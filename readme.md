@@ -9,6 +9,9 @@ cargo build && target/debug/cloudtiles convert tiles/maptiler-osm-2017-07-03-v3.
 
 ![file format](docs/file_format.svg)
 
+- integers are stored with little endian byte order
+- strings are stored with utf8 encoding
+
 ## file header (48 bytes)
 
 | offset | length | type   | description          |
@@ -16,19 +19,19 @@ cargo build && target/debug/cloudtiles convert tiles/maptiler-osm-2017-07-03-v3.
 | 0      | 14     | string | `"OpenCloudTiles"`   |
 | 14     | 1      | u8     | version number (= 0) |
 | 15     | 1      | u8     | `format`             |
-| 16     | 8      | u64    | start of meta_blob   |
-| 24     | 8      | u64    | length of meta_blob  |
-| 32     | 8      | u64    | start of root_block  |
-| 40     | 8      | u64    | length of root_block |
+| 16     | 8      | u64    | length of meta_blob  |
+| 24     | 8      | u64    | length of root_block |
+| 32     | 8      | u64    | length of root_index |
 
 `format` values:
-  - `0`: png
-  - `1`: jpg
-  - `2`: brotli compressed pbf
+  - `0`: brotli compressed pbf
+  - `1`: png
+  - `2`: jpg
+  - `3`: webp
 
 ## meta_blob
 
-`tiles.json`, in utf8, compressed with brotli
+`tiles.json`, compressed with brotli
 
 ## root_index
 
