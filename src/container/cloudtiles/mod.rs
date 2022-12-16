@@ -45,15 +45,15 @@ impl container::Converter for Converter {
 		file.write(&[0u8, 2 * 8]);
 
 		let mut metablob = container.get_meta();
-		let metablob_length = write_compressed_brotli(&mut metablob, &mut file)?;
-		let rootblock_length = write_rootdata(&mut file)?;
+		let metablob_range = write_compressed_brotli(&mut metablob, &mut file)?;
+		let rootindex_range = write_rootdata(&mut file)?;
 
 		file.flush()?;
 
 		let file = file.get_mut();
 
-		file.write_at(&(metablob_length as u64).to_le_bytes(), header_length)?;
-		file.write_at(&(rootblock_length as u64).to_le_bytes(), header_length + 8)?;
+		metablob_range.write_at(file, header_length);
+		rootindex_range.write_at(file, header_length + 16);
 
 		drop(file);
 		//file.write(buf)
@@ -62,13 +62,34 @@ impl container::Converter for Converter {
 		fn write_compressed_brotli(
 			input: &mut Vec<u8>,
 			file: &mut BufWriter<File>,
-		) -> std::io::Result<usize> {
+		) -> std::io::Result<ByteRange> {
 			let params = &BrotliEncoderParams::default();
 			let mut cursor = Cursor::new(input);
-			return BrotliCompress(&mut cursor, file, params);
+			let range = ByteRange::new(
+				file.stream_position()?,
+				BrotliCompress(&mut cursor, file, params)? as u64,
+			);
+			return Ok(range);
 		}
-		fn write_rootdata(file: &mut BufWriter<File>) -> std::io::Result<usize> {
-			return Ok(0);
+		fn write_rootdata(file: &mut BufWriter<File>) -> std::io::Result<ByteRange> {
+			let range = ByteRange::new(file.stream_position()?, 0);
+			return Ok(range);
 		}
+	}
+}
+
+struct ByteRange {
+	offset: u64,
+	length: u64,
+}
+
+impl ByteRange {
+	fn new(offset: u64, length: u64) -> ByteRange {
+		return ByteRange { offset, length };
+	}
+	fn write_at(self, file: &mut File, pos: u64) -> std::io::Result<()> {
+		file.write_at(&(self.offset as u64).to_le_bytes(), pos)?;
+		file.write_at(&(self.length as u64).to_le_bytes(), pos + 8)?;
+		Ok(())
 	}
 }

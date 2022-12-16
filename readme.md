@@ -19,8 +19,9 @@ cargo build && target/debug/cloudtiles convert tiles/maptiler-osm-2017-07-03-v3.
 | 0      | 14     | string | `"OpenCloudTiles"`   |
 | 14     | 1      | u8     | version number (= 0) |
 | 15     | 1      | u8     | `format`             |
+| 16     | 8      | u64    | offset of meta_blob  |
 | 16     | 8      | u64    | length of meta_blob  |
-| 24     | 8      | u64    | length of root_block |
+| 24     | 8      | u64    | offset of root_index |
 | 32     | 8      | u64    | length of root_index |
 
 `format` values:
