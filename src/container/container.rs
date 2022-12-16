@@ -1,13 +1,13 @@
 use std::path::PathBuf;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum TileType {
 	PBF,
 	PNG,
 	JPG,
 	WEBP,
 }
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone)]
 pub enum TileCompression {
 	None,
 	Gzip,
@@ -15,7 +15,7 @@ pub enum TileCompression {
 }
 
 pub trait Reader {
-	fn load(filename: &PathBuf) -> Box<dyn Reader>
+	fn load(filename: &PathBuf) -> std::io::Result<Box<dyn Reader>>
 	where
 		Self: Sized,
 	{

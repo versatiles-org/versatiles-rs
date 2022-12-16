@@ -8,10 +8,10 @@ use std::path::PathBuf;
 pub struct Tiles;
 impl Tiles {
 	pub fn convert(filename_in: &PathBuf, filename_out: &PathBuf) -> std::io::Result<()> {
-		let container_in = Tiles::new_reader(filename_in);
+		let container_in = Tiles::new_reader(filename_in)?;
 		return Tiles::convert_from(filename_out, container_in);
 	}
-	pub fn new_reader(filename: &PathBuf) -> Box<dyn Reader> {
+	pub fn new_reader(filename: &PathBuf) -> std::io::Result<Box<dyn Reader>> {
 		let extension = filename.extension().unwrap().to_str();
 		match extension {
 			Some("mbtiles") => return mbtiles::Reader::load(filename),
