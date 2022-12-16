@@ -1,19 +1,17 @@
-use crate::tiles::container;
+
+use crate::container::container;
 
 pub struct Reader;
 impl container::Reader for Reader {
-	fn load(filename: &std::path::PathBuf) -> Self {
-		panic!("not implemented");
-		return Reader;
-	}
 }
 
 pub struct Converter;
 impl container::Converter for Converter {
 	fn convert_from(
 		filename: &std::path::PathBuf,
-		container: &impl container::Reader,
-	) -> Result<String, String> {
+		container: Box<dyn container::Reader>,
+	) -> std::io::Result<()> {
+		let mut file = std::fs::File::create(filename)?;
 		panic!("not implemented");
 	}
 }

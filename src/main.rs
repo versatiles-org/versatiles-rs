@@ -1,10 +1,10 @@
-mod tiles;
+mod container;
 
 use clap::{arg, value_parser, Command};
 use std::path::PathBuf;
-use tiles::Tiles;
+use container::Tiles;
 
-fn main() {
+fn main() -> std::io::Result<()> {
 	let cmd = Command::new("cargo")
 		.bin_name("cloudtiles")
 		.subcommand_required(true)
@@ -28,10 +28,8 @@ fn main() {
 			let filename_in = sub_matches.get_one::<PathBuf>("INPUT_FILE").unwrap();
 			let filename_out = sub_matches.get_one::<PathBuf>("OUTPUT_FILE").unwrap();
 			println!("convert from {:?} to {:?}", filename_in, filename_out);
-			match Tiles::convert(filename_in, filename_out) {
-				Ok(description) => println!("{}", description),
-				Err(err) => println!("Error: {}", err),
-			}
+			Tiles::convert(filename_in, filename_out)?;
+			return Ok(());
 		}
 		_ => unreachable!("Exhausted list of subcommands and subcommand_required prevents `None`"),
 	}
