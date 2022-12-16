@@ -1,9 +1,8 @@
-
 mod tiles;
 
-use tiles::{Tiles};
 use clap::{arg, value_parser, Command};
 use std::path::PathBuf;
+use tiles::Tiles;
 
 fn main() {
 	let cmd = Command::new("cargo")
@@ -29,7 +28,10 @@ fn main() {
 			let filename_in = sub_matches.get_one::<PathBuf>("INPUT_FILE").unwrap();
 			let filename_out = sub_matches.get_one::<PathBuf>("OUTPUT_FILE").unwrap();
 			println!("convert from {:?} to {:?}", filename_in, filename_out);
-			Tiles::convert(filename_in, filename_out);
+			match Tiles::convert(filename_in, filename_out) {
+				Ok(description) => println!("{}", description),
+				Err(err) => println!("Error: {}", err),
+			}
 		}
 		_ => unreachable!("Exhausted list of subcommands and subcommand_required prevents `None`"),
 	}
