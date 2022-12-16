@@ -54,7 +54,7 @@ impl container::Converter for Converter {
 		// skip start and length of meta_blob and root_block
 		file.write(&[0u8, 2 * 8])?;
 
-		let mut metablob = container.get_meta();
+		let mut metablob = container.get_meta().to_vec();
 		let meta_blob_range = converter.write_compressed_brotli(&mut file, &mut metablob)?;
 		let root_index_range = converter.write_rootdata(&mut file, &container)?;
 

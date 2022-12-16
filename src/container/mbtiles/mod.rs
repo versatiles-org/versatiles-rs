@@ -1,8 +1,5 @@
-use std::fs::read;
-
-use crate::container::container::{self, TileCompression};
-
 use super::container::TileType;
+use crate::container::container::{self, TileCompression};
 
 pub struct Reader {
 	connection: rusqlite::Connection,
@@ -97,6 +94,15 @@ impl container::Reader for Reader {
 	}
 	fn get_tile_compression(&self) -> TileCompression {
 		return self.tile_compression.clone().unwrap();
+	}
+	fn get_meta(&self) -> &[u8] {
+		return self.meta_data.as_ref().unwrap().as_bytes();
+	}
+	fn get_minimum_level(&self) -> u64 {
+		return self.minimum_level.unwrap();
+	}
+	fn get_maximum_level(&self) -> u64 {
+		return self.maximum_level.unwrap();
 	}
 }
 

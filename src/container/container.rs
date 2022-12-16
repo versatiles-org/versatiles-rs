@@ -27,7 +27,7 @@ pub trait Reader {
 	fn get_tile_compression(&self) -> TileCompression {
 		panic!("not implemented: get_tile_compression");
 	}
-	fn get_meta(&self) -> Vec<u8> {
+	fn get_meta(&self) -> &[u8] {
 		panic!("not implemented: get_meta");
 	}
 	fn get_minimum_level(&self) -> u64 {
