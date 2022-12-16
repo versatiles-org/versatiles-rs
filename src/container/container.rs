@@ -1,11 +1,13 @@
 use std::path::PathBuf;
 
+#[derive(PartialEq)]
 pub enum TileType {
 	PBF,
 	PNG,
 	JPG,
 	WEBP,
 }
+#[derive(PartialEq)]
 pub enum TileCompression {
 	None,
 	Gzip,
@@ -27,6 +29,30 @@ pub trait Reader {
 	}
 	fn get_meta(&self) -> Vec<u8> {
 		panic!("not implemented: get_meta");
+	}
+	fn get_minimum_level(&self) -> u64 {
+		panic!("not implemented: get_minimum_level")
+	}
+	fn get_maximum_level(&self) -> u64 {
+		panic!("not implemented: get_maximum_level");
+	}
+	fn get_minimum_col(&self, level: u64) -> u64 {
+		panic!("not implemented: get_minimum_col")
+	}
+	fn get_maximum_col(&self, level: u64) -> u64 {
+		panic!("not implemented: get_maximum_col");
+	}
+	fn get_minimum_row(&self, level: u64) -> u64 {
+		panic!("not implemented: get_minimum_row")
+	}
+	fn get_maximum_row(&self, level: u64) -> u64 {
+		panic!("not implemented: get_maximum_row");
+	}
+	fn get_tile_uncompressed(&self, level: u64, row: u64, col: u64) -> std::io::Result<Vec<u8>> {
+		panic!("not implemented: get_tile_uncompressed");
+	}
+	fn get_tile_raw(&self, level: u64, row: u64, col: u64) -> std::io::Result<Vec<u8>> {
+		panic!("not implemented: get_tile_raw");
 	}
 }
 

@@ -42,7 +42,7 @@ brotli compressed data structure:
 | ------- | ------ | ---- | ----------------------- |
 | 0       | 8      | u64  | minimum level           |
 | 8       | 8      | u64  | maximum level           |
-| 16+i*16 | 8      | u64  | length of level_block i |
+| 16+i*16 | 8      | u64  | offset of level_index i |
 | 24+i*16 | 8      | u64  | length of level_index i |
 
 ## level_index
@@ -55,7 +55,7 @@ brotli compressed data structure:
 | 8       | 8      | u64  | maximum column        |
 | 16      | 8      | u64  | minimum row           |
 | 24      | 8      | u64  | maximum row           |
-| 32+i*16 | 8      | u64  | length of row_block i |
+| 32+i*16 | 8      | u64  | offset of row_index i |
 | 40+i*16 | 8      | u64  | length of row_index i |
 
 ## row_index
@@ -64,5 +64,5 @@ brotli compressed data structure:
 
 | offset | length | type | description           |
 | ------ | ------ | ---- | --------------------- |
-| 0+i*8  | 8      | u64  | start of tile_blob i  |
+| 0+i*8  | 8      | u64  | offset of tile_blob i |
 | 8+i*8  | 8      | u64  | length of tile_blob i |
