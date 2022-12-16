@@ -1,2 +1,5 @@
+edition = "2021"
+fn_single_line = true
 hard_tabs = true
+imports_granularity = "Crate"
 tab_spaces = 3
