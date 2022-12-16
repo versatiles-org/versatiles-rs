@@ -82,6 +82,15 @@ impl Reader {
 
 		return Ok(());
 	}
+	fn calc_min_max(&self, level: u64, fun: &str, var: &str) -> rusqlite::Result<u64> {
+		let sql = format!(
+			"SELECT {}(tile_{}) FROM tiles WHERE zoom_level = {}",
+			fun, var, level
+		);
+		let mut stmt = self.connection.prepare(sql.as_str())?;
+		let row = stmt.query_row([], |row| row.get::<_, u64>(0))?;
+		return Ok(row);
+	}
 }
 
 impl container::Reader for Reader {
@@ -103,6 +112,18 @@ impl container::Reader for Reader {
 	}
 	fn get_maximum_level(&self) -> u64 {
 		return self.maximum_level.unwrap();
+	}
+	fn get_minimum_col(&self, level: u64) -> u64 {
+		return self.calc_min_max(level, "min", "column").unwrap();
+	}
+	fn get_maximum_col(&self, level: u64) -> u64 {
+		return self.calc_min_max(level, "max", "column").unwrap();
+	}
+	fn get_minimum_row(&self, level: u64) -> u64 {
+		return self.calc_min_max(level, "min", "row").unwrap();
+	}
+	fn get_maximum_row(&self, level: u64) -> u64 {
+		return self.calc_min_max(level, "max", "row").unwrap();
 	}
 }
 

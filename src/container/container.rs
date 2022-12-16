@@ -1,3 +1,5 @@
+#![allow(unused_variables)]
+
 use std::path::PathBuf;
 
 #[derive(PartialEq, Clone)]
@@ -15,6 +17,7 @@ pub enum TileCompression {
 }
 
 pub trait Reader {
+	#[allow(dead_code)]
 	fn load(filename: &PathBuf) -> std::io::Result<Box<dyn Reader>>
 	where
 		Self: Sized,

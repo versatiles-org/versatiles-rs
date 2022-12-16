@@ -126,7 +126,7 @@ impl Converter {
 		let mut row_index: Vec<ByteRange> = Vec::new();
 
 		for row in minimum_row..=maximum_row {
-			row_index.push(self.write_row(file, container, level, row)?);
+			row_index.push(self.write_row(file, container, level, row, minimum_col, maximum_col)?);
 		}
 
 		let index_start = file.stream_position()?;
@@ -148,10 +148,9 @@ impl Converter {
 		container: &Box<dyn container::Reader>,
 		level: u64,
 		row: u64,
+		minimum_col: u64,
+		maximum_col: u64,
 	) -> std::io::Result<ByteRange> {
-		let minimum_col = container.get_minimum_col(level);
-		let maximum_col = container.get_maximum_col(level);
-
 		let mut tile_index: Vec<ByteRange> = Vec::new();
 
 		for col in minimum_col..=maximum_col {
