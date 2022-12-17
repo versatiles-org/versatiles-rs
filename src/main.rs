@@ -16,6 +16,10 @@ pub struct Cli {
 	#[arg(long, value_name = "int")]
 	max_zoom: Option<u64>,
 
+	/// precompress tiles
+	#[arg(long, value_enum)]
+	precompression: Option<container::container::TileCompression>,
+
 	#[command(subcommand)]
 	command: Commands,
 }
@@ -51,28 +55,4 @@ fn main() -> std::io::Result<()> {
 			return Ok(());
 		}
 	}
-	/*
-	let cmd = Command::new("cargo")
-		.bin_name("cloudtiles")
-		.subcommand_required(true)
-		.subcommand(
-			Command::new("convert")
-				.about("convert between different tile containers")
-				.arg(
-					arg!([INPUT_FILE])
-						.required(true)
-						.value_parser(value_parser!(PathBuf)),
-				)
-				.arg(
-					arg!([OUTPUT_FILE])
-						.required(true)
-						.value_parser(value_parser!(PathBuf)),
-				),
-		);
-	let matches = cmd.get_matches();
-	match matches.subcommand() {
-		Some(("convert", sub_matches)) => {}
-		_ => unreachable!("Exhausted list of subcommands and subcommand_required prevents `None`"),
-	}
-	*/
 }

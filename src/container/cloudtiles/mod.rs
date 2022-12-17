@@ -1,29 +1,33 @@
+use super::container;
+use super::container::{TileCompression, TileFormat};
+use brotli::{enc::BrotliEncoderParams, BrotliCompress};
+use flate2::{bufread::GzEncoder, Compression};
 use std::fs::File;
-use std::io::{BufWriter, Cursor, Seek, Write};
-
-use crate::container::container;
-use brotli::enc::BrotliEncoderParams;
-use brotli::BrotliCompress;
+use std::io::{BufWriter, Cursor, Read, Seek, Write};
 use std::os::unix::fs::FileExt;
+use std::path::PathBuf;
 
 pub struct Reader;
 impl container::Reader for Reader {}
 
 pub struct Converter {
-	tile_compression: container::TileCompression,
+	tile_compression: Option<TileCompression>,
 	tile_recompress: bool,
+	filename: PathBuf,
 }
 impl container::Converter for Converter {
-	fn convert_from(
-		filename: &std::path::PathBuf,
-		container: Box<dyn container::Reader>,
-	) -> std::io::Result<()> {
-		let mut converter = Converter {
-			tile_compression: container::TileCompression::None,
+	fn new(filename: &PathBuf) -> std::io::Result<Box<dyn container::Converter>>
+	where
+		Self: Sized,
+	{
+		Ok(Box::new(Converter {
+			tile_compression: None,
 			tile_recompress: false,
-		};
-
-		let file = File::create(filename).expect("Unable to create file");
+			filename: filename.clone(),
+		}))
+	}
+	fn convert_from(&mut self, container: Box<dyn container::Reader>) -> std::io::Result<()> {
+		let file = File::create(&self.filename).expect("Unable to create file");
 		let mut file = BufWriter::new(file);
 
 		// magic word
@@ -35,31 +39,37 @@ impl container::Converter for Converter {
 		// format
 		let tile_format = container.get_tile_format();
 		let tile_format_value: u8 = match tile_format {
-			container::TileFormat::PBF => 0,
-			container::TileFormat::PNG => 1,
-			container::TileFormat::JPG => 2,
-			container::TileFormat::WEBP => 3,
+			TileFormat::PBF => 0,
+			TileFormat::PNG => 1,
+			TileFormat::JPG => 2,
+			TileFormat::WEBP => 3,
 		};
 		file.write(&[tile_format_value])?;
 
 		// precompression
 		let tile_compression_src = container.get_tile_compression();
-		converter.tile_compression = tile_compression_src.clone();
-		converter.tile_recompress = tile_compression_src != converter.tile_compression;
-		//println!("{} {} {}", converter.tile_recompress, tile_compression_src, converter.tile_compression_dst;)
-		let tile_compression_dst_value: u8 = match converter.tile_compression {
-			container::TileCompression::None => 0,
-			container::TileCompression::Gzip => 1,
-			container::TileCompression::Brotli => 2,
+
+		if self.tile_compression.is_none() {
+			self.tile_compression = Some(tile_compression_src.clone());
+		}
+		self.tile_recompress = self.tile_compression.as_ref().unwrap() != &tile_compression_src;
+		let tile_compression_dst_value: u8 = match self.tile_compression {
+			Some(TileCompression::None) => 0,
+			Some(TileCompression::Gzip) => 1,
+			Some(TileCompression::Brotli) => 2,
+			None => panic!(),
 		};
 		file.write(&[tile_compression_dst_value])?;
+		println!("tile_compression: {:?}", self.tile_compression);
+		println!("tile_compression_src: {:?}", tile_compression_src);
+		println!("tile_recompress: {}", self.tile_recompress);
 
 		// add zeros
 		file.write(&[0u8, 229])?;
 
 		let mut metablob = container.get_meta().to_vec();
-		let meta_blob_range = write_compressed_brotli(&mut file, &mut metablob)?;
-		let root_index_range = converter.write_rootdata(&mut file, &container)?;
+		let meta_blob_range = write_vec_brotli(&mut file, &mut metablob)?;
+		let root_index_range = self.write_rootdata(&mut file, &container)?;
 
 		file.flush()?;
 
@@ -71,6 +81,9 @@ impl container::Converter for Converter {
 		drop(file);
 
 		return Ok(());
+	}
+	fn set_precompression(&mut self, compression: &TileCompression) {
+		self.tile_compression = Some(compression.clone());
 	}
 }
 
@@ -160,31 +173,40 @@ impl Converter {
 	) -> std::io::Result<ByteRange> {
 		if self.tile_recompress {
 			let tile = container.get_tile_uncompressed(level, col, row).unwrap();
-			let range = write_compressed_brotli(file, &tile)?;
-			return Ok(range);
+			return match self.tile_compression {
+				Some(TileCompression::None) => write_vec(file, &tile),
+				Some(TileCompression::Gzip) => write_vec_gzip(file, &tile),
+				Some(TileCompression::Brotli) => write_vec_brotli(file, &tile),
+				None => panic!(),
+			};
 		} else {
 			let tile = container.get_tile_raw(level, col, row).unwrap();
-
-			let tile_start = file.stream_position()?;
-			file.write(&tile)?;
-			let tile_end = file.stream_position()?;
-
-			return Ok(ByteRange::new(tile_start, tile_end - tile_start));
+			return write_vec(file, &tile);
 		}
 	}
 }
 
-fn write_compressed_brotli(
-	file: &mut BufWriter<File>,
-	input: &Vec<u8>,
-) -> std::io::Result<ByteRange> {
+fn write_vec_brotli(file: &mut BufWriter<File>, data: &Vec<u8>) -> std::io::Result<ByteRange> {
 	let params = &BrotliEncoderParams::default();
-	let mut cursor = Cursor::new(input);
+	let mut cursor = Cursor::new(data);
 	let range = ByteRange::new(
 		file.stream_position()?,
 		BrotliCompress(&mut cursor, file, params)? as u64,
 	);
 	return Ok(range);
+}
+
+fn write_vec_gzip(file: &mut BufWriter<File>, data: &Vec<u8>) -> std::io::Result<ByteRange> {
+	let mut buffer: Vec<u8> = Vec::new();
+	GzEncoder::new(data.as_slice(), Compression::best()).read_to_end(&mut buffer)?;
+	return write_vec(file, &buffer);
+}
+
+fn write_vec(file: &mut BufWriter<File>, data: &Vec<u8>) -> std::io::Result<ByteRange> {
+	Ok(ByteRange::new(
+		file.stream_position()?,
+		file.write(&data)? as u64,
+	))
 }
 
 fn write_compressed_index(
@@ -195,7 +217,7 @@ fn write_compressed_index(
 	for range in index {
 		range.write_to_vec(&mut buffer)?;
 	}
-	return write_compressed_brotli(file, &buffer);
+	return write_vec_brotli(file, &buffer);
 }
 
 struct ByteRange {

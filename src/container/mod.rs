@@ -1,5 +1,5 @@
 mod cloudtiles;
-mod container;
+pub mod container;
 mod mbtiles;
 
 use container::{Converter, Reader};
@@ -12,7 +12,7 @@ impl Tiles {
 	pub fn convert(filename_in: &PathBuf, filename_out: &PathBuf, cli: &Cli) -> std::io::Result<()> {
 		let container_in = Tiles::new_reader(filename_in, cli)?;
 
-		return Tiles::convert_from(filename_out, container_in);
+		return Tiles::convert_from(filename_out, container_in, cli);
 	}
 	pub fn new_reader(filename: &PathBuf, cli: &Cli) -> std::io::Result<Box<dyn Reader>> {
 		let extension = filename.extension().unwrap().to_str();
@@ -38,12 +38,22 @@ impl Tiles {
 
 		return Ok(container);
 	}
-	pub fn convert_from(filename: &PathBuf, reader: Box<dyn Reader>) -> std::io::Result<()> {
+	pub fn convert_from(
+		filename: &PathBuf,
+		reader: Box<dyn Reader>,
+		cli: &Cli,
+	) -> std::io::Result<()> {
 		let extension = filename.extension().unwrap().to_str();
-		match extension {
-			Some("mbtiles") => mbtiles::Converter::convert_from(filename, reader),
-			Some("cloudtiles") => cloudtiles::Converter::convert_from(filename, reader),
+		let mut converter = match extension {
+			Some("mbtiles") => mbtiles::Converter::new(filename).unwrap(),
+			Some("cloudtiles") => cloudtiles::Converter::new(filename).unwrap(),
 			_ => panic!("extension '{:?}' unknown", extension),
+		};
+
+		if cli.precompression.is_some() {
+			converter.set_precompression(cli.precompression.as_ref().unwrap());
 		}
+
+		return converter.convert_from(reader);
 	}
 }

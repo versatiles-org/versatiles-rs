@@ -2,22 +2,27 @@
 
 use std::path::PathBuf;
 
-#[derive(PartialEq, Clone)]
+use clap::ValueEnum;
+
+#[derive(PartialEq, Clone, Debug)]
 pub enum TileFormat {
 	PBF,
 	PNG,
 	JPG,
 	WEBP,
 }
-#[derive(PartialEq, Clone)]
+
+#[derive(PartialEq, Clone, Debug, ValueEnum)]
 pub enum TileCompression {
+	/// uncompressed
 	None,
+	/// use gzip
 	Gzip,
+	/// use brotli
 	Brotli,
 }
 
 pub trait Reader {
-	#[allow(dead_code)]
 	fn load(filename: &PathBuf) -> std::io::Result<Box<dyn Reader>>
 	where
 		Self: Sized,
@@ -43,7 +48,7 @@ pub trait Reader {
 		panic!("not implemented: set_minimum_zoom")
 	}
 	fn set_maximum_zoom(&mut self, level: u64) {
-		panic!("not implemented: set_maximum_zoom");
+		panic!("not implemented: set_maximum_zoom")
 	}
 	fn get_minimum_col(&self, level: u64) -> u64 {
 		panic!("not implemented: get_minimum_col")
@@ -66,7 +71,16 @@ pub trait Reader {
 }
 
 pub trait Converter {
-	fn convert_from(filename: &PathBuf, container: Box<dyn Reader>) -> std::io::Result<()> {
+	fn new(filename: &PathBuf) -> std::io::Result<Box<dyn Converter>>
+	where
+		Self: Sized,
+	{
+		panic!("not implemented: new");
+	}
+	fn convert_from(&mut self, container: Box<dyn Reader>) -> std::io::Result<()> {
 		panic!("not implemented: convert_from");
+	}
+	fn set_precompression(&mut self, compression: &TileCompression) {
+		panic!("not implemented: set_precompression");
 	}
 }

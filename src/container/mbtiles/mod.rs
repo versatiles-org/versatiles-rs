@@ -1,5 +1,7 @@
 use std::io::Read;
 
+use flate2::bufread::GzDecoder;
+
 use super::container::TileFormat;
 use crate::container::container::{self, TileCompression};
 
@@ -149,7 +151,7 @@ impl container::Reader for Reader {
 			Some(TileCompression::Gzip) => {
 				let mut result: Vec<u8> = Vec::new();
 				//println!("{:X?}", data);
-				let _bytes_written = flate2::bufread::GzDecoder::new(data.as_slice())
+				let _bytes_written = GzDecoder::new(data.as_slice())
 					.read_to_end(&mut result)
 					.unwrap();
 				Ok(result)
