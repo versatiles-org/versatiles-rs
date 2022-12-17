@@ -55,7 +55,7 @@ impl container::Converter for Converter {
 		file.write(&[0u8, 2 * 8])?;
 
 		let mut metablob = container.get_meta().to_vec();
-		let meta_blob_range = converter.write_compressed_brotli(&mut file, &mut metablob)?;
+		let meta_blob_range = write_compressed_brotli(&mut file, &mut metablob)?;
 		let root_index_range = converter.write_rootdata(&mut file, &container)?;
 
 		file.flush()?;
@@ -72,19 +72,6 @@ impl container::Converter for Converter {
 }
 
 impl Converter {
-	fn write_compressed_brotli(
-		&self,
-		file: &mut BufWriter<File>,
-		input: &Vec<u8>,
-	) -> std::io::Result<ByteRange> {
-		let params = &BrotliEncoderParams::default();
-		let mut cursor = Cursor::new(input);
-		let range = ByteRange::new(
-			file.stream_position()?,
-			BrotliCompress(&mut cursor, file, params)? as u64,
-		);
-		return Ok(range);
-	}
 	fn write_rootdata(
 		&self,
 		file: &mut BufWriter<File>,
@@ -102,9 +89,7 @@ impl Converter {
 		file.write(&minimum_level.to_le_bytes())?;
 		file.write(&maximum_level.to_le_bytes())?;
 
-		for range in level_index {
-			range.write(file)?;
-		}
+		write_compressed_index(file, level_index)?;
 		let level_index_end = file.stream_position()?;
 
 		return Ok(ByteRange::new(
@@ -134,10 +119,7 @@ impl Converter {
 		file.write(&maximum_col.to_le_bytes())?;
 		file.write(&minimum_row.to_le_bytes())?;
 		file.write(&maximum_row.to_le_bytes())?;
-
-		for range in row_index {
-			range.write(file)?;
-		}
+		write_compressed_index(file, row_index)?;
 		let index_end = file.stream_position()?;
 
 		return Ok(ByteRange::new(index_start, index_end - index_start));
@@ -151,6 +133,8 @@ impl Converter {
 		minimum_col: u64,
 		maximum_col: u64,
 	) -> std::io::Result<ByteRange> {
+		println!("{} / {} / [{}-{}]", level, row, minimum_col, maximum_col);
+
 		let mut tile_index: Vec<ByteRange> = Vec::new();
 
 		for col in minimum_col..=maximum_col {
@@ -158,9 +142,7 @@ impl Converter {
 		}
 
 		let index_start = file.stream_position()?;
-		for range in tile_index {
-			range.write(file)?;
-		}
+		write_compressed_index(file, tile_index)?;
 		let index_end = file.stream_position()?;
 
 		return Ok(ByteRange::new(index_start, index_end - index_start));
@@ -174,11 +156,11 @@ impl Converter {
 		col: u64,
 	) -> std::io::Result<ByteRange> {
 		if self.tile_recompress {
-			let tile = container.get_tile_uncompressed(level, row, col)?;
-			let range = self.write_compressed_brotli(file, &tile)?;
+			let tile = container.get_tile_uncompressed(level, col, row).unwrap();
+			let range = write_compressed_brotli(file, &tile)?;
 			return Ok(range);
 		} else {
-			let tile = container.get_tile_raw(level, row, col)?;
+			let tile = container.get_tile_raw(level, col, row).unwrap();
 
 			let tile_start = file.stream_position()?;
 			file.write(&tile)?;
@@ -187,6 +169,30 @@ impl Converter {
 			return Ok(ByteRange::new(tile_start, tile_end - tile_start));
 		}
 	}
+}
+
+fn write_compressed_brotli(
+	file: &mut BufWriter<File>,
+	input: &Vec<u8>,
+) -> std::io::Result<ByteRange> {
+	let params = &BrotliEncoderParams::default();
+	let mut cursor = Cursor::new(input);
+	let range = ByteRange::new(
+		file.stream_position()?,
+		BrotliCompress(&mut cursor, file, params)? as u64,
+	);
+	return Ok(range);
+}
+
+fn write_compressed_index(
+	file: &mut BufWriter<File>,
+	index: Vec<ByteRange>,
+) -> std::io::Result<ByteRange> {
+	let mut buffer: Vec<u8> = Vec::with_capacity(index.len() * 16);
+	for range in index {
+		range.write_to_vec(&mut buffer)?;
+	}
+	return write_compressed_brotli(file, &buffer);
 }
 
 struct ByteRange {
@@ -199,13 +205,13 @@ impl ByteRange {
 		return ByteRange { offset, length };
 	}
 	fn write_at(self, file: &mut File, pos: u64) -> std::io::Result<()> {
-		file.write_at(&(self.offset as u64).to_le_bytes(), pos)?;
-		file.write_at(&(self.length as u64).to_le_bytes(), pos + 8)?;
+		file.write_at(&self.offset.to_le_bytes(), pos)?;
+		file.write_at(&self.length.to_le_bytes(), pos + 8)?;
 		return Ok(());
 	}
-	fn write(self, file: &mut BufWriter<File>) -> std::io::Result<()> {
-		file.write(&(self.offset as u64).to_le_bytes())?;
-		file.write(&(self.length as u64).to_le_bytes())?;
+	fn write_to_vec(self, buffer: &mut Vec<u8>) -> std::io::Result<()> {
+		buffer.write(&self.offset.to_le_bytes())?;
+		buffer.write(&self.length.to_le_bytes())?;
 		return Ok(());
 	}
 }

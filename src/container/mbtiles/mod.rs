@@ -1,3 +1,5 @@
+use std::io::Read;
+
 use super::container::TileType;
 use crate::container::container::{self, TileCompression};
 
@@ -88,7 +90,7 @@ impl Reader {
 			fun, var, level
 		);
 		let mut stmt = self.connection.prepare(sql.as_str())?;
-		let row = stmt.query_row([], |row| row.get::<_, u64>(0))?;
+		let row = stmt.query_row([], |entry| entry.get::<_, u64>(0))?;
 		return Ok(row);
 	}
 }
@@ -124,6 +126,34 @@ impl container::Reader for Reader {
 	}
 	fn get_maximum_row(&self, level: u64) -> u64 {
 		return self.calc_min_max(level, "max", "row").unwrap();
+	}
+	fn get_tile_raw(&self, level: u64, col: u64, row: u64) -> Result<Vec<u8>, &str> {
+		let mut stmt = self
+			.connection
+			.prepare(
+				"SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?",
+			)
+			.expect("SQL preparation failed");
+		let data = stmt
+			.query_row([level, col, row], |entry| entry.get::<_, Vec<u8>>(0))
+			.expect("SQL query failes");
+		return Ok(data);
+	}
+	fn get_tile_uncompressed(&self, level: u64, col: u64, row: u64) -> Result<Vec<u8>, &str> {
+		let data = self.get_tile_raw(level, col, row)?;
+		return match self.tile_compression {
+			Some(TileCompression::None) => Ok(data),
+			Some(TileCompression::Gzip) => {
+				let mut result: Vec<u8> = Vec::new();
+				//println!("{:X?}", data);
+				let _bytes_written = flate2::bufread::GzDecoder::new(data.as_slice())
+					.read_to_end(&mut result)
+					.unwrap();
+				Ok(result)
+			}
+			Some(TileCompression::Brotli) => panic!("brotli decompression not implemented"),
+			None => panic!(""),
+		};
 	}
 }
 

@@ -51,10 +51,10 @@ pub trait Reader {
 	fn get_maximum_row(&self, level: u64) -> u64 {
 		panic!("not implemented: get_maximum_row");
 	}
-	fn get_tile_uncompressed(&self, level: u64, row: u64, col: u64) -> std::io::Result<Vec<u8>> {
+	fn get_tile_uncompressed(&self, level: u64, col: u64, row: u64) -> Result<Vec<u8>, &str> {
 		panic!("not implemented: get_tile_uncompressed");
 	}
-	fn get_tile_raw(&self, level: u64, row: u64, col: u64) -> std::io::Result<Vec<u8>> {
+	fn get_tile_raw(&self, level: u64, col: u64, row: u64) -> Result<Vec<u8>, &str> {
 		panic!("not implemented: get_tile_raw");
 	}
 }
