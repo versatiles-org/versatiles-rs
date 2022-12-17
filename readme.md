@@ -3,6 +3,8 @@
 
 ```bash
 cargo build && target/debug/cloudtiles convert tiles/maptiler-osm-2017-07-03-v3.6.1-germany_berlin.mbtiles tiles/berlin.cloudtiles
+
+# cargo instruments --all-features -t "CPU Profiler" convert tiles/maptiler-osm-2017-07-03-v3.6.1-germany_berlin.mbtiles tiles/berlin.cloudtiles
 ```
 
 # format

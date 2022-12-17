@@ -133,7 +133,7 @@ impl Converter {
 		minimum_col: u64,
 		maximum_col: u64,
 	) -> std::io::Result<ByteRange> {
-		println!("{} / {} / [{}-{}]", level, row, minimum_col, maximum_col);
+		println!("{} / {} / x{}", level, row, maximum_col - minimum_col + 1);
 
 		let mut tile_index: Vec<ByteRange> = Vec::new();
 
