@@ -187,11 +187,12 @@ impl Converter {
 }
 
 fn write_vec_brotli(file: &mut BufWriter<File>, data: &Vec<u8>) -> std::io::Result<ByteRange> {
-	let params = &BrotliEncoderParams::default();
+	let mut params = BrotliEncoderParams::default();
+	params.quality = 11;
 	let mut cursor = Cursor::new(data);
 	let range = ByteRange::new(
 		file.stream_position()?,
-		BrotliCompress(&mut cursor, file, params)? as u64,
+		BrotliCompress(&mut cursor, file, &params)? as u64,
 	);
 	return Ok(range);
 }
