@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 
 #[derive(PartialEq, Clone)]
-pub enum TileType {
+pub enum TileFormat {
 	PBF,
 	PNG,
 	JPG,
@@ -24,8 +24,8 @@ pub trait Reader {
 	{
 		panic!("not implemented: load");
 	}
-	fn get_tile_type(&self) -> TileType {
-		panic!("not implemented: get_tile_type");
+	fn get_tile_format(&self) -> TileFormat {
+		panic!("not implemented: get_tile_format");
 	}
 	fn get_tile_compression(&self) -> TileCompression {
 		panic!("not implemented: get_tile_compression");
@@ -33,11 +33,17 @@ pub trait Reader {
 	fn get_meta(&self) -> &[u8] {
 		panic!("not implemented: get_meta");
 	}
-	fn get_minimum_level(&self) -> u64 {
-		panic!("not implemented: get_minimum_level")
+	fn get_minimum_zoom(&self) -> u64 {
+		panic!("not implemented: get_minimum_zoom")
 	}
-	fn get_maximum_level(&self) -> u64 {
-		panic!("not implemented: get_maximum_level");
+	fn get_maximum_zoom(&self) -> u64 {
+		panic!("not implemented: get_maximum_zoom");
+	}
+	fn set_minimum_zoom(&mut self, level: u64) {
+		panic!("not implemented: set_minimum_zoom")
+	}
+	fn set_maximum_zoom(&mut self, level: u64) {
+		panic!("not implemented: set_maximum_zoom");
 	}
 	fn get_minimum_col(&self, level: u64) -> u64 {
 		panic!("not implemented: get_minimum_col")

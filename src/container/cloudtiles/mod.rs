@@ -10,7 +10,7 @@ pub struct Reader;
 impl container::Reader for Reader {}
 
 pub struct Converter {
-	tile_compression_dst: container::TileCompression,
+	tile_compression: container::TileCompression,
 	tile_recompress: bool,
 }
 impl container::Converter for Converter {
@@ -19,7 +19,7 @@ impl container::Converter for Converter {
 		container: Box<dyn container::Reader>,
 	) -> std::io::Result<()> {
 		let mut converter = Converter {
-			tile_compression_dst: container::TileCompression::None,
+			tile_compression: container::TileCompression::None,
 			tile_recompress: false,
 		};
 
@@ -27,32 +27,35 @@ impl container::Converter for Converter {
 		let mut file = BufWriter::new(file);
 
 		// magic word
-		file.write(b"OpenCloudTiles")?;
+		file.write(b"OpenCloudTiles/Container")?;
 
 		// version
-		file.write(&[0])?;
+		file.write(&[1])?;
 
-		// format;
-		let tile_type = container.get_tile_type();
-		let tile_compression_src = container.get_tile_compression();
-
-		let tile_type_value: u8 = match tile_type {
-			container::TileType::PBF => {
-				converter.tile_compression_dst = container::TileCompression::Brotli;
-				0
-			}
-			container::TileType::PNG => 1,
-			container::TileType::JPG => 2,
-			container::TileType::WEBP => 3,
+		// format
+		let tile_format = container.get_tile_format();
+		let tile_format_value: u8 = match tile_format {
+			container::TileFormat::PBF => 0,
+			container::TileFormat::PNG => 1,
+			container::TileFormat::JPG => 2,
+			container::TileFormat::WEBP => 3,
 		};
-		converter.tile_recompress = tile_compression_src != converter.tile_compression_dst;
+		file.write(&[tile_format_value])?;
 
-		file.write(&[tile_type_value])?;
+		// precompression
+		let tile_compression_src = container.get_tile_compression();
+		converter.tile_compression = tile_compression_src.clone();
+		converter.tile_recompress = tile_compression_src != converter.tile_compression;
+		//println!("{} {} {}", converter.tile_recompress, tile_compression_src, converter.tile_compression_dst;)
+		let tile_compression_dst_value: u8 = match converter.tile_compression {
+			container::TileCompression::None => 0,
+			container::TileCompression::Gzip => 1,
+			container::TileCompression::Brotli => 2,
+		};
+		file.write(&[tile_compression_dst_value])?;
 
-		let header_length = file.stream_position()?;
-
-		// skip start and length of meta_blob and root_block
-		file.write(&[0u8, 2 * 8])?;
+		// add zeros
+		file.write(&[0u8, 229])?;
 
 		let mut metablob = container.get_meta().to_vec();
 		let meta_blob_range = write_compressed_brotli(&mut file, &mut metablob)?;
@@ -62,8 +65,8 @@ impl container::Converter for Converter {
 
 		let file = file.get_mut();
 
-		meta_blob_range.write_at(file, header_length)?;
-		root_index_range.write_at(file, header_length + 16)?;
+		meta_blob_range.write_at(file, 128)?;
+		root_index_range.write_at(file, 144)?;
 
 		drop(file);
 
@@ -77,8 +80,8 @@ impl Converter {
 		file: &mut BufWriter<File>,
 		container: &Box<dyn container::Reader>,
 	) -> std::io::Result<ByteRange> {
-		let minimum_level = container.get_minimum_level();
-		let maximum_level = container.get_maximum_level();
+		let minimum_level = container.get_minimum_zoom();
+		let maximum_level = container.get_maximum_zoom();
 		let mut level_index: Vec<ByteRange> = Vec::new();
 
 		for level in minimum_level..=maximum_level {

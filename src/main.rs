@@ -1,10 +1,57 @@
 mod container;
 
-use clap::{arg, value_parser, Command};
-use std::path::PathBuf;
+use clap::{Args, Parser, Subcommand};
 use container::Tiles;
+use std::path::PathBuf;
+
+#[derive(Parser)]
+#[command(author, version, about, long_about = None)]
+#[command(propagate_version = true)]
+pub struct Cli {
+	/// minimal zoom level
+	#[arg(long, value_name = "int")]
+	min_zoom: Option<u64>,
+
+	/// maximal zoom level
+	#[arg(long, value_name = "int")]
+	max_zoom: Option<u64>,
+
+	#[command(subcommand)]
+	command: Commands,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+	/// convert between different tile containers
+	Convert {
+		/// (e.g. *.mbtiles, *.cloudtiles, *.tar)
+		input_file: PathBuf,
+
+		/// (e.g. *.mbtiles, *.cloudtiles, *.tar)
+		output_file: PathBuf,
+	},
+}
+
+#[derive(Args)]
+struct Convert {
+	name: Option<String>,
+}
 
 fn main() -> std::io::Result<()> {
+	let cli = Cli::parse();
+
+	let command = &cli.command;
+	match command {
+		Commands::Convert {
+			input_file,
+			output_file,
+		} => {
+			println!("convert from {:?} to {:?}", input_file, output_file);
+			Tiles::convert(input_file, output_file, &cli)?;
+			return Ok(());
+		}
+	}
+	/*
 	let cmd = Command::new("cargo")
 		.bin_name("cloudtiles")
 		.subcommand_required(true)
@@ -24,13 +71,8 @@ fn main() -> std::io::Result<()> {
 		);
 	let matches = cmd.get_matches();
 	match matches.subcommand() {
-		Some(("convert", sub_matches)) => {
-			let filename_in = sub_matches.get_one::<PathBuf>("INPUT_FILE").unwrap();
-			let filename_out = sub_matches.get_one::<PathBuf>("OUTPUT_FILE").unwrap();
-			println!("convert from {:?} to {:?}", filename_in, filename_out);
-			Tiles::convert(filename_in, filename_out)?;
-			return Ok(());
-		}
+		Some(("convert", sub_matches)) => {}
 		_ => unreachable!("Exhausted list of subcommands and subcommand_required prevents `None`"),
 	}
+	*/
 }

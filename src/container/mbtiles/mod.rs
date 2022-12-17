@@ -1,13 +1,13 @@
 use std::io::Read;
 
-use super::container::TileType;
+use super::container::TileFormat;
 use crate::container::container::{self, TileCompression};
 
 pub struct Reader {
 	connection: rusqlite::Connection,
-	minimum_level: Option<u64>,
-	maximum_level: Option<u64>,
-	tile_type: Option<TileType>,
+	minimum_zoom: Option<u64>,
+	maximum_zoom: Option<u64>,
+	tile_format: Option<TileFormat>,
 	tile_compression: Option<TileCompression>,
 	meta_data: Option<String>,
 }
@@ -15,10 +15,10 @@ impl Reader {
 	fn new(connection: rusqlite::Connection) -> Reader {
 		Reader {
 			connection,
-			minimum_level: None,
-			maximum_level: None,
-			tile_type: None,
-			tile_compression: None,
+			minimum_zoom: None,
+			maximum_zoom: None,
+			tile_format: None,
+			tile_compression: Some(TileCompression::None),
 			meta_data: None,
 		}
 	}
@@ -43,24 +43,21 @@ impl Reader {
 			let val = row.get::<_, String>(1)?;
 			//println!("name: {}, value: {}", key, val);
 			match key.as_str() {
-				"minzoom" => self.minimum_level = Some(val.parse::<u64>().unwrap()),
-				"maxzoom" => self.maximum_level = Some(val.parse::<u64>().unwrap()),
+				"minzoom" => self.minimum_zoom = Some(val.parse::<u64>().unwrap()),
+				"maxzoom" => self.maximum_zoom = Some(val.parse::<u64>().unwrap()),
 				"format" => match val.as_str() {
 					"jpg" => {
-						self.tile_type = Some(TileType::JPG);
-						self.tile_compression = Some(TileCompression::None);
+						self.tile_format = Some(TileFormat::JPG);
 					}
 					"pbf" => {
-						self.tile_type = Some(TileType::PBF);
+						self.tile_format = Some(TileFormat::PBF);
 						self.tile_compression = Some(TileCompression::Gzip);
 					}
 					"png" => {
-						self.tile_type = Some(TileType::PNG);
-						self.tile_compression = Some(TileCompression::None);
+						self.tile_format = Some(TileFormat::PNG);
 					}
 					"webp" => {
-						self.tile_type = Some(TileType::WEBP);
-						self.tile_compression = Some(TileCompression::None);
+						self.tile_format = Some(TileFormat::WEBP);
 					}
 					_ => panic!("unknown format"),
 				},
@@ -69,13 +66,13 @@ impl Reader {
 			}
 		}
 
-		if self.minimum_level.is_none() {
+		if self.minimum_zoom.is_none() {
 			panic!("'minzoom' is not defined in table 'metadata'");
 		}
-		if self.maximum_level.is_none() {
+		if self.maximum_zoom.is_none() {
 			panic!("'maxzoom' is not defined in table 'metadata'");
 		}
-		if self.tile_type.is_none() {
+		if self.tile_format.is_none() {
 			panic!("'format' is not defined in table 'metadata'");
 		}
 		if self.meta_data.is_none() {
@@ -100,8 +97,8 @@ impl container::Reader for Reader {
 		let reader = Self::load_sqlite(filename).expect("SQLite error");
 		return Ok(Box::new(reader));
 	}
-	fn get_tile_type(&self) -> TileType {
-		return self.tile_type.clone().unwrap();
+	fn get_tile_format(&self) -> TileFormat {
+		return self.tile_format.clone().unwrap();
 	}
 	fn get_tile_compression(&self) -> TileCompression {
 		return self.tile_compression.clone().unwrap();
@@ -109,11 +106,17 @@ impl container::Reader for Reader {
 	fn get_meta(&self) -> &[u8] {
 		return self.meta_data.as_ref().unwrap().as_bytes();
 	}
-	fn get_minimum_level(&self) -> u64 {
-		return self.minimum_level.unwrap();
+	fn get_minimum_zoom(&self) -> u64 {
+		return self.minimum_zoom.unwrap();
 	}
-	fn get_maximum_level(&self) -> u64 {
-		return self.maximum_level.unwrap();
+	fn get_maximum_zoom(&self) -> u64 {
+		return self.maximum_zoom.unwrap();
+	}
+	fn set_minimum_zoom(&mut self, level: u64) {
+		self.minimum_zoom = Some(level);
+	}
+	fn set_maximum_zoom(&mut self, level: u64) {
+		self.maximum_zoom = Some(level);
 	}
 	fn get_minimum_col(&self, level: u64) -> u64 {
 		return self.calc_min_max(level, "min", "column").unwrap();
