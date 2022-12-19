@@ -87,8 +87,9 @@ cargo build && target/debug/cloudtiles --max-zoom 3 convert tiles/maptiler-osm-2
 
 <style>
   @media (prefers-color-scheme: dark) {
-    img.fix-dark-mode {
+    img.fix-dark-mode, article.markdown-body.entry-content img {
       filter: invert(100%) hue-rotate(180deg);
+      background-color: transparent;
     }
   }
 </style>
