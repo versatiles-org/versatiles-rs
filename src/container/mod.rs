@@ -11,8 +11,10 @@ pub struct Tiles;
 impl Tiles {
 	pub fn convert(filename_in: &PathBuf, filename_out: &PathBuf, cli: &Cli) -> std::io::Result<()> {
 		let container_in = Tiles::new_reader(filename_in, cli)?;
+		let mut converter = Tiles::new_converter(filename_out, cli)?;
+		converter.convert_from(container_in)?;
 
-		return Tiles::convert_from(filename_out, container_in, cli);
+		return Ok(());
 	}
 	pub fn new_reader(filename: &PathBuf, cli: &Cli) -> std::io::Result<Box<dyn Reader>> {
 		let extension = filename.extension().unwrap().to_str();
@@ -38,11 +40,7 @@ impl Tiles {
 
 		return Ok(container);
 	}
-	pub fn convert_from(
-		filename: &PathBuf,
-		reader: Box<dyn Reader>,
-		cli: &Cli,
-	) -> std::io::Result<()> {
+	pub fn new_converter(filename: &PathBuf, cli: &Cli) -> std::io::Result<Box<dyn Converter>> {
 		let extension = filename.extension().unwrap().to_str();
 		let mut converter = match extension {
 			Some("mbtiles") => mbtiles::Converter::new(filename).unwrap(),
@@ -54,6 +52,6 @@ impl Tiles {
 			converter.set_precompression(cli.precompression.as_ref().unwrap());
 		}
 
-		return converter.convert_from(reader);
+		return Ok(converter);
 	}
 }
