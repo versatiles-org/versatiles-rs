@@ -99,20 +99,26 @@ impl Converter {
 		let mut todos: Vec<BlockDefinition> = Vec::new();
 
 		for level in level_min..=level_max {
-			let level_row_min = container.get_minimum_row(level);
-			let level_row_max = container.get_maximum_row(level);
-			let level_col_min = container.get_minimum_col(level);
-			let level_col_max = container.get_maximum_col(level);
-			for block_row in level_row_min.shr(8)..=level_row_max.shr(8) {
-				for block_col in level_col_min.shr(8)..=level_col_max.shr(8) {
-					let row_min = ((level_row_min - block_row * 256) as u64).max(0);
-					let row_max = ((level_row_max - block_row * 256) as u64).min(255);
-					let col_min = ((level_col_min - block_col * 256) as u64).max(0);
-					let col_max = ((level_col_max - block_col * 256) as u64).min(255);
+			let level_row_min = container.get_minimum_row(level) as i64;
+			let level_row_max = container.get_maximum_row(level) as i64;
+			let level_col_min = container.get_minimum_col(level) as i64;
+			let level_col_max = container.get_maximum_col(level) as i64;
+			let block_row_min: i64 = level_row_min.shr(8);
+			let block_row_max: i64 = level_row_max.shr(8);
+			let block_col_min: i64 = level_col_min.shr(8);
+			let block_col_max: i64 = level_col_max.shr(8);
+			for block_row in block_row_min..=block_row_max {
+				for block_col in block_col_min..=block_col_max {
+					let row0 = (block_row * 256) as i64;
+					let col0 = (block_col * 256) as i64;
+					let row_min = (level_row_min - row0).min(255).max(0) as u64;
+					let row_max = (level_row_max - row0).min(255).max(0) as u64;
+					let col_min = (level_col_min - col0).min(255).max(0) as u64;
+					let col_max = (level_col_max - col0).min(255).max(0) as u64;
 					todos.push(BlockDefinition {
 						level,
-						block_row,
-						block_col,
+						block_row: block_row as u64,
+						block_col: block_col as u64,
 						row_min,
 						row_max,
 						col_min,
