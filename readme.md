@@ -9,9 +9,7 @@ cargo build && target/debug/cloudtiles --max-zoom 3 convert tiles/maptiler-osm-2
 
 # format
 
-<p align="center">
-<img src="docs/file_format.svg?raw=true">
-</p>
+<p align="center"><img src="docs/file_format.svg?raw=true" class="fix-dark-mode"></p>
 
 - integers are stored with little endian byte order
 - strings are stored with utf8 encoding
@@ -70,9 +68,7 @@ cargo build && target/debug/cloudtiles --max-zoom 3 convert tiles/maptiler-osm-2
 
 ## `tile_index`
 
-<p align="center">
-<img src="docs/block_tiles.svg?raw=true">
-</p>
+<p align="center"><img src="docs/block_tiles.svg?raw=true" class="fix-dark-mode"></p>
 
 - brotli compressed data structure
 - offsets are relative to start of `block`
@@ -89,3 +85,11 @@ cargo build && target/debug/cloudtiles --max-zoom 3 convert tiles/maptiler-osm-2
 | 3         | 1      | u8   | max_row               |
 | 4 + 12*i  | 8      | u64  | offset of tile_blob i |
 | 12 + 12*i | 4      | u32  | length of tile_blob i |
+
+<style>
+  @media (prefers-color-scheme: dark) {
+    img.fix-dark-mode {
+      filter: invert(100%) hue-rotate(180deg);
+    }
+  }
+</style>
