@@ -70,6 +70,24 @@ pub trait Reader {
 	}
 }
 
+pub struct ReaderWrapper<'a> {
+	reader: &'a Box<dyn Reader>,
+}
+
+impl ReaderWrapper<'_> {
+	pub fn new(reader: &Box<dyn Reader>) -> ReaderWrapper {
+		return ReaderWrapper { reader };
+	}
+	pub fn get_tile_uncompressed(&self, level: u64, col: u64, row: u64) -> Vec<u8> {
+		return self.reader.get_tile_uncompressed(level, col, row).unwrap();
+	}
+	pub fn get_tile_raw(&self, level: u64, col: u64, row: u64) -> Vec<u8> {
+		return self.reader.get_tile_raw(level, col, row).unwrap();
+	}
+}
+
+unsafe impl Send for ReaderWrapper<'_> {}
+
 pub trait Converter {
 	fn new(filename: &PathBuf) -> std::io::Result<Box<dyn Converter>>
 	where
