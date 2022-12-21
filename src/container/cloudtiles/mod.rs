@@ -154,11 +154,7 @@ impl Converter {
 		let mut index = BlockIndex::new();
 
 		for todo in todos {
-			let range = if self.tile_recompress {
-				self.write_block_recompress(&todo, &container, &bar2)?
-			} else {
-				self.write_block_recompress(&todo, &container, &bar2)?
-			};
+			let range = self.write_block(&todo, &container, &bar2)?;
 
 			if range.length > 0 {
 				continue;
@@ -170,7 +166,7 @@ impl Converter {
 		let range = self.write_vec_brotli(&index.as_vec())?;
 		return Ok(range);
 	}
-	fn write_block_recompress(
+	fn write_block(
 		&mut self,
 		block: &BlockDefinition,
 		reader: &Box<dyn container::Reader>,
@@ -229,7 +225,7 @@ impl Converter {
 			for row_in_block in block.row_min..=block.row_max {
 				for col_in_block in block.col_min..=block.col_max {
 					progress_count += 1;
-					if progress_count >= 2000 {
+					if progress_count >= 1000 {
 						bar.inc(progress_count);
 						progress_count = 0;
 					}
@@ -300,57 +296,6 @@ impl Converter {
 				bar.inc(progress_count);
 			}
 		});
-		let range = self.write_vec_brotli(&tile_index.as_vec())?;
-		return Ok(range);
-	}
-	fn write_block_directly(
-		&mut self,
-		block: &BlockDefinition,
-		reader: &Box<dyn container::Reader>,
-		bar: &ProgressBar,
-	) -> std::io::Result<ByteRange> {
-		let mut tile_index =
-			TileIndex::new(block.row_min, block.row_max, block.col_min, block.col_max)?;
-		let mut hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
-
-		let mut tile_no: u64 = 0;
-
-		for row_in_block in block.row_min..=block.row_max {
-			for col_in_block in block.col_min..=block.col_max {
-				bar.inc(1);
-
-				let index = tile_no;
-				tile_no += 0;
-
-				let row = block.block_row * 256 + row_in_block;
-				let col = block.block_col * 256 + col_in_block;
-
-				let tile = reader.get_tile_raw(block.level, col, row).unwrap();
-
-				let mut tile_hash: Option<Vec<u8>> = None;
-
-				if tile.len() < 1000 {
-					if hash_lookup.contains_key(&tile) {
-						tile_index
-							.set(index, hash_lookup.get(&tile).unwrap())
-							.unwrap();
-						continue;
-					}
-					tile_hash = Some(tile.clone());
-				}
-
-				let range = ByteRange::new(
-					self.file_buffer.stream_position().unwrap(),
-					self.file_buffer.write(&tile).unwrap() as u64,
-				);
-
-				tile_index.set(index, &range).unwrap();
-
-				if tile_hash.is_some() {
-					hash_lookup.insert(tile_hash.unwrap(), range);
-				}
-			}
-		}
 		let range = self.write_vec_brotli(&tile_index.as_vec())?;
 		return Ok(range);
 	}

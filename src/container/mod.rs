@@ -48,8 +48,8 @@ impl Tiles {
 			_ => panic!("extension '{:?}' unknown", extension),
 		};
 
-		if cli.precompression.is_some() {
-			converter.set_precompression(cli.precompression.as_ref().unwrap());
+		if cli.precompress.is_some() {
+			converter.set_precompression(cli.precompress.as_ref().unwrap());
 		}
 
 		return Ok(converter);

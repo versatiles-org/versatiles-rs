@@ -18,7 +18,7 @@ pub struct Cli {
 
 	/// precompress tiles
 	#[arg(long, value_enum)]
-	precompression: Option<container::container::TileCompression>,
+	precompress: Option<container::container::TileCompression>,
 
 	#[command(subcommand)]
 	command: Commands,
