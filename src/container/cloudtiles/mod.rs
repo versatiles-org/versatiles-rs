@@ -183,14 +183,14 @@ impl Converter {
 	) -> std::io::Result<ByteRange> {
 		let mut tile_index =
 			TileIndex::new(block.row_min, block.row_max, block.col_min, block.col_max)?;
-		let hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
+		let tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
 		let wrapped_reader = ReaderWrapper::new(reader);
 
 		let reader_mutex = Mutex::new(wrapped_reader);
 		let writer_mutex = Mutex::new(&mut self.file_buffer);
 		let tile_index_mutex = Mutex::new(&mut tile_index);
-		let hash_lookup_mutex = Mutex::new(hash_lookup);
+		let tile_hash_lookup_mutex = Mutex::new(tile_hash_lookup);
 
 		let finalize_write = |compressed: &Vec<u8>, index: u64, tile_hash: Option<Vec<u8>>| {
 			let mut save_writer = writer_mutex.lock().unwrap();
@@ -205,9 +205,9 @@ impl Converter {
 			drop(save_tile_index);
 
 			if tile_hash.is_some() {
-				let mut save_hash_lookup = hash_lookup_mutex.lock().unwrap();
-				save_hash_lookup.insert(tile_hash.unwrap(), range);
-				drop(save_hash_lookup);
+				let mut save_tile_hash_lookup = tile_hash_lookup_mutex.lock().unwrap();
+				save_tile_hash_lookup.insert(tile_hash.unwrap(), range);
+				drop(save_tile_hash_lookup);
 			}
 		};
 
@@ -268,11 +268,11 @@ impl Converter {
 					let mut tile_hash: Option<Vec<u8>> = None;
 
 					if tile.len() < 1000 {
-						let save_hash_lookup = hash_lookup_mutex.lock().unwrap();
-						if save_hash_lookup.contains_key(&tile) {
+						let save_tile_hash_lookup = tile_hash_lookup_mutex.lock().unwrap();
+						if save_tile_hash_lookup.contains_key(&tile) {
 							let mut save_tile_index = tile_index_mutex.lock().unwrap();
 							save_tile_index
-								.set(index, save_hash_lookup.get(&tile).unwrap())
+								.set(index, save_tile_hash_lookup.get(&tile).unwrap())
 								.unwrap();
 							continue;
 						}
