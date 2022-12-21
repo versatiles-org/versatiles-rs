@@ -1,4 +1,4 @@
-use crate::container::container::{self};
+use crate::container::abstract_classes;
 
 pub struct Converter;
-impl container::Converter for Converter {}
+impl abstract_classes::Converter for Converter {}

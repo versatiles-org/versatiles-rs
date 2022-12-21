@@ -2,25 +2,7 @@
 
 use std::path::PathBuf;
 
-use clap::ValueEnum;
-
-#[derive(PartialEq, Clone, Debug)]
-pub enum TileFormat {
-	PBF,
-	PNG,
-	JPG,
-	WEBP,
-}
-
-#[derive(PartialEq, Clone, Debug, ValueEnum)]
-pub enum TileCompression {
-	/// uncompressed
-	None,
-	/// use gzip
-	Gzip,
-	/// use brotli
-	Brotli,
-}
+use super::{TileCompression, TileFormat};
 
 pub trait Reader {
 	fn load(filename: &PathBuf) -> std::io::Result<Box<dyn Reader>>
@@ -78,18 +60,3 @@ impl ReaderWrapper<'_> {
 }
 
 unsafe impl Send for ReaderWrapper<'_> {}
-
-pub trait Converter {
-	fn new(filename: &PathBuf) -> std::io::Result<Box<dyn Converter>>
-	where
-		Self: Sized,
-	{
-		panic!("not implemented: new");
-	}
-	fn convert_from(&mut self, container: Box<dyn Reader>) -> std::io::Result<()> {
-		panic!("not implemented: convert_from");
-	}
-	fn set_precompression(&mut self, compression: &TileCompression) {
-		panic!("not implemented: set_precompression");
-	}
-}

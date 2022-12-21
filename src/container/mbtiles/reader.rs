@@ -2,7 +2,7 @@ use std::io::Read;
 
 use flate2::bufread::GzDecoder;
 
-use crate::container::container::{self, TileCompression, TileFormat};
+use crate::container::abstract_classes::{self, TileCompression, TileFormat};
 
 pub struct Reader {
 	connection: rusqlite::Connection,
@@ -100,8 +100,8 @@ impl Reader {
 	}
 }
 
-impl container::Reader for Reader {
-	fn load(filename: &std::path::PathBuf) -> std::io::Result<Box<dyn container::Reader>> {
+impl abstract_classes::Reader for Reader {
+	fn load(filename: &std::path::PathBuf) -> std::io::Result<Box<dyn abstract_classes::Reader>> {
 		let reader = Self::load_sqlite(filename).expect("SQLite error");
 		return Ok(Box::new(reader));
 	}

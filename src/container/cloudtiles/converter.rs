@@ -1,4 +1,6 @@
-use crate::container::container::{self, ReaderWrapper, TileCompression, TileFormat};
+use crate::container::abstract_classes::{
+	self, Reader, ReaderWrapper, TileCompression, TileFormat,
+};
 use brotli::{enc::BrotliEncoderParams, BrotliCompress};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::HashMap;
@@ -17,8 +19,8 @@ pub struct Converter {
 	file_buffer: BufWriter<File>,
 }
 
-impl container::Converter for Converter {
-	fn new(filename: &PathBuf) -> std::io::Result<Box<dyn container::Converter>>
+impl abstract_classes::Converter for Converter {
+	fn new(filename: &PathBuf) -> std::io::Result<Box<dyn abstract_classes::Converter>>
 	where
 		Self: Sized,
 	{
@@ -29,7 +31,7 @@ impl container::Converter for Converter {
 			file_buffer: BufWriter::new(file),
 		}))
 	}
-	fn convert_from(&mut self, container: Box<dyn container::Reader>) -> std::io::Result<()> {
+	fn convert_from(&mut self, container: Box<dyn Reader>) -> std::io::Result<()> {
 		self.write_header(&container)?;
 		self.write_meta(&container)?;
 		self.write_blocks(&container)?;
@@ -42,7 +44,10 @@ impl container::Converter for Converter {
 }
 
 impl Converter {
-	fn write_header(&mut self, container: &Box<dyn container::Reader>) -> std::io::Result<()> {
+	fn write_header(
+		&mut self,
+		container: &Box<dyn abstract_classes::Reader>,
+	) -> std::io::Result<()> {
 		// magic word
 		self.write(b"OpenCloudTiles/Container/v1   ")?;
 
@@ -81,7 +86,7 @@ impl Converter {
 
 		return Ok(());
 	}
-	fn write_meta(&mut self, container: &Box<dyn container::Reader>) -> std::io::Result<()> {
+	fn write_meta(&mut self, container: &Box<dyn abstract_classes::Reader>) -> std::io::Result<()> {
 		let metablob = container.get_meta().to_vec();
 		let meta_blob_range = self.write_vec_brotli(&metablob)?;
 		let range = self.write_range_at(&meta_blob_range, 128)?;
@@ -89,7 +94,7 @@ impl Converter {
 	}
 	fn write_blocks(
 		&mut self,
-		container: &Box<dyn container::Reader>,
+		container: &Box<dyn abstract_classes::Reader>,
 	) -> std::io::Result<ByteRange> {
 		let level_min = container.get_minimum_zoom();
 		let level_max = container.get_maximum_zoom();
@@ -176,7 +181,7 @@ impl Converter {
 	fn write_block(
 		&mut self,
 		block: &BlockDefinition,
-		reader: &Box<dyn container::Reader>,
+		reader: &Box<dyn abstract_classes::Reader>,
 		bar: &ProgressBar,
 	) -> std::io::Result<ByteRange> {
 		let mut tile_index =

@@ -1,8 +1,9 @@
 mod container;
 
 use clap::{Args, Parser, Subcommand};
-use container::Tiles;
 use std::path::PathBuf;
+
+use crate::container::Tiles;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -18,7 +19,7 @@ pub struct Cli {
 
 	/// precompress tiles
 	#[arg(long, value_enum)]
-	precompress: Option<container::container::TileCompression>,
+	precompress: Option<container::TileCompression>,
 
 	#[command(subcommand)]
 	command: Commands,
