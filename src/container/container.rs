@@ -50,17 +50,8 @@ pub trait Reader {
 	fn set_maximum_zoom(&mut self, level: u64) {
 		panic!("not implemented: set_maximum_zoom")
 	}
-	fn get_minimum_col(&self, level: u64) -> u64 {
-		panic!("not implemented: get_minimum_col")
-	}
-	fn get_maximum_col(&self, level: u64) -> u64 {
-		panic!("not implemented: get_maximum_col");
-	}
-	fn get_minimum_row(&self, level: u64) -> u64 {
-		panic!("not implemented: get_minimum_row")
-	}
-	fn get_maximum_row(&self, level: u64) -> u64 {
-		panic!("not implemented: get_maximum_row");
+	fn get_level_bbox(&self, level: u64) -> (u64, u64, u64, u64) {
+		panic!("not implemented: get_bbox")
 	}
 	fn get_tile_uncompressed(&self, level: u64, col: u64, row: u64) -> Result<Vec<u8>, &str> {
 		panic!("not implemented: get_tile_uncompressed");

@@ -108,11 +108,11 @@ impl Converter {
 
 		for level in level_min..=level_max {
 			bar1.set_position(level);
-
-			let level_row_min = container.get_minimum_row(level) as i64;
-			let level_row_max = container.get_maximum_row(level) as i64;
-			let level_col_min = container.get_minimum_col(level) as i64;
-			let level_col_max = container.get_maximum_col(level) as i64;
+			let bbox = container.get_level_bbox(level);
+			let level_row_min: i64 = bbox.0 as i64;
+			let level_row_max: i64 = bbox.1 as i64;
+			let level_col_min: i64 = bbox.2 as i64;
+			let level_col_max: i64 = bbox.3 as i64;
 			let block_row_min: i64 = level_row_min.shr(8);
 			let block_row_max: i64 = level_row_max.shr(8);
 			let block_col_min: i64 = level_col_min.shr(8);
