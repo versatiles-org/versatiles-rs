@@ -97,17 +97,17 @@ impl Converter {
 
 		let mut todos: Vec<BlockDefinition> = Vec::new();
 
-		let bar1 = ProgressBar::new(level_max);
+		let bar1 = ProgressBar::new(level_max - level_min);
 		bar1.set_style(
 			ProgressStyle::with_template(
-				"counting tiles: {wide_bar:0.white/dim.white} {pos:>7}/{len:7} {per_sec:12} {eta_precise}",
+				"counting tiles: {wide_bar:0.white/dim.white} {pos:>9}/{len:9} {per_sec:18} {elapsed_precise} {eta_precise}",
 			)
 			.unwrap()
 			.progress_chars("██▁"),
 		);
 
 		for level in level_min..=level_max {
-			bar1.set_position(level);
+			bar1.set_position(level - level_min);
 			let bbox = container.get_level_bbox(level);
 			let level_row_min: i64 = bbox.0 as i64;
 			let level_row_max: i64 = bbox.1 as i64;
@@ -138,13 +138,14 @@ impl Converter {
 				}
 			}
 		}
+		bar1.abandon();
 
 		let sum = todos.iter().map(|x| x.count).sum();
 
 		let bar2 = ProgressBar::new(sum);
 		bar2.set_style(
 			ProgressStyle::with_template(
-				"{wide_bar:0.white/dim.white} {pos:>7}/{len:7} {per_sec:12} {eta_precise}",
+				"converting tiles: {wide_bar:0.white/dim.white} {pos:>9}/{len:9} {per_sec:18} {elapsed_precise} {eta_precise}",
 			)
 			.unwrap()
 			.progress_chars("██▁"),
@@ -164,8 +165,7 @@ impl Converter {
 			}
 			index.add(&todo.level, &todo.block_row, &todo.block_col, &range)?;
 		}
-
-		bar2.finish();
+		bar2.abandon();
 
 		let range = self.write_vec_brotli(&index.as_vec())?;
 		return Ok(range);
@@ -224,10 +224,15 @@ impl Converter {
 			let save_reader = reader_mutex.lock().unwrap();
 
 			let mut tile_no: u64 = 0;
+			let mut progress_count = 0;
 
 			for row_in_block in block.row_min..=block.row_max {
 				for col_in_block in block.col_min..=block.col_max {
-					bar.inc(1);
+					progress_count += 1;
+					if progress_count >= 2000 {
+						bar.inc(progress_count);
+						progress_count = 0;
+					}
 
 					let index = tile_no;
 					tile_no += 0;
@@ -290,6 +295,9 @@ impl Converter {
 						write_raw(&tile, index, tile_hash)
 					}
 				}
+			}
+			if progress_count > 0 {
+				bar.inc(progress_count);
 			}
 		});
 		let range = self.write_vec_brotli(&tile_index.as_vec())?;
