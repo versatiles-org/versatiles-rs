@@ -109,23 +109,29 @@ impl Converter {
 
 		for level in level_min..=level_max {
 			bar1.set_position(level - level_min);
+
 			let bbox = container.get_level_bbox(level);
+
 			let level_row_min: i64 = bbox.0 as i64;
 			let level_row_max: i64 = bbox.1 as i64;
 			let level_col_min: i64 = bbox.2 as i64;
 			let level_col_max: i64 = bbox.3 as i64;
+
 			let block_row_min: i64 = level_row_min.shr(8);
 			let block_row_max: i64 = level_row_max.shr(8);
 			let block_col_min: i64 = level_col_min.shr(8);
 			let block_col_max: i64 = level_col_max.shr(8);
+
 			for block_row in block_row_min..=block_row_max {
 				for block_col in block_col_min..=block_col_max {
 					let row0 = (block_row * 256) as i64;
 					let col0 = (block_col * 256) as i64;
+
 					let row_min = (level_row_min - row0).min(255).max(0) as u64;
 					let row_max = (level_row_max - row0).min(255).max(0) as u64;
 					let col_min = (level_col_min - col0).min(255).max(0) as u64;
 					let col_max = (level_col_max - col0).min(255).max(0) as u64;
+
 					todos.push(BlockDefinition {
 						level,
 						block_row: block_row as u64,
@@ -157,9 +163,11 @@ impl Converter {
 		for todo in todos {
 			let range = self.write_block(&todo, &container, &bar2)?;
 
-			if range.length > 0 {
+			if range.length == 0 {
+				// block is empty
 				continue;
 			}
+
 			index.add(&todo.level, &todo.block_row, &todo.block_col, &range)?;
 		}
 		bar2.abandon();
