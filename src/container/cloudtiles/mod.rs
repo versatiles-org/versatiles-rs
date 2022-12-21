@@ -97,7 +97,18 @@ impl Converter {
 
 		let mut todos: Vec<BlockDefinition> = Vec::new();
 
+		let bar1 = ProgressBar::new(level_max);
+		bar1.set_style(
+			ProgressStyle::with_template(
+				"counting tiles: {wide_bar:0.white/dim.white} {pos:>7}/{len:7} {per_sec:12} {eta_precise}",
+			)
+			.unwrap()
+			.progress_chars("██▁"),
+		);
+
 		for level in level_min..=level_max {
+			bar1.set_position(level);
+
 			let level_row_min = container.get_minimum_row(level) as i64;
 			let level_row_max = container.get_maximum_row(level) as i64;
 			let level_col_min = container.get_minimum_col(level) as i64;
@@ -127,10 +138,11 @@ impl Converter {
 				}
 			}
 		}
+
 		let sum = todos.iter().map(|x| x.count).sum();
 
-		let bar = ProgressBar::new(sum);
-		bar.set_style(
+		let bar2 = ProgressBar::new(sum);
+		bar2.set_style(
 			ProgressStyle::with_template(
 				"{wide_bar:0.white/dim.white} {pos:>7}/{len:7} {per_sec:12} {eta_precise}",
 			)
@@ -141,12 +153,11 @@ impl Converter {
 		let mut index = BlockIndex::new();
 
 		for todo in todos {
-			//let range = if self.tile_recompress {
-			//	self.write_block_recompress(&todo, &container, &bar)?
-			//} else {
-			//	self.write_block_directly(&todo, &container, &bar)?
-			//}
-			let range = self.write_block(&todo, &container, &bar)?;
+			let range = if self.tile_recompress {
+				self.write_block_recompress(&todo, &container, &bar2)?
+			} else {
+				self.write_block_recompress(&todo, &container, &bar2)?
+			};
 
 			if range.length > 0 {
 				continue;
@@ -154,12 +165,12 @@ impl Converter {
 			index.add(&todo.level, &todo.block_row, &todo.block_col, &range)?;
 		}
 
-		bar.finish();
+		bar2.finish();
 
 		let range = self.write_vec_brotli(&index.as_vec())?;
 		return Ok(range);
 	}
-	fn write_block(
+	fn write_block_recompress(
 		&mut self,
 		block: &BlockDefinition,
 		reader: &Box<dyn container::Reader>,
@@ -269,6 +280,57 @@ impl Converter {
 				}
 			}
 		});
+		let range = self.write_vec_brotli(&tile_index.as_vec())?;
+		return Ok(range);
+	}
+	fn write_block_directly(
+		&mut self,
+		block: &BlockDefinition,
+		reader: &Box<dyn container::Reader>,
+		bar: &ProgressBar,
+	) -> std::io::Result<ByteRange> {
+		let mut tile_index =
+			TileIndex::new(block.row_min, block.row_max, block.col_min, block.col_max)?;
+		let mut hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
+
+		let mut tile_no: u64 = 0;
+
+		for row_in_block in block.row_min..=block.row_max {
+			for col_in_block in block.col_min..=block.col_max {
+				bar.inc(1);
+
+				let index = tile_no;
+				tile_no += 0;
+
+				let row = block.block_row * 256 + row_in_block;
+				let col = block.block_col * 256 + col_in_block;
+
+				let tile = reader.get_tile_raw(block.level, col, row).unwrap();
+
+				let mut tile_hash: Option<Vec<u8>> = None;
+
+				if tile.len() < 1000 {
+					if hash_lookup.contains_key(&tile) {
+						tile_index
+							.set(index, hash_lookup.get(&tile).unwrap())
+							.unwrap();
+						continue;
+					}
+					tile_hash = Some(tile.clone());
+				}
+
+				let range = ByteRange::new(
+					self.file_buffer.stream_position().unwrap(),
+					self.file_buffer.write(&tile).unwrap() as u64,
+				);
+
+				tile_index.set(index, &range).unwrap();
+
+				if tile_hash.is_some() {
+					hash_lookup.insert(tile_hash.unwrap(), range);
+				}
+			}
+		}
 		let range = self.write_vec_brotli(&tile_index.as_vec())?;
 		return Ok(range);
 	}

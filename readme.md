@@ -2,9 +2,11 @@
 # build
 
 ```bash
-cargo build && target/debug/cloudtiles --max-zoom 3 convert tiles/maptiler-osm-2017-07-03-v3.6.1-germany_berlin.mbtiles tiles/berlin.cloudtiles
+cargo build && target/debug/cloudtiles convert tiles/philippines.mbtiles tiles/philippines.cloudtiles
 
-# cargo instruments --all-features -t "CPU Profiler" -- --max-zoom 3 convert tiles/maptiler-osm-2017-07-03-v3.6.1-germany_berlin.mbtiles tiles/berlin.cloudtiles
+# cargo instruments --all-features -t "CPU Profiler" -- --max-zoom 3 convert tiles/philippines.mbtiles tiles/philippines.cloudtiles
+
+# cargo instruments --all-features -t "CPU Profiler" -- convert tiles/philippines.mbtiles tiles/philippines.cloudtiles
 ```
 
 # format
