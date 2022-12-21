@@ -2,8 +2,7 @@ use std::io::Read;
 
 use flate2::bufread::GzDecoder;
 
-use super::container::TileFormat;
-use crate::container::container::{self, TileCompression};
+use crate::container::container::{self, TileCompression, TileFormat};
 
 pub struct Reader {
 	connection: rusqlite::Connection,
@@ -165,6 +164,3 @@ impl container::Reader for Reader {
 		};
 	}
 }
-
-pub struct Converter;
-impl container::Converter for Converter {}
