@@ -120,12 +120,6 @@ impl abstract_classes::Reader for Reader {
 	fn get_maximum_zoom(&self) -> u64 {
 		return self.maximum_zoom.unwrap();
 	}
-	fn set_minimum_zoom(&mut self, level: u64) {
-		self.minimum_zoom = Some(level);
-	}
-	fn set_maximum_zoom(&mut self, level: u64) {
-		self.maximum_zoom = Some(level);
-	}
 	fn get_level_bbox(&self, level: u64) -> (u64, u64, u64, u64) {
 		return self.calc_level_bbox(level).unwrap();
 	}

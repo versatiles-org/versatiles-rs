@@ -17,6 +17,8 @@ pub struct Converter {
 	tile_compression: Option<TileCompression>,
 	tile_recompress: bool,
 	file_buffer: BufWriter<File>,
+	minimum_zoom: Option<u64>,
+	maximum_zoom: Option<u64>,
 }
 
 impl abstract_classes::Converter for Converter {
@@ -29,6 +31,8 @@ impl abstract_classes::Converter for Converter {
 			tile_compression: None,
 			tile_recompress: false,
 			file_buffer: BufWriter::new(file),
+			minimum_zoom: None,
+			maximum_zoom: None,
 		}))
 	}
 	fn convert_from(&mut self, reader: Box<dyn Reader>) -> std::io::Result<()> {
@@ -40,6 +44,12 @@ impl abstract_classes::Converter for Converter {
 	}
 	fn set_precompression(&mut self, compression: &TileCompression) {
 		self.tile_compression = Some(compression.clone());
+	}
+	fn set_minimum_zoom(&mut self, level: u64) {
+		self.minimum_zoom = Some(level);
+	}
+	fn set_maximum_zoom(&mut self, level: u64) {
+		self.maximum_zoom = Some(level);
 	}
 }
 
@@ -93,8 +103,15 @@ impl Converter {
 		&mut self,
 		reader: &Box<dyn abstract_classes::Reader>,
 	) -> std::io::Result<ByteRange> {
-		let level_min = reader.get_minimum_zoom();
-		let level_max = reader.get_maximum_zoom();
+		let mut level_min = reader.get_minimum_zoom();
+		if self.minimum_zoom.is_some() {
+			level_min = level_min.max(self.minimum_zoom.unwrap())
+		}
+
+		let mut level_max = reader.get_maximum_zoom();
+		if self.maximum_zoom.is_some() {
+			level_max = level_max.max(self.maximum_zoom.unwrap())
+		}
 
 		let mut todos: Vec<BlockDefinition> = Vec::new();
 
