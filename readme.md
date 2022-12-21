@@ -7,7 +7,7 @@ cargo build && target/debug/cloudtiles --precompress brotli convert tiles/philip
 
 # cargo instruments --all-features -t "CPU Profiler" -- --max-zoom 3 convert tiles/philippines.mbtiles tiles/philippines.cloudtiles
 
-# cargo instruments --all-features -t "CPU Profiler" -- convert tiles/germany.mbtiles tiles/germany.cloudtiles
+# cargo instruments --all-features -t "CPU Profiler" -- convert tiles/philippines.mbtiles tiles/philippines.cloudtiles
 ```
 
 # format
