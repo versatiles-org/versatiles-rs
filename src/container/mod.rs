@@ -7,11 +7,11 @@ use std::path::PathBuf;
 
 use crate::Cli;
 
-pub struct Tiles;
-impl Tiles {
+pub struct Tools;
+impl Tools {
 	pub fn convert(filename_in: &PathBuf, filename_out: &PathBuf, cli: &Cli) -> std::io::Result<()> {
-		let container_in = Tiles::new_reader(filename_in, cli)?;
-		let mut converter = Tiles::new_converter(filename_out, cli)?;
+		let container_in = Tools::new_reader(filename_in, cli)?;
+		let mut converter = Tools::new_converter(filename_out, cli)?;
 		converter.convert_from(container_in)?;
 
 		return Ok(());

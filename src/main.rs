@@ -3,7 +3,7 @@ mod container;
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 
-use crate::container::Tiles;
+use crate::container::Tools;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -52,7 +52,7 @@ fn main() -> std::io::Result<()> {
 			output_file,
 		} => {
 			println!("convert from {:?} to {:?}", input_file, output_file);
-			Tiles::convert(input_file, output_file, &cli)?;
+			Tools::convert(input_file, output_file, &cli)?;
 			return Ok(());
 		}
 	}
