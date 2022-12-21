@@ -31,10 +31,10 @@ impl abstract_classes::Converter for Converter {
 			file_buffer: BufWriter::new(file),
 		}))
 	}
-	fn convert_from(&mut self, container: Box<dyn Reader>) -> std::io::Result<()> {
-		self.write_header(&container)?;
-		self.write_meta(&container)?;
-		self.write_blocks(&container)?;
+	fn convert_from(&mut self, reader: Box<dyn Reader>) -> std::io::Result<()> {
+		self.write_header(&reader)?;
+		self.write_meta(&reader)?;
+		self.write_blocks(&reader)?;
 
 		return Ok(());
 	}
@@ -44,15 +44,12 @@ impl abstract_classes::Converter for Converter {
 }
 
 impl Converter {
-	fn write_header(
-		&mut self,
-		container: &Box<dyn abstract_classes::Reader>,
-	) -> std::io::Result<()> {
+	fn write_header(&mut self, reader: &Box<dyn abstract_classes::Reader>) -> std::io::Result<()> {
 		// magic word
-		self.write(b"OpenCloudTiles/Container/v1   ")?;
+		self.write(b"OpenCloudTiles/reader/v1   ")?;
 
 		// tile format
-		let tile_format = container.get_tile_format();
+		let tile_format = reader.get_tile_format();
 		let tile_format_value: u8 = match tile_format {
 			TileFormat::PNG => 0,
 			TileFormat::JPG => 1,
@@ -62,7 +59,7 @@ impl Converter {
 		self.write(&[tile_format_value])?;
 
 		// precompression
-		let tile_compression_src = container.get_tile_compression();
+		let tile_compression_src = reader.get_tile_compression();
 
 		if self.tile_compression.is_none() {
 			self.tile_compression = Some(tile_compression_src.clone());
@@ -86,18 +83,18 @@ impl Converter {
 
 		return Ok(());
 	}
-	fn write_meta(&mut self, container: &Box<dyn abstract_classes::Reader>) -> std::io::Result<()> {
-		let metablob = container.get_meta().to_vec();
+	fn write_meta(&mut self, reader: &Box<dyn abstract_classes::Reader>) -> std::io::Result<()> {
+		let metablob = reader.get_meta().to_vec();
 		let meta_blob_range = self.write_vec_brotli(&metablob)?;
 		let range = self.write_range_at(&meta_blob_range, 128)?;
 		return Ok(range);
 	}
 	fn write_blocks(
 		&mut self,
-		container: &Box<dyn abstract_classes::Reader>,
+		reader: &Box<dyn abstract_classes::Reader>,
 	) -> std::io::Result<ByteRange> {
-		let level_min = container.get_minimum_zoom();
-		let level_max = container.get_maximum_zoom();
+		let level_min = reader.get_minimum_zoom();
+		let level_max = reader.get_maximum_zoom();
 
 		let mut todos: Vec<BlockDefinition> = Vec::new();
 
@@ -113,7 +110,7 @@ impl Converter {
 		for level in level_min..=level_max {
 			bar1.set_position(level - level_min);
 
-			let bbox = container.get_level_bbox(level);
+			let bbox = reader.get_level_bbox(level);
 
 			let level_row_min: i64 = bbox.0 as i64;
 			let level_row_max: i64 = bbox.1 as i64;
@@ -164,7 +161,7 @@ impl Converter {
 		let mut index = BlockIndex::new();
 
 		for todo in todos {
-			let range = self.write_block(&todo, &container, &bar2)?;
+			let range = self.write_block(&todo, &reader, &bar2)?;
 
 			if range.length == 0 {
 				// block is empty
