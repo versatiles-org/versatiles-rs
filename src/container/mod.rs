@@ -1,6 +1,7 @@
 mod abstract_classes;
 mod cloudtiles;
 mod mbtiles;
+mod tar;
 
 pub use abstract_classes::*;
 use std::path::PathBuf;
@@ -48,6 +49,7 @@ impl Tools {
 		let mut converter = match extension {
 			Some("mbtiles") => mbtiles::Converter::new(filename).unwrap(),
 			Some("cloudtiles") => cloudtiles::Converter::new(filename).unwrap(),
+			Some("tar") => tar::Converter::new(filename).unwrap(),
 			_ => panic!("extension '{:?}' unknown", extension),
 		};
 
