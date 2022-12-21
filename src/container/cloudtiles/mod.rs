@@ -9,6 +9,7 @@ use std::io::{BufWriter, Cursor, Read, Seek, Write};
 use std::ops::Shr;
 use std::path::PathBuf;
 use std::sync::Mutex;
+use std::time::{Duration, SystemTime};
 
 pub struct Reader;
 impl container::Reader for Reader {}
@@ -221,11 +222,13 @@ impl Converter {
 
 			let mut tile_no: u64 = 0;
 			let mut progress_count = 0;
+			let mut next_progress_update = SystemTime::now() + Duration::from_secs(10);
 
 			for row_in_block in block.row_min..=block.row_max {
 				for col_in_block in block.col_min..=block.col_max {
 					progress_count += 1;
-					if progress_count >= 1000 {
+					if SystemTime::now() >= next_progress_update {
+						next_progress_update = SystemTime::now() + Duration::from_secs(10);
 						bar.inc(progress_count);
 						progress_count = 0;
 					}
