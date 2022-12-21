@@ -130,29 +130,35 @@ impl container::Reader for Reader {
 	fn get_level_bbox(&self, level: u64) -> (u64, u64, u64, u64) {
 		return self.calc_level_bbox(level).unwrap();
 	}
-	fn get_tile_raw(&self, level: u64, col: u64, row: u64) -> Result<Vec<u8>, &str> {
+	fn get_tile_raw(&self, level: u64, col: u64, row: u64) -> Option<Vec<u8>> {
 		let mut stmt = self
 			.connection
 			.prepare(
 				"SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?",
 			)
 			.expect("SQL preparation failed");
-		let data = stmt
-			.query_row([level, col, row], |entry| entry.get::<_, Vec<u8>>(0))
-			.expect("SQL query failes");
-		return Ok(data);
+		let result = stmt.query_row([level, col, row], |entry| entry.get::<_, Vec<u8>>(0));
+		if result.is_ok() {
+			return Some(result.unwrap());
+		} else {
+			return None;
+		};
 	}
-	fn get_tile_uncompressed(&self, level: u64, col: u64, row: u64) -> Result<Vec<u8>, &str> {
-		let data = self.get_tile_raw(level, col, row)?;
+	fn get_tile_uncompressed(&self, level: u64, col: u64, row: u64) -> Option<Vec<u8>> {
+		let data = self.get_tile_raw(level, col, row);
+		if data.is_none() {
+			return None;
+		}
+		let tile = data.unwrap();
 		return match self.tile_compression {
-			Some(TileCompression::None) => Ok(data),
+			Some(TileCompression::None) => Some(tile),
 			Some(TileCompression::Gzip) => {
 				let mut result: Vec<u8> = Vec::new();
-				//println!("{:X?}", data);
-				let _bytes_written = GzDecoder::new(data.as_slice())
+				//println!("{:X?}", tile);
+				let _bytes_written = GzDecoder::new(tile.as_slice())
 					.read_to_end(&mut result)
 					.unwrap();
-				Ok(result)
+				Some(result)
 			}
 			Some(TileCompression::Brotli) => panic!("brotli decompression not implemented"),
 			None => panic!(""),

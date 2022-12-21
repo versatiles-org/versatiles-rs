@@ -53,10 +53,10 @@ pub trait Reader {
 	fn get_level_bbox(&self, level: u64) -> (u64, u64, u64, u64) {
 		panic!("not implemented: get_bbox")
 	}
-	fn get_tile_uncompressed(&self, level: u64, col: u64, row: u64) -> Result<Vec<u8>, &str> {
+	fn get_tile_uncompressed(&self, level: u64, col: u64, row: u64) -> Option<Vec<u8>> {
 		panic!("not implemented: get_tile_uncompressed");
 	}
-	fn get_tile_raw(&self, level: u64, col: u64, row: u64) -> Result<Vec<u8>, &str> {
+	fn get_tile_raw(&self, level: u64, col: u64, row: u64) -> Option<Vec<u8>> {
 		panic!("not implemented: get_tile_raw");
 	}
 }
@@ -69,11 +69,11 @@ impl ReaderWrapper<'_> {
 	pub fn new(reader: &Box<dyn Reader>) -> ReaderWrapper {
 		return ReaderWrapper { reader };
 	}
-	pub fn get_tile_uncompressed(&self, level: u64, col: u64, row: u64) -> Vec<u8> {
-		return self.reader.get_tile_uncompressed(level, col, row).unwrap();
+	pub fn get_tile_uncompressed(&self, level: u64, col: u64, row: u64) -> Option<Vec<u8>> {
+		return self.reader.get_tile_uncompressed(level, col, row);
 	}
-	pub fn get_tile_raw(&self, level: u64, col: u64, row: u64) -> Vec<u8> {
-		return self.reader.get_tile_raw(level, col, row).unwrap();
+	pub fn get_tile_raw(&self, level: u64, col: u64, row: u64) -> Option<Vec<u8>> {
+		return self.reader.get_tile_raw(level, col, row);
 	}
 }
 

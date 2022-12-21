@@ -235,11 +235,23 @@ impl Converter {
 					let row = block.block_row * 256 + row_in_block;
 					let col = block.block_col * 256 + col_in_block;
 
-					let tile = if self.tile_recompress {
+					let optional_tile = if self.tile_recompress {
 						save_reader.get_tile_uncompressed(block.level, col, row)
 					} else {
 						save_reader.get_tile_raw(block.level, col, row)
 					};
+
+					if optional_tile.is_none() {
+						let mut save_write = writer_mutex.lock().unwrap();
+						let offset = save_write.stream_position().unwrap();
+						let mut save_tile_index = tile_index_mutex.lock().unwrap();
+						save_tile_index
+							.set(index, &ByteRange { offset, length: 0 })
+							.unwrap();
+						continue;
+					}
+
+					let tile = optional_tile.unwrap();
 
 					let mut tile_hash: Option<Vec<u8>> = None;
 
