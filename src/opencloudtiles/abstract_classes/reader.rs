@@ -4,8 +4,8 @@ use std::path::PathBuf;
 
 use super::{TileCompression, TileFormat};
 
-pub trait Reader {
-	fn load(filename: &PathBuf) -> std::io::Result<Box<dyn Reader>>
+pub trait TileReader {
+	fn load(filename: &PathBuf) -> std::io::Result<Box<dyn TileReader>>
 	where
 		Self: Sized;
 	fn get_tile_format(&self) -> TileFormat;
@@ -18,13 +18,13 @@ pub trait Reader {
 	fn get_tile_raw(&self, level: u64, col: u64, row: u64) -> Option<Vec<u8>>;
 }
 
-pub struct ReaderWrapper<'a> {
-	reader: &'a Box<dyn Reader>,
+pub struct TileReaderWrapper<'a> {
+	reader: &'a Box<dyn TileReader>,
 }
 
-impl ReaderWrapper<'_> {
-	pub fn new(reader: &Box<dyn Reader>) -> ReaderWrapper {
-		return ReaderWrapper { reader };
+impl TileReaderWrapper<'_> {
+	pub fn new(reader: &Box<dyn TileReader>) -> TileReaderWrapper {
+		return TileReaderWrapper { reader };
 	}
 	pub fn get_tile_uncompressed(&self, level: u64, col: u64, row: u64) -> Option<Vec<u8>> {
 		return self.reader.get_tile_uncompressed(level, col, row);
@@ -34,5 +34,5 @@ impl ReaderWrapper<'_> {
 	}
 }
 
-unsafe impl Send for ReaderWrapper<'_> {}
-unsafe impl Sync for ReaderWrapper<'_> {}
+unsafe impl Send for TileReaderWrapper<'_> {}
+unsafe impl Sync for TileReaderWrapper<'_> {}

@@ -5,8 +5,8 @@ use std::io::{Cursor, Read, Write};
 mod converter;
 mod reader;
 
-pub use converter::Converter;
-pub use reader::Reader;
+pub use converter::TileConverter;
+pub use reader::TileReader;
 
 fn compress_gzip(data: &Vec<u8>) -> Vec<u8> {
 	let mut buffer: Vec<u8> = Vec::new();

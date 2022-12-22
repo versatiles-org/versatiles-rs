@@ -11,11 +11,14 @@ impl Tools {
 
 		return Ok(());
 	}
-	pub fn new_reader(filename: &PathBuf, _command: &Convert) -> std::io::Result<Box<dyn Reader>> {
+	pub fn new_reader(
+		filename: &PathBuf,
+		_command: &Convert,
+	) -> std::io::Result<Box<dyn TileReader>> {
 		let extension = filename.extension().unwrap().to_str();
 		let reader = match extension {
-			Some("mbtiles") => mbtiles::Reader::load(filename)?,
-			Some("cloudtiles") => cloudtiles::Reader::load(filename)?,
+			Some("mbtiles") => mbtiles::TileReader::load(filename)?,
+			Some("cloudtiles") => cloudtiles::TileReader::load(filename)?,
 			_ => panic!("extension '{:?}' unknown", extension),
 		};
 
@@ -24,13 +27,13 @@ impl Tools {
 	pub fn new_converter(
 		filename: &PathBuf,
 		command: &Convert,
-	) -> std::io::Result<Box<dyn Converter>> {
+	) -> std::io::Result<Box<dyn TileConverter>> {
 		let extension = filename.extension().unwrap().to_str();
 		let mut converter = match extension {
-			Some("mbtiles") => mbtiles::Converter::new(filename).unwrap(),
-			Some("cloudtiles") => cloudtiles::Converter::new(filename).unwrap(),
-			Some("tar") => tar::Converter::new(filename).unwrap(),
-			Some("*") => unknown::Converter::new(filename).unwrap(),
+			Some("mbtiles") => mbtiles::TileConverter::new(filename).unwrap(),
+			Some("cloudtiles") => cloudtiles::TileConverter::new(filename).unwrap(),
+			Some("tar") => tar::TileConverter::new(filename).unwrap(),
+			Some("*") => unknown::TileConverter::new(filename).unwrap(),
 			_ => panic!("extension '{:?}' unknown", extension),
 		};
 

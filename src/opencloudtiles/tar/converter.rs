@@ -1,15 +1,15 @@
 use crate::opencloudtiles;
 
-pub struct Converter;
-impl opencloudtiles::Converter for Converter {
+pub struct TileConverter;
+impl opencloudtiles::TileConverter for TileConverter {
 	#![allow(unused_variables)]
-	fn new(filename: &std::path::PathBuf) -> std::io::Result<Box<dyn opencloudtiles::Converter>>
+	fn new(filename: &std::path::PathBuf) -> std::io::Result<Box<dyn opencloudtiles::TileConverter>>
 	where
 		Self: Sized,
 	{
 		panic!()
 	}
-	fn convert_from(&mut self, reader: Box<dyn opencloudtiles::Reader>) -> std::io::Result<()> {
+	fn convert_from(&mut self, reader: Box<dyn opencloudtiles::TileReader>) -> std::io::Result<()> {
 		panic!()
 	}
 	fn set_precompression(&mut self, compression: &opencloudtiles::TileCompression) {

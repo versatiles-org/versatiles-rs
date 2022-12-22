@@ -4,7 +4,7 @@ use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
 use std::{io::Read, thread};
 
-pub struct Reader {
+pub struct TileReader {
 	pool: r2d2::Pool<SqliteConnectionManager>,
 	minimum_zoom: Option<u64>,
 	maximum_zoom: Option<u64>,
@@ -12,9 +12,9 @@ pub struct Reader {
 	tile_compression: Option<TileCompression>,
 	meta_data: Option<String>,
 }
-impl Reader {
-	fn new(pool: r2d2::Pool<SqliteConnectionManager>) -> Reader {
-		Reader {
+impl TileReader {
+	fn new(pool: r2d2::Pool<SqliteConnectionManager>) -> TileReader {
+		TileReader {
 			pool,
 			minimum_zoom: None,
 			maximum_zoom: None,
@@ -23,7 +23,7 @@ impl Reader {
 			meta_data: None,
 		}
 	}
-	fn load_sqlite(filename: &std::path::PathBuf) -> rusqlite::Result<Reader> {
+	fn load_sqlite(filename: &std::path::PathBuf) -> rusqlite::Result<TileReader> {
 		let concurrency = thread::available_parallelism().unwrap().get();
 
 		let manager = r2d2_sqlite::SqliteConnectionManager::file(filename)
@@ -34,7 +34,7 @@ impl Reader {
 			.build(manager)
 			.unwrap();
 
-		let mut reader = Reader::new(pool);
+		let mut reader = TileReader::new(pool);
 		reader.load_meta_data()?;
 
 		return Ok(reader);
@@ -106,8 +106,10 @@ impl Reader {
 	}
 }
 
-impl abstract_classes::Reader for Reader {
-	fn load(filename: &std::path::PathBuf) -> std::io::Result<Box<dyn abstract_classes::Reader>> {
+impl abstract_classes::TileReader for TileReader {
+	fn load(
+		filename: &std::path::PathBuf,
+	) -> std::io::Result<Box<dyn abstract_classes::TileReader>> {
 		let reader = Self::load_sqlite(filename).expect("SQLite error");
 		return Ok(Box::new(reader));
 	}

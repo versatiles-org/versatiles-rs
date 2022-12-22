@@ -1,5 +1,6 @@
 use crate::opencloudtiles::{
-	abstract_classes, progress::ProgressBar, Reader, ReaderWrapper, TileCompression, TileFormat,
+	abstract_classes, progress::ProgressBar, TileCompression, TileFormat, TileReader,
+	TileReaderWrapper,
 };
 use brotli::{enc::BrotliEncoderParams, BrotliCompress};
 use std::collections::HashMap;
@@ -11,7 +12,7 @@ use std::sync::Mutex;
 
 use super::{compress_brotli, compress_gzip, BlockDefinition, BlockIndex, ByteRange, TileIndex};
 
-pub struct Converter {
+pub struct TileConverter {
 	tile_compression: Option<TileCompression>,
 	tile_recompress: bool,
 	file_buffer: BufWriter<File>,
@@ -19,13 +20,13 @@ pub struct Converter {
 	maximum_zoom: Option<u64>,
 }
 
-impl abstract_classes::Converter for Converter {
-	fn new(filename: &PathBuf) -> std::io::Result<Box<dyn abstract_classes::Converter>>
+impl abstract_classes::TileConverter for TileConverter {
+	fn new(filename: &PathBuf) -> std::io::Result<Box<dyn abstract_classes::TileConverter>>
 	where
 		Self: Sized,
 	{
 		let file = File::create(filename).expect("Unable to create file");
-		Ok(Box::new(Converter {
+		Ok(Box::new(TileConverter {
 			tile_compression: None,
 			tile_recompress: false,
 			file_buffer: BufWriter::new(file),
@@ -33,7 +34,7 @@ impl abstract_classes::Converter for Converter {
 			maximum_zoom: None,
 		}))
 	}
-	fn convert_from(&mut self, reader: Box<dyn Reader>) -> std::io::Result<()> {
+	fn convert_from(&mut self, reader: Box<dyn TileReader>) -> std::io::Result<()> {
 		self.write_header(&reader)?;
 		self.write_meta(&reader)?;
 		self.write_blocks(&reader)?;
@@ -51,8 +52,11 @@ impl abstract_classes::Converter for Converter {
 	}
 }
 
-impl Converter {
-	fn write_header(&mut self, reader: &Box<dyn abstract_classes::Reader>) -> std::io::Result<()> {
+impl TileConverter {
+	fn write_header(
+		&mut self,
+		reader: &Box<dyn abstract_classes::TileReader>,
+	) -> std::io::Result<()> {
 		// magic word
 		self.write(b"OpenCloudTiles/reader/v1   ")?;
 
@@ -91,7 +95,7 @@ impl Converter {
 
 		return Ok(());
 	}
-	fn write_meta(&mut self, reader: &Box<dyn abstract_classes::Reader>) -> std::io::Result<()> {
+	fn write_meta(&mut self, reader: &Box<dyn abstract_classes::TileReader>) -> std::io::Result<()> {
 		let metablob = reader.get_meta().to_vec();
 		let meta_blob_range = self.write_vec_brotli(&metablob)?;
 		let range = self.write_range_at(&meta_blob_range, 128)?;
@@ -99,7 +103,7 @@ impl Converter {
 	}
 	fn write_blocks(
 		&mut self,
-		reader: &Box<dyn abstract_classes::Reader>,
+		reader: &Box<dyn abstract_classes::TileReader>,
 	) -> std::io::Result<ByteRange> {
 		let mut level_min = reader.get_minimum_zoom();
 		if self.minimum_zoom.is_some() {
@@ -179,14 +183,14 @@ impl Converter {
 	fn write_block(
 		&mut self,
 		block: &BlockDefinition,
-		reader: &Box<dyn abstract_classes::Reader>,
+		reader: &Box<dyn abstract_classes::TileReader>,
 		bar: &mut ProgressBar,
 	) -> std::io::Result<ByteRange> {
 		let mut tile_index =
 			TileIndex::new(block.row_min, block.row_max, block.col_min, block.col_max)?;
 		let tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
-		let wrapped_reader = &ReaderWrapper::new(reader);
+		let wrapped_reader = &TileReaderWrapper::new(reader);
 
 		let mutex_writer = &Mutex::new(&mut self.file_buffer);
 		let mutex_tile_index = &Mutex::new(&mut tile_index);

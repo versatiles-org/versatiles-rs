@@ -1,7 +1,7 @@
 use crate::opencloudtiles;
 
-pub struct Reader;
-impl opencloudtiles::Reader for Reader {
+pub struct TileReader;
+impl opencloudtiles::TileReader for TileReader {
 	#![allow(unused_variables)]
 	fn get_level_bbox(&self, level: u64) -> (u64, u64, u64, u64) {
 		panic!();
@@ -27,7 +27,7 @@ impl opencloudtiles::Reader for Reader {
 	fn get_tile_uncompressed(&self, level: u64, col: u64, row: u64) -> Option<Vec<u8>> {
 		panic!();
 	}
-	fn load(filename: &std::path::PathBuf) -> std::io::Result<Box<dyn opencloudtiles::Reader>>
+	fn load(filename: &std::path::PathBuf) -> std::io::Result<Box<dyn opencloudtiles::TileReader>>
 	where
 		Self: Sized,
 	{
