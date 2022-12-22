@@ -1,7 +1,10 @@
 use indicatif;
+use std::time::{Duration, SystemTime};
 
 pub struct ProgressBar {
 	bar: indicatif::ProgressBar,
+	next_progress_update: SystemTime,
+	value: u64,
 }
 
 impl ProgressBar {
@@ -20,15 +23,36 @@ impl ProgressBar {
 			.progress_chars("██▁"),
 		);
 
-		return ProgressBar { bar };
+		let bar = ProgressBar {
+			bar,
+			next_progress_update: SystemTime::now(),
+			value: 0,
+		};
+		return bar;
 	}
-	pub fn set_position(&self, value: u64) {
-		self.bar.set_position(value);
+	pub fn set_position(&mut self, value: u64) {
+		self.value = value;
+		self.update()
 	}
-	pub fn inc(&self, value: u64) {
-		self.bar.inc(value);
+	pub fn inc(&mut self, value: u64) {
+		self.value += value;
+		self.update()
 	}
-	pub fn finish(&self) {
+	pub fn finish(&mut self) {
+		self.force_update();
 		self.bar.abandon();
+	}
+	fn set_next_progress_update(&mut self) {
+		self.next_progress_update += Duration::from_secs(1);
+	}
+	fn update(&mut self) {
+		if SystemTime::now() >= self.next_progress_update {
+			self.bar.set_position(self.value);
+			self.set_next_progress_update();
+		}
+	}
+	fn force_update(&mut self) {
+		self.bar.set_position(self.value);
+		self.set_next_progress_update();
 	}
 }

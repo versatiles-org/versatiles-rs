@@ -8,7 +8,6 @@ use std::io::{BufWriter, Cursor, Seek, Write};
 use std::ops::Shr;
 use std::path::PathBuf;
 use std::sync::Mutex;
-use std::time::{Duration, SystemTime};
 
 use super::{compress_brotli, compress_gzip, BlockDefinition, BlockIndex, ByteRange, TileIndex};
 
@@ -114,7 +113,7 @@ impl Converter {
 
 		let mut todos: Vec<BlockDefinition> = Vec::new();
 
-		let bar1 = ProgressBar::new("counting tiles", level_max - level_min);
+		let mut bar1 = ProgressBar::new("counting tiles", level_max - level_min);
 
 		for level in level_min..=level_max {
 			bar1.set_position(level - level_min);
@@ -158,12 +157,12 @@ impl Converter {
 
 		let sum = todos.iter().map(|x| x.count).sum();
 
-		let bar2 = ProgressBar::new("converting tiles", sum);
+		let mut bar2 = ProgressBar::new("converting tiles", sum);
 
 		let mut index = BlockIndex::new();
 
 		for todo in todos {
-			let range = self.write_block(&todo, &reader, &bar2)?;
+			let range = self.write_block(&todo, &reader, &mut bar2)?;
 
 			if range.length == 0 {
 				// block is empty
@@ -181,7 +180,7 @@ impl Converter {
 		&mut self,
 		block: &BlockDefinition,
 		reader: &Box<dyn abstract_classes::Reader>,
-		bar: &ProgressBar,
+		bar: &mut ProgressBar,
 	) -> std::io::Result<ByteRange> {
 		let mut tile_index =
 			TileIndex::new(block.row_min, block.row_max, block.col_min, block.col_max)?;
@@ -198,20 +197,13 @@ impl Converter {
 
 		rayon::scope(|scope| {
 			let mut tile_no: u64 = 0;
-			let mut progress_count = 0;
-			let mut next_progress_update = SystemTime::now() + Duration::from_secs(10);
 
 			for row_in_block in block.row_min..=block.row_max {
 				for col_in_block in block.col_min..=block.col_max {
-					progress_count += 1;
-					if SystemTime::now() >= next_progress_update {
-						next_progress_update = SystemTime::now() + Duration::from_secs(10);
-						bar.inc(progress_count);
-						progress_count = 0;
-					}
+					bar.inc(1);
 
 					let index = tile_no;
-					tile_no += 0;
+					tile_no += 1;
 
 					let row = block.block_row * 256 + row_in_block;
 					let col = block.block_col * 256 + col_in_block;
@@ -285,9 +277,6 @@ impl Converter {
 						}
 					})
 				}
-			}
-			if progress_count > 0 {
-				bar.inc(progress_count);
 			}
 		});
 		let range = self.write_vec_brotli(&tile_index.as_vec())?;
