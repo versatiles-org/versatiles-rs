@@ -1,4 +1,4 @@
-use crate::container::{self};
+use crate::container;
 
 pub struct Reader;
 impl container::Reader for Reader {

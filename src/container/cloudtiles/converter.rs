@@ -1,6 +1,4 @@
-use crate::container::abstract_classes::{
-	self, Reader, ReaderWrapper, TileCompression, TileFormat,
-};
+use crate::container::{abstract_classes, Reader, ReaderWrapper, TileCompression, TileFormat};
 use brotli::{enc::BrotliEncoderParams, BrotliCompress};
 use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::HashMap;

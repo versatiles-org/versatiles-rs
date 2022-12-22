@@ -1,18 +1,18 @@
-use crate::container::abstract_classes;
+use crate::container;
 
 pub struct Converter;
-impl abstract_classes::Converter for Converter {
+impl container::Converter for Converter {
 	#![allow(unused_variables)]
-	fn new(filename: &std::path::PathBuf) -> std::io::Result<Box<dyn abstract_classes::Converter>>
+	fn new(filename: &std::path::PathBuf) -> std::io::Result<Box<dyn container::Converter>>
 	where
 		Self: Sized,
 	{
 		panic!()
 	}
-	fn convert_from(&mut self, reader: Box<dyn abstract_classes::Reader>) -> std::io::Result<()> {
+	fn convert_from(&mut self, reader: Box<dyn container::Reader>) -> std::io::Result<()> {
 		panic!()
 	}
-	fn set_precompression(&mut self, compression: &abstract_classes::TileCompression) {
+	fn set_precompression(&mut self, compression: &container::TileCompression) {
 		panic!()
 	}
 	fn set_minimum_zoom(&mut self, level: u64) {

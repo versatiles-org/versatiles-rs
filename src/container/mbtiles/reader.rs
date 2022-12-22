@@ -1,4 +1,4 @@
-use crate::container::abstract_classes::{self, TileCompression, TileFormat};
+use crate::container::{abstract_classes, TileCompression, TileFormat};
 use flate2::bufread::GzDecoder;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
