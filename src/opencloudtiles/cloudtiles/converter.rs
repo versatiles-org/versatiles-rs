@@ -1,6 +1,7 @@
-use crate::opencloudtiles::{abstract_classes, Reader, ReaderWrapper, TileCompression, TileFormat};
+use crate::opencloudtiles::{
+	abstract_classes, progress::ProgressBar, Reader, ReaderWrapper, TileCompression, TileFormat,
+};
 use brotli::{enc::BrotliEncoderParams, BrotliCompress};
-use indicatif::{ProgressBar, ProgressStyle};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Cursor, Seek, Write};
@@ -113,14 +114,7 @@ impl Converter {
 
 		let mut todos: Vec<BlockDefinition> = Vec::new();
 
-		let bar1 = ProgressBar::new(level_max - level_min);
-		bar1.set_style(
-			ProgressStyle::with_template(
-				"counting tiles: {wide_bar:0.white/dim.white} {pos:>9}/{len:9} {per_sec:18} {elapsed_precise} {eta_precise}",
-			)
-			.unwrap()
-			.progress_chars("██▁"),
-		);
+		let bar1 = ProgressBar::new("counting tiles", level_max - level_min);
 
 		for level in level_min..=level_max {
 			bar1.set_position(level - level_min);
@@ -160,18 +154,11 @@ impl Converter {
 				}
 			}
 		}
-		bar1.abandon();
+		bar1.finish();
 
 		let sum = todos.iter().map(|x| x.count).sum();
 
-		let bar2 = ProgressBar::new(sum);
-		bar2.set_style(
-			ProgressStyle::with_template(
-				"converting tiles: {wide_bar:0.white/dim.white} {pos:>9}/{len:9} {per_sec:18} {elapsed_precise} {eta_precise}",
-			)
-			.unwrap()
-			.progress_chars("██▁"),
-		);
+		let bar2 = ProgressBar::new("converting tiles", sum);
 
 		let mut index = BlockIndex::new();
 
@@ -185,7 +172,7 @@ impl Converter {
 
 			index.add(&todo.level, &todo.block_row, &todo.block_col, &range)?;
 		}
-		bar2.abandon();
+		bar2.finish();
 
 		let range = self.write_vec_brotli(&index.as_vec())?;
 		return Ok(range);

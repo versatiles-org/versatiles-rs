@@ -1,6 +1,7 @@
 mod abstract_classes;
 mod cloudtiles;
 mod mbtiles;
+mod progress;
 mod tar;
 mod tools;
 mod unknown;
