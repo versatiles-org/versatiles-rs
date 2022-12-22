@@ -28,26 +28,21 @@ impl Tools {
 		filename: &PathBuf,
 		command: &Convert,
 	) -> std::io::Result<Box<dyn TileConverter>> {
+		let config = Some(TileConverterConfig {
+			minimum_zoom: command.min_zoom,
+			maximum_zoom: command.max_zoom,
+			tile_compression: command.precompress.clone(),
+		});
+
 		let extension = filename.extension().unwrap().to_str();
-		let mut converter = match extension {
-			Some("mbtiles") => mbtiles::TileConverter::new(filename).unwrap(),
-			Some("cloudtiles") => cloudtiles::TileConverter::new(filename).unwrap(),
-			Some("tar") => tar::TileConverter::new(filename).unwrap(),
-			Some("*") => unknown::TileConverter::new(filename).unwrap(),
+
+		let converter = match extension {
+			Some("mbtiles") => mbtiles::TileConverter::new(filename, config).unwrap(),
+			Some("cloudtiles") => cloudtiles::TileConverter::new(filename, config).unwrap(),
+			Some("tar") => tar::TileConverter::new(filename, config).unwrap(),
+			Some("*") => unknown::TileConverter::new(filename, config).unwrap(),
 			_ => panic!("extension '{:?}' unknown", extension),
 		};
-
-		if command.precompress.is_some() {
-			converter.set_precompression(command.precompress.as_ref().unwrap());
-		}
-
-		if command.min_zoom.is_some() {
-			converter.set_minimum_zoom(command.min_zoom.unwrap())
-		}
-
-		if command.max_zoom.is_some() {
-			converter.set_maximum_zoom(command.max_zoom.unwrap())
-		}
 
 		return Ok(converter);
 	}

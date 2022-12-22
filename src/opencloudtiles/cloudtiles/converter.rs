@@ -2,6 +2,7 @@ use crate::opencloudtiles::{
 	abstract_classes, progress::ProgressBar, TileCompression, TileFormat, TileReader,
 	TileReaderWrapper,
 };
+use abstract_classes::TileConverterConfig;
 use brotli::{enc::BrotliEncoderParams, BrotliCompress};
 use std::collections::HashMap;
 use std::fs::File;
@@ -13,25 +14,24 @@ use std::sync::Mutex;
 use super::{compress_brotli, compress_gzip, BlockDefinition, BlockIndex, ByteRange, TileIndex};
 
 pub struct TileConverter {
-	tile_compression: Option<TileCompression>,
-	tile_recompress: bool,
 	file_buffer: BufWriter<File>,
-	minimum_zoom: Option<u64>,
-	maximum_zoom: Option<u64>,
+	tile_recompress: bool,
+	config: TileConverterConfig,
 }
 
 impl abstract_classes::TileConverter for TileConverter {
-	fn new(filename: &PathBuf) -> std::io::Result<Box<dyn abstract_classes::TileConverter>>
+	fn new(
+		filename: &PathBuf,
+		tile_config: Option<TileConverterConfig>,
+	) -> std::io::Result<Box<dyn abstract_classes::TileConverter>>
 	where
 		Self: Sized,
 	{
 		let file = File::create(filename).expect("Unable to create file");
 		Ok(Box::new(TileConverter {
-			tile_compression: None,
 			tile_recompress: false,
 			file_buffer: BufWriter::new(file),
-			minimum_zoom: None,
-			maximum_zoom: None,
+			config: tile_config.unwrap_or(TileConverterConfig::new_empty()),
 		}))
 	}
 	fn convert_from(&mut self, reader: Box<dyn TileReader>) -> std::io::Result<()> {
@@ -40,15 +40,6 @@ impl abstract_classes::TileConverter for TileConverter {
 		self.write_blocks(&reader)?;
 
 		return Ok(());
-	}
-	fn set_precompression(&mut self, compression: &TileCompression) {
-		self.tile_compression = Some(compression.clone());
-	}
-	fn set_minimum_zoom(&mut self, level: u64) {
-		self.minimum_zoom = Some(level);
-	}
-	fn set_maximum_zoom(&mut self, level: u64) {
-		self.maximum_zoom = Some(level);
 	}
 }
 
@@ -73,12 +64,13 @@ impl TileConverter {
 		// precompression
 		let tile_compression_src = reader.get_tile_compression();
 
-		if self.tile_compression.is_none() {
-			self.tile_compression = Some(tile_compression_src.clone());
+		if self.config.tile_compression.is_none() {
+			self.config.tile_compression = Some(tile_compression_src.clone());
 		}
-		self.tile_recompress = self.tile_compression.as_ref().unwrap() != &tile_compression_src;
+		self.tile_recompress =
+			self.config.tile_compression.as_ref().unwrap() != &tile_compression_src;
 
-		let tile_compression_dst_value: u8 = match self.tile_compression {
+		let tile_compression_dst_value: u8 = match self.config.tile_compression {
 			Some(TileCompression::None) => 0,
 			Some(TileCompression::Gzip) => 1,
 			Some(TileCompression::Brotli) => 2,
@@ -105,15 +97,8 @@ impl TileConverter {
 		&mut self,
 		reader: &Box<dyn abstract_classes::TileReader>,
 	) -> std::io::Result<ByteRange> {
-		let mut level_min = reader.get_minimum_zoom();
-		if self.minimum_zoom.is_some() {
-			level_min = level_min.max(self.minimum_zoom.unwrap())
-		}
-
-		let mut level_max = reader.get_maximum_zoom();
-		if self.maximum_zoom.is_some() {
-			level_max = level_max.max(self.maximum_zoom.unwrap())
-		}
+		let level_min = self.config.get_minimum_zoom(reader.get_minimum_zoom());
+		let level_max = self.config.get_maximum_zoom(reader.get_maximum_zoom());
 
 		let mut todos: Vec<BlockDefinition> = Vec::new();
 
@@ -197,7 +182,7 @@ impl TileConverter {
 		let mutex_tile_hash_lookup = &Mutex::new(tile_hash_lookup);
 
 		let tile_recompress = &self.tile_recompress;
-		let tile_compression = &self.tile_compression;
+		let tile_compression = &self.config.tile_compression;
 
 		rayon::scope(|scope| {
 			let mut tile_no: u64 = 0;

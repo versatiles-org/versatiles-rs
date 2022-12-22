@@ -3,7 +3,7 @@
 mod converter;
 mod reader;
 
-pub use converter::TileConverter;
+pub use converter::{TileConverter, TileConverterConfig};
 pub use reader::{TileReader, TileReaderWrapper};
 
 use clap::ValueEnum;
