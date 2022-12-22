@@ -202,9 +202,8 @@ impl Converter {
 			TileIndex::new(block.row_min, block.row_max, block.col_min, block.col_max)?;
 		let tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
-		let wrapped_reader = ReaderWrapper::new(reader);
+		let wrapped_reader = &ReaderWrapper::new(reader);
 
-		let mutex_reader = &Mutex::new(wrapped_reader);
 		let mutex_writer = &Mutex::new(&mut self.file_buffer);
 		let mutex_tile_index = &Mutex::new(&mut tile_index);
 		let mutex_tile_hash_lookup = &Mutex::new(tile_hash_lookup);
@@ -233,14 +232,11 @@ impl Converter {
 					let col = block.block_col * 256 + col_in_block;
 
 					scope.spawn(move |_s| {
-						let save_reader = mutex_reader.lock().unwrap();
-
 						let optional_tile = if *tile_recompress {
-							save_reader.get_tile_uncompressed(block.level, col, row)
+							wrapped_reader.get_tile_uncompressed(block.level, col, row)
 						} else {
-							save_reader.get_tile_raw(block.level, col, row)
+							wrapped_reader.get_tile_raw(block.level, col, row)
 						};
-						drop(save_reader);
 
 						if optional_tile.is_none() {
 							let mut save_write = mutex_writer.lock().unwrap();

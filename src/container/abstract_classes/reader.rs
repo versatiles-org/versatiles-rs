@@ -35,3 +35,4 @@ impl ReaderWrapper<'_> {
 }
 
 unsafe impl Send for ReaderWrapper<'_> {}
+unsafe impl Sync for ReaderWrapper<'_> {}
