@@ -239,10 +239,10 @@ impl Converter {
 						};
 
 						if optional_tile.is_none() {
-							let mut save_write = mutex_writer.lock().unwrap();
-							let offset = save_write.stream_position().unwrap();
-							let mut save_tile_index = mutex_tile_index.lock().unwrap();
-							save_tile_index
+							let mut secured_writer = mutex_writer.lock().unwrap();
+							let offset = secured_writer.stream_position().unwrap();
+							let mut secured_tile_index = mutex_tile_index.lock().unwrap();
+							secured_tile_index
 								.set(index, &ByteRange { offset, length: 0 })
 								.unwrap();
 							return;
@@ -250,15 +250,15 @@ impl Converter {
 
 						let tile = optional_tile.unwrap();
 
-						let mut save_tile_hash_lookup = None;
+						let mut secured_tile_hash_lookup = None;
 						let mut tile_hash = None;
 
 						if tile.len() < 1000 {
-							save_tile_hash_lookup = Some(mutex_tile_hash_lookup.lock().unwrap());
-							let lookup = save_tile_hash_lookup.as_ref().unwrap();
+							secured_tile_hash_lookup = Some(mutex_tile_hash_lookup.lock().unwrap());
+							let lookup = secured_tile_hash_lookup.as_ref().unwrap();
 							if lookup.contains_key(&tile) {
-								let mut save_tile_index = mutex_tile_index.lock().unwrap();
-								save_tile_index
+								let mut secured_tile_index = mutex_tile_index.lock().unwrap();
+								secured_tile_index
 									.set(index, lookup.get(&tile).unwrap())
 									.unwrap();
 								return;
@@ -282,19 +282,19 @@ impl Converter {
 							result = tile;
 						}
 
-						let mut save_writer = mutex_writer.lock().unwrap();
+						let mut secured_writer = mutex_writer.lock().unwrap();
 						let range = ByteRange::new(
-							save_writer.stream_position().unwrap(),
-							save_writer.write(&result).unwrap() as u64,
+							secured_writer.stream_position().unwrap(),
+							secured_writer.write(&result).unwrap() as u64,
 						);
-						drop(save_writer);
+						drop(secured_writer);
 
-						let mut save_tile_index = mutex_tile_index.lock().unwrap();
-						save_tile_index.set(index, &range).unwrap();
-						drop(save_tile_index);
+						let mut secured_tile_index = mutex_tile_index.lock().unwrap();
+						secured_tile_index.set(index, &range).unwrap();
+						drop(secured_tile_index);
 
-						if save_tile_hash_lookup.is_some() {
-							save_tile_hash_lookup
+						if secured_tile_hash_lookup.is_some() {
+							secured_tile_hash_lookup
 								.unwrap()
 								.insert(tile_hash.unwrap(), range);
 						}
