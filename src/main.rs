@@ -1,9 +1,9 @@
-mod container;
+mod opencloudtiles;
 
 use clap::{Args, Parser, Subcommand};
 use std::path::PathBuf;
 
-use crate::container::*;
+use crate::opencloudtiles::*;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -37,7 +37,7 @@ pub struct Convert {
 
 	/// precompress tiles
 	#[arg(long, value_enum)]
-	precompress: Option<container::TileCompression>,
+	precompress: Option<opencloudtiles::TileCompression>,
 }
 
 fn main() -> std::io::Result<()> {
