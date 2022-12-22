@@ -1,11 +1,10 @@
-use std::io::Read;
-
-use flate2::bufread::GzDecoder;
-
 use crate::container::abstract_classes::{self, TileCompression, TileFormat};
+use flate2::bufread::GzDecoder;
+use r2d2_sqlite::SqliteConnectionManager;
+use std::{io::Read, thread};
 
 pub struct Reader {
-	connection: rusqlite::Connection,
+	pool: r2d2::Pool<SqliteConnectionManager>,
 	minimum_zoom: Option<u64>,
 	maximum_zoom: Option<u64>,
 	tile_format: Option<TileFormat>,
@@ -13,9 +12,9 @@ pub struct Reader {
 	meta_data: Option<String>,
 }
 impl Reader {
-	fn new(connection: rusqlite::Connection) -> Reader {
+	fn new(pool: r2d2::Pool<SqliteConnectionManager>) -> Reader {
 		Reader {
-			connection,
+			pool,
 			minimum_zoom: None,
 			maximum_zoom: None,
 			tile_format: None,
@@ -24,19 +23,20 @@ impl Reader {
 		}
 	}
 	fn load_sqlite(filename: &std::path::PathBuf) -> rusqlite::Result<Reader> {
-		let connection = rusqlite::Connection::open(filename)?;
-		let mut reader = Reader::new(connection);
+		let concurrency = thread::available_parallelism().unwrap().get();
+		let manager = r2d2_sqlite::SqliteConnectionManager::file(filename);
+		let pool = r2d2::Pool::builder()
+			.max_size(concurrency as u32)
+			.build(manager)
+			.unwrap();
+		let mut reader = Reader::new(pool);
 		reader.load_meta_data()?;
-
-		// tiles from tiles
-		//CREATE VIEW tiles AS   SELECT map.zoom_level as zoom_level,    map.tile_column as tile_column,    map.tile_row as tile_row,    images.tile_data as tile_data   FROM map JOIN images ON map.tile_id = images.tile_id;
 
 		return Ok(reader);
 	}
 	fn load_meta_data(&mut self) -> rusqlite::Result<()> {
-		let mut stmt = self
-			.connection
-			.prepare("SELECT name, value FROM metadata")?;
+		let connection = self.pool.get().unwrap();
+		let mut stmt = connection.prepare("SELECT name, value FROM metadata")?;
 		let mut rows = stmt.query([])?;
 
 		while let Some(row) = rows.next()? {
@@ -87,7 +87,8 @@ impl Reader {
 			"SELECT min(tile_row), max(tile_row), min(tile_column), max(tile_column) FROM tiles WHERE zoom_level = {}",
 			level
 		);
-		let mut stmt = self.connection.prepare(sql.as_str())?;
+		let connection = self.pool.get().unwrap();
+		let mut stmt = connection.prepare(sql.as_str())?;
 		let row = stmt.query_row([], |entry| {
 			Ok((
 				entry.get::<_, u64>(0)?,
@@ -124,8 +125,8 @@ impl abstract_classes::Reader for Reader {
 		return self.calc_level_bbox(level).unwrap();
 	}
 	fn get_tile_raw(&self, level: u64, col: u64, row: u64) -> Option<Vec<u8>> {
-		let mut stmt = self
-			.connection
+		let connection = self.pool.get().unwrap();
+		let mut stmt = connection
 			.prepare(
 				"SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?",
 			)
