@@ -204,47 +204,15 @@ impl Converter {
 
 		let wrapped_reader = ReaderWrapper::new(reader);
 
-		let reader_mutex = Mutex::new(wrapped_reader);
-		let writer_mutex = Mutex::new(&mut self.file_buffer);
-		let tile_index_mutex = Mutex::new(&mut tile_index);
-		let tile_hash_lookup_mutex = Mutex::new(tile_hash_lookup);
+		let mutex_reader = &Mutex::new(wrapped_reader);
+		let mutex_writer = &Mutex::new(&mut self.file_buffer);
+		let mutex_tile_index = &Mutex::new(&mut tile_index);
+		let mutex_tile_hash_lookup = &Mutex::new(tile_hash_lookup);
 
-		let finalize_write = |compressed: &Vec<u8>, index: u64, tile_hash: Option<Vec<u8>>| {
-			let mut save_writer = writer_mutex.lock().unwrap();
-			let range = ByteRange::new(
-				save_writer.stream_position().unwrap(),
-				save_writer.write(compressed).unwrap() as u64,
-			);
-			drop(save_writer);
-
-			let mut save_tile_index = tile_index_mutex.lock().unwrap();
-			save_tile_index.set(index, &range).unwrap();
-			drop(save_tile_index);
-
-			if tile_hash.is_some() {
-				let mut save_tile_hash_lookup = tile_hash_lookup_mutex.lock().unwrap();
-				save_tile_hash_lookup.insert(tile_hash.unwrap(), range);
-				drop(save_tile_hash_lookup);
-			}
-		};
-
-		let write_raw = |tile: &Vec<u8>, index: u64, tile_hash: Option<Vec<u8>>| {
-			finalize_write(&tile, index, tile_hash);
-		};
-
-		let write_gzip = move |tile: &Vec<u8>, index: u64, tile_hash: Option<Vec<u8>>| {
-			let compressed = compress_gzip(tile);
-			finalize_write(&compressed, index, tile_hash);
-		};
-
-		let write_brotli = move |tile: &Vec<u8>, index: u64, tile_hash: Option<Vec<u8>>| {
-			let compressed = compress_brotli(tile);
-			finalize_write(&compressed, index, tile_hash);
-		};
+		let tile_recompress = &self.tile_recompress;
+		let tile_compression = &self.tile_compression;
 
 		rayon::scope(|scope| {
-			let save_reader = reader_mutex.lock().unwrap();
-
 			let mut tile_no: u64 = 0;
 			let mut progress_count = 0;
 			let mut next_progress_update = SystemTime::now() + Duration::from_secs(10);
@@ -264,60 +232,75 @@ impl Converter {
 					let row = block.block_row * 256 + row_in_block;
 					let col = block.block_col * 256 + col_in_block;
 
-					let optional_tile = if self.tile_recompress {
-						save_reader.get_tile_uncompressed(block.level, col, row)
-					} else {
-						save_reader.get_tile_raw(block.level, col, row)
-					};
+					scope.spawn(move |_s| {
+						let save_reader = mutex_reader.lock().unwrap();
 
-					if optional_tile.is_none() {
-						let mut save_write = writer_mutex.lock().unwrap();
-						let offset = save_write.stream_position().unwrap();
-						let mut save_tile_index = tile_index_mutex.lock().unwrap();
-						save_tile_index
-							.set(index, &ByteRange { offset, length: 0 })
-							.unwrap();
-						continue;
-					}
+						let optional_tile = if *tile_recompress {
+							save_reader.get_tile_uncompressed(block.level, col, row)
+						} else {
+							save_reader.get_tile_raw(block.level, col, row)
+						};
+						drop(save_reader);
 
-					let tile = optional_tile.unwrap();
-
-					let mut tile_hash: Option<Vec<u8>> = None;
-
-					if tile.len() < 1000 {
-						let save_tile_hash_lookup = tile_hash_lookup_mutex.lock().unwrap();
-						if save_tile_hash_lookup.contains_key(&tile) {
-							let mut save_tile_index = tile_index_mutex.lock().unwrap();
+						if optional_tile.is_none() {
+							let mut save_write = mutex_writer.lock().unwrap();
+							let offset = save_write.stream_position().unwrap();
+							let mut save_tile_index = mutex_tile_index.lock().unwrap();
 							save_tile_index
-								.set(index, save_tile_hash_lookup.get(&tile).unwrap())
+								.set(index, &ByteRange { offset, length: 0 })
 								.unwrap();
-							continue;
+							return;
 						}
-						tile_hash = Some(tile.clone());
-					}
 
-					if self.tile_recompress {
-						match self.tile_compression {
-							Some(TileCompression::None) => write_raw(&tile, index, tile_hash),
-							Some(TileCompression::Gzip) => {
-								if tile_hash.is_some() {
-									write_gzip(&tile, index, tile_hash);
-								} else {
-									scope.spawn(move |_s| write_gzip(&tile, index, None));
-								}
+						let tile = optional_tile.unwrap();
+
+						let mut tile_hash: Option<Vec<u8>> = None;
+
+						if tile.len() < 1000 {
+							let save_tile_hash_lookup = mutex_tile_hash_lookup.lock().unwrap();
+							if save_tile_hash_lookup.contains_key(&tile) {
+								let mut save_tile_index = mutex_tile_index.lock().unwrap();
+								save_tile_index
+									.set(index, save_tile_hash_lookup.get(&tile).unwrap())
+									.unwrap();
+								return;
 							}
-							Some(TileCompression::Brotli) => {
-								if tile_hash.is_some() {
-									write_brotli(&tile, index, tile_hash);
-								} else {
-									scope.spawn(move |_s| write_brotli(&tile, index, None));
-								}
-							}
-							None => panic!(),
+							tile_hash = Some(tile.clone());
 						}
-					} else {
-						write_raw(&tile, index, tile_hash)
-					}
+
+						let result;
+						if *tile_recompress {
+							match tile_compression {
+								Some(TileCompression::None) => result = tile,
+								Some(TileCompression::Gzip) => {
+									result = compress_gzip(&tile);
+								}
+								Some(TileCompression::Brotli) => {
+									result = compress_brotli(&tile);
+								}
+								None => panic!(),
+							}
+						} else {
+							result = tile;
+						}
+
+						let mut save_writer = mutex_writer.lock().unwrap();
+						let range = ByteRange::new(
+							save_writer.stream_position().unwrap(),
+							save_writer.write(&result).unwrap() as u64,
+						);
+						drop(save_writer);
+
+						let mut save_tile_index = mutex_tile_index.lock().unwrap();
+						save_tile_index.set(index, &range).unwrap();
+						drop(save_tile_index);
+
+						if tile_hash.is_some() {
+							let mut save_tile_hash_lookup = mutex_tile_hash_lookup.lock().unwrap();
+							save_tile_hash_lookup.insert(tile_hash.unwrap(), range);
+							drop(save_tile_hash_lookup);
+						}
+					})
 				}
 			}
 			if progress_count > 0 {
