@@ -1,6 +1,7 @@
 use crate::container::abstract_classes::{self, TileCompression, TileFormat};
 use flate2::bufread::GzDecoder;
 use r2d2_sqlite::SqliteConnectionManager;
+use rusqlite::OpenFlags;
 use std::{io::Read, thread};
 
 pub struct Reader {
@@ -24,11 +25,15 @@ impl Reader {
 	}
 	fn load_sqlite(filename: &std::path::PathBuf) -> rusqlite::Result<Reader> {
 		let concurrency = thread::available_parallelism().unwrap().get();
-		let manager = r2d2_sqlite::SqliteConnectionManager::file(filename);
+
+		let manager = r2d2_sqlite::SqliteConnectionManager::file(filename)
+			.with_flags(OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI);
+
 		let pool = r2d2::Pool::builder()
 			.max_size(concurrency as u32)
 			.build(manager)
 			.unwrap();
+
 		let mut reader = Reader::new(pool);
 		reader.load_meta_data()?;
 
