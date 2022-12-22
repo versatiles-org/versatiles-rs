@@ -250,14 +250,16 @@ impl Converter {
 
 						let tile = optional_tile.unwrap();
 
-						let mut tile_hash: Option<Vec<u8>> = None;
+						let mut save_tile_hash_lookup = None;
+						let mut tile_hash = None;
 
 						if tile.len() < 1000 {
-							let save_tile_hash_lookup = mutex_tile_hash_lookup.lock().unwrap();
-							if save_tile_hash_lookup.contains_key(&tile) {
+							save_tile_hash_lookup = Some(mutex_tile_hash_lookup.lock().unwrap());
+							let lookup = save_tile_hash_lookup.as_ref().unwrap();
+							if lookup.contains_key(&tile) {
 								let mut save_tile_index = mutex_tile_index.lock().unwrap();
 								save_tile_index
-									.set(index, save_tile_hash_lookup.get(&tile).unwrap())
+									.set(index, lookup.get(&tile).unwrap())
 									.unwrap();
 								return;
 							}
@@ -291,10 +293,10 @@ impl Converter {
 						save_tile_index.set(index, &range).unwrap();
 						drop(save_tile_index);
 
-						if tile_hash.is_some() {
-							let mut save_tile_hash_lookup = mutex_tile_hash_lookup.lock().unwrap();
-							save_tile_hash_lookup.insert(tile_hash.unwrap(), range);
-							drop(save_tile_hash_lookup);
+						if save_tile_hash_lookup.is_some() {
+							save_tile_hash_lookup
+								.unwrap()
+								.insert(tile_hash.unwrap(), range);
 						}
 					})
 				}

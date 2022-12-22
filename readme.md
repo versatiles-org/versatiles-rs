@@ -2,7 +2,7 @@
 # build
 
 ```bash
-cargo build && target/debug/cloudtiles convert tiles/australia-oceania.mbtiles tiles/australia-oceania.cloudtiles
+cargo build && target/debug/cloudtiles convert tiles/philippines.mbtiles tiles/philippines.cloudtiles
 cargo build && target/debug/cloudtiles --precompress brotli convert tiles/philippines.mbtiles tiles/philippines.cloudtiles
 
 # cargo instruments --all-features -t "CPU Profiler" -- --max-zoom 3 convert tiles/philippines.mbtiles tiles/philippines.cloudtiles
