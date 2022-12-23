@@ -1,9 +1,8 @@
 mod opencloudtiles;
 
 use clap::{Args, Parser, Subcommand};
+use opencloudtiles::*;
 use std::path::PathBuf;
-
-use crate::opencloudtiles::*;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -37,7 +36,7 @@ pub struct Convert {
 
 	/// set new tile format
 	#[arg(long, value_enum)]
-	tile_format: Option<opencloudtiles::TileFormat>,
+	tile_format: Option<opencloudtiles::types::TileFormat>,
 
 	/// force to recompress tiles
 	#[arg(long, value_enum)]

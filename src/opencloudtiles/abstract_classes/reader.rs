@@ -1,8 +1,7 @@
 #![allow(unused_variables)]
 
+use crate::opencloudtiles::types::{TileBBox, TileData, TileFormat};
 use std::path::PathBuf;
-
-use super::{Tile, TileBBox, TileFormat};
 
 pub trait TileReader {
 	fn load(filename: &PathBuf) -> Result<Box<dyn TileReader>, &str>
@@ -17,7 +16,7 @@ pub trait TileReader {
 	fn get_parameters(&self) -> &TileReaderParameters {
 		panic!();
 	}
-	fn get_tile_raw(&self, level: u64, col: u64, row: u64) -> Option<Tile> {
+	fn get_tile_data(&self, level: u64, col: u64, row: u64) -> Option<TileData> {
 		panic!();
 	}
 }
@@ -65,8 +64,8 @@ impl TileReaderWrapper<'_> {
 	pub fn new(reader: &Box<dyn TileReader>) -> TileReaderWrapper {
 		return TileReaderWrapper { reader };
 	}
-	pub fn get_tile_raw(&self, level: u64, col: u64, row: u64) -> Option<Tile> {
-		return self.reader.get_tile_raw(level, col, row);
+	pub fn get_tile_data(&self, level: u64, col: u64, row: u64) -> Option<TileData> {
+		return self.reader.get_tile_data(level, col, row);
 	}
 }
 

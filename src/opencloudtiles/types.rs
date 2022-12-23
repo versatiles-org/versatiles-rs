@@ -47,4 +47,4 @@ pub enum TileFormat {
 	WEBP,
 }
 
-pub type Tile = Vec<u8>;
+pub type TileData = Vec<u8>;

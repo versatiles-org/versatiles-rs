@@ -1,5 +1,7 @@
-use crate::opencloudtiles::abstract_classes::{self, TileBBox, TileFormat, TileReaderParameters};
-
+use crate::opencloudtiles::{
+	abstract_classes::{self, TileReaderParameters},
+	types::{TileBBox, TileFormat},
+};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
 use std::thread;
@@ -107,7 +109,7 @@ impl abstract_classes::TileReader for TileReader {
 	fn get_parameters(&self) -> &TileReaderParameters {
 		return self.parameters.as_ref().unwrap();
 	}
-	fn get_tile_raw(&self, level: u64, col: u64, row: u64) -> Option<Vec<u8>> {
+	fn get_tile_data(&self, level: u64, col: u64, row: u64) -> Option<Vec<u8>> {
 		let connection = self.pool.get().unwrap();
 		let mut stmt = connection
 			.prepare(

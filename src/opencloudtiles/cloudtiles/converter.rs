@@ -1,8 +1,7 @@
-use crate::opencloudtiles::compress::compress_brotli;
 use crate::opencloudtiles::{
-	abstract_classes, progress::ProgressBar, TileFormat, TileReader, TileReaderWrapper,
+	abstract_classes, compress::compress_brotli, progress::ProgressBar, types::TileFormat,
+	TileConverterConfig, TileReader, TileReaderWrapper,
 };
-use abstract_classes::TileConverterConfig;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Seek, Write};
@@ -189,7 +188,7 @@ impl TileConverter {
 					let col = block.block_col * 256 + col_in_block;
 
 					scope.spawn(move |_s| {
-						let optional_tile = wrapped_reader.get_tile_raw(block.level, col, row);
+						let optional_tile = wrapped_reader.get_tile_data(block.level, col, row);
 
 						if optional_tile.is_none() {
 							let mut secured_writer = mutex_writer.lock().unwrap();

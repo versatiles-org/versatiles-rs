@@ -1,10 +1,11 @@
 #![allow(unused_variables)]
 
+use crate::opencloudtiles::{
+	compress::*,
+	types::{TileBBox, TileData, TileFormat},
+	TileReader, TileReaderParameters,
+};
 use std::path::PathBuf;
-
-use crate::opencloudtiles::compress::*;
-
-use super::{Tile, TileBBox, TileFormat, TileReader, TileReaderParameters};
 
 pub trait TileConverter {
 	fn new(
@@ -26,7 +27,7 @@ pub struct TileConverterConfig {
 	zoom_max: Option<u64>,
 	tile_format: Option<TileFormat>,
 	level_bbox: Vec<TileBBox>,
-	tile_converter: Option<fn(&Tile) -> Tile>,
+	tile_converter: Option<fn(&TileData) -> TileData>,
 	force_recompress: bool,
 }
 
@@ -82,10 +83,10 @@ impl TileConverterConfig {
 
 		self.tile_converter = Some(self.calc_tile_converter(&parameters.get_tile_format()));
 	}
-	pub fn get_tile_converter(&self) -> fn(&Tile) -> Tile {
+	pub fn get_tile_converter(&self) -> fn(&TileData) -> TileData {
 		return self.tile_converter.unwrap();
 	}
-	fn calc_tile_converter(&mut self, src_tile_format: &TileFormat) -> fn(&Tile) -> Tile {
+	fn calc_tile_converter(&mut self, src_tile_format: &TileFormat) -> fn(&TileData) -> TileData {
 		if self.tile_format.is_none() {
 			self.tile_format = Some(src_tile_format.clone());
 			return tile_same;
@@ -117,7 +118,7 @@ impl TileConverterConfig {
 			(TileFormat::PBFBrotli, TileFormat::PBF) => decompress_brotli,
 			(TileFormat::PBFBrotli, TileFormat::PBFBrotli) => {
 				if self.force_recompress {
-					fn tile_unbrotli_brotli(tile: &Tile) -> Tile {
+					fn tile_unbrotli_brotli(tile: &TileData) -> TileData {
 						compress_brotli(&decompress_brotli(&tile))
 					}
 					tile_unbrotli_brotli
@@ -126,7 +127,7 @@ impl TileConverterConfig {
 				}
 			}
 			(TileFormat::PBFBrotli, TileFormat::PBFGzip) => {
-				fn tile_unbrotli_gzip(tile: &Tile) -> Tile {
+				fn tile_unbrotli_gzip(tile: &TileData) -> TileData {
 					compress_gzip(&decompress_brotli(&tile))
 				}
 				tile_unbrotli_gzip
@@ -135,14 +136,14 @@ impl TileConverterConfig {
 
 			(TileFormat::PBFGzip, TileFormat::PBF) => decompress_gzip,
 			(TileFormat::PBFGzip, TileFormat::PBFBrotli) => {
-				fn tile_ungzip_brotli(tile: &Tile) -> Tile {
+				fn tile_ungzip_brotli(tile: &TileData) -> TileData {
 					compress_brotli(&&decompress_gzip(&tile))
 				}
 				tile_ungzip_brotli
 			}
 			(TileFormat::PBFGzip, TileFormat::PBFGzip) => {
 				if self.force_recompress {
-					fn tile_ungzip_gzip(tile: &Tile) -> Tile {
+					fn tile_ungzip_gzip(tile: &TileData) -> TileData {
 						compress_gzip(&decompress_gzip(&tile))
 					}
 					tile_ungzip_gzip
@@ -153,7 +154,7 @@ impl TileConverterConfig {
 			(TileFormat::PBFGzip, _) => todo!(),
 		};
 
-		fn tile_same(tile: &Tile) -> Tile {
+		fn tile_same(tile: &TileData) -> TileData {
 			return tile.clone();
 		}
 	}
