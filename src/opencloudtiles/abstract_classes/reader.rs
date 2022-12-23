@@ -4,7 +4,7 @@ use crate::opencloudtiles::types::{TileBBox, TileData, TileFormat};
 use std::path::PathBuf;
 
 pub trait TileReader {
-	fn load(filename: &PathBuf) -> Result<Box<dyn TileReader>, &str>
+	fn load(filename: &PathBuf) -> Box<dyn TileReader>
 	where
 		Self: Sized,
 	{

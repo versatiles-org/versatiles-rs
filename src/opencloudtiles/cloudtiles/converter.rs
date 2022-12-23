@@ -20,37 +20,32 @@ impl abstract_classes::TileConverter for TileConverter {
 	fn new(
 		filename: &PathBuf,
 		tile_config: TileConverterConfig,
-	) -> Result<Box<dyn abstract_classes::TileConverter>, &'static str>
+	) -> Box<dyn abstract_classes::TileConverter>
 	where
 		Self: Sized,
 	{
 		let file = File::create(filename).expect("Unable to create file");
-		Ok(Box::new(TileConverter {
+		Box::new(TileConverter {
 			file_buffer: BufWriter::new(file),
 			config: tile_config,
-		}))
+		})
 	}
-	fn convert_from(&mut self, reader: Box<dyn TileReader>) -> Result<(), &'static str> {
+	fn convert_from(&mut self, reader: Box<dyn TileReader>) {
 		self
 			.config
 			.finalize_with_parameters(reader.get_parameters());
 
-		self.write_header(&reader)?;
-		let meta_range = self.write_meta(&reader)?;
-		let blocks_range = self.write_blocks(&reader)?;
-		self.update_header(&meta_range, &blocks_range)?;
-
-		return Ok(());
+		self.write_header(&reader);
+		let meta_range = self.write_meta(&reader);
+		let blocks_range = self.write_blocks(&reader);
+		self.update_header(&meta_range, &blocks_range);
 	}
 }
 
 impl TileConverter {
-	fn write_header(
-		&mut self,
-		reader: &Box<dyn abstract_classes::TileReader>,
-	) -> Result<(), &'static str> {
+	fn write_header(&mut self, reader: &Box<dyn abstract_classes::TileReader>) {
 		// magic word
-		self.write(b"OpenCloudTiles/reader/v1   ")?;
+		self.write(b"OpenCloudTiles/reader/v1   ");
 
 		// tile format
 		let tile_format = reader.get_parameters().get_tile_format();
@@ -60,41 +55,27 @@ impl TileConverter {
 			TileFormat::WEBP => 2,
 			TileFormat::PBF | TileFormat::PBFGzip | TileFormat::PBFBrotli => 16,
 		};
-		self.write(&[tile_format_value])?;
+		self.write(&[tile_format_value]);
 
 		let tile_compression_value: u8 = match tile_format {
 			TileFormat::PNG | TileFormat::JPG | TileFormat::WEBP | TileFormat::PBF => 0,
 			TileFormat::PBFGzip => 1,
 			TileFormat::PBFBrotli => 2,
 		};
-		self.write(&[tile_compression_value])?;
+		self.write(&[tile_compression_value]);
 
 		// add zeros
-		self.fill_with_zeros_till(256)?;
-
-		return Ok(());
+		self.fill_with_zeros_till(256);
 	}
-	fn update_header(
-		&mut self,
-		meta_range: &ByteRange,
-		blocks_range: &ByteRange,
-	) -> Result<(), &'static str> {
-		self.write_range_at(meta_range, 128)?;
-		self.write_range_at(blocks_range, 144)?;
-
-		return Ok(());
+	fn update_header(&mut self, meta_range: &ByteRange, blocks_range: &ByteRange) {
+		self.write_range_at(meta_range, 128);
+		self.write_range_at(blocks_range, 144);
 	}
-	fn write_meta(
-		&mut self,
-		reader: &Box<dyn abstract_classes::TileReader>,
-	) -> Result<ByteRange, &'static str> {
+	fn write_meta(&mut self, reader: &Box<dyn abstract_classes::TileReader>) -> ByteRange {
 		let metablob = reader.get_meta().to_vec();
 		return self.write_vec_brotli(&metablob);
 	}
-	fn write_blocks(
-		&mut self,
-		reader: &Box<dyn abstract_classes::TileReader>,
-	) -> Result<ByteRange, &'static str> {
+	fn write_blocks(&mut self, reader: &Box<dyn abstract_classes::TileReader>) -> ByteRange {
 		let zoom_min = self.config.get_zoom_min();
 		let zoom_max = self.config.get_zoom_max();
 
@@ -144,14 +125,14 @@ impl TileConverter {
 		let mut index = BlockIndex::new();
 
 		for todo in todos {
-			let range = self.write_block(&todo, &reader, &mut bar2)?;
+			let range = self.write_block(&todo, &reader, &mut bar2);
 
 			if range.length == 0 {
 				// block is empty
 				continue;
 			}
 
-			index.add(&todo.level, &todo.block_row, &todo.block_col, &range)?;
+			index.add(&todo.level, &todo.block_row, &todo.block_col, &range);
 		}
 		bar2.finish();
 
@@ -162,9 +143,9 @@ impl TileConverter {
 		block: &BlockDefinition,
 		reader: &Box<dyn abstract_classes::TileReader>,
 		bar: &mut ProgressBar,
-	) -> Result<ByteRange, &'static str> {
+	) -> ByteRange {
 		let mut tile_index =
-			TileIndex::new(block.row_min, block.row_max, block.col_min, block.col_max)?;
+			TileIndex::new(block.row_min, block.row_max, block.col_min, block.col_max);
 		let tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
 		let wrapped_reader = &TileReaderWrapper::new(reader);
@@ -194,9 +175,7 @@ impl TileConverter {
 							let mut secured_writer = mutex_writer.lock().unwrap();
 							let offset = secured_writer.stream_position().unwrap();
 							let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-							secured_tile_index
-								.set(index, &ByteRange { offset, length: 0 })
-								.unwrap();
+							secured_tile_index.set(index, &ByteRange { offset, length: 0 });
 							return;
 						}
 
@@ -210,9 +189,7 @@ impl TileConverter {
 							let lookup = secured_tile_hash_lookup.as_ref().unwrap();
 							if lookup.contains_key(&tile) {
 								let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-								secured_tile_index
-									.set(index, lookup.get(&tile).unwrap())
-									.unwrap();
+								secured_tile_index.set(index, lookup.get(&tile).unwrap());
 								return;
 							}
 							tile_hash = Some(tile.clone());
@@ -228,7 +205,7 @@ impl TileConverter {
 						drop(secured_writer);
 
 						let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-						secured_tile_index.set(index, &range).unwrap();
+						secured_tile_index.set(index, &range);
 						drop(secured_tile_index);
 
 						if secured_tile_hash_lookup.is_some() {
@@ -242,35 +219,45 @@ impl TileConverter {
 		});
 		self.write_vec_brotli(&tile_index.as_vec())
 	}
-	fn write(&mut self, buf: &[u8]) -> Result<ByteRange, &'static str> {
-		Ok(ByteRange::new(
-			self.file_buffer.stream_position().unwrap(),
-			self.file_buffer.write(buf).unwrap() as u64,
-		))
+	fn write(&mut self, buf: &[u8]) -> ByteRange {
+		ByteRange::new(
+			self
+				.file_buffer
+				.stream_position()
+				.expect("Error in cloudtiles::write.stream_position"),
+			self
+				.file_buffer
+				.write(buf)
+				.expect("Error in cloudtiles::write.write") as u64,
+		)
 	}
-	fn write_vec_brotli(&mut self, data: &Vec<u8>) -> Result<ByteRange, &'static str> {
+	fn write_vec_brotli(&mut self, data: &Vec<u8>) -> ByteRange {
 		self.write(&compress_brotli(data))
 	}
-	fn write_range_at(&mut self, range: &ByteRange, pos: u64) -> Result<(), &'static str> {
-		let current_pos = self.file_buffer.stream_position().unwrap();
+	fn write_range_at(&mut self, range: &ByteRange, pos: u64) {
+		let current_pos = self
+			.file_buffer
+			.stream_position()
+			.expect("Error in cloudtiles::write_range_at.stream_position");
 		self
 			.file_buffer
 			.seek(std::io::SeekFrom::Start(pos))
-			.unwrap();
-		range.write_to(&mut self.file_buffer).unwrap();
+			.expect("Error in cloudtiles::write_range_at.seek1");
+		range.write_to(&mut self.file_buffer);
 		self
 			.file_buffer
 			.seek(std::io::SeekFrom::Start(current_pos))
-			.unwrap();
-		Ok(())
+			.expect("Error in cloudtiles::write_range_at.seek2");
 	}
-	fn fill_with_zeros_till(&mut self, end_pos: u64) -> Result<ByteRange, &'static str> {
-		let current_pos = self.file_buffer.stream_position().unwrap();
+	fn fill_with_zeros_till(&mut self, end_pos: u64) -> ByteRange {
+		let current_pos = self
+			.file_buffer
+			.stream_position()
+			.expect("Error in cloudtiles::fill_with_zeros_till.stream_position");
 		if current_pos > end_pos {
 			panic!("{} > {}", current_pos, end_pos);
 		}
 		let length = end_pos - current_pos;
-		self.file_buffer.write(&vec![0; length as usize]).unwrap();
-		Ok(ByteRange::new(current_pos, length))
+		return self.write(&vec![0; length as usize]);
 	}
 }

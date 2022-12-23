@@ -4,30 +4,22 @@ use std::path::PathBuf;
 
 pub struct Tools;
 impl Tools {
-	pub fn convert(command: &Convert) -> Result<(), &'static str> {
-		let reader = Tools::new_reader(&command.input_file, command)?;
-		let mut converter = Tools::new_converter(&command.output_file, command)?;
-		converter.convert_from(reader)?;
-
-		return Ok(());
+	pub fn convert(command: &Convert) {
+		let reader = Tools::new_reader(&command.input_file);
+		let mut converter = Tools::new_converter(&command.output_file, command);
+		converter.convert_from(reader);
 	}
-	fn new_reader<'a>(
-		filename: &'a PathBuf,
-		_command: &'a Convert,
-	) -> Result<Box<dyn TileReader>, &'static str> {
+	fn new_reader<'a>(filename: &'a PathBuf) -> Box<dyn TileReader> {
 		let extension = filename.extension().unwrap().to_str();
 		let reader = match extension {
-			Some("mbtiles") => mbtiles::TileReader::load(filename).unwrap(),
-			Some("cloudtiles") => cloudtiles::TileReader::load(filename).unwrap(),
+			Some("mbtiles") => mbtiles::TileReader::load(filename),
+			Some("cloudtiles") => cloudtiles::TileReader::load(filename),
 			_ => panic!("extension '{:?}' unknown", extension),
 		};
 
-		return Ok(reader);
+		return reader;
 	}
-	fn new_converter<'a>(
-		filename: &'a PathBuf,
-		command: &'a Convert,
-	) -> Result<Box<dyn TileConverter>, &'static str> {
+	fn new_converter<'a>(filename: &'a PathBuf, command: &'a Convert) -> Box<dyn TileConverter> {
 		let config = TileConverterConfig::from_options(
 			&command.min_zoom,
 			&command.max_zoom,
@@ -39,13 +31,13 @@ impl Tools {
 		let extension = filename.extension().unwrap().to_str();
 
 		let converter = match extension {
-			Some("mbtiles") => mbtiles::TileConverter::new(filename, config).unwrap(),
-			Some("cloudtiles") => cloudtiles::TileConverter::new(filename, config).unwrap(),
-			Some("tar") => tar::TileConverter::new(filename, config).unwrap(),
-			Some("*") => unknown::TileConverter::new(filename, config).unwrap(),
+			Some("mbtiles") => mbtiles::TileConverter::new(filename, config),
+			Some("cloudtiles") => cloudtiles::TileConverter::new(filename, config),
+			Some("tar") => tar::TileConverter::new(filename, config),
+			Some("*") => unknown::TileConverter::new(filename, config),
 			_ => panic!("extension '{:?}' unknown", extension),
 		};
 
-		return Ok(converter);
+		return converter;
 	}
 }

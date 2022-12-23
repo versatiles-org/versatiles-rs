@@ -99,9 +99,9 @@ impl TileReader {
 }
 
 impl abstract_classes::TileReader for TileReader {
-	fn load(filename: &std::path::PathBuf) -> Result<Box<dyn abstract_classes::TileReader>, &str> {
+	fn load(filename: &std::path::PathBuf) -> Box<dyn abstract_classes::TileReader> {
 		let reader = Self::load_from_sqlite(filename).expect("SQLite error");
-		return Ok(Box::new(reader));
+		return Box::new(reader);
 	}
 	fn get_meta(&self) -> &[u8] {
 		return self.meta_data.as_ref().unwrap().as_bytes();

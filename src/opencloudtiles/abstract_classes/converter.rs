@@ -8,16 +8,13 @@ use crate::opencloudtiles::{
 use std::path::PathBuf;
 
 pub trait TileConverter {
-	fn new(
-		filename: &PathBuf,
-		config: TileConverterConfig,
-	) -> Result<Box<dyn TileConverter>, &'static str>
+	fn new(filename: &PathBuf, config: TileConverterConfig) -> Box<dyn TileConverter>
 	where
 		Self: Sized,
 	{
 		panic!()
 	}
-	fn convert_from(&mut self, reader: Box<dyn TileReader>) -> Result<(), &'static str> {
+	fn convert_from(&mut self, reader: Box<dyn TileReader>) {
 		panic!()
 	}
 }

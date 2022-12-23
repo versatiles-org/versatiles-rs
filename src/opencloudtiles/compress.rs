@@ -11,7 +11,7 @@ pub fn compress_gzip(data: &TileData) -> TileData {
 	let mut result: TileData = Vec::new();
 	GzEncoder::new(data.as_slice(), Compression::best())
 		.read_to_end(&mut result)
-		.unwrap();
+		.expect("Error in compress_gzip");
 	return result;
 }
 
@@ -19,7 +19,7 @@ pub fn decompress_gzip(data: &TileData) -> TileData {
 	let mut result: TileData = Vec::new();
 	GzDecoder::new(data.as_slice())
 		.read_to_end(&mut result)
-		.unwrap();
+		.expect("Error in decompress_gzip");
 	return result;
 }
 
@@ -29,13 +29,13 @@ pub fn compress_brotli(data: &TileData) -> TileData {
 	params.size_hint = data.len();
 	let mut cursor = Cursor::new(data);
 	let mut result: TileData = Vec::new();
-	BrotliCompress(&mut cursor, &mut result, &params).unwrap();
+	BrotliCompress(&mut cursor, &mut result, &params).expect("Error in compress_brotli");
 	return result;
 }
 
 pub fn decompress_brotli(data: &TileData) -> TileData {
 	let mut cursor = Cursor::new(data);
 	let mut result: TileData = Vec::new();
-	BrotliDecompress(&mut cursor, &mut result).unwrap();
+	BrotliDecompress(&mut cursor, &mut result).expect("Error in decompress_brotli");
 	return result;
 }

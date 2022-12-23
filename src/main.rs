@@ -47,7 +47,7 @@ pub struct Convert {
 	force_recompress: bool,
 }
 
-fn main() -> Result<(), &'static str> {
+fn main() {
 	let cli = Cli::parse();
 
 	let command = &cli.command;
@@ -57,8 +57,7 @@ fn main() -> Result<(), &'static str> {
 				"convert from {:?} to {:?}",
 				arguments.input_file, arguments.output_file
 			);
-			Tools::convert(&arguments).unwrap();
-			return Ok(());
+			Tools::convert(&arguments);
 		}
 	}
 }
