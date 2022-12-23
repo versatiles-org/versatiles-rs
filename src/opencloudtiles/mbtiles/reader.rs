@@ -1,5 +1,5 @@
-use crate::opencloudtiles::{abstract_classes, TileFormat};
-use abstract_classes::{TileBBox, TileReaderParameters};
+use crate::opencloudtiles::abstract_classes::{self, TileBBox, TileFormat, TileReaderParameters};
+
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
 use std::thread;

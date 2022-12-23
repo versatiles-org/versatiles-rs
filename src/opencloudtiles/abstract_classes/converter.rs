@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use crate::opencloudtiles::compress::*;
 
-use super::{reader::TileBBox, Tile, TileFormat, TileReader, TileReaderParameters};
+use super::{Tile, TileBBox, TileFormat, TileReader, TileReaderParameters};
 
 pub trait TileConverter {
 	fn new(

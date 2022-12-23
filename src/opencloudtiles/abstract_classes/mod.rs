@@ -2,19 +2,8 @@
 
 mod converter;
 mod reader;
+mod types;
 
-use clap::ValueEnum;
-pub use converter::{TileConverter, TileConverterConfig};
-pub use reader::{TileBBox, TileReader, TileReaderParameters, TileReaderWrapper};
-
-#[derive(PartialEq, Clone, Debug, ValueEnum)]
-pub enum TileFormat {
-	PBF,
-	PBFGzip,
-	PBFBrotli,
-	PNG,
-	JPG,
-	WEBP,
-}
-
-pub type Tile = Vec<u8>;
+pub use converter::*;
+pub use reader::*;
+pub use types::*;
