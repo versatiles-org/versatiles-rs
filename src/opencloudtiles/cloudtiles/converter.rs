@@ -1,21 +1,19 @@
+use crate::opencloudtiles::compress::compress_brotli;
 use crate::opencloudtiles::{
-	abstract_classes, progress::ProgressBar, TileCompression, TileFormat, TileReader,
-	TileReaderWrapper,
+	abstract_classes, progress::ProgressBar, TileFormat, TileReader, TileReaderWrapper,
 };
 use abstract_classes::TileConverterConfig;
-use brotli::{enc::BrotliEncoderParams, BrotliCompress};
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufWriter, Cursor, Seek, Write};
+use std::io::{BufWriter, Seek, Write};
 use std::ops::Shr;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
-use super::{compress_brotli, compress_gzip, BlockDefinition, BlockIndex, ByteRange, TileIndex};
+use super::{BlockDefinition, BlockIndex, ByteRange, TileIndex};
 
 pub struct TileConverter {
 	file_buffer: BufWriter<File>,
-	tile_recompress: bool,
 	config: TileConverterConfig,
 }
 
@@ -23,21 +21,25 @@ impl abstract_classes::TileConverter for TileConverter {
 	fn new(
 		filename: &PathBuf,
 		tile_config: Option<TileConverterConfig>,
-	) -> std::io::Result<Box<dyn abstract_classes::TileConverter>>
+	) -> Result<Box<dyn abstract_classes::TileConverter>, &'static str>
 	where
 		Self: Sized,
 	{
 		let file = File::create(filename).expect("Unable to create file");
 		Ok(Box::new(TileConverter {
-			tile_recompress: false,
 			file_buffer: BufWriter::new(file),
 			config: tile_config.unwrap_or(TileConverterConfig::new_empty()),
 		}))
 	}
-	fn convert_from(&mut self, reader: Box<dyn TileReader>) -> std::io::Result<()> {
+	fn convert_from(&mut self, reader: Box<dyn TileReader>) -> Result<(), &'static str> {
+		self
+			.config
+			.finalize_with_parameters(reader.get_parameters());
+
 		self.write_header(&reader)?;
-		self.write_meta(&reader)?;
-		self.write_blocks(&reader)?;
+		let meta_range = self.write_meta(&reader)?;
+		let blocks_range = self.write_blocks(&reader)?;
+		self.update_header(&meta_range, &blocks_range)?;
 
 		return Ok(());
 	}
@@ -47,82 +49,74 @@ impl TileConverter {
 	fn write_header(
 		&mut self,
 		reader: &Box<dyn abstract_classes::TileReader>,
-	) -> std::io::Result<()> {
+	) -> Result<(), &'static str> {
 		// magic word
 		self.write(b"OpenCloudTiles/reader/v1   ")?;
 
 		// tile format
-		let tile_format = reader.get_tile_format();
+		let tile_format = reader.get_parameters().get_tile_format();
 		let tile_format_value: u8 = match tile_format {
 			TileFormat::PNG => 0,
 			TileFormat::JPG => 1,
 			TileFormat::WEBP => 2,
-			TileFormat::PBF => 16,
+			TileFormat::PBF | TileFormat::PBFGzip | TileFormat::PBFBrotli => 16,
 		};
 		self.write(&[tile_format_value])?;
 
-		// precompression
-		let tile_compression_src = reader.get_tile_compression();
-
-		if self.config.tile_compression.is_none() {
-			self.config.tile_compression = Some(tile_compression_src.clone());
-		}
-		self.tile_recompress =
-			self.config.tile_compression.as_ref().unwrap() != &tile_compression_src;
-
-		let tile_compression_dst_value: u8 = match self.config.tile_compression {
-			Some(TileCompression::None) => 0,
-			Some(TileCompression::Gzip) => 1,
-			Some(TileCompression::Brotli) => 2,
-			None => panic!(),
+		let tile_compression_value: u8 = match tile_format {
+			TileFormat::PNG | TileFormat::JPG | TileFormat::WEBP | TileFormat::PBF => 0,
+			TileFormat::PBFGzip => 1,
+			TileFormat::PBFBrotli => 2,
 		};
-		self.write(&[tile_compression_dst_value])?;
-
-		// println!("tile_compression: {:?}", self.tile_compression);
-		// println!("tile_compression_src: {:?}", tile_compression_src);
-		// println!("tile_recompress: {}", self.tile_recompress);
+		self.write(&[tile_compression_value])?;
 
 		// add zeros
 		self.fill_with_zeros_till(256)?;
 
 		return Ok(());
 	}
-	fn write_meta(&mut self, reader: &Box<dyn abstract_classes::TileReader>) -> std::io::Result<()> {
+	fn update_header(
+		&mut self,
+		meta_range: &ByteRange,
+		blocks_range: &ByteRange,
+	) -> Result<(), &'static str> {
+		self.write_range_at(meta_range, 128)?;
+		self.write_range_at(blocks_range, 144)?;
+
+		return Ok(());
+	}
+	fn write_meta(
+		&mut self,
+		reader: &Box<dyn abstract_classes::TileReader>,
+	) -> Result<ByteRange, &'static str> {
 		let metablob = reader.get_meta().to_vec();
-		let meta_blob_range = self.write_vec_brotli(&metablob)?;
-		let range = self.write_range_at(&meta_blob_range, 128)?;
-		return Ok(range);
+		return self.write_vec_brotli(&metablob);
 	}
 	fn write_blocks(
 		&mut self,
 		reader: &Box<dyn abstract_classes::TileReader>,
-	) -> std::io::Result<ByteRange> {
-		let level_min = self.config.get_minimum_zoom(reader.get_minimum_zoom());
-		let level_max = self.config.get_maximum_zoom(reader.get_maximum_zoom());
+	) -> Result<ByteRange, &'static str> {
+		let zoom_min = self.config.get_min_zoom();
+		let zoom_max = self.config.get_max_zoom();
 
 		let mut todos: Vec<BlockDefinition> = Vec::new();
 
-		let mut bar1 = ProgressBar::new("counting tiles", level_max - level_min);
+		let mut bar1 = ProgressBar::new("counting tiles", zoom_max - zoom_min);
 
-		for level in level_min..=level_max {
-			bar1.set_position(level - level_min);
+		for zoom in zoom_min..=zoom_max {
+			bar1.set_position(zoom - zoom_min);
 
-			let bbox = reader.get_level_bbox(level);
+			let bbox = self.config.get_zoom_bbox(zoom).unwrap();
 
-			let level_row_min: i64 = bbox.0 as i64;
-			let level_row_max: i64 = bbox.1 as i64;
-			let level_col_min: i64 = bbox.2 as i64;
-			let level_col_max: i64 = bbox.3 as i64;
+			let level_row_min: i64 = bbox.get_row_min() as i64;
+			let level_row_max: i64 = bbox.get_row_max() as i64;
+			let level_col_min: i64 = bbox.get_col_min() as i64;
+			let level_col_max: i64 = bbox.get_col_max() as i64;
 
-			let block_row_min: i64 = level_row_min.shr(8);
-			let block_row_max: i64 = level_row_max.shr(8);
-			let block_col_min: i64 = level_col_min.shr(8);
-			let block_col_max: i64 = level_col_max.shr(8);
-
-			for block_row in block_row_min..=block_row_max {
-				for block_col in block_col_min..=block_col_max {
-					let row0 = (block_row * 256) as i64;
-					let col0 = (block_col * 256) as i64;
+			for block_row in level_row_min.shr(8)..=level_row_max.shr(8) {
+				for block_col in level_col_min.shr(8)..=level_col_max.shr(8) {
+					let row0: i64 = block_row * 256i64;
+					let col0: i64 = block_col * 256i64;
 
 					let row_min = (level_row_min - row0).min(255).max(0) as u64;
 					let row_max = (level_row_max - row0).min(255).max(0) as u64;
@@ -130,7 +124,7 @@ impl TileConverter {
 					let col_max = (level_col_max - col0).min(255).max(0) as u64;
 
 					todos.push(BlockDefinition {
-						level,
+						level: zoom,
 						block_row: block_row as u64,
 						block_col: block_col as u64,
 						row_min,
@@ -162,15 +156,14 @@ impl TileConverter {
 		}
 		bar2.finish();
 
-		let range = self.write_vec_brotli(&index.as_vec())?;
-		return Ok(range);
+		return self.write_vec_brotli(&index.as_vec());
 	}
 	fn write_block(
 		&mut self,
 		block: &BlockDefinition,
 		reader: &Box<dyn abstract_classes::TileReader>,
 		bar: &mut ProgressBar,
-	) -> std::io::Result<ByteRange> {
+	) -> Result<ByteRange, &'static str> {
 		let mut tile_index =
 			TileIndex::new(block.row_min, block.row_max, block.col_min, block.col_max)?;
 		let tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
@@ -181,11 +174,9 @@ impl TileConverter {
 		let mutex_tile_index = &Mutex::new(&mut tile_index);
 		let mutex_tile_hash_lookup = &Mutex::new(tile_hash_lookup);
 
-		let tile_recompress = &self.tile_recompress;
-		let tile_compression = &self.config.tile_compression;
-
 		rayon::scope(|scope| {
 			let mut tile_no: u64 = 0;
+			let tile_converter = self.config.get_tile_converter();
 
 			for row_in_block in block.row_min..=block.row_max {
 				for col_in_block in block.col_min..=block.col_max {
@@ -198,11 +189,7 @@ impl TileConverter {
 					let col = block.block_col * 256 + col_in_block;
 
 					scope.spawn(move |_s| {
-						let optional_tile = if *tile_recompress {
-							wrapped_reader.get_tile_uncompressed(block.level, col, row)
-						} else {
-							wrapped_reader.get_tile_raw(block.level, col, row)
-						};
+						let optional_tile = wrapped_reader.get_tile_raw(block.level, col, row);
 
 						if optional_tile.is_none() {
 							let mut secured_writer = mutex_writer.lock().unwrap();
@@ -232,21 +219,7 @@ impl TileConverter {
 							tile_hash = Some(tile.clone());
 						}
 
-						let result;
-						if *tile_recompress {
-							match tile_compression {
-								Some(TileCompression::None) => result = tile,
-								Some(TileCompression::Gzip) => {
-									result = compress_gzip(&tile);
-								}
-								Some(TileCompression::Brotli) => {
-									result = compress_brotli(&tile);
-								}
-								None => panic!(),
-							}
-						} else {
-							result = tile;
-						}
+						let result = tile_converter(&tile);
 
 						let mut secured_writer = mutex_writer.lock().unwrap();
 						let range = ByteRange::new(
@@ -268,40 +241,37 @@ impl TileConverter {
 				}
 			}
 		});
-		let range = self.write_vec_brotli(&tile_index.as_vec())?;
-		return Ok(range);
+		self.write_vec_brotli(&tile_index.as_vec())
 	}
-	fn write(&mut self, buf: &[u8]) -> std::io::Result<ByteRange> {
-		return Ok(ByteRange::new(
-			self.file_buffer.stream_position()?,
-			self.file_buffer.write(buf)? as u64,
-		));
+	fn write(&mut self, buf: &[u8]) -> Result<ByteRange, &'static str> {
+		Ok(ByteRange::new(
+			self.file_buffer.stream_position().unwrap(),
+			self.file_buffer.write(buf).unwrap() as u64,
+		))
 	}
-	fn write_vec_brotli(&mut self, data: &Vec<u8>) -> std::io::Result<ByteRange> {
-		let mut params = BrotliEncoderParams::default();
-		params.quality = 11;
-		params.size_hint = data.len();
-		let mut cursor = Cursor::new(data);
-		let offset = self.file_buffer.stream_position()?;
-		let length = BrotliCompress(&mut cursor, &mut self.file_buffer, &params)? as u64;
-		return Ok(ByteRange::new(offset, length));
+	fn write_vec_brotli(&mut self, data: &Vec<u8>) -> Result<ByteRange, &'static str> {
+		self.write(&compress_brotli(data))
 	}
-	fn write_range_at(&mut self, range: &ByteRange, pos: u64) -> std::io::Result<()> {
-		let current_pos = self.file_buffer.stream_position()?;
-		self.file_buffer.seek(std::io::SeekFrom::Start(pos))?;
-		range.write_to(&mut self.file_buffer)?;
+	fn write_range_at(&mut self, range: &ByteRange, pos: u64) -> Result<(), &'static str> {
+		let current_pos = self.file_buffer.stream_position().unwrap();
 		self
 			.file_buffer
-			.seek(std::io::SeekFrom::Start(current_pos))?;
-		return Ok(());
+			.seek(std::io::SeekFrom::Start(pos))
+			.unwrap();
+		range.write_to(&mut self.file_buffer).unwrap();
+		self
+			.file_buffer
+			.seek(std::io::SeekFrom::Start(current_pos))
+			.unwrap();
+		Ok(())
 	}
-	fn fill_with_zeros_till(&mut self, end_pos: u64) -> std::io::Result<ByteRange> {
-		let current_pos = self.file_buffer.stream_position()?;
+	fn fill_with_zeros_till(&mut self, end_pos: u64) -> Result<ByteRange, &'static str> {
+		let current_pos = self.file_buffer.stream_position().unwrap();
 		if current_pos > end_pos {
 			panic!("{} > {}", current_pos, end_pos);
 		}
 		let length = end_pos - current_pos;
-		self.file_buffer.write(&vec![0; length as usize])?;
-		return Ok(ByteRange::new(current_pos, length));
+		self.file_buffer.write(&vec![0; length as usize]).unwrap();
+		Ok(ByteRange::new(current_pos, length))
 	}
 }

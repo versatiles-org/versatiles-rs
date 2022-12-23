@@ -1,26 +1,20 @@
-use crate::opencloudtiles::{abstract_classes, TileCompression, TileFormat};
-use flate2::bufread::GzDecoder;
+use crate::opencloudtiles::{abstract_classes, TileFormat};
+use abstract_classes::TileReaderParameters;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
-use std::{io::Read, thread};
+use std::thread;
 
 pub struct TileReader {
 	pool: r2d2::Pool<SqliteConnectionManager>,
-	minimum_zoom: Option<u64>,
-	maximum_zoom: Option<u64>,
-	tile_format: Option<TileFormat>,
-	tile_compression: Option<TileCompression>,
 	meta_data: Option<String>,
+	parameters: Option<TileReaderParameters>,
 }
 impl TileReader {
 	fn new(pool: r2d2::Pool<SqliteConnectionManager>) -> TileReader {
 		TileReader {
 			pool,
-			minimum_zoom: None,
-			maximum_zoom: None,
-			tile_format: None,
-			tile_compression: Some(TileCompression::None),
 			meta_data: None,
+			parameters: None,
 		}
 	}
 	fn load_sqlite(filename: &std::path::PathBuf) -> rusqlite::Result<TileReader> {
@@ -44,27 +38,22 @@ impl TileReader {
 		let mut stmt = connection.prepare("SELECT name, value FROM metadata")?;
 		let mut rows = stmt.query([])?;
 
+		let mut min_zoom: Option<u64> = None;
+		let mut max_zoom: Option<u64> = None;
+		let mut tile_format: Option<TileFormat> = None;
+
 		while let Some(row) = rows.next()? {
 			let key = row.get::<_, String>(0)?;
 			let val = row.get::<_, String>(1)?;
 			//println!("name: {}, value: {}", key, val);
 			match key.as_str() {
-				"minzoom" => self.minimum_zoom = Some(val.parse::<u64>().unwrap()),
-				"maxzoom" => self.maximum_zoom = Some(val.parse::<u64>().unwrap()),
+				"minzoom" => min_zoom = Some(val.parse::<u64>().unwrap()),
+				"maxzoom" => max_zoom = Some(val.parse::<u64>().unwrap()),
 				"format" => match val.as_str() {
-					"jpg" => {
-						self.tile_format = Some(TileFormat::JPG);
-					}
-					"pbf" => {
-						self.tile_format = Some(TileFormat::PBF);
-						self.tile_compression = Some(TileCompression::Gzip);
-					}
-					"png" => {
-						self.tile_format = Some(TileFormat::PNG);
-					}
-					"webp" => {
-						self.tile_format = Some(TileFormat::WEBP);
-					}
+					"jpg" => tile_format = Some(TileFormat::JPG),
+					"pbf" => tile_format = Some(TileFormat::PBFGzip),
+					"png" => tile_format = Some(TileFormat::PNG),
+					"webp" => tile_format = Some(TileFormat::WEBP),
 					_ => panic!("unknown format"),
 				},
 				"json" => self.meta_data = Some(val),
@@ -72,15 +61,12 @@ impl TileReader {
 			}
 		}
 
-		if self.minimum_zoom.is_none() {
-			panic!("'minzoom' is not defined in table 'metadata'");
-		}
-		if self.maximum_zoom.is_none() {
-			panic!("'maxzoom' is not defined in table 'metadata'");
-		}
-		if self.tile_format.is_none() {
-			panic!("'format' is not defined in table 'metadata'");
-		}
+		self.parameters = Some(TileReaderParameters::new(
+			min_zoom.unwrap(),
+			max_zoom.unwrap(),
+			tile_format.unwrap(),
+		));
+
 		if self.meta_data.is_none() {
 			panic!("'json' is not defined in table 'metadata'");
 		}
@@ -107,29 +93,15 @@ impl TileReader {
 }
 
 impl abstract_classes::TileReader for TileReader {
-	fn load(
-		filename: &std::path::PathBuf,
-	) -> std::io::Result<Box<dyn abstract_classes::TileReader>> {
+	fn load(filename: &std::path::PathBuf) -> Result<Box<dyn abstract_classes::TileReader>, &str> {
 		let reader = Self::load_sqlite(filename).expect("SQLite error");
 		return Ok(Box::new(reader));
-	}
-	fn get_tile_format(&self) -> TileFormat {
-		return self.tile_format.clone().unwrap();
-	}
-	fn get_tile_compression(&self) -> TileCompression {
-		return self.tile_compression.clone().unwrap();
 	}
 	fn get_meta(&self) -> &[u8] {
 		return self.meta_data.as_ref().unwrap().as_bytes();
 	}
-	fn get_minimum_zoom(&self) -> u64 {
-		return self.minimum_zoom.unwrap();
-	}
-	fn get_maximum_zoom(&self) -> u64 {
-		return self.maximum_zoom.unwrap();
-	}
-	fn get_level_bbox(&self, level: u64) -> (u64, u64, u64, u64) {
-		return self.calc_level_bbox(level).unwrap();
+	fn get_parameters(&self) -> &TileReaderParameters {
+		return self.parameters.as_ref().unwrap();
 	}
 	fn get_tile_raw(&self, level: u64, col: u64, row: u64) -> Option<Vec<u8>> {
 		let connection = self.pool.get().unwrap();
@@ -143,26 +115,6 @@ impl abstract_classes::TileReader for TileReader {
 			return Some(result.unwrap());
 		} else {
 			return None;
-		};
-	}
-	fn get_tile_uncompressed(&self, level: u64, col: u64, row: u64) -> Option<Vec<u8>> {
-		let data = self.get_tile_raw(level, col, row);
-		if data.is_none() {
-			return None;
-		}
-		let tile = data.unwrap();
-		return match self.tile_compression {
-			Some(TileCompression::None) => Some(tile),
-			Some(TileCompression::Gzip) => {
-				let mut result: Vec<u8> = Vec::new();
-				//println!("{:X?}", tile);
-				let _bytes_written = GzDecoder::new(tile.as_slice())
-					.read_to_end(&mut result)
-					.unwrap();
-				Some(result)
-			}
-			Some(TileCompression::Brotli) => panic!("brotli decompression not implemented"),
-			None => panic!(""),
 		};
 	}
 }

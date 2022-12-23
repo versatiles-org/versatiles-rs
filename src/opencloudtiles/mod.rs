@@ -1,5 +1,6 @@
 mod abstract_classes;
 mod cloudtiles;
+mod compress;
 mod mbtiles;
 mod progress;
 mod tar;

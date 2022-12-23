@@ -35,12 +35,16 @@ pub struct Convert {
 	#[arg(long, value_name = "int")]
 	max_zoom: Option<u64>,
 
-	/// precompress tiles
+	/// set new tile format
 	#[arg(long, value_enum)]
-	precompress: Option<opencloudtiles::TileCompression>,
+	tile_format: Option<opencloudtiles::TileFormat>,
+
+	/// force to recompress tiles
+	#[arg(long, value_enum)]
+	force_recompress: Option<bool>,
 }
 
-fn main() -> std::io::Result<()> {
+fn main() -> Result<(), &'static str> {
 	let cli = Cli::parse();
 
 	let command = &cli.command;
@@ -50,7 +54,7 @@ fn main() -> std::io::Result<()> {
 				"convert from {:?} to {:?}",
 				arguments.input_file, arguments.output_file
 			);
-			Tools::convert(&arguments)?;
+			Tools::convert(&arguments).unwrap();
 			return Ok(());
 		}
 	}

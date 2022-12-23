@@ -3,25 +3,18 @@
 mod converter;
 mod reader;
 
-pub use converter::{TileConverter, TileConverterConfig};
-pub use reader::{TileReader, TileReaderWrapper};
-
 use clap::ValueEnum;
+pub use converter::{TileConverter, TileConverterConfig};
+pub use reader::{TileReader, TileReaderParameters, TileReaderWrapper};
 
-#[derive(PartialEq, Clone, Debug)]
+#[derive(PartialEq, Clone, Debug, ValueEnum)]
 pub enum TileFormat {
 	PBF,
+	PBFGzip,
+	PBFBrotli,
 	PNG,
 	JPG,
 	WEBP,
 }
 
-#[derive(PartialEq, Clone, Debug, ValueEnum)]
-pub enum TileCompression {
-	/// uncompressed
-	None,
-	/// use gzip
-	Gzip,
-	/// use brotli
-	Brotli,
-}
+pub type Tile = Vec<u8>;
