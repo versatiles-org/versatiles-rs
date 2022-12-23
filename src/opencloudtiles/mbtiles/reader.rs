@@ -19,7 +19,7 @@ impl TileReader {
 			parameters: None,
 		}
 	}
-	fn load_from_sqlite(filename: &std::path::PathBuf) -> rusqlite::Result<TileReader> {
+	fn load_from_sqlite(filename: &std::path::PathBuf) -> TileReader {
 		let concurrency = thread::available_parallelism().unwrap().get();
 
 		let manager = r2d2_sqlite::SqliteConnectionManager::file(filename)
@@ -31,22 +31,24 @@ impl TileReader {
 			.unwrap();
 
 		let mut reader = TileReader::new(pool);
-		reader.load_meta_data()?;
+		reader.load_meta_data();
 
-		return Ok(reader);
+		return reader;
 	}
-	fn load_meta_data(&mut self) -> rusqlite::Result<()> {
+	fn load_meta_data(&mut self) {
 		let connection = self.pool.get().unwrap();
-		let mut stmt = connection.prepare("SELECT name, value FROM metadata")?;
-		let mut rows = stmt.query([])?;
+		let mut stmt = connection
+			.prepare("SELECT name, value FROM metadata")
+			.expect("can not prepare SQL query");
+		let mut rows = stmt.query([]).expect("SQL query failed");
 
 		let mut min_zoom: Option<u64> = None;
 		let mut max_zoom: Option<u64> = None;
 		let mut tile_format: Option<TileFormat> = None;
 
-		while let Some(row) = rows.next()? {
-			let key = row.get::<_, String>(0)?;
-			let val = row.get::<_, String>(1)?;
+		while let Some(row) = rows.next().unwrap() {
+			let key = row.get::<_, String>(0).unwrap();
+			let val = row.get::<_, String>(1).unwrap();
 			//println!("name: {}, value: {}", key, val);
 			match key.as_str() {
 				"minzoom" => min_zoom = Some(val.parse::<u64>().unwrap()),
@@ -73,8 +75,6 @@ impl TileReader {
 		if self.meta_data.is_none() {
 			panic!("'json' is not defined in table 'metadata'");
 		}
-
-		return Ok(());
 	}
 	fn get_level_bboxes(&self) -> Vec<TileBBox> {
 		let mut level_bboxes = Vec::new();
@@ -100,7 +100,7 @@ impl TileReader {
 
 impl abstract_classes::TileReader for TileReader {
 	fn load(filename: &std::path::PathBuf) -> Box<dyn abstract_classes::TileReader> {
-		let reader = Self::load_from_sqlite(filename).expect("SQLite error");
+		let reader = Self::load_from_sqlite(filename);
 		return Box::new(reader);
 	}
 	fn get_meta(&self) -> &[u8] {
