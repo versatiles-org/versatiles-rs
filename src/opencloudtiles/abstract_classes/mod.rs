@@ -5,7 +5,7 @@ mod reader;
 
 use clap::ValueEnum;
 pub use converter::{TileConverter, TileConverterConfig};
-pub use reader::{TileReader, TileReaderParameters, TileReaderWrapper};
+pub use reader::{TileBBox, TileReader, TileReaderParameters, TileReaderWrapper};
 
 #[derive(PartialEq, Clone, Debug, ValueEnum)]
 pub enum TileFormat {

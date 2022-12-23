@@ -22,8 +22,8 @@ pub trait TileConverter {
 }
 
 pub struct TileConverterConfig {
-	min_zoom: Option<u64>,
-	max_zoom: Option<u64>,
+	zoom_min: Option<u64>,
+	zoom_max: Option<u64>,
 	tile_format: Option<TileFormat>,
 	level_bbox: Vec<TileBBox>,
 	tile_converter: Option<fn(&Tile) -> Tile>,
@@ -32,14 +32,14 @@ pub struct TileConverterConfig {
 
 impl TileConverterConfig {
 	pub fn from_options(
-		min_zoom: &Option<u64>,
-		max_zoom: &Option<u64>,
+		zoom_min: &Option<u64>,
+		zoom_max: &Option<u64>,
 		tile_format: &Option<TileFormat>,
 		force_recompress: &Option<bool>,
 	) -> Self {
 		return TileConverterConfig {
-			min_zoom: min_zoom.clone(),
-			max_zoom: max_zoom.clone(),
+			zoom_min: zoom_min.clone(),
+			zoom_max: zoom_max.clone(),
 			tile_format: tile_format.clone(),
 			level_bbox: Vec::new(),
 			tile_converter: None,
@@ -47,18 +47,37 @@ impl TileConverterConfig {
 		};
 	}
 	pub fn finalize_with_parameters(&mut self, parameters: &TileReaderParameters) {
-		let min_zoom = parameters.get_min_zoom();
-		if self.min_zoom.is_none() {
-			self.min_zoom = Some(min_zoom);
+		let zoom_min = parameters.get_zoom_min();
+		if self.zoom_min.is_none() {
+			self.zoom_min = Some(zoom_min);
 		} else {
-			self.min_zoom = Some(self.min_zoom.unwrap().max(min_zoom));
+			self.zoom_min = Some(self.zoom_min.unwrap().max(zoom_min));
 		}
 
-		let max_zoom = parameters.get_max_zoom();
-		if self.max_zoom.is_none() {
-			self.max_zoom = Some(max_zoom);
+		let zoom_max = parameters.get_zoom_max();
+		if self.zoom_max.is_none() {
+			self.zoom_max = Some(zoom_max);
 		} else {
-			self.max_zoom = Some(self.max_zoom.unwrap().min(max_zoom));
+			self.zoom_max = Some(self.zoom_max.unwrap().min(zoom_max));
+		}
+
+		let level_bbox = parameters.get_level_bbox();
+
+		for (level, bbox) in level_bbox.iter().enumerate() {
+			let bbox_option = self.level_bbox.get_mut(level);
+			if bbox_option.is_none() {
+				self.level_bbox.insert(level, bbox.clone())
+			} else {
+				bbox_option.unwrap().intersect(bbox);
+			}
+		}
+
+		// remove levels outside of [zoom_min, zoom_max]
+		for index in 0..self.level_bbox.len() {
+			let level = index as u64;
+			if (level < zoom_min) || (level > zoom_max) {
+				self.level_bbox.remove(index);
+			}
 		}
 
 		self.tile_converter = Some(self.calc_tile_converter(&parameters.get_tile_format()));
@@ -138,35 +157,13 @@ impl TileConverterConfig {
 			return tile.clone();
 		}
 	}
-	pub fn get_min_zoom(&self) -> u64 {
-		return self.min_zoom.unwrap();
+	pub fn get_zoom_min(&self) -> u64 {
+		return self.zoom_min.unwrap();
 	}
-	pub fn get_max_zoom(&self) -> u64 {
-		return self.max_zoom.unwrap();
+	pub fn get_zoom_max(&self) -> u64 {
+		return self.zoom_max.unwrap();
 	}
 	pub fn get_zoom_bbox(&self, zoom: u64) -> Option<&TileBBox> {
 		return self.level_bbox.get(zoom as usize);
 	}
-	/*
-	pub fn set_min_zoom(&mut self, zoom: &Option<u64>) {
-		if zoom.is_some() {
-			self.min_zoom = Some(zoom.unwrap());
-		}
-	}
-	pub fn set_max_zoom(&mut self, zoom: &Option<u64>) {
-		if zoom.is_some() {
-			self.max_zoom = Some(zoom.unwrap());
-		}
-	}
-	pub fn set_tile_format(&mut self, tile_format: &Option<TileFormat>) {
-		if tile_format.is_some() {
-			self.tile_format = Some(tile_format.as_ref().unwrap().clone());
-		}
-	}
-	pub fn set_recompress(&mut self, force_recompress: &Option<bool>) {
-		if force_recompress.is_some() {
-			self.force_recompress = self.force_recompress
-		}
-	}
-	*/
 }

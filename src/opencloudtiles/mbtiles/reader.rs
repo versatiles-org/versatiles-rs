@@ -1,5 +1,5 @@
 use crate::opencloudtiles::{abstract_classes, TileFormat};
-use abstract_classes::TileReaderParameters;
+use abstract_classes::{TileBBox, TileReaderParameters};
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
 use std::thread;
@@ -17,7 +17,7 @@ impl TileReader {
 			parameters: None,
 		}
 	}
-	fn load_sqlite(filename: &std::path::PathBuf) -> rusqlite::Result<TileReader> {
+	fn load_from_sqlite(filename: &std::path::PathBuf) -> rusqlite::Result<TileReader> {
 		let concurrency = thread::available_parallelism().unwrap().get();
 
 		let manager = r2d2_sqlite::SqliteConnectionManager::file(filename)
@@ -65,6 +65,7 @@ impl TileReader {
 			min_zoom.unwrap(),
 			max_zoom.unwrap(),
 			tile_format.unwrap(),
+			self.get_level_bboxes(),
 		));
 
 		if self.meta_data.is_none() {
@@ -73,28 +74,31 @@ impl TileReader {
 
 		return Ok(());
 	}
-	fn calc_level_bbox(&self, level: u64) -> rusqlite::Result<(u64, u64, u64, u64)> {
-		let sql = format!(
-			"SELECT min(tile_row), max(tile_row), min(tile_column), max(tile_column) FROM tiles WHERE zoom_level = {}",
-			level
-		);
+	fn get_level_bboxes(&self) -> Vec<TileBBox> {
+		let mut level_bboxes = Vec::new();
+
+		let sql = "SELECT min(tile_row), max(tile_row), min(tile_column), max(tile_column),zoom_level FROM tiles GROUP BY zoom_level";
 		let connection = self.pool.get().unwrap();
-		let mut stmt = connection.prepare(sql.as_str())?;
-		let row = stmt.query_row([], |entry| {
-			Ok((
-				entry.get::<_, u64>(0)?,
-				entry.get::<_, u64>(1)?,
-				entry.get::<_, u64>(2)?,
-				entry.get::<_, u64>(3)?,
-			))
-		});
-		return row;
+		let mut stmt = connection.prepare(sql).unwrap();
+
+		let mut entries = stmt.query([]).unwrap();
+		while let Some(entry) = entries.next().unwrap() {
+			let row_min = entry.get_unwrap::<_, u64>("min(tile_row)");
+			let row_max = entry.get_unwrap::<_, u64>("max(tile_row)");
+			let col_min = entry.get_unwrap::<_, u64>("min(tile_column)");
+			let col_max = entry.get_unwrap::<_, u64>("max(tile_column)");
+			let level = entry.get_unwrap::<_, usize>("zoom_level");
+
+			level_bboxes.insert(level, TileBBox::new(row_min, row_max, col_min, col_max));
+		}
+
+		return level_bboxes;
 	}
 }
 
 impl abstract_classes::TileReader for TileReader {
 	fn load(filename: &std::path::PathBuf) -> Result<Box<dyn abstract_classes::TileReader>, &str> {
-		let reader = Self::load_sqlite(filename).expect("SQLite error");
+		let reader = Self::load_from_sqlite(filename).expect("SQLite error");
 		return Ok(Box::new(reader));
 	}
 	fn get_meta(&self) -> &[u8] {

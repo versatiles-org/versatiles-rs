@@ -22,6 +22,7 @@ pub trait TileReader {
 	}
 }
 
+#[derive(Clone)]
 pub struct TileBBox {
 	row_min: u64,
 	row_max: u64,
@@ -30,6 +31,14 @@ pub struct TileBBox {
 }
 
 impl TileBBox {
+	pub fn new(row_min: u64, row_max: u64, col_min: u64, col_max: u64) -> Self {
+		TileBBox {
+			row_min,
+			row_max,
+			col_min,
+			col_max,
+		}
+	}
 	pub fn get_row_min(&self) -> u64 {
 		return self.row_min;
 	}
@@ -42,35 +51,46 @@ impl TileBBox {
 	pub fn get_col_max(&self) -> u64 {
 		return self.col_max;
 	}
+	pub fn intersect(&mut self, bbox: &TileBBox) {
+		self.row_min = self.row_min.max(bbox.row_min);
+		self.row_max = self.row_max.min(bbox.row_max);
+		self.col_min = self.col_min.max(bbox.col_min);
+		self.col_max = self.col_max.min(bbox.col_max);
+	}
 }
 
 pub struct TileReaderParameters {
-	min_zoom: u64,
-	max_zoom: u64,
+	zoom_min: u64,
+	zoom_max: u64,
 	level_bbox: Vec<TileBBox>,
 	tile_format: TileFormat,
 }
 
 impl TileReaderParameters {
-	pub fn new(min_zoom: u64, max_zoom: u64, tile_format: TileFormat) -> TileReaderParameters {
+	pub fn new(
+		zoom_min: u64,
+		zoom_max: u64,
+		tile_format: TileFormat,
+		level_bbox: Vec<TileBBox>,
+	) -> TileReaderParameters {
 		return TileReaderParameters {
-			min_zoom,
-			max_zoom,
+			zoom_min,
+			zoom_max,
 			tile_format,
-			level_bbox: Vec::new(),
+			level_bbox,
 		};
 	}
-	pub fn get_min_zoom(&self) -> u64 {
-		return self.min_zoom;
+	pub fn get_zoom_min(&self) -> u64 {
+		return self.zoom_min;
 	}
-	pub fn get_max_zoom(&self) -> u64 {
-		return self.max_zoom;
+	pub fn get_zoom_max(&self) -> u64 {
+		return self.zoom_max;
 	}
 	pub fn get_tile_format(&self) -> &TileFormat {
 		return &self.tile_format;
 	}
-	pub fn get_level_bbox(&self, level: u64) -> Option<&TileBBox> {
-		return self.level_bbox.get(level as usize);
+	pub fn get_level_bbox(&self) -> &Vec<TileBBox> {
+		return &self.level_bbox;
 	}
 }
 

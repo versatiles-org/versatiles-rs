@@ -96,8 +96,8 @@ impl TileConverter {
 		&mut self,
 		reader: &Box<dyn abstract_classes::TileReader>,
 	) -> Result<ByteRange, &'static str> {
-		let zoom_min = self.config.get_min_zoom();
-		let zoom_max = self.config.get_max_zoom();
+		let zoom_min = self.config.get_zoom_min();
+		let zoom_max = self.config.get_zoom_max();
 
 		let mut todos: Vec<BlockDefinition> = Vec::new();
 
