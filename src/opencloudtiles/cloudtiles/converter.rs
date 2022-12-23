@@ -20,7 +20,7 @@ pub struct TileConverter {
 impl abstract_classes::TileConverter for TileConverter {
 	fn new(
 		filename: &PathBuf,
-		tile_config: Option<TileConverterConfig>,
+		tile_config: TileConverterConfig,
 	) -> Result<Box<dyn abstract_classes::TileConverter>, &'static str>
 	where
 		Self: Sized,
@@ -28,7 +28,7 @@ impl abstract_classes::TileConverter for TileConverter {
 		let file = File::create(filename).expect("Unable to create file");
 		Ok(Box::new(TileConverter {
 			file_buffer: BufWriter::new(file),
-			config: tile_config.unwrap_or(TileConverterConfig::new_empty()),
+			config: tile_config,
 		}))
 	}
 	fn convert_from(&mut self, reader: Box<dyn TileReader>) -> Result<(), &'static str> {

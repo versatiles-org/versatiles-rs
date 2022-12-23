@@ -30,14 +30,6 @@ pub struct TileBBox {
 }
 
 impl TileBBox {
-	pub fn new(row_min: u64, row_max: u64, col_min: u64, col_max: u64) -> TileBBox {
-		return TileBBox {
-			row_min,
-			row_max,
-			col_min,
-			col_max,
-		};
-	}
 	pub fn get_row_min(&self) -> u64 {
 		return self.row_min;
 	}

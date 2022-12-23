@@ -9,7 +9,7 @@ use super::{reader::TileBBox, Tile, TileFormat, TileReader, TileReaderParameters
 pub trait TileConverter {
 	fn new(
 		filename: &PathBuf,
-		config: Option<TileConverterConfig>,
+		config: TileConverterConfig,
 	) -> Result<Box<dyn TileConverter>, &'static str>
 	where
 		Self: Sized,
@@ -31,14 +31,19 @@ pub struct TileConverterConfig {
 }
 
 impl TileConverterConfig {
-	pub fn new_empty() -> Self {
+	pub fn from_options(
+		min_zoom: &Option<u64>,
+		max_zoom: &Option<u64>,
+		tile_format: &Option<TileFormat>,
+		force_recompress: &Option<bool>,
+	) -> Self {
 		return TileConverterConfig {
-			min_zoom: None,
-			max_zoom: None,
-			tile_format: None,
+			min_zoom: min_zoom.clone(),
+			max_zoom: max_zoom.clone(),
+			tile_format: tile_format.clone(),
 			level_bbox: Vec::new(),
 			tile_converter: None,
-			force_recompress: false,
+			force_recompress: force_recompress.unwrap_or(false),
 		};
 	}
 	pub fn finalize_with_parameters(&mut self, parameters: &TileReaderParameters) {
@@ -142,6 +147,7 @@ impl TileConverterConfig {
 	pub fn get_zoom_bbox(&self, zoom: u64) -> Option<&TileBBox> {
 		return self.level_bbox.get(zoom as usize);
 	}
+	/*
 	pub fn set_min_zoom(&mut self, zoom: &Option<u64>) {
 		if zoom.is_some() {
 			self.min_zoom = Some(zoom.unwrap());
@@ -162,4 +168,5 @@ impl TileConverterConfig {
 			self.force_recompress = self.force_recompress
 		}
 	}
+	*/
 }

@@ -11,7 +11,7 @@ impl Tools {
 
 		return Ok(());
 	}
-	pub fn new_reader<'a>(
+	fn new_reader<'a>(
 		filename: &'a PathBuf,
 		_command: &'a Convert,
 	) -> Result<Box<dyn TileReader>, &'static str> {
@@ -24,23 +24,24 @@ impl Tools {
 
 		return Ok(reader);
 	}
-	pub fn new_converter<'a>(
+	fn new_converter<'a>(
 		filename: &'a PathBuf,
 		command: &'a Convert,
 	) -> Result<Box<dyn TileConverter>, &'static str> {
-		let mut config = TileConverterConfig::new_empty();
-		config.set_min_zoom(&command.min_zoom);
-		config.set_max_zoom(&command.max_zoom);
-		config.set_tile_format(&command.tile_format);
-		config.set_recompress(&command.force_recompress);
+		let config = TileConverterConfig::from_options(
+			&command.min_zoom,
+			&command.max_zoom,
+			&command.tile_format,
+			&command.force_recompress,
+		);
 
 		let extension = filename.extension().unwrap().to_str();
 
 		let converter = match extension {
-			Some("mbtiles") => mbtiles::TileConverter::new(filename, Some(config)).unwrap(),
-			Some("cloudtiles") => cloudtiles::TileConverter::new(filename, Some(config)).unwrap(),
-			Some("tar") => tar::TileConverter::new(filename, Some(config)).unwrap(),
-			Some("*") => unknown::TileConverter::new(filename, Some(config)).unwrap(),
+			Some("mbtiles") => mbtiles::TileConverter::new(filename, config).unwrap(),
+			Some("cloudtiles") => cloudtiles::TileConverter::new(filename, config).unwrap(),
+			Some("tar") => tar::TileConverter::new(filename, config).unwrap(),
+			Some("*") => unknown::TileConverter::new(filename, config).unwrap(),
 			_ => panic!("extension '{:?}' unknown", extension),
 		};
 
