@@ -25,8 +25,9 @@ pub trait TileConverter {
 pub struct TileConverterConfig {
 	zoom_min: Option<u64>,
 	zoom_max: Option<u64>,
+	geo_bbox: Option<[f32; 4]>,
 	tile_format: Option<TileFormat>,
-	level_bbox: Vec<TileBBox>,
+	level_bbox: Option<Vec<TileBBox>>,
 	tile_converter: Option<fn(&TileData) -> TileData>,
 	force_recompress: bool,
 }
@@ -35,16 +36,18 @@ impl TileConverterConfig {
 	pub fn from_options(
 		zoom_min: &Option<u64>,
 		zoom_max: &Option<u64>,
+		geo_bbox: &Option<Vec<f32>>,
 		tile_format: &Option<TileFormat>,
-		force_recompress: &Option<bool>,
+		force_recompress: &bool,
 	) -> Self {
 		return TileConverterConfig {
 			zoom_min: zoom_min.clone(),
 			zoom_max: zoom_max.clone(),
 			tile_format: tile_format.clone(),
-			level_bbox: Vec::new(),
+			geo_bbox: geo_bbox.as_ref().map(|v| v.as_slice().try_into().unwrap()),
+			level_bbox: None,
 			tile_converter: None,
-			force_recompress: force_recompress.unwrap_or(false),
+			force_recompress: *force_recompress,
 		};
 	}
 	pub fn finalize_with_parameters(&mut self, parameters: &TileReaderParameters) {
@@ -62,24 +65,26 @@ impl TileConverterConfig {
 			self.zoom_max = Some(self.zoom_max.unwrap().min(zoom_max));
 		}
 
-		let level_bbox = parameters.get_level_bbox();
-
-		for (level, bbox) in level_bbox.iter().enumerate() {
-			let bbox_option = self.level_bbox.get_mut(level);
-			if bbox_option.is_none() {
-				self.level_bbox.insert(level, bbox.clone())
-			} else {
-				bbox_option.unwrap().intersect(bbox);
-			}
+		if self.level_bbox.is_some() {
+			panic!("level_bbox should not be defined yet")
 		}
-
-		// remove levels outside of [zoom_min, zoom_max]
-		for index in 0..self.level_bbox.len() {
+		let src_level_bbox = parameters.get_level_bbox();
+		let mut dst_level_bbox = Vec::new();
+		for (index, bbox) in src_level_bbox.iter().enumerate() {
 			let level = index as u64;
 			if (level < zoom_min) || (level > zoom_max) {
-				self.level_bbox.remove(index);
+				continue;
+			}
+			dst_level_bbox.insert(index, bbox.clone());
+		}
+
+		if self.geo_bbox.is_some() {
+			for (level, bbox) in dst_level_bbox.iter_mut().enumerate() {
+				bbox.intersect(&TileBBox::from_geo(level as u64, self.geo_bbox.unwrap()))
 			}
 		}
+
+		self.level_bbox = Some(dst_level_bbox);
 
 		self.tile_converter = Some(self.calc_tile_converter(&parameters.get_tile_format()));
 	}
@@ -159,12 +164,16 @@ impl TileConverterConfig {
 		}
 	}
 	pub fn get_zoom_min(&self) -> u64 {
-		return self.zoom_min.unwrap();
+		return self.zoom_min.expect("zoom_min is not defined yet");
 	}
 	pub fn get_zoom_max(&self) -> u64 {
-		return self.zoom_max.unwrap();
+		return self.zoom_max.expect("zoom_max is not defined yet");
 	}
 	pub fn get_zoom_bbox(&self, zoom: u64) -> Option<&TileBBox> {
-		return self.level_bbox.get(zoom as usize);
+		return self
+			.level_bbox
+			.as_ref()
+			.expect("level_bbox is not defined yet")
+			.get(zoom as usize);
 	}
 }

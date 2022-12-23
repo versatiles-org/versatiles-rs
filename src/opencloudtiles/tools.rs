@@ -31,6 +31,7 @@ impl Tools {
 		let config = TileConverterConfig::from_options(
 			&command.min_zoom,
 			&command.max_zoom,
+			&command.bbox,
 			&command.tile_format,
 			&command.force_recompress,
 		);

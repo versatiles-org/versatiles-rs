@@ -1,3 +1,5 @@
+use std::f32::consts::PI;
+
 use clap::ValueEnum;
 
 #[derive(Clone)]
@@ -16,6 +18,14 @@ impl TileBBox {
 			col_min,
 			col_max,
 		}
+	}
+	pub fn from_geo(level: u64, geo_bbox: [f32; 4]) -> Self {
+		let zoom: f32 = 2.0f32.powi(level as i32);
+		let x_min = zoom * (geo_bbox[0] / 360.0 + 0.5);
+		let y_min = zoom * (PI - ((geo_bbox[1] / 90.0 + 1.0) * PI / 4.0).tan().ln());
+		let x_max = zoom * (geo_bbox[2] / 360.0 + 0.5);
+		let y_max = zoom * (PI - ((geo_bbox[3] / 90.0 + 1.0) * PI / 4.0).tan().ln());
+		return TileBBox::new(x_min as u64, y_min as u64, x_max as u64, y_max as u64);
 	}
 	pub fn get_row_min(&self) -> u64 {
 		return self.row_min;

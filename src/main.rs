@@ -34,13 +34,17 @@ pub struct Convert {
 	#[arg(long, value_name = "int")]
 	max_zoom: Option<u64>,
 
+	/// bounding box: lon_min lat_min lon_max lat_max
+	#[arg(long, value_name = "float", num_args = 4, value_delimiter = ',')]
+	bbox: Option<Vec<f32>>,
+
 	/// set new tile format
 	#[arg(long, value_enum)]
 	tile_format: Option<opencloudtiles::types::TileFormat>,
 
 	/// force to recompress tiles
 	#[arg(long, value_enum)]
-	force_recompress: Option<bool>,
+	force_recompress: bool,
 }
 
 fn main() -> Result<(), &'static str> {
