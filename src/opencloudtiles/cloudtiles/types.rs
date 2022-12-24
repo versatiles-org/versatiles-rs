@@ -154,7 +154,7 @@ impl BlockIndex {
 		};
 	}
 	pub fn add(&mut self, level: u64, row: u64, col: u64, range: &ByteRange) {
-		self.buffer.write_u64::<BE>(level).unwrap();
+		self.buffer.write_u8(level as u8).unwrap();
 		self.buffer.write_u32::<BE>(row as u32).unwrap();
 		self.buffer.write_u32::<BE>(col as u32).unwrap();
 		self.buffer.write_u64::<BE>(range.offset).unwrap();
@@ -183,16 +183,17 @@ impl TileIndex {
 		//println!("col {} {}", col_min, col_max);
 
 		let length = (count as usize) * 12 + 4;
-		println!("length {}", length);
+		// println!("length {}", length);
 
 		let mut buffer: Vec<u8> = Vec::with_capacity(length);
 		buffer.resize(length, 0);
-		println!("buffer.len() {}", buffer.len());
+		// println!("buffer.len() {}", buffer.len());
 
-		buffer.write_u8(row_min as u8).unwrap();
-		buffer.write_u8(col_min as u8).unwrap();
-		buffer.write_u8(row_max as u8).unwrap();
-		buffer.write_u8(col_max as u8).unwrap();
+		let mut cursor = Cursor::new(&mut buffer);
+		cursor.write_u8(row_min as u8).unwrap();
+		cursor.write_u8(col_min as u8).unwrap();
+		cursor.write_u8(row_max as u8).unwrap();
+		cursor.write_u8(col_max as u8).unwrap();
 
 		return TileIndex { buffer, length };
 	}
@@ -202,7 +203,7 @@ impl TileIndex {
 			start: pos,
 			end: pos + 12,
 		};
-		println!("index {} pos {} slice_range {:?}", index, pos, slice_range);
+		// println!("index {} pos {} slice_range {:?}", index, pos, slice_range);
 		let mut slice = &mut self.buffer.as_mut_slice()[slice_range];
 		slice.write_u64::<BE>(tile_byte_range.offset).unwrap();
 		slice
