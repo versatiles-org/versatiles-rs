@@ -27,6 +27,7 @@ pub struct TileConverterConfig {
 	level_bbox: Option<Vec<TileBBox>>,
 	tile_converter: Option<fn(&TileData) -> TileData>,
 	force_recompress: bool,
+	finalized: bool,
 }
 
 impl TileConverterConfig {
@@ -45,6 +46,7 @@ impl TileConverterConfig {
 			level_bbox: None,
 			tile_converter: None,
 			force_recompress: *force_recompress,
+			finalized: false,
 		};
 	}
 	pub fn finalize_with_parameters(&mut self, parameters: &TileReaderParameters) {
@@ -84,9 +86,8 @@ impl TileConverterConfig {
 		self.level_bbox = Some(dst_level_bbox);
 
 		self.tile_converter = Some(self.calc_tile_converter(&parameters.get_tile_format()));
-	}
-	pub fn get_tile_converter(&self) -> fn(&TileData) -> TileData {
-		return self.tile_converter.unwrap();
+
+		self.finalized = true;
 	}
 	fn calc_tile_converter(&mut self, src_tile_format: &TileFormat) -> fn(&TileData) -> TileData {
 		if self.tile_format.is_none() {
@@ -160,17 +161,39 @@ impl TileConverterConfig {
 			return tile.clone();
 		}
 	}
+	pub fn get_tile_converter(&self) -> fn(&TileData) -> TileData {
+		if !self.finalized {
+			panic!()
+		}
+
+		return self.tile_converter.unwrap();
+	}
 	pub fn get_zoom_min(&self) -> u64 {
-		return self.zoom_min.expect("zoom_min is not defined yet");
+		if !self.finalized {
+			panic!()
+		}
+
+		return self.zoom_min.unwrap();
 	}
 	pub fn get_zoom_max(&self) -> u64 {
-		return self.zoom_max.expect("zoom_max is not defined yet");
+		if !self.finalized {
+			panic!()
+		}
+
+		return self.zoom_max.unwrap();
 	}
 	pub fn get_zoom_bbox(&self, zoom: u64) -> Option<&TileBBox> {
-		return self
-			.level_bbox
-			.as_ref()
-			.expect("level_bbox is not defined yet")
-			.get(zoom as usize);
+		if !self.finalized {
+			panic!()
+		}
+
+		return self.level_bbox.as_ref().unwrap().get(zoom as usize);
+	}
+	pub fn get_tile_format(&self) -> &TileFormat {
+		if !self.finalized {
+			panic!()
+		}
+
+		return self.tile_format.as_ref().unwrap();
 	}
 }

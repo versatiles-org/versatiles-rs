@@ -13,7 +13,7 @@ cargo build && target/debug/cloudtiles --precompress brotli convert tiles/philip
 
 # format
 
-- integers are stored with little endian byte order
+- all integers are stored in big endian byte order
 - strings are stored with utf8 encoding
 
 The file is composed of several parts:

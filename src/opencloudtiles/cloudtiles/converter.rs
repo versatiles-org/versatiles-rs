@@ -1,6 +1,7 @@
+use super::types::{BlockDefinition, BlockIndex, ByteRange, FileHeaderV1, TileIndex};
 use crate::opencloudtiles::{
-	abstract_classes, compress::compress_brotli, progress::ProgressBar, types::TileFormat,
-	TileConverterConfig, TileReader, TileReaderWrapper,
+	abstract_classes, compress::compress_brotli, progress::ProgressBar, TileConverterConfig,
+	TileReader, TileReaderWrapper,
 };
 use std::collections::HashMap;
 use std::fs::File;
@@ -8,8 +9,6 @@ use std::io::{BufWriter, Seek, Write};
 use std::ops::Shr;
 use std::path::PathBuf;
 use std::sync::Mutex;
-
-use super::{BlockDefinition, BlockIndex, ByteRange, TileIndex};
 
 pub struct TileConverter {
 	file_buffer: BufWriter<File>,
@@ -24,7 +23,8 @@ impl abstract_classes::TileConverter for TileConverter {
 	where
 		Self: Sized,
 	{
-		let file = File::create(filename).expect("Unable to create file");
+		let file = File::create(filename).unwrap();
+
 		Box::new(TileConverter {
 			file_buffer: BufWriter::new(file),
 			config: tile_config,
@@ -35,42 +35,16 @@ impl abstract_classes::TileConverter for TileConverter {
 			.config
 			.finalize_with_parameters(reader.get_parameters());
 
-		self.write_header(&reader);
-		let meta_range = self.write_meta(&reader);
-		let blocks_range = self.write_blocks(&reader);
-		self.update_header(&meta_range, &blocks_range);
+		let mut header = FileHeaderV1::new(&self.config.get_tile_format());
+		header.write(&mut self.file_buffer);
+
+		header.meta_range = self.write_meta(&reader);
+		header.blocks_range = self.write_blocks(&reader);
+		header.write(&mut self.file_buffer);
 	}
 }
 
 impl TileConverter {
-	fn write_header(&mut self, reader: &Box<dyn abstract_classes::TileReader>) {
-		// magic word
-		self.write(b"OpenCloudTiles/reader/v1   ");
-
-		// tile format
-		let tile_format = reader.get_parameters().get_tile_format();
-		let tile_format_value: u8 = match tile_format {
-			TileFormat::PNG => 0,
-			TileFormat::JPG => 1,
-			TileFormat::WEBP => 2,
-			TileFormat::PBF | TileFormat::PBFGzip | TileFormat::PBFBrotli => 16,
-		};
-		self.write(&[tile_format_value]);
-
-		let tile_compression_value: u8 = match tile_format {
-			TileFormat::PNG | TileFormat::JPG | TileFormat::WEBP | TileFormat::PBF => 0,
-			TileFormat::PBFGzip => 1,
-			TileFormat::PBFBrotli => 2,
-		};
-		self.write(&[tile_compression_value]);
-
-		// add zeros
-		self.fill_with_zeros_till(256);
-	}
-	fn update_header(&mut self, meta_range: &ByteRange, blocks_range: &ByteRange) {
-		self.write_range_at(meta_range, 128);
-		self.write_range_at(blocks_range, 144);
-	}
 	fn write_meta(&mut self, reader: &Box<dyn abstract_classes::TileReader>) -> ByteRange {
 		let metablob = reader.get_meta().to_vec();
 		return self.write_vec_brotli(&metablob);
@@ -233,31 +207,5 @@ impl TileConverter {
 	}
 	fn write_vec_brotli(&mut self, data: &Vec<u8>) -> ByteRange {
 		self.write(&compress_brotli(data))
-	}
-	fn write_range_at(&mut self, range: &ByteRange, pos: u64) {
-		let current_pos = self
-			.file_buffer
-			.stream_position()
-			.expect("Error in cloudtiles::write_range_at.stream_position");
-		self
-			.file_buffer
-			.seek(std::io::SeekFrom::Start(pos))
-			.expect("Error in cloudtiles::write_range_at.seek1");
-		range.write_to(&mut self.file_buffer);
-		self
-			.file_buffer
-			.seek(std::io::SeekFrom::Start(current_pos))
-			.expect("Error in cloudtiles::write_range_at.seek2");
-	}
-	fn fill_with_zeros_till(&mut self, end_pos: u64) -> ByteRange {
-		let current_pos = self
-			.file_buffer
-			.stream_position()
-			.expect("Error in cloudtiles::fill_with_zeros_till.stream_position");
-		if current_pos > end_pos {
-			panic!("{} > {}", current_pos, end_pos);
-		}
-		let length = end_pos - current_pos;
-		return self.write(&vec![0; length as usize]);
 	}
 }
