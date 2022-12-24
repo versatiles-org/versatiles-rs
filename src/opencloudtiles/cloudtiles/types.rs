@@ -1,6 +1,6 @@
-use bytes::{Buf, BufMut};
-
 use crate::types::TileFormat;
+use byteorder::BigEndian as BE;
+use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::{
 	fs::File,
 	io::{BufReader, BufWriter, Cursor, Read, Seek, Write},
@@ -21,23 +21,26 @@ impl ByteRange {
 			length: 0,
 		}
 	}
-	pub fn from_buf(reader: &mut impl Buf) -> ByteRange {
-		ByteRange::new(reader.get_u64(), reader.get_u64())
+	pub fn from_buf(reader: &mut impl Read) -> ByteRange {
+		ByteRange::new(
+			reader.read_u64::<BE>().unwrap(),
+			reader.read_u64::<BE>().unwrap(),
+		)
 	}
-	pub fn write_to_buf(&self, writer: &mut impl BufMut) {
-		writer.put_u64(self.offset);
-		writer.put_u64(self.length);
+	pub fn write_to_buf(&self, writer: &mut impl WriteBytesExt) {
+		writer.write_u64::<BE>(self.offset).unwrap();
+		writer.write_u64::<BE>(self.length).unwrap();
 	}
 }
 
-pub struct FileHeaderV1 {
+pub struct FileHeader {
 	pub tile_format: TileFormat,
 	pub meta_range: ByteRange,
 	pub blocks_range: ByteRange,
 }
-impl FileHeaderV1 {
-	pub fn new(tile_format: &TileFormat) -> FileHeaderV1 {
-		return FileHeaderV1 {
+impl FileHeader {
+	pub fn new(tile_format: &TileFormat) -> FileHeader {
+		return FileHeader {
 			tile_format: tile_format.clone(),
 			meta_range: ByteRange::empty(),
 			blocks_range: ByteRange::empty(),
@@ -49,7 +52,7 @@ impl FileHeaderV1 {
 		file.write(&self.to_bytes()).unwrap();
 		file.seek(std::io::SeekFrom::Start(current_pos)).unwrap();
 	}
-	pub fn read(file: &mut BufReader<File>) -> FileHeaderV1 {
+	pub fn read(file: &mut BufReader<File>) -> FileHeader {
 		let current_pos = file.stream_position().unwrap();
 		file.seek(std::io::SeekFrom::Start(0)).unwrap();
 
@@ -57,26 +60,30 @@ impl FileHeaderV1 {
 		file.read_exact(&mut header).unwrap();
 		file.seek(std::io::SeekFrom::Start(current_pos)).unwrap();
 
-		return FileHeaderV1::from_buffer(header.as_mut_slice());
+		return FileHeader::from_buffer(header.as_mut_slice());
 	}
 	fn to_bytes(&self) -> Vec<u8> {
 		let mut header: Vec<u8> = Vec::new();
-		header.put(&b"OpenCloudTiles-Container-v1:"[..]);
+		header.write(b"OpenCloudTiles-Container-v1:").unwrap();
 
 		// tile type
-		header.put_u8(match self.tile_format {
-			TileFormat::PNG => 0,
-			TileFormat::JPG => 1,
-			TileFormat::WEBP => 2,
-			TileFormat::PBF | TileFormat::PBFGzip | TileFormat::PBFBrotli => 16,
-		});
+		header
+			.write_u8(match self.tile_format {
+				TileFormat::PNG => 0,
+				TileFormat::JPG => 1,
+				TileFormat::WEBP => 2,
+				TileFormat::PBF | TileFormat::PBFGzip | TileFormat::PBFBrotli => 16,
+			})
+			.unwrap();
 
 		// precompression
-		header.put_u8(match self.tile_format {
-			TileFormat::PNG | TileFormat::JPG | TileFormat::WEBP | TileFormat::PBF => 0,
-			TileFormat::PBFGzip => 1,
-			TileFormat::PBFBrotli => 2,
-		});
+		header
+			.write_u8(match self.tile_format {
+				TileFormat::PNG | TileFormat::JPG | TileFormat::WEBP | TileFormat::PBF => 0,
+				TileFormat::PBFGzip => 1,
+				TileFormat::PBFBrotli => 2,
+			})
+			.unwrap();
 
 		self.meta_range.write_to_buf(&mut header);
 		self.blocks_range.write_to_buf(&mut header);
@@ -87,18 +94,20 @@ impl FileHeaderV1 {
 
 		return header;
 	}
-	fn from_buffer(buf: &mut [u8]) -> FileHeaderV1 {
+	fn from_buffer(buf: &mut [u8]) -> FileHeader {
 		if buf.len() != 62 {
 			panic!();
 		}
 
 		let mut header = Cursor::new(buf);
-		if header.copy_to_bytes(28) != "OpenCloudTiles-Container-v1:" {
+		let mut magic_word = [0u8; 28];
+		header.read_exact(&mut magic_word).unwrap();
+		if &magic_word != b"OpenCloudTiles-Container-v1:" {
 			panic!()
 		};
 
-		let tile_type = header.get_u8();
-		let compression = header.get_u8();
+		let tile_type = header.read_u8().unwrap();
+		let compression = header.read_u8().unwrap();
 
 		let tile_format = match (tile_type, compression) {
 			(0, 0) => TileFormat::PNG,
@@ -113,7 +122,7 @@ impl FileHeaderV1 {
 		let meta_range = ByteRange::from_buf(&mut header);
 		let blocks_range = ByteRange::from_buf(&mut header);
 
-		return FileHeaderV1 {
+		return FileHeader {
 			tile_format,
 			meta_range,
 			blocks_range,
@@ -133,52 +142,77 @@ pub struct BlockDefinition {
 }
 
 pub struct BlockIndex {
-	cursor: Cursor<Vec<u8>>,
+	buffer: Vec<u8>,
+	count: usize,
 }
 
 impl BlockIndex {
 	pub fn new() -> BlockIndex {
-		let data = Vec::new();
-		let cursor = Cursor::new(data);
-		return BlockIndex { cursor };
+		return BlockIndex {
+			buffer: Vec::new(),
+			count: 0,
+		};
 	}
-	pub fn add(&mut self, level: &u64, row: &u64, col: &u64, range: &ByteRange) {
-		self.cursor.write(&level.to_le_bytes()).unwrap();
-		self.cursor.write(&row.to_le_bytes()).unwrap();
-		self.cursor.write(&col.to_le_bytes()).unwrap();
-		self.cursor.write(&range.offset.to_le_bytes()).unwrap();
-		self.cursor.write(&range.length.to_le_bytes()).unwrap();
+	pub fn add(&mut self, level: u64, row: u64, col: u64, range: &ByteRange) {
+		self.buffer.write_u64::<BE>(level).unwrap();
+		self.buffer.write_u32::<BE>(row as u32).unwrap();
+		self.buffer.write_u32::<BE>(col as u32).unwrap();
+		self.buffer.write_u64::<BE>(range.offset).unwrap();
+		self.buffer.write_u64::<BE>(range.length).unwrap();
+		self.count += 1;
 	}
 	pub fn as_vec(&self) -> &Vec<u8> {
-		return self.cursor.get_ref();
+		if self.buffer.len() != self.count * 25 {
+			panic!()
+		}
+		return &self.buffer;
 	}
 }
 
 pub struct TileIndex {
-	cursor: Cursor<Vec<u8>>,
+	buffer: Vec<u8>,
+	length: usize,
 }
 unsafe impl Send for TileIndex {}
 
 impl TileIndex {
 	pub fn new(row_min: u64, row_max: u64, col_min: u64, col_max: u64) -> TileIndex {
-		let data = Vec::new();
-		let mut cursor = Cursor::new(data);
-		cursor.write(&(row_min as u8).to_le_bytes()).unwrap();
-		cursor.write(&(row_max as u8).to_le_bytes()).unwrap();
-		cursor.write(&(col_min as u8).to_le_bytes()).unwrap();
-		cursor.write(&(col_max as u8).to_le_bytes()).unwrap();
-		return TileIndex { cursor };
+		let count = (row_max - row_min + 1) * (col_max - col_min + 1);
+		//println!("{}", count);
+		//println!("row {} {}", row_min, row_max);
+		//println!("col {} {}", col_min, col_max);
+
+		let length = (count as usize) * 12 + 4;
+		println!("length {}", length);
+
+		let mut buffer: Vec<u8> = Vec::with_capacity(length);
+		buffer.resize(length, 0);
+		println!("buffer.len() {}", buffer.len());
+
+		buffer.write_u8(row_min as u8).unwrap();
+		buffer.write_u8(col_min as u8).unwrap();
+		buffer.write_u8(row_max as u8).unwrap();
+		buffer.write_u8(col_max as u8).unwrap();
+
+		return TileIndex { buffer, length };
 	}
-	pub fn set(&mut self, index: u64, range: &ByteRange) {
-		let new_position = 12 * index + 4;
-		//if newPosition != self.cursor.stream_position().unwrap() {
-		//	panic!();
-		//}
-		self.cursor.set_position(new_position);
-		self.cursor.write(&range.offset.to_le_bytes()).unwrap();
-		self.cursor.write(&range.length.to_le_bytes()).unwrap();
+	pub fn set(&mut self, index: usize, tile_byte_range: &ByteRange) {
+		let pos = 4 + 12 * index;
+		let slice_range = std::ops::Range {
+			start: pos,
+			end: pos + 12,
+		};
+		println!("index {} pos {} slice_range {:?}", index, pos, slice_range);
+		let mut slice = &mut self.buffer.as_mut_slice()[slice_range];
+		slice.write_u64::<BE>(tile_byte_range.offset).unwrap();
+		slice
+			.write_u32::<BE>(tile_byte_range.length as u32)
+			.unwrap();
 	}
 	pub fn as_vec(&self) -> &Vec<u8> {
-		return self.cursor.get_ref();
+		if self.buffer.len() != self.length {
+			panic!("{} != {}", self.buffer.len(), self.length);
+		}
+		return &self.buffer;
 	}
 }

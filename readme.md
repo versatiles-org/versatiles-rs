@@ -33,15 +33,15 @@ The file is composed of several parts:
 
 - all `offset`s are relative to start of the file
   
-| offset | length | type   | description                             |
-| ------ | ------ | ------ | --------------------------------------- |
-| 0      | 28     | string | `"OpenCloudTiles-Container-v1:"`        |
-| 28     | 1      | u8     | `tile_format`                           |
-| 29     | 1      | u8     | `tile_precompression`                   |
-| 30     | 8      | u64    | `offset` of `meta` (in the file)        |
-| 38     | 8      | u64    | `length` of `meta`                      |
-| 46     | 8      | u64    | `offset` of `block_index` (in the file) |
-| 54     | 8      | u64    | `length` of `block_index`               |
+| offset | length | type   | description                      |
+| ------ | ------ | ------ | -------------------------------- |
+| 0      | 28     | string | `"OpenCloudTiles-Container-v1:"` |
+| 28     | 1      | u8     | `tile_format`                    |
+| 29     | 1      | u8     | `tile_precompression`            |
+| 30     | 8      | u64    | `offset` of `meta`               |
+| 38     | 8      | u64    | `length` of `meta`               |
+| 46     | 8      | u64    | `offset` of `block_index`        |
+| 54     | 8      | u64    | `length` of `block_index`        |
 
 ### `tile_format` values:
   - `0`: png
@@ -63,21 +63,19 @@ The file is composed of several parts:
 
 - Each `block` is like a "super tile" and contains data of up to 256x256 (= 65536) `tile`s.
 
-### `block_index` (25 bytes per block)
+### `block_index` (29 bytes per block)
 
 - Brotli compressed data structure
-- Offsets are relative to the start of file
 - Empty `block`s are not stored
 - For each block `block_index` contains a 25 bytes long record:
 
-| offset    | length | type | description                            |
-| --------- | ------ | ---- | -------------------------------------- |
-| 0 + 25*i  | 1      | u8   | `level`                                |
-| 1 + 25*i  | 2      | u16  | `row`/256                              |
-| 3 + 25*i  | 2      | u16  | `column`/256                           |
-| 5 + 25*i  | 8      | u64  | `offset` of `tile_index`, in the block |
-| 13 + 25*i | 4      | u32  | `length` of `tile_index`               |
-| 17 + 25*i | 8      | u64  | `offset` of `block`, in the file       |
+| offset    | length | type | description              |
+| --------- | ------ | ---- | ------------------------ |
+| 0 + 25*i  | 1      | u8   | `level`                  |
+| 1 + 25*i  | 4      | u32  | `row`/256                |
+| 5 + 25*i  | 4      | u32  | `column`/256             |
+| 9 + 25*i  | 8      | u64  | `offset` of `tile_index` |
+| 17 + 25*i | 8      | u64  | `length` of `tile_index` |
 
 ## `block`
 
@@ -99,18 +97,18 @@ The file is composed of several parts:
 
 - brotli compressed data structure
 - `tile`s are read horizontally then vertically
-- `j = (row - min_row)*(max_col - min_col + 1) + (col - min_col)`
+- `j = (row - row_min)*(col_max - col_min + 1) + (col - col_min)`
 
 <p align="center"><img src="docs/block_tiles.svg?raw=true" class="fix-dark-mode"></p>
 
 - identical `tile`s can be stored once and referenced multiple times to save storage space
 - if a `tile` does not exist, the length of `tile` is zero
 
-| offset  | length | type | description                           |
-| ------- | ------ | ---- | ------------------------------------- |
-| 0       | 1      | u8   | `min_row`                             |
-| 1       | 1      | u8   | `max_row`                             |
-| 2       | 1      | u8   | `min_column`                          |
-| 3       | 1      | u8   | `max_column`                          |
-| 4 + 8*j | 5      | u40  | `offset` of `tile_blob` j, in `block` |
-| 9 + 8*j | 3      | u24  | `length` of `tile_blob` j             |
+| offset    | length | type | description               |
+| --------- | ------ | ---- | ------------------------- |
+| 0         | 1      | u8   | `row_min`                 |
+| 1         | 1      | u8   | `col_min`                 |
+| 2         | 1      | u8   | `row_max`                 |
+| 3         | 1      | u8   | `col_max`                 |
+| 4 + 12*j  | 8      | u64  | `offset` of `tile_blob` j |
+| 12 + 12*j | 4      | u32  | `length` of `tile_blob` j |

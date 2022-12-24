@@ -1,4 +1,4 @@
-use super::types::{BlockDefinition, BlockIndex, ByteRange, FileHeaderV1, TileIndex};
+use super::types::{BlockDefinition, BlockIndex, ByteRange, FileHeader, TileIndex};
 use crate::opencloudtiles::{
 	abstract_classes, compress::compress_brotli, progress::ProgressBar, TileConverterConfig,
 	TileReader, TileReaderWrapper,
@@ -35,7 +35,7 @@ impl abstract_classes::TileConverter for TileConverter {
 			.config
 			.finalize_with_parameters(reader.get_parameters());
 
-		let mut header = FileHeaderV1::new(&self.config.get_tile_format());
+		let mut header = FileHeader::new(&self.config.get_tile_format());
 		header.write(&mut self.file_buffer);
 
 		header.meta_range = self.write_meta(&reader);
@@ -106,7 +106,7 @@ impl TileConverter {
 				continue;
 			}
 
-			index.add(&todo.level, &todo.block_row, &todo.block_col, &range);
+			index.add(todo.level, todo.block_row, todo.block_col, &range);
 		}
 		bar2.finish();
 
@@ -129,7 +129,7 @@ impl TileConverter {
 		let mutex_tile_hash_lookup = &Mutex::new(tile_hash_lookup);
 
 		rayon::scope(|scope| {
-			let mut tile_no: u64 = 0;
+			let mut tile_no: usize = 0;
 			let tile_converter = self.config.get_tile_converter();
 
 			for row_in_block in block.row_min..=block.row_max {
