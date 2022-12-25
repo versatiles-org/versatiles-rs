@@ -54,6 +54,7 @@ impl abstract_container::TileConverter for TileConverter {
 			let path = Path::new(&filename);
 			let mut header = Header::new_gnu();
 			header.set_size(tile_compressed.len() as u64);
+			header.set_mode(0o644);
 
 			self
 				.builder
