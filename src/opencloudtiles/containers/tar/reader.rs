@@ -1,8 +1,8 @@
 use crate::opencloudtiles::{
 	containers::abstract_container,
-	types::{TileBBoxPyramide, TileFormat, TileReaderParameters},
+	types::{TileBBoxPyramide, TileData, TileFormat, TileReaderParameters},
 };
-use std::{collections::HashMap, fs::File};
+use std::{collections::HashMap, fs::File, os::unix::prelude::FileExt};
 use tar::{Archive, EntryType};
 
 #[derive(PartialEq, Eq, Hash)]
@@ -18,8 +18,9 @@ struct TarByteRange {
 }
 
 pub struct TileReader {
+	file: File,
 	tile_map: HashMap<TileKey, TarByteRange>,
-	parameters: Option<TileReaderParameters>,
+	parameters: TileReaderParameters,
 }
 impl abstract_container::TileReader for TileReader {
 	fn load(filename: &std::path::PathBuf) -> Box<dyn abstract_container::TileReader>
@@ -27,11 +28,11 @@ impl abstract_container::TileReader for TileReader {
 		Self: Sized,
 	{
 		let file = File::open(filename).unwrap();
-		let mut archive = Archive::new(file);
+		let mut archive = Archive::new(&file);
 
 		let mut tile_map = HashMap::new();
 		let mut tile_format: Option<TileFormat> = None;
-		let level_bbox = TileBBoxPyramide::new();
+		let mut bbox_pyramide = TileBBoxPyramide::new_empty();
 
 		for file in archive.entries().unwrap() {
 			let file = file.unwrap();
@@ -42,9 +43,9 @@ impl abstract_container::TileReader for TileReader {
 
 			let path = file.path().unwrap();
 			let fullname: Vec<&str> = path.to_str().unwrap().split('/').collect();
+
 			// expecting something like:
 			// "./6/21/34.png" -> [".", "6", "21", "34.png"]
-
 			assert_eq!(fullname.len(), 4);
 			assert_eq!(fullname[0], ".");
 
@@ -75,23 +76,41 @@ impl abstract_container::TileReader for TileReader {
 			let length = file.size();
 
 			tile_map.insert(TileKey { z, y, x }, TarByteRange { offset, length });
-
-			//println!("{:?} {}", fullname, fullname.len());
-
-			// Inspect metadata about the file
-			//println!("{:?} {} {}", path, offset, length);
+			bbox_pyramide.include_tile(z as u64, x, y);
 		}
-		let zoom_min: u64 = 100;
-		let zoom_max: u64 = 0;
-		let parameters = Some(TileReaderParameters::new(
-			zoom_min,
-			zoom_max,
-			tile_format.unwrap(),
-			level_bbox,
-		));
+
 		return Box::new(TileReader {
+			file,
 			tile_map,
-			parameters,
+			parameters: TileReaderParameters::new(tile_format.unwrap(), bbox_pyramide),
 		});
+	}
+	fn get_parameters(&self) -> &TileReaderParameters {
+		return &self.parameters;
+	}
+	fn get_meta(&self) -> &[u8] {
+		return &[0u8; 0];
+	}
+	fn get_tile_data(&self, level: u64, col: u64, row: u64) -> Option<TileData> {
+		let key = TileKey {
+			z: level as u8,
+			y: row,
+			x: col,
+		};
+		let range = self.tile_map.get(&key);
+
+		if range.is_none() {
+			return None;
+		}
+
+		let offset = range.unwrap().offset;
+		let length = range.unwrap().length as usize;
+
+		let mut buf: Vec<u8> = Vec::new();
+		buf.resize(length, 0);
+
+		self.file.read_exact_at(&mut buf, offset).unwrap();
+
+		return Some(buf);
 	}
 }

@@ -3,7 +3,7 @@ mod tile_bbox_pyramide;
 mod tile_converter_config;
 mod tile_reader_parameters;
 
-use crate::opencloudtiles::{compress::*, containers::abstract_container};
+use crate::opencloudtiles::containers::abstract_container;
 use clap::ValueEnum;
 pub use tile_bbox::TileBBox;
 pub use tile_bbox_pyramide::TileBBoxPyramide;

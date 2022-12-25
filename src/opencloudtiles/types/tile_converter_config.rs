@@ -1,3 +1,5 @@
+use std::ops::RangeInclusive;
+
 use crate::opencloudtiles::{
 	compress::*,
 	types::{
@@ -9,11 +11,8 @@ use crate::opencloudtiles::{
 use super::tile_bbox::TileBBox;
 
 pub struct TileConverterConfig {
-	zoom_min: Option<u64>,
-	zoom_max: Option<u64>,
-	geo_bbox: Option<[f32; 4]>,
 	tile_format: Option<TileFormat>,
-	level_bbox: TileBBoxPyramide,
+	bbox_pyramide: TileBBoxPyramide,
 	tile_converter: Option<fn(&TileData) -> TileData>,
 	force_recompress: bool,
 	finalized: bool,
@@ -21,44 +20,37 @@ pub struct TileConverterConfig {
 
 impl TileConverterConfig {
 	pub fn from_options(
-		zoom_min: &Option<u64>,
-		zoom_max: &Option<u64>,
+		min_zoom: &Option<u64>,
+		max_zoom: &Option<u64>,
 		geo_bbox: &Option<Vec<f32>>,
 		tile_format: &Option<TileFormat>,
 		force_recompress: &bool,
 	) -> Self {
+		let mut bbox_pyramide = TileBBoxPyramide::new_full();
+
+		if min_zoom.is_some() {
+			bbox_pyramide.set_zoom_min(min_zoom.unwrap())
+		}
+
+		if max_zoom.is_some() {
+			bbox_pyramide.set_zoom_max(max_zoom.unwrap())
+		}
+
+		if geo_bbox.is_some() {
+			let array = geo_bbox.as_ref().unwrap().as_slice();
+			bbox_pyramide.limit_by_geo_bbox(array.try_into().unwrap());
+		}
+
 		return TileConverterConfig {
-			zoom_min: zoom_min.clone(),
-			zoom_max: zoom_max.clone(),
 			tile_format: tile_format.clone(),
-			geo_bbox: geo_bbox.as_ref().map(|v| v.as_slice().try_into().unwrap()),
-			level_bbox: TileBBoxPyramide::new(),
+			bbox_pyramide: TileBBoxPyramide::new_full(),
 			tile_converter: None,
 			force_recompress: *force_recompress,
 			finalized: false,
 		};
 	}
 	pub fn finalize_with_parameters(&mut self, parameters: &TileReaderParameters) {
-		let zoom_min = parameters.get_zoom_min();
-		if self.zoom_min.is_none() {
-			self.zoom_min = Some(zoom_min);
-		} else {
-			self.zoom_min = Some(self.zoom_min.unwrap().max(zoom_min));
-		}
-
-		let zoom_max = parameters.get_zoom_max();
-		if self.zoom_max.is_none() {
-			self.zoom_max = Some(zoom_max);
-		} else {
-			self.zoom_max = Some(self.zoom_max.unwrap().min(zoom_max));
-		}
-
-		self.level_bbox.intersect(parameters.get_level_bbox());
-		self.level_bbox.limit_zoom_levels(zoom_min, zoom_max);
-
-		if self.geo_bbox.is_some() {
-			self.level_bbox.limit_by_geo_bbox(self.geo_bbox.unwrap());
-		}
+		self.bbox_pyramide.intersect(parameters.get_level_bbox());
 
 		self.tile_converter = Some(self.calc_tile_converter(&parameters.get_tile_format()));
 
@@ -143,25 +135,8 @@ impl TileConverterConfig {
 
 		return self.tile_converter.unwrap();
 	}
-	pub fn get_zoom_min(&self) -> u64 {
-		if !self.finalized {
-			panic!()
-		}
-
-		return self.zoom_min.unwrap();
-	}
-	pub fn get_zoom_max(&self) -> u64 {
-		if !self.finalized {
-			panic!()
-		}
-
-		return self.zoom_max.unwrap();
-	}
-	pub fn get_zoom_bbox(&self, zoom: u64) -> &TileBBox {
-		if !self.finalized {
-			panic!()
-		}
-		return self.level_bbox.get_level_bbox(zoom);
+	pub fn bbox_iter(&self) -> std::slice::Iter<TileBBox> {
+		return self.bbox_pyramide.iter();
 	}
 	pub fn get_tile_format(&self) -> &TileFormat {
 		if !self.finalized {
@@ -169,5 +144,8 @@ impl TileConverterConfig {
 		}
 
 		return self.tile_format.as_ref().unwrap();
+	}
+	pub fn get_zoom_range(&self) -> RangeInclusive<u64> {
+		return self.bbox_pyramide.get_zoom_range();
 	}
 }

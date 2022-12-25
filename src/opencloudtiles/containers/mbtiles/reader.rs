@@ -1,6 +1,6 @@
 use crate::opencloudtiles::{
 	containers::abstract_container,
-	types::{TileBBoxPyramide, TileFormat, TileReaderParameters},
+	types::{TileBBox, TileBBoxPyramide, TileFormat, TileReaderParameters},
 };
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
@@ -42,8 +42,6 @@ impl TileReader {
 			.expect("can not prepare SQL query");
 		let mut rows = stmt.query([]).expect("SQL query failed");
 
-		let mut min_zoom: Option<u64> = None;
-		let mut max_zoom: Option<u64> = None;
 		let mut tile_format: Option<TileFormat> = None;
 
 		while let Some(row) = rows.next().unwrap() {
@@ -51,8 +49,6 @@ impl TileReader {
 			let val = row.get::<_, String>(1).unwrap();
 			//println!("name: {}, value: {}", key, val);
 			match key.as_str() {
-				"minzoom" => min_zoom = Some(val.parse::<u64>().unwrap()),
-				"maxzoom" => max_zoom = Some(val.parse::<u64>().unwrap()),
 				"format" => match val.as_str() {
 					"jpg" => tile_format = Some(TileFormat::JPG),
 					"pbf" => tile_format = Some(TileFormat::PBFGzip),
@@ -66,18 +62,16 @@ impl TileReader {
 		}
 
 		self.parameters = Some(TileReaderParameters::new(
-			min_zoom.unwrap(),
-			max_zoom.unwrap(),
 			tile_format.unwrap(),
-			self.get_level_bboxes(),
+			self.get_bbox_pyramide(),
 		));
 
 		if self.meta_data.is_none() {
 			panic!("'json' is not defined in table 'metadata'");
 		}
 	}
-	fn get_level_bboxes(&self) -> TileBBoxPyramide {
-		let mut level_bboxes = TileBBoxPyramide::new();
+	fn get_bbox_pyramide(&self) -> TileBBoxPyramide {
+		let mut bbox_pyramide = TileBBoxPyramide::new_empty();
 
 		let sql = "SELECT zoom_level, min(tile_column), min(tile_row), max(tile_column), max(tile_row) FROM tiles GROUP BY zoom_level";
 		let connection = self.pool.get().unwrap();
@@ -85,16 +79,18 @@ impl TileReader {
 
 		let mut entries = stmt.query([]).unwrap();
 		while let Some(entry) = entries.next().unwrap() {
-			level_bboxes.intersect_level_bbox(
+			bbox_pyramide.set_level_bbox(
 				entry.get_unwrap::<_, u64>("zoom_level"),
-				entry.get_unwrap::<_, u64>("min(tile_column)"),
-				entry.get_unwrap::<_, u64>("min(tile_row)"),
-				entry.get_unwrap::<_, u64>("max(tile_column)"),
-				entry.get_unwrap::<_, u64>("max(tile_row)"),
-			)
+				&TileBBox::new(
+					entry.get_unwrap::<_, u64>("min(tile_column)"),
+					entry.get_unwrap::<_, u64>("min(tile_row)"),
+					entry.get_unwrap::<_, u64>("max(tile_column)"),
+					entry.get_unwrap::<_, u64>("max(tile_row)"),
+				),
+			);
 		}
 
-		return level_bboxes;
+		return bbox_pyramide;
 	}
 }
 

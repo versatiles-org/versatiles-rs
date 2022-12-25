@@ -131,14 +131,14 @@ impl FileHeader {
 }
 
 pub struct BlockDefinition {
-	pub level: u64,
-	pub block_col: u64,
-	pub block_row: u64,
-	pub col_min: u64,
-	pub row_min: u64,
-	pub col_max: u64,
-	pub row_max: u64,
-	pub count: u64,
+	pub level: i64,
+	pub block_col: i64,
+	pub block_row: i64,
+	pub col_min: i64,
+	pub row_min: i64,
+	pub col_max: i64,
+	pub row_max: i64,
+	pub count: i64,
 }
 
 pub struct BlockIndex {
@@ -153,7 +153,7 @@ impl BlockIndex {
 			count: 0,
 		};
 	}
-	pub fn add(&mut self, level: u64, col: u64, row: u64, range: &ByteRange) {
+	pub fn add(&mut self, level: u8, col: u32, row: u32, range: &ByteRange) {
 		self.buffer.write_u8(level as u8).unwrap();
 		self.buffer.write_u32::<BE>(col as u32).unwrap();
 		self.buffer.write_u32::<BE>(row as u32).unwrap();
@@ -176,7 +176,7 @@ pub struct TileIndex {
 unsafe impl Send for TileIndex {}
 
 impl TileIndex {
-	pub fn new(col_min: u64, row_min: u64, col_max: u64, row_max: u64) -> TileIndex {
+	pub fn new(col_min: i64, row_min: i64, col_max: i64, row_max: i64) -> TileIndex {
 		let count = (col_max - col_min + 1) * (row_max - row_min + 1);
 
 		let length = (count as usize) * 12 + 4;

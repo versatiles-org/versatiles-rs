@@ -1,37 +1,42 @@
 use super::tile_bbox::TileBBox;
+use std::ops::RangeInclusive;
 
 const MAX_ZOOM_LEVEL: usize = 32;
 pub struct TileBBoxPyramide {
 	level_bbox: Vec<TileBBox>,
 }
 impl TileBBoxPyramide {
-	pub fn new() -> TileBBoxPyramide {
+	pub fn new_full() -> TileBBoxPyramide {
 		return TileBBoxPyramide {
 			level_bbox: (0..=MAX_ZOOM_LEVEL)
-				.map(|l| TileBBox::new_full(l as u64))
+				.map(|z| TileBBox::new_full(z as u64))
 				.collect(),
 		};
 	}
-	pub fn intersect_level_bbox(
-		&mut self,
-		zoom_level: u64,
-		col_min: u64,
-		row_min: u64,
-		col_max: u64,
-		row_max: u64,
-	) {
-		self.level_bbox[zoom_level as usize]
-			.intersect(&TileBBox::new(col_min, row_min, col_max, row_max));
+	pub fn new_empty() -> TileBBoxPyramide {
+		return TileBBoxPyramide {
+			level_bbox: (0..=MAX_ZOOM_LEVEL)
+				.map(|z| TileBBox::new_empty(z as u64))
+				.collect(),
+		};
 	}
-	pub fn limit_zoom_levels(&mut self, zoom_level_min: u64, zoom_level_max: u64) {
+	pub fn set_zoom_min(&mut self, zoom_level_min: u64) {
 		for (index, bbox) in self.level_bbox.iter_mut().enumerate() {
 			let level = index as u64;
-			if (level < zoom_level_min) || (level > zoom_level_max) {
-				bbox.set_empty();
+			if level < zoom_level_min {
+				bbox.set_empty(level);
 			}
 		}
 	}
-	pub fn limit_by_geo_bbox(&mut self, geo_bbox: [f32; 4]) {
+	pub fn set_zoom_max(&mut self, zoom_level_max: u64) {
+		for (index, bbox) in self.level_bbox.iter_mut().enumerate() {
+			let level = index as u64;
+			if level > zoom_level_max {
+				bbox.set_empty(level);
+			}
+		}
+	}
+	pub fn limit_by_geo_bbox(&mut self, geo_bbox: &[f32; 4]) {
 		for (level, bbox) in self.level_bbox.iter_mut().enumerate() {
 			bbox.intersect(&TileBBox::from_geo(level as u64, geo_bbox));
 		}
@@ -43,5 +48,41 @@ impl TileBBoxPyramide {
 	}
 	pub fn get_level_bbox(&self, level: u64) -> &TileBBox {
 		return &self.level_bbox[level as usize];
+	}
+	pub fn set_level_bbox(&mut self, level: u64, bbox: &TileBBox) {
+		self.level_bbox[level as usize].set(bbox);
+	}
+	pub fn include_tile(&mut self, level: u64, col: u64, row: u64) {
+		self.level_bbox[level as usize].include_tile(col, row);
+	}
+	pub fn iter(&self) -> std::slice::Iter<TileBBox> {
+		return self.level_bbox.iter();
+	}
+	pub fn get_zoom_range(&self) -> RangeInclusive<u64> {
+		let levels: Vec<u64> = self
+			.level_bbox
+			.iter()
+			.enumerate()
+			.filter_map(|(level, bbox)| {
+				if bbox.is_empty() {
+					None
+				} else {
+					Some(level as u64)
+				}
+			})
+			.collect();
+
+		let start: u64;
+		let end: u64;
+
+		if levels.len() == 0 {
+			start = 0;
+			end = 0;
+		} else {
+			start = *levels.first().unwrap();
+			end = *levels.last().unwrap();
+		}
+
+		return RangeInclusive::new(start, end);
 	}
 }

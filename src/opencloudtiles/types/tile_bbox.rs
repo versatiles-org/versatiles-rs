@@ -18,19 +18,21 @@ impl TileBBox {
 		}
 	}
 	pub fn new_full(level: u64) -> Self {
-		let max = 2u64.pow(level as u32);
+		let max = 2u64.pow(level as u32) - 1;
 		TileBBox::new(0, 0, max, max)
 	}
-	pub fn new_empty() -> Self {
-		TileBBox::new(1, 1, 0, 0)
+	pub fn new_empty(level: u64) -> Self {
+		let max = 2u64.pow(level as u32);
+		TileBBox::new(max, max, 0, 0)
 	}
-	pub fn set_empty(&mut self) {
-		self.col_min = 1;
-		self.row_min = 1;
+	pub fn set_empty(&mut self, level: u64) {
+		let max = 2u64.pow(level as u32);
+		self.col_min = max;
+		self.row_min = max;
 		self.col_max = 0;
 		self.row_max = 0;
 	}
-	pub fn from_geo(level: u64, geo_bbox: [f32; 4]) -> Self {
+	pub fn from_geo(level: u64, geo_bbox: &[f32; 4]) -> Self {
 		let zoom: f32 = 2.0f32.powi(level as i32);
 		let x_min = zoom * (geo_bbox[0] / 360.0 + 0.5);
 		let y_min = zoom * (PI - ((geo_bbox[1] / 90.0 + 1.0) * PI / 4.0).tan().ln());
@@ -57,6 +59,12 @@ impl TileBBox {
 		self.row_min = self.row_min.max(bbox.row_min);
 		self.col_max = self.col_max.min(bbox.col_max);
 		self.row_max = self.row_max.min(bbox.row_max);
+	}
+	pub fn set(&mut self, bbox: &TileBBox) {
+		self.col_min = bbox.col_min;
+		self.row_min = bbox.row_min;
+		self.col_max = bbox.col_max;
+		self.row_max = bbox.row_max;
 	}
 	pub fn is_empty(&self) -> bool {
 		return (self.col_max < self.col_min) || (self.row_max < self.row_min);
