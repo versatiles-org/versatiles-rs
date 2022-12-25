@@ -1,6 +1,6 @@
 use crate::opencloudtiles::{
 	abstract_classes,
-	types::{TileBBox, TileBBoxPyramide, TileFormat, TileReaderParameters},
+	types::{TileBBoxPyramide, TileFormat, TileReaderParameters},
 };
 use std::{collections::HashMap, fs::File};
 use tar::{Archive, EntryType};
@@ -65,7 +65,7 @@ impl abstract_classes::TileReader for TileReader {
 				_ => panic!("unknown extension {}", extension),
 			});
 
-			if (tile_format.is_none()) {
+			if tile_format.is_none() {
 				tile_format = this_tile_format;
 			} else {
 				assert_eq!(tile_format, this_tile_format, "unknown filename {:?}", path);
