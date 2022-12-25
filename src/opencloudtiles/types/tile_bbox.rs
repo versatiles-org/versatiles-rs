@@ -1,20 +1,22 @@
 use std::f32::consts::PI;
 
+use super::tile_coords::TileCoord2;
+
 #[derive(Clone)]
 pub struct TileBBox {
-	col_min: u64,
-	row_min: u64,
-	col_max: u64,
-	row_max: u64,
+	x_min: u64,
+	y_min: u64,
+	x_max: u64,
+	y_max: u64,
 }
 
 impl TileBBox {
-	pub fn new(col_min: u64, row_min: u64, col_max: u64, row_max: u64) -> Self {
+	pub fn new(x_min: u64, y_min: u64, x_max: u64, y_max: u64) -> Self {
 		TileBBox {
-			col_min,
-			row_min,
-			col_max,
-			row_max,
+			x_min,
+			y_min,
+			x_max,
+			y_max,
 		}
 	}
 	pub fn new_full(level: u64) -> Self {
@@ -27,10 +29,10 @@ impl TileBBox {
 	}
 	pub fn set_empty(&mut self, level: u64) {
 		let max = 2u64.pow(level as u32);
-		self.col_min = max;
-		self.row_min = max;
-		self.col_max = 0;
-		self.row_max = 0;
+		self.x_min = max;
+		self.y_min = max;
+		self.x_max = 0;
+		self.y_max = 0;
 	}
 	pub fn from_geo(level: u64, geo_bbox: &[f32; 4]) -> Self {
 		let zoom: f32 = 2.0f32.powi(level as i32);
@@ -41,43 +43,48 @@ impl TileBBox {
 		return TileBBox::new(x_min as u64, y_min as u64, x_max as u64, y_max as u64);
 	}
 	pub fn include_tile(&mut self, col: u64, row: u64) {
-		if self.col_min > col {
-			self.col_min = col
+		if self.x_min > col {
+			self.x_min = col
 		}
-		if self.row_min > row {
-			self.row_min = row
+		if self.y_min > row {
+			self.y_min = row
 		}
-		if self.col_max < col {
-			self.col_max = col
+		if self.x_max < col {
+			self.x_max = col
 		}
-		if self.row_max < row {
-			self.row_max = row
+		if self.y_max < row {
+			self.y_max = row
 		}
 	}
 	pub fn intersect(&mut self, bbox: &TileBBox) {
-		self.col_min = self.col_min.max(bbox.col_min);
-		self.row_min = self.row_min.max(bbox.row_min);
-		self.col_max = self.col_max.min(bbox.col_max);
-		self.row_max = self.row_max.min(bbox.row_max);
+		self.x_min = self.x_min.max(bbox.x_min);
+		self.y_min = self.y_min.max(bbox.y_min);
+		self.x_max = self.x_max.min(bbox.x_max);
+		self.y_max = self.y_max.min(bbox.y_max);
 	}
 	pub fn set(&mut self, bbox: &TileBBox) {
-		self.col_min = bbox.col_min;
-		self.row_min = bbox.row_min;
-		self.col_max = bbox.col_max;
-		self.row_max = bbox.row_max;
+		self.x_min = bbox.x_min;
+		self.y_min = bbox.y_min;
+		self.x_max = bbox.x_max;
+		self.y_max = bbox.y_max;
 	}
 	pub fn is_empty(&self) -> bool {
-		return (self.col_max < self.col_min) || (self.row_max < self.row_min);
+		return (self.x_max < self.x_min) || (self.y_max < self.y_min);
 	}
 	pub fn as_tuple(&self) -> (u64, u64, u64, u64) {
-		return (self.col_min, self.row_min, self.col_max, self.row_max);
+		return (self.x_min, self.y_min, self.x_max, self.y_max);
 	}
-	pub fn iter_tile_indexes(&self) -> impl Iterator<Item = (u64, u64)> {
-		let rows = self.row_min..=self.row_max;
-		let cols = self.col_min..=self.col_max;
-		return rows
+	pub fn iter_tile_indexes(&self) -> impl Iterator<Item = TileCoord2> {
+		let y_values = self.y_min..=self.y_max;
+		let x_values = self.x_min..=self.x_max;
+		return y_values
 			.into_iter()
-			.map(move |row| cols.clone().into_iter().map(move |col| (col, row)))
+			.map(move |y| {
+				x_values
+					.clone()
+					.into_iter()
+					.map(move |x| TileCoord2 { x, y })
+			})
 			.flatten();
 	}
 }

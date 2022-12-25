@@ -1,5 +1,5 @@
 use super::types::{BlockDefinition, BlockIndex, ByteRange, FileHeader, TileIndex};
-use crate::opencloudtiles::types::{TileConverterConfig, TileReaderWrapper};
+use crate::opencloudtiles::types::{TileConverterConfig, TileCoord3, TileReaderWrapper};
 use crate::opencloudtiles::{
 	compress::compress_brotli, containers::abstract_container, progress::ProgressBar,
 };
@@ -51,33 +51,33 @@ impl TileConverter {
 	}
 	fn write_blocks(&mut self, reader: &Box<dyn abstract_container::TileReader>) -> ByteRange {
 		let zoom_range = self.config.get_zoom_range();
-		let zoom_min = *zoom_range.start() as i64;
-		let zoom_max = *zoom_range.end() as i64;
+		let zoom_min = *zoom_range.start();
+		let zoom_max = *zoom_range.end();
 
 		let mut todos: Vec<BlockDefinition> = Vec::new();
 
 		let mut bar1 = ProgressBar::new("counting tiles", (zoom_max - zoom_min) as u64);
 
 		for (index, bbox) in self.config.get_bbox_pyramide().iter().enumerate() {
-			let zoom = index as i64;
+			let zoom = index as u64;
 			bar1.set_position((zoom - zoom_min) as u64);
 
 			let (level_col_min, level_row_min, level_col_max, level_row_max) = bbox.as_tuple();
 
 			for block_row in level_row_min.shr(8)..=level_row_max.shr(8) {
 				for block_col in level_col_min.shr(8)..=level_col_max.shr(8) {
-					let col0: i64 = (block_col as i64) * 256;
-					let row0: i64 = (block_row as i64) * 256;
+					let col0: u64 = block_col * 256;
+					let row0: u64 = block_row * 256;
 
-					let col_min = (level_col_min as i64 - col0).min(255).max(0);
-					let row_min = (level_row_min as i64 - row0).min(255).max(0);
-					let col_max = (level_col_max as i64 - col0).min(255).max(0);
-					let row_max = (level_row_max as i64 - row0).min(255).max(0);
+					let col_min = (level_col_min - col0).min(255).max(0);
+					let row_min = (level_row_min - row0).min(255).max(0);
+					let col_max = (level_col_max - col0).min(255).max(0);
+					let row_max = (level_row_max - row0).min(255).max(0);
 
 					todos.push(BlockDefinition {
 						level: zoom,
-						block_row: block_row as i64,
-						block_col: block_col as i64,
+						block_row,
+						block_col,
 						col_min,
 						row_min,
 						col_max,
@@ -89,7 +89,7 @@ impl TileConverter {
 		}
 		bar1.finish();
 
-		let sum = todos.iter().map(|x| x.count).sum::<i64>();
+		let sum = todos.iter().map(|x| x.count).sum::<u64>();
 		let mut bar2 = ProgressBar::new("converting tiles", sum as u64);
 
 		let mut index = BlockIndex::new();
@@ -140,12 +140,16 @@ impl TileConverter {
 					let index = tile_no;
 					tile_no += 1;
 
-					let row = block.block_row * 256 + row_in_block;
-					let col = block.block_col * 256 + col_in_block;
+					let y = block.block_row * 256 + row_in_block;
+					let x = block.block_col * 256 + col_in_block;
+					let coord = TileCoord3 {
+						x,
+						y,
+						z: block.level,
+					};
 
 					scope.spawn(move |_s| {
-						let optional_tile =
-							wrapped_reader.get_tile_data(block.level as u64, col as u64, row as u64);
+						let optional_tile = wrapped_reader.get_tile_data(coord);
 
 						if optional_tile.is_none() {
 							let mut secured_writer = mutex_writer.lock().unwrap();

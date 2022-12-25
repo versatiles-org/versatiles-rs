@@ -39,8 +39,8 @@ impl abstract_container::TileConverter for TileConverter {
 		};
 
 		let bbox_pyramide = self.config.get_bbox_pyramide();
-		for (z, y, x) in bbox_pyramide.iter_tile_indexes() {
-			let tile = reader.get_tile_data(z, x, y);
+		for coord in bbox_pyramide.iter_tile_indexes() {
+			let tile = reader.get_tile_data(&coord);
 			if tile.is_none() {
 				continue;
 			}
@@ -50,7 +50,7 @@ impl abstract_container::TileConverter for TileConverter {
 
 			//println!("{}", &tile_data.len());
 
-			let filename = format!("./{}/{}/{}.{}", z, y, x, ext);
+			let filename = format!("./{}/{}/{}.{}", coord.z, coord.y, coord.x, ext);
 			let path = Path::new(&filename);
 			let mut header = Header::new_gnu();
 			header.set_size(tile_compressed.len() as u64);

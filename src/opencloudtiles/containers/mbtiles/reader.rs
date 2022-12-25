@@ -1,6 +1,6 @@
 use crate::opencloudtiles::{
 	containers::abstract_container,
-	types::{TileBBox, TileBBoxPyramide, TileFormat, TileReaderParameters},
+	types::{TileBBox, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters},
 };
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
@@ -105,14 +105,16 @@ impl abstract_container::TileReader for TileReader {
 	fn get_parameters(&self) -> &TileReaderParameters {
 		return self.parameters.as_ref().unwrap();
 	}
-	fn get_tile_data(&self, level: u64, col: u64, row: u64) -> Option<Vec<u8>> {
+	fn get_tile_data(&self, coord: &TileCoord3) -> Option<Vec<u8>> {
 		let connection = self.pool.get().unwrap();
 		let mut stmt = connection
 			.prepare(
 				"SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?",
 			)
 			.expect("SQL preparation failed");
-		let result = stmt.query_row([level, col, row], |entry| entry.get::<_, Vec<u8>>(0));
+		let result = stmt.query_row([coord.z, coord.x, coord.y], |entry| {
+			entry.get::<_, Vec<u8>>(0)
+		});
 		if result.is_ok() {
 			return Some(result.unwrap());
 		} else {

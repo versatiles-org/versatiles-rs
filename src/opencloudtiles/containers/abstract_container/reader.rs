@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 
-use crate::opencloudtiles::types::{TileData, TileReaderParameters};
+use crate::opencloudtiles::types::{TileCoord3, TileData, TileReaderParameters};
 use std::path::PathBuf;
 
 pub trait TileReader {
@@ -16,7 +16,7 @@ pub trait TileReader {
 	fn get_parameters(&self) -> &TileReaderParameters {
 		panic!();
 	}
-	fn get_tile_data(&self, level: u64, col: u64, row: u64) -> Option<TileData> {
+	fn get_tile_data(&self, coord: &TileCoord3) -> Option<TileData> {
 		panic!();
 	}
 }

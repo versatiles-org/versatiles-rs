@@ -1,4 +1,4 @@
-use super::tile_bbox::TileBBox;
+use super::{tile_bbox::TileBBox, tile_coords::TileCoord3};
 use std::{ops::RangeInclusive, slice::Iter};
 
 const MAX_ZOOM_LEVEL: usize = 32;
@@ -58,13 +58,19 @@ impl TileBBoxPyramide {
 	pub fn iter(&self) -> Iter<TileBBox> {
 		return self.level_bbox.iter();
 	}
-	pub fn iter_tile_indexes(&self) -> impl Iterator<Item = (u64, u64, u64)> + '_ {
+	pub fn iter_tile_indexes(&self) -> impl Iterator<Item = TileCoord3> + '_ {
 		return self
 			.level_bbox
 			.as_slice()
 			.iter()
 			.enumerate()
-			.map(move |(z, bbox)| bbox.iter_tile_indexes().map(move |(x, y)| (z as u64, y, x)))
+			.map(move |(z, bbox)| {
+				bbox.iter_tile_indexes().map(move |coord2| TileCoord3 {
+					x: coord2.x,
+					y: coord2.y,
+					z: z as u64,
+				})
+			})
 			.flatten();
 	}
 	pub fn get_zoom_range(&self) -> RangeInclusive<u64> {

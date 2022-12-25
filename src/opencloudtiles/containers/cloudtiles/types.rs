@@ -131,14 +131,14 @@ impl FileHeader {
 }
 
 pub struct BlockDefinition {
-	pub level: i64,
-	pub block_col: i64,
-	pub block_row: i64,
-	pub col_min: i64,
-	pub row_min: i64,
-	pub col_max: i64,
-	pub row_max: i64,
-	pub count: i64,
+	pub level: u64,
+	pub block_col: u64,
+	pub block_row: u64,
+	pub col_min: u64,
+	pub row_min: u64,
+	pub col_max: u64,
+	pub row_max: u64,
+	pub count: u64,
 }
 
 pub struct BlockIndex {
@@ -176,7 +176,7 @@ pub struct TileIndex {
 unsafe impl Send for TileIndex {}
 
 impl TileIndex {
-	pub fn new(col_min: i64, row_min: i64, col_max: i64, row_max: i64) -> TileIndex {
+	pub fn new(col_min: u64, row_min: u64, col_max: u64, row_max: u64) -> TileIndex {
 		let count = (col_max - col_min + 1) * (row_max - row_min + 1);
 
 		let length = (count as usize) * 12 + 4;

@@ -1,6 +1,6 @@
 use crate::opencloudtiles::{
 	containers::abstract_container,
-	types::{TileBBoxPyramide, TileData, TileFormat, TileReaderParameters},
+	types::{TileBBoxPyramide, TileCoord3, TileData, TileFormat, TileReaderParameters},
 };
 use std::{collections::HashMap, fs::File, os::unix::prelude::FileExt};
 use tar::{Archive, EntryType};
@@ -19,7 +19,7 @@ struct TarByteRange {
 
 pub struct TileReader {
 	file: File,
-	tile_map: HashMap<TileKey, TarByteRange>,
+	tile_map: HashMap<TileCoord3, TarByteRange>,
 	parameters: TileReaderParameters,
 }
 impl abstract_container::TileReader for TileReader {
@@ -49,7 +49,7 @@ impl abstract_container::TileReader for TileReader {
 			assert_eq!(fullname.len(), 4);
 			assert_eq!(fullname[0], ".");
 
-			let z = fullname[1].parse::<u8>().unwrap();
+			let z = fullname[1].parse::<u64>().unwrap();
 			let y = fullname[2].parse::<u64>().unwrap();
 			let filename: Vec<&str> = fullname[3].split(".").collect();
 			let x = filename[0].parse::<u64>().unwrap();
@@ -75,7 +75,7 @@ impl abstract_container::TileReader for TileReader {
 			let offset = file.raw_file_position();
 			let length = file.size();
 
-			tile_map.insert(TileKey { z, y, x }, TarByteRange { offset, length });
+			tile_map.insert(TileCoord3 { z, y, x }, TarByteRange { offset, length });
 			bbox_pyramide.include_tile(z as u64, x, y);
 		}
 
@@ -91,13 +91,8 @@ impl abstract_container::TileReader for TileReader {
 	fn get_meta(&self) -> &[u8] {
 		return &[0u8; 0];
 	}
-	fn get_tile_data(&self, level: u64, col: u64, row: u64) -> Option<TileData> {
-		let key = TileKey {
-			z: level as u8,
-			y: row,
-			x: col,
-		};
-		let range = self.tile_map.get(&key);
+	fn get_tile_data(&self, coord: &TileCoord3) -> Option<TileData> {
+		let range = self.tile_map.get(&coord);
 
 		if range.is_none() {
 			return None;
