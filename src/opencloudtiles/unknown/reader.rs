@@ -1,4 +1,4 @@
-use crate::opencloudtiles;
+use crate::opencloudtiles::abstract_classes;
 
 pub struct TileReader;
-impl opencloudtiles::TileReader for TileReader {}
+impl abstract_classes::TileReader for TileReader {}

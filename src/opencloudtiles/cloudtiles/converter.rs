@@ -1,8 +1,6 @@
 use super::types::{BlockDefinition, BlockIndex, ByteRange, FileHeader, TileIndex};
-use crate::opencloudtiles::{
-	abstract_classes, compress::compress_brotli, progress::ProgressBar, TileConverterConfig,
-	TileReader, TileReaderWrapper,
-};
+use crate::opencloudtiles::types::{TileConverterConfig, TileReaderWrapper};
+use crate::opencloudtiles::{abstract_classes, compress::compress_brotli, progress::ProgressBar};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Seek, Write};
@@ -30,7 +28,7 @@ impl abstract_classes::TileConverter for TileConverter {
 			config: tile_config,
 		})
 	}
-	fn convert_from(&mut self, reader: Box<dyn TileReader>) {
+	fn convert_from(&mut self, reader: Box<dyn abstract_classes::TileReader>) {
 		self
 			.config
 			.finalize_with_parameters(reader.get_parameters());
@@ -60,32 +58,29 @@ impl TileConverter {
 		for zoom in zoom_min..=zoom_max {
 			bar1.set_position(zoom - zoom_min);
 
-			let bbox = self.config.get_zoom_bbox(zoom).unwrap();
+			let bbox = self.config.get_zoom_bbox(zoom);
 
-			let level_row_min: i64 = bbox.get_row_min() as i64;
-			let level_row_max: i64 = bbox.get_row_max() as i64;
-			let level_col_min: i64 = bbox.get_col_min() as i64;
-			let level_col_max: i64 = bbox.get_col_max() as i64;
+			let (level_col_min, level_row_min, level_col_max, level_row_max) = bbox.as_tuple();
 
 			for block_row in level_row_min.shr(8)..=level_row_max.shr(8) {
 				for block_col in level_col_min.shr(8)..=level_col_max.shr(8) {
-					let row0: i64 = block_row * 256i64;
-					let col0: i64 = block_col * 256i64;
+					let col0: i64 = (block_col * 256) as i64;
+					let row0: i64 = (block_row * 256) as i64;
 
-					let row_min = (level_row_min - row0).min(255).max(0) as u64;
-					let row_max = (level_row_max - row0).min(255).max(0) as u64;
-					let col_min = (level_col_min - col0).min(255).max(0) as u64;
-					let col_max = (level_col_max - col0).min(255).max(0) as u64;
+					let col_min = (level_col_min as i64 - col0).min(255).max(0) as u64;
+					let row_min = (level_row_min as i64 - row0).min(255).max(0) as u64;
+					let col_max = (level_col_max as i64 - col0).min(255).max(0) as u64;
+					let row_max = (level_row_max as i64 - row0).min(255).max(0) as u64;
 
 					todos.push(BlockDefinition {
 						level: zoom,
-						block_row: block_row as u64,
-						block_col: block_col as u64,
-						row_min,
-						row_max,
+						block_row: block_row,
+						block_col: block_col,
 						col_min,
+						row_min,
 						col_max,
-						count: (row_max - row_min + 1) * (col_max - col_min + 1),
+						row_max,
+						count: (col_max - col_min + 1) * (row_max - row_min + 1),
 					})
 				}
 			}
@@ -106,7 +101,7 @@ impl TileConverter {
 				continue;
 			}
 
-			index.add(todo.level, todo.block_row, todo.block_col, &range);
+			index.add(todo.level, todo.block_col, todo.block_row, &range);
 		}
 		bar2.finish();
 

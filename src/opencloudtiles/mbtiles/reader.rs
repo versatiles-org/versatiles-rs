@@ -1,6 +1,6 @@
 use crate::opencloudtiles::{
-	abstract_classes::{self, TileReaderParameters},
-	types::{TileBBox, TileFormat},
+	abstract_classes,
+	types::{TileBBoxPyramide, TileFormat, TileReaderParameters},
 };
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
@@ -12,7 +12,7 @@ pub struct TileReader {
 	parameters: Option<TileReaderParameters>,
 }
 impl TileReader {
-	fn new(pool: r2d2::Pool<SqliteConnectionManager>) -> TileReader {
+	pub fn new(pool: r2d2::Pool<SqliteConnectionManager>) -> TileReader {
 		TileReader {
 			pool,
 			meta_data: None,
@@ -76,22 +76,22 @@ impl TileReader {
 			panic!("'json' is not defined in table 'metadata'");
 		}
 	}
-	fn get_level_bboxes(&self) -> Vec<TileBBox> {
-		let mut level_bboxes = Vec::new();
+	fn get_level_bboxes(&self) -> TileBBoxPyramide {
+		let mut level_bboxes = TileBBoxPyramide::new();
 
-		let sql = "SELECT min(tile_row), max(tile_row), min(tile_column), max(tile_column),zoom_level FROM tiles GROUP BY zoom_level";
+		let sql = "SELECT zoom_level, min(tile_column), min(tile_row), max(tile_column), max(tile_row) FROM tiles GROUP BY zoom_level";
 		let connection = self.pool.get().unwrap();
 		let mut stmt = connection.prepare(sql).unwrap();
 
 		let mut entries = stmt.query([]).unwrap();
 		while let Some(entry) = entries.next().unwrap() {
-			let row_min = entry.get_unwrap::<_, u64>("min(tile_row)");
-			let row_max = entry.get_unwrap::<_, u64>("max(tile_row)");
-			let col_min = entry.get_unwrap::<_, u64>("min(tile_column)");
-			let col_max = entry.get_unwrap::<_, u64>("max(tile_column)");
-			let level = entry.get_unwrap::<_, usize>("zoom_level");
-
-			level_bboxes.insert(level, TileBBox::new(row_min, row_max, col_min, col_max));
+			level_bboxes.intersect_level_bbox(
+				entry.get_unwrap::<_, u64>("zoom_level"),
+				entry.get_unwrap::<_, u64>("min(tile_column)"),
+				entry.get_unwrap::<_, u64>("min(tile_row)"),
+				entry.get_unwrap::<_, u64>("max(tile_column)"),
+				entry.get_unwrap::<_, u64>("max(tile_row)"),
+			)
 		}
 
 		return level_bboxes;

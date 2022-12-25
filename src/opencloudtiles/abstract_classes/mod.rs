@@ -1,7 +1,5 @@
-#![allow(unused_variables)]
-
 mod converter;
 mod reader;
 
-pub use converter::*;
-pub use reader::*;
+pub use converter::TileConverter;
+pub use reader::TileReader;

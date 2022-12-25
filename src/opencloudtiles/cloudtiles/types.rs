@@ -132,12 +132,12 @@ impl FileHeader {
 
 pub struct BlockDefinition {
 	pub level: u64,
-	pub block_row: u64,
 	pub block_col: u64,
-	pub row_min: u64,
-	pub row_max: u64,
+	pub block_row: u64,
 	pub col_min: u64,
+	pub row_min: u64,
 	pub col_max: u64,
+	pub row_max: u64,
 	pub count: u64,
 }
 
@@ -153,10 +153,10 @@ impl BlockIndex {
 			count: 0,
 		};
 	}
-	pub fn add(&mut self, level: u64, row: u64, col: u64, range: &ByteRange) {
+	pub fn add(&mut self, level: u64, col: u64, row: u64, range: &ByteRange) {
 		self.buffer.write_u8(level as u8).unwrap();
-		self.buffer.write_u32::<BE>(row as u32).unwrap();
 		self.buffer.write_u32::<BE>(col as u32).unwrap();
+		self.buffer.write_u32::<BE>(row as u32).unwrap();
 		self.buffer.write_u64::<BE>(range.offset).unwrap();
 		self.buffer.write_u64::<BE>(range.length).unwrap();
 		self.count += 1;
@@ -176,24 +176,19 @@ pub struct TileIndex {
 unsafe impl Send for TileIndex {}
 
 impl TileIndex {
-	pub fn new(row_min: u64, row_max: u64, col_min: u64, col_max: u64) -> TileIndex {
-		let count = (row_max - row_min + 1) * (col_max - col_min + 1);
-		//println!("{}", count);
-		//println!("row {} {}", row_min, row_max);
-		//println!("col {} {}", col_min, col_max);
+	pub fn new(col_min: u64, row_min: u64, col_max: u64, row_max: u64) -> TileIndex {
+		let count = (col_max - col_min + 1) * (row_max - row_min + 1);
 
 		let length = (count as usize) * 12 + 4;
-		// println!("length {}", length);
 
 		let mut buffer: Vec<u8> = Vec::with_capacity(length);
 		buffer.resize(length, 0);
-		// println!("buffer.len() {}", buffer.len());
 
 		let mut cursor = Cursor::new(&mut buffer);
-		cursor.write_u8(row_min as u8).unwrap();
 		cursor.write_u8(col_min as u8).unwrap();
-		cursor.write_u8(row_max as u8).unwrap();
+		cursor.write_u8(row_min as u8).unwrap();
 		cursor.write_u8(col_max as u8).unwrap();
+		cursor.write_u8(row_max as u8).unwrap();
 
 		return TileIndex { buffer, length };
 	}

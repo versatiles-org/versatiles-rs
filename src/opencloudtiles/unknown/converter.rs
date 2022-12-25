@@ -1,4 +1,4 @@
-use crate::opencloudtiles;
+use crate::opencloudtiles::abstract_classes;
 
 pub struct TileConverter;
-impl opencloudtiles::TileConverter for TileConverter {}
+impl abstract_classes::TileConverter for TileConverter {}

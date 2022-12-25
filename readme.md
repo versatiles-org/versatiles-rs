@@ -72,8 +72,8 @@ The file is composed of several parts:
 | offset    | length | type | description              |
 | --------- | ------ | ---- | ------------------------ |
 | 0 + 25*i  | 1      | u8   | `level`                  |
-| 1 + 25*i  | 4      | u32  | `row`/256                |
-| 5 + 25*i  | 4      | u32  | `column`/256             |
+| 1 + 25*i  | 4      | u32  | `column`/256             |
+| 4 + 25*i  | 4      | u32  | `row`/256                |
 | 9 + 25*i  | 8      | u64  | `offset` of `tile_index` |
 | 17 + 25*i | 8      | u64  | `length` of `tile_index` |
 
@@ -106,9 +106,9 @@ The file is composed of several parts:
 
 | offset    | length | type | description               |
 | --------- | ------ | ---- | ------------------------- |
-| 0         | 1      | u8   | `row_min`                 |
-| 1         | 1      | u8   | `col_min`                 |
-| 2         | 1      | u8   | `row_max`                 |
-| 3         | 1      | u8   | `col_max`                 |
+| 0         | 1      | u8   | `col_min`                 |
+| 1         | 1      | u8   | `row_min`                 |
+| 2         | 1      | u8   | `col_max`                 |
+| 3         | 1      | u8   | `row_max`                 |
 | 4 + 12*j  | 8      | u64  | `offset` of `tile_blob` j |
 | 12 + 12*j | 4      | u32  | `length` of `tile_blob` j |
