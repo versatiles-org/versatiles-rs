@@ -72,4 +72,12 @@ impl TileBBox {
 	pub fn as_tuple(&self) -> (u64, u64, u64, u64) {
 		return (self.col_min, self.row_min, self.col_max, self.row_max);
 	}
+	pub fn iter_tile_indexes(&self) -> impl Iterator<Item = (u64, u64)> {
+		let rows = self.row_min..=self.row_max;
+		let cols = self.col_min..=self.col_max;
+		return rows
+			.into_iter()
+			.map(move |row| cols.clone().into_iter().map(move |col| (row, col)))
+			.flatten();
+	}
 }

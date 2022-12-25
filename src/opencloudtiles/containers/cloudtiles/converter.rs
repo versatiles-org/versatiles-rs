@@ -58,7 +58,7 @@ impl TileConverter {
 
 		let mut bar1 = ProgressBar::new("counting tiles", (zoom_max - zoom_min) as u64);
 
-		for (index, bbox) in self.config.bbox_iter().enumerate() {
+		for (index, bbox) in self.config.get_bbox_pyramide().iter().enumerate() {
 			let zoom = index as i64;
 			bar1.set_position((zoom - zoom_min) as u64);
 

@@ -2,7 +2,7 @@
 # build
 
 ```bash
-cargo build && target/debug/cloudtiles convert tiles/stuttgart.mbtiles tiles/stuttgart.cloudtiles
+cargo build && target/debug/cloudtiles convert tiles/stuttgart.mbtiles tiles/stuttgart.tar
 cargo build && target/debug/cloudtiles convert tiles/hitzekarte.tar tiles/hitzekarte.cloudtiles
 cargo build && target/debug/cloudtiles --precompress brotli convert tiles/philippines.mbtiles tiles/philippines.cloudtiles
 

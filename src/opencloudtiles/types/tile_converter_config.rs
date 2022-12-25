@@ -8,8 +8,6 @@ use crate::opencloudtiles::{
 	},
 };
 
-use super::tile_bbox::TileBBox;
-
 pub struct TileConverterConfig {
 	tile_format: Option<TileFormat>,
 	bbox_pyramide: TileBBoxPyramide,
@@ -135,8 +133,8 @@ impl TileConverterConfig {
 
 		return self.tile_converter.unwrap();
 	}
-	pub fn bbox_iter(&self) -> std::slice::Iter<TileBBox> {
-		return self.bbox_pyramide.iter();
+	pub fn get_bbox_pyramide(&self) -> &TileBBoxPyramide {
+		return &self.bbox_pyramide;
 	}
 	pub fn get_tile_format(&self) -> &TileFormat {
 		if !self.finalized {
