@@ -1,6 +1,8 @@
 use super::types::{BlockDefinition, BlockIndex, ByteRange, FileHeader, TileIndex};
 use crate::opencloudtiles::types::{TileConverterConfig, TileReaderWrapper};
-use crate::opencloudtiles::{abstract_classes, compress::compress_brotli, progress::ProgressBar};
+use crate::opencloudtiles::{
+	compress::compress_brotli, containers::abstract_container, progress::ProgressBar,
+};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Seek, Write};
@@ -13,11 +15,11 @@ pub struct TileConverter {
 	config: TileConverterConfig,
 }
 
-impl abstract_classes::TileConverter for TileConverter {
+impl abstract_container::TileConverter for TileConverter {
 	fn new(
 		filename: &PathBuf,
 		tile_config: TileConverterConfig,
-	) -> Box<dyn abstract_classes::TileConverter>
+	) -> Box<dyn abstract_container::TileConverter>
 	where
 		Self: Sized,
 	{
@@ -28,7 +30,7 @@ impl abstract_classes::TileConverter for TileConverter {
 			config: tile_config,
 		})
 	}
-	fn convert_from(&mut self, reader: Box<dyn abstract_classes::TileReader>) {
+	fn convert_from(&mut self, reader: Box<dyn abstract_container::TileReader>) {
 		self
 			.config
 			.finalize_with_parameters(reader.get_parameters());
@@ -43,11 +45,11 @@ impl abstract_classes::TileConverter for TileConverter {
 }
 
 impl TileConverter {
-	fn write_meta(&mut self, reader: &Box<dyn abstract_classes::TileReader>) -> ByteRange {
+	fn write_meta(&mut self, reader: &Box<dyn abstract_container::TileReader>) -> ByteRange {
 		let metablob = reader.get_meta().to_vec();
 		return self.write_vec_brotli(&metablob);
 	}
-	fn write_blocks(&mut self, reader: &Box<dyn abstract_classes::TileReader>) -> ByteRange {
+	fn write_blocks(&mut self, reader: &Box<dyn abstract_container::TileReader>) -> ByteRange {
 		let zoom_min = self.config.get_zoom_min();
 		let zoom_max = self.config.get_zoom_max();
 
@@ -110,7 +112,7 @@ impl TileConverter {
 	fn write_block(
 		&mut self,
 		block: &BlockDefinition,
-		reader: &Box<dyn abstract_classes::TileReader>,
+		reader: &Box<dyn abstract_container::TileReader>,
 		bar: &mut ProgressBar,
 	) -> ByteRange {
 		let mut tile_index =

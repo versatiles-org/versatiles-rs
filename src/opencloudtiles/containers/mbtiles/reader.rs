@@ -1,5 +1,5 @@
 use crate::opencloudtiles::{
-	abstract_classes,
+	containers::abstract_container,
 	types::{TileBBoxPyramide, TileFormat, TileReaderParameters},
 };
 use r2d2_sqlite::SqliteConnectionManager;
@@ -98,8 +98,8 @@ impl TileReader {
 	}
 }
 
-impl abstract_classes::TileReader for TileReader {
-	fn load(filename: &std::path::PathBuf) -> Box<dyn abstract_classes::TileReader> {
+impl abstract_container::TileReader for TileReader {
+	fn load(filename: &std::path::PathBuf) -> Box<dyn abstract_container::TileReader> {
 		let reader = Self::load_from_sqlite(filename);
 		return Box::new(reader);
 	}

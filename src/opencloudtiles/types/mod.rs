@@ -1,5 +1,4 @@
-use super::abstract_classes;
-use crate::opencloudtiles::compress::*;
+use crate::opencloudtiles::{compress::*, containers::abstract_container};
 use clap::ValueEnum;
 use std::f32::consts::PI;
 
@@ -163,11 +162,11 @@ impl TileReaderParameters {
 }
 
 pub struct TileReaderWrapper<'a> {
-	reader: &'a Box<dyn abstract_classes::TileReader>,
+	reader: &'a Box<dyn abstract_container::TileReader>,
 }
 
 impl TileReaderWrapper<'_> {
-	pub fn new(reader: &Box<dyn abstract_classes::TileReader>) -> TileReaderWrapper {
+	pub fn new(reader: &Box<dyn abstract_container::TileReader>) -> TileReaderWrapper {
 		return TileReaderWrapper { reader };
 	}
 	pub fn get_tile_data(&self, level: u64, col: u64, row: u64) -> Option<TileData> {
