@@ -77,7 +77,7 @@ impl TileBBox {
 		let cols = self.col_min..=self.col_max;
 		return rows
 			.into_iter()
-			.map(move |row| cols.clone().into_iter().map(move |col| (row, col)))
+			.map(move |row| cols.clone().into_iter().map(move |col| (col, row)))
 			.flatten();
 	}
 }

@@ -36,19 +36,28 @@ impl abstract_container::TileConverter for TileConverter {
 			TileFormat::PNG => "png",
 			TileFormat::JPG => "jpg",
 			TileFormat::WEBP => "webp",
-			_ => panic!("unknown tile_format"),
 		};
-		let mut header = Header::new_gnu();
-		for (z, y, x) in self.config.get_bbox_pyramide().iter_tile_indexes() {
+
+		let bbox_pyramide = self.config.get_bbox_pyramide();
+		for (z, y, x) in bbox_pyramide.iter_tile_indexes() {
 			let tile = reader.get_tile_data(z, x, y);
 			if tile.is_none() {
 				continue;
 			}
+
+			let tile_data = tile.unwrap();
+			let tile_compressed = converter(&tile_data);
+
+			//println!("{}", &tile_data.len());
+
 			let filename = format!("./{}/{}/{}.{}", z, y, x, ext);
 			let path = Path::new(&filename);
+			let mut header = Header::new_gnu();
+			header.set_size(tile_compressed.len() as u64);
+
 			self
 				.builder
-				.append_data(&mut header, &path, converter(&tile.unwrap()).as_slice())
+				.append_data(&mut header, &path, tile_compressed.as_slice())
 				.unwrap();
 		}
 		self.builder.finish().unwrap();
