@@ -1,20 +1,26 @@
-use std::ops::RangeInclusive;
-
 use crate::opencloudtiles::{
 	compress::*,
-	types::{tile_bbox_pyramide::TileBBoxPyramide, tile_reader_parameters::TileReaderParameters, TileData, TileFormat},
+	image::*,
+	types::{
+		tile_bbox_pyramide::TileBBoxPyramide, tile_reader_parameters::TileReaderParameters, TileData,
+		TileFormat,
+	},
 };
+use image::DynamicImage;
+use std::ops::RangeInclusive;
 
 pub struct TileConverterConfig {
 	tile_format: Option<TileFormat>,
 	bbox_pyramide: TileBBoxPyramide,
-	tile_converter: Option<fn(&TileData) -> TileData>,
+	tile_converter: Option<TileDataConverter>,
 	force_recompress: bool,
 	finalized: bool,
 }
 
 impl TileConverterConfig {
-	pub fn new(tile_format: Option<TileFormat>, bbox_pyramide: TileBBoxPyramide, force_recompress: bool) -> Self {
+	pub fn new(
+		tile_format: Option<TileFormat>, bbox_pyramide: TileBBoxPyramide, force_recompress: bool,
+	) -> Self {
 		return TileConverterConfig {
 			tile_format,
 			bbox_pyramide,
@@ -30,7 +36,7 @@ impl TileConverterConfig {
 
 		self.finalized = true;
 	}
-	fn calc_tile_converter(&mut self, src_tile_format: &TileFormat) -> fn(&TileData) -> TileData {
+	fn calc_tile_converter(&mut self, src_tile_format: &TileFormat) -> TileDataConverter {
 		if self.tile_format.is_none() {
 			self.tile_format = Some(src_tile_format.clone());
 			return tile_same;
@@ -45,64 +51,78 @@ impl TileConverterConfig {
 		//if src_tile_format == TileFormat::PNG | TileFormat::JPG | TileFormat::WEBP {}
 
 		return match (src_tile_format, dst_tile_format) {
-			(TileFormat::PNG, TileFormat::PNG) => tile_same,
-			(TileFormat::PNG, _) => panic!(),
+			// ##### PNG
+			(TileFormat::PNG, TileFormat::PNG) => {
+				if self.force_recompress {
+					|tile: &TileData| -> TileData { compress_png(&decompress_png(tile)) }
+				} else {
+					tile_same
+				}
+			}
+			(TileFormat::PNG, TileFormat::JPG) => {
+				|tile: &TileData| -> TileData { compress_jpg(&decompress_png(tile)) }
+			}
+			(TileFormat::PNG, TileFormat::WEBP) => {
+				|tile: &TileData| -> TileData { compress_webp_lossless(&decompress_png(tile)) }
+			}
+			(TileFormat::PNG, _) => todo!("convert PNG -> ?"),
 
+			// ##### JPEG
 			(TileFormat::JPG, TileFormat::JPG) => tile_same,
-			(TileFormat::JPG, _) => panic!(),
+			(TileFormat::JPG, TileFormat::PNG) => {
+				|tile: &TileData| -> TileData { compress_png(&decompress_jpg(tile)) }
+			}
+			(TileFormat::JPG, TileFormat::WEBP) => {
+				|tile: &TileData| -> TileData { compress_webp(&decompress_jpg(tile)) }
+			}
+			(TileFormat::JPG, _) => todo!("convert JPG -> ?"),
 
 			(TileFormat::WEBP, TileFormat::WEBP) => tile_same,
-			(TileFormat::WEBP, _) => panic!(),
+			(TileFormat::WEBP, TileFormat::PNG) => {
+				|tile: &TileData| -> TileData { compress_png(&decompress_webp(tile)) }
+			}
+			(TileFormat::WEBP, TileFormat::JPG) => {
+				|tile: &TileData| -> TileData { compress_jpg(&decompress_webp(tile)) }
+			}
+			(TileFormat::WEBP, _) => todo!("convert WEBP -> ?"),
 
 			(TileFormat::PBF, TileFormat::PBF) => tile_same,
 			(TileFormat::PBF, TileFormat::PBFBrotli) => compress_brotli,
 			(TileFormat::PBF, TileFormat::PBFGzip) => compress_gzip,
-			(TileFormat::PBF, _) => panic!(),
+			(TileFormat::PBF, _) => todo!("convert PBF -> images"),
 
 			(TileFormat::PBFBrotli, TileFormat::PBF) => decompress_brotli,
 			(TileFormat::PBFBrotli, TileFormat::PBFBrotli) => {
 				if self.force_recompress {
-					fn tile_unbrotli_brotli(tile: &TileData) -> TileData {
-						compress_brotli(&decompress_brotli(&tile))
-					}
-					tile_unbrotli_brotli
+					|tile: &TileData| -> TileData { compress_brotli(&decompress_brotli(tile)) }
 				} else {
 					tile_same
 				}
 			}
 			(TileFormat::PBFBrotli, TileFormat::PBFGzip) => {
-				fn tile_unbrotli_gzip(tile: &TileData) -> TileData {
-					compress_gzip(&decompress_brotli(&tile))
-				}
-				tile_unbrotli_gzip
+				|tile: &TileData| -> TileData { compress_gzip(&decompress_brotli(tile)) }
 			}
-			(TileFormat::PBFBrotli, _) => panic!(),
+			(TileFormat::PBFBrotli, _) => todo!("convert PBFBrotli -> images"),
 
 			(TileFormat::PBFGzip, TileFormat::PBF) => decompress_gzip,
 			(TileFormat::PBFGzip, TileFormat::PBFBrotli) => {
-				fn tile_ungzip_brotli(tile: &TileData) -> TileData {
-					compress_brotli(&&decompress_gzip(&tile))
-				}
-				tile_ungzip_brotli
+				|tile: &TileData| -> TileData { compress_brotli(&decompress_gzip(tile)) }
 			}
 			(TileFormat::PBFGzip, TileFormat::PBFGzip) => {
 				if self.force_recompress {
-					fn tile_ungzip_gzip(tile: &TileData) -> TileData {
-						compress_gzip(&decompress_gzip(&tile))
-					}
-					tile_ungzip_gzip
+					|tile: &TileData| -> TileData { compress_gzip(&decompress_gzip(tile)) }
 				} else {
 					tile_same
 				}
 			}
-			(TileFormat::PBFGzip, _) => todo!(),
+			(TileFormat::PBFGzip, _) => todo!("convert PBFGzip -> images"),
 		};
 
 		fn tile_same(tile: &TileData) -> TileData {
 			return tile.clone();
 		}
 	}
-	pub fn get_tile_converter(&self) -> fn(&TileData) -> TileData {
+	pub fn get_tile_converter(&self) -> TileDataConverter {
 		if !self.finalized {
 			panic!()
 		}
@@ -123,3 +143,5 @@ impl TileConverterConfig {
 		return self.bbox_pyramide.get_zoom_range();
 	}
 }
+
+type TileDataConverter = fn(&TileData) -> TileData;

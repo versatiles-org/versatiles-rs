@@ -1,11 +1,10 @@
+use super::types::TileData;
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
 use flate2::{
 	bufread::{GzDecoder, GzEncoder},
 	Compression,
 };
 use std::io::{Cursor, Read};
-
-use super::types::TileData;
 
 pub fn compress_gzip(data: &TileData) -> TileData {
 	let mut result: TileData = Vec::new();

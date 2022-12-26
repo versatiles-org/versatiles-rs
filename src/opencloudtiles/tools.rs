@@ -46,7 +46,11 @@ impl Tools {
 			bbox_pyramide.limit_by_geo_bbox(array.try_into().unwrap());
 		}
 
-		let config = TileConverterConfig::new(None, bbox_pyramide, command.force_recompress);
+		let config = TileConverterConfig::new(
+			command.tile_format.clone(),
+			bbox_pyramide,
+			command.force_recompress,
+		);
 
 		let extension = filename.extension().unwrap().to_str();
 
