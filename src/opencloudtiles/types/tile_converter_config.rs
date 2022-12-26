@@ -1,12 +1,8 @@
 use crate::opencloudtiles::{
 	compress::*,
 	image::*,
-	types::{
-		tile_bbox_pyramide::TileBBoxPyramide, tile_reader_parameters::TileReaderParameters, TileData,
-		TileFormat,
-	},
+	types::{TileBBoxPyramide, TileData, TileFormat, TileReaderParameters},
 };
-use image::DynamicImage;
 use std::ops::RangeInclusive;
 
 pub struct TileConverterConfig {

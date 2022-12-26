@@ -36,7 +36,17 @@ impl TileBBox {
 		return TileBBox::new(x_min as u64, y_min as u64, x_max as u64, y_max as u64);
 	}
 	pub fn count_tiles(&self) -> u64 {
-		return (self.x_max - self.x_min + 1) * (self.y_max - self.y_min + 1);
+		let cols_count: u64 = if self.x_max < self.x_min {
+			0
+		} else {
+			self.x_max - self.x_min + 1
+		};
+		let rows_count: u64 = if self.y_max < self.y_min {
+			0
+		} else {
+			self.y_max - self.y_min + 1
+		};
+		return cols_count * rows_count;
 	}
 	pub fn set_empty(&mut self, level: u64) {
 		let max = 2u64.pow(level as u32);

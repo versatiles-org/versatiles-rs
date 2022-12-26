@@ -1,5 +1,6 @@
 use crate::opencloudtiles::{
 	containers::abstract_container,
+	progress::ProgressBar,
 	types::{TileConverterConfig, TileFormat},
 };
 use std::{fs::File, path::Path};
@@ -10,7 +11,9 @@ pub struct TileConverter {
 	config: TileConverterConfig,
 }
 impl abstract_container::TileConverter for TileConverter {
-	fn new(filename: &std::path::PathBuf, config: TileConverterConfig) -> Box<dyn abstract_container::TileConverter>
+	fn new(
+		filename: &std::path::PathBuf, config: TileConverterConfig,
+	) -> Box<dyn abstract_container::TileConverter>
 	where
 		Self: Sized,
 	{
@@ -34,7 +37,11 @@ impl abstract_container::TileConverter for TileConverter {
 		};
 
 		let bbox_pyramide = self.config.get_bbox_pyramide();
+		let mut bar = ProgressBar::new("counting tiles", bbox_pyramide.count_tiles());
+
 		for coord in bbox_pyramide.iter_tile_indexes() {
+			bar.inc(1);
+
 			let tile = reader.get_tile_data(&coord);
 			if tile.is_none() {
 				continue;
@@ -56,6 +63,7 @@ impl abstract_container::TileConverter for TileConverter {
 				.append_data(&mut header, &path, tile_compressed.as_slice())
 				.unwrap();
 		}
+		bar.finish();
 		self.builder.finish().unwrap();
 	}
 }

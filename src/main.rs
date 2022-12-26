@@ -44,7 +44,7 @@ pub struct Convert {
 
 	/// force to recompress tiles
 	#[arg(long, value_enum)]
-	force_recompress: bool,
+	recompress: bool,
 }
 
 fn main() {
@@ -53,7 +53,10 @@ fn main() {
 	let command = &cli.command;
 	match command {
 		Commands::Convert(arguments) => {
-			println!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
+			println!(
+				"convert from {:?} to {:?}",
+				arguments.input_file, arguments.output_file
+			);
 			Tools::convert(&arguments);
 		}
 	}
