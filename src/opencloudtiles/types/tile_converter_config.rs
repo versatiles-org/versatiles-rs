@@ -17,33 +17,16 @@ pub struct TileConverterConfig {
 }
 
 impl TileConverterConfig {
-	pub fn from_options(
-		min_zoom: &Option<u64>,
-		max_zoom: &Option<u64>,
-		geo_bbox: &Option<Vec<f32>>,
-		tile_format: &Option<TileFormat>,
-		force_recompress: &bool,
+	pub fn new(
+		tile_format: Option<TileFormat>,
+		bbox_pyramide: TileBBoxPyramide,
+		force_recompress: bool,
 	) -> Self {
-		let mut bbox_pyramide = TileBBoxPyramide::new_full();
-
-		if min_zoom.is_some() {
-			bbox_pyramide.set_zoom_min(min_zoom.unwrap())
-		}
-
-		if max_zoom.is_some() {
-			bbox_pyramide.set_zoom_max(max_zoom.unwrap())
-		}
-
-		if geo_bbox.is_some() {
-			let array = geo_bbox.as_ref().unwrap().as_slice();
-			bbox_pyramide.limit_by_geo_bbox(array.try_into().unwrap());
-		}
-
 		return TileConverterConfig {
-			tile_format: tile_format.clone(),
-			bbox_pyramide: TileBBoxPyramide::new_full(),
+			tile_format,
+			bbox_pyramide,
 			tile_converter: None,
-			force_recompress: *force_recompress,
+			force_recompress,
 			finalized: false,
 		};
 	}

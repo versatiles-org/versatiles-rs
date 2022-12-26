@@ -10,6 +10,8 @@ use crate::{
 };
 use std::path::PathBuf;
 
+use super::types::TileBBoxPyramide;
+
 pub struct Tools;
 impl Tools {
 	pub fn convert(command: &Convert) {
@@ -29,13 +31,22 @@ impl Tools {
 		return reader;
 	}
 	fn new_converter<'a>(filename: &'a PathBuf, command: &'a Convert) -> Box<dyn TileConverter> {
-		let config = TileConverterConfig::from_options(
-			&command.min_zoom,
-			&command.max_zoom,
-			&command.bbox,
-			&command.tile_format,
-			&command.force_recompress,
-		);
+		let mut bbox_pyramide = TileBBoxPyramide::new_full();
+
+		if command.min_zoom.is_some() {
+			bbox_pyramide.set_zoom_min(command.min_zoom.unwrap())
+		}
+
+		if command.max_zoom.is_some() {
+			bbox_pyramide.set_zoom_max(command.max_zoom.unwrap())
+		}
+
+		if command.bbox.is_some() {
+			let array = command.bbox.as_ref().unwrap().as_slice();
+			bbox_pyramide.limit_by_geo_bbox(array.try_into().unwrap());
+		}
+
+		let config = TileConverterConfig::new(None, bbox_pyramide, command.force_recompress);
 
 		let extension = filename.extension().unwrap().to_str();
 
