@@ -26,7 +26,7 @@ The file is composed of several parts:
 4. **index** of all blocks
 
 
-<p align="center"><img src="docs/file_format.svg?raw=true" class="fix-dark-mode"></p>
+<p align="center"><img src="docs/file_format.svg?raw=true"></p>
 
 ## file
 
@@ -83,7 +83,7 @@ The file is composed of several parts:
 - Each `block` contains data of up to 256x256 (= 65536) `tile`s.
 - Levels 0-8 can be stored with one `block` each. level 9 might contain 512x512 `tile`s so 4 `block`s are necessary.
 
-<p align="center"><img src="docs/level_blocks.svg?raw=true" class="fix-dark-mode"></p>
+<p align="center"><img src="docs/level_blocks.svg?raw=true"></p>
 
 - Each `block` contains the concatenated `tile` blobs and ends with a `tile_index`.
 - Neither the order of `block`s in the `file` nor the order of `tile`s in a `block` matters as long as their indexes are correct.
@@ -100,7 +100,7 @@ The file is composed of several parts:
 - `tile`s are read horizontally then vertically
 - `j = (row - row_min)*(col_max - col_min + 1) + (col - col_min)`
 
-<p align="center"><img src="docs/block_tiles.svg?raw=true" class="fix-dark-mode"></p>
+<p align="center"><img src="docs/block_tiles.svg?raw=true"></p>
 
 - identical `tile`s can be stored once and referenced multiple times to save storage space
 - if a `tile` does not exist, the length of `tile` is zero
