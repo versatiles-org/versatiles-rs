@@ -10,10 +10,7 @@ pub struct TileConverter {
 	config: TileConverterConfig,
 }
 impl abstract_container::TileConverter for TileConverter {
-	fn new(
-		filename: &std::path::PathBuf,
-		config: TileConverterConfig,
-	) -> Box<dyn abstract_container::TileConverter>
+	fn new(filename: &std::path::PathBuf, config: TileConverterConfig) -> Box<dyn abstract_container::TileConverter>
 	where
 		Self: Sized,
 	{
@@ -23,9 +20,7 @@ impl abstract_container::TileConverter for TileConverter {
 		Box::new(TileConverter { builder, config })
 	}
 	fn convert_from(&mut self, reader: Box<dyn abstract_container::TileReader>) {
-		self
-			.config
-			.finalize_with_parameters(reader.get_parameters());
+		self.config.finalize_with_parameters(reader.get_parameters());
 
 		let converter = self.config.get_tile_converter();
 

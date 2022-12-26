@@ -2,10 +2,7 @@ use std::ops::RangeInclusive;
 
 use crate::opencloudtiles::{
 	compress::*,
-	types::{
-		tile_bbox_pyramide::TileBBoxPyramide, tile_reader_parameters::TileReaderParameters, TileData,
-		TileFormat,
-	},
+	types::{tile_bbox_pyramide::TileBBoxPyramide, tile_reader_parameters::TileReaderParameters, TileData, TileFormat},
 };
 
 pub struct TileConverterConfig {
@@ -17,11 +14,7 @@ pub struct TileConverterConfig {
 }
 
 impl TileConverterConfig {
-	pub fn new(
-		tile_format: Option<TileFormat>,
-		bbox_pyramide: TileBBoxPyramide,
-		force_recompress: bool,
-	) -> Self {
+	pub fn new(tile_format: Option<TileFormat>, bbox_pyramide: TileBBoxPyramide, force_recompress: bool) -> Self {
 		return TileConverterConfig {
 			tile_format,
 			bbox_pyramide,

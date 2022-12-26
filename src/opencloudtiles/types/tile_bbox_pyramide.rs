@@ -8,16 +8,12 @@ pub struct TileBBoxPyramide {
 impl TileBBoxPyramide {
 	pub fn new_full() -> TileBBoxPyramide {
 		return TileBBoxPyramide {
-			level_bbox: (0..=MAX_ZOOM_LEVEL)
-				.map(|z| TileBBox::new_full(z as u64))
-				.collect(),
+			level_bbox: (0..=MAX_ZOOM_LEVEL).map(|z| TileBBox::new_full(z as u64)).collect(),
 		};
 	}
 	pub fn new_empty() -> TileBBoxPyramide {
 		return TileBBoxPyramide {
-			level_bbox: (0..=MAX_ZOOM_LEVEL)
-				.map(|z| TileBBox::new_empty(z as u64))
-				.collect(),
+			level_bbox: (0..=MAX_ZOOM_LEVEL).map(|z| TileBBox::new_empty(z as u64)).collect(),
 		};
 	}
 	pub fn set_zoom_min(&mut self, zoom_level_min: u64) {
@@ -78,13 +74,7 @@ impl TileBBoxPyramide {
 			.level_bbox
 			.iter()
 			.enumerate()
-			.filter_map(|(level, bbox)| {
-				if bbox.is_empty() {
-					None
-				} else {
-					Some(level as u64)
-				}
-			})
+			.filter_map(|(level, bbox)| if bbox.is_empty() { None } else { Some(level as u64) })
 			.collect();
 
 		let start: u64;

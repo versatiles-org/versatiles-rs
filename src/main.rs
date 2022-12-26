@@ -53,10 +53,7 @@ fn main() {
 	let command = &cli.command;
 	match command {
 		Commands::Convert(arguments) => {
-			println!(
-				"convert from {:?} to {:?}",
-				arguments.input_file, arguments.output_file
-			);
+			println!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 			Tools::convert(&arguments);
 		}
 	}
