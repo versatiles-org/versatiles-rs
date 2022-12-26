@@ -1,6 +1,8 @@
 use super::types::{BlockDefinition, BlockIndex, ByteRange, FileHeader, TileIndex};
 use crate::opencloudtiles::types::{TileBBox, TileConverterConfig, TileCoord3, TileReaderWrapper};
-use crate::opencloudtiles::{compress::compress_brotli, containers::abstract_container, progress::ProgressBar};
+use crate::opencloudtiles::{
+	compress::compress_brotli, containers::abstract_container, progress::ProgressBar,
+};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Seek, Write};
@@ -99,7 +101,8 @@ impl TileConverter {
 		return self.write_vec_brotli(&index.as_vec());
 	}
 	fn write_block(
-		&mut self, block: &BlockDefinition, reader: &Box<dyn abstract_container::TileReader>, bar: &mut ProgressBar,
+		&mut self, block: &BlockDefinition, reader: &Box<dyn abstract_container::TileReader>,
+		bar: &mut ProgressBar,
 	) -> ByteRange {
 		let bbox = &block.bbox;
 		let mut tile_index = TileIndex::new(bbox);
@@ -128,7 +131,7 @@ impl TileConverter {
 					let coord = TileCoord3 { x, y, z: block.level };
 
 					scope.spawn(move |_s| {
-						let optional_tile = wrapped_reader.get_tile_data(coord);
+						let optional_tile = wrapped_reader.get_tile_data(&coord);
 
 						if optional_tile.is_none() {
 							let mut secured_writer = mutex_writer.lock().unwrap();
@@ -168,7 +171,9 @@ impl TileConverter {
 						drop(secured_tile_index);
 
 						if secured_tile_hash_lookup.is_some() {
-							secured_tile_hash_lookup.unwrap().insert(tile_hash.unwrap(), range);
+							secured_tile_hash_lookup
+								.unwrap()
+								.insert(tile_hash.unwrap(), range);
 						}
 					})
 				}
@@ -182,7 +187,10 @@ impl TileConverter {
 				.file_buffer
 				.stream_position()
 				.expect("Error in cloudtiles::write.stream_position"),
-			self.file_buffer.write(buf).expect("Error in cloudtiles::write.write") as u64,
+			self
+				.file_buffer
+				.write(buf)
+				.expect("Error in cloudtiles::write.write") as u64,
 		)
 	}
 	fn write_vec_brotli(&mut self, data: &Vec<u8>) -> ByteRange {

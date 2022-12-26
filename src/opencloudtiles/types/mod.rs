@@ -32,7 +32,7 @@ impl TileReaderWrapper<'_> {
 	pub fn new(reader: &Box<dyn abstract_container::TileReader>) -> TileReaderWrapper {
 		return TileReaderWrapper { reader };
 	}
-	pub fn get_tile_data(&self, coord: TileCoord3) -> Option<TileData> {
+	pub fn get_tile_data(&self, coord: &TileCoord3) -> Option<TileData> {
 		return self.reader.get_tile_data(&coord);
 	}
 }
