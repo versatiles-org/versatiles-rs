@@ -2,7 +2,7 @@ use crate::{
 	opencloudtiles::{
 		containers::{
 			abstract_container::{TileConverter, TileReader},
-			cloudtiles, mbtiles, tar, unknown,
+			cloudtiles, mbtiles, tar,
 		},
 		types::TileConverterConfig,
 	},
@@ -54,7 +54,6 @@ impl Tools {
 			Some("mbtiles") => mbtiles::TileConverter::new(filename, config),
 			Some("cloudtiles") => cloudtiles::TileConverter::new(filename, config),
 			Some("tar") => tar::TileConverter::new(filename, config),
-			Some("*") => unknown::TileConverter::new(filename, config),
 			_ => panic!("extension '{:?}' unknown", extension),
 		};
 
