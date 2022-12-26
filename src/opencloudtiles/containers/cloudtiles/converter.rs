@@ -140,8 +140,9 @@ impl TileConverter {
 					let index = tile_no;
 					tile_no += 1;
 
-					let y = block.block_row * 256 + row_in_block;
 					let x = block.block_col * 256 + col_in_block;
+					let y = block.block_row * 256 + row_in_block;
+
 					let coord = TileCoord3 {
 						x,
 						y,

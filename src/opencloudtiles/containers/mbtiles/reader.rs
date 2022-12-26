@@ -40,13 +40,13 @@ impl TileReader {
 		let mut stmt = connection
 			.prepare("SELECT name, value FROM metadata")
 			.expect("can not prepare SQL query");
-		let mut rows = stmt.query([]).expect("SQL query failed");
+		let mut entries = stmt.query([]).expect("SQL query failed");
 
 		let mut tile_format: Option<TileFormat> = None;
 
-		while let Some(row) = rows.next().unwrap() {
-			let key = row.get::<_, String>(0).unwrap();
-			let val = row.get::<_, String>(1).unwrap();
+		while let Some(entry) = entries.next().unwrap() {
+			let key = entry.get::<_, String>(0).unwrap();
+			let val = entry.get::<_, String>(1).unwrap();
 			//println!("name: {}, value: {}", key, val);
 			match key.as_str() {
 				"format" => match val.as_str() {
