@@ -2,12 +2,12 @@ use std::f32::consts::PI;
 
 use super::tile_coords::TileCoord2;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct TileBBox {
-	x_min: u64,
-	y_min: u64,
-	x_max: u64,
-	y_max: u64,
+	pub x_min: u64,
+	pub y_min: u64,
+	pub x_max: u64,
+	pub y_max: u64,
 }
 
 impl TileBBox {
@@ -27,13 +27,6 @@ impl TileBBox {
 		let max = 2u64.pow(level as u32);
 		TileBBox::new(max, max, 0, 0)
 	}
-	pub fn set_empty(&mut self, level: u64) {
-		let max = 2u64.pow(level as u32);
-		self.x_min = max;
-		self.y_min = max;
-		self.x_max = 0;
-		self.y_max = 0;
-	}
 	pub fn from_geo(level: u64, geo_bbox: &[f32; 4]) -> Self {
 		let zoom: f32 = 2.0f32.powi(level as i32);
 		let x_min = zoom * (geo_bbox[0] / 360.0 + 0.5);
@@ -41,6 +34,16 @@ impl TileBBox {
 		let x_max = zoom * (geo_bbox[2] / 360.0 + 0.5);
 		let y_max = zoom * (PI - ((geo_bbox[3] / 90.0 + 1.0) * PI / 4.0).tan().ln());
 		return TileBBox::new(x_min as u64, y_min as u64, x_max as u64, y_max as u64);
+	}
+	pub fn count_tiles(&self) -> u64 {
+		return (self.x_max - self.x_min + 1) * (self.y_max - self.y_min + 1);
+	}
+	pub fn set_empty(&mut self, level: u64) {
+		let max = 2u64.pow(level as u32);
+		self.x_min = max;
+		self.y_min = max;
+		self.x_max = 0;
+		self.y_max = 0;
 	}
 	pub fn include_tile(&mut self, col: u64, row: u64) {
 		if self.x_min > col {
@@ -79,12 +82,7 @@ impl TileBBox {
 		let x_values = self.x_min..=self.x_max;
 		return y_values
 			.into_iter()
-			.map(move |y| {
-				x_values
-					.clone()
-					.into_iter()
-					.map(move |x| TileCoord2 { x, y })
-			})
+			.map(move |y| x_values.clone().into_iter().map(move |x| TileCoord2 { x, y }))
 			.flatten();
 	}
 }

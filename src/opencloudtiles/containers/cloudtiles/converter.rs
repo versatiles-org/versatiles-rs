@@ -1,8 +1,6 @@
 use super::types::{BlockDefinition, BlockIndex, ByteRange, FileHeader, TileIndex};
-use crate::opencloudtiles::types::{TileConverterConfig, TileCoord3, TileReaderWrapper};
-use crate::opencloudtiles::{
-	compress::compress_brotli, containers::abstract_container, progress::ProgressBar,
-};
+use crate::opencloudtiles::types::{TileBBox, TileConverterConfig, TileCoord3, TileReaderWrapper};
+use crate::opencloudtiles::{compress::compress_brotli, containers::abstract_container, progress::ProgressBar};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Seek, Write};
@@ -16,10 +14,7 @@ pub struct TileConverter {
 }
 
 impl abstract_container::TileConverter for TileConverter {
-	fn new(
-		filename: &PathBuf,
-		tile_config: TileConverterConfig,
-	) -> Box<dyn abstract_container::TileConverter>
+	fn new(filename: &PathBuf, tile_config: TileConverterConfig) -> Box<dyn abstract_container::TileConverter>
 	where
 		Self: Sized,
 	{
@@ -31,9 +26,7 @@ impl abstract_container::TileConverter for TileConverter {
 		})
 	}
 	fn convert_from(&mut self, reader: Box<dyn abstract_container::TileReader>) {
-		self
-			.config
-			.finalize_with_parameters(reader.get_parameters());
+		self.config.finalize_with_parameters(reader.get_parameters());
 
 		let mut header = FileHeader::new(&self.config.get_tile_format());
 		header.write(&mut self.file_buffer);
@@ -64,10 +57,10 @@ impl TileConverter {
 
 			let (level_col_min, level_row_min, level_col_max, level_row_max) = bbox.as_tuple();
 
-			for block_row in level_row_min.shr(8)..=level_row_max.shr(8) {
-				for block_col in level_col_min.shr(8)..=level_col_max.shr(8) {
-					let col0: u64 = block_col * 256;
-					let row0: u64 = block_row * 256;
+			for block_y in level_row_min.shr(8)..=level_row_max.shr(8) {
+				for block_x in level_col_min.shr(8)..=level_col_max.shr(8) {
+					let col0: u64 = block_x * 256;
+					let row0: u64 = block_y * 256;
 
 					let col_min = (level_col_min - col0).min(255).max(0);
 					let row_min = (level_row_min - row0).min(255).max(0);
@@ -76,12 +69,9 @@ impl TileConverter {
 
 					todos.push(BlockDefinition {
 						level: zoom,
-						block_row,
-						block_col,
-						col_min,
-						row_min,
-						col_max,
-						row_max,
+						block_y,
+						block_x,
+						bbox: TileBBox::new(col_min, row_min, col_max, row_max),
 						count: (col_max - col_min + 1) * (row_max - row_min + 1),
 					})
 				}
@@ -102,25 +92,17 @@ impl TileConverter {
 				continue;
 			}
 
-			index.add(
-				todo.level as u8,
-				todo.block_col as u32,
-				todo.block_row as u32,
-				&range,
-			);
+			index.add(todo.level as u8, todo.block_x as u32, todo.block_y as u32, &range);
 		}
 		bar2.finish();
 
 		return self.write_vec_brotli(&index.as_vec());
 	}
 	fn write_block(
-		&mut self,
-		block: &BlockDefinition,
-		reader: &Box<dyn abstract_container::TileReader>,
-		bar: &mut ProgressBar,
+		&mut self, block: &BlockDefinition, reader: &Box<dyn abstract_container::TileReader>, bar: &mut ProgressBar,
 	) -> ByteRange {
-		let mut tile_index =
-			TileIndex::new(block.row_min, block.row_max, block.col_min, block.col_max);
+		let bbox = &block.bbox;
+		let mut tile_index = TileIndex::new(bbox);
 		let tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
 		let wrapped_reader = &TileReaderWrapper::new(reader);
@@ -133,21 +115,17 @@ impl TileConverter {
 			let mut tile_no: usize = 0;
 			let tile_converter = self.config.get_tile_converter();
 
-			for row_in_block in block.row_min..=block.row_max {
-				for col_in_block in block.col_min..=block.col_max {
+			for y_in_block in bbox.y_min..=bbox.y_max {
+				for x_in_block in bbox.x_min..=bbox.x_max {
 					bar.inc(1);
 
 					let index = tile_no;
 					tile_no += 1;
 
-					let x = block.block_col * 256 + col_in_block;
-					let y = block.block_row * 256 + row_in_block;
+					let x = block.block_x * 256 + x_in_block;
+					let y = block.block_y * 256 + y_in_block;
 
-					let coord = TileCoord3 {
-						x,
-						y,
-						z: block.level,
-					};
+					let coord = TileCoord3 { x, y, z: block.level };
 
 					scope.spawn(move |_s| {
 						let optional_tile = wrapped_reader.get_tile_data(coord);
@@ -190,9 +168,7 @@ impl TileConverter {
 						drop(secured_tile_index);
 
 						if secured_tile_hash_lookup.is_some() {
-							secured_tile_hash_lookup
-								.unwrap()
-								.insert(tile_hash.unwrap(), range);
+							secured_tile_hash_lookup.unwrap().insert(tile_hash.unwrap(), range);
 						}
 					})
 				}
@@ -206,10 +182,7 @@ impl TileConverter {
 				.file_buffer
 				.stream_position()
 				.expect("Error in cloudtiles::write.stream_position"),
-			self
-				.file_buffer
-				.write(buf)
-				.expect("Error in cloudtiles::write.write") as u64,
+			self.file_buffer.write(buf).expect("Error in cloudtiles::write.write") as u64,
 		)
 	}
 	fn write_vec_brotli(&mut self, data: &Vec<u8>) -> ByteRange {
