@@ -95,7 +95,7 @@ impl TileReader {
 }
 
 impl abstract_container::TileReader for TileReader {
-	fn load(filename: &std::path::PathBuf) -> Box<dyn abstract_container::TileReader> {
+	fn from_file(filename: &std::path::PathBuf) -> Box<dyn abstract_container::TileReader> {
 		let reader = Self::load_from_sqlite(filename);
 		return Box::new(reader);
 	}

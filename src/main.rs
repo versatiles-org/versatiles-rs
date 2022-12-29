@@ -16,15 +16,18 @@ pub struct Cli {
 pub enum Commands {
 	/// convert between different tile containers
 	Convert(Convert),
+
+	/// serve tiles via http
+	Serve(Serve),
 }
 
 #[derive(Args)]
 pub struct Convert {
 	/// (e.g. *.mbtiles, *.cloudtiles, *.tar)
-	input_file: PathBuf,
+	input_file: String,
 
 	/// (e.g. *.mbtiles, *.cloudtiles, *.tar)
-	output_file: PathBuf,
+	output_file: String,
 
 	/// minimal zoom level
 	#[arg(long, value_name = "int")]
@@ -47,6 +50,17 @@ pub struct Convert {
 	recompress: bool,
 }
 
+#[derive(Args)]
+pub struct Serve {
+	/// (e.g. *.mbtiles, *.cloudtiles, *.tar)
+	#[arg(value_delimiter = ' ')]
+	sources: Vec<String>,
+
+	/// serve via port (default: 8080)
+	#[arg(long, default_value = "8080")]
+	port: u16,
+}
+
 fn main() {
 	let cli = Cli::parse();
 
@@ -58,6 +72,13 @@ fn main() {
 				arguments.input_file, arguments.output_file
 			);
 			Tools::convert(&arguments);
+		}
+		Commands::Serve(arguments) => {
+			println!(
+				"serve from {:?} to http://localhost:{:?}/",
+				arguments.sources, arguments.port
+			);
+			Tools::serve(&arguments);
 		}
 	}
 }

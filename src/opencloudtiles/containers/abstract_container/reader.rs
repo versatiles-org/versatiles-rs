@@ -4,7 +4,7 @@ use crate::opencloudtiles::types::{TileCoord3, TileData, TileReaderParameters};
 use std::path::PathBuf;
 
 pub trait TileReader {
-	fn load(filename: &PathBuf) -> Box<dyn TileReader>
+	fn from_file(filename: &PathBuf) -> Box<dyn TileReader>
 	where
 		Self: Sized,
 	{
