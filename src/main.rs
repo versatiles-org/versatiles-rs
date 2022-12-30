@@ -2,7 +2,6 @@ mod opencloudtiles;
 
 use clap::{Args, Parser, Subcommand};
 use opencloudtiles::*;
-use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]

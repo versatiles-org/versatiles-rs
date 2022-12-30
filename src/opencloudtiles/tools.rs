@@ -10,7 +10,7 @@ use crate::{
 };
 use std::path::PathBuf;
 
-use super::{server::Server, types::TileBBoxPyramide};
+use super::{tile_server::TileServer, types::TileBBoxPyramide};
 
 pub struct Tools;
 impl Tools {
@@ -74,8 +74,8 @@ impl Tools {
 
 		return converter;
 	}
-	fn new_server(command: &Serve) -> Server {
-		let server = Server::new(command.port);
+	fn new_server(command: &Serve) -> TileServer {
+		let server = TileServer::new(command.port);
 
 		return server;
 	}
