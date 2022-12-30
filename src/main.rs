@@ -52,7 +52,7 @@ pub struct Convert {
 #[derive(Args)]
 pub struct Serve {
 	/// (e.g. *.mbtiles, *.cloudtiles, *.tar)
-	#[arg(value_delimiter = ' ')]
+	#[arg(num_args = 1.., required = true)]
 	sources: Vec<String>,
 
 	/// serve via port (default: 8080)

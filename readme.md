@@ -6,6 +6,7 @@ cargo build && target/debug/cloudtiles convert --tile-format webp tiles/original
 cargo build && target/debug/cloudtiles convert tiles/original/stuttgart.mbtiles tiles/stuttgart.cloudtiles
 cargo build && target/debug/cloudtiles convert tiles/stuttgart.cloudtiles tiles/hitzekarte.tar
 cargo build && target/debug/cloudtiles convert tiles/philippines.mbtiles tiles/philippines.cloudtiles
+cargo build && target/debug/cloudtiles serve "tiles/stuttgart.cloudtiles#osm"
 
 # cargo instruments --all-features -t "CPU Profiler" -- --max-zoom 3 convert tiles/philippines.mbtiles tiles/philippines.cloudtiles
 
@@ -35,7 +36,7 @@ The file is composed of several parts:
 - all `offset`s are relative to start of the file
   
 | offset | length | type   | description                      |
-| ------ | ------ | ------ | -------------------------------- |
+|--------|--------|--------|----------------------------------|
 | 0      | 28     | string | `"OpenCloudTiles-Container-v1:"` |
 | 28     | 1      | u8     | `tile_format`                    |
 | 29     | 1      | u8     | `tile_precompression`            |
@@ -68,15 +69,19 @@ The file is composed of several parts:
 
 - Brotli compressed data structure
 - Empty `block`s are not stored
-- For each block `block_index` contains a 25 bytes long record:
+- For each block `block_index` contains a 259 bytes long record:
 
 | offset    | length | type | description              |
-| --------- | ------ | ---- | ------------------------ |
-| 0 + 25*i  | 1      | u8   | `level`                  |
-| 1 + 25*i  | 4      | u32  | `column`/256             |
-| 4 + 25*i  | 4      | u32  | `row`/256                |
-| 9 + 25*i  | 8      | u64  | `offset` of `tile_index` |
-| 17 + 25*i | 8      | u64  | `length` of `tile_index` |
+|-----------|--------|------|--------------------------|
+| 0 + 29*i  | 1      | u8   | `level`                  |
+| 1 + 29*i  | 4      | u32  | `column`/256             |
+| 5 + 29*i  | 4      | u32  | `row`/256                |
+| 9 + 29*i  | 1      | u8   | `col_min`                |
+| 10 + 29*i | 1      | u8   | `row_min`                |
+| 11 + 29*i | 1      | u8   | `col_max`                |
+| 12 + 29*i | 1      | u8   | `row_max`                |
+| 13 + 29*i | 8      | u64  | `offset` of `tile_index` |
+| 21 + 29*i | 8      | u64  | `length` of `tile_index` |
 
 ## `block`
 
@@ -105,11 +110,7 @@ The file is composed of several parts:
 - identical `tile`s can be stored once and referenced multiple times to save storage space
 - if a `tile` does not exist, the length of `tile` is zero
 
-| offset    | length | type | description               |
-| --------- | ------ | ---- | ------------------------- |
-| 0         | 1      | u8   | `col_min`                 |
-| 1         | 1      | u8   | `row_min`                 |
-| 2         | 1      | u8   | `col_max`                 |
-| 3         | 1      | u8   | `row_max`                 |
-| 4 + 12*j  | 8      | u64  | `offset` of `tile_blob` j |
-| 12 + 12*j | 4      | u32  | `length` of `tile_blob` j |
+| offset | length | type | description               |
+|--------|--------|------|---------------------------|
+| 12*j   | 8      | u64  | `offset` of `tile_blob` j |
+| 12*j   | 4      | u32  | `length` of `tile_blob` j |

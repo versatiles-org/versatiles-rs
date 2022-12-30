@@ -1,4 +1,4 @@
-use super::types::{BlockDefinition, BlockIndex, ByteRange, FileHeader, TileIndex};
+use super::types::{BlockDefinition, BlockIndexWriter, ByteRange, FileHeader, TileIndex};
 use crate::opencloudtiles::types::{TileBBox, TileConverterConfig, TileCoord3, TileReaderWrapper};
 use crate::opencloudtiles::{
 	compress::compress_brotli, containers::abstract_container, progress::ProgressBar,
@@ -71,8 +71,8 @@ impl TileConverter {
 
 					todos.push(BlockDefinition {
 						level: zoom,
-						block_y,
-						block_x,
+						x: block_x,
+						y: block_y,
 						bbox: TileBBox::new(col_min, row_min, col_max, row_max),
 						count: (col_max - col_min + 1) * (row_max - row_min + 1),
 					})
@@ -84,28 +84,28 @@ impl TileConverter {
 		let sum = todos.iter().map(|x| x.count).sum::<u64>();
 		let mut bar2 = ProgressBar::new("converting tiles", sum as u64);
 
-		let mut index = BlockIndex::new();
+		let mut block_index_writer = BlockIndexWriter::new();
 
-		for todo in todos {
-			let range = self.write_block(&todo, &reader, &mut bar2);
+		for block in todos {
+			let range = self.write_block(&block, &reader, &mut bar2);
 
 			if range.length == 0 {
 				// block is empty
 				continue;
 			}
 
-			index.add(todo.level as u8, todo.block_x as u32, todo.block_y as u32, &range);
+			block_index_writer.write(&block, &range);
 		}
 		bar2.finish();
 
-		return self.write_vec_brotli(&index.as_vec());
+		return self.write_vec_brotli(&block_index_writer.as_vec());
 	}
 	fn write_block(
 		&mut self, block: &BlockDefinition, reader: &Box<dyn abstract_container::TileReader>,
 		bar: &mut ProgressBar,
 	) -> ByteRange {
 		let bbox = &block.bbox;
-		let mut tile_index = TileIndex::new(bbox);
+		let mut tile_index = TileIndex::create(bbox.count_tiles() as usize);
 		let tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
 		let wrapped_reader = &TileReaderWrapper::new(reader);
@@ -125,8 +125,8 @@ impl TileConverter {
 					let index = tile_no;
 					tile_no += 1;
 
-					let x = block.block_x * 256 + x_in_block;
-					let y = block.block_y * 256 + y_in_block;
+					let x = block.x * 256 + x_in_block;
+					let y = block.y * 256 + y_in_block;
 
 					let coord = TileCoord3 { x, y, z: block.level };
 

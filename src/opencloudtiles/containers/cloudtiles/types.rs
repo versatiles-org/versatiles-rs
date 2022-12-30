@@ -1,11 +1,33 @@
-use crate::opencloudtiles::types::TileBBox;
+use crate::opencloudtiles::types::{TileBBox, TileBBoxPyramide};
 use crate::types::TileFormat;
 use byteorder::BigEndian as BE;
 use byteorder::{ReadBytesExt, WriteBytesExt};
+use std::io::{BufReader, SeekFrom};
+use std::path::PathBuf;
 use std::{
 	fs::File,
-	io::{BufReader, BufWriter, Cursor, Read, Seek, Write},
+	io::{BufWriter, Cursor, Read, Seek, Write},
 };
+
+trait CloudTilesSrcTrait: Read + Seek {}
+impl CloudTilesSrcTrait for BufReader<File> {}
+
+pub struct CloudTilesSrc {
+	reader: Box<dyn CloudTilesSrcTrait>,
+}
+impl CloudTilesSrc {
+	pub fn from_file(filename: &PathBuf) -> CloudTilesSrc {
+		return CloudTilesSrc {
+			reader: Box::new(BufReader::new(File::open(filename).unwrap())),
+		};
+	}
+	pub fn read_range(&mut self, range: &ByteRange) -> Vec<u8> {
+		let mut buffer = vec![0; range.length as usize];
+		self.reader.seek(SeekFrom::Start(range.offset)).unwrap();
+		self.reader.read_exact(&mut buffer).unwrap();
+		return buffer;
+	}
+}
 
 #[derive(Clone)]
 pub struct ByteRange {
@@ -43,18 +65,12 @@ impl FileHeader {
 	}
 	pub fn write(&self, file: &mut BufWriter<File>) {
 		let current_pos = file.stream_position().unwrap();
-		file.seek(std::io::SeekFrom::Start(0)).unwrap();
+		file.seek(SeekFrom::Start(0)).unwrap();
 		file.write(&self.to_bytes()).unwrap();
-		file.seek(std::io::SeekFrom::Start(current_pos)).unwrap();
+		file.seek(SeekFrom::Start(current_pos)).unwrap();
 	}
-	pub fn read(file: &mut BufReader<File>) -> FileHeader {
-		let current_pos = file.stream_position().unwrap();
-		file.seek(std::io::SeekFrom::Start(0)).unwrap();
-
-		let mut header = vec![0; 62];
-		file.read_exact(&mut header).unwrap();
-		file.seek(std::io::SeekFrom::Start(current_pos)).unwrap();
-
+	pub fn read(reader: &mut CloudTilesSrc) -> FileHeader {
+		let mut header = reader.read_range(&ByteRange::new(0, 62));
 		return FileHeader::from_buffer(header.as_mut_slice());
 	}
 	fn to_bytes(&self) -> Vec<u8> {
@@ -127,28 +143,32 @@ impl FileHeader {
 
 pub struct BlockDefinition {
 	pub level: u64,
-	pub block_x: u64,
-	pub block_y: u64,
+	pub x: u64,
+	pub y: u64,
 	pub bbox: TileBBox,
 	pub count: u64,
 }
 
-pub struct BlockIndex {
+pub struct BlockIndexWriter {
 	buffer: Vec<u8>,
 	count: usize,
 }
 
-impl BlockIndex {
-	pub fn new() -> BlockIndex {
-		return BlockIndex {
+impl BlockIndexWriter {
+	pub fn new() -> BlockIndexWriter {
+		return BlockIndexWriter {
 			buffer: Vec::new(),
 			count: 0,
 		};
 	}
-	pub fn add(&mut self, level: u8, col: u32, row: u32, range: &ByteRange) {
-		self.buffer.write_u8(level as u8).unwrap();
-		self.buffer.write_u32::<BE>(col as u32).unwrap();
-		self.buffer.write_u32::<BE>(row as u32).unwrap();
+	pub fn write(&mut self, block: &BlockDefinition, range: &ByteRange) {
+		self.buffer.write_u8(block.level as u8).unwrap();
+		self.buffer.write_u32::<BE>(block.x as u32).unwrap();
+		self.buffer.write_u32::<BE>(block.y as u32).unwrap();
+		self.buffer.write_u8(block.bbox.x_min as u8).unwrap();
+		self.buffer.write_u8(block.bbox.y_min as u8).unwrap();
+		self.buffer.write_u8(block.bbox.x_max as u8).unwrap();
+		self.buffer.write_u8(block.bbox.y_max as u8).unwrap();
 		self.buffer.write_u64::<BE>(range.offset).unwrap();
 		self.buffer.write_u64::<BE>(range.length).unwrap();
 		self.count += 1;
@@ -161,6 +181,17 @@ impl BlockIndex {
 	}
 }
 
+pub struct BlockIndexReader {}
+impl BlockIndexReader {
+	pub fn from_vec(buf: &Vec<u8>) -> BlockIndexReader {
+		return BlockIndexReader {};
+	}
+	pub fn get_bbox_pyramide(&self) -> TileBBoxPyramide {
+		panic!();
+		return TileBBoxPyramide::new_empty();
+	}
+}
+
 pub struct TileIndex {
 	buffer: Vec<u8>,
 	length: usize,
@@ -169,24 +200,25 @@ pub struct TileIndex {
 unsafe impl Send for TileIndex {}
 
 impl TileIndex {
-	pub fn new(bbox: &TileBBox) -> TileIndex {
-		let count = bbox.count_tiles() as usize;
-
+	pub fn create(count: usize) -> TileIndex {
 		let length = count * 12 + 4;
 
 		let mut buffer: Vec<u8> = Vec::with_capacity(length);
 		buffer.resize(length, 0);
 
-		let mut cursor = Cursor::new(&mut buffer);
-		cursor.write_u8(bbox.x_min as u8).unwrap();
-		cursor.write_u8(bbox.y_min as u8).unwrap();
-		cursor.write_u8(bbox.x_max as u8).unwrap();
-		cursor.write_u8(bbox.y_max as u8).unwrap();
-
-		return TileIndex { buffer, length, count };
+		return TileIndex {
+			buffer,
+			length,
+			count,
+		};
 	}
 	pub fn set(&mut self, index: usize, tile_byte_range: &ByteRange) {
-		assert!(index < self.count, "index {} is to big for count {}", index, self.count);
+		assert!(
+			index < self.count,
+			"index {} is to big for count {}",
+			index,
+			self.count
+		);
 
 		let pos = 4 + 12 * index;
 		let slice_range = std::ops::Range {

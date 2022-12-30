@@ -23,10 +23,23 @@ impl Tools {
 		let mut server = Tools::new_server(command);
 
 		command.sources.iter().for_each(|string| {
-			let pos = string.find(":").unwrap();
-			let name = string.get(0..pos).unwrap();
-			let filename = string.get(pos + 1..).unwrap();
-			server.add_source(name, Tools::new_reader(filename));
+			let parts: Vec<&str> = string.split("#").collect();
+
+			match parts.len() {
+				1 => {
+					server.add_source(guess_name(string), Tools::new_reader(string));
+				}
+				2 => {
+					server.add_source(parts[1], Tools::new_reader(parts[0]));
+				}
+				_ => panic!(),
+			}
+
+			fn guess_name(path: &str) -> &str {
+				let filename = path.split(&['/', '\\']).last().unwrap();
+				let name = filename.split('.').next().unwrap();
+				return name;
+			}
 		});
 
 		server.start();
