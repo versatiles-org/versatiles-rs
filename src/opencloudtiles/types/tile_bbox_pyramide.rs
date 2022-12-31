@@ -55,6 +55,9 @@ impl TileBBoxPyramide {
 	pub fn include_tile(&mut self, level: u64, col: u64, row: u64) {
 		self.level_bbox[level as usize].include_tile(col, row);
 	}
+	pub fn include_bbox(&mut self, level: u64, bbox: &TileBBox) {
+		self.level_bbox[level as usize].include_bbox(bbox);
+	}
 	pub fn iter(&self) -> Iter<TileBBox> {
 		return self.level_bbox.iter();
 	}

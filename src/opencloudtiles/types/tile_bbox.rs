@@ -55,18 +55,32 @@ impl TileBBox {
 		self.x_max = 0;
 		self.y_max = 0;
 	}
-	pub fn include_tile(&mut self, col: u64, row: u64) {
-		if self.x_min > col {
-			self.x_min = col
+	pub fn include_tile(&mut self, x: u64, y: u64) {
+		if self.x_min > x {
+			self.x_min = x
 		}
-		if self.y_min > row {
-			self.y_min = row
+		if self.y_min > y {
+			self.y_min = y
 		}
-		if self.x_max < col {
-			self.x_max = col
+		if self.x_max < x {
+			self.x_max = x
 		}
-		if self.y_max < row {
-			self.y_max = row
+		if self.y_max < y {
+			self.y_max = y
+		}
+	}
+	pub fn include_bbox(&mut self, bbox: &TileBBox) {
+		if self.x_min > bbox.x_min {
+			self.x_min = bbox.x_min
+		}
+		if self.y_min > bbox.y_min {
+			self.y_min = bbox.y_min
+		}
+		if self.x_max < bbox.x_max {
+			self.x_max = bbox.x_max
+		}
+		if self.y_max < bbox.y_max {
+			self.y_max = bbox.y_max
 		}
 	}
 	pub fn intersect(&mut self, bbox: &TileBBox) {

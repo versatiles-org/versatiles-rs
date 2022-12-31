@@ -1,4 +1,4 @@
-use super::types::{BlockIndexReader, CloudTilesSrc, FileHeader};
+use super::types::{BlockIndex, CloudTilesSrc, FileHeader};
 use crate::opencloudtiles::{
 	containers::abstract_container,
 	types::{TileCoord3, TileData, TileReaderParameters},
@@ -13,7 +13,8 @@ pub struct TileReader {
 impl TileReader {
 	pub fn new(mut reader: CloudTilesSrc) -> TileReader {
 		let header = FileHeader::read(&mut reader);
-		let block_index = BlockIndexReader::from_vec(&reader.read_range(&header.blocks_range));
+		println!("{:?}", header);
+		let block_index = BlockIndex::from_brotli_vec(&reader.read_range(&header.blocks_range));
 		let bbox_pyramide = block_index.get_bbox_pyramide();
 		let parameters = TileReaderParameters::new(header.tile_format, bbox_pyramide);
 		return TileReader { reader, parameters };

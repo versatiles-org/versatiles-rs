@@ -1,7 +1,9 @@
-use super::types::{BlockDefinition, BlockIndexWriter, ByteRange, FileHeader, TileIndex};
-use crate::opencloudtiles::types::{TileBBox, TileConverterConfig, TileCoord3, TileReaderWrapper};
+use super::types::{BlockDefinition, BlockIndex, ByteRange, FileHeader, TileIndex};
 use crate::opencloudtiles::{
-	compress::compress_brotli, containers::abstract_container, progress::ProgressBar,
+	compress::compress_brotli,
+	containers::abstract_container,
+	progress::ProgressBar,
+	types::{TileBBox, TileConverterConfig, TileCoord3, TileReaderWrapper},
 };
 use std::collections::HashMap;
 use std::fs::File;
@@ -42,14 +44,15 @@ impl abstract_container::TileConverter for TileConverter {
 impl TileConverter {
 	fn write_meta(&mut self, reader: &Box<dyn abstract_container::TileReader>) -> ByteRange {
 		let metablob = reader.get_meta().to_vec();
-		return self.write_vec_brotli(&metablob);
+		let temp = compress_brotli(&metablob);
+		return self.write(&temp);
 	}
 	fn write_blocks(&mut self, reader: &Box<dyn abstract_container::TileReader>) -> ByteRange {
 		let zoom_range = self.config.get_zoom_range();
 		let zoom_min = *zoom_range.start();
 		let zoom_max = *zoom_range.end();
 
-		let mut todos: Vec<BlockDefinition> = Vec::new();
+		let mut blocks: Vec<BlockDefinition> = Vec::new();
 
 		let mut bar1 = ProgressBar::new("counting tiles", (zoom_max - zoom_min) as u64);
 
@@ -69,24 +72,24 @@ impl TileConverter {
 					let col_max = (level_col_max - col0).min(255).max(0);
 					let row_max = (level_row_max - row0).min(255).max(0);
 
-					todos.push(BlockDefinition {
+					blocks.push(BlockDefinition {
 						level: zoom,
 						x: block_x,
 						y: block_y,
 						bbox: TileBBox::new(col_min, row_min, col_max, row_max),
-						count: (col_max - col_min + 1) * (row_max - row_min + 1),
+						tile_range: ByteRange::empty(),
 					})
 				}
 			}
 		}
 		bar1.finish();
 
-		let sum = todos.iter().map(|x| x.count).sum::<u64>();
+		let sum = blocks.iter().map(|block| block.count_tiles()).sum::<u64>();
 		let mut bar2 = ProgressBar::new("converting tiles", sum as u64);
 
-		let mut block_index_writer = BlockIndexWriter::new();
+		let mut block_index = BlockIndex::new_empty();
 
-		for block in todos {
+		for mut block in blocks.into_iter() {
 			let range = self.write_block(&block, &reader, &mut bar2);
 
 			if range.length == 0 {
@@ -94,11 +97,12 @@ impl TileConverter {
 				continue;
 			}
 
-			block_index_writer.write(&block, &range);
+			block.tile_range = range;
+			block_index.add_block(block);
 		}
 		bar2.finish();
 
-		return self.write_vec_brotli(&block_index_writer.as_vec());
+		return self.write(&block_index.as_brotli_vec());
 	}
 	fn write_block(
 		&mut self, block: &BlockDefinition, reader: &Box<dyn abstract_container::TileReader>,
@@ -179,7 +183,7 @@ impl TileConverter {
 				}
 			}
 		});
-		self.write_vec_brotli(&tile_index.as_vec())
+		self.write(&tile_index.as_brotli_vec())
 	}
 	fn write(&mut self, buf: &[u8]) -> ByteRange {
 		ByteRange::new(
@@ -192,8 +196,5 @@ impl TileConverter {
 				.write(buf)
 				.expect("Error in cloudtiles::write.write") as u64,
 		)
-	}
-	fn write_vec_brotli(&mut self, data: &Vec<u8>) -> ByteRange {
-		self.write(&compress_brotli(data))
 	}
 }

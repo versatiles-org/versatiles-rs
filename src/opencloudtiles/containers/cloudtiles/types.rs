@@ -1,8 +1,10 @@
+use crate::opencloudtiles::compress::{compress_brotli, decompress_brotli};
 use crate::opencloudtiles::types::{TileBBox, TileBBoxPyramide};
 use crate::types::TileFormat;
 use byteorder::BigEndian as BE;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{BufReader, SeekFrom};
+use std::ops::Div;
 use std::path::PathBuf;
 use std::{
 	fs::File,
@@ -29,7 +31,7 @@ impl CloudTilesSrc {
 	}
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ByteRange {
 	pub offset: u64,
 	pub length: u64,
@@ -50,6 +52,7 @@ impl ByteRange {
 	}
 }
 
+#[derive(Debug)]
 pub struct FileHeader {
 	pub tile_format: TileFormat,
 	pub meta_range: ByteRange,
@@ -146,49 +149,99 @@ pub struct BlockDefinition {
 	pub x: u64,
 	pub y: u64,
 	pub bbox: TileBBox,
-	pub count: u64,
+	pub tile_range: ByteRange,
 }
-
-pub struct BlockIndexWriter {
-	buffer: Vec<u8>,
-	count: usize,
-}
-
-impl BlockIndexWriter {
-	pub fn new() -> BlockIndexWriter {
-		return BlockIndexWriter {
-			buffer: Vec::new(),
-			count: 0,
+impl BlockDefinition {
+	fn from_vec(buf: &[u8]) -> BlockDefinition {
+		let mut cursor = Cursor::new(buf);
+		let level = cursor.read_u8().unwrap() as u64;
+		let x = cursor.read_u32::<BE>().unwrap() as u64;
+		let y = cursor.read_u32::<BE>().unwrap() as u64;
+		let x_min = cursor.read_u8().unwrap() as u64;
+		let y_min = cursor.read_u8().unwrap() as u64;
+		let x_max = cursor.read_u8().unwrap() as u64;
+		let y_max = cursor.read_u8().unwrap() as u64;
+		let bbox = TileBBox::new(x_min, y_min, x_max, y_max);
+		let offset = cursor.read_u64::<BE>().unwrap();
+		let length = cursor.read_u64::<BE>().unwrap();
+		let tile_range = ByteRange::new(offset, length);
+		return BlockDefinition {
+			level,
+			x,
+			y,
+			bbox,
+			tile_range,
 		};
 	}
-	pub fn write(&mut self, block: &BlockDefinition, range: &ByteRange) {
-		self.buffer.write_u8(block.level as u8).unwrap();
-		self.buffer.write_u32::<BE>(block.x as u32).unwrap();
-		self.buffer.write_u32::<BE>(block.y as u32).unwrap();
-		self.buffer.write_u8(block.bbox.x_min as u8).unwrap();
-		self.buffer.write_u8(block.bbox.y_min as u8).unwrap();
-		self.buffer.write_u8(block.bbox.x_max as u8).unwrap();
-		self.buffer.write_u8(block.bbox.y_max as u8).unwrap();
-		self.buffer.write_u64::<BE>(range.offset).unwrap();
-		self.buffer.write_u64::<BE>(range.length).unwrap();
-		self.count += 1;
+	pub fn count_tiles(&self) -> u64 {
+		return self.bbox.count_tiles();
 	}
-	pub fn as_vec(&self) -> &Vec<u8> {
-		if self.buffer.len() != self.count * 25 {
-			panic!()
-		}
-		return &self.buffer;
+
+	pub fn as_vec(&self) -> Vec<u8> {
+		let vec = Vec::new();
+		let mut cursor = Cursor::new(vec);
+		cursor.write_u8(self.level as u8).unwrap();
+		cursor.write_u32::<BE>(self.x as u32).unwrap();
+		cursor.write_u32::<BE>(self.y as u32).unwrap();
+		cursor.write_u8(self.bbox.x_min as u8).unwrap();
+		cursor.write_u8(self.bbox.y_min as u8).unwrap();
+		cursor.write_u8(self.bbox.x_max as u8).unwrap();
+		cursor.write_u8(self.bbox.y_max as u8).unwrap();
+		cursor.write_u64::<BE>(self.tile_range.offset).unwrap();
+		cursor.write_u64::<BE>(self.tile_range.length).unwrap();
+		return cursor.into_inner();
 	}
 }
 
-pub struct BlockIndexReader {}
-impl BlockIndexReader {
-	pub fn from_vec(buf: &Vec<u8>) -> BlockIndexReader {
-		return BlockIndexReader {};
+pub struct BlockIndex {
+	blocks: Vec<BlockDefinition>,
+}
+impl BlockIndex {
+	pub fn new_empty() -> BlockIndex {
+		return BlockIndex { blocks: Vec::new() };
+	}
+	pub fn from_vec(buf: &Vec<u8>) -> BlockIndex {
+		let count = buf.len().div(29);
+		assert_eq!(
+			count * 29,
+			buf.len(),
+			"block index is defect, cause buffer length is not a multiple of 29"
+		);
+		let mut blocks = Vec::new();
+		for i in 0..count {
+			let block = BlockDefinition::from_vec(&buf[i * 29..(i + 1) * 29]);
+			blocks.push(block);
+		}
+		println!("{}", buf.len());
+		return BlockIndex { blocks };
+	}
+	pub fn from_brotli_vec(buf: &Vec<u8>) -> BlockIndex {
+		let temp = &decompress_brotli(buf);
+		return BlockIndex::from_vec(temp);
 	}
 	pub fn get_bbox_pyramide(&self) -> TileBBoxPyramide {
-		panic!();
-		return TileBBoxPyramide::new_empty();
+		let mut pyramide = TileBBoxPyramide::new_empty();
+		for block in self.blocks.iter() {
+			pyramide.include_bbox(block.level, &block.bbox);
+		}
+		return pyramide;
+	}
+	pub fn add_block(&mut self, block: BlockDefinition) {
+		self.blocks.push(block)
+	}
+	pub fn as_vec(&self) -> Vec<u8> {
+		let vec = Vec::new();
+		let mut cursor = Cursor::new(vec);
+		for block in self.blocks.iter() {
+			let vec = block.as_vec();
+			let slice = vec.as_slice();
+			//println!("{}", slice.len());
+			cursor.write(slice).unwrap();
+		}
+		return cursor.into_inner();
+	}
+	pub fn as_brotli_vec(&self) -> Vec<u8> {
+		return compress_brotli(&self.as_vec());
 	}
 }
 
@@ -235,5 +288,8 @@ impl TileIndex {
 			panic!("{} != {}", self.buffer.len(), self.length);
 		}
 		return &self.buffer;
+	}
+	pub fn as_brotli_vec(&self) -> Vec<u8> {
+		return compress_brotli(&self.as_vec());
 	}
 }
