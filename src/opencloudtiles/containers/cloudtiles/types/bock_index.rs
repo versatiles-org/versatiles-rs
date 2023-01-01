@@ -9,6 +9,8 @@ use std::{
 	ops::Div,
 };
 
+#[derive(Debug)]
+
 pub struct BlockIndex {
 	lookup: HashMap<TileCoord3, BlockDefinition>,
 }
@@ -43,14 +45,9 @@ impl BlockIndex {
 		return pyramide;
 	}
 	pub fn add_block(&mut self, block: BlockDefinition) {
-		self.lookup.insert(
-			TileCoord3 {
-				x: block.x,
-				y: block.y,
-				z: block.level,
-			},
-			block,
-		);
+		self
+			.lookup
+			.insert(TileCoord3::new(block.level, block.y, block.x), block);
 	}
 	pub fn as_vec(&self) -> Vec<u8> {
 		let vec = Vec::new();

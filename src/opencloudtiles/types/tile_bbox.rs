@@ -1,8 +1,8 @@
-use std::f32::consts::PI;
+use std::{f32::consts::PI, fmt};
 
 use super::tile_coords::TileCoord2;
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct TileBBox {
 	pub x_min: u64,
 	pub y_min: u64,
@@ -108,5 +108,14 @@ impl TileBBox {
 			.into_iter()
 			.map(move |y| x_values.clone().into_iter().map(move |x| TileCoord2 { x, y }))
 			.flatten();
+	}
+}
+
+impl fmt::Debug for TileBBox {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_fmt(format_args!(
+			"TileBBox[{},{},{},{}]",
+			&self.x_min, &self.y_min, &self.x_max, &self.y_max
+		))
 	}
 }

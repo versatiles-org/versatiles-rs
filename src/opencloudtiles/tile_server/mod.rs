@@ -62,7 +62,7 @@ impl TileServer {
 		async fn simple_file_send(filename: &str) -> Result<Response<Body>> {
 			// Serve a file by asynchronously reading it by chunks using tokio-util crate.
 
-			if let Ok(file) = File::open(filename).await {
+			if let Ok(_file) = File::open(filename).await {
 				let body = Body::from("stream");
 				return Ok(Response::new(body));
 			}

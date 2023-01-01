@@ -51,6 +51,12 @@ impl abstract_container::TileReaderTrait for TileReader {
 
 		let block_option = self.block_index.get_block(&block_coord);
 		if block_option.is_none() {
+			println!(
+				"block <{:#?}> for tile <{:#?}> does not exist",
+				block_coord, coord
+			);
+			println!("<{:#?}>", self.block_index);
+			panic!();
 			return None;
 		}
 
@@ -59,9 +65,11 @@ impl abstract_container::TileReaderTrait for TileReader {
 		let tile_x = coord.x - block_coord.x * 256;
 		let tile_y = coord.y - block_coord.y * 256;
 		if (tile_x < block.bbox.x_min) || (tile_y < block.bbox.y_min) {
+			println!("tile {:?} outside block definition", coord);
 			return None;
 		}
 		if (tile_x > block.bbox.x_max) || (tile_y > block.bbox.y_max) {
+			println!("tile {:?} outside block definition", coord);
 			return None;
 		}
 
@@ -77,6 +85,7 @@ impl abstract_container::TileReaderTrait for TileReader {
 		let tile_range = tile_index.get_tile_range(tile_id as usize);
 
 		if tile_range.length == 0 {
+			println!("tile_range not specified {:?}", coord);
 			return None;
 		}
 

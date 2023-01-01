@@ -1,7 +1,7 @@
 use super::ByteRange;
-use crate::opencloudtiles::types::TileBBox;
+use crate::opencloudtiles::types::{TileBBox, TileCoord3};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
-use std::io::Cursor;
+use std::{fmt, io::Cursor};
 
 pub struct BlockDefinition {
 	pub level: u64,
@@ -57,5 +57,15 @@ impl BlockDefinition {
 		cursor.write_u64::<BE>(self.tile_range.offset).unwrap();
 		cursor.write_u64::<BE>(self.tile_range.length).unwrap();
 		return cursor.into_inner();
+	}
+}
+
+impl fmt::Debug for BlockDefinition {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("BlockDefinition")
+			.field("z/y/x", &TileCoord3::new(self.level, self.y, self.x))
+			.field("bbox", &self.bbox)
+			.field("tile_range", &self.tile_range)
+			.finish()
 	}
 }
