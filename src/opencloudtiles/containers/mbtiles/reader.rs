@@ -4,7 +4,7 @@ use crate::opencloudtiles::{
 };
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
-use std::{fmt::Debug, thread};
+use std::{fmt::Debug, str::from_utf8, thread};
 
 pub struct TileReader {
 	pool: r2d2::Pool<SqliteConnectionManager>,
@@ -122,7 +122,7 @@ impl abstract_container::TileReaderTrait for TileReader {
 impl Debug for TileReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TileReader:MBTiles")
-			.field("meta", &self.get_meta())
+			.field("meta", &from_utf8(&self.get_meta()).unwrap())
 			.field("parameters", &self.get_parameters())
 			.finish()
 	}

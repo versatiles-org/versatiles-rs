@@ -4,7 +4,7 @@ use crate::opencloudtiles::{
 	containers::abstract_container::{TileReaderBox, TileReaderTrait},
 	types::{MetaData, TileCoord3, TileData, TileReaderParameters},
 };
-use std::{collections::HashMap, fmt::Debug, ops::Shr, path::PathBuf};
+use std::{collections::HashMap, fmt::Debug, ops::Shr, path::PathBuf, str::from_utf8};
 
 pub struct TileReader {
 	meta: MetaData,
@@ -104,7 +104,7 @@ impl TileReaderTrait for TileReader {
 impl Debug for TileReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TileReader:CloudTiles")
-			.field("meta", &self.get_meta())
+			.field("meta", &from_utf8(&self.get_meta()).unwrap())
 			.field("parameters", &self.get_parameters())
 			.finish()
 	}

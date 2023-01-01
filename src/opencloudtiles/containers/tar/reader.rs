@@ -2,7 +2,7 @@ use crate::opencloudtiles::{
 	containers::abstract_container::{self, TileReaderBox, TileReaderTrait},
 	types::{TileBBoxPyramide, TileCoord3, TileData, TileFormat, TileReaderParameters},
 };
-use std::{collections::HashMap, fmt::Debug, fs::File, os::unix::prelude::FileExt};
+use std::{collections::HashMap, fmt::Debug, fs::File, os::unix::prelude::FileExt, str::from_utf8};
 use tar::{Archive, EntryType};
 
 #[derive(PartialEq, Eq, Hash)]
@@ -113,7 +113,7 @@ impl abstract_container::TileReaderTrait for TileReader {
 impl Debug for TileReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TileReader:Tar")
-			.field("meta", &self.get_meta())
+			.field("meta", &from_utf8(&self.get_meta()).unwrap())
 			.field("parameters", &self.get_parameters())
 			.finish()
 	}
