@@ -1,5 +1,3 @@
-#![allow(unused_variables)]
-
 use super::TileReaderBox;
 use crate::opencloudtiles::types::TileConverterConfig;
 use std::path::PathBuf;

@@ -1,9 +1,7 @@
-#![allow(unused_variables)]
-
 use crate::opencloudtiles::types::{TileCoord3, TileData, TileReaderParameters};
-use std::path::PathBuf;
+use std::{fmt::Debug, path::PathBuf};
 
-pub trait TileReaderTrait {
+pub trait TileReaderTrait: Debug + Send + Sync {
 	fn from_file(filename: &PathBuf) -> TileReaderBox
 	where
 		Self: Sized;
@@ -12,4 +10,4 @@ pub trait TileReaderTrait {
 	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<TileData>;
 }
 
-pub type TileReaderBox = Box<dyn TileReaderTrait + Send + Sync>;
+pub type TileReaderBox = Box<dyn TileReaderTrait>;

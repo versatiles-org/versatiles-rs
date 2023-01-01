@@ -60,18 +60,7 @@ impl TileConverter {
 			bar1.set_position((zoom - zoom_min) as u64);
 
 			let bbox_blocks = bbox_tiles.clone().scale_down(256);
-
-			//let (level_col_min, level_row_min, level_col_max, level_row_max) = bbox.as_tuple();
-
 			for block in bbox_blocks.iter_tile_indexes() {
-				// let col0: u64 = block.x * 256;
-				// let row0: u64 = block.y * 256;
-
-				//let col_min = (level_col_min - col0).min(255).max(0);
-				//let row_min = (level_row_min - row0).min(255).max(0);
-				//let col_max = (level_col_max - col0).min(255).max(0);
-				//let row_max = (level_row_max - row0).min(255).max(0);
-
 				blocks.push(BlockDefinition::new(
 					zoom,
 					block.x,

@@ -1,9 +1,10 @@
 use super::types::{BlockIndex, CloudTilesSrc, FileHeader, TileIndex};
 use crate::opencloudtiles::{
-	containers::abstract_container::{self, TileReaderBox},
-	types::{TileCoord3, TileData, TileReaderParameters},
+	compress::decompress_brotli,
+	containers::abstract_container::{TileReaderBox, TileReaderTrait},
+	types::{MetaData, TileCoord3, TileData, TileReaderParameters},
 };
-use std::{collections::HashMap, ops::Shr, path::PathBuf};
+use std::{collections::HashMap, fmt::Debug, ops::Shr, path::PathBuf};
 
 pub struct TileReader {
 	reader: CloudTilesSrc,

@@ -1,8 +1,8 @@
 use crate::opencloudtiles::{
-	containers::abstract_container::{self, TileReaderBox},
+	containers::abstract_container::{self, TileReaderBox, TileReaderTrait},
 	types::{TileBBoxPyramide, TileCoord3, TileData, TileFormat, TileReaderParameters},
 };
-use std::{collections::HashMap, fs::File, os::unix::prelude::FileExt};
+use std::{collections::HashMap, fmt::Debug, fs::File, os::unix::prelude::FileExt};
 use tar::{Archive, EntryType};
 
 #[derive(PartialEq, Eq, Hash)]

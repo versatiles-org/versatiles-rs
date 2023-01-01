@@ -1,10 +1,10 @@
 use crate::opencloudtiles::{
-	containers::abstract_container::{self, TileReaderBox},
+	containers::abstract_container::{self, TileReaderBox, TileReaderTrait},
 	types::{TileBBox, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters},
 };
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
-use std::thread;
+use std::{fmt::Debug, thread};
 
 pub struct TileReader {
 	pool: r2d2::Pool<SqliteConnectionManager>,
