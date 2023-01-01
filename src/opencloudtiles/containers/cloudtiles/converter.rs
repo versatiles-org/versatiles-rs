@@ -28,11 +28,12 @@ impl TileConverterTrait for TileConverter {
 		self.config.finalize_with_parameters(reader.get_parameters());
 
 		let mut header = FileHeader::new(&self.config.get_tile_format());
-		self.write_header(&header);
+		self.writer.append(&header.to_bytes());
 
 		header.meta_range = self.write_meta(&reader);
 		header.blocks_range = self.write_blocks(reader);
-		self.write_header(&header);
+
+		self.writer.write_start(&header.to_bytes())
 	}
 }
 
@@ -161,8 +162,5 @@ impl TileConverter {
 		});
 
 		return self.writer.append(&tile_index.as_brotli_vec());
-	}
-	pub fn write_header(&mut self, header: &FileHeader) {
-		self.writer.write_start(&header.to_bytes())
 	}
 }
