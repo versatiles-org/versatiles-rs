@@ -121,10 +121,10 @@ impl TileBBox {
 		return self;
 	}
 	pub fn clamped_offset_from(mut self, x: u64, y: u64) -> TileBBox {
-		self.x_min = (self.x_min - x).max(0).min(255);
-		self.y_min = (self.y_min - y).max(0).min(255);
-		self.x_max = (self.x_max - x).max(0).min(255);
-		self.y_max = (self.y_max - y).max(0).min(255);
+		self.x_min = (self.x_min.max(x) - x).min(255);
+		self.y_min = (self.y_min.max(y) - y).min(255);
+		self.x_max = (self.x_max.max(x) - x).min(255);
+		self.y_max = (self.y_max.max(y) - y).min(255);
 		return self;
 	}
 }
