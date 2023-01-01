@@ -31,7 +31,7 @@ impl TileServer {
 		let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
 		let new_service = make_service_fn(move |_| {
 			// Move a clone of `client` into the `service_fn`.
-			let client = client.clone();
+			let _client = client.clone();
 			async { Ok::<_, GenericError>(service_fn(response_examples)) }
 		});
 		let server = Server::bind(&addr).serve(new_service);

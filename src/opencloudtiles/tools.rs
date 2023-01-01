@@ -93,8 +93,3 @@ impl Tools {
 		return server;
 	}
 }
-
-fn get_extension(filename: &str) -> &str {
-	let pos = filename.rfind('.').unwrap();
-	return filename.get(pos + 1..).unwrap();
-}

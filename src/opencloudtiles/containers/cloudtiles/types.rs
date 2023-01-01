@@ -231,7 +231,7 @@ impl BlockIndex {
 	}
 	pub fn get_bbox_pyramide(&self) -> TileBBoxPyramide {
 		let mut pyramide = TileBBoxPyramide::new_empty();
-		for (coord, block) in self.lookup.iter() {
+		for (_coord, block) in self.lookup.iter() {
 			pyramide.include_bbox(block.level, &block.bbox);
 		}
 		return pyramide;
@@ -249,7 +249,7 @@ impl BlockIndex {
 	pub fn as_vec(&self) -> Vec<u8> {
 		let vec = Vec::new();
 		let mut cursor = Cursor::new(vec);
-		for (coord, block) in self.lookup.iter() {
+		for (_coord, block) in self.lookup.iter() {
 			let vec = block.as_vec();
 			let slice = vec.as_slice();
 			//println!("{}", slice.len());
