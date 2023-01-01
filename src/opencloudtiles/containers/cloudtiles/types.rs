@@ -1,14 +1,16 @@
-use crate::opencloudtiles::compress::{compress_brotli, decompress_brotli};
-use crate::opencloudtiles::types::{TileBBox, TileBBoxPyramide};
+use crate::opencloudtiles::{
+	compress::{compress_brotli, decompress_brotli},
+	types::{TileBBox, TileBBoxPyramide, TileCoord3},
+};
 use crate::types::TileFormat;
-use byteorder::BigEndian as BE;
-use byteorder::{ReadBytesExt, WriteBytesExt};
-use std::io::{BufReader, SeekFrom};
-use std::ops::Div;
-use std::path::PathBuf;
+use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::{
+	collections::HashMap,
 	fs::File,
+	io::{BufReader, SeekFrom},
 	io::{BufWriter, Cursor, Read, Seek, Write},
+	ops::Div,
+	path::PathBuf,
 };
 
 trait CloudTilesSrcTrait: Read + Seek {}
@@ -152,6 +154,15 @@ pub struct BlockDefinition {
 	pub tile_range: ByteRange,
 }
 impl BlockDefinition {
+	pub fn new(level: u64, x: u64, y: u64, bbox: TileBBox) -> BlockDefinition {
+		return BlockDefinition {
+			level,
+			x,
+			y,
+			bbox,
+			tile_range: ByteRange::empty(),
+		};
+	}
 	fn from_vec(buf: &[u8]) -> BlockDefinition {
 		let mut cursor = Cursor::new(buf);
 		let level = cursor.read_u8().unwrap() as u64;
@@ -176,7 +187,6 @@ impl BlockDefinition {
 	pub fn count_tiles(&self) -> u64 {
 		return self.bbox.count_tiles();
 	}
-
 	pub fn as_vec(&self) -> Vec<u8> {
 		let vec = Vec::new();
 		let mut cursor = Cursor::new(vec);
@@ -194,11 +204,13 @@ impl BlockDefinition {
 }
 
 pub struct BlockIndex {
-	blocks: Vec<BlockDefinition>,
+	lookup: HashMap<TileCoord3, BlockDefinition>,
 }
 impl BlockIndex {
 	pub fn new_empty() -> BlockIndex {
-		return BlockIndex { blocks: Vec::new() };
+		return BlockIndex {
+			lookup: HashMap::new(),
+		};
 	}
 	pub fn from_vec(buf: &Vec<u8>) -> BlockIndex {
 		let count = buf.len().div(29);
@@ -207,13 +219,11 @@ impl BlockIndex {
 			buf.len(),
 			"block index is defect, cause buffer length is not a multiple of 29"
 		);
-		let mut blocks = Vec::new();
+		let mut block_index = BlockIndex::new_empty();
 		for i in 0..count {
-			let block = BlockDefinition::from_vec(&buf[i * 29..(i + 1) * 29]);
-			blocks.push(block);
+			block_index.add_block(BlockDefinition::from_vec(&buf[i * 29..(i + 1) * 29]))
 		}
-		println!("{}", buf.len());
-		return BlockIndex { blocks };
+		return block_index;
 	}
 	pub fn from_brotli_vec(buf: &Vec<u8>) -> BlockIndex {
 		let temp = &decompress_brotli(buf);
@@ -221,18 +231,25 @@ impl BlockIndex {
 	}
 	pub fn get_bbox_pyramide(&self) -> TileBBoxPyramide {
 		let mut pyramide = TileBBoxPyramide::new_empty();
-		for block in self.blocks.iter() {
+		for (coord, block) in self.lookup.iter() {
 			pyramide.include_bbox(block.level, &block.bbox);
 		}
 		return pyramide;
 	}
 	pub fn add_block(&mut self, block: BlockDefinition) {
-		self.blocks.push(block)
+		self.lookup.insert(
+			TileCoord3 {
+				x: block.x,
+				y: block.y,
+				z: block.level,
+			},
+			block,
+		);
 	}
 	pub fn as_vec(&self) -> Vec<u8> {
 		let vec = Vec::new();
 		let mut cursor = Cursor::new(vec);
-		for block in self.blocks.iter() {
+		for (coord, block) in self.lookup.iter() {
 			let vec = block.as_vec();
 			let slice = vec.as_slice();
 			//println!("{}", slice.len());
@@ -243,53 +260,62 @@ impl BlockIndex {
 	pub fn as_brotli_vec(&self) -> Vec<u8> {
 		return compress_brotli(&self.as_vec());
 	}
+	pub fn get_block(&self, coord: &TileCoord3) -> Option<&BlockDefinition> {
+		return self.lookup.get(coord);
+	}
 }
 
+#[derive(Debug)]
 pub struct TileIndex {
-	buffer: Vec<u8>,
-	length: usize,
+	index: Vec<ByteRange>,
 	count: usize,
 }
 unsafe impl Send for TileIndex {}
 
 impl TileIndex {
-	pub fn create(count: usize) -> TileIndex {
-		let length = count * 12 + 4;
-
-		let mut buffer: Vec<u8> = Vec::with_capacity(length);
-		buffer.resize(length, 0);
-
-		return TileIndex {
-			buffer,
-			length,
-			count,
-		};
+	pub fn new_empty(count: usize) -> TileIndex {
+		let mut index = Vec::new();
+		index.resize(count, ByteRange { offset: 0, length: 0 });
+		return TileIndex { index, count };
 	}
-	pub fn set(&mut self, index: usize, tile_byte_range: &ByteRange) {
-		assert!(
-			index < self.count,
-			"index {} is to big for count {}",
-			index,
-			self.count
+	pub fn from_vec(buf: &Vec<u8>) -> TileIndex {
+		let count = buf.len().div(12);
+		assert_eq!(
+			count * 12,
+			buf.len(),
+			"tile index is defect, cause buffer length is not a multiple of 12"
 		);
+		let mut index: Vec<ByteRange> = Vec::new();
 
-		let pos = 4 + 12 * index;
-		let slice_range = std::ops::Range {
-			start: pos,
-			end: pos + 12,
-		};
-		// println!("index {} pos {} slice_range {:?}", index, pos, slice_range);
-		let mut slice = &mut self.buffer.as_mut_slice()[slice_range];
-		slice.write_u64::<BE>(tile_byte_range.offset).unwrap();
-		slice.write_u32::<BE>(tile_byte_range.length as u32).unwrap();
-	}
-	pub fn as_vec(&self) -> &Vec<u8> {
-		if self.buffer.len() != self.length {
-			panic!("{} != {}", self.buffer.len(), self.length);
+		let mut cursor = Cursor::new(buf);
+		for i in 0..count {
+			let offset = cursor.read_u64::<BE>().unwrap();
+			let length = cursor.read_u32::<BE>().unwrap() as u64;
+			index[i] = ByteRange { offset, length };
 		}
-		return &self.buffer;
+
+		return TileIndex { index, count };
+	}
+	pub fn from_brotli_vec(buf: &Vec<u8>) -> TileIndex {
+		let temp = &decompress_brotli(buf);
+		return TileIndex::from_vec(temp);
+	}
+	pub fn set(&mut self, index: usize, tile_byte_range: ByteRange) {
+		self.index[index] = tile_byte_range;
+	}
+	pub fn as_vec(&self) -> Vec<u8> {
+		let buf = Vec::new();
+		let mut cursor = Cursor::new(buf);
+		for range in self.index.iter() {
+			cursor.write_u64::<BE>(range.offset).unwrap();
+			cursor.write_u32::<BE>(range.length as u32).unwrap();
+		}
+		return cursor.into_inner();
 	}
 	pub fn as_brotli_vec(&self) -> Vec<u8> {
 		return compress_brotli(&self.as_vec());
+	}
+	pub fn get_tile_range(&self, index: usize) -> &ByteRange {
+		return &self.index[index];
 	}
 }

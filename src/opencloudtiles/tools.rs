@@ -1,23 +1,23 @@
 use crate::{
 	opencloudtiles::{
 		containers::{
-			abstract_container::{TileConverter, TileReader},
+			abstract_container::{TileConverter, TileReaderBox, TileReaderTrait},
 			cloudtiles, mbtiles, tar,
 		},
+		tile_server::TileServer,
+		types::TileBBoxPyramide,
 		types::TileConverterConfig,
 	},
 	Convert, Serve,
 };
 use std::path::PathBuf;
 
-use super::{tile_server::TileServer, types::TileBBoxPyramide};
-
 pub struct Tools;
 impl Tools {
 	pub fn convert(command: &Convert) {
-		let reader = Tools::new_reader(&command.input_file);
+		let mut reader = Tools::new_reader(&command.input_file);
 		let mut converter = Tools::new_converter(&command.output_file, command);
-		converter.convert_from(reader);
+		converter.convert_from(&mut reader);
 	}
 	pub fn serve(command: &Serve) {
 		let mut server = Tools::new_server(command);
@@ -44,7 +44,7 @@ impl Tools {
 
 		server.start();
 	}
-	fn new_reader(filename: &str) -> Box<dyn TileReader> {
+	fn new_reader(filename: &str) -> TileReaderBox {
 		let path = PathBuf::from(filename);
 		let extension = path.extension().unwrap().to_str().unwrap();
 

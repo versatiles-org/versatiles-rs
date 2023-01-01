@@ -1,5 +1,5 @@
 use crate::opencloudtiles::{
-	containers::abstract_container,
+	containers::abstract_container::{self, TileReaderBox},
 	types::{TileBBoxPyramide, TileCoord3, TileData, TileFormat, TileReaderParameters},
 };
 use std::{collections::HashMap, fs::File, os::unix::prelude::FileExt};
@@ -22,8 +22,8 @@ pub struct TileReader {
 	tile_map: HashMap<TileCoord3, TarByteRange>,
 	parameters: TileReaderParameters,
 }
-impl abstract_container::TileReader for TileReader {
-	fn from_file(filename: &std::path::PathBuf) -> Box<dyn abstract_container::TileReader>
+impl abstract_container::TileReaderTrait for TileReader {
+	fn from_file(filename: &std::path::PathBuf) -> TileReaderBox
 	where
 		Self: Sized,
 	{
@@ -91,7 +91,7 @@ impl abstract_container::TileReader for TileReader {
 	fn get_meta(&self) -> &[u8] {
 		return &[0u8; 0];
 	}
-	fn get_tile_data(&self, coord: &TileCoord3) -> Option<TileData> {
+	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<TileData> {
 		let range = self.tile_map.get(&coord);
 
 		if range.is_none() {

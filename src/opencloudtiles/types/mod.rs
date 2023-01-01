@@ -4,7 +4,6 @@ mod tile_converter_config;
 mod tile_coords;
 mod tile_reader_parameters;
 
-use crate::opencloudtiles::containers::abstract_container;
 use clap::ValueEnum;
 pub use tile_bbox::TileBBox;
 pub use tile_bbox_pyramide::TileBBoxPyramide;
@@ -23,19 +22,3 @@ pub enum TileFormat {
 }
 
 pub type TileData = Vec<u8>;
-
-pub struct TileReaderWrapper<'a> {
-	reader: &'a Box<dyn abstract_container::TileReader>,
-}
-
-impl TileReaderWrapper<'_> {
-	pub fn new(reader: &Box<dyn abstract_container::TileReader>) -> TileReaderWrapper {
-		return TileReaderWrapper { reader };
-	}
-	pub fn get_tile_data(&self, coord: &TileCoord3) -> Option<TileData> {
-		return self.reader.get_tile_data(&coord);
-	}
-}
-
-unsafe impl Send for TileReaderWrapper<'_> {}
-unsafe impl Sync for TileReaderWrapper<'_> {}

@@ -1,7 +1,7 @@
 use crate::opencloudtiles::{
-	containers::abstract_container,
+	containers::abstract_container::{self, TileReaderBox},
 	progress::ProgressBar,
-	types::{TileConverterConfig, TileFormat, TileReaderWrapper},
+	types::{TileConverterConfig, TileFormat},
 };
 use rayon::iter::ParallelBridge;
 use rayon::prelude::ParallelIterator;
@@ -24,7 +24,7 @@ impl abstract_container::TileConverter for TileConverter {
 
 		Box::new(TileConverter { builder, config })
 	}
-	fn convert_from(&mut self, reader: Box<dyn abstract_container::TileReader>) {
+	fn convert_from(&mut self, reader: &mut TileReaderBox) {
 		self.config.finalize_with_parameters(reader.get_parameters());
 
 		let converter = self.config.get_tile_converter();
@@ -41,13 +41,13 @@ impl abstract_container::TileConverter for TileConverter {
 		let bbox_pyramide = self.config.get_bbox_pyramide();
 		let mut bar = ProgressBar::new("counting tiles", bbox_pyramide.count_tiles());
 		let mutex_bar = &Mutex::new(&mut bar);
-		let wrapped_reader = &TileReaderWrapper::new(&reader);
+		let mutex_reader = &Mutex::new(reader);
 		let mutex_builder = &Mutex::new(&mut self.builder);
 
 		bbox_pyramide.iter_tile_indexes().par_bridge().for_each(|coord| {
 			mutex_bar.lock().unwrap().inc(1);
 
-			let tile = wrapped_reader.get_tile_data(&coord);
+			let tile = mutex_reader.lock().unwrap().get_tile_data(&coord);
 			if tile.is_none() {
 				return;
 			}

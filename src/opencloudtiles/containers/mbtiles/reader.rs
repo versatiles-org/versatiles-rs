@@ -1,5 +1,5 @@
 use crate::opencloudtiles::{
-	containers::abstract_container,
+	containers::abstract_container::{self, TileReaderBox},
 	types::{TileBBox, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters},
 };
 use r2d2_sqlite::SqliteConnectionManager;
@@ -94,8 +94,8 @@ impl TileReader {
 	}
 }
 
-impl abstract_container::TileReader for TileReader {
-	fn from_file(filename: &std::path::PathBuf) -> Box<dyn abstract_container::TileReader> {
+impl abstract_container::TileReaderTrait for TileReader {
+	fn from_file(filename: &std::path::PathBuf) -> TileReaderBox {
 		let reader = Self::load_from_sqlite(filename);
 		return Box::new(reader);
 	}
@@ -105,7 +105,7 @@ impl abstract_container::TileReader for TileReader {
 	fn get_parameters(&self) -> &TileReaderParameters {
 		return self.parameters.as_ref().unwrap();
 	}
-	fn get_tile_data(&self, coord: &TileCoord3) -> Option<Vec<u8>> {
+	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<Vec<u8>> {
 		let connection = self.pool.get().unwrap();
 		let mut stmt = connection
 			.prepare("SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?")

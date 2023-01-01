@@ -1,4 +1,4 @@
-use super::containers::abstract_container::TileReader;
+use super::containers::abstract_container::TileReaderBox;
 use hyper::service::{make_service_fn, service_fn};
 use hyper::{Body, Client, Method, Request, Response, Result, Server, StatusCode};
 use std::collections::HashMap;
@@ -12,7 +12,7 @@ static NOTFOUND: &[u8] = b"Not Found";
 
 pub struct TileServer {
 	port: u16,
-	sources: HashMap<String, Box<dyn TileReader>>,
+	sources: HashMap<String, TileReaderBox>,
 }
 
 impl TileServer {
@@ -22,7 +22,7 @@ impl TileServer {
 			sources: HashMap::new(),
 		};
 	}
-	pub fn add_source(&mut self, name: &str, reader: Box<dyn TileReader>) {
+	pub fn add_source(&mut self, name: &str, reader: TileReaderBox) {
 		self.sources.insert(name.to_owned(), reader);
 	}
 	#[tokio::main]

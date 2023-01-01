@@ -2,8 +2,9 @@
 
 use std::path::PathBuf;
 
-use crate::opencloudtiles::containers::abstract_container;
 use crate::opencloudtiles::types::TileConverterConfig;
+
+use super::TileReaderBox;
 
 pub trait TileConverter {
 	fn new(filename: &PathBuf, config: TileConverterConfig) -> Box<dyn TileConverter>
@@ -12,7 +13,7 @@ pub trait TileConverter {
 	{
 		panic!()
 	}
-	fn convert_from(&mut self, reader: Box<dyn abstract_container::TileReader>) {
+	fn convert_from(&mut self, reader: &mut TileReaderBox) {
 		panic!()
 	}
 }

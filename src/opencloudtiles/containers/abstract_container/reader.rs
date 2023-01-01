@@ -3,8 +3,8 @@
 use crate::opencloudtiles::types::{TileCoord3, TileData, TileReaderParameters};
 use std::path::PathBuf;
 
-pub trait TileReader {
-	fn from_file(filename: &PathBuf) -> Box<dyn TileReader>
+pub trait TileReaderTrait {
+	fn from_file(filename: &PathBuf) -> TileReaderBox
 	where
 		Self: Sized,
 	{
@@ -16,7 +16,9 @@ pub trait TileReader {
 	fn get_parameters(&self) -> &TileReaderParameters {
 		panic!();
 	}
-	fn get_tile_data(&self, coord: &TileCoord3) -> Option<TileData> {
+	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<TileData> {
 		panic!();
 	}
 }
+
+pub type TileReaderBox = Box<dyn TileReaderTrait + Send + Sync>;
