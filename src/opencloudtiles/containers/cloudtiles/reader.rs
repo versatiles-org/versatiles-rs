@@ -16,8 +16,9 @@ pub struct TileReader {
 
 impl TileReader {
 	pub fn new(mut reader: CloudTilesSrc) -> TileReader {
-		let header = FileHeader::read(&mut reader);
+		let header = FileHeader::from_reader(&mut reader);
 
+		println!("{:?}", header);
 		let meta = if header.meta_range.length > 0 {
 			decompress_brotli(&reader.read_range(&header.meta_range))
 		} else {

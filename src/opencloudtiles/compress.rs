@@ -23,18 +23,22 @@ pub fn decompress_gzip(data: &TileData) -> TileData {
 }
 
 pub fn compress_brotli(data: &TileData) -> TileData {
+	println!("compress_brotli: ({}) {:?}", data.len(), data);
 	let mut params = BrotliEncoderParams::default();
 	params.quality = 11;
 	params.size_hint = data.len();
 	let mut cursor = Cursor::new(data);
 	let mut result: TileData = Vec::new();
 	BrotliCompress(&mut cursor, &mut result, &params).expect("Error in compress_brotli");
+	println!("result: ({}) {:?}", result.len(), result);
 	return result;
 }
 
 pub fn decompress_brotli(data: &TileData) -> TileData {
+	println!("decompress_brotli: ({}) {:?}", data.len(), data);
 	let mut cursor = Cursor::new(data);
 	let mut result: TileData = Vec::new();
 	BrotliDecompress(&mut cursor, &mut result).expect("Error in decompress_brotli");
+	println!("result: ({}) {:?}", result.len(), result);
 	return result;
 }

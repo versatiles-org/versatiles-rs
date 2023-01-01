@@ -5,6 +5,7 @@
 cargo build && target/debug/cloudtiles convert --tile-format webp tiles/original/hitzekarte.tar tiles/hitzekarte.tar
 cargo build && target/debug/cloudtiles convert tiles/original/stuttgart.mbtiles tiles/stuttgart.cloudtiles
 cargo build && target/debug/cloudtiles convert tiles/stuttgart.cloudtiles tiles/stuttgart.tar
+cargo build && target/debug/cloudtiles probe tiles/stuttgart.cloudtiles
 cargo build && target/debug/cloudtiles serve tiles/stuttgart.cloudtiles
 
 # cargo instruments --all-features -t "CPU Profiler" -- --max-zoom 3 convert tiles/philippines.mbtiles tiles/philippines.cloudtiles

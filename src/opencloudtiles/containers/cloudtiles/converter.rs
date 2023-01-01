@@ -1,4 +1,4 @@
-use super::types::{BlockDefinition, BlockIndex, ByteRange, FileHeader, TileIndex};
+use super::types::{BlockDefinition, BlockIndex, ByteRange, CloudTilesDst, FileHeader, TileIndex};
 use crate::opencloudtiles::{
 	compress::compress_brotli,
 	containers::abstract_container::{TileConverterTrait, TileReaderBox},
@@ -6,13 +6,11 @@ use crate::opencloudtiles::{
 	types::{TileConverterConfig, TileCoord3},
 };
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufWriter, Seek, Write};
 use std::path::PathBuf;
 use std::sync::Mutex;
 
 pub struct TileConverter {
-	file_buffer: BufWriter<File>,
+	writer: CloudTilesDst,
 	config: TileConverterConfig,
 }
 
@@ -21,10 +19,8 @@ impl TileConverterTrait for TileConverter {
 	where
 		Self: Sized,
 	{
-		let file = File::create(filename).unwrap();
-
 		Box::new(TileConverter {
-			file_buffer: BufWriter::new(file),
+			writer: CloudTilesDst::new_file(filename),
 			config: tile_config,
 		})
 	}
@@ -32,11 +28,11 @@ impl TileConverterTrait for TileConverter {
 		self.config.finalize_with_parameters(reader.get_parameters());
 
 		let mut header = FileHeader::new(&self.config.get_tile_format());
-		header.write(&mut self.file_buffer);
+		self.write_header(&header);
 
 		header.meta_range = self.write_meta(&reader);
 		header.blocks_range = self.write_blocks(reader);
-		header.write(&mut self.file_buffer);
+		self.write_header(&header);
 	}
 }
 
@@ -44,7 +40,7 @@ impl TileConverter {
 	fn write_meta(&mut self, reader: &TileReaderBox) -> ByteRange {
 		let metablob = reader.get_meta().to_vec();
 		let temp = compress_brotli(&metablob);
-		return self.write(&temp);
+		return self.writer.append(&temp);
 	}
 	fn write_blocks(&mut self, reader: &mut TileReaderBox) -> ByteRange {
 		let zoom_range = self.config.get_zoom_range();
@@ -91,7 +87,7 @@ impl TileConverter {
 		}
 		bar2.finish();
 
-		return self.write(&block_index.as_brotli_vec());
+		return self.writer.append(&block_index.as_brotli_vec());
 	}
 	fn write_block(
 		&mut self, block: &BlockDefinition, reader: &mut TileReaderBox, bar: &mut ProgressBar,
@@ -101,7 +97,7 @@ impl TileConverter {
 		let tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
 		let mutex_reader = &Mutex::new(reader);
-		let mutex_writer = &Mutex::new(&mut self.file_buffer);
+		let mutex_writer = &Mutex::new(&mut self.writer);
 		let mutex_tile_index = &Mutex::new(&mut tile_index);
 		let mutex_tile_hash_lookup = &Mutex::new(tile_hash_lookup);
 
@@ -125,10 +121,8 @@ impl TileConverter {
 						let optional_tile = mutex_reader.lock().unwrap().get_tile_data(&coord);
 
 						if optional_tile.is_none() {
-							let mut secured_writer = mutex_writer.lock().unwrap();
-							let offset = secured_writer.stream_position().unwrap();
 							let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-							secured_tile_index.set(index, ByteRange { offset, length: 0 });
+							secured_tile_index.set(index, ByteRange { offset: 0, length: 0 });
 							return;
 						}
 
@@ -150,12 +144,7 @@ impl TileConverter {
 
 						let result = tile_converter(&tile);
 
-						let mut secured_writer = mutex_writer.lock().unwrap();
-						let range = ByteRange::new(
-							secured_writer.stream_position().unwrap(),
-							secured_writer.write(&result).unwrap() as u64,
-						);
-						drop(secured_writer);
+						let range = mutex_writer.lock().unwrap().append(&result);
 
 						let mut secured_tile_index = mutex_tile_index.lock().unwrap();
 						secured_tile_index.set(index, range.clone());
@@ -170,18 +159,10 @@ impl TileConverter {
 				}
 			}
 		});
-		self.write(&tile_index.as_brotli_vec())
+
+		return self.writer.append(&tile_index.as_brotli_vec());
 	}
-	fn write(&mut self, buf: &[u8]) -> ByteRange {
-		ByteRange::new(
-			self
-				.file_buffer
-				.stream_position()
-				.expect("Error in cloudtiles::write.stream_position"),
-			self
-				.file_buffer
-				.write(buf)
-				.expect("Error in cloudtiles::write.write") as u64,
-		)
+	pub fn write_header(&mut self, header: &FileHeader) {
+		self.writer.write_start(&header.to_bytes())
 	}
 }

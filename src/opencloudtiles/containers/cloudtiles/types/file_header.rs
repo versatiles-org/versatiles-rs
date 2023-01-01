@@ -1,11 +1,7 @@
 use super::{ByteRange, CloudTilesSrc};
 use crate::types::TileFormat;
 use byteorder::{ReadBytesExt, WriteBytesExt};
-use std::{
-	fs::File,
-	io::SeekFrom,
-	io::{BufWriter, Cursor, Read, Seek, Write},
-};
+use std::io::{Cursor, Read, Write};
 
 #[derive(Debug)]
 pub struct FileHeader {
@@ -21,17 +17,11 @@ impl FileHeader {
 			blocks_range: ByteRange::empty(),
 		};
 	}
-	pub fn write(&self, file: &mut BufWriter<File>) {
-		let current_pos = file.stream_position().unwrap();
-		file.seek(SeekFrom::Start(0)).unwrap();
-		file.write(&self.to_bytes()).unwrap();
-		file.seek(SeekFrom::Start(current_pos)).unwrap();
-	}
-	pub fn read(reader: &mut CloudTilesSrc) -> FileHeader {
+	pub fn from_reader(reader: &mut CloudTilesSrc) -> FileHeader {
 		let mut header = reader.read_range(&ByteRange::new(0, 62));
 		return FileHeader::from_buffer(header.as_mut_slice());
 	}
-	fn to_bytes(&self) -> Vec<u8> {
+	pub fn to_bytes(&self) -> Vec<u8> {
 		let mut header: Vec<u8> = Vec::new();
 		header.write(b"OpenCloudTiles-Container-v1:").unwrap();
 
