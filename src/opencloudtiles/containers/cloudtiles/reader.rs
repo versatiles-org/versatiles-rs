@@ -7,6 +7,7 @@ use crate::opencloudtiles::{
 use std::{collections::HashMap, fmt::Debug, ops::Shr, path::PathBuf};
 
 pub struct TileReader {
+	meta: MetaData,
 	reader: CloudTilesSrc,
 	parameters: TileReaderParameters,
 	block_index: BlockIndex,
@@ -16,11 +17,18 @@ pub struct TileReader {
 impl TileReader {
 	pub fn new(mut reader: CloudTilesSrc) -> TileReader {
 		let header = FileHeader::read(&mut reader);
-		// println!("{:?}", header);
+
+		let meta = if header.meta_range.length > 0 {
+			decompress_brotli(&reader.read_range(&header.meta_range))
+		} else {
+			Vec::new()
+		};
+
 		let block_index = BlockIndex::from_brotli_vec(&reader.read_range(&header.blocks_range));
 		let bbox_pyramide = block_index.get_bbox_pyramide();
 		let parameters = TileReaderParameters::new(header.tile_format, bbox_pyramide);
 		return TileReader {
+			meta,
 			reader,
 			parameters,
 			block_index,
@@ -32,13 +40,13 @@ impl TileReader {
 unsafe impl Send for TileReader {}
 unsafe impl Sync for TileReader {}
 
-impl abstract_container::TileReaderTrait for TileReader {
+impl TileReaderTrait for TileReader {
 	fn from_file(filename: &PathBuf) -> TileReaderBox {
 		let reader = CloudTilesSrc::from_file(filename);
 		return Box::new(TileReader::new(reader));
 	}
 	fn get_meta(&self) -> &[u8] {
-		panic!();
+		return &self.meta;
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
 		return &self.parameters;

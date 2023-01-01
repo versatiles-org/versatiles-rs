@@ -18,6 +18,12 @@ pub enum Commands {
 
 	/// serve tiles via http
 	Serve(Serve),
+
+	/// serve tiles via http
+	Probe(Probe),
+
+	/// serve tiles via http
+	Compare(Compare),
 }
 
 #[derive(Args)]
@@ -60,6 +66,17 @@ pub struct Serve {
 	port: u16,
 }
 
+#[derive(Args)]
+pub struct Probe {
+	file: String,
+}
+
+#[derive(Args)]
+pub struct Compare {
+	file1: String,
+	file2: String,
+}
+
 fn main() {
 	let cli = Cli::parse();
 
@@ -78,6 +95,14 @@ fn main() {
 				arguments.sources, arguments.port
 			);
 			Tools::serve(&arguments);
+		}
+		Commands::Probe(arguments) => {
+			println!("probe {:?}", arguments.file);
+			Tools::probe(&arguments);
+		}
+		Commands::Compare(arguments) => {
+			println!("compare {:?} with {:?}", arguments.file1, arguments.file2);
+			Tools::compare(&arguments);
 		}
 	}
 }

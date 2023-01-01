@@ -1,28 +1,27 @@
 use crate::{
 	opencloudtiles::{
 		containers::{
-			abstract_container::{TileConverterTrait, TileReaderBox, TileReaderTrait},
+			abstract_container::{self, TileConverterTrait, TileReaderTrait},
 			cloudtiles, mbtiles, tar,
 		},
 		tile_server::TileServer,
-		types::TileBBoxPyramide,
-		types::TileConverterConfig,
+		types::{TileBBoxPyramide, TileConverterConfig},
 	},
-	Convert, Serve,
+	Compare, Convert, Probe, Serve,
 };
 use std::path::PathBuf;
 
 pub struct Tools;
 impl Tools {
-	pub fn convert(command: &Convert) {
-		let mut reader = Tools::new_reader(&command.input_file);
-		let mut converter = Tools::new_converter(&command.output_file, command);
+	pub fn convert(arguments: &Convert) {
+		let mut reader = Tools::new_reader(&arguments.input_file);
+		let mut converter = Tools::new_converter(&arguments.output_file, arguments);
 		converter.convert_from(&mut reader);
 	}
-	pub fn serve(command: &Serve) {
-		let mut server = Tools::new_server(command);
+	pub fn serve(arguments: &Serve) {
+		let mut server = Tools::new_server(arguments);
 
-		command.sources.iter().for_each(|string| {
+		arguments.sources.iter().for_each(|string| {
 			let parts: Vec<&str> = string.split("#").collect();
 
 			match parts.len() {
@@ -44,7 +43,15 @@ impl Tools {
 
 		server.start();
 	}
-	fn new_reader(filename: &str) -> TileReaderBox {
+	pub fn probe(arguments: &Probe) {
+		let reader = Tools::new_reader(&arguments.file);
+		println!("{:#?}", reader);
+	}
+	pub fn compare(arguments: &Compare) {
+		let reader1 = Tools::new_reader(&arguments.file1);
+		let reader2 = Tools::new_reader(&arguments.file2);
+	}
+	fn new_reader(filename: &str) -> abstract_container::TileReaderBox {
 		let path = PathBuf::from(filename);
 		let extension = path.extension().unwrap().to_str().unwrap();
 
@@ -57,7 +64,7 @@ impl Tools {
 
 		return reader;
 	}
-	fn new_converter(filename: &str, command: &Convert) -> Box<dyn TileConverterTrait> {
+	fn new_converter(filename: &str, command: &Convert) -> Box<dyn abstract_container::TileConverterTrait> {
 		let mut bbox_pyramide = TileBBoxPyramide::new_full();
 
 		if command.min_zoom.is_some() {
