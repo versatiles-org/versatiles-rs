@@ -1,7 +1,7 @@
 use super::types::{BlockDefinition, BlockIndex, ByteRange, FileHeader, TileIndex};
 use crate::opencloudtiles::{
 	compress::compress_brotli,
-	containers::abstract_container::{self, TileReaderBox},
+	containers::abstract_container::{TileConverterTrait, TileReaderBox},
 	progress::ProgressBar,
 	types::{TileBBox, TileConverterConfig, TileCoord3},
 };
@@ -17,8 +17,8 @@ pub struct TileConverter {
 	config: TileConverterConfig,
 }
 
-impl abstract_container::TileConverter for TileConverter {
-	fn new(filename: &PathBuf, tile_config: TileConverterConfig) -> Box<dyn abstract_container::TileConverter>
+impl TileConverterTrait for TileConverter {
+	fn new(filename: &PathBuf, tile_config: TileConverterConfig) -> Box<dyn TileConverterTrait>
 	where
 		Self: Sized,
 	{

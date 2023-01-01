@@ -1,13 +1,11 @@
 #![allow(unused_variables)]
 
+use super::TileReaderBox;
+use crate::opencloudtiles::types::TileConverterConfig;
 use std::path::PathBuf;
 
-use crate::opencloudtiles::types::TileConverterConfig;
-
-use super::TileReaderBox;
-
-pub trait TileConverter {
-	fn new(filename: &PathBuf, config: TileConverterConfig) -> Box<dyn TileConverter>
+pub trait TileConverterTrait {
+	fn new(filename: &PathBuf, config: TileConverterConfig) -> Box<dyn TileConverterTrait>
 	where
 		Self: Sized,
 	{

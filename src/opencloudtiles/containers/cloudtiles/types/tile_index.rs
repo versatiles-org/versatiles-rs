@@ -24,7 +24,9 @@ impl TileIndex {
 			buf.len(),
 			"tile index is defect, cause buffer length is not a multiple of 12"
 		);
+
 		let mut index: Vec<ByteRange> = Vec::new();
+		index.resize(count, ByteRange::new(0, 0));
 
 		let mut cursor = Cursor::new(buf);
 		for i in 0..count {

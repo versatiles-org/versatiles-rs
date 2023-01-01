@@ -1,5 +1,5 @@
 use crate::opencloudtiles::{
-	containers::abstract_container::{self, TileReaderBox},
+	containers::abstract_container::{TileConverterTrait, TileReaderBox},
 	progress::ProgressBar,
 	types::{TileConverterConfig, TileFormat},
 };
@@ -12,10 +12,8 @@ pub struct TileConverter {
 	builder: Builder<File>,
 	config: TileConverterConfig,
 }
-impl abstract_container::TileConverter for TileConverter {
-	fn new(
-		filename: &std::path::PathBuf, config: TileConverterConfig,
-	) -> Box<dyn abstract_container::TileConverter>
+impl TileConverterTrait for TileConverter {
+	fn new(filename: &std::path::PathBuf, config: TileConverterConfig) -> Box<dyn TileConverterTrait>
 	where
 		Self: Sized,
 	{

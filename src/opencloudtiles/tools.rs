@@ -1,7 +1,7 @@
 use crate::{
 	opencloudtiles::{
 		containers::{
-			abstract_container::{TileConverter, TileReaderBox, TileReaderTrait},
+			abstract_container::{TileConverterTrait, TileReaderBox, TileReaderTrait},
 			cloudtiles, mbtiles, tar,
 		},
 		tile_server::TileServer,
@@ -57,7 +57,7 @@ impl Tools {
 
 		return reader;
 	}
-	fn new_converter(filename: &str, command: &Convert) -> Box<dyn TileConverter> {
+	fn new_converter(filename: &str, command: &Convert) -> Box<dyn TileConverterTrait> {
 		let mut bbox_pyramide = TileBBoxPyramide::new_full();
 
 		if command.min_zoom.is_some() {
