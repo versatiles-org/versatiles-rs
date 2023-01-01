@@ -15,7 +15,7 @@ pub struct TileReader {
 impl TileReader {
 	pub fn new(mut reader: CloudTilesSrc) -> TileReader {
 		let header = FileHeader::read(&mut reader);
-		println!("{:?}", header);
+		// println!("{:?}", header);
 		let block_index = BlockIndex::from_brotli_vec(&reader.read_range(&header.blocks_range));
 		let bbox_pyramide = block_index.get_bbox_pyramide();
 		let parameters = TileReaderParameters::new(header.tile_format, bbox_pyramide);

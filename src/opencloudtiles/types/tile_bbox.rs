@@ -109,6 +109,12 @@ impl TileBBox {
 			.map(move |y| x_values.clone().into_iter().map(move |x| TileCoord2 { x, y }))
 			.flatten();
 	}
+	pub fn shift_by(&mut self, x: u64, y: u64) {
+		self.x_min += x;
+		self.y_min += y;
+		self.x_max += x;
+		self.y_max += y;
+	}
 }
 
 impl fmt::Debug for TileBBox {
