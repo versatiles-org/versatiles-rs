@@ -37,12 +37,16 @@ impl TileConverterTrait for TileConverter {
 		};
 
 		let bbox_pyramide = self.config.get_bbox_pyramide();
+		//println!("{:?}", bbox_pyramide);
+
 		let mut bar = ProgressBar::new("counting tiles", bbox_pyramide.count_tiles());
 		let mutex_bar = &Mutex::new(&mut bar);
 		let mutex_reader = &Mutex::new(reader);
 		let mutex_builder = &Mutex::new(&mut self.builder);
 
 		bbox_pyramide.iter_tile_indexes().par_bridge().for_each(|coord| {
+			// println!("{:?}", coord);
+
 			mutex_bar.lock().unwrap().inc(1);
 
 			let tile = mutex_reader.lock().unwrap().get_tile_data(&coord);

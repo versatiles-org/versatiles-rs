@@ -1,3 +1,4 @@
+use super::{ByteRange, CloudTilesSrc};
 use crate::types::TileFormat;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::{
@@ -5,8 +6,6 @@ use std::{
 	io::SeekFrom,
 	io::{BufWriter, Cursor, Read, Seek, Write},
 };
-
-use super::{ByteRange, CloudTilesSrc};
 
 #[derive(Debug)]
 pub struct FileHeader {

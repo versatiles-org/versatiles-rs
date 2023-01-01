@@ -2,6 +2,8 @@ use super::{tile_bbox::TileBBox, tile_coords::TileCoord3};
 use std::{ops::RangeInclusive, slice::Iter};
 
 const MAX_ZOOM_LEVEL: usize = 32;
+
+#[derive(Debug)]
 pub struct TileBBoxPyramide {
 	level_bbox: Vec<TileBBox>,
 }

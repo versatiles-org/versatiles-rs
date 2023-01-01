@@ -1,3 +1,4 @@
+use super::BlockDefinition;
 use crate::opencloudtiles::{
 	compress::{compress_brotli, decompress_brotli},
 	types::{TileBBoxPyramide, TileCoord3},
@@ -7,8 +8,6 @@ use std::{
 	io::{Cursor, Write},
 	ops::Div,
 };
-
-use super::BlockDefinition;
 
 pub struct BlockIndex {
 	lookup: HashMap<TileCoord3, BlockDefinition>,

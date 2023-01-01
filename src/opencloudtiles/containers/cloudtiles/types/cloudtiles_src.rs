@@ -1,11 +1,10 @@
+use super::ByteRange;
 use std::{
 	fs::File,
 	io::{BufReader, SeekFrom},
 	io::{Read, Seek},
 	path::PathBuf,
 };
-
-use super::ByteRange;
 
 trait CloudTilesSrcTrait: Read + Seek {}
 impl CloudTilesSrcTrait for BufReader<File> {}
