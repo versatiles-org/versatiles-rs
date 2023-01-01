@@ -118,3 +118,12 @@ impl abstract_container::TileReaderTrait for TileReader {
 		};
 	}
 }
+
+impl Debug for TileReader {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("TileReader:MBTiles")
+			.field("meta", &self.get_meta())
+			.field("parameters", &self.get_parameters())
+			.finish()
+	}
+}

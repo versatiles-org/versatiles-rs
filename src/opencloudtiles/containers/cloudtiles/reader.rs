@@ -91,3 +91,12 @@ impl abstract_container::TileReaderTrait for TileReader {
 		return Some(self.reader.read_range(&tile_range));
 	}
 }
+
+impl Debug for TileReader {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("TileReader:CloudTiles")
+			.field("meta", &self.get_meta())
+			.field("parameters", &self.get_parameters())
+			.finish()
+	}
+}

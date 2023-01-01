@@ -22,3 +22,4 @@ pub enum TileFormat {
 }
 
 pub type TileData = Vec<u8>;
+pub type MetaData = Vec<u8>;
