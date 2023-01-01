@@ -132,8 +132,12 @@ impl TileBBox {
 impl fmt::Debug for TileBBox {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_fmt(format_args!(
-			"TileBBox[{},{},{},{}]",
-			&self.x_min, &self.y_min, &self.x_max, &self.y_max
+			"TileBBox [{},{},{},{}] = {}",
+			&self.x_min,
+			&self.y_min,
+			&self.x_max,
+			&self.y_max,
+			&self.count_tiles()
 		))
 	}
 }
