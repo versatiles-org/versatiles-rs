@@ -2,8 +2,8 @@ use super::{tile_bbox_pyramide::TileBBoxPyramide, TileFormat};
 
 #[derive(Debug)]
 pub struct TileReaderParameters {
-	bbox_pyramide: TileBBoxPyramide,
 	tile_format: TileFormat,
+	bbox_pyramide: TileBBoxPyramide,
 }
 
 impl TileReaderParameters {
