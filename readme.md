@@ -59,7 +59,7 @@ The file is composed of several parts:
 ### `meta`
 
 - Content of `tiles.json`
-- Compressed with `$tile_precompression`
+- Compressed with Brotli
 
 ### `block`
 
