@@ -6,7 +6,6 @@ use std::{io::Cursor, ops::Div};
 #[derive(Debug)]
 pub struct TileIndex {
 	index: Vec<ByteRange>,
-	count: usize,
 }
 unsafe impl Send for TileIndex {}
 
@@ -14,7 +13,7 @@ impl TileIndex {
 	pub fn new_empty(count: usize) -> TileIndex {
 		let mut index = Vec::new();
 		index.resize(count, ByteRange { offset: 0, length: 0 });
-		return TileIndex { index, count };
+		return TileIndex { index };
 	}
 	pub fn from_vec(buf: &Vec<u8>) -> TileIndex {
 		let count = buf.len().div(12);
@@ -34,7 +33,7 @@ impl TileIndex {
 			index[i] = ByteRange { offset, length };
 		}
 
-		return TileIndex { index, count };
+		return TileIndex { index };
 	}
 	pub fn from_brotli_vec(buf: &Vec<u8>) -> TileIndex {
 		let temp = &decompress_brotli(buf);

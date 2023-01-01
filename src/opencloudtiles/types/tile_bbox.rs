@@ -98,9 +98,6 @@ impl TileBBox {
 	pub fn is_empty(&self) -> bool {
 		return (self.x_max < self.x_min) || (self.y_max < self.y_min);
 	}
-	pub fn as_tuple(&self) -> (u64, u64, u64, u64) {
-		return (self.x_min, self.y_min, self.x_max, self.y_max);
-	}
 	pub fn iter_tile_indexes(&self) -> impl Iterator<Item = TileCoord2> {
 		let y_values = self.y_min..=self.y_max;
 		let x_values = self.x_min..=self.x_max;
@@ -109,11 +106,26 @@ impl TileBBox {
 			.map(move |y| x_values.clone().into_iter().map(move |x| TileCoord2 { x, y }))
 			.flatten();
 	}
-	pub fn shift_by(&mut self, x: u64, y: u64) {
+	pub fn shift_by(mut self, x: u64, y: u64) -> TileBBox {
 		self.x_min += x;
 		self.y_min += y;
 		self.x_max += x;
 		self.y_max += y;
+		return self;
+	}
+	pub fn scale_down(mut self, scale: u64) -> TileBBox {
+		self.x_min /= scale;
+		self.y_min /= scale;
+		self.x_max /= scale;
+		self.y_max /= scale;
+		return self;
+	}
+	pub fn clamped_offset_from(mut self, x: u64, y: u64) -> TileBBox {
+		self.x_min = (self.x_min - x).max(0).min(255);
+		self.y_min = (self.y_min - y).max(0).min(255);
+		self.x_max = (self.x_max - x).max(0).min(255);
+		self.y_max = (self.y_max - y).max(0).min(255);
+		return self;
 	}
 }
 

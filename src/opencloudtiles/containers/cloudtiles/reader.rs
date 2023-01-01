@@ -55,8 +55,6 @@ impl abstract_container::TileReaderTrait for TileReader {
 				"block <{:#?}> for tile <{:#?}> does not exist",
 				block_coord, coord
 			);
-			println!("<{:#?}>", self.block_index);
-			panic!();
 			return None;
 		}
 

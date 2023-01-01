@@ -3,12 +3,11 @@ use crate::opencloudtiles::{
 	compress::compress_brotli,
 	containers::abstract_container::{TileConverterTrait, TileReaderBox},
 	progress::ProgressBar,
-	types::{TileBBox, TileConverterConfig, TileCoord3},
+	types::{TileConverterConfig, TileCoord3},
 };
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufWriter, Seek, Write};
-use std::ops::Shr;
 use std::path::PathBuf;
 use std::sync::Mutex;
 
@@ -56,29 +55,31 @@ impl TileConverter {
 
 		let mut bar1 = ProgressBar::new("counting tiles", (zoom_max - zoom_min) as u64);
 
-		for (index, bbox) in self.config.get_bbox_pyramide().iter().enumerate() {
+		for (index, bbox_tiles) in self.config.get_bbox_pyramide().iter().enumerate() {
 			let zoom = index as u64;
 			bar1.set_position((zoom - zoom_min) as u64);
 
-			let (level_col_min, level_row_min, level_col_max, level_row_max) = bbox.as_tuple();
+			let bbox_blocks = bbox_tiles.clone().scale_down(256);
 
-			for block_y in level_row_min.shr(8)..=level_row_max.shr(8) {
-				for block_x in level_col_min.shr(8)..=level_col_max.shr(8) {
-					let col0: u64 = block_x * 256;
-					let row0: u64 = block_y * 256;
+			//let (level_col_min, level_row_min, level_col_max, level_row_max) = bbox.as_tuple();
 
-					let col_min = (level_col_min - col0).min(255).max(0);
-					let row_min = (level_row_min - row0).min(255).max(0);
-					let col_max = (level_col_max - col0).min(255).max(0);
-					let row_max = (level_row_max - row0).min(255).max(0);
+			for block in bbox_blocks.iter_tile_indexes() {
+				// let col0: u64 = block.x * 256;
+				// let row0: u64 = block.y * 256;
 
-					blocks.push(BlockDefinition::new(
-						zoom,
-						block_x,
-						block_y,
-						TileBBox::new(col_min, row_min, col_max, row_max),
-					))
-				}
+				//let col_min = (level_col_min - col0).min(255).max(0);
+				//let row_min = (level_row_min - row0).min(255).max(0);
+				//let col_max = (level_col_max - col0).min(255).max(0);
+				//let row_max = (level_row_max - row0).min(255).max(0);
+
+				blocks.push(BlockDefinition::new(
+					zoom,
+					block.x,
+					block.y,
+					bbox_tiles
+						.clone()
+						.clamped_offset_from(block.x * 256, block.y * 256),
+				))
 			}
 		}
 		bar1.finish();
