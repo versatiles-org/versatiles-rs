@@ -1,32 +1,29 @@
-use super::{tile_bbox::TileBBox, tile_coords::TileCoord3};
-use std::{ops::RangeInclusive, slice::Iter};
+use super::{tile_bbox::TileBBox, tile_coords::TileCoord3, TileCoord2};
+use std::slice::Iter;
 
 const MAX_ZOOM_LEVEL: usize = 32;
 
 #[derive(Debug)]
 pub struct TileBBoxPyramide {
-	level_bbox: Vec<TileBBox>,
+	level_bbox: [TileBBox; MAX_ZOOM_LEVEL],
 }
+
 impl TileBBoxPyramide {
 	pub fn new_full() -> TileBBoxPyramide {
-		return TileBBoxPyramide {
-			level_bbox: (0..=MAX_ZOOM_LEVEL)
-				.map(|z| TileBBox::new_full(z as u64))
-				.collect(),
-		};
+		TileBBoxPyramide {
+			level_bbox: std::array::from_fn(|z| TileBBox::new_full(z as u64)),
+		}
 	}
 	pub fn new_empty() -> TileBBoxPyramide {
-		return TileBBoxPyramide {
-			level_bbox: (0..=MAX_ZOOM_LEVEL)
-				.map(|z| TileBBox::new_empty(z as u64))
-				.collect(),
-		};
+		TileBBoxPyramide {
+			level_bbox: std::array::from_fn(|_z| TileBBox::new_empty()),
+		}
 	}
 	pub fn set_zoom_min(&mut self, zoom_level_min: u64) {
 		for (index, bbox) in self.level_bbox.iter_mut().enumerate() {
 			let level = index as u64;
 			if level < zoom_level_min {
-				bbox.set_empty(level);
+				bbox.set_empty();
 			}
 		}
 	}
@@ -34,7 +31,7 @@ impl TileBBoxPyramide {
 		for (index, bbox) in self.level_bbox.iter_mut().enumerate() {
 			let level = index as u64;
 			if level > zoom_level_max {
-				bbox.set_empty(level);
+				bbox.set_empty();
 			}
 		}
 	}
@@ -43,19 +40,20 @@ impl TileBBoxPyramide {
 			bbox.intersect(&TileBBox::from_geo(level as u64, geo_bbox));
 		}
 	}
-	pub fn intersect(&mut self, level_bbox: &TileBBoxPyramide) {
+	pub fn intersect(&mut self, other_bbox_pyramide: &TileBBoxPyramide) {
 		for (level, bbox) in self.level_bbox.iter_mut().enumerate() {
-			bbox.intersect(level_bbox.get_level_bbox(level as u64));
+			let other_bbox = other_bbox_pyramide.get_level_bbox(level as u64);
+			bbox.intersect(other_bbox);
 		}
 	}
 	pub fn get_level_bbox(&self, level: u64) -> &TileBBox {
 		return &self.level_bbox[level as usize];
 	}
-	pub fn set_level_bbox(&mut self, level: u64, bbox: &TileBBox) {
-		self.level_bbox[level as usize].set(bbox);
+	pub fn set_level_bbox(&mut self, level: u64, bbox: TileBBox) {
+		self.level_bbox[level as usize] = bbox;
 	}
-	pub fn include_tile(&mut self, level: u64, col: u64, row: u64) {
-		self.level_bbox[level as usize].include_tile(col, row);
+	pub fn include_coord(&mut self, coord: &TileCoord3) {
+		self.level_bbox[coord.z as usize].include_tile(coord.x, coord.y);
 	}
 	pub fn include_bbox(&mut self, level: u64, bbox: &TileBBox) {
 		self.level_bbox[level as usize].include_bbox(bbox);
@@ -69,35 +67,21 @@ impl TileBBoxPyramide {
 			.as_slice()
 			.iter()
 			.enumerate()
-			.map(move |(z, bbox)| {
-				bbox.iter_tile_indexes().map(move |coord2| TileCoord3 {
-					x: coord2.x,
-					y: coord2.y,
-					z: z as u64,
-				})
+			.map(|(z, bbox)| {
+				bbox
+					.iter_coords()
+					.map(move |TileCoord2 { x, y }| TileCoord3 { x, y, z: z as u64 })
 			})
 			.flatten();
 	}
-	pub fn get_zoom_range(&self) -> RangeInclusive<u64> {
-		let levels: Vec<u64> = self
-			.level_bbox
-			.iter()
-			.enumerate()
-			.filter_map(|(level, bbox)| if bbox.is_empty() { None } else { Some(level as u64) })
-			.collect();
-
-		let start: u64;
-		let end: u64;
-
-		if levels.len() == 0 {
-			start = 0;
-			end = 0;
-		} else {
-			start = *levels.first().unwrap();
-			end = *levels.last().unwrap();
+	pub fn get_max_zoom(&self) -> u64 {
+		let mut max: usize = 0;
+		for (level, bbox) in self.level_bbox.iter().enumerate() {
+			if !bbox.get_is_empty() {
+				max = level;
+			}
 		}
-
-		return RangeInclusive::new(start, end);
+		return max as u64;
 	}
 	pub fn count_tiles(&self) -> u64 {
 		return self.level_bbox.iter().map(|bbox| bbox.count_tiles()).sum();

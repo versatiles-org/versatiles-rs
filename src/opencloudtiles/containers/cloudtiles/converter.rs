@@ -3,7 +3,7 @@ use crate::opencloudtiles::{
 	compress::compress_brotli,
 	containers::abstract_container::{TileConverterTrait, TileReaderBox},
 	progress::ProgressBar,
-	types::{TileConverterConfig, TileCoord3},
+	types::{TileConverterConfig, TileCoord2, TileCoord3},
 };
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -44,27 +44,20 @@ impl TileConverter {
 		return self.writer.append(&temp);
 	}
 	fn write_blocks(&mut self, reader: &mut TileReaderBox) -> ByteRange {
-		let zoom_range = self.config.get_zoom_range();
-		let zoom_min = *zoom_range.start();
-		let zoom_max = *zoom_range.end();
-
 		let mut blocks: Vec<BlockDefinition> = Vec::new();
-
-		let mut bar1 = ProgressBar::new("counting tiles", (zoom_max - zoom_min) as u64);
+		let mut bar1 = ProgressBar::new("counting tiles", self.config.get_max_zoom());
 
 		for (index, bbox_tiles) in self.config.get_bbox_pyramide().iter().enumerate() {
 			let zoom = index as u64;
-			bar1.set_position((zoom - zoom_min) as u64);
+			bar1.set_position(zoom);
 
 			let bbox_blocks = bbox_tiles.clone().scale_down(256);
-			for block in bbox_blocks.iter_tile_indexes() {
+			for TileCoord2 { x, y } in bbox_blocks.iter_coords() {
 				blocks.push(BlockDefinition::new(
 					zoom,
-					block.x,
-					block.y,
-					bbox_tiles
-						.clone()
-						.clamped_offset_from(block.x * 256, block.y * 256),
+					x,
+					y,
+					bbox_tiles.clone().clamped_offset_from(x * 256, y * 256),
 				))
 			}
 		}
@@ -106,58 +99,56 @@ impl TileConverter {
 			let mut tile_no: usize = 0;
 			let tile_converter = self.config.get_tile_converter();
 
-			for y_in_block in bbox.y_min..=bbox.y_max {
-				for x_in_block in bbox.x_min..=bbox.x_max {
-					bar.inc(1);
+			for tile in bbox.iter_coords() {
+				bar.inc(1);
 
-					let index = tile_no;
-					tile_no += 1;
+				let index = tile_no;
+				tile_no += 1;
 
-					let x = block.x * 256 + x_in_block;
-					let y = block.y * 256 + y_in_block;
+				let x = block.x * 256 + tile.x;
+				let y = block.y * 256 + tile.y;
 
-					let coord = TileCoord3 { x, y, z: block.level };
+				let coord = TileCoord3 { x, y, z: block.level };
 
-					scope.spawn(move |_s| {
-						let optional_tile = mutex_reader.lock().unwrap().get_tile_data(&coord);
+				scope.spawn(move |_s| {
+					let optional_tile = mutex_reader.lock().unwrap().get_tile_data(&coord);
 
-						if optional_tile.is_none() {
+					if optional_tile.is_none() {
+						let mut secured_tile_index = mutex_tile_index.lock().unwrap();
+						secured_tile_index.set(index, ByteRange { offset: 0, length: 0 });
+						return;
+					}
+
+					let tile = optional_tile.unwrap();
+
+					let mut secured_tile_hash_lookup = None;
+					let mut tile_hash = None;
+
+					if tile.len() < 1000 {
+						secured_tile_hash_lookup = Some(mutex_tile_hash_lookup.lock().unwrap());
+						let lookup = secured_tile_hash_lookup.as_ref().unwrap();
+						if lookup.contains_key(&tile) {
 							let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-							secured_tile_index.set(index, ByteRange { offset: 0, length: 0 });
+							secured_tile_index.set(index, lookup.get(&tile).unwrap().clone());
 							return;
 						}
+						tile_hash = Some(tile.clone());
+					}
 
-						let tile = optional_tile.unwrap();
+					let result = tile_converter(&tile);
 
-						let mut secured_tile_hash_lookup = None;
-						let mut tile_hash = None;
+					let range = mutex_writer.lock().unwrap().append(&result);
 
-						if tile.len() < 1000 {
-							secured_tile_hash_lookup = Some(mutex_tile_hash_lookup.lock().unwrap());
-							let lookup = secured_tile_hash_lookup.as_ref().unwrap();
-							if lookup.contains_key(&tile) {
-								let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-								secured_tile_index.set(index, lookup.get(&tile).unwrap().clone());
-								return;
-							}
-							tile_hash = Some(tile.clone());
-						}
+					let mut secured_tile_index = mutex_tile_index.lock().unwrap();
+					secured_tile_index.set(index, range.clone());
+					drop(secured_tile_index);
 
-						let result = tile_converter(&tile);
-
-						let range = mutex_writer.lock().unwrap().append(&result);
-
-						let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-						secured_tile_index.set(index, range.clone());
-						drop(secured_tile_index);
-
-						if secured_tile_hash_lookup.is_some() {
-							secured_tile_hash_lookup
-								.unwrap()
-								.insert(tile_hash.unwrap(), range);
-						}
-					})
-				}
+					if secured_tile_hash_lookup.is_some() {
+						secured_tile_hash_lookup
+							.unwrap()
+							.insert(tile_hash.unwrap(), range);
+					}
+				})
 			}
 		});
 

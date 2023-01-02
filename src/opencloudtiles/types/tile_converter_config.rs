@@ -3,7 +3,6 @@ use crate::opencloudtiles::{
 	image::*,
 	types::{TileBBoxPyramide, TileData, TileFormat, TileReaderParameters},
 };
-use std::ops::RangeInclusive;
 
 pub struct TileConverterConfig {
 	tile_format: Option<TileFormat>,
@@ -135,8 +134,8 @@ impl TileConverterConfig {
 
 		return self.tile_format.as_ref().unwrap();
 	}
-	pub fn get_zoom_range(&self) -> RangeInclusive<u64> {
-		return self.bbox_pyramide.get_zoom_range();
+	pub fn get_max_zoom(&self) -> u64 {
+		return self.bbox_pyramide.get_max_zoom();
 	}
 }
 

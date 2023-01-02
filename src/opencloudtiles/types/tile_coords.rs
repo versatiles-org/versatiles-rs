@@ -5,7 +5,11 @@ pub struct TileCoord2 {
 	pub x: u64,
 	pub y: u64,
 }
-impl TileCoord2 {}
+impl TileCoord2 {
+	pub fn new(x: u64, y: u64) -> TileCoord2 {
+		TileCoord2 { x, y }
+	}
+}
 
 #[derive(Eq, PartialEq, Clone, Hash, Ord)]
 pub struct TileCoord3 {

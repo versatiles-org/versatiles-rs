@@ -75,8 +75,9 @@ impl abstract_container::TileReaderTrait for TileReader {
 			let offset = file.raw_file_position();
 			let length = file.size();
 
-			tile_map.insert(TileCoord3 { z, y, x }, TarByteRange { offset, length });
-			bbox_pyramide.include_tile(z as u64, x, y);
+			let coord3 = TileCoord3 { z, y, x };
+			bbox_pyramide.include_coord(&coord3);
+			tile_map.insert(coord3, TarByteRange { offset, length });
 		}
 
 		return Box::new(TileReader {

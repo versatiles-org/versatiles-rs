@@ -50,10 +50,10 @@ impl BlockDefinition {
 		cursor.write_u8(self.level as u8).unwrap();
 		cursor.write_u32::<BE>(self.x as u32).unwrap();
 		cursor.write_u32::<BE>(self.y as u32).unwrap();
-		cursor.write_u8(self.bbox.x_min as u8).unwrap();
-		cursor.write_u8(self.bbox.y_min as u8).unwrap();
-		cursor.write_u8(self.bbox.x_max as u8).unwrap();
-		cursor.write_u8(self.bbox.y_max as u8).unwrap();
+		cursor.write_u8(self.bbox.get_x_min() as u8).unwrap();
+		cursor.write_u8(self.bbox.get_y_min() as u8).unwrap();
+		cursor.write_u8(self.bbox.get_x_max() as u8).unwrap();
+		cursor.write_u8(self.bbox.get_y_max() as u8).unwrap();
 		cursor.write_u64::<BE>(self.tile_range.offset).unwrap();
 		cursor.write_u64::<BE>(self.tile_range.length).unwrap();
 		return cursor.into_inner();

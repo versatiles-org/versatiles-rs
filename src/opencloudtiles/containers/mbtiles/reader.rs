@@ -81,7 +81,7 @@ impl TileReader {
 		while let Some(entry) = entries.next().unwrap() {
 			bbox_pyramide.set_level_bbox(
 				entry.get_unwrap::<_, u64>("zoom_level"),
-				&TileBBox::new(
+				TileBBox::new(
 					entry.get_unwrap::<_, u64>("min(tile_column)"),
 					entry.get_unwrap::<_, u64>("min(tile_row)"),
 					entry.get_unwrap::<_, u64>("max(tile_column)"),
