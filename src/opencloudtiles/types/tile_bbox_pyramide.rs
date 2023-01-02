@@ -77,7 +77,7 @@ impl TileBBoxPyramide {
 	pub fn get_max_zoom(&self) -> u64 {
 		let mut max: usize = 0;
 		for (level, bbox) in self.level_bbox.iter().enumerate() {
-			if !bbox.get_is_empty() {
+			if !bbox.is_empty() {
 				max = level;
 			}
 		}
