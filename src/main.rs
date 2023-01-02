@@ -1,7 +1,7 @@
 mod opencloudtiles;
 
 use clap::{Args, Parser, Subcommand};
-use opencloudtiles::*;
+use opencloudtiles::tools;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -87,22 +87,22 @@ fn main() {
 				"convert from {:?} to {:?}",
 				arguments.input_file, arguments.output_file
 			);
-			Tools::convert(&arguments);
+			tools::convert(&arguments);
 		}
 		Commands::Serve(arguments) => {
 			println!(
 				"serve from {:?} to http://localhost:{:?}/",
 				arguments.sources, arguments.port
 			);
-			Tools::serve(&arguments);
+			tools::serve(&arguments);
 		}
 		Commands::Probe(arguments) => {
 			println!("probe {:?}", arguments.file);
-			Tools::probe(&arguments);
+			tools::probe(&arguments);
 		}
 		Commands::Compare(arguments) => {
 			println!("compare {:?} with {:?}", arguments.file1, arguments.file2);
-			Tools::compare(&arguments);
+			tools::compare(&arguments);
 		}
 	}
 }

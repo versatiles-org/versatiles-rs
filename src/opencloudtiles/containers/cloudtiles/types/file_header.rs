@@ -1,5 +1,5 @@
 use super::{ByteRange, CloudTilesSrc};
-use crate::types::TileFormat;
+use crate::opencloudtiles::types::TileFormat;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read, Write};
 
