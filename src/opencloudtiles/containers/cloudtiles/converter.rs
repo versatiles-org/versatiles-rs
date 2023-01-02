@@ -1,8 +1,7 @@
 use super::types::{BlockDefinition, BlockIndex, ByteRange, CloudTilesDst, FileHeader, TileIndex};
 use crate::opencloudtiles::{
-	compress::compress_brotli,
 	containers::abstract_container::{TileConverterTrait, TileReaderBox},
-	progress::ProgressBar,
+	helpers::{compress_brotli, ProgressBar},
 	types::{TileConverterConfig, TileCoord2, TileCoord3},
 };
 use std::collections::HashMap;

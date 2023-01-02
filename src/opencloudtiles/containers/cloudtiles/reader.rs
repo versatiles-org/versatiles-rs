@@ -1,7 +1,7 @@
 use super::types::{BlockIndex, CloudTilesSrc, FileHeader, TileIndex};
 use crate::opencloudtiles::{
-	compress::decompress_brotli,
 	containers::abstract_container::{TileReaderBox, TileReaderTrait},
+	helpers::decompress_brotli,
 	types::{MetaData, TileCoord2, TileCoord3, TileData, TileReaderParameters},
 };
 use std::{collections::HashMap, fmt::Debug, ops::Shr, path::PathBuf, str::from_utf8};

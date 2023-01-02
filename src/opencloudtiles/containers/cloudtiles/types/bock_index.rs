@@ -1,6 +1,6 @@
 use super::BlockDefinition;
 use crate::opencloudtiles::{
-	compress::{compress_brotli, decompress_brotli},
+	helpers::{compress_brotli, decompress_brotli},
 	types::{TileBBoxPyramide, TileCoord3},
 };
 use std::{

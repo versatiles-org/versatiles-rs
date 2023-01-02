@@ -1,4 +1,4 @@
-use super::types::TileData;
+use crate::opencloudtiles::types::TileData;
 use image::{
 	codecs::{
 		jpeg::JpegEncoder,

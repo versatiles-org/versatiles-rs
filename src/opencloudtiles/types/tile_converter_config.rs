@@ -1,6 +1,5 @@
 use crate::opencloudtiles::{
-	compress::*,
-	image::*,
+	helpers::*,
 	types::{TileBBoxPyramide, TileData, TileFormat, TileReaderParameters},
 };
 

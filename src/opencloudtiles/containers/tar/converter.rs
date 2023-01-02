@@ -1,6 +1,6 @@
 use crate::opencloudtiles::{
 	containers::abstract_container::{TileConverterTrait, TileReaderBox},
-	progress::ProgressBar,
+	helpers::ProgressBar,
 	types::{TileConverterConfig, TileFormat},
 };
 use rayon::iter::ParallelBridge;

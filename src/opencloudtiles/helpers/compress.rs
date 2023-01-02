@@ -1,4 +1,4 @@
-use super::types::TileData;
+use crate::opencloudtiles::types::TileData;
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
 use flate2::{
 	bufread::{GzDecoder, GzEncoder},

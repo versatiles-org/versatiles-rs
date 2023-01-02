@@ -4,7 +4,7 @@ use crate::{
 			abstract_container::{self, TileConverterTrait, TileReaderTrait},
 			cloudtiles, mbtiles, tar,
 		},
-		tile_server::TileServer,
+		helpers::TileServer,
 		types::{TileBBoxPyramide, TileConverterConfig},
 	},
 	Compare, Convert, Probe, Serve,
