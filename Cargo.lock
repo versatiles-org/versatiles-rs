@@ -150,28 +150,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cloudtiles"
-version = "0.1.0"
-dependencies = [
- "brotli",
- "byteorder",
- "clap",
- "flate2",
- "hyper",
- "image",
- "indicatif",
- "itertools",
- "r2d2",
- "r2d2_sqlite",
- "rayon",
- "rusqlite",
- "serde_json",
- "tar",
- "tokio",
- "webp",
-]
-
-[[package]]
 name = "color_quant"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -794,6 +772,28 @@ name = "once_cell"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "86f0b0d4bf799edbc74508c1e8bf170ff5f41238e5f8225603ca7caaae2b7860"
+
+[[package]]
+name = "opencloudtiles"
+version = "0.1.0"
+dependencies = [
+ "brotli",
+ "byteorder",
+ "clap",
+ "flate2",
+ "hyper",
+ "image",
+ "indicatif",
+ "itertools",
+ "r2d2",
+ "r2d2_sqlite",
+ "rayon",
+ "rusqlite",
+ "serde_json",
+ "tar",
+ "tokio",
+ "webp",
+]
 
 [[package]]
 name = "os_str_bytes"

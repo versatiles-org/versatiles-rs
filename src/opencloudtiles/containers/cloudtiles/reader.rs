@@ -18,7 +18,6 @@ impl TileReader {
 	pub fn new(mut reader: CloudTilesSrc) -> TileReader {
 		let header = FileHeader::from_reader(&mut reader);
 
-		println!("{:?}", header);
 		let meta = if header.meta_range.length > 0 {
 			decompress_brotli(&reader.read_range(&header.meta_range))
 		} else {
@@ -83,18 +82,9 @@ impl TileReaderTrait for TileReader {
 			.entry(block_coord)
 			.or_insert_with(|| TileIndex::from_brotli_vec(&self.reader.read_range(&block.tile_range)));
 
-		//let x = tile_x - block.bbox.x_min;
-		//let y = tile_y - block.bbox.y_min;
-		//let tile_id = y * (block.bbox.x_max - block.bbox.x_min + 1) + x;
-
 		let tile_id = block.bbox.get_tile_index(&TileCoord2::new(tile_x, tile_y));
 
 		let tile_range = tile_index.get_tile_range(tile_id as usize);
-
-		if tile_range.length == 0 {
-			println!("tile_range not specified {:?}", coord);
-			return None;
-		}
 
 		return Some(self.reader.read_range(&tile_range));
 	}
