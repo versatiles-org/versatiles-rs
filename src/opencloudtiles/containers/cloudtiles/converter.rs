@@ -1,7 +1,7 @@
 use super::types::{BlockDefinition, BlockIndex, ByteRange, CloudTilesDst, FileHeader, TileIndex};
 use crate::opencloudtiles::{
 	containers::abstract_container::{TileConverterTrait, TileReaderBox},
-	helpers::{compress_brotli, ProgressBar},
+	helpers::ProgressBar,
 	types::{TileConverterConfig, TileCoord2, TileCoord3},
 };
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
@@ -39,9 +39,13 @@ impl TileConverterTrait for TileConverter {
 
 impl TileConverter {
 	fn write_meta(&mut self, reader: &TileReaderBox) -> ByteRange {
-		let metablob = reader.get_meta().to_vec();
-		let temp = compress_brotli(&metablob);
-		return self.writer.append(&temp);
+		let uncompressed = reader.get_meta().to_vec();
+
+		let compressor = self.config.get_data_compressor();
+
+		let compressed = compressor(&uncompressed);
+
+		return self.writer.append(&compressed);
 	}
 	fn write_blocks(&mut self, reader: &mut TileReaderBox) -> ByteRange {
 		let mut blocks: Vec<BlockDefinition> = Vec::new();
@@ -95,7 +99,7 @@ impl TileConverter {
 		let mutex_tile_index = &Mutex::new(&mut tile_index);
 		let mutex_tile_hash_lookup = &Mutex::new(tile_hash_lookup);
 
-		let tile_converter = self.config.get_tile_converter();
+		let tile_converter = self.config.get_tile_recompressor();
 
 		bbox.iter_coords().par_bridge().for_each(|tile| {
 			mutex_bar.lock().unwrap().inc(1);

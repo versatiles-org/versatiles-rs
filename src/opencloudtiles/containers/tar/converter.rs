@@ -26,7 +26,7 @@ impl TileConverterTrait for TileConverter {
 			.config
 			.finalize_with_parameters(reader.get_parameters());
 
-		let converter = self.config.get_tile_converter();
+		let converter = self.config.get_tile_recompressor();
 
 		let ext = match self.config.get_tile_format() {
 			TileFormat::PBF => "pbf",
