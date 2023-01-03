@@ -1,8 +1,6 @@
-use std::{f32::consts::PI, fmt};
-
+use super::TileCoord2;
 use itertools::Itertools;
-
-use super::tile_coords::TileCoord2;
+use std::{f32::consts::PI, fmt};
 
 #[derive(Clone)]
 pub struct TileBBox {

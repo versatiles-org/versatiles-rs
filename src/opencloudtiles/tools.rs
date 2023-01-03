@@ -84,7 +84,11 @@ fn new_converter(filename: &str, command: &Convert) -> Box<dyn TileConverterTrai
 		bbox_pyramide.limit_by_geo_bbox(array.try_into().unwrap());
 	}
 
-	let config = TileConverterConfig::new(command.tile_format.clone(), bbox_pyramide, command.recompress);
+	let config = TileConverterConfig::new(
+		command.tile_format.clone(),
+		bbox_pyramide,
+		command.recompress,
+	);
 
 	let path = PathBuf::from(filename);
 	let extension = path.extension().unwrap().to_str().unwrap();

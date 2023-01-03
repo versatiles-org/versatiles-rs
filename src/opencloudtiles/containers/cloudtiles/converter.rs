@@ -4,9 +4,7 @@ use crate::opencloudtiles::{
 	helpers::{compress_brotli, ProgressBar},
 	types::{TileConverterConfig, TileCoord2, TileCoord3},
 };
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::Mutex;
+use std::{collections::HashMap, path::PathBuf, sync::Mutex};
 
 pub struct TileConverter {
 	writer: CloudTilesDst,
@@ -24,7 +22,9 @@ impl TileConverterTrait for TileConverter {
 		})
 	}
 	fn convert_from(&mut self, reader: &mut TileReaderBox) {
-		self.config.finalize_with_parameters(reader.get_parameters());
+		self
+			.config
+			.finalize_with_parameters(reader.get_parameters());
 
 		let mut header = FileHeader::new(&self.config.get_tile_format());
 		self.writer.append(&header.to_bytes());
@@ -107,14 +107,24 @@ impl TileConverter {
 				let x = block.x * 256 + tile.x;
 				let y = block.y * 256 + tile.y;
 
-				let coord = TileCoord3 { x, y, z: block.level };
+				let coord = TileCoord3 {
+					x,
+					y,
+					z: block.level,
+				};
 
 				scope.spawn(move |_s| {
 					let optional_tile = mutex_reader.lock().unwrap().get_tile_data(&coord);
 
 					if optional_tile.is_none() {
 						let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-						secured_tile_index.set(index, ByteRange { offset: 0, length: 0 });
+						secured_tile_index.set(
+							index,
+							ByteRange {
+								offset: 0,
+								length: 0,
+							},
+						);
 						return;
 					}
 

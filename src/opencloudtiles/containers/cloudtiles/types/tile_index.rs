@@ -12,7 +12,13 @@ unsafe impl Send for TileIndex {}
 impl TileIndex {
 	pub fn new_empty(count: usize) -> TileIndex {
 		let mut index = Vec::new();
-		index.resize(count, ByteRange { offset: 0, length: 0 });
+		index.resize(
+			count,
+			ByteRange {
+				offset: 0,
+				length: 0,
+			},
+		);
 		return TileIndex { index };
 	}
 	pub fn from_vec(buf: &Vec<u8>) -> TileIndex {

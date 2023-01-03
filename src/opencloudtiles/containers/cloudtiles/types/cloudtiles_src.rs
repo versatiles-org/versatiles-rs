@@ -1,8 +1,7 @@
 use super::ByteRange;
 use std::{
 	fs::File,
-	io::{BufReader, SeekFrom},
-	io::{Read, Seek},
+	io::{BufReader, Read, Seek, SeekFrom},
 	path::PathBuf,
 };
 

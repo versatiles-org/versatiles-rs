@@ -1,4 +1,4 @@
-use super::{tile_bbox_pyramide::TileBBoxPyramide, TileFormat};
+use super::{TileBBoxPyramide, TileFormat};
 
 #[derive(Debug)]
 pub struct TileReaderParameters {

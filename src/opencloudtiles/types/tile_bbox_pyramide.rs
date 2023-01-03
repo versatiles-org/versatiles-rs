@@ -1,4 +1,4 @@
-use super::{tile_bbox::TileBBox, tile_coords::TileCoord3, TileCoord2};
+use super::{TileBBox, TileCoord2, TileCoord3};
 use std::slice::Iter;
 
 const MAX_ZOOM_LEVEL: usize = 32;

@@ -25,7 +25,10 @@ impl TileCoord3 {
 
 impl fmt::Debug for TileCoord3 {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_fmt(format_args!("TileCoord3[{}/{}/{}]", &self.z, &self.y, &self.x))
+		f.write_fmt(format_args!(
+			"TileCoord3[{}/{}/{}]",
+			&self.z, &self.y, &self.x
+		))
 	}
 }
 

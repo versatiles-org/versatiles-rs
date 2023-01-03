@@ -1,8 +1,9 @@
 use crate::opencloudtiles::containers::abstract_container::TileReaderBox;
-use hyper::service::{make_service_fn, service_fn};
-use hyper::{Body, Client, Method, Request, Response, Result, Server, StatusCode};
-use std::collections::HashMap;
-use std::net::SocketAddr;
+use hyper::{
+	service::{make_service_fn, service_fn},
+	Body, Client, Method, Request, Response, Result, Server, StatusCode,
+};
+use std::{collections::HashMap, net::SocketAddr};
 use tokio::fs::File;
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;

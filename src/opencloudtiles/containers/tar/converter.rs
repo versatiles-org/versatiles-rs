@@ -3,8 +3,7 @@ use crate::opencloudtiles::{
 	helpers::ProgressBar,
 	types::{TileConverterConfig, TileFormat},
 };
-use rayon::iter::ParallelBridge;
-use rayon::prelude::ParallelIterator;
+use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use std::{fs::File, path::Path, sync::Mutex};
 use tar::{Builder, Header};
 
@@ -23,7 +22,9 @@ impl TileConverterTrait for TileConverter {
 		Box::new(TileConverter { builder, config })
 	}
 	fn convert_from(&mut self, reader: &mut TileReaderBox) {
-		self.config.finalize_with_parameters(reader.get_parameters());
+		self
+			.config
+			.finalize_with_parameters(reader.get_parameters());
 
 		let converter = self.config.get_tile_converter();
 
@@ -44,33 +45,36 @@ impl TileConverterTrait for TileConverter {
 		let mutex_reader = &Mutex::new(reader);
 		let mutex_builder = &Mutex::new(&mut self.builder);
 
-		bbox_pyramide.iter_tile_indexes().par_bridge().for_each(|coord| {
-			// println!("{:?}", coord);
+		bbox_pyramide
+			.iter_tile_indexes()
+			.par_bridge()
+			.for_each(|coord| {
+				// println!("{:?}", coord);
 
-			mutex_bar.lock().unwrap().inc(1);
+				mutex_bar.lock().unwrap().inc(1);
 
-			let tile = mutex_reader.lock().unwrap().get_tile_data(&coord);
-			if tile.is_none() {
-				return;
-			}
+				let tile = mutex_reader.lock().unwrap().get_tile_data(&coord);
+				if tile.is_none() {
+					return;
+				}
 
-			let tile_data = tile.unwrap();
-			let tile_compressed = converter(&tile_data);
+				let tile_data = tile.unwrap();
+				let tile_compressed = converter(&tile_data);
 
-			//println!("{}", &tile_data.len());
+				//println!("{}", &tile_data.len());
 
-			let filename = format!("./{}/{}/{}.{}", coord.z, coord.y, coord.x, ext);
-			let path = Path::new(&filename);
-			let mut header = Header::new_gnu();
-			header.set_size(tile_compressed.len() as u64);
-			header.set_mode(0o644);
+				let filename = format!("./{}/{}/{}.{}", coord.z, coord.y, coord.x, ext);
+				let path = Path::new(&filename);
+				let mut header = Header::new_gnu();
+				header.set_size(tile_compressed.len() as u64);
+				header.set_mode(0o644);
 
-			mutex_builder
-				.lock()
-				.unwrap()
-				.append_data(&mut header, &path, tile_compressed.as_slice())
-				.unwrap();
-		});
+				mutex_builder
+					.lock()
+					.unwrap()
+					.append_data(&mut header, &path, tile_compressed.as_slice())
+					.unwrap();
+			});
 
 		bar.finish();
 		self.builder.finish().unwrap();
