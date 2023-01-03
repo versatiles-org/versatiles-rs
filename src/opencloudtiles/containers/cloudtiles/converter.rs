@@ -46,8 +46,7 @@ impl TileConverter {
 		let mut blocks: Vec<BlockDefinition> = Vec::new();
 		let mut bar1 = ProgressBar::new("counting tiles", self.config.get_max_zoom());
 
-		for (index, bbox_tiles) in self.config.get_bbox_pyramide().iter().enumerate() {
-			let zoom = index as u64;
+		for (zoom, bbox_tiles) in self.config.get_bbox_pyramide().iter_levels() {
 			bar1.set_position(zoom);
 
 			let bbox_blocks = bbox_tiles.clone().scale_down(256);

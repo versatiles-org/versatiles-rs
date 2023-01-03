@@ -58,8 +58,18 @@ impl TileBBoxPyramide {
 	pub fn include_bbox(&mut self, level: u64, bbox: &TileBBox) {
 		self.level_bbox[level as usize].include_bbox(bbox);
 	}
-	pub fn iter(&self) -> Iter<TileBBox> {
-		return self.level_bbox.iter();
+	pub fn iter_levels(&self) -> impl Iterator<Item = (u64, &TileBBox)> {
+		return self
+			.level_bbox
+			.iter()
+			.enumerate()
+			.filter_map(|(level, bbox)| {
+				if bbox.is_empty() {
+					return None;
+				} else {
+					return Some((level as u64, bbox));
+				}
+			});
 	}
 	pub fn iter_tile_indexes(&self) -> impl Iterator<Item = TileCoord3> + '_ {
 		return self
