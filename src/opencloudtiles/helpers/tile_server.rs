@@ -24,6 +24,9 @@ impl TileServer {
 		};
 	}
 	pub fn add_source(&mut self, name: &str, reader: TileReaderBox) {
+		if self.sources.contains_key(name) {
+			panic!("multiple tile sources with the name '{}' are defined", name)
+		};
 		self.sources.insert(name.to_owned(), reader);
 	}
 	#[tokio::main]

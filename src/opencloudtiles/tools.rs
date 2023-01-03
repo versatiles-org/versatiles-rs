@@ -12,6 +12,11 @@ use crate::{
 use std::path::PathBuf;
 
 pub fn convert(arguments: &Convert) {
+	println!(
+		"convert from {:?} to {:?}",
+		arguments.input_file, arguments.output_file
+	);
+
 	let mut reader = new_reader(&arguments.input_file);
 	let mut converter = new_converter(&arguments.output_file, arguments);
 	converter.convert_from(&mut reader);
@@ -20,18 +25,19 @@ pub fn convert(arguments: &Convert) {
 pub fn serve(arguments: &Serve) {
 	let mut server = new_server(arguments);
 
+	println!("serve to http://localhost:{}/", arguments.port);
+
 	arguments.sources.iter().for_each(|string| {
 		let parts: Vec<&str> = string.split("#").collect();
 
-		match parts.len() {
-			1 => {
-				server.add_source(guess_name(string), new_reader(string));
-			}
-			2 => {
-				server.add_source(parts[1], new_reader(parts[0]));
-			}
+		let (reader_name, reader_source) = match parts.len() {
+			1 => (guess_name(string), string.as_str()),
+			2 => (parts[1], parts[0]),
 			_ => panic!(),
-		}
+		};
+
+		println!("   - {}: {}", reader_name, reader_source);
+		server.add_source(reader_name, new_reader(reader_source));
 
 		fn guess_name(path: &str) -> &str {
 			let filename = path.split(&['/', '\\']).last().unwrap();
@@ -44,11 +50,15 @@ pub fn serve(arguments: &Serve) {
 }
 
 pub fn probe(arguments: &Probe) {
+	println!("probe {:?}", arguments.file);
+
 	let reader = new_reader(&arguments.file);
 	println!("{:#?}", reader);
 }
 
 pub fn compare(arguments: &Compare) {
+	println!("compare {:?} with {:?}", arguments.file1, arguments.file2);
+
 	let _reader1 = new_reader(&arguments.file1);
 	let _reader2 = new_reader(&arguments.file2);
 	todo!()

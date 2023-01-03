@@ -83,25 +83,15 @@ fn main() {
 	let command = &cli.command;
 	match command {
 		Commands::Convert(arguments) => {
-			println!(
-				"convert from {:?} to {:?}",
-				arguments.input_file, arguments.output_file
-			);
 			tools::convert(&arguments);
 		}
 		Commands::Serve(arguments) => {
-			println!(
-				"serve from {:?} to http://localhost:{:?}/",
-				arguments.sources, arguments.port
-			);
 			tools::serve(&arguments);
 		}
 		Commands::Probe(arguments) => {
-			println!("probe {:?}", arguments.file);
 			tools::probe(&arguments);
 		}
 		Commands::Compare(arguments) => {
-			println!("compare {:?} with {:?}", arguments.file1, arguments.file2);
 			tools::compare(&arguments);
 		}
 	}
