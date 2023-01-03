@@ -4,12 +4,12 @@ use crate::{
 			abstract_container::{TileConverterTrait, TileReaderBox, TileReaderTrait},
 			cloudtiles, mbtiles, tar,
 		},
-		helpers::TileServer,
+		servers::{self, ServerSourceTileReader},
 		types::{TileBBoxPyramide, TileConverterConfig},
 	},
 	Compare, Convert, Probe, Serve,
 };
-use std::path::PathBuf;
+use std::{boxed::Box, path::PathBuf};
 
 pub fn convert(arguments: &Convert) {
 	println!(
@@ -30,14 +30,14 @@ pub fn serve(arguments: &Serve) {
 	arguments.sources.iter().for_each(|string| {
 		let parts: Vec<&str> = string.split("#").collect();
 
-		let (reader_name, reader_source) = match parts.len() {
+		let (url, reader_source) = match parts.len() {
 			1 => (guess_name(string), string.as_str()),
 			2 => (parts[1], parts[0]),
 			_ => panic!(),
 		};
 
-		println!("   - {}: {}", reader_name, reader_source);
-		server.add_source(reader_name, new_reader(reader_source));
+		let reader = new_reader(reader_source);
+		server.add_source(url, ServerSourceTileReader::from_reader(reader));
 
 		fn guess_name(path: &str) -> &str {
 			let filename = path.split(&['/', '\\']).last().unwrap();
@@ -45,6 +45,10 @@ pub fn serve(arguments: &Serve) {
 			return name;
 		}
 	});
+
+	server
+		.iter_url_mapping()
+		.for_each(|(url, source)| println!("   - {}: {}", url, source));
 
 	server.start();
 }
@@ -113,6 +117,6 @@ fn new_converter(filename: &str, command: &Convert) -> Box<dyn TileConverterTrai
 	return converter;
 }
 
-fn new_server(command: &Serve) -> TileServer {
-	TileServer::new(command.port)
+fn new_server(command: &Serve) -> servers::TileServer {
+	servers::TileServer::new(command.port)
 }

@@ -1,4 +1,4 @@
-use crate::opencloudtiles::containers::abstract_container::TileReaderBox;
+use super::types::ServerSourceBox;
 use hyper::{
 	service::{make_service_fn, service_fn},
 	Body, Client, Method, Request, Response, Result, Server, StatusCode,
@@ -12,7 +12,7 @@ static NOTFOUND: &[u8] = b"Not Found";
 
 pub struct TileServer {
 	port: u16,
-	sources: HashMap<String, TileReaderBox>,
+	sources: HashMap<String, ServerSourceBox>,
 }
 
 impl TileServer {
@@ -23,11 +23,11 @@ impl TileServer {
 		};
 	}
 
-	pub fn add_source(&mut self, name: &str, reader: TileReaderBox) {
+	pub fn add_source(&mut self, name: &str, source: ServerSourceBox) {
 		if self.sources.contains_key(name) {
-			panic!("multiple tile sources with the name '{}' are defined", name)
+			panic!("multiple sources with the url '{}' are defined", name)
 		};
-		self.sources.insert(name.to_owned(), reader);
+		self.sources.insert(name.to_owned(), source);
 	}
 
 	#[tokio::main]
@@ -79,19 +79,11 @@ impl TileServer {
 			return Ok(Response::new(Body::from(content.to_string())));
 		}
 	}
-	/*
-	async fn serve(&self) {
 
-		async |req: Request<Body>| -> Result<Response<Body>, Infallible> {
-			let uri = req.uri();
-			let path = uri.into_parts().path_and_query.unwrap().path();
-			let parts = path.split('/').collect();
-			match parts[1] {
-				Some("static") => return Ok(self.serve_static(&parts[2..], req).await),
-			}
-		},
+	pub fn iter_url_mapping(&self) -> impl Iterator<Item = (&str, &str)> {
+		self
+			.sources
+			.iter()
+			.map(|(url, source)| (url.as_str(), source.get_name()))
 	}
-	async fn serve_static(&self, url_parts: &Vec<&str>, req: Request<Body>) -> Response<Body> {
-		return Response::new(Body::from("Hello World"));
-	}*/
 }

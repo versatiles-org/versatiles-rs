@@ -2,7 +2,10 @@ use crate::opencloudtiles::{
 	containers::abstract_container::{self, TileReaderBox, TileReaderTrait},
 	types::{TileBBoxPyramide, TileCoord3, TileData, TileFormat, TileReaderParameters},
 };
-use std::{collections::HashMap, fmt::Debug, fs::File, os::unix::prelude::FileExt, str::from_utf8};
+use std::{
+	collections::HashMap, fmt::Debug, fs::File, os::unix::prelude::FileExt, path::PathBuf,
+	str::from_utf8,
+};
 use tar::{Archive, EntryType};
 
 #[derive(PartialEq, Eq, Hash)]
@@ -18,12 +21,13 @@ struct TarByteRange {
 }
 
 pub struct TileReader {
+	name: String,
 	file: File,
 	tile_map: HashMap<TileCoord3, TarByteRange>,
 	parameters: TileReaderParameters,
 }
 impl abstract_container::TileReaderTrait for TileReader {
-	fn from_file(filename: &std::path::PathBuf) -> TileReaderBox
+	fn from_file(filename: &PathBuf) -> TileReaderBox
 	where
 		Self: Sized,
 	{
@@ -81,6 +85,7 @@ impl abstract_container::TileReaderTrait for TileReader {
 		}
 
 		return Box::new(TileReader {
+			name: filename.to_string_lossy().to_string(),
 			file,
 			tile_map,
 			parameters: TileReaderParameters::new(tile_format.unwrap(), bbox_pyramide),
@@ -108,6 +113,9 @@ impl abstract_container::TileReaderTrait for TileReader {
 		self.file.read_exact_at(&mut buf, offset).unwrap();
 
 		return Some(buf);
+	}
+	fn get_name(&self) -> &str {
+		&self.name
 	}
 }
 

@@ -6,6 +6,7 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 	where
 		Self: Sized;
 	fn get_meta(&self) -> &[u8];
+	fn get_name(&self) -> &str;
 	fn get_parameters(&self) -> &TileReaderParameters;
 	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<TileData>;
 }

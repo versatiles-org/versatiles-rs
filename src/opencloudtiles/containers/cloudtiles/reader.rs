@@ -88,6 +88,9 @@ impl TileReaderTrait for TileReader {
 
 		return Some(self.reader.read_range(&tile_range));
 	}
+	fn get_name(&self) -> &str {
+		self.reader.get_name()
+	}
 }
 
 impl Debug for TileReader {

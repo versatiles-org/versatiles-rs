@@ -4,22 +4,24 @@ use crate::opencloudtiles::{
 };
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
-use std::{fmt::Debug, str::from_utf8, thread};
+use std::{fmt::Debug, path::PathBuf, str::from_utf8, thread};
 
 pub struct TileReader {
+	name: String,
 	pool: r2d2::Pool<SqliteConnectionManager>,
 	meta_data: Option<String>,
 	parameters: Option<TileReaderParameters>,
 }
 impl TileReader {
-	pub fn new(pool: r2d2::Pool<SqliteConnectionManager>) -> TileReader {
+	pub fn new(name: String, pool: r2d2::Pool<SqliteConnectionManager>) -> TileReader {
 		TileReader {
+			name,
 			pool,
 			meta_data: None,
 			parameters: None,
 		}
 	}
-	fn load_from_sqlite(filename: &std::path::PathBuf) -> TileReader {
+	fn load_from_sqlite(filename: &PathBuf) -> TileReader {
 		let concurrency = thread::available_parallelism().unwrap().get();
 
 		let manager = r2d2_sqlite::SqliteConnectionManager::file(filename)
@@ -30,7 +32,7 @@ impl TileReader {
 			.build(manager)
 			.unwrap();
 
-		let mut reader = TileReader::new(pool);
+		let mut reader = TileReader::new(filename.to_string_lossy().to_string(), pool);
 		reader.load_meta_data();
 
 		return reader;
@@ -95,7 +97,7 @@ impl TileReader {
 }
 
 impl abstract_container::TileReaderTrait for TileReader {
-	fn from_file(filename: &std::path::PathBuf) -> TileReaderBox {
+	fn from_file(filename: &PathBuf) -> TileReaderBox {
 		let reader = Self::load_from_sqlite(filename);
 		return Box::new(reader);
 	}
@@ -120,6 +122,9 @@ impl abstract_container::TileReaderTrait for TileReader {
 		} else {
 			return None;
 		};
+	}
+	fn get_name(&self) -> &str {
+		&self.name
 	}
 }
 
