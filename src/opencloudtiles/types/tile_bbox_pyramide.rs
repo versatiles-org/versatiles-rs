@@ -1,9 +1,9 @@
+use std::fmt;
+
 use super::{TileBBox, TileCoord2, TileCoord3};
-use std::slice::Iter;
 
 const MAX_ZOOM_LEVEL: usize = 32;
 
-#[derive(Debug)]
 pub struct TileBBoxPyramide {
 	level_bbox: [TileBBox; MAX_ZOOM_LEVEL],
 }
@@ -95,5 +95,17 @@ impl TileBBoxPyramide {
 	}
 	pub fn count_tiles(&self) -> u64 {
 		return self.level_bbox.iter().map(|bbox| bbox.count_tiles()).sum();
+	}
+}
+
+impl fmt::Debug for TileBBoxPyramide {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_list()
+			.entries(
+				self
+					.iter_levels()
+					.map(|(level, bbox)| format!("{}: {:?}", level, bbox)),
+			)
+			.finish()
 	}
 }
