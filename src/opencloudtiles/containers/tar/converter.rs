@@ -38,7 +38,18 @@ impl TileConverterTrait for TileConverter {
 		};
 
 		let bbox_pyramide = self.config.get_bbox_pyramide();
-		//println!("{:?}", bbox_pyramide);
+
+		let meta_data = reader.get_meta();
+		if meta_data.len() > 0 {
+			let mut header = Header::new_gnu();
+			header.set_size(meta_data.len() as u64);
+			header.set_mode(0o644);
+
+			self
+				.builder
+				.append_data(&mut header, &Path::new("meta.json"), meta_data)
+				.unwrap();
+		}
 
 		let mut bar = ProgressBar::new("converting tiles", bbox_pyramide.count_tiles());
 		let mutex_bar = &Mutex::new(&mut bar);
