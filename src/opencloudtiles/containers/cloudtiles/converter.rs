@@ -4,6 +4,7 @@ use crate::opencloudtiles::{
 	helpers::{compress_brotli, ProgressBar},
 	types::{TileConverterConfig, TileCoord2, TileCoord3},
 };
+use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use std::{collections::HashMap, path::PathBuf, sync::Mutex};
 
 pub struct TileConverter {
@@ -89,74 +90,69 @@ impl TileConverter {
 		let tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
 		let mutex_reader = &Mutex::new(reader);
+		let mutex_bar = &Mutex::new(bar);
 		let mutex_writer = &Mutex::new(&mut self.writer);
 		let mutex_tile_index = &Mutex::new(&mut tile_index);
 		let mutex_tile_hash_lookup = &Mutex::new(tile_hash_lookup);
 
-		rayon::scope(|scope| {
-			let mut tile_no: usize = 0;
-			let tile_converter = self.config.get_tile_converter();
+		let tile_converter = self.config.get_tile_converter();
 
-			for tile in bbox.iter_coords() {
-				bar.inc(1);
+		bbox.iter_coords().par_bridge().for_each(|tile| {
+			mutex_bar.lock().unwrap().inc(1);
 
-				let index = tile_no;
-				tile_no += 1;
+			let index = bbox.get_tile_index(&tile);
 
-				let x = block.x * 256 + tile.x;
-				let y = block.y * 256 + tile.y;
+			let x = block.x * 256 + tile.x;
+			let y = block.y * 256 + tile.y;
 
-				let coord = TileCoord3 {
-					x,
-					y,
-					z: block.level,
-				};
+			let coord = TileCoord3 {
+				x,
+				y,
+				z: block.level,
+			};
 
-				scope.spawn(move |_s| {
-					let optional_tile = mutex_reader.lock().unwrap().get_tile_data(&coord);
+			let optional_tile = mutex_reader.lock().unwrap().get_tile_data(&coord);
 
-					if optional_tile.is_none() {
-						let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-						secured_tile_index.set(
-							index,
-							ByteRange {
-								offset: 0,
-								length: 0,
-							},
-						);
-						return;
-					}
+			if optional_tile.is_none() {
+				let mut secured_tile_index = mutex_tile_index.lock().unwrap();
+				secured_tile_index.set(
+					index,
+					ByteRange {
+						offset: 0,
+						length: 0,
+					},
+				);
+				return;
+			}
 
-					let tile = optional_tile.unwrap();
+			let tile = optional_tile.unwrap();
 
-					let mut secured_tile_hash_lookup = None;
-					let mut tile_hash = None;
+			let mut secured_tile_hash_lookup = None;
+			let mut tile_hash = None;
 
-					if tile.len() < 1000 {
-						secured_tile_hash_lookup = Some(mutex_tile_hash_lookup.lock().unwrap());
-						let lookup = secured_tile_hash_lookup.as_ref().unwrap();
-						if lookup.contains_key(&tile) {
-							let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-							secured_tile_index.set(index, lookup.get(&tile).unwrap().clone());
-							return;
-						}
-						tile_hash = Some(tile.clone());
-					}
-
-					let result = tile_converter(&tile);
-
-					let range = mutex_writer.lock().unwrap().append(&result);
-
+			if tile.len() < 1000 {
+				secured_tile_hash_lookup = Some(mutex_tile_hash_lookup.lock().unwrap());
+				let lookup = secured_tile_hash_lookup.as_ref().unwrap();
+				if lookup.contains_key(&tile) {
 					let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-					secured_tile_index.set(index, range.clone());
-					drop(secured_tile_index);
+					secured_tile_index.set(index, lookup.get(&tile).unwrap().clone());
+					return;
+				}
+				tile_hash = Some(tile.clone());
+			}
 
-					if secured_tile_hash_lookup.is_some() {
-						secured_tile_hash_lookup
-							.unwrap()
-							.insert(tile_hash.unwrap(), range);
-					}
-				})
+			let result = tile_converter(&tile);
+
+			let range = mutex_writer.lock().unwrap().append(&result);
+
+			let mut secured_tile_index = mutex_tile_index.lock().unwrap();
+			secured_tile_index.set(index, range.clone());
+			drop(secured_tile_index);
+
+			if secured_tile_hash_lookup.is_some() {
+				secured_tile_hash_lookup
+					.unwrap()
+					.insert(tile_hash.unwrap(), range);
 			}
 		});
 
