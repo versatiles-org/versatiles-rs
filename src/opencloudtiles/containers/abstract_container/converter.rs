@@ -6,5 +6,7 @@ pub trait TileConverterTrait {
 	fn new(filename: &PathBuf, config: TileConverterConfig) -> Box<dyn TileConverterTrait>
 	where
 		Self: Sized;
+
+	// readers must be mutable, because they might use caching
 	fn convert_from(&mut self, reader: &mut TileReaderBox);
 }
