@@ -8,7 +8,6 @@ use tokio::fs::File;
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
-static INDEX: &str = "examples/send_file_index.html";
 static NOTFOUND: &[u8] = b"Not Found";
 
 pub struct TileServer {
@@ -23,12 +22,14 @@ impl TileServer {
 			sources: HashMap::new(),
 		};
 	}
+
 	pub fn add_source(&mut self, name: &str, reader: TileReaderBox) {
 		if self.sources.contains_key(name) {
 			panic!("multiple tile sources with the name '{}' are defined", name)
 		};
 		self.sources.insert(name.to_owned(), reader);
 	}
+
 	#[tokio::main]
 	pub async fn start(&self) {
 		let client = Client::new();
@@ -46,7 +47,7 @@ impl TileServer {
 
 		async fn response_examples(req: Request<Body>) -> Result<Response<Body>> {
 			match (req.method(), req.uri().path()) {
-				(&Method::GET, "/") | (&Method::GET, "/index.html") => simple_file_send(INDEX).await,
+				(&Method::GET, "/") | (&Method::GET, "/index.html") => make_text_content("index"),
 				(&Method::GET, "/no_file.html") => {
 					// Test what happens when file cannot be be found
 					simple_file_send("this_file_should_not_exist.html").await
@@ -72,6 +73,10 @@ impl TileServer {
 			}
 
 			Ok(not_found())
+		}
+
+		fn make_text_content(content: &str) -> Result<Response<Body>> {
+			return Ok(Response::new(Body::from(content.to_string())));
 		}
 	}
 	/*
