@@ -1,15 +1,13 @@
 use crate::opencloudtiles::{
 	containers::abstract_container::TileReaderBox,
-	types::{TileFormat, TilePrecompression},
+	types::{Compression, TileFormat},
 };
 use enumset::EnumSet;
 use hyper::{Body, Response, Result};
 
 pub trait ServerSourceTrait {
 	fn get_name(&self) -> &str;
-	fn get_data(
-		&self, path: &[String], accept: EnumSet<TilePrecompression>,
-	) -> Result<Response<Body>>;
+	fn get_data(&self, path: &[String], accept: EnumSet<Compression>) -> Result<Response<Body>>;
 }
 
 pub type ServerSourceBox = Box<dyn ServerSourceTrait>;
@@ -17,7 +15,7 @@ pub type ServerSourceBox = Box<dyn ServerSourceTrait>;
 pub struct ServerSourceTileReader {
 	reader: TileReaderBox,
 	tile_format: TileFormat,
-	precompression: TilePrecompression,
+	precompression: Compression,
 }
 impl ServerSourceTileReader {
 	pub fn from_reader(reader: TileReaderBox) -> Box<ServerSourceTileReader> {
@@ -36,9 +34,7 @@ impl ServerSourceTrait for ServerSourceTileReader {
 		self.reader.get_name()
 	}
 
-	fn get_data(
-		&self, path: &[String], accept: EnumSet<TilePrecompression>,
-	) -> Result<Response<Body>> {
+	fn get_data(&self, path: &[String], accept: EnumSet<Compression>) -> Result<Response<Body>> {
 		if path.len() == 3 {
 			// get tile
 			todo!()

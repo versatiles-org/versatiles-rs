@@ -1,8 +1,6 @@
 use crate::opencloudtiles::{
 	containers::abstract_container::{self, TileReaderBox, TileReaderTrait},
-	types::{
-		TileBBoxPyramide, TileCoord3, TileData, TileFormat, TilePrecompression, TileReaderParameters,
-	},
+	types::{Compression, TileBBoxPyramide, TileCoord3, TileData, TileFormat, TileReaderParameters},
 };
 use std::{
 	collections::HashMap, fmt::Debug, fs::File, os::unix::prelude::FileExt, path::PathBuf,
@@ -38,7 +36,7 @@ impl abstract_container::TileReaderTrait for TileReader {
 
 		let mut tile_map = HashMap::new();
 		let mut tile_form: Option<TileFormat> = None;
-		let mut tile_comp: Option<TilePrecompression> = None;
+		let mut tile_comp: Option<Compression> = None;
 		let mut bbox_pyramide = TileBBoxPyramide::new_empty();
 
 		for file in archive.entries().unwrap() {
@@ -66,13 +64,13 @@ impl abstract_container::TileReaderTrait for TileReader {
 			let this_comp = match extension {
 				"gz" => {
 					extension = filename.pop().unwrap();
-					TilePrecompression::Gzip
+					Compression::Gzip
 				}
 				"br" => {
 					extension = filename.pop().unwrap();
-					TilePrecompression::Brotli
+					Compression::Brotli
 				}
-				_ => TilePrecompression::Uncompressed,
+				_ => Compression::Uncompressed,
 			};
 
 			let this_form = match extension {

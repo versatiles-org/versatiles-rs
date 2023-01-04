@@ -1,17 +1,17 @@
 use super::{ByteRange, CloudTilesSrc};
-use crate::opencloudtiles::types::{TileFormat, TilePrecompression};
+use crate::opencloudtiles::types::{Compression, TileFormat};
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read, Write};
 
 #[derive(Debug)]
 pub struct FileHeader {
 	pub tile_format: TileFormat,
-	pub precompression: TilePrecompression,
+	pub precompression: Compression,
 	pub meta_range: ByteRange,
 	pub blocks_range: ByteRange,
 }
 impl FileHeader {
-	pub fn new(tile_format: &TileFormat, precompression: &TilePrecompression) -> FileHeader {
+	pub fn new(tile_format: &TileFormat, precompression: &Compression) -> FileHeader {
 		return FileHeader {
 			tile_format: tile_format.clone(),
 			precompression: precompression.clone(),
@@ -40,9 +40,9 @@ impl FileHeader {
 		// precompression
 		header
 			.write_u8(match self.precompression {
-				TilePrecompression::Uncompressed => 0,
-				TilePrecompression::Gzip => 1,
-				TilePrecompression::Brotli => 2,
+				Compression::Uncompressed => 0,
+				Compression::Gzip => 1,
+				Compression::Brotli => 2,
 			})
 			.unwrap();
 
@@ -79,9 +79,9 @@ impl FileHeader {
 		};
 
 		let precompression = match compression {
-			0 => TilePrecompression::Uncompressed,
-			1 => TilePrecompression::Gzip,
-			2 => TilePrecompression::Brotli,
+			0 => Compression::Uncompressed,
+			1 => Compression::Gzip,
+			2 => Compression::Brotli,
 			_ => panic!(),
 		};
 

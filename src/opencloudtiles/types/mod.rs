@@ -21,7 +21,7 @@ pub enum TileFormat {
 }
 
 #[derive(Debug, EnumSetType, ValueEnum)]
-pub enum TilePrecompression {
+pub enum Compression {
 	Uncompressed,
 	Gzip,
 	Brotli,

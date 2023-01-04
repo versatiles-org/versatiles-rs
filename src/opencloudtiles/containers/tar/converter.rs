@@ -1,7 +1,7 @@
 use crate::opencloudtiles::{
 	containers::abstract_container::{TileConverterTrait, TileReaderBox},
 	helpers::ProgressBar,
-	types::{TileConverterConfig, TileFormat, TilePrecompression},
+	types::{Compression, TileConverterConfig, TileFormat},
 };
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use std::{fs::File, path::Path, sync::Mutex};
@@ -36,9 +36,9 @@ impl TileConverterTrait for TileConverter {
 		};
 
 		let ext_comp = match self.config.get_tile_precompression() {
-			TilePrecompression::Uncompressed => "",
-			TilePrecompression::Gzip => ".gz",
-			TilePrecompression::Brotli => ".br",
+			Compression::Uncompressed => "",
+			Compression::Gzip => ".gz",
+			Compression::Brotli => ".br",
 		};
 
 		let bbox_pyramide = self.config.get_bbox_pyramide();
