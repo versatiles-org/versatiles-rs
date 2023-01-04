@@ -113,4 +113,4 @@ The file is composed of several parts:
 | offset | length | type | description               |
 |--------|--------|------|---------------------------|
 | 12*j   | 8      | u64  | `offset` of `tile_blob` j |
-| 12*j   | 4      | u32  | `length` of `tile_blob` j |
+| 12*j+8 | 4      | u32  | `length` of `tile_blob` j |
