@@ -1,8 +1,8 @@
 use super::types::{BlockIndex, CloudTilesSrc, FileHeader, TileIndex};
 use crate::opencloudtiles::{
 	containers::abstract_container::{TileReaderBox, TileReaderTrait},
-	helpers::{decompress, decompress_brotli},
-	types::{Blob, Precompression, TileCoord2, TileCoord3, TileReaderParameters},
+	helpers::DataConverter,
+	types::{Blob, TileCoord2, TileCoord3, TileReaderParameters},
 };
 use std::{collections::HashMap, fmt::Debug, ops::Shr, path::PathBuf, str::from_utf8};
 
@@ -19,7 +19,8 @@ impl TileReader {
 		let header = FileHeader::from_reader(&mut reader);
 
 		let meta = if header.meta_range.length > 0 {
-			decompress_brotli(reader.read_range(&header.meta_range))
+			DataConverter::new_decompressor(&header.precompression)
+				.run(reader.read_range(&header.meta_range))
 		} else {
 			Blob::empty()
 		};
@@ -46,16 +47,13 @@ impl TileReaderTrait for TileReader {
 		let reader = CloudTilesSrc::from_file(filename);
 		return Box::new(TileReader::new(reader));
 	}
-	fn get_meta(&self) -> (Blob, Precompression) {
-		return (
-			self.meta.clone(),
-			self.parameters.get_tile_precompression().clone(),
-		);
+	fn get_meta(&self) -> Blob {
+		return self.meta.clone();
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
 		return &self.parameters;
 	}
-	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<(Blob, Precompression)> {
+	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<Blob> {
 		let block_coord = TileCoord3 {
 			x: coord.x.shr(8),
 			y: coord.y.shr(8),
@@ -90,10 +88,7 @@ impl TileReaderTrait for TileReader {
 
 		let tile_range = tile_index.get_tile_range(tile_id as usize);
 
-		return Some((
-			self.reader.read_range(&tile_range),
-			self.parameters.get_tile_precompression().clone(),
-		));
+		return Some(self.reader.read_range(&tile_range));
 	}
 	fn get_name(&self) -> &str {
 		self.reader.get_name()
@@ -102,12 +97,8 @@ impl TileReaderTrait for TileReader {
 
 impl Debug for TileReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let meta = self.get_meta();
 		f.debug_struct("TileReader:CloudTiles")
-			.field(
-				"meta",
-				&from_utf8(decompress(meta.0, &meta.1).as_slice()).unwrap(),
-			)
+			.field("meta", &from_utf8(self.get_meta().as_slice()).unwrap())
 			.field("parameters", &self.get_parameters())
 			.finish()
 	}

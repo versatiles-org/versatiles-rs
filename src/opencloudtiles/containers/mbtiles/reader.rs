@@ -1,6 +1,5 @@
 use crate::opencloudtiles::{
 	containers::abstract_container::{self, TileReaderBox, TileReaderTrait},
-	helpers::decompress,
 	types::{
 		Blob, Precompression, TileBBox, TileBBoxPyramide, TileCoord3, TileFormat,
 		TileReaderParameters,
@@ -119,16 +118,13 @@ impl abstract_container::TileReaderTrait for TileReader {
 		let reader = Self::load_from_sqlite(filename);
 		return Box::new(reader);
 	}
-	fn get_meta(&self) -> (Blob, Precompression) {
-		return (
-			Blob::from_slice(self.meta_data.as_ref().unwrap().as_bytes()),
-			Precompression::Uncompressed,
-		);
+	fn get_meta(&self) -> Blob {
+		return Blob::from_slice(self.meta_data.as_ref().unwrap().as_bytes());
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
 		return self.parameters.as_ref().unwrap();
 	}
-	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<(Blob, Precompression)> {
+	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<Blob> {
 		let connection = self.pool.get().unwrap();
 		let mut stmt = connection
 			.prepare(
@@ -139,15 +135,7 @@ impl abstract_container::TileReaderTrait for TileReader {
 			entry.get::<_, Vec<u8>>(0)
 		});
 		if result.is_ok() {
-			return Some((
-				Blob::from_vec(result.unwrap()),
-				self
-					.parameters
-					.as_ref()
-					.unwrap()
-					.get_tile_precompression()
-					.clone(),
-			));
+			return Some(Blob::from_vec(result.unwrap()));
 		} else {
 			return None;
 		};
@@ -159,12 +147,8 @@ impl abstract_container::TileReaderTrait for TileReader {
 
 impl Debug for TileReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let meta = self.get_meta();
 		f.debug_struct("TileReader:MBTiles")
-			.field(
-				"meta",
-				&from_utf8(decompress(meta.0, &meta.1).as_slice()).unwrap(),
-			)
+			.field("meta", &from_utf8(self.get_meta().as_slice()).unwrap())
 			.field("parameters", &self.get_parameters())
 			.finish()
 	}

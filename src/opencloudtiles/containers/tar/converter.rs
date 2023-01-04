@@ -1,6 +1,6 @@
 use crate::opencloudtiles::{
 	containers::abstract_container::{TileConverterTrait, TileReaderBox},
-	helpers::{decompress, ProgressBar},
+	helpers::ProgressBar,
 	types::{Precompression, TileConverterConfig, TileFormat},
 };
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
@@ -43,8 +43,7 @@ impl TileConverterTrait for TileConverter {
 
 		let bbox_pyramide = self.config.get_bbox_pyramide();
 
-		let (meta, precompression) = reader.get_meta();
-		let meta_data = decompress(meta, &precompression);
+		let meta_data = reader.get_meta();
 
 		if meta_data.len() > 0 {
 			let mut header = Header::new_gnu();
@@ -75,11 +74,9 @@ impl TileConverterTrait for TileConverter {
 					return;
 				}
 
-				let (mut tile, _precompression) = optional_tile.unwrap();
+				let mut tile = optional_tile.unwrap();
 
-				for converter in tile_converter.iter() {
-					tile = converter(tile);
-				}
+				tile = tile_converter.run(tile);
 
 				let filename = format!(
 					"./{}/{}/{}{}{}",

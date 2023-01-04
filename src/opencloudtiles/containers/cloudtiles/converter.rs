@@ -1,7 +1,7 @@
 use super::types::{BlockDefinition, BlockIndex, ByteRange, CloudTilesDst, FileHeader, TileIndex};
 use crate::opencloudtiles::{
 	containers::abstract_container::{TileConverterTrait, TileReaderBox},
-	helpers::{compress, decompress, ProgressBar},
+	helpers::ProgressBar,
 	types::{TileConverterConfig, TileCoord2, TileCoord3},
 };
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
@@ -42,10 +42,8 @@ impl TileConverterTrait for TileConverter {
 
 impl TileConverter {
 	fn write_meta(&mut self, reader: &TileReaderBox) -> ByteRange {
-		let (meta, precompression) = reader.get_meta();
-		let uncompressed = decompress(meta, &precompression);
-		let compressed = compress(uncompressed, self.config.get_tile_precompression());
-
+		let meta = reader.get_meta();
+		let compressed = self.config.get_compressor().run(meta);
 		return self.writer.append(compressed);
 	}
 	fn write_blocks(&mut self, reader: &mut TileReaderBox) -> ByteRange {
@@ -131,7 +129,7 @@ impl TileConverter {
 				return;
 			}
 
-			let (mut tile, _precompression) = optional_tile.unwrap();
+			let mut tile = optional_tile.unwrap();
 
 			drop(safe_reader);
 
@@ -149,9 +147,7 @@ impl TileConverter {
 				tile_hash = Some(tile.clone());
 			}
 
-			for converter in tile_converter.iter() {
-				tile = converter(tile);
-			}
+			tile = tile_converter.run(tile);
 
 			let range = mutex_writer.lock().unwrap().append(tile);
 

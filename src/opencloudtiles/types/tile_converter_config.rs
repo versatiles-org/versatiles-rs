@@ -1,6 +1,6 @@
 use crate::opencloudtiles::{
 	helpers::*,
-	types::{Blob, TileBBoxPyramide, TileFormat, TileReaderParameters},
+	types::{TileBBoxPyramide, TileFormat, TileReaderParameters},
 };
 
 use super::Precompression;
@@ -8,8 +8,8 @@ use super::Precompression;
 pub struct TileConverterConfig {
 	tile_format: Option<TileFormat>,
 	tile_precompression: Option<Precompression>,
-	tile_recompressor: Option<Vec<TileDataConverter>>,
-	data_compressor: Option<TileDataConverter>,
+	tile_recompressor: Option<DataConverter>,
+	compressor: Option<DataConverter>,
 	bbox_pyramide: TileBBoxPyramide,
 	force_recompress: bool,
 	finalized: bool,
@@ -25,7 +25,7 @@ impl TileConverterConfig {
 			tile_precompression,
 			bbox_pyramide,
 			tile_recompressor: None,
-			data_compressor: None,
+			compressor: None,
 			force_recompress,
 			finalized: false,
 		};
@@ -40,80 +40,29 @@ impl TileConverterConfig {
 			.tile_precompression
 			.get_or_insert(parameters.get_tile_precompression().clone());
 
-		self.tile_recompressor = Some(self.calc_tile_recompressor(parameters));
-		self.data_compressor = Some(self.calc_data_compressor());
-
-		self.finalized = true;
-	}
-	fn calc_tile_recompressor(&self, parameters: &TileReaderParameters) -> Vec<TileDataConverter> {
 		let src_form = parameters.get_tile_format();
 		let src_comp = parameters.get_tile_precompression();
 		let dst_form = self.tile_format.as_ref().unwrap();
 		let dst_comp = self.tile_precompression.as_ref().unwrap();
+		let force_recompress = self.force_recompress;
 
-		let format_converter: Option<fn(Blob) -> Blob> =
-			if (src_form != dst_form) || self.force_recompress {
-				use TileFormat::*;
-				Some(match (src_form, dst_form) {
-					(PNG, JPG) => |tile| img2jpg(&png2img(tile)),
-					(PNG, WEBP) => |tile| img2webplossless(&png2img(tile)),
-					(PNG, _) => todo!("convert PNG -> {:?}", dst_form),
+		self.tile_recompressor = Some(DataConverter::new_tile_recompressor(
+			src_form,
+			src_comp,
+			dst_form,
+			dst_comp,
+			force_recompress,
+		));
 
-					(JPG, PNG) => |tile| img2png(&jpg2img(tile)),
-					(JPG, WEBP) => |tile| img2webp(&jpg2img(tile)),
-					(JPG, _) => todo!("convert JPG -> {:?}", dst_form),
+		self.compressor = Some(DataConverter::new_compressor(dst_comp));
 
-					(WEBP, PNG) => |tile| img2png(&webp2img(tile)),
-					(WEBP, JPG) => |tile| img2jpg(&webp2img(tile)),
-					(WEBP, _) => todo!("convert WEBP -> {:?}", dst_form),
-
-					(PBF, _) => todo!("convert PBF -> {:?}", dst_form),
-				})
-			} else {
-				None
-			};
-
-		let mut result: Vec<TileDataConverter> = Vec::new();
-		if (src_comp == dst_comp) && !self.force_recompress {
-			if format_converter.is_some() {
-				result.push(format_converter.unwrap())
-			}
-		} else {
-			use Precompression::*;
-			match src_comp {
-				Uncompressed => {}
-				Gzip => result.push(decompress_gzip),
-				Brotli => result.push(decompress_brotli),
-			}
-			if format_converter.is_some() {
-				result.push(format_converter.unwrap())
-			}
-			match dst_comp {
-				Uncompressed => {}
-				Gzip => result.push(compress_gzip),
-				Brotli => result.push(compress_brotli),
-			}
-		};
-
-		return result;
+		self.finalized = true;
 	}
-	fn calc_data_compressor(&self) -> TileDataConverter {
-		use Precompression::*;
-		fn dont_change(tile: Blob) -> Blob {
-			return tile;
-		}
-
-		return match self.tile_precompression.as_ref().unwrap() {
-			Uncompressed => dont_change,
-			Gzip => compress_gzip,
-			Brotli => compress_brotli,
-		};
-	}
-	pub fn get_tile_recompressor(&self) -> &Vec<TileDataConverter> {
+	pub fn get_tile_recompressor(&self) -> &DataConverter {
 		return self.tile_recompressor.as_ref().unwrap();
 	}
-	pub fn get_data_compressor(&self) -> TileDataConverter {
-		return self.data_compressor.unwrap();
+	pub fn get_compressor(&self) -> &DataConverter {
+		return self.compressor.as_ref().unwrap();
 	}
 	pub fn get_bbox_pyramide(&self) -> &TileBBoxPyramide {
 		return &self.bbox_pyramide;
@@ -128,5 +77,3 @@ impl TileConverterConfig {
 		return self.bbox_pyramide.get_max_zoom();
 	}
 }
-
-type TileDataConverter = fn(Blob) -> Blob;

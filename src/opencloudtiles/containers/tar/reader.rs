@@ -1,6 +1,5 @@
 use crate::opencloudtiles::{
 	containers::abstract_container::{self, TileReaderBox, TileReaderTrait},
-	helpers::decompress,
 	types::{Blob, Precompression, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters},
 };
 use std::{
@@ -22,7 +21,7 @@ struct TarByteRange {
 }
 
 pub struct TileReader {
-	meta: (Blob, Precompression),
+	meta: Blob,
 	name: String,
 	file: File,
 	tile_map: HashMap<TileCoord3, TarByteRange>,
@@ -115,7 +114,7 @@ impl abstract_container::TileReaderTrait for TileReader {
 		}
 
 		return Box::new(TileReader {
-			meta: (Blob::empty(), Precompression::Uncompressed),
+			meta: Blob::empty(),
 			name: filename.to_string_lossy().to_string(),
 			file,
 			tile_map,
@@ -129,10 +128,10 @@ impl abstract_container::TileReaderTrait for TileReader {
 	fn get_parameters(&self) -> &TileReaderParameters {
 		return &self.parameters;
 	}
-	fn get_meta(&self) -> (Blob, Precompression) {
-		return (self.meta.0.clone(), self.meta.1);
+	fn get_meta(&self) -> Blob {
+		return self.meta.clone();
 	}
-	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<(Blob, Precompression)> {
+	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<Blob> {
 		let range = self.tile_map.get(&coord);
 
 		if range.is_none() {
@@ -147,10 +146,7 @@ impl abstract_container::TileReaderTrait for TileReader {
 
 		self.file.read_exact_at(&mut buf, offset).unwrap();
 
-		return Some((
-			Blob::from_vec(buf),
-			self.parameters.get_tile_precompression().clone(),
-		));
+		return Some(Blob::from_vec(buf));
 	}
 	fn get_name(&self) -> &str {
 		&self.name
@@ -159,12 +155,8 @@ impl abstract_container::TileReaderTrait for TileReader {
 
 impl Debug for TileReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let meta = self.get_meta();
 		f.debug_struct("TileReader:Tar")
-			.field(
-				"meta",
-				&from_utf8(decompress(meta.0, &meta.1).as_slice()).unwrap(),
-			)
+			.field("meta", &from_utf8(self.get_meta().as_slice()).unwrap())
 			.field("parameters", &self.get_parameters())
 			.finish()
 	}

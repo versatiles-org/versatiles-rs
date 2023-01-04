@@ -45,9 +45,6 @@ impl Blob {
 		return Blob(Bytes::from(Vec::from(&self.0[range])));
 	}
 
-	pub fn to_bytes(&self) -> Bytes {
-		return self.0.clone();
-	}
 	pub fn as_slice(&self) -> &[u8] {
 		return self.0.as_ref();
 	}

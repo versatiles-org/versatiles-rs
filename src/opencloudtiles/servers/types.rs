@@ -55,14 +55,14 @@ impl ServerSourceTrait for ServerSourceTileReader {
 			todo!()
 		} else if path[0] == "meta.json" {
 			// get meta
-			let (meta, precompression) = self.reader.get_meta();
+			let meta = self.reader.get_meta();
 			println!("bytes.len() {}", meta.len());
 
 			if meta.len() == 0 {
 				return ok_not_found();
 			}
 
-			return ok_data(meta, &precompression, "application/json");
+			return ok_data(meta, &Precompression::Uncompressed, "application/json");
 		} else {
 			// unknown request;
 			return ok_not_found();
