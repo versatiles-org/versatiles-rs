@@ -29,7 +29,7 @@ strip = true  # Automatically strip symbols from the binary.
 [dependencies]
 brotli = "3.3.4"
 byteorder = "1.4.3"
-clap = { version = "4.0.29", features = ["derive"] }
+clap = { version = "4.0.32", features = ["derive"] }
 enumset = "1.0.12"
 flate2 = "1.0.25"
 hyper = { version = "0.14", features = ["full"] }
@@ -40,8 +40,8 @@ r2d2 = "0.8.10"
 r2d2_sqlite = "0.21.0"
 rayon = "1.6.1"
 rusqlite = "0.28.0"
-serde_json = "1.0.89"
+serde_json = "1.0.91"
 tar = "0.4.38"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1.23.1", features = ["full"] }
 url = "2.3.1"
 webp = "0.2.2"
