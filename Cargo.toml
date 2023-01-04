@@ -4,14 +4,27 @@ version = "0.1.0"
 edition = "2021"
 
 [profile.dev]
+codegen-units = 256
 debug = true
+debug-assertions = true
+incremental = true
+lto = false
+opt-level = 1
+overflow-checks = true
+panic = 'unwind'
+rpath = false
 
 [profile.release]
+codegen-units = 1
 debug = false
-lto = false
+debug-assertions = false
+incremental = false
+lto = true
 opt-level = 3
 overflow-checks = false
-strip = true
+panic = 'unwind'
+rpath = false
+strip = true  # Automatically strip symbols from the binary.
 
 [dependencies]
 brotli = "3.3.4"
