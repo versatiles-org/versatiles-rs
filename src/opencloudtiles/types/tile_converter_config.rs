@@ -3,21 +3,26 @@ use crate::opencloudtiles::{
 	types::{TileBBoxPyramide, TileData, TileFormat, TileReaderParameters},
 };
 
+use super::TilePrecompression;
+
 pub struct TileConverterConfig {
 	tile_format: Option<TileFormat>,
-	bbox_pyramide: TileBBoxPyramide,
-	tile_recompressor: Option<TileDataConverter>,
+	tile_precompression: Option<TilePrecompression>,
+	tile_recompressor: Option<Vec<TileDataConverter>>,
 	data_compressor: Option<TileDataConverter>,
+	bbox_pyramide: TileBBoxPyramide,
 	force_recompress: bool,
 	finalized: bool,
 }
 
 impl TileConverterConfig {
 	pub fn new(
-		tile_format: Option<TileFormat>, bbox_pyramide: TileBBoxPyramide, force_recompress: bool,
+		tile_format: Option<TileFormat>, tile_precompression: Option<TilePrecompression>,
+		bbox_pyramide: TileBBoxPyramide, force_recompress: bool,
 	) -> Self {
 		return TileConverterConfig {
 			tile_format,
+			tile_precompression,
 			bbox_pyramide,
 			tile_recompressor: None,
 			data_compressor: None,
@@ -28,115 +33,84 @@ impl TileConverterConfig {
 	pub fn finalize_with_parameters(&mut self, parameters: &TileReaderParameters) {
 		self.bbox_pyramide.intersect(parameters.get_level_bbox());
 
-		self.tile_recompressor = Some(self.calc_tile_recompressor(&parameters.get_tile_format()));
+		self
+			.tile_format
+			.get_or_insert(parameters.get_tile_format().clone());
+		self
+			.tile_precompression
+			.get_or_insert(parameters.get_tile_precompression().clone());
+
+		self.tile_recompressor = Some(self.calc_tile_recompressor(parameters));
 		self.data_compressor = Some(self.calc_data_compressor());
 
 		self.finalized = true;
 	}
-	fn calc_tile_recompressor(&mut self, src_tile_format: &TileFormat) -> TileDataConverter {
-		if self.tile_format.is_none() {
-			self.tile_format = Some(src_tile_format.clone());
-			return dont_change;
-		}
+	fn calc_tile_recompressor(&self, parameters: &TileReaderParameters) -> Vec<TileDataConverter> {
+		let src_form = parameters.get_tile_format();
+		let src_comp = parameters.get_tile_precompression();
+		let dst_form = self.tile_format.as_ref().unwrap();
+		let dst_comp = self.tile_precompression.as_ref().unwrap();
 
-		let dst_tile_format = self.tile_format.as_ref().unwrap();
+		let format_converter: Option<fn(&TileData) -> TileData> =
+			if (src_form != dst_form) || self.force_recompress {
+				use TileFormat::*;
+				Some(match (src_form, dst_form) {
+					(PNG, JPG) => |tile| img2jpg(&png2img(tile)),
+					(PNG, WEBP) => |tile| img2webplossless(&png2img(tile)),
+					(PNG, _) => todo!("convert PNG -> {:?}", dst_form),
 
-		if src_tile_format == dst_tile_format {
-			return dont_change;
-		}
+					(JPG, PNG) => |tile| img2png(&jpg2img(tile)),
+					(JPG, WEBP) => |tile| img2webp(&jpg2img(tile)),
+					(JPG, _) => todo!("convert JPG -> {:?}", dst_form),
 
-		//if src_tile_format == TileFormat::PNG | TileFormat::JPG | TileFormat::WEBP {}
+					(WEBP, PNG) => |tile| img2png(&webp2img(tile)),
+					(WEBP, JPG) => |tile| img2jpg(&webp2img(tile)),
+					(WEBP, _) => todo!("convert WEBP -> {:?}", dst_form),
 
-		return match (src_tile_format, dst_tile_format) {
-			// ##### PNG
-			(TileFormat::PNG, TileFormat::PNG) => {
-				if self.force_recompress {
-					|tile: &TileData| -> TileData { compress_png(&decompress_png(tile)) }
-				} else {
-					dont_change
-				}
-			}
-			(TileFormat::PNG, TileFormat::JPG) => {
-				|tile: &TileData| -> TileData { compress_jpg(&decompress_png(tile)) }
-			}
-			(TileFormat::PNG, TileFormat::WEBP) => {
-				|tile: &TileData| -> TileData { compress_webp_lossless(&decompress_png(tile)) }
-			}
-			(TileFormat::PNG, _) => todo!("convert PNG -> ?"),
+					(PBF, _) => todo!("convert PBF -> {:?}", dst_form),
+				})
+			} else {
+				None
+			};
 
-			// ##### JPEG
-			(TileFormat::JPG, TileFormat::JPG) => dont_change,
-			(TileFormat::JPG, TileFormat::PNG) => {
-				|tile: &TileData| -> TileData { compress_png(&decompress_jpg(tile)) }
+		let mut result: Vec<TileDataConverter> = Vec::new();
+		if (src_comp == dst_comp) && !self.force_recompress {
+			if format_converter.is_some() {
+				result.push(format_converter.unwrap())
 			}
-			(TileFormat::JPG, TileFormat::WEBP) => {
-				|tile: &TileData| -> TileData { compress_webp(&decompress_jpg(tile)) }
+		} else {
+			use TilePrecompression::*;
+			match src_comp {
+				Uncompressed => {}
+				Gzip => result.push(decompress_gzip),
+				Brotli => result.push(decompress_brotli),
 			}
-			(TileFormat::JPG, _) => todo!("convert JPG -> ?"),
-
-			(TileFormat::WEBP, TileFormat::WEBP) => dont_change,
-			(TileFormat::WEBP, TileFormat::PNG) => {
-				|tile: &TileData| -> TileData { compress_png(&decompress_webp(tile)) }
+			if format_converter.is_some() {
+				result.push(format_converter.unwrap())
 			}
-			(TileFormat::WEBP, TileFormat::JPG) => {
-				|tile: &TileData| -> TileData { compress_jpg(&decompress_webp(tile)) }
+			match dst_comp {
+				Uncompressed => {}
+				Gzip => result.push(compress_gzip),
+				Brotli => result.push(compress_brotli),
 			}
-			(TileFormat::WEBP, _) => todo!("convert WEBP -> ?"),
-
-			(TileFormat::PBF, TileFormat::PBF) => dont_change,
-			(TileFormat::PBF, TileFormat::PBFBrotli) => compress_brotli,
-			(TileFormat::PBF, TileFormat::PBFGzip) => compress_gzip,
-			(TileFormat::PBF, _) => todo!("convert PBF -> images"),
-
-			(TileFormat::PBFBrotli, TileFormat::PBF) => decompress_brotli,
-			(TileFormat::PBFBrotli, TileFormat::PBFBrotli) => {
-				if self.force_recompress {
-					|tile: &TileData| -> TileData { compress_brotli(&decompress_brotli(tile)) }
-				} else {
-					dont_change
-				}
-			}
-			(TileFormat::PBFBrotli, TileFormat::PBFGzip) => {
-				|tile: &TileData| -> TileData { compress_gzip(&decompress_brotli(tile)) }
-			}
-			(TileFormat::PBFBrotli, _) => todo!("convert PBFBrotli -> images"),
-
-			(TileFormat::PBFGzip, TileFormat::PBF) => decompress_gzip,
-			(TileFormat::PBFGzip, TileFormat::PBFBrotli) => {
-				|tile: &TileData| -> TileData { compress_brotli(&decompress_gzip(tile)) }
-			}
-			(TileFormat::PBFGzip, TileFormat::PBFGzip) => {
-				if self.force_recompress {
-					|tile: &TileData| -> TileData { compress_gzip(&decompress_gzip(tile)) }
-				} else {
-					dont_change
-				}
-			}
-			(TileFormat::PBFGzip, _) => todo!("convert PBFGzip -> images"),
 		};
 
+		return result;
+	}
+	fn calc_data_compressor(&self) -> TileDataConverter {
+		use TilePrecompression::*;
 		fn dont_change(tile: &TileData) -> TileData {
 			return tile.clone();
 		}
-	}
-	fn calc_data_compressor(&mut self) -> TileDataConverter {
-		let dst_tile_format = self.tile_format.as_ref().unwrap();
 
-		return match dst_tile_format {
-			TileFormat::PNG => dont_change,
-			TileFormat::JPG => dont_change,
-			TileFormat::WEBP => dont_change,
-			TileFormat::PBF => dont_change,
-			TileFormat::PBFBrotli => compress_brotli,
-			TileFormat::PBFGzip => compress_gzip,
+		return match self.tile_precompression.as_ref().unwrap() {
+			Uncompressed => dont_change,
+			Gzip => compress_gzip,
+			Brotli => compress_brotli,
 		};
-
-		fn dont_change(tile: &TileData) -> TileData {
-			return tile.clone();
-		}
 	}
-	pub fn get_tile_recompressor(&self) -> TileDataConverter {
-		return self.tile_recompressor.unwrap();
+	pub fn get_tile_recompressor(&self) -> &Vec<TileDataConverter> {
+		return self.tile_recompressor.as_ref().unwrap();
 	}
 	pub fn get_data_compressor(&self) -> TileDataConverter {
 		return self.data_compressor.unwrap();
@@ -145,11 +119,10 @@ impl TileConverterConfig {
 		return &self.bbox_pyramide;
 	}
 	pub fn get_tile_format(&self) -> &TileFormat {
-		if !self.finalized {
-			panic!()
-		}
-
 		return self.tile_format.as_ref().unwrap();
+	}
+	pub fn get_tile_precompression(&self) -> &TilePrecompression {
+		return self.tile_precompression.as_ref().unwrap();
 	}
 	pub fn get_max_zoom(&self) -> u64 {
 		return self.bbox_pyramide.get_max_zoom();

@@ -1,7 +1,10 @@
 mod opencloudtiles;
 
 use clap::{Args, Parser, Subcommand};
-use opencloudtiles::tools;
+use opencloudtiles::{
+	tools,
+	types::{TileFormat, TilePrecompression},
+};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -48,7 +51,11 @@ pub struct Convert {
 
 	/// set new tile format
 	#[arg(long, value_enum)]
-	tile_format: Option<opencloudtiles::types::TileFormat>,
+	tile_format: Option<TileFormat>,
+
+	/// set tile precompression
+	#[arg(long, value_enum)]
+	precompress: Option<TilePrecompression>,
 
 	/// force to recompress tiles
 	#[arg(long, value_enum)]

@@ -1,7 +1,7 @@
 use crate::opencloudtiles::{
 	containers::abstract_container::{TileConverterTrait, TileReaderBox},
 	helpers::ProgressBar,
-	types::{TileConverterConfig, TileFormat},
+	types::{TileConverterConfig, TileFormat, TilePrecompression},
 };
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use std::{fs::File, path::Path, sync::Mutex};
@@ -26,15 +26,19 @@ impl TileConverterTrait for TileConverter {
 			.config
 			.finalize_with_parameters(reader.get_parameters());
 
-		let converter = self.config.get_tile_recompressor();
+		let tile_converter = self.config.get_tile_recompressor();
 
-		let ext = match self.config.get_tile_format() {
-			TileFormat::PBF => "pbf",
-			TileFormat::PBFGzip => "pbf.gz",
-			TileFormat::PBFBrotli => "pbf.br",
-			TileFormat::PNG => "png",
-			TileFormat::JPG => "jpg",
-			TileFormat::WEBP => "webp",
+		let ext_form = match self.config.get_tile_format() {
+			TileFormat::PBF => ".pbf",
+			TileFormat::PNG => ".png",
+			TileFormat::JPG => ".jpg",
+			TileFormat::WEBP => ".webp",
+		};
+
+		let ext_comp = match self.config.get_tile_precompression() {
+			TilePrecompression::Uncompressed => "",
+			TilePrecompression::Gzip => ".gz",
+			TilePrecompression::Brotli => ".br",
 		};
 
 		let bbox_pyramide = self.config.get_bbox_pyramide();
@@ -69,21 +73,25 @@ impl TileConverterTrait for TileConverter {
 					return;
 				}
 
-				let tile_data = tile.unwrap();
-				let tile_compressed = converter(&tile_data);
+				let mut tile = tile.unwrap();
 
-				//println!("{}", &tile_data.len());
+				for converter in tile_converter.iter() {
+					tile = converter(&tile);
+				}
 
-				let filename = format!("./{}/{}/{}.{}", coord.z, coord.y, coord.x, ext);
+				let filename = format!(
+					"./{}/{}/{}{}{}",
+					coord.z, coord.y, coord.x, ext_form, ext_comp
+				);
 				let path = Path::new(&filename);
 				let mut header = Header::new_gnu();
-				header.set_size(tile_compressed.len() as u64);
+				header.set_size(tile.len() as u64);
 				header.set_mode(0o644);
 
 				mutex_builder
 					.lock()
 					.unwrap()
-					.append_data(&mut header, &path, tile_compressed.as_slice())
+					.append_data(&mut header, &path, tile.as_slice())
 					.unwrap();
 			});
 

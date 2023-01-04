@@ -27,7 +27,10 @@ impl TileConverterTrait for TileConverter {
 			.config
 			.finalize_with_parameters(reader.get_parameters());
 
-		let mut header = FileHeader::new(&self.config.get_tile_format());
+		let mut header = FileHeader::new(
+			self.config.get_tile_format(),
+			self.config.get_tile_precompression(),
+		);
 		self.writer.append(&header.to_bytes());
 
 		header.meta_range = self.write_meta(&reader);
@@ -129,7 +132,7 @@ impl TileConverter {
 				return;
 			}
 
-			let tile = optional_tile.unwrap();
+			let mut tile = optional_tile.unwrap();
 
 			let mut secured_tile_hash_lookup = None;
 			let mut tile_hash = None;
@@ -145,9 +148,11 @@ impl TileConverter {
 				tile_hash = Some(tile.clone());
 			}
 
-			let result = tile_converter(&tile);
+			for converter in tile_converter.iter() {
+				tile = converter(&tile);
+			}
 
-			let range = mutex_writer.lock().unwrap().append(&result);
+			let range = mutex_writer.lock().unwrap().append(&tile);
 
 			let mut secured_tile_index = mutex_tile_index.lock().unwrap();
 			secured_tile_index.set(index, range.clone());

@@ -5,7 +5,7 @@ use image::{
 };
 use webp::Encoder;
 
-pub fn compress_png(image: &DynamicImage) -> TileData {
+pub fn img2png(image: &DynamicImage) -> TileData {
 	let mut buffer: TileData = Vec::new();
 	png::PngEncoder::new_with_quality(
 		&mut buffer,
@@ -22,11 +22,11 @@ pub fn compress_png(image: &DynamicImage) -> TileData {
 	return buffer;
 }
 
-pub fn decompress_png(data: &TileData) -> DynamicImage {
+pub fn png2img(data: &TileData) -> DynamicImage {
 	load_from_memory_with_format(data, ImageFormat::Png).unwrap()
 }
 
-pub fn compress_jpg(image: &DynamicImage) -> TileData {
+pub fn img2jpg(image: &DynamicImage) -> TileData {
 	let mut buffer: TileData = Vec::new();
 	jpeg::JpegEncoder::new_with_quality(&mut buffer, 95u8)
 		.write_image(
@@ -39,22 +39,22 @@ pub fn compress_jpg(image: &DynamicImage) -> TileData {
 	return buffer;
 }
 
-pub fn decompress_jpg(data: &TileData) -> DynamicImage {
+pub fn jpg2img(data: &TileData) -> DynamicImage {
 	load_from_memory_with_format(data, ImageFormat::Jpeg).unwrap()
 }
 
-pub fn compress_webp(image: &DynamicImage) -> TileData {
+pub fn img2webp(image: &DynamicImage) -> TileData {
 	let encoder = Encoder::from_image(&image).unwrap();
 	let memory = encoder.encode(95f32);
 	return memory.to_vec();
 }
 
-pub fn compress_webp_lossless(image: &DynamicImage) -> TileData {
+pub fn img2webplossless(image: &DynamicImage) -> TileData {
 	let encoder = Encoder::from_image(&image).unwrap();
 	let memory = encoder.encode_lossless();
 	return memory.to_vec();
 }
 
-pub fn decompress_webp(data: &TileData) -> DynamicImage {
+pub fn webp2img(data: &TileData) -> DynamicImage {
 	load_from_memory_with_format(data, ImageFormat::WebP).unwrap()
 }

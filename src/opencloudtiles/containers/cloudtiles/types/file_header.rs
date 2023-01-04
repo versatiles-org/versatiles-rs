@@ -1,18 +1,20 @@
 use super::{ByteRange, CloudTilesSrc};
-use crate::opencloudtiles::types::TileFormat;
+use crate::opencloudtiles::types::{TileFormat, TilePrecompression};
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read, Write};
 
 #[derive(Debug)]
 pub struct FileHeader {
 	pub tile_format: TileFormat,
+	pub precompression: TilePrecompression,
 	pub meta_range: ByteRange,
 	pub blocks_range: ByteRange,
 }
 impl FileHeader {
-	pub fn new(tile_format: &TileFormat) -> FileHeader {
+	pub fn new(tile_format: &TileFormat, precompression: &TilePrecompression) -> FileHeader {
 		return FileHeader {
 			tile_format: tile_format.clone(),
+			precompression: precompression.clone(),
 			meta_range: ByteRange::empty(),
 			blocks_range: ByteRange::empty(),
 		};
@@ -31,16 +33,16 @@ impl FileHeader {
 				TileFormat::PNG => 0,
 				TileFormat::JPG => 1,
 				TileFormat::WEBP => 2,
-				TileFormat::PBF | TileFormat::PBFGzip | TileFormat::PBFBrotli => 16,
+				TileFormat::PBF => 16,
 			})
 			.unwrap();
 
 		// precompression
 		header
-			.write_u8(match self.tile_format {
-				TileFormat::PNG | TileFormat::JPG | TileFormat::WEBP | TileFormat::PBF => 0,
-				TileFormat::PBFGzip => 1,
-				TileFormat::PBFBrotli => 2,
+			.write_u8(match self.precompression {
+				TilePrecompression::Uncompressed => 0,
+				TilePrecompression::Gzip => 1,
+				TilePrecompression::Brotli => 2,
 			})
 			.unwrap();
 
@@ -68,13 +70,18 @@ impl FileHeader {
 		let tile_type = header.read_u8().unwrap();
 		let compression = header.read_u8().unwrap();
 
-		let tile_format = match (tile_type, compression) {
-			(0, 0) => TileFormat::PNG,
-			(1, 0) => TileFormat::JPG,
-			(2, 0) => TileFormat::WEBP,
-			(16, 0) => TileFormat::PBF,
-			(16, 1) => TileFormat::PBFGzip,
-			(16, 2) => TileFormat::PBFBrotli,
+		let tile_format = match tile_type {
+			0 => TileFormat::PNG,
+			1 => TileFormat::JPG,
+			2 => TileFormat::WEBP,
+			16 => TileFormat::PBF,
+			_ => panic!(),
+		};
+
+		let precompression = match compression {
+			0 => TilePrecompression::Uncompressed,
+			1 => TilePrecompression::Gzip,
+			2 => TilePrecompression::Brotli,
 			_ => panic!(),
 		};
 
@@ -83,6 +90,7 @@ impl FileHeader {
 
 		return FileHeader {
 			tile_format,
+			precompression,
 			meta_range,
 			blocks_range,
 		};

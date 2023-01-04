@@ -1,6 +1,8 @@
 use crate::opencloudtiles::{
 	containers::abstract_container::{self, TileReaderBox, TileReaderTrait},
-	types::{TileBBox, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters},
+	types::{
+		TileBBox, TileBBoxPyramide, TileCoord3, TileFormat, TilePrecompression, TileReaderParameters,
+	},
 };
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
@@ -45,6 +47,7 @@ impl TileReader {
 		let mut entries = stmt.query([]).expect("SQL query failed");
 
 		let mut tile_format: Option<TileFormat> = None;
+		let mut precompression: Option<TilePrecompression> = None;
 
 		while let Some(entry) = entries.next().unwrap() {
 			let key = entry.get::<_, String>(0).unwrap();
@@ -52,10 +55,22 @@ impl TileReader {
 			//println!("name: {}, value: {}", key, val);
 			match key.as_str() {
 				"format" => match val.as_str() {
-					"jpg" => tile_format = Some(TileFormat::JPG),
-					"pbf" => tile_format = Some(TileFormat::PBFGzip),
-					"png" => tile_format = Some(TileFormat::PNG),
-					"webp" => tile_format = Some(TileFormat::WEBP),
+					"jpg" => {
+						tile_format = Some(TileFormat::JPG);
+						precompression = Some(TilePrecompression::Uncompressed);
+					}
+					"pbf" => {
+						tile_format = Some(TileFormat::PBF);
+						precompression = Some(TilePrecompression::Gzip);
+					}
+					"png" => {
+						tile_format = Some(TileFormat::PNG);
+						precompression = Some(TilePrecompression::Uncompressed);
+					}
+					"webp" => {
+						tile_format = Some(TileFormat::WEBP);
+						precompression = Some(TilePrecompression::Uncompressed);
+					}
 					_ => panic!("unknown format"),
 				},
 				"json" => self.meta_data = Some(val),
@@ -65,6 +80,7 @@ impl TileReader {
 
 		self.parameters = Some(TileReaderParameters::new(
 			tile_format.unwrap(),
+			precompression.unwrap(),
 			self.get_bbox_pyramide(),
 		));
 

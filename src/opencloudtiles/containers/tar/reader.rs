@@ -1,6 +1,8 @@
 use crate::opencloudtiles::{
 	containers::abstract_container::{self, TileReaderBox, TileReaderTrait},
-	types::{TileBBoxPyramide, TileCoord3, TileData, TileFormat, TileReaderParameters},
+	types::{
+		TileBBoxPyramide, TileCoord3, TileData, TileFormat, TilePrecompression, TileReaderParameters,
+	},
 };
 use std::{
 	collections::HashMap, fmt::Debug, fs::File, os::unix::prelude::FileExt, path::PathBuf,
@@ -35,7 +37,8 @@ impl abstract_container::TileReaderTrait for TileReader {
 		let mut archive = Archive::new(&file);
 
 		let mut tile_map = HashMap::new();
-		let mut tile_format: Option<TileFormat> = None;
+		let mut tile_form: Option<TileFormat> = None;
+		let mut tile_comp: Option<TilePrecompression> = None;
 		let mut bbox_pyramide = TileBBoxPyramide::new_empty();
 
 		for file in archive.entries().unwrap() {
@@ -46,7 +49,7 @@ impl abstract_container::TileReaderTrait for TileReader {
 			}
 
 			let path = file.path().unwrap();
-			let fullname: Vec<&str> = path.to_str().unwrap().split('/').collect();
+			let fullname: Vec<&str> = path.iter().map(|s| s.to_str().unwrap()).collect();
 
 			// expecting something like:
 			// "./6/21/34.png" -> [".", "6", "21", "34.png"]
@@ -55,25 +58,52 @@ impl abstract_container::TileReaderTrait for TileReader {
 
 			let z = fullname[1].parse::<u64>().unwrap();
 			let y = fullname[2].parse::<u64>().unwrap();
-			let filename: Vec<&str> = fullname[3].split(".").collect();
+
+			let mut filename: Vec<&str> = fullname[3].split(".").collect();
 			let x = filename[0].parse::<u64>().unwrap();
 
-			let extension = filename[1..].join(".");
-			let this_tile_format = Some(match extension.as_str() {
+			let mut extension = filename.pop().unwrap();
+			let this_comp = match extension {
+				"gz" => {
+					extension = filename.pop().unwrap();
+					TilePrecompression::Gzip
+				}
+				"br" => {
+					extension = filename.pop().unwrap();
+					TilePrecompression::Brotli
+				}
+				_ => TilePrecompression::Uncompressed,
+			};
+
+			let this_form = match extension {
 				"png" => TileFormat::PNG,
 				"jpg" => TileFormat::JPG,
 				"jpeg" => TileFormat::JPG,
 				"webp" => TileFormat::WEBP,
 				"pbf" => TileFormat::PBF,
-				"pbf.gz" => TileFormat::PBFGzip,
-				"pbf.br" => TileFormat::PBFBrotli,
-				_ => panic!("unknown extension {}", extension),
-			});
+				_ => panic!("unknown extension for {:?}", fullname),
+			};
 
-			if tile_format.is_none() {
-				tile_format = this_tile_format;
+			if tile_form.is_none() {
+				tile_form = Some(this_form);
 			} else {
-				assert_eq!(tile_format, this_tile_format, "unknown filename {:?}", path);
+				assert_eq!(
+					tile_form.as_ref().unwrap(),
+					&this_form,
+					"unknown filename {:?}",
+					path
+				);
+			}
+
+			if tile_comp.is_none() {
+				tile_comp = Some(this_comp);
+			} else {
+				assert_eq!(
+					tile_comp.as_ref().unwrap(),
+					&this_comp,
+					"unknown filename {:?}",
+					path
+				);
 			}
 
 			let offset = file.raw_file_position();
@@ -88,7 +118,11 @@ impl abstract_container::TileReaderTrait for TileReader {
 			name: filename.to_string_lossy().to_string(),
 			file,
 			tile_map,
-			parameters: TileReaderParameters::new(tile_format.unwrap(), bbox_pyramide),
+			parameters: TileReaderParameters::new(
+				tile_form.unwrap(),
+				tile_comp.unwrap(),
+				bbox_pyramide,
+			),
 		});
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
