@@ -1,13 +1,13 @@
 use crate::opencloudtiles::{
 	helpers::*,
-	types::{TileBBoxPyramide, TileData, TileFormat, TileReaderParameters},
+	types::{Blob, TileBBoxPyramide, TileFormat, TileReaderParameters},
 };
 
-use super::Compression;
+use super::Precompression;
 
 pub struct TileConverterConfig {
 	tile_format: Option<TileFormat>,
-	tile_precompression: Option<Compression>,
+	tile_precompression: Option<Precompression>,
 	tile_recompressor: Option<Vec<TileDataConverter>>,
 	data_compressor: Option<TileDataConverter>,
 	bbox_pyramide: TileBBoxPyramide,
@@ -17,7 +17,7 @@ pub struct TileConverterConfig {
 
 impl TileConverterConfig {
 	pub fn new(
-		tile_format: Option<TileFormat>, tile_precompression: Option<Compression>,
+		tile_format: Option<TileFormat>, tile_precompression: Option<Precompression>,
 		bbox_pyramide: TileBBoxPyramide, force_recompress: bool,
 	) -> Self {
 		return TileConverterConfig {
@@ -51,7 +51,7 @@ impl TileConverterConfig {
 		let dst_form = self.tile_format.as_ref().unwrap();
 		let dst_comp = self.tile_precompression.as_ref().unwrap();
 
-		let format_converter: Option<fn(&TileData) -> TileData> =
+		let format_converter: Option<fn(Blob) -> Blob> =
 			if (src_form != dst_form) || self.force_recompress {
 				use TileFormat::*;
 				Some(match (src_form, dst_form) {
@@ -79,7 +79,7 @@ impl TileConverterConfig {
 				result.push(format_converter.unwrap())
 			}
 		} else {
-			use Compression::*;
+			use Precompression::*;
 			match src_comp {
 				Uncompressed => {}
 				Gzip => result.push(decompress_gzip),
@@ -98,9 +98,9 @@ impl TileConverterConfig {
 		return result;
 	}
 	fn calc_data_compressor(&self) -> TileDataConverter {
-		use Compression::*;
-		fn dont_change(tile: &TileData) -> TileData {
-			return tile.clone();
+		use Precompression::*;
+		fn dont_change(tile: Blob) -> Blob {
+			return tile;
 		}
 
 		return match self.tile_precompression.as_ref().unwrap() {
@@ -121,7 +121,7 @@ impl TileConverterConfig {
 	pub fn get_tile_format(&self) -> &TileFormat {
 		return self.tile_format.as_ref().unwrap();
 	}
-	pub fn get_tile_precompression(&self) -> &Compression {
+	pub fn get_tile_precompression(&self) -> &Precompression {
 		return self.tile_precompression.as_ref().unwrap();
 	}
 	pub fn get_max_zoom(&self) -> u64 {
@@ -129,4 +129,4 @@ impl TileConverterConfig {
 	}
 }
 
-type TileDataConverter = fn(&TileData) -> TileData;
+type TileDataConverter = fn(Blob) -> Blob;

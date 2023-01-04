@@ -9,7 +9,7 @@ use crate::{
 	},
 	Compare, Convert, Probe, Serve,
 };
-use std::{boxed::Box, path::PathBuf, sync::Arc};
+use std::{boxed::Box, path::PathBuf};
 
 pub fn convert(arguments: &Convert) {
 	println!(

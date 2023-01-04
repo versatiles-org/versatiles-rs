@@ -1,15 +1,15 @@
-use super::{Compression, TileBBoxPyramide, TileFormat};
+use super::{Precompression, TileBBoxPyramide, TileFormat};
 
 #[derive(Debug)]
 pub struct TileReaderParameters {
 	tile_format: TileFormat,
-	tile_precompression: Compression,
+	tile_precompression: Precompression,
 	bbox_pyramide: TileBBoxPyramide,
 }
 
 impl TileReaderParameters {
 	pub fn new(
-		tile_format: TileFormat, tile_precompression: Compression, bbox_pyramide: TileBBoxPyramide,
+		tile_format: TileFormat, tile_precompression: Precompression, bbox_pyramide: TileBBoxPyramide,
 	) -> TileReaderParameters {
 		return TileReaderParameters {
 			tile_format,
@@ -20,7 +20,7 @@ impl TileReaderParameters {
 	pub fn get_tile_format(&self) -> &TileFormat {
 		return &self.tile_format;
 	}
-	pub fn get_tile_precompression(&self) -> &Compression {
+	pub fn get_tile_precompression(&self) -> &Precompression {
 		return &self.tile_precompression;
 	}
 	pub fn get_level_bbox(&self) -> &TileBBoxPyramide {

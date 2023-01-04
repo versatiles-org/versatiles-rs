@@ -1,6 +1,10 @@
 use crate::opencloudtiles::{
 	containers::abstract_container::{self, TileReaderBox, TileReaderTrait},
-	types::{Compression, TileBBox, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters},
+	helpers::decompress,
+	types::{
+		Blob, Precompression, TileBBox, TileBBoxPyramide, TileCoord3, TileFormat,
+		TileReaderParameters,
+	},
 };
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
@@ -45,7 +49,7 @@ impl TileReader {
 		let mut entries = stmt.query([]).expect("SQL query failed");
 
 		let mut tile_format: Option<TileFormat> = None;
-		let mut precompression: Option<Compression> = None;
+		let mut precompression: Option<Precompression> = None;
 
 		while let Some(entry) = entries.next().unwrap() {
 			let key = entry.get::<_, String>(0).unwrap();
@@ -55,19 +59,19 @@ impl TileReader {
 				"format" => match val.as_str() {
 					"jpg" => {
 						tile_format = Some(TileFormat::JPG);
-						precompression = Some(Compression::Uncompressed);
+						precompression = Some(Precompression::Uncompressed);
 					}
 					"pbf" => {
 						tile_format = Some(TileFormat::PBF);
-						precompression = Some(Compression::Gzip);
+						precompression = Some(Precompression::Gzip);
 					}
 					"png" => {
 						tile_format = Some(TileFormat::PNG);
-						precompression = Some(Compression::Uncompressed);
+						precompression = Some(Precompression::Uncompressed);
 					}
 					"webp" => {
 						tile_format = Some(TileFormat::WEBP);
-						precompression = Some(Compression::Uncompressed);
+						precompression = Some(Precompression::Uncompressed);
 					}
 					_ => panic!("unknown format"),
 				},
@@ -115,13 +119,16 @@ impl abstract_container::TileReaderTrait for TileReader {
 		let reader = Self::load_from_sqlite(filename);
 		return Box::new(reader);
 	}
-	fn get_meta(&self) -> &[u8] {
-		return self.meta_data.as_ref().unwrap().as_bytes();
+	fn get_meta(&self) -> (Blob, Precompression) {
+		return (
+			Blob::from_slice(self.meta_data.as_ref().unwrap().as_bytes()),
+			Precompression::Uncompressed,
+		);
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
 		return self.parameters.as_ref().unwrap();
 	}
-	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<Vec<u8>> {
+	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<(Blob, Precompression)> {
 		let connection = self.pool.get().unwrap();
 		let mut stmt = connection
 			.prepare(
@@ -132,7 +139,15 @@ impl abstract_container::TileReaderTrait for TileReader {
 			entry.get::<_, Vec<u8>>(0)
 		});
 		if result.is_ok() {
-			return Some(result.unwrap());
+			return Some((
+				Blob::from_vec(result.unwrap()),
+				self
+					.parameters
+					.as_ref()
+					.unwrap()
+					.get_tile_precompression()
+					.clone(),
+			));
 		} else {
 			return None;
 		};
@@ -144,8 +159,12 @@ impl abstract_container::TileReaderTrait for TileReader {
 
 impl Debug for TileReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let meta = self.get_meta();
 		f.debug_struct("TileReader:MBTiles")
-			.field("meta", &from_utf8(&self.get_meta()).unwrap())
+			.field(
+				"meta",
+				&from_utf8(decompress(meta.0, &meta.1).as_slice()).unwrap(),
+			)
 			.field("parameters", &self.get_parameters())
 			.finish()
 	}

@@ -1,3 +1,5 @@
+use crate::opencloudtiles::types::Blob;
+
 use super::ByteRange;
 use std::{
 	fs::File,
@@ -19,11 +21,11 @@ impl CloudTilesSrc {
 			reader: Box::new(BufReader::new(File::open(filename).unwrap())),
 		};
 	}
-	pub fn read_range(&mut self, range: &ByteRange) -> Vec<u8> {
+	pub fn read_range(&mut self, range: &ByteRange) -> Blob {
 		let mut buffer = vec![0; range.length as usize];
 		self.reader.seek(SeekFrom::Start(range.offset)).unwrap();
 		self.reader.read_exact(&mut buffer).unwrap();
-		return buffer;
+		return Blob::from_vec(buffer);
 	}
 	pub fn get_name(&self) -> &str {
 		return &self.name;

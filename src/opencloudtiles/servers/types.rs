@@ -1,13 +1,13 @@
 use crate::opencloudtiles::{
 	containers::abstract_container::TileReaderBox,
-	types::{Compression, TileFormat},
+	types::{Blob, Precompression, TileFormat},
 };
 use enumset::EnumSet;
-use hyper::{Body, Response, Result};
+use hyper::{Body, Response, Result, StatusCode};
 
 pub trait ServerSourceTrait: Send + Sync {
 	fn get_name(&self) -> &str;
-	fn get_data(&self, path: &[String], accept: EnumSet<Compression>) -> Result<Response<Body>>;
+	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Result<Response<Body>>;
 }
 
 pub type ServerSourceBox = Box<dyn ServerSourceTrait>;
@@ -15,7 +15,7 @@ pub type ServerSourceBox = Box<dyn ServerSourceTrait>;
 pub struct ServerSourceTileReader {
 	reader: TileReaderBox,
 	tile_format: TileFormat,
-	precompression: Compression,
+	precompression: Precompression,
 }
 impl ServerSourceTileReader {
 	pub fn from_reader(reader: TileReaderBox) -> Box<ServerSourceTileReader> {
@@ -34,16 +34,38 @@ impl ServerSourceTrait for ServerSourceTileReader {
 		self.reader.get_name()
 	}
 
-	fn get_data(&self, path: &[String], accept: EnumSet<Compression>) -> Result<Response<Body>> {
+	fn get_data(&self, path: &[&str], _accept: EnumSet<Precompression>) -> Result<Response<Body>> {
+		let ok_data =
+			|data: Blob, _precompression: &Precompression, _mime: &str| -> Result<Response<Body>> {
+				return Ok(Response::builder()
+					.status(StatusCode::OK)
+					.body(data.to_vec().into())
+					.unwrap());
+			};
+
+		let ok_not_found = || -> Result<Response<Body>> {
+			return Ok(Response::builder()
+				.status(StatusCode::NOT_FOUND)
+				.body("Not Found".into())
+				.unwrap());
+		};
+
 		if path.len() == 3 {
 			// get tile
 			todo!()
 		} else if path[0] == "meta.json" {
 			// get meta
-			todo!()
+			let (meta, precompression) = self.reader.get_meta();
+			println!("bytes.len() {}", meta.len());
+
+			if meta.len() == 0 {
+				return ok_not_found();
+			}
+
+			return ok_data(meta, &precompression, "application/json");
 		} else {
 			// unknown request;
-			todo!()
+			return ok_not_found();
 		}
 	}
 }

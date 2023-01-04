@@ -3,7 +3,7 @@ mod opencloudtiles;
 use clap::{Args, Parser, Subcommand};
 use opencloudtiles::{
 	tools,
-	types::{Compression, TileFormat},
+	types::{Precompression, TileFormat},
 };
 
 #[derive(Parser)]
@@ -55,7 +55,7 @@ pub struct Convert {
 
 	/// set tile precompression
 	#[arg(long, value_enum)]
-	precompress: Option<Compression>,
+	precompress: Option<Precompression>,
 
 	/// force to recompress tiles
 	#[arg(long, value_enum)]

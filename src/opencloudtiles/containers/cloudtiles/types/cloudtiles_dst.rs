@@ -1,3 +1,5 @@
+use crate::opencloudtiles::types::Blob;
+
 use super::ByteRange;
 use std::{
 	fs::File,
@@ -17,16 +19,16 @@ impl CloudTilesDst {
 			writer: Box::new(BufWriter::new(File::create(filename).unwrap())),
 		};
 	}
-	pub fn append(&mut self, buf: &[u8]) -> ByteRange {
+	pub fn append(&mut self, blob: Blob) -> ByteRange {
 		let pos = self.writer.stream_position().unwrap();
-		let len = self.writer.write(buf).unwrap();
+		let len = self.writer.write(blob.as_slice()).unwrap();
 		return ByteRange::new(pos, len as u64);
 	}
-	pub fn write_start(&mut self, buf: &[u8]) {
+	pub fn write_start(&mut self, blob: Blob) {
 		let pos = self.writer.stream_position().unwrap();
 		self.writer.seek(SeekFrom::Start(0)).unwrap();
 
-		self.writer.write(buf).unwrap();
+		self.writer.write(blob.as_slice()).unwrap();
 
 		self.writer.seek(SeekFrom::Start(pos)).unwrap();
 	}

@@ -1,7 +1,7 @@
 use crate::opencloudtiles::{
 	containers::abstract_container::{TileConverterTrait, TileReaderBox},
-	helpers::ProgressBar,
-	types::{Compression, TileConverterConfig, TileFormat},
+	helpers::{decompress, ProgressBar},
+	types::{Precompression, TileConverterConfig, TileFormat},
 };
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use std::{fs::File, path::Path, sync::Mutex};
@@ -36,14 +36,16 @@ impl TileConverterTrait for TileConverter {
 		};
 
 		let ext_comp = match self.config.get_tile_precompression() {
-			Compression::Uncompressed => "",
-			Compression::Gzip => ".gz",
-			Compression::Brotli => ".br",
+			Precompression::Uncompressed => "",
+			Precompression::Gzip => ".gz",
+			Precompression::Brotli => ".br",
 		};
 
 		let bbox_pyramide = self.config.get_bbox_pyramide();
 
-		let meta_data = reader.get_meta();
+		let (meta, precompression) = reader.get_meta();
+		let meta_data = decompress(meta, &precompression);
+
 		if meta_data.len() > 0 {
 			let mut header = Header::new_gnu();
 			header.set_size(meta_data.len() as u64);
@@ -51,7 +53,7 @@ impl TileConverterTrait for TileConverter {
 
 			self
 				.builder
-				.append_data(&mut header, &Path::new("meta.json"), meta_data)
+				.append_data(&mut header, &Path::new("meta.json"), meta_data.as_slice())
 				.unwrap();
 		}
 
@@ -68,15 +70,15 @@ impl TileConverterTrait for TileConverter {
 
 				mutex_bar.lock().unwrap().inc(1);
 
-				let tile = mutex_reader.lock().unwrap().get_tile_data(&coord);
-				if tile.is_none() {
+				let optional_tile = mutex_reader.lock().unwrap().get_tile_data(&coord);
+				if optional_tile.is_none() {
 					return;
 				}
 
-				let mut tile = tile.unwrap();
+				let (mut tile, _precompression) = optional_tile.unwrap();
 
 				for converter in tile_converter.iter() {
-					tile = converter(&tile);
+					tile = converter(tile);
 				}
 
 				let filename = format!(

@@ -1,17 +1,17 @@
 use super::{ByteRange, CloudTilesSrc};
-use crate::opencloudtiles::types::{Compression, TileFormat};
+use crate::opencloudtiles::types::{Blob, Precompression, TileFormat};
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read, Write};
 
 #[derive(Debug)]
 pub struct FileHeader {
 	pub tile_format: TileFormat,
-	pub precompression: Compression,
+	pub precompression: Precompression,
 	pub meta_range: ByteRange,
 	pub blocks_range: ByteRange,
 }
 impl FileHeader {
-	pub fn new(tile_format: &TileFormat, precompression: &Compression) -> FileHeader {
+	pub fn new(tile_format: &TileFormat, precompression: &Precompression) -> FileHeader {
 		return FileHeader {
 			tile_format: tile_format.clone(),
 			precompression: precompression.clone(),
@@ -20,10 +20,9 @@ impl FileHeader {
 		};
 	}
 	pub fn from_reader(reader: &mut CloudTilesSrc) -> FileHeader {
-		let mut header = reader.read_range(&ByteRange::new(0, 62));
-		return FileHeader::from_buffer(header.as_mut_slice());
+		return FileHeader::from_blob(reader.read_range(&ByteRange::new(0, 62)));
 	}
-	pub fn to_bytes(&self) -> Vec<u8> {
+	pub fn to_blob(&self) -> Blob {
 		let mut header: Vec<u8> = Vec::new();
 		header.write(b"OpenCloudTiles-Container-v1:").unwrap();
 
@@ -40,9 +39,9 @@ impl FileHeader {
 		// precompression
 		header
 			.write_u8(match self.precompression {
-				Compression::Uncompressed => 0,
-				Compression::Gzip => 1,
-				Compression::Brotli => 2,
+				Precompression::Uncompressed => 0,
+				Precompression::Gzip => 1,
+				Precompression::Brotli => 2,
 			})
 			.unwrap();
 
@@ -53,14 +52,14 @@ impl FileHeader {
 			panic!()
 		}
 
-		return header;
+		return Blob::from_vec(header);
 	}
-	fn from_buffer(buf: &mut [u8]) -> FileHeader {
-		if buf.len() != 62 {
+	fn from_blob(blob: Blob) -> FileHeader {
+		if blob.len() != 62 {
 			panic!();
 		}
 
-		let mut header = Cursor::new(buf);
+		let mut header = Cursor::new(blob.as_slice());
 		let mut magic_word = [0u8; 28];
 		header.read_exact(&mut magic_word).unwrap();
 		if &magic_word != b"OpenCloudTiles-Container-v1:" {
@@ -79,9 +78,9 @@ impl FileHeader {
 		};
 
 		let precompression = match compression {
-			0 => Compression::Uncompressed,
-			1 => Compression::Gzip,
-			2 => Compression::Brotli,
+			0 => Precompression::Uncompressed,
+			1 => Precompression::Gzip,
+			2 => Precompression::Brotli,
 			_ => panic!(),
 		};
 

@@ -1,13 +1,13 @@
 use super::types::{BlockIndex, CloudTilesSrc, FileHeader, TileIndex};
 use crate::opencloudtiles::{
 	containers::abstract_container::{TileReaderBox, TileReaderTrait},
-	helpers::decompress_brotli,
-	types::{MetaData, TileCoord2, TileCoord3, TileData, TileReaderParameters},
+	helpers::{decompress, decompress_brotli},
+	types::{Blob, Precompression, TileCoord2, TileCoord3, TileReaderParameters},
 };
 use std::{collections::HashMap, fmt::Debug, ops::Shr, path::PathBuf, str::from_utf8};
 
 pub struct TileReader {
-	meta: MetaData,
+	meta: Blob,
 	reader: CloudTilesSrc,
 	parameters: TileReaderParameters,
 	block_index: BlockIndex,
@@ -19,12 +19,12 @@ impl TileReader {
 		let header = FileHeader::from_reader(&mut reader);
 
 		let meta = if header.meta_range.length > 0 {
-			decompress_brotli(&reader.read_range(&header.meta_range))
+			decompress_brotli(reader.read_range(&header.meta_range))
 		} else {
-			Vec::new()
+			Blob::empty()
 		};
 
-		let block_index = BlockIndex::from_brotli_vec(&reader.read_range(&header.blocks_range));
+		let block_index = BlockIndex::from_brotli_blob(reader.read_range(&header.blocks_range));
 		let bbox_pyramide = block_index.get_bbox_pyramide();
 		let parameters =
 			TileReaderParameters::new(header.tile_format, header.precompression, bbox_pyramide);
@@ -46,13 +46,16 @@ impl TileReaderTrait for TileReader {
 		let reader = CloudTilesSrc::from_file(filename);
 		return Box::new(TileReader::new(reader));
 	}
-	fn get_meta(&self) -> &[u8] {
-		return &self.meta;
+	fn get_meta(&self) -> (Blob, Precompression) {
+		return (
+			self.meta.clone(),
+			self.parameters.get_tile_precompression().clone(),
+		);
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
 		return &self.parameters;
 	}
-	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<TileData> {
+	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<(Blob, Precompression)> {
 		let block_coord = TileCoord3 {
 			x: coord.x.shr(8),
 			y: coord.y.shr(8),
@@ -81,13 +84,16 @@ impl TileReaderTrait for TileReader {
 		let tile_index = self
 			.tile_index_cache
 			.entry(block_coord)
-			.or_insert_with(|| TileIndex::from_brotli_vec(&self.reader.read_range(&block.tile_range)));
+			.or_insert_with(|| TileIndex::from_brotli_blob(self.reader.read_range(&block.tile_range)));
 
 		let tile_id = block.bbox.get_tile_index(&TileCoord2::new(tile_x, tile_y));
 
 		let tile_range = tile_index.get_tile_range(tile_id as usize);
 
-		return Some(self.reader.read_range(&tile_range));
+		return Some((
+			self.reader.read_range(&tile_range),
+			self.parameters.get_tile_precompression().clone(),
+		));
 	}
 	fn get_name(&self) -> &str {
 		self.reader.get_name()
@@ -96,8 +102,12 @@ impl TileReaderTrait for TileReader {
 
 impl Debug for TileReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let meta = self.get_meta();
 		f.debug_struct("TileReader:CloudTiles")
-			.field("meta", &from_utf8(&self.get_meta()).unwrap())
+			.field(
+				"meta",
+				&from_utf8(decompress(meta.0, &meta.1).as_slice()).unwrap(),
+			)
 			.field("parameters", &self.get_parameters())
 			.finish()
 	}

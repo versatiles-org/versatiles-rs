@@ -1,5 +1,5 @@
 use super::ByteRange;
-use crate::opencloudtiles::types::{TileBBox, TileCoord3};
+use crate::opencloudtiles::types::{Blob, TileBBox, TileCoord3};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::{fmt, io::Cursor};
 
@@ -20,8 +20,8 @@ impl BlockDefinition {
 			tile_range: ByteRange::empty(),
 		};
 	}
-	pub fn from_vec(buf: &[u8]) -> BlockDefinition {
-		let mut cursor = Cursor::new(buf);
+	pub fn from_blob(buf: Blob) -> BlockDefinition {
+		let mut cursor = Cursor::new(buf.as_slice());
 		let level = cursor.read_u8().unwrap() as u64;
 		let x = cursor.read_u32::<BE>().unwrap() as u64;
 		let y = cursor.read_u32::<BE>().unwrap() as u64;
@@ -44,7 +44,7 @@ impl BlockDefinition {
 	pub fn count_tiles(&self) -> u64 {
 		return self.bbox.count_tiles();
 	}
-	pub fn as_vec(&self) -> Vec<u8> {
+	pub fn as_blob(&self) -> Blob {
 		let vec = Vec::new();
 		let mut cursor = Cursor::new(vec);
 		cursor.write_u8(self.level as u8).unwrap();
@@ -56,7 +56,7 @@ impl BlockDefinition {
 		cursor.write_u8(self.bbox.get_y_max() as u8).unwrap();
 		cursor.write_u64::<BE>(self.tile_range.offset).unwrap();
 		cursor.write_u64::<BE>(self.tile_range.length).unwrap();
-		return cursor.into_inner();
+		return Blob::from_vec(cursor.into_inner());
 	}
 }
 

@@ -1,20 +1,13 @@
 use super::types::ServerSourceBox;
-use crate::opencloudtiles::types::Compression;
+use crate::opencloudtiles::types::Precompression;
 use enumset::{enum_set, EnumSet};
 use hyper::{
 	header,
 	service::{make_service_fn, service_fn},
 	Body, Request, Response, Result, Server, StatusCode,
 };
-use std::{
-	net::SocketAddr,
-	sync::{Arc, Mutex},
-};
-use tokio::fs::File;
-
+use std::{net::SocketAddr, sync::Arc};
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
-
-static NOTFOUND: &[u8] = b"Not Found";
 
 pub struct TileServer {
 	port: u16,
@@ -51,42 +44,75 @@ impl TileServer {
 	}
 
 	#[tokio::main]
-	pub async fn start(&self) {
+	pub async fn start(&mut self) {
 		fn ok_not_found() -> Result<Response<Body>> {
 			Ok(Response::builder()
 				.status(StatusCode::NOT_FOUND)
-				.body(NOTFOUND.into())
+				.body("Not Found".into())
 				.unwrap())
 		}
 
 		let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
 
-		let mutex_sources1 = Arc::new(Mutex::new(&self.sources));
+		let mut sources: Vec<(String, usize, Arc<ServerSourceBox>)> = Vec::new();
+		while self.sources.len() > 0 {
+			let (prefix, source) = self.sources.pop().unwrap();
+			let skip = prefix.matches("/").count();
+			sources.push((prefix, skip, Arc::new(source)));
+		}
+		let arc_sources = Arc::new(sources);
 
 		let new_service = make_service_fn(move |_| {
-			let mutex_sources1 = mutex_sources1.clone();
+			let arc_sources = arc_sources.clone();
 			async move {
 				Ok::<_, GenericError>(service_fn(move |req: Request<Body>| {
-					let mutex_sources1 = mutex_sources1.clone();
+					let arc_sources = arc_sources.clone();
 					async move {
-						let method = req.method();
+						let _method = req.method();
 						let path = req.uri().path();
 						let headers = req.headers();
 
-						let mut encoding_set: EnumSet<Compression> = enum_set!(Compression::Uncompressed);
+						let mut encoding_set: EnumSet<Precompression> =
+							enum_set!(Precompression::Uncompressed);
 						let encoding = headers.get(header::ACCEPT_ENCODING);
 						if encoding.is_some() {
 							let encoding_string = encoding.unwrap().to_str().unwrap_or("");
 
 							if encoding_string.contains("gzip") {
-								encoding_set.insert(Compression::Gzip);
+								encoding_set.insert(Precompression::Gzip);
 							}
 							if encoding_string.contains("br") {
-								encoding_set.insert(Compression::Brotli);
+								encoding_set.insert(Precompression::Brotli);
 							}
 						}
 
-						for (prefix, source) in mutex_sources1.lock().unwrap().iter() {}
+						let source_option = arc_sources
+							.iter()
+							.find(|(prefix, _, _)| path.starts_with(prefix));
+
+						if source_option.is_none() {
+							return ok_not_found();
+						}
+
+						let (_prefix, skip, source) = source_option.unwrap();
+
+						let split_path: Vec<&str> = path.split("/").collect();
+						let sub_path: &[&str] = if skip < &split_path.len() {
+							&split_path.as_slice()[*skip..]
+						} else {
+							&[]
+						};
+
+						//println!("   - - - ");
+						//println!("path {}", path);
+						//println!("prefix {}", prefix);
+						//println!("skip {}", skip);
+						//println!("split_path {:?}", split_path);
+						//println!("sub_path {:?}", sub_path);
+
+						source.get_data(sub_path, encoding_set);
+
+						//let (prefix, source) = source_option.unwrap();
 
 						return ok_not_found();
 					}
@@ -97,23 +123,6 @@ impl TileServer {
 
 		if let Err(e) = server.await {
 			eprintln!("server error: {}", e);
-		}
-
-		/// HTTP status code 404
-
-		async fn simple_file_send(filename: &str) -> Result<Response<Body>> {
-			// Serve a file by asynchronously reading it by chunks using tokio-util crate.
-
-			if let Ok(_file) = File::open(filename).await {
-				let body = Body::from("stream");
-				return Ok(Response::new(body));
-			}
-
-			return ok_not_found();
-		}
-
-		fn make_text_content(content: &str) -> Result<Response<Body>> {
-			return Ok(Response::new(Body::from(content.to_string())));
 		}
 	}
 

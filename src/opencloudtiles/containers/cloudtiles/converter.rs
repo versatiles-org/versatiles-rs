@@ -1,7 +1,7 @@
 use super::types::{BlockDefinition, BlockIndex, ByteRange, CloudTilesDst, FileHeader, TileIndex};
 use crate::opencloudtiles::{
 	containers::abstract_container::{TileConverterTrait, TileReaderBox},
-	helpers::ProgressBar,
+	helpers::{compress, decompress, ProgressBar},
 	types::{TileConverterConfig, TileCoord2, TileCoord3},
 };
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
@@ -31,24 +31,22 @@ impl TileConverterTrait for TileConverter {
 			self.config.get_tile_format(),
 			self.config.get_tile_precompression(),
 		);
-		self.writer.append(&header.to_bytes());
+		self.writer.append(header.to_blob());
 
 		header.meta_range = self.write_meta(&reader);
 		header.blocks_range = self.write_blocks(reader);
 
-		self.writer.write_start(&header.to_bytes())
+		self.writer.write_start(header.to_blob())
 	}
 }
 
 impl TileConverter {
 	fn write_meta(&mut self, reader: &TileReaderBox) -> ByteRange {
-		let uncompressed = reader.get_meta().to_vec();
+		let (meta, precompression) = reader.get_meta();
+		let uncompressed = decompress(meta, &precompression);
+		let compressed = compress(uncompressed, self.config.get_tile_precompression());
 
-		let compressor = self.config.get_data_compressor();
-
-		let compressed = compressor(&uncompressed);
-
-		return self.writer.append(&compressed);
+		return self.writer.append(compressed);
 	}
 	fn write_blocks(&mut self, reader: &mut TileReaderBox) -> ByteRange {
 		let mut blocks: Vec<BlockDefinition> = Vec::new();
@@ -87,7 +85,7 @@ impl TileConverter {
 		}
 		bar2.finish();
 
-		return self.writer.append(&block_index.as_brotli_vec());
+		return self.writer.append(block_index.as_brotli_blob());
 	}
 	fn write_block(
 		&mut self, block: &BlockDefinition, reader: &mut TileReaderBox, bar: &mut ProgressBar,
@@ -118,7 +116,8 @@ impl TileConverter {
 				z: block.level,
 			};
 
-			let optional_tile = mutex_reader.lock().unwrap().get_tile_data(&coord);
+			let mut safe_reader = mutex_reader.lock().unwrap();
+			let optional_tile = safe_reader.get_tile_data(&coord);
 
 			if optional_tile.is_none() {
 				let mut secured_tile_index = mutex_tile_index.lock().unwrap();
@@ -132,7 +131,9 @@ impl TileConverter {
 				return;
 			}
 
-			let mut tile = optional_tile.unwrap();
+			let (mut tile, _precompression) = optional_tile.unwrap();
+
+			drop(safe_reader);
 
 			let mut secured_tile_hash_lookup = None;
 			let mut tile_hash = None;
@@ -140,19 +141,19 @@ impl TileConverter {
 			if tile.len() < 1000 {
 				secured_tile_hash_lookup = Some(mutex_tile_hash_lookup.lock().unwrap());
 				let lookup = secured_tile_hash_lookup.as_ref().unwrap();
-				if lookup.contains_key(&tile) {
+				if lookup.contains_key(tile.as_slice()) {
 					let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-					secured_tile_index.set(index, lookup.get(&tile).unwrap().clone());
+					secured_tile_index.set(index, lookup.get(tile.as_slice()).unwrap().clone());
 					return;
 				}
 				tile_hash = Some(tile.clone());
 			}
 
 			for converter in tile_converter.iter() {
-				tile = converter(&tile);
+				tile = converter(tile);
 			}
 
-			let range = mutex_writer.lock().unwrap().append(&tile);
+			let range = mutex_writer.lock().unwrap().append(tile);
 
 			let mut secured_tile_index = mutex_tile_index.lock().unwrap();
 			secured_tile_index.set(index, range.clone());
@@ -161,10 +162,10 @@ impl TileConverter {
 			if secured_tile_hash_lookup.is_some() {
 				secured_tile_hash_lookup
 					.unwrap()
-					.insert(tile_hash.unwrap(), range);
+					.insert(tile_hash.unwrap().to_vec(), range);
 			}
 		});
 
-		return self.writer.append(&tile_index.as_brotli_vec());
+		return self.writer.append(tile_index.as_brotli_blob());
 	}
 }
