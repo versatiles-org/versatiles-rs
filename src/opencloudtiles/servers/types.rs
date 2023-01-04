@@ -5,7 +5,7 @@ use crate::opencloudtiles::{
 use enumset::EnumSet;
 use hyper::{Body, Response, Result};
 
-pub trait ServerSourceTrait {
+pub trait ServerSourceTrait: Send + Sync {
 	fn get_name(&self) -> &str;
 	fn get_data(&self, path: &[String], accept: EnumSet<Compression>) -> Result<Response<Body>>;
 }

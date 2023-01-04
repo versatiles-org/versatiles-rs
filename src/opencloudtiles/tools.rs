@@ -4,12 +4,12 @@ use crate::{
 			abstract_container::{TileConverterTrait, TileReaderBox, TileReaderTrait},
 			cloudtiles, mbtiles, tar,
 		},
-		servers::{self, ServerSourceTileReader},
+		servers::{self, ServerSourceTileReader, TileServer},
 		types::{TileBBoxPyramide, TileConverterConfig},
 	},
 	Compare, Convert, Probe, Serve,
 };
-use std::{boxed::Box, path::PathBuf};
+use std::{boxed::Box, path::PathBuf, sync::Arc};
 
 pub fn convert(arguments: &Convert) {
 	println!(
@@ -23,21 +23,24 @@ pub fn convert(arguments: &Convert) {
 }
 
 pub fn serve(arguments: &Serve) {
-	let mut server = new_server(arguments);
+	let mut server: TileServer = new_server(arguments);
 
 	println!("serve to http://localhost:{}/", arguments.port);
 
 	arguments.sources.iter().for_each(|string| {
 		let parts: Vec<&str> = string.split("#").collect();
 
-		let (url, reader_source) = match parts.len() {
+		let (name, reader_source) = match parts.len() {
 			1 => (guess_name(string), string.as_str()),
 			2 => (parts[1], parts[0]),
 			_ => panic!(),
 		};
 
 		let reader = new_reader(reader_source);
-		server.add_source(url, ServerSourceTileReader::from_reader(reader));
+		server.add_source(
+			format!("/tiles/{}/", name),
+			ServerSourceTileReader::from_reader(reader),
+		);
 
 		fn guess_name(path: &str) -> &str {
 			let filename = path.split(&['/', '\\']).last().unwrap();
