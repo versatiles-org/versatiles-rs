@@ -2,6 +2,13 @@
 name = "opencloudtiles"
 version = "0.1.0"
 edition = "2021"
+authors = ["Michael Kreil"]
+description = "A toolbox for converting, checking and serving map tiles in various formats."
+readme = "readme.md"
+homepage = "https://www.opencloudtiles.org"
+repository = "https://github.com/OpenCloudTiles/opencloudtiles-tools"
+license = "MIT"
+exclude = [".DS_Store"]
 
 [profile.dev]
 codegen-units = 256
