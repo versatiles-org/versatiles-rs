@@ -1,5 +1,5 @@
 use crate::opencloudtiles::{
-	containers::abstract_container::TileReaderBox,
+	containers::TileReaderBox,
 	types::{Blob, Precompression, TileFormat},
 };
 use enumset::EnumSet;

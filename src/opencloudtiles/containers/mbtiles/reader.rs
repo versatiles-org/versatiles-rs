@@ -1,5 +1,5 @@
 use crate::opencloudtiles::{
-	containers::abstract_container::{self, TileReaderBox, TileReaderTrait},
+	containers::{TileReaderBox, TileReaderTrait},
 	types::{
 		Blob, Precompression, TileBBox, TileBBoxPyramide, TileCoord3, TileFormat,
 		TileReaderParameters,
@@ -115,7 +115,7 @@ impl TileReader {
 	}
 }
 
-impl abstract_container::TileReaderTrait for TileReader {
+impl TileReaderTrait for TileReader {
 	fn new(filename: &str) -> TileReaderBox {
 		let path = Path::new(filename);
 		if !path.exists() {

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use crate::opencloudtiles::{
-	containers::abstract_container::{TileConverterTrait, TileReaderBox},
+	containers::{TileConverterTrait, TileReaderBox},
 	types::TileConverterConfig,
 };
 

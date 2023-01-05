@@ -1,9 +1,6 @@
 use crate::{
 	opencloudtiles::{
-		containers::{
-			abstract_container::{TileConverterTrait, TileReaderBox, TileReaderTrait},
-			cloudtiles, mbtiles, tar,
-		},
+		containers::{cloudtiles, mbtiles, tar, TileConverterTrait, TileReaderBox, TileReaderTrait},
 		servers::{self, ServerSourceTileReader, TileServer},
 		types::{TileBBoxPyramide, TileConverterConfig},
 	},

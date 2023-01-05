@@ -2,7 +2,7 @@ use super::types::{
 	BlockIndex, ByteRange, CloudTilesSrc, CloudTilesSrcTrait, FileHeader, TileIndex,
 };
 use crate::opencloudtiles::{
-	containers::abstract_container::{TileReaderBox, TileReaderTrait},
+	containers::{TileReaderBox, TileReaderTrait},
 	helpers::DataConverter,
 	types::{Blob, TileCoord2, TileCoord3, TileReaderParameters},
 };

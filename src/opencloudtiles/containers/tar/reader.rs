@@ -1,5 +1,5 @@
 use crate::opencloudtiles::{
-	containers::abstract_container::{self, TileReaderBox, TileReaderTrait},
+	containers::{TileReaderBox, TileReaderTrait},
 	types::{Blob, Precompression, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters},
 };
 use std::{
@@ -27,7 +27,7 @@ pub struct TileReader {
 	tile_map: HashMap<TileCoord3, TarByteRange>,
 	parameters: TileReaderParameters,
 }
-impl abstract_container::TileReaderTrait for TileReader {
+impl TileReaderTrait for TileReader {
 	fn new(filename: &str) -> TileReaderBox
 	where
 		Self: Sized,

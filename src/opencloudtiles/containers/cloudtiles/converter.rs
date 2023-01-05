@@ -1,6 +1,6 @@
 use super::types::{BlockDefinition, BlockIndex, ByteRange, CloudTilesDst, FileHeader, TileIndex};
 use crate::opencloudtiles::{
-	containers::abstract_container::{TileConverterTrait, TileReaderBox},
+	containers::{TileConverterTrait, TileReaderBox},
 	helpers::ProgressBar,
 	types::{TileConverterConfig, TileCoord2, TileCoord3},
 };

@@ -1,7 +1,17 @@
 use crate::opencloudtiles::types::{
-	Blob, Precompression, TileCoord3, TileFormat, TileReaderParameters,
+	Blob, Precompression, TileConverterConfig, TileCoord3, TileFormat, TileReaderParameters,
 };
 use std::fmt::Debug;
+use std::path::PathBuf;
+
+pub trait TileConverterTrait {
+	fn new(filename: &PathBuf, config: TileConverterConfig) -> Box<dyn TileConverterTrait>
+	where
+		Self: Sized;
+
+	// readers must be mutable, because they might use caching
+	fn convert_from(&mut self, reader: &mut TileReaderBox);
+}
 
 pub trait TileReaderTrait: Debug + Send + Sync {
 	fn new(filename: &str) -> TileReaderBox
