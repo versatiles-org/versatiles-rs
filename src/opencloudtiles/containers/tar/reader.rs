@@ -3,7 +3,7 @@ use crate::opencloudtiles::{
 	types::{Blob, Precompression, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters},
 };
 use std::{
-	collections::HashMap, fmt::Debug, fs::File, os::unix::prelude::FileExt, path::PathBuf,
+	collections::HashMap, fmt::Debug, fs::File, os::unix::prelude::FileExt, path::Path,
 	str::from_utf8,
 };
 use tar::{Archive, EntryType};
@@ -28,11 +28,16 @@ pub struct TileReader {
 	parameters: TileReaderParameters,
 }
 impl abstract_container::TileReaderTrait for TileReader {
-	fn from_file(filename: &PathBuf) -> TileReaderBox
+	fn new(filename: &str) -> TileReaderBox
 	where
 		Self: Sized,
 	{
-		let file = File::open(filename).unwrap();
+		let path = Path::new(filename);
+		if !path.exists() {
+			panic!("file {} does not exists", filename)
+		}
+
+		let file = File::open(path).unwrap();
 		let mut archive = Archive::new(&file);
 
 		let mut tile_map = HashMap::new();
@@ -115,7 +120,7 @@ impl abstract_container::TileReaderTrait for TileReader {
 
 		return Box::new(TileReader {
 			meta: Blob::empty(),
-			name: filename.to_string_lossy().to_string(),
+			name: filename.to_string(),
 			file,
 			tile_map,
 			parameters: TileReaderParameters::new(
@@ -131,7 +136,7 @@ impl abstract_container::TileReaderTrait for TileReader {
 	fn get_meta(&self) -> Blob {
 		return self.meta.clone();
 	}
-	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<Blob> {
+	fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob> {
 		let range = self.tile_map.get(&coord);
 
 		if range.is_none() {

@@ -58,7 +58,6 @@ impl TileConverterTrait for TileConverter {
 
 		let mut bar = ProgressBar::new("converting tiles", bbox_pyramide.count_tiles());
 		let mutex_bar = &Mutex::new(&mut bar);
-		let mutex_reader = &Mutex::new(reader);
 		let mutex_builder = &Mutex::new(&mut self.builder);
 
 		bbox_pyramide
@@ -69,7 +68,7 @@ impl TileConverterTrait for TileConverter {
 
 				mutex_bar.lock().unwrap().inc(1);
 
-				let optional_tile = mutex_reader.lock().unwrap().get_tile_data(&coord);
+				let optional_tile = reader.get_tile_data(&coord);
 				if optional_tile.is_none() {
 					return;
 				}

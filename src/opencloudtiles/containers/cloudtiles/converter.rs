@@ -86,13 +86,12 @@ impl TileConverter {
 		return self.writer.append(block_index.as_brotli_blob());
 	}
 	fn write_block(
-		&mut self, block: &BlockDefinition, reader: &mut TileReaderBox, bar: &mut ProgressBar,
+		&mut self, block: &BlockDefinition, reader: &TileReaderBox, bar: &mut ProgressBar,
 	) -> ByteRange {
 		let bbox = &block.bbox;
 		let mut tile_index = TileIndex::new_empty(bbox.count_tiles() as usize);
 		let tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
-		let mutex_reader = &Mutex::new(reader);
 		let mutex_bar = &Mutex::new(bar);
 		let mutex_writer = &Mutex::new(&mut self.writer);
 		let mutex_tile_index = &Mutex::new(&mut tile_index);
@@ -114,8 +113,7 @@ impl TileConverter {
 				z: block.level,
 			};
 
-			let mut safe_reader = mutex_reader.lock().unwrap();
-			let optional_tile = safe_reader.get_tile_data(&coord);
+			let optional_tile = reader.get_tile_data(&coord);
 
 			if optional_tile.is_none() {
 				let mut secured_tile_index = mutex_tile_index.lock().unwrap();
@@ -130,8 +128,6 @@ impl TileConverter {
 			}
 
 			let mut tile = optional_tile.unwrap();
-
-			drop(safe_reader);
 
 			let mut secured_tile_hash_lookup = None;
 			let mut tile_hash = None;

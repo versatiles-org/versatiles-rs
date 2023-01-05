@@ -29,7 +29,7 @@ pub enum Precompression {
 	Brotli,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Blob(Bytes);
 impl Blob {
 	pub fn from_vec(vec: Vec<u8>) -> Blob {

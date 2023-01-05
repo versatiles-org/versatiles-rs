@@ -72,13 +72,12 @@ pub fn compare(arguments: &Compare) {
 }
 
 fn new_reader(filename: &str) -> TileReaderBox {
-	let path = PathBuf::from(filename);
-	let extension = path.extension().unwrap().to_str().unwrap();
+	let extension = filename.split(".").last().unwrap();
 
 	let reader = match extension {
-		"mbtiles" => mbtiles::TileReader::from_file(&path),
-		"tar" => tar::TileReader::from_file(&path),
-		"cloudtiles" => cloudtiles::TileReader::from_file(&path),
+		"mbtiles" => mbtiles::TileReader::new(filename),
+		"tar" => tar::TileReader::new(filename),
+		"cloudtiles" => cloudtiles::TileReader::new(filename),
 		_ => panic!("extension '{:?}' unknown", extension),
 	};
 

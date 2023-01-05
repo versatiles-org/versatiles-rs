@@ -4,30 +4,60 @@ use super::ByteRange;
 use std::{
 	fs::File,
 	io::{BufReader, Read, Seek, SeekFrom},
-	path::PathBuf,
+	path::Path,
+	sync::Mutex,
 };
 
-trait CloudTilesSrcTrait: Read + Seek {}
-impl CloudTilesSrcTrait for BufReader<File> {}
-
-pub struct CloudTilesSrc {
-	name: String,
-	reader: Box<dyn CloudTilesSrcTrait>,
+pub trait CloudTilesSrcTrait {
+	fn new(source: &str) -> Self
+	where
+		Self: Sized;
+	fn read_range(&self, range: &ByteRange) -> Blob;
+	fn get_name(&self) -> &str;
 }
-impl CloudTilesSrc {
-	pub fn from_file(filename: &PathBuf) -> CloudTilesSrc {
-		return CloudTilesSrc {
-			name: filename.to_string_lossy().to_string(),
-			reader: Box::new(BufReader::new(File::open(filename).unwrap())),
+
+pub struct CloudTilesSrc(Box<dyn CloudTilesSrcTrait>);
+impl CloudTilesSrcTrait for CloudTilesSrc {
+	fn new(source: &str) -> Self
+	where
+		Self: Sized,
+	{
+		return CloudTilesSrc(Box::new(CloudTilesSrcFile::new(source)));
+	}
+	fn read_range(&self, range: &ByteRange) -> Blob {
+		return self.0.read_range(range);
+	}
+	fn get_name(&self) -> &str {
+		return self.0.get_name();
+	}
+}
+
+struct CloudTilesSrcFile {
+	name: String,
+	reader_mutex: Mutex<BufReader<File>>,
+}
+impl CloudTilesSrcTrait for CloudTilesSrcFile {
+	fn new(source: &str) -> Self {
+		let path = Path::new(source);
+		if !path.exists() {
+			panic!("file {} does not exists", source)
+		}
+
+		return CloudTilesSrcFile {
+			name: source.to_string(),
+			reader_mutex: Mutex::new(BufReader::new(File::open(path).unwrap())),
 		};
 	}
-	pub fn read_range(&mut self, range: &ByteRange) -> Blob {
+	fn read_range(&self, range: &ByteRange) -> Blob {
 		let mut buffer = vec![0; range.length as usize];
-		self.reader.seek(SeekFrom::Start(range.offset)).unwrap();
-		self.reader.read_exact(&mut buffer).unwrap();
+		let mut reader_safe = self.reader_mutex.lock().unwrap();
+
+		reader_safe.seek(SeekFrom::Start(range.offset)).unwrap();
+		reader_safe.read_exact(&mut buffer).unwrap();
+
 		return Blob::from_vec(buffer);
 	}
-	pub fn get_name(&self) -> &str {
+	fn get_name(&self) -> &str {
 		return &self.name;
 	}
 }

@@ -1,21 +1,23 @@
-use super::types::{BlockIndex, CloudTilesSrc, FileHeader, TileIndex};
+use super::types::{
+	BlockIndex, ByteRange, CloudTilesSrc, CloudTilesSrcTrait, FileHeader, TileIndex,
+};
 use crate::opencloudtiles::{
 	containers::abstract_container::{TileReaderBox, TileReaderTrait},
 	helpers::DataConverter,
 	types::{Blob, TileCoord2, TileCoord3, TileReaderParameters},
 };
-use std::{collections::HashMap, fmt::Debug, ops::Shr, path::PathBuf, str::from_utf8};
+use std::{collections::HashMap, fmt::Debug, ops::Shr, str::from_utf8, sync::RwLock};
 
 pub struct TileReader {
 	meta: Blob,
 	reader: CloudTilesSrc,
 	parameters: TileReaderParameters,
 	block_index: BlockIndex,
-	tile_index_cache: HashMap<TileCoord3, TileIndex>,
+	tile_index_cache: RwLock<HashMap<TileCoord3, TileIndex>>,
 }
 
 impl TileReader {
-	pub fn new(mut reader: CloudTilesSrc) -> TileReader {
+	pub fn from_src(mut reader: CloudTilesSrc) -> TileReader {
 		let header = FileHeader::from_reader(&mut reader);
 
 		let meta = if header.meta_range.length > 0 {
@@ -34,7 +36,7 @@ impl TileReader {
 			reader,
 			parameters,
 			block_index,
-			tile_index_cache: HashMap::new(),
+			tile_index_cache: RwLock::new(HashMap::new()),
 		};
 	}
 }
@@ -43,9 +45,9 @@ unsafe impl Send for TileReader {}
 unsafe impl Sync for TileReader {}
 
 impl TileReaderTrait for TileReader {
-	fn from_file(filename: &PathBuf) -> TileReaderBox {
-		let reader = CloudTilesSrc::from_file(filename);
-		return Box::new(TileReader::new(reader));
+	fn new(filename: &str) -> TileReaderBox {
+		let reader = CloudTilesSrc::new(filename);
+		return Box::new(TileReader::from_src(reader));
 	}
 	fn get_meta(&self) -> Blob {
 		return self.meta.clone();
@@ -53,7 +55,7 @@ impl TileReaderTrait for TileReader {
 	fn get_parameters(&self) -> &TileReaderParameters {
 		return &self.parameters;
 	}
-	fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<Blob> {
+	fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob> {
 		let block_coord = TileCoord3 {
 			x: coord.x.shr(8),
 			y: coord.y.shr(8),
@@ -79,14 +81,37 @@ impl TileReaderTrait for TileReader {
 			return None;
 		}
 
-		let tile_index = self
-			.tile_index_cache
-			.entry(block_coord)
-			.or_insert_with(|| TileIndex::from_brotli_blob(self.reader.read_range(&block.tile_range)));
-
 		let tile_id = block.bbox.get_tile_index(&TileCoord2::new(tile_x, tile_y));
 
-		let tile_range = tile_index.get_tile_range(tile_id as usize);
+		let cache_reader = self.tile_index_cache.read().unwrap();
+		let tile_index_option = cache_reader.get(&block_coord);
+
+		let tile_range: ByteRange;
+
+		if tile_index_option.is_none() {
+			drop(cache_reader);
+			let tile_index = TileIndex::from_brotli_blob(self.reader.read_range(&block.tile_range));
+			let mut cache_writer = self.tile_index_cache.write().unwrap();
+			cache_writer
+				.insert(block_coord.clone(), tile_index)
+				.unwrap();
+			drop(cache_writer);
+
+			let cache_reader = self.tile_index_cache.read().unwrap();
+			let tile_index_option = cache_reader.get(&block_coord);
+
+			tile_range = tile_index_option
+				.unwrap()
+				.get_tile_range(tile_id as usize)
+				.clone();
+			drop(cache_reader);
+		} else {
+			tile_range = tile_index_option
+				.unwrap()
+				.get_tile_range(tile_id as usize)
+				.clone();
+			drop(cache_reader);
+		};
 
 		return Some(self.reader.read_range(&tile_range));
 	}

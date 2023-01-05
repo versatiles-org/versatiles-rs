@@ -1,4 +1,4 @@
-use super::{ByteRange, CloudTilesSrc};
+use super::{ByteRange, CloudTilesSrc, CloudTilesSrcTrait};
 use crate::opencloudtiles::types::{Blob, Precompression, TileFormat};
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read, Write};
