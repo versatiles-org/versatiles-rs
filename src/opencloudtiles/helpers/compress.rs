@@ -6,6 +6,7 @@ use flate2::{
 };
 use std::io::{Cursor, Read};
 
+#[allow(dead_code)]
 pub fn compress(data: Blob, precompression: &Precompression) -> Blob {
 	match precompression {
 		Precompression::Uncompressed => data,

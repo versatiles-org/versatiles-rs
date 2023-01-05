@@ -92,9 +92,7 @@ impl TileReaderTrait for TileReader {
 			drop(cache_reader);
 			let tile_index = TileIndex::from_brotli_blob(self.reader.read_range(&block.tile_range));
 			let mut cache_writer = self.tile_index_cache.write().unwrap();
-			cache_writer
-				.insert(block_coord.clone(), tile_index)
-				.unwrap();
+			cache_writer.insert(block_coord.clone(), tile_index);
 			drop(cache_writer);
 
 			let cache_reader = self.tile_index_cache.read().unwrap();
