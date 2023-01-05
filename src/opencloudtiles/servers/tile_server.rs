@@ -1,10 +1,10 @@
-use super::types::ServerSourceBox;
+use super::{ok_not_found, types::ServerSourceBox};
 use crate::opencloudtiles::types::Precompression;
 use enumset::{enum_set, EnumSet};
 use hyper::{
 	header,
 	service::{make_service_fn, service_fn},
-	Body, Request, Response, Result, Server, StatusCode,
+	Body, Request, Server,
 };
 use std::{net::SocketAddr, sync::Arc};
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
@@ -45,13 +45,6 @@ impl TileServer {
 
 	#[tokio::main]
 	pub async fn start(&mut self) {
-		fn ok_not_found() -> Result<Response<Body>> {
-			Ok(Response::builder()
-				.status(StatusCode::NOT_FOUND)
-				.body("Not Found".into())
-				.unwrap())
-		}
-
 		let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
 
 		let mut sources: Vec<(String, usize, Arc<ServerSourceBox>)> = Vec::new();
@@ -110,11 +103,13 @@ impl TileServer {
 						//println!("split_path {:?}", split_path);
 						//println!("sub_path {:?}", sub_path);
 
-						source.get_data(sub_path, encoding_set);
+						let result = source.get_data(sub_path, encoding_set);
 
-						//let (prefix, source) = source_option.unwrap();
+						if result.is_err() {
+							return ok_not_found();
+						}
 
-						return ok_not_found();
+						return result;
 					}
 				}))
 			}

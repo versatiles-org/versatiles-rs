@@ -1,4 +1,4 @@
-use crate::opencloudtiles::types::Blob;
+use crate::opencloudtiles::types::{Blob, Precompression};
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
 use flate2::{
 	bufread::{GzDecoder, GzEncoder},
@@ -6,7 +6,6 @@ use flate2::{
 };
 use std::io::{Cursor, Read};
 
-/*
 pub fn compress(data: Blob, precompression: &Precompression) -> Blob {
 	match precompression {
 		Precompression::Uncompressed => data,
@@ -22,7 +21,6 @@ pub fn decompress(data: Blob, precompression: &Precompression) -> Blob {
 		Precompression::Brotli => decompress_brotli(data),
 	}
 }
- */
 
 pub fn compress_gzip(data: Blob) -> Blob {
 	let mut result: Vec<u8> = Vec::new();
