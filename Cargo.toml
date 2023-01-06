@@ -9,7 +9,6 @@ homepage = "https://www.opencloudtiles.org"
 repository = "https://github.com/OpenCloudTiles/opencloudtiles-tools"
 license = "MIT"
 exclude = ["**/.DS_Store", ".DS_Store"]
-exclude_files = ["**/.DS_Store", ".DS_Store"]
 
 [profile.dev]
 codegen-units = 256
