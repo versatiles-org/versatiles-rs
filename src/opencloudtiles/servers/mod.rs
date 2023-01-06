@@ -1,5 +1,7 @@
+mod sources;
 mod tile_server;
-mod types;
+mod traits;
 
+pub use sources::*;
 pub use tile_server::*;
-pub use types::*;
+pub use traits::*;

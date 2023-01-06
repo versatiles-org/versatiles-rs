@@ -1,12 +1,13 @@
-use super::{ok_not_found, types::ServerSourceBox};
+use super::traits::ServerSourceBox;
 use crate::opencloudtiles::types::Precompression;
 use enumset::{enum_set, EnumSet};
 use hyper::{
 	header,
 	service::{make_service_fn, service_fn},
-	Body, Request, Server,
+	Body, Request, Response, Result, Server, StatusCode,
 };
 use std::{net::SocketAddr, sync::Arc};
+
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
 pub struct TileServer {
@@ -127,4 +128,11 @@ impl TileServer {
 			.iter()
 			.map(|(url, source)| (url.to_owned(), source.get_name().to_owned()))
 	}
+}
+
+pub fn ok_not_found() -> Result<Response<Body>> {
+	return Ok(Response::builder()
+		.status(StatusCode::NOT_FOUND)
+		.body("Not Found".into())
+		.unwrap());
 }

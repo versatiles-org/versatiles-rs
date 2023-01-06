@@ -1,7 +1,7 @@
 use crate::{
 	opencloudtiles::{
 		containers::{cloudtiles, mbtiles, tar, TileConverterTrait, TileReaderBox, TileReaderTrait},
-		servers::{self, ServerSourceTileReader, TileServer},
+		servers::{ServerSourceTileReader, TileServer},
 		types::{TileBBoxPyramide, TileConverterConfig},
 	},
 	Compare, Convert, Probe, Serve,
@@ -117,6 +117,6 @@ fn new_converter(filename: &str, command: &Convert) -> Box<dyn TileConverterTrai
 	return converter;
 }
 
-fn new_server(command: &Serve) -> servers::TileServer {
-	servers::TileServer::new(command.port)
+fn new_server(command: &Serve) -> TileServer {
+	TileServer::new(command.port)
 }

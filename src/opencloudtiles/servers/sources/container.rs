@@ -1,6 +1,7 @@
 use crate::opencloudtiles::{
 	containers::TileReaderBox,
 	helpers::{compress_brotli, compress_gzip, decompress},
+	servers::ServerSourceTrait,
 	types::{Blob, Precompression, TileCoord3, TileFormat},
 };
 use enumset::EnumSet;
@@ -8,13 +9,6 @@ use hyper::{
 	header::{CONTENT_ENCODING, CONTENT_TYPE},
 	Body, Response, Result, StatusCode,
 };
-
-pub trait ServerSourceTrait: Send + Sync {
-	fn get_name(&self) -> &str;
-	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Result<Response<Body>>;
-}
-
-pub type ServerSourceBox = Box<dyn ServerSourceTrait>;
 
 pub struct ServerSourceTileReader {
 	reader: TileReaderBox,
