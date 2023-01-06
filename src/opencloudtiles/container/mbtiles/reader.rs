@@ -53,7 +53,9 @@ impl TileReader {
 		while let Some(entry) = entries.next().unwrap() {
 			let key = entry.get::<_, String>(0).unwrap();
 			let val = entry.get::<_, String>(1).unwrap();
+
 			//println!("name: {}, value: {}", key, val);
+
 			match key.as_str() {
 				"format" => match val.as_str() {
 					"jpg" => {
@@ -98,14 +100,16 @@ impl TileReader {
 
 		let mut entries = stmt.query([]).unwrap();
 		while let Some(entry) = entries.next().unwrap() {
+			let zoom_level = entry.get_unwrap::<_, u64>("zoom_level");
+			let col_min = entry.get_unwrap::<_, u64>("min(tile_column)");
+			let row_min = entry.get_unwrap::<_, u64>("min(tile_row)");
+			let col_max = entry.get_unwrap::<_, u64>("max(tile_column)");
+			let row_max = entry.get_unwrap::<_, u64>("max(tile_row)");
+			let max_index = 2u64.pow(zoom_level as u32) - 1;
+
 			bbox_pyramide.set_level_bbox(
-				entry.get_unwrap::<_, u64>("zoom_level"),
-				TileBBox::new(
-					entry.get_unwrap::<_, u64>("min(tile_column)"),
-					entry.get_unwrap::<_, u64>("min(tile_row)"),
-					entry.get_unwrap::<_, u64>("max(tile_column)"),
-					entry.get_unwrap::<_, u64>("max(tile_row)"),
-				),
+				zoom_level,
+				TileBBox::new(col_min, max_index - row_max, col_max, max_index - row_min),
 			);
 		}
 
@@ -140,10 +144,12 @@ impl TileReaderTrait for TileReader {
 		let connection = self.pool.get().unwrap();
 		let mut stmt = connection
 			.prepare(
-				"SELECT tile_data FROM tiles WHERE zoom_level = ? AND tile_column = ? AND tile_row = ?",
+				"SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?",
 			)
 			.expect("SQL preparation failed");
-		let result = stmt.query_row([coord.z, coord.x, coord.y], |entry| {
+
+		let max_index = 2u64.pow(coord.z as u32) - 1;
+		let result = stmt.query_row([coord.x, max_index - coord.y, coord.z], |entry| {
 			entry.get::<_, Vec<u8>>(0)
 		});
 		if result.is_ok() {
