@@ -1,4 +1,8 @@
-use crate::opencloudtiles::{container::TileReaderBox, lib::*, server::ServerSourceTrait};
+use crate::opencloudtiles::{
+	container::TileReaderBox,
+	lib::*,
+	server::{ok_not_found, ServerSourceTrait},
+};
 use enumset::EnumSet;
 use hyper::{
 	header::{CONTENT_ENCODING, CONTENT_TYPE},
@@ -11,7 +15,7 @@ pub struct TileContainer {
 	precompression: Precompression,
 }
 impl TileContainer {
-	pub fn from_reader(reader: TileReaderBox) -> Box<TileContainer> {
+	pub fn from(reader: TileReaderBox) -> Box<TileContainer> {
 		let parameters = reader.get_parameters();
 		let precompression = parameters.get_tile_precompression().clone();
 
@@ -96,11 +100,4 @@ impl ServerSourceTrait for TileContainer {
 		// unknown request;
 		return ok_not_found();
 	}
-}
-
-pub fn ok_not_found() -> Result<Response<Body>> {
-	return Ok(Response::builder()
-		.status(StatusCode::NOT_FOUND)
-		.body("Not Found".into())
-		.unwrap());
 }

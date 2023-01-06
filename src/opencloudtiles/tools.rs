@@ -36,7 +36,7 @@ pub fn serve(arguments: &Serve) {
 		let reader = new_reader(reader_source);
 		server.add_source(
 			format!("/tiles/{}/", name),
-			source::TileContainer::from_reader(reader),
+			source::TileContainer::from(reader),
 		);
 
 		fn guess_name(path: &str) -> &str {
