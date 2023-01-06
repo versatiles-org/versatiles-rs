@@ -46,9 +46,23 @@ pub fn serve(arguments: &Serve) {
 		}
 	});
 
-	server
-		.iter_url_mapping()
-		.for_each(|(url, source)| println!("   - {}: {}", url, source));
+	if arguments.static_folder.is_some() {
+		server.add_source(
+			String::from("/static/"),
+			source::Folder::from(arguments.static_folder.as_ref().unwrap()),
+		);
+	} else if arguments.static_tar.is_some() {
+		server.add_source(
+			String::from("/static/"),
+			source::Tar::from(arguments.static_tar.as_ref().unwrap()),
+		);
+	}
+
+	let mut list: Vec<(String, String)> = server.iter_url_mapping().collect();
+	list.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+	list
+		.iter()
+		.for_each(|(url, source)| println!("   {:30}  <-  {}", url.to_owned() + "*", source));
 
 	server.start();
 }
