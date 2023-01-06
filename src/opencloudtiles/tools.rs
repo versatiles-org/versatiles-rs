@@ -101,7 +101,7 @@ fn new_converter(filename: &str, command: &Convert) -> Box<dyn TileConverterTrai
 		command.tile_format.clone(),
 		command.precompress.clone(),
 		bbox_pyramide,
-		command.recompress,
+		command.force_recompression,
 	);
 
 	let path = PathBuf::from(filename);
