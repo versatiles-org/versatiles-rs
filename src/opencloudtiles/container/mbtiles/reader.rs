@@ -115,9 +115,9 @@ impl TileReader {
 impl TileReaderTrait for TileReader {
 	fn new(filename: &str) -> TileReaderBox {
 		let path = Path::new(filename);
-		if !path.exists() {
-			panic!("file {} does not exists", filename)
-		}
+
+		assert!(path.exists(), "file {:?} does not exist", path);
+		assert!(path.is_absolute(), "path {:?} must be absolute", path);
 
 		let reader = Self::load_from_sqlite(&path.to_path_buf());
 		return Box::new(reader);

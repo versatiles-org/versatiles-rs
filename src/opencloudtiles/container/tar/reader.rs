@@ -33,9 +33,9 @@ impl TileReaderTrait for TileReader {
 		Self: Sized,
 	{
 		let path = Path::new(filename);
-		if !path.exists() {
-			panic!("file {} does not exists", filename)
-		}
+
+		assert!(path.exists(), "file {:?} does not exist", path);
+		assert!(path.is_absolute(), "path {:?} must be absolute", path);
 
 		let file = File::open(path).unwrap();
 		let mut archive = Archive::new(&file);

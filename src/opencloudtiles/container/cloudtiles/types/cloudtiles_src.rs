@@ -39,9 +39,9 @@ struct CloudTilesSrcFile {
 impl CloudTilesSrcTrait for CloudTilesSrcFile {
 	fn new(source: &str) -> Self {
 		let path = Path::new(source);
-		if !path.exists() {
-			panic!("file {} does not exists", source)
-		}
+
+		assert!(path.exists(), "file {:?} does not exist", path);
+		assert!(path.is_absolute(), "path {:?} must be absolute", path);
 
 		return CloudTilesSrcFile {
 			name: source.to_string(),
