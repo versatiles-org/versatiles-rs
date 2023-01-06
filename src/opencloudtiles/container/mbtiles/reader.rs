@@ -5,6 +5,7 @@ use crate::opencloudtiles::{
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
 use std::{
+	env::current_dir,
 	fmt::Debug,
 	path::{Path, PathBuf},
 	str::from_utf8,
@@ -113,13 +114,20 @@ impl TileReader {
 }
 
 impl TileReaderTrait for TileReader {
-	fn new(filename: &str) -> TileReaderBox {
-		let path = Path::new(filename);
+	fn new(path: &str) -> TileReaderBox {
+		let mut filename = current_dir().unwrap();
+		filename.push(Path::new(path));
 
-		assert!(path.exists(), "file {:?} does not exist", path);
-		assert!(path.is_absolute(), "path {:?} must be absolute", path);
+		assert!(filename.exists(), "file {:?} does not exist", filename);
+		assert!(
+			filename.is_absolute(),
+			"path {:?} must be absolute",
+			filename
+		);
 
-		let reader = Self::load_from_sqlite(&path.to_path_buf());
+		filename = filename.canonicalize().unwrap();
+
+		let reader = Self::load_from_sqlite(&filename);
 		return Box::new(reader);
 	}
 	fn get_meta(&self) -> Blob {

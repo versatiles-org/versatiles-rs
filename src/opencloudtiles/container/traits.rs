@@ -12,7 +12,7 @@ pub trait TileConverterTrait {
 }
 
 pub trait TileReaderTrait: Debug + Send + Sync {
-	fn new(filename: &str) -> TileReaderBox
+	fn new(path: &str) -> TileReaderBox
 	where
 		Self: Sized;
 	fn get_name(&self) -> &str;

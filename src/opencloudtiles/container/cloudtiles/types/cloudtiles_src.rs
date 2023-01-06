@@ -2,6 +2,7 @@ use crate::opencloudtiles::lib::Blob;
 
 use super::ByteRange;
 use std::{
+	env::current_dir,
 	fs::File,
 	io::{BufReader, Read, Seek, SeekFrom},
 	path::Path,
@@ -38,14 +39,21 @@ struct CloudTilesSrcFile {
 }
 impl CloudTilesSrcTrait for CloudTilesSrcFile {
 	fn new(source: &str) -> Self {
-		let path = Path::new(source);
+		let mut filename = current_dir().unwrap();
+		filename.push(Path::new(source));
 
-		assert!(path.exists(), "file {:?} does not exist", path);
-		assert!(path.is_absolute(), "path {:?} must be absolute", path);
+		assert!(filename.exists(), "file {:?} does not exist", filename);
+		assert!(
+			filename.is_absolute(),
+			"filename {:?} must be absolute",
+			filename
+		);
+
+		filename = filename.canonicalize().unwrap();
 
 		return CloudTilesSrcFile {
 			name: source.to_string(),
-			reader_mutex: Mutex::new(BufReader::new(File::open(path).unwrap())),
+			reader_mutex: Mutex::new(BufReader::new(File::open(filename).unwrap())),
 		};
 	}
 	fn read_range(&self, range: &ByteRange) -> Blob {

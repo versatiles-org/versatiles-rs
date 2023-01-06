@@ -3,8 +3,8 @@ use crate::opencloudtiles::{
 	lib::*,
 };
 use std::{
-	collections::HashMap, fmt::Debug, fs::File, os::unix::prelude::FileExt, path::Path,
-	str::from_utf8,
+	collections::HashMap, env::current_dir, fmt::Debug, fs::File, os::unix::prelude::FileExt,
+	path::Path, str::from_utf8,
 };
 use tar::{Archive, EntryType};
 
@@ -28,16 +28,23 @@ pub struct TileReader {
 	parameters: TileReaderParameters,
 }
 impl TileReaderTrait for TileReader {
-	fn new(filename: &str) -> TileReaderBox
+	fn new(path: &str) -> TileReaderBox
 	where
 		Self: Sized,
 	{
-		let path = Path::new(filename);
+		let mut filename = current_dir().unwrap();
+		filename.push(Path::new(path));
 
-		assert!(path.exists(), "file {:?} does not exist", path);
-		assert!(path.is_absolute(), "path {:?} must be absolute", path);
+		assert!(filename.exists(), "file {:?} does not exist", filename);
+		assert!(
+			filename.is_absolute(),
+			"path {:?} must be absolute",
+			filename
+		);
 
-		let file = File::open(path).unwrap();
+		filename = filename.canonicalize().unwrap();
+
+		let file = File::open(filename).unwrap();
 		let mut archive = Archive::new(&file);
 
 		let mut tile_map = HashMap::new();
@@ -120,7 +127,7 @@ impl TileReaderTrait for TileReader {
 
 		return Box::new(TileReader {
 			meta: Blob::empty(),
-			name: filename.to_string(),
+			name: path.to_string(),
 			file,
 			tile_map,
 			parameters: TileReaderParameters::new(
