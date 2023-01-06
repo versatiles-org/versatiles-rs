@@ -98,13 +98,6 @@ impl TileServer {
 							&[]
 						};
 
-						//println!("   - - - ");
-						//println!("path {}", path);
-						//println!("prefix {}", prefix);
-						//println!("skip {}", skip);
-						//println!("split_path {:?}", split_path);
-						//println!("sub_path {:?}", sub_path);
-
 						let result = source.get_data(sub_path, encoding_set);
 
 						if result.is_err() {

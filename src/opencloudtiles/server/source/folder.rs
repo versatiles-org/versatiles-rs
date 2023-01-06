@@ -41,12 +41,12 @@ impl ServerSourceTrait for Folder {
 		let mut local_path = self.folder.clone();
 		local_path.push(PathBuf::from(path.join("/")));
 
-		if !local_path.starts_with(&self.folder) {
-			return ok_not_found();
-		}
-
 		if local_path.is_dir() {
 			local_path.push("index.html");
+		}
+
+		if !local_path.starts_with(&self.folder) {
+			return ok_not_found();
 		}
 
 		if !local_path.exists() {
