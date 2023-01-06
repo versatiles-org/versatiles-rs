@@ -52,4 +52,5 @@ serde_json = "1.0.91"
 tar = "0.4.38"
 tokio = { version = "1.23.1", features = ["full"] }
 url = "2.3.1"
+urlencoding = "2.1.2"
 webp = "0.2.2"

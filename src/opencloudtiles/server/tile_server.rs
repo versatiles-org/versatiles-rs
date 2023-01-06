@@ -63,8 +63,9 @@ impl TileServer {
 				Ok::<_, GenericError>(service_fn(move |req: Request<Body>| {
 					let arc_sources = arc_sources.clone();
 					async move {
+						let path = urlencoding::decode(req.uri().path()).unwrap();
+
 						let _method = req.method();
-						let path = req.uri().path();
 						let headers = req.headers();
 
 						let mut encoding_set: EnumSet<Precompression> =
