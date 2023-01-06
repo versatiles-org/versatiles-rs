@@ -1,6 +1,15 @@
-use super::{compress::*, image::*, Blob, Precompression, TileFormat};
+use super::{compress::*, image::*, Blob, Precompression};
+use clap::ValueEnum;
 
 type FnConv = fn(Blob) -> Blob;
+
+#[derive(Clone, Debug, PartialEq, ValueEnum)]
+pub enum TileFormat {
+	PBF,
+	PNG,
+	JPG,
+	WEBP,
+}
 
 #[derive(Debug)]
 pub struct DataConverter {

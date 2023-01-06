@@ -1,10 +1,20 @@
-use super::{Blob, Precompression};
+use super::Blob;
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
 use flate2::{
 	bufread::{GzDecoder, GzEncoder},
 	Compression,
 };
 use std::io::{Cursor, Read};
+
+use clap::ValueEnum;
+use enumset::EnumSetType;
+
+#[derive(Debug, EnumSetType, ValueEnum)]
+pub enum Precompression {
+	Uncompressed,
+	Gzip,
+	Brotli,
+}
 
 #[allow(dead_code)]
 pub fn compress(data: Blob, precompression: &Precompression) -> Blob {
