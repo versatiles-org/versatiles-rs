@@ -2,8 +2,8 @@ mod opencloudtiles;
 
 use clap::{Args, Parser, Subcommand};
 use opencloudtiles::{
+	lib::{Precompression, TileFormat},
 	tools,
-	types::{Precompression, TileFormat},
 };
 
 #[derive(Parser)]

@@ -1,8 +1,8 @@
 use crate::{
 	opencloudtiles::{
-		containers::{cloudtiles, mbtiles, tar, TileConverterTrait, TileReaderBox, TileReaderTrait},
-		servers::{sources, TileServer},
-		types::{TileBBoxPyramide, TileConverterConfig},
+		container::{cloudtiles, mbtiles, tar, TileConverterTrait, TileReaderBox, TileReaderTrait},
+		lib::{TileBBoxPyramide, TileConverterConfig},
+		server::{source, TileServer},
 	},
 	Compare, Convert, Probe, Serve,
 };
@@ -36,7 +36,7 @@ pub fn serve(arguments: &Serve) {
 		let reader = new_reader(reader_source);
 		server.add_source(
 			format!("/tiles/{}/", name),
-			sources::TileContainer::from_reader(reader),
+			source::TileContainer::from_reader(reader),
 		);
 
 		fn guess_name(path: &str) -> &str {
