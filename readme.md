@@ -43,6 +43,7 @@ cargo build && target/debug/opencloudtiles convert tiles/original/stuttgart.mbti
 cargo build && target/debug/opencloudtiles convert tiles/stuttgart.cloudtiles tiles/stuttgart.tar
 cargo build && target/debug/opencloudtiles probe tiles/stuttgart.cloudtiles
 cargo build && target/debug/opencloudtiles serve tiles/stuttgart.cloudtiles
+cargo build && target/debug/opencloudtiles serve -s tiles/frontend tiles/stuttgart.cloudtiles
 
 # cargo instruments --all-features -t "CPU Profiler" -- --max-zoom 3 convert tiles/philippines.mbtiles tiles/philippines.cloudtiles
 

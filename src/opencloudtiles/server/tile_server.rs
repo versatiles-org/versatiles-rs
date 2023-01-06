@@ -1,13 +1,13 @@
-use crate::opencloudtiles::lib::Precompression;
+use crate::opencloudtiles::lib::{Blob, Precompression};
 
 use super::traits::ServerSourceBox;
 use enumset::{enum_set, EnumSet};
 use hyper::{
-	header,
+	header::{self, CONTENT_ENCODING, CONTENT_TYPE},
 	service::{make_service_fn, service_fn},
 	Body, Request, Response, Result, Server, StatusCode,
 };
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, path::Path, sync::Arc};
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
@@ -136,4 +136,23 @@ pub fn ok_not_found() -> Result<Response<Body>> {
 		.status(StatusCode::NOT_FOUND)
 		.body("Not Found".into())
 		.unwrap());
+}
+
+pub fn ok_data(data: Blob, precompression: &Precompression, mime: &str) -> Result<Response<Body>> {
+	let mut response = Response::builder()
+		.status(StatusCode::OK)
+		.header(CONTENT_TYPE, mime);
+
+	match precompression {
+		Precompression::Uncompressed => {}
+		Precompression::Gzip => response = response.header(CONTENT_ENCODING, "gzip"),
+		Precompression::Brotli => response = response.header(CONTENT_ENCODING, "br"),
+	}
+
+	return Ok(response.body(data.to_vec().into()).unwrap());
+}
+
+pub fn guess_mime(path: &Path) -> String {
+	let mime = mime_guess::from_path(path).first_or_octet_stream();
+	return mime.essence_str().to_owned();
 }

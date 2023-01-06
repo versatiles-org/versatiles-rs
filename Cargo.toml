@@ -43,6 +43,7 @@ hyper = { version = "0.14", features = ["full"] }
 image = "0.24.5"
 indicatif = "0.17.2"
 itertools = "0.10.5"
+mime_guess = "2.0.4"
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.21.0"
 rayon = "1.6.1"

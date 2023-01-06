@@ -1,13 +1,10 @@
 use crate::opencloudtiles::{
 	container::TileReaderBox,
 	lib::*,
-	server::{ok_not_found, ServerSourceTrait},
+	server::{ok_data, ok_not_found, ServerSourceTrait},
 };
 use enumset::EnumSet;
-use hyper::{
-	header::{CONTENT_ENCODING, CONTENT_TYPE},
-	Body, Response, Result, StatusCode,
-};
+use hyper::{Body, Response, Result};
 
 pub struct TileContainer {
 	reader: TileReaderBox,
@@ -40,21 +37,6 @@ impl ServerSourceTrait for TileContainer {
 	}
 
 	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Result<Response<Body>> {
-		let ok_data =
-			|data: Blob, precompression: &Precompression, mime: &str| -> Result<Response<Body>> {
-				let mut response = Response::builder()
-					.status(StatusCode::OK)
-					.header(CONTENT_TYPE, mime);
-
-				match precompression {
-					Precompression::Uncompressed => {}
-					Precompression::Gzip => response = response.header(CONTENT_ENCODING, "gzip"),
-					Precompression::Brotli => response = response.header(CONTENT_ENCODING, "br"),
-				}
-
-				return Ok(response.body(data.to_vec().into()).unwrap());
-			};
-
 		if path.len() == 3 {
 			// get tile
 
