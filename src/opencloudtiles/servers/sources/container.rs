@@ -10,13 +10,13 @@ use hyper::{
 	Body, Response, Result, StatusCode,
 };
 
-pub struct ServerSourceTileReader {
+pub struct TileContainer {
 	reader: TileReaderBox,
 	tile_mime: String,
 	precompression: Precompression,
 }
-impl ServerSourceTileReader {
-	pub fn from_reader(reader: TileReaderBox) -> Box<ServerSourceTileReader> {
+impl TileContainer {
+	pub fn from_reader(reader: TileReaderBox) -> Box<TileContainer> {
 		let parameters = reader.get_parameters();
 		let precompression = parameters.get_tile_precompression().clone();
 
@@ -28,14 +28,14 @@ impl ServerSourceTileReader {
 		}
 		.to_string();
 
-		return Box::new(ServerSourceTileReader {
+		return Box::new(TileContainer {
 			reader,
 			tile_mime,
 			precompression,
 		});
 	}
 }
-impl ServerSourceTrait for ServerSourceTileReader {
+impl ServerSourceTrait for TileContainer {
 	fn get_name(&self) -> &str {
 		self.reader.get_name()
 	}

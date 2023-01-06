@@ -2,4 +2,4 @@ mod container;
 mod folder;
 mod tar;
 
-pub use container::ServerSourceTileReader;
+pub use container::TileContainer;
