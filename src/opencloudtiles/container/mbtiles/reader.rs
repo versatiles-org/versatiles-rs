@@ -112,21 +112,26 @@ impl TileReader {
 			let xc = (x0 + x1) / 2;
 
 			/*
-				SQLite is not very fast. Especially this query is very slow:
+				SQLite is not very fast. In particular, the following query is slow for very large tables:
 				> SELECT MIN(tile_row) FROM tiles WHERE zoom_level = 14
 
-				For some reason SQLite still want's to scan every record and is not using the index properly.
-				This seems to effect only the last field in an index (here: tile_row).
+				The execution of the above query takes about 1 second per 1 million records.
+				For some reason, SQLite does not use the index properly.
+
+				According to the manual: The MIN/MAX aggregate function can be optimized down to "a single index lookup",
+				if they are the "left-most column of an index": https://www.sqlite.org/optoverview.html#minmax
+				My guess is that the optimization does not work well on the right-most column of an index (here: tile_row).
 
 				To increase the speed of the above query by a factor of about 10, we split it into 2 queries.
 
-				The first query gives as good estimate by calculating MIN(tile_row) for the center tile_column:
+				The first query gives a good estimate by calculating MIN(tile_row) for the middle (or any used) tile_column:
 				> SELECT MIN(tile_row) FROM tiles WHERE zoom_level = 14 AND tile_column = $center_column
+				This takes just milliseconds.
 
 				The second query calculates MIN(tile_row) for all columns, but starting with the estimate:
 				> SELECT MIN(tile_row) FROM tiles WHERE zoom_level = 14 AND tile_row <= $min_row_estimate
 
-				This seems to help a lot. My guess is that it prevents SQLite to scan the whole table.
+				This seems to be a great help. I suspect it helps SQLite so it doesn't have to scan the entire index/table.
 			*/
 
 			let sql_prefix = format!("zoom_level = {} AND tile_", z);
