@@ -6,7 +6,6 @@ use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
 use std::{
 	env::current_dir,
-	fmt::Debug,
 	path::{Path, PathBuf},
 	str::from_utf8,
 	thread,
@@ -93,26 +92,54 @@ impl TileReader {
 	}
 	fn get_bbox_pyramide(&self) -> TileBBoxPyramide {
 		let mut bbox_pyramide = TileBBoxPyramide::new_empty();
-
-		let sql = "SELECT zoom_level, min(tile_column), min(tile_row), max(tile_column), max(tile_row) FROM tiles GROUP BY zoom_level";
 		let connection = self.pool.get().unwrap();
-		let mut stmt = connection.prepare(sql).unwrap();
 
-		let mut entries = stmt.query([]).unwrap();
-		while let Some(entry) = entries.next().unwrap() {
-			let zoom_level = entry.get_unwrap::<_, u64>("zoom_level");
-			let col_min = entry.get_unwrap::<_, u64>("min(tile_column)");
-			let row_min = entry.get_unwrap::<_, u64>("min(tile_row)");
-			let col_max = entry.get_unwrap::<_, u64>("max(tile_column)");
-			let row_max = entry.get_unwrap::<_, u64>("max(tile_row)");
-			let max_index = 2u64.pow(zoom_level as u32) - 1;
+		let query = |sql1: &str, sql2: &str| -> u64 {
+			let sql = if sql2.len() == 0 {
+				format!("SELECT {} FROM tiles", sql1)
+			} else {
+				format!("SELECT {} FROM tiles WHERE {}", sql1, sql2)
+			};
+			return connection.query_row(&sql, [], |r| r.get(0)).unwrap();
+		};
 
-			bbox_pyramide.set_level_bbox(
-				zoom_level,
-				TileBBox::new(col_min, max_index - row_max, col_max, max_index - row_min),
-			);
+		let z0 = query("MIN(zoom_level)", "");
+		let z1 = query("MAX(zoom_level)", "");
+
+		for z in z0..=z1 {
+			let x0 = query("MIN(tile_column)", &format!("zoom_level = {}", z));
+			let x1 = query("MAX(tile_column)", &format!("zoom_level = {}", z));
+			let xc = (x0 + x1) / 2;
+
+			/*
+				SQLite is not very fast. Especially this query is very slow:
+				> SELECT MIN(tile_row) FROM tiles WHERE zoom_level = 14
+
+				For some reason SQLite still want's to scan every record and is not using the index properly.
+				This seems to effect only the last field in an index (here: tile_row).
+
+				To increase the speed of the above query by a factor of about 10, we split it into 2 queries.
+
+				The first query gives as good estimate by calculating MIN(tile_row) for the center tile_column:
+				> SELECT MIN(tile_row) FROM tiles WHERE zoom_level = 14 AND tile_column = $center_column
+
+				The second query calculates MIN(tile_row) for all columns, but starting with the estimate:
+				> SELECT MIN(tile_row) FROM tiles WHERE zoom_level = 14 AND tile_row <= $min_row_estimate
+
+				This seems to help a lot. My guess is that it prevents SQLite to scan the whole table.
+			*/
+
+			let sql_prefix = format!("zoom_level = {} AND tile_", z);
+			let mut y0 = query("MIN(tile_row)", &format!("{}column = {}", sql_prefix, xc));
+			let mut y1 = query("MAX(tile_row)", &format!("{}column = {}", sql_prefix, xc));
+
+			y0 = query("MIN(tile_row)", &format!("{}row <= {}", sql_prefix, y0));
+			y1 = query("MAX(tile_row)", &format!("{}row >= {}", sql_prefix, y1));
+
+			let max_y = 2u64.pow(z as u32) - 1;
+
+			bbox_pyramide.set_level_bbox(z, TileBBox::new(x0, max_y - y1, x1, max_y - y0));
 		}
-
 		return bbox_pyramide;
 	}
 }
@@ -163,7 +190,7 @@ impl TileReaderTrait for TileReader {
 	}
 }
 
-impl Debug for TileReader {
+impl std::fmt::Debug for TileReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TileReader:MBTiles")
 			.field("meta", &from_utf8(self.get_meta().as_slice()).unwrap())
