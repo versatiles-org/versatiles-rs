@@ -2,7 +2,7 @@ use super::TileCoord2;
 use itertools::Itertools;
 use std::{f32::consts::PI, fmt};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct TileBBox {
 	x_min: u64,
 	y_min: u64,
@@ -36,6 +36,10 @@ impl TileBBox {
 	}
 	pub fn is_empty(&self) -> bool {
 		return (self.x_max < self.x_min) || (self.y_max < self.y_min);
+	}
+	pub fn is_full(&self, level: u64) -> bool {
+		let max = 2u64.pow(level as u32) - 1;
+		return (self.x_min == 0) && (self.y_min == 0) && (self.x_max == max) && (self.y_max == max);
 	}
 	pub fn count_tiles(&self) -> u64 {
 		let cols_count;

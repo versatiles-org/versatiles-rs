@@ -47,8 +47,13 @@ impl TileConverter {
 		return self.writer.append(compressed);
 	}
 	fn write_blocks(&mut self, reader: &mut TileReaderBox) -> ByteRange {
+		let pyramide = self.config.get_bbox_pyramide();
+		if pyramide.is_empty() {
+			return ByteRange::empty();
+		}
+
 		let mut blocks: Vec<BlockDefinition> = Vec::new();
-		let mut bar1 = ProgressBar::new("counting tiles", self.config.get_max_zoom());
+		let mut bar1 = ProgressBar::new("counting tiles", self.config.get_max_zoom().unwrap());
 
 		for (zoom, bbox_tiles) in self.config.get_bbox_pyramide().iter_levels() {
 			bar1.set_position(zoom);
