@@ -40,6 +40,10 @@ impl TileCoord3 {
 	pub fn new(z: u64, y: u64, x: u64) -> TileCoord3 {
 		TileCoord3 { x, y, z }
 	}
+	pub fn flip_vertically(&self) -> TileCoord3 {
+		let max_index = 2u64.pow(self.z as u32) - 1;
+		return TileCoord3::new(self.z, max_index-self.y, self.x)
+	}
 }
 
 impl Debug for TileCoord3 {

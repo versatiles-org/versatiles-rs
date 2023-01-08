@@ -15,7 +15,7 @@ pub struct TileReader {
 	name: String,
 	pool: r2d2::Pool<SqliteConnectionManager>,
 	meta_data: Option<String>,
-	parameters: Option<TileReaderParameters>,
+	parameters: TileReaderParameters,
 }
 impl TileReader {
 	fn load_from_sqlite(filename: &PathBuf) -> TileReader {
@@ -33,7 +33,7 @@ impl TileReader {
 			name: filename.to_string_lossy().to_string(),
 			pool,
 			meta_data: None,
-			parameters: None,
+			parameters: TileReaderParameters::new(TileFormat::PBF, Precompression::Uncompressed, TileBBoxPyramide::new_empty()),
 		};
 		reader.load_meta_data();
 
@@ -80,11 +80,9 @@ impl TileReader {
 			}
 		}
 
-		self.parameters = Some(TileReaderParameters::new(
-			tile_format.unwrap(),
-			precompression.unwrap(),
-			self.get_bbox_pyramide(),
-		));
+		self.parameters.set_tile_format(&tile_format.unwrap());
+		self.parameters.set_tile_precompression(&precompression.unwrap());
+		self.parameters.set_bbox_pyramide(&self.get_bbox_pyramide());
 
 		if self.meta_data.is_none() {
 			panic!("'json' is not defined in table 'metadata'");
@@ -171,15 +169,24 @@ impl TileReaderTrait for TileReader {
 		Blob::from_slice(self.meta_data.as_ref().unwrap().as_bytes())
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
-		self.parameters.as_ref().unwrap()
+		&self.parameters
 	}
-	fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob> {
+	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
+		&mut self.parameters
+	}
+	fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
 		let connection = self.pool.get().unwrap();
 		let mut stmt = connection
 			.prepare(
 				"SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?",
 			)
 			.expect("SQL preparation failed");
+
+		let coord:TileCoord3 = if self.get_parameters().get_vertical_flip() {
+			coord_in.flip_vertically().to_owned()
+		} else {
+			coord_in.to_owned()
+		};
 
 		let max_index = 2u64.pow(coord.z as u32) - 1;
 		let result = stmt.query_row([coord.x, max_index - coord.y, coord.z], |entry| {

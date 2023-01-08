@@ -56,7 +56,16 @@ impl TileReaderTrait for TileReader {
 	fn get_parameters(&self) -> &TileReaderParameters {
 		&self.parameters
 	}
-	fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob> {
+	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
+		&mut self.parameters
+	}
+	fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
+		let coord:TileCoord3 = if self.get_parameters().get_vertical_flip() {
+			coord_in.flip_vertically().to_owned()
+		} else {
+			coord_in.to_owned()
+		};
+
 		let block_coord = TileCoord3 {
 			x: coord.x.shr(8),
 			y: coord.y.shr(8),
