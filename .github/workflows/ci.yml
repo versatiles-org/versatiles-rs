@@ -10,7 +10,7 @@ on:
     - master
   schedule:
     - cron: '0 0 15 * *'
-  workflow_dispatch
+  workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
