@@ -36,7 +36,7 @@ impl TileReaderParameters {
 		&self.tile_precompression
 	}
 	pub fn set_tile_precompression(&mut self, precompression: &Precompression) {
-		self.tile_precompression = precompression.clone();
+		self.tile_precompression = *precompression;
 	}
 	#[allow(dead_code)]
 	pub fn get_decompressor(&self) -> &DataConverter {

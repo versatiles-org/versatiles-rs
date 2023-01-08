@@ -189,7 +189,7 @@ impl TileReaderTrait for TileReader {
 			.expect("SQL preparation failed");
 
 		let coord: TileCoord3 = if self.get_parameters().get_vertical_flip() {
-			coord_in.flip_vertically().to_owned()
+			coord_in.flip_vertically()
 		} else {
 			coord_in.to_owned()
 		};

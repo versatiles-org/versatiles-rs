@@ -26,7 +26,7 @@ fn new_reader(filename: &str, arguments: &Convert) -> TileReaderBox {
 		.get_parameters_mut()
 		.set_vertical_flip(arguments.flip_input);
 
-	return reader;
+	reader
 }
 
 fn new_converter(filename: &str, arguments: &Convert) -> TileConverterBox {
