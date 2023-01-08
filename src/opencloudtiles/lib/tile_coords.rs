@@ -42,7 +42,7 @@ impl TileCoord3 {
 	}
 	pub fn flip_vertically(&self) -> TileCoord3 {
 		let max_index = 2u64.pow(self.z as u32) - 1;
-		return TileCoord3::new(self.z, max_index-self.y, self.x)
+		return TileCoord3::new(self.z, max_index - self.y, self.x);
 	}
 }
 

@@ -179,7 +179,7 @@ impl TileReaderTrait for TileReader {
 		self.meta.clone()
 	}
 	fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
-		let coord:TileCoord3 = if self.get_parameters().get_vertical_flip() {
+		let coord: TileCoord3 = if self.get_parameters().get_vertical_flip() {
 			coord_in.flip_vertically().to_owned()
 		} else {
 			coord_in.to_owned()

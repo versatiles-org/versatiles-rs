@@ -19,15 +19,17 @@ pub fn convert(arguments: &Convert) {
 	converter.convert_from(&mut reader);
 }
 
-fn new_reader(filename:&str, arguments: &Convert) -> TileReaderBox {
+fn new_reader(filename: &str, arguments: &Convert) -> TileReaderBox {
 	let mut reader = get_reader(filename);
 
-	reader.get_parameters_mut().set_vertical_flip(arguments.flip_input);
+	reader
+		.get_parameters_mut()
+		.set_vertical_flip(arguments.flip_input);
 
 	return reader;
 }
 
-fn new_converter(filename:&str, arguments: &Convert) -> TileConverterBox {
+fn new_converter(filename: &str, arguments: &Convert) -> TileConverterBox {
 	let mut bbox_pyramide = TileBBoxPyramide::new_full();
 
 	if arguments.min_zoom.is_some() {

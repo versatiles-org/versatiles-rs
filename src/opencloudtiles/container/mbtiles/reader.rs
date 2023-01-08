@@ -33,7 +33,11 @@ impl TileReader {
 			name: filename.to_string_lossy().to_string(),
 			pool,
 			meta_data: None,
-			parameters: TileReaderParameters::new(TileFormat::PBF, Precompression::Uncompressed, TileBBoxPyramide::new_empty()),
+			parameters: TileReaderParameters::new(
+				TileFormat::PBF,
+				Precompression::Uncompressed,
+				TileBBoxPyramide::new_empty(),
+			),
 		};
 		reader.load_meta_data();
 
@@ -81,7 +85,9 @@ impl TileReader {
 		}
 
 		self.parameters.set_tile_format(&tile_format.unwrap());
-		self.parameters.set_tile_precompression(&precompression.unwrap());
+		self
+			.parameters
+			.set_tile_precompression(&precompression.unwrap());
 		self.parameters.set_bbox_pyramide(&self.get_bbox_pyramide());
 
 		if self.meta_data.is_none() {
@@ -182,7 +188,7 @@ impl TileReaderTrait for TileReader {
 			)
 			.expect("SQL preparation failed");
 
-		let coord:TileCoord3 = if self.get_parameters().get_vertical_flip() {
+		let coord: TileCoord3 = if self.get_parameters().get_vertical_flip() {
 			coord_in.flip_vertically().to_owned()
 		} else {
 			coord_in.to_owned()
