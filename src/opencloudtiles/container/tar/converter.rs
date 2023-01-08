@@ -1,5 +1,5 @@
 use crate::opencloudtiles::{
-	container::{TileConverterTrait, TileReaderBox},
+	container::{TileConverterBox, TileConverterTrait, TileReaderBox},
 	lib::{Precompression, ProgressBar, TileConverterConfig, TileFormat},
 };
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
@@ -11,7 +11,7 @@ pub struct TileConverter {
 	config: TileConverterConfig,
 }
 impl TileConverterTrait for TileConverter {
-	fn new(filename: &std::path::PathBuf, config: TileConverterConfig) -> Box<dyn TileConverterTrait>
+	fn new(filename: &Path, config: TileConverterConfig) -> TileConverterBox
 	where
 		Self: Sized,
 	{

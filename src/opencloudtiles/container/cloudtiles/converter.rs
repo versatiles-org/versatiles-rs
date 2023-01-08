@@ -1,11 +1,11 @@
 use super::types::{BlockDefinition, BlockIndex, ByteRange, CloudTilesDst, FileHeader, TileIndex};
 use crate::opencloudtiles::{
-	container::{TileConverterTrait, TileReaderBox},
+	container::{TileConverterBox, TileConverterTrait, TileReaderBox},
 	lib::ProgressBar,
 	lib::{TileConverterConfig, TileCoord2, TileCoord3},
 };
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
-use std::{collections::HashMap, path::PathBuf, sync::Mutex};
+use std::{collections::HashMap, path::Path, sync::Mutex};
 
 pub struct TileConverter {
 	writer: CloudTilesDst,
@@ -13,7 +13,7 @@ pub struct TileConverter {
 }
 
 impl TileConverterTrait for TileConverter {
-	fn new(filename: &PathBuf, tile_config: TileConverterConfig) -> Box<dyn TileConverterTrait>
+	fn new(filename: &Path, tile_config: TileConverterConfig) -> TileConverterBox
 	where
 		Self: Sized,
 	{
@@ -44,7 +44,7 @@ impl TileConverter {
 	fn write_meta(&mut self, reader: &TileReaderBox) -> ByteRange {
 		let meta = reader.get_meta();
 		let compressed = self.config.get_compressor().run(meta);
-		
+
 		self.writer.append(compressed)
 	}
 	fn write_blocks(&mut self, reader: &mut TileReaderBox) -> ByteRange {

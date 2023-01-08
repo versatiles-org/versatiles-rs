@@ -1,9 +1,13 @@
 use crate::opencloudtiles::lib::*;
 use std::fmt::Debug;
-use std::path::PathBuf;
+use std::path::Path;
 
+pub type TileConverterBox = Box<dyn TileConverterTrait>;
+pub type TileReaderBox = Box<dyn TileReaderTrait>;
+
+#[allow(clippy::new_ret_no_self)]
 pub trait TileConverterTrait {
-	fn new(filename: &PathBuf, config: TileConverterConfig) -> Box<dyn TileConverterTrait>
+	fn new(filename: &Path, config: TileConverterConfig) -> TileConverterBox
 	where
 		Self: Sized;
 
@@ -11,6 +15,7 @@ pub trait TileConverterTrait {
 	fn convert_from(&mut self, reader: &mut TileReaderBox);
 }
 
+#[allow(clippy::new_ret_no_self)]
 pub trait TileReaderTrait: Debug + Send + Sync {
 	fn new(path: &str) -> TileReaderBox
 	where
@@ -30,5 +35,3 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 	/// always compressed with get_tile_precompression and formatted with get_tile_format
 	fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob>;
 }
-
-pub type TileReaderBox = Box<dyn TileReaderTrait>;

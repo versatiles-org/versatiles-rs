@@ -52,9 +52,11 @@ pub fn decompress_gzip(data: Blob) -> Blob {
 }
 
 pub fn compress_brotli(data: Blob) -> Blob {
-	let mut params = BrotliEncoderParams::default();
-	params.quality = 11;
-	params.size_hint = data.len();
+	let params = BrotliEncoderParams {
+		quality: 11,
+		size_hint: data.len(),
+		..Default::default()
+	};
 	let mut cursor = Cursor::new(data.as_slice());
 	let mut result: Vec<u8> = Vec::new();
 	BrotliCompress(&mut cursor, &mut result, &params).expect("Error in compress_brotli");
@@ -94,7 +96,7 @@ mod tests {
 		(0..size).for_each(|i| {
 			vec[i] = (((i as f64 + 1.78123).cos() * 6_513_814_013_423.454).fract() * 256f64) as u8;
 		});
-		
+
 		Blob::from_vec(vec)
 	}
 }

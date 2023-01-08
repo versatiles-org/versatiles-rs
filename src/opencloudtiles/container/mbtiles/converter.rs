@@ -1,13 +1,13 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use crate::opencloudtiles::{
-	container::{TileConverterTrait, TileReaderBox},
+	container::{TileConverterBox, TileConverterTrait, TileReaderBox},
 	lib::TileConverterConfig,
 };
 
 pub struct TileConverter;
 impl TileConverterTrait for TileConverter {
-	fn new(_filename: &PathBuf, _config: TileConverterConfig) -> Box<dyn TileConverterTrait>
+	fn new(_filename: &Path, _config: TileConverterConfig) -> TileConverterBox
 	where
 		Self: Sized,
 	{

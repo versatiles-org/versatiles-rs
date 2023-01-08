@@ -6,7 +6,9 @@ use crate::{
 	},
 	Compare, Convert, Probe, Serve,
 };
-use std::{boxed::Box, path::PathBuf};
+use std::path::PathBuf;
+
+use super::container::TileConverterBox;
 
 pub fn convert(arguments: &Convert) {
 	println!(
@@ -95,7 +97,7 @@ fn new_reader(filename: &str) -> TileReaderBox {
 	reader
 }
 
-fn new_converter(filename: &str, command: &Convert) -> Box<dyn TileConverterTrait> {
+fn new_converter(filename: &str, command: &Convert) -> TileConverterBox {
 	let mut bbox_pyramide = TileBBoxPyramide::new_full();
 
 	if command.min_zoom.is_some() {
