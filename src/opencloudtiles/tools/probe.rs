@@ -1,5 +1,4 @@
-use crate::{Probe, opencloudtiles::tools::get_reader};
-
+use crate::{opencloudtiles::tools::get_reader, Probe};
 
 pub fn probe(arguments: &Probe) {
 	println!("probe {:?}", arguments.file);
@@ -7,4 +6,3 @@ pub fn probe(arguments: &Probe) {
 	let reader = get_reader(&arguments.file);
 	println!("{:#?}", reader);
 }
-

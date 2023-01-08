@@ -1,8 +1,10 @@
 use crate::{
 	opencloudtiles::{
-		container::{cloudtiles, mbtiles, tar, TileConverterTrait, TileConverterBox},
-		lib::{TileBBoxPyramide, TileConverterConfig}, tools::get_reader,
-	}, Convert,
+		container::{cloudtiles, mbtiles, tar, TileConverterBox, TileConverterTrait},
+		lib::{TileBBoxPyramide, TileConverterConfig},
+		tools::get_reader,
+	},
+	Convert,
 };
 use std::path::PathBuf;
 

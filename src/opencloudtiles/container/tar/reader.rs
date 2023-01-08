@@ -2,11 +2,11 @@ use crate::opencloudtiles::{
 	container::{TileReaderBox, TileReaderTrait},
 	lib::*,
 };
-use std::{
-	collections::HashMap, env::current_dir, fmt::Debug, fs::File, os::unix::prelude::FileExt,
-	path::Path, str::from_utf8, io::Read,
-};
 use itertools::Itertools;
+use std::{
+	collections::HashMap, env::current_dir, fmt::Debug, fs::File, io::Read,
+	os::unix::prelude::FileExt, path::Path, str::from_utf8,
+};
 use tar::{Archive, EntryType};
 
 #[derive(PartialEq, Eq, Hash)]
@@ -132,7 +132,7 @@ impl TileReaderTrait for TileReader {
 				continue;
 			}
 
-			let mut add_meta = |precompression:Precompression| {
+			let mut add_meta = |precompression: Precompression| {
 				let mut blob: Vec<u8> = Vec::new();
 				entry.read_to_end(&mut blob).unwrap();
 
@@ -141,10 +141,16 @@ impl TileReaderTrait for TileReader {
 
 			if path_vec.len() == 1 {
 				match path_vec[0] {
-					"meta.json" | "tiles.json" | "metadata.json" => add_meta(Precompression::Uncompressed),
-					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => add_meta(Precompression::Gzip),
-					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => add_meta(Precompression::Brotli),
-					&_ => continue
+					"meta.json" | "tiles.json" | "metadata.json" => {
+						add_meta(Precompression::Uncompressed)
+					}
+					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
+						add_meta(Precompression::Gzip)
+					}
+					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
+						add_meta(Precompression::Brotli)
+					}
+					&_ => continue,
 				};
 			}
 

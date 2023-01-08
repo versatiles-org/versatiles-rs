@@ -1,9 +1,4 @@
-use crate::{
-	opencloudtiles::{
-		container::{cloudtiles, mbtiles, tar, TileReaderBox, TileReaderTrait},
-		
-	},
-};
+use crate::opencloudtiles::container::{cloudtiles, mbtiles, tar, TileReaderBox, TileReaderTrait};
 
 pub fn get_reader(filename: &str) -> TileReaderBox {
 	let extension = filename.split('.').last().unwrap();

@@ -1,7 +1,9 @@
 use crate::{
 	opencloudtiles::{
-		server::{source, TileServer}, tools::get_reader,
-	}, Serve,
+		server::{source, TileServer},
+		tools::get_reader,
+	},
+	Serve,
 };
 
 pub fn serve(arguments: &Serve) {
