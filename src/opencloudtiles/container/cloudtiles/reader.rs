@@ -105,10 +105,7 @@ impl TileReaderTrait for TileReader {
 			let cache_reader = self.tile_index_cache.read().unwrap();
 			let tile_index_option = cache_reader.get(&block_coord);
 
-			tile_range = tile_index_option
-				.unwrap()
-				.get_tile_range(tile_id)
-				.clone();
+			tile_range = tile_index_option.unwrap().get_tile_range(tile_id).clone();
 
 			drop(cache_reader);
 		}
