@@ -1,5 +1,5 @@
 use crate::opencloudtiles::{
-	lib::{compress_brotli, compress_gzip, Blob, Precompression},
+	lib::*,
 	server::{guess_mime, ok_data, ok_not_found, ServerSourceTrait},
 };
 use enumset::EnumSet;
@@ -14,8 +14,19 @@ use std::{
 };
 use tar::{Archive, EntryType};
 
+struct CompressedVersions {
+	un: Option<Blob>,
+	gz: Option<Blob>,
+	br: Option<Blob>,
+}
+impl CompressedVersions {
+	fn new() -> Self {
+		CompressedVersions{ un: None, gz: None, br: None }
+	}
+}
+
 pub struct Tar {
-	lookup: HashMap<String, Blob>,
+	lookup: HashMap<String, CompressedVersions>,
 	name: String,
 }
 impl Tar {
@@ -32,9 +43,10 @@ impl Tar {
 		);
 		assert!(filename.is_file(), "path {:?} must be a file", filename);
 
-		let mut lookup = HashMap::new();
+		let mut lookup:HashMap<String, CompressedVersions> = HashMap::new();
 		let file = BufReader::new(File::open(filename).unwrap());
 		let mut archive = Archive::new(file);
+
 		for file_result in archive.entries().unwrap() {
 			if file_result.is_err() {
 				continue;
@@ -46,25 +58,47 @@ impl Tar {
 				continue;
 			}
 
+			let mut entry_path = file.path().unwrap().into_owned();
+			
+			let precompression:Precompression = if let Some(extension) = entry_path.extension() {
+				match extension.to_str() {
+					Some("br") => Precompression::Brotli,
+					Some("gz")=> Precompression::Gzip,
+					_ => Precompression::Uncompressed,
+				}
+			} else {
+				Precompression::Uncompressed
+			};
+
+			if precompression != Precompression::Uncompressed {
+				entry_path = entry_path.with_extension("")
+			}
+
 			let mut buffer = Vec::new();
 			file.read_to_end(&mut buffer).unwrap();
 			let blob = Blob::from_vec(buffer);
 
-			let entry_path = file.path().unwrap();
+			let mut add = |path:&Path, blob: Blob| {
+				let name:String = path
+				.iter()
+				.map(|s| s.to_str().unwrap())
+				.collect::<Vec<&str>>()
+				.join("/");
+
+				let entry = lookup.entry(name);
+				let versions = entry.or_insert_with(|| CompressedVersions::new());
+				match precompression {
+        Precompression::Uncompressed => versions.un = Some(blob),
+        Precompression::Gzip => versions.gz = Some(blob),
+        Precompression::Brotli => versions.br = Some(blob),
+    }
+
+		};
 
 			if entry_path.file_name() == Some(OsStr::new("index.html")) {
-				lookup.insert(path2name(entry_path.parent().unwrap()), blob.clone());
+				add(entry_path.parent().unwrap(), blob.clone());
 			}
-
-			lookup.insert(path2name(&entry_path), blob);
-
-			fn path2name(path: &Path) -> String {
-				path
-					.iter()
-					.map(|s| s.to_str().unwrap())
-					.collect::<Vec<&str>>()
-					.join("/")
-			}
+			add(&entry_path, blob);
 		}
 
 		Box::new(Tar {
@@ -85,18 +119,50 @@ impl ServerSourceTrait for Tar {
 			return ok_not_found();
 		}
 
-		let blob = entry_option.unwrap().to_owned();
+		let versions = entry_option.unwrap().to_owned();
 
 		let mime = guess_mime(Path::new(&entry_name));
 
 		if accept.contains(Precompression::Brotli) {
-			return ok_data(compress_brotli(blob), &Precompression::Brotli, &mime);
+			let respond = |blob| ok_data(blob, &Precompression::Brotli, &mime);
+
+			if let Some(blob) = &versions.br {
+				return respond(blob.to_owned());
+			}
+			if let Some(blob) = &versions.un {
+				return respond(compress_brotli(blob.to_owned()));
+			}
+			if let Some(blob) = &versions.gz {
+				return respond(compress_brotli(decompress_gzip(blob.to_owned())));
+			}
 		}
 
 		if accept.contains(Precompression::Gzip) {
-			return ok_data(compress_gzip(blob), &Precompression::Gzip, &mime);
+			let respond = |blob| ok_data(blob, &Precompression::Gzip, &mime);
+
+			if let Some(blob) = &versions.gz {
+				return respond(blob.to_owned());
+			}
+			if let Some(blob) = &versions.un {
+				return respond(compress_gzip(blob.to_owned()));
+			}
+			if let Some(blob) = &versions.br {
+				return respond(compress_gzip(decompress_brotli(blob.to_owned())));
+			}
 		}
 
-		ok_data(blob, &Precompression::Uncompressed, &mime)
+		let respond = |blob| ok_data(blob, &Precompression::Uncompressed, &mime);
+
+		if let Some(blob) = &versions.un {
+			return respond(blob.to_owned());
+		}
+		if let Some(blob) = &versions.br {
+			return respond(decompress_brotli(blob.to_owned()));
+		}
+		if let Some(blob) = &versions.gz {
+			return respond(decompress_gzip(blob.to_owned()));
+		}
+
+		return ok_not_found();
 	}
 }
