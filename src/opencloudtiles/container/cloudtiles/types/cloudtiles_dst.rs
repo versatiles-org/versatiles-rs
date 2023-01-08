@@ -28,7 +28,7 @@ impl CloudTilesDst {
 		let pos = self.writer.stream_position().unwrap();
 		self.writer.seek(SeekFrom::Start(0)).unwrap();
 
-		self.writer.write(blob.as_slice()).unwrap();
+		self.writer.write_all(blob.as_slice()).unwrap();
 
 		self.writer.seek(SeekFrom::Start(pos)).unwrap();
 	}

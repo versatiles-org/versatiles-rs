@@ -24,7 +24,7 @@ impl FileHeader {
 	}
 	pub fn to_blob(&self) -> Blob {
 		let mut header: Vec<u8> = Vec::new();
-		header.write(b"OpenCloudTiles-Container-v1:").unwrap();
+		header.write_all(b"OpenCloudTiles-Container-v1:").unwrap();
 
 		// tile type
 		header

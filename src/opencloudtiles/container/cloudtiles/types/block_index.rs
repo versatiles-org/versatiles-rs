@@ -57,7 +57,7 @@ impl BlockIndex {
 		let vec = Vec::new();
 		let mut cursor = Cursor::new(vec);
 		for (_coord, block) in self.lookup.iter() {
-			cursor.write(block.as_blob().as_slice()).unwrap();
+			cursor.write_all(block.as_blob().as_slice()).unwrap();
 		}
 		return Blob::from_vec(cursor.into_inner());
 	}
