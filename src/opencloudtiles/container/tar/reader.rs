@@ -4,8 +4,9 @@ use crate::opencloudtiles::{
 };
 use std::{
 	collections::HashMap, env::current_dir, fmt::Debug, fs::File, os::unix::prelude::FileExt,
-	path::Path, str::from_utf8,
+	path::Path, str::from_utf8, io::Read,
 };
+use itertools::Itertools;
 use tar::{Archive, EntryType};
 
 #[derive(PartialEq, Eq, Hash)]
@@ -47,86 +48,111 @@ impl TileReaderTrait for TileReader {
 		let file = File::open(filename).unwrap();
 		let mut archive = Archive::new(&file);
 
+		let mut meta = Blob::empty();
 		let mut tile_map = HashMap::new();
 		let mut tile_form: Option<TileFormat> = None;
 		let mut tile_comp: Option<Precompression> = None;
 		let mut bbox_pyramide = TileBBoxPyramide::new_empty();
 
-		for file in archive.entries().unwrap() {
-			let file = file.unwrap();
-			let header = file.header();
+		for entry in archive.entries().unwrap() {
+			let mut entry = entry.unwrap();
+			let header = entry.header();
 			if header.entry_type() != EntryType::Regular {
 				continue;
 			}
 
-			let path = file.path().unwrap();
-			let fullname: Vec<&str> = path.iter().map(|s| s.to_str().unwrap()).collect();
+			let path = entry.path().unwrap().clone();
+			let mut path_tmp: Vec<&str> = path.iter().map(|s| s.to_str().unwrap()).collect_vec();
+			path_tmp.remove(0);
+			let path_string = path_tmp.join("/");
+			drop(path);
+			let path_vec: Vec<&str> = path_string.split('/').collect();
 
-			// expecting something like:
-			// "./6/21/34.png" -> [".", "6", "21", "34.png"]
-			assert_eq!(fullname.len(), 4);
-			assert_eq!(fullname[0], ".");
+			let mut add_tile = || {
+				let z = path_vec[0].parse::<u64>().unwrap();
+				let y = path_vec[1].parse::<u64>().unwrap();
 
-			let z = fullname[1].parse::<u64>().unwrap();
-			let y = fullname[2].parse::<u64>().unwrap();
+				let mut filename: Vec<&str> = path_vec[2].split('.').collect();
+				let x = filename[0].parse::<u64>().unwrap();
 
-			let mut filename: Vec<&str> = fullname[3].split('.').collect();
-			let x = filename[0].parse::<u64>().unwrap();
+				let mut extension = filename.pop().unwrap();
+				let this_comp = match extension {
+					"gz" => {
+						extension = filename.pop().unwrap();
+						Precompression::Gzip
+					}
+					"br" => {
+						extension = filename.pop().unwrap();
+						Precompression::Brotli
+					}
+					_ => Precompression::Uncompressed,
+				};
 
-			let mut extension = filename.pop().unwrap();
-			let this_comp = match extension {
-				"gz" => {
-					extension = filename.pop().unwrap();
-					Precompression::Gzip
+				let this_form = match extension {
+					"png" => TileFormat::PNG,
+					"jpg" => TileFormat::JPG,
+					"jpeg" => TileFormat::JPG,
+					"webp" => TileFormat::WEBP,
+					"pbf" => TileFormat::PBF,
+					_ => panic!("unknown extension for {:?}", path_vec),
+				};
+
+				if tile_form.is_none() {
+					tile_form = Some(this_form);
+				} else {
+					assert_eq!(
+						tile_form.as_ref().unwrap(),
+						&this_form,
+						"unknown filename {:?}",
+						path_string
+					);
 				}
-				"br" => {
-					extension = filename.pop().unwrap();
-					Precompression::Brotli
+
+				if tile_comp.is_none() {
+					tile_comp = Some(this_comp);
+				} else {
+					assert_eq!(
+						tile_comp.as_ref().unwrap(),
+						&this_comp,
+						"unknown filename {:?}",
+						path_string
+					);
 				}
-				_ => Precompression::Uncompressed,
+
+				let offset = entry.raw_file_position();
+				let length = entry.size();
+
+				let coord3 = TileCoord3 { z, y, x };
+				bbox_pyramide.include_coord(&coord3);
+				tile_map.insert(coord3, TarByteRange { offset, length });
 			};
 
-			let this_form = match extension {
-				"png" => TileFormat::PNG,
-				"jpg" => TileFormat::JPG,
-				"jpeg" => TileFormat::JPG,
-				"webp" => TileFormat::WEBP,
-				"pbf" => TileFormat::PBF,
-				_ => panic!("unknown extension for {:?}", fullname),
+			if path_vec.len() == 3 {
+				add_tile();
+				continue;
+			}
+
+			let mut add_meta = |precompression:Precompression| {
+				let mut blob: Vec<u8> = Vec::new();
+				entry.read_to_end(&mut blob).unwrap();
+
+				meta = decompress(Blob::from_vec(blob), &precompression);
 			};
 
-			if tile_form.is_none() {
-				tile_form = Some(this_form);
-			} else {
-				assert_eq!(
-					tile_form.as_ref().unwrap(),
-					&this_form,
-					"unknown filename {:?}",
-					path
-				);
+			if path_vec.len() == 1 {
+				match path_vec[0] {
+					"meta.json" | "tiles.json" | "metadata.json" => add_meta(Precompression::Uncompressed),
+					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => add_meta(Precompression::Gzip),
+					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => add_meta(Precompression::Brotli),
+					&_ => continue
+				};
 			}
 
-			if tile_comp.is_none() {
-				tile_comp = Some(this_comp);
-			} else {
-				assert_eq!(
-					tile_comp.as_ref().unwrap(),
-					&this_comp,
-					"unknown filename {:?}",
-					path
-				);
-			}
-
-			let offset = file.raw_file_position();
-			let length = file.size();
-
-			let coord3 = TileCoord3 { z, y, x };
-			bbox_pyramide.include_coord(&coord3);
-			tile_map.insert(coord3, TarByteRange { offset, length });
+			// ignore
 		}
 
 		Box::new(TileReader {
-			meta: Blob::empty(),
+			meta,
 			name: path.to_string(),
 			file,
 			tile_map,
