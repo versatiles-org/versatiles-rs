@@ -59,6 +59,10 @@ pub struct Convert {
 	#[arg(long, short, value_name = "float", num_args = 4, value_delimiter = ',')]
 	bbox: Option<Vec<f32>>,
 
+	/// flip input vertically
+	#[arg(long)]
+	flip_input: bool,
+
 	/// convert tiles to new format
 	#[arg(long, short, value_enum)]
 	tile_format: Option<TileFormat>,
