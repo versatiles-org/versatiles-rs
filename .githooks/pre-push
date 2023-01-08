@@ -2,17 +2,28 @@
 
 set -eu
 
-if ! cargo fmt -- --check; then
+# Stash any changes to the working tree
+git stash -q --keep-index
+
+function cleanup {
+   git stash pop -q
+}
+trap cleanup EXIT
+
+if result=$(cargo fmt -- --check 2>&1); then
+   echo "$result"
    echo "ERROR DURING: cargo fmt"
    exit 1
 fi
 
-if ! cargo clippy -- -D warnings; then
+if result=$(cargo clippy -- -D warnings 2>&1); then
+   echo "$result"
    echo "ERROR DURING: cargo clippy"
    exit 1
 fi
 
-if ! cargo test; then
+if result=$(cargo test 2>&1); then
+   echo "$result"
    echo "ERROR DURING: cargo test"
    exit 1
 fi
