@@ -21,7 +21,11 @@ struct CompressedVersions {
 }
 impl CompressedVersions {
 	fn new() -> Self {
-		CompressedVersions{ un: None, gz: None, br: None }
+		CompressedVersions {
+			un: None,
+			gz: None,
+			br: None,
+		}
 	}
 }
 
@@ -43,7 +47,7 @@ impl Tar {
 		);
 		assert!(filename.is_file(), "path {:?} must be a file", filename);
 
-		let mut lookup:HashMap<String, CompressedVersions> = HashMap::new();
+		let mut lookup: HashMap<String, CompressedVersions> = HashMap::new();
 		let file = BufReader::new(File::open(filename).unwrap());
 		let mut archive = Archive::new(file);
 
@@ -59,11 +63,11 @@ impl Tar {
 			}
 
 			let mut entry_path = file.path().unwrap().into_owned();
-			
-			let precompression:Precompression = if let Some(extension) = entry_path.extension() {
+
+			let precompression: Precompression = if let Some(extension) = entry_path.extension() {
 				match extension.to_str() {
 					Some("br") => Precompression::Brotli,
-					Some("gz")=> Precompression::Gzip,
+					Some("gz") => Precompression::Gzip,
 					_ => Precompression::Uncompressed,
 				}
 			} else {
@@ -78,22 +82,21 @@ impl Tar {
 			file.read_to_end(&mut buffer).unwrap();
 			let blob = Blob::from_vec(buffer);
 
-			let mut add = |path:&Path, blob: Blob| {
-				let name:String = path
-				.iter()
-				.map(|s| s.to_str().unwrap())
-				.collect::<Vec<&str>>()
-				.join("/");
+			let mut add = |path: &Path, blob: Blob| {
+				let name: String = path
+					.iter()
+					.map(|s| s.to_str().unwrap())
+					.collect::<Vec<&str>>()
+					.join("/");
 
 				let entry = lookup.entry(name);
-				let versions = entry.or_insert_with(|| CompressedVersions::new());
+				let versions = entry.or_insert_with(CompressedVersions::new);
 				match precompression {
-        Precompression::Uncompressed => versions.un = Some(blob),
-        Precompression::Gzip => versions.gz = Some(blob),
-        Precompression::Brotli => versions.br = Some(blob),
-    }
-
-		};
+					Precompression::Uncompressed => versions.un = Some(blob),
+					Precompression::Gzip => versions.gz = Some(blob),
+					Precompression::Brotli => versions.br = Some(blob),
+				}
+			};
 
 			if entry_path.file_name() == Some(OsStr::new("index.html")) {
 				add(entry_path.parent().unwrap(), blob.clone());
@@ -163,6 +166,6 @@ impl ServerSourceTrait for Tar {
 			return respond(decompress_gzip(blob.to_owned()));
 		}
 
-		return ok_not_found();
+		ok_not_found()
 	}
 }
