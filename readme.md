@@ -51,3 +51,10 @@ cargo build && target/debug/opencloudtiles serve -s tiles/frontend tiles/origina
 
 # cargo instruments --all-features -t "CPU Profiler" -- convert tiles/philippines.mbtiles tiles/philippines.cloudtiles
 ```
+
+# dev config
+
+```
+git config --local core.hooksPath .githooks/
+```
+

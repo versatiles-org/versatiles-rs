@@ -1,0 +1,21 @@
+#!/bin/bash
+
+result=$(cargo fmt -- --check)
+if [[ $? -ne 0 ]]; then
+   echo "ERROR DURING: cargo fmt"
+   exit 1
+fi
+
+result=$(cargo clippy -- -D warnings)
+if [[ $? -ne 0 ]]; then
+   echo "ERROR DURING: cargo clippy"
+   exit 1
+fi
+
+result=$(cargo test -- -D warnings)
+if [[ $? -ne 0 ]]; then
+   echo "ERROR DURING: cargo test"
+   exit 1
+fi
+
+exit 0
