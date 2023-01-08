@@ -22,21 +22,20 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with: {submodules: true}
     - name: Install rust
       uses: actions-rs/toolchain@v1
       with:
         toolchain: stable
-        override: true
         profile: minimal
         components: rustfmt, clippy
     - name: Check formatting
       run: cargo fmt -- --check
     - name: Documentation
-      run: cargo doc --workspace
+      run: cargo doc
     - name: Clippy
-      run: cargo clippy --workspace -- -D warnings
+      run: cargo clippy -- -D warnings
 
   cargo_test:
     name: cargo test
@@ -44,7 +43,7 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with: {submodules: false}
 
     - name: Install rust
@@ -52,10 +51,9 @@ jobs:
       with:
         toolchain: stable
         profile: minimal
-        override: true
 
     - name: Build
-      run: cargo build --verbose --workspace --exclude netcdf-src
+      run: cargo build
 
     - name: Test
-      run: cargo test --verbose --workspace --exclude netcdf-src
+      run: cargo test
