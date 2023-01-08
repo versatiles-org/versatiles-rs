@@ -25,8 +25,12 @@ impl CloudTilesSrcTrait for CloudTilesSrc {
 	{
 		CloudTilesSrc(Box::new(CloudTilesSrcFile::new(source)))
 	}
-	fn read_range(&self, range: &ByteRange) -> Blob { self.0.read_range(range) }
-	fn get_name(&self) -> &str { self.0.get_name() }
+	fn read_range(&self, range: &ByteRange) -> Blob {
+		self.0.read_range(range)
+	}
+	fn get_name(&self) -> &str {
+		self.0.get_name()
+	}
 }
 
 struct CloudTilesSrcFile {
@@ -61,5 +65,7 @@ impl CloudTilesSrcTrait for CloudTilesSrcFile {
 
 		Blob::from_vec(buffer)
 	}
-	fn get_name(&self) -> &str { &self.name }
+	fn get_name(&self) -> &str {
+		&self.name
+	}
 }

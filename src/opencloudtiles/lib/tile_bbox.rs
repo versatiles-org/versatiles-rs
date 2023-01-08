@@ -24,7 +24,9 @@ impl TileBBox {
 		let max = 2u64.pow(level as u32) - 1;
 		TileBBox::new(0, 0, max, max)
 	}
-	pub fn new_empty() -> TileBBox { TileBBox::new(1, 1, 0, 0) }
+	pub fn new_empty() -> TileBBox {
+		TileBBox::new(1, 1, 0, 0)
+	}
 	pub fn from_geo(level: u64, geo_bbox: &[f32; 4]) -> TileBBox {
 		let p1 = TileCoord2::from_geo(level, geo_bbox[0], geo_bbox[1]);
 		let p2 = TileCoord2::from_geo(level, geo_bbox[2], geo_bbox[3]);
@@ -42,7 +44,9 @@ impl TileBBox {
 		self.x_max = 0;
 		self.y_max = 0;
 	}
-	pub fn is_empty(&self) -> bool { (self.x_max < self.x_min) || (self.y_max < self.y_min) }
+	pub fn is_empty(&self) -> bool {
+		(self.x_max < self.x_min) || (self.y_max < self.y_min)
+	}
 	pub fn set_full(&mut self, level: u64) {
 		let max = 2u64.pow(level as u32) - 1;
 		self.x_min = 0;
@@ -151,10 +155,18 @@ impl TileBBox {
 
 		index as usize
 	}
-	pub fn get_x_min(&self) -> u64 { self.x_min }
-	pub fn get_y_min(&self) -> u64 { self.y_min }
-	pub fn get_x_max(&self) -> u64 { self.x_max }
-	pub fn get_y_max(&self) -> u64 { self.y_max }
+	pub fn get_x_min(&self) -> u64 {
+		self.x_min
+	}
+	pub fn get_y_min(&self) -> u64 {
+		self.y_min
+	}
+	pub fn get_x_max(&self) -> u64 {
+		self.x_max
+	}
+	pub fn get_y_max(&self) -> u64 {
+		self.y_max
+	}
 }
 
 impl fmt::Debug for TileBBox {

@@ -41,7 +41,9 @@ impl TileIndex {
 
 		TileIndex { index }
 	}
-	pub fn from_brotli_blob(buf: Blob) -> TileIndex { TileIndex::from_blob(decompress_brotli(buf)) }
+	pub fn from_brotli_blob(buf: Blob) -> TileIndex {
+		TileIndex::from_blob(decompress_brotli(buf))
+	}
 	pub fn set(&mut self, index: usize, tile_byte_range: ByteRange) {
 		self.index[index] = tile_byte_range;
 	}
@@ -55,6 +57,10 @@ impl TileIndex {
 
 		Blob::from_vec(cursor.into_inner())
 	}
-	pub fn as_brotli_blob(&self) -> Blob { compress_brotli(self.as_blob()) }
-	pub fn get_tile_range(&self, index: usize) -> &ByteRange { &self.index[index] }
+	pub fn as_brotli_blob(&self) -> Blob {
+		compress_brotli(self.as_blob())
+	}
+	pub fn get_tile_range(&self, index: usize) -> &ByteRange {
+		&self.index[index]
+	}
 }

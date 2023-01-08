@@ -57,12 +57,22 @@ impl TileConverterConfig {
 	pub fn get_tile_recompressor(&self) -> &DataConverter {
 		self.tile_recompressor.as_ref().unwrap()
 	}
-	pub fn get_compressor(&self) -> &DataConverter { self.compressor.as_ref().unwrap() }
-	pub fn get_bbox_pyramide(&self) -> &TileBBoxPyramide { &self.bbox_pyramide }
-	pub fn get_tile_format(&self) -> &TileFormat { self.tile_format.as_ref().unwrap() }
+	pub fn get_compressor(&self) -> &DataConverter {
+		self.compressor.as_ref().unwrap()
+	}
+	pub fn get_bbox_pyramide(&self) -> &TileBBoxPyramide {
+		&self.bbox_pyramide
+	}
+	pub fn get_tile_format(&self) -> &TileFormat {
+		self.tile_format.as_ref().unwrap()
+	}
 	pub fn get_tile_precompression(&self) -> &Precompression {
 		self.tile_precompression.as_ref().unwrap()
 	}
-	pub fn get_max_zoom(&self) -> Option<u64> { self.bbox_pyramide.get_zoom_max() }
-	pub fn get_min_zoom(&self) -> Option<u64> { self.bbox_pyramide.get_zoom_min() }
+	pub fn get_max_zoom(&self) -> Option<u64> {
+		self.bbox_pyramide.get_zoom_max()
+	}
+	pub fn get_min_zoom(&self) -> Option<u64> {
+		self.bbox_pyramide.get_zoom_min()
+	}
 }

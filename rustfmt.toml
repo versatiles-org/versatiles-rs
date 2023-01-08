@@ -1,8 +1,6 @@
 edition = "2021"
 fn_args_layout = "Compressed"
-fn_single_line = true
 hard_tabs = true
-imports_granularity = "Crate"
 max_width = 100
 newline_style = "Unix"
 reorder_imports = true

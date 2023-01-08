@@ -21,7 +21,9 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 		Self: Sized;
 	fn get_name(&self) -> &str;
 	fn get_parameters(&self) -> &TileReaderParameters;
-	fn get_tile_format(&self) -> &TileFormat { self.get_parameters().get_tile_format() }
+	fn get_tile_format(&self) -> &TileFormat {
+		self.get_parameters().get_tile_format()
+	}
 	fn get_tile_precompression(&self) -> &Precompression {
 		self.get_parameters().get_tile_precompression()
 	}

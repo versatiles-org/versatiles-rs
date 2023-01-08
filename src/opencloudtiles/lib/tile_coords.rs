@@ -9,7 +9,9 @@ pub struct TileCoord2 {
 	pub y: u64,
 }
 impl TileCoord2 {
-	pub fn new(x: u64, y: u64) -> TileCoord2 { TileCoord2 { x, y } }
+	pub fn new(x: u64, y: u64) -> TileCoord2 {
+		TileCoord2 { x, y }
+	}
 	pub fn from_geo(level: u64, x: f32, y: f32) -> TileCoord2 {
 		let zoom: f32 = 2.0f32.powi(level as i32);
 		let x = zoom * (x / 360.0 + 0.5);
@@ -35,7 +37,9 @@ pub struct TileCoord3 {
 	pub z: u64,
 }
 impl TileCoord3 {
-	pub fn new(z: u64, y: u64, x: u64) -> TileCoord3 { TileCoord3 { x, y, z } }
+	pub fn new(z: u64, y: u64, x: u64) -> TileCoord3 {
+		TileCoord3 { x, y, z }
+	}
 }
 
 impl Debug for TileCoord3 {

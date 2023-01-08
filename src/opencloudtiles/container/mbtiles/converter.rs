@@ -13,5 +13,7 @@ impl TileConverterTrait for TileConverter {
 	{
 		panic!()
 	}
-	fn convert_from(&mut self, _reader: &mut TileReaderBox) { panic!() }
+	fn convert_from(&mut self, _reader: &mut TileReaderBox) {
+		panic!()
+	}
 }

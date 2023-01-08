@@ -33,7 +33,9 @@ impl Folder {
 	}
 }
 impl ServerSourceTrait for Folder {
-	fn get_name(&self) -> &str { &self.name }
+	fn get_name(&self) -> &str {
+		&self.name
+	}
 
 	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Result<Response<Body>> {
 		let mut local_path = self.folder.clone();

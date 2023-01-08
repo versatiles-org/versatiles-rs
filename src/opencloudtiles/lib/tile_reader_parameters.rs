@@ -24,9 +24,17 @@ impl TileReaderParameters {
 			bbox_pyramide,
 		}
 	}
-	pub fn get_tile_format(&self) -> &TileFormat { &self.tile_format }
-	pub fn get_tile_precompression(&self) -> &Precompression { &self.tile_precompression }
+	pub fn get_tile_format(&self) -> &TileFormat {
+		&self.tile_format
+	}
+	pub fn get_tile_precompression(&self) -> &Precompression {
+		&self.tile_precompression
+	}
 	#[allow(dead_code)]
-	pub fn get_decompressor(&self) -> &DataConverter { &self.decompressor }
-	pub fn get_level_bbox(&self) -> &TileBBoxPyramide { &self.bbox_pyramide }
+	pub fn get_decompressor(&self) -> &DataConverter {
+		&self.decompressor
+	}
+	pub fn get_level_bbox(&self) -> &TileBBoxPyramide {
+		&self.bbox_pyramide
+	}
 }

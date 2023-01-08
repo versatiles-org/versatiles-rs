@@ -99,7 +99,9 @@ impl DataConverter {
 
 		converter
 	}
-	fn push(&mut self, f: FnConv) { self.pipeline.push(f); }
+	fn push(&mut self, f: FnConv) {
+		self.pipeline.push(f);
+	}
 	pub fn run(&self, mut data: Blob) -> Blob {
 		for f in self.pipeline.iter() {
 			data = f(data);

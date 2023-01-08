@@ -32,7 +32,9 @@ impl TileContainer {
 	}
 }
 impl ServerSourceTrait for TileContainer {
-	fn get_name(&self) -> &str { self.reader.get_name() }
+	fn get_name(&self) -> &str {
+		self.reader.get_name()
+	}
 
 	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Result<Response<Body>> {
 		if path.len() == 3 {

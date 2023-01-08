@@ -63,7 +63,9 @@ impl BlockIndex {
 
 		Blob::from_vec(cursor.into_inner())
 	}
-	pub fn as_brotli_blob(&self) -> Blob { compress_brotli(self.as_blob()) }
+	pub fn as_brotli_blob(&self) -> Blob {
+		compress_brotli(self.as_blob())
+	}
 	pub fn get_block(&self, coord: &TileCoord3) -> Option<&BlockDefinition> {
 		self.lookup.get(coord)
 	}

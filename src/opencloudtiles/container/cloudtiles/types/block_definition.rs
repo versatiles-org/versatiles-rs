@@ -42,7 +42,9 @@ impl BlockDefinition {
 			tile_range,
 		}
 	}
-	pub fn count_tiles(&self) -> u64 { self.bbox.count_tiles() }
+	pub fn count_tiles(&self) -> u64 {
+		self.bbox.count_tiles()
+	}
 	pub fn as_blob(&self) -> Blob {
 		let vec = Vec::new();
 		let mut cursor = Cursor::new(vec);

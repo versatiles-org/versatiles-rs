@@ -167,8 +167,12 @@ impl TileReaderTrait for TileReader {
 
 		Box::new(Self::load_from_sqlite(&filename))
 	}
-	fn get_meta(&self) -> Blob { Blob::from_slice(self.meta_data.as_ref().unwrap().as_bytes()) }
-	fn get_parameters(&self) -> &TileReaderParameters { self.parameters.as_ref().unwrap() }
+	fn get_meta(&self) -> Blob {
+		Blob::from_slice(self.meta_data.as_ref().unwrap().as_bytes())
+	}
+	fn get_parameters(&self) -> &TileReaderParameters {
+		self.parameters.as_ref().unwrap()
+	}
 	fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob> {
 		let connection = self.pool.get().unwrap();
 		let mut stmt = connection
@@ -188,7 +192,9 @@ impl TileReaderTrait for TileReader {
 			None
 		}
 	}
-	fn get_name(&self) -> &str { &self.name }
+	fn get_name(&self) -> &str {
+		&self.name
+	}
 }
 
 impl std::fmt::Debug for TileReader {
