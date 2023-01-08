@@ -90,7 +90,7 @@ impl TileReaderTrait for TileReader {
 		let tile_range: ByteRange;
 
 		if let Some(tile_index) = tile_index_option {
-			tile_range = tile_index.get_tile_range(tile_id as usize).clone();
+			tile_range = tile_index.get_tile_range(tile_id).clone();
 
 			drop(cache_reader);
 		} else {
@@ -107,7 +107,7 @@ impl TileReaderTrait for TileReader {
 
 			tile_range = tile_index_option
 				.unwrap()
-				.get_tile_range(tile_id as usize)
+				.get_tile_range(tile_id)
 				.clone();
 
 			drop(cache_reader);

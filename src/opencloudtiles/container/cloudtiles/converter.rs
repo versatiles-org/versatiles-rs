@@ -71,7 +71,7 @@ impl TileConverter {
 		bar1.finish();
 
 		let sum = blocks.iter().map(|block| block.count_tiles()).sum::<u64>();
-		let mut bar2 = ProgressBar::new("converting tiles", sum as u64);
+		let mut bar2 = ProgressBar::new("converting tiles", sum);
 
 		let mut block_index = BlockIndex::new_empty();
 
