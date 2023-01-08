@@ -133,16 +133,16 @@ fn main() {
 	let command = &cli.command;
 	match command {
 		Commands::Convert(arguments) => {
-			tools::convert(&arguments);
+			tools::convert(arguments);
 		}
 		Commands::Serve(arguments) => {
-			tools::serve(&arguments);
+			tools::serve(arguments);
 		}
 		Commands::Probe(arguments) => {
-			tools::probe(&arguments);
+			tools::probe(arguments);
 		}
 		Commands::Compare(arguments) => {
-			tools::compare(&arguments);
+			tools::compare(arguments);
 		}
 	}
 }

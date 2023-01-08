@@ -16,24 +16,25 @@ impl TileReaderParameters {
 		tile_format: TileFormat, tile_precompression: Precompression, bbox_pyramide: TileBBoxPyramide,
 	) -> TileReaderParameters {
 		let decompressor = DataConverter::new_decompressor(&tile_precompression);
-		return TileReaderParameters {
+		
+		TileReaderParameters {
 			decompressor,
 			tile_format,
 			tile_precompression,
 			bbox_pyramide,
-		};
+		}
 	}
 	pub fn get_tile_format(&self) -> &TileFormat {
-		return &self.tile_format;
+		&self.tile_format
 	}
 	pub fn get_tile_precompression(&self) -> &Precompression {
-		return &self.tile_precompression;
+		&self.tile_precompression
 	}
 	#[allow(dead_code)]
 	pub fn get_decompressor(&self) -> &DataConverter {
-		return &self.decompressor;
+		&self.decompressor
 	}
 	pub fn get_level_bbox(&self) -> &TileBBoxPyramide {
-		return &self.bbox_pyramide;
+		&self.bbox_pyramide
 	}
 }

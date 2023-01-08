@@ -26,15 +26,15 @@ impl Folder {
 
 		folder = folder.canonicalize().unwrap();
 
-		return Box::new(Folder {
+		Box::new(Folder {
 			folder,
 			name: path.to_string(),
-		});
+		})
 	}
 }
 impl ServerSourceTrait for Folder {
 	fn get_name(&self) -> &str {
-		return &self.name;
+		&self.name
 	}
 
 	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Result<Response<Body>> {
@@ -72,6 +72,6 @@ impl ServerSourceTrait for Folder {
 			return ok_data(compress_gzip(blob), &Precompression::Gzip, &mime);
 		}
 
-		return ok_data(blob, &Precompression::Uncompressed, &mime);
+		ok_data(blob, &Precompression::Uncompressed, &mime)
 	}
 }

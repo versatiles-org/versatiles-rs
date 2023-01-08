@@ -51,7 +51,7 @@ impl TileConverterTrait for TileConverter {
 
 			self
 				.builder
-				.append_data(&mut header, &Path::new("meta.json"), meta_data.as_slice())
+				.append_data(&mut header, Path::new("meta.json"), meta_data.as_slice())
 				.unwrap();
 		}
 
@@ -88,7 +88,7 @@ impl TileConverterTrait for TileConverter {
 				mutex_builder
 					.lock()
 					.unwrap()
-					.append_data(&mut header, &path, tile.as_slice())
+					.append_data(&mut header, path, tile.as_slice())
 					.unwrap();
 			});
 

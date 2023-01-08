@@ -25,7 +25,7 @@ pub fn serve(arguments: &Serve) {
 	println!("serve to http://localhost:{}/", arguments.port);
 
 	arguments.sources.iter().for_each(|string| {
-		let parts: Vec<&str> = string.split("#").collect();
+		let parts: Vec<&str> = string.split('#').collect();
 
 		let (name, reader_source) = match parts.len() {
 			1 => (guess_name(string), string.as_str()),
@@ -42,7 +42,7 @@ pub fn serve(arguments: &Serve) {
 		fn guess_name(path: &str) -> &str {
 			let filename = path.split(&['/', '\\']).last().unwrap();
 			let name = filename.split('.').next().unwrap();
-			return name;
+			name
 		}
 	});
 
@@ -83,7 +83,7 @@ pub fn compare(arguments: &Compare) {
 }
 
 fn new_reader(filename: &str) -> TileReaderBox {
-	let extension = filename.split(".").last().unwrap();
+	let extension = filename.split('.').last().unwrap();
 
 	let reader = match extension {
 		"mbtiles" => mbtiles::TileReader::new(filename),
@@ -92,7 +92,7 @@ fn new_reader(filename: &str) -> TileReaderBox {
 		_ => panic!("extension '{:?}' unknown", extension),
 	};
 
-	return reader;
+	reader
 }
 
 fn new_converter(filename: &str, command: &Convert) -> Box<dyn TileConverterTrait> {
@@ -113,7 +113,7 @@ fn new_converter(filename: &str, command: &Convert) -> Box<dyn TileConverterTrai
 
 	let config = TileConverterConfig::new(
 		command.tile_format.clone(),
-		command.precompress.clone(),
+		command.precompress,
 		bbox_pyramide,
 		command.force_recompression,
 	);
@@ -128,7 +128,7 @@ fn new_converter(filename: &str, command: &Convert) -> Box<dyn TileConverterTrai
 		_ => panic!("extension '{:?}' unknown", extension),
 	};
 
-	return converter;
+	converter
 }
 
 fn new_server(command: &Serve) -> TileServer {

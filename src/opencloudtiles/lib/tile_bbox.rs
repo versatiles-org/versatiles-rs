@@ -2,7 +2,7 @@ use super::TileCoord2;
 use itertools::Itertools;
 use std::fmt;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct TileBBox {
 	x_min: u64,
 	y_min: u64,
@@ -13,12 +13,12 @@ pub struct TileBBox {
 #[allow(dead_code)]
 impl TileBBox {
 	pub fn new(x_min: u64, y_min: u64, x_max: u64, y_max: u64) -> TileBBox {
-		return TileBBox {
+		TileBBox {
 			x_min,
 			y_min,
 			x_max,
 			y_max,
-		};
+		}
 	}
 	pub fn new_full(level: u64) -> TileBBox {
 		let max = 2u64.pow(level as u32) - 1;
@@ -30,12 +30,13 @@ impl TileBBox {
 	pub fn from_geo(level: u64, geo_bbox: &[f32; 4]) -> TileBBox {
 		let p1 = TileCoord2::from_geo(level, geo_bbox[0], geo_bbox[1]);
 		let p2 = TileCoord2::from_geo(level, geo_bbox[2], geo_bbox[3]);
-		return TileBBox::new(
+		
+		TileBBox::new(
 			p1.x.min(p2.x),
 			p1.y.min(p2.y),
 			p1.x.max(p2.x),
 			p1.y.max(p2.y),
-		);
+		)
 	}
 	pub fn set_empty(&mut self) {
 		self.x_min = 1;
@@ -44,7 +45,7 @@ impl TileBBox {
 		self.y_max = 0;
 	}
 	pub fn is_empty(&self) -> bool {
-		return (self.x_max < self.x_min) || (self.y_max < self.y_min);
+		(self.x_max < self.x_min) || (self.y_max < self.y_min)
 	}
 	pub fn set_full(&mut self, level: u64) {
 		let max = 2u64.pow(level as u32) - 1;
@@ -55,21 +56,17 @@ impl TileBBox {
 	}
 	pub fn is_full(&self, level: u64) -> bool {
 		let max = 2u64.pow(level as u32) - 1;
-		return (self.x_min == 0) && (self.y_min == 0) && (self.x_max == max) && (self.y_max == max);
+		(self.x_min == 0) && (self.y_min == 0) && (self.x_max == max) && (self.y_max == max)
 	}
 	pub fn count_tiles(&self) -> u64 {
-		let cols_count;
 		if self.x_max < self.x_min {
 			return 0;
-		} else {
-			cols_count = self.x_max - self.x_min + 1
-		};
-
+		}
 		if self.y_max < self.y_min {
 			return 0;
-		} else {
-			return cols_count * (self.y_max - self.y_min + 1);
-		};
+		}
+
+		(self.x_max - self.x_min + 1) * (self.y_max - self.y_min + 1)
 	}
 	pub fn include_tile(&mut self, x: u64, y: u64) {
 		if self.is_empty() {
@@ -112,36 +109,40 @@ impl TileBBox {
 	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord2> {
 		let y_values = self.y_min..=self.y_max;
 		let x_values = self.x_min..=self.x_max;
-		return y_values
+		
+		y_values
 			.cartesian_product(x_values)
-			.map(|(y, x)| TileCoord2 { x, y });
+			.map(|(y, x)| TileCoord2 { x, y })
 	}
 	pub fn shift_by(mut self, x: u64, y: u64) -> TileBBox {
 		self.x_min += x;
 		self.y_min += y;
 		self.x_max += x;
 		self.y_max += y;
-		return self;
+		
+		self
 	}
 	pub fn scale_down(mut self, scale: u64) -> TileBBox {
 		self.x_min /= scale;
 		self.y_min /= scale;
 		self.x_max /= scale;
 		self.y_max /= scale;
-		return self;
+		
+		self
 	}
 	pub fn clamped_offset_from(mut self, x: u64, y: u64) -> TileBBox {
 		self.x_min = (self.x_min.max(x) - x).min(255);
 		self.y_min = (self.y_min.max(y) - y).min(255);
 		self.x_max = (self.x_max.max(x) - x).min(255);
 		self.y_max = (self.y_max.max(y) - y).min(255);
-		return self;
+		
+		self
 	}
 	pub fn contains(&self, coord: &TileCoord2) -> bool {
-		return (coord.x >= self.x_min)
+		(coord.x >= self.x_min)
 			&& (coord.x <= self.x_max)
 			&& (coord.y >= self.y_min)
-			&& (coord.y <= self.y_max);
+			&& (coord.y <= self.y_max)
 	}
 	pub fn get_tile_index(&self, coord: &TileCoord2) -> usize {
 		if !self.contains(coord) {
@@ -151,7 +152,8 @@ impl TileBBox {
 		let x = coord.x - self.x_min;
 		let y = coord.y - self.y_min;
 		let index = y * (self.x_max + 1 - self.x_min) + x;
-		return index as usize;
+
+		index as usize
 	}
 	pub fn get_x_min(&self) -> u64 {
 		self.x_min
@@ -226,7 +228,7 @@ mod tests {
 		bbox1_intersect.intersect_bbox(&bbox2);
 		assert_eq!(bbox1_intersect, TileBBox::new(1, 11, 2, 12));
 
-		let mut bbox1_union = bbox1.clone();
+		let mut bbox1_union = bbox1;
 		bbox1_union.union_bbox(&bbox2);
 		assert_eq!(bbox1_union, TileBBox::new(0, 10, 3, 13));
 	}

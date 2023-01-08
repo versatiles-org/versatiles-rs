@@ -20,12 +20,11 @@ impl ProgressBar {
 				.progress_chars("██▁"),
 		);
 
-		let bar = ProgressBar {
+		ProgressBar {
 			bar,
 			next_progress_update: SystemTime::now(),
 			value: 0,
-		};
-		return bar;
+		}
 	}
 	pub fn set_position(&mut self, value: u64) {
 		self.value = value;

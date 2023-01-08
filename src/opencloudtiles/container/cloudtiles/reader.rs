@@ -30,13 +30,14 @@ impl TileReader {
 		let bbox_pyramide = block_index.get_bbox_pyramide();
 		let parameters =
 			TileReaderParameters::new(header.tile_format, header.precompression, bbox_pyramide);
-		return TileReader {
+
+		TileReader {
 			meta,
 			reader,
 			parameters,
 			block_index,
 			tile_index_cache: RwLock::new(HashMap::new()),
-		};
+		}
 	}
 }
 
@@ -46,13 +47,14 @@ unsafe impl Sync for TileReader {}
 impl TileReaderTrait for TileReader {
 	fn new(filename: &str) -> TileReaderBox {
 		let reader = CloudTilesSrc::new(filename);
-		return Box::new(TileReader::from_src(reader));
+
+		Box::new(TileReader::from_src(reader))
 	}
 	fn get_meta(&self) -> Blob {
-		return self.meta.clone();
+		self.meta.clone()
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
-		return &self.parameters;
+		&self.parameters
 	}
 	fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob> {
 		let block_coord = TileCoord3 {
@@ -87,11 +89,17 @@ impl TileReaderTrait for TileReader {
 
 		let tile_range: ByteRange;
 
-		if tile_index_option.is_none() {
+		if let Some(tile_index) = tile_index_option {
+			tile_range = tile_index.get_tile_range(tile_id as usize).clone();
+
 			drop(cache_reader);
+		} else {
+			drop(cache_reader);
+
 			let tile_index = TileIndex::from_brotli_blob(self.reader.read_range(&block.tile_range));
 			let mut cache_writer = self.tile_index_cache.write().unwrap();
 			cache_writer.insert(block_coord.clone(), tile_index);
+
 			drop(cache_writer);
 
 			let cache_reader = self.tile_index_cache.read().unwrap();
@@ -101,16 +109,11 @@ impl TileReaderTrait for TileReader {
 				.unwrap()
 				.get_tile_range(tile_id as usize)
 				.clone();
-			drop(cache_reader);
-		} else {
-			tile_range = tile_index_option
-				.unwrap()
-				.get_tile_range(tile_id as usize)
-				.clone();
-			drop(cache_reader);
-		};
 
-		return Some(self.reader.read_range(&tile_range));
+			drop(cache_reader);
+		}
+
+		Some(self.reader.read_range(&tile_range))
 	}
 	fn get_name(&self) -> &str {
 		self.reader.get_name()

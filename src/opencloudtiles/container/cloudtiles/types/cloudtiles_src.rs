@@ -23,13 +23,13 @@ impl CloudTilesSrcTrait for CloudTilesSrc {
 	where
 		Self: Sized,
 	{
-		return CloudTilesSrc(Box::new(CloudTilesSrcFile::new(source)));
+		CloudTilesSrc(Box::new(CloudTilesSrcFile::new(source)))
 	}
 	fn read_range(&self, range: &ByteRange) -> Blob {
-		return self.0.read_range(range);
+		self.0.read_range(range)
 	}
 	fn get_name(&self) -> &str {
-		return self.0.get_name();
+		self.0.get_name()
 	}
 }
 
@@ -51,10 +51,10 @@ impl CloudTilesSrcTrait for CloudTilesSrcFile {
 
 		filename = filename.canonicalize().unwrap();
 
-		return CloudTilesSrcFile {
+		CloudTilesSrcFile {
 			name: source.to_string(),
 			reader_mutex: Mutex::new(BufReader::new(File::open(filename).unwrap())),
-		};
+		}
 	}
 	fn read_range(&self, range: &ByteRange) -> Blob {
 		let mut buffer = vec![0; range.length as usize];
@@ -63,9 +63,9 @@ impl CloudTilesSrcTrait for CloudTilesSrcFile {
 		reader_safe.seek(SeekFrom::Start(range.offset)).unwrap();
 		reader_safe.read_exact(&mut buffer).unwrap();
 
-		return Blob::from_vec(buffer);
+		Blob::from_vec(buffer)
 	}
 	fn get_name(&self) -> &str {
-		return &self.name;
+		&self.name
 	}
 }

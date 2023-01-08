@@ -18,19 +18,19 @@ pub struct TileServer {
 
 impl TileServer {
 	pub fn new(port: u16) -> TileServer {
-		return TileServer {
+		TileServer {
 			port,
 			sources: Vec::new(),
-		};
+		}
 	}
 
 	pub fn add_source(&mut self, url_prefix: String, source: ServerSourceBox) {
 		let mut prefix = url_prefix;
-		if !prefix.starts_with("/") {
+		if !prefix.starts_with('/') {
 			prefix = "/".to_owned() + &prefix;
 		}
-		if !prefix.ends_with("/") {
-			prefix = prefix + "/";
+		if !prefix.ends_with('/') {
+			prefix += "/";
 		}
 
 		for (other_prefix, _source) in self.sources.iter() {
@@ -50,9 +50,9 @@ impl TileServer {
 		let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
 
 		let mut sources: Vec<(String, usize, Arc<ServerSourceBox>)> = Vec::new();
-		while self.sources.len() > 0 {
+		while !self.sources.is_empty() {
 			let (prefix, source) = self.sources.pop().unwrap();
-			let skip = prefix.matches("/").count();
+			let skip = prefix.matches('/').count();
 			sources.push((prefix, skip, Arc::new(source)));
 		}
 		let arc_sources = Arc::new(sources);
@@ -70,9 +70,9 @@ impl TileServer {
 
 						let mut encoding_set: EnumSet<Precompression> =
 							enum_set!(Precompression::Uncompressed);
-						let encoding = headers.get(header::ACCEPT_ENCODING);
-						if encoding.is_some() {
-							let encoding_string = encoding.unwrap().to_str().unwrap_or("");
+						let encoding_option = headers.get(header::ACCEPT_ENCODING);
+						if let Some(encoding) = encoding_option {
+							let encoding_string = encoding.to_str().unwrap_or("");
 
 							if encoding_string.contains("gzip") {
 								encoding_set.insert(Precompression::Gzip);
@@ -92,7 +92,7 @@ impl TileServer {
 
 						let (_prefix, skip, source) = source_option.unwrap();
 
-						let split_path: Vec<&str> = path.split("/").collect();
+						let split_path: Vec<&str> = path.split('/').collect();
 						let sub_path: &[&str] = if skip < &split_path.len() {
 							&split_path.as_slice()[*skip..]
 						} else {
@@ -105,7 +105,7 @@ impl TileServer {
 							return ok_not_found();
 						}
 
-						return result;
+						result
 					}
 				}))
 			}
@@ -126,10 +126,10 @@ impl TileServer {
 }
 
 pub fn ok_not_found() -> Result<Response<Body>> {
-	return Ok(Response::builder()
+	Ok(Response::builder()
 		.status(StatusCode::NOT_FOUND)
 		.body("Not Found".into())
-		.unwrap());
+		.unwrap())
 }
 
 pub fn ok_data(data: Blob, precompression: &Precompression, mime: &str) -> Result<Response<Body>> {
@@ -143,7 +143,7 @@ pub fn ok_data(data: Blob, precompression: &Precompression, mime: &str) -> Resul
 		Precompression::Brotli => response = response.header(CONTENT_ENCODING, "br"),
 	}
 
-	return Ok(response.body(data.to_vec().into()).unwrap());
+	Ok(response.body(data.to_vec().into()).unwrap())
 }
 
 pub fn guess_mime(path: &Path) -> String {

@@ -37,7 +37,7 @@ impl TileReader {
 		};
 		reader.load_meta_data();
 
-		return reader;
+		reader
 	}
 	fn load_meta_data(&mut self) {
 		let connection = self.pool.get().unwrap();
@@ -95,12 +95,13 @@ impl TileReader {
 		let connection = self.pool.get().unwrap();
 
 		let query = |sql1: &str, sql2: &str| -> u64 {
-			let sql = if sql2.len() == 0 {
+			let sql = if sql2.is_empty() {
 				format!("SELECT {} FROM tiles", sql1)
 			} else {
 				format!("SELECT {} FROM tiles WHERE {}", sql1, sql2)
 			};
-			return connection.query_row(&sql, [], |r| r.get(0)).unwrap();
+
+			connection.query_row(&sql, [], |r| r.get(0)).unwrap()
 		};
 
 		let z0 = query("MIN(zoom_level)", "");
@@ -145,7 +146,8 @@ impl TileReader {
 
 			bbox_pyramide.set_level_bbox(z, TileBBox::new(x0, max_y - y1, x1, max_y - y0));
 		}
-		return bbox_pyramide;
+		
+		bbox_pyramide
 	}
 }
 
@@ -163,14 +165,13 @@ impl TileReaderTrait for TileReader {
 
 		filename = filename.canonicalize().unwrap();
 
-		let reader = Self::load_from_sqlite(&filename);
-		return Box::new(reader);
+		Box::new(Self::load_from_sqlite(&filename))
 	}
 	fn get_meta(&self) -> Blob {
-		return Blob::from_slice(self.meta_data.as_ref().unwrap().as_bytes());
+		Blob::from_slice(self.meta_data.as_ref().unwrap().as_bytes())
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
-		return self.parameters.as_ref().unwrap();
+		self.parameters.as_ref().unwrap()
 	}
 	fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob> {
 		let connection = self.pool.get().unwrap();
@@ -184,11 +185,12 @@ impl TileReaderTrait for TileReader {
 		let result = stmt.query_row([coord.x, max_index - coord.y, coord.z], |entry| {
 			entry.get::<_, Vec<u8>>(0)
 		});
-		if result.is_ok() {
-			return Some(Blob::from_vec(result.unwrap()));
+		
+		if let Ok(vec) = result {
+			Some(Blob::from_vec(vec))
 		} else {
-			return None;
-		};
+			None
+		}
 	}
 	fn get_name(&self) -> &str {
 		&self.name

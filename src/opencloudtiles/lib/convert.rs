@@ -3,7 +3,8 @@ use clap::ValueEnum;
 
 type FnConv = fn(Blob) -> Blob;
 
-#[derive(Clone, Debug, PartialEq, ValueEnum)]
+#[allow(clippy::upper_case_acronyms)]
+#[derive(Clone, Debug, PartialEq, Eq, ValueEnum)]
 pub enum TileFormat {
 	PBF,
 	PNG,
@@ -27,7 +28,7 @@ impl DataConverter {
 	) -> DataConverter {
 		let mut converter = DataConverter::empty();
 
-		let format_converter: Option<fn(Blob) -> Blob> = if (src_form != dst_form) || force_recompress
+		let format_converter_option: Option<fn(Blob) -> Blob> = if (src_form != dst_form) || force_recompress
 		{
 			use TileFormat::*;
 			match (src_form, dst_form) {
@@ -54,8 +55,8 @@ impl DataConverter {
 		};
 
 		if (src_comp == dst_comp) && !force_recompress {
-			if format_converter.is_some() {
-				converter.push(format_converter.unwrap())
+			if let Some(format_converter) = format_converter_option {
+				converter.push(format_converter)
 			}
 		} else {
 			use Precompression::*;
@@ -64,8 +65,8 @@ impl DataConverter {
 				Gzip => converter.push(decompress_gzip),
 				Brotli => converter.push(decompress_brotli),
 			}
-			if format_converter.is_some() {
-				converter.push(format_converter.unwrap())
+			if let Some(format_converter) = format_converter_option {
+				converter.push(format_converter)
 			}
 			match dst_comp {
 				Uncompressed => {}
@@ -74,7 +75,7 @@ impl DataConverter {
 			}
 		};
 
-		return converter;
+		converter
 	}
 	pub fn new_compressor(dst_comp: &Precompression) -> DataConverter {
 		let mut converter = DataConverter::empty();
@@ -85,7 +86,7 @@ impl DataConverter {
 			Precompression::Brotli => converter.push(compress_brotli),
 		}
 
-		return converter;
+		converter
 	}
 	pub fn new_decompressor(src_comp: &Precompression) -> DataConverter {
 		let mut converter = DataConverter::empty();
@@ -96,7 +97,7 @@ impl DataConverter {
 			Precompression::Brotli => converter.push(decompress_brotli),
 		}
 
-		return converter;
+		converter
 	}
 	fn push(&mut self, f: FnConv) {
 		self.pipeline.push(f);
@@ -105,6 +106,6 @@ impl DataConverter {
 		for f in self.pipeline.iter() {
 			data = f(data);
 		}
-		return data;
+		data
 	}
 }

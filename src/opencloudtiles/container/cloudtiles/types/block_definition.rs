@@ -12,13 +12,13 @@ pub struct BlockDefinition {
 }
 impl BlockDefinition {
 	pub fn new(level: u64, x: u64, y: u64, bbox: TileBBox) -> BlockDefinition {
-		return BlockDefinition {
+		BlockDefinition {
 			level,
 			x,
 			y,
 			bbox,
 			tile_range: ByteRange::empty(),
-		};
+		}
 	}
 	pub fn from_blob(buf: Blob) -> BlockDefinition {
 		let mut cursor = Cursor::new(buf.as_slice());
@@ -33,16 +33,17 @@ impl BlockDefinition {
 		let offset = cursor.read_u64::<BE>().unwrap();
 		let length = cursor.read_u64::<BE>().unwrap();
 		let tile_range = ByteRange::new(offset, length);
-		return BlockDefinition {
+
+		BlockDefinition {
 			level,
 			x,
 			y,
 			bbox,
 			tile_range,
-		};
+		}
 	}
 	pub fn count_tiles(&self) -> u64 {
-		return self.bbox.count_tiles();
+		self.bbox.count_tiles()
 	}
 	pub fn as_blob(&self) -> Blob {
 		let vec = Vec::new();
@@ -56,7 +57,8 @@ impl BlockDefinition {
 		cursor.write_u8(self.bbox.get_y_max() as u8).unwrap();
 		cursor.write_u64::<BE>(self.tile_range.offset).unwrap();
 		cursor.write_u64::<BE>(self.tile_range.length).unwrap();
-		return Blob::from_vec(cursor.into_inner());
+		
+		Blob::from_vec(cursor.into_inner())
 	}
 }
 

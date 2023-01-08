@@ -16,7 +16,7 @@ impl TileConverterConfig {
 		tile_format: Option<TileFormat>, tile_precompression: Option<Precompression>,
 		bbox_pyramide: TileBBoxPyramide, force_recompress: bool,
 	) -> Self {
-		return TileConverterConfig {
+		TileConverterConfig {
 			tile_format,
 			tile_precompression,
 			bbox_pyramide,
@@ -24,7 +24,7 @@ impl TileConverterConfig {
 			compressor: None,
 			force_recompress,
 			finalized: false,
-		};
+		}
 	}
 	pub fn finalize_with_parameters(&mut self, parameters: &TileReaderParameters) {
 		self.bbox_pyramide.intersect(parameters.get_level_bbox());
@@ -34,7 +34,7 @@ impl TileConverterConfig {
 			.get_or_insert(parameters.get_tile_format().clone());
 		self
 			.tile_precompression
-			.get_or_insert(parameters.get_tile_precompression().clone());
+			.get_or_insert(*parameters.get_tile_precompression());
 
 		let src_form = parameters.get_tile_format();
 		let src_comp = parameters.get_tile_precompression();
@@ -55,19 +55,19 @@ impl TileConverterConfig {
 		self.finalized = true;
 	}
 	pub fn get_tile_recompressor(&self) -> &DataConverter {
-		return self.tile_recompressor.as_ref().unwrap();
+		self.tile_recompressor.as_ref().unwrap()
 	}
 	pub fn get_compressor(&self) -> &DataConverter {
-		return self.compressor.as_ref().unwrap();
+		self.compressor.as_ref().unwrap()
 	}
 	pub fn get_bbox_pyramide(&self) -> &TileBBoxPyramide {
-		return &self.bbox_pyramide;
+		&self.bbox_pyramide
 	}
 	pub fn get_tile_format(&self) -> &TileFormat {
-		return self.tile_format.as_ref().unwrap();
+		self.tile_format.as_ref().unwrap()
 	}
 	pub fn get_tile_precompression(&self) -> &Precompression {
-		return self.tile_precompression.as_ref().unwrap();
+		self.tile_precompression.as_ref().unwrap()
 	}
 	pub fn get_max_zoom(&self) -> Option<u64> {
 		self.bbox_pyramide.get_zoom_max()

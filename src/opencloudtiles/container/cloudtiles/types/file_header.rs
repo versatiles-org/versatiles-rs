@@ -12,15 +12,15 @@ pub struct FileHeader {
 }
 impl FileHeader {
 	pub fn new(tile_format: &TileFormat, precompression: &Precompression) -> FileHeader {
-		return FileHeader {
+		FileHeader {
 			tile_format: tile_format.clone(),
-			precompression: precompression.clone(),
+			precompression: precompression.to_owned(),
 			meta_range: ByteRange::empty(),
 			blocks_range: ByteRange::empty(),
-		};
+		}
 	}
 	pub fn from_reader(reader: &mut CloudTilesSrc) -> FileHeader {
-		return FileHeader::from_blob(reader.read_range(&ByteRange::new(0, 62)));
+		FileHeader::from_blob(reader.read_range(&ByteRange::new(0, 62)))
 	}
 	pub fn to_blob(&self) -> Blob {
 		let mut header: Vec<u8> = Vec::new();
@@ -52,7 +52,7 @@ impl FileHeader {
 			panic!()
 		}
 
-		return Blob::from_vec(header);
+		Blob::from_vec(header)
 	}
 	fn from_blob(blob: Blob) -> FileHeader {
 		if blob.len() != 62 {
@@ -87,11 +87,11 @@ impl FileHeader {
 		let meta_range = ByteRange::from_buf(&mut header);
 		let blocks_range = ByteRange::from_buf(&mut header);
 
-		return FileHeader {
+		FileHeader {
 			tile_format,
 			precompression,
 			meta_range,
 			blocks_range,
-		};
+		}
 	}
 }

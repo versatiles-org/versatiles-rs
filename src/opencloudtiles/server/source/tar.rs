@@ -53,7 +53,7 @@ impl Tar {
 			let entry_path = file.path().unwrap();
 
 			if entry_path.file_name() == Some(OsStr::new("index.html")) {
-				lookup.insert(path2name(&entry_path.parent().unwrap()), blob.clone());
+				lookup.insert(path2name(entry_path.parent().unwrap()), blob.clone());
 			}
 
 			lookup.insert(path2name(&entry_path), blob);
@@ -67,15 +67,15 @@ impl Tar {
 			}
 		}
 
-		return Box::new(Tar {
+		Box::new(Tar {
 			lookup,
 			name: path.to_string(),
-		});
+		})
 	}
 }
 impl ServerSourceTrait for Tar {
 	fn get_name(&self) -> &str {
-		return &self.name;
+		&self.name
 	}
 
 	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Result<Response<Body>> {
@@ -97,6 +97,6 @@ impl ServerSourceTrait for Tar {
 			return ok_data(compress_gzip(blob), &Precompression::Gzip, &mime);
 		}
 
-		return ok_data(blob, &Precompression::Uncompressed, &mime);
+		ok_data(blob, &Precompression::Uncompressed, &mime)
 	}
 }

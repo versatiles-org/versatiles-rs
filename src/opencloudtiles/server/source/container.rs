@@ -14,7 +14,7 @@ pub struct TileContainer {
 impl TileContainer {
 	pub fn from(reader: TileReaderBox) -> Box<TileContainer> {
 		let parameters = reader.get_parameters();
-		let precompression = parameters.get_tile_precompression().clone();
+		let precompression = *parameters.get_tile_precompression();
 
 		let tile_mime = match parameters.get_tile_format() {
 			TileFormat::PBF => "application/x-protobuf",
@@ -24,11 +24,11 @@ impl TileContainer {
 		}
 		.to_string();
 
-		return Box::new(TileContainer {
+		Box::new(TileContainer {
 			reader,
 			tile_mime,
 			precompression,
-		});
+		})
 	}
 }
 impl ServerSourceTrait for TileContainer {
@@ -80,6 +80,6 @@ impl ServerSourceTrait for TileContainer {
 		}
 
 		// unknown request;
-		return ok_not_found();
+		ok_not_found()
 	}
 }

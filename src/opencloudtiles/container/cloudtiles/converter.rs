@@ -33,7 +33,7 @@ impl TileConverterTrait for TileConverter {
 		);
 		self.writer.append(header.to_blob());
 
-		header.meta_range = self.write_meta(&reader);
+		header.meta_range = self.write_meta(reader);
 		header.blocks_range = self.write_blocks(reader);
 
 		self.writer.write_start(header.to_blob())
@@ -44,7 +44,8 @@ impl TileConverter {
 	fn write_meta(&mut self, reader: &TileReaderBox) -> ByteRange {
 		let meta = reader.get_meta();
 		let compressed = self.config.get_compressor().run(meta);
-		return self.writer.append(compressed);
+		
+		self.writer.append(compressed)
 	}
 	fn write_blocks(&mut self, reader: &mut TileReaderBox) -> ByteRange {
 		let pyramide = self.config.get_bbox_pyramide();
@@ -88,7 +89,7 @@ impl TileConverter {
 		}
 		bar2.finish();
 
-		return self.writer.append(block_index.as_brotli_blob());
+		self.writer.append(block_index.as_brotli_blob())
 	}
 	fn write_block(
 		&mut self, block: &BlockDefinition, reader: &TileReaderBox, bar: &mut ProgressBar,
@@ -134,12 +135,12 @@ impl TileConverter {
 
 			let mut tile = optional_tile.unwrap();
 
-			let mut secured_tile_hash_lookup = None;
+			let mut secured_tile_hash_lookup_option = None;
 			let mut tile_hash = None;
 
 			if tile.len() < 1000 {
-				secured_tile_hash_lookup = Some(mutex_tile_hash_lookup.lock().unwrap());
-				let lookup = secured_tile_hash_lookup.as_ref().unwrap();
+				secured_tile_hash_lookup_option = Some(mutex_tile_hash_lookup.lock().unwrap());
+				let lookup = secured_tile_hash_lookup_option.as_ref().unwrap();
 				if lookup.contains_key(tile.as_slice()) {
 					let mut secured_tile_index = mutex_tile_index.lock().unwrap();
 					secured_tile_index.set(index, lookup.get(tile.as_slice()).unwrap().clone());
@@ -156,13 +157,11 @@ impl TileConverter {
 			secured_tile_index.set(index, range.clone());
 			drop(secured_tile_index);
 
-			if secured_tile_hash_lookup.is_some() {
-				secured_tile_hash_lookup
-					.unwrap()
-					.insert(tile_hash.unwrap().to_vec(), range);
+			if let Some(mut secured_tile_hash_lookup) = secured_tile_hash_lookup_option {
+				secured_tile_hash_lookup.insert(tile_hash.unwrap().to_vec(), range);
 			}
 		});
 
-		return self.writer.append(tile_index.as_brotli_blob());
+		self.writer.append(tile_index.as_brotli_blob())
 	}
 }

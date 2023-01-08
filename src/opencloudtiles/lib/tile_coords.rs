@@ -16,10 +16,11 @@ impl TileCoord2 {
 		let zoom: f32 = 2.0f32.powi(level as i32);
 		let x = zoom * (x / 360.0 + 0.5);
 		let y = zoom * (0.5 - 0.5 * (y * PI / 360.0 + PI / 4.0).tan().ln() / PI);
-		return TileCoord2 {
+
+		TileCoord2 {
 			x: x as u64,
 			y: y as u64,
-		};
+		}
 	}
 }
 

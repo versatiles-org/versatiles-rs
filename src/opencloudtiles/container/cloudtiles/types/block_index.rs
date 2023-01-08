@@ -15,9 +15,9 @@ pub struct BlockIndex {
 }
 impl BlockIndex {
 	pub fn new_empty() -> BlockIndex {
-		return BlockIndex {
+		BlockIndex {
 			lookup: HashMap::new(),
-		};
+		}
 	}
 	pub fn from_blob(buf: Blob) -> BlockIndex {
 		let count = buf.len().div(29);
@@ -32,10 +32,11 @@ impl BlockIndex {
 				buf.get_range(i * 29..(i + 1) * 29),
 			));
 		}
-		return block_index;
+		
+		block_index
 	}
 	pub fn from_brotli_blob(buf: Blob) -> BlockIndex {
-		return BlockIndex::from_blob(decompress_brotli(buf));
+		BlockIndex::from_blob(decompress_brotli(buf))
 	}
 	pub fn get_bbox_pyramide(&self) -> TileBBoxPyramide {
 		let mut pyramide = TileBBoxPyramide::new_empty();
@@ -45,8 +46,8 @@ impl BlockIndex {
 				&block.bbox.clone().shift_by(block.x * 256, block.y * 256),
 			);
 		}
-		//println!("{:#?}", pyramide);
-		return pyramide;
+
+		pyramide
 	}
 	pub fn add_block(&mut self, block: BlockDefinition) {
 		self
@@ -59,12 +60,13 @@ impl BlockIndex {
 		for (_coord, block) in self.lookup.iter() {
 			cursor.write_all(block.as_blob().as_slice()).unwrap();
 		}
-		return Blob::from_vec(cursor.into_inner());
+
+		Blob::from_vec(cursor.into_inner())
 	}
-	pub fn as_brotli_blob(self) -> Blob {
-		return compress_brotli(self.as_blob());
+	pub fn as_brotli_blob(&self) -> Blob {
+		compress_brotli(self.as_blob())
 	}
 	pub fn get_block(&self, coord: &TileCoord3) -> Option<&BlockDefinition> {
-		return self.lookup.get(coord);
+		self.lookup.get(coord)
 	}
 }

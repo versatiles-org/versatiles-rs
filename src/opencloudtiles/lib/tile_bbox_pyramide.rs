@@ -31,7 +31,7 @@ impl TileBBoxPyramide {
 		}
 	}
 	pub fn get_level_bbox(&self, level: u64) -> &TileBBox {
-		return &self.level_bbox[level as usize];
+		&self.level_bbox[level as usize]
 	}
 	pub fn set_level_bbox(&mut self, level: u64, bbox: TileBBox) {
 		self.level_bbox[level as usize] = bbox;
@@ -43,29 +43,24 @@ impl TileBBoxPyramide {
 		self.level_bbox[level as usize].union_bbox(bbox);
 	}
 	pub fn iter_levels(&self) -> impl Iterator<Item = (u64, &TileBBox)> {
-		return self
+		self
 			.level_bbox
 			.iter()
 			.enumerate()
 			.filter_map(|(level, bbox)| {
 				if bbox.is_empty() {
-					return None;
+					None
 				} else {
-					return Some((level as u64, bbox));
+					Some((level as u64, bbox))
 				}
-			});
+			})
 	}
 	pub fn iter_tile_indexes(&self) -> impl Iterator<Item = TileCoord3> + '_ {
-		return self
-			.level_bbox
-			.iter()
-			.enumerate()
-			.map(|(z, bbox)| {
-				bbox
-					.iter_coords()
-					.map(move |TileCoord2 { x, y }| TileCoord3 { x, y, z: z as u64 })
-			})
-			.flatten();
+		return self.level_bbox.iter().enumerate().flat_map(|(z, bbox)| {
+			bbox
+				.iter_coords()
+				.map(move |TileCoord2 { x, y }| TileCoord3 { x, y, z: z as u64 })
+		});
 	}
 	pub fn get_zoom_min(&self) -> Option<u64> {
 		self

@@ -70,7 +70,7 @@ impl TileReaderTrait for TileReader {
 			let z = fullname[1].parse::<u64>().unwrap();
 			let y = fullname[2].parse::<u64>().unwrap();
 
-			let mut filename: Vec<&str> = fullname[3].split(".").collect();
+			let mut filename: Vec<&str> = fullname[3].split('.').collect();
 			let x = filename[0].parse::<u64>().unwrap();
 
 			let mut extension = filename.pop().unwrap();
@@ -125,7 +125,7 @@ impl TileReaderTrait for TileReader {
 			tile_map.insert(coord3, TarByteRange { offset, length });
 		}
 
-		return Box::new(TileReader {
+		Box::new(TileReader {
 			meta: Blob::empty(),
 			name: path.to_string(),
 			file,
@@ -135,20 +135,18 @@ impl TileReaderTrait for TileReader {
 				tile_comp.unwrap(),
 				bbox_pyramide,
 			),
-		});
+		})
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
-		return &self.parameters;
+		&self.parameters
 	}
 	fn get_meta(&self) -> Blob {
-		return self.meta.clone();
+		self.meta.clone()
 	}
 	fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob> {
-		let range = self.tile_map.get(&coord);
+		let range = self.tile_map.get(coord);
 
-		if range.is_none() {
-			return None;
-		}
+		range?;
 
 		let offset = range.unwrap().offset;
 		let length = range.unwrap().length as usize;
@@ -158,7 +156,7 @@ impl TileReaderTrait for TileReader {
 
 		self.file.read_exact_at(&mut buf, offset).unwrap();
 
-		return Some(Blob::from_vec(buf));
+		Some(Blob::from_vec(buf))
 	}
 	fn get_name(&self) -> &str {
 		&self.name

@@ -15,14 +15,15 @@ pub struct CloudTilesDst {
 }
 impl CloudTilesDst {
 	pub fn new_file(filename: &PathBuf) -> CloudTilesDst {
-		return CloudTilesDst {
+		CloudTilesDst {
 			writer: Box::new(BufWriter::new(File::create(filename).unwrap())),
-		};
+		}
 	}
 	pub fn append(&mut self, blob: Blob) -> ByteRange {
 		let pos = self.writer.stream_position().unwrap();
 		let len = self.writer.write(blob.as_slice()).unwrap();
-		return ByteRange::new(pos, len as u64);
+		
+		ByteRange::new(pos, len as u64)
 	}
 	pub fn write_start(&mut self, blob: Blob) {
 		let pos = self.writer.stream_position().unwrap();
