@@ -10,6 +10,7 @@ pub struct TileBBox {
 	y_max: u64,
 }
 
+#[allow(dead_code)]
 impl TileBBox {
 	pub fn new(x_min: u64, y_min: u64, x_max: u64, y_max: u64) -> TileBBox {
 		return TileBBox {
@@ -74,7 +75,7 @@ impl TileBBox {
 			self.y_max = self.y_max.max(y);
 		}
 	}
-	pub fn include_bbox(&mut self, bbox: &TileBBox) {
+	pub fn union_bbox(&mut self, bbox: &TileBBox) {
 		if self.is_empty() {
 			self.set_bbox(bbox);
 		} else {
@@ -84,7 +85,7 @@ impl TileBBox {
 			self.y_max = self.y_max.max(bbox.y_max);
 		}
 	}
-	pub fn intersect(&mut self, bbox: &TileBBox) {
+	pub fn intersect_bbox(&mut self, bbox: &TileBBox) {
 		if self.is_empty() {
 		} else {
 			self.x_min = self.x_min.max(bbox.x_min);

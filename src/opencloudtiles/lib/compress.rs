@@ -74,14 +74,14 @@ mod tests {
 	fn verify_brotli() {
 		let data1 = random_data(100000);
 		let data2 = decompress_brotli(compress_brotli(data1.clone()));
-		assert_eq!(data1, data2, "problem with brotli compressor/decompressor");
+		assert_eq!(data1, data2);
 	}
 
 	#[test]
 	fn verify_gzip() {
 		let data1 = random_data(100000);
 		let data2 = decompress_gzip(compress_gzip(data1.clone()));
-		assert_eq!(data1, data2, "problem with gzip compressor/decompressor");
+		assert_eq!(data1, data2);
 	}
 
 	fn random_data(size: usize) -> Blob {

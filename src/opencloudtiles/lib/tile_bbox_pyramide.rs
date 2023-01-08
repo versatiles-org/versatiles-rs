@@ -21,13 +21,13 @@ impl TileBBoxPyramide {
 	}
 	pub fn limit_by_geo_bbox(&mut self, geo_bbox: &[f32; 4]) {
 		for (level, bbox) in self.level_bbox.iter_mut().enumerate() {
-			bbox.intersect(&TileBBox::from_geo(level as u64, geo_bbox));
+			bbox.intersect_bbox(&TileBBox::from_geo(level as u64, geo_bbox));
 		}
 	}
 	pub fn intersect(&mut self, other_bbox_pyramide: &TileBBoxPyramide) {
 		for (level, bbox) in self.level_bbox.iter_mut().enumerate() {
 			let other_bbox = other_bbox_pyramide.get_level_bbox(level as u64);
-			bbox.intersect(other_bbox);
+			bbox.intersect_bbox(other_bbox);
 		}
 	}
 	pub fn get_level_bbox(&self, level: u64) -> &TileBBox {
@@ -40,7 +40,7 @@ impl TileBBoxPyramide {
 		self.level_bbox[coord.z as usize].include_tile(coord.x, coord.y);
 	}
 	pub fn include_bbox(&mut self, level: u64, bbox: &TileBBox) {
-		self.level_bbox[level as usize].include_bbox(bbox);
+		self.level_bbox[level as usize].union_bbox(bbox);
 	}
 	pub fn iter_levels(&self) -> impl Iterator<Item = (u64, &TileBBox)> {
 		return self
@@ -135,19 +135,19 @@ mod tests {
 	fn intersection_tests() {
 		let mut pyramide1 = TileBBoxPyramide::new_empty();
 		pyramide1.intersect(&TileBBoxPyramide::new_empty());
-		assert!(pyramide1.is_empty(), "failed");
+		assert!(pyramide1.is_empty());
 
 		let mut pyramide1 = TileBBoxPyramide::new_full();
 		pyramide1.intersect(&TileBBoxPyramide::new_empty());
-		assert!(pyramide1.is_empty(), "failed");
+		assert!(pyramide1.is_empty());
 
 		let mut pyramide1 = TileBBoxPyramide::new_empty();
 		pyramide1.intersect(&TileBBoxPyramide::new_full());
-		assert!(pyramide1.is_empty(), "failed");
+		assert!(pyramide1.is_empty());
 
 		let mut pyramide1 = TileBBoxPyramide::new_full();
 		pyramide1.intersect(&TileBBoxPyramide::new_full());
-		assert!(pyramide1.is_full(), "failed");
+		assert!(pyramide1.is_full());
 	}
 
 	#[test]
@@ -156,7 +156,7 @@ mod tests {
 			let mut pyramide = TileBBoxPyramide::new_empty();
 			let bbox = TileBBox::new_full(z0);
 			pyramide.set_level_bbox(z1, bbox.clone());
-			assert_eq!(pyramide.get_level_bbox(z1).clone(), bbox, "failed");
+			assert_eq!(pyramide.get_level_bbox(z1).clone(), bbox);
 		};
 
 		test(0, 1);
@@ -170,8 +170,8 @@ mod tests {
 			let mut pyramide = TileBBoxPyramide::new_full();
 			pyramide.set_zoom_min(z0);
 			pyramide.set_zoom_max(z1);
-			assert_eq!(pyramide.get_zoom_min().unwrap(), z0, "failed");
-			assert_eq!(pyramide.get_zoom_max().unwrap(), z1, "failed");
+			assert_eq!(pyramide.get_zoom_min().unwrap(), z0);
+			assert_eq!(pyramide.get_zoom_max().unwrap(), z1);
 		};
 
 		test(0, 1);
