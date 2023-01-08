@@ -2,58 +2,65 @@
 name: CI
 
 on:
-  push:
-    branches:
-    - master
-  pull_request:
-    branches:
-    - master
-  schedule:
-    - cron: '0 0 15 * *'
-  workflow_dispatch:
+   push:
+      branches:
+         - master
+   pull_request:
+      branches:
+         - master
+   schedule:
+      - cron: '0 0 15 * *'
+   workflow_dispatch:
+      inputs:
+         logLevel:
+            description: 'Log level'
+            required: true
+            default: 'warning'
+         tags:
+            description: 'Test scenario tags'
 
 env:
-  CARGO_TERM_COLOR: always
+   CARGO_TERM_COLOR: always
 
 jobs:
-  rustfmt:
-    name: rustfmt
-    runs-on: ubuntu-18.04
+   rustfmt:
+      name: rustfmt
+      runs-on: ubuntu-18.04
 
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-      with: {submodules: true}
-    - name: Install rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
-        components: rustfmt, clippy
-    - name: Check formatting
-      run: cargo fmt -- --check
-    - name: Documentation
-      run: cargo doc
-    - name: Clippy
-      run: cargo clippy -- -D warnings
+      steps:
+         - name: Checkout repository
+           uses: actions/checkout@v3
+           with: { submodules: true }
+         - name: Install rust
+           uses: actions-rs/toolchain@v1
+           with:
+              toolchain: stable
+              profile: minimal
+              components: rustfmt, clippy
+         - name: Check formatting
+           run: cargo fmt -- --check
+         - name: Documentation
+           run: cargo doc
+         - name: Clippy
+           run: cargo clippy -- -D warnings
 
-  cargo_test:
-    name: cargo test
-    runs-on: ubuntu-18.04
+   cargo_test:
+      name: cargo test
+      runs-on: ubuntu-18.04
 
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-      with: {submodules: false}
+      steps:
+         - name: Checkout repository
+           uses: actions/checkout@v3
+           with: { submodules: false }
 
-    - name: Install rust
-      uses: actions-rs/toolchain@v1
-      with:
-        toolchain: stable
-        profile: minimal
+         - name: Install rust
+           uses: actions-rs/toolchain@v1
+           with:
+              toolchain: stable
+              profile: minimal
 
-    - name: Build
-      run: cargo build
+         - name: Build
+           run: cargo build
 
-    - name: Test
-      run: cargo test
+         - name: Test
+           run: cargo test
