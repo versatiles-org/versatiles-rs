@@ -1,6 +1,5 @@
 use crate::opencloudtiles::lib::*;
-use std::fmt::Debug;
-use std::path::Path;
+use std::{fmt::Debug, path::Path};
 
 pub type TileConverterBox = Box<dyn TileConverterTrait>;
 pub type TileReaderBox = Box<dyn TileReaderTrait>;
@@ -22,9 +21,7 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 		Self: Sized;
 	fn get_name(&self) -> &str;
 	fn get_parameters(&self) -> &TileReaderParameters;
-	fn get_tile_format(&self) -> &TileFormat {
-		self.get_parameters().get_tile_format()
-	}
+	fn get_tile_format(&self) -> &TileFormat { self.get_parameters().get_tile_format() }
 	fn get_tile_precompression(&self) -> &Precompression {
 		self.get_parameters().get_tile_precompression()
 	}

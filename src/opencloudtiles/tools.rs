@@ -133,6 +133,4 @@ fn new_converter(filename: &str, command: &Convert) -> TileConverterBox {
 	converter
 }
 
-fn new_server(command: &Serve) -> TileServer {
-	TileServer::new(command.port)
-}
+fn new_server(command: &Serve) -> TileServer { TileServer::new(command.port) }

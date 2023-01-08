@@ -32,7 +32,7 @@ impl BlockIndex {
 				buf.get_range(i * 29..(i + 1) * 29),
 			));
 		}
-		
+
 		block_index
 	}
 	pub fn from_brotli_blob(buf: Blob) -> BlockIndex {
@@ -63,9 +63,7 @@ impl BlockIndex {
 
 		Blob::from_vec(cursor.into_inner())
 	}
-	pub fn as_brotli_blob(&self) -> Blob {
-		compress_brotli(self.as_blob())
-	}
+	pub fn as_brotli_blob(&self) -> Blob { compress_brotli(self.as_blob()) }
 	pub fn get_block(&self, coord: &TileCoord3) -> Option<&BlockDefinition> {
 		self.lookup.get(coord)
 	}

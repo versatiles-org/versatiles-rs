@@ -74,9 +74,7 @@ impl Tar {
 	}
 }
 impl ServerSourceTrait for Tar {
-	fn get_name(&self) -> &str {
-		&self.name
-	}
+	fn get_name(&self) -> &str { &self.name }
 
 	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Result<Response<Body>> {
 		let entry_name = path.join("/");

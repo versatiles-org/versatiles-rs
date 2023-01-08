@@ -1,8 +1,7 @@
 use super::types::{BlockDefinition, BlockIndex, ByteRange, CloudTilesDst, FileHeader, TileIndex};
 use crate::opencloudtiles::{
 	container::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	lib::ProgressBar,
-	lib::{TileConverterConfig, TileCoord2, TileCoord3},
+	lib::{ProgressBar, TileConverterConfig, TileCoord2, TileCoord3},
 };
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use std::{collections::HashMap, path::Path, sync::Mutex};

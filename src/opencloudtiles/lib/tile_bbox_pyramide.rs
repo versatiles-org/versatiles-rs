@@ -30,9 +30,7 @@ impl TileBBoxPyramide {
 			bbox.intersect_bbox(other_bbox);
 		}
 	}
-	pub fn get_level_bbox(&self, level: u64) -> &TileBBox {
-		&self.level_bbox[level as usize]
-	}
+	pub fn get_level_bbox(&self, level: u64) -> &TileBBox { &self.level_bbox[level as usize] }
 	pub fn set_level_bbox(&mut self, level: u64, bbox: TileBBox) {
 		self.level_bbox[level as usize] = bbox;
 	}
@@ -98,9 +96,7 @@ impl TileBBoxPyramide {
 	pub fn count_tiles(&self) -> u64 {
 		return self.level_bbox.iter().map(|bbox| bbox.count_tiles()).sum();
 	}
-	pub fn is_empty(&self) -> bool {
-		self.level_bbox.iter().all(|bbox| bbox.is_empty())
-	}
+	pub fn is_empty(&self) -> bool { self.level_bbox.iter().all(|bbox| bbox.is_empty()) }
 	pub fn is_full(&self) -> bool {
 		self
 			.level_bbox

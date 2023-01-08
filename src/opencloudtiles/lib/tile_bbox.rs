@@ -24,13 +24,11 @@ impl TileBBox {
 		let max = 2u64.pow(level as u32) - 1;
 		TileBBox::new(0, 0, max, max)
 	}
-	pub fn new_empty() -> TileBBox {
-		TileBBox::new(1, 1, 0, 0)
-	}
+	pub fn new_empty() -> TileBBox { TileBBox::new(1, 1, 0, 0) }
 	pub fn from_geo(level: u64, geo_bbox: &[f32; 4]) -> TileBBox {
 		let p1 = TileCoord2::from_geo(level, geo_bbox[0], geo_bbox[1]);
 		let p2 = TileCoord2::from_geo(level, geo_bbox[2], geo_bbox[3]);
-		
+
 		TileBBox::new(
 			p1.x.min(p2.x),
 			p1.y.min(p2.y),
@@ -44,9 +42,7 @@ impl TileBBox {
 		self.x_max = 0;
 		self.y_max = 0;
 	}
-	pub fn is_empty(&self) -> bool {
-		(self.x_max < self.x_min) || (self.y_max < self.y_min)
-	}
+	pub fn is_empty(&self) -> bool { (self.x_max < self.x_min) || (self.y_max < self.y_min) }
 	pub fn set_full(&mut self, level: u64) {
 		let max = 2u64.pow(level as u32) - 1;
 		self.x_min = 0;
@@ -109,7 +105,7 @@ impl TileBBox {
 	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord2> {
 		let y_values = self.y_min..=self.y_max;
 		let x_values = self.x_min..=self.x_max;
-		
+
 		y_values
 			.cartesian_product(x_values)
 			.map(|(y, x)| TileCoord2 { x, y })
@@ -119,7 +115,7 @@ impl TileBBox {
 		self.y_min += y;
 		self.x_max += x;
 		self.y_max += y;
-		
+
 		self
 	}
 	pub fn scale_down(mut self, scale: u64) -> TileBBox {
@@ -127,7 +123,7 @@ impl TileBBox {
 		self.y_min /= scale;
 		self.x_max /= scale;
 		self.y_max /= scale;
-		
+
 		self
 	}
 	pub fn clamped_offset_from(mut self, x: u64, y: u64) -> TileBBox {
@@ -135,7 +131,7 @@ impl TileBBox {
 		self.y_min = (self.y_min.max(y) - y).min(255);
 		self.x_max = (self.x_max.max(x) - x).min(255);
 		self.y_max = (self.y_max.max(y) - y).min(255);
-		
+
 		self
 	}
 	pub fn contains(&self, coord: &TileCoord2) -> bool {
@@ -155,18 +151,10 @@ impl TileBBox {
 
 		index as usize
 	}
-	pub fn get_x_min(&self) -> u64 {
-		self.x_min
-	}
-	pub fn get_y_min(&self) -> u64 {
-		self.y_min
-	}
-	pub fn get_x_max(&self) -> u64 {
-		self.x_max
-	}
-	pub fn get_y_max(&self) -> u64 {
-		self.y_max
-	}
+	pub fn get_x_min(&self) -> u64 { self.x_min }
+	pub fn get_y_min(&self) -> u64 { self.y_min }
+	pub fn get_x_max(&self) -> u64 { self.x_max }
+	pub fn get_y_max(&self) -> u64 { self.y_max }
 }
 
 impl fmt::Debug for TileBBox {

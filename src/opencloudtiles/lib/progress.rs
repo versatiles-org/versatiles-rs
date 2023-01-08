@@ -38,9 +38,7 @@ impl ProgressBar {
 		self.force_update();
 		self.bar.abandon();
 	}
-	fn set_next_progress_update(&mut self) {
-		self.next_progress_update += Duration::from_secs(1);
-	}
+	fn set_next_progress_update(&mut self) { self.next_progress_update += Duration::from_secs(1); }
 	fn update(&mut self) {
 		if SystemTime::now() >= self.next_progress_update {
 			self.bar.set_position(self.value);

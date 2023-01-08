@@ -137,12 +137,8 @@ impl TileReaderTrait for TileReader {
 			),
 		})
 	}
-	fn get_parameters(&self) -> &TileReaderParameters {
-		&self.parameters
-	}
-	fn get_meta(&self) -> Blob {
-		self.meta.clone()
-	}
+	fn get_parameters(&self) -> &TileReaderParameters { &self.parameters }
+	fn get_meta(&self) -> Blob { self.meta.clone() }
 	fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob> {
 		let range = self.tile_map.get(coord);
 
@@ -158,9 +154,7 @@ impl TileReaderTrait for TileReader {
 
 		Some(Blob::from_vec(buf))
 	}
-	fn get_name(&self) -> &str {
-		&self.name
-	}
+	fn get_name(&self) -> &str { &self.name }
 }
 
 impl Debug for TileReader {

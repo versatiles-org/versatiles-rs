@@ -50,12 +50,8 @@ impl TileReaderTrait for TileReader {
 
 		Box::new(TileReader::from_src(reader))
 	}
-	fn get_meta(&self) -> Blob {
-		self.meta.clone()
-	}
-	fn get_parameters(&self) -> &TileReaderParameters {
-		&self.parameters
-	}
+	fn get_meta(&self) -> Blob { self.meta.clone() }
+	fn get_parameters(&self) -> &TileReaderParameters { &self.parameters }
 	fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob> {
 		let block_coord = TileCoord3 {
 			x: coord.x.shr(8),
@@ -115,9 +111,7 @@ impl TileReaderTrait for TileReader {
 
 		Some(self.reader.read_range(&tile_range))
 	}
-	fn get_name(&self) -> &str {
-		self.reader.get_name()
-	}
+	fn get_name(&self) -> &str { self.reader.get_name() }
 }
 
 impl Debug for TileReader {

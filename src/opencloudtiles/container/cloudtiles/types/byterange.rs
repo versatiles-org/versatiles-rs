@@ -7,9 +7,7 @@ pub struct ByteRange {
 	pub length: u64,
 }
 impl ByteRange {
-	pub fn new(offset: u64, length: u64) -> ByteRange {
-		ByteRange { offset, length }
-	}
+	pub fn new(offset: u64, length: u64) -> ByteRange { ByteRange { offset, length } }
 	pub fn empty() -> ByteRange {
 		ByteRange {
 			offset: 0,

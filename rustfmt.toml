@@ -1,6 +1,5 @@
 edition = "2021"
 fn_args_layout = "Compressed"
-fn_params_layout = "Compressed"
 fn_single_line = true
 hard_tabs = true
 imports_granularity = "Crate"

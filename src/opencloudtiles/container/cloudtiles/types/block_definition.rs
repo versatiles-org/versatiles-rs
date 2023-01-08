@@ -42,9 +42,7 @@ impl BlockDefinition {
 			tile_range,
 		}
 	}
-	pub fn count_tiles(&self) -> u64 {
-		self.bbox.count_tiles()
-	}
+	pub fn count_tiles(&self) -> u64 { self.bbox.count_tiles() }
 	pub fn as_blob(&self) -> Blob {
 		let vec = Vec::new();
 		let mut cursor = Cursor::new(vec);
@@ -57,7 +55,7 @@ impl BlockDefinition {
 		cursor.write_u8(self.bbox.get_y_max() as u8).unwrap();
 		cursor.write_u64::<BE>(self.tile_range.offset).unwrap();
 		cursor.write_u64::<BE>(self.tile_range.length).unwrap();
-		
+
 		Blob::from_vec(cursor.into_inner())
 	}
 }

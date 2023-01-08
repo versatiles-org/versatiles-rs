@@ -19,7 +19,7 @@ pub fn img2png(image: &DynamicImage) -> Blob {
 		image.color(),
 	)
 	.unwrap();
-	
+
 	Blob::from_vec(buffer)
 }
 
@@ -37,8 +37,8 @@ pub fn img2jpg(image: &DynamicImage) -> Blob {
 			image.color(),
 		)
 		.unwrap();
-	
-		Blob::from_vec(buffer)
+
+	Blob::from_vec(buffer)
 }
 
 pub fn jpg2img(data: Blob) -> DynamicImage {
