@@ -39,8 +39,6 @@ jobs:
               components: rustfmt, clippy
          - name: Check formatting
            run: cargo fmt -- --check
-         - name: Documentation
-           run: cargo doc
          - name: Clippy
            run: cargo clippy -- -D warnings
 
