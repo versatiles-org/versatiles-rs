@@ -1,7 +1,7 @@
 use hyper::body::Bytes;
 use std::ops::Range;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Blob(Bytes);
 impl Blob {
 	pub fn from_vec(vec: Vec<u8>) -> Blob {
