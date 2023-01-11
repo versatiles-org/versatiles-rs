@@ -1,7 +1,7 @@
 use super::types::{BlockDefinition, BlockIndex, ByteRange, CloudTilesDst, FileHeader, TileIndex};
 use crate::opencloudtiles::{
 	container::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	lib::{ProgressBar, TileConverterConfig, TileCoord2, TileCoord3},
+	lib::{ProgressBar, TileBBox, TileConverterConfig, TileCoord2},
 };
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use std::{collections::HashMap, path::Path, sync::Mutex};
@@ -60,12 +60,15 @@ impl TileConverter {
 
 			let bbox_blocks = bbox_tiles.clone().scale_down(256);
 			for TileCoord2 { x, y } in bbox_blocks.iter_coords() {
-				blocks.push(BlockDefinition::new(
-					zoom,
-					x,
-					y,
-					bbox_tiles.clone().clamped_offset_from(x * 256, y * 256),
-				))
+				let mut bbox_block = bbox_tiles.clone();
+				bbox_block.intersect_bbox(&TileBBox::new(
+					x * 256,
+					y * 256,
+					x * 256 + 255,
+					y * 256 + 255,
+				));
+
+				blocks.push(BlockDefinition::new(zoom, x, y, bbox_block))
 			}
 		}
 		bar1.finish();
@@ -104,61 +107,47 @@ impl TileConverter {
 
 		let tile_converter = self.config.get_tile_recompressor();
 
-		bbox.iter_coords().par_bridge().for_each(|tile| {
-			mutex_bar.lock().unwrap().inc(1);
+		let column_range = bbox.get_y_min()..=bbox.get_y_max();
+		column_range.par_bridge().for_each(|y| {
+			let row_bbox = TileBBox::new(bbox.get_x_min(), y, bbox.get_x_max(), y);
 
-			let index = bbox.get_tile_index(&tile);
+			reader
+				.get_bbox_tile_data(block.level, &row_bbox)
+				.into_iter()
+				.par_bridge()
+				.for_each(|(coord, mut blob)| {
+					let index = bbox.get_tile_index(&coord);
 
-			let x = block.x * 256 + tile.x;
-			let y = block.y * 256 + tile.y;
+					let mut secured_tile_hash_lookup_option = None;
+					let mut tile_hash = None;
 
-			let coord = TileCoord3 {
-				x,
-				y,
-				z: block.level,
-			};
+					if blob.len() < 5000 {
+						secured_tile_hash_lookup_option = Some(mutex_tile_hash_lookup.lock().unwrap());
+						let lookup = secured_tile_hash_lookup_option.as_ref().unwrap();
+						if lookup.contains_key(blob.as_slice()) {
+							let mut secured_tile_index = mutex_tile_index.lock().unwrap();
+							secured_tile_index.set(index, lookup.get(blob.as_slice()).unwrap().clone());
+							return;
+						}
+						tile_hash = Some(blob.clone());
+					}
 
-			let optional_tile = reader.get_tile_data(&coord);
+					blob = tile_converter.run(blob);
 
-			if optional_tile.is_none() {
-				let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-				secured_tile_index.set(
-					index,
-					ByteRange {
-						offset: 0,
-						length: 0,
-					},
-				);
-				return;
-			}
+					let mut secured_writer = mutex_writer.lock().unwrap();
+					let range = secured_writer.append(blob);
+					drop(secured_writer);
 
-			let mut tile = optional_tile.unwrap();
-
-			let mut secured_tile_hash_lookup_option = None;
-			let mut tile_hash = None;
-
-			if tile.len() < 1000 {
-				secured_tile_hash_lookup_option = Some(mutex_tile_hash_lookup.lock().unwrap());
-				let lookup = secured_tile_hash_lookup_option.as_ref().unwrap();
-				if lookup.contains_key(tile.as_slice()) {
 					let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-					secured_tile_index.set(index, lookup.get(tile.as_slice()).unwrap().clone());
-					return;
-				}
-				tile_hash = Some(tile.clone());
-			}
+					secured_tile_index.set(index, range.clone());
+					drop(secured_tile_index);
 
-			tile = tile_converter.run(tile);
+					if let Some(mut secured_tile_hash_lookup) = secured_tile_hash_lookup_option {
+						secured_tile_hash_lookup.insert(tile_hash.unwrap().to_vec(), range);
+					}
+				});
 
-			let range = mutex_writer.lock().unwrap().append(tile);
-
-			let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-			secured_tile_index.set(index, range.clone());
-			drop(secured_tile_index);
-
-			if let Some(mut secured_tile_hash_lookup) = secured_tile_hash_lookup_option {
-				secured_tile_hash_lookup.insert(tile_hash.unwrap().to_vec(), range);
-			}
+			mutex_bar.lock().unwrap().inc(row_bbox.count_tiles());
 		});
 
 		self.writer.append(tile_index.as_brotli_blob())

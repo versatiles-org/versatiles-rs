@@ -22,6 +22,9 @@ impl TileCoord2 {
 			y: y as u64,
 		}
 	}
+	pub fn add_zoom(&self, level: u64) -> TileCoord3 {
+		TileCoord3::new(level, self.y, self.x)
+	}
 }
 
 impl fmt::Debug for TileCoord2 {

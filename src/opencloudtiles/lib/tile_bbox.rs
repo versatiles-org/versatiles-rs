@@ -130,6 +130,7 @@ impl TileBBox {
 
 		self
 	}
+	/*
 	pub fn clamped_offset_from(mut self, x: u64, y: u64) -> TileBBox {
 		self.x_min = (self.x_min.max(x) - x).min(255);
 		self.y_min = (self.y_min.max(y) - y).min(255);
@@ -138,6 +139,7 @@ impl TileBBox {
 
 		self
 	}
+	*/
 	pub fn contains(&self, coord: &TileCoord2) -> bool {
 		(coord.x >= self.x_min)
 			&& (coord.x <= self.x_max)
