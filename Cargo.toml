@@ -1,6 +1,6 @@
 [package]
 name = "opencloudtiles"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 authors = ["Michael Kreil"]
 description = "A toolbox for converting, checking and serving map tiles in various formats."
