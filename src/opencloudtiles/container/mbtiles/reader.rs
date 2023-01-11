@@ -149,15 +149,15 @@ impl TileReader {
 			y0 = query("MIN(tile_row)", &format!("{}row <= {}", sql_prefix, y0));
 			y1 = query("MAX(tile_row)", &format!("{}row >= {}", sql_prefix, y1));
 
-			let max_y = 2i32.pow(z as u32) - 1;
+			let max_value = 2i32.pow(z as u32) - 1;
 
 			bbox_pyramide.set_level_bbox(
 				z as u64,
 				TileBBox::new(
-					x0.max(0) as u64,
-					(max_y - y1).max(0) as u64,
-					x1.max(0) as u64,
-					(max_y - y0).max(0) as u64,
+					x0.max(0).min(max_value) as u64,
+					(max_value - y1).max(0).min(max_value) as u64,
+					x1.max(0).min(max_value) as u64,
+					(max_value - y0).max(0).min(max_value) as u64,
 				),
 			);
 		}
