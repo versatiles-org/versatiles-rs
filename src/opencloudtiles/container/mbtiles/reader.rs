@@ -99,7 +99,7 @@ impl TileReader {
 		let mut bbox_pyramide = TileBBoxPyramide::new_empty();
 		let connection = self.pool.get().unwrap();
 
-		let query = |sql1: &str, sql2: &str| -> u64 {
+		let query = |sql1: &str, sql2: &str| -> i32 {
 			let sql = if sql2.is_empty() {
 				format!("SELECT {} FROM tiles", sql1)
 			} else {
@@ -149,9 +149,17 @@ impl TileReader {
 			y0 = query("MIN(tile_row)", &format!("{}row <= {}", sql_prefix, y0));
 			y1 = query("MAX(tile_row)", &format!("{}row >= {}", sql_prefix, y1));
 
-			let max_y = 2u64.pow(z as u32) - 1;
+			let max_y = 2i32.pow(z as u32) - 1;
 
-			bbox_pyramide.set_level_bbox(z, TileBBox::new(x0, max_y - y1, x1, max_y - y0));
+			bbox_pyramide.set_level_bbox(
+				z as u64,
+				TileBBox::new(
+					x0.max(0) as u64,
+					(max_y - y1).max(0) as u64,
+					x1.max(0) as u64,
+					(max_y - y0).max(0) as u64,
+				),
+			);
 		}
 
 		bbox_pyramide
