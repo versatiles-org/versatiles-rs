@@ -154,10 +154,10 @@ impl TileReader {
 			bbox_pyramide.set_level_bbox(
 				z as u64,
 				TileBBox::new(
-					x0.max(0).min(max_value) as u64,
-					(max_value - y1).max(0).min(max_value) as u64,
-					x1.max(0).min(max_value) as u64,
-					(max_value - y0).max(0).min(max_value) as u64,
+					x0.clamp(0, max_value) as u64,
+					(max_value - y1).clamp(0, max_value) as u64,
+					x1.clamp(0, max_value) as u64,
+					(max_value - y0).clamp(0, max_value) as u64,
 				),
 			);
 		}
