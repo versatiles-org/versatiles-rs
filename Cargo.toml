@@ -37,12 +37,15 @@ strip = true  # Automatically strip symbols from the binary.
 brotli = "3.3.4"
 byteorder = "1.4.3"
 clap = { version = "4.0.32", features = ["derive"] }
+clap-verbosity-flag = "2.0.0"
 enumset = "1.0.12"
+env_logger = "0.10.0"
 flate2 = "1.0.25"
 hyper = { version = "0.14", features = ["full"] }
 image = "0.24.5"
 indicatif = "0.17.2"
 itertools = "0.10.5"
+log = "0.4.17"
 mime_guess = "2.0.4"
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.21.0"

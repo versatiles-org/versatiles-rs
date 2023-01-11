@@ -2,6 +2,7 @@ use crate::opencloudtiles::{
 	container::{TileReaderBox, TileReaderTrait},
 	lib::*,
 };
+use log::trace;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
 use std::{
@@ -104,6 +105,8 @@ impl TileReader {
 			} else {
 				format!("SELECT {} FROM tiles WHERE {}", sql1, sql2)
 			};
+
+			trace!("SQL: {}", sql);
 
 			connection.query_row(&sql, [], |r| r.get(0)).unwrap()
 		};
