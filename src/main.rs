@@ -1,6 +1,6 @@
 mod opencloudtiles;
 use clap::{Args, Parser, Subcommand};
-use clap_verbosity_flag::{Verbosity, InfoLevel};
+use clap_verbosity_flag::{InfoLevel, Verbosity};
 use opencloudtiles::{
 	lib::{Precompression, TileFormat},
 	tools,
@@ -21,7 +21,7 @@ pub struct Cli {
 	command: Commands,
 
 	#[command(flatten)]
-    verbose: Verbosity<InfoLevel>,
+	verbose: Verbosity<InfoLevel>,
 }
 
 #[derive(Subcommand)]
@@ -138,8 +138,8 @@ fn main() {
 	let cli = Cli::parse();
 
 	env_logger::Builder::new()
-    .filter_level(cli.verbose.log_level_filter())
-    .init();
+		.filter_level(cli.verbose.log_level_filter())
+		.init();
 
 	let command = &cli.command;
 	match command {
