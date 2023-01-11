@@ -32,17 +32,16 @@ fn new_reader(filename: &str, arguments: &Convert) -> TileReaderBox {
 fn new_converter(filename: &str, arguments: &Convert) -> TileConverterBox {
 	let mut bbox_pyramide = TileBBoxPyramide::new_full();
 
-	if arguments.min_zoom.is_some() {
-		bbox_pyramide.set_zoom_min(arguments.min_zoom.unwrap())
+	if let Some(value) = arguments.min_zoom {
+		bbox_pyramide.set_zoom_min(value)
 	}
 
-	if arguments.max_zoom.is_some() {
-		bbox_pyramide.set_zoom_max(arguments.max_zoom.unwrap())
+	if let Some(value) = arguments.max_zoom {
+		bbox_pyramide.set_zoom_max(value)
 	}
 
-	if arguments.bbox.is_some() {
-		let array = arguments.bbox.as_ref().unwrap().as_slice();
-		bbox_pyramide.limit_by_geo_bbox(array.try_into().unwrap());
+	if let Some(value) = &arguments.bbox {
+		bbox_pyramide.limit_by_geo_bbox(value.as_slice().try_into().unwrap());
 	}
 
 	let config = TileConverterConfig::new(
