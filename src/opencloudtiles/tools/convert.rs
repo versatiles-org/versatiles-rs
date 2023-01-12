@@ -1,6 +1,8 @@
 use crate::{
 	opencloudtiles::{
-		container::{cloudtiles, mbtiles, tar, TileConverterBox, TileConverterTrait, TileReaderBox},
+		container::{
+			cloudtiles, mbtiles, tar_file, TileConverterBox, TileConverterTrait, TileReaderBox,
+		},
 		lib::{TileBBoxPyramide, TileConverterConfig},
 		tools::get_reader,
 	},
@@ -57,7 +59,7 @@ fn new_converter(filename: &str, arguments: &Convert) -> TileConverterBox {
 	let converter = match extension {
 		"mbtiles" => mbtiles::TileConverter::new(&path, config),
 		"cloudtiles" => cloudtiles::TileConverter::new(&path, config),
-		"tar" => tar::TileConverter::new(&path, config),
+		"tar" => tar_file::TileConverter::new(&path, config),
 		_ => panic!("extension '{:?}' unknown", extension),
 	};
 

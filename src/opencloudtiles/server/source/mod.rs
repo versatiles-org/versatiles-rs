@@ -1,5 +1,5 @@
 mod container;
 mod folder;
-mod tar;
+mod tar_file;
 
-pub use self::{container::*, folder::*, tar::*};
+pub use self::{container::*, folder::*, tar_file::*};

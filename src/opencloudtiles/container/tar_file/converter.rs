@@ -1,7 +1,5 @@
-use crate::opencloudtiles::{
-	container::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	lib::{Precompression, ProgressBar, TileConverterConfig, TileFormat},
-};
+use crate::opencloudtiles::{container::*, lib::*};
+use log::trace;
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use std::{fs::File, path::Path, sync::Mutex};
 use tar::{Builder, Header};
@@ -15,12 +13,16 @@ impl TileConverterTrait for TileConverter {
 	where
 		Self: Sized,
 	{
+		trace!("new {:?}", filename);
+
 		let file = File::create(filename).unwrap();
 		let builder = Builder::new(file);
 
 		Box::new(TileConverter { builder, config })
 	}
 	fn convert_from(&mut self, reader: &mut TileReaderBox) {
+		trace!("convert_from");
+
 		self
 			.config
 			.finalize_with_parameters(reader.get_parameters());

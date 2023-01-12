@@ -41,7 +41,7 @@ pub fn serve(arguments: &Serve) {
 	} else if arguments.static_tar.is_some() {
 		server.add_source(
 			String::from("/static/"),
-			source::Tar::from(arguments.static_tar.as_ref().unwrap()),
+			source::TarFile::from(arguments.static_tar.as_ref().unwrap()),
 		);
 	}
 

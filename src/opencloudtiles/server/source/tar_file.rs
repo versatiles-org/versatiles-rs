@@ -29,12 +29,12 @@ impl CompressedVersions {
 	}
 }
 
-pub struct Tar {
+pub struct TarFile {
 	lookup: HashMap<String, CompressedVersions>,
 	name: String,
 }
-impl Tar {
-	pub fn from(path: &str) -> Box<Tar> {
+impl TarFile {
+	pub fn from(path: &str) -> Box<TarFile> {
 		let mut filename = current_dir().unwrap();
 		filename.push(Path::new(path));
 		filename = filename.canonicalize().unwrap();
@@ -104,13 +104,13 @@ impl Tar {
 			add(&entry_path, blob);
 		}
 
-		Box::new(Tar {
+		Box::new(TarFile {
 			lookup,
 			name: path.to_string(),
 		})
 	}
 }
-impl ServerSourceTrait for Tar {
+impl ServerSourceTrait for TarFile {
 	fn get_name(&self) -> &str {
 		&self.name
 	}

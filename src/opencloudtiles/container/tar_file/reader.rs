@@ -1,8 +1,5 @@
-use crate::opencloudtiles::{
-	container::{TileReaderBox, TileReaderTrait},
-	lib::*,
-};
-use itertools::Itertools;
+use crate::opencloudtiles::{container::*, lib::*};
+use log::trace;
 use std::{
 	collections::HashMap, env::current_dir, fmt::Debug, fs::File, io::Read,
 	os::unix::prelude::FileExt, path::Path, str::from_utf8,
@@ -33,6 +30,7 @@ impl TileReaderTrait for TileReader {
 	where
 		Self: Sized,
 	{
+		trace!("new {}", path);
 		let mut filename = current_dir().unwrap();
 		filename.push(Path::new(path));
 
@@ -62,7 +60,7 @@ impl TileReaderTrait for TileReader {
 			}
 
 			let path = entry.path().unwrap().clone();
-			let mut path_tmp: Vec<&str> = path.iter().map(|s| s.to_str().unwrap()).collect_vec();
+			let mut path_tmp: Vec<&str> = path.iter().map(|s| s.to_str().unwrap()).collect();
 			path_tmp.remove(0);
 			let path_string = path_tmp.join("/");
 			drop(path);
@@ -179,6 +177,8 @@ impl TileReaderTrait for TileReader {
 		self.meta.clone()
 	}
 	fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
+		trace!("get_tile_data {:?}", coord_in);
+
 		let coord: TileCoord3 = if self.get_parameters().get_vertical_flip() {
 			coord_in.flip_vertically()
 		} else {

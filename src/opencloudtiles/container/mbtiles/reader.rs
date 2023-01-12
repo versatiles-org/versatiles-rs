@@ -20,6 +20,8 @@ pub struct TileReader {
 }
 impl TileReader {
 	fn load_from_sqlite(filename: &PathBuf) -> TileReader {
+		trace!("load_from_sqlite {:?}", filename);
+
 		let concurrency = thread::available_parallelism().unwrap().get();
 
 		let manager = r2d2_sqlite::SqliteConnectionManager::file(filename)
@@ -45,6 +47,8 @@ impl TileReader {
 		reader
 	}
 	fn load_meta_data(&mut self) {
+		trace!("load_meta_data");
+
 		let connection = self.pool.get().unwrap();
 		let mut stmt = connection
 			.prepare("SELECT name, value FROM metadata")
@@ -96,6 +100,8 @@ impl TileReader {
 		}
 	}
 	fn get_bbox_pyramide(&self) -> TileBBoxPyramide {
+		trace!("get_bbox_pyramide");
+
 		let mut bbox_pyramide = TileBBoxPyramide::new_empty();
 		let connection = self.pool.get().unwrap();
 
@@ -168,6 +174,8 @@ impl TileReader {
 
 impl TileReaderTrait for TileReader {
 	fn new(path: &str) -> TileReaderBox {
+		trace!("open {}", path);
+
 		let mut filename = current_dir().unwrap();
 		filename.push(Path::new(path));
 
@@ -192,6 +200,8 @@ impl TileReaderTrait for TileReader {
 		&mut self.parameters
 	}
 	fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
+		trace!("read 1 tile {:?}", coord_in);
+
 		let connection = self.pool.get().unwrap();
 		let mut stmt = connection
 			.prepare(
@@ -218,7 +228,7 @@ impl TileReaderTrait for TileReader {
 	}
 	fn get_bbox_tile_data(&self, zoom: u64, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
 		trace!(
-			"request tiles {} for z:{}, bbox:{:?}",
+			"read {} tiles for z:{}, bbox:{:?}",
 			bbox.count_tiles(),
 			zoom,
 			bbox
