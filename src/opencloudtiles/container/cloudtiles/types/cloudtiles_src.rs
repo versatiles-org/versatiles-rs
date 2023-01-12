@@ -1,35 +1,37 @@
-use crate::opencloudtiles::lib::Blob;
-
 use super::ByteRange;
+use crate::opencloudtiles::lib::Blob;
+use core::panic;
+use futures::executor::block_on;
+use log::error;
+use object_store::ObjectStore;
 use std::{
 	env::current_dir,
 	fs::File,
 	io::{BufReader, Read, Seek, SeekFrom},
 	path::Path,
-	sync::Mutex,
+	sync::{Arc, Mutex},
 };
 
 pub trait CloudTilesSrcTrait {
-	fn new(source: &str) -> Self
+	fn new(source: &str) -> Option<Self>
 	where
 		Self: Sized;
 	fn read_range(&self, range: &ByteRange) -> Blob;
 	fn get_name(&self) -> &str;
 }
 
-pub struct CloudTilesSrc(Box<dyn CloudTilesSrcTrait>);
-impl CloudTilesSrcTrait for CloudTilesSrc {
-	fn new(source: &str) -> Self
+pub struct CloudTilesSrc;
+impl CloudTilesSrc {
+	pub fn new(source: &str) -> Box<dyn CloudTilesSrcTrait>
 	where
 		Self: Sized,
 	{
-		CloudTilesSrc(Box::new(CloudTilesSrcFile::new(source)))
-	}
-	fn read_range(&self, range: &ByteRange) -> Blob {
-		self.0.read_range(range)
-	}
-	fn get_name(&self) -> &str {
-		self.0.get_name()
+		if let Some(src) = CloudTilesSrcObjectStore::new(source) {
+			return Box::new(src);
+		} else if let Some(src) = CloudTilesSrcFile::new(source) {
+			return Box::new(src);
+		}
+		panic!();
 	}
 }
 
@@ -38,11 +40,15 @@ struct CloudTilesSrcFile {
 	reader_mutex: Mutex<BufReader<File>>,
 }
 impl CloudTilesSrcTrait for CloudTilesSrcFile {
-	fn new(source: &str) -> Self {
+	fn new(source: &str) -> Option<Self> {
 		let mut filename = current_dir().unwrap();
 		filename.push(Path::new(source));
 
-		assert!(filename.exists(), "file {:?} does not exist", filename);
+		if !filename.exists() {
+			error!("file {:?} does not exist", filename);
+			return None;
+		}
+
 		assert!(
 			filename.is_absolute(),
 			"filename {:?} must be absolute",
@@ -51,10 +57,10 @@ impl CloudTilesSrcTrait for CloudTilesSrcFile {
 
 		filename = filename.canonicalize().unwrap();
 
-		CloudTilesSrcFile {
+		Some(Self {
 			name: source.to_string(),
 			reader_mutex: Mutex::new(BufReader::new(File::open(filename).unwrap())),
-		}
+		})
 	}
 	fn read_range(&self, range: &ByteRange) -> Blob {
 		let mut buffer = vec![0; range.length as usize];
@@ -64,6 +70,38 @@ impl CloudTilesSrcTrait for CloudTilesSrcFile {
 		reader_safe.read_exact(&mut buffer).unwrap();
 
 		Blob::from_vec(buffer)
+	}
+	fn get_name(&self) -> &str {
+		&self.name
+	}
+}
+
+struct CloudTilesSrcObjectStore {
+	name: String,
+	url: object_store::path::Path,
+	object_store: Arc<dyn ObjectStore>,
+}
+impl CloudTilesSrcTrait for CloudTilesSrcObjectStore {
+	fn new(source: &str) -> Option<Self> {
+		let object_store;
+		if source.starts_with("gs://") {
+			object_store = object_store::gcp::GoogleCloudStorageBuilder::new()
+				.with_service_account_path("credentials.json")
+				.with_url(source)
+				.build()
+				.unwrap();
+		} else {
+			return None;
+		}
+
+		Some(Self {
+			name: source.to_string(),
+			url: object_store::path::Path::from(source),
+			object_store: Arc::new(object_store),
+		})
+	}
+	fn read_range(&self, range: &ByteRange) -> Blob {
+		Blob::from_bytes(block_on(self.object_store.get_range(&self.url, range.as_range())).unwrap())
 	}
 	fn get_name(&self) -> &str {
 		&self.name

@@ -4,6 +4,9 @@ use std::ops::Range;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Blob(Bytes);
 impl Blob {
+	pub fn from_bytes(bytes: Bytes) -> Blob {
+		Blob(bytes)
+	}
 	pub fn from_vec(vec: Vec<u8>) -> Blob {
 		Blob(Bytes::from(vec))
 	}

@@ -1,5 +1,5 @@
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
-use std::{fmt, io::Read};
+use std::{fmt, io::Read, ops::Range};
 
 #[derive(Clone)]
 pub struct ByteRange {
@@ -25,6 +25,12 @@ impl ByteRange {
 	pub fn write_to_buf(&self, writer: &mut impl WriteBytesExt) {
 		writer.write_u64::<BE>(self.offset).unwrap();
 		writer.write_u64::<BE>(self.length).unwrap();
+	}
+	pub fn as_range(&self) -> Range<usize> {
+		return Range {
+			start: (self.offset) as usize,
+			end: (self.offset + self.length) as usize,
+		};
 	}
 }
 

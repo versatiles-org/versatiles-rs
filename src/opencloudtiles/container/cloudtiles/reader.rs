@@ -1,22 +1,17 @@
-use super::types::{
-	BlockIndex, ByteRange, CloudTilesSrc, CloudTilesSrcTrait, FileHeader, TileIndex,
-};
-use crate::opencloudtiles::{
-	container::{TileReaderBox, TileReaderTrait},
-	lib::*,
-};
+use super::types::*;
+use crate::opencloudtiles::{container::*, lib::*};
 use std::{collections::HashMap, fmt::Debug, ops::Shr, str::from_utf8, sync::RwLock};
 
 pub struct TileReader {
 	meta: Blob,
-	reader: CloudTilesSrc,
+	reader: Box<dyn CloudTilesSrcTrait>,
 	parameters: TileReaderParameters,
 	block_index: BlockIndex,
 	tile_index_cache: RwLock<HashMap<TileCoord3, TileIndex>>,
 }
 
 impl TileReader {
-	pub fn from_src(mut reader: CloudTilesSrc) -> TileReader {
+	pub fn from_src(mut reader: Box<dyn CloudTilesSrcTrait>) -> TileReader {
 		let header = FileHeader::from_reader(&mut reader);
 
 		let meta = if header.meta_range.length > 0 {

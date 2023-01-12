@@ -1,5 +1,5 @@
-use super::{ByteRange, CloudTilesSrc, CloudTilesSrcTrait};
-use crate::opencloudtiles::lib::{Blob, Precompression, TileFormat};
+use super::*;
+use crate::opencloudtiles::lib::*;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read, Write};
 
@@ -19,7 +19,7 @@ impl FileHeader {
 			blocks_range: ByteRange::empty(),
 		}
 	}
-	pub fn from_reader(reader: &mut CloudTilesSrc) -> FileHeader {
+	pub fn from_reader(reader: &mut Box<dyn CloudTilesSrcTrait>) -> FileHeader {
 		FileHeader::from_blob(reader.read_range(&ByteRange::new(0, 62)))
 	}
 	pub fn to_blob(&self) -> Blob {

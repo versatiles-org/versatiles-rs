@@ -1,8 +1,5 @@
-use super::types::{BlockDefinition, BlockIndex, ByteRange, CloudTilesDst, FileHeader, TileIndex};
-use crate::opencloudtiles::{
-	container::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	lib::{ProgressBar, TileBBox, TileConverterConfig, TileCoord2},
-};
+use super::types::*;
+use crate::opencloudtiles::{container::*, lib::*};
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use std::{collections::HashMap, path::Path, sync::Mutex};
 
@@ -111,8 +108,9 @@ impl TileConverter {
 		column_range.par_bridge().for_each(|y| {
 			let row_bbox = TileBBox::new(bbox.get_x_min(), y, bbox.get_x_max(), y);
 
-			reader
-				.get_bbox_tile_data(block.level, &row_bbox)
+			let tile_data = reader.get_bbox_tile_data(block.level, &row_bbox);
+
+			tile_data
 				.into_iter()
 				.par_bridge()
 				.for_each(|(coord, mut blob)| {
