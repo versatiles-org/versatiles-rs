@@ -1,61 +1,33 @@
 [package]
 name = "opencloudtiles"
-version = "0.1.4"
 edition = "2021"
+version = "0.1.4"
 authors = ["Michael Kreil"]
 description = "A toolbox for converting, checking and serving map tiles in various formats."
-readme = "readme.md"
 homepage = "https://www.opencloudtiles.org"
-repository = "https://github.com/OpenCloudTiles/opencloudtiles-tools"
+readme = "readme.md"
 license = "MIT"
-exclude = ["**/.DS_Store", ".DS_Store"]
+repository = "https://github.com/OpenCloudTiles/opencloudtiles-tools"
 
 [profile.dev]
-codegen-units = 256
-debug = true
-debug-assertions = true
-incremental = true
-lto = false
 opt-level = 1
-overflow-checks = true
-panic = 'unwind'
+debug = true
 rpath = false
+lto = false
+debug-assertions = true
+codegen-units = 256
+panic = "unwind"
+incremental = true
+overflow-checks = true
 
 [profile.release]
-codegen-units = 1
-debug = false
-debug-assertions = false
-incremental = false
-lto = true
 opt-level = 3
-overflow-checks = false
-panic = 'unwind'
+debug = false
 rpath = false
-strip = true  # Automatically strip symbols from the binary.
-
-[dependencies]
-brotli = "3.3.4"
-byteorder = "1.4.3"
-clap = { version = "4.0.32", features = ["derive"] }
-clap-verbosity-flag = "2.0.0"
-enumset = "1.0.12"
-env_logger = "0.10.0"
-futures = "0.3.25"
-flate2 = "1.0.25"
-hyper = { version = "0.14", features = ["server"] }
-image = "0.24.5"
-indicatif = "0.17.2"
-itertools = "0.10.5"
-log = "0.4.17"
-mime_guess = "2.0.4"
-object_store = {version = "0.5.3", features=["gcp"]}
-r2d2 = "0.8.10"
-r2d2_sqlite = "0.21.0"
-rayon = "1.6.1"
-rusqlite = "0.28.0"
-serde_json = "1.0.91"
-tar = "0.4.38"
-tokio = { version = "1.23.1", features = ["rt-multi-thread"] }
-url = "2.3.1"
-urlencoding = "2.1.2"
-webp = "0.2.2"
+lto = true
+debug-assertions = false
+codegen-units = 1
+panic = "unwind"
+incremental = false
+overflow-checks = false
+strip = true
