@@ -22,6 +22,9 @@ impl DataConverter {
 			pipeline: Vec::new(),
 		}
 	}
+	pub fn is_empty(&self) -> bool {
+		self.pipeline.len() == 0
+	}
 	pub fn new_tile_recompressor(
 		src_form: &TileFormat, src_comp: &Precompression, dst_form: &TileFormat,
 		dst_comp: &Precompression, force_recompress: bool,

@@ -1,6 +1,6 @@
 use super::types::*;
 use crate::opencloudtiles::{container::*, lib::*};
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+use rayon::prelude::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
 use std::{collections::HashMap, path::Path, sync::Mutex};
 
 pub struct TileConverter {
@@ -27,12 +27,12 @@ impl TileConverterTrait for TileConverter {
 			self.config.get_tile_format(),
 			self.config.get_tile_precompression(),
 		);
-		self.writer.append(header.to_blob());
+		self.writer.append(&header.to_blob());
 
 		header.meta_range = self.write_meta(reader);
 		header.blocks_range = self.write_blocks(reader);
 
-		self.writer.write_start(header.to_blob())
+		self.writer.write_start(&header.to_blob())
 	}
 }
 
@@ -41,7 +41,7 @@ impl TileConverter {
 		let meta = reader.get_meta();
 		let compressed = self.config.get_compressor().run(meta);
 
-		self.writer.append(compressed)
+		self.writer.append(&compressed)
 	}
 	fn write_blocks(&mut self, reader: &mut TileReaderBox) -> ByteRange {
 		let pyramide = self.config.get_bbox_pyramide();
@@ -88,7 +88,7 @@ impl TileConverter {
 		}
 		bar2.finish();
 
-		self.writer.append(block_index.as_brotli_blob())
+		self.writer.append(&block_index.as_brotli_blob())
 	}
 	fn write_block(
 		&mut self, block: &BlockDefinition, reader: &TileReaderBox, bar: &mut ProgressBar,
@@ -106,44 +106,52 @@ impl TileConverter {
 
 		bbox
 			.iter_bbox_row_slices(256)
+			.par_bridge()
 			.for_each(|row_bbox: TileBBox| {
-				reader
-					.get_bbox_tile_vec(block.level, &row_bbox)
-					.par_iter()
-					.for_each(|(coord, blob)| {
-						mutex_bar.lock().unwrap().inc(1);
+				let mut blobs: Vec<(TileCoord2, Blob)> =
+					reader.get_bbox_tile_vec(block.level, &row_bbox);
 
-						let index = bbox.get_tile_index(&coord);
+				if !tile_converter.is_empty() {
+					blobs = blobs
+						.par_iter()
+						.map(|(coord, blob)| (coord.clone(), tile_converter.run(blob.clone())))
+						.collect();
+				}
 
-						let mut secured_tile_hash_lookup_option = None;
-						let mut tile_hash = None;
+				let mut secured_tile_hash_lookup = mutex_tile_hash_lookup.lock().unwrap();
+				let mut secured_tile_index = mutex_tile_index.lock().unwrap();
+				let mut secured_writer = mutex_writer.lock().unwrap();
 
-						if blob.len() < 5000 {
-							secured_tile_hash_lookup_option = Some(mutex_tile_hash_lookup.lock().unwrap());
-							let lookup = secured_tile_hash_lookup_option.as_ref().unwrap();
-							if lookup.contains_key(blob.as_slice()) {
-								let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-								secured_tile_index.set(index, lookup.get(blob.as_slice()).unwrap().clone());
-								return;
-							}
-							tile_hash = Some(blob.clone());
+				blobs.iter().for_each(|(coord, blob)| {
+					let index = bbox.get_tile_index(&coord);
+
+					let mut tile_hash = None;
+
+					if blob.len() < 1000 {
+						if secured_tile_hash_lookup.contains_key(blob.as_slice()) {
+							secured_tile_index.set(
+								index,
+								secured_tile_hash_lookup
+									.get(blob.as_slice())
+									.unwrap()
+									.clone(),
+							);
+							return;
 						}
+						tile_hash = Some(blob.clone());
+					}
 
-						let compressed_blob = tile_converter.run(blob.clone());
+					let range = secured_writer.append(blob);
+					secured_tile_index.set(index, range.clone());
 
-						let mut secured_writer = mutex_writer.lock().unwrap();
-						let range = secured_writer.append(compressed_blob);
-						drop(secured_writer);
+					if tile_hash.is_some() {
+						secured_tile_hash_lookup.insert(tile_hash.unwrap().to_vec(), range);
+					}
+				});
 
-						let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-						secured_tile_index.set(index, range.clone());
-						drop(secured_tile_index);
-
-						if let Some(mut secured_tile_hash_lookup) = secured_tile_hash_lookup_option {
-							secured_tile_hash_lookup.insert(tile_hash.unwrap().to_vec(), range);
-						}
-					});
+				mutex_bar.lock().unwrap().inc(row_bbox.count_tiles());
 			});
-		self.writer.append(tile_index.as_brotli_blob())
+
+		self.writer.append(&tile_index.as_brotli_blob())
 	}
 }
