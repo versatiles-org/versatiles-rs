@@ -150,12 +150,12 @@ impl TileBBox {
 		}
 
 		assert_eq!(col_pos[0], self.x_min);
-		assert_eq!(col_pos[col_count as usize], self.x_max + 1);
+		assert_eq!(col_pos[col_count], self.x_max + 1);
 		assert_eq!(row_pos[0], self.y_min);
-		assert_eq!(row_pos[row_count as usize], self.y_max + 1);
+		assert_eq!(row_pos[row_count], self.y_max + 1);
 
-		let cols = 0..col_count as usize;
-		let rows = 0..row_count as usize;
+		let cols = 0..col_count;
+		let rows = 0..row_count;
 
 		rows.cartesian_product(cols).map(move |(row, col)| {
 			TileBBox::new(

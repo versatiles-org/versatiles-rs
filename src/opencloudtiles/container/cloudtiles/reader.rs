@@ -41,7 +41,7 @@ unsafe impl Sync for TileReader {}
 
 impl TileReaderTrait for TileReader {
 	fn new(filename: &str) -> TileReaderBox {
-		let reader = CloudTilesSrc::new(filename);
+		let reader = new_cloud_tile_src(filename);
 
 		Box::new(TileReader::from_src(reader))
 	}

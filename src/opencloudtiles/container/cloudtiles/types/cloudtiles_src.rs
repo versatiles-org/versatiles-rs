@@ -20,19 +20,13 @@ pub trait CloudTilesSrcTrait {
 	fn get_name(&self) -> &str;
 }
 
-pub struct CloudTilesSrc;
-impl CloudTilesSrc {
-	pub fn new(source: &str) -> Box<dyn CloudTilesSrcTrait>
-	where
-		Self: Sized,
-	{
-		if let Some(src) = CloudTilesSrcObjectStore::new(source) {
-			return Box::new(src);
-		} else if let Some(src) = CloudTilesSrcFile::new(source) {
-			return Box::new(src);
-		}
-		panic!();
+pub fn new_cloud_tile_src(source: &str) -> Box<dyn CloudTilesSrcTrait> {
+	if let Some(src) = CloudTilesSrcObjectStore::new(source) {
+		return Box::new(src);
+	} else if let Some(src) = CloudTilesSrcFile::new(source) {
+		return Box::new(src);
 	}
+	panic!();
 }
 
 struct CloudTilesSrcFile {
@@ -83,16 +77,15 @@ struct CloudTilesSrcObjectStore {
 }
 impl CloudTilesSrcTrait for CloudTilesSrcObjectStore {
 	fn new(source: &str) -> Option<Self> {
-		let object_store;
-		if source.starts_with("gs://") {
-			object_store = object_store::gcp::GoogleCloudStorageBuilder::new()
+		let object_store = if source.starts_with("gs://") {
+			object_store::gcp::GoogleCloudStorageBuilder::new()
 				.with_service_account_path("credentials.json")
 				.with_url(source)
 				.build()
-				.unwrap();
+				.unwrap()
 		} else {
 			return None;
-		}
+		};
 
 		Some(Self {
 			name: source.to_string(),

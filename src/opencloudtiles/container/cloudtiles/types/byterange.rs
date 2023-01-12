@@ -27,10 +27,10 @@ impl ByteRange {
 		writer.write_u64::<BE>(self.length).unwrap();
 	}
 	pub fn as_range(&self) -> Range<usize> {
-		return Range {
+		Range {
 			start: (self.offset) as usize,
 			end: (self.offset + self.length) as usize,
-		};
+		}
 	}
 }
 

@@ -123,9 +123,9 @@ impl TileConverter {
 				let mut secured_writer = mutex_writer.lock().unwrap();
 
 				blobs.iter().for_each(|(coord, blob)| {
-					let index = bbox.get_tile_index(&coord);
+					let index = bbox.get_tile_index(coord);
 
-					let mut tile_hash = None;
+					let mut tile_hash_option = None;
 
 					if blob.len() < 1000 {
 						if secured_tile_hash_lookup.contains_key(blob.as_slice()) {
@@ -138,14 +138,14 @@ impl TileConverter {
 							);
 							return;
 						}
-						tile_hash = Some(blob.clone());
+						tile_hash_option = Some(blob.clone());
 					}
 
 					let range = secured_writer.append(blob);
 					secured_tile_index.set(index, range.clone());
 
-					if tile_hash.is_some() {
-						secured_tile_hash_lookup.insert(tile_hash.unwrap().to_vec(), range);
+					if let Some(tile_hash) = tile_hash_option {
+						secured_tile_hash_lookup.insert(tile_hash.to_vec(), range);
 					}
 				});
 
