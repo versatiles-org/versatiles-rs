@@ -1,6 +1,6 @@
 use super::types::*;
 use crate::opencloudtiles::{container::*, lib::*};
-use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
+use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{collections::HashMap, path::Path, sync::Mutex};
 
 pub struct TileConverter {
@@ -104,50 +104,46 @@ impl TileConverter {
 
 		let tile_converter = self.config.get_tile_recompressor();
 
-		let column_range = bbox.get_y_min()..=bbox.get_y_max();
-		column_range.par_bridge().for_each(|y| {
-			let row_bbox = TileBBox::new(bbox.get_x_min(), y, bbox.get_x_max(), y);
+		bbox
+			.iter_bbox_row_slices(256)
+			.for_each(|row_bbox: TileBBox| {
+				reader
+					.get_bbox_tile_vec(block.level, &row_bbox)
+					.par_iter()
+					.for_each(|(coord, blob)| {
+						mutex_bar.lock().unwrap().inc(1);
 
-			let tile_data = reader.get_bbox_tile_data(block.level, &row_bbox);
+						let index = bbox.get_tile_index(&coord);
 
-			tile_data
-				.into_iter()
-				.par_bridge()
-				.for_each(|(coord, mut blob)| {
-					let index = bbox.get_tile_index(&coord);
+						let mut secured_tile_hash_lookup_option = None;
+						let mut tile_hash = None;
 
-					let mut secured_tile_hash_lookup_option = None;
-					let mut tile_hash = None;
-
-					if blob.len() < 5000 {
-						secured_tile_hash_lookup_option = Some(mutex_tile_hash_lookup.lock().unwrap());
-						let lookup = secured_tile_hash_lookup_option.as_ref().unwrap();
-						if lookup.contains_key(blob.as_slice()) {
-							let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-							secured_tile_index.set(index, lookup.get(blob.as_slice()).unwrap().clone());
-							return;
+						if blob.len() < 5000 {
+							secured_tile_hash_lookup_option = Some(mutex_tile_hash_lookup.lock().unwrap());
+							let lookup = secured_tile_hash_lookup_option.as_ref().unwrap();
+							if lookup.contains_key(blob.as_slice()) {
+								let mut secured_tile_index = mutex_tile_index.lock().unwrap();
+								secured_tile_index.set(index, lookup.get(blob.as_slice()).unwrap().clone());
+								return;
+							}
+							tile_hash = Some(blob.clone());
 						}
-						tile_hash = Some(blob.clone());
-					}
 
-					blob = tile_converter.run(blob);
+						let compressed_blob = tile_converter.run(blob.clone());
 
-					let mut secured_writer = mutex_writer.lock().unwrap();
-					let range = secured_writer.append(blob);
-					drop(secured_writer);
+						let mut secured_writer = mutex_writer.lock().unwrap();
+						let range = secured_writer.append(compressed_blob);
+						drop(secured_writer);
 
-					let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-					secured_tile_index.set(index, range.clone());
-					drop(secured_tile_index);
+						let mut secured_tile_index = mutex_tile_index.lock().unwrap();
+						secured_tile_index.set(index, range.clone());
+						drop(secured_tile_index);
 
-					if let Some(mut secured_tile_hash_lookup) = secured_tile_hash_lookup_option {
-						secured_tile_hash_lookup.insert(tile_hash.unwrap().to_vec(), range);
-					}
-				});
-
-			mutex_bar.lock().unwrap().inc(row_bbox.count_tiles());
-		});
-
+						if let Some(mut secured_tile_hash_lookup) = secured_tile_hash_lookup_option {
+							secured_tile_hash_lookup.insert(tile_hash.unwrap().to_vec(), range);
+						}
+					});
+			});
 		self.writer.append(tile_index.as_brotli_blob())
 	}
 }

@@ -226,7 +226,7 @@ impl TileReaderTrait for TileReader {
 			None
 		}
 	}
-	fn get_bbox_tile_data(&self, zoom: u64, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
+	fn get_bbox_tile_vec(&self, zoom: u64, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
 		trace!(
 			"read {} tiles for z:{}, bbox:{:?}",
 			bbox.count_tiles(),

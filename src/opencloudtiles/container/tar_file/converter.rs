@@ -61,38 +61,36 @@ impl TileConverterTrait for TileConverter {
 		let mutex_bar = &Mutex::new(&mut bar);
 		let mutex_builder = &Mutex::new(&mut self.builder);
 
-		bbox_pyramide
-			.iter_tile_indexes()
-			.par_bridge()
-			.for_each(|coord| {
-				// println!("{:?}", coord);
+		bbox_pyramide.iter_levels().for_each(|(level, bbox)| {
+			bbox
+				.iter_bbox_row_slices(256)
+				.for_each(|row_bbox: TileBBox| {
+					let tile_vec = reader.get_bbox_tile_vec(level, &row_bbox);
+					tile_vec
+						.into_iter()
+						.par_bridge()
+						.for_each(|(coord, mut blob)| {
+							mutex_bar.lock().unwrap().inc(1);
 
-				mutex_bar.lock().unwrap().inc(1);
+							blob = tile_converter.run(blob);
 
-				let optional_tile = reader.get_tile_data(&coord);
-				if optional_tile.is_none() {
-					return;
-				}
+							let filename = format!(
+								"./{}/{}/{}{}{}",
+								level, coord.y, coord.x, ext_form, ext_comp
+							);
+							let path = Path::new(&filename);
+							let mut header = Header::new_gnu();
+							header.set_size(blob.len() as u64);
+							header.set_mode(0o644);
 
-				let mut tile = optional_tile.unwrap();
-
-				tile = tile_converter.run(tile);
-
-				let filename = format!(
-					"./{}/{}/{}{}{}",
-					coord.z, coord.y, coord.x, ext_form, ext_comp
-				);
-				let path = Path::new(&filename);
-				let mut header = Header::new_gnu();
-				header.set_size(tile.len() as u64);
-				header.set_mode(0o644);
-
-				mutex_builder
-					.lock()
-					.unwrap()
-					.append_data(&mut header, path, tile.as_slice())
-					.unwrap();
-			});
+							mutex_builder
+								.lock()
+								.unwrap()
+								.append_data(&mut header, path, blob.as_slice())
+								.unwrap();
+						})
+				})
+		});
 
 		bar.finish();
 		self.builder.finish().unwrap();

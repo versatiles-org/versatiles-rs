@@ -107,14 +107,14 @@ impl TileBBox {
 		self.x_max = bbox.x_max;
 		self.y_max = bbox.y_max;
 	}
-	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord2> {
+	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord2> + '_ {
 		let y_range = self.y_min..=self.y_max;
 		let x_range = self.x_min..=self.x_max;
 		y_range
 			.cartesian_product(x_range)
 			.map(|(y, x)| TileCoord2::new(x, y))
 	}
-	pub fn iter_bbox_slices(&self, max_count: usize) -> impl Iterator<Item = TileBBox> {
+	pub fn iter_bbox_row_slices(&self, max_count: usize) -> impl Iterator<Item = TileBBox> + '_ {
 		let mut col_count = (self.x_max - self.x_min + 1) as usize;
 		let mut row_count = (self.y_max - self.y_min + 1) as usize;
 
@@ -147,11 +147,6 @@ impl TileBBox {
 			col_pos.insert(0, self.x_min);
 			col_pos.insert(1, self.x_max + 1);
 			col_count = 1;
-
-			println!("row_chunk_count {}", row_chunk_count);
-			println!("row_chunk_size {}", row_chunk_size);
-			println!("col_pos {:?}", col_pos);
-			println!("row_pos {:?}", row_pos);
 		}
 
 		assert_eq!(col_pos[0], self.x_min);
@@ -161,9 +156,6 @@ impl TileBBox {
 
 		let cols = 0..col_count as usize;
 		let rows = 0..row_count as usize;
-
-		println!("cols {:?}", cols);
-		println!("rows {:?}", rows);
 
 		rows.cartesian_product(cols).map(move |(row, col)| {
 			TileBBox::new(
@@ -324,7 +316,7 @@ mod tests {
 	fn iter_bbox_slices_99() {
 		let bbox = TileBBox::new(0, 1000, 99, 1003);
 
-		let vec: Vec<TileBBox> = bbox.iter_bbox_slices(99).collect();
+		let vec: Vec<TileBBox> = bbox.iter_bbox_row_slices(99).collect();
 		println!("{:?}", bbox);
 		assert_eq!(vec.len(), 8);
 		assert_eq!(vec[0], TileBBox::new(0, 1000, 49, 1000));
@@ -338,10 +330,10 @@ mod tests {
 	}
 
 	#[test]
-	fn iter_bbox_slices_100() {
+	fn iter_bbox_row_slices_100() {
 		let bbox = TileBBox::new(0, 1000, 99, 1003);
 
-		let vec: Vec<TileBBox> = bbox.iter_bbox_slices(100).collect();
+		let vec: Vec<TileBBox> = bbox.iter_bbox_row_slices(100).collect();
 		println!("{:?}", bbox);
 		assert_eq!(vec.len(), 4);
 		assert_eq!(vec[0], TileBBox::new(0, 1000, 99, 1000));
@@ -351,10 +343,10 @@ mod tests {
 	}
 
 	#[test]
-	fn iter_bbox_slices_199() {
+	fn iter_bbox_row_slices_199() {
 		let bbox = TileBBox::new(0, 1000, 99, 1003);
 
-		let vec: Vec<TileBBox> = bbox.iter_bbox_slices(199).collect();
+		let vec: Vec<TileBBox> = bbox.iter_bbox_row_slices(199).collect();
 		println!("{:?}", bbox);
 		assert_eq!(vec.len(), 4);
 		assert_eq!(vec[0], TileBBox::new(0, 1000, 99, 1000));
@@ -364,10 +356,10 @@ mod tests {
 	}
 
 	#[test]
-	fn iter_bbox_slices_200() {
+	fn iter_bbox_row_slices_200() {
 		let bbox = TileBBox::new(0, 1000, 99, 1003);
 
-		let vec: Vec<TileBBox> = bbox.iter_bbox_slices(200).collect();
+		let vec: Vec<TileBBox> = bbox.iter_bbox_row_slices(200).collect();
 		println!("{:?}", bbox);
 		assert_eq!(vec.len(), 2);
 		assert_eq!(vec[0], TileBBox::new(0, 1000, 99, 1001));
