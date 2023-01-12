@@ -1,5 +1,6 @@
-use super::TileCoord2;
 use itertools::Itertools;
+
+use super::TileCoord2;
 use std::fmt;
 
 #[derive(Clone, PartialEq, Eq)]
@@ -107,12 +108,71 @@ impl TileBBox {
 		self.y_max = bbox.y_max;
 	}
 	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord2> {
-		let y_values = self.y_min..=self.y_max;
-		let x_values = self.x_min..=self.x_max;
+		let y_range = self.y_min..=self.y_max;
+		let x_range = self.x_min..=self.x_max;
+		y_range
+			.cartesian_product(x_range)
+			.map(|(y, x)| TileCoord2::new(x, y))
+	}
+	pub fn iter_bbox_slices(&self, max_count: usize) -> impl Iterator<Item = TileBBox> {
+		let mut col_count = (self.x_max - self.x_min + 1) as usize;
+		let mut row_count = (self.y_max - self.y_min + 1) as usize;
 
-		y_values
-			.cartesian_product(x_values)
-			.map(|(y, x)| TileCoord2 { x, y })
+		let mut col_pos: Vec<u64> = Vec::new();
+		let mut row_pos: Vec<u64> = Vec::new();
+
+		if max_count <= col_count {
+			// split each row
+
+			let col_chunk_count = (col_count as f64 / max_count as f64).ceil() as usize;
+			let col_chunk_size = col_count as f64 / col_chunk_count as f64;
+			for col in 0..=col_chunk_count {
+				col_pos.insert(col, (col_chunk_size * col as f64) as u64 + self.x_min)
+			}
+			col_count = col_chunk_count;
+
+			for row in self.y_min..=self.y_max + 1 {
+				row_pos.insert((row - self.y_min) as usize, row)
+			}
+		} else {
+			// multiple rows
+
+			let row_chunk_count = (row_count as f64 / (max_count / col_count) as f64).ceil() as usize;
+			let row_chunk_size = row_count as f64 / row_chunk_count as f64;
+			for row in 0..=row_chunk_count {
+				row_pos.insert(row, (row_chunk_size * row as f64) as u64 + self.y_min)
+			}
+			row_count = row_chunk_count;
+
+			col_pos.insert(0, self.x_min);
+			col_pos.insert(1, self.x_max + 1);
+			col_count = 1;
+
+			println!("row_chunk_count {}", row_chunk_count);
+			println!("row_chunk_size {}", row_chunk_size);
+			println!("col_pos {:?}", col_pos);
+			println!("row_pos {:?}", row_pos);
+		}
+
+		assert_eq!(col_pos[0], self.x_min);
+		assert_eq!(col_pos[col_count as usize], self.x_max + 1);
+		assert_eq!(row_pos[0], self.y_min);
+		assert_eq!(row_pos[row_count as usize], self.y_max + 1);
+
+		let cols = 0..col_count as usize;
+		let rows = 0..row_count as usize;
+
+		println!("cols {:?}", cols);
+		println!("rows {:?}", rows);
+
+		rows.cartesian_product(cols).map(move |(row, col)| {
+			TileBBox::new(
+				col_pos[col],
+				row_pos[row],
+				col_pos[col + 1] - 1,
+				row_pos[row + 1] - 1,
+			)
+		})
 	}
 	pub fn shift_by(mut self, x: u64, y: u64) -> TileBBox {
 		self.x_min += x;
@@ -130,16 +190,6 @@ impl TileBBox {
 
 		self
 	}
-	/*
-	pub fn clamped_offset_from(mut self, x: u64, y: u64) -> TileBBox {
-		self.x_min = (self.x_min.max(x) - x).min(255);
-		self.y_min = (self.y_min.max(y) - y).min(255);
-		self.x_max = (self.x_max.max(x) - x).min(255);
-		self.y_max = (self.y_max.max(y) - y).min(255);
-
-		self
-	}
-	*/
 	pub fn contains(&self, coord: &TileCoord2) -> bool {
 		(coord.x >= self.x_min)
 			&& (coord.x <= self.x_max)
@@ -190,7 +240,9 @@ mod tests {
 
 	#[test]
 	fn count_tiles() {
+		assert_eq!(TileBBox::new(5, 12, 5, 12).count_tiles(), 1);
 		assert_eq!(TileBBox::new(5, 12, 7, 15).count_tiles(), 12);
+		assert_eq!(TileBBox::new(5, 15, 7, 12).count_tiles(), 0);
 		assert_eq!(TileBBox::new(7, 12, 5, 15).count_tiles(), 0);
 	}
 
@@ -255,5 +307,70 @@ mod tests {
 
 		bbox1.set_empty();
 		assert!(bbox1.is_empty());
+	}
+
+	#[test]
+	fn iter_coords() {
+		let bbox = TileBBox::new(1, 5, 2, 6);
+		let vec: Vec<TileCoord2> = bbox.iter_coords().collect();
+		assert_eq!(vec.len(), 4);
+		assert_eq!(vec[0], TileCoord2::new(1, 5));
+		assert_eq!(vec[1], TileCoord2::new(2, 5));
+		assert_eq!(vec[2], TileCoord2::new(1, 6));
+		assert_eq!(vec[3], TileCoord2::new(2, 6));
+	}
+
+	#[test]
+	fn iter_bbox_slices_99() {
+		let bbox = TileBBox::new(0, 1000, 99, 1003);
+
+		let vec: Vec<TileBBox> = bbox.iter_bbox_slices(99).collect();
+		println!("{:?}", bbox);
+		assert_eq!(vec.len(), 8);
+		assert_eq!(vec[0], TileBBox::new(0, 1000, 49, 1000));
+		assert_eq!(vec[1], TileBBox::new(50, 1000, 99, 1000));
+		assert_eq!(vec[2], TileBBox::new(0, 1001, 49, 1001));
+		assert_eq!(vec[3], TileBBox::new(50, 1001, 99, 1001));
+		assert_eq!(vec[4], TileBBox::new(0, 1002, 49, 1002));
+		assert_eq!(vec[5], TileBBox::new(50, 1002, 99, 1002));
+		assert_eq!(vec[6], TileBBox::new(0, 1003, 49, 1003));
+		assert_eq!(vec[7], TileBBox::new(50, 1003, 99, 1003));
+	}
+
+	#[test]
+	fn iter_bbox_slices_100() {
+		let bbox = TileBBox::new(0, 1000, 99, 1003);
+
+		let vec: Vec<TileBBox> = bbox.iter_bbox_slices(100).collect();
+		println!("{:?}", bbox);
+		assert_eq!(vec.len(), 4);
+		assert_eq!(vec[0], TileBBox::new(0, 1000, 99, 1000));
+		assert_eq!(vec[1], TileBBox::new(0, 1001, 99, 1001));
+		assert_eq!(vec[2], TileBBox::new(0, 1002, 99, 1002));
+		assert_eq!(vec[3], TileBBox::new(0, 1003, 99, 1003));
+	}
+
+	#[test]
+	fn iter_bbox_slices_199() {
+		let bbox = TileBBox::new(0, 1000, 99, 1003);
+
+		let vec: Vec<TileBBox> = bbox.iter_bbox_slices(199).collect();
+		println!("{:?}", bbox);
+		assert_eq!(vec.len(), 4);
+		assert_eq!(vec[0], TileBBox::new(0, 1000, 99, 1000));
+		assert_eq!(vec[1], TileBBox::new(0, 1001, 99, 1001));
+		assert_eq!(vec[2], TileBBox::new(0, 1002, 99, 1002));
+		assert_eq!(vec[3], TileBBox::new(0, 1003, 99, 1003));
+	}
+
+	#[test]
+	fn iter_bbox_slices_200() {
+		let bbox = TileBBox::new(0, 1000, 99, 1003);
+
+		let vec: Vec<TileBBox> = bbox.iter_bbox_slices(200).collect();
+		println!("{:?}", bbox);
+		assert_eq!(vec.len(), 2);
+		assert_eq!(vec[0], TileBBox::new(0, 1000, 99, 1001));
+		assert_eq!(vec[1], TileBBox::new(0, 1002, 99, 1003));
 	}
 }
