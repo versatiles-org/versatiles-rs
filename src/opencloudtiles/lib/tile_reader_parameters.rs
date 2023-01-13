@@ -1,6 +1,5 @@
-use crate::opencloudtiles::lib::DataConverter;
-
 use super::{Precompression, TileBBoxPyramide, TileFormat};
+use crate::opencloudtiles::lib::DataConverter;
 
 #[derive(Debug)]
 pub struct TileReaderParameters {

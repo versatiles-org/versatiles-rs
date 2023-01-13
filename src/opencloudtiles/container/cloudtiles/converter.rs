@@ -51,11 +51,8 @@ impl TileConverter {
 		}
 
 		let mut blocks: Vec<BlockDefinition> = Vec::new();
-		let mut bar1 = ProgressBar::new("counting tiles", self.config.get_max_zoom().unwrap());
 
 		for (zoom, bbox_tiles) in self.config.get_bbox_pyramide().iter_levels() {
-			bar1.set_position(zoom);
-
 			let bbox_blocks = bbox_tiles.clone().scale_down(256);
 			for TileCoord2 { x, y } in bbox_blocks.iter_coords() {
 				let mut bbox_block = bbox_tiles.clone();
@@ -69,15 +66,14 @@ impl TileConverter {
 				blocks.push(BlockDefinition::new(zoom, x, y, bbox_block))
 			}
 		}
-		bar1.finish();
 
 		let sum = blocks.iter().map(|block| block.count_tiles()).sum::<u64>();
-		let mut bar2 = ProgressBar::new("converting tiles", sum);
+		let mut progress = ProgressBar::new("converting tiles", sum);
 
 		let mut block_index = BlockIndex::new_empty();
 
 		for mut block in blocks.into_iter() {
-			let range = self.write_block(&block, reader, &mut bar2);
+			let range = self.write_block(&block, reader, &mut progress);
 
 			if range.length == 0 {
 				// block is empty
@@ -87,12 +83,12 @@ impl TileConverter {
 			block.tile_range = range;
 			block_index.add_block(block);
 		}
-		bar2.finish();
+		progress.finish();
 
 		self.writer.append(&block_index.as_brotli_blob())
 	}
 	fn write_block(
-		&mut self, block: &BlockDefinition, reader: &TileReaderBox, bar: &mut ProgressBar,
+		&mut self, block: &BlockDefinition, reader: &TileReaderBox, progress: &mut ProgressBar,
 	) -> ByteRange {
 		debug!("start block {:?}", block);
 
@@ -100,7 +96,7 @@ impl TileConverter {
 		let mut tile_index = TileIndex::new_empty(bbox.count_tiles() as usize);
 		let tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
-		let mutex_bar = &Mutex::new(bar);
+		let mutex_progress = &Mutex::new(progress);
 		let mutex_writer = &Mutex::new(&mut self.writer);
 		let mutex_tile_index = &Mutex::new(&mut tile_index);
 		let mutex_tile_hash_lookup = &Mutex::new(tile_hash_lookup);
@@ -108,7 +104,7 @@ impl TileConverter {
 		let tile_converter = self.config.get_tile_recompressor();
 
 		bbox
-			.iter_bbox_row_slices(2048)
+			.iter_bbox_row_slices(256)
 			.par_bridge()
 			.for_each(|row_bbox: TileBBox| {
 				debug!("start block slice {:?}", row_bbox);
@@ -168,7 +164,7 @@ impl TileConverter {
 					}
 				});
 
-				mutex_bar.lock().unwrap().inc(row_bbox.count_tiles());
+				mutex_progress.lock().unwrap().inc(row_bbox.count_tiles());
 
 				debug!("finish block slice {:?}", row_bbox);
 			});

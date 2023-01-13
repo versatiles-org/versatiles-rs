@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::time::{Duration, SystemTime};
 use term_size::dimensions_stdout;
 
@@ -14,14 +15,18 @@ pub struct ProgressBar {
 
 impl ProgressBar {
 	pub fn new(message: &str, max_value: u64) -> Self {
-		ProgressBar {
+		//println!("progressbar.init");
+		let now = SystemTime::now();
+		let mut progress = ProgressBar {
 			max_value,
 			message: message.to_string(),
-			start: SystemTime::now(),
-			next_update: SystemTime::now().checked_add(STEP_SIZE).unwrap(),
+			start: now,
+			next_update: now.checked_sub(STEP_SIZE).unwrap(),
 			value: 0,
 			finished: false,
-		}
+		};
+		progress.update();
+		progress
 	}
 	pub fn set_position(&mut self, value: u64) {
 		self.value = value;
@@ -32,19 +37,22 @@ impl ProgressBar {
 		self.update();
 	}
 	fn update(&mut self) {
-		if SystemTime::now() < self.next_update {
+		//println!("progressbar.update");
+		let now = SystemTime::now();
+		if now < self.next_update {
 			return;
 		}
-		self.next_update = SystemTime::now().checked_add(STEP_SIZE).unwrap();
+		self.next_update = now.checked_add(STEP_SIZE).unwrap();
 		self.draw();
 	}
 	fn draw(&mut self) {
+		//println!("progressbar.draw");
 		let width = dimensions_stdout().unwrap().0;
 
 		let duration = SystemTime::now().duration_since(self.start).unwrap();
 		let progress = self.value as f64 / self.max_value as f64;
 		let time_left =
-			Duration::from_secs_f64(duration.as_secs_f64() / (progress + 0e-3) * (1.0 - progress));
+			Duration::from_secs_f64(duration.as_secs_f64() / (progress + 1e-3) * (1.0 - progress));
 		let speed = self.value as f64 / duration.as_secs_f64();
 
 		let col1 = self.message.to_string();
@@ -74,13 +82,14 @@ impl ProgressBar {
 		);
 		let pos = (line.len() as f64 * progress).round() as usize;
 
-		eprint!("\r\x1B[7m{}\x1B[0m{}", &line[0..pos], &line[pos..]);
+		print!("\r\x1B[7m{}\x1B[0m{}", &line[0..pos], &line[pos..]);
+		std::io::stdout().flush().unwrap();
 	}
 	pub fn finish(&mut self) {
 		self.finished = true;
 		self.value = self.max_value;
 		self.draw();
-		eprintln!();
+		println!();
 	}
 }
 
