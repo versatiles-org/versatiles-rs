@@ -120,11 +120,9 @@ impl TileReader {
 		let z0 = query("MIN(zoom_level)", "");
 		let z1 = query("MAX(zoom_level)", "");
 
-		let mut progress = ProgressBar::new("get bbox pyramide", (z1 - z0) as u64);
+		let mut progress = ProgressBar::new("get mbtiles bbox pyramide", (z1 - z0 + 1) as u64);
 
 		for z in z0..=z1 {
-			progress.set_position((z - z0) as u64);
-
 			let x0 = query("MIN(tile_column)", &format!("zoom_level = {}", z));
 			let x1 = query("MAX(tile_column)", &format!("zoom_level = {}", z));
 			let xc = (x0 + x1) / 2;
@@ -170,6 +168,8 @@ impl TileReader {
 					(max_value - y0).clamp(0, max_value) as u64,
 				),
 			);
+
+			progress.inc(1);
 		}
 
 		progress.finish();

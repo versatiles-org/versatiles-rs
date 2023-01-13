@@ -13,6 +13,7 @@ pub struct ProgressBar {
 	finished: bool,
 }
 
+#[allow(dead_code)]
 impl ProgressBar {
 	pub fn new(message: &str, max_value: u64) -> Self {
 		//println!("progressbar.init");
