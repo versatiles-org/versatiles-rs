@@ -105,7 +105,7 @@ impl TileConverter {
 		let tile_converter = self.config.get_tile_recompressor();
 
 		bbox
-			.iter_bbox_row_slices(256)
+			.iter_bbox_row_slices(2048)
 			.par_bridge()
 			.for_each(|row_bbox: TileBBox| {
 				let mut blobs: Vec<(TileCoord2, Blob)> =
