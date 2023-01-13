@@ -48,7 +48,7 @@ fn new_converter(filename: &str, arguments: &Convert) -> TileConverterBox {
 		trace!("parsing bbox argument: {:?}", value);
 		let values: Vec<f32> = value
 			.split(&[' ', ',', ';'])
-			.filter(|s| s.len() > 0)
+			.filter(|s| !s.is_empty())
 			.map(|s| s.parse::<f32>().expect("bbox value is not a number"))
 			.collect();
 		if values.len() != 4 {
