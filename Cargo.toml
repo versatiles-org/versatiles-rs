@@ -43,7 +43,6 @@ flate2 = { version = "1.0.25", default-features = false, features = ["miniz_oxid
 futures = { version = "0.3.25", default-features = false, features = [] }
 hyper = { version = "0.14.23", default-features = false, features = ["server"] }
 image = { version = "0.24.5", default-features = false, features = ["jpeg", "png"] }
-indicatif = { version = "0.17.2", default-features = false, features = [] }
 itertools = { version = "0.10.5", default-features = false, features = [] }
 log = { version = "0.4.17", default-features = false, features = [] }
 mime_guess = { version = "2.0.4", default-features = false, features = [] }
@@ -53,6 +52,7 @@ r2d2_sqlite = { version = "0.21.0", default-features = false, features = [] }
 rayon = { version = "1.6.1", default-features = false, features = [] }
 rusqlite = { version = "0.28.0", default-features = false, features = [] }
 tar = { version = "0.4.38", default-features = false, features = [] }
+term_size = { version = "0.3.2", default-features = false, features = [] }
 tokio = { version = "1.24.1", default-features = false, features = ["rt-multi-thread"] }
 urlencoding = { version = "2.1.2", default-features = false, features = [] }
 webp = { version = "0.2.2", default-features = false, features = ["img"] }
