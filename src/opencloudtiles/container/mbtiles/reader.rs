@@ -242,15 +242,17 @@ impl TileReaderTrait for TileReader {
 			WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?
 			ORDER BY zoom_level ASC, tile_row ASC, tile_column ASC";
 
+		trace!("SQL: {}", sql);
+
 		let mut stmt = connection.prepare(sql).expect("SQL preparation failed");
 
-		return stmt
+		let vec: Vec<(TileCoord2, Blob)> = stmt
 			.query_map(
 				[
 					bbox.get_x_min(),
 					bbox.get_x_max(),
-					max_index - bbox.get_y_min(),
 					max_index - bbox.get_y_max(),
+					max_index - bbox.get_y_min(),
 					zoom,
 				],
 				|row| {
@@ -266,6 +268,10 @@ impl TileReaderTrait for TileReader {
 			.unwrap()
 			.map(|row| row.unwrap())
 			.collect();
+
+		trace!("result count: {}", vec.len());
+
+		return vec;
 	}
 	fn get_name(&self) -> &str {
 		&self.name

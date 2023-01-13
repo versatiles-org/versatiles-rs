@@ -1,5 +1,6 @@
 use super::types::*;
 use crate::opencloudtiles::{container::*, lib::*};
+use log::{debug, trace};
 use rayon::prelude::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
 use std::{collections::HashMap, path::Path, sync::Mutex};
 
@@ -93,6 +94,8 @@ impl TileConverter {
 	fn write_block(
 		&mut self, block: &BlockDefinition, reader: &TileReaderBox, bar: &mut ProgressBar,
 	) -> ByteRange {
+		debug!("start block {:?}", block);
+
 		let bbox = &block.bbox;
 		let mut tile_index = TileIndex::new_empty(bbox.count_tiles() as usize);
 		let tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
@@ -108,8 +111,16 @@ impl TileConverter {
 			.iter_bbox_row_slices(2048)
 			.par_bridge()
 			.for_each(|row_bbox: TileBBox| {
+				debug!("start block slice {:?}", row_bbox);
+
 				let mut blobs: Vec<(TileCoord2, Blob)> =
 					reader.get_bbox_tile_vec(block.level, &row_bbox);
+
+				debug!(
+					"get_bbox_tile_vec: count {}, size sum {}",
+					blobs.len(),
+					blobs.iter().fold(0, |acc, e| acc + e.1.len())
+				);
 
 				if !tile_converter.is_empty() {
 					blobs = blobs
@@ -118,11 +129,19 @@ impl TileConverter {
 						.collect();
 				}
 
+				debug!(
+					"compressed: count {}, size sum {}",
+					blobs.len(),
+					blobs.iter().fold(0, |acc, e| acc + e.1.len())
+				);
+
 				let mut secured_tile_hash_lookup = mutex_tile_hash_lookup.lock().unwrap();
 				let mut secured_tile_index = mutex_tile_index.lock().unwrap();
 				let mut secured_writer = mutex_writer.lock().unwrap();
 
 				blobs.iter().for_each(|(coord, blob)| {
+					trace!("blob size {}", blob.len());
+
 					let index = bbox.get_tile_index(coord);
 
 					let mut tile_hash_option = None;
@@ -150,7 +169,11 @@ impl TileConverter {
 				});
 
 				mutex_bar.lock().unwrap().inc(row_bbox.count_tiles());
+
+				debug!("finish block slice {:?}", row_bbox);
 			});
+
+		debug!("finish block and write index {:?}", block);
 
 		self.writer.append(&tile_index.as_brotli_blob())
 	}
