@@ -1,3 +1,5 @@
+use log::trace;
+
 use crate::{
 	opencloudtiles::{
 		container::{
@@ -43,7 +45,19 @@ fn new_converter(filename: &str, arguments: &Convert) -> TileConverterBox {
 	}
 
 	if let Some(value) = &arguments.bbox {
-		bbox_pyramide.limit_by_geo_bbox(value.as_slice().try_into().unwrap());
+		trace!("parsing bbox argument: {:?}", value);
+		let values: Vec<f32> = value
+			.split(&[' ', ',', ';'])
+			.filter(|s| s.len() > 0)
+			.map(|s| s.parse::<f32>().expect("bbox value is not a number"))
+			.collect();
+		if values.len() != 4 {
+			panic!(
+				"bbox must contain exactly 4 numbers, but instead i'v got: {:?}",
+				value
+			);
+		}
+		bbox_pyramide.limit_by_geo_bbox(values.as_slice().try_into().unwrap());
 	}
 
 	let config = TileConverterConfig::new(

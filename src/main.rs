@@ -58,9 +58,14 @@ pub struct Convert {
 	#[arg(long, value_name = "int")]
 	max_zoom: Option<u64>,
 
-	/// bounding box: lon_min lat_min lon_max lat_max
-	#[arg(long, short, value_name = "float", num_args = 4, value_delimiter = ',')]
-	bbox: Option<Vec<f32>>,
+	/// bounding box
+	#[arg(
+		long,
+		short,
+		value_name = "lon_min,lat_min,lon_max,lat_max",
+		allow_hyphen_values = true
+	)]
+	bbox: Option<String>,
 
 	/// flip input vertically
 	#[arg(long)]
