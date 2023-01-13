@@ -48,7 +48,12 @@ impl ProgressBar {
 	}
 	fn draw(&mut self) {
 		//println!("progressbar.draw");
-		let width = dimensions_stdout().unwrap().0;
+		let size = dimensions_stdout();
+		if size.is_none() {
+			return;
+		}
+
+		let width = size.unwrap().0;
 
 		let duration = SystemTime::now().duration_since(self.start).unwrap();
 		let progress = self.value as f64 / self.max_value as f64;
