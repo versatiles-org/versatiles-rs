@@ -47,7 +47,7 @@ impl ProgressBar {
 			Duration::from_secs_f64(duration.as_secs_f64() / (progress + 0e-3) * (1.0 - progress));
 		let speed = self.value as f64 / duration.as_secs_f64();
 
-		let col1 = format!("{}", self.message);
+		let col1 = self.message.to_string();
 		let col2 = format!(
 			"{:>15}/{:<15}{:.2}%",
 			format_big_number(self.value),
@@ -74,17 +74,13 @@ impl ProgressBar {
 		);
 		let pos = (line.len() as f64 * progress).round() as usize;
 
-		eprint!(
-			"\r\x1B[47;30m{}\x1B[0m{}",
-			line[0..pos].to_string(),
-			line[pos..].to_string()
-		);
+		eprint!("\r\x1B[47;30m{}\x1B[0m{}", &line[0..pos], &line[pos..]);
 	}
 	pub fn finish(&mut self) {
 		self.finished = true;
 		self.value = self.max_value;
 		self.draw();
-		eprint!("\n");
+		eprintln!();
 	}
 }
 
