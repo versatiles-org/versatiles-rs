@@ -74,7 +74,7 @@ impl ProgressBar {
 		);
 		let pos = (line.len() as f64 * progress).round() as usize;
 
-		eprint!("\r\x1B[47;30m{}\x1B[0m{}", &line[0..pos], &line[pos..]);
+		eprint!("\r\x1B[7m{}\x1B[0m{}", &line[0..pos], &line[pos..]);
 	}
 	pub fn finish(&mut self) {
 		self.finished = true;
