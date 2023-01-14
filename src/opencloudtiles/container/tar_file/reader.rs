@@ -61,10 +61,16 @@ impl TileReaderTrait for TileReader {
 
 			let path = entry.path().unwrap().clone();
 			let mut path_tmp: Vec<&str> = path.iter().map(|s| s.to_str().unwrap()).collect();
-			path_tmp.remove(0);
-			let path_string = path_tmp.join("/");
+
+			if path_tmp[0] == "." {
+				path_tmp.remove(0);
+			}
+
+			//println!("{:?}", path_tmp);
+
+			let path_tmp_string = path_tmp.join("/");
 			drop(path);
-			let path_vec: Vec<&str> = path_string.split('/').collect();
+			let path_vec: Vec<&str> = path_tmp_string.split('/').collect();
 
 			let mut add_tile = || {
 				let z = path_vec[0].parse::<u64>().unwrap();
@@ -102,7 +108,7 @@ impl TileReaderTrait for TileReader {
 						tile_form.as_ref().unwrap(),
 						&this_form,
 						"unknown filename {:?}",
-						path_string
+						path_tmp_string
 					);
 				}
 
@@ -113,7 +119,7 @@ impl TileReaderTrait for TileReader {
 						tile_comp.as_ref().unwrap(),
 						&this_comp,
 						"unknown filename {:?}",
-						path_string
+						path_tmp_string
 					);
 				}
 
@@ -140,18 +146,22 @@ impl TileReaderTrait for TileReader {
 			if path_vec.len() == 1 {
 				match path_vec[0] {
 					"meta.json" | "tiles.json" | "metadata.json" => {
-						add_meta(Precompression::Uncompressed)
+						add_meta(Precompression::Uncompressed);
+						continue;
 					}
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
-						add_meta(Precompression::Gzip)
+						add_meta(Precompression::Gzip);
+						continue;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
-						add_meta(Precompression::Brotli)
+						add_meta(Precompression::Brotli);
+						continue;
 					}
-					&_ => continue,
+					&_ => {}
 				};
 			}
 
+			panic!("unknown file in tar: {:?}", path_tmp_string);
 			// ignore
 		}
 
