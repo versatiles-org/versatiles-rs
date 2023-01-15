@@ -81,7 +81,7 @@ pub struct Convert {
 
 	/// force recompression, e.g. to improve an existing gzip compression.
 	#[arg(long, short, value_enum)]
-	force_recompression: bool,
+	force_recompress: bool,
 }
 
 #[derive(Args)]

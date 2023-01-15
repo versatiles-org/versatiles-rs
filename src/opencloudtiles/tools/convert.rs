@@ -64,7 +64,7 @@ fn new_converter(filename: &str, arguments: &Convert) -> TileConverterBox {
 		arguments.tile_format.clone(),
 		arguments.precompress,
 		bbox_pyramide,
-		arguments.force_recompression,
+		arguments.force_recompress,
 	);
 
 	let path = PathBuf::from(filename);
