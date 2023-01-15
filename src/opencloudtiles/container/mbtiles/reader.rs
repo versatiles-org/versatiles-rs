@@ -277,7 +277,7 @@ impl TileReaderTrait for TileReader {
 
 		trace!("result count: {}", vec.len());
 
-		return vec;
+		vec
 	}
 	fn get_name(&self) -> &str {
 		&self.name
