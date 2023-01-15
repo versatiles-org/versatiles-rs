@@ -122,7 +122,7 @@ impl TileBBox {
 		let mut row_pos: Vec<u64> = Vec::new();
 
 		if max_count <= col_count {
-			// split each row
+			// split each row into chunks
 
 			let col_chunk_count = (col_count as f64 / max_count as f64).ceil() as usize;
 			let col_chunk_size = col_count as f64 / col_chunk_count as f64;
@@ -135,12 +135,16 @@ impl TileBBox {
 				row_pos.insert((row - self.y_min) as usize, row)
 			}
 		} else {
-			// multiple rows
+			// each chunk consists of multiple rows
 
-			let row_chunk_count = (row_count as f64 / (max_count / col_count) as f64).ceil() as usize;
+			let row_chunk_max_size = max_count / col_count;
+			let row_chunk_count = (row_count as f64 / row_chunk_max_size as f64).ceil() as usize;
 			let row_chunk_size = row_count as f64 / row_chunk_count as f64;
 			for row in 0..=row_chunk_count {
-				row_pos.insert(row, (row_chunk_size * row as f64) as u64 + self.y_min)
+				row_pos.insert(
+					row,
+					(row_chunk_size * row as f64).round() as u64 + self.y_min,
+				)
 			}
 			row_count = row_chunk_count;
 
