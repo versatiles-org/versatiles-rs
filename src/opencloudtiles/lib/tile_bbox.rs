@@ -153,10 +153,10 @@ impl TileBBox {
 			col_count = 1;
 		}
 
-		assert_eq!(col_pos[0], self.x_min);
-		assert_eq!(col_pos[col_count], self.x_max + 1);
-		assert_eq!(row_pos[0], self.y_min);
-		assert_eq!(row_pos[row_count], self.y_max + 1);
+		assert_eq!(col_pos[0], self.x_min, "incorrect x_min");
+		assert_eq!(row_pos[0], self.y_min, "incorrect y_min");
+		assert_eq!(col_pos[col_count] - 1, self.x_max, "incorrect x_max");
+		assert_eq!(row_pos[row_count] - 1, self.y_max, "incorrect y_max");
 
 		let cols = 0..col_count;
 		let rows = 0..row_count;
