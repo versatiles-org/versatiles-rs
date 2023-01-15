@@ -104,7 +104,7 @@ impl TileConverter {
 		let tile_converter = self.config.get_tile_recompressor();
 
 		bbox
-			.iter_bbox_row_slices(256)
+			.iter_bbox_row_slices(1024)
 			.par_bridge()
 			.for_each(|row_bbox: TileBBox| {
 				debug!("start block slice {:?}", row_bbox);

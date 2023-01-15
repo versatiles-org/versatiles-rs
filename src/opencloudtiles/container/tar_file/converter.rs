@@ -63,7 +63,7 @@ impl TileConverterTrait for TileConverter {
 
 		bbox_pyramide.iter_levels().for_each(|(level, bbox)| {
 			bbox
-				.iter_bbox_row_slices(256)
+				.iter_bbox_row_slices(1024)
 				.for_each(|row_bbox: TileBBox| {
 					let tile_vec = reader.get_bbox_tile_vec(level, &row_bbox);
 					tile_vec
