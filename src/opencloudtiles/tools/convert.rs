@@ -1,18 +1,54 @@
+use crate::opencloudtiles::{container::*, lib::*, tools::get_reader};
+use clap::Args;
 use log::trace;
-
-use crate::{
-	opencloudtiles::{
-		container::{
-			cloudtiles, mbtiles, tar_file, TileConverterBox, TileConverterTrait, TileReaderBox,
-		},
-		lib::{TileBBoxPyramide, TileConverterConfig},
-		tools::get_reader,
-	},
-	Convert,
-};
 use std::path::PathBuf;
 
-pub fn convert(arguments: &Convert) {
+#[derive(Args)]
+#[command(arg_required_else_help = true, disable_version_flag = true)]
+pub struct Subcommand {
+	/// supported container formats: *.cloudtiles, *.tar, *.mbtiles
+	#[arg()]
+	input_file: String,
+
+	/// supported container formats: *.cloudtiles, *.tar
+	#[arg()]
+	output_file: String,
+
+	/// minimum zoom level
+	#[arg(long, value_name = "int")]
+	min_zoom: Option<u64>,
+
+	/// maximum zoom level
+	#[arg(long, value_name = "int")]
+	max_zoom: Option<u64>,
+
+	/// bounding box
+	#[arg(
+		long,
+		short,
+		value_name = "lon_min,lat_min,lon_max,lat_max",
+		allow_hyphen_values = true
+	)]
+	bbox: Option<String>,
+
+	/// flip input vertically
+	#[arg(long)]
+	flip_input: bool,
+
+	/// convert tiles to new format
+	#[arg(long, short, value_enum)]
+	tile_format: Option<TileFormat>,
+
+	/// set new precompression
+	#[arg(long, short, value_enum)]
+	precompress: Option<Precompression>,
+
+	/// force recompression, e.g. to improve an existing gzip compression.
+	#[arg(long, short, value_enum)]
+	force_recompress: bool,
+}
+
+pub fn run(arguments: &Subcommand) {
 	println!(
 		"convert from {:?} to {:?}",
 		arguments.input_file, arguments.output_file
@@ -23,7 +59,7 @@ pub fn convert(arguments: &Convert) {
 	converter.convert_from(&mut reader);
 }
 
-fn new_reader(filename: &str, arguments: &Convert) -> TileReaderBox {
+fn new_reader(filename: &str, arguments: &Subcommand) -> TileReaderBox {
 	let mut reader = get_reader(filename);
 
 	reader
@@ -33,7 +69,7 @@ fn new_reader(filename: &str, arguments: &Convert) -> TileReaderBox {
 	reader
 }
 
-fn new_converter(filename: &str, arguments: &Convert) -> TileConverterBox {
+fn new_converter(filename: &str, arguments: &Subcommand) -> TileConverterBox {
 	let mut bbox_pyramide = TileBBoxPyramide::new_full();
 
 	if let Some(value) = arguments.min_zoom {
