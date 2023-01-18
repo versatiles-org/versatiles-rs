@@ -33,26 +33,28 @@ overflow-checks = false
 strip = true
 
 [dependencies]
-brotli = { version = "3.3.4", default-features = false, features = ["std"] }
-byteorder = { version = "1.4.3", default-features = false, features = [] }
-clap = { version = "4.0.32", features = [] }
-clap-verbosity-flag = { version = "2.0.0", default-features = false, features = [] }
-enumset = { version = "1.0.12", default-features = false, features = [] }
-env_logger = { version = "0.10.0", default-features = false, features = [] }
-flate2 = { version = "1.0.25", default-features = false, features = ["miniz_oxide"] }
-futures = { version = "0.3.25", default-features = false, features = [] }
+brotli = { version = "3.3.4", features = ["std"] }
+byteorder = "1.4.3"
+clap = "4.0.32"
+clap-verbosity-flag = "2.0.0"
+enumset = "1.0.12"
+env_logger = "0.10.0"
+flate2 = { version = "1.0.25", features = ["miniz_oxide"] }
+futures = "0.3.25"
 hyper = { version = "0.14.23", default-features = false, features = ["server"] }
 image = { version = "0.24.5", default-features = false, features = ["jpeg", "png"] }
-itertools = { version = "0.10.5", default-features = false, features = [] }
-log = { version = "0.4.17", default-features = false, features = [] }
-mime_guess = { version = "2.0.4", default-features = false, features = [] }
-object_store = { version = "0.5.3", default-features = false, features = ["gcp"] }
-r2d2 = { version = "0.8.10", default-features = false, features = [] }
-r2d2_sqlite = { version = "0.21.0", default-features = false, features = [] }
-rayon = { version = "1.6.1", default-features = false, features = [] }
-rusqlite = { version = "0.28.0", default-features = false, features = [] }
-tar = { version = "0.4.38", default-features = false, features = [] }
-term_size = { version = "0.3.2", default-features = false, features = [] }
-tokio = { version = "1.24.1", default-features = false, features = ["rt-multi-thread"] }
-urlencoding = { version = "2.1.2", default-features = false, features = [] }
-webp = { version = "0.2.2", default-features = false, features = ["img"] }
+itertools = "0.10.5"
+log = "0.4.17"
+mime_guess = "2.0.4"
+object_store = { version = "0.5.3", default-features = false,  features = ["gcp"] }
+r2d2 = "0.8.10"
+r2d2_sqlite = "0.21.0"
+rayon = "1.6.1"
+regex = { version = "1.7.1", default-features = false }
+rusqlite = "0.28.0"
+sysinfo = "0.27.7"
+tar = "0.4.38"
+term_size = "0.3.2"
+tokio = { version = "1.24.1", features = ["rt-multi-thread"] }
+urlencoding = "2.1.2"
+webp = { version = "0.2.2", features = ["img"] }
