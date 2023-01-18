@@ -1,5 +1,6 @@
 .*.sh
 .DS_Store
-credentials.json
+*.tar
 /target
 /tiles
+credentials.json
