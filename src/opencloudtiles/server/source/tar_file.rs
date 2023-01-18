@@ -4,6 +4,7 @@ use crate::opencloudtiles::{
 };
 use enumset::EnumSet;
 use hyper::{Body, Response, Result};
+use log::trace;
 use std::{
 	collections::HashMap,
 	env::current_dir,
@@ -83,11 +84,17 @@ impl TarFile {
 			let blob = Blob::from_vec(buffer);
 
 			let mut add = |path: &Path, blob: Blob| {
-				let name: String = path
+				let mut name: String = path
 					.iter()
 					.map(|s| s.to_str().unwrap())
 					.collect::<Vec<&str>>()
 					.join("/");
+
+				while name.starts_with(&['.', '/']) {
+					name = name[1..].to_string();
+				}
+
+				trace!("adding file from tar: {} ({:?})", name, precompression);
 
 				let entry = lookup.entry(name);
 				let versions = entry.or_insert_with(CompressedVersions::new);
