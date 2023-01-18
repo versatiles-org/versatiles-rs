@@ -90,7 +90,7 @@ impl TarFile {
 					.collect::<Vec<&str>>()
 					.join("/");
 
-				while name.starts_with(&['.', '/']) {
+				while name.starts_with(['.', '/']) {
 					name = name[1..].to_string();
 				}
 
