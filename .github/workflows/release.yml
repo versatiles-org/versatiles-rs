@@ -1,0 +1,32 @@
+name: Release on tag push
+on:
+  push:
+    tag: v*.*.*
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+        - { o: macos-latest,    t: x86_64-apple-darwin        }
+        - { o: macos-latest,    t: aarch64-apple-darwin       }
+        - { o: ubuntu-latest,   t: x86_64-unknown-linux-musl  }
+        - { o: ubuntu-latest,   t: aarch64-unknown-linux-musl }
+        - { o: windows-latest,  t: x86_64-pc-windows-msvc     }
+        - { o: windows-latest,  t: aarch64-pc-windows-msvc    }
+
+    name: ${{ matrix.t }}
+    runs-on: ${{ matrix.o }}
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: cargo-bins/release-rust@v1
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        crates-token: ${{ secrets.CRATES_TOKEN }}
+        target: ${{ matrix.t }}
+        publish-tag: false
