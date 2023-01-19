@@ -108,14 +108,14 @@ impl TileConverter {
 			.iter_bbox_row_slices(1024)
 			.par_bridge()
 			.for_each(|row_bbox: TileBBox| {
-				debug!("start block slice {:?}", row_bbox);
+				trace!("start block slice {:?}", row_bbox);
 
 				let mut blobs: Vec<(TileCoord2, Blob)> =
 					reader.get_bbox_tile_vec(block.level, &row_bbox);
 
 				blobs.sort_by_cached_key(|(coord, _blob)| coord.y * width + coord.x);
 
-				debug!(
+				trace!(
 					"get_bbox_tile_vec: count {}, size sum {}",
 					blobs.len(),
 					blobs.iter().fold(0, |acc, e| acc + e.1.len())
@@ -128,7 +128,7 @@ impl TileConverter {
 						.collect();
 				}
 
-				debug!(
+				trace!(
 					"compressed: count {}, size sum {}",
 					blobs.len(),
 					blobs.iter().fold(0, |acc, e| acc + e.1.len())
@@ -169,7 +169,7 @@ impl TileConverter {
 
 				mutex_progress.lock().unwrap().inc(row_bbox.count_tiles());
 
-				debug!("finish block slice {:?}", row_bbox);
+				trace!("finish block slice {:?}", row_bbox);
 			});
 
 		debug!("finish block and write index {:?}", block);
