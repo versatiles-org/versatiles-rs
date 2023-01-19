@@ -1,8 +1,6 @@
 name: Release
 on:
   workflow_dispatch:
-  release:
-    types: [created]
 
 jobs:
   release:
@@ -25,7 +23,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@main
-    - uses: cargo-bins/release-rust@main
+    - uses: cargo-bins/release-rust@v1
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         crates-token: ${{ secrets.CRATES_TOKEN }}
