@@ -1047,7 +1047,7 @@ checksum = "6f61fba1741ea2b3d6a1e3178721804bb716a68a6aeba1149b5d52e3d464ea66"
 
 [[package]]
 name = "opencloudtiles"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "brotli",
  "byteorder",
