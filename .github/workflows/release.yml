@@ -23,8 +23,8 @@ jobs:
       contents: write
 
     steps:
-    - uses: actions/checkout@v3
-    - uses: cargo-bins/release-rust@v1
+    - uses: actions/checkout@main
+    - uses: cargo-bins/release-rust@main
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         crates-token: ${{ secrets.CRATES_TOKEN }}
