@@ -63,4 +63,10 @@ impl TileIndex {
 	pub fn get_tile_range(&self, index: usize) -> &ByteRange {
 		&self.index[index]
 	}
+	pub fn len(&self) -> usize {
+		self.index.len()
+	}
+	pub fn iter(&self) -> impl Iterator<Item = &ByteRange> {
+		self.index.iter()
+	}
 }

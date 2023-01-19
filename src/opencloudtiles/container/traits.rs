@@ -46,4 +46,6 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 			})
 			.collect()
 	}
+
+	fn deep_verify(&self);
 }

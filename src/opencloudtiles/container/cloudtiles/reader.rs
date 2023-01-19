@@ -1,5 +1,7 @@
 use super::types::*;
 use crate::opencloudtiles::{container::*, lib::*};
+use itertools::Itertools;
+use log::debug;
 use std::{collections::HashMap, fmt::Debug, ops::Shr, str::from_utf8, sync::RwLock};
 
 pub struct TileReader {
@@ -118,6 +120,57 @@ impl TileReaderTrait for TileReader {
 	}
 	fn get_name(&self) -> &str {
 		self.reader.get_name()
+	}
+	fn deep_verify(&self) {
+		let block_count = self.block_index.len() as u64;
+
+		debug!("number of blocks: {}", block_count);
+
+		let mut progress = ProgressBar::new("deep verify", block_count + 1);
+
+		let blocks = self
+			.block_index
+			.iter()
+			.sorted_by_cached_key(|block| block.get_sort_index());
+
+		let mut level_status_images: Vec<StatusImage> = Vec::new();
+
+		for block in blocks {
+			let tiles_count = block.bbox.count_tiles();
+
+			let tile_index = TileIndex::from_brotli_blob(self.reader.read_range(&block.tile_range));
+			assert_eq!(
+				tile_index.len(),
+				tiles_count as usize,
+				"tile count are not the same"
+			);
+
+			let level = block.level as usize;
+			let status_image: &mut StatusImage =
+				if let Some(status_image) = level_status_images.get_mut(level) {
+					status_image
+				} else {
+					let status_image = StatusImage::new(2u64.pow(block.level as u32));
+					level_status_images.insert(level, status_image);
+					level_status_images.get_mut(level).unwrap()
+				};
+
+			let x_offset = block.x * 256;
+			let y_offset = block.y * 256;
+
+			for (index, byterange) in tile_index.iter().enumerate() {
+				let coord = block.bbox.get_coord_by_index(index);
+				status_image.set(coord.x + x_offset, coord.y + y_offset, byterange.length);
+			}
+
+			progress.inc(1);
+		}
+
+		for (index, status_image) in level_status_images.iter().enumerate() {
+			status_image.save_png(&format!("level_{}.png", index));
+		}
+
+		progress.finish();
 	}
 }
 

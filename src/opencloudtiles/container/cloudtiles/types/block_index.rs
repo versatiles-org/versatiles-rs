@@ -7,7 +7,6 @@ use std::{
 };
 
 #[derive(Debug)]
-
 pub struct BlockIndex {
 	lookup: HashMap<TileCoord3, BlockDefinition>,
 }
@@ -66,5 +65,11 @@ impl BlockIndex {
 	}
 	pub fn get_block(&self, coord: &TileCoord3) -> Option<&BlockDefinition> {
 		self.lookup.get(coord)
+	}
+	pub fn len(&self) -> usize {
+		self.lookup.len()
+	}
+	pub fn iter(&self) -> impl Iterator<Item = &BlockDefinition> {
+		self.lookup.iter().map(|(_coord, block)| block)
 	}
 }

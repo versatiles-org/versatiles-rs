@@ -94,7 +94,14 @@ impl CloudTilesSrcTrait for CloudTilesSrcObjectStore {
 		})
 	}
 	fn read_range(&self, range: &ByteRange) -> Blob {
-		Blob::from_bytes(block_on(self.object_store.get_range(&self.url, range.as_range())).unwrap())
+		Blob::from_bytes(
+			block_on(
+				self
+					.object_store
+					.get_range(&self.url, range.as_range_usize()),
+			)
+			.unwrap(),
+		)
 	}
 	fn get_name(&self) -> &str {
 		&self.name

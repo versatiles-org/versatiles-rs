@@ -1,14 +1,16 @@
-use itertools::Itertools;
-
 use super::TileCoord2;
-use std::fmt;
+use itertools::Itertools;
+use std::{
+	fmt,
+	ops::{Div, Rem},
+};
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct TileBBox {
-	x_min: u64,
-	y_min: u64,
-	x_max: u64,
-	y_max: u64,
+	pub x_min: u64,
+	pub y_min: u64,
+	pub x_max: u64,
+	pub y_max: u64,
 }
 
 #[allow(dead_code)]
@@ -203,17 +205,10 @@ impl TileBBox {
 
 		index as usize
 	}
-	pub fn get_x_min(&self) -> u64 {
-		self.x_min
-	}
-	pub fn get_y_min(&self) -> u64 {
-		self.y_min
-	}
-	pub fn get_x_max(&self) -> u64 {
-		self.x_max
-	}
-	pub fn get_y_max(&self) -> u64 {
-		self.y_max
+	pub fn get_coord_by_index(&self, index: usize) -> TileCoord2 {
+		let width = self.x_max + 1 - self.x_min;
+		let i = index as u64;
+		TileCoord2::new(i.rem(width) + self.x_min, i.div(width) + self.y_min)
 	}
 }
 

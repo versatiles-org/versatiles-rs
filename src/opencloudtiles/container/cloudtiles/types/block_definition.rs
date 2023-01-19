@@ -1,8 +1,9 @@
 use super::ByteRange;
 use crate::opencloudtiles::lib::*;
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
-use std::{fmt, io::Cursor};
+use std::{fmt, io::Cursor, ops::Div};
 
+#[derive(Clone, Copy)]
 pub struct BlockDefinition {
 	pub level: u64,
 	pub x: u64,
@@ -22,6 +23,7 @@ impl BlockDefinition {
 	}
 	pub fn from_blob(buf: Blob) -> BlockDefinition {
 		let mut cursor = Cursor::new(buf.as_slice());
+
 		let level = cursor.read_u8().unwrap() as u64;
 		let x = cursor.read_u32::<BE>().unwrap() as u64;
 		let y = cursor.read_u32::<BE>().unwrap() as u64;
@@ -29,9 +31,10 @@ impl BlockDefinition {
 		let y_min = cursor.read_u8().unwrap() as u64;
 		let x_max = cursor.read_u8().unwrap() as u64;
 		let y_max = cursor.read_u8().unwrap() as u64;
-		let bbox = TileBBox::new(x_min, y_min, x_max, y_max);
 		let offset = cursor.read_u64::<BE>().unwrap();
 		let length = cursor.read_u64::<BE>().unwrap();
+
+		let bbox = TileBBox::new(x_min, y_min, x_max, y_max);
 		let tile_range = ByteRange::new(offset, length);
 
 		BlockDefinition {
@@ -48,17 +51,36 @@ impl BlockDefinition {
 	pub fn as_blob(&self) -> Blob {
 		let vec = Vec::new();
 		let mut cursor = Cursor::new(vec);
+
 		cursor.write_u8(self.level as u8).unwrap();
 		cursor.write_u32::<BE>(self.x as u32).unwrap();
 		cursor.write_u32::<BE>(self.y as u32).unwrap();
-		cursor.write_u8(self.bbox.get_x_min() as u8).unwrap();
-		cursor.write_u8(self.bbox.get_y_min() as u8).unwrap();
-		cursor.write_u8(self.bbox.get_x_max() as u8).unwrap();
-		cursor.write_u8(self.bbox.get_y_max() as u8).unwrap();
+		cursor.write_u8(self.bbox.x_min as u8).unwrap();
+		cursor.write_u8(self.bbox.y_min as u8).unwrap();
+		cursor.write_u8(self.bbox.x_max as u8).unwrap();
+		cursor.write_u8(self.bbox.y_max as u8).unwrap();
 		cursor.write_u64::<BE>(self.tile_range.offset).unwrap();
 		cursor.write_u64::<BE>(self.tile_range.length).unwrap();
 
 		Blob::from_vec(cursor.into_inner())
+	}
+	#[allow(dead_code)]
+	pub fn as_str(&self) -> String {
+		let x_offset = self.x * 256;
+		let y_offset = self.y * 256;
+		format!(
+			"[{},[{},{}],[{},{}]]",
+			self.level,
+			self.bbox.x_min + x_offset,
+			self.bbox.y_min + y_offset,
+			self.bbox.x_max + x_offset,
+			self.bbox.y_max + y_offset
+		)
+	}
+	pub fn get_sort_index(&self) -> u64 {
+		let size = 2u64.pow(self.level as u32);
+		let offset = (size * size - 1).div(3);
+		offset + size * self.y + self.x
 	}
 }
 

@@ -1,11 +1,11 @@
 use super::{TileBBox, TileCoord2, TileCoord3};
 use std::fmt;
 
-const MAX_ZOOM_LEVEL: usize = 32;
+const MAX_ZOOM_LEVEL: u64 = 32;
 
 #[derive(Clone)]
 pub struct TileBBoxPyramide {
-	level_bbox: [TileBBox; MAX_ZOOM_LEVEL],
+	level_bbox: [TileBBox; MAX_ZOOM_LEVEL as usize],
 }
 
 #[allow(dead_code)]

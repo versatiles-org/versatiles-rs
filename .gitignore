@@ -1,5 +1,6 @@
 .*.sh
 .DS_Store
+*.png
 *.tar
 /target
 /tiles

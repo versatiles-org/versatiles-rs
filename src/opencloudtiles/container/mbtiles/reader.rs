@@ -254,10 +254,10 @@ impl TileReaderTrait for TileReader {
 		let vec: Vec<(TileCoord2, Blob)> = stmt
 			.query_map(
 				[
-					bbox.get_x_min(),
-					bbox.get_x_max(),
-					max_index - bbox.get_y_max(),
-					max_index - bbox.get_y_min(),
+					bbox.x_min,
+					bbox.x_max,
+					max_index - bbox.y_max,
+					max_index - bbox.y_min,
 					zoom,
 				],
 				|row| {
@@ -280,6 +280,9 @@ impl TileReaderTrait for TileReader {
 	}
 	fn get_name(&self) -> &str {
 		&self.name
+	}
+	fn deep_verify(&self) {
+		todo!()
 	}
 }
 

@@ -33,7 +33,7 @@ impl fmt::Debug for TileCoord2 {
 	}
 }
 
-#[derive(Eq, PartialEq, Clone, Hash)]
+#[derive(Eq, PartialEq, Clone, Hash, Copy)]
 pub struct TileCoord3 {
 	pub x: u64,
 	pub y: u64,
