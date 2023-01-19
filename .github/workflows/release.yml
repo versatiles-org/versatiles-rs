@@ -1,7 +1,8 @@
-name: Release on tag push
+name: Release
 on:
-  push:
-    tag: v*.*.*
+  workflow_dispatch
+  release:
+    types: [created]
 
 jobs:
   release:
