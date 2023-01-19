@@ -51,7 +51,8 @@ cargo build && ./target/debug/opencloudtiles serve -s tiles/frontend tiles/origi
 
 # cargo instruments --all-features -t "CPU Profiler" -- convert tiles/original/philippines.mbtiles tiles/philippines.cloudtiles
 
-# cargo instruments --all-features -t "CPU Profiler" -- convert tiles/philippines.mbtiles tiles/philippines.cloudtiles
+# cargo build -r && ./target/release/opencloudtiles probe --scan ~/Dropbox/Dropbox\ upload/Dropbbox\ upload\ new/opencloudtiles/mbtiles/2023-01-eu-de.mbtiles
+# cargo instruments --all-features -t "CPU Profiler" -- probe --scan ~/Dropbox/Dropbox\ upload/Dropbbox\ upload\ new/opencloudtiles/mbtiles/2023-01-eu-de.mbtiles
 ```
 
 # dev config

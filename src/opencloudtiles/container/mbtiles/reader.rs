@@ -245,8 +245,7 @@ impl TileReaderTrait for TileReader {
 
 		let sql = "SELECT tile_column, tile_row, tile_data
 			FROM tiles
-			WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?
-			ORDER BY zoom_level ASC, tile_row ASC, tile_column ASC";
+			WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?";
 
 		trace!("SQL: {}", sql);
 

@@ -102,6 +102,7 @@ impl TileConverter {
 		let mutex_tile_hash_lookup = &Mutex::new(tile_hash_lookup);
 
 		let tile_converter = self.config.get_tile_recompressor();
+		let width = 2u64.pow(block.level as u32);
 
 		bbox
 			.iter_bbox_row_slices(1024)
@@ -111,6 +112,8 @@ impl TileConverter {
 
 				let mut blobs: Vec<(TileCoord2, Blob)> =
 					reader.get_bbox_tile_vec(block.level, &row_bbox);
+
+				blobs.sort_by_cached_key(|(coord, _blob)| coord.y * width + coord.x);
 
 				debug!(
 					"get_bbox_tile_vec: count {}, size sum {}",
