@@ -32,6 +32,9 @@ incremental = false
 overflow-checks = false
 strip = true
 
+[profile.bench]
+lto = false
+
 [dependencies]
 brotli = { version = "3.3.4", features = ["std"] }
 byteorder = "1.4.3"

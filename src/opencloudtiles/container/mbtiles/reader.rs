@@ -294,3 +294,20 @@ impl std::fmt::Debug for TileReader {
 			.finish()
 	}
 }
+
+#[cfg(test)]
+mod bench {
+	extern crate test;
+	use super::*;
+	use test::Bencher;
+
+	#[bench]
+	fn read_speed(b: &mut Bencher) {
+		let reader = TileReader::new("tests/ressources/2023-01-eu-de-be.mbtiles");
+
+		b.iter(|| {
+			let vec = reader.get_bbox_tile_vec(14, &TileBBox::new(8787, 5361, 8818, 5387));
+			println!("{}", vec.len());
+		})
+	}
+}

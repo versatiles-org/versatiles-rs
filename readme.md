@@ -49,10 +49,14 @@ cargo build && ./target/debug/opencloudtiles serve -s tiles/frontend tiles/stutt
 
 cargo build && ./target/debug/opencloudtiles serve -s tiles/frontend tiles/original/europe.mbtiles
 
-# cargo instruments --all-features -t "CPU Profiler" -- convert ~/Dropbox/Dropbox\ upload/Dropbbox\ upload\ new/opencloudtiles/mbtiles/2023-01-eu-de.mbtiles tiles/test.cloudtiles
+cargo instruments --all-features -t "CPU Profiler" -- convert ~/Dropbox/Dropbox\ upload/Dropbbox\ upload\ new/opencloudtiles/mbtiles/2023-01-eu-de.mbtiles tiles/test.cloudtiles
 
-# cargo build -r && ./target/release/opencloudtiles probe --scan ~/Dropbox/Dropbox\ upload/Dropbbox\ upload\ new/opencloudtiles/mbtiles/2023-01-eu-de.mbtiles
-# cargo instruments --all-features -t "CPU Profiler" -- probe --scan ~/Dropbox/Dropbox\ upload/Dropbbox\ upload\ new/opencloudtiles/mbtiles/2023-01-eu-de.mbtiles
+cargo build -r && ./target/release/opencloudtiles probe --scan ~/Dropbox/Dropbox\ upload/Dropbbox\ upload\ new/opencloudtiles/mbtiles/2023-01-eu-de.mbtiles
+cargo instruments --all-features -t "CPU Profiler" -- probe --scan ~/Dropbox/Dropbox\ upload/Dropbbox\ upload\ new/opencloudtiles/mbtiles/2023-01-eu-de.mbtiles
+
+cargo test
+cargo bench "bench"
+
 ```
 
 # dev config
