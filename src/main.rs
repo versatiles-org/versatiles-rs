@@ -1,6 +1,3 @@
-#![feature(test)]
-
-mod opencloudtiles;
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use opencloudtiles::tools;

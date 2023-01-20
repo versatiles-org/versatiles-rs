@@ -34,7 +34,7 @@ jobs:
          - name: Install rust
            uses: actions-rs/toolchain@v1
            with:
-              toolchain: nightly
+              toolchain: stable
               profile: minimal
               components: rustfmt, clippy
          - name: Check formatting
@@ -54,7 +54,7 @@ jobs:
          - name: Install rust
            uses: actions-rs/toolchain@v1
            with:
-              toolchain: nightly
+              toolchain: stable
               profile: minimal
 
          - name: Build

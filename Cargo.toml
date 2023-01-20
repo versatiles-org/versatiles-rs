@@ -10,6 +10,11 @@ license = "MIT"
 repository = "https://github.com/OpenCloudTiles/opencloudtiles-tools"
 exclude = ["tests/ressources/*"]
 
+[lib]
+name = "opencloudtiles"
+path = "src/lib/mod.rs"
+crate-type = ["lib"]
+
 [profile.dev]
 opt-level = 1
 debug = true
@@ -62,3 +67,10 @@ term_size = "0.3.2"
 tokio = { version = "1.24.1", features = ["rt-multi-thread"] }
 urlencoding = "2.1.2"
 webp = { version = "0.2.2", features = ["img"] }
+
+[dev-dependencies]
+criterion = "0.4.0"
+
+[[bench]]
+name = "main"
+harness = false
