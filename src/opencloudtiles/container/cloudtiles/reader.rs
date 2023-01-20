@@ -96,7 +96,7 @@ impl TileReaderTrait for TileReader {
 		let tile_range: ByteRange;
 
 		if let Some(tile_index) = tile_index_option {
-			tile_range = tile_index.get_tile_range(tile_id).clone();
+			tile_range = *tile_index.get_tile_range(tile_id);
 
 			drop(cache_reader);
 		} else {
@@ -104,14 +104,14 @@ impl TileReaderTrait for TileReader {
 
 			let tile_index = TileIndex::from_brotli_blob(self.reader.read_range(&block.tile_range));
 			let mut cache_writer = self.tile_index_cache.write().unwrap();
-			cache_writer.insert(block_coord.clone(), tile_index);
+			cache_writer.insert(block_coord, tile_index);
 
 			drop(cache_writer);
 
 			let cache_reader = self.tile_index_cache.read().unwrap();
 			let tile_index_option = cache_reader.get(&block_coord);
 
-			tile_range = tile_index_option.unwrap().get_tile_range(tile_id).clone();
+			tile_range = *tile_index_option.unwrap().get_tile_range(tile_id);
 
 			drop(cache_reader);
 		}

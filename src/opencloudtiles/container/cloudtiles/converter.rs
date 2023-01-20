@@ -53,9 +53,9 @@ impl TileConverter {
 		let mut blocks: Vec<BlockDefinition> = Vec::new();
 
 		for (zoom, bbox_tiles) in self.config.get_bbox_pyramide().iter_levels() {
-			let bbox_blocks = bbox_tiles.clone().scale_down(256);
+			let bbox_blocks = bbox_tiles.scale_down(256);
 			for TileCoord2 { x, y } in bbox_blocks.iter_coords() {
-				let mut bbox_block = bbox_tiles.clone();
+				let mut bbox_block = *bbox_tiles;
 				bbox_block.intersect_bbox(&TileBBox::new(
 					x * 256,
 					y * 256,
@@ -149,10 +149,7 @@ impl TileConverter {
 						if secured_tile_hash_lookup.contains_key(blob.as_slice()) {
 							secured_tile_index.set(
 								index,
-								secured_tile_hash_lookup
-									.get(blob.as_slice())
-									.unwrap()
-									.clone(),
+								*secured_tile_hash_lookup.get(blob.as_slice()).unwrap(),
 							);
 							return;
 						}
@@ -160,7 +157,7 @@ impl TileConverter {
 					}
 
 					let range = secured_writer.append(blob);
-					secured_tile_index.set(index, range.clone());
+					secured_tile_index.set(index, range);
 
 					if let Some(tile_hash) = tile_hash_option {
 						secured_tile_hash_lookup.insert(tile_hash.to_vec(), range);

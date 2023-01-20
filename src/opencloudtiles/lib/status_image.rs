@@ -77,7 +77,7 @@ impl StatusImagePyramide {
 
 		let width = (self.max_size * 2 - 1) as u32;
 		let height = (self.max_size) as u32;
-		let mut canvas: RgbImage = ImageBuffer::new(width as u32, height as u32);
+		let mut canvas: RgbImage = ImageBuffer::new(width, height);
 		canvas.fill(16);
 
 		for image in self.images.iter() {

@@ -40,7 +40,7 @@ impl BlockIndex {
 		for (_coord, block) in self.lookup.iter() {
 			pyramide.include_bbox(
 				block.level,
-				&block.bbox.clone().shift_by(block.x * 256, block.y * 256),
+				&block.bbox.shift_by(block.x * 256, block.y * 256),
 			);
 		}
 
@@ -70,6 +70,6 @@ impl BlockIndex {
 		self.lookup.len()
 	}
 	pub fn iter(&self) -> impl Iterator<Item = &BlockDefinition> {
-		self.lookup.iter().map(|(_coord, block)| block)
+		self.lookup.values()
 	}
 }
