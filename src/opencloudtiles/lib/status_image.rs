@@ -60,9 +60,11 @@ impl StatusImagePyramide {
 			return self.images.get_mut(index).unwrap();
 		} else {
 			let size = 2u64.pow(index as u32);
-			self.max_size = self.max_size.max(size);
 			let status_image = StatusImage::new(size);
+
+			self.max_size = self.max_size.max(size);
 			self.images.insert(index, status_image);
+
 			return self.images.get_mut(index).unwrap();
 		}
 	}
@@ -93,5 +95,26 @@ impl StatusImagePyramide {
 		canvas.save(filename).unwrap();
 
 		progress.finish();
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn basic_tests() {
+		let mut image = StatusImage::new(2);
+		image.set(0, 0, 0);
+		assert_eq!(image.get_color(0, 0), Rgb([0, 0, 0]));
+
+		image.set(1, 0, 100);
+		assert_eq!(image.get_color(1, 0), Rgb([50, 9, 0]));
+
+		image.set(0, 1, 10000);
+		assert_eq!(image.get_color(0, 1), Rgb([159, 99, 38]));
+
+		image.set(1, 1, 1000000);
+		assert_eq!(image.get_color(1, 1), Rgb([255, 255, 255]));
 	}
 }

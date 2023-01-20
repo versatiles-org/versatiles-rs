@@ -102,7 +102,7 @@ impl TileConverter {
 		let mutex_tile_hash_lookup = &Mutex::new(tile_hash_lookup);
 
 		let tile_converter = self.config.get_tile_recompressor();
-		let width = 2u64.pow(block.level as u32);
+		let width = 2u64.pow(block.z as u32);
 
 		bbox
 			.iter_bbox_row_slices(1024)
@@ -110,8 +110,7 @@ impl TileConverter {
 			.for_each(|row_bbox: TileBBox| {
 				trace!("start block slice {:?}", row_bbox);
 
-				let mut blobs: Vec<(TileCoord2, Blob)> =
-					reader.get_bbox_tile_vec(block.level, &row_bbox);
+				let mut blobs: Vec<(TileCoord2, Blob)> = reader.get_bbox_tile_vec(block.z, &row_bbox);
 
 				blobs.sort_by_cached_key(|(coord, _blob)| coord.y * width + coord.x);
 
@@ -160,7 +159,7 @@ impl TileConverter {
 					secured_tile_index.set(index, range);
 
 					if let Some(tile_hash) = tile_hash_option {
-						secured_tile_hash_lookup.insert(tile_hash.to_vec(), range);
+						secured_tile_hash_lookup.insert(tile_hash.as_vec(), range);
 					}
 				});
 

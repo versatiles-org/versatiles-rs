@@ -38,10 +38,7 @@ impl BlockIndex {
 	pub fn get_bbox_pyramide(&self) -> TileBBoxPyramide {
 		let mut pyramide = TileBBoxPyramide::new_empty();
 		for (_coord, block) in self.lookup.iter() {
-			pyramide.include_bbox(
-				block.level,
-				&block.bbox.shift_by(block.x * 256, block.y * 256),
-			);
+			pyramide.include_bbox(block.z, &block.bbox.shift_by(block.x * 256, block.y * 256));
 		}
 
 		pyramide
@@ -49,7 +46,7 @@ impl BlockIndex {
 	pub fn add_block(&mut self, block: BlockDefinition) {
 		self
 			.lookup
-			.insert(TileCoord3::new(block.level, block.y, block.x), block);
+			.insert(TileCoord3::new(block.x, block.y, block.z), block);
 	}
 	pub fn as_blob(&self) -> Blob {
 		let vec = Vec::new();

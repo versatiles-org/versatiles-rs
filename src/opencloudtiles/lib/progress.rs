@@ -126,3 +126,19 @@ fn format_big_number(value: u64) -> String {
 		.unwrap()
 		.join("'")
 }
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+    use super::*;
+
+	#[test]
+	fn basic_tests () {
+		assert_eq!(format_big_number(123456789), "123'456'789");
+		assert_eq!(format_big_number(1234567890), "1'234'567'890");
+		assert_eq!(format_duration(Duration::from_secs(1)), "00:00:01");
+		assert_eq!(format_duration(Duration::from_secs(60)), "00:01:00");
+		assert_eq!(format_duration(Duration::from_secs(60*60)), "01:00:00");
+		assert_eq!(format_duration(Duration::from_secs(60*60*24)), "1d 00:00:00");
+	}
+}

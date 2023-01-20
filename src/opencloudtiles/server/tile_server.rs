@@ -143,7 +143,7 @@ pub fn ok_data(data: Blob, precompression: &Precompression, mime: &str) -> Resul
 		Precompression::Brotli => response = response.header(CONTENT_ENCODING, "br"),
 	}
 
-	Ok(response.body(data.to_vec().into()).unwrap())
+	Ok(response.body(data.as_vec().into()).unwrap())
 }
 
 pub fn guess_mime(path: &Path) -> String {

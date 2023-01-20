@@ -126,7 +126,7 @@ impl TileReaderTrait for TileReader {
 				let offset = entry.raw_file_position();
 				let length = entry.size();
 
-				let coord3 = TileCoord3 { z, y, x };
+				let coord3 = TileCoord3 { x, y, z };
 				bbox_pyramide.include_coord(&coord3);
 				tile_map.insert(coord3, TarByteRange { offset, length });
 			};

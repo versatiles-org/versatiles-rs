@@ -148,7 +148,7 @@ impl TileReaderTrait for TileReader {
 				"tile count are not the same"
 			);
 
-			let status_image = status_images.get_level(block.level);
+			let status_image = status_images.get_level(block.z);
 
 			let x_offset = block.x * 256;
 			let y_offset = block.y * 256;

@@ -5,18 +5,18 @@ use std::{fmt, io::Cursor, ops::Div};
 
 #[derive(Clone, Copy)]
 pub struct BlockDefinition {
-	pub level: u64,
 	pub x: u64,
 	pub y: u64,
+	pub z: u64,
 	pub bbox: TileBBox,
 	pub tile_range: ByteRange,
 }
 impl BlockDefinition {
-	pub fn new(level: u64, x: u64, y: u64, bbox: TileBBox) -> BlockDefinition {
+	pub fn new(z: u64, x: u64, y: u64, bbox: TileBBox) -> BlockDefinition {
 		BlockDefinition {
-			level,
 			x,
 			y,
+			z,
 			bbox,
 			tile_range: ByteRange::empty(),
 		}
@@ -38,7 +38,7 @@ impl BlockDefinition {
 		let tile_range = ByteRange::new(offset, length);
 
 		BlockDefinition {
-			level,
+			z: level,
 			x,
 			y,
 			bbox,
@@ -52,7 +52,7 @@ impl BlockDefinition {
 		let vec = Vec::new();
 		let mut cursor = Cursor::new(vec);
 
-		cursor.write_u8(self.level as u8).unwrap();
+		cursor.write_u8(self.z as u8).unwrap();
 		cursor.write_u32::<BE>(self.x as u32).unwrap();
 		cursor.write_u32::<BE>(self.y as u32).unwrap();
 		cursor.write_u8(self.bbox.x_min as u8).unwrap();
@@ -70,7 +70,7 @@ impl BlockDefinition {
 		let y_offset = self.y * 256;
 		format!(
 			"[{},[{},{}],[{},{}]]",
-			self.level,
+			self.z,
 			self.bbox.x_min + x_offset,
 			self.bbox.y_min + y_offset,
 			self.bbox.x_max + x_offset,
@@ -78,7 +78,7 @@ impl BlockDefinition {
 		)
 	}
 	pub fn get_sort_index(&self) -> u64 {
-		let size = 2u64.pow(self.level as u32);
+		let size = 2u64.pow(self.z as u32);
 		let offset = (size * size - 1).div(3);
 		offset + size * self.y + self.x
 	}
@@ -87,7 +87,7 @@ impl BlockDefinition {
 impl fmt::Debug for BlockDefinition {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("BlockDefinition")
-			.field("z/y/x", &TileCoord3::new(self.level, self.y, self.x))
+			.field("x/y/z", &TileCoord3::new(self.x, self.y, self.z))
 			.field("bbox", &self.bbox)
 			.field("tile_range", &self.tile_range)
 			.finish()

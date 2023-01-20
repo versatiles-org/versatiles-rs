@@ -30,9 +30,9 @@ impl TileBBox {
 	pub fn new_empty() -> TileBBox {
 		TileBBox::new(1, 1, 0, 0)
 	}
-	pub fn from_geo(level: u64, geo_bbox: &[f32; 4]) -> TileBBox {
-		let p1 = TileCoord2::from_geo(level, geo_bbox[0], geo_bbox[1]);
-		let p2 = TileCoord2::from_geo(level, geo_bbox[2], geo_bbox[3]);
+	pub fn from_geo(geo_bbox: &[f32; 4], z: u64) -> TileBBox {
+		let p1 = TileCoord2::from_geo(geo_bbox[0], geo_bbox[1], z);
+		let p2 = TileCoord2::from_geo(geo_bbox[2], geo_bbox[3], z);
 
 		TileBBox::new(
 			p1.x.min(p2.x),
@@ -239,7 +239,7 @@ mod tests {
 
 	#[test]
 	fn from_geo() {
-		let bbox1 = TileBBox::from_geo(9, &[8.0653f32, 51.3563f32, 12.3528f32, 52.2564f32]);
+		let bbox1 = TileBBox::from_geo(&[8.0653f32, 51.3563f32, 12.3528f32, 52.2564f32], 9);
 		let bbox2 = TileBBox::new(267, 168, 273, 170);
 		println!("bbox1 {:?}", bbox1);
 		println!("bbox2 {:?}", bbox2);

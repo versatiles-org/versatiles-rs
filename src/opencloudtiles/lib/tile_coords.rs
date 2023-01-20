@@ -12,8 +12,8 @@ impl TileCoord2 {
 	pub fn new(x: u64, y: u64) -> TileCoord2 {
 		TileCoord2 { x, y }
 	}
-	pub fn from_geo(level: u64, x: f32, y: f32) -> TileCoord2 {
-		let zoom: f32 = 2.0f32.powi(level as i32);
+	pub fn from_geo(x: f32, y: f32, z: u64) -> TileCoord2 {
+		let zoom: f32 = 2.0f32.powi(z as i32);
 		let x = zoom * (x / 360.0 + 0.5);
 		let y = zoom * (0.5 - 0.5 * (y * PI / 360.0 + PI / 4.0).tan().ln() / PI);
 
@@ -22,8 +22,8 @@ impl TileCoord2 {
 			y: y as u64,
 		}
 	}
-	pub fn add_zoom(&self, level: u64) -> TileCoord3 {
-		TileCoord3::new(level, self.y, self.x)
+	pub fn add_zoom(&self, z: u64) -> TileCoord3 {
+		TileCoord3::new(self.x, self.y, z)
 	}
 }
 
@@ -40,20 +40,24 @@ pub struct TileCoord3 {
 	pub z: u64,
 }
 impl TileCoord3 {
-	pub fn new(z: u64, y: u64, x: u64) -> TileCoord3 {
+	pub fn new(x: u64, y: u64, z: u64) -> TileCoord3 {
 		TileCoord3 { x, y, z }
 	}
 	pub fn flip_vertically(&self) -> TileCoord3 {
 		let max_index = 2u64.pow(self.z as u32) - 1;
-		TileCoord3::new(self.z, max_index - self.y, self.x)
+		TileCoord3 {
+			x: self.x,
+			y: max_index - self.y,
+			z: self.z,
+		}
 	}
 }
 
 impl Debug for TileCoord3 {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_fmt(format_args!(
-			"TileCoord3{{ z:{}, y:{} x:{} }}",
-			&self.z, &self.y, &self.x
+			"TileCoord3{{ x:{}, y:{} z:{} }}",
+			&self.x, &self.y, &self.z
 		))
 	}
 }
@@ -78,8 +82,8 @@ mod tests {
 
 	#[test]
 	fn from_geo() {
-		let test = |level: u64, xf: f32, yf: f32, xi: u64, yi: u64| {
-			let coord1 = TileCoord2::from_geo(level, xf, yf);
+		let test = |z: u64, xf: f32, yf: f32, xi: u64, yi: u64| {
+			let coord1 = TileCoord2::from_geo(xf, yf, z);
 			let coord2 = TileCoord2::new(xi, yi);
 			println!("coord1 {:?}", coord1);
 			println!("coord2 {:?}", coord2);

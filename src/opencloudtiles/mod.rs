@@ -1,4 +1,4 @@
 mod container;
-pub mod lib;
 mod server;
+pub mod lib;
 pub mod tools;

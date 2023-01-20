@@ -23,11 +23,26 @@ impl Blob {
 	pub fn as_slice(&self) -> &[u8] {
 		self.0.as_ref()
 	}
-	pub fn to_vec(&self) -> Vec<u8> {
+	pub fn as_vec(&self) -> Vec<u8> {
 		self.0.to_vec()
 	}
 
 	pub fn len(&self) -> usize {
 		self.0.len()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Blob;
+
+	#[test]
+	fn basic_tests () {
+		let vec = vec![0,1,2,3,4,5,6,7];
+		let blob = Blob::from_vec(vec.clone());
+		assert_eq!(blob.as_vec(), vec);
+		assert_eq!(Blob::from_slice(blob.as_slice()), blob);
+		assert_eq!(blob.len(), 8);
+		assert_eq!(blob.get_range(2..5).as_vec(), vec![2,3,4]);
 	}
 }
