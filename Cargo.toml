@@ -8,6 +8,7 @@ homepage = "https://www.opencloudtiles.org"
 readme = "readme.md"
 license = "MIT"
 repository = "https://github.com/OpenCloudTiles/opencloudtiles-tools"
+exclude = ["tests/ressources/*"]
 
 [profile.dev]
 opt-level = 1
