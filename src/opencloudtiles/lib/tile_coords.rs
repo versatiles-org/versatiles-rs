@@ -22,7 +22,7 @@ impl TileCoord2 {
 			y: y as u64,
 		}
 	}
-	pub fn add_zoom(&self, z: u64) -> TileCoord3 {
+	pub fn with_zoom(&self, z: u64) -> TileCoord3 {
 		TileCoord3::new(self.x, self.y, z)
 	}
 }
@@ -95,5 +95,19 @@ mod tests {
 
 		test(12, -4.43515, 58.0042, 1997, 1233);
 		test(12, 20.4395, 44.8029, 2280, 1476);
+	}
+
+	#[test]
+	fn with_zoom() {
+		let coord = TileCoord2::new(1, 2);
+		assert_eq!(coord.with_zoom(3), TileCoord3::new(1, 2, 3));
+		assert_eq!(coord, TileCoord2::new(1, 2));
+	}
+
+	#[test]
+	fn flip_vertically() {
+		let coord = TileCoord3::new(1, 2, 3);
+		assert_eq!(coord.flip_vertically(), TileCoord3::new(1, 5, 3));
+		assert_eq!(coord, TileCoord3::new(1, 2, 3));
 	}
 }

@@ -89,11 +89,11 @@ impl TileReader {
 			}
 		}
 
-		self.parameters.set_tile_format(&tile_format.unwrap());
+		self.parameters.set_tile_format(tile_format.unwrap());
 		self
 			.parameters
-			.set_tile_precompression(&precompression.unwrap());
-		self.parameters.set_bbox_pyramide(&self.get_bbox_pyramide());
+			.set_tile_precompression(precompression.unwrap());
+		self.parameters.set_bbox_pyramide(self.get_bbox_pyramide());
 
 		if self.meta_data.is_none() {
 			panic!("'json' is not defined in table 'metadata'");

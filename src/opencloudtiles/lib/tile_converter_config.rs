@@ -27,7 +27,7 @@ impl TileConverterConfig {
 		}
 	}
 	pub fn finalize_with_parameters(&mut self, parameters: &TileReaderParameters) {
-		self.bbox_pyramide.intersect(parameters.get_level_bbox());
+		self.bbox_pyramide.intersect(parameters.get_bbox_pyramide());
 
 		self
 			.tile_format

@@ -123,6 +123,25 @@ impl fmt::Debug for TileBBoxPyramide {
 	}
 }
 
+impl PartialEq for TileBBoxPyramide {
+	fn eq(&self, other: &Self) -> bool {
+		for i in 0..MAX_ZOOM_LEVEL {
+			let bbox0 = self.get_level_bbox(i);
+			let bbox1 = other.get_level_bbox(i);
+			if bbox0.is_empty() != bbox1.is_empty() {
+				return false;
+			}
+			if bbox0.is_empty() {
+				continue;
+			}
+			if bbox0 != bbox1 {
+				return false;
+			}
+		}
+		return true;
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
