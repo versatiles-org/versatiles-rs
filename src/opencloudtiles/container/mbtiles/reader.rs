@@ -12,6 +12,8 @@ use std::{
 	thread,
 };
 
+const MB: usize = 1024 * 1024;
+
 pub struct TileReader {
 	name: String,
 	pool: r2d2::Pool<SqliteConnectionManager>,
@@ -31,6 +33,12 @@ impl TileReader {
 			.max_size(concurrency as u32)
 			.build(manager)
 			.unwrap();
+
+		let con = pool.get().unwrap();
+		con.pragma_update(None, "mmap_size", 256 * MB).unwrap();
+		con.pragma_update(None, "temp_store", "memory").unwrap();
+		con.pragma_update(None, "page_size", 65536).unwrap();
+		con.pragma_update(None, "threads", concurrency).unwrap();
 
 		let mut reader = TileReader {
 			name: filename.to_string_lossy().to_string(),
