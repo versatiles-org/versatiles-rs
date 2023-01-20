@@ -3,7 +3,7 @@ use crate::opencloudtiles::lib::*;
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read, Write};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct FileHeader {
 	pub tile_format: TileFormat,
 	pub precompression: Precompression,
@@ -93,5 +93,41 @@ impl FileHeader {
 			meta_range,
 			blocks_range,
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn conversion() {
+		let test = |tile_format: &TileFormat,
+		            precompression: &Precompression,
+		            a: u64,
+		            b: u64,
+		            c: u64,
+		            d: u64| {
+			let mut header1 = FileHeader::new(tile_format, precompression);
+			header1.meta_range = ByteRange::new(a, b);
+			header1.blocks_range = ByteRange::new(c, d);
+
+			let header2 = FileHeader::from_blob(header1.to_blob());
+			assert_eq!(header1, header2);
+			assert_eq!(&header2.tile_format, tile_format);
+			assert_eq!(&header2.precompression, precompression);
+			assert_eq!(header2.meta_range, ByteRange::new(a, b));
+			assert_eq!(header2.blocks_range, ByteRange::new(c, d));
+		};
+		test(
+			&TileFormat::JPG,
+			&Precompression::Uncompressed,
+			314159265358979323,
+			846264338327950288,
+			419716939937510582,
+			097494459230781640,
+		);
+
+		test(&TileFormat::PBF, &Precompression::Brotli, 29, 97, 92, 458);
 	}
 }

@@ -3,7 +3,7 @@ use crate::opencloudtiles::lib::*;
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::{io::Cursor, ops::Div};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct TileIndex {
 	index: Vec<ByteRange>,
 }
@@ -68,5 +68,20 @@ impl TileIndex {
 	}
 	pub fn iter(&self) -> impl Iterator<Item = &ByteRange> {
 		self.index.iter()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn conversion() {
+		let mut index1 = TileIndex::new_empty(100);
+		for i in 0..100u64 {
+			index1.set(i as usize, ByteRange::new(i * 1000, i * 2000));
+		}
+		let index2 = TileIndex::from_brotli_blob(index1.as_brotli_blob());
+		assert_eq!(index1, index2);
 	}
 }
