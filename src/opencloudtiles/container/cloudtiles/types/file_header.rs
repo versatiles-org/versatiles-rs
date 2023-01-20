@@ -84,8 +84,8 @@ impl FileHeader {
 			_ => panic!(),
 		};
 
-		let meta_range = ByteRange::from_buf(&mut header);
-		let blocks_range = ByteRange::from_buf(&mut header);
+		let meta_range = ByteRange::from_reader(&mut header);
+		let blocks_range = ByteRange::from_reader(&mut header);
 
 		FileHeader {
 			tile_format,

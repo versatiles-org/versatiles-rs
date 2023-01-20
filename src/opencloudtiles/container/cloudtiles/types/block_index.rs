@@ -6,7 +6,7 @@ use std::{
 	ops::Div,
 };
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct BlockIndex {
 	lookup: HashMap<TileCoord3, BlockDefinition>,
 }
@@ -68,5 +68,18 @@ impl BlockIndex {
 	}
 	pub fn iter(&self) -> impl Iterator<Item = &BlockDefinition> {
 		self.lookup.values()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn conversion() {
+		let mut index1 = BlockIndex::new_empty();
+		index1.add_block(BlockDefinition::new(1, 2, 3, TileBBox::new_empty()));
+		let index2 = BlockIndex::from_brotli_blob(index1.as_brotli_blob());
+		assert_eq!(index1, index2);
 	}
 }

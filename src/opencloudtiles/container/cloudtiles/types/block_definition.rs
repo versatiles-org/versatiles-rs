@@ -3,7 +3,7 @@ use crate::opencloudtiles::lib::*;
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::{fmt, io::Cursor, ops::Div};
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct BlockDefinition {
 	pub x: u64,
 	pub y: u64,
@@ -12,7 +12,7 @@ pub struct BlockDefinition {
 	pub tile_range: ByteRange,
 }
 impl BlockDefinition {
-	pub fn new(z: u64, x: u64, y: u64, bbox: TileBBox) -> BlockDefinition {
+	pub fn new(x: u64, y: u64, z: u64, bbox: TileBBox) -> BlockDefinition {
 		BlockDefinition {
 			x,
 			y,
@@ -91,5 +91,18 @@ impl fmt::Debug for BlockDefinition {
 			.field("bbox", &self.bbox)
 			.field("tile_range", &self.tile_range)
 			.finish()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn conversion() {
+		let mut def1 = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
+		def1.tile_range = ByteRange::new(4, 5);
+		let def2 = BlockDefinition::from_blob(def1.as_blob());
+		assert_eq!(def1, def2);
 	}
 }

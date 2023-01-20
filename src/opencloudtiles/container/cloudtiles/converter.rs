@@ -63,7 +63,7 @@ impl TileConverter {
 					y * 256 + 255,
 				));
 
-				blocks.push(BlockDefinition::new(zoom, x, y, bbox_block))
+				blocks.push(BlockDefinition::new(x, y, zoom, bbox_block))
 			}
 		}
 
