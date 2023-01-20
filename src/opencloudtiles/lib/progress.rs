@@ -109,9 +109,9 @@ fn format_duration(duration: Duration) -> String {
 	t /= 24;
 	if t > 0 {
 		let days = t;
-		format!("{}d {:02}:{:02}:{:02}", days, hours, minutes, seconds)
+		format!("{days}d {hours:02}:{minutes:02}:{seconds:02}")
 	} else {
-		format!("{:02}:{:02}:{:02}", hours, minutes, seconds)
+		format!("{hours:02}:{minutes:02}:{seconds:02}")
 	}
 }
 
@@ -129,16 +129,19 @@ fn format_big_number(value: u64) -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-    use super::*;
+	use super::*;
+	use std::time::Duration;
 
 	#[test]
-	fn basic_tests () {
+	fn basic_tests() {
 		assert_eq!(format_big_number(123456789), "123'456'789");
 		assert_eq!(format_big_number(1234567890), "1'234'567'890");
 		assert_eq!(format_duration(Duration::from_secs(1)), "00:00:01");
 		assert_eq!(format_duration(Duration::from_secs(60)), "00:01:00");
-		assert_eq!(format_duration(Duration::from_secs(60*60)), "01:00:00");
-		assert_eq!(format_duration(Duration::from_secs(60*60*24)), "1d 00:00:00");
+		assert_eq!(format_duration(Duration::from_secs(60 * 60)), "01:00:00");
+		assert_eq!(
+			format_duration(Duration::from_secs(60 * 60 * 24)),
+			"1d 00:00:00"
+		);
 	}
 }

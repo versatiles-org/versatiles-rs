@@ -34,12 +34,8 @@ impl TileReaderTrait for TileReader {
 		let mut filename = current_dir().unwrap();
 		filename.push(Path::new(path));
 
-		assert!(filename.exists(), "file {:?} does not exist", filename);
-		assert!(
-			filename.is_absolute(),
-			"path {:?} must be absolute",
-			filename
-		);
+		assert!(filename.exists(), "file {filename:?} does not exist");
+		assert!(filename.is_absolute(), "path {filename:?} must be absolute");
 
 		filename = filename.canonicalize().unwrap();
 
@@ -98,7 +94,7 @@ impl TileReaderTrait for TileReader {
 					"jpeg" => TileFormat::JPG,
 					"webp" => TileFormat::WEBP,
 					"pbf" => TileFormat::PBF,
-					_ => panic!("unknown extension for {:?}", path_vec),
+					_ => panic!("unknown extension for {path_vec:?}"),
 				};
 
 				if tile_form.is_none() {
@@ -107,8 +103,7 @@ impl TileReaderTrait for TileReader {
 					assert_eq!(
 						tile_form.as_ref().unwrap(),
 						&this_form,
-						"unknown filename {:?}",
-						path_tmp_string
+						"unknown filename {path_tmp_string:?}"
 					);
 				}
 
@@ -118,8 +113,7 @@ impl TileReaderTrait for TileReader {
 					assert_eq!(
 						tile_comp.as_ref().unwrap(),
 						&this_comp,
-						"unknown filename {:?}",
-						path_tmp_string
+						"unknown filename {path_tmp_string:?}"
 					);
 				}
 
@@ -161,7 +155,7 @@ impl TileReaderTrait for TileReader {
 				};
 			}
 
-			panic!("unknown file in tar: {:?}", path_tmp_string);
+			panic!("unknown file in tar: {path_tmp_string:?}");
 			// ignore
 		}
 

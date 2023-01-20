@@ -115,9 +115,9 @@ impl TileReader {
 
 		let query = |sql1: &str, sql2: &str| -> i32 {
 			let sql = if sql2.is_empty() {
-				format!("SELECT {} FROM tiles", sql1)
+				format!("SELECT {sql1} FROM tiles")
 			} else {
-				format!("SELECT {} FROM tiles WHERE {}", sql1, sql2)
+				format!("SELECT {sql1} FROM tiles WHERE {sql2}")
 			};
 
 			trace!("SQL: {}", sql);
@@ -131,8 +131,8 @@ impl TileReader {
 		let mut progress = ProgressBar::new("get mbtiles bbox pyramide", (z1 - z0 + 1) as u64);
 
 		for z in z0..=z1 {
-			let x0 = query("MIN(tile_column)", &format!("zoom_level = {}", z));
-			let x1 = query("MAX(tile_column)", &format!("zoom_level = {}", z));
+			let x0 = query("MIN(tile_column)", &format!("zoom_level = {z}"));
+			let x1 = query("MAX(tile_column)", &format!("zoom_level = {z}"));
 			let xc = (x0 + x1) / 2;
 
 			/*
@@ -158,12 +158,12 @@ impl TileReader {
 				This seems to be a great help. I suspect it helps SQLite so it doesn't have to scan the entire index/table.
 			*/
 
-			let sql_prefix = format!("zoom_level = {} AND tile_", z);
-			let mut y0 = query("MIN(tile_row)", &format!("{}column = {}", sql_prefix, xc));
-			let mut y1 = query("MAX(tile_row)", &format!("{}column = {}", sql_prefix, xc));
+			let sql_prefix = format!("zoom_level = {z} AND tile_");
+			let mut y0 = query("MIN(tile_row)", &format!("{sql_prefix}column = {xc}"));
+			let mut y1 = query("MAX(tile_row)", &format!("{sql_prefix}column = {xc}"));
 
-			y0 = query("MIN(tile_row)", &format!("{}row <= {}", sql_prefix, y0));
-			y1 = query("MAX(tile_row)", &format!("{}row >= {}", sql_prefix, y1));
+			y0 = query("MIN(tile_row)", &format!("{sql_prefix}row <= {y0}"));
+			y1 = query("MAX(tile_row)", &format!("{sql_prefix}row >= {y1}"));
 
 			let max_value = 2i32.pow(z as u32) - 1;
 
@@ -193,12 +193,8 @@ impl TileReaderTrait for TileReader {
 		let mut filename = current_dir().unwrap();
 		filename.push(Path::new(path));
 
-		assert!(filename.exists(), "file {:?} does not exist", filename);
-		assert!(
-			filename.is_absolute(),
-			"path {:?} must be absolute",
-			filename
-		);
+		assert!(filename.exists(), "file {filename:?} does not exist");
+		assert!(filename.is_absolute(), "path {filename:?} must be absolute");
 
 		filename = filename.canonicalize().unwrap();
 

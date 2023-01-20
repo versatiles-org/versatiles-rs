@@ -20,9 +20,9 @@ impl Folder {
 		let mut folder = current_dir().unwrap();
 		folder.push(Path::new(path));
 
-		assert!(folder.exists(), "path {:?} does not exist", folder);
-		assert!(folder.is_absolute(), "path {:?} must be absolute", folder);
-		assert!(folder.is_dir(), "path {:?} must be a directory", folder);
+		assert!(folder.exists(), "path {folder:?} does not exist");
+		assert!(folder.is_absolute(), "path {folder:?} must be absolute");
+		assert!(folder.is_dir(), "path {folder:?} must be a directory");
 
 		folder = folder.canonicalize().unwrap();
 

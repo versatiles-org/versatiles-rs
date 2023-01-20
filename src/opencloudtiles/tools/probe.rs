@@ -18,7 +18,7 @@ pub fn run(arguments: &Subcommand) {
 	println!("probe {:?}", arguments.file);
 
 	let reader = get_reader(&arguments.file);
-	println!("{:#?}", reader);
+	println!("{reader:#?}");
 
 	if arguments.deep {
 		reader.deep_verify();

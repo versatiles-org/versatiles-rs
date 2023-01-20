@@ -59,7 +59,7 @@ pub fn run(arguments: &Subcommand) {
 
 		let reader = get_reader(reader_source);
 		server.add_source(
-			format!("/tiles/{}/", name),
+			format!("/tiles/{name}/"),
 			source::TileContainer::from(reader),
 		);
 

@@ -88,10 +88,7 @@ fn new_converter(filename: &str, arguments: &Subcommand) -> TileConverterBox {
 			.map(|s| s.parse::<f32>().expect("bbox value is not a number"))
 			.collect();
 		if values.len() != 4 {
-			panic!(
-				"bbox must contain exactly 4 numbers, but instead i'v got: {:?}",
-				value
-			);
+			panic!("bbox must contain exactly 4 numbers, but instead i'v got: {value:?}");
 		}
 		bbox_pyramide.limit_by_geo_bbox(values.as_slice().try_into().unwrap());
 	}
@@ -110,7 +107,7 @@ fn new_converter(filename: &str, arguments: &Subcommand) -> TileConverterBox {
 		"mbtiles" => mbtiles::TileConverter::new(&path, config),
 		"cloudtiles" => cloudtiles::TileConverter::new(&path, config),
 		"tar" => tar_file::TileConverter::new(&path, config),
-		_ => panic!("extension '{:?}' unknown", extension),
+		_ => panic!("extension '{extension:?}' unknown"),
 	};
 
 	converter

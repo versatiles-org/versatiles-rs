@@ -71,10 +71,7 @@ impl TileReaderTrait for TileReader {
 
 		let block_option = self.block_index.get_block(&block_coord);
 		if block_option.is_none() {
-			println!(
-				"block <{:#?}> for tile <{:#?}> does not exist",
-				block_coord, coord
-			);
+			println!("block <{block_coord:#?}> for tile <{coord:#?}> does not exist");
 			return None;
 		}
 
@@ -84,7 +81,7 @@ impl TileReaderTrait for TileReader {
 		let tile_y = coord.y - block_coord.y * 256;
 
 		if !block.bbox.contains(&TileCoord2::new(tile_x, tile_y)) {
-			println!("tile {:?} outside block definition", coord);
+			println!("tile {coord:?} outside block definition");
 			return None;
 		}
 

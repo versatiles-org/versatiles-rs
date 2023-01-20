@@ -40,13 +40,9 @@ impl TarFile {
 		filename.push(Path::new(path));
 		filename = filename.canonicalize().unwrap();
 
-		assert!(filename.exists(), "path {:?} does not exist", filename);
-		assert!(
-			filename.is_absolute(),
-			"path {:?} must be absolute",
-			filename
-		);
-		assert!(filename.is_file(), "path {:?} must be a file", filename);
+		assert!(filename.exists(), "path {filename:?} does not exist");
+		assert!(filename.is_absolute(), "path {filename:?} must be absolute");
+		assert!(filename.is_file(), "path {filename:?} must be a file");
 
 		let mut lookup: HashMap<String, CompressedVersions> = HashMap::new();
 		let file = BufReader::new(File::open(filename).unwrap());

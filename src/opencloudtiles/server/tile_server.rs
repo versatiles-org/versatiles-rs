@@ -35,10 +35,7 @@ impl TileServer {
 
 		for (other_prefix, _source) in self.sources.iter() {
 			if other_prefix.starts_with(&prefix) || prefix.starts_with(other_prefix) {
-				panic!(
-					"multiple sources with the prefix '{}' and '{}' are defined",
-					prefix, other_prefix
-				);
+				panic!("multiple sources with the prefix '{prefix}' and '{other_prefix}' are defined");
 			};
 		}
 
@@ -113,7 +110,7 @@ impl TileServer {
 		let server = Server::bind(&addr).serve(new_service);
 
 		if let Err(e) = server.await {
-			eprintln!("server error: {}", e);
+			eprintln!("server error: {e}");
 		}
 	}
 

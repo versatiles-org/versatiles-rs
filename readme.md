@@ -54,6 +54,7 @@ cargo instruments --all-features -t "CPU Profiler" -- convert ~/Dropbox/Dropbox\
 cargo build -r && ./target/release/opencloudtiles probe --scan ~/Dropbox/Dropbox\ upload/Dropbbox\ upload\ new/opencloudtiles/mbtiles/2023-01-eu-de.mbtiles
 cargo instruments --all-features -t "CPU Profiler" -- probe --scan ~/Dropbox/Dropbox\ upload/Dropbbox\ upload\ new/opencloudtiles/mbtiles/2023-01-eu-de.mbtiles
 
+cargo publish --no-verify
 cargo test
 cargo bench "bench"
 

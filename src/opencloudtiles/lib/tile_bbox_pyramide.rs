@@ -117,7 +117,7 @@ impl fmt::Debug for TileBBoxPyramide {
 			.entries(
 				self
 					.iter_levels()
-					.map(|(level, bbox)| format!("{}: {:?}", level, bbox)),
+					.map(|(level, bbox)| format!("{level}: {bbox:?}")),
 			)
 			.finish()
 	}
@@ -138,7 +138,7 @@ impl PartialEq for TileBBoxPyramide {
 				return false;
 			}
 		}
-		return true;
+		true
 	}
 }
 

@@ -45,8 +45,7 @@ impl CloudTilesSrcTrait for CloudTilesSrcFile {
 
 		assert!(
 			filename.is_absolute(),
-			"filename {:?} must be absolute",
-			filename
+			"filename {filename:?} must be absolute"
 		);
 
 		filename = filename.canonicalize().unwrap();
