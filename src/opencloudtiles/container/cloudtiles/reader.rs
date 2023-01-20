@@ -126,14 +126,17 @@ impl TileReaderTrait for TileReader {
 
 		debug!("number of blocks: {}", block_count);
 
-		let mut progress = ProgressBar::new("deep verify", block_count + 1);
+		let mut progress = ProgressBar::new(
+			"deep verify",
+			self.block_index.get_bbox_pyramide().count_tiles(),
+		);
 
 		let blocks = self
 			.block_index
 			.iter()
 			.sorted_by_cached_key(|block| block.get_sort_index());
 
-		let mut level_status_images: Vec<StatusImage> = Vec::new();
+		let mut status_images = StatusImagePyramide::new();
 
 		for block in blocks {
 			let tiles_count = block.bbox.count_tiles();
@@ -145,15 +148,7 @@ impl TileReaderTrait for TileReader {
 				"tile count are not the same"
 			);
 
-			let level = block.level as usize;
-			let status_image: &mut StatusImage =
-				if let Some(status_image) = level_status_images.get_mut(level) {
-					status_image
-				} else {
-					let status_image = StatusImage::new(2u64.pow(block.level as u32));
-					level_status_images.insert(level, status_image);
-					level_status_images.get_mut(level).unwrap()
-				};
+			let status_image = status_images.get_level(block.level);
 
 			let x_offset = block.x * 256;
 			let y_offset = block.y * 256;
@@ -163,14 +158,11 @@ impl TileReaderTrait for TileReader {
 				status_image.set(coord.x + x_offset, coord.y + y_offset, byterange.length);
 			}
 
-			progress.inc(1);
+			progress.inc(block.count_tiles());
 		}
-
-		for (index, status_image) in level_status_images.iter().enumerate() {
-			status_image.save_png(&format!("level_{}.png", index));
-		}
-
 		progress.finish();
+
+		status_images.save("tile_sizes.png");
 	}
 }
 
