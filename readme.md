@@ -41,7 +41,7 @@ More on the cloudtiles container: [github.com/OpenCloudTiles/**opencloudtiles-sp
 cargo build && ./target/debug/opencloudtiles convert --tile-format webp tiles/original/hitzekarte.tar tiles/hitzekarte.tar
 cargo build && ./target/debug/opencloudtiles convert tiles/original/stuttgart.mbtiles tiles/stuttgart.cloudtiles
 cargo build && ./target/debug/opencloudtiles convert tiles/stuttgart.cloudtiles tiles/stuttgart.tar
-cargo build && ./target/debug/opencloudtiles convert --min-zoom 14 --bbox -30,15,-20,20 tiles/original/2023-01-planet.mbtiles tiles/mostly_water.cloudtiles
+cargo build && ./target/debug/opencloudtiles convert --min-zoom 14 --bbox -30,15,-20,20 ~/Dropbox/Dropbox\ upload/Dropbbox\ upload\ new/opencloudtiles/mbtiles/2023-01-planet.mbtiles tiles/mostly_water.cloudtiles
 
 cargo build && ./target/debug/opencloudtiles probe tiles/stuttgart.cloudtiles
 cargo build && ./target/debug/opencloudtiles serve tiles/stuttgart.cloudtiles
