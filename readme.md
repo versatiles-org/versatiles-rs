@@ -58,7 +58,7 @@ cargo build && ./target/debug/opencloudtiles convert --bbox 2.4,45.5,24.0,55.7 ~
 
 cargo publish --no-verify
 cargo test
-cargo bench "bench"
+cargo bench --bench main
 
 ```
 

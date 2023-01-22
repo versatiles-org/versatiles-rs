@@ -1,3 +1,4 @@
+use log::{max_level, LevelFilter};
 use std::io::Write;
 use std::time::{Duration, SystemTime};
 use term_size::dimensions_stdout;
@@ -38,6 +39,10 @@ impl ProgressBar {
 		self.update();
 	}
 	fn update(&mut self) {
+		if max_level() < LevelFilter::Info {
+			return;
+		}
+
 		//println!("progressbar.update");
 		let now = SystemTime::now();
 		if now < self.next_update {
@@ -92,6 +97,9 @@ impl ProgressBar {
 		std::io::stdout().flush().unwrap();
 	}
 	pub fn finish(&mut self) {
+		if max_level() < LevelFilter::Info {
+			return;
+		}
 		self.finished = true;
 		self.value = self.max_value;
 		self.draw();
