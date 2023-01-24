@@ -1,7 +1,6 @@
 use super::traits::ServerSourceBox;
 use crate::helper::{Blob, Precompression};
 use enumset::{enum_set, EnumSet};
-use futures::Future;
 use hyper::{
 	header::{self, CONTENT_ENCODING, CONTENT_TYPE},
 	service::{make_service_fn, service_fn},
@@ -43,7 +42,8 @@ impl TileServer {
 	}
 
 	#[tokio::main]
-	pub async fn start(&mut self) -> impl Future {
+	pub async fn start(&mut self) {
+		println!("hallo");
 		let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
 
 		let mut sources: Vec<(String, usize, Arc<ServerSourceBox>)> = Vec::new();
@@ -108,8 +108,11 @@ impl TileServer {
 			}
 		});
 		let server = Server::bind(&addr).serve(new_service);
+		println!("server is running");
 
-		server
+		if let Err(e) = server.await {
+			eprintln!("server error: {e}");
+		}
 	}
 
 	pub fn iter_url_mapping(&self) -> impl Iterator<Item = (String, String)> + '_ {

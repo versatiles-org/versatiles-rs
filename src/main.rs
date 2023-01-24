@@ -1,6 +1,5 @@
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
-use futures::executor::block_on;
 use opencloudtiles::tools;
 
 #[derive(Parser)]
@@ -48,9 +47,6 @@ fn main() {
 		Commands::Compare(arguments) => tools::compare::run(arguments),
 		Commands::Convert(arguments) => tools::convert::run(arguments),
 		Commands::Probe(arguments) => tools::probe::run(arguments),
-		Commands::Serve(arguments) => {
-			let _a = block_on(tools::serve::run(arguments));
-			()
-		}
+		Commands::Serve(arguments) => tools::serve::run(arguments),
 	}
 }

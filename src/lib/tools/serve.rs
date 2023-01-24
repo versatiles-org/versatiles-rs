@@ -3,7 +3,6 @@ use crate::{
 	tools::get_reader,
 };
 use clap::Args;
-use futures::Future;
 
 #[derive(Args)]
 #[command(
@@ -44,7 +43,7 @@ pub struct Subcommand {
 	pub static_tar: Option<String>,
 }
 
-pub async fn run(arguments: &Subcommand) -> impl Future {
+pub fn run(arguments: &Subcommand) {
 	let mut server: TileServer = new_server(arguments);
 
 	println!("serve to http://localhost:{}/", arguments.port);
@@ -89,7 +88,7 @@ pub async fn run(arguments: &Subcommand) -> impl Future {
 		.iter()
 		.for_each(|(url, source)| println!("   {:30}  <-  {}", url.to_owned() + "*", source));
 
-	server.start()
+	server.start();
 }
 
 fn new_server(command: &Subcommand) -> TileServer {
