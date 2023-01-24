@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{black_box, criterion_group, Criterion};
 use log::{set_max_level, LevelFilter};
 use opencloudtiles::{
 	container::{mbtiles::TileReader, TileReaderTrait},
@@ -23,10 +23,9 @@ fn mbtiles_read_vec(c: &mut Criterion) {
 
 	c.bench_function("get_bbox_tile_vec", |b| {
 		b.iter(|| {
-			reader.get_bbox_tile_vec(14, &TileBBox::new(8787, 5361, 8818, 5387));
+			black_box(reader.get_bbox_tile_vec(14, &TileBBox::new(8787, 5361, 8818, 5387)));
 		})
 	});
 }
 
-criterion_group!(benches, mbtiles_read_vec);
-criterion_main!(benches);
+criterion_group!(mbtiles, mbtiles_read_vec);

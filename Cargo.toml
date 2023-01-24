@@ -56,6 +56,7 @@ itertools = "0.10.5"
 log = "0.4.17"
 mime_guess = "2.0.4"
 object_store = { version = "0.5.3", default-features = false,  features = ["gcp"] }
+rand = "0.8.5"
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.21.0"
 rayon = "1.6.1"
