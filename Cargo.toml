@@ -56,11 +56,12 @@ itertools = "0.10.5"
 log = "0.4.17"
 mime_guess = "2.0.4"
 object_store = { version = "0.5.3", default-features = false,  features = ["gcp"] }
-rand = "0.8.5"
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.21.0"
+rand = "0.8.5"
 rayon = "1.6.1"
 regex = { version = "1.7.1", default-features = false }
+reqwest = { version = "0.11.14", features = ["blocking"] }
 rusqlite = "0.28.0"
 sysinfo = "0.27.7"
 tar = "0.4.38"

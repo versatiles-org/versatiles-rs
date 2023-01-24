@@ -5,4 +5,5 @@ mod benchmarks;
 criterion_main! {
 	benchmarks::mbtiles::mbtiles,
 	benchmarks::cloudtiles::cloudtiles,
+	benchmarks::server::server,
 }

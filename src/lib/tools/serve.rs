@@ -3,6 +3,7 @@ use crate::{
 	tools::get_reader,
 };
 use clap::Args;
+use futures::Future;
 
 #[derive(Args)]
 #[command(
@@ -18,11 +19,11 @@ pub struct Subcommand {
 	/// you can add a name by using a "#":
 	///    e.g. "overlay.tar#iran-revolution" will serve "overlay.tar" at url "/tiles/iran-revolution/..."
 	#[arg(num_args = 1.., required = true, verbatim_doc_comment)]
-	sources: Vec<String>,
+	pub sources: Vec<String>,
 
 	/// serve via port
 	#[arg(short, long, default_value = "8080")]
-	port: u16,
+	pub port: u16,
 
 	/// serve static content at "/static/..." from folder
 	#[arg(
@@ -31,7 +32,7 @@ pub struct Subcommand {
 		conflicts_with = "static_tar",
 		value_name = "folder"
 	)]
-	static_folder: Option<String>,
+	pub static_folder: Option<String>,
 
 	/// serve static content at "/static/..." from tar file
 	#[arg(
@@ -40,10 +41,10 @@ pub struct Subcommand {
 		conflicts_with = "static_folder",
 		value_name = "file"
 	)]
-	static_tar: Option<String>,
+	pub static_tar: Option<String>,
 }
 
-pub fn run(arguments: &Subcommand) {
+pub async fn run(arguments: &Subcommand) -> impl Future {
 	let mut server: TileServer = new_server(arguments);
 
 	println!("serve to http://localhost:{}/", arguments.port);
@@ -88,7 +89,7 @@ pub fn run(arguments: &Subcommand) {
 		.iter()
 		.for_each(|(url, source)| println!("   {:30}  <-  {}", url.to_owned() + "*", source));
 
-	server.start();
+	server.start()
 }
 
 fn new_server(command: &Subcommand) -> TileServer {

@@ -26,7 +26,7 @@ pub fn new_cloud_tile_src(source: &str) -> Box<dyn CloudTilesSrcTrait> {
 	} else if let Some(src) = CloudTilesSrcFile::new(source) {
 		return Box::new(src);
 	}
-	panic!();
+	panic!("can't find {source}");
 }
 
 struct CloudTilesSrcFile {
