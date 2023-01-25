@@ -44,7 +44,7 @@ lto = false
 [dependencies]
 brotli = { version = "3.3.4", features = ["std"] }
 byteorder = "1.4.3"
-clap = "4.0.32"
+clap = "4.1.4"
 clap-verbosity-flag = "2.0.0"
 enumset = "1.0.12"
 env_logger = "0.10.0"
@@ -66,7 +66,7 @@ rusqlite = "0.28.0"
 sysinfo = "0.27.7"
 tar = "0.4.38"
 term_size = "0.3.2"
-tokio = { version = "1.24.1", features = ["rt-multi-thread"] }
+tokio = { version = "1.24.2", features = ["rt-multi-thread"] }
 urlencoding = "2.1.2"
 webp = { version = "0.2.2", features = ["img"] }
 
