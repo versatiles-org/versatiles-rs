@@ -30,7 +30,7 @@ impl FileHeader {
 	}
 	pub fn to_blob(&self) -> Blob {
 		let mut header: Vec<u8> = Vec::new();
-		header.write_all(b"versatiles-Container-v1:").unwrap();
+		header.write_all(b"versatiles_v01").unwrap();
 
 		// tile type
 		header
@@ -38,7 +38,7 @@ impl FileHeader {
 				TileFormat::PNG => 0,
 				TileFormat::JPG => 1,
 				TileFormat::WEBP => 2,
-				TileFormat::PBF => 16,
+				TileFormat::PBF => 3,
 			})
 			.unwrap();
 
@@ -63,7 +63,10 @@ impl FileHeader {
 		self.blocks_range.write_to_buf(&mut header);
 
 		if header.len() != 66 {
-			panic!()
+			panic!(
+				"header should be 66 bytes long, but is {} bytes long",
+				header.len()
+			)
 		}
 
 		Blob::from_vec(header)
