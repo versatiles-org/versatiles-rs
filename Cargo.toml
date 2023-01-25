@@ -1,17 +1,17 @@
 [package]
-name = "opencloudtiles"
+name = "versatiles"
 edition = "2021"
 version = "0.1.11"
 authors = ["Michael Kreil"]
 description = "A toolbox for converting, checking and serving map tiles in various formats."
-homepage = "https://www.opencloudtiles.org"
+homepage = "https://versatiles.org"
 readme = "readme.md"
 license = "MIT"
-repository = "https://github.com/OpenCloudTiles/opencloudtiles-tools"
+repository = "https://github.com/versatiles-org/versatiles"
 exclude = ["tests/ressources/*"]
 
 [lib]
-name = "opencloudtiles"
+name = "versatiles"
 path = "src/lib/mod.rs"
 crate-type = ["lib"]
 

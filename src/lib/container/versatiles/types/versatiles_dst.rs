@@ -7,15 +7,15 @@ use std::{
 	path::Path,
 };
 
-trait CloudTilesDstTrait: Write + Seek + Send {}
-impl CloudTilesDstTrait for BufWriter<File> {}
+trait VersaTilesDstTrait: Write + Seek + Send {}
+impl VersaTilesDstTrait for BufWriter<File> {}
 
-pub struct CloudTilesDst {
-	writer: Box<dyn CloudTilesDstTrait>,
+pub struct VersaTilesDst {
+	writer: Box<dyn VersaTilesDstTrait>,
 }
-impl CloudTilesDst {
-	pub fn new_file(filename: &Path) -> CloudTilesDst {
-		CloudTilesDst {
+impl VersaTilesDst {
+	pub fn new_file(filename: &Path) -> VersaTilesDst {
+		VersaTilesDst {
 			writer: Box::new(BufWriter::new(File::create(filename).unwrap())),
 		}
 	}

@@ -1,11 +1,11 @@
 use core::time;
 use criterion::{black_box, criterion_group, Criterion};
-use opencloudtiles::{
+use rand::seq::SliceRandom;
+use std::thread;
+use versatiles::{
 	container::{mbtiles::TileReader, TileReaderTrait},
 	helper::TileCoord3,
 };
-use rand::seq::SliceRandom;
-use std::thread;
 
 fn bench_server(c: &mut Criterion) {
 	let mut group = c.benchmark_group("test_server");
@@ -18,13 +18,13 @@ fn bench_server(c: &mut Criterion) {
 		.collect();
 	drop(reader);
 
-	let args = opencloudtiles::tools::serve::Subcommand {
+	let args = versatiles::tools::serve::Subcommand {
 		sources: vec!["benches/resources/berlin.mbtiles".to_string()],
 		port: 8080,
 		static_folder: None,
 		static_tar: None,
 	};
-	thread::spawn(move || opencloudtiles::tools::serve::run(&args));
+	thread::spawn(move || versatiles::tools::serve::run(&args));
 
 	thread::sleep(time::Duration::from_secs(1));
 

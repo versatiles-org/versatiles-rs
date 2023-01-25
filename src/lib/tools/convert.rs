@@ -6,11 +6,11 @@ use std::path::PathBuf;
 #[derive(Args)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
 pub struct Subcommand {
-	/// supported container formats: *.cloudtiles, *.tar, *.mbtiles
+	/// supported container formats: *.versatiles, *.tar, *.mbtiles
 	#[arg()]
 	input_file: String,
 
-	/// supported container formats: *.cloudtiles, *.tar
+	/// supported container formats: *.versatiles, *.tar
 	#[arg()]
 	output_file: String,
 
@@ -105,7 +105,7 @@ fn new_converter(filename: &str, arguments: &Subcommand) -> TileConverterBox {
 
 	let converter = match extension {
 		"mbtiles" => mbtiles::TileConverter::new(&path, config),
-		"cloudtiles" => cloudtiles::TileConverter::new(&path, config),
+		"versatiles" => versatiles::TileConverter::new(&path, config),
 		"tar" => tar_file::TileConverter::new(&path, config),
 		_ => panic!("extension '{extension:?}' unknown"),
 	};

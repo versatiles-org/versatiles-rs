@@ -5,7 +5,7 @@ use rayon::prelude::{IntoParallelRefIterator, ParallelBridge, ParallelIterator};
 use std::{collections::HashMap, path::Path, sync::Mutex};
 
 pub struct TileConverter {
-	writer: CloudTilesDst,
+	writer: VersaTilesDst,
 	config: TileConverterConfig,
 }
 
@@ -15,7 +15,7 @@ impl TileConverterTrait for TileConverter {
 		Self: Sized,
 	{
 		Box::new(TileConverter {
-			writer: CloudTilesDst::new_file(filename),
+			writer: VersaTilesDst::new_file(filename),
 			config: tile_config,
 		})
 	}

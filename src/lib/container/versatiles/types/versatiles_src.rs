@@ -12,7 +12,7 @@ use std::{
 	sync::{Arc, Mutex},
 };
 
-pub trait CloudTilesSrcTrait {
+pub trait VersaTilesSrcTrait {
 	fn new(source: &str) -> Option<Self>
 	where
 		Self: Sized;
@@ -20,20 +20,20 @@ pub trait CloudTilesSrcTrait {
 	fn get_name(&self) -> &str;
 }
 
-pub fn new_cloud_tile_src(source: &str) -> Box<dyn CloudTilesSrcTrait> {
-	if let Some(src) = CloudTilesSrcObjectStore::new(source) {
+pub fn new_versatiles_src(source: &str) -> Box<dyn VersaTilesSrcTrait> {
+	if let Some(src) = VersaTilesSrcObjectStore::new(source) {
 		return Box::new(src);
-	} else if let Some(src) = CloudTilesSrcFile::new(source) {
+	} else if let Some(src) = VersaTilesSrcFile::new(source) {
 		return Box::new(src);
 	}
 	panic!("can't find {source}");
 }
 
-struct CloudTilesSrcFile {
+struct VersaTilesSrcFile {
 	name: String,
 	reader_mutex: Mutex<BufReader<File>>,
 }
-impl CloudTilesSrcTrait for CloudTilesSrcFile {
+impl VersaTilesSrcTrait for VersaTilesSrcFile {
 	fn new(source: &str) -> Option<Self> {
 		let mut filename = current_dir().unwrap();
 		filename.push(Path::new(source));
@@ -69,12 +69,12 @@ impl CloudTilesSrcTrait for CloudTilesSrcFile {
 	}
 }
 
-struct CloudTilesSrcObjectStore {
+struct VersaTilesSrcObjectStore {
 	name: String,
 	url: object_store::path::Path,
 	object_store: Arc<dyn ObjectStore>,
 }
-impl CloudTilesSrcTrait for CloudTilesSrcObjectStore {
+impl VersaTilesSrcTrait for VersaTilesSrcObjectStore {
 	fn new(source: &str) -> Option<Self> {
 		let object_store = if source.starts_with("gs://") {
 			object_store::gcp::GoogleCloudStorageBuilder::new()

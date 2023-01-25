@@ -5,7 +5,7 @@ use clap::Args;
 #[command(arg_required_else_help = true, disable_version_flag = true)]
 pub struct Subcommand {
 	/// tile container you want to probe
-	/// supported container formats are: *.cloudtiles, *.tar, *.mbtiles
+	/// supported container formats are: *.versatiles, *.tar, *.mbtiles
 	#[arg(required = true, verbatim_doc_comment)]
 	file: String,
 

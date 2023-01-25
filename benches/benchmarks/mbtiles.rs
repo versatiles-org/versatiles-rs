@@ -1,6 +1,6 @@
 use criterion::{black_box, criterion_group, Criterion};
 use log::{set_max_level, LevelFilter};
-use opencloudtiles::{
+use versatiles::{
 	container::{mbtiles::TileReader, TileReaderTrait},
 	helper::*,
 };

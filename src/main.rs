@@ -1,6 +1,6 @@
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
-use opencloudtiles::tools;
+use versatiles::tools;
 
 #[derive(Parser)]
 #[command(

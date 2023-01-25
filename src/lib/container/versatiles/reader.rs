@@ -6,14 +6,14 @@ use std::{collections::HashMap, fmt::Debug, ops::Shr, str::from_utf8, sync::RwLo
 
 pub struct TileReader {
 	meta: Blob,
-	reader: Box<dyn CloudTilesSrcTrait>,
+	reader: Box<dyn VersaTilesSrcTrait>,
 	parameters: TileReaderParameters,
 	block_index: BlockIndex,
 	tile_index_cache: RwLock<HashMap<TileCoord3, TileIndex>>,
 }
 
 impl TileReader {
-	pub fn from_src(mut reader: Box<dyn CloudTilesSrcTrait>) -> TileReader {
+	pub fn from_src(mut reader: Box<dyn VersaTilesSrcTrait>) -> TileReader {
 		let header = FileHeader::from_reader(&mut reader);
 
 		let meta = if header.meta_range.length > 0 {
@@ -43,7 +43,7 @@ unsafe impl Sync for TileReader {}
 
 impl TileReaderTrait for TileReader {
 	fn new(filename: &str) -> TileReaderBox {
-		let reader = new_cloud_tile_src(filename);
+		let reader = new_versatiles_src(filename);
 
 		Box::new(TileReader::from_src(reader))
 	}
@@ -165,7 +165,7 @@ impl TileReaderTrait for TileReader {
 
 impl Debug for TileReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("TileReader:CloudTiles")
+		f.debug_struct("TileReader:VersaTiles")
 			.field("meta", &from_utf8(self.get_meta().as_slice()).unwrap())
 			.field("parameters", &self.get_parameters())
 			.finish()

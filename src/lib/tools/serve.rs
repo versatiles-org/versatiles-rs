@@ -12,9 +12,9 @@ use clap::Args;
 )]
 pub struct Subcommand {
 	/// one or more tile containers you want to serve
-	/// supported container formats are: *.cloudtiles, *.tar, *.mbtiles
+	/// supported container formats are: *.versatiles, *.tar, *.mbtiles
 	/// the url will be generated automatically:
-	///    e.g. "ukraine.cloudtiles" will be served at url "/tiles/ukraine/..."
+	///    e.g. "ukraine.versatiles" will be served at url "/tiles/ukraine/..."
 	/// you can add a name by using a "#":
 	///    e.g. "overlay.tar#iran-revolution" will serve "overlay.tar" at url "/tiles/iran-revolution/..."
 	#[arg(num_args = 1.., required = true, verbatim_doc_comment)]

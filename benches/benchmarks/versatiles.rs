@@ -1,16 +1,16 @@
 use criterion::{black_box, criterion_group, Criterion};
 use log::{set_max_level, LevelFilter};
-use opencloudtiles::{
-	container::{cloudtiles::TileReader, TileReaderTrait},
+use rand::seq::SliceRandom;
+use versatiles::{
+	container::{versatiles::TileReader, TileReaderTrait},
 	helper::*,
 };
-use rand::seq::SliceRandom;
 
-fn cloudtiles_read(c: &mut Criterion) {
+fn versatiles_read(c: &mut Criterion) {
 	set_max_level(LevelFilter::Warn);
 
 	c.bench_function("get_tile_data", |b| {
-		let reader = TileReader::new("benches/resources/berlin.cloudtiles");
+		let reader = TileReader::new("benches/resources/berlin.versatiles");
 		let coords: Vec<TileCoord3> = reader
 			.get_parameters()
 			.get_bbox_pyramide()
@@ -24,4 +24,4 @@ fn cloudtiles_read(c: &mut Criterion) {
 	});
 }
 
-criterion_group!(cloudtiles, cloudtiles_read);
+criterion_group!(versatiles, versatiles_read);

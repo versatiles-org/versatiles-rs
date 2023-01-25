@@ -1248,40 +1248,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
-name = "opencloudtiles"
-version = "0.1.11"
-dependencies = [
- "brotli",
- "byteorder",
- "clap 4.1.1",
- "clap-verbosity-flag",
- "criterion",
- "enumset",
- "env_logger",
- "flate2",
- "futures",
- "hyper",
- "image",
- "itertools",
- "log",
- "mime_guess",
- "object_store",
- "r2d2",
- "r2d2_sqlite",
- "rand",
- "rayon",
- "regex",
- "reqwest",
- "rusqlite",
- "sysinfo",
- "tar",
- "term_size",
- "tokio",
- "urlencoding",
- "webp",
-]
-
-[[package]]
 name = "openssl"
 version = "0.10.45"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2146,6 +2112,40 @@ name = "vcpkg"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
+
+[[package]]
+name = "versatiles"
+version = "0.1.11"
+dependencies = [
+ "brotli",
+ "byteorder",
+ "clap 4.1.1",
+ "clap-verbosity-flag",
+ "criterion",
+ "enumset",
+ "env_logger",
+ "flate2",
+ "futures",
+ "hyper",
+ "image",
+ "itertools",
+ "log",
+ "mime_guess",
+ "object_store",
+ "r2d2",
+ "r2d2_sqlite",
+ "rand",
+ "rayon",
+ "regex",
+ "reqwest",
+ "rusqlite",
+ "sysinfo",
+ "tar",
+ "term_size",
+ "tokio",
+ "urlencoding",
+ "webp",
+]
 
 [[package]]
 name = "version_check"
