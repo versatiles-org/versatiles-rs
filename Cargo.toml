@@ -1,7 +1,7 @@
 [package]
 name = "versatiles"
 edition = "2021"
-version = "0.1.11"
+version = "0.1.12"
 authors = ["Michael Kreil"]
 description = "A toolbox for converting, checking and serving map tiles in various formats."
 homepage = "https://versatiles.org"
