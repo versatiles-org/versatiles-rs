@@ -8,7 +8,7 @@ homepage = "https://versatiles.org"
 readme = "readme.md"
 license = "MIT"
 repository = "https://github.com/versatiles-org/versatiles"
-exclude = ["tests/ressources/*"]
+exclude = ["benches/resources/*"]
 
 [lib]
 name = "versatiles"
