@@ -19,8 +19,8 @@ env:
    CARGO_TERM_COLOR: always
 
 jobs:
-   cargo_fmt:
-      name: cargo fmt
+   checks:
+      name: checks
       runs-on: ubuntu-18.04
 
       steps:
@@ -35,29 +35,14 @@ jobs:
               profile: minimal
               components: rustfmt, clippy
 
-         - name: Check formatting
+         - name: cargo fmt
            run: cargo fmt -- --check
 
-         - name: Clippy
+         - name: cargo clippy
            run: cargo clippy -- -D warnings
 
-   cargo_test:
-      name: cargo test
-      runs-on: ubuntu-18.04
-
-      steps:
-         - name: Checkout repository
-           uses: actions/checkout@v3
-           with: { submodules: false }
-
-         - name: Install rust
-           uses: actions-rs/toolchain@v1
-           with:
-              toolchain: stable
-              profile: minimal
-
-         - name: Build
+         - name: cargo build
            run: cargo build
 
-         - name: Test
+         - name: cargo test
            run: cargo test
