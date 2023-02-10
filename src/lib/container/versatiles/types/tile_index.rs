@@ -63,6 +63,9 @@ impl TileIndex {
 	pub fn iter(&self) -> impl Iterator<Item = &ByteRange> {
 		self.index.iter()
 	}
+	pub fn add_offset(&mut self, offset: u64) {
+		self.index.iter_mut().for_each(|r| r.offset += offset);
+	}
 }
 
 #[cfg(test)]

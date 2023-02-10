@@ -33,4 +33,7 @@ impl VersaTilesDst {
 
 		self.writer.seek(SeekFrom::Start(pos)).unwrap();
 	}
+	pub fn get_position(&mut self) -> u64 {
+		self.writer.stream_position().unwrap()
+	}
 }

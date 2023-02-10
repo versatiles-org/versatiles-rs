@@ -72,22 +72,28 @@ impl TileConverter {
 		let mut block_index = BlockIndex::new_empty();
 
 		for mut block in blocks.into_iter() {
-			let range = self.write_block(&block, reader, &mut progress);
+			let (tiles_range, index_range) = self.write_block(&block, reader, &mut progress);
 
-			if range.length == 0 {
+			if tiles_range.length + index_range.length == 0 {
 				// block is empty
 				continue;
 			}
 
-			block.tile_range = range;
+			block.tiles_range = tiles_range;
+			block.index_range = index_range;
+
 			block_index.add_block(block);
 		}
 		progress.finish();
 
 		self.writer.append(&block_index.as_brotli_blob())
 	}
-	fn write_block(&mut self, block: &BlockDefinition, reader: &TileReaderBox, progress: &mut ProgressBar) -> ByteRange {
+	fn write_block(
+		&mut self, block: &BlockDefinition, reader: &TileReaderBox, progress: &mut ProgressBar,
+	) -> (ByteRange, ByteRange) {
 		debug!("start block {:?}", block);
+
+		let offset0 = self.writer.get_position();
 
 		let bbox = &block.bbox;
 		let mut tile_index = TileIndex::new_empty(bbox.count_tiles() as usize);
@@ -149,7 +155,8 @@ impl TileConverter {
 						tile_hash_option = Some(blob.clone());
 					}
 
-					let range = secured_writer.append(blob);
+					let mut range = secured_writer.append(blob);
+					range.offset -= offset0;
 					secured_tile_index.set(index, range);
 
 					if let Some(tile_hash) = tile_hash_option {
@@ -164,6 +171,9 @@ impl TileConverter {
 
 		debug!("finish block and write index {:?}", block);
 
-		self.writer.append(&tile_index.as_brotli_blob())
+		let offset1 = self.writer.get_position();
+		let index_range = self.writer.append(&tile_index.as_brotli_blob());
+
+		return (ByteRange::new(offset0, offset1 - offset0), index_range);
 	}
 }

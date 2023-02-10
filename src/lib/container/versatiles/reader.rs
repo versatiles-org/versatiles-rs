@@ -97,7 +97,9 @@ impl TileReaderTrait for TileReader {
 		} else {
 			drop(cache_reader);
 
-			let tile_index = TileIndex::from_brotli_blob(self.reader.read_range(&block.tile_range));
+			let mut tile_index = TileIndex::from_brotli_blob(self.reader.read_range(&block.index_range));
+			tile_index.add_offset(block.tiles_range.offset);
+
 			let mut cache_writer = self.tile_index_cache.write().unwrap();
 			cache_writer.insert(block_coord, tile_index);
 
@@ -133,7 +135,7 @@ impl TileReaderTrait for TileReader {
 		for block in blocks {
 			let tiles_count = block.bbox.count_tiles();
 
-			let tile_index = TileIndex::from_brotli_blob(self.reader.read_range(&block.tile_range));
+			let tile_index = TileIndex::from_brotli_blob(self.reader.read_range(&block.index_range));
 			assert_eq!(tile_index.len(), tiles_count as usize, "tile count are not the same");
 
 			let status_image = status_images.get_level(block.z);
