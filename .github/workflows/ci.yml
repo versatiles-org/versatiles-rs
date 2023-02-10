@@ -19,22 +19,25 @@ env:
    CARGO_TERM_COLOR: always
 
 jobs:
-   rustfmt:
-      name: rustfmt
+   cargo_fmt:
+      name: cargo fmt
       runs-on: ubuntu-18.04
 
       steps:
          - name: Checkout repository
            uses: actions/checkout@v3
            with: { submodules: true }
+
          - name: Install rust
            uses: actions-rs/toolchain@v1
            with:
               toolchain: stable
               profile: minimal
               components: rustfmt, clippy
+
          - name: Check formatting
            run: cargo fmt -- --check
+
          - name: Clippy
            run: cargo clippy -- -D warnings
 
