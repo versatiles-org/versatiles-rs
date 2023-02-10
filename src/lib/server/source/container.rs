@@ -17,10 +17,16 @@ impl TileContainer {
 		let precompression = *parameters.get_tile_precompression();
 
 		let tile_mime = match parameters.get_tile_format() {
-			TileFormat::PBF => "application/x-protobuf",
+			TileFormat::BIN => "application/octet-stream",
 			TileFormat::PNG => "image/png",
 			TileFormat::JPG => "image/jpeg",
 			TileFormat::WEBP => "image/webp",
+			TileFormat::AVIF => "image/avif",
+			TileFormat::SVG => "image/svg+xml",
+			TileFormat::PBF => "application/x-protobuf",
+			TileFormat::GEOJSON => "application/geo+json",
+			TileFormat::TOPOJSON => "application/topo+json",
+			TileFormat::JSON => "application/json",
 		}
 		.to_string();
 

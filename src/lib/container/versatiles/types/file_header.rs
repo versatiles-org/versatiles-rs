@@ -35,10 +35,18 @@ impl FileHeader {
 		// tile type
 		header
 			.write_u8(match self.tile_format {
-				TileFormat::PNG => 0,
-				TileFormat::JPG => 1,
-				TileFormat::WEBP => 2,
-				TileFormat::PBF => 3,
+				TileFormat::BIN => 0x00,
+
+				TileFormat::PNG => 0x10,
+				TileFormat::JPG => 0x11,
+				TileFormat::WEBP => 0x12,
+				TileFormat::AVIF => 0x13,
+				TileFormat::SVG => 0x14,
+
+				TileFormat::PBF => 0x20,
+				TileFormat::GEOJSON => 0x21,
+				TileFormat::TOPOJSON => 0x22,
+				TileFormat::JSON => 0x23,
 			})
 			.unwrap();
 

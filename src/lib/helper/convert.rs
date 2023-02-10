@@ -6,10 +6,16 @@ type FnConv = fn(Blob) -> Blob;
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum)]
 pub enum TileFormat {
-	PBF,
+	BIN,
 	PNG,
 	JPG,
 	WEBP,
+	AVIF,
+	SVG,
+	PBF,
+	GEOJSON,
+	TOPOJSON,
+	JSON,
 }
 
 #[derive(Debug)]
@@ -38,20 +44,20 @@ impl DataConverter {
 					(PNG, JPG) => Some(|tile| img2jpg(&png2img(tile))),
 					(PNG, PNG) => Some(|tile| img2png(&png2img(tile))),
 					(PNG, WEBP) => Some(|tile| img2webplossless(&png2img(tile))),
-					(PNG, _) => todo!("convert PNG -> {:?}", dst_form),
 
-					(JPG, JPG) => None,
 					(JPG, PNG) => Some(|tile| img2png(&jpg2img(tile))),
 					(JPG, WEBP) => Some(|tile| img2webp(&jpg2img(tile))),
-					(JPG, _) => todo!("convert JPG -> {:?}", dst_form),
 
 					(WEBP, JPG) => Some(|tile| img2jpg(&webp2img(tile))),
 					(WEBP, PNG) => Some(|tile| img2png(&webp2img(tile))),
-					(WEBP, WEBP) => None,
-					(WEBP, _) => todo!("convert WEBP -> {:?}", dst_form),
 
-					(PBF, PBF) => None,
-					(PBF, _) => todo!("convert PBF -> {:?}", dst_form),
+					(_, _) => {
+						if src_form == dst_form {
+							None
+						} else {
+							todo!("convert {:?} -> {:?}", src_form, dst_form)
+						}
+					}
 				}
 			} else {
 				None

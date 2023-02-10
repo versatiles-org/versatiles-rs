@@ -30,10 +30,18 @@ impl TileConverterTrait for TileConverter {
 		let tile_converter = self.config.get_tile_recompressor();
 
 		let ext_form = match self.config.get_tile_format() {
-			TileFormat::PBF => ".pbf",
+			TileFormat::BIN => "",
+
 			TileFormat::PNG => ".png",
 			TileFormat::JPG => ".jpg",
 			TileFormat::WEBP => ".webp",
+			TileFormat::AVIF => ".avif",
+			TileFormat::SVG => ".svg",
+
+			TileFormat::PBF => ".pbf",
+			TileFormat::GEOJSON => ".geojson",
+			TileFormat::TOPOJSON => ".topojson",
+			TileFormat::JSON => ".json",
 		};
 
 		let ext_comp = match self.config.get_tile_precompression() {
