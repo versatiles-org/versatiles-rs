@@ -5,15 +5,15 @@ on:
    push:
    pull_request:
    schedule:
-      - cron: '0 0 15 * *'
+      - cron: "0 0 15 * *"
    workflow_dispatch:
       inputs:
          logLevel:
-            description: 'Log level'
+            description: "Log level"
             required: true
-            default: 'warning'
+            default: "warning"
          tags:
-            description: 'Test scenario tags'
+            description: "Test scenario tags"
 
 env:
    CARGO_TERM_COLOR: always
@@ -24,14 +24,13 @@ jobs:
       runs-on: ubuntu-latest
 
       steps:
-         - name: Checkout repository
-           uses: actions/checkout@v3
+         - uses: actions/checkout@v3
 
          - name: update rust
-            run: rustup update stable && rustup default stable
-         
+           run: rustup update stable && rustup default stable
+
          - name: add components
-            run: rustup component add rustfmt clippy
+           run: rustup component add rustfmt clippy
 
          - name: cargo fmt
            run: cargo fmt -- --check
@@ -39,8 +38,8 @@ jobs:
          - name: cargo clippy
            run: cargo clippy -- -D warnings
 
-#         - name: cargo build
-#           run: cargo build
+         # - name: cargo build
+         #   run: cargo build
 
          - name: cargo test
            run: cargo test
