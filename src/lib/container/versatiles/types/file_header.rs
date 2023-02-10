@@ -95,10 +95,18 @@ impl FileHeader {
 		let compression = header.read_u8().unwrap();
 
 		let tile_format = match tile_type {
-			0 => TileFormat::PNG,
-			1 => TileFormat::JPG,
-			2 => TileFormat::WEBP,
-			3 => TileFormat::PBF,
+			0x00 => TileFormat::BIN,
+
+			0x10 => TileFormat::PNG,
+			0x11 => TileFormat::JPG,
+			0x12 => TileFormat::WEBP,
+			0x13 => TileFormat::AVIF,
+			0x14 => TileFormat::SVG,
+
+			0x20 => TileFormat::PBF,
+			0x21 => TileFormat::GEOJSON,
+			0x22 => TileFormat::TOPOJSON,
+			0x23 => TileFormat::JSON,
 			_ => panic!(),
 		};
 
