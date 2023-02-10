@@ -3,62 +3,43 @@ name: CI
 
 on:
    push:
-      branches:
-         - main
    pull_request:
-      branches:
-         - main
    schedule:
-      - cron: '0 0 15 * *'
+      - cron: "0 0 15 * *"
    workflow_dispatch:
       inputs:
          logLevel:
-            description: 'Log level'
+            description: "Log level"
             required: true
-            default: 'warning'
+            default: "warning"
          tags:
-            description: 'Test scenario tags'
+            description: "Test scenario tags"
 
 env:
    CARGO_TERM_COLOR: always
 
 jobs:
-   rustfmt:
-      name: rustfmt
-      runs-on: ubuntu-18.04
+   checks:
+      name: checks
+      runs-on: ubuntu-latest
 
       steps:
-         - name: Checkout repository
-           uses: actions/checkout@v3
-           with: { submodules: true }
-         - name: Install rust
-           uses: actions-rs/toolchain@v1
-           with:
-              toolchain: stable
-              profile: minimal
-              components: rustfmt, clippy
-         - name: Check formatting
+         - uses: actions/checkout@v3
+
+         - name: update rust
+           run: rustup update stable && rustup default stable
+
+         - name: add components
+           run: rustup component add rustfmt clippy
+
+         - name: cargo fmt
            run: cargo fmt -- --check
-         - name: Clippy
+
+         - name: cargo clippy
            run: cargo clippy -- -D warnings
 
-   cargo_test:
-      name: cargo test
-      runs-on: ubuntu-18.04
+         - name: cargo check
+           run: cargo check
 
-      steps:
-         - name: Checkout repository
-           uses: actions/checkout@v3
-           with: { submodules: false }
-
-         - name: Install rust
-           uses: actions-rs/toolchain@v1
-           with:
-              toolchain: stable
-              profile: minimal
-
-         - name: Build
-           run: cargo build
-
-         - name: Test
+         - name: cargo test
            run: cargo test
