@@ -69,10 +69,4 @@ impl TileConverterConfig {
 	pub fn get_tile_precompression(&self) -> &Precompression {
 		self.tile_precompression.as_ref().unwrap()
 	}
-	pub fn get_max_zoom(&self) -> Option<u64> {
-		self.bbox_pyramide.get_zoom_max()
-	}
-	pub fn get_min_zoom(&self) -> Option<u64> {
-		self.bbox_pyramide.get_zoom_min()
-	}
 }

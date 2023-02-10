@@ -24,9 +24,15 @@ impl TileConverterTrait for TileConverter {
 			.config
 			.finalize_with_parameters(reader.get_parameters());
 
+		let bbox_pyramide: &TileBBoxPyramide = self.config.get_bbox_pyramide();
 		let mut header = FileHeader::new(
 			self.config.get_tile_format(),
 			self.config.get_tile_precompression(),
+			[
+				bbox_pyramide.get_zoom_min().unwrap(),
+				bbox_pyramide.get_zoom_max().unwrap(),
+			],
+			bbox_pyramide.get_geo_bbox(),
 		);
 		self.writer.append(&header.to_blob());
 

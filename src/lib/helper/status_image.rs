@@ -53,7 +53,7 @@ impl StatusImagePyramide {
 			max_size: 0,
 		}
 	}
-	pub fn get_level(&mut self, level: u64) -> &mut StatusImage {
+	pub fn get_level(&mut self, level: u8) -> &mut StatusImage {
 		let index = level as usize;
 
 		if self.images.get(index).is_some() {

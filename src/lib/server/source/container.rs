@@ -46,7 +46,7 @@ impl ServerSourceTrait for TileContainer {
 		if path.len() == 3 {
 			// get tile
 
-			let z = path[0].parse::<u64>().unwrap();
+			let z = path[0].parse::<u8>().unwrap();
 			let y = path[1].parse::<u64>().unwrap();
 			let x = path[2].parse::<u64>().unwrap();
 

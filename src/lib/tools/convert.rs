@@ -16,11 +16,11 @@ pub struct Subcommand {
 
 	/// minimum zoom level
 	#[arg(long, value_name = "int")]
-	min_zoom: Option<u64>,
+	min_zoom: Option<u8>,
 
 	/// maximum zoom level
 	#[arg(long, value_name = "int")]
-	max_zoom: Option<u64>,
+	max_zoom: Option<u8>,
 
 	/// bounding box
 	#[arg(

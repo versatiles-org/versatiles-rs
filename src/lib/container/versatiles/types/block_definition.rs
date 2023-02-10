@@ -7,12 +7,12 @@ use std::{fmt, io::Cursor, ops::Div};
 pub struct BlockDefinition {
 	pub x: u64,
 	pub y: u64,
-	pub z: u64,
+	pub z: u8,
 	pub bbox: TileBBox,
 	pub tile_range: ByteRange,
 }
 impl BlockDefinition {
-	pub fn new(x: u64, y: u64, z: u64, bbox: TileBBox) -> BlockDefinition {
+	pub fn new(x: u64, y: u64, z: u8, bbox: TileBBox) -> BlockDefinition {
 		BlockDefinition {
 			x,
 			y,
@@ -24,7 +24,7 @@ impl BlockDefinition {
 	pub fn from_blob(buf: Blob) -> BlockDefinition {
 		let mut cursor = Cursor::new(buf.as_slice());
 
-		let level = cursor.read_u8().unwrap() as u64;
+		let z = cursor.read_u8().unwrap() as u8;
 		let x = cursor.read_u32::<BE>().unwrap() as u64;
 		let y = cursor.read_u32::<BE>().unwrap() as u64;
 		let x_min = cursor.read_u8().unwrap() as u64;
@@ -38,7 +38,7 @@ impl BlockDefinition {
 		let tile_range = ByteRange::new(offset, length);
 
 		BlockDefinition {
-			z: level,
+			z,
 			x,
 			y,
 			bbox,

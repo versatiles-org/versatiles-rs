@@ -69,7 +69,7 @@ impl TileReaderTrait for TileReader {
 			let path_vec: Vec<&str> = path_tmp_string.split('/').collect();
 
 			let mut add_tile = || {
-				let z = path_vec[0].parse::<u64>().unwrap();
+				let z = path_vec[0].parse::<u8>().unwrap();
 				let y = path_vec[1].parse::<u64>().unwrap();
 
 				let mut filename: Vec<&str> = path_vec[2].split('.').collect();

@@ -1,4 +1,4 @@
-use super::TileCoord2;
+use super::{TileCoord2, TileCoord3};
 use itertools::Itertools;
 use std::{
 	fmt,
@@ -23,14 +23,14 @@ impl TileBBox {
 			y_max,
 		}
 	}
-	pub fn new_full(level: u64) -> TileBBox {
+	pub fn new_full(level: u8) -> TileBBox {
 		let max = 2u64.pow(level as u32) - 1;
 		TileBBox::new(0, 0, max, max)
 	}
 	pub fn new_empty() -> TileBBox {
 		TileBBox::new(1, 1, 0, 0)
 	}
-	pub fn from_geo(geo_bbox: &[f32; 4], z: u64) -> TileBBox {
+	pub fn from_geo(geo_bbox: &[f32; 4], z: u8) -> TileBBox {
 		let p1 = TileCoord2::from_geo(geo_bbox[0], geo_bbox[1], z);
 		let p2 = TileCoord2::from_geo(geo_bbox[2], geo_bbox[3], z);
 
@@ -209,6 +209,16 @@ impl TileBBox {
 		let width = self.x_max + 1 - self.x_min;
 		let i = index as u64;
 		TileCoord2::new(i.rem(width) + self.x_min, i.div(width) + self.y_min)
+	}
+	pub fn to_geo_bbox(&self, z: u8) -> [f64; 4] {
+		let p0 = TileCoord3::new(self.x_min, self.y_min, z).to_geo();
+		let p1 = TileCoord3::new(self.x_max, self.y_max, z).to_geo();
+		return [
+			p0[0].min(p1[0]),
+			p0[1].min(p1[1]),
+			p0[0].max(p1[0]),
+			p0[1].max(p1[1]),
+		];
 	}
 }
 

@@ -168,7 +168,7 @@ impl TileReader {
 			let max_value = 2i32.pow(z as u32) - 1;
 
 			bbox_pyramide.set_level_bbox(
-				z as u64,
+				z as u8,
 				TileBBox::new(
 					x0.clamp(0, max_value) as u64,
 					(max_value - y1).clamp(0, max_value) as u64,
@@ -226,7 +226,7 @@ impl TileReaderTrait for TileReader {
 		};
 
 		let max_index = 2u64.pow(coord.z as u32) - 1;
-		let result = stmt.query_row([coord.x, max_index - coord.y, coord.z], |entry| {
+		let result = stmt.query_row([coord.x, max_index - coord.y, coord.z as u64], |entry| {
 			entry.get::<_, Vec<u8>>(0)
 		});
 
@@ -236,7 +236,7 @@ impl TileReaderTrait for TileReader {
 			None
 		}
 	}
-	fn get_bbox_tile_vec(&self, zoom: u64, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
+	fn get_bbox_tile_vec(&self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
 		trace!(
 			"read {} tiles for z:{}, bbox:{:?}",
 			bbox.count_tiles(),
@@ -262,7 +262,7 @@ impl TileReaderTrait for TileReader {
 					bbox.x_max,
 					max_index - bbox.y_max,
 					max_index - bbox.y_min,
-					zoom,
+					zoom.into(),
 				],
 				|row| {
 					Ok((

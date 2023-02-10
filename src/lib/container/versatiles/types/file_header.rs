@@ -3,10 +3,12 @@ use crate::helper::*;
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read, Write};
 
+const BBOX_SCALE: i32 = 10000000;
+
 #[derive(Debug, PartialEq)]
 pub struct FileHeader {
 	pub zoom_range: [u8; 2],
-	pub bbox: [f32; 4],
+	pub bbox: [i32; 4],
 
 	pub tile_format: TileFormat,
 	pub precompression: Precompression,
@@ -15,19 +17,47 @@ pub struct FileHeader {
 	pub blocks_range: ByteRange,
 }
 impl FileHeader {
-	pub fn new(tile_format: &TileFormat, precompression: &Precompression) -> FileHeader {
+	pub fn new(
+		tile_format: &TileFormat, precompression: &Precompression, zoom_range: [u8; 2],
+		bbox: [f64; 4],
+	) -> FileHeader {
+		assert!(
+			zoom_range[0] <= zoom_range[1],
+			"zoom_range[0] ({}) must be <= zoom_range[1] ({})",
+			zoom_range[0],
+			zoom_range[1]
+		);
+		assert!(bbox[0] >= -180.0, "bbox[0] ({}) >= -180", bbox[0]);
+		assert!(bbox[1] >= -90.0, "bbox[1] ({}) >= -90", bbox[1]);
+		assert!(bbox[2] <= 180.0, "bbox[2] ({}) <= 180", bbox[2]);
+		assert!(bbox[3] <= 90.0, "bbox[3] ({}) <= 90", bbox[3]);
+		assert!(
+			bbox[0] <= bbox[2],
+			"bbox[0] ({}) <= bbox[2] ({})",
+			bbox[0],
+			bbox[2]
+		);
+		assert!(
+			bbox[1] <= bbox[3],
+			"bbox[1] ({}) <= bbox[3] ({})",
+			bbox[1],
+			bbox[3]
+		);
+
 		FileHeader {
-			zoom_range: [0, 0],
-			bbox: [0.0, 0.0, 0.0, 0.0],
+			zoom_range,
+			bbox: bbox.map(|v| (v * BBOX_SCALE as f64) as i32),
 			tile_format: tile_format.clone(),
 			precompression: precompression.to_owned(),
 			meta_range: ByteRange::empty(),
 			blocks_range: ByteRange::empty(),
 		}
 	}
+
 	pub fn from_reader(reader: &mut Box<dyn VersaTilesSrcTrait>) -> FileHeader {
 		FileHeader::from_blob(reader.read_range(&ByteRange::new(0, 66)))
 	}
+
 	pub fn to_blob(&self) -> Blob {
 		let mut header: Vec<u8> = Vec::new();
 		header.write_all(b"versatiles_v02").unwrap();
@@ -62,10 +92,10 @@ impl FileHeader {
 		header.write_u8(self.zoom_range[0]).unwrap();
 		header.write_u8(self.zoom_range[1]).unwrap();
 
-		header.write_f32::<BE>(self.bbox[0]).unwrap();
-		header.write_f32::<BE>(self.bbox[1]).unwrap();
-		header.write_f32::<BE>(self.bbox[2]).unwrap();
-		header.write_f32::<BE>(self.bbox[3]).unwrap();
+		header.write_i32::<BE>(self.bbox[0]).unwrap();
+		header.write_i32::<BE>(self.bbox[1]).unwrap();
+		header.write_i32::<BE>(self.bbox[2]).unwrap();
+		header.write_i32::<BE>(self.bbox[3]).unwrap();
 
 		self.meta_range.write_to_buf(&mut header);
 		self.blocks_range.write_to_buf(&mut header);
@@ -79,6 +109,7 @@ impl FileHeader {
 
 		Blob::from_vec(header)
 	}
+
 	fn from_blob(blob: Blob) -> FileHeader {
 		if blob.len() != 66 {
 			panic!();
@@ -119,11 +150,11 @@ impl FileHeader {
 
 		let zoom_range: [u8; 2] = [header.read_u8().unwrap(), header.read_u8().unwrap()];
 
-		let bbox: [f32; 4] = [
-			header.read_f32::<BE>().unwrap(),
-			header.read_f32::<BE>().unwrap(),
-			header.read_f32::<BE>().unwrap(),
-			header.read_f32::<BE>().unwrap(),
+		let bbox: [i32; 4] = [
+			header.read_i32::<BE>().unwrap(),
+			header.read_i32::<BE>().unwrap(),
+			header.read_i32::<BE>().unwrap(),
+			header.read_i32::<BE>().unwrap(),
 		];
 
 		let meta_range = ByteRange::from_reader(&mut header);
@@ -152,7 +183,8 @@ mod tests {
 		            b: u64,
 		            c: u64,
 		            d: u64| {
-			let mut header1 = FileHeader::new(tile_format, precompression);
+			let mut header1 =
+				FileHeader::new(tile_format, precompression, [0, 0], [0.0, 0.0, 0.0, 0.0]);
 			header1.meta_range = ByteRange::new(a, b);
 			header1.blocks_range = ByteRange::new(c, d);
 
