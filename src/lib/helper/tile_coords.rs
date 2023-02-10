@@ -1,5 +1,6 @@
 use std::{
 	f32::consts::PI,
+	f64::consts::PI as PI64,
 	fmt::{self, Debug},
 };
 
@@ -12,7 +13,7 @@ impl TileCoord2 {
 	pub fn new(x: u64, y: u64) -> TileCoord2 {
 		TileCoord2 { x, y }
 	}
-	pub fn from_geo(x: f32, y: f32, z: u64) -> TileCoord2 {
+	pub fn from_geo(x: f32, y: f32, z: u8) -> TileCoord2 {
 		let zoom: f32 = 2.0f32.powi(z as i32);
 		let x = zoom * (x / 360.0 + 0.5);
 		let y = zoom * (0.5 - 0.5 * (y * PI / 360.0 + PI / 4.0).tan().ln() / PI);
@@ -22,7 +23,7 @@ impl TileCoord2 {
 			y: y as u64,
 		}
 	}
-	pub fn with_zoom(&self, z: u64) -> TileCoord3 {
+	pub fn with_zoom(&self, z: u8) -> TileCoord3 {
 		TileCoord3::new(self.x, self.y, z)
 	}
 }
@@ -37,10 +38,10 @@ impl fmt::Debug for TileCoord2 {
 pub struct TileCoord3 {
 	pub x: u64,
 	pub y: u64,
-	pub z: u64,
+	pub z: u8,
 }
 impl TileCoord3 {
-	pub fn new(x: u64, y: u64, z: u64) -> TileCoord3 {
+	pub fn new(x: u64, y: u64, z: u8) -> TileCoord3 {
 		TileCoord3 { x, y, z }
 	}
 	pub fn flip_vertically(&self) -> TileCoord3 {
@@ -50,6 +51,14 @@ impl TileCoord3 {
 			y: max_index - self.y,
 			z: self.z,
 		}
+	}
+	pub fn to_geo(&self) -> [f64; 2] {
+		let zoom: f64 = 2.0f64.powi(self.z as i32);
+
+		[
+			((self.x as f64) / zoom - 0.5) * 360.0,
+			((PI64 * (1.0 - 2.0 * (self.y as f64) / zoom)).exp().atan() / PI64 - 0.25) * 360.0,
+		]
 	}
 }
 
@@ -82,7 +91,7 @@ mod tests {
 
 	#[test]
 	fn from_geo() {
-		let test = |z: u64, xf: f32, yf: f32, xi: u64, yi: u64| {
+		let test = |z: u8, xf: f32, yf: f32, xi: u64, yi: u64| {
 			let coord1 = TileCoord2::from_geo(xf, yf, z);
 			let coord2 = TileCoord2::new(xi, yi);
 			println!("coord1 {:?}", coord1);

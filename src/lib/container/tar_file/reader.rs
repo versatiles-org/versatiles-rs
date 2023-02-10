@@ -1,8 +1,8 @@
 use crate::{container::*, helper::*};
 use log::trace;
 use std::{
-	collections::HashMap, env::current_dir, fmt::Debug, fs::File, io::Read,
-	os::unix::prelude::FileExt, path::Path, str::from_utf8,
+	collections::HashMap, env::current_dir, fmt::Debug, fs::File, io::Read, os::unix::prelude::FileExt, path::Path,
+	str::from_utf8,
 };
 use tar::{Archive, EntryType};
 
@@ -69,7 +69,7 @@ impl TileReaderTrait for TileReader {
 			let path_vec: Vec<&str> = path_tmp_string.split('/').collect();
 
 			let mut add_tile = || {
-				let z = path_vec[0].parse::<u64>().unwrap();
+				let z = path_vec[0].parse::<u8>().unwrap();
 				let y = path_vec[1].parse::<u64>().unwrap();
 
 				let mut filename: Vec<&str> = path_vec[2].split('.').collect();
@@ -164,11 +164,7 @@ impl TileReaderTrait for TileReader {
 			name: path.to_string(),
 			file,
 			tile_map,
-			parameters: TileReaderParameters::new(
-				tile_form.unwrap(),
-				tile_comp.unwrap(),
-				bbox_pyramide,
-			),
+			parameters: TileReaderParameters::new(tile_form.unwrap(), tile_comp.unwrap(), bbox_pyramide),
 		})
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {

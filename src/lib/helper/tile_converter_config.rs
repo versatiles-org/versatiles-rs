@@ -13,8 +13,8 @@ pub struct TileConverterConfig {
 #[allow(dead_code)]
 impl TileConverterConfig {
 	pub fn new(
-		tile_format: Option<TileFormat>, tile_precompression: Option<Precompression>,
-		bbox_pyramide: TileBBoxPyramide, force_recompress: bool,
+		tile_format: Option<TileFormat>, tile_precompression: Option<Precompression>, bbox_pyramide: TileBBoxPyramide,
+		force_recompress: bool,
 	) -> Self {
 		TileConverterConfig {
 			tile_format,
@@ -29,9 +29,7 @@ impl TileConverterConfig {
 	pub fn finalize_with_parameters(&mut self, parameters: &TileReaderParameters) {
 		self.bbox_pyramide.intersect(parameters.get_bbox_pyramide());
 
-		self
-			.tile_format
-			.get_or_insert(parameters.get_tile_format().clone());
+		self.tile_format.get_or_insert(parameters.get_tile_format().clone());
 		self
 			.tile_precompression
 			.get_or_insert(*parameters.get_tile_precompression());
@@ -68,11 +66,5 @@ impl TileConverterConfig {
 	}
 	pub fn get_tile_precompression(&self) -> &Precompression {
 		self.tile_precompression.as_ref().unwrap()
-	}
-	pub fn get_max_zoom(&self) -> Option<u64> {
-		self.bbox_pyramide.get_zoom_max()
-	}
-	pub fn get_min_zoom(&self) -> Option<u64> {
-		self.bbox_pyramide.get_zoom_min()
 	}
 }

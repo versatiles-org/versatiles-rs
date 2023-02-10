@@ -53,7 +53,7 @@ impl StatusImagePyramide {
 			max_size: 0,
 		}
 	}
-	pub fn get_level(&mut self, level: u64) -> &mut StatusImage {
+	pub fn get_level(&mut self, level: u8) -> &mut StatusImage {
 		let index = level as usize;
 
 		if self.images.get(index).is_some() {
@@ -71,10 +71,7 @@ impl StatusImagePyramide {
 	pub fn save(&self, filename: &str) {
 		let mut progress = ProgressBar::new(
 			"save status images",
-			self
-				.images
-				.iter()
-				.fold(0, |acc, img| acc + img.size * img.size),
+			self.images.iter().fold(0, |acc, img| acc + img.size * img.size),
 		);
 
 		let width = (self.max_size * 2 - 1) as u32;

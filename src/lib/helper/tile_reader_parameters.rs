@@ -60,26 +60,20 @@ mod tests {
 
 	#[test]
 	fn basic_tests() {
-		let test = |tile_format: TileFormat,
-		            tile_precompression: Precompression,
-		            bbox_pyramide: TileBBoxPyramide,
-		            flip: bool| {
-			let mut p = TileReaderParameters::new(
-				tile_format.clone(),
-				tile_precompression,
-				bbox_pyramide.clone(),
-			);
-			p.set_vertical_flip(flip);
-			assert_eq!(p.get_tile_format(), &tile_format);
-			assert_eq!(p.get_tile_precompression(), &tile_precompression);
-			assert_eq!(p.get_bbox_pyramide(), &bbox_pyramide);
-			assert_eq!(p.get_vertical_flip(), flip);
+		let test =
+			|tile_format: TileFormat, tile_precompression: Precompression, bbox_pyramide: TileBBoxPyramide, flip: bool| {
+				let mut p = TileReaderParameters::new(tile_format.clone(), tile_precompression, bbox_pyramide.clone());
+				p.set_vertical_flip(flip);
+				assert_eq!(p.get_tile_format(), &tile_format);
+				assert_eq!(p.get_tile_precompression(), &tile_precompression);
+				assert_eq!(p.get_bbox_pyramide(), &bbox_pyramide);
+				assert_eq!(p.get_vertical_flip(), flip);
 
-			p.set_tile_format(TileFormat::PNG);
-			p.set_tile_precompression(Precompression::Gzip);
-			assert_eq!(p.get_tile_format(), &TileFormat::PNG);
-			assert_eq!(p.get_tile_precompression(), &Precompression::Gzip);
-		};
+				p.set_tile_format(TileFormat::PNG);
+				p.set_tile_precompression(Precompression::Gzip);
+				assert_eq!(p.get_tile_format(), &TileFormat::PNG);
+				assert_eq!(p.get_tile_precompression(), &Precompression::Gzip);
+			};
 
 		test(
 			TileFormat::JPG,

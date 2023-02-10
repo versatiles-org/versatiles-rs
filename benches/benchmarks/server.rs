@@ -32,10 +32,7 @@ fn bench_server(c: &mut Criterion) {
 	group.bench_function("tile_request", |b| {
 		b.iter(|| {
 			let coord = coords.choose(&mut rand::thread_rng()).unwrap();
-			let url = format!(
-				"http://127.0.0.1:8080/tiles/berlin/{}/{}/{}",
-				coord.z, coord.y, coord.x
-			);
+			let url = format!("http://127.0.0.1:8080/tiles/berlin/{}/{}/{}", coord.z, coord.y, coord.x);
 
 			let _resp = black_box(reqwest::blocking::get(url).unwrap().text().unwrap());
 		})

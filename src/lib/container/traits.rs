@@ -36,13 +36,11 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 	fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob>;
 
 	/// always compressed with get_tile_precompression and formatted with get_tile_format
-	fn get_bbox_tile_vec(&self, zoom: u64, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
+	fn get_bbox_tile_vec(&self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
 		bbox
 			.iter_coords()
 			.filter_map(move |coord: TileCoord2| -> Option<(TileCoord2, Blob)> {
-				self
-					.get_tile_data(&coord.with_zoom(zoom))
-					.map(|blob| (coord, blob))
+				self.get_tile_data(&coord.with_zoom(zoom)).map(|blob| (coord, blob))
 			})
 			.collect()
 	}

@@ -31,4 +31,7 @@ impl VersaTilesDst {
 		self.writer.write_all(blob.as_slice()).unwrap();
 		self.writer.seek(SeekFrom::Start(pos)).unwrap();
 	}
+	pub fn get_position(&mut self) -> u64 {
+		self.writer.stream_position().unwrap()
+	}
 }

@@ -62,8 +62,7 @@ impl ProgressBar {
 
 		let duration = SystemTime::now().duration_since(self.start).unwrap();
 		let progress = self.value as f64 / self.max_value as f64;
-		let time_left =
-			Duration::from_secs_f64(duration.as_secs_f64() / (progress + 1e-3) * (1.0 - progress));
+		let time_left = Duration::from_secs_f64(duration.as_secs_f64() / (progress + 1e-3) * (1.0 - progress));
 		let speed = self.value as f64 / duration.as_secs_f64();
 
 		let col1 = self.message.to_string();
@@ -83,14 +82,7 @@ impl ProgressBar {
 		let space1 = (width - col2.len()) / 2 - col1.len();
 		let space2 = width - (col1.len() + space1 + col2.len() + col3.len());
 
-		let line = format!(
-			"\r{}{}{}{}{}",
-			col1,
-			" ".repeat(space1),
-			col2,
-			" ".repeat(space2),
-			col3
-		);
+		let line = format!("\r{}{}{}{}{}", col1, " ".repeat(space1), col2, " ".repeat(space2), col3);
 		let pos = (line.len() as f64 * progress).round() as usize;
 
 		print!("\r\x1B[7m{}\x1B[0m{}", &line[0..pos], &line[pos..]);
@@ -147,9 +139,6 @@ mod tests {
 		assert_eq!(format_duration(Duration::from_secs(1)), "00:00:01");
 		assert_eq!(format_duration(Duration::from_secs(60)), "00:01:00");
 		assert_eq!(format_duration(Duration::from_secs(60 * 60)), "01:00:00");
-		assert_eq!(
-			format_duration(Duration::from_secs(60 * 60 * 24)),
-			"1d 00:00:00"
-		);
+		assert_eq!(format_duration(Duration::from_secs(60 * 60 * 24)), "1d 00:00:00");
 	}
 }
