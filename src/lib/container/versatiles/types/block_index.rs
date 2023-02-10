@@ -6,6 +6,8 @@ use std::{
 	ops::Div,
 };
 
+const BLOCK_INDEX_LENGTH: usize = 33;
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct BlockIndex {
 	lookup: HashMap<TileCoord3, BlockDefinition>,
@@ -15,15 +17,18 @@ impl BlockIndex {
 		BlockIndex { lookup: HashMap::new() }
 	}
 	pub fn from_blob(buf: Blob) -> BlockIndex {
-		let count = buf.len().div(29);
+		let count = buf.len().div(BLOCK_INDEX_LENGTH);
 		assert_eq!(
-			count * 29,
+			count * BLOCK_INDEX_LENGTH,
 			buf.len(),
-			"block index is defect, cause buffer length is not a multiple of 29"
+			"block index is defect, cause buffer length is not a multiple of {}",
+			BLOCK_INDEX_LENGTH
 		);
 		let mut block_index = BlockIndex::new_empty();
 		for i in 0..count {
-			block_index.add_block(BlockDefinition::from_blob(buf.get_range(i * 29..(i + 1) * 29)));
+			block_index.add_block(BlockDefinition::from_blob(
+				buf.get_range(i * BLOCK_INDEX_LENGTH..(i + 1) * BLOCK_INDEX_LENGTH),
+			));
 		}
 
 		block_index

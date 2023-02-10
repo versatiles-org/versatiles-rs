@@ -3,6 +3,8 @@ use crate::helper::*;
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::{io::Cursor, ops::Div};
 
+const TILE_INDEX_LENGTH: usize = 12;
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct TileIndex {
 	index: Vec<ByteRange>,
@@ -17,11 +19,12 @@ impl TileIndex {
 		TileIndex { index }
 	}
 	pub fn from_blob(buf: Blob) -> TileIndex {
-		let count = buf.len().div(12);
+		let count = buf.len().div(TILE_INDEX_LENGTH);
 		assert_eq!(
-			count * 12,
+			count * TILE_INDEX_LENGTH,
 			buf.len(),
-			"tile index is defect, cause buffer length is not a multiple of 12"
+			"tile index is defect, cause buffer length is not a multiple of {}",
+			TILE_INDEX_LENGTH
 		);
 
 		let mut index: Vec<ByteRange> = Vec::new();

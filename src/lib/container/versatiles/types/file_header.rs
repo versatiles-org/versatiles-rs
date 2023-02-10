@@ -3,6 +3,7 @@ use crate::helper::*;
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read, Write};
 
+const HEADER_LENGTH: usize = 66;
 const BBOX_SCALE: i32 = 10000000;
 
 #[derive(Debug, PartialEq)]
@@ -44,7 +45,7 @@ impl FileHeader {
 	}
 
 	pub fn from_reader(reader: &mut Box<dyn VersaTilesSrcTrait>) -> FileHeader {
-		FileHeader::from_blob(reader.read_range(&ByteRange::new(0, 66)))
+		FileHeader::from_blob(reader.read_range(&ByteRange::new(0, HEADER_LENGTH as u64)))
 	}
 
 	pub fn to_blob(&self) -> Blob {
@@ -89,15 +90,19 @@ impl FileHeader {
 		self.meta_range.write_to_buf(&mut header);
 		self.blocks_range.write_to_buf(&mut header);
 
-		if header.len() != 66 {
-			panic!("header should be 66 bytes long, but is {} bytes long", header.len())
+		if header.len() != HEADER_LENGTH {
+			panic!(
+				"header should be {} bytes long, but is {} bytes long",
+				HEADER_LENGTH,
+				header.len()
+			)
 		}
 
 		Blob::from_vec(header)
 	}
 
 	fn from_blob(blob: Blob) -> FileHeader {
-		if blob.len() != 66 {
+		if blob.len() != HEADER_LENGTH {
 			panic!();
 		}
 

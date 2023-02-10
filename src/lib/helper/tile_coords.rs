@@ -54,10 +54,11 @@ impl TileCoord3 {
 	}
 	pub fn to_geo(&self) -> [f64; 2] {
 		let zoom: f64 = 2.0f64.powi(self.z as i32);
-		return [
+
+		[
 			((self.x as f64) / zoom - 0.5) * 360.0,
 			((PI64 * (1.0 - 2.0 * (self.y as f64) / zoom)).exp().atan() / PI64 - 0.25) * 360.0,
-		];
+		]
 	}
 }
 

@@ -174,6 +174,6 @@ impl TileConverter {
 		let offset1 = self.writer.get_position();
 		let index_range = self.writer.append(&tile_index.as_brotli_blob());
 
-		return (ByteRange::new(offset0, offset1 - offset0), index_range);
+		(ByteRange::new(offset0, offset1 - offset0), index_range)
 	}
 }

@@ -105,8 +105,8 @@ impl TileBBoxPyramide {
 	}
 	pub fn get_geo_bbox(&self) -> [f64; 4] {
 		let level = self.get_zoom_max().unwrap();
-		let bbox = self.get_level_bbox(level);
-		return bbox.to_geo_bbox(level);
+
+		self.get_level_bbox(level).to_geo_bbox(level)
 	}
 }
 

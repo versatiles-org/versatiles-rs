@@ -26,7 +26,7 @@ impl BlockDefinition {
 	pub fn from_blob(buf: Blob) -> BlockDefinition {
 		let mut cursor = Cursor::new(buf.as_slice());
 
-		let z = cursor.read_u8().unwrap() as u8;
+		let z = cursor.read_u8().unwrap();
 		let x = cursor.read_u32::<BE>().unwrap() as u64;
 		let y = cursor.read_u32::<BE>().unwrap() as u64;
 
@@ -41,7 +41,7 @@ impl BlockDefinition {
 		let index_length = cursor.read_u32::<BE>().unwrap() as u64;
 
 		let tiles_range = ByteRange::new(offset, tiles_length);
-		let index_range = ByteRange::new(offset, tiles_length + index_length);
+		let index_range = ByteRange::new(offset + tiles_length, index_length);
 
 		BlockDefinition {
 			z,
@@ -59,7 +59,7 @@ impl BlockDefinition {
 		let vec = Vec::new();
 		let mut cursor = Cursor::new(vec);
 
-		cursor.write_u8(self.z as u8).unwrap();
+		cursor.write_u8(self.z).unwrap();
 		cursor.write_u32::<BE>(self.x as u32).unwrap();
 		cursor.write_u32::<BE>(self.y as u32).unwrap();
 
@@ -68,7 +68,13 @@ impl BlockDefinition {
 		cursor.write_u8(self.bbox.x_max as u8).unwrap();
 		cursor.write_u8(self.bbox.y_max as u8).unwrap();
 
-		assert!(self.tiles_range.offset + self.tiles_range.length == self.index_range.offset);
+		assert!(
+			self.tiles_range.offset + self.tiles_range.length == self.index_range.offset,
+			"{} + {} == {}",
+			self.tiles_range.offset,
+			self.tiles_range.length,
+			self.index_range.offset
+		);
 		cursor.write_u64::<BE>(self.tiles_range.offset).unwrap();
 		cursor.write_u64::<BE>(self.tiles_range.length).unwrap();
 		cursor.write_u32::<BE>(self.index_range.length as u32).unwrap();
@@ -114,6 +120,7 @@ mod tests {
 	fn conversion() {
 		let mut def1 = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
 		def1.tiles_range = ByteRange::new(4, 5);
+		def1.index_range = ByteRange::new(9, 6);
 
 		let def2 = BlockDefinition::from_blob(def1.as_blob());
 
