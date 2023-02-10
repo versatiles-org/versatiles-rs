@@ -38,8 +38,8 @@ jobs:
          - name: cargo clippy
            run: cargo clippy -- -D warnings
 
-         # - name: cargo build
-         #   run: cargo build
+         - name: cargo check
+           run: cargo check
 
          - name: cargo test
            run: cargo test
