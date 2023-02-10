@@ -30,7 +30,7 @@ impl FileHeader {
 	}
 	pub fn to_blob(&self) -> Blob {
 		let mut header: Vec<u8> = Vec::new();
-		header.write_all(b"versatiles_v01").unwrap();
+		header.write_all(b"versatiles_v02").unwrap();
 
 		// tile type
 		header
@@ -87,7 +87,7 @@ impl FileHeader {
 		let mut header = Cursor::new(blob.as_slice());
 		let mut magic_word = [0u8; 14];
 		header.read_exact(&mut magic_word).unwrap();
-		if &magic_word != b"versatiles_v01" {
+		if &magic_word != b"versatiles_v02" {
 			panic!()
 		};
 
