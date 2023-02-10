@@ -40,9 +40,7 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 		bbox
 			.iter_coords()
 			.filter_map(move |coord: TileCoord2| -> Option<(TileCoord2, Blob)> {
-				self
-					.get_tile_data(&coord.with_zoom(zoom))
-					.map(|blob| (coord, blob))
+				self.get_tile_data(&coord.with_zoom(zoom)).map(|blob| (coord, blob))
 			})
 			.collect()
 	}

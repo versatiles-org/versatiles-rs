@@ -5,11 +5,7 @@ use crate::{
 use clap::Args;
 
 #[derive(Args)]
-#[command(
-	arg_required_else_help = true,
-	disable_version_flag = true,
-	verbatim_doc_comment
-)]
+#[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]
 pub struct Subcommand {
 	/// one or more tile containers you want to serve
 	/// supported container formats are: *.versatiles, *.tar, *.mbtiles
@@ -25,21 +21,11 @@ pub struct Subcommand {
 	pub port: u16,
 
 	/// serve static content at "/static/..." from folder
-	#[arg(
-		short = 's',
-		long,
-		conflicts_with = "static_tar",
-		value_name = "folder"
-	)]
+	#[arg(short = 's', long, conflicts_with = "static_tar", value_name = "folder")]
 	pub static_folder: Option<String>,
 
 	/// serve static content at "/static/..." from tar file
-	#[arg(
-		short = 't',
-		long,
-		conflicts_with = "static_folder",
-		value_name = "file"
-	)]
+	#[arg(short = 't', long, conflicts_with = "static_folder", value_name = "file")]
 	pub static_tar: Option<String>,
 }
 
@@ -58,10 +44,7 @@ pub fn run(arguments: &Subcommand) {
 		};
 
 		let reader = get_reader(reader_source);
-		server.add_source(
-			format!("/tiles/{name}/"),
-			source::TileContainer::from(reader),
-		);
+		server.add_source(format!("/tiles/{name}/"), source::TileContainer::from(reader));
 
 		fn guess_name(path: &str) -> &str {
 			let filename = path.split(&['/', '\\']).last().unwrap();

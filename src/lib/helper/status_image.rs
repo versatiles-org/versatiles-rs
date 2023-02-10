@@ -71,10 +71,7 @@ impl StatusImagePyramide {
 	pub fn save(&self, filename: &str) {
 		let mut progress = ProgressBar::new(
 			"save status images",
-			self
-				.images
-				.iter()
-				.fold(0, |acc, img| acc + img.size * img.size),
+			self.images.iter().fold(0, |acc, img| acc + img.size * img.size),
 		);
 
 		let width = (self.max_size * 2 - 1) as u32;

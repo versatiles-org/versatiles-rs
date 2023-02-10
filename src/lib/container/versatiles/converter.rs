@@ -20,9 +20,7 @@ impl TileConverterTrait for TileConverter {
 		})
 	}
 	fn convert_from(&mut self, reader: &mut TileReaderBox) {
-		self
-			.config
-			.finalize_with_parameters(reader.get_parameters());
+		self.config.finalize_with_parameters(reader.get_parameters());
 
 		let bbox_pyramide: &TileBBoxPyramide = self.config.get_bbox_pyramide();
 		let mut header = FileHeader::new(
@@ -62,12 +60,7 @@ impl TileConverter {
 			let bbox_blocks = bbox_tiles.scale_down(256);
 			for TileCoord2 { x, y } in bbox_blocks.iter_coords() {
 				let mut bbox_block = *bbox_tiles;
-				bbox_block.intersect_bbox(&TileBBox::new(
-					x * 256,
-					y * 256,
-					x * 256 + 255,
-					y * 256 + 255,
-				));
+				bbox_block.intersect_bbox(&TileBBox::new(x * 256, y * 256, x * 256 + 255, y * 256 + 255));
 
 				blocks.push(BlockDefinition::new(x, y, zoom, bbox_block))
 			}
@@ -93,9 +86,7 @@ impl TileConverter {
 
 		self.writer.append(&block_index.as_brotli_blob())
 	}
-	fn write_block(
-		&mut self, block: &BlockDefinition, reader: &TileReaderBox, progress: &mut ProgressBar,
-	) -> ByteRange {
+	fn write_block(&mut self, block: &BlockDefinition, reader: &TileReaderBox, progress: &mut ProgressBar) -> ByteRange {
 		debug!("start block {:?}", block);
 
 		let bbox = &block.bbox;
@@ -152,10 +143,7 @@ impl TileConverter {
 
 					if blob.len() < 1000 {
 						if secured_tile_hash_lookup.contains_key(blob.as_slice()) {
-							secured_tile_index.set(
-								index,
-								*secured_tile_hash_lookup.get(blob.as_slice()).unwrap(),
-							);
+							secured_tile_index.set(index, *secured_tile_hash_lookup.get(blob.as_slice()).unwrap());
 							return;
 						}
 						tile_hash_option = Some(blob.clone());

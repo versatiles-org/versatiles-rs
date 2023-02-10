@@ -1,8 +1,8 @@
 use crate::{container::*, helper::*};
 use log::trace;
 use std::{
-	collections::HashMap, env::current_dir, fmt::Debug, fs::File, io::Read,
-	os::unix::prelude::FileExt, path::Path, str::from_utf8,
+	collections::HashMap, env::current_dir, fmt::Debug, fs::File, io::Read, os::unix::prelude::FileExt, path::Path,
+	str::from_utf8,
 };
 use tar::{Archive, EntryType};
 
@@ -164,11 +164,7 @@ impl TileReaderTrait for TileReader {
 			name: path.to_string(),
 			file,
 			tile_map,
-			parameters: TileReaderParameters::new(
-				tile_form.unwrap(),
-				tile_comp.unwrap(),
-				bbox_pyramide,
-			),
+			parameters: TileReaderParameters::new(tile_form.unwrap(), tile_comp.unwrap(), bbox_pyramide),
 		})
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {

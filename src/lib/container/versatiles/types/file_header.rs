@@ -18,8 +18,7 @@ pub struct FileHeader {
 }
 impl FileHeader {
 	pub fn new(
-		tile_format: &TileFormat, precompression: &Precompression, zoom_range: [u8; 2],
-		bbox: [f64; 4],
+		tile_format: &TileFormat, precompression: &Precompression, zoom_range: [u8; 2], bbox: [f64; 4],
 	) -> FileHeader {
 		assert!(
 			zoom_range[0] <= zoom_range[1],
@@ -31,18 +30,8 @@ impl FileHeader {
 		assert!(bbox[1] >= -90.0, "bbox[1] ({}) >= -90", bbox[1]);
 		assert!(bbox[2] <= 180.0, "bbox[2] ({}) <= 180", bbox[2]);
 		assert!(bbox[3] <= 90.0, "bbox[3] ({}) <= 90", bbox[3]);
-		assert!(
-			bbox[0] <= bbox[2],
-			"bbox[0] ({}) <= bbox[2] ({})",
-			bbox[0],
-			bbox[2]
-		);
-		assert!(
-			bbox[1] <= bbox[3],
-			"bbox[1] ({}) <= bbox[3] ({})",
-			bbox[1],
-			bbox[3]
-		);
+		assert!(bbox[0] <= bbox[2], "bbox[0] ({}) <= bbox[2] ({})", bbox[0], bbox[2]);
+		assert!(bbox[1] <= bbox[3], "bbox[1] ({}) <= bbox[3] ({})", bbox[1], bbox[3]);
 
 		FileHeader {
 			zoom_range,
@@ -101,10 +90,7 @@ impl FileHeader {
 		self.blocks_range.write_to_buf(&mut header);
 
 		if header.len() != 66 {
-			panic!(
-				"header should be 66 bytes long, but is {} bytes long",
-				header.len()
-			)
+			panic!("header should be 66 bytes long, but is {} bytes long", header.len())
 		}
 
 		Blob::from_vec(header)
@@ -177,14 +163,8 @@ mod tests {
 
 	#[test]
 	fn conversion() {
-		let test = |tile_format: &TileFormat,
-		            precompression: &Precompression,
-		            a: u64,
-		            b: u64,
-		            c: u64,
-		            d: u64| {
-			let mut header1 =
-				FileHeader::new(tile_format, precompression, [0, 0], [0.0, 0.0, 0.0, 0.0]);
+		let test = |tile_format: &TileFormat, precompression: &Precompression, a: u64, b: u64, c: u64, d: u64| {
+			let mut header1 = FileHeader::new(tile_format, precompression, [0, 0], [0.0, 0.0, 0.0, 0.0]);
 			header1.meta_range = ByteRange::new(a, b);
 			header1.blocks_range = ByteRange::new(c, d);
 

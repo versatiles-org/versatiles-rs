@@ -44,17 +44,13 @@ impl TileBBoxPyramide {
 		self.level_bbox[level as usize].union_bbox(bbox);
 	}
 	pub fn iter_levels(&self) -> impl Iterator<Item = (u8, &TileBBox)> {
-		self
-			.level_bbox
-			.iter()
-			.enumerate()
-			.filter_map(|(level, bbox)| {
-				if bbox.is_empty() {
-					None
-				} else {
-					Some((level as u8, bbox))
-				}
-			})
+		self.level_bbox.iter().enumerate().filter_map(|(level, bbox)| {
+			if bbox.is_empty() {
+				None
+			} else {
+				Some((level as u8, bbox))
+			}
+		})
 	}
 	pub fn iter_tile_indexes(&self) -> impl Iterator<Item = TileCoord3> + '_ {
 		return self.level_bbox.iter().enumerate().flat_map(|(z, bbox)| {
@@ -117,11 +113,7 @@ impl TileBBoxPyramide {
 impl fmt::Debug for TileBBoxPyramide {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_list()
-			.entries(
-				self
-					.iter_levels()
-					.map(|(level, bbox)| format!("{level}: {bbox:?}")),
-			)
+			.entries(self.iter_levels().map(|(level, bbox)| format!("{level}: {bbox:?}")))
 			.finish()
 	}
 }

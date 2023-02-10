@@ -98,9 +98,7 @@ impl TileReader {
 		}
 
 		self.parameters.set_tile_format(tile_format.unwrap());
-		self
-			.parameters
-			.set_tile_precompression(precompression.unwrap());
+		self.parameters.set_tile_precompression(precompression.unwrap());
 		self.parameters.set_bbox_pyramide(self.get_bbox_pyramide());
 
 		if self.meta_data.is_none() {
@@ -214,9 +212,7 @@ impl TileReaderTrait for TileReader {
 
 		let connection = self.pool.get().unwrap();
 		let mut stmt = connection
-			.prepare(
-				"SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?",
-			)
+			.prepare("SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")
 			.expect("SQL preparation failed");
 
 		let coord: TileCoord3 = if self.get_parameters().get_vertical_flip() {
@@ -237,12 +233,7 @@ impl TileReaderTrait for TileReader {
 		}
 	}
 	fn get_bbox_tile_vec(&self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
-		trace!(
-			"read {} tiles for z:{}, bbox:{:?}",
-			bbox.count_tiles(),
-			zoom,
-			bbox
-		);
+		trace!("read {} tiles for z:{}, bbox:{:?}", bbox.count_tiles(), zoom, bbox);
 
 		let connection = self.pool.get().unwrap();
 		let max_index = 2u64.pow(zoom as u32) - 1;
@@ -266,10 +257,7 @@ impl TileReaderTrait for TileReader {
 				],
 				|row| {
 					Ok((
-						TileCoord2::new(
-							row.get(0).unwrap(),
-							max_index - row.get::<_, u64>(1).unwrap(),
-						),
+						TileCoord2::new(row.get(0).unwrap(), max_index - row.get::<_, u64>(1).unwrap()),
 						Blob::from_vec(row.get(2).unwrap()),
 					))
 				},

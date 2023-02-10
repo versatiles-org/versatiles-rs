@@ -43,10 +43,7 @@ impl VersaTilesSrcTrait for VersaTilesSrcFile {
 			return None;
 		}
 
-		assert!(
-			filename.is_absolute(),
-			"filename {filename:?} must be absolute"
-		);
+		assert!(filename.is_absolute(), "filename {filename:?} must be absolute");
 
 		filename = filename.canonicalize().unwrap();
 
@@ -93,14 +90,7 @@ impl VersaTilesSrcTrait for VersaTilesSrcObjectStore {
 		})
 	}
 	fn read_range(&self, range: &ByteRange) -> Blob {
-		Blob::from_bytes(
-			block_on(
-				self
-					.object_store
-					.get_range(&self.url, range.as_range_usize()),
-			)
-			.unwrap(),
-		)
+		Blob::from_bytes(block_on(self.object_store.get_range(&self.url, range.as_range_usize())).unwrap())
 	}
 	fn get_name(&self) -> &str {
 		&self.name

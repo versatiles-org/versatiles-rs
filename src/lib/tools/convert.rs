@@ -49,10 +49,7 @@ pub struct Subcommand {
 }
 
 pub fn run(arguments: &Subcommand) {
-	println!(
-		"convert from {:?} to {:?}",
-		arguments.input_file, arguments.output_file
-	);
+	println!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
 	let mut reader = new_reader(&arguments.input_file, arguments);
 	let mut converter = new_converter(&arguments.output_file, arguments);
@@ -62,9 +59,7 @@ pub fn run(arguments: &Subcommand) {
 fn new_reader(filename: &str, arguments: &Subcommand) -> TileReaderBox {
 	let mut reader = get_reader(filename);
 
-	reader
-		.get_parameters_mut()
-		.set_vertical_flip(arguments.flip_input);
+	reader.get_parameters_mut().set_vertical_flip(arguments.flip_input);
 
 	reader
 }

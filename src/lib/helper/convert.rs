@@ -24,44 +24,41 @@ pub struct DataConverter {
 }
 impl DataConverter {
 	fn empty() -> DataConverter {
-		DataConverter {
-			pipeline: Vec::new(),
-		}
+		DataConverter { pipeline: Vec::new() }
 	}
 	pub fn is_empty(&self) -> bool {
 		self.pipeline.len() == 0
 	}
 	pub fn new_tile_recompressor(
-		src_form: &TileFormat, src_comp: &Precompression, dst_form: &TileFormat,
-		dst_comp: &Precompression, force_recompress: bool,
+		src_form: &TileFormat, src_comp: &Precompression, dst_form: &TileFormat, dst_comp: &Precompression,
+		force_recompress: bool,
 	) -> DataConverter {
 		let mut converter = DataConverter::empty();
 
-		let format_converter_option: Option<fn(Blob) -> Blob> =
-			if (src_form != dst_form) || force_recompress {
-				use TileFormat::*;
-				match (src_form, dst_form) {
-					(PNG, JPG) => Some(|tile| img2jpg(&png2img(tile))),
-					(PNG, PNG) => Some(|tile| img2png(&png2img(tile))),
-					(PNG, WEBP) => Some(|tile| img2webplossless(&png2img(tile))),
+		let format_converter_option: Option<fn(Blob) -> Blob> = if (src_form != dst_form) || force_recompress {
+			use TileFormat::*;
+			match (src_form, dst_form) {
+				(PNG, JPG) => Some(|tile| img2jpg(&png2img(tile))),
+				(PNG, PNG) => Some(|tile| img2png(&png2img(tile))),
+				(PNG, WEBP) => Some(|tile| img2webplossless(&png2img(tile))),
 
-					(JPG, PNG) => Some(|tile| img2png(&jpg2img(tile))),
-					(JPG, WEBP) => Some(|tile| img2webp(&jpg2img(tile))),
+				(JPG, PNG) => Some(|tile| img2png(&jpg2img(tile))),
+				(JPG, WEBP) => Some(|tile| img2webp(&jpg2img(tile))),
 
-					(WEBP, JPG) => Some(|tile| img2jpg(&webp2img(tile))),
-					(WEBP, PNG) => Some(|tile| img2png(&webp2img(tile))),
+				(WEBP, JPG) => Some(|tile| img2jpg(&webp2img(tile))),
+				(WEBP, PNG) => Some(|tile| img2png(&webp2img(tile))),
 
-					(_, _) => {
-						if src_form == dst_form {
-							None
-						} else {
-							todo!("convert {:?} -> {:?}", src_form, dst_form)
-						}
+				(_, _) => {
+					if src_form == dst_form {
+						None
+					} else {
+						todo!("convert {:?} -> {:?}", src_form, dst_form)
 					}
 				}
-			} else {
-				None
-			};
+			}
+		} else {
+			None
+		};
 
 		if (src_comp == dst_comp) && !force_recompress {
 			if let Some(format_converter) = format_converter_option {

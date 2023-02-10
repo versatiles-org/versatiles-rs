@@ -17,16 +17,14 @@ impl TileReader {
 		let header = FileHeader::from_reader(&mut reader);
 
 		let meta = if header.meta_range.length > 0 {
-			DataConverter::new_decompressor(&header.precompression)
-				.run(reader.read_range(&header.meta_range))
+			DataConverter::new_decompressor(&header.precompression).run(reader.read_range(&header.meta_range))
 		} else {
 			Blob::empty()
 		};
 
 		let block_index = BlockIndex::from_brotli_blob(reader.read_range(&header.blocks_range));
 		let bbox_pyramide = block_index.get_bbox_pyramide();
-		let parameters =
-			TileReaderParameters::new(header.tile_format, header.precompression, bbox_pyramide);
+		let parameters = TileReaderParameters::new(header.tile_format, header.precompression, bbox_pyramide);
 
 		TileReader {
 			meta,
@@ -123,10 +121,7 @@ impl TileReaderTrait for TileReader {
 
 		debug!("number of blocks: {}", block_count);
 
-		let mut progress = ProgressBar::new(
-			"deep verify",
-			self.block_index.get_bbox_pyramide().count_tiles(),
-		);
+		let mut progress = ProgressBar::new("deep verify", self.block_index.get_bbox_pyramide().count_tiles());
 
 		let blocks = self
 			.block_index
@@ -139,11 +134,7 @@ impl TileReaderTrait for TileReader {
 			let tiles_count = block.bbox.count_tiles();
 
 			let tile_index = TileIndex::from_brotli_blob(self.reader.read_range(&block.tile_range));
-			assert_eq!(
-				tile_index.len(),
-				tiles_count as usize,
-				"tile count are not the same"
-			);
+			assert_eq!(tile_index.len(), tiles_count as usize, "tile count are not the same");
 
 			let status_image = status_images.get_level(block.z);
 

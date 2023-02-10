@@ -11,16 +11,10 @@ impl ByteRange {
 		ByteRange { offset, length }
 	}
 	pub fn empty() -> ByteRange {
-		ByteRange {
-			offset: 0,
-			length: 0,
-		}
+		ByteRange { offset: 0, length: 0 }
 	}
 	pub fn from_reader(reader: &mut impl Read) -> ByteRange {
-		ByteRange::new(
-			reader.read_u64::<BE>().unwrap(),
-			reader.read_u64::<BE>().unwrap(),
-		)
+		ByteRange::new(reader.read_u64::<BE>().unwrap(), reader.read_u64::<BE>().unwrap())
 	}
 	pub fn write_to_buf(&self, writer: &mut impl WriteBytesExt) {
 		writer.write_u64::<BE>(self.offset).unwrap();

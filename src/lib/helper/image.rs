@@ -7,18 +7,9 @@ use webp::Encoder;
 
 pub fn img2png(image: &DynamicImage) -> Blob {
 	let mut buffer: Vec<u8> = Vec::new();
-	png::PngEncoder::new_with_quality(
-		&mut buffer,
-		png::CompressionType::Best,
-		png::FilterType::Adaptive,
-	)
-	.write_image(
-		image.as_bytes(),
-		image.width(),
-		image.height(),
-		image.color(),
-	)
-	.unwrap();
+	png::PngEncoder::new_with_quality(&mut buffer, png::CompressionType::Best, png::FilterType::Adaptive)
+		.write_image(image.as_bytes(), image.width(), image.height(), image.color())
+		.unwrap();
 
 	Blob::from_vec(buffer)
 }
@@ -30,12 +21,7 @@ pub fn png2img(data: Blob) -> DynamicImage {
 pub fn img2jpg(image: &DynamicImage) -> Blob {
 	let mut buffer: Vec<u8> = Vec::new();
 	jpeg::JpegEncoder::new_with_quality(&mut buffer, 95u8)
-		.write_image(
-			image.as_bytes(),
-			image.width(),
-			image.height(),
-			image.color(),
-		)
+		.write_image(image.as_bytes(), image.width(), image.height(), image.color())
 		.unwrap();
 
 	Blob::from_vec(buffer)

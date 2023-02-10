@@ -34,12 +34,7 @@ impl TileBBox {
 		let p1 = TileCoord2::from_geo(geo_bbox[0], geo_bbox[1], z);
 		let p2 = TileCoord2::from_geo(geo_bbox[2], geo_bbox[3], z);
 
-		TileBBox::new(
-			p1.x.min(p2.x),
-			p1.y.min(p2.y),
-			p1.x.max(p2.x),
-			p1.y.max(p2.y),
-		)
+		TileBBox::new(p1.x.min(p2.x), p1.y.min(p2.y), p1.x.max(p2.x), p1.y.max(p2.y))
 	}
 	pub fn set_empty(&mut self) {
 		self.x_min = 1;
@@ -112,9 +107,7 @@ impl TileBBox {
 	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord2> + '_ {
 		let y_range = self.y_min..=self.y_max;
 		let x_range = self.x_min..=self.x_max;
-		y_range
-			.cartesian_product(x_range)
-			.map(|(y, x)| TileCoord2::new(x, y))
+		y_range.cartesian_product(x_range).map(|(y, x)| TileCoord2::new(x, y))
 	}
 	pub fn iter_bbox_row_slices(&self, max_count: usize) -> impl Iterator<Item = TileBBox> + '_ {
 		let mut col_count = (self.x_max - self.x_min + 1) as usize;
@@ -143,10 +136,7 @@ impl TileBBox {
 			let row_chunk_count = (row_count as f64 / row_chunk_max_size as f64).ceil() as usize;
 			let row_chunk_size = row_count as f64 / row_chunk_count as f64;
 			for row in 0..=row_chunk_count {
-				row_pos.insert(
-					row,
-					(row_chunk_size * row as f64).round() as u64 + self.y_min,
-				)
+				row_pos.insert(row, (row_chunk_size * row as f64).round() as u64 + self.y_min)
 			}
 			row_count = row_chunk_count;
 
@@ -163,14 +153,9 @@ impl TileBBox {
 		let cols = 0..col_count;
 		let rows = 0..row_count;
 
-		rows.cartesian_product(cols).map(move |(row, col)| {
-			TileBBox::new(
-				col_pos[col],
-				row_pos[row],
-				col_pos[col + 1] - 1,
-				row_pos[row + 1] - 1,
-			)
-		})
+		rows
+			.cartesian_product(cols)
+			.map(move |(row, col)| TileBBox::new(col_pos[col], row_pos[row], col_pos[col + 1] - 1, row_pos[row + 1] - 1))
 	}
 	pub fn shift_by(mut self, x: u64, y: u64) -> TileBBox {
 		self.x_min += x;
@@ -189,10 +174,7 @@ impl TileBBox {
 		self
 	}
 	pub fn contains(&self, coord: &TileCoord2) -> bool {
-		(coord.x >= self.x_min)
-			&& (coord.x <= self.x_max)
-			&& (coord.y >= self.y_min)
-			&& (coord.y <= self.y_max)
+		(coord.x >= self.x_min) && (coord.x <= self.x_max) && (coord.y >= self.y_min) && (coord.y <= self.y_max)
 	}
 	pub fn get_tile_index(&self, coord: &TileCoord2) -> usize {
 		if !self.contains(coord) {
@@ -213,12 +195,7 @@ impl TileBBox {
 	pub fn to_geo_bbox(&self, z: u8) -> [f64; 4] {
 		let p0 = TileCoord3::new(self.x_min, self.y_min, z).to_geo();
 		let p1 = TileCoord3::new(self.x_max, self.y_max, z).to_geo();
-		return [
-			p0[0].min(p1[0]),
-			p0[1].min(p1[1]),
-			p0[0].max(p1[0]),
-			p0[1].max(p1[1]),
-		];
+		return [p0[0].min(p1[0]), p0[1].min(p1[1]), p0[0].max(p1[0]), p0[1].max(p1[1])];
 	}
 }
 

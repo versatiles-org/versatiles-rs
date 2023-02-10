@@ -23,9 +23,7 @@ impl TileConverterTrait for TileConverter {
 	fn convert_from(&mut self, reader: &mut TileReaderBox) {
 		trace!("convert_from");
 
-		self
-			.config
-			.finalize_with_parameters(reader.get_parameters());
+		self.config.finalize_with_parameters(reader.get_parameters());
 
 		let tile_converter = self.config.get_tile_recompressor();
 
@@ -70,34 +68,26 @@ impl TileConverterTrait for TileConverter {
 		let mutex_builder = &Mutex::new(&mut self.builder);
 
 		bbox_pyramide.iter_levels().for_each(|(level, bbox)| {
-			bbox
-				.iter_bbox_row_slices(1024)
-				.for_each(|row_bbox: TileBBox| {
-					let tile_vec = reader.get_bbox_tile_vec(level, &row_bbox);
-					tile_vec
-						.into_iter()
-						.par_bridge()
-						.for_each(|(coord, mut blob)| {
-							mutex_bar.lock().unwrap().inc(1);
+			bbox.iter_bbox_row_slices(1024).for_each(|row_bbox: TileBBox| {
+				let tile_vec = reader.get_bbox_tile_vec(level, &row_bbox);
+				tile_vec.into_iter().par_bridge().for_each(|(coord, mut blob)| {
+					mutex_bar.lock().unwrap().inc(1);
 
-							blob = tile_converter.run(blob);
+					blob = tile_converter.run(blob);
 
-							let filename = format!(
-								"./{}/{}/{}{}{}",
-								level, coord.y, coord.x, ext_form, ext_comp
-							);
-							let path = Path::new(&filename);
-							let mut header = Header::new_gnu();
-							header.set_size(blob.len() as u64);
-							header.set_mode(0o644);
+					let filename = format!("./{}/{}/{}{}{}", level, coord.y, coord.x, ext_form, ext_comp);
+					let path = Path::new(&filename);
+					let mut header = Header::new_gnu();
+					header.set_size(blob.len() as u64);
+					header.set_mode(0o644);
 
-							mutex_builder
-								.lock()
-								.unwrap()
-								.append_data(&mut header, path, blob.as_slice())
-								.unwrap();
-						})
+					mutex_builder
+						.lock()
+						.unwrap()
+						.append_data(&mut header, path, blob.as_slice())
+						.unwrap();
 				})
+			})
 		});
 
 		bar.finish();

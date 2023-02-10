@@ -65,8 +65,7 @@ impl TileServer {
 						let _method = req.method();
 						let headers = req.headers();
 
-						let mut encoding_set: EnumSet<Precompression> =
-							enum_set!(Precompression::Uncompressed);
+						let mut encoding_set: EnumSet<Precompression> = enum_set!(Precompression::Uncompressed);
 						let encoding_option = headers.get(header::ACCEPT_ENCODING);
 						if let Some(encoding) = encoding_option {
 							let encoding_string = encoding.to_str().unwrap_or("");
@@ -79,9 +78,7 @@ impl TileServer {
 							}
 						}
 
-						let source_option = arc_sources
-							.iter()
-							.find(|(prefix, _, _)| path.starts_with(prefix));
+						let source_option = arc_sources.iter().find(|(prefix, _, _)| path.starts_with(prefix));
 
 						if source_option.is_none() {
 							return ok_not_found();
@@ -131,9 +128,7 @@ pub fn ok_not_found() -> Result<Response<Body>> {
 }
 
 pub fn ok_data(data: Blob, precompression: &Precompression, mime: &str) -> Result<Response<Body>> {
-	let mut response = Response::builder()
-		.status(StatusCode::OK)
-		.header(CONTENT_TYPE, mime);
+	let mut response = Response::builder().status(StatusCode::OK).header(CONTENT_TYPE, mime);
 
 	match precompression {
 		Precompression::Uncompressed => {}

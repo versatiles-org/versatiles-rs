@@ -12,9 +12,7 @@ pub struct BlockIndex {
 }
 impl BlockIndex {
 	pub fn new_empty() -> BlockIndex {
-		BlockIndex {
-			lookup: HashMap::new(),
-		}
+		BlockIndex { lookup: HashMap::new() }
 	}
 	pub fn from_blob(buf: Blob) -> BlockIndex {
 		let count = buf.len().div(29);
@@ -25,9 +23,7 @@ impl BlockIndex {
 		);
 		let mut block_index = BlockIndex::new_empty();
 		for i in 0..count {
-			block_index.add_block(BlockDefinition::from_blob(
-				buf.get_range(i * 29..(i + 1) * 29),
-			));
+			block_index.add_block(BlockDefinition::from_blob(buf.get_range(i * 29..(i + 1) * 29)));
 		}
 
 		block_index
@@ -44,9 +40,7 @@ impl BlockIndex {
 		pyramide
 	}
 	pub fn add_block(&mut self, block: BlockDefinition) {
-		self
-			.lookup
-			.insert(TileCoord3::new(block.x, block.y, block.z), block);
+		self.lookup.insert(TileCoord3::new(block.x, block.y, block.z), block);
 	}
 	pub fn as_blob(&self) -> Blob {
 		let vec = Vec::new();
