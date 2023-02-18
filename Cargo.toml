@@ -1,13 +1,15 @@
 [package]
 name = "versatiles"
 edition = "2021"
-version = "0.1.13"
-authors = ["Michael Kreil"]
+version = "0.2.0"
 description = "A toolbox for converting, checking and serving map tiles in various formats."
 homepage = "https://versatiles.org"
+repository = "https://github.com/versatiles-org/versatiles"
+authors = ["Michael Kreil <versatiles@michael-kreil.de>"]
+keywords = ["versatiles", "mbtiles", "tiles", "map"]
+categories = ["command-line-utilities", "science::geo", "web-programming::http-server"]
 readme = "readme.md"
 license = "MIT"
-repository = "https://github.com/versatiles-org/versatiles"
 exclude = ["benches/resources/*"]
 
 [lib]
