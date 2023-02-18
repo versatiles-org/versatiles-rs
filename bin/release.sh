@@ -8,6 +8,7 @@ select answer in "Yes" "No"; do
 		echo "❗️ Then do it!"
 		exit 1
 	fi
+	break
 done
 
 # check if nothing to commit
