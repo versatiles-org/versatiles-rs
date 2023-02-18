@@ -46,7 +46,7 @@ lto = false
 [dependencies]
 brotli = { version = "3.3.4", features = ["std"], default-features = false }
 byteorder = { default-features = false, version = "1.4.3" }
-clap = { default-features = false, version = "4.1.6" }
+clap = { version = "4.1.6" }
 clap-verbosity-flag = "2.0.0"
 enumset = "1.0.12"
 env_logger = { features = ["regex"], default-features = false, version = "0.10.0" }
