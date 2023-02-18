@@ -46,18 +46,18 @@ lto = false
 [dependencies]
 brotli = { version = "3.3.4", features = ["std"] }
 byteorder = "1.4.3"
-clap = "4.1.4"
+clap = "4.1.6"
 clap-verbosity-flag = "2.0.0"
 enumset = "1.0.12"
 env_logger = "0.10.0"
 flate2 = { version = "1.0.25", features = ["miniz_oxide"] }
-futures = "0.3.25"
-hyper = { version = "0.14.23", default-features = false, features = ["server"] }
+futures = "0.3.26"
+hyper = { version = "0.14.24", default-features = false, features = ["server"] }
 image = { version = "0.24.5", default-features = false, features = ["jpeg", "png"] }
 itertools = "0.10.5"
 log = "0.4.17"
 mime_guess = "2.0.4"
-object_store = { version = "0.5.3", default-features = false,  features = ["gcp"] }
+object_store = { version = "0.5.4", default-features = false,  features = ["gcp"] }
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.21.0"
 rand = "0.8.5"
@@ -65,10 +65,10 @@ rayon = "1.6.1"
 regex = { version = "1.7.1", default-features = false }
 reqwest = { version = "0.11.14", features = ["blocking"] }
 rusqlite = "0.28.0"
-sysinfo = "0.27.7"
+sysinfo = "0.28.0"
 tar = "0.4.38"
 term_size = "0.3.2"
-tokio = { version = "1.24.2", features = ["rt-multi-thread"] }
+tokio = { version = "1.25.0", features = ["rt-multi-thread"] }
 urlencoding = "2.1.2"
 webp = { version = "0.2.2", features = ["img"] }
 
