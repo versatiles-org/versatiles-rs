@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 echo "check cargo fmt"
 result=$(cargo fmt -- --check 2>&1)
