@@ -18,7 +18,7 @@ if [ "$(git status --porcelain)" ]; then
 fi
 
 # check cargo
-bash bin/check.sh
+./check.sh
 if [ $? -ne 0 ]; then
 	echo "❗️ Check failed!"
 	exit 1
