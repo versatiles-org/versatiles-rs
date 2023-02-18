@@ -68,7 +68,7 @@ rusqlite = "0.28.0"
 sysinfo = { default-features = false, version = "0.28.0" }
 tar = { default-features = false, version = "0.4.38" }
 term_size = "0.3.2"
-tokio = { version = "1.25.0", default-features = false }
+tokio = { version = "1.25.0", default-features = false, features = ["rt-multi-thread"] }
 urlencoding = "2.1.2"
 webp = { version = "0.2.2", features = ["img"], default-features = false }
 
