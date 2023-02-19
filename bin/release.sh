@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")"
 
+# check cargo
+./check.sh
+if [ $? -ne 0 ]; then
+	echo "❗️ Check failed!"
+	exit 1
+fi
+
 # check if version was updated
 echo "Did you update the version number in Cargo.toml?"
 select answer in "Yes" "No"; do
@@ -14,13 +21,6 @@ done
 # check if nothing to commit
 if [ "$(git status --porcelain)" ]; then
 	echo "❗️ Please commit all uncommitted changes!"
-	exit 1
-fi
-
-# check cargo
-./check.sh
-if [ $? -ne 0 ]; then
-	echo "❗️ Check failed!"
 	exit 1
 fi
 
