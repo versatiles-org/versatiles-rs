@@ -4,6 +4,10 @@ use core::panic;
 use futures::executor::block_on;
 use log::error;
 use object_store::ObjectStore;
+use reqwest::{
+	blocking::{Client, Request},
+	Method, Url,
+};
 use std::{
 	env::current_dir,
 	fs::File,
@@ -21,12 +25,14 @@ pub trait VersaTilesSrcTrait {
 }
 
 pub fn new_versatiles_src(source: &str) -> Box<dyn VersaTilesSrcTrait> {
-	if let Some(src) = VersaTilesSrcObjectStore::new(source) {
+	if let Some(src) = VersaTilesSrcFile::new(source) {
 		return Box::new(src);
-	} else if let Some(src) = VersaTilesSrcFile::new(source) {
+	} else if let Some(src) = VersaTilesSrcHttp::new(source) {
+		return Box::new(src);
+	} else if let Some(src) = VersaTilesSrcObjectStore::new(source) {
 		return Box::new(src);
 	}
-	panic!("can't find {source}");
+	panic!("don't know how to open {source}");
 }
 
 struct VersaTilesSrcFile {
@@ -91,6 +97,39 @@ impl VersaTilesSrcTrait for VersaTilesSrcObjectStore {
 	}
 	fn read_range(&self, range: &ByteRange) -> Blob {
 		Blob::from_bytes(block_on(self.object_store.get_range(&self.url, range.as_range_usize())).unwrap())
+	}
+	fn get_name(&self) -> &str {
+		&self.name
+	}
+}
+
+struct VersaTilesSrcHttp {
+	name: String,
+	url: Url,
+	client: Client,
+}
+impl VersaTilesSrcTrait for VersaTilesSrcHttp {
+	fn new(source: &str) -> Option<Self> {
+		if source.starts_with("https://") || source.starts_with("http://") {
+			return Some(Self {
+				name: source.to_string(),
+				url: Url::parse(source).unwrap(),
+				client: Client::new(),
+			});
+		} else {
+			return None;
+		}
+	}
+	fn read_range(&self, range: &ByteRange) -> Blob {
+		let mut request = Request::new(Method::GET, self.url.clone());
+		request.headers_mut().append(
+			"range",
+			format!("bytes={}-{}", range.offset, range.length + range.offset - 1)
+				.parse()
+				.unwrap(),
+		);
+		let response = Client::execute(&self.client, request).unwrap();
+		return Blob::from_bytes(response.bytes().unwrap());
 	}
 	fn get_name(&self) -> &str {
 		&self.name
