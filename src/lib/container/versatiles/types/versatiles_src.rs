@@ -111,13 +111,13 @@ struct VersaTilesSrcHttp {
 impl VersaTilesSrcTrait for VersaTilesSrcHttp {
 	fn new(source: &str) -> Option<Self> {
 		if source.starts_with("https://") || source.starts_with("http://") {
-			return Some(Self {
+			Some(Self {
 				name: source.to_string(),
 				url: Url::parse(source).unwrap(),
 				client: Client::new(),
-			});
+			})
 		} else {
-			return None;
+			None
 		}
 	}
 	fn read_range(&self, range: &ByteRange) -> Blob {
@@ -129,7 +129,7 @@ impl VersaTilesSrcTrait for VersaTilesSrcHttp {
 				.unwrap(),
 		);
 		let response = Client::execute(&self.client, request).unwrap();
-		return Blob::from_bytes(response.bytes().unwrap());
+		Blob::from_bytes(response.bytes().unwrap())
 	}
 	fn get_name(&self) -> &str {
 		&self.name
