@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")"
+cd ..
 
 # check cargo
-./check.sh
+./bin/check.sh
 if [ $? -ne 0 ]; then
 	echo "❗️ Check failed!"
 	exit 1
