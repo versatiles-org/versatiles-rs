@@ -1,6 +1,5 @@
 use super::ByteRange;
 use crate::helper::Blob;
-use core::panic;
 use futures::executor::block_on;
 use log::error;
 use object_store::ObjectStore;
@@ -25,14 +24,11 @@ pub trait VersaTilesSrcTrait {
 }
 
 pub fn new_versatiles_src(source: &str) -> Box<dyn VersaTilesSrcTrait> {
-	if let Some(src) = VersaTilesSrcFile::new(source) {
-		return Box::new(src);
-	} else if let Some(src) = VersaTilesSrcHttp::new(source) {
-		return Box::new(src);
-	} else if let Some(src) = VersaTilesSrcObjectStore::new(source) {
-		return Box::new(src);
-	}
-	panic!("don't know how to open {source}");
+	return match source.split_terminator(':').next() {
+		Some("gs") => Box::new(VersaTilesSrcObjectStore::new(source).unwrap()),
+		Some("http" | "https") => Box::new(VersaTilesSrcHttp::new(source).unwrap()),
+		_ => Box::new(VersaTilesSrcFile::new(source).unwrap()),
+	};
 }
 
 struct VersaTilesSrcFile {
@@ -45,7 +41,7 @@ impl VersaTilesSrcTrait for VersaTilesSrcFile {
 		filename.push(Path::new(source));
 
 		if !filename.exists() {
-			error!("file {:?} does not exist", filename);
+			error!("file \"{:?}\" not found", filename);
 			return None;
 		}
 

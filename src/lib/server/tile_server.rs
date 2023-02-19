@@ -43,7 +43,6 @@ impl TileServer {
 
 	#[tokio::main]
 	pub async fn start(&mut self) {
-		println!("hallo");
 		let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
 
 		let mut sources: Vec<(String, usize, Arc<ServerSourceBox>)> = Vec::new();
