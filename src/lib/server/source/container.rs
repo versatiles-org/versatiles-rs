@@ -1,3 +1,5 @@
+use std::fmt::Debug;
+
 use crate::{
 	container::TileReaderBox,
 	helper::*,
@@ -87,5 +89,15 @@ impl ServerSourceTrait for TileContainer {
 
 		// unknown request;
 		ok_not_found()
+	}
+}
+
+impl Debug for TileContainer {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("TileContainer")
+			.field("reader", &self.reader)
+			.field("tile_mime", &self.tile_mime)
+			.field("precompression", &self.precompression)
+			.finish()
 	}
 }

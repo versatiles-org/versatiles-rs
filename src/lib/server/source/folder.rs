@@ -6,6 +6,7 @@ use enumset::EnumSet;
 use hyper::{Body, Response, Result};
 use std::{
 	env::current_dir,
+	fmt::Debug,
 	fs::File,
 	io::{BufReader, Read},
 	path::{Path, PathBuf},
@@ -73,5 +74,14 @@ impl ServerSourceTrait for Folder {
 		}
 
 		ok_data(blob, &Precompression::Uncompressed, &mime)
+	}
+}
+
+impl Debug for Folder {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Folder")
+			.field("folder", &self.folder)
+			.field("name", &self.name)
+			.finish()
 	}
 }

@@ -9,6 +9,7 @@ use std::{
 	collections::HashMap,
 	env::current_dir,
 	ffi::OsStr,
+	fmt::Debug,
 	fs::File,
 	io::{BufReader, Read},
 	path::Path,
@@ -113,6 +114,7 @@ impl TarFile {
 		})
 	}
 }
+
 impl ServerSourceTrait for TarFile {
 	fn get_name(&self) -> &str {
 		&self.name
@@ -170,5 +172,11 @@ impl ServerSourceTrait for TarFile {
 		}
 
 		ok_not_found()
+	}
+}
+
+impl Debug for TarFile {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("TarFile").field("name", &self.name).finish()
 	}
 }

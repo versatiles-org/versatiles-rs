@@ -24,6 +24,8 @@ impl TileServer {
 	}
 
 	pub fn add_source(&mut self, url_prefix: String, source: ServerSourceBox) {
+		log::info!("add source: prefix='{}', source={:?}", url_prefix, source);
+
 		let mut prefix = url_prefix;
 		if !prefix.starts_with('/') {
 			prefix = "/".to_owned() + &prefix;
@@ -43,6 +45,8 @@ impl TileServer {
 
 	#[tokio::main]
 	pub async fn start(&mut self) {
+		log::info!("starting server");
+
 		let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
 
 		let mut sources: Vec<(String, usize, Arc<ServerSourceBox>)> = Vec::new();
@@ -54,11 +58,15 @@ impl TileServer {
 		let arc_sources = Arc::new(sources);
 
 		let new_service = make_service_fn(move |_| {
+			log::debug!("new service");
+
 			let arc_sources = arc_sources.clone();
 			async move {
 				Ok::<_, GenericError>(service_fn(move |req: Request<Body>| {
 					let arc_sources = arc_sources.clone();
 					async move {
+						log::debug!("request {:?}", req);
+
 						let path = urlencoding::decode(req.uri().path()).unwrap();
 
 						let _method = req.method();
