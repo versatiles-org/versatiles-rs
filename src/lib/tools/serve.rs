@@ -3,6 +3,7 @@ use crate::{
 	tools::get_reader,
 };
 use clap::Args;
+use regex::Regex;
 
 #[derive(Args)]
 #[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]
@@ -31,23 +32,38 @@ pub struct Subcommand {
 
 pub fn run(arguments: &Subcommand) {
 	let mut server: TileServer = new_server(arguments);
-	arguments.sources.iter().for_each(|string| {
-		let parts: Vec<&str> = string.split('#').collect();
 
-		let (name, reader_source) = match parts.len() {
-			1 => (guess_name(string), string.as_str()),
-			2 => (parts[1], parts[0]),
-			_ => panic!(),
-		};
+	let patterns: Vec<Regex> = [
+		r"^\[(?P<name>[a-z0-9-]+?)\](?P<url>.*)$",
+		r"^(?P<url>.*)\[(?P<name>[a-z0-9-]+?)\]$",
+		r"^(?P<url>.*)#(?P<name>[a-z0-9-]+?)$",
+		r"^(?P<url>.*)$",
+	]
+	.iter()
+	.map(|pat| Regex::new(pat).unwrap())
+	.collect();
 
-		let reader = get_reader(reader_source);
-		server.add_source(format!("/tiles/{name}/"), source::TileContainer::from(reader));
+	arguments.sources.iter().for_each(|arg| {
+		let name: &str;
+		let url: &str;
 
-		fn guess_name(path: &str) -> &str {
-			let filename = path.split(&['/', '\\']).last().unwrap();
-			let name = filename.split('.').next().unwrap();
-			name
+		match patterns.iter().find(|p| p.is_match(arg)) {
+			None => panic!(),
+			Some(pattern) => {
+				let c = pattern.captures(&arg).unwrap();
+				url = c.name("url").unwrap().as_str();
+				name = match c.name("name") {
+					None => {
+						let filename = url.split(&['/', '\\']).last().unwrap();
+						filename.split('.').next().unwrap()
+					}
+					Some(m) => m.as_str(),
+				}
+			}
 		}
+
+		let reader = get_reader(url);
+		server.add_source(format!("/tiles/{name}/"), source::TileContainer::from(reader));
 	});
 
 	if arguments.static_folder.is_some() {
