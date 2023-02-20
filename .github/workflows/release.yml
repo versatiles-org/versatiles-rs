@@ -10,6 +10,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       -
+        name: Prepare
+        run: echo "LATEST_VERSION=$(git tag | egrep "^v\d+\.\d+\.\d+$" | sort --version-sort | tail -n1)" >> $GITHUB_ENV
+      -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v2
       -
@@ -38,4 +41,4 @@ jobs:
         with:
           platforms: linux/amd64, linux/386
           push: true
-          tags: versatiles/versatiles:latest, versatiles/versatiles:${{ env.GITHUB_REF_NAME }}
+          tags: versatiles/versatiles:latest, versatiles/versatiles:${{ env.LATEST_VERSION }}
