@@ -31,9 +31,6 @@ pub struct Subcommand {
 
 pub fn run(arguments: &Subcommand) {
 	let mut server: TileServer = new_server(arguments);
-
-	println!("serve to http://localhost:{}/", arguments.port);
-
 	arguments.sources.iter().for_each(|string| {
 		let parts: Vec<&str> = string.split('#').collect();
 
@@ -71,6 +68,7 @@ pub fn run(arguments: &Subcommand) {
 		.iter()
 		.for_each(|(url, source)| println!("   {:30}  <-  {}", url.to_owned() + "*", source));
 
+	println!("listening on http://127.0.0.1:{}/", arguments.port);
 	server.start();
 }
 
