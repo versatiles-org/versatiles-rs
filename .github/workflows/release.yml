@@ -34,7 +34,7 @@ jobs:
 #          docker run --rm ${{ env.TEST_TAG }}
       -
         name: get version
-        run: echo "LATEST_VERSION=$(git tag | egrep "^v\d+\.\d+\.\d+$" | sort --version-sort | tail -n1)" >> $GITHUB_ENV
+        run: echo "LATEST_VERSION=$(curl -s 'https://api.github.com/repos/versatiles-org/versatiles/tags' | jq -r '.[].name' | egrep '^v\d+\.\d+\.\d+$' | sort --version-sort | tail -n1)" >> $GITHUB_ENV
       -
         name: Build and push
         uses: docker/build-push-action@v4
