@@ -28,7 +28,7 @@ fi
 git push
 
 # publish
-cargo publish --no-verify
+#cargo publish --no-verify
 
 # get version
 version=$(cat Cargo.toml | sed -ne 's/^version[ ="]*\([0-9\.]*\).*$/\1/p')
