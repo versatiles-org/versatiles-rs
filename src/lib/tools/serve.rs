@@ -8,12 +8,14 @@ use regex::Regex;
 #[derive(Args)]
 #[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]
 pub struct Subcommand {
-	/// one or more tile containers you want to serve
-	/// supported container formats are: *.versatiles, *.tar, *.mbtiles
-	/// the url will be generated automatically:
-	///    e.g. "ukraine.versatiles" will be served at url "/tiles/ukraine/..."
-	/// you can add a name by using a "#":
-	///    e.g. "overlay.tar#iran-revolution" will serve "overlay.tar" at url "/tiles/iran-revolution/..."
+	/// One or more tile containers you want to serve.
+	/// Supported container formats are: *.versatiles, *.tar, *.mbtiles
+	/// Container files have to be on the local filesystem, accept VersaTiles containers:
+	///    VersaTiles containers can also be served from http://..., https://... or gs://...
+	/// The name used in the url (/tiles/$name/) will be generated automatically from the file name:
+	///    e.g. ".../ukraine.versatiles" will be served at url "/tiles/ukraine/..."
+	/// You can also configure a different name for each file using:
+	///    "[name]file", "file[name]" or "file#name"
 	#[arg(num_args = 1.., required = true, verbatim_doc_comment)]
 	pub sources: Vec<String>,
 
@@ -21,11 +23,11 @@ pub struct Subcommand {
 	#[arg(short, long, default_value = "8080")]
 	pub port: u16,
 
-	/// serve static content at "/static/..." from folder
+	/// serve static content at "/static/..." from a local folder
 	#[arg(short = 's', long, conflicts_with = "static_tar", value_name = "folder")]
 	pub static_folder: Option<String>,
 
-	/// serve static content at "/static/..." from tar file
+	/// serve static content at "/static/..." from a local tar file
 	#[arg(short = 't', long, conflicts_with = "static_folder", value_name = "file")]
 	pub static_tar: Option<String>,
 }
