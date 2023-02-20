@@ -1,31 +1,41 @@
-name: Release
+name: release docker image
 on:
+  release:
+    types: [published]
   workflow_dispatch:
 
 jobs:
   release:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-        - { o: macos-latest,    t: x86_64-apple-darwin        }
-        - { o: macos-latest,    t: aarch64-apple-darwin       }
-        - { o: ubuntu-latest,   t: x86_64-unknown-linux-musl  }
-        - { o: ubuntu-latest,   t: aarch64-unknown-linux-musl }
-        - { o: windows-latest,  t: x86_64-pc-windows-msvc     }
-        - { o: windows-latest,  t: aarch64-pc-windows-msvc    }
-
-    name: ${{ matrix.t }}
-    runs-on: ${{ matrix.o }}
-    permissions:
-      id-token: write
-      contents: write
-
+    name: release
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@main
-    - uses: cargo-bins/release-rust@v1
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        crates-token: ${{ secrets.CRATES_TOKEN }}
-        target: ${{ matrix.t }}
-        publish-tag: false
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      -
+        name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+#      -
+#        name: Build and export to Docker
+#        uses: docker/build-push-action@v4
+#        with:
+#          platforms: linux/amd64,linux/arm64
+#          load: true
+#          tags: ${{ env.TEST_TAG }}
+#      -
+#        name: Test
+#        run: |
+#          docker run --rm ${{ env.TEST_TAG }}
+      -
+        name: Build and push
+        uses: docker/build-push-action@v4
+        with:
+          platforms: linux/amd64, linux/386
+          push: true
+          tags: versatiles/versatiles:latest
