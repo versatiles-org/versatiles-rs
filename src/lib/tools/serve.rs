@@ -46,23 +46,17 @@ pub fn run(arguments: &Subcommand) {
 	.collect();
 
 	arguments.sources.iter().for_each(|arg| {
-		let name: &str;
-		let url: &str;
+		let pattern = patterns.iter().find(|p| p.is_match(arg)).unwrap();
+		let c = pattern.captures(arg).unwrap();
 
-		match patterns.iter().find(|p| p.is_match(arg)) {
-			None => panic!(),
-			Some(pattern) => {
-				let c = pattern.captures(&arg).unwrap();
-				url = c.name("url").unwrap().as_str();
-				name = match c.name("name") {
-					None => {
-						let filename = url.split(&['/', '\\']).last().unwrap();
-						filename.split('.').next().unwrap()
-					}
-					Some(m) => m.as_str(),
-				}
+		let url: &str = c.name("url").unwrap().as_str();
+		let name: &str = match c.name("name") {
+			None => {
+				let filename = url.split(&['/', '\\']).last().unwrap();
+				filename.split('.').next().unwrap()
 			}
-		}
+			Some(m) => m.as_str(),
+		};
 
 		let reader = get_reader(url);
 		server.add_source(format!("/tiles/{name}/"), source::TileContainer::from(reader));
