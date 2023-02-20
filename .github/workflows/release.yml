@@ -32,12 +32,10 @@ jobs:
 #        name: Test
 #        run: |
 #          docker run --rm ${{ env.TEST_TAG }}
-      - name: Dump env
-        run: env | sort
       -
         name: Build and push
         uses: docker/build-push-action@v4
         with:
           platforms: linux/amd64, linux/386
           push: true
-          tags: versatiles/versatiles:latest
+          tags: versatiles/versatiles:latest, versatiles/versatiles:${{ env.GITHUB_REF_NAME }}
