@@ -12,7 +12,9 @@ jobs:
       matrix:
         include:
           - os: debian
+            platforms: "linux/amd64, linux/386"
           - os: alpine
+            platforms: "linux/amd64"
     steps:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
@@ -28,7 +30,7 @@ jobs:
       - name: "Build and push"
         uses: docker/build-push-action@v4
         with:
-          platforms: linux/amd64, linux/386
+          platforms: ${{ matrix.platforms }}
           file: "docker/${{ matrix.os }}.Dockerfile"
           push: true
           tags: versatiles/versatiles:${{ matrix.os }}-latest, versatiles/versatiles:${{ matrix.os }}-${{ env.LATEST_VERSION }}
