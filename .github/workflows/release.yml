@@ -29,6 +29,6 @@ jobs:
         uses: docker/build-push-action@v4
         with:
           platforms: linux/amd64, linux/386
-          file: "{context}/docker/${{ matrix.os }}.Dockerfile"
+          file: "docker/${{ matrix.os }}.Dockerfile"
           push: true
           tags: versatiles/versatiles:${{ matrix.os }}-latest, versatiles/versatiles:${{ matrix.os }}-${{ env.LATEST_VERSION }}
