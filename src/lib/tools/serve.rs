@@ -1,3 +1,5 @@
+use std::{net::IpAddr, str::FromStr};
+
 use crate::{
 	server::{source, TileServer},
 	tools::get_reader,
@@ -18,6 +20,10 @@ pub struct Subcommand {
 	///    "[name]file", "file[name]" or "file#name"
 	#[arg(num_args = 1.., required = true, verbatim_doc_comment)]
 	pub sources: Vec<String>,
+
+	/// serve via socket ip
+	#[arg(short = 'i', long, default_value = "127.0.0.1")]
+	pub ip: String,
 
 	/// serve via port
 	#[arg(short, long, default_value = "8080")]
@@ -85,5 +91,5 @@ pub fn run(arguments: &Subcommand) {
 }
 
 fn new_server(command: &Subcommand) -> TileServer {
-	TileServer::new(command.port)
+	TileServer::new(IpAddr::from_str(&command.ip).unwrap(), command.port)
 }

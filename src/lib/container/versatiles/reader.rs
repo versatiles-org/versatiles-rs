@@ -2,7 +2,7 @@ use super::types::*;
 use crate::{container::*, helper::*};
 use itertools::Itertools;
 use log::debug;
-use std::{collections::HashMap, fmt::Debug, ops::Shr, str::from_utf8, sync::RwLock};
+use std::{collections::HashMap, fmt::Debug, ops::Shr, sync::RwLock};
 
 pub struct TileReader {
 	meta: Blob,

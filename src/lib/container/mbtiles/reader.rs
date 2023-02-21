@@ -8,7 +8,6 @@ use rusqlite::OpenFlags;
 use std::{
 	env::current_dir,
 	path::{Path, PathBuf},
-	str::from_utf8,
 	thread,
 };
 

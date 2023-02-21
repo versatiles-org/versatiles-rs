@@ -6,18 +6,24 @@ use hyper::{
 	service::{make_service_fn, service_fn},
 	Body, Request, Response, Result, Server, StatusCode,
 };
-use std::{net::SocketAddr, path::Path, sync::Arc};
+use std::{
+	net::{IpAddr, SocketAddr},
+	path::Path,
+	sync::Arc,
+};
 
 type GenericError = Box<dyn std::error::Error + Send + Sync>;
 
 pub struct TileServer {
+	ip: IpAddr,
 	port: u16,
 	sources: Vec<(String, ServerSourceBox)>,
 }
 
 impl TileServer {
-	pub fn new(port: u16) -> TileServer {
+	pub fn new(ip: IpAddr, port: u16) -> TileServer {
 		TileServer {
+			ip,
 			port,
 			sources: Vec::new(),
 		}
@@ -47,7 +53,7 @@ impl TileServer {
 	pub async fn start(&mut self) {
 		log::info!("starting server");
 
-		let addr = SocketAddr::from(([127, 0, 0, 1], self.port));
+		let socket = SocketAddr::new(self.ip, self.port);
 
 		let mut sources: Vec<(String, usize, Arc<ServerSourceBox>)> = Vec::new();
 		while !self.sources.is_empty() {
@@ -111,7 +117,7 @@ impl TileServer {
 				}))
 			}
 		});
-		let server = Server::bind(&addr).serve(new_service);
+		let server = Server::bind(&socket).serve(new_service);
 		println!("server is running");
 
 		if let Err(e) = server.await {

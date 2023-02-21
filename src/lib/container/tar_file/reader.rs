@@ -2,7 +2,6 @@ use crate::{container::*, helper::*};
 use log::trace;
 use std::{
 	collections::HashMap, env::current_dir, fmt::Debug, fs::File, io::Read, os::unix::prelude::FileExt, path::Path,
-	str::from_utf8,
 };
 use tar::{Archive, EntryType};
 
