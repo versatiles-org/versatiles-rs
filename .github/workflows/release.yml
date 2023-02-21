@@ -8,37 +8,27 @@ jobs:
   release:
     name: Build and release
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: debian
+          - os: alpine
     steps:
-      -
-        name: Set up QEMU
+      - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
-      -
-        name: Set up Docker Buildx
+      - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
-      -
-        name: Login to Docker Hub
+      - name: Login to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-#      -
-#        name: Build and export to Docker
-#        uses: docker/build-push-action@v4
-#        with:
-#          platforms: linux/amd64,linux/arm64
-#          load: true
-#          tags: ${{ env.TEST_TAG }}
-#      -
-#        name: Test
-#        run: |
-#          docker run --rm ${{ env.TEST_TAG }}
-      -
-        name: get version
+      - name: get version
         run: echo "LATEST_VERSION=$(curl -s 'https://api.github.com/repos/versatiles-org/versatiles/releases/latest' | jq -r '.tag_name')" >> $GITHUB_ENV
-      -
-        name: Build and push
+      - name: "Build and push"
         uses: docker/build-push-action@v4
         with:
           platforms: linux/amd64, linux/386
+          file: "{context}/docker/${{ matrix.os }}.Dockerfile"
           push: true
-          tags: versatiles/versatiles:latest, versatiles/versatiles:${{ env.LATEST_VERSION }}
+          tags: versatiles/versatiles:${{ matrix.os }}-latest, versatiles/versatiles:${{ matrix.os }}-${{ env.LATEST_VERSION }}
