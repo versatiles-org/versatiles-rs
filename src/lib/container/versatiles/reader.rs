@@ -159,7 +159,6 @@ impl TileReaderTrait for TileReader {
 impl Debug for TileReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TileReader:VersaTiles")
-			.field("meta", &from_utf8(self.get_meta().as_slice()).unwrap())
 			.field("parameters", &self.get_parameters())
 			.finish()
 	}
