@@ -52,7 +52,7 @@ impl TileServer {
 	}
 
 	pub fn set_static(&mut self, source: ServerSourceBox) {
-		log::info!("set static: source={:?}", source);
+		log::debug!("set static: source={:?}", source);
 		self.static_source = Some(Arc::new(source));
 	}
 
@@ -105,6 +105,7 @@ impl TileServer {
 						let source_option = arc_sources.iter().find(|(prefix, _, _)| path.starts_with(prefix));
 
 						let mut sub_path: Vec<&str> = path.split('/').collect();
+
 						let source: Arc<ServerSourceBox>;
 						if let Some((_prefix, skip, my_source)) = source_option {
 							source = my_source.clone();
@@ -116,9 +117,12 @@ impl TileServer {
 							};
 						} else if arc_static_source.is_some() {
 							source = arc_static_source.as_ref().unwrap().clone();
+							sub_path.remove(0); // delete first empty element, because of trailing "/"
 						} else {
 							return ok_not_found();
 						}
+
+						log::debug!("serve {} from {}", sub_path.join("/"), source.get_name());
 
 						let result = source.get_data(sub_path.as_slice(), encoding_set);
 
