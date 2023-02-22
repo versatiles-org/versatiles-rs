@@ -32,7 +32,7 @@ impl TileServer {
 	}
 
 	pub fn add_source(&mut self, url_prefix: String, source: ServerSourceBox) {
-		log::info!("add source: prefix='{}', source={:?}", url_prefix, source);
+		log::debug!("add source: prefix='{}', source={:?}", url_prefix, source);
 
 		let mut prefix = url_prefix;
 		if !prefix.starts_with('/') {
