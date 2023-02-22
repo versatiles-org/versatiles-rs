@@ -59,6 +59,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4b46cbb362ab8752921c97e041f5e366ee6297bd428a31275b9fcf1e380f7299"
 
 [[package]]
+name = "astra"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a97e65fed1928086888fd6078b82076bfc40dce7a32a260c312bb8a55aba01d5"
+dependencies = [
+ "futures-core",
+ "hyper",
+ "log",
+ "mio",
+ "num_cpus",
+ "tokio",
+]
+
+[[package]]
 name = "async-trait"
 version = "0.1.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1919,8 +1933,10 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 name = "versatiles"
 version = "0.2.7"
 dependencies = [
+ "astra",
  "brotli",
  "byteorder",
+ "bytes",
  "clap 4.1.6",
  "clap-verbosity-flag",
  "criterion",
@@ -1928,7 +1944,7 @@ dependencies = [
  "env_logger",
  "flate2",
  "futures",
- "hyper",
+ "http",
  "image",
  "itertools",
  "log",
@@ -1944,7 +1960,6 @@ dependencies = [
  "sysinfo",
  "tar",
  "term_size",
- "tokio",
  "urlencoding",
  "webp",
 ]

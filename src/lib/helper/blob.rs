@@ -1,4 +1,4 @@
-use hyper::body::Bytes;
+use bytes::Bytes;
 use std::ops::Range;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -10,8 +10,8 @@ impl Blob {
 	pub fn from_vec(vec: Vec<u8>) -> Blob {
 		Blob(Bytes::from(vec))
 	}
-	pub fn from_slice(slice: &[u8]) -> Blob {
-		Blob(Bytes::copy_from_slice(slice))
+	pub fn from_string(text: &str) -> Blob {
+		Blob(Bytes::from(text.to_owned()))
 	}
 	pub fn empty() -> Blob {
 		Blob(Bytes::from(Vec::new()))
@@ -45,7 +45,6 @@ mod tests {
 		let vec = vec![0, 1, 2, 3, 4, 5, 6, 7];
 		let blob = Blob::from_vec(vec.clone());
 		assert_eq!(blob.as_vec(), vec);
-		assert_eq!(Blob::from_slice(blob.as_slice()), blob);
 		assert_eq!(blob.len(), 8);
 		assert_eq!(blob.get_range(2..5).as_vec(), vec![2, 3, 4]);
 	}

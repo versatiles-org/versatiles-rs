@@ -1,30 +1,21 @@
 use super::traits::ServerSourceBox;
 use crate::helper::{Blob, Precompression};
+use astra::{Body, Request, Response, ResponseBuilder, Server};
 use enumset::{enum_set, EnumSet};
-use hyper::{
-	header::{self, CONTENT_ENCODING, CONTENT_TYPE},
-	service::{make_service_fn, service_fn},
-	Body, Request, Response, Result, Server, StatusCode,
-};
-use std::{
-	net::{IpAddr, SocketAddr},
-	path::Path,
-	sync::Arc,
-};
-
-type GenericError = Box<dyn std::error::Error + Send + Sync>;
+use http::header::{ACCEPT_ENCODING, CONTENT_ENCODING, CONTENT_TYPE};
+use std::{path::Path, sync::Arc};
 
 pub struct TileServer {
-	ip: IpAddr,
+	ip: String,
 	port: u16,
 	sources: Vec<(String, ServerSourceBox)>,
 	static_source: Option<Arc<ServerSourceBox>>,
 }
 
 impl TileServer {
-	pub fn new(ip: IpAddr, port: u16) -> TileServer {
+	pub fn new(ip: &str, port: u16) -> TileServer {
 		TileServer {
-			ip,
+			ip: ip.to_owned(),
 			port,
 			sources: Vec::new(),
 			static_source: None,
@@ -56,8 +47,7 @@ impl TileServer {
 		self.static_source = Some(Arc::new(source));
 	}
 
-	#[tokio::main]
-	pub async fn start(&mut self) {
+	pub fn start(&mut self) {
 		log::info!("starting server");
 
 		let mut sources: Vec<(String, usize, Arc<ServerSourceBox>)> = Vec::new();
@@ -69,78 +59,56 @@ impl TileServer {
 		let arc_sources = Arc::new(sources);
 		let arc_static_source = self.static_source.clone();
 
-		let new_service = make_service_fn(move |_| {
-			log::debug!("new service");
+		println!("server starts listening on http://{}:{}/", self.ip, self.port);
 
-			let arc_sources = arc_sources.clone();
-			let arc_static_source = arc_static_source.clone();
-			async move {
-				Ok::<_, GenericError>(service_fn(move |req: Request<Body>| {
-					let arc_sources = arc_sources.clone();
-					let arc_static_source = arc_static_source.clone();
+		let address = format!("{}:{}", self.ip, self.port);
+		Server::bind(address)
+			.serve(move |req: Request| -> Response {
+				log::debug!("request {:?}", req);
 
-					async move {
-						log::debug!("request {:?}", req);
+				let path = urlencoding::decode(req.uri().path()).unwrap().to_string();
 
-						let path = urlencoding::decode(req.uri().path()).unwrap().to_string();
+				let _method = req.method();
+				let headers = req.headers();
 
-						let _method = req.method();
-						let headers = req.headers();
+				let mut encoding_set: EnumSet<Precompression> = enum_set!(Precompression::Uncompressed);
+				let encoding_option = headers.get(ACCEPT_ENCODING);
+				if let Some(encoding) = encoding_option {
+					let encoding_string = encoding.to_str().unwrap_or("");
 
-						let mut encoding_set: EnumSet<Precompression> = enum_set!(Precompression::Uncompressed);
-						let encoding_option = headers.get(header::ACCEPT_ENCODING);
-						if let Some(encoding) = encoding_option {
-							let encoding_string = encoding.to_str().unwrap_or("");
-
-							if encoding_string.contains("gzip") {
-								encoding_set.insert(Precompression::Gzip);
-							}
-							if encoding_string.contains("br") {
-								encoding_set.insert(Precompression::Brotli);
-							}
-						}
-
-						let source_option = arc_sources.iter().find(|(prefix, _, _)| path.starts_with(prefix));
-
-						let mut sub_path: Vec<&str> = path.split('/').collect();
-
-						let source: Arc<ServerSourceBox>;
-						if let Some((_prefix, skip, my_source)) = source_option {
-							source = my_source.clone();
-
-							if skip < &sub_path.len() {
-								sub_path = sub_path.split_off(*skip);
-							} else {
-								sub_path.clear()
-							};
-						} else if arc_static_source.is_some() {
-							source = arc_static_source.as_ref().unwrap().clone();
-							sub_path.remove(0); // delete first empty element, because of trailing "/"
-						} else {
-							return ok_not_found();
-						}
-
-						log::debug!("serve {} from {}", sub_path.join("/"), source.get_name());
-
-						let result = source.get_data(sub_path.as_slice(), encoding_set);
-
-						if result.is_err() {
-							return ok_not_found();
-						}
-
-						result
+					if encoding_string.contains("gzip") {
+						encoding_set.insert(Precompression::Gzip);
 					}
-				}))
-			}
-		});
+					if encoding_string.contains("br") {
+						encoding_set.insert(Precompression::Brotli);
+					}
+				}
 
-		let socket = SocketAddr::new(self.ip, self.port);
-		let server = Server::bind(&socket).serve(new_service);
-		println!("server is listening on http://{}:{}/", self.ip, self.port);
+				let source_option = arc_sources.iter().find(|(prefix, _, _)| path.starts_with(prefix));
 
-		if let Err(e) = server.await {
-			eprintln!("server error: {e}");
-		}
+				let mut sub_path: Vec<&str> = path.split('/').collect();
+
+				let source: Arc<ServerSourceBox>;
+				if let Some((_prefix, skip, my_source)) = source_option {
+					source = my_source.clone();
+
+					if skip < &sub_path.len() {
+						sub_path = sub_path.split_off(*skip);
+					} else {
+						sub_path.clear()
+					};
+				} else if arc_static_source.is_some() {
+					source = arc_static_source.as_ref().unwrap().clone();
+					sub_path.remove(0); // delete first empty element, because of trailing "/"
+				} else {
+					return ok_not_found();
+				}
+
+				log::debug!("serve {} from {}", sub_path.join("/"), source.get_name());
+
+				source.get_data(sub_path.as_slice(), encoding_set)
+			})
+			.expect("serve failed");
 	}
 
 	pub fn iter_url_mapping(&self) -> impl Iterator<Item = (String, String)> + '_ {
@@ -151,15 +119,12 @@ impl TileServer {
 	}
 }
 
-pub fn ok_not_found() -> Result<Response<Body>> {
-	Ok(Response::builder()
-		.status(StatusCode::NOT_FOUND)
-		.body("Not Found".into())
-		.unwrap())
+pub fn ok_not_found() -> Response {
+	ResponseBuilder::new().status(404).body(Body::new("Not Found")).unwrap()
 }
 
-pub fn ok_data(data: Blob, precompression: &Precompression, mime: &str) -> Result<Response<Body>> {
-	let mut response = Response::builder().status(StatusCode::OK).header(CONTENT_TYPE, mime);
+pub fn ok_data(data: Blob, precompression: &Precompression, mime: &str) -> Response {
+	let mut response = ResponseBuilder::new().status(200).header(CONTENT_TYPE, mime);
 
 	match precompression {
 		Precompression::Uncompressed => {}
@@ -167,7 +132,7 @@ pub fn ok_data(data: Blob, precompression: &Precompression, mime: &str) -> Resul
 		Precompression::Brotli => response = response.header(CONTENT_ENCODING, "br"),
 	}
 
-	Ok(response.body(data.as_vec().into()).unwrap())
+	response.body(data.as_vec().into()).unwrap()
 }
 
 pub fn guess_mime(path: &Path) -> String {

@@ -1,12 +1,11 @@
-use std::fmt::Debug;
-
 use crate::{
 	container::TileReaderBox,
 	helper::*,
 	server::{ok_data, ok_not_found, ServerSourceTrait},
 };
+use astra::Response;
 use enumset::EnumSet;
-use hyper::{Body, Response, Result};
+use std::fmt::Debug;
 
 pub struct TileContainer {
 	reader: TileReaderBox,
@@ -44,7 +43,7 @@ impl ServerSourceTrait for TileContainer {
 		self.reader.get_name()
 	}
 
-	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Result<Response<Body>> {
+	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response {
 		if path.len() == 3 {
 			// get tile
 

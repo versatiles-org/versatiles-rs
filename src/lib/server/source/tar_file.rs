@@ -2,8 +2,8 @@ use crate::{
 	helper::*,
 	server::{guess_mime, ok_data, ok_not_found, ServerSourceTrait},
 };
+use astra::Response;
 use enumset::EnumSet;
-use hyper::{Body, Response, Result};
 use log::trace;
 use std::{
 	collections::HashMap,
@@ -120,7 +120,7 @@ impl ServerSourceTrait for TarFile {
 		&self.name
 	}
 
-	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Result<Response<Body>> {
+	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response {
 		let entry_name = path.join("/");
 		let entry_option = self.lookup.get(&entry_name);
 		if entry_option.is_none() {

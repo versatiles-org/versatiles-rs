@@ -44,15 +44,17 @@ strip = true
 lto = false
 
 [dependencies]
+astra = "0.1.3"
 brotli = { version = "3.3.4", features = ["std"], default-features = false }
 byteorder = { default-features = false, version = "1.4.3" }
+bytes = "1.4.0"
 clap = { version = "4.1.6" }
 clap-verbosity-flag = "2.0.0"
 enumset = "1.0.12"
 env_logger = { features = ["regex"], default-features = false, version = "0.10.0" }
 flate2 = { version = "1.0.25", default-features = false }
 futures = { default-features = false, version = "0.3.26" }
-hyper = { version = "0.14.24", default-features = false, features = ["server"] }
+http = "0.2.9"
 image = { version = "0.24.5", default-features = false, features = ["jpeg", "png"] }
 itertools = { default-features = false, version = "0.10.5" }
 log = "0.4.17"
@@ -68,7 +70,6 @@ rusqlite = "0.28.0"
 sysinfo = { default-features = false, version = "0.28.0" }
 tar = { default-features = false, version = "0.4.38" }
 term_size = "0.3.2"
-tokio = { version = "1.25.0", default-features = false, features = ["rt-multi-thread"] }
 urlencoding = "2.1.2"
 webp = { version = "0.2.2", features = ["img"], default-features = false }
 

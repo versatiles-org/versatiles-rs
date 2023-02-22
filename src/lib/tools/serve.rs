@@ -1,5 +1,3 @@
-use std::{net::IpAddr, str::FromStr};
-
 use crate::{
 	server::{source, TileServer},
 	tools::get_reader,
@@ -84,5 +82,5 @@ pub fn run(arguments: &Subcommand) {
 }
 
 fn new_server(command: &Subcommand) -> TileServer {
-	TileServer::new(IpAddr::from_str(&command.ip).unwrap(), command.port)
+	TileServer::new(&command.ip, command.port)
 }

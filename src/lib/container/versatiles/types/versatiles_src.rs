@@ -92,7 +92,8 @@ impl VersaTilesSrcTrait for VersaTilesSrcObjectStore {
 		})
 	}
 	fn read_range(&self, range: &ByteRange) -> Blob {
-		Blob::from_bytes(block_on(self.object_store.get_range(&self.url, range.as_range_usize())).unwrap())
+		let bytes = block_on(self.object_store.get_range(&self.url, range.as_range_usize())).unwrap();
+		Blob::from_bytes(bytes)
 	}
 	fn get_name(&self) -> &str {
 		&self.name

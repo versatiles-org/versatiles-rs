@@ -198,7 +198,7 @@ impl TileReaderTrait for TileReader {
 		Box::new(Self::load_from_sqlite(&filename))
 	}
 	fn get_meta(&self) -> Blob {
-		Blob::from_slice(self.meta_data.as_ref().unwrap().as_bytes())
+		Blob::from_string(self.meta_data.as_ref().unwrap())
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
 		&self.parameters
