@@ -106,8 +106,7 @@ impl TileServer {
 
 						let mut sub_path: Vec<&str> = path.split('/').collect();
 						let source: Arc<ServerSourceBox>;
-						if source_option.is_some() {
-							let (_prefix, skip, my_source) = source_option.unwrap();
+						if let Some((_prefix, skip, my_source)) = source_option {
 							source = my_source.clone();
 
 							if skip < &sub_path.len() {
@@ -115,12 +114,10 @@ impl TileServer {
 							} else {
 								sub_path.clear()
 							};
+						} else if arc_static_source.is_some() {
+							source = arc_static_source.as_ref().unwrap().clone();
 						} else {
-							if arc_static_source.is_some() {
-								source = arc_static_source.as_ref().unwrap().clone();
-							} else {
-								return ok_not_found();
-							}
+							return ok_not_found();
 						}
 
 						let result = source.get_data(sub_path.as_slice(), encoding_set);
