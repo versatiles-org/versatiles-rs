@@ -33,6 +33,7 @@ version=$(cat Cargo.toml | sed -ne 's/^version[ ="]*\([0-9\.]*\).*$/\1/p')
 
 # git tag
 git tag -a "v$version" -m "new release: v$version"
+git push
 git push origin "v$version"
 
 # github create release
