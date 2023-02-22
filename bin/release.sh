@@ -25,9 +25,6 @@ if [ "$(git status --porcelain)" ]; then
 	exit 1
 fi
 
-# push
-git push
-
 # publish to crates.io
 cargo publish --no-verify
 
