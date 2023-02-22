@@ -60,8 +60,6 @@ impl TileServer {
 	pub async fn start(&mut self) {
 		log::info!("starting server");
 
-		let socket = SocketAddr::new(self.ip, self.port);
-
 		let mut sources: Vec<(String, usize, Arc<ServerSourceBox>)> = Vec::new();
 		while !self.sources.is_empty() {
 			let (prefix, source) = self.sources.pop().unwrap();
@@ -135,8 +133,10 @@ impl TileServer {
 				}))
 			}
 		});
+
+		let socket = SocketAddr::new(self.ip, self.port);
 		let server = Server::bind(&socket).serve(new_service);
-		println!("server is running");
+		println!("server is listening on http://{}:{}/", self.ip, self.port);
 
 		if let Err(e) = server.await {
 			eprintln!("server error: {e}");

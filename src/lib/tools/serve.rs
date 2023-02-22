@@ -80,7 +80,6 @@ pub fn run(arguments: &Subcommand) {
 		.iter()
 		.for_each(|(url, source)| println!("   {:30}  <-  {}", url.to_owned() + "*", source));
 
-	println!("listening on http://127.0.0.1:{}/", arguments.port);
 	server.start();
 }
 
