@@ -18,6 +18,7 @@ pub struct TileServer {
 	ip: IpAddr,
 	port: u16,
 	sources: Vec<(String, ServerSourceBox)>,
+	static_source: Option<Arc<ServerSourceBox>>,
 }
 
 impl TileServer {
@@ -26,6 +27,7 @@ impl TileServer {
 			ip,
 			port,
 			sources: Vec::new(),
+			static_source: None,
 		}
 	}
 
@@ -49,6 +51,11 @@ impl TileServer {
 		self.sources.push((prefix, source));
 	}
 
+	pub fn set_static(&mut self, source: ServerSourceBox) {
+		log::info!("set static: source={:?}", source);
+		self.static_source = Some(Arc::new(source));
+	}
+
 	#[tokio::main]
 	pub async fn start(&mut self) {
 		log::info!("starting server");
@@ -62,18 +69,22 @@ impl TileServer {
 			sources.push((prefix, skip, Arc::new(source)));
 		}
 		let arc_sources = Arc::new(sources);
+		let arc_static_source = self.static_source.clone();
 
 		let new_service = make_service_fn(move |_| {
 			log::debug!("new service");
 
 			let arc_sources = arc_sources.clone();
+			let arc_static_source = arc_static_source.clone();
 			async move {
 				Ok::<_, GenericError>(service_fn(move |req: Request<Body>| {
 					let arc_sources = arc_sources.clone();
+					let arc_static_source = arc_static_source.clone();
+
 					async move {
 						log::debug!("request {:?}", req);
 
-						let path = urlencoding::decode(req.uri().path()).unwrap();
+						let path = urlencoding::decode(req.uri().path()).unwrap().to_string();
 
 						let _method = req.method();
 						let headers = req.headers();
@@ -93,20 +104,26 @@ impl TileServer {
 
 						let source_option = arc_sources.iter().find(|(prefix, _, _)| path.starts_with(prefix));
 
-						if source_option.is_none() {
-							return ok_not_found();
+						let mut sub_path: Vec<&str> = path.split('/').collect();
+						let source: Arc<ServerSourceBox>;
+						if source_option.is_some() {
+							let (_prefix, skip, my_source) = source_option.unwrap();
+							source = my_source.clone();
+
+							if skip < &sub_path.len() {
+								sub_path = sub_path.split_off(*skip);
+							} else {
+								sub_path.clear()
+							};
+						} else {
+							if arc_static_source.is_some() {
+								source = arc_static_source.as_ref().unwrap().clone();
+							} else {
+								return ok_not_found();
+							}
 						}
 
-						let (_prefix, skip, source) = source_option.unwrap();
-
-						let split_path: Vec<&str> = path.split('/').collect();
-						let sub_path: &[&str] = if skip < &split_path.len() {
-							&split_path.as_slice()[*skip..]
-						} else {
-							&[]
-						};
-
-						let result = source.get_data(sub_path, encoding_set);
+						let result = source.get_data(sub_path.as_slice(), encoding_set);
 
 						if result.is_err() {
 							return ok_not_found();

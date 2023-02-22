@@ -29,11 +29,11 @@ pub struct Subcommand {
 	#[arg(short, long, default_value = "8080")]
 	pub port: u16,
 
-	/// serve static content at "/static/..." from a local folder
+	/// serve static content at "/..." from a local folder
 	#[arg(short = 's', long, conflicts_with = "static_tar", value_name = "folder")]
 	pub static_folder: Option<String>,
 
-	/// serve static content at "/static/..." from a local tar file
+	/// serve static content at "/..." from a local tar file
 	#[arg(short = 't', long, conflicts_with = "static_folder", value_name = "file")]
 	pub static_tar: Option<String>,
 }
@@ -69,15 +69,9 @@ pub fn run(arguments: &Subcommand) {
 	});
 
 	if arguments.static_folder.is_some() {
-		server.add_source(
-			String::from("/static/"),
-			source::Folder::from(arguments.static_folder.as_ref().unwrap()),
-		);
+		server.set_static(source::Folder::from(arguments.static_folder.as_ref().unwrap()));
 	} else if arguments.static_tar.is_some() {
-		server.add_source(
-			String::from("/static/"),
-			source::TarFile::from(arguments.static_tar.as_ref().unwrap()),
-		);
+		server.set_static(source::TarFile::from(arguments.static_tar.as_ref().unwrap()));
 	}
 
 	let mut list: Vec<(String, String)> = server.iter_url_mapping().collect();
