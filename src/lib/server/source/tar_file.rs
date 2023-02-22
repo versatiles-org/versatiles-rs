@@ -16,14 +16,16 @@ use std::{
 };
 use tar::{Archive, EntryType};
 
-struct CompressedVersions {
+struct FileEntry {
+	mime: String,
 	un: Option<Blob>,
 	gz: Option<Blob>,
 	br: Option<Blob>,
 }
-impl CompressedVersions {
-	fn new() -> Self {
-		CompressedVersions {
+impl FileEntry {
+	fn new(mime: String) -> Self {
+		FileEntry {
+			mime,
 			un: None,
 			gz: None,
 			br: None,
@@ -32,7 +34,7 @@ impl CompressedVersions {
 }
 
 pub struct TarFile {
-	lookup: HashMap<String, CompressedVersions>,
+	lookup: HashMap<String, FileEntry>,
 	name: String,
 }
 impl TarFile {
@@ -45,7 +47,7 @@ impl TarFile {
 		assert!(filename.is_absolute(), "path {filename:?} must be absolute");
 		assert!(filename.is_file(), "path {filename:?} must be a file");
 
-		let mut lookup: HashMap<String, CompressedVersions> = HashMap::new();
+		let mut lookup: HashMap<String, FileEntry> = HashMap::new();
 		let file = BufReader::new(File::open(filename).unwrap());
 		let mut archive = Archive::new(file);
 
@@ -80,6 +82,10 @@ impl TarFile {
 			file.read_to_end(&mut buffer).unwrap();
 			let blob = Blob::from_vec(buffer);
 
+			let filename = entry_path.file_name().unwrap();
+
+			let mime = &guess_mime(Path::new(&filename));
+
 			let mut add = |path: &Path, blob: Blob| {
 				let mut name: String = path
 					.iter()
@@ -94,7 +100,7 @@ impl TarFile {
 				trace!("adding file from tar: {} ({:?})", name, precompression);
 
 				let entry = lookup.entry(name);
-				let versions = entry.or_insert_with(CompressedVersions::new);
+				let versions = entry.or_insert_with(|| FileEntry::new(mime.to_string()));
 				match precompression {
 					Precompression::Uncompressed => versions.un = Some(blob),
 					Precompression::Gzip => versions.gz = Some(blob),
@@ -102,7 +108,7 @@ impl TarFile {
 				}
 			};
 
-			if entry_path.file_name() == Some(OsStr::new("index.html")) {
+			if filename == OsStr::new("index.html") {
 				add(entry_path.parent().unwrap(), blob.clone());
 			}
 			add(&entry_path, blob);
@@ -127,47 +133,45 @@ impl ServerSourceTrait for TarFile {
 			return ok_not_found();
 		}
 
-		let versions = entry_option.unwrap().to_owned();
-
-		let mime = guess_mime(Path::new(&entry_name));
+		let file_entry = entry_option.unwrap().to_owned();
 
 		if accept.contains(Precompression::Brotli) {
-			let respond = |blob| ok_data(blob, &Precompression::Brotli, &mime);
+			let respond = |blob| ok_data(blob, &Precompression::Brotli, &file_entry.mime);
 
-			if let Some(blob) = &versions.br {
+			if let Some(blob) = &file_entry.br {
 				return respond(blob.to_owned());
 			}
-			if let Some(blob) = &versions.un {
+			if let Some(blob) = &file_entry.un {
 				return respond(compress_brotli(blob.to_owned()));
 			}
-			if let Some(blob) = &versions.gz {
+			if let Some(blob) = &file_entry.gz {
 				return respond(compress_brotli(decompress_gzip(blob.to_owned())));
 			}
 		}
 
 		if accept.contains(Precompression::Gzip) {
-			let respond = |blob| ok_data(blob, &Precompression::Gzip, &mime);
+			let respond = |blob| ok_data(blob, &Precompression::Gzip, &file_entry.mime);
 
-			if let Some(blob) = &versions.gz {
+			if let Some(blob) = &file_entry.gz {
 				return respond(blob.to_owned());
 			}
-			if let Some(blob) = &versions.un {
+			if let Some(blob) = &file_entry.un {
 				return respond(compress_gzip(blob.to_owned()));
 			}
-			if let Some(blob) = &versions.br {
+			if let Some(blob) = &file_entry.br {
 				return respond(compress_gzip(decompress_brotli(blob.to_owned())));
 			}
 		}
 
-		let respond = |blob| ok_data(blob, &Precompression::Uncompressed, &mime);
+		let respond = |blob| ok_data(blob, &Precompression::Uncompressed, &file_entry.mime);
 
-		if let Some(blob) = &versions.un {
+		if let Some(blob) = &file_entry.un {
 			return respond(blob.to_owned());
 		}
-		if let Some(blob) = &versions.br {
+		if let Some(blob) = &file_entry.br {
 			return respond(decompress_brotli(blob.to_owned()));
 		}
-		if let Some(blob) = &versions.gz {
+		if let Some(blob) = &file_entry.gz {
 			return respond(decompress_gzip(blob.to_owned()));
 		}
 
