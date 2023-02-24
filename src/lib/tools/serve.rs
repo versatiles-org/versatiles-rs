@@ -10,7 +10,7 @@ use regex::Regex;
 pub struct Subcommand {
 	/// One or more tile containers you want to serve.
 	/// Supported container formats are: *.versatiles, *.tar, *.mbtiles
-	/// Container files have to be on the local filesystem, accept VersaTiles containers:
+	/// Container files have to be on the local filesystem, except VersaTiles containers:
 	///    VersaTiles containers can also be served from http://..., https://... or gs://...
 	/// The name used in the url (/tiles/$name/) will be generated automatically from the file name:
 	///    e.g. ".../ukraine.versatiles" will be served at url "/tiles/ukraine/..."
