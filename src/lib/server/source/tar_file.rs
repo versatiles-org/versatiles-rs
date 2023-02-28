@@ -122,8 +122,11 @@ impl TarFile {
 }
 
 impl ServerSourceTrait for TarFile {
-	fn get_name(&self) -> &str {
-		&self.name
+	fn get_name(&self) -> String {
+		self.name.to_owned()
+	}
+	fn get_info_as_json(&self) -> String {
+		"{{\"type\":\"tar\"}}".to_owned()
 	}
 
 	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response {

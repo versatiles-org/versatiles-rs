@@ -59,13 +59,14 @@ impl TileServer {
 			let (prefix, tile_source) = self.tile_sources.pop().unwrap();
 			let skip = prefix.matches('/').count();
 			tile_sources_json_lines.push(format!(
-				"{{\"url\":\"{}\",\"name\":\"{}\"}}",
+				"{{ \"url\":\"{}\", \"name\":\"{}\", \"info\":{} }}",
 				prefix,
-				tile_source.get_name()
+				tile_source.get_name(),
+				tile_source.get_info_as_json()
 			));
 			sources.push((prefix, skip, Arc::new(tile_source)));
 		}
-		let tile_sources_json: String = "[\n".to_owned() + &tile_sources_json_lines.join(",\n\t") + "\n]";
+		let tile_sources_json: String = "[\n\t".to_owned() + &tile_sources_json_lines.join(",\n\t") + "\n]";
 
 		let arc_sources = Arc::new(sources);
 		let static_sources: Arc<Mutex<Vec<ServerSourceBox>>> = self.static_sources.clone();

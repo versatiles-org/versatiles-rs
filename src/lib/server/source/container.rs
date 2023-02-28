@@ -39,8 +39,20 @@ impl TileContainer {
 	}
 }
 impl ServerSourceTrait for TileContainer {
-	fn get_name(&self) -> &str {
-		self.reader.get_name()
+	fn get_name(&self) -> String {
+		self.reader.get_name().to_owned()
+	}
+	fn get_info_as_json(&self) -> String {
+		let parameters = self.reader.get_parameters();
+		let bbox_pyramide = parameters.get_bbox_pyramide();
+		format!(
+			"{{ \"format\":\"{:?}\", \"precompression\":\"{:?}\", \"zoom_min\":{}, \"zoom_max\":{}, \"bbox\":{:?} }}",
+			parameters.get_tile_format(),
+			parameters.get_tile_precompression(),
+			bbox_pyramide.get_zoom_min().unwrap(),
+			bbox_pyramide.get_zoom_max().unwrap(),
+			bbox_pyramide.get_geo_bbox(),
+		)
 	}
 
 	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response {
