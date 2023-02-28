@@ -69,8 +69,6 @@ impl TileReader {
 			let key = entry.get::<_, String>(0).unwrap();
 			let val = entry.get::<_, String>(1).unwrap();
 
-			//println!("name: {}, value: {}", key, val);
-
 			match key.as_str() {
 				"format" => match val.as_str() {
 					"jpg" => {

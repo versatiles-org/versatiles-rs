@@ -17,7 +17,6 @@ pub struct ProgressBar {
 #[allow(dead_code)]
 impl ProgressBar {
 	pub fn new(message: &str, max_value: u64) -> Self {
-		//println!("progressbar.init");
 		let now = SystemTime::now();
 		let mut progress = ProgressBar {
 			max_value,
@@ -43,7 +42,6 @@ impl ProgressBar {
 			return;
 		}
 
-		//println!("progressbar.update");
 		let now = SystemTime::now();
 		if now < self.next_update {
 			return;
@@ -52,7 +50,6 @@ impl ProgressBar {
 		self.draw();
 	}
 	fn draw(&mut self) {
-		//println!("progressbar.draw");
 		let size = dimensions_stdout();
 		if size.is_none() {
 			return;

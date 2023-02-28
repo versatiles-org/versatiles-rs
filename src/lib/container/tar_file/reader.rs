@@ -61,8 +61,6 @@ impl TileReaderTrait for TileReader {
 				path_tmp.remove(0);
 			}
 
-			//println!("{:?}", path_tmp);
-
 			let path_tmp_string = path_tmp.join("/");
 			drop(path);
 			let path_vec: Vec<&str> = path_tmp_string.split('/').collect();
