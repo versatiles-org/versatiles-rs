@@ -88,6 +88,17 @@ impl TileServer {
 					}
 				}
 
+				if path.starts_with("/api/") {
+					if path.starts_with("/api/layers.json") {
+						let text = "";
+						return ok_data(
+							Blob::from_string(text),
+							&Precompression::Uncompressed,
+							"application/json",
+						);
+					}
+				}
+
 				let source_option = arc_sources.iter().find(|(prefix, _, _)| path.starts_with(prefix));
 
 				let mut sub_path: Vec<&str> = path.split('/').collect();
@@ -108,9 +119,8 @@ impl TileServer {
 					return source.get_data(sub_path.as_slice(), encoding_set);
 				}
 
-				sub_path.remove(0); // delete first empty element, because of trailing "/"
-
 				// serve static content?
+				sub_path.remove(0); // delete first empty element, because of trailing "/"
 				for source in static_sources.lock().unwrap().iter() {
 					log::debug!("try to serve static {} from {}", sub_path.join("/"), source.get_name());
 
