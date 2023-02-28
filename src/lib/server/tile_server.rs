@@ -11,7 +11,7 @@ use std::{
 pub struct TileServer {
 	ip: String,
 	port: u16,
-	sources: Vec<(String, ServerSourceBox)>,
+	tile_sources: Vec<(String, ServerSourceBox)>,
 	static_sources: Arc<Mutex<Vec<ServerSourceBox>>>,
 }
 
@@ -20,13 +20,13 @@ impl TileServer {
 		TileServer {
 			ip: ip.to_owned(),
 			port,
-			sources: Vec::new(),
+			tile_sources: Vec::new(),
 			static_sources: Arc::new(Mutex::new(Vec::new())),
 		}
 	}
 
-	pub fn add_source(&mut self, url_prefix: String, source: ServerSourceBox) {
-		log::debug!("add source: prefix='{}', source={:?}", url_prefix, source);
+	pub fn add_source(&mut self, url_prefix: String, tile_source: ServerSourceBox) {
+		log::debug!("add source: prefix='{}', source={:?}", url_prefix, tile_source);
 
 		let mut prefix = url_prefix;
 		if !prefix.starts_with('/') {
@@ -36,13 +36,13 @@ impl TileServer {
 			prefix += "/";
 		}
 
-		for (other_prefix, _source) in self.sources.iter() {
+		for (other_prefix, _source) in self.tile_sources.iter() {
 			if other_prefix.starts_with(&prefix) || prefix.starts_with(other_prefix) {
 				panic!("multiple sources with the prefix '{prefix}' and '{other_prefix}' are defined");
 			};
 		}
 
-		self.sources.push((prefix, source));
+		self.tile_sources.push((prefix, tile_source));
 	}
 
 	pub fn add_static(&mut self, source: ServerSourceBox) {
@@ -54,11 +54,18 @@ impl TileServer {
 		log::info!("starting server");
 
 		let mut sources: Vec<(String, usize, Arc<ServerSourceBox>)> = Vec::new();
-		while !self.sources.is_empty() {
-			let (prefix, source) = self.sources.pop().unwrap();
+		let mut tile_sources_json_lines: Vec<String> = Vec::new();
+		while !self.tile_sources.is_empty() {
+			let (prefix, tile_source) = self.tile_sources.pop().unwrap();
 			let skip = prefix.matches('/').count();
-			sources.push((prefix, skip, Arc::new(source)));
+			tile_sources_json_lines.push(format!(
+				"{{\"url\":\"{}\",\"name\":\"{}\"}}",
+				prefix,
+				tile_source.get_name()
+			));
+			sources.push((prefix, skip, Arc::new(tile_source)));
 		}
+		let tile_sources_json: String = "[\n".to_owned() + &tile_sources_json_lines.join(",\n\t") + "\n]";
 
 		let arc_sources = Arc::new(sources);
 		let static_sources: Arc<Mutex<Vec<ServerSourceBox>>> = self.static_sources.clone();
@@ -89,10 +96,16 @@ impl TileServer {
 				}
 
 				if path.starts_with("/api/") {
-					if path.starts_with("/api/layers.json") {
-						let text = "";
+					if path.starts_with("/api/status.json") {
 						return ok_data(
-							Blob::from_string(text),
+							Blob::from_string("{{\"status\":\"ready\"}}"),
+							&Precompression::Uncompressed,
+							"application/json",
+						);
+					}
+					if path.starts_with("/api/tiles.json") {
+						return ok_data(
+							Blob::from_string(&tile_sources_json),
 							&Precompression::Uncompressed,
 							"application/json",
 						);
@@ -137,9 +150,9 @@ impl TileServer {
 
 	pub fn iter_url_mapping(&self) -> impl Iterator<Item = (String, String)> + '_ {
 		self
-			.sources
+			.tile_sources
 			.iter()
-			.map(|(url, source)| (url.to_owned(), source.get_name().to_owned()))
+			.map(|(url, tile_source)| (url.to_owned(), tile_source.get_name().to_owned()))
 	}
 }
 
