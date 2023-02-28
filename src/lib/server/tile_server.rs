@@ -119,7 +119,7 @@ impl TileServer {
 					}
 				}
 
-				return ok_not_found();
+				ok_not_found()
 			})
 			.expect("serve failed");
 	}
