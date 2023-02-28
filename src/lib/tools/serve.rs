@@ -19,21 +19,18 @@ pub struct Subcommand {
 	#[arg(num_args = 1.., required = true, verbatim_doc_comment)]
 	pub sources: Vec<String>,
 
-	/// serve via socket ip
+	/// Serve via socket ip.
 	#[arg(short = 'i', long, default_value = "127.0.0.1")]
 	pub ip: String,
 
-	/// serve via port
+	/// Serve via port.
 	#[arg(short, long, default_value = "8080")]
 	pub port: u16,
 
-	/// serve static content at "/..." from a local folder
-	#[arg(short = 's', long, conflicts_with = "static_tar", value_name = "folder")]
-	pub static_folder: Option<String>,
-
-	/// serve static content at "/..." from a local tar file
-	#[arg(short = 't', long, conflicts_with = "static_folder", value_name = "file")]
-	pub static_tar: Option<String>,
+	/// Serve static content at "http:/.../" from a local folder or tar.
+	/// If multiple static sources are defined, the first hit will be served.
+	#[arg(short = 's', long = "static")]
+	pub static_content: Vec<String>,
 }
 
 pub fn run(arguments: &Subcommand) {
@@ -66,10 +63,12 @@ pub fn run(arguments: &Subcommand) {
 		server.add_source(format!("/tiles/{name}/"), source::TileContainer::from(reader));
 	});
 
-	if arguments.static_folder.is_some() {
-		server.set_static(source::Folder::from(arguments.static_folder.as_ref().unwrap()));
-	} else if arguments.static_tar.is_some() {
-		server.set_static(source::TarFile::from(arguments.static_tar.as_ref().unwrap()));
+	for filename in arguments.static_content.iter() {
+		if filename.ends_with(".tar") {
+			server.add_static(source::TarFile::from(filename));
+		} else {
+			server.add_static(source::Folder::from(filename));
+		}
 	}
 
 	let mut list: Vec<(String, String)> = server.iter_url_mapping().collect();

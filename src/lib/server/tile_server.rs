@@ -3,13 +3,16 @@ use crate::helper::{Blob, Precompression};
 use astra::{Body, Request, Response, ResponseBuilder, Server};
 use enumset::{enum_set, EnumSet};
 use http::header::{ACCEPT_ENCODING, CONTENT_ENCODING, CONTENT_TYPE};
-use std::{path::Path, sync::Arc};
+use std::{
+	path::Path,
+	sync::{Arc, Mutex},
+};
 
 pub struct TileServer {
 	ip: String,
 	port: u16,
 	sources: Vec<(String, ServerSourceBox)>,
-	static_source: Option<Arc<ServerSourceBox>>,
+	static_sources: Arc<Mutex<Vec<ServerSourceBox>>>,
 }
 
 impl TileServer {
@@ -18,7 +21,7 @@ impl TileServer {
 			ip: ip.to_owned(),
 			port,
 			sources: Vec::new(),
-			static_source: None,
+			static_sources: Arc::new(Mutex::new(Vec::new())),
 		}
 	}
 
@@ -42,9 +45,9 @@ impl TileServer {
 		self.sources.push((prefix, source));
 	}
 
-	pub fn set_static(&mut self, source: ServerSourceBox) {
+	pub fn add_static(&mut self, source: ServerSourceBox) {
 		log::debug!("set static: source={:?}", source);
-		self.static_source = Some(Arc::new(source));
+		self.static_sources.lock().unwrap().push(source);
 	}
 
 	pub fn start(&mut self) {
@@ -56,8 +59,9 @@ impl TileServer {
 			let skip = prefix.matches('/').count();
 			sources.push((prefix, skip, Arc::new(source)));
 		}
+
 		let arc_sources = Arc::new(sources);
-		let arc_static_source = self.static_source.clone();
+		let static_sources: Arc<Mutex<Vec<ServerSourceBox>>> = self.static_sources.clone();
 
 		println!("server starts listening on http://{}:{}/", self.ip, self.port);
 
@@ -87,26 +91,35 @@ impl TileServer {
 				let source_option = arc_sources.iter().find(|(prefix, _, _)| path.starts_with(prefix));
 
 				let mut sub_path: Vec<&str> = path.split('/').collect();
+				sub_path.remove(0); // delete first empty element, because of trailing "/"
 
-				let source: Arc<ServerSourceBox>;
 				if let Some((_prefix, skip, my_source)) = source_option {
-					source = my_source.clone();
+					// serve tile
+
+					let source: Arc<ServerSourceBox> = my_source.clone();
 
 					if skip < &sub_path.len() {
 						sub_path = sub_path.split_off(*skip);
 					} else {
 						sub_path.clear()
 					};
-				} else if arc_static_source.is_some() {
-					source = arc_static_source.as_ref().unwrap().clone();
-					sub_path.remove(0); // delete first empty element, because of trailing "/"
-				} else {
-					return ok_not_found();
+
+					log::debug!("try to serve tile {} from {}", sub_path.join("/"), source.get_name());
+
+					return source.get_data(sub_path.as_slice(), encoding_set);
 				}
 
-				log::debug!("serve {} from {}", sub_path.join("/"), source.get_name());
+				// serve static content?
+				for source in static_sources.lock().unwrap().iter() {
+					log::debug!("try to serve static {} from {}", sub_path.join("/"), source.get_name());
 
-				source.get_data(sub_path.as_slice(), encoding_set)
+					let response = source.get_data(sub_path.as_slice(), encoding_set);
+					if response.status() == 200 {
+						return response;
+					}
+				}
+
+				return ok_not_found();
 			})
 			.expect("serve failed");
 	}

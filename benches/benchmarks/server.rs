@@ -22,8 +22,7 @@ fn bench_server(c: &mut Criterion) {
 		sources: vec!["benches/resources/berlin.mbtiles".to_string()],
 		ip: "127.0.0.1".to_owned(),
 		port: 8080,
-		static_folder: None,
-		static_tar: None,
+		static_content: Vec::new(),
 	};
 	thread::spawn(move || versatiles::tools::serve::run(&args));
 
