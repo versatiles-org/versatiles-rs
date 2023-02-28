@@ -46,7 +46,8 @@ impl ServerSourceTrait for TileContainer {
 		let parameters = self.reader.get_parameters();
 		let bbox_pyramide = parameters.get_bbox_pyramide();
 		format!(
-			"{{ \"format\":\"{:?}\", \"precompression\":\"{:?}\", \"zoom_min\":{}, \"zoom_max\":{}, \"bbox\":{:?} }}",
+			"{{ \"container\":\"{:?}\", \"format\":\"{:?}\", \"precompression\":\"{:?}\", \"zoom_min\":{}, \"zoom_max\":{}, \"bbox\":{:?} }}",
+			self.reader.get_container_name(),
 			parameters.get_tile_format(),
 			parameters.get_tile_precompression(),
 			bbox_pyramide.get_zoom_min().unwrap(),

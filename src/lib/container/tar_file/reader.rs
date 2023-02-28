@@ -25,6 +25,9 @@ pub struct TileReader {
 	parameters: TileReaderParameters,
 }
 impl TileReaderTrait for TileReader {
+	fn get_container_name(&self) -> &str {
+		"tar"
+	}
 	fn new(path: &str) -> TileReaderBox
 	where
 		Self: Sized,

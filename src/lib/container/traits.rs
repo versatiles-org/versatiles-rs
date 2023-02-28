@@ -28,6 +28,7 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 	fn get_tile_precompression(&self) -> &Precompression {
 		self.get_parameters().get_tile_precompression()
 	}
+	fn get_container_name(&self) -> &str;
 
 	/// always uncompressed
 	fn get_meta(&self) -> Blob;

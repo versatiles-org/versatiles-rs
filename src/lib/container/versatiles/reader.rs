@@ -45,6 +45,9 @@ impl TileReaderTrait for TileReader {
 
 		Box::new(TileReader::from_src(reader))
 	}
+	fn get_container_name(&self) -> &str {
+		"versatiles"
+	}
 	fn get_meta(&self) -> Blob {
 		self.meta.clone()
 	}

@@ -153,7 +153,7 @@ impl TileServer {
 		self
 			.tile_sources
 			.iter()
-			.map(|(url, tile_source)| (url.to_owned(), tile_source.get_name().to_owned()))
+			.map(|(url, tile_source)| (url.to_owned(), tile_source.get_name()))
 	}
 }
 

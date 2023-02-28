@@ -195,6 +195,9 @@ impl TileReaderTrait for TileReader {
 
 		Box::new(Self::load_from_sqlite(&filename))
 	}
+	fn get_container_name(&self) -> &str {
+		"mbtiles"
+	}
 	fn get_meta(&self) -> Blob {
 		Blob::from_string(self.meta_data.as_ref().unwrap())
 	}
