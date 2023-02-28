@@ -91,7 +91,6 @@ impl TileServer {
 				let source_option = arc_sources.iter().find(|(prefix, _, _)| path.starts_with(prefix));
 
 				let mut sub_path: Vec<&str> = path.split('/').collect();
-				sub_path.remove(0); // delete first empty element, because of trailing "/"
 
 				if let Some((_prefix, skip, my_source)) = source_option {
 					// serve tile
@@ -108,6 +107,8 @@ impl TileServer {
 
 					return source.get_data(sub_path.as_slice(), encoding_set);
 				}
+
+				sub_path.remove(0); // delete first empty element, because of trailing "/"
 
 				// serve static content?
 				for source in static_sources.lock().unwrap().iter() {
