@@ -56,7 +56,7 @@ impl TileServer {
 		let mut sources: Vec<(String, usize, Arc<ServerSourceBox>)> = Vec::new();
 		let mut tile_sources_json_lines: Vec<String> = Vec::new();
 		while !self.tile_sources.is_empty() {
-			let (prefix, tile_source) = self.tile_sources.pop().unwrap();
+			let (prefix, tile_source) = self.tile_sources.remove(0);
 			let skip = prefix.matches('/').count();
 			tile_sources_json_lines.push(format!(
 				"{{ \"url\":\"{}\", \"name\":\"{}\", \"info\":{} }}",
