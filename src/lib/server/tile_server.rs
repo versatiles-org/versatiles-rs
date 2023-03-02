@@ -2,7 +2,7 @@ use super::traits::ServerSourceBox;
 use crate::helper::{Blob, Precompression};
 use astra::{Body, Request, Response, ResponseBuilder, Server};
 use enumset::{enum_set, EnumSet};
-use http::header::{ACCEPT_ENCODING, CONTENT_ENCODING, CONTENT_TYPE};
+use http::header::{ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE};
 use std::{
 	path::Path,
 	sync::{Arc, Mutex},
@@ -162,7 +162,10 @@ pub fn ok_not_found() -> Response {
 }
 
 pub fn ok_data(data: Blob, precompression: &Precompression, mime: &str) -> Response {
-	let mut response = ResponseBuilder::new().status(200).header(CONTENT_TYPE, mime);
+	let mut response = ResponseBuilder::new()
+		.status(200)
+		.header(CONTENT_TYPE, mime)
+		.header(CACHE_CONTROL, "public");
 
 	match precompression {
 		Precompression::Uncompressed => {}
