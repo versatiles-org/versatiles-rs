@@ -29,7 +29,7 @@ pub struct Subcommand {
 
 	/// Serve static content at "http:/.../" from a local folder or tar.
 	/// If multiple static sources are defined, the first hit will be served.
-	#[arg(short = 's', long = "static")]
+	#[arg(short = 's', long = "static", verbatim_doc_comment)]
 	pub static_content: Vec<String>,
 }
 

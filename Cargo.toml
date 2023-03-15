@@ -48,8 +48,8 @@ astra = { version = "0.1.3", default-features = false }
 brotli = { version = "3.3.4", default-features = false, features = ["std"] }
 byteorder = { default-features = false, version = "1.4.3" }
 bytes = { version = "1.4.0", default-features = false }
-clap = { version = "4.1.8", default-features = false }
-clap-verbosity-flag = { version = "2.0.0", default-features = false }
+clap = { version = "4.1.8", default-features = true }
+clap-verbosity-flag = { version = "2.0.0", default-features = true }
 enumset = { version = "1.0.12", default-features = false }
 env_logger = { features = ["regex"], default-features = false, version = "0.10.0" }
 flate2 = { version = "1.0.25", default-features = false }
