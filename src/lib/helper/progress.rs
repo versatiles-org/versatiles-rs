@@ -55,7 +55,7 @@ impl ProgressBar {
 			return;
 		}
 
-		let width = size.unwrap().0;
+		let width: i64 = size.unwrap().0 as i64;
 
 		let duration = SystemTime::now().duration_since(self.start).unwrap();
 		let progress = self.value as f64 / self.max_value as f64;
@@ -76,10 +76,21 @@ impl ProgressBar {
 			format_duration(time_left)
 		);
 
-		let space1 = (width - col2.len()) / 2 - col1.len();
-		let space2 = width - (col1.len() + space1 + col2.len() + col3.len());
+		let length1 = col1.len() as i64;
+		let length2 = col2.len() as i64;
+		let length3 = col3.len() as i64;
 
-		let line = format!("\r{}{}{}{}{}", col1, " ".repeat(space1), col2, " ".repeat(space2), col3);
+		let space1 = 0.min((width - length2) / 2 - length1);
+		let space2 = 0.min(width - (length1 + space1 + length2 + length3));
+
+		let line = format!(
+			"\r{}{}{}{}{}",
+			col1,
+			" ".repeat(space1 as usize),
+			col2,
+			" ".repeat(space2 as usize),
+			col3
+		);
 		let pos = (line.len() as f64 * progress).round() as usize;
 
 		print!("\r\x1B[7m{}\x1B[0m{}", &line[0..pos], &line[pos..]);
