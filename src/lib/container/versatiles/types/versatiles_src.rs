@@ -26,11 +26,11 @@ pub trait VersaTilesSrcTrait {
 pub fn new_versatiles_src(source: &str) -> Box<dyn VersaTilesSrcTrait> {
 	let start = source.split_terminator(':').next();
 
-	return match start {
+	match start {
 		Some("gs") => Box::new(VersaTilesSrcObjectStore::new(source).unwrap()),
 		Some("http" | "https") => Box::new(VersaTilesSrcHttp::new(source).unwrap()),
 		_ => Box::new(VersaTilesSrcFile::new(source).unwrap()),
-	};
+	}
 }
 
 struct VersaTilesSrcFile {
