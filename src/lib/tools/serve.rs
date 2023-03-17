@@ -37,9 +37,9 @@ pub fn run(arguments: &Subcommand) {
 	let mut server: TileServer = new_server(arguments);
 
 	let patterns: Vec<Regex> = [
-		r"^\[(?P<name>[a-z0-9-]+?)\](?P<url>.*)$",
-		r"^(?P<url>.*)\[(?P<name>[a-z0-9-]+?)\]$",
-		r"^(?P<url>.*)#(?P<name>[a-z0-9-]+?)$",
+		r"^\[(?P<name>[^\]]+?)\](?P<url>.*)$",
+		r"^(?P<url>.*)\[(?P<name>[^\]]+?)\]$",
+		r"^(?P<url>.*)#(?P<name>[^\]]+?)$",
 		r"^(?P<url>.*)$",
 	]
 	.iter()
