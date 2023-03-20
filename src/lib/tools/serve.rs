@@ -60,7 +60,7 @@ pub fn run(arguments: &Subcommand) {
 		};
 
 		let reader = get_reader(url);
-		server.add_source(format!("/tiles/{name}/"), source::TileContainer::from(reader));
+		server.add_tile_source(format!("/tiles/{name}/"), source::TileContainer::from(reader));
 	});
 
 	for filename in arguments.static_content.iter() {

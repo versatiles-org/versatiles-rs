@@ -1,22 +1,18 @@
 use super::traits::ServerSourceBox;
 use crate::helper::{Blob, Precompression};
 use axum::{
-	async_trait,
 	body::{Bytes, Full},
-	extract::State,
-	extract::{FromRef, FromRequestParts},
-	http::{request::Parts, StatusCode},
-	middleware::{self, Next},
+	extract::{Path, State},
 	response::Response,
 	routing::get,
 	Router, Server,
 };
 use enumset::{enum_set, EnumSet};
-use http::header::{ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE};
-use std::{
-	path::Path,
-	sync::{Arc, Mutex},
+use http::{
+	header::{ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE},
+	HeaderMap,
 };
+use std::sync::{Arc, Mutex};
 use tokio;
 
 struct TileSource {
@@ -41,7 +37,7 @@ impl TileServer {
 		}
 	}
 
-	pub fn add_source(&mut self, url_prefix: String, tile_source: ServerSourceBox) {
+	pub fn add_tile_source(&mut self, url_prefix: String, tile_source: ServerSourceBox) {
 		log::debug!("add source: prefix='{}', source={:?}", url_prefix, tile_source);
 
 		let mut prefix = url_prefix;
@@ -74,9 +70,7 @@ impl TileServer {
 
 	#[tokio::main]
 	pub async fn start(&mut self) {
-		log::info!("starting server");
-
-		let mut tile_sources_json_lines: Vec<String> = Vec::new();
+		log::debug!("starting server");
 		/*
 			  let mut sources: Vec<(String, usize, Arc<ServerSourceBox>)> = Vec::new();
 			  while !self.tile_sources.is_empty() {
@@ -96,31 +90,10 @@ impl TileServer {
 			  let static_sources: Arc<Mutex<Vec<ServerSourceBox>>> = self.static_sources.clone();
 		*/
 
-		// Initiale state
-		#[derive(Clone)]
-		struct ServerState {}
-		let serverState = ServerState {};
-
 		// Initialize App
 		let mut app = Router::new().route("/status", get(|| async { "ready!" }));
 
-		for tile_source in self.tile_sources.iter() {
-			let skip = tile_source.prefix.matches('/').count();
-			tile_sources_json_lines.push(format!(
-				"{{ \"url\":\"{}\", \"name\":\"{}\", \"info\":{} }}",
-				tile_source.prefix,
-				tile_source.source.get_name(),
-				tile_source.source.get_info_as_json()
-			));
-
-			let route = tile_source.prefix.to_owned() + "*";
-			let source = tile_source.source.clone();
-
-			let tileApp = Router::new().route(&route, get(|| async { "tile" })).with_state(source);
-			app = app.merge(tileApp);
-		}
-
-		//	.with_state(serverState);
+		app = self.add_tile_sources_to_app(app);
 
 		let addr = format!("{}:{}", self.ip, self.port);
 		println!("server starts listening on {}", addr);
@@ -207,6 +180,47 @@ impl TileServer {
 		*/
 	}
 
+	fn add_tile_sources_to_app(&self, mut app: Router) -> Router {
+		for tile_source in self.tile_sources.iter() {
+			//let skip = tile_source.prefix.matches('/').count();
+			/*
+			tile_sources_json_lines.push(format!(
+				"{{ \"url\":\"{}\", \"name\":\"{}\", \"info\":{} }}",
+				tile_source.prefix,
+				tile_source.source.get_name(),
+				tile_source.source.get_info_as_json()
+			));
+			 */
+
+			let route = tile_source.prefix.to_owned() + "*path";
+			let source = tile_source.source.clone();
+
+			let tile_app = Router::new().route(&route, get(serve_tile)).with_state(source);
+			app = app.merge(tile_app);
+			//
+			async fn serve_tile(
+				Path(path): Path<String>, headers: HeaderMap, State(source): State<Arc<ServerSourceBox>>,
+			) -> Response<Full<Bytes>> {
+				let mut encoding_set: EnumSet<Precompression> = enum_set!(Precompression::Uncompressed);
+				let encoding_option = headers.get(ACCEPT_ENCODING);
+				if let Some(encoding) = encoding_option {
+					let encoding_string = encoding.to_str().unwrap_or("");
+
+					if encoding_string.contains("gzip") {
+						encoding_set.insert(Precompression::Gzip);
+					}
+					if encoding_string.contains("br") {
+						encoding_set.insert(Precompression::Brotli);
+					}
+				}
+
+				let sub_path: Vec<&str> = path.split('/').collect();
+				source.get_data(&sub_path, encoding_set)
+			}
+		}
+		return app;
+	}
+
 	pub fn iter_url_mapping(&self) -> impl Iterator<Item = (String, String)> + '_ {
 		self
 			.tile_sources
@@ -234,7 +248,7 @@ pub fn ok_data(data: Blob, precompression: &Precompression, mime: &str) -> Respo
 	response.body(Full::from(data.as_vec())).unwrap()
 }
 
-pub fn guess_mime(path: &Path) -> String {
+pub fn guess_mime(path: &std::path::Path) -> String {
 	let mime = mime_guess::from_path(path).first_or_octet_stream();
 	return mime.essence_str().to_owned();
 }
