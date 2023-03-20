@@ -2,14 +2,7 @@
 cd "$(dirname "$0")"
 cd ..
 
-# check cargo
-./bin/check.sh
-if [ $? -ne 0 ]; then
-	echo "❗️ Check failed!"
-	exit 1
-fi
-
-# check if version was updated
+# ask if version was updated
 echo "Did you update the version number in Cargo.toml?"
 select answer in "Yes" "No"; do
 	if [ $answer != "Yes" ]; then
@@ -18,6 +11,13 @@ select answer in "Yes" "No"; do
 	fi
 	break
 done
+
+# check cargo
+./bin/check.sh
+if [ $? -ne 0 ]; then
+	echo "❗️ Check failed!"
+	exit 1
+fi
 
 # check if nothing to commit
 if [ "$(git status --porcelain)" ]; then
