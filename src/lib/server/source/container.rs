@@ -64,8 +64,8 @@ impl ServerSourceTrait for TileContainer {
 			// get tile
 
 			let z = path[0].parse::<u8>().unwrap();
-			let y = path[1].parse::<u64>().unwrap();
-			let x = path[2].parse::<u64>().unwrap();
+			let x = path[1].parse::<u64>().unwrap();
+			let y = path[2].parse::<u64>().unwrap();
 
 			let tile = self.reader.get_tile_data(&TileCoord3::new(x, y, z));
 
