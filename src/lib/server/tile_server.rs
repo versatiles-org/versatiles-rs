@@ -94,6 +94,7 @@ impl TileServer {
 		let mut app = Router::new().route("/status", get(|| async { "ready!" }));
 
 		app = self.add_tile_sources_to_app(app);
+		app = self.add_api_to_app(app);
 		app = self.add_static_sources_to_app(app);
 
 		let addr = format!("{}:{}", self.ip, self.port);
@@ -230,6 +231,44 @@ impl TileServer {
 
 			return ok_not_found();
 		}
+		return app;
+	}
+
+	fn add_api_to_app(&self, mut app: Router) -> Router {
+		let mut tile_sources_json_lines: Vec<String> = Vec::new();
+		for tile_source in self.tile_sources.iter() {
+			tile_sources_json_lines.push(format!(
+				"{{ \"url\":\"{}\", \"name\":\"{}\", \"info\":{} }}",
+				tile_source.prefix,
+				tile_source.source.get_name(),
+				tile_source.source.get_info_as_json()
+			));
+		}
+		let tile_sources_json: String = "[\n\t".to_owned() + &tile_sources_json_lines.join(",\n\t") + "\n]";
+
+		let api_app = Router::new()
+			.route(
+				&"/api/status.json",
+				get(|| async {
+					ok_data(
+						Blob::from_string("{{\"status\":\"ready\"}}"),
+						&Precompression::Uncompressed,
+						"application/json",
+					)
+				}),
+			)
+			.route(
+				&"/api/tiles.json",
+				get(|| async move {
+					ok_data(
+						Blob::from_string(&tile_sources_json),
+						&Precompression::Uncompressed,
+						"application/json",
+					)
+				}),
+			);
+
+		app = app.merge(api_app);
 		return app;
 	}
 
