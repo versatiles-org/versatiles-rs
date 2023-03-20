@@ -103,14 +103,15 @@ impl TileServer {
 				source.get_data(&sub_path, get_encoding(headers))
 			}
 		}
-		return app;
+
+		app
 	}
 
-	fn add_static_sources_to_app(&self, mut app: Router) -> Router {
+	fn add_static_sources_to_app(&self, app: Router) -> Router {
 		let sources = self.static_sources.clone();
 
-		let static_app = Router::new().route(&"/*path", get(serve_static)).with_state(sources);
-		app = app.merge(static_app);
+		let static_app = Router::new().route("/*path", get(serve_static)).with_state(sources);
+		return app.merge(static_app);
 
 		async fn serve_static(
 			Path(path): Path<String>, headers: HeaderMap, State(sources): State<Vec<Arc<ServerSourceBox>>>,
@@ -125,12 +126,11 @@ impl TileServer {
 				}
 			}
 
-			return ok_not_found();
+			ok_not_found()
 		}
-		return app;
 	}
 
-	fn add_api_to_app(&self, mut app: Router) -> Router {
+	fn add_api_to_app(&self, app: Router) -> Router {
 		let mut tile_sources_json_lines: Vec<String> = Vec::new();
 		for tile_source in self.tile_sources.iter() {
 			tile_sources_json_lines.push(format!(
@@ -144,7 +144,7 @@ impl TileServer {
 
 		let api_app = Router::new()
 			.route(
-				&"/api/status.json",
+				"/api/status.json",
 				get(|| async {
 					ok_data(
 						Blob::from_string("{{\"status\":\"ready\"}}"),
@@ -154,7 +154,7 @@ impl TileServer {
 				}),
 			)
 			.route(
-				&"/api/tiles.json",
+				"/api/tiles.json",
 				get(|| async move {
 					ok_data(
 						Blob::from_string(&tile_sources_json),
@@ -164,8 +164,7 @@ impl TileServer {
 				}),
 			);
 
-		app = app.merge(api_app);
-		return app;
+		app.merge(api_app)
 	}
 
 	pub fn iter_url_mapping(&self) -> impl Iterator<Item = (String, String)> + '_ {
@@ -213,5 +212,5 @@ fn get_encoding(headers: HeaderMap) -> EnumSet<Precompression> {
 			encoding_set.insert(Precompression::Brotli);
 		}
 	}
-	return encoding_set;
+	encoding_set
 }
