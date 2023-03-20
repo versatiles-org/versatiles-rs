@@ -71,24 +71,6 @@ impl TileServer {
 	#[tokio::main]
 	pub async fn start(&mut self) {
 		log::debug!("starting server");
-		/*
-			  let mut sources: Vec<(String, usize, Arc<ServerSourceBox>)> = Vec::new();
-			  while !self.tile_sources.is_empty() {
-				  let (prefix, tile_source) = self.tile_sources.remove(0);
-				  let skip = prefix.matches('/').count();
-				  tile_sources_json_lines.push(format!(
-					  "{{ \"url\":\"{}\", \"name\":\"{}\", \"info\":{} }}",
-					  prefix,
-					  tile_source.get_name(),
-					  tile_source.get_info_as_json()
-				  ));
-				  sources.push((prefix, skip, Arc::new(tile_source)));
-			  }
-			  let tile_sources_json: String = "[\n\t".to_owned() + &tile_sources_json_lines.join(",\n\t") + "\n]";
-
-			  let arc_sources = Arc::new(sources);
-			  let static_sources: Arc<Mutex<Vec<ServerSourceBox>>> = self.static_sources.clone();
-		*/
 
 		// Initialize App
 		let mut app = Router::new().route("/status", get(|| async { "ready!" }));
@@ -104,102 +86,16 @@ impl TileServer {
 			.serve(app.into_make_service())
 			.await
 			.expect("server failed");
-		/*
-		  .serve(
-
-			  function servicemove |req: Request| -> Response {
-			  log::debug!("request {:?}", req);
-
-			  let path = urlencoding::decode(req.uri().path()).unwrap().to_string();
-
-			  let _method = req.method();
-			  let headers = req.headers();
-
-			  let mut encoding_set: EnumSet<Precompression> = enum_set!(Precompression::Uncompressed);
-			  let encoding_option = headers.get(ACCEPT_ENCODING);
-			  if let Some(encoding) = encoding_option {
-				  let encoding_string = encoding.to_str().unwrap_or("");
-
-				  if encoding_string.contains("gzip") {
-					  encoding_set.insert(Precompression::Gzip);
-				  }
-				  if encoding_string.contains("br") {
-					  encoding_set.insert(Precompression::Brotli);
-				  }
-			  }
-
-			  if path.starts_with("/api/") {
-				  if path.starts_with("/api/status.json") {
-					  return ok_data(
-						  Blob::from_string("{{\"status\":\"ready\"}}"),
-						  &Precompression::Uncompressed,
-						  "application/json",
-					  );
-				  }
-				  if path.starts_with("/api/tiles.json") {
-					  return ok_data(
-						  Blob::from_string(&tile_sources_json),
-						  &Precompression::Uncompressed,
-						  "application/json",
-					  );
-				  }
-			  }
-
-			  let source_option = arc_sources.iter().find(|(prefix, _, _)| path.starts_with(prefix));
-
-			  let mut sub_path: Vec<&str> = path.split('/').collect();
-
-			  if let Some((_prefix, skip, my_source)) = source_option {
-				  // serve tile
-
-				  let source: Arc<ServerSourceBox> = my_source.clone();
-
-				  if skip < &sub_path.len() {
-					  sub_path = sub_path.split_off(*skip);
-				  } else {
-					  sub_path.clear()
-				  };
-
-				  log::debug!("try to serve tile {} from {}", sub_path.join("/"), source.get_name());
-
-				  return source.get_data(sub_path.as_slice(), encoding_set);
-			  }
-
-			  // serve static content?
-			  sub_path.remove(0); // delete first empty element, because of trailing "/"
-			  for source in static_sources.lock().unwrap().iter() {
-				  log::debug!("try to serve static {} from {}", sub_path.join("/"), source.get_name());
-
-				  let response = source.get_data(sub_path.as_slice(), encoding_set);
-				  if response.status() == 200 {
-					  return response;
-				  }
-			  }
-
-			  ok_not_found()
-		  })
-		  .expect("serve failed");
-		*/
 	}
 
 	fn add_tile_sources_to_app(&self, mut app: Router) -> Router {
 		for tile_source in self.tile_sources.iter() {
-			//let skip = tile_source.prefix.matches('/').count();
-			/*
-			tile_sources_json_lines.push(format!(
-				"{{ \"url\":\"{}\", \"name\":\"{}\", \"info\":{} }}",
-				tile_source.prefix,
-				tile_source.source.get_name(),
-				tile_source.source.get_info_as_json()
-			));
-			 */
-
 			let route = tile_source.prefix.to_owned() + "*path";
 			let source = tile_source.source.clone();
 
 			let tile_app = Router::new().route(&route, get(serve_tile)).with_state(source);
 			app = app.merge(tile_app);
-			//
+
 			async fn serve_tile(
 				Path(path): Path<String>, headers: HeaderMap, State(source): State<Arc<ServerSourceBox>>,
 			) -> Response<Full<Bytes>> {
