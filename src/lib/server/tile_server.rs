@@ -1,12 +1,19 @@
 use super::traits::ServerSourceBox;
 use crate::helper::{Blob, Precompression};
-use astra::{Body, Request, Response, ResponseBuilder, Server};
+use axum::{
+	async_trait,
+	extract::{FromRef, FromRequestParts, State},
+	http::{request::Parts, StatusCode},
+	routing::get,
+	Router,
+};
 use enumset::{enum_set, EnumSet};
 use http::header::{ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE};
 use std::{
 	path::Path,
 	sync::{Arc, Mutex},
 };
+use tokio;
 
 pub struct TileServer {
 	ip: String,
@@ -50,103 +57,123 @@ impl TileServer {
 		self.static_sources.lock().unwrap().push(source);
 	}
 
-	pub fn start(&mut self) {
+	#[tokio::main]
+	pub async fn start(&mut self) {
 		log::info!("starting server");
 
-		let mut sources: Vec<(String, usize, Arc<ServerSourceBox>)> = Vec::new();
-		let mut tile_sources_json_lines: Vec<String> = Vec::new();
-		while !self.tile_sources.is_empty() {
-			let (prefix, tile_source) = self.tile_sources.remove(0);
-			let skip = prefix.matches('/').count();
-			tile_sources_json_lines.push(format!(
-				"{{ \"url\":\"{}\", \"name\":\"{}\", \"info\":{} }}",
-				prefix,
-				tile_source.get_name(),
-				tile_source.get_info_as_json()
-			));
-			sources.push((prefix, skip, Arc::new(tile_source)));
-		}
-		let tile_sources_json: String = "[\n\t".to_owned() + &tile_sources_json_lines.join(",\n\t") + "\n]";
+		/*
+			  let mut sources: Vec<(String, usize, Arc<ServerSourceBox>)> = Vec::new();
+			  let mut tile_sources_json_lines: Vec<String> = Vec::new();
+			  while !self.tile_sources.is_empty() {
+				  let (prefix, tile_source) = self.tile_sources.remove(0);
+				  let skip = prefix.matches('/').count();
+				  tile_sources_json_lines.push(format!(
+					  "{{ \"url\":\"{}\", \"name\":\"{}\", \"info\":{} }}",
+					  prefix,
+					  tile_source.get_name(),
+					  tile_source.get_info_as_json()
+				  ));
+				  sources.push((prefix, skip, Arc::new(tile_source)));
+			  }
+			  let tile_sources_json: String = "[\n\t".to_owned() + &tile_sources_json_lines.join(",\n\t") + "\n]";
 
-		let arc_sources = Arc::new(sources);
-		let static_sources: Arc<Mutex<Vec<ServerSourceBox>>> = self.static_sources.clone();
+			  let arc_sources = Arc::new(sources);
+			  let static_sources: Arc<Mutex<Vec<ServerSourceBox>>> = self.static_sources.clone();
+		*/
 
-		println!("server starts listening on http://{}:{}/", self.ip, self.port);
+		// Initiale state
+		#[derive(Clone)]
+		struct ServerState {};
+		let serverState = ServerState {};
 
-		let address = format!("{}:{}", self.ip, self.port);
-		Server::bind(address)
-			.serve(move |req: Request| -> Response {
-				log::debug!("request {:?}", req);
+		// Initialize App
+		let app = Router::new();
+		app = app.route("/status", get(|| async { "ready!" }));
+		app = app.with_state(serverState);
 
-				let path = urlencoding::decode(req.uri().path()).unwrap().to_string();
+		let addr = format!("{}:{}", self.ip, self.port);
+		println!("server starts listening on {}", addr);
 
-				let _method = req.method();
-				let headers = req.headers();
+		axum::Server::bind(&addr.parse().unwrap())
+			.serve(app.into_make_service())
+			.await
+			.unwrap();
+		/*
+		  .serve(
 
-				let mut encoding_set: EnumSet<Precompression> = enum_set!(Precompression::Uncompressed);
-				let encoding_option = headers.get(ACCEPT_ENCODING);
-				if let Some(encoding) = encoding_option {
-					let encoding_string = encoding.to_str().unwrap_or("");
+			  function servicemove |req: Request| -> Response {
+			  log::debug!("request {:?}", req);
 
-					if encoding_string.contains("gzip") {
-						encoding_set.insert(Precompression::Gzip);
-					}
-					if encoding_string.contains("br") {
-						encoding_set.insert(Precompression::Brotli);
-					}
-				}
+			  let path = urlencoding::decode(req.uri().path()).unwrap().to_string();
 
-				if path.starts_with("/api/") {
-					if path.starts_with("/api/status.json") {
-						return ok_data(
-							Blob::from_string("{{\"status\":\"ready\"}}"),
-							&Precompression::Uncompressed,
-							"application/json",
-						);
-					}
-					if path.starts_with("/api/tiles.json") {
-						return ok_data(
-							Blob::from_string(&tile_sources_json),
-							&Precompression::Uncompressed,
-							"application/json",
-						);
-					}
-				}
+			  let _method = req.method();
+			  let headers = req.headers();
 
-				let source_option = arc_sources.iter().find(|(prefix, _, _)| path.starts_with(prefix));
+			  let mut encoding_set: EnumSet<Precompression> = enum_set!(Precompression::Uncompressed);
+			  let encoding_option = headers.get(ACCEPT_ENCODING);
+			  if let Some(encoding) = encoding_option {
+				  let encoding_string = encoding.to_str().unwrap_or("");
 
-				let mut sub_path: Vec<&str> = path.split('/').collect();
+				  if encoding_string.contains("gzip") {
+					  encoding_set.insert(Precompression::Gzip);
+				  }
+				  if encoding_string.contains("br") {
+					  encoding_set.insert(Precompression::Brotli);
+				  }
+			  }
 
-				if let Some((_prefix, skip, my_source)) = source_option {
-					// serve tile
+			  if path.starts_with("/api/") {
+				  if path.starts_with("/api/status.json") {
+					  return ok_data(
+						  Blob::from_string("{{\"status\":\"ready\"}}"),
+						  &Precompression::Uncompressed,
+						  "application/json",
+					  );
+				  }
+				  if path.starts_with("/api/tiles.json") {
+					  return ok_data(
+						  Blob::from_string(&tile_sources_json),
+						  &Precompression::Uncompressed,
+						  "application/json",
+					  );
+				  }
+			  }
 
-					let source: Arc<ServerSourceBox> = my_source.clone();
+			  let source_option = arc_sources.iter().find(|(prefix, _, _)| path.starts_with(prefix));
 
-					if skip < &sub_path.len() {
-						sub_path = sub_path.split_off(*skip);
-					} else {
-						sub_path.clear()
-					};
+			  let mut sub_path: Vec<&str> = path.split('/').collect();
 
-					log::debug!("try to serve tile {} from {}", sub_path.join("/"), source.get_name());
+			  if let Some((_prefix, skip, my_source)) = source_option {
+				  // serve tile
 
-					return source.get_data(sub_path.as_slice(), encoding_set);
-				}
+				  let source: Arc<ServerSourceBox> = my_source.clone();
 
-				// serve static content?
-				sub_path.remove(0); // delete first empty element, because of trailing "/"
-				for source in static_sources.lock().unwrap().iter() {
-					log::debug!("try to serve static {} from {}", sub_path.join("/"), source.get_name());
+				  if skip < &sub_path.len() {
+					  sub_path = sub_path.split_off(*skip);
+				  } else {
+					  sub_path.clear()
+				  };
 
-					let response = source.get_data(sub_path.as_slice(), encoding_set);
-					if response.status() == 200 {
-						return response;
-					}
-				}
+				  log::debug!("try to serve tile {} from {}", sub_path.join("/"), source.get_name());
 
-				ok_not_found()
-			})
-			.expect("serve failed");
+				  return source.get_data(sub_path.as_slice(), encoding_set);
+			  }
+
+			  // serve static content?
+			  sub_path.remove(0); // delete first empty element, because of trailing "/"
+			  for source in static_sources.lock().unwrap().iter() {
+				  log::debug!("try to serve static {} from {}", sub_path.join("/"), source.get_name());
+
+				  let response = source.get_data(sub_path.as_slice(), encoding_set);
+				  if response.status() == 200 {
+					  return response;
+				  }
+			  }
+
+			  ok_not_found()
+		  })
+		  .expect("serve failed");
+		*/
 	}
 
 	pub fn iter_url_mapping(&self) -> impl Iterator<Item = (String, String)> + '_ {

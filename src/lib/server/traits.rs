@@ -1,5 +1,5 @@
 use crate::helper::Precompression;
-use astra::Response;
+use axum::response::Response;
 use enumset::EnumSet;
 use std::fmt::Debug;
 
