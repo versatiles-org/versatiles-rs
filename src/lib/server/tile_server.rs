@@ -120,7 +120,7 @@ impl TileServer {
 			let mut path_vec: Vec<&str> = uri.path().split('/').skip(1).collect();
 
 			if let Some(last) = path_vec.last_mut() {
-				if last.len() == 0 {
+				if last.is_empty() {
 					*last = "index.html";
 				}
 			}
