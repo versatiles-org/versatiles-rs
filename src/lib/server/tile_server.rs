@@ -2,10 +2,12 @@ use super::traits::ServerSourceBox;
 use crate::helper::{Blob, Precompression};
 use axum::{
 	async_trait,
-	extract::{FromRef, FromRequestParts, State},
+	extract::State,
+	extract::{FromRef, FromRequestParts},
 	http::{request::Parts, StatusCode},
+	middleware::{self, Next},
 	routing::get,
-	Router,
+	Router, Server,
 };
 use enumset::{enum_set, EnumSet};
 use http::header::{ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE};
@@ -83,21 +85,21 @@ impl TileServer {
 
 		// Initiale state
 		#[derive(Clone)]
-		struct ServerState {};
+		struct ServerState {}
 		let serverState = ServerState {};
 
 		// Initialize App
-		let app = Router::new();
-		app = app.route("/status", get(|| async { "ready!" }));
-		app = app.with_state(serverState);
+		let app = Router::new()
+			.route("/status", get(|State(state): State<ServerState>| async { "ready!" }))
+			.with_state(serverState);
 
 		let addr = format!("{}:{}", self.ip, self.port);
 		println!("server starts listening on {}", addr);
 
-		axum::Server::bind(&addr.parse().unwrap())
+		Server::bind(&addr.parse().unwrap())
 			.serve(app.into_make_service())
 			.await
-			.unwrap();
+			.expect("server failed");
 		/*
 		  .serve(
 
@@ -184,6 +186,7 @@ impl TileServer {
 	}
 }
 
+/*
 pub fn ok_not_found() -> Response {
 	ResponseBuilder::new().status(404).body(Body::new("Not Found")).unwrap()
 }
@@ -202,6 +205,7 @@ pub fn ok_data(data: Blob, precompression: &Precompression, mime: &str) -> Respo
 
 	response.body(data.as_vec().into()).unwrap()
 }
+ */
 
 pub fn guess_mime(path: &Path) -> String {
 	let mime = mime_guess::from_path(path).first_or_octet_stream();
