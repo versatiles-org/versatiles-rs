@@ -12,7 +12,7 @@ use http::{
 	header::{ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE},
 	HeaderMap,
 };
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio;
 
 struct TileSource {
@@ -24,7 +24,7 @@ pub struct TileServer {
 	ip: String,
 	port: u16,
 	tile_sources: Vec<TileSource>,
-	static_sources: Arc<Mutex<Vec<ServerSourceBox>>>,
+	static_sources: Vec<Arc<ServerSourceBox>>,
 }
 
 impl TileServer {
@@ -33,7 +33,7 @@ impl TileServer {
 			ip: ip.to_owned(),
 			port,
 			tile_sources: Vec::new(),
-			static_sources: Arc::new(Mutex::new(Vec::new())),
+			static_sources: Vec::new(),
 		}
 	}
 
@@ -63,9 +63,9 @@ impl TileServer {
 		});
 	}
 
-	pub fn add_static(&mut self, source: ServerSourceBox) {
+	pub fn add_static_source(&mut self, source: ServerSourceBox) {
 		log::debug!("set static: source={:?}", source);
-		self.static_sources.lock().unwrap().push(source);
+		self.static_sources.push(Arc::new(source));
 	}
 
 	#[tokio::main]
@@ -94,6 +94,7 @@ impl TileServer {
 		let mut app = Router::new().route("/status", get(|| async { "ready!" }));
 
 		app = self.add_tile_sources_to_app(app);
+		app = self.add_static_sources_to_app(app);
 
 		let addr = format!("{}:{}", self.ip, self.port);
 		println!("server starts listening on {}", addr);
@@ -201,22 +202,33 @@ impl TileServer {
 			async fn serve_tile(
 				Path(path): Path<String>, headers: HeaderMap, State(source): State<Arc<ServerSourceBox>>,
 			) -> Response<Full<Bytes>> {
-				let mut encoding_set: EnumSet<Precompression> = enum_set!(Precompression::Uncompressed);
-				let encoding_option = headers.get(ACCEPT_ENCODING);
-				if let Some(encoding) = encoding_option {
-					let encoding_string = encoding.to_str().unwrap_or("");
-
-					if encoding_string.contains("gzip") {
-						encoding_set.insert(Precompression::Gzip);
-					}
-					if encoding_string.contains("br") {
-						encoding_set.insert(Precompression::Brotli);
-					}
-				}
-
 				let sub_path: Vec<&str> = path.split('/').collect();
-				source.get_data(&sub_path, encoding_set)
+				source.get_data(&sub_path, get_encoding(headers))
 			}
+		}
+		return app;
+	}
+
+	fn add_static_sources_to_app(&self, mut app: Router) -> Router {
+		let sources = self.static_sources.clone();
+
+		let static_app = Router::new().route(&"/*path", get(serve_static)).with_state(sources);
+		app = app.merge(static_app);
+
+		async fn serve_static(
+			Path(path): Path<String>, headers: HeaderMap, State(sources): State<Vec<Arc<ServerSourceBox>>>,
+		) -> Response<Full<Bytes>> {
+			let sub_path: Vec<&str> = path.split('/').collect();
+			let encoding_set = get_encoding(headers);
+
+			for source in sources.iter() {
+				let response = source.get_data(sub_path.as_slice(), encoding_set);
+				if response.status() == 200 {
+					return response;
+				}
+			}
+
+			return ok_not_found();
 		}
 		return app;
 	}
@@ -251,4 +263,20 @@ pub fn ok_data(data: Blob, precompression: &Precompression, mime: &str) -> Respo
 pub fn guess_mime(path: &std::path::Path) -> String {
 	let mime = mime_guess::from_path(path).first_or_octet_stream();
 	return mime.essence_str().to_owned();
+}
+
+fn get_encoding(headers: HeaderMap) -> EnumSet<Precompression> {
+	let mut encoding_set: EnumSet<Precompression> = enum_set!(Precompression::Uncompressed);
+	let encoding_option = headers.get(ACCEPT_ENCODING);
+	if let Some(encoding) = encoding_option {
+		let encoding_string = encoding.to_str().unwrap_or("");
+
+		if encoding_string.contains("gzip") {
+			encoding_set.insert(Precompression::Gzip);
+		}
+		if encoding_string.contains("br") {
+			encoding_set.insert(Precompression::Brotli);
+		}
+	}
+	return encoding_set;
 }

@@ -65,9 +65,9 @@ pub fn run(arguments: &Subcommand) {
 
 	for filename in arguments.static_content.iter() {
 		if filename.ends_with(".tar") {
-			server.add_static(source::TarFile::from(filename));
+			server.add_static_source(source::TarFile::from(filename));
 		} else {
-			server.add_static(source::Folder::from(filename));
+			server.add_static_source(source::Folder::from(filename));
 		}
 	}
 
