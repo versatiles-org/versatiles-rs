@@ -3,15 +3,15 @@ use crate::helper::{Blob, Precompression};
 use axum::{
 	body::{Bytes, Full},
 	extract::{Path, State},
+	http::{
+		header::{ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE},
+		HeaderMap, Uri,
+	},
 	response::Response,
 	routing::get,
 	Router, Server,
 };
 use enumset::{enum_set, EnumSet};
-use http::{
-	header::{ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE},
-	HeaderMap,
-};
 use std::sync::Arc;
 use tokio;
 
@@ -110,17 +110,26 @@ impl TileServer {
 	fn add_static_sources_to_app(&self, app: Router) -> Router {
 		let sources = self.static_sources.clone();
 
-		let static_app = Router::new().route("/*path", get(serve_static)).with_state(sources);
+		let static_app = Router::new().fallback(get(serve_static)).with_state(sources);
+
 		return app.merge(static_app);
 
 		async fn serve_static(
-			Path(path): Path<String>, headers: HeaderMap, State(sources): State<Vec<Arc<ServerSourceBox>>>,
+			uri: Uri, headers: HeaderMap, State(sources): State<Vec<Arc<ServerSourceBox>>>,
 		) -> Response<Full<Bytes>> {
-			let sub_path: Vec<&str> = path.split('/').collect();
+			let mut path_vec: Vec<&str> = uri.path().split('/').skip(1).collect();
+
+			if let Some(last) = path_vec.last_mut() {
+				if last.len() == 0 {
+					*last = "index.html";
+				}
+			}
+
+			let path_slice = path_vec.as_slice();
 			let encoding_set = get_encoding(headers);
 
 			for source in sources.iter() {
-				let response = source.get_data(sub_path.as_slice(), encoding_set);
+				let response = source.get_data(path_slice, encoding_set);
 				if response.status() == 200 {
 					return response;
 				}
