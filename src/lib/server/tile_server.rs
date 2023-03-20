@@ -2,10 +2,12 @@ use super::traits::ServerSourceBox;
 use crate::helper::{Blob, Precompression};
 use axum::{
 	async_trait,
+	body::{Bytes, Full},
 	extract::State,
 	extract::{FromRef, FromRequestParts},
 	http::{request::Parts, StatusCode},
 	middleware::{self, Next},
+	response::Response,
 	routing::get,
 	Router, Server,
 };
@@ -17,10 +19,15 @@ use std::{
 };
 use tokio;
 
+struct TileSource {
+	prefix: String,
+	source: Arc<ServerSourceBox>,
+}
+
 pub struct TileServer {
 	ip: String,
 	port: u16,
-	tile_sources: Vec<(String, ServerSourceBox)>,
+	tile_sources: Vec<TileSource>,
 	static_sources: Arc<Mutex<Vec<ServerSourceBox>>>,
 }
 
@@ -45,13 +52,19 @@ impl TileServer {
 			prefix += "/";
 		}
 
-		for (other_prefix, _source) in self.tile_sources.iter() {
-			if other_prefix.starts_with(&prefix) || prefix.starts_with(other_prefix) {
-				panic!("multiple sources with the prefix '{prefix}' and '{other_prefix}' are defined");
+		for other_tile_source in self.tile_sources.iter() {
+			if other_tile_source.prefix.starts_with(&prefix) || prefix.starts_with(&other_tile_source.prefix) {
+				panic!(
+					"multiple sources with the prefix '{}' and '{}' are defined",
+					prefix, other_tile_source.prefix
+				);
 			};
 		}
 
-		self.tile_sources.push((prefix, tile_source));
+		self.tile_sources.push(TileSource {
+			prefix,
+			source: Arc::new(tile_source),
+		});
 	}
 
 	pub fn add_static(&mut self, source: ServerSourceBox) {
@@ -63,9 +76,9 @@ impl TileServer {
 	pub async fn start(&mut self) {
 		log::info!("starting server");
 
+		let mut tile_sources_json_lines: Vec<String> = Vec::new();
 		/*
 			  let mut sources: Vec<(String, usize, Arc<ServerSourceBox>)> = Vec::new();
-			  let mut tile_sources_json_lines: Vec<String> = Vec::new();
 			  while !self.tile_sources.is_empty() {
 				  let (prefix, tile_source) = self.tile_sources.remove(0);
 				  let skip = prefix.matches('/').count();
@@ -89,9 +102,25 @@ impl TileServer {
 		let serverState = ServerState {};
 
 		// Initialize App
-		let app = Router::new()
-			.route("/status", get(|State(state): State<ServerState>| async { "ready!" }))
-			.with_state(serverState);
+		let mut app = Router::new().route("/status", get(|| async { "ready!" }));
+
+		for tile_source in self.tile_sources.iter() {
+			let skip = tile_source.prefix.matches('/').count();
+			tile_sources_json_lines.push(format!(
+				"{{ \"url\":\"{}\", \"name\":\"{}\", \"info\":{} }}",
+				tile_source.prefix,
+				tile_source.source.get_name(),
+				tile_source.source.get_info_as_json()
+			));
+
+			let route = tile_source.prefix.to_owned() + "*";
+			let source = tile_source.source.clone();
+
+			let tileApp = Router::new().route(&route, get(|| async { "tile" })).with_state(source);
+			app = app.merge(tileApp);
+		}
+
+		//	.with_state(serverState);
 
 		let addr = format!("{}:{}", self.ip, self.port);
 		println!("server starts listening on {}", addr);
@@ -182,17 +211,16 @@ impl TileServer {
 		self
 			.tile_sources
 			.iter()
-			.map(|(url, tile_source)| (url.to_owned(), tile_source.get_name()))
+			.map(|tile_source| (tile_source.prefix.to_owned(), tile_source.source.get_name()))
 	}
 }
 
-/*
-pub fn ok_not_found() -> Response {
-	ResponseBuilder::new().status(404).body(Body::new("Not Found")).unwrap()
+pub fn ok_not_found() -> Response<Full<Bytes>> {
+	Response::builder().status(404).body(Full::from("Not Found")).unwrap()
 }
 
-pub fn ok_data(data: Blob, precompression: &Precompression, mime: &str) -> Response {
-	let mut response = ResponseBuilder::new()
+pub fn ok_data(data: Blob, precompression: &Precompression, mime: &str) -> Response<Full<Bytes>> {
+	let mut response = Response::builder()
 		.status(200)
 		.header(CONTENT_TYPE, mime)
 		.header(CACHE_CONTROL, "public");
@@ -203,9 +231,8 @@ pub fn ok_data(data: Blob, precompression: &Precompression, mime: &str) -> Respo
 		Precompression::Brotli => response = response.header(CONTENT_ENCODING, "br"),
 	}
 
-	response.body(data.as_vec().into()).unwrap()
+	response.body(Full::from(data.as_vec())).unwrap()
 }
- */
 
 pub fn guess_mime(path: &Path) -> String {
 	let mime = mime_guess::from_path(path).first_or_octet_stream();

@@ -3,7 +3,10 @@ use crate::{
 	helper::*,
 	server::{ok_data, ok_not_found, ServerSourceTrait},
 };
-//use astra::Response;
+use axum::{
+	body::{Bytes, Full},
+	response::Response,
+};
 use enumset::EnumSet;
 use std::fmt::Debug;
 
@@ -56,7 +59,7 @@ impl ServerSourceTrait for TileContainer {
 		)
 	}
 
-	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response {
+	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response<Full<Bytes>> {
 		if path.len() == 3 {
 			// get tile
 

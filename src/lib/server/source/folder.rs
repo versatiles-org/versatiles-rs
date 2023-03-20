@@ -2,7 +2,10 @@ use crate::{
 	helper::*,
 	server::{guess_mime, ok_data, ok_not_found, ServerSourceTrait},
 };
-//use astra::Response;
+use axum::{
+	body::{Bytes, Full},
+	response::Response,
+};
 use enumset::EnumSet;
 use std::{
 	env::current_dir,
@@ -41,7 +44,7 @@ impl ServerSourceTrait for Folder {
 		"{{\"type\":\"folder\"}}".to_owned()
 	}
 
-	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response {
+	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response<Full<Bytes>> {
 		let mut local_path = self.folder.clone();
 		local_path.push(PathBuf::from(path.join("/")));
 
