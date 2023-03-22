@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 echo "check cargo fmt"
-result=$(cargo fmt -- --check 2>&1)
+result=$(cargo fmt --all -- --check 2>&1)
 if [ $? -ne 0 ]; then
    echo "$result"
    echo "ERROR DURING: cargo fmt"
@@ -9,7 +9,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "check cargo clippy "
-result=$(cargo clippy -- -D warnings 2>&1)
+result=$(cargo clippy --all -- -D warnings 2>&1)
 if [ $? -ne 0 ]; then
    echo "$result"
    echo "ERROR DURING: cargo clippy"
@@ -17,7 +17,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "check cargo test"
-result=$(cargo test 2>&1)
+result=$(cargo test --workspace 2>&1)
 if [ $? -ne 0 ]; then
    echo "$result"
    echo "ERROR DURING: cargo test"
