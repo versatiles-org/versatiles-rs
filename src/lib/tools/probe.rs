@@ -1,5 +1,6 @@
 use crate::tools::get_reader;
 use clap::Args;
+use futures::executor::block_on;
 
 #[derive(Args)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -15,12 +16,14 @@ pub struct Subcommand {
 }
 
 pub fn run(arguments: &Subcommand) {
-	println!("probe {:?}", arguments.file);
+	block_on(async {
+		println!("probe {:?}", arguments.file);
 
-	let reader = get_reader(&arguments.file);
-	println!("{reader:#?}");
+		let reader = get_reader(&arguments.file).await;
+		println!("{reader:#?}");
 
-	if arguments.deep {
-		reader.deep_verify();
-	}
+		if arguments.deep {
+			reader.deep_verify().await;
+		}
+	})
 }

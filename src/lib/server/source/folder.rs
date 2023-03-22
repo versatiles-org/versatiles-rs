@@ -2,6 +2,7 @@ use crate::{
 	helper::*,
 	server::{guess_mime, ok_data, ok_not_found, ServerSourceTrait},
 };
+use async_trait::async_trait;
 use axum::{
 	body::{Bytes, Full},
 	response::Response,
@@ -36,6 +37,7 @@ impl Folder {
 		})
 	}
 }
+#[async_trait]
 impl ServerSourceTrait for Folder {
 	fn get_name(&self) -> String {
 		self.name.to_owned()
@@ -44,7 +46,7 @@ impl ServerSourceTrait for Folder {
 		"{{\"type\":\"folder\"}}".to_owned()
 	}
 
-	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response<Full<Bytes>> {
+	async fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response<Full<Bytes>> {
 		let mut local_path = self.folder.clone();
 		local_path.push(PathBuf::from(path.join("/")));
 

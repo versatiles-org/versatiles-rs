@@ -44,6 +44,7 @@ strip = true
 lto = false
 
 [dependencies]
+async-trait = "0.1.67"
 axum = { version = "0.6.11", default-features = false, features = ["tokio"] }
 brotli = { version = "3.3.4", default-features = false, features = ["std"] }
 byteorder = { version = "1.4.3", default-features = false }
@@ -69,8 +70,8 @@ reqwest = { version = "0.11.14", default-features = false, features=["blocking"]
 rusqlite = { version = "0.28.0", default-features = false }
 sysinfo = { version = "0.28.3", default-features = false }
 tar = { version = "0.4.38", default-features = false }
-tokio = { version = "1.26.0", default-features = false }
 term_size = { version = "0.3.2", default-features = false }
+tokio = { version = "1.26.0", default-features = false }
 urlencoding = { version = "2.1.2", default-features = false }
 webp = { version = "0.2.2", default-features = false, features = ["img"] }
 

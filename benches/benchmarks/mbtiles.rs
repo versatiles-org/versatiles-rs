@@ -1,4 +1,5 @@
 use criterion::{black_box, criterion_group, Criterion};
+use futures::executor::block_on;
 use log::{set_max_level, LevelFilter};
 use versatiles::{
 	container::{mbtiles::TileReader, TileReaderTrait},
@@ -9,9 +10,11 @@ fn mbtiles_read_vec(c: &mut Criterion) {
 	set_max_level(LevelFilter::Warn);
 
 	c.bench_function("get_bbox_tile_vec", |b| {
-		let reader = TileReader::new("benches/resources/berlin.mbtiles");
+		let reader = block_on(TileReader::new("benches/resources/berlin.mbtiles"));
 		b.iter(|| {
-			black_box(reader.get_bbox_tile_vec(14, &TileBBox::new(8787, 5361, 8818, 5387)));
+			black_box(block_on(
+				reader.get_bbox_tile_vec(14, &TileBBox::new(8787, 5361, 8818, 5387)),
+			));
 		})
 	});
 }

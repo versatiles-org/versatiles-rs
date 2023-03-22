@@ -1,8 +1,10 @@
 use super::types::*;
 use crate::{container::*, helper::*};
+use async_trait::async_trait;
 use itertools::Itertools;
 use log::debug;
-use std::{collections::HashMap, fmt::Debug, ops::Shr, sync::RwLock};
+use std::{collections::HashMap, fmt::Debug, ops::Shr};
+use tokio::sync::RwLock;
 
 pub struct TileReader {
 	meta: Blob,
@@ -13,16 +15,16 @@ pub struct TileReader {
 }
 
 impl TileReader {
-	pub fn from_src(mut reader: Box<dyn VersaTilesSrcTrait>) -> TileReader {
-		let header = FileHeader::from_reader(&mut reader);
+	pub async fn from_src(mut reader: Box<dyn VersaTilesSrcTrait>) -> TileReader {
+		let header = FileHeader::from_reader(&mut reader).await;
 
 		let meta = if header.meta_range.length > 0 {
-			DataConverter::new_decompressor(&header.precompression).run(reader.read_range(&header.meta_range))
+			DataConverter::new_decompressor(&header.precompression).run(reader.read_range(&header.meta_range).await)
 		} else {
 			Blob::empty()
 		};
 
-		let block_index = BlockIndex::from_brotli_blob(reader.read_range(&header.blocks_range));
+		let block_index = BlockIndex::from_brotli_blob(reader.read_range(&header.blocks_range).await);
 		let bbox_pyramide = block_index.get_bbox_pyramide();
 		let parameters = TileReaderParameters::new(header.tile_format, header.precompression, bbox_pyramide);
 
@@ -39,16 +41,18 @@ impl TileReader {
 unsafe impl Send for TileReader {}
 unsafe impl Sync for TileReader {}
 
+#[async_trait]
 impl TileReaderTrait for TileReader {
-	fn new(filename: &str) -> TileReaderBox {
-		let reader = new_versatiles_src(filename);
+	async fn new(filename: &str) -> TileReaderBox {
+		let source = new_versatiles_src(filename);
+		let reader = TileReader::from_src(source).await;
 
-		Box::new(TileReader::from_src(reader))
+		Box::new(reader)
 	}
 	fn get_container_name(&self) -> &str {
 		"versatiles"
 	}
-	fn get_meta(&self) -> Blob {
+	async fn get_meta(&self) -> Blob {
 		self.meta.clone()
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
@@ -57,13 +61,12 @@ impl TileReaderTrait for TileReader {
 	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
 		&mut self.parameters
 	}
-	fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
+	async fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
 		let coord: TileCoord3 = if self.get_parameters().get_vertical_flip() {
 			coord_in.flip_vertically()
 		} else {
 			coord_in.to_owned()
 		};
-
 		let block_coord = TileCoord3 {
 			x: coord.x.shr(8),
 			y: coord.y.shr(8),
@@ -88,7 +91,7 @@ impl TileReaderTrait for TileReader {
 
 		let tile_id = block.bbox.get_tile_index(&TileCoord2::new(tile_x, tile_y));
 
-		let cache_reader = self.tile_index_cache.read().unwrap();
+		let cache_reader = self.tile_index_cache.read().await;
 		let tile_index_option = cache_reader.get(&block_coord);
 
 		let tile_range: ByteRange;
@@ -99,16 +102,16 @@ impl TileReaderTrait for TileReader {
 			drop(cache_reader);
 		} else {
 			drop(cache_reader);
-
-			let mut tile_index = TileIndex::from_brotli_blob(self.reader.read_range(&block.index_range));
+			let blob = self.reader.read_range(&block.index_range).await;
+			let mut tile_index = TileIndex::from_brotli_blob(blob);
 			tile_index.add_offset(block.tiles_range.offset);
 
-			let mut cache_writer = self.tile_index_cache.write().unwrap();
+			let mut cache_writer = self.tile_index_cache.write().await;
 			cache_writer.insert(block_coord, tile_index);
 
 			drop(cache_writer);
 
-			let cache_reader = self.tile_index_cache.read().unwrap();
+			let cache_reader = self.tile_index_cache.read().await;
 			let tile_index_option = cache_reader.get(&block_coord);
 
 			tile_range = *tile_index_option.unwrap().get_tile_range(tile_id);
@@ -116,12 +119,12 @@ impl TileReaderTrait for TileReader {
 			drop(cache_reader);
 		}
 
-		Some(self.reader.read_range(&tile_range))
+		Some(self.reader.read_range(&tile_range).await)
 	}
 	fn get_name(&self) -> &str {
 		self.reader.get_name()
 	}
-	fn deep_verify(&self) {
+	async fn deep_verify(&self) {
 		let block_count = self.block_index.len() as u64;
 
 		debug!("number of blocks: {}", block_count);
@@ -138,7 +141,8 @@ impl TileReaderTrait for TileReader {
 		for block in blocks {
 			let tiles_count = block.bbox.count_tiles();
 
-			let tile_index = TileIndex::from_brotli_blob(self.reader.read_range(&block.index_range));
+			let blob = self.reader.read_range(&block.index_range).await;
+			let tile_index = TileIndex::from_brotli_blob(blob);
 			assert_eq!(tile_index.len(), tiles_count as usize, "tile count are not the same");
 
 			let status_image = status_images.get_level(block.z);

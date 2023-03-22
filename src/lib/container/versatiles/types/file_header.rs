@@ -44,8 +44,8 @@ impl FileHeader {
 		}
 	}
 
-	pub fn from_reader(reader: &mut Box<dyn VersaTilesSrcTrait>) -> FileHeader {
-		FileHeader::from_blob(reader.read_range(&ByteRange::new(0, HEADER_LENGTH as u64)))
+	pub async fn from_reader(reader: &mut Box<dyn VersaTilesSrcTrait>) -> FileHeader {
+		FileHeader::from_blob(reader.read_range(&ByteRange::new(0, HEADER_LENGTH as u64)).await)
 	}
 
 	pub fn to_blob(&self) -> Blob {

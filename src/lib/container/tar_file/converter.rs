@@ -1,4 +1,5 @@
 use crate::{container::*, helper::*};
+use async_trait::async_trait;
 use log::trace;
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use std::{fs::File, path::Path, sync::Mutex};
@@ -8,6 +9,7 @@ pub struct TileConverter {
 	builder: Builder<File>,
 	config: TileConverterConfig,
 }
+#[async_trait]
 impl TileConverterTrait for TileConverter {
 	fn new(filename: &Path, config: TileConverterConfig) -> TileConverterBox
 	where
@@ -20,7 +22,7 @@ impl TileConverterTrait for TileConverter {
 
 		Box::new(TileConverter { builder, config })
 	}
-	fn convert_from(&mut self, reader: &mut TileReaderBox) {
+	async fn convert_from(&mut self, reader: &mut TileReaderBox) {
 		trace!("convert_from");
 
 		self.config.finalize_with_parameters(reader.get_parameters());
@@ -50,7 +52,7 @@ impl TileConverterTrait for TileConverter {
 
 		let bbox_pyramide = self.config.get_bbox_pyramide();
 
-		let meta_data = reader.get_meta();
+		let meta_data = reader.get_meta().await;
 
 		if meta_data.is_empty() {
 			let mut header = Header::new_gnu();
@@ -67,9 +69,9 @@ impl TileConverterTrait for TileConverter {
 		let mutex_bar = &Mutex::new(&mut bar);
 		let mutex_builder = &Mutex::new(&mut self.builder);
 
-		bbox_pyramide.iter_levels().for_each(|(level, bbox)| {
-			bbox.iter_bbox_row_slices(1024).for_each(|row_bbox: TileBBox| {
-				let tile_vec = reader.get_bbox_tile_vec(level, &row_bbox);
+		for (level, bbox) in bbox_pyramide.iter_levels() {
+			for row_bbox in bbox.iter_bbox_row_slices(1024) {
+				let tile_vec = reader.get_bbox_tile_vec(level, &row_bbox).await;
 				tile_vec.into_iter().par_bridge().for_each(|(coord, mut blob)| {
 					mutex_bar.lock().unwrap().inc(1);
 
@@ -87,8 +89,8 @@ impl TileConverterTrait for TileConverter {
 						.append_data(&mut header, path, blob.as_slice())
 						.unwrap();
 				})
-			})
-		});
+			}
+		}
 
 		bar.finish();
 		self.builder.finish().unwrap();

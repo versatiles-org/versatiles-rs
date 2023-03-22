@@ -36,6 +36,9 @@ impl Blob {
 	}
 }
 
+unsafe impl Send for Blob {}
+unsafe impl Sync for Blob {}
+
 #[cfg(test)]
 mod tests {
 	use super::Blob;

@@ -1,12 +1,10 @@
 use super::ByteRange;
 use crate::helper::Blob;
+use async_trait::async_trait;
 use futures::executor::block_on;
 use log::error;
 use object_store::ObjectStore;
-use reqwest::{
-	blocking::{Client, Request},
-	Method, Url,
-};
+use reqwest::{Client, Method, Request, Url};
 use std::{
 	env::current_dir,
 	fs::File,
@@ -15,11 +13,12 @@ use std::{
 	sync::{Arc, Mutex},
 };
 
-pub trait VersaTilesSrcTrait {
+#[async_trait]
+pub trait VersaTilesSrcTrait: Send + Sync {
 	fn new(source: &str) -> Option<Self>
 	where
 		Self: Sized;
-	fn read_range(&self, range: &ByteRange) -> Blob;
+	async fn read_range(&self, range: &ByteRange) -> Blob;
 	fn get_name(&self) -> &str;
 }
 
@@ -37,6 +36,7 @@ struct VersaTilesSrcFile {
 	name: String,
 	reader_mutex: Mutex<BufReader<File>>,
 }
+#[async_trait]
 impl VersaTilesSrcTrait for VersaTilesSrcFile {
 	fn new(source: &str) -> Option<Self> {
 		let mut filename = current_dir().unwrap();
@@ -56,14 +56,14 @@ impl VersaTilesSrcTrait for VersaTilesSrcFile {
 			reader_mutex: Mutex::new(BufReader::new(File::open(filename).unwrap())),
 		})
 	}
-	fn read_range(&self, range: &ByteRange) -> Blob {
+	async fn read_range(&self, range: &ByteRange) -> Blob {
 		let mut buffer = vec![0; range.length as usize];
 		let mut reader_safe = self.reader_mutex.lock().unwrap();
 
 		reader_safe.seek(SeekFrom::Start(range.offset)).unwrap();
 		reader_safe.read_exact(&mut buffer).unwrap();
 
-		Blob::from_vec(buffer)
+		return Blob::from_vec(buffer);
 	}
 	fn get_name(&self) -> &str {
 		&self.name
@@ -75,6 +75,7 @@ struct VersaTilesSrcObjectStore {
 	url: object_store::path::Path,
 	object_store: Arc<dyn ObjectStore>,
 }
+#[async_trait]
 impl VersaTilesSrcTrait for VersaTilesSrcObjectStore {
 	fn new(source: &str) -> Option<Self> {
 		let object_store = if source.starts_with("gs://") {
@@ -93,7 +94,7 @@ impl VersaTilesSrcTrait for VersaTilesSrcObjectStore {
 			object_store: Arc::new(object_store),
 		})
 	}
-	fn read_range(&self, range: &ByteRange) -> Blob {
+	async fn read_range(&self, range: &ByteRange) -> Blob {
 		let bytes = block_on(self.object_store.get_range(&self.url, range.as_range_usize())).unwrap();
 		Blob::from_bytes(bytes)
 	}
@@ -107,6 +108,7 @@ struct VersaTilesSrcHttp {
 	url: Url,
 	client: Client,
 }
+#[async_trait]
 impl VersaTilesSrcTrait for VersaTilesSrcHttp {
 	fn new(source: &str) -> Option<Self> {
 		if source.starts_with("https://") || source.starts_with("http://") {
@@ -119,7 +121,7 @@ impl VersaTilesSrcTrait for VersaTilesSrcHttp {
 			None
 		}
 	}
-	fn read_range(&self, range: &ByteRange) -> Blob {
+	async fn read_range(&self, range: &ByteRange) -> Blob {
 		let mut request = Request::new(Method::GET, self.url.clone());
 		request.headers_mut().append(
 			"range",
@@ -127,8 +129,17 @@ impl VersaTilesSrcTrait for VersaTilesSrcHttp {
 				.parse()
 				.unwrap(),
 		);
-		let response = Client::execute(&self.client, request).unwrap();
-		Blob::from_bytes(response.bytes().unwrap())
+		//println!("### request {:?}", request);
+
+		let result = Client::execute(&self.client, request).await.unwrap();
+		//println!("### result {:?}", result);
+
+		let bytes = result.bytes().await.unwrap();
+
+		//let range = result.headers().get("content-range");
+		//println!("range {:?}", range);
+
+		Blob::from_bytes(bytes)
 	}
 	fn get_name(&self) -> &str {
 		&self.name

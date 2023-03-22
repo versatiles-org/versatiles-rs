@@ -1,22 +1,25 @@
 use crate::helper::*;
+use async_trait::async_trait;
 use std::{fmt::Debug, path::Path};
 
 pub type TileConverterBox = Box<dyn TileConverterTrait>;
 pub type TileReaderBox = Box<dyn TileReaderTrait>;
 
 #[allow(clippy::new_ret_no_self)]
+#[async_trait]
 pub trait TileConverterTrait {
 	fn new(filename: &Path, config: TileConverterConfig) -> TileConverterBox
 	where
 		Self: Sized;
 
 	// readers must be mutable, because they might use caching
-	fn convert_from(&mut self, reader: &mut TileReaderBox);
+	async fn convert_from(&mut self, reader: &mut TileReaderBox);
 }
 
 #[allow(clippy::new_ret_no_self)]
+#[async_trait]
 pub trait TileReaderTrait: Debug + Send + Sync {
-	fn new(path: &str) -> TileReaderBox
+	async fn new(path: &str) -> TileReaderBox
 	where
 		Self: Sized;
 	fn get_name(&self) -> &str;
@@ -31,20 +34,22 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 	fn get_container_name(&self) -> &str;
 
 	/// always uncompressed
-	fn get_meta(&self) -> Blob;
+	async fn get_meta(&self) -> Blob;
 
 	/// always compressed with get_tile_precompression and formatted with get_tile_format
-	fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob>;
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob>;
 
 	/// always compressed with get_tile_precompression and formatted with get_tile_format
-	fn get_bbox_tile_vec(&self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
-		bbox
-			.iter_coords()
-			.filter_map(move |coord: TileCoord2| -> Option<(TileCoord2, Blob)> {
-				self.get_tile_data(&coord.with_zoom(zoom)).map(|blob| (coord, blob))
-			})
-			.collect()
+	async fn get_bbox_tile_vec(&self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
+		let mut vec: Vec<(TileCoord2, Blob)> = Vec::new();
+		for coord in bbox.iter_coords() {
+			let option = self.get_tile_data(&coord.with_zoom(zoom)).await;
+			if let Some(blob) = option {
+				vec.push((coord, blob));
+			}
+		}
+		return vec;
 	}
 
-	fn deep_verify(&self);
+	async fn deep_verify(&self);
 }

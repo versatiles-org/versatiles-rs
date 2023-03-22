@@ -3,6 +3,7 @@ use crate::{
 	helper::*,
 	server::{ok_data, ok_not_found, ServerSourceTrait},
 };
+use async_trait::async_trait;
 use axum::{
 	body::{Bytes, Full},
 	response::Response,
@@ -41,6 +42,8 @@ impl TileContainer {
 		})
 	}
 }
+
+#[async_trait]
 impl ServerSourceTrait for TileContainer {
 	fn get_name(&self) -> String {
 		self.reader.get_name().to_owned()
@@ -59,7 +62,7 @@ impl ServerSourceTrait for TileContainer {
 		)
 	}
 
-	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response<Full<Bytes>> {
+	async fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response<Full<Bytes>> {
 		if path.len() == 3 {
 			// get tile
 
@@ -67,7 +70,7 @@ impl ServerSourceTrait for TileContainer {
 			let x = path[1].parse::<u64>().unwrap();
 			let y = path[2].parse::<u64>().unwrap();
 
-			let tile = self.reader.get_tile_data(&TileCoord3::new(x, y, z));
+			let tile = self.reader.get_tile_data(&TileCoord3::new(x, y, z)).await;
 
 			if tile.is_none() {
 				return ok_not_found();
@@ -83,7 +86,7 @@ impl ServerSourceTrait for TileContainer {
 			return ok_data(data, &Precompression::Uncompressed, &self.tile_mime);
 		} else if path[0] == "meta.json" {
 			// get meta
-			let meta = self.reader.get_meta();
+			let meta = self.reader.get_meta().await;
 
 			if meta.is_empty() {
 				return ok_not_found();

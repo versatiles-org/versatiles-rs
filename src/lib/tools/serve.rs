@@ -3,6 +3,7 @@ use crate::{
 	tools::get_reader,
 };
 use clap::Args;
+use futures::executor::block_on;
 use regex::Regex;
 
 #[derive(Args)]
@@ -34,50 +35,52 @@ pub struct Subcommand {
 }
 
 pub fn run(arguments: &Subcommand) {
-	let mut server: TileServer = new_server(arguments);
+	block_on(async {
+		let mut server: TileServer = new_server(arguments);
 
-	let patterns: Vec<Regex> = [
-		r"^\[(?P<name>[^\]]+?)\](?P<url>.*)$",
-		r"^(?P<url>.*)\[(?P<name>[^\]]+?)\]$",
-		r"^(?P<url>.*)#(?P<name>[^\]]+?)$",
-		r"^(?P<url>.*)$",
-	]
-	.iter()
-	.map(|pat| Regex::new(pat).unwrap())
-	.collect();
-
-	arguments.sources.iter().for_each(|arg| {
-		let pattern = patterns.iter().find(|p| p.is_match(arg)).unwrap();
-		let c = pattern.captures(arg).unwrap();
-
-		let url: &str = c.name("url").unwrap().as_str();
-		let name: &str = match c.name("name") {
-			None => {
-				let filename = url.split(&['/', '\\']).last().unwrap();
-				filename.split('.').next().unwrap()
-			}
-			Some(m) => m.as_str(),
-		};
-
-		let reader = get_reader(url);
-		server.add_tile_source(format!("/tiles/{name}/"), source::TileContainer::from(reader));
-	});
-
-	for filename in arguments.static_content.iter() {
-		if filename.ends_with(".tar") {
-			server.add_static_source(source::TarFile::from(filename));
-		} else {
-			server.add_static_source(source::Folder::from(filename));
-		}
-	}
-
-	let mut list: Vec<(String, String)> = server.iter_url_mapping().collect();
-	list.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-	list
+		let patterns: Vec<Regex> = [
+			r"^\[(?P<name>[^\]]+?)\](?P<url>.*)$",
+			r"^(?P<url>.*)\[(?P<name>[^\]]+?)\]$",
+			r"^(?P<url>.*)#(?P<name>[^\]]+?)$",
+			r"^(?P<url>.*)$",
+		]
 		.iter()
-		.for_each(|(url, source)| println!("   {:30}  <-  {}", url.to_owned() + "*", source));
+		.map(|pat| Regex::new(pat).unwrap())
+		.collect();
 
-	server.start();
+		for arg in arguments.sources.iter() {
+			let pattern = patterns.iter().find(|p| p.is_match(arg)).unwrap();
+			let c = pattern.captures(arg).unwrap();
+
+			let url: &str = c.name("url").unwrap().as_str();
+			let name: &str = match c.name("name") {
+				None => {
+					let filename = url.split(&['/', '\\']).last().unwrap();
+					filename.split('.').next().unwrap()
+				}
+				Some(m) => m.as_str(),
+			};
+
+			let reader = get_reader(url).await;
+			server.add_tile_source(format!("/tiles/{name}/"), source::TileContainer::from(reader));
+		}
+
+		for filename in arguments.static_content.iter() {
+			if filename.ends_with(".tar") {
+				server.add_static_source(source::TarFile::from(filename));
+			} else {
+				server.add_static_source(source::Folder::from(filename));
+			}
+		}
+
+		let mut list: Vec<(String, String)> = server.iter_url_mapping().collect();
+		list.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+		list
+			.iter()
+			.for_each(|(url, source)| println!("   {:30}  <-  {}", url.to_owned() + "*", source));
+
+		server.start();
+	})
 }
 
 fn new_server(command: &Subcommand) -> TileServer {

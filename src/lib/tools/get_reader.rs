@@ -1,6 +1,6 @@
 use crate::container::{mbtiles, tar_file, versatiles, TileReaderBox, TileReaderTrait};
 
-pub fn get_reader(filename: &str) -> TileReaderBox {
+pub async fn get_reader(filename: &str) -> TileReaderBox {
 	let extension = filename.split('.').last().unwrap();
 
 	let reader = match extension {
@@ -10,5 +10,5 @@ pub fn get_reader(filename: &str) -> TileReaderBox {
 		_ => panic!("extension '{extension:?}' unknown"),
 	};
 
-	reader
+	reader.await
 }

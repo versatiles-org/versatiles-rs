@@ -2,6 +2,7 @@ use crate::{
 	container::{TileReaderBox, TileReaderTrait},
 	helper::*,
 };
+use async_trait::async_trait;
 use log::trace;
 use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::OpenFlags;
@@ -181,8 +182,9 @@ impl TileReader {
 	}
 }
 
+#[async_trait]
 impl TileReaderTrait for TileReader {
-	fn new(path: &str) -> TileReaderBox {
+	async fn new(path: &str) -> TileReaderBox {
 		trace!("open {}", path);
 
 		let mut filename = current_dir().unwrap();
@@ -198,7 +200,7 @@ impl TileReaderTrait for TileReader {
 	fn get_container_name(&self) -> &str {
 		"mbtiles"
 	}
-	fn get_meta(&self) -> Blob {
+	async fn get_meta(&self) -> Blob {
 		Blob::from_string(self.meta_data.as_ref().unwrap())
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
@@ -207,7 +209,7 @@ impl TileReaderTrait for TileReader {
 	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
 		&mut self.parameters
 	}
-	fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
+	async fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
 		trace!("read 1 tile {:?}", coord_in);
 
 		let connection = self.pool.get().unwrap();
@@ -232,7 +234,7 @@ impl TileReaderTrait for TileReader {
 			None
 		}
 	}
-	fn get_bbox_tile_vec(&self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
+	async fn get_bbox_tile_vec(&self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
 		trace!("read {} tiles for z:{}, bbox:{:?}", bbox.count_tiles(), zoom, bbox);
 
 		let connection = self.pool.get().unwrap();
@@ -273,7 +275,7 @@ impl TileReaderTrait for TileReader {
 	fn get_name(&self) -> &str {
 		&self.name
 	}
-	fn deep_verify(&self) {
+	async fn deep_verify(&self) {
 		todo!()
 	}
 }

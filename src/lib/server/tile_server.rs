@@ -100,7 +100,7 @@ impl TileServer {
 				Path(path): Path<String>, headers: HeaderMap, State(source): State<Arc<ServerSourceBox>>,
 			) -> Response<Full<Bytes>> {
 				let sub_path: Vec<&str> = path.split('/').collect();
-				source.get_data(&sub_path, get_encoding(headers))
+				source.get_data(&sub_path, get_encoding(headers)).await
 			}
 		}
 
@@ -129,7 +129,7 @@ impl TileServer {
 			let encoding_set = get_encoding(headers);
 
 			for source in sources.iter() {
-				let response = source.get_data(path_slice, encoding_set);
+				let response = source.get_data(path_slice, encoding_set).await;
 				if response.status() == 200 {
 					return response;
 				}

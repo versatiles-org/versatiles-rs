@@ -2,6 +2,7 @@ use crate::{
 	helper::*,
 	server::{guess_mime, ok_data, ok_not_found, ServerSourceTrait},
 };
+use async_trait::async_trait;
 use axum::{
 	body::{Bytes, Full},
 	response::Response,
@@ -124,6 +125,7 @@ impl TarFile {
 	}
 }
 
+#[async_trait]
 impl ServerSourceTrait for TarFile {
 	fn get_name(&self) -> String {
 		self.name.to_owned()
@@ -132,7 +134,7 @@ impl ServerSourceTrait for TarFile {
 		"{{\"type\":\"tar\"}}".to_owned()
 	}
 
-	fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response<Full<Bytes>> {
+	async fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response<Full<Bytes>> {
 		let entry_name = path.join("/");
 		let entry_option = self.lookup.get(&entry_name);
 		if entry_option.is_none() {

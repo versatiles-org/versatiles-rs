@@ -1,4 +1,5 @@
 use crate::{container::*, helper::*};
+use async_trait::async_trait;
 use log::trace;
 use std::{
 	collections::HashMap, env::current_dir, fmt::Debug, fs::File, io::Read, os::unix::prelude::FileExt, path::Path,
@@ -24,11 +25,12 @@ pub struct TileReader {
 	tile_map: HashMap<TileCoord3, TarByteRange>,
 	parameters: TileReaderParameters,
 }
+#[async_trait]
 impl TileReaderTrait for TileReader {
 	fn get_container_name(&self) -> &str {
 		"tar"
 	}
-	fn new(path: &str) -> TileReaderBox
+	async fn new(path: &str) -> TileReaderBox
 	where
 		Self: Sized,
 	{
@@ -173,10 +175,10 @@ impl TileReaderTrait for TileReader {
 	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
 		&mut self.parameters
 	}
-	fn get_meta(&self) -> Blob {
+	async fn get_meta(&self) -> Blob {
 		self.meta.clone()
 	}
-	fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
+	async fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
 		trace!("get_tile_data {:?}", coord_in);
 
 		let coord: TileCoord3 = if self.get_parameters().get_vertical_flip() {
@@ -202,7 +204,7 @@ impl TileReaderTrait for TileReader {
 	fn get_name(&self) -> &str {
 		&self.name
 	}
-	fn deep_verify(&self) {
+	async fn deep_verify(&self) {
 		todo!()
 	}
 }

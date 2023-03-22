@@ -1,5 +1,6 @@
 use core::time;
 use criterion::{black_box, criterion_group, Criterion};
+use futures::executor::block_on;
 use rand::seq::SliceRandom;
 use std::thread;
 use versatiles::{
@@ -10,7 +11,7 @@ use versatiles::{
 fn bench_server(c: &mut Criterion) {
 	let mut group = c.benchmark_group("test_server");
 
-	let reader = TileReader::new("benches/resources/berlin.mbtiles");
+	let reader = block_on(TileReader::new("benches/resources/berlin.mbtiles"));
 	let coords: Vec<TileCoord3> = reader
 		.get_parameters()
 		.get_bbox_pyramide()
