@@ -12,10 +12,8 @@ readme = "readme.md"
 license = "MIT"
 exclude = ["benches/resources/*"]
 
-[lib]
-name = "versatiles"
-path = "src/lib/mod.rs"
-crate-type = ["lib"]
+[workspace]
+members = [ "libs/versatiles_container",  "libs/versatiles_server",  "libs/versatiles_shared" ]
 
 [profile.dev]
 opt-level = 1
@@ -44,36 +42,39 @@ strip = true
 lto = false
 
 [dependencies]
-async-trait = "0.1.67"
-axum = { version = "0.6.11", default-features = false, features = ["tokio"] }
-brotli = { version = "3.3.4", default-features = false, features = ["std"] }
-byteorder = { version = "1.4.3", default-features = false }
-bytes = { version = "1.4.0", default-features = false }
+versatiles_container = { path = "libs/versatiles_container" }
+versatiles_shared = { path = "libs/versatiles_shared" }
+versatiles_server = { path = "libs/versatiles_server" }
+# async-trait = "0.1.67"
+# axum = { version = "0.6.11", default-features = false, features = ["tokio"] }
+# brotli = { version = "3.3.4", default-features = false, features = ["std"] }
+# byteorder = { version = "1.4.3", default-features = false }
+# bytes = { version = "1.4.0", default-features = false }
 clap = { version = "4.1.10", default-features = true }
 clap-verbosity-flag = { version = "2.0.0", default-features = true }
-enumset = { version = "1.0.12", default-features = false }
+# enumset = { version = "1.0.12", default-features = false }
 env_logger = { version = "0.10.0", default-features = false, features = ["regex"] }
-flate2 = { version = "1.0.25", default-features = false }
-futures = { version = "0.3.27", default-features = false }
-http = { version = "0.2.9", default-features = false }
-image = { version = "0.24.5", default-features = false, features = ["jpeg", "png"] }
-itertools = { version = "0.10.5", default-features = false }
+# flate2 = { version = "1.0.25", default-features = false }
+futures = { version = "0.3.27", default-features = false, features = ["executor"] }
+# http = { version = "0.2.9", default-features = false }
+# image = { version = "0.24.5", default-features = false, features = ["jpeg", "png"] }
+# itertools = { version = "0.10.5", default-features = false }
 log = { version = "0.4.17", default-features = false }
-mime_guess = { version = "2.0.4", default-features = false }
-object_store = { version = "0.5.5", default-features = false, features = ["gcp"] }
-r2d2 = { version = "0.8.10", default-features = false }
-r2d2_sqlite = { version = "0.21.0", default-features = false }
-rand = { version = "0.8.5", default-features = false }
-rayon = { version = "1.7.0", default-features = false }
+# mime_guess = { version = "2.0.4", default-features = false }
+# object_store = { version = "0.5.5", default-features = false, features = ["gcp"] }
+# r2d2 = { version = "0.8.10", default-features = false }
+# r2d2_sqlite = { version = "0.21.0", default-features = false }
+# rand = { version = "0.8.5", default-features = false }
+# rayon = { version = "1.7.0", default-features = false }
 regex = { version = "1.7.1", default-features = false }
-reqwest = { version = "0.11.14", default-features = false, features=["blocking"] }
-rusqlite = { version = "0.28.0", default-features = false }
-sysinfo = { version = "0.28.3", default-features = false }
-tar = { version = "0.4.38", default-features = false }
-term_size = { version = "0.3.2", default-features = false }
-tokio = { version = "1.26.0", default-features = false }
-urlencoding = { version = "2.1.2", default-features = false }
-webp = { version = "0.2.2", default-features = false, features = ["img"] }
+# reqwest = { version = "0.11.14", default-features = false, features=["blocking"] }
+# rusqlite = { version = "0.28.0", default-features = false }
+# sysinfo = { version = "0.28.3", default-features = false }
+# tar = { version = "0.4.38", default-features = false }
+# term_size = { version = "0.3.2", default-features = false }
+tokio = { version = "1.26.0", default-features = false, features = ["macros"] }
+# urlencoding = { version = "2.1.2", default-features = false }
+# webp = { version = "0.2.2", default-features = false, features = ["img"] }
 
 [dev-dependencies]
 criterion = { version = "0.4.0", default-features = false }
