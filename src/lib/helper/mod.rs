@@ -1,6 +1,7 @@
 mod blob;
 mod compress;
 mod convert;
+mod error;
 mod image;
 mod progress;
 mod status_image;
@@ -13,6 +14,7 @@ mod tile_reader_parameters;
 pub use self::blob::*;
 pub use self::compress::*;
 pub use self::convert::*;
+pub use self::error::*;
 pub use self::image::*;
 pub use self::progress::*;
 pub use self::status_image::*;

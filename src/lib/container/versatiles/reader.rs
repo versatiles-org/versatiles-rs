@@ -19,12 +19,13 @@ impl TileReader {
 		let header = FileHeader::from_reader(&mut reader).await;
 
 		let meta = if header.meta_range.length > 0 {
-			DataConverter::new_decompressor(&header.precompression).run(reader.read_range(&header.meta_range).await)
+			DataConverter::new_decompressor(&header.precompression)
+				.run(reader.read_range(&header.meta_range).await.unwrap())
 		} else {
 			Blob::empty()
 		};
 
-		let block_index = BlockIndex::from_brotli_blob(reader.read_range(&header.blocks_range).await);
+		let block_index = BlockIndex::from_brotli_blob(reader.read_range(&header.blocks_range).await.unwrap());
 		let bbox_pyramide = block_index.get_bbox_pyramide();
 		let parameters = TileReaderParameters::new(header.tile_format, header.precompression, bbox_pyramide);
 
@@ -102,7 +103,7 @@ impl TileReaderTrait for TileReader {
 			drop(cache_reader);
 		} else {
 			drop(cache_reader);
-			let blob = self.reader.read_range(&block.index_range).await;
+			let blob = self.reader.read_range(&block.index_range).await.unwrap();
 			let mut tile_index = TileIndex::from_brotli_blob(blob);
 			tile_index.add_offset(block.tiles_range.offset);
 
@@ -119,7 +120,7 @@ impl TileReaderTrait for TileReader {
 			drop(cache_reader);
 		}
 
-		Some(self.reader.read_range(&tile_range).await)
+		Some(self.reader.read_range(&tile_range).await.unwrap())
 	}
 	fn get_name(&self) -> &str {
 		self.reader.get_name()
@@ -141,7 +142,7 @@ impl TileReaderTrait for TileReader {
 		for block in blocks {
 			let tiles_count = block.bbox.count_tiles();
 
-			let blob = self.reader.read_range(&block.index_range).await;
+			let blob = self.reader.read_range(&block.index_range).await.unwrap();
 			let tile_index = TileIndex::from_brotli_blob(blob);
 			assert_eq!(tile_index.len(), tiles_count as usize, "tile count are not the same");
 
