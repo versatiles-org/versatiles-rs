@@ -34,7 +34,8 @@ pub struct Subcommand {
 	pub static_content: Vec<String>,
 }
 
-pub fn run(arguments: &Subcommand) {
+#[tokio::main]
+pub async fn run(arguments: &Subcommand) {
 	block_on(async {
 		let mut server: TileServer = new_server(arguments);
 
@@ -79,7 +80,7 @@ pub fn run(arguments: &Subcommand) {
 			.iter()
 			.for_each(|(url, source)| println!("   {:30}  <-  {}", url.to_owned() + "*", source));
 
-		server.start();
+		server.start().await;
 	})
 }
 

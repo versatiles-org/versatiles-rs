@@ -13,7 +13,6 @@ use axum::{
 };
 use enumset::{enum_set, EnumSet};
 use std::sync::Arc;
-use tokio;
 
 struct TileSource {
 	prefix: String,
@@ -68,7 +67,6 @@ impl TileServer {
 		self.static_sources.push(Arc::new(source));
 	}
 
-	#[tokio::main]
 	pub async fn start(&mut self) {
 		log::debug!("starting server");
 
