@@ -1,9 +1,7 @@
-use crate::tools::get_reader;
 use clap::Args;
 use futures::executor::block_on;
 use log::trace;
-use std::path::PathBuf;
-use versatiles_container::{mbtiles, tar_file, versatiles, TileConverterBox, TileConverterTrait, TileReaderBox};
+use versatiles_container::{get_converter, get_reader, TileConverterBox, TileReaderBox};
 use versatiles_shared::{Precompression, TileBBoxPyramide, TileConverterConfig, TileFormat};
 
 #[derive(Args)]
@@ -100,15 +98,7 @@ fn new_converter(filename: &str, arguments: &Subcommand) -> TileConverterBox {
 		arguments.force_recompress,
 	);
 
-	let path = PathBuf::from(filename);
-	let extension = path.extension().unwrap().to_str().unwrap();
-
-	let converter = match extension {
-		"mbtiles" => mbtiles::TileConverter::new(&path, config),
-		"versatiles" => versatiles::TileConverter::new(&path, config),
-		"tar" => tar_file::TileConverter::new(&path, config),
-		_ => panic!("extension '{extension:?}' unknown"),
-	};
+	let converter = get_converter(filename, config);
 
 	converter
 }

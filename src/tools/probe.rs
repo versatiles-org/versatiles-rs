@@ -1,6 +1,6 @@
-use crate::tools::get_reader;
 use clap::Args;
 use futures::executor::block_on;
+use versatiles_container::get_reader;
 
 #[derive(Args)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]

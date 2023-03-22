@@ -1,7 +1,7 @@
-use crate::tools::get_reader;
 use clap::Args;
 use futures::executor::block_on;
 use regex::Regex;
+use versatiles_container::get_reader;
 use versatiles_server::{source, TileServer};
 
 #[derive(Args)]
