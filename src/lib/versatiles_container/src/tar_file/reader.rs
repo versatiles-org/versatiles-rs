@@ -105,22 +105,18 @@ impl TileReaderTrait for TileReader {
 
 				if tile_form.is_none() {
 					tile_form = Some(this_form);
-				} else {
-					if tile_form.as_ref().unwrap() != &this_form {
-						return Err(Error::new(format!(
-							"unknown filename {path_tmp_string:?}, can't detect format"
-						)));
-					}
+				} else if tile_form.as_ref().unwrap() != &this_form {
+					return Err(Error::new(format!(
+						"unknown filename {path_tmp_string:?}, can't detect format"
+					)));
 				}
 
 				if tile_comp.is_none() {
 					tile_comp = Some(this_comp);
-				} else {
-					if tile_comp.as_ref().unwrap() != &this_comp {
-						return Err(Error::new(format!(
-							"unknown filename {path_tmp_string:?}, can't detect compression"
-						)));
-					}
+				} else if tile_comp.as_ref().unwrap() != &this_comp {
+					return Err(Error::new(format!(
+						"unknown filename {path_tmp_string:?}, can't detect compression"
+					)));
 				}
 
 				let offset = entry.raw_file_position();

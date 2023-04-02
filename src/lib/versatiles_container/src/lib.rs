@@ -17,7 +17,7 @@ pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
 		_ => panic!("extension '{extension:?}' unknown"),
 	};
 
-	Ok(reader.await?)
+	reader.await
 }
 
 pub fn get_converter(filename: &str, config: TileConverterConfig) -> TileConverterBox {
