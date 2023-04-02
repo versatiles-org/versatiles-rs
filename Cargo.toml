@@ -13,7 +13,7 @@ license = "MIT"
 exclude = ["benches/resources/*"]
 
 [workspace]
-members = [ "libs/versatiles_container",  "libs/versatiles_server",  "libs/versatiles_shared" ]
+members = [ ".", "libs/versatiles_container", "libs/versatiles_server", "libs/versatiles_shared" ]
 
 [profile.dev]
 opt-level = 1
