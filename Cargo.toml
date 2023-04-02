@@ -45,18 +45,18 @@ lto = false
 versatiles_container = { path = "libs/versatiles_container" }
 versatiles_shared = { path = "libs/versatiles_shared" }
 versatiles_server = { path = "libs/versatiles_server" }
-clap = { version = "4.1.10", default-features = true }
+clap = { version = "4.1.11", default-features = true }
 clap-verbosity-flag = { version = "2.0.0", default-features = true }
 env_logger = { version = "0.10.0", default-features = false, features = ["regex"] }
 futures = { version = "0.3.27", default-features = false, features = ["executor"] }
 log = { version = "0.4.17", default-features = false }
-regex = { version = "1.7.1", default-features = false }
+regex = { version = "1.7.2", default-features = false }
 tokio = { version = "1.26.0", default-features = false, features = ["macros"] }
 
 [dev-dependencies]
 criterion = { version = "0.4.0", default-features = false }
 rand = { version = "0.8.5", default-features = true }
-reqwest = { version = "0.11.14", default-features = false, features=["blocking"] }
+reqwest = { version = "0.11.15", default-features = false, features=["blocking"] }
 
 [[bench]]
 name = "main"
