@@ -29,8 +29,12 @@ criterion = { version = "0.4.0", default-features = false }
 rand = { version = "0.8.5", default-features = true }
 reqwest = { version = "0.11.15", default-features = false, features=["blocking"] }
 
+[[bin]]
+name = "versatiles"
+path = "src/main.rs"
+
 [[bench]]
 name = "main"
 harness = false
-path = "../benches/main.rs"
+path = "benches/main.rs"
 

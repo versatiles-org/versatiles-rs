@@ -5,6 +5,7 @@ use rand::{seq::SliceRandom, thread_rng};
 use reqwest::blocking::get;
 use std::thread;
 use versatiles_container::get_reader;
+use versatiles_server::{source, TileServer};
 use versatiles_shared::TileCoord3;
 
 fn bench_server(c: &mut Criterion) {
@@ -18,13 +19,11 @@ fn bench_server(c: &mut Criterion) {
 		.collect();
 	drop(reader);
 
-	let args = tools::serve::Subcommand {
-		sources: vec!["benches/resources/berlin.mbtiles".to_string()],
-		ip: "127.0.0.1".to_owned(),
-		port: 8080,
-		static_content: Vec::new(),
-	};
-	thread::spawn(move || versatiles::tools::serve::run(&args));
+	let mut server = TileServer::new("127.0.0.1", 8080);
+	let reader = block_on(get_reader("benches/resources/berlin.mbtiles"));
+	server.add_tile_source(format!("/tiles/berlin/"), source::TileContainer::from(reader));
+
+	thread::spawn(move || block_on(server.start()));
 
 	thread::sleep(time::Duration::from_secs(1));
 

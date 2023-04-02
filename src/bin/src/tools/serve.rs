@@ -35,7 +35,7 @@ pub struct Subcommand {
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) {
 	block_on(async {
-		let mut server: TileServer = new_server(arguments);
+		let mut server: TileServer = TileServer::new(&arguments.ip, arguments.port);
 
 		let patterns: Vec<Regex> = [
 			r"^\[(?P<name>[^\]]+?)\](?P<url>.*)$",
@@ -80,8 +80,4 @@ pub async fn run(arguments: &Subcommand) {
 
 		server.start().await;
 	})
-}
-
-fn new_server(command: &Subcommand) -> TileServer {
-	TileServer::new(&command.ip, command.port)
 }
