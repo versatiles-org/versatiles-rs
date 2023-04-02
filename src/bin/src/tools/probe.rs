@@ -19,7 +19,7 @@ pub fn run(arguments: &Subcommand) {
 	block_on(async {
 		println!("probe {:?}", arguments.file);
 
-		let reader = get_reader(&arguments.file).await;
+		let reader = get_reader(&arguments.file).await.unwrap();
 		println!("{reader:#?}");
 
 		if arguments.deep {

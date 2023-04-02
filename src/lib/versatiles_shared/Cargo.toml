@@ -16,4 +16,5 @@ itertools = { version = "0.10.5", default-features = false }
 log = { version = "0.4.17", default-features = false }
 reqwest = { version = "0.11.15", default-features = false, features=["blocking"] }
 term_size = { version = "0.3.2", default-features = false }
+url = { version = "2.3.1", default-features = false }
 webp = { version = "0.2.2", default-features = false, features = ["img"] }

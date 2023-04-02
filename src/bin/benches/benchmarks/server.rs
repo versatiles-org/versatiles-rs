@@ -11,7 +11,7 @@ use versatiles_shared::TileCoord3;
 fn bench_server(c: &mut Criterion) {
 	let mut group = c.benchmark_group("test_server");
 
-	let reader = block_on(get_reader("benches/resources/berlin.mbtiles"));
+	let reader = block_on(get_reader("benches/resources/berlin.mbtiles")).unwrap();
 	let coords: Vec<TileCoord3> = reader
 		.get_parameters()
 		.get_bbox_pyramide()
@@ -20,7 +20,7 @@ fn bench_server(c: &mut Criterion) {
 	drop(reader);
 
 	let mut server = TileServer::new("127.0.0.1", 8080);
-	let reader = block_on(get_reader("benches/resources/berlin.mbtiles"));
+	let reader = block_on(get_reader("src/bin/benches/resources/berlin.mbtiles")).unwrap();
 	server.add_tile_source(format!("/tiles/berlin/"), source::TileContainer::from(reader));
 
 	thread::spawn(move || block_on(server.start()));

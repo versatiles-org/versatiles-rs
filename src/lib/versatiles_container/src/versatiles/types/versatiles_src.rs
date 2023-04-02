@@ -1,6 +1,5 @@
 use super::ByteRange;
 use async_trait::async_trait;
-use log::error;
 use reqwest::{Client, Method, Request, Url};
 use std::{
 	env::current_dir,
@@ -13,21 +12,21 @@ use versatiles_shared::{Blob, Error};
 
 #[async_trait]
 pub trait VersaTilesSrcTrait: Send + Sync {
-	fn new(source: &str) -> Option<Self>
+	fn new(source: &str) -> Result<Self, Error>
 	where
 		Self: Sized;
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob, Error>;
 	fn get_name(&self) -> &str;
 }
 
-pub fn new_versatiles_src(source: &str) -> Box<dyn VersaTilesSrcTrait> {
+pub fn new_versatiles_src(source: &str) -> Result<Box<dyn VersaTilesSrcTrait>, Error> {
 	let start = source.split_terminator(':').next();
 
-	match start {
-		//Some("gs") => Box::new(VersaTilesSrcObjectStore::new(source).unwrap()),
-		Some("http" | "https") => Box::new(VersaTilesSrcHttp::new(source).unwrap()),
-		_ => Box::new(VersaTilesSrcFile::new(source).unwrap()),
-	}
+	Ok(match start {
+		//Some("gs") => Box::new(VersaTilesSrcObjectStore::new(source)?),
+		Some("http" | "https") => Box::new(VersaTilesSrcHttp::new(source)?),
+		_ => Box::new(VersaTilesSrcFile::new(source)?),
+	})
 }
 
 struct VersaTilesSrcFile {
@@ -36,22 +35,23 @@ struct VersaTilesSrcFile {
 }
 #[async_trait]
 impl VersaTilesSrcTrait for VersaTilesSrcFile {
-	fn new(source: &str) -> Option<Self> {
-		let mut filename = current_dir().unwrap();
+	fn new(source: &str) -> Result<Self, Error> {
+		let mut filename = current_dir()?;
 		filename.push(Path::new(source));
 
 		if !filename.exists() {
-			error!("file \"{:?}\" not found", filename);
-			return None;
+			return Err(Error::new(format!("file \"{filename:?}\" not found")));
 		}
 
-		assert!(filename.is_absolute(), "filename {filename:?} must be absolute");
+		if !filename.is_absolute() {
+			return Err(Error::new(format!("filename {filename:?} must be absolute")));
+		}
 
-		filename = filename.canonicalize().unwrap();
+		filename = filename.canonicalize()?;
 
-		Some(Self {
+		Ok(Self {
 			name: source.to_string(),
-			reader_mutex: Mutex::new(BufReader::new(File::open(filename).unwrap())),
+			reader_mutex: Mutex::new(BufReader::new(File::open(filename)?)),
 		})
 	}
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob, Error> {
@@ -76,7 +76,7 @@ struct VersaTilesSrcObjectStore {
 }
 #[async_trait]
 impl VersaTilesSrcTrait for VersaTilesSrcObjectStore {
-	fn new(source: &str) -> Option<Self> {
+	fn new(source: &str) -> Result<Self, Error> {
 		let object_store = if source.starts_with("gs://") {
 			object_store::gcp::GoogleCloudStorageBuilder::new()
 				.with_service_account_path("credentials.json")
@@ -110,15 +110,18 @@ struct VersaTilesSrcHttp {
 }
 #[async_trait]
 impl VersaTilesSrcTrait for VersaTilesSrcHttp {
-	fn new(source: &str) -> Option<Self> {
+	fn new(source: &str) -> Result<Self, Error> {
 		if source.starts_with("https://") || source.starts_with("http://") {
-			Some(Self {
+			Ok(Self {
 				name: source.to_string(),
-				url: Url::parse(source).unwrap(),
+				url: Url::parse(source)?,
 				client: Client::new(),
 			})
 		} else {
-			None
+			Err(Error::new(format!(
+				"source {} must start with http:// or https://",
+				source
+			)))
 		}
 	}
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob, Error> {

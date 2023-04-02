@@ -5,7 +5,7 @@ use std::{
 };
 use tar::{Archive, EntryType};
 use versatiles_shared::{
-	decompress, Blob, Precompression, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
+	decompress, Blob, Error, Precompression, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
 };
 
 use crate::{TileReaderBox, TileReaderTrait};
@@ -34,20 +34,20 @@ impl TileReaderTrait for TileReader {
 	fn get_container_name(&self) -> &str {
 		"tar"
 	}
-	async fn new(path: &str) -> TileReaderBox
+	async fn new(path: &str) -> Result<TileReaderBox, Error>
 	where
 		Self: Sized,
 	{
 		trace!("new {}", path);
-		let mut filename = current_dir().unwrap();
+		let mut filename = current_dir()?;
 		filename.push(Path::new(path));
 
 		assert!(filename.exists(), "file {filename:?} does not exist");
 		assert!(filename.is_absolute(), "path {filename:?} must be absolute");
 
-		filename = filename.canonicalize().unwrap();
+		filename = filename.canonicalize()?;
 
-		let file = File::open(filename).unwrap();
+		let file = File::open(filename)?;
 		let mut archive = Archive::new(&file);
 
 		let mut meta = Blob::empty();
@@ -56,14 +56,14 @@ impl TileReaderTrait for TileReader {
 		let mut tile_comp: Option<Precompression> = None;
 		let mut bbox_pyramide = TileBBoxPyramide::new_empty();
 
-		for entry in archive.entries().unwrap() {
-			let mut entry = entry.unwrap();
+		for entry in archive.entries()? {
+			let mut entry = entry?;
 			let header = entry.header();
 			if header.entry_type() != EntryType::Regular {
 				continue;
 			}
 
-			let path = entry.path().unwrap().clone();
+			let path = entry.path()?.clone();
 			let mut path_tmp: Vec<&str> = path.iter().map(|s| s.to_str().unwrap()).collect();
 
 			if path_tmp[0] == "." {
@@ -74,7 +74,7 @@ impl TileReaderTrait for TileReader {
 			drop(path);
 			let path_vec: Vec<&str> = path_tmp_string.split('/').collect();
 
-			let mut add_tile = || {
+			if path_vec.len() == 3 {
 				let z = path_vec[0].parse::<u8>().unwrap();
 				let y = path_vec[1].parse::<u64>().unwrap();
 
@@ -106,21 +106,21 @@ impl TileReaderTrait for TileReader {
 				if tile_form.is_none() {
 					tile_form = Some(this_form);
 				} else {
-					assert_eq!(
-						tile_form.as_ref().unwrap(),
-						&this_form,
-						"unknown filename {path_tmp_string:?}"
-					);
+					if tile_form.as_ref().unwrap() != &this_form {
+						return Err(Error::new(format!(
+							"unknown filename {path_tmp_string:?}, can't detect format"
+						)));
+					}
 				}
 
 				if tile_comp.is_none() {
 					tile_comp = Some(this_comp);
 				} else {
-					assert_eq!(
-						tile_comp.as_ref().unwrap(),
-						&this_comp,
-						"unknown filename {path_tmp_string:?}"
-					);
+					if tile_comp.as_ref().unwrap() != &this_comp {
+						return Err(Error::new(format!(
+							"unknown filename {path_tmp_string:?}, can't detect compression"
+						)));
+					}
 				}
 
 				let offset = entry.raw_file_position();
@@ -129,10 +129,6 @@ impl TileReaderTrait for TileReader {
 				let coord3 = TileCoord3 { x, y, z };
 				bbox_pyramide.include_coord(&coord3);
 				tile_map.insert(coord3, TarByteRange { offset, length });
-			};
-
-			if path_vec.len() == 3 {
-				add_tile();
 				continue;
 			}
 
@@ -165,13 +161,13 @@ impl TileReaderTrait for TileReader {
 			// ignore
 		}
 
-		Box::new(TileReader {
+		Ok(Box::new(TileReader {
 			meta,
 			name: path.to_string(),
 			file,
 			tile_map,
 			parameters: TileReaderParameters::new(tile_form.unwrap(), tile_comp.unwrap(), bbox_pyramide),
-		})
+		}))
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
 		&self.parameters

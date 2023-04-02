@@ -60,7 +60,7 @@ pub async fn run(arguments: &Subcommand) {
 				Some(m) => m.as_str(),
 			};
 
-			let reader = get_reader(url).await;
+			let reader = get_reader(url).await.unwrap();
 			server.add_tile_source(format!("/tiles/{name}/"), source::TileContainer::from(reader));
 		}
 

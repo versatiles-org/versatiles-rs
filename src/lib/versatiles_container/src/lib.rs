@@ -5,9 +5,9 @@ pub mod versatiles;
 
 use std::path::PathBuf;
 pub use traits::*;
-use versatiles_shared::TileConverterConfig;
+use versatiles_shared::{Error, TileConverterConfig};
 
-pub async fn get_reader(filename: &str) -> TileReaderBox {
+pub async fn get_reader(filename: &str) -> Result<TileReaderBox, Error> {
 	let extension = filename.split('.').last().unwrap();
 
 	let reader = match extension {
@@ -17,7 +17,7 @@ pub async fn get_reader(filename: &str) -> TileReaderBox {
 		_ => panic!("extension '{extension:?}' unknown"),
 	};
 
-	reader.await
+	Ok(reader.await?)
 }
 
 pub fn get_converter(filename: &str, config: TileConverterConfig) -> TileConverterBox {

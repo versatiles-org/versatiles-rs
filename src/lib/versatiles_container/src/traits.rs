@@ -19,7 +19,7 @@ pub trait TileConverterTrait {
 #[allow(clippy::new_ret_no_self)]
 #[async_trait]
 pub trait TileReaderTrait: Debug + Send + Sync {
-	async fn new(path: &str) -> TileReaderBox
+	async fn new(path: &str) -> Result<TileReaderBox, Error>
 	where
 		Self: Sized;
 	fn get_name(&self) -> &str;

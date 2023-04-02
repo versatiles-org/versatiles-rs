@@ -9,7 +9,7 @@ use std::{
 	thread,
 };
 use versatiles_shared::{
-	Blob, Precompression, ProgressBar, TileBBox, TileBBoxPyramide, TileCoord2, TileCoord3, TileFormat,
+	Blob, Error, Precompression, ProgressBar, TileBBox, TileBBoxPyramide, TileCoord2, TileCoord3, TileFormat,
 	TileReaderParameters,
 };
 
@@ -185,18 +185,18 @@ impl TileReader {
 
 #[async_trait]
 impl TileReaderTrait for TileReader {
-	async fn new(path: &str) -> TileReaderBox {
+	async fn new(path: &str) -> Result<TileReaderBox, Error> {
 		trace!("open {}", path);
 
-		let mut filename = current_dir().unwrap();
+		let mut filename = current_dir()?;
 		filename.push(Path::new(path));
 
 		assert!(filename.exists(), "file {filename:?} does not exist");
 		assert!(filename.is_absolute(), "path {filename:?} must be absolute");
 
-		filename = filename.canonicalize().unwrap();
+		filename = filename.canonicalize()?;
 
-		Box::new(Self::load_from_sqlite(&filename))
+		Ok(Box::new(Self::load_from_sqlite(&filename)))
 	}
 	fn get_container_name(&self) -> &str {
 		"mbtiles"

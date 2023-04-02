@@ -2,7 +2,7 @@ use clap::Args;
 use futures::executor::block_on;
 use log::trace;
 use versatiles_container::{get_converter, get_reader, TileConverterBox, TileReaderBox};
-use versatiles_shared::{Precompression, TileBBoxPyramide, TileConverterConfig, TileFormat};
+use versatiles_shared::{Error, Precompression, TileBBoxPyramide, TileConverterConfig, TileFormat};
 
 #[derive(Args)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -53,18 +53,18 @@ pub fn run(arguments: &Subcommand) {
 	println!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
 	block_on(async {
-		let mut reader = new_reader(&arguments.input_file, arguments).await;
+		let mut reader = new_reader(&arguments.input_file, arguments).await.unwrap();
 		let mut converter = new_converter(&arguments.output_file, arguments);
 		converter.convert_from(&mut reader).await;
 	})
 }
 
-async fn new_reader(filename: &str, arguments: &Subcommand) -> TileReaderBox {
-	let mut reader = get_reader(filename).await;
+async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TileReaderBox, Error> {
+	let mut reader = get_reader(filename).await?;
 
 	reader.get_parameters_mut().set_vertical_flip(arguments.flip_input);
 
-	reader
+	Ok(reader)
 }
 
 fn new_converter(filename: &str, arguments: &Subcommand) -> TileConverterBox {

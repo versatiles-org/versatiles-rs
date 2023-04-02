@@ -1738,6 +1738,7 @@ dependencies = [
  "log",
  "reqwest",
  "term_size",
+ "url",
  "webp",
 ]
 

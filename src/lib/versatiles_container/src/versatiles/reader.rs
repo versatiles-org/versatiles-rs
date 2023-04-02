@@ -45,11 +45,11 @@ unsafe impl Sync for TileReader {}
 
 #[async_trait]
 impl TileReaderTrait for TileReader {
-	async fn new(filename: &str) -> TileReaderBox {
-		let source = new_versatiles_src(filename);
+	async fn new(filename: &str) -> Result<TileReaderBox, Error> {
+		let source = new_versatiles_src(filename)?;
 		let reader = TileReader::from_src(source).await;
 
-		Box::new(reader)
+		Ok(Box::new(reader))
 	}
 	fn get_container_name(&self) -> &str {
 		"versatiles"

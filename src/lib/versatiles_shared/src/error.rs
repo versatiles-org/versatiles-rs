@@ -2,7 +2,11 @@ pub struct Error {
 	msg: String,
 }
 
-impl std::error::Error for Error {}
+impl Error {
+	pub fn new(msg: String) -> Self {
+		Error { msg }
+	}
+}
 
 impl From<std::io::Error> for Error {
 	fn from(error: std::io::Error) -> Self {
@@ -28,6 +32,12 @@ impl From<reqwest::Error> for Error {
 	}
 }
 
+impl From<url::ParseError> for Error {
+	fn from(error: url::ParseError) -> Self {
+		Self { msg: error.to_string() }
+	}
+}
+
 impl std::fmt::Debug for Error {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("Error").finish()
@@ -39,3 +49,5 @@ impl std::fmt::Display for Error {
 		write!(f, "{}", self.msg)
 	}
 }
+
+impl std::error::Error for Error {}
