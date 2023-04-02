@@ -5,7 +5,9 @@ use itertools::Itertools;
 use log::debug;
 use std::{collections::HashMap, fmt::Debug, ops::Shr};
 use tokio::sync::RwLock;
-use versatiles_shared::*;
+use versatiles_shared::{
+	Blob, DataConverter, ProgressBar, Result, StatusImagePyramide, TileCoord2, TileCoord3, TileReaderParameters,
+};
 
 pub struct TileReader {
 	meta: Blob,
@@ -45,7 +47,7 @@ unsafe impl Sync for TileReader {}
 
 #[async_trait]
 impl TileReaderTrait for TileReader {
-	async fn new(filename: &str) -> Result<TileReaderBox, Error> {
+	async fn new(filename: &str) -> Result<TileReaderBox> {
 		let source = new_versatiles_src(filename)?;
 		let reader = TileReader::from_src(source).await;
 

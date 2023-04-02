@@ -9,7 +9,7 @@ use std::{
 	thread,
 };
 use versatiles_shared::{
-	Blob, Error, Precompression, ProgressBar, TileBBox, TileBBoxPyramide, TileCoord2, TileCoord3, TileFormat,
+	Blob, Precompression, ProgressBar, Result, TileBBox, TileBBoxPyramide, TileCoord2, TileCoord3, TileFormat,
 	TileReaderParameters,
 };
 
@@ -185,7 +185,7 @@ impl TileReader {
 
 #[async_trait]
 impl TileReaderTrait for TileReader {
-	async fn new(path: &str) -> Result<TileReaderBox, Error> {
+	async fn new(path: &str) -> Result<TileReaderBox> {
 		trace!("open {}", path);
 
 		let mut filename = current_dir()?;

@@ -2,7 +2,7 @@ use clap::Args;
 use futures::executor::block_on;
 use log::trace;
 use versatiles_container::{get_converter, get_reader, TileConverterBox, TileReaderBox};
-use versatiles_shared::{Error, Precompression, TileBBoxPyramide, TileConverterConfig, TileFormat};
+use versatiles_shared::{Precompression, Result, TileBBoxPyramide, TileConverterConfig, TileFormat};
 
 #[derive(Args)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -59,7 +59,7 @@ pub fn run(arguments: &Subcommand) {
 	})
 }
 
-async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TileReaderBox, Error> {
+async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TileReaderBox> {
 	let mut reader = get_reader(filename).await?;
 
 	reader.get_parameters_mut().set_vertical_flip(arguments.flip_input);

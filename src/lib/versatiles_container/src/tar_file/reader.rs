@@ -5,7 +5,7 @@ use std::{
 };
 use tar::{Archive, EntryType};
 use versatiles_shared::{
-	decompress, Blob, Error, Precompression, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
+	decompress, Blob, Error, Precompression, Result, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
 };
 
 use crate::{TileReaderBox, TileReaderTrait};
@@ -34,7 +34,7 @@ impl TileReaderTrait for TileReader {
 	fn get_container_name(&self) -> &str {
 		"tar"
 	}
-	async fn new(path: &str) -> Result<TileReaderBox, Error>
+	async fn new(path: &str) -> Result<TileReaderBox>
 	where
 		Self: Sized,
 	{

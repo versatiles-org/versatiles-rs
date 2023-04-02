@@ -1,43 +1,31 @@
+// use http::header::InvalidHeaderValue as http_header_InvalidHeaderValue;
+// use reqwest::Error as reqwest_Error;
+// use std::fmt::Error as std_fmt_Error;
+// use std::io::Error as std_io_Error;
+// use url::ParseError as url_ParseError;
+
+pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+#[derive(Debug, Clone)]
 pub struct Error {
 	msg: String,
 }
 
 impl Error {
-	pub fn new(msg: String) -> Self {
-		Error { msg }
+	pub fn new(msg: String) -> Box<Self> {
+		Box::new(Self { msg })
 	}
 }
 
-impl From<std::io::Error> for Error {
-	fn from(error: std::io::Error) -> Self {
-		Self { msg: error.to_string() }
+impl std::fmt::Display for Error {
+	fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+		write!(f, "{}", self.msg)
 	}
 }
 
-impl From<std::fmt::Error> for Error {
-	fn from(error: std::fmt::Error) -> Self {
-		Self { msg: error.to_string() }
-	}
-}
+impl std::error::Error for Error {}
 
-impl From<http::header::InvalidHeaderValue> for Error {
-	fn from(error: http::header::InvalidHeaderValue) -> Self {
-		Self { msg: error.to_string() }
-	}
-}
-
-impl From<reqwest::Error> for Error {
-	fn from(error: reqwest::Error) -> Self {
-		Self { msg: error.to_string() }
-	}
-}
-
-impl From<url::ParseError> for Error {
-	fn from(error: url::ParseError) -> Self {
-		Self { msg: error.to_string() }
-	}
-}
-
+/*
 impl std::fmt::Debug for Error {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("Error").finish()
@@ -51,3 +39,4 @@ impl std::fmt::Display for Error {
 }
 
 impl std::error::Error for Error {}
+ */

@@ -1,6 +1,9 @@
 use async_trait::async_trait;
 use std::{fmt::Debug, path::Path};
-use versatiles_shared::*;
+use versatiles_shared::{
+	Blob, Precompression, Result, TileBBox, TileConverterConfig, TileCoord2, TileCoord3, TileFormat,
+	TileReaderParameters,
+};
 
 pub type TileConverterBox = Box<dyn TileConverterTrait>;
 pub type TileReaderBox = Box<dyn TileReaderTrait>;
@@ -19,7 +22,7 @@ pub trait TileConverterTrait {
 #[allow(clippy::new_ret_no_self)]
 #[async_trait]
 pub trait TileReaderTrait: Debug + Send + Sync {
-	async fn new(path: &str) -> Result<TileReaderBox, Error>
+	async fn new(path: &str) -> Result<TileReaderBox>
 	where
 		Self: Sized;
 	fn get_name(&self) -> &str;
