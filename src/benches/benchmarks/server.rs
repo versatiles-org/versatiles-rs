@@ -18,7 +18,7 @@ fn bench_server(c: &mut Criterion) {
 		.collect();
 	drop(reader);
 
-	let args = versatiles::tools::serve::Subcommand {
+	let args = tools::serve::Subcommand {
 		sources: vec!["benches/resources/berlin.mbtiles".to_string()],
 		ip: "127.0.0.1".to_owned(),
 		port: 8080,

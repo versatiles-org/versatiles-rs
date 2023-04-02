@@ -13,7 +13,7 @@ select answer in "Yes" "No"; do
 done
 
 # check cargo
-./bin/check.sh
+./helpers/check.sh
 if [ $? -ne 0 ]; then
 	echo "❗️ Check failed!"
 	exit 1

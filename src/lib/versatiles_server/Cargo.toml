@@ -2,7 +2,7 @@
 name = "versatiles_server"
 version = "0.1.0"
 edition = "2021"
-workspace = "../.."
+workspace = "../../.."
 
 [dependencies]
 versatiles_container = { path = "../versatiles_container" }

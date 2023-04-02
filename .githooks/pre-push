@@ -10,7 +10,7 @@ function cleanup {
 }
 trap cleanup EXIT
 
-result=$(bash ../bin/check.sh)
+result=$(bash ../helpers/check.sh)
 if [ $? -ne 0 ]; then
    echo "$result"
    exit 1
