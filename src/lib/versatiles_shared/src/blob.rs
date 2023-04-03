@@ -10,7 +10,7 @@ impl Blob {
 	pub fn from_vec(vec: Vec<u8>) -> Blob {
 		Blob(Bytes::from(vec))
 	}
-	pub fn from_str(text: &str) -> Blob {
+	pub fn from_str_ref(text: &str) -> Blob {
 		Blob(Bytes::from(text.to_owned()))
 	}
 	pub fn from_string(text: String) -> Blob {
@@ -60,14 +60,14 @@ mod tests {
 	#[test]
 	fn string() {
 		let text = String::from("Xylofön");
-		assert_eq!(Blob::from_str(&text).as_str(), text);
+		assert_eq!(Blob::from_str_ref(&text).as_str(), text);
 		assert_eq!(Blob::from_string(text.clone()).as_str(), text);
 	}
 
 	#[test]
 	fn empty() {
 		let text = String::from("");
-		assert_eq!(Blob::from_str(&text).is_empty(), true);
+		assert_eq!(Blob::from_str_ref(&text).is_empty(), true);
 	}
 
 	#[test]
@@ -80,7 +80,7 @@ mod tests {
 	#[test]
 	fn debug() {
 		let text = String::from("Voisilmäpulla");
-		let blob = Blob::from_str(&text);
+		let blob = Blob::from_str_ref(&text);
 		let debug = format!("{:?}", blob);
 		println!("{}", debug);
 		//assert_eq!(format!("{:}blob Blob::from_bytes(bytes).as_str(), text);
