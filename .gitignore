@@ -2,8 +2,9 @@
 .DS_Store
 *.png
 *.tar
+/coverage
+/frontend
 /releases
 /target
 /tiles
-/frontend
 credentials.json
