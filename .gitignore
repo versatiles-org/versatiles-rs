@@ -1,5 +1,6 @@
 .*.sh
 .DS_Store
+*.lcov
 *.png
 *.tar
 /coverage
@@ -8,3 +9,4 @@
 /target
 /tiles
 credentials.json
+lcov.info

@@ -1,10 +1,12 @@
+pub mod dummy;
 pub mod mbtiles;
 pub mod tar_file;
-mod traits;
 pub mod versatiles;
 
-use std::path::PathBuf;
+mod traits;
 pub use traits::*;
+
+use std::path::PathBuf;
 use versatiles_shared::{Result, TileConverterConfig};
 
 pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {

@@ -101,7 +101,7 @@ impl TileReaderTrait for TileReader {
 		let tile_range: ByteRange;
 
 		if let Some(tile_index) = tile_index_option {
-			tile_range = *tile_index.get_tile_range(tile_id);
+			tile_range = *tile_index.get(tile_id);
 
 			drop(cache_reader);
 		} else {
@@ -118,7 +118,7 @@ impl TileReaderTrait for TileReader {
 			let cache_reader = self.tile_index_cache.read().await;
 			let tile_index_option = cache_reader.get(&block_coord);
 
-			tile_range = *tile_index_option.unwrap().get_tile_range(tile_id);
+			tile_range = *tile_index_option.unwrap().get(tile_id);
 
 			drop(cache_reader);
 		}

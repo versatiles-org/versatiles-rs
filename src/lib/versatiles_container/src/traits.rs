@@ -25,15 +25,23 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 	async fn new(path: &str) -> Result<TileReaderBox>
 	where
 		Self: Sized;
+
+	/// some kine of name for this reader source, e.g. the filename
 	fn get_name(&self) -> &str;
+
 	fn get_parameters(&self) -> &TileReaderParameters;
+
 	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters;
+
 	fn get_tile_format(&self) -> &TileFormat {
 		self.get_parameters().get_tile_format()
 	}
+
 	fn get_tile_precompression(&self) -> &Precompression {
 		self.get_parameters().get_tile_precompression()
 	}
+
+	/// container name, e.g. versatiles, mbtiles, ...
 	fn get_container_name(&self) -> &str;
 
 	/// always uncompressed

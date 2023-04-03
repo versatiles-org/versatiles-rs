@@ -57,7 +57,7 @@ impl TileIndex {
 	pub fn as_brotli_blob(&self) -> Blob {
 		compress_brotli(self.as_blob())
 	}
-	pub fn get_tile_range(&self, index: usize) -> &ByteRange {
+	pub fn get(&self, index: usize) -> &ByteRange {
 		&self.index[index]
 	}
 	pub fn len(&self) -> usize {
@@ -74,6 +74,26 @@ impl TileIndex {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn init() {
+		const COUNT: u64 = 16;
+
+		let mut index = TileIndex::new_empty(COUNT as usize);
+		assert_eq!(index.len(), COUNT as usize);
+
+		for i in 0..COUNT {
+			index.set(i as usize, ByteRange::new(i * i, i));
+			assert_eq!(index.get(i as usize), &ByteRange::new(i * i, i));
+		}
+
+		index.add_offset(18);
+
+		for (index, range) in index.iter().enumerate() {
+			let i = index as u64;
+			assert_eq!(range, &ByteRange::new(i * i + 18, i));
+		}
+	}
 
 	#[test]
 	fn conversion() {

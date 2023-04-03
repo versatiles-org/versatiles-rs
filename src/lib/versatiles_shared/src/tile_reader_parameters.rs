@@ -24,6 +24,15 @@ impl TileReaderParameters {
 			flip_vertically: false,
 		}
 	}
+	pub fn new_dummy() -> TileReaderParameters {
+		TileReaderParameters {
+			decompressor: DataConverter::new_empty(),
+			tile_format: TileFormat::PBF,
+			tile_precompression: Precompression::Uncompressed,
+			bbox_pyramide: TileBBoxPyramide::new_empty(),
+			flip_vertically: false,
+		}
+	}
 	pub fn get_tile_format(&self) -> &TileFormat {
 		&self.tile_format
 	}

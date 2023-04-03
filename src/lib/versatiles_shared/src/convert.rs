@@ -23,7 +23,7 @@ pub struct DataConverter {
 	pipeline: Vec<FnConv>,
 }
 impl DataConverter {
-	fn empty() -> DataConverter {
+	pub fn new_empty() -> DataConverter {
 		DataConverter { pipeline: Vec::new() }
 	}
 	pub fn is_empty(&self) -> bool {
@@ -33,7 +33,7 @@ impl DataConverter {
 		src_form: &TileFormat, src_comp: &Precompression, dst_form: &TileFormat, dst_comp: &Precompression,
 		force_recompress: bool,
 	) -> DataConverter {
-		let mut converter = DataConverter::empty();
+		let mut converter = DataConverter::new_empty();
 
 		let format_converter_option: Option<fn(Blob) -> Blob> = if (src_form != dst_form) || force_recompress {
 			use TileFormat::*;
@@ -84,7 +84,7 @@ impl DataConverter {
 		converter
 	}
 	pub fn new_compressor(dst_comp: &Precompression) -> DataConverter {
-		let mut converter = DataConverter::empty();
+		let mut converter = DataConverter::new_empty();
 
 		match dst_comp {
 			Precompression::Uncompressed => {}
@@ -95,7 +95,7 @@ impl DataConverter {
 		converter
 	}
 	pub fn new_decompressor(src_comp: &Precompression) -> DataConverter {
-		let mut converter = DataConverter::empty();
+		let mut converter = DataConverter::new_empty();
 
 		match src_comp {
 			Precompression::Uncompressed => {}
