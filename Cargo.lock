@@ -1717,6 +1717,7 @@ dependencies = [
  "async-trait",
  "axum",
  "enumset",
+ "futures",
  "log",
  "mime_guess",
  "tar",

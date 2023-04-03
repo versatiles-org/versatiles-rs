@@ -46,7 +46,7 @@ impl std::fmt::Debug for TileReader {
 mod tests {
 	use crate::{dummy, TileConverterTrait, TileReaderTrait};
 	use futures::executor::block_on;
-	use versatiles_shared::TileReaderParameters;
+	use versatiles_shared::{Blob, TileCoord3, TileReaderParameters};
 
 	#[test]
 	fn test1() {
@@ -55,6 +55,11 @@ mod tests {
 		assert_eq!(reader.get_name(), "dummy.bin");
 		assert_eq!(reader.get_parameters(), &TileReaderParameters::new_dummy());
 		assert_eq!(reader.get_parameters_mut(), &mut TileReaderParameters::new_dummy());
+		assert_eq!(block_on(reader.get_meta()), Blob::empty());
+		assert_eq!(
+			block_on(reader.get_tile_data(&TileCoord3::new_empty())).unwrap(),
+			Blob::empty()
+		);
 	}
 
 	#[test]

@@ -202,7 +202,7 @@ impl TileReaderTrait for TileReader {
 		"mbtiles"
 	}
 	async fn get_meta(&self) -> Blob {
-		Blob::from_string(self.meta_data.as_ref().unwrap())
+		Blob::from_str(self.meta_data.as_ref().unwrap())
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
 		&self.parameters

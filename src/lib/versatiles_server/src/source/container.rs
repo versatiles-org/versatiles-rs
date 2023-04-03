@@ -117,3 +117,17 @@ impl Debug for TileContainer {
 			.finish()
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use futures::executor::block_on;
+	use versatiles_container::{dummy::TileReader, TileReaderTrait};
+
+	use super::TileContainer;
+
+	#[test]
+	fn tile_container_from() {
+		let reader = block_on(TileReader::new("filename")).unwrap();
+		let _container = TileContainer::from(reader);
+	}
+}
