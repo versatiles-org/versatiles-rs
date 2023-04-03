@@ -12,6 +12,7 @@ pub struct ProgressBar {
 	next_update: SystemTime,
 	value: u64,
 	finished: bool,
+	visible: bool,
 }
 
 #[allow(dead_code)]
@@ -25,6 +26,7 @@ impl ProgressBar {
 			next_update: now.checked_sub(STEP_SIZE).unwrap(),
 			value: 0,
 			finished: false,
+			visible: max_level() >= LevelFilter::Info,
 		};
 		progress.update();
 		progress
@@ -37,17 +39,28 @@ impl ProgressBar {
 		self.value += value;
 		self.update();
 	}
+	pub fn set_visible(&mut self, visible: bool) {
+		self.visible = visible;
+	}
 	fn update(&mut self) {
-		if max_level() < LevelFilter::Info {
-			return;
-		}
-
 		let now = SystemTime::now();
 		if now < self.next_update {
 			return;
 		}
 		self.next_update = now.checked_add(STEP_SIZE).unwrap();
-		self.draw();
+
+		if self.visible {
+			self.draw();
+		}
+	}
+	pub fn finish(&mut self) {
+		self.finished = true;
+		self.value = self.max_value;
+
+		if self.visible {
+			self.draw();
+			println!();
+		}
 	}
 	fn draw(&mut self) {
 		let size = dimensions_stdout();
@@ -96,15 +109,6 @@ impl ProgressBar {
 		print!("\r\x1B[7m{}\x1B[0m{}", &line[0..pos], &line[pos..]);
 		std::io::stdout().flush().unwrap();
 	}
-	pub fn finish(&mut self) {
-		if max_level() < LevelFilter::Info {
-			return;
-		}
-		self.finished = true;
-		self.value = self.max_value;
-		self.draw();
-		println!();
-	}
 }
 
 fn format_duration(duration: Duration) -> String {
@@ -141,12 +145,21 @@ mod tests {
 	use std::time::Duration;
 
 	#[test]
-	fn basic_tests() {
+	fn format() {
 		assert_eq!(format_big_number(123456789), "123'456'789");
 		assert_eq!(format_big_number(1234567890), "1'234'567'890");
 		assert_eq!(format_duration(Duration::from_secs(1)), "00:00:01");
 		assert_eq!(format_duration(Duration::from_secs(60)), "00:01:00");
 		assert_eq!(format_duration(Duration::from_secs(60 * 60)), "01:00:00");
 		assert_eq!(format_duration(Duration::from_secs(60 * 60 * 24)), "1d 00:00:00");
+	}
+
+	#[test]
+	fn progress_bar() {
+		let mut progress = ProgressBar::new("hallo", 100);
+		progress.set_visible(true);
+		progress.set_position(1);
+		progress.inc(1);
+		progress.finish();
 	}
 }
