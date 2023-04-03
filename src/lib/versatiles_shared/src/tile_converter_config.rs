@@ -71,3 +71,33 @@ impl TileConverterConfig {
 		self.tile_precompression.as_ref().unwrap()
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use crate::{Precompression, TileBBoxPyramide, TileConverterConfig, TileFormat, TileReaderParameters};
+
+	#[test]
+	fn test() {
+		let pyramide = TileBBoxPyramide::new_full();
+		let parameters = TileReaderParameters::new(TileFormat::PNG, Precompression::Gzip, pyramide.clone());
+
+		let mut config = TileConverterConfig::new(
+			Some(TileFormat::JPG),
+			Some(Precompression::Brotli),
+			pyramide.clone(),
+			true,
+		);
+
+		config.finalize_with_parameters(&parameters);
+
+		assert_eq!(config.get_tile_format(), &TileFormat::JPG);
+		assert_eq!(config.get_tile_precompression(), &Precompression::Brotli);
+
+		assert_eq!(
+			config.get_tile_recompressor().description(),
+			"decompress_gzip, PNG->JPG, compress_brotli"
+		);
+		assert_eq!(config.get_compressor().description(), "compress_brotli");
+		assert_eq!(config.get_bbox_pyramide(), &pyramide);
+	}
+}
