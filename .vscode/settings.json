@@ -4,4 +4,5 @@
 		"editor.defaultFormatter": "rust-lang.rust-analyzer",
 		"editor.formatOnSave": true,
 	},
+	"coverage-gutters.coverageBaseDir": "target/llvm-cov",
 }
