@@ -1,6 +1,6 @@
 use super::{DataConverter, Precompression, TileBBoxPyramide, TileFormat};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct TileReaderParameters {
 	tile_format: TileFormat,
 	tile_precompression: Precompression,

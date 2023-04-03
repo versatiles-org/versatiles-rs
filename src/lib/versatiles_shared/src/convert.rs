@@ -18,7 +18,7 @@ pub enum TileFormat {
 	JSON,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct DataConverter {
 	pipeline: Vec<FnConv>,
 }

@@ -17,7 +17,7 @@ impl TileReaderTrait for TileReader {
 		"dummy"
 	}
 	fn get_name(&self) -> &str {
-		"dummy"
+		"dummy.bin"
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
 		&self.parameters
@@ -39,5 +39,28 @@ impl std::fmt::Debug for TileReader {
 		f.debug_struct("TileReader:MBTiles")
 			.field("parameters", &self.get_parameters())
 			.finish()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::{dummy, TileConverterTrait, TileReaderTrait};
+	use futures::executor::block_on;
+	use versatiles_shared::TileReaderParameters;
+
+	#[test]
+	fn test1() {
+		let mut reader = block_on(dummy::TileReader::new("filename.txt")).unwrap();
+		assert_eq!(reader.get_container_name(), "dummy");
+		assert_eq!(reader.get_name(), "dummy.bin");
+		assert_eq!(reader.get_parameters(), &TileReaderParameters::new_dummy());
+		assert_eq!(reader.get_parameters_mut(), &mut TileReaderParameters::new_dummy());
+	}
+
+	#[test]
+	fn test2() {
+		let mut converter = dummy::TileConverter {};
+		let mut reader = block_on(dummy::TileReader::new("filename.txt")).unwrap();
+		block_on(converter.convert_from(&mut reader));
 	}
 }
