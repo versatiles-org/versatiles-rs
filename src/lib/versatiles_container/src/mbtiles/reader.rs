@@ -1,13 +1,14 @@
 use crate::{TileReaderBox, TileReaderTrait};
 use async_trait::async_trait;
+use futures::executor::block_on;
 use log::trace;
-use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::OpenFlags;
+use rusqlite::{Connection, OpenFlags};
 use std::{
 	env::current_dir,
 	path::{Path, PathBuf},
 	thread,
 };
+use tokio::sync::Mutex;
 use versatiles_shared::{
 	Blob, Precompression, ProgressBar, Result, TileBBox, TileBBoxPyramide, TileCoord2, TileCoord3, TileFormat,
 	TileReaderParameters,
@@ -17,33 +18,26 @@ const MB: usize = 1024 * 1024;
 
 pub struct TileReader {
 	name: String,
-	pool: r2d2::Pool<SqliteConnectionManager>,
+	connection: Mutex<Connection>,
 	meta_data: Option<String>,
 	parameters: TileReaderParameters,
 }
 impl TileReader {
-	fn load_from_sqlite(filename: &PathBuf) -> TileReader {
+	async fn load_from_sqlite(filename: &PathBuf) -> TileReader {
 		trace!("load_from_sqlite {:?}", filename);
 
 		let concurrency = thread::available_parallelism().unwrap().get();
 
-		let manager = r2d2_sqlite::SqliteConnectionManager::file(filename)
-			.with_flags(OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_URI);
+		let connection = Connection::open_with_flags(filename, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
 
-		let pool = r2d2::Pool::builder()
-			.max_size(concurrency as u32)
-			.build(manager)
-			.unwrap();
-
-		let con = pool.get().unwrap();
-		con.pragma_update(None, "mmap_size", 256 * MB).unwrap();
-		con.pragma_update(None, "temp_store", "memory").unwrap();
-		con.pragma_update(None, "page_size", 65536).unwrap();
-		con.pragma_update(None, "threads", concurrency).unwrap();
+		connection.pragma_update(None, "mmap_size", 256 * MB).unwrap();
+		connection.pragma_update(None, "temp_store", "memory").unwrap();
+		connection.pragma_update(None, "page_size", 65536).unwrap();
+		connection.pragma_update(None, "threads", concurrency).unwrap();
 
 		let mut reader = TileReader {
 			name: filename.to_string_lossy().to_string(),
-			pool,
+			connection: Mutex::new(connection),
 			meta_data: None,
 			parameters: TileReaderParameters::new(
 				TileFormat::PBF,
@@ -51,14 +45,14 @@ impl TileReader {
 				TileBBoxPyramide::new_empty(),
 			),
 		};
-		reader.load_meta_data();
+		reader.load_meta_data().await;
 
 		reader
 	}
-	fn load_meta_data(&mut self) {
+	async fn load_meta_data(&mut self) {
 		trace!("load_meta_data");
 
-		let connection = self.pool.get().unwrap();
+		let connection = self.connection.lock().await;
 		let mut stmt = connection
 			.prepare("SELECT name, value FROM metadata")
 			.expect("can not prepare SQL query");
@@ -95,20 +89,23 @@ impl TileReader {
 				&_ => {}
 			}
 		}
+		drop(entries);
+		drop(stmt);
+		drop(connection);
 
 		self.parameters.set_tile_format(tile_format.unwrap());
 		self.parameters.set_tile_precompression(precompression.unwrap());
-		self.parameters.set_bbox_pyramide(self.get_bbox_pyramide());
+		self.parameters.set_bbox_pyramide(block_on(self.get_bbox_pyramide()));
 
 		if self.meta_data.is_none() {
 			panic!("'json' is not defined in table 'metadata'");
 		}
 	}
-	fn get_bbox_pyramide(&self) -> TileBBoxPyramide {
+	async fn get_bbox_pyramide(&self) -> TileBBoxPyramide {
 		trace!("get_bbox_pyramide");
 
 		let mut bbox_pyramide = TileBBoxPyramide::new_empty();
-		let connection = self.pool.get().unwrap();
+		let connection = self.connection.lock().await;
 
 		let query = |sql1: &str, sql2: &str| -> i32 {
 			let sql = if sql2.is_empty() {
@@ -196,7 +193,7 @@ impl TileReaderTrait for TileReader {
 
 		filename = filename.canonicalize()?;
 
-		Ok(Box::new(Self::load_from_sqlite(&filename)))
+		Ok(Box::new(Self::load_from_sqlite(&filename).await))
 	}
 	fn get_container_name(&self) -> &str {
 		"mbtiles"
@@ -213,7 +210,7 @@ impl TileReaderTrait for TileReader {
 	async fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
 		trace!("read 1 tile {:?}", coord_in);
 
-		let connection = self.pool.get().unwrap();
+		let connection = self.connection.lock().await;
 		let mut stmt = connection
 			.prepare("SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")
 			.expect("SQL preparation failed");
@@ -238,7 +235,7 @@ impl TileReaderTrait for TileReader {
 	async fn get_bbox_tile_vec(&self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
 		trace!("read {} tiles for z:{}, bbox:{:?}", bbox.count_tiles(), zoom, bbox);
 
-		let connection = self.pool.get().unwrap();
+		let connection = self.connection.lock().await;
 		let max_index = 2u64.pow(zoom as u32) - 1;
 
 		let sql = "SELECT tile_column, tile_row, tile_data
