@@ -22,9 +22,8 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-	/// Compare two tile containers
-	Compare(tools::compare::Subcommand),
-
+	// /// Compare two tile containers
+	// Compare(tools::compare::Subcommand),
 	/// Convert between different tile containers
 	Convert(tools::convert::Subcommand),
 
@@ -47,7 +46,7 @@ fn main() {
 
 fn run(cli: Cli) {
 	match &cli.command {
-		Commands::Compare(arguments) => tools::compare::run(arguments),
+		//Commands::Compare(arguments) => tools::compare::run(arguments),
 		Commands::Convert(arguments) => tools::convert::run(arguments),
 		Commands::Probe(arguments) => tools::probe::run(arguments),
 		Commands::Serve(arguments) => tools::serve::run(arguments),
