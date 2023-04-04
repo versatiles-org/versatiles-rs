@@ -1,5 +1,4 @@
 use clap::Args;
-use futures::executor::block_on;
 use versatiles_container::get_reader;
 
 #[derive(Args)]
@@ -8,22 +7,43 @@ pub struct Subcommand {
 	/// tile container you want to probe
 	/// supported container formats are: *.versatiles, *.tar, *.mbtiles
 	#[arg(required = true, verbatim_doc_comment)]
-	file: String,
-
-	/// deep scan of every tile
-	#[arg(long, short)]
-	deep: bool,
+	filename: String,
+	/*
+		/// deep scan of every tile
+		#[arg(long, short)]
+		deep: bool,
+	*/
 }
 
-pub fn run(arguments: &Subcommand) {
-	block_on(async {
-		println!("probe {:?}", arguments.file);
+#[tokio::main]
+pub async fn run(arguments: &Subcommand) {
+	println!("probe {:?}", arguments.filename);
 
-		let reader = get_reader(&arguments.file).await.unwrap();
-		println!("{reader:#?}");
+	let reader = get_reader(&arguments.filename).await.unwrap();
+	println!("{reader:#?}");
 
-		if arguments.deep {
-			reader.deep_verify().await;
-		}
-	})
+	/*
+	if arguments.deep {
+		reader.deep_verify().await;
+	}
+	*/
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::tests::run_command;
+
+	#[test]
+	fn probe_local() {
+		run_command(vec!["versatiles", "probe", "../../resources/berlin.mbtiles"])
+	}
+
+	#[test]
+	fn probe_remote() {
+		run_command(vec![
+			"versatiles",
+			"probe",
+			"https://download.versatiles.org/planet-20230227.versatiles",
+		])
+	}
 }

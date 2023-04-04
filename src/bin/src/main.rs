@@ -42,11 +42,24 @@ fn main() {
 		.filter_level(cli.verbose.log_level_filter())
 		.init();
 
-	let command = &cli.command;
-	match command {
+	run(cli);
+}
+
+fn run(cli: Cli) {
+	match &cli.command {
 		Commands::Compare(arguments) => tools::compare::run(arguments),
 		Commands::Convert(arguments) => tools::convert::run(arguments),
 		Commands::Probe(arguments) => tools::probe::run(arguments),
 		Commands::Serve(arguments) => tools::serve::run(arguments),
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::{run, Cli};
+	use clap::Parser;
+
+	pub fn run_command(arg_vec: Vec<&str>) {
+		run(Cli::parse_from(arg_vec));
 	}
 }

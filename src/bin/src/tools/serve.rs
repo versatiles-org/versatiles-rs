@@ -1,5 +1,4 @@
 use clap::Args;
-use futures::executor::block_on;
 use regex::Regex;
 use versatiles_container::get_reader;
 use versatiles_server::{source, TileServer};
@@ -34,50 +33,48 @@ pub struct Subcommand {
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) {
-	block_on(async {
-		let mut server: TileServer = TileServer::new(&arguments.ip, arguments.port);
+	let mut server: TileServer = TileServer::new(&arguments.ip, arguments.port);
 
-		let patterns: Vec<Regex> = [
-			r"^\[(?P<name>[^\]]+?)\](?P<url>.*)$",
-			r"^(?P<url>.*)\[(?P<name>[^\]]+?)\]$",
-			r"^(?P<url>.*)#(?P<name>[^\]]+?)$",
-			r"^(?P<url>.*)$",
-		]
-		.iter()
-		.map(|pat| Regex::new(pat).unwrap())
-		.collect();
+	let patterns: Vec<Regex> = [
+		r"^\[(?P<name>[^\]]+?)\](?P<url>.*)$",
+		r"^(?P<url>.*)\[(?P<name>[^\]]+?)\]$",
+		r"^(?P<url>.*)#(?P<name>[^\]]+?)$",
+		r"^(?P<url>.*)$",
+	]
+	.iter()
+	.map(|pat| Regex::new(pat).unwrap())
+	.collect();
 
-		for arg in arguments.sources.iter() {
-			let pattern = patterns.iter().find(|p| p.is_match(arg)).unwrap();
-			let c = pattern.captures(arg).unwrap();
+	for arg in arguments.sources.iter() {
+		let pattern = patterns.iter().find(|p| p.is_match(arg)).unwrap();
+		let c = pattern.captures(arg).unwrap();
 
-			let url: &str = c.name("url").unwrap().as_str();
-			let name: &str = match c.name("name") {
-				None => {
-					let filename = url.split(&['/', '\\']).last().unwrap();
-					filename.split('.').next().unwrap()
-				}
-				Some(m) => m.as_str(),
-			};
-
-			let reader = get_reader(url).await.unwrap();
-			server.add_tile_source(format!("/tiles/{name}/"), source::TileContainer::from(reader));
-		}
-
-		for filename in arguments.static_content.iter() {
-			if filename.ends_with(".tar") {
-				server.add_static_source(source::TarFile::from(filename));
-			} else {
-				server.add_static_source(source::Folder::from(filename));
+		let url: &str = c.name("url").unwrap().as_str();
+		let name: &str = match c.name("name") {
+			None => {
+				let filename = url.split(&['/', '\\']).last().unwrap();
+				filename.split('.').next().unwrap()
 			}
+			Some(m) => m.as_str(),
+		};
+
+		let reader = get_reader(url).await.unwrap();
+		server.add_tile_source(format!("/tiles/{name}/"), source::TileContainer::from(reader));
+	}
+
+	for filename in arguments.static_content.iter() {
+		if filename.ends_with(".tar") {
+			server.add_static_source(source::TarFile::from(filename));
+		} else {
+			server.add_static_source(source::Folder::from(filename));
 		}
+	}
 
-		let mut list: Vec<(String, String)> = server.iter_url_mapping().collect();
-		list.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
-		list
-			.iter()
-			.for_each(|(url, source)| println!("   {:30}  <-  {}", url.to_owned() + "*", source));
+	let mut list: Vec<(String, String)> = server.iter_url_mapping().collect();
+	list.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+	list
+		.iter()
+		.for_each(|(url, source)| println!("   {:30}  <-  {}", url.to_owned() + "*", source));
 
-		server.start().await;
-	})
+	server.start().await;
 }

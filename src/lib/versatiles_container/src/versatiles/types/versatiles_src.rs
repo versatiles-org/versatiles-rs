@@ -6,6 +6,7 @@ use std::{
 	fs::File,
 	io::{BufReader, Read, Seek, SeekFrom},
 	path::Path,
+	time::Duration,
 };
 use tokio::sync::Mutex;
 use versatiles_shared::{Blob, Error, Result};
@@ -112,10 +113,14 @@ struct VersaTilesSrcHttp {
 impl VersaTilesSrcTrait for VersaTilesSrcHttp {
 	fn new(source: &str) -> Result<Self> {
 		if source.starts_with("https://") || source.starts_with("http://") {
+			let client = reqwest::Client::builder()
+				.tcp_keepalive(Duration::from_secs(600))
+				.use_rustls_tls()
+				.build()?;
 			Ok(Self {
 				name: source.to_string(),
 				url: Url::parse(source)?,
-				client: Client::new(),
+				client,
 			})
 		} else {
 			Err(Error::new(format!(
@@ -128,15 +133,15 @@ impl VersaTilesSrcTrait for VersaTilesSrcHttp {
 		let mut request = Request::new(Method::GET, self.url.clone());
 		let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
 		request.headers_mut().append("range", request_range.parse()?);
-		//println!("### request {:?}", request);
 
-		let result = Client::execute(&self.client, request).await?;
-		//println!("### result {:?}", result);
+		//println!("### request:\n{:#?}", request);
+		let result = self.client.execute(request).await?;
+		//println!("### result:\n{:#?}", result);
 
 		let bytes = result.bytes().await?;
 
 		//let range = result.headers().get("content-range");
-		//println!("range {:?}", range);
+		//println!("range {:#?}", range);
 
 		Ok(Blob::from_bytes(bytes))
 	}
