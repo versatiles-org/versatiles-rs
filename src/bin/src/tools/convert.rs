@@ -1,5 +1,4 @@
 use clap::Args;
-use futures::executor::block_on;
 use log::trace;
 use versatiles_container::{get_converter, get_reader, TileConverterBox, TileReaderBox};
 use versatiles_shared::{Precompression, Result, TileBBoxPyramide, TileConverterConfig, TileFormat};
@@ -45,18 +44,17 @@ pub struct Subcommand {
 	precompress: Option<Precompression>,
 
 	/// force recompression, e.g. to improve an existing gzip compression.
-	#[arg(long, short, value_enum)]
+	#[arg(long, short)]
 	force_recompress: bool,
 }
 
-pub fn run(arguments: &Subcommand) {
+#[tokio::main]
+pub async fn run(arguments: &Subcommand) {
 	println!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
-	block_on(async {
-		let mut reader = new_reader(&arguments.input_file, arguments).await.unwrap();
-		let mut converter = new_converter(&arguments.output_file, arguments);
-		converter.convert_from(&mut reader).await;
-	})
+	let mut reader = new_reader(&arguments.input_file, arguments).await.unwrap();
+	let mut converter = new_converter(&arguments.output_file, arguments);
+	converter.convert_from(&mut reader).await;
 }
 
 async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TileReaderBox> {
@@ -101,4 +99,38 @@ fn new_converter(filename: &str, arguments: &Subcommand) -> TileConverterBox {
 	let converter = get_converter(filename, config);
 
 	converter
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::tests::run_command;
+	use std::env;
+
+	#[test]
+	fn convert_local() {
+		run_command(vec![
+			"versatiles",
+			"convert",
+			"../../resources/berlin.mbtiles",
+			env::temp_dir().with_file_name("berlin1.versatiles").to_str().unwrap(),
+		])
+	}
+
+	#[test]
+	fn convert_remote() {
+		run_command(vec![
+			"versatiles",
+			"convert",
+			"--min-zoom",
+			"1",
+			"--max-zoom",
+			"3",
+			"--bbox",
+			"-85,-180,85,180",
+			"--flip-input",
+			"--force-recompress",
+			"https://download.versatiles.org/planet-20230227.versatiles",
+			env::temp_dir().with_file_name("berlin2.versatiles").to_str().unwrap(),
+		])
+	}
 }
