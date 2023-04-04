@@ -107,7 +107,7 @@ mod tests {
 	use std::env;
 
 	#[test]
-	fn convert_local() {
+	fn test_local() {
 		run_command(vec![
 			"versatiles",
 			"convert",
@@ -117,7 +117,7 @@ mod tests {
 	}
 
 	#[test]
-	fn convert_remote() {
+	fn test_remote() {
 		run_command(vec![
 			"versatiles",
 			"convert",

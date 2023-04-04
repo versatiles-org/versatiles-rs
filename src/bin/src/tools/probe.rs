@@ -34,12 +34,12 @@ mod tests {
 	use crate::tests::run_command;
 
 	#[test]
-	fn probe_local() {
+	fn test_local() {
 		run_command(vec!["versatiles", "probe", "../../resources/berlin.mbtiles"])
 	}
 
 	#[test]
-	fn probe_remote() {
+	fn test_remote() {
 		run_command(vec![
 			"versatiles",
 			"probe",
