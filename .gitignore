@@ -8,5 +8,6 @@
 /releases
 /target
 /tiles
+/tmp
 credentials.json
 lcov.info

@@ -104,21 +104,23 @@ fn new_converter(filename: &str, arguments: &Subcommand) -> TileConverterBox {
 #[cfg(test)]
 mod tests {
 	use crate::tests::run_command;
-	use std::env;
+	use std::fs;
 
 	#[test]
 	fn test_local() {
+		fs::create_dir("../../tmp/").unwrap_or_default();
 		run_command(vec![
 			"versatiles",
 			"convert",
 			"../../resources/berlin.mbtiles",
-			env::temp_dir().with_file_name("berlin1.versatiles").to_str().unwrap(),
+			"../../tmp/berlin1.versatiles",
 		])
 		.unwrap();
 	}
 
 	#[test]
 	fn test_remote() {
+		fs::create_dir("../../tmp/").unwrap_or_default();
 		run_command(vec![
 			"versatiles",
 			"convert",
@@ -131,7 +133,7 @@ mod tests {
 			"--flip-input",
 			"--force-recompress",
 			"https://download.versatiles.org/planet-20230227.versatiles",
-			env::temp_dir().with_file_name("berlin2.versatiles").to_str().unwrap(),
+			"../../tmp/berlin2.versatiles",
 		])
 		.unwrap();
 	}
