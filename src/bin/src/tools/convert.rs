@@ -3,7 +3,7 @@ use log::trace;
 use versatiles_container::{get_converter, get_reader, TileConverterBox, TileReaderBox};
 use versatiles_shared::{Precompression, Result, TileBBoxPyramide, TileConverterConfig, TileFormat};
 
-#[derive(Args)]
+#[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
 pub struct Subcommand {
 	/// supported container formats: *.versatiles, *.tar, *.mbtiles
@@ -114,6 +114,7 @@ mod tests {
 			"../../resources/berlin.mbtiles",
 			env::temp_dir().with_file_name("berlin1.versatiles").to_str().unwrap(),
 		])
+		.unwrap();
 	}
 
 	#[test]
@@ -132,5 +133,6 @@ mod tests {
 			"https://download.versatiles.org/planet-20230227.versatiles",
 			env::temp_dir().with_file_name("berlin2.versatiles").to_str().unwrap(),
 		])
+		.unwrap();
 	}
 }

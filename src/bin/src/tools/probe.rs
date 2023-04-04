@@ -1,7 +1,7 @@
 use clap::Args;
 use versatiles_container::get_reader;
 
-#[derive(Args)]
+#[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
 pub struct Subcommand {
 	/// tile container you want to probe
@@ -35,7 +35,7 @@ mod tests {
 
 	#[test]
 	fn test_local() {
-		run_command(vec!["versatiles", "probe", "../../resources/berlin.mbtiles"])
+		run_command(vec!["versatiles", "probe", "../../resources/berlin.mbtiles"]).unwrap();
 	}
 
 	#[test]
@@ -45,5 +45,6 @@ mod tests {
 			"probe",
 			"https://download.versatiles.org/planet-20230227.versatiles",
 		])
+		.unwrap();
 	}
 }

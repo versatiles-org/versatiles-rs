@@ -3,7 +3,7 @@ use regex::Regex;
 use versatiles_container::get_reader;
 use versatiles_server::{source, TileServer};
 
-#[derive(Args)]
+#[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]
 pub struct Subcommand {
 	/// One or more tile containers you want to serve.

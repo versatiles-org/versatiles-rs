@@ -2,7 +2,7 @@ pub mod tools;
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[command(
 	author,
 	version,
@@ -20,7 +20,7 @@ pub struct Cli {
 	verbose: Verbosity<InfoLevel>,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug)]
 pub enum Commands {
 	// /// Compare two tile containers
 	// Compare(tools::compare::Subcommand),
@@ -57,8 +57,29 @@ fn run(cli: Cli) {
 mod tests {
 	use crate::{run, Cli};
 	use clap::Parser;
+	use core::result::Result;
 
-	pub fn run_command(arg_vec: Vec<&str>) {
-		run(Cli::parse_from(arg_vec));
+	pub fn run_command(arg_vec: Vec<&str>) -> Result<String, String> {
+		match Cli::try_parse_from(arg_vec) {
+			Ok(cli) => {
+				let msg = format!("{:?}", cli);
+				run(cli);
+				Ok(msg)
+			}
+			Err(error) => Err(error.render().to_string()),
+		}
+	}
+
+	#[test]
+	fn help() {
+		let err = run_command(vec!["versatiles"]).unwrap_err();
+		assert!(err.starts_with("A toolbox for converting, checking and serving map tiles in various formats."));
+		assert!(err.contains("\nUsage: versatiles [OPTIONS] <COMMAND>"));
+	}
+
+	#[test]
+	fn version() {
+		let err = run_command(vec!["versatiles", "-V"]).unwrap_err();
+		assert!(err.starts_with("versatiles "));
 	}
 }
