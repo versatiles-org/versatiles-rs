@@ -12,6 +12,7 @@ use axum::{
 };
 use enumset::{enum_set, EnumSet};
 use std::sync::Arc;
+use tokio::sync::oneshot::Sender;
 use versatiles_shared::{Blob, Precompression};
 
 struct TileSource {
@@ -24,6 +25,7 @@ pub struct TileServer {
 	port: u16,
 	tile_sources: Vec<TileSource>,
 	static_sources: Vec<Arc<Box<dyn ServerSourceTrait>>>,
+	exit_signal: Option<Sender<()>>,
 }
 
 impl TileServer {
@@ -33,6 +35,7 @@ impl TileServer {
 			port,
 			tile_sources: Vec::new(),
 			static_sources: Vec::new(),
+			exit_signal: None,
 		}
 	}
 
@@ -68,6 +71,10 @@ impl TileServer {
 	}
 
 	pub async fn start(&mut self) {
+		if self.exit_signal.is_some() {
+			self.stop().await
+		}
+
 		log::debug!("starting server");
 
 		// Initialize App
@@ -80,10 +87,30 @@ impl TileServer {
 		let addr = format!("{}:{}", self.ip, self.port);
 		println!("server starts listening on {}", addr);
 
-		Server::bind(&addr.parse().unwrap())
-			.serve(app.into_make_service())
-			.await
-			.expect("server failed");
+		let server = Server::bind(&addr.parse().unwrap()).serve(app.into_make_service());
+
+		let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+		let graceful = server.with_graceful_shutdown(async {
+			rx.await.ok();
+		});
+
+		self.exit_signal = Some(tx);
+
+		tokio::spawn(async move {
+			if let Err(e) = graceful.await {
+				eprintln!("server error: {}", e);
+			}
+		});
+	}
+
+	pub async fn stop(&mut self) {
+		if self.exit_signal.is_none() {
+			return;
+		}
+
+		log::debug!("stopping server");
+
+		self.exit_signal.take().unwrap().send(()).unwrap();
 	}
 
 	fn add_tile_sources_to_app(&self, mut app: Router) -> Router {
@@ -224,13 +251,14 @@ fn get_encoding(headers: HeaderMap) -> EnumSet<Precompression> {
 
 #[cfg(test)]
 mod tests {
-	use std::path::Path;
+	use crate::source::TileContainer;
 
-	use crate::guess_mime;
-
-	use super::get_encoding;
+	use super::{get_encoding, guess_mime, TileServer};
 	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
 	use enumset::{enum_set, EnumSet};
+	use std::path::Path;
+	use versatiles_container::dummy;
+	use versatiles_container::TileReaderTrait;
 	use versatiles_shared::Precompression;
 	use versatiles_shared::Precompression::*;
 
@@ -264,6 +292,7 @@ mod tests {
 		test("gzip;q=1.0, identity; q=0.5, *;q=0", enum_set!(Uncompressed | Gzip));
 		test("identity", enum_set!(Uncompressed));
 	}
+
 	#[test]
 	fn test_guess_mime() {
 		let test = |path: &str, mime: &str| {
@@ -281,5 +310,33 @@ mod tests {
 		test("fluffy.pbf", "application/octet-stream");
 		test("fluffy.png", "image/png");
 		test("fluffy.svg", "image/svg+xml");
+	}
+
+	#[test]
+	fn test_server() {
+		#[tokio::main]
+		async fn test() {
+			const PORT: u16 = 3000;
+
+			let reader = dummy::TileReader::new("").await.unwrap();
+			let source = TileContainer::from(reader);
+
+			let mut server = TileServer::new("127.0.0.1", PORT);
+			server.add_tile_source("cheese", source);
+
+			println!("step 1");
+			server.start().await;
+			println!("step 2");
+
+			let base_url = format!("http://127.0.0.1:{}/", PORT);
+			//let result = reqwest::get(base_url + "cheese/0/1/2.png").await.unwrap();
+			let result = reqwest::get(base_url + "status").await.unwrap();
+			println!("step 3");
+			result.bytes().await.unwrap();
+			println!("step 4");
+			server.stop().await;
+			println!("step 5");
+		}
+		test()
 	}
 }

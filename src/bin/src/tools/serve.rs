@@ -1,5 +1,6 @@
 use clap::Args;
 use regex::Regex;
+use tokio::time::{sleep, Duration};
 use versatiles_container::get_reader;
 use versatiles_server::{source, TileServer};
 
@@ -77,4 +78,8 @@ pub async fn run(arguments: &Subcommand) {
 		.for_each(|(url, source)| println!("   {:30}  <-  {}", url.to_owned() + "*", source));
 
 	server.start().await;
+
+	loop {
+		sleep(Duration::from_secs(60)).await
+	}
 }
