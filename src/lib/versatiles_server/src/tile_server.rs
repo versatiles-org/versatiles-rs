@@ -316,27 +316,34 @@ mod tests {
 	fn test_server() {
 		#[tokio::main]
 		async fn test() {
+			const IP: &str = "127.0.0.1";
 			const PORT: u16 = 3000;
 
-			let reader = dummy::TileReader::new("").await.unwrap();
+			async fn get(path: &str) -> String {
+				reqwest::get(format!("http://{IP}:{PORT}/{path}"))
+					.await
+					.unwrap()
+					.text()
+					.await
+					.unwrap()
+			}
+
+			let reader = dummy::TileReader::new("dummy").await.unwrap();
 			let source = TileContainer::from(reader);
 
-			let mut server = TileServer::new("127.0.0.1", PORT);
+			let mut server = TileServer::new(IP, PORT);
 			server.add_tile_source("cheese", source);
 
-			println!("step 1");
 			server.start().await;
-			println!("step 2");
 
-			let base_url = format!("http://127.0.0.1:{}/", PORT);
-			//let result = reqwest::get(base_url + "cheese/0/1/2.png").await.unwrap();
-			let result = reqwest::get(base_url + "status").await.unwrap();
-			println!("step 3");
-			result.bytes().await.unwrap();
-			println!("step 4");
+			assert_eq!(get("status").await, "ready!");
+			assert_eq!(get("cheese/meta.json").await, "Not Found");
+			assert_eq!(get("cheese/tiles.json").await, "Not Found");
+			assert_eq!(get("cheese/0/0/0.png").await, "dummydata");
+
 			server.stop().await;
-			println!("step 5");
 		}
+
 		test()
 	}
 }
