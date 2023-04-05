@@ -67,7 +67,7 @@ impl ServerSourceTrait for Folder {
 		let f = File::open(&local_path).unwrap();
 		let mut buffer = Vec::new();
 		BufReader::new(f).read_to_end(&mut buffer).unwrap();
-		let blob = Blob::from_vec(buffer);
+		let blob = Blob::from(buffer);
 
 		let mime = guess_mime(&local_path);
 

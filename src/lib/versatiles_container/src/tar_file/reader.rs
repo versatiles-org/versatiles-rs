@@ -132,7 +132,7 @@ impl TileReaderTrait for TileReader {
 				let mut blob: Vec<u8> = Vec::new();
 				entry.read_to_end(&mut blob).unwrap();
 
-				meta = decompress(Blob::from_vec(blob), &precompression);
+				meta = decompress(Blob::from(blob), &precompression);
 			};
 
 			if path_vec.len() == 1 {
@@ -195,7 +195,7 @@ impl TileReaderTrait for TileReader {
 
 		self.file.read_exact_at(&mut buf, offset).unwrap();
 
-		Some(Blob::from_vec(buf))
+		Some(Blob::from(buf))
 	}
 	fn get_name(&self) -> &str {
 		&self.name

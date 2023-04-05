@@ -4,18 +4,6 @@ use std::ops::Range;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Blob(Bytes);
 impl Blob {
-	pub fn from_bytes(bytes: Bytes) -> Blob {
-		Blob(bytes)
-	}
-	pub fn from_vec(vec: Vec<u8>) -> Blob {
-		Blob(Bytes::from(vec))
-	}
-	pub fn from_str_ref(text: &str) -> Blob {
-		Blob(Bytes::from(text.to_owned()))
-	}
-	pub fn from_string(text: String) -> Blob {
-		Blob(Bytes::from(text))
-	}
 	pub fn empty() -> Blob {
 		Blob(Bytes::from(Vec::new()))
 	}
@@ -39,6 +27,42 @@ impl Blob {
 	}
 }
 
+impl From<Bytes> for Blob {
+	fn from(item: Bytes) -> Self {
+		Blob(item)
+	}
+}
+
+impl From<Vec<u8>> for Blob {
+	fn from(item: Vec<u8>) -> Self {
+		Blob(Bytes::from(item))
+	}
+}
+
+impl From<&str> for Blob {
+	fn from(item: &str) -> Self {
+		Blob(Bytes::from(item.to_owned()))
+	}
+}
+
+impl From<&String> for Blob {
+	fn from(item: &String) -> Self {
+		Blob(Bytes::from(item.to_owned()))
+	}
+}
+
+impl From<String> for Blob {
+	fn from(item: String) -> Self {
+		Blob(Bytes::from(item))
+	}
+}
+
+impl From<&[u8]> for Blob {
+	fn from(item: &[u8]) -> Self {
+		Blob(Bytes::from(item.to_vec()))
+	}
+}
+
 unsafe impl Send for Blob {}
 unsafe impl Sync for Blob {}
 
@@ -50,7 +74,7 @@ mod tests {
 	#[test]
 	fn basic_tests() {
 		let vec = vec![0, 1, 2, 3, 4, 5, 6, 7];
-		let blob = Blob::from_vec(vec.clone());
+		let blob = Blob::from(vec.clone());
 		assert_eq!(blob.as_vec(), vec);
 		assert_eq!(blob.len(), 8);
 		assert_eq!(blob.get_range(2..5).as_vec(), vec![2, 3, 4]);
@@ -59,27 +83,28 @@ mod tests {
 	#[test]
 	fn string() {
 		let text = String::from("Xylofön");
-		assert_eq!(Blob::from_str_ref(&text).as_str(), text);
-		assert_eq!(Blob::from_string(text.clone()).as_str(), text);
+		assert_eq!(Blob::from(text.clone()).as_str(), text);
+		assert_eq!(Blob::from(&text).as_str(), text);
+		assert_eq!(Blob::from(&*text).as_str(), text);
 	}
 
 	#[test]
 	fn empty() {
 		let text = String::from("");
-		assert_eq!(Blob::from_str_ref(&text).is_empty(), true);
+		assert_eq!(Blob::from(&text).is_empty(), true);
 	}
 
 	#[test]
 	fn bytes() {
 		let text = String::from("Smørrebrød");
 		let bytes = Bytes::from(text.clone());
-		assert_eq!(Blob::from_bytes(bytes).as_str(), text);
+		assert_eq!(Blob::from(bytes).as_str(), text);
 	}
 
 	#[test]
 	fn debug() {
 		let text = String::from("Voisilmäpulla");
-		let blob = Blob::from_str_ref(&text);
+		let blob = Blob::from(&text);
 		let debug = format!("{:?}", blob);
 		println!("{}", debug);
 		//assert_eq!(format!("{:}blob Blob::from_bytes(bytes).as_str(), text);

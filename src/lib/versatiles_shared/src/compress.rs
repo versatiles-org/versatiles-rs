@@ -38,7 +38,7 @@ pub fn compress_gzip(data: Blob) -> Blob {
 		.read_to_end(&mut result)
 		.expect("Error in compress_gzip");
 
-	Blob::from_vec(result)
+	Blob::from(result)
 }
 
 pub fn decompress_gzip(data: Blob) -> Blob {
@@ -47,7 +47,7 @@ pub fn decompress_gzip(data: Blob) -> Blob {
 		.read_to_end(&mut result)
 		.expect("Error in decompress_gzip");
 
-	Blob::from_vec(result)
+	Blob::from(result)
 }
 
 pub fn compress_brotli(data: Blob) -> Blob {
@@ -60,7 +60,7 @@ pub fn compress_brotli(data: Blob) -> Blob {
 	let mut result: Vec<u8> = Vec::new();
 	BrotliCompress(&mut cursor, &mut result, &params).expect("Error in compress_brotli");
 
-	Blob::from_vec(result)
+	Blob::from(result)
 }
 
 pub fn decompress_brotli(data: Blob) -> Blob {
@@ -68,7 +68,7 @@ pub fn decompress_brotli(data: Blob) -> Blob {
 	let mut result: Vec<u8> = Vec::new();
 	BrotliDecompress(&mut cursor, &mut result).expect("Error in decompress_brotli");
 
-	Blob::from_vec(result)
+	Blob::from(result)
 }
 
 #[cfg(test)]
@@ -96,6 +96,6 @@ mod tests {
 			vec[i] = (((i as f64 + 1.78123).cos() * 6_513_814_013_423.454).fract() * 256f64) as u8;
 		});
 
-		Blob::from_vec(vec)
+		Blob::from(vec)
 	}
 }

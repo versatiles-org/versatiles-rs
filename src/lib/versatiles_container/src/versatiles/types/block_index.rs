@@ -54,7 +54,7 @@ impl BlockIndex {
 			cursor.write_all(block.as_blob().as_slice()).unwrap();
 		}
 
-		Blob::from_vec(cursor.into_inner())
+		Blob::from(cursor.into_inner())
 	}
 	pub fn as_brotli_blob(&self) -> Blob {
 		compress_brotli(self.as_blob())

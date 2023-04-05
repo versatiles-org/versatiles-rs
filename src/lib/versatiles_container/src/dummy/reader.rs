@@ -29,7 +29,7 @@ impl TileReaderTrait for TileReader {
 		Blob::empty()
 	}
 	async fn get_tile_data(&self, _coord: &TileCoord3) -> Option<Blob> {
-		Some(Blob::empty())
+		Some(Blob::from("dummydata"))
 	}
 	async fn deep_verify(&self) {}
 }
@@ -58,7 +58,7 @@ mod tests {
 		assert_eq!(block_on(reader.get_meta()), Blob::empty());
 		assert_eq!(
 			block_on(reader.get_tile_data(&TileCoord3::new_empty())).unwrap(),
-			Blob::empty()
+			Blob::from("dummydata")
 		);
 	}
 

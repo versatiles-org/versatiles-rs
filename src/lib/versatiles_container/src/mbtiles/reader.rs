@@ -199,7 +199,7 @@ impl TileReaderTrait for TileReader {
 		"mbtiles"
 	}
 	async fn get_meta(&self) -> Blob {
-		Blob::from_str_ref(self.meta_data.as_ref().unwrap())
+		Blob::from(self.meta_data.as_ref().unwrap())
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
 		&self.parameters
@@ -227,7 +227,7 @@ impl TileReaderTrait for TileReader {
 		});
 
 		if let Ok(vec) = result {
-			Some(Blob::from_vec(vec))
+			Some(Blob::from(vec))
 		} else {
 			None
 		}
@@ -257,8 +257,8 @@ impl TileReaderTrait for TileReader {
 				],
 				|row| {
 					Ok((
-						TileCoord2::new(row.get(0).unwrap(), max_index - row.get::<_, u64>(1).unwrap()),
-						Blob::from_vec(row.get(2).unwrap()),
+						TileCoord2::new(row.get::<_, u64>(0).unwrap(), max_index - row.get::<_, u64>(1).unwrap()),
+						Blob::from(row.get::<_, Vec<u8>>(2).unwrap()),
 					))
 				},
 			)

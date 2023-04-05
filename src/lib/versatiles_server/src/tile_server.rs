@@ -154,7 +154,7 @@ impl TileServer {
 				"/api/status.json",
 				get(|| async {
 					ok_data(
-						Blob::from_str_ref("{{\"status\":\"ready\"}}"),
+						Blob::from("{{\"status\":\"ready\"}}"),
 						&Precompression::Uncompressed,
 						"application/json",
 					)
@@ -164,7 +164,7 @@ impl TileServer {
 				"/api/tiles.json",
 				get(|| async move {
 					ok_data(
-						Blob::from_str_ref(&tile_sources_json),
+						Blob::from(&tile_sources_json),
 						&Precompression::Uncompressed,
 						"application/json",
 					)

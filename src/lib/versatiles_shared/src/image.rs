@@ -11,7 +11,7 @@ pub fn img2png(image: &DynamicImage) -> Blob {
 		.write_image(image.as_bytes(), image.width(), image.height(), image.color())
 		.unwrap();
 
-	Blob::from_vec(buffer)
+	Blob::from(buffer)
 }
 
 pub fn png2img(data: Blob) -> DynamicImage {
@@ -24,7 +24,7 @@ pub fn img2jpg(image: &DynamicImage) -> Blob {
 		.write_image(image.as_bytes(), image.width(), image.height(), image.color())
 		.unwrap();
 
-	Blob::from_vec(buffer)
+	Blob::from(buffer)
 }
 
 pub fn jpg2img(data: Blob) -> DynamicImage {
@@ -40,7 +40,7 @@ pub fn img2webp(image: &DynamicImage) -> Blob {
 	let encoder = Encoder::from_image(image).unwrap();
 	let memory = encoder.encode(95f32);
 
-	Blob::from_vec(memory.to_vec())
+	Blob::from(memory.to_vec())
 }
 
 pub fn img2webplossless(image: &DynamicImage) -> Blob {
@@ -50,7 +50,7 @@ pub fn img2webplossless(image: &DynamicImage) -> Blob {
 	}
 	let encoder = Encoder::from_image(image).unwrap();
 	let memory = encoder.encode_lossless();
-	Blob::from_vec(memory.to_vec())
+	Blob::from(memory.to_vec())
 }
 
 pub fn webp2img(data: Blob) -> DynamicImage {

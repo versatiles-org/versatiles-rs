@@ -62,7 +62,7 @@ impl VersaTilesSrcTrait for VersaTilesSrcFile {
 		reader_safe.seek(SeekFrom::Start(range.offset))?;
 		reader_safe.read_exact(&mut buffer)?;
 
-		return Ok(Blob::from_vec(buffer));
+		return Ok(Blob::from(buffer));
 	}
 	fn get_name(&self) -> &str {
 		&self.name
@@ -143,7 +143,7 @@ impl VersaTilesSrcTrait for VersaTilesSrcHttp {
 		//let range = result.headers().get("content-range");
 		//println!("range {:#?}", range);
 
-		Ok(Blob::from_bytes(bytes))
+		Ok(Blob::from(bytes))
 	}
 	fn get_name(&self) -> &str {
 		&self.name

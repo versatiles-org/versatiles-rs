@@ -79,7 +79,7 @@ impl BlockDefinition {
 		cursor.write_u64::<BE>(self.tiles_range.length).unwrap();
 		cursor.write_u32::<BE>(self.index_range.length as u32).unwrap();
 
-		Blob::from_vec(cursor.into_inner())
+		Blob::from(cursor.into_inner())
 	}
 	#[allow(dead_code)]
 	pub fn as_str(&self) -> String {

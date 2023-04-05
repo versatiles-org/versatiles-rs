@@ -52,7 +52,7 @@ impl TileIndex {
 			cursor.write_u32::<BE>(range.length as u32).unwrap();
 		}
 
-		Blob::from_vec(cursor.into_inner())
+		Blob::from(cursor.into_inner())
 	}
 	pub fn as_brotli_blob(&self) -> Blob {
 		compress_brotli(self.as_blob())

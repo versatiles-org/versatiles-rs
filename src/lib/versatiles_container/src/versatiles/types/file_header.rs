@@ -103,7 +103,7 @@ impl FileHeader {
 			)
 		}
 
-		Blob::from_vec(header)
+		Blob::from(header)
 	}
 
 	fn from_blob(blob: Blob) -> FileHeader {

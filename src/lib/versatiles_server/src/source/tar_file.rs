@@ -82,7 +82,7 @@ impl TarFile {
 
 			let mut buffer = Vec::new();
 			file.read_to_end(&mut buffer).unwrap();
-			let blob = Blob::from_vec(buffer);
+			let blob = Blob::from(buffer);
 
 			let filename = entry_path.file_name().unwrap();
 
