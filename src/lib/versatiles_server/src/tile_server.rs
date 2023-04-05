@@ -224,6 +224,10 @@ fn get_encoding(headers: HeaderMap) -> EnumSet<Precompression> {
 
 #[cfg(test)]
 mod tests {
+	use std::path::Path;
+
+	use crate::guess_mime;
+
 	use super::get_encoding;
 	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
 	use enumset::{enum_set, EnumSet};
@@ -234,10 +238,14 @@ mod tests {
 	fn test_get_encoding() {
 		let test = |encoding: &str, comp0: EnumSet<Precompression>| {
 			let mut map = HeaderMap::new();
-			map.insert(ACCEPT_ENCODING, encoding.parse().unwrap());
+			if encoding != "NONE" {
+				map.insert(ACCEPT_ENCODING, encoding.parse().unwrap());
+			}
 			let comp = get_encoding(map);
 			assert_eq!(comp, comp0);
 		};
+
+		test("NONE", enum_set!(Uncompressed));
 		test("", enum_set!(Uncompressed));
 		test("*", enum_set!(Uncompressed));
 		test("br", enum_set!(Uncompressed | Brotli));
@@ -255,5 +263,23 @@ mod tests {
 		);
 		test("gzip;q=1.0, identity; q=0.5, *;q=0", enum_set!(Uncompressed | Gzip));
 		test("identity", enum_set!(Uncompressed));
+	}
+	#[test]
+	fn test_guess_mime() {
+		let test = |path: &str, mime: &str| {
+			assert_eq!(guess_mime(Path::new(path)), mime);
+		};
+
+		test("fluffy.css", "text/css");
+		test("fluffy.gif", "image/gif");
+		test("fluffy.htm", "text/html");
+		test("fluffy.html", "text/html");
+		test("fluffy.jpeg", "image/jpeg");
+		test("fluffy.jpg", "image/jpeg");
+		test("fluffy.js", "application/javascript");
+		test("fluffy.json", "application/json");
+		test("fluffy.pbf", "application/octet-stream");
+		test("fluffy.png", "image/png");
+		test("fluffy.svg", "image/svg+xml");
 	}
 }
