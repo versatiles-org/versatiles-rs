@@ -62,13 +62,19 @@ impl ServerSourceTrait for TileContainer {
 
 	async fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response<Full<Bytes>> {
 		if path.len() == 3 {
+			let z = path[0].parse::<u8>();
+			let x = path[1].parse::<u64>();
+			let y: String = path[2].chars().take_while(|c| c.is_numeric()).collect();
+			let y = y.parse::<u64>();
+
+			if x.is_err() || y.is_err() || z.is_err() {
+				return ok_not_found();
+			}
+
+			let coord = TileCoord3::new(x.unwrap(), y.unwrap(), z.unwrap());
+
 			// get tile
-
-			let z = path[0].parse::<u8>().unwrap();
-			let x = path[1].parse::<u64>().unwrap();
-			let y = path[2].parse::<u64>().unwrap();
-
-			let tile = self.reader.get_tile_data(&TileCoord3::new(x, y, z)).await;
+			let tile = self.reader.get_tile_data(&coord).await;
 
 			if tile.is_none() {
 				return ok_not_found();
