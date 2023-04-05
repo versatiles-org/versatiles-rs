@@ -1,4 +1,8 @@
 
+[![Crates.io](https://img.shields.io/crates/v/versatiles?style=flat-square)](https://crates.io/crates/versatiles)
+[![Crates.io](https://img.shields.io/crates/d/versatiles?style=flat-square)](https://crates.io/crates/versatiles)
+[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+
 # install
 
 - Install [Rust](https://doc.rust-lang.org/cargo/getting-started/installation.html) (very easy)
