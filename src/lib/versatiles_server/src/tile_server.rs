@@ -328,11 +328,15 @@ mod tests {
 					.unwrap()
 			}
 
+			let mut server = TileServer::new(IP, PORT);
+
 			let reader = dummy::TileReader::new("dummy").await.unwrap();
 			let source = TileContainer::from(reader);
-
-			let mut server = TileServer::new(IP, PORT);
 			server.add_tile_source("cheese", source);
+
+			let reader = dummy::TileReader::new("dummy").await.unwrap();
+			let source = TileContainer::from(reader);
+			server.add_static_source(source);
 
 			server.start().await;
 
