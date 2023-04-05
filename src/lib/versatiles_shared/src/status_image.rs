@@ -83,8 +83,7 @@ impl StatusImagePyramide {
 		let mut y_offset: u32 = 0;
 		let mut image_positions: Vec<[u32; 2]> = Vec::new();
 
-		for i in 0..draw_list.len() {
-			let image = draw_list[i];
+		for (i, image) in draw_list.iter().enumerate() {
 			let size = image.size as u32;
 			image_positions.push([x_offset, y_offset]);
 			width = width.max(size + x_offset);
