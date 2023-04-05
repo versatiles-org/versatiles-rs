@@ -56,35 +56,56 @@ impl StatusImagePyramide {
 	pub fn get_level(&mut self, level: u8) -> &mut StatusImage {
 		let index = level as usize;
 
-		if self.images.get(index).is_some() {
-			return self.images.get_mut(index).unwrap();
-		} else {
-			let size = 2u64.pow(index as u32);
+		while self.images.len() <= index {
+			// append image
+			let i = self.images.len();
+			let size = 2u64.pow(i as u32);
 			let status_image = StatusImage::new(size);
-
 			self.max_size = self.max_size.max(size);
-			self.images.insert(index, status_image);
-
-			return self.images.get_mut(index).unwrap();
+			self.images.push(status_image);
 		}
+
+		assert!(self.images.get(index).is_some());
+
+		return self.images.get_mut(index).unwrap();
 	}
 	pub fn save(&self, filename: &str) {
+		let draw_list: Vec<&StatusImage> = self.images.iter().rev().collect();
+
 		let mut progress = ProgressBar::new(
 			"save status images",
-			self.images.iter().fold(0, |acc, img| acc + img.size * img.size),
+			draw_list.iter().fold(0, |acc, img| acc + img.size * img.size),
 		);
 
-		let width = (self.max_size * 2 - 1) as u32;
-		let height = (self.max_size) as u32;
+		let mut width: u32 = 0;
+		let mut height: u32 = 0;
+		let mut x_offset: u32 = 0;
+		let mut y_offset: u32 = 0;
+		let mut image_positions: Vec<[u32; 2]> = Vec::new();
+
+		for i in 0..draw_list.len() {
+			let image = draw_list[i];
+			let size = image.size as u32;
+			image_positions.push([x_offset, y_offset]);
+			width = width.max(size + x_offset);
+			height = height.max(size + y_offset);
+			if i == 0 {
+				x_offset = size;
+			} else {
+				y_offset += size;
+			}
+		}
+
 		let mut canvas: RgbImage = ImageBuffer::new(width, height);
 		canvas.fill(16);
 
-		for image in self.images.iter() {
+		for i in 0..draw_list.len() {
+			let image = draw_list[i];
 			let size = image.size as u32;
-			let x_offset = width - (size * 2 - 1);
+			let [x_offset, y_offset] = image_positions[i];
 			for y in 0..size {
 				for x in 0..size {
-					canvas.put_pixel(x + x_offset, y, image.get_color(x, y));
+					canvas.put_pixel(x + x_offset, y + y_offset, image.get_color(x, y));
 				}
 				progress.inc(image.size);
 			}
@@ -104,20 +125,56 @@ impl Default for StatusImagePyramide {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use assert_fs::fixture::NamedTempFile;
 
 	#[test]
-	fn basic_tests() {
-		let mut image = StatusImage::new(2);
+	fn set_get_color() {
+		let image = &mut StatusImage::new(256);
+		test_image(image);
+		fill_image(image);
+
+		let tmp_file = NamedTempFile::new("image.png").unwrap();
+		image.save(tmp_file.to_str().unwrap());
+
+		let size = tmp_file.path().metadata().unwrap().len();
+		assert!(size > 10000, "{}", size);
+		tmp_file.close().unwrap();
+	}
+
+	#[test]
+	fn pyramide() {
+		let mut pyramide = StatusImagePyramide::default();
+		let image = pyramide.get_level(8);
+		assert!(image.size == 256);
+		test_image(image);
+		fill_image(image);
+
+		let tmp_file = NamedTempFile::new("pyramide.png").unwrap();
+		pyramide.save(tmp_file.to_str().unwrap());
+
+		let size = tmp_file.path().metadata().unwrap().len();
+		assert!(size > 40000, "{}", size);
+		tmp_file.close().unwrap();
+	}
+
+	fn test_image(image: &mut StatusImage) {
 		image.set(0, 0, 0);
-		assert_eq!(image.get_color(0, 0), Rgb([0, 0, 0]));
-
 		image.set(1, 0, 100);
-		assert_eq!(image.get_color(1, 0), Rgb([50, 9, 0]));
-
 		image.set(0, 1, 10000);
-		assert_eq!(image.get_color(0, 1), Rgb([159, 99, 38]));
-
 		image.set(1, 1, 1000000);
+
+		assert_eq!(image.get_color(0, 0), Rgb([0, 0, 0]));
+		assert_eq!(image.get_color(1, 0), Rgb([50, 9, 0]));
+		assert_eq!(image.get_color(0, 1), Rgb([159, 99, 38]));
 		assert_eq!(image.get_color(1, 1), Rgb([255, 255, 255]));
+	}
+
+	fn fill_image(image: &mut StatusImage) {
+		let size = image.size;
+		for y in 0..size {
+			for x in 0..size {
+				image.set(x, y, x * y)
+			}
+		}
 	}
 }
