@@ -2068,6 +2068,7 @@ dependencies = [
 name = "versatiles_container"
 version = "0.1.0"
 dependencies = [
+ "assert_fs",
  "async-trait",
  "byteorder",
  "futures",

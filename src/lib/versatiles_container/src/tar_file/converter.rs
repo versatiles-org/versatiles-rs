@@ -97,3 +97,48 @@ impl TileConverterTrait for TileConverter {
 		self.builder.finish().unwrap();
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::TileConverter;
+	use crate::{mbtiles::TileReader, TileConverterTrait, TileReaderTrait};
+	use assert_fs::fixture::NamedTempFile;
+	use std::time::Instant;
+	use versatiles_shared::{Precompression, TileBBoxPyramide, TileConverterConfig, TileFormat};
+
+	#[test]
+	fn test_converter() {
+		#[tokio::main]
+		async fn test(tile_format: TileFormat, compression: Precompression, force_recompress: bool) {
+			println!("test {:?},{:?},{:?}", tile_format, compression, force_recompress);
+
+			let start = Instant::now();
+
+			let mut bbox_pyramide = TileBBoxPyramide::new_full();
+
+			// ensure test duration of < 100 ms
+			match compression {
+				Precompression::Uncompressed => bbox_pyramide.set_zoom_max(13),
+				Precompression::Gzip => bbox_pyramide.set_zoom_max(12),
+				Precompression::Brotli => bbox_pyramide.set_zoom_max(6),
+			};
+
+			let config = TileConverterConfig::new(Some(tile_format), Some(compression), bbox_pyramide, force_recompress);
+			let tmp_file = NamedTempFile::new("temp.tar").unwrap();
+			let mut reader = TileReader::new("../../../resources/berlin.mbtiles").await.unwrap();
+			let mut convert = TileConverter::new(tmp_file.path(), config);
+			convert.convert_from(&mut reader).await;
+			tmp_file.close().unwrap();
+
+			let duration = start.elapsed();
+			println!("Time elapsed in expensive_function() is: {:?}", duration);
+		}
+
+		test(TileFormat::PBF, Precompression::Uncompressed, true);
+		test(TileFormat::PBF, Precompression::Uncompressed, false);
+		test(TileFormat::PBF, Precompression::Gzip, true);
+		test(TileFormat::PBF, Precompression::Gzip, false);
+		test(TileFormat::PBF, Precompression::Brotli, true);
+		test(TileFormat::PBF, Precompression::Brotli, false);
+	}
+}
