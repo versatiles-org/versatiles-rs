@@ -18,6 +18,7 @@ pub struct Folder {
 	folder: PathBuf,
 	name: String,
 }
+
 impl Folder {
 	pub fn from(path: &str) -> Box<Folder> {
 		let mut folder = current_dir().unwrap();
@@ -35,13 +36,14 @@ impl Folder {
 		})
 	}
 }
+
 #[async_trait]
 impl ServerSourceTrait for Folder {
 	fn get_name(&self) -> String {
 		self.name.to_owned()
 	}
 	fn get_info_as_json(&self) -> String {
-		"{{\"type\":\"folder\"}}".to_owned()
+		"{\"type\":\"folder\"}".to_owned()
 	}
 
 	async fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response<Full<Bytes>> {
@@ -89,5 +91,42 @@ impl Debug for Folder {
 			.field("folder", &self.folder)
 			.field("name", &self.name)
 			.finish()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use axum::body::HttpBody;
+	use enumset::enum_set;
+	use futures::executor::block_on;
+	use hyper::StatusCode;
+	use versatiles_shared::Precompression;
+
+	use super::Folder;
+	use crate::ServerSourceTrait;
+
+	#[test]
+	fn test() {
+		block_on(async {
+			let folder = Folder::from("../../../ressources");
+
+			assert_eq!(folder.get_name(), "../../../ressources");
+
+			assert_eq!(folder.get_info_as_json(), "{\"type\":\"folder\"}");
+
+			let mut result = folder
+				.get_data(&["recipes", "Queijo.txt"], enum_set!(Precompression::Uncompressed))
+				.await;
+			assert_eq!(result.status(), StatusCode::NOT_FOUND);
+			let result = result.data().await.unwrap().unwrap();
+			assert_eq!(format!("{:?}", result), "b\"Not Found\"");
+
+			let mut result = folder
+				.get_data(&["berlin.mbtiles"], enum_set!(Precompression::Uncompressed))
+				.await;
+			assert_eq!(result.status(), StatusCode::OK);
+			let result = result.data().await.unwrap().unwrap();
+			assert_eq!(result.len(), 26533888);
+		})
 	}
 }

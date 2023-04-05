@@ -129,7 +129,7 @@ impl ServerSourceTrait for TarFile {
 		self.name.to_owned()
 	}
 	fn get_info_as_json(&self) -> String {
-		"{{\"type\":\"tar\"}}".to_owned()
+		"{\"type\":\"tar\"}".to_owned()
 	}
 
 	async fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response<Full<Bytes>> {
