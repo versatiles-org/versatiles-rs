@@ -181,7 +181,7 @@ impl TileServer {
 				"/api/status.json",
 				get(|| async {
 					ok_data(
-						Blob::from("{{\"status\":\"ready\"}}"),
+						Blob::from("{\"status\":\"ready\"}"),
 						&Precompression::Uncompressed,
 						"application/json",
 					)
@@ -262,6 +262,9 @@ mod tests {
 	use versatiles_shared::Precompression;
 	use versatiles_shared::Precompression::*;
 
+	const IP: &str = "127.0.0.1";
+	const PORT: u16 = 3000;
+
 	#[test]
 	fn test_get_encoding() {
 		let test = |encoding: &str, comp0: EnumSet<Precompression>| {
@@ -316,9 +319,6 @@ mod tests {
 	fn test_server() {
 		#[tokio::main]
 		async fn test() {
-			const IP: &str = "127.0.0.1";
-			const PORT: u16 = 3000;
-
 			async fn get(path: &str) -> String {
 				reqwest::get(format!("http://{IP}:{PORT}/{path}"))
 					.await
@@ -336,12 +336,34 @@ mod tests {
 
 			server.start().await;
 
+			assert_eq!(get("api/status.json").await, "{\"status\":\"ready\"}");
+			assert_eq!(get("api/tiles.json").await, "[\n\t{ \"url\":\"/cheese/\", \"name\":\"dummy name\", \"info\":{ \"container\":\"dummy container\", \"format\":\"PBF\", \"precompression\":\"Uncompressed\", \"zoom_min\":0, \"zoom_max\":31, \"bbox\":[-180.0, -85.051128765345, 179.99999983236194, 85.05112877980659] } }\n]");
+			assert_eq!(get("cheese/0/0/0.png").await, "dummy tile data");
+			assert_eq!(get("cheese/meta.json").await, "dummy meta data");
+			assert_eq!(get("cheese/tiles.json").await, "dummy meta data");
+			assert_eq!(get("cheese/brum.json").await, "Not Found");
 			assert_eq!(get("status").await, "ready!");
-			assert_eq!(get("cheese/meta.json").await, "Not Found");
-			assert_eq!(get("cheese/tiles.json").await, "Not Found");
-			assert_eq!(get("cheese/0/0/0.png").await, "dummydata");
 
 			server.stop().await;
+		}
+
+		test()
+	}
+
+	#[test]
+	#[should_panic]
+	fn test_panic() {
+		#[tokio::main]
+		async fn test() {
+			let mut server = TileServer::new(IP, PORT);
+
+			let reader = dummy::TileReader::new("dummy").await.unwrap();
+			let source = TileContainer::from(reader);
+			server.add_tile_source("cheese", source);
+
+			let reader = dummy::TileReader::new("dummy").await.unwrap();
+			let source = TileContainer::from(reader);
+			server.add_tile_source("cheese", source);
 		}
 
 		test()
