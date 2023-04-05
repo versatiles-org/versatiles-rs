@@ -1,4 +1,4 @@
-use super::traits::ServerSourceBox;
+use crate::ServerSourceTrait;
 use axum::{
 	body::{Bytes, Full},
 	extract::{Path, State},
@@ -16,14 +16,14 @@ use versatiles_shared::{Blob, Precompression};
 
 struct TileSource {
 	prefix: String,
-	source: Arc<ServerSourceBox>,
+	source: Arc<Box<dyn ServerSourceTrait>>,
 }
 
 pub struct TileServer {
 	ip: String,
 	port: u16,
 	tile_sources: Vec<TileSource>,
-	static_sources: Vec<Arc<ServerSourceBox>>,
+	static_sources: Vec<Arc<Box<dyn ServerSourceTrait>>>,
 }
 
 impl TileServer {
@@ -36,10 +36,10 @@ impl TileServer {
 		}
 	}
 
-	pub fn add_tile_source(&mut self, url_prefix: String, tile_source: ServerSourceBox) {
+	pub fn add_tile_source(&mut self, url_prefix: &str, tile_source: Box<dyn ServerSourceTrait>) {
 		log::debug!("add source: prefix='{}', source={:?}", url_prefix, tile_source);
 
-		let mut prefix = url_prefix;
+		let mut prefix = url_prefix.trim().to_owned();
 		if !prefix.starts_with('/') {
 			prefix = "/".to_owned() + &prefix;
 		}
@@ -62,7 +62,7 @@ impl TileServer {
 		});
 	}
 
-	pub fn add_static_source(&mut self, source: ServerSourceBox) {
+	pub fn add_static_source(&mut self, source: Box<dyn ServerSourceTrait>) {
 		log::debug!("set static: source={:?}", source);
 		self.static_sources.push(Arc::new(source));
 	}
@@ -95,7 +95,7 @@ impl TileServer {
 			app = app.merge(tile_app);
 
 			async fn serve_tile(
-				Path(path): Path<String>, headers: HeaderMap, State(source): State<Arc<ServerSourceBox>>,
+				Path(path): Path<String>, headers: HeaderMap, State(source): State<Arc<Box<dyn ServerSourceTrait>>>,
 			) -> Response<Full<Bytes>> {
 				let sub_path: Vec<&str> = path.split('/').collect();
 				source.get_data(&sub_path, get_encoding(headers)).await
@@ -113,7 +113,7 @@ impl TileServer {
 		return app.merge(static_app);
 
 		async fn serve_static(
-			uri: Uri, headers: HeaderMap, State(sources): State<Vec<Arc<ServerSourceBox>>>,
+			uri: Uri, headers: HeaderMap, State(sources): State<Vec<Arc<Box<dyn ServerSourceTrait>>>>,
 		) -> Response<Full<Bytes>> {
 			let mut path_vec: Vec<&str> = uri.path().split('/').skip(1).collect();
 

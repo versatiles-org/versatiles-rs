@@ -13,5 +13,3 @@ pub trait ServerSourceTrait: Send + Sync + Debug {
 	fn get_info_as_json(&self) -> String;
 	async fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response<Full<Bytes>>;
 }
-
-pub type ServerSourceBox = Box<dyn ServerSourceTrait>;
