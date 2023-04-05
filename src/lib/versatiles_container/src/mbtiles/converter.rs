@@ -11,10 +11,10 @@ impl TileConverterTrait for TileConverter {
 	where
 		Self: Sized,
 	{
-		panic!()
+		panic!("conversion to mbtiles is not supported")
 	}
 	async fn convert_from(&mut self, _reader: &mut TileReaderBox) {
-		panic!()
+		panic!("conversion to mbtiles is not supported")
 	}
 }
 
