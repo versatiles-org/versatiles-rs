@@ -10,7 +10,7 @@ keywords = ["versatiles", "mbtiles", "tiles", "map"]
 categories = ["command-line-utilities", "science::geo", "web-programming::http-server"]
 readme = "readme.md"
 license = "MIT"
-exclude = ["benches/resources/*"]
+exclude = ["benches/ressources/*"]
 
 [dependencies]
 versatiles_container = { path = "../lib/versatiles_container" }

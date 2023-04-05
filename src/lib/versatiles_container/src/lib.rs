@@ -61,7 +61,7 @@ mod tests {
 
 			let config = TileConverterConfig::new(None, Some(compression), bbox_pyramide, force_recompress);
 			let tmp_file = NamedTempFile::new("temp.".to_owned() + extension).unwrap();
-			let mut reader = TileReader::new("../../../resources/berlin.mbtiles").await.unwrap();
+			let mut reader = TileReader::new("../../../ressources/berlin.mbtiles").await.unwrap();
 			let mut convert = get_converter(tmp_file.to_str().unwrap(), config);
 			convert.convert_from(&mut reader).await;
 			tmp_file.close().unwrap();
