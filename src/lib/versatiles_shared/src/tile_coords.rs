@@ -30,7 +30,17 @@ impl TileCoord2 {
 
 impl fmt::Debug for TileCoord2 {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_fmt(format_args!("TileCoord2{{ x:{}, y:{} }}", &self.x, &self.y))
+		f.write_fmt(format_args!("TileCoord2({}, {})", &self.x, &self.y))
+	}
+}
+
+impl PartialOrd for TileCoord2 {
+	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+		match self.y.partial_cmp(&other.y) {
+			Some(core::cmp::Ordering::Equal) => {}
+			ord => return ord,
+		}
+		self.x.partial_cmp(&other.x)
 	}
 }
 
@@ -67,10 +77,7 @@ impl TileCoord3 {
 
 impl Debug for TileCoord3 {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_fmt(format_args!(
-			"TileCoord3{{ x:{}, y:{} z:{} }}",
-			&self.x, &self.y, &self.z
-		))
+		f.write_fmt(format_args!("TileCoord3({}, {}, {})", &self.x, &self.y, &self.z))
 	}
 }
 
@@ -90,23 +97,28 @@ impl PartialOrd for TileCoord3 {
 
 #[cfg(test)]
 mod tests {
+	use std::{
+		collections::hash_map::DefaultHasher,
+		hash::{Hash, Hasher},
+	};
+
 	use super::*;
 
 	#[test]
 	fn from_geo() {
-		let test = |z: u8, xf: f32, yf: f32, xi: u64, yi: u64| {
+		let test = |z: u8, x: u64, y: u64, xf: f32, yf: f32| {
 			let coord1 = TileCoord2::from_geo(xf, yf, z);
-			let coord2 = TileCoord2::new(xi, yi);
+			let coord2 = TileCoord2::new(x, y);
 			println!("coord1 {:?}", coord1);
 			println!("coord2 {:?}", coord2);
-			assert_eq!(coord1, coord2)
+			assert_eq!(coord1, coord2);
 		};
 
-		test(9, 8.0653, 52.2564, 267, 168);
-		test(9, 12.3528, 51.3563, 273, 170);
+		test(9, 267, 168, 8.0653, 52.2564);
+		test(9, 273, 170, 12.3528, 51.3563);
 
-		test(12, -4.43515, 58.0042, 1997, 1233);
-		test(12, 20.4395, 44.8029, 2280, 1476);
+		test(12, 1997, 1233, -4.43515, 58.0042);
+		test(12, 2280, 1476, 20.4395, 44.8029);
 	}
 
 	#[test]
@@ -121,5 +133,102 @@ mod tests {
 		let coord = TileCoord3::new(1, 2, 3);
 		assert_eq!(coord.flip_vertically(), TileCoord3::new(1, 5, 3));
 		assert_eq!(coord, TileCoord3::new(1, 2, 3));
+	}
+
+	#[test]
+	fn debug() {
+		assert_eq!(format!("{:?}", TileCoord2::new(1, 2)), "TileCoord2(1, 2)");
+		assert_eq!(format!("{:?}", TileCoord3::new(1, 2, 3)), "TileCoord3(1, 2, 3)");
+	}
+
+	#[test]
+	fn partial_eq2() {
+		let c = TileCoord2::new(2, 2);
+		assert!(c.eq(&c));
+		assert!(c.eq(&c.clone()));
+		assert!(c.ne(&TileCoord2::new(1, 2)));
+		assert!(c.ne(&TileCoord2::new(2, 1)));
+	}
+
+	#[test]
+	fn partial_eq3() {
+		let c = TileCoord3::new(2, 2, 2);
+		assert!(c.eq(&c));
+		assert!(c.eq(&c.clone()));
+		assert!(c.ne(&TileCoord3::new(1, 2, 2)));
+		assert!(c.ne(&TileCoord3::new(2, 1, 2)));
+		assert!(c.ne(&TileCoord3::new(2, 2, 1)));
+	}
+
+	#[test]
+	fn hash() {
+		let mut hasher = DefaultHasher::new();
+		TileCoord2::new(2, 2).hash(&mut hasher);
+		TileCoord3::new(2, 2, 2).hash(&mut hasher);
+		assert_eq!(hasher.finish(), 8781784348340199787);
+	}
+
+	#[test]
+	fn partial_cmp2() {
+		use std::cmp::Ordering;
+		use std::cmp::Ordering::*;
+
+		let check = |x: u64, y: u64, order: Ordering| {
+			let c1 = TileCoord2::new(2, 2);
+			let c2 = TileCoord2::new(x, y);
+			assert_eq!(c2.partial_cmp(&c1), Some(order));
+		};
+
+		check(1, 1, Less);
+		check(2, 1, Less);
+		check(3, 1, Less);
+		check(1, 2, Less);
+		check(2, 2, Equal);
+		check(3, 2, Greater);
+		check(1, 3, Greater);
+		check(2, 3, Greater);
+		check(3, 3, Greater);
+	}
+
+	#[test]
+	fn partial_cmp3() {
+		use std::cmp::Ordering;
+		use std::cmp::Ordering::*;
+
+		let check = |x: u64, y: u64, z: u8, order: Ordering| {
+			let c1 = TileCoord3::new(2, 2, 2);
+			let c2 = TileCoord3::new(x, y, z);
+			assert_eq!(c2.partial_cmp(&c1), Some(order));
+		};
+
+		check(1, 1, 1, Less);
+		check(2, 1, 1, Less);
+		check(3, 1, 1, Less);
+		check(1, 2, 1, Less);
+		check(2, 2, 1, Less);
+		check(3, 2, 1, Less);
+		check(1, 3, 1, Less);
+		check(2, 3, 1, Less);
+		check(3, 3, 1, Less);
+
+		check(1, 1, 2, Less);
+		check(2, 1, 2, Less);
+		check(3, 1, 2, Less);
+		check(1, 2, 2, Less);
+		check(2, 2, 2, Equal);
+		check(3, 2, 2, Greater);
+		check(1, 3, 2, Greater);
+		check(2, 3, 2, Greater);
+		check(3, 3, 2, Greater);
+
+		check(1, 1, 3, Greater);
+		check(2, 1, 3, Greater);
+		check(3, 1, 3, Greater);
+		check(1, 2, 3, Greater);
+		check(2, 2, 3, Greater);
+		check(3, 2, 3, Greater);
+		check(1, 3, 3, Greater);
+		check(2, 3, 3, Greater);
+		check(3, 3, 3, Greater);
 	}
 }
