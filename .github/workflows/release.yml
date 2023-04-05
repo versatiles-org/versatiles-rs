@@ -26,7 +26,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       - name: get version
-        run: echo "LATEST_VERSION=$(curl -s 'https://api.github.com/repos/versatiles-org/versatiles/releases/latest' | jq -r '.tag_name')" >> $GITHUB_ENV
+        run: echo "LATEST_VERSION=$(curl -s 'https://api.github.com/repos/versatiles-org/versatiles-rs/releases/latest' | jq -r '.tag_name')" >> $GITHUB_ENV
       - name: "Build and push"
         uses: docker/build-push-action@v4
         with:
