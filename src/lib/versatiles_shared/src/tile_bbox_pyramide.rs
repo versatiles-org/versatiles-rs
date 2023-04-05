@@ -1,4 +1,5 @@
 use super::{TileBBox, TileCoord2, TileCoord3};
+use std::array::from_fn;
 use std::fmt;
 
 const MAX_ZOOM_LEVEL: u8 = 32;
@@ -12,12 +13,12 @@ pub struct TileBBoxPyramide {
 impl TileBBoxPyramide {
 	pub fn new_full() -> TileBBoxPyramide {
 		TileBBoxPyramide {
-			level_bbox: std::array::from_fn(|z| TileBBox::new_full(z as u8)),
+			level_bbox: from_fn(|z| TileBBox::new_full(z as u8)),
 		}
 	}
 	pub fn new_empty() -> TileBBoxPyramide {
 		TileBBoxPyramide {
-			level_bbox: std::array::from_fn(|_z| TileBBox::new_empty()),
+			level_bbox: from_fn(|_z| TileBBox::new_empty()),
 		}
 	}
 	pub fn limit_by_geo_bbox(&mut self, geo_bbox: &[f32; 4]) {

@@ -29,7 +29,7 @@ impl TileReaderParameters {
 			decompressor: DataConverter::new_empty(),
 			tile_format: TileFormat::PBF,
 			tile_precompression: Precompression::Uncompressed,
-			bbox_pyramide: TileBBoxPyramide::new_empty(),
+			bbox_pyramide: TileBBoxPyramide::new_full(),
 			flip_vertically: false,
 		}
 	}
