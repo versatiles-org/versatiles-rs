@@ -88,7 +88,7 @@ impl ServerSourceTrait for TileContainer {
 
 			data = decompress(data, &self.precompression);
 			return ok_data(data, &Precompression::Uncompressed, &self.tile_mime);
-		} else if path[0] == "meta.json" {
+		} else if (path[0] == "meta.json") || (path[0] == "tiles.json") {
 			// get meta
 			let meta = self.reader.get_meta().await;
 
