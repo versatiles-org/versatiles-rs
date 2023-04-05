@@ -55,7 +55,7 @@ impl TileConverterTrait for TileConverter {
 
 		let meta_data = reader.get_meta().await;
 
-		if meta_data.is_empty() {
+		if !meta_data.is_empty() {
 			let mut header = Header::new_gnu();
 			header.set_size(meta_data.len() as u64);
 			header.set_mode(0o644);
