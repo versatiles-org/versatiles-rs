@@ -221,3 +221,39 @@ fn get_encoding(headers: HeaderMap) -> EnumSet<Precompression> {
 	}
 	encoding_set
 }
+
+#[cfg(test)]
+mod tests {
+	use super::get_encoding;
+	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
+	use enumset::{enum_set, EnumSet};
+	use versatiles_shared::Precompression;
+	use versatiles_shared::Precompression::*;
+
+	#[test]
+	fn test_get_encoding() {
+		let test = |encoding: &str, comp0: EnumSet<Precompression>| {
+			let mut map = HeaderMap::new();
+			map.insert(ACCEPT_ENCODING, encoding.parse().unwrap());
+			let comp = get_encoding(map);
+			assert_eq!(comp, comp0);
+		};
+		test("", enum_set!(Uncompressed));
+		test("*", enum_set!(Uncompressed));
+		test("br", enum_set!(Uncompressed | Brotli));
+		test("br;q=1.0, gzip;q=0.8, *;q=0.1", enum_set!(Uncompressed | Brotli | Gzip));
+		test("compress", enum_set!(Uncompressed));
+		test("compress, gzip", enum_set!(Uncompressed | Gzip));
+		test("compress;q=0.5, gzip;q=1.0", enum_set!(Uncompressed | Gzip));
+		test("deflate", enum_set!(Uncompressed));
+		test("deflate, gzip;q=1.0, *;q=0.5", enum_set!(Uncompressed | Gzip));
+		test("gzip", enum_set!(Uncompressed | Gzip));
+		test("gzip, compress, br", enum_set!(Uncompressed | Brotli | Gzip));
+		test(
+			"gzip, deflate, br;q=1.0, identity;q=0.5, *;q=0.25",
+			enum_set!(Uncompressed | Brotli | Gzip),
+		);
+		test("gzip;q=1.0, identity; q=0.5, *;q=0", enum_set!(Uncompressed | Gzip));
+		test("identity", enum_set!(Uncompressed));
+	}
+}

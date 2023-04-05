@@ -44,9 +44,8 @@ unsafe impl Sync for Blob {}
 
 #[cfg(test)]
 mod tests {
-	use bytes::Bytes;
-
 	use super::Blob;
+	use bytes::Bytes;
 
 	#[test]
 	fn basic_tests() {
