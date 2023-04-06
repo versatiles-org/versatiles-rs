@@ -8,7 +8,7 @@ repository = "https://github.com/versatiles-org/versatiles-rs"
 authors = ["Michael Kreil <versatiles@michael-kreil.de>"]
 keywords = ["versatiles", "mbtiles", "tiles", "map"]
 categories = ["command-line-utilities", "science::geo", "web-programming::http-server"]
-readme = "readme.md"
+readme = "README.MD"
 license = "MIT"
 exclude = ["benches/ressources/*"]
 

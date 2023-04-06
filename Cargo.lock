@@ -2137,13 +2137,10 @@ dependencies = [
  "clap 4.2.1",
  "enumset",
  "flate2",
- "http",
  "image",
  "itertools",
  "log",
- "reqwest",
  "term_size",
- "url",
  "webp",
 ]
 
