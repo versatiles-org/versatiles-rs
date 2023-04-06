@@ -3,8 +3,10 @@ use async_trait::async_trait;
 use std::path::Path;
 use versatiles_shared::{Precompression, TileBBoxPyramide, TileConverterConfig, TileFormat};
 
-pub enum DummyConverterProfile {
+#[derive(Debug)]
+pub enum ConverterProfile {
 	Png,
+	Whatever,
 }
 
 pub struct TileConverter {
@@ -12,17 +14,18 @@ pub struct TileConverter {
 }
 
 impl TileConverter {
-	pub fn new_dummy(profile: DummyConverterProfile, max_zoom_level: u8) -> TileConverterBox {
+	pub fn new_dummy(profile: ConverterProfile, max_zoom_level: u8) -> TileConverterBox {
 		let mut bbox_pyramide = TileBBoxPyramide::new_full();
 		bbox_pyramide.set_zoom_max(max_zoom_level);
 
 		let config = match profile {
-			DummyConverterProfile::Png => TileConverterConfig::new(
+			ConverterProfile::Png => TileConverterConfig::new(
 				Some(TileFormat::PNG),
 				Some(Precompression::Uncompressed),
 				bbox_pyramide,
 				false,
 			),
+			ConverterProfile::Whatever => TileConverterConfig::new(None, None, bbox_pyramide, false),
 		};
 		Box::new(TileConverter { config })
 	}
@@ -53,14 +56,14 @@ impl TileConverterTrait for TileConverter {
 
 #[cfg(test)]
 mod tests {
-	use super::{DummyConverterProfile, TileConverter};
-	use crate::dummy::{reader::DummyReaderProfile, TileReader};
+	use super::{ConverterProfile, TileConverter};
+	use crate::dummy::{reader::ReaderProfile, TileReader};
 	use futures::executor::block_on;
 
 	#[test]
 	fn test() {
-		let mut converter = TileConverter::new_dummy(DummyConverterProfile::Png, 8);
-		let mut reader = TileReader::new_dummy(DummyReaderProfile::PngEmpty, 8);
+		let mut converter = TileConverter::new_dummy(ConverterProfile::Png, 8);
+		let mut reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
 		block_on(converter.convert_from(&mut reader));
 	}
 }

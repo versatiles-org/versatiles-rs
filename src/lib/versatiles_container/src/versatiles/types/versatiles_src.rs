@@ -41,11 +41,11 @@ impl VersaTilesSrcTrait for VersaTilesSrcFile {
 		filename.push(Path::new(source));
 
 		if !filename.exists() {
-			return Err(Error::new(format!("file \"{filename:?}\" not found")));
+			return Err(Error::new(&format!("file \"{filename:?}\" not found")));
 		}
 
 		if !filename.is_absolute() {
-			return Err(Error::new(format!("filename {filename:?} must be absolute")));
+			return Err(Error::new(&format!("filename {filename:?} must be absolute")));
 		}
 
 		filename = filename.canonicalize()?;
@@ -123,7 +123,7 @@ impl VersaTilesSrcTrait for VersaTilesSrcHttp {
 				client,
 			})
 		} else {
-			Err(Error::new(format!(
+			Err(Error::new(&format!(
 				"source {} must start with http:// or https://",
 				source
 			)))

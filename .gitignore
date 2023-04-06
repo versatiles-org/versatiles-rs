@@ -1,8 +1,9 @@
 .*.sh
 .DS_Store
 *.code-workspace
+*.info
+*.json
 *.lcov
-*.png
 *.tar
 /coverage
 /frontend
@@ -10,5 +11,3 @@
 /target
 /tiles
 /tmp
-credentials.json
-lcov.info

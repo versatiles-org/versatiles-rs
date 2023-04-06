@@ -6,8 +6,8 @@ pub struct Error {
 }
 
 impl Error {
-	pub fn new(msg: String) -> Box<Self> {
-		Box::new(Self { msg })
+	pub fn new(msg: &str) -> Box<Self> {
+		Box::new(Self { msg: msg.to_owned() })
 	}
 }
 
@@ -25,7 +25,7 @@ mod tests {
 
 	#[test]
 	fn test() {
-		let err = Error::new(String::from("hi"));
+		let err = Error::new("hi");
 		let err = err.clone();
 		format!("{}", err);
 		format!("{:?}", err);
