@@ -10,6 +10,7 @@ pub struct TileConverter {
 	builder: Builder<File>,
 	config: TileConverterConfig,
 }
+
 #[async_trait]
 impl TileConverterTrait for TileConverter {
 	fn new(filename: &Path, config: TileConverterConfig) -> TileConverterBox

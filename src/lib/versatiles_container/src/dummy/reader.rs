@@ -1,9 +1,28 @@
 use crate::{TileReaderBox, TileReaderTrait};
 use async_trait::async_trait;
-use versatiles_shared::{Blob, Result, TileCoord3, TileReaderParameters};
+use versatiles_shared::{Blob, Precompression, Result, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters};
+
+pub enum DummyReaderProfile {
+	PNG,
+}
 
 pub struct TileReader {
 	parameters: TileReaderParameters,
+}
+
+impl TileReader {
+	pub fn new_dummy(profile: DummyReaderProfile, max_zoom_level: u8) -> TileReaderBox {
+		let mut bbox_pyramide = TileBBoxPyramide::new_full();
+		bbox_pyramide.set_zoom_max(max_zoom_level);
+
+		let parameters = match profile {
+			DummyReaderProfile::PNG => {
+				TileReaderParameters::new(TileFormat::PNG, Precompression::Uncompressed, bbox_pyramide)
+			}
+		};
+
+		Box::new(Self { parameters })
+	}
 }
 
 #[async_trait]
@@ -44,28 +63,28 @@ impl std::fmt::Debug for TileReader {
 
 #[cfg(test)]
 mod tests {
-	use crate::{dummy, TileConverterTrait, TileReaderTrait};
+	use crate::dummy::{converter::DummyConverterProfile, reader::DummyReaderProfile, TileConverter, TileReader};
 	use futures::executor::block_on;
 	use versatiles_shared::{Blob, TileCoord3, TileReaderParameters};
 
 	#[test]
 	fn test1() {
-		let mut reader = block_on(dummy::TileReader::new("filename.txt")).unwrap();
+		let mut reader = TileReader::new_dummy(DummyReaderProfile::PNG, 8);
 		assert_eq!(reader.get_container_name(), "dummy container");
 		assert_eq!(reader.get_name(), "dummy name");
-		assert_eq!(reader.get_parameters(), &TileReaderParameters::new_dummy());
-		assert_eq!(reader.get_parameters_mut(), &mut TileReaderParameters::new_dummy());
+		assert_ne!(reader.get_parameters(), &TileReaderParameters::new_dummy());
+		assert_ne!(reader.get_parameters_mut(), &mut TileReaderParameters::new_dummy());
 		assert_eq!(block_on(reader.get_meta()), Blob::from("dummy meta data"));
 		assert_eq!(
-			block_on(reader.get_tile_data(&TileCoord3::new_empty())).unwrap(),
+			block_on(reader.get_tile_data(&TileCoord3::new(0, 0, 0))).unwrap(),
 			Blob::from("dummy tile data")
 		);
 	}
 
 	#[test]
 	fn test2() {
-		let mut converter = dummy::TileConverter {};
-		let mut reader = block_on(dummy::TileReader::new("filename.txt")).unwrap();
+		let mut converter = TileConverter::new_dummy(DummyConverterProfile::PNG, 8);
+		let mut reader = TileReader::new_dummy(DummyReaderProfile::PNG, 8);
 		block_on(converter.convert_from(&mut reader));
 	}
 }

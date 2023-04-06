@@ -54,9 +54,6 @@ impl TileCoord3 {
 	pub fn new(x: u64, y: u64, z: u8) -> TileCoord3 {
 		TileCoord3 { x, y, z }
 	}
-	pub fn new_empty() -> TileCoord3 {
-		TileCoord3::new(0, 0, 0)
-	}
 	pub fn flip_vertically(&self) -> TileCoord3 {
 		let max_index = 2u64.pow(self.z as u32) - 1;
 		TileCoord3 {
