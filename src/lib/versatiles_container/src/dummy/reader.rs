@@ -79,17 +79,17 @@ mod tests {
 	use versatiles_shared::{Blob, TileCoord3, TileReaderParameters};
 
 	#[test]
-	fn test1() {
+	fn reader() {
 		let mut reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
 		assert_eq!(reader.get_container_name(), "dummy container");
 		assert_eq!(reader.get_name(), "dummy name");
 		assert_ne!(reader.get_parameters(), &TileReaderParameters::new_dummy());
 		assert_ne!(reader.get_parameters_mut(), &mut TileReaderParameters::new_dummy());
 		assert_eq!(block_on(reader.get_meta()), Blob::from("dummy meta data"));
-		assert_eq!(
-			block_on(reader.get_tile_data(&TileCoord3::new(0, 0, 0))).unwrap(),
-			Blob::from("dummy tile data")
-		);
+		let blob = block_on(reader.get_tile_data(&TileCoord3::new(0, 0, 0)))
+			.unwrap()
+			.as_vec();
+		assert_eq!(&blob[0..4], b"\x89PNG");
 	}
 
 	#[test]
