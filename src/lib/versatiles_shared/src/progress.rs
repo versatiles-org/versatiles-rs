@@ -1,21 +1,3 @@
-//! A library to display a progress bar in a terminal window.
-//!
-//! # Example
-//! ```
-//! use progress_bar::{ProgressBar};
-//!
-//! fn main() {
-//!     let mut pb = ProgressBar::new("Loading", 50);
-//!     for i in 0..50 {
-//!         pb.set_position(i + 1);
-//!         std::thread::sleep(std::time::Duration::from_millis(100));
-//!     }
-//!     pb.finish();
-//! }
-//! ```
-//!
-//! The library provides a progress bar that updates itself with a specified refresh rate. It shows the current percentage of work completed, the current rate of progress, the estimated remaining time, and other relevant information. It can be used to track progress in long-running tasks, such as file transfers, computations, or data processing.
-
 use log::{max_level, LevelFilter};
 use std::io::Write;
 use std::time::{Duration, SystemTime};

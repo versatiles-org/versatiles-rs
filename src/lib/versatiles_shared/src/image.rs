@@ -135,8 +135,8 @@ pub fn img2webplossless(image: &DynamicImage) -> Result<Blob> {
 pub fn webp2img(data: Blob) -> Result<DynamicImage> {
 	let decoder = Decoder::new(data.as_slice());
 	let image = decoder.decode();
-	if image.is_some() {
-		Ok(image.unwrap().to_image())
+	if let Some(image) = image {
+		Ok(image.to_image())
 	} else {
 		Err(Error::new("cant read webp"))
 	}

@@ -2,7 +2,11 @@ use crate::{TileConverterBox, TileConverterTrait, TileReaderBox};
 use async_trait::async_trait;
 use log::trace;
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
-use std::{fs::File, path::Path, sync::Mutex};
+use std::{
+	fs::File,
+	path::{Path, PathBuf},
+	sync::Mutex,
+};
 use tar::{Builder, Header};
 use versatiles_shared::{Precompression, ProgressBar, TileConverterConfig, TileFormat};
 
@@ -74,27 +78,26 @@ impl TileConverterTrait for TileConverter {
 		for (level, bbox) in bbox_pyramide.iter_levels() {
 			for row_bbox in bbox.iter_bbox_row_slices(1024) {
 				let tile_vec = reader.get_bbox_tile_vec(level, &row_bbox).await;
-				tile_vec.into_iter().par_bridge().for_each(|(coord, mut blob)| {
+				tile_vec.into_iter().par_bridge().for_each(|(coord, blob)| {
 					mutex_bar.lock().unwrap().inc(1);
+					let result = tile_converter.run(blob);
 
-					let blob_option = tile_converter.run(blob);
-					blob = if blob_option.is_err() {
-						return;
-					} else {
-						blob_option.unwrap()
-					};
+					if let Ok(blob) = result {
+						let filename = format!("./{}/{}/{}{}{}", level, coord.y, coord.x, ext_form, ext_comp);
+						let path = PathBuf::from(&filename);
 
-					let filename = format!("./{}/{}/{}{}{}", level, coord.y, coord.x, ext_form, ext_comp);
-					let path = Path::new(&filename);
-					let mut header = Header::new_gnu();
-					header.set_size(blob.len() as u64);
-					header.set_mode(0o644);
+						// Build header
+						let mut header = Header::new_gnu();
+						header.set_size(blob.len() as u64);
+						header.set_mode(0o644);
 
-					mutex_builder
-						.lock()
-						.unwrap()
-						.append_data(&mut header, path, blob.as_slice())
-						.unwrap();
+						// Write blob to file
+						mutex_builder
+							.lock()
+							.unwrap()
+							.append_data(&mut header, path, blob.as_slice())
+							.unwrap();
+					}
 				})
 			}
 		}
