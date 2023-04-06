@@ -4,7 +4,7 @@ use std::path::Path;
 use versatiles_shared::{Precompression, TileBBoxPyramide, TileConverterConfig, TileFormat};
 
 pub enum DummyConverterProfile {
-	PNG,
+	Png,
 }
 
 pub struct TileConverter {
@@ -17,7 +17,7 @@ impl TileConverter {
 		bbox_pyramide.set_zoom_max(max_zoom_level);
 
 		let config = match profile {
-			DummyConverterProfile::PNG => TileConverterConfig::new(
+			DummyConverterProfile::Png => TileConverterConfig::new(
 				Some(TileFormat::PNG),
 				Some(Precompression::Uncompressed),
 				bbox_pyramide,
@@ -59,8 +59,8 @@ mod tests {
 
 	#[test]
 	fn test() {
-		let mut converter = TileConverter::new_dummy(DummyConverterProfile::PNG, 8);
-		let mut reader = TileReader::new_dummy(DummyReaderProfile::PNG, 8);
+		let mut converter = TileConverter::new_dummy(DummyConverterProfile::Png, 8);
+		let mut reader = TileReader::new_dummy(DummyReaderProfile::PngEmpty, 8);
 		block_on(converter.convert_from(&mut reader));
 	}
 }

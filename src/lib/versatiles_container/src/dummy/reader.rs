@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use versatiles_shared::{Blob, Precompression, Result, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters};
 
 pub enum DummyReaderProfile {
-	PNG,
+	PngEmpty,
 }
 
 pub struct TileReader {
@@ -16,7 +16,7 @@ impl TileReader {
 		bbox_pyramide.set_zoom_max(max_zoom_level);
 
 		let parameters = match profile {
-			DummyReaderProfile::PNG => {
+			DummyReaderProfile::PngEmpty => {
 				TileReaderParameters::new(TileFormat::PNG, Precompression::Uncompressed, bbox_pyramide)
 			}
 		};
@@ -69,7 +69,7 @@ mod tests {
 
 	#[test]
 	fn test1() {
-		let mut reader = TileReader::new_dummy(DummyReaderProfile::PNG, 8);
+		let mut reader = TileReader::new_dummy(DummyReaderProfile::PngEmpty, 8);
 		assert_eq!(reader.get_container_name(), "dummy container");
 		assert_eq!(reader.get_name(), "dummy name");
 		assert_ne!(reader.get_parameters(), &TileReaderParameters::new_dummy());
@@ -83,8 +83,8 @@ mod tests {
 
 	#[test]
 	fn test2() {
-		let mut converter = TileConverter::new_dummy(DummyConverterProfile::PNG, 8);
-		let mut reader = TileReader::new_dummy(DummyReaderProfile::PNG, 8);
+		let mut converter = TileConverter::new_dummy(DummyConverterProfile::Png, 8);
+		let mut reader = TileReader::new_dummy(DummyReaderProfile::PngEmpty, 8);
 		block_on(converter.convert_from(&mut reader));
 	}
 }
