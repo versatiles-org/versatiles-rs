@@ -8,6 +8,7 @@ use flate2::{
 };
 use std::io::{Cursor, Read};
 
+/// Enum representing possible precompression algorithms
 #[derive(Debug, EnumSetType, ValueEnum)]
 pub enum Precompression {
 	Uncompressed,
@@ -15,7 +16,12 @@ pub enum Precompression {
 	Brotli,
 }
 
-#[allow(dead_code)]
+/// Compresses data based on the given precompression algorithm
+///
+/// # Arguments
+///
+/// * `data` - The blob of data to compress
+/// * `precompression` - The precompression algorithm to use
 pub fn compress(data: Blob, precompression: &Precompression) -> Blob {
 	match precompression {
 		Precompression::Uncompressed => data,
@@ -24,6 +30,12 @@ pub fn compress(data: Blob, precompression: &Precompression) -> Blob {
 	}
 }
 
+/// Decompresses data based on the given precompression algorithm
+///
+/// # Arguments
+///
+/// * `data` - The blob of data to decompress
+/// * `precompression` - The precompression algorithm used for compression
 pub fn decompress(data: Blob, precompression: &Precompression) -> Blob {
 	match precompression {
 		Precompression::Uncompressed => data,
@@ -32,6 +44,11 @@ pub fn decompress(data: Blob, precompression: &Precompression) -> Blob {
 	}
 }
 
+/// Compresses data using gzip
+///
+/// # Arguments
+///
+/// * `data` - The blob of data to compress
 pub fn compress_gzip(data: Blob) -> Blob {
 	let mut result: Vec<u8> = Vec::new();
 	GzEncoder::new(data.as_slice(), Compression::best())
@@ -41,6 +58,11 @@ pub fn compress_gzip(data: Blob) -> Blob {
 	Blob::from(result)
 }
 
+/// Decompresses data that was compressed using gzip
+///
+/// # Arguments
+///
+/// * `data` - The blob of data to decompress
 pub fn decompress_gzip(data: Blob) -> Blob {
 	let mut result: Vec<u8> = Vec::new();
 	GzDecoder::new(data.as_slice())
@@ -50,6 +72,11 @@ pub fn decompress_gzip(data: Blob) -> Blob {
 	Blob::from(result)
 }
 
+/// Compresses data using Brotli
+///
+/// # Arguments
+///
+/// * `data` - The blob of data to compress
 pub fn compress_brotli(data: Blob) -> Blob {
 	let params = BrotliEncoderParams {
 		quality: 11,
@@ -63,6 +90,11 @@ pub fn compress_brotli(data: Blob) -> Blob {
 	Blob::from(result)
 }
 
+/// Decompresses data that was compressed using Brotli
+///
+/// # Arguments
+///
+/// * `data` - The blob of data to decompress
 pub fn decompress_brotli(data: Blob) -> Blob {
 	let mut cursor = Cursor::new(data.as_slice());
 	let mut result: Vec<u8> = Vec::new();
@@ -76,19 +108,32 @@ mod tests {
 	use super::*;
 
 	#[test]
+	/// Verify that the Brotli compression and decompression functions work correctly.
 	fn verify_brotli() {
+		// Generate random data.
 		let data1 = random_data(100000);
+
+		// Compress and then decompress the data.
 		let data2 = decompress_brotli(compress_brotli(data1.clone()));
+
+		// Check that the original and decompressed data match.
 		assert_eq!(data1, data2);
 	}
 
 	#[test]
+	/// Verify that the Gzip compression and decompression functions work correctly.
 	fn verify_gzip() {
+		// Generate random data.
 		let data1 = random_data(100000);
+
+		// Compress and then decompress the data.
 		let data2 = decompress_gzip(compress_gzip(data1.clone()));
+
+		// Check that the original and decompressed data match.
 		assert_eq!(data1, data2);
 	}
 
+	/// Generate random binary data of a specified size.
 	fn random_data(size: usize) -> Blob {
 		let mut vec: Vec<u8> = Vec::new();
 		vec.resize(size, 0);
