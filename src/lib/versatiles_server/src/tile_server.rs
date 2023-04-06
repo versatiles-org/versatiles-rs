@@ -251,9 +251,8 @@ fn get_encoding(headers: HeaderMap) -> EnumSet<Precompression> {
 
 #[cfg(test)]
 mod tests {
-	use crate::source::TileContainer;
-
 	use super::{get_encoding, guess_mime, TileServer};
+	use crate::source::TileContainer;
 	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
 	use enumset::{enum_set, EnumSet};
 	use std::path::Path;

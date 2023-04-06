@@ -62,10 +62,9 @@ pub fn webp2img(data: Blob) -> DynamicImage {
 
 #[cfg(test)]
 mod tests {
-	use std::panic;
-
 	use crate::*;
 	use ::image::{DynamicImage, GrayAlphaImage, GrayImage, Luma, LumaA, Rgb, RgbImage, Rgba, RgbaImage};
+	use std::panic;
 
 	#[test]
 	fn png() {

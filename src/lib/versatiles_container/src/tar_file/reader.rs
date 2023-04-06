@@ -1,3 +1,4 @@
+use crate::{TileReaderBox, TileReaderTrait};
 use async_trait::async_trait;
 use log::trace;
 use std::{
@@ -7,8 +8,6 @@ use tar::{Archive, EntryType};
 use versatiles_shared::{
 	decompress, Blob, Error, Precompression, Result, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
 };
-
-use crate::{TileReaderBox, TileReaderTrait};
 
 #[derive(PartialEq, Eq, Hash)]
 struct TileKey {

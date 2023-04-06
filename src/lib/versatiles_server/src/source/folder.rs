@@ -96,14 +96,13 @@ impl Debug for Folder {
 
 #[cfg(test)]
 mod tests {
+	use super::Folder;
+	use crate::ServerSourceTrait;
 	use axum::body::HttpBody;
 	use enumset::enum_set;
 	use futures::executor::block_on;
 	use hyper::StatusCode;
 	use versatiles_shared::Precompression;
-
-	use super::Folder;
-	use crate::ServerSourceTrait;
 
 	#[test]
 	fn test() {

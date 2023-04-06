@@ -1,7 +1,6 @@
+use super::ProgressBar;
 use image::{ImageBuffer, Luma, Rgb, RgbImage};
 use std::vec::Vec;
-
-use super::ProgressBar;
 
 pub struct StatusImage {
 	size: u64,

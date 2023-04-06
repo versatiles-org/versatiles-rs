@@ -72,9 +72,8 @@ impl BlockIndex {
 
 #[cfg(test)]
 mod tests {
-	use versatiles_shared::TileBBox;
-
 	use super::*;
+	use versatiles_shared::TileBBox;
 
 	#[test]
 	fn conversion() {

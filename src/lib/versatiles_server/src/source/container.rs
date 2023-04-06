@@ -126,10 +126,9 @@ impl Debug for TileContainer {
 
 #[cfg(test)]
 mod tests {
+	use super::TileContainer;
 	use futures::executor::block_on;
 	use versatiles_container::{dummy::TileReader, TileReaderTrait};
-
-	use super::TileContainer;
 
 	#[test]
 	fn tile_container_from() {

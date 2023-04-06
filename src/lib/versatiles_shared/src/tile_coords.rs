@@ -94,12 +94,11 @@ impl PartialOrd for TileCoord3 {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use std::{
 		collections::hash_map::DefaultHasher,
 		hash::{Hash, Hasher},
 	};
-
-	use super::*;
 
 	#[test]
 	fn from_geo() {
