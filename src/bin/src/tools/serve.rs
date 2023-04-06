@@ -30,6 +30,10 @@ pub struct Subcommand {
 	/// If multiple static sources are defined, the first hit will be served.
 	#[arg(short = 's', long = "static", verbatim_doc_comment)]
 	pub static_content: Vec<String>,
+
+	/// Shutdown server automatically after x milliseconds.
+	#[arg(long)]
+	pub auto_shutdown: Option<u64>,
 }
 
 #[tokio::main]
@@ -79,7 +83,44 @@ pub async fn run(arguments: &Subcommand) {
 
 	server.start().await;
 
-	loop {
-		sleep(Duration::from_secs(60)).await
+	if arguments.auto_shutdown.is_some() {
+		sleep(Duration::from_millis(arguments.auto_shutdown.unwrap())).await
+	} else {
+		loop {
+			sleep(Duration::from_secs(60)).await
+		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::tests::run_command;
+
+	#[test]
+	fn test_local() {
+		run_command(vec![
+			"versatiles",
+			"serve",
+			"-p",
+			"65001",
+			"--auto-shutdown",
+			"500",
+			"../../ressources/berlin.mbtiles",
+		])
+		.unwrap();
+	}
+
+	#[test]
+	fn test_remote() {
+		run_command(vec![
+			"versatiles",
+			"serve",
+			"-p",
+			"65002",
+			"--auto-shutdown",
+			"500",
+			"https://download.versatiles.org/planet-20230227.versatiles",
+		])
+		.unwrap();
 	}
 }
