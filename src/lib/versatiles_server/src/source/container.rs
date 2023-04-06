@@ -49,11 +49,15 @@ impl ServerSourceTrait for TileContainer {
 	fn get_info_as_json(&self) -> String {
 		let parameters = self.reader.get_parameters();
 		let bbox_pyramide = parameters.get_bbox_pyramide();
+
+		let tile_format = format!("{:?}", parameters.get_tile_format()).to_lowercase();
+		let tile_precompression = format!("{:?}", parameters.get_tile_precompression()).to_lowercase();
+
 		format!(
-			"{{ \"container\":\"{}\", \"format\":\"{:?}\", \"precompression\":\"{:?}\", \"zoom_min\":{}, \"zoom_max\":{}, \"bbox\":{:?} }}",
+			"{{ \"container\":\"{}\", \"format\":\"{}\", \"precompression\":\"{}\", \"zoom_min\":{}, \"zoom_max\":{}, \"bbox\":{:?} }}",
 			self.reader.get_container_name(),
-			parameters.get_tile_format(),
-			parameters.get_tile_precompression(),
+			tile_format,
+			tile_precompression,
 			bbox_pyramide.get_zoom_min().unwrap(),
 			bbox_pyramide.get_zoom_max().unwrap(),
 			bbox_pyramide.get_geo_bbox(),
@@ -127,12 +131,11 @@ impl Debug for TileContainer {
 #[cfg(test)]
 mod tests {
 	use super::TileContainer;
-	use futures::executor::block_on;
-	use versatiles_container::{dummy::TileReader, TileReaderTrait};
+	use versatiles_container::dummy::{ReaderProfile, TileReader};
 
 	#[test]
 	fn tile_container_from() {
-		let reader = block_on(TileReader::new("filename")).unwrap();
+		let reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
 		let _container = TileContainer::from(reader);
 	}
 }

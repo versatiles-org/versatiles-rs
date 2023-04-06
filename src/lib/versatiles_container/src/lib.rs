@@ -140,7 +140,7 @@ mod tests {
 		for container in containers {
 			test(
 				ReaderProfile::PngFast,
-				8,
+				7,
 				&container,
 				TileFormat::PNG,
 				Precompression::Uncompressed,
@@ -148,7 +148,7 @@ mod tests {
 			);
 			test(
 				ReaderProfile::PngFast,
-				8,
+				4,
 				&container,
 				TileFormat::JPG,
 				Precompression::Uncompressed,
@@ -156,7 +156,7 @@ mod tests {
 			);
 			test(
 				ReaderProfile::PbfFast,
-				8,
+				7,
 				&container,
 				TileFormat::PBF,
 				Precompression::Gzip,
