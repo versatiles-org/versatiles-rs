@@ -131,7 +131,7 @@ impl TileReaderTrait for TileReader {
 				let mut blob: Vec<u8> = Vec::new();
 				entry.read_to_end(&mut blob).unwrap();
 
-				meta = decompress(Blob::from(blob), &precompression);
+				meta = decompress(Blob::from(blob), &precompression).unwrap();
 			};
 
 			if path_vec.len() == 1 {

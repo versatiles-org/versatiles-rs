@@ -24,6 +24,7 @@ impl TileReader {
 		let meta = if header.meta_range.length > 0 {
 			DataConverter::new_decompressor(&header.precompression)
 				.run(reader.read_range(&header.meta_range).await.unwrap())
+				.unwrap()
 		} else {
 			Blob::empty()
 		};

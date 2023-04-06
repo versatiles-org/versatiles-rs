@@ -148,10 +148,10 @@ impl ServerSourceTrait for TarFile {
 				return respond(blob.to_owned());
 			}
 			if let Some(blob) = &file_entry.un {
-				return respond(compress_brotli(blob.to_owned()));
+				return respond(compress_brotli(blob.to_owned()).unwrap());
 			}
 			if let Some(blob) = &file_entry.gz {
-				return respond(compress_brotli(decompress_gzip(blob.to_owned())));
+				return respond(compress_brotli(decompress_gzip(blob.to_owned()).unwrap()).unwrap());
 			}
 		}
 
@@ -162,10 +162,10 @@ impl ServerSourceTrait for TarFile {
 				return respond(blob.to_owned());
 			}
 			if let Some(blob) = &file_entry.un {
-				return respond(compress_gzip(blob.to_owned()));
+				return respond(compress_gzip(blob.to_owned()).unwrap());
 			}
 			if let Some(blob) = &file_entry.br {
-				return respond(compress_gzip(decompress_brotli(blob.to_owned())));
+				return respond(compress_gzip(decompress_brotli(blob.to_owned()).unwrap()).unwrap());
 			}
 		}
 
@@ -175,10 +175,10 @@ impl ServerSourceTrait for TarFile {
 			return respond(blob.to_owned());
 		}
 		if let Some(blob) = &file_entry.br {
-			return respond(decompress_brotli(blob.to_owned()));
+			return respond(decompress_brotli(blob.to_owned()).unwrap());
 		}
 		if let Some(blob) = &file_entry.gz {
-			return respond(decompress_gzip(blob.to_owned()));
+			return respond(decompress_gzip(blob.to_owned()).unwrap());
 		}
 
 		ok_not_found()

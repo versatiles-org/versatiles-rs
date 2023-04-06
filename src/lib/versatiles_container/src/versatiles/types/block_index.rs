@@ -34,7 +34,7 @@ impl BlockIndex {
 		block_index
 	}
 	pub fn from_brotli_blob(buf: Blob) -> BlockIndex {
-		BlockIndex::from_blob(decompress_brotli(buf))
+		BlockIndex::from_blob(decompress_brotli(buf).unwrap())
 	}
 	pub fn get_bbox_pyramide(&self) -> TileBBoxPyramide {
 		let mut pyramide = TileBBoxPyramide::new_empty();
@@ -57,7 +57,7 @@ impl BlockIndex {
 		Blob::from(cursor.into_inner())
 	}
 	pub fn as_brotli_blob(&self) -> Blob {
-		compress_brotli(self.as_blob())
+		compress_brotli(self.as_blob()).unwrap()
 	}
 	pub fn get_block(&self, coord: &TileCoord3) -> Option<&BlockDefinition> {
 		self.lookup.get(coord)

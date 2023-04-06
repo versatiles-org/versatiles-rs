@@ -1,16 +1,18 @@
+use crate::Result;
+
 use super::{compress::*, image::*, Blob, Precompression};
 use clap::ValueEnum;
 use std::fmt::Debug;
 
 /// A structure representing a function that converts a blob to another blob
 struct FnConv {
-	func: fn(Blob) -> Blob,
+	func: fn(Blob) -> Result<Blob>,
 	name: String,
 }
 
 impl FnConv {
 	/// Create a new `FnConv` from a function and a name
-	fn new(func: fn(Blob) -> Blob, name: &str) -> FnConv {
+	fn new(func: fn(Blob) -> Result<Blob>, name: &str) -> FnConv {
 		FnConv {
 			func,
 			name: name.to_owned(),
@@ -18,7 +20,7 @@ impl FnConv {
 	}
 
 	/// Create an optional `FnConv` from a function and a name
-	fn some(func: fn(Blob) -> Blob, name: &str) -> Option<FnConv> {
+	fn some(func: fn(Blob) -> Result<Blob>, name: &str) -> Option<FnConv> {
 		Some(FnConv::new(func, name))
 	}
 }
@@ -76,15 +78,18 @@ impl DataConverter {
 		let format_converter_option: Option<FnConv> = if (src_form != dst_form) || force_recompress {
 			use TileFormat::*;
 			match (src_form, dst_form) {
-				(PNG, JPG) => FnConv::some(|tile| img2jpg(&png2img(tile)), "PNG->JPG"),
-				(PNG, PNG) => FnConv::some(|tile| img2png(&png2img(tile)), "PNG->PNG"),
-				(PNG, WEBP) => FnConv::some(|tile| img2webplossless(&png2img(tile)), "PNG->WEBP"),
+				(PNG, JPG) => FnConv::some(|tile| -> Result<Blob> { img2jpg(&png2img(tile)?) }, "PNG->JPG"),
+				(PNG, PNG) => FnConv::some(|tile| -> Result<Blob> { img2png(&png2img(tile)?) }, "PNG->PNG"),
+				(PNG, WEBP) => FnConv::some(
+					|tile| -> Result<Blob> { img2webplossless(&png2img(tile)?) },
+					"PNG->WEBP",
+				),
 
-				(JPG, PNG) => FnConv::some(|tile| img2png(&jpg2img(tile)), "JPG->PNG"),
-				(JPG, WEBP) => FnConv::some(|tile| img2webp(&jpg2img(tile)), "JPG->WEBP"),
+				(JPG, PNG) => FnConv::some(|tile| -> Result<Blob> { img2png(&jpg2img(tile)?) }, "JPG->PNG"),
+				(JPG, WEBP) => FnConv::some(|tile| -> Result<Blob> { img2webp(&jpg2img(tile)?) }, "JPG->WEBP"),
 
-				(WEBP, JPG) => FnConv::some(|tile| img2jpg(&webp2img(tile)), "WEBP->JPG"),
-				(WEBP, PNG) => FnConv::some(|tile| img2png(&webp2img(tile)), "WEBP->PNG"),
+				(WEBP, JPG) => FnConv::some(|tile| -> Result<Blob> { img2jpg(&webp2img(tile)?) }, "WEBP->JPG"),
+				(WEBP, PNG) => FnConv::some(|tile| -> Result<Blob> { img2png(&webp2img(tile)?) }, "WEBP->PNG"),
 
 				(_, _) => {
 					if src_form == dst_form {
@@ -161,11 +166,11 @@ impl DataConverter {
 	}
 
 	/// Runs the data through the pipeline of conversion functions and returns the result.
-	pub fn run(&self, mut data: Blob) -> Blob {
+	pub fn run(&self, mut data: Blob) -> Result<Blob> {
 		for f in self.pipeline.iter() {
-			data = (f.func)(data);
+			data = (f.func)(data)?;
 		}
-		data
+		Ok(data)
 	}
 
 	/// Returns a string describing the pipeline of conversion functions.

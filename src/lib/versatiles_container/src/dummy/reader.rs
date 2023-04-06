@@ -30,7 +30,7 @@ impl TileReader {
 			}
 			ReaderProfile::PbfFast => {
 				parameters = TileReaderParameters::new(TileFormat::PBF, Precompression::Gzip, bbox_pyramide);
-				tile_blob = compress_gzip(Blob::from(include_bytes!("./dummy.pbf").to_vec()));
+				tile_blob = compress_gzip(Blob::from(include_bytes!("./dummy.pbf").to_vec())).unwrap();
 			}
 		};
 

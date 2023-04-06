@@ -77,7 +77,12 @@ impl TileConverterTrait for TileConverter {
 				tile_vec.into_iter().par_bridge().for_each(|(coord, mut blob)| {
 					mutex_bar.lock().unwrap().inc(1);
 
-					blob = tile_converter.run(blob);
+					let blob_option = tile_converter.run(blob);
+					blob = if blob_option.is_err() {
+						return;
+					} else {
+						blob_option.unwrap()
+					};
 
 					let filename = format!("./{}/{}/{}{}{}", level, coord.y, coord.x, ext_form, ext_comp);
 					let path = Path::new(&filename);

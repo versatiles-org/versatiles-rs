@@ -90,7 +90,7 @@ impl ServerSourceTrait for TileContainer {
 				return ok_data(data, &self.precompression, &self.tile_mime);
 			}
 
-			data = decompress(data, &self.precompression);
+			data = decompress(data, &self.precompression).unwrap();
 			return ok_data(data, &Precompression::Uncompressed, &self.tile_mime);
 		} else if (path[0] == "meta.json") || (path[0] == "tiles.json") {
 			// get meta
@@ -103,11 +103,11 @@ impl ServerSourceTrait for TileContainer {
 			let mime = "application/json";
 
 			if accept.contains(Precompression::Brotli) {
-				return ok_data(compress_brotli(meta), &Precompression::Brotli, mime);
+				return ok_data(compress_brotli(meta).unwrap(), &Precompression::Brotli, mime);
 			}
 
 			if accept.contains(Precompression::Gzip) {
-				return ok_data(compress_gzip(meta), &Precompression::Gzip, mime);
+				return ok_data(compress_gzip(meta).unwrap(), &Precompression::Gzip, mime);
 			}
 
 			return ok_data(meta, &Precompression::Uncompressed, mime);

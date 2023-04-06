@@ -46,7 +46,7 @@ impl TileConverterTrait for TileConverter {
 impl TileConverter {
 	async fn write_meta(&mut self, reader: &TileReaderBox) -> ByteRange {
 		let meta = reader.get_meta().await;
-		let compressed = self.config.get_compressor().run(meta);
+		let compressed = self.config.get_compressor().run(meta).unwrap();
 
 		self.writer.append(&compressed)
 	}
@@ -125,7 +125,7 @@ impl TileConverter {
 			if !tile_converter.is_empty() {
 				blobs = blobs
 					.par_iter()
-					.map(|(coord, blob)| (coord.clone(), tile_converter.run(blob.clone())))
+					.map(|(coord, blob)| (coord.clone(), tile_converter.run(blob.clone()).unwrap()))
 					.collect();
 			}
 

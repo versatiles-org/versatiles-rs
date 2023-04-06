@@ -1,3 +1,5 @@
+use crate::Result;
+
 use super::Blob;
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
 use clap::ValueEnum;
@@ -22,9 +24,9 @@ pub enum Precompression {
 ///
 /// * `data` - The blob of data to compress
 /// * `precompression` - The precompression algorithm to use
-pub fn compress(data: Blob, precompression: &Precompression) -> Blob {
+pub fn compress(data: Blob, precompression: &Precompression) -> Result<Blob> {
 	match precompression {
-		Precompression::Uncompressed => data,
+		Precompression::Uncompressed => Ok(data),
 		Precompression::Gzip => compress_gzip(data),
 		Precompression::Brotli => compress_brotli(data),
 	}
@@ -36,9 +38,9 @@ pub fn compress(data: Blob, precompression: &Precompression) -> Blob {
 ///
 /// * `data` - The blob of data to decompress
 /// * `precompression` - The precompression algorithm used for compression
-pub fn decompress(data: Blob, precompression: &Precompression) -> Blob {
+pub fn decompress(data: Blob, precompression: &Precompression) -> Result<Blob> {
 	match precompression {
-		Precompression::Uncompressed => data,
+		Precompression::Uncompressed => Ok(data),
 		Precompression::Gzip => decompress_gzip(data),
 		Precompression::Brotli => decompress_brotli(data),
 	}
@@ -49,13 +51,11 @@ pub fn decompress(data: Blob, precompression: &Precompression) -> Blob {
 /// # Arguments
 ///
 /// * `data` - The blob of data to compress
-pub fn compress_gzip(data: Blob) -> Blob {
+pub fn compress_gzip(data: Blob) -> Result<Blob> {
 	let mut result: Vec<u8> = Vec::new();
-	GzEncoder::new(data.as_slice(), Compression::best())
-		.read_to_end(&mut result)
-		.expect("Error in compress_gzip");
+	GzEncoder::new(data.as_slice(), Compression::best()).read_to_end(&mut result)?;
 
-	Blob::from(result)
+	Ok(Blob::from(result))
 }
 
 /// Decompresses data that was compressed using gzip
@@ -63,13 +63,11 @@ pub fn compress_gzip(data: Blob) -> Blob {
 /// # Arguments
 ///
 /// * `data` - The blob of data to decompress
-pub fn decompress_gzip(data: Blob) -> Blob {
+pub fn decompress_gzip(data: Blob) -> Result<Blob> {
 	let mut result: Vec<u8> = Vec::new();
-	GzDecoder::new(data.as_slice())
-		.read_to_end(&mut result)
-		.expect("Error in decompress_gzip");
+	GzDecoder::new(data.as_slice()).read_to_end(&mut result)?;
 
-	Blob::from(result)
+	Ok(Blob::from(result))
 }
 
 /// Compresses data using Brotli
@@ -77,7 +75,7 @@ pub fn decompress_gzip(data: Blob) -> Blob {
 /// # Arguments
 ///
 /// * `data` - The blob of data to compress
-pub fn compress_brotli(data: Blob) -> Blob {
+pub fn compress_brotli(data: Blob) -> Result<Blob> {
 	let params = BrotliEncoderParams {
 		quality: 11,
 		size_hint: data.len(),
@@ -85,9 +83,9 @@ pub fn compress_brotli(data: Blob) -> Blob {
 	};
 	let mut cursor = Cursor::new(data.as_slice());
 	let mut result: Vec<u8> = Vec::new();
-	BrotliCompress(&mut cursor, &mut result, &params).expect("Error in compress_brotli");
+	BrotliCompress(&mut cursor, &mut result, &params)?;
 
-	Blob::from(result)
+	Ok(Blob::from(result))
 }
 
 /// Decompresses data that was compressed using Brotli
@@ -95,12 +93,12 @@ pub fn compress_brotli(data: Blob) -> Blob {
 /// # Arguments
 ///
 /// * `data` - The blob of data to decompress
-pub fn decompress_brotli(data: Blob) -> Blob {
+pub fn decompress_brotli(data: Blob) -> Result<Blob> {
 	let mut cursor = Cursor::new(data.as_slice());
 	let mut result: Vec<u8> = Vec::new();
-	BrotliDecompress(&mut cursor, &mut result).expect("Error in decompress_brotli");
+	BrotliDecompress(&mut cursor, &mut result)?;
 
-	Blob::from(result)
+	Ok(Blob::from(result))
 }
 
 #[cfg(test)]
@@ -109,28 +107,32 @@ mod tests {
 
 	#[test]
 	/// Verify that the Brotli compression and decompression functions work correctly.
-	fn verify_brotli() {
+	fn verify_brotli() -> Result<()> {
 		// Generate random data.
 		let data1 = random_data(100000);
 
 		// Compress and then decompress the data.
-		let data2 = decompress_brotli(compress_brotli(data1.clone()));
+		let data2 = decompress_brotli(compress_brotli(data1.clone())?)?;
 
 		// Check that the original and decompressed data match.
 		assert_eq!(data1, data2);
+
+		Ok(())
 	}
 
 	#[test]
 	/// Verify that the Gzip compression and decompression functions work correctly.
-	fn verify_gzip() {
+	fn verify_gzip() -> Result<()> {
 		// Generate random data.
 		let data1 = random_data(100000);
 
 		// Compress and then decompress the data.
-		let data2 = decompress_gzip(compress_gzip(data1.clone()));
+		let data2 = decompress_gzip(compress_gzip(data1.clone())?)?;
 
 		// Check that the original and decompressed data match.
 		assert_eq!(data1, data2);
+
+		Ok(())
 	}
 
 	/// Generate random binary data of a specified size.

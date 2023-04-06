@@ -1,4 +1,5 @@
 use super::Blob;
+use crate::{Error, Result};
 use image::{
 	codecs::{jpeg, png},
 	load_from_memory_with_format, DynamicImage, ImageEncoder, ImageFormat,
@@ -17,13 +18,16 @@ const WEBP_QUALITY: f32 = 95.0;
 /// # Returns
 ///
 /// A `Blob` object containing the PNG-encoded image.
-pub fn img2png(image: &DynamicImage) -> Blob {
+pub fn img2png(image: &DynamicImage) -> Result<Blob> {
 	let mut buffer: Vec<u8> = Vec::new();
-	png::PngEncoder::new_with_quality(&mut buffer, png::CompressionType::Best, png::FilterType::Adaptive)
-		.write_image(image.as_bytes(), image.width(), image.height(), image.color())
-		.unwrap();
+	png::PngEncoder::new_with_quality(&mut buffer, png::CompressionType::Best, png::FilterType::Adaptive).write_image(
+		image.as_bytes(),
+		image.width(),
+		image.height(),
+		image.color(),
+	)?;
 
-	Blob::from(buffer)
+	Ok(Blob::from(buffer))
 }
 
 /// Decodes a PNG-encoded image from a Blob and returns it as a DynamicImage.
@@ -35,8 +39,8 @@ pub fn img2png(image: &DynamicImage) -> Blob {
 /// # Returns
 ///
 /// A `DynamicImage` object representing the decoded image.
-pub fn png2img(data: Blob) -> DynamicImage {
-	load_from_memory_with_format(data.as_slice(), ImageFormat::Png).unwrap()
+pub fn png2img(data: Blob) -> Result<DynamicImage> {
+	Ok(load_from_memory_with_format(data.as_slice(), ImageFormat::Png)?)
 }
 
 /// Encodes a DynamicImage into JPEG format and returns it as a Blob.
@@ -48,13 +52,16 @@ pub fn png2img(data: Blob) -> DynamicImage {
 /// # Returns
 ///
 /// A `Blob` object containing the JPEG-encoded image.
-pub fn img2jpg(image: &DynamicImage) -> Blob {
+pub fn img2jpg(image: &DynamicImage) -> Result<Blob> {
 	let mut buffer: Vec<u8> = Vec::new();
-	jpeg::JpegEncoder::new_with_quality(&mut buffer, JPEG_QUALITY)
-		.write_image(image.as_bytes(), image.width(), image.height(), image.color())
-		.unwrap();
+	jpeg::JpegEncoder::new_with_quality(&mut buffer, JPEG_QUALITY).write_image(
+		image.as_bytes(),
+		image.width(),
+		image.height(),
+		image.color(),
+	)?;
 
-	Blob::from(buffer)
+	Ok(Blob::from(buffer))
 }
 
 /// Decodes a JPEG-encoded image from a Blob and returns it as a DynamicImage.
@@ -66,8 +73,8 @@ pub fn img2jpg(image: &DynamicImage) -> Blob {
 /// # Returns
 ///
 /// A `DynamicImage` object representing the decoded image.
-pub fn jpg2img(data: Blob) -> DynamicImage {
-	load_from_memory_with_format(data.as_slice(), ImageFormat::Jpeg).unwrap()
+pub fn jpg2img(data: Blob) -> Result<DynamicImage> {
+	Ok(load_from_memory_with_format(data.as_slice(), ImageFormat::Jpeg)?)
 }
 
 /// Encodes a DynamicImage into WebP format and returns it as a Blob.
@@ -83,16 +90,15 @@ pub fn jpg2img(data: Blob) -> DynamicImage {
 /// # Panics
 ///
 /// Panics if the image color type is not 8-bit RGB or RGBA, as the crate "WebP" only supports these formats.
-pub fn img2webp(image: &DynamicImage) -> Blob {
+pub fn img2webp(image: &DynamicImage) -> Result<Blob> {
 	match image.color() {
-		image::ColorType::Rgb8 => {}
-		image::ColorType::Rgba8 => {}
-		_ => panic!("currently only 8 bit RGB/RGBA is supported for WebP lossy encoding"),
+		image::ColorType::Rgb8 | image::ColorType::Rgba8 => {
+			Ok(Blob::from(Encoder::from_image(image)?.encode(WEBP_QUALITY).to_vec()))
+		}
+		_ => Err(Error::new(
+			"currently only 8 bit RGB/RGBA is supported for WebP lossy encoding",
+		)),
 	}
-	let encoder = Encoder::from_image(image).unwrap();
-	let memory = encoder.encode(WEBP_QUALITY);
-
-	Blob::from(memory.to_vec())
 }
 
 /// Encodes a DynamicImage into WebP lossless format and returns it as a Blob.
@@ -108,14 +114,13 @@ pub fn img2webp(image: &DynamicImage) -> Blob {
 /// # Returns
 ///
 /// A `Blob` containing the WebP-encoded image data.
-pub fn img2webplossless(image: &DynamicImage) -> Blob {
+pub fn img2webplossless(image: &DynamicImage) -> Result<Blob> {
 	match image.color() {
-		image::ColorType::Rgb8 => {}
-		_ => panic!("currently only 8 bit RGB is supported for WebP lossless encoding"),
+		image::ColorType::Rgb8 => Ok(Blob::from(Encoder::from_image(image)?.encode_lossless().to_vec())),
+		_ => Err(Error::new(
+			"currently only 8 bit RGB is supported for WebP lossless encoding",
+		)),
 	}
-	let encoder = Encoder::from_image(image).unwrap();
-	let memory = encoder.encode_lossless();
-	Blob::from(memory.to_vec())
 }
 
 /// Decodes an image from WebP format.
@@ -127,10 +132,14 @@ pub fn img2webplossless(image: &DynamicImage) -> Blob {
 /// # Returns
 ///
 /// A `DynamicImage` containing the decoded image.
-pub fn webp2img(data: Blob) -> DynamicImage {
+pub fn webp2img(data: Blob) -> Result<DynamicImage> {
 	let decoder = Decoder::new(data.as_slice());
-	let image = decoder.decode().unwrap();
-	image.to_image()
+	let image = decoder.decode();
+	if image.is_some() {
+		Ok(image.unwrap().to_image())
+	} else {
+		Err(Error::new("cant read webp"))
+	}
 }
 
 /// This module contains test functions for encoding and decoding images
@@ -138,74 +147,66 @@ pub fn webp2img(data: Blob) -> DynamicImage {
 mod tests {
 	use crate::*;
 	use ::image::{DynamicImage, GrayAlphaImage, GrayImage, Luma, LumaA, Rgb, RgbImage, Rgba, RgbaImage};
-	use std::panic;
 
 	/// Test PNG encoding and decoding for grayscale images
 	#[test]
-	fn png() {
+	fn png() -> Result<()> {
 		let image1 = get_image_grey();
-		compare_images(png2img(img2png(&image1)), image1, 0);
+		compare_images(png2img(img2png(&image1)?)?, image1, 0);
 
 		let image2 = get_image_greya();
-		compare_images(png2img(img2png(&image2)), image2, 0);
+		compare_images(png2img(img2png(&image2)?)?, image2, 0);
 
 		let image3 = get_image_rgb();
-		compare_images(png2img(img2png(&image3)), image3, 0);
+		compare_images(png2img(img2png(&image3)?)?, image3, 0);
 
 		let image4 = get_image_rgba();
-		compare_images(png2img(img2png(&image4)), image4, 0);
+		compare_images(png2img(img2png(&image4)?)?, image4, 0);
+
+		Ok(())
 	}
 
 	/// Test JPEG encoding and decoding for grayscale and RGB images
 	#[test]
-	fn jpg() {
+	fn jpg() -> Result<()> {
 		let image1 = get_image_grey();
-		compare_images(jpg2img(img2jpg(&image1)), image1, 0);
+		compare_images(jpg2img(img2jpg(&image1)?)?, image1, 0);
 
 		let image3 = get_image_rgb();
-		compare_images(jpg2img(img2jpg(&image3)), image3, 4);
+		compare_images(jpg2img(img2jpg(&image3)?)?, image3, 4);
+
+		Ok(())
 	}
 
 	/// Test WebP encoding and decoding for grayscale, grayscale with alpha, RGB, and RGBA images
 	#[test]
-	fn webp() {
-		assert!(panic::catch_unwind(|| {
-			img2webp(&get_image_grey());
-		})
-		.is_err());
+	fn webp() -> Result<()> {
+		assert!(img2webp(&get_image_grey()).is_err());
 
-		assert!(panic::catch_unwind(|| {
-			img2webp(&get_image_greya());
-		})
-		.is_err());
+		assert!(img2webp(&get_image_greya()).is_err());
 
 		let image3 = get_image_rgb();
-		compare_images(webp2img(img2webp(&image3)), image3, 4);
+		compare_images(webp2img(img2webp(&image3)?)?, image3, 4);
 
 		let image4 = get_image_rgba();
-		compare_images(webp2img(img2webp(&image4)), image4, 6);
+		compare_images(webp2img(img2webp(&image4)?)?, image4, 6);
+
+		Ok(())
 	}
 
 	/// Test lossless WebP encoding and decoding for grayscale and grayscale with alpha images
 	#[test]
-	fn webplossless() {
-		assert!(panic::catch_unwind(|| {
-			img2webplossless(&get_image_grey());
-		})
-		.is_err());
+	fn webplossless() -> Result<()> {
+		assert!(img2webplossless(&get_image_grey()).is_err());
 
-		assert!(panic::catch_unwind(|| {
-			img2webplossless(&get_image_greya());
-		})
-		.is_err());
+		assert!(img2webplossless(&get_image_greya()).is_err());
 
 		let image3 = get_image_rgb();
-		compare_images(webp2img(img2webplossless(&image3)), image3, 0);
+		compare_images(webp2img(img2webplossless(&image3)?)?, image3, 0);
 
-		assert!(panic::catch_unwind(|| {
-			img2webplossless(&get_image_rgba());
-		})
-		.is_err());
+		assert!(img2webplossless(&get_image_rgba()).is_err());
+
+		Ok(())
 	}
 
 	/// Generate a DynamicImage with RGBA colors

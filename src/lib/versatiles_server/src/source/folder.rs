@@ -74,11 +74,11 @@ impl ServerSourceTrait for Folder {
 		let mime = guess_mime(&local_path);
 
 		if accept.contains(Precompression::Brotli) {
-			return ok_data(compress_brotli(blob), &Precompression::Brotli, &mime);
+			return ok_data(compress_brotli(blob).unwrap(), &Precompression::Brotli, &mime);
 		}
 
 		if accept.contains(Precompression::Gzip) {
-			return ok_data(compress_gzip(blob), &Precompression::Gzip, &mime);
+			return ok_data(compress_gzip(blob).unwrap(), &Precompression::Gzip, &mime);
 		}
 
 		ok_data(blob, &Precompression::Uncompressed, &mime)
