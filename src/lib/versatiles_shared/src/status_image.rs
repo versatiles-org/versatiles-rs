@@ -6,20 +6,36 @@ pub struct StatusImage {
 	size: u64,
 	data: Vec<u64>,
 }
+
 impl StatusImage {
+	/// Creates a new `StatusImage` with the specified size.
 	pub fn new(size: u64) -> Self {
 		let mut data: Vec<u64> = Vec::new();
 		data.resize((size * size) as usize, 0);
 
 		Self { size, data }
 	}
+
+	/// Sets the value of the pixel at the given coordinates to the given value.
+	///
+	/// # Arguments
+	///
+	/// * `x` - The x coordinate of the pixel.
+	/// * `y` - The y coordinate of the pixel.
+	/// * `v` - The value to set the pixel to.
 	pub fn set(&mut self, x: u64, y: u64, v: u64) {
 		assert!(x < self.size);
 		assert!(y < self.size);
+
 		let index = y * self.size + x;
 		self.data[index as usize] = v;
 	}
-	#[allow(dead_code)]
+
+	/// Saves the image as a grayscale PNG file.
+	///
+	/// # Arguments
+	///
+	/// * `filename` - The name of the file to save the image to.
 	pub fn save(&self, filename: &str) {
 		let image = ImageBuffer::from_fn(self.size as u32, self.size as u32, |x, y| {
 			let index = y * (self.size as u32) + x;
@@ -29,6 +45,13 @@ impl StatusImage {
 		});
 		image.save(filename).unwrap();
 	}
+
+	/// Gets the color of the pixel at the given coordinates.
+	///
+	/// # Arguments
+	///
+	/// * `x` - The x coordinate of the pixel.
+	/// * `y` - The y coordinate of the pixel.
 	pub fn get_color(&self, x: u32, y: u32) -> Rgb<u8> {
 		let index = (y as usize) * (self.size as usize) + (x as usize);
 		let v = self.data[index];

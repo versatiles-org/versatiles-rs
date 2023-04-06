@@ -1,3 +1,21 @@
+//! A library to display a progress bar in a terminal window.
+//!
+//! # Example
+//! ```
+//! use progress_bar::{ProgressBar};
+//!
+//! fn main() {
+//!     let mut pb = ProgressBar::new("Loading", 50);
+//!     for i in 0..50 {
+//!         pb.set_position(i + 1);
+//!         std::thread::sleep(std::time::Duration::from_millis(100));
+//!     }
+//!     pb.finish();
+//! }
+//! ```
+//!
+//! The library provides a progress bar that updates itself with a specified refresh rate. It shows the current percentage of work completed, the current rate of progress, the estimated remaining time, and other relevant information. It can be used to track progress in long-running tasks, such as file transfers, computations, or data processing.
+
 use log::{max_level, LevelFilter};
 use std::io::Write;
 use std::time::{Duration, SystemTime};
@@ -5,18 +23,35 @@ use term_size::dimensions_stdout;
 
 const STEP_SIZE: Duration = Duration::from_millis(500);
 
+/// A struct that represents a progress bar.
 pub struct ProgressBar {
+	/// The maximum value of the progress bar.
 	max_value: u64,
+	/// A message that describes the task being performed.
 	message: String,
+	/// The time at which the task was started.
 	start: SystemTime,
+	/// The time of the next update.
 	next_update: SystemTime,
+	/// The current value of the progress bar.
 	value: u64,
+	/// Indicates whether the progress bar has finished.
 	finished: bool,
+	/// Indicates whether the progress bar is visible.
 	visible: bool,
 }
 
-#[allow(dead_code)]
 impl ProgressBar {
+	/// Creates a new progress bar.
+	///
+	/// # Arguments
+	///
+	/// * `message`: A message that describes the task being performed.
+	/// * `max_value`: The maximum value of the progress bar.
+	///
+	/// # Returns
+	///
+	/// A new `ProgressBar` instance.
 	pub fn new(message: &str, max_value: u64) -> Self {
 		let now = SystemTime::now();
 		let mut progress = ProgressBar {
@@ -31,17 +66,37 @@ impl ProgressBar {
 		progress.update();
 		progress
 	}
+
+	/// Sets the position of the progress bar.
+	///
+	/// # Arguments
+	///
+	/// * `value`: The new position of the progress bar.
 	pub fn set_position(&mut self, value: u64) {
 		self.value = value;
 		self.update();
 	}
+
+	/// Increases the value of the progress bar by a given amount.
+	///
+	/// # Arguments
+	///
+	/// * `value`: The amount by which to increase the progress bar.
 	pub fn inc(&mut self, value: u64) {
 		self.value += value;
 		self.update();
 	}
+
+	/// Sets the visibility of the progress bar.
+	///
+	/// # Arguments
+	///
+	/// * `visible`: A flag indicating whether the progress bar should be visible.
 	pub fn set_visible(&mut self, visible: bool) {
 		self.visible = visible;
 	}
+
+	/// Updates the progress bar if it is time to do so.
 	fn update(&mut self) {
 		let now = SystemTime::now();
 		if now < self.next_update {
@@ -53,6 +108,8 @@ impl ProgressBar {
 			self.draw();
 		}
 	}
+
+	/// Finishes the progress bar and sets its value to the maximum.
 	pub fn finish(&mut self) {
 		self.finished = true;
 		self.value = self.max_value;
@@ -62,6 +119,7 @@ impl ProgressBar {
 			println!();
 		}
 	}
+
 	fn draw(&mut self) {
 		let size = dimensions_stdout();
 		if size.is_none() {
@@ -111,6 +169,17 @@ impl ProgressBar {
 	}
 }
 
+/// Converts a `Duration` to a formatted string in the format "HH:MM:SS" or "Dd HH:MM:SS"
+/// depending on the duration's length.
+///
+/// # Arguments
+///
+/// * `duration` - A `Duration` object representing the length of time to format.
+///
+/// # Returns
+///
+/// A string representing the formatted duration.
+///
 fn format_duration(duration: Duration) -> String {
 	let mut t = duration.as_secs();
 	let seconds = t % 60;
@@ -127,6 +196,16 @@ fn format_duration(duration: Duration) -> String {
 	}
 }
 
+/// Formats a large integer value by adding an apostrophe every three digits.
+///
+/// # Arguments
+///
+/// * `value` - An integer to format.
+///
+/// # Returns
+///
+/// A string representing the formatted integer.
+///
 fn format_big_number(value: u64) -> String {
 	value
 		.to_string()

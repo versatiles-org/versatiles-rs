@@ -5,6 +5,15 @@ use image::{
 };
 use webp::{Decoder, Encoder};
 
+/// Encodes a DynamicImage into PNG format and returns it as a Blob.
+///
+/// # Arguments
+///
+/// * `image` - A `DynamicImage` object representing the image to encode.
+///
+/// # Returns
+///
+/// A `Blob` object containing the PNG-encoded image.
 pub fn img2png(image: &DynamicImage) -> Blob {
 	let mut buffer: Vec<u8> = Vec::new();
 	png::PngEncoder::new_with_quality(&mut buffer, png::CompressionType::Best, png::FilterType::Adaptive)
@@ -14,10 +23,28 @@ pub fn img2png(image: &DynamicImage) -> Blob {
 	Blob::from(buffer)
 }
 
+/// Decodes a PNG-encoded image from a Blob and returns it as a DynamicImage.
+///
+/// # Arguments
+///
+/// * `data` - A `Blob` object containing the PNG-encoded image data.
+///
+/// # Returns
+///
+/// A `DynamicImage` object representing the decoded image.
 pub fn png2img(data: Blob) -> DynamicImage {
 	load_from_memory_with_format(data.as_slice(), ImageFormat::Png).unwrap()
 }
 
+/// Encodes a DynamicImage into JPEG format and returns it as a Blob.
+///
+/// # Arguments
+///
+/// * `image` - A `DynamicImage` object representing the image to encode.
+///
+/// # Returns
+///
+/// A `Blob` object containing the JPEG-encoded image.
 pub fn img2jpg(image: &DynamicImage) -> Blob {
 	let mut buffer: Vec<u8> = Vec::new();
 	jpeg::JpegEncoder::new_with_quality(&mut buffer, 95u8)
@@ -27,10 +54,32 @@ pub fn img2jpg(image: &DynamicImage) -> Blob {
 	Blob::from(buffer)
 }
 
+/// Decodes a JPEG-encoded image from a Blob and returns it as a DynamicImage.
+///
+/// # Arguments
+///
+/// * `data` - A `Blob` object containing the JPEG-encoded image data.
+///
+/// # Returns
+///
+/// A `DynamicImage` object representing the decoded image.
 pub fn jpg2img(data: Blob) -> DynamicImage {
 	load_from_memory_with_format(data.as_slice(), ImageFormat::Jpeg).unwrap()
 }
 
+/// Encodes a DynamicImage into WebP format and returns it as a Blob.
+///
+/// # Arguments
+///
+/// * `image` - A `DynamicImage` object representing the image to encode.
+///
+/// # Returns
+///
+/// A `Blob` object containing the WebP-encoded image.
+///
+/// # Panics
+///
+/// Panics if the image color type is not 8-bit RGB or RGBA, as the crate "WebP" only supports these formats.
 pub fn img2webp(image: &DynamicImage) -> Blob {
 	match image.color() {
 		image::ColorType::Rgb8 => {}
@@ -43,6 +92,19 @@ pub fn img2webp(image: &DynamicImage) -> Blob {
 	Blob::from(memory.to_vec())
 }
 
+/// Encodes a DynamicImage into WebP lossless format and returns it as a Blob.
+///
+/// # Arguments
+///
+/// * `image` - A reference to a `DynamicImage` that is to be encoded.
+///
+/// # Panics
+///
+/// This function will panic if the image color type is not `Rgb8`, since currently only 8-bit RGB is supported for WebP lossless encoding.
+///
+/// # Returns
+///
+/// A `Blob` containing the WebP-encoded image data.
 pub fn img2webplossless(image: &DynamicImage) -> Blob {
 	match image.color() {
 		image::ColorType::Rgb8 => {}
@@ -53,19 +115,29 @@ pub fn img2webplossless(image: &DynamicImage) -> Blob {
 	Blob::from(memory.to_vec())
 }
 
+/// Decodes an image from WebP format.
+///
+/// # Arguments
+///
+/// * `data` - A `Blob` containing the WebP-encoded image data.
+///
+/// # Returns
+///
+/// A `DynamicImage` containing the decoded image.
 pub fn webp2img(data: Blob) -> DynamicImage {
 	let decoder = Decoder::new(data.as_slice());
 	let image = decoder.decode().unwrap();
 	image.to_image()
-	//load_from_memory_with_format(data.as_slice(), ImageFormat::WebP).unwrap()
 }
 
+/// This module contains test functions for encoding and decoding images
 #[cfg(test)]
 mod tests {
 	use crate::*;
 	use ::image::{DynamicImage, GrayAlphaImage, GrayImage, Luma, LumaA, Rgb, RgbImage, Rgba, RgbaImage};
 	use std::panic;
 
+	/// Test PNG encoding and decoding for grayscale images
 	#[test]
 	fn png() {
 		let image1 = get_image_grey();
@@ -81,6 +153,7 @@ mod tests {
 		compare_images(png2img(img2png(&image4)), image4, 0);
 	}
 
+	/// Test JPEG encoding and decoding for grayscale and RGB images
 	#[test]
 	fn jpg() {
 		let image1 = get_image_grey();
@@ -90,6 +163,7 @@ mod tests {
 		compare_images(jpg2img(img2jpg(&image3)), image3, 4);
 	}
 
+	/// Test WebP encoding and decoding for grayscale, grayscale with alpha, RGB, and RGBA images
 	#[test]
 	fn webp() {
 		assert!(panic::catch_unwind(|| {
@@ -109,6 +183,7 @@ mod tests {
 		compare_images(webp2img(img2webp(&image4)), image4, 6);
 	}
 
+	/// Test lossless WebP encoding and decoding for grayscale and grayscale with alpha images
 	#[test]
 	fn webplossless() {
 		assert!(panic::catch_unwind(|| {
@@ -130,28 +205,53 @@ mod tests {
 		.is_err());
 	}
 
+	/// Generate a DynamicImage with RGBA colors
 	fn get_image_rgba() -> DynamicImage {
 		DynamicImage::ImageRgba8(RgbaImage::from_fn(256, 256, |x, y| -> Rgba<u8> {
 			Rgba([x as u8, (255 - x) as u8, y as u8, (255 - y) as u8])
 		}))
 	}
 
+	/// Generate a DynamicImage with RGB colors
 	fn get_image_rgb() -> DynamicImage {
 		DynamicImage::ImageRgb8(RgbImage::from_fn(256, 256, |x, y| -> Rgb<u8> {
 			Rgb([x as u8, (255 - x) as u8, y as u8])
 		}))
 	}
 
+	/// Generate a DynamicImage with grayscale colors
+	///
+	/// Returns a DynamicImage with 256x256 grayscale colors from black to white. Each pixel in the image
+	/// is a Luma<u8> value.
 	fn get_image_grey() -> DynamicImage {
 		DynamicImage::ImageLuma8(GrayImage::from_fn(256, 256, |x, _y| -> Luma<u8> { Luma([x as u8]) }))
 	}
 
+	/// Generate a DynamicImage with grayscale alpha colors
+	///
+	/// Returns a DynamicImage with 256x256 grayscale alpha colors from black to white. Each pixel in the
+	/// image is a LumaA<u8> value, with the alpha value determined by the y coordinate.
 	fn get_image_greya() -> DynamicImage {
 		DynamicImage::ImageLumaA8(GrayAlphaImage::from_fn(256, 256, |x, y| -> LumaA<u8> {
 			LumaA([x as u8, y as u8])
 		}))
 	}
 
+	/// Compare two DynamicImages for similarity
+	///
+	/// Compares two DynamicImages to ensure that they have the same dimensions and that the maximum
+	/// difference between the pixel values in each image is less than or equal to a given threshold.
+	///
+	/// # Arguments
+	///
+	/// * `image1` - The first DynamicImage to compare
+	/// * `image2` - The second DynamicImage to compare
+	/// * `max_allowed_diff` - The maximum allowed difference between pixel values in the two images
+	///
+	/// # Panics
+	///
+	/// This function will panic if the two images have different dimensions or if the maximum difference
+	/// between the pixel values in the two images is greater than the specified threshold.
 	fn compare_images(image1: DynamicImage, image2: DynamicImage, max_allowed_diff: u8) {
 		assert_eq!(image1.width(), image2.width());
 		assert_eq!(image1.height(), image2.height());
