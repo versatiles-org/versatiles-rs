@@ -5,6 +5,9 @@ use image::{
 };
 use webp::{Decoder, Encoder};
 
+const JPEG_QUALITY: u8 = 95;
+const WEBP_QUALITY: f32 = 95.0;
+
 /// Encodes a DynamicImage into PNG format and returns it as a Blob.
 ///
 /// # Arguments
@@ -47,7 +50,7 @@ pub fn png2img(data: Blob) -> DynamicImage {
 /// A `Blob` object containing the JPEG-encoded image.
 pub fn img2jpg(image: &DynamicImage) -> Blob {
 	let mut buffer: Vec<u8> = Vec::new();
-	jpeg::JpegEncoder::new_with_quality(&mut buffer, 95u8)
+	jpeg::JpegEncoder::new_with_quality(&mut buffer, JPEG_QUALITY)
 		.write_image(image.as_bytes(), image.width(), image.height(), image.color())
 		.unwrap();
 
@@ -87,7 +90,7 @@ pub fn img2webp(image: &DynamicImage) -> Blob {
 		_ => panic!("currently only 8 bit RGB/RGBA is supported for WebP lossy encoding"),
 	}
 	let encoder = Encoder::from_image(image).unwrap();
-	let memory = encoder.encode(95f32);
+	let memory = encoder.encode(WEBP_QUALITY);
 
 	Blob::from(memory.to_vec())
 }
