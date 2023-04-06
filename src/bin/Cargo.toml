@@ -16,7 +16,7 @@ exclude = ["benches/ressources/*"]
 versatiles_container = { path = "../lib/versatiles_container" }
 versatiles_shared = { path = "../lib/versatiles_shared" }
 versatiles_server = { path = "../lib/versatiles_server" }
-clap = { version = "4.1.11", default-features = true }
+clap = { version = "4.2.1", default-features = true }
 clap-verbosity-flag = { version = "2.0.0", default-features = true }
 env_logger = { version = "0.10.0", default-features = false, features = ["regex"] }
 futures = { version = "0.3.27", default-features = false, features = ["executor"] }

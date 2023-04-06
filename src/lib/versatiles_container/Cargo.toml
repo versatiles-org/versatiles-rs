@@ -6,14 +6,14 @@ workspace = "../../.."
 
 [dependencies]
 versatiles_shared = { path = "../versatiles_shared" }
-async-trait = "0.1.67"
+async-trait = { version = "0.1.68", default-features = false }
 byteorder = { version = "1.4.3", default-features = false }
 futures = { version = "0.3.27", default-features = false, features = ["executor"] }
 itertools = { version = "0.10.5", default-features = false, features = ["use_alloc"] }
 log = { version = "0.4.17", default-features = false }
 rayon = { version = "1.7.0", default-features = false }
 reqwest = { version = "0.11.16", features=["blocking", "rustls-tls"] }
-rusqlite = { version = "0.28.0", default-features = false }
+rusqlite = { version = "0.29.0", default-features = false }
 tar = { version = "0.4.38", default-features = false }
 tokio = { version = "1.26.0", default-features = false }
 

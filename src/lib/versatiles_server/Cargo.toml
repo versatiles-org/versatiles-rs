@@ -7,7 +7,7 @@ workspace = "../../.."
 [dependencies]
 versatiles_container = { path = "../versatiles_container" }
 versatiles_shared = { path = "../versatiles_shared" }
-async-trait = "0.1.67"
+async-trait = { version = "0.1.68", default-features = false }
 axum = { version = "0.6.11", default-features = false, features = ["tokio"] }
 enumset = { version = "1.0.12", default-features = false }
 hyper = { version = "0.14.25", default-features = false }
