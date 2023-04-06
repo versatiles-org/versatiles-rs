@@ -1,5 +1,6 @@
 .*.sh
 .DS_Store
+*.code-workspace
 *.lcov
 *.png
 *.tar
