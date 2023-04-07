@@ -201,7 +201,7 @@ mod tests {
 		tar::TileConverter,
 		TileConverterTrait,
 	};
-	use versatiles_shared::TileConverterConfig;
+	use versatiles_shared::{TileBBoxPyramide, TileConverterConfig, TileFormat};
 
 	async fn get_as_string(container: &Box<TarFile>, path: &[&str], compression: Compression) -> String {
 		let mut resp = container.get_data(path, enum_set!(compression)).await;
@@ -210,27 +210,57 @@ mod tests {
 		return data3.to_string();
 	}
 
-	#[tokio::test]
-	async fn test_tar_file() {
-		let file = NamedTempFile::new("temp.tar").unwrap();
+	pub async fn make_test_tar(compression: Compression) -> NamedTempFile {
+		let reader_profile = ReaderProfile::PbfFast;
 
 		// get dummy reader
-		let mut reader1 = TileReader::new_dummy(ReaderProfile::PngFast, 3);
+		let mut reader = TileReader::new_dummy(reader_profile, 3);
 
-		let config = TileConverterConfig::new_full();
-		let mut converter1 = TileConverter::new(&file.path(), config);
-		converter1.convert_from(&mut reader1).await;
+		// get to test container comverter
+		let container_file = NamedTempFile::new("temp.tar").unwrap();
+
+		let config = TileConverterConfig::new(
+			Some(TileFormat::PBF),
+			Some(compression),
+			TileBBoxPyramide::new_full(),
+			false,
+		);
+		let mut converter = TileConverter::new(&container_file.path(), config);
+
+		// convert
+		converter.convert_from(&mut reader).await;
+
+		container_file
+	}
+	async fn test_tar_file(compression: Compression) {
+		let file = make_test_tar(compression).await;
 
 		let tar_file = TarFile::from(&file.to_str().unwrap());
 
 		let result = get_as_string(&tar_file, &["meta.json"], Compression::None).await;
 		assert_eq!(result, "dummy meta data");
 
-		let result = get_as_string(&tar_file, &["0", "0", "0.png"], Compression::None).await;
-		assert!(result.starts_with("�PNG\r\n"));
+		let result = get_as_string(&tar_file, &["0", "0", "0.pbf"], Compression::None).await;
+		println!("{}", result);
+		assert!(result.starts_with("\u{1a}4\n\u{5}ocean"));
 
 		let result = get_as_string(&tar_file, &["cheesecake.mp4"], Compression::None).await;
 		assert_eq!(result, "Not Found");
+	}
+
+	#[tokio::test]
+	async fn test_tar_file_uncompressed() {
+		test_tar_file(Compression::None).await;
+	}
+
+	#[tokio::test]
+	async fn test_tar_file_gzip() {
+		test_tar_file(Compression::Gzip).await;
+	}
+
+	#[tokio::test]
+	async fn test_tar_file_brotli() {
+		test_tar_file(Compression::Brotli).await;
 	}
 
 	#[test]
