@@ -288,6 +288,9 @@ pub mod tests {
 	async fn reader() {
 		// get test container reader
 		let mut reader = TileReader::new("../../../ressources/berlin.mbtiles").await.unwrap();
+
+		reader.get_tile_data(&TileCoord3::new(0, 0, 0)).await;
+
 		let mut converter = dummy::TileConverter::new_dummy(ConverterProfile::Whatever, 8);
 		converter.convert_from(&mut reader).await;
 	}
