@@ -24,3 +24,6 @@ RUN adduser \
 FROM scratch
 WORKDIR /data/
 
+# Copy files from builder
+COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /etc/group /etc/group
