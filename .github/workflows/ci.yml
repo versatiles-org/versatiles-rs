@@ -47,3 +47,9 @@ jobs:
 
       - name: cargo test
         run: cargo test
+
+      - name: get code coverage
+        run: cargo llvm-cov test --workspace --tests --lcov --output-path ./lcov.info
+
+      - name: Codecov
+        uses: codecov/codecov-action@v3
