@@ -45,6 +45,47 @@ mod tests {
 	use std::time::Instant;
 	use versatiles_shared::{Compression, TileBBoxPyramide, TileConverterConfig, TileFormat};
 
+	pub async fn make_test_file(
+		tile_format: TileFormat, compression: Compression, max_zoom_level: u8, extension: &str,
+	) -> NamedTempFile {
+		let reader_profile = match tile_format {
+			TileFormat::BIN => todo!(),
+			TileFormat::PNG => ReaderProfile::PngFast,
+			TileFormat::JPG => ReaderProfile::PngFast,
+			TileFormat::WEBP => ReaderProfile::PngFast,
+			TileFormat::AVIF => todo!(),
+			TileFormat::SVG => todo!(),
+			TileFormat::PBF => ReaderProfile::PbfFast,
+			TileFormat::GEOJSON => todo!(),
+			TileFormat::TOPOJSON => todo!(),
+			TileFormat::JSON => todo!(),
+		};
+
+		// get dummy reader
+		let mut reader = dummy::TileReader::new_dummy(reader_profile, max_zoom_level);
+
+		// get to test container comverter
+		let container_file = match extension {
+			"tar" => NamedTempFile::new("temp.tar"),
+			"versatiles" => NamedTempFile::new("temp.versatiles"),
+			_ => panic!(),
+		}
+		.unwrap();
+
+		let config = TileConverterConfig::new(
+			Some(tile_format),
+			Some(compression),
+			TileBBoxPyramide::new_full(),
+			false,
+		);
+		let mut converter = get_converter(&container_file.to_str().unwrap(), config);
+
+		// convert
+		converter.convert_from(&mut reader).await;
+
+		container_file
+	}
+
 	#[test]
 	fn test_readers() {
 		#[derive(Debug)]
@@ -80,7 +121,7 @@ mod tests {
 				Some(tile_format),
 				Some(compression),
 				TileBBoxPyramide::new_full(),
-				false,
+				force_recompress,
 			);
 			let mut converter1 = get_converter(&container_file.to_str().unwrap(), config);
 

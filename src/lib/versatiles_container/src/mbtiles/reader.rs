@@ -269,9 +269,6 @@ impl TileReaderTrait for TileReader {
 	fn get_name(&self) -> &str {
 		&self.name
 	}
-	async fn deep_verify(&self) {
-		todo!()
-	}
 }
 
 impl std::fmt::Debug for TileReader {

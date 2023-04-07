@@ -61,7 +61,6 @@ impl TileReaderTrait for TileReader {
 	async fn get_tile_data(&self, _coord: &TileCoord3) -> Option<Blob> {
 		Some(self.tile_blob.clone())
 	}
-	async fn deep_verify(&self) {}
 }
 
 impl std::fmt::Debug for TileReader {

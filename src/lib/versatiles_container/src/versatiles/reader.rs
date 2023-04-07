@@ -3,7 +3,7 @@ use crate::{TileReaderBox, TileReaderTrait};
 use async_trait::async_trait;
 use itertools::Itertools;
 use log::debug;
-use std::{collections::HashMap, fmt::Debug, ops::Shr};
+use std::{collections::HashMap, fmt::Debug, ops::Shr, path::Path};
 use tokio::sync::RwLock;
 use versatiles_shared::{
 	Blob, DataConverter, ProgressBar, Result, StatusImagePyramide, TileCoord2, TileCoord3, TileReaderParameters,
@@ -129,7 +129,7 @@ impl TileReaderTrait for TileReader {
 	fn get_name(&self) -> &str {
 		self.reader.get_name()
 	}
-	async fn deep_verify(&self) {
+	async fn deep_verify(&self, output_folder: &Path) {
 		let block_count = self.block_index.len() as u64;
 
 		debug!("number of blocks: {}", block_count);
@@ -164,7 +164,9 @@ impl TileReaderTrait for TileReader {
 		}
 		progress.finish();
 
-		status_images.save("tile_sizes.png");
+		let mut status_image_path = output_folder.clone().to_path_buf();
+		status_image_path.push("tile_sizes.png");
+		status_images.save(status_image_path.as_path());
 	}
 }
 
@@ -173,5 +175,21 @@ impl Debug for TileReader {
 		f.debug_struct("TileReader:VersaTiles")
 			.field("parameters", &self.get_parameters())
 			.finish()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::TileReader;
+	use crate::{tests::make_test_file, TileReaderTrait};
+	use assert_fs::TempDir;
+	use versatiles_shared::{Compression, TileFormat};
+
+	#[tokio::test]
+	async fn test_deep_verify() {
+		let temp_dir = TempDir::new().unwrap();
+		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 8, "versatiles").await;
+		let reader = TileReader::new(temp_file.to_str().unwrap()).await.unwrap();
+		reader.deep_verify(temp_dir.path()).await;
 	}
 }

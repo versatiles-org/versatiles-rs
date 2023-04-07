@@ -1,6 +1,6 @@
 use super::ProgressBar;
 use image::{ImageBuffer, Luma, Rgb, RgbImage};
-use std::vec::Vec;
+use std::{path::Path, vec::Vec};
 
 pub struct StatusImage {
 	size: u64,
@@ -91,7 +91,7 @@ impl StatusImagePyramide {
 
 		return self.images.get_mut(index).unwrap();
 	}
-	pub fn save(&self, filename: &str) {
+	pub fn save(&self, filename: &Path) {
 		let draw_list: Vec<&StatusImage> = self.images.iter().rev().collect();
 
 		let mut progress = ProgressBar::new(
@@ -171,7 +171,7 @@ mod tests {
 		fill_image(image);
 
 		let tmp_file = NamedTempFile::new("pyramide.png").unwrap();
-		pyramide.save(tmp_file.to_str().unwrap());
+		pyramide.save(tmp_file.path());
 
 		let size = tmp_file.path().metadata().unwrap().len();
 		assert!(size > 40000, "{}", size);

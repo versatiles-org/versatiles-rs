@@ -43,10 +43,10 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 	/// container name, e.g. versatiles, mbtiles, ...
 	fn get_container_name(&self) -> &str;
 
-	/// always uncompressed
+	/// get meta data, always uncompressed
 	async fn get_meta(&self) -> Blob;
 
-	/// always compressed with get_tile_precompression and formatted with get_tile_format
+	/// always compressed with get_tile_compression and formatted with get_tile_format
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob>;
 
 	/// always compressed with get_tile_precompression and formatted with get_tile_format
@@ -61,7 +61,10 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 		return vec;
 	}
 
-	async fn deep_verify(&self);
+	/// verify container and output data to output_folder
+	async fn deep_verify(&self, _output_folder: &Path) {
+		todo!()
+	}
 }
 
 #[cfg(test)]
@@ -105,8 +108,6 @@ mod tests {
 		fn get_container_name(&self) -> &str {
 			"test container name"
 		}
-
-		async fn deep_verify(&self) {}
 
 		async fn get_tile_data(&self, _coord: &TileCoord3) -> Option<Blob> {
 			Some(Blob::from("test tile data"))
