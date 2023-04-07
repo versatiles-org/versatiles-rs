@@ -4,7 +4,7 @@ FROM rust:alpine as builder
 COPY ../ /usr/src/versatiles
 WORKDIR /usr/src/versatiles
 
-RUN apk add sqlite-dev curl gzip musl-dev git
+RUN apk add musl-dev openssl-dev pkgconfig sqlite-dev
 RUN rustup default stable
 RUN cargo install versatiles 
 
@@ -30,6 +30,3 @@ COPY --from=builder /etc/group /etc/group
 COPY --chown=versatiles:versatiles --from=builder /usr/local/cargo/bin/versatiles /usr/local/cargo/bin/versatiles
 
 USER versatiles
-EXPOSE 8080
-
-CMD ["/usr/local/cargo/bin/versatiles", "serve", "-i", "0.0.0.0", "-p", "8080", "-s", "/data/static", "/data/tiles/osm.versatiles"]
