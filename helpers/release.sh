@@ -12,16 +12,16 @@ select answer in "Yes" "No"; do
 	break
 done
 
+# check if nothing to commit
+if [ "$(git status --porcelain)" ]; then
+	echo "❗️ Please commit all uncommitted changes!"
+	exit 1
+fi
+
 # check cargo
 ./helpers/check.sh
 if [ $? -ne 0 ]; then
 	echo "❗️ Check failed!"
-	exit 1
-fi
-
-# check if nothing to commit
-if [ "$(git status --porcelain)" ]; then
-	echo "❗️ Please commit all uncommitted changes!"
 	exit 1
 fi
 
