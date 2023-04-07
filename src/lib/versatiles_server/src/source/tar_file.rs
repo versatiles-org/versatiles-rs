@@ -256,6 +256,9 @@ mod tests {
 			let tar_file = TarFile::from(&file.to_str().unwrap());
 
 			let result = get_as_string(&tar_file, &["meta.json"], to_compression).await;
+			assert_eq!(result, "Not Found");
+
+			let result = get_as_string(&tar_file, &["tiles.json"], to_compression).await;
 			assert_eq!(result, "dummy meta data");
 
 			let result = get_as_string(&tar_file, &["0", "0", "0.pbf"], to_compression).await;
