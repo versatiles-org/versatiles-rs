@@ -127,25 +127,24 @@ impl TileReaderTrait for TileReader {
 				continue;
 			}
 
-			let mut add_meta = |compression: Compression| {
+			let mut read_to_end = || {
 				let mut blob: Vec<u8> = Vec::new();
 				entry.read_to_end(&mut blob).unwrap();
-
-				meta = decompress(Blob::from(blob), &compression).unwrap();
+				Blob::from(blob)
 			};
 
 			if path_vec.len() == 1 {
 				match path_vec[0] {
 					"meta.json" | "tiles.json" | "metadata.json" => {
-						add_meta(Compression::None);
+						meta = read_to_end();
 						continue;
 					}
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
-						add_meta(Compression::Gzip);
+						meta = decompress(read_to_end(), &Compression::Gzip).unwrap();
 						continue;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
-						add_meta(Compression::Brotli);
+						meta = decompress(read_to_end(), &Compression::Brotli).unwrap();
 						continue;
 					}
 					&_ => {}
