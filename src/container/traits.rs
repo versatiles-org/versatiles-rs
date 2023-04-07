@@ -1,8 +1,8 @@
-use async_trait::async_trait;
-use std::{fmt::Debug, path::Path};
-use versatiles_shared::{
+use crate::shared::{
 	Blob, Compression, Result, TileBBox, TileConverterConfig, TileCoord2, TileCoord3, TileFormat, TileReaderParameters,
 };
+use async_trait::async_trait;
+use std::{fmt::Debug, path::Path};
 
 pub type TileConverterBox = Box<dyn TileConverterTrait>;
 pub type TileReaderBox = Box<dyn TileReaderTrait>;

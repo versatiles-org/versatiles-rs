@@ -1,7 +1,9 @@
-use crate::{TileConverterBox, TileConverterTrait, TileReaderBox};
+use crate::{
+	container::{TileConverterBox, TileConverterTrait, TileReaderBox},
+	shared::TileConverterConfig,
+};
 use async_trait::async_trait;
 use std::path::Path;
-use versatiles_shared::TileConverterConfig;
 
 pub struct TileConverter;
 
@@ -21,10 +23,12 @@ impl TileConverterTrait for TileConverter {
 #[cfg(test)]
 mod tests {
 	use super::TileConverter;
-	use crate::{dummy, TileConverterTrait, TileReaderTrait};
+	use crate::{
+		container::{dummy, TileConverterTrait, TileReaderTrait},
+		shared::TileConverterConfig,
+	};
 	use futures::executor::block_on;
 	use std::path::Path;
-	use versatiles_shared::TileConverterConfig;
 
 	#[test]
 	#[should_panic]

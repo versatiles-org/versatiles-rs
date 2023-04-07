@@ -1,12 +1,12 @@
+use crate::container::get_reader;
+use crate::server::{source, TileServer};
+use crate::shared::TileCoord3;
 use core::time;
 use criterion::{black_box, criterion_group, Criterion};
 use futures::executor::block_on;
 use rand::{seq::SliceRandom, thread_rng};
 use reqwest::blocking::get;
 use std::thread;
-use versatiles_container::get_reader;
-use versatiles_server::{source, TileServer};
-use versatiles_shared::TileCoord3;
 
 fn bench_server(c: &mut Criterion) {
 	let mut group = c.benchmark_group("test_server");

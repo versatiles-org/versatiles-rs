@@ -1,8 +1,10 @@
+use crate::{
+	container::get_reader,
+	server::{source, TileServer},
+};
 use clap::Args;
 use regex::Regex;
 use tokio::time::{sleep, Duration};
-use versatiles_container::get_reader;
-use versatiles_server::{source, TileServer};
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]

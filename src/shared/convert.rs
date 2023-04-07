@@ -1,6 +1,4 @@
-use crate::Result;
-
-use super::{compress::*, image::*, Blob, Compression};
+use super::{compress::*, image::*, Blob, Compression, Result};
 use clap::ValueEnum;
 use std::fmt::Debug;
 
@@ -205,7 +203,6 @@ impl Eq for DataConverter {}
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{Blob, Compression, DataConverter, TileFormat};
 
 	#[test]
 	fn test_new() {

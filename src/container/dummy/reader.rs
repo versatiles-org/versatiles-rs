@@ -1,8 +1,10 @@
-use crate::{TileReaderBox, TileReaderTrait};
-use async_trait::async_trait;
-use versatiles_shared::{
-	compress_gzip, Blob, Compression, Error, Result, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
+use crate::{
+	container::{TileReaderBox, TileReaderTrait},
+	shared::{
+		compress_gzip, Blob, Compression, Error, Result, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
+	},
 };
+use async_trait::async_trait;
 
 #[derive(Debug)]
 pub enum ReaderProfile {
@@ -73,9 +75,11 @@ impl std::fmt::Debug for TileReader {
 
 #[cfg(test)]
 mod tests {
-	use crate::dummy::{converter::ConverterProfile, reader::ReaderProfile, TileConverter, TileReader};
+	use crate::{
+		container::dummy::{converter::ConverterProfile, reader::ReaderProfile, TileConverter, TileReader},
+		shared::{Blob, TileCoord3, TileReaderParameters},
+	};
 	use futures::executor::block_on;
-	use versatiles_shared::{Blob, TileCoord3, TileReaderParameters};
 
 	#[test]
 	fn reader() {

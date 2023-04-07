@@ -1,7 +1,9 @@
+use crate::{
+	container::{get_converter, get_reader, TileConverterBox, TileReaderBox},
+	shared::{Compression, Result, TileBBoxPyramide, TileConverterConfig, TileFormat},
+};
 use clap::Args;
 use log::trace;
-use versatiles_container::{get_converter, get_reader, TileConverterBox, TileReaderBox};
-use versatiles_shared::{Compression, Result, TileBBoxPyramide, TileConverterConfig, TileFormat};
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]

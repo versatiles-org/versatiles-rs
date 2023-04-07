@@ -72,7 +72,7 @@ impl TileConverterConfig {
 
 #[cfg(test)]
 mod tests {
-	use crate::{Compression, TileBBoxPyramide, TileConverterConfig, TileFormat, TileReaderParameters};
+	use super::{Compression, TileBBoxPyramide, TileConverterConfig, TileFormat, TileReaderParameters};
 
 	#[test]
 	fn test() {

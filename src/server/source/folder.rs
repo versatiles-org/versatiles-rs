@@ -1,4 +1,7 @@
-use crate::{guess_mime, ok_data, ok_not_found, ServerSourceTrait};
+use crate::{
+	server::{guess_mime, ok_data, ok_not_found, ServerSourceTrait},
+	shared::{compress_brotli, compress_gzip, Blob, Compression},
+};
 use async_trait::async_trait;
 use axum::{
 	body::{Bytes, Full},
@@ -12,7 +15,6 @@ use std::{
 	io::{BufReader, Read},
 	path::{Path, PathBuf},
 };
-use versatiles_shared::{compress_brotli, compress_gzip, Blob, Compression};
 
 pub struct Folder {
 	folder: PathBuf,
@@ -97,12 +99,11 @@ impl Debug for Folder {
 #[cfg(test)]
 mod tests {
 	use super::Folder;
-	use crate::ServerSourceTrait;
+	use crate::{server::ServerSourceTrait, shared::Compression};
 	use axum::body::HttpBody;
 	use enumset::enum_set;
 	use futures::executor::block_on;
 	use hyper::StatusCode;
-	use versatiles_shared::Compression;
 
 	#[test]
 	fn test() {

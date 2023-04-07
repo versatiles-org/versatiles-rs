@@ -1,7 +1,7 @@
 use super::ByteRange;
+use crate::shared::{compress_brotli, decompress_brotli, Blob};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::{io::Cursor, ops::Div};
-use versatiles_shared::{compress_brotli, decompress_brotli, Blob};
 
 const TILE_INDEX_LENGTH: usize = 12;
 

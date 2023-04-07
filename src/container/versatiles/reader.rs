@@ -1,13 +1,12 @@
 use super::types::*;
-use crate::{TileReaderBox, TileReaderTrait};
+use crate::{container::{TileReaderBox, TileReaderTrait},shared::{
+	Blob, DataConverter, ProgressBar, Result, StatusImagePyramide, TileCoord2, TileCoord3, TileReaderParameters,
+}};
 use async_trait::async_trait;
 use itertools::Itertools;
 use log::debug;
 use std::{collections::HashMap, fmt::Debug, ops::Shr, path::Path};
 use tokio::sync::RwLock;
-use versatiles_shared::{
-	Blob, DataConverter, ProgressBar, Result, StatusImagePyramide, TileCoord2, TileCoord3, TileReaderParameters,
-};
 
 pub struct TileReader {
 	meta: Blob,
@@ -179,9 +178,11 @@ impl Debug for TileReader {
 #[cfg(test)]
 mod tests {
 	use super::TileReader;
-	use crate::{tests::make_test_file, TileReaderTrait};
+	use crate::{
+		container::{tests::make_test_file, TileReaderTrait},
+		shared::{Compression, TileFormat},
+	};
 	use assert_fs::TempDir;
-	use versatiles_shared::{Compression, TileFormat};
 
 	#[tokio::test]
 	async fn test_deep_verify() {

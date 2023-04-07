@@ -1,4 +1,7 @@
-use crate::{TileConverterBox, TileConverterTrait, TileReaderBox};
+use crate::{
+	container::{TileConverterBox, TileConverterTrait, TileReaderBox},
+	shared::{compress, Compression, ProgressBar, TileConverterConfig, TileFormat},
+};
 use async_trait::async_trait;
 use log::trace;
 use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
@@ -8,7 +11,6 @@ use std::{
 	sync::Mutex,
 };
 use tar::{Builder, Header};
-use versatiles_shared::{compress, Compression, ProgressBar, TileConverterConfig, TileFormat};
 
 pub struct TileConverter {
 	builder: Builder<File>,

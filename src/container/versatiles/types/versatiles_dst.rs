@@ -1,10 +1,10 @@
 use super::ByteRange;
+use crate::shared::Blob;
 use std::{
 	fs::File,
 	io::{BufWriter, Seek, SeekFrom, Write},
 	path::Path,
 };
-use versatiles_shared::Blob;
 
 trait VersaTilesDstTrait: Write + Seek + Send {}
 impl VersaTilesDstTrait for BufWriter<File> {}

@@ -1,9 +1,9 @@
+use crate::container::get_reader;
+use crate::shared::TileCoord3;
 use criterion::{black_box, criterion_group, Criterion};
 use futures::executor::block_on;
 use log::{set_max_level, LevelFilter};
 use rand::{seq::SliceRandom, thread_rng};
-use versatiles_container::get_reader;
-use versatiles_shared::TileCoord3;
 
 fn versatiles_read(c: &mut Criterion) {
 	set_max_level(LevelFilter::Warn);

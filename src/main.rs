@@ -1,5 +1,9 @@
 // Import necessary modules and dependencies
+pub mod container;
+pub mod server;
+pub mod shared;
 pub mod tools;
+
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 

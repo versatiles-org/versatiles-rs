@@ -1,5 +1,4 @@
-use super::Blob;
-use crate::{Error, Result};
+use super::{Blob, Error, Result};
 use image::{
 	codecs::{jpeg, png},
 	load_from_memory_with_format, DynamicImage, ImageEncoder, ImageFormat,
@@ -145,7 +144,7 @@ pub fn webp2img(data: Blob) -> Result<DynamicImage> {
 /// This module contains test functions for encoding and decoding images
 #[cfg(test)]
 mod tests {
-	use crate::*;
+	use super::*;
 	use ::image::{DynamicImage, GrayAlphaImage, GrayImage, Luma, LumaA, Rgb, RgbImage, Rgba, RgbaImage};
 
 	/// Test PNG encoding and decoding for grayscale images

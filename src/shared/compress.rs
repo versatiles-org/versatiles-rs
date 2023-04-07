@@ -1,6 +1,4 @@
-use crate::Result;
-
-use super::Blob;
+use super::{Blob, Result};
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
 use clap::ValueEnum;
 use enumset::EnumSetType;

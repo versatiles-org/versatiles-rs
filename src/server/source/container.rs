@@ -1,4 +1,8 @@
-use crate::{ok_data, ok_not_found, ServerSourceTrait};
+use crate::{
+	container::TileReaderBox,
+	server::{ok_data, ok_not_found, ServerSourceTrait},
+	shared::{compress_brotli, compress_gzip, decompress, Compression, TileCoord3, TileFormat},
+};
 use async_trait::async_trait;
 use axum::{
 	body::{Bytes, Full},
@@ -6,8 +10,6 @@ use axum::{
 };
 use enumset::EnumSet;
 use std::fmt::Debug;
-use versatiles_container::TileReaderBox;
-use versatiles_shared::{compress_brotli, compress_gzip, decompress, Compression, TileCoord3, TileFormat};
 
 pub struct TileContainer {
 	reader: TileReaderBox,
@@ -131,7 +133,7 @@ impl Debug for TileContainer {
 #[cfg(test)]
 mod tests {
 	use super::TileContainer;
-	use versatiles_container::dummy::{ReaderProfile, TileReader};
+	use crate::container::dummy::{ReaderProfile, TileReader};
 
 	#[test]
 	fn tile_container_from() {

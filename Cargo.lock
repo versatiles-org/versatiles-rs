@@ -2046,72 +2046,32 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 name = "versatiles"
 version = "0.2.14"
 dependencies = [
- "clap 4.2.1",
- "clap-verbosity-flag",
- "criterion",
- "env_logger",
- "futures",
- "log",
- "rand",
- "regex",
- "reqwest",
- "tokio",
- "versatiles_container",
- "versatiles_server",
- "versatiles_shared",
-]
-
-[[package]]
-name = "versatiles_container"
-version = "0.1.0"
-dependencies = [
- "assert_fs",
- "async-trait",
- "byteorder",
- "futures",
- "itertools",
- "log",
- "rayon",
- "reqwest",
- "rusqlite",
- "tar",
- "tokio",
- "versatiles_shared",
-]
-
-[[package]]
-name = "versatiles_server"
-version = "0.1.0"
-dependencies = [
  "assert_fs",
  "async-trait",
  "axum",
- "enumset",
- "futures",
- "hyper",
- "log",
- "mime_guess",
- "reqwest",
- "tar",
- "tokio",
- "versatiles_container",
- "versatiles_shared",
-]
-
-[[package]]
-name = "versatiles_shared"
-version = "0.1.0"
-dependencies = [
- "assert_fs",
  "brotli",
+ "byteorder",
  "bytes",
  "clap 4.2.1",
+ "clap-verbosity-flag",
+ "criterion",
  "enumset",
+ "env_logger",
  "flate2",
+ "futures",
+ "hyper",
  "image",
  "itertools",
  "log",
+ "mime_guess",
+ "rand",
+ "rayon",
+ "regex",
+ "reqwest",
+ "rusqlite",
+ "tar",
  "term_size",
+ "tokio",
  "webp",
 ]
 

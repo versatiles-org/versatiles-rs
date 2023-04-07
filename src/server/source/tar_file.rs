@@ -1,4 +1,7 @@
-use crate::{guess_mime, ok_data, ok_not_found, ServerSourceTrait};
+use crate::{
+	server::{guess_mime, ok_data, ok_not_found, ServerSourceTrait},
+	shared::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression},
+};
 use async_trait::async_trait;
 use axum::{
 	body::{Bytes, Full},
@@ -16,7 +19,6 @@ use std::{
 	path::Path,
 };
 use tar::{Archive, EntryType};
-use versatiles_shared::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression};
 
 struct FileEntry {
 	mime: String,
@@ -193,16 +195,16 @@ impl Debug for TarFile {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use assert_fs::NamedTempFile;
-	use axum::body::HttpBody;
-	use enumset::enum_set;
-	use hyper::header::CONTENT_ENCODING;
-	use versatiles_container::{
+	use crate::container::{
 		dummy::{ReaderProfile, TileReader},
 		tar::TileConverter,
 		TileConverterTrait,
 	};
-	use versatiles_shared::{decompress, TileBBoxPyramide, TileConverterConfig, TileFormat};
+	use crate::shared::{decompress, TileBBoxPyramide, TileConverterConfig, TileFormat};
+	use assert_fs::NamedTempFile;
+	use axum::body::HttpBody;
+	use enumset::enum_set;
+	use hyper::header::CONTENT_ENCODING;
 
 	async fn get_as_string(container: &Box<TarFile>, path: &[&str], compression: &Compression) -> String {
 		let mut resp = container.get_data(path, enum_set!(compression)).await;

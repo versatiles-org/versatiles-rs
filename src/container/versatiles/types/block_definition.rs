@@ -1,7 +1,7 @@
 use super::ByteRange;
+use crate::shared::{Blob, TileBBox, TileCoord3};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::{fmt, io::Cursor, ops::Div};
-use versatiles_shared::{Blob, TileBBox, TileCoord3};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct BlockDefinition {

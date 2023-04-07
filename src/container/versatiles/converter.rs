@@ -1,10 +1,12 @@
 use super::types::*;
-use crate::{TileConverterBox, TileConverterTrait, TileReaderBox};
+use crate::{
+	container::{TileConverterBox, TileConverterTrait, TileReaderBox},
+	shared::{Blob, ProgressBar, TileBBox, TileBBoxPyramide, TileConverterConfig, TileCoord2},
+};
 use async_trait::async_trait;
 use log::{debug, trace};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::{collections::HashMap, path::Path, sync::Mutex};
-use versatiles_shared::{Blob, ProgressBar, TileBBox, TileBBoxPyramide, TileConverterConfig, TileCoord2};
 
 pub struct TileConverter {
 	writer: VersaTilesDst,

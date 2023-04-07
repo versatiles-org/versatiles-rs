@@ -1,4 +1,10 @@
-use crate::{TileReaderBox, TileReaderTrait};
+use crate::{
+	container::{TileReaderBox, TileReaderTrait},
+	shared::{
+		Blob, Compression, ProgressBar, Result, TileBBox, TileBBoxPyramide, TileCoord2, TileCoord3, TileFormat,
+		TileReaderParameters,
+	},
+};
 use async_trait::async_trait;
 use futures::executor::block_on;
 use log::trace;
@@ -9,10 +15,6 @@ use std::{
 	thread,
 };
 use tokio::sync::Mutex;
-use versatiles_shared::{
-	Blob, Compression, ProgressBar, Result, TileBBox, TileBBoxPyramide, TileCoord2, TileCoord3, TileFormat,
-	TileReaderParameters,
-};
 
 const MB: usize = 1024 * 1024;
 
@@ -282,7 +284,7 @@ impl std::fmt::Debug for TileReader {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::dummy::{self, ConverterProfile};
+	use crate::container::dummy::{self, ConverterProfile};
 
 	#[tokio::test]
 	async fn reader() {

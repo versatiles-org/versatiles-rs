@@ -1,4 +1,5 @@
 use super::ByteRange;
+use crate::shared::{Blob, Error, Result};
 use async_trait::async_trait;
 use reqwest::{Client, Method, Request, Url};
 use std::{
@@ -9,7 +10,6 @@ use std::{
 	time::Duration,
 };
 use tokio::sync::Mutex;
-use versatiles_shared::{Blob, Error, Result};
 
 #[async_trait]
 pub trait VersaTilesSrcTrait: Send + Sync {
@@ -34,6 +34,7 @@ struct VersaTilesSrcFile {
 	name: String,
 	reader_mutex: Mutex<BufReader<File>>,
 }
+
 #[async_trait]
 impl VersaTilesSrcTrait for VersaTilesSrcFile {
 	fn new(source: &str) -> Result<Self> {

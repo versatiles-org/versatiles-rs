@@ -1,8 +1,8 @@
+use crate::container::get_reader;
+use crate::shared::TileBBox;
 use criterion::{black_box, criterion_group, Criterion};
 use futures::executor::block_on;
 use log::{set_max_level, LevelFilter};
-use versatiles_container::get_reader;
-use versatiles_shared::TileBBox;
 
 fn mbtiles_read_vec(c: &mut Criterion) {
 	set_max_level(LevelFilter::Warn);

@@ -1,13 +1,15 @@
-use crate::{TileReaderBox, TileReaderTrait};
+use crate::{
+	container::{TileReaderBox, TileReaderTrait},
+	shared::{
+		decompress, Blob, Compression, Error, Result, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
+	},
+};
 use async_trait::async_trait;
 use log::trace;
 use std::{
 	collections::HashMap, env::current_dir, fmt::Debug, fs::File, io::Read, os::unix::prelude::FileExt, path::Path,
 };
 use tar::{Archive, EntryType};
-use versatiles_shared::{
-	decompress, Blob, Compression, Error, Result, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
-};
 
 #[derive(PartialEq, Eq, Hash)]
 struct TileKey {
@@ -211,7 +213,7 @@ impl Debug for TileReader {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::{
+	use crate::container::{
 		dummy::{ConverterProfile, TileConverter},
 		tests::make_test_file,
 	};

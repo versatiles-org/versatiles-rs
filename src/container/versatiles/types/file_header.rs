@@ -1,7 +1,7 @@
 use super::{ByteRange, VersaTilesSrcTrait};
+use crate::shared::{Blob, Compression, TileFormat};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read, Write};
-use versatiles_shared::{Blob, Compression, TileFormat};
 
 const HEADER_LENGTH: usize = 66;
 const BBOX_SCALE: i32 = 10000000;
@@ -167,9 +167,8 @@ impl FileHeader {
 
 #[cfg(test)]
 mod tests {
-	use byteorder::ByteOrder;
-
 	use super::*;
+	use byteorder::ByteOrder;
 
 	#[test]
 	fn conversion() {

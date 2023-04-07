@@ -6,8 +6,8 @@ pub mod versatiles;
 mod traits;
 pub use traits::*;
 
+use crate::shared::{Result, TileConverterConfig};
 use std::path::PathBuf;
-use versatiles_shared::{Result, TileConverterConfig};
 
 pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
 	let extension = filename.split('.').last().unwrap();
@@ -38,12 +38,14 @@ pub fn get_converter(filename: &str, config: TileConverterConfig) -> TileConvert
 #[cfg(test)]
 pub mod tests {
 	use crate::{
-		dummy::{self, ConverterProfile, ReaderProfile},
-		get_converter, get_reader,
+		container::{
+			dummy::{self, ConverterProfile, ReaderProfile},
+			get_converter, get_reader,
+		},
+		shared::{Compression, TileBBoxPyramide, TileConverterConfig, TileFormat},
 	};
 	use assert_fs::fixture::NamedTempFile;
 	use std::time::Instant;
-	use versatiles_shared::{Compression, TileBBoxPyramide, TileConverterConfig, TileFormat};
 
 	pub async fn make_test_file(
 		tile_format: TileFormat, compression: Compression, max_zoom_level: u8, extension: &str,

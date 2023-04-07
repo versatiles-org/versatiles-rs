@@ -1,3 +1,4 @@
+use crate::shared::Compression;
 use async_trait::async_trait;
 use axum::{
 	body::{Bytes, Full},
@@ -5,7 +6,6 @@ use axum::{
 };
 use enumset::EnumSet;
 use std::fmt::Debug;
-use versatiles_shared::Compression;
 
 #[async_trait]
 pub trait ServerSourceTrait: Send + Sync + Debug {

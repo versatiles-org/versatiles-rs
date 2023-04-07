@@ -1,10 +1,10 @@
 use super::BlockDefinition;
+use crate::shared::{compress_brotli, decompress_brotli, Blob, TileBBoxPyramide, TileCoord3};
 use std::{
 	collections::HashMap,
 	io::{Cursor, Write},
 	ops::Div,
 };
-use versatiles_shared::{compress_brotli, decompress_brotli, Blob, TileBBoxPyramide, TileCoord3};
 
 const BLOCK_INDEX_LENGTH: usize = 33;
 
@@ -73,7 +73,7 @@ impl BlockIndex {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use versatiles_shared::TileBBox;
+	use crate::shared::TileBBox;
 
 	#[test]
 	fn conversion() {
