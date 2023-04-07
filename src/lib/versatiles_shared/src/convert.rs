@@ -1,6 +1,6 @@
 use crate::Result;
 
-use super::{compress::*, image::*, Blob, Precompression};
+use super::{compress::*, image::*, Blob, Compression};
 use clap::ValueEnum;
 use std::fmt::Debug;
 
@@ -69,7 +69,7 @@ impl DataConverter {
 	/// Create a new `DataConverter` for tile recompression from `src_form` and `src_comp` to `dst_form` and `dst_comp`
 	/// with optional forced recompression
 	pub fn new_tile_recompressor(
-		src_form: &TileFormat, src_comp: &Precompression, dst_form: &TileFormat, dst_comp: &Precompression,
+		src_form: &TileFormat, src_comp: &Compression, dst_form: &TileFormat, dst_comp: &Compression,
 		force_recompress: bool,
 	) -> DataConverter {
 		let mut converter = DataConverter::new_empty();
@@ -109,9 +109,9 @@ impl DataConverter {
 				converter.push(format_converter)
 			}
 		} else {
-			use Precompression::*;
+			use Compression::*;
 			match src_comp {
-				Uncompressed => {}
+				None => {}
 				Gzip => converter.push(FnConv::new(decompress_gzip, "decompress_gzip")),
 				Brotli => converter.push(FnConv::new(decompress_brotli, "decompress_brotli")),
 			}
@@ -119,7 +119,7 @@ impl DataConverter {
 				converter.push(format_converter)
 			}
 			match dst_comp {
-				Uncompressed => {}
+				None => {}
 				Gzip => converter.push(FnConv::new(compress_gzip, "compress_gzip")),
 				Brotli => converter.push(FnConv::new(compress_brotli, "compress_brotli")),
 			}
@@ -129,16 +129,16 @@ impl DataConverter {
 	}
 	/// Constructs a new `DataConverter` instance that compresses data using the specified precompression algorithm.
 	/// The `dst_comp` parameter specifies the precompression algorithm to use: `Precompression::Uncompressed`, `Precompression::Gzip`, or `Precompression::Brotli`.
-	pub fn new_compressor(dst_comp: &Precompression) -> DataConverter {
+	pub fn new_compressor(dst_comp: &Compression) -> DataConverter {
 		let mut converter = DataConverter::new_empty();
 
 		match dst_comp {
 			// If uncompressed, do nothing
-			Precompression::Uncompressed => {}
+			Compression::None => {}
 			// If gzip, add the gzip compression function to the pipeline
-			Precompression::Gzip => converter.push(FnConv::new(compress_gzip, "compress_gzip")),
+			Compression::Gzip => converter.push(FnConv::new(compress_gzip, "compress_gzip")),
 			// If brotli, add the brotli compression function to the pipeline
-			Precompression::Brotli => converter.push(FnConv::new(compress_brotli, "compress_brotli")),
+			Compression::Brotli => converter.push(FnConv::new(compress_brotli, "compress_brotli")),
 		}
 
 		converter
@@ -146,16 +146,16 @@ impl DataConverter {
 
 	/// Constructs a new `DataConverter` instance that decompresses data using the specified precompression algorithm.
 	/// The `src_comp` parameter specifies the precompression algorithm to use: `Precompression::Uncompressed`, `Precompression::Gzip`, or `Precompression::Brotli`.
-	pub fn new_decompressor(src_comp: &Precompression) -> DataConverter {
+	pub fn new_decompressor(src_comp: &Compression) -> DataConverter {
 		let mut converter = DataConverter::new_empty();
 
 		match src_comp {
 			// If uncompressed, do nothing
-			Precompression::Uncompressed => {}
+			Compression::None => {}
 			// If gzip, add the gzip decompression function to the pipeline
-			Precompression::Gzip => converter.push(FnConv::new(decompress_gzip, "decompress_gzip")),
+			Compression::Gzip => converter.push(FnConv::new(decompress_gzip, "decompress_gzip")),
 			// If brotli, add the brotli decompression function to the pipeline
-			Precompression::Brotli => converter.push(FnConv::new(decompress_brotli, "decompress_brotli")),
+			Compression::Brotli => converter.push(FnConv::new(decompress_brotli, "decompress_brotli")),
 		}
 
 		converter

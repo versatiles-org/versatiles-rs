@@ -1,8 +1,7 @@
 use async_trait::async_trait;
 use std::{fmt::Debug, path::Path};
 use versatiles_shared::{
-	Blob, Precompression, Result, TileBBox, TileConverterConfig, TileCoord2, TileCoord3, TileFormat,
-	TileReaderParameters,
+	Blob, Compression, Result, TileBBox, TileConverterConfig, TileCoord2, TileCoord3, TileFormat, TileReaderParameters,
 };
 
 pub type TileConverterBox = Box<dyn TileConverterTrait>;
@@ -37,7 +36,7 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 		self.get_parameters().get_tile_format()
 	}
 
-	fn get_tile_precompression(&self) -> &Precompression {
+	fn get_tile_precompression(&self) -> &Compression {
 		self.get_parameters().get_tile_precompression()
 	}
 
@@ -137,7 +136,7 @@ mod tests {
 		assert_eq!(reader.get_name(), "test_path");
 
 		// Test getting tile precompression and format
-		assert_eq!(reader.get_tile_precompression(), &Precompression::Uncompressed);
+		assert_eq!(reader.get_tile_precompression(), &Compression::None);
 		assert_eq!(reader.get_tile_format(), &TileFormat::PBF);
 
 		// Test getting container name

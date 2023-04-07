@@ -1,9 +1,9 @@
-use super::{DataConverter, Precompression, TileBBoxPyramide, TileFormat};
+use super::{Compression, DataConverter, TileBBoxPyramide, TileFormat};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct TileReaderParameters {
 	tile_format: TileFormat,
-	tile_precompression: Precompression,
+	tile_precompression: Compression,
 	bbox_pyramide: TileBBoxPyramide,
 	#[allow(dead_code)]
 	decompressor: DataConverter,
@@ -12,7 +12,7 @@ pub struct TileReaderParameters {
 
 impl TileReaderParameters {
 	pub fn new(
-		tile_format: TileFormat, tile_precompression: Precompression, bbox_pyramide: TileBBoxPyramide,
+		tile_format: TileFormat, tile_precompression: Compression, bbox_pyramide: TileBBoxPyramide,
 	) -> TileReaderParameters {
 		let decompressor = DataConverter::new_decompressor(&tile_precompression);
 
@@ -28,7 +28,7 @@ impl TileReaderParameters {
 		TileReaderParameters {
 			decompressor: DataConverter::new_empty(),
 			tile_format: TileFormat::PBF,
-			tile_precompression: Precompression::Uncompressed,
+			tile_precompression: Compression::None,
 			bbox_pyramide: TileBBoxPyramide::new_full(),
 			flip_vertically: false,
 		}
@@ -39,10 +39,10 @@ impl TileReaderParameters {
 	pub fn set_tile_format(&mut self, tile_format: TileFormat) {
 		self.tile_format = tile_format;
 	}
-	pub fn get_tile_precompression(&self) -> &Precompression {
+	pub fn get_tile_precompression(&self) -> &Compression {
 		&self.tile_precompression
 	}
-	pub fn set_tile_precompression(&mut self, precompression: Precompression) {
+	pub fn set_tile_precompression(&mut self, precompression: Compression) {
 		self.tile_precompression = precompression;
 	}
 	#[allow(dead_code)]
@@ -70,7 +70,7 @@ mod tests {
 	#[test]
 	fn basic_tests() {
 		let test =
-			|tile_format: TileFormat, tile_precompression: Precompression, bbox_pyramide: TileBBoxPyramide, flip: bool| {
+			|tile_format: TileFormat, tile_precompression: Compression, bbox_pyramide: TileBBoxPyramide, flip: bool| {
 				let mut p = TileReaderParameters::new(tile_format.clone(), tile_precompression, bbox_pyramide.clone());
 				p.set_vertical_flip(flip);
 				assert_eq!(p.get_tile_format(), &tile_format);
@@ -79,23 +79,13 @@ mod tests {
 				assert_eq!(p.get_vertical_flip(), flip);
 
 				p.set_tile_format(TileFormat::PNG);
-				p.set_tile_precompression(Precompression::Gzip);
+				p.set_tile_precompression(Compression::Gzip);
 				assert_eq!(p.get_tile_format(), &TileFormat::PNG);
-				assert_eq!(p.get_tile_precompression(), &Precompression::Gzip);
+				assert_eq!(p.get_tile_precompression(), &Compression::Gzip);
 			};
 
-		test(
-			TileFormat::JPG,
-			Precompression::Uncompressed,
-			TileBBoxPyramide::new_empty(),
-			false,
-		);
+		test(TileFormat::JPG, Compression::None, TileBBoxPyramide::new_empty(), false);
 
-		test(
-			TileFormat::PBF,
-			Precompression::Brotli,
-			TileBBoxPyramide::new_full(),
-			true,
-		);
+		test(TileFormat::PBF, Compression::Brotli, TileBBoxPyramide::new_full(), true);
 	}
 }

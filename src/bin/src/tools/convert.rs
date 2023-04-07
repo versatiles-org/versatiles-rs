@@ -1,7 +1,7 @@
 use clap::Args;
 use log::trace;
 use versatiles_container::{get_converter, get_reader, TileConverterBox, TileReaderBox};
-use versatiles_shared::{Precompression, Result, TileBBoxPyramide, TileConverterConfig, TileFormat};
+use versatiles_shared::{Compression, Result, TileBBoxPyramide, TileConverterConfig, TileFormat};
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -41,7 +41,7 @@ pub struct Subcommand {
 
 	/// set new precompression
 	#[arg(long, short, value_enum)]
-	precompress: Option<Precompression>,
+	precompress: Option<Compression>,
 
 	/// force recompression, e.g. to improve an existing gzip compression.
 	#[arg(long, short)]

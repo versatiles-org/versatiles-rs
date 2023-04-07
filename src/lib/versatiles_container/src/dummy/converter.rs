@@ -1,7 +1,7 @@
 use crate::{TileConverterBox, TileConverterTrait, TileReaderBox};
 use async_trait::async_trait;
 use std::path::Path;
-use versatiles_shared::{Precompression, TileBBoxPyramide, TileConverterConfig, TileFormat};
+use versatiles_shared::{Compression, TileBBoxPyramide, TileConverterConfig, TileFormat};
 
 #[derive(Debug)]
 pub enum ConverterProfile {
@@ -19,12 +19,9 @@ impl TileConverter {
 		bbox_pyramide.set_zoom_max(max_zoom_level);
 
 		let config = match profile {
-			ConverterProfile::Png => TileConverterConfig::new(
-				Some(TileFormat::PNG),
-				Some(Precompression::Uncompressed),
-				bbox_pyramide,
-				false,
-			),
+			ConverterProfile::Png => {
+				TileConverterConfig::new(Some(TileFormat::PNG), Some(Compression::None), bbox_pyramide, false)
+			}
 			ConverterProfile::Whatever => TileConverterConfig::new(None, None, bbox_pyramide, false),
 		};
 		Box::new(TileConverter { config })

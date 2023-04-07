@@ -43,7 +43,7 @@ mod tests {
 	};
 	use assert_fs::fixture::NamedTempFile;
 	use std::time::Instant;
-	use versatiles_shared::{Precompression, TileBBoxPyramide, TileConverterConfig, TileFormat};
+	use versatiles_shared::{Compression, TileBBoxPyramide, TileConverterConfig, TileFormat};
 
 	#[test]
 	fn test_readers() {
@@ -56,7 +56,7 @@ mod tests {
 		#[tokio::main]
 		async fn test(
 			reader_profile: ReaderProfile, max_zoom_level: u8, container: &Container, tile_format: TileFormat,
-			compression: Precompression, force_recompress: bool,
+			compression: Compression, force_recompress: bool,
 		) {
 			let test_name = format!(
 				"{:?}, {}, {:?}, {:?}, {:?}, {:?}",
@@ -103,7 +103,7 @@ mod tests {
 				7,
 				&container,
 				TileFormat::PNG,
-				Precompression::Uncompressed,
+				Compression::None,
 				false,
 			);
 			test(
@@ -111,7 +111,7 @@ mod tests {
 				4,
 				&container,
 				TileFormat::JPG,
-				Precompression::Uncompressed,
+				Compression::None,
 				false,
 			);
 			test(
@@ -119,7 +119,7 @@ mod tests {
 				7,
 				&container,
 				TileFormat::PBF,
-				Precompression::Gzip,
+				Compression::Gzip,
 				false,
 			);
 		}

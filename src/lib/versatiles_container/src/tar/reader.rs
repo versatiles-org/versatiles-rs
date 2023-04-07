@@ -6,7 +6,7 @@ use std::{
 };
 use tar::{Archive, EntryType};
 use versatiles_shared::{
-	decompress, Blob, Error, Precompression, Result, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
+	decompress, Blob, Compression, Error, Result, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
 };
 
 #[derive(PartialEq, Eq, Hash)]
@@ -52,7 +52,7 @@ impl TileReaderTrait for TileReader {
 		let mut meta = Blob::empty();
 		let mut tile_map = HashMap::new();
 		let mut tile_form: Option<TileFormat> = None;
-		let mut tile_comp: Option<Precompression> = None;
+		let mut tile_comp: Option<Compression> = None;
 		let mut bbox_pyramide = TileBBoxPyramide::new_empty();
 
 		for entry in archive.entries()? {
@@ -84,13 +84,13 @@ impl TileReaderTrait for TileReader {
 				let this_comp = match extension {
 					"gz" => {
 						extension = filename.pop().unwrap();
-						Precompression::Gzip
+						Compression::Gzip
 					}
 					"br" => {
 						extension = filename.pop().unwrap();
-						Precompression::Brotli
+						Compression::Brotli
 					}
-					_ => Precompression::Uncompressed,
+					_ => Compression::None,
 				};
 
 				let this_form = match extension {
@@ -127,7 +127,7 @@ impl TileReaderTrait for TileReader {
 				continue;
 			}
 
-			let mut add_meta = |precompression: Precompression| {
+			let mut add_meta = |precompression: Compression| {
 				let mut blob: Vec<u8> = Vec::new();
 				entry.read_to_end(&mut blob).unwrap();
 
@@ -137,15 +137,15 @@ impl TileReaderTrait for TileReader {
 			if path_vec.len() == 1 {
 				match path_vec[0] {
 					"meta.json" | "tiles.json" | "metadata.json" => {
-						add_meta(Precompression::Uncompressed);
+						add_meta(Compression::None);
 						continue;
 					}
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
-						add_meta(Precompression::Gzip);
+						add_meta(Compression::Gzip);
 						continue;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
-						add_meta(Precompression::Brotli);
+						add_meta(Compression::Brotli);
 						continue;
 					}
 					&_ => {}

@@ -4,16 +4,13 @@ use super::Blob;
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
 use clap::ValueEnum;
 use enumset::EnumSetType;
-use flate2::{
-	bufread::{GzDecoder, GzEncoder},
-	Compression,
-};
+use flate2::bufread::{GzDecoder, GzEncoder};
 use std::io::{Cursor, Read};
 
 /// Enum representing possible precompression algorithms
 #[derive(Debug, EnumSetType, ValueEnum)]
-pub enum Precompression {
-	Uncompressed,
+pub enum Compression {
+	None,
 	Gzip,
 	Brotli,
 }
@@ -24,11 +21,11 @@ pub enum Precompression {
 ///
 /// * `data` - The blob of data to compress
 /// * `precompression` - The precompression algorithm to use
-pub fn compress(data: Blob, precompression: &Precompression) -> Result<Blob> {
+pub fn compress(data: Blob, precompression: &Compression) -> Result<Blob> {
 	match precompression {
-		Precompression::Uncompressed => Ok(data),
-		Precompression::Gzip => compress_gzip(data),
-		Precompression::Brotli => compress_brotli(data),
+		Compression::None => Ok(data),
+		Compression::Gzip => compress_gzip(data),
+		Compression::Brotli => compress_brotli(data),
 	}
 }
 
@@ -38,11 +35,11 @@ pub fn compress(data: Blob, precompression: &Precompression) -> Result<Blob> {
 ///
 /// * `data` - The blob of data to decompress
 /// * `precompression` - The precompression algorithm used for compression
-pub fn decompress(data: Blob, precompression: &Precompression) -> Result<Blob> {
+pub fn decompress(data: Blob, precompression: &Compression) -> Result<Blob> {
 	match precompression {
-		Precompression::Uncompressed => Ok(data),
-		Precompression::Gzip => decompress_gzip(data),
-		Precompression::Brotli => decompress_brotli(data),
+		Compression::None => Ok(data),
+		Compression::Gzip => decompress_gzip(data),
+		Compression::Brotli => decompress_brotli(data),
 	}
 }
 
@@ -53,7 +50,7 @@ pub fn decompress(data: Blob, precompression: &Precompression) -> Result<Blob> {
 /// * `data` - The blob of data to compress
 pub fn compress_gzip(data: Blob) -> Result<Blob> {
 	let mut result: Vec<u8> = Vec::new();
-	GzEncoder::new(data.as_slice(), Compression::best()).read_to_end(&mut result)?;
+	GzEncoder::new(data.as_slice(), flate2::Compression::best()).read_to_end(&mut result)?;
 
 	Ok(Blob::from(result))
 }

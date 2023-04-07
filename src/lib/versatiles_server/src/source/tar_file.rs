@@ -16,7 +16,7 @@ use std::{
 	path::Path,
 };
 use tar::{Archive, EntryType};
-use versatiles_shared::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Precompression};
+use versatiles_shared::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression};
 
 struct FileEntry {
 	mime: String,
@@ -66,17 +66,17 @@ impl TarFile {
 
 			let mut entry_path = file.path().unwrap().into_owned();
 
-			let precompression: Precompression = if let Some(extension) = entry_path.extension() {
+			let precompression: Compression = if let Some(extension) = entry_path.extension() {
 				match extension.to_str() {
-					Some("br") => Precompression::Brotli,
-					Some("gz") => Precompression::Gzip,
-					_ => Precompression::Uncompressed,
+					Some("br") => Compression::Brotli,
+					Some("gz") => Compression::Gzip,
+					_ => Compression::None,
 				}
 			} else {
-				Precompression::Uncompressed
+				Compression::None
 			};
 
-			if precompression != Precompression::Uncompressed {
+			if precompression != Compression::None {
 				entry_path = entry_path.with_extension("")
 			}
 
@@ -104,9 +104,9 @@ impl TarFile {
 				let entry = lookup.entry(name);
 				let versions = entry.or_insert_with(|| FileEntry::new(mime.to_string()));
 				match precompression {
-					Precompression::Uncompressed => versions.un = Some(blob),
-					Precompression::Gzip => versions.gz = Some(blob),
-					Precompression::Brotli => versions.br = Some(blob),
+					Compression::None => versions.un = Some(blob),
+					Compression::Gzip => versions.gz = Some(blob),
+					Compression::Brotli => versions.br = Some(blob),
 				}
 			};
 
@@ -132,7 +132,7 @@ impl ServerSourceTrait for TarFile {
 		"{\"type\":\"tar\"}".to_owned()
 	}
 
-	async fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response<Full<Bytes>> {
+	async fn get_data(&self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>> {
 		let entry_name = path.join("/");
 		let entry_option = self.lookup.get(&entry_name);
 		if entry_option.is_none() {
@@ -141,8 +141,8 @@ impl ServerSourceTrait for TarFile {
 
 		let file_entry = entry_option.unwrap().to_owned();
 
-		if accept.contains(Precompression::Brotli) {
-			let respond = |blob| ok_data(blob, &Precompression::Brotli, &file_entry.mime);
+		if accept.contains(Compression::Brotli) {
+			let respond = |blob| ok_data(blob, &Compression::Brotli, &file_entry.mime);
 
 			if let Some(blob) = &file_entry.br {
 				return respond(blob.to_owned());
@@ -155,8 +155,8 @@ impl ServerSourceTrait for TarFile {
 			}
 		}
 
-		if accept.contains(Precompression::Gzip) {
-			let respond = |blob| ok_data(blob, &Precompression::Gzip, &file_entry.mime);
+		if accept.contains(Compression::Gzip) {
+			let respond = |blob| ok_data(blob, &Compression::Gzip, &file_entry.mime);
 
 			if let Some(blob) = &file_entry.gz {
 				return respond(blob.to_owned());
@@ -169,7 +169,7 @@ impl ServerSourceTrait for TarFile {
 			}
 		}
 
-		let respond = |blob| ok_data(blob, &Precompression::Uncompressed, &file_entry.mime);
+		let respond = |blob| ok_data(blob, &Compression::None, &file_entry.mime);
 
 		if let Some(blob) = &file_entry.un {
 			return respond(blob.to_owned());
@@ -203,7 +203,7 @@ mod tests {
 	};
 	use versatiles_shared::TileConverterConfig;
 
-	async fn get_as_string(container: &Box<TarFile>, path: &[&str], precompression: Precompression) -> String {
+	async fn get_as_string(container: &Box<TarFile>, path: &[&str], precompression: Compression) -> String {
 		let mut resp = container.get_data(path, enum_set!(precompression)).await;
 		let data1 = resp.data().await.unwrap().unwrap();
 		let data3 = String::from_utf8_lossy(&data1);
@@ -223,13 +223,13 @@ mod tests {
 
 		let tar_file = TarFile::from(&file.to_str().unwrap());
 
-		let result = get_as_string(&tar_file, &["meta.json"], Precompression::Uncompressed).await;
+		let result = get_as_string(&tar_file, &["meta.json"], Compression::None).await;
 		assert_eq!(result, "dummy meta data");
 
-		let result = get_as_string(&tar_file, &["0", "0", "0.png"], Precompression::Uncompressed).await;
+		let result = get_as_string(&tar_file, &["0", "0", "0.png"], Compression::None).await;
 		assert!(result.starts_with("�PNG\r\n"));
 
-		let result = get_as_string(&tar_file, &["cheesecake.mp4"], Precompression::Uncompressed).await;
+		let result = get_as_string(&tar_file, &["cheesecake.mp4"], Compression::None).await;
 		assert_eq!(result, "Not Found");
 	}
 

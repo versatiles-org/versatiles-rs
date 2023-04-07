@@ -13,7 +13,7 @@ use axum::{
 use enumset::{enum_set, EnumSet};
 use std::sync::Arc;
 use tokio::sync::oneshot::Sender;
-use versatiles_shared::{Blob, Precompression};
+use versatiles_shared::{Blob, Compression};
 
 struct TileSource {
 	prefix: String,
@@ -182,20 +182,14 @@ impl TileServer {
 				get(|| async {
 					ok_data(
 						Blob::from("{\"status\":\"ready\"}"),
-						&Precompression::Uncompressed,
+						&Compression::None,
 						"application/json",
 					)
 				}),
 			)
 			.route(
 				"/api/tiles.json",
-				get(|| async move {
-					ok_data(
-						Blob::from(&tile_sources_json),
-						&Precompression::Uncompressed,
-						"application/json",
-					)
-				}),
+				get(|| async move { ok_data(Blob::from(&tile_sources_json), &Compression::None, "application/json") }),
 			);
 
 		app.merge(api_app)
@@ -213,16 +207,16 @@ pub fn ok_not_found() -> Response<Full<Bytes>> {
 	Response::builder().status(404).body(Full::from("Not Found")).unwrap()
 }
 
-pub fn ok_data(data: Blob, precompression: &Precompression, mime: &str) -> Response<Full<Bytes>> {
+pub fn ok_data(data: Blob, precompression: &Compression, mime: &str) -> Response<Full<Bytes>> {
 	let mut response = Response::builder()
 		.status(200)
 		.header(CONTENT_TYPE, mime)
 		.header(CACHE_CONTROL, "public");
 
 	match precompression {
-		Precompression::Uncompressed => {}
-		Precompression::Gzip => response = response.header(CONTENT_ENCODING, "gzip"),
-		Precompression::Brotli => response = response.header(CONTENT_ENCODING, "br"),
+		Compression::None => {}
+		Compression::Gzip => response = response.header(CONTENT_ENCODING, "gzip"),
+		Compression::Brotli => response = response.header(CONTENT_ENCODING, "br"),
 	}
 
 	response.body(Full::from(data.as_vec())).unwrap()
@@ -233,17 +227,17 @@ pub fn guess_mime(path: &std::path::Path) -> String {
 	return mime.essence_str().to_owned();
 }
 
-fn get_encoding(headers: HeaderMap) -> EnumSet<Precompression> {
-	let mut encoding_set: EnumSet<Precompression> = enum_set!(Precompression::Uncompressed);
+fn get_encoding(headers: HeaderMap) -> EnumSet<Compression> {
+	let mut encoding_set: EnumSet<Compression> = enum_set!(Compression::None);
 	let encoding_option = headers.get(ACCEPT_ENCODING);
 	if let Some(encoding) = encoding_option {
 		let encoding_string = encoding.to_str().unwrap_or("");
 
 		if encoding_string.contains("gzip") {
-			encoding_set.insert(Precompression::Gzip);
+			encoding_set.insert(Compression::Gzip);
 		}
 		if encoding_string.contains("br") {
-			encoding_set.insert(Precompression::Brotli);
+			encoding_set.insert(Compression::Brotli);
 		}
 	}
 	encoding_set
@@ -257,15 +251,15 @@ mod tests {
 	use enumset::{enum_set, EnumSet};
 	use std::path::Path;
 	use versatiles_container::dummy;
-	use versatiles_shared::Precompression;
-	use versatiles_shared::Precompression::*;
+	use versatiles_shared::Compression;
+	use versatiles_shared::Compression::*;
 
 	const IP: &str = "127.0.0.1";
 	const PORT: u16 = 3000;
 
 	#[test]
 	fn test_get_encoding() {
-		let test = |encoding: &str, comp0: EnumSet<Precompression>| {
+		let test = |encoding: &str, comp0: EnumSet<Compression>| {
 			let mut map = HeaderMap::new();
 			if encoding != "NONE" {
 				map.insert(ACCEPT_ENCODING, encoding.parse().unwrap());
@@ -274,24 +268,24 @@ mod tests {
 			assert_eq!(comp, comp0);
 		};
 
-		test("NONE", enum_set!(Uncompressed));
-		test("", enum_set!(Uncompressed));
-		test("*", enum_set!(Uncompressed));
-		test("br", enum_set!(Uncompressed | Brotli));
-		test("br;q=1.0, gzip;q=0.8, *;q=0.1", enum_set!(Uncompressed | Brotli | Gzip));
-		test("compress", enum_set!(Uncompressed));
-		test("compress, gzip", enum_set!(Uncompressed | Gzip));
-		test("compress;q=0.5, gzip;q=1.0", enum_set!(Uncompressed | Gzip));
-		test("deflate", enum_set!(Uncompressed));
-		test("deflate, gzip;q=1.0, *;q=0.5", enum_set!(Uncompressed | Gzip));
-		test("gzip", enum_set!(Uncompressed | Gzip));
-		test("gzip, compress, br", enum_set!(Uncompressed | Brotli | Gzip));
+		test("NONE", enum_set!(None));
+		test("", enum_set!(None));
+		test("*", enum_set!(None));
+		test("br", enum_set!(None | Brotli));
+		test("br;q=1.0, gzip;q=0.8, *;q=0.1", enum_set!(None | Brotli | Gzip));
+		test("compress", enum_set!(None));
+		test("compress, gzip", enum_set!(None | Gzip));
+		test("compress;q=0.5, gzip;q=1.0", enum_set!(None | Gzip));
+		test("deflate", enum_set!(None));
+		test("deflate, gzip;q=1.0, *;q=0.5", enum_set!(None | Gzip));
+		test("gzip", enum_set!(None | Gzip));
+		test("gzip, compress, br", enum_set!(None | Brotli | Gzip));
 		test(
 			"gzip, deflate, br;q=1.0, identity;q=0.5, *;q=0.25",
-			enum_set!(Uncompressed | Brotli | Gzip),
+			enum_set!(None | Brotli | Gzip),
 		);
-		test("gzip;q=1.0, identity; q=0.5, *;q=0", enum_set!(Uncompressed | Gzip));
-		test("identity", enum_set!(Uncompressed));
+		test("gzip;q=1.0, identity; q=0.5, *;q=0", enum_set!(None | Gzip));
+		test("identity", enum_set!(None));
 	}
 
 	#[test]

@@ -1,7 +1,7 @@
 use crate::{TileReaderBox, TileReaderTrait};
 use async_trait::async_trait;
 use versatiles_shared::{
-	compress_gzip, Blob, Error, Precompression, Result, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
+	compress_gzip, Blob, Compression, Error, Result, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
 };
 
 #[derive(Debug)]
@@ -25,11 +25,11 @@ impl TileReader {
 
 		match profile {
 			ReaderProfile::PngFast => {
-				parameters = TileReaderParameters::new(TileFormat::PNG, Precompression::Uncompressed, bbox_pyramide);
+				parameters = TileReaderParameters::new(TileFormat::PNG, Compression::None, bbox_pyramide);
 				tile_blob = Blob::from(include_bytes!("./dummy.png").to_vec());
 			}
 			ReaderProfile::PbfFast => {
-				parameters = TileReaderParameters::new(TileFormat::PBF, Precompression::Gzip, bbox_pyramide);
+				parameters = TileReaderParameters::new(TileFormat::PBF, Compression::Gzip, bbox_pyramide);
 				tile_blob = compress_gzip(Blob::from(include_bytes!("./dummy.pbf").to_vec())).unwrap();
 			}
 		};

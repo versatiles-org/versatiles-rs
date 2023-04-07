@@ -5,11 +5,11 @@ use axum::{
 };
 use enumset::EnumSet;
 use std::fmt::Debug;
-use versatiles_shared::Precompression;
+use versatiles_shared::Compression;
 
 #[async_trait]
 pub trait ServerSourceTrait: Send + Sync + Debug {
 	fn get_name(&self) -> String;
 	fn get_info_as_json(&self) -> String;
-	async fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response<Full<Bytes>>;
+	async fn get_data(&self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>>;
 }

@@ -1,8 +1,8 @@
-use super::{DataConverter, Precompression, TileBBoxPyramide, TileFormat, TileReaderParameters};
+use super::{Compression, DataConverter, TileBBoxPyramide, TileFormat, TileReaderParameters};
 
 pub struct TileConverterConfig {
 	tile_format: Option<TileFormat>,
-	tile_precompression: Option<Precompression>,
+	tile_precompression: Option<Compression>,
 	tile_recompressor: Option<DataConverter>,
 	compressor: Option<DataConverter>,
 	bbox_pyramide: TileBBoxPyramide,
@@ -13,7 +13,7 @@ pub struct TileConverterConfig {
 #[allow(dead_code)]
 impl TileConverterConfig {
 	pub fn new(
-		tile_format: Option<TileFormat>, tile_precompression: Option<Precompression>, bbox_pyramide: TileBBoxPyramide,
+		tile_format: Option<TileFormat>, tile_precompression: Option<Compression>, bbox_pyramide: TileBBoxPyramide,
 		force_recompress: bool,
 	) -> Self {
 		TileConverterConfig {
@@ -67,31 +67,27 @@ impl TileConverterConfig {
 	pub fn get_tile_format(&self) -> &TileFormat {
 		self.tile_format.as_ref().unwrap()
 	}
-	pub fn get_tile_precompression(&self) -> &Precompression {
+	pub fn get_tile_precompression(&self) -> &Compression {
 		self.tile_precompression.as_ref().unwrap()
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use crate::{Precompression, TileBBoxPyramide, TileConverterConfig, TileFormat, TileReaderParameters};
+	use crate::{Compression, TileBBoxPyramide, TileConverterConfig, TileFormat, TileReaderParameters};
 
 	#[test]
 	fn test() {
 		let pyramide = TileBBoxPyramide::new_full();
-		let parameters = TileReaderParameters::new(TileFormat::PNG, Precompression::Gzip, pyramide.clone());
+		let parameters = TileReaderParameters::new(TileFormat::PNG, Compression::Gzip, pyramide.clone());
 
-		let mut config = TileConverterConfig::new(
-			Some(TileFormat::JPG),
-			Some(Precompression::Brotli),
-			pyramide.clone(),
-			true,
-		);
+		let mut config =
+			TileConverterConfig::new(Some(TileFormat::JPG), Some(Compression::Brotli), pyramide.clone(), true);
 
 		config.finalize_with_parameters(&parameters);
 
 		assert_eq!(config.get_tile_format(), &TileFormat::JPG);
-		assert_eq!(config.get_tile_precompression(), &Precompression::Brotli);
+		assert_eq!(config.get_tile_precompression(), &Compression::Brotli);
 
 		assert_eq!(
 			config.get_tile_recompressor().description(),

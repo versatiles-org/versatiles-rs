@@ -7,12 +7,12 @@ use axum::{
 use enumset::EnumSet;
 use std::fmt::Debug;
 use versatiles_container::TileReaderBox;
-use versatiles_shared::{compress_brotli, compress_gzip, decompress, Precompression, TileCoord3, TileFormat};
+use versatiles_shared::{compress_brotli, compress_gzip, decompress, Compression, TileCoord3, TileFormat};
 
 pub struct TileContainer {
 	reader: TileReaderBox,
 	tile_mime: String,
-	precompression: Precompression,
+	precompression: Compression,
 }
 impl TileContainer {
 	pub fn from(reader: TileReaderBox) -> Box<TileContainer> {
@@ -64,7 +64,7 @@ impl ServerSourceTrait for TileContainer {
 		)
 	}
 
-	async fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response<Full<Bytes>> {
+	async fn get_data(&self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>> {
 		if path.len() == 3 {
 			let z = path[0].parse::<u8>();
 			let x = path[1].parse::<u64>();
@@ -91,7 +91,7 @@ impl ServerSourceTrait for TileContainer {
 			}
 
 			data = decompress(data, &self.precompression).unwrap();
-			return ok_data(data, &Precompression::Uncompressed, &self.tile_mime);
+			return ok_data(data, &Compression::None, &self.tile_mime);
 		} else if (path[0] == "meta.json") || (path[0] == "tiles.json") {
 			// get meta
 			let meta = self.reader.get_meta().await;
@@ -102,15 +102,15 @@ impl ServerSourceTrait for TileContainer {
 
 			let mime = "application/json";
 
-			if accept.contains(Precompression::Brotli) {
-				return ok_data(compress_brotli(meta).unwrap(), &Precompression::Brotli, mime);
+			if accept.contains(Compression::Brotli) {
+				return ok_data(compress_brotli(meta).unwrap(), &Compression::Brotli, mime);
 			}
 
-			if accept.contains(Precompression::Gzip) {
-				return ok_data(compress_gzip(meta).unwrap(), &Precompression::Gzip, mime);
+			if accept.contains(Compression::Gzip) {
+				return ok_data(compress_gzip(meta).unwrap(), &Compression::Gzip, mime);
 			}
 
-			return ok_data(meta, &Precompression::Uncompressed, mime);
+			return ok_data(meta, &Compression::None, mime);
 		}
 
 		// unknown request;

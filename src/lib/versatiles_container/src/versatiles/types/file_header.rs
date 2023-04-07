@@ -1,7 +1,7 @@
 use super::{ByteRange, VersaTilesSrcTrait};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read, Write};
-use versatiles_shared::{Blob, Precompression, TileFormat};
+use versatiles_shared::{Blob, Compression, TileFormat};
 
 const HEADER_LENGTH: usize = 66;
 const BBOX_SCALE: i32 = 10000000;
@@ -12,14 +12,14 @@ pub struct FileHeader {
 	pub bbox: [i32; 4],
 
 	pub tile_format: TileFormat,
-	pub precompression: Precompression,
+	pub precompression: Compression,
 
 	pub meta_range: ByteRange,
 	pub blocks_range: ByteRange,
 }
 impl FileHeader {
 	pub fn new(
-		tile_format: &TileFormat, precompression: &Precompression, zoom_range: [u8; 2], bbox: [f64; 4],
+		tile_format: &TileFormat, precompression: &Compression, zoom_range: [u8; 2], bbox: [f64; 4],
 	) -> FileHeader {
 		assert!(
 			zoom_range[0] <= zoom_range[1],
@@ -78,9 +78,9 @@ impl FileHeader {
 		// precompression
 		header
 			.write_u8(match self.precompression {
-				Precompression::Uncompressed => 0,
-				Precompression::Gzip => 1,
-				Precompression::Brotli => 2,
+				Compression::None => 0,
+				Compression::Gzip => 1,
+				Compression::Brotli => 2,
 			})
 			.unwrap();
 
@@ -138,9 +138,9 @@ impl FileHeader {
 		};
 
 		let precompression = match compression {
-			0 => Precompression::Uncompressed,
-			1 => Precompression::Gzip,
-			2 => Precompression::Brotli,
+			0 => Compression::None,
+			1 => Compression::Gzip,
+			2 => Compression::Brotli,
 			_ => panic!(),
 		};
 
@@ -173,7 +173,7 @@ mod tests {
 
 	#[test]
 	fn conversion() {
-		let test = |tile_format: &TileFormat, precompression: &Precompression, a: u64, b: u64, c: u64, d: u64| {
+		let test = |tile_format: &TileFormat, precompression: &Compression, a: u64, b: u64, c: u64, d: u64| {
 			let mut header1 = FileHeader::new(tile_format, precompression, [0, 0], [0.0, 0.0, 0.0, 0.0]);
 			header1.meta_range = ByteRange::new(a, b);
 			header1.blocks_range = ByteRange::new(c, d);
@@ -187,13 +187,13 @@ mod tests {
 		};
 		test(
 			&TileFormat::JPG,
-			&Precompression::Uncompressed,
+			&Compression::None,
 			314159265358979323,
 			846264338327950288,
 			419716939937510582,
 			097494459230781640,
 		);
 
-		test(&TileFormat::PBF, &Precompression::Brotli, 29, 97, 92, 458);
+		test(&TileFormat::PBF, &Compression::Brotli, 29, 97, 92, 458);
 	}
 }

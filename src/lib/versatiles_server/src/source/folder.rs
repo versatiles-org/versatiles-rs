@@ -12,7 +12,7 @@ use std::{
 	io::{BufReader, Read},
 	path::{Path, PathBuf},
 };
-use versatiles_shared::{compress_brotli, compress_gzip, Blob, Precompression};
+use versatiles_shared::{compress_brotli, compress_gzip, Blob, Compression};
 
 pub struct Folder {
 	folder: PathBuf,
@@ -46,7 +46,7 @@ impl ServerSourceTrait for Folder {
 		"{\"type\":\"folder\"}".to_owned()
 	}
 
-	async fn get_data(&self, path: &[&str], accept: EnumSet<Precompression>) -> Response<Full<Bytes>> {
+	async fn get_data(&self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>> {
 		let mut local_path = self.folder.clone();
 		local_path.push(PathBuf::from(path.join("/")));
 
@@ -73,15 +73,15 @@ impl ServerSourceTrait for Folder {
 
 		let mime = guess_mime(&local_path);
 
-		if accept.contains(Precompression::Brotli) {
-			return ok_data(compress_brotli(blob).unwrap(), &Precompression::Brotli, &mime);
+		if accept.contains(Compression::Brotli) {
+			return ok_data(compress_brotli(blob).unwrap(), &Compression::Brotli, &mime);
 		}
 
-		if accept.contains(Precompression::Gzip) {
-			return ok_data(compress_gzip(blob).unwrap(), &Precompression::Gzip, &mime);
+		if accept.contains(Compression::Gzip) {
+			return ok_data(compress_gzip(blob).unwrap(), &Compression::Gzip, &mime);
 		}
 
-		ok_data(blob, &Precompression::Uncompressed, &mime)
+		ok_data(blob, &Compression::None, &mime)
 	}
 }
 
@@ -102,7 +102,7 @@ mod tests {
 	use enumset::enum_set;
 	use futures::executor::block_on;
 	use hyper::StatusCode;
-	use versatiles_shared::Precompression;
+	use versatiles_shared::Compression;
 
 	#[test]
 	fn test() {
@@ -114,15 +114,13 @@ mod tests {
 			assert_eq!(folder.get_info_as_json(), "{\"type\":\"folder\"}");
 
 			let mut result = folder
-				.get_data(&["recipes", "Queijo.txt"], enum_set!(Precompression::Uncompressed))
+				.get_data(&["recipes", "Queijo.txt"], enum_set!(Compression::None))
 				.await;
 			assert_eq!(result.status(), StatusCode::NOT_FOUND);
 			let result = result.data().await.unwrap().unwrap();
 			assert_eq!(format!("{:?}", result), "b\"Not Found\"");
 
-			let mut result = folder
-				.get_data(&["berlin.mbtiles"], enum_set!(Precompression::Uncompressed))
-				.await;
+			let mut result = folder.get_data(&["berlin.mbtiles"], enum_set!(Compression::None)).await;
 			assert_eq!(result.status(), StatusCode::OK);
 			let result = result.data().await.unwrap().unwrap();
 			assert_eq!(result.len(), 26533888);

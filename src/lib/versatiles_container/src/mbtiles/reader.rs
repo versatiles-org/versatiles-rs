@@ -10,7 +10,7 @@ use std::{
 };
 use tokio::sync::Mutex;
 use versatiles_shared::{
-	Blob, Precompression, ProgressBar, Result, TileBBox, TileBBoxPyramide, TileCoord2, TileCoord3, TileFormat,
+	Blob, Compression, ProgressBar, Result, TileBBox, TileBBoxPyramide, TileCoord2, TileCoord3, TileFormat,
 	TileReaderParameters,
 };
 
@@ -39,11 +39,7 @@ impl TileReader {
 			name: filename.to_string_lossy().to_string(),
 			connection: Mutex::new(connection),
 			meta_data: None,
-			parameters: TileReaderParameters::new(
-				TileFormat::PBF,
-				Precompression::Uncompressed,
-				TileBBoxPyramide::new_empty(),
-			),
+			parameters: TileReaderParameters::new(TileFormat::PBF, Compression::None, TileBBoxPyramide::new_empty()),
 		};
 		reader.load_meta_data().await;
 
@@ -59,7 +55,7 @@ impl TileReader {
 		let mut entries = stmt.query([]).expect("SQL query failed");
 
 		let mut tile_format: Option<TileFormat> = None;
-		let mut precompression: Option<Precompression> = None;
+		let mut precompression: Option<Compression> = None;
 
 		while let Some(entry) = entries.next().unwrap() {
 			let key = entry.get::<_, String>(0).unwrap();
@@ -69,19 +65,19 @@ impl TileReader {
 				"format" => match val.as_str() {
 					"jpg" => {
 						tile_format = Some(TileFormat::JPG);
-						precompression = Some(Precompression::Uncompressed);
+						precompression = Some(Compression::None);
 					}
 					"pbf" => {
 						tile_format = Some(TileFormat::PBF);
-						precompression = Some(Precompression::Gzip);
+						precompression = Some(Compression::Gzip);
 					}
 					"png" => {
 						tile_format = Some(TileFormat::PNG);
-						precompression = Some(Precompression::Uncompressed);
+						precompression = Some(Compression::None);
 					}
 					"webp" => {
 						tile_format = Some(TileFormat::WEBP);
-						precompression = Some(Precompression::Uncompressed);
+						precompression = Some(Compression::None);
 					}
 					_ => panic!("unknown format"),
 				},

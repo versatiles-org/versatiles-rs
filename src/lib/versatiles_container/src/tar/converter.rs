@@ -8,7 +8,7 @@ use std::{
 	sync::Mutex,
 };
 use tar::{Builder, Header};
-use versatiles_shared::{Precompression, ProgressBar, TileConverterConfig, TileFormat};
+use versatiles_shared::{Compression, ProgressBar, TileConverterConfig, TileFormat};
 
 pub struct TileConverter {
 	builder: Builder<File>,
@@ -51,9 +51,9 @@ impl TileConverterTrait for TileConverter {
 		};
 
 		let ext_comp = match self.config.get_tile_precompression() {
-			Precompression::Uncompressed => "",
-			Precompression::Gzip => ".gz",
-			Precompression::Brotli => ".br",
+			Compression::None => "",
+			Compression::Gzip => ".gz",
+			Compression::Brotli => ".br",
 		};
 
 		let bbox_pyramide = self.config.get_bbox_pyramide();
