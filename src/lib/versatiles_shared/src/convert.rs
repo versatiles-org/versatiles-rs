@@ -23,6 +23,16 @@ impl FnConv {
 	fn some(func: fn(Blob) -> Result<Blob>, name: &str) -> Option<FnConv> {
 		Some(FnConv::new(func, name))
 	}
+
+	#[allow(dead_code)]
+	fn get_function(&self) -> fn(Blob) -> Result<Blob> {
+		self.func
+	}
+
+	#[allow(dead_code)]
+	fn get_name(&self) -> &str {
+		&self.name
+	}
 }
 
 impl Debug for FnConv {
@@ -195,6 +205,7 @@ impl Eq for DataConverter {}
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::{Blob, Compression, DataConverter, TileFormat};
 
 	#[test]
 	fn test_new() {
@@ -224,5 +235,48 @@ mod tests {
 		let data_converter =
 			DataConverter::new_tile_recompressor(&src_form, &src_comp, &dst_form, &dst_comp, force_recompress);
 		assert_eq!(data_converter.pipeline.len(), 3);
+	}
+
+	// Test function for the `FnConv` struct
+	#[test]
+	fn test_fn_conv() {
+		// Create a test `FnConv` instance
+		let test_fn = FnConv::new(|blob| Ok(blob), "test");
+		// Check the name of the `FnConv` instance
+		assert_eq!(test_fn.get_name(), "test");
+
+		// Check the function of the `FnConv` instance
+
+		let func = test_fn.get_function();
+		let vec = vec![1, 2, 3];
+		assert_eq!(func(Blob::from(&vec)).unwrap().as_vec(), vec);
+	}
+
+	// Test function for the `DataConverter` struct
+	#[test]
+	fn test_data_converter() {
+		// Create a test `DataConverter` instance
+		let test_converter = DataConverter::new_tile_recompressor(
+			&TileFormat::PNG,
+			&Compression::Gzip,
+			&TileFormat::JPG,
+			&Compression::Brotli,
+			true,
+		);
+
+		// Check if the converter is not empty
+		assert!(!test_converter.is_empty());
+
+		// Check if the converter has the correct number of conversion functions in the pipeline
+		assert_eq!(test_converter.pipeline.len(), 3);
+
+		// Check if the first function in the pipeline is the `decompress_gzip` function
+		assert_eq!(test_converter.pipeline[0].name, "decompress_gzip");
+
+		// Check if the second function in the pipeline is the `PNG->JPG` format conversion function
+		assert_eq!(test_converter.pipeline[1].name, "PNG->JPG");
+
+		// Check if the third function in the pipeline is the `compress_brotli` function
+		assert_eq!(test_converter.pipeline[2].name, "compress_brotli");
 	}
 }

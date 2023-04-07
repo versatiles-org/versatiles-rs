@@ -56,6 +56,13 @@ impl From<Vec<u8>> for Blob {
 	}
 }
 
+impl From<&Vec<u8>> for Blob {
+	/// Converts a `Vec<u8>` instance into a `Blob`.
+	fn from(item: &Vec<u8>) -> Self {
+		Blob(Bytes::from(item.clone()))
+	}
+}
+
 impl From<&str> for Blob {
 	/// Converts a `&str` instance into a `Blob`.
 	fn from(item: &str) -> Self {
