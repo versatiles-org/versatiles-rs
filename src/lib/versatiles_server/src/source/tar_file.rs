@@ -190,3 +190,46 @@ impl Debug for TarFile {
 		f.debug_struct("TarFile").field("name", &self.name).finish()
 	}
 }
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use assert_fs::NamedTempFile;
+	use axum::body::HttpBody;
+	use enumset::enum_set;
+	use versatiles_container::{
+		dummy::{ReaderProfile, TileReader},
+		tar_file::TileConverter,
+		TileConverterTrait,
+	};
+	use versatiles_shared::TileConverterConfig;
+
+	#[tokio::test]
+	async fn test_tar_file() {
+		async fn get(container: &Box<TarFile>, path: &[&str]) -> String {
+			let mut resp = container.get_data(path, enum_set!(Precompression::Uncompressed)).await;
+			let data1 = resp.data().await.unwrap().unwrap();
+			let data3 = String::from_utf8_lossy(&data1);
+			return data3.to_string();
+		}
+
+		let file = NamedTempFile::new("temp.tar").unwrap();
+
+		// get dummy reader
+		let mut reader1 = TileReader::new_dummy(ReaderProfile::PngFast, 3);
+
+		let config = TileConverterConfig::new_full();
+		let mut converter1 = TileConverter::new(&file.path(), config);
+		converter1.convert_from(&mut reader1).await;
+
+		let tar_file = TarFile::from(&file.to_str().unwrap());
+
+		let result = get(&tar_file, &["meta.json"]).await;
+		assert_eq!(result, "dummy meta data");
+
+		let result = get(&tar_file, &["0", "0", "0.png"]).await;
+		assert!(result.starts_with("�PNG\r\n"));
+
+		let result = get(&tar_file, &["cheesecake.mp4"]).await;
+		assert_eq!(result, "Not Found");
+	}
+}

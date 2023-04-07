@@ -2083,6 +2083,7 @@ dependencies = [
 name = "versatiles_server"
 version = "0.1.0"
 dependencies = [
+ "assert_fs",
  "async-trait",
  "axum",
  "enumset",
