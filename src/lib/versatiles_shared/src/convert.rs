@@ -191,3 +191,38 @@ impl PartialEq for DataConverter {
 /// Implements the `Eq` trait for the `DataConverter` struct.
 /// This trait is used in conjunction with `PartialEq` to provide a total equality relation for `DataConverter` instances.
 impl Eq for DataConverter {}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_new() {
+		let fn_conv = FnConv::new(|x| Ok(x), "test_fn_conv");
+		assert_eq!(fn_conv.name, "test_fn_conv");
+	}
+
+	#[test]
+	fn test_new_empty() {
+		let data_converter = DataConverter::new_empty();
+		assert_eq!(data_converter.pipeline.len(), 0);
+	}
+
+	#[test]
+	fn test_is_empty() {
+		let data_converter = DataConverter::new_empty();
+		assert!(data_converter.is_empty());
+	}
+
+	#[test]
+	fn test_new_tile_recompressor() {
+		let src_form = TileFormat::PNG;
+		let src_comp = Compression::Gzip;
+		let dst_form = TileFormat::JPG;
+		let dst_comp = Compression::Brotli;
+		let force_recompress = false;
+		let data_converter =
+			DataConverter::new_tile_recompressor(&src_form, &src_comp, &dst_form, &dst_comp, force_recompress);
+		assert_eq!(data_converter.pipeline.len(), 3);
+	}
+}
