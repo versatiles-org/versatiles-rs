@@ -278,3 +278,17 @@ impl std::fmt::Debug for TileReader {
 			.finish()
 	}
 }
+
+#[cfg(test)]
+pub mod tests {
+	use super::*;
+	use crate::dummy::{self, ConverterProfile};
+
+	#[tokio::test]
+	async fn reader() {
+		// get test container reader
+		let mut reader = TileReader::new("../../../ressources/berlin.mbtiles").await.unwrap();
+		let mut converter = dummy::TileConverter::new_dummy(ConverterProfile::Whatever, 8);
+		converter.convert_from(&mut reader).await;
+	}
+}

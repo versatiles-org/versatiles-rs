@@ -131,7 +131,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_reader() {
-		let reader = TestReader::new("test_path").await.unwrap();
+		let mut reader = TestReader::new("test_path").await.unwrap();
 
 		// Test getting name
 		assert_eq!(reader.get_name(), "test_path");
@@ -152,5 +152,8 @@ mod tests {
 			reader.get_tile_data(&coord).await.unwrap().to_string(),
 			"test tile data"
 		);
+
+		let mut converter = TestConverter::new(&Path::new("/hallo"), TileConverterConfig::new_full());
+		converter.convert_from(&mut reader).await;
 	}
 }

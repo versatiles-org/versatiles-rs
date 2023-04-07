@@ -49,16 +49,11 @@ pub mod tests {
 		tile_format: TileFormat, compression: Compression, max_zoom_level: u8, extension: &str,
 	) -> NamedTempFile {
 		let reader_profile = match tile_format {
-			TileFormat::BIN => todo!(),
 			TileFormat::PNG => ReaderProfile::PngFast,
 			TileFormat::JPG => ReaderProfile::PngFast,
 			TileFormat::WEBP => ReaderProfile::PngFast,
-			TileFormat::AVIF => todo!(),
-			TileFormat::SVG => todo!(),
 			TileFormat::PBF => ReaderProfile::PbfFast,
-			TileFormat::GEOJSON => todo!(),
-			TileFormat::TOPOJSON => todo!(),
-			TileFormat::JSON => todo!(),
+			_ => todo!(),
 		};
 
 		// get dummy reader
@@ -87,7 +82,7 @@ pub mod tests {
 	}
 
 	#[test]
-	fn test_readers() {
+	fn converters_and_readers() {
 		#[derive(Debug)]
 		enum Container {
 			Tar,
