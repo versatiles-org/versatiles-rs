@@ -31,6 +31,11 @@ impl Blob {
 		std::str::from_utf8(&self.0).unwrap()
 	}
 
+	/// Returns the underlying bytes as a string, assuming they represent valid UTF-8 encoded text.
+	pub fn to_string(&self) -> String {
+		String::from_utf8_lossy(&self.0).to_string()
+	}
+
 	/// Returns the length of the underlying byte slice.
 	pub fn len(&self) -> usize {
 		self.0.len()
@@ -124,6 +129,7 @@ mod tests {
 
 		// Assert that a Blob can be created from a reference to the string and converted back to a string correctly
 		assert_eq!(Blob::from(&text).as_str(), text);
+		assert_eq!(Blob::from(&text).to_string(), text);
 
 		// Assert that a Blob can be created from a reference to the string's underlying buffer and converted back to a string correctly
 		assert_eq!(Blob::from(&*text).as_str(), text);
