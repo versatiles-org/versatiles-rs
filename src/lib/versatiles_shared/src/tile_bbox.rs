@@ -205,8 +205,8 @@ impl TileBBox {
 		TileCoord2::new(i.rem(width) + self.x_min, i.div(width) + self.y_min)
 	}
 	pub fn to_geo_bbox(&self, z: u8) -> [f32; 4] {
-		let p_min = TileCoord3::new(self.x_min + 0, self.y_max + 1, z).to_geo();
-		let p_max = TileCoord3::new(self.x_max + 1, self.y_min + 0, z).to_geo();
+		let p_min = TileCoord3::new(self.x_min, self.y_max + 1, z).to_geo();
+		let p_max = TileCoord3::new(self.x_max + 1, self.y_min, z).to_geo();
 
 		[p_min[0], p_min[1], p_max[0], p_max[1]]
 	}
