@@ -313,61 +313,51 @@ mod tests {
 		test("fluffy.svg", "image/svg+xml");
 	}
 
-	#[test]
-	fn test_server() {
-		#[tokio::main]
-		async fn test() {
-			async fn get(path: &str) -> String {
-				reqwest::get(format!("http://{IP}:{PORT}/{path}"))
-					.await
-					.unwrap()
-					.text()
-					.await
-					.unwrap()
-			}
-
-			let mut server = TileServer::new(IP, PORT);
-
-			let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
-			let source = TileContainer::from(reader);
-			server.add_tile_source("cheese", source);
-
-			let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
-			let source = TileContainer::from(reader);
-			server.add_static_source(source);
-
-			server.start().await;
-
-			assert_eq!(get("api/status.json").await, "{\"status\":\"ready\"}");
-			assert_eq!(get("api/tiles.json").await, "[\n\t{ \"url\":\"/cheese/\", \"name\":\"dummy name\", \"info\":{ \"container\":\"dummy container\", \"format\":\"pbf\", \"precompression\":\"gzip\", \"zoom_min\":0, \"zoom_max\":8, \"bbox\":[-180.0, -84.92832092949963, 178.59375, 85.05112877980659] } }\n]");
-			assert!(get("cheese/0/0/0.png").await.starts_with("\u{1a}4\n\u{5}ocean"));
-			assert_eq!(get("cheese/meta.json").await, "dummy meta data");
-			assert_eq!(get("cheese/tiles.json").await, "dummy meta data");
-			assert_eq!(get("cheese/brum.json").await, "Not Found");
-			assert_eq!(get("status").await, "ready!");
-
-			server.stop().await;
+	#[tokio::test]
+	async fn test_server() {
+		async fn get(path: &str) -> String {
+			reqwest::get(format!("http://{IP}:{PORT}/{path}"))
+				.await
+				.unwrap()
+				.text()
+				.await
+				.unwrap()
 		}
 
-		test()
+		let mut server = TileServer::new(IP, PORT);
+
+		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
+		let source = TileContainer::from(reader);
+		server.add_tile_source("cheese", source);
+
+		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
+		let source = TileContainer::from(reader);
+		server.add_static_source(source);
+
+		server.start().await;
+
+		assert_eq!(get("api/status.json").await, "{\"status\":\"ready\"}");
+		assert_eq!(get("api/tiles.json").await, "[\n\t{ \"url\":\"/cheese/\", \"name\":\"dummy name\", \"info\":{ \"container\":\"dummy container\", \"format\":\"pbf\", \"precompression\":\"gzip\", \"zoom_min\":0, \"zoom_max\":8, \"bbox\":[-180.0, -84.92832092949963, 178.59375, 85.05112877980659] } }\n]");
+		assert!(get("cheese/0/0/0.png").await.starts_with("\u{1a}4\n\u{5}ocean"));
+		assert_eq!(get("cheese/meta.json").await, "dummy meta data");
+		assert_eq!(get("cheese/tiles.json").await, "dummy meta data");
+		assert_eq!(get("cheese/brum.json").await, "Not Found");
+		assert_eq!(get("status").await, "ready!");
+
+		server.stop().await;
 	}
 
-	#[test]
+	#[tokio::test]
 	#[should_panic]
-	fn test_panic() {
-		#[tokio::main]
-		async fn test() {
-			let mut server = TileServer::new(IP, PORT);
+	async fn test_panic() {
+		let mut server = TileServer::new(IP, PORT);
 
-			let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PngFast, 8);
-			let source = TileContainer::from(reader);
-			server.add_tile_source("cheese", source);
+		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PngFast, 8);
+		let source = TileContainer::from(reader);
+		server.add_tile_source("cheese", source);
 
-			let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
-			let source = TileContainer::from(reader);
-			server.add_tile_source("cheese", source);
-		}
-
-		test()
+		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
+		let source = TileContainer::from(reader);
+		server.add_tile_source("cheese", source);
 	}
 }

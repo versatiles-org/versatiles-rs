@@ -46,46 +46,6 @@ mod tests {
 	use versatiles_shared::{Precompression, TileBBoxPyramide, TileConverterConfig, TileFormat};
 
 	#[test]
-	fn test_converters() {
-		/*
-		#[tokio::main]
-		async fn test(extension: &str, compression: Precompression, force_recompress: bool) {
-			println!("test {:?}, {:?}, {:?}", extension, compression, force_recompress);
-
-			let start = Instant::now();
-
-			let mut bbox_pyramide = TileBBoxPyramide::new_full();
-
-			// ensure test duration of < 100 ms
-			match compression {
-				Precompression::Uncompressed => bbox_pyramide.set_zoom_max(13),
-				Precompression::Gzip => bbox_pyramide.set_zoom_max(12),
-				Precompression::Brotli => bbox_pyramide.set_zoom_max(6),
-			};
-
-			let config = TileConverterConfig::new(None, Some(compression), bbox_pyramide, force_recompress);
-			let tmp_file = NamedTempFile::new("temp.".to_owned() + extension).unwrap();
-			let mut reader = TileReader::new("../../../ressources/berlin.mbtiles").await.unwrap();
-			let mut convert = get_converter(tmp_file.to_str().unwrap(), config);
-			convert.convert_from(&mut reader).await;
-			tmp_file.close().unwrap();
-
-			let duration = start.elapsed();
-			println!("Time elapsed in expensive_function() is: {:?}", duration);
-		}
-
-		let extensions = ["tar", "versatiles"];
-		for extension in extensions {
-			test(extension, Precompression::Uncompressed, true);
-			test(extension, Precompression::Uncompressed, false);
-			test(extension, Precompression::Gzip, true);
-			test(extension, Precompression::Gzip, false);
-			test(extension, Precompression::Brotli, true);
-			test(extension, Precompression::Brotli, false);
-		}
-		 */
-	}
-	#[test]
 	fn test_readers() {
 		#[derive(Debug)]
 		enum Container {

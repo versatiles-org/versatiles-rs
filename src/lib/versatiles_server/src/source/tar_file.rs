@@ -203,15 +203,15 @@ mod tests {
 	};
 	use versatiles_shared::TileConverterConfig;
 
+	async fn get_as_string(container: &Box<TarFile>, path: &[&str], precompression: Precompression) -> String {
+		let mut resp = container.get_data(path, enum_set!(precompression)).await;
+		let data1 = resp.data().await.unwrap().unwrap();
+		let data3 = String::from_utf8_lossy(&data1);
+		return data3.to_string();
+	}
+
 	#[tokio::test]
 	async fn test_tar_file() {
-		async fn get(container: &Box<TarFile>, path: &[&str]) -> String {
-			let mut resp = container.get_data(path, enum_set!(Precompression::Uncompressed)).await;
-			let data1 = resp.data().await.unwrap().unwrap();
-			let data3 = String::from_utf8_lossy(&data1);
-			return data3.to_string();
-		}
-
 		let file = NamedTempFile::new("temp.tar").unwrap();
 
 		// get dummy reader
@@ -223,13 +223,27 @@ mod tests {
 
 		let tar_file = TarFile::from(&file.to_str().unwrap());
 
-		let result = get(&tar_file, &["meta.json"]).await;
+		let result = get_as_string(&tar_file, &["meta.json"], Precompression::Uncompressed).await;
 		assert_eq!(result, "dummy meta data");
 
-		let result = get(&tar_file, &["0", "0", "0.png"]).await;
+		let result = get_as_string(&tar_file, &["0", "0", "0.png"], Precompression::Uncompressed).await;
 		assert!(result.starts_with("�PNG\r\n"));
 
-		let result = get(&tar_file, &["cheesecake.mp4"]).await;
+		let result = get_as_string(&tar_file, &["cheesecake.mp4"], Precompression::Uncompressed).await;
 		assert_eq!(result, "Not Found");
+	}
+
+	#[test]
+	fn test_tar_file_from_non_existing_path() {
+		let path = "path/to/non-existing/file.tar";
+		let result = std::panic::catch_unwind(|| TarFile::from(path));
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_tar_file_from_directory() {
+		let path = ".";
+		let result = std::panic::catch_unwind(|| TarFile::from(path));
+		assert!(result.is_err());
 	}
 }
