@@ -245,48 +245,60 @@ mod tests {
 
 		container_file
 	}
-	async fn test_tar_file(from_compression: &Compression, to_compression: &Compression) {
-		let file = make_test_tar(from_compression).await;
 
-		let tar_file = TarFile::from(&file.to_str().unwrap());
+	#[tokio::test]
+	async fn compressions() {
+		use Compression::*;
 
-		let result = get_as_string(&tar_file, &["meta.json"], to_compression).await;
-		assert_eq!(result, "dummy meta data");
+		async fn test_compression(from_compression: &Compression, to_compression: &Compression) {
+			let file = make_test_tar(from_compression).await;
 
-		let result = get_as_string(&tar_file, &["0", "0", "0.pbf"], to_compression).await;
-		println!("{}", result);
-		assert!(result.starts_with("\u{1a}4\n\u{5}ocean"));
+			let tar_file = TarFile::from(&file.to_str().unwrap());
 
-		let result = get_as_string(&tar_file, &["cheesecake.mp4"], to_compression).await;
-		assert_eq!(result, "Not Found");
+			let result = get_as_string(&tar_file, &["meta.json"], to_compression).await;
+			assert_eq!(result, "dummy meta data");
+
+			let result = get_as_string(&tar_file, &["0", "0", "0.pbf"], to_compression).await;
+			println!("{}", result);
+			assert!(result.starts_with("\u{1a}4\n\u{5}ocean"));
+
+			let result = get_as_string(&tar_file, &["cheesecake.mp4"], to_compression).await;
+			assert_eq!(result, "Not Found");
+		}
+
+		test_compression(&None, &None).await;
+		test_compression(&None, &Gzip).await;
+		test_compression(&None, &Brotli).await;
+
+		test_compression(&Gzip, &None).await;
+		test_compression(&Gzip, &Gzip).await;
+		test_compression(&Gzip, &Brotli).await;
+
+		test_compression(&Brotli, &None).await;
+		test_compression(&Brotli, &Gzip).await;
+		test_compression(&Brotli, &Brotli).await;
 	}
 
 	#[tokio::test]
-	async fn test_tar_file_compressions() {
-		use Compression::*;
+	async fn small_stuff() {
+		let file = make_test_tar(&Compression::None).await;
 
-		test_tar_file(&None, &None).await;
-		test_tar_file(&None, &Gzip).await;
-		test_tar_file(&None, &Brotli).await;
+		let tar_file = TarFile::from(&file.to_str().unwrap());
 
-		test_tar_file(&Gzip, &None).await;
-		test_tar_file(&Gzip, &Gzip).await;
-		test_tar_file(&Gzip, &Brotli).await;
-
-		test_tar_file(&Brotli, &None).await;
-		test_tar_file(&Brotli, &Gzip).await;
-		test_tar_file(&Brotli, &Brotli).await;
+		assert_eq!(tar_file.get_info_as_json(), "{\"type\":\"tar\"}");
+		assert!(tar_file.get_name().ends_with("temp.tar"));
+		assert!(format!("{:?}", tar_file).starts_with("TarFile { name:"));
 	}
 
 	#[test]
-	fn test_tar_file_from_non_existing_path() {
+	fn from_non_existing_path() {
 		let path = "path/to/non-existing/file.tar";
 		let result = std::panic::catch_unwind(|| TarFile::from(path));
 		assert!(result.is_err());
 	}
 
 	#[test]
-	fn test_tar_file_from_directory() {
+	fn from_directory() {
 		let path = ".";
 		let result = std::panic::catch_unwind(|| TarFile::from(path));
 		assert!(result.is_err());
