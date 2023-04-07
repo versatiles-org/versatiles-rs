@@ -198,7 +198,7 @@ mod tests {
 	use enumset::enum_set;
 	use versatiles_container::{
 		dummy::{ReaderProfile, TileReader},
-		tar_file::TileConverter,
+		tar::TileConverter,
 		TileConverterTrait,
 	};
 	use versatiles_shared::TileConverterConfig;
