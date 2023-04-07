@@ -10,7 +10,7 @@ keywords = ["versatiles", "mbtiles", "tiles", "map"]
 categories = ["command-line-utilities", "science::geo", "web-programming::http-server"]
 readme = "README.MD"
 license = "MIT"
-exclude = ["benches/ressources/*"]
+exclude = ["ressources/*"]
 
 [dependencies]
 async-trait = { version = "0.1.68", default-features = false }
@@ -50,7 +50,7 @@ path = "src/main.rs"
 [[bench]]
 name = "main"
 harness = false
-path = "benches/main.rs"
+path = "benches/lib.rs"
 
 [profile.dev]
 opt-level = 1
