@@ -48,6 +48,9 @@ jobs:
       - name: cargo test
         run: cargo test
 
+      - name: get cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+
       - name: get code coverage
         run: cargo llvm-cov test --workspace --tests --lcov --output-path ./lcov.info
 
