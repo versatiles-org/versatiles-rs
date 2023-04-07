@@ -126,4 +126,38 @@ mod tests {
 
 		assert_eq!(def1, def2);
 	}
+	#[test]
+	fn count_tiles() {
+		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
+		assert_eq!(def.count_tiles(), 16);
+	}
+
+	#[test]
+	fn as_blob() {
+		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
+		let blob = def.as_blob();
+		assert_eq!(blob.len(), 33);
+	}
+
+	#[test]
+	fn get_sort_index() {
+		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
+		assert_eq!(def.get_sort_index(), 38);
+	}
+
+	#[test]
+	fn as_str() {
+		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
+		assert_eq!(def.as_str(), "[3,[256,512],[259,515]]");
+	}
+
+	#[test]
+	fn debug() {
+		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
+		let debug_string = format!("{:?}", def);
+		assert_eq!(
+		debug_string,
+		"BlockDefinition { x/y/z: TileCoord3(1, 2, 3), bbox: TileBBox [0,0,3,3] = 16, tiles_range: ByteRange[0,0], index_range: ByteRange[0,0] }"
+	);
+	}
 }
