@@ -36,8 +36,8 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 		self.get_parameters().get_tile_format()
 	}
 
-	fn get_tile_precompression(&self) -> &Compression {
-		self.get_parameters().get_tile_precompression()
+	fn get_tile_compression(&self) -> &Compression {
+		self.get_parameters().get_tile_compression()
 	}
 
 	/// container name, e.g. versatiles, mbtiles, ...
@@ -49,7 +49,7 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 	/// always compressed with get_tile_compression and formatted with get_tile_format
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob>;
 
-	/// always compressed with get_tile_precompression and formatted with get_tile_format
+	/// always compressed with get_tile_compression and formatted with get_tile_format
 	async fn get_bbox_tile_vec(&self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
 		let mut vec: Vec<(TileCoord2, Blob)> = Vec::new();
 		for coord in bbox.iter_coords() {
@@ -136,8 +136,8 @@ mod tests {
 		// Test getting name
 		assert_eq!(reader.get_name(), "test_path");
 
-		// Test getting tile precompression and format
-		assert_eq!(reader.get_tile_precompression(), &Compression::None);
+		// Test getting tile compression and format
+		assert_eq!(reader.get_tile_compression(), &Compression::None);
 		assert_eq!(reader.get_tile_format(), &TileFormat::PBF);
 
 		// Test getting container name

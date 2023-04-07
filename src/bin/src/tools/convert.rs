@@ -39,7 +39,7 @@ pub struct Subcommand {
 	#[arg(long, short, value_enum)]
 	tile_format: Option<TileFormat>,
 
-	/// set new precompression
+	/// set new compression
 	#[arg(long, short, value_enum)]
 	precompress: Option<Compression>,
 

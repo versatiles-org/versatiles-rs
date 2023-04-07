@@ -31,7 +31,7 @@ Commands:
 | - from S3           | 🚧         | 🚫      | 🚫  |
 | **write container** |            |         |     |
 | - to file           | ✅          | 🚫      | ✅   |
-| **precompression**  |            |         |     |
+| **compression**     |            |         |     |
 | - uncompressed      | ✅          | 🚫      | ✅   |
 | - gzip              | ✅          | ✅       | ✅   |
 | - brotli            | ✅          | 🚫      | ✅   |

@@ -27,7 +27,7 @@ impl TileConverterTrait for TileConverter {
 		let bbox_pyramide: &TileBBoxPyramide = self.config.get_bbox_pyramide();
 		let mut header = FileHeader::new(
 			self.config.get_tile_format(),
-			self.config.get_tile_precompression(),
+			self.config.get_tile_compression(),
 			[
 				bbox_pyramide.get_zoom_min().unwrap(),
 				bbox_pyramide.get_zoom_max().unwrap(),

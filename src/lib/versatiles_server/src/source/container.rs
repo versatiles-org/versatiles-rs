@@ -12,12 +12,12 @@ use versatiles_shared::{compress_brotli, compress_gzip, decompress, Compression,
 pub struct TileContainer {
 	reader: TileReaderBox,
 	tile_mime: String,
-	precompression: Compression,
+	compression: Compression,
 }
 impl TileContainer {
 	pub fn from(reader: TileReaderBox) -> Box<TileContainer> {
 		let parameters = reader.get_parameters();
-		let precompression = *parameters.get_tile_precompression();
+		let compression = *parameters.get_tile_compression();
 
 		let tile_mime = match parameters.get_tile_format() {
 			TileFormat::BIN => "application/octet-stream",
@@ -36,7 +36,7 @@ impl TileContainer {
 		Box::new(TileContainer {
 			reader,
 			tile_mime,
-			precompression,
+			compression,
 		})
 	}
 }
@@ -51,13 +51,13 @@ impl ServerSourceTrait for TileContainer {
 		let bbox_pyramide = parameters.get_bbox_pyramide();
 
 		let tile_format = format!("{:?}", parameters.get_tile_format()).to_lowercase();
-		let tile_precompression = format!("{:?}", parameters.get_tile_precompression()).to_lowercase();
+		let tile_compression = format!("{:?}", parameters.get_tile_compression()).to_lowercase();
 
 		format!(
-			"{{ \"container\":\"{}\", \"format\":\"{}\", \"precompression\":\"{}\", \"zoom_min\":{}, \"zoom_max\":{}, \"bbox\":{:?} }}",
+			"{{ \"container\":\"{}\", \"format\":\"{}\", \"compression\":\"{}\", \"zoom_min\":{}, \"zoom_max\":{}, \"bbox\":{:?} }}",
 			self.reader.get_container_name(),
 			tile_format,
-			tile_precompression,
+			tile_compression,
 			bbox_pyramide.get_zoom_min().unwrap(),
 			bbox_pyramide.get_zoom_max().unwrap(),
 			bbox_pyramide.get_geo_bbox(),
@@ -86,11 +86,11 @@ impl ServerSourceTrait for TileContainer {
 
 			let mut data = tile.unwrap();
 
-			if accept.contains(self.precompression) {
-				return ok_data(data, &self.precompression, &self.tile_mime);
+			if accept.contains(self.compression) {
+				return ok_data(data, &self.compression, &self.tile_mime);
 			}
 
-			data = decompress(data, &self.precompression).unwrap();
+			data = decompress(data, &self.compression).unwrap();
 			return ok_data(data, &Compression::None, &self.tile_mime);
 		} else if (path[0] == "meta.json") || (path[0] == "tiles.json") {
 			// get meta
@@ -123,7 +123,7 @@ impl Debug for TileContainer {
 		f.debug_struct("TileContainer")
 			.field("reader", &self.reader)
 			.field("tile_mime", &self.tile_mime)
-			.field("precompression", &self.precompression)
+			.field("compression", &self.compression)
 			.finish()
 	}
 }

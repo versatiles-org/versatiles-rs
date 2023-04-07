@@ -22,7 +22,7 @@ impl TileReader {
 		let header = FileHeader::from_reader(&mut reader).await;
 
 		let meta = if header.meta_range.length > 0 {
-			DataConverter::new_decompressor(&header.precompression)
+			DataConverter::new_decompressor(&header.compression)
 				.run(reader.read_range(&header.meta_range).await.unwrap())
 				.unwrap()
 		} else {
@@ -31,7 +31,7 @@ impl TileReader {
 
 		let block_index = BlockIndex::from_brotli_blob(reader.read_range(&header.blocks_range).await.unwrap());
 		let bbox_pyramide = block_index.get_bbox_pyramide();
-		let parameters = TileReaderParameters::new(header.tile_format, header.precompression, bbox_pyramide);
+		let parameters = TileReaderParameters::new(header.tile_format, header.compression, bbox_pyramide);
 
 		TileReader {
 			meta,

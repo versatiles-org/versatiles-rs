@@ -50,7 +50,7 @@ impl TileConverterTrait for TileConverter {
 			TileFormat::JSON => ".json",
 		};
 
-		let ext_comp = match self.config.get_tile_precompression() {
+		let ext_comp = match self.config.get_tile_compression() {
 			Compression::None => "",
 			Compression::Gzip => ".gz",
 			Compression::Brotli => ".br",

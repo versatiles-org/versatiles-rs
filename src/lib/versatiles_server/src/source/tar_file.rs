@@ -66,7 +66,7 @@ impl TarFile {
 
 			let mut entry_path = file.path().unwrap().into_owned();
 
-			let precompression: Compression = if let Some(extension) = entry_path.extension() {
+			let compression: Compression = if let Some(extension) = entry_path.extension() {
 				match extension.to_str() {
 					Some("br") => Compression::Brotli,
 					Some("gz") => Compression::Gzip,
@@ -76,7 +76,7 @@ impl TarFile {
 				Compression::None
 			};
 
-			if precompression != Compression::None {
+			if compression != Compression::None {
 				entry_path = entry_path.with_extension("")
 			}
 
@@ -99,11 +99,11 @@ impl TarFile {
 					name = name[1..].to_string();
 				}
 
-				trace!("adding file from tar: {} ({:?})", name, precompression);
+				trace!("adding file from tar: {} ({:?})", name, compression);
 
 				let entry = lookup.entry(name);
 				let versions = entry.or_insert_with(|| FileEntry::new(mime.to_string()));
-				match precompression {
+				match compression {
 					Compression::None => versions.un = Some(blob),
 					Compression::Gzip => versions.gz = Some(blob),
 					Compression::Brotli => versions.br = Some(blob),
@@ -203,8 +203,8 @@ mod tests {
 	};
 	use versatiles_shared::TileConverterConfig;
 
-	async fn get_as_string(container: &Box<TarFile>, path: &[&str], precompression: Compression) -> String {
-		let mut resp = container.get_data(path, enum_set!(precompression)).await;
+	async fn get_as_string(container: &Box<TarFile>, path: &[&str], compression: Compression) -> String {
+		let mut resp = container.get_data(path, enum_set!(compression)).await;
 		let data1 = resp.data().await.unwrap().unwrap();
 		let data3 = String::from_utf8_lossy(&data1);
 		return data3.to_string();

@@ -2,7 +2,7 @@ use super::{Compression, DataConverter, TileBBoxPyramide, TileFormat, TileReader
 
 pub struct TileConverterConfig {
 	tile_format: Option<TileFormat>,
-	tile_precompression: Option<Compression>,
+	tile_compression: Option<Compression>,
 	tile_recompressor: Option<DataConverter>,
 	compressor: Option<DataConverter>,
 	bbox_pyramide: TileBBoxPyramide,
@@ -13,12 +13,12 @@ pub struct TileConverterConfig {
 #[allow(dead_code)]
 impl TileConverterConfig {
 	pub fn new(
-		tile_format: Option<TileFormat>, tile_precompression: Option<Compression>, bbox_pyramide: TileBBoxPyramide,
+		tile_format: Option<TileFormat>, tile_compression: Option<Compression>, bbox_pyramide: TileBBoxPyramide,
 		force_recompress: bool,
 	) -> Self {
 		TileConverterConfig {
 			tile_format,
-			tile_precompression,
+			tile_compression,
 			bbox_pyramide,
 			tile_recompressor: None,
 			compressor: None,
@@ -33,14 +33,12 @@ impl TileConverterConfig {
 		self.bbox_pyramide.intersect(parameters.get_bbox_pyramide());
 
 		self.tile_format.get_or_insert(parameters.get_tile_format().clone());
-		self
-			.tile_precompression
-			.get_or_insert(*parameters.get_tile_precompression());
+		self.tile_compression.get_or_insert(*parameters.get_tile_compression());
 
 		let src_form = parameters.get_tile_format();
-		let src_comp = parameters.get_tile_precompression();
+		let src_comp = parameters.get_tile_compression();
 		let dst_form = self.tile_format.as_ref().unwrap();
-		let dst_comp = self.tile_precompression.as_ref().unwrap();
+		let dst_comp = self.tile_compression.as_ref().unwrap();
 		let force_recompress = self.force_recompress;
 
 		self.tile_recompressor = Some(DataConverter::new_tile_recompressor(
@@ -67,8 +65,8 @@ impl TileConverterConfig {
 	pub fn get_tile_format(&self) -> &TileFormat {
 		self.tile_format.as_ref().unwrap()
 	}
-	pub fn get_tile_precompression(&self) -> &Compression {
-		self.tile_precompression.as_ref().unwrap()
+	pub fn get_tile_compression(&self) -> &Compression {
+		self.tile_compression.as_ref().unwrap()
 	}
 }
 
@@ -87,7 +85,7 @@ mod tests {
 		config.finalize_with_parameters(&parameters);
 
 		assert_eq!(config.get_tile_format(), &TileFormat::JPG);
-		assert_eq!(config.get_tile_precompression(), &Compression::Brotli);
+		assert_eq!(config.get_tile_compression(), &Compression::Brotli);
 
 		assert_eq!(
 			config.get_tile_recompressor().description(),

@@ -207,13 +207,13 @@ pub fn ok_not_found() -> Response<Full<Bytes>> {
 	Response::builder().status(404).body(Full::from("Not Found")).unwrap()
 }
 
-pub fn ok_data(data: Blob, precompression: &Compression, mime: &str) -> Response<Full<Bytes>> {
+pub fn ok_data(data: Blob, compression: &Compression, mime: &str) -> Response<Full<Bytes>> {
 	let mut response = Response::builder()
 		.status(200)
 		.header(CONTENT_TYPE, mime)
 		.header(CACHE_CONTROL, "public");
 
-	match precompression {
+	match compression {
 		Compression::None => {}
 		Compression::Gzip => response = response.header(CONTENT_ENCODING, "gzip"),
 		Compression::Brotli => response = response.header(CONTENT_ENCODING, "br"),
@@ -331,7 +331,7 @@ mod tests {
 		server.start().await;
 
 		assert_eq!(get("api/status.json").await, "{\"status\":\"ready\"}");
-		assert_eq!(get("api/tiles.json").await, "[\n\t{ \"url\":\"/cheese/\", \"name\":\"dummy name\", \"info\":{ \"container\":\"dummy container\", \"format\":\"pbf\", \"precompression\":\"gzip\", \"zoom_min\":0, \"zoom_max\":8, \"bbox\":[-180.0, -84.92832092949963, 178.59375, 85.05112877980659] } }\n]");
+		assert_eq!(get("api/tiles.json").await, "[\n\t{ \"url\":\"/cheese/\", \"name\":\"dummy name\", \"info\":{ \"container\":\"dummy container\", \"format\":\"pbf\", \"compression\":\"gzip\", \"zoom_min\":0, \"zoom_max\":8, \"bbox\":[-180.0, -84.92832092949963, 178.59375, 85.05112877980659] } }\n]");
 		assert!(get("cheese/0/0/0.png").await.starts_with("\u{1a}4\n\u{5}ocean"));
 		assert_eq!(get("cheese/meta.json").await, "dummy meta data");
 		assert_eq!(get("cheese/tiles.json").await, "dummy meta data");

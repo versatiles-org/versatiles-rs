@@ -7,7 +7,7 @@ use enumset::EnumSetType;
 use flate2::bufread::{GzDecoder, GzEncoder};
 use std::io::{Cursor, Read};
 
-/// Enum representing possible precompression algorithms
+/// Enum representing possible compression algorithms
 #[derive(Debug, EnumSetType, ValueEnum)]
 pub enum Compression {
 	None,
@@ -15,28 +15,28 @@ pub enum Compression {
 	Brotli,
 }
 
-/// Compresses data based on the given precompression algorithm
+/// Compresses data based on the given compression algorithm
 ///
 /// # Arguments
 ///
 /// * `data` - The blob of data to compress
-/// * `precompression` - The precompression algorithm to use
-pub fn compress(data: Blob, precompression: &Compression) -> Result<Blob> {
-	match precompression {
+/// * `compression` - The compression algorithm to use
+pub fn compress(data: Blob, compression: &Compression) -> Result<Blob> {
+	match compression {
 		Compression::None => Ok(data),
 		Compression::Gzip => compress_gzip(data),
 		Compression::Brotli => compress_brotli(data),
 	}
 }
 
-/// Decompresses data based on the given precompression algorithm
+/// Decompresses data based on the given compression algorithm
 ///
 /// # Arguments
 ///
 /// * `data` - The blob of data to decompress
-/// * `precompression` - The precompression algorithm used for compression
-pub fn decompress(data: Blob, precompression: &Compression) -> Result<Blob> {
-	match precompression {
+/// * `compression` - The compression algorithm used for compression
+pub fn decompress(data: Blob, compression: &Compression) -> Result<Blob> {
+	match compression {
 		Compression::None => Ok(data),
 		Compression::Gzip => decompress_gzip(data),
 		Compression::Brotli => decompress_brotli(data),

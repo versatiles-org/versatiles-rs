@@ -55,7 +55,7 @@ impl TileReader {
 		let mut entries = stmt.query([]).expect("SQL query failed");
 
 		let mut tile_format: Option<TileFormat> = None;
-		let mut precompression: Option<Compression> = None;
+		let mut compression: Option<Compression> = None;
 
 		while let Some(entry) = entries.next().unwrap() {
 			let key = entry.get::<_, String>(0).unwrap();
@@ -65,19 +65,19 @@ impl TileReader {
 				"format" => match val.as_str() {
 					"jpg" => {
 						tile_format = Some(TileFormat::JPG);
-						precompression = Some(Compression::None);
+						compression = Some(Compression::None);
 					}
 					"pbf" => {
 						tile_format = Some(TileFormat::PBF);
-						precompression = Some(Compression::Gzip);
+						compression = Some(Compression::Gzip);
 					}
 					"png" => {
 						tile_format = Some(TileFormat::PNG);
-						precompression = Some(Compression::None);
+						compression = Some(Compression::None);
 					}
 					"webp" => {
 						tile_format = Some(TileFormat::WEBP);
-						precompression = Some(Compression::None);
+						compression = Some(Compression::None);
 					}
 					_ => panic!("unknown format"),
 				},
@@ -90,7 +90,7 @@ impl TileReader {
 		drop(connection);
 
 		self.parameters.set_tile_format(tile_format.unwrap());
-		self.parameters.set_tile_precompression(precompression.unwrap());
+		self.parameters.set_tile_compression(compression.unwrap());
 		self.parameters.set_bbox_pyramide(block_on(self.get_bbox_pyramide()));
 
 		if self.meta_data.is_none() {

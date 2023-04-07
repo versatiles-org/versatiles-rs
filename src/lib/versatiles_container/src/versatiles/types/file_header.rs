@@ -12,15 +12,13 @@ pub struct FileHeader {
 	pub bbox: [i32; 4],
 
 	pub tile_format: TileFormat,
-	pub precompression: Compression,
+	pub compression: Compression,
 
 	pub meta_range: ByteRange,
 	pub blocks_range: ByteRange,
 }
 impl FileHeader {
-	pub fn new(
-		tile_format: &TileFormat, precompression: &Compression, zoom_range: [u8; 2], bbox: [f64; 4],
-	) -> FileHeader {
+	pub fn new(tile_format: &TileFormat, compression: &Compression, zoom_range: [u8; 2], bbox: [f64; 4]) -> FileHeader {
 		assert!(
 			zoom_range[0] <= zoom_range[1],
 			"zoom_range[0] ({}) must be <= zoom_range[1] ({})",
@@ -38,7 +36,7 @@ impl FileHeader {
 			zoom_range,
 			bbox: bbox.map(|v| (v * BBOX_SCALE as f64) as i32),
 			tile_format: tile_format.clone(),
-			precompression: precompression.to_owned(),
+			compression: compression.to_owned(),
 			meta_range: ByteRange::empty(),
 			blocks_range: ByteRange::empty(),
 		}
@@ -75,9 +73,9 @@ impl FileHeader {
 			})
 			.unwrap();
 
-		// precompression
+		// compression
 		header
-			.write_u8(match self.precompression {
+			.write_u8(match self.compression {
 				Compression::None => 0,
 				Compression::Gzip => 1,
 				Compression::Brotli => 2,
@@ -137,7 +135,7 @@ impl FileHeader {
 			_ => panic!(),
 		};
 
-		let precompression = match compression {
+		let compression = match compression {
 			0 => Compression::None,
 			1 => Compression::Gzip,
 			2 => Compression::Brotli,
@@ -160,7 +158,7 @@ impl FileHeader {
 			zoom_range,
 			bbox,
 			tile_format,
-			precompression,
+			compression,
 			meta_range,
 			blocks_range,
 		}
@@ -173,15 +171,15 @@ mod tests {
 
 	#[test]
 	fn conversion() {
-		let test = |tile_format: &TileFormat, precompression: &Compression, a: u64, b: u64, c: u64, d: u64| {
-			let mut header1 = FileHeader::new(tile_format, precompression, [0, 0], [0.0, 0.0, 0.0, 0.0]);
+		let test = |tile_format: &TileFormat, compression: &Compression, a: u64, b: u64, c: u64, d: u64| {
+			let mut header1 = FileHeader::new(tile_format, compression, [0, 0], [0.0, 0.0, 0.0, 0.0]);
 			header1.meta_range = ByteRange::new(a, b);
 			header1.blocks_range = ByteRange::new(c, d);
 
 			let header2 = FileHeader::from_blob(header1.to_blob());
 			assert_eq!(header1, header2);
 			assert_eq!(&header2.tile_format, tile_format);
-			assert_eq!(&header2.precompression, precompression);
+			assert_eq!(&header2.compression, compression);
 			assert_eq!(header2.meta_range, ByteRange::new(a, b));
 			assert_eq!(header2.blocks_range, ByteRange::new(c, d));
 		};

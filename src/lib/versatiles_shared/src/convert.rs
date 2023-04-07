@@ -127,8 +127,8 @@ impl DataConverter {
 
 		converter
 	}
-	/// Constructs a new `DataConverter` instance that compresses data using the specified precompression algorithm.
-	/// The `dst_comp` parameter specifies the precompression algorithm to use: `Precompression::Uncompressed`, `Precompression::Gzip`, or `Precompression::Brotli`.
+	/// Constructs a new `DataConverter` instance that compresses data using the specified compression algorithm.
+	/// The `dst_comp` parameter specifies the compression algorithm to use: `Compression::Uncompressed`, `Compression::Gzip`, or `Compression::Brotli`.
 	pub fn new_compressor(dst_comp: &Compression) -> DataConverter {
 		let mut converter = DataConverter::new_empty();
 
@@ -144,8 +144,8 @@ impl DataConverter {
 		converter
 	}
 
-	/// Constructs a new `DataConverter` instance that decompresses data using the specified precompression algorithm.
-	/// The `src_comp` parameter specifies the precompression algorithm to use: `Precompression::Uncompressed`, `Precompression::Gzip`, or `Precompression::Brotli`.
+	/// Constructs a new `DataConverter` instance that decompresses data using the specified compression algorithm.
+	/// The `src_comp` parameter specifies the compression algorithm to use: `Compression::Uncompressed`, `Compression::Gzip`, or `Compression::Brotli`.
 	pub fn new_decompressor(src_comp: &Compression) -> DataConverter {
 		let mut converter = DataConverter::new_empty();
 
