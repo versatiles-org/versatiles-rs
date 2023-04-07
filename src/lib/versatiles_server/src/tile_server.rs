@@ -331,7 +331,7 @@ mod tests {
 		server.start().await;
 
 		assert_eq!(get("api/status.json").await, "{\"status\":\"ready\"}");
-		assert_eq!(get("api/tiles.json").await, "[\n\t{ \"url\":\"/cheese/\", \"name\":\"dummy name\", \"info\":{ \"container\":\"dummy container\", \"format\":\"pbf\", \"compression\":\"gzip\", \"zoom_min\":0, \"zoom_max\":8, \"bbox\":[-180.0, -84.92832092949963, 178.59375, 85.05112877980659] } }\n]");
+		assert_eq!(get("api/tiles.json").await, "[\n\t{ \"url\":\"/cheese/\", \"name\":\"dummy name\", \"info\":{ \"container\":\"dummy container\", \"format\":\"pbf\", \"compression\":\"gzip\", \"zoom_min\":0, \"zoom_max\":8, \"bbox\":[-180.0, -85.05113, 180.0, 85.05112] } }\n]");
 		assert!(get("cheese/0/0/0.png").await.starts_with("\u{1a}4\n\u{5}ocean"));
 		assert_eq!(get("cheese/meta.json").await, "dummy meta data");
 		assert_eq!(get("cheese/tiles.json").await, "dummy meta data");

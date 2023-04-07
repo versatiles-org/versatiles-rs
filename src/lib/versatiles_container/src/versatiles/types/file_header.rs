@@ -18,7 +18,7 @@ pub struct FileHeader {
 	pub blocks_range: ByteRange,
 }
 impl FileHeader {
-	pub fn new(tile_format: &TileFormat, compression: &Compression, zoom_range: [u8; 2], bbox: [f64; 4]) -> FileHeader {
+	pub fn new(tile_format: &TileFormat, compression: &Compression, zoom_range: [u8; 2], bbox: [f32; 4]) -> FileHeader {
 		assert!(
 			zoom_range[0] <= zoom_range[1],
 			"zoom_range[0] ({}) must be <= zoom_range[1] ({})",
@@ -34,7 +34,7 @@ impl FileHeader {
 
 		FileHeader {
 			zoom_range,
-			bbox: bbox.map(|v| (v * BBOX_SCALE as f64) as i32),
+			bbox: bbox.map(|v| (v * BBOX_SCALE as f32) as i32),
 			tile_format: tile_format.clone(),
 			compression: compression.to_owned(),
 			meta_range: ByteRange::empty(),

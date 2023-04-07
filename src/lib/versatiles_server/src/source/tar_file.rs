@@ -259,7 +259,6 @@ mod tests {
 			assert_eq!(result, "dummy meta data");
 
 			let result = get_as_string(&tar_file, &["0", "0", "0.pbf"], to_compression).await;
-			println!("{}", result);
 			assert!(result.starts_with("\u{1a}4\n\u{5}ocean"));
 
 			let result = get_as_string(&tar_file, &["cheesecake.mp4"], to_compression).await;
