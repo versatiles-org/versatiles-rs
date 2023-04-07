@@ -31,11 +31,6 @@ impl Blob {
 		std::str::from_utf8(&self.0).unwrap()
 	}
 
-	/// Returns the underlying bytes as a string, assuming they represent valid UTF-8 encoded text.
-	pub fn to_string(&self) -> String {
-		String::from_utf8_lossy(&self.0).to_string()
-	}
-
 	/// Returns the length of the underlying byte slice.
 	pub fn len(&self) -> usize {
 		self.0.len()
@@ -86,6 +81,12 @@ impl From<&[u8]> for Blob {
 	/// Converts a `&[u8]` instance into a `Blob`.
 	fn from(item: &[u8]) -> Self {
 		Blob(Bytes::from(item.to_vec()))
+	}
+}
+
+impl ToString for Blob {
+	fn to_string(&self) -> String {
+		String::from_utf8_lossy(&self.0).to_string()
 	}
 }
 
