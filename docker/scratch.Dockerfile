@@ -8,7 +8,7 @@ RUN apk add sqlite-dev curl gzip musl-dev git
 RUN rustup default stable
 RUN cargo install versatiles 
 
-# Create appuser
+# Create User
 ENV USER=versatiles
 ENV UID=1000
 RUN adduser \ 
