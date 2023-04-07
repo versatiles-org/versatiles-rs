@@ -164,9 +164,7 @@ impl TileReaderTrait for TileReader {
 		}
 		progress.finish();
 
-		let mut status_image_path = output_folder.clone().to_path_buf();
-		status_image_path.push("tile_sizes.png");
-		status_images.save(status_image_path.as_path());
+		status_images.save(&output_folder.join("tile_sizes.png"));
 	}
 }
 
