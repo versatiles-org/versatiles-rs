@@ -131,8 +131,8 @@ impl ProgressBar {
 		let length2 = col2.len() as i64;
 		let length3 = col3.len() as i64;
 
-		let space1 = 0.min((width - length2) / 2 - length1);
-		let space2 = 0.min(width - (length1 + space1 + length2 + length3));
+		let space1 = 0.max((width - length2) / 2 - length1);
+		let space2 = 0.max(width - (length1 + space1 + length2 + length3));
 
 		let line = format!(
 			"\r{}{}{}{}{}",
