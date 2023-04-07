@@ -50,7 +50,7 @@ path = "src/main.rs"
 [[bench]]
 name = "main"
 harness = false
-path = "benches/lib.rs"
+path = "benches/main.rs"
 
 [profile.dev]
 opt-level = 1
