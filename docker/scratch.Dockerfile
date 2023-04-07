@@ -28,3 +28,8 @@ WORKDIR /data/
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
 COPY --chown=versatiles:versatiles --from=builder /usr/local/cargo/bin/versatiles /usr/local/cargo/bin/versatiles
+
+USER versatiles
+EXPOSE 8080
+
+CMD ["/usr/local/cargo/bin/versatiles", "serve", "-i", "0.0.0.0", "-p", "8080", "-s", "/data/static", "/data/tiles/osm.versatiles"]
