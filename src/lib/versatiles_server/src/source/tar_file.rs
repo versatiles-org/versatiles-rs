@@ -196,21 +196,34 @@ mod tests {
 	use assert_fs::NamedTempFile;
 	use axum::body::HttpBody;
 	use enumset::enum_set;
+	use hyper::header::CONTENT_ENCODING;
 	use versatiles_container::{
 		dummy::{ReaderProfile, TileReader},
 		tar::TileConverter,
 		TileConverterTrait,
 	};
-	use versatiles_shared::{TileBBoxPyramide, TileConverterConfig, TileFormat};
+	use versatiles_shared::{decompress, TileBBoxPyramide, TileConverterConfig, TileFormat};
 
-	async fn get_as_string(container: &Box<TarFile>, path: &[&str], compression: Compression) -> String {
+	async fn get_as_string(container: &Box<TarFile>, path: &[&str], compression: &Compression) -> String {
 		let mut resp = container.get_data(path, enum_set!(compression)).await;
-		let data1 = resp.data().await.unwrap().unwrap();
-		let data3 = String::from_utf8_lossy(&data1);
-		return data3.to_string();
+		let encoding = resp.headers().get(CONTENT_ENCODING);
+
+		let content_compression = match encoding {
+			None => Compression::None,
+			Some(value) => match value.to_str().unwrap() {
+				"gzip" => Compression::Gzip,
+				"br" => Compression::Brotli,
+				_ => panic!("encoding: {:?}", encoding),
+			},
+		};
+
+		let data = resp.data().await.unwrap().unwrap();
+		let data = decompress(Blob::from(data), &content_compression).unwrap();
+		let data = String::from_utf8_lossy(data.as_slice());
+		return data.to_string();
 	}
 
-	pub async fn make_test_tar(compression: Compression) -> NamedTempFile {
+	pub async fn make_test_tar(compression: &Compression) -> NamedTempFile {
 		let reader_profile = ReaderProfile::PbfFast;
 
 		// get dummy reader
@@ -221,7 +234,7 @@ mod tests {
 
 		let config = TileConverterConfig::new(
 			Some(TileFormat::PBF),
-			Some(compression),
+			Some(compression.to_owned()),
 			TileBBoxPyramide::new_full(),
 			false,
 		);
@@ -232,35 +245,37 @@ mod tests {
 
 		container_file
 	}
-	async fn test_tar_file(compression: Compression) {
-		let file = make_test_tar(compression).await;
+	async fn test_tar_file(from_compression: &Compression, to_compression: &Compression) {
+		let file = make_test_tar(from_compression).await;
 
 		let tar_file = TarFile::from(&file.to_str().unwrap());
 
-		let result = get_as_string(&tar_file, &["meta.json"], Compression::None).await;
+		let result = get_as_string(&tar_file, &["meta.json"], to_compression).await;
 		assert_eq!(result, "dummy meta data");
 
-		let result = get_as_string(&tar_file, &["0", "0", "0.pbf"], Compression::None).await;
+		let result = get_as_string(&tar_file, &["0", "0", "0.pbf"], to_compression).await;
 		println!("{}", result);
 		assert!(result.starts_with("\u{1a}4\n\u{5}ocean"));
 
-		let result = get_as_string(&tar_file, &["cheesecake.mp4"], Compression::None).await;
+		let result = get_as_string(&tar_file, &["cheesecake.mp4"], to_compression).await;
 		assert_eq!(result, "Not Found");
 	}
 
 	#[tokio::test]
-	async fn test_tar_file_uncompressed() {
-		test_tar_file(Compression::None).await;
-	}
+	async fn test_tar_file_compressions() {
+		use Compression::*;
 
-	#[tokio::test]
-	async fn test_tar_file_gzip() {
-		test_tar_file(Compression::Gzip).await;
-	}
+		test_tar_file(&None, &None).await;
+		test_tar_file(&None, &Gzip).await;
+		test_tar_file(&None, &Brotli).await;
 
-	#[tokio::test]
-	async fn test_tar_file_brotli() {
-		test_tar_file(Compression::Brotli).await;
+		test_tar_file(&Gzip, &None).await;
+		test_tar_file(&Gzip, &Gzip).await;
+		test_tar_file(&Gzip, &Brotli).await;
+
+		test_tar_file(&Brotli, &None).await;
+		test_tar_file(&Brotli, &Gzip).await;
+		test_tar_file(&Brotli, &Brotli).await;
 	}
 
 	#[test]
