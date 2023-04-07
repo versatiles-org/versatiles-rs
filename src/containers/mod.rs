@@ -38,7 +38,7 @@ pub fn get_converter(filename: &str, config: TileConverterConfig) -> TileConvert
 #[cfg(test)]
 pub mod tests {
 	use crate::{
-		container::{
+		containers::{
 			dummy::{self, ConverterProfile, ReaderProfile},
 			get_converter, get_reader,
 		},

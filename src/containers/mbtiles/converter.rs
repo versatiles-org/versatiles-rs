@@ -1,5 +1,5 @@
 use crate::{
-	container::{TileConverterBox, TileConverterTrait, TileReaderBox},
+	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
 	shared::TileConverterConfig,
 };
 use async_trait::async_trait;
@@ -24,7 +24,7 @@ impl TileConverterTrait for TileConverter {
 mod tests {
 	use super::TileConverter;
 	use crate::{
-		container::{dummy, TileConverterTrait, TileReaderTrait},
+		containers::{dummy, TileConverterTrait, TileReaderTrait},
 		shared::TileConverterConfig,
 	};
 	use futures::executor::block_on;

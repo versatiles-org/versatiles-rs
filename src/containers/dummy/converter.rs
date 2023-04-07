@@ -1,5 +1,5 @@
 use crate::{
-	container::{TileConverterBox, TileConverterTrait, TileReaderBox},
+	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
 	shared::{Compression, TileBBoxPyramide, TileConverterConfig, TileFormat},
 };
 use async_trait::async_trait;
@@ -57,7 +57,7 @@ impl TileConverterTrait for TileConverter {
 mod tests {
 	use super::{ConverterProfile, TileConverter};
 	use crate::{
-		container::{
+		containers::{
 			dummy::{reader::ReaderProfile, TileReader},
 			TileConverterTrait,
 		},

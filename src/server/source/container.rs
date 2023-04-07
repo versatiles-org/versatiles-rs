@@ -1,5 +1,5 @@
 use crate::{
-	container::TileReaderBox,
+	containers::TileReaderBox,
 	server::{ok_data, ok_not_found, ServerSourceTrait},
 	shared::{compress_brotli, compress_gzip, decompress, Compression, TileCoord3, TileFormat},
 };
@@ -133,7 +133,7 @@ impl Debug for TileContainer {
 #[cfg(test)]
 mod tests {
 	use super::TileContainer;
-	use crate::container::dummy::{ReaderProfile, TileReader};
+	use crate::containers::dummy::{ReaderProfile, TileReader};
 
 	#[test]
 	fn tile_container_from() {

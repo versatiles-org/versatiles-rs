@@ -1,7 +1,10 @@
 use super::types::*;
-use crate::{container::{TileReaderBox, TileReaderTrait},shared::{
-	Blob, DataConverter, ProgressBar, Result, StatusImagePyramide, TileCoord2, TileCoord3, TileReaderParameters,
-}};
+use crate::{
+	containers::{TileReaderBox, TileReaderTrait},
+	shared::{
+		Blob, DataConverter, ProgressBar, Result, StatusImagePyramide, TileCoord2, TileCoord3, TileReaderParameters,
+	},
+};
 use async_trait::async_trait;
 use itertools::Itertools;
 use log::debug;
@@ -179,7 +182,7 @@ impl Debug for TileReader {
 mod tests {
 	use super::TileReader;
 	use crate::{
-		container::{tests::make_test_file, TileReaderTrait},
+		containers::{tests::make_test_file, TileReaderTrait},
 		shared::{Compression, TileFormat},
 	};
 	use assert_fs::TempDir;

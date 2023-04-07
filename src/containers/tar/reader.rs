@@ -1,5 +1,5 @@
 use crate::{
-	container::{TileReaderBox, TileReaderTrait},
+	containers::{TileReaderBox, TileReaderTrait},
 	shared::{
 		decompress, Blob, Compression, Error, Result, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
 	},
@@ -213,7 +213,7 @@ impl Debug for TileReader {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::container::{
+	use crate::containers::{
 		dummy::{ConverterProfile, TileConverter},
 		tests::make_test_file,
 	};

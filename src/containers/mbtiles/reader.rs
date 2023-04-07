@@ -1,5 +1,5 @@
 use crate::{
-	container::{TileReaderBox, TileReaderTrait},
+	containers::{TileReaderBox, TileReaderTrait},
 	shared::{
 		Blob, Compression, ProgressBar, Result, TileBBox, TileBBoxPyramide, TileCoord2, TileCoord3, TileFormat,
 		TileReaderParameters,
@@ -284,7 +284,7 @@ impl std::fmt::Debug for TileReader {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::container::dummy::{self, ConverterProfile};
+	use crate::containers::dummy::{self, ConverterProfile};
 
 	#[tokio::test]
 	async fn reader() {

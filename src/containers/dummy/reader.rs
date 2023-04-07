@@ -1,5 +1,5 @@
 use crate::{
-	container::{TileReaderBox, TileReaderTrait},
+	containers::{TileReaderBox, TileReaderTrait},
 	shared::{
 		compress_gzip, Blob, Compression, Error, Result, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
 	},
@@ -76,7 +76,7 @@ impl std::fmt::Debug for TileReader {
 #[cfg(test)]
 mod tests {
 	use crate::{
-		container::dummy::{converter::ConverterProfile, reader::ReaderProfile, TileConverter, TileReader},
+		containers::dummy::{converter::ConverterProfile, reader::ReaderProfile, TileConverter, TileReader},
 		shared::{Blob, TileCoord3, TileReaderParameters},
 	};
 	use futures::executor::block_on;

@@ -247,7 +247,7 @@ fn get_encoding(headers: HeaderMap) -> EnumSet<Compression> {
 mod tests {
 	use super::{get_encoding, guess_mime, TileServer};
 	use crate::{
-		container::dummy,
+		containers::dummy,
 		server::source::TileContainer,
 		shared::Compression::{self, *},
 	};

@@ -195,7 +195,7 @@ impl Debug for TarFile {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::{
+	use crate::containers::{
 		dummy::{ReaderProfile, TileReader},
 		tar::TileConverter,
 		TileConverterTrait,
