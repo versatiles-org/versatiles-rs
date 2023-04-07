@@ -26,8 +26,8 @@ impl TileConverterConfig {
 			finalized: false,
 		}
 	}
-	pub fn empty() -> Self {
-		Self::new(None, None, TileBBoxPyramide::new_empty(), false)
+	pub fn new_full() -> Self {
+		Self::new(None, None, TileBBoxPyramide::new_full(), false)
 	}
 	pub fn finalize_with_parameters(&mut self, parameters: &TileReaderParameters) {
 		self.bbox_pyramide.intersect(parameters.get_bbox_pyramide());

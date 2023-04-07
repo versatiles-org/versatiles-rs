@@ -29,7 +29,7 @@ mod tests {
 	#[test]
 	#[should_panic]
 	fn test1() {
-		let _converter = TileConverter::new(Path::new("filename.txt"), TileConverterConfig::empty());
+		let _converter = TileConverter::new(Path::new("filename.txt"), TileConverterConfig::new_full());
 	}
 
 	#[test]
