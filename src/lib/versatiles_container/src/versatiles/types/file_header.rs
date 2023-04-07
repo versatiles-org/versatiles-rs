@@ -167,6 +167,8 @@ impl FileHeader {
 
 #[cfg(test)]
 mod tests {
+	use byteorder::ByteOrder;
+
 	use super::*;
 
 	#[test]
@@ -193,5 +195,55 @@ mod tests {
 		);
 
 		test(&TileFormat::PBF, &Compression::Brotli, 29, 97, 92, 458);
+	}
+
+	#[test]
+	fn test_new_file_header() {
+		let tf = TileFormat::PNG;
+		let comp = Compression::Gzip;
+		let zoom = [10, 14];
+		let bbox = [-180.0, -85.0511, 180.0, 85.0511];
+		let header = FileHeader::new(&tf, &comp, zoom, bbox);
+
+		assert_eq!(header.zoom_range, zoom);
+		assert_eq!(header.bbox, [-1800000000, -850511040, 1800000000, 850511040]);
+		assert_eq!(header.tile_format, tf);
+		assert_eq!(header.compression, comp);
+		assert_eq!(header.meta_range, ByteRange::empty());
+		assert_eq!(header.blocks_range, ByteRange::empty());
+	}
+
+	#[test]
+	fn test_to_blob() {
+		let header = FileHeader::new(
+			&TileFormat::PBF,
+			&Compression::Gzip,
+			[3, 8],
+			[-180.0, -85.05112878, 180.0, 85.05112878],
+		);
+
+		let blob = header.to_blob();
+
+		assert_eq!(blob.len(), HEADER_LENGTH);
+		assert_eq!(&blob.as_slice()[0..14], b"versatiles_v02");
+		assert_eq!(blob.as_slice()[14], 0x20);
+		assert_eq!(blob.as_slice()[15], 1);
+		assert_eq!(blob.as_slice()[16], 3);
+		assert_eq!(blob.as_slice()[17], 8);
+		assert_eq!(BE::read_i32(&blob.as_slice()[18..22]), -1800000000);
+		assert_eq!(BE::read_i32(&blob.as_slice()[22..26]), -850511296);
+		assert_eq!(BE::read_i32(&blob.as_slice()[26..30]), 1800000000);
+		assert_eq!(BE::read_i32(&blob.as_slice()[30..34]), 850511296);
+		assert_eq!(ByteRange::from_buf(&blob.as_slice()[34..50]), ByteRange::empty());
+		assert_eq!(ByteRange::from_buf(&blob.as_slice()[50..66]), ByteRange::empty());
+
+		let header2 = FileHeader::from_blob(blob);
+
+		assert_eq!(header2.zoom_range, [3, 8]);
+		assert_eq!(header2.bbox, [-1800000000, -850511296, 1800000000, 850511296]);
+		assert_eq!(header2.tile_format, TileFormat::PBF);
+		assert_eq!(header2.compression, Compression::Gzip);
+		assert_eq!(header2.meta_range, ByteRange::empty());
+		assert_eq!(header2.blocks_range, ByteRange::empty());
 	}
 }

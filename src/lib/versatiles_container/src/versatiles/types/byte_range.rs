@@ -1,5 +1,9 @@
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
-use std::{fmt, io::Read, ops::Range};
+use std::{
+	fmt,
+	io::{Cursor, Read},
+	ops::Range,
+};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ByteRange {
@@ -12,6 +16,12 @@ impl ByteRange {
 	}
 	pub fn empty() -> ByteRange {
 		ByteRange { offset: 0, length: 0 }
+	}
+	pub fn from_buf(buf: &[u8]) -> ByteRange {
+		let mut cursor = Cursor::new(buf);
+		let offset = cursor.read_u64::<BE>().unwrap();
+		let length = cursor.read_u64::<BE>().unwrap();
+		ByteRange::new(offset, length)
 	}
 	pub fn from_reader(reader: &mut impl Read) -> ByteRange {
 		ByteRange::new(reader.read_u64::<BE>().unwrap(), reader.read_u64::<BE>().unwrap())
