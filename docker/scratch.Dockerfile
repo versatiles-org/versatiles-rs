@@ -27,3 +27,4 @@ WORKDIR /data/
 # Copy files from builder
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
+COPY --chown=versatiles:versatiles --from=builder /usr/local/cargo/bin/versatiles /usr/local/cargo/bin/versatiles
