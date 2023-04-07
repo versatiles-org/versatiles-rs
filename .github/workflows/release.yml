@@ -16,7 +16,7 @@ jobs:
           - os: alpine
             platforms: linux/amd64
           - os: scratch
-            platforms: linux/amd64, linux/386
+            platforms: linux/amd64
     steps:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
