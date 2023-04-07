@@ -104,11 +104,9 @@ impl ProgressBar {
 
 	fn draw(&mut self) {
 		let size = dimensions_stdout();
-		if size.is_none() {
-			return;
-		}
+		let size = size.unwrap_or((80, 30));
 
-		let width: i64 = size.unwrap().0 as i64;
+		let width: i64 = size.0 as i64;
 
 		let duration = SystemTime::now().duration_since(self.start).unwrap();
 		let progress = self.value as f64 / self.max_value as f64;
