@@ -1,7 +1,8 @@
 
-[![Crates.io](https://img.shields.io/crates/v/versatiles?style=flat-square)](https://crates.io/crates/versatiles)
-[![Crates.io](https://img.shields.io/crates/d/versatiles?style=flat-square)](https://crates.io/crates/versatiles)
-[![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
+[![Crates.io](https://img.shields.io/crates/v/versatiles)](https://crates.io/crates/versatiles)
+[![Crates.io](https://img.shields.io/crates/d/versatiles)](https://crates.io/crates/versatiles)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Code Coverage](https://codecov.io/gh/versatiles-org/versatiles-rs/branch/main/graph/badge.svg?token=IDHAI13M0K)](https://codecov.io/gh/versatiles-org/versatiles-rs)
 
 # install
 

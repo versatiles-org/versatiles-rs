@@ -53,14 +53,24 @@ impl TileConverterTrait for TileConverter {
 
 #[cfg(test)]
 mod tests {
-	use super::{ConverterProfile, TileConverter};
-	use crate::dummy::{reader::ReaderProfile, TileReader};
-	use futures::executor::block_on;
+	use std::path::Path;
 
-	#[test]
-	fn test() {
+	use super::{ConverterProfile, TileConverter};
+	use crate::{
+		dummy::{reader::ReaderProfile, TileReader},
+		TileConverterTrait,
+	};
+	use versatiles_shared::TileConverterConfig;
+
+	#[tokio::test]
+	async fn test() {
 		let mut converter = TileConverter::new_dummy(ConverterProfile::Png, 8);
 		let mut reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
-		block_on(converter.convert_from(&mut reader));
+		converter.convert_from(&mut reader).await;
+	}
+
+	#[test]
+	fn test_new_dummy_png() {
+		TileConverter::new(Path::new("hi"), TileConverterConfig::new_full());
 	}
 }
