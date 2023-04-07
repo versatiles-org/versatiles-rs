@@ -8,7 +8,7 @@ use std::{
 	sync::Mutex,
 };
 use tar::{Builder, Header};
-use versatiles_shared::{Compression, ProgressBar, TileConverterConfig, TileFormat};
+use versatiles_shared::{compress, Compression, ProgressBar, TileConverterConfig, TileFormat};
 
 pub struct TileConverter {
 	builder: Builder<File>,
@@ -61,13 +61,16 @@ impl TileConverterTrait for TileConverter {
 		let meta_data = reader.get_meta().await;
 
 		if !meta_data.is_empty() {
+			let meta_data = compress(meta_data, self.config.get_tile_compression()).unwrap();
+			let filename = format!("tiles.json{}", ext_comp);
+
 			let mut header = Header::new_gnu();
 			header.set_size(meta_data.len() as u64);
 			header.set_mode(0o644);
 
 			self
 				.builder
-				.append_data(&mut header, Path::new("meta.json"), meta_data.as_slice())
+				.append_data(&mut header, Path::new(&filename), meta_data.as_slice())
 				.unwrap();
 		}
 

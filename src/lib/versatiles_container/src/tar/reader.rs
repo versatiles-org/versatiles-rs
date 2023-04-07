@@ -208,3 +208,31 @@ impl Debug for TileReader {
 			.finish()
 	}
 }
+
+#[cfg(test)]
+pub mod tests {
+	use super::*;
+	use crate::{
+		dummy::{ConverterProfile, TileConverter},
+		tests::make_test_file,
+	};
+
+	#[tokio::test]
+	async fn all_compressions() {
+		async fn test_compression(compression: Compression) {
+			let file = make_test_file(TileFormat::PBF, compression, 4, "tar").await;
+
+			// get tar reader
+			let mut reader = TileReader::new(file.to_str().unwrap()).await.unwrap();
+			reader.get_parameters_mut();
+			format!("{:?}", reader);
+
+			let mut converter = TileConverter::new_dummy(ConverterProfile::Whatever, 4);
+			converter.convert_from(&mut reader).await;
+		}
+
+		test_compression(Compression::None).await;
+		test_compression(Compression::Gzip).await;
+		test_compression(Compression::Brotli).await;
+	}
+}
