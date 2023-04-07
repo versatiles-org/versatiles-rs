@@ -19,3 +19,8 @@ RUN adduser \
     --no-create-home \ 
     --uid "${UID}" \ 
     "${USER}"
+
+# Setup Final Docker Image
+FROM scratch
+WORKDIR /data/
+
