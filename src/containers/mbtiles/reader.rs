@@ -289,7 +289,7 @@ pub mod tests {
 	#[tokio::test]
 	async fn reader() {
 		// get test container reader
-		let mut reader = TileReader::new("../../../ressources/berlin.mbtiles").await.unwrap();
+		let mut reader = TileReader::new("ressources/berlin.mbtiles").await.unwrap();
 
 		reader.get_tile_data(&TileCoord3::new(0, 0, 0)).await;
 

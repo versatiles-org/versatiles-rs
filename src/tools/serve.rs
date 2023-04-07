@@ -107,7 +107,7 @@ mod tests {
 			"65001",
 			"--auto-shutdown",
 			"500",
-			"../../ressources/berlin.mbtiles",
+			"ressources/berlin.mbtiles",
 		])
 		.unwrap();
 	}

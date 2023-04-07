@@ -108,9 +108,9 @@ mod tests {
 	#[test]
 	fn test() {
 		block_on(async {
-			let folder = Folder::from("../../../ressources");
+			let folder = Folder::from("ressources");
 
-			assert_eq!(folder.get_name(), "../../../ressources");
+			assert_eq!(folder.get_name(), "ressources");
 
 			assert_eq!(folder.get_info_as_json(), "{\"type\":\"folder\"}");
 

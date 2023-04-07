@@ -35,7 +35,7 @@ mod tests {
 
 	#[test]
 	fn test_local() {
-		run_command(vec!["versatiles", "probe", "../../ressources/berlin.mbtiles"]).unwrap();
+		run_command(vec!["versatiles", "probe", "ressources/berlin.mbtiles"]).unwrap();
 	}
 
 	#[test]
