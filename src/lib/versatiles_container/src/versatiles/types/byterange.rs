@@ -48,4 +48,45 @@ mod tests {
 		let range2 = ByteRange::from_reader(&mut cursor);
 		assert_eq!(range1, range2);
 	}
+
+	#[test]
+	fn new() {
+		let range = ByteRange::new(23, 42);
+		assert_eq!(range.offset, 23);
+		assert_eq!(range.length, 42);
+	}
+
+	#[test]
+	fn empty() {
+		let range = ByteRange::empty();
+		assert_eq!(range.offset, 0);
+		assert_eq!(range.length, 0);
+	}
+
+	#[test]
+	fn write_to_buf() {
+		let range = ByteRange::new(23, 42);
+		let mut buf: Vec<u8> = Vec::new();
+		range.write_to_buf(&mut buf);
+		assert_eq!(buf.len(), 16); // 2 u64 values take up 16 bytes
+		let mut cursor = Cursor::new(buf);
+		let offset = cursor.read_u64::<BE>().unwrap();
+		let length = cursor.read_u64::<BE>().unwrap();
+		assert_eq!(offset, 23);
+		assert_eq!(length, 42);
+	}
+
+	#[test]
+	fn as_range_usize() {
+		let range = ByteRange::new(23, 42);
+		let range_usize = range.as_range_usize();
+		assert_eq!(range_usize.start, 23);
+		assert_eq!(range_usize.end, 65); // 23 + 42 = 65
+	}
+
+	#[test]
+	fn debug() {
+		let range = ByteRange::new(23, 42);
+		assert_eq!(format!("{:?}", range), "ByteRange[23,42]");
+	}
 }
