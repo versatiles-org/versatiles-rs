@@ -4,9 +4,9 @@ FROM rust:alpine as builder
 COPY ../ /usr/src/versatiles
 WORKDIR /usr/src/versatiles
 
-RUN apk add musl-dev openssl-dev pkgconfig sqlite-dev
+RUN apk add musl-dev openssl-dev pkgconfig sqlite-dev curl gzip
 RUN rustup default stable
-RUN cargo install versatiles 
+RUN cargo install versatiles
 
 # Create User
 ENV USER=versatiles

@@ -1,6 +1,6 @@
 FROM alpine as builder
 
-RUN apk add --no-cache musl-dev rust cargo curl openssl-dev pkgconfig sqlite-dev
+RUN apk add --no-cache musl-dev curl openssl-dev pkgconfig sqlite-dev
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
 RUN cargo install versatiles
 
