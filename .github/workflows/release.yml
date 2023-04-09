@@ -12,11 +12,11 @@ jobs:
       matrix:
         include:
           - os: debian
-            platforms: linux/amd64,linux/386,linux/arm64/v8
+            platforms: linux/amd64
           - os: alpine
-            platforms: linux/amd64,linux/386,linux/arm64/v8
+            platforms: linux/amd64
           - os: scratch
-            platforms: linux/amd64,linux/386,linux/arm64/v8
+            platforms: linux/amd64
     steps:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2

@@ -13,9 +13,6 @@ function docker_build_release () {
 	docker buildx build --platform="${platf}" --progress="plain" --tag="${linux}-versatiles" --file="${linux}.Dockerfile" .
 }
 
-# docker_build_release debian linux/amd64
-docker_build_release debian linux/arm64/v8
-
-#docker build --progress=plain -t debian-versatiles -f debian.Dockerfile .
-#docker build --progress=plain -t debian-versatiles-test -f debian.test.Dockerfile .
-#docker run --rm debian-versatiles-test
+docker_build_release debian linux/amd64
+docker_build_release alpine linux/amd64
+docker_build_release scratch linux/amd64
