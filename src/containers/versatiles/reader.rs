@@ -126,6 +126,10 @@ impl TileReaderTrait for TileReader {
 			drop(cache_reader);
 		}
 
+		if tile_range.length == 0 {
+			return None;
+		}
+
 		Some(self.reader.read_range(&tile_range).await.unwrap())
 	}
 	fn get_name(&self) -> Result<&str> {
