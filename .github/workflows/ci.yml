@@ -12,8 +12,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  checks:
-    name: checks
+  check:
+    name: check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -28,15 +28,13 @@ jobs:
       - name: cargo check
         run: cargo check
 
-  tests:
-    name: tests
+  test:
+    name: test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - name: update rust
         run: rustup update stable && rustup default stable
-      - name: add components
-        run: rustup component add rustfmt clippy
       - name: cargo test
         run: cargo test
 
