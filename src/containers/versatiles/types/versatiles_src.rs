@@ -116,6 +116,8 @@ impl VersaTilesSrcTrait for VersaTilesSrcHttp {
 		if source.starts_with("https://") || source.starts_with("http://") {
 			let client = reqwest::Client::builder()
 				.tcp_keepalive(Duration::from_secs(600))
+				.connection_verbose(true)
+				.danger_accept_invalid_certs(true)
 				.use_rustls_tls()
 				.build()?;
 			Ok(Self {
