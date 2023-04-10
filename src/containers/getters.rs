@@ -4,9 +4,8 @@ use log::error;
 use std::path::PathBuf;
 
 pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
-	let extension = filename.split('.').last().unwrap();
-
-	match extension {
+	let extension = get_extension(&PathBuf::from(filename));
+	match extension.as_str() {
 		"mbtiles" => mbtiles::TileReader::new(filename).await,
 		"tar" => tar::TileReader::new(filename).await,
 		"versatiles" => versatiles::TileReader::new(filename).await,
@@ -19,15 +18,22 @@ pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
 
 pub fn get_converter(filename: &str, config: TileConverterConfig) -> Result<TileConverterBox> {
 	let path = PathBuf::from(filename);
-	let extension = path.extension().unwrap().to_str().unwrap_or("");
-
-	match extension {
+	let extension = get_extension(&path);
+	match extension.as_str() {
 		"versatiles" => Ok(versatiles::TileConverter::new(&path, config)),
 		"tar" => Ok(tar::TileConverter::new(&path, config)),
 		_ => {
 			error!("Error when writing: file extension '{extension:?}' unknown");
 			Err(Error::new("file extension unknown"))
 		}
+	}
+}
+
+fn get_extension(path: &PathBuf) -> String {
+	if let Some(osstr) = path.extension() {
+		return String::from(osstr.to_str().unwrap_or(""));
+	} else {
+		return String::from("");
 	}
 }
 
