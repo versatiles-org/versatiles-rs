@@ -45,20 +45,20 @@ impl TileReaderTrait for TileReader {
 	async fn new(_path: &str) -> Result<TileReaderBox> {
 		Err(Error::new("don't want to"))
 	}
-	fn get_container_name(&self) -> &str {
-		"dummy container"
+	fn get_container_name(&self) -> Result<&str> {
+		Ok("dummy container")
 	}
-	fn get_name(&self) -> &str {
-		"dummy name"
+	fn get_name(&self) -> Result<&str> {
+		Ok("dummy name")
 	}
-	fn get_parameters(&self) -> &TileReaderParameters {
-		&self.parameters
+	fn get_parameters(&self) -> Result<&TileReaderParameters> {
+		Ok(&self.parameters)
 	}
-	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
-		&mut self.parameters
+	fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters> {
+		Ok(&mut self.parameters)
 	}
-	async fn get_meta(&self) -> Blob {
-		Blob::from("dummy meta data")
+	async fn get_meta(&self) -> Result<Blob> {
+		Ok(Blob::from("dummy meta data"))
 	}
 	async fn get_tile_data(&self, _coord: &TileCoord3) -> Option<Blob> {
 		Some(self.tile_blob.clone())
@@ -84,11 +84,14 @@ mod tests {
 	#[test]
 	fn reader() {
 		let mut reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
-		assert_eq!(reader.get_container_name(), "dummy container");
-		assert_eq!(reader.get_name(), "dummy name");
-		assert_ne!(reader.get_parameters(), &TileReaderParameters::new_dummy());
-		assert_ne!(reader.get_parameters_mut(), &mut TileReaderParameters::new_dummy());
-		assert_eq!(block_on(reader.get_meta()), Blob::from("dummy meta data"));
+		assert_eq!(reader.get_container_name().unwrap(), "dummy container");
+		assert_eq!(reader.get_name().unwrap(), "dummy name");
+		assert_ne!(reader.get_parameters().unwrap(), &TileReaderParameters::new_dummy());
+		assert_ne!(
+			reader.get_parameters_mut().unwrap(),
+			&mut TileReaderParameters::new_dummy()
+		);
+		assert_eq!(block_on(reader.get_meta()).unwrap(), Blob::from("dummy meta data"));
 		let blob = block_on(reader.get_tile_data(&TileCoord3::new(0, 0, 0)))
 			.unwrap()
 			.as_vec();
@@ -99,6 +102,6 @@ mod tests {
 	fn test2() {
 		let mut converter = TileConverter::new_dummy(ConverterProfile::Png, 8);
 		let mut reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
-		block_on(converter.convert_from(&mut reader));
+		block_on(converter.convert_from(&mut reader)).unwrap();
 	}
 }

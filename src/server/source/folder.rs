@@ -1,6 +1,6 @@
 use crate::{
 	server::{guess_mime, ok_data, ok_not_found, ServerSourceTrait},
-	shared::{compress_brotli, compress_gzip, Blob, Compression},
+	shared::{compress_brotli, compress_gzip, Blob, Compression, Result},
 };
 use async_trait::async_trait;
 use axum::{
@@ -41,11 +41,11 @@ impl Folder {
 
 #[async_trait]
 impl ServerSourceTrait for Folder {
-	fn get_name(&self) -> String {
-		self.name.to_owned()
+	fn get_name(&self) -> Result<String> {
+		Ok(self.name.to_owned())
 	}
-	fn get_info_as_json(&self) -> String {
-		"{\"type\":\"folder\"}".to_owned()
+	fn get_info_as_json(&self) -> Result<String> {
+		Ok("{\"type\":\"folder\"}".to_owned())
 	}
 
 	async fn get_data(&self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>> {
@@ -110,9 +110,9 @@ mod tests {
 		block_on(async {
 			let folder = Folder::from("ressources");
 
-			assert_eq!(folder.get_name(), "ressources");
+			assert_eq!(folder.get_name().unwrap(), "ressources");
 
-			assert_eq!(folder.get_info_as_json(), "{\"type\":\"folder\"}");
+			assert_eq!(folder.get_info_as_json().unwrap(), "{\"type\":\"folder\"}");
 
 			let mut result = folder
 				.get_data(&["recipes", "Queijo.txt"], enum_set!(Compression::None))

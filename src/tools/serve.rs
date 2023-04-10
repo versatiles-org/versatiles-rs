@@ -1,6 +1,7 @@
 use crate::{
 	containers::get_reader,
 	server::{source, TileServer},
+	shared::Result,
 };
 use clap::Args;
 use regex::Regex;
@@ -39,7 +40,7 @@ pub struct Subcommand {
 }
 
 #[tokio::main]
-pub async fn run(arguments: &Subcommand) {
+pub async fn run(arguments: &Subcommand) -> Result<()> {
 	let mut server: TileServer = TileServer::new(&arguments.ip, arguments.port);
 
 	let patterns: Vec<Regex> = [
@@ -65,8 +66,9 @@ pub async fn run(arguments: &Subcommand) {
 			Some(m) => m.as_str(),
 		};
 
-		let reader = get_reader(url).await.unwrap();
-		server.add_tile_source(&format!("/tiles/{name}/"), source::TileContainer::from(reader));
+		let reader = get_reader(url).await?;
+		let source = source::TileContainer::from(reader)?;
+		server.add_tile_source(&format!("/tiles/{name}/"), source);
 	}
 
 	for filename in arguments.static_content.iter() {
@@ -83,15 +85,17 @@ pub async fn run(arguments: &Subcommand) {
 		.iter()
 		.for_each(|(url, source)| println!("   {:30}  <-  {}", url.to_owned() + "*", source));
 
-	server.start().await;
+	server.start().await?;
 
-	if arguments.auto_shutdown.is_some() {
-		sleep(Duration::from_millis(arguments.auto_shutdown.unwrap())).await
+	if let Some(milliseconds) = arguments.auto_shutdown {
+		sleep(Duration::from_millis(milliseconds)).await
 	} else {
 		loop {
 			sleep(Duration::from_secs(60)).await
 		}
 	}
+
+	Ok(())
 }
 
 #[cfg(test)]

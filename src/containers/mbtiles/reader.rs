@@ -25,17 +25,17 @@ pub struct TileReader {
 	parameters: TileReaderParameters,
 }
 impl TileReader {
-	async fn load_from_sqlite(filename: &PathBuf) -> TileReader {
+	async fn load_from_sqlite(filename: &PathBuf) -> Result<TileReader> {
 		trace!("load_from_sqlite {:?}", filename);
 
-		let concurrency = thread::available_parallelism().unwrap().get();
+		let concurrency = thread::available_parallelism()?.get();
 
-		let connection = Connection::open_with_flags(filename, OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+		let connection = Connection::open_with_flags(filename, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
 
-		connection.pragma_update(None, "mmap_size", 256 * MB).unwrap();
-		connection.pragma_update(None, "temp_store", "memory").unwrap();
-		connection.pragma_update(None, "page_size", 65536).unwrap();
-		connection.pragma_update(None, "threads", concurrency).unwrap();
+		connection.pragma_update(None, "mmap_size", 256 * MB)?;
+		connection.pragma_update(None, "temp_store", "memory")?;
+		connection.pragma_update(None, "page_size", 65536)?;
+		connection.pragma_update(None, "threads", concurrency)?;
 
 		let mut reader = TileReader {
 			name: filename.to_string_lossy().to_string(),
@@ -43,11 +43,12 @@ impl TileReader {
 			meta_data: None,
 			parameters: TileReaderParameters::new(TileFormat::PBF, Compression::None, TileBBoxPyramide::new_empty()),
 		};
-		reader.load_meta_data().await;
 
-		reader
+		reader.load_meta_data().await?;
+
+		Ok(reader)
 	}
-	async fn load_meta_data(&mut self) {
+	async fn load_meta_data(&mut self) -> Result<()> {
 		trace!("load_meta_data");
 
 		let connection = self.connection.lock().await;
@@ -59,9 +60,9 @@ impl TileReader {
 		let mut tile_format: Option<TileFormat> = None;
 		let mut compression: Option<Compression> = None;
 
-		while let Some(entry) = entries.next().unwrap() {
-			let key = entry.get::<_, String>(0).unwrap();
-			let val = entry.get::<_, String>(1).unwrap();
+		while let Some(entry) = entries.next()? {
+			let key = entry.get::<_, String>(0)?;
+			let val = entry.get::<_, String>(1)?;
 
 			match key.as_str() {
 				"format" => match val.as_str() {
@@ -98,6 +99,8 @@ impl TileReader {
 		if self.meta_data.is_none() {
 			panic!("'json' is not defined in table 'metadata'");
 		}
+
+		Ok(())
 	}
 	async fn get_bbox_pyramide(&self) -> TileBBoxPyramide {
 		trace!("get_bbox_pyramide");
@@ -191,19 +194,19 @@ impl TileReaderTrait for TileReader {
 
 		filename = filename.canonicalize()?;
 
-		Ok(Box::new(Self::load_from_sqlite(&filename).await))
+		Ok(Box::new(Self::load_from_sqlite(&filename).await?))
 	}
-	fn get_container_name(&self) -> &str {
-		"mbtiles"
+	fn get_container_name(&self) -> Result<&str> {
+		Ok("mbtiles")
 	}
-	async fn get_meta(&self) -> Blob {
-		Blob::from(self.meta_data.as_ref().unwrap())
+	async fn get_meta(&self) -> Result<Blob> {
+		Ok(Blob::from(self.meta_data.as_ref().unwrap()))
 	}
-	fn get_parameters(&self) -> &TileReaderParameters {
-		&self.parameters
+	fn get_parameters(&self) -> Result<&TileReaderParameters> {
+		Ok(&self.parameters)
 	}
-	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
-		&mut self.parameters
+	fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters> {
+		Ok(&mut self.parameters)
 	}
 	async fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
 		trace!("read 1 tile {:?}", coord_in);
@@ -213,7 +216,7 @@ impl TileReaderTrait for TileReader {
 			.prepare("SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")
 			.expect("SQL preparation failed");
 
-		let coord: TileCoord3 = if self.get_parameters().get_vertical_flip() {
+		let coord: TileCoord3 = if self.get_parameters().unwrap().get_vertical_flip() {
 			coord_in.flip_vertically()
 		} else {
 			coord_in.to_owned()
@@ -268,8 +271,8 @@ impl TileReaderTrait for TileReader {
 
 		vec
 	}
-	fn get_name(&self) -> &str {
-		&self.name
+	fn get_name(&self) -> Result<&str> {
+		Ok(&self.name)
 	}
 }
 
@@ -294,6 +297,7 @@ pub mod tests {
 		reader.get_tile_data(&TileCoord3::new(0, 0, 0)).await;
 
 		let mut converter = dummy::TileConverter::new_dummy(ConverterProfile::Whatever, 8);
-		converter.convert_from(&mut reader).await;
+
+		converter.convert_from(&mut reader).await.unwrap();
 	}
 }

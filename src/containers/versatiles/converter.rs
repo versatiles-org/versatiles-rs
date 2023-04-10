@@ -1,7 +1,7 @@
 use super::types::*;
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{Blob, ProgressBar, TileBBox, TileBBoxPyramide, TileConverterConfig, TileCoord2},
+	shared::{Blob, ProgressBar, Result, TileBBox, TileBBoxPyramide, TileConverterConfig, TileCoord2},
 };
 use async_trait::async_trait;
 use log::{debug, trace};
@@ -23,8 +23,8 @@ impl TileConverterTrait for TileConverter {
 			config: tile_config,
 		})
 	}
-	async fn convert_from(&mut self, reader: &mut TileReaderBox) {
-		self.config.finalize_with_parameters(reader.get_parameters());
+	async fn convert_from(&mut self, reader: &mut TileReaderBox) -> Result<()> {
+		self.config.finalize_with_parameters(reader.get_parameters()?);
 
 		let bbox_pyramide: &TileBBoxPyramide = self.config.get_bbox_pyramide();
 		let mut header = FileHeader::new(
@@ -38,19 +38,21 @@ impl TileConverterTrait for TileConverter {
 		);
 		self.writer.append(&header.to_blob());
 
-		header.meta_range = self.write_meta(reader).await;
+		header.meta_range = self.write_meta(reader).await?;
 		header.blocks_range = self.write_blocks(reader).await;
 
-		self.writer.write_start(&header.to_blob())
+		self.writer.write_start(&header.to_blob());
+
+		Ok(())
 	}
 }
 
 impl TileConverter {
-	async fn write_meta(&mut self, reader: &TileReaderBox) -> ByteRange {
-		let meta = reader.get_meta().await;
+	async fn write_meta(&mut self, reader: &TileReaderBox) -> Result<ByteRange> {
+		let meta = reader.get_meta().await?;
 		let compressed = self.config.get_compressor().run(meta).unwrap();
 
-		self.writer.append(&compressed)
+		Ok(self.writer.append(&compressed))
 	}
 	async fn write_blocks(&mut self, reader: &mut TileReaderBox) -> ByteRange {
 		let pyramide = self.config.get_bbox_pyramide();

@@ -1,5 +1,5 @@
 use super::ServerSourceTrait;
-use crate::shared::{Blob, Compression};
+use crate::shared::{Blob, Compression, Result};
 use axum::{
 	body::{Bytes, Full},
 	extract::{Path, State},
@@ -70,7 +70,7 @@ impl TileServer {
 		self.static_sources.push(Arc::new(source));
 	}
 
-	pub async fn start(&mut self) {
+	pub async fn start(&mut self) -> Result<()> {
 		if self.exit_signal.is_some() {
 			self.stop().await
 		}
@@ -81,13 +81,13 @@ impl TileServer {
 		let mut app = Router::new().route("/status", get(|| async { "ready!" }));
 
 		app = self.add_tile_sources_to_app(app);
-		app = self.add_api_to_app(app);
+		app = self.add_api_to_app(app)?;
 		app = self.add_static_sources_to_app(app);
 
 		let addr = format!("{}:{}", self.ip, self.port);
 		println!("server starts listening on {}", addr);
 
-		let server = Server::bind(&addr.parse().unwrap()).serve(app.into_make_service());
+		let server = Server::bind(&addr.parse()?).serve(app.into_make_service());
 
 		let (tx, rx) = tokio::sync::oneshot::channel::<()>();
 		let graceful = server.with_graceful_shutdown(async {
@@ -101,6 +101,8 @@ impl TileServer {
 				eprintln!("server error: {}", e);
 			}
 		});
+
+		Ok(())
 	}
 
 	pub async fn stop(&mut self) {
@@ -164,14 +166,14 @@ impl TileServer {
 		}
 	}
 
-	fn add_api_to_app(&self, app: Router) -> Router {
+	fn add_api_to_app(&self, app: Router) -> Result<Router> {
 		let mut tile_sources_json_lines: Vec<String> = Vec::new();
 		for tile_source in self.tile_sources.iter() {
 			tile_sources_json_lines.push(format!(
 				"{{ \"url\":\"{}\", \"name\":\"{}\", \"info\":{} }}",
 				tile_source.prefix,
-				tile_source.source.get_name(),
-				tile_source.source.get_info_as_json()
+				tile_source.source.get_name()?,
+				tile_source.source.get_info_as_json()?
 			));
 		}
 		let tile_sources_json: String = "[\n\t".to_owned() + &tile_sources_json_lines.join(",\n\t") + "\n]";
@@ -192,14 +194,16 @@ impl TileServer {
 				get(|| async move { ok_data(Blob::from(&tile_sources_json), &Compression::None, "application/json") }),
 			);
 
-		app.merge(api_app)
+		Ok(app.merge(api_app))
 	}
 
 	pub fn iter_url_mapping(&self) -> impl Iterator<Item = (String, String)> + '_ {
-		self
-			.tile_sources
-			.iter()
-			.map(|tile_source| (tile_source.prefix.to_owned(), tile_source.source.get_name()))
+		self.tile_sources.iter().map(|tile_source| {
+			(
+				tile_source.prefix.to_owned(),
+				tile_source.source.get_name().unwrap_or(String::from("???")),
+			)
+		})
 	}
 }
 
@@ -322,14 +326,14 @@ mod tests {
 		let mut server = TileServer::new(IP, PORT);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
-		let source = TileContainer::from(reader);
+		let source = TileContainer::from(reader).unwrap();
 		server.add_tile_source("cheese", source);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
-		let source = TileContainer::from(reader);
+		let source = TileContainer::from(reader).unwrap();
 		server.add_static_source(source);
 
-		server.start().await;
+		server.start().await.unwrap();
 
 		assert_eq!(get("api/status.json").await, "{\"status\":\"ready\"}");
 		assert_eq!(get("api/tiles.json").await, "[\n\t{ \"url\":\"/cheese/\", \"name\":\"dummy name\", \"info\":{ \"container\":\"dummy container\", \"format\":\"pbf\", \"compression\":\"gzip\", \"zoom_min\":0, \"zoom_max\":8, \"bbox\":[-180.0, -85.05113, 180.0, 85.05112] } }\n]");
@@ -348,11 +352,11 @@ mod tests {
 		let mut server = TileServer::new(IP, PORT);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PngFast, 8);
-		let source = TileContainer::from(reader);
+		let source = TileContainer::from(reader).unwrap();
 		server.add_tile_source("cheese", source);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
-		let source = TileContainer::from(reader);
+		let source = TileContainer::from(reader).unwrap();
 		server.add_tile_source("cheese", source);
 	}
 }

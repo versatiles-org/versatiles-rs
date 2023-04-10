@@ -1,6 +1,6 @@
 use crate::{
 	server::{guess_mime, ok_data, ok_not_found, ServerSourceTrait},
-	shared::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression},
+	shared::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression, Result},
 };
 use async_trait::async_trait;
 use axum::{
@@ -127,11 +127,11 @@ impl TarFile {
 
 #[async_trait]
 impl ServerSourceTrait for TarFile {
-	fn get_name(&self) -> String {
-		self.name.to_owned()
+	fn get_name(&self) -> Result<String> {
+		Ok(self.name.to_owned())
 	}
-	fn get_info_as_json(&self) -> String {
-		"{\"type\":\"tar\"}".to_owned()
+	fn get_info_as_json(&self) -> Result<String> {
+		Ok("{\"type\":\"tar\"}".to_owned())
 	}
 
 	async fn get_data(&self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>> {
@@ -243,7 +243,7 @@ mod tests {
 		let mut converter = TileConverter::new(&container_file.path(), config);
 
 		// convert
-		converter.convert_from(&mut reader).await;
+		converter.convert_from(&mut reader).await.unwrap();
 
 		container_file
 	}
@@ -289,8 +289,8 @@ mod tests {
 
 		let tar_file = TarFile::from(&file.to_str().unwrap());
 
-		assert_eq!(tar_file.get_info_as_json(), "{\"type\":\"tar\"}");
-		assert!(tar_file.get_name().ends_with("temp.tar"));
+		assert_eq!(tar_file.get_info_as_json().unwrap(), "{\"type\":\"tar\"}");
+		assert!(tar_file.get_name().unwrap().ends_with("temp.tar"));
 		assert!(format!("{:?}", tar_file).starts_with("TarFile { name:"));
 	}
 

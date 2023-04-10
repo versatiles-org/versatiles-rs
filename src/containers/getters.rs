@@ -1,7 +1,7 @@
 use super::{mbtiles, tar, versatiles, TileConverterBox, TileConverterTrait, TileReaderBox, TileReaderTrait};
 use crate::shared::{Error, Result, TileConverterConfig};
 use log::error;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
 	let extension = get_extension(&PathBuf::from(filename));
@@ -29,11 +29,11 @@ pub fn get_converter(filename: &str, config: TileConverterConfig) -> Result<Tile
 	}
 }
 
-fn get_extension(path: &PathBuf) -> String {
+fn get_extension(path: &Path) -> String {
 	if let Some(osstr) = path.extension() {
-		return String::from(osstr.to_str().unwrap_or(""));
+		String::from(osstr.to_str().unwrap_or(""))
 	} else {
-		return String::from("");
+		String::from("")
 	}
 }
 
@@ -80,7 +80,7 @@ pub mod tests {
 		let mut converter = get_converter(&container_file.to_str().unwrap(), config).unwrap();
 
 		// convert
-		converter.convert_from(&mut reader).await;
+		converter.convert_from(&mut reader).await.unwrap();
 
 		container_file
 	}
@@ -125,12 +125,12 @@ pub mod tests {
 			let mut converter1 = get_converter(&container_file.to_str().unwrap(), config).unwrap();
 
 			// convert
-			converter1.convert_from(&mut reader1).await;
+			converter1.convert_from(&mut reader1).await.unwrap();
 
 			// get test container reader
 			let mut reader2 = get_reader(container_file.to_str().unwrap()).await.unwrap();
 			let mut converter2 = dummy::TileConverter::new_dummy(ConverterProfile::Whatever, max_zoom_level);
-			converter2.convert_from(&mut reader2).await;
+			converter2.convert_from(&mut reader2).await.unwrap();
 
 			println!("elapsed time for {}: {:?}", test_name, start.elapsed());
 		}

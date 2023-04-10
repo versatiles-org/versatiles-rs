@@ -1,6 +1,6 @@
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::TileConverterConfig,
+	shared::{Result, TileConverterConfig},
 };
 use async_trait::async_trait;
 use std::path::Path;
@@ -15,7 +15,7 @@ impl TileConverterTrait for TileConverter {
 	{
 		panic!("conversion to mbtiles is not supported")
 	}
-	async fn convert_from(&mut self, _reader: &mut TileReaderBox) {
+	async fn convert_from(&mut self, _reader: &mut TileReaderBox) -> Result<()> {
 		panic!("conversion to mbtiles is not supported")
 	}
 }
@@ -41,6 +41,6 @@ mod tests {
 	fn test2() {
 		let mut converter = TileConverter {};
 		let mut reader = block_on(dummy::TileReader::new("filename.txt")).unwrap();
-		block_on(converter.convert_from(&mut reader));
+		block_on(converter.convert_from(&mut reader)).unwrap();
 	}
 }
