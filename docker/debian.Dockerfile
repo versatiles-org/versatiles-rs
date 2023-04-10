@@ -2,8 +2,9 @@
 FROM debian:stable as builder
 
 # install dependencies
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update
-RUN apt -y install build-essential curl libsqlite3-dev libssl-dev pkg-config
+RUN apt install -y build-essential curl libsqlite3-dev libssl-dev pkg-config
 
 # install rust
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
@@ -13,12 +14,10 @@ RUN $HOME/.cargo/bin/cargo install versatiles
 
 # create production system
 FROM debian:stable-slim
-
-WORKDIR $HOME
-
-ENV DEBIAN_FRONTEND=noninteractive
+WORKDIR /data/
 
 # install dependencies
+ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update && \
     apt install -y --no-install-recommends curl libsqlite3-0 && \
     apt clean && \
@@ -26,8 +25,6 @@ RUN apt update && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /var/cache/*
 
-RUN du -hd2 /usr/
-
 # copy versatiles and tests
 COPY --from=builder /root/.cargo/bin/versatiles /usr/bin/
-COPY versatiles_selftest.sh /
+COPY versatiles_selftest.sh .
