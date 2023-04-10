@@ -1,7 +1,7 @@
 use crate::{
 	containers::TileReaderBox,
 	server::{ok_data, ok_not_found, ServerSourceTrait},
-	shared::{compress_brotli, compress_gzip, decompress, Compression, TileCoord3, TileFormat},
+	shared::{compress_brotli, compress_gzip, decompress, Compression, Result, TileCoord3, TileFormat},
 };
 use async_trait::async_trait;
 use axum::{
@@ -17,8 +17,8 @@ pub struct TileContainer {
 	compression: Compression,
 }
 impl TileContainer {
-	pub fn from(reader: TileReaderBox) -> Box<TileContainer> {
-		let parameters = reader.get_parameters();
+	pub fn from(reader: TileReaderBox) -> Result<Box<TileContainer>> {
+		let parameters = reader.get_parameters()?;
 		let compression = *parameters.get_tile_compression();
 
 		let tile_mime = match parameters.get_tile_format() {
@@ -35,35 +35,35 @@ impl TileContainer {
 		}
 		.to_string();
 
-		Box::new(TileContainer {
+		Ok(Box::new(TileContainer {
 			reader,
 			tile_mime,
 			compression,
-		})
+		}))
 	}
 }
 
 #[async_trait]
 impl ServerSourceTrait for TileContainer {
-	fn get_name(&self) -> String {
-		self.reader.get_name().to_owned()
+	fn get_name(&self) -> Result<String> {
+		Ok(self.reader.get_name()?.to_owned())
 	}
-	fn get_info_as_json(&self) -> String {
-		let parameters = self.reader.get_parameters();
+	fn get_info_as_json(&self) -> Result<String> {
+		let parameters = self.reader.get_parameters()?;
 		let bbox_pyramide = parameters.get_bbox_pyramide();
 
 		let tile_format = format!("{:?}", parameters.get_tile_format()).to_lowercase();
 		let tile_compression = format!("{:?}", parameters.get_tile_compression()).to_lowercase();
 
-		format!(
+		Ok(format!(
 			"{{ \"container\":\"{}\", \"format\":\"{}\", \"compression\":\"{}\", \"zoom_min\":{}, \"zoom_max\":{}, \"bbox\":{:?} }}",
-			self.reader.get_container_name(),
+			self.reader.get_container_name()?,
 			tile_format,
 			tile_compression,
 			bbox_pyramide.get_zoom_min().unwrap(),
 			bbox_pyramide.get_zoom_max().unwrap(),
 			bbox_pyramide.get_geo_bbox(),
-		)
+		))
 	}
 
 	async fn get_data(&self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>> {
@@ -96,7 +96,7 @@ impl ServerSourceTrait for TileContainer {
 			return ok_data(data, &Compression::None, &self.tile_mime);
 		} else if (path[0] == "meta.json") || (path[0] == "tiles.json") {
 			// get meta
-			let meta = self.reader.get_meta().await;
+			let meta = self.reader.get_meta().await.unwrap();
 
 			if meta.is_empty() {
 				return ok_not_found();

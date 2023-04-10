@@ -56,20 +56,20 @@ impl TileReaderTrait for TileReader {
 
 		Ok(Box::new(reader))
 	}
-	fn get_container_name(&self) -> &str {
-		"versatiles"
+	fn get_container_name(&self) -> Result<&str> {
+		Ok("versatiles")
 	}
-	async fn get_meta(&self) -> Blob {
-		self.meta.clone()
+	async fn get_meta(&self) -> Result<Blob> {
+		Ok(self.meta.clone())
 	}
-	fn get_parameters(&self) -> &TileReaderParameters {
-		&self.parameters
+	fn get_parameters(&self) -> Result<&TileReaderParameters> {
+		Ok(&self.parameters)
 	}
-	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
-		&mut self.parameters
+	fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters> {
+		Ok(&mut self.parameters)
 	}
 	async fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
-		let coord: TileCoord3 = if self.get_parameters().get_vertical_flip() {
+		let coord: TileCoord3 = if self.get_parameters().unwrap().get_vertical_flip() {
 			coord_in.flip_vertically()
 		} else {
 			coord_in.to_owned()
@@ -126,12 +126,16 @@ impl TileReaderTrait for TileReader {
 			drop(cache_reader);
 		}
 
+		if tile_range.length == 0 {
+			return None;
+		}
+
 		Some(self.reader.read_range(&tile_range).await.unwrap())
 	}
-	fn get_name(&self) -> &str {
-		self.reader.get_name()
+	fn get_name(&self) -> Result<&str> {
+		Ok(self.reader.get_name())
 	}
-	async fn deep_verify(&self, output_folder: &Path) {
+	async fn deep_verify(&self, output_folder: &Path) -> Result<()> {
 		let block_count = self.block_index.len() as u64;
 
 		debug!("number of blocks: {}", block_count);
@@ -148,7 +152,7 @@ impl TileReaderTrait for TileReader {
 		for block in blocks {
 			let tiles_count = block.bbox.count_tiles();
 
-			let blob = self.reader.read_range(&block.index_range).await.unwrap();
+			let blob = self.reader.read_range(&block.index_range).await?;
 			let tile_index = TileIndex::from_brotli_blob(blob);
 			assert_eq!(tile_index.len(), tiles_count as usize, "tile count are not the same");
 
@@ -167,6 +171,8 @@ impl TileReaderTrait for TileReader {
 		progress.finish();
 
 		status_images.save(&output_folder.join("tile_sizes.png"));
+
+		Ok(())
 	}
 }
 
@@ -192,6 +198,6 @@ mod tests {
 		let temp_dir = TempDir::new().unwrap();
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 8, "versatiles").await;
 		let reader = TileReader::new(temp_file.to_str().unwrap()).await.unwrap();
-		reader.deep_verify(temp_dir.path()).await;
+		reader.deep_verify(temp_dir.path()).await.unwrap();
 	}
 }

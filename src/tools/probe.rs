@@ -1,4 +1,4 @@
-use crate::containers::get_reader;
+use crate::{containers::get_reader, shared::Result};
 use clap::Args;
 
 #[derive(Args, Debug)]
@@ -16,17 +16,13 @@ pub struct Subcommand {
 }
 
 #[tokio::main]
-pub async fn run(arguments: &Subcommand) {
+pub async fn run(arguments: &Subcommand) -> Result<()> {
 	println!("probe {:?}", arguments.filename);
 
-	let reader = get_reader(&arguments.filename).await.unwrap();
+	let reader = get_reader(&arguments.filename).await?;
 	println!("{reader:#?}");
 
-	/*
-	if arguments.deep {
-		reader.deep_verify().await;
-	}
-	*/
+	Ok(())
 }
 
 #[cfg(test)]

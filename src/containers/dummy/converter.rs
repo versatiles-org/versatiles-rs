@@ -1,6 +1,6 @@
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{Compression, TileBBoxPyramide, TileConverterConfig, TileFormat},
+	shared::{Compression, Result, TileBBoxPyramide, TileConverterConfig, TileFormat},
 };
 use async_trait::async_trait;
 use std::path::Path;
@@ -38,11 +38,12 @@ impl TileConverterTrait for TileConverter {
 	{
 		Box::new(Self { config })
 	}
-	async fn convert_from(&mut self, reader: &mut TileReaderBox) {
-		reader.get_container_name();
-		reader.get_name();
-		reader.get_meta().await;
-		self.config.finalize_with_parameters(reader.get_parameters());
+	async fn convert_from(&mut self, reader: &mut TileReaderBox) -> Result<()> {
+		let _temp = reader.get_container_name()?;
+		let _temp = reader.get_name()?;
+		let _temp = reader.get_meta().await?;
+
+		self.config.finalize_with_parameters(reader.get_parameters()?);
 		let bbox_pyramide = self.config.get_bbox_pyramide();
 
 		for (level, bbox) in bbox_pyramide.iter_levels() {
@@ -50,6 +51,8 @@ impl TileConverterTrait for TileConverter {
 				let _tile_vec = reader.get_bbox_tile_vec(level, &row_bbox).await;
 			}
 		}
+
+		Ok(())
 	}
 }
 
@@ -69,7 +72,7 @@ mod tests {
 	async fn test() {
 		let mut converter = TileConverter::new_dummy(ConverterProfile::Png, 8);
 		let mut reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
-		converter.convert_from(&mut reader).await;
+		converter.convert_from(&mut reader).await.unwrap();
 	}
 
 	#[test]

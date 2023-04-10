@@ -1,6 +1,6 @@
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{compress, Compression, ProgressBar, TileConverterConfig, TileFormat},
+	shared::{compress, Compression, ProgressBar, Result, TileConverterConfig, TileFormat},
 };
 use async_trait::async_trait;
 use log::trace;
@@ -30,10 +30,10 @@ impl TileConverterTrait for TileConverter {
 
 		Box::new(TileConverter { builder, config })
 	}
-	async fn convert_from(&mut self, reader: &mut TileReaderBox) {
+	async fn convert_from(&mut self, reader: &mut TileReaderBox) -> Result<()> {
 		trace!("convert_from");
 
-		self.config.finalize_with_parameters(reader.get_parameters());
+		self.config.finalize_with_parameters(reader.get_parameters()?);
 
 		let tile_converter = self.config.get_tile_recompressor();
 
@@ -60,10 +60,10 @@ impl TileConverterTrait for TileConverter {
 
 		let bbox_pyramide = self.config.get_bbox_pyramide();
 
-		let meta_data = reader.get_meta().await;
+		let meta_data = reader.get_meta().await?;
 
 		if !meta_data.is_empty() {
-			let meta_data = compress(meta_data, self.config.get_tile_compression()).unwrap();
+			let meta_data = compress(meta_data, self.config.get_tile_compression())?;
 			let filename = format!("tiles.json{}", ext_comp);
 
 			let mut header = Header::new_gnu();
@@ -72,8 +72,7 @@ impl TileConverterTrait for TileConverter {
 
 			self
 				.builder
-				.append_data(&mut header, Path::new(&filename), meta_data.as_slice())
-				.unwrap();
+				.append_data(&mut header, Path::new(&filename), meta_data.as_slice())?;
 		}
 
 		let mut bar = ProgressBar::new("converting tiles", bbox_pyramide.count_tiles());
@@ -108,6 +107,8 @@ impl TileConverterTrait for TileConverter {
 		}
 
 		bar.finish();
-		self.builder.finish().unwrap();
+		self.builder.finish()?;
+
+		Ok(())
 	}
 }

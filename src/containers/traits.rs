@@ -15,7 +15,7 @@ pub trait TileConverterTrait {
 		Self: Sized;
 
 	// readers must be mutable, because they might use caching
-	async fn convert_from(&mut self, reader: &mut TileReaderBox);
+	async fn convert_from(&mut self, reader: &mut TileReaderBox) -> Result<()>;
 }
 
 #[allow(clippy::new_ret_no_self)]
@@ -26,25 +26,25 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 		Self: Sized;
 
 	/// some kine of name for this reader source, e.g. the filename
-	fn get_name(&self) -> &str;
+	fn get_name(&self) -> Result<&str>;
 
-	fn get_parameters(&self) -> &TileReaderParameters;
+	fn get_parameters(&self) -> Result<&TileReaderParameters>;
 
-	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters;
+	fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters>;
 
-	fn get_tile_format(&self) -> &TileFormat {
-		self.get_parameters().get_tile_format()
+	fn get_tile_format(&self) -> Result<&TileFormat> {
+		Ok(self.get_parameters()?.get_tile_format())
 	}
 
-	fn get_tile_compression(&self) -> &Compression {
-		self.get_parameters().get_tile_compression()
+	fn get_tile_compression(&self) -> Result<&Compression> {
+		Ok(self.get_parameters()?.get_tile_compression())
 	}
 
 	/// container name, e.g. versatiles, mbtiles, ...
-	fn get_container_name(&self) -> &str;
+	fn get_container_name(&self) -> Result<&str>;
 
 	/// get meta data, always uncompressed
-	async fn get_meta(&self) -> Blob;
+	async fn get_meta(&self) -> Result<Blob>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob>;
@@ -62,7 +62,7 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 	}
 
 	/// verify container and output data to output_folder
-	async fn deep_verify(&self, _output_folder: &Path) {
+	async fn deep_verify(&self, _output_folder: &Path) -> Result<()> {
 		todo!()
 	}
 }
@@ -89,24 +89,24 @@ mod tests {
 			Ok(Box::new(reader))
 		}
 
-		fn get_name(&self) -> &str {
-			&self.name
+		fn get_name(&self) -> Result<&str> {
+			Ok(&self.name)
 		}
 
-		fn get_parameters(&self) -> &TileReaderParameters {
-			&self.parameters
+		fn get_parameters(&self) -> Result<&TileReaderParameters> {
+			Ok(&self.parameters)
 		}
 
-		fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
-			&mut self.parameters
+		fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters> {
+			Ok(&mut self.parameters)
 		}
 
-		async fn get_meta(&self) -> Blob {
-			Blob::from("test metadata")
+		async fn get_meta(&self) -> Result<Blob> {
+			Ok(Blob::from("test metadata"))
 		}
 
-		fn get_container_name(&self) -> &str {
-			"test container name"
+		fn get_container_name(&self) -> Result<&str> {
+			Ok("test container name")
 		}
 
 		async fn get_tile_data(&self, _coord: &TileCoord3) -> Option<Blob> {
@@ -126,7 +126,9 @@ mod tests {
 			Box::new(converter)
 		}
 
-		async fn convert_from(&mut self, _reader: &mut TileReaderBox) {}
+		async fn convert_from(&mut self, _reader: &mut TileReaderBox) -> Result<()> {
+			Ok(())
+		}
 	}
 
 	#[tokio::test]
@@ -134,17 +136,17 @@ mod tests {
 		let mut reader = TestReader::new("test_path").await.unwrap();
 
 		// Test getting name
-		assert_eq!(reader.get_name(), "test_path");
+		assert_eq!(reader.get_name().unwrap(), "test_path");
 
 		// Test getting tile compression and format
-		assert_eq!(reader.get_tile_compression(), &Compression::None);
-		assert_eq!(reader.get_tile_format(), &TileFormat::PBF);
+		assert_eq!(reader.get_tile_compression().unwrap(), &Compression::None);
+		assert_eq!(reader.get_tile_format().unwrap(), &TileFormat::PBF);
 
 		// Test getting container name
-		assert_eq!(reader.get_container_name(), "test container name");
+		assert_eq!(reader.get_container_name().unwrap(), "test container name");
 
 		// Test getting metadata
-		assert_eq!(reader.get_meta().await.to_string(), "test metadata");
+		assert_eq!(reader.get_meta().await.unwrap().to_string(), "test metadata");
 
 		// Test getting tile data
 		let coord = TileCoord3::new(0, 0, 0);
@@ -154,6 +156,6 @@ mod tests {
 		);
 
 		let mut converter = TestConverter::new(&Path::new("/hallo"), TileConverterConfig::new_full());
-		converter.convert_from(&mut reader).await;
+		converter.convert_from(&mut reader).await.unwrap();
 	}
 }

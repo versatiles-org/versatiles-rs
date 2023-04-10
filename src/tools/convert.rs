@@ -1,9 +1,9 @@
 use crate::{
 	containers::{get_converter, get_reader, TileConverterBox, TileReaderBox},
-	shared::{Compression, Result, TileBBoxPyramide, TileConverterConfig, TileFormat},
+	shared::{Compression, Error, Result, TileBBoxPyramide, TileConverterConfig, TileFormat},
 };
 use clap::Args;
-use log::trace;
+use log::{error, trace};
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -51,23 +51,24 @@ pub struct Subcommand {
 }
 
 #[tokio::main]
-pub async fn run(arguments: &Subcommand) {
+pub async fn run(arguments: &Subcommand) -> Result<()> {
 	println!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
-	let mut reader = new_reader(&arguments.input_file, arguments).await.unwrap();
-	let mut converter = new_converter(&arguments.output_file, arguments);
-	converter.convert_from(&mut reader).await;
+	let mut reader = new_reader(&arguments.input_file, arguments).await?;
+	let mut converter = new_converter(&arguments.output_file, arguments)?;
+
+	converter.convert_from(&mut reader).await
 }
 
 async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TileReaderBox> {
 	let mut reader = get_reader(filename).await?;
 
-	reader.get_parameters_mut().set_vertical_flip(arguments.flip_input);
+	reader.get_parameters_mut()?.set_vertical_flip(arguments.flip_input);
 
 	Ok(reader)
 }
 
-fn new_converter(filename: &str, arguments: &Subcommand) -> TileConverterBox {
+fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileConverterBox> {
 	let mut bbox_pyramide = TileBBoxPyramide::new_full();
 
 	if let Some(value) = arguments.min_zoom {
@@ -85,10 +86,13 @@ fn new_converter(filename: &str, arguments: &Subcommand) -> TileConverterBox {
 			.filter(|s| !s.is_empty())
 			.map(|s| s.parse::<f32>().expect("bbox value is not a number"))
 			.collect();
+
 		if values.len() != 4 {
-			panic!("bbox must contain exactly 4 numbers, but instead i'v got: {value:?}");
+			error!("bbox must contain exactly 4 numbers, but instead i'v got: {value:?}");
+			return Err(Error::new("bbox must contain exactly 4 numbers"));
 		}
-		bbox_pyramide.limit_by_geo_bbox(values.as_slice().try_into().unwrap());
+
+		bbox_pyramide.limit_by_geo_bbox(values.as_slice().try_into()?);
 	}
 
 	let config = TileConverterConfig::new(
@@ -98,9 +102,7 @@ fn new_converter(filename: &str, arguments: &Subcommand) -> TileConverterBox {
 		arguments.force_recompress,
 	);
 
-	let converter = get_converter(filename, config);
-
-	converter
+	get_converter(filename, config)
 }
 
 #[cfg(test)]

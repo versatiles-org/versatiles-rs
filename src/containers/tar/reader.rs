@@ -32,8 +32,8 @@ pub struct TileReader {
 }
 #[async_trait]
 impl TileReaderTrait for TileReader {
-	fn get_container_name(&self) -> &str {
-		"tar"
+	fn get_container_name(&self) -> Result<&str> {
+		Ok("tar")
 	}
 	async fn new(path: &str) -> Result<TileReaderBox>
 	where
@@ -165,19 +165,19 @@ impl TileReaderTrait for TileReader {
 			parameters: TileReaderParameters::new(tile_form.unwrap(), tile_comp.unwrap(), bbox_pyramide),
 		}))
 	}
-	fn get_parameters(&self) -> &TileReaderParameters {
-		&self.parameters
+	fn get_parameters(&self) -> Result<&TileReaderParameters> {
+		Ok(&self.parameters)
 	}
-	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
-		&mut self.parameters
+	fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters> {
+		Ok(&mut self.parameters)
 	}
-	async fn get_meta(&self) -> Blob {
-		self.meta.clone()
+	async fn get_meta(&self) -> Result<Blob> {
+		Ok(self.meta.clone())
 	}
 	async fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
 		trace!("get_tile_data {:?}", coord_in);
 
-		let coord: TileCoord3 = if self.get_parameters().get_vertical_flip() {
+		let coord: TileCoord3 = if self.get_parameters().unwrap().get_vertical_flip() {
 			coord_in.flip_vertically()
 		} else {
 			coord_in.to_owned()
@@ -197,8 +197,8 @@ impl TileReaderTrait for TileReader {
 
 		Some(Blob::from(buf))
 	}
-	fn get_name(&self) -> &str {
-		&self.name
+	fn get_name(&self) -> Result<&str> {
+		Ok(&self.name)
 	}
 }
 
@@ -225,11 +225,11 @@ pub mod tests {
 
 			// get tar reader
 			let mut reader = TileReader::new(file.to_str().unwrap()).await.unwrap();
-			reader.get_parameters_mut();
+			reader.get_parameters_mut().unwrap();
 			format!("{:?}", reader);
 
 			let mut converter = TileConverter::new_dummy(ConverterProfile::Whatever, 4);
-			converter.convert_from(&mut reader).await;
+			converter.convert_from(&mut reader).await.unwrap();
 		}
 
 		test_compression(Compression::None).await;

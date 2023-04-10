@@ -6,6 +6,7 @@ pub mod tools;
 
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
+use shared::Result;
 
 // Define the command-line interface using the clap crate
 #[derive(Parser, Debug)]
@@ -48,11 +49,11 @@ fn main() {
 		.filter_level(cli.verbose.log_level_filter())
 		.init();
 
-	run(cli);
+	run(cli).unwrap();
 }
 
 // Helper function for running subcommands
-fn run(cli: Cli) {
+fn run(cli: Cli) -> Result<()> {
 	match &cli.command {
 		Commands::Convert(arguments) => tools::convert::run(arguments),
 		Commands::Probe(arguments) => tools::probe::run(arguments),
@@ -72,7 +73,7 @@ mod tests {
 		match Cli::try_parse_from(arg_vec) {
 			Ok(cli) => {
 				let msg = format!("{:?}", cli);
-				run(cli);
+				run(cli).unwrap();
 				Ok(msg)
 			}
 			Err(error) => Err(error.render().to_string()),
