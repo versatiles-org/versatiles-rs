@@ -11,6 +11,7 @@ function docker_build_release () {
 	if [ -z ${platf+x} ]; then echo "platf is unset"; exit 1; fi
 
 	docker buildx build --platform="${platf}" --progress="plain" --tag="${linux}-versatiles" --file="${linux}.Dockerfile" .
+	docker run --platform="${platf}" "${linux}-versatiles" sh /versatiles_selftest.sh
 }
 
 docker_build_release debian linux/amd64
