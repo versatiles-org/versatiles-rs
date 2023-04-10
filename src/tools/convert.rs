@@ -98,9 +98,7 @@ fn new_converter(filename: &str, arguments: &Subcommand) -> TileConverterBox {
 		arguments.force_recompress,
 	);
 
-	let converter = get_converter(filename, config);
-
-	converter
+	get_converter(filename, config).unwrap()
 }
 
 #[cfg(test)]

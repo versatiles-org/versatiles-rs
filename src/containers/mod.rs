@@ -6,33 +6,36 @@ pub mod versatiles;
 mod traits;
 pub use traits::*;
 
-use crate::shared::{Result, TileConverterConfig};
+use crate::shared::{Error, Result, TileConverterConfig};
+use log::error;
 use std::path::PathBuf;
 
 pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
 	let extension = filename.split('.').last().unwrap();
 
-	let reader = match extension {
-		"mbtiles" => mbtiles::TileReader::new(filename),
-		"tar" => tar::TileReader::new(filename),
-		"versatiles" => versatiles::TileReader::new(filename),
-		_ => panic!("extension '{extension:?}' unknown"),
-	};
-
-	reader.await
+	match extension {
+		"mbtiles" => mbtiles::TileReader::new(filename).await,
+		"tar" => tar::TileReader::new(filename).await,
+		"versatiles" => versatiles::TileReader::new(filename).await,
+		_ => {
+			error!("Error when reading: file extension '{extension:?}' unknown");
+			Err(Error::new("file extension unknown"))
+		}
+	}
 }
 
-pub fn get_converter(filename: &str, config: TileConverterConfig) -> TileConverterBox {
+pub fn get_converter(filename: &str, config: TileConverterConfig) -> Result<TileConverterBox> {
 	let path = PathBuf::from(filename);
-	let extension = path.extension().unwrap().to_str().expect("file has no extension");
+	let extension = path.extension().unwrap().to_str().unwrap_or("");
 
-	let converter = match extension {
-		//"mbtiles" => mbtiles::TileConverter::new(&path, config),
-		"versatiles" => versatiles::TileConverter::new(&path, config),
-		"tar" => tar::TileConverter::new(&path, config),
-		_ => panic!("extension '{extension:?}' unknown"),
-	};
-	converter
+	match extension {
+		"versatiles" => Ok(versatiles::TileConverter::new(&path, config)),
+		"tar" => Ok(tar::TileConverter::new(&path, config)),
+		_ => {
+			error!("Error when writing: file extension '{extension:?}' unknown");
+			Err(Error::new("file extension unknown"))
+		}
+	}
 }
 
 #[cfg(test)]
@@ -75,7 +78,7 @@ pub mod tests {
 			TileBBoxPyramide::new_full(),
 			false,
 		);
-		let mut converter = get_converter(&container_file.to_str().unwrap(), config);
+		let mut converter = get_converter(&container_file.to_str().unwrap(), config).unwrap();
 
 		// convert
 		converter.convert_from(&mut reader).await;
@@ -120,7 +123,7 @@ pub mod tests {
 				TileBBoxPyramide::new_full(),
 				force_recompress,
 			);
-			let mut converter1 = get_converter(&container_file.to_str().unwrap(), config);
+			let mut converter1 = get_converter(&container_file.to_str().unwrap(), config).unwrap();
 
 			// convert
 			converter1.convert_from(&mut reader1).await;
