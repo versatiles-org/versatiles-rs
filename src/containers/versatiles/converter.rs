@@ -7,9 +7,10 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures::executor::block_on;
+use futures::lock::Mutex;
 use log::{debug, trace};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use std::{collections::HashMap, sync::Mutex};
+use std::collections::HashMap;
 
 pub struct TileConverter {
 	writer: Box<dyn DataWriterTrait>,
@@ -148,9 +149,9 @@ impl TileConverter {
 				blobs.iter().fold(0, |acc, e| acc + e.1.len())
 			);
 
-			let mut secured_tile_hash_lookup = mutex_tile_hash_lookup.lock().unwrap();
-			let mut secured_tile_index = mutex_tile_index.lock().unwrap();
-			let mut secured_writer = mutex_writer.lock().unwrap();
+			let mut secured_tile_hash_lookup = mutex_tile_hash_lookup.lock().await;
+			let mut secured_tile_index = mutex_tile_index.lock().await;
+			let mut secured_writer = mutex_writer.lock().await;
 
 			for (coord, blob) in blobs.iter() {
 				trace!("blob size {}", blob.len());
@@ -176,7 +177,7 @@ impl TileConverter {
 				}
 			}
 
-			mutex_progress.lock().unwrap().inc(row_bbox.count_tiles());
+			mutex_progress.lock().await.inc(row_bbox.count_tiles());
 
 			trace!("finish block slice {:?}", row_bbox);
 		}
