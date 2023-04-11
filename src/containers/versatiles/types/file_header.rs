@@ -106,14 +106,14 @@ impl FileHeader {
 
 	fn from_blob(blob: Blob) -> FileHeader {
 		if blob.len() != HEADER_LENGTH {
-			panic!();
+			panic!("'{blob:?}' is not a valid versatiles header. A header should be {HEADER_LENGTH} bytes long.");
 		}
 
 		let mut header = Cursor::new(blob.as_slice());
 		let mut magic_word = [0u8; 14];
 		header.read_exact(&mut magic_word).unwrap();
 		if &magic_word != b"versatiles_v02" {
-			panic!()
+			panic!("'{blob:?}' is not a valid versatiles header. A header should start with 'versatiles_v02'");
 		};
 
 		let tile_type = header.read_u8().unwrap();
@@ -132,14 +132,14 @@ impl FileHeader {
 			0x21 => TileFormat::GEOJSON,
 			0x22 => TileFormat::TOPOJSON,
 			0x23 => TileFormat::JSON,
-			_ => panic!(),
+			_ => panic!("unknown tile_type value: {tile_type}"),
 		};
 
 		let compression = match compression {
 			0 => Compression::None,
 			1 => Compression::Gzip,
 			2 => Compression::Brotli,
-			_ => panic!(),
+			_ => panic!("unknown compression value: {tile_type}"),
 		};
 
 		let zoom_range: [u8; 2] = [header.read_u8().unwrap(), header.read_u8().unwrap()];

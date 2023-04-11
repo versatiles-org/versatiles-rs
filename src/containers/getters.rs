@@ -67,7 +67,7 @@ pub mod tests {
 		let container_file = match extension {
 			"tar" => NamedTempFile::new("temp.tar"),
 			"versatiles" => NamedTempFile::new("temp.versatiles"),
-			_ => panic!(),
+			_ => panic!("make_test_file: extension {extension} not found"),
 		}
 		.unwrap();
 

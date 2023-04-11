@@ -215,7 +215,7 @@ mod tests {
 			Some(value) => match value.to_str().unwrap() {
 				"gzip" => Compression::Gzip,
 				"br" => Compression::Brotli,
-				_ => panic!("encoding: {:?}", encoding),
+				_ => panic!("encoding: {encoding:?}"),
 			},
 		};
 

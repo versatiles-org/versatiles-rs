@@ -190,7 +190,7 @@ impl TileBBox {
 	}
 	pub fn get_tile_index(&self, coord: &TileCoord2) -> usize {
 		if !self.contains(coord) {
-			panic!()
+			panic!("coord '{coord:?}' is not in '{self:?}'")
 		}
 
 		let x = coord.x - self.x_min;

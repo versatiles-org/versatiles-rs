@@ -82,7 +82,7 @@ impl TileReader {
 						tile_format = Some(TileFormat::WEBP);
 						compression = Some(Compression::None);
 					}
-					_ => panic!("unknown format"),
+					_ => panic!("unknown file format: {val}"),
 				},
 				"json" => self.meta_data = Some(val),
 				&_ => {}
