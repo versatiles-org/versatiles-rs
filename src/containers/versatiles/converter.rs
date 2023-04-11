@@ -1,15 +1,12 @@
-use super::types::*;
-use super::DataWriterFile;
-use super::DataWriterTrait;
+use super::{types::*, DataWriterFile, DataWriterTrait};
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
 	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig, TileCoord2},
 };
 use async_trait::async_trait;
-use futures::executor::block_on;
-use futures::lock::Mutex;
+use futures::{executor::block_on, lock::Mutex};
 use log::{debug, trace};
-use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
+//use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::HashMap;
 
 pub struct TileConverter {
@@ -127,9 +124,7 @@ impl TileConverter {
 			trace!("start block slice {:?}", row_bbox);
 
 			let mut blobs: Vec<(TileCoord2, Blob)> = reader.get_bbox_tile_vec(block.z, &row_bbox).await;
-
 			blobs.sort_by_cached_key(|(coord, _blob)| coord.y * width + coord.x);
-
 			trace!(
 				"get_bbox_tile_vec: count {}, size sum {}",
 				blobs.len(),
@@ -138,7 +133,7 @@ impl TileConverter {
 
 			if !tile_converter.is_empty() {
 				blobs = blobs
-					.par_iter()
+					.iter()
 					.map(|(coord, blob)| (coord.clone(), tile_converter.run(blob.clone()).unwrap()))
 					.collect();
 			}

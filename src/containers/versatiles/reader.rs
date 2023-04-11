@@ -11,14 +11,13 @@ use async_trait::async_trait;
 use itertools::Itertools;
 use log::debug;
 use std::{collections::HashMap, fmt::Debug, ops::Shr, path::Path};
-use tokio::sync::RwLock;
 
 pub struct TileReader {
 	meta: Blob,
 	reader: Box<dyn DataReaderTrait>,
 	parameters: TileReaderParameters,
 	block_index: BlockIndex,
-	tile_index_cache: RwLock<HashMap<TileCoord3, TileIndex>>,
+	tile_index_cache: HashMap<TileCoord3, TileIndex>,
 }
 
 impl TileReader {
@@ -42,7 +41,7 @@ impl TileReader {
 			reader,
 			parameters,
 			block_index,
-			tile_index_cache: RwLock::new(HashMap::new()),
+			tile_index_cache: HashMap::new(),
 		})
 	}
 }
@@ -76,6 +75,7 @@ impl TileReaderTrait for TileReader {
 		} else {
 			coord_in.to_owned()
 		};
+
 		let block_coord = TileCoord3 {
 			x: coord.x.shr(8),
 			y: coord.y.shr(8),
@@ -100,32 +100,22 @@ impl TileReaderTrait for TileReader {
 
 		let tile_id = block.bbox.get_tile_index(&TileCoord2::new(tile_x, tile_y));
 
-		let cache_reader = self.tile_index_cache.read().await;
-		let tile_index_option = cache_reader.get(&block_coord);
+		let tile_index_option = self.tile_index_cache.get(&block_coord);
 
 		let tile_range: ByteRange;
 
 		if let Some(tile_index) = tile_index_option {
 			tile_range = *tile_index.get(tile_id);
-
-			drop(cache_reader);
 		} else {
-			drop(cache_reader);
 			let blob = self.reader.read_range(&block.index_range).await.unwrap();
 			let mut tile_index = TileIndex::from_brotli_blob(blob);
 			tile_index.add_offset(block.tiles_range.offset);
 
-			let mut cache_writer = self.tile_index_cache.write().await;
-			cache_writer.insert(block_coord, tile_index);
+			self.tile_index_cache.insert(block_coord, tile_index);
 
-			drop(cache_writer);
-
-			let cache_reader = self.tile_index_cache.read().await;
-			let tile_index_option = cache_reader.get(&block_coord);
+			let tile_index_option = self.tile_index_cache.get(&block_coord);
 
 			tile_range = *tile_index_option.unwrap().get(tile_id);
-
-			drop(cache_reader);
 		}
 
 		if tile_range.length == 0 {
