@@ -12,9 +12,9 @@ jobs:
       matrix:
         include:
           - os: debian
-            platforms: linux/amd64, linux/386
+            platforms: linux/amd64
           - os: alpine
-            platforms: linux/amd64, linux/arm/v6, linux/arm/v7, linux/arm64/v8, linux/386
+            platforms: linux/amd64
           - os: scratch
             platforms: linux/amd64
     steps:
