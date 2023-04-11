@@ -28,6 +28,6 @@ WORKDIR /data/
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
 COPY --from=builder --chown=versatiles:versatiles /root/.cargo/bin/versatiles /usr/bin/
-COPY versatiles_selftest.sh .
+COPY helpers/versatiles_selftest.sh .
 
 USER versatiles

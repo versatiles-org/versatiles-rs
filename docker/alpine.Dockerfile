@@ -23,7 +23,6 @@ RUN apk add --no-cache curl sqlite
 
 
 
-
 # copy versatiles and tests
 COPY --from=builder /root/.cargo/bin/versatiles /usr/bin/
-COPY versatiles_selftest.sh .
+COPY helpers/versatiles_selftest.sh .
