@@ -5,6 +5,7 @@
 *.json
 *.lcov
 *.tar
+*.versatiles
 /coverage
 /frontend
 /releases

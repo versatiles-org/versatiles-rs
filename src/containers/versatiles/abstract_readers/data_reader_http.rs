@@ -4,7 +4,8 @@ use crate::shared::{Blob, Error, Result};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
-use reqwest::{Client, Method, Request, Url};
+use reqwest::{Client, Method, Request, StatusCode, Url};
+use std::str;
 use std::time::Duration;
 
 pub struct DataReaderHttp {
@@ -42,10 +43,13 @@ impl DataReaderTrait for DataReaderHttp {
 
 		let response = self.client.execute(request).await?;
 
-		let content_length: u64 = match response.headers().get("content-length") {
-			Some(text) => text.to_str()?.parse::<u64>()?,
-			None => panic!("content-length not set for range request {range:?} to url {}", self.url),
-		};
+		if response.status() != StatusCode::PARTIAL_CONTENT {
+			let status_code = response.status();
+			println!("response: {}", str::from_utf8(&response.bytes().await?).unwrap());
+			panic!(
+				"as a response to a range request it is expected to get the status code 206. instead we got {status_code}"
+			)
+		}
 
 		let content_range: &str = match response.headers().get("content-range") {
 			Some(header_value) => header_value.to_str()?,
@@ -69,11 +73,6 @@ impl DataReaderTrait for DataReaderHttp {
 			content_range_end = captures.get(2).unwrap().as_str().parse::<u64>()?;
 		} else {
 			panic!("format of content-range response is invalid: {content_range}")
-		}
-		let content_range_length = content_range_end - content_range_start + 1;
-
-		if content_range_length != content_length {
-			panic!("content-range length {content_range_length} is not content-length {content_length}");
 		}
 
 		if content_range_start != range.offset {
