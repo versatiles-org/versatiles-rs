@@ -1,13 +1,14 @@
+echo "Update rust"
 rustup update
 
-# Find unused dependencies
+echo "Find unused dependencies"
 cargo +nightly udeps
 
-# check features
+#echo "check features"
 #unused-features analyze
 
-# upgrade dependencies
+echo "upgrade dependencies"
 cargo upgrades
 
-# Update dependencies in the local lock file
+echo "Update dependencies in the local lock file"
 cargo update
