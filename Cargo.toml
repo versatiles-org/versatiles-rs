@@ -10,7 +10,7 @@ keywords = ["versatiles", "mbtiles", "tiles", "map"]
 categories = ["command-line-utilities", "science::geo", "web-programming::http-server"]
 readme = "README.MD"
 license = "MIT"
-exclude = ["docker/*", "helpers/*", "ressources/*"]
+exclude = ["docker/*", "helpers/*", "ressources/*", "benches/*"]
 
 [dependencies]
 async-trait = { version = "0.1.68", default-features = false }
@@ -47,10 +47,10 @@ rand = { version = "0.8.5", default-features = true }
 name = "versatiles"
 path = "src/main.rs"
 
-[[bench]]
-name = "main"
-harness = false
-path = "benches/main.rs"
+# [[bench]]
+# name = "main"
+# harness = false
+# path = "benches/main.rs"
 
 [profile.dev]
 opt-level = 1
@@ -75,5 +75,5 @@ incremental = false
 overflow-checks = false
 strip = true
 
-[profile.bench]
-lto = false
+# [profile.bench]
+# lto = false

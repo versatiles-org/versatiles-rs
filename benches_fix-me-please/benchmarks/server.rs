@@ -1,12 +1,14 @@
-use crate::container::get_reader;
-use crate::server::{source, TileServer};
-use crate::shared::TileCoord3;
 use core::time;
 use criterion::{black_box, criterion_group, Criterion};
 use futures::executor::block_on;
 use rand::{seq::SliceRandom, thread_rng};
 use reqwest::blocking::get;
 use std::thread;
+use versatiles::{
+	containers::get_reader,
+	server::{source::TileContainer, TileServer},
+	shared::TileCoord3,
+};
 
 fn bench_server(c: &mut Criterion) {
 	let mut group = c.benchmark_group("test_server");
@@ -14,6 +16,7 @@ fn bench_server(c: &mut Criterion) {
 	let reader = block_on(get_reader("benches/ressources/berlin.mbtiles")).unwrap();
 	let coords: Vec<TileCoord3> = reader
 		.get_parameters()
+		.unwrap()
 		.get_bbox_pyramide()
 		.iter_tile_indexes()
 		.collect();
@@ -21,9 +24,9 @@ fn bench_server(c: &mut Criterion) {
 
 	let mut server = TileServer::new("127.0.0.1", 8080);
 	let reader = block_on(get_reader("src/bin/benches/ressources/berlin.mbtiles")).unwrap();
-	server.add_tile_source(&format!("/tiles/berlin/"), source::TileContainer::from(reader));
+	server.add_tile_source(&format!("/tiles/berlin/"), TileContainer::from(reader).unwrap());
 
-	thread::spawn(move || block_on(server.start()));
+	thread::spawn(move || block_on(server.start()).unwrap());
 
 	thread::sleep(time::Duration::from_secs(1));
 
