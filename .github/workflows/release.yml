@@ -39,4 +39,4 @@ jobs:
           platforms: ${{ matrix.platforms }}
           file: "docker/${{ matrix.os }}.Dockerfile"
           push: true
-          tags: versatiles/versatiles:latest-${{ matrix.os }}, versatiles/versatiles:${{ env.LATEST_VERSION }}-${{ matrix.os }}
+          tags: versatiles/versatiles:latest-${{ matrix.os }}, versatiles/versatiles:v${{ env.LATEST_VERSION }}-${{ matrix.os }}
