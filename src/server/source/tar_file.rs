@@ -240,7 +240,9 @@ mod tests {
 			TileBBoxPyramide::new_full(),
 			false,
 		);
-		let mut converter = TileConverter::new(&container_file.path(), config);
+		let mut converter = TileConverter::new(container_file.to_str().unwrap(), config)
+			.await
+			.unwrap();
 
 		// convert
 		converter.convert_from(&mut reader).await.unwrap();

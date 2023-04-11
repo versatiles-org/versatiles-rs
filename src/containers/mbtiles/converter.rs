@@ -3,13 +3,12 @@ use crate::{
 	shared::{Result, TileConverterConfig},
 };
 use async_trait::async_trait;
-use std::path::Path;
 
 pub struct TileConverter;
 
 #[async_trait]
 impl TileConverterTrait for TileConverter {
-	fn new(_filename: &Path, _config: TileConverterConfig) -> TileConverterBox
+	async fn new(_filename: &str, _config: TileConverterConfig) -> Result<TileConverterBox>
 	where
 		Self: Sized,
 	{
@@ -28,12 +27,11 @@ mod tests {
 		shared::TileConverterConfig,
 	};
 	use futures::executor::block_on;
-	use std::path::Path;
 
 	#[test]
 	#[should_panic]
 	fn test1() {
-		let _converter = TileConverter::new(Path::new("filename.txt"), TileConverterConfig::new_full());
+		let _converter = TileConverter::new("filename.txt", TileConverterConfig::new_full());
 	}
 
 	#[test]

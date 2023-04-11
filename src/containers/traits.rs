@@ -10,7 +10,7 @@ pub type TileReaderBox = Box<dyn TileReaderTrait>;
 #[allow(clippy::new_ret_no_self)]
 #[async_trait]
 pub trait TileConverterTrait {
-	fn new(filename: &Path, config: TileConverterConfig) -> TileConverterBox
+	async fn new(filename: &str, tile_config: TileConverterConfig) -> Result<TileConverterBox>
 	where
 		Self: Sized;
 
@@ -118,12 +118,12 @@ mod tests {
 
 	#[async_trait]
 	impl TileConverterTrait for TestConverter {
-		fn new(_filename: &Path, _config: TileConverterConfig) -> TileConverterBox
+		async fn new(_filename: &str, _config: TileConverterConfig) -> Result<TileConverterBox>
 		where
 			Self: Sized,
 		{
 			let converter = TestConverter {};
-			Box::new(converter)
+			Ok(Box::new(converter))
 		}
 
 		async fn convert_from(&mut self, _reader: &mut TileReaderBox) -> Result<()> {
@@ -155,7 +155,9 @@ mod tests {
 			"test tile data"
 		);
 
-		let mut converter = TestConverter::new(&Path::new("/hallo"), TileConverterConfig::new_full());
+		let mut converter = TestConverter::new("/hallo", TileConverterConfig::new_full())
+			.await
+			.unwrap();
 		converter.convert_from(&mut reader).await.unwrap();
 	}
 }

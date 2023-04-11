@@ -1,32 +1,37 @@
 use super::types::*;
+use super::DataWriterFile;
+use super::DataWriterTrait;
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{Blob, ProgressBar, Result, TileBBox, TileBBoxPyramide, TileConverterConfig, TileCoord2},
+	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig, TileCoord2},
 };
 use async_trait::async_trait;
+use futures::executor::block_on;
 use log::{debug, trace};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
-use std::{collections::HashMap, path::Path, sync::Mutex};
+use std::{collections::HashMap, sync::Mutex};
 
 pub struct TileConverter {
-	writer: VersaTilesDst,
+	writer: Box<dyn DataWriterTrait>,
 	config: TileConverterConfig,
 }
+
 #[async_trait]
 impl TileConverterTrait for TileConverter {
-	fn new(filename: &Path, tile_config: TileConverterConfig) -> TileConverterBox
+	async fn new(filename: &str, tile_config: TileConverterConfig) -> Result<TileConverterBox>
 	where
 		Self: Sized,
 	{
-		Box::new(TileConverter {
-			writer: VersaTilesDst::new_file(filename),
+		Ok(Box::new(TileConverter {
+			writer: DataWriterFile::new(filename).await?,
 			config: tile_config,
-		})
+		}))
 	}
 	async fn convert_from(&mut self, reader: &mut TileReaderBox) -> Result<()> {
 		self.config.finalize_with_parameters(reader.get_parameters()?);
 
-		let bbox_pyramide: &TileBBoxPyramide = self.config.get_bbox_pyramide();
+		let bbox_pyramide = self.config.get_bbox_pyramide();
+
 		let mut header = FileHeader::new(
 			self.config.get_tile_format(),
 			self.config.get_tile_compression(),
@@ -36,12 +41,14 @@ impl TileConverterTrait for TileConverter {
 			],
 			bbox_pyramide.get_geo_bbox(),
 		);
-		self.writer.append(&header.to_blob());
+
+		self.writer.append(&header.to_blob()).await?;
 
 		header.meta_range = self.write_meta(reader).await?;
-		header.blocks_range = self.write_blocks(reader).await;
 
-		self.writer.write_start(&header.to_blob());
+		header.blocks_range = block_on(self.write_blocks(reader))?;
+
+		self.writer.write_start(&header.to_blob()).await?;
 
 		Ok(())
 	}
@@ -52,12 +59,12 @@ impl TileConverter {
 		let meta = reader.get_meta().await?;
 		let compressed = self.config.get_compressor().run(meta).unwrap();
 
-		Ok(self.writer.append(&compressed))
+		self.writer.append(&compressed).await
 	}
-	async fn write_blocks(&mut self, reader: &mut TileReaderBox) -> ByteRange {
+	async fn write_blocks(&mut self, reader: &mut TileReaderBox) -> Result<ByteRange> {
 		let pyramide = self.config.get_bbox_pyramide();
 		if pyramide.is_empty() {
-			return ByteRange::empty();
+			return Ok(ByteRange::empty());
 		}
 
 		let mut blocks: Vec<BlockDefinition> = Vec::new();
@@ -92,14 +99,16 @@ impl TileConverter {
 		}
 		progress.finish();
 
-		self.writer.append(&block_index.as_brotli_blob())
+		let range = self.writer.append(&block_index.as_brotli_blob()).await.unwrap();
+
+		Ok(range)
 	}
 	async fn write_block(
 		&mut self, block: &BlockDefinition, reader: &TileReaderBox, progress: &mut ProgressBar,
 	) -> (ByteRange, ByteRange) {
 		debug!("start block {:?}", block);
 
-		let offset0 = self.writer.get_position();
+		let offset0 = self.writer.get_position().await.unwrap();
 
 		let bbox = &block.bbox;
 		let mut tile_index = TileIndex::new_empty(bbox.count_tiles() as usize);
@@ -143,7 +152,7 @@ impl TileConverter {
 			let mut secured_tile_index = mutex_tile_index.lock().unwrap();
 			let mut secured_writer = mutex_writer.lock().unwrap();
 
-			blobs.iter().for_each(|(coord, blob)| {
+			for (coord, blob) in blobs.iter() {
 				trace!("blob size {}", blob.len());
 
 				let index = bbox.get_tile_index(coord);
@@ -153,19 +162,19 @@ impl TileConverter {
 				if blob.len() < 1000 {
 					if secured_tile_hash_lookup.contains_key(blob.as_slice()) {
 						secured_tile_index.set(index, *secured_tile_hash_lookup.get(blob.as_slice()).unwrap());
-						return;
+						continue;
 					}
 					tile_hash_option = Some(blob.clone());
 				}
 
-				let mut range = secured_writer.append(blob);
+				let mut range = secured_writer.append(blob).await.unwrap();
 				range.offset -= offset0;
 				secured_tile_index.set(index, range);
 
 				if let Some(tile_hash) = tile_hash_option {
 					secured_tile_hash_lookup.insert(tile_hash.as_vec(), range);
 				}
-			});
+			}
 
 			mutex_progress.lock().unwrap().inc(row_bbox.count_tiles());
 
@@ -174,8 +183,8 @@ impl TileConverter {
 
 		debug!("finish block and write index {:?}", block);
 
-		let offset1 = self.writer.get_position();
-		let index_range = self.writer.append(&tile_index.as_brotli_blob());
+		let offset1 = self.writer.get_position().await.unwrap();
+		let index_range = self.writer.append(&tile_index.as_brotli_blob()).await.unwrap();
 
 		(ByteRange::new(offset0, offset1 - offset0), index_range)
 	}

@@ -3,7 +3,6 @@ use crate::{
 	shared::{Compression, Result, TileBBoxPyramide, TileConverterConfig, TileFormat},
 };
 use async_trait::async_trait;
-use std::path::Path;
 
 #[derive(Debug)]
 pub enum ConverterProfile {
@@ -32,11 +31,11 @@ impl TileConverter {
 
 #[async_trait]
 impl TileConverterTrait for TileConverter {
-	fn new(_filename: &Path, config: TileConverterConfig) -> TileConverterBox
+	async fn new(_filename: &str, config: TileConverterConfig) -> Result<TileConverterBox>
 	where
 		Self: Sized,
 	{
-		Box::new(Self { config })
+		Ok(Box::new(Self { config }))
 	}
 	async fn convert_from(&mut self, reader: &mut TileReaderBox) -> Result<()> {
 		let _temp = reader.get_container_name()?;
@@ -66,7 +65,6 @@ mod tests {
 		},
 		shared::TileConverterConfig,
 	};
-	use std::path::Path;
 
 	#[tokio::test]
 	async fn test() {
@@ -75,8 +73,8 @@ mod tests {
 		converter.convert_from(&mut reader).await.unwrap();
 	}
 
-	#[test]
-	fn test_new_dummy_png() {
-		TileConverter::new(Path::new("hi"), TileConverterConfig::new_full());
+	#[tokio::test]
+	async fn test_new_dummy_png() {
+		TileConverter::new("hi", TileConverterConfig::new_full()).await.unwrap();
 	}
 }

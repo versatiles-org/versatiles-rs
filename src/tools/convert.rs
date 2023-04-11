@@ -55,7 +55,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	println!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
 	let mut reader = new_reader(&arguments.input_file, arguments).await?;
-	let mut converter = new_converter(&arguments.output_file, arguments)?;
+	let mut converter = new_converter(&arguments.output_file, arguments).await?;
 
 	converter.convert_from(&mut reader).await
 }
@@ -68,7 +68,7 @@ async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TileReader
 	Ok(reader)
 }
 
-fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileConverterBox> {
+async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileConverterBox> {
 	let mut bbox_pyramide = TileBBoxPyramide::new_full();
 
 	if let Some(value) = arguments.min_zoom {
@@ -102,7 +102,9 @@ fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileConverter
 		arguments.force_recompress,
 	);
 
-	get_converter(filename, config)
+	let converter = get_converter(filename, config).await?;
+
+	Ok(converter)
 }
 
 #[cfg(test)]

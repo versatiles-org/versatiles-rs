@@ -16,12 +16,12 @@ pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
 	}
 }
 
-pub fn get_converter(filename: &str, config: TileConverterConfig) -> Result<TileConverterBox> {
+pub async fn get_converter(filename: &str, config: TileConverterConfig) -> Result<TileConverterBox> {
 	let path = PathBuf::from(filename);
 	let extension = get_extension(&path);
 	match extension.as_str() {
-		"versatiles" => Ok(versatiles::TileConverter::new(&path, config)),
-		"tar" => Ok(tar::TileConverter::new(&path, config)),
+		"versatiles" => versatiles::TileConverter::new(filename, config).await,
+		"tar" => tar::TileConverter::new(filename, config).await,
 		_ => {
 			error!("Error when writing: file extension '{extension:?}' unknown");
 			Err(Error::new("file extension unknown"))
@@ -77,7 +77,7 @@ pub mod tests {
 			TileBBoxPyramide::new_full(),
 			false,
 		);
-		let mut converter = get_converter(&container_file.to_str().unwrap(), config).unwrap();
+		let mut converter = get_converter(&container_file.to_str().unwrap(), config).await.unwrap();
 
 		// convert
 		converter.convert_from(&mut reader).await.unwrap();
@@ -122,7 +122,7 @@ pub mod tests {
 				TileBBoxPyramide::new_full(),
 				force_recompress,
 			);
-			let mut converter1 = get_converter(&container_file.to_str().unwrap(), config).unwrap();
+			let mut converter1 = get_converter(&container_file.to_str().unwrap(), config).await.unwrap();
 
 			// convert
 			converter1.convert_from(&mut reader1).await.unwrap();

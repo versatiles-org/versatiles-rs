@@ -19,7 +19,7 @@ pub struct TileConverter {
 
 #[async_trait]
 impl TileConverterTrait for TileConverter {
-	fn new(filename: &Path, config: TileConverterConfig) -> TileConverterBox
+	async fn new(filename: &str, config: TileConverterConfig) -> Result<TileConverterBox>
 	where
 		Self: Sized,
 	{
@@ -28,7 +28,7 @@ impl TileConverterTrait for TileConverter {
 		let file = File::create(filename).unwrap();
 		let builder = Builder::new(file);
 
-		Box::new(TileConverter { builder, config })
+		Ok(Box::new(TileConverter { builder, config }))
 	}
 	async fn convert_from(&mut self, reader: &mut TileReaderBox) -> Result<()> {
 		trace!("convert_from");

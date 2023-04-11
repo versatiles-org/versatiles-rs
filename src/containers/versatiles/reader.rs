@@ -1,4 +1,6 @@
+use super::new_data_reader;
 use super::types::*;
+use super::DataReaderTrait;
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
 	shared::{
@@ -13,15 +15,15 @@ use tokio::sync::RwLock;
 
 pub struct TileReader {
 	meta: Blob,
-	reader: Box<dyn VersaTilesSrcTrait>,
+	reader: Box<dyn DataReaderTrait>,
 	parameters: TileReaderParameters,
 	block_index: BlockIndex,
 	tile_index_cache: RwLock<HashMap<TileCoord3, TileIndex>>,
 }
 
 impl TileReader {
-	pub async fn from_src(mut reader: Box<dyn VersaTilesSrcTrait>) -> TileReader {
-		let header = FileHeader::from_reader(&mut reader).await;
+	pub async fn from_src(mut reader: Box<dyn DataReaderTrait>) -> Result<TileReader> {
+		let header = FileHeader::from_reader(&mut reader).await?;
 
 		let meta = if header.meta_range.length > 0 {
 			DataConverter::new_decompressor(&header.compression)
@@ -35,13 +37,13 @@ impl TileReader {
 		let bbox_pyramide = block_index.get_bbox_pyramide();
 		let parameters = TileReaderParameters::new(header.tile_format, header.compression, bbox_pyramide);
 
-		TileReader {
+		Ok(TileReader {
 			meta,
 			reader,
 			parameters,
 			block_index,
 			tile_index_cache: RwLock::new(HashMap::new()),
-		}
+		})
 	}
 }
 
@@ -51,8 +53,8 @@ unsafe impl Sync for TileReader {}
 #[async_trait]
 impl TileReaderTrait for TileReader {
 	async fn new(filename: &str) -> Result<TileReaderBox> {
-		let source = new_versatiles_src(filename)?;
-		let reader = TileReader::from_src(source).await;
+		let source = new_data_reader(filename).await?;
+		let reader = TileReader::from_src(source).await?;
 
 		Ok(Box::new(reader))
 	}

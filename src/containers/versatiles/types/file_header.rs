@@ -1,5 +1,8 @@
-use super::{ByteRange, VersaTilesSrcTrait};
-use crate::shared::{Blob, Compression, TileFormat};
+use super::ByteRange;
+use crate::{
+	containers::versatiles::DataReaderTrait,
+	shared::{Blob, Compression, Result, TileFormat},
+};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read, Write};
 
@@ -42,13 +45,10 @@ impl FileHeader {
 		}
 	}
 
-	pub async fn from_reader(reader: &mut Box<dyn VersaTilesSrcTrait>) -> FileHeader {
-		FileHeader::from_blob(
-			reader
-				.read_range(&ByteRange::new(0, HEADER_LENGTH as u64))
-				.await
-				.unwrap(),
-		)
+	pub async fn from_reader(reader: &mut Box<dyn DataReaderTrait>) -> Result<FileHeader> {
+		let range = ByteRange::new(0, HEADER_LENGTH as u64);
+		let blob = reader.read_range(&range).await?;
+		Ok(FileHeader::from_blob(blob))
 	}
 
 	pub fn to_blob(&self) -> Blob {
