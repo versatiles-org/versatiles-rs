@@ -208,7 +208,7 @@ impl TileReaderTrait for TileReader {
 	fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters> {
 		Ok(&mut self.parameters)
 	}
-	async fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
+	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Option<Blob> {
 		trace!("read 1 tile {:?}", coord_in);
 
 		let connection = self.connection.lock().await;
@@ -233,7 +233,7 @@ impl TileReaderTrait for TileReader {
 			None
 		}
 	}
-	async fn get_bbox_tile_vec(&self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
+	async fn get_bbox_tile_vec(&mut self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
 		trace!("read {} tiles for z:{}, bbox:{:?}", bbox.count_tiles(), zoom, bbox);
 
 		let connection = self.connection.lock().await;

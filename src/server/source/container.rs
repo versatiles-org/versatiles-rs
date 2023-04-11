@@ -66,7 +66,7 @@ impl ServerSourceTrait for TileContainer {
 		))
 	}
 
-	async fn get_data(&self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>> {
+	async fn get_data(&mut self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>> {
 		if path.len() == 3 {
 			let z = path[0].parse::<u8>();
 			let x = path[1].parse::<u64>();

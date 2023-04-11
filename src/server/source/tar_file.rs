@@ -134,7 +134,7 @@ impl ServerSourceTrait for TarFile {
 		Ok("{\"type\":\"tar\"}".to_owned())
 	}
 
-	async fn get_data(&self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>> {
+	async fn get_data(&mut self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>> {
 		let entry_name = path.join("/");
 		let entry_option = self.lookup.get(&entry_name);
 		if entry_option.is_none() {
@@ -206,7 +206,7 @@ mod tests {
 	use enumset::enum_set;
 	use hyper::header::CONTENT_ENCODING;
 
-	async fn get_as_string(container: &Box<TarFile>, path: &[&str], compression: &Compression) -> String {
+	async fn get_as_string(container: &mut Box<TarFile>, path: &[&str], compression: &Compression) -> String {
 		let mut resp = container.get_data(path, enum_set!(compression)).await;
 		let encoding = resp.headers().get(CONTENT_ENCODING);
 
@@ -257,18 +257,18 @@ mod tests {
 		async fn test_compression(from_compression: &Compression, to_compression: &Compression) {
 			let file = make_test_tar(from_compression).await;
 
-			let tar_file = TarFile::from(&file.to_str().unwrap());
+			let mut tar_file = TarFile::from(&file.to_str().unwrap());
 
-			let result = get_as_string(&tar_file, &["meta.json"], to_compression).await;
+			let result = get_as_string(&mut tar_file, &["meta.json"], to_compression).await;
 			assert_eq!(result, "Not Found");
 
-			let result = get_as_string(&tar_file, &["tiles.json"], to_compression).await;
+			let result = get_as_string(&mut tar_file, &["tiles.json"], to_compression).await;
 			assert_eq!(result, "dummy meta data");
 
-			let result = get_as_string(&tar_file, &["0", "0", "0.pbf"], to_compression).await;
+			let result = get_as_string(&mut tar_file, &["0", "0", "0.pbf"], to_compression).await;
 			assert!(result.starts_with("\u{1a}4\n\u{5}ocean"));
 
-			let result = get_as_string(&tar_file, &["cheesecake.mp4"], to_compression).await;
+			let result = get_as_string(&mut tar_file, &["cheesecake.mp4"], to_compression).await;
 			assert_eq!(result, "Not Found");
 		}
 

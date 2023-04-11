@@ -1,4 +1,4 @@
-use super::ServerSourceTrait;
+use super::{ServerSource, ServerSourceTrait};
 use crate::shared::{Blob, Compression, Result};
 use axum::{
 	body::{Bytes, Full},
@@ -12,19 +12,20 @@ use axum::{
 	Router, Server,
 };
 use enumset::{enum_set, EnumSet};
+use futures::{executor::block_on, lock::Mutex};
 use std::sync::Arc;
 use tokio::sync::oneshot::Sender;
 
 struct TileSource {
 	prefix: String,
-	source: Arc<Box<dyn ServerSourceTrait>>,
+	source: ServerSource,
 }
 
 pub struct TileServer {
 	ip: String,
 	port: u16,
 	tile_sources: Vec<TileSource>,
-	static_sources: Vec<Arc<Box<dyn ServerSourceTrait>>>,
+	static_sources: Vec<ServerSource>,
 	exit_signal: Option<Sender<()>>,
 }
 
@@ -61,13 +62,13 @@ impl TileServer {
 
 		self.tile_sources.push(TileSource {
 			prefix,
-			source: Arc::new(tile_source),
+			source: Arc::new(Mutex::new(tile_source)),
 		});
 	}
 
 	pub fn add_static_source(&mut self, source: Box<dyn ServerSourceTrait>) {
 		log::debug!("set static: source={:?}", source);
-		self.static_sources.push(Arc::new(source));
+		self.static_sources.push(Arc::new(Mutex::new(source)));
 	}
 
 	pub async fn start(&mut self) -> Result<()> {
@@ -118,16 +119,20 @@ impl TileServer {
 	fn add_tile_sources_to_app(&self, mut app: Router) -> Router {
 		for tile_source in self.tile_sources.iter() {
 			let route = tile_source.prefix.to_owned() + "*path";
-			let source = tile_source.source.clone();
 
-			let tile_app = Router::new().route(&route, get(serve_tile)).with_state(source);
+			let tile_app = Router::new()
+				.route(&route, get(serve_tile))
+				.with_state(tile_source.source.clone());
 			app = app.merge(tile_app);
 
 			async fn serve_tile(
-				Path(path): Path<String>, headers: HeaderMap, State(source): State<Arc<Box<dyn ServerSourceTrait>>>,
+				Path(path): Path<String>, headers: HeaderMap, State(source_mutex): State<ServerSource>,
 			) -> Response<Full<Bytes>> {
 				let sub_path: Vec<&str> = path.split('/').collect();
-				source.get_data(&sub_path, get_encoding(headers)).await
+				let mut source = source_mutex.lock().await;
+				let response = source.get_data(&sub_path, get_encoding(headers)).await;
+				drop(source);
+				response
 			}
 		}
 
@@ -135,14 +140,14 @@ impl TileServer {
 	}
 
 	fn add_static_sources_to_app(&self, app: Router) -> Router {
-		let sources = self.static_sources.clone();
-
-		let static_app = Router::new().fallback(get(serve_static)).with_state(sources);
+		let static_app = Router::new()
+			.fallback(get(serve_static))
+			.with_state(self.static_sources.clone());
 
 		return app.merge(static_app);
 
 		async fn serve_static(
-			uri: Uri, headers: HeaderMap, State(sources): State<Vec<Arc<Box<dyn ServerSourceTrait>>>>,
+			uri: Uri, headers: HeaderMap, State(sources): State<Vec<ServerSource>>,
 		) -> Response<Full<Bytes>> {
 			let mut path_vec: Vec<&str> = uri.path().split('/').skip(1).collect();
 
@@ -156,7 +161,9 @@ impl TileServer {
 			let encoding_set = get_encoding(headers);
 
 			for source in sources.iter() {
+				let mut source = source.lock().await;
 				let response = source.get_data(path_slice, encoding_set).await;
+				drop(source);
 				if response.status() == 200 {
 					return response;
 				}
@@ -169,12 +176,14 @@ impl TileServer {
 	fn add_api_to_app(&self, app: Router) -> Result<Router> {
 		let mut tile_sources_json_lines: Vec<String> = Vec::new();
 		for tile_source in self.tile_sources.iter() {
+			let source = block_on(tile_source.source.lock());
 			tile_sources_json_lines.push(format!(
 				"{{ \"url\":\"{}\", \"name\":\"{}\", \"info\":{} }}",
 				tile_source.prefix,
-				tile_source.source.get_name()?,
-				tile_source.source.get_info_as_json()?
+				source.get_name()?,
+				source.get_info_as_json()?
 			));
+			drop(source);
 		}
 		let tile_sources_json: String = "[\n\t".to_owned() + &tile_sources_json_lines.join(",\n\t") + "\n]";
 
@@ -199,9 +208,10 @@ impl TileServer {
 
 	pub fn iter_url_mapping(&self) -> impl Iterator<Item = (String, String)> + '_ {
 		self.tile_sources.iter().map(|tile_source| {
+			let source = block_on(tile_source.source.lock());
 			(
 				tile_source.prefix.to_owned(),
-				tile_source.source.get_name().unwrap_or(String::from("???")),
+				source.get_name().unwrap_or(String::from("???")),
 			)
 		})
 	}

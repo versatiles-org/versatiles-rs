@@ -36,7 +36,7 @@ impl DataReaderTrait for DataReaderHttp {
 			)))
 		}
 	}
-	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
+	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
 		let mut request = Request::new(Method::GET, self.url.clone());
 		let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
 		request.headers_mut().append("range", request_range.parse()?);

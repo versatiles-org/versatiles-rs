@@ -174,7 +174,7 @@ impl TileReaderTrait for TileReader {
 	async fn get_meta(&self) -> Result<Blob> {
 		Ok(self.meta.clone())
 	}
-	async fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
+	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Option<Blob> {
 		trace!("get_tile_data {:?}", coord_in);
 
 		let coord: TileCoord3 = if self.get_parameters().unwrap().get_vertical_flip() {

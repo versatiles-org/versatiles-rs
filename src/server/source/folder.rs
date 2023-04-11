@@ -48,7 +48,7 @@ impl ServerSourceTrait for Folder {
 		Ok("{\"type\":\"folder\"}".to_owned())
 	}
 
-	async fn get_data(&self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>> {
+	async fn get_data(&mut self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>> {
 		let mut local_path = self.folder.clone();
 		local_path.push(PathBuf::from(path.join("/")));
 
@@ -108,7 +108,7 @@ mod tests {
 	#[test]
 	fn test() {
 		block_on(async {
-			let folder = Folder::from("ressources");
+			let mut folder = Folder::from("ressources");
 
 			assert_eq!(folder.get_name().unwrap(), "ressources");
 

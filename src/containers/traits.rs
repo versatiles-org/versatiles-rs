@@ -47,10 +47,10 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 	async fn get_meta(&self) -> Result<Blob>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Option<Blob>;
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<Blob>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
-	async fn get_bbox_tile_vec(&self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
+	async fn get_bbox_tile_vec(&mut self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
 		let mut vec: Vec<(TileCoord2, Blob)> = Vec::new();
 		for coord in bbox.iter_coords() {
 			let option = self.get_tile_data(&coord.with_zoom(zoom)).await;
@@ -62,7 +62,7 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 	}
 
 	/// verify container and output data to output_folder
-	async fn deep_verify(&self, _output_folder: &Path) -> Result<()> {
+	async fn deep_verify(&mut self, _output_folder: &Path) -> Result<()> {
 		todo!()
 	}
 }
@@ -109,7 +109,7 @@ mod tests {
 			Ok("test container name")
 		}
 
-		async fn get_tile_data(&self, _coord: &TileCoord3) -> Option<Blob> {
+		async fn get_tile_data(&mut self, _coord: &TileCoord3) -> Option<Blob> {
 			Some(Blob::from("test tile data"))
 		}
 	}

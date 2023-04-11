@@ -70,7 +70,7 @@ impl TileReaderTrait for TileReader {
 	fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters> {
 		Ok(&mut self.parameters)
 	}
-	async fn get_tile_data(&self, coord_in: &TileCoord3) -> Option<Blob> {
+	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Option<Blob> {
 		let coord: TileCoord3 = if self.get_parameters().unwrap().get_vertical_flip() {
 			coord_in.flip_vertically()
 		} else {
@@ -137,7 +137,7 @@ impl TileReaderTrait for TileReader {
 	fn get_name(&self) -> Result<&str> {
 		Ok(self.reader.get_name())
 	}
-	async fn deep_verify(&self, output_folder: &Path) -> Result<()> {
+	async fn deep_verify(&mut self, output_folder: &Path) -> Result<()> {
 		let block_count = self.block_index.len() as u64;
 
 		debug!("number of blocks: {}", block_count);
@@ -199,7 +199,7 @@ mod tests {
 	async fn test_deep_verify() {
 		let temp_dir = TempDir::new().unwrap();
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 8, "versatiles").await;
-		let reader = TileReader::new(temp_file.to_str().unwrap()).await.unwrap();
+		let mut reader = TileReader::new(temp_file.to_str().unwrap()).await.unwrap();
 		reader.deep_verify(temp_dir.path()).await.unwrap();
 	}
 }

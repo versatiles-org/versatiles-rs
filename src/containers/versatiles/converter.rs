@@ -105,7 +105,7 @@ impl TileConverter {
 		Ok(range)
 	}
 	async fn write_block(
-		&mut self, block: &BlockDefinition, reader: &TileReaderBox, progress: &mut ProgressBar,
+		&mut self, block: &BlockDefinition, reader: &mut TileReaderBox, progress: &mut ProgressBar,
 	) -> (ByteRange, ByteRange) {
 		debug!("start block {:?}", block);
 
