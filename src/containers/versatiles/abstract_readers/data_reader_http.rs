@@ -2,6 +2,8 @@ use super::super::types::ByteRange;
 use super::DataReaderTrait;
 use crate::shared::{Blob, Error, Result};
 use async_trait::async_trait;
+use lazy_static::lazy_static;
+use regex::{Regex, RegexBuilder};
 use reqwest::{Client, Method, Request, Url};
 use std::time::Duration;
 
@@ -39,13 +41,53 @@ impl DataReaderTrait for DataReaderHttp {
 		request.headers_mut().append("range", request_range.parse()?);
 
 		//println!("### request:\n{:#?}", request);
-		let result = self.client.execute(request).await?;
-		//println!("### result:\n{:#?}", result);
+		let response = self.client.execute(request).await?;
 
-		let bytes = result.bytes().await?;
+		let content_length: u64 = match response.headers().get("content-length") {
+			Some(text) => text.to_str()?.parse::<u64>()?,
+			None => panic!("content-length not set for range request {range:?} to url {}", self.url),
+		};
 
-		//let range = result.headers().get("content-range");
-		//println!("range {:#?}", range);
+		let content_range: &str = match response.headers().get("content-range") {
+			Some(header_value) => header_value.to_str()?,
+			None => panic!(
+				"content-range is not set for range request {range:?} to url {}",
+				self.url
+			),
+		};
+
+		let content_range_start: u64;
+		let content_range_end: u64;
+		let content_range_full_length: u64;
+
+		lazy_static! {
+			static ref RE_RANGE: Regex = RegexBuilder::new(r"^bytes (\d+)-(\d+)/(\d+)$")
+				.case_insensitive(true)
+				.build()
+				.unwrap();
+		}
+
+		if let Some(captures) = RE_RANGE.captures(content_range) {
+			content_range_start = captures.get(1).unwrap().as_str().parse::<u64>()?;
+			content_range_end = captures.get(2).unwrap().as_str().parse::<u64>()?;
+			content_range_full_length = captures.get(3).unwrap().as_str().parse::<u64>()?;
+		} else {
+			panic!("format of content-range response is invalid: {content_range}")
+		}
+
+		if content_range_full_length != content_length {
+			panic!("content-range full length {content_range_full_length} is not content-length {content_length}");
+		}
+
+		if content_range_start != range.offset {
+			panic!("content-range-start {content_range_start} is not start of range {range:?}");
+		}
+
+		if content_range_end != range.offset + range.length - 1 {
+			panic!("content-range-end {content_range_end} is not end of range {range:?}");
+		}
+
+		let bytes = response.bytes().await?;
 
 		Ok(Blob::from(bytes))
 	}
