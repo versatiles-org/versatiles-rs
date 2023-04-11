@@ -8,6 +8,11 @@ ERROR=false
 function docker_build_release () {
 	linux=$1
 	platf=$2
+
+	echo -e "\e[32;1m$linux on $platf\e[0m"
+
+	echo -e "\e[32m  - build\e[0m"
+
 	if [ -z ${linux+x} ]; then echo "linux is unset"; exit 1; fi
 	if [ -z ${platf+x} ]; then echo "platf is unset"; exit 1; fi
 
@@ -17,6 +22,7 @@ function docker_build_release () {
 		docker buildx build --platform="${platf}" --quiet            --tag="${linux}-versatiles" --file="${linux}.Dockerfile" .
 	fi
 
+	echo -e "\e[32m  - test\e[0m"
 	docker run --platform="${platf}" "${linux}-versatiles" sh versatiles_selftest.sh
 	
 	if [ "$?" != "0" ]; then
@@ -27,7 +33,7 @@ function docker_build_release () {
 
 docker_build_release debian linux/amd64
 docker_build_release alpine linux/amd64
-#docker_build_release scratch linux/amd64
+docker_build_release scratch linux/amd64
 
 if $ERROR; then
 	echo -e "\e[31;1mTHERE WERE ERRORS!!!\e[0m"
