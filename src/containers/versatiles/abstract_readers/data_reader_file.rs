@@ -2,13 +2,13 @@ use super::super::types::ByteRange;
 use super::DataReaderTrait;
 use crate::shared::{Blob, Error, Result};
 use async_trait::async_trait;
+use futures::lock::Mutex;
 use std::{
 	env::current_dir,
 	fs::File,
 	io::{BufReader, Read, Seek, SeekFrom},
 	path::Path,
 };
-use tokio::sync::Mutex;
 
 pub struct DataReaderFile {
 	name: String,
@@ -30,10 +30,11 @@ impl DataReaderTrait for DataReaderFile {
 		}
 
 		filename = filename.canonicalize()?;
+		let file = File::open(filename)?;
 
 		Ok(Box::new(Self {
 			name: source.to_string(),
-			reader_mutex: Mutex::new(BufReader::new(File::open(filename)?)),
+			reader_mutex: Mutex::new(BufReader::new(file)),
 		}))
 	}
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
@@ -42,6 +43,7 @@ impl DataReaderTrait for DataReaderFile {
 
 		reader_safe.seek(SeekFrom::Start(range.offset))?;
 		reader_safe.read_exact(&mut buffer)?;
+		drop(reader_safe);
 
 		return Ok(Blob::from(buffer));
 	}
