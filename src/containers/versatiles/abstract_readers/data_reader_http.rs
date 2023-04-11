@@ -40,7 +40,6 @@ impl DataReaderTrait for DataReaderHttp {
 		let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
 		request.headers_mut().append("range", request_range.parse()?);
 
-		//println!("### request:\n{:#?}", request);
 		let response = self.client.execute(request).await?;
 
 		let content_length: u64 = match response.headers().get("content-length") {
