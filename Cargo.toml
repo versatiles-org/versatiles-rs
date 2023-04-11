@@ -10,7 +10,7 @@ keywords = ["versatiles", "mbtiles", "tiles", "map"]
 categories = ["command-line-utilities", "science::geo", "web-programming::http-server"]
 readme = "README.MD"
 license = "MIT"
-exclude = ["ressources/*"]
+exclude = ["docker/*", "helpers/*", "ressources/*"]
 
 [dependencies]
 async-trait = { version = "0.1.68", default-features = false }
