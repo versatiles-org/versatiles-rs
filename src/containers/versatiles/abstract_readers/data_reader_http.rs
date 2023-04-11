@@ -56,27 +56,25 @@ impl DataReaderTrait for DataReaderHttp {
 			),
 		};
 
-		let content_range_start: u64;
-		let content_range_end: u64;
-		let content_range_full_length: u64;
-
 		lazy_static! {
-			static ref RE_RANGE: Regex = RegexBuilder::new(r"^bytes (\d+)-(\d+)/(\d+)$")
+			static ref RE_RANGE: Regex = RegexBuilder::new(r"^bytes (\d+)-(\d+)/\d+$")
 				.case_insensitive(true)
 				.build()
 				.unwrap();
 		}
 
+		let content_range_start: u64;
+		let content_range_end: u64;
 		if let Some(captures) = RE_RANGE.captures(content_range) {
 			content_range_start = captures.get(1).unwrap().as_str().parse::<u64>()?;
 			content_range_end = captures.get(2).unwrap().as_str().parse::<u64>()?;
-			content_range_full_length = captures.get(3).unwrap().as_str().parse::<u64>()?;
 		} else {
 			panic!("format of content-range response is invalid: {content_range}")
 		}
+		let content_range_length = content_range_end - content_range_start + 1;
 
-		if content_range_full_length != content_length {
-			panic!("content-range full length {content_range_full_length} is not content-length {content_length}");
+		if content_range_length != content_length {
+			panic!("content-range length {content_range_length} is not content-length {content_length}");
 		}
 
 		if content_range_start != range.offset {
