@@ -30,13 +30,13 @@ mod tests {
 
 	#[test]
 	#[should_panic]
-	fn test1() {
-		let _converter = TileConverter::new("filename.txt", TileConverterConfig::new_full());
+	fn panic1() {
+		let _converter = block_on(TileConverter::new("filename.txt", TileConverterConfig::new_full()));
 	}
 
 	#[test]
 	#[should_panic]
-	fn test2() {
+	fn panic2() {
 		let mut converter = TileConverter {};
 		let mut reader = block_on(dummy::TileReader::new("filename.txt")).unwrap();
 		block_on(converter.convert_from(&mut reader)).unwrap();
