@@ -27,7 +27,7 @@ WORKDIR /data/
 # Copy files from builder
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
-COPY --from=builder --chown=versatiles:versatiles /root/.cargo/bin/versatiles /usr/bin/
+COPY --from=builder --chown=versatiles:versatiles /usr/local/cargo/bin/versatiles /usr/bin/
 COPY helpers/versatiles_selftest.sh .
 
 USER versatiles
