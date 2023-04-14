@@ -33,28 +33,24 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Log in to GitHub container registry
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v2
         with:
           registry: ghcr.io
-          username: ${{ github.actor }}
+          username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: get version
         run: echo "LATEST_VERSION=$(curl -s 'https://crates.io/api/v1/crates/versatiles' | jq -r '.crate.max_version')" >> $GITHUB_ENV
 
-      - name: get metadata
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          images: |
-            versatiles/versatiles
-            ghcr.io/versatiles/versatiles
-
-      - name: "Build and push"
+      - name: Build and push
         uses: docker/build-push-action@v4
         with:
           platforms: ${{ matrix.platforms }}
           file: "docker/${{ matrix.os }}.Dockerfile"
           push: true
-          tags: versatiles/versatiles:latest-${{ matrix.os }}, versatiles/versatiles:v${{ env.LATEST_VERSION }}-${{ matrix.os }}
+          tags: |
+            versatiles/versatiles:latest-${{ matrix.os }}
+            versatiles/versatiles:v${{ env.LATEST_VERSION }}-${{ matrix.os }}
+            ghcr.io/versatiles/versatiles:latest-${{ matrix.os }}
+            ghcr.io/versatiles/versatiles:v${{ env.LATEST_VERSION }}-${{ matrix.os }}
