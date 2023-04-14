@@ -1,0 +1,26 @@
+---
+name: Code Coverage
+
+on:
+  push:
+    branches:
+      - "main"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  codecov:
+    name: code coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: update rust
+        run: rustup update stable && rustup default stable
+      - name: get cargo-llvm-cov
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: get code coverage
+        run: cargo llvm-cov test --workspace --tests --lcov --output-path ./lcov.info
+      - name: Codecov
+        uses: codecov/codecov-action@v3
