@@ -52,5 +52,5 @@ jobs:
           tags: |
             versatiles/versatiles:latest-${{ matrix.os }}
             versatiles/versatiles:v${{ env.LATEST_VERSION }}-${{ matrix.os }}
-            ghcr.io/versatiles/versatiles:latest-${{ matrix.os }}
-            ghcr.io/versatiles/versatiles:v${{ env.LATEST_VERSION }}-${{ matrix.os }}
+            ghcr.io/versatiles/versatiles-rs:latest-${{ matrix.os }}
+            ghcr.io/versatiles/versatiles-rs:v${{ env.LATEST_VERSION }}-${{ matrix.os }}
