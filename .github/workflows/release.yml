@@ -43,6 +43,14 @@ jobs:
       - name: get version
         run: echo "LATEST_VERSION=$(curl -s 'https://crates.io/api/v1/crates/versatiles' | jq -r '.crate.max_version')" >> $GITHUB_ENV
 
+      - name: get metadata
+        id: meta
+        uses: docker/metadata-action@v4
+        with:
+          images: |
+            versatiles/versatiles
+            ghcr.io/versatiles/versatiles
+
       - name: "Build and push"
         uses: docker/build-push-action@v4
         with:
