@@ -30,12 +30,14 @@ pub struct Cli {
 // Define subcommands for the command-line interface
 #[derive(Subcommand, Debug)]
 pub enum Commands {
+	#[clap(visible_alias = "converter")]
 	/// Convert between different tile containers
 	Convert(tools::convert::Subcommand),
 
 	/// Show information about a tile container
 	Probe(tools::probe::Subcommand),
 
+	#[clap(visible_alias = "server")]
 	/// Serve tiles via http
 	Serve(tools::serve::Subcommand),
 }
