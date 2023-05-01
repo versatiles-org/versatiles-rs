@@ -152,12 +152,58 @@ impl Debug for TileContainer {
 #[cfg(test)]
 mod tests {
 	use super::TileContainer;
-	use crate::containers::dummy::{ReaderProfile, TileReader};
+	use crate::{
+		containers::{
+			dummy::{ReaderProfile, TileReader},
+			TileReaderBox,
+		},
+		server::ServerSourceTrait,
+		shared::{Compression, Result},
+	};
+	use axum::body::Bytes;
+	use enumset::EnumSet;
+	use hyper::body::HttpBody;
 
 	// Test the constructor function for TileContainer
 	#[test]
-	fn tile_container_from() {
+	fn tile_container_from() -> Result<()> {
 		let reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
-		let _container = TileContainer::from(reader);
+		let container = TileContainer::from(reader)?;
+
+		assert_eq!(container.get_name().unwrap(), "dummy name");
+
+		let expected_info = r#"{ "container":"dummy container", "format":"png", "compression":"none", "zoom_min":0, "zoom_max":8, "bbox":[-180.0, -85.05113, 180.0, 85.05112] }"#;
+		assert_eq!(container.get_info_as_json().unwrap(), expected_info);
+
+		Ok(())
+	}
+
+	// Test the get_data method of the TileContainer
+	#[tokio::test]
+	async fn tile_container_get_data() -> Result<()> {
+		let reader: TileReaderBox = TileReader::new_dummy(ReaderProfile::PngFast, 8).try_into().unwrap();
+		let mut container = TileContainer::from(reader).unwrap();
+
+		let path = &["0", "0", "0.png"];
+		let accept = EnumSet::only(Compression::None);
+
+		let mut response = container.get_data(path, accept).await;
+
+		assert_eq!(response.status(), 200);
+		assert_eq!(response.headers().get("content-type").unwrap().to_str()?, "image/png");
+		let body: Bytes = response.data().await.unwrap()?;
+		assert_eq!(&body[0..6], b"\x89PNG\r\n");
+
+		let path = &["meta.json"];
+		let mut response = container.get_data(path, accept).await;
+		assert_eq!(response.status(), 200);
+		assert_eq!(
+			response.headers().get("content-type").unwrap().to_str().unwrap(),
+			"application/json"
+		);
+		let body: Bytes = response.data().await.unwrap()?;
+		assert_eq!(&body[..], b"dummy meta data");
+
+		Ok(())
 	}
 }
