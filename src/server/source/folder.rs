@@ -22,20 +22,20 @@ pub struct Folder {
 }
 
 impl Folder {
-	pub fn from(path: &str) -> Box<Folder> {
-		let mut folder = current_dir().unwrap();
+	pub fn from(path: &str) -> Result<Box<Folder>> {
+		let mut folder = current_dir()?;
 		folder.push(Path::new(path));
 
 		assert!(folder.exists(), "path {folder:?} does not exist");
 		assert!(folder.is_absolute(), "path {folder:?} must be absolute");
 		assert!(folder.is_dir(), "path {folder:?} must be a directory");
 
-		folder = folder.canonicalize().unwrap();
+		folder = folder.canonicalize()?;
 
-		Box::new(Folder {
+		Ok(Box::new(Folder {
 			folder,
 			name: path.to_string(),
-		})
+		}))
 	}
 }
 
@@ -108,7 +108,7 @@ mod tests {
 	#[test]
 	fn test() {
 		block_on(async {
-			let mut folder = Folder::from("ressources");
+			let mut folder = Folder::from("ressources").unwrap();
 
 			assert_eq!(folder.get_name().unwrap(), "ressources");
 

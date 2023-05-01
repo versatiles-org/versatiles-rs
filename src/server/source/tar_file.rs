@@ -42,31 +42,31 @@ pub struct TarFile {
 	name: String,
 }
 impl TarFile {
-	pub fn from(path: &str) -> Box<TarFile> {
-		let mut filename = current_dir().unwrap();
+	pub fn from(path: &str) -> Result<Box<TarFile>> {
+		let mut filename = current_dir()?;
 		filename.push(Path::new(path));
-		filename = filename.canonicalize().unwrap();
+		filename = filename.canonicalize()?;
 
 		assert!(filename.exists(), "path {filename:?} does not exist");
 		assert!(filename.is_absolute(), "path {filename:?} must be absolute");
 		assert!(filename.is_file(), "path {filename:?} must be a file");
 
 		let mut lookup: HashMap<String, FileEntry> = HashMap::new();
-		let file = BufReader::new(File::open(filename).unwrap());
+		let file = BufReader::new(File::open(filename)?);
 		let mut archive = Archive::new(file);
 
-		for file_result in archive.entries().unwrap() {
+		for file_result in archive.entries()? {
 			if file_result.is_err() {
 				continue;
 			}
 
-			let mut file = file_result.unwrap();
+			let mut file = file_result?;
 
 			if file.header().entry_type() != EntryType::Regular {
 				continue;
 			}
 
-			let mut entry_path = file.path().unwrap().into_owned();
+			let mut entry_path = file.path()?.into_owned();
 
 			let compression: Compression = if let Some(extension) = entry_path.extension() {
 				match extension.to_str() {
@@ -83,7 +83,7 @@ impl TarFile {
 			}
 
 			let mut buffer = Vec::new();
-			file.read_to_end(&mut buffer).unwrap();
+			file.read_to_end(&mut buffer)?;
 			let blob = Blob::from(buffer);
 
 			let filename = entry_path.file_name().unwrap();
@@ -118,10 +118,10 @@ impl TarFile {
 			add(&entry_path, blob);
 		}
 
-		Box::new(TarFile {
+		Ok(Box::new(TarFile {
 			lookup,
 			name: path.to_string(),
-		})
+		}))
 	}
 }
 
@@ -257,7 +257,7 @@ mod tests {
 		async fn test_compression(from_compression: &Compression, to_compression: &Compression) {
 			let file = make_test_tar(from_compression).await;
 
-			let mut tar_file = TarFile::from(&file.to_str().unwrap());
+			let mut tar_file = TarFile::from(&file.to_str().unwrap()).unwrap();
 
 			let result = get_as_string(&mut tar_file, &["meta.json"], to_compression).await;
 			assert_eq!(result, "Not Found");
@@ -289,7 +289,7 @@ mod tests {
 	async fn small_stuff() {
 		let file = make_test_tar(&Compression::None).await;
 
-		let tar_file = TarFile::from(&file.to_str().unwrap());
+		let tar_file = TarFile::from(&file.to_str().unwrap()).unwrap();
 
 		assert_eq!(tar_file.get_info_as_json().unwrap(), "{\"type\":\"tar\"}");
 		assert!(tar_file.get_name().unwrap().ends_with("temp.tar"));
