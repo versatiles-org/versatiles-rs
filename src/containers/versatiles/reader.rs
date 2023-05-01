@@ -25,16 +25,14 @@ impl TileReader {
 		let header = FileHeader::from_reader(&mut reader).await?;
 
 		let meta = if header.meta_range.length > 0 {
-			DataConverter::new_decompressor(&header.compression)
-				.run(reader.read_range(&header.meta_range).await.unwrap())
-				.unwrap()
+			DataConverter::new_decompressor(&header.compression).run(reader.read_range(&header.meta_range).await?)?
 		} else {
 			Blob::empty()
 		};
 
-		let block_index = BlockIndex::from_brotli_blob(reader.read_range(&header.blocks_range).await.unwrap());
-		let bbox_pyramide = block_index.get_bbox_pyramide();
-		let parameters = TileReaderParameters::new(header.tile_format, header.compression, bbox_pyramide);
+		let block_index = BlockIndex::from_brotli_blob(reader.read_range(&header.blocks_range).await?);
+		let bbox_pyramid = block_index.get_bbox_pyramid();
+		let parameters = TileReaderParameters::new(header.tile_format, header.compression, bbox_pyramid);
 
 		Ok(TileReader {
 			meta,
@@ -133,7 +131,7 @@ impl TileReaderTrait for TileReader {
 
 		debug!("number of blocks: {}", block_count);
 
-		let mut progress = ProgressBar::new("deep verify", self.block_index.get_bbox_pyramide().count_tiles());
+		let mut progress = ProgressBar::new("deep verify", self.block_index.get_bbox_pyramid().count_tiles());
 
 		let blocks = self
 			.block_index

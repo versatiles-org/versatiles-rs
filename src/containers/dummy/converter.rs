@@ -1,6 +1,6 @@
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{Compression, Result, TileBBoxPyramide, TileConverterConfig, TileFormat},
+	shared::{Compression, Result, TileBBoxPyramid, TileConverterConfig, TileFormat},
 };
 use async_trait::async_trait;
 
@@ -16,14 +16,14 @@ pub struct TileConverter {
 
 impl TileConverter {
 	pub fn new_dummy(profile: ConverterProfile, max_zoom_level: u8) -> TileConverterBox {
-		let mut bbox_pyramide = TileBBoxPyramide::new_full();
-		bbox_pyramide.set_zoom_max(max_zoom_level);
+		let mut bbox_pyramid = TileBBoxPyramid::new_full();
+		bbox_pyramid.set_zoom_max(max_zoom_level);
 
 		let config = match profile {
 			ConverterProfile::Png => {
-				TileConverterConfig::new(Some(TileFormat::PNG), Some(Compression::None), bbox_pyramide, false)
+				TileConverterConfig::new(Some(TileFormat::PNG), Some(Compression::None), bbox_pyramid, false)
 			}
-			ConverterProfile::Whatever => TileConverterConfig::new(None, None, bbox_pyramide, false),
+			ConverterProfile::Whatever => TileConverterConfig::new(None, None, bbox_pyramid, false),
 		};
 		Box::new(TileConverter { config })
 	}
@@ -43,9 +43,9 @@ impl TileConverterTrait for TileConverter {
 		let _temp = reader.get_meta().await?;
 
 		self.config.finalize_with_parameters(reader.get_parameters()?);
-		let bbox_pyramide = self.config.get_bbox_pyramide();
+		let bbox_pyramid = self.config.get_bbox_pyramid();
 
-		for (level, bbox) in bbox_pyramide.iter_levels() {
+		for (level, bbox) in bbox_pyramid.iter_levels() {
 			for row_bbox in bbox.iter_bbox_row_slices(1024) {
 				let _tile_vec = reader.get_bbox_tile_vec(level, &row_bbox).await;
 			}

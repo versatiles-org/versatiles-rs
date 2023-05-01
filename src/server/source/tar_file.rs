@@ -200,7 +200,7 @@ mod tests {
 		tar::TileConverter,
 		TileConverterTrait,
 	};
-	use crate::shared::{decompress, TileBBoxPyramide, TileConverterConfig, TileFormat};
+	use crate::shared::{decompress, TileBBoxPyramid, TileConverterConfig, TileFormat};
 	use assert_fs::NamedTempFile;
 	use axum::body::HttpBody;
 	use enumset::enum_set;
@@ -237,7 +237,7 @@ mod tests {
 		let config = TileConverterConfig::new(
 			Some(TileFormat::PBF),
 			Some(compression.to_owned()),
-			TileBBoxPyramide::new_full(),
+			TileBBoxPyramid::new_full(),
 			false,
 		);
 		let mut converter = TileConverter::new(container_file.to_str().unwrap(), config)

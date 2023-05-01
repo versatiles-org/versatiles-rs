@@ -44,7 +44,7 @@ pub mod tests {
 			dummy::{self, ConverterProfile, ReaderProfile},
 			get_converter, get_reader,
 		},
-		shared::{Compression, TileBBoxPyramide, TileConverterConfig, TileFormat},
+		shared::{Compression, TileBBoxPyramid, TileConverterConfig, TileFormat},
 	};
 	use assert_fs::fixture::NamedTempFile;
 	use std::time::Instant;
@@ -71,12 +71,7 @@ pub mod tests {
 		}
 		.unwrap();
 
-		let config = TileConverterConfig::new(
-			Some(tile_format),
-			Some(compression),
-			TileBBoxPyramide::new_full(),
-			false,
-		);
+		let config = TileConverterConfig::new(Some(tile_format), Some(compression), TileBBoxPyramid::new_full(), false);
 		let mut converter = get_converter(&container_file.to_str().unwrap(), config).await.unwrap();
 
 		// convert
@@ -119,7 +114,7 @@ pub mod tests {
 			let config = TileConverterConfig::new(
 				Some(tile_format),
 				Some(compression),
-				TileBBoxPyramide::new_full(),
+				TileBBoxPyramid::new_full(),
 				force_recompress,
 			);
 			let mut converter1 = get_converter(&container_file.to_str().unwrap(), config).await.unwrap();

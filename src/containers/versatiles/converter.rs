@@ -28,16 +28,16 @@ impl TileConverterTrait for TileConverter {
 	async fn convert_from(&mut self, reader: &mut TileReaderBox) -> Result<()> {
 		self.config.finalize_with_parameters(reader.get_parameters()?);
 
-		let bbox_pyramide = self.config.get_bbox_pyramide();
+		let bbox_pyramid = self.config.get_bbox_pyramid();
 
 		let mut header = FileHeader::new(
 			self.config.get_tile_format(),
 			self.config.get_tile_compression(),
 			[
-				bbox_pyramide.get_zoom_min().unwrap(),
-				bbox_pyramide.get_zoom_max().unwrap(),
+				bbox_pyramid.get_zoom_min().unwrap(),
+				bbox_pyramid.get_zoom_max().unwrap(),
 			],
-			bbox_pyramide.get_geo_bbox(),
+			bbox_pyramid.get_geo_bbox(),
 		);
 
 		self.writer.append(&header.to_blob()).await?;
@@ -60,14 +60,14 @@ impl TileConverter {
 		self.writer.append(&compressed).await
 	}
 	async fn write_blocks(&mut self, reader: &mut TileReaderBox) -> Result<ByteRange> {
-		let pyramide = self.config.get_bbox_pyramide();
-		if pyramide.is_empty() {
+		let pyramid = self.config.get_bbox_pyramid();
+		if pyramid.is_empty() {
 			return Ok(ByteRange::empty());
 		}
 
 		let mut blocks: Vec<BlockDefinition> = Vec::new();
 
-		for (zoom, bbox_tiles) in self.config.get_bbox_pyramide().iter_levels() {
+		for (zoom, bbox_tiles) in self.config.get_bbox_pyramid().iter_levels() {
 			let bbox_blocks = bbox_tiles.scale_down(256);
 			for TileCoord2 { x, y } in bbox_blocks.iter_coords() {
 				let mut bbox_block = *bbox_tiles;

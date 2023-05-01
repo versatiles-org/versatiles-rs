@@ -1,7 +1,7 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
 	shared::{
-		decompress, Blob, Compression, Error, Result, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
+		decompress, Blob, Compression, Error, Result, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters,
 	},
 };
 use async_trait::async_trait;
@@ -55,7 +55,7 @@ impl TileReaderTrait for TileReader {
 		let mut tile_map = HashMap::new();
 		let mut tile_form: Option<TileFormat> = None;
 		let mut tile_comp: Option<Compression> = None;
-		let mut bbox_pyramide = TileBBoxPyramide::new_empty();
+		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
 		for entry in archive.entries()? {
 			let mut entry = entry?;
@@ -124,7 +124,7 @@ impl TileReaderTrait for TileReader {
 				let length = entry.size();
 
 				let coord3 = TileCoord3 { x, y, z };
-				bbox_pyramide.include_coord(&coord3);
+				bbox_pyramid.include_coord(&coord3);
 				tile_map.insert(coord3, TarByteRange { offset, length });
 				continue;
 			}
@@ -162,7 +162,7 @@ impl TileReaderTrait for TileReader {
 			name: path.to_string(),
 			file,
 			tile_map,
-			parameters: TileReaderParameters::new(tile_form.unwrap(), tile_comp.unwrap(), bbox_pyramide),
+			parameters: TileReaderParameters::new(tile_form.unwrap(), tile_comp.unwrap(), bbox_pyramid),
 		}))
 	}
 	fn get_parameters(&self) -> Result<&TileReaderParameters> {

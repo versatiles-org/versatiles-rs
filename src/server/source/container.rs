@@ -50,7 +50,7 @@ impl ServerSourceTrait for TileContainer {
 	}
 	fn get_info_as_json(&self) -> Result<String> {
 		let parameters = self.reader.get_parameters()?;
-		let bbox_pyramide = parameters.get_bbox_pyramide();
+		let bbox_pyramid = parameters.get_bbox_pyramid();
 
 		let tile_format = format!("{:?}", parameters.get_tile_format()).to_lowercase();
 		let tile_compression = format!("{:?}", parameters.get_tile_compression()).to_lowercase();
@@ -60,9 +60,9 @@ impl ServerSourceTrait for TileContainer {
 			self.reader.get_container_name()?,
 			tile_format,
 			tile_compression,
-			bbox_pyramide.get_zoom_min().unwrap(),
-			bbox_pyramide.get_zoom_max().unwrap(),
-			bbox_pyramide.get_geo_bbox(),
+			bbox_pyramid.get_zoom_min().unwrap(),
+			bbox_pyramid.get_zoom_max().unwrap(),
+			bbox_pyramid.get_geo_bbox(),
 		))
 	}
 

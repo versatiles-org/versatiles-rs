@@ -1,7 +1,7 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
 	shared::{
-		Blob, Compression, ProgressBar, Result, TileBBox, TileBBoxPyramide, TileCoord2, TileCoord3, TileFormat,
+		Blob, Compression, ProgressBar, Result, TileBBox, TileBBoxPyramid, TileCoord2, TileCoord3, TileFormat,
 		TileReaderParameters,
 	},
 };
@@ -41,7 +41,7 @@ impl TileReader {
 			name: filename.to_string_lossy().to_string(),
 			connection: Mutex::new(connection),
 			meta_data: None,
-			parameters: TileReaderParameters::new(TileFormat::PBF, Compression::None, TileBBoxPyramide::new_empty()),
+			parameters: TileReaderParameters::new(TileFormat::PBF, Compression::None, TileBBoxPyramid::new_empty()),
 		};
 
 		reader.load_meta_data().await?;
@@ -94,7 +94,7 @@ impl TileReader {
 
 		self.parameters.set_tile_format(tile_format.unwrap());
 		self.parameters.set_tile_compression(compression.unwrap());
-		self.parameters.set_bbox_pyramide(block_on(self.get_bbox_pyramide()));
+		self.parameters.set_bbox_pyramid(block_on(self.get_bbox_pyramid()));
 
 		if self.meta_data.is_none() {
 			panic!("'json' is not defined in table 'metadata'");
@@ -102,10 +102,10 @@ impl TileReader {
 
 		Ok(())
 	}
-	async fn get_bbox_pyramide(&self) -> TileBBoxPyramide {
-		trace!("get_bbox_pyramide");
+	async fn get_bbox_pyramid(&self) -> TileBBoxPyramid {
+		trace!("get_bbox_pyramid");
 
-		let mut bbox_pyramide = TileBBoxPyramide::new_empty();
+		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 		let connection = self.connection.lock().await;
 
 		let query = |sql1: &str, sql2: &str| -> i32 {
@@ -123,7 +123,7 @@ impl TileReader {
 		let z0 = query("MIN(zoom_level)", "");
 		let z1 = query("MAX(zoom_level)", "");
 
-		let mut progress = ProgressBar::new("get mbtiles bbox pyramide", (z1 - z0 + 1) as u64);
+		let mut progress = ProgressBar::new("get mbtiles bbox pyramid", (z1 - z0 + 1) as u64);
 
 		for z in z0..=z1 {
 			let x0 = query("MIN(tile_column)", &format!("zoom_level = {z}"));
@@ -162,7 +162,7 @@ impl TileReader {
 
 			let max_value = 2i32.pow(z as u32) - 1;
 
-			bbox_pyramide.set_level_bbox(
+			bbox_pyramid.set_level_bbox(
 				z as u8,
 				TileBBox::new(
 					x0.clamp(0, max_value) as u64,
@@ -177,7 +177,7 @@ impl TileReader {
 
 		progress.finish();
 
-		bbox_pyramide
+		bbox_pyramid
 	}
 }
 

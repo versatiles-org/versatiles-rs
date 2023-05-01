@@ -58,7 +58,7 @@ impl TileConverterTrait for TileConverter {
 			Compression::Brotli => ".br",
 		};
 
-		let bbox_pyramide = self.config.get_bbox_pyramide();
+		let bbox_pyramid = self.config.get_bbox_pyramid();
 
 		let meta_data = reader.get_meta().await?;
 
@@ -75,11 +75,11 @@ impl TileConverterTrait for TileConverter {
 				.append_data(&mut header, Path::new(&filename), meta_data.as_slice())?;
 		}
 
-		let mut bar = ProgressBar::new("converting tiles", bbox_pyramide.count_tiles());
+		let mut bar = ProgressBar::new("converting tiles", bbox_pyramid.count_tiles());
 		let mutex_bar = &Mutex::new(&mut bar);
 		let mutex_builder = &Mutex::new(&mut self.builder);
 
-		for (level, bbox) in bbox_pyramide.iter_levels() {
+		for (level, bbox) in bbox_pyramid.iter_levels() {
 			for row_bbox in bbox.iter_bbox_row_slices(1024) {
 				let tile_vec = reader.get_bbox_tile_vec(level, &row_bbox).await;
 				tile_vec.into_iter().par_bridge().for_each(|(coord, blob)| {

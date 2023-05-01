@@ -166,15 +166,15 @@ mod tests {
 	}
 
 	#[test]
-	fn pyramide() {
-		let mut pyramide = StatusImagePyramide::default();
-		let image = pyramide.get_level(8);
+	fn pyramid() {
+		let mut pyramid = StatusImagePyramide::default();
+		let image = pyramid.get_level(8);
 		assert!(image.size == 256);
 		test_image(image);
 		fill_image(image);
 
-		let tmp_file = NamedTempFile::new("pyramide.png").unwrap();
-		pyramide.save(tmp_file.path());
+		let tmp_file = NamedTempFile::new("pyramid.png").unwrap();
+		pyramid.save(tmp_file.path());
 
 		let size = tmp_file.path().metadata().unwrap().len();
 		assert!(size > 40000, "{}", size);

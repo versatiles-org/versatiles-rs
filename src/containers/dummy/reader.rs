@@ -1,7 +1,7 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
 	shared::{
-		compress_gzip, Blob, Compression, Error, Result, TileBBoxPyramide, TileCoord3, TileFormat, TileReaderParameters,
+		compress_gzip, Blob, Compression, Error, Result, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters,
 	},
 };
 use async_trait::async_trait;
@@ -19,19 +19,19 @@ pub struct TileReader {
 
 impl TileReader {
 	pub fn new_dummy(profile: ReaderProfile, max_zoom_level: u8) -> TileReaderBox {
-		let mut bbox_pyramide = TileBBoxPyramide::new_full();
-		bbox_pyramide.set_zoom_max(max_zoom_level);
+		let mut bbox_pyramid = TileBBoxPyramid::new_full();
+		bbox_pyramid.set_zoom_max(max_zoom_level);
 
 		let parameters;
 		let tile_blob;
 
 		match profile {
 			ReaderProfile::PngFast => {
-				parameters = TileReaderParameters::new(TileFormat::PNG, Compression::None, bbox_pyramide);
+				parameters = TileReaderParameters::new(TileFormat::PNG, Compression::None, bbox_pyramid);
 				tile_blob = Blob::from(include_bytes!("./dummy.png").to_vec());
 			}
 			ReaderProfile::PbfFast => {
-				parameters = TileReaderParameters::new(TileFormat::PBF, Compression::Gzip, bbox_pyramide);
+				parameters = TileReaderParameters::new(TileFormat::PBF, Compression::Gzip, bbox_pyramid);
 				tile_blob = compress_gzip(Blob::from(include_bytes!("./dummy.pbf").to_vec())).unwrap();
 			}
 		};

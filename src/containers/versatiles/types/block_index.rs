@@ -1,5 +1,5 @@
 use super::BlockDefinition;
-use crate::shared::{compress_brotli, decompress_brotli, Blob, TileBBoxPyramide, TileCoord3};
+use crate::shared::{compress_brotli, decompress_brotli, Blob, TileBBoxPyramid, TileCoord3};
 use std::{
 	collections::HashMap,
 	io::{Cursor, Write},
@@ -12,19 +12,22 @@ const BLOCK_INDEX_LENGTH: usize = 33;
 pub struct BlockIndex {
 	lookup: HashMap<TileCoord3, BlockDefinition>,
 }
+
 impl BlockIndex {
-	pub fn new_empty() -> BlockIndex {
-		BlockIndex { lookup: HashMap::new() }
+	pub fn new_empty() -> Self {
+		Self { lookup: HashMap::new() }
 	}
-	pub fn from_blob(buf: Blob) -> BlockIndex {
+
+	pub fn from_blob(buf: Blob) -> Self {
 		let count = buf.len().div(BLOCK_INDEX_LENGTH);
 		assert_eq!(
 			count * BLOCK_INDEX_LENGTH,
 			buf.len(),
-			"block index is defect, cause buffer length is not a multiple of {}",
+			"Block index is defective, because buffer length is not a multiple of {}",
 			BLOCK_INDEX_LENGTH
 		);
-		let mut block_index = BlockIndex::new_empty();
+
+		let mut block_index = Self::new_empty();
 		for i in 0..count {
 			block_index.add_block(
 				BlockDefinition::from_blob(buf.get_range(i * BLOCK_INDEX_LENGTH..(i + 1) * BLOCK_INDEX_LENGTH)).unwrap(),
@@ -33,20 +36,23 @@ impl BlockIndex {
 
 		block_index
 	}
-	pub fn from_brotli_blob(buf: Blob) -> BlockIndex {
-		BlockIndex::from_blob(decompress_brotli(buf).unwrap())
+
+	pub fn from_brotli_blob(buf: Blob) -> Self {
+		Self::from_blob(decompress_brotli(buf).unwrap())
 	}
-	pub fn get_bbox_pyramide(&self) -> TileBBoxPyramide {
-		let mut pyramide = TileBBoxPyramide::new_empty();
+
+	pub fn get_bbox_pyramid(&self) -> TileBBoxPyramid {
+		let mut pyramid = TileBBoxPyramid::new_empty();
 		for (_coord, block) in self.lookup.iter() {
-			pyramide.include_bbox(
+			pyramid.include_bbox(
 				block.get_z(),
 				&block.get_bbox().shift_by(block.get_x() * 256, block.get_y() * 256),
 			);
 		}
 
-		pyramide
+		pyramid
 	}
+
 	pub fn add_block(&mut self, block: BlockDefinition) {
 		self.lookup.insert(block.get_coord3(), block);
 	}
@@ -60,15 +66,19 @@ impl BlockIndex {
 
 		Blob::from(cursor.into_inner())
 	}
+
 	pub fn as_brotli_blob(&self) -> Blob {
 		compress_brotli(self.as_blob()).unwrap()
 	}
+
 	pub fn get_block(&self, coord: &TileCoord3) -> Option<&BlockDefinition> {
 		self.lookup.get(coord)
 	}
+
 	pub fn len(&self) -> usize {
 		self.lookup.len()
 	}
+
 	pub fn iter(&self) -> impl Iterator<Item = &BlockDefinition> {
 		self.lookup.values()
 	}

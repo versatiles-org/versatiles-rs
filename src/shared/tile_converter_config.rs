@@ -1,24 +1,24 @@
-use super::{Compression, DataConverter, TileBBoxPyramide, TileFormat, TileReaderParameters};
+use super::{Compression, DataConverter, TileBBoxPyramid, TileFormat, TileReaderParameters};
 
 pub struct TileConverterConfig {
 	tile_format: Option<TileFormat>,
 	tile_compression: Option<Compression>,
 	tile_recompressor: Option<DataConverter>,
 	compressor: Option<DataConverter>,
-	bbox_pyramide: TileBBoxPyramide,
+	bbox_pyramid: TileBBoxPyramid,
 	force_recompress: bool,
 	finalized: bool,
 }
 
 impl TileConverterConfig {
 	pub fn new(
-		tile_format: Option<TileFormat>, tile_compression: Option<Compression>, bbox_pyramide: TileBBoxPyramide,
+		tile_format: Option<TileFormat>, tile_compression: Option<Compression>, bbox_pyramid: TileBBoxPyramid,
 		force_recompress: bool,
 	) -> Self {
 		TileConverterConfig {
 			tile_format,
 			tile_compression,
-			bbox_pyramide,
+			bbox_pyramid,
 			tile_recompressor: None,
 			compressor: None,
 			force_recompress,
@@ -27,10 +27,10 @@ impl TileConverterConfig {
 	}
 	#[cfg(test)]
 	pub fn new_full() -> Self {
-		Self::new(None, None, TileBBoxPyramide::new_full(), false)
+		Self::new(None, None, TileBBoxPyramid::new_full(), false)
 	}
 	pub fn finalize_with_parameters(&mut self, parameters: &TileReaderParameters) {
-		self.bbox_pyramide.intersect(parameters.get_bbox_pyramide());
+		self.bbox_pyramid.intersect(parameters.get_bbox_pyramid());
 
 		self.tile_format.get_or_insert(parameters.get_tile_format().clone());
 		self.tile_compression.get_or_insert(*parameters.get_tile_compression());
@@ -59,8 +59,8 @@ impl TileConverterConfig {
 	pub fn get_compressor(&self) -> &DataConverter {
 		self.compressor.as_ref().unwrap()
 	}
-	pub fn get_bbox_pyramide(&self) -> &TileBBoxPyramide {
-		&self.bbox_pyramide
+	pub fn get_bbox_pyramid(&self) -> &TileBBoxPyramid {
+		&self.bbox_pyramid
 	}
 	pub fn get_tile_format(&self) -> &TileFormat {
 		self.tile_format.as_ref().unwrap()
@@ -72,15 +72,15 @@ impl TileConverterConfig {
 
 #[cfg(test)]
 mod tests {
-	use super::{Compression, TileBBoxPyramide, TileConverterConfig, TileFormat, TileReaderParameters};
+	use super::{Compression, TileBBoxPyramid, TileConverterConfig, TileFormat, TileReaderParameters};
 
 	#[test]
 	fn test() {
-		let pyramide = TileBBoxPyramide::new_full();
-		let parameters = TileReaderParameters::new(TileFormat::PNG, Compression::Gzip, pyramide.clone());
+		let pyramid = TileBBoxPyramid::new_full();
+		let parameters = TileReaderParameters::new(TileFormat::PNG, Compression::Gzip, pyramid.clone());
 
 		let mut config =
-			TileConverterConfig::new(Some(TileFormat::JPG), Some(Compression::Brotli), pyramide.clone(), true);
+			TileConverterConfig::new(Some(TileFormat::JPG), Some(Compression::Brotli), pyramid.clone(), true);
 
 		config.finalize_with_parameters(&parameters);
 
@@ -92,6 +92,6 @@ mod tests {
 			"decompress_gzip, PNG->JPG, compress_brotli"
 		);
 		assert_eq!(config.get_compressor().description(), "compress_brotli");
-		assert_eq!(config.get_bbox_pyramide(), &pyramide);
+		assert_eq!(config.get_bbox_pyramid(), &pyramid);
 	}
 }

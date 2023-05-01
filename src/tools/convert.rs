@@ -1,6 +1,6 @@
 use crate::{
 	containers::{get_converter, get_reader, TileConverterBox, TileReaderBox},
-	shared::{Compression, Error, Result, TileBBoxPyramide, TileConverterConfig, TileFormat},
+	shared::{Compression, Error, Result, TileBBoxPyramid, TileConverterConfig, TileFormat},
 };
 use clap::Args;
 use log::{error, trace};
@@ -69,14 +69,14 @@ async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TileReader
 }
 
 async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileConverterBox> {
-	let mut bbox_pyramide = TileBBoxPyramide::new_full();
+	let mut bbox_pyramid = TileBBoxPyramid::new_full();
 
 	if let Some(value) = arguments.min_zoom {
-		bbox_pyramide.set_zoom_min(value)
+		bbox_pyramid.set_zoom_min(value)
 	}
 
 	if let Some(value) = arguments.max_zoom {
-		bbox_pyramide.set_zoom_max(value)
+		bbox_pyramid.set_zoom_max(value)
 	}
 
 	if let Some(value) = &arguments.bbox {
@@ -92,13 +92,13 @@ async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileCon
 			return Err(Error::new("bbox must contain exactly 4 numbers"));
 		}
 
-		bbox_pyramide.limit_by_geo_bbox(values.as_slice().try_into()?);
+		bbox_pyramid.limit_by_geo_bbox(values.as_slice().try_into()?);
 	}
 
 	let config = TileConverterConfig::new(
 		arguments.tile_format.clone(),
 		arguments.precompress,
-		bbox_pyramide,
+		bbox_pyramid,
 		arguments.force_recompress,
 	);
 
