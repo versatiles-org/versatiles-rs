@@ -108,7 +108,7 @@ impl TileReaderTrait for TileReader {
 		if let Some(tile_index) = tile_index_option {
 			tile_range = *tile_index.get(tile_id);
 		} else {
-			let blob = self.reader.read_range(&block.get_index_range()).await.unwrap();
+			let blob = self.reader.read_range(block.get_index_range()).await.unwrap();
 			let mut tile_index = TileIndex::from_brotli_blob(blob);
 			tile_index.add_offset(block.get_tiles_range().offset);
 

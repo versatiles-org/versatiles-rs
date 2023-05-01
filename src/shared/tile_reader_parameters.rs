@@ -5,12 +5,10 @@ pub struct TileReaderParameters {
 	tile_format: TileFormat,
 	tile_compression: Compression,
 	bbox_pyramide: TileBBoxPyramide,
-	#[allow(dead_code)]
 	decompressor: DataConverter,
 	flip_vertically: bool,
 }
 
-#[allow(dead_code)]
 impl TileReaderParameters {
 	pub fn new(
 		tile_format: TileFormat, tile_compression: Compression, bbox_pyramide: TileBBoxPyramide,
@@ -25,6 +23,7 @@ impl TileReaderParameters {
 			flip_vertically: false,
 		}
 	}
+	#[cfg(test)]
 	pub fn new_dummy() -> TileReaderParameters {
 		TileReaderParameters {
 			decompressor: DataConverter::new_empty(),
@@ -45,10 +44,6 @@ impl TileReaderParameters {
 	}
 	pub fn set_tile_compression(&mut self, compression: Compression) {
 		self.tile_compression = compression;
-	}
-	#[allow(dead_code)]
-	pub fn get_decompressor(&self) -> &DataConverter {
-		&self.decompressor
 	}
 	pub fn get_bbox_pyramide(&self) -> &TileBBoxPyramide {
 		&self.bbox_pyramide

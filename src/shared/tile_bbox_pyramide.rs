@@ -1,4 +1,4 @@
-use super::{TileBBox, TileCoord2, TileCoord3};
+use super::{TileBBox, TileCoord3};
 use std::array::from_fn;
 use std::fmt;
 
@@ -9,7 +9,6 @@ pub struct TileBBoxPyramide {
 	level_bbox: [TileBBox; MAX_ZOOM_LEVEL as usize],
 }
 
-#[allow(dead_code)]
 impl TileBBoxPyramide {
 	pub fn new_full() -> TileBBoxPyramide {
 		TileBBoxPyramide {
@@ -53,13 +52,6 @@ impl TileBBoxPyramide {
 			}
 		})
 	}
-	pub fn iter_tile_indexes(&self) -> impl Iterator<Item = TileCoord3> + '_ {
-		return self.level_bbox.iter().enumerate().flat_map(|(z, bbox)| {
-			bbox
-				.iter_coords()
-				.map(move |TileCoord2 { x, y }| TileCoord3 { x, y, z: z as u8 })
-		});
-	}
 	pub fn get_zoom_min(&self) -> Option<u8> {
 		self
 			.level_bbox
@@ -97,6 +89,7 @@ impl TileBBoxPyramide {
 	pub fn is_empty(&self) -> bool {
 		self.level_bbox.iter().all(|bbox| bbox.is_empty())
 	}
+	#[cfg(test)]
 	pub fn is_full(&self) -> bool {
 		self
 			.level_bbox

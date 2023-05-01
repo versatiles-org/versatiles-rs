@@ -5,7 +5,6 @@ use std::ops::Range;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Blob(Bytes);
 
-#[allow(dead_code)]
 impl Blob {
 	/// Creates an empty `Blob`.
 	pub fn empty() -> Blob {
@@ -27,6 +26,7 @@ impl Blob {
 		self.0.to_vec()
 	}
 
+	#[cfg(test)]
 	/// Returns the underlying bytes as a string, assuming they represent valid UTF-8 encoded text.
 	pub fn as_str(&self) -> &str {
 		std::str::from_utf8(&self.0).unwrap()

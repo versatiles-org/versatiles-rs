@@ -10,7 +10,6 @@ pub struct TileConverterConfig {
 	finalized: bool,
 }
 
-#[allow(dead_code)]
 impl TileConverterConfig {
 	pub fn new(
 		tile_format: Option<TileFormat>, tile_compression: Option<Compression>, bbox_pyramide: TileBBoxPyramide,
@@ -26,6 +25,7 @@ impl TileConverterConfig {
 			finalized: false,
 		}
 	}
+	#[cfg(test)]
 	pub fn new_full() -> Self {
 		Self::new(None, None, TileBBoxPyramide::new_full(), false)
 	}

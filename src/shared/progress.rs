@@ -23,7 +23,6 @@ pub struct ProgressBar {
 	visible: bool,
 }
 
-#[allow(dead_code)]
 impl ProgressBar {
 	/// Creates a new progress bar.
 	///
@@ -50,6 +49,7 @@ impl ProgressBar {
 		progress
 	}
 
+	#[cfg(test)]
 	/// Sets the position of the progress bar.
 	///
 	/// # Arguments
@@ -70,6 +70,7 @@ impl ProgressBar {
 		self.update();
 	}
 
+	#[cfg(test)]
 	/// Sets the visibility of the progress bar.
 	///
 	/// # Arguments

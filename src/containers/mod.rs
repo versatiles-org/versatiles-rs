@@ -1,3 +1,4 @@
+#[cfg(test)]
 pub mod dummy;
 pub mod mbtiles;
 pub mod tar;

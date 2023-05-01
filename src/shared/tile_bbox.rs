@@ -13,7 +13,6 @@ pub struct TileBBox {
 	pub y_max: u64,
 }
 
-#[allow(dead_code)]
 impl TileBBox {
 	pub fn new(x_min: u64, y_min: u64, x_max: u64, y_max: u64) -> TileBBox {
 		TileBBox {
@@ -57,6 +56,7 @@ impl TileBBox {
 	pub fn is_empty(&self) -> bool {
 		(self.x_max < self.x_min) || (self.y_max < self.y_min)
 	}
+	#[cfg(test)]
 	pub fn set_full(&mut self, level: u64) {
 		let max = 2u64.pow(level as u32) - 1;
 		self.x_min = 0;
@@ -64,6 +64,7 @@ impl TileBBox {
 		self.x_max = max;
 		self.y_max = max;
 	}
+	#[cfg(test)]
 	pub fn is_full(&self, level: u64) -> bool {
 		let max = 2u64.pow(level as u32) - 1;
 		(self.x_min == 0) && (self.y_min == 0) && (self.x_max == max) && (self.y_max == max)

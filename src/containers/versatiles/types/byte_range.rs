@@ -1,16 +1,14 @@
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
-use std::{
-	fmt,
-	io::{Cursor, Read},
-	ops::Range,
-};
+use std::{fmt, io::Read};
+#[cfg(test)]
+use std::{io::Cursor, ops::Range};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct ByteRange {
 	pub offset: u64,
 	pub length: u64,
 }
-#[allow(dead_code)]
+
 impl ByteRange {
 	pub fn new(offset: u64, length: u64) -> ByteRange {
 		ByteRange { offset, length }
@@ -18,6 +16,7 @@ impl ByteRange {
 	pub fn empty() -> ByteRange {
 		ByteRange { offset: 0, length: 0 }
 	}
+	#[cfg(test)]
 	pub fn from_buf(buf: &[u8]) -> ByteRange {
 		let mut cursor = Cursor::new(buf);
 		let offset = cursor.read_u64::<BE>().unwrap();
@@ -31,6 +30,7 @@ impl ByteRange {
 		writer.write_u64::<BE>(self.offset).unwrap();
 		writer.write_u64::<BE>(self.length).unwrap();
 	}
+	#[cfg(test)]
 	pub fn as_range_usize(&self) -> Range<usize> {
 		Range {
 			start: (self.offset) as usize,

@@ -22,12 +22,12 @@ impl FnConv {
 		Some(FnConv::new(func, name))
 	}
 
-	#[allow(dead_code)]
+	#[cfg(test)]
 	fn get_function(&self) -> fn(Blob) -> Result<Blob> {
 		self.func
 	}
 
-	#[allow(dead_code)]
+	#[cfg(test)]
 	fn get_name(&self) -> &str {
 		&self.name
 	}

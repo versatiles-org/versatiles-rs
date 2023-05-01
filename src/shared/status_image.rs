@@ -1,5 +1,7 @@
 use super::ProgressBar;
-use image::{ImageBuffer, Luma, Rgb, RgbImage};
+#[cfg(test)]
+use image::Luma;
+use image::{ImageBuffer, Rgb, RgbImage};
 use std::{path::Path, vec::Vec};
 
 pub struct StatusImage {
@@ -7,7 +9,6 @@ pub struct StatusImage {
 	data: Vec<u64>,
 }
 
-#[allow(dead_code)]
 impl StatusImage {
 	/// Creates a new `StatusImage` with the specified size.
 	pub fn new(size: u64) -> Self {
@@ -32,6 +33,7 @@ impl StatusImage {
 		self.data[index as usize] = v;
 	}
 
+	#[cfg(test)]
 	/// Saves the image as a grayscale PNG file.
 	///
 	/// # Arguments
