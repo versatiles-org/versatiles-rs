@@ -43,7 +43,7 @@ enum Commands {
 }
 
 // Main function for running the command-line interface
-fn main() {
+fn main() -> Result<()> {
 	let cli = Cli::parse();
 
 	// Initialize logger and set log level based on verbosity flag
@@ -51,7 +51,9 @@ fn main() {
 		.filter_level(cli.verbose.log_level_filter())
 		.init();
 
-	run(cli).unwrap();
+	run(cli)?;
+
+	Ok(())
 }
 
 // Helper function for running subcommands
