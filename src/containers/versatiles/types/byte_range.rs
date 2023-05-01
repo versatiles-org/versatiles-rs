@@ -10,6 +10,7 @@ pub struct ByteRange {
 	pub offset: u64,
 	pub length: u64,
 }
+#[allow(dead_code)]
 impl ByteRange {
 	pub fn new(offset: u64, length: u64) -> ByteRange {
 		ByteRange { offset, length }

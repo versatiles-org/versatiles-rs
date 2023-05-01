@@ -10,6 +10,7 @@ pub struct TileReaderParameters {
 	flip_vertically: bool,
 }
 
+#[allow(dead_code)]
 impl TileReaderParameters {
 	pub fn new(
 		tile_format: TileFormat, tile_compression: Compression, bbox_pyramide: TileBBoxPyramide,

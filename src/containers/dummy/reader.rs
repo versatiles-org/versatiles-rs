@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
 	shared::{

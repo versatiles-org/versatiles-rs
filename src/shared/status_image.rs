@@ -7,6 +7,7 @@ pub struct StatusImage {
 	data: Vec<u64>,
 }
 
+#[allow(dead_code)]
 impl StatusImage {
 	/// Creates a new `StatusImage` with the specified size.
 	pub fn new(size: u64) -> Self {

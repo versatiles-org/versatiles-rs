@@ -23,6 +23,7 @@ pub struct ProgressBar {
 	visible: bool,
 }
 
+#[allow(dead_code)]
 impl ProgressBar {
 	/// Creates a new progress bar.
 	///

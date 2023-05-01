@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
 	shared::{Compression, Result, TileBBoxPyramide, TileConverterConfig, TileFormat},

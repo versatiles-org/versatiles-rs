@@ -5,6 +5,7 @@ use std::ops::Range;
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Blob(Bytes);
 
+#[allow(dead_code)]
 impl Blob {
 	/// Creates an empty `Blob`.
 	pub fn empty() -> Blob {
