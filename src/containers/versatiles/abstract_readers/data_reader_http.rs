@@ -91,3 +91,62 @@ impl DataReaderTrait for DataReaderHttp {
 		&self.name
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::{DataReaderHttp, DataReaderTrait};
+	use crate::{containers::versatiles::types::ByteRange, shared::Result};
+	use std::str;
+
+	// Test the 'new' method for valid and invalid URLs
+	#[tokio::test]
+	async fn test_new() {
+		let valid_url = "https://www.example.com";
+		let invalid_url = "ftp://www.example.com";
+
+		// Test with a valid URL
+		let data_reader_http = DataReaderHttp::new(valid_url).await;
+		assert!(data_reader_http.is_ok());
+
+		// Test with an invalid URL
+		let data_reader_http = DataReaderHttp::new(invalid_url).await;
+		assert!(data_reader_http.is_err());
+	}
+
+	// Test the 'read_range' method
+	#[tokio::test]
+	async fn test_read_range() -> Result<()> {
+		// A sample URL containing text data
+		let url = "https://raw.githubusercontent.com/versatiles-org/versatiles-rs/main/resources/berlin.mbtiles";
+		let mut data_reader_http = DataReaderHttp::new(url).await?;
+
+		// Define a range to read
+		let range = ByteRange { offset: 7, length: 8 };
+
+		// Read the specified range from the URL
+		let blob = data_reader_http.read_range(&range).await?;
+
+		// Convert the resulting Blob to a string
+		let result_text = str::from_utf8(blob.as_slice())?;
+
+		// Expected text from the specified range
+		let expected_text = "format 3";
+
+		// Check if the read range matches the expected text
+		assert_eq!(result_text, expected_text);
+
+		Ok(())
+	}
+
+	// Test the 'get_name' method
+	#[tokio::test]
+	async fn test_get_name() -> Result<()> {
+		let url = "https://www.example.com";
+		let data_reader_http = DataReaderHttp::new(url).await?;
+
+		// Check if the name matches the original URL
+		assert_eq!(data_reader_http.get_name(), url);
+
+		Ok(())
+	}
+}
