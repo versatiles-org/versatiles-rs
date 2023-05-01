@@ -1,8 +1,8 @@
 // Import necessary modules and dependencies
-pub mod containers;
-pub mod server;
-pub mod shared;
-pub mod tools;
+mod containers;
+mod server;
+mod shared;
+mod tools;
 
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
@@ -19,7 +19,7 @@ use shared::Result;
 	disable_help_subcommand = true, // Disable help subcommand
 	disable_help_flag = true, // Disable help flag
 )]
-pub struct Cli {
+struct Cli {
 	#[command(subcommand)]
 	command: Commands, // Set subcommands
 
@@ -29,7 +29,7 @@ pub struct Cli {
 
 // Define subcommands for the command-line interface
 #[derive(Subcommand, Debug)]
-pub enum Commands {
+enum Commands {
 	#[clap(visible_alias = "converter")]
 	/// Convert between different tile containers
 	Convert(tools::convert::Subcommand),
