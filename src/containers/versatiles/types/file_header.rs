@@ -161,6 +161,8 @@ impl FileHeader {
 
 #[cfg(test)]
 mod tests {
+	use std::panic::catch_unwind;
+
 	use super::*;
 	use byteorder::ByteOrder;
 
@@ -238,5 +240,122 @@ mod tests {
 		assert_eq!(header2.compression, Compression::Gzip);
 		assert_eq!(header2.meta_range, ByteRange::empty());
 		assert_eq!(header2.blocks_range, ByteRange::empty());
+	}
+
+	#[test]
+	fn test_new_file_header_with_invalid_params() {
+		let tf = TileFormat::PNG;
+		let comp = Compression::Gzip;
+
+		let should_panic = |zoom: [u8; 2], bbox: [f32; 4]| {
+			assert!(catch_unwind(|| {
+				FileHeader::new(&tf, &comp, zoom, bbox);
+			})
+			.is_err())
+		};
+
+		should_panic([14, 10], [0.0, 0.0, 0.0, 0.0]);
+		should_panic([0, 0], [-190.0, -85.0511, 180.0, 85.0511]);
+		should_panic([0, 0], [-180.0, -95.0511, 180.0, 85.0511]);
+		should_panic([0, 0], [-180.0, -85.0511, 190.0, 85.0511]);
+		should_panic([0, 0], [-180.0, -85.0511, 180.0, 95.0511]);
+		should_panic([0, 0], [-180.0, 85.0511, 180.0, -85.0511]);
+		should_panic([0, 0], [180.0, -85.0511, -180.0, 85.0511]);
+	}
+
+	#[test]
+	fn test_all_tile_formats() {
+		let compression = Compression::Gzip;
+		let zoom_range = [0, 0];
+		let bbox = [0.0, 0.0, 0.0, 0.0];
+
+		let tile_formats = vec![
+			TileFormat::BIN,
+			TileFormat::PNG,
+			TileFormat::JPG,
+			TileFormat::WEBP,
+			TileFormat::AVIF,
+			TileFormat::SVG,
+			TileFormat::PBF,
+			TileFormat::GEOJSON,
+			TileFormat::TOPOJSON,
+			TileFormat::JSON,
+		];
+
+		for tile_format in tile_formats {
+			let header = FileHeader::new(&tile_format, &compression, zoom_range, bbox);
+			let blob = header.to_blob().unwrap();
+			let header2 = FileHeader::from_blob(blob).unwrap();
+
+			assert_eq!(&header2.tile_format, &tile_format);
+			assert_eq!(&header2.compression, &compression);
+		}
+	}
+
+	#[test]
+	fn test_all_compressions() {
+		let tile_format = TileFormat::PNG;
+		let zoom_range = [0, 0];
+		let bbox = [0.0, 0.0, 0.0, 0.0];
+
+		let compressions = vec![Compression::None, Compression::Gzip, Compression::Brotli];
+
+		for compression in compressions {
+			let header = FileHeader::new(&tile_format, &compression, zoom_range, bbox);
+			let blob = header.to_blob().unwrap();
+			let header2 = FileHeader::from_blob(blob).unwrap();
+
+			assert_eq!(&header2.tile_format, &tile_format);
+			assert_eq!(&header2.compression, &compression);
+		}
+	}
+
+	#[test]
+	fn test_invalid_header_length() {
+		let invalid_blob = Blob::from(vec![0; HEADER_LENGTH - 1]);
+		let result = catch_unwind(|| {
+			FileHeader::from_blob(invalid_blob).unwrap();
+		});
+
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_invalid_magic_word() {
+		let mut invalid_blob = Blob::from(vec![0; HEADER_LENGTH]);
+		invalid_blob.as_mut_slice()[0..14].copy_from_slice(b"invalid_header");
+		let result = catch_unwind(|| {
+			FileHeader::from_blob(invalid_blob).unwrap();
+		});
+
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_unknown_tile_format() {
+		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &Compression::Gzip, [0, 0], [0.0, 0.0, 0.0, 0.0])
+			.to_blob()
+			.unwrap();
+		invalid_blob.as_mut_slice()[14] = 0xFF; // Set an unknown tile format value
+
+		let result = catch_unwind(|| {
+			FileHeader::from_blob(invalid_blob).unwrap();
+		});
+
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_unknown_compression() {
+		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &Compression::Gzip, [0, 0], [0.0, 0.0, 0.0, 0.0])
+			.to_blob()
+			.unwrap();
+		invalid_blob.as_mut_slice()[15] = 0xFF; // Set an unknown compression value
+
+		let result = catch_unwind(|| {
+			FileHeader::from_blob(invalid_blob).unwrap();
+		});
+
+		assert!(result.is_err());
 	}
 }

@@ -1,19 +1,22 @@
-use bytes::Bytes;
+#![allow(dead_code)]
+
+use bytes::{Bytes, BytesMut};
+use image::EncodableLayout;
 use std::ops::Range;
 
-/// A simple wrapper around `bytes::Bytes` that provides additional methods for working with byte data.
+/// A simple wrapper around `bytesMut::Bytes` that provides additional methods for working with byte data.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Blob(Bytes);
+pub struct Blob(BytesMut);
 
 impl Blob {
 	/// Creates an empty `Blob`.
 	pub fn empty() -> Blob {
-		Blob(Bytes::from(Vec::new()))
+		Blob(BytesMut::from(""))
 	}
 
 	/// Returns a new `Blob` containing the bytes in the specified range.
 	pub fn get_range(&self, range: Range<usize>) -> Blob {
-		Blob(Bytes::from(Vec::from(&self.0[range])))
+		Blob(BytesMut::from(&self.0[range]))
 	}
 
 	/// Returns a reference to the underlying byte slice.
@@ -21,12 +24,16 @@ impl Blob {
 		self.0.as_ref()
 	}
 
+	/// Returns a mutable reference to the underlying byte slice.
+	pub fn as_mut_slice(&mut self) -> &mut [u8] {
+		self.0.as_mut()
+	}
+
 	/// Returns a new `Vec<u8>` containing a copy of the underlying bytes.
 	pub fn as_vec(&self) -> Vec<u8> {
 		self.0.to_vec()
 	}
 
-	#[cfg(test)]
 	/// Returns the underlying bytes as a string, assuming they represent valid UTF-8 encoded text.
 	pub fn as_str(&self) -> &str {
 		std::str::from_utf8(&self.0).unwrap()
@@ -43,52 +50,59 @@ impl Blob {
 	}
 }
 
+impl From<BytesMut> for Blob {
+	/// Converts a `bytes::BytesMut` instance into a `Blob`.
+	fn from(item: BytesMut) -> Self {
+		Blob(item)
+	}
+}
+
 impl From<Bytes> for Blob {
 	/// Converts a `bytes::Bytes` instance into a `Blob`.
 	fn from(item: Bytes) -> Self {
-		Blob(item)
+		Blob(BytesMut::from(item.as_ref()))
 	}
 }
 
 impl From<Vec<u8>> for Blob {
 	/// Converts a `Vec<u8>` instance into a `Blob`.
 	fn from(item: Vec<u8>) -> Self {
-		Blob(Bytes::from(item))
+		Blob(BytesMut::from(item.as_slice()))
 	}
 }
 
 impl From<&Vec<u8>> for Blob {
 	/// Converts a `Vec<u8>` instance into a `Blob`.
 	fn from(item: &Vec<u8>) -> Self {
-		Blob(Bytes::from(item.clone()))
+		Blob(BytesMut::from(item.as_slice()))
 	}
 }
 
 impl From<&str> for Blob {
 	/// Converts a `&str` instance into a `Blob`.
 	fn from(item: &str) -> Self {
-		Blob(Bytes::from(item.to_owned()))
+		Blob(BytesMut::from(item))
 	}
 }
 
 impl From<&String> for Blob {
 	/// Converts a `&String` instance into a `Blob`.
 	fn from(item: &String) -> Self {
-		Blob(Bytes::from(item.to_owned()))
+		Blob(BytesMut::from(item.as_bytes()))
 	}
 }
 
 impl From<String> for Blob {
 	/// Converts a `String` instance into a `Blob`.
 	fn from(item: String) -> Self {
-		Blob(Bytes::from(item))
+		Blob(BytesMut::from(item.as_bytes()))
 	}
 }
 
 impl From<&[u8]> for Blob {
 	/// Converts a `&[u8]` instance into a `Blob`.
 	fn from(item: &[u8]) -> Self {
-		Blob(Bytes::from(item.to_vec()))
+		Blob(BytesMut::from(item.as_bytes()))
 	}
 }
 
@@ -106,7 +120,7 @@ unsafe impl Sync for Blob {}
 mod tests {
 	// Import the Blob struct from the parent module
 	use super::Blob;
-	use bytes::Bytes;
+	use bytes::BytesMut;
 
 	// Test basic functionality of the Blob struct
 	#[test]
@@ -161,7 +175,7 @@ mod tests {
 		let text = String::from("Smørrebrød");
 
 		// Create a Bytes instance from the string
-		let bytes = Bytes::from(text.clone());
+		let bytes = BytesMut::from(text.as_bytes());
 
 		// Assert that a Blob can be created from the Bytes instance and converted back to the string correctly
 		assert_eq!(Blob::from(bytes).as_str(), text);
