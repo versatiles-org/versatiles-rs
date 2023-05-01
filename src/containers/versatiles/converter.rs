@@ -40,13 +40,15 @@ impl TileConverterTrait for TileConverter {
 			bbox_pyramid.get_geo_bbox(),
 		);
 
-		self.writer.append(&header.to_blob()).await?;
+		let blob: Blob = header.to_blob()?;
+
+		self.writer.append(&blob).await?;
 
 		header.meta_range = self.write_meta(reader).await?;
 
 		header.blocks_range = block_on(self.write_blocks(reader))?;
 
-		self.writer.write_start(&header.to_blob()).await?;
+		self.writer.write_start(&blob).await?;
 
 		Ok(())
 	}

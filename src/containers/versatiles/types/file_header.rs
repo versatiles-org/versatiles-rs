@@ -49,47 +49,43 @@ impl FileHeader {
 	pub async fn from_reader(reader: &mut Box<dyn DataReaderTrait>) -> Result<FileHeader> {
 		let range = ByteRange::new(0, HEADER_LENGTH as u64);
 		let blob = reader.read_range(&range).await?;
-		Ok(FileHeader::from_blob(blob))
+		FileHeader::from_blob(blob)
 	}
 
-	pub fn to_blob(&self) -> Blob {
+	pub fn to_blob(&self) -> Result<Blob> {
 		let mut header: Vec<u8> = Vec::new();
-		header.write_all(b"versatiles_v02").unwrap();
+		header.write_all(b"versatiles_v02")?;
 
 		// tile type
-		header
-			.write_u8(match self.tile_format {
-				TileFormat::BIN => 0x00,
+		header.write_u8(match self.tile_format {
+			TileFormat::BIN => 0x00,
 
-				TileFormat::PNG => 0x10,
-				TileFormat::JPG => 0x11,
-				TileFormat::WEBP => 0x12,
-				TileFormat::AVIF => 0x13,
-				TileFormat::SVG => 0x14,
+			TileFormat::PNG => 0x10,
+			TileFormat::JPG => 0x11,
+			TileFormat::WEBP => 0x12,
+			TileFormat::AVIF => 0x13,
+			TileFormat::SVG => 0x14,
 
-				TileFormat::PBF => 0x20,
-				TileFormat::GEOJSON => 0x21,
-				TileFormat::TOPOJSON => 0x22,
-				TileFormat::JSON => 0x23,
-			})
-			.unwrap();
+			TileFormat::PBF => 0x20,
+			TileFormat::GEOJSON => 0x21,
+			TileFormat::TOPOJSON => 0x22,
+			TileFormat::JSON => 0x23,
+		})?;
 
 		// compression
-		header
-			.write_u8(match self.compression {
-				Compression::None => 0,
-				Compression::Gzip => 1,
-				Compression::Brotli => 2,
-			})
-			.unwrap();
+		header.write_u8(match self.compression {
+			Compression::None => 0,
+			Compression::Gzip => 1,
+			Compression::Brotli => 2,
+		})?;
 
-		header.write_u8(self.zoom_range[0]).unwrap();
-		header.write_u8(self.zoom_range[1]).unwrap();
+		header.write_u8(self.zoom_range[0])?;
+		header.write_u8(self.zoom_range[1])?;
 
-		header.write_i32::<BE>(self.bbox[0]).unwrap();
-		header.write_i32::<BE>(self.bbox[1]).unwrap();
-		header.write_i32::<BE>(self.bbox[2]).unwrap();
-		header.write_i32::<BE>(self.bbox[3]).unwrap();
+		header.write_i32::<BE>(self.bbox[0])?;
+		header.write_i32::<BE>(self.bbox[1])?;
+		header.write_i32::<BE>(self.bbox[2])?;
+		header.write_i32::<BE>(self.bbox[3])?;
 
 		self.meta_range.write_to_buf(&mut header);
 		self.blocks_range.write_to_buf(&mut header);
@@ -102,23 +98,23 @@ impl FileHeader {
 			);
 		}
 
-		Blob::from(header)
+		Ok(Blob::from(header))
 	}
 
-	fn from_blob(blob: Blob) -> FileHeader {
+	fn from_blob(blob: Blob) -> Result<FileHeader> {
 		if blob.len() != HEADER_LENGTH {
 			panic!("'{blob:?}' is not a valid versatiles header. A header should be {HEADER_LENGTH} bytes long.");
 		}
 
 		let mut header = Cursor::new(blob.as_slice());
 		let mut magic_word = [0u8; 14];
-		header.read_exact(&mut magic_word).unwrap();
+		header.read_exact(&mut magic_word)?;
 		if &magic_word != b"versatiles_v02" {
 			panic!("'{blob:?}' is not a valid versatiles header. A header should start with 'versatiles_v02'");
 		};
 
-		let tile_type = header.read_u8().unwrap();
-		let compression = header.read_u8().unwrap();
+		let tile_type = header.read_u8()?;
+		let compression = header.read_u8()?;
 
 		let tile_format = match tile_type {
 			0x00 => TileFormat::BIN,
@@ -143,26 +139,26 @@ impl FileHeader {
 			_ => panic!("unknown compression value: {tile_type}"),
 		};
 
-		let zoom_range: [u8; 2] = [header.read_u8().unwrap(), header.read_u8().unwrap()];
+		let zoom_range: [u8; 2] = [header.read_u8()?, header.read_u8()?];
 
 		let bbox: [i32; 4] = [
-			header.read_i32::<BE>().unwrap(),
-			header.read_i32::<BE>().unwrap(),
-			header.read_i32::<BE>().unwrap(),
-			header.read_i32::<BE>().unwrap(),
+			header.read_i32::<BE>()?,
+			header.read_i32::<BE>()?,
+			header.read_i32::<BE>()?,
+			header.read_i32::<BE>()?,
 		];
 
 		let meta_range = ByteRange::from_reader(&mut header);
 		let blocks_range = ByteRange::from_reader(&mut header);
 
-		FileHeader {
+		Ok(FileHeader {
 			zoom_range,
 			bbox,
 			tile_format,
 			compression,
 			meta_range,
 			blocks_range,
-		}
+		})
 	}
 }
 
@@ -178,7 +174,7 @@ mod tests {
 			header1.meta_range = ByteRange::new(a, b);
 			header1.blocks_range = ByteRange::new(c, d);
 
-			let header2 = FileHeader::from_blob(header1.to_blob());
+			let header2 = FileHeader::from_blob(header1.to_blob().unwrap()).unwrap();
 			assert_eq!(header1, header2);
 			assert_eq!(&header2.tile_format, tile_format);
 			assert_eq!(&header2.compression, compression);
@@ -222,7 +218,7 @@ mod tests {
 			[-180.0, -85.05112878, 180.0, 85.05112878],
 		);
 
-		let blob = header.to_blob();
+		let blob = header.to_blob().unwrap();
 
 		assert_eq!(blob.len(), HEADER_LENGTH);
 		assert_eq!(&blob.as_slice()[0..14], b"versatiles_v02");
@@ -237,7 +233,7 @@ mod tests {
 		assert_eq!(ByteRange::from_buf(&blob.as_slice()[34..50]), ByteRange::empty());
 		assert_eq!(ByteRange::from_buf(&blob.as_slice()[50..66]), ByteRange::empty());
 
-		let header2 = FileHeader::from_blob(blob);
+		let header2 = FileHeader::from_blob(blob).unwrap();
 
 		assert_eq!(header2.zoom_range, [3, 8]);
 		assert_eq!(header2.bbox, [-1800000000, -850511296, 1800000000, 850511296]);
