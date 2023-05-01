@@ -1,7 +1,7 @@
 use super::ByteRange;
 use crate::shared::{Blob, TileBBox, TileCoord3};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
-use std::{fmt, io::Cursor, ops::Div};
+use std::{fmt, io::Cursor};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct BlockDefinition {
@@ -12,9 +12,10 @@ pub struct BlockDefinition {
 	pub tiles_range: ByteRange,
 	pub index_range: ByteRange,
 }
+
 impl BlockDefinition {
-	pub fn new(x: u64, y: u64, z: u8, bbox: TileBBox) -> BlockDefinition {
-		BlockDefinition {
+	pub fn new(x: u64, y: u64, z: u8, bbox: TileBBox) -> Self {
+		Self {
 			x,
 			y,
 			z,
@@ -23,18 +24,21 @@ impl BlockDefinition {
 			index_range: ByteRange::empty(),
 		}
 	}
-	pub fn from_blob(buf: Blob) -> BlockDefinition {
+
+	pub fn from_blob(buf: Blob) -> Self {
 		let mut cursor = Cursor::new(buf.as_slice());
 
 		let z = cursor.read_u8().unwrap();
 		let x = cursor.read_u32::<BE>().unwrap() as u64;
 		let y = cursor.read_u32::<BE>().unwrap() as u64;
 
-		let x_min = cursor.read_u8().unwrap() as u64;
-		let y_min = cursor.read_u8().unwrap() as u64;
-		let x_max = cursor.read_u8().unwrap() as u64;
-		let y_max = cursor.read_u8().unwrap() as u64;
-		let bbox = TileBBox::new(x_min, y_min, x_max, y_max);
+		let bbox = {
+			let x_min = cursor.read_u8().unwrap() as u64;
+			let y_min = cursor.read_u8().unwrap() as u64;
+			let x_max = cursor.read_u8().unwrap() as u64;
+			let y_max = cursor.read_u8().unwrap() as u64;
+			TileBBox::new(x_min, y_min, x_max, y_max)
+		};
 
 		let offset = cursor.read_u64::<BE>().unwrap();
 		let tiles_length = cursor.read_u64::<BE>().unwrap();
@@ -43,45 +47,51 @@ impl BlockDefinition {
 		let tiles_range = ByteRange::new(offset, tiles_length);
 		let index_range = ByteRange::new(offset + tiles_length, index_length);
 
-		BlockDefinition {
-			z,
+		Self {
 			x,
 			y,
+			z,
 			bbox,
 			tiles_range,
 			index_range,
 		}
 	}
+
 	pub fn count_tiles(&self) -> u64 {
 		self.bbox.count_tiles()
 	}
+
 	pub fn as_blob(&self) -> Blob {
-		let vec = Vec::new();
-		let mut cursor = Cursor::new(vec);
+		let mut vec = Vec::with_capacity(33);
+		vec.write_u8(self.z).unwrap();
+		vec.write_u32::<BE>(self.x as u32).unwrap();
+		vec.write_u32::<BE>(self.y as u32).unwrap();
 
-		cursor.write_u8(self.z).unwrap();
-		cursor.write_u32::<BE>(self.x as u32).unwrap();
-		cursor.write_u32::<BE>(self.y as u32).unwrap();
+		vec.write_u8(self.bbox.x_min as u8).unwrap();
+		vec.write_u8(self.bbox.y_min as u8).unwrap();
+		vec.write_u8(self.bbox.x_max as u8).unwrap();
+		vec.write_u8(self.bbox.y_max as u8).unwrap();
 
-		cursor.write_u8(self.bbox.x_min as u8).unwrap();
-		cursor.write_u8(self.bbox.y_min as u8).unwrap();
-		cursor.write_u8(self.bbox.x_max as u8).unwrap();
-		cursor.write_u8(self.bbox.y_max as u8).unwrap();
-
-		assert!(
-			self.tiles_range.offset + self.tiles_range.length == self.index_range.offset,
-			"{} + {} == {}",
-			self.tiles_range.offset,
-			self.tiles_range.length,
-			self.index_range.offset
+		assert_eq!(
+			self.tiles_range.offset + self.tiles_range.length,
+			self.index_range.offset,
+			"tiles_range and index_range do not match"
 		);
-		cursor.write_u64::<BE>(self.tiles_range.offset).unwrap();
-		cursor.write_u64::<BE>(self.tiles_range.length).unwrap();
-		cursor.write_u32::<BE>(self.index_range.length as u32).unwrap();
 
-		Blob::from(cursor.into_inner())
+		vec.write_u64::<BE>(self.tiles_range.offset).unwrap();
+		vec.write_u64::<BE>(self.tiles_range.length).unwrap();
+		vec.write_u32::<BE>(self.index_range.length as u32).unwrap();
+
+		Blob::from(vec)
 	}
-	#[allow(dead_code)]
+
+	pub fn get_sort_index(&self) -> u64 {
+		let size = 2u64.pow(self.z as u32);
+		let offset = (size * size - 1) / 3;
+		offset + size * self.y + self.x
+	}
+
+	#[cfg(test)]
 	pub fn as_str(&self) -> String {
 		let x_offset = self.x * 256;
 		let y_offset = self.y * 256;
@@ -93,11 +103,6 @@ impl BlockDefinition {
 			self.bbox.x_max + x_offset,
 			self.bbox.y_max + y_offset
 		)
-	}
-	pub fn get_sort_index(&self) -> u64 {
-		let size = 2u64.pow(self.z as u32);
-		let offset = (size * size - 1).div(3);
-		offset + size * self.y + self.x
 	}
 }
 
@@ -117,7 +122,7 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn conversion() {
+	fn test_conversion() {
 		let mut def1 = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
 		def1.tiles_range = ByteRange::new(4, 5);
 		def1.index_range = ByteRange::new(9, 6);
@@ -126,37 +131,38 @@ mod tests {
 
 		assert_eq!(def1, def2);
 	}
+
 	#[test]
-	fn count_tiles() {
+	fn test_count_tiles() {
 		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
 		assert_eq!(def.count_tiles(), 16);
 	}
 
 	#[test]
-	fn as_blob() {
+	fn test_as_blob() {
 		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
 		let blob = def.as_blob();
 		assert_eq!(blob.len(), 33);
 	}
 
 	#[test]
-	fn get_sort_index() {
+	fn test_get_sort_index() {
 		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
 		assert_eq!(def.get_sort_index(), 38);
 	}
 
 	#[test]
-	fn as_str() {
+	fn test_as_str() {
 		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
 		assert_eq!(def.as_str(), "[3,[256,512],[259,515]]");
 	}
 
 	#[test]
-	fn debug() {
+	fn test_debug() {
 		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
 		let debug_string = format!("{:?}", def);
 		assert_eq!(
-		debug_string,
+			debug_string,
 		"BlockDefinition { x/y/z: TileCoord3(1, 2, 3), bbox: TileBBox [0,0,3,3] = 16, tiles_range: ByteRange[0,0], index_range: ByteRange[0,0] }"
 	);
 	}
