@@ -89,16 +89,17 @@ impl TileReaderTrait for TileReader {
 		}
 
 		let block = block_option.unwrap();
+		let bbox = block.get_bbox();
 
 		let tile_x = coord.x - block_coord.x * 256;
 		let tile_y = coord.y - block_coord.y * 256;
 
-		if !block.bbox.contains(&TileCoord2::new(tile_x, tile_y)) {
+		if !bbox.contains(&TileCoord2::new(tile_x, tile_y)) {
 			log::debug!("tile {coord:?} outside block definition");
 			return None;
 		}
 
-		let tile_id = block.bbox.get_tile_index(&TileCoord2::new(tile_x, tile_y));
+		let tile_id = bbox.get_tile_index(&TileCoord2::new(tile_x, tile_y));
 
 		let tile_index_option = self.tile_index_cache.get(&block_coord);
 
@@ -107,9 +108,9 @@ impl TileReaderTrait for TileReader {
 		if let Some(tile_index) = tile_index_option {
 			tile_range = *tile_index.get(tile_id);
 		} else {
-			let blob = self.reader.read_range(&block.index_range).await.unwrap();
+			let blob = self.reader.read_range(&block.get_index_range()).await.unwrap();
 			let mut tile_index = TileIndex::from_brotli_blob(blob);
-			tile_index.add_offset(block.tiles_range.offset);
+			tile_index.add_offset(block.get_tiles_range().offset);
 
 			self.tile_index_cache.insert(block_coord, tile_index);
 
@@ -142,19 +143,20 @@ impl TileReaderTrait for TileReader {
 		let mut status_images = StatusImagePyramide::new();
 
 		for block in blocks {
-			let tiles_count = block.bbox.count_tiles();
+			let bbox = block.get_bbox();
+			let tiles_count = bbox.count_tiles();
 
-			let blob = self.reader.read_range(&block.index_range).await?;
+			let blob = self.reader.read_range(block.get_index_range()).await?;
 			let tile_index = TileIndex::from_brotli_blob(blob);
 			assert_eq!(tile_index.len(), tiles_count as usize, "tile count are not the same");
 
-			let status_image = status_images.get_level(block.z);
+			let status_image = status_images.get_level(block.get_z());
 
-			let x_offset = block.x * 256;
-			let y_offset = block.y * 256;
+			let x_offset = block.get_x() * 256;
+			let y_offset = block.get_y() * 256;
 
 			for (index, byterange) in tile_index.iter().enumerate() {
-				let coord = block.bbox.get_coord_by_index(index);
+				let coord = bbox.get_coord_by_index(index);
 				status_image.set(coord.x + x_offset, coord.y + y_offset, byterange.length);
 			}
 

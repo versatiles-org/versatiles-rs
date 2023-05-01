@@ -26,9 +26,9 @@ impl BlockIndex {
 		);
 		let mut block_index = BlockIndex::new_empty();
 		for i in 0..count {
-			block_index.add_block(BlockDefinition::from_blob(
-				buf.get_range(i * BLOCK_INDEX_LENGTH..(i + 1) * BLOCK_INDEX_LENGTH),
-			));
+			block_index.add_block(
+				BlockDefinition::from_blob(buf.get_range(i * BLOCK_INDEX_LENGTH..(i + 1) * BLOCK_INDEX_LENGTH)).unwrap(),
+			);
 		}
 
 		block_index
@@ -39,19 +39,23 @@ impl BlockIndex {
 	pub fn get_bbox_pyramide(&self) -> TileBBoxPyramide {
 		let mut pyramide = TileBBoxPyramide::new_empty();
 		for (_coord, block) in self.lookup.iter() {
-			pyramide.include_bbox(block.z, &block.bbox.shift_by(block.x * 256, block.y * 256));
+			pyramide.include_bbox(
+				block.get_z(),
+				&block.get_bbox().shift_by(block.get_x() * 256, block.get_y() * 256),
+			);
 		}
 
 		pyramide
 	}
 	pub fn add_block(&mut self, block: BlockDefinition) {
-		self.lookup.insert(TileCoord3::new(block.x, block.y, block.z), block);
+		self.lookup.insert(block.get_coord3(), block);
 	}
+
 	pub fn as_blob(&self) -> Blob {
 		let vec = Vec::new();
 		let mut cursor = Cursor::new(vec);
 		for (_coord, block) in self.lookup.iter() {
-			cursor.write_all(block.as_blob().as_slice()).unwrap();
+			cursor.write_all(block.as_blob().unwrap().as_slice()).unwrap();
 		}
 
 		Blob::from(cursor.into_inner())

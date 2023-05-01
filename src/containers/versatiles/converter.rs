@@ -90,8 +90,7 @@ impl TileConverter {
 				continue;
 			}
 
-			block.tiles_range = tiles_range;
-			block.index_range = index_range;
+			block = block.with_tiles_range(tiles_range).with_index_range(index_range);
 
 			block_index.add_block(block);
 		}
@@ -108,7 +107,7 @@ impl TileConverter {
 
 		let offset0 = self.writer.get_position().await.unwrap();
 
-		let bbox = &block.bbox;
+		let bbox = block.get_bbox();
 		let mut tile_index = TileIndex::new_empty(bbox.count_tiles() as usize);
 		let tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
@@ -118,12 +117,13 @@ impl TileConverter {
 		let mutex_tile_hash_lookup = &Mutex::new(tile_hash_lookup);
 
 		let tile_converter = self.config.get_tile_recompressor();
-		let width = 2u64.pow(block.z as u32);
+		let z = block.get_z();
+		let width = 2u64.pow(z as u32);
 
 		for row_bbox in bbox.iter_bbox_row_slices(1024) {
 			trace!("start block slice {:?}", row_bbox);
 
-			let mut blobs: Vec<(TileCoord2, Blob)> = reader.get_bbox_tile_vec(block.z, &row_bbox).await;
+			let mut blobs: Vec<(TileCoord2, Blob)> = reader.get_bbox_tile_vec(z, &row_bbox).await;
 			blobs.sort_by_cached_key(|(coord, _blob)| coord.y * width + coord.x);
 			trace!(
 				"get_bbox_tile_vec: count {}, size sum {}",
