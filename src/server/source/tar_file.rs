@@ -1,6 +1,6 @@
 use crate::{
 	server::{guess_mime, ok_data, ok_not_found, ServerSourceTrait},
-	shared::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression, Result},
+	shared::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression, Error, Result},
 };
 use async_trait::async_trait;
 use axum::{
@@ -45,13 +45,17 @@ pub struct TarFile {
 
 impl TarFile {
 	pub fn from(path: &str) -> Result<Box<Self>> {
-		let mut filename = current_dir()?;
-		filename.push(Path::new(path));
-		filename = filename.canonicalize()?;
+		let filename = current_dir()?.join(Path::new(path)).canonicalize()?;
 
-		assert!(filename.exists(), "path {filename:?} does not exist");
-		assert!(filename.is_absolute(), "path {filename:?} must be absolute");
-		assert!(filename.is_file(), "path {filename:?} must be a file");
+		if !filename.exists() {
+			return Err(Error::new(&format!("path {filename:?} does not exist")));
+		}
+		if !filename.is_absolute() {
+			return Err(Error::new(&format!("path {filename:?} must be absolute")));
+		}
+		if !filename.is_file() {
+			return Err(Error::new(&format!("path {filename:?} must be a file")));
+		}
 
 		let mut lookup: HashMap<String, FileEntry> = HashMap::new();
 		let file = BufReader::new(File::open(filename)?);
@@ -96,7 +100,7 @@ impl TarFile {
 					.collect::<Vec<&str>>()
 					.join("/");
 
-				while name.starts_with(&['.', '/']) {
+				while name.starts_with(['.', '/']) {
 					name = name[1..].to_string();
 				}
 
@@ -299,14 +303,12 @@ mod tests {
 	#[test]
 	fn from_non_existing_path() {
 		let path = "path/to/non-existing/file.tar";
-		let result = std::panic::catch_unwind(|| TarFile::from(path));
-		assert!(result.is_err());
+		assert!(TarFile::from(path).is_err());
 	}
 
 	#[test]
 	fn from_directory() {
 		let path = ".";
-		let result = std::panic::catch_unwind(|| TarFile::from(path));
-		assert!(result.is_err());
+		assert!(TarFile::from(path).is_err());
 	}
 }
