@@ -26,6 +26,7 @@ struct FileEntry {
 	gz: Option<Blob>,
 	br: Option<Blob>,
 }
+
 impl FileEntry {
 	fn new(mime: String) -> Self {
 		FileEntry {
@@ -41,8 +42,9 @@ pub struct TarFile {
 	lookup: HashMap<String, FileEntry>,
 	name: String,
 }
+
 impl TarFile {
-	pub fn from(path: &str) -> Result<Box<TarFile>> {
+	pub fn from(path: &str) -> Result<Box<Self>> {
 		let mut filename = current_dir()?;
 		filename.push(Path::new(path));
 		filename = filename.canonicalize()?;
@@ -56,30 +58,28 @@ impl TarFile {
 		let mut archive = Archive::new(file);
 
 		for file_result in archive.entries()? {
-			if file_result.is_err() {
-				continue;
-			}
-
-			let mut file = file_result?;
+			let mut file = match file_result {
+				Ok(file) => file,
+				Err(_) => continue,
+			};
 
 			if file.header().entry_type() != EntryType::Regular {
 				continue;
 			}
 
 			let mut entry_path = file.path()?.into_owned();
-
-			let compression: Compression = if let Some(extension) = entry_path.extension() {
-				match extension.to_str() {
-					Some("br") => Compression::Brotli,
-					Some("gz") => Compression::Gzip,
+			let compression = entry_path
+				.extension()
+				.and_then(OsStr::to_str)
+				.map(|ext| match ext {
+					"br" => Compression::Brotli,
+					"gz" => Compression::Gzip,
 					_ => Compression::None,
-				}
-			} else {
-				Compression::None
-			};
+				})
+				.unwrap_or(Compression::None);
 
 			if compression != Compression::None {
-				entry_path = entry_path.with_extension("")
+				entry_path.set_extension("");
 			}
 
 			let mut buffer = Vec::new();
@@ -87,21 +87,20 @@ impl TarFile {
 			let blob = Blob::from(buffer);
 
 			let filename = entry_path.file_name().unwrap();
-
-			let mime = &guess_mime(Path::new(&filename));
+			let mime = guess_mime(Path::new(&filename));
 
 			let mut add = |path: &Path, blob: Blob| {
-				let mut name: String = path
+				let mut name = path
 					.iter()
 					.map(|s| s.to_str().unwrap())
 					.collect::<Vec<&str>>()
 					.join("/");
 
-				while name.starts_with(['.', '/']) {
+				while name.starts_with(&['.', '/']) {
 					name = name[1..].to_string();
 				}
 
-				trace!("adding file from tar: {} ({:?})", name, compression);
+				trace!("Adding file from tar: {} ({:?})", name, compression);
 
 				let entry = lookup.entry(name);
 				let versions = entry.or_insert_with(|| FileEntry::new(mime.to_string()));
@@ -118,7 +117,7 @@ impl TarFile {
 			add(&entry_path, blob);
 		}
 
-		Ok(Box::new(TarFile {
+		Ok(Box::new(Self {
 			lookup,
 			name: path.to_string(),
 		}))
@@ -192,6 +191,7 @@ impl Debug for TarFile {
 		f.debug_struct("TarFile").field("name", &self.name).finish()
 	}
 }
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -231,7 +231,7 @@ mod tests {
 		// get dummy reader
 		let mut reader = TileReader::new_dummy(reader_profile, 3);
 
-		// get to test container comverter
+		// get to test container converter
 		let container_file = NamedTempFile::new("temp.tar").unwrap();
 
 		let config = TileConverterConfig::new(
