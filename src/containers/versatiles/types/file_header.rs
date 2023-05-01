@@ -20,6 +20,7 @@ pub struct FileHeader {
 	pub meta_range: ByteRange,
 	pub blocks_range: ByteRange,
 }
+
 impl FileHeader {
 	pub fn new(tile_format: &TileFormat, compression: &Compression, zoom_range: [u8; 2], bbox: [f32; 4]) -> FileHeader {
 		assert!(
@@ -98,7 +99,7 @@ impl FileHeader {
 				"header should be {} bytes long, but is {} bytes long",
 				HEADER_LENGTH,
 				header.len()
-			)
+			);
 		}
 
 		Blob::from(header)
