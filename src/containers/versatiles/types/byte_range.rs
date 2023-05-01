@@ -10,30 +10,35 @@ pub struct ByteRange {
 }
 
 impl ByteRange {
-	pub fn new(offset: u64, length: u64) -> ByteRange {
-		ByteRange { offset, length }
+	pub fn new(offset: u64, length: u64) -> Self {
+		Self { offset, length }
 	}
-	pub fn empty() -> ByteRange {
-		ByteRange { offset: 0, length: 0 }
+
+	pub fn empty() -> Self {
+		Self { offset: 0, length: 0 }
 	}
+
 	#[cfg(test)]
-	pub fn from_buf(buf: &[u8]) -> ByteRange {
+	pub fn from_buf(buf: &[u8]) -> Self {
 		let mut cursor = Cursor::new(buf);
 		let offset = cursor.read_u64::<BE>().unwrap();
 		let length = cursor.read_u64::<BE>().unwrap();
-		ByteRange::new(offset, length)
+		Self::new(offset, length)
 	}
-	pub fn from_reader(reader: &mut impl Read) -> ByteRange {
-		ByteRange::new(reader.read_u64::<BE>().unwrap(), reader.read_u64::<BE>().unwrap())
+
+	pub fn from_reader(reader: &mut impl Read) -> Self {
+		Self::new(reader.read_u64::<BE>().unwrap(), reader.read_u64::<BE>().unwrap())
 	}
+
 	pub fn write_to_buf(&self, writer: &mut impl WriteBytesExt) {
 		writer.write_u64::<BE>(self.offset).unwrap();
 		writer.write_u64::<BE>(self.length).unwrap();
 	}
+
 	#[cfg(test)]
 	pub fn as_range_usize(&self) -> Range<usize> {
 		Range {
-			start: (self.offset) as usize,
+			start: self.offset as usize,
 			end: (self.offset + self.length) as usize,
 		}
 	}
@@ -41,7 +46,7 @@ impl ByteRange {
 
 impl fmt::Debug for ByteRange {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_fmt(format_args!("ByteRange[{},{}]", &self.offset, &self.length))
+		write!(f, "ByteRange[{},{}]", self.offset, self.length)
 	}
 }
 
