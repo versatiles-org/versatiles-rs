@@ -69,7 +69,7 @@ impl TileConverter {
 	// Write metadata
 	async fn write_meta(&mut self, reader: &TileReaderBox) -> Result<ByteRange> {
 		let meta = reader.get_meta().await?;
-		let compressed = self.config.get_compressor().run(meta).unwrap();
+		let compressed = self.config.get_compressor().run(meta)?;
 
 		self.writer.append(&compressed).await
 	}
@@ -116,7 +116,7 @@ impl TileConverter {
 
 		// Finish updating progress and write the block index
 		progress.finish();
-		let range = self.writer.append(&block_index.as_brotli_blob()).await.unwrap();
+		let range = self.writer.append(&block_index.as_brotli_blob()).await?;
 
 		Ok(range)
 	}

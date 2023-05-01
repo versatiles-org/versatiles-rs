@@ -67,7 +67,7 @@ impl BlockDefinition {
 
 	pub fn as_blob(&self) -> Result<Blob> {
 		let mut vec = Vec::with_capacity(33);
-		vec.write_u8(self.coord3.z).unwrap();
+		vec.write_u8(self.coord3.z)?;
 		vec.write_u32::<BE>(self.coord3.x as u32)?;
 		vec.write_u32::<BE>(self.coord3.y as u32)?;
 

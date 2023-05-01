@@ -76,11 +76,11 @@ impl TileReaderTrait for TileReader {
 			let path_vec: Vec<&str> = path_tmp_string.split('/').collect();
 
 			if path_vec.len() == 3 {
-				let z = path_vec[0].parse::<u8>().unwrap();
-				let y = path_vec[1].parse::<u64>().unwrap();
+				let z = path_vec[0].parse::<u8>()?;
+				let y = path_vec[1].parse::<u64>()?;
 
 				let mut filename: Vec<&str> = path_vec[2].split('.').collect();
-				let x = filename[0].parse::<u64>().unwrap();
+				let x = filename[0].parse::<u64>()?;
 
 				let mut extension = filename.pop().unwrap();
 				let this_comp = match extension {
@@ -142,11 +142,11 @@ impl TileReaderTrait for TileReader {
 						continue;
 					}
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
-						meta = decompress(read_to_end(), &Compression::Gzip).unwrap();
+						meta = decompress(read_to_end(), &Compression::Gzip)?;
 						continue;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
-						meta = decompress(read_to_end(), &Compression::Brotli).unwrap();
+						meta = decompress(read_to_end(), &Compression::Brotli)?;
 						continue;
 					}
 					&_ => {}
@@ -183,12 +183,10 @@ impl TileReaderTrait for TileReader {
 			coord_in.to_owned()
 		};
 
-		let range = self.tile_map.get(&coord);
+		let range = self.tile_map.get(&coord)?;
 
-		range?;
-
-		let offset = range.unwrap().offset;
-		let length = range.unwrap().length as usize;
+		let offset = range.offset;
+		let length = range.length as usize;
 
 		let mut buf: Vec<u8> = Vec::new();
 		buf.resize(length, 0);
@@ -219,21 +217,23 @@ pub mod tests {
 	};
 
 	#[tokio::test]
-	async fn all_compressions() {
-		async fn test_compression(compression: Compression) {
-			let file = make_test_file(TileFormat::PBF, compression, 4, "tar").await;
+	async fn all_compressions() -> Result<()> {
+		async fn test_compression(compression: Compression) -> Result<()> {
+			let file = make_test_file(TileFormat::PBF, compression, 4, "tar").await?;
 
 			// get tar reader
-			let mut reader = TileReader::new(file.to_str().unwrap()).await.unwrap();
-			reader.get_parameters_mut().unwrap();
+			let mut reader = TileReader::new(file.to_str().unwrap()).await?;
+			reader.get_parameters_mut()?;
 			format!("{:?}", reader);
 
 			let mut converter = TileConverter::new_dummy(ConverterProfile::Whatever, 4);
-			converter.convert_from(&mut reader).await.unwrap();
+			converter.convert_from(&mut reader).await?;
+			Ok(())
 		}
 
-		test_compression(Compression::None).await;
-		test_compression(Compression::Gzip).await;
-		test_compression(Compression::Brotli).await;
+		test_compression(Compression::None).await?;
+		test_compression(Compression::Gzip).await?;
+		test_compression(Compression::Brotli).await?;
+		Ok(())
 	}
 }

@@ -41,22 +41,22 @@ fn get_extension(path: &Path) -> String {
 pub mod tests {
 	use crate::{
 		containers::{
-			dummy::{self, ConverterProfile, ReaderProfile},
+			dummy::{self, ConverterProfile as CP, ReaderProfile as RP},
 			get_converter, get_reader,
 		},
-		shared::{Compression, TileBBoxPyramid, TileConverterConfig, TileFormat},
+		shared::{Compression as C, Result, TileBBoxPyramid, TileConverterConfig, TileFormat as TF},
 	};
 	use assert_fs::fixture::NamedTempFile;
 	use std::time::Instant;
 
 	pub async fn make_test_file(
-		tile_format: TileFormat, compression: Compression, max_zoom_level: u8, extension: &str,
-	) -> NamedTempFile {
+		tile_format: TF, compression: C, max_zoom_level: u8, extension: &str,
+	) -> Result<NamedTempFile> {
 		let reader_profile = match tile_format {
-			TileFormat::PNG => ReaderProfile::PngFast,
-			TileFormat::JPG => ReaderProfile::PngFast,
-			TileFormat::WEBP => ReaderProfile::PngFast,
-			TileFormat::PBF => ReaderProfile::PbfFast,
+			TF::PNG => RP::PngFast,
+			TF::JPG => RP::PngFast,
+			TF::WEBP => RP::PngFast,
+			TF::PBF => RP::PbfFast,
 			_ => todo!(),
 		};
 
@@ -68,20 +68,19 @@ pub mod tests {
 			"tar" => NamedTempFile::new("temp.tar"),
 			"versatiles" => NamedTempFile::new("temp.versatiles"),
 			_ => panic!("make_test_file: extension {extension} not found"),
-		}
-		.unwrap();
+		}?;
 
 		let config = TileConverterConfig::new(Some(tile_format), Some(compression), TileBBoxPyramid::new_full(), false);
-		let mut converter = get_converter(&container_file.to_str().unwrap(), config).await.unwrap();
+		let mut converter = get_converter(&container_file.to_str().unwrap(), config).await?;
 
 		// convert
-		converter.convert_from(&mut reader).await.unwrap();
+		converter.convert_from(&mut reader).await?;
 
-		container_file
+		Ok(container_file)
 	}
 
 	#[test]
-	fn converters_and_readers() {
+	fn converters_and_readers() -> Result<()> {
 		#[derive(Debug)]
 		enum Container {
 			Tar,
@@ -90,9 +89,9 @@ pub mod tests {
 
 		#[tokio::main]
 		async fn test(
-			reader_profile: ReaderProfile, max_zoom_level: u8, container: &Container, tile_format: TileFormat,
-			compression: Compression, force_recompress: bool,
-		) {
+			reader_profile: RP, max_zoom_level: u8, container: &Container, tile_format: TF, compression: C,
+			force_recompress: bool,
+		) -> Result<()> {
 			let test_name = format!(
 				"{:?}, {}, {:?}, {:?}, {:?}, {:?}",
 				reader_profile, max_zoom_level, container, tile_format, compression, force_recompress
@@ -108,8 +107,7 @@ pub mod tests {
 			let container_file = match container {
 				Container::Tar => NamedTempFile::new("temp.tar"),
 				Container::Versatiles => NamedTempFile::new("temp.versatiles"),
-			}
-			.unwrap();
+			}?;
 
 			let config = TileConverterConfig::new(
 				Some(tile_format),
@@ -117,46 +115,28 @@ pub mod tests {
 				TileBBoxPyramid::new_full(),
 				force_recompress,
 			);
-			let mut converter1 = get_converter(&container_file.to_str().unwrap(), config).await.unwrap();
+			let mut converter1 = get_converter(&container_file.to_str().unwrap(), config).await?;
 
 			// convert
-			converter1.convert_from(&mut reader1).await.unwrap();
+			converter1.convert_from(&mut reader1).await?;
 
 			// get test container reader
-			let mut reader2 = get_reader(container_file.to_str().unwrap()).await.unwrap();
-			let mut converter2 = dummy::TileConverter::new_dummy(ConverterProfile::Whatever, max_zoom_level);
-			converter2.convert_from(&mut reader2).await.unwrap();
+			let mut reader2 = get_reader(container_file.to_str().unwrap()).await?;
+			let mut converter2 = dummy::TileConverter::new_dummy(CP::Whatever, max_zoom_level);
+			converter2.convert_from(&mut reader2).await?;
 
 			println!("elapsed time for {}: {:?}", test_name, start.elapsed());
+
+			Ok(())
 		}
 
 		let containers = vec![Container::Tar, Container::Versatiles];
 
 		for container in containers {
-			test(
-				ReaderProfile::PngFast,
-				7,
-				&container,
-				TileFormat::PNG,
-				Compression::None,
-				false,
-			);
-			test(
-				ReaderProfile::PngFast,
-				4,
-				&container,
-				TileFormat::JPG,
-				Compression::None,
-				false,
-			);
-			test(
-				ReaderProfile::PbfFast,
-				7,
-				&container,
-				TileFormat::PBF,
-				Compression::Gzip,
-				false,
-			);
+			test(RP::PngFast, 7, &container, TF::PNG, C::None, false)?;
+			test(RP::PngFast, 4, &container, TF::JPG, C::None, false)?;
+			test(RP::PbfFast, 7, &container, TF::PBF, C::Gzip, false)?;
 		}
+		Ok(())
 	}
 }

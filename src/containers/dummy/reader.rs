@@ -77,25 +77,23 @@ impl std::fmt::Debug for TileReader {
 mod tests {
 	use crate::{
 		containers::dummy::{converter::ConverterProfile, reader::ReaderProfile, TileConverter, TileReader},
-		shared::{Blob, TileCoord3, TileReaderParameters},
+		shared::{Blob, Result, TileCoord3, TileReaderParameters},
 	};
 	use futures::executor::block_on;
 
 	#[test]
-	fn reader() {
+	fn reader() -> Result<()> {
 		let mut reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
-		assert_eq!(reader.get_container_name().unwrap(), "dummy container");
-		assert_eq!(reader.get_name().unwrap(), "dummy name");
-		assert_ne!(reader.get_parameters().unwrap(), &TileReaderParameters::new_dummy());
-		assert_ne!(
-			reader.get_parameters_mut().unwrap(),
-			&mut TileReaderParameters::new_dummy()
-		);
-		assert_eq!(block_on(reader.get_meta()).unwrap(), Blob::from("dummy meta data"));
+		assert_eq!(reader.get_container_name()?, "dummy container");
+		assert_eq!(reader.get_name()?, "dummy name");
+		assert_ne!(reader.get_parameters()?, &TileReaderParameters::new_dummy());
+		assert_ne!(reader.get_parameters_mut()?, &mut TileReaderParameters::new_dummy());
+		assert_eq!(block_on(reader.get_meta())?, Blob::from("dummy meta data"));
 		let blob = block_on(reader.get_tile_data(&TileCoord3::new(0, 0, 0)))
 			.unwrap()
 			.as_vec();
 		assert_eq!(&blob[0..4], b"\x89PNG");
+		Ok(())
 	}
 
 	#[test]

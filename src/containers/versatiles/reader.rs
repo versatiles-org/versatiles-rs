@@ -210,16 +210,17 @@ mod tests {
 	use super::TileReader;
 	use crate::{
 		containers::{tests::make_test_file, TileReaderTrait},
-		shared::{Compression, TileFormat},
+		shared::{Compression, Result, TileFormat},
 	};
 	use assert_fs::TempDir;
 
 	// Test deep verification
 	#[tokio::test]
-	async fn test_deep_verify() {
-		let temp_dir = TempDir::new().unwrap();
-		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 8, "versatiles").await;
-		let mut reader = TileReader::new(temp_file.to_str().unwrap()).await.unwrap();
-		reader.deep_verify(temp_dir.path()).await.unwrap();
+	async fn test_deep_verify() -> Result<()> {
+		let temp_dir = TempDir::new()?;
+		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 8, "versatiles").await?;
+		let mut reader = TileReader::new(temp_file.to_str().unwrap()).await?;
+		reader.deep_verify(temp_dir.path()).await?;
+		Ok(())
 	}
 }

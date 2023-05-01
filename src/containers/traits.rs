@@ -132,21 +132,21 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_reader() {
-		let mut reader = TestReader::new("test_path").await.unwrap();
+	async fn test_reader() -> Result<()> {
+		let mut reader = TestReader::new("test_path").await?;
 
 		// Test getting name
-		assert_eq!(reader.get_name().unwrap(), "test_path");
+		assert_eq!(reader.get_name()?, "test_path");
 
 		// Test getting tile compression and format
-		assert_eq!(reader.get_tile_compression().unwrap(), &Compression::None);
-		assert_eq!(reader.get_tile_format().unwrap(), &TileFormat::PBF);
+		assert_eq!(reader.get_tile_compression()?, &Compression::None);
+		assert_eq!(reader.get_tile_format()?, &TileFormat::PBF);
 
 		// Test getting container name
-		assert_eq!(reader.get_container_name().unwrap(), "test container name");
+		assert_eq!(reader.get_container_name()?, "test container name");
 
 		// Test getting metadata
-		assert_eq!(reader.get_meta().await.unwrap().to_string(), "test metadata");
+		assert_eq!(reader.get_meta().await?.to_string(), "test metadata");
 
 		// Test getting tile data
 		let coord = TileCoord3::new(0, 0, 0);
@@ -155,9 +155,9 @@ mod tests {
 			"test tile data"
 		);
 
-		let mut converter = TestConverter::new("/hallo", TileConverterConfig::new_full())
-			.await
-			.unwrap();
-		converter.convert_from(&mut reader).await.unwrap();
+		let mut converter = TestConverter::new("/hallo", TileConverterConfig::new_full()).await?;
+		converter.convert_from(&mut reader).await?;
+
+		Ok(())
 	}
 }

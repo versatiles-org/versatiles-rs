@@ -45,7 +45,7 @@ impl DataReaderTrait for DataReaderHttp {
 
 		if response.status() != StatusCode::PARTIAL_CONTENT {
 			let status_code = response.status();
-			println!("response: {}", str::from_utf8(&response.bytes().await?).unwrap());
+			println!("response: {}", str::from_utf8(&response.bytes().await?)?);
 			panic!(
 				"as a response to a range request it is expected to get the status code 206. instead we got {status_code}"
 			)
