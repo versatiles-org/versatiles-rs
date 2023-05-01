@@ -2,6 +2,7 @@ use super::{compress::*, image::*, Blob, Compression, Result};
 use clap::ValueEnum;
 use std::fmt::Debug;
 
+#[derive(Clone)]
 /// A structure representing a function that converts a blob to another blob
 struct FnConv {
 	func: fn(Blob) -> Result<Blob>,
@@ -22,11 +23,13 @@ impl FnConv {
 		Some(FnConv::new(func, name))
 	}
 
+	// Getter function for testing the function field
 	#[cfg(test)]
 	fn get_function(&self) -> fn(Blob) -> Result<Blob> {
 		self.func
 	}
 
+	// Getter function for testing the name field
 	#[cfg(test)]
 	fn get_name(&self) -> &str {
 		&self.name
@@ -42,6 +45,7 @@ impl Debug for FnConv {
 	}
 }
 
+// Enum representing supported tile formats
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Debug, PartialEq, Eq, ValueEnum)]
 pub enum TileFormat {
@@ -58,7 +62,7 @@ pub enum TileFormat {
 }
 
 /// A structure representing a pipeline of conversions to be applied to a blob
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DataConverter {
 	pipeline: Vec<FnConv>,
 }
@@ -135,6 +139,7 @@ impl DataConverter {
 
 		converter
 	}
+
 	/// Constructs a new `DataConverter` instance that compresses data using the specified compression algorithm.
 	/// The `dst_comp` parameter specifies the compression algorithm to use: `Compression::Uncompressed`, `Compression::Gzip`, or `Compression::Brotli`.
 	pub fn new_compressor(dst_comp: &Compression) -> DataConverter {
@@ -168,6 +173,7 @@ impl DataConverter {
 
 		converter
 	}
+
 	/// Adds a new conversion function to the pipeline.
 	fn push(&mut self, f: FnConv) {
 		self.pipeline.push(f);
@@ -202,7 +208,14 @@ impl Eq for DataConverter {}
 
 #[cfg(test)]
 mod tests {
-	use super::*;
+	use crate::shared::{
+		convert::FnConv,
+		Blob,
+		Compression::{self, *},
+		DataConverter,
+		TileFormat::{self, *},
+	};
+	use std::panic::catch_unwind;
 
 	#[test]
 	fn test_new() {
@@ -224,14 +237,43 @@ mod tests {
 
 	#[test]
 	fn test_new_tile_recompressor() {
-		let src_form = TileFormat::PNG;
-		let src_comp = Compression::Gzip;
-		let dst_form = TileFormat::JPG;
-		let dst_comp = Compression::Brotli;
-		let force_recompress = false;
-		let data_converter =
-			DataConverter::new_tile_recompressor(&src_form, &src_comp, &dst_form, &dst_comp, force_recompress);
-		assert_eq!(data_converter.pipeline.len(), 3);
+		fn test(
+			src_form: TileFormat, src_comp: Compression, dst_form: TileFormat, dst_comp: Compression,
+			force_recompress: bool, length: usize, description: &str,
+		) {
+			let data_converter =
+				DataConverter::new_tile_recompressor(&src_form, &src_comp, &dst_form, &dst_comp, force_recompress);
+			assert_eq!(data_converter.description().replace("compress_", "_"), description);
+			assert_eq!(data_converter.pipeline.len(), length);
+			assert_eq!(data_converter, data_converter.clone());
+		}
+
+		assert!(catch_unwind(|| {
+			test(PBF, Brotli, PNG, Brotli, false, 3, "hallo3");
+		})
+		.is_err());
+
+		assert!(catch_unwind(|| {
+			test(PNG, None, PBF, Gzip, true, 3, "hallo4");
+		})
+		.is_err());
+
+		test(PBF, None, PBF, Brotli, false, 1, "_brotli");
+		test(PNG, Gzip, PNG, Brotli, false, 2, "de_gzip, _brotli");
+		test(PNG, None, PNG, None, false, 0, "");
+		test(PNG, None, PNG, None, true, 1, "PNG->PNG");
+		test(PNG, Gzip, PNG, Brotli, false, 2, "de_gzip, _brotli");
+		test(PNG, Gzip, PNG, Brotli, true, 3, "de_gzip, PNG->PNG, _brotli");
+
+		test(PNG, Gzip, JPG, Gzip, false, 1, "PNG->JPG");
+		test(PNG, Brotli, PNG, Gzip, true, 3, "de_brotli, PNG->PNG, _gzip");
+		test(PNG, None, WEBP, None, false, 1, "PNG->WEBP");
+		test(JPG, Gzip, PNG, None, true, 2, "de_gzip, JPG->PNG");
+		test(JPG, Brotli, WEBP, None, false, 2, "de_brotli, JPG->WEBP");
+		test(WEBP, None, JPG, Brotli, true, 2, "WEBP->JPG, _brotli");
+		test(WEBP, Gzip, PNG, Brotli, false, 3, "de_gzip, WEBP->PNG, _brotli");
+		test(PNG, Brotli, WEBP, Gzip, true, 3, "de_brotli, PNG->WEBP, _gzip");
+		test(PNG, None, WEBP, Gzip, false, 2, "PNG->WEBP, _gzip");
 	}
 
 	// Test function for the `FnConv` struct
@@ -239,41 +281,13 @@ mod tests {
 	fn test_fn_conv() {
 		// Create a test `FnConv` instance
 		let test_fn = FnConv::new(|blob| Ok(blob), "test");
+
 		// Check the name of the `FnConv` instance
 		assert_eq!(test_fn.get_name(), "test");
 
 		// Check the function of the `FnConv` instance
-
 		let func = test_fn.get_function();
 		let vec = vec![1, 2, 3];
 		assert_eq!(func(Blob::from(&vec)).unwrap().as_vec(), vec);
-	}
-
-	// Test function for the `DataConverter` struct
-	#[test]
-	fn test_data_converter() {
-		// Create a test `DataConverter` instance
-		let test_converter = DataConverter::new_tile_recompressor(
-			&TileFormat::PNG,
-			&Compression::Gzip,
-			&TileFormat::JPG,
-			&Compression::Brotli,
-			true,
-		);
-
-		// Check if the converter is not empty
-		assert!(!test_converter.is_empty());
-
-		// Check if the converter has the correct number of conversion functions in the pipeline
-		assert_eq!(test_converter.pipeline.len(), 3);
-
-		// Check if the first function in the pipeline is the `decompress_gzip` function
-		assert_eq!(test_converter.pipeline[0].name, "decompress_gzip");
-
-		// Check if the second function in the pipeline is the `PNG->JPG` format conversion function
-		assert_eq!(test_converter.pipeline[1].name, "PNG->JPG");
-
-		// Check if the third function in the pipeline is the `compress_brotli` function
-		assert_eq!(test_converter.pipeline[2].name, "compress_brotli");
 	}
 }
