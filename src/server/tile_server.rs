@@ -369,4 +369,54 @@ mod tests {
 		let source = TileContainer::from(reader).unwrap();
 		server.add_tile_source("cheese", source);
 	}
+
+	#[test]
+	fn test_tile_server_new() {
+		let ip = "127.0.0.1";
+		let port = 8080;
+
+		let server = TileServer::new(ip, port);
+		assert_eq!(server.ip, ip);
+		assert_eq!(server.port, port);
+		assert_eq!(server.tile_sources.len(), 0);
+		assert_eq!(server.static_sources.len(), 0);
+		assert!(server.exit_signal.is_none());
+	}
+
+	#[test]
+	fn test_tile_server_add_tile_source() {
+		let mut server = TileServer::new(IP, PORT);
+
+		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
+		let source = TileContainer::from(reader).unwrap();
+		server.add_tile_source("cheese", source);
+
+		assert_eq!(server.tile_sources.len(), 1);
+		assert_eq!(server.tile_sources[0].prefix, "/cheese/");
+	}
+
+	#[test]
+	fn test_tile_server_add_static_source() {
+		let mut server = TileServer::new(IP, PORT);
+
+		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
+		let source = TileContainer::from(reader).unwrap();
+		server.add_static_source(source);
+
+		assert_eq!(server.static_sources.len(), 1);
+	}
+
+	#[test]
+	fn test_tile_server_iter_url_mapping() {
+		let mut server = TileServer::new(IP, PORT);
+
+		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
+		let source = TileContainer::from(reader).unwrap();
+		server.add_tile_source("cheese", source);
+
+		let mappings: Vec<(String, String)> = server.iter_url_mapping().collect();
+		assert_eq!(mappings.len(), 1);
+		assert_eq!(mappings[0].0, "/cheese/");
+		assert_eq!(mappings[0].1, "dummy name");
+	}
 }
