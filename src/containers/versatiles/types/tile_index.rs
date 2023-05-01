@@ -9,63 +9,69 @@ const TILE_INDEX_LENGTH: usize = 12;
 pub struct TileIndex {
 	index: Vec<ByteRange>,
 }
+
 unsafe impl Send for TileIndex {}
 
 impl TileIndex {
-	pub fn new_empty(count: usize) -> TileIndex {
-		let mut index = Vec::new();
-		index.resize(count, ByteRange { offset: 0, length: 0 });
-
-		TileIndex { index }
+	pub fn new_empty(count: usize) -> Self {
+		let index = vec![ByteRange::new(0, 0); count];
+		Self { index }
 	}
-	pub fn from_blob(buf: Blob) -> TileIndex {
+
+	pub fn from_blob(buf: Blob) -> Self {
 		let count = buf.len().div(TILE_INDEX_LENGTH);
 		assert_eq!(
 			count * TILE_INDEX_LENGTH,
 			buf.len(),
-			"tile index is defect, cause buffer length is not a multiple of {}",
+			"Tile index is defective: buffer length is not a multiple of {}",
 			TILE_INDEX_LENGTH
 		);
 
-		let mut index: Vec<ByteRange> = Vec::new();
-		index.resize(count, ByteRange::new(0, 0));
-
+		let mut index = vec![ByteRange::new(0, 0); count];
 		let mut cursor = Cursor::new(buf.as_slice());
-		for item in index.iter_mut() {
+		for item in &mut index {
 			item.offset = cursor.read_u64::<BE>().unwrap();
 			item.length = cursor.read_u32::<BE>().unwrap() as u64;
 		}
 
-		TileIndex { index }
+		Self { index }
 	}
-	pub fn from_brotli_blob(buf: Blob) -> TileIndex {
-		TileIndex::from_blob(decompress_brotli(buf).unwrap())
+
+	pub fn from_brotli_blob(buf: Blob) -> Self {
+		Self::from_blob(decompress_brotli(buf).unwrap())
 	}
+
 	pub fn set(&mut self, index: usize, tile_byte_range: ByteRange) {
 		self.index[index] = tile_byte_range;
 	}
+
 	pub fn as_blob(&self) -> Blob {
-		let buf = Vec::new();
-		let mut cursor = Cursor::new(buf);
-		for range in self.index.iter() {
+		let mut buf = Vec::new();
+		let mut cursor = Cursor::new(&mut buf);
+		for range in &self.index {
 			cursor.write_u64::<BE>(range.offset).unwrap();
 			cursor.write_u32::<BE>(range.length as u32).unwrap();
 		}
 
-		Blob::from(cursor.into_inner())
+		Blob::from(buf)
 	}
+
 	pub fn as_brotli_blob(&self) -> Blob {
 		compress_brotli(self.as_blob()).unwrap()
 	}
+
 	pub fn get(&self, index: usize) -> &ByteRange {
 		&self.index[index]
 	}
+
 	pub fn len(&self) -> usize {
 		self.index.len()
 	}
+
 	pub fn iter(&self) -> impl Iterator<Item = &ByteRange> {
 		self.index.iter()
 	}
+
 	pub fn add_offset(&mut self, offset: u64) {
 		self.index.iter_mut().for_each(|r| r.offset += offset);
 	}
