@@ -42,10 +42,11 @@ impl Folder {
 #[async_trait]
 impl ServerSourceTrait for Folder {
 	fn get_name(&self) -> Result<String> {
-		Ok(self.name.to_owned())
+		Ok(self.name.clone())
 	}
+
 	fn get_info_as_json(&self) -> Result<String> {
-		Ok("{\"type\":\"folder\"}".to_owned())
+		Ok("{\"type\":\"folder\"}".to_string())
 	}
 
 	async fn get_data(&mut self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>> {
@@ -60,11 +61,7 @@ impl ServerSourceTrait for Folder {
 			return ok_not_found();
 		}
 
-		if !local_path.exists() {
-			return ok_not_found();
-		}
-
-		if !local_path.is_file() {
+		if !local_path.exists() || !local_path.is_file() {
 			return ok_not_found();
 		}
 
@@ -108,9 +105,9 @@ mod tests {
 	#[test]
 	fn test() {
 		block_on(async {
-			let mut folder = Folder::from("ressources").unwrap();
+			let mut folder = Folder::from("resources").unwrap();
 
-			assert_eq!(folder.get_name().unwrap(), "ressources");
+			assert_eq!(folder.get_name().unwrap(), "resources");
 
 			assert_eq!(folder.get_info_as_json().unwrap(), "{\"type\":\"folder\"}");
 

@@ -118,7 +118,7 @@ mod tests {
 		run_command(vec![
 			"versatiles",
 			"convert",
-			"ressources/berlin.mbtiles",
+			"resources/berlin.mbtiles",
 			"tmp/berlin1.versatiles",
 		])
 		.unwrap();
