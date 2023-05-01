@@ -68,7 +68,7 @@ impl TileCoord3 {
 			z: self.z,
 		}
 	}
-	pub fn to_geo(&self) -> [f32; 2] {
+	pub fn as_geo(&self) -> [f32; 2] {
 		let zoom: f32 = 2.0f32.powi(self.z as i32);
 
 		[
