@@ -4,9 +4,8 @@ use crate::{
 	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig, TileCoord2},
 };
 use async_trait::async_trait;
-use futures::{executor::block_on, lock::Mutex};
+use futures::lock::Mutex;
 use log::{debug, trace};
-//use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use std::collections::HashMap;
 
 pub struct TileConverter {
@@ -45,9 +44,9 @@ impl TileConverterTrait for TileConverter {
 		self.writer.append(&blob).await?;
 
 		header.meta_range = self.write_meta(reader).await?;
+		header.blocks_range = self.write_blocks(reader).await?;
 
-		header.blocks_range = block_on(self.write_blocks(reader))?;
-
+		let blob: Blob = header.to_blob()?;
 		self.writer.write_start(&blob).await?;
 
 		Ok(())
