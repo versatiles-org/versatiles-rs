@@ -113,10 +113,7 @@ impl FileHeader {
 			panic!("'{blob:?}' is not a valid versatiles header. A header should start with 'versatiles_v02'");
 		};
 
-		let tile_type = header.read_u8()?;
-		let compression = header.read_u8()?;
-
-		let tile_format = match tile_type {
+		let tile_format = match header.read_u8()? {
 			0x00 => TileFormat::BIN,
 
 			0x10 => TileFormat::PNG,
@@ -129,14 +126,14 @@ impl FileHeader {
 			0x21 => TileFormat::GEOJSON,
 			0x22 => TileFormat::TOPOJSON,
 			0x23 => TileFormat::JSON,
-			_ => panic!("unknown tile_type value: {tile_type}"),
+			value => panic!("unknown tile_type value: {value}"),
 		};
 
-		let compression = match compression {
+		let compression = match header.read_u8()? {
 			0 => Compression::None,
 			1 => Compression::Gzip,
 			2 => Compression::Brotli,
-			_ => panic!("unknown compression value: {tile_type}"),
+			value => panic!("unknown compression value: {value}"),
 		};
 
 		let zoom_range: [u8; 2] = [header.read_u8()?, header.read_u8()?];
