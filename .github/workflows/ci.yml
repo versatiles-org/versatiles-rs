@@ -29,7 +29,7 @@ jobs:
         run: cargo check
 
   test:
-    name: test and coverage
+    name: test
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -38,6 +38,15 @@ jobs:
         run: rustup update stable && rustup default stable
       - name: cargo test
         run: cargo test
+
+  codecov:
+    name: code coverage
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v3
+      - name: update rust
+        run: rustup update stable && rustup default stable
       - name: get cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: cargo llvm-cov
