@@ -2,6 +2,8 @@
 cd "$(dirname "$0")"
 cd ..
 
+set -e
+
 # check cargo
 ./helpers/check.sh
 if [ $? -ne 0 ]; then
