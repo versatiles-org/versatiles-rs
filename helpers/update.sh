@@ -1,3 +1,7 @@
+#!/usr/bin/env bash
+cd "$(dirname "$0")"
+cd ..
+
 echo "Update rust"
 rustup update
 
@@ -7,8 +11,8 @@ cargo +nightly udeps
 #echo "check features"
 #unused-features analyze
 
-echo "upgrade dependencies"
-cargo upgrades
+rm Cargo.lock
 
-echo "Update dependencies in the local lock file"
-cargo update
+echo "upgrade dependencies"
+# cargo install cargo-edit
+cargo upgrade
