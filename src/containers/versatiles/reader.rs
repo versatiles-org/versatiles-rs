@@ -216,7 +216,7 @@ mod tests {
 
 	// Test deep verification
 	#[tokio::test]
-	async fn test_deep_verify() -> Result<()> {
+	async fn deep_verify() -> Result<()> {
 		let temp_dir = TempDir::new()?;
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 8, "versatiles").await?;
 		let mut reader = TileReader::new(temp_file.to_str().unwrap()).await?;

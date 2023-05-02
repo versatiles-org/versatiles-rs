@@ -88,7 +88,7 @@ pub mod tests {
 		}
 
 		#[tokio::main]
-		async fn test(
+		async fn test_converter_and_reader(
 			reader_profile: RP, max_zoom_level: u8, container: &Container, tile_format: TF, compression: C,
 			force_recompress: bool,
 		) -> Result<()> {
@@ -133,9 +133,9 @@ pub mod tests {
 		let containers = vec![Container::Tar, Container::Versatiles];
 
 		for container in containers {
-			test(RP::PngFast, 7, &container, TF::PNG, C::None, false)?;
-			test(RP::PngFast, 4, &container, TF::JPG, C::None, false)?;
-			test(RP::PbfFast, 7, &container, TF::PBF, C::Gzip, false)?;
+			test_converter_and_reader(RP::PngFast, 7, &container, TF::PNG, C::None, false)?;
+			test_converter_and_reader(RP::PngFast, 4, &container, TF::JPG, C::None, false)?;
+			test_converter_and_reader(RP::PbfFast, 7, &container, TF::PBF, C::Gzip, false)?;
 		}
 		Ok(())
 	}

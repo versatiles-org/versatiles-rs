@@ -97,7 +97,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test2() {
+	fn convert_from() {
 		let mut converter = TileConverter::new_dummy(ConverterProfile::Png, 8);
 		let mut reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
 		block_on(converter.convert_from(&mut reader)).unwrap();

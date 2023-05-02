@@ -154,7 +154,7 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn test_conversion() {
+	fn conversion() {
 		let mut def1 = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
 		def1.tiles_range = ByteRange::new(4, 5);
 		def1.index_range = ByteRange::new(9, 6);
@@ -165,32 +165,32 @@ mod tests {
 	}
 
 	#[test]
-	fn test_count_tiles() {
+	fn count_tiles() {
 		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
 		assert_eq!(def.count_tiles(), 16);
 	}
 
 	#[test]
-	fn test_as_blob() {
+	fn as_blob() {
 		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
 		let blob = def.as_blob().unwrap();
 		assert_eq!(blob.len(), 33);
 	}
 
 	#[test]
-	fn test_get_sort_index() {
+	fn get_sort_index() {
 		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
 		assert_eq!(def.get_sort_index(), 38);
 	}
 
 	#[test]
-	fn test_as_str() {
+	fn as_str() {
 		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
 		assert_eq!(def.as_str(), "[3,[256,512],[259,515]]");
 	}
 
 	#[test]
-	fn test_debug() {
+	fn debug() {
 		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
 		let debug_string = format!("{:?}", def);
 		assert_eq!(

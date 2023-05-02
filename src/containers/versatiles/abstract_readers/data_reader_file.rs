@@ -57,7 +57,7 @@ mod tests {
 
 	// Test the 'new' method for valid and invalid files
 	#[tokio::test]
-	async fn test_new() -> Result<()> {
+	async fn new() -> Result<()> {
 		let temp_file_path = NamedTempFile::new("testfile.txt")?;
 		let invalid_path = NamedTempFile::new("nonexistent.txt")?;
 
@@ -80,7 +80,7 @@ mod tests {
 
 	// Test the 'read_range' method
 	#[tokio::test]
-	async fn test_read_range() -> Result<()> {
+	async fn read_range() -> Result<()> {
 		let temp_file_path = NamedTempFile::new("testfile.txt")?;
 
 		// Create a temporary file
@@ -105,7 +105,7 @@ mod tests {
 
 	// Test the 'get_name' method
 	#[tokio::test]
-	async fn test_get_name() -> Result<()> {
+	async fn get_name() -> Result<()> {
 		let temp_file_path = NamedTempFile::new("testfile.txt")?;
 
 		// Create a temporary file

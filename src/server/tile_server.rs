@@ -323,7 +323,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_server() {
+	async fn server() {
 		async fn get(path: &str) -> String {
 			reqwest::get(format!("http://{IP}:{PORT}/{path}"))
 				.await
@@ -358,7 +358,7 @@ mod tests {
 
 	#[tokio::test]
 	#[should_panic]
-	async fn test_panic() {
+	async fn panic() {
 		let mut server = TileServer::new(IP, PORT);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PngFast, 8);
@@ -371,7 +371,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_tile_server_new() {
+	fn tile_server_new() {
 		let ip = "127.0.0.1";
 		let port = 8080;
 
@@ -384,7 +384,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_tile_server_add_tile_source() {
+	fn tile_server_add_tile_source() {
 		let mut server = TileServer::new(IP, PORT);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
@@ -396,7 +396,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_tile_server_add_static_source() {
+	fn tile_server_add_static_source() {
 		let mut server = TileServer::new(IP, PORT);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
@@ -407,7 +407,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_tile_server_iter_url_mapping() {
+	fn tile_server_iter_url_mapping() {
 		let mut server = TileServer::new(IP, PORT);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);

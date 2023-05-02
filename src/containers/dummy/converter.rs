@@ -67,14 +67,14 @@ mod tests {
 	};
 
 	#[tokio::test]
-	async fn test() {
+	async fn convert_from() {
 		let mut converter = TileConverter::new_dummy(ConverterProfile::Png, 8);
 		let mut reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
 		converter.convert_from(&mut reader).await.unwrap();
 	}
 
 	#[tokio::test]
-	async fn test_new_dummy_png() {
+	async fn dummy() {
 		TileConverter::new("hi", TileConverterConfig::new_full()).await.unwrap();
 	}
 }

@@ -132,7 +132,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_reader() -> Result<()> {
+	async fn reader() -> Result<()> {
 		let mut reader = TestReader::new("test_path").await?;
 
 		// Test getting name

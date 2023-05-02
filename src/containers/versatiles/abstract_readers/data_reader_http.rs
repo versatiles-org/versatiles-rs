@@ -100,7 +100,7 @@ mod tests {
 
 	// Test the 'new' method for valid and invalid URLs
 	#[tokio::test]
-	async fn test_new() {
+	async fn new() {
 		let valid_url = "https://www.example.com";
 		let invalid_url = "ftp://www.example.com";
 
@@ -115,7 +115,7 @@ mod tests {
 
 	// Test the 'read_range' method
 	#[tokio::test]
-	async fn test_read_range() -> Result<()> {
+	async fn read_range() -> Result<()> {
 		// A sample URL containing text data
 		let url = "https://raw.githubusercontent.com/versatiles-org/versatiles-rs/main/resources/berlin.mbtiles";
 		let mut data_reader_http = DataReaderHttp::new(url).await?;
@@ -140,7 +140,7 @@ mod tests {
 
 	// Test the 'get_name' method
 	#[tokio::test]
-	async fn test_get_name() -> Result<()> {
+	async fn get_name() -> Result<()> {
 		let url = "https://www.example.com";
 		let data_reader_http = DataReaderHttp::new(url).await?;
 

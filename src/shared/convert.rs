@@ -218,25 +218,25 @@ mod tests {
 	use std::panic::catch_unwind;
 
 	#[test]
-	fn test_new() {
+	fn new() {
 		let fn_conv = FnConv::new(|x| Ok(x), "test_fn_conv");
 		assert_eq!(fn_conv.name, "test_fn_conv");
 	}
 
 	#[test]
-	fn test_new_empty() {
+	fn new_empty() {
 		let data_converter = DataConverter::new_empty();
 		assert_eq!(data_converter.pipeline.len(), 0);
 	}
 
 	#[test]
-	fn test_is_empty() {
+	fn is_empty() {
 		let data_converter = DataConverter::new_empty();
 		assert!(data_converter.is_empty());
 	}
 
 	#[test]
-	fn test_new_tile_recompressor() {
+	fn new_tile_recompressor() {
 		fn test(
 			src_form: TileFormat, src_comp: Compression, dst_form: TileFormat, dst_comp: Compression,
 			force_recompress: bool, length: usize, description: &str,
@@ -278,7 +278,7 @@ mod tests {
 
 	// Test function for the `FnConv` struct
 	#[test]
-	fn test_fn_conv() {
+	fn fn_conv() {
 		// Create a test `FnConv` instance
 		let test_fn = FnConv::new(|blob| Ok(blob), "test");
 

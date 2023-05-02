@@ -108,34 +108,31 @@ mod tests {
 	use crate::{server::ServerSourceTrait, shared::Compression};
 	use axum::body::HttpBody;
 	use enumset::enum_set;
-	use futures::executor::block_on;
 	use hyper::StatusCode;
 
-	#[test]
-	fn test() {
-		block_on(async {
-			// Create a new Folder instance
-			let mut folder = Folder::from("resources").unwrap();
+	#[tokio::test]
+	async fn test() {
+		// Create a new Folder instance
+		let mut folder = Folder::from("resources").unwrap();
 
-			// Test get_name function
-			assert_eq!(folder.get_name().unwrap(), "resources");
+		// Test get_name function
+		assert_eq!(folder.get_name().unwrap(), "resources");
 
-			// Test get_info_as_json function
-			assert_eq!(folder.get_info_as_json().unwrap(), "{\"type\":\"folder\"}");
+		// Test get_info_as_json function
+		assert_eq!(folder.get_info_as_json().unwrap(), "{\"type\":\"folder\"}");
 
-			// Test get_data function with a non-existent file
-			let mut result = folder
-				.get_data(&["recipes", "Queijo.txt"], enum_set!(Compression::None))
-				.await;
-			assert_eq!(result.status(), StatusCode::NOT_FOUND);
-			let result = result.data().await.unwrap().unwrap();
-			assert_eq!(format!("{:?}", result), "b\"Not Found\"");
+		// Test get_data function with a non-existent file
+		let mut result = folder
+			.get_data(&["recipes", "Queijo.txt"], enum_set!(Compression::None))
+			.await;
+		assert_eq!(result.status(), StatusCode::NOT_FOUND);
+		let result = result.data().await.unwrap().unwrap();
+		assert_eq!(format!("{:?}", result), "b\"Not Found\"");
 
-			// Test get_data function with an existing file
-			let mut result = folder.get_data(&["berlin.mbtiles"], enum_set!(Compression::None)).await;
-			assert_eq!(result.status(), StatusCode::OK);
-			let result = result.data().await.unwrap().unwrap();
-			assert_eq!(result.len(), 26533888);
-		})
+		// Test get_data function with an existing file
+		let mut result = folder.get_data(&["berlin.mbtiles"], enum_set!(Compression::None)).await;
+		assert_eq!(result.status(), StatusCode::OK);
+		let result = result.data().await.unwrap().unwrap();
+		assert_eq!(result.len(), 26533888);
 	}
 }

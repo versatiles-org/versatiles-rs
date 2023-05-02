@@ -193,7 +193,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_new_file_header() {
+	fn new_file_header() {
 		let tf = TileFormat::PNG;
 		let comp = Compression::Gzip;
 		let zoom = [10, 14];
@@ -209,7 +209,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_to_blob() {
+	fn to_blob() {
 		let header = FileHeader::new(
 			&TileFormat::PBF,
 			&Compression::Gzip,
@@ -243,7 +243,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_new_file_header_with_invalid_params() {
+	fn new_file_header_with_invalid_params() {
 		let tf = TileFormat::PNG;
 		let comp = Compression::Gzip;
 
@@ -264,7 +264,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_all_tile_formats() {
+	fn all_tile_formats() {
 		let compression = Compression::Gzip;
 		let zoom_range = [0, 0];
 		let bbox = [0.0, 0.0, 0.0, 0.0];
@@ -293,7 +293,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_all_compressions() {
+	fn all_compressions() {
 		let tile_format = TileFormat::PNG;
 		let zoom_range = [0, 0];
 		let bbox = [0.0, 0.0, 0.0, 0.0];
@@ -311,7 +311,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_invalid_header_length() {
+	fn invalid_header_length() {
 		let invalid_blob = Blob::from(vec![0; HEADER_LENGTH - 1]);
 		let result = catch_unwind(|| {
 			FileHeader::from_blob(invalid_blob).unwrap();
@@ -321,7 +321,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_invalid_magic_word() {
+	fn invalid_magic_word() {
 		let mut invalid_blob = Blob::from(vec![0; HEADER_LENGTH]);
 		invalid_blob.as_mut_slice()[0..14].copy_from_slice(b"invalid_header");
 		let result = catch_unwind(|| {
@@ -332,7 +332,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_unknown_tile_format() {
+	fn unknown_tile_format() {
 		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &Compression::Gzip, [0, 0], [0.0, 0.0, 0.0, 0.0])
 			.to_blob()
 			.unwrap();
@@ -346,7 +346,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_unknown_compression() {
+	fn unknown_compression() {
 		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &Compression::Gzip, [0, 0], [0.0, 0.0, 0.0, 0.0])
 			.to_blob()
 			.unwrap();
