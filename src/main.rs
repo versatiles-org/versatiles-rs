@@ -30,14 +30,14 @@ struct Cli {
 // Define subcommands for the command-line interface
 #[derive(Subcommand, Debug)]
 enum Commands {
-	#[clap(visible_alias = "converter")]
+	#[clap(alias = "converter")]
 	/// Convert between different tile containers
 	Convert(tools::convert::Subcommand),
 
 	/// Show information about a tile container
 	Probe(tools::probe::Subcommand),
 
-	#[clap(visible_alias = "server")]
+	#[clap(alias = "server")]
 	/// Serve tiles via http
 	Serve(tools::serve::Subcommand),
 }
@@ -51,9 +51,7 @@ fn main() -> Result<()> {
 		.filter_level(cli.verbose.log_level_filter())
 		.init();
 
-	run(cli)?;
-
-	Ok(())
+	run(cli)
 }
 
 // Helper function for running subcommands
@@ -98,4 +96,25 @@ mod tests {
 		let err = run_command(vec!["versatiles", "-V"]).unwrap_err();
 		assert!(err.starts_with("versatiles "));
 	}
+
+	// Test for subcommand 'convert'
+	#[test]
+	fn convert_subcommand() {
+		let output = run_command(vec!["versatiles", "convert"]).unwrap_err();
+		assert!(output.starts_with("Convert between different tile containers"));
+	}
+
+	// Test for subcommand 'probe'
+	#[test]
+	fn probe_subcommand() {
+		let output = run_command(vec!["versatiles", "probe"]).unwrap_err();
+		assert!(output.starts_with("Show information about a tile container"));
+	}
+
+	// Test for subcommand 'serve'
+	#[test]
+	fn serve_subcommand() {
+		let output = run_command(vec!["versatiles", "serve"]).unwrap_err();
+		assert!(output.starts_with("Serve tiles via http"));
+	} // Add required imports at the top of the test module
 }
