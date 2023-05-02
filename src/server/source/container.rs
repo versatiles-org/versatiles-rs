@@ -153,12 +153,12 @@ impl Debug for TileContainer {
 mod tests {
 	use super::TileContainer;
 	use crate::{
-		containers::{
-			dummy::{ReaderProfile, TileReader},
-			TileReaderBox,
-		},
+		containers::dummy::{ReaderProfile, TileReader},
 		server::ServerSourceTrait,
-		shared::{Compression, Result},
+		shared::{
+			Compression::{self, *},
+			Result,
+		},
 	};
 	use axum::body::Bytes;
 	use enumset::EnumSet;
@@ -178,31 +178,68 @@ mod tests {
 		Ok(())
 	}
 
+	// Test the debug function
+	#[test]
+	fn debug() {
+		let reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
+		let container = TileContainer::from(reader).unwrap();
+		let debug = format!("{container:?}");
+		println!("{debug}");
+		assert!(debug.starts_with("TileContainer { reader: TileReader:Dummy {"));
+	}
+
 	// Test the get_data method of the TileContainer
 	#[tokio::test]
 	async fn tile_container_get_data() -> Result<()> {
-		let reader: TileReaderBox = TileReader::new_dummy(ReaderProfile::PngFast, 8).try_into().unwrap();
-		let mut container = TileContainer::from(reader).unwrap();
+		async fn check_response(
+			container: &mut TileContainer, url: &str, compression: Compression, status: u16, content_type: &str,
+		) -> Result<Bytes> {
+			let path: Vec<&str> = url.split("/").collect();
+			let mut response = container.get_data(&path, EnumSet::only(compression)).await;
+			assert_eq!(response.status(), status);
+			assert_eq!(response.headers().get("content-type").unwrap().to_str()?, content_type);
+			let body: Bytes = response.data().await.unwrap()?;
+			Ok(body)
+		}
 
-		let path = &["0", "0", "0.png"];
-		let accept = EnumSet::only(Compression::None);
+		async fn check_404(container: &mut TileContainer, url: &str, compression: Compression) -> Result<bool> {
+			let path: Vec<&str> = url.split("/").collect();
+			let mut response = container.get_data(&path, EnumSet::only(compression)).await;
+			assert_eq!(response.status(), 404, "for url {url}");
+			let body: Bytes = response.data().await.unwrap()?;
+			assert_eq!(body, "Not Found");
+			Ok(true)
+		}
 
-		let mut response = container.get_data(path, accept).await;
+		let c = &mut TileContainer::from(TileReader::new_dummy(ReaderProfile::PngFast, 8))?;
 
-		assert_eq!(response.status(), 200);
-		assert_eq!(response.headers().get("content-type").unwrap().to_str()?, "image/png");
-		let body: Bytes = response.data().await.unwrap()?;
-		assert_eq!(&body[0..6], b"\x89PNG\r\n");
-
-		let path = &["meta.json"];
-		let mut response = container.get_data(path, accept).await;
-		assert_eq!(response.status(), 200);
 		assert_eq!(
-			response.headers().get("content-type").unwrap().to_str().unwrap(),
-			"application/json"
+			&check_response(c, "0/0/0.png", None, 200, "image/png").await?[0..6],
+			b"\x89PNG\r\n"
 		);
-		let body: Bytes = response.data().await.unwrap()?;
-		assert_eq!(&body[..], b"dummy meta data");
+
+		assert_eq!(
+			&check_response(c, "meta.json", None, 200, "application/json").await?[..],
+			b"dummy meta data"
+		);
+
+		assert_eq!(
+			&check_response(c, "meta.json", Brotli, 200, "application/json").await?[..],
+			[11, 7, 128, 100, 117, 109, 109, 121, 32, 109, 101, 116, 97, 32, 100, 97, 116, 97, 3]
+		);
+
+		assert_eq!(
+			&check_response(c, "meta.json", Gzip, 200, "application/json").await?[..],
+			[
+				31, 139, 8, 0, 0, 0, 0, 0, 2, 255, 75, 41, 205, 205, 173, 84, 200, 77, 45, 73, 84, 72, 73, 44, 73, 4, 0,
+				191, 165, 147, 231, 15, 0, 0, 0
+			]
+		);
+
+		assert!(check_404(c, "x/0/0.png", None).await?);
+		assert!(check_404(c, "-1/0/0.png", None).await?);
+		assert!(check_404(c, "0/0/-1.png", None).await?);
+		assert!(check_404(c, "0/0/1.png", None).await?);
 
 		Ok(())
 	}

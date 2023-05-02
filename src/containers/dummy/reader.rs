@@ -60,8 +60,12 @@ impl TileReaderTrait for TileReader {
 	async fn get_meta(&self) -> Result<Blob> {
 		Ok(Blob::from("dummy meta data"))
 	}
-	async fn get_tile_data(&mut self, _coord: &TileCoord3) -> Option<Blob> {
-		Some(self.tile_blob.clone())
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<Blob> {
+		if coord.is_valid() {
+			Some(self.tile_blob.clone())
+		} else {
+			None
+		}
 	}
 }
 

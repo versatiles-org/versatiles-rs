@@ -76,6 +76,14 @@ impl TileCoord3 {
 			((PI32 * (1.0 - 2.0 * (self.y as f32) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
 		]
 	}
+	#[cfg(test)]
+	pub fn is_valid(&self) -> bool {
+		if self.z > 31 {
+			return false;
+		};
+		let max = 2u64.pow(self.z as u32);
+		return (self.x < max) && (self.y < max);
+	}
 }
 
 impl Debug for TileCoord3 {
