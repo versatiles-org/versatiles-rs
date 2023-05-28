@@ -92,7 +92,7 @@ mod tests {
 	#[test]
 	fn conversion() {
 		let mut index1 = BlockIndex::new_empty();
-		index1.add_block(BlockDefinition::new(1, 2, 3, TileBBox::new_empty()));
+		index1.add_block(BlockDefinition::new(1, 2, 3, TileBBox::new_empty(3)));
 		let index2 = BlockIndex::from_brotli_blob(index1.as_brotli_blob());
 		assert_eq!(index1, index2);
 	}

@@ -7,45 +7,58 @@ use std::{
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct TileBBox {
+	level: u8,
 	pub x_min: u64,
 	pub y_min: u64,
 	pub x_max: u64,
 	pub y_max: u64,
+	max: u64,
 }
 
 impl TileBBox {
-	pub fn new(x_min: u64, y_min: u64, x_max: u64, y_max: u64) -> TileBBox {
+	pub fn new(level: u8, x_min: u64, y_min: u64, x_max: u64, y_max: u64) -> TileBBox {
+		let max = 2u64.pow(level as u32) - 1;
 		TileBBox {
+			level,
+			max,
 			x_min,
 			y_min,
-			x_max,
-			y_max,
+			x_max: max.min(x_max),
+			y_max: max.min(y_max),
 		}
 	}
 	pub fn new_full(level: u8) -> TileBBox {
 		let max = 2u64.pow(level as u32) - 1;
-		TileBBox::new(0, 0, max, max)
+		TileBBox {
+			level,
+			max,
+			x_min: 0,
+			y_min: 0,
+			x_max: max,
+			y_max: max,
+		}
 	}
-	pub fn new_empty() -> TileBBox {
-		TileBBox::new(1, 1, 0, 0)
+	pub fn new_empty(level: u8) -> TileBBox {
+		let max = 2u64.pow(level as u32) - 1;
+		TileBBox {
+			level,
+			max,
+			x_min: max,
+			y_min: max,
+			x_max: 0,
+			y_max: 0,
+		}
 	}
-	pub fn from_geo(geo_bbox: &[f32; 4], z: u8) -> TileBBox {
+	pub fn from_geo(level: u8, geo_bbox: &[f32; 4]) -> TileBBox {
 		let x_min: f32 = geo_bbox[0].min(geo_bbox[2]);
 		let x_max: f32 = geo_bbox[0].max(geo_bbox[2]);
 		let y_min: f32 = geo_bbox[1].min(geo_bbox[3]);
 		let y_max: f32 = geo_bbox[1].max(geo_bbox[3]);
 
-		let p_min = TileCoord2::from_geo(x_min, y_max, z, false);
-		let p_max = TileCoord2::from_geo(x_max, y_min, z, true);
+		let p_min = TileCoord2::from_geo(x_min, y_max, level, false);
+		let p_max = TileCoord2::from_geo(x_max, y_min, level, true);
 
-		let max_i = 2u64.pow(z as u32) - 1;
-
-		TileBBox::new(
-			p_min.x.max(0),
-			p_min.y.max(0),
-			max_i.min(p_max.x.max(1) - 1),
-			max_i.min(p_max.y.max(1) - 1),
-		)
+		TileBBox::new(level, p_min.x, p_min.y, p_max.x.max(1) - 1, p_max.y.max(1) - 1)
 	}
 	pub fn set_empty(&mut self) {
 		self.x_min = 1;
@@ -57,17 +70,15 @@ impl TileBBox {
 		(self.x_max < self.x_min) || (self.y_max < self.y_min)
 	}
 	#[cfg(test)]
-	pub fn set_full(&mut self, level: u64) {
-		let max = 2u64.pow(level as u32) - 1;
+	pub fn set_full(&mut self) {
 		self.x_min = 0;
 		self.y_min = 0;
-		self.x_max = max;
-		self.y_max = max;
+		self.x_max = self.max;
+		self.y_max = self.max;
 	}
 	#[cfg(test)]
-	pub fn is_full(&self, level: u64) -> bool {
-		let max = 2u64.pow(level as u32) - 1;
-		(self.x_min == 0) && (self.y_min == 0) && (self.x_max == max) && (self.y_max == max)
+	pub fn is_full(&self) -> bool {
+		(self.x_min == 0) && (self.y_min == 0) && (self.x_max == self.max) && (self.y_max == self.max)
 	}
 	pub fn count_tiles(&self) -> u64 {
 		if self.x_max < self.x_min {
@@ -88,36 +99,36 @@ impl TileBBox {
 		} else {
 			self.x_min = self.x_min.min(x);
 			self.y_min = self.y_min.min(y);
-			self.x_max = self.x_max.max(x);
-			self.y_max = self.y_max.max(y);
+			self.x_max = self.x_max.max(x).min(self.max);
+			self.y_max = self.y_max.max(y).min(self.max);
 		}
 	}
 	pub fn union_bbox(&mut self, bbox: &TileBBox) {
-		if self.is_empty() {
-			self.set_bbox(bbox);
-		} else {
-			self.x_min = self.x_min.min(bbox.x_min);
-			self.y_min = self.y_min.min(bbox.y_min);
-			self.x_max = self.x_max.max(bbox.x_max);
-			self.y_max = self.y_max.max(bbox.y_max);
+		if !bbox.is_empty() {
+			if self.is_empty() {
+				self.set_bbox(bbox);
+			} else {
+				self.x_min = self.x_min.min(bbox.x_min);
+				self.y_min = self.y_min.min(bbox.y_min);
+				self.x_max = self.x_max.max(bbox.x_max).min(self.max);
+				self.y_max = self.y_max.max(bbox.y_max).min(self.max);
+			}
 		}
 	}
 	pub fn intersect_bbox(&mut self, bbox: &TileBBox) {
-		if self.is_empty() {
-		} else {
+		if !self.is_empty() {
 			self.x_min = self.x_min.max(bbox.x_min);
 			self.y_min = self.y_min.max(bbox.y_min);
 			self.x_max = self.x_max.min(bbox.x_max);
 			self.y_max = self.y_max.min(bbox.y_max);
 		}
 	}
-	pub fn add_border(&mut self, x_min: &u64, y_min: &u64, x_max: &u64, y_max: &u64) {
-		if self.is_empty() {
-		} else {
-			self.x_min -= x_min;
-			self.y_min -= y_min;
-			self.x_max += x_max;
-			self.y_max += y_max;
+	pub fn add_border(&mut self, x_min: u64, y_min: u64, x_max: u64, y_max: u64) {
+		if !self.is_empty() {
+			self.x_min -= self.x_min.min(x_min);
+			self.y_min -= self.y_min.min(y_min);
+			self.x_max = (self.x_max + x_max).min(self.max);
+			self.y_max = (self.y_max + y_max).min(self.max);
 		}
 	}
 	pub fn set_bbox(&mut self, bbox: &TileBBox) {
@@ -175,9 +186,15 @@ impl TileBBox {
 		let cols = 0..col_count;
 		let rows = 0..row_count;
 
-		rows
-			.cartesian_product(cols)
-			.map(move |(row, col)| TileBBox::new(col_pos[col], row_pos[row], col_pos[col + 1] - 1, row_pos[row + 1] - 1))
+		rows.cartesian_product(cols).map(move |(row, col)| {
+			TileBBox::new(
+				self.level,
+				col_pos[col],
+				row_pos[row],
+				col_pos[col + 1] - 1,
+				row_pos[row + 1] - 1,
+			)
+		})
 	}
 	pub fn shift_by(mut self, x: u64, y: u64) -> TileBBox {
 		self.x_min += x;
@@ -225,7 +242,8 @@ impl TileBBox {
 impl fmt::Debug for TileBBox {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_fmt(format_args!(
-			"TileBBox [{},{},{},{}] = {}",
+			"TileBBox({}) [{},{},{},{}] = {}",
+			&self.level,
 			&self.x_min,
 			&self.y_min,
 			&self.x_max,
@@ -241,16 +259,16 @@ mod tests {
 
 	#[test]
 	fn count_tiles() {
-		assert_eq!(TileBBox::new(5, 12, 5, 12).count_tiles(), 1);
-		assert_eq!(TileBBox::new(5, 12, 7, 15).count_tiles(), 12);
-		assert_eq!(TileBBox::new(5, 15, 7, 12).count_tiles(), 0);
-		assert_eq!(TileBBox::new(7, 12, 5, 15).count_tiles(), 0);
+		assert_eq!(TileBBox::new(4, 5, 12, 5, 12).count_tiles(), 1);
+		assert_eq!(TileBBox::new(4, 5, 12, 7, 15).count_tiles(), 12);
+		assert_eq!(TileBBox::new(4, 5, 15, 7, 12).count_tiles(), 0);
+		assert_eq!(TileBBox::new(4, 7, 12, 5, 15).count_tiles(), 0);
 	}
 
 	#[test]
 	fn from_geo() {
-		let bbox1 = TileBBox::from_geo(&[8.0653f32, 51.3563f32, 12.3528f32, 52.2564f32], 9);
-		let bbox2 = TileBBox::new(267, 168, 273, 170);
+		let bbox1 = TileBBox::from_geo(9, &[8.0653f32, 51.3563f32, 12.3528f32, 52.2564f32]);
+		let bbox2 = TileBBox::new(9, 267, 168, 273, 170);
 		println!("bbox1 {:?}", bbox1);
 		println!("bbox2 {:?}", bbox2);
 		assert_eq!(bbox1, bbox2);
@@ -261,9 +279,9 @@ mod tests {
 		let quarter_planet0 = [0.001f32, -90f32, 179.999f32, -0.001f32];
 		let quarter_planet1 = [0f32, -85.05113f32, 180f32, 0f32];
 		for level in 1..18 {
-			let level_bbox0 = TileBBox::from_geo(&quarter_planet0, level);
+			let level_bbox0 = TileBBox::from_geo(level, &quarter_planet0);
 			let geo_bbox = level_bbox0.as_geo_bbox(level);
-			let level_bbox1 = TileBBox::from_geo(&geo_bbox, level);
+			let level_bbox1 = TileBBox::from_geo(level, &geo_bbox);
 			assert_eq!(geo_bbox, quarter_planet1);
 			assert_eq!(level_bbox1, level_bbox0);
 		}
@@ -273,7 +291,7 @@ mod tests {
 	fn sa_pacific() {
 		let geo_bbox0 = [-180f32, -66.51326f32, -90f32, 0f32];
 		for level in 2..32 {
-			let level_bbox0 = TileBBox::from_geo(&geo_bbox0, level);
+			let level_bbox0 = TileBBox::from_geo(level, &geo_bbox0);
 			assert_eq!(level_bbox0.count_tiles(), 4u64.pow(level as u32 - 2));
 			let geo_bbox1 = level_bbox0.as_geo_bbox(level);
 			assert_eq!(geo_bbox1, geo_bbox0);
@@ -282,7 +300,7 @@ mod tests {
 
 	#[test]
 	fn get_tile_index() {
-		let bbox = TileBBox::new(100, 100, 199, 199);
+		let bbox = TileBBox::new(8, 100, 100, 199, 199);
 		assert_eq!(bbox.get_tile_index(&TileCoord2::new(100, 100)), 0);
 		assert_eq!(bbox.get_tile_index(&TileCoord2::new(101, 100)), 1);
 		assert_eq!(bbox.get_tile_index(&TileCoord2::new(199, 100)), 99);
@@ -300,35 +318,35 @@ mod tests {
 		  | #-|-#
 		  #---#
 		*/
-		let bbox1 = TileBBox::new(0, 11, 2, 13);
-		let bbox2 = TileBBox::new(1, 10, 3, 12);
+		let bbox1 = TileBBox::new(4, 0, 11, 2, 13);
+		let bbox2 = TileBBox::new(4, 1, 10, 3, 12);
 
 		let mut bbox1_intersect = bbox1.clone();
 		bbox1_intersect.intersect_bbox(&bbox2);
-		assert_eq!(bbox1_intersect, TileBBox::new(1, 11, 2, 12));
+		assert_eq!(bbox1_intersect, TileBBox::new(4, 1, 11, 2, 12));
 
 		let mut bbox1_union = bbox1;
 		bbox1_union.union_bbox(&bbox2);
-		assert_eq!(bbox1_union, TileBBox::new(0, 10, 3, 13));
+		assert_eq!(bbox1_union, TileBBox::new(4, 0, 10, 3, 13));
 	}
 
 	#[test]
 	fn include_tile() {
-		let mut bbox = TileBBox::new(0, 1, 2, 3);
+		let mut bbox = TileBBox::new(4, 0, 1, 2, 3);
 		bbox.include_tile(4, 5);
-		assert_eq!(bbox, TileBBox::new(0, 1, 4, 5));
+		assert_eq!(bbox, TileBBox::new(4, 0, 1, 4, 5));
 	}
 
 	#[test]
 	fn empty_or_full() {
-		let mut bbox1 = TileBBox::new_empty();
+		let mut bbox1 = TileBBox::new_empty(12);
 		assert!(bbox1.is_empty());
 
-		bbox1.set_full(12);
-		assert!(bbox1.is_full(12));
+		bbox1.set_full();
+		assert!(bbox1.is_full());
 
 		let mut bbox1 = TileBBox::new_full(13);
-		assert!(bbox1.is_full(13));
+		assert!(bbox1.is_full());
 
 		bbox1.set_empty();
 		assert!(bbox1.is_empty());
@@ -336,7 +354,7 @@ mod tests {
 
 	#[test]
 	fn iter_coords() {
-		let bbox = TileBBox::new(1, 5, 2, 6);
+		let bbox = TileBBox::new(16, 1, 5, 2, 6);
 		let vec: Vec<TileCoord2> = bbox.iter_coords().collect();
 		assert_eq!(vec.len(), 4);
 		assert_eq!(vec[0], TileCoord2::new(1, 5));
@@ -347,77 +365,81 @@ mod tests {
 
 	#[test]
 	fn iter_bbox_slices_99() {
-		let bbox = TileBBox::new(0, 1000, 99, 1003);
+		let bbox = TileBBox::new(10, 0, 1000, 99, 1003);
 
 		let vec: Vec<TileBBox> = bbox.iter_bbox_row_slices(99).collect();
 		println!("{:?}", bbox);
 		assert_eq!(vec.len(), 8);
-		assert_eq!(vec[0], TileBBox::new(0, 1000, 49, 1000));
-		assert_eq!(vec[1], TileBBox::new(50, 1000, 99, 1000));
-		assert_eq!(vec[2], TileBBox::new(0, 1001, 49, 1001));
-		assert_eq!(vec[3], TileBBox::new(50, 1001, 99, 1001));
-		assert_eq!(vec[4], TileBBox::new(0, 1002, 49, 1002));
-		assert_eq!(vec[5], TileBBox::new(50, 1002, 99, 1002));
-		assert_eq!(vec[6], TileBBox::new(0, 1003, 49, 1003));
-		assert_eq!(vec[7], TileBBox::new(50, 1003, 99, 1003));
+		assert_eq!(vec[0], TileBBox::new(10, 0, 1000, 49, 1000));
+		assert_eq!(vec[1], TileBBox::new(10, 50, 1000, 99, 1000));
+		assert_eq!(vec[2], TileBBox::new(10, 0, 1001, 49, 1001));
+		assert_eq!(vec[3], TileBBox::new(10, 50, 1001, 99, 1001));
+		assert_eq!(vec[4], TileBBox::new(10, 0, 1002, 49, 1002));
+		assert_eq!(vec[5], TileBBox::new(10, 50, 1002, 99, 1002));
+		assert_eq!(vec[6], TileBBox::new(10, 0, 1003, 49, 1003));
+		assert_eq!(vec[7], TileBBox::new(10, 50, 1003, 99, 1003));
 	}
 
 	#[test]
 	fn iter_bbox_row_slices_100() {
-		let bbox = TileBBox::new(0, 1000, 99, 1003);
+		let bbox = TileBBox::new(10, 0, 1000, 99, 1003);
 
 		let vec: Vec<TileBBox> = bbox.iter_bbox_row_slices(100).collect();
 		println!("{:?}", bbox);
 		assert_eq!(vec.len(), 4);
-		assert_eq!(vec[0], TileBBox::new(0, 1000, 99, 1000));
-		assert_eq!(vec[1], TileBBox::new(0, 1001, 99, 1001));
-		assert_eq!(vec[2], TileBBox::new(0, 1002, 99, 1002));
-		assert_eq!(vec[3], TileBBox::new(0, 1003, 99, 1003));
+		assert_eq!(vec[0], TileBBox::new(10, 0, 1000, 99, 1000));
+		assert_eq!(vec[1], TileBBox::new(10, 0, 1001, 99, 1001));
+		assert_eq!(vec[2], TileBBox::new(10, 0, 1002, 99, 1002));
+		assert_eq!(vec[3], TileBBox::new(10, 0, 1003, 99, 1003));
 	}
 
 	#[test]
 	fn iter_bbox_row_slices_199() {
-		let bbox = TileBBox::new(0, 1000, 99, 1003);
+		let bbox = TileBBox::new(10, 0, 1000, 99, 1003);
 
 		let vec: Vec<TileBBox> = bbox.iter_bbox_row_slices(199).collect();
 		println!("{:?}", bbox);
 		assert_eq!(vec.len(), 4);
-		assert_eq!(vec[0], TileBBox::new(0, 1000, 99, 1000));
-		assert_eq!(vec[1], TileBBox::new(0, 1001, 99, 1001));
-		assert_eq!(vec[2], TileBBox::new(0, 1002, 99, 1002));
-		assert_eq!(vec[3], TileBBox::new(0, 1003, 99, 1003));
+		assert_eq!(vec[0], TileBBox::new(10, 0, 1000, 99, 1000));
+		assert_eq!(vec[1], TileBBox::new(10, 0, 1001, 99, 1001));
+		assert_eq!(vec[2], TileBBox::new(10, 0, 1002, 99, 1002));
+		assert_eq!(vec[3], TileBBox::new(10, 0, 1003, 99, 1003));
 	}
 
 	#[test]
 	fn iter_bbox_row_slices_200() {
-		let bbox = TileBBox::new(0, 1000, 99, 1003);
+		let bbox = TileBBox::new(10, 0, 1000, 99, 1003);
 
 		let vec: Vec<TileBBox> = bbox.iter_bbox_row_slices(200).collect();
 		println!("{:?}", bbox);
 		assert_eq!(vec.len(), 2);
-		assert_eq!(vec[0], TileBBox::new(0, 1000, 99, 1001));
-		assert_eq!(vec[1], TileBBox::new(0, 1002, 99, 1003));
+		assert_eq!(vec[0], TileBBox::new(10, 0, 1000, 99, 1001));
+		assert_eq!(vec[1], TileBBox::new(10, 0, 1002, 99, 1003));
 	}
 	#[test]
 
 	fn add_border() {
-		let mut bbox = TileBBox::new(5, 10, 20, 30);
+		let mut bbox = TileBBox::new(8, 5, 10, 20, 30);
 
 		// border of (1, 1, 1, 1) should increase the size of the bbox by 1 in all directions
-		bbox.add_border(&1, &1, &1, &1);
-		assert_eq!(bbox, TileBBox::new(4, 9, 21, 31));
+		bbox.add_border(1, 1, 1, 1);
+		assert_eq!(bbox, TileBBox::new(8, 4, 9, 21, 31));
 
 		// border of (2, 3, 4, 5) should further increase the size of the bbox
-		bbox.add_border(&2, &3, &4, &5);
-		assert_eq!(bbox, TileBBox::new(2, 6, 25, 36));
+		bbox.add_border(2, 3, 4, 5);
+		assert_eq!(bbox, TileBBox::new(8, 2, 6, 25, 36));
 
 		// border of (0, 0, 0, 0) should not change the size of the bbox
-		bbox.add_border(&0, &0, &0, &0);
-		assert_eq!(bbox, TileBBox::new(2, 6, 25, 36));
+		bbox.add_border(0, 0, 0, 0);
+		assert_eq!(bbox, TileBBox::new(8, 2, 6, 25, 36));
+
+		// border of (0, 0, 0, 0) should not change the size of the bbox
+		bbox.add_border(999, 999, 999, 999);
+		assert_eq!(bbox, TileBBox::new(8, 0, 0, 255, 255));
 
 		// if bbox is empty, add_border should have no effect
-		let mut empty_bbox = TileBBox::new_empty();
-		empty_bbox.add_border(&1, &2, &3, &4);
-		assert_eq!(empty_bbox, TileBBox::new_empty());
+		let mut empty_bbox = TileBBox::new_empty(8);
+		empty_bbox.add_border(1, 2, 3, 4);
+		assert_eq!(empty_bbox, TileBBox::new_empty(8));
 	}
 }

@@ -99,7 +99,7 @@ async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileCon
 		bbox_pyramid.intersect_geo_bbox(values.as_slice().try_into()?);
 
 		if let Some(b) = arguments.bbox_border {
-			bbox_pyramid.add_border(&b, &b, &b, &b);
+			bbox_pyramid.add_border(b, b, b, b);
 		}
 	}
 

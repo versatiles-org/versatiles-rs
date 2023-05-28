@@ -33,7 +33,7 @@ impl BlockDefinition {
 			let y_min = cursor.read_u8()? as u64;
 			let x_max = cursor.read_u8()? as u64;
 			let y_max = cursor.read_u8()? as u64;
-			TileBBox::new(x_min, y_min, x_max, y_max)
+			TileBBox::new(z.min(8), x_min, y_min, x_max, y_max)
 		};
 
 		let offset = cursor.read_u64::<BE>()?;
@@ -155,7 +155,7 @@ mod tests {
 
 	#[test]
 	fn conversion() {
-		let mut def1 = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
+		let mut def1 = BlockDefinition::new(1, 2, 3, TileBBox::new_full(3));
 		def1.tiles_range = ByteRange::new(4, 5);
 		def1.index_range = ByteRange::new(9, 6);
 
@@ -195,7 +195,7 @@ mod tests {
 		let debug_string = format!("{:?}", def);
 		assert_eq!(
 			debug_string,
-			"BlockDefinition { x/y/z: TileCoord3(1, 2, 3), bbox: TileBBox [0,0,3,3] = 16, tiles_range: ByteRange[0,0], index_range: ByteRange[0,0] }"
+			"BlockDefinition { x/y/z: TileCoord3(1, 2, 3), bbox: TileBBox(2) [0,0,3,3] = 16, tiles_range: ByteRange[0,0], index_range: ByteRange[0,0] }"
 		);
 	}
 }

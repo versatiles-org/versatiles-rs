@@ -83,13 +83,13 @@ impl TileConverter {
 
 		// Initialize blocks and populate them
 		let mut blocks: Vec<BlockDefinition> = Vec::new();
-		for (zoom, bbox_tiles) in self.config.get_bbox_pyramid().iter_levels() {
+		for (z, bbox_tiles) in self.config.get_bbox_pyramid().iter_levels() {
 			let bbox_blocks = bbox_tiles.scale_down(256);
 			for TileCoord2 { x, y } in bbox_blocks.iter_coords() {
 				let mut bbox_block = *bbox_tiles;
-				bbox_block.intersect_bbox(&TileBBox::new(x * 256, y * 256, x * 256 + 255, y * 256 + 255));
+				bbox_block.intersect_bbox(&TileBBox::new(z, x * 256, y * 256, x * 256 + 255, y * 256 + 255));
 
-				blocks.push(BlockDefinition::new(x, y, zoom, bbox_block))
+				blocks.push(BlockDefinition::new(x, y, z, bbox_block))
 			}
 		}
 
