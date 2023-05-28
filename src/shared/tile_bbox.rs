@@ -111,6 +111,15 @@ impl TileBBox {
 			self.y_max = self.y_max.min(bbox.y_max);
 		}
 	}
+	pub fn add_border(&mut self, x_min: &u64, y_min: &u64, x_max: &u64, y_max: &u64) {
+		if self.is_empty() {
+		} else {
+			self.x_min -= x_min;
+			self.y_min -= y_min;
+			self.x_max += x_max;
+			self.y_max += y_max;
+		}
+	}
 	pub fn set_bbox(&mut self, bbox: &TileBBox) {
 		self.x_min = bbox.x_min;
 		self.y_min = bbox.y_min;
@@ -388,5 +397,27 @@ mod tests {
 		assert_eq!(vec.len(), 2);
 		assert_eq!(vec[0], TileBBox::new(0, 1000, 99, 1001));
 		assert_eq!(vec[1], TileBBox::new(0, 1002, 99, 1003));
+	}
+	#[test]
+
+	fn add_border() {
+		let mut bbox = TileBBox::new(5, 10, 20, 30);
+
+		// border of (1, 1, 1, 1) should increase the size of the bbox by 1 in all directions
+		bbox.add_border(&1, &1, &1, &1);
+		assert_eq!(bbox, TileBBox::new(4, 9, 21, 31));
+
+		// border of (2, 3, 4, 5) should further increase the size of the bbox
+		bbox.add_border(&2, &3, &4, &5);
+		assert_eq!(bbox, TileBBox::new(2, 6, 25, 36));
+
+		// border of (0, 0, 0, 0) should not change the size of the bbox
+		bbox.add_border(&0, &0, &0, &0);
+		assert_eq!(bbox, TileBBox::new(2, 6, 25, 36));
+
+		// if bbox is empty, add_border should have no effect
+		let mut empty_bbox = TileBBox::new_empty();
+		empty_bbox.add_border(&1, &2, &3, &4);
+		assert_eq!(empty_bbox, TileBBox::new_empty());
 	}
 }

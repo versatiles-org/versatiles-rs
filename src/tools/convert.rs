@@ -24,7 +24,7 @@ pub struct Subcommand {
 	#[arg(long, value_name = "int")]
 	max_zoom: Option<u8>,
 
-	/// bounding box
+	/// use only tiles inside a bounding box
 	#[arg(
 		long,
 		short,
@@ -32,6 +32,10 @@ pub struct Subcommand {
 		allow_hyphen_values = true
 	)]
 	bbox: Option<String>,
+
+	/// also use tiles surrounding the bounding box as an additional border
+	#[arg(long)]
+	bbox_border: Option<u64>,
 
 	/// flip input vertically
 	#[arg(long)]
@@ -71,28 +75,32 @@ async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TileReader
 async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileConverterBox> {
 	let mut bbox_pyramid = TileBBoxPyramid::new_full();
 
-	if let Some(value) = arguments.min_zoom {
-		bbox_pyramid.set_zoom_min(value)
+	if let Some(min_zoom) = arguments.min_zoom {
+		bbox_pyramid.set_zoom_min(min_zoom)
 	}
 
-	if let Some(value) = arguments.max_zoom {
-		bbox_pyramid.set_zoom_max(value)
+	if let Some(max_zoom) = arguments.max_zoom {
+		bbox_pyramid.set_zoom_max(max_zoom)
 	}
 
-	if let Some(value) = &arguments.bbox {
-		trace!("parsing bbox argument: {:?}", value);
-		let values: Vec<f32> = value
+	if let Some(bbox) = &arguments.bbox {
+		trace!("parsing bbox argument: {:?}", bbox);
+		let values: Vec<f32> = bbox
 			.split(&[' ', ',', ';'])
 			.filter(|s| !s.is_empty())
 			.map(|s| s.parse::<f32>().expect("bbox value is not a number"))
 			.collect();
 
 		if values.len() != 4 {
-			error!("bbox must contain exactly 4 numbers, but instead i'v got: {value:?}");
+			error!("bbox must contain exactly 4 numbers, but instead i'v got: {bbox:?}");
 			return Err(Error::new("bbox must contain exactly 4 numbers"));
 		}
 
-		bbox_pyramid.limit_by_geo_bbox(values.as_slice().try_into()?);
+		bbox_pyramid.intersect_geo_bbox(values.as_slice().try_into()?);
+
+		if let Some(b) = arguments.bbox_border {
+			bbox_pyramid.add_border(&b, &b, &b, &b);
+		}
 	}
 
 	let config = TileConverterConfig::new(

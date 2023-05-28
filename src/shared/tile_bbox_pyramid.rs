@@ -20,9 +20,14 @@ impl TileBBoxPyramid {
 			level_bbox: from_fn(|_z| TileBBox::new_empty()),
 		}
 	}
-	pub fn limit_by_geo_bbox(&mut self, geo_bbox: &[f32; 4]) {
+	pub fn intersect_geo_bbox(&mut self, geo_bbox: &[f32; 4]) {
 		for (level, bbox) in self.level_bbox.iter_mut().enumerate() {
 			bbox.intersect_bbox(&TileBBox::from_geo(geo_bbox, level as u8));
+		}
+	}
+	pub fn add_border(&mut self, x_min: &u64, y_min: &u64, x_max: &u64, y_max: &u64) {
+		for bbox in self.level_bbox.iter_mut() {
+			bbox.add_border(x_min, y_min, x_max, y_max);
 		}
 	}
 	pub fn intersect(&mut self, other_bbox_pyramid: &TileBBoxPyramid) {
@@ -158,7 +163,7 @@ mod tests {
 	fn limit_by_geo_bbox() {
 		let mut pyramid = TileBBoxPyramid::new_full();
 		pyramid.set_zoom_max(8);
-		pyramid.limit_by_geo_bbox(&[8.0653f32, 51.3563f32, 12.3528f32, 52.2564f32]);
+		pyramid.intersect_geo_bbox(&[8.0653f32, 51.3563f32, 12.3528f32, 52.2564f32]);
 
 		assert_eq!(pyramid.get_level_bbox(0), &TileBBox::new(0, 0, 0, 0));
 		assert_eq!(pyramid.get_level_bbox(1), &TileBBox::new(1, 0, 1, 0));
