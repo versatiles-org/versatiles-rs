@@ -68,7 +68,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 
 		let reader = get_reader(url).await?;
 		let source = source::TileContainer::from(reader)?;
-		server.add_tile_source(&format!("/tiles/{name}/"), source);
+		server.add_tile_source(&format!("/tiles/{name}/"), source)?;
 	}
 
 	for filename in arguments.static_content.iter() {

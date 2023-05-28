@@ -153,8 +153,7 @@ impl TileReaderTrait for TileReader {
 				};
 			}
 
-			panic!("unknown file in tar: {path_tmp_string:?}");
-			// ignore
+			return Err(Error::new(&format!("unknown file in tar: {path_tmp_string:?}")));
 		}
 
 		Ok(Box::new(TileReader {

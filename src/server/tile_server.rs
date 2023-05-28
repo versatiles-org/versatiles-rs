@@ -1,5 +1,5 @@
 use super::{ServerSource, ServerSourceTrait};
-use crate::shared::{Blob, Compression, Result};
+use crate::shared::{Blob, Compression, Error, Result};
 use axum::{
 	body::{Bytes, Full},
 	extract::{Path, State},
@@ -40,7 +40,7 @@ impl TileServer {
 		}
 	}
 
-	pub fn add_tile_source(&mut self, url_prefix: &str, tile_source: Box<dyn ServerSourceTrait>) {
+	pub fn add_tile_source(&mut self, url_prefix: &str, tile_source: Box<dyn ServerSourceTrait>) -> Result<()> {
 		log::debug!("add source: prefix='{}', source={:?}", url_prefix, tile_source);
 
 		let mut prefix = url_prefix.trim().to_owned();
@@ -53,10 +53,10 @@ impl TileServer {
 
 		for other_tile_source in self.tile_sources.iter() {
 			if other_tile_source.prefix.starts_with(&prefix) || prefix.starts_with(&other_tile_source.prefix) {
-				panic!(
+				return Err(Error::new(&format!(
 					"multiple sources with the prefix '{}' and '{}' are defined",
 					prefix, other_tile_source.prefix
-				);
+				)));
 			};
 		}
 
@@ -64,6 +64,8 @@ impl TileServer {
 			prefix,
 			source: Arc::new(Mutex::new(tile_source)),
 		});
+
+		Ok(())
 	}
 
 	pub fn add_static_source(&mut self, source: Box<dyn ServerSourceTrait>) {
@@ -337,7 +339,7 @@ mod tests {
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
 		let source = TileContainer::from(reader).unwrap();
-		server.add_tile_source("cheese", source);
+		server.add_tile_source("cheese", source).unwrap();
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
 		let source = TileContainer::from(reader).unwrap();
@@ -363,11 +365,11 @@ mod tests {
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PngFast, 8);
 		let source = TileContainer::from(reader).unwrap();
-		server.add_tile_source("cheese", source);
+		server.add_tile_source("cheese", source).unwrap();
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
 		let source = TileContainer::from(reader).unwrap();
-		server.add_tile_source("cheese", source);
+		server.add_tile_source("cheese", source).unwrap();
 	}
 
 	#[test]
@@ -389,7 +391,7 @@ mod tests {
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
 		let source = TileContainer::from(reader).unwrap();
-		server.add_tile_source("cheese", source);
+		server.add_tile_source("cheese", source).unwrap();
 
 		assert_eq!(server.tile_sources.len(), 1);
 		assert_eq!(server.tile_sources[0].prefix, "/cheese/");
@@ -412,7 +414,7 @@ mod tests {
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
 		let source = TileContainer::from(reader).unwrap();
-		server.add_tile_source("cheese", source);
+		server.add_tile_source("cheese", source).unwrap();
 
 		let mappings: Vec<(String, String)> = server.iter_url_mapping().collect();
 		assert_eq!(mappings.len(), 1);

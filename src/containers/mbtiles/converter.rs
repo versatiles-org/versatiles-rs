@@ -1,6 +1,6 @@
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{Result, TileConverterConfig},
+	shared::{Error, Result, TileConverterConfig},
 };
 use async_trait::async_trait;
 
@@ -12,10 +12,10 @@ impl TileConverterTrait for TileConverter {
 	where
 		Self: Sized,
 	{
-		panic!("conversion to mbtiles is not supported")
+		Err(Error::new("conversion to mbtiles is not supported"))
 	}
 	async fn convert_from(&mut self, _reader: &mut TileReaderBox) -> Result<()> {
-		panic!("conversion to mbtiles is not supported")
+		Err(Error::new("conversion to mbtiles is not supported"))
 	}
 }
 

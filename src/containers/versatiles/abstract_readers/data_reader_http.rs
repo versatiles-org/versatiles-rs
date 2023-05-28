@@ -46,9 +46,9 @@ impl DataReaderTrait for DataReaderHttp {
 		if response.status() != StatusCode::PARTIAL_CONTENT {
 			let status_code = response.status();
 			println!("response: {}", str::from_utf8(&response.bytes().await?)?);
-			panic!(
+			return Err(Error::new(&format!(
 				"as a response to a range request it is expected to get the status code 206. instead we got {status_code}"
-			)
+			)));
 		}
 
 		let content_range: &str = match response.headers().get("content-range") {
@@ -72,15 +72,21 @@ impl DataReaderTrait for DataReaderHttp {
 			content_range_start = captures.get(1).unwrap().as_str().parse::<u64>()?;
 			content_range_end = captures.get(2).unwrap().as_str().parse::<u64>()?;
 		} else {
-			panic!("format of content-range response is invalid: {content_range}")
+			return Err(Error::new(&format!(
+				"format of content-range response is invalid: {content_range}"
+			)));
 		}
 
 		if content_range_start != range.offset {
-			panic!("content-range-start {content_range_start} is not start of range {range:?}");
+			return Err(Error::new(&format!(
+				"content-range-start {content_range_start} is not start of range {range:?}"
+			)));
 		}
 
 		if content_range_end != range.offset + range.length - 1 {
-			panic!("content-range-end {content_range_end} is not end of range {range:?}");
+			return Err(Error::new(&format!(
+				"content-range-end {content_range_end} is not end of range {range:?}"
+			)));
 		}
 
 		let bytes = response.bytes().await?;

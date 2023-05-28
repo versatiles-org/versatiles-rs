@@ -1,7 +1,7 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
 	shared::{
-		Blob, Compression, ProgressBar, Result, TileBBox, TileBBoxPyramid, TileCoord2, TileCoord3, TileFormat,
+		Blob, Compression, Error, ProgressBar, Result, TileBBox, TileBBoxPyramid, TileCoord2, TileCoord3, TileFormat,
 		TileReaderParameters,
 	},
 };
@@ -97,7 +97,7 @@ impl TileReader {
 		self.parameters.set_bbox_pyramid(block_on(self.get_bbox_pyramid()));
 
 		if self.meta_data.is_none() {
-			panic!("'json' is not defined in table 'metadata'");
+			return Err(Error::new("'json' is not defined in table 'metadata'"));
 		}
 
 		Ok(())
