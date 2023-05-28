@@ -29,9 +29,8 @@ mod tests {
 	use futures::executor::block_on;
 
 	#[test]
-	#[should_panic]
 	fn panic1() {
-		let _converter = block_on(TileConverter::new("filename.txt", TileConverterConfig::new_full()));
+		assert!(block_on(TileConverter::new("filename.txt", TileConverterConfig::new_full())).is_err());
 	}
 
 	#[test]
