@@ -43,8 +43,8 @@ impl TileBBox {
 		TileBBox {
 			level,
 			max,
-			x_min: max,
-			y_min: max,
+			x_min: max + 1,
+			y_min: max + 1,
 			x_max: 0,
 			y_max: 0,
 		}

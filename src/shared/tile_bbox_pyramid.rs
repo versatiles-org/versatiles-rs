@@ -250,13 +250,13 @@ mod tests {
 
 		// Check that each level's bounding box has been adjusted correctly.
 		assert_eq!(pyramid.get_level_bbox(0), &TileBBox::new(0, 0, 0, 0, 0));
-		assert_eq!(pyramid.get_level_bbox(1), &TileBBox::new(1, 0, 0, 0, 0));
-		assert_eq!(pyramid.get_level_bbox(2), &TileBBox::new(2, 0, 0, 0, 0));
-		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 0, 0, 0, 0));
-		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 0, 0, 0, 0));
-		assert_eq!(pyramid.get_level_bbox(5), &TileBBox::new(5, 0, 0, 0, 0));
-		assert_eq!(pyramid.get_level_bbox(6), &TileBBox::new(6, 0, 0, 0, 0));
-		assert_eq!(pyramid.get_level_bbox(7), &TileBBox::new(7, 0, 0, 0, 0));
-		assert_eq!(pyramid.get_level_bbox(8), &TileBBox::new(8, 0, 0, 0, 0));
+		assert_eq!(pyramid.get_level_bbox(1), &TileBBox::new(1, 0, 0, 1, 1));
+		assert_eq!(pyramid.get_level_bbox(2), &TileBBox::new(2, 0, 0, 3, 3));
+		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 2, 1, 7, 7));
+		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 6, 5, 11, 12));
+		assert_eq!(pyramid.get_level_bbox(5), &TileBBox::new(5, 14, 13, 19, 20));
+		assert_eq!(pyramid.get_level_bbox(6), &TileBBox::new(6, 29, 28, 35, 36));
+		assert_eq!(pyramid.get_level_bbox(7), &TileBBox::new(7, 59, 58, 68, 69));
+		assert_eq!(pyramid.get_level_bbox(8), &TileBBox::new(8, 120, 118, 134, 135));
 	}
 }
