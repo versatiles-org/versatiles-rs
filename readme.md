@@ -1,8 +1,11 @@
 
-[![Crates.io](https://img.shields.io/crates/v/versatiles)](https://crates.io/crates/versatiles)
-[![Crates.io](https://img.shields.io/crates/d/versatiles)](https://crates.io/crates/versatiles)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Crates.io](https://img.shields.io/crates/v/versatiles?label=version)](https://crates.io/crates/versatiles)
+[![Crates.io](https://img.shields.io/crates/d/versatiles?label=crates.io+downloads)](https://crates.io/crates/versatiles)
 [![Code Coverage](https://codecov.io/gh/versatiles-org/versatiles-rs/branch/main/graph/badge.svg?token=IDHAI13M0K)](https://codecov.io/gh/versatiles-org/versatiles-rs)
+[![Docker Pulls](https://img.shields.io/docker/pulls/versatiles/versatiles)](https://hub.docker.com/r/versatiles/versatiles/tags)
+[![Docker Image Size](https://img.shields.io/docker/image-size/versatiles/versatiles/latest-scratch?label=docker+size)](https://hub.docker.com/r/versatiles/versatiles/tags)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Matrix Chat](https://img.shields.io/matrix/versatiles:matrix.org?label=matrix)](https://matrix.to/#/#versatiles:matrix.org)
 
 # install
 
