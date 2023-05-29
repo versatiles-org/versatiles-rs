@@ -217,7 +217,7 @@ impl TileReaderTrait for TileReader {
 			.prepare("SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")
 			.expect("SQL preparation failed");
 
-		let mut coord: TileCoord3 = coord_in.clone();
+		let mut coord: TileCoord3 = *coord_in;
 
 		if self.get_parameters().unwrap().get_swap_xy() {
 			coord.swap_xy();

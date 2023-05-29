@@ -158,7 +158,7 @@ mod tests {
 			"3",
 			"--bbox",
 			"-85,-180,85,180",
-			"--flip-input",
+			"--flip-y",
 			"--force-recompress",
 			"https://download.versatiles.org/planet-20230227.versatiles",
 			"tmp/berlin2.versatiles",

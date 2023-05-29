@@ -83,7 +83,7 @@ impl TileReaderTrait for TileReader {
 
 	// Get tile data for a given coordinate
 	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Option<Blob> {
-		let mut coord: TileCoord3 = coord_in.clone();
+		let mut coord: TileCoord3 = *coord_in;
 
 		if self.get_parameters().unwrap().get_swap_xy() {
 			coord.swap_xy();

@@ -239,13 +239,17 @@ impl TileBBox {
 		[p_min[0], p_min[1], p_max[0], p_max[1]]
 	}
 	pub fn swap_xy(&mut self) {
-		swap(&mut self.x_min, &mut self.y_min);
-		swap(&mut self.x_max, &mut self.y_max);
+		if !self.is_empty() {
+			swap(&mut self.x_min, &mut self.y_min);
+			swap(&mut self.x_max, &mut self.y_max);
+		}
 	}
 	pub fn flip_y(&mut self) {
-		self.y_min = self.max - self.y_min;
-		self.y_max = self.max - self.y_max;
-		swap(&mut self.y_min, &mut self.y_max);
+		if !self.is_empty() {
+			self.y_min = self.max - self.y_min;
+			self.y_max = self.max - self.y_max;
+			swap(&mut self.y_min, &mut self.y_max);
+		}
 	}
 }
 
