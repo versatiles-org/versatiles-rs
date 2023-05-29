@@ -83,7 +83,7 @@ impl TileReaderTrait for TileReader {
 				let x = filename[0].parse::<u64>()?;
 
 				let mut extension = filename.pop().unwrap();
-				let this_comp = match extension {
+				let file_comp = match extension {
 					"gz" => {
 						extension = filename.pop().unwrap();
 						Compression::Gzip
@@ -113,8 +113,8 @@ impl TileReaderTrait for TileReader {
 				}
 
 				if tile_comp.is_none() {
-					tile_comp = Some(this_comp);
-				} else if tile_comp.as_ref().unwrap() != &this_comp {
+					tile_comp = Some(file_comp);
+				} else if tile_comp.as_ref().unwrap() != &file_comp {
 					return Err(Error::new(&format!(
 						"unknown filename {path_tmp_string:?}, can't detect compression"
 					)));
