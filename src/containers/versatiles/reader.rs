@@ -83,11 +83,14 @@ impl TileReaderTrait for TileReader {
 
 	// Get tile data for a given coordinate
 	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Option<Blob> {
-		// Handle vertical flip if needed
-		let coord: TileCoord3 = if self.get_parameters().unwrap().get_vertical_flip() {
-			coord_in.flip_vertically()
-		} else {
-			coord_in.to_owned()
+		let mut coord: TileCoord3 = coord_in.clone();
+
+		if self.get_parameters().unwrap().get_swap_xy() {
+			coord.swap_xy();
+		};
+
+		if self.get_parameters().unwrap().get_flip_y() {
+			coord.flip_y();
 		};
 
 		// Calculate block coordinate

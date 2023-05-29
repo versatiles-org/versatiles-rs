@@ -217,10 +217,14 @@ impl TileReaderTrait for TileReader {
 			.prepare("SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")
 			.expect("SQL preparation failed");
 
-		let coord: TileCoord3 = if self.get_parameters().unwrap().get_vertical_flip() {
-			coord_in.flip_vertically()
-		} else {
-			coord_in.to_owned()
+		let mut coord: TileCoord3 = coord_in.clone();
+
+		if self.get_parameters().unwrap().get_swap_xy() {
+			coord.swap_xy();
+		};
+
+		if self.get_parameters().unwrap().get_flip_y() {
+			coord.flip_y();
 		};
 
 		let max_index = 2u64.pow(coord.z as u32) - 1;

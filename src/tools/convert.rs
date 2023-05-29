@@ -37,9 +37,13 @@ pub struct Subcommand {
 	#[arg(long)]
 	bbox_border: Option<u64>,
 
+	/// swap rows and columns, e.g. z/x/y -> z/y/x
+	#[arg(long)]
+	swap_xy: bool,
+
 	/// flip input vertically
 	#[arg(long)]
-	flip_input: bool,
+	flip_y: bool,
 
 	/// convert tiles to new format
 	#[arg(long, short, value_enum)]
@@ -54,7 +58,7 @@ pub struct Subcommand {
 	force_recompress: bool,
 
 	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
-	#[arg(long, value_enum)]
+	#[arg(long, value_enum, value_name = "COMPRESSION")]
 	override_input_compression: Option<Compression>,
 }
 
@@ -72,7 +76,8 @@ async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TileReader
 	let mut reader = get_reader(filename).await?;
 	let parameters = reader.get_parameters_mut()?;
 
-	parameters.set_vertical_flip(arguments.flip_input);
+	parameters.set_swap_xy(arguments.swap_xy);
+	parameters.set_flip_y(arguments.flip_y);
 
 	if let Some(compression) = arguments.override_input_compression {
 		parameters.set_tile_compression(compression);

@@ -30,7 +30,7 @@ impl TileConverterConfig {
 		Self::new(None, None, TileBBoxPyramid::new_full(), false)
 	}
 	pub fn finalize_with_parameters(&mut self, parameters: &TileReaderParameters) {
-		self.bbox_pyramid.intersect(parameters.get_bbox_pyramid());
+		self.bbox_pyramid.intersect(&parameters.get_bbox_pyramid());
 
 		self.tile_format.get_or_insert(parameters.get_tile_format().clone());
 		self.tile_compression.get_or_insert(*parameters.get_tile_compression());

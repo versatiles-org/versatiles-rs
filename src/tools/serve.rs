@@ -1,7 +1,7 @@
 use crate::{
 	containers::get_reader,
 	server::{source, TileServer},
-	shared::Result,
+	shared::{Compression, Result},
 };
 use clap::Args;
 use regex::Regex;
@@ -37,6 +37,18 @@ pub struct Subcommand {
 	/// Shutdown server automatically after x milliseconds.
 	#[arg(long)]
 	pub auto_shutdown: Option<u64>,
+
+	/// swap rows and columns, e.g. z/x/y -> z/y/x
+	#[arg(long)]
+	pub swap_xy: bool,
+
+	/// flip input vertically
+	#[arg(long)]
+	pub flip_y: bool,
+
+	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
+	#[arg(long, value_enum, value_name = "COMPRESSION")]
+	override_input_compression: Option<Compression>,
 }
 
 #[tokio::main]
@@ -66,7 +78,15 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 			Some(m) => m.as_str(),
 		};
 
-		let reader = get_reader(url).await?;
+		let mut reader = get_reader(url).await?;
+		let parameters = reader.get_parameters_mut()?;
+		parameters.set_swap_xy(arguments.swap_xy);
+		parameters.set_flip_y(arguments.flip_y);
+
+		if let Some(compression) = arguments.override_input_compression {
+			parameters.set_tile_compression(compression);
+		}
+
 		let source = source::TileContainer::from(reader)?;
 		server.add_tile_source(&format!("/tiles/{name}/"), source)?;
 	}

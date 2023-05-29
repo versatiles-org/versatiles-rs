@@ -1,6 +1,7 @@
 use std::{
 	f32::consts::PI as PI32,
 	fmt::{self, Debug},
+	mem::swap,
 };
 
 #[derive(Eq, PartialEq, Clone, Hash)]
@@ -60,13 +61,12 @@ impl TileCoord3 {
 	pub fn new(x: u64, y: u64, z: u8) -> TileCoord3 {
 		TileCoord3 { x, y, z }
 	}
-	pub fn flip_vertically(&self) -> TileCoord3 {
+	pub fn flip_y(&mut self) {
 		let max_index = 2u64.pow(self.z as u32) - 1;
-		TileCoord3 {
-			x: self.x,
-			y: max_index - self.y,
-			z: self.z,
-		}
+		self.y = max_index - self.y;
+	}
+	pub fn swap_xy(&mut self) {
+		swap(&mut self.x, &mut self.y);
 	}
 	pub fn as_geo(&self) -> [f32; 2] {
 		let zoom: f32 = 2.0f32.powi(self.z as i32);
@@ -137,9 +137,10 @@ mod tests {
 
 	#[test]
 	fn flip_vertically() {
-		let coord = TileCoord3::new(1, 2, 3);
-		assert_eq!(coord.flip_vertically(), TileCoord3::new(1, 5, 3));
+		let mut coord = TileCoord3::new(1, 2, 3);
 		assert_eq!(coord, TileCoord3::new(1, 2, 3));
+		coord.flip_y();
+		assert_eq!(coord, TileCoord3::new(1, 5, 3));
 	}
 
 	#[test]

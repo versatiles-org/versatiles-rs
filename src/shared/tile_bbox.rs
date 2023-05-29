@@ -2,6 +2,7 @@ use super::{TileCoord2, TileCoord3};
 use itertools::Itertools;
 use std::{
 	fmt,
+	mem::swap,
 	ops::{Div, Rem},
 };
 
@@ -236,6 +237,15 @@ impl TileBBox {
 		let p_max = TileCoord3::new(self.x_max + 1, self.y_min, z).as_geo();
 
 		[p_min[0], p_min[1], p_max[0], p_max[1]]
+	}
+	pub fn swap_xy(&mut self) {
+		swap(&mut self.x_min, &mut self.y_min);
+		swap(&mut self.x_max, &mut self.y_max);
+	}
+	pub fn flip_y(&mut self) {
+		self.y_min = self.max - self.y_min;
+		self.y_max = self.max - self.y_max;
+		swap(&mut self.y_min, &mut self.y_max);
 	}
 }
 

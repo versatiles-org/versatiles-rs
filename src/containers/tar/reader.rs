@@ -176,10 +176,14 @@ impl TileReaderTrait for TileReader {
 	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Option<Blob> {
 		trace!("get_tile_data {:?}", coord_in);
 
-		let coord: TileCoord3 = if self.get_parameters().unwrap().get_vertical_flip() {
-			coord_in.flip_vertically()
-		} else {
-			coord_in.to_owned()
+		let mut coord: TileCoord3 = coord_in.clone();
+
+		if self.get_parameters().unwrap().get_swap_xy() {
+			coord.swap_xy();
+		};
+
+		if self.get_parameters().unwrap().get_flip_y() {
+			coord.flip_y();
 		};
 
 		let range = self.tile_map.get(&coord)?;
