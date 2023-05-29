@@ -123,7 +123,7 @@ mod tests {
 	#[tokio::test]
 	async fn read_range() -> Result<()> {
 		// A sample URL containing text data
-		let url = "https://raw.githubusercontent.com/versatiles-org/versatiles-rs/main/resources/berlin.mbtiles";
+		let url = "https://raw.githubusercontent.com/versatiles-org/versatiles-rs/main/testdata/berlin.mbtiles";
 		let mut data_reader_http = DataReaderHttp::new(url).await?;
 
 		// Define a range to read
