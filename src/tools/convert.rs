@@ -47,11 +47,15 @@ pub struct Subcommand {
 
 	/// set new compression
 	#[arg(long, short, value_enum)]
-	precompress: Option<Compression>,
+	compress: Option<Compression>,
 
-	/// force recompression, e.g. to improve an existing gzip compression.
+	/// force recompression, e.g. to improve an existing gzip compression
 	#[arg(long, short)]
 	force_recompress: bool,
+
+	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
+	#[arg(long, value_enum)]
+	override_input_compression: Option<Compression>,
 }
 
 #[tokio::main]
@@ -66,8 +70,13 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 
 async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TileReaderBox> {
 	let mut reader = get_reader(filename).await?;
+	let parameters = reader.get_parameters_mut()?;
 
-	reader.get_parameters_mut()?.set_vertical_flip(arguments.flip_input);
+	parameters.set_vertical_flip(arguments.flip_input);
+
+	if let Some(compression) = arguments.override_input_compression {
+		parameters.set_tile_compression(compression);
+	}
 
 	Ok(reader)
 }
@@ -105,7 +114,7 @@ async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileCon
 
 	let config = TileConverterConfig::new(
 		arguments.tile_format.clone(),
-		arguments.precompress,
+		arguments.compress,
 		bbox_pyramid,
 		arguments.force_recompress,
 	);
