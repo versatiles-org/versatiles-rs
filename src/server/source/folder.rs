@@ -113,10 +113,10 @@ mod tests {
 	#[tokio::test]
 	async fn test() {
 		// Create a new Folder instance
-		let mut folder = Folder::from("resources").unwrap();
+		let mut folder = Folder::from("testdata").unwrap();
 
 		// Test get_name function
-		assert_eq!(folder.get_name().unwrap(), "resources");
+		assert_eq!(folder.get_name().unwrap(), "testdata");
 
 		// Test get_info_as_json function
 		assert_eq!(folder.get_info_as_json().unwrap(), "{\"type\":\"folder\"}");
