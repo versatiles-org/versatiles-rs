@@ -3,8 +3,10 @@ name: Continuous Integration
 
 on:
   push:
-    tags-ignore:
+    branches:
       - "**"
+    tags:
+      - "!**"
   schedule:
     - cron: "0 0 13 * *"
   workflow_dispatch:
