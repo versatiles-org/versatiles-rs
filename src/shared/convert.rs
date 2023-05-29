@@ -38,10 +38,7 @@ impl FnConv {
 
 impl Debug for FnConv {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("FnConv")
-			.field("func", &self.func)
-			.field("name", &self.name)
-			.finish()
+		f.write_str(&self.name)
 	}
 }
 
