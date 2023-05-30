@@ -1,7 +1,8 @@
 use super::ByteRange;
 use crate::{
 	containers::versatiles::DataReaderTrait,
-	shared::{Blob, Compression, Error, Result, TileFormat},
+	create_error,
+	shared::{Blob, Compression, Result, TileFormat},
 };
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read, Write};
@@ -91,11 +92,10 @@ impl FileHeader {
 		self.blocks_range.write_to_buf(&mut header);
 
 		if header.len() != HEADER_LENGTH {
-			return Err(Error::new(&format!(
-				"header should be {} bytes long, but is {} bytes long",
-				HEADER_LENGTH,
+			return create_error!(
+				"header should be {HEADER_LENGTH} bytes long, but is {} bytes long",
 				header.len()
-			)));
+			);
 		}
 
 		Ok(Blob::from(header))
@@ -103,18 +103,18 @@ impl FileHeader {
 
 	fn from_blob(blob: Blob) -> Result<FileHeader> {
 		if blob.len() != HEADER_LENGTH {
-			return Err(Error::new(&format!(
+			return create_error!(
 				"'{blob:?}' is not a valid versatiles header. A header should be {HEADER_LENGTH} bytes long."
-			)));
+			);
 		}
 
 		let mut header = Cursor::new(blob.as_slice());
 		let mut magic_word = [0u8; 14];
 		header.read_exact(&mut magic_word)?;
 		if &magic_word != b"versatiles_v02" {
-			return Err(Error::new(&format!(
+			return create_error!(
 				"'{blob:?}' is not a valid versatiles header. A header should start with 'versatiles_v02'"
-			)));
+			);
 		};
 
 		let tile_format = match header.read_u8()? {
@@ -130,14 +130,14 @@ impl FileHeader {
 			0x21 => TileFormat::GEOJSON,
 			0x22 => TileFormat::TOPOJSON,
 			0x23 => TileFormat::JSON,
-			value => return Err(Error::new(&format!("unknown tile_type value: {value}"))),
+			value => return create_error!("unknown tile_type value: {value}"),
 		};
 
 		let compression = match header.read_u8()? {
 			0 => Compression::None,
 			1 => Compression::Gzip,
 			2 => Compression::Brotli,
-			value => return Err(Error::new(&format!("unknown compression value: {value}"))),
+			value => return create_error!("unknown compression value: {value}"),
 		};
 
 		let zoom_range: [u8; 2] = [header.read_u8()?, header.read_u8()?];

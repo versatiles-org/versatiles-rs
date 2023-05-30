@@ -23,6 +23,13 @@ impl std::fmt::Display for Error {
 
 impl std::error::Error for Error {}
 
+#[macro_export]
+macro_rules! create_error {
+	($($arg:tt)*) => {
+		Err(crate::shared::Error::new(&format!($($arg)*)))
+	};
+}
+
 #[cfg(test)]
 mod tests {
 	use super::Error;

@@ -1,6 +1,9 @@
 use super::super::types::ByteRange;
 use super::DataReaderTrait;
-use crate::shared::{Blob, Error, Result};
+use crate::{
+	create_error,
+	shared::{Blob, Result},
+};
 use async_trait::async_trait;
 use std::{
 	env::current_dir,
@@ -21,11 +24,11 @@ impl DataReaderTrait for DataReaderFile {
 		filename.push(Path::new(source));
 
 		if !filename.exists() {
-			return Err(Error::new(&format!("file \"{filename:?}\" not found")));
+			return create_error!("file \"{filename:?}\" not found");
 		}
 
 		if !filename.is_absolute() {
-			return Err(Error::new(&format!("filename {filename:?} must be absolute")));
+			return create_error!("filename \"{filename:?}\" must be absolute");
 		}
 
 		filename = filename.canonicalize()?;

@@ -1,5 +1,8 @@
 use super::{ServerSource, ServerSourceTrait};
-use crate::shared::{Blob, Compression, Error, Result};
+use crate::{
+	create_error,
+	shared::{Blob, Compression, Result},
+};
 use axum::{
 	body::{Bytes, Full},
 	extract::{Path, State},
@@ -53,10 +56,11 @@ impl TileServer {
 
 		for other_tile_source in self.tile_sources.iter() {
 			if other_tile_source.prefix.starts_with(&prefix) || prefix.starts_with(&other_tile_source.prefix) {
-				return Err(Error::new(&format!(
+				return create_error!(
 					"multiple sources with the prefix '{}' and '{}' are defined",
-					prefix, other_tile_source.prefix
-				)));
+					prefix,
+					other_tile_source.prefix
+				);
 			};
 		}
 

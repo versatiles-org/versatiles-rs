@@ -1,6 +1,7 @@
 use crate::{
+	create_error,
 	server::{guess_mime, ok_data, ok_not_found, ServerSourceTrait},
-	shared::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression, Error, Result},
+	shared::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression, Result},
 };
 use async_trait::async_trait;
 use axum::{
@@ -48,13 +49,13 @@ impl TarFile {
 		let filename = current_dir()?.join(Path::new(path)).canonicalize()?;
 
 		if !filename.exists() {
-			return Err(Error::new(&format!("path {filename:?} does not exist")));
+			return create_error!("path {filename:?} does not exist");
 		}
 		if !filename.is_absolute() {
-			return Err(Error::new(&format!("path {filename:?} must be absolute")));
+			return create_error!("path {filename:?} must be absolute");
 		}
 		if !filename.is_file() {
-			return Err(Error::new(&format!("path {filename:?} must be a file")));
+			return create_error!("path {filename:?} must be a file");
 		}
 
 		let mut lookup: HashMap<String, FileEntry> = HashMap::new();
