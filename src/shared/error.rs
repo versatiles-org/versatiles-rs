@@ -26,7 +26,7 @@ impl std::error::Error for Error {}
 #[macro_export]
 macro_rules! create_error {
 	($($arg:tt)*) => {
-		Err(crate::shared::Error::new(&format!($($arg)*)))
+		Err($crate::shared::Error::new(&format!($($arg)*)))
 	};
 }
 
