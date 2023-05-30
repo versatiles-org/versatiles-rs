@@ -2,9 +2,7 @@
 FROM alpine as builder
 
 # install dependencies
-
-
-RUN apk add musl-dev curl gcc openssl-dev pkgconfig sqlite-dev
+RUN apk add curl gcc musl-dev openssl-dev pkgconfig sqlite-dev
 
 # install rust
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
@@ -16,12 +14,7 @@ RUN $HOME/.cargo/bin/cargo install versatiles
 FROM alpine
 
 # install dependencies
-
-
 RUN apk add --no-cache curl sqlite
-
-
-
 
 # copy versatiles and tests
 COPY --from=builder /root/.cargo/bin/versatiles /usr/bin/

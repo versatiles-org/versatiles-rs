@@ -4,7 +4,7 @@ FROM rust:alpine as builder
 COPY ../ /usr/src/versatiles
 WORKDIR /usr/src/versatiles
 
-RUN apk add musl-dev openssl-dev pkgconfig sqlite-dev curl gzip
+RUN apk add curl gzip musl-dev openssl-dev pkgconfig sqlite-dev
 RUN rustup default stable
 RUN cargo install versatiles
 
