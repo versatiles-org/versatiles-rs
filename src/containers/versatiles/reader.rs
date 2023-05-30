@@ -2,6 +2,7 @@
 use super::{new_data_reader, types::*, DataReaderTrait};
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
+	create_error,
 	shared::{
 		Blob, DataConverter, ProgressBar, Result, StatusImagePyramide, TileCoord2, TileCoord3, TileReaderParameters,
 	},
@@ -82,14 +83,14 @@ impl TileReaderTrait for TileReader {
 	}
 
 	// Get tile data for a given coordinate
-	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Option<Blob> {
+	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Result<Blob> {
 		let mut coord: TileCoord3 = *coord_in;
 
-		if self.get_parameters().unwrap().get_swap_xy() {
+		if self.get_parameters()?.get_swap_xy() {
 			coord.swap_xy();
 		};
 
-		if self.get_parameters().unwrap().get_flip_y() {
+		if self.get_parameters()?.get_flip_y() {
 			coord.flip_y();
 		};
 
@@ -103,8 +104,7 @@ impl TileReaderTrait for TileReader {
 		// Get the block using the block coordinate
 		let block_option = self.block_index.get_block(&block_coord);
 		if block_option.is_none() {
-			log::debug!("block <{block_coord:#?}> for tile <{coord:#?}> does not exist");
-			return None;
+			return create_error!("block <{block_coord:#?}> for tile <{coord:#?}> does not exist");
 		}
 
 		// Get the block and its bounding box
@@ -117,8 +117,7 @@ impl TileReaderTrait for TileReader {
 
 		// Check if the tile is within the block definition
 		if !bbox.contains(&TileCoord2::new(tile_x, tile_y)) {
-			log::debug!("tile {coord:?} outside block definition");
-			return None;
+			return create_error!("tile {coord:?} outside block definition");
 		}
 
 		// Get the tile ID
@@ -143,11 +142,11 @@ impl TileReaderTrait for TileReader {
 
 		// Return None if the tile range has zero length
 		if tile_range.length == 0 {
-			return None;
+			return create_error!("tile_range.length == 0");
 		}
 
 		// Read the tile data from the reader
-		Some(self.reader.read_range(&tile_range).await.unwrap())
+		self.reader.read_range(&tile_range).await
 	}
 
 	// Get the name of the reader

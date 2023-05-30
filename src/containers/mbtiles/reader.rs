@@ -1,5 +1,6 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
+	create_error,
 	shared::{
 		Blob, Compression, Error, ProgressBar, Result, TileBBox, TileBBoxPyramid, TileCoord2, TileCoord3, TileFormat,
 		TileReaderParameters,
@@ -209,7 +210,7 @@ impl TileReaderTrait for TileReader {
 	fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters> {
 		Ok(&mut self.parameters)
 	}
-	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Option<Blob> {
+	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Result<Blob> {
 		trace!("read 1 tile {:?}", coord_in);
 
 		let connection = self.connection.lock().await;
@@ -219,11 +220,11 @@ impl TileReaderTrait for TileReader {
 
 		let mut coord: TileCoord3 = *coord_in;
 
-		if self.get_parameters().unwrap().get_swap_xy() {
+		if self.get_parameters()?.get_swap_xy() {
 			coord.swap_xy();
 		};
 
-		if self.get_parameters().unwrap().get_flip_y() {
+		if self.get_parameters()?.get_flip_y() {
 			coord.flip_y();
 		};
 
@@ -233,9 +234,9 @@ impl TileReaderTrait for TileReader {
 		});
 
 		if let Ok(vec) = result {
-			Some(Blob::from(vec))
+			Ok(Blob::from(vec))
 		} else {
-			None
+			create_error!("tile not found")
 		}
 	}
 	async fn get_bbox_tile_vec(&mut self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
@@ -295,14 +296,16 @@ pub mod tests {
 	use crate::containers::dummy::{self, ConverterProfile};
 
 	#[tokio::test]
-	async fn reader() {
+	async fn reader() -> Result<()> {
 		// get test container reader
-		let mut reader = TileReader::new("testdata/berlin.mbtiles").await.unwrap();
+		let mut reader = TileReader::new("testdata/berlin.mbtiles").await?;
 
-		reader.get_tile_data(&TileCoord3::new(0, 0, 0)).await;
+		reader.get_tile_data(&TileCoord3::new(0, 0, 0)).await?;
 
 		let mut converter = dummy::TileConverter::new_dummy(ConverterProfile::Whatever, 8);
 
-		converter.convert_from(&mut reader).await.unwrap();
+		converter.convert_from(&mut reader).await?;
+
+		Ok(())
 	}
 }

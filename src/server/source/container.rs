@@ -95,7 +95,7 @@ impl ServerSourceTrait for TileContainer {
 			let tile = self.reader.get_tile_data(&coord).await;
 
 			// If tile data is not found, return a not found response
-			if tile.is_none() {
+			if tile.is_err() {
 				return ok_not_found();
 			}
 

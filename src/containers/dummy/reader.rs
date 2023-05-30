@@ -1,5 +1,6 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
+	create_error,
 	shared::{
 		compress_gzip, Blob, Compression, Error, Result, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters,
 	},
@@ -60,11 +61,11 @@ impl TileReaderTrait for TileReader {
 	async fn get_meta(&self) -> Result<Blob> {
 		Ok(Blob::from("dummy meta data"))
 	}
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<Blob> {
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
 		if coord.is_valid() {
-			Some(self.tile_blob.clone())
+			Ok(self.tile_blob.clone())
 		} else {
-			None
+			create_error!("invalid coordinates: {coord:?}")
 		}
 	}
 }

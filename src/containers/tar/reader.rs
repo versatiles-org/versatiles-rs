@@ -1,8 +1,7 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
-	shared::{
-		decompress, Blob, Compression, Error, Result, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters,
-	},
+	create_error,
+	shared::{decompress, Blob, Compression, Result, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters},
 };
 use async_trait::async_trait;
 use log::trace;
@@ -107,17 +106,13 @@ impl TileReaderTrait for TileReader {
 				if tile_form.is_none() {
 					tile_form = Some(this_form);
 				} else if tile_form.as_ref().unwrap() != &this_form {
-					return Err(Error::new(&format!(
-						"unknown filename {path_tmp_string:?}, can't detect format"
-					)));
+					return create_error!("unknown filename {path_tmp_string:?}, can't detect format");
 				}
 
 				if tile_comp.is_none() {
 					tile_comp = Some(file_comp);
 				} else if tile_comp.as_ref().unwrap() != &file_comp {
-					return Err(Error::new(&format!(
-						"unknown filename {path_tmp_string:?}, can't detect compression"
-					)));
+					return create_error!("unknown filename {path_tmp_string:?}, can't detect compression");
 				}
 
 				let offset = entry.raw_file_position();
@@ -153,7 +148,7 @@ impl TileReaderTrait for TileReader {
 				};
 			}
 
-			return Err(Error::new(&format!("unknown file in tar: {path_tmp_string:?}")));
+			return create_error!("unknown file in tar: {path_tmp_string:?}");
 		}
 
 		Ok(Box::new(TileReader {
@@ -173,20 +168,20 @@ impl TileReaderTrait for TileReader {
 	async fn get_meta(&self) -> Result<Blob> {
 		Ok(self.meta.clone())
 	}
-	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Option<Blob> {
+	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Result<Blob> {
 		trace!("get_tile_data {:?}", coord_in);
 
 		let mut coord: TileCoord3 = *coord_in;
 
-		if self.get_parameters().unwrap().get_swap_xy() {
+		if self.get_parameters()?.get_swap_xy() {
 			coord.swap_xy();
 		};
 
-		if self.get_parameters().unwrap().get_flip_y() {
+		if self.get_parameters()?.get_flip_y() {
 			coord.flip_y();
 		};
 
-		let range = self.tile_map.get(&coord)?;
+		let range = self.tile_map.get(&coord).unwrap();
 
 		let offset = range.offset;
 		let length = range.length as usize;
@@ -194,9 +189,9 @@ impl TileReaderTrait for TileReader {
 		let mut buf: Vec<u8> = Vec::new();
 		buf.resize(length, 0);
 
-		self.file.read_exact_at(&mut buf, offset).unwrap();
+		self.file.read_exact_at(&mut buf, offset)?;
 
-		Some(Blob::from(buf))
+		Ok(Blob::from(buf))
 	}
 	fn get_name(&self) -> Result<&str> {
 		Ok(&self.name)

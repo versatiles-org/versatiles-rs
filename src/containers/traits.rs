@@ -47,14 +47,14 @@ pub trait TileReaderTrait: Debug + Send + Sync {
 	async fn get_meta(&self) -> Result<Blob>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Option<Blob>;
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
 	async fn get_bbox_tile_vec(&mut self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
 		let mut vec: Vec<(TileCoord2, Blob)> = Vec::new();
 		for coord in bbox.iter_coords() {
 			let option = self.get_tile_data(&coord.with_zoom(zoom)).await;
-			if let Some(blob) = option {
+			if let Ok(blob) = option {
 				vec.push((coord, blob));
 			}
 		}
@@ -109,8 +109,8 @@ mod tests {
 			Ok("test container name")
 		}
 
-		async fn get_tile_data(&mut self, _coord: &TileCoord3) -> Option<Blob> {
-			Some(Blob::from("test tile data"))
+		async fn get_tile_data(&mut self, _coord: &TileCoord3) -> Result<Blob> {
+			Ok(Blob::from("test tile data"))
 		}
 	}
 
