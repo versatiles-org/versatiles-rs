@@ -134,6 +134,7 @@ mod tests {
 	use crate::tests::run_command;
 	use std::fs;
 
+	#[cfg(feature = "mbtiles")]
 	#[test]
 	fn test_local() {
 		fs::create_dir("tmp/").unwrap_or_default();

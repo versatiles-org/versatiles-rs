@@ -1,6 +1,9 @@
 #[cfg(test)]
 pub mod dummy;
+
+#[cfg(feature = "mbtiles")]
 pub mod mbtiles;
+
 pub mod tar;
 pub mod versatiles;
 

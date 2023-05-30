@@ -1,4 +1,7 @@
-use super::{mbtiles, tar, versatiles, TileConverterBox, TileConverterTrait, TileReaderBox, TileReaderTrait};
+#[cfg(feature = "mbtiles")]
+use super::mbtiles;
+
+use super::{tar, versatiles, TileConverterBox, TileConverterTrait, TileReaderBox, TileReaderTrait};
 use crate::shared::{Error, Result, TileConverterConfig};
 use log::error;
 use std::path::{Path, PathBuf};
@@ -6,6 +9,7 @@ use std::path::{Path, PathBuf};
 pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
 	let extension = get_extension(&PathBuf::from(filename));
 	match extension.as_str() {
+		#[cfg(feature = "mbtiles")]
 		"mbtiles" => mbtiles::TileReader::new(filename).await,
 		"tar" => tar::TileReader::new(filename).await,
 		"versatiles" => versatiles::TileReader::new(filename).await,

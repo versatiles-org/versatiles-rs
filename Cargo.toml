@@ -78,3 +78,7 @@ strip = true
 
 # [profile.bench]
 # lto = false
+
+[features]
+default = ["mbtiles"]
+mbtiles = []

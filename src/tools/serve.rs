@@ -122,6 +122,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 mod tests {
 	use crate::tests::run_command;
 
+	#[cfg(feature = "mbtiles")]
 	#[test]
 	fn test_local() {
 		run_command(vec![

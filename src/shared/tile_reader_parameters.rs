@@ -39,6 +39,7 @@ impl TileReaderParameters {
 	pub fn get_tile_format(&self) -> &TileFormat {
 		&self.tile_format
 	}
+	#[allow(dead_code)]
 	pub fn set_tile_format(&mut self, tile_format: TileFormat) {
 		self.tile_format = tile_format;
 	}
@@ -70,6 +71,7 @@ impl TileReaderParameters {
 	pub fn set_swap_xy(&mut self, flip: bool) {
 		self.swap_xy = flip;
 	}
+	#[allow(dead_code)]
 	pub fn set_bbox_pyramid(&mut self, pyramid: TileBBoxPyramid) {
 		self.bbox_pyramid = pyramid;
 	}
