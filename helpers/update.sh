@@ -6,7 +6,8 @@ echo "Update rust"
 rustup update
 
 echo "Find unused dependencies"
-cargo +nightly udeps
+cargo +nightly udeps --all-targets --no-default-features
+cargo +nightly udeps --all-targets --no-default-features --features mbtiles
 
 #echo "check features"
 #unused-features analyze
