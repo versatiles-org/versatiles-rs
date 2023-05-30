@@ -41,17 +41,10 @@ webp = { version = "0.2.2", default-features = false, features = ["img"] }
 
 [dev-dependencies]
 assert_fs = { version = "1.0.13" }
-criterion = { version = "0.5.1", default-features = false }
-rand = { version = "0.8.5", default-features = true }
 
 [[bin]]
 name = "versatiles"
 path = "src/main.rs"
-
-# [[bench]]
-# name = "main"
-# harness = false
-# path = "benches/main.rs"
 
 [profile.dev]
 opt-level = 1
@@ -75,9 +68,6 @@ panic = "unwind"
 incremental = false
 overflow-checks = false
 strip = true
-
-# [profile.bench]
-# lto = false
 
 [features]
 default = ["mbtiles"]
