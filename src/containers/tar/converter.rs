@@ -3,8 +3,8 @@ use crate::{
 	shared::{compress, Compression, ProgressBar, Result, TileConverterConfig, TileFormat},
 };
 use async_trait::async_trait;
+use futures::{future, StreamExt};
 use log::trace;
-use rayon::{iter::ParallelBridge, prelude::ParallelIterator};
 use std::{
 	fs::File,
 	path::{Path, PathBuf},
@@ -80,9 +80,9 @@ impl TileConverterTrait for TileConverter {
 		let mutex_builder = &Mutex::new(&mut self.builder);
 
 		for bbox in bbox_pyramid.iter_levels() {
-			for row_bbox in bbox.iter_bbox_row_slices(1024) {
-				let tile_vec = reader.get_bbox_tile_vec(&row_bbox).await;
-				tile_vec.into_iter().par_bridge().for_each(|(coord, blob)| {
+			let stream = reader.get_bbox_tile_stream(bbox).await;
+			stream
+				.for_each(|(coord, blob)| {
 					mutex_bar.lock().unwrap().inc(1);
 					let result = tile_converter.run(blob);
 
@@ -102,8 +102,10 @@ impl TileConverterTrait for TileConverter {
 							.append_data(&mut header, path, blob.as_slice())
 							.unwrap();
 					}
+
+					future::ready(())
 				})
-			}
+				.await;
 		}
 
 		bar.finish();

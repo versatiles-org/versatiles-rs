@@ -5,7 +5,7 @@ use crate::{
 	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig, TileCoord3},
 };
 use async_trait::async_trait;
-use futures::lock::Mutex;
+use futures::{lock::Mutex, StreamExt};
 use log::{debug, trace};
 use std::collections::HashMap;
 
@@ -148,15 +148,15 @@ impl TileConverter {
 		let width = 2u64.pow(z as u32);
 
 		// Iterate through the row slices of the block
-		for row_bbox in bbox.iter_bbox_row_slices(1024) {
+		for row_bbox in bbox.iter_bbox_row_slices(2048) {
 			trace!("start block slice {:?}", row_bbox);
 
 			// Get the tiles and sort them
-			let mut blobs: Vec<(TileCoord3, Blob)> = reader.get_bbox_tile_vec(&row_bbox).await;
+			let mut blobs: Vec<(TileCoord3, Blob)> = reader.get_bbox_tile_stream(&row_bbox).await.collect().await;
 			blobs.sort_by_cached_key(|(coord, _blob)| coord.y * width + coord.x);
 
 			trace!(
-				"get_bbox_tile_vec: count {}, size sum {}",
+				"get_bbox_tile_stream: count {}, size sum {}",
 				blobs.len(),
 				blobs.iter().fold(0, |acc, e| acc + e.1.len())
 			);

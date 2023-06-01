@@ -239,6 +239,7 @@ impl TileReaderTrait for TileReader {
 			create_error!("tile not found")
 		}
 	}
+	/*
 	async fn get_bbox_tile_vec(&mut self, bbox: &TileBBox) -> Vec<(TileCoord3, Blob)> {
 		trace!("read tiles from bbox:{:?}", bbox);
 
@@ -281,6 +282,7 @@ impl TileReaderTrait for TileReader {
 
 		vec
 	}
+	*/
 	fn get_name(&self) -> Result<&str> {
 		Ok(&self.name)
 	}

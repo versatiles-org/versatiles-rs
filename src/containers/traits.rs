@@ -51,18 +51,6 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
-	async fn get_bbox_tile_vec(&mut self, bbox: &TileBBox) -> Vec<(TileCoord3, Blob)> {
-		let mut vec: Vec<(TileCoord3, Blob)> = Vec::new();
-		for coord in bbox.iter_coords() {
-			let option = self.get_tile_data(&coord).await;
-			if let Ok(blob) = option {
-				vec.push((coord, blob));
-			}
-		}
-		return vec;
-	}
-
-	/// always compressed with get_tile_compression and formatted with get_tile_format
 	async fn get_bbox_tile_stream<'a>(
 		&'a mut self, bbox: &TileBBox,
 	) -> Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + 'a + Send>> {
