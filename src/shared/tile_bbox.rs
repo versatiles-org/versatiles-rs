@@ -8,12 +8,12 @@ use std::{
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct TileBBox {
-	level: u8,
+	pub level: u8,
 	pub x_min: u64,
 	pub y_min: u64,
 	pub x_max: u64,
 	pub y_max: u64,
-	max: u64,
+	pub max: u64,
 }
 
 impl TileBBox {
@@ -138,10 +138,12 @@ impl TileBBox {
 		self.x_max = bbox.x_max;
 		self.y_max = bbox.y_max;
 	}
-	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord2> + '_ {
+	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord3> + '_ {
 		let y_range = self.y_min..=self.y_max;
 		let x_range = self.x_min..=self.x_max;
-		y_range.cartesian_product(x_range).map(|(y, x)| TileCoord2::new(x, y))
+		y_range
+			.cartesian_product(x_range)
+			.map(|(y, x)| TileCoord3::new(x, y, self.level))
 	}
 	pub fn iter_bbox_row_slices(&self, max_count: usize) -> impl Iterator<Item = TileBBox> + '_ {
 		let mut col_count = (self.x_max - self.x_min + 1) as usize;
@@ -369,12 +371,12 @@ mod tests {
 	#[test]
 	fn iter_coords() {
 		let bbox = TileBBox::new(16, 1, 5, 2, 6);
-		let vec: Vec<TileCoord2> = bbox.iter_coords().collect();
+		let vec: Vec<TileCoord3> = bbox.iter_coords().collect();
 		assert_eq!(vec.len(), 4);
-		assert_eq!(vec[0], TileCoord2::new(1, 5));
-		assert_eq!(vec[1], TileCoord2::new(2, 5));
-		assert_eq!(vec[2], TileCoord2::new(1, 6));
-		assert_eq!(vec[3], TileCoord2::new(2, 6));
+		assert_eq!(vec[0], TileCoord3::new(1, 5, 16));
+		assert_eq!(vec[1], TileCoord3::new(2, 5, 16));
+		assert_eq!(vec[2], TileCoord3::new(1, 6, 16));
+		assert_eq!(vec[3], TileCoord3::new(2, 6, 16));
 	}
 
 	#[test]

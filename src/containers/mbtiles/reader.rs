@@ -2,7 +2,7 @@ use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
 	create_error,
 	shared::{
-		Blob, Compression, Error, ProgressBar, Result, TileBBox, TileBBoxPyramid, TileCoord2, TileCoord3, TileFormat,
+		Blob, Compression, Error, ProgressBar, Result, TileBBox, TileBBoxPyramid, TileCoord3, TileFormat,
 		TileReaderParameters,
 	},
 };
@@ -239,11 +239,11 @@ impl TileReaderTrait for TileReader {
 			create_error!("tile not found")
 		}
 	}
-	async fn get_bbox_tile_vec(&mut self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
-		trace!("read {} tiles for z:{}, bbox:{:?}", bbox.count_tiles(), zoom, bbox);
+	async fn get_bbox_tile_vec(&mut self, bbox: &TileBBox) -> Vec<(TileCoord3, Blob)> {
+		trace!("read tiles from bbox:{:?}", bbox);
 
 		let connection = self.connection.lock().await;
-		let max_index = 2u64.pow(zoom as u32) - 1;
+		let max_index = bbox.max;
 
 		let sql = "SELECT tile_column, tile_row, tile_data
 			FROM tiles
@@ -253,18 +253,22 @@ impl TileReaderTrait for TileReader {
 
 		let mut stmt = connection.prepare(sql).expect("SQL preparation failed");
 
-		let vec: Vec<(TileCoord2, Blob)> = stmt
+		let vec: Vec<(TileCoord3, Blob)> = stmt
 			.query_map(
 				[
 					bbox.x_min,
 					bbox.x_max,
 					max_index - bbox.y_max,
 					max_index - bbox.y_min,
-					zoom.into(),
+					bbox.level as u64,
 				],
 				|row| {
 					Ok((
-						TileCoord2::new(row.get::<_, u64>(0).unwrap(), max_index - row.get::<_, u64>(1).unwrap()),
+						TileCoord3::new(
+							row.get::<_, u64>(0).unwrap(),
+							max_index - row.get::<_, u64>(1).unwrap(),
+							bbox.level,
+						),
 						Blob::from(row.get::<_, Vec<u8>>(2).unwrap()),
 					))
 				},

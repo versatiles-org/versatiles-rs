@@ -55,14 +55,8 @@ impl TileBBoxPyramid {
 	pub fn include_bbox(&mut self, level: u8, bbox: &TileBBox) {
 		self.level_bbox[level as usize].union_bbox(bbox);
 	}
-	pub fn iter_levels(&self) -> impl Iterator<Item = (u8, &TileBBox)> {
-		self.level_bbox.iter().enumerate().filter_map(|(level, bbox)| {
-			if bbox.is_empty() {
-				None
-			} else {
-				Some((level as u8, bbox))
-			}
-		})
+	pub fn iter_levels(&self) -> impl Iterator<Item = &TileBBox> {
+		self.level_bbox.iter().filter(|bbox| !bbox.is_empty())
 	}
 	pub fn get_zoom_min(&self) -> Option<u8> {
 		self
@@ -115,7 +109,7 @@ impl TileBBoxPyramid {
 impl fmt::Debug for TileBBoxPyramid {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_list()
-			.entries(self.iter_levels().map(|(level, bbox)| format!("{level}: {bbox:?}")))
+			.entries(self.iter_levels().map(|bbox| format!("{}: {bbox:?}", bbox.level)))
 			.finish()
 	}
 }

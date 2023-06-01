@@ -1,5 +1,5 @@
 use crate::shared::{
-	Blob, Compression, Result, TileBBox, TileConverterConfig, TileCoord2, TileCoord3, TileFormat, TileReaderParameters,
+	Blob, Compression, Result, TileBBox, TileConverterConfig, TileCoord3, TileFormat, TileReaderParameters,
 };
 use async_trait::async_trait;
 use futures::stream::{unfold, Stream};
@@ -51,10 +51,10 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
-	async fn get_bbox_tile_vec(&mut self, zoom: u8, bbox: &TileBBox) -> Vec<(TileCoord2, Blob)> {
-		let mut vec: Vec<(TileCoord2, Blob)> = Vec::new();
+	async fn get_bbox_tile_vec(&mut self, bbox: &TileBBox) -> Vec<(TileCoord3, Blob)> {
+		let mut vec: Vec<(TileCoord3, Blob)> = Vec::new();
 		for coord in bbox.iter_coords() {
-			let option = self.get_tile_data(&coord.with_zoom(zoom)).await;
+			let option = self.get_tile_data(&coord).await;
 			if let Ok(blob) = option {
 				vec.push((coord, blob));
 			}
@@ -64,14 +64,14 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
 	async fn get_bbox_tile_stream<'a>(
-		&'a mut self, zoom: u8, bbox: &TileBBox,
-	) -> Box<dyn Stream<Item = Result<(TileCoord2, Blob)>> + 'a> {
+		&'a mut self, bbox: &TileBBox,
+	) -> Box<dyn Stream<Item = Result<(TileCoord3, Blob)>> + 'a> {
 		let initial_state = (self, bbox.iter_coords().collect::<Vec<_>>().into_iter());
 
 		let stream = unfold(initial_state, move |(tile_reader, mut coord_iter)| async move {
 			match coord_iter.next() {
 				Some(coord) => {
-					let result = tile_reader.get_tile_data(&coord.with_zoom(zoom)).await;
+					let result = tile_reader.get_tile_data(&coord).await;
 					match result {
 						Ok(blob) => Some((Ok((coord, blob)), (tile_reader, coord_iter))),
 						Err(err) => Some((Err(err), (tile_reader, coord_iter))),
@@ -191,8 +191,7 @@ mod tests {
 	async fn get_bbox_tile_stream() -> Result<()> {
 		let mut reader = TestReader::new("test_path").await?;
 		let bbox = TileBBox::new(4, 0, 0, 10, 10); // Or replace it with actual bbox
-		let zoom = 4; // Or replace it with actual zoom level
-		let stream = reader.get_bbox_tile_stream(zoom, &bbox).await;
+		let stream = reader.get_bbox_tile_stream(&bbox).await;
 		let mut pinned_stream = Pin::from(stream); // Pin the stream
 
 		while let Some(result) = pinned_stream.next().await {

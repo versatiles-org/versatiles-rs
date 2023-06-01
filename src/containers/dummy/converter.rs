@@ -45,9 +45,9 @@ impl TileConverterTrait for TileConverter {
 		self.config.finalize_with_parameters(reader.get_parameters()?);
 		let bbox_pyramid = self.config.get_bbox_pyramid();
 
-		for (level, bbox) in bbox_pyramid.iter_levels() {
+		for bbox in bbox_pyramid.iter_levels() {
 			for row_bbox in bbox.iter_bbox_row_slices(1024) {
-				let _tile_vec = reader.get_bbox_tile_vec(level, &row_bbox).await;
+				let _tile_vec = reader.get_bbox_tile_vec(&row_bbox).await;
 			}
 		}
 

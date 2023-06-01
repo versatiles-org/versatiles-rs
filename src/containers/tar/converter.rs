@@ -79,15 +79,15 @@ impl TileConverterTrait for TileConverter {
 		let mutex_bar = &Mutex::new(&mut bar);
 		let mutex_builder = &Mutex::new(&mut self.builder);
 
-		for (level, bbox) in bbox_pyramid.iter_levels() {
+		for bbox in bbox_pyramid.iter_levels() {
 			for row_bbox in bbox.iter_bbox_row_slices(1024) {
-				let tile_vec = reader.get_bbox_tile_vec(level, &row_bbox).await;
+				let tile_vec = reader.get_bbox_tile_vec(&row_bbox).await;
 				tile_vec.into_iter().par_bridge().for_each(|(coord, blob)| {
 					mutex_bar.lock().unwrap().inc(1);
 					let result = tile_converter.run(blob);
 
 					if let Ok(blob) = result {
-						let filename = format!("./{}/{}/{}{}{}", level, coord.y, coord.x, ext_form, ext_comp);
+						let filename = format!("./{}/{}/{}{}{}", bbox.level, coord.y, coord.x, ext_form, ext_comp);
 						let path = PathBuf::from(&filename);
 
 						// Build header

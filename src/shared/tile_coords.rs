@@ -30,9 +30,6 @@ impl TileCoord2 {
 			}
 		}
 	}
-	pub fn with_zoom(&self, z: u8) -> TileCoord3 {
-		TileCoord3::new(self.x, self.y, z)
-	}
 }
 
 impl fmt::Debug for TileCoord2 {
@@ -75,6 +72,9 @@ impl TileCoord3 {
 			((self.x as f32) / zoom - 0.5) * 360.0,
 			((PI32 * (1.0 - 2.0 * (self.y as f32) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
 		]
+	}
+	pub fn as_coord2(&self) -> TileCoord2 {
+		TileCoord2 { x: self.x, y: self.y }
 	}
 	#[cfg(test)]
 	pub fn is_valid(&self) -> bool {
@@ -126,13 +126,6 @@ mod tests {
 
 		test(12, 1997, 1233, -4.43515, 58.0042);
 		test(12, 2280, 1476, 20.4395, 44.8029);
-	}
-
-	#[test]
-	fn with_zoom() {
-		let coord = TileCoord2::new(1, 2);
-		assert_eq!(coord.with_zoom(3), TileCoord3::new(1, 2, 3));
-		assert_eq!(coord, TileCoord2::new(1, 2));
 	}
 
 	#[test]

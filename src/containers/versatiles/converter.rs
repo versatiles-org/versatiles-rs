@@ -2,7 +2,7 @@
 use super::{types::*, DataWriterFile, DataWriterTrait};
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig, TileCoord2},
+	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig, TileCoord3},
 };
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -83,9 +83,9 @@ impl TileConverter {
 
 		// Initialize blocks and populate them
 		let mut blocks: Vec<BlockDefinition> = Vec::new();
-		for (z, bbox_tiles) in self.config.get_bbox_pyramid().iter_levels() {
+		for bbox_tiles in self.config.get_bbox_pyramid().iter_levels() {
 			let bbox_blocks = bbox_tiles.scale_down(256);
-			for TileCoord2 { x, y } in bbox_blocks.iter_coords() {
+			for TileCoord3 { x, y, z } in bbox_blocks.iter_coords() {
 				let mut bbox_block = *bbox_tiles;
 				bbox_block.intersect_bbox(&TileBBox::new(z, x * 256, y * 256, x * 256 + 255, y * 256 + 255));
 
@@ -152,7 +152,7 @@ impl TileConverter {
 			trace!("start block slice {:?}", row_bbox);
 
 			// Get the tiles and sort them
-			let mut blobs: Vec<(TileCoord2, Blob)> = reader.get_bbox_tile_vec(z, &row_bbox).await;
+			let mut blobs: Vec<(TileCoord3, Blob)> = reader.get_bbox_tile_vec(&row_bbox).await;
 			blobs.sort_by_cached_key(|(coord, _blob)| coord.y * width + coord.x);
 
 			trace!(
@@ -165,7 +165,7 @@ impl TileConverter {
 			if !tile_converter.is_empty() {
 				blobs = blobs
 					.iter()
-					.map(|(coord, blob)| (coord.clone(), tile_converter.run(blob.clone()).unwrap()))
+					.map(|(coord, blob)| (*coord, tile_converter.run(blob.clone()).unwrap()))
 					.collect();
 			}
 
@@ -184,7 +184,7 @@ impl TileConverter {
 			for (coord, blob) in blobs.iter() {
 				trace!("blob size {}", blob.len());
 
-				let index = bbox.get_tile_index(coord);
+				let index = bbox.get_tile_index(&coord.as_coord2());
 
 				let mut tile_hash_option = None;
 				if blob.len() < 1000 {
