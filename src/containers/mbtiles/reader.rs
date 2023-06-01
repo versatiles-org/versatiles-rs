@@ -7,21 +7,24 @@ use crate::{
 	},
 };
 use async_trait::async_trait;
-use futures::executor::block_on;
+use futures::{executor::block_on, Stream};
 use log::trace;
 use rusqlite::{Connection, OpenFlags};
 use std::{
 	env::current_dir,
 	path::{Path, PathBuf},
+	pin::Pin,
+	sync::Arc,
 	thread,
 };
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc, Mutex};
+use tokio_stream::wrappers::ReceiverStream;
 
 const MB: usize = 1024 * 1024;
 
 pub struct TileReader {
 	name: String,
-	connection: Mutex<Connection>,
+	connection: Arc<Mutex<Connection>>,
 	meta_data: Option<String>,
 	parameters: TileReaderParameters,
 }
@@ -40,7 +43,7 @@ impl TileReader {
 
 		let mut reader = TileReader {
 			name: filename.to_string_lossy().to_string(),
-			connection: Mutex::new(connection),
+			connection: Arc::new(Mutex::new(connection)),
 			meta_data: None,
 			parameters: TileReaderParameters::new(TileFormat::PBF, Compression::None, TileBBoxPyramid::new_empty()),
 		};
@@ -239,50 +242,46 @@ impl TileReaderTrait for TileReader {
 			create_error!("tile not found")
 		}
 	}
-	/*
-	async fn get_bbox_tile_vec(&mut self, bbox: &TileBBox) -> Vec<(TileCoord3, Blob)> {
-		trace!("read tiles from bbox:{:?}", bbox);
+	async fn get_bbox_tile_stream<'a>(
+		&'a mut self, bbox: &TileBBox,
+	) -> Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + 'a + Send>> {
+		let (tx, rx) = mpsc::channel(256);
 
-		let connection = self.connection.lock().await;
-		let max_index = bbox.max;
+		let bbox = *bbox;
+		let c = self.connection.clone();
 
-		let sql = "SELECT tile_column, tile_row, tile_data
-			FROM tiles
-			WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?";
+		tokio::spawn(async move {
+			let sql = "SELECT tile_column, tile_row, tile_data
+				  FROM tiles
+				  WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?";
 
-		trace!("SQL: {}", sql);
-
-		let mut stmt = connection.prepare(sql).expect("SQL preparation failed");
-
-		let vec: Vec<(TileCoord3, Blob)> = stmt
-			.query_map(
-				[
+			let connection = c.lock().await;
+			let mut stmt = connection.prepare(sql).unwrap();
+			let mut rows = stmt
+				.query(rusqlite::params![
 					bbox.x_min,
 					bbox.x_max,
-					max_index - bbox.y_max,
-					max_index - bbox.y_min,
+					bbox.max - bbox.y_max,
+					bbox.max - bbox.y_min,
 					bbox.level as u64,
-				],
-				|row| {
-					Ok((
-						TileCoord3::new(
-							row.get::<_, u64>(0).unwrap(),
-							max_index - row.get::<_, u64>(1).unwrap(),
-							bbox.level,
-						),
-						Blob::from(row.get::<_, Vec<u8>>(2).unwrap()),
-					))
-				},
-			)
-			.unwrap()
-			.map(|row| row.unwrap())
-			.collect();
+				])
+				.unwrap();
 
-		trace!("result count: {}", vec.len());
+			while let Some(row) = rows.next().unwrap() {
+				let coord = TileCoord3::new(
+					row.get::<_, u64>(0).unwrap(),
+					bbox.max - row.get::<_, u64>(1).unwrap(),
+					bbox.level,
+				);
+				let blob = Blob::from(row.get::<_, Vec<u8>>(2).unwrap());
 
-		vec
+				tx.blocking_send((coord, blob)).unwrap();
+			}
+		});
+
+		let stream = ReceiverStream::new(rx);
+		Box::pin(stream)
 	}
-	*/
 	fn get_name(&self) -> Result<&str> {
 		Ok(&self.name)
 	}
