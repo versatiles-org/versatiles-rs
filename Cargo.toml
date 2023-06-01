@@ -30,18 +30,21 @@ itertools = { version = "0.10.5", default-features = false, features = ["use_all
 lazy_static = { version = "1.4.0", default-features = false }
 log = { version = "0.4.18", default-features = false }
 mime_guess = { version = "2.0.4", default-features = false }
-rayon = { version = "1.7.0", default-features = false }
 regex = { version = "1.8.3", default-features = false, features = ["std"] }
 reqwest = { version = "0.11.18", default-features = false, features=["blocking", "rustls-tls"] }
 rusqlite = { version = "0.29.0", default-features = false, optional = true }
 tar = { version = "0.4.38", default-features = false }
 term_size = { version = "0.3.2", default-features = false }
 tokio = { version = "1.28.2", default-features = false, features = ["macros"] }
-tokio-stream = { version = "0.1.14", default-features = false }
+tokio-stream = { version = "0.1.14", default-features = false, optional = true }
 webp = { version = "0.2.2", default-features = false, features = ["img"] }
 
 [dev-dependencies]
 assert_fs = { version = "1.0.13" }
+
+[features]
+default = ["mbtiles"]
+mbtiles = ["dep:rusqlite", "dep:tokio-stream"]
 
 [[bin]]
 name = "versatiles"
@@ -69,7 +72,3 @@ panic = "unwind"
 incremental = false
 overflow-checks = false
 strip = true
-
-[features]
-default = ["mbtiles"]
-mbtiles = ["dep:rusqlite"]
