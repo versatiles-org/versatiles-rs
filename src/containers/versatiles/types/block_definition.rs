@@ -12,7 +12,7 @@ pub struct BlockDefinition {
 }
 
 impl BlockDefinition {
-	pub fn new(x: u64, y: u64, z: u8, bbox: TileBBox) -> Self {
+	pub fn new(x: u32, y: u32, z: u8, bbox: TileBBox) -> Self {
 		Self {
 			coord3: TileCoord3::new(x, y, z),
 			bbox,
@@ -25,14 +25,14 @@ impl BlockDefinition {
 		let mut cursor = Cursor::new(buf.as_slice());
 
 		let z = cursor.read_u8()?;
-		let x = cursor.read_u32::<BE>()? as u64;
-		let y = cursor.read_u32::<BE>()? as u64;
+		let x = cursor.read_u32::<BE>()?;
+		let y = cursor.read_u32::<BE>()?;
 
 		let bbox = {
-			let x_min = cursor.read_u8()? as u64;
-			let y_min = cursor.read_u8()? as u64;
-			let x_max = cursor.read_u8()? as u64;
-			let y_max = cursor.read_u8()? as u64;
+			let x_min = cursor.read_u8()? as u32;
+			let y_min = cursor.read_u8()? as u32;
+			let x_max = cursor.read_u8()? as u32;
+			let y_max = cursor.read_u8()? as u32;
 			TileBBox::new(z.min(8), x_min, y_min, x_max, y_max)
 		};
 
@@ -67,14 +67,14 @@ impl BlockDefinition {
 
 	pub fn as_blob(&self) -> Result<Blob> {
 		let mut vec = Vec::with_capacity(33);
-		vec.write_u8(self.coord3.z)?;
-		vec.write_u32::<BE>(self.coord3.x as u32)?;
-		vec.write_u32::<BE>(self.coord3.y as u32)?;
+		vec.write_u8(self.coord3.get_z())?;
+		vec.write_u32::<BE>(self.coord3.get_x())?;
+		vec.write_u32::<BE>(self.coord3.get_y())?;
 
-		vec.write_u8(self.bbox.x_min as u8)?;
-		vec.write_u8(self.bbox.y_min as u8)?;
-		vec.write_u8(self.bbox.x_max as u8)?;
-		vec.write_u8(self.bbox.y_max as u8)?;
+		vec.write_u8(self.bbox.get_x_min() as u8)?;
+		vec.write_u8(self.bbox.get_y_min() as u8)?;
+		vec.write_u8(self.bbox.get_x_max() as u8)?;
+		vec.write_u8(self.bbox.get_y_max() as u8)?;
 
 		assert_eq!(
 			self.tiles_range.offset + self.tiles_range.length,
@@ -90,9 +90,7 @@ impl BlockDefinition {
 	}
 
 	pub fn get_sort_index(&self) -> u64 {
-		let size = 2u64.pow(self.coord3.z as u32);
-		let offset = (size * size - 1) / 3;
-		offset + size * self.coord3.y + self.coord3.x
+		self.coord3.get_sort_index()
 	}
 
 	pub fn get_bbox(&self) -> &TileBBox {
@@ -107,16 +105,16 @@ impl BlockDefinition {
 		&self.index_range
 	}
 
-	pub fn get_x(&self) -> u64 {
-		self.coord3.x
+	pub fn get_x(&self) -> u32 {
+		self.coord3.get_x()
 	}
 
-	pub fn get_y(&self) -> u64 {
-		self.coord3.y
+	pub fn get_y(&self) -> u32 {
+		self.coord3.get_y()
 	}
 
 	pub fn get_z(&self) -> u8 {
-		self.coord3.z
+		self.coord3.get_z()
 	}
 
 	pub fn get_coord3(&self) -> TileCoord3 {
@@ -125,15 +123,15 @@ impl BlockDefinition {
 
 	#[cfg(test)]
 	pub fn as_str(&self) -> String {
-		let x_offset = self.coord3.x * 256;
-		let y_offset = self.coord3.y * 256;
+		let x_offset = self.coord3.get_x() * 256;
+		let y_offset = self.coord3.get_y() * 256;
 		format!(
 			"[{},[{},{}],[{},{}]]",
-			self.coord3.z,
-			self.bbox.x_min + x_offset,
-			self.bbox.y_min + y_offset,
-			self.bbox.x_max + x_offset,
-			self.bbox.y_max + y_offset
+			self.coord3.get_z(),
+			self.bbox.get_x_min() + x_offset,
+			self.bbox.get_y_min() + y_offset,
+			self.bbox.get_x_max() + x_offset,
+			self.bbox.get_y_max() + y_offset
 		)
 	}
 }

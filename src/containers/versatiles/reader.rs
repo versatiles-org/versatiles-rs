@@ -95,11 +95,7 @@ impl TileReaderTrait for TileReader {
 		};
 
 		// Calculate block coordinate
-		let block_coord = TileCoord3 {
-			x: coord.x.shr(8),
-			y: coord.y.shr(8),
-			z: coord.z,
-		};
+		let block_coord = TileCoord3::new(coord.get_x().shr(8), coord.get_y().shr(8), coord.get_z());
 
 		// Get the block using the block coordinate
 		let block_option = self.block_index.get_block(&block_coord);
@@ -112,8 +108,8 @@ impl TileReaderTrait for TileReader {
 		let bbox = block.get_bbox();
 
 		// Calculate tile coordinates within the block
-		let tile_x = coord.x - block_coord.x * 256;
-		let tile_y = coord.y - block_coord.y * 256;
+		let tile_x = coord.get_x() - block_coord.get_x() * 256;
+		let tile_y = coord.get_y() - block_coord.get_y() * 256;
 
 		// Check if the tile is within the block definition
 		if !bbox.contains(&TileCoord2::new(tile_x, tile_y)) {
@@ -184,7 +180,11 @@ impl TileReaderTrait for TileReader {
 
 			for (index, byterange) in tile_index.iter().enumerate() {
 				let coord = bbox.get_coord_by_index(index);
-				status_image.set(coord.x + x_offset, coord.y + y_offset, byterange.length);
+				status_image.set(
+					coord.get_x() + x_offset,
+					coord.get_y() + y_offset,
+					byterange.length as u32,
+				);
 			}
 
 			progress.inc(block.count_tiles());

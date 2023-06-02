@@ -35,7 +35,7 @@ pub struct Subcommand {
 
 	/// also use tiles surrounding the bounding box as an additional border
 	#[arg(long)]
-	bbox_border: Option<u64>,
+	bbox_border: Option<u32>,
 
 	/// swap rows and columns, e.g. z/x/y -> z/y/x
 	#[arg(long)]

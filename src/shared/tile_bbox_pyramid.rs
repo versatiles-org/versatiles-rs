@@ -25,7 +25,7 @@ impl TileBBoxPyramid {
 			bbox.intersect_bbox(&TileBBox::from_geo(z as u8, geo_bbox));
 		}
 	}
-	pub fn add_border(&mut self, x_min: u64, y_min: u64, x_max: u64, y_max: u64) {
+	pub fn add_border(&mut self, x_min: u32, y_min: u32, x_max: u32, y_max: u32) {
 		for bbox in self.level_bbox.iter_mut() {
 			bbox.add_border(x_min, y_min, x_max, y_max);
 		}
@@ -50,7 +50,7 @@ impl TileBBoxPyramid {
 		self.level_bbox.iter_mut().for_each(|b| b.flip_y())
 	}
 	pub fn include_coord(&mut self, coord: &TileCoord3) {
-		self.level_bbox[coord.z as usize].include_tile(coord.x, coord.y);
+		self.level_bbox[coord.get_z() as usize].include_tile(coord.get_x(), coord.get_y());
 	}
 	pub fn include_bbox(&mut self, level: u8, bbox: &TileBBox) {
 		self.level_bbox[level as usize].union_bbox(bbox);
@@ -109,7 +109,7 @@ impl TileBBoxPyramid {
 impl fmt::Debug for TileBBoxPyramid {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_list()
-			.entries(self.iter_levels().map(|bbox| format!("{}: {bbox:?}", bbox.level)))
+			.entries(self.iter_levels().map(|bbox| format!("{}: {bbox:?}", bbox.get_level())))
 			.finish()
 	}
 }

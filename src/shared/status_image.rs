@@ -5,14 +5,14 @@ use image::{ImageBuffer, Rgb, RgbImage};
 use std::{path::Path, vec::Vec};
 
 pub struct StatusImage {
-	size: u64,
-	data: Vec<u64>,
+	size: u32,
+	data: Vec<u32>,
 }
 
 impl StatusImage {
 	/// Creates a new `StatusImage` with the specified size.
-	pub fn new(size: u64) -> Self {
-		let mut data: Vec<u64> = Vec::new();
+	pub fn new(size: u32) -> Self {
+		let mut data: Vec<u32> = Vec::new();
 		data.resize((size * size) as usize, 0);
 
 		Self { size, data }
@@ -25,7 +25,7 @@ impl StatusImage {
 	/// * `x` - The x coordinate of the pixel.
 	/// * `y` - The y coordinate of the pixel.
 	/// * `v` - The value to set the pixel to.
-	pub fn set(&mut self, x: u64, y: u64, v: u64) {
+	pub fn set(&mut self, x: u32, y: u32, v: u32) {
 		assert!(x < self.size);
 		assert!(y < self.size);
 
@@ -69,7 +69,7 @@ impl StatusImage {
 
 pub struct StatusImagePyramide {
 	images: Vec<StatusImage>,
-	max_size: u64,
+	max_size: u32,
 }
 impl StatusImagePyramide {
 	pub fn new() -> Self {
@@ -84,7 +84,7 @@ impl StatusImagePyramide {
 		while self.images.len() <= index {
 			// append image
 			let i = self.images.len();
-			let size = 2u64.pow(i as u32);
+			let size = 2u32.pow(i as u32);
 			let status_image = StatusImage::new(size);
 			self.max_size = self.max_size.max(size);
 			self.images.push(status_image);
@@ -99,7 +99,7 @@ impl StatusImagePyramide {
 
 		let mut progress = ProgressBar::new(
 			"save status images",
-			draw_list.iter().fold(0, |acc, img| acc + img.size * img.size),
+			draw_list.iter().fold(0, |acc, img| acc + (img.size as u64).pow(2)),
 		);
 
 		let mut width: u32 = 0;
@@ -109,7 +109,7 @@ impl StatusImagePyramide {
 		let mut image_positions: Vec<[u32; 2]> = Vec::new();
 
 		for (i, image) in draw_list.iter().enumerate() {
-			let size = image.size as u32;
+			let size = image.size;
 			image_positions.push([x_offset, y_offset]);
 			width = width.max(size + x_offset);
 			height = height.max(size + y_offset);
@@ -125,13 +125,13 @@ impl StatusImagePyramide {
 
 		for i in 0..draw_list.len() {
 			let image = draw_list[i];
-			let size = image.size as u32;
+			let size = image.size;
 			let [x_offset, y_offset] = image_positions[i];
 			for y in 0..size {
 				for x in 0..size {
 					canvas.put_pixel(x + x_offset, y + y_offset, image.get_color(x, y));
 				}
-				progress.inc(image.size);
+				progress.inc(image.size as u64);
 			}
 		}
 		canvas.save(filename).unwrap();

@@ -79,9 +79,9 @@ impl ServerSourceTrait for TileContainer {
 		if path.len() == 3 {
 			// Parse the tile coordinates
 			let z = path[0].parse::<u8>();
-			let x = path[1].parse::<u64>();
+			let x = path[1].parse::<u32>();
 			let y: String = path[2].chars().take_while(|c| c.is_numeric()).collect();
-			let y = y.parse::<u64>();
+			let y = y.parse::<u32>();
 
 			// Check for parsing errors
 			if x.is_err() || y.is_err() || z.is_err() {

@@ -170,10 +170,10 @@ impl TileReader {
 				z as u8,
 				TileBBox::new(
 					z as u8,
-					x0.clamp(0, max_value) as u64,
-					(max_value - y1).clamp(0, max_value) as u64,
-					x1.clamp(0, max_value) as u64,
-					(max_value - y0).clamp(0, max_value) as u64,
+					x0.clamp(0, max_value) as u32,
+					(max_value - y1).clamp(0, max_value) as u32,
+					x1.clamp(0, max_value) as u32,
+					(max_value - y0).clamp(0, max_value) as u32,
 				),
 			);
 
@@ -231,10 +231,11 @@ impl TileReaderTrait for TileReader {
 			coord.flip_y();
 		};
 
-		let max_index = 2u64.pow(coord.z as u32) - 1;
-		let result = stmt.query_row([coord.x, max_index - coord.y, coord.z as u64], |entry| {
-			entry.get::<_, Vec<u8>>(0)
-		});
+		let max_index = 2u32.pow(coord.get_z() as u32) - 1;
+		let result = stmt.query_row(
+			[coord.get_x(), max_index - coord.get_y(), coord.get_z() as u32],
+			|entry| entry.get::<_, Vec<u8>>(0),
+		);
 
 		if let Ok(vec) = result {
 			Ok(Blob::from(vec))
@@ -247,7 +248,12 @@ impl TileReaderTrait for TileReader {
 	) -> Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + 'a + Send>> {
 		let (tx, rx) = mpsc::channel(256);
 
-		let bbox = *bbox;
+		let level = bbox.get_level();
+		let max = bbox.get_max();
+		let x_min = bbox.get_x_min();
+		let x_max = bbox.get_x_max();
+		let y_min = bbox.get_y_min();
+		let y_max = bbox.get_y_max();
 		let c = self.connection.clone();
 
 		tokio::spawn(async move {
@@ -258,20 +264,14 @@ impl TileReaderTrait for TileReader {
 			let connection = c.lock().await;
 			let mut stmt = connection.prepare(sql).unwrap();
 			let mut rows = stmt
-				.query(rusqlite::params![
-					bbox.x_min,
-					bbox.x_max,
-					bbox.max - bbox.y_max,
-					bbox.max - bbox.y_min,
-					bbox.level as u64,
-				])
+				.query(rusqlite::params![x_min, x_max, max - y_max, max - y_min, level as u32,])
 				.unwrap();
 
 			while let Some(row) = rows.next().unwrap() {
 				let coord = TileCoord3::new(
-					row.get::<_, u64>(0).unwrap(),
-					bbox.max - row.get::<_, u64>(1).unwrap(),
-					bbox.level,
+					row.get::<_, u32>(0).unwrap(),
+					max - row.get::<_, u32>(1).unwrap(),
+					level,
 				);
 				let blob = Blob::from(row.get::<_, Vec<u8>>(2).unwrap());
 

@@ -87,7 +87,14 @@ impl TileConverterTrait for TileConverter {
 					let result = tile_converter.run(blob);
 
 					if let Ok(blob) = result {
-						let filename = format!("./{}/{}/{}{}{}", bbox.level, coord.y, coord.x, ext_form, ext_comp);
+						let filename = format!(
+							"./{}/{}/{}{}{}",
+							coord.get_z(),
+							coord.get_y(),
+							coord.get_x(),
+							ext_form,
+							ext_comp
+						);
 						let path = PathBuf::from(&filename);
 
 						// Build header

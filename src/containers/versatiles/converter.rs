@@ -85,7 +85,10 @@ impl TileConverter {
 		let mut blocks: Vec<BlockDefinition> = Vec::new();
 		for bbox_tiles in self.config.get_bbox_pyramid().iter_levels() {
 			let bbox_blocks = bbox_tiles.scale_down(256);
-			for TileCoord3 { x, y, z } in bbox_blocks.iter_coords() {
+			for coord in bbox_blocks.iter_coords() {
+				let x = coord.get_x();
+				let y = coord.get_y();
+				let z = coord.get_z();
 				let mut bbox_block = *bbox_tiles;
 				bbox_block.intersect_bbox(&TileBBox::new(z, x * 256, y * 256, x * 256 + 255, y * 256 + 255));
 
@@ -153,7 +156,7 @@ impl TileConverter {
 
 			// Get the tiles and sort them
 			let mut blobs: Vec<(TileCoord3, Blob)> = reader.get_bbox_tile_stream(&row_bbox).await.collect().await;
-			blobs.sort_by_cached_key(|(coord, _blob)| coord.y * width + coord.x);
+			blobs.sort_by_cached_key(|(coord, _blob)| coord.get_y() as u64 * width + coord.get_x() as u64);
 
 			trace!(
 				"get_bbox_tile_stream: count {}, size sum {}",

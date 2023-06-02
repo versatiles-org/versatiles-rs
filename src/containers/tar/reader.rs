@@ -76,10 +76,10 @@ impl TileReaderTrait for TileReader {
 
 			if path_vec.len() == 3 {
 				let z = path_vec[0].parse::<u8>()?;
-				let y = path_vec[1].parse::<u64>()?;
+				let y = path_vec[1].parse::<u32>()?;
 
 				let mut filename: Vec<&str> = path_vec[2].split('.').collect();
-				let x = filename[0].parse::<u64>()?;
+				let x = filename[0].parse::<u32>()?;
 
 				let mut extension = filename.pop().unwrap();
 				let file_comp = match extension {
@@ -118,7 +118,7 @@ impl TileReaderTrait for TileReader {
 				let offset = entry.raw_file_position();
 				let length = entry.size();
 
-				let coord3 = TileCoord3 { x, y, z };
+				let coord3 = TileCoord3::new(x, y, z);
 				bbox_pyramid.include_coord(&coord3);
 				tile_map.insert(coord3, TarByteRange { offset, length });
 				continue;
