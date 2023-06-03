@@ -30,7 +30,7 @@ impl BlockIndex {
 		let mut block_index = Self::new_empty();
 		for i in 0..count {
 			block_index.add_block(
-				BlockDefinition::from_blob(buf.get_range(i * BLOCK_INDEX_LENGTH..(i + 1) * BLOCK_INDEX_LENGTH)).unwrap(),
+				BlockDefinition::from_slice(buf.get_range(i * BLOCK_INDEX_LENGTH..(i + 1) * BLOCK_INDEX_LENGTH)).unwrap(),
 			);
 		}
 
@@ -61,7 +61,7 @@ impl BlockIndex {
 		let vec = Vec::new();
 		let mut cursor = Cursor::new(vec);
 		for (_coord, block) in self.lookup.iter() {
-			cursor.write_all(block.as_blob().unwrap().as_slice()).unwrap();
+			cursor.write_all(&block.as_vec().unwrap()).unwrap();
 		}
 
 		Blob::from(cursor.into_inner())

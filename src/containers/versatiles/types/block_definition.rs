@@ -1,5 +1,5 @@
 use super::ByteRange;
-use crate::shared::{Blob, Result, TileBBox, TileCoord3};
+use crate::shared::{Result, TileBBox, TileCoord3};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::{fmt, io::Cursor};
 
@@ -21,8 +21,8 @@ impl BlockDefinition {
 		}
 	}
 
-	pub fn from_blob(buf: Blob) -> Result<Self> {
-		let mut cursor = Cursor::new(buf.as_slice());
+	pub fn from_slice(slice: &[u8]) -> Result<Self> {
+		let mut cursor = Cursor::new(slice);
 
 		let z = cursor.read_u8()?;
 		let x = cursor.read_u32::<BE>()?;
@@ -65,8 +65,8 @@ impl BlockDefinition {
 		self.bbox.count_tiles()
 	}
 
-	pub fn as_blob(&self) -> Result<Blob> {
-		let mut vec = Vec::with_capacity(33);
+	pub fn as_vec(&self) -> Result<Vec<u8>> {
+		let mut vec: Vec<u8> = Vec::with_capacity(33);
 		vec.write_u8(self.coord3.get_z())?;
 		vec.write_u32::<BE>(self.coord3.get_x())?;
 		vec.write_u32::<BE>(self.coord3.get_y())?;
@@ -86,7 +86,7 @@ impl BlockDefinition {
 		vec.write_u64::<BE>(self.tiles_range.length)?;
 		vec.write_u32::<BE>(self.index_range.length as u32)?;
 
-		Ok(Blob::from(vec))
+		Ok(vec)
 	}
 
 	pub fn get_sort_index(&self) -> u64 {
@@ -157,7 +157,7 @@ mod tests {
 		def1.tiles_range = ByteRange::new(4, 5);
 		def1.index_range = ByteRange::new(9, 6);
 
-		let def2 = BlockDefinition::from_blob(def1.as_blob().unwrap()).unwrap();
+		let def2 = BlockDefinition::from_slice(&def1.as_vec().unwrap()).unwrap();
 
 		assert_eq!(def1, def2);
 	}
@@ -169,9 +169,9 @@ mod tests {
 	}
 
 	#[test]
-	fn as_blob() {
+	fn as_vec() {
 		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
-		let blob = def.as_blob().unwrap();
+		let blob = def.as_vec().unwrap();
 		assert_eq!(blob.len(), 33);
 	}
 
