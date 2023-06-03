@@ -47,9 +47,18 @@ criterion = { version = "0.5.1", default-features = false }
 default = ["mbtiles"]
 mbtiles = ["dep:rusqlite", "dep:tokio-stream"]
 
+[lib]
+name = "versatiles"
+path = "src/lib.rs"
+
 [[bin]]
 name = "versatiles"
 path = "src/main.rs"
+
+[[bench]]
+name = "versatiles"
+harness = false
+path = "benches/main.rs"
 
 [profile.dev]
 opt-level = 1
@@ -73,3 +82,6 @@ panic = "unwind"
 incremental = false
 overflow-checks = false
 strip = true
+
+[profile.bench]
+lto = false
