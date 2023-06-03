@@ -41,6 +41,7 @@ webp = { version = "0.2.2", default-features = false, features = ["img"] }
 
 [dev-dependencies]
 assert_fs = { version = "1.0.13" }
+criterion = { version = "0.5.1", default-features = false }
 
 [features]
 default = ["mbtiles"]
