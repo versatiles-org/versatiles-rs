@@ -8,7 +8,7 @@ use crate::{
 use async_trait::async_trait;
 use futures::Stream;
 use log::trace;
-use sqlx::{query_as, query_scalar, SqlitePool};
+use sqlx::{query_scalar, SqlitePool};
 use std::{
 	env::current_dir,
 	path::{Path, PathBuf},
@@ -44,7 +44,7 @@ impl TileReader {
 		trace!("load_meta_data");
 
 		let pyramide = self.get_bbox_pyramid().await;
-		let entries: Vec<RecordMetadata> = sqlx::query_as!(RecordMetadata, "SELECT name, value FROM metadata")
+		let entries: Vec<RecordMetadata> = sqlx::query_as::<_, RecordMetadata>("SELECT name, value FROM metadata")
 			.fetch_all(&self.pool)
 			.await?;
 
@@ -227,13 +227,12 @@ impl TileReaderTrait for TileReader {
 		let y = max_index - coord.get_y();
 		let z = coord.get_z() as u32;
 
-		let entry:RecordTile = query_as!(
-			RecordTile,
-			"SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?",
-			x,y,z
-		)
-		.fetch_one(&self.pool)
-		.await?;
+		let entry:RecordTile = sqlx::query_as::<_, RecordTile>("SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")
+			.bind(x)
+			.bind(y)
+			.bind(z)
+			.fetch_one(&self.pool)
+			.await?;
 
 		Ok(Blob::from(entry.tile_data.unwrap()))
 	}
@@ -282,6 +281,7 @@ impl std::fmt::Debug for TileReader {
 	}
 }
 
+#[derive(sqlx::FromRow)]
 struct RecordMetadata {
 	name: Option<String>,
 	value: Option<String>,
