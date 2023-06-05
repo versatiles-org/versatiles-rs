@@ -230,11 +230,7 @@ impl TileReaderTrait for TileReader {
 		let entry:RecordTile = query_as!(
 			RecordTile,
 			"SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?",
-			x
-,y,
-z
-			
-			
+			x,y,z
 		)
 		.fetch_one(&self.pool)
 		.await?;
@@ -309,7 +305,13 @@ pub mod tests {
 		// get test container reader
 		let mut reader = TileReader::new("testdata/berlin.mbtiles").await?;
 
-		reader.get_tile_data(&TileCoord3::new(0, 0, 0)).await?;
+		let tile = reader.get_tile_data(&TileCoord3::new(8803, 5376, 14)).await?;
+		assert_eq!(tile.len(), 172969);
+		assert_eq!(tile.get_range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
+		assert_eq!(
+			tile.get_range(172959..172969),
+			&[255, 15, 172, 89, 205, 237, 7, 134, 5, 0]
+		);
 
 		let mut converter = dummy::TileConverter::new_dummy(ConverterProfile::Whatever, 8);
 
