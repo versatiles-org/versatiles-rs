@@ -32,7 +32,7 @@ log = { version = "0.4.18", default-features = false }
 mime_guess = { version = "2.0.4", default-features = false }
 regex = { version = "1.8.3", default-features = false, features = ["std"] }
 reqwest = { version = "0.11.18", default-features = false, features=["blocking", "rustls-tls"] }
-rusqlite = { version = "0.29.0", default-features = false, optional = true }
+sqlx = { version = "0.6.3", default-features = false, optional = true, features = ["macros", "runtime-tokio-rustls", "sqlite"] }
 tar = { version = "0.4.38", default-features = false }
 term_size = { version = "0.3.2", default-features = false }
 tokio = { version = "1.28.2", default-features = false, features = ["macros"] }
@@ -45,7 +45,7 @@ criterion = { version = "0.5.1", default-features = false, features = ["async_fu
 
 [features]
 default = ["mbtiles"]
-mbtiles = ["dep:rusqlite", "dep:tokio-stream"]
+mbtiles = ["dep:sqlx", "dep:tokio-stream"]
 
 [lib]
 name = "versatiles"

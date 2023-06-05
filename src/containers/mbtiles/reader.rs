@@ -1,6 +1,5 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
-	create_error,
 	shared::{
 		Blob, Compression, Error, ProgressBar, Result, TileBBox, TileBBoxPyramid, TileCoord3, TileFormat,
 		TileReaderParameters,
@@ -9,22 +8,17 @@ use crate::{
 use async_trait::async_trait;
 use futures::Stream;
 use log::trace;
-use rusqlite::{Connection, OpenFlags};
+use sqlx::{query_as, query_scalar, SqlitePool};
 use std::{
 	env::current_dir,
 	path::{Path, PathBuf},
 	pin::Pin,
-	sync::Arc,
-	thread,
 };
-use tokio::sync::{mpsc, Mutex};
-use tokio_stream::wrappers::ReceiverStream;
-
-const MB: usize = 1024 * 1024;
+use tokio_stream::StreamExt;
 
 pub struct TileReader {
 	name: String,
-	connection: Arc<Mutex<Connection>>,
+	pool: SqlitePool,
 	meta_data: Option<String>,
 	parameters: TileReaderParameters,
 }
@@ -32,18 +26,12 @@ impl TileReader {
 	async fn load_from_sqlite(filename: &PathBuf) -> Result<TileReader> {
 		trace!("load_from_sqlite {:?}", filename);
 
-		let concurrency = thread::available_parallelism()?.get();
-
-		let connection = Connection::open_with_flags(filename, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
-
-		connection.pragma_update(None, "mmap_size", 256 * MB)?;
-		connection.pragma_update(None, "temp_store", "memory")?;
-		connection.pragma_update(None, "page_size", 65536)?;
-		connection.pragma_update(None, "threads", concurrency)?;
+		let name = filename.to_string_lossy().to_string();
+		let pool = SqlitePool::connect(&name).await?;
 
 		let mut reader = TileReader {
-			name: filename.to_string_lossy().to_string(),
-			connection: Arc::new(Mutex::new(connection)),
+			name,
+			pool,
 			meta_data: None,
 			parameters: TileReaderParameters::new(TileFormat::PBF, Compression::None, TileBBoxPyramid::new_empty()),
 		};
@@ -56,18 +44,16 @@ impl TileReader {
 		trace!("load_meta_data");
 
 		let pyramide = self.get_bbox_pyramid().await;
-		let connection = self.connection.lock().await;
-		let mut stmt = connection
-			.prepare("SELECT name, value FROM metadata")
-			.expect("can not prepare SQL query");
-		let mut entries = stmt.query([]).expect("SQL query failed");
+		let entries: Vec<RecordMetadata> = sqlx::query_as!(RecordMetadata, "SELECT name, value FROM metadata")
+			.fetch_all(&self.pool)
+			.await?;
 
 		let mut tile_format: Option<TileFormat> = None;
 		let mut compression: Option<Compression> = None;
 
-		while let Some(entry) = entries.next()? {
-			let key = entry.get::<_, String>(0)?;
-			let val = entry.get::<_, String>(1)?;
+		for entry in entries {
+			let key = entry.name.unwrap();
+			let val = entry.value.unwrap();
 
 			match key.as_str() {
 				"format" => match val.as_str() {
@@ -93,9 +79,6 @@ impl TileReader {
 				&_ => {}
 			}
 		}
-		drop(entries);
-		drop(stmt);
-		drop(connection);
 
 		self.parameters.set_tile_format(tile_format.unwrap());
 		self.parameters.set_tile_compression(compression.unwrap());
@@ -107,32 +90,35 @@ impl TileReader {
 
 		Ok(())
 	}
+	async fn simple_query(&self, sql1: &str, sql2: &str) -> i32 {
+		let sql = if sql2.is_empty() {
+			format!("SELECT {sql1} FROM tiles")
+		} else {
+			format!("SELECT {sql1} FROM tiles WHERE {sql2}")
+		};
+
+		trace!("SQL: {}", sql);
+
+		//connection.query_row(&sql, [], |r| r.get(0)).unwrap()
+		query_scalar(&sql).fetch_one(&self.pool).await.unwrap()
+	}
 	async fn get_bbox_pyramid(&self) -> TileBBoxPyramid {
 		trace!("get_bbox_pyramid");
 
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
-		let connection = self.connection.lock().await;
 
-		let query = |sql1: &str, sql2: &str| -> i32 {
-			let sql = if sql2.is_empty() {
-				format!("SELECT {sql1} FROM tiles")
-			} else {
-				format!("SELECT {sql1} FROM tiles WHERE {sql2}")
-			};
-
-			trace!("SQL: {}", sql);
-
-			connection.query_row(&sql, [], |r| r.get(0)).unwrap()
-		};
-
-		let z0 = query("MIN(zoom_level)", "");
-		let z1 = query("MAX(zoom_level)", "");
+		let z0 = self.simple_query("MIN(zoom_level)", "").await;
+		let z1 = self.simple_query("MAX(zoom_level)", "").await;
 
 		let mut progress = ProgressBar::new("get mbtiles bbox pyramid", (z1 - z0 + 1) as u64);
 
 		for z in z0..=z1 {
-			let x0 = query("MIN(tile_column)", &format!("zoom_level = {z}"));
-			let x1 = query("MAX(tile_column)", &format!("zoom_level = {z}"));
+			let x0 = self
+				.simple_query("MIN(tile_column)", &format!("zoom_level = {z}"))
+				.await;
+			let x1 = self
+				.simple_query("MAX(tile_column)", &format!("zoom_level = {z}"))
+				.await;
 			let xc = (x0 + x1) / 2;
 
 			/*
@@ -159,11 +145,19 @@ impl TileReader {
 			*/
 
 			let sql_prefix = format!("zoom_level = {z} AND tile_");
-			let mut y0 = query("MIN(tile_row)", &format!("{sql_prefix}column = {xc}"));
-			let mut y1 = query("MAX(tile_row)", &format!("{sql_prefix}column = {xc}"));
+			let mut y0 = self
+				.simple_query("MIN(tile_row)", &format!("{sql_prefix}column = {xc}"))
+				.await;
+			let mut y1 = self
+				.simple_query("MAX(tile_row)", &format!("{sql_prefix}column = {xc}"))
+				.await;
 
-			y0 = query("MIN(tile_row)", &format!("{sql_prefix}row <= {y0}"));
-			y1 = query("MAX(tile_row)", &format!("{sql_prefix}row >= {y1}"));
+			y0 = self
+				.simple_query("MIN(tile_row)", &format!("{sql_prefix}row <= {y0}"))
+				.await;
+			y1 = self
+				.simple_query("MAX(tile_row)", &format!("{sql_prefix}row >= {y1}"))
+				.await;
 
 			let max_value = 2i32.pow(z as u32) - 1;
 
@@ -218,11 +212,6 @@ impl TileReaderTrait for TileReader {
 	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Result<Blob> {
 		trace!("read 1 tile {:?}", coord_in);
 
-		let connection = self.connection.lock().await;
-		let mut stmt = connection
-			.prepare("SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")
-			.expect("SQL preparation failed");
-
 		let mut coord: TileCoord3 = *coord_in;
 
 		if self.get_parameters()?.get_swap_xy() {
@@ -234,55 +223,55 @@ impl TileReaderTrait for TileReader {
 		};
 
 		let max_index = 2u32.pow(coord.get_z() as u32) - 1;
-		let result = stmt.query_row(
-			[coord.get_x(), max_index - coord.get_y(), coord.get_z() as u32],
-			|entry| entry.get::<_, Vec<u8>>(0),
-		);
+		let x = coord.get_x();
+		let y = max_index - coord.get_y();
+		let z = coord.get_z() as u32;
 
-		if let Ok(vec) = result {
-			Ok(Blob::from(vec))
-		} else {
-			create_error!("tile not found")
-		}
+		let entry:RecordTile = query_as!(
+			RecordTile,
+			"SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?",
+			x
+,y,
+z
+			
+			
+		)
+		.fetch_one(&self.pool)
+		.await?;
+
+		Ok(Blob::from(entry.tile_data.unwrap()))
 	}
 	async fn get_bbox_tile_stream<'a>(
 		&'a mut self, bbox: &TileBBox,
 	) -> Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + 'a + Send>> {
-		let (tx, rx) = mpsc::channel(256);
-
-		let level = bbox.get_level();
 		let max = bbox.get_max();
 		let x_min = bbox.get_x_min();
 		let x_max = bbox.get_x_max();
-		let y_min = bbox.get_y_min();
-		let y_max = bbox.get_y_max();
-		let c = self.connection.clone();
+		let y_min = max - bbox.get_y_max();
+		let y_max = max - bbox.get_y_min();
+		let level = bbox.get_level();
 
-		tokio::spawn(async move {
-			let sql = "SELECT tile_column, tile_row, tile_data
-				  FROM tiles
-				  WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?";
+		let stream = sqlx::query_as::<_, RecordTile>(
+			"SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?")
+			.bind(x_min)
+			.bind(x_max)
+			.bind(y_min)
+			.bind(y_max)
+			.bind(level)
+		.fetch(&self.pool);
 
-			let connection = c.lock().await;
-			let mut stmt = connection.prepare(sql).unwrap();
-			let mut rows = stmt
-				.query(rusqlite::params![x_min, x_max, max - y_max, max - y_min, level as u32,])
-				.unwrap();
-
-			while let Some(row) = rows.next().unwrap() {
-				let coord = TileCoord3::new(
-					row.get::<_, u32>(0).unwrap(),
-					max - row.get::<_, u32>(1).unwrap(),
-					level,
-				);
-				let blob = Blob::from(row.get::<_, Vec<u8>>(2).unwrap());
-
-				tx.send((coord, blob)).await.unwrap();
-			}
+		let stream2 = stream.map(move |r: sqlx::Result<RecordTile>| {
+			let r = r.unwrap();
+			let coord = TileCoord3::new(
+				r.tile_column.unwrap() as u32,
+				max - r.tile_row.unwrap() as u32,
+				r.zoom_level.unwrap() as u8,
+			);
+			let blob = Blob::from(r.tile_data.unwrap());
+			(coord, blob)
 		});
 
-		let stream = ReceiverStream::new(rx);
-		Box::pin(stream)
+		Box::pin(stream2)
 	}
 	fn get_name(&self) -> Result<&str> {
 		Ok(&self.name)
@@ -295,6 +284,19 @@ impl std::fmt::Debug for TileReader {
 			.field("parameters", &self.get_parameters())
 			.finish()
 	}
+}
+
+struct RecordMetadata {
+	name: Option<String>,
+	value: Option<String>,
+}
+
+#[derive(sqlx::FromRow)]
+struct RecordTile {
+	tile_column: Option<i64>,
+	tile_row: Option<i64>,
+	zoom_level: Option<i64>,
+	tile_data: Option<Vec<u8>>,
 }
 
 #[cfg(test)]
