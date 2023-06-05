@@ -7,7 +7,7 @@ use crate::{
 	},
 };
 use async_trait::async_trait;
-use futures::{executor::block_on, Stream};
+use futures::Stream;
 use log::trace;
 use rusqlite::{Connection, OpenFlags};
 use std::{
@@ -55,6 +55,7 @@ impl TileReader {
 	async fn load_meta_data(&mut self) -> Result<()> {
 		trace!("load_meta_data");
 
+		let pyramide = self.get_bbox_pyramid().await;
 		let connection = self.connection.lock().await;
 		let mut stmt = connection
 			.prepare("SELECT name, value FROM metadata")
@@ -98,7 +99,7 @@ impl TileReader {
 
 		self.parameters.set_tile_format(tile_format.unwrap());
 		self.parameters.set_tile_compression(compression.unwrap());
-		self.parameters.set_bbox_pyramid(block_on(self.get_bbox_pyramid()));
+		self.parameters.set_bbox_pyramid(pyramide);
 
 		if self.meta_data.is_none() {
 			return Err(Error::new("'json' is not defined in table 'metadata'"));
@@ -199,7 +200,8 @@ impl TileReaderTrait for TileReader {
 
 		filename = filename.canonicalize()?;
 
-		Ok(Box::new(Self::load_from_sqlite(&filename).await?))
+		let db = Self::load_from_sqlite(&filename).await?;
+		Ok(Box::new(db))
 	}
 	fn get_container_name(&self) -> Result<&str> {
 		Ok("mbtiles")
@@ -275,7 +277,7 @@ impl TileReaderTrait for TileReader {
 				);
 				let blob = Blob::from(row.get::<_, Vec<u8>>(2).unwrap());
 
-				tx.blocking_send((coord, blob)).unwrap();
+				tx.send((coord, blob)).await.unwrap();
 			}
 		});
 

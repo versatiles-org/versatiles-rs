@@ -2,4 +2,4 @@
 cd "$(dirname "$0")"
 cd ..
 
-cargo bench --bench versatiles
+RUST_BACKTRACE=full cargo bench --bench versatiles
