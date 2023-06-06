@@ -8,11 +8,12 @@ use crate::{
 use async_trait::async_trait;
 use futures::Stream;
 use log::trace;
-use sqlx::{query_scalar, SqlitePool};
+use sqlx::{query_scalar, sqlite::SqliteConnectOptions, ConnectOptions, SqlitePool};
 use std::{
 	env::current_dir,
 	path::{Path, PathBuf},
 	pin::Pin,
+	str::FromStr,
 };
 use tokio_stream::StreamExt;
 
@@ -27,7 +28,10 @@ impl TileReader {
 		trace!("load_from_sqlite {:?}", filename);
 
 		let name = filename.to_string_lossy().to_string();
-		let pool = SqlitePool::connect(&name).await?;
+		let options = SqliteConnectOptions::from_str(&name)?
+			.disable_statement_logging()
+			.clone();
+		let pool = SqlitePool::connect_with(options).await?;
 
 		let mut reader = TileReader {
 			name,
