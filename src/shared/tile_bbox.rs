@@ -174,6 +174,7 @@ impl TileBBox {
 			.cartesian_product(x_range)
 			.map(|(y, x)| TileCoord3::new(x, y, self.level))
 	}
+	#[allow(dead_code)]
 	pub fn iter_bbox_row_slices(&self, max_count: usize) -> impl Iterator<Item = TileBBox> + '_ {
 		let mut col_count = (self.x_max - self.x_min + 1) as usize;
 		let mut row_count = (self.y_max - self.y_min + 1) as usize;

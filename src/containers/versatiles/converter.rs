@@ -5,9 +5,9 @@ use crate::{
 	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig, TileCoord3},
 };
 use async_trait::async_trait;
-use futures::{lock::Mutex, StreamExt};
+use futures::{lock::Mutex, Stream, StreamExt};
 use log::{debug, trace};
-use std::collections::HashMap;
+use std::{collections::HashMap, pin::Pin};
 
 // Define TileConverter struct
 pub struct TileConverter {
@@ -147,70 +147,48 @@ impl TileConverter {
 
 		// Create the tile converter and set parameters
 		let tile_converter = self.config.get_tile_recompressor();
-		let z = block.get_z();
-		let width = 2u64.pow(z as u32);
 
-		// Iterate through the row slices of the block
-		for row_bbox in bbox.iter_bbox_row_slices(2048) {
-			trace!("start block slice {:?}", row_bbox);
+		// Get the tile stream
+		let mut stream: Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + Send>> = reader.get_bbox_tile_stream(&bbox).await;
 
-			// Get the tiles and sort them
-			let mut blobs: Vec<(TileCoord3, Blob)> = reader.get_bbox_tile_stream(&row_bbox).await.collect().await;
-			blobs.sort_by_cached_key(|(coord, _blob)| coord.get_y() as u64 * width + coord.get_x() as u64);
-
-			trace!(
-				"get_bbox_tile_stream: count {}, size sum {}",
-				blobs.len(),
-				blobs.iter().fold(0, |acc, e| acc + e.1.len())
-			);
-
-			// Compress the blobs if necessary
-			if !tile_converter.is_empty() {
-				blobs = blobs
-					.iter()
-					.map(|(coord, blob)| (*coord, tile_converter.run(blob.clone()).unwrap()))
-					.collect();
-			}
-
-			trace!(
-				"compressed: count {}, size sum {}",
-				blobs.len(),
-				blobs.iter().fold(0, |acc, e| acc + e.1.len())
-			);
-
-			// Acquire locks for shared data structures
-			let mut secured_tile_hash_lookup = mutex_tile_hash_lookup.lock().await;
-			let mut secured_tile_index = mutex_tile_index.lock().await;
-			let mut secured_writer = mutex_writer.lock().await;
-
-			// Iterate through the blobs and process them
-			for (coord, blob) in blobs.iter() {
-				trace!("blob size {}", blob.len());
-
-				let index = bbox.get_tile_index(&coord.as_coord2());
-
-				let mut tile_hash_option = None;
-				if blob.len() < 1000 {
-					if secured_tile_hash_lookup.contains_key(blob.as_slice()) {
-						secured_tile_index.set(index, *secured_tile_hash_lookup.get(blob.as_slice()).unwrap());
-						continue;
-					}
-					tile_hash_option = Some(blob.clone());
-				}
-
-				let mut range = secured_writer.append(blob).await.unwrap();
-				range.offset -= offset0;
-				secured_tile_index.set(index, range);
-
-				if let Some(tile_hash) = tile_hash_option {
-					secured_tile_hash_lookup.insert(tile_hash.as_vec(), range);
-				}
-			}
-
-			// Increment progress and finish the row slice
-			mutex_progress.lock().await.inc(row_bbox.count_tiles());
-			trace!("finish block slice {:?}", row_bbox);
+		// Compress the blobs if necessary
+		if !tile_converter.is_empty() {
+			stream = Box::pin(stream.map(|(coord, blob)| (coord, tile_converter.run(blob.clone()).unwrap())))
 		}
+
+		// Acquire locks for shared data structures
+		let mut secured_tile_hash_lookup = mutex_tile_hash_lookup.lock().await;
+		let mut secured_tile_index = mutex_tile_index.lock().await;
+		let mut secured_writer = mutex_writer.lock().await;
+
+		// Iterate through the blobs and process them
+		while let Some((coord, blob)) = stream.next().await {
+			trace!("blob size {}", blob.len());
+
+			let index = bbox.get_tile_index(&coord.as_coord2());
+
+			let mut tile_hash_option = None;
+			if blob.len() < 1000 {
+				if secured_tile_hash_lookup.contains_key(blob.as_slice()) {
+					secured_tile_index.set(index, *secured_tile_hash_lookup.get(blob.as_slice()).unwrap());
+					continue;
+				}
+				tile_hash_option = Some(blob.clone());
+			}
+
+			let mut range = secured_writer.append(&blob).await.unwrap();
+			range.offset -= offset0;
+			secured_tile_index.set(index, range);
+
+			if let Some(tile_hash) = tile_hash_option {
+				secured_tile_hash_lookup.insert(tile_hash.as_vec(), range);
+			}
+		}
+		drop(secured_writer);
+		drop(secured_tile_index);
+
+		// Increment progress and finish the row slice
+		mutex_progress.lock().await.inc(bbox.count_tiles());
 
 		// Finish the block and write the index
 		debug!("finish block and write index {:?}", block);
