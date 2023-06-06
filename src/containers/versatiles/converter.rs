@@ -149,11 +149,11 @@ impl TileConverter {
 		let tile_converter = self.config.get_tile_recompressor();
 
 		// Get the tile stream
-		let mut stream: Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + Send>> = reader.get_bbox_tile_stream(&bbox).await;
+		let mut stream: Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + Send>> = reader.get_bbox_tile_stream(bbox).await;
 
 		// Compress the blobs if necessary
 		if !tile_converter.is_empty() {
-			stream = Box::pin(stream.map(|(coord, blob)| (coord, tile_converter.run(blob.clone()).unwrap())))
+			stream = Box::pin(stream.map(|(coord, blob)| (coord, tile_converter.run(blob).unwrap())))
 		}
 
 		// Acquire locks for shared data structures
