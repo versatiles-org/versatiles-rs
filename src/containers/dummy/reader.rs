@@ -101,10 +101,10 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn convert_from() {
+	#[tokio::test]
+	async fn convert_from() {
 		let mut converter = TileConverter::new_dummy(ConverterProfile::Png, 8);
 		let mut reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
-		block_on(converter.convert_from(&mut reader)).unwrap();
+		converter.convert_from(&mut reader).await.unwrap();
 	}
 }
