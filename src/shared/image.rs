@@ -17,7 +17,7 @@ const WEBP_QUALITY: f32 = 95.0;
 /// # Returns
 ///
 /// A `Blob` object containing the PNG-encoded image.
-pub fn img2png(image: &DynamicImage) -> Result<Blob> {
+pub fn img2png(image: DynamicImage) -> Result<Blob> {
 	let mut buffer: Vec<u8> = Vec::new();
 	png::PngEncoder::new_with_quality(&mut buffer, png::CompressionType::Best, png::FilterType::Adaptive).write_image(
 		image.as_bytes(),
@@ -51,7 +51,7 @@ pub fn png2img(data: Blob) -> Result<DynamicImage> {
 /// # Returns
 ///
 /// A `Blob` object containing the JPEG-encoded image.
-pub fn img2jpg(image: &DynamicImage) -> Result<Blob> {
+pub fn img2jpg(image: DynamicImage) -> Result<Blob> {
 	let mut buffer: Vec<u8> = Vec::new();
 	jpeg::JpegEncoder::new_with_quality(&mut buffer, JPEG_QUALITY).write_image(
 		image.as_bytes(),
@@ -89,10 +89,10 @@ pub fn jpg2img(data: Blob) -> Result<DynamicImage> {
 /// # Panics
 ///
 /// Panics if the image color type is not 8-bit RGB or RGBA, as the crate "WebP" only supports these formats.
-pub fn img2webp(image: &DynamicImage) -> Result<Blob> {
+pub fn img2webp(image: DynamicImage) -> Result<Blob> {
 	match image.color() {
 		image::ColorType::Rgb8 | image::ColorType::Rgba8 => {
-			Ok(Blob::from(Encoder::from_image(image)?.encode(WEBP_QUALITY).to_vec()))
+			Ok(Blob::from(Encoder::from_image(&image)?.encode(WEBP_QUALITY).to_vec()))
 		}
 		_ => Err(Error::new(
 			"currently only 8 bit RGB/RGBA is supported for WebP lossy encoding",
@@ -113,9 +113,9 @@ pub fn img2webp(image: &DynamicImage) -> Result<Blob> {
 /// # Returns
 ///
 /// A `Blob` containing the WebP-encoded image data.
-pub fn img2webplossless(image: &DynamicImage) -> Result<Blob> {
+pub fn img2webplossless(image: DynamicImage) -> Result<Blob> {
 	match image.color() {
-		image::ColorType::Rgb8 => Ok(Blob::from(Encoder::from_image(image)?.encode_lossless().to_vec())),
+		image::ColorType::Rgb8 => Ok(Blob::from(Encoder::from_image(&image)?.encode_lossless().to_vec())),
 		_ => Err(Error::new(
 			"currently only 8 bit RGB is supported for WebP lossless encoding",
 		)),
@@ -151,16 +151,16 @@ mod tests {
 	#[test]
 	fn png() -> Result<()> {
 		let image1 = get_image_grey();
-		compare_images(png2img(img2png(&image1)?)?, image1, 0);
+		compare_images(png2img(img2png(image1.clone())?)?, image1, 0);
 
 		let image2 = get_image_greya();
-		compare_images(png2img(img2png(&image2)?)?, image2, 0);
+		compare_images(png2img(img2png(image2.clone())?)?, image2, 0);
 
 		let image3 = get_image_rgb();
-		compare_images(png2img(img2png(&image3)?)?, image3, 0);
+		compare_images(png2img(img2png(image3.clone())?)?, image3, 0);
 
 		let image4 = get_image_rgba();
-		compare_images(png2img(img2png(&image4)?)?, image4, 0);
+		compare_images(png2img(img2png(image4.clone())?)?, image4, 0);
 
 		Ok(())
 	}
@@ -169,10 +169,10 @@ mod tests {
 	#[test]
 	fn jpg() -> Result<()> {
 		let image1 = get_image_grey();
-		compare_images(jpg2img(img2jpg(&image1)?)?, image1, 0);
+		compare_images(jpg2img(img2jpg(image1.clone())?)?, image1, 0);
 
 		let image3 = get_image_rgb();
-		compare_images(jpg2img(img2jpg(&image3)?)?, image3, 4);
+		compare_images(jpg2img(img2jpg(image3.clone())?)?, image3, 4);
 
 		Ok(())
 	}
@@ -180,15 +180,15 @@ mod tests {
 	/// Test WebP encoding and decoding for grayscale, grayscale with alpha, RGB, and RGBA images
 	#[test]
 	fn webp() -> Result<()> {
-		assert!(img2webp(&get_image_grey()).is_err());
+		assert!(img2webp(get_image_grey()).is_err());
 
-		assert!(img2webp(&get_image_greya()).is_err());
+		assert!(img2webp(get_image_greya()).is_err());
 
 		let image3 = get_image_rgb();
-		compare_images(webp2img(img2webp(&image3)?)?, image3, 4);
+		compare_images(webp2img(img2webp(image3.clone())?)?, image3, 4);
 
 		let image4 = get_image_rgba();
-		compare_images(webp2img(img2webp(&image4)?)?, image4, 6);
+		compare_images(webp2img(img2webp(image4.clone())?)?, image4, 6);
 
 		Ok(())
 	}
@@ -196,14 +196,14 @@ mod tests {
 	/// Test lossless WebP encoding and decoding for grayscale and grayscale with alpha images
 	#[test]
 	fn webplossless() -> Result<()> {
-		assert!(img2webplossless(&get_image_grey()).is_err());
+		assert!(img2webplossless(get_image_grey()).is_err());
 
-		assert!(img2webplossless(&get_image_greya()).is_err());
+		assert!(img2webplossless(get_image_greya()).is_err());
 
 		let image3 = get_image_rgb();
-		compare_images(webp2img(img2webplossless(&image3)?)?, image3, 0);
+		compare_images(webp2img(img2webplossless(image3.clone())?)?, image3, 0);
 
-		assert!(img2webplossless(&get_image_rgba()).is_err());
+		assert!(img2webplossless(get_image_rgba()).is_err());
 
 		Ok(())
 	}

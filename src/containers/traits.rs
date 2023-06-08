@@ -49,14 +49,17 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
-	async fn get_bbox_tile_iterator(&mut self, bbox: &TileBBox) -> TileIterator {
-		Box::new(bbox.iter_coords().filter_map(|coord| {
-			let result = block_on(self.get_tile_data(&coord));
-			match result {
-				Ok(blob) => Some((coord, blob)),
-				Err(_) => None,
-			}
-		}))
+	async fn get_bbox_tile_vec(&mut self, bbox: &TileBBox) -> Result<Vec<(TileCoord3, Blob)>> {
+		Ok(bbox
+			.iter_coords()
+			.filter_map(|coord| {
+				let result = block_on(self.get_tile_data(&coord));
+				match result {
+					Ok(blob) => Some((coord, blob)),
+					Err(_) => None,
+				}
+			})
+			.collect())
 	}
 
 	/// verify container and output data to output_folder
@@ -160,12 +163,12 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn get_bbox_tile_iterator() -> Result<()> {
+	async fn get_bbox_tile_vec() -> Result<()> {
 		let mut reader = TestReader::new("test_path").await?;
 		let bbox = TileBBox::new(4, 0, 0, 10, 10); // Or replace it with actual bbox
-		let mut iterator = reader.get_bbox_tile_iterator(&bbox).await;
+		let vec = reader.get_bbox_tile_vec(&bbox).await?;
 
-		for (coord, blob) in iterator {
+		for (coord, blob) in vec {
 			println!("TileCoord2: {:?}", coord);
 			println!("Blob: {:?}", blob);
 			// Here, you can add the assertions you need to verify the correctness of each tile data

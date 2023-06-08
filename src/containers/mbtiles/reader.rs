@@ -40,7 +40,7 @@ impl TileReader {
 	async fn load_meta_data(&mut self) -> Result<()> {
 		trace!("load_meta_data");
 
-		let pyramide = self.get_bbox_pyramid().await;
+		let pyramide = self.get_bbox_pyramid().await?;
 		let conn = self.pool.get()?;
 		let mut stmt = conn.prepare("SELECT name, value FROM metadata")?;
 		let entries = stmt.query_map([], |row| {
@@ -90,7 +90,7 @@ impl TileReader {
 
 		Ok(())
 	}
-	async fn simple_query(&self, sql1: &str, sql2: &str) -> i32 {
+	async fn simple_query(&self, sql1: &str, sql2: &str) -> Result<i32> {
 		let sql = if sql2.is_empty() {
 			format!("SELECT {sql1} FROM tiles")
 		} else {
@@ -99,27 +99,27 @@ impl TileReader {
 
 		trace!("SQL: {}", sql);
 
-		let conn = self.pool.get().unwrap();
-		let mut stmt = conn.prepare(&sql).unwrap();
-		stmt.query_row([], |row| Ok(row.get::<_, i32>(0).unwrap())).unwrap()
+		let conn = self.pool.get()?;
+		let mut stmt = conn.prepare(&sql)?;
+		Ok(stmt.query_row([], |row| row.get::<_, i32>(0))?)
 	}
-	async fn get_bbox_pyramid(&self) -> TileBBoxPyramid {
+	async fn get_bbox_pyramid(&self) -> Result<TileBBoxPyramid> {
 		trace!("get_bbox_pyramid");
 
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
-		let z0 = self.simple_query("MIN(zoom_level)", "").await;
-		let z1 = self.simple_query("MAX(zoom_level)", "").await;
+		let z0 = self.simple_query("MIN(zoom_level)", "").await?;
+		let z1 = self.simple_query("MAX(zoom_level)", "").await?;
 
 		let mut progress = ProgressBar::new("get mbtiles bbox pyramid", (z1 - z0 + 1) as u64);
 
 		for z in z0..=z1 {
 			let x0 = self
 				.simple_query("MIN(tile_column)", &format!("zoom_level = {z}"))
-				.await;
+				.await?;
 			let x1 = self
 				.simple_query("MAX(tile_column)", &format!("zoom_level = {z}"))
-				.await;
+				.await?;
 			let xc = (x0 + x1) / 2;
 
 			/*
@@ -148,17 +148,17 @@ impl TileReader {
 			let sql_prefix = format!("zoom_level = {z} AND tile_");
 			let mut y0 = self
 				.simple_query("MIN(tile_row)", &format!("{sql_prefix}column = {xc}"))
-				.await;
+				.await?;
 			let mut y1 = self
 				.simple_query("MAX(tile_row)", &format!("{sql_prefix}column = {xc}"))
-				.await;
+				.await?;
 
 			y0 = self
 				.simple_query("MIN(tile_row)", &format!("{sql_prefix}row <= {y0}"))
-				.await;
+				.await?;
 			y1 = self
 				.simple_query("MAX(tile_row)", &format!("{sql_prefix}row >= {y1}"))
-				.await;
+				.await?;
 
 			let max_value = 2i32.pow(z as u32) - 1;
 
@@ -178,7 +178,7 @@ impl TileReader {
 
 		progress.finish();
 
-		bbox_pyramid
+		Ok(bbox_pyramid)
 	}
 }
 
@@ -236,7 +236,7 @@ impl TileReaderTrait for TileReader {
 
 		Ok(Blob::from(blob))
 	}
-	async fn get_bbox_tile_iterator(&mut self, bbox: &TileBBox) -> TileIterator {
+	async fn get_bbox_tile_vec(&mut self, bbox: &TileBBox) -> Result<Vec<(TileCoord3, Blob)>> {
 		let max = bbox.get_max();
 		let x_min = bbox.get_x_min();
 		let x_max = bbox.get_x_max();
@@ -244,26 +244,27 @@ impl TileReaderTrait for TileReader {
 		let y_max = max - bbox.get_y_min();
 		let level = bbox.get_level();
 
-		let conn = self.pool.get().unwrap();
-		let mut stmt =
-			conn.prepare("SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?").unwrap();
+		let conn = self.pool.get()?;
+		let mut stmt = conn
+			 .prepare("SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?")
+			 ?;
 
-		let iterator = stmt
-			.query_map([x_min, x_max, y_min, y_max, level as u32], |row| {
-				Ok((
-					TileCoord3 {
-						x: row.get::<_, u32>(0).unwrap(),
-						y: max - row.get::<_, u32>(1).unwrap(),
-						z: row.get::<_, u8>(2).unwrap(),
-					},
-					Blob::from(row.get::<_, Vec<u8>>(3)?),
-				))
-			})
-			.unwrap();
+		let mut rows = stmt.query([x_min, x_max, y_min, y_max, level as u32])?;
 
-		let iterator = iterator.map(|e| e.unwrap());
+		let mut vec: Vec<(TileCoord3, Blob)> = Vec::new();
 
-		Box::new(iterator)
+		while let Some(row) = rows.next()? {
+			vec.push((
+				TileCoord3::new(
+					row.get::<_, u32>(0).unwrap(),
+					max - row.get::<_, u32>(1).unwrap(),
+					row.get::<_, u8>(2).unwrap(),
+				),
+				Blob::from(row.get::<_, Vec<u8>>(3)?),
+			))
+		}
+
+		Ok(vec)
 	}
 	fn get_name(&self) -> Result<&str> {
 		Ok(&self.name)
@@ -281,13 +282,6 @@ impl std::fmt::Debug for TileReader {
 struct RecordMetadata {
 	name: String,
 	value: String,
-}
-
-struct RecordTile {
-	tile_column: i64,
-	tile_row: i64,
-	zoom_level: i64,
-	tile_data: Vec<u8>,
 }
 
 #[cfg(test)]

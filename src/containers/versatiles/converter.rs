@@ -105,7 +105,7 @@ impl TileConverter {
 
 		// Iterate through blocks and write them
 		for mut block in blocks.into_iter() {
-			let (tiles_range, index_range) = self.write_block(&block, reader, &mut progress).await;
+			let (tiles_range, index_range) = self.write_block(&block, reader, &mut progress).await?;
 
 			if tiles_range.length + index_range.length == 0 {
 				// Block is empty, continue with the next block
@@ -127,7 +127,7 @@ impl TileConverter {
 	// Write a single block
 	async fn write_block<'a>(
 		&mut self, block: &BlockDefinition, reader: &'a mut TileReaderBox, progress: &mut ProgressBar,
-	) -> (ByteRange, ByteRange) {
+	) -> Result<(ByteRange, ByteRange)> {
 		// Log the start of the block
 		debug!("start block {:?}", block);
 
@@ -154,16 +154,16 @@ impl TileConverter {
 		let mut secured_writer = mutex_writer.lock().await;
 
 		// Get the tile stream
-		let mut stream = reader.get_bbox_tile_iterator(bbox).await;
+		let mut vec = reader.get_bbox_tile_vec(bbox).await?;
 
 		// Compress the blobs if necessary
 		if !tile_converter.is_empty() {
 			//stream = Box::pin(stream.map(|(coord, blob)| (coord, tile_converter.run(blob).unwrap())))
-			stream = tile_converter.process_iterator(stream);
+			vec = tile_converter.process_vec(vec);
 		}
 
 		// Iterate through the blobs and process them
-		for (coord, blob) in stream {
+		for (coord, blob) in vec {
 			trace!("blob size {}", blob.len());
 
 			let index = bbox.get_tile_index(&coord.as_coord2());
@@ -198,6 +198,6 @@ impl TileConverter {
 		let offset1 = self.writer.get_position().await.unwrap();
 		let index_range = self.writer.append(&tile_index.as_brotli_blob()).await.unwrap();
 
-		(ByteRange::new(offset0, offset1 - offset0), index_range)
+		Ok((ByteRange::new(offset0, offset1 - offset0), index_range))
 	}
 }

@@ -151,13 +151,13 @@ impl ServerSourceTrait for TarFile {
 			let respond = |blob| ok_data(blob, &Compression::Brotli, &file_entry.mime);
 
 			if let Some(blob) = &file_entry.br {
-				return respond(blob.to_owned());
+				return respond(blob.clone());
 			}
 			if let Some(blob) = &file_entry.un {
-				return respond(compress_brotli(blob.to_owned()).unwrap());
+				return respond(compress_brotli(blob.clone()).unwrap());
 			}
 			if let Some(blob) = &file_entry.gz {
-				return respond(compress_brotli(decompress_gzip(blob.to_owned()).unwrap()).unwrap());
+				return respond(compress_brotli(decompress_gzip(blob.clone()).unwrap()).unwrap());
 			}
 		}
 
@@ -165,26 +165,26 @@ impl ServerSourceTrait for TarFile {
 			let respond = |blob| ok_data(blob, &Compression::Gzip, &file_entry.mime);
 
 			if let Some(blob) = &file_entry.gz {
-				return respond(blob.to_owned());
+				return respond(blob.clone());
 			}
 			if let Some(blob) = &file_entry.un {
-				return respond(compress_gzip(blob.to_owned()).unwrap());
+				return respond(compress_gzip(blob.clone()).unwrap());
 			}
 			if let Some(blob) = &file_entry.br {
-				return respond(compress_gzip(decompress_brotli(blob.to_owned()).unwrap()).unwrap());
+				return respond(compress_gzip(decompress_brotli(blob.clone()).unwrap()).unwrap());
 			}
 		}
 
 		let respond = |blob| ok_data(blob, &Compression::None, &file_entry.mime);
 
 		if let Some(blob) = &file_entry.un {
-			return respond(blob.to_owned());
+			return respond(blob.clone());
 		}
 		if let Some(blob) = &file_entry.br {
-			return respond(decompress_brotli(blob.to_owned()).unwrap());
+			return respond(decompress_brotli(blob.clone()).unwrap());
 		}
 		if let Some(blob) = &file_entry.gz {
-			return respond(decompress_gzip(blob.to_owned()).unwrap());
+			return respond(decompress_gzip(blob.clone()).unwrap());
 		}
 
 		ok_not_found()

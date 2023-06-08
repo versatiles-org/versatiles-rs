@@ -10,7 +10,6 @@ mod tile_bbox_pyramid;
 mod tile_converter_config;
 mod tile_coords;
 mod tile_reader_parameters;
-mod tile_iterator;
 
 pub use self::blob::*;
 pub use self::compress::*;
@@ -24,4 +23,3 @@ pub use self::tile_bbox_pyramid::*;
 pub use self::tile_converter_config::*;
 pub use self::tile_coords::*;
 pub use self::tile_reader_parameters::*;
-pub use self::tile_iterator::*;

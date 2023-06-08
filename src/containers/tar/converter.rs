@@ -79,12 +79,11 @@ impl TileConverterTrait for TileConverter {
 		let mutex_builder = &Mutex::new(&mut self.builder);
 
 		for bbox in bbox_pyramid.iter_levels() {
-			let iterator = reader.get_bbox_tile_iterator(bbox).await;
+			let iterator = reader.get_bbox_tile_vec(bbox).await?;
 			for (coord, blob) in iterator {
 				mutex_bar.lock().unwrap().inc(1);
-				let result = tile_converter.process_blob(blob);
 
-				if let Ok(blob) = result {
+				if let Ok(blob) = tile_converter.process_blob(blob) {
 					let filename = format!(
 						"./{}/{}/{}{}{}",
 						coord.get_z(),

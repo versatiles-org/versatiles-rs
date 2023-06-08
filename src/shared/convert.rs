@@ -1,17 +1,20 @@
-use super::{compress::*, image::*, Blob, Compression, Result, TileIterator};
+use super::{compress::*, image::*, Blob, Compression, Result, TileCoord3};
 use clap::ValueEnum;
+use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use std::fmt::Debug;
+
+type FnConvType = fn(Blob) -> Result<Blob>;
 
 #[derive(Clone)]
 /// A structure representing a function that converts a blob to another blob
 struct FnConv {
-	func: fn(Blob) -> Result<Blob>,
+	func: FnConvType,
 	name: String,
 }
 
 impl FnConv {
 	/// Create a new `FnConv` from a function and a name
-	fn new(func: fn(Blob) -> Result<Blob>, name: &str) -> FnConv {
+	fn new(func: FnConvType, name: &str) -> FnConv {
 		FnConv {
 			func,
 			name: name.to_owned(),
@@ -19,13 +22,13 @@ impl FnConv {
 	}
 
 	/// Create an optional `FnConv` from a function and a name
-	fn some(func: fn(Blob) -> Result<Blob>, name: &str) -> Option<FnConv> {
+	fn some(func: FnConvType, name: &str) -> Option<FnConv> {
 		Some(FnConv::new(func, name))
 	}
 
 	// Getter function for testing the function field
 	#[cfg(test)]
-	fn get_function(&self) -> fn(Blob) -> Result<Blob> {
+	fn get_function(&self) -> FnConvType {
 		self.func
 	}
 
@@ -87,18 +90,15 @@ impl DataConverter {
 		let format_converter_option: Option<FnConv> = if (src_form != dst_form) || force_recompress {
 			use TileFormat::*;
 			match (src_form, dst_form) {
-				(PNG, JPG) => FnConv::some(|tile| -> Result<Blob> { img2jpg(&png2img(tile)?) }, "PNG->JPG"),
-				(PNG, PNG) => FnConv::some(|tile| -> Result<Blob> { img2png(&png2img(tile)?) }, "PNG->PNG"),
-				(PNG, WEBP) => FnConv::some(
-					|tile| -> Result<Blob> { img2webplossless(&png2img(tile)?) },
-					"PNG->WEBP",
-				),
+				(PNG, JPG) => FnConv::some(|tile| -> Result<Blob> { img2jpg(png2img(tile)?) }, "PNG->JPG"),
+				(PNG, PNG) => FnConv::some(|tile| -> Result<Blob> { img2png(png2img(tile)?) }, "PNG->PNG"),
+				(PNG, WEBP) => FnConv::some(|tile| -> Result<Blob> { img2webplossless(png2img(tile)?) }, "PNG->WEBP"),
 
-				(JPG, PNG) => FnConv::some(|tile| -> Result<Blob> { img2png(&jpg2img(tile)?) }, "JPG->PNG"),
-				(JPG, WEBP) => FnConv::some(|tile| -> Result<Blob> { img2webp(&jpg2img(tile)?) }, "JPG->WEBP"),
+				(JPG, PNG) => FnConv::some(|tile| -> Result<Blob> { img2png(jpg2img(tile)?) }, "JPG->PNG"),
+				(JPG, WEBP) => FnConv::some(|tile| -> Result<Blob> { img2webp(jpg2img(tile)?) }, "JPG->WEBP"),
 
-				(WEBP, JPG) => FnConv::some(|tile| -> Result<Blob> { img2jpg(&webp2img(tile)?) }, "WEBP->JPG"),
-				(WEBP, PNG) => FnConv::some(|tile| -> Result<Blob> { img2png(&webp2img(tile)?) }, "WEBP->PNG"),
+				(WEBP, JPG) => FnConv::some(|tile| -> Result<Blob> { img2jpg(webp2img(tile)?) }, "WEBP->JPG"),
+				(WEBP, PNG) => FnConv::some(|tile| -> Result<Blob> { img2png(webp2img(tile)?) }, "WEBP->PNG"),
 
 				(_, _) => {
 					if src_form == dst_form {
@@ -177,23 +177,24 @@ impl DataConverter {
 	}
 
 	/// Runs the data through the pipeline of conversion functions and returns the result.
-	pub fn process_blob(&self, mut data: Blob) -> Result<Blob> {
+	pub fn process_blob(&self, mut blob: Blob) -> Result<Blob> {
 		for f in self.pipeline.iter() {
-			data = (f.func)(data)?;
+			blob = (f.func)(blob)?;
 		}
-		Ok(data)
+		Ok(blob)
 	}
 
 	/// Runs a stream through the pipeline of conversion functions
-	pub fn process_iterator(&self, iterator: TileIterator) -> TileIterator {
-		let pipeline = self.pipeline;
-		Box::new(iterator.map(|(coord, blob)| {
-			let mut data = blob;
-			for f in pipeline.iter() {
-				data = (f.func)(data).unwrap();
-			}
-			(coord, data)
-		}))
+	pub fn process_vec(&self, vec: Vec<(TileCoord3, Blob)>) -> Vec<(TileCoord3, Blob)> {
+		let pipeline = self.pipeline.clone();
+		vec.into_par_iter()
+			.map(move |(coord, mut blob)| {
+				for f in pipeline.iter() {
+					blob = (f.func)(blob).unwrap();
+				}
+				(coord, blob)
+			})
+			.collect()
 	}
 
 	/// Returns a string describing the pipeline of conversion functions.
@@ -228,7 +229,7 @@ mod tests {
 
 	#[test]
 	fn new() {
-		let fn_conv = FnConv::new(|x| Ok(x), "test_fn_conv");
+		let fn_conv = FnConv::new(|x| Ok(x.clone()), "test_fn_conv");
 		assert_eq!(fn_conv.name, "test_fn_conv");
 	}
 
@@ -289,7 +290,7 @@ mod tests {
 	#[test]
 	fn fn_conv() {
 		// Create a test `FnConv` instance
-		let test_fn = FnConv::new(|blob| Ok(blob), "test");
+		let test_fn = FnConv::new(|blob| Ok(blob.clone()), "test");
 
 		// Check the name of the `FnConv` instance
 		assert_eq!(test_fn.get_name(), "test");
