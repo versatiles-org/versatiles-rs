@@ -1,4 +1,4 @@
-use super::{compress::*, image::*, Blob, Compression, Result};
+use super::{compress::*, image::*, Blob, Compression, Result, TileIterator};
 use clap::ValueEnum;
 use std::fmt::Debug;
 
@@ -177,11 +177,23 @@ impl DataConverter {
 	}
 
 	/// Runs the data through the pipeline of conversion functions and returns the result.
-	pub fn run(&self, mut data: Blob) -> Result<Blob> {
+	pub fn process_blob(&self, mut data: Blob) -> Result<Blob> {
 		for f in self.pipeline.iter() {
 			data = (f.func)(data)?;
 		}
 		Ok(data)
+	}
+
+	/// Runs a stream through the pipeline of conversion functions
+	pub fn process_iterator(&self, iterator: TileIterator) -> TileIterator {
+		let pipeline = self.pipeline;
+		Box::new(iterator.map(|(coord, blob)| {
+			let mut data = blob;
+			for f in pipeline.iter() {
+				data = (f.func)(data).unwrap();
+			}
+			(coord, data)
+		}))
 	}
 
 	/// Returns a string describing the pipeline of conversion functions.

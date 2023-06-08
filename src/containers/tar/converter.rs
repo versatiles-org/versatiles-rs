@@ -3,7 +3,6 @@ use crate::{
 	shared::{compress, Compression, ProgressBar, Result, TileConverterConfig, TileFormat},
 };
 use async_trait::async_trait;
-use futures::{future, StreamExt};
 use log::trace;
 use std::{
 	fs::File,
@@ -80,39 +79,35 @@ impl TileConverterTrait for TileConverter {
 		let mutex_builder = &Mutex::new(&mut self.builder);
 
 		for bbox in bbox_pyramid.iter_levels() {
-			let stream = reader.get_bbox_tile_stream(bbox).await;
-			stream
-				.for_each(|(coord, blob)| {
-					mutex_bar.lock().unwrap().inc(1);
-					let result = tile_converter.run(blob);
+			let iterator = reader.get_bbox_tile_iterator(bbox).await;
+			for (coord, blob) in iterator {
+				mutex_bar.lock().unwrap().inc(1);
+				let result = tile_converter.process_blob(blob);
 
-					if let Ok(blob) = result {
-						let filename = format!(
-							"./{}/{}/{}{}{}",
-							coord.get_z(),
-							coord.get_y(),
-							coord.get_x(),
-							ext_form,
-							ext_comp
-						);
-						let path = PathBuf::from(&filename);
+				if let Ok(blob) = result {
+					let filename = format!(
+						"./{}/{}/{}{}{}",
+						coord.get_z(),
+						coord.get_y(),
+						coord.get_x(),
+						ext_form,
+						ext_comp
+					);
+					let path = PathBuf::from(&filename);
 
-						// Build header
-						let mut header = Header::new_gnu();
-						header.set_size(blob.len() as u64);
-						header.set_mode(0o644);
+					// Build header
+					let mut header = Header::new_gnu();
+					header.set_size(blob.len() as u64);
+					header.set_mode(0o644);
 
-						// Write blob to file
-						mutex_builder
-							.lock()
-							.unwrap()
-							.append_data(&mut header, path, blob.as_slice())
-							.unwrap();
-					}
-
-					future::ready(())
-				})
-				.await;
+					// Write blob to file
+					mutex_builder
+						.lock()
+						.unwrap()
+						.append_data(&mut header, path, blob.as_slice())
+						.unwrap();
+				}
+			}
 		}
 
 		bar.finish();

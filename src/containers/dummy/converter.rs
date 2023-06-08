@@ -3,7 +3,6 @@ use crate::{
 	shared::{Compression, Result, TileBBoxPyramid, TileConverterConfig, TileFormat},
 };
 use async_trait::async_trait;
-use futures::stream::StreamExt;
 
 #[derive(Debug)]
 pub enum ConverterProfile {
@@ -47,8 +46,8 @@ impl TileConverterTrait for TileConverter {
 		let bbox_pyramid = self.config.get_bbox_pyramid();
 
 		for bbox in bbox_pyramid.iter_levels() {
-			let stream = reader.get_bbox_tile_stream(&bbox).await;
-			let _count = stream.count().await;
+			let stream = reader.get_bbox_tile_iterator(&bbox).await;
+			let _count = stream.count();
 		}
 
 		Ok(())

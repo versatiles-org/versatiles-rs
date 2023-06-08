@@ -30,13 +30,14 @@ itertools = { version = "0.10.5", default-features = false, features = ["use_all
 lazy_static = { version = "1.4.0", default-features = false }
 log = { version = "0.4.18", default-features = false }
 mime_guess = { version = "2.0.4", default-features = false }
+r2d2 = { version = "0.8.10", default-features = false, optional = true }
+r2d2_sqlite = { version = "0.22.0", default-features = false, optional = true }
+rayon = { version = "1.7.0", default-features = false }
 regex = { version = "1.8.4", default-features = false, features = ["std"] }
 reqwest = { version = "0.11.18", default-features = false, features=["blocking", "rustls-tls"] }
-sqlx = { version = "0.6.3", default-features = false, optional = true, features = ["macros", "runtime-tokio-rustls", "sqlite"] }
 tar = { version = "0.4.38", default-features = false }
 term_size = { version = "0.3.2", default-features = false }
 tokio = { version = "1.28.2", default-features = false, features = ["macros"] }
-tokio-stream = { version = "0.1.14", default-features = false, optional = true }
 webp = { version = "0.2.2", default-features = false, features = ["img"] }
 
 [dev-dependencies]
@@ -45,7 +46,7 @@ criterion = { version = "0.5.1", default-features = false, features = ["async_fu
 
 [features]
 default = ["mbtiles"]
-mbtiles = ["dep:sqlx", "dep:tokio-stream"]
+mbtiles = ["dep:r2d2", "dep:r2d2_sqlite"]
 
 [lib]
 name = "versatiles"

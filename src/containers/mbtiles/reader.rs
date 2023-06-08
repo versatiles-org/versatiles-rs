@@ -1,25 +1,19 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
-	shared::{
-		Blob, Compression, Error, ProgressBar, Result, TileBBox, TileBBoxPyramid, TileCoord3, TileFormat,
-		TileReaderParameters,
-	},
+	shared::*,
 };
 use async_trait::async_trait;
-use futures::Stream;
 use log::trace;
-use sqlx::{query_scalar, sqlite::SqliteConnectOptions, ConnectOptions, SqlitePool};
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
 use std::{
 	env::current_dir,
 	path::{Path, PathBuf},
-	pin::Pin,
-	str::FromStr,
 };
-use tokio_stream::StreamExt;
 
 pub struct TileReader {
 	name: String,
-	pool: SqlitePool,
+	pool: Pool<SqliteConnectionManager>,
 	meta_data: Option<String>,
 	parameters: TileReaderParameters,
 }
@@ -28,10 +22,9 @@ impl TileReader {
 		trace!("load_from_sqlite {:?}", filename);
 
 		let name = filename.to_string_lossy().to_string();
-		let options = SqliteConnectOptions::from_str(&name)?
-			.disable_statement_logging()
-			.clone();
-		let pool = SqlitePool::connect_with(options).await?;
+
+		let manager = SqliteConnectionManager::file(&name);
+		let pool = Pool::builder().max_size(10).build(manager)?;
 
 		let mut reader = TileReader {
 			name,
@@ -48,19 +41,22 @@ impl TileReader {
 		trace!("load_meta_data");
 
 		let pyramide = self.get_bbox_pyramid().await;
-		let entries: Vec<RecordMetadata> = sqlx::query_as::<_, RecordMetadata>("SELECT name, value FROM metadata")
-			.fetch_all(&self.pool)
-			.await?;
+		let conn = self.pool.get()?;
+		let mut stmt = conn.prepare("SELECT name, value FROM metadata")?;
+		let entries = stmt.query_map([], |row| {
+			Ok(RecordMetadata {
+				name: row.get(0)?,
+				value: row.get(1)?,
+			})
+		})?;
 
 		let mut tile_format: Option<TileFormat> = None;
 		let mut compression: Option<Compression> = None;
 
 		for entry in entries {
-			let key = entry.name.unwrap();
-			let val = entry.value.unwrap();
-
-			match key.as_str() {
-				"format" => match val.as_str() {
+			let entry = entry?;
+			match entry.name.as_str() {
+				"format" => match entry.value.as_str() {
 					"jpg" => {
 						tile_format = Some(TileFormat::JPG);
 						compression = Some(Compression::None);
@@ -77,9 +73,9 @@ impl TileReader {
 						tile_format = Some(TileFormat::WEBP);
 						compression = Some(Compression::None);
 					}
-					_ => panic!("unknown file format: {val}"),
+					_ => panic!("unknown file format: {}", entry.value),
 				},
-				"json" => self.meta_data = Some(val),
+				"json" => self.meta_data = Some(entry.value),
 				&_ => {}
 			}
 		}
@@ -103,8 +99,9 @@ impl TileReader {
 
 		trace!("SQL: {}", sql);
 
-		//connection.query_row(&sql, [], |r| r.get(0)).unwrap()
-		query_scalar(&sql).fetch_one(&self.pool).await.unwrap()
+		let conn = self.pool.get().unwrap();
+		let mut stmt = conn.prepare(&sql).unwrap();
+		stmt.query_row([], |row| Ok(row.get::<_, i32>(0).unwrap())).unwrap()
 	}
 	async fn get_bbox_pyramid(&self) -> TileBBoxPyramid {
 		trace!("get_bbox_pyramid");
@@ -231,18 +228,15 @@ impl TileReaderTrait for TileReader {
 		let y = max_index - coord.get_y();
 		let z = coord.get_z() as u32;
 
-		let entry:RecordTile = sqlx::query_as::<_, RecordTile>("SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")
-			.bind(x)
-			.bind(y)
-			.bind(z)
-			.fetch_one(&self.pool)
-			.await?;
+		let conn = self.pool.get()?;
+		let mut stmt =
+			conn.prepare("SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")?;
 
-		Ok(Blob::from(entry.tile_data.unwrap()))
+		let blob = stmt.query_row([x, y, z], |row| row.get::<_, Vec<u8>>(0))?;
+
+		Ok(Blob::from(blob))
 	}
-	async fn get_bbox_tile_stream<'a>(
-		&'a mut self, bbox: &TileBBox,
-	) -> Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + 'a + Send>> {
+	async fn get_bbox_tile_iterator(&mut self, bbox: &TileBBox) -> TileIterator {
 		let max = bbox.get_max();
 		let x_min = bbox.get_x_min();
 		let x_max = bbox.get_x_max();
@@ -250,27 +244,26 @@ impl TileReaderTrait for TileReader {
 		let y_max = max - bbox.get_y_min();
 		let level = bbox.get_level();
 
-		let stream = sqlx::query_as::<_, RecordTile>(
-			"SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?")
-			.bind(x_min)
-			.bind(x_max)
-			.bind(y_min)
-			.bind(y_max)
-			.bind(level)
-		.fetch(&self.pool);
+		let conn = self.pool.get().unwrap();
+		let mut stmt =
+			conn.prepare("SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?").unwrap();
 
-		let stream2 = stream.map(move |r: sqlx::Result<RecordTile>| {
-			let r = r.unwrap();
-			let coord = TileCoord3::new(
-				r.tile_column.unwrap() as u32,
-				max - r.tile_row.unwrap() as u32,
-				r.zoom_level.unwrap() as u8,
-			);
-			let blob = Blob::from(r.tile_data.unwrap());
-			(coord, blob)
-		});
+		let iterator = stmt
+			.query_map([x_min, x_max, y_min, y_max, level as u32], |row| {
+				Ok((
+					TileCoord3 {
+						x: row.get::<_, u32>(0).unwrap(),
+						y: max - row.get::<_, u32>(1).unwrap(),
+						z: row.get::<_, u8>(2).unwrap(),
+					},
+					Blob::from(row.get::<_, Vec<u8>>(3)?),
+				))
+			})
+			.unwrap();
 
-		Box::pin(stream2)
+		let iterator = iterator.map(|e| e.unwrap());
+
+		Box::new(iterator)
 	}
 	fn get_name(&self) -> Result<&str> {
 		Ok(&self.name)
@@ -285,18 +278,16 @@ impl std::fmt::Debug for TileReader {
 	}
 }
 
-#[derive(sqlx::FromRow)]
 struct RecordMetadata {
-	name: Option<String>,
-	value: Option<String>,
+	name: String,
+	value: String,
 }
 
-#[derive(sqlx::FromRow)]
 struct RecordTile {
-	tile_column: Option<i64>,
-	tile_row: Option<i64>,
-	zoom_level: Option<i64>,
-	tile_data: Option<Vec<u8>>,
+	tile_column: i64,
+	tile_row: i64,
+	zoom_level: i64,
+	tile_data: Vec<u8>,
 }
 
 #[cfg(test)]

@@ -28,7 +28,8 @@ impl TileReader {
 		let header = FileHeader::from_reader(&mut reader).await?;
 
 		let meta = if header.meta_range.length > 0 {
-			DataConverter::new_decompressor(&header.compression).run(reader.read_range(&header.meta_range).await?)?
+			DataConverter::new_decompressor(&header.compression)
+				.process_blob(reader.read_range(&header.meta_range).await?)?
 		} else {
 			Blob::empty()
 		};

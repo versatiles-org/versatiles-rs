@@ -2,12 +2,12 @@
 use super::{types::*, DataWriterFile, DataWriterTrait};
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig, TileCoord3},
+	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig},
 };
 use async_trait::async_trait;
-use futures::{lock::Mutex, Stream, StreamExt};
+use futures::lock::Mutex;
 use log::{debug, trace};
-use std::{collections::HashMap, pin::Pin};
+use std::collections::HashMap;
 
 // Define TileConverter struct
 pub struct TileConverter {
@@ -69,7 +69,7 @@ impl TileConverter {
 	// Write metadata
 	async fn write_meta(&mut self, reader: &TileReaderBox) -> Result<ByteRange> {
 		let meta = reader.get_meta().await?;
-		let compressed = self.config.get_compressor().run(meta)?;
+		let compressed = self.config.get_compressor().process_blob(meta)?;
 
 		self.writer.append(&compressed).await
 	}
@@ -125,8 +125,8 @@ impl TileConverter {
 	}
 
 	// Write a single block
-	async fn write_block(
-		&mut self, block: &BlockDefinition, reader: &mut TileReaderBox, progress: &mut ProgressBar,
+	async fn write_block<'a>(
+		&mut self, block: &BlockDefinition, reader: &'a mut TileReaderBox, progress: &mut ProgressBar,
 	) -> (ByteRange, ByteRange) {
 		// Log the start of the block
 		debug!("start block {:?}", block);
@@ -148,21 +148,22 @@ impl TileConverter {
 		// Create the tile converter and set parameters
 		let tile_converter = self.config.get_tile_recompressor();
 
-		// Get the tile stream
-		let mut stream: Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + Send>> = reader.get_bbox_tile_stream(bbox).await;
-
-		// Compress the blobs if necessary
-		if !tile_converter.is_empty() {
-			stream = Box::pin(stream.map(|(coord, blob)| (coord, tile_converter.run(blob).unwrap())))
-		}
-
 		// Acquire locks for shared data structures
 		let mut secured_tile_hash_lookup = mutex_tile_hash_lookup.lock().await;
 		let mut secured_tile_index = mutex_tile_index.lock().await;
 		let mut secured_writer = mutex_writer.lock().await;
 
+		// Get the tile stream
+		let mut stream = reader.get_bbox_tile_iterator(bbox).await;
+
+		// Compress the blobs if necessary
+		if !tile_converter.is_empty() {
+			//stream = Box::pin(stream.map(|(coord, blob)| (coord, tile_converter.run(blob).unwrap())))
+			stream = tile_converter.process_iterator(stream);
+		}
+
 		// Iterate through the blobs and process them
-		while let Some((coord, blob)) = stream.next().await {
+		for (coord, blob) in stream {
 			trace!("blob size {}", blob.len());
 
 			let index = bbox.get_tile_index(&coord.as_coord2());
@@ -184,6 +185,7 @@ impl TileConverter {
 				secured_tile_hash_lookup.insert(tile_hash.as_vec(), range);
 			}
 		}
+
 		drop(secured_writer);
 		drop(secured_tile_index);
 

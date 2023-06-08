@@ -1,9 +1,7 @@
-use crate::shared::{
-	Blob, Compression, Result, TileBBox, TileConverterConfig, TileCoord3, TileFormat, TileReaderParameters,
-};
+use crate::shared::*;
 use async_trait::async_trait;
-use futures::stream::{unfold, Stream, StreamExt};
-use std::{fmt::Debug, path::Path, pin::Pin};
+use futures::executor::block_on;
+use std::{fmt::Debug, path::Path};
 
 pub type TileConverterBox = Box<dyn TileConverterTrait>;
 pub type TileReaderBox = Box<dyn TileReaderTrait>;
@@ -51,26 +49,14 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
-	async fn get_bbox_tile_stream<'a>(
-		&'a mut self, bbox: &TileBBox,
-	) -> Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + 'a + Send>> {
-		let initial_state = (self, bbox.iter_coords().collect::<Vec<_>>().into_iter());
-
-		let stream = unfold(initial_state, move |(tile_reader, mut coord_iter)| async move {
-			match coord_iter.next() {
-				Some(coord) => {
-					let result = tile_reader.get_tile_data(&coord).await;
-					match result {
-						Ok(blob) => Some((Some((coord, blob)), (tile_reader, coord_iter))),
-						Err(_) => Some((None, (tile_reader, coord_iter))),
-					}
-				}
-				None => None,
+	async fn get_bbox_tile_iterator(&mut self, bbox: &TileBBox) -> TileIterator {
+		Box::new(bbox.iter_coords().filter_map(|coord| {
+			let result = block_on(self.get_tile_data(&coord));
+			match result {
+				Ok(blob) => Some((coord, blob)),
+				Err(_) => None,
 			}
-		});
-		let stream = stream.filter_map(|item| async move { item });
-
-		Box::pin(stream)
+		}))
 	}
 
 	/// verify container and output data to output_folder
@@ -81,11 +67,8 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 
 #[cfg(test)]
 mod tests {
-	use std::pin::Pin;
-
 	use super::*;
 	use async_trait::async_trait;
-	use futures::StreamExt;
 
 	#[derive(Debug)]
 	struct TestReader {
@@ -177,13 +160,12 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn get_bbox_tile_stream() -> Result<()> {
+	async fn get_bbox_tile_iterator() -> Result<()> {
 		let mut reader = TestReader::new("test_path").await?;
 		let bbox = TileBBox::new(4, 0, 0, 10, 10); // Or replace it with actual bbox
-		let stream = reader.get_bbox_tile_stream(&bbox).await;
-		let mut pinned_stream = Pin::from(stream); // Pin the stream
+		let mut iterator = reader.get_bbox_tile_iterator(&bbox).await;
 
-		while let Some((coord, blob)) = pinned_stream.next().await {
+		for (coord, blob) in iterator {
 			println!("TileCoord2: {:?}", coord);
 			println!("Blob: {:?}", blob);
 			// Here, you can add the assertions you need to verify the correctness of each tile data
