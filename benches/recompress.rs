@@ -32,7 +32,7 @@ async fn recompress_to_brotli(c: &mut Criterion) {
 	println!("count: {}", vec.len());
 	let mut size: usize = 0;
 	vec.iter().for_each(|(_c, b)| size += b.len());
-	println!("size: {:.2} MB", size as f32 / 1048576.);
+	println!("size before: {:.2} MB", size as f32 / 1048576.);
 
 	let converter = DataConverter::new_tile_recompressor(
 		reader.get_tile_format().unwrap(),
@@ -41,6 +41,13 @@ async fn recompress_to_brotli(c: &mut Criterion) {
 		&Compression::Brotli,
 		true,
 	);
+
+	let mut size: usize = 0;
+	converter
+		.process_vec(vec.clone())
+		.iter()
+		.for_each(|(_c, b)| size += b.len());
+	println!("size after: {:.2} MB", size as f32 / 1048576.);
 
 	let mut group = c.benchmark_group("sample-size-example");
 	group.sample_size(10).measurement_time(Duration::from_secs(20));
