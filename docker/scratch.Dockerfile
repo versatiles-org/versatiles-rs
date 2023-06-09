@@ -8,7 +8,10 @@ RUN apk add curl gzip musl-dev openssl-dev pkgconfig sqlite-dev
 RUN rustup default stable
 RUN cargo install versatiles
 
-# Create User
+# download frontend
+RUN curl -L "https://github.com/versatiles-org/versatiles-frontend/releases/latest/download/frontend.br.tar" > frontend.br.tar
+
+# Create user
 ENV USER=versatiles
 ENV UID=1000
 RUN adduser \ 
@@ -28,6 +31,7 @@ WORKDIR /data/
 COPY --from=builder /etc/passwd /etc/passwd
 COPY --from=builder /etc/group /etc/group
 COPY --from=builder --chown=versatiles:versatiles /usr/local/cargo/bin/versatiles /usr/bin/
+COPY --from=builder --chown=versatiles:versatiles frontend.br.tar .
 COPY helpers/versatiles_selftest.sh .
 
 USER versatiles
