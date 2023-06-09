@@ -156,9 +156,10 @@ impl TileConverter {
 		// Get the tile stream
 		let mut vec = reader.get_bbox_tile_vec(bbox).await?;
 
+		vec.sort_by_cached_key(|(coord, _blob)| coord.get_sort_index());
+
 		// Compress the blobs if necessary
 		if !tile_converter.is_empty() {
-			//stream = Box::pin(stream.map(|(coord, blob)| (coord, tile_converter.run(blob).unwrap())))
 			vec = tile_converter.process_vec(vec);
 		}
 
