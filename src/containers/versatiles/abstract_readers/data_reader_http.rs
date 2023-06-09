@@ -49,12 +49,15 @@ impl DataReaderTrait for DataReaderHttp {
 			);
 		}
 
-		let content_range: &str = match response.headers().get("content-range") {
-			Some(header_value) => header_value.to_str()?,
-			None => panic!(
-				"content-range is not set for range request {range:?} to url {}",
-				self.url
-			),
+		let content_range: &str;
+		match response.headers().get("content-range") {
+			Some(header_value) => content_range = header_value.to_str()?,
+			None => {
+				return create_error!(
+					"content-range is not set for range request {range:?} to url {}",
+					self.url
+				)
+			}
 		};
 
 		lazy_static! {
@@ -114,24 +117,40 @@ mod tests {
 	// Test the 'read_range' method
 	#[tokio::test]
 	async fn read_range() -> Result<()> {
-		// A sample URL containing text data
-		let url = "https://raw.githubusercontent.com/versatiles-org/versatiles-rs/main/testdata/berlin.mbtiles";
-		let mut data_reader_http = DataReaderHttp::new(url).await?;
+		async fn test(url: &str, check: (u64, u64, &str)) -> Result<()> {
+			let mut data_reader_http = DataReaderHttp::new(url).await?;
 
-		// Define a range to read
-		let range = ByteRange { offset: 7, length: 8 };
+			// Define a range to read
+			let range = ByteRange {
+				offset: check.0,
+				length: check.1,
+			};
 
-		// Read the specified range from the URL
-		let blob = data_reader_http.read_range(&range).await?;
+			// Read the specified range from the URL
+			let blob = data_reader_http.read_range(&range).await?;
 
-		// Convert the resulting Blob to a string
-		let result_text = str::from_utf8(blob.as_slice())?;
+			// Convert the resulting Blob to a string
+			let result_text = str::from_utf8(blob.as_slice())?;
 
-		// Expected text from the specified range
-		let expected_text = "format 3";
+			// Check if the read range matches the expected text
+			assert_eq!(result_text, check.2);
 
-		// Check if the read range matches the expected text
-		assert_eq!(result_text, expected_text);
+			Ok(())
+		}
+
+		test(
+			"https://raw.githubusercontent.com/versatiles-org/versatiles-rs/main/testdata/berlin.mbtiles",
+			(7, 8, "format 3"),
+		)
+		.await?;
+
+		test(
+			"https://storage.googleapis.com/versatiles/download/planet/planet-20230529.versatiles",
+			(3, 12, "satiles_v02 "),
+		)
+		.await?;
+
+		test("https://google.com/", (100, 110, "plingplong")).await.unwrap_err();
 
 		Ok(())
 	}
