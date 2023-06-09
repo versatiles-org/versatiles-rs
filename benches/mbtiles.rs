@@ -2,6 +2,7 @@ use criterion::{async_executor::FuturesExecutor, criterion_group, Criterion};
 use log::{set_max_level, LevelFilter};
 use versatiles::{containers::get_reader, shared::TileBBox};
 
+#[allow(dead_code)]
 #[tokio::main]
 async fn mbtiles_read_vec(c: &mut Criterion) {
 	set_max_level(LevelFilter::Warn);
