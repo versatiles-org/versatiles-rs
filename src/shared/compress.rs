@@ -1,7 +1,9 @@
+use crate::create_error;
+
 use super::{Blob, Result};
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
 use clap::ValueEnum;
-use enumset::EnumSetType;
+use enumset::{EnumSet, EnumSetType};
 use flate2::bufread::{GzDecoder, GzEncoder};
 use std::io::{Cursor, Read};
 
@@ -11,6 +13,52 @@ pub enum Compression {
 	None,
 	Gzip,
 	Brotli,
+}
+
+pub fn optimize_compression(
+	data: Blob, compression: &Compression, compressions: EnumSet<Compression>,
+) -> Result<(Blob, Compression)> {
+	if compressions.is_empty() {
+		return create_error!("no compression allowed");
+	}
+
+	match compression {
+		Compression::None => {
+			if compressions.contains(Compression::Brotli) {
+				return Ok((compress_brotli(data)?, Compression::Brotli));
+			}
+
+			if compressions.contains(Compression::Gzip) {
+				return Ok((compress_gzip(data)?, Compression::Gzip));
+			}
+
+			Ok((data, Compression::None))
+		}
+		Compression::Gzip => {
+			if compressions.contains(Compression::Gzip) {
+				return Ok((data, Compression::Gzip));
+			}
+			let data = decompress_gzip(data)?;
+
+			if compressions.contains(Compression::Brotli) {
+				return Ok((compress_brotli(data)?, Compression::Brotli));
+			}
+
+			Ok((data, Compression::None))
+		}
+		Compression::Brotli => {
+			if compressions.contains(Compression::Brotli) {
+				return Ok((data, Compression::Brotli));
+			}
+			let data = decompress_brotli(data)?;
+
+			if compressions.contains(Compression::Gzip) {
+				return Ok((compress_gzip(data)?, Compression::Gzip));
+			}
+
+			Ok((data, Compression::None))
+		}
+	}
 }
 
 /// Compresses data based on the given compression algorithm

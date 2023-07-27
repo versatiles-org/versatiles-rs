@@ -1,13 +1,9 @@
 use crate::{
 	create_error,
-	server::{guess_mime, ok_data, ok_not_found, ServerSourceTrait},
-	shared::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression, Result},
+	server::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait},
+	shared::{Blob, Compression, Result},
 };
 use async_trait::async_trait;
-use axum::{
-	body::{Bytes, Full},
-	response::Response,
-};
 use enumset::EnumSet;
 use log::trace;
 use std::{
@@ -138,56 +134,29 @@ impl ServerSourceTrait for TarFile {
 		Ok("{\"type\":\"tar\"}".to_owned())
 	}
 
-	async fn get_data(&mut self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>> {
+	async fn get_data(&mut self, path: &[&str], accept: EnumSet<Compression>) -> Option<ServerSourceResult> {
 		let entry_name = path.join("/");
-		let entry_option = self.lookup.get(&entry_name);
-		if entry_option.is_none() {
-			return ok_not_found();
-		}
-
-		let file_entry = entry_option.unwrap().to_owned();
+		let file_entry = self.lookup.get(&entry_name)?.to_owned();
 
 		if accept.contains(Compression::Brotli) {
-			let respond = |blob| ok_data(blob, &Compression::Brotli, &file_entry.mime);
-
 			if let Some(blob) = &file_entry.br {
-				return respond(blob.clone());
-			}
-			if let Some(blob) = &file_entry.un {
-				return respond(compress_brotli(blob.clone()).unwrap());
-			}
-			if let Some(blob) = &file_entry.gz {
-				return respond(compress_brotli(decompress_gzip(blob.clone()).unwrap()).unwrap());
+				return make_result(blob.to_owned(), &Compression::Brotli, &file_entry.mime);
 			}
 		}
 
 		if accept.contains(Compression::Gzip) {
-			let respond = |blob| ok_data(blob, &Compression::Gzip, &file_entry.mime);
-
 			if let Some(blob) = &file_entry.gz {
-				return respond(blob.clone());
+				return make_result(blob.to_owned(), &Compression::Gzip, &file_entry.mime);
 			}
+		}
+
+		if accept.contains(Compression::None) {
 			if let Some(blob) = &file_entry.un {
-				return respond(compress_gzip(blob.clone()).unwrap());
-			}
-			if let Some(blob) = &file_entry.br {
-				return respond(compress_gzip(decompress_brotli(blob.clone()).unwrap()).unwrap());
+				return make_result(blob.to_owned(), &Compression::None, &file_entry.mime);
 			}
 		}
 
-		let respond = |blob| ok_data(blob, &Compression::None, &file_entry.mime);
-
-		if let Some(blob) = &file_entry.un {
-			return respond(blob.clone());
-		}
-		if let Some(blob) = &file_entry.br {
-			return respond(decompress_brotli(blob.clone()).unwrap());
-		}
-		if let Some(blob) = &file_entry.gz {
-			return respond(decompress_gzip(blob.clone()).unwrap());
-		}
-
-		ok_not_found()
+		None
 	}
 }
 
@@ -205,30 +174,8 @@ mod tests {
 		tar::TileConverter,
 		TileConverterTrait,
 	};
-	use crate::shared::{decompress, TileBBoxPyramid, TileConverterConfig, TileFormat};
+	use crate::shared::{TileBBoxPyramid, TileConverterConfig, TileFormat};
 	use assert_fs::NamedTempFile;
-	use axum::body::HttpBody;
-	use enumset::enum_set;
-	use hyper::header::CONTENT_ENCODING;
-
-	async fn get_as_string(container: &mut Box<TarFile>, path: &[&str], compression: &Compression) -> String {
-		let mut resp = container.get_data(path, enum_set!(compression)).await;
-		let encoding = resp.headers().get(CONTENT_ENCODING);
-
-		let content_compression = match encoding {
-			None => Compression::None,
-			Some(value) => match value.to_str().unwrap() {
-				"gzip" => Compression::Gzip,
-				"br" => Compression::Brotli,
-				_ => panic!("encoding: {encoding:?}"),
-			},
-		};
-
-		let data = resp.data().await.unwrap().unwrap();
-		let data = decompress(Blob::from(data), &content_compression).unwrap();
-		let data = String::from_utf8_lossy(data.as_slice());
-		return data.to_string();
-	}
 
 	pub async fn make_test_tar(compression: &Compression) -> NamedTempFile {
 		let reader_profile = ReaderProfile::PbfFast;
@@ -253,41 +200,6 @@ mod tests {
 		converter.convert_from(&mut reader).await.unwrap();
 
 		container_file
-	}
-
-	#[tokio::test]
-	async fn compressions() {
-		use Compression::*;
-
-		async fn test_compression(from_compression: &Compression, to_compression: &Compression) {
-			let file = make_test_tar(from_compression).await;
-
-			let mut tar_file = TarFile::from(&file.to_str().unwrap()).unwrap();
-
-			let result = get_as_string(&mut tar_file, &["meta.json"], to_compression).await;
-			assert_eq!(result, "Not Found");
-
-			let result = get_as_string(&mut tar_file, &["tiles.json"], to_compression).await;
-			assert_eq!(result, "dummy meta data");
-
-			let result = get_as_string(&mut tar_file, &["0", "0", "0.pbf"], to_compression).await;
-			assert!(result.starts_with("\u{1a}4\n\u{5}ocean"));
-
-			let result = get_as_string(&mut tar_file, &["cheesecake.mp4"], to_compression).await;
-			assert_eq!(result, "Not Found");
-		}
-
-		test_compression(&None, &None).await;
-		test_compression(&None, &Gzip).await;
-		test_compression(&None, &Brotli).await;
-
-		test_compression(&Gzip, &None).await;
-		test_compression(&Gzip, &Gzip).await;
-		test_compression(&Gzip, &Brotli).await;
-
-		test_compression(&Brotli, &None).await;
-		test_compression(&Brotli, &Gzip).await;
-		test_compression(&Brotli, &Brotli).await;
 	}
 
 	#[tokio::test]

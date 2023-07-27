@@ -1,12 +1,8 @@
 use crate::{
-	server::{guess_mime, ok_data, ok_not_found, ServerSourceTrait},
-	shared::{compress_brotli, compress_gzip, Blob, Compression, Result},
+	server::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait},
+	shared::{Blob, Compression, Result},
 };
 use async_trait::async_trait;
-use axum::{
-	body::{Bytes, Full},
-	response::Response,
-};
 use enumset::EnumSet;
 use std::{
 	env::current_dir,
@@ -57,7 +53,7 @@ impl ServerSourceTrait for Folder {
 
 	// Gets the data at the given path and responds with a compressed or uncompressed version
 	// based on the accept header
-	async fn get_data(&mut self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>> {
+	async fn get_data(&mut self, path: &[&str], _accept: EnumSet<Compression>) -> Option<ServerSourceResult> {
 		let mut local_path = self.folder.clone();
 		local_path.push(PathBuf::from(path.join("/")));
 
@@ -68,7 +64,7 @@ impl ServerSourceTrait for Folder {
 
 		// If the local path is not a subpath of the folder or it doesn't exist, return not found
 		if !local_path.starts_with(&self.folder) || !local_path.exists() || !local_path.is_file() {
-			return ok_not_found();
+			return None;
 		}
 
 		let f = File::open(&local_path).unwrap();
@@ -78,18 +74,7 @@ impl ServerSourceTrait for Folder {
 
 		let mime = guess_mime(&local_path);
 
-		// If Brotli compression is accepted, compress and return the data
-		if accept.contains(Compression::Brotli) {
-			return ok_data(compress_brotli(blob).unwrap(), &Compression::Brotli, &mime);
-		}
-
-		// If Gzip compression is accepted, compress and return the data
-		if accept.contains(Compression::Gzip) {
-			return ok_data(compress_gzip(blob).unwrap(), &Compression::Gzip, &mime);
-		}
-
-		// If no compression is accepted, return the data uncompressed
-		ok_data(blob, &Compression::None, &mime)
+		return make_result(blob, &Compression::None, &mime);
 	}
 }
 
@@ -106,9 +91,7 @@ impl Debug for Folder {
 mod tests {
 	use super::Folder;
 	use crate::{server::ServerSourceTrait, shared::Compression};
-	use axum::body::HttpBody;
 	use enumset::enum_set;
-	use hyper::StatusCode;
 
 	#[tokio::test]
 	async fn test() {
@@ -122,17 +105,16 @@ mod tests {
 		assert_eq!(folder.get_info_as_json().unwrap(), "{\"type\":\"folder\"}");
 
 		// Test get_data function with a non-existent file
-		let mut result = folder
+		let result = folder
 			.get_data(&["recipes", "Queijo.txt"], enum_set!(Compression::None))
 			.await;
-		assert_eq!(result.status(), StatusCode::NOT_FOUND);
-		let result = result.data().await.unwrap().unwrap();
-		assert_eq!(format!("{:?}", result), "b\"Not Found\"");
+		assert!(result.is_none());
 
 		// Test get_data function with an existing file
-		let mut result = folder.get_data(&["berlin.mbtiles"], enum_set!(Compression::None)).await;
-		assert_eq!(result.status(), StatusCode::OK);
-		let result = result.data().await.unwrap().unwrap();
+		let result = folder.get_data(&["berlin.mbtiles"], enum_set!(Compression::None)).await;
+		assert!(result.is_some());
+
+		let result = result.unwrap().blob;
 		assert_eq!(result.len(), 26533888);
 	}
 }

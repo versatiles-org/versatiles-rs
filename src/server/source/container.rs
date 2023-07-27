@@ -1,13 +1,9 @@
 use crate::{
 	containers::TileReaderBox,
-	server::{ok_data, ok_not_found, ServerSourceTrait},
-	shared::{compress_brotli, compress_gzip, decompress, Compression, Result, TileCoord3, TileFormat},
+	server::{make_result, ServerSourceResult, ServerSourceTrait},
+	shared::{Compression, Result, TileCoord3, TileFormat},
 };
 use async_trait::async_trait;
-use axum::{
-	body::{Bytes, Full},
-	response::Response,
-};
 use enumset::EnumSet;
 use std::fmt::Debug;
 
@@ -75,7 +71,7 @@ impl ServerSourceTrait for TileContainer {
 	}
 
 	// Retrieve the tile data as an HTTP response
-	async fn get_data(&mut self, path: &[&str], accept: EnumSet<Compression>) -> Response<Full<Bytes>> {
+	async fn get_data(&mut self, path: &[&str], _accept: EnumSet<Compression>) -> Option<ServerSourceResult> {
 		if path.len() == 3 {
 			// Parse the tile coordinates
 			let z = path[0].parse::<u8>();
@@ -85,7 +81,7 @@ impl ServerSourceTrait for TileContainer {
 
 			// Check for parsing errors
 			if x.is_err() || y.is_err() || z.is_err() {
-				return ok_not_found();
+				return None;
 			}
 
 			// Create a TileCoord3 instance
@@ -96,44 +92,24 @@ impl ServerSourceTrait for TileContainer {
 
 			// If tile data is not found, return a not found response
 			if tile.is_err() {
-				return ok_not_found();
+				return None;
 			}
 
-			let mut data = tile.unwrap();
-
-			// If the accepted compression matches the container's compression, return the data
-			if accept.contains(self.compression) {
-				return ok_data(data, &self.compression, &self.tile_mime);
-			}
-
-			// Decompress the data and return it
-			data = decompress(data, &self.compression).unwrap();
-			return ok_data(data, &Compression::None, &self.tile_mime);
+			return make_result(tile.unwrap(), &self.compression, &self.tile_mime);
 		} else if (path[0] == "meta.json") || (path[0] == "tiles.json") {
 			// Get metadata
 			let meta = self.reader.get_meta().await.unwrap();
 
 			// If metadata is empty, return a not found response
 			if meta.is_empty() {
-				return ok_not_found();
+				return None;
 			}
 
-			let mime = "application/json";
-
-			// Return the compressed metadata based on the accepted compression
-			if accept.contains(Compression::Brotli) {
-				return ok_data(compress_brotli(meta).unwrap(), &Compression::Brotli, mime);
-			}
-
-			if accept.contains(Compression::Gzip) {
-				return ok_data(compress_gzip(meta).unwrap(), &Compression::Gzip, mime);
-			}
-
-			return ok_data(meta, &Compression::None, mime);
+			return make_result(meta, &Compression::None, &String::from("application/json"));
 		}
 
 		// If the request is unknown, return a not found response
-		ok_not_found()
+		None
 	}
 }
 
@@ -160,9 +136,7 @@ mod tests {
 			Result,
 		},
 	};
-	use axum::body::Bytes;
 	use enumset::EnumSet;
-	use hyper::body::HttpBody;
 
 	// Test the constructor function for TileContainer
 	#[test]
@@ -192,48 +166,35 @@ mod tests {
 	#[tokio::test]
 	async fn tile_container_get_data() -> Result<()> {
 		async fn check_response(
-			container: &mut TileContainer, url: &str, compression: Compression, status: u16, content_type: &str,
-		) -> Result<Bytes> {
+			container: &mut TileContainer, url: &str, compression: Compression, mime_type: &str,
+		) -> Result<Vec<u8>> {
 			let path: Vec<&str> = url.split("/").collect();
-			let mut response = container.get_data(&path, EnumSet::only(compression)).await;
-			assert_eq!(response.status(), status);
-			assert_eq!(response.headers().get("content-type").unwrap().to_str()?, content_type);
-			let body: Bytes = response.data().await.unwrap()?;
-			Ok(body)
+			let response = container.get_data(&path, EnumSet::only(compression)).await;
+			assert!(response.is_some());
+
+			let response = response.unwrap();
+			assert_eq!(response.mime, mime_type);
+
+			Ok(response.blob.as_vec())
 		}
 
 		async fn check_404(container: &mut TileContainer, url: &str, compression: Compression) -> Result<bool> {
 			let path: Vec<&str> = url.split("/").collect();
-			let mut response = container.get_data(&path, EnumSet::only(compression)).await;
-			assert_eq!(response.status(), 404, "for url {url}");
-			let body: Bytes = response.data().await.unwrap()?;
-			assert_eq!(body, "Not Found");
+			let response = container.get_data(&path, EnumSet::only(compression)).await;
+			assert!(response.is_none());
 			Ok(true)
 		}
 
 		let c = &mut TileContainer::from(TileReader::new_dummy(ReaderProfile::PngFast, 8))?;
 
 		assert_eq!(
-			&check_response(c, "0/0/0.png", None, 200, "image/png").await?[0..6],
+			&check_response(c, "0/0/0.png", None, "image/png").await?[0..6],
 			b"\x89PNG\r\n"
 		);
 
 		assert_eq!(
-			&check_response(c, "meta.json", None, 200, "application/json").await?[..],
+			&check_response(c, "meta.json", None, "application/json").await?[..],
 			b"dummy meta data"
-		);
-
-		assert_eq!(
-			&check_response(c, "meta.json", Brotli, 200, "application/json").await?[..],
-			[11, 7, 128, 100, 117, 109, 109, 121, 32, 109, 101, 116, 97, 32, 100, 97, 116, 97, 3]
-		);
-
-		assert_eq!(
-			&check_response(c, "meta.json", Gzip, 200, "application/json").await?[..],
-			[
-				31, 139, 8, 0, 0, 0, 0, 0, 2, 255, 75, 41, 205, 205, 173, 84, 200, 77, 45, 73, 84, 72, 73, 44, 73, 4, 0,
-				191, 165, 147, 231, 15, 0, 0, 0
-			]
 		);
 
 		assert!(check_404(c, "x/0/0.png", None).await?);

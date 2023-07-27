@@ -1,7 +1,7 @@
-use super::{ServerSource, ServerSourceTrait};
+use super::{ServerSource, ServerSourceResult, ServerSourceTrait};
 use crate::{
 	create_error,
-	shared::{Blob, Compression, Result},
+	shared::{optimize_compression, Blob, Compression, Result},
 };
 use axum::{
 	body::{Bytes, Full},
@@ -129,16 +129,20 @@ impl TileServer {
 			let tile_app = Router::new()
 				.route(&route, get(serve_tile))
 				.with_state(tile_source.source.clone());
+
 			app = app.merge(tile_app);
 
 			async fn serve_tile(
 				Path(path): Path<String>, headers: HeaderMap, State(source_mutex): State<ServerSource>,
 			) -> Response<Full<Bytes>> {
 				let sub_path: Vec<&str> = path.split('/').collect();
-				let mut source = source_mutex.lock().await;
-				let response = source.get_data(&sub_path, get_encoding(headers)).await;
-				drop(source);
-				response
+				let compressions = get_encoding(headers);
+				let response = source_mutex.lock().await.get_data(&sub_path, compressions).await;
+				if let Some(response) = response {
+					ok_data(response, compressions).await
+				} else {
+					ok_not_found()
+				}
 			}
 		}
 
@@ -164,14 +168,11 @@ impl TileServer {
 			}
 
 			let path_slice = path_vec.as_slice();
-			let encoding_set = get_encoding(headers);
+			let compressions = get_encoding(headers);
 
 			for source in sources.iter() {
-				let mut source = source.lock().await;
-				let response = source.get_data(path_slice, encoding_set).await;
-				drop(source);
-				if response.status() == 200 {
-					return response;
+				if let Some(result) = source.lock().await.get_data(path_slice, compressions).await {
+					return ok_data(result, compressions).await;
 				}
 			}
 
@@ -196,17 +197,11 @@ impl TileServer {
 		let api_app = Router::new()
 			.route(
 				"/api/status.json",
-				get(|| async {
-					ok_data(
-						Blob::from("{\"status\":\"ready\"}"),
-						&Compression::None,
-						"application/json",
-					)
-				}),
+				get(|| async { ok_json("{\"status\":\"ready\"}").await }),
 			)
 			.route(
 				"/api/tiles.json",
-				get(|| async move { ok_data(Blob::from(&tile_sources_json), &Compression::None, "application/json") }),
+				get(|| async move { ok_json(&tile_sources_json).await }),
 			);
 
 		Ok(app.merge(api_app))
@@ -223,15 +218,17 @@ impl TileServer {
 	}
 }
 
-pub fn ok_not_found() -> Response<Full<Bytes>> {
+fn ok_not_found() -> Response<Full<Bytes>> {
 	Response::builder().status(404).body(Full::from("Not Found")).unwrap()
 }
 
-pub fn ok_data(data: Blob, compression: &Compression, mime: &str) -> Response<Full<Bytes>> {
+async fn ok_data(result: ServerSourceResult, compressions: EnumSet<Compression>) -> Response<Full<Bytes>> {
 	let mut response = Response::builder()
 		.status(200)
-		.header(CONTENT_TYPE, mime)
+		.header(CONTENT_TYPE, result.mime)
 		.header(CACHE_CONTROL, "public");
+
+	let (blob, compression) = optimize_compression(result.blob, &result.compression, compressions).unwrap();
 
 	match compression {
 		Compression::None => {}
@@ -239,7 +236,19 @@ pub fn ok_data(data: Blob, compression: &Compression, mime: &str) -> Response<Fu
 		Compression::Brotli => response = response.header(CONTENT_ENCODING, "br"),
 	}
 
-	response.body(Full::from(data.as_vec())).unwrap()
+	response.body(Full::from(blob.as_vec())).unwrap()
+}
+
+async fn ok_json(message: &str) -> Response<Full<Bytes>> {
+	ok_data(
+		ServerSourceResult {
+			blob: Blob::from(message),
+			compression: Compression::None,
+			mime: String::from("application/json"),
+		},
+		enum_set!(Compression::None),
+	)
+	.await
 }
 
 pub fn guess_mime(path: &std::path::Path) -> String {
