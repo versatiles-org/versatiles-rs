@@ -105,6 +105,7 @@ impl TileBBox {
 	pub fn get_level(&self) -> u8 {
 		self.level
 	}
+	#[allow(dead_code)]
 	pub fn get_max(&self) -> u32 {
 		self.max
 	}
