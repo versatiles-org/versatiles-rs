@@ -59,18 +59,14 @@ jobs:
 
       - name: Install arm tools
         if: ${{ contains(matrix.arch, 'arm') }}
-        run: |
-          echo "GNU_PREFIX=arm-linux-gnueabihf-" >> $GITHUB_ENV
-          sudo apt-get install -y binutils-arm-linux-gnueabihf
+        run: sudo apt-get install -y binutils-arm-linux-gnueabihf
 
       - name: Install aarch64 tools
         if: ${{ contains(matrix.arch, 'aarch64') }}
-        run: |
-          echo "GNU_PREFIX=aarch64-linux-gnu-" >> $GITHUB_ENV
-          sudo apt-get install -y binutils-aarch64-linux-gnu
+        run: sudo apt-get install -y binutils-aarch64-linux-gnu
 
-      - name: Install sqlite-dev
-        run: sudo apt-get install -y libsqlite3-dev
+      #- name: Install sqlite-dev
+      #  run: sudo apt-get install -y libsqlite3-dev
 
       - uses: actions/checkout@v3
 
