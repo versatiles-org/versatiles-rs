@@ -1,6 +1,9 @@
 name: Build and release binaries
 
 on:
+  push:
+    branches:
+      - "feat-workflow-release-binaries"
   release:
     types:
       - created
