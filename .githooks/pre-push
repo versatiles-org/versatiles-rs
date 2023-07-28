@@ -10,10 +10,7 @@ function cleanup {
 }
 trap cleanup EXIT
 
-result=$(bash ../helpers/check.sh)
-if [ $? -ne 0 ]; then
-   echo "$result"
-   exit 1
-fi
+cargo fmt --all -- --check
+cargo clippy --all -- -D warning
 
 exit 0
