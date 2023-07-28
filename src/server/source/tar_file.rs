@@ -150,10 +150,16 @@ impl ServerSourceTrait for TarFile {
 			}
 		}
 
-		if accept.contains(Compression::None) {
-			if let Some(blob) = &file_entry.un {
-				return make_result(blob.to_owned(), &Compression::None, &file_entry.mime);
-			}
+		if let Some(blob) = &file_entry.un {
+			return make_result(blob.to_owned(), &Compression::None, &file_entry.mime);
+		}
+
+		if let Some(blob) = &file_entry.br {
+			return make_result(blob.to_owned(), &Compression::Brotli, &file_entry.mime);
+		}
+
+		if let Some(blob) = &file_entry.gz {
+			return make_result(blob.to_owned(), &Compression::Gzip, &file_entry.mime);
 		}
 
 		None
@@ -177,7 +183,7 @@ mod tests {
 	use crate::shared::{TileBBoxPyramid, TileConverterConfig, TileFormat};
 	use assert_fs::NamedTempFile;
 
-	pub async fn make_test_tar(compression: &Compression) -> NamedTempFile {
+	pub async fn make_test_tar(compression: Compression) -> NamedTempFile {
 		let reader_profile = ReaderProfile::PbfFast;
 
 		// get dummy reader
@@ -188,7 +194,7 @@ mod tests {
 
 		let config = TileConverterConfig::new(
 			Some(TileFormat::PBF),
-			Some(compression.to_owned()),
+			Some(compression),
 			TileBBoxPyramid::new_full(),
 			false,
 		);
@@ -204,7 +210,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn small_stuff() {
-		let file = make_test_tar(&Compression::None).await;
+		let file = make_test_tar(Compression::None).await;
 
 		let tar_file = TarFile::from(&file.to_str().unwrap()).unwrap();
 
@@ -223,5 +229,55 @@ mod tests {
 	fn from_directory() {
 		let path = ".";
 		assert!(TarFile::from(path).is_err());
+	}
+
+	#[tokio::test]
+	async fn test_get_data() {
+		use Compression::{Brotli as B, Gzip as G, None as N};
+
+		test1(N).await.unwrap();
+		test1(G).await.unwrap();
+		test1(B).await.unwrap();
+
+		async fn test1(compression_tar: Compression) -> Result<()> {
+			println!("compression_tar {:?}", compression_tar);
+			let file = make_test_tar(compression_tar).await;
+			let mut tar_file = TarFile::from(file.to_str().unwrap())?;
+
+			test2(&mut tar_file, &compression_tar, N).await?;
+			test2(&mut tar_file, &compression_tar, G).await?;
+			test2(&mut tar_file, &compression_tar, B).await?;
+
+			return Ok(());
+
+			async fn test2(
+				tar_file: &mut TarFile, compression_tar: &Compression, compression_accept: Compression,
+			) -> Result<()> {
+				println!("compression_accept {:?}", compression_accept);
+				let accept = EnumSet::only(compression_accept);
+
+				let path = ["non_existing_file"];
+				let result = tar_file.get_data(&path, accept).await;
+				assert!(result.is_none());
+
+				//let path = ["0", "0", "0"];
+				let path = ["tiles.json"];
+				let result = tar_file.get_data(&path, accept).await;
+				assert!(result.is_some());
+
+				let result = result.unwrap();
+
+				println!("{:?}", result);
+
+				if result.compression == N {
+					assert_eq!(result.blob.as_str(), "dummy meta data");
+				}
+
+				assert_eq!(result.mime, "application/json");
+				assert_eq!(&result.compression, compression_tar);
+
+				return Ok(());
+			}
+		}
 	}
 }

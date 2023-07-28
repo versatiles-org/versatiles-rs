@@ -13,6 +13,7 @@ pub trait ServerSourceTrait: Send + Sync + Debug {
 	async fn get_data(&mut self, path: &[&str], accept: EnumSet<Compression>) -> Option<ServerSourceResult>;
 }
 
+#[derive(Debug)]
 pub struct ServerSourceResult {
 	pub blob: Blob,
 	pub compression: Compression,
