@@ -72,7 +72,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --release --features=bin --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+          args: --release --all-features --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
           use-cross: true
 
       - name: Upload binary
