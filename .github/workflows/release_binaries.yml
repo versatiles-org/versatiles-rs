@@ -70,12 +70,14 @@ jobs:
 
       - uses: actions/checkout@v3
 
-      - name: Build ${{ matrix.arch }}-${{ matrix.libc }}
-        uses: actions-rs/cargo@v1
+      - uses: actions-rs/toolchain@v1
         with:
-          command: build
-          args: --release --all-features --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
-          use-cross: true
+          toolchain: stable
+          target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+          components: cross
+
+      - name: Build ${{ matrix.arch }}-${{ matrix.libc }}
+        run: cross build --release --all-features --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
 
       - name: Upload binary
         uses: actions/upload-artifact@v3
