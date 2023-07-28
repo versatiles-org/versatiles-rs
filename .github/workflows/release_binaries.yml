@@ -39,18 +39,16 @@ jobs:
             libc: "gnu"
           - arch: "x86_64"
             libc: "musl"
-          - arch: "i686"
-            libc: "musl"
-          - arch: "arm"
-            libc: "gnueabihf"
-          - arch: "arm"
-            libc: "musleabi"
-          - arch: "arm"
-            libc: "musleabihf"
-          - arch: "armv7"
-            libc: "musleabihf"
-          - arch: "aarch64"
-            libc: "gnu"
+          #- arch: "i686"
+          #  libc: "musl"
+          #- arch: "arm"
+          #  libc: "gnueabihf"
+          #- arch: "arm"
+          #  libc: "musleabi"
+          #- arch: "arm"
+          #  libc: "musleabihf"
+          #- arch: "armv7"
+          #  libc: "musleabihf"
       fail-fast: false
     steps:
       - name: Install musl tools
@@ -68,9 +66,11 @@ jobs:
       #- name: Install sqlite-dev
       #  run: sudo apt-get install -y libsqlite3-dev
 
-      - uses: actions/checkout@v3
+      - name: Get repo
+        uses: actions/checkout@v3
 
-      - uses: actions-rs/toolchain@v1
+      - name: Get Rust
+        uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
@@ -78,8 +78,8 @@ jobs:
       - name: Install cross
         run: cargo install cross
 
-      - name: Build ${{ matrix.arch }}-${{ matrix.libc }}
-        run: cross build --release --all-features --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+      - name: Build binary
+        run: cross build -vvv --release --all-features --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
 
       - name: Upload binary
         uses: actions/upload-artifact@v3
