@@ -69,6 +69,9 @@ jobs:
           echo "GNU_PREFIX=aarch64-linux-gnu-" >> $GITHUB_ENV
           sudo apt-get install -y binutils-aarch64-linux-gnu
 
+      - name: Install sqlite-dev
+        run: apt install -y libsqlite3-dev
+
       - uses: actions/checkout@v3
 
       - name: Build ${{ matrix.arch }}-${{ matrix.libc }}
