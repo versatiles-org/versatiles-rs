@@ -70,7 +70,7 @@ jobs:
           sudo apt-get install -y binutils-aarch64-linux-gnu
 
       - name: Install sqlite-dev
-        run: apt install -y libsqlite3-dev
+        run: sudo apt-get install -y libsqlite3-dev
 
       - uses: actions/checkout@v3
 
