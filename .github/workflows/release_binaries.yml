@@ -75,6 +75,9 @@ jobs:
           toolchain: stable
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
 
+      - name: Install cross
+        run: cargo install cross
+
       - name: Build ${{ matrix.arch }}-${{ matrix.libc }}
         run: cross build --release --all-features --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
 
