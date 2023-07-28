@@ -21,7 +21,7 @@ jobs:
 
       - name: Get release tag
         id: get_release
-        run: echo 'RELEASE_TAG=v$(cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/\1/p")' >> $GITHUB_ENV'
+        run: echo 'RELEASE_TAG=v$(cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/\1/p")' >> $GITHUB_ENV
 
       - name: Create release if needed
         run: gh release create $RELEASE_TAG || true
