@@ -123,10 +123,11 @@ jobs:
           path: "target/release/versatiles.exe"
 
   upload-release:
+    name: Upload release
     needs:
       - build-linux
       - build-macos
-      - build-windows
+      #- build-windows
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
