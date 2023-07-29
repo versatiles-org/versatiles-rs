@@ -3,8 +3,8 @@ name: Continuous Integration
 
 on:
   push:
-    branches:
-      - "**"
+    branches-ignore:
+      - "feat-workflow-release-binaries"
     tags:
       - "!**"
     paths-ignore:

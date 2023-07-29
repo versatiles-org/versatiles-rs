@@ -39,21 +39,23 @@ jobs:
             libc: "gnu"
           - arch: "x86_64"
             libc: "musl"
-          #- arch: "i686"
-          #  libc: "musl"
-          #- arch: "arm"
-          #  libc: "gnueabihf"
-          #- arch: "arm"
-          #  libc: "musleabi"
-          #- arch: "arm"
-          #  libc: "musleabihf"
-          #- arch: "armv7"
-          #  libc: "musleabihf"
+          - arch: "i686"
+            libc: "musl"
+          - arch: "arm"
+            libc: "gnueabihf"
+          - arch: "arm"
+            libc: "musleabi"
+          - arch: "arm"
+            libc: "musleabihf"
+          - arch: "armv7"
+            libc: "musleabihf"
+          - arch: "aarch64"
+            libc: "musl"
       fail-fast: false
     steps:
       - name: Install musl tools
         if: ${{ contains(matrix.libc, 'musl') }}
-        run: sudo apt-get install -y musl-tools
+        run: sudo apt-get install -y musl musl-tools
 
       - name: Install arm tools
         if: ${{ contains(matrix.arch, 'arm') }}
@@ -79,7 +81,7 @@ jobs:
         run: cargo install cross
 
       - name: Build binary
-        run: cross build -vvv --release --all-features --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+        run: cross build -vv --release --all-features --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
 
       - name: Upload binary
         uses: actions/upload-artifact@v3
