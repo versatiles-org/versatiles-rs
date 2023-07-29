@@ -37,8 +37,6 @@ jobs:
         include:
           - arch: "x86_64"
             libc: "gnu"
-          - arch: "i686"
-            libc: "gnu"
           - arch: "aarch64"
             libc: "gnu"
       fail-fast: false

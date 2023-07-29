@@ -8,20 +8,6 @@ pre-build = [
 [target.gnu-linux-x86_64]
 pre-build = [ "dpkg --add-architecture $CROSS_DEB_ARCH", "apt-get update", "apt-get install -y libsqlite3-dev:x86_64" ]
 
-[target.musl-linux-x86_64]
-pre-build = [ "dpkg --add-architecture $CROSS_DEB_ARCH", "apt-get update", "apt-get install -y libsqlite3-dev:x86_64" ]
-
-[target.musl-linux-i686]
-pre-build = [ "dpkg --add-architecture $CROSS_DEB_ARCH", "apt-get update", "apt-get install -y libsqlite3-dev:i686" ]
-
-[target.gnueabihf-linux-arm]
+[target.gnu-linux-aarch64]
 pre-build = [ "dpkg --add-architecture $CROSS_DEB_ARCH", "apt-get update", "apt-get install -y libsqlite3-dev:arm64" ]
 
-[target.musleabi-linux-arm]
-pre-build = [ "dpkg --add-architecture $CROSS_DEB_ARCH", "apt-get update", "apt-get install -y libsqlite3-dev:arm64" ]
-
-[target.musleabihf-linux-arm]
-pre-build = [ "dpkg --add-architecture $CROSS_DEB_ARCH", "apt-get update", "apt-get install -y libsqlite3-dev:arm64" ]
-
-[target.musl-linux-aarch64]
-pre-build = [ "dpkg --add-architecture $CROSS_DEB_ARCH", "apt-get update", "apt-get install -y libsqlite3-dev:aarch64" ]
