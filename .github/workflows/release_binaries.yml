@@ -14,7 +14,7 @@ env:
 
 jobs:
   prepare:
-    name: Build release binary
+    name: Prepare release
     runs-on: ubuntu-latest
     outputs:
       release_tag: $RELEASE_TAG
@@ -84,7 +84,7 @@ jobs:
           target: ${{ matrix.arch }}-apple-darwin
 
       - name: Build binary
-        run: cross build --release --all-features --target ${{ matrix.arch }}-apple-darwin
+        run: cargo build --release --all-features --target ${{ matrix.arch }}-apple-darwin
 
       - name: Upload binary
         uses: actions/upload-artifact@v3
@@ -99,7 +99,9 @@ jobs:
       matrix:
         include:
           - arch: "x86_64"
-            libc: "gnu"
+            libc: "msvc"
+          - arch: "aarch64"
+            libc: "msvc"
       fail-fast: false
     steps:
       - uses: actions/checkout@v3
@@ -111,7 +113,7 @@ jobs:
           default: true
 
       - name: Build binary
-        run: cross build --release --all-features --target ${{ matrix.arch }}-pc-windows-${{ matrix.libc }}
+        run: cargo build --release --all-features --target ${{ matrix.arch }}-pc-windows-${{ matrix.libc }}
 
       - name: Upload binary
         uses: actions/upload-artifact@v3
