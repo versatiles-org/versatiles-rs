@@ -20,16 +20,17 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Get old release tag
+        run: echo "old_tag=$(git describe --tags `git rev-list --tags --max-count=1`)" >> "$GITHUB_ENV"
+
       - name: Get new release tag
-        run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/release_tag=v\1/p" >> "$GITHUB_ENV"
+        run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/new_tag=v\1/p" >> "$GITHUB_ENV"
+
+      - name: Create tag
+        run: git tag ${{ env.new_tag }}
 
       - name: Create release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ env.release_tag }}
-
-      - name: Check release
-        run: gh release view ${{ env.release_tag }}
+        run: gh release create ${{ env.new_tag }}
 
   build-linux:
     runs-on: ubuntu-latest
@@ -145,5 +146,5 @@ jobs:
         run: |
           cd release
           find . -maxdepth 1 -type f -exec echo "sha256sum '{}' > '{}'.sha256" \; | sh
-          gh release upload "${{ env.release_tag }}" --clobber *
-          # gh release edit "${{ env.release_tag }}" --draft=false --latest --prerelease=false
+          gh release upload "${{ env.new_tag }}" --clobber *
+          # gh release edit "${{ env.new_tag }}" --draft=false --latest --prerelease=false
