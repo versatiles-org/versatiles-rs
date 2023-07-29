@@ -39,7 +39,6 @@ jobs:
             libc: "gnu"
           #- arch: "aarch64"
           #  libc: "gnu"
-      fail-fast: false
     steps:
       - name: Install aarch64 tools
         if: ${{ contains(matrix.arch, 'aarch64') }}
@@ -52,18 +51,19 @@ jobs:
           profile: minimal
           toolchain: stable
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+          default: true
 
       - name: Install cross
         run: cargo install cross
 
       - name: Build binary
-        run: cross build --release --all-features --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+        run: cross build --release --all-features
 
       - name: Upload binary
         uses: actions/upload-artifact@v3
         with:
           name: "versatiles-linux-${{ matrix.arch }}-${{ matrix.libc }}"
-          path: "target/${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}/release/versatiles"
+          path: "target/release/versatiles"
 
   build-macos:
     runs-on: macos-latest
@@ -73,7 +73,6 @@ jobs:
         include:
           - arch: "x86_64"
           - arch: "aarch64"
-      fail-fast: false
     steps:
       - uses: actions/checkout@v3
 
@@ -82,15 +81,16 @@ jobs:
           profile: minimal
           toolchain: stable
           target: ${{ matrix.arch }}-apple-darwin
+          default: true
 
       - name: Build binary
-        run: cargo build --release --all-features --target ${{ matrix.arch }}-apple-darwin
+        run: cargo build --release --all-features
 
       - name: Upload binary
         uses: actions/upload-artifact@v3
         with:
           name: "versatiles-macos-${{ matrix.arch }}"
-          path: "target/${{ matrix.arch }}-apple-darwin/release/versatiles"
+          path: "target/release/versatiles"
 
   build-windows:
     runs-on: windows-latest
@@ -102,7 +102,6 @@ jobs:
             libc: "msvc"
           - arch: "aarch64"
             libc: "msvc"
-      fail-fast: false
     steps:
       - uses: actions/checkout@v3
 
@@ -110,22 +109,23 @@ jobs:
         with:
           profile: minimal
           toolchain: stable
+          target: ${{ matrix.arch }}-pc-windows-${{ matrix.libc }}
           default: true
 
       - name: Build binary
-        run: cargo build --release --all-features --target ${{ matrix.arch }}-pc-windows-${{ matrix.libc }}
+        run: cargo build --release --all-features
 
       - name: Upload binary
         uses: actions/upload-artifact@v3
         with:
           name: "versatiles-windows-${{ matrix.arch }}.exe"
-          path: "target/${{ matrix.arch }}-pc-windows-${{ matrix.libc }}/release/versatiles.exe"
+          path: "target/release/versatiles.exe"
 
   upload-release:
     needs:
       - build-linux
       - build-macos
-      - build-windows
+      #- build-windows
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
