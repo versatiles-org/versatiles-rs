@@ -37,20 +37,10 @@ jobs:
         include:
           - arch: "x86_64"
             libc: "gnu"
-          - arch: "x86_64"
-            libc: "musl"
           - arch: "i686"
-            libc: "musl"
-          - arch: "arm"
-            libc: "gnueabihf"
-          - arch: "arm"
-            libc: "musleabi"
-          - arch: "arm"
-            libc: "musleabihf"
-          - arch: "armv7"
-            libc: "musleabihf"
+            libc: "gnu"
           - arch: "aarch64"
-            libc: "musl"
+            libc: "gnu"
       fail-fast: false
     steps:
       - name: Install musl tools
