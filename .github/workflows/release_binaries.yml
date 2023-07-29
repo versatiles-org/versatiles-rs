@@ -27,8 +27,8 @@ jobs:
         id: get_release
         run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/tag=v\1/p" >> "$GITHUB_OUTPUT"
 
-      - name: Create release if needed
-        run: gh release create ${{ steps.get_release.outputs.tag }} || true
+      - name: Check release
+        run: gh release view ${{ steps.get_release.outputs.tag }}
 
   build-linux:
     runs-on: ubuntu-latest
