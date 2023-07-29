@@ -11,6 +11,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   prepare:
