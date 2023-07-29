@@ -125,6 +125,7 @@ jobs:
   upload-release:
     name: Upload release
     needs:
+      - prepare
       - build-linux
       - build-macos
       #- build-windows
