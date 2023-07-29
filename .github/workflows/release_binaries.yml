@@ -17,17 +17,17 @@ jobs:
     name: Prepare release
     runs-on: ubuntu-latest
     outputs:
-      release_tag: $RELEASE_TAG
+      release_tag: ${{ steps.get_release.outputs.tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Get release tag
         id: get_release
-        run: echo 'RELEASE_TAG=v$(cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/\1/p")' >> $GITHUB_ENV
+        run: echo 'tag=v$(cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/\1/p")' >> "$GITHUB_OUTPUT"
 
       - name: Create release if needed
-        run: gh release create $RELEASE_TAG || true
+        run: gh release create ${{ steps.get_release.outputs.tag }} || true
 
   build-linux:
     runs-on: ubuntu-latest
