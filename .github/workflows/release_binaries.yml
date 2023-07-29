@@ -22,16 +22,19 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Get old release tag
-        run: echo "old_tag=$(git describe --tags `git rev-list --tags --max-count=1`)" >> "$GITHUB_ENV"
+        run: 'curl -s -H "Accept: application/json" https://api.github.com/repos/versatiles-org/versatiles-rs/tags | jq -r ''"old_tag=" + first(.[] | .name | select(startswith("v")))'' >> "$GITHUB_ENV"'
 
       - name: Get new release tag
         run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/new_tag=v\1/p" >> "$GITHUB_ENV"
 
       - name: Create tag
-        run: git tag ${{ env.new_tag }}
+        run: git tag "${{ env.new_tag }}"
+
+      - name: Push tag
+        run: git push "${{ env.new_tag }}"
 
       - name: Create release
-        run: gh release create --draft --verify-tag ${{ env.new_tag }}
+        run: gh release create --draft --verify-tag "${{ env.new_tag }}"
 
   build-linux:
     runs-on: ubuntu-latest
