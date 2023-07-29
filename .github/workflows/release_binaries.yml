@@ -11,24 +11,25 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
-  GH_TOKEN: ${{ github.token }}
 
 jobs:
   prepare:
     name: Prepare release
     runs-on: ubuntu-latest
-    outputs:
-      release_tag: ${{ steps.get_release.outputs.tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Get release tag
-        id: get_release
-        run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/tag=v\1/p" >> "$GITHUB_OUTPUT"
+      - name: Get new release tag
+        run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/release_tag=v\1/p" >> "$GITHUB_ENV"
+
+      - name: Create release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ env.release_tag }}
 
       - name: Check release
-        run: gh release view ${{ steps.get_release.outputs.tag }}
+        run: gh release view ${{ env.release_tag }}
 
   build-linux:
     runs-on: ubuntu-latest
@@ -144,5 +145,5 @@ jobs:
         run: |
           cd release
           find . -maxdepth 1 -type f -exec echo "sha256sum '{}' > '{}'.sha256" \; | sh
-          gh release upload ${{needs.prepare.outputs.release_tag}} --clobber *
-          # gh release edit ${{needs.prepare.outputs.release_tag}} --draft=false --latest --prerelease=false
+          gh release upload "${{ env.release_tag }}" --clobber *
+          # gh release edit "${{ env.release_tag }}" --draft=false --latest --prerelease=false
