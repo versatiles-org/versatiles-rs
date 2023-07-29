@@ -11,6 +11,7 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   prepare:
@@ -30,7 +31,7 @@ jobs:
         run: git tag ${{ env.new_tag }}
 
       - name: Create release
-        run: gh release create ${{ env.new_tag }}
+        run: gh release create --draft --verify-tag ${{ env.new_tag }}
 
   build-linux:
     runs-on: ubuntu-latest
