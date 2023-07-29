@@ -93,6 +93,7 @@ jobs:
           path: "target/release/versatiles"
 
   build-windows:
+    if: false
     runs-on: windows-latest
     needs: prepare
     strategy:
@@ -134,6 +135,7 @@ jobs:
       - uses: actions/download-artifact@v3
         with:
           path: ~/release
+
       - name: Upload binary
         working-directory: ~/release
         run: |
