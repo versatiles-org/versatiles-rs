@@ -37,31 +37,19 @@ jobs:
         include:
           - arch: "x86_64"
             libc: "gnu"
-          - arch: "aarch64"
-            libc: "gnu"
+          #- arch: "aarch64"
+          #  libc: "gnu"
       fail-fast: false
     steps:
-      - name: Install musl tools
-        if: ${{ contains(matrix.libc, 'musl') }}
-        run: sudo apt-get install -y musl musl-tools
-
-      - name: Install arm tools
-        if: ${{ contains(matrix.arch, 'arm') }}
-        run: sudo apt-get install -y binutils-arm-linux-gnueabihf
-
       - name: Install aarch64 tools
         if: ${{ contains(matrix.arch, 'aarch64') }}
         run: sudo apt-get install -y binutils-aarch64-linux-gnu
 
-      #- name: Install sqlite-dev
-      #  run: sudo apt-get install -y libsqlite3-dev
+      - uses: actions/checkout@v3
 
-      - name: Get repo
-        uses: actions/checkout@v3
-
-      - name: Get Rust
-        uses: actions-rs/toolchain@v1
+      - uses: actions-rs/toolchain@v1
         with:
+          profile: minimal
           toolchain: stable
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
 
@@ -69,7 +57,7 @@ jobs:
         run: cargo install cross
 
       - name: Build binary
-        run: cross build -vv --release --all-features --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+        run: cross build --release --all-features --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
 
       - name: Upload binary
         uses: actions/upload-artifact@v3
@@ -77,80 +65,65 @@ jobs:
           name: "versatiles-linux-${{ matrix.arch }}-${{ matrix.libc }}"
           path: "target/${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}/release/versatiles"
 
-  #  build-macos:
-  #    runs-on: macos-latest
-  #    needs: prepare
-  #    steps:
-  #      - uses: actions/checkout@v3
-  #
-  #      - uses: actions-rs/toolchain@v1
-  #        with:
-  #          profile: minimal
-  #          toolchain: stable
-  #          default: true
-  #
-  #      - name: Build binary
-  #        uses: actions-rs/cargo@v1
-  #        with:
-  #          command: build
-  #          args: --release --features=bin
-  #          use-cross: true
-  #
-  #      - name: Optimize and package binary
-  #        run: |
-  #          cd target/release
-  #          strip versatiles
-  #          chmod +x versatiles
-  #          mkdir dmg
-  #          mv versatiles dmg/
-  #          hdiutil create -fs HFS+ -srcfolder dmg -volname versatiles versatiles.dmg
-  #
-  #      - name: Upload binary
-  #        if: false
-  #        uses: actions/upload-release-asset@v1
-  #        env:
-  #          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #        with:
-  #          asset_name: versatiles-${{needs.prepare.outputs.tag_name}}-macos-x86_64.dmg
-  #          asset_path: target/release/versatiles.dmg
-  #          upload_url: ${{needs.prepare.outputs.upload_url}}
-  #          asset_content_type: application/octet-stream
-  #
-  #  build-windows:
-  #    runs-on: windows-latest
-  #    needs: prepare
-  #    steps:
-  #      - uses: actions/checkout@v3
-  #
-  #      - uses: actions-rs/toolchain@v1
-  #        with:
-  #          profile: minimal
-  #          toolchain: stable
-  #          default: true
-  #
-  #      - name: Build binary
-  #        uses: actions-rs/cargo@v1
-  #        with:
-  #          command: build
-  #          args: --release --features=bin
-  #          use-cross: true
-  #
-  #      - name: Upload binary
-  #        if: false
-  #        uses: actions/upload-release-asset@v1
-  #        env:
-  #          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #        with:
-  #          asset_name: versatiles-${{needs.prepare.outputs.tag_name}}-windows-x86_64.exe
-  #          asset_path: target/release/versatiles.exe
-  #          upload_url: ${{needs.prepare.outputs.upload_url}}
-  #          asset_content_type: application/octet-stream
+  build-macos:
+    runs-on: macos-latest
+    needs: prepare
+    strategy:
+      matrix:
+        include:
+          - arch: "x86_64"
+          - arch: "aarch64"
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          target: ${{ matrix.arch }}-apple-darwin
+
+      - name: Build binary
+        run: cross build --release --all-features --target ${{ matrix.arch }}-apple-darwin
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: "versatiles-macos-${{ matrix.arch }}"
+          path: "target/${{ matrix.arch }}-apple-darwin/release/versatiles"
+
+  build-windows:
+    runs-on: windows-latest
+    needs: prepare
+    strategy:
+      matrix:
+        include:
+          - arch: "x86_64"
+            libc: "gnu"
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: actions-rs/toolchain@v1
+        with:
+          profile: minimal
+          toolchain: stable
+          default: true
+
+      - name: Build binary
+        run: cross build --release --all-features --target ${{ matrix.arch }}-pc-windows-${{ matrix.libc }}
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v3
+        with:
+          name: "versatiles-windows-${{ matrix.arch }}.exe"
+          path: "target/${{ matrix.arch }}-pc-windows-${{ matrix.libc }}/release/versatiles.exe"
 
   upload-release:
     needs:
       - build-linux
-      #- build-macos
-      #- build-windows
+      - build-macos
+      - build-windows
     runs-on: ubuntu-latest
     env:
       GH_TOKEN: ${{ github.token }}
