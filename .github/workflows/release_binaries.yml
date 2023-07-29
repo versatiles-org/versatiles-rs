@@ -31,7 +31,7 @@ jobs:
         run: git tag "${{ env.new_tag }}"
 
       - name: Push tag
-        run: git push "${{ env.new_tag }}"
+        run: git push origin "${{ env.new_tag }}"
 
       - name: Create release
         run: gh release create --draft --verify-tag "${{ env.new_tag }}"
