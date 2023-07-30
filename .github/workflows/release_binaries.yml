@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - "feat-workflow-release-binaries"
-    #  - "main"
+    # - "main"
     tags:
       - "v*.*.*"
   workflow_dispatch:
