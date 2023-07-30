@@ -28,7 +28,7 @@ jobs:
         run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/new_tag=v\1/p" | tr -d '\n' >> "$GITHUB_ENV"
 
       - name: Compare versions
-        if: ${{ env.git_tag != env.new_tag }}
+        if: env.git_tag != env.new_tag
         run: echo "Latest Git tag (${{ env.new_tag }}) is not current cargo version (${{ env.new_tag }})"; exit1
 
       - name: Create release
