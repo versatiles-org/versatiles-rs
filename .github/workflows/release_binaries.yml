@@ -4,9 +4,9 @@ on:
   push:
     branches:
       - "feat-workflow-release-binaries"
-  release:
-    types:
-      - created
+    #  - "main"
+    #tags:
+    #  - "v*.*.*"
   workflow_dispatch:
 
 env:
@@ -21,17 +21,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Get old release tag
-        run: 'curl -s -H "Accept: application/json" https://api.github.com/repos/versatiles-org/versatiles-rs/tags | jq -r ''"old_tag=" + first(.[] | .name | select(startswith("v")))'' >> "$GITHUB_ENV"'
+      - name: Get version via git tag
+        run: echo -n "git_tag=$(git tag -l 'v*.*.*' | tail -n 1)" >> "$GITHUB_ENV"'
 
-      - name: Get new release tag
-        run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/new_tag=v\1/p" >> "$GITHUB_ENV"
+      - name: Get version via cargo.toml
+        run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/new_tag=v\1/p" | tr -d '\n' >> "$GITHUB_ENV"
 
-      - name: Create tag
-        run: git tag "${{ env.new_tag }}"
-
-      - name: Push tag
-        run: git push origin "${{ env.new_tag }}"
+      - name: Compare versions
+        if: ${{ env.git_tag != env.new_tag }}
+        run: echo "Latest Git tag (${{ env.new_tag }}) is not current cargo version (${{ env.new_tag }})"; exit1
 
       - name: Create release
         run: gh release create --draft --verify-tag "${{ env.new_tag }}"
@@ -151,4 +149,4 @@ jobs:
           cd release
           find . -maxdepth 1 -type f -exec echo "sha256sum '{}' > '{}'.sha256" \; | sh
           gh release upload "${{ env.new_tag }}" --clobber *
-          # gh release edit "${{ env.new_tag }}" --draft=false --latest --prerelease=false
+          gh release edit "${{ env.new_tag }}" --draft=false --latest --prerelease=false
