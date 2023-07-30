@@ -21,16 +21,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - run: git version
-      - run: git remote -v
-      - run: git log -n 3
-      - run: git tag
-      - run: git tag -l 'v*.*.*'
-      - run: git tag -l 'v*.*.*' | tail -n 1
-      - run: echo -n "git_tag=$(git tag -l 'v*.*.*' | tail -n 1)"
-
-      - name: Get version via git tag
-        run: echo -n "git_tag=$(git tag -l 'v*.*.*' | tail -n 1)" >> "$GITHUB_ENV"'
+      - name: Get version via latest git tag
+        run: 'curl -s -H "Accept: application/json" https://api.github.com/repos/versatiles-org/versatiles-rs/tags | jq -r ''"git_tag=" + first(.[] | .name | select(startswith("v")))'' >> "$GITHUB_ENV"'
 
       - name: Get version via cargo.toml
         run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/new_tag=v\1/p" | tr -d '\n' >> "$GITHUB_ENV"
