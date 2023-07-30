@@ -21,21 +21,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      #- name: Get version via latest git tag
+      - name: Get version via latest git tag
+        run: echo "git_tag=${GITHUB_REF#refs/*/}" >> "$GITHUB_ENV"
       #  run: curl https://api.github.com/repos/versatiles-org/versatiles-rs/tags | jq -r '"git_tag=" + first(.[] | .name | select(startswith("v")))' >> "$GITHUB_ENV"
 
       - name: Get version via cargo.toml
-        run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/new_tag=v\1/p" | tr -d '\n' >> "$GITHUB_ENV"
+        run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/version=v\1/p" | tr -d '\n' >> "$GITHUB_ENV"
 
       - name: Compare versions
-        if: github.ref_name != env.new_tag
-        run: echo "Current cargo version (${{ env.new_tag }}) is not pushed tag (${{ github.ref_name }})"; exit 1
+        if: env.git_tag != env.version
+        run: echo "Current cargo version (${{ env.version }}) is not pushed tag (${{ env.git_tag }})"; exit 1
 
       - name: Try to create release
-        run: gh release create "${{ env.new_tag }}" --title "${{ env.new_tag }}" --draft || true
+        run: gh release create "${{ env.version }}" --title "${{ env.version }}" --draft || true
 
       - name: Check release
-        run: gh release view "${{ env.new_tag }}"
+        run: gh release view "${{ env.version }}"
 
   build-linux:
     runs-on: ubuntu-latest
@@ -151,5 +152,5 @@ jobs:
         run: |
           cd /release-files
           find . -maxdepth 1 -type f -exec echo "sha256sum '{}' > '{}'.sha256" \; | sh
-          gh release upload "${{ env.new_tag }}" --clobber *
-          gh release edit "${{ env.new_tag }}" --draft=false --latest --prerelease=false
+          gh release upload "${{ env.version }}" --clobber *
+          gh release edit "${{ env.version }}" --draft=false --latest --prerelease=false
