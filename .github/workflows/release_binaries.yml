@@ -5,8 +5,8 @@ on:
     branches:
       - "feat-workflow-release-binaries"
     #  - "main"
-    #tags:
-    #  - "v*.*.*"
+    tags:
+      - "v*.*.*"
   workflow_dispatch:
 
 env:
@@ -21,18 +21,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Get version via latest git tag
-        run: curl https://api.github.com/repos/versatiles-org/versatiles-rs/tags | jq -r '"git_tag=" + first(.[] | .name | select(startswith("v")))' >> "$GITHUB_ENV"
+      #- name: Get version via latest git tag
+      #  run: curl https://api.github.com/repos/versatiles-org/versatiles-rs/tags | jq -r '"git_tag=" + first(.[] | .name | select(startswith("v")))' >> "$GITHUB_ENV"
 
       - name: Get version via cargo.toml
         run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/new_tag=v\1/p" | tr -d '\n' >> "$GITHUB_ENV"
 
       - name: Compare versions
-        if: env.git_tag != env.new_tag
-        run: echo "Latest Git tag (${{ env.git_tag }}) is not current cargo version (${{ env.new_tag }})"; exit 1
+        if: github.ref_name != env.new_tag
+        run: echo "Current cargo version (${{ env.new_tag }}) is not pushed tag (${{ github.ref_name }})"; exit 1
 
-      - name: Create release
-        run: gh release create --draft --verify-tag "${{ env.new_tag }}"
+      - name: Try to create release
+        run: gh release create "${{ env.new_tag }}" --title "${{ env.new_tag }}" --draft || true
+
+      - name: Check release
+        run: gh release view "${{ env.new_tag }}"
 
   build-linux:
     runs-on: ubuntu-latest
