@@ -19,8 +19,8 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Get version via latest git tag
-        run: echo "git_tag=${{ github.ref_name }}" >> "$GITHUB_ENV"
-      #  run: curl https://api.github.com/repos/versatiles-org/versatiles-rs/tags | jq -r '"git_tag=" + first(.[] | .name | select(startswith("v")))' >> "$GITHUB_ENV"
+        #^run: echo "git_tag=${{ github.ref_name }}" >> "$GITHUB_ENV"
+        run: curl https://api.github.com/repos/versatiles-org/versatiles-rs/tags | jq -r '"git_tag=" + first(.[] | .name | select(startswith("v")))' >> "$GITHUB_ENV"
 
       - name: Get version via cargo.toml
         run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/version=v\1/p" | tr -d '\n' >> "$GITHUB_ENV"
