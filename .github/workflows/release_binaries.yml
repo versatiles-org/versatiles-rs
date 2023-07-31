@@ -9,6 +9,7 @@ on:
 env:
   CARGO_TERM_COLOR: always
   GH_TOKEN: ${{ github.token }}
+  DEBUG_MODE: 1
 
 jobs:
   prepare:
@@ -32,7 +33,7 @@ jobs:
         run: echo "Current cargo version (${{ env.version }}) is not pushed tag (${{ env.git_tag }})"; exit 1
 
       - name: Try to create release
-        run: 'gh release create "${{ env.version }}" --title "${{ env.version }}" -n "new release: ${{ env.version }}" --draft || true'
+        run: 'gh release create "${{ env.version }}" --title "${{ env.version }}" -n "new release: ${{ env.version }}" --draft --prerelease || true'
 
       - name: Check release
         run: gh release view "${{ env.version }}"
@@ -65,18 +66,26 @@ jobs:
           default: true
 
       - name: Install cross
+        if: ${{ env.DEBUG_MODE != 1 }}
         run: cargo install cross
 
       - name: Build binary
+        if: ${{ env.DEBUG_MODE != 1 }}
         run: cross build --release --all-features --target-dir target
+
+      - if: ${{ env.DEBUG_MODE == 1 }}
+        run: |
+          mkdir -r target/release
+          echo "${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}" > "target/release/versatiles"
 
       - run: find .
 
-      - name: Upload binary
-        uses: actions/upload-artifact@v3
-        with:
-          name: "versatiles-linux-${{ matrix.arch }}-${{ matrix.libc }}"
-          path: "target/release/versatiles"
+      - name: Pack and upload
+        run: |
+          cd target/release
+          FILENAME="versatiles-linux-${{ matrix.arch }}-${{ matrix.libc }}.tar.gz"
+          tar -czf "$FILENAME" "versatiles"
+          gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
 
   build-macos:
     if: false
@@ -137,7 +146,7 @@ jobs:
           path: "target/release/versatiles.exe"
 
   upload-release:
-    name: Upload release
+    name: Finish release
     needs:
       - prepare
       - build-linux
@@ -149,15 +158,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v3
-        with:
-          path: dist
-
-      - run: find .
-
-      - name: Upload binary
+      - name: Finish release
         run: |
-          cd dist
-          find . -maxdepth 1 -type f -exec echo "sha256sum '{}' > '{}'.sha256" \; | sh
-          gh release upload "${GITHUB_REF#refs/*/}" --clobber *
           gh release edit "${GITHUB_REF#refs/*/}" --draft=false --latest --prerelease=false
