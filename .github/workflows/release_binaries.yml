@@ -66,7 +66,7 @@ jobs:
         run: cargo binstall cross
 
       - name: Build binary
-        run: cross build --release --all-features
+        run: cross build --release --all-features --target-dir target/release/versatiles
 
       - name: Upload binary
         uses: actions/upload-artifact@v3
