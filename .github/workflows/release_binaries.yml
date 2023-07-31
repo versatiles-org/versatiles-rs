@@ -37,7 +37,8 @@ jobs:
       - name: Check release
         run: gh release view "${{ env.version }}"
 
-      - id: result
+      - name: Set output variable
+        id: result
         run: echo "tag=${{ env.git_tag }}" >> "$GITHUB_OUTPUT"
 
   build-linux:
