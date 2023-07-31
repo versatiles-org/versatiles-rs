@@ -68,6 +68,9 @@ jobs:
       - name: Install cross
         run: cargo install cross
 
+      - name: Test binary
+        run: cross test --release --all-features --target-dir target
+
       - name: Build binary
         run: cross build --release --all-features --target-dir target
 
@@ -97,6 +100,9 @@ jobs:
           toolchain: stable
           target: ${{ matrix.arch }}-apple-darwin
           default: true
+
+      - name: Test binary
+        run: cargo test --release --all-features
 
       - name: Build binary
         run: cargo build --release --all-features
@@ -130,6 +136,9 @@ jobs:
           toolchain: stable
           target: ${{ matrix.arch }}-pc-windows-${{ matrix.libc }}
           default: true
+
+      - name: Test binary
+        run: cargo test --release --all-features
 
       - name: Build binary
         run: cargo build --release --all-features
