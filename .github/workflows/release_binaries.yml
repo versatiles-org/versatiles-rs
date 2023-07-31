@@ -9,7 +9,6 @@ on:
 env:
   CARGO_TERM_COLOR: always
   GH_TOKEN: ${{ github.token }}
-  DEBUG_MODE: 1
 
 jobs:
   prepare:
@@ -67,29 +66,20 @@ jobs:
           default: true
 
       - name: Install cross
-        if: ${{ env.DEBUG_MODE != 1 }}
         run: cargo install cross
 
       - name: Build binary
-        if: ${{ env.DEBUG_MODE != 1 }}
         run: cross build --release --all-features --target-dir target
-
-      - if: ${{ env.DEBUG_MODE == 1 }}
-        run: |
-          mkdir -p target/release
-          echo "${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}" > "target/release/versatiles"
-
-      - run: find .
 
       - name: Pack and upload
         run: |
+          find .
           cd target/release
           FILENAME="versatiles-linux-${{ matrix.arch }}-${{ matrix.libc }}.tar.gz"
           tar -czf "$FILENAME" "versatiles"
           gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
 
   build-macos:
-    if: false
     name: Build MacOS
     runs-on: macos-latest
     needs: prepare
@@ -111,11 +101,13 @@ jobs:
       - name: Build binary
         run: cargo build --release --all-features
 
-      - name: Upload binary
-        uses: actions/upload-artifact@v3
-        with:
-          name: "versatiles-macos-${{ matrix.arch }}"
-          path: "target/release/versatiles"
+      - name: Pack and upload
+        run: |
+          find .
+          cd target/release
+          FILENAME="versatiles-macos-${{ matrix.arch }}.tar.gz"
+          tar -czf "$FILENAME" "versatiles"
+          gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
 
   build-windows:
     if: false
@@ -142,18 +134,20 @@ jobs:
       - name: Build binary
         run: cargo build --release --all-features
 
-      - name: Upload binary
-        uses: actions/upload-artifact@v3
-        with:
-          name: "versatiles-windows-${{ matrix.arch }}.exe"
-          path: "target/release/versatiles.exe"
+      - name: Pack and upload
+        run: |
+          find .
+          cd target/release
+          FILENAME="versatiles-windows-${{ matrix.arch }}.tar.gz"
+          tar -czf "$FILENAME" "versatiles.exe"
+          gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
 
   finish-release:
     name: Finish release
     needs:
       - prepare
       - build-linux
-      #- build-macos
+      - build-macos
       #- build-windows
     runs-on: ubuntu-latest
     env:
