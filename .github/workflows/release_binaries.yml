@@ -30,7 +30,7 @@ jobs:
         run: echo "Current cargo version (${{ env.version }}) is not pushed tag (${{ env.git_tag }})"; exit 1
 
       - name: Try to create release
-        run: gh release create "${{ env.version }}" --title "${{ env.version }}" --draft || true
+        run: 'gh release create "${{ env.version }}" --title "${{ env.version }}" -n "new release: ${{ env.version }}" --draft || true'
 
       - name: Check release
         run: gh release view "${{ env.version }}"
