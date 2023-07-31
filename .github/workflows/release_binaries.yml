@@ -146,11 +146,11 @@ jobs:
 
       - uses: actions/download-artifact@v3
         with:
-          path: /release-files
+          path: dist
 
       - name: Upload binary
         run: |
-          cd /release-files
+          cd dist
           find . -maxdepth 1 -type f -exec echo "sha256sum '{}' > '{}'.sha256" \; | sh
           gh release upload "${{ env.version }}" --clobber *
           gh release edit "${{ env.version }}" --draft=false --latest --prerelease=false
