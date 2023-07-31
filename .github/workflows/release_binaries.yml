@@ -63,7 +63,7 @@ jobs:
         run: cargo install cross
 
       - name: Build binary
-        run: cross build --release --all-features --target-dir target/release/versatiles
+        run: cross build --release --all-features --target-dir target/release
 
       - name: Upload binary
         uses: actions/upload-artifact@v3
@@ -72,6 +72,7 @@ jobs:
           path: "target/release/versatiles"
 
   build-macos:
+    if: false
     runs-on: macos-latest
     needs: prepare
     strategy:
@@ -133,7 +134,7 @@ jobs:
     needs:
       - prepare
       - build-linux
-      - build-macos
+      #- build-macos
       #- build-windows
     runs-on: ubuntu-latest
     env:
@@ -151,5 +152,5 @@ jobs:
         run: |
           cd dist
           find . -maxdepth 1 -type f -exec echo "sha256sum '{}' > '{}'.sha256" \; | sh
-          gh release upload "${{ env.version }}" --clobber *
-          gh release edit "${{ env.version }}" --draft=false --latest --prerelease=false
+          gh release upload "${GITHUB_REF#refs/*/}" --clobber *
+          gh release edit "${GITHUB_REF#refs/*/}" --draft=false --latest --prerelease=false
