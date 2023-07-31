@@ -148,6 +148,8 @@ jobs:
         with:
           path: dist
 
+      - run: find .
+
       - name: Upload binary
         run: |
           cd dist
