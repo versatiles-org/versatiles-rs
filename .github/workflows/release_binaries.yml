@@ -65,6 +65,8 @@ jobs:
       - name: Build binary
         run: cross build --release --all-features --target-dir target/release
 
+      - run: find target
+
       - name: Upload binary
         uses: actions/upload-artifact@v3
         with:
