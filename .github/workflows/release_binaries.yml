@@ -42,6 +42,7 @@ jobs:
         run: echo "tag=${{ env.git_tag }}" >> "$GITHUB_OUTPUT"
 
   build-linux:
+    name: Build Linux
     runs-on: ubuntu-latest
     needs: prepare
     strategy:
@@ -89,6 +90,7 @@ jobs:
 
   build-macos:
     if: false
+    name: Build MacOS
     runs-on: macos-latest
     needs: prepare
     strategy:
@@ -117,6 +119,7 @@ jobs:
 
   build-windows:
     if: false
+    name: Build Windows
     runs-on: windows-latest
     needs: prepare
     strategy:
@@ -160,4 +163,4 @@ jobs:
 
       - name: Finish release
         run: |
-          gh release edit "${GITHUB_REF#refs/*/}" --draft=false --latest --prerelease=false
+          gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest --prerelease=false --verify-tag
