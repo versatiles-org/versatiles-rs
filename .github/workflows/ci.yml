@@ -3,12 +3,15 @@ name: Continuous Integration
 
 on:
   push:
-    branches:
-      - "**"
+    branches-ignore:
+      - "feat-workflow-release-binaries"
     tags:
-      - "!**"
+      - "!**" # Don't run twice on commits with tags
+    paths-ignore:
+      - ".github/**"
+  pull_request:
   schedule:
-    - cron: "0 0 13 * *"
+    - cron: "0 3 5,20 * *"
   workflow_dispatch:
 
 env:
