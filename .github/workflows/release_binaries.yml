@@ -14,6 +14,8 @@ jobs:
   prepare:
     name: Prepare release
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.result.outputs.tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -34,6 +36,9 @@ jobs:
 
       - name: Check release
         run: gh release view "${{ env.version }}"
+
+      - id: result
+        run: echo "tag=${{ env.git_tag }}" >> "$GITHUB_OUTPUT"
 
   build-linux:
     runs-on: ubuntu-latest
