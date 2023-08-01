@@ -4,22 +4,9 @@ cd ..
 
 set -e
 
-# check cargo
-./helpers/check.sh
-if [ $? -ne 0 ]; then
-	echo "❗️ Check failed!"
-	exit 1
-fi
-
-# ask if version was updated
-echo "Did you update the version number in Cargo.toml?"
-select answer in "Yes" "No"; do
-	if [ $answer != "Yes" ]; then
-		echo "❗️ Then do it!"
-		exit 1
-	fi
-	break
-done
+RED="\033[1;31m"
+GRE="\033[1;32m"
+END="\033[0m"
 
 # check if nothing to commit
 if [ "$(git status --porcelain)" ]; then
@@ -27,16 +14,34 @@ if [ "$(git status --porcelain)" ]; then
 	exit 1
 fi
 
+# get versions
+old_tag=$(curl -s "https://api.github.com/repos/versatiles-org/versatiles-rs/tags" | jq -r 'first(.[] | .name | select(startswith("v")))')
+new_tag=v$(cat Cargo.toml | sed -ne 's/^version[ ="]*\([0-9\.]*\).*$/\1/p')
+
+echo "old version: $old_tag"
+echo "new version: $new_tag"
+
+if [ $new_tag == $old_tag ]; then
+	echo -e "${RED}New version $new_tag already exists!${END}"
+	echo -e "${RED}ABORT${END}"
+	exit 1
+fi
+
+# check cargo
+./helpers/check.sh
+if [ $? -ne 0 ]; then
+	echo "❗️ Check failed!"
+	exit 1
+fi
+
 # publish to crates.io
 cargo publish --no-verify
 
-# get version
-version=$(cat Cargo.toml | sed -ne 's/^version[ ="]*\([0-9\.]*\).*$/\1/p')
+# git delete tag if possible
+git tag -d "$new_tag" || true
+git push -n -d origin "$new_tag" || true
 
 # git tag
-git tag -a "v$version" -m "new release: v$version"
-git push
-git push origin "v$version"
-
-# github create release
-gh release create "v$version" --title "v$version" --notes "new release: v$version"
+git tag -a "$new_tag" -m "new release: $new_tag"
+git push -n
+git push -n origin "$new_tag"
