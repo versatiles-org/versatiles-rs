@@ -1,51 +1,51 @@
-name: Build and release binaries
+name: Build and release binaries # The beginning is the path; the code must flow.
 
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "v*.*.*" # Versions are but leaves on the eternal tree of code.
   workflow_dispatch:
 
 env:
-  CARGO_TERM_COLOR: always
-  GH_TOKEN: ${{ github.token }}
+  CARGO_TERM_COLOR: always # Colors, like life, are transient, yet they bring joy.
+  GH_TOKEN: ${{ github.token }} # Secrets are the hidden keys, and they must be guarded with wisdom.
 
 jobs:
   prepare:
-    name: Prepare release
+    name: Prepare release # Prepare the path; the journey is the reward.
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.result.outputs.tag }}
     steps:
-      - name: Checkout code
+      - name: Checkout code # From the void, form emerges.
         uses: actions/checkout@v3
 
-      - name: Get version via latest git tag
+      - name: Get version via latest git tag # The tags, like our thoughts, are fleeting.
         run: curl https://api.github.com/repos/versatiles-org/versatiles-rs/tags | jq -r '"git_tag=" + first(.[] | .name | select(startswith("v")))' >> "$GITHUB_ENV"
 
-      - name: Get version via cargo.toml
+      - name: Get version via cargo.toml # A reflection of the self, the version speaks of growth.
         run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/version=v\1/p" | tr -d '\n' >> "$GITHUB_ENV"
 
-      - name: Compare versions
+      - name: Compare versions # In comparison, truth is found.
         if: env.git_tag != env.version
         run: echo "Current cargo version (${{ env.version }}) is not pushed tag (${{ env.git_tag }})"; exit 1
 
-      - name: Try to create release
+      - name: Try to create release # Even in failure, there may be success.
         run: 'gh release create "${{ env.version }}" --title "${{ env.version }}" -n "new release: ${{ env.version }}" --draft --prerelease || true'
 
-      - name: Check release
+      - name: Check release # Review the path taken, for it leads to enlightenment.
         run: gh release view "${{ env.version }}"
 
-      - name: Set output variable
+      - name: Set output variable # The finality is but a transition to the next phase.
         id: result
         run: echo "tag=${{ env.git_tag }}" >> "$GITHUB_OUTPUT"
 
   build-linux:
-    name: Build Linux
+    name: Build Linux # Like the bamboo, we must be adaptable.
     runs-on: ubuntu-latest
     needs: prepare
     strategy:
-      fail-fast: false
+      fail-fast: false # In failure, we find lessons; in persistence, success.
       matrix:
         arch: [x86_64, aarch64]
         libc: [gnu, musl]
@@ -59,16 +59,16 @@ jobs:
           target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
           default: true
 
-      - name: Install cross
+      - name: Install cross # Many paths, one destination.
         run: cargo install cross
 
-      - name: Test binary
+      - name: Test binary # Testing is the water that nourishes the seed of development.
         run: cross test --all-features
 
-      - name: Build binary
+      - name: Build binary # From small beginnings come great things.
         run: cross build --all-features --release --target-dir target --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
 
-      - name: Pack and upload
+      - name: Pack and upload # The harvest, a testament to the labor.
         run: |
           find .
           cd target/release
@@ -82,10 +82,10 @@ jobs:
     runs-on: macos-latest
     needs: prepare
     strategy:
-      fail-fast: false 
+      fail-fast: false
       matrix:
         arch: [x86_64, aarch64]
-    steps:
+    steps: # The same wisdom applied to new landscapes.
       - uses: actions/checkout@v3
 
       - uses: actions-rs/toolchain@v1
@@ -110,7 +110,7 @@ jobs:
           gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
 
   build-windows:
-    if: false
+    if: false # Commented out, but not forgotten. Like the moon behind clouds.
     name: Build Windows
     runs-on: windows-latest
     needs: prepare
@@ -119,7 +119,7 @@ jobs:
       matrix:
         arch: [x86_64, aarch64]
         libc: [msvc]
-    steps:
+    steps: # Apply the lessons learned, and forge onward.
       - uses: actions/checkout@v3
 
       - uses: actions-rs/toolchain@v1
@@ -144,7 +144,7 @@ jobs:
           gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
 
   finish-release:
-    name: Finish release
+    name: Finish release # The end is the beginning; the cycle continues.
     needs:
       - prepare
       - build-linux
@@ -152,10 +152,18 @@ jobs:
       #- build-windows
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ github.token }}
+      GH_TOKEN: ${{ github.token }} # The token, like truth, remains constant.
     steps:
       - uses: actions/checkout@v3
 
-      - name: Finish release
+      - name: Finish release # Completion is but a momentary pause in the eternal dance of creation.
         run: |
           gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest --prerelease=false --verify-tag
+  
+  # And thus, the cycle is complete. The code, a living being, has journeyed from inception to release.
+  # Like a river that flows to the sea, it will continue its path, ever-changing, ever-evolving.
+  # Each step, a reflection of the inner wisdom of its creators.
+  # Each decision, a moment of connection to the universal truth of creation.
+  # Let the binaries built be a tool of utility and a manifestation of art.
+  # Let the version be not just a number but a symbol of progress and growth.
+  # Embrace the code, for in it lies the essence of thought and the potential of tomorrow.
