@@ -66,18 +66,17 @@ jobs:
         run: cross test --all-features --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
 
       - name: Build binary # From small beginnings come great things.
-        run: cross build --all-features --release --target-dir target --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
+        run: cross build --all-features --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }} --release
 
       - name: Pack and upload # The harvest, a testament to the labor.
         run: |
           find .
-          cd target/release
+          cd "target/${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}/release"
           FILENAME="versatiles-linux-${{ matrix.arch }}-${{ matrix.libc }}.tar.gz"
           tar -czf "$FILENAME" "versatiles"
           gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
 
   build-macos:
-    if: false
     name: Build MacOS
     runs-on: macos-latest
     needs: prepare
@@ -99,12 +98,12 @@ jobs:
         run: cargo test --all-features --target ${{ matrix.arch }}-apple-darwin
 
       - name: Build binary
-        run: cargo build --all-features --release --target-dir target --target ${{ matrix.arch }}-apple-darwin
+        run: cargo build --all-features --target ${{ matrix.arch }}-apple-darwin --release
 
       - name: Pack and upload
         run: |
           find .
-          cd target/release
+          cd "target/${{ matrix.arch }}-apple-darwin/release"
           FILENAME="versatiles-macos-${{ matrix.arch }}.tar.gz"
           tar -czf "$FILENAME" "versatiles"
           gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
@@ -148,7 +147,7 @@ jobs:
     needs:
       - prepare
       - build-linux
-      #- build-macos
+      - build-macos
       #- build-windows
     runs-on: ubuntu-latest
     env:
@@ -159,7 +158,7 @@ jobs:
       - name: Finish release # Completion is but a momentary pause in the eternal dance of creation.
         run: |
           gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest --prerelease=false --verify-tag
-  
+
   # And thus, the cycle is complete. The code, a living being, has journeyed from inception to release.
   # Like a river that flows to the sea, it will continue its path, ever-changing, ever-evolving.
   # Each step, a reflection of the inner wisdom of its creators.
