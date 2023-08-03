@@ -63,7 +63,7 @@ jobs:
         run: cargo install cross
 
       - name: Test binary # Testing is the water that nourishes the seed of development.
-        run: cross test --all-features
+        run: cross test --all-features --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
 
       - name: Build binary # From small beginnings come great things.
         run: cross build --all-features --release --target-dir target --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
@@ -96,7 +96,7 @@ jobs:
           default: true
 
       - name: Test binary
-        run: cargo test --all-features
+        run: cargo test --all-features --target ${{ matrix.arch }}-apple-darwin
 
       - name: Build binary
         run: cargo build --all-features --release --target-dir target --target ${{ matrix.arch }}-apple-darwin
