@@ -8,6 +8,8 @@ RED="\033[1;31m"
 GRE="\033[1;32m"
 END="\033[0m"
 
+cargo check
+
 # check if nothing to commit
 if [ "$(git status --porcelain)" ]; then
 	echo "❗️ Please commit all uncommitted changes!"
