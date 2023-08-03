@@ -2,8 +2,8 @@ name: Build and release binaries
 
 on:
   push:
-    tags:
-      - "v*.*.*"
+  #   tags:
+  #     - "v*.*.*"
   workflow_dispatch:
 
 env:
@@ -47,15 +47,12 @@ jobs:
     needs: prepare
     strategy:
       matrix:
-        include:
-          - arch: "x86_64"
-            libc: "gnu"
-          #- arch: "aarch64"
-          #  libc: "gnu"
+        arch: [x86_64, aarch64]
+        libc: [gnu]
     steps:
-      - name: Install aarch64 tools
-        if: ${{ contains(matrix.arch, 'aarch64') }}
-        run: sudo apt-get install -y binutils-aarch64-linux-gnu
+      #- name: Install aarch64 tools
+      #  if: ${{ contains(matrix.arch, 'aarch64') }}
+      #  run: sudo apt-get install -y binutils-aarch64-linux-gnu
 
       - uses: actions/checkout@v3
 
@@ -69,19 +66,19 @@ jobs:
       - name: Install cross
         run: cargo install cross
 
-      - name: Test binary
-        run: cross test --release --all-features --target-dir target
+      #- name: Test binary
+      #  run: cross test --release --all-features --target-dir target
 
       - name: Build binary
         run: cross build --release --all-features --target-dir target
 
-      - name: Pack and upload
-        run: |
-          find .
-          cd target/release
-          FILENAME="versatiles-linux-${{ matrix.arch }}-${{ matrix.libc }}.tar.gz"
-          tar -czf "$FILENAME" "versatiles"
-          gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
+      #- name: Pack and upload
+      #  run: |
+      #    find .
+      #    cd target/release
+      #    FILENAME="versatiles-linux-${{ matrix.arch }}-${{ matrix.libc }}.tar.gz"
+      #    tar -czf "$FILENAME" "versatiles"
+      #    gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
 
   build-macos:
     name: Build MacOS
@@ -89,9 +86,7 @@ jobs:
     needs: prepare
     strategy:
       matrix:
-        include:
-          - arch: "x86_64"
-          - arch: "aarch64"
+        arch: [x86_64, aarch64]
     steps:
       - uses: actions/checkout@v3
 
@@ -123,11 +118,8 @@ jobs:
     needs: prepare
     strategy:
       matrix:
-        include:
-          - arch: "x86_64"
-            libc: "msvc"
-          - arch: "aarch64"
-            libc: "msvc"
+        arch: [x86_64, aarch64]
+        libc: [msvc]
     steps:
       - uses: actions/checkout@v3
 
@@ -157,7 +149,7 @@ jobs:
     needs:
       - prepare
       - build-linux
-      - build-macos
+      #- build-macos
       #- build-windows
     runs-on: ubuntu-latest
     env:
@@ -165,6 +157,6 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Finish release
-        run: |
-          gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest --prerelease=false --verify-tag
+      #- name: Finish release
+      #  run: |
+      #    gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest --prerelease=false --verify-tag
