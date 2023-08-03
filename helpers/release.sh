@@ -39,11 +39,6 @@ fi
 # publish to crates.io
 cargo publish --no-verify
 
-# git delete tag if possible
-git tag -d "$new_tag" || true
-git push -n -d origin "$new_tag" || true
-
 # git tag
-git tag -a "$new_tag" -m "new release: $new_tag"
-git push -n
-git push -n origin "$new_tag"
+git tag -f -a "$new_tag" -m "new release: $new_tag"
+git push --no-verify --follow-tags
