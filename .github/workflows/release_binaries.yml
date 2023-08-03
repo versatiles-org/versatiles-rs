@@ -47,7 +47,7 @@ jobs:
     strategy:
       matrix:
         arch: [x86_64, aarch64]
-        libc: [gnu]
+        libc: [gnu, musl]
     steps:
       - uses: actions/checkout@v3
 
