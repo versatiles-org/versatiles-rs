@@ -78,6 +78,7 @@ jobs:
 
   build-macos:
     name: Build MacOS
+    if: false
     runs-on: macos-latest
     needs: prepare
     strategy:
@@ -147,7 +148,7 @@ jobs:
     needs:
       - prepare
       - build-linux
-      - build-macos
+      #- build-macos
       #- build-windows
     runs-on: ubuntu-latest
     env:
