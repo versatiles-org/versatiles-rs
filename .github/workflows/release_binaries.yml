@@ -62,10 +62,10 @@ jobs:
         run: cargo install cross
 
       - name: Test binary
-        run: cross test --release --all-features --target-dir target
+        run: cross test --all-features
 
       - name: Build binary
-        run: cross build --release --all-features --target-dir target
+        run: cross build --all-features --release --target-dir target --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
 
       - name: Pack and upload
         run: |
@@ -93,10 +93,10 @@ jobs:
           default: true
 
       - name: Test binary
-        run: cargo test --release --all-features
+        run: cargo test --all-features
 
       - name: Build binary
-        run: cargo build --release --all-features
+        run: cargo build --all-features --release --target-dir target --target ${{ matrix.arch }}-apple-darwin
 
       - name: Pack and upload
         run: |
