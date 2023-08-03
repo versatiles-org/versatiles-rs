@@ -1,12 +1,15 @@
 [target.x86_64-unknown-linux-gnu]
+image.name = "debian"
 pre-build = [ "dpkg --add-architecture amd64", "apt-get update", "apt-get install -y libsqlite3-dev:amd64" ]
 
 [target.x86_64-unknown-linux-musl]
+image.name = "shtripok/rust-musl-builder"
 pre-build = [ "dpkg --add-architecture amd64", "apt-get update", "apt-get install -y libsqlite3-dev:amd64" ]
 
 [target.aarch64-unknown-linux-gnu]
-pre-build = [ "dpkg --add-architecture arm64", "apt-get update", "apt-get install -y libsqlite3-dev:arm64 libwebp-dev:arm64" ]
+image.name = "debian"
+pre-build = [ "dpkg --add-architecture arm64", "apt-get update", "apt-get install -y libsqlite3-dev:arm64" ]
 
 [target.aarch64-unknown-linux-musl]
-pre-build = [ "dpkg --add-architecture arm64", "apt-get update", "apt-get install -y libsqlite3-dev:arm64 libwebp-dev:arm64" ]
-
+image.name = "shtripok/rust-musl-builder"
+pre-build = [ "dpkg --add-architecture arm64", "apt-get update", "apt-get install -y libsqlite3-dev:arm64" ]
