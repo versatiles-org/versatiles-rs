@@ -17,45 +17,29 @@ env:
 
 jobs:
   check:
-    name: check
     runs-on: ubuntu-latest
     steps:
-      - name: checkout
-        uses: actions/checkout@v3
-      - name: update rust
-        run: rustup update stable && rustup default stable
-      - name: add components
-        run: rustup component add rustfmt clippy
-      - name: cargo fmt
-        run: cargo fmt -- --check
-      - name: cargo clippy
-        run: cargo clippy -- -D warnings
-      - name: cargo check
-        run: cargo check
+      - uses: actions/checkout@v3
+      - run: rustup update stable && rustup default stable
+      - run: rustup component add rustfmt clippy
+      - run: cargo fmt -- --check
+      - run: cargo clippy -- -D warnings
+      - run: cargo check
 
   test:
-    name: test
     runs-on: ubuntu-latest
     steps:
-      - name: checkout
-        uses: actions/checkout@v3
-      - name: update rust
-        run: rustup update stable && rustup default stable
-      - name: test features
-        run: ./helpers/test_features.sh
+      - uses: actions/checkout@v3
+      - run: rustup update stable && rustup default stable
+      - run: ./helpers/test_features.sh
 
   codecov:
     name: code coverage
     if: ${{ (github.head_ref || github.ref_name) }} == "main"
     runs-on: ubuntu-latest
     steps:
-      - name: checkout
-        uses: actions/checkout@v3
-      - name: update rust
-        run: rustup update stable && rustup default stable
-      - name: get cargo-llvm-cov
-        uses: taiki-e/install-action@cargo-llvm-cov
-      - name: cargo llvm-cov
-        run: cargo llvm-cov test --workspace --tests --lcov --output-path ./lcov.info
-      - name: upload to codecov
-        uses: codecov/codecov-action@v3
+      - uses: actions/checkout@v3
+      - run: rustup update stable && rustup default stable
+      - uses: taiki-e/install-action@cargo-llvm-cov
+      - run: cargo llvm-cov test --workspace --tests --lcov --output-path ./lcov.info
+      - uses: codecov/codecov-action@v3
