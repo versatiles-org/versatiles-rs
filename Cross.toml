@@ -1,15 +1,13 @@
 [target.x86_64-unknown-linux-gnu]
-image = "debian"
+dockerfile = "docker/linux-gnu.Dockerfile"
 pre-build = [ "dpkg --add-architecture amd64", "apt-get update", "apt-get install -y libsqlite3-dev:amd64" ]
 
 [target.x86_64-unknown-linux-musl]
-image = "shtripok/rust-musl-builder"
 pre-build = [ "dpkg --add-architecture amd64", "apt-get update", "apt-get install -y libsqlite3-dev:amd64" ]
 
 [target.aarch64-unknown-linux-gnu]
-image = "debian"
+dockerfile = "docker/linux-gnu.Dockerfile"
 pre-build = [ "dpkg --add-architecture arm64", "apt-get update", "apt-get install -y libsqlite3-dev:arm64" ]
 
 [target.aarch64-unknown-linux-musl]
-image = "shtripok/rust-musl-builder"
 pre-build = [ "dpkg --add-architecture arm64", "apt-get update", "apt-get install -y libsqlite3-dev:arm64" ]
