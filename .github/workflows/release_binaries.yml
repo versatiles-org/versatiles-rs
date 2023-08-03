@@ -81,6 +81,7 @@ jobs:
       #    gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
 
   build-macos:
+    if: false
     name: Build MacOS
     runs-on: macos-latest
     needs: prepare

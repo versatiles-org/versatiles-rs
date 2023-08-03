@@ -2,11 +2,11 @@
 name: Continuous Integration
 
 on:
-  push:
-    branches:
-      - "**"
-    tags:
-      - "!**" # Don't run twice on commits with tags
+  #push:
+  #  branches:
+  #    - "**"
+  #  tags:
+  #    - "!**" # Don't run twice on commits with tags
   pull_request:
   schedule:
     - cron: "0 3 5,20 * *"
