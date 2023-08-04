@@ -1,5 +1,5 @@
 # create builder system
-FROM --platform=$TARGETPLATFORM debian as builder
+FROM --platform=$TARGETPLATFORM debian:latest as builder
 
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
