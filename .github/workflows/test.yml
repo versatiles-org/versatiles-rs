@@ -1,6 +1,9 @@
 name: test
 
 on:
+  push:
+    branches:
+      - fix-linux-release
   workflow_dispatch:
 
 jobs:
