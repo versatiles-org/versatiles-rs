@@ -12,4 +12,8 @@ RUN rustup target add aarch64-unknown-linux-musl
 # tests here
 COPY Cargo.* .
 COPY src .
-CMD cargo build --all-features --target aarch64-unknown-linux-musl --release
+RUN cargo build --all-features --target aarch64-unknown-linux-musl --release
+RUN find .
+
+FROM scratch
+COPY --from=builder /target/aarch64-unknown-linux-musl/release/versatiles /versatiles
