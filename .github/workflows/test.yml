@@ -14,4 +14,4 @@ jobs:
       - uses: docker/setup-qemu-action@v2
       - uses: docker/setup-buildx-action@v2
       - run: docker buildx build --platform="linux/arm64" --progress="plain" --file="docker/aarch64-unknown-linux-musl.Dockerfile" --tag="me" .
-      - run: docker run -it --platform="linux/arm64" "me"
+      - run: docker run -it -v $PWD:/srv -w/srv --platform="linux/arm64" "me"
