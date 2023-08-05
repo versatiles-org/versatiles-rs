@@ -53,7 +53,13 @@ jobs:
       - uses: actions/checkout@v3
       - uses: docker/setup-qemu-action@v2
       - uses: docker/setup-buildx-action@v2
-      - run: docker buildx build --platform="linux/${{ matrix.proc }}" --progress="plain" --file="docker/linux-${{ matrix.libc }}-${{ matrix.proc }}.Dockerfile" --output type=local,dest=output/ .
+      - run: docker buildx build
+          --platform="linux/${{ matrix.proc }}"
+          --file="docker/build-linux.Dockerfile"
+          --build-arg="arch=${{ matrix.arch }}"
+          --build-arg="libc=${{ matrix.libc }}"
+          --progress="plain"
+          --output="type=local,dest=output/"" .
 
       - name: Pack and upload # The harvest, a testament to the labor.
         run: |
