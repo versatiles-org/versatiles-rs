@@ -31,10 +31,7 @@ jobs:
         run: echo "Current cargo version (${{ env.version }}) is not pushed tag (${{ env.git_tag }})"; exit 1
 
       - name: Try to create release # Even in failure, there may be success.
-        run: 'gh release create "${{ env.version }}" --title "${{ env.version }}" -n "new release: ${{ env.version }}" --draft --prerelease || true'
-
-      - name: Check release # Review the path taken, for it leads to enlightenment.
-        run: gh release view "${{ env.version }}"
+        run: 'gh release view "${{ env.version }}" && gh release create "${{ env.version }}" --title "${{ env.version }}" -n "new release: ${{ env.version }}" --draft --prerelease'
 
       - name: Set output variable # The finality is but a transition to the next phase.
         id: result
@@ -47,33 +44,23 @@ jobs:
     strategy:
       fail-fast: false # In failure, we find lessons; in persistence, success.
       matrix:
-        arch: [x86_64, aarch64]
+        arch: [aarch64, x86_64]
         libc: [gnu, musl]
+        include:
+          - { arch: aarch64, proc: arm64 }
+          - { arch: x86_64, proc: amd64 }
     steps:
       - uses: actions/checkout@v3
-
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
-          default: true
-
-      - name: Install cross # Many paths, one destination.
-        run: cargo install cross
-
-      - name: Test binary # Testing is the water that nourishes the seed of development.
-        run: cross test --all-features --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
-
-      - name: Build binary # From small beginnings come great things.
-        run: cross build --all-features --target ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }} --release
+      - uses: docker/setup-qemu-action@v2
+      - uses: docker/setup-buildx-action@v2
+      - run: docker buildx build --platform="linux/${{ matrix.proc }}" --progress="plain" --file="docker/linux-${{ matrix.libc }}-${{ matrix.proc }}.Dockerfile" --output type=local,dest=output/ .
 
       - name: Pack and upload # The harvest, a testament to the labor.
         run: |
           find .
-          cd "target/${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}/release"
+          cd "output"
           FILENAME="versatiles-linux-${{ matrix.arch }}-${{ matrix.libc }}.tar.gz"
-          tar -czf "$FILENAME" "versatiles"
+          tar -czf "$FILENAME" versatiles
           gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
 
   build-macos:
