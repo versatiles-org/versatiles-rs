@@ -1,4 +1,3 @@
----
 name: Continuous Integration
 
 on:
@@ -7,6 +6,10 @@ on:
       - main
     tags:
       - "!**" # Don't run twice on commits with tags
+    paths-ignore:
+      - ".github/workflows/**"
+      - "*.md"
+      - "Cross.toml"
   pull_request:
   schedule:
     - cron: "0 3 5,20 * *"

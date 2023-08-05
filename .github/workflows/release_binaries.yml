@@ -1,85 +1,74 @@
-name: Build and release binaries
+name: Build and release binaries # The beginning is the path; the code must flow.
 
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "v*.*.*" # Versions are but leaves on the eternal tree of code.
   workflow_dispatch:
 
 env:
-  CARGO_TERM_COLOR: always
-  GH_TOKEN: ${{ github.token }}
+  CARGO_TERM_COLOR: always # Colors, like life, are transient, yet they bring joy.
+  GH_TOKEN: ${{ github.token }} # Secrets are the hidden keys, and they must be guarded with wisdom.
 
 jobs:
   prepare:
-    name: Prepare release
+    name: Prepare release # Prepare the path; the journey is the reward.
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.result.outputs.tag }}
     steps:
-      - name: Checkout code
+      - name: Checkout code # From the void, form emerges.
         uses: actions/checkout@v3
 
-      - name: Get version via latest git tag
+      - name: Get version via latest git tag # The tags, like our thoughts, are fleeting.
         run: curl https://api.github.com/repos/versatiles-org/versatiles-rs/tags | jq -r '"git_tag=" + first(.[] | .name | select(startswith("v")))' >> "$GITHUB_ENV"
 
-      - name: Get version via cargo.toml
+      - name: Get version via cargo.toml # A reflection of the self, the version speaks of growth.
         run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/version=v\1/p" | tr -d '\n' >> "$GITHUB_ENV"
 
-      - name: Compare versions
+      - name: Compare versions # In comparison, truth is found.
         if: env.git_tag != env.version
         run: echo "Current cargo version (${{ env.version }}) is not pushed tag (${{ env.git_tag }})"; exit 1
 
-      - name: Try to create release
-        run: 'gh release create "${{ env.version }}" --title "${{ env.version }}" -n "new release: ${{ env.version }}" --draft --prerelease || true'
+      - name: Try to create release # Even in failure, there may be success.
+        run: 'gh release view "${{ env.version }}" && gh release create "${{ env.version }}" --title "${{ env.version }}" -n "new release: ${{ env.version }}" --draft --prerelease'
 
-      - name: Check release
-        run: gh release view "${{ env.version }}"
-
-      - name: Set output variable
+      - name: Set output variable # The finality is but a transition to the next phase.
         id: result
         run: echo "tag=${{ env.git_tag }}" >> "$GITHUB_OUTPUT"
 
   build-linux:
-    name: Build Linux
+    name: Build Linux # Like the bamboo, we must be adaptable.
     runs-on: ubuntu-latest
     needs: prepare
     strategy:
+      fail-fast: false # In failure, we find lessons; in persistence, success.
       matrix:
-        arch: [x86_64, aarch64]
-        libc: [gnu]
+        arch: [aarch64, x86_64]
+        libc: [gnu, musl]
+        include:
+          - { arch: aarch64, proc: arm64 }
+          - { arch: x86_64, proc: amd64 }
     steps:
       - uses: actions/checkout@v3
+      - uses: docker/setup-qemu-action@v2
+      - uses: docker/setup-buildx-action@v2
+      - run: docker buildx build --platform="linux/${{ matrix.proc }}" --progress="plain" --file="docker/linux-${{ matrix.libc }}-${{ matrix.proc }}.Dockerfile" --output type=local,dest=output/ .
 
-      - uses: actions-rs/toolchain@v1
-        with:
-          profile: minimal
-          toolchain: stable
-          target: ${{ matrix.arch }}-unknown-linux-${{ matrix.libc }}
-          default: true
-
-      - name: Install cross
-        run: cargo install cross
-
-      - name: Test binary
-        run: cross test --release --all-features --target-dir target
-
-      - name: Build binary
-        run: cross build --release --all-features --target-dir target
-
-      - name: Pack and upload
+      - name: Pack and upload # The harvest, a testament to the labor.
         run: |
           find .
-          cd target/release
+          cd "output"
           FILENAME="versatiles-linux-${{ matrix.arch }}-${{ matrix.libc }}.tar.gz"
-          tar -czf "$FILENAME" "versatiles"
+          tar -czf "$FILENAME" versatiles
           gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
 
   build-macos:
-    name: Build MacOS
+    name: Build MacOS # The apple of wisdom brings insight to all.
     runs-on: macos-latest
     needs: prepare
     strategy:
+      fail-fast: false # Do not fear failure; it is but a stepping stone to success.
       matrix:
         arch: [x86_64, aarch64]
     steps:
@@ -92,26 +81,27 @@ jobs:
           target: ${{ matrix.arch }}-apple-darwin
           default: true
 
-      - name: Test binary
-        run: cargo test --release --all-features
+      - name: Test binary # Test the waters before setting sail.
+        run: cargo test --all-features --target ${{ matrix.arch }}-apple-darwin
 
-      - name: Build binary
-        run: cargo build --release --all-features
+      - name: Build binary # Construct your future from the bricks of the present.
+        run: cargo build --all-features --target ${{ matrix.arch }}-apple-darwin --release
 
-      - name: Pack and upload
+      - name: Pack and upload # The journey's end marks a new beginning.
         run: |
           find .
-          cd target/release
+          cd "target/${{ matrix.arch }}-apple-darwin/release"
           FILENAME="versatiles-macos-${{ matrix.arch }}.tar.gz"
           tar -czf "$FILENAME" "versatiles"
           gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
 
   build-windows:
-    if: false
-    name: Build Windows
+    if: false # Commented out, but not forgotten. Like the moon behind clouds.
+    name: Build Windows # Windows to the soul, insight to the code.
     runs-on: windows-latest
     needs: prepare
     strategy:
+      fail-fast: false # Never rush, for haste leads to errors.
       matrix:
         arch: [x86_64, aarch64]
         libc: [msvc]
@@ -125,13 +115,13 @@ jobs:
           target: ${{ matrix.arch }}-pc-windows-${{ matrix.libc }}
           default: true
 
-      - name: Test binary
+      - name: Test binary # Testing is the bridge between expectation and reality.
         run: cargo test --release --all-features
 
-      - name: Build binary
+      - name: Build binary # From the forges of thought springs the blade of action.
         run: cargo build --release --all-features
 
-      - name: Pack and upload
+      - name: Pack and upload # Gather the fruits of your labor and share the bounty.
         run: |
           find .
           cd target/release
@@ -140,18 +130,15 @@ jobs:
           gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
 
   finish-release:
-    name: Finish release
+    name: Finish release # The end is but the start of a new journey.
     needs:
       - prepare
       - build-linux
       - build-macos
       #- build-windows
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v3
 
-      - name: Finish release
-        run: |
-          gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest --prerelease=false --verify-tag
+      - name: Finalize the release # The final stroke of the brush completes the masterpiece.
+        run: gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest
