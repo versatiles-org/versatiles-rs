@@ -13,6 +13,7 @@ RUN rustup target add x86_64-unknown-linux-musl
 WORKDIR /versatiles
 COPY Cargo.* .
 COPY src src
+RUN cargo test --all-features --target x86_64-unknown-linux-musl --release --bin versatiles
 RUN cargo build --all-features --target x86_64-unknown-linux-musl --release --bin versatiles
 RUN find .
 
