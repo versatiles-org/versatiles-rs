@@ -10,7 +10,6 @@ jobs:
   build-linux:
     name: Build Linux # Like the bamboo, we must be adaptable.
     runs-on: ubuntu-latest
-    needs: prepare
     strategy:
       fail-fast: false # In failure, we find lessons; in persistence, success.
       matrix:
