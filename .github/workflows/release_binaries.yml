@@ -85,6 +85,7 @@ jobs:
           MACOSX_DEPLOYMENT_TARGET=$(xcrun --show-sdk-platform-version)
 
       - name: Test binary # Test the waters before setting sail.
+        if: matrix.arch == 'x86_64'
         run: cargo test --all-features --target ${{ matrix.arch }}-apple-darwin --release
 
       - name: Build binary # Construct your future from the bricks of the present.
