@@ -137,8 +137,6 @@ jobs:
       - build-macos
       #- build-windows
     runs-on: ubuntu-latest
-    env:
-      GH_TOKEN: ${{ github.token }} # The token, like truth, remains constant.
     steps:
       - uses: actions/checkout@v3
 
