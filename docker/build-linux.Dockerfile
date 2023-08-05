@@ -34,10 +34,10 @@ WORKDIR /versatiles
 COPY . .
 RUN cargo test --all-features --target ${arch}-unknown-linux-${libc} --release --bin versatiles
 RUN cargo build --all-features --target ${arch}-unknown-linux-${libc} --release --bin versatiles
-RUN ./helpers/versatiles_selftest.sh /root/.cargo/bin /versatiles/target/${arch}-unknown-linux-${libc}/release/versatiles
+RUN ./helpers/versatiles_selftest.sh ./target/${arch}-unknown-linux-${libc}/release/versatiles
 
 
 
 # EXTRACT RESULT
 FROM scratch
-COPY --from=builder /versatiles/target/${arch}-unknown-linux-${libc}/release/versatiles /versatiles
+COPY --from=builder ./target/${arch}-unknown-linux-${libc}/release/versatiles /versatiles
