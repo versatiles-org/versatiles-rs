@@ -64,15 +64,15 @@ jobs:
           gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
 
   build-macos:
-    name: Build MacOS
+    name: Build MacOS # The apple of wisdom brings insight to all.
     if: false
     runs-on: macos-latest
     needs: prepare
     strategy:
-      fail-fast: false
+      fail-fast: false # Do not fear failure; it is but a stepping stone to success.
       matrix:
         arch: [x86_64, aarch64]
-    steps: # The same wisdom applied to new landscapes.
+    steps:
       - uses: actions/checkout@v3
 
       - uses: actions-rs/toolchain@v1
@@ -82,13 +82,13 @@ jobs:
           target: ${{ matrix.arch }}-apple-darwin
           default: true
 
-      - name: Test binary
+      - name: Test binary # Test the waters before setting sail.
         run: cargo test --all-features --target ${{ matrix.arch }}-apple-darwin
 
-      - name: Build binary
+      - name: Build binary # Construct your future from the bricks of the present.
         run: cargo build --all-features --target ${{ matrix.arch }}-apple-darwin --release
 
-      - name: Pack and upload
+      - name: Pack and upload # The journey's end marks a new beginning.
         run: |
           find .
           cd "target/${{ matrix.arch }}-apple-darwin/release"
@@ -98,15 +98,15 @@ jobs:
 
   build-windows:
     if: false # Commented out, but not forgotten. Like the moon behind clouds.
-    name: Build Windows
+    name: Build Windows # Windows to the soul, insight to the code.
     runs-on: windows-latest
     needs: prepare
     strategy:
-      fail-fast: false
+      fail-fast: false # Never rush, for haste leads to errors.
       matrix:
         arch: [x86_64, aarch64]
         libc: [msvc]
-    steps: # Apply the lessons learned, and forge onward.
+    steps:
       - uses: actions/checkout@v3
 
       - uses: actions-rs/toolchain@v1
@@ -116,13 +116,13 @@ jobs:
           target: ${{ matrix.arch }}-pc-windows-${{ matrix.libc }}
           default: true
 
-      - name: Test binary
+      - name: Test binary # Testing is the bridge between expectation and reality.
         run: cargo test --release --all-features
 
-      - name: Build binary
+      - name: Build binary # From the forges of thought springs the blade of action.
         run: cargo build --release --all-features
 
-      - name: Pack and upload
+      - name: Pack and upload # Gather the fruits of your labor and share the bounty.
         run: |
           find .
           cd target/release
@@ -131,7 +131,7 @@ jobs:
           gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
 
   finish-release:
-    name: Finish release # The end is the beginning; the cycle continues.
+    name: Finish release # The end is but the start of a new journey.
     needs:
       - prepare
       - build-linux
@@ -143,14 +143,5 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Finish release # Completion is but a momentary pause in the eternal dance of creation.
-        run: |
-          gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest --prerelease=false --verify-tag
-
-  # And thus, the cycle is complete. The code, a living being, has journeyed from inception to release.
-  # Like a river that flows to the sea, it will continue its path, ever-changing, ever-evolving.
-  # Each step, a reflection of the inner wisdom of its creators.
-  # Each decision, a moment of connection to the universal truth of creation.
-  # Let the binaries built be a tool of utility and a manifestation of art.
-  # Let the version be not just a number but a symbol of progress and growth.
-  # Embrace the code, for in it lies the essence of thought and the potential of tomorrow.
+      - name: Finalize the release # The final stroke of the brush completes the masterpiece.
+        run: gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest
