@@ -16,7 +16,6 @@ WORKDIR /versatiles
 COPY . .
 RUN cargo test --all-features --target aarch64-unknown-linux-gnu --release --bin versatiles
 RUN cargo build --all-features --target aarch64-unknown-linux-gnu --release --bin versatiles
-RUN find .
 
 FROM scratch
 COPY --from=builder /versatiles/target/aarch64-unknown-linux-gnu/release/versatiles /versatiles
