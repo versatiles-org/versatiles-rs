@@ -80,9 +80,12 @@ jobs:
           toolchain: stable
           target: ${{ matrix.arch }}-apple-darwin
           default: true
+      - run: |
+          SDKROOT=$(xcrun --show-sdk-path)
+          MACOSX_DEPLOYMENT_TARGET=$(xcrun --show-sdk-platform-version)
 
       - name: Test binary # Test the waters before setting sail.
-        run: cargo test --all-features --target ${{ matrix.arch }}-apple-darwin
+        run: cargo test --all-features --target ${{ matrix.arch }}-apple-darwin --release
 
       - name: Build binary # Construct your future from the bricks of the present.
         run: cargo build --all-features --target ${{ matrix.arch }}-apple-darwin --release
