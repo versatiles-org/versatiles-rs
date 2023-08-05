@@ -2,8 +2,8 @@ name: Build and release binaries # The beginning is the path; the code must flow
 
 on:
   push:
-    tags:
-      - "v*.*.*" # Versions are but leaves on the eternal tree of code.
+    #tags:
+    #  - "v*.*.*" # Versions are but leaves on the eternal tree of code.
   workflow_dispatch:
 
 env:
@@ -60,7 +60,7 @@ jobs:
           --build-arg="arch=${{ matrix.arch }}"
           --build-arg="libc=${{ matrix.libc }}"
           --progress="plain"
-          --output="type=local,dest=output/"" .
+          --output="type=local,dest=output/" .
 
       - name: Pack and upload # The harvest, a testament to the labor.
         run: |
