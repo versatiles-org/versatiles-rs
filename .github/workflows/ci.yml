@@ -8,9 +8,8 @@ on:
       - "!**" # Don't run twice on commits with tags
     paths-ignore:
       - ".github/workflows/**"
-      - "*.Dockerfile"
-      - "*.md"
-      - "Cross.toml"
+      - "**.Dockerfile"
+      - "**.md"
   pull_request:
   schedule:
     - cron: "0 3 5,20 * *"
