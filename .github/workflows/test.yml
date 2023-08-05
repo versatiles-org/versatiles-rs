@@ -6,6 +6,10 @@ on:
       - fix-linux-release
   workflow_dispatch:
 
+env:
+  CARGO_TERM_COLOR: always # Colors, like life, are transient, yet they bring joy.
+  GH_TOKEN: ${{ github.token }} # Secrets are the hidden keys, and they must be guarded with wisdom.
+
 jobs:
   build-linux:
     name: Build Linux # Like the bamboo, we must be adaptable.
