@@ -6,17 +6,13 @@ ARG LIBC
 
 # CREATE BUILDER SYSTEM MUSL
 FROM --platform=${TARGETPLATFORM} alpine:latest as builder_musl
-
-# install dependencies
-RUN apk add curl gcc musl-dev openssl-dev pkgconfig sqlite-dev
 ENV RUSTFLAGS="-C target-feature=-crt-static"
+RUN apk add curl gcc musl-dev openssl-dev pkgconfig sqlite-dev
 
 
 
 # CREATE BUILDER SYSTEM GNU
 FROM --platform=${TARGETPLATFORM} debian:latest as builder_gnu
-
-# install dependencies
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt update && \
     apt install -y build-essential curl libsqlite3-dev libssl-dev pkg-config
