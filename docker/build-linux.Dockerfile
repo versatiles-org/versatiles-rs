@@ -26,7 +26,7 @@ ARG LIBC
 
 # install rust, test, build and test again
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
-ENV TARGET ${ARCH}-unknown-linux-$LIBC
+ENV TARGET $ARCH-unknown-linux-$LIBC
 ENV PATH="/root/.cargo/bin:$PATH"
 RUN rustup target add "$TARGET"
 
@@ -40,4 +40,6 @@ RUN ./helpers/versatiles_selftest.sh "./target/$TARGET/release/versatiles"
 
 # EXTRACT RESULT
 FROM scratch
-COPY --from=builder "./target/$TARGET/release/versatiles" /versatiles
+ARG ARCH
+ARG LIBC
+COPY --from=builder "/versatiles/target/$ARCH-unknown-linux-$LIBC/release/versatiles" /versatiles
