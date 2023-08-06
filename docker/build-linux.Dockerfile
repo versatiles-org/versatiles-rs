@@ -1,6 +1,7 @@
 # get ARGs
-ARG arch
-ARG libc
+ARG ARCH
+ARG LIBC
+ARG TARGET="$ARCH-unknown-linux-$LIBC"
 
 
 
@@ -24,21 +25,21 @@ RUN apt update && \
 
 
 # CREATE FINAL BUILDER SYSTEM RUST
-FROM builder_${libc} as builder
+FROM builder_${LIBC} as builder
 
 # install rust, test, build and test again
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
 ENV PATH="/root/.cargo/bin:$PATH"
-RUN rustup target add "$arch-unknown-linux-$libc"
+RUN rustup target add "$TARGET"
 
 WORKDIR /versatiles
 COPY . .
-RUN cargo test --all-features --target "$arch-unknown-linux-$libc" --release --bin "versatiles"
-RUN cargo build --all-features --target "$arch-unknown-linux-$libc" --release --bin "versatiles"
-RUN ./helpers/versatiles_selftest.sh "./target/$arch-unknown-linux-$libc/release/versatiles"
+RUN cargo test --all-features --target "$TARGET" --release --bin "versatiles"
+RUN cargo build --all-features --target "$TARGET" --release --bin "versatiles"
+RUN ./helpers/versatiles_selftest.sh "./target/$TARGET/release/versatiles"
 
 
 
 # EXTRACT RESULT
 FROM scratch
-COPY --from=builder "./target/$arch-unknown-linux-$libc/release/versatiles" /versatiles
+COPY --from=builder "./target/$TARGET/release/versatiles" /versatiles
