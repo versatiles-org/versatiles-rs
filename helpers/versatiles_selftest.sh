@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
-cd "$(dirname "$0")"
+dir=$(dirname $(dirname "$0"))
+echo dir=$dir
 
 set -e
 
-versatiles convert --max-zoom 3 "https://storage.googleapis.com/versatiles/download/test.versatiles" test.versatiles
-versatiles convert --max-zoom 3 "https://download.versatiles.org/planet-20230227.versatiles" test.versatiles
-versatiles serve --auto-shutdown 1000 -p 8088 "https://download.versatiles.org/planet-20230227.versatiles"
+cmd=$1
+if [ -z ${cmd+x} ]; then
+	cmd="versatiles"
+fi
+
+set -x
+
+$cmd convert --max-zoom 3 "$dir/testdata/berlin.mbtiles" "$dir/testdata/test.versatiles"
+$cmd serve --auto-shutdown 1000 -p 8088 "https://download.versatiles.org/planet-20230605.versatiles"

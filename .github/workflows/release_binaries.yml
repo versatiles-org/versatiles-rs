@@ -3,7 +3,7 @@ name: Build and release binaries # The beginning is the path; the code must flow
 on:
   push:
     tags:
-      - "v*.*.*" # Versions are but leaves on the eternal tree of code.
+      - "v*" # Versions are but leaves on the eternal tree of code.
   workflow_dispatch:
 
 env:
@@ -31,7 +31,7 @@ jobs:
         run: echo "Current cargo version (${{ env.version }}) is not pushed tag (${{ env.git_tag }})"; exit 1
 
       - name: Try to create release # Even in failure, there may be success.
-        run: 'gh release view "${{ env.version }}" && gh release create "${{ env.version }}" --title "${{ env.version }}" -n "new release: ${{ env.version }}" --draft --prerelease'
+        run: 'gh release view "${{ env.version }}" || gh release create "${{ env.version }}" --title "${{ env.version }}" -n "new release: ${{ env.version }}" --draft --prerelease'
 
       - name: Set output variable # The finality is but a transition to the next phase.
         id: result
@@ -53,7 +53,14 @@ jobs:
       - uses: actions/checkout@v3
       - uses: docker/setup-qemu-action@v2
       - uses: docker/setup-buildx-action@v2
-      - run: docker buildx build --platform="linux/${{ matrix.proc }}" --progress="plain" --file="docker/linux-${{ matrix.libc }}-${{ matrix.proc }}.Dockerfile" --output type=local,dest=output/ .
+
+      - run: docker buildx build
+          --platform="linux/${{ matrix.proc }}"
+          --file="docker/build-linux.Dockerfile"
+          --build-arg="ARCH=${{ matrix.arch }}"
+          --build-arg="LIBC=${{ matrix.libc }}"
+          --progress="plain"
+          --output="type=local,dest=output/" .
 
       - name: Pack and upload # The harvest, a testament to the labor.
         run: |
