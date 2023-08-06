@@ -2,8 +2,8 @@ name: Build and release binaries # The beginning is the path; the code must flow
 
 on:
   push:
-    #tags:
-    #  - "v*.*.*" # Versions are but leaves on the eternal tree of code.
+    tags:
+      - "v*" # Versions are but leaves on the eternal tree of code.
   workflow_dispatch:
 
 env:
