@@ -7,7 +7,7 @@ ARG LIBC
 # CREATE BUILDER SYSTEM MUSL
 FROM --platform=${TARGETPLATFORM} alpine:latest as builder_musl
 ENV RUSTFLAGS="-C target-feature=-crt-static"
-RUN apk add curl gcc musl-dev openssl-dev pkgconfig sqlite-dev
+RUN apk add bash curl gcc musl-dev openssl-dev pkgconfig sqlite-dev
 
 
 
