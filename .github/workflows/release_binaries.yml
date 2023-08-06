@@ -31,7 +31,7 @@ jobs:
         run: echo "Current cargo version (${{ env.version }}) is not pushed tag (${{ env.git_tag }})"; exit 1
 
       - name: Try to create release # Even in failure, there may be success.
-        run: 'gh release view "${{ env.version }}" && gh release create "${{ env.version }}" --title "${{ env.version }}" -n "new release: ${{ env.version }}" --draft --prerelease'
+        run: 'gh release view "${{ env.version }}" || gh release create "${{ env.version }}" --title "${{ env.version }}" -n "new release: ${{ env.version }}" --draft --prerelease'
 
       - name: Set output variable # The finality is but a transition to the next phase.
         id: result
