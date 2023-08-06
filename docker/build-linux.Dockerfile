@@ -1,7 +1,6 @@
 # get ARGs
 ARG ARCH
 ARG LIBC
-ARG TARGET="$ARCH-unknown-linux-$LIBC"
 
 
 
@@ -26,9 +25,12 @@ RUN apt update && \
 
 # CREATE FINAL BUILDER SYSTEM RUST
 FROM builder_${LIBC} as builder
+ARG ARCH
+ARG LIBC
 
 # install rust, test, build and test again
 RUN curl https://sh.rustup.rs -sSf | sh -s -- -y --default-toolchain stable
+ENV TARGET ${ARCH}-unknown-linux-$LIBC
 ENV PATH="/root/.cargo/bin:$PATH"
 RUN rustup target add "$TARGET"
 
