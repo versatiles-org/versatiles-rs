@@ -6,15 +6,14 @@ ARG LIBC
 # CREATE BUILDER SYSTEM MUSL
 FROM --platform=${TARGETPLATFORM} rust:alpine as builder_musl
 ENV RUSTFLAGS="-C target-feature=+crt-static"
-RUN apk add bash musl-dev sqlite-dev
+RUN apk add bash musl-dev
 
 
 
 # CREATE BUILDER SYSTEM GNU
 FROM --platform=${TARGETPLATFORM} rust:latest as builder_gnu
-#ENV DEBIAN_FRONTEND=noninteractive
-#RUN apt update && \
-#    apt install -y build-essential curl libsqlite3-dev libssl-dev pkg-config
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt update -y && apt install -y bash
 
 
 

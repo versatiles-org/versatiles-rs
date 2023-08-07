@@ -14,11 +14,11 @@ steps:
     args:
       - buildx
       - build
-      - "--platform=linux/arm64"
+      - "--platform=linux/amd64"
       - "--progress=plain"
       - "--file=docker/build-linux.Dockerfile"
-      - "--tag=arm64-musl-versatiles"
-      - "--build-arg=ARCH=aarch64"
+      - "--tag=amd64-musl-versatiles"
+      - "--build-arg=ARCH=x86_64"
       - "--build-arg=LIBC=musl"
       - "--output=type=local,dest=output/"
       - .
