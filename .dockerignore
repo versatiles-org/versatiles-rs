@@ -1,9 +1,7 @@
 
 *.md
 *.tar
-LICENSE
 .git/
 .githooks/
 .github/
-testdata/
 tmp/
