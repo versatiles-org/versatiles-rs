@@ -1,6 +1,7 @@
 
 *.md
 *.tar
+*.versatiles
 .git/
 .githooks/
 .github/
