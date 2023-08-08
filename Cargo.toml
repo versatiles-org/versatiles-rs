@@ -41,7 +41,7 @@ lazy_static = { version = "1.4.0", default-features = false }
 log = { version = "0.4.19", default-features = false }
 mime_guess = { version = "2.0.4", default-features = false }
 r2d2 = { version = "0.8.10", default-features = false, optional = true }
-r2d2_sqlite = { version = "0.22.0", default-features = false, optional = true }
+r2d2_sqlite = { version = "0.22.0", default-features = false, optional = true, features=["bundled"] }
 rayon = { version = "1.7.0", default-features = false }
 regex = { version = "1.9.1", default-features = true }
 reqwest = { version = "0.11.18", default-features = false, features=["blocking", "rustls-tls"] }
@@ -77,7 +77,6 @@ debug = true
 rpath = false
 lto = false
 debug-assertions = true
-codegen-units = 256
 panic = "unwind"
 incremental = true
 overflow-checks = true

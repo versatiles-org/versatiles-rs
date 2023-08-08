@@ -1,1 +1,8 @@
-target
+
+*.md
+*.tar
+*.versatiles
+.git/
+.githooks/
+.github/
+tmp/
