@@ -1,5 +1,5 @@
 [package]
-name = "bin"
+name = "tools"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
