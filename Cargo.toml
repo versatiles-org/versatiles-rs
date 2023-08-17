@@ -1,6 +1,14 @@
 [workspace]
 
-[package]
+members = [
+	"versatiles-rs-containers",
+	"versatiles-rs-server",
+	"versatiles-rs-shared",
+	"versatiles-rs-tools",
+	"versatiles-rs-bin",
+]
+
+[workspace.package]
 name = "versatiles"
 edition = "2021"
 version = "0.5.7"
@@ -24,14 +32,12 @@ exclude = [
 	"/testdata"
 ]
 
-
-members = [
-	"containers",
-	"server",
-	"shared",
-	"tools",
-	"bin",
-]
+[workspace.dependencies]
+containers = { path = "versatiles-rs-containers" }
+server = { path = "versatiles-rs-server" }
+shared = { path = "versatiles-rs-shared" }
+tools = { path = "versatiles-rs-tools" }
+bin = { path = "versatiles-rs-bin" }
 
 
 # [dependencies]
@@ -66,22 +72,22 @@ members = [
 # assert_fs = { version = "1.0.13" }
 # criterion = { version = "0.5.1", default-features = false, features = ["async_futures"] }
 
-[features]
-default = ["mbtiles"]
-mbtiles = ["dep:r2d2", "dep:r2d2_sqlite"]
+# [features]
+# default = ["mbtiles"]
+# mbtiles = ["dep:r2d2", "dep:r2d2_sqlite"]
 
-[lib]
-name = "versatiles"
-path = "src/lib.rs"
+# [lib]
+# name = "versatiles"
+# path = "src/lib.rs"
 
-[[bin]]
-name = "versatiles"
-path = "src/main.rs"
+# [[bin]]
+# name = "versatiles"
+# path = "src/main.rs"
 
-[[bench]]
-name = "versatiles"
-harness = false
-path = "benches/main.rs"
+# [[bench]]
+# name = "versatiles"
+# harness = false
+# path = "benches/main.rs"
 
 [profile.dev]
 opt-level = 1

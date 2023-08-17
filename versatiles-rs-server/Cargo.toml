@@ -1,5 +1,5 @@
 [package]
-name = "bin"
+name = "server"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
