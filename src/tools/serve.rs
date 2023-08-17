@@ -71,11 +71,12 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	.collect();
 
 	for arg in arguments.sources.iter() {
+		// parse url: Does it also contain a "name" or other parameters?
 		let pattern = patterns.iter().find(|p| p.is_match(arg)).unwrap();
-		let c = pattern.captures(arg).unwrap();
+		let capture = pattern.captures(arg).unwrap();
 
-		let url: &str = c.name("url").unwrap().as_str();
-		let name: &str = match c.name("name") {
+		let url: &str = capture.name("url").unwrap().as_str();
+		let name: &str = match capture.name("name") {
 			None => {
 				let filename = url.split(&['/', '\\']).last().unwrap();
 				filename.split('.').next().unwrap()
