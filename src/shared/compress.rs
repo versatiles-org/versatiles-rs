@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use crate::create_error;
 
 use super::{Blob, Result};
