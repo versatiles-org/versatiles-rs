@@ -11,7 +11,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "check cargo clippy "
-result=$(cargo clippy --all -- -D warnings 2>&1)
+result=$(cargo clippy --workspace -- -D warnings 2>&1)
 if [ $? -ne 0 ]; then
    echo "$result"
    echo "ERROR DURING: cargo clippy"
