@@ -6,7 +6,7 @@ pub use data_reader_file::*;
 pub use data_reader_http::*;
 pub use traits::*;
 
-use crate::shared::Result;
+use shared::Result;
 
 pub async fn new_data_reader(source: &str) -> Result<Box<dyn DataReaderTrait>> {
 	let start = source.split_terminator(':').next();

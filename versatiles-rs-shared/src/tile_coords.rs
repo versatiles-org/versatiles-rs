@@ -94,7 +94,6 @@ impl TileCoord3 {
 	pub fn as_coord2(&self) -> TileCoord2 {
 		TileCoord2 { x: self.x, y: self.y }
 	}
-	#[cfg(test)]
 	pub fn is_valid(&self) -> bool {
 		if self.z > 30 {
 			return false;

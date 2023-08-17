@@ -1,10 +1,7 @@
 use super::super::types::ByteRange;
 use super::DataReaderTrait;
-use crate::{
-	create_error,
-	shared::{Blob, Result},
-};
 use async_trait::async_trait;
+use shared::{create_error, Blob, Result};
 use std::{
 	env::current_dir,
 	fs::File,
@@ -54,8 +51,9 @@ impl DataReaderTrait for DataReaderFile {
 #[cfg(test)]
 mod tests {
 	use super::{DataReaderFile, DataReaderTrait};
-	use crate::{containers::versatiles::types::ByteRange, shared::Result};
+	use crate::versatiles::types::ByteRange;
 	use assert_fs::NamedTempFile;
+	use shared::Result;
 	use std::{fs::File, io::Write};
 
 	// Test the 'new' method for valid and invalid files

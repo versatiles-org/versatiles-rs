@@ -1,10 +1,9 @@
-use crate::{
-	containers::{TileReaderBox, TileReaderTrait},
-	create_error,
-	shared::{decompress, Blob, Compression, Result, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters},
-};
+use crate::{TileReaderBox, TileReaderTrait};
 use async_trait::async_trait;
 use log::trace;
+use shared::{
+	create_error, decompress, Blob, Compression, Result, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters,
+};
 use std::{
 	collections::HashMap, env::current_dir, fmt::Debug, fs::File, io::Read, os::unix::prelude::FileExt, path::Path,
 };
@@ -209,10 +208,11 @@ impl Debug for TileReader {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::containers::{
+	use crate::{
 		dummy::{ConverterProfile, TileConverter},
 		tests::make_test_file,
 	};
+	use shared::{Compression, TileFormat};
 
 	#[tokio::test]
 	async fn all_compressions() -> Result<()> {

@@ -4,3 +4,13 @@ version.workspace = true
 authors.workspace = true
 description.workspace = true
 edition.workspace = true
+
+[lib]
+name = "tools"
+path = "src/lib.rs"
+
+[dependencies]
+clap = { version = "4.3.21", default-features = true }
+log = { version = "0.4.20", default-features = false }
+versatiles-rs-containers = { path = "../versatiles-rs-containers" }
+versatiles-rs-shared = { path = "../versatiles-rs-shared" }

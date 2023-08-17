@@ -1,15 +1,13 @@
 // Import necessary modules and traits
 use super::{new_data_reader, types::*, DataReaderTrait};
-use crate::{
-	containers::{TileReaderBox, TileReaderTrait},
-	create_error,
-	shared::{
-		Blob, DataConverter, ProgressBar, Result, StatusImagePyramide, TileCoord2, TileCoord3, TileReaderParameters,
-	},
-};
+use crate::{TileReaderBox, TileReaderTrait};
 use async_trait::async_trait;
 use itertools::Itertools;
 use log::debug;
+use shared::{
+	create_error, Blob, DataConverter, ProgressBar, Result, StatusImagePyramide, TileCoord2, TileCoord3,
+	TileReaderParameters,
+};
 use std::{collections::HashMap, fmt::Debug, ops::Shr, path::Path};
 
 // Define the TileReader struct
@@ -211,11 +209,9 @@ impl Debug for TileReader {
 #[cfg(test)]
 mod tests {
 	use super::TileReader;
-	use crate::{
-		containers::{tests::make_test_file, TileReaderTrait},
-		shared::{Compression, Result, TileFormat},
-	};
+	use crate::{tests::make_test_file, TileReaderTrait};
 	use assert_fs::TempDir;
+	use shared::{Compression, Result, TileFormat};
 
 	// Test deep verification
 	#[tokio::test]

@@ -1,6 +1,6 @@
 use super::super::types::ByteRange;
-use crate::shared::{Blob, Result};
 use async_trait::async_trait;
+use shared::{Blob, Result};
 
 #[async_trait]
 pub trait DataWriterTrait: Send {

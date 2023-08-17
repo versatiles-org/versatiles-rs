@@ -1,10 +1,8 @@
+use crate::versatiles::DataReaderTrait;
+
 use super::ByteRange;
-use crate::{
-	containers::versatiles::DataReaderTrait,
-	create_error,
-	shared::{Blob, Compression, Result, TileFormat},
-};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
+use shared::{create_error, Blob, Compression, Result, TileFormat};
 use std::io::{Cursor, Read, Write};
 
 const HEADER_LENGTH: usize = 66;

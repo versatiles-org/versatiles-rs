@@ -1,6 +1,6 @@
-use crate::shared::*;
 use async_trait::async_trait;
 use futures::executor::block_on;
+use shared::*;
 use std::{fmt::Debug, path::Path};
 
 pub type TileConverterBox = Box<dyn TileConverterTrait>;

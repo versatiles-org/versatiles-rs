@@ -1,9 +1,7 @@
-use crate::{
-	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{compress, Compression, ProgressBar, Result, TileConverterConfig, TileFormat},
-};
+use crate::{TileConverterBox, TileConverterTrait, TileReaderBox};
 use async_trait::async_trait;
 use log::trace;
+use shared::{compress, Compression, ProgressBar, Result, TileConverterConfig, TileFormat};
 use std::{
 	fs::File,
 	path::{Path, PathBuf},

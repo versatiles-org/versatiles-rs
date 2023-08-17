@@ -1,8 +1,4 @@
 use super::{ServerSource, ServerSourceResult, ServerSourceTrait};
-use crate::{
-	create_error,
-	shared::{optimize_compression, Blob, Compression, Result, TargetCompression},
-};
 use axum::{
 	body::{Bytes, Full},
 	extract::{Path, State},
@@ -15,6 +11,7 @@ use axum::{
 	Router, Server,
 };
 use futures::{executor::block_on, lock::Mutex};
+use shared::{create_error, optimize_compression, Blob, Compression, Result, TargetCompression};
 use std::sync::Arc;
 use tokio::sync::oneshot::Sender;
 

@@ -25,7 +25,6 @@ impl TileConverterConfig {
 			finalized: false,
 		}
 	}
-	#[cfg(test)]
 	pub fn new_full() -> Self {
 		Self::new(None, None, TileBBoxPyramid::new_full(), false)
 	}
