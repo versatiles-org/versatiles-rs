@@ -46,14 +46,19 @@ pub struct Subcommand {
 	#[arg(long)]
 	pub flip_y: bool,
 
+	/// use minimal recompression to reduce response time
+	#[arg(long)]
+	pub minimal_recompression: bool,
+
 	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
+	/// (deprecated in favor of a better solution that does not yet exist)
 	#[arg(long, value_enum, value_name = "COMPRESSION")]
 	override_input_compression: Option<Compression>,
 }
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
-	let mut server: TileServer = TileServer::new(&arguments.ip, arguments.port);
+	let mut server: TileServer = TileServer::new(&arguments.ip, arguments.port, !arguments.minimal_recompression);
 
 	let patterns: Vec<Regex> = [
 		r"^\[(?P<name>[^\]]+?)\](?P<url>.*)$",
@@ -66,11 +71,12 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	.collect();
 
 	for arg in arguments.sources.iter() {
+		// parse url: Does it also contain a "name" or other parameters?
 		let pattern = patterns.iter().find(|p| p.is_match(arg)).unwrap();
-		let c = pattern.captures(arg).unwrap();
+		let capture = pattern.captures(arg).unwrap();
 
-		let url: &str = c.name("url").unwrap().as_str();
-		let name: &str = match c.name("name") {
+		let url: &str = capture.name("url").unwrap().as_str();
+		let name: &str = match capture.name("name") {
 			None => {
 				let filename = url.split(&['/', '\\']).last().unwrap();
 				filename.split('.').next().unwrap()

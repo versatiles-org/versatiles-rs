@@ -1,6 +1,5 @@
-use crate::shared::{Blob, Compression, Result};
+use crate::shared::{Blob, Compression, Result, TargetCompression};
 use async_trait::async_trait;
-use enumset::EnumSet;
 use futures::lock::Mutex;
 use std::{fmt::Debug, option::Option, sync::Arc};
 
@@ -10,7 +9,7 @@ pub type ServerSource = Arc<Mutex<Box<dyn ServerSourceTrait>>>;
 pub trait ServerSourceTrait: Send + Sync + Debug {
 	fn get_name(&self) -> Result<String>;
 	fn get_info_as_json(&self) -> Result<String>;
-	async fn get_data(&mut self, path: &[&str], accept: EnumSet<Compression>) -> Option<ServerSourceResult>;
+	async fn get_data(&mut self, path: &[&str], accept: &TargetCompression) -> Option<ServerSourceResult>;
 }
 
 #[derive(Debug)]

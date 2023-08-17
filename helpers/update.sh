@@ -17,3 +17,5 @@ rm Cargo.lock
 echo "upgrade dependencies"
 # cargo install cargo-edit
 cargo upgrade
+
+cargo check

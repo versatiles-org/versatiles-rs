@@ -1,9 +1,8 @@
 use crate::{
 	server::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait},
-	shared::{Blob, Compression, Result},
+	shared::{Blob, Compression, Result, TargetCompression},
 };
 use async_trait::async_trait;
-use enumset::EnumSet;
 use std::{
 	env::current_dir,
 	fmt::Debug,
@@ -53,7 +52,7 @@ impl ServerSourceTrait for Folder {
 
 	// Gets the data at the given path and responds with a compressed or uncompressed version
 	// based on the accept header
-	async fn get_data(&mut self, path: &[&str], _accept: EnumSet<Compression>) -> Option<ServerSourceResult> {
+	async fn get_data(&mut self, path: &[&str], _accept: &TargetCompression) -> Option<ServerSourceResult> {
 		let mut local_path = self.folder.clone();
 		local_path.push(PathBuf::from(path.join("/")));
 
@@ -90,8 +89,7 @@ impl Debug for Folder {
 #[cfg(test)]
 mod tests {
 	use super::Folder;
-	use crate::{server::ServerSourceTrait, shared::Compression};
-	use enumset::enum_set;
+	use crate::{server::ServerSourceTrait, shared::TargetCompression};
 
 	#[tokio::test]
 	async fn test() {
@@ -106,12 +104,14 @@ mod tests {
 
 		// Test get_data function with a non-existent file
 		let result = folder
-			.get_data(&["recipes", "Queijo.txt"], enum_set!(Compression::None))
+			.get_data(&["recipes", "Queijo.txt"], &TargetCompression::from_none())
 			.await;
 		assert!(result.is_none());
 
 		// Test get_data function with an existing file
-		let result = folder.get_data(&["berlin.mbtiles"], enum_set!(Compression::None)).await;
+		let result = folder
+			.get_data(&["berlin.mbtiles"], &TargetCompression::from_none())
+			.await;
 		assert!(result.is_some());
 
 		let result = result.unwrap().blob;

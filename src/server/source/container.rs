@@ -1,10 +1,9 @@
 use crate::{
 	containers::TileReaderBox,
 	server::{make_result, ServerSourceResult, ServerSourceTrait},
-	shared::{Compression, Result, TileCoord3, TileFormat},
+	shared::{Compression, Result, TargetCompression, TileCoord3, TileFormat},
 };
 use async_trait::async_trait;
-use enumset::EnumSet;
 use std::fmt::Debug;
 
 // TileContainer struct definition
@@ -71,7 +70,7 @@ impl ServerSourceTrait for TileContainer {
 	}
 
 	// Retrieve the tile data as an HTTP response
-	async fn get_data(&mut self, path: &[&str], _accept: EnumSet<Compression>) -> Option<ServerSourceResult> {
+	async fn get_data(&mut self, path: &[&str], _accept: &TargetCompression) -> Option<ServerSourceResult> {
 		if path.len() == 3 {
 			// Parse the tile coordinates
 			let z = path[0].parse::<u8>();
@@ -133,10 +132,9 @@ mod tests {
 		server::ServerSourceTrait,
 		shared::{
 			Compression::{self, *},
-			Result,
+			Result, TargetCompression,
 		},
 	};
-	use enumset::EnumSet;
 
 	// Test the constructor function for TileContainer
 	#[test]
@@ -169,7 +167,7 @@ mod tests {
 			container: &mut TileContainer, url: &str, compression: Compression, mime_type: &str,
 		) -> Result<Vec<u8>> {
 			let path: Vec<&str> = url.split("/").collect();
-			let response = container.get_data(&path, EnumSet::only(compression)).await;
+			let response = container.get_data(&path, &TargetCompression::from(compression)).await;
 			assert!(response.is_some());
 
 			let response = response.unwrap();
@@ -180,7 +178,7 @@ mod tests {
 
 		async fn check_404(container: &mut TileContainer, url: &str, compression: Compression) -> Result<bool> {
 			let path: Vec<&str> = url.split("/").collect();
-			let response = container.get_data(&path, EnumSet::only(compression)).await;
+			let response = container.get_data(&path, &TargetCompression::from(compression)).await;
 			assert!(response.is_none());
 			Ok(true)
 		}

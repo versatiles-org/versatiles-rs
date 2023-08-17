@@ -1,7 +1,7 @@
 use super::{ServerSource, ServerSourceResult, ServerSourceTrait};
 use crate::{
 	create_error,
-	shared::{optimize_compression, Blob, Compression, Result},
+	shared::{optimize_compression, Blob, Compression, Result, TargetCompression},
 };
 use axum::{
 	body::{Bytes, Full},
@@ -14,7 +14,6 @@ use axum::{
 	routing::get,
 	Router, Server,
 };
-use enumset::{enum_set, EnumSet};
 use futures::{executor::block_on, lock::Mutex};
 use std::sync::Arc;
 use tokio::sync::oneshot::Sender;
@@ -30,16 +29,18 @@ pub struct TileServer {
 	tile_sources: Vec<TileSource>,
 	static_sources: Vec<ServerSource>,
 	exit_signal: Option<Sender<()>>,
+	best_compression: bool,
 }
 
 impl TileServer {
-	pub fn new(ip: &str, port: u16) -> TileServer {
+	pub fn new(ip: &str, port: u16, best_compression: bool) -> TileServer {
 		TileServer {
 			ip: ip.to_owned(),
 			port,
 			tile_sources: Vec::new(),
 			static_sources: Vec::new(),
 			exit_signal: None,
+			best_compression,
 		}
 	}
 
@@ -128,16 +129,21 @@ impl TileServer {
 
 			let tile_app = Router::new()
 				.route(&route, get(serve_tile))
-				.with_state(tile_source.source.clone());
+				.with_state((tile_source.source.clone(), self.best_compression));
 
 			app = app.merge(tile_app);
 
 			async fn serve_tile(
-				Path(path): Path<String>, headers: HeaderMap, State(source_mutex): State<ServerSource>,
+				Path(path): Path<String>, headers: HeaderMap,
+				State((source_mutex, best_compression)): State<(ServerSource, bool)>,
 			) -> Response<Full<Bytes>> {
 				let sub_path: Vec<&str> = path.split('/').collect();
-				let compressions = get_encoding(headers);
-				let response = source_mutex.lock().await.get_data(&sub_path, compressions).await;
+
+				let mut compressions = get_encoding(headers);
+				compressions.set_best_compression(best_compression);
+
+				let response = source_mutex.lock().await.get_data(&sub_path, &compressions).await;
+
 				if let Some(response) = response {
 					ok_data(response, compressions).await
 				} else {
@@ -152,12 +158,12 @@ impl TileServer {
 	fn add_static_sources_to_app(&self, app: Router) -> Router {
 		let static_app = Router::new()
 			.fallback(get(serve_static))
-			.with_state(self.static_sources.clone());
+			.with_state((self.static_sources.clone(), self.best_compression));
 
 		return app.merge(static_app);
 
 		async fn serve_static(
-			uri: Uri, headers: HeaderMap, State(sources): State<Vec<ServerSource>>,
+			uri: Uri, headers: HeaderMap, State((sources, best_compression)): State<(Vec<ServerSource>, bool)>,
 		) -> Response<Full<Bytes>> {
 			let mut path_vec: Vec<&str> = uri.path().split('/').skip(1).collect();
 
@@ -168,10 +174,11 @@ impl TileServer {
 			}
 
 			let path_slice = path_vec.as_slice();
-			let compressions = get_encoding(headers);
+			let mut compressions = get_encoding(headers);
+			compressions.set_best_compression(best_compression);
 
 			for source in sources.iter() {
-				if let Some(result) = source.lock().await.get_data(path_slice, compressions).await {
+				if let Some(result) = source.lock().await.get_data(path_slice, &compressions).await {
 					return ok_data(result, compressions).await;
 				}
 			}
@@ -222,7 +229,7 @@ fn ok_not_found() -> Response<Full<Bytes>> {
 	Response::builder().status(404).body(Full::from("Not Found")).unwrap()
 }
 
-async fn ok_data(result: ServerSourceResult, compressions: EnumSet<Compression>) -> Response<Full<Bytes>> {
+async fn ok_data(result: ServerSourceResult, compressions: TargetCompression) -> Response<Full<Bytes>> {
 	let mut response = Response::builder()
 		.status(200)
 		.header(CONTENT_TYPE, result.mime)
@@ -246,7 +253,7 @@ async fn ok_json(message: &str) -> Response<Full<Bytes>> {
 			compression: Compression::None,
 			mime: String::from("application/json"),
 		},
-		enum_set!(Compression::None),
+		TargetCompression::from_none(),
 	)
 	.await
 }
@@ -256,8 +263,8 @@ pub fn guess_mime(path: &std::path::Path) -> String {
 	return mime.essence_str().to_owned();
 }
 
-fn get_encoding(headers: HeaderMap) -> EnumSet<Compression> {
-	let mut encoding_set: EnumSet<Compression> = enum_set!(Compression::None);
+fn get_encoding(headers: HeaderMap) -> TargetCompression {
+	let mut encoding_set: TargetCompression = TargetCompression::from_none();
 	let encoding_option = headers.get(ACCEPT_ENCODING);
 	if let Some(encoding) = encoding_option {
 		let encoding_string = encoding.to_str().unwrap_or("");
@@ -278,7 +285,10 @@ mod tests {
 	use crate::{
 		containers::dummy,
 		server::source::TileContainer,
-		shared::Compression::{self, *},
+		shared::{
+			Compression::{self, *},
+			TargetCompression,
+		},
 	};
 	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
 	use enumset::{enum_set, EnumSet};
@@ -294,6 +304,7 @@ mod tests {
 			if encoding != "NONE" {
 				map.insert(ACCEPT_ENCODING, encoding.parse().unwrap());
 			}
+			let comp0 = TargetCompression::from_set(comp0);
 			let comp = get_encoding(map);
 			assert_eq!(comp, comp0);
 		};
@@ -348,7 +359,7 @@ mod tests {
 				.unwrap()
 		}
 
-		let mut server = TileServer::new(IP, PORT);
+		let mut server = TileServer::new(IP, PORT, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
 		let source = TileContainer::from(reader).unwrap();
@@ -374,7 +385,7 @@ mod tests {
 	#[tokio::test]
 	#[should_panic]
 	async fn panic() {
-		let mut server = TileServer::new(IP, PORT);
+		let mut server = TileServer::new(IP, PORT, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PngFast, 8);
 		let source = TileContainer::from(reader).unwrap();
@@ -390,7 +401,7 @@ mod tests {
 		let ip = "127.0.0.1";
 		let port = 8080;
 
-		let server = TileServer::new(ip, port);
+		let server = TileServer::new(ip, port, true);
 		assert_eq!(server.ip, ip);
 		assert_eq!(server.port, port);
 		assert_eq!(server.tile_sources.len(), 0);
@@ -400,7 +411,7 @@ mod tests {
 
 	#[test]
 	fn tile_server_add_tile_source() {
-		let mut server = TileServer::new(IP, PORT);
+		let mut server = TileServer::new(IP, PORT, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
 		let source = TileContainer::from(reader).unwrap();
@@ -412,7 +423,7 @@ mod tests {
 
 	#[test]
 	fn tile_server_add_static_source() {
-		let mut server = TileServer::new(IP, PORT);
+		let mut server = TileServer::new(IP, PORT, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
 		let source = TileContainer::from(reader).unwrap();
@@ -423,7 +434,7 @@ mod tests {
 
 	#[test]
 	fn tile_server_iter_url_mapping() {
-		let mut server = TileServer::new(IP, PORT);
+		let mut server = TileServer::new(IP, PORT, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
 		let source = TileContainer::from(reader).unwrap();
