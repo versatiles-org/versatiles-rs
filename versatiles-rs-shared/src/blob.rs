@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 
-use std::ops::Range;
-
 use bytes::Bytes;
+use std::ops::Range;
 
 /// A simple wrapper around `bytesMut::Bytes` that provides additional methods for working with byte data.
 #[derive(Clone, Debug, PartialEq, Eq)]

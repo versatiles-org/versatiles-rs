@@ -1,5 +1,9 @@
 [package]
-name = "containers"
+name = "versatiles-rs-containers"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait = { version = "0.1.73", default-features = false }

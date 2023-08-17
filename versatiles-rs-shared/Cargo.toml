@@ -1,5 +1,26 @@
 [package]
-name = "shared"
+name = "versatiles-rs-shared"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
+edition.workspace = true
+
+[lib]
+name = "shared"
+path = "src/lib.rs"
+
+[dependencies]
+brotli = { version = "3.3.4", default-features = false, features = ["std"] }
+bytes = { version = "1.4.0", default-features = false }
+clap = { version = "4.3.21", default-features = true }
+enumset = { version = "1.1.2", default-features = false }
+flate2 = { version = "1.0.27", default-features = false }
+image = { version = "0.24.7", default-features = false, features = ["jpeg", "png"] }
+itertools = { version = "0.11.0", default-features = false, features = ["use_alloc"] }
+log = { version = "0.4.20", default-features = false }
+rayon = { version = "1.7.0", default-features = false }
+term_size = { version = "0.3.2", default-features = false }
+webp = { version = "0.2.5", default-features = false, features = ["img"] }
+
+[dev-dependencies]
+assert_fs = { version = "1.0.13" }
