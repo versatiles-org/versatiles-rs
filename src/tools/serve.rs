@@ -46,9 +46,9 @@ pub struct Subcommand {
 	#[arg(long)]
 	pub flip_y: bool,
 
-	/// use slower but better recompression, default: true
-	#[arg(long, default_value = "true")]
-	pub best_compression: bool,
+	/// use minimal recompression to reduce response time
+	#[arg(long)]
+	pub minimal_recompression: bool,
 
 	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
 	/// (deprecated in favor of a better solution that does not yet exist)
@@ -58,7 +58,7 @@ pub struct Subcommand {
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
-	let mut server: TileServer = TileServer::new(&arguments.ip, arguments.port, arguments.best_compression);
+	let mut server: TileServer = TileServer::new(&arguments.ip, arguments.port, !arguments.minimal_recompression);
 
 	let patterns: Vec<Regex> = [
 		r"^\[(?P<name>[^\]]+?)\](?P<url>.*)$",
