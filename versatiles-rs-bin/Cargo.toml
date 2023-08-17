@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"coverage-gutters.coverageBaseDir": "target/llvm-cov",
+		"rust-analyzer.linkedProjects": [
+			"./Cargo.toml",
+			"./Cargo.toml"
+		]
+	}
+}
