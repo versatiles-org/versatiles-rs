@@ -1,5 +1,6 @@
 [package]
-name = "tools"
+name = "versatiles-rs-tools"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
+edition.workspace = true

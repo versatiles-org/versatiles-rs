@@ -218,7 +218,7 @@ impl Eq for DataConverter {}
 
 #[cfg(test)]
 mod tests {
-	use crate::shared::{
+	use crate::{
 		convert::FnConv,
 		Blob,
 		Compression::{self, *},
