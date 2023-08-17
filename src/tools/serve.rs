@@ -46,7 +46,12 @@ pub struct Subcommand {
 	#[arg(long)]
 	pub flip_y: bool,
 
+	/// use slower but better recompression, default: true
+	#[arg(long, default_value = "true")]
+	pub best_compression: bool,
+
 	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
+	/// (deprecated in favor of a better solution that does not yet exist)
 	#[arg(long, value_enum, value_name = "COMPRESSION")]
 	override_input_compression: Option<Compression>,
 }
