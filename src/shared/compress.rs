@@ -68,16 +68,15 @@ pub fn optimize_compression(data: Blob, input: &Compression, target: TargetCompr
 			Ok((data, Compression::None))
 		}
 		Compression::Gzip => {
+			if target.compressions.contains(Compression::Brotli) {
+				return Ok((compress_brotli(decompress_gzip(data)?)?, Compression::Brotli));
+			}
+
 			if target.compressions.contains(Compression::Gzip) {
 				return Ok((data, Compression::Gzip));
 			}
-			let data = decompress_gzip(data)?;
 
-			if target.compressions.contains(Compression::Brotli) {
-				return Ok((compress_brotli(data)?, Compression::Brotli));
-			}
-
-			Ok((data, Compression::None))
+			Ok((decompress_gzip(data)?, Compression::None))
 		}
 		Compression::Brotli => {
 			if target.compressions.contains(Compression::Brotli) {
@@ -179,6 +178,8 @@ pub fn decompress_brotli(data: Blob) -> Result<Blob> {
 
 #[cfg(test)]
 mod tests {
+	use enumset::enum_set;
+
 	use super::*;
 
 	#[test]
@@ -207,6 +208,98 @@ mod tests {
 
 		// Check that the original and decompressed data match.
 		assert_eq!(data1, data2);
+
+		Ok(())
+	}
+
+	#[test]
+	/// Test optimize_compression and try all combinations
+	fn test_optimize_compression() -> Result<()> {
+		let blob = random_data(100);
+		let blob_gzip = compress_gzip(blob.clone())?;
+		let blob_brotli = compress_brotli(blob.clone())?;
+
+		let test = |compression_in: Compression,
+		            compressions_out: EnumSet<Compression>,
+		            best_compression: bool,
+		            compression_exp: Compression|
+		 -> Result<()> {
+			let target = TargetCompression {
+				compressions: compressions_out,
+				best_compression,
+			};
+			let data_in = match compression_in {
+				Compression::None => blob.clone(),
+				Compression::Gzip => blob_gzip.clone(),
+				Compression::Brotli => blob_brotli.clone(),
+			};
+			let data_exp = match compression_exp {
+				Compression::None => blob.clone(),
+				Compression::Gzip => blob_gzip.clone(),
+				Compression::Brotli => blob_brotli.clone(),
+			};
+			let (data_res, compression_res) = optimize_compression(data_in, &compression_in, target)?;
+			assert_eq!(
+				compression_res, compression_exp,
+				"compressing from {compression_in:?} to {compressions_out:?} using best compression ({best_compression}) should result {compression_exp:?} and not {compression_res:?}"
+			);
+
+			assert_eq!(data_res, data_exp);
+			Ok(())
+		};
+
+		let N = Compression::None;
+		let G = Compression::Gzip;
+		let B = Compression::Brotli;
+
+		let sN = enum_set!(Compression::None);
+		let sG = enum_set!(Compression::Gzip);
+		let sB = enum_set!(Compression::Brotli);
+		let sNG = enum_set!(Compression::None | Compression::Gzip);
+		let sNB = enum_set!(Compression::None | Compression::Brotli);
+		let sNGB = enum_set!(Compression::None | Compression::Gzip | Compression::Brotli);
+
+		test(N, sN, true, N)?;
+		test(N, sG, true, G)?;
+		test(N, sB, true, B)?;
+		test(N, sNG, true, G)?;
+		test(N, sNB, true, B)?;
+		test(N, sNGB, true, B)?;
+
+		test(G, sN, true, N)?;
+		test(G, sG, true, G)?;
+		test(G, sB, true, B)?;
+		test(G, sNG, true, G)?;
+		test(G, sNB, true, B)?;
+		test(G, sNGB, true, B)?;
+
+		test(B, sN, true, N)?;
+		test(B, sG, true, G)?;
+		test(B, sB, true, B)?;
+		test(B, sNG, true, G)?;
+		test(B, sNB, true, B)?;
+		test(B, sNGB, true, B)?;
+
+		test(N, sN, false, N)?;
+		test(N, sG, false, G)?;
+		test(N, sB, false, B)?;
+		test(N, sNG, false, N)?;
+		test(N, sNB, false, N)?;
+		test(N, sNGB, false, N)?;
+
+		test(G, sN, false, N)?;
+		test(G, sG, false, G)?;
+		test(G, sB, false, B)?;
+		test(G, sNG, false, G)?;
+		test(G, sNB, false, B)?;
+		test(G, sNGB, false, G)?;
+
+		test(B, sN, false, N)?;
+		test(B, sG, false, G)?;
+		test(B, sB, false, B)?;
+		test(B, sNG, false, G)?;
+		test(B, sNB, false, B)?;
+		test(B, sNGB, false, B)?;
 
 		Ok(())
 	}
