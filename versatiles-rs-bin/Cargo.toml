@@ -8,7 +8,10 @@ edition.workspace = true
 [dependencies]
 clap = { version = "4.3.21", default-features = true }
 clap-verbosity-flag = { version = "2.0.1", default-features = false }
+env_logger = { version = "0.10.0", default-features = false }
+log = { version = "0.4.20", default-features = false }
+regex = { version = "1.9.3", default-features = true }
+tokio = { version = "1.32.0", default-features = false, features = ["macros"] }
 versatiles-rs-containers = { path = "../versatiles-rs-containers" }
 versatiles-rs-server = { path = "../versatiles-rs-server" }
 versatiles-rs-shared = { path = "../versatiles-rs-shared" }
-versatiles-rs-tools = { path = "../versatiles-rs-tools" }

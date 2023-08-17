@@ -470,6 +470,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "env_logger"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "85cdab6a89accf66733ad5a1693a4dcced6aeff64602b634530dd73c1f3ee9f0"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "errno"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -959,6 +968,16 @@ name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
+
+[[package]]
+name = "mime_guess"
+version = "2.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4192263c238a5f0d0c6bfd21f336a313a4ce1c450542449ca191bb657b4642ef"
+dependencies = [
+ "mime",
+ "unicase",
+]
 
 [[package]]
 name = "miniz_oxide"
@@ -1597,6 +1616,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3528ecfd12c466c6f163363caf2d02a71161dd5e1cc6ae7b34207ea2d42d81ed"
 
 [[package]]
+name = "unicase"
+version = "2.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50f37be617794602aabbeee0be4f259dc1778fabe05e2d67ee8f79326d5cb4f6"
+dependencies = [
+ "version_check",
+]
+
+[[package]]
 name = "unicode-bidi"
 version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1646,10 +1674,13 @@ version = "0.5.7"
 dependencies = [
  "clap",
  "clap-verbosity-flag",
+ "env_logger",
+ "log",
+ "regex",
+ "tokio",
  "versatiles-rs-containers",
  "versatiles-rs-server",
  "versatiles-rs-shared",
- "versatiles-rs-tools",
 ]
 
 [[package]]
@@ -1677,8 +1708,11 @@ dependencies = [
  "assert_fs",
  "async-trait",
  "axum",
+ "enumset",
  "futures",
  "log",
+ "mime_guess",
+ "reqwest",
  "tar",
  "tokio",
  "versatiles-rs-containers",
@@ -1704,14 +1738,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "versatiles-rs-tools"
-version = "0.5.7"
-dependencies = [
- "clap",
- "log",
- "versatiles-rs-containers",
- "versatiles-rs-shared",
-]
+name = "version_check"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "walkdir"
