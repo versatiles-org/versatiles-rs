@@ -1,9 +1,8 @@
 #[cfg(feature = "mbtiles")]
 use super::mbtiles;
-
 use super::{tar, versatiles, TileConverterBox, TileConverterTrait, TileReaderBox, TileReaderTrait};
-use crate::shared::{Error, Result, TileConverterConfig};
 use log::error;
+use shared::{Error, Result, TileConverterConfig};
 use std::path::{Path, PathBuf};
 
 pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
@@ -44,13 +43,11 @@ fn get_extension(path: &Path) -> String {
 #[cfg(test)]
 pub mod tests {
 	use crate::{
-		containers::{
-			dummy::{self, ConverterProfile as CP, ReaderProfile as RP},
-			get_converter, get_reader,
-		},
-		shared::{Compression as C, Result, TileBBoxPyramid, TileConverterConfig, TileFormat as TF},
+		dummy::{self, ConverterProfile as CP, ReaderProfile as RP},
+		get_converter, get_reader,
 	};
 	use assert_fs::fixture::NamedTempFile;
+	use shared::{Compression as C, Result, TileBBoxPyramid, TileConverterConfig, TileFormat as TF};
 	use std::time::Instant;
 
 	pub async fn make_test_file(

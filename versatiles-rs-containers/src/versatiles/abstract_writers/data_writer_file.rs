@@ -1,7 +1,7 @@
 use super::super::types::ByteRange;
 use super::DataWriterTrait;
-use crate::shared::{Blob, Result};
 use async_trait::async_trait;
+use shared::{Blob, Result};
 use std::{
 	fs::File,
 	io::{BufWriter, Seek, SeekFrom, Write},

@@ -1,4 +1,3 @@
-#[cfg(test)]
 pub mod dummy;
 
 #[cfg(feature = "mbtiles")]

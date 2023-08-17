@@ -1,6 +1,6 @@
 use super::ByteRange;
-use crate::shared::{Result, TileBBox, TileCoord3};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
+use shared::{Result, TileBBox, TileCoord3};
 use std::{fmt, io::Cursor};
 
 #[derive(Clone, Copy, PartialEq, Eq)]

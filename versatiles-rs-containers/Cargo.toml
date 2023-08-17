@@ -5,5 +5,22 @@ authors.workspace = true
 description.workspace = true
 edition.workspace = true
 
+[lib]
+name = "containers"
+path = "src/lib.rs"
+
 [dependencies]
 async-trait = { version = "0.1.73", default-features = false }
+byteorder = { version = "1.4.3", default-features = false }
+futures = { version = "0.3.28", default-features = false, features = ["executor"] }
+itertools = { version = "0.11.0", default-features = false, features = ["use_alloc"] }
+lazy_static = { version = "1.4.0", default-features = false }
+log = { version = "0.4.20", default-features = false }
+regex = { version = "1.9.3", default-features = true }
+reqwest = { version = "0.11.18", default-features = false, features=["blocking", "rustls-tls"] }
+tar = { version = "0.4.40", default-features = false }
+tokio = { version = "1.32.0", default-features = false, features = ["macros", "rt"] }
+versatiles-rs-shared = { path = "../versatiles-rs-shared" }
+
+[dev-dependencies]
+assert_fs = { version = "1.0.13" }

@@ -1,8 +1,6 @@
-use crate::{
-	server::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait},
-	shared::{Blob, Compression, Result, TargetCompression},
-};
+use crate::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait};
 use async_trait::async_trait;
+use shared::{Blob, Compression, Result, TargetCompression};
 use std::{
 	env::current_dir,
 	fmt::Debug,
@@ -89,7 +87,8 @@ impl Debug for Folder {
 #[cfg(test)]
 mod tests {
 	use super::Folder;
-	use crate::{server::ServerSourceTrait, shared::TargetCompression};
+	use crate::ServerSourceTrait;
+	use shared::TargetCompression;
 
 	#[tokio::test]
 	async fn test() {

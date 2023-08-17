@@ -1,10 +1,7 @@
-use crate::{
-	create_error,
-	server::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait},
-	shared::{Blob, Compression, Result, TargetCompression},
-};
+use crate::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait};
 use async_trait::async_trait;
 use log::trace;
+use shared::{create_error, Blob, Compression, Result, TargetCompression};
 use std::{
 	collections::HashMap,
 	env::current_dir,
@@ -174,13 +171,13 @@ impl Debug for TarFile {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::containers::{
+	use assert_fs::NamedTempFile;
+	use containers::{
 		dummy::{ReaderProfile, TileReader},
 		tar::TileConverter,
 		TileConverterTrait,
 	};
-	use crate::shared::{TileBBoxPyramid, TileConverterConfig, TileFormat};
-	use assert_fs::NamedTempFile;
+	use shared::{TileBBoxPyramid, TileConverterConfig, TileFormat};
 
 	pub async fn make_test_tar(compression: Compression) -> NamedTempFile {
 		let reader_profile = ReaderProfile::PbfFast;

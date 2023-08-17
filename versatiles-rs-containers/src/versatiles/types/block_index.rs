@@ -1,5 +1,5 @@
 use super::BlockDefinition;
-use crate::shared::{compress_brotli, decompress_brotli, Blob, TileBBoxPyramid, TileCoord3};
+use shared::{compress_brotli, decompress_brotli, Blob, TileBBoxPyramid, TileCoord3};
 use std::{
 	collections::HashMap,
 	io::{Cursor, Write},
@@ -87,7 +87,7 @@ impl BlockIndex {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::shared::TileBBox;
+	use shared::TileBBox;
 
 	#[test]
 	fn conversion() {

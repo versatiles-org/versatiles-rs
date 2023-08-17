@@ -1,8 +1,6 @@
-use crate::{
-	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{Compression, Result, TileBBoxPyramid, TileConverterConfig, TileFormat},
-};
+use crate::{TileConverterBox, TileConverterTrait, TileReaderBox};
 use async_trait::async_trait;
+use shared::{Compression, Result, TileBBoxPyramid, TileConverterConfig, TileFormat};
 
 #[derive(Debug)]
 pub enum ConverterProfile {
@@ -56,14 +54,12 @@ impl TileConverterTrait for TileConverter {
 
 #[cfg(test)]
 mod tests {
-	use super::{ConverterProfile, TileConverter};
+	use super::*;
 	use crate::{
-		containers::{
-			dummy::{reader::ReaderProfile, TileReader},
-			TileConverterTrait,
-		},
-		shared::TileConverterConfig,
+		dummy::{ReaderProfile, TileReader},
+		TileConverterTrait,
 	};
+	use shared::TileConverterConfig;
 
 	#[tokio::test]
 	async fn convert_from() {

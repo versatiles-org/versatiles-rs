@@ -1,12 +1,10 @@
 // Import necessary modules and traits
 use super::{types::*, DataWriterFile, DataWriterTrait};
-use crate::{
-	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig},
-};
+use crate::{TileConverterBox, TileConverterTrait, TileReaderBox};
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use log::{debug, trace};
+use shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig};
 use std::collections::HashMap;
 
 // Define TileConverter struct

@@ -25,7 +25,6 @@ impl TileReaderParameters {
 			flip_y: false,
 		}
 	}
-	#[cfg(test)]
 	pub fn new_dummy() -> TileReaderParameters {
 		TileReaderParameters {
 			decompressor: DataConverter::new_empty(),
