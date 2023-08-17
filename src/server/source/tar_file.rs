@@ -1,10 +1,9 @@
 use crate::{
 	create_error,
 	server::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait},
-	shared::{Blob, Compression, Result},
+	shared::{Blob, Compression, Result, TargetCompression},
 };
 use async_trait::async_trait;
-use enumset::EnumSet;
 use log::trace;
 use std::{
 	collections::HashMap,
@@ -134,7 +133,7 @@ impl ServerSourceTrait for TarFile {
 		Ok("{\"type\":\"tar\"}".to_owned())
 	}
 
-	async fn get_data(&mut self, path: &[&str], accept: EnumSet<Compression>) -> Option<ServerSourceResult> {
+	async fn get_data(&mut self, path: &[&str], accept: &TargetCompression) -> Option<ServerSourceResult> {
 		let entry_name = path.join("/");
 		let file_entry = self.lookup.get(&entry_name)?.to_owned();
 
@@ -254,15 +253,15 @@ mod tests {
 				tar_file: &mut TarFile, compression_tar: &Compression, compression_accept: Compression,
 			) -> Result<()> {
 				println!("compression_accept {:?}", compression_accept);
-				let accept = EnumSet::only(compression_accept);
+				let accept = TargetCompression::from(compression_accept);
 
 				let path = ["non_existing_file"];
-				let result = tar_file.get_data(&path, accept).await;
+				let result = tar_file.get_data(&path, &accept).await;
 				assert!(result.is_none());
 
 				//let path = ["0", "0", "0"];
 				let path = ["tiles.json"];
-				let result = tar_file.get_data(&path, accept).await;
+				let result = tar_file.get_data(&path, &accept).await;
 				assert!(result.is_some());
 
 				let result = result.unwrap();

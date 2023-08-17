@@ -58,7 +58,7 @@ pub struct Subcommand {
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
-	let mut server: TileServer = TileServer::new(&arguments.ip, arguments.port);
+	let mut server: TileServer = TileServer::new(&arguments.ip, arguments.port, arguments.best_compression);
 
 	let patterns: Vec<Regex> = [
 		r"^\[(?P<name>[^\]]+?)\](?P<url>.*)$",
