@@ -278,17 +278,16 @@ fn get_encoding(headers: HeaderMap) -> TargetCompression {
 
 #[cfg(test)]
 mod tests {
+	use crate::source::TileContainer;
+
 	use super::{get_encoding, guess_mime, TileServer};
-	use crate::{
-		containers::dummy,
-		server::source::TileContainer,
-		shared::{
-			Compression::{self, *},
-			TargetCompression,
-		},
-	};
 	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
+	use containers::dummy;
 	use enumset::{enum_set, EnumSet};
+	use shared::{
+		Compression::{self, *},
+		TargetCompression,
+	};
 	use std::path::Path;
 
 	const IP: &str = "127.0.0.1";

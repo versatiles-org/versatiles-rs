@@ -1,3 +1,5 @@
+mod tools;
+
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
 use shared::Result;

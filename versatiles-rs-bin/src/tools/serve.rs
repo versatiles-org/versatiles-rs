@@ -1,10 +1,8 @@
-use crate::{
-	containers::get_reader,
-	server::{source, TileServer},
-	shared::{Compression, Result},
-};
 use clap::Args;
+use containers::get_reader;
 use regex::Regex;
+use server::{source, TileServer};
+use shared::{Compression, Result};
 use tokio::time::{sleep, Duration};
 
 #[derive(Args, Debug)]
