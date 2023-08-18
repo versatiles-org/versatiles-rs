@@ -2,8 +2,6 @@ name: Continuous Integration
 
 on:
   push:
-    branches:
-      - main
     tags:
       - "!**" # Don't run twice on commits with tags
     paths-ignore:
