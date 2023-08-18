@@ -1,9 +1,10 @@
 use crate::{
 	containers::{get_converter, get_reader, TileConverterBox, TileReaderBox},
-	shared::{Compression, Error, Result, TileBBoxPyramid, TileConverterConfig, TileFormat},
+	create_error,
+	shared::{Compression, Result, TileBBoxPyramid, TileConverterConfig, TileFormat},
 };
 use clap::Args;
-use log::{error, trace};
+use log::trace;
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -106,8 +107,7 @@ async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileCon
 			.collect();
 
 		if values.len() != 4 {
-			error!("bbox must contain exactly 4 numbers, but instead i'v got: {bbox:?}");
-			return Err(Error::new("bbox must contain exactly 4 numbers"));
+			return create_error!("bbox must contain exactly 4 numbers, but instead i'v got: {bbox:?}");
 		}
 
 		bbox_pyramid.intersect_geo_bbox(values.as_slice().try_into()?);

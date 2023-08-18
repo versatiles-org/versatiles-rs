@@ -1,9 +1,7 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
 	create_error,
-	shared::{
-		compress_gzip, Blob, Compression, Error, Result, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters,
-	},
+	shared::{compress_gzip, Blob, Compression, Result, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters},
 };
 use async_trait::async_trait;
 
@@ -44,7 +42,7 @@ impl TileReader {
 #[async_trait]
 impl TileReaderTrait for TileReader {
 	async fn new(_path: &str) -> Result<TileReaderBox> {
-		Err(Error::new("don't want to"))
+		create_error!("don't want to")
 	}
 	fn get_container_name(&self) -> Result<&str> {
 		Ok("dummy container")

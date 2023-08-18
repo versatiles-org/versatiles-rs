@@ -1,5 +1,6 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
+	create_error,
 	shared::*,
 };
 use async_trait::async_trait;
@@ -85,7 +86,7 @@ impl TileReader {
 		self.parameters.set_bbox_pyramid(pyramide);
 
 		if self.meta_data.is_none() {
-			return Err(Error::new("'json' is not defined in table 'metadata'"));
+			return create_error!("'json' is not defined in table 'metadata'");
 		}
 
 		Ok(())
@@ -190,8 +191,12 @@ impl TileReaderTrait for TileReader {
 		let mut filename = current_dir()?;
 		filename.push(Path::new(path));
 
-		assert!(filename.exists(), "file {filename:?} does not exist");
-		assert!(filename.is_absolute(), "path {filename:?} must be absolute");
+		if !filename.exists() {
+			return create_error!("file {filename:?} does not exist");
+		};
+		if !filename.is_absolute() {
+			return create_error!("path {filename:?} must be absolute");
+		};
 
 		filename = filename.canonicalize()?;
 
