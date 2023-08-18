@@ -1,6 +1,6 @@
 use crate::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait};
 use async_trait::async_trait;
-use shared::{Blob, Compression, Result, TargetCompression};
+use shared::{create_error, Blob, Compression, Result, TargetCompression};
 use std::{
 	env::current_dir,
 	fmt::Debug,
@@ -22,9 +22,15 @@ impl Folder {
 		folder.push(Path::new(path));
 
 		// Check that the folder exists, is absolute and is a directory
-		assert!(folder.exists(), "path {folder:?} does not exist");
-		assert!(folder.is_absolute(), "path {folder:?} must be absolute");
-		assert!(folder.is_dir(), "path {folder:?} must be a directory");
+		if !folder.exists() {
+			return create_error!("path {folder:?} does not exist");
+		};
+		if !folder.is_absolute() {
+			return create_error!("path {folder:?} must be absolute");
+		};
+		if !folder.is_dir() {
+			return create_error!("path {folder:?} must be a directory");
+		};
 
 		folder = folder.canonicalize()?;
 
@@ -93,10 +99,10 @@ mod tests {
 	#[tokio::test]
 	async fn test() {
 		// Create a new Folder instance
-		let mut folder = Folder::from("testdata").unwrap();
+		let mut folder = Folder::from("../testdata").unwrap();
 
 		// Test get_name function
-		assert_eq!(folder.get_name().unwrap(), "testdata");
+		assert_eq!(folder.get_name().unwrap(), "../testdata");
 
 		// Test get_info_as_json function
 		assert_eq!(folder.get_info_as_json().unwrap(), "{\"type\":\"folder\"}");
