@@ -1,5 +1,5 @@
 [package]
-name = "versatiles-rs-bin"
+name = "versatiles"
 version.workspace = true
 authors.workspace = true
 description.workspace = true
