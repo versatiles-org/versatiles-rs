@@ -13,7 +13,7 @@ async fn recompress_to_brotli(c: &mut Criterion) {
 	set_max_level(LevelFilter::Warn);
 
 	let bbox = TileBBox::new_full(13);
-	let mut reader = get_reader("testdata/berlin.mbtiles").await.unwrap();
+	let mut reader = get_reader("../testdata/berlin.mbtiles").await.unwrap();
 
 	let mut vec = reader.get_bbox_tile_vec(&bbox).await.unwrap();
 	let n = vec.len() as f32;

@@ -33,7 +33,7 @@ mod tests {
 	#[test]
 	#[cfg(feature = "mbtiles")]
 	fn test_local() {
-		run_command(vec!["versatiles", "probe", "testdata/berlin.mbtiles"]).unwrap();
+		run_command(vec!["versatiles", "probe", "../testdata/berlin.mbtiles"]).unwrap();
 	}
 
 	#[test]

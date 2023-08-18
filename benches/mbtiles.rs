@@ -10,7 +10,7 @@ async fn mbtiles_read_vec(c: &mut Criterion) {
 	c.bench_function("get_bbox_tile_iterator", |b| {
 		let bbox = TileBBox::new(14, 8787, 5361, 8818, 5387);
 		b.to_async(FuturesExecutor).iter(|| async {
-			let mut reader = get_reader("testdata/berlin.mbtiles").await.unwrap();
+			let mut reader = get_reader("../testdata/berlin.mbtiles").await.unwrap();
 			let stream = reader.get_bbox_tile_vec(&bbox).await.unwrap();
 			let _count = stream.len();
 		});

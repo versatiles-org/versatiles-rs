@@ -135,19 +135,19 @@ mod tests {
 	#[cfg(feature = "mbtiles")]
 	#[test]
 	fn test_local() {
-		fs::create_dir("tmp/").unwrap_or_default();
+		fs::create_dir("../tmp/").unwrap_or_default();
 		run_command(vec![
 			"versatiles",
 			"convert",
-			"testdata/berlin.mbtiles",
-			"tmp/berlin1.versatiles",
+			"../testdata/berlin.mbtiles",
+			"../tmp/berlin1.versatiles",
 		])
 		.unwrap();
 	}
 
 	#[test]
 	fn test_remote() {
-		fs::create_dir("tmp/").unwrap_or_default();
+		fs::create_dir("../tmp/").unwrap_or_default();
 		run_command(vec![
 			"versatiles",
 			"convert",
@@ -160,7 +160,7 @@ mod tests {
 			"--flip-y",
 			"--force-recompress",
 			"https://download.versatiles.org/planet-20230227.versatiles",
-			"tmp/berlin2.versatiles",
+			"../tmp/berlin2.versatiles",
 		])
 		.unwrap();
 	}
