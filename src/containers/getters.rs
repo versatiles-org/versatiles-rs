@@ -15,9 +15,7 @@ pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
 		"mbtiles" => mbtiles::TileReader::new(filename).await,
 		"tar" => tar::TileReader::new(filename).await,
 		"versatiles" => versatiles::TileReader::new(filename).await,
-		_ => {
-			return create_error!("Error when reading: file extension '{extension:?}' unknown");
-		}
+		_ => create_error!("Error when reading: file extension '{extension:?}' unknown"),
 	}
 }
 
@@ -27,9 +25,7 @@ pub async fn get_converter(filename: &str, config: TileConverterConfig) -> Resul
 	match extension.as_str() {
 		"versatiles" => versatiles::TileConverter::new(filename, config).await,
 		"tar" => tar::TileConverter::new(filename, config).await,
-		_ => {
-			return create_error!("Error when writing: file extension '{extension:?}' unknown");
-		}
+		_ => create_error!("Error when writing: file extension '{extension:?}' unknown"),
 	}
 }
 
