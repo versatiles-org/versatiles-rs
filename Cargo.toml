@@ -8,7 +8,6 @@ members = [
 ]
 
 [workspace.package]
-name = "versatiles"
 edition = "2021"
 version = "0.5.7"
 description = "A toolbox for converting, checking and serving map tiles in various formats."
@@ -36,10 +35,6 @@ versatiles-rs-containers = { path = "versatiles-rs-containers" }
 versatiles-rs-server = { path = "versatiles-rs-server" }
 versatiles-rs-shared = { path = "versatiles-rs-shared" }
 versatiles-rs-bin = { path = "versatiles-rs-bin" }
-
-# [features]
-# default = ["mbtiles"]
-# mbtiles = ["dep:r2d2", "dep:r2d2_sqlite"]
 
 [profile.dev]
 opt-level = 1

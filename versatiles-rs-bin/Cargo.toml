@@ -15,3 +15,7 @@ tokio = { version = "1.32.0", default-features = false, features = ["macros"] }
 versatiles-rs-containers = { path = "../versatiles-rs-containers" }
 versatiles-rs-server = { path = "../versatiles-rs-server" }
 versatiles-rs-shared = { path = "../versatiles-rs-shared" }
+
+[features]
+default = ["mbtiles"]
+mbtiles = ["versatiles-rs-containers/mbtiles"]
