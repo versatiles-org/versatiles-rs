@@ -1,8 +1,6 @@
-use crate::{
-	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{Error, Result, TileConverterConfig},
-};
+use crate::{TileConverterBox, TileConverterTrait, TileReaderBox};
 use async_trait::async_trait;
+use shared::{create_error, Result, TileConverterConfig};
 
 pub struct TileConverter;
 
@@ -12,21 +10,19 @@ impl TileConverterTrait for TileConverter {
 	where
 		Self: Sized,
 	{
-		Err(Error::new("conversion to mbtiles is not supported"))
+		create_error!("conversion to mbtiles is not supported")
 	}
 	async fn convert_from(&mut self, _reader: &mut TileReaderBox) -> Result<()> {
-		Err(Error::new("conversion to mbtiles is not supported"))
+		create_error!("conversion to mbtiles is not supported")
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::TileConverter;
-	use crate::{
-		containers::{dummy, TileConverterTrait, TileReaderTrait},
-		shared::TileConverterConfig,
-	};
+	use crate::{dummy, TileConverterTrait, TileReaderTrait};
 	use futures::executor::block_on;
+	use shared::TileConverterConfig;
 
 	#[test]
 	fn panic1() {

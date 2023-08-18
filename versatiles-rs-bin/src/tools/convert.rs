@@ -1,7 +1,7 @@
 use clap::Args;
 use containers::{get_converter, get_reader, TileConverterBox, TileReaderBox};
 use log::{error, trace};
-use shared::{Compression, Error, Result, TileBBoxPyramid, TileConverterConfig, TileFormat};
+use shared::{create_error, Compression, Result, TileBBoxPyramid, TileConverterConfig, TileFormat};
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -105,7 +105,7 @@ async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileCon
 
 		if values.len() != 4 {
 			error!("bbox must contain exactly 4 numbers, but instead i'v got: {bbox:?}");
-			return Err(Error::new("bbox must contain exactly 4 numbers"));
+			return create_error!("bbox must contain exactly 4 numbers");
 		}
 
 		bbox_pyramid.intersect_geo_bbox(values.as_slice().try_into()?);

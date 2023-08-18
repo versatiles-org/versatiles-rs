@@ -2,7 +2,7 @@
 use super::mbtiles;
 use super::{tar, versatiles, TileConverterBox, TileConverterTrait, TileReaderBox, TileReaderTrait};
 use log::error;
-use shared::{Error, Result, TileConverterConfig};
+use shared::{create_error, Result, TileConverterConfig};
 use std::path::{Path, PathBuf};
 
 pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
@@ -14,7 +14,7 @@ pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
 		"versatiles" => versatiles::TileReader::new(filename).await,
 		_ => {
 			error!("Error when reading: file extension '{extension:?}' unknown");
-			Err(Error::new("file extension unknown"))
+			create_error!("file extension unknown")
 		}
 	}
 }
@@ -27,7 +27,7 @@ pub async fn get_converter(filename: &str, config: TileConverterConfig) -> Resul
 		"tar" => tar::TileConverter::new(filename, config).await,
 		_ => {
 			error!("Error when writing: file extension '{extension:?}' unknown");
-			Err(Error::new("file extension unknown"))
+			create_error!("file extension unknown")
 		}
 	}
 }

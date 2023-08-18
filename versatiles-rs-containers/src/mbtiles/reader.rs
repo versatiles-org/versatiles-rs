@@ -1,11 +1,12 @@
-use crate::{
-	containers::{TileReaderBox, TileReaderTrait},
-	shared::*,
-};
+use crate::{TileReaderBox, TileReaderTrait};
 use async_trait::async_trait;
 use log::trace;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
+use shared::{
+	create_error, Blob, Compression, ProgressBar, Result, TileBBox, TileBBoxPyramid, TileCoord3, TileFormat,
+	TileReaderParameters,
+};
 use std::{
 	env::current_dir,
 	path::{Path, PathBuf},
@@ -85,7 +86,7 @@ impl TileReader {
 		self.parameters.set_bbox_pyramid(pyramide);
 
 		if self.meta_data.is_none() {
-			return Err(Error::new("'json' is not defined in table 'metadata'"));
+			return create_error!("'json' is not defined in table 'metadata'");
 		}
 
 		Ok(())
@@ -287,7 +288,7 @@ struct RecordMetadata {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::containers::dummy::{self, ConverterProfile};
+	use crate::dummy::{self, ConverterProfile};
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {

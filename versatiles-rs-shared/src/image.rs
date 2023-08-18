@@ -1,4 +1,4 @@
-use super::{Blob, Error, Result};
+use super::{create_error, Blob, Result};
 use image::{
 	codecs::{jpeg, png},
 	load_from_memory_with_format, DynamicImage, ImageEncoder, ImageFormat,
@@ -94,9 +94,7 @@ pub fn img2webp(image: DynamicImage) -> Result<Blob> {
 		image::ColorType::Rgb8 | image::ColorType::Rgba8 => {
 			Ok(Blob::from(Encoder::from_image(&image)?.encode(WEBP_QUALITY).to_vec()))
 		}
-		_ => Err(Error::new(
-			"currently only 8 bit RGB/RGBA is supported for WebP lossy encoding",
-		)),
+		_ => create_error!("currently only 8 bit RGB/RGBA is supported for WebP lossy encoding"),
 	}
 }
 
@@ -116,9 +114,7 @@ pub fn img2webp(image: DynamicImage) -> Result<Blob> {
 pub fn img2webplossless(image: DynamicImage) -> Result<Blob> {
 	match image.color() {
 		image::ColorType::Rgb8 => Ok(Blob::from(Encoder::from_image(&image)?.encode_lossless().to_vec())),
-		_ => Err(Error::new(
-			"currently only 8 bit RGB is supported for WebP lossless encoding",
-		)),
+		_ => create_error!("currently only 8 bit RGB is supported for WebP lossless encoding"),
 	}
 }
 
@@ -137,7 +133,7 @@ pub fn webp2img(data: Blob) -> Result<DynamicImage> {
 	if let Some(image) = image {
 		Ok(image.to_image())
 	} else {
-		Err(Error::new("cant read webp"))
+		create_error!("cant read webp")
 	}
 }
 
