@@ -258,7 +258,7 @@ mod tests {
 		) {
 			let data_converter =
 				DataConverter::new_tile_recompressor(&src_form, &src_comp, &dst_form, &dst_comp, force_recompress);
-			assert_eq!(data_converter.description().replace("compress_", "_"), description);
+			assert_eq!(data_converter.description(), description);
 			assert_eq!(data_converter.pipeline.len(), length);
 			assert_eq!(data_converter, data_converter.clone());
 		}
@@ -273,21 +273,21 @@ mod tests {
 		})
 		.is_err());
 
-		test(PBF, None, PBF, Brotli, false, 1, "_brotli");
-		test(PNG, Gzip, PNG, Brotli, false, 2, "de_gzip, _brotli");
+		test(PBF, None, PBF, Brotli, false, 1, "Brotli");
+		test(PNG, Gzip, PNG, Brotli, false, 2, "UnGzip, Brotli");
 		test(PNG, None, PNG, None, false, 0, "");
-		test(PNG, None, PNG, None, true, 1, "PNG->PNG");
-		test(PNG, Gzip, PNG, Brotli, false, 2, "de_gzip, _brotli");
-		test(PNG, Gzip, PNG, Brotli, true, 3, "de_gzip, PNG->PNG, _brotli");
+		test(PNG, None, PNG, None, true, 1, "Png2Png");
+		test(PNG, Gzip, PNG, Brotli, false, 2, "UnGzip, Brotli");
+		test(PNG, Gzip, PNG, Brotli, true, 3, "UnGzip, Png2Png, Brotli");
 
-		test(PNG, Gzip, JPG, Gzip, false, 1, "PNG->JPG");
-		test(PNG, Brotli, PNG, Gzip, true, 3, "de_brotli, PNG->PNG, _gzip");
-		test(PNG, None, WEBP, None, false, 1, "PNG->WEBP");
-		test(JPG, Gzip, PNG, None, true, 2, "de_gzip, JPG->PNG");
-		test(JPG, Brotli, WEBP, None, false, 2, "de_brotli, JPG->WEBP");
-		test(WEBP, None, JPG, Brotli, true, 2, "WEBP->JPG, _brotli");
-		test(WEBP, Gzip, PNG, Brotli, false, 3, "de_gzip, WEBP->PNG, _brotli");
-		test(PNG, Brotli, WEBP, Gzip, true, 3, "de_brotli, PNG->WEBP, _gzip");
-		test(PNG, None, WEBP, Gzip, false, 2, "PNG->WEBP, _gzip");
+		test(PNG, Gzip, JPG, Gzip, false, 1, "Png2Jpg");
+		test(PNG, Brotli, PNG, Gzip, true, 3, "UnBrotli, Png2Png, Gzip");
+		test(PNG, None, WEBP, None, false, 1, "Png2Webplossless");
+		test(JPG, Gzip, PNG, None, true, 2, "UnGzip, Jpg2Png");
+		test(JPG, Brotli, WEBP, None, false, 2, "UnBrotli, Jpg2Webp");
+		test(WEBP, None, JPG, Brotli, true, 2, "Webp2Jpg, Brotli");
+		test(WEBP, Gzip, PNG, Brotli, false, 3, "UnGzip, Webp2Png, Brotli");
+		test(PNG, Brotli, WEBP, Gzip, true, 3, "UnBrotli, Png2Webplossless, Gzip");
+		test(PNG, None, WEBP, Gzip, false, 2, "Png2Webplossless, Gzip");
 	}
 }

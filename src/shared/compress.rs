@@ -158,13 +158,14 @@ pub fn compress_brotli(data: Blob) -> Result<Blob> {
 	let mut output: Vec<u8> = Vec::new();
 	let mut input_buffer: [u8; 4096] = [0; 4096];
 	let mut output_buffer: [u8; 4096] = [0; 4096];
+	let alloc = StandardAlloc::default();
 	BrotliCompressCustomAlloc(
 		&mut input,
 		&mut output,
 		&mut input_buffer[..],
 		&mut output_buffer[..],
 		&params,
-		StandardAlloc::default(),
+		alloc,
 	)?;
 
 	Ok(Blob::from(output))
