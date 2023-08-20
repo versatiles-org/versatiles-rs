@@ -54,7 +54,8 @@ jobs:
       - uses: docker/setup-qemu-action@v2
       - uses: docker/setup-buildx-action@v2
 
-      - run: docker buildx build
+      - name: Test and Build Binary
+        run: docker buildx build
           --platform="linux/${{ matrix.proc }}"
           --file="docker/build-linux.Dockerfile"
           --build-arg="ARCH=${{ matrix.arch }}"
@@ -91,11 +92,11 @@ jobs:
           SDKROOT=$(xcrun --show-sdk-path)
           MACOSX_DEPLOYMENT_TARGET=$(xcrun --show-sdk-platform-version)
 
-      - name: Test binary # Test the waters before setting sail.
+      - name: Test Binary # Test the waters before setting sail.
         if: matrix.arch == 'x86_64'
         run: cargo test --all-features --target ${{ matrix.arch }}-apple-darwin --release
 
-      - name: Build binary # Construct your future from the bricks of the present.
+      - name: Build Binary # Construct your future from the bricks of the present.
         run: cargo build --all-features --target ${{ matrix.arch }}-apple-darwin --release
 
       - name: Pack and upload # The journey's end marks a new beginning.
