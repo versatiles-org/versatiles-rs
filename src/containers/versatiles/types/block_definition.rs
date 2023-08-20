@@ -193,7 +193,7 @@ mod tests {
 		let debug_string = format!("{:?}", def);
 		assert_eq!(
 			debug_string,
-			"BlockDefinition { x/y/z: TileCoord3(1, 2, 3), bbox: TileBBox(2) [0,0,3,3] = 16, tiles_range: ByteRange[0,0], index_range: ByteRange[0,0] }"
+			"BlockDefinition { x/y/z: TileCoord3(1, 2, 3), bbox: 2: [0,0,3,3] (16), tiles_range: ByteRange[0,0], index_range: ByteRange[0,0] }"
 		);
 	}
 }
