@@ -1,13 +1,15 @@
+use std::fmt;
+
 use super::{Compression, DataConverter, TileBBoxPyramid, TileFormat};
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct TileReaderParameters {
-	tile_format: TileFormat,
-	tile_compression: Compression,
 	bbox_pyramid: TileBBoxPyramid,
 	decompressor: DataConverter,
-	swap_xy: bool,
 	flip_y: bool,
+	swap_xy: bool,
+	tile_compression: Compression,
+	tile_format: TileFormat,
 }
 
 impl TileReaderParameters {
@@ -74,6 +76,19 @@ impl TileReaderParameters {
 	#[allow(dead_code)]
 	pub fn set_bbox_pyramid(&mut self, pyramid: TileBBoxPyramid) {
 		self.bbox_pyramid = pyramid;
+	}
+}
+
+impl fmt::Debug for TileReaderParameters {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_struct("")
+			.field("bbox_pyramid", &self.bbox_pyramid)
+			.field("decompressor", &self.decompressor)
+			.field("flip_y", &self.flip_y)
+			.field("swap_xy", &self.swap_xy)
+			.field("tile_compression", &self.tile_compression)
+			.field("tile_format", &self.tile_format)
+			.finish()
 	}
 }
 

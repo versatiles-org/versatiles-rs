@@ -1,7 +1,8 @@
 use super::{compress::*, image::*, Blob, Compression, Result, TileCoord3};
 use clap::ValueEnum;
+use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
-use std::fmt::Debug;
+use std::fmt::{self, Debug};
 
 type FnConvType = fn(Blob) -> Result<Blob>;
 
@@ -62,7 +63,7 @@ pub enum TileFormat {
 }
 
 /// A structure representing a pipeline of conversions to be applied to a blob
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct DataConverter {
 	pipeline: Vec<FnConv>,
 }
@@ -209,6 +210,12 @@ impl DataConverter {
 impl PartialEq for DataConverter {
 	fn eq(&self, other: &Self) -> bool {
 		self.description() == other.description()
+	}
+}
+
+impl fmt::Debug for DataConverter {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.write_str(&self.pipeline.iter().map(|f| &f.name).join(", "))
 	}
 }
 

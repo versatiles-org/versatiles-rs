@@ -294,7 +294,7 @@ impl TileBBox {
 impl fmt::Debug for TileBBox {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_fmt(format_args!(
-			"TileBBox({}) [{},{},{},{}] = {}",
+			"{}: [{},{},{},{}] ({})",
 			&self.level,
 			&self.x_min,
 			&self.y_min,

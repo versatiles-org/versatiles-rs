@@ -108,9 +108,7 @@ impl TileBBoxPyramid {
 
 impl fmt::Debug for TileBBoxPyramid {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_list()
-			.entries(self.iter_levels().map(|bbox| format!("{}: {bbox:?}", bbox.get_level())))
-			.finish()
+		f.debug_list().entries(self.iter_levels()).finish()
 	}
 }
 
