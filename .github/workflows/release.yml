@@ -152,4 +152,7 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Finalize the release # The final stroke of the brush completes the masterpiece.
-        run: gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest
+        run: gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest --prerelease=false
+
+      - name: Trigger Docker release
+        run: 'curl -XPOST -u "michaelkreil:${{secrets.PAT_TOKEN}}" https://api.github.com/repos/versatiles-org/versatiles-docker/actions/workflows/release.yml/dispatches --data ''{"ref":"main"}'''
