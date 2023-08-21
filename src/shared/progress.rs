@@ -118,13 +118,13 @@ impl ProgressBar {
 		let col1 = self.message.to_string();
 		let col2 = format!(
 			"{:>15}/{:<15}{:.2}%",
-			format_big_number(self.value),
-			format_big_number(self.max_value),
+			format_integer(self.value),
+			format_integer(self.max_value),
 			progress * 100.0
 		);
 		let col3 = format!(
 			"{}/s {:>15} {:>15}",
-			format_big_number(speed as u64),
+			format_float(speed),
 			format_duration(duration),
 			format_duration(time_left)
 		);
@@ -188,7 +188,7 @@ fn format_duration(duration: Duration) -> String {
 ///
 /// A string representing the formatted integer.
 ///
-fn format_big_number(value: u64) -> String {
+fn format_integer(value: u64) -> String {
 	value
 		.to_string()
 		.as_bytes()
@@ -200,6 +200,18 @@ fn format_big_number(value: u64) -> String {
 		.join("'")
 }
 
+fn format_float(value: f64) -> String {
+	if value > 1000.0 {
+		format_integer(value as u64)
+	} else if value > 100.0 {
+		format!("{:.1}", value)
+	} else if value > 10.0 {
+		format!("{:.2}", value)
+	} else {
+		format!("{:.3}", value)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -207,8 +219,8 @@ mod tests {
 
 	#[test]
 	fn format() {
-		assert_eq!(format_big_number(123456789), "123'456'789");
-		assert_eq!(format_big_number(1234567890), "1'234'567'890");
+		assert_eq!(format_integer(123456789), "123'456'789");
+		assert_eq!(format_integer(1234567890), "1'234'567'890");
 		assert_eq!(format_duration(Duration::from_secs(1)), "00:00:01");
 		assert_eq!(format_duration(Duration::from_secs(60)), "00:01:00");
 		assert_eq!(format_duration(Duration::from_secs(60 * 60)), "01:00:00");
