@@ -1,9 +1,7 @@
 #![allow(non_snake_case)]
-
-use crate::create_error;
-
 use super::{Blob, Result};
-use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
+use crate::create_error;
+use brotli::{enc::BrotliEncoderParams, writer::StandardAlloc, BrotliCompressCustomAlloc, BrotliDecompress};
 use clap::ValueEnum;
 use enumset::{EnumSet, EnumSetType};
 use flate2::bufread::{GzDecoder, GzEncoder};
@@ -152,15 +150,26 @@ pub fn decompress_gzip(data: Blob) -> Result<Blob> {
 /// * `data` - The blob of data to compress
 pub fn compress_brotli(data: Blob) -> Result<Blob> {
 	let params = BrotliEncoderParams {
-		quality: 11,
+		quality: 5, // smallest + fastest
+		lgwin: 10,  // smallest + fastest
 		size_hint: data.len(),
 		..Default::default()
 	};
-	let mut cursor = Cursor::new(data.as_slice());
-	let mut result: Vec<u8> = Vec::new();
-	BrotliCompress(&mut cursor, &mut result, &params)?;
+	let mut input = Cursor::new(data.as_slice());
+	let mut output: Vec<u8> = Vec::new();
+	let mut input_buffer: [u8; 4096] = [0; 4096];
+	let mut output_buffer: [u8; 4096] = [0; 4096];
+	let alloc = StandardAlloc::default();
+	BrotliCompressCustomAlloc(
+		&mut input,
+		&mut output,
+		&mut input_buffer[..],
+		&mut output_buffer[..],
+		&params,
+		alloc,
+	)?;
 
-	Ok(Blob::from(result))
+	Ok(Blob::from(output))
 }
 
 /// Decompresses data that was compressed using Brotli
@@ -178,9 +187,8 @@ pub fn decompress_brotli(data: Blob) -> Result<Blob> {
 
 #[cfg(test)]
 mod tests {
-	use enumset::enum_set;
-
 	use super::*;
+	use enumset::enum_set;
 
 	#[test]
 	/// Verify that the Brotli compression and decompression functions work correctly.
@@ -314,4 +322,50 @@ mod tests {
 
 		Blob::from(vec)
 	}
+
+	/*
+	#[test]
+	fn bench_brotli() -> Result<()> {
+		// Generate random data.
+		let data1 = random_data(131072);
+
+		let test = |quality: i32, lgwin: i32| {
+			let data = data1.clone();
+
+			let start = Instant::now();
+			let params = BrotliEncoderParams {
+				quality,
+				lgwin,
+				size_hint: data.len(),
+				..Default::default()
+			};
+			let mut input = Cursor::new(data.as_slice());
+			let mut output: Vec<u8> = Vec::new();
+			let mut input_buffer: [u8; 4096] = [0; 4096];
+			let mut output_buffer: [u8; 4096] = [0; 4096];
+			let alloc = StandardAlloc::default();
+			BrotliCompressCustomAlloc(
+				&mut input,
+				&mut output,
+				&mut input_buffer[..],
+				&mut output_buffer[..],
+				&params,
+				alloc,
+			)
+			.unwrap();
+			let time = start.elapsed().as_micros();
+			let size = output.len();
+
+			println!("{quality}\t{lgwin}\t{size}\t{time}")
+		};
+
+		for quality in 1..=11 {
+			for window in 10..=22 {
+				test(quality, window);
+			}
+		}
+
+		Ok(())
+	}
+	*/
 }

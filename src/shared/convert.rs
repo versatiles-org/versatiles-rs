@@ -1,48 +1,54 @@
-use super::{compress::*, image::*, Blob, Compression, Result, TileCoord3};
+use super::{
+	compress_brotli, compress_gzip, decompress_brotli, decompress_gzip,
+	image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2img, webp2img},
+	Blob, Compression, Result, TileCoord3,
+};
 use clap::ValueEnum;
 use itertools::Itertools;
 use rayon::prelude::{IntoParallelIterator, ParallelIterator};
 use std::fmt::{self, Debug};
 
-type FnConvType = fn(Blob) -> Result<Blob>;
-
-#[derive(Clone)]
-/// A structure representing a function that converts a blob to another blob
-struct FnConv {
-	func: FnConvType,
-	name: String,
+#[derive(Clone, Debug)]
+enum FnConv {
+	Png2Jpg,
+	Png2Png,
+	Png2Webplossless,
+	Jpg2Png,
+	Jpg2Webp,
+	Webp2Jpg,
+	Webp2Png,
+	UnGzip,
+	UnBrotli,
+	Gzip,
+	Brotli,
 }
+
+impl fmt::Display for FnConv {
+	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+		write!(f, "{:?}", self)
+	}
+}
+
+/// A structure representing a function that converts a blob to another blob
 
 impl FnConv {
-	/// Create a new `FnConv` from a function and a name
-	fn new(func: FnConvType, name: &str) -> FnConv {
-		FnConv {
-			func,
-			name: name.to_owned(),
+	fn run(&self, tile: Blob) -> Result<Blob> {
+		match self {
+			FnConv::Png2Jpg => img2jpg(png2img(tile)?),
+			FnConv::Png2Png => img2png(png2img(tile)?),
+			FnConv::Png2Webplossless => img2webplossless(png2img(tile)?),
+
+			FnConv::Jpg2Png => img2png(jpg2img(tile)?),
+			FnConv::Jpg2Webp => img2webp(jpg2img(tile)?),
+
+			FnConv::Webp2Jpg => img2jpg(webp2img(tile)?),
+			FnConv::Webp2Png => img2png(webp2img(tile)?),
+
+			FnConv::UnGzip => decompress_gzip(tile),
+			FnConv::UnBrotli => decompress_brotli(tile),
+			FnConv::Gzip => compress_gzip(tile),
+			FnConv::Brotli => compress_brotli(tile),
 		}
-	}
-
-	/// Create an optional `FnConv` from a function and a name
-	fn some(func: FnConvType, name: &str) -> Option<FnConv> {
-		Some(FnConv::new(func, name))
-	}
-
-	// Getter function for testing the function field
-	#[cfg(test)]
-	fn get_function(&self) -> FnConvType {
-		self.func
-	}
-
-	// Getter function for testing the name field
-	#[cfg(test)]
-	fn get_name(&self) -> &str {
-		&self.name
-	}
-}
-
-impl Debug for FnConv {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.write_str(&self.name)
 	}
 }
 
@@ -91,15 +97,15 @@ impl DataConverter {
 		let format_converter_option: Option<FnConv> = if (src_form != dst_form) || force_recompress {
 			use TileFormat::*;
 			match (src_form, dst_form) {
-				(PNG, JPG) => FnConv::some(|tile| -> Result<Blob> { img2jpg(png2img(tile)?) }, "PNG->JPG"),
-				(PNG, PNG) => FnConv::some(|tile| -> Result<Blob> { img2png(png2img(tile)?) }, "PNG->PNG"),
-				(PNG, WEBP) => FnConv::some(|tile| -> Result<Blob> { img2webplossless(png2img(tile)?) }, "PNG->WEBP"),
+				(PNG, JPG) => Some(FnConv::Png2Jpg),
+				(PNG, PNG) => Some(FnConv::Png2Png),
+				(PNG, WEBP) => Some(FnConv::Png2Webplossless),
 
-				(JPG, PNG) => FnConv::some(|tile| -> Result<Blob> { img2png(jpg2img(tile)?) }, "JPG->PNG"),
-				(JPG, WEBP) => FnConv::some(|tile| -> Result<Blob> { img2webp(jpg2img(tile)?) }, "JPG->WEBP"),
+				(JPG, PNG) => Some(FnConv::Jpg2Png),
+				(JPG, WEBP) => Some(FnConv::Jpg2Webp),
 
-				(WEBP, JPG) => FnConv::some(|tile| -> Result<Blob> { img2jpg(webp2img(tile)?) }, "WEBP->JPG"),
-				(WEBP, PNG) => FnConv::some(|tile| -> Result<Blob> { img2png(webp2img(tile)?) }, "WEBP->PNG"),
+				(WEBP, JPG) => Some(FnConv::Webp2Jpg),
+				(WEBP, PNG) => Some(FnConv::Webp2Png),
 
 				(_, _) => {
 					if src_form == dst_form {
@@ -122,16 +128,16 @@ impl DataConverter {
 			use Compression::*;
 			match src_comp {
 				None => {}
-				Gzip => converter.push(FnConv::new(decompress_gzip, "decompress_gzip")),
-				Brotli => converter.push(FnConv::new(decompress_brotli, "decompress_brotli")),
+				Gzip => converter.push(FnConv::UnGzip),
+				Brotli => converter.push(FnConv::UnBrotli),
 			}
 			if let Some(format_converter) = format_converter_option {
 				converter.push(format_converter)
 			}
 			match dst_comp {
 				None => {}
-				Gzip => converter.push(FnConv::new(compress_gzip, "compress_gzip")),
-				Brotli => converter.push(FnConv::new(compress_brotli, "compress_brotli")),
+				Gzip => converter.push(FnConv::Gzip),
+				Brotli => converter.push(FnConv::Brotli),
 			}
 		};
 
@@ -147,9 +153,9 @@ impl DataConverter {
 			// If uncompressed, do nothing
 			Compression::None => {}
 			// If gzip, add the gzip compression function to the pipeline
-			Compression::Gzip => converter.push(FnConv::new(compress_gzip, "compress_gzip")),
+			Compression::Gzip => converter.push(FnConv::Gzip),
 			// If brotli, add the brotli compression function to the pipeline
-			Compression::Brotli => converter.push(FnConv::new(compress_brotli, "compress_brotli")),
+			Compression::Brotli => converter.push(FnConv::Brotli),
 		}
 
 		converter
@@ -164,9 +170,9 @@ impl DataConverter {
 			// If uncompressed, do nothing
 			Compression::None => {}
 			// If gzip, add the gzip decompression function to the pipeline
-			Compression::Gzip => converter.push(FnConv::new(decompress_gzip, "decompress_gzip")),
+			Compression::Gzip => converter.push(FnConv::UnGzip),
 			// If brotli, add the brotli decompression function to the pipeline
-			Compression::Brotli => converter.push(FnConv::new(decompress_brotli, "decompress_brotli")),
+			Compression::Brotli => converter.push(FnConv::UnBrotli),
 		}
 
 		converter
@@ -180,7 +186,7 @@ impl DataConverter {
 	/// Runs the data through the pipeline of conversion functions and returns the result.
 	pub fn process_blob(&self, mut blob: Blob) -> Result<Blob> {
 		for f in self.pipeline.iter() {
-			blob = (f.func)(blob)?;
+			blob = f.run(blob)?;
 		}
 		Ok(blob)
 	}
@@ -191,7 +197,7 @@ impl DataConverter {
 		vec.into_par_iter()
 			.map(move |(coord, mut blob)| {
 				for f in pipeline.iter() {
-					blob = (f.func)(blob).unwrap();
+					blob = f.run(blob).unwrap();
 				}
 				(coord, blob)
 			})
@@ -200,7 +206,7 @@ impl DataConverter {
 
 	/// Returns a string describing the pipeline of conversion functions.
 	pub fn description(&self) -> String {
-		let names: Vec<String> = self.pipeline.iter().map(|e| e.name.clone()).collect();
+		let names: Vec<String> = self.pipeline.iter().map(|f| f.to_string()).collect();
 		names.join(", ")
 	}
 }
@@ -215,7 +221,7 @@ impl PartialEq for DataConverter {
 
 impl fmt::Debug for DataConverter {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(&self.pipeline.iter().map(|f| &f.name).join(", "))
+		f.write_str(&self.pipeline.iter().map(|f| f.to_string()).join(", "))
 	}
 }
 
@@ -226,19 +232,11 @@ impl Eq for DataConverter {}
 #[cfg(test)]
 mod tests {
 	use crate::shared::{
-		convert::FnConv,
-		Blob,
 		Compression::{self, *},
 		DataConverter,
 		TileFormat::{self, *},
 	};
 	use std::panic::catch_unwind;
-
-	#[test]
-	fn new() {
-		let fn_conv = FnConv::new(|x| Ok(x.clone()), "test_fn_conv");
-		assert_eq!(fn_conv.name, "test_fn_conv");
-	}
 
 	#[test]
 	fn new_empty() {
@@ -260,7 +258,7 @@ mod tests {
 		) {
 			let data_converter =
 				DataConverter::new_tile_recompressor(&src_form, &src_comp, &dst_form, &dst_comp, force_recompress);
-			assert_eq!(data_converter.description().replace("compress_", "_"), description);
+			assert_eq!(data_converter.description(), description);
 			assert_eq!(data_converter.pipeline.len(), length);
 			assert_eq!(data_converter, data_converter.clone());
 		}
@@ -275,36 +273,21 @@ mod tests {
 		})
 		.is_err());
 
-		test(PBF, None, PBF, Brotli, false, 1, "_brotli");
-		test(PNG, Gzip, PNG, Brotli, false, 2, "de_gzip, _brotli");
+		test(PBF, None, PBF, Brotli, false, 1, "Brotli");
+		test(PNG, Gzip, PNG, Brotli, false, 2, "UnGzip, Brotli");
 		test(PNG, None, PNG, None, false, 0, "");
-		test(PNG, None, PNG, None, true, 1, "PNG->PNG");
-		test(PNG, Gzip, PNG, Brotli, false, 2, "de_gzip, _brotli");
-		test(PNG, Gzip, PNG, Brotli, true, 3, "de_gzip, PNG->PNG, _brotli");
+		test(PNG, None, PNG, None, true, 1, "Png2Png");
+		test(PNG, Gzip, PNG, Brotli, false, 2, "UnGzip, Brotli");
+		test(PNG, Gzip, PNG, Brotli, true, 3, "UnGzip, Png2Png, Brotli");
 
-		test(PNG, Gzip, JPG, Gzip, false, 1, "PNG->JPG");
-		test(PNG, Brotli, PNG, Gzip, true, 3, "de_brotli, PNG->PNG, _gzip");
-		test(PNG, None, WEBP, None, false, 1, "PNG->WEBP");
-		test(JPG, Gzip, PNG, None, true, 2, "de_gzip, JPG->PNG");
-		test(JPG, Brotli, WEBP, None, false, 2, "de_brotli, JPG->WEBP");
-		test(WEBP, None, JPG, Brotli, true, 2, "WEBP->JPG, _brotli");
-		test(WEBP, Gzip, PNG, Brotli, false, 3, "de_gzip, WEBP->PNG, _brotli");
-		test(PNG, Brotli, WEBP, Gzip, true, 3, "de_brotli, PNG->WEBP, _gzip");
-		test(PNG, None, WEBP, Gzip, false, 2, "PNG->WEBP, _gzip");
-	}
-
-	// Test function for the `FnConv` struct
-	#[test]
-	fn fn_conv() {
-		// Create a test `FnConv` instance
-		let test_fn = FnConv::new(|blob| Ok(blob.clone()), "test");
-
-		// Check the name of the `FnConv` instance
-		assert_eq!(test_fn.get_name(), "test");
-
-		// Check the function of the `FnConv` instance
-		let func = test_fn.get_function();
-		let vec = vec![1, 2, 3];
-		assert_eq!(func(Blob::from(&vec)).unwrap().as_vec(), vec);
+		test(PNG, Gzip, JPG, Gzip, false, 1, "Png2Jpg");
+		test(PNG, Brotli, PNG, Gzip, true, 3, "UnBrotli, Png2Png, Gzip");
+		test(PNG, None, WEBP, None, false, 1, "Png2Webplossless");
+		test(JPG, Gzip, PNG, None, true, 2, "UnGzip, Jpg2Png");
+		test(JPG, Brotli, WEBP, None, false, 2, "UnBrotli, Jpg2Webp");
+		test(WEBP, None, JPG, Brotli, true, 2, "Webp2Jpg, Brotli");
+		test(WEBP, Gzip, PNG, Brotli, false, 3, "UnGzip, Webp2Png, Brotli");
+		test(PNG, Brotli, WEBP, Gzip, true, 3, "UnBrotli, Png2Webplossless, Gzip");
+		test(PNG, None, WEBP, Gzip, false, 2, "Png2Webplossless, Gzip");
 	}
 }
