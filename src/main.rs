@@ -17,7 +17,6 @@ use shared::Result;
 	long_about = None, // Disable long description
 	propagate_version = true, // Enable version flag for subcommands
 	disable_help_subcommand = true, // Disable help subcommand
-	disable_help_flag = true, // Disable help flag
 )]
 struct Cli {
 	#[command(subcommand)]

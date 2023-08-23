@@ -28,7 +28,7 @@ axum = { version = "0.6.20", default-features = false, features = ["tokio"] }
 brotli = { version = "3.3.4", default-features = false, features = ["std"] }
 byteorder = { version = "1.4.3", default-features = false }
 bytes = { version = "1.4.0", default-features = false }
-clap = { version = "4.3.24", default-features = true }
+clap = { version = "4.3.24", default-features = true, features = ["wrap_help"] }
 clap-verbosity-flag = { version = "2.0.1", default-features = false }
 enumset = { version = "1.1.2", default-features = false }
 env_logger = { version = "0.10.0", default-features = false }
