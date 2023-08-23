@@ -1,7 +1,7 @@
 #![allow(non_snake_case)]
 use super::{Blob, Result};
 use crate::create_error;
-use brotli::{enc::BrotliEncoderParams, writer::StandardAlloc, BrotliCompressCustomAlloc, BrotliDecompress};
+use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
 use clap::ValueEnum;
 use enumset::{EnumSet, EnumSetType};
 use flate2::bufread::{GzDecoder, GzEncoder};
@@ -157,17 +157,7 @@ pub fn compress_brotli(data: Blob) -> Result<Blob> {
 	};
 	let mut input = Cursor::new(data.as_slice());
 	let mut output: Vec<u8> = Vec::new();
-	let mut input_buffer: [u8; 4096] = [0; 4096];
-	let mut output_buffer: [u8; 4096] = [0; 4096];
-	let alloc = StandardAlloc::default();
-	BrotliCompressCustomAlloc(
-		&mut input,
-		&mut output,
-		&mut input_buffer[..],
-		&mut output_buffer[..],
-		&params,
-		alloc,
-	)?;
+	BrotliCompress(&mut input, &mut output, &params)?;
 
 	Ok(Blob::from(output))
 }
