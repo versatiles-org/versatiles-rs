@@ -1,5 +1,5 @@
 use crate::{
-	containers::{TileReaderBox, TileReaderTrait},
+	containers::{TileIterator, TileReaderBox, TileReaderTrait},
 	create_error,
 	shared::*,
 };
@@ -241,7 +241,7 @@ impl TileReaderTrait for TileReader {
 
 		Ok(Blob::from(blob))
 	}
-	async fn get_bbox_tile_vec(&mut self, bbox: &TileBBox) -> Result<Vec<(TileCoord3, Blob)>> {
+	fn get_bbox_tile_iter<'a>(&'a mut self, bbox: &'a TileBBox) -> TileIterator {
 		let max = bbox.get_max();
 		let x_min = bbox.get_x_min();
 		let x_max = bbox.get_x_max();
@@ -249,27 +249,22 @@ impl TileReaderTrait for TileReader {
 		let y_max = max - bbox.get_y_min();
 		let level = bbox.get_level();
 
-		let conn = self.pool.get()?;
+		let conn = self.pool.get().unwrap();
 		let mut stmt = conn
 			 .prepare("SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?")
-			 ?;
+			 .unwrap();
 
-		let mut rows = stmt.query([x_min, x_max, y_min, y_max, level as u32])?;
+		let iterator = stmt
+			.query_map([x_min, x_max, y_min, y_max, level as u32], move |row| {
+				Ok((
+					TileCoord3::new(row.get::<_, u32>(0)?, max - row.get::<_, u32>(1)?, row.get::<_, u8>(2)?),
+					Blob::from(row.get::<_, Vec<u8>>(3)?),
+				))
+			})
+			.unwrap()
+			.collect::<Vec<_>>();
 
-		let mut vec: Vec<(TileCoord3, Blob)> = Vec::new();
-
-		while let Some(row) = rows.next()? {
-			vec.push((
-				TileCoord3::new(
-					row.get::<_, u32>(0).unwrap(),
-					max - row.get::<_, u32>(1).unwrap(),
-					row.get::<_, u8>(2).unwrap(),
-				),
-				Blob::from(row.get::<_, Vec<u8>>(3)?),
-			))
-		}
-
-		Ok(vec)
+		Box::new(iterator.into_iter().map(|r| r.unwrap()))
 	}
 	fn get_name(&self) -> Result<&str> {
 		Ok(&self.name)

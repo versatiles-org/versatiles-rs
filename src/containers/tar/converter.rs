@@ -79,7 +79,7 @@ impl TileConverterTrait for TileConverter {
 		let mutex_builder = &Mutex::new(&mut self.builder);
 
 		for bbox in bbox_pyramid.iter_levels() {
-			let iterator = reader.get_bbox_tile_vec(bbox).await?;
+			let iterator = reader.get_bbox_tile_iter(bbox);
 			for (coord, blob) in iterator {
 				mutex_bar.lock().unwrap().inc(1);
 

@@ -46,8 +46,7 @@ impl TileConverterTrait for TileConverter {
 		let bbox_pyramid = self.config.get_bbox_pyramid();
 
 		for bbox in bbox_pyramid.iter_levels() {
-			let stream = reader.get_bbox_tile_vec(&bbox).await?;
-			let _count = stream.len();
+			let _count = reader.get_bbox_tile_iter(&bbox).count();
 		}
 
 		Ok(())

@@ -5,6 +5,7 @@ use std::{fmt::Debug, path::Path};
 
 pub type TileConverterBox = Box<dyn TileConverterTrait>;
 pub type TileReaderBox = Box<dyn TileReaderTrait>;
+pub type TileIterator<'a> = Box<dyn Iterator<Item = (TileCoord3, Blob)> + 'a>;
 
 #[allow(clippy::new_ret_no_self)]
 #[async_trait]
@@ -49,17 +50,14 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
-	async fn get_bbox_tile_vec(&mut self, bbox: &TileBBox) -> Result<Vec<(TileCoord3, Blob)>> {
-		Ok(bbox
-			.iter_coords()
-			.filter_map(|coord| {
-				let result = block_on(self.get_tile_data(&coord));
-				match result {
-					Ok(blob) => Some((coord, blob)),
-					Err(_) => None,
-				}
-			})
-			.collect())
+	fn get_bbox_tile_iter<'a>(&'a mut self, bbox: &'a TileBBox) -> TileIterator {
+		Box::new(bbox.iter_coords().filter_map(|coord| {
+			let result = block_on(self.get_tile_data(&coord));
+			match result {
+				Ok(blob) => Some((coord, blob)),
+				Err(_) => None,
+			}
+		}))
 	}
 
 	/// verify container and output data to output_folder
@@ -163,10 +161,10 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn get_bbox_tile_vec() -> Result<()> {
+	async fn get_bbox_tile_stream() -> Result<()> {
 		let mut reader = TestReader::new("test_path").await?;
 		let bbox = TileBBox::new(4, 0, 0, 10, 10); // Or replace it with actual bbox
-		let vec = reader.get_bbox_tile_vec(&bbox).await?;
+		let vec = reader.get_bbox_tile_iter(&bbox);
 
 		for (coord, blob) in vec {
 			println!("TileCoord2: {:?}", coord);

@@ -2,7 +2,7 @@
 use super::{types::*, DataWriterFile, DataWriterTrait};
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig},
+	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig, TileCoord3},
 };
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -154,7 +154,7 @@ impl TileConverter {
 		let mut secured_writer = mutex_writer.lock().await;
 
 		// Get the tile stream
-		let mut vec = reader.get_bbox_tile_vec(bbox).await?;
+		let mut vec: Vec<(TileCoord3, Blob)> = reader.get_bbox_tile_iter(bbox).collect();
 
 		vec.sort_by_cached_key(|(coord, _blob)| coord.get_sort_index());
 
