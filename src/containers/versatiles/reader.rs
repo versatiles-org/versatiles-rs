@@ -11,7 +11,7 @@ use crate::{
 use async_trait::async_trait;
 use itertools::Itertools;
 use log::debug;
-use std::{collections::HashMap, fmt::Debug, iter, ops::Shr, path::Path};
+use std::{collections::HashMap, fmt::Debug, iter, ops::Shr, path::Path, sync::Arc};
 
 // Define the TileReader struct
 pub struct TileReader {
@@ -19,7 +19,7 @@ pub struct TileReader {
 	reader: Box<dyn DataReaderTrait>,
 	parameters: TileReaderParameters,
 	block_index: BlockIndex,
-	tile_index_cache: HashMap<TileCoord3, TileIndex>,
+	tile_index_cache: HashMap<TileCoord3, Arc<TileIndex>>,
 }
 
 // Implement methods for the TileReader struct
@@ -46,6 +46,25 @@ impl TileReader {
 			block_index,
 			tile_index_cache: HashMap::new(),
 		})
+	}
+
+	async fn get_block_tile_index_cached(&mut self, block: &BlockDefinition) -> Arc<TileIndex> {
+		let block_coord = block.get_coord3();
+
+		// Retrieve the tile index from cache or read from the reader
+		let tile_index_option = self.tile_index_cache.get(&block_coord);
+
+		if let Some(tile_index) = tile_index_option {
+			return tile_index.clone();
+		}
+
+		let blob = self.reader.read_range(block.get_index_range()).await.unwrap();
+		let mut tile_index = TileIndex::from_brotli_blob(blob);
+		tile_index.add_offset(block.get_tiles_range().offset);
+
+		self.tile_index_cache.insert(block_coord, Arc::new(tile_index));
+
+		return self.tile_index_cache.get(&block_coord).unwrap().clone();
 	}
 }
 
@@ -106,7 +125,7 @@ impl TileReaderTrait for TileReader {
 		}
 
 		// Get the block and its bounding box
-		let block = block_option.unwrap();
+		let block: BlockDefinition = block_option.unwrap().clone();
 		let bbox = block.get_tiles_bbox();
 
 		// Calculate tile coordinates within the block
@@ -122,21 +141,8 @@ impl TileReaderTrait for TileReader {
 		let tile_id = bbox.get_tile_index(&tile_coord);
 
 		// Retrieve the tile index from cache or read from the reader
-		let tile_index_option = self.tile_index_cache.get(&block_coord);
-		let tile_range: ByteRange;
-
-		if let Some(tile_index) = tile_index_option {
-			tile_range = *tile_index.get(tile_id);
-		} else {
-			let blob = self.reader.read_range(block.get_index_range()).await.unwrap();
-			let mut tile_index = TileIndex::from_brotli_blob(blob);
-			tile_index.add_offset(block.get_tiles_range().offset);
-
-			self.tile_index_cache.insert(block_coord, tile_index);
-
-			let tile_index_option = self.tile_index_cache.get(&block_coord);
-			tile_range = *tile_index_option.unwrap().get(tile_id);
-		}
+		let tile_index: Arc<TileIndex> = self.get_block_tile_index_cached(&block).await;
+		let tile_range: &ByteRange = tile_index.get(tile_id);
 
 		// Return None if the tile range has zero length
 		if tile_range.length == 0 {
