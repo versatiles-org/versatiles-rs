@@ -152,7 +152,7 @@ mod tests {
 			"65002",
 			"--auto-shutdown",
 			"500",
-			"https://download.versatiles.org/planet-20230227.versatiles",
+			"https://download.versatiles.org/planet-latest.versatiles",
 		])
 		.unwrap();
 	}

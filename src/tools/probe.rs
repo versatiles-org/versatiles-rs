@@ -40,7 +40,7 @@ mod tests {
 		run_command(vec![
 			"versatiles",
 			"probe",
-			"https://download.versatiles.org/planet-20230227.versatiles",
+			"https://download.versatiles.org/planet-latest.versatiles",
 		])
 		.unwrap();
 	}

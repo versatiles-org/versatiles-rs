@@ -161,7 +161,7 @@ mod tests {
 			"-85,-180,85,180",
 			"--flip-y",
 			"--force-recompress",
-			"https://download.versatiles.org/planet-20230227.versatiles",
+			"https://download.versatiles.org/planet-latest.versatiles",
 			"tmp/berlin2.versatiles",
 		])
 		.unwrap();
