@@ -80,7 +80,8 @@ impl TileConverterTrait for TileConverter {
 
 		for bbox in bbox_pyramid.iter_levels() {
 			let iterator = reader.get_bbox_tile_iter(bbox);
-			for (coord, blob) in iterator {
+			for entry in iterator {
+				let (coord, blob) = entry?;
 				mutex_bar.lock().unwrap().inc(1);
 
 				if let Ok(blob) = tile_converter.process_blob(blob) {

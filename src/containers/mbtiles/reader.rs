@@ -254,7 +254,7 @@ impl TileReaderTrait for TileReader {
 			 .prepare("SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?")
 			 .unwrap();
 
-		let iterator = stmt
+		let vec: Vec<crate::shared::Result<(TileCoord3, Blob)>> = stmt
 			.query_map([x_min, x_max, y_min, y_max, level as u32], move |row| {
 				Ok((
 					TileCoord3::new(row.get::<_, u32>(0)?, max - row.get::<_, u32>(1)?, row.get::<_, u8>(2)?),
@@ -262,9 +262,15 @@ impl TileReaderTrait for TileReader {
 				))
 			})
 			.unwrap()
-			.collect::<Vec<_>>();
+			.map(|r| -> crate::shared::Result<(TileCoord3, Blob)> {
+				match r {
+					Ok(ok) => Ok(ok),
+					Err(err) => Err(Box::new(err)),
+				}
+			})
+			.collect();
 
-		Box::new(iterator.into_iter().map(|r| r.unwrap()))
+		Box::new(vec.into_iter())
 	}
 	fn get_name(&self) -> Result<&str> {
 		Ok(&self.name)

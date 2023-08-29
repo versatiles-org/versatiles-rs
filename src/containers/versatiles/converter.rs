@@ -135,7 +135,7 @@ impl TileConverter {
 		let offset0 = self.writer.get_position().await.unwrap();
 
 		// Prepare the necessary data structures
-		let bbox = block.get_bbox();
+		let bbox = block.get_tiles_bbox();
 		let mut tile_index = TileIndex::new_empty(bbox.count_tiles() as usize);
 		let tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
@@ -154,7 +154,7 @@ impl TileConverter {
 		let mut secured_writer = mutex_writer.lock().await;
 
 		// Get the tile stream
-		let mut vec: Vec<(TileCoord3, Blob)> = reader.get_bbox_tile_iter(bbox).collect();
+		let mut vec: Vec<(TileCoord3, Blob)> = reader.get_bbox_tile_iter(bbox).map(|t| t.unwrap()).collect();
 
 		vec.sort_by_cached_key(|(coord, _blob)| coord.get_sort_index());
 

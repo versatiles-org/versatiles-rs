@@ -44,10 +44,7 @@ impl BlockIndex {
 	pub fn get_bbox_pyramid(&self) -> TileBBoxPyramid {
 		let mut pyramid = TileBBoxPyramid::new_empty();
 		for (_coord, block) in self.lookup.iter() {
-			pyramid.include_bbox(
-				block.get_z(),
-				&block.get_bbox().shift_by(block.get_x() * 256, block.get_y() * 256),
-			);
+			pyramid.include_bbox(block.get_z(), &block.get_bbox());
 		}
 
 		pyramid

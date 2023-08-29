@@ -5,7 +5,7 @@ use std::{fmt::Debug, path::Path};
 
 pub type TileConverterBox = Box<dyn TileConverterTrait>;
 pub type TileReaderBox = Box<dyn TileReaderTrait>;
-pub type TileIterator<'a> = Box<dyn Iterator<Item = (TileCoord3, Blob)> + 'a>;
+pub type TileIterator<'a> = Box<dyn Iterator<Item = Result<(TileCoord3, Blob)>> + 'a>;
 
 #[allow(clippy::new_ret_no_self)]
 #[async_trait]
@@ -51,11 +51,11 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
 	fn get_bbox_tile_iter<'a>(&'a mut self, bbox: &'a TileBBox) -> TileIterator {
-		Box::new(bbox.iter_coords().filter_map(|coord| {
+		Box::new(bbox.iter_coords().map(|coord| {
 			let result = block_on(self.get_tile_data(&coord));
 			match result {
-				Ok(blob) => Some((coord, blob)),
-				Err(_) => None,
+				Ok(blob) => Ok((coord, blob)),
+				Err(err) => Err(err),
 			}
 		}))
 	}
@@ -161,12 +161,13 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn get_bbox_tile_stream() -> Result<()> {
+	async fn get_bbox_tile_iter() -> Result<()> {
 		let mut reader = TestReader::new("test_path").await?;
 		let bbox = TileBBox::new(4, 0, 0, 10, 10); // Or replace it with actual bbox
-		let vec = reader.get_bbox_tile_iter(&bbox);
+		let iterator = reader.get_bbox_tile_iter(&bbox);
 
-		for (coord, blob) in vec {
+		for entry in iterator {
+			let (coord, blob) = entry?;
 			println!("TileCoord2: {:?}", coord);
 			println!("Blob: {:?}", blob);
 			// Here, you can add the assertions you need to verify the correctness of each tile data

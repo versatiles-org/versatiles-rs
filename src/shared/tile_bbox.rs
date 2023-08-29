@@ -289,6 +289,13 @@ impl TileBBox {
 			swap(&mut self.y_min, &mut self.y_max);
 		}
 	}
+	#[allow(dead_code)]
+	pub fn substract(&mut self, c: &TileCoord2) {
+		self.x_min -= c.get_x();
+		self.y_min -= c.get_y();
+		self.x_max -= c.get_x();
+		self.y_max -= c.get_y();
+	}
 }
 
 impl fmt::Debug for TileBBox {
