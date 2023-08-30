@@ -157,10 +157,10 @@ impl TileReaderTrait for TileReader {
 
 	fn get_bbox_tile_iter<'a>(&'a mut self, bbox: &'a TileBBox) -> TileIterator<'a> {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
-		const MAX_CHUNK_GAP: u64 = 16 * 1024;
+		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
 		let mut outer_bbox: TileBBox = bbox.clone();
-		println!("outer_bbox {outer_bbox:?}");
+		//println!("outer_bbox {outer_bbox:?}");
 
 		if self.get_parameters().unwrap().get_swap_xy() {
 			outer_bbox.swap_xy();
@@ -171,8 +171,8 @@ impl TileReaderTrait for TileReader {
 		};
 
 		let block_coords: Vec<TileCoord3> = outer_bbox.clone().scale_down(256).iter_coords().collect();
-		println!("outer_bbox {outer_bbox:?}");
-		println!("block_coords {block_coords:?}");
+		//println!("outer_bbox {outer_bbox:?}");
+		//println!("block_coords {block_coords:?}");
 
 		println!("fetch index");
 
@@ -193,9 +193,9 @@ impl TileReaderTrait for TileReader {
 				let mut tiles_bbox = outer_bbox.clone();
 				tiles_bbox.substract_coord2(&block.get_coord_offset());
 				tiles_bbox.intersect_bbox(&block_tiles_bbox);
-				println!("outer_bbox {outer_bbox:?}");
-				println!("block_tiles_bbox {block_tiles_bbox:?}");
-				println!("tiles_bbox {tiles_bbox:?}");
+				//println!("outer_bbox {outer_bbox:?}");
+				//println!("block_tiles_bbox {block_tiles_bbox:?}");
+				//println!("tiles_bbox {tiles_bbox:?}");
 
 				// Retrieve the tile index from cache or read from the reader
 				let tile_index: Arc<TileIndex> = block_on(self.get_block_tile_index_cached(&block));
@@ -218,16 +218,21 @@ impl TileReaderTrait for TileReader {
 					if chunk.is_empty() {
 						chunk.push(entry)
 					} else {
-						let end = entry.1.offset + entry.1.length;
+						let newest = &entry.1;
 						let first = &chunk.first().unwrap().1;
 						let last = &chunk.last().unwrap().1;
-						if (first.offset + MAX_CHUNK_SIZE > end)
-							&& (last.offset + last.length + MAX_CHUNK_GAP > entry.1.offset)
+						if (first.offset + MAX_CHUNK_SIZE > newest.offset + newest.length)
+							&& (last.offset + last.length + MAX_CHUNK_GAP > newest.offset)
 						{
 							// chunk size is still inside the limits
 							chunk.push(entry);
 						} else {
 							// chunk becomes to big
+							//let size = newest.offset + newest.length - first.offset;
+							//let gap = newest.offset - (last.offset + last.length);
+							//println!(
+							//	"chunks split - first:{first:?}, last:{last:?}, newest:{newest:?}, gap:{gap}, size:{size}"
+							//);
 							chunks.push(chunk);
 							chunk = Vec::new();
 						}
@@ -247,14 +252,14 @@ impl TileReaderTrait for TileReader {
 
 		let reader = &mut self.reader;
 
-		return Box::new(chunks.into_iter().flat_map(move |chunk| {
+		let tiles = chunks.into_iter().flat_map(move |chunk| {
 			let first = chunk.first().unwrap().1;
 			let last = chunk.last().unwrap().1;
 			let offset = first.offset;
 			let end = last.offset + last.length;
 			let chunk_range = ByteRange::new(offset, end - offset);
 
-			println!("read_range start {chunk_range:?}");
+			println!("read_range start {chunk_range:?}, tiles: {}", chunk.len());
 			let big_blob = block_on(reader.read_range(&chunk_range)).unwrap();
 			println!("read_range finished");
 
@@ -270,7 +275,9 @@ impl TileReaderTrait for TileReader {
 				.collect();
 
 			return result.into_iter();
-		}));
+		});
+
+		return Box::new(tiles);
 	}
 
 	// Get the name of the reader

@@ -38,8 +38,12 @@ impl DataReaderTrait for DataReaderHttp {
 		let mut request = Request::new(Method::GET, self.url.clone());
 		let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
 		request.headers_mut().append("range", request_range.parse()?);
+		println!("A");
+		println!("self.client {:?}", self.client);
+		println!("request {request:?}");
 
 		let response = self.client.execute(request).await?;
+		println!("B");
 
 		if response.status() != StatusCode::PARTIAL_CONTENT {
 			let status_code = response.status();
@@ -48,6 +52,7 @@ impl DataReaderTrait for DataReaderHttp {
 				"as a response to a range request it is expected to get the status code 206. instead we got {status_code}"
 			);
 		}
+		//println!("C");
 
 		let content_range: &str;
 		match response.headers().get("content-range") {
@@ -59,6 +64,7 @@ impl DataReaderTrait for DataReaderHttp {
 				)
 			}
 		};
+		//println!("D");
 
 		lazy_static! {
 			static ref RE_RANGE: Regex = RegexBuilder::new(r"^bytes (\d+)-(\d+)/\d+$")
@@ -66,6 +72,7 @@ impl DataReaderTrait for DataReaderHttp {
 				.build()
 				.unwrap();
 		}
+		//println!("E");
 
 		let content_range_start: u64;
 		let content_range_end: u64;
@@ -84,7 +91,11 @@ impl DataReaderTrait for DataReaderHttp {
 			return create_error!("content-range-end {content_range_end} is not end of range {range:?}");
 		}
 
+		println!("F");
+
 		let bytes = response.bytes().await?;
+
+		println!("G");
 
 		Ok(Blob::from(bytes))
 	}
