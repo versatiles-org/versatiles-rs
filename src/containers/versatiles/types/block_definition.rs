@@ -5,17 +5,20 @@ use std::{fmt, io::Cursor};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct BlockDefinition {
-	coord3: TileCoord3,
-	tiles_bbox: TileBBox, // tile coverage, is usually [0,0,255,255]
+	coord3: TileCoord3,       // block offset, for level 14 it's between [0,0] and [63,63]
+	tiles_coverage: TileBBox, // tile coverage, is usually [0,0,255,255]
 	tiles_range: ByteRange,
 	index_range: ByteRange,
 }
 
 impl BlockDefinition {
-	pub fn new(x: u32, y: u32, z: u8, bbox: TileBBox) -> Self {
+	pub fn new(x: u32, y: u32, z: u8, tiles_coverage: TileBBox) -> Self {
+		if (tiles_coverage.get_x_max() > 255) || (tiles_coverage.get_y_max() > 255) {
+			panic!("tiles_coverage bbox out of bounds ({tiles_coverage:?})")
+		}
 		Self {
 			coord3: TileCoord3::new(x, y, z),
-			tiles_bbox: bbox,
+			tiles_coverage,
 			tiles_range: ByteRange::empty(),
 			index_range: ByteRange::empty(),
 		}
@@ -45,7 +48,7 @@ impl BlockDefinition {
 
 		Ok(Self {
 			coord3: TileCoord3::new(x, y, z),
-			tiles_bbox,
+			tiles_coverage: tiles_bbox,
 			tiles_range,
 			index_range,
 		})
@@ -62,7 +65,7 @@ impl BlockDefinition {
 	}
 
 	pub fn count_tiles(&self) -> u64 {
-		self.tiles_bbox.count_tiles()
+		self.tiles_coverage.count_tiles()
 	}
 
 	pub fn as_vec(&self) -> Result<Vec<u8>> {
@@ -71,10 +74,10 @@ impl BlockDefinition {
 		vec.write_u32::<BE>(self.coord3.get_x())?;
 		vec.write_u32::<BE>(self.coord3.get_y())?;
 
-		vec.write_u8(self.tiles_bbox.get_x_min() as u8)?;
-		vec.write_u8(self.tiles_bbox.get_y_min() as u8)?;
-		vec.write_u8(self.tiles_bbox.get_x_max() as u8)?;
-		vec.write_u8(self.tiles_bbox.get_y_max() as u8)?;
+		vec.write_u8(self.tiles_coverage.get_x_min() as u8)?;
+		vec.write_u8(self.tiles_coverage.get_y_min() as u8)?;
+		vec.write_u8(self.tiles_coverage.get_x_max() as u8)?;
+		vec.write_u8(self.tiles_coverage.get_y_max() as u8)?;
 
 		assert_eq!(
 			self.tiles_range.offset + self.tiles_range.length,
@@ -93,12 +96,12 @@ impl BlockDefinition {
 		self.coord3.get_sort_index()
 	}
 
-	pub fn get_bbox(&self) -> TileBBox {
-		self.get_tiles_bbox().shift_by(self.get_x() * 256, self.get_y() * 256)
-	}
-
-	pub fn get_tiles_bbox(&self) -> &TileBBox {
-		&self.tiles_bbox
+	/// global bbox of the defined tiles, e.g. [4096,4096,4351,4351]
+	pub fn get_global_bbox(&self) -> TileBBox {
+		self
+			.tiles_coverage
+			.clone()
+			.shift_by(self.get_x() * 256, self.get_y() * 256)
 	}
 
 	pub fn get_tiles_range(&self) -> &ByteRange {
@@ -136,10 +139,10 @@ impl BlockDefinition {
 		format!(
 			"[{},[{},{}],[{},{}]]",
 			self.coord3.get_z(),
-			self.tiles_bbox.get_x_min() + x_offset,
-			self.tiles_bbox.get_y_min() + y_offset,
-			self.tiles_bbox.get_x_max() + x_offset,
-			self.tiles_bbox.get_y_max() + y_offset
+			self.tiles_coverage.get_x_min() + x_offset,
+			self.tiles_coverage.get_y_min() + y_offset,
+			self.tiles_coverage.get_x_max() + x_offset,
+			self.tiles_coverage.get_y_max() + y_offset
 		)
 	}
 }
@@ -148,7 +151,7 @@ impl fmt::Debug for BlockDefinition {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("BlockDefinition")
 			.field("x/y/z", &self.coord3)
-			.field("bbox", &self.tiles_bbox)
+			.field("bbox", &self.tiles_coverage)
 			.field("tiles_range", &self.tiles_range)
 			.field("index_range", &self.index_range)
 			.finish()

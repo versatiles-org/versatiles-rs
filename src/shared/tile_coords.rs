@@ -38,6 +38,7 @@ impl TileCoord2 {
 	pub fn get_y(&self) -> u32 {
 		self.y
 	}
+	#[allow(dead_code)]
 	pub fn substract(&mut self, c: &TileCoord2) {
 		self.x -= c.x;
 		self.y -= c.y;

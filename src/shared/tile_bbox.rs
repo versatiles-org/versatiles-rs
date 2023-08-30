@@ -238,6 +238,22 @@ impl TileBBox {
 
 		self
 	}
+	pub fn substract_coord2(mut self, c: &TileCoord2) -> TileBBox {
+		self.x_min = self.x_min.saturating_sub(c.get_x());
+		self.y_min = self.y_min.saturating_sub(c.get_y());
+		self.x_max = self.x_max.saturating_sub(c.get_x());
+		self.y_max = self.y_max.saturating_sub(c.get_y());
+
+		self
+	}
+	pub fn substract_u32(mut self, x: u32, y: u32) -> TileBBox {
+		self.x_min = self.x_min.saturating_sub(x);
+		self.y_min = self.y_min.saturating_sub(y);
+		self.x_max = self.x_max.saturating_sub(x);
+		self.y_max = self.y_max.saturating_sub(y);
+
+		self
+	}
 	pub fn scale_down(mut self, scale: u32) -> TileBBox {
 		self.x_min /= scale;
 		self.y_min /= scale;
@@ -263,20 +279,17 @@ impl TileBBox {
 
 		index as usize
 	}
-	pub fn get_coord2_by_index(&self, index: usize) -> TileCoord2 {
-		let width = (self.x_max + 1 - self.x_min) as usize;
-		TileCoord2::new(
-			index.rem(width) as u32 + self.x_min,
-			index.div(width) as u32 + self.y_min,
-		)
+	pub fn get_coord2_by_index(&self, index: u32) -> TileCoord2 {
+		assert!(index < self.count_tiles() as u32, "index out of bounds");
+
+		let width = self.x_max + 1 - self.x_min;
+		TileCoord2::new(index.rem(width) + self.x_min, index.div(width) + self.y_min)
 	}
-	pub fn get_coord3_by_index(&self, index: usize) -> TileCoord3 {
-		let width = (self.x_max + 1 - self.x_min) as usize;
-		TileCoord3::new(
-			index.rem(width) as u32 + self.x_min,
-			index.div(width) as u32 + self.y_min,
-			self.level,
-		)
+	pub fn get_coord3_by_index(&self, index: u32) -> TileCoord3 {
+		assert!(index < self.count_tiles() as u32, "index out of bounds");
+
+		let width = self.x_max + 1 - self.x_min;
+		TileCoord3::new(index.rem(width) + self.x_min, index.div(width) + self.y_min, self.level)
 	}
 	pub fn as_geo_bbox(&self, z: u8) -> [f32; 4] {
 		let p_min = TileCoord3::new(self.x_min, self.y_max + 1, z).as_geo();
@@ -296,13 +309,6 @@ impl TileBBox {
 			self.y_max = self.max - self.y_max;
 			swap(&mut self.y_min, &mut self.y_max);
 		}
-	}
-	#[allow(dead_code)]
-	pub fn substract(&mut self, c: &TileCoord2) {
-		self.x_min -= c.get_x();
-		self.y_min -= c.get_y();
-		self.x_max -= c.get_x();
-		self.y_max -= c.get_y();
 	}
 }
 

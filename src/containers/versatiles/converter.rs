@@ -2,11 +2,11 @@
 use super::{types::*, DataWriterFile, DataWriterTrait};
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileIterator, TileReaderBox},
-	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig},
+	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig, TileCoord2},
 };
 use async_trait::async_trait;
 use futures::executor::block_on;
-use log::{debug, trace};
+use log::debug;
 use std::collections::HashMap;
 
 // Define TileConverter struct
@@ -89,10 +89,11 @@ impl TileConverter {
 				let x = coord.get_x();
 				let y = coord.get_y();
 				let z = coord.get_z();
-				let mut bbox_block = *bbox_tiles;
-				bbox_block.intersect_bbox(&TileBBox::new(z, x * 256, y * 256, x * 256 + 255, y * 256 + 255));
+				let mut tiles_coverage = TileBBox::new(z, 0, 0, 255, 255);
+				tiles_coverage.substract_coord2(&TileCoord2::new(x * 256, y * 256));
+				tiles_coverage.intersect_bbox(&bbox_tiles.clone().substract_u32(x * 256, y * 256));
 
-				blocks.push(BlockDefinition::new(x, y, z, bbox_block))
+				blocks.push(BlockDefinition::new(x, y, z, tiles_coverage))
 			}
 		}
 
@@ -135,7 +136,8 @@ impl TileConverter {
 		let offset0 = self.writer.get_position()?;
 
 		// Prepare the necessary data structures
-		let bbox = block.get_tiles_bbox();
+		let bbox = block.get_global_bbox();
+		println!("bbox {bbox:?}");
 		let mut tile_index = TileIndex::new_empty(bbox.count_tiles() as usize);
 		let mut tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
@@ -155,7 +157,7 @@ impl TileConverter {
 
 		// Get the tile stream
 		println!("A");
-		let tile_iterator: TileIterator = reader.get_bbox_tile_iter(bbox);
+		let tile_iterator: TileIterator = reader.get_bbox_tile_iter(&bbox);
 
 		//println!("B");
 		//vec.sort_by_cached_key(|(coord, _blob)| coord.get_sort_index());
@@ -173,9 +175,14 @@ impl TileConverter {
 			i += 1;
 
 			let (coord, blob) = entry;
-			println!("coord {coord:?}");
+			//println!("coord {coord:?}");
+			//vec = tile_converter.process_vec(vec); !!!!!
+			//vec = tile_converter.process_vec(vec); !!!!!
+			//vec = tile_converter.process_vec(vec); !!!!!
+			//vec = tile_converter.process_vec(vec); !!!!!
+			//vec = tile_converter.process_vec(vec); !!!!!
 
-			trace!("blob size {}", blob.len());
+			//trace!("blob size {}", blob.len());
 
 			let index = bbox.get_tile_index(&coord.as_coord2());
 
@@ -196,7 +203,7 @@ impl TileConverter {
 				tile_hash_lookup.insert(tile_hash.as_vec(), range);
 			}
 
-			if i > 16 {
+			if i > 256 {
 				progress.inc(i);
 				i = 0;
 			}

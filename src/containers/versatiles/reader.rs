@@ -63,6 +63,8 @@ impl TileReader {
 		let mut tile_index = TileIndex::from_brotli_blob(blob);
 		tile_index.add_offset(block.get_tiles_range().offset);
 
+		assert_eq!(tile_index.len(), block.count_tiles() as usize);
+
 		self.tile_index_cache.insert(block_coord, Arc::new(tile_index));
 
 		return self.tile_index_cache.get(&block_coord).unwrap().clone();
@@ -127,11 +129,10 @@ impl TileReaderTrait for TileReader {
 
 		// Get the block and its bounding box
 		let block: BlockDefinition = block_option.unwrap().clone();
-		let bbox = block.get_tiles_bbox();
+		let bbox = block.get_global_bbox();
 
 		// Calculate tile coordinates within the block
-		let mut tile_coord: TileCoord2 = coord.as_coord2();
-		tile_coord.substract(&block.get_coord_offset());
+		let tile_coord: TileCoord2 = coord.as_coord2();
 
 		// Check if the tile is within the block definition
 		if !bbox.contains(&tile_coord) {
@@ -159,6 +160,7 @@ impl TileReaderTrait for TileReader {
 		const MAX_CHUNK_GAP: u64 = 16 * 1024;
 
 		let mut outer_bbox: TileBBox = bbox.clone();
+		println!("outer_bbox {outer_bbox:?}");
 
 		if self.get_parameters().unwrap().get_swap_xy() {
 			outer_bbox.swap_xy();
@@ -169,6 +171,8 @@ impl TileReaderTrait for TileReader {
 		};
 
 		let block_coords: Vec<TileCoord3> = outer_bbox.clone().scale_down(256).iter_coords().collect();
+		println!("outer_bbox {outer_bbox:?}");
+		println!("block_coords {block_coords:?}");
 
 		println!("fetch index");
 
@@ -184,18 +188,24 @@ impl TileReaderTrait for TileReader {
 
 				// Get the block and its bounding box
 				let block: BlockDefinition = block_option.unwrap().clone();
-				let block_tiles_bbox = block.get_tiles_bbox();
+				let block_tiles_bbox = block.get_global_bbox();
 
 				let mut tiles_bbox = outer_bbox.clone();
+				tiles_bbox.substract_coord2(&block.get_coord_offset());
 				tiles_bbox.intersect_bbox(&block_tiles_bbox);
+				println!("outer_bbox {outer_bbox:?}");
+				println!("block_tiles_bbox {block_tiles_bbox:?}");
+				println!("tiles_bbox {tiles_bbox:?}");
 
 				// Retrieve the tile index from cache or read from the reader
 				let tile_index: Arc<TileIndex> = block_on(self.get_block_tile_index_cached(&block));
+
 				//let tile_range: &ByteRange = tile_index.get(tile_id);
 				let mut tile_ranges: Vec<(TileCoord3, ByteRange)> = tile_index
 					.iter()
 					.enumerate()
-					.map(|(index, range)| (block_tiles_bbox.get_coord3_by_index(index), range.to_owned()))
+					.map(|(index, range)| (block_tiles_bbox.get_coord3_by_index(index as u32), *range))
+					.filter(|(coord, range)| tiles_bbox.contains(&coord.as_coord2()) && (range.length > 0))
 					.collect();
 
 				tile_ranges.sort_by_key(|e| e.1.offset);
@@ -245,7 +255,7 @@ impl TileReaderTrait for TileReader {
 			let chunk_range = ByteRange::new(offset, end - offset);
 
 			println!("read_range start {chunk_range:?}");
-			let big_blob = block_on(reader.read_range(&chunk_range)).unwrap().clone();
+			let big_blob = block_on(reader.read_range(&chunk_range)).unwrap();
 			println!("read_range finished");
 
 			let result: Vec<(TileCoord3, Blob)> = chunk
@@ -284,7 +294,7 @@ impl TileReaderTrait for TileReader {
 		let mut status_images = StatusImagePyramide::new();
 
 		for block in blocks {
-			let bbox = block.get_tiles_bbox();
+			let bbox = block.get_global_bbox();
 			let tiles_count = bbox.count_tiles();
 
 			let blob = self.reader.read_range(block.get_index_range()).await?;
@@ -293,16 +303,9 @@ impl TileReaderTrait for TileReader {
 
 			let status_image = status_images.get_level(block.get_z());
 
-			let x_offset = block.get_x() * 256;
-			let y_offset = block.get_y() * 256;
-
 			for (index, byterange) in tile_index.iter().enumerate() {
-				let coord = bbox.get_coord2_by_index(index);
-				status_image.set(
-					coord.get_x() + x_offset,
-					coord.get_y() + y_offset,
-					byterange.length as u32,
-				);
+				let coord = bbox.get_coord2_by_index(index as u32);
+				status_image.set(coord.get_x(), coord.get_y(), byterange.length as u32);
 			}
 
 			progress.inc(block.count_tiles());
