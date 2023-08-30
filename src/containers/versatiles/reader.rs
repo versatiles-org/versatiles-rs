@@ -9,9 +9,10 @@ use crate::{
 	},
 };
 use async_trait::async_trait;
+use futures::executor::block_on;
 use itertools::Itertools;
 use log::debug;
-use std::{collections::HashMap, fmt::Debug, iter, ops::Shr, path::Path, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, ops::Shr, path::Path, sync::Arc, vec::IntoIter};
 
 // Define the TileReader struct
 pub struct TileReader {
@@ -153,7 +154,10 @@ impl TileReaderTrait for TileReader {
 		self.reader.read_range(&tile_range).await
 	}
 
-	fn get_bbox_tile_iter<'a>(&'a mut self, bbox: &'a TileBBox) -> TileIterator {
+	fn get_bbox_tile_iter<'a>(&'a mut self, bbox: &'a TileBBox) -> TileIterator<'a> {
+		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
+		const MAX_CHUNK_GAP: u64 = 16 * 1024;
+
 		let mut outer_bbox: TileBBox = bbox.clone();
 
 		if self.get_parameters().unwrap().get_swap_xy() {
@@ -166,74 +170,92 @@ impl TileReaderTrait for TileReader {
 
 		let block_coords: Vec<TileCoord3> = outer_bbox.clone().scale_down(256).iter_coords().collect();
 
-		Box::new(
-			block_coords
-				.into_iter()
-				.flat_map(move |block_coord: TileCoord3| -> TileIterator {
-					// Get the block using the block coordinate
-					let block_option = self.block_index.get_block(&block_coord);
-					if block_option.is_none() {
-						let err: Result<_> = create_error!("block <{block_coord:#?}> does not exist");
-						return Box::new(iter::once(err));
-					}
+		//println!("fetch index");
 
-					// Get the block and its bounding box
-					let block = block_option.unwrap();
-					let block_tiles_bbox = block.get_tiles_bbox();
+		let chunks: Vec<Vec<(TileCoord3, ByteRange)>> = block_coords
+			.into_iter()
+			.flat_map(|block_coord: TileCoord3| -> IntoIter<Vec<(TileCoord3, ByteRange)>> {
+				// Get the block using the block coordinate
 
-					let mut tiles_bbox = outer_bbox.clone();
-					tiles_bbox.intersect_bbox(&block_tiles_bbox);
+				let block_option = self.block_index.get_block(&block_coord);
+				if block_option.is_none() {
+					panic!("block <{block_coord:#?}> does not exist");
+				}
 
-					// Retrieve the tile index from cache or read from the reader
-					let tile_index_option = self.tile_index_cache.get(&block_coord);
+				// Get the block and its bounding box
+				let block: BlockDefinition = block_option.unwrap().clone();
+				let block_tiles_bbox = block.get_tiles_bbox();
 
-					println!("block_coord {block_coord:?}");
-					println!("block {block:?}");
-					println!("tiles_bbox {tiles_bbox:?}");
-					println!("tile_index_option {tile_index_option:?}");
-					println!("tile_index_option {tile_index_option:?}");
+				let mut tiles_bbox = outer_bbox.clone();
+				tiles_bbox.intersect_bbox(&block_tiles_bbox);
 
-					return Box::new(iter::once(Ok((TileCoord3::new(1, 1, 1), Blob::empty()))));
-					/*
-					// Calculate tile coordinates within the block
-					let tile_x = coord.get_x() - block_coord.get_x() * 256;
-					let tile_y = coord.get_y() - block_coord.get_y() * 256;
+				// Retrieve the tile index from cache or read from the reader
+				let tile_index: Arc<TileIndex> = block_on(self.get_block_tile_index_cached(&block));
+				//let tile_range: &ByteRange = tile_index.get(tile_id);
+				let mut tile_ranges: Vec<(TileCoord3, ByteRange)> = tile_index
+					.iter()
+					.enumerate()
+					.map(|(index, range)| (block_tiles_bbox.get_coord3_by_index(index), range.to_owned()))
+					.collect();
 
-					// Check if the tile is within the block definition
-					if !outer_bbox.contains(&TileCoord2::new(tile_x, tile_y)) {
-						return create_error!("tile {coord:?} outside block definition");
-					}
+				tile_ranges.sort_by_key(|e| e.1.offset);
 
-					// Get the tile ID
-					let tile_id = outer_bbox.get_tile_index(&TileCoord2::new(tile_x, tile_y));
+				let mut chunks: Vec<Vec<(TileCoord3, ByteRange)>> = Vec::new();
+				let mut chunk: Vec<(TileCoord3, ByteRange)> = Vec::new();
 
-					// Retrieve the tile index from cache or read from the reader
-					let tile_index_option = self.tile_index_cache.get(&block_coord);
-					let tile_range: ByteRange;
-
-					if let Some(tile_index) = tile_index_option {
-						tile_range = *tile_index.get(tile_id);
+				for entry in tile_ranges {
+					if chunk.is_empty() {
+						chunk.push(entry)
 					} else {
-						let blob = self.reader.read_range(block.get_index_range()).await.unwrap();
-						let mut tile_index = TileIndex::from_brotli_blob(blob);
-						tile_index.add_offset(block.get_tiles_range().offset);
-
-						self.tile_index_cache.insert(block_coord, tile_index);
-
-						let tile_index_option = self.tile_index_cache.get(&block_coord);
-						tile_range = *tile_index_option.unwrap().get(tile_id);
+						let end = entry.1.offset + entry.1.length;
+						let first = &chunk.first().unwrap().1;
+						let last = &chunk.last().unwrap().1;
+						if (first.offset + MAX_CHUNK_SIZE > end)
+							&& (last.offset + last.length + MAX_CHUNK_GAP > entry.1.offset)
+						{
+							// chunk size is still inside the limits
+							chunk.push(entry);
+						} else {
+							// chunk becomes to big
+							chunks.push(chunk);
+							chunk = Vec::new();
+						}
 					}
+				}
 
-					// Return None if the tile range has zero length
-					if tile_range.length == 0 {
-						return create_error!("tile_range.length == 0");
-					}
+				if !chunk.is_empty() {
+					chunks.push(chunk);
+				}
 
-					// Read the tile data from the reader
-					self.reader.read_range(&tile_range).await
-					 */
-				}),
-		)
+				chunks.into_iter()
+			})
+			.collect();
+
+		//println!("Index fetched");
+
+		let reader = &mut self.reader;
+
+		return Box::new(chunks.into_iter().flat_map(move |chunk| {
+			let first = chunk.first().unwrap().1;
+			let last = chunk.last().unwrap().1;
+			let offset = first.offset;
+			let end = last.offset + last.length;
+			let chunk_range = ByteRange::new(offset, end - offset);
+			let big_blob = block_on(reader.read_range(&chunk_range)).unwrap().clone();
+
+			let result: Vec<Result<(TileCoord3, Blob)>> = chunk
+				.into_iter()
+				.map(|(coord, range)| {
+					let start = range.offset - offset;
+					let end = start + range.length;
+					let tile_range = (start as usize)..(end as usize);
+					let blob = Blob::from(big_blob.clone().get_range(tile_range));
+					Ok((coord, blob))
+				})
+				.collect();
+
+			return result.into_iter();
+		}));
 	}
 
 	// Get the name of the reader
@@ -270,7 +292,7 @@ impl TileReaderTrait for TileReader {
 			let y_offset = block.get_y() * 256;
 
 			for (index, byterange) in tile_index.iter().enumerate() {
-				let coord = bbox.get_coord_by_index(index);
+				let coord = bbox.get_coord2_by_index(index);
 				status_image.set(
 					coord.get_x() + x_offset,
 					coord.get_y() + y_offset,

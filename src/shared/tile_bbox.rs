@@ -263,11 +263,19 @@ impl TileBBox {
 
 		index as usize
 	}
-	pub fn get_coord_by_index(&self, index: usize) -> TileCoord2 {
+	pub fn get_coord2_by_index(&self, index: usize) -> TileCoord2 {
 		let width = (self.x_max + 1 - self.x_min) as usize;
 		TileCoord2::new(
 			index.rem(width) as u32 + self.x_min,
 			index.div(width) as u32 + self.y_min,
+		)
+	}
+	pub fn get_coord3_by_index(&self, index: usize) -> TileCoord3 {
+		let width = (self.x_max + 1 - self.x_min) as usize;
+		TileCoord3::new(
+			index.rem(width) as u32 + self.x_min,
+			index.div(width) as u32 + self.y_min,
+			self.level,
 		)
 	}
 	pub fn as_geo_bbox(&self, z: u8) -> [f32; 4] {

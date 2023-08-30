@@ -80,6 +80,13 @@ impl From<&Vec<u8>> for Blob {
 	}
 }
 
+impl From<&[u8]> for Blob {
+	/// Converts a `Vec<u8>` instance into a `Blob`.
+	fn from(item: &[u8]) -> Self {
+		Blob(item.to_vec())
+	}
+}
+
 impl From<&str> for Blob {
 	/// Converts a `&str` instance into a `Blob`.
 	fn from(item: &str) -> Self {

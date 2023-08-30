@@ -166,12 +166,12 @@ mod tests {
 		let bbox = TileBBox::new(4, 0, 0, 10, 10); // Or replace it with actual bbox
 		let iterator = reader.get_bbox_tile_iter(&bbox);
 
-		for entry in iterator {
-			let (coord, blob) = entry?;
+		iterator.for_each(|entry| {
+			let (coord, blob) = entry.unwrap();
 			println!("TileCoord2: {:?}", coord);
 			println!("Blob: {:?}", blob);
 			// Here, you can add the assertions you need to verify the correctness of each tile data
-		}
+		});
 
 		Ok(())
 	}
