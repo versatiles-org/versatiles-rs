@@ -1,11 +1,11 @@
 // Import necessary modules and traits
 use super::{types::*, DataWriterFile, DataWriterTrait};
 use crate::{
-	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig, TileCoord3},
+	containers::{TileConverterBox, TileConverterTrait, TileIterator, TileReaderBox},
+	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig},
 };
 use async_trait::async_trait;
-use futures::lock::Mutex;
+use futures::executor::block_on;
 use log::{debug, trace};
 use std::collections::HashMap;
 
@@ -24,7 +24,7 @@ impl TileConverterTrait for TileConverter {
 		Self: Sized,
 	{
 		Ok(Box::new(TileConverter {
-			writer: DataWriterFile::new(filename).await?,
+			writer: DataWriterFile::new(filename)?,
 			config: tile_config,
 		}))
 	}
@@ -50,15 +50,15 @@ impl TileConverterTrait for TileConverter {
 
 		// Convert the header to a blob and write it
 		let blob: Blob = header.to_blob()?;
-		self.writer.append(&blob).await?;
+		self.writer.append(&blob)?;
 
 		// Write metadata and blocks
-		header.meta_range = self.write_meta(reader).await?;
-		header.blocks_range = self.write_blocks(reader).await?;
+		header.meta_range = self.write_meta(reader)?;
+		header.blocks_range = self.write_blocks(reader)?;
 
 		// Update the header and write it
 		let blob: Blob = header.to_blob()?;
-		self.writer.write_start(&blob).await?;
+		self.writer.write_start(&blob)?;
 
 		Ok(())
 	}
@@ -67,15 +67,15 @@ impl TileConverterTrait for TileConverter {
 // Implement additional methods for TileConverter
 impl TileConverter {
 	// Write metadata
-	async fn write_meta(&mut self, reader: &TileReaderBox) -> Result<ByteRange> {
-		let meta = reader.get_meta().await?;
+	fn write_meta(&mut self, reader: &TileReaderBox) -> Result<ByteRange> {
+		let meta = block_on(reader.get_meta())?;
 		let compressed = self.config.get_compressor().process_blob(meta)?;
 
-		self.writer.append(&compressed).await
+		self.writer.append(&compressed)
 	}
 
 	// Write blocks
-	async fn write_blocks(&mut self, reader: &mut TileReaderBox) -> Result<ByteRange> {
+	fn write_blocks(&mut self, reader: &mut TileReaderBox) -> Result<ByteRange> {
 		let pyramid = self.config.get_bbox_pyramid();
 		if pyramid.is_empty() {
 			return Ok(ByteRange::empty());
@@ -105,7 +105,7 @@ impl TileConverter {
 
 		// Iterate through blocks and write them
 		for mut block in blocks.into_iter() {
-			let (tiles_range, index_range) = self.write_block(&block, reader, &mut progress).await?;
+			let (tiles_range, index_range) = self.write_block(&block, reader, &mut progress)?;
 
 			if tiles_range.length + index_range.length == 0 {
 				// Block is empty, continue with the next block
@@ -119,85 +119,97 @@ impl TileConverter {
 
 		// Finish updating progress and write the block index
 		progress.finish();
-		let range = self.writer.append(&block_index.as_brotli_blob()).await?;
+		let range = self.writer.append(&block_index.as_brotli_blob())?;
 
 		Ok(range)
 	}
 
 	// Write a single block
-	async fn write_block<'a>(
+	fn write_block<'a>(
 		&mut self, block: &BlockDefinition, reader: &'a mut TileReaderBox, progress: &mut ProgressBar,
 	) -> Result<(ByteRange, ByteRange)> {
 		// Log the start of the block
 		debug!("start block {:?}", block);
 
 		// Get the initial writer position
-		let offset0 = self.writer.get_position().await.unwrap();
+		let offset0 = self.writer.get_position()?;
 
 		// Prepare the necessary data structures
 		let bbox = block.get_tiles_bbox();
 		let mut tile_index = TileIndex::new_empty(bbox.count_tiles() as usize);
-		let tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
+		let mut tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
 		// Initialize mutexes for shared data structures
-		let mutex_progress = &Mutex::new(progress);
-		let mutex_writer = &Mutex::new(&mut self.writer);
-		let mutex_tile_index = &Mutex::new(&mut tile_index);
-		let mutex_tile_hash_lookup = &Mutex::new(tile_hash_lookup);
+		//let mutex_progress = &Mutex::new(progress);
+		//let mutex_writer = &Mutex::new(&mut self.writer);
+		//let mutex_tile_index = &Mutex::new(&mut tile_index);
+		//let mutex_tile_hash_lookup = &Mutex::new(tile_hash_lookup);
 
 		// Create the tile converter and set parameters
 		let tile_converter = self.config.get_tile_recompressor();
 
 		// Acquire locks for shared data structures
-		let mut secured_tile_hash_lookup = mutex_tile_hash_lookup.lock().await;
-		let mut secured_tile_index = mutex_tile_index.lock().await;
-		let mut secured_writer = mutex_writer.lock().await;
+		//let mut secured_tile_hash_lookup = mutex_tile_hash_lookup.lock()?;
+		//let mut secured_tile_index = mutex_tile_index.lock()?;
+		//let mut secured_writer = mutex_writer.lock()?;
 
 		// Get the tile stream
-		let mut vec: Vec<(TileCoord3, Blob)> = reader.get_bbox_tile_iter(bbox).map(|t| t.unwrap()).collect();
+		println!("A");
+		let tile_iterator: TileIterator = reader.get_bbox_tile_iter(bbox);
 
-		vec.sort_by_cached_key(|(coord, _blob)| coord.get_sort_index());
+		//println!("B");
+		//vec.sort_by_cached_key(|(coord, _blob)| coord.get_sort_index());
+		//println!("C");
 
 		// Compress the blobs if necessary
 		if !tile_converter.is_empty() {
-			vec = tile_converter.process_vec(vec);
+			//vec = tile_converter.process_vec(vec);
 		}
 
+		let mut i: u64 = 0;
+
 		// Iterate through the blobs and process them
-		for (coord, blob) in vec {
+		for entry in tile_iterator {
+			i += 1;
+
+			let (coord, blob) = entry;
+			println!("coord {coord:?}");
+
 			trace!("blob size {}", blob.len());
 
 			let index = bbox.get_tile_index(&coord.as_coord2());
 
 			let mut tile_hash_option = None;
 			if blob.len() < 1000 {
-				if secured_tile_hash_lookup.contains_key(blob.as_slice()) {
-					secured_tile_index.set(index, *secured_tile_hash_lookup.get(blob.as_slice()).unwrap());
+				if tile_hash_lookup.contains_key(blob.as_slice()) {
+					tile_index.set(index, *tile_hash_lookup.get(blob.as_slice()).unwrap());
 					continue;
 				}
 				tile_hash_option = Some(blob.clone());
 			}
 
-			let mut range = secured_writer.append(&blob).await.unwrap();
+			let mut range = self.writer.append(&blob)?;
 			range.offset -= offset0;
-			secured_tile_index.set(index, range);
+			tile_index.set(index, range);
 
 			if let Some(tile_hash) = tile_hash_option {
-				secured_tile_hash_lookup.insert(tile_hash.as_vec(), range);
+				tile_hash_lookup.insert(tile_hash.as_vec(), range);
+			}
+
+			if i > 16 {
+				progress.inc(i);
+				i = 0;
 			}
 		}
 
-		drop(secured_writer);
-		drop(secured_tile_index);
-
 		// Increment progress and finish the row slice
-		mutex_progress.lock().await.inc(bbox.count_tiles());
+		progress.inc(i);
 
 		// Finish the block and write the index
 		debug!("finish block and write index {:?}", block);
 
-		let offset1 = self.writer.get_position().await.unwrap();
-		let index_range = self.writer.append(&tile_index.as_brotli_blob()).await.unwrap();
+		let offset1 = self.writer.get_position()?;
+		let index_range = self.writer.append(&tile_index.as_brotli_blob())?;
 
 		Ok((ByteRange::new(offset0, offset1 - offset0), index_range))
 	}

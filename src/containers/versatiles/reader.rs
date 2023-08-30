@@ -170,7 +170,7 @@ impl TileReaderTrait for TileReader {
 
 		let block_coords: Vec<TileCoord3> = outer_bbox.clone().scale_down(256).iter_coords().collect();
 
-		//println!("fetch index");
+		println!("fetch index");
 
 		let chunks: Vec<Vec<(TileCoord3, ByteRange)>> = block_coords
 			.into_iter()
@@ -199,6 +199,7 @@ impl TileReaderTrait for TileReader {
 					.collect();
 
 				tile_ranges.sort_by_key(|e| e.1.offset);
+				//println!("tile_ranges {tile_ranges:?}");
 
 				let mut chunks: Vec<Vec<(TileCoord3, ByteRange)>> = Vec::new();
 				let mut chunk: Vec<(TileCoord3, ByteRange)> = Vec::new();
@@ -231,7 +232,8 @@ impl TileReaderTrait for TileReader {
 			})
 			.collect();
 
-		//println!("Index fetched");
+		//println!("chunks {chunks:?}");
+		println!("Index fetched");
 
 		let reader = &mut self.reader;
 
@@ -241,16 +243,19 @@ impl TileReaderTrait for TileReader {
 			let offset = first.offset;
 			let end = last.offset + last.length;
 			let chunk_range = ByteRange::new(offset, end - offset);
-			let big_blob = block_on(reader.read_range(&chunk_range)).unwrap().clone();
 
-			let result: Vec<Result<(TileCoord3, Blob)>> = chunk
+			println!("read_range start {chunk_range:?}");
+			let big_blob = block_on(reader.read_range(&chunk_range)).unwrap().clone();
+			println!("read_range finished");
+
+			let result: Vec<(TileCoord3, Blob)> = chunk
 				.into_iter()
 				.map(|(coord, range)| {
 					let start = range.offset - offset;
 					let end = start + range.length;
 					let tile_range = (start as usize)..(end as usize);
-					let blob = Blob::from(big_blob.clone().get_range(tile_range));
-					Ok((coord, blob))
+					let blob = Blob::from(big_blob.get_range(tile_range));
+					(coord, blob)
 				})
 				.collect();
 
