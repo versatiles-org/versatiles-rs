@@ -59,7 +59,6 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 					continue;
 				}
 				let blob = result.unwrap().to_owned();
-				drop(result);
 				yield (coord, blob);
 			}
 		})
@@ -170,7 +169,7 @@ mod tests {
 	async fn get_bbox_tile_iter() -> Result<()> {
 		let mut reader = TestReader::new("test_path").await?;
 		let bbox = TileBBox::new(4, 0, 0, 10, 10); // Or replace it with actual bbox
-		let stream = reader.get_bbox_tile_iter(&bbox).await;
+		let mut stream = reader.get_bbox_tile_iter(&bbox).await;
 
 		while let Some((coord, blob)) = stream.next().await {
 			println!("TileCoord2: {:?}", coord);

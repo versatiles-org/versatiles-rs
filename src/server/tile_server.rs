@@ -14,9 +14,8 @@ use axum::{
 	routing::get,
 	Router, Server,
 };
-use futures::{executor::block_on, lock::Mutex};
 use std::sync::Arc;
-use tokio::sync::oneshot::Sender;
+use tokio::sync::{oneshot::Sender, Mutex};
 
 struct TileSource {
 	prefix: String,
@@ -190,7 +189,7 @@ impl TileServer {
 	fn add_api_to_app(&self, app: Router) -> Result<Router> {
 		let mut tile_sources_json_lines: Vec<String> = Vec::new();
 		for tile_source in self.tile_sources.iter() {
-			let source = block_on(tile_source.source.lock());
+			let source = tile_source.source.blocking_lock();
 			tile_sources_json_lines.push(format!(
 				"{{ \"url\":\"{}\", \"name\":\"{}\", \"info\":{} }}",
 				tile_source.prefix,
@@ -216,7 +215,7 @@ impl TileServer {
 
 	pub fn iter_url_mapping(&self) -> impl Iterator<Item = (String, String)> + '_ {
 		self.tile_sources.iter().map(|tile_source| {
-			let source = block_on(tile_source.source.lock());
+			let source = tile_source.source.blocking_lock();
 			(
 				tile_source.prefix.to_owned(),
 				source.get_name().unwrap_or(String::from("???")),

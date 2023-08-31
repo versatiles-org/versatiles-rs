@@ -1,7 +1,7 @@
 use crate::shared::{Blob, Compression, Result, TargetCompression};
 use async_trait::async_trait;
-use futures::lock::Mutex;
 use std::{fmt::Debug, option::Option, sync::Arc};
+use tokio::sync::Mutex;
 
 pub type ServerSource = Arc<Mutex<Box<dyn ServerSourceTrait>>>;
 

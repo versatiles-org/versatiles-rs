@@ -8,11 +8,13 @@ use crate::{
 		TileReaderParameters,
 	},
 };
+use async_stream::stream;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use itertools::Itertools;
 use log::debug;
 use std::{collections::HashMap, fmt::Debug, ops::Shr, path::Path, sync::Arc};
+use tokio::sync::Mutex;
 
 // Define the TileReader struct
 pub struct TileReader {
@@ -176,73 +178,75 @@ impl TileReaderTrait for TileReader {
 
 		println!("fetch index");
 
+		let self_mutex = Arc::new(Mutex::new(self));
+
 		let chunks: Vec<Vec<Vec<(TileCoord3, ByteRange)>>> = futures_util::stream::iter(block_coords)
-			.then(|block_coord: TileCoord3| async {
-				// Get the block using the block coordinate
+			.then(|block_coord: TileCoord3| {
+				let self_mutex = self_mutex.clone();
+				async move {
+					// Get the block using the block coordinate
 
-				let block_option = self.block_index.get_block(&block_coord);
-				if block_option.is_none() {
-					panic!("block <{block_coord:#?}> does not exist");
-				}
+					let mut myself = self_mutex.lock().await;
 
-				// Get the block and its bounding box
-				let block: BlockDefinition = block_option.unwrap().clone();
-				let block_tiles_bbox = block.get_global_bbox();
+					let block_option = myself.block_index.get_block(&block_coord);
+					if block_option.is_none() {
+						panic!("block <{block_coord:#?}> does not exist");
+					}
 
-				let mut tiles_bbox = outer_bbox.clone();
-				tiles_bbox.substract_coord2(&block.get_coord_offset());
-				tiles_bbox.intersect_bbox(&block_tiles_bbox);
-				//println!("outer_bbox {outer_bbox:?}");
-				//println!("block_tiles_bbox {block_tiles_bbox:?}");
-				//println!("tiles_bbox {tiles_bbox:?}");
+					// Get the block and its bounding box
+					let block: BlockDefinition = block_option.unwrap().clone();
+					let block_tiles_bbox = block.get_global_bbox();
 
-				// Retrieve the tile index from cache or read from the reader
-				let tile_index: Arc<TileIndex> = self.get_block_tile_index_cached(&block).await;
+					let mut tiles_bbox = outer_bbox.clone();
+					tiles_bbox.substract_coord2(&block.get_coord_offset());
+					tiles_bbox.intersect_bbox(&block_tiles_bbox);
+					//println!("outer_bbox {outer_bbox:?}");
+					//println!("block_tiles_bbox {block_tiles_bbox:?}");
+					//println!("tiles_bbox {tiles_bbox:?}");
 
-				//let tile_range: &ByteRange = tile_index.get(tile_id);
-				let mut tile_ranges: Vec<(TileCoord3, ByteRange)> = tile_index
-					.iter()
-					.enumerate()
-					.map(|(index, range)| (block_tiles_bbox.get_coord3_by_index(index as u32), *range))
-					.filter(|(coord, range)| tiles_bbox.contains(&coord.as_coord2()) && (range.length > 0))
-					.collect();
+					// Retrieve the tile index from cache or read from the reader
+					let tile_index: Arc<TileIndex> = myself.get_block_tile_index_cached(&block).await;
 
-				tile_ranges.sort_by_key(|e| e.1.offset);
-				//println!("tile_ranges {tile_ranges:?}");
+					//let tile_range: &ByteRange = tile_index.get(tile_id);
+					let mut tile_ranges: Vec<(TileCoord3, ByteRange)> = tile_index
+						.iter()
+						.enumerate()
+						.map(|(index, range)| (block_tiles_bbox.get_coord3_by_index(index as u32), *range))
+						.filter(|(coord, range)| tiles_bbox.contains(&coord.as_coord2()) && (range.length > 0))
+						.collect();
 
-				let mut chunks: Vec<Vec<(TileCoord3, ByteRange)>> = Vec::new();
-				let mut chunk: Vec<(TileCoord3, ByteRange)> = Vec::new();
+					tile_ranges.sort_by_key(|e| e.1.offset);
+					//println!("tile_ranges {tile_ranges:?}");
 
-				for entry in tile_ranges {
-					if chunk.is_empty() {
-						chunk.push(entry)
-					} else {
-						let newest = &entry.1;
-						let first = &chunk.first().unwrap().1;
-						let last = &chunk.last().unwrap().1;
-						if (first.offset + MAX_CHUNK_SIZE > newest.offset + newest.length)
-							&& (last.offset + last.length + MAX_CHUNK_GAP > newest.offset)
-						{
-							// chunk size is still inside the limits
-							chunk.push(entry);
+					let mut chunks: Vec<Vec<(TileCoord3, ByteRange)>> = Vec::new();
+					let mut chunk: Vec<(TileCoord3, ByteRange)> = Vec::new();
+
+					for entry in tile_ranges {
+						if chunk.is_empty() {
+							chunk.push(entry)
 						} else {
-							// chunk becomes to big
-							//let size = newest.offset + newest.length - first.offset;
-							//let gap = newest.offset - (last.offset + last.length);
-							//println!(
-							//	"chunks split - first:{first:?}, last:{last:?}, newest:{newest:?}, gap:{gap}, size:{size}"
-							//);
-							chunks.push(chunk);
-							chunk = Vec::new();
+							let newest = &entry.1;
+							let first = &chunk.first().unwrap().1;
+							let last = &chunk.last().unwrap().1;
+							if (first.offset + MAX_CHUNK_SIZE > newest.offset + newest.length)
+								&& (last.offset + last.length + MAX_CHUNK_GAP > newest.offset)
+							{
+								// chunk size is still inside the limits
+								chunk.push(entry);
+							} else {
+								// chunk becomes to big
+								chunks.push(chunk);
+								chunk = Vec::new();
+							}
 						}
 					}
-				}
 
-				if !chunk.is_empty() {
-					chunks.push(chunk);
-				}
+					if !chunk.is_empty() {
+						chunks.push(chunk);
+					}
 
-				chunks
+					chunks
+				}
 			})
 			.collect()
 			.await;
@@ -250,12 +254,11 @@ impl TileReaderTrait for TileReader {
 		//println!("chunks {chunks:?}");
 		println!("Index fetched");
 
-		let reader = &mut self.reader;
+		//let chunk_iterator: &dyn Iterator<Item = Vec<(TileCoord3, ByteRange)>> = &chunks.into_iter().flatten();
 
-		let chunk_iterator: &dyn Iterator<Item = Vec<(TileCoord3, ByteRange)>> = &chunks.into_iter().flatten();
-
-		let tile_stream = futures_util::stream::iter(chunk_iterator.into_iter())
-			.then(move |chunk| async {
+		Box::pin(stream! {
+			let mut myself = self_mutex.lock().await;
+			for  chunk in chunks.into_iter().flatten() {
 				let first = chunk.first().unwrap().1;
 				let last = chunk.last().unwrap().1;
 				let offset = first.offset;
@@ -263,25 +266,19 @@ impl TileReaderTrait for TileReader {
 				let chunk_range = ByteRange::new(offset, end - offset);
 
 				println!("read_range start {chunk_range:?}, tiles: {}", chunk.len());
-				let big_blob = reader.read_range(&chunk_range).await.unwrap();
+				let big_blob = myself.reader.read_range(&chunk_range).await.unwrap();
 				println!("read_range finished");
 
-				let result: Vec<(TileCoord3, Blob)> = chunk
-					.into_iter()
-					.map(|(coord, range)| {
-						let start = range.offset - offset;
-						let end = start + range.length;
-						let tile_range = (start as usize)..(end as usize);
-						let blob = Blob::from(big_blob.get_range(tile_range));
-						(coord, blob)
-					})
-					.collect();
+				for (coord, range) in chunk {
+					let start = range.offset - offset;
+					let end = start + range.length;
+					let tile_range = (start as usize)..(end as usize);
+					let blob = Blob::from(big_blob.get_range(tile_range));
+					yield (coord, blob)
 
-				return futures_util::stream::iter(result);
-			})
-			.flatten();
-
-		return Box::pin(tile_stream);
+				}
+			}
+		})
 	}
 
 	// Get the name of the reader
