@@ -149,7 +149,7 @@ impl TileConverter {
 
 		// Compress the blobs if necessary
 		if !tile_converter.is_empty() {
-			//vec = tile_converter.process_vec(vec);
+			tile_stream = tile_converter.process_stream(tile_stream);
 		}
 
 		let mut i: u64 = 0;
@@ -159,13 +159,6 @@ impl TileConverter {
 			i += 1;
 
 			let (coord, blob) = entry;
-			//vec = tile_converter.process_vec(vec); !!!!!
-			//vec = tile_converter.process_vec(vec); !!!!!
-			//vec = tile_converter.process_vec(vec); !!!!!
-			//vec = tile_converter.process_vec(vec); !!!!!
-			//vec = tile_converter.process_vec(vec); !!!!!
-
-			//trace!("blob size {}", blob.len());
 
 			let index = bbox.get_tile_index(&coord.as_coord2());
 
