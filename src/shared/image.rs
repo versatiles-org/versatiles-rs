@@ -94,7 +94,7 @@ pub fn img2webp(image: DynamicImage) -> Result<Blob> {
 	match image.color() {
 		image::ColorType::Rgb8 | image::ColorType::Rgba8 => Ok(Blob::from(
 			Encoder::from_image(&image)
-				.map_err(|s| Error::new(s))?
+				.map_err(Error::new)?
 				.encode(WEBP_QUALITY)
 				.to_vec(),
 		)),
@@ -119,7 +119,7 @@ pub fn img2webplossless(image: DynamicImage) -> Result<Blob> {
 	match image.color() {
 		image::ColorType::Rgb8 => Ok(Blob::from(
 			Encoder::from_image(&image)
-				.map_err(|s| Error::new(s))?
+				.map_err(Error::new)?
 				.encode_lossless()
 				.to_vec(),
 		)),

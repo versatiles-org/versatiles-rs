@@ -110,7 +110,7 @@ impl TileCoord3 {
 			return false;
 		};
 		let max = 2u32.pow(self.z as u32);
-		return (self.x < max) && (self.y < max);
+		(self.x < max) && (self.y < max)
 	}
 	pub fn get_sort_index(&self) -> u64 {
 		let size = 2u64.pow(self.z as u32);

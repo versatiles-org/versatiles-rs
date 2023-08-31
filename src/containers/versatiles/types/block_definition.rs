@@ -98,10 +98,7 @@ impl BlockDefinition {
 
 	/// global bbox of the defined tiles, e.g. [4096,4096,4351,4351]
 	pub fn get_global_bbox(&self) -> TileBBox {
-		self
-			.tiles_coverage
-			.clone()
-			.shift_by(self.get_x() * 256, self.get_y() * 256)
+		self.tiles_coverage.shift_by(self.get_x() * 256, self.get_y() * 256)
 	}
 
 	pub fn get_tiles_range(&self) -> &ByteRange {

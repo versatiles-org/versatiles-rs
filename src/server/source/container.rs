@@ -166,7 +166,7 @@ mod tests {
 		async fn check_response(
 			container: &mut TileContainer, url: &str, compression: Compression, mime_type: &str,
 		) -> Result<Vec<u8>> {
-			let path: Vec<&str> = url.split("/").collect();
+			let path: Vec<&str> = url.split('/').collect();
 			let response = container.get_data(&path, &TargetCompression::from(compression)).await;
 			assert!(response.is_some());
 
@@ -177,7 +177,7 @@ mod tests {
 		}
 
 		async fn check_404(container: &mut TileContainer, url: &str, compression: Compression) -> Result<bool> {
-			let path: Vec<&str> = url.split("/").collect();
+			let path: Vec<&str> = url.split('/').collect();
 			let response = container.get_data(&path, &TargetCompression::from(compression)).await;
 			assert!(response.is_none());
 			Ok(true)

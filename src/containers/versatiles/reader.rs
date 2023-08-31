@@ -130,7 +130,7 @@ impl TileReaderTrait for TileReader {
 		}
 
 		// Get the block and its bounding box
-		let block: BlockDefinition = block_option.unwrap().clone();
+		let block: BlockDefinition = *block_option.unwrap();
 		let bbox = block.get_global_bbox();
 
 		// Calculate tile coordinates within the block
@@ -154,14 +154,14 @@ impl TileReaderTrait for TileReader {
 		}
 
 		// Read the tile data from the reader
-		self.reader.read_range(&tile_range).await
+		self.reader.read_range(tile_range).await
 	}
 
 	async fn get_bbox_tile_iter<'a>(&'a mut self, bbox: &'a TileBBox) -> TileStream<'a> {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
-		let mut outer_bbox: TileBBox = bbox.clone();
+		let mut outer_bbox: TileBBox = *bbox;
 
 		if self.get_parameters().unwrap().get_swap_xy() {
 			outer_bbox.swap_xy();
@@ -171,7 +171,7 @@ impl TileReaderTrait for TileReader {
 			outer_bbox.flip_y();
 		};
 
-		let block_coords: Vec<TileCoord3> = outer_bbox.clone().scale_down(256).iter_coords().collect();
+		let block_coords: Vec<TileCoord3> = outer_bbox.scale_down(256).iter_coords().collect();
 
 		let self_mutex = Arc::new(Mutex::new(self));
 
@@ -189,10 +189,10 @@ impl TileReaderTrait for TileReader {
 					}
 
 					// Get the block and its bounding box
-					let block: BlockDefinition = block_option.unwrap().clone();
+					let block: BlockDefinition = *block_option.unwrap();
 					let block_tiles_bbox = block.get_global_bbox();
 
-					let mut tiles_bbox = outer_bbox.clone();
+					let mut tiles_bbox = outer_bbox;
 					tiles_bbox.substract_coord2(&block.get_coord_offset());
 					tiles_bbox.intersect_bbox(&block_tiles_bbox);
 

@@ -171,6 +171,7 @@ mod tests {
 	use byteorder::ByteOrder;
 
 	#[test]
+	#[allow(clippy::zero_prefixed_literal)]
 	fn conversion() {
 		let test = |tile_format: &TileFormat, compression: &Compression, a: u64, b: u64, c: u64, d: u64| {
 			let mut header1 = FileHeader::new(tile_format, compression, [0, 0], [0.0, 0.0, 0.0, 0.0]);
@@ -218,7 +219,7 @@ mod tests {
 			&TileFormat::PBF,
 			&Compression::Gzip,
 			[3, 8],
-			[-180.0, -85.05112878, 180.0, 85.05112878],
+			[-180.0, -85.051_13, 180.0, 85.051_13],
 		);
 
 		let blob = header.to_blob().unwrap();

@@ -211,7 +211,7 @@ mod tests {
 	async fn small_stuff() {
 		let file = make_test_tar(Compression::None).await;
 
-		let tar_file = TarFile::from(&file.to_str().unwrap()).unwrap();
+		let tar_file = TarFile::from(file.to_str().unwrap()).unwrap();
 
 		assert_eq!(tar_file.get_info_as_json().unwrap(), "{\"type\":\"tar\"}");
 		assert!(tar_file.get_name().unwrap().ends_with("temp.tar"));
@@ -275,7 +275,7 @@ mod tests {
 				assert_eq!(result.mime, "application/json");
 				assert_eq!(&result.compression, compression_tar);
 
-				return Ok(());
+				Ok(())
 			}
 		}
 	}

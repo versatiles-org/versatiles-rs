@@ -71,7 +71,7 @@ pub mod tests {
 		}?;
 
 		let config = TileConverterConfig::new(Some(tile_format), Some(compression), TileBBoxPyramid::new_full(), false);
-		let mut converter = get_converter(&container_file.to_str().unwrap(), config).await?;
+		let mut converter = get_converter(container_file.to_str().unwrap(), config).await?;
 
 		// convert
 		converter.convert_from(&mut reader).await?;
@@ -115,7 +115,7 @@ pub mod tests {
 				TileBBoxPyramid::new_full(),
 				force_recompress,
 			);
-			let mut converter1 = get_converter(&container_file.to_str().unwrap(), config).await?;
+			let mut converter1 = get_converter(container_file.to_str().unwrap(), config).await?;
 
 			// convert
 			converter1.convert_from(&mut reader1).await?;

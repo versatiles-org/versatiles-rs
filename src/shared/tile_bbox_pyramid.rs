@@ -213,7 +213,7 @@ mod tests {
 		let test = |z0: u8, z1: u8| {
 			let mut pyramid = TileBBoxPyramid::new_empty();
 			let bbox = TileBBox::new_full(z0);
-			pyramid.set_level_bbox(z1, bbox.clone());
+			pyramid.set_level_bbox(z1, bbox);
 			assert_eq!(pyramid.get_level_bbox(z1).clone(), bbox);
 		};
 

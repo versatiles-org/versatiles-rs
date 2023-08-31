@@ -91,7 +91,7 @@ impl TileConverter {
 				let z = coord.get_z();
 				let mut tiles_coverage = TileBBox::new(z, 0, 0, 255, 255);
 				tiles_coverage.substract_coord2(&TileCoord2::new(x * 256, y * 256));
-				tiles_coverage.intersect_bbox(&bbox_tiles.clone().substract_u32(x * 256, y * 256));
+				tiles_coverage.intersect_bbox(&(*bbox_tiles).substract_u32(x * 256, y * 256));
 
 				blocks.push(BlockDefinition::new(x, y, z, tiles_coverage))
 			}

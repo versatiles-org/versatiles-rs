@@ -177,7 +177,7 @@ mod tests {
 		let text = String::from("");
 
 		// Assert that a Blob can be created from the empty string and correctly identified as empty
-		assert_eq!(Blob::from(&text).is_empty(), true);
+		assert!(Blob::from(&text).is_empty());
 	}
 
 	// Test creating a Blob from bytes

@@ -47,7 +47,7 @@ impl TileConverterTrait for TileConverter {
 		let bbox_pyramid = self.config.get_bbox_pyramid();
 
 		for bbox in bbox_pyramid.iter_levels() {
-			let mut stream = reader.get_bbox_tile_iter(&bbox).await;
+			let mut stream = reader.get_bbox_tile_iter(bbox).await;
 			while let Some((_coord, _blob)) = stream.next().await {}
 		}
 
