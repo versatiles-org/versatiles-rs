@@ -137,31 +137,15 @@ impl TileConverter {
 
 		// Prepare the necessary data structures
 		let bbox = block.get_global_bbox();
-		println!("bbox {bbox:?}");
+
 		let mut tile_index = TileIndex::new_empty(bbox.count_tiles() as usize);
 		let mut tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
-
-		// Initialize mutexes for shared data structures
-		//let mutex_progress = &Mutex::new(progress);
-		//let mutex_writer = &Mutex::new(&mut self.writer);
-		//let mutex_tile_index = &Mutex::new(&mut tile_index);
-		//let mutex_tile_hash_lookup = &Mutex::new(tile_hash_lookup);
 
 		// Create the tile converter and set parameters
 		let tile_converter = self.config.get_tile_recompressor();
 
-		// Acquire locks for shared data structures
-		//let mut secured_tile_hash_lookup = mutex_tile_hash_lookup.lock()?;
-		//let mut secured_tile_index = mutex_tile_index.lock()?;
-		//let mut secured_writer = mutex_writer.lock()?;
-
 		// Get the tile stream
-		println!("A");
 		let mut tile_stream: TileStream = reader.get_bbox_tile_iter(&bbox).await;
-
-		//println!("B");
-		//vec.sort_by_cached_key(|(coord, _blob)| coord.get_sort_index());
-		//println!("C");
 
 		// Compress the blobs if necessary
 		if !tile_converter.is_empty() {
@@ -175,7 +159,6 @@ impl TileConverter {
 			i += 1;
 
 			let (coord, blob) = entry;
-			//println!("coord {coord:?}");
 			//vec = tile_converter.process_vec(vec); !!!!!
 			//vec = tile_converter.process_vec(vec); !!!!!
 			//vec = tile_converter.process_vec(vec); !!!!!

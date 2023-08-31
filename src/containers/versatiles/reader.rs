@@ -162,7 +162,6 @@ impl TileReaderTrait for TileReader {
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
 		let mut outer_bbox: TileBBox = bbox.clone();
-		//println!("outer_bbox {outer_bbox:?}");
 
 		if self.get_parameters().unwrap().get_swap_xy() {
 			outer_bbox.swap_xy();
@@ -173,10 +172,6 @@ impl TileReaderTrait for TileReader {
 		};
 
 		let block_coords: Vec<TileCoord3> = outer_bbox.clone().scale_down(256).iter_coords().collect();
-		//println!("outer_bbox {outer_bbox:?}");
-		//println!("block_coords {block_coords:?}");
-
-		println!("fetch index");
 
 		let self_mutex = Arc::new(Mutex::new(self));
 
@@ -200,9 +195,6 @@ impl TileReaderTrait for TileReader {
 					let mut tiles_bbox = outer_bbox.clone();
 					tiles_bbox.substract_coord2(&block.get_coord_offset());
 					tiles_bbox.intersect_bbox(&block_tiles_bbox);
-					//println!("outer_bbox {outer_bbox:?}");
-					//println!("block_tiles_bbox {block_tiles_bbox:?}");
-					//println!("tiles_bbox {tiles_bbox:?}");
 
 					// Retrieve the tile index from cache or read from the reader
 					let tile_index: Arc<TileIndex> = myself.get_block_tile_index_cached(&block).await;
@@ -216,7 +208,6 @@ impl TileReaderTrait for TileReader {
 						.collect();
 
 					tile_ranges.sort_by_key(|e| e.1.offset);
-					//println!("tile_ranges {tile_ranges:?}");
 
 					let mut chunks: Vec<Vec<(TileCoord3, ByteRange)>> = Vec::new();
 					let mut chunk: Vec<(TileCoord3, ByteRange)> = Vec::new();
@@ -251,11 +242,6 @@ impl TileReaderTrait for TileReader {
 			.collect()
 			.await;
 
-		//println!("chunks {chunks:?}");
-		println!("Index fetched");
-
-		//let chunk_iterator: &dyn Iterator<Item = Vec<(TileCoord3, ByteRange)>> = &chunks.into_iter().flatten();
-
 		Box::pin(stream! {
 			let mut myself = self_mutex.lock().await;
 			for  chunk in chunks.into_iter().flatten() {
@@ -265,9 +251,7 @@ impl TileReaderTrait for TileReader {
 				let end = last.offset + last.length;
 				let chunk_range = ByteRange::new(offset, end - offset);
 
-				println!("read_range start {chunk_range:?}, tiles: {}", chunk.len());
 				let big_blob = myself.reader.read_range(&chunk_range).await.unwrap();
-				println!("read_range finished");
 
 				for (coord, range) in chunk {
 					let start = range.offset - offset;
