@@ -88,7 +88,7 @@ impl TileServer {
 		let mut app = Router::new().route("/status", get(|| async { "ready!" }));
 
 		app = self.add_tile_sources_to_app(app);
-		app = self.add_api_to_app(app)?;
+		app = self.add_api_to_app(app).await?;
 		app = self.add_static_sources_to_app(app);
 
 		let addr = format!("{}:{}", self.ip, self.port);
@@ -186,10 +186,10 @@ impl TileServer {
 		}
 	}
 
-	fn add_api_to_app(&self, app: Router) -> Result<Router> {
+	async fn add_api_to_app(&self, app: Router) -> Result<Router> {
 		let mut tile_sources_json_lines: Vec<String> = Vec::new();
 		for tile_source in self.tile_sources.iter() {
-			let source = tile_source.source.blocking_lock();
+			let source = tile_source.source.lock().await;
 			tile_sources_json_lines.push(format!(
 				"{{ \"url\":\"{}\", \"name\":\"{}\", \"info\":{} }}",
 				tile_source.prefix,
@@ -213,14 +213,16 @@ impl TileServer {
 		Ok(app.merge(api_app))
 	}
 
-	pub fn iter_url_mapping(&self) -> impl Iterator<Item = (String, String)> + '_ {
-		self.tile_sources.iter().map(|tile_source| {
-			let source = tile_source.source.blocking_lock();
-			(
+	pub async fn get_url_mapping(&self) -> Vec<(String, String)> {
+		let mut result = Vec::new();
+		for tile_source in self.tile_sources.iter() {
+			let source = tile_source.source.lock().await;
+			result.push((
 				tile_source.prefix.to_owned(),
 				source.get_name().unwrap_or(String::from("???")),
-			)
-		})
+			))
+		}
+		result
 	}
 }
 
@@ -431,15 +433,15 @@ mod tests {
 		assert_eq!(server.static_sources.len(), 1);
 	}
 
-	#[test]
-	fn tile_server_iter_url_mapping() {
+	#[tokio::test]
+	async fn tile_server_iter_url_mapping() {
 		let mut server = TileServer::new(IP, PORT, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
 		let source = TileContainer::from(reader).unwrap();
 		server.add_tile_source("cheese", source).unwrap();
 
-		let mappings: Vec<(String, String)> = server.iter_url_mapping().collect();
+		let mappings: Vec<(String, String)> = server.get_url_mapping().await;
 		assert_eq!(mappings.len(), 1);
 		assert_eq!(mappings[0].0, "/cheese/");
 		assert_eq!(mappings[0].1, "dummy name");

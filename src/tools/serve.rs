@@ -105,7 +105,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 		}
 	}
 
-	let mut list: Vec<(String, String)> = server.iter_url_mapping().collect();
+	let mut list: Vec<(String, String)> = server.get_url_mapping().await;
 	list.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 	list
 		.iter()
