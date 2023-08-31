@@ -1,11 +1,11 @@
 // Import necessary modules and traits
 use super::{types::*, DataWriterFile, DataWriterTrait};
 use crate::{
-	containers::{TileConverterBox, TileConverterTrait, TileIterator, TileReaderBox},
+	containers::{TileConverterBox, TileConverterTrait, TileReaderBox, TileStream},
 	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig, TileCoord2},
 };
 use async_trait::async_trait;
-use futures::executor::block_on;
+use futures_util::StreamExt;
 use log::debug;
 use std::collections::HashMap;
 
@@ -53,8 +53,8 @@ impl TileConverterTrait for TileConverter {
 		self.writer.append(&blob)?;
 
 		// Write metadata and blocks
-		header.meta_range = self.write_meta(reader)?;
-		header.blocks_range = self.write_blocks(reader)?;
+		header.meta_range = self.write_meta(reader).await?;
+		header.blocks_range = self.write_blocks(reader).await?;
 
 		// Update the header and write it
 		let blob: Blob = header.to_blob()?;
@@ -67,15 +67,15 @@ impl TileConverterTrait for TileConverter {
 // Implement additional methods for TileConverter
 impl TileConverter {
 	// Write metadata
-	fn write_meta(&mut self, reader: &TileReaderBox) -> Result<ByteRange> {
-		let meta = block_on(reader.get_meta())?;
+	async fn write_meta(&mut self, reader: &TileReaderBox) -> Result<ByteRange> {
+		let meta = reader.get_meta().await?;
 		let compressed = self.config.get_compressor().process_blob(meta)?;
 
 		self.writer.append(&compressed)
 	}
 
 	// Write blocks
-	fn write_blocks(&mut self, reader: &mut TileReaderBox) -> Result<ByteRange> {
+	async fn write_blocks(&mut self, reader: &mut TileReaderBox) -> Result<ByteRange> {
 		let pyramid = self.config.get_bbox_pyramid();
 		if pyramid.is_empty() {
 			return Ok(ByteRange::empty());
@@ -106,7 +106,7 @@ impl TileConverter {
 
 		// Iterate through blocks and write them
 		for mut block in blocks.into_iter() {
-			let (tiles_range, index_range) = self.write_block(&block, reader, &mut progress)?;
+			let (tiles_range, index_range) = self.write_block(&block, reader, &mut progress).await?;
 
 			if tiles_range.length + index_range.length == 0 {
 				// Block is empty, continue with the next block
@@ -126,7 +126,7 @@ impl TileConverter {
 	}
 
 	// Write a single block
-	fn write_block<'a>(
+	async fn write_block<'a>(
 		&mut self, block: &BlockDefinition, reader: &'a mut TileReaderBox, progress: &mut ProgressBar,
 	) -> Result<(ByteRange, ByteRange)> {
 		// Log the start of the block
@@ -157,7 +157,7 @@ impl TileConverter {
 
 		// Get the tile stream
 		println!("A");
-		let tile_iterator: TileIterator = reader.get_bbox_tile_iter(&bbox);
+		let mut tile_stream: TileStream = reader.get_bbox_tile_iter(&bbox).await;
 
 		//println!("B");
 		//vec.sort_by_cached_key(|(coord, _blob)| coord.get_sort_index());
@@ -171,7 +171,7 @@ impl TileConverter {
 		let mut i: u64 = 0;
 
 		// Iterate through the blobs and process them
-		for entry in tile_iterator {
+		while let Some(entry) = tile_stream.next().await {
 			i += 1;
 
 			let (coord, blob) = entry;

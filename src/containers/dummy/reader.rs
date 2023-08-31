@@ -82,19 +82,16 @@ mod tests {
 		containers::dummy::{converter::ConverterProfile, reader::ReaderProfile, TileConverter, TileReader},
 		shared::{Blob, Result, TileCoord3, TileReaderParameters},
 	};
-	use futures::executor::block_on;
 
-	#[test]
-	fn reader() -> Result<()> {
+	#[tokio::test]
+	async fn reader() -> Result<()> {
 		let mut reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
 		assert_eq!(reader.get_container_name()?, "dummy container");
 		assert_eq!(reader.get_name()?, "dummy name");
 		assert_ne!(reader.get_parameters()?, &TileReaderParameters::new_dummy());
 		assert_ne!(reader.get_parameters_mut()?, &mut TileReaderParameters::new_dummy());
-		assert_eq!(block_on(reader.get_meta())?, Blob::from("dummy meta data"));
-		let blob = block_on(reader.get_tile_data(&TileCoord3::new(0, 0, 0)))
-			.unwrap()
-			.as_vec();
+		assert_eq!(reader.get_meta().await?, Blob::from("dummy meta data"));
+		let blob = reader.get_tile_data(&TileCoord3::new(0, 0, 0)).await.unwrap().as_vec();
 		assert_eq!(&blob[0..4], b"\x89PNG");
 		Ok(())
 	}

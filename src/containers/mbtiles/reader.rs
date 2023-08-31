@@ -1,5 +1,5 @@
 use crate::{
-	containers::{TileIterator, TileReaderBox, TileReaderTrait},
+	containers::{TileReaderBox, TileReaderTrait, TileStream},
 	create_error,
 	shared::*,
 };
@@ -241,7 +241,7 @@ impl TileReaderTrait for TileReader {
 
 		Ok(Blob::from(blob))
 	}
-	fn get_bbox_tile_iter<'a>(&'a mut self, bbox: &'a TileBBox) -> TileIterator {
+	async fn get_bbox_tile_iter<'a>(&'a mut self, bbox: &'a TileBBox) -> TileStream {
 		let max = bbox.get_max();
 		let x_min = bbox.get_x_min();
 		let x_max = bbox.get_x_max();
@@ -268,7 +268,7 @@ impl TileReaderTrait for TileReader {
 			})
 			.collect();
 
-		Box::new(vec.into_iter())
+		Box::pin(futures_util::stream::iter(vec))
 	}
 	fn get_name(&self) -> Result<&str> {
 		Ok(&self.name)

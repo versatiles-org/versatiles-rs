@@ -1,7 +1,7 @@
 // Import necessary modules and traits
 use super::{new_data_reader, types::*, DataReaderTrait};
 use crate::{
-	containers::{TileIterator, TileReaderBox, TileReaderTrait},
+	containers::{TileReaderBox, TileReaderTrait, TileStream},
 	create_error,
 	shared::{
 		Blob, DataConverter, ProgressBar, Result, StatusImagePyramide, TileBBox, TileCoord2, TileCoord3,
@@ -9,10 +9,10 @@ use crate::{
 	},
 };
 use async_trait::async_trait;
-use futures::executor::block_on;
+use futures_util::StreamExt;
 use itertools::Itertools;
 use log::debug;
-use std::{collections::HashMap, fmt::Debug, ops::Shr, path::Path, sync::Arc, vec::IntoIter};
+use std::{collections::HashMap, fmt::Debug, ops::Shr, path::Path, sync::Arc};
 
 // Define the TileReader struct
 pub struct TileReader {
@@ -155,7 +155,7 @@ impl TileReaderTrait for TileReader {
 		self.reader.read_range(&tile_range).await
 	}
 
-	fn get_bbox_tile_iter<'a>(&'a mut self, bbox: &'a TileBBox) -> TileIterator<'a> {
+	async fn get_bbox_tile_iter<'a>(&'a mut self, bbox: &'a TileBBox) -> TileStream<'a> {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
@@ -176,9 +176,8 @@ impl TileReaderTrait for TileReader {
 
 		println!("fetch index");
 
-		let chunks: Vec<Vec<(TileCoord3, ByteRange)>> = block_coords
-			.into_iter()
-			.flat_map(|block_coord: TileCoord3| -> IntoIter<Vec<(TileCoord3, ByteRange)>> {
+		let chunks: Vec<Vec<Vec<(TileCoord3, ByteRange)>>> = futures_util::stream::iter(block_coords)
+			.then(|block_coord: TileCoord3| async {
 				// Get the block using the block coordinate
 
 				let block_option = self.block_index.get_block(&block_coord);
@@ -198,7 +197,7 @@ impl TileReaderTrait for TileReader {
 				//println!("tiles_bbox {tiles_bbox:?}");
 
 				// Retrieve the tile index from cache or read from the reader
-				let tile_index: Arc<TileIndex> = block_on(self.get_block_tile_index_cached(&block));
+				let tile_index: Arc<TileIndex> = self.get_block_tile_index_cached(&block).await;
 
 				//let tile_range: &ByteRange = tile_index.get(tile_id);
 				let mut tile_ranges: Vec<(TileCoord3, ByteRange)> = tile_index
@@ -243,41 +242,46 @@ impl TileReaderTrait for TileReader {
 					chunks.push(chunk);
 				}
 
-				chunks.into_iter()
+				chunks
 			})
-			.collect();
+			.collect()
+			.await;
 
 		//println!("chunks {chunks:?}");
 		println!("Index fetched");
 
 		let reader = &mut self.reader;
 
-		let tiles = chunks.into_iter().flat_map(move |chunk| {
-			let first = chunk.first().unwrap().1;
-			let last = chunk.last().unwrap().1;
-			let offset = first.offset;
-			let end = last.offset + last.length;
-			let chunk_range = ByteRange::new(offset, end - offset);
+		let chunk_iterator: &dyn Iterator<Item = Vec<(TileCoord3, ByteRange)>> = &chunks.into_iter().flatten();
 
-			println!("read_range start {chunk_range:?}, tiles: {}", chunk.len());
-			let big_blob = block_on(reader.read_range(&chunk_range)).unwrap();
-			println!("read_range finished");
+		let tile_stream = futures_util::stream::iter(chunk_iterator.into_iter())
+			.then(move |chunk| async {
+				let first = chunk.first().unwrap().1;
+				let last = chunk.last().unwrap().1;
+				let offset = first.offset;
+				let end = last.offset + last.length;
+				let chunk_range = ByteRange::new(offset, end - offset);
 
-			let result: Vec<(TileCoord3, Blob)> = chunk
-				.into_iter()
-				.map(|(coord, range)| {
-					let start = range.offset - offset;
-					let end = start + range.length;
-					let tile_range = (start as usize)..(end as usize);
-					let blob = Blob::from(big_blob.get_range(tile_range));
-					(coord, blob)
-				})
-				.collect();
+				println!("read_range start {chunk_range:?}, tiles: {}", chunk.len());
+				let big_blob = reader.read_range(&chunk_range).await.unwrap();
+				println!("read_range finished");
 
-			return result.into_iter();
-		});
+				let result: Vec<(TileCoord3, Blob)> = chunk
+					.into_iter()
+					.map(|(coord, range)| {
+						let start = range.offset - offset;
+						let end = start + range.length;
+						let tile_range = (start as usize)..(end as usize);
+						let blob = Blob::from(big_blob.get_range(tile_range));
+						(coord, blob)
+					})
+					.collect();
 
-		return Box::new(tiles);
+				return futures_util::stream::iter(result);
+			})
+			.flatten();
+
+		return Box::pin(tile_stream);
 	}
 
 	// Get the name of the reader

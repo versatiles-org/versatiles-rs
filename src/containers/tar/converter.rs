@@ -3,6 +3,7 @@ use crate::{
 	shared::{compress, Compression, ProgressBar, Result, TileConverterConfig, TileFormat},
 };
 use async_trait::async_trait;
+use futures_util::StreamExt;
 use log::trace;
 use std::{
 	fs::File,
@@ -79,8 +80,8 @@ impl TileConverterTrait for TileConverter {
 		let mutex_builder = &Mutex::new(&mut self.builder);
 
 		for bbox in bbox_pyramid.iter_levels() {
-			let iterator = reader.get_bbox_tile_iter(bbox);
-			for entry in iterator {
+			let stream = reader.get_bbox_tile_iter(bbox).await;
+			while let Some(entry) = stream.next().await {
 				let (coord, blob) = entry;
 				mutex_bar.lock().unwrap().inc(1);
 
