@@ -145,6 +145,25 @@ mod tests {
 			"tmp/berlin1.versatiles",
 		])
 		.unwrap();
+		run_command(vec![
+			"versatiles",
+			"convert",
+			"tmp/berlin1.versatiles",
+			"tmp/berlin2.versatiles",
+		])
+		.unwrap();
+		run_command(vec![
+			"versatiles",
+			"convert",
+			"--min-zoom=1",
+			"--max-zoom=13",
+			"--bbox=13.38,52.46,13.43,52.49",
+			"--flip-y",
+			"--force-recompress",
+			"tmp/berlin2.versatiles",
+			"tmp/berlin3.versatiles",
+		])
+		.unwrap();
 	}
 
 	#[test]
@@ -153,12 +172,9 @@ mod tests {
 		run_command(vec![
 			"versatiles",
 			"convert",
-			"--min-zoom",
-			"1",
-			"--max-zoom",
-			"3",
-			"--bbox",
-			"-85,-180,85,180",
+			"--min-zoom=1",
+			"--max-zoom=3",
+			"--bbox=-85,-180,85,180",
 			"--flip-y",
 			"--force-recompress",
 			"https://download.versatiles.org/planet-latest.versatiles",
@@ -173,10 +189,8 @@ mod tests {
 		run_command(vec![
 			"versatiles",
 			"convert",
-			"--min-zoom",
-			"12",
-			"--bbox",
-			"9.14,48.76,9.19,48.79",
+			"--min-zoom=12",
+			"--bbox=9.14,48.76,9.19,48.79",
 			"--flip-y",
 			"https://download.versatiles.org/planet-latest.versatiles",
 			"tmp/stuttgart.versatiles",
