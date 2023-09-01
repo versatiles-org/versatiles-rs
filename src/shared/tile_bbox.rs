@@ -268,6 +268,13 @@ impl TileBBox {
 			&& (coord.get_y() >= self.y_min)
 			&& (coord.get_y() <= self.y_max)
 	}
+	pub fn contains3(&self, coord: &TileCoord3) -> bool {
+		(coord.get_z() == self.level)
+			&& (coord.get_x() >= self.x_min)
+			&& (coord.get_x() <= self.x_max)
+			&& (coord.get_y() >= self.y_min)
+			&& (coord.get_y() <= self.y_max)
+	}
 	pub fn get_tile_index(&self, coord: &TileCoord2) -> usize {
 		if !self.contains(coord) {
 			panic!("coord '{coord:?}' is not in '{self:?}'")
@@ -297,18 +304,20 @@ impl TileBBox {
 
 		[p_min[0], p_min[1], p_max[0], p_max[1]]
 	}
-	pub fn swap_xy(&mut self) {
+	pub fn swap_xy(mut self) -> Self {
 		if !self.is_empty() {
 			swap(&mut self.x_min, &mut self.y_min);
 			swap(&mut self.x_max, &mut self.y_max);
 		}
+		self
 	}
-	pub fn flip_y(&mut self) {
+	pub fn flip_y(mut self) -> Self {
 		if !self.is_empty() {
 			self.y_min = self.max - self.y_min;
 			self.y_max = self.max - self.y_max;
 			swap(&mut self.y_min, &mut self.y_max);
 		}
+		self
 	}
 }
 
@@ -489,6 +498,7 @@ mod tests {
 		assert_eq!(vec[0], TileBBox::new(10, 0, 1000, 99, 1001));
 		assert_eq!(vec[1], TileBBox::new(10, 0, 1002, 99, 1003));
 	}
+
 	#[test]
 
 	fn add_border() {
@@ -514,5 +524,22 @@ mod tests {
 		let mut empty_bbox = TileBBox::new_empty(8);
 		empty_bbox.add_border(1, 2, 3, 4);
 		assert_eq!(empty_bbox, TileBBox::new_empty(8));
+	}
+
+	#[test]
+
+	fn flip_y() {
+		assert_eq!(TileBBox::new(1, 0, 0, 1, 1).flip_y(), TileBBox::new(1, 0, 0, 1, 1));
+		assert_eq!(TileBBox::new(2, 0, 0, 1, 1).flip_y(), TileBBox::new(2, 0, 2, 1, 3));
+		assert_eq!(TileBBox::new(3, 0, 0, 1, 1).flip_y(), TileBBox::new(3, 0, 6, 1, 7));
+		assert_eq!(
+			TileBBox::new(9, 10, 0, 10, 511).flip_y(),
+			TileBBox::new(9, 10, 0, 10, 511)
+		);
+		assert_eq!(
+			TileBBox::new(9, 0, 10, 511, 10).flip_y(),
+			TileBBox::new(9, 0, 501, 511, 501)
+		);
+		assert_ne!(TileBBox::new(2, 0, 0, 1, 1).flip_y(), TileBBox::new(2, 0, 6, 1, 7));
 	}
 }

@@ -44,10 +44,14 @@ impl TileBBoxPyramid {
 		self.level_bbox[level as usize] = bbox;
 	}
 	pub fn swap_xy(&mut self) {
-		self.level_bbox.iter_mut().for_each(|b| b.swap_xy())
+		self.level_bbox.iter_mut().for_each(|b| {
+			b.swap_xy();
+		});
 	}
 	pub fn flip_y(&mut self) {
-		self.level_bbox.iter_mut().for_each(|b| b.flip_y())
+		self.level_bbox.iter_mut().for_each(|b| {
+			b.flip_y();
+		});
 	}
 	pub fn include_coord(&mut self, coord: &TileCoord3) {
 		self.level_bbox[coord.get_z() as usize].include_tile(coord.get_x(), coord.get_y());

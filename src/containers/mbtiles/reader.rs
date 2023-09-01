@@ -218,7 +218,7 @@ impl TileReaderTrait for TileReader {
 	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Result<Blob> {
 		trace!("read 1 tile {:?}", coord_in);
 
-		let mut coord: TileCoord3 = *coord_in;
+		let coord: TileCoord3 = *coord_in;
 
 		if self.get_parameters()?.get_swap_xy() {
 			coord.swap_xy();

@@ -110,7 +110,7 @@ impl TileReaderTrait for TileReader {
 
 	// Get tile data for a given coordinate
 	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Result<Blob> {
-		let mut coord: TileCoord3 = *coord_in;
+		let coord: TileCoord3 = *coord_in;
 
 		if self.get_parameters()?.get_swap_xy() {
 			coord.swap_xy();
@@ -161,13 +161,16 @@ impl TileReaderTrait for TileReader {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
-		let mut outer_bbox: TileBBox = *bbox;
+		let outer_bbox: TileBBox = *bbox;
 
-		if self.get_parameters().unwrap().get_swap_xy() {
+		let swap_xy: bool = self.get_parameters().unwrap().get_swap_xy();
+		let flip_y: bool = self.get_parameters().unwrap().get_flip_y();
+
+		if swap_xy {
 			outer_bbox.swap_xy();
 		};
 
-		if self.get_parameters().unwrap().get_flip_y() {
+		if flip_y {
 			outer_bbox.flip_y();
 		};
 
@@ -244,11 +247,13 @@ impl TileReaderTrait for TileReader {
 
 		Box::pin(stream! {
 			let mut myself = self_mutex.lock().await;
-			for  chunk in chunks.into_iter().flatten() {
+			for chunk in chunks.into_iter().flatten() {
 				let first = chunk.first().unwrap().1;
 				let last = chunk.last().unwrap().1;
+
 				let offset = first.offset;
 				let end = last.offset + last.length;
+
 				let chunk_range = ByteRange::new(offset, end - offset);
 
 				let big_blob = myself.reader.read_range(&chunk_range).await.unwrap();
@@ -257,9 +262,21 @@ impl TileReaderTrait for TileReader {
 					let start = range.offset - offset;
 					let end = start + range.length;
 					let tile_range = (start as usize)..(end as usize);
-					let blob = Blob::from(big_blob.get_range(tile_range));
-					yield (coord, blob)
 
+					let blob = Blob::from(big_blob.get_range(tile_range));
+
+
+					if flip_y {
+						coord.flip_y();
+					}
+
+					if swap_xy {
+						coord.swap_xy();
+					}
+
+					assert!(outer_bbox.contains3(&coord), "outer_bbox {outer_bbox:?} does not contain {coord:?}");
+
+					yield (coord, blob)
 				}
 			}
 		})
