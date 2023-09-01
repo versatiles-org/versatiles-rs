@@ -148,7 +148,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_remote() {
+	fn test_remote1() {
 		fs::create_dir("tmp/").unwrap_or_default();
 		run_command(vec![
 			"versatiles",
@@ -162,7 +162,24 @@ mod tests {
 			"--flip-y",
 			"--force-recompress",
 			"https://download.versatiles.org/planet-latest.versatiles",
-			"tmp/berlin2.versatiles",
+			"tmp/planet2.versatiles",
+		])
+		.unwrap();
+	}
+
+	#[test]
+	fn test_remote2() {
+		fs::create_dir("tmp/").unwrap_or_default();
+		run_command(vec![
+			"versatiles",
+			"convert",
+			"--min-zoom",
+			"12",
+			"--bbox",
+			"9.14,48.76,9.19,48.79",
+			"--flip-y",
+			"https://download.versatiles.org/planet-latest.versatiles",
+			"tmp/stuttgart.versatiles",
 		])
 		.unwrap();
 	}
