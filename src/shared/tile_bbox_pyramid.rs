@@ -112,6 +112,12 @@ impl fmt::Debug for TileBBoxPyramid {
 	}
 }
 
+impl fmt::Display for TileBBoxPyramid {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_list().entries(self.iter_levels()).finish()
+	}
+}
+
 impl PartialEq for TileBBoxPyramid {
 	fn eq(&self, other: &Self) -> bool {
 		for i in 0..MAX_ZOOM_LEVEL {

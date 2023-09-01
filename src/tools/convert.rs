@@ -148,6 +148,7 @@ mod tests {
 		run_command(vec![
 			"versatiles",
 			"convert",
+			"--flip-y",
 			"tmp/berlin1.versatiles",
 			"tmp/berlin2.versatiles",
 		])
