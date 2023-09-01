@@ -58,13 +58,16 @@ impl TileConverterTrait for TileConverter {
 
 		// Convert the header to a blob and write it
 		let blob: Blob = header.to_blob()?;
+		trace!("write header");
 		self.writer.append(&blob)?;
 
-		// Write metadata and blocks
+		trace!("write meta");
 		header.meta_range = self.write_meta(reader).await?;
+
+		trace!("write blocks");
 		header.blocks_range = self.write_blocks(reader).await?;
 
-		// Update the header and write it
+		trace!("update header");
 		let blob: Blob = header.to_blob()?;
 		self.writer.write_start(&blob)?;
 
@@ -122,7 +125,8 @@ impl TileConverter {
 			}
 
 			// Update the block with the tile and index range and add it to the block index
-			block = block.with_tiles_range(tiles_range).with_index_range(index_range);
+			block.set_tiles_range(tiles_range);
+			block.set_index_range(index_range);
 			block_index.add_block(block);
 		}
 

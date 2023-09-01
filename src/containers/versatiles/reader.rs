@@ -12,7 +12,7 @@ use async_stream::stream;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use itertools::Itertools;
-use log::debug;
+use log::{debug, trace};
 use std::{collections::HashMap, fmt::Debug, ops::Shr, path::Path, sync::Arc};
 use tokio::sync::Mutex;
 
@@ -110,7 +110,7 @@ impl TileReaderTrait for TileReader {
 
 	// Get tile data for a given coordinate
 	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Result<Blob> {
-		let coord: TileCoord3 = *coord_in;
+		let mut coord: TileCoord3 = *coord_in;
 
 		if self.get_parameters()?.get_swap_xy() {
 			coord.swap_xy();
@@ -161,7 +161,7 @@ impl TileReaderTrait for TileReader {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
-		let outer_bbox: TileBBox = *bbox;
+		let mut outer_bbox: TileBBox = *bbox;
 
 		let swap_xy: bool = self.get_parameters().unwrap().get_swap_xy();
 		let flip_y: bool = self.get_parameters().unwrap().get_flip_y();
@@ -182,32 +182,44 @@ impl TileReaderTrait for TileReader {
 			.then(|block_coord: TileCoord3| {
 				let self_mutex = self_mutex.clone();
 				async move {
-					// Get the block using the block coordinate
-
 					let mut myself = self_mutex.lock().await;
 
+					// Get the block using the block coordinate
 					let block_option = myself.block_index.get_block(&block_coord);
 					if block_option.is_none() {
 						panic!("block <{block_coord:#?}> does not exist");
 					}
 
-					// Get the block and its bounding box
+					// Get the block
 					let block: BlockDefinition = *block_option.unwrap();
-					let block_tiles_bbox = block.get_global_bbox();
+					trace!("block {block:?}");
 
-					let mut tiles_bbox = outer_bbox;
-					tiles_bbox.substract_coord2(&block.get_coord_offset());
-					tiles_bbox.intersect_bbox(&block_tiles_bbox);
+					// Get the bounding box of all tiles defined in this block
+					let tiles_bbox_block = block.get_global_bbox();
+					trace!("tiles_bbox_block {tiles_bbox_block:?}");
+
+					// Get the bounding box of all tiles defined in this block
+					let mut tiles_bbox_used = outer_bbox.clone();
+					tiles_bbox_used.intersect_bbox(&tiles_bbox_block);
+					trace!("tiles_bbox_used {tiles_bbox_used:?}");
+
+					println!(
+						"{} {} {}",
+						outer_bbox.get_level(),
+						tiles_bbox_block.get_level(),
+						tiles_bbox_used.get_level()
+					);
 
 					// Retrieve the tile index from cache or read from the reader
 					let tile_index: Arc<TileIndex> = myself.get_block_tile_index_cached(&block).await;
+					trace!("tile_index {tile_index:?}");
 
 					//let tile_range: &ByteRange = tile_index.get(tile_id);
 					let mut tile_ranges: Vec<(TileCoord3, ByteRange)> = tile_index
 						.iter()
 						.enumerate()
-						.map(|(index, range)| (block_tiles_bbox.get_coord3_by_index(index as u32), *range))
-						.filter(|(coord, range)| tiles_bbox.contains(&coord.as_coord2()) && (range.length > 0))
+						.map(|(index, range)| (tiles_bbox_block.get_coord3_by_index(index as u32), *range))
+						.filter(|(coord, range)| tiles_bbox_used.contains3(coord) && (range.length > 0))
 						.collect();
 
 					tile_ranges.sort_by_key(|e| e.1.offset);
@@ -258,7 +270,7 @@ impl TileReaderTrait for TileReader {
 
 				let big_blob = myself.reader.read_range(&chunk_range).await.unwrap();
 
-				for (coord, range) in chunk {
+				for (mut coord, range) in chunk {
 					let start = range.offset - offset;
 					let end = start + range.length;
 					let tile_range = (start as usize)..(end as usize);

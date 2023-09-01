@@ -304,20 +304,18 @@ impl TileBBox {
 
 		[p_min[0], p_min[1], p_max[0], p_max[1]]
 	}
-	pub fn swap_xy(mut self) -> Self {
+	pub fn swap_xy(&mut self) {
 		if !self.is_empty() {
 			swap(&mut self.x_min, &mut self.y_min);
 			swap(&mut self.x_max, &mut self.y_max);
 		}
-		self
 	}
-	pub fn flip_y(mut self) -> Self {
+	pub fn flip_y(&mut self) {
 		if !self.is_empty() {
 			self.y_min = self.max - self.y_min;
 			self.y_max = self.max - self.y_max;
 			swap(&mut self.y_min, &mut self.y_max);
 		}
-		self
 	}
 }
 
@@ -529,17 +527,17 @@ mod tests {
 	#[test]
 
 	fn flip_y() {
-		assert_eq!(TileBBox::new(1, 0, 0, 1, 1).flip_y(), TileBBox::new(1, 0, 0, 1, 1));
-		assert_eq!(TileBBox::new(2, 0, 0, 1, 1).flip_y(), TileBBox::new(2, 0, 2, 1, 3));
-		assert_eq!(TileBBox::new(3, 0, 0, 1, 1).flip_y(), TileBBox::new(3, 0, 6, 1, 7));
-		assert_eq!(
-			TileBBox::new(9, 10, 0, 10, 511).flip_y(),
-			TileBBox::new(9, 10, 0, 10, 511)
-		);
-		assert_eq!(
-			TileBBox::new(9, 0, 10, 511, 10).flip_y(),
-			TileBBox::new(9, 0, 501, 511, 501)
-		);
-		assert_ne!(TileBBox::new(2, 0, 0, 1, 1).flip_y(), TileBBox::new(2, 0, 6, 1, 7));
+		let test = |a, b, c, d, e| -> TileBBox {
+			let mut t = TileBBox::new(a, b, c, d, e);
+			t.flip_y();
+			t
+		};
+
+		assert_eq!(test(1, 0, 0, 1, 1), TileBBox::new(1, 0, 0, 1, 1));
+		assert_eq!(test(2, 0, 0, 1, 1), TileBBox::new(2, 0, 2, 1, 3));
+		assert_eq!(test(3, 0, 0, 1, 1), TileBBox::new(3, 0, 6, 1, 7));
+		assert_eq!(test(9, 10, 0, 10, 511), TileBBox::new(9, 10, 0, 10, 511));
+		assert_eq!(test(9, 0, 10, 511, 10), TileBBox::new(9, 0, 501, 511, 501));
+		assert_ne!(test(2, 0, 0, 1, 1), TileBBox::new(2, 0, 6, 1, 7));
 	}
 }

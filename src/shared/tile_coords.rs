@@ -86,14 +86,12 @@ impl TileCoord3 {
 	pub fn get_z(&self) -> u8 {
 		self.z
 	}
-	pub fn flip_y(mut self) -> Self {
+	pub fn flip_y(&mut self) {
 		let max_index = 2u32.pow(self.z as u32) - 1;
 		self.y = max_index - self.y;
-		self
 	}
-	pub fn swap_xy(mut self) -> Self {
+	pub fn swap_xy(&mut self) {
 		swap(&mut self.x, &mut self.y);
-		self
 	}
 	pub fn as_geo(&self) -> [f32; 2] {
 		let zoom: f32 = 2.0f32.powi(self.z as i32);
@@ -165,7 +163,9 @@ mod tests {
 
 	#[test]
 	fn flip_y() {
-		assert_eq!(TileCoord3::new(1, 2, 3).flip_y(), TileCoord3::new(1, 5, 3));
+		let mut c = TileCoord3::new(1, 2, 3);
+		c.flip_y();
+		assert_eq!(c, TileCoord3::new(1, 5, 3));
 	}
 
 	#[test]

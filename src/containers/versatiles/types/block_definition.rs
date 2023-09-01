@@ -54,14 +54,12 @@ impl BlockDefinition {
 		})
 	}
 
-	pub fn with_tiles_range(mut self, range: ByteRange) -> Self {
+	pub fn set_tiles_range(&mut self, range: ByteRange) {
 		self.tiles_range = range;
-		self
 	}
 
-	pub fn with_index_range(mut self, range: ByteRange) -> Self {
+	pub fn set_index_range(&mut self, range: ByteRange) {
 		self.index_range = range;
-		self
 	}
 
 	pub fn count_tiles(&self) -> u64 {
@@ -125,6 +123,7 @@ impl BlockDefinition {
 		self.coord3
 	}
 
+	#[allow(dead_code)]
 	pub fn get_coord_offset(&self) -> TileCoord2 {
 		TileCoord2::new(self.coord3.get_x() * 256, self.coord3.get_y() * 256)
 	}
