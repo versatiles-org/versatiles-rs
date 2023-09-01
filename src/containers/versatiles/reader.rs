@@ -161,7 +161,7 @@ impl TileReaderTrait for TileReader {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
-		let mut outer_bbox: TileBBox = *bbox;
+		let mut outer_bbox: TileBBox = bbox.clone();
 
 		let swap_xy: bool = self.get_parameters().unwrap().get_swap_xy();
 		let flip_y: bool = self.get_parameters().unwrap().get_flip_y();
@@ -203,14 +203,10 @@ impl TileReaderTrait for TileReader {
 					tiles_bbox_used.intersect_bbox(&tiles_bbox_block);
 					trace!("tiles_bbox_used {tiles_bbox_used:?}");
 
-					println!(
-						"{} {} {}",
-						outer_bbox.get_level(),
-						tiles_bbox_block.get_level(),
-						tiles_bbox_used.get_level()
-					);
+					assert_eq!(outer_bbox.get_level(), tiles_bbox_block.get_level());
+					assert_eq!(outer_bbox.get_level(), tiles_bbox_used.get_level());
 
-					// Retrieve the tile index from cache or read from the reader
+					// Get the tile index of this block
 					let tile_index: Arc<TileIndex> = myself.get_block_tile_index_cached(&block).await;
 					trace!("tile_index {tile_index:?}");
 
@@ -286,7 +282,7 @@ impl TileReaderTrait for TileReader {
 						coord.swap_xy();
 					}
 
-					assert!(outer_bbox.contains3(&coord), "outer_bbox {outer_bbox:?} does not contain {coord:?}");
+					assert!(bbox.contains3(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
 
 					yield (coord, blob)
 				}

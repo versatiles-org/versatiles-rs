@@ -1,23 +1,35 @@
 use super::ByteRange;
 use crate::shared::{Result, TileBBox, TileCoord2, TileCoord3};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
-use std::{fmt, io::Cursor};
+use std::{fmt, io::Cursor, ops::Div};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct BlockDefinition {
-	coord3: TileCoord3,       // block offset, for level 14 it's between [0,0] and [63,63]
+	offset: TileCoord3,       // block offset, for level 14 it's between [0,0] and [63,63]
+	global_bbox: TileBBox,    // tile coverage, is usually [0,0,255,255]
 	tiles_coverage: TileBBox, // tile coverage, is usually [0,0,255,255]
 	tiles_range: ByteRange,
 	index_range: ByteRange,
 }
 
 impl BlockDefinition {
-	pub fn new(x: u32, y: u32, z: u8, tiles_coverage: TileBBox) -> Self {
-		if (tiles_coverage.get_x_max() > 255) || (tiles_coverage.get_y_max() > 255) {
-			panic!("tiles_coverage bbox out of bounds ({tiles_coverage:?})")
-		}
+	pub fn new(bbox: TileBBox) -> Self {
+		let x = bbox.get_x_min().div(256u32);
+		let y = bbox.get_y_min().div(256u32);
+		let z = bbox.get_level();
+		let global_bbox = bbox.clone();
+
+		let tiles_coverage = TileBBox::new(
+			z.min(8),
+			bbox.get_x_min() - x * 256,
+			bbox.get_y_min() - y * 256,
+			bbox.get_x_max() - x * 256,
+			bbox.get_y_max() - y * 256,
+		);
+
 		Self {
-			coord3: TileCoord3::new(x, y, z),
+			offset: TileCoord3::new(x, y, z),
+			global_bbox,
 			tiles_coverage,
 			tiles_range: ByteRange::empty(),
 			index_range: ByteRange::empty(),
@@ -31,13 +43,12 @@ impl BlockDefinition {
 		let x = cursor.read_u32::<BE>()?;
 		let y = cursor.read_u32::<BE>()?;
 
-		let tiles_bbox = {
-			let x_min = cursor.read_u8()? as u32;
-			let y_min = cursor.read_u8()? as u32;
-			let x_max = cursor.read_u8()? as u32;
-			let y_max = cursor.read_u8()? as u32;
-			TileBBox::new(z.min(8), x_min, y_min, x_max, y_max)
-		};
+		let x_min = cursor.read_u8()? as u32;
+		let y_min = cursor.read_u8()? as u32;
+		let x_max = cursor.read_u8()? as u32;
+		let y_max = cursor.read_u8()? as u32;
+
+		let tiles_bbox = TileBBox::new(z.min(8), x_min, y_min, x_max, y_max);
 
 		let offset = cursor.read_u64::<BE>()?;
 		let tiles_length = cursor.read_u64::<BE>()?;
@@ -46,8 +57,11 @@ impl BlockDefinition {
 		let tiles_range = ByteRange::new(offset, tiles_length);
 		let index_range = ByteRange::new(offset + tiles_length, index_length);
 
+		let global_bbox = TileBBox::new(z, x_min + x * 256, y_min + y * 256, x_max + x * 256, y_max + y * 256);
+
 		Ok(Self {
-			coord3: TileCoord3::new(x, y, z),
+			offset: TileCoord3::new(x, y, z),
+			global_bbox,
 			tiles_coverage: tiles_bbox,
 			tiles_range,
 			index_range,
@@ -68,9 +82,9 @@ impl BlockDefinition {
 
 	pub fn as_vec(&self) -> Result<Vec<u8>> {
 		let mut vec: Vec<u8> = Vec::with_capacity(33);
-		vec.write_u8(self.coord3.get_z())?;
-		vec.write_u32::<BE>(self.coord3.get_x())?;
-		vec.write_u32::<BE>(self.coord3.get_y())?;
+		vec.write_u8(self.offset.get_z())?;
+		vec.write_u32::<BE>(self.offset.get_x())?;
+		vec.write_u32::<BE>(self.offset.get_y())?;
 
 		vec.write_u8(self.tiles_coverage.get_x_min() as u8)?;
 		vec.write_u8(self.tiles_coverage.get_y_min() as u8)?;
@@ -91,7 +105,7 @@ impl BlockDefinition {
 	}
 
 	pub fn get_sort_index(&self) -> u64 {
-		self.coord3.get_sort_index()
+		self.offset.get_sort_index()
 	}
 
 	/// global bbox of the defined tiles, e.g. [4096,4096,4351,4351]
@@ -108,33 +122,33 @@ impl BlockDefinition {
 	}
 
 	pub fn get_x(&self) -> u32 {
-		self.coord3.get_x()
+		self.offset.get_x()
 	}
 
 	pub fn get_y(&self) -> u32 {
-		self.coord3.get_y()
+		self.offset.get_y()
 	}
 
 	pub fn get_z(&self) -> u8 {
-		self.coord3.get_z()
+		self.offset.get_z()
 	}
 
 	pub fn get_coord3(&self) -> TileCoord3 {
-		self.coord3
+		self.offset
 	}
 
 	#[allow(dead_code)]
 	pub fn get_coord_offset(&self) -> TileCoord2 {
-		TileCoord2::new(self.coord3.get_x() * 256, self.coord3.get_y() * 256)
+		TileCoord2::new(self.offset.get_x() * 256, self.offset.get_y() * 256)
 	}
 
 	#[cfg(test)]
 	pub fn as_str(&self) -> String {
-		let x_offset = self.coord3.get_x() * 256;
-		let y_offset = self.coord3.get_y() * 256;
+		let x_offset = self.offset.get_x() * 256;
+		let y_offset = self.offset.get_y() * 256;
 		format!(
 			"[{},[{},{}],[{},{}]]",
-			self.coord3.get_z(),
+			self.offset.get_z(),
 			self.tiles_coverage.get_x_min() + x_offset,
 			self.tiles_coverage.get_y_min() + y_offset,
 			self.tiles_coverage.get_x_max() + x_offset,
@@ -146,7 +160,7 @@ impl BlockDefinition {
 impl fmt::Debug for BlockDefinition {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("BlockDefinition")
-			.field("x/y/z", &self.coord3)
+			.field("x/y/z", &self.offset)
 			.field("bbox", &self.tiles_coverage)
 			.field("tiles_range", &self.tiles_range)
 			.field("index_range", &self.index_range)
@@ -159,48 +173,21 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn conversion() {
-		let mut def1 = BlockDefinition::new(1, 2, 3, TileBBox::new_full(3));
-		def1.tiles_range = ByteRange::new(4, 5);
-		def1.index_range = ByteRange::new(9, 6);
+	fn multitest() -> Result<()> {
+		let mut def = BlockDefinition::new(TileBBox::new(12, 300, 400, 320, 450));
+		def.tiles_range = ByteRange::new(4, 5);
+		def.index_range = ByteRange::new(9, 6);
 
-		let def2 = BlockDefinition::from_slice(&def1.as_vec().unwrap()).unwrap();
-
-		assert_eq!(def1, def2);
-	}
-
-	#[test]
-	fn count_tiles() {
-		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
-		assert_eq!(def.count_tiles(), 16);
-	}
-
-	#[test]
-	fn as_vec() {
-		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
-		let blob = def.as_vec().unwrap();
-		assert_eq!(blob.len(), 33);
-	}
-
-	#[test]
-	fn get_sort_index() {
-		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
+		assert_eq!(def, BlockDefinition::from_slice(&def.as_vec()?)?);
+		assert_eq!(def.count_tiles(), 1071);
+		assert_eq!(def.as_vec()?.len(), 33);
 		assert_eq!(def.get_sort_index(), 38);
-	}
-
-	#[test]
-	fn as_str() {
-		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
 		assert_eq!(def.as_str(), "[3,[256,512],[259,515]]");
-	}
-
-	#[test]
-	fn debug() {
-		let def = BlockDefinition::new(1, 2, 3, TileBBox::new_full(2));
-		let debug_string = format!("{:?}", def);
 		assert_eq!(
-			debug_string,
+			format!("{:?}", def),
 			"BlockDefinition { x/y/z: TileCoord3(1, 2, 3), bbox: 2: [0,0,3,3] (16), tiles_range: ByteRange[0,0], index_range: ByteRange[0,0] }"
 		);
+
+		Ok(())
 	}
 }

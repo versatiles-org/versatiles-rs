@@ -2,7 +2,7 @@
 use super::{types::*, DataWriterFile, DataWriterTrait};
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox, TileStream},
-	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig, TileCoord2},
+	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig},
 };
 use async_trait::async_trait;
 use futures_util::StreamExt;
@@ -97,14 +97,13 @@ impl TileConverter {
 		for bbox_tiles in self.config.get_bbox_pyramid().iter_levels() {
 			let bbox_blocks = bbox_tiles.scale_down(256);
 			for coord in bbox_blocks.iter_coords() {
-				let x = coord.get_x();
-				let y = coord.get_y();
+				let x = coord.get_x() * 256;
+				let y = coord.get_y() * 256;
 				let z = coord.get_z();
-				let mut tiles_coverage = TileBBox::new(z, 0, 0, 255, 255);
-				tiles_coverage.substract_coord2(&TileCoord2::new(x * 256, y * 256));
-				tiles_coverage.intersect_bbox(&(*bbox_tiles).substract_u32(x * 256, y * 256));
 
-				blocks.push(BlockDefinition::new(x, y, z, tiles_coverage))
+				let mut bbox_block = bbox_tiles.clone();
+				bbox_block.intersect_bbox(&TileBBox::new(z, x, y, x + 255, y + 255));
+				blocks.push(BlockDefinition::new(bbox_block))
 			}
 		}
 

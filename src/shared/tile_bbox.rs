@@ -20,13 +20,19 @@ impl TileBBox {
 	pub fn new(level: u8, x_min: u32, y_min: u32, x_max: u32, y_max: u32) -> TileBBox {
 		assert!(level <= 31, "level ({level}) must be <= 31");
 		let max = 2u32.pow(level as u32) - 1;
+
+		assert!(x_min <= x_max, "x_min ({x_min}) must be <= x_max ({x_max})");
+		assert!(y_min <= y_max, "y_min ({y_min}) must be <= y_max ({y_max})");
+		assert!(x_max <= max, "x_max ({x_max}) must be <= max ({max})");
+		assert!(y_max <= max, "y_max ({y_max}) must be <= max ({max})");
+
 		TileBBox {
 			level,
 			max,
 			x_min,
 			y_min,
-			x_max: max.min(x_max),
-			y_max: max.min(y_max),
+			x_max,
+			y_max,
 		}
 	}
 	pub fn new_full(level: u8) -> TileBBox {
@@ -238,6 +244,7 @@ impl TileBBox {
 
 		self
 	}
+	#[allow(dead_code)]
 	pub fn substract_coord2(mut self, c: &TileCoord2) -> TileBBox {
 		self.x_min = self.x_min.saturating_sub(c.get_x());
 		self.y_min = self.y_min.saturating_sub(c.get_y());
@@ -246,6 +253,7 @@ impl TileBBox {
 
 		self
 	}
+	#[allow(dead_code)]
 	pub fn substract_u32(mut self, x: u32, y: u32) -> TileBBox {
 		self.x_min = self.x_min.saturating_sub(x);
 		self.y_min = self.y_min.saturating_sub(y);
