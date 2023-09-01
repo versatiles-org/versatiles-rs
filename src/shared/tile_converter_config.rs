@@ -1,5 +1,6 @@
 use super::{Compression, DataConverter, TileBBoxPyramid, TileFormat, TileReaderParameters};
 
+#[derive(Debug)]
 pub struct TileConverterConfig {
 	tile_format: Option<TileFormat>,
 	tile_compression: Option<Compression>,

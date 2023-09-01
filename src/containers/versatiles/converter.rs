@@ -6,7 +6,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use futures_util::StreamExt;
-use log::debug;
+use log::{debug, trace};
 use std::collections::HashMap;
 
 // Define TileConverter struct
@@ -31,11 +31,17 @@ impl TileConverterTrait for TileConverter {
 
 	// Convert tiles from the TileReader
 	async fn convert_from(&mut self, reader: &mut TileReaderBox) -> Result<()> {
+		let parameters = reader.get_parameters()?;
+		trace!("convert_from - parameters: {parameters:?}");
+
 		// Finalize the configuration
-		self.config.finalize_with_parameters(reader.get_parameters()?);
+		trace!("convert_from - self.config1: {:?}", self.config);
+		self.config.finalize_with_parameters(parameters);
+		trace!("convert_from - self.config2: {:?}", self.config);
 
 		// Get the bounding box pyramid
 		let bbox_pyramid = self.config.get_bbox_pyramid();
+		trace!("convert_from - bbox_pyramid: {bbox_pyramid:?}");
 
 		// Create the file header
 		let mut header = FileHeader::new(
