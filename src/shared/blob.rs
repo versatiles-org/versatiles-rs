@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 
+use bytes::Bytes;
+use std::fmt::Debug;
 use std::ops::Range;
 
-use bytes::Bytes;
-
 /// A simple wrapper around `bytesMut::Bytes` that provides additional methods for working with byte data.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Blob(Vec<u8>);
 
 impl Blob {
@@ -108,14 +108,29 @@ impl From<String> for Blob {
 	}
 }
 
-/*
-impl From<&[u8]> for Blob {
-	/// Converts a `&[u8]` instance into a `Blob`.
-	fn from(item: &[u8]) -> Self {
-		Blob(BytesMut::from(item.as_bytes()))
+impl Debug for Blob {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let chunk: &[u8];
+		let mut suffix: &str = "";
+		if self.0.len() > 32 {
+			suffix = "...";
+			chunk = self.0.get(0..32).unwrap();
+		} else {
+			chunk = &self.0;
+		}
+		write!(
+			f,
+			"Blob({}, {}{})",
+			self.0.len(),
+			chunk
+				.iter()
+				.map(|v| format!("{v:X}"))
+				.collect::<Vec<String>>()
+				.join("_"),
+			suffix
+		)
 	}
 }
-*/
 
 impl ToString for Blob {
 	fn to_string(&self) -> String {
@@ -195,14 +210,18 @@ mod tests {
 	// Test the debug format of the Blob struct
 	#[test]
 	fn debug() {
-		// Create a string with non-ASCII characters
-		let text = String::from("Voisilmäpulla");
+		assert_eq!(
+			format!("{:?}", Blob::from("Voisilmäpulla")),
+			"Blob(14, 56_6F_69_73_69_6C_6D_C3_A4_70_75_6C_6C_61)"
+		);
 
-		// Create a Blob instance from the string
-		let blob = Blob::from(&text);
-
-		// Format the Blob instance using the debug formatter and print it
-		let _debug = format!("{:?}", blob);
-		//println!("{}", debug);
+		assert_eq!(
+			format!("{:?}", Blob::from("01234567890123456789012345678901")),
+			"Blob(32, 30_31_32_33_34_35_36_37_38_39_30_31_32_33_34_35_36_37_38_39_30_31_32_33_34_35_36_37_38_39_30_31)"
+		);
+		assert_eq!(
+			format!("{:?}", Blob::from("012345678901234567890123456789012")),
+			"Blob(33, 30_31_32_33_34_35_36_37_38_39_30_31_32_33_34_35_36_37_38_39_30_31_32_33_34_35_36_37_38_39_30_31...)"
+		);
 	}
 }
