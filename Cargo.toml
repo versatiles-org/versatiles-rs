@@ -42,7 +42,6 @@ log = { version = "0.4.20", default-features = false }
 mime_guess = { version = "2.0.4", default-features = false }
 r2d2 = { version = "0.8.10", default-features = false, optional = true }
 r2d2_sqlite = { version = "0.22.0", default-features = false, optional = true, features=["bundled"] }
-rayon = { version = "1.7.0", default-features = false }
 regex = { version = "1.9.4", default-features = true }
 reqwest = { version = "0.11.20", default-features = false, features=["rustls-tls"] }
 tar = { version = "0.4.40", default-features = false }
