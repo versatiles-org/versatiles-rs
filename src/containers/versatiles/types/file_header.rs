@@ -206,7 +206,7 @@ mod tests {
 		let header = FileHeader::new(&tf, &comp, zoom, &bbox);
 
 		assert_eq!(header.zoom_range, zoom);
-		assert_eq!(header.bbox, [-1800000000, -850511040, 1800000000, 850511040]);
+		assert_eq!(header.bbox, [-1800000000, -850511000, 1800000000, 850511000]);
 		assert_eq!(header.tile_format, tf);
 		assert_eq!(header.compression, comp);
 		assert_eq!(header.meta_range, ByteRange::empty());
@@ -231,16 +231,16 @@ mod tests {
 		assert_eq!(blob.as_slice()[16], 3);
 		assert_eq!(blob.as_slice()[17], 8);
 		assert_eq!(BE::read_i32(&blob.as_slice()[18..22]), -1800000000);
-		assert_eq!(BE::read_i32(&blob.as_slice()[22..26]), -850511296);
+		assert_eq!(BE::read_i32(&blob.as_slice()[22..26]), -850511300);
 		assert_eq!(BE::read_i32(&blob.as_slice()[26..30]), 1800000000);
-		assert_eq!(BE::read_i32(&blob.as_slice()[30..34]), 850511296);
+		assert_eq!(BE::read_i32(&blob.as_slice()[30..34]), 850511300);
 		assert_eq!(ByteRange::from_buf(&blob.as_slice()[34..50]), ByteRange::empty());
 		assert_eq!(ByteRange::from_buf(&blob.as_slice()[50..66]), ByteRange::empty());
 
 		let header2 = FileHeader::from_blob(blob).unwrap();
 
 		assert_eq!(header2.zoom_range, [3, 8]);
-		assert_eq!(header2.bbox, [-1800000000, -850511296, 1800000000, 850511296]);
+		assert_eq!(header2.bbox, [-1800000000, -850511300, 1800000000, 850511300]);
 		assert_eq!(header2.tile_format, TileFormat::PBF);
 		assert_eq!(header2.compression, Compression::Gzip);
 		assert_eq!(header2.meta_range, ByteRange::empty());
