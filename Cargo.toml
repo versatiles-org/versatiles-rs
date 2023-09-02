@@ -44,7 +44,7 @@ r2d2 = { version = "0.8.10", default-features = false, optional = true }
 r2d2_sqlite = { version = "0.22.0", default-features = false, optional = true, features=["bundled"] }
 regex = { version = "1.9.4", default-features = true }
 reqwest = { version = "0.11.20", default-features = false, features=["rustls-tls"] }
-tar = { version = "0.4.40", default-features = false }
+tar = { version = "0.4.40", default-features = false, optional = true }
 term_size = { version = "0.3.2", default-features = false }
 tokio = { version = "1.32.0", default-features = false, features = ["macros", "rt-multi-thread"] }
 webp = { version = "0.2.5", default-features = false, features = ["img"] }
@@ -55,9 +55,10 @@ criterion = { version = "0.5.1", default-features = false, features = ["async_fu
 
 [features]
 default = ["full"]
-full = ["mbtiles", "server"]
+full = ["mbtiles", "server", "tar"]
 mbtiles = ["dep:r2d2", "dep:r2d2_sqlite"]
 server = ["dep:axum", "dep:hyper", "dep:mime_guess"]
+tar = ["dep:tar"]
 
 [lib]
 name = "versatiles"

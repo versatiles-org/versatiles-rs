@@ -9,6 +9,7 @@ pub struct TileBBoxPyramid {
 	level_bbox: [TileBBox; MAX_ZOOM_LEVEL as usize],
 }
 
+#[allow(dead_code)]
 impl TileBBoxPyramid {
 	pub fn new_full() -> TileBBoxPyramid {
 		TileBBoxPyramid {
@@ -39,7 +40,6 @@ impl TileBBoxPyramid {
 	pub fn get_level_bbox(&self, level: u8) -> &TileBBox {
 		&self.level_bbox[level as usize]
 	}
-	#[allow(dead_code)]
 	pub fn set_level_bbox(&mut self, level: u8, bbox: TileBBox) {
 		self.level_bbox[level as usize] = bbox;
 	}

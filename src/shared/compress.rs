@@ -1,4 +1,4 @@
-#![allow(non_snake_case)]
+#![allow(non_snake_case, dead_code)]
 use super::{Blob, Result};
 use crate::create_error;
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};

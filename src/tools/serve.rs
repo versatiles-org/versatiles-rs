@@ -98,11 +98,12 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	}
 
 	for filename in arguments.static_content.iter() {
+		#[cfg(feature = "tar")]
 		if filename.ends_with(".tar") {
 			server.add_static_source(source::TarFile::from(filename)?);
-		} else {
-			server.add_static_source(source::Folder::from(filename)?);
+			continue;
 		}
+		server.add_static_source(source::Folder::from(filename)?);
 	}
 
 	let mut list: Vec<(String, String)> = server.get_url_mapping().await;
