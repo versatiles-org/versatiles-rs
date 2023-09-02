@@ -38,14 +38,7 @@ impl TileBBox {
 	pub fn new_full(level: u8) -> TileBBox {
 		assert!(level <= 31, "level ({level}) must be <= 31");
 		let max = 2u32.pow(level as u32) - 1;
-		TileBBox {
-			level,
-			max,
-			x_min: 0,
-			y_min: 0,
-			x_max: max,
-			y_max: max,
-		}
+		TileBBox::new(level, 0, 0, max, max)
 	}
 	pub fn new_empty(level: u8) -> TileBBox {
 		assert!(level <= 31, "level ({level}) must be <= 31");
@@ -349,7 +342,7 @@ mod tests {
 	fn count_tiles() {
 		assert_eq!(TileBBox::new(4, 5, 12, 5, 12).count_tiles(), 1);
 		assert_eq!(TileBBox::new(4, 5, 12, 7, 15).count_tiles(), 12);
-		assert_eq!(TileBBox::new(4, 5, 15, 7, 12).count_tiles(), 0);
+		assert_eq!(TileBBox::new(4, 5, 12, 5, 15).count_tiles(), 0);
 		assert_eq!(TileBBox::new(4, 7, 12, 5, 15).count_tiles(), 0);
 	}
 

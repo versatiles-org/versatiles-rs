@@ -99,10 +99,11 @@ impl TileConverter {
 			for coord in bbox_blocks.iter_coords() {
 				let x = coord.get_x() * 256;
 				let y = coord.get_y() * 256;
-				let z = coord.get_z();
+				let level = coord.get_z();
+				let size = 2u32.pow(level.min(8) as u32) - 1;
 
 				let mut bbox_block = bbox_tiles.clone();
-				bbox_block.intersect_bbox(&TileBBox::new(z, x, y, x + 255, y + 255));
+				bbox_block.intersect_bbox(&TileBBox::new(level, x, y, x + size, y + size));
 				blocks.push(BlockDefinition::new(bbox_block))
 			}
 		}

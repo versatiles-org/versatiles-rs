@@ -181,11 +181,11 @@ mod tests {
 		assert_eq!(def, BlockDefinition::from_slice(&def.as_vec()?)?);
 		assert_eq!(def.count_tiles(), 1071);
 		assert_eq!(def.as_vec()?.len(), 33);
-		assert_eq!(def.get_sort_index(), 38);
-		assert_eq!(def.as_str(), "[3,[256,512],[259,515]]");
+		assert_eq!(def.get_sort_index(), 5596502);
+		assert_eq!(def.as_str(), "[12,[300,400],[320,450]]");
 		assert_eq!(
 			format!("{:?}", def),
-			"BlockDefinition { x/y/z: TileCoord3(1, 2, 3), bbox: 2: [0,0,3,3] (16), tiles_range: ByteRange[0,0], index_range: ByteRange[0,0] }"
+			"BlockDefinition { x/y/z: TileCoord3(1, 1, 12), bbox: 8: [44,144,64,194] (1071), tiles_range: ByteRange[4,5], index_range: ByteRange[9,6] }"
 		);
 
 		Ok(())
