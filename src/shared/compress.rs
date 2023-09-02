@@ -20,6 +20,7 @@ pub struct TargetCompression {
 	compressions: EnumSet<Compression>,
 	best_compression: bool,
 }
+#[allow(dead_code)]
 impl TargetCompression {
 	pub fn from_set(compressions: EnumSet<Compression>) -> Self {
 		TargetCompression {
@@ -44,6 +45,7 @@ impl TargetCompression {
 	}
 }
 
+#[allow(dead_code)]
 pub fn optimize_compression(data: Blob, input: &Compression, target: TargetCompression) -> Result<(Blob, Compression)> {
 	if target.compressions.is_empty() {
 		return create_error!("no compression allowed");

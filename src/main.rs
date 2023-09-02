@@ -1,8 +1,10 @@
 // Import necessary modules and dependencies
 mod containers;
-mod server;
 mod shared;
 mod tools;
+
+#[cfg(feature = "server")]
+mod server;
 
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
@@ -36,6 +38,7 @@ enum Commands {
 	/// Show information about a tile container
 	Probe(tools::probe::Subcommand),
 
+	#[cfg(feature = "server")]
 	#[clap(alias = "server")]
 	/// Serve tiles via http
 	Serve(tools::serve::Subcommand),
@@ -59,6 +62,7 @@ fn run(cli: Cli) -> Result<()> {
 	match &cli.command {
 		Commands::Convert(arguments) => tools::convert::run(arguments),
 		Commands::Probe(arguments) => tools::probe::run(arguments),
+		#[cfg(feature = "server")]
 		Commands::Serve(arguments) => tools::serve::run(arguments),
 	}
 }
