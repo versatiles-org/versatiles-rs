@@ -8,9 +8,9 @@ use log::trace;
 use std::{
 	fs::File,
 	path::{Path, PathBuf},
-	sync::Mutex,
 };
 use tar::{Builder, Header};
+use tokio::sync::Mutex;
 
 pub struct TileConverter {
 	builder: Builder<File>,
@@ -25,7 +25,7 @@ impl TileConverterTrait for TileConverter {
 	{
 		trace!("new {:?}", filename);
 
-		let file = File::create(filename).unwrap();
+		let file = File::create(filename)?;
 		let builder = Builder::new(file);
 
 		Ok(Box::new(TileConverter { builder, config }))
@@ -84,7 +84,7 @@ impl TileConverterTrait for TileConverter {
 
 			while let Some(entry) = stream.next().await {
 				let (coord, blob) = entry;
-				mutex_bar.lock().unwrap().inc(1);
+				mutex_bar.lock().await.inc(1);
 
 				if let Ok(blob) = tile_converter.process_blob(blob) {
 					let filename = format!(
@@ -105,9 +105,8 @@ impl TileConverterTrait for TileConverter {
 					// Write blob to file
 					mutex_builder
 						.lock()
-						.unwrap()
-						.append_data(&mut header, path, blob.as_slice())
-						.unwrap();
+						.await
+						.append_data(&mut header, path, blob.as_slice())?;
 				}
 			}
 		}
