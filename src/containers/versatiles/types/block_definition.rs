@@ -185,10 +185,40 @@ mod tests {
 		assert_eq!(def.as_vec()?.len(), 33);
 		assert_eq!(def.get_sort_index(), 5596502);
 		assert_eq!(def.as_str(), "[12,[300,400],[320,450]]");
+		assert_eq!(def.get_z(), 12);
+		assert_eq!(def.get_coord3(), &TileCoord3::new(1, 1, 12));
+		assert_eq!(def.get_global_bbox(), &TileBBox::new(12, 300, 400, 320, 450));
 		assert_eq!(
 			format!("{:?}", def),
 			"BlockDefinition { x/y/z: TileCoord3(1, 1, 12), bbox: 8: [44,144,64,194] (1071), tiles_range: ByteRange[4,5], index_range: ByteRange[9,6] }"
 		);
+
+		let def2 = BlockDefinition::from_slice(&def.as_vec()?)?;
+		assert_eq!(def, def2);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_set_tiles_range() -> Result<()> {
+		let bbox = TileBBox::new(14, 0, 0, 255, 255);
+		let mut def = BlockDefinition::new(bbox);
+		let range = ByteRange::new(10, 20);
+
+		def.set_tiles_range(range);
+		assert_eq!(*def.get_tiles_range(), range);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_set_index_range() -> Result<()> {
+		let bbox = TileBBox::new(14, 0, 0, 255, 255);
+		let mut def = BlockDefinition::new(bbox);
+		let range = ByteRange::new(10, 20);
+
+		def.set_index_range(range);
+		assert_eq!(*def.get_index_range(), range);
 
 		Ok(())
 	}
