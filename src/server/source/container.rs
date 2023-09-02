@@ -144,7 +144,7 @@ mod tests {
 
 		assert_eq!(container.get_name().unwrap(), "dummy name");
 
-		let expected_info = r#"{ "container":"dummy container", "format":"png", "compression":"none", "zoom_min":0, "zoom_max":8, "bbox":[-180.0, -85.05113, 180.0, 85.05112] }"#;
+		let expected_info = r#"{ "container":"dummy container", "format":"png", "compression":"none", "zoom_min":0, "zoom_max":8, "bbox":[-180.0, -85.05112877980659, 180.0, 85.05112877980659] }"#;
 		assert_eq!(container.get_info_as_json().unwrap(), expected_info);
 
 		Ok(())

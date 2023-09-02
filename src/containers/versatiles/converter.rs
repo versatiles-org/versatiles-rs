@@ -95,7 +95,7 @@ impl TileConverter {
 		// Initialize blocks and populate them
 		let mut blocks: Vec<BlockDefinition> = Vec::new();
 		for bbox_tiles in self.config.get_bbox_pyramid().iter_levels() {
-			let mut bbox_blocks = bbox_tiles.clone();
+			let mut bbox_blocks = *bbox_tiles;
 			bbox_blocks.scale_down(256);
 
 			for coord in bbox_blocks.iter_coords() {
