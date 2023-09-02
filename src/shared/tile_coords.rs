@@ -1,5 +1,5 @@
 use std::{
-	f32::consts::PI as PI32,
+	f64::consts::PI as PI32,
 	fmt::{self, Debug},
 	mem::swap,
 };
@@ -13,23 +13,16 @@ impl TileCoord2 {
 	pub fn new(x: u32, y: u32) -> TileCoord2 {
 		TileCoord2 { x, y }
 	}
-	pub fn from_geo(x: f32, y: f32, z: u8, round_ceil: bool) -> TileCoord2 {
+	pub fn from_geo(x: f64, y: f64, z: u8) -> TileCoord2 {
 		assert!(z <= 31, "z {z} must be <= 31");
 
-		let zoom: f32 = 2.0f32.powi(z as i32);
+		let zoom: f64 = 2.0f64.powi(z as i32);
 		let x = zoom * (x / 360.0 + 0.5);
 		let y = zoom * (0.5 - 0.5 * (y * PI32 / 360.0 + PI32 / 4.0).tan().ln() / PI32);
 
-		if round_ceil {
-			TileCoord2 {
-				x: x.ceil() as u32,
-				y: y.ceil() as u32,
-			}
-		} else {
-			TileCoord2 {
-				x: x as u32,
-				y: y as u32,
-			}
+		TileCoord2 {
+			x: x.floor() as u32,
+			y: y.floor() as u32,
 		}
 	}
 	pub fn get_x(&self) -> u32 {
@@ -93,12 +86,12 @@ impl TileCoord3 {
 	pub fn swap_xy(&mut self) {
 		swap(&mut self.x, &mut self.y);
 	}
-	pub fn as_geo(&self) -> [f32; 2] {
-		let zoom: f32 = 2.0f32.powi(self.z as i32);
+	pub fn as_geo(&self) -> [f64; 2] {
+		let zoom: f64 = 2.0f64.powi(self.z as i32);
 
 		[
-			((self.x as f32) / zoom - 0.5) * 360.0,
-			((PI32 * (1.0 - 2.0 * (self.y as f32) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
+			((self.x as f64) / zoom - 0.5) * 360.0,
+			((PI32 * (1.0 - 2.0 * (self.y as f64) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
 		]
 	}
 	pub fn as_coord2(&self) -> TileCoord2 {
@@ -149,9 +142,8 @@ mod tests {
 
 	#[test]
 	fn from_geo() {
-		let test = |z: u8, x: u32, y: u32, xf: f32, yf: f32| {
-			assert_eq!(TileCoord2::from_geo(xf, yf, z, false), TileCoord2::new(x, y));
-			assert_eq!(TileCoord2::from_geo(xf, yf, z, true), TileCoord2::new(x + 1, y + 1));
+		let test = |z: u8, x: u32, y: u32, xf: f64, yf: f64| {
+			assert_eq!(TileCoord2::from_geo(xf, yf, z,), TileCoord2::new(x, y));
 		};
 
 		test(9, 267, 168, 8.0653, 52.2564);

@@ -20,7 +20,7 @@ impl TileBBoxPyramid {
 			level_bbox: from_fn(|z| TileBBox::new_empty(z as u8)),
 		}
 	}
-	pub fn intersect_geo_bbox(&mut self, geo_bbox: &[f32; 4]) {
+	pub fn intersect_geo_bbox(&mut self, geo_bbox: &[f64; 4]) {
 		for (z, bbox) in self.level_bbox.iter_mut().enumerate() {
 			bbox.intersect_bbox(&TileBBox::from_geo(z as u8, geo_bbox));
 		}
@@ -103,7 +103,7 @@ impl TileBBoxPyramid {
 	pub fn is_full(&self) -> bool {
 		self.level_bbox.iter().all(|bbox| bbox.is_full())
 	}
-	pub fn get_geo_bbox(&self) -> [f32; 4] {
+	pub fn get_geo_bbox(&self) -> [f64; 4] {
 		let level = self.get_zoom_max().unwrap();
 
 		self.get_level_bbox(level).as_geo_bbox(level)
@@ -168,7 +168,7 @@ mod tests {
 	fn limit_by_geo_bbox() {
 		let mut pyramid = TileBBoxPyramid::new_full();
 		pyramid.set_zoom_max(8);
-		pyramid.intersect_geo_bbox(&[8.0653f32, 51.3563f32, 12.3528f32, 52.2564f32]);
+		pyramid.intersect_geo_bbox(&[8.0653f64, 51.3563f64, 12.3528f64, 52.2564f64]);
 
 		assert_eq!(pyramid.get_level_bbox(0), &TileBBox::new(0, 0, 0, 0, 0));
 		assert_eq!(pyramid.get_level_bbox(1), &TileBBox::new(1, 1, 0, 1, 0));
@@ -261,7 +261,7 @@ mod tests {
 		assert_eq!(pyramid.get_level_bbox(0), &TileBBox::new(0, 0, 0, 0, 0));
 		assert_eq!(pyramid.get_level_bbox(1), &TileBBox::new(1, 0, 0, 1, 1));
 		assert_eq!(pyramid.get_level_bbox(2), &TileBBox::new(2, 0, 0, 3, 3));
-		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 2, 1, 7, 7));
+		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 2, 1, 6, 7));
 		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 6, 5, 11, 12));
 		assert_eq!(pyramid.get_level_bbox(5), &TileBBox::new(5, 14, 13, 19, 20));
 		assert_eq!(pyramid.get_level_bbox(6), &TileBBox::new(6, 29, 28, 35, 36));

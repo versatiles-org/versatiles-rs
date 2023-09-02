@@ -53,7 +53,7 @@ impl TileConverterTrait for TileConverter {
 				bbox_pyramid.get_zoom_min().unwrap(),
 				bbox_pyramid.get_zoom_max().unwrap(),
 			],
-			bbox_pyramid.get_geo_bbox(),
+			&bbox_pyramid.get_geo_bbox(),
 		);
 
 		// Convert the header to a blob and write it

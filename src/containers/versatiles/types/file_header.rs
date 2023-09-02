@@ -23,7 +23,7 @@ pub struct FileHeader {
 }
 
 impl FileHeader {
-	pub fn new(tile_format: &TileFormat, compression: &Compression, zoom_range: [u8; 2], bbox: [f32; 4]) -> FileHeader {
+	pub fn new(tile_format: &TileFormat, compression: &Compression, zoom_range: [u8; 2], bbox: &[f64; 4]) -> FileHeader {
 		assert!(
 			zoom_range[0] <= zoom_range[1],
 			"zoom_range[0] ({}) must be <= zoom_range[1] ({})",
@@ -39,7 +39,7 @@ impl FileHeader {
 
 		FileHeader {
 			zoom_range,
-			bbox: bbox.map(|v| (v * BBOX_SCALE as f32) as i32),
+			bbox: bbox.map(|v| (v * BBOX_SCALE as f64) as i32),
 			tile_format: tile_format.clone(),
 			compression: compression.to_owned(),
 			meta_range: ByteRange::empty(),
@@ -174,7 +174,7 @@ mod tests {
 	#[allow(clippy::zero_prefixed_literal)]
 	fn conversion() {
 		let test = |tile_format: &TileFormat, compression: &Compression, a: u64, b: u64, c: u64, d: u64| {
-			let mut header1 = FileHeader::new(tile_format, compression, [0, 0], [0.0, 0.0, 0.0, 0.0]);
+			let mut header1 = FileHeader::new(tile_format, compression, [0, 0], &[0.0, 0.0, 0.0, 0.0]);
 			header1.meta_range = ByteRange::new(a, b);
 			header1.blocks_range = ByteRange::new(c, d);
 
@@ -203,7 +203,7 @@ mod tests {
 		let comp = Compression::Gzip;
 		let zoom = [10, 14];
 		let bbox = [-180.0, -85.0511, 180.0, 85.0511];
-		let header = FileHeader::new(&tf, &comp, zoom, bbox);
+		let header = FileHeader::new(&tf, &comp, zoom, &bbox);
 
 		assert_eq!(header.zoom_range, zoom);
 		assert_eq!(header.bbox, [-1800000000, -850511040, 1800000000, 850511040]);
@@ -219,7 +219,7 @@ mod tests {
 			&TileFormat::PBF,
 			&Compression::Gzip,
 			[3, 8],
-			[-180.0, -85.051_13, 180.0, 85.051_13],
+			&[-180.0, -85.051_13, 180.0, 85.051_13],
 		);
 
 		let blob = header.to_blob().unwrap();
@@ -252,9 +252,9 @@ mod tests {
 		let tf = TileFormat::PNG;
 		let comp = Compression::Gzip;
 
-		let should_panic = |zoom: [u8; 2], bbox: [f32; 4]| {
+		let should_panic = |zoom: [u8; 2], bbox: [f64; 4]| {
 			assert!(catch_unwind(|| {
-				FileHeader::new(&tf, &comp, zoom, bbox);
+				FileHeader::new(&tf, &comp, zoom, &bbox);
 			})
 			.is_err())
 		};
@@ -288,7 +288,7 @@ mod tests {
 		];
 
 		for tile_format in tile_formats {
-			let header = FileHeader::new(&tile_format, &compression, zoom_range, bbox);
+			let header = FileHeader::new(&tile_format, &compression, zoom_range, &bbox);
 			let blob = header.to_blob().unwrap();
 			let header2 = FileHeader::from_blob(blob).unwrap();
 
@@ -306,7 +306,7 @@ mod tests {
 		let compressions = vec![Compression::None, Compression::Gzip, Compression::Brotli];
 
 		for compression in compressions {
-			let header = FileHeader::new(&tile_format, &compression, zoom_range, bbox);
+			let header = FileHeader::new(&tile_format, &compression, zoom_range, &bbox);
 			let blob = header.to_blob().unwrap();
 			let header2 = FileHeader::from_blob(blob).unwrap();
 
@@ -338,7 +338,7 @@ mod tests {
 
 	#[test]
 	fn unknown_tile_format() {
-		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &Compression::Gzip, [0, 0], [0.0, 0.0, 0.0, 0.0])
+		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &Compression::Gzip, [0, 0], &[0.0, 0.0, 0.0, 0.0])
 			.to_blob()
 			.unwrap();
 		invalid_blob.as_mut_slice()[14] = 0xFF; // Set an unknown tile format value
@@ -352,7 +352,7 @@ mod tests {
 
 	#[test]
 	fn unknown_compression() {
-		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &Compression::Gzip, [0, 0], [0.0, 0.0, 0.0, 0.0])
+		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &Compression::Gzip, [0, 0], &[0.0, 0.0, 0.0, 0.0])
 			.to_blob()
 			.unwrap();
 		invalid_blob.as_mut_slice()[15] = 0xFF; // Set an unknown compression value

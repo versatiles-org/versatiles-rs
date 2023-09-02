@@ -100,10 +100,10 @@ async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileCon
 
 	if let Some(bbox) = &arguments.bbox {
 		trace!("parsing bbox argument: {:?}", bbox);
-		let values: Vec<f32> = bbox
+		let values: Vec<f64> = bbox
 			.split(&[' ', ',', ';'])
 			.filter(|s| !s.is_empty())
-			.map(|s| s.parse::<f32>().expect("bbox value is not a number"))
+			.map(|s| s.parse::<f64>().expect("bbox value is not a number"))
 			.collect();
 
 		if values.len() != 4 {
