@@ -65,7 +65,7 @@ pub struct Subcommand {
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
-	println!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
+	eprintln!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
 	let mut reader = new_reader(&arguments.input_file, arguments).await?;
 	let mut converter = new_converter(&arguments.output_file, arguments).await?;
@@ -100,10 +100,10 @@ async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileCon
 
 	if let Some(bbox) = &arguments.bbox {
 		trace!("parsing bbox argument: {:?}", bbox);
-		let values: Vec<f32> = bbox
+		let values: Vec<f64> = bbox
 			.split(&[' ', ',', ';'])
 			.filter(|s| !s.is_empty())
-			.map(|s| s.parse::<f32>().expect("bbox value is not a number"))
+			.map(|s| s.parse::<f64>().expect("bbox value is not a number"))
 			.collect();
 
 		if values.len() != 4 {
@@ -145,24 +145,56 @@ mod tests {
 			"tmp/berlin1.versatiles",
 		])
 		.unwrap();
+		run_command(vec![
+			"versatiles",
+			"convert",
+			"--flip-y",
+			"tmp/berlin1.versatiles",
+			"tmp/berlin2.versatiles",
+		])
+		.unwrap();
+		run_command(vec![
+			"versatiles",
+			"convert",
+			"--min-zoom=1",
+			"--max-zoom=13",
+			"--bbox=13.38,52.46,13.43,52.49",
+			"--flip-y",
+			"--force-recompress",
+			"tmp/berlin2.versatiles",
+			"tmp/berlin3.versatiles",
+		])
+		.unwrap();
 	}
 
 	#[test]
-	fn test_remote() {
+	fn test_remote1() {
 		fs::create_dir("tmp/").unwrap_or_default();
 		run_command(vec![
 			"versatiles",
 			"convert",
-			"--min-zoom",
-			"1",
-			"--max-zoom",
-			"3",
-			"--bbox",
-			"-85,-180,85,180",
+			"--min-zoom=1",
+			"--max-zoom=3",
+			"--bbox=-85,-180,85,180",
 			"--flip-y",
 			"--force-recompress",
 			"https://download.versatiles.org/planet-latest.versatiles",
-			"tmp/berlin2.versatiles",
+			"tmp/planet2.versatiles",
+		])
+		.unwrap();
+	}
+
+	#[test]
+	fn test_remote2() {
+		fs::create_dir("tmp/").unwrap_or_default();
+		run_command(vec![
+			"versatiles",
+			"convert",
+			"--min-zoom=12",
+			"--bbox=9.14,48.76,9.19,48.79",
+			"--flip-y",
+			"https://download.versatiles.org/planet-latest.versatiles",
+			"tmp/stuttgart.versatiles",
 		])
 		.unwrap();
 	}

@@ -13,20 +13,20 @@ pub struct DataWriterFile {
 
 #[async_trait]
 impl DataWriterTrait for DataWriterFile {
-	async fn new(filename: &str) -> Result<Box<Self>> {
+	fn new(filename: &str) -> Result<Box<Self>> {
 		Ok(Box::new(DataWriterFile {
 			writer: BufWriter::new(File::create(filename)?),
 		}))
 	}
 
-	async fn append(&mut self, blob: &Blob) -> Result<ByteRange> {
+	fn append(&mut self, blob: &Blob) -> Result<ByteRange> {
 		let pos = self.writer.stream_position()?;
 		let len = self.writer.write(blob.as_slice())?;
 
 		Ok(ByteRange::new(pos, len as u64))
 	}
 
-	async fn write_start(&mut self, blob: &Blob) -> Result<()> {
+	fn write_start(&mut self, blob: &Blob) -> Result<()> {
 		let pos = self.writer.stream_position()?;
 		self.writer.rewind()?;
 		self.writer.write_all(blob.as_slice())?;
@@ -34,7 +34,7 @@ impl DataWriterTrait for DataWriterFile {
 		Ok(())
 	}
 
-	async fn get_position(&mut self) -> Result<u64> {
+	fn get_position(&mut self) -> Result<u64> {
 		Ok(self.writer.stream_position()?)
 	}
 }

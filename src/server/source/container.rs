@@ -144,7 +144,7 @@ mod tests {
 
 		assert_eq!(container.get_name().unwrap(), "dummy name");
 
-		let expected_info = r#"{ "container":"dummy container", "format":"png", "compression":"none", "zoom_min":0, "zoom_max":8, "bbox":[-180.0, -85.05113, 180.0, 85.05112] }"#;
+		let expected_info = r#"{ "container":"dummy container", "format":"png", "compression":"none", "zoom_min":0, "zoom_max":8, "bbox":[-180.0, -85.05112877980659, 180.0, 85.05112877980659] }"#;
 		assert_eq!(container.get_info_as_json().unwrap(), expected_info);
 
 		Ok(())
@@ -156,7 +156,6 @@ mod tests {
 		let reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
 		let container = TileContainer::from(reader).unwrap();
 		let debug = format!("{container:?}");
-		println!("{debug}");
 		assert!(debug.starts_with("TileContainer { reader: TileReader:Dummy {"));
 	}
 
@@ -166,7 +165,7 @@ mod tests {
 		async fn check_response(
 			container: &mut TileContainer, url: &str, compression: Compression, mime_type: &str,
 		) -> Result<Vec<u8>> {
-			let path: Vec<&str> = url.split("/").collect();
+			let path: Vec<&str> = url.split('/').collect();
 			let response = container.get_data(&path, &TargetCompression::from(compression)).await;
 			assert!(response.is_some());
 
@@ -177,7 +176,7 @@ mod tests {
 		}
 
 		async fn check_404(container: &mut TileContainer, url: &str, compression: Compression) -> Result<bool> {
-			let path: Vec<&str> = url.split("/").collect();
+			let path: Vec<&str> = url.split('/').collect();
 			let response = container.get_data(&path, &TargetCompression::from(compression)).await;
 			assert!(response.is_none());
 			Ok(true)

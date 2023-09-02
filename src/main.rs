@@ -48,6 +48,7 @@ fn main() -> Result<()> {
 	// Initialize logger and set log level based on verbosity flag
 	env_logger::Builder::new()
 		.filter_level(cli.verbose.log_level_filter())
+		.format_timestamp(None)
 		.init();
 
 	run(cli)

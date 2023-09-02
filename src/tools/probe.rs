@@ -17,10 +17,10 @@ pub struct Subcommand {
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
-	println!("probe {:?}", arguments.filename);
+	eprintln!("probe {:?}", arguments.filename);
 
 	let reader = get_reader(&arguments.filename).await?;
-	println!("{reader:#?}");
+	eprintln!("{reader:#?}");
 
 	Ok(())
 }

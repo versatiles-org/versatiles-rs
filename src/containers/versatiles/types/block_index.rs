@@ -44,17 +44,14 @@ impl BlockIndex {
 	pub fn get_bbox_pyramid(&self) -> TileBBoxPyramid {
 		let mut pyramid = TileBBoxPyramid::new_empty();
 		for (_coord, block) in self.lookup.iter() {
-			pyramid.include_bbox(
-				block.get_z(),
-				&block.get_bbox().shift_by(block.get_x() * 256, block.get_y() * 256),
-			);
+			pyramid.include_bbox(block.get_z(), block.get_global_bbox());
 		}
 
 		pyramid
 	}
 
 	pub fn add_block(&mut self, block: BlockDefinition) {
-		self.lookup.insert(block.get_coord3(), block);
+		self.lookup.insert(*block.get_coord3(), block);
 	}
 
 	pub fn as_blob(&self) -> Blob {
@@ -92,7 +89,7 @@ mod tests {
 	#[test]
 	fn conversion() {
 		let mut index1 = BlockIndex::new_empty();
-		index1.add_block(BlockDefinition::new(1, 2, 3, TileBBox::new_empty(3)));
+		index1.add_block(BlockDefinition::new(TileBBox::new(3, 1, 2, 3, 4)));
 		let index2 = BlockIndex::from_brotli_blob(index1.as_brotli_blob());
 		assert_eq!(index1, index2);
 	}

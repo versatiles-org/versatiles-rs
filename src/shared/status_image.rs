@@ -40,8 +40,8 @@ impl StatusImage {
 	///
 	/// * `filename` - The name of the file to save the image to.
 	pub fn save(&self, filename: &str) {
-		let image = ImageBuffer::from_fn(self.size as u32, self.size as u32, |x, y| {
-			let index = y * (self.size as u32) + x;
+		let image = ImageBuffer::from_fn(self.size, self.size, |x, y| {
+			let index = y * self.size + x;
 			let v = self.data[index as usize];
 			let c: u8 = (v as f64).sqrt() as u8;
 			Luma([c])

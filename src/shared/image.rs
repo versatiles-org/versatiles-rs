@@ -1,4 +1,4 @@
-use super::{Blob, Result};
+use super::{Blob, Error, Result};
 use crate::create_error;
 use image::{
 	codecs::{jpeg, png},
@@ -92,9 +92,12 @@ pub fn jpg2img(data: Blob) -> Result<DynamicImage> {
 /// Panics if the image color type is not 8-bit RGB or RGBA, as the crate "WebP" only supports these formats.
 pub fn img2webp(image: DynamicImage) -> Result<Blob> {
 	match image.color() {
-		image::ColorType::Rgb8 | image::ColorType::Rgba8 => {
-			Ok(Blob::from(Encoder::from_image(&image)?.encode(WEBP_QUALITY).to_vec()))
-		}
+		image::ColorType::Rgb8 | image::ColorType::Rgba8 => Ok(Blob::from(
+			Encoder::from_image(&image)
+				.map_err(Error::new)?
+				.encode(WEBP_QUALITY)
+				.to_vec(),
+		)),
 		_ => create_error!("currently only 8 bit RGB/RGBA is supported for WebP lossy encoding"),
 	}
 }
@@ -114,7 +117,12 @@ pub fn img2webp(image: DynamicImage) -> Result<Blob> {
 /// A `Blob` containing the WebP-encoded image data.
 pub fn img2webplossless(image: DynamicImage) -> Result<Blob> {
 	match image.color() {
-		image::ColorType::Rgb8 => Ok(Blob::from(Encoder::from_image(&image)?.encode_lossless().to_vec())),
+		image::ColorType::Rgb8 => Ok(Blob::from(
+			Encoder::from_image(&image)
+				.map_err(Error::new)?
+				.encode_lossless()
+				.to_vec(),
+		)),
 		_ => create_error!("currently only 8 bit RGB is supported for WebP lossless encoding"),
 	}
 }

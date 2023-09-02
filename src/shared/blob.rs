@@ -80,6 +80,13 @@ impl From<&Vec<u8>> for Blob {
 	}
 }
 
+impl From<&[u8]> for Blob {
+	/// Converts a `Vec<u8>` instance into a `Blob`.
+	fn from(item: &[u8]) -> Self {
+		Blob(item.to_vec())
+	}
+}
+
 impl From<&str> for Blob {
 	/// Converts a `&str` instance into a `Blob`.
 	fn from(item: &str) -> Self {
@@ -170,7 +177,7 @@ mod tests {
 		let text = String::from("");
 
 		// Assert that a Blob can be created from the empty string and correctly identified as empty
-		assert_eq!(Blob::from(&text).is_empty(), true);
+		assert!(Blob::from(&text).is_empty());
 	}
 
 	// Test creating a Blob from bytes
@@ -195,7 +202,7 @@ mod tests {
 		let blob = Blob::from(&text);
 
 		// Format the Blob instance using the debug formatter and print it
-		let debug = format!("{:?}", blob);
-		println!("{}", debug);
+		let _debug = format!("{:?}", blob);
+		//println!("{}", debug);
 	}
 }

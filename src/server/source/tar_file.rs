@@ -211,7 +211,7 @@ mod tests {
 	async fn small_stuff() {
 		let file = make_test_tar(Compression::None).await;
 
-		let tar_file = TarFile::from(&file.to_str().unwrap()).unwrap();
+		let tar_file = TarFile::from(file.to_str().unwrap()).unwrap();
 
 		assert_eq!(tar_file.get_info_as_json().unwrap(), "{\"type\":\"tar\"}");
 		assert!(tar_file.get_name().unwrap().ends_with("temp.tar"));
@@ -239,7 +239,6 @@ mod tests {
 		test1(B).await.unwrap();
 
 		async fn test1(compression_tar: Compression) -> Result<()> {
-			println!("compression_tar {:?}", compression_tar);
 			let file = make_test_tar(compression_tar).await;
 			let mut tar_file = TarFile::from(file.to_str().unwrap())?;
 
@@ -252,7 +251,6 @@ mod tests {
 			async fn test2(
 				tar_file: &mut TarFile, compression_tar: &Compression, compression_accept: Compression,
 			) -> Result<()> {
-				println!("compression_accept {:?}", compression_accept);
 				let accept = TargetCompression::from(compression_accept);
 
 				let path = ["non_existing_file"];
@@ -266,8 +264,6 @@ mod tests {
 
 				let result = result.unwrap();
 
-				println!("{:?}", result);
-
 				if result.compression == N {
 					assert_eq!(result.blob.as_str(), "dummy meta data");
 				}
@@ -275,7 +271,7 @@ mod tests {
 				assert_eq!(result.mime, "application/json");
 				assert_eq!(&result.compression, compression_tar);
 
-				return Ok(());
+				Ok(())
 			}
 		}
 	}

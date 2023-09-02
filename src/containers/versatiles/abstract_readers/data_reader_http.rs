@@ -4,6 +4,7 @@ use crate::create_error;
 use crate::shared::{Blob, Result};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
+use log::info;
 use regex::{Regex, RegexBuilder};
 use reqwest::{Client, Method, Request, StatusCode, Url};
 use std::str;
@@ -43,7 +44,7 @@ impl DataReaderTrait for DataReaderHttp {
 
 		if response.status() != StatusCode::PARTIAL_CONTENT {
 			let status_code = response.status();
-			println!("response: {}", str::from_utf8(&response.bytes().await?)?);
+			info!("response: {}", str::from_utf8(&response.bytes().await?)?);
 			return create_error!(
 				"as a response to a range request it is expected to get the status code 206. instead we got {status_code}"
 			);

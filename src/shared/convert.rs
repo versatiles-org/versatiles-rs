@@ -1,12 +1,17 @@
+use crate::containers::TileStream;
+
 use super::{
 	compress_brotli, compress_gzip, decompress_brotli, decompress_gzip,
 	image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2img, webp2img},
-	Blob, Compression, Result, TileCoord3,
+	Blob, Compression, Result,
 };
 use clap::ValueEnum;
+use futures_util::StreamExt;
 use itertools::Itertools;
-use rayon::prelude::{IntoParallelIterator, ParallelIterator};
-use std::fmt::{self, Debug};
+use std::{
+	fmt::{self, Debug},
+	sync::Arc,
+};
 
 #[derive(Clone, Debug)]
 enum FnConv {
@@ -192,16 +197,14 @@ impl DataConverter {
 	}
 
 	/// Runs a stream through the pipeline of conversion functions
-	pub fn process_vec(&self, vec: Vec<(TileCoord3, Blob)>) -> Vec<(TileCoord3, Blob)> {
-		let pipeline = self.pipeline.clone();
-		vec.into_par_iter()
-			.map(move |(coord, mut blob)| {
-				for f in pipeline.iter() {
-					blob = f.run(blob).unwrap();
-				}
-				(coord, blob)
-			})
-			.collect()
+	pub fn process_stream<'a>(&'a self, stream: TileStream<'a>) -> TileStream<'a> {
+		let pipeline = Arc::new(self.pipeline.clone());
+		Box::pin(stream.map(move |(coord, mut blob)| {
+			for f in pipeline.iter() {
+				blob = f.run(blob).unwrap();
+			}
+			(coord, blob)
+		}))
 	}
 
 	/// Returns a string describing the pipeline of conversion functions.
@@ -264,12 +267,12 @@ mod tests {
 		}
 
 		assert!(catch_unwind(|| {
-			test(PBF, Brotli, PNG, Brotli, false, 3, "hallo3");
+			test(PBF, Brotli, PNG, Brotli, false, 3, "hello3");
 		})
 		.is_err());
 
 		assert!(catch_unwind(|| {
-			test(PNG, None, PBF, Gzip, true, 3, "hallo4");
+			test(PNG, None, PBF, Gzip, true, 3, "hello4");
 		})
 		.is_err());
 

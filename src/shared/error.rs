@@ -1,5 +1,5 @@
 /// A type alias for `std::result::Result` that uses `Box<dyn std::error::Error>` as the error type.
-pub type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// Represents an error in the application.
 #[derive(Debug, Clone)]
@@ -9,10 +9,12 @@ pub struct Error {
 
 impl Error {
 	/// Creates a new `Error` instance with the given message.
-	pub fn new(msg: &str) -> Box<Self> {
-		Box::new(Self { msg: msg.to_owned() })
+	pub fn new(msg: &str) -> Self {
+		Self { msg: msg.to_owned() }
 	}
 }
+
+unsafe impl Send for Error {}
 
 impl std::fmt::Display for Error {
 	/// Formats the error message for display.
@@ -21,7 +23,11 @@ impl std::fmt::Display for Error {
 	}
 }
 
-impl std::error::Error for Error {}
+impl<T: std::error::Error> From<T> for Error {
+	fn from(error: T) -> Self {
+		Self { msg: error.to_string() }
+	}
+}
 
 #[macro_export]
 macro_rules! create_error {

@@ -27,18 +27,19 @@ mod tests {
 		containers::{dummy, TileConverterTrait, TileReaderTrait},
 		shared::TileConverterConfig,
 	};
-	use futures::executor::block_on;
 
-	#[test]
-	fn panic1() {
-		assert!(block_on(TileConverter::new("filename.txt", TileConverterConfig::new_full())).is_err());
+	#[tokio::test]
+	async fn panic1() {
+		assert!(TileConverter::new("filename.txt", TileConverterConfig::new_full())
+			.await
+			.is_err());
 	}
 
-	#[test]
+	#[tokio::test]
 	#[should_panic]
-	fn panic2() {
+	async fn panic2() {
 		let mut converter = TileConverter {};
-		let mut reader = block_on(dummy::TileReader::new("filename.txt")).unwrap();
-		block_on(converter.convert_from(&mut reader)).unwrap();
+		let mut reader = dummy::TileReader::new("filename.txt").await.unwrap();
+		assert!(converter.convert_from(&mut reader).await.is_err())
 	}
 }

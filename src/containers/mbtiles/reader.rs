@@ -1,5 +1,5 @@
 use crate::{
-	containers::{TileIterator, TileReaderBox, TileReaderTrait},
+	containers::{TileReaderBox, TileReaderTrait, TileStream},
 	create_error,
 	shared::*,
 };
@@ -241,30 +241,65 @@ impl TileReaderTrait for TileReader {
 
 		Ok(Blob::from(blob))
 	}
-	fn get_bbox_tile_iter<'a>(&'a mut self, bbox: &'a TileBBox) -> TileIterator {
-		let max = bbox.get_max();
-		let x_min = bbox.get_x_min();
-		let x_max = bbox.get_x_max();
-		let y_min = max - bbox.get_y_max();
-		let y_max = max - bbox.get_y_min();
-		let level = bbox.get_level();
+	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox_in: &'a TileBBox) -> TileStream {
+		if bbox_in.is_empty() {
+			return Box::pin(futures_util::stream::empty());
+		}
+
+		let mut bbox: TileBBox = *bbox_in;
+
+		let parameters = self.get_parameters().unwrap();
+		let swap_xy = parameters.get_swap_xy();
+		let flip_y = !parameters.get_flip_y(); // Because mbtiles is actually flipped;
+
+		println!("bbox {bbox:?}");
+		println!("flip_y {flip_y:?}");
+
+		if swap_xy {
+			bbox.swap_xy();
+		};
+
+		if flip_y {
+			bbox.flip_y();
+		};
 
 		let conn = self.pool.get().unwrap();
 		let mut stmt = conn
 			 .prepare("SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?")
 			 .unwrap();
 
-		let iterator = stmt
-			.query_map([x_min, x_max, y_min, y_max, level as u32], move |row| {
-				Ok((
-					TileCoord3::new(row.get::<_, u32>(0)?, max - row.get::<_, u32>(1)?, row.get::<_, u8>(2)?),
-					Blob::from(row.get::<_, Vec<u8>>(3)?),
-				))
-			})
-			.unwrap()
-			.collect::<Vec<_>>();
+		let vec: Vec<(TileCoord3, Blob)> = stmt
+			.query_map(
+				[
+					bbox.get_x_min(),
+					bbox.get_x_max(),
+					bbox.get_y_min(),
+					bbox.get_y_max(),
+					bbox.get_level() as u32,
+				],
+				move |row| {
+					let mut coord = TileCoord3::new(row.get::<_, u32>(0)?, row.get::<_, u32>(1)?, row.get::<_, u8>(2)?);
 
-		Box::new(iterator.into_iter().map(|r| r.unwrap()))
+					if flip_y {
+						coord.flip_y();
+					};
+					if swap_xy {
+						coord.swap_xy();
+					};
+
+					let blob = Blob::from(row.get::<_, Vec<u8>>(3)?);
+
+					Ok((coord, blob))
+				},
+			)
+			.unwrap()
+			.filter_map(|r| match r {
+				Ok(ok) => Some(ok),
+				Err(_) => None,
+			})
+			.collect();
+
+		Box::pin(futures_util::stream::iter(vec))
 	}
 	fn get_name(&self) -> Result<&str> {
 		Ok(&self.name)

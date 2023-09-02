@@ -20,7 +20,7 @@ impl TileBBoxPyramid {
 			level_bbox: from_fn(|z| TileBBox::new_empty(z as u8)),
 		}
 	}
-	pub fn intersect_geo_bbox(&mut self, geo_bbox: &[f32; 4]) {
+	pub fn intersect_geo_bbox(&mut self, geo_bbox: &[f64; 4]) {
 		for (z, bbox) in self.level_bbox.iter_mut().enumerate() {
 			bbox.intersect_bbox(&TileBBox::from_geo(z as u8, geo_bbox));
 		}
@@ -44,10 +44,14 @@ impl TileBBoxPyramid {
 		self.level_bbox[level as usize] = bbox;
 	}
 	pub fn swap_xy(&mut self) {
-		self.level_bbox.iter_mut().for_each(|b| b.swap_xy())
+		self.level_bbox.iter_mut().for_each(|b| {
+			b.swap_xy();
+		});
 	}
 	pub fn flip_y(&mut self) {
-		self.level_bbox.iter_mut().for_each(|b| b.flip_y())
+		self.level_bbox.iter_mut().for_each(|b| {
+			b.flip_y();
+		});
 	}
 	pub fn include_coord(&mut self, coord: &TileCoord3) {
 		self.level_bbox[coord.get_z() as usize].include_tile(coord.get_x(), coord.get_y());
@@ -99,7 +103,7 @@ impl TileBBoxPyramid {
 	pub fn is_full(&self) -> bool {
 		self.level_bbox.iter().all(|bbox| bbox.is_full())
 	}
-	pub fn get_geo_bbox(&self) -> [f32; 4] {
+	pub fn get_geo_bbox(&self) -> [f64; 4] {
 		let level = self.get_zoom_max().unwrap();
 
 		self.get_level_bbox(level).as_geo_bbox(level)
@@ -107,6 +111,12 @@ impl TileBBoxPyramid {
 }
 
 impl fmt::Debug for TileBBoxPyramid {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_list().entries(self.iter_levels()).finish()
+	}
+}
+
+impl fmt::Display for TileBBoxPyramid {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_list().entries(self.iter_levels()).finish()
 	}
@@ -158,7 +168,7 @@ mod tests {
 	fn limit_by_geo_bbox() {
 		let mut pyramid = TileBBoxPyramid::new_full();
 		pyramid.set_zoom_max(8);
-		pyramid.intersect_geo_bbox(&[8.0653f32, 51.3563f32, 12.3528f32, 52.2564f32]);
+		pyramid.intersect_geo_bbox(&[8.0653f64, 51.3563f64, 12.3528f64, 52.2564f64]);
 
 		assert_eq!(pyramid.get_level_bbox(0), &TileBBox::new(0, 0, 0, 0, 0));
 		assert_eq!(pyramid.get_level_bbox(1), &TileBBox::new(1, 1, 0, 1, 0));
@@ -213,7 +223,7 @@ mod tests {
 		let test = |z0: u8, z1: u8| {
 			let mut pyramid = TileBBoxPyramid::new_empty();
 			let bbox = TileBBox::new_full(z0);
-			pyramid.set_level_bbox(z1, bbox.clone());
+			pyramid.set_level_bbox(z1, bbox);
 			assert_eq!(pyramid.get_level_bbox(z1).clone(), bbox);
 		};
 

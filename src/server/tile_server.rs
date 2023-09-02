@@ -14,9 +14,9 @@ use axum::{
 	routing::get,
 	Router, Server,
 };
-use futures::{executor::block_on, lock::Mutex};
+use log::error;
 use std::sync::Arc;
-use tokio::sync::oneshot::Sender;
+use tokio::sync::{oneshot::Sender, Mutex};
 
 struct TileSource {
 	prefix: String,
@@ -89,11 +89,11 @@ impl TileServer {
 		let mut app = Router::new().route("/status", get(|| async { "ready!" }));
 
 		app = self.add_tile_sources_to_app(app);
-		app = self.add_api_to_app(app)?;
+		app = self.add_api_to_app(app).await?;
 		app = self.add_static_sources_to_app(app);
 
 		let addr = format!("{}:{}", self.ip, self.port);
-		println!("server starts listening on {}", addr);
+		eprintln!("server starts listening on {}", addr);
 
 		let server = Server::bind(&addr.parse()?).serve(app.into_make_service());
 
@@ -106,7 +106,7 @@ impl TileServer {
 
 		tokio::spawn(async move {
 			if let Err(e) = graceful.await {
-				eprintln!("server error: {}", e);
+				error!("server error: {}", e);
 			}
 		});
 
@@ -187,10 +187,10 @@ impl TileServer {
 		}
 	}
 
-	fn add_api_to_app(&self, app: Router) -> Result<Router> {
+	async fn add_api_to_app(&self, app: Router) -> Result<Router> {
 		let mut tile_sources_json_lines: Vec<String> = Vec::new();
 		for tile_source in self.tile_sources.iter() {
-			let source = block_on(tile_source.source.lock());
+			let source = tile_source.source.lock().await;
 			tile_sources_json_lines.push(format!(
 				"{{ \"url\":\"{}\", \"name\":\"{}\", \"info\":{} }}",
 				tile_source.prefix,
@@ -214,14 +214,16 @@ impl TileServer {
 		Ok(app.merge(api_app))
 	}
 
-	pub fn iter_url_mapping(&self) -> impl Iterator<Item = (String, String)> + '_ {
-		self.tile_sources.iter().map(|tile_source| {
-			let source = block_on(tile_source.source.lock());
-			(
+	pub async fn get_url_mapping(&self) -> Vec<(String, String)> {
+		let mut result = Vec::new();
+		for tile_source in self.tile_sources.iter() {
+			let source = tile_source.source.lock().await;
+			result.push((
 				tile_source.prefix.to_owned(),
 				source.get_name().unwrap_or(String::from("???")),
-			)
-		})
+			))
+		}
+		result
 	}
 }
 
@@ -372,7 +374,7 @@ mod tests {
 		server.start().await.unwrap();
 
 		assert_eq!(get("api/status.json").await, "{\"status\":\"ready\"}");
-		assert_eq!(get("api/tiles.json").await, "[\n\t{ \"url\":\"/cheese/\", \"name\":\"dummy name\", \"info\":{ \"container\":\"dummy container\", \"format\":\"pbf\", \"compression\":\"gzip\", \"zoom_min\":0, \"zoom_max\":8, \"bbox\":[-180.0, -85.05113, 180.0, 85.05112] } }\n]");
+		assert_eq!(get("api/tiles.json").await, "[\n\t{ \"url\":\"/cheese/\", \"name\":\"dummy name\", \"info\":{ \"container\":\"dummy container\", \"format\":\"pbf\", \"compression\":\"gzip\", \"zoom_min\":0, \"zoom_max\":8, \"bbox\":[-180.0, -85.05112877980659, 180.0, 85.05112877980659] } }\n]");
 		assert!(get("cheese/0/0/0.png").await.starts_with("\u{1a}4\n\u{5}ocean"));
 		assert_eq!(get("cheese/meta.json").await, "dummy meta data");
 		assert_eq!(get("cheese/tiles.json").await, "dummy meta data");
@@ -432,15 +434,15 @@ mod tests {
 		assert_eq!(server.static_sources.len(), 1);
 	}
 
-	#[test]
-	fn tile_server_iter_url_mapping() {
+	#[tokio::test]
+	async fn tile_server_iter_url_mapping() {
 		let mut server = TileServer::new(IP, PORT, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
 		let source = TileContainer::from(reader).unwrap();
 		server.add_tile_source("cheese", source).unwrap();
 
-		let mappings: Vec<(String, String)> = server.iter_url_mapping().collect();
+		let mappings: Vec<(String, String)> = server.get_url_mapping().await;
 		assert_eq!(mappings.len(), 1);
 		assert_eq!(mappings[0].0, "/cheese/");
 		assert_eq!(mappings[0].1, "dummy name");

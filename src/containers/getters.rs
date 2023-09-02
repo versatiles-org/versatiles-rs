@@ -71,7 +71,7 @@ pub mod tests {
 		}?;
 
 		let config = TileConverterConfig::new(Some(tile_format), Some(compression), TileBBoxPyramid::new_full(), false);
-		let mut converter = get_converter(&container_file.to_str().unwrap(), config).await?;
+		let mut converter = get_converter(container_file.to_str().unwrap(), config).await?;
 
 		// convert
 		converter.convert_from(&mut reader).await?;
@@ -92,13 +92,12 @@ pub mod tests {
 			reader_profile: RP, max_zoom_level: u8, container: &Container, tile_format: TF, compression: C,
 			force_recompress: bool,
 		) -> Result<()> {
-			let test_name = format!(
+			let _test_name = format!(
 				"{:?}, {}, {:?}, {:?}, {:?}, {:?}",
 				reader_profile, max_zoom_level, container, tile_format, compression, force_recompress
 			);
-			println!("test: {}", test_name);
 
-			let start = Instant::now();
+			let _start = Instant::now();
 
 			// get dummy reader
 			let mut reader1 = dummy::TileReader::new_dummy(reader_profile, max_zoom_level);
@@ -115,7 +114,7 @@ pub mod tests {
 				TileBBoxPyramid::new_full(),
 				force_recompress,
 			);
-			let mut converter1 = get_converter(&container_file.to_str().unwrap(), config).await?;
+			let mut converter1 = get_converter(container_file.to_str().unwrap(), config).await?;
 
 			// convert
 			converter1.convert_from(&mut reader1).await?;
@@ -124,8 +123,6 @@ pub mod tests {
 			let mut reader2 = get_reader(container_file.to_str().unwrap()).await?;
 			let mut converter2 = dummy::TileConverter::new_dummy(CP::Whatever, max_zoom_level);
 			converter2.convert_from(&mut reader2).await?;
-
-			println!("elapsed time for {}: {:?}", test_name, start.elapsed());
 
 			Ok(())
 		}
