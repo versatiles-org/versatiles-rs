@@ -104,7 +104,7 @@ impl TileConverter {
 				let level = coord.get_z();
 				let size = 2u32.pow(level.min(8) as u32) - 1;
 
-				let mut bbox_block = bbox_tiles.clone();
+				let mut bbox_block = *bbox_tiles;
 				bbox_block.intersect_bbox(&TileBBox::new(level, x, y, x + size, y + size));
 				blocks.push(BlockDefinition::new(bbox_block))
 			}
@@ -159,7 +159,7 @@ impl TileConverter {
 		let tile_converter = self.config.get_tile_recompressor();
 
 		// Get the tile stream
-		let mut tile_stream: TileStream = reader.get_bbox_tile_stream(&bbox).await;
+		let mut tile_stream: TileStream = reader.get_bbox_tile_stream(bbox).await;
 
 		// Compress the blobs if necessary
 		if !tile_converter.is_empty() {

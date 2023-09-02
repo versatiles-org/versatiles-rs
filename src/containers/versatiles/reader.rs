@@ -55,7 +55,7 @@ impl TileReader {
 		let block_coord = block.get_coord3();
 
 		// Retrieve the tile index from cache or read from the reader
-		let tile_index_option = self.tile_index_cache.get(&block_coord);
+		let tile_index_option = self.tile_index_cache.get(block_coord);
 
 		if let Some(tile_index) = tile_index_option {
 			return tile_index.clone();
@@ -69,7 +69,7 @@ impl TileReader {
 
 		self.tile_index_cache.insert(*block_coord, Arc::new(tile_index));
 
-		return self.tile_index_cache.get(&block_coord).unwrap().clone();
+		return self.tile_index_cache.get(block_coord).unwrap().clone();
 	}
 }
 
@@ -161,7 +161,7 @@ impl TileReaderTrait for TileReader {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
-		let mut outer_bbox: TileBBox = bbox.clone();
+		let mut outer_bbox: TileBBox = *bbox;
 
 		let swap_xy: bool = self.get_parameters().unwrap().get_swap_xy();
 		let flip_y: bool = self.get_parameters().unwrap().get_flip_y();
@@ -174,7 +174,7 @@ impl TileReaderTrait for TileReader {
 			outer_bbox.flip_y();
 		};
 
-		let mut block_coords: TileBBox = outer_bbox.clone();
+		let mut block_coords: TileBBox = outer_bbox;
 		block_coords.scale_down(256);
 		let block_coords: Vec<TileCoord3> = block_coords.iter_coords().collect();
 
@@ -201,8 +201,8 @@ impl TileReaderTrait for TileReader {
 					trace!("tiles_bbox_block {tiles_bbox_block:?}");
 
 					// Get the bounding box of all tiles defined in this block
-					let mut tiles_bbox_used = outer_bbox.clone();
-					tiles_bbox_used.intersect_bbox(&tiles_bbox_block);
+					let mut tiles_bbox_used = outer_bbox;
+					tiles_bbox_used.intersect_bbox(tiles_bbox_block);
 					trace!("tiles_bbox_used {tiles_bbox_used:?}");
 
 					assert_eq!(outer_bbox.get_level(), tiles_bbox_block.get_level());
