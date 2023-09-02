@@ -186,6 +186,68 @@ mod tests {
 	}
 
 	#[test]
+	fn tilecoord2_new_and_getters() {
+		let coord = TileCoord2::new(3, 4);
+		assert_eq!(coord.get_x(), 3);
+		assert_eq!(coord.get_y(), 4);
+	}
+
+	#[test]
+	fn tilecoord2_substract() {
+		let mut coord1 = TileCoord2::new(5, 7);
+		let coord2 = TileCoord2::new(2, 3);
+		coord1.substract(&coord2);
+		assert_eq!(coord1, TileCoord2::new(3, 4));
+	}
+
+	#[test]
+	fn tilecoord2_scale_by() {
+		let mut coord = TileCoord2::new(3, 4);
+		coord.scale_by(2);
+		assert_eq!(coord, TileCoord2::new(6, 8));
+	}
+
+	#[test]
+	fn tilecoord3_new_and_getters() {
+		let coord = TileCoord3::new(3, 4, 5);
+		assert_eq!(coord.get_x(), 3);
+		assert_eq!(coord.get_y(), 4);
+		assert_eq!(coord.get_z(), 5);
+	}
+
+	#[test]
+	fn tilecoord3_swap_xy() {
+		let mut coord = TileCoord3::new(3, 4, 5);
+		coord.swap_xy();
+		assert_eq!(coord, TileCoord3::new(4, 3, 5));
+	}
+
+	#[test]
+	fn tilecoord3_as_geo() {
+		let coord = TileCoord3::new(3, 4, 5);
+		assert_eq!(coord.as_geo(), [-146.25, 79.17133464081945]);
+	}
+
+	#[test]
+	fn tilecoord3_as_coord2() {
+		let coord = TileCoord3::new(3, 4, 5);
+		let coord2 = coord.as_coord2();
+		assert_eq!(coord2, TileCoord2::new(3, 4));
+	}
+
+	#[test]
+	fn tilecoord3_is_valid() {
+		let coord = TileCoord3::new(3, 4, 5);
+		assert!(coord.is_valid());
+	}
+
+	#[test]
+	fn tilecoord3_get_sort_index() {
+		let coord = TileCoord3::new(3, 4, 5);
+		assert_eq!(coord.get_sort_index(), 472);
+	}
+
+	#[test]
 	fn hash() {
 		let mut hasher = DefaultHasher::new();
 		TileCoord2::new(2, 2).hash(&mut hasher);

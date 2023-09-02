@@ -525,7 +525,6 @@ mod tests {
 	}
 
 	#[test]
-
 	fn add_border() {
 		let mut bbox = TileBBox::new(8, 5, 10, 20, 30);
 
@@ -552,7 +551,6 @@ mod tests {
 	}
 
 	#[test]
-
 	fn flip_y() {
 		let test = |a, b, c, d, e| -> TileBBox {
 			let mut t = TileBBox::new(a, b, c, d, e);
@@ -565,5 +563,33 @@ mod tests {
 		assert_eq!(test(3, 0, 0, 1, 1), TileBBox::new(3, 0, 6, 1, 7));
 		assert_eq!(test(9, 10, 0, 10, 511), TileBBox::new(9, 10, 0, 10, 511));
 		assert_eq!(test(9, 0, 10, 511, 10), TileBBox::new(9, 0, 501, 511, 501));
+	}
+
+	#[test]
+	fn test_shift_by() {
+		let mut bbox = TileBBox::new(4, 1, 2, 3, 4);
+		bbox.shift_by(1, 1);
+		assert_eq!(bbox, TileBBox::new(4, 2, 3, 4, 5));
+	}
+
+	#[test]
+	fn test_substract_coord2() {
+		let mut bbox = TileBBox::new(4, 3, 3, 5, 5);
+		let coord = TileCoord2::new(1, 1);
+		bbox.substract_coord2(&coord);
+		assert_eq!(bbox, TileBBox::new(4, 2, 2, 4, 4));
+	}
+
+	#[test]
+	fn test_substract_u32() {
+		let mut bbox = TileBBox::new(4, 3, 3, 5, 5);
+		bbox.substract_u32(1, 1);
+		assert_eq!(bbox, TileBBox::new(4, 2, 2, 4, 4));
+	}
+
+	#[test]
+	fn test_get_max() {
+		let bbox = TileBBox::new(4, 1, 1, 3, 3);
+		assert_eq!(bbox.get_max(), 15);
 	}
 }
