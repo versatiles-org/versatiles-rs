@@ -51,7 +51,7 @@ impl BlockIndex {
 	}
 
 	pub fn add_block(&mut self, block: BlockDefinition) {
-		self.lookup.insert(block.get_coord3(), block);
+		self.lookup.insert(*block.get_coord3(), block);
 	}
 
 	pub fn as_blob(&self) -> Blob {

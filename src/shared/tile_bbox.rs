@@ -21,19 +21,18 @@ impl TileBBox {
 		assert!(level <= 31, "level ({level}) must be <= 31");
 		let max = 2u32.pow(level as u32) - 1;
 
-		assert!(x_min <= x_max, "x_min ({x_min}) must be <= x_max ({x_max})");
-		assert!(y_min <= y_max, "y_min ({y_min}) must be <= y_max ({y_max})");
-		assert!(x_max <= max, "x_max ({x_max}) must be <= max ({max})");
-		assert!(y_max <= max, "y_max ({y_max}) must be <= max ({max})");
-
-		TileBBox {
+		let bbox = TileBBox {
 			level,
 			max,
 			x_min,
 			y_min,
 			x_max,
 			y_max,
-		}
+		};
+
+		bbox.check();
+
+		bbox
 	}
 	pub fn new_full(level: u8) -> TileBBox {
 		assert!(level <= 31, "level ({level}) must be <= 31");
@@ -223,46 +222,80 @@ impl TileBBox {
 			)
 		})
 	}
-	pub fn shift_by(mut self, x: u32, y: u32) -> TileBBox {
+
+	fn check(&self) {
+		assert!(
+			self.x_min <= self.x_max,
+			"x_min ({}) must be <= x_max ({})",
+			self.x_min,
+			self.x_max
+		);
+		assert!(
+			self.y_min <= self.y_max,
+			"y_min ({}) must be <= y_max ({})",
+			self.y_min,
+			self.y_max
+		);
+		assert!(
+			self.x_max <= self.max,
+			"x_max ({}) must be <= max ({})",
+			self.x_max,
+			self.max
+		);
+		assert!(
+			self.y_max <= self.max,
+			"y_max ({}) must be <= max ({})",
+			self.y_max,
+			self.max
+		);
+	}
+
+	#[allow(dead_code)]
+	pub fn shift_by(&mut self, x: u32, y: u32) {
 		self.x_min += x;
 		self.y_min += y;
 		self.x_max += x;
 		self.y_max += y;
 
-		self
+		self.check();
 	}
+
 	#[allow(dead_code)]
-	pub fn substract_coord2(mut self, c: &TileCoord2) -> TileBBox {
+	pub fn substract_coord2(&mut self, c: &TileCoord2) {
 		self.x_min = self.x_min.saturating_sub(c.get_x());
 		self.y_min = self.y_min.saturating_sub(c.get_y());
 		self.x_max = self.x_max.saturating_sub(c.get_x());
 		self.y_max = self.y_max.saturating_sub(c.get_y());
 
-		self
+		self.check();
 	}
+
 	#[allow(dead_code)]
-	pub fn substract_u32(mut self, x: u32, y: u32) -> TileBBox {
+	pub fn substract_u32(&mut self, x: u32, y: u32) {
 		self.x_min = self.x_min.saturating_sub(x);
 		self.y_min = self.y_min.saturating_sub(y);
 		self.x_max = self.x_max.saturating_sub(x);
 		self.y_max = self.y_max.saturating_sub(y);
 
-		self
+		self.check();
 	}
-	pub fn scale_down(mut self, scale: u32) -> TileBBox {
+
+	pub fn scale_down(&mut self, scale: u32) {
 		self.x_min /= scale;
 		self.y_min /= scale;
 		self.x_max /= scale;
 		self.y_max /= scale;
 
-		self
+		self.check();
 	}
+
 	pub fn contains(&self, coord: &TileCoord2) -> bool {
 		(coord.get_x() >= self.x_min)
 			&& (coord.get_x() <= self.x_max)
 			&& (coord.get_y() >= self.y_min)
 			&& (coord.get_y() <= self.y_max)
 	}
+
 	pub fn contains3(&self, coord: &TileCoord3) -> bool {
 		(coord.get_z() == self.level)
 			&& (coord.get_x() >= self.x_min)

@@ -67,7 +67,7 @@ impl TileReader {
 
 		assert_eq!(tile_index.len(), block.count_tiles() as usize);
 
-		self.tile_index_cache.insert(block_coord, Arc::new(tile_index));
+		self.tile_index_cache.insert(*block_coord, Arc::new(tile_index));
 
 		return self.tile_index_cache.get(&block_coord).unwrap().clone();
 	}
@@ -174,7 +174,9 @@ impl TileReaderTrait for TileReader {
 			outer_bbox.flip_y();
 		};
 
-		let block_coords: Vec<TileCoord3> = outer_bbox.scale_down(256).iter_coords().collect();
+		let mut block_coords: TileBBox = outer_bbox.clone();
+		block_coords.scale_down(256);
+		let block_coords: Vec<TileCoord3> = block_coords.iter_coords().collect();
 
 		let self_mutex = Arc::new(Mutex::new(self));
 

@@ -109,8 +109,8 @@ impl BlockDefinition {
 	}
 
 	/// global bbox of the defined tiles, e.g. [4096,4096,4351,4351]
-	pub fn get_global_bbox(&self) -> TileBBox {
-		self.tiles_coverage.shift_by(self.get_x() * 256, self.get_y() * 256)
+	pub fn get_global_bbox(&self) -> &TileBBox {
+		&self.global_bbox
 	}
 
 	pub fn get_tiles_range(&self) -> &ByteRange {
@@ -121,10 +121,12 @@ impl BlockDefinition {
 		&self.index_range
 	}
 
+	#[allow(dead_code)]
 	pub fn get_x(&self) -> u32 {
 		self.offset.get_x()
 	}
 
+	#[allow(dead_code)]
 	pub fn get_y(&self) -> u32 {
 		self.offset.get_y()
 	}
@@ -133,8 +135,8 @@ impl BlockDefinition {
 		self.offset.get_z()
 	}
 
-	pub fn get_coord3(&self) -> TileCoord3 {
-		self.offset
+	pub fn get_coord3(&self) -> &TileCoord3 {
+		&self.offset
 	}
 
 	#[allow(dead_code)]
