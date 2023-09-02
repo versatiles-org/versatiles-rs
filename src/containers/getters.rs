@@ -1,9 +1,7 @@
 #[cfg(feature = "mbtiles")]
 use super::mbtiles;
-
 #[cfg(feature = "tar")]
 use super::tar;
-
 use super::{versatiles, TileConverterBox, TileConverterTrait, TileReaderBox, TileReaderTrait};
 use crate::{
 	create_error,
@@ -42,6 +40,7 @@ fn get_extension(path: &Path) -> String {
 	}
 }
 
+#[allow(unused_imports)]
 #[cfg(test)]
 pub mod tests {
 	use crate::{
@@ -85,6 +84,7 @@ pub mod tests {
 	}
 
 	#[test]
+	#[cfg(all(feature = "tar", feature = "image"))]
 	fn converters_and_readers() -> Result<()> {
 		#[derive(Debug)]
 		enum Container {
@@ -139,6 +139,7 @@ pub mod tests {
 			test_converter_and_reader(RP::PngFast, 4, &container, TF::JPG, C::None, false)?;
 			test_converter_and_reader(RP::PbfFast, 7, &container, TF::PBF, C::Gzip, false)?;
 		}
+
 		Ok(())
 	}
 }

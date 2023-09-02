@@ -51,6 +51,7 @@ impl DataReaderTrait for DataReaderFile {
 		&self.name
 	}
 }
+
 #[cfg(test)]
 mod tests {
 	use super::{DataReaderFile, DataReaderTrait};

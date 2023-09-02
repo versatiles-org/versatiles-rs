@@ -1,10 +1,8 @@
-use crate::containers::TileStream;
-
-use super::{
-	compress_brotli, compress_gzip, decompress_brotli, decompress_gzip,
-	image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2img, webp2img},
-	Blob, Compression, Result,
-};
+#[cfg(feature = "image")]
+use super::image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2img, webp2img};
+use super::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression, Result};
+use crate::{containers::TileStream, create_error};
+#[cfg(feature = "cli")]
 use clap::ValueEnum;
 use futures_util::StreamExt;
 use itertools::Itertools;
@@ -37,29 +35,40 @@ impl fmt::Display for FnConv {
 /// A structure representing a function that converts a blob to another blob
 
 impl FnConv {
+	#[allow(unreachable_patterns)]
 	fn run(&self, tile: Blob) -> Result<Blob> {
 		match self {
+			#[cfg(feature = "image")]
 			FnConv::Png2Jpg => img2jpg(png2img(tile)?),
+			#[cfg(feature = "image")]
 			FnConv::Png2Png => img2png(png2img(tile)?),
+			#[cfg(feature = "image")]
 			FnConv::Png2Webplossless => img2webplossless(png2img(tile)?),
 
+			#[cfg(feature = "image")]
 			FnConv::Jpg2Png => img2png(jpg2img(tile)?),
+			#[cfg(feature = "image")]
 			FnConv::Jpg2Webp => img2webp(jpg2img(tile)?),
 
+			#[cfg(feature = "image")]
 			FnConv::Webp2Jpg => img2jpg(webp2img(tile)?),
+			#[cfg(feature = "image")]
 			FnConv::Webp2Png => img2png(webp2img(tile)?),
 
 			FnConv::UnGzip => decompress_gzip(tile),
 			FnConv::UnBrotli => decompress_brotli(tile),
 			FnConv::Gzip => compress_gzip(tile),
 			FnConv::Brotli => compress_brotli(tile),
+
+			_ => create_error!("{self:?} is not supported"),
 		}
 	}
 }
 
 // Enum representing supported tile formats
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Clone, Debug, PartialEq, Eq, ValueEnum)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "cli", derive(ValueEnum))]
 pub enum TileFormat {
 	BIN,
 	PNG,

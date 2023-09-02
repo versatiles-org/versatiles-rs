@@ -129,6 +129,7 @@ async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileCon
 	Ok(converter)
 }
 
+#[allow(unused_imports)]
 #[cfg(test)]
 mod tests {
 	use crate::tests::run_command;
@@ -168,6 +169,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg(feature = "request")]
 	fn test_remote1() {
 		fs::create_dir("tmp/").unwrap_or_default();
 		run_command(vec![
@@ -185,6 +187,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg(feature = "request")]
 	fn test_remote2() {
 		fs::create_dir("tmp/").unwrap_or_default();
 		run_command(vec![

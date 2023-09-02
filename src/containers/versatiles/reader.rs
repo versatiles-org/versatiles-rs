@@ -1,12 +1,11 @@
 // Import necessary modules and traits
 use super::{new_data_reader, types::*, DataReaderTrait};
+#[cfg(feature = "image")]
+use crate::shared::StatusImagePyramide;
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait, TileStream},
 	create_error,
-	shared::{
-		Blob, DataConverter, ProgressBar, Result, StatusImagePyramide, TileBBox, TileCoord2, TileCoord3,
-		TileReaderParameters,
-	},
+	shared::{Blob, DataConverter, ProgressBar, Result, TileBBox, TileCoord2, TileCoord3, TileReaderParameters},
 };
 use async_stream::stream;
 use async_trait::async_trait;
@@ -298,6 +297,7 @@ impl TileReaderTrait for TileReader {
 	}
 
 	// Perform a deep verification of the TileReader
+	#[allow(unused_variables)]
 	async fn deep_verify(&mut self, output_folder: &Path) -> Result<()> {
 		let block_count = self.block_index.len() as u64;
 
@@ -310,28 +310,30 @@ impl TileReaderTrait for TileReader {
 			.iter()
 			.sorted_by_cached_key(|block| block.get_sort_index());
 
-		let mut status_images = StatusImagePyramide::new();
+		#[cfg(feature = "image")]
+		{
+			let mut status_images = StatusImagePyramide::new();
 
-		for block in blocks {
-			let bbox = block.get_global_bbox();
-			let tiles_count = bbox.count_tiles();
+			for block in blocks {
+				let bbox = block.get_global_bbox();
+				let tiles_count = bbox.count_tiles();
 
-			let blob = self.reader.read_range(block.get_index_range()).await?;
-			let tile_index = TileIndex::from_brotli_blob(blob);
-			assert_eq!(tile_index.len(), tiles_count as usize, "tile count are not the same");
+				let blob = self.reader.read_range(block.get_index_range()).await?;
+				let tile_index = TileIndex::from_brotli_blob(blob);
+				assert_eq!(tile_index.len(), tiles_count as usize, "tile count are not the same");
 
-			let status_image = status_images.get_level(block.get_z());
+				let status_image = status_images.get_level(block.get_z());
 
-			for (index, byterange) in tile_index.iter().enumerate() {
-				let coord = bbox.get_coord2_by_index(index as u32);
-				status_image.set(coord.get_x(), coord.get_y(), byterange.length as u32);
+				for (index, byterange) in tile_index.iter().enumerate() {
+					let coord = bbox.get_coord2_by_index(index as u32);
+					status_image.set(coord.get_x(), coord.get_y(), byterange.length as u32);
+				}
+
+				progress.inc(block.count_tiles());
 			}
-
-			progress.inc(block.count_tiles());
+			status_images.save(&output_folder.join("tile_sizes.png"));
 		}
 		progress.finish();
-
-		status_images.save(&output_folder.join("tile_sizes.png"));
 
 		Ok(())
 	}
@@ -346,7 +348,6 @@ impl Debug for TileReader {
 	}
 }
 
-// Unit tests
 #[cfg(test)]
 mod tests {
 	use super::TileReader;

@@ -7,7 +7,7 @@ rustup update
 
 echo "Find unused dependencies"
 cargo +nightly udeps --all-targets --no-default-features
-cargo +nightly udeps --all-targets --no-default-features --features mbtiles
+cargo +nightly udeps --all-targets
 
 #echo "check features"
 #unused-features analyze
@@ -19,3 +19,4 @@ echo "upgrade dependencies"
 cargo upgrade
 
 cargo check
+cli image mbtiles request server tar

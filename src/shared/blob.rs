@@ -141,7 +141,6 @@ impl ToString for Blob {
 unsafe impl Send for Blob {}
 unsafe impl Sync for Blob {}
 
-// module containing unit tests for Blob struct
 #[cfg(test)]
 mod tests {
 	use bytes::Bytes;

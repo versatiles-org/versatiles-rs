@@ -1,10 +1,9 @@
 // Import necessary modules and dependencies
 mod containers;
-mod shared;
-mod tools;
-
 #[cfg(feature = "server")]
 mod server;
+mod shared;
+mod tools;
 
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{InfoLevel, Verbosity};
@@ -117,6 +116,7 @@ mod tests {
 
 	// Test for subcommand 'serve'
 	#[test]
+	#[cfg(feature = "server")]
 	fn serve_subcommand() {
 		let output = run_command(vec!["versatiles", "serve"]).unwrap_err();
 		assert!(output.starts_with("Serve tiles via http"));

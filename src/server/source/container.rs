@@ -123,7 +123,6 @@ impl Debug for TileContainer {
 	}
 }
 
-// Test module
 #[cfg(test)]
 mod tests {
 	use super::TileContainer;

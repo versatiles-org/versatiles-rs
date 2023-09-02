@@ -94,10 +94,10 @@ jobs:
 
       - name: Test Binary # Test the waters before setting sail.
         if: matrix.arch == 'x86_64'
-        run: cargo test --all-features --target ${{ matrix.arch }}-apple-darwin --release
+        run: cargo test --bin versatiles --all-features --target ${{ matrix.arch }}-apple-darwin --release
 
       - name: Build Binary # Construct your future from the bricks of the present.
-        run: cargo build --all-features --target ${{ matrix.arch }}-apple-darwin --release
+        run: cargo build --bin versatiles --all-features --target ${{ matrix.arch }}-apple-darwin --release
 
       - name: Pack and upload # The journey's end marks a new beginning.
         run: |
@@ -128,10 +128,10 @@ jobs:
           default: true
 
       - name: Test binary # Testing is the bridge between expectation and reality.
-        run: cargo test --release --all-features
+        run: cargo test --bin versatiles --release --all-features
 
       - name: Build binary # From the forges of thought springs the blade of action.
-        run: cargo build --release --all-features
+        run: cargo build --bin versatiles --release --all-features
 
       - name: Pack and upload # Gather the fruits of your labor and share the bounty.
         run: |

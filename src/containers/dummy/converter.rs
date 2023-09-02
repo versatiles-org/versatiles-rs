@@ -5,6 +5,7 @@ use crate::{
 use async_trait::async_trait;
 use futures_util::StreamExt;
 
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum ConverterProfile {
 	Png,

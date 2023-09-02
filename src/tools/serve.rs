@@ -125,6 +125,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	Ok(())
 }
 
+#[allow(unused_imports)]
 #[cfg(test)]
 mod tests {
 	use crate::tests::run_command;
@@ -144,6 +145,7 @@ mod tests {
 		.unwrap();
 	}
 
+	#[cfg(feature = "request")]
 	#[test]
 	fn test_remote() {
 		run_command(vec![
