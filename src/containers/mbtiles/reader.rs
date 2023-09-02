@@ -241,7 +241,7 @@ impl TileReaderTrait for TileReader {
 
 		Ok(Blob::from(blob))
 	}
-	async fn get_bbox_tile_iter<'a>(&'a mut self, bbox: &'a TileBBox) -> TileStream {
+	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox: &'a TileBBox) -> TileStream {
 		let max = bbox.get_max();
 		let x_min = bbox.get_x_min();
 		let x_max = bbox.get_x_max();

@@ -51,7 +51,7 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
-	async fn get_bbox_tile_iter<'a>(&'a mut self, bbox: &'a TileBBox) -> TileStream {
+	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox: &'a TileBBox) -> TileStream {
 		Box::pin(stream! {
 			for coord in bbox.iter_coords() {
 				let result = self.get_tile_data(&coord).await;
@@ -169,7 +169,7 @@ mod tests {
 	async fn get_bbox_tile_iter() -> Result<()> {
 		let mut reader = TestReader::new("test_path").await?;
 		let bbox = TileBBox::new(4, 0, 0, 10, 10); // Or replace it with actual bbox
-		let mut stream = reader.get_bbox_tile_iter(&bbox).await;
+		let mut stream = reader.get_bbox_tile_stream(&bbox).await;
 
 		while let Some((_coord, _blob)) = stream.next().await {}
 

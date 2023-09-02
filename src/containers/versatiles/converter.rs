@@ -157,7 +157,7 @@ impl TileConverter {
 		let tile_converter = self.config.get_tile_recompressor();
 
 		// Get the tile stream
-		let mut tile_stream: TileStream = reader.get_bbox_tile_iter(&bbox).await;
+		let mut tile_stream: TileStream = reader.get_bbox_tile_stream(&bbox).await;
 
 		// Compress the blobs if necessary
 		if !tile_converter.is_empty() {
