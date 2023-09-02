@@ -156,7 +156,6 @@ mod tests {
 		let reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
 		let container = TileContainer::from(reader).unwrap();
 		let debug = format!("{container:?}");
-		println!("{debug}");
 		assert!(debug.starts_with("TileContainer { reader: TileReader:Dummy {"));
 	}
 

@@ -239,7 +239,6 @@ mod tests {
 		test1(B).await.unwrap();
 
 		async fn test1(compression_tar: Compression) -> Result<()> {
-			println!("compression_tar {:?}", compression_tar);
 			let file = make_test_tar(compression_tar).await;
 			let mut tar_file = TarFile::from(file.to_str().unwrap())?;
 
@@ -252,7 +251,6 @@ mod tests {
 			async fn test2(
 				tar_file: &mut TarFile, compression_tar: &Compression, compression_accept: Compression,
 			) -> Result<()> {
-				println!("compression_accept {:?}", compression_accept);
 				let accept = TargetCompression::from(compression_accept);
 
 				let path = ["non_existing_file"];
@@ -265,8 +263,6 @@ mod tests {
 				assert!(result.is_some());
 
 				let result = result.unwrap();
-
-				println!("{:?}", result);
 
 				if result.compression == N {
 					assert_eq!(result.blob.as_str(), "dummy meta data");

@@ -10,7 +10,7 @@ pub struct Subcommand {
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
-	println!("compare {:?} with {:?}", arguments.file1, arguments.file2);
+	eprintln!("compare {:?} with {:?}", arguments.file1, arguments.file2);
 
 	let _reader1 = get_reader(&arguments.file1);
 	let _reader2 = get_reader(&arguments.file2);

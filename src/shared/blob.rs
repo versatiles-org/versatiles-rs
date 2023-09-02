@@ -202,7 +202,7 @@ mod tests {
 		let blob = Blob::from(&text);
 
 		// Format the Blob instance using the debug formatter and print it
-		let debug = format!("{:?}", blob);
-		println!("{}", debug);
+		let _debug = format!("{:?}", blob);
+		//println!("{}", debug);
 	}
 }

@@ -14,6 +14,7 @@ use axum::{
 	routing::get,
 	Router, Server,
 };
+use log::error;
 use std::sync::Arc;
 use tokio::sync::{oneshot::Sender, Mutex};
 
@@ -92,7 +93,7 @@ impl TileServer {
 		app = self.add_static_sources_to_app(app);
 
 		let addr = format!("{}:{}", self.ip, self.port);
-		println!("server starts listening on {}", addr);
+		eprintln!("server starts listening on {}", addr);
 
 		let server = Server::bind(&addr.parse()?).serve(app.into_make_service());
 
@@ -105,7 +106,7 @@ impl TileServer {
 
 		tokio::spawn(async move {
 			if let Err(e) = graceful.await {
-				eprintln!("server error: {}", e);
+				error!("server error: {}", e);
 			}
 		});
 

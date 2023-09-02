@@ -100,7 +100,7 @@ impl ProgressBar {
 
 		if self.visible {
 			self.draw();
-			println!();
+			eprintln!();
 		}
 	}
 
@@ -146,7 +146,7 @@ impl ProgressBar {
 		);
 		let pos = (line.len() as f64 * progress).round() as usize;
 
-		print!("\r\x1B[7m{}\x1B[0m{}", &line[0..pos], &line[pos..]);
+		eprint!("\r\x1B[7m{}\x1B[0m{}", &line[0..pos], &line[pos..]);
 		std::io::stdout().flush().unwrap();
 	}
 }
@@ -229,7 +229,7 @@ mod tests {
 
 	#[test]
 	fn progress_bar() {
-		let mut progress = ProgressBar::new("hallo", 100);
+		let mut progress = ProgressBar::new("hello", 100);
 		progress.set_visible(true);
 		progress.set_position(1);
 		progress.inc(1);

@@ -21,8 +21,8 @@ impl TileCoord2 {
 		let y = zoom * (0.5 - 0.5 * (y * PI32 / 360.0 + PI32 / 4.0).tan().ln() / PI32);
 
 		TileCoord2 {
-			x: x.floor() as u32,
-			y: y.floor() as u32,
+			x: x.floor().min(zoom - 1.0).max(0.0) as u32,
+			y: y.floor().min(zoom - 1.0).max(0.0) as u32,
 		}
 	}
 	pub fn get_x(&self) -> u32 {

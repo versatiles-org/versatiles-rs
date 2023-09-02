@@ -63,16 +63,7 @@ impl TileBBox {
 		let p_min = TileCoord2::from_geo(x_min, y_max, level);
 		let p_max = TileCoord2::from_geo(x_max, y_min, level);
 
-		println!("p_min {p_min:?}");
-		println!("p_min {p_min:?}");
-
-		TileBBox::new(
-			level,
-			p_min.get_x(),
-			p_min.get_y(),
-			p_max.get_x().max(1),
-			p_max.get_y().max(1),
-		)
+		TileBBox::new(level, p_min.get_x(), p_min.get_y(), p_max.get_x(), p_max.get_y())
 	}
 	pub fn set_empty(&mut self) {
 		self.x_min = 1;
@@ -353,32 +344,35 @@ mod tests {
 	fn from_geo() {
 		let bbox1 = TileBBox::from_geo(9, &[8.0653f64, 51.3563f64, 12.3528f64, 52.2564f64]);
 		let bbox2 = TileBBox::new(9, 267, 168, 273, 170);
-		println!("bbox1 {:?}", bbox1);
-		println!("bbox2 {:?}", bbox2);
 		assert_eq!(bbox1, bbox2);
 	}
 
 	#[test]
 	fn quarter_planet() {
-		let quarter_planet0 = [0.001f64, -90f64, 179.999f64, -0.001f64];
-		let quarter_planet1 = [0f64, -85.05113f64, 180f64, 0f64];
-		for level in 1..18 {
-			let level_bbox0 = TileBBox::from_geo(level, &quarter_planet0);
-			let geo_bbox = level_bbox0.as_geo_bbox(level);
-			let level_bbox1 = TileBBox::from_geo(level, &geo_bbox);
-			assert_eq!(geo_bbox, quarter_planet1);
-			assert_eq!(level_bbox1, level_bbox0);
+		let geo_bbox2 = [0f64, -85.05112877980659f64, 180f64, 0f64];
+		let mut geo_bbox0 = geo_bbox2.clone();
+		geo_bbox0[1] += 1e-10f64;
+		geo_bbox0[2] -= 1e-10f64;
+		for level in 1..32 {
+			let level_bbox0 = TileBBox::from_geo(level, &geo_bbox0);
+			assert_eq!(level_bbox0.count_tiles(), 4u64.pow(level as u32 - 1));
+			let geo_bbox1 = level_bbox0.as_geo_bbox(level);
+			assert_eq!(geo_bbox1, geo_bbox2);
 		}
 	}
 
 	#[test]
 	fn sa_pacific() {
-		let geo_bbox0 = [-180f64, -66.51326f64, -90f64, 0f64];
+		let geo_bbox2 = [-180f64, -66.51326044311186f64, -90f64, 0f64];
+		let mut geo_bbox0 = geo_bbox2.clone();
+		geo_bbox0[1] += 1e-10f64;
+		geo_bbox0[2] -= 1e-10f64;
+
 		for level in 2..32 {
 			let level_bbox0 = TileBBox::from_geo(level, &geo_bbox0);
 			assert_eq!(level_bbox0.count_tiles(), 4u64.pow(level as u32 - 2));
 			let geo_bbox1 = level_bbox0.as_geo_bbox(level);
-			assert_eq!(geo_bbox1, geo_bbox0);
+			assert_eq!(geo_bbox1, geo_bbox2);
 		}
 	}
 
@@ -452,7 +446,7 @@ mod tests {
 		let bbox = TileBBox::new(10, 0, 1000, 99, 1003);
 
 		let vec: Vec<TileBBox> = bbox.iter_bbox_row_slices(99).collect();
-		println!("{:?}", bbox);
+
 		assert_eq!(vec.len(), 8);
 		assert_eq!(vec[0], TileBBox::new(10, 0, 1000, 49, 1000));
 		assert_eq!(vec[1], TileBBox::new(10, 50, 1000, 99, 1000));
@@ -469,7 +463,7 @@ mod tests {
 		let bbox = TileBBox::new(10, 0, 1000, 99, 1003);
 
 		let vec: Vec<TileBBox> = bbox.iter_bbox_row_slices(100).collect();
-		println!("{:?}", bbox);
+
 		assert_eq!(vec.len(), 4);
 		assert_eq!(vec[0], TileBBox::new(10, 0, 1000, 99, 1000));
 		assert_eq!(vec[1], TileBBox::new(10, 0, 1001, 99, 1001));
@@ -482,7 +476,7 @@ mod tests {
 		let bbox = TileBBox::new(10, 0, 1000, 99, 1003);
 
 		let vec: Vec<TileBBox> = bbox.iter_bbox_row_slices(199).collect();
-		println!("{:?}", bbox);
+
 		assert_eq!(vec.len(), 4);
 		assert_eq!(vec[0], TileBBox::new(10, 0, 1000, 99, 1000));
 		assert_eq!(vec[1], TileBBox::new(10, 0, 1001, 99, 1001));
@@ -495,7 +489,7 @@ mod tests {
 		let bbox = TileBBox::new(10, 0, 1000, 99, 1003);
 
 		let vec: Vec<TileBBox> = bbox.iter_bbox_row_slices(200).collect();
-		println!("{:?}", bbox);
+
 		assert_eq!(vec.len(), 2);
 		assert_eq!(vec[0], TileBBox::new(10, 0, 1000, 99, 1001));
 		assert_eq!(vec[1], TileBBox::new(10, 0, 1002, 99, 1003));

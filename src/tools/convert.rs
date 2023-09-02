@@ -65,7 +65,7 @@ pub struct Subcommand {
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
-	println!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
+	eprintln!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
 	let mut reader = new_reader(&arguments.input_file, arguments).await?;
 	let mut converter = new_converter(&arguments.output_file, arguments).await?;

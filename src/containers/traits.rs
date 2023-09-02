@@ -159,7 +159,7 @@ mod tests {
 			"test tile data"
 		);
 
-		let mut converter = TestConverter::new("/hallo", TileConverterConfig::new_full()).await?;
+		let mut converter = TestConverter::new("/hello", TileConverterConfig::new_full()).await?;
 		converter.convert_from(&mut reader).await?;
 
 		Ok(())
@@ -171,11 +171,7 @@ mod tests {
 		let bbox = TileBBox::new(4, 0, 0, 10, 10); // Or replace it with actual bbox
 		let mut stream = reader.get_bbox_tile_iter(&bbox).await;
 
-		while let Some((coord, blob)) = stream.next().await {
-			println!("TileCoord2: {:?}", coord);
-			println!("Blob: {:?}", blob);
-			// Here, you can add the assertions you need to verify the correctness of each tile data
-		}
+		while let Some((_coord, _blob)) = stream.next().await {}
 
 		Ok(())
 	}

@@ -267,12 +267,12 @@ mod tests {
 		}
 
 		assert!(catch_unwind(|| {
-			test(PBF, Brotli, PNG, Brotli, false, 3, "hallo3");
+			test(PBF, Brotli, PNG, Brotli, false, 3, "hello3");
 		})
 		.is_err());
 
 		assert!(catch_unwind(|| {
-			test(PNG, None, PBF, Gzip, true, 3, "hallo4");
+			test(PNG, None, PBF, Gzip, true, 3, "hello4");
 		})
 		.is_err());
 

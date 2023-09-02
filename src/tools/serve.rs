@@ -109,7 +109,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	list.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 	list
 		.iter()
-		.for_each(|(url, source)| println!("   {:30}  <-  {}", url.to_owned() + "*", source));
+		.for_each(|(url, source)| eprintln!("   {:30}  <-  {}", url.to_owned() + "*", source));
 
 	server.start().await?;
 
