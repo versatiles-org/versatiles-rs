@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-cd "$(dirname "$0")"
-cd ../docker
+
+cd "$(dirname "$0")/../docker"
 
 DEBUG=false
 ERROR=false
 
-function docker_build_release () {
+function docker_build_release()  {
 	linux=$1
 	platf=$2
 
@@ -13,18 +13,24 @@ function docker_build_release () {
 
 	echo -e "\e[32m  - build\e[0m"
 
-	if [ -z ${linux+x} ]; then echo "linux is unset"; exit 1; fi
-	if [ -z ${platf+x} ]; then echo "platf is unset"; exit 1; fi
+	if [ -z ${linux+x} ]; then
+		echo                         "linux is unset"
+		exit                                                1
+	fi
+	if [ -z ${platf+x} ]; then
+		echo                         "platf is unset"
+		exit                                                1
+	fi
 
 	if $DEBUG; then
 		docker buildx build --platform="${platf}" --progress="plain" --tag="${linux}-versatiles" --file="${linux}.Dockerfile" .
 	else
-		docker buildx build --platform="${platf}" --quiet            --tag="${linux}-versatiles" --file="${linux}.Dockerfile" .
+		docker buildx build --platform="${platf}" --quiet          --tag="${linux}-versatiles" --file="${linux}.Dockerfile" .
 	fi
 
 	echo -e "\e[32m  - test\e[0m"
 	docker run --platform="${platf}" "${linux}-versatiles" sh versatiles_selftest.sh
-	
+
 	if [ "$?" != "0" ]; then
 		echo -e "\e[31;1mERROR!\e[0m"
 		ERROR=true

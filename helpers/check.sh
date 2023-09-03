@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-cd "$(dirname "$0")"
-cd ..
+
+cd "$(dirname "$0")/.."
 
 echo "check cargo fmt"
 result=$(cargo fmt --all -- --check 2>&1)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-cd "$(dirname "$0")"
-cd ..
+
+cd "$(dirname "$0")/.."
 
 mkdir -p target/llvm-cov
 cargo llvm-cov test --workspace --tests --lcov --output-path target/llvm-cov/lcov.info
