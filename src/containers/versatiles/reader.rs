@@ -7,9 +7,8 @@ use crate::{
 	create_error,
 	shared::{Blob, DataConverter, ProgressBar, Result, TileBBox, TileCoord2, TileCoord3, TileReaderParameters},
 };
-use async_stream::stream;
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures_util::{stream, StreamExt};
 use itertools::Itertools;
 use log::{debug, trace};
 use std::{collections::HashMap, fmt::Debug, ops::Shr, path::Path, sync::Arc};
@@ -254,41 +253,52 @@ impl TileReaderTrait for TileReader {
 			.collect()
 			.await;
 
-		Box::pin(stream! {
-			let mut myself = self_mutex.lock().await;
-			for chunk in chunks.into_iter().flatten() {
-				let first = chunk.first().unwrap().1;
-				let last = chunk.last().unwrap().1;
+		let chunks: Vec<Vec<(TileCoord3, ByteRange)>> = chunks.into_iter().flatten().collect();
 
-				let offset = first.offset;
-				let end = last.offset + last.length;
+		stream::iter(chunks)
+			.then(move |chunk| {
+				let self_mutex = self_mutex.clone();
+				async move {
+					let mut myself = self_mutex.lock().await;
 
-				let chunk_range = ByteRange::new(offset, end - offset);
+					let first = chunk.first().unwrap().1;
+					let last = chunk.last().unwrap().1;
 
-				let big_blob = myself.reader.read_range(&chunk_range).await.unwrap();
+					let offset = first.offset;
+					let end = last.offset + last.length;
 
-				for (mut coord, range) in chunk {
-					let start = range.offset - offset;
-					let end = start + range.length;
-					let tile_range = (start as usize)..(end as usize);
+					let chunk_range = ByteRange::new(offset, end - offset);
 
-					let blob = Blob::from(big_blob.get_range(tile_range));
+					let big_blob = myself.reader.read_range(&chunk_range).await.unwrap();
 
+					let entries: Vec<(TileCoord3, Blob)> = chunk
+						.into_iter()
+						.map(|(mut coord, range)| {
+							let start = range.offset - offset;
+							let end = start + range.length;
+							let tile_range = (start as usize)..(end as usize);
 
-					if flip_y {
-						coord.flip_y();
-					}
+							let blob = Blob::from(big_blob.get_range(tile_range));
 
-					if swap_xy {
-						coord.swap_xy();
-					}
+							if flip_y {
+								coord.flip_y();
+							}
 
-					assert!(bbox.contains3(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
+							if swap_xy {
+								coord.swap_xy();
+							}
 
-					yield (coord, blob)
+							assert!(bbox.contains3(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
+
+							(coord, blob)
+						})
+						.collect();
+
+					stream::iter(entries)
 				}
-			}
-		})
+			})
+			.flatten()
+			.boxed()
 	}
 
 	// Get the name of the reader

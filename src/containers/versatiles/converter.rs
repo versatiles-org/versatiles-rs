@@ -5,7 +5,7 @@ use crate::{
 	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig},
 };
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures_util::{future::ready, StreamExt};
 use log::{debug, trace};
 use std::collections::HashMap;
 
@@ -141,7 +141,7 @@ impl TileConverter {
 
 	// Write a single block
 	async fn write_block<'a>(
-		&mut self, block: &BlockDefinition, reader: &'a mut TileReaderBox, progress: &mut ProgressBar,
+		&'a mut self, block: &BlockDefinition, reader: &'a mut TileReaderBox, progress: &'a mut ProgressBar,
 	) -> Result<(ByteRange, ByteRange)> {
 		// Log the start of the block
 		debug!("start block {:?}", block);
@@ -150,7 +150,7 @@ impl TileConverter {
 		let offset0 = self.writer.get_position()?;
 
 		// Prepare the necessary data structures
-		let bbox = block.get_global_bbox();
+		let bbox = *block.get_global_bbox();
 
 		let mut tile_index = TileIndex::new_empty(bbox.count_tiles() as usize);
 		let mut tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
@@ -159,52 +159,45 @@ impl TileConverter {
 		let tile_converter = self.config.get_tile_recompressor();
 
 		// Get the tile stream
-		let mut tile_stream: TileStream = reader.get_bbox_tile_stream(bbox).await;
+		let mut tile_stream: TileStream = reader.get_bbox_tile_stream(&bbox).await;
 
-		// Compress the blobs if necessary
 		if !tile_converter.is_empty() {
-			tile_stream = tile_converter.process_stream(tile_stream);
+			tile_stream = tile_converter.process_stream(tile_stream)
 		}
-
-		let mut i: u64 = 0;
 
 		// Iterate through the blobs and process them
-		while let Some(entry) = tile_stream.next().await {
-			i += 1;
+		tile_stream
+			.for_each(|(coord, blob)| {
+				progress.inc(1);
 
-			let (coord, blob) = entry;
+				let index = bbox.get_tile_index(&coord.as_coord2());
 
-			let index = bbox.get_tile_index(&coord.as_coord2());
-
-			let mut tile_hash_option = None;
-			if blob.len() < 1000 {
-				if tile_hash_lookup.contains_key(blob.as_slice()) {
-					tile_index.set(index, *tile_hash_lookup.get(blob.as_slice()).unwrap());
-					continue;
+				let mut tile_hash_option = None;
+				if blob.len() < 1000 {
+					if tile_hash_lookup.contains_key(blob.as_slice()) {
+						tile_index.set(index, *tile_hash_lookup.get(blob.as_slice()).unwrap());
+						return ready(());
+					}
+					tile_hash_option = Some(blob.clone());
 				}
-				tile_hash_option = Some(blob.clone());
-			}
 
-			let mut range = self.writer.append(&blob)?;
-			range.offset -= offset0;
-			tile_index.set(index, range);
+				let mut range = self.writer.append(&blob).unwrap();
+				range.offset -= offset0;
+				tile_index.set(index, range);
 
-			if let Some(tile_hash) = tile_hash_option {
-				tile_hash_lookup.insert(tile_hash.as_vec(), range);
-			}
+				if let Some(tile_hash) = tile_hash_option {
+					tile_hash_lookup.insert(tile_hash.as_vec(), range);
+				}
 
-			if i > 256 {
-				progress.inc(i);
-				i = 0;
-			}
-		}
-
-		// Increment progress and finish the row slice
-		progress.inc(i);
+				ready(())
+			})
+			.await;
 
 		// Finish the block and write the index
 		debug!("finish block and write index {:?}", block);
 
+		//let mut writer = writer_mut.lock().await;
+		//let mut writer = writer_mut1.lock().await;
 		let offset1 = self.writer.get_position()?;
 		let index_range = self.writer.append(&tile_index.as_brotli_blob())?;
 

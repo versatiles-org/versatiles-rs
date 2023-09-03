@@ -1,8 +1,8 @@
 use crate::shared::*;
-use async_stream::stream;
 use async_trait::async_trait;
-use futures_util::Stream;
-use std::{fmt::Debug, path::Path, pin::Pin};
+use futures_util::{stream, Stream, StreamExt};
+use std::{fmt::Debug, path::Path, pin::Pin, sync::Arc};
+use tokio::sync::Mutex;
 
 pub type TileConverterBox = Box<dyn TileConverterTrait>;
 pub type TileReaderBox = Box<dyn TileReaderTrait>;
@@ -52,16 +52,20 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
 	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox: &'a TileBBox) -> TileStream {
-		Box::pin(stream! {
-			for coord in bbox.iter_coords() {
-				let result = self.get_tile_data(&coord).await;
-				if result.is_err() {
-					continue;
+		let mutex = Arc::new(Mutex::new(self));
+		stream::iter(bbox.iter_coords())
+			.filter_map(move |coord| {
+				let mutex = mutex.clone();
+				async move {
+					let result = mutex.lock().await.get_tile_data(&coord).await;
+					if result.is_err() {
+						return None;
+					}
+					let blob = result.unwrap().to_owned();
+					Some((coord, blob))
 				}
-				let blob = result.unwrap().to_owned();
-				yield (coord, blob);
-			}
-		})
+			})
+			.boxed()
 	}
 
 	/// verify container and output data to output_folder

@@ -205,15 +205,23 @@ impl DataConverter {
 		Ok(blob)
 	}
 
+	#[allow(dead_code)]
 	/// Runs a stream through the pipeline of conversion functions
 	pub fn process_stream<'a>(&'a self, stream: TileStream<'a>) -> TileStream<'a> {
 		let pipeline = Arc::new(self.pipeline.clone());
-		Box::pin(stream.map(move |(coord, mut blob)| {
-			for f in pipeline.iter() {
-				blob = f.run(blob).unwrap();
-			}
-			(coord, blob)
-		}))
+		stream
+			.map(move |(coord, mut blob)| {
+				let pipeline = pipeline.clone();
+				tokio::spawn(async move {
+					for f in pipeline.iter() {
+						blob = f.run(blob).unwrap();
+					}
+					(coord, blob)
+				})
+			})
+			.buffer_unordered(num_cpus::get())
+			.map(|r| r.unwrap())
+			.boxed()
 	}
 
 	/// Returns a string describing the pipeline of conversion functions.

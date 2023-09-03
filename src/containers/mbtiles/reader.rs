@@ -4,6 +4,7 @@ use crate::{
 	shared::*,
 };
 use async_trait::async_trait;
+use futures_util::StreamExt;
 use log::trace;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -243,7 +244,7 @@ impl TileReaderTrait for TileReader {
 	}
 	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox_in: &'a TileBBox) -> TileStream {
 		if bbox_in.is_empty() {
-			return Box::pin(futures_util::stream::empty());
+			return futures_util::stream::empty().boxed();
 		}
 
 		let mut bbox: TileBBox = *bbox_in;
@@ -299,7 +300,7 @@ impl TileReaderTrait for TileReader {
 			})
 			.collect();
 
-		Box::pin(futures_util::stream::iter(vec))
+		futures_util::stream::iter(vec).boxed()
 	}
 	fn get_name(&self) -> Result<&str> {
 		Ok(&self.name)
