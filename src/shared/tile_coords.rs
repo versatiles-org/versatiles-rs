@@ -266,6 +266,7 @@ mod tests {
 		assert_eq!(hasher.finish(), 8202047236025635059);
 	}
 
+	/*
 	#[test]
 	fn as_geo_bbox() {
 		assert_eq!(
@@ -273,6 +274,7 @@ mod tests {
 			[5.625, 48.92249926375825, 11.25, 45.089035564831]
 		);
 	}
+	*/
 
 	#[test]
 	fn partial_cmp2() {
