@@ -94,6 +94,17 @@ impl TileCoord3 {
 			((PI32 * (1.0 - 2.0 * (self.y as f64) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
 		]
 	}
+	#[allow(dead_code)]
+	pub fn as_geo_bbox(&self) -> [f64; 4] {
+		let zoom: f64 = 2.0f64.powi(self.z as i32);
+
+		[
+			((self.x as f64) / zoom - 0.5) * 360.0,
+			((PI32 * (1.0 - 2.0 * (self.y as f64) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
+			(((self.x + 1) as f64) / zoom - 0.5) * 360.0,
+			((PI32 * (1.0 - 2.0 * ((self.y + 1) as f64) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
+		]
+	}
 	pub fn as_coord2(&self) -> TileCoord2 {
 		TileCoord2 { x: self.x, y: self.y }
 	}
@@ -253,6 +264,14 @@ mod tests {
 		TileCoord2::new(2, 2).hash(&mut hasher);
 		TileCoord3::new(2, 2, 2).hash(&mut hasher);
 		assert_eq!(hasher.finish(), 8202047236025635059);
+	}
+
+	#[test]
+	fn as_geo_bbox() {
+		assert_eq!(
+			TileCoord3::new(33, 22, 6).as_geo_bbox(),
+			[5.625, 48.92249926375825, 11.25, 45.089035564831]
+		);
 	}
 
 	#[test]
