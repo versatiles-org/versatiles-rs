@@ -1,7 +1,7 @@
 use log::{max_level, LevelFilter};
 use std::io::Write;
 use std::time::{Duration, SystemTime};
-use term_size::dimensions_stdout;
+use terminal_size::terminal_size;
 
 const STEP_SIZE: Duration = Duration::from_millis(500);
 
@@ -105,10 +105,7 @@ impl ProgressBar {
 	}
 
 	fn draw(&mut self) {
-		let size = dimensions_stdout();
-		let size = size.unwrap_or((80, 30));
-
-		let width: i64 = size.0 as i64;
+		let width = terminal_size().map_or(80, |s| s.0 .0) as i64;
 
 		let duration = SystemTime::now().duration_since(self.start).unwrap();
 		let progress = self.value as f64 / self.max_value as f64;
