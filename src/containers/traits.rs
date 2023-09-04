@@ -61,7 +61,7 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 					if result.is_err() {
 						return None;
 					}
-					let blob = result.unwrap().to_owned();
+					let blob = result.unwrap();
 					Some((coord, blob))
 				}
 			})

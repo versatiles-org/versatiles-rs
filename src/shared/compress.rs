@@ -155,8 +155,8 @@ pub fn decompress_gzip(data: Blob) -> Result<Blob> {
 /// * `data` - The blob of data to compress
 pub fn compress_brotli(data: Blob) -> Result<Blob> {
 	let params = BrotliEncoderParams {
-		quality: 5, // smallest + fastest
-		lgwin: 10,  // smallest + fastest
+		quality: 10, // smallest
+		lgwin: 19,   // smallest
 		size_hint: data.len(),
 		..Default::default()
 	};
