@@ -1,3 +1,4 @@
+use colored::*;
 use std::fmt::{Debug, Display};
 use std::io::{stderr, Write};
 use std::sync::Arc;
@@ -36,23 +37,63 @@ impl PrettyPrint {
 		}
 	}
 	pub async fn get_category(&mut self, text: &str) -> PrettyPrint {
-		self.write(format!("{}{}:", self.prefix, text)).await;
+		self.write(format!("{}{}:", self.prefix, text.bold().white())).await;
 		self.new_indented()
 	}
 	pub async fn get_list(&mut self, text: &str) -> PrettyPrint {
-		self.write(format!("{}{}:", self.prefix, text)).await;
+		self.write(format!("{}{}:", self.prefix, text.white())).await;
 		self.new_indented()
 	}
 	pub async fn add_warning(&self, text: &str) {
-		self.write(format!("{}{}", self.prefix, text)).await;
+		self.write(format!("{}{}", self.prefix, text.bold().yellow())).await;
 	}
 	pub async fn add_key_value<K: Display, V: Debug>(&self, key: &K, value: &V) {
-		self.write(format!("{}{}: {:?}", self.prefix, key, value)).await;
+		self
+			.write(format!("{}{}: {}", self.prefix, key, get_formatted_value(value)))
+			.await;
+	}
+	pub async fn add_value<V: Debug>(&self, value: &V) {
+		self
+			.write(format!("{}{}", self.prefix, get_formatted_value(value)))
+			.await;
 	}
 	async fn write(&self, text: String) {
 		self.parent.output.lock().await.write_all(text.as_bytes()).unwrap();
 	}
 }
+
+fn get_formatted_value<V: Debug>(value: &V) -> ColoredString {
+	let type_name = std::any::type_name::<V>();
+	if type_name.starts_with("versatiles::shared::") {
+		return format!("{:?}", value).bright_blue();
+	}
+	match type_name {
+		"bool" => format!("{:?}", value).bright_green(),
+		"f32" | "f64" => format!("{:?}", value).bright_cyan(),
+		"i128" | "i16" | "i32" | "i64" | "i8" | "isize" => format_integer(value).bright_cyan(),
+		"u128" | "u16" | "u32" | "u64" | "u8" | "usize" => format_integer(value).bright_cyan(),
+		"str" => format!("{:?}", value).bright_magenta(),
+		_ => {
+			panic!("Unknown typename {type_name}");
+		}
+	}
+}
+
+fn format_integer<V: Debug>(value: &V) -> String {
+	let mut text = format!("{:?}", value);
+	let mut formatted = String::from("");
+	while (text.len() > 3) && text.chars().nth_back(3).unwrap().is_numeric() {
+		let i = text.len() - 3;
+		formatted = String::from("_") + &text[i..] + &formatted;
+		text = String::from(&text[..i]);
+	}
+	if formatted.len() == 0 {
+		text
+	} else {
+		text + &formatted
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

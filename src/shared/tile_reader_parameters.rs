@@ -74,8 +74,8 @@ impl TileReaderParameters {
 	}
 	pub async fn probe<'a>(&self, mut print: PrettyPrint) -> Result<()> {
 		let p = print.get_list("bbox_pyramid").await;
-		for (index, level) in self.bbox_pyramid.iter_levels().enumerate() {
-			p.add_key_value(&index.to_string(), level).await
+		for level in self.bbox_pyramid.iter_levels() {
+			p.add_value(level).await
 		}
 		print.add_key_value(&"decompressor", &self.decompressor).await;
 		print.add_key_value(&"flip_y", &self.flip_y).await;

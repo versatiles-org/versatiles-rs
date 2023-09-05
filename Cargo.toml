@@ -29,6 +29,7 @@ byteorder = { version = "1.4.3", default-features = true }
 bytes = { version = "1.4.0", default-features = false }
 clap = { version = "4.4.2", default-features = true, optional = true, features = ["wrap_help"] }
 clap-verbosity-flag = { version = "2.0.1", default-features = false, optional = true }
+colored = "2.0.4"
 enumset = { version = "1.1.2", default-features = false }
 env_logger = { version = "0.10.0", default-features = true, optional = true }
 flate2 = { version = "1.0.27", default-features = true }
