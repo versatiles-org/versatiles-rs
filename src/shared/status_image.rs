@@ -4,11 +4,13 @@ use image::Luma;
 use image::{ImageBuffer, Rgb, RgbImage};
 use std::{path::Path, vec::Vec};
 
+#[allow(dead_code)]
 pub struct StatusImage {
 	size: u32,
 	data: Vec<u32>,
 }
 
+#[allow(dead_code)]
 impl StatusImage {
 	/// Creates a new `StatusImage` with the specified size.
 	pub fn new(size: u32) -> Self {
@@ -67,10 +69,13 @@ impl StatusImage {
 	}
 }
 
+#[allow(dead_code)]
 pub struct StatusImagePyramide {
 	images: Vec<StatusImage>,
 	max_size: u32,
 }
+
+#[allow(dead_code)]
 impl StatusImagePyramide {
 	pub fn new() -> Self {
 		Self {

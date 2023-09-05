@@ -104,6 +104,7 @@ impl BlockDefinition {
 		Ok(vec)
 	}
 
+	#[allow(dead_code)]
 	pub fn get_sort_index(&self) -> u64 {
 		self.offset.get_sort_index()
 	}

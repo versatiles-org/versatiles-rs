@@ -1,17 +1,16 @@
 // Import necessary modules and traits
 use super::{new_data_reader, types::*, DataReaderTrait};
+use crate::shared::PrettyPrint;
 #[cfg(feature = "image")]
-use crate::shared::StatusImagePyramide;
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait, TileStream},
 	create_error,
-	shared::{Blob, DataConverter, ProgressBar, Result, TileBBox, TileCoord2, TileCoord3, TileReaderParameters},
+	shared::{Blob, DataConverter, Result, TileBBox, TileCoord2, TileCoord3, TileReaderParameters},
 };
 use async_trait::async_trait;
 use futures_util::{stream, StreamExt};
-use itertools::Itertools;
-use log::{debug, trace};
-use std::{collections::HashMap, fmt::Debug, ops::Shr, path::Path, sync::Arc};
+use log::trace;
+use std::{collections::HashMap, fmt::Debug, ops::Shr, sync::Arc};
 use tokio::sync::Mutex;
 
 // Define the TileReader struct
@@ -306,44 +305,21 @@ impl TileReaderTrait for TileReader {
 		Ok(self.reader.get_name())
 	}
 
-	// Perform a deep verification of the TileReader
-	#[allow(unused_variables)]
-	async fn deep_verify(&mut self, output_folder: &Path) -> Result<()> {
-		let block_count = self.block_index.len() as u64;
+	// deep probe of container meta
+	async fn probe_container(&mut self, print: PrettyPrint) -> Result<()> {
+		print.add_key_value(&"meta size", &self.meta.len()).await;
+		print.add_key_value(&"block count", &self.block_index.len()).await;
 
-		debug!("number of blocks: {}", block_count);
+		let mut index_size = 0;
+		let mut tiles_size = 0;
 
-		let mut progress = ProgressBar::new("deep verify", self.block_index.get_bbox_pyramid().count_tiles());
-
-		let blocks = self
-			.block_index
-			.iter()
-			.sorted_by_cached_key(|block| block.get_sort_index());
-
-		#[cfg(feature = "image")]
-		{
-			let mut status_images = StatusImagePyramide::new();
-
-			for block in blocks {
-				let bbox = block.get_global_bbox();
-				let tiles_count = bbox.count_tiles();
-
-				let blob = self.reader.read_range(block.get_index_range()).await?;
-				let tile_index = TileIndex::from_brotli_blob(blob);
-				assert_eq!(tile_index.len(), tiles_count as usize, "tile count are not the same");
-
-				let status_image = status_images.get_level(block.get_z());
-
-				for (index, byterange) in tile_index.iter().enumerate() {
-					let coord = bbox.get_coord2_by_index(index as u32);
-					status_image.set(coord.get_x(), coord.get_y(), byterange.length as u32);
-				}
-
-				progress.inc(block.count_tiles());
-			}
-			status_images.save(&output_folder.join("tile_sizes.png"));
+		for block in self.block_index.iter() {
+			index_size += block.get_index_range().length;
+			tiles_size += block.get_tiles_range().length;
 		}
-		progress.finish();
+
+		print.add_key_value(&"sum of block index sizes", &index_size).await;
+		print.add_key_value(&"sum of block tiles sizes", &tiles_size).await;
 
 		Ok(())
 	}
@@ -365,13 +341,11 @@ mod tests {
 		containers::{tests::make_test_file, TileReaderTrait},
 		shared::{Compression, Result, TileCoord3, TileFormat},
 	};
-	use assert_fs::TempDir;
 	use tokio;
 
 	// Test tile fetching
 	#[tokio::test]
 	async fn test_reader() -> Result<()> {
-		let temp_dir = TempDir::new()?;
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 8, "versatiles").await?;
 
 		let mut reader = TileReader::new(temp_file.to_str().unwrap()).await?;
@@ -381,9 +355,6 @@ mod tests {
 
 		let tile_data = reader.get_tile_data(&TileCoord3::new(2, 3, 4)).await?;
 		assert_eq!(tile_data.len(), 77);
-
-		let output_folder = temp_dir.path().to_path_buf();
-		assert!(reader.deep_verify(&output_folder).await.is_ok());
 
 		Ok(())
 	}

@@ -4,6 +4,7 @@ mod convert;
 mod error;
 #[cfg(feature = "image")]
 mod image;
+mod pretty_print;
 mod progress;
 #[cfg(feature = "image")]
 mod status_image;
@@ -19,6 +20,7 @@ pub use self::convert::*;
 pub use self::error::*;
 #[cfg(feature = "image")]
 pub use self::image::*;
+pub use self::pretty_print::*;
 pub use self::progress::*;
 #[cfg(feature = "image")]
 pub use self::status_image::*;

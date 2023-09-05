@@ -1,7 +1,7 @@
 use crate::shared::*;
 use async_trait::async_trait;
 use futures_util::{stream, Stream, StreamExt};
-use std::{fmt::Debug, path::Path, pin::Pin, sync::Arc};
+use std::{fmt::Debug, pin::Pin, sync::Arc};
 use tokio::sync::Mutex;
 
 pub type TileConverterBox = Box<dyn TileConverterTrait>;
@@ -68,9 +68,40 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 			.boxed()
 	}
 
-	/// verify container and output data to output_folder
-	async fn deep_verify(&mut self, _output_folder: &Path) -> Result<()> {
-		todo!()
+	/// probe container
+	async fn probe(&mut self, level: u8) -> Result<()> {
+		let mut print = PrettyPrinter::new_printer();
+
+		self
+			.get_parameters()?
+			.probe(print.get_category("parameters").await)
+			.await?;
+
+		if level >= 1 {
+			self.probe_container(print.get_category("container").await).await?;
+		}
+
+		if level >= 2 {
+			self.probe_tiles(print.get_category("container_tiles").await).await?;
+		}
+
+		Ok(())
+	}
+
+	/// probe container deep
+	async fn probe_container(&mut self, print: PrettyPrint) -> Result<()> {
+		print
+			.add_warning("deep container probing is not implemented for this container format")
+			.await;
+		Ok(())
+	}
+
+	/// probe container
+	async fn probe_tiles(&mut self, print: PrettyPrint) -> Result<()> {
+		print
+			.add_warning("deep tile probing is not implemented for this container format")
+			.await;
+		Ok(())
 	}
 }
 

@@ -1,6 +1,5 @@
+use super::{Compression, DataConverter, PrettyPrint, Result, TileBBoxPyramid, TileFormat};
 use std::fmt;
-
-use super::{Compression, DataConverter, TileBBoxPyramid, TileFormat};
 
 #[derive(PartialEq, Eq)]
 pub struct TileReaderParameters {
@@ -72,6 +71,44 @@ impl TileReaderParameters {
 	}
 	pub fn set_swap_xy(&mut self, flip: bool) {
 		self.swap_xy = flip;
+	}
+	pub async fn probe<'a>(&self, mut print: PrettyPrint) -> Result<()> {
+		let p = print.get_list("bbox_pyramid").await;
+		for (index, level) in self.bbox_pyramid.iter_levels().enumerate() {
+			p.add_key_value(&index.to_string(), level).await
+		}
+		print.add_key_value(&"decompressor", &self.decompressor).await;
+		print.add_key_value(&"flip_y", &self.flip_y).await;
+		print.add_key_value(&"swap_xy", &self.swap_xy).await;
+		print.add_key_value(&"tile_compression", &self.tile_compression).await;
+		print.add_key_value(&"tile_format", &self.tile_format).await;
+		Ok(())
+		/*
+
+		parameters:  {
+			 bbox_pyramid: [
+				  0: [0,0,0,0] (1),
+				  1: [0,0,1,1] (4),
+				  2: [0,0,3,3] (16),
+				  3: [0,0,7,7] (64),
+				  4: [0,0,15,15] (256),
+				  5: [0,0,31,31] (1024),
+				  6: [0,0,63,63] (4096),
+				  7: [0,0,127,127] (16384),
+				  8: [0,0,255,255] (65536),
+				  9: [0,0,511,511] (262144),
+				  10: [0,0,1023,1023] (1048576),
+				  11: [0,0,2047,2047] (4194304),
+				  12: [0,0,4095,4095] (16777216),
+				  13: [0,0,8191,8191] (67108864),
+				  14: [0,0,16383,16383] (268435456),
+			 ],
+			 decompressor: UnGzip,
+			 flip_y: false,
+			 swap_xy: false,
+			 tile_compression: Gzip,
+			 tile_format: PBF,
+			  */
 	}
 	#[allow(dead_code)]
 	pub fn set_bbox_pyramid(&mut self, pyramid: TileBBoxPyramid) {

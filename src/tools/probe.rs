@@ -1,5 +1,5 @@
 use crate::{containers::get_reader, shared::Result};
-use clap::Args;
+use clap::{ArgAction::Count, Args};
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -8,19 +8,20 @@ pub struct Subcommand {
 	/// supported container formats are: *.versatiles, *.tar, *.mbtiles
 	#[arg(required = true, verbatim_doc_comment)]
 	filename: String,
-	/*
-		/// deep scan of every tile
-		#[arg(long, short)]
-		deep: bool,
-	*/
+
+	/// scan deep
+	/// -d scans container
+	/// -dd scans every tile
+	#[arg(long, short, action = Count,)]
+	deep: u8,
 }
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
 	eprintln!("probe {:?}", arguments.filename);
 
-	let reader = get_reader(&arguments.filename).await?;
-	eprintln!("{reader:#?}");
+	let mut reader = get_reader(&arguments.filename).await?;
+	reader.probe(arguments.deep).await?;
 
 	Ok(())
 }
