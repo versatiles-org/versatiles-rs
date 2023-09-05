@@ -25,11 +25,10 @@ jobs:
       - name: Check out
         uses: actions/checkout@v3
       - name: Install Rust
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           components: rustfmt, clippy
-          override: true
       - name: Init Cache
         uses: actions/cache@v3
         with:
