@@ -43,13 +43,15 @@ jobs:
         run: cargo fmt -- --check
       - name: Cargo Clippy
         run: cargo clippy -- -D warnings
-      - name: Cargo Check
-        run: cargo check
+      - name: Cargo Check bin
+        run: cargo check --bin versatiles --all-features
+      - name: Cargo Check lib
+        run: cargo check --lib
       - name: Test Features
         run: ./helpers/test_features.sh
       - name: Install Cargo Coverage
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Cargo Coverage
-        run: cargo llvm-cov test --bin versatiles --tests --lcov --output-path ./lcov.info
+        run: cargo llvm-cov test --bin versatiles --all-features --tests --lcov --output-path ./lcov.info
       - name: Upload Coverage
         uses: codecov/codecov-action@v3

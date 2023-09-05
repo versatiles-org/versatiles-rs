@@ -1,37 +1,36 @@
-mod blob;
-mod compress;
-mod convert;
-mod error;
-#[cfg(feature = "full")]
-mod image;
-#[cfg(feature = "full")]
-mod pretty_print;
-#[cfg(feature = "full")]
-mod progress;
-#[cfg(feature = "full")]
-mod status_image;
-mod tile_bbox;
-mod tile_bbox_pyramid;
-#[cfg(feature = "full")]
-mod tile_converter_config;
-mod tile_coords;
-mod tile_reader_parameters;
+pub mod blob;
+pub mod compress;
+pub mod convert;
+pub mod error;
+pub mod tile_bbox;
+pub mod tile_bbox_pyramid;
+pub mod tile_coords;
+pub mod tile_reader_parameters;
 
-pub use self::blob::*;
-pub use self::compress::*;
-pub use self::convert::*;
-pub use self::error::*;
+pub use blob::*;
+pub use compress::*;
+pub use convert::*;
+pub use error::*;
+pub use tile_bbox::*;
+pub use tile_bbox_pyramid::*;
+pub use tile_coords::*;
+pub use tile_reader_parameters::*;
+
 #[cfg(feature = "full")]
-pub use self::image::*;
+#[path = ""]
+mod optional_modules {
+	pub mod image;
+	pub mod pretty_print;
+	pub mod progress;
+	pub mod status_image;
+	pub mod tile_converter_config;
+
+	pub use image::*;
+	pub use pretty_print::*;
+	pub use progress::*;
+	pub use status_image::*;
+	pub use tile_converter_config::*;
+}
+
 #[cfg(feature = "full")]
-pub use self::pretty_print::*;
-#[cfg(feature = "full")]
-pub use self::progress::*;
-#[cfg(feature = "full")]
-pub use self::status_image::*;
-pub use self::tile_bbox::*;
-pub use self::tile_bbox_pyramid::*;
-#[cfg(feature = "full")]
-pub use self::tile_converter_config::*;
-pub use self::tile_coords::*;
-pub use self::tile_reader_parameters::*;
+pub use optional_modules::*;

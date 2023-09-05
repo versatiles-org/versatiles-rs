@@ -1,4 +1,4 @@
-use super::{Compression, DataConverter, TileBBoxPyramid, TileFormat, TileReaderParameters};
+use crate::shared::{Compression, DataConverter, TileBBoxPyramid, TileFormat, TileReaderParameters};
 
 #[derive(Debug)]
 pub struct TileConverterConfig {

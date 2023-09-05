@@ -55,7 +55,7 @@ assert_fs = { version = "1.0.13" }
 criterion = { version = "0.5.1", default-features = false, features = ["async_futures"] }
 
 [features]
-default = ["full"]
+default = []
 full = ["dep:axum", "dep:clap", "dep:clap-verbosity-flag", "dep:colored", "dep:env_logger", "dep:hyper", "dep:image", "dep:lazy_static", "dep:mime_guess", "dep:r2d2", "dep:r2d2_sqlite", "dep:regex", "dep:reqwest", "dep:tar", "dep:terminal_size", "dep:webp"]
 
 [lib]

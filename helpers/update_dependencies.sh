@@ -14,4 +14,4 @@ echo "upgrade dependencies"
 # cargo install cargo-edit
 cargo upgrade
 
-cargo check --bin versatiles
+cargo check --bin versatiles --all-features

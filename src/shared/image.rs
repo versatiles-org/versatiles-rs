@@ -1,5 +1,5 @@
-use super::{Blob, Error, Result};
 use crate::create_error;
+use crate::shared::{Blob, Error, Result};
 use image::{
 	codecs::{jpeg, png},
 	load_from_memory_with_format, DynamicImage, ImageEncoder, ImageFormat,

@@ -27,7 +27,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "check cargo test bin"
-result=$(cargo test --bin versatiles 2>&1)
+result=$(cargo test --bin versatiles --all-features 2>&1)
 if [ $? -ne 0 ]; then
    echo "$result"
    echo "ERROR DURING: cargo test bin"
