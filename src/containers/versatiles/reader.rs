@@ -1,7 +1,7 @@
 // Import necessary modules and traits
 use super::{new_data_reader, types::*, DataReaderTrait};
+#[cfg(feature = "full")]
 use crate::shared::PrettyPrint;
-#[cfg(feature = "image")]
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait, TileStream},
 	create_error,
@@ -306,6 +306,7 @@ impl TileReaderTrait for TileReader {
 	}
 
 	// deep probe of container meta
+	#[cfg(feature = "full")]
 	async fn probe_container(&mut self, print: PrettyPrint) -> Result<()> {
 		print.add_key_value(&"meta size", &self.meta.len()).await;
 		print.add_key_value(&"block count", &self.block_index.len()).await;
@@ -336,15 +337,19 @@ impl Debug for TileReader {
 
 #[cfg(test)]
 mod tests {
+	#[cfg(feature = "full")]
 	use super::TileReader;
+	#[cfg(feature = "full")]
 	use crate::{
 		containers::{tests::make_test_file, TileReaderTrait},
 		shared::{Compression, Result, TileCoord3, TileFormat},
 	};
+	#[cfg(feature = "full")]
 	use tokio;
 
 	// Test tile fetching
 	#[tokio::test]
+	#[cfg(feature = "full")]
 	async fn test_reader() -> Result<()> {
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 8, "versatiles").await?;
 

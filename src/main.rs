@@ -1,6 +1,5 @@
 // Import necessary modules and dependencies
 mod containers;
-#[cfg(feature = "server")]
 mod server;
 mod shared;
 mod tools;
@@ -37,7 +36,6 @@ enum Commands {
 	/// Show information about a tile container
 	Probe(tools::probe::Subcommand),
 
-	#[cfg(feature = "server")]
 	#[clap(alias = "server")]
 	/// Serve tiles via http
 	Serve(tools::serve::Subcommand),
@@ -61,7 +59,6 @@ fn run(cli: Cli) -> Result<()> {
 	match &cli.command {
 		Commands::Convert(arguments) => tools::convert::run(arguments),
 		Commands::Probe(arguments) => tools::probe::run(arguments),
-		#[cfg(feature = "server")]
 		Commands::Serve(arguments) => tools::serve::run(arguments),
 	}
 }
@@ -116,7 +113,6 @@ mod tests {
 
 	// Test for subcommand 'serve'
 	#[test]
-	#[cfg(feature = "server")]
 	fn serve_subcommand() {
 		let output = run_command(vec!["versatiles", "serve"]).unwrap_err();
 		assert!(output.starts_with("Serve tiles via http"));

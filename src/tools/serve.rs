@@ -98,7 +98,6 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	}
 
 	for filename in arguments.static_content.iter() {
-		#[cfg(feature = "tar")]
 		if filename.ends_with(".tar") {
 			server.add_static_source(source::TarFile::from(filename)?);
 			continue;
@@ -130,7 +129,6 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 mod tests {
 	use crate::tests::run_command;
 
-	#[cfg(feature = "mbtiles")]
 	#[test]
 	fn test_local() {
 		run_command(vec![
@@ -145,7 +143,6 @@ mod tests {
 		.unwrap();
 	}
 
-	#[cfg(feature = "request")]
 	#[test]
 	fn test_remote() {
 		run_command(vec![

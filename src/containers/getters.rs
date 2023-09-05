@@ -1,32 +1,33 @@
-#[cfg(feature = "mbtiles")]
+#[cfg(feature = "full")]
 use super::mbtiles;
-#[cfg(feature = "tar")]
+#[cfg(feature = "full")]
 use super::tar;
-use super::{versatiles, TileConverterBox, TileConverterTrait, TileReaderBox, TileReaderTrait};
-use crate::{
-	create_error,
-	shared::{Result, TileConverterConfig},
-};
+use super::{versatiles, TileReaderBox, TileReaderTrait};
+#[cfg(feature = "full")]
+use super::{TileConverterBox, TileConverterTrait};
+#[cfg(feature = "full")]
+use crate::shared::TileConverterConfig;
+use crate::{create_error, shared::Result};
 use std::path::{Path, PathBuf};
 
 pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
 	let extension = get_extension(&PathBuf::from(filename));
 	match extension.as_str() {
-		#[cfg(feature = "mbtiles")]
+		#[cfg(feature = "full")]
 		"mbtiles" => mbtiles::TileReader::new(filename).await,
-		#[cfg(feature = "tar")]
+		#[cfg(feature = "full")]
 		"tar" => tar::TileReader::new(filename).await,
 		"versatiles" => versatiles::TileReader::new(filename).await,
 		_ => create_error!("Error when reading: file extension '{extension:?}' unknown"),
 	}
 }
 
+#[cfg(feature = "full")]
 pub async fn get_converter(filename: &str, config: TileConverterConfig) -> Result<TileConverterBox> {
 	let path = PathBuf::from(filename);
 	let extension = get_extension(&path);
 	match extension.as_str() {
 		"versatiles" => versatiles::TileConverter::new(filename, config).await,
-		#[cfg(feature = "tar")]
 		"tar" => tar::TileConverter::new(filename, config).await,
 		_ => create_error!("Error when writing: file extension '{extension:?}' unknown"),
 	}
@@ -44,15 +45,21 @@ fn get_extension(path: &Path) -> String {
 #[cfg(test)]
 pub mod tests {
 	use crate::{
+		containers::get_reader,
+		shared::{Compression as C, Result, TileBBoxPyramid, TileFormat as TF},
+	};
+	#[cfg(feature = "full")]
+	use crate::{
 		containers::{
 			dummy::{self, ConverterProfile as CP, ReaderProfile as RP},
-			get_converter, get_reader,
+			get_converter,
 		},
-		shared::{Compression as C, Result, TileBBoxPyramid, TileConverterConfig, TileFormat as TF},
+		shared::TileConverterConfig,
 	};
 	use assert_fs::fixture::NamedTempFile;
 	use std::time::Instant;
 
+	#[cfg(feature = "full")]
 	pub async fn make_test_file(
 		tile_format: TF, compression: C, max_zoom_level: u8, extension: &str,
 	) -> Result<NamedTempFile> {

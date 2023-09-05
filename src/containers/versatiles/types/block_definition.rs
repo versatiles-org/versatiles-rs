@@ -12,6 +12,7 @@ pub struct BlockDefinition {
 	index_range: ByteRange,
 }
 
+#[allow(dead_code)]
 impl BlockDefinition {
 	pub fn new(bbox: TileBBox) -> Self {
 		let x = bbox.get_x_min().div(256u32);

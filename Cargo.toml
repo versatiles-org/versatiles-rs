@@ -11,14 +11,14 @@ categories = ["command-line-utilities", "science::geo", "web-programming::http-s
 readme = "README.MD"
 license = "MIT"
 exclude = [
-	".githooks/",
-	".github/",
-	".gitignore",
-	".prettierignore",
-	".vscode/",
-	"/docker",
-	"/helpers",
-	"/testdata"
+".githooks/",
+".github/",
+".gitignore",
+".prettierignore",
+".vscode/",
+"/docker",
+"/helpers",
+"/testdata"
 ]
 
 [dependencies]
@@ -29,7 +29,7 @@ byteorder = { version = "1.4.3", default-features = true }
 bytes = { version = "1.4.0", default-features = false }
 clap = { version = "4.4.2", default-features = true, optional = true, features = ["wrap_help"] }
 clap-verbosity-flag = { version = "2.0.1", default-features = false, optional = true }
-colored = "2.0.4"
+colored = { version = "2.0.4", default-features = false, optional = true }
 enumset = { version = "1.1.2", default-features = false }
 env_logger = { version = "0.10.0", default-features = true, optional = true }
 flate2 = { version = "1.0.27", default-features = true }
@@ -46,7 +46,7 @@ r2d2_sqlite = { version = "0.22.0", default-features = false, optional = true, f
 regex = { version = "1.9.5", default-features = true, optional = true }
 reqwest = { version = "0.11.20", default-features = false, optional = true, features = ["rustls-tls"] }
 tar = { version = "0.4.40", default-features = false, optional = true }
-terminal_size = { version = "0.2.6", default-features = false }
+terminal_size = { version = "0.2.6", default-features = false, optional = true }
 tokio = { version = "1.32.0", default-features = false, features = ["macros", "rt-multi-thread", "sync"] }
 webp = { version = "0.2.5", default-features = false, optional = true, features = ["img"] }
 
@@ -56,13 +56,7 @@ criterion = { version = "0.5.1", default-features = false, features = ["async_fu
 
 [features]
 default = ["full"]
-full = ["cli", "image", "mbtiles", "request", "server", "tar"]
-cli = ["dep:clap", "dep:clap-verbosity-flag", "dep:env_logger"]
-image = ["dep:image", "dep:webp"]
-mbtiles = ["dep:r2d2", "dep:r2d2_sqlite"]
-request = ["dep:lazy_static", "dep:regex", "dep:reqwest"]
-server = ["dep:axum", "dep:hyper", "dep:mime_guess", "dep:regex"]
-tar = ["dep:tar"]
+full = ["dep:axum", "dep:clap", "dep:clap-verbosity-flag", "dep:colored", "dep:env_logger", "dep:hyper", "dep:image", "dep:lazy_static", "dep:mime_guess", "dep:r2d2", "dep:r2d2_sqlite", "dep:regex", "dep:reqwest", "dep:tar", "dep:terminal_size", "dep:webp"]
 
 [lib]
 name = "versatiles"
@@ -71,7 +65,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "versatiles"
 path = "src/main.rs"
-required-features = ["cli"]
+required-features = ["full"]
 
 [profile.dev]
 opt-level = 1

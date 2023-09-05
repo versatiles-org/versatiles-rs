@@ -1,10 +1,9 @@
-#[cfg(test)]
+#[cfg(all(feature = "full", test))]
 pub mod dummy;
-#[cfg(feature = "mbtiles")]
+#[cfg(feature = "full")]
 pub mod mbtiles;
-#[cfg(feature = "tar")]
+#[cfg(feature = "full")]
 pub mod tar;
-
 pub mod versatiles;
 
 mod getters;

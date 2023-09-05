@@ -13,6 +13,7 @@ pub struct BlockIndex {
 	lookup: HashMap<TileCoord3, BlockDefinition>,
 }
 
+#[allow(dead_code)]
 impl BlockIndex {
 	pub fn new_empty() -> Self {
 		Self { lookup: HashMap::new() }

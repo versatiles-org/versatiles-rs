@@ -1,8 +1,8 @@
-#[cfg(feature = "image")]
+#[cfg(feature = "full")]
 use super::image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2img, webp2img};
 use super::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression, Result};
 use crate::{containers::TileStream, create_error};
-#[cfg(feature = "cli")]
+#[cfg(feature = "full")]
 use clap::ValueEnum;
 use futures_util::StreamExt;
 use itertools::Itertools;
@@ -38,21 +38,19 @@ impl FnConv {
 	#[allow(unreachable_patterns)]
 	fn run(&self, tile: Blob) -> Result<Blob> {
 		match self {
-			#[cfg(feature = "image")]
+			#[cfg(feature = "full")]
 			FnConv::Png2Jpg => img2jpg(png2img(tile)?),
-			#[cfg(feature = "image")]
+			#[cfg(feature = "full")]
 			FnConv::Png2Png => img2png(png2img(tile)?),
-			#[cfg(feature = "image")]
+			#[cfg(feature = "full")]
 			FnConv::Png2Webplossless => img2webplossless(png2img(tile)?),
-
-			#[cfg(feature = "image")]
+			#[cfg(feature = "full")]
 			FnConv::Jpg2Png => img2png(jpg2img(tile)?),
-			#[cfg(feature = "image")]
+			#[cfg(feature = "full")]
 			FnConv::Jpg2Webp => img2webp(jpg2img(tile)?),
-
-			#[cfg(feature = "image")]
+			#[cfg(feature = "full")]
 			FnConv::Webp2Jpg => img2jpg(webp2img(tile)?),
-			#[cfg(feature = "image")]
+			#[cfg(feature = "full")]
 			FnConv::Webp2Png => img2png(webp2img(tile)?),
 
 			FnConv::UnGzip => decompress_gzip(tile),
@@ -68,7 +66,7 @@ impl FnConv {
 // Enum representing supported tile formats
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "cli", derive(ValueEnum))]
+#[cfg_attr(feature = "full", derive(ValueEnum))]
 pub enum TileFormat {
 	BIN,
 	PNG,

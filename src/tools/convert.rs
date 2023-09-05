@@ -135,7 +135,6 @@ mod tests {
 	use crate::tests::run_command;
 	use std::fs;
 
-	#[cfg(feature = "mbtiles")]
 	#[test]
 	fn test_local() {
 		fs::create_dir("tmp/").unwrap_or_default();
@@ -169,7 +168,7 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "request")]
+
 	fn test_remote1() {
 		fs::create_dir("tmp/").unwrap_or_default();
 		run_command(vec![
@@ -187,7 +186,7 @@ mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "request")]
+
 	fn test_remote2() {
 		fs::create_dir("tmp/").unwrap_or_default();
 		run_command(vec![

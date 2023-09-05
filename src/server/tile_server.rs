@@ -351,7 +351,6 @@ mod tests {
 	}
 
 	#[tokio::test]
-	#[cfg(feature = "request")]
 	async fn server() {
 		async fn get(path: &str) -> String {
 			reqwest::get(format!("http://{IP}:{PORT}/{path}"))

@@ -4,12 +4,14 @@ use futures_util::{stream, Stream, StreamExt};
 use std::{fmt::Debug, pin::Pin, sync::Arc};
 use tokio::sync::Mutex;
 
+#[cfg(feature = "full")]
 pub type TileConverterBox = Box<dyn TileConverterTrait>;
 pub type TileReaderBox = Box<dyn TileReaderTrait>;
 pub type TileStream<'a> = Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + Send + 'a>>;
 
 #[allow(clippy::new_ret_no_self)]
 #[async_trait]
+#[cfg(feature = "full")]
 pub trait TileConverterTrait {
 	async fn new(filename: &str, tile_config: TileConverterConfig) -> Result<TileConverterBox>
 	where
@@ -68,6 +70,7 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 			.boxed()
 	}
 
+	#[cfg(feature = "full")]
 	/// probe container
 	async fn probe(&mut self, level: u8) -> Result<()> {
 		let mut print = PrettyPrinter::new_printer();
@@ -88,6 +91,7 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
+	#[cfg(feature = "full")]
 	/// probe container deep
 	async fn probe_container(&mut self, print: PrettyPrint) -> Result<()> {
 		print
@@ -96,6 +100,7 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
+	#[cfg(feature = "full")]
 	/// probe container
 	async fn probe_tiles(&mut self, print: PrettyPrint) -> Result<()> {
 		print
@@ -152,10 +157,11 @@ mod tests {
 			Ok(Blob::from("test tile data"))
 		}
 	}
-
+	#[cfg(feature = "full")]
 	struct TestConverter {}
 
 	#[async_trait]
+	#[cfg(feature = "full")]
 	impl TileConverterTrait for TestConverter {
 		async fn new(_filename: &str, _config: TileConverterConfig) -> Result<TileConverterBox>
 		where
@@ -171,6 +177,7 @@ mod tests {
 	}
 
 	#[tokio::test]
+	#[cfg(feature = "full")]
 	async fn reader() -> Result<()> {
 		let mut reader = TestReader::new("test_path").await?;
 

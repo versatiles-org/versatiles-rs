@@ -72,7 +72,7 @@ fn get_formatted_value<V: Debug>(value: &V) -> ColoredString {
 		"f32" | "f64" => format!("{:?}", value).bright_cyan(),
 		"i128" | "i16" | "i32" | "i64" | "i8" | "isize" => format_integer(value).bright_cyan(),
 		"u128" | "u16" | "u32" | "u64" | "u8" | "usize" => format_integer(value).bright_cyan(),
-		"str" => format!("{:?}", value).bright_magenta(),
+		"str" | "&str" => format!("{:?}", value).bright_magenta(),
 		_ => {
 			panic!("Unknown typename {type_name}");
 		}
@@ -87,7 +87,7 @@ fn format_integer<V: Debug>(value: &V) -> String {
 		formatted = String::from("_") + &text[i..] + &formatted;
 		text = String::from(&text[..i]);
 	}
-	if formatted.len() == 0 {
+	if formatted.is_empty() {
 		text
 	} else {
 		text + &formatted
