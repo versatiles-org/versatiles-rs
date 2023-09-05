@@ -22,27 +22,35 @@ jobs:
   check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - run: rustup update stable && rustup default stable
-      - run: rustup component add rustfmt clippy
-      - run: cargo fmt -- --check
-      - run: cargo clippy -- -D warnings
-      - run: cargo check
-
-  test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: rustup update stable && rustup default stable
-      - run: ./helpers/test_features.sh
-
-  codecov:
-    name: code coverage
-    if: ((github.head_ref || github.ref_name) == 'main') && (github.event_name != 'pull_request')
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - run: rustup update stable && rustup default stable
-      - uses: taiki-e/install-action@cargo-llvm-cov
-      - run: cargo llvm-cov test --bin versatiles --tests --lcov --output-path ./lcov.info
-      - uses: codecov/codecov-action@v3
+      - name: Check out
+        uses: actions/checkout@v3
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          components: rustfmt, clippy
+          override: true
+      - name: Init Cache
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - name: Cargo Fmt
+        run: cargo fmt -- --check
+      - name: Cargo Clippy
+        run: cargo clippy -- -D warnings
+      - name: Cargo Check
+        run: cargo check
+      - name: Test Features
+        run: ./helpers/test_features.sh
+      - name: Install Cargo Coverage
+        uses: taiki-e/install-action@cargo-llvm-cov
+      - name: Cargo Coverage
+        run: cargo llvm-cov test --bin versatiles --tests --lcov --output-path ./lcov.info
+      - name: Upload Coverage
+        uses: codecov/codecov-action@v3
