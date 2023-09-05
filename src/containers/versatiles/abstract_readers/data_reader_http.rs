@@ -114,46 +114,53 @@ mod tests {
 		let data_reader_http = DataReaderHttp::new(invalid_url).await;
 		assert!(data_reader_http.is_err());
 	}
+	async fn read_range_helper(url: &str, offset: u64, length: u64, expected: &str) -> Result<()> {
+		let mut data_reader_http = DataReaderHttp::new(url).await?;
 
-	// Test the 'read_range' method
-	#[tokio::test]
-	async fn read_range() -> Result<()> {
-		async fn test(url: &str, check: (u64, u64, &str)) -> Result<()> {
-			let mut data_reader_http = DataReaderHttp::new(url).await?;
+		// Define a range to read
+		let range = ByteRange { offset, length };
 
-			// Define a range to read
-			let range = ByteRange {
-				offset: check.0,
-				length: check.1,
-			};
+		// Read the specified range from the URL
+		let blob = data_reader_http.read_range(&range).await?;
 
-			// Read the specified range from the URL
-			let blob = data_reader_http.read_range(&range).await?;
+		// Convert the resulting Blob to a string
+		let result_text = str::from_utf8(blob.as_slice())?;
 
-			// Convert the resulting Blob to a string
-			let result_text = str::from_utf8(blob.as_slice())?;
-
-			// Check if the read range matches the expected text
-			assert_eq!(result_text, check.2);
-
-			Ok(())
-		}
-
-		test(
-			"https://raw.githubusercontent.com/versatiles-org/versatiles-rs/main/testdata/berlin.mbtiles",
-			(7, 8, "format 3"),
-		)
-		.await?;
-
-		test(
-			"https://storage.googleapis.com/versatiles/download/planet/planet-20230529.versatiles",
-			(3, 12, "satiles_v02 "),
-		)
-		.await?;
-
-		test("https://google.com/", (100, 110, "plingplong")).await.unwrap_err();
+		// Check if the read range matches the expected text
+		assert_eq!(result_text, expected);
 
 		Ok(())
+	}
+
+	#[tokio::test]
+	async fn read_range_git() {
+		read_range_helper(
+			"https://raw.githubusercontent.com/versatiles-org/versatiles-rs/main/testdata/berlin.mbtiles",
+			7,
+			8,
+			"format 3",
+		)
+		.await
+		.unwrap()
+	}
+
+	#[tokio::test]
+	async fn read_range_googleapis() {
+		read_range_helper(
+			"https://storage.googleapis.com/versatiles/download/planet/planet-20230529.versatiles",
+			3,
+			12,
+			"satiles_v02 ",
+		)
+		.await
+		.unwrap();
+	}
+
+	#[tokio::test]
+	async fn read_range_google() {
+		read_range_helper("https://google.com/", 100, 110, "plingplong")
+			.await
+			.unwrap_err();
 	}
 
 	// Test the 'get_name' method
