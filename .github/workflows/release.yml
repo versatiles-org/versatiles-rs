@@ -157,3 +157,6 @@ jobs:
 
       - name: Trigger Docker release
         run: 'curl -XPOST -u "michaelkreil:${{secrets.PAT_TOKEN}}" https://api.github.com/repos/versatiles-org/versatiles-docker/actions/workflows/release.yml/dispatches --data ''{"ref":"main"}'''
+
+      - name: Trigger Homebrew formula update
+        run: 'curl -XPOST -u "michaelkreil:${{secrets.PAT_TOKEN}}" https://api.github.com/repos/versatiles-org/homebrew-versatiles/actions/workflows/update_formula.yml/dispatches --data ''{"ref":"main"}'''
