@@ -34,7 +34,7 @@ pub struct Subcommand {
 	)]
 	bbox: Option<String>,
 
-	/// also use tiles surrounding the bounding box as an additional border
+	/// also include additional tiles surrounding the bounding box as a border
 	#[arg(long)]
 	bbox_border: Option<u32>,
 

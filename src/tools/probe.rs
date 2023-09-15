@@ -9,7 +9,7 @@ pub struct Subcommand {
 	#[arg(required = true, verbatim_doc_comment)]
 	filename: String,
 
-	/// scan deep
+	/// deep scan (if supported yet)
 	/// -d scans container
 	/// -dd scans every tile
 	#[arg(long, short, action = Count,)]
