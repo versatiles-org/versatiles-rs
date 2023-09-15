@@ -65,7 +65,7 @@ impl FnConv {
 
 // Enum representing supported tile formats
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 #[cfg_attr(feature = "full", derive(ValueEnum))]
 pub enum TileFormat {
 	BIN,

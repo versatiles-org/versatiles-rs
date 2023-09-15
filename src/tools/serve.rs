@@ -86,11 +86,11 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 
 		let mut reader = get_reader(url).await?;
 		let parameters = reader.get_parameters_mut()?;
-		parameters.set_swap_xy(arguments.swap_xy);
-		parameters.set_flip_y(arguments.flip_y);
+		parameters.swap_xy = arguments.swap_xy;
+		parameters.flip_y = arguments.flip_y;
 
 		if let Some(compression) = arguments.override_input_compression {
-			parameters.set_tile_compression(compression);
+			parameters.tile_compression = compression;
 		}
 
 		let source = source::TileContainer::from(reader)?;

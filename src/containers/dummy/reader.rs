@@ -7,13 +7,14 @@ use async_trait::async_trait;
 
 #[derive(Debug)]
 pub enum ReaderProfile {
-	PngFast,
-	PbfFast,
+	JSON,
+	PNG,
+	PBF,
 }
 
 pub struct TileReader {
 	parameters: TileReaderParameters,
-	tile_blob: Blob,
+	profile: ReaderProfile,
 }
 
 impl TileReader {
@@ -22,20 +23,20 @@ impl TileReader {
 		bbox_pyramid.set_zoom_max(max_zoom_level);
 
 		let parameters;
-		let tile_blob;
 
 		match profile {
-			ReaderProfile::PngFast => {
-				parameters = TileReaderParameters::new(TileFormat::PNG, Compression::None, bbox_pyramid);
-				tile_blob = Blob::from(include_bytes!("./dummy.png").to_vec());
+			ReaderProfile::JSON => {
+				parameters = TileReaderParameters::new(TileFormat::JSON, Compression::None, bbox_pyramid);
 			}
-			ReaderProfile::PbfFast => {
+			ReaderProfile::PNG => {
+				parameters = TileReaderParameters::new(TileFormat::PNG, Compression::None, bbox_pyramid);
+			}
+			ReaderProfile::PBF => {
 				parameters = TileReaderParameters::new(TileFormat::PBF, Compression::Gzip, bbox_pyramid);
-				tile_blob = compress_gzip(Blob::from(include_bytes!("./dummy.pbf").to_vec())).unwrap();
 			}
 		};
 
-		Box::new(Self { parameters, tile_blob })
+		Box::new(Self { profile, parameters })
 	}
 }
 
@@ -59,9 +60,13 @@ impl TileReaderTrait for TileReader {
 	async fn get_meta(&self) -> Result<Blob> {
 		Ok(Blob::from("dummy meta data"))
 	}
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
+	async fn get_tile_data_original(&mut self, coord: &TileCoord3) -> Result<Blob> {
 		if coord.is_valid() {
-			Ok(self.tile_blob.clone())
+			Ok(match self.profile {
+				ReaderProfile::JSON => Blob::from(coord.as_json()),
+				ReaderProfile::PNG => Blob::from(include_bytes!("./dummy.png").to_vec()),
+				ReaderProfile::PBF => compress_gzip(Blob::from(include_bytes!("./dummy.pbf").to_vec())).unwrap(),
+			})
 		} else {
 			create_error!("invalid coordinates: {coord:?}")
 		}
@@ -85,21 +90,39 @@ mod tests {
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let mut reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
+		let mut reader = TileReader::new_dummy(ReaderProfile::PNG, 8);
 		assert_eq!(reader.get_container_name()?, "dummy container");
 		assert_eq!(reader.get_name()?, "dummy name");
 		assert_ne!(reader.get_parameters()?, &TileReaderParameters::new_dummy());
 		assert_ne!(reader.get_parameters_mut()?, &mut TileReaderParameters::new_dummy());
 		assert_eq!(reader.get_meta().await?, Blob::from("dummy meta data"));
-		let blob = reader.get_tile_data(&TileCoord3::new(0, 0, 0)).await.unwrap().as_vec();
+		let blob = reader
+			.get_tile_data_original(&TileCoord3::new(0, 0, 0))
+			.await
+			.unwrap()
+			.as_vec();
 		assert_eq!(&blob[0..4], b"\x89PNG");
 		Ok(())
 	}
 
 	#[tokio::test]
+	async fn get_tile_data_original() {
+		let test = |profile, blob| async move {
+			let coord = TileCoord3::new(23, 45, 6);
+			let mut reader = TileReader::new_dummy(profile, 8);
+			let tile = reader.get_tile_data_original(&coord).await.unwrap();
+			assert_eq!(tile, blob);
+		};
+
+		test(ReaderProfile::PNG, Blob::from(b"\x89PNG\x0d\x0a\x1a\x0a\x00\x00\x00\x0dIHDR\x00\x00\x01\x00\x00\x00\x01\x00\x01\x03\x00\x00\x00f\xbc:%\x00\x00\x00\x03PLTE\xaa\xd3\xdf\xcf\xec\xbc\xf5\x00\x00\x00\x1fIDATh\x81\xed\xc1\x01\x0d\x00\x00\x00\xc2\xa0\xf7Om\x0e7\xa0\x00\x00\x00\x00\x00\x00\x00\x00\xbe\x0d!\x00\x00\x01\x9a`\xe1\xd5\x00\x00\x00\x00IEND\xaeB`\x82".to_vec())).await;
+		test(ReaderProfile::PBF, Blob::from(b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x02\xff\x016\x00\xc9\xff\x1a4\x0a\x05ocean\x12\x19\x12\x04\x00\x00\x01\x00\x18\x03\x22\x0f\x09)\xa8@\x1a\x00\xd1@\xd2@\x00\x00\xd2@\x0f\x1a\x01x\x1a\x01y\x22\x05\x15\x00\x00\x00\x00(\x80 x\x02C!\x1f_6\x00\x00\x00".to_vec())).await;
+		test(ReaderProfile::JSON, Blob::from("{x:23,y:45,z:6}")).await;
+	}
+
+	#[tokio::test]
 	async fn convert_from() {
 		let mut converter = TileConverter::new_dummy(ConverterProfile::Png, 8);
-		let mut reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
+		let mut reader = TileReader::new_dummy(ReaderProfile::PNG, 8);
 		converter.convert_from(&mut reader).await.unwrap();
 	}
 }

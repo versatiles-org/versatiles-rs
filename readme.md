@@ -55,3 +55,8 @@ versatiles convert --tile-format webp satellite_tiles.tar satellite_tiles.versat
 
 versatiles serve satellite_tiles.versatiles
 ```
+
+# TODOs
+
+- [ ] explain how to setup for development (don't forget to set --all-features for e.g. VS Code), and why you have to use `cargo test --all-features`
+- [ ] update this manual

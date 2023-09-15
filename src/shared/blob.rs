@@ -3,6 +3,7 @@
 use bytes::Bytes;
 use std::fmt::Debug;
 use std::ops::Range;
+use std::str::from_utf8;
 
 /// A simple wrapper around `bytesMut::Bytes` that provides additional methods for working with byte data.
 #[derive(Clone, PartialEq, Eq)]
@@ -110,25 +111,23 @@ impl From<String> for Blob {
 
 impl Debug for Blob {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let chunk: &[u8];
-		let mut suffix: &str = "";
-		if self.0.len() > 32 {
-			suffix = "...";
-			chunk = self.0.get(0..32).unwrap();
-		} else {
-			chunk = &self.0;
-		}
-		write!(
-			f,
-			"Blob({}, {}{})",
+		f.write_fmt(format_args!(
+			"Blob({}: b\"{}\")",
 			self.0.len(),
-			chunk
-				.iter()
-				.map(|v| format!("{v:X}"))
+			self
+				.0
+				.clone()
+				.into_iter()
+				.map(|c| {
+					if c < 32 || c == 34 || c == 92 || c > 126 {
+						format!("\\x{:02x}", c)
+					} else {
+						from_utf8(&[c]).unwrap().to_string()
+					}
+				})
 				.collect::<Vec<String>>()
-				.join("_"),
-			suffix
-		)
+				.join("")
+		))
 	}
 }
 
@@ -211,16 +210,11 @@ mod tests {
 	fn debug() {
 		assert_eq!(
 			format!("{:?}", Blob::from("Voisilmäpulla")),
-			"Blob(14, 56_6F_69_73_69_6C_6D_C3_A4_70_75_6C_6C_61)"
+			"Blob(14: b\"Voisilm\\xc3\\xa4pulla\")"
 		);
-
 		assert_eq!(
 			format!("{:?}", Blob::from("01234567890123456789012345678901")),
-			"Blob(32, 30_31_32_33_34_35_36_37_38_39_30_31_32_33_34_35_36_37_38_39_30_31_32_33_34_35_36_37_38_39_30_31)"
-		);
-		assert_eq!(
-			format!("{:?}", Blob::from("012345678901234567890123456789012")),
-			"Blob(33, 30_31_32_33_34_35_36_37_38_39_30_31_32_33_34_35_36_37_38_39_30_31_32_33_34_35_36_37_38_39_30_31...)"
+			"Blob(32: b\"01234567890123456789012345678901\")"
 		);
 	}
 }

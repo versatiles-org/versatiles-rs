@@ -64,10 +64,10 @@ pub mod tests {
 		tile_format: TF, compression: C, max_zoom_level: u8, extension: &str,
 	) -> Result<NamedTempFile> {
 		let reader_profile = match tile_format {
-			TF::PNG => RP::PngFast,
-			TF::JPG => RP::PngFast,
-			TF::WEBP => RP::PngFast,
-			TF::PBF => RP::PbfFast,
+			TF::PNG => RP::PNG,
+			TF::JPG => RP::PNG,
+			TF::WEBP => RP::PNG,
+			TF::PBF => RP::PBF,
 			_ => todo!(),
 		};
 
@@ -142,9 +142,9 @@ pub mod tests {
 		let containers = vec![Container::Tar, Container::Versatiles];
 
 		for container in containers {
-			test_converter_and_reader(RP::PngFast, 7, &container, TF::PNG, C::None, false)?;
-			test_converter_and_reader(RP::PngFast, 4, &container, TF::JPG, C::None, false)?;
-			test_converter_and_reader(RP::PbfFast, 7, &container, TF::PBF, C::Gzip, false)?;
+			test_converter_and_reader(RP::PNG, 7, &container, TF::PNG, C::None, false)?;
+			test_converter_and_reader(RP::PNG, 4, &container, TF::JPG, C::None, false)?;
+			test_converter_and_reader(RP::PBF, 7, &container, TF::PBF, C::Gzip, false)?;
 		}
 
 		Ok(())

@@ -36,11 +36,11 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 	fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters>;
 
 	fn get_tile_format(&self) -> Result<&TileFormat> {
-		Ok(self.get_parameters()?.get_tile_format())
+		Ok(&self.get_parameters()?.tile_format)
 	}
 
 	fn get_tile_compression(&self) -> Result<&Compression> {
-		Ok(self.get_parameters()?.get_tile_compression())
+		Ok(&self.get_parameters()?.tile_compression)
 	}
 
 	/// container name, e.g. versatiles, mbtiles, ...
@@ -50,22 +50,47 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 	async fn get_meta(&self) -> Result<Blob>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob>;
+	/// returns the tile in the coordinate system of the source
+	async fn get_tile_data_original(&mut self, coord: &TileCoord3) -> Result<Blob>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
-	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox: &'a TileBBox) -> TileStream {
+	/// returns the tile in the target coordinate system (after optional flipping)
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
+		let mut coord_inner: TileCoord3 = *coord;
+		self.get_parameters()?.transform_backward(&mut coord_inner);
+		self.get_tile_data_original(&coord_inner).await
+	}
+
+	/// always compressed with get_tile_compression and formatted with get_tile_format
+	/// returns the tiles in the coordinate system of the source
+	async fn get_bbox_tile_stream_original<'a>(&'a mut self, bbox: TileBBox) -> TileStream {
 		let mutex = Arc::new(Mutex::new(self));
-		stream::iter(bbox.iter_coords())
+		let coords: Vec<TileCoord3> = bbox.iter_coords().collect();
+		stream::iter(coords)
 			.filter_map(move |coord| {
 				let mutex = mutex.clone();
 				async move {
-					let result = mutex.lock().await.get_tile_data(&coord).await;
+					let result = mutex.lock().await.get_tile_data_original(&coord).await;
 					if result.is_err() {
 						return None;
 					}
 					let blob = result.unwrap();
 					Some((coord, blob))
 				}
+			})
+			.boxed()
+	}
+
+	/// always compressed with get_tile_compression and formatted with get_tile_format
+	/// returns the tiles in the target coordinate system (after optional flipping)
+	async fn get_bbox_tile_stream<'a>(&'a mut self, mut bbox: TileBBox) -> TileStream {
+		let parameters: TileReaderParameters = (*self.get_parameters().unwrap()).clone();
+		parameters.transform_backward(&mut bbox);
+		let stream = self.get_bbox_tile_stream_original(bbox).await;
+		stream
+			.map(move |(mut coord, blob)| {
+				parameters.transform_forward(&mut coord);
+				(coord, blob)
 			})
 			.boxed()
 	}
@@ -153,7 +178,7 @@ mod tests {
 			Ok("test container name")
 		}
 
-		async fn get_tile_data(&mut self, _coord: &TileCoord3) -> Result<Blob> {
+		async fn get_tile_data_original(&mut self, _coord: &TileCoord3) -> Result<Blob> {
 			Ok(Blob::from("test tile data"))
 		}
 	}
@@ -197,7 +222,7 @@ mod tests {
 		// Test getting tile data
 		let coord = TileCoord3::new(0, 0, 0);
 		assert_eq!(
-			reader.get_tile_data(&coord).await.unwrap().to_string(),
+			reader.get_tile_data_original(&coord).await.unwrap().to_string(),
 			"test tile data"
 		);
 
@@ -211,7 +236,7 @@ mod tests {
 	async fn get_bbox_tile_iter() -> Result<()> {
 		let mut reader = TestReader::new("test_path").await?;
 		let bbox = TileBBox::new(4, 0, 0, 10, 10); // Or replace it with actual bbox
-		let mut stream = reader.get_bbox_tile_stream(&bbox).await;
+		let mut stream = reader.get_bbox_tile_stream(bbox).await;
 
 		while let Some((_coord, _blob)) = stream.next().await {}
 

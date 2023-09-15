@@ -41,8 +41,8 @@ impl FileHeader {
 		FileHeader {
 			zoom_range,
 			bbox: bbox.map(|v| (v * BBOX_SCALE as f64) as i32),
-			tile_format: tile_format.clone(),
-			compression: compression.to_owned(),
+			tile_format: *tile_format,
+			compression: *compression,
 			meta_range: ByteRange::empty(),
 			blocks_range: ByteRange::empty(),
 		}

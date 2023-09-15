@@ -34,7 +34,7 @@ mod tests {
 	#[test]
 
 	fn test_local() {
-		run_command(vec!["versatiles", "probe", "testdata/berlin.mbtiles"]).unwrap();
+		run_command(vec!["versatiles", "probe", "-q", "testdata/berlin.mbtiles"]).unwrap();
 	}
 
 	#[test]
@@ -43,6 +43,7 @@ mod tests {
 		run_command(vec![
 			"versatiles",
 			"probe",
+			"-q",
 			"https://download.versatiles.org/planet-latest.versatiles",
 		])
 		.unwrap();

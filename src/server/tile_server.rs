@@ -363,11 +363,11 @@ mod tests {
 
 		let mut server = TileServer::new(IP, PORT, true);
 
-		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
+		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		let source = TileContainer::from(reader).unwrap();
 		server.add_tile_source("cheese", source).unwrap();
 
-		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
+		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		let source = TileContainer::from(reader).unwrap();
 		server.add_static_source(source);
 
@@ -389,11 +389,11 @@ mod tests {
 	async fn panic() {
 		let mut server = TileServer::new(IP, PORT, true);
 
-		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PngFast, 8);
+		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PNG, 8);
 		let source = TileContainer::from(reader).unwrap();
 		server.add_tile_source("cheese", source).unwrap();
 
-		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
+		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		let source = TileContainer::from(reader).unwrap();
 		server.add_tile_source("cheese", source).unwrap();
 	}
@@ -415,7 +415,7 @@ mod tests {
 	fn tile_server_add_tile_source() {
 		let mut server = TileServer::new(IP, PORT, true);
 
-		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
+		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		let source = TileContainer::from(reader).unwrap();
 		server.add_tile_source("cheese", source).unwrap();
 
@@ -427,7 +427,7 @@ mod tests {
 	fn tile_server_add_static_source() {
 		let mut server = TileServer::new(IP, PORT, true);
 
-		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
+		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		let source = TileContainer::from(reader).unwrap();
 		server.add_static_source(source);
 
@@ -438,7 +438,7 @@ mod tests {
 	async fn tile_server_iter_url_mapping() {
 		let mut server = TileServer::new(IP, PORT, true);
 
-		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PbfFast, 8);
+		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		let source = TileContainer::from(reader).unwrap();
 		server.add_tile_source("cheese", source).unwrap();
 

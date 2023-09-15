@@ -17,10 +17,10 @@ impl TileContainer {
 	// Constructor function for creating a TileContainer instance
 	pub fn from(reader: TileReaderBox) -> Result<Box<TileContainer>> {
 		let parameters = reader.get_parameters()?;
-		let compression = *parameters.get_tile_compression();
+		let compression = parameters.tile_compression;
 
 		// Determine the MIME type based on the tile format
-		let tile_mime = match parameters.get_tile_format() {
+		let tile_mime = match parameters.tile_format {
 			// Various tile formats with their corresponding MIME types
 			TileFormat::BIN => "application/octet-stream",
 			TileFormat::PNG => "image/png",
@@ -53,10 +53,10 @@ impl ServerSourceTrait for TileContainer {
 	// Get information about the tile container as a JSON string
 	fn get_info_as_json(&self) -> Result<String> {
 		let parameters = self.reader.get_parameters()?;
-		let bbox_pyramid = parameters.get_bbox_pyramid();
+		let bbox_pyramid = &parameters.bbox_pyramid;
 
-		let tile_format = format!("{:?}", parameters.get_tile_format()).to_lowercase();
-		let tile_compression = format!("{:?}", parameters.get_tile_compression()).to_lowercase();
+		let tile_format = format!("{:?}", parameters.tile_format).to_lowercase();
+		let tile_compression = format!("{:?}", parameters.tile_compression).to_lowercase();
 
 		Ok(format!(
 			"{{ \"container\":\"{}\", \"format\":\"{}\", \"compression\":\"{}\", \"zoom_min\":{}, \"zoom_max\":{}, \"bbox\":{:?} }}",
@@ -138,7 +138,7 @@ mod tests {
 	// Test the constructor function for TileContainer
 	#[test]
 	fn tile_container_from() -> Result<()> {
-		let reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
+		let reader = TileReader::new_dummy(ReaderProfile::PNG, 8);
 		let container = TileContainer::from(reader)?;
 
 		assert_eq!(container.get_name().unwrap(), "dummy name");
@@ -152,7 +152,7 @@ mod tests {
 	// Test the debug function
 	#[test]
 	fn debug() {
-		let reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
+		let reader = TileReader::new_dummy(ReaderProfile::PNG, 8);
 		let container = TileContainer::from(reader).unwrap();
 		let debug = format!("{container:?}");
 		assert!(debug.starts_with("TileContainer { reader: TileReader:Dummy {"));
@@ -181,7 +181,7 @@ mod tests {
 			Ok(true)
 		}
 
-		let c = &mut TileContainer::from(TileReader::new_dummy(ReaderProfile::PngFast, 8))?;
+		let c = &mut TileContainer::from(TileReader::new_dummy(ReaderProfile::PNG, 8))?;
 
 		assert_eq!(
 			&check_response(c, "0/0/0.png", None, "image/png").await?[0..6],

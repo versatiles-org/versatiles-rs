@@ -48,7 +48,7 @@ impl TileConverterTrait for TileConverter {
 		let bbox_pyramid = self.config.get_bbox_pyramid();
 
 		for bbox in bbox_pyramid.iter_levels() {
-			let mut stream = reader.get_bbox_tile_stream(bbox).await;
+			let mut stream = reader.get_bbox_tile_stream(bbox.clone()).await;
 			while let Some((_coord, _blob)) = stream.next().await {}
 		}
 
@@ -70,7 +70,7 @@ mod tests {
 	#[tokio::test]
 	async fn convert_from() {
 		let mut converter = TileConverter::new_dummy(ConverterProfile::Png, 8);
-		let mut reader = TileReader::new_dummy(ReaderProfile::PngFast, 8);
+		let mut reader = TileReader::new_dummy(ReaderProfile::PNG, 8);
 		converter.convert_from(&mut reader).await.unwrap();
 	}
 

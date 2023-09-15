@@ -106,17 +106,7 @@ impl TileReaderTrait for TileReader {
 	}
 
 	// Get tile data for a given coordinate
-	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Result<Blob> {
-		let mut coord: TileCoord3 = *coord_in;
-
-		if self.get_parameters()?.get_swap_xy() {
-			coord.swap_xy();
-		};
-
-		if self.get_parameters()?.get_flip_y() {
-			coord.flip_y();
-		};
-
+	async fn get_tile_data_original(&mut self, coord: &TileCoord3) -> Result<Blob> {
 		// Calculate block coordinate
 		let block_coord = TileCoord3::new(coord.get_x().shr(8), coord.get_y().shr(8), coord.get_z());
 
@@ -154,24 +144,11 @@ impl TileReaderTrait for TileReader {
 		self.reader.read_range(tile_range).await
 	}
 
-	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox: &'a TileBBox) -> TileStream<'a> {
+	async fn get_bbox_tile_stream_original<'a>(&'a mut self, bbox: TileBBox) -> TileStream<'a> {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
-		let mut outer_bbox: TileBBox = *bbox;
-
-		let swap_xy: bool = self.get_parameters().unwrap().get_swap_xy();
-		let flip_y: bool = self.get_parameters().unwrap().get_flip_y();
-
-		if swap_xy {
-			outer_bbox.swap_xy();
-		};
-
-		if flip_y {
-			outer_bbox.flip_y();
-		};
-
-		let mut block_coords: TileBBox = outer_bbox;
+		let mut block_coords: TileBBox = bbox;
 		block_coords.scale_down(256);
 		let block_coords: Vec<TileCoord3> = block_coords.iter_coords().collect();
 
@@ -198,12 +175,12 @@ impl TileReaderTrait for TileReader {
 					trace!("tiles_bbox_block {tiles_bbox_block:?}");
 
 					// Get the bounding box of all tiles defined in this block
-					let mut tiles_bbox_used = outer_bbox;
+					let mut tiles_bbox_used = bbox;
 					tiles_bbox_used.intersect_bbox(tiles_bbox_block);
 					trace!("tiles_bbox_used {tiles_bbox_used:?}");
 
-					assert_eq!(outer_bbox.get_level(), tiles_bbox_block.get_level());
-					assert_eq!(outer_bbox.get_level(), tiles_bbox_used.get_level());
+					assert_eq!(bbox.get_level(), tiles_bbox_block.get_level());
+					assert_eq!(bbox.get_level(), tiles_bbox_used.get_level());
 
 					// Get the tile index of this block
 					let tile_index: Arc<TileIndex> = myself.get_block_tile_index_cached(&block).await;
@@ -272,20 +249,12 @@ impl TileReaderTrait for TileReader {
 
 					let entries: Vec<(TileCoord3, Blob)> = chunk
 						.into_iter()
-						.map(|(mut coord, range)| {
+						.map(|(coord, range)| {
 							let start = range.offset - offset;
 							let end = start + range.length;
 							let tile_range = (start as usize)..(end as usize);
 
 							let blob = Blob::from(big_blob.get_range(tile_range));
-
-							if flip_y {
-								coord.flip_y();
-							}
-
-							if swap_xy {
-								coord.swap_xy();
-							}
 
 							assert!(bbox.contains3(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
 
@@ -358,7 +327,7 @@ mod tests {
 		let meta = reader.get_meta().await?;
 		assert_eq!(meta.to_string(), "dummy meta data");
 
-		let tile_data = reader.get_tile_data(&TileCoord3::new(2, 3, 4)).await?;
+		let tile_data = reader.get_tile_data_original(&TileCoord3::new(2, 3, 4)).await?;
 		assert_eq!(tile_data.len(), 77);
 
 		Ok(())

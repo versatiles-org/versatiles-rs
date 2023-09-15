@@ -1,16 +1,16 @@
-use super::{Compression, DataConverter, TileBBoxPyramid, TileFormat};
+use super::{transform_coord::TransformCoord, Compression, DataConverter, TileBBoxPyramid, TileFormat};
 #[cfg(feature = "full")]
 use super::{PrettyPrint, Result};
 use std::fmt;
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct TileReaderParameters {
-	bbox_pyramid: TileBBoxPyramid,
-	decompressor: DataConverter,
-	flip_y: bool,
-	swap_xy: bool,
-	tile_compression: Compression,
-	tile_format: TileFormat,
+	pub bbox_pyramid: TileBBoxPyramid,
+	pub decompressor: DataConverter,
+	pub flip_y: bool,
+	pub swap_xy: bool,
+	pub tile_compression: Compression,
+	pub tile_format: TileFormat,
 }
 
 impl TileReaderParameters {
@@ -39,40 +39,29 @@ impl TileReaderParameters {
 			flip_y: false,
 		}
 	}
-	pub fn get_tile_format(&self) -> &TileFormat {
-		&self.tile_format
+	pub fn transform_forward<T>(&self, bbox: &mut T)
+	where
+		T: TransformCoord,
+	{
+		self.flip_y_if_needed(bbox);
+		self.swap_xy_if_needed(bbox);
 	}
-	#[allow(dead_code)]
-	pub fn set_tile_format(&mut self, tile_format: TileFormat) {
-		self.tile_format = tile_format;
+	pub fn transform_backward<T>(&self, bbox: &mut T)
+	where
+		T: TransformCoord,
+	{
+		self.swap_xy_if_needed(bbox);
+		self.flip_y_if_needed(bbox);
 	}
-	pub fn get_tile_compression(&self) -> &Compression {
-		&self.tile_compression
-	}
-	pub fn set_tile_compression(&mut self, compression: Compression) {
-		self.tile_compression = compression;
-	}
-	pub fn get_bbox_pyramid(&self) -> TileBBoxPyramid {
-		let mut bbox_pyramid = self.bbox_pyramid.clone();
-		if self.swap_xy {
-			bbox_pyramid.swap_xy();
-		}
+	fn flip_y_if_needed(&self, data: &mut impl TransformCoord) {
 		if self.flip_y {
-			bbox_pyramid.flip_y();
+			data.flip_y();
 		}
-		bbox_pyramid
 	}
-	pub fn get_flip_y(&self) -> bool {
-		self.flip_y
-	}
-	pub fn set_flip_y(&mut self, flip: bool) {
-		self.flip_y = flip;
-	}
-	pub fn get_swap_xy(&self) -> bool {
-		self.swap_xy
-	}
-	pub fn set_swap_xy(&mut self, flip: bool) {
-		self.swap_xy = flip;
+	fn swap_xy_if_needed(&self, data: &mut impl TransformCoord) {
+		if self.swap_xy {
+			data.swap_xy();
+		}
 	}
 	#[cfg(feature = "full")]
 	pub async fn probe<'a>(&self, mut print: PrettyPrint) -> Result<()> {
@@ -112,48 +101,16 @@ mod tests {
 
 	#[test]
 	fn basic_tests() {
-		let test = |tile_format: TileFormat,
-		            tile_compression: Compression,
-		            bbox_pyramid: TileBBoxPyramid,
-		            flip_y: bool,
-		            swap_xy: bool| {
-			let mut p = TileReaderParameters::new(tile_format.clone(), tile_compression, bbox_pyramid.clone());
-			p.set_flip_y(flip_y);
-			p.set_swap_xy(swap_xy);
+		let test = |tile_format: TileFormat, tile_compression: Compression, bbox_pyramid: TileBBoxPyramid| {
+			let p = TileReaderParameters::new(tile_format.clone(), tile_compression, bbox_pyramid.clone());
 
-			assert_eq!(p.get_tile_format(), &tile_format);
-			assert_eq!(p.get_tile_compression(), &tile_compression);
-			assert_eq!(p.get_bbox_pyramid(), bbox_pyramid);
-			assert_eq!(p.get_flip_y(), flip_y);
-			assert_eq!(p.get_swap_xy(), swap_xy);
-
-			p.set_tile_format(TileFormat::PNG);
-			p.set_tile_compression(Compression::Gzip);
-			assert_eq!(p.get_tile_format(), &TileFormat::PNG);
-			assert_eq!(p.get_tile_compression(), &Compression::Gzip);
+			assert_eq!(p.tile_format, tile_format);
+			assert_eq!(p.tile_compression, tile_compression);
+			assert_eq!(p.bbox_pyramid, bbox_pyramid);
 		};
 
-		test(
-			TileFormat::JPG,
-			Compression::None,
-			TileBBoxPyramid::new_empty(),
-			false,
-			false,
-		);
-		test(
-			TileFormat::JPG,
-			Compression::None,
-			TileBBoxPyramid::new_empty(),
-			false,
-			true,
-		);
-
-		test(
-			TileFormat::PBF,
-			Compression::Brotli,
-			TileBBoxPyramid::new_full(),
-			true,
-			true,
-		);
+		test(TileFormat::JPG, Compression::None, TileBBoxPyramid::new_empty());
+		test(TileFormat::JPG, Compression::None, TileBBoxPyramid::new_empty());
+		test(TileFormat::PBF, Compression::Brotli, TileBBoxPyramid::new_full());
 	}
 }

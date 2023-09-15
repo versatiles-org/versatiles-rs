@@ -31,13 +31,16 @@ impl TileConverterConfig {
 		Self::new(None, None, TileBBoxPyramid::new_full(), false)
 	}
 	pub fn finalize_with_parameters(&mut self, parameters: &TileReaderParameters) {
-		self.bbox_pyramid.intersect(&parameters.get_bbox_pyramid());
+		let mut bbox_pyramid = parameters.bbox_pyramid.clone();
+		parameters.transform_forward(&mut bbox_pyramid);
 
-		self.tile_format.get_or_insert(parameters.get_tile_format().clone());
-		self.tile_compression.get_or_insert(*parameters.get_tile_compression());
+		self.bbox_pyramid.intersect(&bbox_pyramid);
 
-		let src_form = parameters.get_tile_format();
-		let src_comp = parameters.get_tile_compression();
+		self.tile_format.get_or_insert(parameters.tile_format);
+		self.tile_compression.get_or_insert(parameters.tile_compression);
+
+		let src_form = &parameters.tile_format;
+		let src_comp = &parameters.tile_compression;
 		let dst_form = self.tile_format.as_ref().unwrap();
 		let dst_comp = self.tile_compression.as_ref().unwrap();
 		let force_recompress = self.force_recompress;

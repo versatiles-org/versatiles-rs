@@ -1,7 +1,6 @@
 use std::{
 	f64::consts::PI as PI32,
 	fmt::{self, Debug},
-	mem::swap,
 };
 
 #[derive(Eq, PartialEq, Clone, Hash)]
@@ -61,9 +60,9 @@ impl PartialOrd for TileCoord2 {
 
 #[derive(Eq, PartialEq, Clone, Hash, Copy)]
 pub struct TileCoord3 {
-	x: u32,
-	y: u32,
-	z: u8,
+	pub x: u32,
+	pub y: u32,
+	pub z: u8,
 }
 impl TileCoord3 {
 	pub fn new(x: u32, y: u32, z: u8) -> TileCoord3 {
@@ -78,13 +77,6 @@ impl TileCoord3 {
 	}
 	pub fn get_z(&self) -> u8 {
 		self.z
-	}
-	pub fn flip_y(&mut self) {
-		let max_index = 2u32.pow(self.z as u32) - 1;
-		self.y = max_index - self.y;
-	}
-	pub fn swap_xy(&mut self) {
-		swap(&mut self.x, &mut self.y);
 	}
 	pub fn as_geo(&self) -> [f64; 2] {
 		let zoom: f64 = 2.0f64.powi(self.z as i32);
@@ -107,6 +99,10 @@ impl TileCoord3 {
 	}
 	pub fn as_coord2(&self) -> TileCoord2 {
 		TileCoord2 { x: self.x, y: self.y }
+	}
+	#[cfg(test)]
+	pub fn as_json(&self) -> String {
+		format!("{{x:{},y:{},z:{}}}", self.x, self.y, self.z)
 	}
 	#[cfg(test)]
 	pub fn is_valid(&self) -> bool {
@@ -165,13 +161,6 @@ mod tests {
 	}
 
 	#[test]
-	fn flip_y() {
-		let mut c = TileCoord3::new(1, 2, 3);
-		c.flip_y();
-		assert_eq!(c, TileCoord3::new(1, 5, 3));
-	}
-
-	#[test]
 	fn debug() {
 		assert_eq!(format!("{:?}", TileCoord2::new(1, 2)), "TileCoord2(1, 2)");
 		assert_eq!(format!("{:?}", TileCoord3::new(1, 2, 3)), "TileCoord3(1, 2, 3)");
@@ -224,13 +213,6 @@ mod tests {
 		assert_eq!(coord.get_x(), 3);
 		assert_eq!(coord.get_y(), 4);
 		assert_eq!(coord.get_z(), 5);
-	}
-
-	#[test]
-	fn tilecoord3_swap_xy() {
-		let mut coord = TileCoord3::new(3, 4, 5);
-		coord.swap_xy();
-		assert_eq!(coord, TileCoord3::new(4, 3, 5));
 	}
 
 	#[test]

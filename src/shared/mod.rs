@@ -6,6 +6,7 @@ pub mod tile_bbox;
 pub mod tile_bbox_pyramid;
 pub mod tile_coords;
 pub mod tile_reader_parameters;
+mod transform_coord;
 
 pub use blob::*;
 pub use compress::*;

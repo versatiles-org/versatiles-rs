@@ -116,5 +116,5 @@ mod tests {
 	fn serve_subcommand() {
 		let output = run_command(vec!["versatiles", "serve"]).unwrap_err();
 		assert!(output.starts_with("Serve tiles via http"));
-	} // Add required imports at the top of the test module
+	}
 }

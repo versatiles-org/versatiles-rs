@@ -2,18 +2,17 @@ use super::{TileCoord2, TileCoord3};
 use itertools::Itertools;
 use std::{
 	fmt,
-	mem::swap,
 	ops::{Div, Rem},
 };
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct TileBBox {
-	level: u8,
-	x_min: u32,
-	y_min: u32,
-	x_max: u32,
-	y_max: u32,
-	max: u32,
+	pub level: u8,
+	pub x_min: u32,
+	pub y_min: u32,
+	pub x_max: u32,
+	pub y_max: u32,
+	pub max: u32,
 }
 
 #[allow(dead_code)]
@@ -328,19 +327,6 @@ impl TileBBox {
 
 		[p_min[0], p_min[1], p_max[0], p_max[1]]
 	}
-	pub fn swap_xy(&mut self) {
-		if !self.is_empty() {
-			swap(&mut self.x_min, &mut self.y_min);
-			swap(&mut self.x_max, &mut self.y_max);
-		}
-	}
-	pub fn flip_y(&mut self) {
-		if !self.is_empty() {
-			self.y_min = self.max - self.y_min;
-			self.y_max = self.max - self.y_max;
-			swap(&mut self.y_min, &mut self.y_max);
-		}
-	}
 }
 
 impl fmt::Debug for TileBBox {
@@ -548,21 +534,6 @@ mod tests {
 		let mut empty_bbox = TileBBox::new_empty(8);
 		empty_bbox.add_border(1, 2, 3, 4);
 		assert_eq!(empty_bbox, TileBBox::new_empty(8));
-	}
-
-	#[test]
-	fn flip_y() {
-		let test = |a, b, c, d, e| -> TileBBox {
-			let mut t = TileBBox::new(a, b, c, d, e);
-			t.flip_y();
-			t
-		};
-
-		assert_eq!(test(1, 0, 0, 1, 1), TileBBox::new(1, 0, 0, 1, 1));
-		assert_eq!(test(2, 0, 0, 1, 1), TileBBox::new(2, 0, 2, 1, 3));
-		assert_eq!(test(3, 0, 0, 1, 1), TileBBox::new(3, 0, 6, 1, 7));
-		assert_eq!(test(9, 10, 0, 10, 511), TileBBox::new(9, 10, 0, 10, 511));
-		assert_eq!(test(9, 0, 10, 511, 10), TileBBox::new(9, 0, 501, 511, 501));
 	}
 
 	#[test]

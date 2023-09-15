@@ -82,8 +82,8 @@ impl TileReader {
 			}
 		}
 
-		self.parameters.set_tile_format(tile_format.unwrap());
-		self.parameters.set_tile_compression(compression.unwrap());
+		self.parameters.tile_format = tile_format.unwrap();
+		self.parameters.tile_compression = compression.unwrap();
 		self.parameters.set_bbox_pyramid(pyramide);
 
 		if self.meta_data.is_none() {
@@ -216,18 +216,8 @@ impl TileReaderTrait for TileReader {
 	fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters> {
 		Ok(&mut self.parameters)
 	}
-	async fn get_tile_data(&mut self, coord_in: &TileCoord3) -> Result<Blob> {
-		trace!("read 1 tile {:?}", coord_in);
-
-		let mut coord: TileCoord3 = *coord_in;
-
-		if self.get_parameters()?.get_swap_xy() {
-			coord.swap_xy();
-		};
-
-		if self.get_parameters()?.get_flip_y() {
-			coord.flip_y();
-		};
+	async fn get_tile_data_original(&mut self, coord: &TileCoord3) -> Result<Blob> {
+		trace!("read 1 tile {:?}", coord);
 
 		let max_index = 2u32.pow(coord.get_z() as u32) - 1;
 		let x = coord.get_x();
@@ -242,27 +232,10 @@ impl TileReaderTrait for TileReader {
 
 		Ok(Blob::from(blob))
 	}
-	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox_in: &'a TileBBox) -> TileStream {
-		if bbox_in.is_empty() {
+	async fn get_bbox_tile_stream_original<'a>(&'a mut self, bbox: TileBBox) -> TileStream {
+		if bbox.is_empty() {
 			return futures_util::stream::empty().boxed();
 		}
-
-		let mut bbox: TileBBox = *bbox_in;
-
-		let parameters = self.get_parameters().unwrap();
-		let swap_xy = parameters.get_swap_xy();
-		let flip_y = !parameters.get_flip_y(); // Because mbtiles is actually flipped;
-
-		println!("bbox {bbox:?}");
-		println!("flip_y {flip_y:?}");
-
-		if swap_xy {
-			bbox.swap_xy();
-		};
-
-		if flip_y {
-			bbox.flip_y();
-		};
 
 		let conn = self.pool.get().unwrap();
 		let mut stmt = conn
@@ -279,17 +252,8 @@ impl TileReaderTrait for TileReader {
 					bbox.get_level() as u32,
 				],
 				move |row| {
-					let mut coord = TileCoord3::new(row.get::<_, u32>(0)?, row.get::<_, u32>(1)?, row.get::<_, u8>(2)?);
-
-					if flip_y {
-						coord.flip_y();
-					};
-					if swap_xy {
-						coord.swap_xy();
-					};
-
+					let coord = TileCoord3::new(row.get::<_, u32>(0)?, row.get::<_, u32>(1)?, row.get::<_, u8>(2)?);
 					let blob = Blob::from(row.get::<_, Vec<u8>>(3)?);
-
 					Ok((coord, blob))
 				},
 			)
@@ -330,7 +294,7 @@ pub mod tests {
 		// get test container reader
 		let mut reader = TileReader::new("testdata/berlin.mbtiles").await?;
 
-		let tile = reader.get_tile_data(&TileCoord3::new(8803, 5376, 14)).await?;
+		let tile = reader.get_tile_data_original(&TileCoord3::new(8803, 5376, 14)).await?;
 		assert_eq!(tile.len(), 172969);
 		assert_eq!(tile.get_range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
 		assert_eq!(

@@ -183,7 +183,7 @@ mod tests {
 	use assert_fs::NamedTempFile;
 
 	pub async fn make_test_tar(compression: Compression) -> NamedTempFile {
-		let reader_profile = ReaderProfile::PbfFast;
+		let reader_profile = ReaderProfile::PBF;
 
 		// get dummy reader
 		let mut reader = TileReader::new_dummy(reader_profile, 3);
