@@ -47,8 +47,10 @@ jobs:
         run: cargo check --bin versatiles --all-features
       - name: Cargo Check lib
         run: cargo check --lib
-      - name: Test Features
-        run: ./helpers/test_features.sh
+      - name: Cargo Test bin
+        run: cargo test --bin versatiles --all-features
+      - name: Cargo Test lib
+        run: cargo test --lib
       - name: Install Cargo Coverage
         uses: taiki-e/install-action@cargo-llvm-cov
       - name: Cargo Coverage
