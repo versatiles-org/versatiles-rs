@@ -26,8 +26,8 @@ async-trait = { version = "0.1.73", default-features = false }
 axum = { version = "0.6.20", default-features = false, optional = true, features = ["tokio"] }
 brotli = { version = "3.3.4", default-features = false, features = ["std"] }
 byteorder = { version = "1.4.3", default-features = true }
-bytes = { version = "1.4.0", default-features = false }
-clap = { version = "4.4.2", default-features = true, optional = true, features = ["wrap_help"] }
+bytes = { version = "1.5.0", default-features = false }
+clap = { version = "4.4.3", default-features = true, optional = true, features = ["wrap_help"] }
 clap-verbosity-flag = { version = "2.0.1", default-features = false, optional = true }
 colored = { version = "2.0.4", default-features = false, optional = true }
 enumset = { version = "1.1.2", default-features = false }
