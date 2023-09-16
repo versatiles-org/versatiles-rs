@@ -119,8 +119,10 @@ impl Debug for Blob {
 				.clone()
 				.into_iter()
 				.map(|c| {
-					if c < 32 || c == 34 || c == 92 || c > 126 {
+					if !(32..=126).contains(&c) {
 						format!("\\x{:02x}", c)
+					} else if c == 34 || c == 92 {
+						String::from("\\") + from_utf8(&[c]).unwrap()
 					} else {
 						from_utf8(&[c]).unwrap().to_string()
 					}

@@ -1,64 +1,102 @@
 use colored::*;
+#[cfg(test)]
+use lazy_static::lazy_static;
+#[cfg(test)]
+use regex::*;
 use std::fmt::{Debug, Display};
-use std::io::{stderr, Write};
+#[cfg(not(test))]
+use std::io::stderr;
+use std::io::Write;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
 pub struct PrettyPrinter {
 	indention: String,
-	output: Arc<Mutex<Box<dyn Write + Send + Sync>>>,
+	#[cfg(not(test))]
+	output: Arc<Mutex<Box<dyn Write + Send>>>,
+	#[cfg(test)]
+	output: Arc<Mutex<Vec<u8>>>,
 }
 
 impl PrettyPrinter {
-	pub fn new_printer() -> PrettyPrint {
+	pub fn new() -> PrettyPrint {
 		let me = Arc::new(Self {
 			indention: String::from("   "),
+
+			#[cfg(not(test))]
 			output: Arc::new(Mutex::new(Box::new(stderr()))),
+
+			#[cfg(test)]
+			output: Arc::new(Mutex::new(Vec::new())),
 		});
 		PrettyPrint::new(me, "\n")
+	}
+	async fn write(&self, text: String) {
+		self.output.lock().await.write_all(text.as_bytes()).unwrap();
+	}
+	#[cfg(test)]
+	async fn as_string(&self) -> String {
+		lazy_static! {
+			static ref RE_COLORS: Regex = RegexBuilder::new("\u{001b}\\[[0-9;]*m").build().unwrap();
+		}
+		let text: String = String::from_utf8(self.output.lock().await.to_vec()).unwrap();
+		RE_COLORS.replace_all(&text, "").to_string()
 	}
 }
 pub struct PrettyPrint {
 	prefix: String,
-	parent: Arc<PrettyPrinter>,
+	printer: Arc<PrettyPrinter>,
 }
 
 impl PrettyPrint {
-	fn new(parent: Arc<PrettyPrinter>, indent: &str) -> Self {
+	fn new(printer: Arc<PrettyPrinter>, indent: &str) -> Self {
 		Self {
 			prefix: String::from(indent),
-			parent,
+			printer,
 		}
 	}
 	fn new_indented(&mut self) -> Self {
 		Self {
-			prefix: String::from(&self.prefix) + &self.parent.indention,
-			parent: self.parent.clone(),
+			prefix: String::from(&self.prefix) + &self.printer.indention,
+			printer: self.printer.clone(),
 		}
 	}
 	pub async fn get_category(&mut self, text: &str) -> PrettyPrint {
-		self.write(format!("{}{}:", self.prefix, text.bold().white())).await;
+		self
+			.printer
+			.write(format!("{}{}:", self.prefix, text.bold().white()))
+			.await;
 		self.new_indented()
 	}
 	pub async fn get_list(&mut self, text: &str) -> PrettyPrint {
-		self.write(format!("{}{}:", self.prefix, text.white())).await;
+		self.printer.write(format!("{}{}:", self.prefix, text.white())).await;
 		self.new_indented()
 	}
 	pub async fn add_warning(&self, text: &str) {
-		self.write(format!("{}{}", self.prefix, text.bold().yellow())).await;
-	}
-	pub async fn add_key_value<K: Display, V: Debug>(&self, key: &K, value: &V) {
 		self
+			.printer
+			.write(format!("{}{}", self.prefix, text.bold().yellow()))
+			.await;
+	}
+	pub async fn add_key_value<K: Display + ?Sized, V: Debug>(&self, key: &K, value: &V) {
+		self
+			.printer
 			.write(format!("{}{}: {}", self.prefix, key, get_formatted_value(value)))
 			.await;
 	}
 	pub async fn add_value<V: Debug>(&self, value: &V) {
 		self
+			.printer
 			.write(format!("{}{}", self.prefix, get_formatted_value(value)))
 			.await;
 	}
-	async fn write(&self, text: String) {
-		self.parent.output.lock().await.write_all(text.as_bytes()).unwrap();
+	#[cfg(test)]
+	pub async fn as_string(&self) -> String {
+		self.printer.as_string().await
+	}
+	#[allow(dead_code)]
+	pub async fn add_str(&self, text: String) {
+		self.printer.write(text).await;
 	}
 }
 
@@ -72,7 +110,7 @@ fn get_formatted_value<V: Debug>(value: &V) -> ColoredString {
 		"f32" | "f64" => format!("{:?}", value).bright_cyan(),
 		"i128" | "i16" | "i32" | "i64" | "i8" | "isize" => format_integer(value).bright_cyan(),
 		"u128" | "u16" | "u32" | "u64" | "u8" | "usize" => format_integer(value).bright_cyan(),
-		"str" | "&str" => format!("{:?}", value).bright_magenta(),
+		"alloc::string::String" | "str" | "&str" => format!("{:?}", value).bright_magenta(),
 		_ => {
 			panic!("Unknown typename {type_name}");
 		}
@@ -97,56 +135,27 @@ fn format_integer<V: Debug>(value: &V) -> String {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::io::Cursor;
-	use std::sync::Arc;
-	use tokio::sync::Mutex;
 
 	#[tokio::test]
 	async fn test_new_printer() {
-		let _printer = PrettyPrinter::new_printer();
+		let _printer = PrettyPrinter::new();
 	}
 
 	#[tokio::test]
-	async fn test_get_category() {
-		let parent = Arc::new(PrettyPrinter {
-			indention: String::from("   "),
-			output: Arc::new(Mutex::new(Box::new(Cursor::new(vec![])))),
-		});
-		let mut pretty_print = PrettyPrint::new(parent.clone(), "\n");
+	async fn test_writers() {
+		let mut printer = PrettyPrinter::new();
 
-		let _new_pretty_print = pretty_print.get_category("test category").await;
-	}
+		printer.add_warning("test_warning_1").await;
+		let mut cat = printer.get_category("test_category_1").await;
+		cat.get_list("test_list_1").await.add_key_value("string_1", &4).await;
+		cat.add_str(String::from("string_2")).await;
+		cat.add_warning("test_warning_2").await;
+		printer.add_warning("test_warning_3").await;
 
-	#[tokio::test]
-	async fn test_get_list() {
-		let parent = Arc::new(PrettyPrinter {
-			indention: String::from("   "),
-			output: Arc::new(Mutex::new(Box::new(Cursor::new(vec![])))),
-		});
-		let mut pretty_print = PrettyPrint::new(parent.clone(), "\n");
-
-		let _new_pretty_print = pretty_print.get_list("test list").await;
-	}
-
-	#[tokio::test]
-	async fn test_add_warning() {
-		let parent = Arc::new(PrettyPrinter {
-			indention: String::from("   "),
-			output: Arc::new(Mutex::new(Box::new(Cursor::new(vec![])))),
-		});
-		let pretty_print = PrettyPrint::new(parent.clone(), "\n");
-
-		pretty_print.add_warning("test warning").await;
-	}
-
-	#[tokio::test]
-	async fn test_add_key_value() {
-		let parent = Arc::new(PrettyPrinter {
-			indention: String::from("   "),
-			output: Arc::new(Mutex::new(Box::new(Cursor::new(vec![])))),
-		});
-		let pretty_print = PrettyPrint::new(parent.clone(), "\n");
-
-		pretty_print.add_key_value(&"key", &"value").await;
+		let result = printer.as_string().await;
+		assert_eq!(
+			&result,
+			"\ntest_warning_1\ntest_category_1:\n   test_list_1:\n      string_1: 4string_2\n   test_warning_2\ntest_warning_3"
+		);
 	}
 }

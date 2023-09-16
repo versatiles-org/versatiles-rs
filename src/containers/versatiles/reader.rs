@@ -305,30 +305,58 @@ impl Debug for TileReader {
 }
 
 #[cfg(test)]
+#[cfg(feature = "full")]
 mod tests {
-	#[cfg(feature = "full")]
 	use super::TileReader;
-	#[cfg(feature = "full")]
 	use crate::{
 		containers::{tests::make_test_file, TileReaderTrait},
 		shared::{Compression, Result, TileCoord3, TileFormat},
 	};
-	#[cfg(feature = "full")]
 	use tokio;
+
+	#[tokio::test]
+	async fn test_reader() -> Result<()> {
+		use crate::shared::Blob;
+
+		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 8, "versatiles").await?;
+		let temp_file = temp_file.to_str().unwrap();
+
+		let mut reader = TileReader::new(temp_file).await?;
+
+		assert_eq!(format!("{:?}", reader), "TileReader:VersaTiles { parameters:  { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: UnGzip, flip_y: false, swap_xy: false, tile_compression: Gzip, tile_format: PBF } }");
+		assert_eq!(reader.get_container_name()?, "versatiles");
+		assert!(reader.get_name()?.ends_with(temp_file));
+		assert_eq!(reader.get_meta().await?, Blob::from(b"dummy meta data".to_vec()));
+		assert_eq!(format!("{:?}", reader.get_parameters()?), " { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: UnGzip, flip_y: false, swap_xy: false, tile_compression: Gzip, tile_format: PBF }");
+		assert_eq!(reader.get_tile_compression()?, &Compression::Gzip);
+		assert_eq!(reader.get_tile_format()?, &TileFormat::PBF);
+
+		let tile = reader.get_tile_data_original(&TileCoord3::new(123, 45, 8)).await?;
+		assert_eq!(tile, Blob::from(b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x02\xff\x016\x00\xc9\xff\x1a4\x0a\x05ocean\x12\x19\x12\x04\x00\x00\x01\x00\x18\x03\"\x0f\x09)\xa8@\x1a\x00\xd1@\xd2@\x00\x00\xd2@\x0f\x1a\x01x\x1a\x01y\"\x05\x15\x00\x00\x00\x00(\x80 x\x02C!\x1f_6\x00\x00\x00".to_vec()));
+
+		Ok(())
+	}
 
 	// Test tile fetching
 	#[tokio::test]
-	#[cfg(feature = "full")]
-	async fn test_reader() -> Result<()> {
+	async fn probe() -> Result<()> {
+		use crate::shared::PrettyPrinter;
+
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 8, "versatiles").await?;
+		let temp_file = temp_file.to_str().unwrap();
 
-		let mut reader = TileReader::new(temp_file.to_str().unwrap()).await?;
+		let mut reader = TileReader::new(temp_file).await?;
 
-		let meta = reader.get_meta().await?;
-		assert_eq!(meta.to_string(), "dummy meta data");
+		let mut printer = PrettyPrinter::new();
+		reader.probe_container(printer.get_category("container").await).await?;
+		assert_eq!(printer.as_string().await, "\ncontainer:\n   meta size: 15\n   block count: 9\n   sum of block index sizes: 134\n   sum of block tiles sizes: 693");
 
-		let tile_data = reader.get_tile_data_original(&TileCoord3::new(2, 3, 4)).await?;
-		assert_eq!(tile_data.len(), 77);
+		let mut printer = PrettyPrinter::new();
+		reader.probe_tiles(printer.get_category("tiles").await).await?;
+		assert_eq!(
+			printer.as_string().await,
+			"\ntiles:\n   deep tile probing is not implemented for this container format"
+		);
 
 		Ok(())
 	}

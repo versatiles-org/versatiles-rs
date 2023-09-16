@@ -219,6 +219,10 @@ mod tests {
 	fn tilecoord3_as_geo() {
 		let coord = TileCoord3::new(3, 4, 5);
 		assert_eq!(coord.as_geo(), [-146.25, 79.17133464081945]);
+		assert_eq!(
+			coord.as_geo_bbox(),
+			[-146.25, 79.17133464081945, -135.0, 76.84081641443098]
+		);
 	}
 
 	#[test]

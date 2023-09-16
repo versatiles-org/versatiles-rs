@@ -96,6 +96,11 @@ mod tests {
 		// Create a new Folder instance
 		let mut folder = Folder::from("testdata").unwrap();
 
+		assert_eq!(
+			format!("{:?}", folder),
+			"Folder { folder: \"/Users/michaelkreil/Projekte/versatiles/versatiles-rs/testdata\", name: \"testdata\" }"
+		);
+
 		// Test get_name function
 		assert_eq!(folder.get_name().unwrap(), "testdata");
 

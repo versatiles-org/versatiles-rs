@@ -1,5 +1,5 @@
 use super::ByteRange;
-use crate::shared::{Result, TileBBox, TileCoord2, TileCoord3};
+use crate::shared::{Result, TileBBox, TileCoord3};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::{fmt, io::Cursor, ops::Div};
 
@@ -123,27 +123,12 @@ impl BlockDefinition {
 		&self.index_range
 	}
 
-	#[allow(dead_code)]
-	pub fn get_x(&self) -> u32 {
-		self.offset.get_x()
-	}
-
-	#[allow(dead_code)]
-	pub fn get_y(&self) -> u32 {
-		self.offset.get_y()
-	}
-
 	pub fn get_z(&self) -> u8 {
 		self.offset.get_z()
 	}
 
 	pub fn get_coord3(&self) -> &TileCoord3 {
 		&self.offset
-	}
-
-	#[allow(dead_code)]
-	pub fn get_coord_offset(&self) -> TileCoord2 {
-		TileCoord2::new(self.offset.get_x() * 256, self.offset.get_y() * 256)
 	}
 
 	#[cfg(test)]

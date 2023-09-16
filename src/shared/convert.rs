@@ -223,7 +223,7 @@ impl DataConverter {
 	}
 
 	/// Returns a string describing the pipeline of conversion functions.
-	pub fn description(&self) -> String {
+	pub fn as_string(&self) -> String {
 		let names: Vec<String> = self.pipeline.iter().map(|f| f.to_string()).collect();
 		names.join(", ")
 	}
@@ -233,7 +233,7 @@ impl DataConverter {
 /// This function returns true if the `description` method of both `DataConverter` instances returns the same value.
 impl PartialEq for DataConverter {
 	fn eq(&self, other: &Self) -> bool {
-		self.description() == other.description()
+		self.as_string() == other.as_string()
 	}
 }
 
@@ -276,7 +276,7 @@ mod tests {
 		) {
 			let data_converter =
 				DataConverter::new_tile_recompressor(&src_form, &src_comp, &dst_form, &dst_comp, force_recompress);
-			assert_eq!(data_converter.description(), description);
+			assert_eq!(data_converter.as_string(), description);
 			assert_eq!(data_converter.pipeline.len(), length);
 			assert_eq!(data_converter, data_converter.clone());
 		}

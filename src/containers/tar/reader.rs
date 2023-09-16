@@ -205,12 +205,35 @@ pub mod tests {
 	};
 
 	#[tokio::test]
+	async fn reader() -> Result<()> {
+		let temp_file = make_test_file(TileFormat::PNG, Compression::Brotli, 4, "tar").await?;
+		let temp_file = temp_file.to_str().unwrap();
+
+		// get tar reader
+		let mut reader = TileReader::new(temp_file).await?;
+
+		assert_eq!(format!("{:?}", reader), "TileReader:Tar { parameters: Ok( { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], decompressor: UnBrotli, flip_y: false, swap_xy: false, tile_compression: Brotli, tile_format: PNG }) }");
+		assert_eq!(reader.get_container_name()?, "tar");
+		assert!(reader.get_name()?.ends_with(temp_file));
+		assert_eq!(reader.get_meta().await?, Blob::from(b"dummy meta data".to_vec()));
+		assert_eq!(format!("{:?}", reader.get_parameters()?), " { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], decompressor: UnBrotli, flip_y: false, swap_xy: false, tile_compression: Brotli, tile_format: PNG }");
+		assert_eq!(reader.get_tile_compression()?, &Compression::Brotli);
+		assert_eq!(reader.get_tile_format()?, &TileFormat::PNG);
+
+		let tile = reader.get_tile_data_original(&TileCoord3::new(12, 3, 4)).await?;
+		assert_eq!(tile, Blob::from( b"\x053\x80\x89PNG\x0d\x0a\x1a\x0a\x00\x00\x00\x0dIHDR\x00\x00\x01\x00\x00\x00\x01\x00\x01\x03\x00\x00\x00f\xbc:%\x00\x00\x00\x03PLTE\xaa\xd3\xdf\xcf\xec\xbc\xf5\x00\x00\x00\x1fIDATh\x81\xed\xc1\x01\x0d\x00\x00\x00\xc2\xa0\xf7Om\x0e7\xa0\x00\x00\x00\x00\x00\x00\x00\x00\xbe\x0d!\x00\x00\x01\x9a`\xe1\xd5\x00\x00\x00\x00IEND\xaeB`\x82\x03".to_vec()));
+
+		Ok(())
+	}
+
+	#[tokio::test]
 	async fn all_compressions() -> Result<()> {
 		async fn test_compression(compression: Compression) -> Result<()> {
-			let file = make_test_file(TileFormat::PBF, compression, 4, "tar").await?;
+			let temp_file = make_test_file(TileFormat::PBF, compression, 4, "tar").await?;
+			let temp_file = temp_file.to_str().unwrap();
 
 			// get tar reader
-			let mut reader = TileReader::new(file.to_str().unwrap()).await?;
+			let mut reader = TileReader::new(temp_file).await?;
 			reader.get_parameters_mut()?;
 			format!("{:?}", reader);
 
@@ -222,6 +245,33 @@ pub mod tests {
 		test_compression(Compression::None).await?;
 		test_compression(Compression::Gzip).await?;
 		test_compression(Compression::Brotli).await?;
+		Ok(())
+	}
+
+	// Test tile fetching
+	#[tokio::test]
+	async fn probe() -> Result<()> {
+		use crate::shared::PrettyPrinter;
+
+		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 4, "tar").await?;
+		let temp_file = temp_file.to_str().unwrap();
+
+		let mut reader = TileReader::new(temp_file).await?;
+
+		let mut printer = PrettyPrinter::new();
+		reader.probe_container(printer.get_category("container").await).await?;
+		assert_eq!(
+			printer.as_string().await,
+			"\ncontainer:\n   deep container probing is not implemented for this container format"
+		);
+
+		let mut printer = PrettyPrinter::new();
+		reader.probe_tiles(printer.get_category("tiles").await).await?;
+		assert_eq!(
+			printer.as_string().await,
+			"\ntiles:\n   deep tile probing is not implemented for this container format"
+		);
+
 		Ok(())
 	}
 }

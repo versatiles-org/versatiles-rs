@@ -21,6 +21,25 @@ impl TileBBoxPyramid {
 			level_bbox: from_fn(|z| TileBBox::new_empty(z as u8)),
 		}
 	}
+	#[cfg(test)]
+	pub fn new_dummy() -> TileBBoxPyramid {
+		TileBBoxPyramid {
+			level_bbox: from_fn(|z| {
+				if z < 16 {
+					let n: f64 = 2_f64.powf(z as f64) - 1_f64;
+					TileBBox::new(
+						z as u8,
+						(n * 0.1).floor() as u32,
+						(n * 0.2).floor() as u32,
+						(n * 0.8).ceil() as u32,
+						(n * 0.9).ceil() as u32,
+					)
+				} else {
+					TileBBox::new_empty(z as u8)
+				}
+			}),
+		}
+	}
 	pub fn intersect_geo_bbox(&mut self, geo_bbox: &[f64; 4]) {
 		for (z, bbox) in self.level_bbox.iter_mut().enumerate() {
 			bbox.intersect_bbox(&TileBBox::from_geo(z as u8, geo_bbox));
@@ -40,14 +59,14 @@ impl TileBBoxPyramid {
 	pub fn get_level_bbox(&self, level: u8) -> &TileBBox {
 		&self.level_bbox[level as usize]
 	}
-	pub fn set_level_bbox(&mut self, level: u8, bbox: TileBBox) {
-		self.level_bbox[level as usize] = bbox;
+	pub fn set_level_bbox(&mut self, bbox: TileBBox) {
+		self.level_bbox[bbox.level as usize] = bbox;
 	}
 	pub fn include_coord(&mut self, coord: &TileCoord3) {
 		self.level_bbox[coord.get_z() as usize].include_tile(coord.get_x(), coord.get_y());
 	}
-	pub fn include_bbox(&mut self, level: u8, bbox: &TileBBox) {
-		self.level_bbox[level as usize].union_bbox(bbox);
+	pub fn include_bbox(&mut self, bbox: &TileBBox) {
+		self.level_bbox[bbox.level as usize].union_bbox(bbox);
 	}
 	pub fn iter_levels(&self) -> impl Iterator<Item = &TileBBox> {
 		self.level_bbox.iter().filter(|bbox| !bbox.is_empty())
@@ -193,8 +212,8 @@ mod tests {
 	#[test]
 	fn include_bbox() {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		pyramid.include_bbox(4, &TileBBox::new(4, 1, 2, 3, 4));
-		pyramid.include_bbox(4, &TileBBox::new(4, 5, 6, 7, 8));
+		pyramid.include_bbox(&TileBBox::new(4, 1, 2, 3, 4));
+		pyramid.include_bbox(&TileBBox::new(4, 5, 6, 7, 8));
 
 		assert!(pyramid.get_level_bbox(0).is_empty());
 		assert!(pyramid.get_level_bbox(1).is_empty());
@@ -210,16 +229,17 @@ mod tests {
 
 	#[test]
 	fn level_bbox() {
-		let test = |z0: u8, z1: u8| {
+		let test = |level: u8| {
 			let mut pyramid = TileBBoxPyramid::new_empty();
-			let bbox = TileBBox::new_full(z0);
-			pyramid.set_level_bbox(z1, bbox);
-			assert_eq!(pyramid.get_level_bbox(z1).clone(), bbox);
+			let bbox = TileBBox::new_full(level);
+			pyramid.set_level_bbox(bbox);
+			assert_eq!(pyramid.get_level_bbox(level).clone(), bbox);
 		};
 
-		test(0, 1);
-		test(0, 30);
-		test(30, 30);
+		test(0);
+		test(1);
+		test(30);
+		test(31);
 	}
 
 	#[test]

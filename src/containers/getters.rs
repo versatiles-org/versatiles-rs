@@ -48,6 +48,7 @@ pub mod tests {
 		containers::get_reader,
 		shared::{Compression as C, Result, TileBBoxPyramid, TileFormat as TF},
 	};
+
 	#[cfg(feature = "full")]
 	use crate::{
 		containers::{
@@ -91,7 +92,7 @@ pub mod tests {
 	}
 
 	#[test]
-	#[cfg(all(feature = "tar", feature = "image"))]
+	#[cfg(feature = "full")]
 	fn converters_and_readers() -> Result<()> {
 		#[derive(Debug)]
 		enum Container {

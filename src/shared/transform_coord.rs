@@ -9,6 +9,7 @@ pub trait TransformCoord {
 impl TransformCoord for TileCoord3 {
 	fn flip_y(&mut self) {
 		let max_index = 2u32.pow(self.z as u32) - 1;
+		assert!(max_index >= self.y, "error for {self:?}");
 		self.y = max_index - self.y;
 	}
 	fn swap_xy(&mut self) {
@@ -19,6 +20,7 @@ impl TransformCoord for TileCoord3 {
 impl TransformCoord for TileBBox {
 	fn flip_y(&mut self) {
 		if !self.is_empty() {
+			assert!(self.max >= self.y_max);
 			self.y_min = self.max - self.y_min;
 			self.y_max = self.max - self.y_max;
 			swap(&mut self.y_min, &mut self.y_max);

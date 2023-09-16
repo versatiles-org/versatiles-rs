@@ -98,7 +98,7 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 	#[cfg(feature = "full")]
 	/// probe container
 	async fn probe(&mut self, level: u8) -> Result<()> {
-		let mut print = PrettyPrinter::new_printer();
+		let mut print = PrettyPrinter::new();
 
 		self
 			.get_parameters()?

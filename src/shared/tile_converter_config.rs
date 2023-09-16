@@ -91,8 +91,8 @@ mod tests {
 		assert_eq!(config.get_tile_format(), &TileFormat::JPG);
 		assert_eq!(config.get_tile_compression(), &Compression::Brotli);
 
-		assert_eq!(config.get_tile_recompressor().description(), "UnGzip, Png2Jpg, Brotli");
-		assert_eq!(config.get_compressor().description(), "Brotli");
+		assert_eq!(config.get_tile_recompressor().as_string(), "UnGzip, Png2Jpg, Brotli");
+		assert_eq!(config.get_compressor().as_string(), "Brotli");
 		assert_eq!(config.get_bbox_pyramid(), &pyramid);
 	}
 }
