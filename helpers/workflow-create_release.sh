@@ -1,18 +1,20 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")/.."
 
+set -e
+
 # get latest tags
 curl -s https://api.github.com/repos/versatiles-org/versatiles-rs/tags >tags.json
 
 # get new tag
-NEW_TAG=$(jq -r "nth(0; .[] | .name | select(startswith('v')))" tags.json)
+NEW_TAG=$(jq -r "nth(0; .[] | .name | select(startswith(\"v\")))" tags.json)
 # get old tag
-OLD_TAG=$(jq -r "nth(1; .[] | .name | select(startswith('v')))" tags.json)
+OLD_TAG=$(jq -r "nth(1; .[] | .name | select(startswith(\"v\")))" tags.json)
 # get old SHA
 OLD_SHA=$(jq -r ".[] | select(.name == \"$OLD_TAG\") | .commit.sha" tags.json)
 
 # get version via cargo.toml
-VERSION=$(cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/version=v\1/p" | tr -d '\n')
+VERSION=$(cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/v\1/p" | tr -d '\n')
 
 # compare versions
 if [ "$NEW_TAG" != "$VERSION" ]; then

@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 FOLDER="$1"
 FILENAME="versatiles-$2"
 TAG=$3

@@ -6,6 +6,7 @@
 *.lcov
 *.tar
 *.versatiles
+/*.txt
 /coverage
 /frontend
 /releases
