@@ -18,13 +18,15 @@ VERSION=$(cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/v\1/p" | tr -d '\n'
 
 # compare versions
 if [ "$NEW_TAG" != "$VERSION" ]; then
-	echo "Current cargo version ($VERSION) is not latest tag ($NEW_TAG)"
-	exit 1
+   echo "Current cargo version ($VERSION) is not latest tag ($NEW_TAG)"
+   exit 1
 fi
 
 echo "# new release: $NEW_TAG" >notes.txt
 
-curl -s "https://api.github.com/repos/versatiles-org/versatiles-rs/commits?per_page=100" | jq -r ".[] | if .sha == \"$OLD_SHA\" then halt else \"- \" + .commit.message end" >>notes.txt
+curl -s "https://api.github.com/repos/versatiles-org/versatiles-rs/commits?per_page=100" |
+   jq   -r ".[] | if .sha == \"$OLD_SHA\" then halt else \"- \" + .commit.message end" |
+   tac   >>notes.txt
 
 # Try to create release
 gh release view "$NEW_TAG" || gh release create "$NEW_TAG" --title "$NEW_TAG" -F notes.txt --draft --prerelease
