@@ -24,7 +24,7 @@ jobs:
         run: |
           ./helpers/workflow-create_release.sh
           echo "new version: $NEW_TAG" >> $GITHUB_STEP_SUMMARY
-          cat ../notes.txt >> $GITHUB_STEP_SUMMARY
+          cat notes.txt >> $GITHUB_STEP_SUMMARY
           echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
 
   build-linux:
