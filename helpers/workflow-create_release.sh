@@ -32,5 +32,5 @@ curl -s "https://api.github.com/repos/versatiles-org/versatiles-rs/commits?per_p
 gh release view "$NEW_TAG" || gh release create "$NEW_TAG" --title "$NEW_TAG" -F notes.txt --draft --prerelease
 
 # return results to GitHub
-echo "tag=$NEW_TAG" >>$GITHUB_OUTPUT
-cat notes.txt >>$GITHUB_STEP_SUMMARY
+echo "tag=$NEW_TAG" >>"$GITHUB_OUTPUT"
+cat notes.txt >>"$GITHUB_STEP_SUMMARY"

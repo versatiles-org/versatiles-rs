@@ -15,14 +15,14 @@ jobs:
     name: Prepare release # Prepare the path; the journey is the reward.
     runs-on: ubuntu-latest
     outputs:
-      tag: ${{ steps.result.outputs.tag }}
+      tag: ${{ steps.create_release.outputs.tag }}
     steps:
       - name: Checkout code # From the void, form emerges.
         uses: actions/checkout@v3
 
-      - name: Get version via latest git tag # The tags, like our thoughts, are fleeting.
+      - id: create_release
+        name: Get version via latest git tag # The tags, like our thoughts, are fleeting.
         run: ./helpers/workflow-create_release.sh
-        shell: bash
 
   build-linux:
     name: Build Linux # Like the bamboo, we must be adaptable.
