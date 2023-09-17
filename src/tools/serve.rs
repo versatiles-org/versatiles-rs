@@ -134,6 +134,8 @@ mod tests {
 		run_command(vec![
 			"versatiles",
 			"serve",
+			"-i",
+			"127.0.0.1",
 			"-p",
 			"65001",
 			"--auto-shutdown",
@@ -148,6 +150,8 @@ mod tests {
 		run_command(vec![
 			"versatiles",
 			"serve",
+			"-i",
+			"127.0.0.1",
 			"-p",
 			"65002",
 			"--auto-shutdown",
