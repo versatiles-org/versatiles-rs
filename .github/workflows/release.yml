@@ -21,21 +21,7 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Get version via latest git tag # The tags, like our thoughts, are fleeting.
-        run: curl https://api.github.com/repos/versatiles-org/versatiles-rs/tags | jq -r '"git_tag=" + first(.[] | .name | select(startswith("v")))' >> "$GITHUB_ENV"
-
-      - name: Get version via cargo.toml # A reflection of the self, the version speaks of growth.
-        run: cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/version=v\1/p" | tr -d '\n' >> "$GITHUB_ENV"
-
-      - name: Compare versions # In comparison, truth is found.
-        if: env.git_tag != env.version
-        run: echo "Current cargo version (${{ env.version }}) is not pushed tag (${{ env.git_tag }})"; exit 1
-
-      - name: Try to create release # Even in failure, there may be success.
-        run: 'gh release view "${{ env.version }}" || gh release create "${{ env.version }}" --title "${{ env.version }}" -n "new release: ${{ env.version }}" --draft --prerelease'
-
-      - name: Set output variable # The finality is but a transition to the next phase.
-        id: result
-        run: echo "tag=${{ env.git_tag }}" >> "$GITHUB_OUTPUT"
+        run: ./helpers/workflow-create_release.sh
 
   build-linux:
     name: Build Linux # Like the bamboo, we must be adaptable.
@@ -64,12 +50,7 @@ jobs:
           --output="type=local,dest=output/" .
 
       - name: Pack and upload # The harvest, a testament to the labor.
-        run: |
-          find .
-          cd "output"
-          FILENAME="versatiles-linux-${{ matrix.libc }}-${{ matrix.arch }}.tar.gz"
-          tar -czf "$FILENAME" versatiles
-          gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
+        run: ./helpers/workflow-pack_and_upload.sh "output" "linux-${{ matrix.libc }}-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
 
   build-macos:
     name: Build MacOS # The apple of wisdom brings insight to all.
@@ -100,12 +81,7 @@ jobs:
         run: cargo build --bin versatiles --all-features --target ${{ matrix.arch }}-apple-darwin --release
 
       - name: Pack and upload # The journey's end marks a new beginning.
-        run: |
-          find .
-          cd "target/${{ matrix.arch }}-apple-darwin/release"
-          FILENAME="versatiles-macos-${{ matrix.arch }}.tar.gz"
-          tar -czf "$FILENAME" "versatiles"
-          gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
+        run: ./helpers/workflow-pack_and_upload.sh "target/${{ matrix.arch }}-apple-darwin/release" "macos-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
 
   build-windows:
     if: false # Commented out, but not forgotten. Like the moon behind clouds.
@@ -134,12 +110,7 @@ jobs:
         run: cargo build --bin versatiles --release --all-features
 
       - name: Pack and upload # Gather the fruits of your labor and share the bounty.
-        run: |
-          find .
-          cd target/release
-          FILENAME="versatiles-windows-${{ matrix.libc }}-${{ matrix.arch }}.tar.gz"
-          tar -czf "$FILENAME" "versatiles.exe"
-          gh release upload "${{ needs.prepare.outputs.tag }}" "$FILENAME" --clobber
+        run: ./helpers/workflow-pack_and_upload.sh "target/release" "windows-${{ matrix.libc }}-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
 
   finish-release:
     name: Finish release # The end is but the start of a new journey.
