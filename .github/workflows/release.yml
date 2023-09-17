@@ -23,9 +23,12 @@ jobs:
       - name: Get version via latest git tag # The tags, like our thoughts, are fleeting.
         run: |
           ./helpers/workflow-create_release.sh
-          echo "new version: $NEW_TAG" >> $GITHUB_STEP_SUMMARY
-          cat notes.txt >> $GITHUB_STEP_SUMMARY
-          echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "new version: $NEW_TAG"
+          echo "tag2=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "$GITHUB_OUTPUT"
+          echo "test2: $NEW_TAG"
+          echo "output2: $GITHUB_OUTPUT"
+        shell: bash
 
   build-linux:
     name: Build Linux # Like the bamboo, we must be adaptable.
