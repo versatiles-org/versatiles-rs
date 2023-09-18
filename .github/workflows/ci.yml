@@ -43,7 +43,7 @@ jobs:
       - name: Cargo Fmt
         run: cargo fmt -- --check
       - name: Cargo Clippy
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --bin versatiles --all-features -- -D warnings
       - name: Cargo Check bin
         run: cargo check --bin versatiles --all-features
       - name: Cargo Check lib
