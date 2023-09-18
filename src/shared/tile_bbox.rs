@@ -364,6 +364,17 @@ mod tests {
 	}
 
 	#[test]
+	fn from_geo_is_not_empty() {
+		let bbox1 = TileBBox::from_geo(0, &[8f64, 51f64, 8.000001f64, 51f64]);
+		assert_eq!(bbox1.count_tiles(), 1);
+		assert_eq!(bbox1.is_empty(), false);
+
+		let bbox2 = TileBBox::from_geo(14, &[-132f64, -40f64, -132.000001f64, -40f64]);
+		assert_eq!(bbox2.count_tiles(), 1);
+		assert_eq!(bbox2.is_empty(), false);
+	}
+
+	#[test]
 	fn quarter_planet() {
 		let geo_bbox2 = [0f64, -85.05112877980659f64, 180f64, 0f64];
 		let mut geo_bbox0 = geo_bbox2;
