@@ -35,7 +35,7 @@ pub struct Subcommand {
 	bbox: Option<String>,
 
 	/// also include additional tiles surrounding the bounding box as a border
-	#[arg(long)]
+	#[arg(long, value_name = "int")]
 	bbox_border: Option<u32>,
 
 	/// swap rows and columns, e.g. z/x/y -> z/y/x
