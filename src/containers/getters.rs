@@ -1,11 +1,7 @@
-#[cfg(feature = "full")]
 use super::mbtiles;
-#[cfg(feature = "full")]
 use super::tar;
 use super::{versatiles, TileReaderBox, TileReaderTrait};
-#[cfg(feature = "full")]
 use super::{TileConverterBox, TileConverterTrait};
-#[cfg(feature = "full")]
 use crate::shared::TileConverterConfig;
 use crate::{create_error, shared::Result};
 use std::path::{Path, PathBuf};
@@ -13,16 +9,13 @@ use std::path::{Path, PathBuf};
 pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
 	let extension = get_extension(&PathBuf::from(filename));
 	match extension.as_str() {
-		#[cfg(feature = "full")]
 		"mbtiles" => mbtiles::TileReader::new(filename).await,
-		#[cfg(feature = "full")]
 		"tar" => tar::TileReader::new(filename).await,
 		"versatiles" => versatiles::TileReader::new(filename).await,
 		_ => create_error!("Error when reading: file extension '{extension:?}' unknown"),
 	}
 }
 
-#[cfg(feature = "full")]
 pub async fn get_converter(filename: &str, config: TileConverterConfig) -> Result<TileConverterBox> {
 	let path = PathBuf::from(filename);
 	let extension = get_extension(&path);
@@ -49,7 +42,6 @@ pub mod tests {
 		shared::{Compression as C, Result, TileBBoxPyramid, TileFormat as TF},
 	};
 
-	#[cfg(feature = "full")]
 	use crate::{
 		containers::{
 			dummy::{self, ConverterProfile as CP, ReaderProfile as RP},
@@ -60,7 +52,6 @@ pub mod tests {
 	use assert_fs::fixture::NamedTempFile;
 	use std::time::Instant;
 
-	#[cfg(feature = "full")]
 	pub async fn make_test_file(
 		tile_format: TF, compression: C, max_zoom_level: u8, extension: &str,
 	) -> Result<NamedTempFile> {
@@ -92,7 +83,7 @@ pub mod tests {
 	}
 
 	#[test]
-	#[cfg(feature = "full")]
+
 	fn converters_and_readers() -> Result<()> {
 		#[derive(Debug)]
 		enum Container {
