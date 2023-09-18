@@ -1,10 +1,10 @@
-use crate::{
+use clap::Args;
+use log::trace;
+use versatiles_lib::{
 	containers::{get_converter, get_reader, TileConverterBox, TileReaderBox},
 	create_error,
 	shared::{Compression, Result, TileBBoxPyramid, TileConverterConfig, TileFormat},
 };
-use clap::Args;
-use log::trace;
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]

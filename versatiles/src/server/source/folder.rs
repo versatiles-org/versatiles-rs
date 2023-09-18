@@ -1,7 +1,4 @@
-use crate::{
-	server::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait},
-	shared::{Blob, Compression, Result, TargetCompression},
-};
+use crate::server::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait};
 use async_trait::async_trait;
 use std::{
 	env::current_dir,
@@ -10,6 +7,7 @@ use std::{
 	io::{BufReader, Read},
 	path::{Path, PathBuf},
 };
+use versatiles_lib::shared::{Blob, Compression, Result, TargetCompression};
 
 // Folder struct definition
 pub struct Folder {
@@ -89,7 +87,8 @@ impl Debug for Folder {
 #[cfg(test)]
 mod tests {
 	use super::Folder;
-	use crate::{server::ServerSourceTrait, shared::TargetCompression};
+	use crate::server::ServerSourceTrait;
+	use versatiles_lib::shared::TargetCompression;
 
 	#[tokio::test]
 	async fn test() {

@@ -58,7 +58,6 @@ criterion = { version = "0.5.1", default-features = false, features = ["async_fu
 [[bin]]
 name = "versatiles"
 path = "src/main.rs"
-required-features = ["full"]
 
 [profile.dev]
 opt-level = 1

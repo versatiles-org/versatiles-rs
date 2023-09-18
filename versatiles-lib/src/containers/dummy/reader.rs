@@ -22,18 +22,10 @@ impl TileReader {
 		let mut bbox_pyramid = TileBBoxPyramid::new_full();
 		bbox_pyramid.set_zoom_max(max_zoom_level);
 
-		let parameters;
-
-		match profile {
-			ReaderProfile::JSON => {
-				parameters = TileReaderParameters::new(TileFormat::JSON, Compression::None, bbox_pyramid);
-			}
-			ReaderProfile::PNG => {
-				parameters = TileReaderParameters::new(TileFormat::PNG, Compression::None, bbox_pyramid);
-			}
-			ReaderProfile::PBF => {
-				parameters = TileReaderParameters::new(TileFormat::PBF, Compression::Gzip, bbox_pyramid);
-			}
+		let parameters = match profile {
+			ReaderProfile::JSON => TileReaderParameters::new(TileFormat::JSON, Compression::None, bbox_pyramid),
+			ReaderProfile::PNG => TileReaderParameters::new(TileFormat::PNG, Compression::None, bbox_pyramid),
+			ReaderProfile::PBF => TileReaderParameters::new(TileFormat::PBF, Compression::Gzip, bbox_pyramid),
 		};
 
 		Box::new(Self { profile, parameters })

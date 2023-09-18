@@ -1,5 +1,5 @@
-use crate::{containers::get_reader, shared::Result};
 use clap::{ArgAction::Count, Args};
+use versatiles_lib::{containers::get_reader, shared::Result};
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
