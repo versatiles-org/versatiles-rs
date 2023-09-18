@@ -137,20 +137,20 @@ mod tests {
 
 	#[test]
 	fn test_local() {
-		fs::create_dir("tmp/").unwrap_or_default();
+		fs::create_dir("../tmp/").unwrap_or_default();
 		run_command(vec![
 			"versatiles",
 			"convert",
-			"testdata/berlin.mbtiles",
-			"tmp/berlin1.versatiles",
+			"../testdata/berlin.mbtiles",
+			"../tmp/berlin1.versatiles",
 		])
 		.unwrap();
 		run_command(vec![
 			"versatiles",
 			"convert",
 			"--flip-y",
-			"tmp/berlin1.versatiles",
-			"tmp/berlin2.versatiles",
+			"../tmp/berlin1.versatiles",
+			"../tmp/berlin2.versatiles",
 		])
 		.unwrap();
 		run_command(vec![
@@ -161,8 +161,8 @@ mod tests {
 			"--bbox=13.38,52.46,13.43,52.49",
 			"--flip-y",
 			"--force-recompress",
-			"tmp/berlin2.versatiles",
-			"tmp/berlin3.versatiles",
+			"../tmp/berlin2.versatiles",
+			"../tmp/berlin3.versatiles",
 		])
 		.unwrap();
 	}
@@ -170,7 +170,7 @@ mod tests {
 	#[test]
 
 	fn test_remote1() {
-		fs::create_dir("tmp/").unwrap_or_default();
+		fs::create_dir("../tmp/").unwrap_or_default();
 		run_command(vec![
 			"versatiles",
 			"convert",
@@ -180,7 +180,7 @@ mod tests {
 			"--flip-y",
 			"--force-recompress",
 			"https://download.versatiles.org/planet-latest.versatiles",
-			"tmp/planet2.versatiles",
+			"../tmp/planet2.versatiles",
 		])
 		.unwrap();
 	}
@@ -188,7 +188,7 @@ mod tests {
 	#[test]
 
 	fn test_remote2() {
-		fs::create_dir("tmp/").unwrap_or_default();
+		fs::create_dir("../tmp/").unwrap_or_default();
 		run_command(vec![
 			"versatiles",
 			"convert",
@@ -196,7 +196,7 @@ mod tests {
 			"--bbox=9.14,48.76,9.19,48.79",
 			"--flip-y",
 			"https://download.versatiles.org/planet-latest.versatiles",
-			"tmp/stuttgart.versatiles",
+			"../tmp/stuttgart.versatiles",
 		])
 		.unwrap();
 	}

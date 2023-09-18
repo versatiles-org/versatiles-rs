@@ -93,14 +93,14 @@ mod tests {
 	#[tokio::test]
 	async fn test() {
 		// Create a new Folder instance
-		let mut folder = Folder::from("testdata").unwrap();
+		let mut folder = Folder::from("../testdata").unwrap();
 
 		let debug: String = format!("{:?}", folder);
 		assert!(debug.starts_with("Folder { folder: \""));
-		assert!(debug.ends_with("testdata\", name: \"testdata\" }"));
+		assert!(debug.ends_with("testdata\", name: \"../testdata\" }"));
 
 		// Test get_name function
-		assert_eq!(folder.get_name().unwrap(), "testdata");
+		assert_eq!(folder.get_name().unwrap(), "../testdata");
 
 		// Test get_info_as_json function
 		assert_eq!(folder.get_info_as_json().unwrap(), "{\"type\":\"folder\"}");

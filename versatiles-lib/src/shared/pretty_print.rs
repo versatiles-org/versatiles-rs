@@ -108,7 +108,7 @@ impl Default for PrettyPrint {
 
 fn get_formatted_value<V: Debug>(value: &V) -> ColoredString {
 	let type_name = std::any::type_name::<V>();
-	if type_name.starts_with("versatiles::shared::") {
+	if type_name.starts_with("versatiles_lib::shared::") {
 		return format!("{:?}", value).bright_blue();
 	}
 	match type_name {

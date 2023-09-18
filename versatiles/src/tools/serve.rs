@@ -140,7 +140,7 @@ mod tests {
 			"65001",
 			"--auto-shutdown",
 			"500",
-			"testdata/berlin.mbtiles",
+			"../testdata/berlin.mbtiles",
 		])
 		.unwrap();
 	}
