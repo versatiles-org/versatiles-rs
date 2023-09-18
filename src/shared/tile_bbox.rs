@@ -34,11 +34,13 @@ impl TileBBox {
 
 		bbox
 	}
+
 	pub fn new_full(level: u8) -> TileBBox {
 		assert!(level <= 31, "level ({level}) must be <= 31");
 		let max = 2u32.pow(level as u32) - 1;
 		TileBBox::new(level, 0, 0, max, max)
 	}
+
 	pub fn new_empty(level: u8) -> TileBBox {
 		assert!(level <= 31, "level ({level}) must be <= 31");
 		let max = 2u32.pow(level as u32) - 1;
@@ -51,6 +53,7 @@ impl TileBBox {
 			y_max: 0,
 		}
 	}
+
 	pub fn from_geo(level: u8, geo_bbox: &[f64; 4]) -> TileBBox {
 		assert!(level <= 31, "level ({level}) must be <= 31");
 
@@ -64,15 +67,18 @@ impl TileBBox {
 
 		TileBBox::new(level, p_min.get_x(), p_min.get_y(), p_max.get_x(), p_max.get_y())
 	}
+
 	pub fn set_empty(&mut self) {
 		self.x_min = 1;
 		self.y_min = 1;
 		self.x_max = 0;
 		self.y_max = 0;
 	}
+
 	pub fn is_empty(&self) -> bool {
 		(self.x_max < self.x_min) || (self.y_max < self.y_min)
 	}
+
 	#[cfg(test)]
 	pub fn set_full(&mut self) {
 		self.x_min = 0;
@@ -80,10 +86,12 @@ impl TileBBox {
 		self.x_max = self.max;
 		self.y_max = self.max;
 	}
+
 	#[cfg(test)]
 	pub fn is_full(&self) -> bool {
 		(self.x_min == 0) && (self.y_min == 0) && (self.x_max == self.max) && (self.y_max == self.max)
 	}
+
 	pub fn count_tiles(&self) -> u64 {
 		if self.x_max < self.x_min {
 			return 0;
@@ -94,24 +102,7 @@ impl TileBBox {
 
 		(self.x_max - self.x_min + 1) as u64 * (self.y_max - self.y_min + 1) as u64
 	}
-	pub fn get_level(&self) -> u8 {
-		self.level
-	}
-	pub fn get_max(&self) -> u32 {
-		self.max
-	}
-	pub fn get_x_min(&self) -> u32 {
-		self.x_min
-	}
-	pub fn get_y_min(&self) -> u32 {
-		self.y_min
-	}
-	pub fn get_x_max(&self) -> u32 {
-		self.x_max
-	}
-	pub fn get_y_max(&self) -> u32 {
-		self.y_max
-	}
+
 	pub fn include_tile(&mut self, x: u32, y: u32) {
 		if self.is_empty() {
 			self.x_min = x;
@@ -125,6 +116,7 @@ impl TileBBox {
 			self.y_max = self.y_max.max(y).min(self.max);
 		}
 	}
+
 	pub fn union_bbox(&mut self, bbox: &TileBBox) {
 		if !bbox.is_empty() {
 			if self.is_empty() {
@@ -137,6 +129,7 @@ impl TileBBox {
 			}
 		}
 	}
+
 	pub fn intersect_bbox(&mut self, bbox: &TileBBox) {
 		if !self.is_empty() {
 			self.x_min = self.x_min.max(bbox.x_min);
@@ -145,6 +138,7 @@ impl TileBBox {
 			self.y_max = self.y_max.min(bbox.y_max);
 		}
 	}
+
 	pub fn add_border(&mut self, x_min: u32, y_min: u32, x_max: u32, y_max: u32) {
 		if !self.is_empty() {
 			self.x_min -= self.x_min.min(x_min);
@@ -153,12 +147,14 @@ impl TileBBox {
 			self.y_max = (self.y_max + y_max).min(self.max);
 		}
 	}
+
 	pub fn set_bbox(&mut self, bbox: &TileBBox) {
 		self.x_min = bbox.x_min;
 		self.y_min = bbox.y_min;
 		self.x_max = bbox.x_max;
 		self.y_max = bbox.y_max;
 	}
+
 	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord3> + '_ {
 		let y_range = self.y_min..=self.y_max;
 		let x_range = self.x_min..=self.x_max;
@@ -166,6 +162,7 @@ impl TileBBox {
 			.cartesian_product(x_range)
 			.map(|(y, x)| TileCoord3::new(x, y, self.level))
 	}
+
 	pub fn iter_bbox_row_slices(&self, max_count: usize) -> impl Iterator<Item = TileBBox> + '_ {
 		let mut col_count = (self.x_max - self.x_min + 1) as usize;
 		let mut row_count = (self.y_max - self.y_min + 1) as usize;
@@ -298,6 +295,7 @@ impl TileBBox {
 			&& (coord.get_y() >= self.y_min)
 			&& (coord.get_y() <= self.y_max)
 	}
+
 	pub fn get_tile_index(&self, coord: &TileCoord2) -> usize {
 		if !self.contains(coord) {
 			panic!("coord '{coord:?}' is not in '{self:?}'")
@@ -309,18 +307,21 @@ impl TileBBox {
 
 		index as usize
 	}
+
 	pub fn get_coord2_by_index(&self, index: u32) -> TileCoord2 {
 		assert!(index < self.count_tiles() as u32, "index out of bounds");
 
 		let width = self.x_max + 1 - self.x_min;
 		TileCoord2::new(index.rem(width) + self.x_min, index.div(width) + self.y_min)
 	}
+
 	pub fn get_coord3_by_index(&self, index: u32) -> TileCoord3 {
 		assert!(index < self.count_tiles() as u32, "index out of bounds");
 
 		let width = self.x_max + 1 - self.x_min;
 		TileCoord3::new(index.rem(width) + self.x_min, index.div(width) + self.y_min, self.level)
 	}
+
 	pub fn as_geo_bbox(&self, z: u8) -> [f64; 4] {
 		let p_min = TileCoord3::new(self.x_min, self.y_max + 1, z).as_geo();
 		let p_max = TileCoord3::new(self.x_max + 1, self.y_min, z).as_geo();
@@ -561,6 +562,6 @@ mod tests {
 	#[test]
 	fn test_get_max() {
 		let bbox = TileBBox::new(4, 1, 1, 3, 3);
-		assert_eq!(bbox.get_max(), 15);
+		assert_eq!(bbox.max, 15);
 	}
 }

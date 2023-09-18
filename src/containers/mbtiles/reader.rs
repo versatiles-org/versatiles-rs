@@ -241,13 +241,7 @@ impl TileReaderTrait for TileReader {
 
 		let vec: Vec<(TileCoord3, Blob)> = stmt
 			.query_map(
-				[
-					bbox.get_x_min(),
-					bbox.get_x_max(),
-					bbox.get_y_min(),
-					bbox.get_y_max(),
-					bbox.get_level() as u32,
-				],
+				[bbox.x_min, bbox.x_max, bbox.y_min, bbox.y_max, bbox.level as u32],
 				move |row| {
 					let coord = TileCoord3::new(row.get::<_, u32>(0)?, row.get::<_, u32>(1)?, row.get::<_, u8>(2)?);
 					let blob = Blob::from(row.get::<_, Vec<u8>>(3)?);

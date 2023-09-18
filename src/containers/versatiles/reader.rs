@@ -179,8 +179,8 @@ impl TileReaderTrait for TileReader {
 					tiles_bbox_used.intersect_bbox(tiles_bbox_block);
 					trace!("tiles_bbox_used {tiles_bbox_used:?}");
 
-					assert_eq!(bbox.get_level(), tiles_bbox_block.get_level());
-					assert_eq!(bbox.get_level(), tiles_bbox_used.get_level());
+					assert_eq!(bbox.level, tiles_bbox_block.level);
+					assert_eq!(bbox.level, tiles_bbox_used.level);
 
 					// Get the tile index of this block
 					let tile_index: Arc<TileIndex> = myself.get_block_tile_index_cached(&block).await;

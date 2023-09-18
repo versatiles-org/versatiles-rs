@@ -15,17 +15,17 @@ pub struct BlockDefinition {
 #[allow(dead_code)]
 impl BlockDefinition {
 	pub fn new(bbox: TileBBox) -> Self {
-		let x = bbox.get_x_min().div(256u32);
-		let y = bbox.get_y_min().div(256u32);
-		let z = bbox.get_level();
+		let x = bbox.x_min.div(256u32);
+		let y = bbox.y_min.div(256u32);
+		let z = bbox.level;
 		let global_bbox = bbox;
 
 		let tiles_coverage = TileBBox::new(
 			z.min(8),
-			bbox.get_x_min() - x * 256,
-			bbox.get_y_min() - y * 256,
-			bbox.get_x_max() - x * 256,
-			bbox.get_y_max() - y * 256,
+			bbox.x_min - x * 256,
+			bbox.y_min - y * 256,
+			bbox.x_max - x * 256,
+			bbox.y_max - y * 256,
 		);
 
 		Self {
@@ -87,10 +87,10 @@ impl BlockDefinition {
 		vec.write_u32::<BE>(self.offset.get_x())?;
 		vec.write_u32::<BE>(self.offset.get_y())?;
 
-		vec.write_u8(self.tiles_coverage.get_x_min() as u8)?;
-		vec.write_u8(self.tiles_coverage.get_y_min() as u8)?;
-		vec.write_u8(self.tiles_coverage.get_x_max() as u8)?;
-		vec.write_u8(self.tiles_coverage.get_y_max() as u8)?;
+		vec.write_u8(self.tiles_coverage.x_min as u8)?;
+		vec.write_u8(self.tiles_coverage.y_min as u8)?;
+		vec.write_u8(self.tiles_coverage.x_max as u8)?;
+		vec.write_u8(self.tiles_coverage.y_max as u8)?;
 
 		assert_eq!(
 			self.tiles_range.offset + self.tiles_range.length,
@@ -138,10 +138,10 @@ impl BlockDefinition {
 		format!(
 			"[{},[{},{}],[{},{}]]",
 			self.offset.get_z(),
-			self.tiles_coverage.get_x_min() + x_offset,
-			self.tiles_coverage.get_y_min() + y_offset,
-			self.tiles_coverage.get_x_max() + x_offset,
-			self.tiles_coverage.get_y_max() + y_offset
+			self.tiles_coverage.x_min + x_offset,
+			self.tiles_coverage.y_min + y_offset,
+			self.tiles_coverage.x_max + x_offset,
+			self.tiles_coverage.y_max + y_offset
 		)
 	}
 }
