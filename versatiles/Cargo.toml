@@ -49,7 +49,7 @@ tar = { version = "0.4.40", default-features = false }
 terminal_size = { version = "0.2.6", default-features = false }
 tokio = { version = "1.32.0", default-features = false, features = ["macros", "rt-multi-thread", "sync"] }
 webp = { version = "0.2.5", default-features = false, features = ["img"] }
-versatiles_lib = { path = "../versatiles-lib", features = ["full"] }
+versatiles_lib = { path = "../versatiles_lib", features = ["full"] }
 
 [dev-dependencies]
 assert_fs = { version = "1.0.13" }
