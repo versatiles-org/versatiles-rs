@@ -340,18 +340,18 @@ mod tests {
 	// Test tile fetching
 	#[tokio::test]
 	async fn probe() -> Result<()> {
-		use crate::shared::PrettyPrinter;
+		use crate::shared::PrettyPrint;
 
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 8, "versatiles").await?;
 		let temp_file = temp_file.to_str().unwrap();
 
 		let mut reader = TileReader::new(temp_file).await?;
 
-		let mut printer = PrettyPrinter::new();
+		let mut printer = PrettyPrint::new();
 		reader.probe_container(printer.get_category("container").await).await?;
 		assert_eq!(printer.as_string().await, "\ncontainer:\n   meta size: 15\n   block count: 9\n   sum of block index sizes: 134\n   sum of block tiles sizes: 693");
 
-		let mut printer = PrettyPrinter::new();
+		let mut printer = PrettyPrint::new();
 		reader.probe_tiles(printer.get_category("tiles").await).await?;
 		assert_eq!(
 			printer.as_string().await,

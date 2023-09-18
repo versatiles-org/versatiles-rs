@@ -251,21 +251,21 @@ pub mod tests {
 	// Test tile fetching
 	#[tokio::test]
 	async fn probe() -> Result<()> {
-		use crate::shared::PrettyPrinter;
+		use crate::shared::PrettyPrint;
 
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 4, "tar").await?;
 		let temp_file = temp_file.to_str().unwrap();
 
 		let mut reader = TileReader::new(temp_file).await?;
 
-		let mut printer = PrettyPrinter::new();
+		let mut printer = PrettyPrint::new();
 		reader.probe_container(printer.get_category("container").await).await?;
 		assert_eq!(
 			printer.as_string().await,
 			"\ncontainer:\n   deep container probing is not implemented for this container format"
 		);
 
-		let mut printer = PrettyPrinter::new();
+		let mut printer = PrettyPrint::new();
 		reader.probe_tiles(printer.get_category("tiles").await).await?;
 		assert_eq!(
 			printer.as_string().await,

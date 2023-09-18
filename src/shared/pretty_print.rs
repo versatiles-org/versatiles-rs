@@ -10,7 +10,7 @@ use std::io::Write;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
-pub struct PrettyPrinter {
+struct PrettyPrinter {
 	indention: String,
 	#[cfg(not(test))]
 	output: Arc<Mutex<Box<dyn Write + Send>>>,
@@ -19,8 +19,8 @@ pub struct PrettyPrinter {
 }
 
 impl PrettyPrinter {
-	pub fn new() -> PrettyPrint {
-		let me = Arc::new(Self {
+	pub fn new() -> Self {
+		Self {
 			indention: String::from("   "),
 
 			#[cfg(not(test))]
@@ -28,8 +28,7 @@ impl PrettyPrinter {
 
 			#[cfg(test)]
 			output: Arc::new(Mutex::new(Vec::new())),
-		});
-		PrettyPrint::new(me, "\n")
+		}
 	}
 	async fn write(&self, text: String) {
 		self.output.lock().await.write_all(text.as_bytes()).unwrap();
@@ -43,16 +42,17 @@ impl PrettyPrinter {
 		RE_COLORS.replace_all(&text, "").to_string()
 	}
 }
+
 pub struct PrettyPrint {
 	prefix: String,
 	printer: Arc<PrettyPrinter>,
 }
 
 impl PrettyPrint {
-	fn new(printer: Arc<PrettyPrinter>, indent: &str) -> Self {
+	pub fn new() -> Self {
 		Self {
-			prefix: String::from(indent),
-			printer,
+			prefix: String::from("\n"),
+			printer: Arc::new(PrettyPrinter::new()),
 		}
 	}
 	fn new_indented(&mut self) -> Self {
@@ -100,6 +100,12 @@ impl PrettyPrint {
 	}
 }
 
+impl Default for PrettyPrint {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 fn get_formatted_value<V: Debug>(value: &V) -> ColoredString {
 	let type_name = std::any::type_name::<V>();
 	if type_name.starts_with("versatiles::shared::") {
@@ -137,13 +143,13 @@ mod tests {
 	use super::*;
 
 	#[tokio::test]
-	async fn test_new_printer() {
-		let _printer = PrettyPrinter::new();
+	async fn test_new_pretty_print() {
+		let _printer = PrettyPrint::new();
 	}
 
 	#[tokio::test]
 	async fn test_writers() {
-		let mut printer = PrettyPrinter::new();
+		let mut printer = PrettyPrint::new();
 
 		printer.add_warning("test_warning_1").await;
 		let mut cat = printer.get_category("test_category_1").await;
