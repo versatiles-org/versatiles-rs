@@ -2008,6 +2008,42 @@ dependencies = [
  "tar",
  "terminal_size",
  "tokio",
+ "versatiles_lib",
+ "webp",
+]
+
+[[package]]
+name = "versatiles_lib"
+version = "0.6.3"
+dependencies = [
+ "assert_fs",
+ "async-trait",
+ "axum",
+ "brotli",
+ "byteorder",
+ "bytes",
+ "clap",
+ "clap-verbosity-flag",
+ "colored",
+ "criterion",
+ "enumset",
+ "env_logger",
+ "flate2",
+ "futures-util",
+ "hyper",
+ "image",
+ "itertools 0.11.0",
+ "lazy_static",
+ "log",
+ "mime_guess",
+ "num_cpus",
+ "r2d2",
+ "r2d2_sqlite",
+ "regex",
+ "reqwest",
+ "tar",
+ "terminal_size",
+ "tokio",
  "webp",
 ]
 
