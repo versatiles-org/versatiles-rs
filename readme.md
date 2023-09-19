@@ -6,57 +6,8 @@
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Matrix Chat](https://img.shields.io/matrix/versatiles:matrix.org?label=matrix)](https://matrix.to/#/#versatiles:matrix.org)
 
-# Install
+# versatiles-rs
 
-- Install [Rust](https://doc.rust-lang.org/cargo/getting-started/installation.html) and then run `cargo install versatiles`
-- You can also use the latest [binary releases](https://github.com/versatiles-org/versatiles-rs/releases/latest/).
-- *Homebrew (Mac) is [coming](https://github.com/versatiles-org/versatiles-rs/issues/30) …*
-- And we have prepared [some Docker Images](https://github.com/versatiles-org/versatiles-docker).
-
-# Run
-
-Running `versatiles` will list you all available commands:
-```
-Usage: versatiles <COMMAND>
-
-Commands:
-   convert  Convert between different tile containers
-   probe    Show information about a tile container
-   serve    Serve tiles via http
-```
-
-# supported file formats
-
-<table>
-   <thead>
-      <tr><th>Feature</th><th>.versatiles</th><th>.mbtiles</th><th>.tar</th></tr>
-   </thead>
-   <tbody>
-      <tr><th colspan="4" style="text-align:center">read container</th></tr>
-      <tr><td>from file</td><td>✅</td><td>✅</td><td>✅</td></tr>
-      <tr><td>from http</td><td>✅</td><td>🚫</td><td>🚫</td></tr>
-      <tr><td>from gcs</td><td>🚧</td><td>🚫</td><td>🚫</td></tr>
-      <tr><td>from S3</td><td>🚧</td><td>🚫</td><td>🚫</td></tr>
-      <tr><th colspan="4" style="text-align:center">write container</th></tr>
-      <tr><td>to file</td><td>✅</td><td>🚫</td><td>✅</td></tr>
-      <tr><th colspan="4" style="text-align:center">compression</th></tr>
-      <tr><td>uncompressed</td><td>✅</td><td>🚫</td><td>✅</td></tr>
-      <tr><td>gzip</td><td>✅</td><td>✅</td><td>✅</td></tr>
-      <tr><td>brotli</td><td>✅</td><td>🚫</td><td>✅</td></tr>
-   </tbody>
-</table>
-
-More about the VersaTiles container format: [github.com/versatiles-org/**versatiles-spec**](https://github.com/versatiles-org/versatiles-spec)
-
-# examples
-
-```bash
-versatiles convert --tile-format webp satellite_tiles.tar satellite_tiles.versatiles
-
-versatiles serve satellite_tiles.versatiles
-```
-
-# TODOs
-
-- [ ] explain how to setup for development (don't forget to set --all-features for e.g. VS Code), and why you have to use `cargo test --all-features`
-- [ ] update this manual
+This repo contains the source code for:
+- [**versatiles**](./versatiles/README.md) CLI application containing a tiles server and a container converter.
+- [**versatiles-lib**](./versatiles-lib/README.md) library for reading `*.versatiles` containers.

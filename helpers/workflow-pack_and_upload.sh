@@ -23,4 +23,5 @@ case $(uname -s) in
       echo "Unknown OS: $(uname -s)"
       ;;
 esac
+
 gh release upload "$TAG" $FILENAME.tar.gz* --clobber

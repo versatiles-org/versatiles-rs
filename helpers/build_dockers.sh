@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-
 cd "$(dirname "$0")/../docker"
 
 DEBUG=false
@@ -14,18 +13,18 @@ function docker_build_release()  {
 	echo -e "\e[32m  - build\e[0m"
 
 	if [ -z ${linux+x} ]; then
-		echo                         "linux is unset"
-		exit                                                1
+		echo "linux is unset"
+		exit 1
 	fi
 	if [ -z ${platf+x} ]; then
-		echo                         "platf is unset"
-		exit                                                1
+		echo "platf is unset"
+		exit 1
 	fi
 
 	if $DEBUG; then
 		docker buildx build --platform="${platf}" --progress="plain" --tag="${linux}-versatiles" --file="${linux}.Dockerfile" .
 	else
-		docker buildx build --platform="${platf}" --quiet          --tag="${linux}-versatiles" --file="${linux}.Dockerfile" .
+		docker buildx build --platform="${platf}" --quiet --tag="${linux}-versatiles" --file="${linux}.Dockerfile" .
 	fi
 
 	echo -e "\e[32m  - test\e[0m"

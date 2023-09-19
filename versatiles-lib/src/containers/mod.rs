@@ -1,4 +1,4 @@
-#[cfg(all(feature = "full", test))]
+#[cfg(feature = "full")]
 pub mod dummy;
 #[cfg(feature = "full")]
 mod getters;

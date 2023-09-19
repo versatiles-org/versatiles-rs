@@ -1,8 +1,4 @@
-use crate::{
-	create_error,
-	server::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait},
-	shared::{Blob, Compression, Result, TargetCompression},
-};
+use crate::server::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait};
 use async_trait::async_trait;
 use log::trace;
 use std::{
@@ -15,6 +11,10 @@ use std::{
 	path::Path,
 };
 use tar::{Archive, EntryType};
+use versatiles_lib::{
+	create_error,
+	shared::{Blob, Compression, Result, TargetCompression},
+};
 
 struct FileEntry {
 	mime: String,
@@ -174,13 +174,15 @@ impl Debug for TarFile {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::containers::{
-		dummy::{ReaderProfile, TileReader},
-		tar::TileConverter,
-		TileConverterTrait,
-	};
-	use crate::shared::{TileBBoxPyramid, TileConverterConfig, TileFormat};
 	use assert_fs::NamedTempFile;
+	use versatiles_lib::{
+		containers::{
+			dummy::{ReaderProfile, TileReader},
+			tar::TileConverter,
+			TileConverterTrait,
+		},
+		shared::{TileBBoxPyramid, TileConverterConfig, TileFormat},
+	};
 
 	pub async fn make_test_tar(compression: Compression) -> NamedTempFile {
 		let reader_profile = ReaderProfile::PBF;

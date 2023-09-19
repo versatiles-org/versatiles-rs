@@ -1,0 +1,60 @@
+[package]
+name = "versatiles"
+edition = "2021"
+version = "0.6.3"
+description = "A toolbox for converting, checking and serving map tiles in various formats."
+homepage = "https://versatiles.org"
+repository = "https://github.com/versatiles-org/versatiles-rs"
+authors = ["Michael Kreil <versatiles@michael-kreil.de>"]
+keywords = ["versatiles", "mbtiles", "tiles", "map"]
+categories = ["command-line-utilities", "science::geo", "web-programming::http-server"]
+readme = "README.MD"
+license = "MIT"
+exclude = [
+".githooks/",
+".github/",
+".gitignore",
+".prettierignore",
+".vscode/",
+"/docker",
+"/helpers",
+"/testdata"
+]
+
+[dependencies]
+async-trait = { version = "0.1.73", default-features = false }
+axum = { version = "0.6.20", default-features = false, features = ["tokio"] }
+brotli = { version = "3.3.4", default-features = false, features = ["std"] }
+byteorder = { version = "1.4.3", default-features = true }
+bytes = { version = "1.5.0", default-features = false }
+clap = { version = "4.4.4", default-features = true, features = ["wrap_help"] }
+clap-verbosity-flag = { version = "2.0.1", default-features = false }
+colored = { version = "2.0.4", default-features = false }
+enumset = { version = "1.1.2", default-features = false }
+env_logger = { version = "0.10.0", default-features = true }
+flate2 = { version = "1.0.27", default-features = true }
+futures-util = { version = "0.3.28", default-features = false, features = ["std"] }
+hyper = { version = "0.14.27", default-features = false, features = ["http2", "tcp"] }
+image = { version = "0.24.7", default-features = false, features = ["jpeg", "png"] }
+itertools = { version = "0.11.0", default-features = false, features = ["use_alloc"] }
+lazy_static = { version = "1.4.0", default-features = false }
+log = { version = "0.4.20", default-features = false }
+mime_guess = { version = "2.0.4", default-features = false }
+num_cpus = { version = "1.16.0", default-features = false }
+r2d2 = { version = "0.8.10", default-features = false }
+r2d2_sqlite = { version = "0.22.0", default-features = false, features = ["bundled"] }
+regex = { version = "1.9.5", default-features = true }
+reqwest = { version = "0.11.20", default-features = false, features = ["rustls-tls"] }
+tar = { version = "0.4.40", default-features = false }
+terminal_size = { version = "0.2.6", default-features = false }
+tokio = { version = "1.32.0", default-features = false, features = ["macros", "rt-multi-thread", "sync"] }
+webp = { version = "0.2.5", default-features = false, features = ["img"] }
+versatiles-lib = { path = "../versatiles-lib", version = "0.6.3", features = ["full"] }
+
+[dev-dependencies]
+assert_fs = { version = "1.0.13" }
+criterion = { version = "0.5.1", default-features = false, features = ["async_futures"] }
+
+[[bin]]
+name = "versatiles"
+path = "src/main.rs"

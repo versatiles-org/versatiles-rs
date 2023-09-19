@@ -1,11 +1,11 @@
-use crate::{
-	containers::get_reader,
-	server::{source, TileServer},
-	shared::{Compression, Result},
-};
+use crate::server::{source, TileServer};
 use clap::Args;
 use regex::Regex;
 use tokio::time::{sleep, Duration};
+use versatiles_lib::{
+	containers::get_reader,
+	shared::{Compression, Result},
+};
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]
@@ -140,7 +140,7 @@ mod tests {
 			"65001",
 			"--auto-shutdown",
 			"500",
-			"testdata/berlin.mbtiles",
+			"../testdata/berlin.mbtiles",
 		])
 		.unwrap();
 	}

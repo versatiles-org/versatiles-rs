@@ -1,5 +1,5 @@
-use crate::{containers::get_reader, shared::Result};
 use clap::{ArgAction::Count, Args};
+use versatiles_lib::{containers::get_reader, shared::Result};
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -34,7 +34,7 @@ mod tests {
 	#[test]
 
 	fn test_local() {
-		run_command(vec!["versatiles", "probe", "-q", "testdata/berlin.mbtiles"]).unwrap();
+		run_command(vec!["versatiles", "probe", "-q", "../testdata/berlin.mbtiles"]).unwrap();
 	}
 
 	#[test]

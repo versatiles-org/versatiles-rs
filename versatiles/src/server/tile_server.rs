@@ -1,8 +1,4 @@
 use super::{ServerSource, ServerSourceResult, ServerSourceTrait};
-use crate::{
-	create_error,
-	shared::{optimize_compression, Blob, Compression, Result, TargetCompression},
-};
 use axum::{
 	body::{Bytes, Full},
 	extract::{Path, State},
@@ -17,6 +13,10 @@ use axum::{
 use log::error;
 use std::sync::Arc;
 use tokio::sync::{oneshot::Sender, Mutex};
+use versatiles_lib::{
+	create_error,
+	shared::{optimize_compression, Blob, Compression, Result, TargetCompression},
+};
 
 struct TileSource {
 	prefix: String,
@@ -284,17 +284,17 @@ fn get_encoding(headers: HeaderMap) -> TargetCompression {
 #[cfg(test)]
 mod tests {
 	use super::{get_encoding, guess_mime, TileServer};
-	use crate::{
+	use crate::server::source::TileContainer;
+	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
+	use enumset::{enum_set, EnumSet};
+	use std::path::Path;
+	use versatiles_lib::{
 		containers::dummy,
-		server::source::TileContainer,
 		shared::{
 			Compression::{self, *},
 			TargetCompression,
 		},
 	};
-	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
-	use enumset::{enum_set, EnumSet};
-	use std::path::Path;
 
 	const IP: &str = "127.0.0.1";
 	const PORT: u16 = 3000;

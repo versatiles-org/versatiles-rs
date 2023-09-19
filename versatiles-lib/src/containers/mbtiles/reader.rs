@@ -283,7 +283,7 @@ pub mod tests {
 	#[tokio::test]
 	async fn reader() -> Result<()> {
 		// get test container reader
-		let mut reader = TileReader::new("testdata/berlin.mbtiles").await?;
+		let mut reader = TileReader::new("../testdata/berlin.mbtiles").await?;
 
 		assert_eq!(format!("{:?}", reader), "TileReader:MBTiles { parameters: Ok( { bbox_pyramid: [0: [0,0,0,0] (1), 1: [1,0,1,0] (1), 2: [2,1,2,1] (1), 3: [4,2,4,2] (1), 4: [8,5,8,5] (1), 5: [17,10,17,10] (1), 6: [34,20,34,21] (2), 7: [68,41,68,42] (2), 8: [137,83,137,84] (2), 9: [274,167,275,168] (4), 10: [549,335,551,336] (6), 11: [1098,670,1102,673] (20), 12: [2196,1340,2204,1346] (63), 13: [4393,2680,4409,2693] (238), 14: [8787,5361,8818,5387] (864)], decompressor: , flip_y: false, swap_xy: false, tile_compression: Gzip, tile_format: PBF }) }");
 		assert_eq!(reader.get_container_name()?, "mbtiles");
@@ -313,7 +313,7 @@ pub mod tests {
 	async fn probe() -> Result<()> {
 		use crate::shared::PrettyPrint;
 
-		let mut reader = TileReader::new("testdata/berlin.mbtiles").await?;
+		let mut reader = TileReader::new("../testdata/berlin.mbtiles").await?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(printer.get_category("container").await).await?;
