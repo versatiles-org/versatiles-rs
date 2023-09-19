@@ -75,10 +75,10 @@ jobs:
 
       - name: Test Binary # Test the waters before setting sail.
         if: matrix.arch == 'x86_64'
-        run: cargo test --all-features --bin "versatiles" --package "versatiles" --release --target --target "${{ matrix.arch }}-apple-darwin"
+        run: cargo test --all-features --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-apple-darwin"
 
       - name: Build Binary # Construct your future from the bricks of the present.
-        run: cargo build --all-features --bin "versatiles" --package "versatiles" --release --target --target "${{ matrix.arch }}-apple-darwin"
+        run: cargo build --all-features --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-apple-darwin"
 
       - name: Pack and upload # The journey's end marks a new beginning.
         run: ./helpers/workflow-pack_and_upload.sh "target/${{ matrix.arch }}-apple-darwin/release" "macos-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
