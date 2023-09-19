@@ -14,7 +14,7 @@ OLD_TAG=$(jq -r "nth(1; .[] | .name | select(startswith(\"v\")))" tags.json)
 OLD_SHA=$(jq -r ".[] | select(.name == \"$OLD_TAG\") | .commit.sha" tags.json)
 
 # get version via cargo.toml
-VERSION=$(cat Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/v\1/p" | tr -d '\n')
+VERSION=$(cat ./versatiles/Cargo.toml | sed -n "s/^version *= *\"\(.*\)\"/v\1/p" | tr -d '\n')
 
 # compare versions
 if [ "$NEW_TAG" != "$VERSION" ]; then
