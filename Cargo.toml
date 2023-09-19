@@ -1,5 +1,5 @@
 [workspace]
-members = ["versatiles", "versatiles_lib"]
+members = ["versatiles", "versatiles-lib"]
 resolver = "2"
 
 [profile.dev]

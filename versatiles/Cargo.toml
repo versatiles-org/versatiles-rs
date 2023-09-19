@@ -27,7 +27,7 @@ axum = { version = "0.6.20", default-features = false, features = ["tokio"] }
 brotli = { version = "3.3.4", default-features = false, features = ["std"] }
 byteorder = { version = "1.4.3", default-features = true }
 bytes = { version = "1.5.0", default-features = false }
-clap = { version = "4.4.3", default-features = true, features = ["wrap_help"] }
+clap = { version = "4.4.4", default-features = true, features = ["wrap_help"] }
 clap-verbosity-flag = { version = "2.0.1", default-features = false }
 colored = { version = "2.0.4", default-features = false }
 enumset = { version = "1.1.2", default-features = false }
@@ -49,7 +49,7 @@ tar = { version = "0.4.40", default-features = false }
 terminal_size = { version = "0.2.6", default-features = false }
 tokio = { version = "1.32.0", default-features = false, features = ["macros", "rt-multi-thread", "sync"] }
 webp = { version = "0.2.5", default-features = false, features = ["img"] }
-versatiles_lib = { path = "../versatiles_lib", features = ["full"] }
+versatiles-lib = { path = "../versatiles-lib", features = ["full"] }
 
 [dev-dependencies]
 assert_fs = { version = "1.0.13" }
