@@ -19,9 +19,9 @@ fi
 
 # get versions
 old_tag=$(curl -s "https://api.github.com/repos/versatiles-org/versatiles-rs/tags" | jq -r 'first(.[] | .name | select(startswith("v")))')
-ver_bin=v$(toml get -r versatiles/Cargo.toml package.version)
-ver_lib=v$(toml get -r versatiles-lib/Cargo.toml package.version)
-ver_lib_dep=v$(toml get -r versatiles/Cargo.toml dependencies.versatiles-lib.version)
+ver_bin="v$(toml get -r versatiles/Cargo.toml package.version)"
+ver_lib="v$(toml get -r versatiles-lib/Cargo.toml package.version)"
+ver_lib_dep="v$(toml get -r versatiles/Cargo.toml dependencies.versatiles-lib.version)"
 
 if [ $ver_bin != $ver_lib ]; then
 	echo -e "${RED}The versions of lib ($ver_lib) and bin ($ver_bin) must be same!${END}"
@@ -48,8 +48,8 @@ if [ $? -ne 0 ]; then
 fi
 
 # publish to crates.io
-cargo publish --package versatiles --no-verify
 cargo publish --package versatiles-lib --no-verify
+cargo publish --package versatiles --no-verify
 
 # git tag
 git tag -f -a "$new_tag" -m "new release: $new_tag"
