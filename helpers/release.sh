@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")/.."
 
+# cargo install toml-cli
+
 set -e
 
 RED="\033[1;31m"
@@ -17,19 +19,21 @@ fi
 
 # get versions
 old_tag=$(curl -s "https://api.github.com/repos/versatiles-org/versatiles-rs/tags" | jq -r 'first(.[] | .name | select(startswith("v")))')
-tag_bin=v$(cat versatiles/Cargo.toml | sed -ne 's/^version[ ="]*\([0-9\.]*\).*$/\1/p')
-tag_lib=v$(cat versatiles-lib/Cargo.toml | sed -ne 's/^version[ ="]*\([0-9\.]*\).*$/\1/p')
+ver_bin=v$(toml get -r versatiles/Cargo.toml package.version)
+ver_lib=v$(toml get -r versatiles-lib/Cargo.toml package.version)
+ver_lib_dep=v$(toml get -r versatiles/Cargo.toml dependencies.versatiles-lib.version)
 
-echo "old version: $old_tag"
-echo "version bin: $tag_bin"
-echo "version lib: $tag_lib"
-
-if [ $tag_bin != $tag_lib ]; then
-	echo -e "${RED}The versions of lib ($tag_lib) and bin ($tag_bin) must be same!${END}"
+if [ $ver_bin != $ver_lib ]; then
+	echo -e "${RED}The versions of lib ($ver_lib) and bin ($ver_bin) must be same!${END}"
 	exit 1
 fi
 
-new_tag=$tag_bin
+if [ $ver_lib != $ver_lib_dep ]; then
+	echo -e "${RED}The versions of lib ($ver_lib) and the lib dependency in bin ($ver_lib_dep) must be same!${END}"
+	exit 1
+fi
+
+new_tag=$ver_bin
 
 if [ $new_tag == $old_tag ]; then
 	echo -e "${RED}New version $new_tag already exists!${END}"
