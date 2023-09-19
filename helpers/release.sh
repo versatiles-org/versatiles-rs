@@ -18,7 +18,7 @@ fi
 # get versions
 old_tag=$(curl -s "https://api.github.com/repos/versatiles-org/versatiles-rs/tags" | jq -r 'first(.[] | .name | select(startswith("v")))')
 tag_bin=v$(cat versatiles/Cargo.toml | sed -ne 's/^version[ ="]*\([0-9\.]*\).*$/\1/p')
-tag_lib=v$(cat versatiles_lib/Cargo.toml | sed -ne 's/^version[ ="]*\([0-9\.]*\).*$/\1/p')
+tag_lib=v$(cat versatiles-lib/Cargo.toml | sed -ne 's/^version[ ="]*\([0-9\.]*\).*$/\1/p')
 
 echo "old version: $old_tag"
 echo "version bin: $tag_bin"
@@ -44,7 +44,8 @@ if [ $? -ne 0 ]; then
 fi
 
 # publish to crates.io
-cargo publish --no-verify
+cargo publish --package versatiles --no-verify
+cargo publish --package versatiles-lib --no-verify
 
 # git tag
 git tag -f -a "$new_tag" -m "new release: $new_tag"
