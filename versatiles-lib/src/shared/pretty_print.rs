@@ -1,11 +1,5 @@
 use colored::*;
-#[cfg(test)]
-use lazy_static::lazy_static;
-#[cfg(test)]
-use regex::*;
 use std::fmt::{Debug, Display};
-#[cfg(not(test))]
-use std::io::stderr;
 use std::io::Write;
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -20,6 +14,9 @@ struct PrettyPrinter {
 
 impl PrettyPrinter {
 	pub fn new() -> Self {
+		#[cfg(not(test))]
+		use std::io::stderr;
+
 		Self {
 			indention: String::from("   "),
 
@@ -35,6 +32,9 @@ impl PrettyPrinter {
 	}
 	#[cfg(test)]
 	async fn as_string(&self) -> String {
+		use lazy_static::lazy_static;
+		use regex::{Regex, RegexBuilder};
+
 		lazy_static! {
 			static ref RE_COLORS: Regex = RegexBuilder::new("\u{001b}\\[[0-9;]*m").build().unwrap();
 		}
@@ -45,49 +45,46 @@ impl PrettyPrinter {
 
 pub struct PrettyPrint {
 	prefix: String,
+	suffix: String,
 	printer: Arc<PrettyPrinter>,
 }
 
 impl PrettyPrint {
 	pub fn new() -> Self {
 		Self {
-			prefix: String::from("\n"),
+			prefix: String::from(""),
+			suffix: String::from("\n"),
 			printer: Arc::new(PrettyPrinter::new()),
 		}
 	}
 	fn new_indented(&mut self) -> Self {
 		Self {
-			prefix: String::from(&self.prefix) + &self.printer.indention,
+			prefix: format!("{}{}", self.prefix, self.printer.indention),
+			suffix: self.suffix.clone(),
 			printer: self.printer.clone(),
 		}
 	}
 	pub async fn get_category(&mut self, text: &str) -> PrettyPrint {
-		self
-			.printer
-			.write(format!("{}{}:", self.prefix, text.bold().white()))
-			.await;
+		self.write_line(text.white().bold().to_string() + ":").await;
 		self.new_indented()
 	}
 	pub async fn get_list(&mut self, text: &str) -> PrettyPrint {
-		self.printer.write(format!("{}{}:", self.prefix, text.white())).await;
+		self.write_line(text.white().to_string() + ":").await;
 		self.new_indented()
 	}
 	pub async fn add_warning(&self, text: &str) {
-		self
-			.printer
-			.write(format!("{}{}", self.prefix, text.bold().yellow()))
-			.await;
+		self.write_line(text.yellow().bold()).await;
 	}
 	pub async fn add_key_value<K: Display + ?Sized, V: Debug>(&self, key: &K, value: &V) {
-		self
-			.printer
-			.write(format!("{}{}: {}", self.prefix, key, get_formatted_value(value)))
-			.await;
+		self.write_line(format!("{key}: {}", get_formatted_value(value))).await;
 	}
 	pub async fn add_value<V: Debug>(&self, value: &V) {
+		self.write_line(get_formatted_value(value)).await;
+	}
+	async fn write_line<T: Display>(&self, line: T) {
 		self
 			.printer
-			.write(format!("{}{}", self.prefix, get_formatted_value(value)))
+			.write(format!("{}{}{}", self.prefix, line, self.suffix))
 			.await;
 	}
 	#[cfg(test)]
@@ -161,7 +158,13 @@ mod tests {
 		let result = printer.as_string().await;
 		assert_eq!(
 			&result,
-			"\ntest_warning_1\ntest_category_1:\n   test_list_1:\n      string_1: 4string_2\n   test_warning_2\ntest_warning_3"
+			"test_warning_1\ntest_category_1:\n   test_list_1:\n      string_1: 4\nstring_2   test_warning_2\ntest_warning_3\n"
 		);
+	}
+
+	#[test]
+	#[should_panic] // everybody should panic
+	fn x() {
+		assert_eq!("Elon Musk", "Genius");
 	}
 }

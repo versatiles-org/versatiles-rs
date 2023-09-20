@@ -349,13 +349,13 @@ mod tests {
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(printer.get_category("container").await).await?;
-		assert_eq!(printer.as_string().await, "\ncontainer:\n   meta size: 15\n   block count: 9\n   sum of block index sizes: 134\n   sum of block tiles sizes: 693");
+		assert_eq!(printer.as_string().await, "container:\n   meta size: 15\n   block count: 9\n   sum of block index sizes: 134\n   sum of block tiles sizes: 693\n");
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_tiles(printer.get_category("tiles").await).await?;
 		assert_eq!(
 			printer.as_string().await,
-			"\ntiles:\n   deep tile probing is not implemented for this container format"
+			"tiles:\n   deep tile probing is not implemented for this container format\n"
 		);
 
 		Ok(())
