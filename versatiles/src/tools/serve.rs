@@ -140,7 +140,7 @@ mod tests {
 			"65001",
 			"--auto-shutdown",
 			"500",
-			"../testdata/berlin.mbtiles",
+			"../testdata/berlin.mbtiles[test]",
 		])
 		.unwrap();
 	}
@@ -156,7 +156,7 @@ mod tests {
 			"65002",
 			"--auto-shutdown",
 			"500",
-			"https://download.versatiles.org/planet-latest.versatiles",
+			"[test]https://download.versatiles.org/planet-latest.versatiles",
 		])
 		.unwrap();
 	}
