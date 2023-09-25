@@ -109,7 +109,7 @@ fn get_formatted_value<V: Debug + ?Sized>(value: &V) -> ColoredString {
 		return format!("{:?}", value).bright_blue();
 	}
 	match type_name {
-		"bool" => format!("{:?}", value).bright_green(),
+		"bool" | "core::option::Option<versatiles_lib::shared::blob::Blob>" => format!("{:?}", value).bright_green(),
 		"f32" | "f64" => format!("{:?}", value).bright_cyan(),
 		"i128" | "i16" | "i32" | "i64" | "i8" | "isize" => format_integer(value).bright_cyan(),
 		"u128" | "u16" | "u32" | "u64" | "u8" | "usize" => format_integer(value).bright_cyan(),

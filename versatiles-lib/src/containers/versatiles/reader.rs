@@ -15,7 +15,7 @@ use tokio::sync::Mutex;
 
 // Define the TileReader struct
 pub struct TileReader {
-	meta: Blob,
+	meta: Option<Blob>,
 	reader: Box<dyn DataReaderTrait>,
 	parameters: TileReaderParameters,
 	block_index: BlockIndex,
@@ -29,10 +29,12 @@ impl TileReader {
 		let header = FileHeader::from_reader(&mut reader).await?;
 
 		let meta = if header.meta_range.length > 0 {
-			DataConverter::new_decompressor(&header.compression)
-				.process_blob(reader.read_range(&header.meta_range).await?)?
+			Some(
+				DataConverter::new_decompressor(&header.compression)
+					.process_blob(reader.read_range(&header.meta_range).await?)?,
+			)
 		} else {
-			Blob::new_empty()
+			None
 		};
 
 		let block_index = BlockIndex::from_brotli_blob(reader.read_range(&header.blocks_range).await?);
@@ -92,11 +94,7 @@ impl TileReaderTrait for TileReader {
 
 	// Get metadata
 	async fn get_meta(&self) -> Result<Option<Blob>> {
-		Ok(if self.meta.is_empty() {
-			Some(self.meta.clone())
-		} else {
-			None
-		})
+		Ok(self.meta.clone())
 	}
 
 	// Get TileReader parameters
@@ -281,8 +279,10 @@ impl TileReaderTrait for TileReader {
 	// deep probe of container meta
 	#[cfg(feature = "full")]
 	async fn probe_container(&mut self, print: PrettyPrint) -> Result<()> {
-		print.add_key_value(&"meta size", &self.meta.len()).await;
-		print.add_key_value(&"block count", &self.block_index.len()).await;
+		print
+			.add_key_value("meta size", &self.meta.as_ref().map_or(0, |b| b.len()))
+			.await;
+		print.add_key_value("block count", &self.block_index.len()).await;
 
 		let mut index_size = 0;
 		let mut tiles_size = 0;
@@ -292,8 +292,8 @@ impl TileReaderTrait for TileReader {
 			tiles_size += block.get_tiles_range().length;
 		}
 
-		print.add_key_value(&"sum of block index sizes", &index_size).await;
-		print.add_key_value(&"sum of block tiles sizes", &tiles_size).await;
+		print.add_key_value("sum of block index sizes", &index_size).await;
+		print.add_key_value("sum of block tiles sizes", &tiles_size).await;
 
 		Ok(())
 	}

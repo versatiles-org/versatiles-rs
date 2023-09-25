@@ -103,8 +103,12 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 		let cat = print.get_category("parameters").await;
 		cat.add_key_value("name", self.get_name()?).await;
 		cat.add_key_value("container", self.get_container_name()?).await;
-		let meta = self.get_meta().await?.map_or(String::from("none"), |b| b.to_string());
-		cat.add_key_value("meta", &meta).await;
+		let meta_option = self.get_meta().await?;
+		if let Some(meta) = meta_option {
+			cat.add_key_value("meta", meta.as_str()).await;
+		} else {
+			cat.add_key_value("meta", &meta_option).await;
+		}
 
 		self
 			.get_parameters()?
