@@ -29,18 +29,18 @@ pub struct TileServer {
 	tile_sources: Vec<TileSource>,
 	static_sources: Vec<ServerSource>,
 	exit_signal: Option<Sender<()>>,
-	best_compression: bool,
+	use_best_compression: bool,
 }
 
 impl TileServer {
-	pub fn new(ip: &str, port: u16, best_compression: bool) -> TileServer {
+	pub fn new(ip: &str, port: u16, use_best_compression: bool) -> TileServer {
 		TileServer {
 			ip: ip.to_owned(),
 			port,
 			tile_sources: Vec::new(),
 			static_sources: Vec::new(),
 			exit_signal: None,
-			best_compression,
+			use_best_compression,
 		}
 	}
 
@@ -129,7 +129,7 @@ impl TileServer {
 
 			let tile_app = Router::new()
 				.route(&route, get(serve_tile))
-				.with_state((tile_source.source.clone(), self.best_compression));
+				.with_state((tile_source.source.clone(), self.use_best_compression));
 
 			app = app.merge(tile_app);
 
@@ -139,13 +139,17 @@ impl TileServer {
 			) -> Response<Full<Bytes>> {
 				let sub_path: Vec<&str> = path.split('/').collect();
 
-				let mut compressions = get_encoding(headers);
-				compressions.set_best_compression(best_compression);
+				let mut target_compressions = get_encoding(headers);
+				target_compressions.set_best_compression(best_compression);
 
-				let response = source_mutex.lock().await.get_data(&sub_path, &compressions).await;
+				let response = source_mutex
+					.lock()
+					.await
+					.get_data(&sub_path, &target_compressions)
+					.await;
 
 				if let Some(response) = response {
-					ok_data(response, compressions).await
+					ok_data(response, target_compressions).await
 				} else {
 					ok_not_found()
 				}
@@ -158,7 +162,7 @@ impl TileServer {
 	fn add_static_sources_to_app(&self, app: Router) -> Router {
 		let static_app = Router::new()
 			.fallback(get(serve_static))
-			.with_state((self.static_sources.clone(), self.best_compression));
+			.with_state((self.static_sources.clone(), self.use_best_compression));
 
 		return app.merge(static_app);
 
@@ -231,13 +235,22 @@ fn ok_not_found() -> Response<Full<Bytes>> {
 	Response::builder().status(404).body(Full::from("Not Found")).unwrap()
 }
 
-async fn ok_data(result: ServerSourceResult, compressions: TargetCompression) -> Response<Full<Bytes>> {
+async fn ok_data(result: ServerSourceResult, target_compressions: TargetCompression) -> Response<Full<Bytes>> {
+	let is_compressable = match result.mime.as_str() {
+		"image/png" | "image/jpeg" | "image/webp" | "image/avif" => false,
+		_ => true,
+	};
+
 	let mut response = Response::builder()
 		.status(200)
 		.header(CONTENT_TYPE, result.mime)
 		.header(CACHE_CONTROL, "public");
 
-	let (blob, compression) = optimize_compression(result.blob, &result.compression, compressions).unwrap();
+	let (blob, compression) = if is_compressable {
+		optimize_compression(result.blob, &result.compression, target_compressions).unwrap()
+	} else {
+		(result.blob, result.compression)
+	};
 
 	match compression {
 		Compression::None => {}

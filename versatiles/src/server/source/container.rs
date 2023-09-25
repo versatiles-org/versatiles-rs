@@ -102,11 +102,7 @@ impl ServerSourceTrait for TileContainer {
 			// If metadata is empty, return a not found response
 			meta_option.as_ref()?;
 
-			return make_result(
-				meta_option.unwrap(),
-				&Compression::None,
-				&String::from("application/json"),
-			);
+			return make_result(meta_option.unwrap(), &Compression::None, "application/json");
 		}
 
 		// If the request is unknown, return a not found response
