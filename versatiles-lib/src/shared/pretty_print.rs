@@ -75,7 +75,7 @@ impl PrettyPrint {
 	pub async fn add_warning(&self, text: &str) {
 		self.write_line(text.yellow().bold()).await;
 	}
-	pub async fn add_key_value<K: Display + ?Sized, V: Debug>(&self, key: &K, value: &V) {
+	pub async fn add_key_value<K: Display + ?Sized, V: Debug + ?Sized>(&self, key: &K, value: &V) {
 		self.write_line(format!("{key}: {}", get_formatted_value(value))).await;
 	}
 	pub async fn add_value<V: Debug>(&self, value: &V) {
@@ -103,7 +103,7 @@ impl Default for PrettyPrint {
 	}
 }
 
-fn get_formatted_value<V: Debug>(value: &V) -> ColoredString {
+fn get_formatted_value<V: Debug + ?Sized>(value: &V) -> ColoredString {
 	let type_name = std::any::type_name::<V>();
 	if type_name.starts_with("versatiles_lib::shared::") {
 		return format!("{:?}", value).bright_blue();
@@ -120,7 +120,7 @@ fn get_formatted_value<V: Debug>(value: &V) -> ColoredString {
 	}
 }
 
-fn format_integer<V: Debug>(value: &V) -> String {
+fn format_integer<V: Debug + ?Sized>(value: &V) -> String {
 	let mut text = format!("{:?}", value);
 	let mut formatted = String::from("");
 	while (text.len() > 3) && text.chars().nth_back(3).unwrap().is_numeric() {

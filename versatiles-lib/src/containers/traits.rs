@@ -100,6 +100,12 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 	async fn probe(&mut self, level: u8) -> Result<()> {
 		let mut print = PrettyPrint::new();
 
+		let cat = print.get_category("parameters").await;
+		cat.add_key_value("name", self.get_name()?).await;
+		cat.add_key_value("container", self.get_container_name()?).await;
+		let meta = self.get_meta().await?.map_or(String::from("none"), |b| b.to_string());
+		cat.add_key_value("meta", &meta).await;
+
 		self
 			.get_parameters()?
 			.probe(print.get_category("parameters").await)
