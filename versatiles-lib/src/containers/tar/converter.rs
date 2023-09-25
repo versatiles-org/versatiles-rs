@@ -60,9 +60,9 @@ impl TileConverterTrait for TileConverter {
 
 		let bbox_pyramid = self.config.get_bbox_pyramid();
 
-		let meta_data = reader.get_meta().await?;
+		let meta_data_option = reader.get_meta().await?;
 
-		if !meta_data.is_empty() {
+		if let Some(meta_data) = meta_data_option {
 			let meta_data = compress(meta_data, self.config.get_tile_compression())?;
 			let filename = format!("tiles.json{}", ext_comp);
 

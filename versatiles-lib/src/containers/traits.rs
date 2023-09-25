@@ -47,7 +47,7 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 	fn get_container_name(&self) -> Result<&str>;
 
 	/// get meta data, always uncompressed
-	async fn get_meta(&self) -> Result<Blob>;
+	async fn get_meta(&self) -> Result<Option<Blob>>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
 	/// returns the tile in the coordinate system of the source
@@ -170,8 +170,8 @@ mod tests {
 			Ok(&mut self.parameters)
 		}
 
-		async fn get_meta(&self) -> Result<Blob> {
-			Ok(Blob::from("test metadata"))
+		async fn get_meta(&self) -> Result<Option<Blob>> {
+			Ok(Some(Blob::from("test metadata")))
 		}
 
 		fn get_container_name(&self) -> Result<&str> {
@@ -217,7 +217,7 @@ mod tests {
 		assert_eq!(reader.get_container_name()?, "test container name");
 
 		// Test getting metadata
-		assert_eq!(reader.get_meta().await?.to_string(), "test metadata");
+		assert_eq!(reader.get_meta().await?.unwrap().to_string(), "test metadata");
 
 		// Test getting tile data
 		let coord = TileCoord3::new(0, 0, 0);

@@ -49,8 +49,8 @@ impl TileReaderTrait for TileReader {
 	fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters> {
 		Ok(&mut self.parameters)
 	}
-	async fn get_meta(&self) -> Result<Blob> {
-		Ok(Blob::from("dummy meta data"))
+	async fn get_meta(&self) -> Result<Option<Blob>> {
+		Ok(Some(Blob::from("dummy meta data")))
 	}
 	async fn get_tile_data_original(&mut self, coord: &TileCoord3) -> Result<Blob> {
 		if coord.is_valid() {
@@ -87,7 +87,7 @@ mod tests {
 		assert_eq!(reader.get_name()?, "dummy name");
 		assert_ne!(reader.get_parameters()?, &TileReaderParameters::new_dummy());
 		assert_ne!(reader.get_parameters_mut()?, &mut TileReaderParameters::new_dummy());
-		assert_eq!(reader.get_meta().await?, Blob::from("dummy meta data"));
+		assert_eq!(reader.get_meta().await?, Some(Blob::from("dummy meta data")));
 		let blob = reader
 			.get_tile_data_original(&TileCoord3::new(0, 0, 0))
 			.await

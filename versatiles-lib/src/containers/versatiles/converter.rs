@@ -79,7 +79,7 @@ impl TileConverterTrait for TileConverter {
 impl TileConverter {
 	// Write metadata
 	async fn write_meta(&mut self, reader: &TileReaderBox) -> Result<ByteRange> {
-		let meta = reader.get_meta().await?;
+		let meta: Blob = reader.get_meta().await?.unwrap_or_default();
 		let compressed = self.config.get_compressor().process_blob(meta)?;
 
 		self.writer.append(&compressed)

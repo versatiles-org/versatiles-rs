@@ -32,7 +32,7 @@ impl TileReader {
 			DataConverter::new_decompressor(&header.compression)
 				.process_blob(reader.read_range(&header.meta_range).await?)?
 		} else {
-			Blob::empty()
+			Blob::new_empty()
 		};
 
 		let block_index = BlockIndex::from_brotli_blob(reader.read_range(&header.blocks_range).await?);
@@ -91,8 +91,12 @@ impl TileReaderTrait for TileReader {
 	}
 
 	// Get metadata
-	async fn get_meta(&self) -> Result<Blob> {
-		Ok(self.meta.clone())
+	async fn get_meta(&self) -> Result<Option<Blob>> {
+		Ok(if self.meta.is_empty() {
+			Some(self.meta.clone())
+		} else {
+			None
+		})
 	}
 
 	// Get TileReader parameters
@@ -326,7 +330,7 @@ mod tests {
 		assert_eq!(format!("{:?}", reader), "TileReader:VersaTiles { parameters:  { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: UnGzip, flip_y: false, swap_xy: false, tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name()?, "versatiles");
 		assert!(reader.get_name()?.ends_with(temp_file));
-		assert_eq!(reader.get_meta().await?, Blob::from(b"dummy meta data".to_vec()));
+		assert_eq!(reader.get_meta().await?, Some(Blob::from(b"dummy meta data".to_vec())));
 		assert_eq!(format!("{:?}", reader.get_parameters()?), " { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: UnGzip, flip_y: false, swap_xy: false, tile_compression: Gzip, tile_format: PBF }");
 		assert_eq!(reader.get_tile_compression()?, &Compression::Gzip);
 		assert_eq!(reader.get_tile_format()?, &TileFormat::PBF);

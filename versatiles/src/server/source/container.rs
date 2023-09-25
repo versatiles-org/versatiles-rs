@@ -97,14 +97,16 @@ impl ServerSourceTrait for TileContainer {
 			return make_result(tile.unwrap(), &self.compression, &self.tile_mime);
 		} else if (path[0] == "meta.json") || (path[0] == "tiles.json") {
 			// Get metadata
-			let meta = self.reader.get_meta().await.unwrap();
+			let meta_option = self.reader.get_meta().await.unwrap();
 
 			// If metadata is empty, return a not found response
-			if meta.is_empty() {
-				return None;
-			}
+			meta_option.as_ref()?;
 
-			return make_result(meta, &Compression::None, &String::from("application/json"));
+			return make_result(
+				meta_option.unwrap(),
+				&Compression::None,
+				&String::from("application/json"),
+			);
 		}
 
 		// If the request is unknown, return a not found response

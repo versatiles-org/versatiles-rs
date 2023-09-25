@@ -23,7 +23,7 @@ struct TarByteRange {
 }
 
 pub struct TileReader {
-	meta: Blob,
+	meta: Option<Blob>,
 	name: String,
 	file: File,
 	tile_map: HashMap<TileCoord3, TarByteRange>,
@@ -50,7 +50,7 @@ impl TileReaderTrait for TileReader {
 		let file = File::open(filename)?;
 		let mut archive = Archive::new(&file);
 
-		let mut meta = Blob::empty();
+		let mut meta: Option<Blob> = None;
 		let mut tile_map = HashMap::new();
 		let mut tile_form: Option<TileFormat> = None;
 		let mut tile_comp: Option<Compression> = None;
@@ -133,15 +133,15 @@ impl TileReaderTrait for TileReader {
 			if path_vec.len() == 1 {
 				match path_vec[0] {
 					"meta.json" | "tiles.json" | "metadata.json" => {
-						meta = read_to_end();
+						meta = Some(read_to_end());
 						continue;
 					}
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
-						meta = decompress(read_to_end(), &Compression::Gzip)?;
+						meta = Some(decompress(read_to_end(), &Compression::Gzip)?);
 						continue;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
-						meta = decompress(read_to_end(), &Compression::Brotli)?;
+						meta = Some(decompress(read_to_end(), &Compression::Brotli)?);
 						continue;
 					}
 					&_ => {}
@@ -165,7 +165,7 @@ impl TileReaderTrait for TileReader {
 	fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters> {
 		Ok(&mut self.parameters)
 	}
-	async fn get_meta(&self) -> Result<Blob> {
+	async fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(self.meta.clone())
 	}
 	async fn get_tile_data_original(&mut self, coord: &TileCoord3) -> Result<Blob> {
@@ -215,7 +215,7 @@ pub mod tests {
 		assert_eq!(format!("{:?}", reader), "TileReader:Tar { parameters: Ok( { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], decompressor: UnBrotli, flip_y: false, swap_xy: false, tile_compression: Brotli, tile_format: PNG }) }");
 		assert_eq!(reader.get_container_name()?, "tar");
 		assert!(reader.get_name()?.ends_with(temp_file));
-		assert_eq!(reader.get_meta().await?, Blob::from(b"dummy meta data".to_vec()));
+		assert_eq!(reader.get_meta().await?, Some(Blob::from(b"dummy meta data".to_vec())));
 		assert_eq!(format!("{:?}", reader.get_parameters()?), " { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], decompressor: UnBrotli, flip_y: false, swap_xy: false, tile_compression: Brotli, tile_format: PNG }");
 		assert_eq!(reader.get_tile_compression()?, &Compression::Brotli);
 		assert_eq!(reader.get_tile_format()?, &TileFormat::PNG);

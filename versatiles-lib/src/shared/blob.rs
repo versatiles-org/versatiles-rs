@@ -11,7 +11,7 @@ pub struct Blob(Vec<u8>);
 
 impl Blob {
 	/// Creates an empty `Blob`.
-	pub fn empty() -> Blob {
+	pub fn new_empty() -> Blob {
 		Blob(Vec::new())
 	}
 
@@ -136,6 +136,12 @@ impl Debug for Blob {
 impl ToString for Blob {
 	fn to_string(&self) -> String {
 		String::from_utf8_lossy(&self.0).to_string()
+	}
+}
+
+impl Default for Blob {
+	fn default() -> Self {
+		Self::new_empty()
 	}
 }
 
