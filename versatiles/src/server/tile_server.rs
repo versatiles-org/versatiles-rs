@@ -236,20 +236,20 @@ fn ok_not_found() -> Response<Full<Bytes>> {
 }
 
 async fn ok_data(result: ServerSourceResult, target_compressions: TargetCompression) -> Response<Full<Bytes>> {
-	let is_compressable = match result.mime.as_str() {
-		"image/png" | "image/jpeg" | "image/webp" | "image/avif" => false,
-		_ => true,
-	};
+	let is_incompressible = matches!(
+		result.mime.as_str(),
+		"image/png" | "image/jpeg" | "image/webp" | "image/avif"
+	);
 
 	let mut response = Response::builder()
 		.status(200)
 		.header(CONTENT_TYPE, result.mime)
 		.header(CACHE_CONTROL, "public");
 
-	let (blob, compression) = if is_compressable {
-		optimize_compression(result.blob, &result.compression, target_compressions).unwrap()
-	} else {
+	let (blob, compression) = if is_incompressible {
 		(result.blob, result.compression)
+	} else {
+		optimize_compression(result.blob, &result.compression, target_compressions).unwrap()
 	};
 
 	match compression {
