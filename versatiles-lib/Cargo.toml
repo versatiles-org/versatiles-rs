@@ -44,7 +44,7 @@ reqwest = { version = "0.11.20", default-features = false, optional = true, feat
 tar = { version = "0.4.40", default-features = false, optional = true }
 terminal_size = { version = "0.2.6", default-features = false, optional = true }
 tokio = { version = "1.32.0", default-features = false, features = ["macros", "rt-multi-thread", "sync"] }
-webp = { version = "0.2.5", default-features = false, optional = true, features = ["img"] }
+webp = { version = "0.2.6", default-features = false, optional = true, features = ["img"] }
 
 [dev-dependencies]
 assert_fs = { version = "1.0.13" }
