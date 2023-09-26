@@ -26,7 +26,7 @@ jobs:
 
   build-linux-arm:
     name: Build Linux ARM # Like the bamboo, we must be adaptable.
-    runs-on: self-hosted
+    runs-on: buildjet-16vcpu-ubuntu-2204-arm
     needs: prepare
     strategy:
       fail-fast: false # In failure, we find lessons; in persistence, success.
@@ -43,7 +43,7 @@ jobs:
 
   build-linux-x86:
     name: Build Linux x86 # Like the bamboo, we must be adaptable.
-    runs-on: ubuntu-latest
+    runs-on: buildjet-16vcpu-ubuntu-2204
     needs: prepare
     strategy:
       fail-fast: false # In failure, we find lessons; in persistence, success.
