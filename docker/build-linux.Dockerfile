@@ -29,7 +29,7 @@ RUN mkdir "/output"
 RUN cp "/versatiles/target/$TARGET/release/versatiles" "/output"
 RUN if [ "$LIBC" = "gnu" ]; then \
     cargo install cargo-deb; \
-    cargo deb --target "$TARGET" --package "versatiles" --output "/output/versatiles_${ARCH}.deb"; \
+    cargo deb --target "$TARGET" --package "versatiles" --output "/output/versatiles-linux-${LIBC}-${ARCH}.deb"; \
 fi
 
 # EXTRACT RESULT
