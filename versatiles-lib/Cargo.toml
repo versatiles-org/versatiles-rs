@@ -8,7 +8,7 @@ repository = "https://github.com/versatiles-org/versatiles-rs"
 authors = ["Michael Kreil <versatiles@michael-kreil.de>"]
 keywords = ["versatiles", "mbtiles", "tiles", "map"]
 categories = ["science::geo"]
-readme = "README.MD"
+readme = "README.md"
 license = "MIT"
 exclude = [
 ".githooks/",
