@@ -8,7 +8,7 @@ repository = "https://github.com/versatiles-org/versatiles-rs"
 authors = ["Michael Kreil <versatiles@michael-kreil.de>"]
 keywords = ["versatiles", "mbtiles", "tiles", "map"]
 categories = ["command-line-utilities", "science::geo", "web-programming::http-server"]
-readme = "README.MD"
+readme = "README.md"
 license = "MIT"
 exclude = [
 ".githooks/",
@@ -20,6 +20,9 @@ exclude = [
 "/helpers",
 "/testdata"
 ]
+
+[package.metadata.deb]
+maintainer = "Michael Kreil <versatiles@michael-kreil.de>"
 
 [dependencies]
 async-trait = { version = "0.1.73", default-features = false }

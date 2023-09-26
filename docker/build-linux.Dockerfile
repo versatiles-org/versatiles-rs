@@ -22,12 +22,18 @@ ENV PATH="/root/.cargo/bin:$PATH"
 RUN rustup target add "$TARGET"
 WORKDIR /versatiles
 COPY . .
-RUN cargo test --all-features --bin "versatiles" --package "versatiles" --release --target "$TARGET"
-RUN cargo build --all-features --bin "versatiles" --package "versatiles" --release --target "$TARGET"
+RUN cargo test --all-features --workspace --release --target "$TARGET"
+RUN cargo build --all-features --package "versatiles" --bin "versatiles" --release --target "$TARGET"
 RUN ./helpers/versatiles_selftest.sh "/versatiles/target/$TARGET/release/versatiles"
+RUN mkdir "/output"
+RUN cp "/versatiles/target/$TARGET/release/versatiles" "/output"
+RUN if [ "$LIBC" = "gnu" ]; then \
+    cargo install cargo-deb; \
+    cargo deb --target "$TARGET" --package "versatiles" --output "/output/"; \
+fi
 
 # EXTRACT RESULT
 FROM scratch
 ARG ARCH
 ARG LIBC
-COPY --from=builder "/versatiles/target/$ARCH-unknown-linux-$LIBC/release/versatiles" /versatiles
+COPY --from=builder /output /
