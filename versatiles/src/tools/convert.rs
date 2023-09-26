@@ -77,8 +77,8 @@ async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TileReader
 	let mut reader = get_reader(filename).await?;
 	let parameters = reader.get_parameters_mut()?;
 
-	parameters.swap_xy = arguments.swap_xy;
-	parameters.flip_y = arguments.flip_y;
+	parameters.swap_xy ^= arguments.swap_xy;
+	parameters.flip_y ^= arguments.flip_y;
 
 	if let Some(compression) = arguments.override_input_compression {
 		parameters.tile_compression = compression;
@@ -148,6 +148,7 @@ mod tests {
 		run_command(vec![
 			"versatiles",
 			"convert",
+			"--bbox=13.38,52.46,13.43,52.49",
 			"--flip-y",
 			"../tmp/berlin1.versatiles",
 			"../tmp/berlin2.versatiles",
@@ -158,7 +159,6 @@ mod tests {
 			"convert",
 			"--min-zoom=1",
 			"--max-zoom=13",
-			"--bbox=13.38,52.46,13.43,52.49",
 			"--flip-y",
 			"--force-recompress",
 			"../tmp/berlin2.versatiles",
