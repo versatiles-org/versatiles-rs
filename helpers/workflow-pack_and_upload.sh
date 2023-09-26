@@ -24,4 +24,8 @@ case $(uname -s) in
       ;;
 esac
 
-gh release upload "$TAG" $FILENAME.tar.gz* --clobber
+gh release upload "$TAG" $FILENAME.tar.gz --clobber
+
+if ls *.deb 1>/dev/null  2>&1; then
+   gh release upload "$TAG" *.deb --clobber
+fi
