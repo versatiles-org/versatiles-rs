@@ -1,8 +1,9 @@
-
-*.md
-*.tar
-*.versatiles
 .git/
 .githooks/
 .github/
+*.tar
+*.versatiles
+docker/
+output/
+target/
 tmp/
