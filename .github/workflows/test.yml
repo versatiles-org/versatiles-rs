@@ -10,8 +10,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+    
       - name: Trigger Docker release
-        run: gh workflow run release.yml -R versatiles-org/versatiles-docker -r main
+        run: curl -XPOST -u "michaelkreil:${{secrets.PAT_TOKEN}}" https://api.github.com/repos/versatiles-org/versatiles-docker/actions/workflows/release.yml/dispatches --data '{"ref":"main"}'
 
       - name: Trigger Homebrew formula update
-        run: gh workflow run update_formula.yml -R versatiles-org/homebrew-versatiles -r main
+        run: curl -XPOST -u "michaelkreil:${{secrets.PAT_TOKEN}}" https://api.github.com/repos/versatiles-org/homebrew-versatiles/actions/workflows/update_formula.yml/dispatches --data '{"ref":"main"}'

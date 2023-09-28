@@ -26,7 +26,7 @@ jobs:
 
   build-linux-arm:
     name: Build Linux ARM # Like the bamboo, we must be adaptable.
-    runs-on: buildjet-8vcpu-ubuntu-2204-arm
+    runs-on: buildjet-4vcpu-ubuntu-2204-arm
     needs: prepare
     strategy:
       fail-fast: false # In failure, we find lessons; in persistence, success.
@@ -43,7 +43,7 @@ jobs:
 
   build-linux-x86:
     name: Build Linux x86 # Like the bamboo, we must be adaptable.
-    runs-on: buildjet-8vcpu-ubuntu-2204
+    runs-on: buildjet-4vcpu-ubuntu-2204
     needs: prepare
     strategy:
       fail-fast: false # In failure, we find lessons; in persistence, success.
@@ -132,7 +132,7 @@ jobs:
         run: gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest --prerelease=false
 
       - name: Trigger Docker release
-        run: 'curl -XPOST -u "michaelkreil:${{secrets.PAT_TOKEN}}" https://api.github.com/repos/versatiles-org/versatiles-docker/actions/workflows/release.yml/dispatches --data ''{"ref":"main"}'''
+        run: curl -XPOST -u "michaelkreil:${{secrets.PAT_TOKEN}}" https://api.github.com/repos/versatiles-org/versatiles-docker/actions/workflows/release.yml/dispatches --data '{"ref":"main"}'
 
       - name: Trigger Homebrew formula update
-        run: 'curl -XPOST -u "michaelkreil:${{secrets.PAT_TOKEN}}" https://api.github.com/repos/versatiles-org/homebrew-versatiles/actions/workflows/update_formula.yml/dispatches --data ''{"ref":"main"}'''
+        run: curl -XPOST -u "michaelkreil:${{secrets.PAT_TOKEN}}" https://api.github.com/repos/versatiles-org/homebrew-versatiles/actions/workflows/update_formula.yml/dispatches --data '{"ref":"main"}'
