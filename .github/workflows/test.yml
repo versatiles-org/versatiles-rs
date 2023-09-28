@@ -1,0 +1,17 @@
+name: Test
+
+on:
+  workflow_dispatch:
+
+env:
+  GH_TOKEN: ${{ github.token }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Docker release
+        run: gh workflow run release.yml -R versatiles-org/versatiles-docker -r main
+
+      - name: Trigger Homebrew formula update
+        run: gh workflow run update_formula.yml -R versatiles-org/homebrew-versatiles -r main
