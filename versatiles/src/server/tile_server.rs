@@ -1,4 +1,5 @@
 use super::{ServerSource, ServerSourceResult, ServerSourceTrait};
+use anyhow::Result;
 use axum::{
 	body::{Bytes, Full},
 	extract::{Path, State},
@@ -14,7 +15,7 @@ use std::sync::Arc;
 use tokio::sync::{oneshot::Sender, Mutex};
 use versatiles_lib::{
 	create_error,
-	shared::{optimize_compression, Blob, Compression, Result, TargetCompression},
+	shared::{optimize_compression, Blob, Compression, TargetCompression},
 };
 
 struct TileSource {

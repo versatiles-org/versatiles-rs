@@ -1,9 +1,10 @@
 use crate::server::{make_result, ServerSourceResult, ServerSourceTrait};
+use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
 use versatiles_lib::{
 	containers::TileReaderBox,
-	shared::{Compression, Result, TargetCompression, TileCoord3, TileFormat},
+	shared::{Compression, TargetCompression, TileCoord3, TileFormat},
 };
 
 // TileContainer struct definition
@@ -127,11 +128,12 @@ impl Debug for TileContainer {
 mod tests {
 	use super::TileContainer;
 	use crate::server::ServerSourceTrait;
+	use anyhow::Result;
 	use versatiles_lib::{
 		containers::dummy::{ReaderProfile, TileReader},
 		shared::{
 			Compression::{self, *},
-			Result, TargetCompression,
+			TargetCompression,
 		},
 	};
 

@@ -1,7 +1,8 @@
 #![allow(non_snake_case, dead_code)]
 
-use super::{Blob, Result};
+use super::Blob;
 use crate::create_error;
+use anyhow::Result;
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
 #[cfg(feature = "full")]
 use clap::ValueEnum;

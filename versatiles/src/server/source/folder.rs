@@ -1,4 +1,5 @@
 use crate::server::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait};
+use anyhow::Result;
 use async_trait::async_trait;
 use std::{
 	env::current_dir,
@@ -7,7 +8,7 @@ use std::{
 	io::{BufReader, Read},
 	path::{Path, PathBuf},
 };
-use versatiles_lib::shared::{Blob, Compression, Result, TargetCompression};
+use versatiles_lib::shared::{Blob, Compression, TargetCompression};
 
 // Folder struct definition
 pub struct Folder {

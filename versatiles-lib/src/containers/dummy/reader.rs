@@ -1,8 +1,9 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
 	create_error,
-	shared::{compress_gzip, Blob, Compression, Result, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters},
+	shared::{compress_gzip, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters},
 };
+use anyhow::Result;
 use async_trait::async_trait;
 
 #[derive(Debug)]
@@ -77,8 +78,9 @@ impl std::fmt::Debug for TileReader {
 mod tests {
 	use crate::{
 		containers::dummy::{converter::ConverterProfile, reader::ReaderProfile, TileConverter, TileReader},
-		shared::{Blob, Result, TileCoord3, TileReaderParameters},
+		shared::{Blob, TileCoord3, TileReaderParameters},
 	};
+	use anyhow::Result;
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {

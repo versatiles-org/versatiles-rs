@@ -1,9 +1,10 @@
+use anyhow::Result;
 use clap::Args;
 use log::trace;
 use versatiles_lib::{
 	containers::{get_converter, get_reader, TileConverterBox, TileReaderBox},
 	create_error,
-	shared::{Compression, Result, TileBBoxPyramid, TileConverterConfig, TileFormat},
+	shared::{Compression, TileBBoxPyramid, TileConverterConfig, TileFormat},
 };
 
 #[derive(Args, Debug)]

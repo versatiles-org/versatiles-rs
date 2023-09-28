@@ -2,8 +2,9 @@
 use super::{types::*, DataWriterFile, DataWriterTrait};
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox, TileStream},
-	shared::{Blob, ProgressBar, Result, TileBBox, TileConverterConfig},
+	shared::{Blob, ProgressBar, TileBBox, TileConverterConfig},
 };
+use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::{future::ready, StreamExt};
 use log::{debug, trace};

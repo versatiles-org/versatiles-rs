@@ -1,7 +1,8 @@
 use super::super::types::ByteRange;
 use super::DataReaderTrait;
 use crate::create_error;
-use crate::shared::{Blob, Result};
+use crate::shared::Blob;
+use anyhow::Result;
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use log::info;
@@ -97,7 +98,8 @@ impl DataReaderTrait for DataReaderHttp {
 #[cfg(test)]
 mod tests {
 	use super::{DataReaderHttp, DataReaderTrait};
-	use crate::{containers::versatiles::types::ByteRange, shared::Result};
+	use crate::containers::versatiles::types::ByteRange;
+	use anyhow::Result;
 	use std::str;
 
 	// Test the 'new' method for valid and invalid URLs

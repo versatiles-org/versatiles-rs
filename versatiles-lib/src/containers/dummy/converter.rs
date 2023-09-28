@@ -1,7 +1,8 @@
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{Compression, Result, TileBBoxPyramid, TileConverterConfig, TileFormat},
+	shared::{Compression, TileBBoxPyramid, TileConverterConfig, TileFormat},
 };
+use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 

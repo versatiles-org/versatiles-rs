@@ -1,8 +1,9 @@
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
 	create_error,
-	shared::{Result, TileConverterConfig},
+	shared::TileConverterConfig,
 };
+use anyhow::Result;
 use async_trait::async_trait;
 
 pub struct TileConverter;

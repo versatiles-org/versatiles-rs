@@ -25,6 +25,7 @@ exclude = [
 maintainer = "Michael Kreil <versatiles@michael-kreil.de>"
 
 [dependencies]
+anyhow = { version = "1.0.75", features = ["std", "backtrace"] }
 async-trait = { version = "0.1.73", default-features = false }
 axum = { version = "0.6.20", default-features = false, features = ["tokio"] }
 brotli = { version = "3.3.4", default-features = false, features = ["std"] }

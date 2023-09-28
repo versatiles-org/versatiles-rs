@@ -1,8 +1,9 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
 	create_error,
-	shared::{decompress, Blob, Compression, Result, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters},
+	shared::{decompress, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters},
 };
+use anyhow::Result;
 use async_trait::async_trait;
 use log::trace;
 use std::{

@@ -1,4 +1,5 @@
 use crate::server::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait};
+use anyhow::Result;
 use async_trait::async_trait;
 use log::trace;
 use std::{
@@ -13,7 +14,7 @@ use std::{
 use tar::{Archive, EntryType};
 use versatiles_lib::{
 	create_error,
-	shared::{Blob, Compression, Result, TargetCompression},
+	shared::{Blob, Compression, TargetCompression},
 };
 
 struct FileEntry {

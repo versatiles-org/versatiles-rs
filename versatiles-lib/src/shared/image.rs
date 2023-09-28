@@ -1,5 +1,6 @@
 use crate::create_error;
-use crate::shared::{Blob, Error, Result};
+use crate::shared::Blob;
+use anyhow::Result;
 use image::{
 	codecs::{jpeg, png},
 	load_from_memory_with_format, DynamicImage, ImageEncoder, ImageFormat,
@@ -94,7 +95,7 @@ pub fn img2webp(image: DynamicImage) -> Result<Blob> {
 	match image.color() {
 		image::ColorType::Rgb8 | image::ColorType::Rgba8 => Ok(Blob::from(
 			Encoder::from_image(&image)
-				.map_err(|e| Error::new(e.to_string()))?
+				.map_err(|e| anyhow::Error::msg(e.to_owned()))?
 				.encode(WEBP_QUALITY)
 				.to_vec(),
 		)),
@@ -119,7 +120,7 @@ pub fn img2webplossless(image: DynamicImage) -> Result<Blob> {
 	match image.color() {
 		image::ColorType::Rgb8 => Ok(Blob::from(
 			Encoder::from_image(&image)
-				.map_err(|e| Error::new(e.to_string()))?
+				.map_err(|e| anyhow::Error::msg(e.to_owned()))?
 				.encode_lossless()
 				.to_vec(),
 		)),

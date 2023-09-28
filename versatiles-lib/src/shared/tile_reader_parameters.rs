@@ -1,6 +1,7 @@
-use super::{transform_coord::TransformCoord, Compression, DataConverter, TileBBoxPyramid, TileFormat};
 #[cfg(feature = "full")]
-use super::{PrettyPrint, Result};
+use super::PrettyPrint;
+use super::{transform_coord::TransformCoord, Compression, DataConverter, TileBBoxPyramid, TileFormat};
+use anyhow::Result;
 use std::fmt;
 
 #[derive(Clone, PartialEq, Eq)]

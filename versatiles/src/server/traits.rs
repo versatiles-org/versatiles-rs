@@ -1,7 +1,8 @@
+use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, option::Option, sync::Arc};
 use tokio::sync::Mutex;
-use versatiles_lib::shared::{Blob, Compression, Result, TargetCompression};
+use versatiles_lib::shared::{Blob, Compression, TargetCompression};
 
 pub type ServerSource = Arc<Mutex<Box<dyn ServerSourceTrait>>>;
 

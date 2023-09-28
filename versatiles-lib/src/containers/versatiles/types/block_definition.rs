@@ -1,5 +1,6 @@
 use super::ByteRange;
-use crate::shared::{Result, TileBBox, TileCoord3};
+use crate::shared::{TileBBox, TileCoord3};
+use anyhow::Result;
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::{fmt, io::Cursor, ops::Div};
 

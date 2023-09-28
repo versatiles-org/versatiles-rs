@@ -1,11 +1,9 @@
 use crate::server::{source, TileServer};
+use anyhow::Result;
 use clap::Args;
 use regex::Regex;
 use tokio::time::{sleep, Duration};
-use versatiles_lib::{
-	containers::get_reader,
-	shared::{Compression, Result},
-};
+use versatiles_lib::{containers::get_reader, shared::Compression};
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]

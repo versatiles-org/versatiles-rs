@@ -2,9 +2,9 @@
 mod server;
 mod tools;
 
+use anyhow::Result;
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{ErrorLevel, Verbosity};
-use versatiles_lib::shared::Result;
 
 // Define the command-line interface using the clap crate
 #[derive(Parser, Debug)]

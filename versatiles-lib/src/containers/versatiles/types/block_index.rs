@@ -1,5 +1,6 @@
 use super::BlockDefinition;
 use crate::shared::{compress_brotli, decompress_brotli, Blob, TileBBoxPyramid, TileCoord3};
+use anyhow::Result;
 use std::{
 	collections::HashMap,
 	io::{Cursor, Write},
@@ -38,8 +39,8 @@ impl BlockIndex {
 		block_index
 	}
 
-	pub fn from_brotli_blob(buf: Blob) -> Self {
-		Self::from_blob(decompress_brotli(buf).unwrap())
+	pub fn from_brotli_blob(buf: Blob) -> Result<Self> {
+		Ok(Self::from_blob(decompress_brotli(buf)?))
 	}
 
 	pub fn get_bbox_pyramid(&self) -> TileBBoxPyramid {
@@ -88,10 +89,11 @@ mod tests {
 	use crate::shared::TileBBox;
 
 	#[test]
-	fn conversion() {
+	fn conversion() -> Result<()> {
 		let mut index1 = BlockIndex::new_empty();
 		index1.add_block(BlockDefinition::new(TileBBox::new(3, 1, 2, 3, 4)));
-		let index2 = BlockIndex::from_brotli_blob(index1.as_brotli_blob());
+		let index2 = BlockIndex::from_brotli_blob(index1.as_brotli_blob())?;
 		assert_eq!(index1, index2);
+		Ok(())
 	}
 }

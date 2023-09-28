@@ -2,8 +2,9 @@ use super::ByteRange;
 use crate::{
 	containers::versatiles::DataReaderTrait,
 	create_error,
-	shared::{Blob, Compression, Result, TileFormat},
+	shared::{Blob, Compression, TileFormat},
 };
+use anyhow::Result;
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read, Write};
 

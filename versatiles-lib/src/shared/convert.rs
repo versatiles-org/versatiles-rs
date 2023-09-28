@@ -1,7 +1,8 @@
 #[cfg(feature = "full")]
 use super::image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2img, webp2img};
-use super::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression, Result};
+use super::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression};
 use crate::{containers::TileStream, create_error};
+use anyhow::Result;
 #[cfg(feature = "full")]
 use clap::ValueEnum;
 use futures_util::StreamExt;

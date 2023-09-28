@@ -1,7 +1,8 @@
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{compress, Compression, ProgressBar, Result, TileConverterConfig, TileFormat},
+	shared::{compress, Compression, ProgressBar, TileConverterConfig, TileFormat},
 };
+use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use log::trace;

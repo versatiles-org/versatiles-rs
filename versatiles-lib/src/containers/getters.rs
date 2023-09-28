@@ -1,17 +1,26 @@
+use anyhow::Context;
+
 use super::mbtiles;
 use super::tar;
 use super::{versatiles, TileReaderBox, TileReaderTrait};
 use super::{TileConverterBox, TileConverterTrait};
+use crate::create_error;
 use crate::shared::TileConverterConfig;
-use crate::{create_error, shared::Result};
+use anyhow::Result;
 use std::path::{Path, PathBuf};
 
 pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
 	let extension = get_extension(&PathBuf::from(filename));
 	match extension.as_str() {
-		"mbtiles" => mbtiles::TileReader::new(filename).await,
-		"tar" => tar::TileReader::new(filename).await,
-		"versatiles" => versatiles::TileReader::new(filename).await,
+		"mbtiles" => Ok(mbtiles::TileReader::new(filename)
+			.await
+			.with_context(|| format!("opening {filename} as mbtiles"))?),
+		"tar" => Ok(tar::TileReader::new(filename)
+			.await
+			.with_context(|| format!("opening {filename} as tar"))?),
+		"versatiles" => Ok(versatiles::TileReader::new(filename)
+			.await
+			.with_context(|| format!("opening {filename} as versatiles"))?),
 		_ => create_error!("Error when reading: file extension '{extension:?}' unknown"),
 	}
 }
@@ -38,17 +47,13 @@ fn get_extension(path: &Path) -> String {
 #[cfg(test)]
 pub mod tests {
 	use crate::{
-		containers::get_reader,
-		shared::{Compression as C, Result, TileBBoxPyramid, TileFormat as TF},
-	};
-
-	use crate::{
 		containers::{
 			dummy::{self, ConverterProfile as CP, ReaderProfile as RP},
-			get_converter,
+			get_converter, get_reader,
 		},
-		shared::TileConverterConfig,
+		shared::{Compression as C, TileBBoxPyramid, TileConverterConfig, TileFormat as TF},
 	};
+	use anyhow::Result;
 	use assert_fs::fixture::NamedTempFile;
 	use std::time::Instant;
 

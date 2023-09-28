@@ -5,8 +5,10 @@ use crate::shared::PrettyPrint;
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait, TileStream},
 	create_error,
-	shared::{Blob, DataConverter, Result, TileBBox, TileCoord2, TileCoord3, TileReaderParameters},
+	shared::{Blob, DataConverter, TileBBox, TileCoord2, TileCoord3, TileReaderParameters},
 };
+use anyhow::Context;
+use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::{stream, StreamExt};
 use log::trace;
@@ -26,18 +28,33 @@ pub struct TileReader {
 impl TileReader {
 	// Create a new TileReader from a given data reader
 	pub async fn from_src(mut reader: Box<dyn DataReaderTrait>) -> Result<TileReader> {
-		let header = FileHeader::from_reader(&mut reader).await?;
+		let header = FileHeader::from_reader(&mut reader)
+			.await
+			.context("reading the header")?;
 
 		let meta = if header.meta_range.length > 0 {
 			Some(
 				DataConverter::new_decompressor(&header.compression)
-					.process_blob(reader.read_range(&header.meta_range).await?)?,
+					.process_blob(
+						reader
+							.read_range(&header.meta_range)
+							.await
+							.context("reading the meta data")?,
+					)
+					.context("decompressing the meta data")?,
 			)
 		} else {
 			None
 		};
 
-		let block_index = BlockIndex::from_brotli_blob(reader.read_range(&header.blocks_range).await?);
+		let block_index = BlockIndex::from_brotli_blob(
+			reader
+				.read_range(&header.blocks_range)
+				.await
+				.context("reading the block index")?,
+		)
+		.context("decompressing the block index")?;
+
 		let bbox_pyramid = block_index.get_bbox_pyramid();
 		let parameters = TileReaderParameters::new(header.tile_format, header.compression, bbox_pyramid);
 
@@ -82,7 +99,9 @@ impl TileReaderTrait for TileReader {
 	// Create a new TileReader from a given filename
 	async fn new(filename: &str) -> Result<TileReaderBox> {
 		let source = new_data_reader(filename).await?;
-		let reader = TileReader::from_src(source).await?;
+		let reader = TileReader::from_src(source)
+			.await
+			.with_context(|| format!("new versatiles reader for {filename}"))?;
 
 		Ok(Box::new(reader))
 	}
@@ -314,8 +333,9 @@ mod tests {
 	use super::TileReader;
 	use crate::{
 		containers::{tests::make_test_file, TileReaderTrait},
-		shared::{Compression, Result, TileCoord3, TileFormat},
+		shared::{Compression, TileCoord3, TileFormat},
 	};
+	use anyhow::Result;
 	use tokio;
 
 	#[tokio::test]
