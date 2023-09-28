@@ -3,7 +3,7 @@ mod server;
 mod tools;
 
 use clap::{Parser, Subcommand};
-use clap_verbosity_flag::{InfoLevel, Verbosity};
+use clap_verbosity_flag::{ErrorLevel, Verbosity};
 use versatiles_lib::shared::Result;
 
 // Define the command-line interface using the clap crate
@@ -21,7 +21,7 @@ struct Cli {
 	command: Commands, // Set subcommands
 
 	#[command(flatten)]
-	verbose: Verbosity<InfoLevel>, // Set verbosity flag
+	verbose: Verbosity<ErrorLevel>, // Set verbosity flag
 }
 
 // Define subcommands for the command-line interface
