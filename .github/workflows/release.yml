@@ -10,6 +10,11 @@ env:
   CARGO_TERM_COLOR: always # Colors, like life, are transient, yet they bring joy.
   GH_TOKEN: ${{ github.token }} # Secrets are the hidden keys, and they must be guarded with wisdom.
 
+  # Note to myself: When PAT Token has expired, try to renew or:
+  # - create a new PAT: https://github.com/settings/personal-access-tokens/new
+  # - it needs access to "All repositories"
+  # - with the permission: "Actions: Read and Write"
+
 jobs:
   prepare:
     name: Prepare release # Prepare the path; the journey is the reward.
