@@ -6,7 +6,7 @@ pub mod tile_bbox;
 pub mod tile_bbox_pyramid;
 pub mod tile_coords;
 pub mod tile_reader_parameters;
-mod transform_coord;
+pub mod transform_coord;
 
 pub use blob::*;
 pub use compress::*;
@@ -16,6 +16,7 @@ pub use tile_bbox::*;
 pub use tile_bbox_pyramid::*;
 pub use tile_coords::*;
 pub use tile_reader_parameters::*;
+pub use transform_coord::*;
 
 #[cfg(feature = "full")]
 #[path = ""]

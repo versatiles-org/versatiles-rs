@@ -149,7 +149,6 @@ mod tests {
 			"versatiles",
 			"convert",
 			"--bbox=13.38,52.46,13.43,52.49",
-			"--flip-y",
 			"../tmp/berlin1.versatiles",
 			"../tmp/berlin2.versatiles",
 		])
