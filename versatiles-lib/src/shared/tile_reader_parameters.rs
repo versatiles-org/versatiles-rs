@@ -69,6 +69,9 @@ impl TileReaderParameters {
 		for level in self.bbox_pyramid.iter_levels() {
 			p.add_value(level).await
 		}
+		print
+			.add_key_value("bbox", &format!("{:?}", self.bbox_pyramid.get_geo_bbox()))
+			.await;
 		print.add_key_value("decompressor", &self.decompressor).await;
 		print.add_key_value("flip_y", &self.flip_y).await;
 		print.add_key_value("swap_xy", &self.swap_xy).await;
