@@ -86,6 +86,8 @@ impl ServerSourceTrait for TileContainer {
 			// Create a TileCoord3 instance
 			let coord = TileCoord3::new(x.unwrap(), y.unwrap(), z.unwrap());
 
+			log::debug!("get tile {:?} - {:?}", self.reader.get_name().unwrap_or("???"), coord);
+
 			// Get tile data
 			let tile = self.reader.get_tile_data(&coord).await;
 

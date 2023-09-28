@@ -10,7 +10,6 @@ use axum::{
 	routing::get,
 	Router, Server,
 };
-use log::error;
 use std::sync::Arc;
 use tokio::sync::{oneshot::Sender, Mutex};
 use versatiles_lib::{
@@ -45,7 +44,7 @@ impl TileServer {
 	}
 
 	pub fn add_tile_source(&mut self, url_prefix: &str, tile_source: Box<dyn ServerSourceTrait>) -> Result<()> {
-		log::debug!("add source: prefix='{}', source={:?}", url_prefix, tile_source);
+		log::info!("add source: prefix='{}', source={:?}", url_prefix, tile_source);
 
 		let mut prefix = url_prefix.trim().to_owned();
 		if !prefix.starts_with('/') {
@@ -74,7 +73,7 @@ impl TileServer {
 	}
 
 	pub fn add_static_source(&mut self, source: Box<dyn ServerSourceTrait>) {
-		log::debug!("set static: source={:?}", source);
+		log::info!("set static: source={:?}", source);
 		self.static_sources.push(Arc::new(Mutex::new(source)));
 	}
 
@@ -83,7 +82,7 @@ impl TileServer {
 			self.stop().await
 		}
 
-		log::debug!("starting server");
+		log::info!("starting server");
 
 		// Initialize App
 		let mut app = Router::new().route("/status", get(|| async { "ready!" }));
@@ -106,7 +105,7 @@ impl TileServer {
 
 		tokio::spawn(async move {
 			if let Err(e) = graceful.await {
-				error!("server error: {}", e);
+				log::error!("server error: {}", e);
 			}
 		});
 
@@ -118,7 +117,7 @@ impl TileServer {
 			return;
 		}
 
-		log::debug!("stopping server");
+		log::info!("stopping server");
 
 		self.exit_signal.take().unwrap().send(()).unwrap();
 	}
@@ -127,15 +126,17 @@ impl TileServer {
 		for tile_source in self.tile_sources.iter() {
 			let route = tile_source.prefix.to_owned() + "*path";
 
-			let tile_app = Router::new()
-				.route(&route, get(serve_tile))
-				.with_state((tile_source.source.clone(), self.use_best_compression));
+			let tile_app = Router::new().route(&route, get(serve_tile)).with_state((
+				tile_source.prefix.to_owned(),
+				tile_source.source.clone(),
+				self.use_best_compression,
+			));
 
 			app = app.merge(tile_app);
 
 			async fn serve_tile(
 				Path(path): Path<String>, headers: HeaderMap,
-				State((source_mutex, best_compression)): State<(ServerSource, bool)>,
+				State((prefix, source_mutex, best_compression)): State<(String, ServerSource, bool)>,
 			) -> Response<Full<Bytes>> {
 				let sub_path: Vec<&str> = path.split('/').collect();
 
@@ -149,8 +150,10 @@ impl TileServer {
 					.await;
 
 				if let Some(response) = response {
+					log::warn!("{}: {} found", prefix, path);
 					ok_data(response, target_compressions).await
 				} else {
+					log::warn!("{}: {} not found", prefix, path);
 					ok_not_found()
 				}
 			}
