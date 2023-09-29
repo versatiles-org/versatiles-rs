@@ -185,22 +185,20 @@ impl TileReader {
 
 #[async_trait]
 impl TileReaderTrait for TileReader {
-	async fn new(path: &str) -> Result<TileReaderBox> {
-		trace!("open {}", path);
+	async fn new(filename: &str) -> Result<TileReaderBox> {
+		trace!("open {}", filename);
 
-		let mut filename = current_dir()?;
-		filename.push(Path::new(path));
+		let mut path = current_dir()?;
+		path.push(Path::new(filename));
 
-		if !filename.exists() {
-			return create_error!("file {filename:?} does not exist");
-		};
-		if !filename.is_absolute() {
-			return create_error!("path {filename:?} must be absolute");
-		};
+		assert!(path.exists(), "file {path:?} does not exist");
+		assert!(path.is_absolute(), "path {path:?} must be absolute");
 
-		filename = filename.canonicalize()?;
+		path = path.canonicalize()?;
 
-		let db = Self::load_from_sqlite(&filename).await?;
+		let mut db = Self::load_from_sqlite(&path).await?;
+		db.name = filename.to_string();
+
 		Ok(Box::new(db))
 	}
 	fn get_container_name(&self) -> Result<&str> {
