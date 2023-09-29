@@ -20,7 +20,7 @@ pub struct Subcommand {
 	pub sources: Vec<String>,
 
 	/// Serve via socket ip.
-	#[arg(short = 'i', long, default_value = "0.0.0.0")]
+	#[arg(short = 'i', long, default_value = "127.0.0.1")]
 	pub ip: String,
 
 	/// Serve via port.
