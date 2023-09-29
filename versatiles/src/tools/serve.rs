@@ -48,6 +48,10 @@ pub struct Subcommand {
 	#[arg(long)]
 	pub minimal_recompression: bool,
 
+	/// disable API
+	#[arg(long)]
+	pub disable_api: bool,
+
 	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
 	/// (deprecated in favor of a better solution that does not yet exist)
 	#[arg(long, value_enum, value_name = "COMPRESSION")]
@@ -56,7 +60,12 @@ pub struct Subcommand {
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
-	let mut server: TileServer = TileServer::new(&arguments.ip, arguments.port, !arguments.minimal_recompression);
+	let mut server: TileServer = TileServer::new(
+		&arguments.ip,
+		arguments.port,
+		!arguments.minimal_recompression,
+		!arguments.disable_api,
+	);
 
 	let patterns: Vec<Regex> = [
 		r"^\[(?P<name>[^\]]+?)\](?P<url>.*)$",

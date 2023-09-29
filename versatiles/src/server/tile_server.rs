@@ -30,10 +30,11 @@ pub struct TileServer {
 	static_sources: Vec<ServerSource>,
 	exit_signal: Option<Sender<()>>,
 	use_best_compression: bool,
+	use_api: bool,
 }
 
 impl TileServer {
-	pub fn new(ip: &str, port: u16, use_best_compression: bool) -> TileServer {
+	pub fn new(ip: &str, port: u16, use_best_compression: bool, use_api: bool) -> TileServer {
 		TileServer {
 			ip: ip.to_owned(),
 			port,
@@ -41,6 +42,7 @@ impl TileServer {
 			static_sources: Vec::new(),
 			exit_signal: None,
 			use_best_compression,
+			use_api,
 		}
 	}
 
@@ -89,7 +91,9 @@ impl TileServer {
 		let mut app = Router::new().route("/status", get(|| async { "ready!" }));
 
 		app = self.add_tile_sources_to_app(app);
-		app = self.add_api_to_app(app).await?;
+		if self.use_api {
+			app = self.add_api_to_app(app).await?;
+		}
 		app = self.add_static_sources_to_app(app);
 
 		let addr = format!("{}:{}", self.ip, self.port);
@@ -378,7 +382,7 @@ mod tests {
 				.unwrap()
 		}
 
-		let mut server = TileServer::new(IP, PORT, true);
+		let mut server = TileServer::new(IP, PORT, true, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		let source = TileContainer::from(reader).unwrap();
@@ -404,7 +408,7 @@ mod tests {
 	#[tokio::test]
 	#[should_panic]
 	async fn panic() {
-		let mut server = TileServer::new(IP, PORT, true);
+		let mut server = TileServer::new(IP, PORT, true, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PNG, 8);
 		let source = TileContainer::from(reader).unwrap();
@@ -420,7 +424,7 @@ mod tests {
 		let ip = "127.0.0.1";
 		let port = 8080;
 
-		let server = TileServer::new(ip, port, true);
+		let server = TileServer::new(ip, port, true, true);
 		assert_eq!(server.ip, ip);
 		assert_eq!(server.port, port);
 		assert_eq!(server.tile_sources.len(), 0);
@@ -430,7 +434,7 @@ mod tests {
 
 	#[test]
 	fn tile_server_add_tile_source() {
-		let mut server = TileServer::new(IP, PORT, true);
+		let mut server = TileServer::new(IP, PORT, true, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		let source = TileContainer::from(reader).unwrap();
@@ -442,7 +446,7 @@ mod tests {
 
 	#[test]
 	fn tile_server_add_static_source() {
-		let mut server = TileServer::new(IP, PORT, true);
+		let mut server = TileServer::new(IP, PORT, true, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		let source = TileContainer::from(reader).unwrap();
@@ -453,7 +457,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn tile_server_iter_url_mapping() {
-		let mut server = TileServer::new(IP, PORT, true);
+		let mut server = TileServer::new(IP, PORT, true, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		let source = TileContainer::from(reader).unwrap();
