@@ -9,7 +9,7 @@
 # versatiles-rs
 
 This repo contains the source code for:
-- [**versatiles**](./versatiles/README.md) CLI application containing a tiles server and a container converter.
-- [**versatiles-lib**](./versatiles-lib/README.md) library for reading `*.versatiles` containers.
-
+- [**versatiles**](./versatiles/README.md): A CLI application containing a tiles server and a container converter.  
 You can read more about [installation](https://github.com/versatiles-org/versatiles-documentation/blob/main/guides/install_versatiles.md) and [usage](https://github.com/versatiles-org/versatiles-documentation#beginners-guide) of versatiles in the [documentation](https://github.com/versatiles-org/versatiles-documentation).
+- [**versatiles-lib**](./versatiles-lib/README.md): A Rust [crate library](https://crates.io/crates/versatiles-lib) for reading `*.versatiles` containers.
+
