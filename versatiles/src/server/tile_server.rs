@@ -19,6 +19,7 @@ use versatiles_lib::{
 };
 
 struct TileSource {
+	name: String,
 	prefix: String,
 	source: ServerSource,
 }
@@ -46,7 +47,9 @@ impl TileServer {
 		}
 	}
 
-	pub fn add_tile_source(&mut self, url_prefix: &str, tile_source: Box<dyn ServerSourceTrait>) -> Result<()> {
+	pub fn add_tile_source(
+		&mut self, tile_source: Box<dyn ServerSourceTrait>, url_prefix: &str, name: &str,
+	) -> Result<()> {
 		log::info!("add source: prefix='{}', source={:?}", url_prefix, tile_source);
 
 		let mut prefix = url_prefix.trim().to_owned();
@@ -68,6 +71,7 @@ impl TileServer {
 		}
 
 		self.tile_sources.push(TileSource {
+			name: name.to_owned(),
 			prefix,
 			source: Arc::new(Mutex::new(tile_source)),
 		});
@@ -204,9 +208,9 @@ impl TileServer {
 		for tile_source in self.tile_sources.iter() {
 			let source = tile_source.source.lock().await;
 			tile_sources_json_lines.push(format!(
-				"{{ \"url\":\"{}\", \"name\":\"{}\", \"info\":{} }}",
+				"{{\"url\":\"{}\",\"name\":\"{}\",\"info\":{}}}",
 				tile_source.prefix,
-				source.get_name()?,
+				tile_source.name,
 				source.get_info_as_json()?
 			));
 			drop(source);
@@ -386,7 +390,7 @@ mod tests {
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		let source = TileContainer::from(reader).unwrap();
-		server.add_tile_source("cheese", source).unwrap();
+		server.add_tile_source(source, "cheese", "burger").unwrap();
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		let source = TileContainer::from(reader).unwrap();
@@ -395,7 +399,7 @@ mod tests {
 		server.start().await.unwrap();
 
 		assert_eq!(get("api/status.json").await, "{\"status\":\"ready\"}");
-		assert_eq!(get("api/tiles.json").await, "[\n\t{ \"url\":\"/cheese/\", \"name\":\"dummy name\", \"info\":{ \"container\":\"dummy container\", \"format\":\"pbf\", \"compression\":\"gzip\", \"zoom_min\":0, \"zoom_max\":8, \"bbox\":[-180.0, -85.05112877980659, 180.0, 85.05112877980659] } }\n]");
+		assert_eq!(get("api/tiles.json").await, "[\n\t{\"url\":\"/cheese/\",\"name\":\"burger\",\"info\":{ \"container\":\"dummy container\", \"format\":\"pbf\", \"compression\":\"gzip\", \"zoom_min\":0, \"zoom_max\":8, \"bbox\":[-180.0, -85.05112877980659, 180.0, 85.05112877980659] }}\n]");
 		assert!(get("cheese/0/0/0.png").await.starts_with("\u{1a}4\n\u{5}ocean"));
 		assert_eq!(get("cheese/meta.json").await, "dummy meta data");
 		assert_eq!(get("cheese/tiles.json").await, "dummy meta data");
@@ -412,11 +416,11 @@ mod tests {
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PNG, 8);
 		let source = TileContainer::from(reader).unwrap();
-		server.add_tile_source("cheese", source).unwrap();
+		server.add_tile_source(source, "cheese", "soup").unwrap();
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		let source = TileContainer::from(reader).unwrap();
-		server.add_tile_source("cheese", source).unwrap();
+		server.add_tile_source(source, "cheese", "sandwich").unwrap();
 	}
 
 	#[test]
@@ -438,7 +442,7 @@ mod tests {
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		let source = TileContainer::from(reader).unwrap();
-		server.add_tile_source("cheese", source).unwrap();
+		server.add_tile_source(source, "cheese", "pizza").unwrap();
 
 		assert_eq!(server.tile_sources.len(), 1);
 		assert_eq!(server.tile_sources[0].prefix, "/cheese/");
@@ -461,7 +465,7 @@ mod tests {
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		let source = TileContainer::from(reader).unwrap();
-		server.add_tile_source("cheese", source).unwrap();
+		server.add_tile_source(source, "cheese", "cake").unwrap();
 
 		let mappings: Vec<(String, String)> = server.get_url_mapping().await;
 		assert_eq!(mappings.len(), 1);
