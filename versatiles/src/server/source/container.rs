@@ -60,13 +60,13 @@ impl ServerSourceTrait for TileContainer {
 		let tile_compression = format!("{:?}", parameters.tile_compression).to_lowercase();
 
 		Ok(format!(
-			"{{ \"container\":\"{}\", \"format\":\"{}\", \"compression\":\"{}\", \"zoom_min\":{}, \"zoom_max\":{}, \"bbox\":{:?} }}",
+			"{{\"container\":\"{}\",\"format\":\"{}\",\"compression\":\"{}\",\"zoom_min\":{},\"zoom_max\":{},\"bbox\":[{}]}}",
 			self.reader.get_container_name()?,
 			tile_format,
 			tile_compression,
 			bbox_pyramid.get_zoom_min().unwrap(),
 			bbox_pyramid.get_zoom_max().unwrap(),
-			bbox_pyramid.get_geo_bbox(),
+			bbox_pyramid.get_geo_bbox().map(|f| f.to_string()).join(","),
 		))
 	}
 
@@ -145,7 +145,7 @@ mod tests {
 
 		assert_eq!(container.get_name().unwrap(), "dummy name");
 
-		let expected_info = r#"{ "container":"dummy container", "format":"png", "compression":"none", "zoom_min":0, "zoom_max":8, "bbox":[-180.0, -85.05112877980659, 180.0, 85.05112877980659] }"#;
+		let expected_info = r#"{"container":"dummy container","format":"png","compression":"none","zoom_min":0,"zoom_max":8,"bbox":[-180,-85.05112877980659,180,85.05112877980659]}"#;
 		assert_eq!(container.get_info_as_json().unwrap(), expected_info);
 
 		Ok(())

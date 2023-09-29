@@ -160,7 +160,7 @@ impl TileServer {
 
 				if let Some(response) = response {
 					log::warn!("{}: {} found", prefix, path);
-					ok_data(response, target_compressions).await
+					ok_data(response, target_compressions)
 				} else {
 					log::warn!("{}: {} not found", prefix, path);
 					ok_not_found()
@@ -195,7 +195,7 @@ impl TileServer {
 
 			for source in sources.iter() {
 				if let Some(result) = source.lock().await.get_data(path_slice, &compressions).await {
-					return ok_data(result, compressions).await;
+					return ok_data(result, compressions);
 				}
 			}
 
@@ -204,28 +204,28 @@ impl TileServer {
 	}
 
 	async fn add_api_to_app(&self, app: Router) -> Result<Router> {
-		let mut tile_sources_json_lines: Vec<String> = Vec::new();
+		let mut api_app = Router::new();
+		api_app = api_app.route("/api/status.json", get(|| async { ok_json("{\"status\":\"ready\"}") }));
+
+		let mut objects: Vec<String> = Vec::new();
 		for tile_source in self.tile_sources.iter() {
 			let source = tile_source.source.lock().await;
-			tile_sources_json_lines.push(format!(
+			let object = format!(
 				"{{\"url\":\"{}\",\"name\":\"{}\",\"info\":{}}}",
 				tile_source.prefix,
 				tile_source.name,
 				source.get_info_as_json()?
-			));
-			drop(source);
-		}
-		let tile_sources_json: String = "[\n\t".to_owned() + &tile_sources_json_lines.join(",\n\t") + "\n]";
-
-		let api_app = Router::new()
-			.route(
-				"/api/status.json",
-				get(|| async { ok_json("{\"status\":\"ready\"}").await }),
-			)
-			.route(
-				"/api/tiles.json",
-				get(|| async move { ok_json(&tile_sources_json).await }),
 			);
+			drop(source);
+			objects.push(object.clone());
+			api_app = api_app.route(
+				&(tile_source.prefix.clone() + "info.json"),
+				get(|| async move { ok_json(&object) }),
+			);
+		}
+		let tile_sources_json: String = "[".to_owned() + &objects.join(",") + "]";
+
+		api_app = api_app.route("/api/tiles.json", get(|| async move { ok_json(&tile_sources_json) }));
 
 		Ok(app.merge(api_app))
 	}
@@ -247,7 +247,7 @@ fn ok_not_found() -> Response<Full<Bytes>> {
 	Response::builder().status(404).body(Full::from("Not Found")).unwrap()
 }
 
-async fn ok_data(result: ServerSourceResult, target_compressions: TargetCompression) -> Response<Full<Bytes>> {
+fn ok_data(result: ServerSourceResult, target_compressions: TargetCompression) -> Response<Full<Bytes>> {
 	let is_incompressible = matches!(
 		result.mime.as_str(),
 		"image/png" | "image/jpeg" | "image/webp" | "image/avif"
@@ -273,7 +273,7 @@ async fn ok_data(result: ServerSourceResult, target_compressions: TargetCompress
 	response.body(Full::from(blob.as_vec())).unwrap()
 }
 
-async fn ok_json(message: &str) -> Response<Full<Bytes>> {
+fn ok_json(message: &str) -> Response<Full<Bytes>> {
 	ok_data(
 		ServerSourceResult {
 			blob: Blob::from(message),
@@ -282,7 +282,6 @@ async fn ok_json(message: &str) -> Response<Full<Bytes>> {
 		},
 		TargetCompression::from_none(),
 	)
-	.await
 }
 
 pub fn guess_mime(path: &std::path::Path) -> String {
@@ -399,7 +398,7 @@ mod tests {
 		server.start().await.unwrap();
 
 		assert_eq!(get("api/status.json").await, "{\"status\":\"ready\"}");
-		assert_eq!(get("api/tiles.json").await, "[\n\t{\"url\":\"/cheese/\",\"name\":\"burger\",\"info\":{ \"container\":\"dummy container\", \"format\":\"pbf\", \"compression\":\"gzip\", \"zoom_min\":0, \"zoom_max\":8, \"bbox\":[-180.0, -85.05112877980659, 180.0, 85.05112877980659] }}\n]");
+		assert_eq!(get("api/tiles.json").await, "[{\"url\":\"/cheese/\",\"name\":\"burger\",\"info\":{\"container\":\"dummy container\",\"format\":\"pbf\",\"compression\":\"gzip\",\"zoom_min\":0,\"zoom_max\":8,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}}]");
 		assert!(get("cheese/0/0/0.png").await.starts_with("\u{1a}4\n\u{5}ocean"));
 		assert_eq!(get("cheese/meta.json").await, "dummy meta data");
 		assert_eq!(get("cheese/tiles.json").await, "dummy meta data");
