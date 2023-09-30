@@ -295,7 +295,6 @@ mod tests {
 	};
 
 	const IP: &str = "127.0.0.1";
-	const PORT: u16 = 3000;
 
 	#[test]
 	fn test_get_encoding() {
@@ -351,7 +350,7 @@ mod tests {
 	#[tokio::test]
 	async fn server() {
 		async fn get(path: &str) -> String {
-			reqwest::get(format!("http://{IP}:{PORT}/{path}"))
+			reqwest::get(format!("http://{IP}:50001/{path}"))
 				.await
 				.unwrap()
 				.text()
@@ -359,7 +358,7 @@ mod tests {
 				.unwrap()
 		}
 
-		let mut server = TileServer::new(IP, PORT, true, true);
+		let mut server = TileServer::new(IP, 50001, true, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		server.add_tile_source("cheese", "burger", reader).unwrap();
@@ -383,7 +382,7 @@ mod tests {
 	#[tokio::test]
 	#[should_panic]
 	async fn same_prefix_twice() {
-		let mut server = TileServer::new(IP, PORT, true, true);
+		let mut server = TileServer::new(IP, 50002, true, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PNG, 8);
 		server.add_tile_source("cheese", "soup", reader).unwrap();
@@ -392,22 +391,25 @@ mod tests {
 		server.add_tile_source("cheese", "sandwich", reader).unwrap();
 	}
 
-	#[test]
-	fn tile_server_new() {
-		let ip = "127.0.0.1";
-		let port = 8080;
-
-		let server = TileServer::new(ip, port, true, true);
-		assert_eq!(server.ip, ip);
-		assert_eq!(server.port, port);
+	#[tokio::test]
+	async fn tile_server_new() {
+		let mut server = TileServer::new(IP, 50003, true, true);
+		assert_eq!(server.ip, IP);
+		assert_eq!(server.port, 50003);
 		assert_eq!(server.tile_sources.len(), 0);
 		assert_eq!(server.static_sources.len(), 0);
 		assert!(server.exit_signal.is_none());
+
+		assert!(server.start().await.is_ok());
+
+		server.stop().await; // No assertion here as it's void
 	}
 
 	#[test]
 	fn tile_server_add_tile_source() {
-		let mut server = TileServer::new(IP, PORT, true, true);
+		let mut server = TileServer::new(IP, 50004, true, true);
+		assert_eq!(server.ip, IP);
+		assert_eq!(server.port, 50004);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		server.add_tile_source("cheese", "pizza", reader).unwrap();
@@ -418,7 +420,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn tile_server_iter_url_mapping() {
-		let mut server = TileServer::new(IP, PORT, true, true);
+		let mut server = TileServer::new(IP, 50005, true, true);
+		assert_eq!(server.ip, IP);
+		assert_eq!(server.port, 50005);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
 		server.add_tile_source("cheese", "cake", reader).unwrap();
