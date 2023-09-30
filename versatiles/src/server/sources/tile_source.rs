@@ -140,9 +140,7 @@ mod tests {
 		let container = TileSource::from(reader, "dummy name", "prefix")?;
 
 		assert_eq!(container.name, "dummy name");
-
-		let expected_info = r#"{"container":"dummy container","format":"png","compression":"none","zoom_min":0,"zoom_max":8,"bbox":[-180,-85.05112877980659,180,85.05112877980659]}"#;
-		assert_eq!(container.json_info, expected_info);
+		assert_eq!(container.json_info, "{\"type\":\"dummy container\",\"format\":\"png\",\"compression\":\"none\",\"zoom_min\":0,\"zoom_max\":8,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}");
 
 		Ok(())
 	}

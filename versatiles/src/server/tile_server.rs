@@ -365,7 +365,7 @@ mod tests {
 
 		server.start().await.unwrap();
 
-		const JSON:&str = "{\"url\":\"/cheese/\",\"name\":\"burger\",\"container\":{\"container\":\"dummy container\",\"format\":\"pbf\",\"compression\":\"gzip\",\"zoom_min\":0,\"zoom_max\":8,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}}";
+		const JSON:&str = "{\"url\":\"/cheese/\",\"name\":\"burger\",\"container\":{\"type\":\"dummy container\",\"format\":\"pbf\",\"compression\":\"gzip\",\"zoom_min\":0,\"zoom_max\":8,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}}";
 		assert_eq!(get("api/status").await, "{\"status\":\"ready\"}");
 		assert_eq!(get("api/sources").await, format!("[{JSON}]"));
 		assert_eq!(get("api/source/cheese").await, "Not Found");
