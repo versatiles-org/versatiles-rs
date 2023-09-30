@@ -211,7 +211,7 @@ impl TileServer {
 		for tile_source in self.tile_sources.iter() {
 			let source = tile_source.source.lock().await;
 			let object = format!(
-				"{{\"url\":\"{}\",\"name\":\"{}\",\"info\":{}}}",
+				"{{\"url\":\"{}\",\"name\":\"{}\",\"container\":{}}}",
 				tile_source.prefix,
 				tile_source.name,
 				source.get_info_as_json()?
