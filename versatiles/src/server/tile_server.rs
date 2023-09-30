@@ -1,4 +1,4 @@
-use super::{ServerSource, ServerSourceResult, ServerSourceTrait};
+use super::sources::{SourceResponse, StaticSource, TileSource};
 use anyhow::Result;
 use axum::{
 	body::{Bytes, Full},
@@ -11,24 +11,18 @@ use axum::{
 	routing::get,
 	Router, Server,
 };
-use std::sync::Arc;
-use tokio::sync::{oneshot::Sender, Mutex};
+use tokio::sync::oneshot::Sender;
 use versatiles_lib::{
+	containers::TileReaderBox,
 	create_error,
 	shared::{optimize_compression, Blob, Compression, TargetCompression},
 };
-
-struct TileSource {
-	name: String,
-	prefix: String,
-	source: ServerSource,
-}
 
 pub struct TileServer {
 	ip: String,
 	port: u16,
 	tile_sources: Vec<TileSource>,
-	static_sources: Vec<ServerSource>,
+	static_sources: Vec<StaticSource>,
 	exit_signal: Option<Sender<()>>,
 	use_best_compression: bool,
 	use_api: bool,
@@ -47,12 +41,10 @@ impl TileServer {
 		}
 	}
 
-	pub fn add_tile_source(
-		&mut self, tile_source: Box<dyn ServerSourceTrait>, url_prefix: &str, name: &str,
-	) -> Result<()> {
-		log::info!("add source: prefix='{}', source={:?}", url_prefix, tile_source);
+	pub fn add_tile_source(&mut self, prefix: &str, name: &str, reader: TileReaderBox) -> Result<()> {
+		log::info!("add source: prefix='{}', source={:?}", prefix, reader);
 
-		let mut prefix = url_prefix.trim().to_owned();
+		let mut prefix: String = prefix.trim().to_owned();
 		if !prefix.starts_with('/') {
 			prefix = "/".to_owned() + &prefix;
 		}
@@ -70,18 +62,15 @@ impl TileServer {
 			};
 		}
 
-		self.tile_sources.push(TileSource {
-			name: name.to_owned(),
-			prefix,
-			source: Arc::new(Mutex::new(tile_source)),
-		});
+		self.tile_sources.push(TileSource::from(reader, name, &prefix)?);
 
 		Ok(())
 	}
 
-	pub fn add_static_source(&mut self, source: Box<dyn ServerSourceTrait>) {
-		log::info!("set static: source={:?}", source);
-		self.static_sources.push(Arc::new(Mutex::new(source)));
+	pub fn add_static_source(&mut self, filename: &str) -> Result<()> {
+		log::info!("add static: {filename}");
+		self.static_sources.push(StaticSource::new(filename)?);
+		Ok(())
 	}
 
 	pub async fn start(&mut self) -> Result<()> {
@@ -135,34 +124,28 @@ impl TileServer {
 		for tile_source in self.tile_sources.iter() {
 			let route = tile_source.prefix.to_owned() + "*path";
 
-			let tile_app = Router::new().route(&route, get(serve_tile)).with_state((
-				tile_source.prefix.to_owned(),
-				tile_source.source.clone(),
-				self.use_best_compression,
-			));
+			let tile_app = Router::new()
+				.route(&route, get(serve_tile))
+				.with_state((tile_source.clone(), self.use_best_compression));
 
 			app = app.merge(tile_app);
 
 			async fn serve_tile(
 				Path(path): Path<String>, headers: HeaderMap,
-				State((prefix, source_mutex, best_compression)): State<(String, ServerSource, bool)>,
+				State((tile_source, best_compression)): State<(TileSource, bool)>,
 			) -> Response<Full<Bytes>> {
 				let sub_path: Vec<&str> = path.split('/').collect();
 
 				let mut target_compressions = get_encoding(headers);
 				target_compressions.set_best_compression(best_compression);
 
-				let response = source_mutex
-					.lock()
-					.await
-					.get_data(&sub_path, &target_compressions)
-					.await;
+				let response = tile_source.get_data(&sub_path, &target_compressions).await;
 
 				if let Some(response) = response {
-					log::warn!("{}: {} found", prefix, path);
+					log::warn!("{}: {} found", tile_source.prefix, path);
 					ok_data(response, target_compressions)
 				} else {
-					log::warn!("{}: {} not found", prefix, path);
+					log::warn!("{}: {} not found", tile_source.prefix, path);
 					ok_not_found()
 				}
 			}
@@ -179,7 +162,7 @@ impl TileServer {
 		return app.merge(static_app);
 
 		async fn serve_static(
-			uri: Uri, headers: HeaderMap, State((sources, best_compression)): State<(Vec<ServerSource>, bool)>,
+			uri: Uri, headers: HeaderMap, State((sources, best_compression)): State<(Vec<StaticSource>, bool)>,
 		) -> Response<Full<Bytes>> {
 			let mut path_vec: Vec<&str> = uri.path().split('/').skip(1).collect();
 
@@ -194,7 +177,7 @@ impl TileServer {
 			compressions.set_best_compression(best_compression);
 
 			for source in sources.iter() {
-				if let Some(result) = source.lock().await.get_data(path_slice, &compressions).await {
+				if let Some(result) = source.get_data(path_slice, &compressions).await {
 					return ok_data(result, compressions);
 				}
 			}
@@ -209,14 +192,10 @@ impl TileServer {
 
 		let mut objects: Vec<String> = Vec::new();
 		for tile_source in self.tile_sources.iter() {
-			let source = tile_source.source.lock().await;
 			let object = format!(
 				"{{\"url\":\"{}\",\"name\":\"{}\",\"container\":{}}}",
-				tile_source.prefix,
-				tile_source.name,
-				source.get_info_as_json()?
+				tile_source.prefix, tile_source.name, tile_source.json_info
 			);
-			drop(source);
 			objects.push(object.clone());
 			api_app = api_app.route(
 				&format!("/api/source/{}", tile_source.name),
@@ -233,11 +212,7 @@ impl TileServer {
 	pub async fn get_url_mapping(&self) -> Vec<(String, String)> {
 		let mut result = Vec::new();
 		for tile_source in self.tile_sources.iter() {
-			let source = tile_source.source.lock().await;
-			result.push((
-				tile_source.prefix.to_owned(),
-				source.get_name().unwrap_or(String::from("???")),
-			))
+			result.push((tile_source.prefix.to_owned(), tile_source.name.to_owned()))
 		}
 		result
 	}
@@ -247,7 +222,7 @@ fn ok_not_found() -> Response<Full<Bytes>> {
 	Response::builder().status(404).body(Full::from("Not Found")).unwrap()
 }
 
-fn ok_data(result: ServerSourceResult, target_compressions: TargetCompression) -> Response<Full<Bytes>> {
+fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Response<Full<Bytes>> {
 	let is_incompressible = matches!(
 		result.mime.as_str(),
 		"image/png" | "image/jpeg" | "image/webp" | "image/avif"
@@ -275,7 +250,7 @@ fn ok_data(result: ServerSourceResult, target_compressions: TargetCompression) -
 
 fn ok_json(message: &str) -> Response<Full<Bytes>> {
 	ok_data(
-		ServerSourceResult {
+		SourceResponse {
 			blob: Blob::from(message),
 			compression: Compression::None,
 			mime: String::from("application/json"),
@@ -308,7 +283,6 @@ fn get_encoding(headers: HeaderMap) -> TargetCompression {
 #[cfg(test)]
 mod tests {
 	use super::{get_encoding, guess_mime, TileServer};
-	use crate::server::source::TileContainer;
 	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
 	use enumset::{enum_set, EnumSet};
 	use std::path::Path;
@@ -388,17 +362,15 @@ mod tests {
 		let mut server = TileServer::new(IP, PORT, true, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
-		let source = TileContainer::from(reader).unwrap();
-		server.add_tile_source(source, "cheese", "burger").unwrap();
-
-		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
-		let source = TileContainer::from(reader).unwrap();
-		server.add_static_source(source);
+		server.add_tile_source("cheese", "burger", reader).unwrap();
 
 		server.start().await.unwrap();
 
-		assert_eq!(get("api/status.json").await, "{\"status\":\"ready\"}");
-		assert_eq!(get("api/tiles.json").await, "[{\"url\":\"/cheese/\",\"name\":\"burger\",\"info\":{\"container\":\"dummy container\",\"format\":\"pbf\",\"compression\":\"gzip\",\"zoom_min\":0,\"zoom_max\":8,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}}]");
+		const JSON:&str = "{\"url\":\"/cheese/\",\"name\":\"burger\",\"container\":{\"container\":\"dummy container\",\"format\":\"pbf\",\"compression\":\"gzip\",\"zoom_min\":0,\"zoom_max\":8,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}}";
+		assert_eq!(get("api/status").await, "{\"status\":\"ready\"}");
+		assert_eq!(get("api/sources").await, format!("[{JSON}]"));
+		assert_eq!(get("api/source/cheese").await, "Not Found");
+		assert_eq!(get("api/source/burger").await, JSON);
 		assert!(get("cheese/0/0/0.png").await.starts_with("\u{1a}4\n\u{5}ocean"));
 		assert_eq!(get("cheese/meta.json").await, "dummy meta data");
 		assert_eq!(get("cheese/tiles.json").await, "dummy meta data");
@@ -410,16 +382,14 @@ mod tests {
 
 	#[tokio::test]
 	#[should_panic]
-	async fn panic() {
+	async fn same_prefix_twice() {
 		let mut server = TileServer::new(IP, PORT, true, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PNG, 8);
-		let source = TileContainer::from(reader).unwrap();
-		server.add_tile_source(source, "cheese", "soup").unwrap();
+		server.add_tile_source("cheese", "soup", reader).unwrap();
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
-		let source = TileContainer::from(reader).unwrap();
-		server.add_tile_source(source, "cheese", "sandwich").unwrap();
+		server.add_tile_source("cheese", "sandwich", reader).unwrap();
 	}
 
 	#[test]
@@ -440,22 +410,10 @@ mod tests {
 		let mut server = TileServer::new(IP, PORT, true, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
-		let source = TileContainer::from(reader).unwrap();
-		server.add_tile_source(source, "cheese", "pizza").unwrap();
+		server.add_tile_source("cheese", "pizza", reader).unwrap();
 
 		assert_eq!(server.tile_sources.len(), 1);
 		assert_eq!(server.tile_sources[0].prefix, "/cheese/");
-	}
-
-	#[test]
-	fn tile_server_add_static_source() {
-		let mut server = TileServer::new(IP, PORT, true, true);
-
-		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
-		let source = TileContainer::from(reader).unwrap();
-		server.add_static_source(source);
-
-		assert_eq!(server.static_sources.len(), 1);
 	}
 
 	#[tokio::test]
@@ -463,12 +421,11 @@ mod tests {
 		let mut server = TileServer::new(IP, PORT, true, true);
 
 		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
-		let source = TileContainer::from(reader).unwrap();
-		server.add_tile_source(source, "cheese", "cake").unwrap();
+		server.add_tile_source("cheese", "cake", reader).unwrap();
 
 		let mappings: Vec<(String, String)> = server.get_url_mapping().await;
 		assert_eq!(mappings.len(), 1);
 		assert_eq!(mappings[0].0, "/cheese/");
-		assert_eq!(mappings[0].1, "dummy name");
+		assert_eq!(mappings[0].1, "cake");
 	}
 }

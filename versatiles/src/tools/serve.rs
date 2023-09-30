@@ -1,4 +1,4 @@
-use crate::server::{source, TileServer};
+use crate::server::TileServer;
 use anyhow::Result;
 use clap::Args;
 use regex::Regex;
@@ -100,16 +100,11 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 			parameters.tile_compression = compression;
 		}
 
-		let source = source::TileContainer::from(reader)?;
-		server.add_tile_source(source, &format!("/tiles/{name}/"), name)?;
+		server.add_tile_source(&format!("/tiles/{name}/"), name, reader)?;
 	}
 
 	for filename in arguments.static_content.iter() {
-		if filename.ends_with(".tar") {
-			server.add_static_source(source::TarFile::from(filename)?);
-			continue;
-		}
-		server.add_static_source(source::Folder::from(filename)?);
+		server.add_static_source(filename)?;
 	}
 
 	let mut list: Vec<(String, String)> = server.get_url_mapping().await;

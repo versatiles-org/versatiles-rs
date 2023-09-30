@@ -1,22 +1,26 @@
-use crate::server::{make_result, ServerSourceResult, ServerSourceTrait};
+use super::response::SourceResponse;
 use anyhow::Result;
-use async_trait::async_trait;
-use std::fmt::Debug;
+use std::{fmt::Debug, sync::Arc};
+use tokio::sync::Mutex;
 use versatiles_lib::{
 	containers::TileReaderBox,
 	shared::{Compression, TargetCompression, TileCoord3, TileFormat},
 };
 
-// TileContainer struct definition
-pub struct TileContainer {
-	reader: TileReaderBox,
-	tile_mime: String,
-	compression: Compression,
+// TileSource struct definition
+#[derive(Clone)]
+pub struct TileSource {
+	pub name: String,
+	pub prefix: String,
+	pub json_info: String,
+	reader: Arc<Mutex<TileReaderBox>>,
+	pub tile_mime: String,
+	pub compression: Compression,
 }
 
-impl TileContainer {
-	// Constructor function for creating a TileContainer instance
-	pub fn from(reader: TileReaderBox) -> Result<Box<TileContainer>> {
+impl TileSource {
+	// Constructor function for creating a TileSource instance
+	pub fn from(reader: TileReaderBox, name: &str, prefix: &str) -> Result<TileSource> {
 		let parameters = reader.get_parameters()?;
 		let compression = parameters.tile_compression;
 
@@ -36,42 +40,31 @@ impl TileContainer {
 		}
 		.to_string();
 
-		Ok(Box::new(TileContainer {
-			reader,
-			tile_mime,
-			compression,
-		}))
-	}
-}
-
-#[async_trait]
-impl ServerSourceTrait for TileContainer {
-	// Get the name of the tile container
-	fn get_name(&self) -> Result<String> {
-		Ok(self.reader.get_name()?.to_owned())
-	}
-
-	// Get information about the tile container as a JSON string
-	fn get_info_as_json(&self) -> Result<String> {
-		let parameters = self.reader.get_parameters()?;
 		let bbox_pyramid = &parameters.bbox_pyramid;
-
 		let tile_format = format!("{:?}", parameters.tile_format).to_lowercase();
 		let tile_compression = format!("{:?}", parameters.tile_compression).to_lowercase();
-
-		Ok(format!(
+		let json_info = format!(
 			"{{\"container\":\"{}\",\"format\":\"{}\",\"compression\":\"{}\",\"zoom_min\":{},\"zoom_max\":{},\"bbox\":[{}]}}",
-			self.reader.get_container_name()?,
+			reader.get_container_name()?,
 			tile_format,
 			tile_compression,
 			bbox_pyramid.get_zoom_min().unwrap(),
 			bbox_pyramid.get_zoom_max().unwrap(),
 			bbox_pyramid.get_geo_bbox().map(|f| f.to_string()).join(","),
-		))
+		);
+
+		Ok(TileSource {
+			name: name.to_string(),
+			prefix: prefix.to_string(),
+			json_info,
+			reader: Arc::new(Mutex::new(reader)),
+			tile_mime,
+			compression,
+		})
 	}
 
 	// Retrieve the tile data as an HTTP response
-	async fn get_data(&mut self, path: &[&str], _accept: &TargetCompression) -> Option<ServerSourceResult> {
+	pub async fn get_data(&self, path: &[&str], _accept: &TargetCompression) -> Option<SourceResponse> {
 		if path.len() == 3 {
 			// Parse the tile coordinates
 			let z = path[0].parse::<u8>();
@@ -87,25 +80,29 @@ impl ServerSourceTrait for TileContainer {
 			// Create a TileCoord3 instance
 			let coord = TileCoord3::new(x.unwrap(), y.unwrap(), z.unwrap());
 
-			log::debug!("get tile {:?} - {:?}", self.reader.get_name().unwrap_or("???"), coord);
+			log::debug!("get tile {:?} - {:?}", self.name, coord);
 
 			// Get tile data
-			let tile = self.reader.get_tile_data(&coord).await;
+			let mut reader = self.reader.lock().await;
+			let tile = reader.get_tile_data(&coord).await;
+			drop(reader);
 
 			// If tile data is not found, return a not found response
 			if tile.is_err() {
 				return None;
 			}
 
-			return make_result(tile.unwrap(), &self.compression, &self.tile_mime);
+			return SourceResponse::new_some(tile.unwrap(), &self.compression, &self.tile_mime);
 		} else if (path[0] == "meta.json") || (path[0] == "tiles.json") {
 			// Get metadata
-			let meta_option = self.reader.get_meta().await.unwrap();
+			let reader = self.reader.lock().await;
+			let meta_option = reader.get_meta().await.unwrap();
+			drop(reader);
 
 			// If metadata is empty, return a not found response
 			meta_option.as_ref()?;
 
-			return make_result(meta_option.unwrap(), &Compression::None, "application/json");
+			return SourceResponse::new_some(meta_option.unwrap(), &Compression::None, "application/json");
 		}
 
 		// If the request is unknown, return a not found response
@@ -113,10 +110,10 @@ impl ServerSourceTrait for TileContainer {
 	}
 }
 
-// Debug implementation for TileContainer
-impl Debug for TileContainer {
+// Debug implementation for TileSource
+impl Debug for TileSource {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("TileContainer")
+		f.debug_struct("TileSource")
 			.field("reader", &self.reader)
 			.field("tile_mime", &self.tile_mime)
 			.field("compression", &self.compression)
@@ -126,8 +123,7 @@ impl Debug for TileContainer {
 
 #[cfg(test)]
 mod tests {
-	use super::TileContainer;
-	use crate::server::ServerSourceTrait;
+	use super::TileSource;
 	use anyhow::Result;
 	use versatiles_lib::{
 		containers::dummy::{ReaderProfile, TileReader},
@@ -137,16 +133,16 @@ mod tests {
 		},
 	};
 
-	// Test the constructor function for TileContainer
+	// Test the constructor function for TileSource
 	#[test]
 	fn tile_container_from() -> Result<()> {
 		let reader = TileReader::new_dummy(ReaderProfile::PNG, 8);
-		let container = TileContainer::from(reader)?;
+		let container = TileSource::from(reader, "dummy name", "prefix")?;
 
-		assert_eq!(container.get_name().unwrap(), "dummy name");
+		assert_eq!(container.name, "dummy name");
 
 		let expected_info = r#"{"container":"dummy container","format":"png","compression":"none","zoom_min":0,"zoom_max":8,"bbox":[-180,-85.05112877980659,180,85.05112877980659]}"#;
-		assert_eq!(container.get_info_as_json().unwrap(), expected_info);
+		assert_eq!(container.json_info, expected_info);
 
 		Ok(())
 	}
@@ -155,16 +151,15 @@ mod tests {
 	#[test]
 	fn debug() {
 		let reader = TileReader::new_dummy(ReaderProfile::PNG, 8);
-		let container = TileContainer::from(reader).unwrap();
-		let debug = format!("{container:?}");
-		assert!(debug.starts_with("TileContainer { reader: TileReader:Dummy {"));
+		let container = TileSource::from(reader, "name", "prefix").unwrap();
+		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: TileReader:Dummy { parameters: Ok( { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: , flip_y: false, swap_xy: false, tile_compression: None, tile_format: PNG }) } }, tile_mime: \"image/png\", compression: None }");
 	}
 
-	// Test the get_data method of the TileContainer
+	// Test the get_data method of the TileSource
 	#[tokio::test]
 	async fn tile_container_get_data() -> Result<()> {
 		async fn check_response(
-			container: &mut TileContainer, url: &str, compression: Compression, mime_type: &str,
+			container: &mut TileSource, url: &str, compression: Compression, mime_type: &str,
 		) -> Result<Vec<u8>> {
 			let path: Vec<&str> = url.split('/').collect();
 			let response = container.get_data(&path, &TargetCompression::from(compression)).await;
@@ -176,14 +171,14 @@ mod tests {
 			Ok(response.blob.as_vec())
 		}
 
-		async fn check_404(container: &mut TileContainer, url: &str, compression: Compression) -> Result<bool> {
+		async fn check_404(container: &mut TileSource, url: &str, compression: Compression) -> Result<bool> {
 			let path: Vec<&str> = url.split('/').collect();
 			let response = container.get_data(&path, &TargetCompression::from(compression)).await;
 			assert!(response.is_none());
 			Ok(true)
 		}
 
-		let c = &mut TileContainer::from(TileReader::new_dummy(ReaderProfile::PNG, 8))?;
+		let c = &mut TileSource::from(TileReader::new_dummy(ReaderProfile::PNG, 8), "name", "prefix")?;
 
 		assert_eq!(
 			&check_response(c, "0/0/0.png", None, "image/png").await?[0..6],

@@ -1,4 +1,5 @@
-use crate::server::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait};
+use super::{response::SourceResponse, static_source::StaticSourceTrait};
+use crate::server::guess_mime;
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{
@@ -11,6 +12,7 @@ use std::{
 use versatiles_lib::shared::{Blob, Compression, TargetCompression};
 
 // Folder struct definition
+#[derive(Clone)]
 pub struct Folder {
 	folder: PathBuf,
 	name: String,
@@ -18,7 +20,7 @@ pub struct Folder {
 
 impl Folder {
 	// Constructor for the Folder struct
-	pub fn from(path: &str) -> Result<Box<Folder>> {
+	pub fn from(path: &str) -> Result<Folder> {
 		let mut folder = current_dir()?;
 		folder.push(Path::new(path));
 
@@ -30,28 +32,23 @@ impl Folder {
 		folder = folder.canonicalize()?;
 
 		// Create a new Folder struct with the given path and name
-		Ok(Box::new(Folder {
+		Ok(Folder {
 			folder,
 			name: path.to_string(),
-		}))
+		})
 	}
 }
 
 #[async_trait]
-impl ServerSourceTrait for Folder {
+impl StaticSourceTrait for Folder {
 	// Returns the name of the folder
 	fn get_name(&self) -> Result<String> {
 		Ok(self.name.clone())
 	}
 
-	// Returns a JSON string containing the folder's type
-	fn get_info_as_json(&self) -> Result<String> {
-		Ok("{\"type\":\"folder\"}".to_string())
-	}
-
 	// Gets the data at the given path and responds with a compressed or uncompressed version
 	// based on the accept header
-	async fn get_data(&mut self, path: &[&str], _accept: &TargetCompression) -> Option<ServerSourceResult> {
+	async fn get_data(&self, path: &[&str], _accept: &TargetCompression) -> Option<SourceResponse> {
 		let mut local_path = self.folder.clone();
 		local_path.push(PathBuf::from(path.join("/")));
 
@@ -72,7 +69,7 @@ impl ServerSourceTrait for Folder {
 
 		let mime = guess_mime(&local_path);
 
-		return make_result(blob, &Compression::None, &mime);
+		return SourceResponse::new_some(blob, &Compression::None, &mime);
 	}
 }
 
@@ -87,14 +84,15 @@ impl Debug for Folder {
 
 #[cfg(test)]
 mod tests {
+	use crate::server::sources::static_source::StaticSourceTrait;
+
 	use super::Folder;
-	use crate::server::ServerSourceTrait;
 	use versatiles_lib::shared::TargetCompression;
 
 	#[tokio::test]
 	async fn test() {
 		// Create a new Folder instance
-		let mut folder = Folder::from("../testdata").unwrap();
+		let folder = Folder::from("../testdata").unwrap();
 
 		let debug: String = format!("{:?}", folder);
 		assert!(debug.starts_with("Folder { folder: \""));
@@ -102,9 +100,6 @@ mod tests {
 
 		// Test get_name function
 		assert_eq!(folder.get_name().unwrap(), "../testdata");
-
-		// Test get_info_as_json function
-		assert_eq!(folder.get_info_as_json().unwrap(), "{\"type\":\"folder\"}");
 
 		// Test get_data function with a non-existent file
 		let result = folder

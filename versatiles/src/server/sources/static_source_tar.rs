@@ -1,4 +1,4 @@
-use crate::server::{guess_mime, make_result, ServerSourceResult, ServerSourceTrait};
+use crate::server::guess_mime;
 use anyhow::Result;
 use async_trait::async_trait;
 use log::trace;
@@ -16,6 +16,8 @@ use versatiles_lib::{
 	create_error,
 	shared::{Blob, Compression, TargetCompression},
 };
+
+use super::{response::SourceResponse, static_source::StaticSourceTrait};
 
 struct FileEntry {
 	mime: String,
@@ -41,7 +43,7 @@ pub struct TarFile {
 }
 
 impl TarFile {
-	pub fn from(path: &str) -> Result<Box<Self>> {
+	pub fn from(path: &str) -> Result<Self> {
 		let filename = current_dir()?.join(Path::new(path)).canonicalize()?;
 
 		if !filename.exists() {
@@ -118,48 +120,45 @@ impl TarFile {
 			add(&entry_path, blob);
 		}
 
-		Ok(Box::new(Self {
+		Ok(Self {
 			lookup,
 			name: path.to_string(),
-		}))
+		})
 	}
 }
 
 #[async_trait]
-impl ServerSourceTrait for TarFile {
+impl StaticSourceTrait for TarFile {
 	fn get_name(&self) -> Result<String> {
 		Ok(self.name.to_owned())
 	}
-	fn get_info_as_json(&self) -> Result<String> {
-		Ok("{\"type\":\"tar\"}".to_owned())
-	}
 
-	async fn get_data(&mut self, path: &[&str], accept: &TargetCompression) -> Option<ServerSourceResult> {
+	async fn get_data(&self, path: &[&str], accept: &TargetCompression) -> Option<SourceResponse> {
 		let entry_name = path.join("/");
 		let file_entry = self.lookup.get(&entry_name)?.to_owned();
 
 		if accept.contains(Compression::Brotli) {
 			if let Some(blob) = &file_entry.br {
-				return make_result(blob.to_owned(), &Compression::Brotli, &file_entry.mime);
+				return SourceResponse::new_some(blob.to_owned(), &Compression::Brotli, &file_entry.mime);
 			}
 		}
 
 		if accept.contains(Compression::Gzip) {
 			if let Some(blob) = &file_entry.gz {
-				return make_result(blob.to_owned(), &Compression::Gzip, &file_entry.mime);
+				return SourceResponse::new_some(blob.to_owned(), &Compression::Gzip, &file_entry.mime);
 			}
 		}
 
 		if let Some(blob) = &file_entry.un {
-			return make_result(blob.to_owned(), &Compression::None, &file_entry.mime);
+			return SourceResponse::new_some(blob.to_owned(), &Compression::None, &file_entry.mime);
 		}
 
 		if let Some(blob) = &file_entry.br {
-			return make_result(blob.to_owned(), &Compression::Brotli, &file_entry.mime);
+			return SourceResponse::new_some(blob.to_owned(), &Compression::Brotli, &file_entry.mime);
 		}
 
 		if let Some(blob) = &file_entry.gz {
-			return make_result(blob.to_owned(), &Compression::Gzip, &file_entry.mime);
+			return SourceResponse::new_some(blob.to_owned(), &Compression::Gzip, &file_entry.mime);
 		}
 
 		None
@@ -216,7 +215,6 @@ mod tests {
 
 		let tar_file = TarFile::from(file.to_str().unwrap()).unwrap();
 
-		assert_eq!(tar_file.get_info_as_json().unwrap(), "{\"type\":\"tar\"}");
 		assert!(tar_file.get_name().unwrap().ends_with("temp.tar"));
 		assert!(format!("{:?}", tar_file).starts_with("TarFile { name:"));
 	}
