@@ -24,10 +24,10 @@ exclude = [
 [dependencies]
 anyhow = { version = "1.0.75", features = ["std", "backtrace"] }
 async-trait = { version = "0.1.73", default-features = false }
-brotli = { version = "3.3.4", default-features = false, features = ["std"] }
+brotli = { version = "3.4.0", default-features = false, features = ["std"] }
 byteorder = { version = "1.4.3", default-features = true }
 bytes = { version = "1.5.0", default-features = false }
-clap = { version = "4.4.5", default-features = true, optional = true, features = ["derive"] }
+clap = { version = "4.4.6", default-features = true, optional = true, features = ["derive"] }
 colored = { version = "2.0.4", default-features = false, optional = true }
 enumset = { version = "1.1.2", default-features = false }
 flate2 = { version = "1.0.27", default-features = true }
@@ -40,7 +40,7 @@ log = { version = "0.4.20", default-features = false }
 num_cpus = { version = "1.16.0", default-features = false }
 r2d2 = { version = "0.8.10", default-features = false, optional = true }
 r2d2_sqlite = { version = "0.22.0", default-features = false, optional = true, features = ["bundled"] }
-regex = { version = "1.9.5", default-features = true, optional = true }
+regex = { version = "1.9.6", default-features = true, optional = true }
 reqwest = { version = "0.11.20", default-features = false, optional = true, features = ["rustls-tls"] }
 tar = { version = "0.4.40", default-features = false, optional = true }
 terminal_size = { version = "0.2.6", default-features = false, optional = true }

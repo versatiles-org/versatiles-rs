@@ -28,10 +28,10 @@ maintainer = "Michael Kreil <versatiles@michael-kreil.de>"
 anyhow = { version = "1.0.75", features = ["std", "backtrace"] }
 async-trait = { version = "0.1.73", default-features = false }
 axum = { version = "0.6.20", default-features = false, features = ["tokio"] }
-brotli = { version = "3.3.4", default-features = false, features = ["std"] }
+brotli = { version = "3.4.0", default-features = false, features = ["std"] }
 byteorder = { version = "1.4.3", default-features = true }
 bytes = { version = "1.5.0", default-features = false }
-clap = { version = "4.4.5", default-features = true, features = ["wrap_help"] }
+clap = { version = "4.4.6", default-features = true, features = ["wrap_help"] }
 clap-verbosity-flag = { version = "2.0.1", default-features = false }
 colored = { version = "2.0.4", default-features = false }
 enumset = { version = "1.1.2", default-features = false }
@@ -47,7 +47,7 @@ mime_guess = { version = "2.0.4", default-features = false }
 num_cpus = { version = "1.16.0", default-features = false }
 r2d2 = { version = "0.8.10", default-features = false }
 r2d2_sqlite = { version = "0.22.0", default-features = false, features = ["bundled"] }
-regex = { version = "1.9.5", default-features = true }
+regex = { version = "1.9.6", default-features = true }
 reqwest = { version = "0.11.20", default-features = false, features = ["rustls-tls"] }
 tar = { version = "0.4.40", default-features = false }
 terminal_size = { version = "0.2.6", default-features = false }
