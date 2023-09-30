@@ -205,7 +205,7 @@ impl TileServer {
 
 	async fn add_api_to_app(&self, app: Router) -> Result<Router> {
 		let mut api_app = Router::new();
-		api_app = api_app.route("/api/status.json", get(|| async { ok_json("{\"status\":\"ready\"}") }));
+		api_app = api_app.route("/api/status", get(|| async { ok_json("{\"status\":\"ready\"}") }));
 
 		let mut objects: Vec<String> = Vec::new();
 		for tile_source in self.tile_sources.iter() {
@@ -219,13 +219,13 @@ impl TileServer {
 			drop(source);
 			objects.push(object.clone());
 			api_app = api_app.route(
-				&(tile_source.prefix.clone() + "info.json"),
+				&format!("/api/source/{}", tile_source.name),
 				get(|| async move { ok_json(&object) }),
 			);
 		}
 		let tile_sources_json: String = "[".to_owned() + &objects.join(",") + "]";
 
-		api_app = api_app.route("/api/tiles.json", get(|| async move { ok_json(&tile_sources_json) }));
+		api_app = api_app.route("/api/sources", get(|| async move { ok_json(&tile_sources_json) }));
 
 		Ok(app.merge(api_app))
 	}
