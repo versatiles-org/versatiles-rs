@@ -3,7 +3,7 @@ use crate::{
 	create_error,
 	shared::{decompress, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters},
 };
-use anyhow::{ensure, Result};
+use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
 use log::trace;
 use std::{
@@ -172,7 +172,11 @@ impl TileReaderTrait for TileReader {
 	async fn get_tile_data_original(&mut self, coord: &TileCoord3) -> Result<Blob> {
 		trace!("get_tile_data_original {:?}", coord);
 
-		let range = self.tile_map.get(coord).unwrap();
+		let range = self.tile_map.get(coord);
+		if range.is_none() {
+			bail!("tile {:?} not found", coord);
+		}
+		let range = range.unwrap();
 
 		let offset = range.offset;
 		let length = range.length as usize;
