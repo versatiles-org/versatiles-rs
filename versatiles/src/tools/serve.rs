@@ -12,10 +12,10 @@ pub struct Subcommand {
 	/// Supported container formats are: *.versatiles, *.tar, *.mbtiles
 	/// Container files have to be on the local filesystem, except VersaTiles containers:
 	///    VersaTiles containers can also be served from http://... or https://...
-	/// The name used in the url (/tiles/$name/) will be generated automatically from the file name:
+	/// The id used in the url (/tiles/$id/) will be generated automatically from the file id:
 	///    e.g. ".../ukraine.versatiles" will be served at url "/tiles/ukraine/..."
-	/// You can also configure a different name for each file using:
-	///    "[name]file", "file[name]" or "file#name"
+	/// You can also configure a different id for each file using:
+	///    "[id]file", "file[id]" or "file#id"
 	#[arg(num_args = 1.., required = true, verbatim_doc_comment)]
 	pub sources: Vec<String>,
 
@@ -68,9 +68,9 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	);
 
 	let patterns: Vec<Regex> = [
-		r"^\[(?P<name>[^\]]+?)\](?P<url>.*)$",
-		r"^(?P<url>.*)\[(?P<name>[^\]]+?)\]$",
-		r"^(?P<url>.*)#(?P<name>[^\]]+?)$",
+		r"^\[(?P<id>[^\]]+?)\](?P<url>.*)$",
+		r"^(?P<url>.*)\[(?P<id>[^\]]+?)\]$",
+		r"^(?P<url>.*)#(?P<id>[^\]]+?)$",
 		r"^(?P<url>.*)$",
 	]
 	.iter()
@@ -78,12 +78,12 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	.collect();
 
 	for arg in arguments.sources.iter() {
-		// parse url: Does it also contain a "name" or other parameters?
+		// parse url: Does it also contain a "id" or other parameters?
 		let pattern = patterns.iter().find(|p| p.is_match(arg)).unwrap();
 		let capture = pattern.captures(arg).unwrap();
 
 		let url: &str = capture.name("url").unwrap().as_str();
-		let name: &str = match capture.name("name") {
+		let id: &str = match capture.name("id") {
 			None => {
 				let filename = url.split(&['/', '\\']).last().unwrap();
 				filename.split('.').next().unwrap()
@@ -100,7 +100,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 			parameters.tile_compression = compression;
 		}
 
-		server.add_tile_source(&format!("/tiles/{name}/"), name, reader)?;
+		server.add_tile_source(&format!("/tiles/{id}/"), id, reader)?;
 	}
 
 	for filename in arguments.static_content.iter() {

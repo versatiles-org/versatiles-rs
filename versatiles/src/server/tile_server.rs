@@ -41,7 +41,7 @@ impl TileServer {
 		}
 	}
 
-	pub fn add_tile_source(&mut self, prefix: &str, name: &str, reader: TileReaderBox) -> Result<()> {
+	pub fn add_tile_source(&mut self, prefix: &str, id: &str, reader: TileReaderBox) -> Result<()> {
 		log::info!("add source: prefix='{}', source={:?}", prefix, reader);
 
 		let mut prefix: String = prefix.trim().to_owned();
@@ -62,7 +62,7 @@ impl TileServer {
 			};
 		}
 
-		self.tile_sources.push(TileSource::from(reader, name, &prefix)?);
+		self.tile_sources.push(TileSource::from(reader, id, &prefix)?);
 
 		Ok(())
 	}
@@ -193,12 +193,12 @@ impl TileServer {
 		let mut objects: Vec<String> = Vec::new();
 		for tile_source in self.tile_sources.iter() {
 			let object = format!(
-				"{{\"url\":\"{}\",\"name\":\"{}\",\"container\":{}}}",
-				tile_source.prefix, tile_source.name, tile_source.json_info
+				"{{\"url\":\"{}\",\"id\":\"{}\",\"container\":{}}}",
+				tile_source.prefix, tile_source.id, tile_source.json_info
 			);
 			objects.push(object.clone());
 			api_app = api_app.route(
-				&format!("/api/source/{}", tile_source.name),
+				&format!("/api/source/{}", tile_source.id),
 				get(|| async move { ok_json(&object) }),
 			);
 		}
@@ -212,7 +212,7 @@ impl TileServer {
 	pub async fn get_url_mapping(&self) -> Vec<(String, String)> {
 		let mut result = Vec::new();
 		for tile_source in self.tile_sources.iter() {
-			result.push((tile_source.prefix.to_owned(), tile_source.name.to_owned()))
+			result.push((tile_source.prefix.to_owned(), tile_source.id.to_owned()))
 		}
 		result
 	}
@@ -365,7 +365,7 @@ mod tests {
 
 		server.start().await.unwrap();
 
-		const JSON:&str = "{\"url\":\"/cheese/\",\"name\":\"burger\",\"container\":{\"type\":\"dummy container\",\"format\":\"pbf\",\"compression\":\"gzip\",\"zoom_min\":0,\"zoom_max\":8,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}}";
+		const JSON:&str = "{\"url\":\"/cheese/\",\"id\":\"burger\",\"container\":{\"type\":\"dummy container\",\"format\":\"pbf\",\"compression\":\"gzip\",\"zoom_min\":0,\"zoom_max\":8,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}}";
 		assert_eq!(get("api/status").await, "{\"status\":\"ready\"}");
 		assert_eq!(get("api/sources").await, format!("[{JSON}]"));
 		assert_eq!(get("api/source/cheese").await, "Not Found");
