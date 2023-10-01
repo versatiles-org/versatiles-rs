@@ -1,6 +1,7 @@
 use std::{
 	f64::consts::PI as PI32,
 	fmt::{self, Debug},
+	ops::{Add, Sub},
 };
 
 #[derive(Eq, PartialEq, Clone, Hash)]
@@ -12,16 +13,25 @@ impl TileCoord2 {
 	pub fn new(x: u32, y: u32) -> TileCoord2 {
 		TileCoord2 { x, y }
 	}
-	pub fn from_geo(x: f64, y: f64, z: u8) -> TileCoord2 {
+	pub fn from_geo(x: f64, y: f64, z: u8, round_up: bool) -> TileCoord2 {
 		assert!(z <= 31, "z {z} must be <= 31");
 
 		let zoom: f64 = 2.0f64.powi(z as i32);
-		let x = zoom * (x / 360.0 + 0.5);
-		let y = zoom * (0.5 - 0.5 * (y * PI32 / 360.0 + PI32 / 4.0).tan().ln() / PI32);
+		let mut x = zoom * (x / 360.0 + 0.5);
+		let mut y = zoom * (0.5 - 0.5 * (y * PI32 / 360.0 + PI32 / 4.0).tan().ln() / PI32);
+
+		// add/substract a little offset to compensate for floating point rounding issues
+		if round_up {
+			x = x.sub(1e-6).floor();
+			y = y.sub(1e-6).floor();
+		} else {
+			x = x.add(1e-6).floor();
+			y = y.add(1e-6).floor();
+		}
 
 		TileCoord2 {
-			x: x.floor().min(zoom - 1.0).max(0.0) as u32,
-			y: y.floor().min(zoom - 1.0).max(0.0) as u32,
+			x: x.min(zoom - 1.0).max(0.0) as u32,
+			y: y.min(zoom - 1.0).max(0.0) as u32,
 		}
 	}
 	pub fn get_x(&self) -> u32 {
@@ -148,7 +158,8 @@ mod tests {
 	#[test]
 	fn from_geo() {
 		let test = |z: u8, x: u32, y: u32, xf: f64, yf: f64| {
-			assert_eq!(TileCoord2::from_geo(xf, yf, z,), TileCoord2::new(x, y));
+			assert_eq!(TileCoord2::from_geo(xf, yf, z, false), TileCoord2::new(x, y));
+			assert_eq!(TileCoord2::from_geo(xf, yf, z, true), TileCoord2::new(x, y));
 		};
 
 		test(9, 267, 168, 8.0653, 52.2564);

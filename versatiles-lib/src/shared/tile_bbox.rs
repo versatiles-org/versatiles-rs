@@ -21,6 +21,11 @@ impl TileBBox {
 		assert!(level <= 31, "level ({level}) must be <= 31");
 		let max = 2u32.pow(level as u32) - 1;
 
+		assert!(x_max <= max, "x_max ({x_max}) must be <= 180");
+		assert!(y_max <= max, "y_max ({y_max}) must be <= 90");
+		assert!(x_min <= x_max, "x_min ({x_min}) must be <= x_max ({x_max})",);
+		assert!(y_min <= y_max, "y_min ({y_min}) must be <= y_max ({y_max})",);
+
 		let bbox = TileBBox {
 			level,
 			max,
@@ -56,14 +61,25 @@ impl TileBBox {
 
 	pub fn from_geo(level: u8, geo_bbox: &[f64; 4]) -> TileBBox {
 		assert!(level <= 31, "level ({level}) must be <= 31");
+		assert!(geo_bbox[0] >= -180., "x_min ({}) must be >= -180", geo_bbox[0]);
+		assert!(geo_bbox[1] >= -90., "y_min ({}) must be >= -90", geo_bbox[1]);
+		assert!(geo_bbox[2] <= 180., "x_max ({}) must be <= 180", geo_bbox[2]);
+		assert!(geo_bbox[3] <= 90., "y_max ({}) must be <= 90", geo_bbox[3]);
+		assert!(
+			geo_bbox[0] <= geo_bbox[2],
+			"x_min ({}) must be <= x_max ({})",
+			geo_bbox[0],
+			geo_bbox[2]
+		);
+		assert!(
+			geo_bbox[1] <= geo_bbox[3],
+			"y_min ({}) must be <= y_max ({})",
+			geo_bbox[1],
+			geo_bbox[3]
+		);
 
-		let x_min: f64 = geo_bbox[0].min(geo_bbox[2]);
-		let x_max: f64 = geo_bbox[0].max(geo_bbox[2]);
-		let y_min: f64 = geo_bbox[1].min(geo_bbox[3]);
-		let y_max: f64 = geo_bbox[1].max(geo_bbox[3]);
-
-		let p_min = TileCoord2::from_geo(x_min, y_max, level);
-		let p_max = TileCoord2::from_geo(x_max, y_min, level);
+		let p_min = TileCoord2::from_geo(geo_bbox[0], geo_bbox[3], level, false);
+		let p_max = TileCoord2::from_geo(geo_bbox[2], geo_bbox[1], level, true);
 
 		TileBBox::new(level, p_min.get_x(), p_min.get_y(), p_max.get_x(), p_max.get_y())
 	}
@@ -358,28 +374,28 @@ mod tests {
 
 	#[test]
 	fn from_geo() {
-		let bbox1 = TileBBox::from_geo(9, &[8.0653f64, 51.3563f64, 12.3528f64, 52.2564f64]);
+		let bbox1 = TileBBox::from_geo(9, &[8.0653, 51.3563, 12.3528, 52.2564]);
 		let bbox2 = TileBBox::new(9, 267, 168, 273, 170);
 		assert_eq!(bbox1, bbox2);
 	}
 
 	#[test]
 	fn from_geo_is_not_empty() {
-		let bbox1 = TileBBox::from_geo(0, &[8f64, 51f64, 8.000001f64, 51f64]);
+		let bbox1 = TileBBox::from_geo(0, &[8.0, 51.0, 8.000001f64, 51.0]);
 		assert_eq!(bbox1.count_tiles(), 1);
 		assert_eq!(bbox1.is_empty(), false);
 
-		let bbox2 = TileBBox::from_geo(14, &[-132f64, -40f64, -132.000001f64, -40f64]);
+		let bbox2 = TileBBox::from_geo(14, &[-132.000001, -40.0, -132.0, -40.0]);
 		assert_eq!(bbox2.count_tiles(), 1);
 		assert_eq!(bbox2.is_empty(), false);
 	}
 
 	#[test]
 	fn quarter_planet() {
-		let geo_bbox2 = [0f64, -85.05112877980659f64, 180f64, 0f64];
+		let geo_bbox2 = [0.0, -85.05112877980659f64, 180.0, 0.0];
 		let mut geo_bbox0 = geo_bbox2;
-		geo_bbox0[1] += 1e-10f64;
-		geo_bbox0[2] -= 1e-10f64;
+		geo_bbox0[1] += 1e-10;
+		geo_bbox0[2] -= 1e-10;
 		for level in 1..32 {
 			let level_bbox0 = TileBBox::from_geo(level, &geo_bbox0);
 			assert_eq!(level_bbox0.count_tiles(), 4u64.pow(level as u32 - 1));
@@ -390,10 +406,10 @@ mod tests {
 
 	#[test]
 	fn sa_pacific() {
-		let geo_bbox2 = [-180f64, -66.51326044311186f64, -90f64, 0f64];
+		let geo_bbox2 = [-180.0, -66.51326044311186f64, -90.0, 0.0];
 		let mut geo_bbox0 = geo_bbox2;
-		geo_bbox0[1] += 1e-10f64;
-		geo_bbox0[2] -= 1e-10f64;
+		geo_bbox0[1] += 1e-10;
+		geo_bbox0[2] -= 1e-10;
 
 		for level in 2..32 {
 			let level_bbox0 = TileBBox::from_geo(level, &geo_bbox0);

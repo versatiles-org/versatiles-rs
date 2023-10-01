@@ -176,7 +176,7 @@ mod tests {
 			"convert",
 			"--min-zoom=1",
 			"--max-zoom=3",
-			"--bbox=-85,-180,85,180",
+			"--bbox=-180,-85,180,85",
 			"--flip-y",
 			"--force-recompress",
 			"https://download.versatiles.org/planet-latest.versatiles",
