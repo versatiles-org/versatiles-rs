@@ -1,3 +1,4 @@
+use anyhow::Result;
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::{fmt, io::Read};
 #[cfg(test)]
@@ -19,20 +20,24 @@ impl ByteRange {
 	}
 
 	#[cfg(test)]
-	pub fn from_buf(buf: &[u8]) -> Self {
+	pub fn from_buf(buf: &[u8]) -> Result<Self> {
+		use anyhow::ensure;
+
+		ensure!(buf.len() == 16, "byte range buffer must be 16 bytes long");
 		let mut cursor = Cursor::new(buf);
-		let offset = cursor.read_u64::<BE>().unwrap();
-		let length = cursor.read_u64::<BE>().unwrap();
-		Self::new(offset, length)
+		let offset = cursor.read_u64::<BE>()?;
+		let length = cursor.read_u64::<BE>()?;
+		Ok(Self::new(offset, length))
 	}
 
-	pub fn from_reader(reader: &mut impl Read) -> Self {
-		Self::new(reader.read_u64::<BE>().unwrap(), reader.read_u64::<BE>().unwrap())
+	pub fn from_reader(reader: &mut impl Read) -> Result<Self> {
+		Ok(Self::new(reader.read_u64::<BE>()?, reader.read_u64::<BE>()?))
 	}
 
-	pub fn write_to_buf(&self, writer: &mut impl WriteBytesExt) {
-		writer.write_u64::<BE>(self.offset).unwrap();
-		writer.write_u64::<BE>(self.length).unwrap();
+	pub fn write_to_buf(&self, writer: &mut impl WriteBytesExt) -> Result<()> {
+		writer.write_u64::<BE>(self.offset)?;
+		writer.write_u64::<BE>(self.length)?;
+		Ok(())
 	}
 
 	#[cfg(test)]
@@ -59,9 +64,9 @@ mod tests {
 	fn conversion() {
 		let range1 = ByteRange::new(23, 42);
 		let mut cursor: Cursor<Vec<u8>> = Cursor::new(Vec::new());
-		range1.write_to_buf(&mut cursor);
+		range1.write_to_buf(&mut cursor).unwrap();
 		cursor.set_position(0);
-		let range2 = ByteRange::from_reader(&mut cursor);
+		let range2 = ByteRange::from_reader(&mut cursor).unwrap();
 		assert_eq!(range1, range2);
 	}
 
@@ -83,7 +88,7 @@ mod tests {
 	fn write_to_buf() {
 		let range = ByteRange::new(23, 42);
 		let mut buf: Vec<u8> = Vec::new();
-		range.write_to_buf(&mut buf);
+		range.write_to_buf(&mut buf).unwrap();
 		assert_eq!(buf.len(), 16); // 2 u64 values take up 16 bytes
 		let mut cursor = Cursor::new(buf);
 		let offset = cursor.read_u64::<BE>().unwrap();

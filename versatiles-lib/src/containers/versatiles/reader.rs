@@ -78,7 +78,7 @@ impl TileReader {
 		}
 
 		let blob = self.reader.read_range(block.get_index_range()).await.unwrap();
-		let mut tile_index = TileIndex::from_brotli_blob(blob);
+		let mut tile_index = TileIndex::from_brotli_blob(blob).unwrap();
 		tile_index.add_offset(block.get_tiles_range().offset);
 
 		assert_eq!(tile_index.len(), block.count_tiles() as usize);
@@ -129,7 +129,7 @@ impl TileReaderTrait for TileReader {
 	// Get tile data for a given coordinate
 	async fn get_tile_data_original(&mut self, coord: &TileCoord3) -> Result<Blob> {
 		// Calculate block coordinate
-		let block_coord = TileCoord3::new(coord.get_x().shr(8), coord.get_y().shr(8), coord.get_z());
+		let block_coord = TileCoord3::new(coord.get_x().shr(8), coord.get_y().shr(8), coord.get_z())?;
 
 		// Get the block using the block coordinate
 		let block_option = self.block_index.get_block(&block_coord);
@@ -211,7 +211,7 @@ impl TileReaderTrait for TileReader {
 					let mut tile_ranges: Vec<(TileCoord3, ByteRange)> = tile_index
 						.iter()
 						.enumerate()
-						.map(|(index, range)| (tiles_bbox_block.get_coord3_by_index(index as u32), *range))
+						.map(|(index, range)| (tiles_bbox_block.get_coord3_by_index(index as u32).unwrap(), *range))
 						.filter(|(coord, range)| tiles_bbox_used.contains3(coord) && (range.length > 0))
 						.collect();
 
@@ -355,7 +355,7 @@ mod tests {
 		assert_eq!(reader.get_tile_compression()?, &Compression::Gzip);
 		assert_eq!(reader.get_tile_format()?, &TileFormat::PBF);
 
-		let tile = reader.get_tile_data_original(&TileCoord3::new(123, 45, 8)).await?;
+		let tile = reader.get_tile_data_original(&TileCoord3::new(123, 45, 8)?).await?;
 		assert_eq!(tile, Blob::from(b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x02\xff\x016\x00\xc9\xff\x1a4\x0a\x05ocean\x12\x19\x12\x04\x00\x00\x01\x00\x18\x03\"\x0f\x09)\xa8@\x1a\x00\xd1@\xd2@\x00\x00\xd2@\x0f\x1a\x01x\x1a\x01y\"\x05\x15\x00\x00\x00\x00(\x80 x\x02C!\x1f_6\x00\x00\x00".to_vec()));
 
 		Ok(())

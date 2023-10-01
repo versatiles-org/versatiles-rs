@@ -1,6 +1,6 @@
 use super::{response::SourceResponse, static_source::StaticSourceTrait};
 use crate::server::guess_mime;
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use std::{
 	env::current_dir,
@@ -25,9 +25,9 @@ impl Folder {
 		folder.push(Path::new(path));
 
 		// Check that the folder exists, is absolute and is a directory
-		assert!(folder.exists(), "path {folder:?} does not exist");
-		assert!(folder.is_absolute(), "path {folder:?} must be absolute");
-		assert!(folder.is_dir(), "path {folder:?} must be a directory");
+		ensure!(folder.exists(), "path {folder:?} does not exist");
+		ensure!(folder.is_absolute(), "path {folder:?} must be absolute");
+		ensure!(folder.is_dir(), "path {folder:?} must be a directory");
 
 		folder = folder.canonicalize()?;
 

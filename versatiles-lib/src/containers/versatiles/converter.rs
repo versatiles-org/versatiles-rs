@@ -55,7 +55,7 @@ impl TileConverterTrait for TileConverter {
 				bbox_pyramid.get_zoom_max().unwrap(),
 			],
 			&bbox_pyramid.get_geo_bbox(),
-		);
+		)?;
 
 		// Convert the header to a blob and write it
 		let blob: Blob = header.to_blob()?;
@@ -106,7 +106,7 @@ impl TileConverter {
 				let size = 2u32.pow(level.min(8) as u32) - 1;
 
 				let mut bbox_block = *bbox_tiles;
-				bbox_block.intersect_bbox(&TileBBox::new(level, x, y, x + size, y + size));
+				bbox_block.intersect_bbox(&TileBBox::new(level, x, y, x + size, y + size)?);
 				blocks.push(BlockDefinition::new(bbox_block))
 			}
 		}

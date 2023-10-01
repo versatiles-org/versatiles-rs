@@ -3,7 +3,7 @@ use crate::{
 	create_error,
 	shared::{decompress, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters},
 };
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use log::trace;
 use std::{
@@ -43,8 +43,8 @@ impl TileReaderTrait for TileReader {
 		let mut filename = current_dir()?;
 		filename.push(Path::new(path));
 
-		assert!(filename.exists(), "file {filename:?} does not exist");
-		assert!(filename.is_absolute(), "path {filename:?} must be absolute");
+		ensure!(filename.exists(), "file {filename:?} does not exist");
+		ensure!(filename.is_absolute(), "path {filename:?} must be absolute");
 
 		filename = filename.canonicalize()?;
 
@@ -119,7 +119,7 @@ impl TileReaderTrait for TileReader {
 				let offset = entry.raw_file_position();
 				let length = entry.size();
 
-				let coord3 = TileCoord3::new(x, y, z);
+				let coord3 = TileCoord3::new(x, y, z)?;
 				bbox_pyramid.include_coord(&coord3);
 				tile_map.insert(coord3, TarByteRange { offset, length });
 				continue;
@@ -221,7 +221,7 @@ pub mod tests {
 		assert_eq!(reader.get_tile_compression()?, &Compression::Brotli);
 		assert_eq!(reader.get_tile_format()?, &TileFormat::PNG);
 
-		let tile = reader.get_tile_data_original(&TileCoord3::new(12, 3, 4)).await?;
+		let tile = reader.get_tile_data_original(&TileCoord3::new(12, 3, 4)?).await?;
 		assert_eq!(tile, Blob::from( b"\x053\x80\x89PNG\x0d\x0a\x1a\x0a\x00\x00\x00\x0dIHDR\x00\x00\x01\x00\x00\x00\x01\x00\x01\x03\x00\x00\x00f\xbc:%\x00\x00\x00\x03PLTE\xaa\xd3\xdf\xcf\xec\xbc\xf5\x00\x00\x00\x1fIDATh\x81\xed\xc1\x01\x0d\x00\x00\x00\xc2\xa0\xf7Om\x0e7\xa0\x00\x00\x00\x00\x00\x00\x00\x00\xbe\x0d!\x00\x00\x01\x9a`\xe1\xd5\x00\x00\x00\x00IEND\xaeB`\x82\x03".to_vec()));
 
 		Ok(())

@@ -232,9 +232,9 @@ mod tests {
 		assert_eq!(reader.get_meta().await?.unwrap().to_string(), "test metadata");
 
 		// Test getting tile data
-		let coord = TileCoord3::new(0, 0, 0);
+		let coord = TileCoord3::new(0, 0, 0)?;
 		assert_eq!(
-			reader.get_tile_data_original(&coord).await.unwrap().to_string(),
+			reader.get_tile_data_original(&coord).await?.to_string(),
 			"test tile data"
 		);
 
@@ -247,7 +247,7 @@ mod tests {
 	#[tokio::test]
 	async fn get_bbox_tile_iter() -> Result<()> {
 		let mut reader = TestReader::new("test_path").await?;
-		let bbox = TileBBox::new(4, 0, 0, 10, 10); // Or replace it with actual bbox
+		let bbox = TileBBox::new(4, 0, 0, 10, 10)?; // Or replace it with actual bbox
 		let mut stream = reader.get_bbox_tile_stream(bbox).await;
 
 		while let Some((_coord, _blob)) = stream.next().await {}

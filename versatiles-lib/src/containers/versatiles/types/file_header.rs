@@ -4,7 +4,7 @@ use crate::{
 	create_error,
 	shared::{Blob, Compression, TileFormat},
 };
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read, Write};
 
@@ -25,28 +25,30 @@ pub struct FileHeader {
 
 #[allow(dead_code)]
 impl FileHeader {
-	pub fn new(tile_format: &TileFormat, compression: &Compression, zoom_range: [u8; 2], bbox: &[f64; 4]) -> FileHeader {
-		assert!(
+	pub fn new(
+		tile_format: &TileFormat, compression: &Compression, zoom_range: [u8; 2], bbox: &[f64; 4],
+	) -> Result<FileHeader> {
+		ensure!(
 			zoom_range[0] <= zoom_range[1],
 			"zoom_range[0] ({}) must be <= zoom_range[1] ({})",
 			zoom_range[0],
 			zoom_range[1]
 		);
-		assert!(bbox[0] >= -180.0, "bbox[0] ({}) >= -180", bbox[0]);
-		assert!(bbox[1] >= -90.0, "bbox[1] ({}) >= -90", bbox[1]);
-		assert!(bbox[2] <= 180.0, "bbox[2] ({}) <= 180", bbox[2]);
-		assert!(bbox[3] <= 90.0, "bbox[3] ({}) <= 90", bbox[3]);
-		assert!(bbox[0] <= bbox[2], "bbox[0] ({}) <= bbox[2] ({})", bbox[0], bbox[2]);
-		assert!(bbox[1] <= bbox[3], "bbox[1] ({}) <= bbox[3] ({})", bbox[1], bbox[3]);
+		ensure!(bbox[0] >= -180.0, "bbox[0] ({}) >= -180", bbox[0]);
+		ensure!(bbox[1] >= -90.0, "bbox[1] ({}) >= -90", bbox[1]);
+		ensure!(bbox[2] <= 180.0, "bbox[2] ({}) <= 180", bbox[2]);
+		ensure!(bbox[3] <= 90.0, "bbox[3] ({}) <= 90", bbox[3]);
+		ensure!(bbox[0] <= bbox[2], "bbox[0] ({}) <= bbox[2] ({})", bbox[0], bbox[2]);
+		ensure!(bbox[1] <= bbox[3], "bbox[1] ({}) <= bbox[3] ({})", bbox[1], bbox[3]);
 
-		FileHeader {
+		Ok(FileHeader {
 			zoom_range,
 			bbox: bbox.map(|v| (v * BBOX_SCALE as f64) as i32),
 			tile_format: *tile_format,
 			compression: *compression,
 			meta_range: ByteRange::empty(),
 			blocks_range: ByteRange::empty(),
-		}
+		})
 	}
 
 	pub async fn from_reader(reader: &mut Box<dyn DataReaderTrait>) -> Result<FileHeader> {
@@ -90,8 +92,8 @@ impl FileHeader {
 		header.write_i32::<BE>(self.bbox[2])?;
 		header.write_i32::<BE>(self.bbox[3])?;
 
-		self.meta_range.write_to_buf(&mut header);
-		self.blocks_range.write_to_buf(&mut header);
+		self.meta_range.write_to_buf(&mut header)?;
+		self.blocks_range.write_to_buf(&mut header)?;
 
 		if header.len() != HEADER_LENGTH {
 			return create_error!(
@@ -151,8 +153,8 @@ impl FileHeader {
 			header.read_i32::<BE>()?,
 		];
 
-		let meta_range = ByteRange::from_reader(&mut header);
-		let blocks_range = ByteRange::from_reader(&mut header);
+		let meta_range = ByteRange::from_reader(&mut header)?;
+		let blocks_range = ByteRange::from_reader(&mut header)?;
 
 		Ok(FileHeader {
 			zoom_range,
@@ -176,7 +178,7 @@ mod tests {
 	#[allow(clippy::zero_prefixed_literal)]
 	fn conversion() {
 		let test = |tile_format: &TileFormat, compression: &Compression, a: u64, b: u64, c: u64, d: u64| {
-			let mut header1 = FileHeader::new(tile_format, compression, [0, 0], &[0.0, 0.0, 0.0, 0.0]);
+			let mut header1 = FileHeader::new(tile_format, compression, [0, 0], &[0.0, 0.0, 0.0, 0.0]).unwrap();
 			header1.meta_range = ByteRange::new(a, b);
 			header1.blocks_range = ByteRange::new(c, d);
 
@@ -205,7 +207,7 @@ mod tests {
 		let comp = Compression::Gzip;
 		let zoom = [10, 14];
 		let bbox = [-180.0, -85.0511, 180.0, 85.0511];
-		let header = FileHeader::new(&tf, &comp, zoom, &bbox);
+		let header = FileHeader::new(&tf, &comp, zoom, &bbox).unwrap();
 
 		assert_eq!(header.zoom_range, zoom);
 		assert_eq!(header.bbox, [-1800000000, -850511000, 1800000000, 850511000]);
@@ -222,7 +224,8 @@ mod tests {
 			&Compression::Gzip,
 			[3, 8],
 			&[-180.0, -85.051_13, 180.0, 85.051_13],
-		);
+		)
+		.unwrap();
 
 		let blob = header.to_blob().unwrap();
 
@@ -236,8 +239,14 @@ mod tests {
 		assert_eq!(BE::read_i32(&blob.as_slice()[22..26]), -850511300);
 		assert_eq!(BE::read_i32(&blob.as_slice()[26..30]), 1800000000);
 		assert_eq!(BE::read_i32(&blob.as_slice()[30..34]), 850511300);
-		assert_eq!(ByteRange::from_buf(&blob.as_slice()[34..50]), ByteRange::empty());
-		assert_eq!(ByteRange::from_buf(&blob.as_slice()[50..66]), ByteRange::empty());
+		assert_eq!(
+			ByteRange::from_buf(&blob.as_slice()[34..50]).unwrap(),
+			ByteRange::empty()
+		);
+		assert_eq!(
+			ByteRange::from_buf(&blob.as_slice()[50..66]).unwrap(),
+			ByteRange::empty()
+		);
 
 		let header2 = FileHeader::from_blob(blob).unwrap();
 
@@ -256,7 +265,7 @@ mod tests {
 
 		let should_panic = |zoom: [u8; 2], bbox: [f64; 4]| {
 			assert!(catch_unwind(|| {
-				FileHeader::new(&tf, &comp, zoom, &bbox);
+				FileHeader::new(&tf, &comp, zoom, &bbox).unwrap();
 			})
 			.is_err())
 		};
@@ -290,7 +299,7 @@ mod tests {
 		];
 
 		for tile_format in tile_formats {
-			let header = FileHeader::new(&tile_format, &compression, zoom_range, &bbox);
+			let header = FileHeader::new(&tile_format, &compression, zoom_range, &bbox).unwrap();
 			let blob = header.to_blob().unwrap();
 			let header2 = FileHeader::from_blob(blob).unwrap();
 
@@ -308,7 +317,7 @@ mod tests {
 		let compressions = vec![Compression::None, Compression::Gzip, Compression::Brotli];
 
 		for compression in compressions {
-			let header = FileHeader::new(&tile_format, &compression, zoom_range, &bbox);
+			let header = FileHeader::new(&tile_format, &compression, zoom_range, &bbox).unwrap();
 			let blob = header.to_blob().unwrap();
 			let header2 = FileHeader::from_blob(blob).unwrap();
 
@@ -341,6 +350,7 @@ mod tests {
 	#[test]
 	fn unknown_tile_format() {
 		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &Compression::Gzip, [0, 0], &[0.0, 0.0, 0.0, 0.0])
+			.unwrap()
 			.to_blob()
 			.unwrap();
 		invalid_blob.as_mut_slice()[14] = 0xFF; // Set an unknown tile format value
@@ -355,6 +365,7 @@ mod tests {
 	#[test]
 	fn unknown_compression() {
 		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &Compression::Gzip, [0, 0], &[0.0, 0.0, 0.0, 0.0])
+			.unwrap()
 			.to_blob()
 			.unwrap();
 		invalid_blob.as_mut_slice()[15] = 0xFF; // Set an unknown compression value

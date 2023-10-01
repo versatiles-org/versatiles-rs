@@ -154,19 +154,19 @@ mod tests {
 		}
 
 		let mut pyramide = TileBBoxPyramid::new_empty();
-		pyramide.include_bbox(&TileBBox::new(7, 12, 34, 56, 78));
-		pyramide.include_bbox(&TileBBox::new(8, 12, 34, 56, 78));
-		pyramide.include_bbox(&TileBBox::new(9, 12, 34, 56, 78));
+		pyramide.include_bbox(&TileBBox::new(7, 12, 34, 56, 78).unwrap());
+		pyramide.include_bbox(&TileBBox::new(8, 12, 34, 56, 78).unwrap());
+		pyramide.include_bbox(&TileBBox::new(9, 12, 34, 56, 78).unwrap());
 		test2(TileBBoxPyramid::new_empty());
-		test2(TileBBox::new(8, 12, 34, 56, 78));
-		test2(TileCoord3::new(12, 34, 6));
+		test2(TileBBox::new(8, 12, 34, 56, 78).unwrap());
+		test2(TileCoord3::new(12, 34, 6).unwrap());
 	}
 
 	// Testing transform_forward and transform_backward methods
 	#[test]
 	fn transform_coord() {
 		fn test(flip_y: bool, swap_xy: bool, t: TileCoord3) {
-			let mut bbox = TileCoord3::new(12, 34, 6);
+			let mut bbox = TileCoord3::new(12, 34, 6).unwrap();
 			let mut p = TileReaderParameters::new_dummy();
 
 			p.flip_y = flip_y;
@@ -176,17 +176,17 @@ mod tests {
 			assert_eq!(bbox, t);
 		}
 
-		test(false, false, TileCoord3::new(12, 34, 6));
-		test(false, true, TileCoord3::new(34, 12, 6));
-		test(true, false, TileCoord3::new(12, 29, 6));
-		test(true, true, TileCoord3::new(29, 12, 6));
+		test(false, false, TileCoord3::new(12, 34, 6).unwrap());
+		test(false, true, TileCoord3::new(34, 12, 6).unwrap());
+		test(true, false, TileCoord3::new(12, 29, 6).unwrap());
+		test(true, true, TileCoord3::new(29, 12, 6).unwrap());
 	}
 
 	// Testing transform_forward and transform_backward methods
 	#[test]
 	fn transform_bbox() {
 		fn test(flip_y: bool, swap_xy: bool, t: TileBBox) {
-			let mut bbox = TileBBox::new(8, 12, 34, 56, 78);
+			let mut bbox = TileBBox::new(8, 12, 34, 56, 78).unwrap();
 			let mut p = TileReaderParameters::new_dummy();
 
 			p.flip_y = flip_y;
@@ -196,9 +196,9 @@ mod tests {
 			assert_eq!(bbox, t);
 		}
 
-		test(false, false, TileBBox::new(8, 12, 34, 56, 78));
-		test(false, true, TileBBox::new(8, 34, 12, 78, 56));
-		test(true, false, TileBBox::new(8, 12, 177, 56, 221));
-		test(true, true, TileBBox::new(8, 177, 12, 221, 56));
+		test(false, false, TileBBox::new(8, 12, 34, 56, 78).unwrap());
+		test(false, true, TileBBox::new(8, 34, 12, 78, 56).unwrap());
+		test(true, false, TileBBox::new(8, 12, 177, 56, 221).unwrap());
+		test(true, true, TileBBox::new(8, 177, 12, 221, 56).unwrap());
 	}
 }

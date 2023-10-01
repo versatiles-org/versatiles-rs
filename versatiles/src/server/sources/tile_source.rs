@@ -78,7 +78,7 @@ impl TileSource {
 			}
 
 			// Create a TileCoord3 instance
-			let coord = TileCoord3::new(x.unwrap(), y.unwrap(), z.unwrap());
+			let coord = TileCoord3::new(x.unwrap(), y.unwrap(), z.unwrap()).unwrap();
 
 			log::debug!("get tile {:?} - {:?}", self.id, coord);
 

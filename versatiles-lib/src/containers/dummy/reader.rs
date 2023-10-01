@@ -58,7 +58,7 @@ impl TileReaderTrait for TileReader {
 			Ok(match self.profile {
 				ReaderProfile::JSON => Blob::from(coord.as_json()),
 				ReaderProfile::PNG => Blob::from(include_bytes!("./dummy.png").to_vec()),
-				ReaderProfile::PBF => compress_gzip(Blob::from(include_bytes!("./dummy.pbf").to_vec())).unwrap(),
+				ReaderProfile::PBF => compress_gzip(Blob::from(include_bytes!("./dummy.pbf").to_vec()))?,
 			})
 		} else {
 			create_error!("invalid coordinates: {coord:?}")
@@ -91,9 +91,8 @@ mod tests {
 		assert_ne!(reader.get_parameters_mut()?, &mut TileReaderParameters::new_dummy());
 		assert_eq!(reader.get_meta().await?, Some(Blob::from("dummy meta data")));
 		let blob = reader
-			.get_tile_data_original(&TileCoord3::new(0, 0, 0))
-			.await
-			.unwrap()
+			.get_tile_data_original(&TileCoord3::new(0, 0, 0)?)
+			.await?
 			.as_vec();
 		assert_eq!(&blob[0..4], b"\x89PNG");
 		Ok(())
@@ -102,7 +101,7 @@ mod tests {
 	#[tokio::test]
 	async fn get_tile_data_original() {
 		let test = |profile, blob| async move {
-			let coord = TileCoord3::new(23, 45, 6);
+			let coord = TileCoord3::new(23, 45, 6).unwrap();
 			let mut reader = TileReader::new_dummy(profile, 8);
 			let tile = reader.get_tile_data_original(&coord).await.unwrap();
 			assert_eq!(tile, blob);

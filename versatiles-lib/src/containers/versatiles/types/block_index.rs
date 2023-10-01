@@ -1,6 +1,6 @@
 use super::BlockDefinition;
 use crate::shared::{compress_brotli, decompress_brotli, Blob, TileBBoxPyramid, TileCoord3};
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use std::{
 	collections::HashMap,
 	io::{Cursor, Write},
@@ -20,27 +20,26 @@ impl BlockIndex {
 		Self { lookup: HashMap::new() }
 	}
 
-	pub fn from_blob(buf: Blob) -> Self {
+	pub fn from_blob(buf: Blob) -> Result<Self> {
 		let count = buf.len().div(BLOCK_INDEX_LENGTH);
-		assert_eq!(
-			count * BLOCK_INDEX_LENGTH,
-			buf.len(),
+		ensure!(
+			count * BLOCK_INDEX_LENGTH == buf.len(),
 			"Block index is defective, because buffer length is not a multiple of {}",
 			BLOCK_INDEX_LENGTH
 		);
 
 		let mut block_index = Self::new_empty();
 		for i in 0..count {
-			block_index.add_block(
-				BlockDefinition::from_slice(buf.get_range(i * BLOCK_INDEX_LENGTH..(i + 1) * BLOCK_INDEX_LENGTH)).unwrap(),
-			);
+			block_index.add_block(BlockDefinition::from_slice(
+				buf.get_range(i * BLOCK_INDEX_LENGTH..(i + 1) * BLOCK_INDEX_LENGTH),
+			)?);
 		}
 
-		block_index
+		Ok(block_index)
 	}
 
 	pub fn from_brotli_blob(buf: Blob) -> Result<Self> {
-		Ok(Self::from_blob(decompress_brotli(buf)?))
+		Self::from_blob(decompress_brotli(buf)?)
 	}
 
 	pub fn get_bbox_pyramid(&self) -> TileBBoxPyramid {
@@ -91,7 +90,7 @@ mod tests {
 	#[test]
 	fn conversion() -> Result<()> {
 		let mut index1 = BlockIndex::new_empty();
-		index1.add_block(BlockDefinition::new(TileBBox::new(3, 1, 2, 3, 4)));
+		index1.add_block(BlockDefinition::new(TileBBox::new(3, 1, 2, 3, 4)?));
 		let index2 = BlockIndex::from_brotli_blob(index1.as_brotli_blob())?;
 		assert_eq!(index1, index2);
 		Ok(())

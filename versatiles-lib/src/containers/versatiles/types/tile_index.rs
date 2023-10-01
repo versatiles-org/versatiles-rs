@@ -1,5 +1,6 @@
 use super::ByteRange;
 use crate::shared::{compress_brotli, decompress_brotli, Blob};
+use anyhow::{ensure, Result};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::{io::Cursor, ops::Div};
 
@@ -19,11 +20,10 @@ impl TileIndex {
 		Self { index }
 	}
 
-	pub fn from_blob(buf: Blob) -> Self {
+	pub fn from_blob(buf: Blob) -> Result<Self> {
 		let count = buf.len().div(TILE_INDEX_LENGTH);
-		assert_eq!(
-			count * TILE_INDEX_LENGTH,
-			buf.len(),
+		ensure!(
+			count * TILE_INDEX_LENGTH == buf.len(),
 			"Tile index is defective: buffer length is not a multiple of {}",
 			TILE_INDEX_LENGTH
 		);
@@ -31,15 +31,15 @@ impl TileIndex {
 		let mut index = vec![ByteRange::new(0, 0); count];
 		let mut cursor = Cursor::new(buf.as_slice());
 		for item in &mut index {
-			item.offset = cursor.read_u64::<BE>().unwrap();
-			item.length = cursor.read_u32::<BE>().unwrap() as u64;
+			item.offset = cursor.read_u64::<BE>()?;
+			item.length = cursor.read_u32::<BE>()? as u64;
 		}
 
-		Self { index }
+		Ok(Self { index })
 	}
 
-	pub fn from_brotli_blob(buf: Blob) -> Self {
-		Self::from_blob(decompress_brotli(buf).unwrap())
+	pub fn from_brotli_blob(buf: Blob) -> Result<Self> {
+		Self::from_blob(decompress_brotli(buf)?)
 	}
 
 	pub fn set(&mut self, index: usize, tile_byte_range: ByteRange) {
@@ -108,7 +108,7 @@ mod tests {
 		for i in 0..100u64 {
 			index1.set(i as usize, ByteRange::new(i * 1000, i * 2000));
 		}
-		let index2 = TileIndex::from_brotli_blob(index1.as_brotli_blob());
+		let index2 = TileIndex::from_brotli_blob(index1.as_brotli_blob()).unwrap();
 		assert_eq!(index1, index2);
 	}
 }

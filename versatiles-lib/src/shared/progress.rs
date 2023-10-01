@@ -1,5 +1,6 @@
 use log::{max_level, LevelFilter};
 use std::io::Write;
+use std::ops::Add;
 use std::time::{Duration, SystemTime};
 use terminal_size::terminal_size;
 
@@ -40,7 +41,7 @@ impl ProgressBar {
 			max_value,
 			message: message.to_string(),
 			start: now,
-			next_update: now.checked_sub(STEP_SIZE).unwrap(),
+			next_update: now,
 			value: 0,
 			finished: false,
 			visible: max_level() >= LevelFilter::Info,
@@ -86,7 +87,7 @@ impl ProgressBar {
 		if now < self.next_update {
 			return;
 		}
-		self.next_update = now.checked_add(STEP_SIZE).unwrap();
+		self.next_update = now.add(STEP_SIZE);
 
 		if self.visible {
 			self.draw();

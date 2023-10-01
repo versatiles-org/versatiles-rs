@@ -3,7 +3,7 @@ use crate::{
 	create_error,
 	shared::*,
 };
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use log::trace;
@@ -170,7 +170,7 @@ impl TileReader {
 				y0.clamp(0, max_value) as u32,
 				x1.clamp(0, max_value) as u32,
 				y1.clamp(0, max_value) as u32,
-			));
+			)?);
 
 			progress.inc(1);
 		}
@@ -191,8 +191,8 @@ impl TileReaderTrait for TileReader {
 		let mut path = current_dir()?;
 		path.push(Path::new(filename));
 
-		assert!(path.exists(), "file {path:?} does not exist");
-		assert!(path.is_absolute(), "path {path:?} must be absolute");
+		ensure!(path.exists(), "file {path:?} does not exist");
+		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
 		path = path.canonicalize()?;
 
@@ -268,7 +268,8 @@ impl TileReaderTrait for TileReader {
 						row.get::<_, u32>(0)?,
 						max_index - row.get::<_, u32>(1)?,
 						row.get::<_, u8>(2)?,
-					);
+					)
+					.unwrap();
 					let blob = Blob::from(row.get::<_, Vec<u8>>(3)?);
 					parameters.transform_forward(&mut coord);
 					Ok((coord, blob))
@@ -321,7 +322,7 @@ pub mod tests {
 		assert_eq!(reader.get_tile_compression()?, &Compression::Gzip);
 		assert_eq!(reader.get_tile_format()?, &TileFormat::PBF);
 
-		let tile = reader.get_tile_data_original(&TileCoord3::new(8803, 5376, 14)).await?;
+		let tile = reader.get_tile_data_original(&TileCoord3::new(8803, 5376, 14)?).await?;
 		assert_eq!(tile.len(), 172969);
 		assert_eq!(tile.get_range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
 		assert_eq!(

@@ -1,4 +1,5 @@
 use super::ProgressBar;
+use anyhow::{ensure, Result};
 #[cfg(test)]
 use image::Luma;
 use image::{ImageBuffer, Rgb, RgbImage};
@@ -27,12 +28,14 @@ impl StatusImage {
 	/// * `x` - The x coordinate of the pixel.
 	/// * `y` - The y coordinate of the pixel.
 	/// * `v` - The value to set the pixel to.
-	pub fn set(&mut self, x: u32, y: u32, v: u32) {
-		assert!(x < self.size);
-		assert!(y < self.size);
+	pub fn set(&mut self, x: u32, y: u32, v: u32) -> Result<()> {
+		ensure!(x < self.size);
+		ensure!(y < self.size);
 
 		let index = y * self.size + x;
 		self.data[index as usize] = v;
+
+		Ok(())
 	}
 
 	#[cfg(test)]
@@ -187,10 +190,10 @@ mod tests {
 	}
 
 	fn test_image(image: &mut StatusImage) {
-		image.set(0, 0, 0);
-		image.set(1, 0, 100);
-		image.set(0, 1, 10000);
-		image.set(1, 1, 1000000);
+		image.set(0, 0, 0).unwrap();
+		image.set(1, 0, 100).unwrap();
+		image.set(0, 1, 10000).unwrap();
+		image.set(1, 1, 1000000).unwrap();
 
 		assert_eq!(image.get_color(0, 0), Rgb([0, 0, 0]));
 		assert_eq!(image.get_color(1, 0), Rgb([50, 9, 0]));
@@ -202,7 +205,7 @@ mod tests {
 		let size = image.size;
 		for y in 0..size {
 			for x in 0..size {
-				image.set(x, y, x * y)
+				image.set(x, y, x * y).unwrap()
 			}
 		}
 	}

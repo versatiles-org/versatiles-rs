@@ -13,12 +13,12 @@ pub struct TileBBoxPyramid {
 impl TileBBoxPyramid {
 	pub fn new_full() -> TileBBoxPyramid {
 		TileBBoxPyramid {
-			level_bbox: from_fn(|z| TileBBox::new_full(z as u8)),
+			level_bbox: from_fn(|z| TileBBox::new_full(z as u8).unwrap()),
 		}
 	}
 	pub fn new_empty() -> TileBBoxPyramid {
 		TileBBoxPyramid {
-			level_bbox: from_fn(|z| TileBBox::new_empty(z as u8)),
+			level_bbox: from_fn(|z| TileBBox::new_empty(z as u8).unwrap()),
 		}
 	}
 	#[cfg(test)]
@@ -34,15 +34,16 @@ impl TileBBoxPyramid {
 						(n * 0.8).ceil() as u32,
 						(n * 0.9).ceil() as u32,
 					)
+					.unwrap()
 				} else {
-					TileBBox::new_empty(z as u8)
+					TileBBox::new_empty(z as u8).unwrap()
 				}
 			}),
 		}
 	}
 	pub fn intersect_geo_bbox(&mut self, geo_bbox: &[f64; 4]) {
 		for (z, bbox) in self.level_bbox.iter_mut().enumerate() {
-			bbox.intersect_bbox(&TileBBox::from_geo(z as u8, geo_bbox));
+			bbox.intersect_bbox(&TileBBox::from_geo(z as u8, geo_bbox).unwrap());
 		}
 	}
 	pub fn add_border(&mut self, x_min: u32, y_min: u32, x_max: u32, y_max: u32) {
@@ -179,47 +180,47 @@ mod tests {
 		pyramid.set_zoom_max(8);
 		pyramid.intersect_geo_bbox(&[8.0653f64, 51.3563f64, 12.3528f64, 52.2564f64]);
 
-		assert_eq!(pyramid.get_level_bbox(0), &TileBBox::new(0, 0, 0, 0, 0));
-		assert_eq!(pyramid.get_level_bbox(1), &TileBBox::new(1, 1, 0, 1, 0));
-		assert_eq!(pyramid.get_level_bbox(2), &TileBBox::new(2, 2, 1, 2, 1));
-		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 4, 2, 4, 2));
-		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 8, 5, 8, 5));
-		assert_eq!(pyramid.get_level_bbox(5), &TileBBox::new(5, 16, 10, 17, 10));
-		assert_eq!(pyramid.get_level_bbox(6), &TileBBox::new(6, 33, 21, 34, 21));
-		assert_eq!(pyramid.get_level_bbox(7), &TileBBox::new(7, 66, 42, 68, 42));
-		assert_eq!(pyramid.get_level_bbox(8), &TileBBox::new(8, 133, 84, 136, 85));
+		assert_eq!(pyramid.get_level_bbox(0), &TileBBox::new(0, 0, 0, 0, 0).unwrap());
+		assert_eq!(pyramid.get_level_bbox(1), &TileBBox::new(1, 1, 0, 1, 0).unwrap());
+		assert_eq!(pyramid.get_level_bbox(2), &TileBBox::new(2, 2, 1, 2, 1).unwrap());
+		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 4, 2, 4, 2).unwrap());
+		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 8, 5, 8, 5).unwrap());
+		assert_eq!(pyramid.get_level_bbox(5), &TileBBox::new(5, 16, 10, 17, 10).unwrap());
+		assert_eq!(pyramid.get_level_bbox(6), &TileBBox::new(6, 33, 21, 34, 21).unwrap());
+		assert_eq!(pyramid.get_level_bbox(7), &TileBBox::new(7, 66, 42, 68, 42).unwrap());
+		assert_eq!(pyramid.get_level_bbox(8), &TileBBox::new(8, 133, 84, 136, 85).unwrap());
 	}
 
 	#[test]
 	fn include_coord() {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		pyramid.include_coord(&TileCoord3::new(1, 2, 3));
-		pyramid.include_coord(&TileCoord3::new(4, 5, 3));
-		pyramid.include_coord(&TileCoord3::new(6, 7, 8));
+		pyramid.include_coord(&TileCoord3::new(1, 2, 3).unwrap());
+		pyramid.include_coord(&TileCoord3::new(4, 5, 3).unwrap());
+		pyramid.include_coord(&TileCoord3::new(6, 7, 8).unwrap());
 
 		assert!(pyramid.get_level_bbox(0).is_empty());
 		assert!(pyramid.get_level_bbox(1).is_empty());
 		assert!(pyramid.get_level_bbox(2).is_empty());
-		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 1, 2, 4, 5));
+		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 1, 2, 4, 5).unwrap());
 		assert!(pyramid.get_level_bbox(4).is_empty());
 		assert!(pyramid.get_level_bbox(5).is_empty());
 		assert!(pyramid.get_level_bbox(6).is_empty());
 		assert!(pyramid.get_level_bbox(7).is_empty());
-		assert_eq!(pyramid.get_level_bbox(8), &TileBBox::new(8, 6, 7, 6, 7));
+		assert_eq!(pyramid.get_level_bbox(8), &TileBBox::new(8, 6, 7, 6, 7).unwrap());
 		assert!(pyramid.get_level_bbox(9).is_empty());
 	}
 
 	#[test]
 	fn include_bbox() {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		pyramid.include_bbox(&TileBBox::new(4, 1, 2, 3, 4));
-		pyramid.include_bbox(&TileBBox::new(4, 5, 6, 7, 8));
+		pyramid.include_bbox(&TileBBox::new(4, 1, 2, 3, 4).unwrap());
+		pyramid.include_bbox(&TileBBox::new(4, 5, 6, 7, 8).unwrap());
 
 		assert!(pyramid.get_level_bbox(0).is_empty());
 		assert!(pyramid.get_level_bbox(1).is_empty());
 		assert!(pyramid.get_level_bbox(2).is_empty());
 		assert!(pyramid.get_level_bbox(3).is_empty());
-		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 1, 2, 7, 8));
+		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 1, 2, 7, 8).unwrap());
 		assert!(pyramid.get_level_bbox(5).is_empty());
 		assert!(pyramid.get_level_bbox(6).is_empty());
 		assert!(pyramid.get_level_bbox(7).is_empty());
@@ -231,7 +232,7 @@ mod tests {
 	fn level_bbox() {
 		let test = |level: u8| {
 			let mut pyramid = TileBBoxPyramid::new_empty();
-			let bbox = TileBBox::new_full(level);
+			let bbox = TileBBox::new_full(level).unwrap();
 			pyramid.set_level_bbox(bbox);
 			assert_eq!(pyramid.get_level_bbox(level).clone(), bbox);
 		};
@@ -268,14 +269,17 @@ mod tests {
 		pyramid.add_border(1, 2, 3, 4);
 
 		// Check that each level's bounding box has been adjusted correctly.
-		assert_eq!(pyramid.get_level_bbox(0), &TileBBox::new(0, 0, 0, 0, 0));
-		assert_eq!(pyramid.get_level_bbox(1), &TileBBox::new(1, 0, 0, 1, 1));
-		assert_eq!(pyramid.get_level_bbox(2), &TileBBox::new(2, 0, 0, 3, 3));
-		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 2, 1, 7, 7));
-		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 6, 5, 11, 12));
-		assert_eq!(pyramid.get_level_bbox(5), &TileBBox::new(5, 14, 13, 19, 20));
-		assert_eq!(pyramid.get_level_bbox(6), &TileBBox::new(6, 29, 28, 35, 36));
-		assert_eq!(pyramid.get_level_bbox(7), &TileBBox::new(7, 59, 58, 68, 69));
-		assert_eq!(pyramid.get_level_bbox(8), &TileBBox::new(8, 120, 118, 134, 135));
+		assert_eq!(pyramid.get_level_bbox(0), &TileBBox::new(0, 0, 0, 0, 0).unwrap());
+		assert_eq!(pyramid.get_level_bbox(1), &TileBBox::new(1, 0, 0, 1, 1).unwrap());
+		assert_eq!(pyramid.get_level_bbox(2), &TileBBox::new(2, 0, 0, 3, 3).unwrap());
+		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 2, 1, 7, 7).unwrap());
+		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 6, 5, 11, 12).unwrap());
+		assert_eq!(pyramid.get_level_bbox(5), &TileBBox::new(5, 14, 13, 19, 20).unwrap());
+		assert_eq!(pyramid.get_level_bbox(6), &TileBBox::new(6, 29, 28, 35, 36).unwrap());
+		assert_eq!(pyramid.get_level_bbox(7), &TileBBox::new(7, 59, 58, 68, 69).unwrap());
+		assert_eq!(
+			pyramid.get_level_bbox(8),
+			&TileBBox::new(8, 120, 118, 134, 135).unwrap()
+		);
 	}
 }

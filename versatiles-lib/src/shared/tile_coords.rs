@@ -1,3 +1,4 @@
+use anyhow::{ensure, Result};
 use std::{
 	f64::consts::PI as PI32,
 	fmt::{self, Debug},
@@ -13,8 +14,12 @@ impl TileCoord2 {
 	pub fn new(x: u32, y: u32) -> TileCoord2 {
 		TileCoord2 { x, y }
 	}
-	pub fn from_geo(x: f64, y: f64, z: u8, round_up: bool) -> TileCoord2 {
-		assert!(z <= 31, "z {z} must be <= 31");
+	pub fn from_geo(x: f64, y: f64, z: u8, round_up: bool) -> Result<TileCoord2> {
+		ensure!(z <= 31, "z {z} must be <= 31");
+		ensure!(x >= -180., "x must be >= -180");
+		ensure!(x <= 180., "x must be <= 180");
+		ensure!(y >= -90., "y must be >= -90");
+		ensure!(y <= 90., "y must be <= 90");
 
 		let zoom: f64 = 2.0f64.powi(z as i32);
 		let mut x = zoom * (x / 360.0 + 0.5);
@@ -29,10 +34,10 @@ impl TileCoord2 {
 			y = y.add(1e-6).floor();
 		}
 
-		TileCoord2 {
+		Ok(TileCoord2 {
 			x: x.min(zoom - 1.0).max(0.0) as u32,
 			y: y.min(zoom - 1.0).max(0.0) as u32,
-		}
+		})
 	}
 	pub fn get_x(&self) -> u32 {
 		self.x
@@ -75,9 +80,9 @@ pub struct TileCoord3 {
 	pub z: u8,
 }
 impl TileCoord3 {
-	pub fn new(x: u32, y: u32, z: u8) -> TileCoord3 {
-		assert!(z <= 31, "z ({z}) must be <= 31");
-		TileCoord3 { x, y, z }
+	pub fn new(x: u32, y: u32, z: u8) -> Result<TileCoord3> {
+		ensure!(z <= 31, "z ({z}) must be <= 31");
+		Ok(TileCoord3 { x, y, z })
 	}
 	pub fn get_x(&self) -> u32 {
 		self.x
@@ -158,8 +163,8 @@ mod tests {
 	#[test]
 	fn from_geo() {
 		let test = |z: u8, x: u32, y: u32, xf: f64, yf: f64| {
-			assert_eq!(TileCoord2::from_geo(xf, yf, z, false), TileCoord2::new(x, y));
-			assert_eq!(TileCoord2::from_geo(xf, yf, z, true), TileCoord2::new(x, y));
+			assert_eq!(TileCoord2::from_geo(xf, yf, z, false).unwrap(), TileCoord2::new(x, y));
+			assert_eq!(TileCoord2::from_geo(xf, yf, z, true).unwrap(), TileCoord2::new(x, y));
 		};
 
 		test(9, 267, 168, 8.0653, 52.2564);
@@ -172,7 +177,10 @@ mod tests {
 	#[test]
 	fn debug() {
 		assert_eq!(format!("{:?}", TileCoord2::new(1, 2)), "TileCoord2(1, 2)");
-		assert_eq!(format!("{:?}", TileCoord3::new(1, 2, 3)), "TileCoord3(1, 2, 3)");
+		assert_eq!(
+			format!("{:?}", TileCoord3::new(1, 2, 3).unwrap()),
+			"TileCoord3(1, 2, 3)"
+		);
 	}
 
 	#[test]
@@ -186,12 +194,12 @@ mod tests {
 
 	#[test]
 	fn partial_eq3() {
-		let c = TileCoord3::new(2, 2, 2);
+		let c = TileCoord3::new(2, 2, 2).unwrap();
 		assert!(c.eq(&c));
 		assert!(c.eq(&c.clone()));
-		assert!(c.ne(&TileCoord3::new(1, 2, 2)));
-		assert!(c.ne(&TileCoord3::new(2, 1, 2)));
-		assert!(c.ne(&TileCoord3::new(2, 2, 1)));
+		assert!(c.ne(&TileCoord3::new(1, 2, 2).unwrap()));
+		assert!(c.ne(&TileCoord3::new(2, 1, 2).unwrap()));
+		assert!(c.ne(&TileCoord3::new(2, 2, 1).unwrap()));
 	}
 
 	#[test]
@@ -218,7 +226,7 @@ mod tests {
 
 	#[test]
 	fn tilecoord3_new_and_getters() {
-		let coord = TileCoord3::new(3, 4, 5);
+		let coord = TileCoord3::new(3, 4, 5).unwrap();
 		assert_eq!(coord.get_x(), 3);
 		assert_eq!(coord.get_y(), 4);
 		assert_eq!(coord.get_z(), 5);
@@ -226,7 +234,7 @@ mod tests {
 
 	#[test]
 	fn tilecoord3_as_geo() {
-		let coord = TileCoord3::new(3, 4, 5);
+		let coord = TileCoord3::new(3, 4, 5).unwrap();
 		assert_eq!(coord.as_geo(), [-146.25, 79.17133464081945]);
 		assert_eq!(
 			coord.as_geo_bbox(),
@@ -236,20 +244,20 @@ mod tests {
 
 	#[test]
 	fn tilecoord3_as_coord2() {
-		let coord = TileCoord3::new(3, 4, 5);
+		let coord = TileCoord3::new(3, 4, 5).unwrap();
 		let coord2 = coord.as_coord2();
 		assert_eq!(coord2, TileCoord2::new(3, 4));
 	}
 
 	#[test]
 	fn tilecoord3_is_valid() {
-		let coord = TileCoord3::new(3, 4, 5);
+		let coord = TileCoord3::new(3, 4, 5).unwrap();
 		assert!(coord.is_valid());
 	}
 
 	#[test]
 	fn tilecoord3_get_sort_index() {
-		let coord = TileCoord3::new(3, 4, 5);
+		let coord = TileCoord3::new(3, 4, 5).unwrap();
 		assert_eq!(coord.get_sort_index(), 472);
 	}
 
@@ -257,7 +265,7 @@ mod tests {
 	fn hash() {
 		let mut hasher = DefaultHasher::new();
 		TileCoord2::new(2, 2).hash(&mut hasher);
-		TileCoord3::new(2, 2, 2).hash(&mut hasher);
+		TileCoord3::new(2, 2, 2).unwrap().hash(&mut hasher);
 		assert_eq!(hasher.finish(), 8202047236025635059);
 	}
 
@@ -299,8 +307,8 @@ mod tests {
 		use std::cmp::Ordering::*;
 
 		let check = |x: u32, y: u32, z: u8, order: Ordering| {
-			let c1 = TileCoord3::new(2, 2, 2);
-			let c2 = TileCoord3::new(x, y, z);
+			let c1 = TileCoord3::new(2, 2, 2).unwrap();
+			let c2 = TileCoord3::new(x, y, z).unwrap();
 			assert_eq!(c2.partial_cmp(&c1), Some(order));
 		};
 
