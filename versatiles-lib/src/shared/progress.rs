@@ -44,7 +44,7 @@ impl ProgressBar {
 			next_update: now,
 			value: 0,
 			finished: false,
-			visible: max_level() >= LevelFilter::Info,
+			visible: max_level() >= LevelFilter::Error,
 		};
 		progress.update();
 		progress
