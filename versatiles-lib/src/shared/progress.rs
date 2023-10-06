@@ -109,8 +109,8 @@ impl ProgressBar {
 		let width = terminal_size().map_or(80, |s| s.0 .0) as i64;
 
 		let duration = SystemTime::now().duration_since(self.start).unwrap();
-		let progress = self.value as f64 / self.max_value as f64;
-		let time_left = Duration::from_secs_f64(duration.as_secs_f64() / (progress + 1e-3) * (1.0 - progress));
+		let progress = (self.value as f64 / self.max_value as f64).clamp(1e-6, 1.);
+		let time_left = Duration::from_secs_f64(duration.as_secs_f64() / progress * (1.0 - progress));
 		let speed = self.value as f64 / duration.as_secs_f64();
 
 		let col1 = self.message.to_string();
