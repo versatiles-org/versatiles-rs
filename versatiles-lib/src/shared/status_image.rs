@@ -15,10 +15,10 @@ pub struct StatusImage {
 impl StatusImage {
 	/// Creates a new `StatusImage` with the specified size.
 	pub fn new(size: u32) -> Self {
-		let mut data: Vec<u32> = Vec::new();
-		data.resize((size * size) as usize, 0);
-
-		Self { size, data }
+		Self {
+			size,
+			data: vec![0; (size * size) as usize],
+		}
 	}
 
 	/// Sets the value of the pixel at the given coordinates to the given value.

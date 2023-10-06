@@ -181,9 +181,7 @@ impl TileReaderTrait for TileReader {
 		let offset = range.offset;
 		let length = range.length as usize;
 
-		let mut buf: Vec<u8> = Vec::new();
-		buf.resize(length, 0);
-
+		let mut buf: Vec<u8> = vec![0; length];
 		self.file.read_exact_at(&mut buf, offset)?;
 
 		Ok(Blob::from(buf))
