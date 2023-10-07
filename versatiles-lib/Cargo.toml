@@ -43,7 +43,7 @@ r2d2_sqlite = { version = "0.22.0", default-features = false, optional = true, f
 regex = { version = "1.9.6", default-features = true, optional = true }
 reqwest = { version = "0.11.22", default-features = false, optional = true, features = ["rustls-tls"] }
 tar = { version = "0.4.40", default-features = false, optional = true }
-terminal_size = { version = "0.2.6", default-features = false, optional = true }
+terminal_size = { version = "0.3.0", default-features = false, optional = true }
 tokio = { version = "1.32.0", default-features = false, features = ["macros", "rt-multi-thread", "sync"] }
 webp = { version = "0.2.6", default-features = false, optional = true, features = ["img"] }
 
