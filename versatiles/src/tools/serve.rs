@@ -17,7 +17,7 @@ pub struct Subcommand {
 	/// You can also configure a different id for each file using:
 	///    "[id]file", "file[id]" or "file#id"
 	#[arg(num_args = 1.., required = true, verbatim_doc_comment)]
-	pub sources: Vec<String>,
+	pub tile_sources: Vec<String>,
 
 	/// Serve via socket ip.
 	#[arg(short = 'i', long, default_value = "127.0.0.1")]
@@ -29,6 +29,7 @@ pub struct Subcommand {
 
 	/// Serve static content at "http:/.../" from a local folder or tar.
 	/// If multiple static sources are defined, the first hit will be served.
+	/// You can also add an optional path like "[/assets/styles]styles.tar"
 	#[arg(short = 's', long = "static", verbatim_doc_comment)]
 	pub static_content: Vec<String>,
 
@@ -67,7 +68,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 		!arguments.disable_api,
 	);
 
-	let patterns: Vec<Regex> = [
+	let tile_patterns: Vec<Regex> = [
 		r"^\[(?P<id>[^\]]+?)\](?P<url>.*)$",
 		r"^(?P<url>.*)\[(?P<id>[^\]]+?)\]$",
 		r"^(?P<url>.*)#(?P<id>[^\]]+?)$",
@@ -77,17 +78,27 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	.map(|pat| Regex::new(pat).unwrap())
 	.collect();
 
-	for arg in arguments.sources.iter() {
+	let static_patterns: Vec<Regex> = [
+		r"^\[(?P<path>[^\]]+?)\](?P<filename>.*)$",
+		r"^(?P<filename>.*)\[(?P<path>[^\]]+?)\]$",
+		r"^(?P<filename>.*)$",
+	]
+	.iter()
+	.map(|pat| Regex::new(pat).unwrap())
+	.collect();
+
+	for argument in arguments.tile_sources.iter() {
 		// parse url: Does it also contain a "id" or other parameters?
-		let pattern = patterns.iter().find(|p| p.is_match(arg)).unwrap();
-		let capture = pattern.captures(arg).unwrap();
+		let capture = tile_patterns
+			.iter()
+			.find(|p| p.is_match(argument))
+			.unwrap()
+			.captures(argument)
+			.unwrap();
 
 		let url: &str = capture.name("url").unwrap().as_str();
 		let id: &str = match capture.name("id") {
-			None => {
-				let filename = url.split(&['/', '\\']).last().unwrap();
-				filename.split('.').next().unwrap()
-			}
+			None => url.split(&['/', '\\']).last().unwrap().split('.').next().unwrap(),
 			Some(m) => m.as_str(),
 		};
 
@@ -103,8 +114,21 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 		server.add_tile_source(&format!("/tiles/{id}/"), id, reader)?;
 	}
 
-	for filename in arguments.static_content.iter() {
-		server.add_static_source(filename)?;
+	for argument in arguments.static_content.iter() {
+		let capture = static_patterns
+			.iter()
+			.find(|p| p.is_match(argument))
+			.unwrap()
+			.captures(argument)
+			.unwrap();
+
+		let filename: &str = capture.name("filename").unwrap().as_str();
+		let path: &str = match capture.name("path") {
+			None => "",
+			Some(m) => m.as_str(),
+		};
+
+		server.add_static_source(filename, path)?;
 	}
 
 	let mut list: Vec<(String, String)> = server.get_url_mapping().await;

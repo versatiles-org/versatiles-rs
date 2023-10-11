@@ -67,9 +67,9 @@ impl TileServer {
 		Ok(())
 	}
 
-	pub fn add_static_source(&mut self, filename: &str) -> Result<()> {
+	pub fn add_static_source(&mut self, filename: &str, path: &str) -> Result<()> {
 		log::info!("add static: {filename}");
-		self.static_sources.push(StaticSource::new(filename)?);
+		self.static_sources.push(StaticSource::new(filename, path)?);
 		Ok(())
 	}
 
@@ -164,7 +164,8 @@ impl TileServer {
 		async fn serve_static(
 			uri: Uri, headers: HeaderMap, State((sources, best_compression)): State<(Vec<StaticSource>, bool)>,
 		) -> Response<Full<Bytes>> {
-			let mut path_vec: Vec<&str> = uri.path().split('/').skip(1).collect();
+			let path = uri.path();
+			let mut path_vec: Vec<&str> = path.split('/').skip(1).collect();
 
 			if let Some(last) = path_vec.last_mut() {
 				if last.is_empty() {

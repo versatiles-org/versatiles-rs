@@ -13,19 +13,40 @@ pub trait StaticSourceTrait: Send + Sync + Debug {
 #[derive(Clone)]
 pub struct StaticSource {
 	source: Arc<Box<dyn StaticSourceTrait>>,
+	path: Vec<String>,
 }
 
 impl StaticSource {
-	pub fn new(filename: &str) -> Result<StaticSource> {
+	pub fn new(filename: &str, uncleaned_path: &str) -> Result<StaticSource> {
+		let mut path: Vec<String> = uncleaned_path.trim().split('/').map(|s| s.to_string()).collect();
+		while path.first() == Some(&String::from("")) {
+			path.remove(0);
+		}
+		while path.last() == Some(&String::from("")) {
+			path.pop();
+		}
+
 		Ok(StaticSource {
 			source: Arc::new(if filename.ends_with(".tar") {
 				Box::new(TarFile::from(filename)?)
 			} else {
 				Box::new(Folder::from(filename)?)
 			}),
+			path,
 		})
 	}
 	pub async fn get_data(&self, path: &[&str], accept: &TargetCompression) -> Option<SourceResponse> {
-		self.source.get_data(path, accept).await
+		if self.path.is_empty() {
+			self.source.get_data(path, accept).await
+		} else {
+			let mut path_vec: Vec<&str> = path.to_vec();
+			for segment in self.path.iter() {
+				if path_vec.is_empty() || (segment != path_vec[0]) {
+					return None;
+				}
+				path_vec.remove(0);
+			}
+			self.source.get_data(path_vec.as_slice(), accept).await
+		}
 	}
 }
