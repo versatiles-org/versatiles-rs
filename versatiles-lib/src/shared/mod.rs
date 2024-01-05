@@ -11,7 +11,6 @@ pub mod transform_coord;
 pub use blob::*;
 pub use compress::*;
 pub use convert::*;
-pub use error::*;
 pub use tile_bbox::*;
 pub use tile_bbox_pyramid::*;
 pub use tile_coords::*;
