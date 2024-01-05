@@ -25,11 +25,13 @@ jobs:
     steps:
       - name: Check out
         uses: actions/checkout@v3
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
           components: rustfmt, clippy
+
       - name: Init Cache
         uses: actions/cache@v3
         with:
@@ -40,17 +42,24 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
       - name: Cargo Fmt
         run: cargo fmt -- --check
+
       - name: Cargo Clippy
         run: cargo clippy --workspace --all-features -- -D warnings
+
       - name: Cargo Check
         run: cargo check --workspace --all-features
+
       - name: Cargo Test
         run: cargo test --workspace --all-features
+
       - name: Install Cargo Coverage
         uses: taiki-e/install-action@cargo-llvm-cov
+
       - name: Cargo Coverage
         run: cargo llvm-cov test --workspace --all-features --tests --lcov --output-path ./lcov.info
+
       - name: Upload Coverage
         uses: codecov/codecov-action@v3
