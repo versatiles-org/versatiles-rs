@@ -11,12 +11,6 @@ END="\033[0m"
 
 cargo check --workspace
 
-# check if nothing to commit
-if [ -n "$(git status --porcelain)" ]; then
-	echo "❗️ Please commit all uncommitted changes!"
-	exit 1
-fi
-
 # get versions
 old_tag=$(curl -s "https://api.github.com/repos/versatiles-org/versatiles-rs/tags" | jq -r 'first(.[] | .name | select(startswith("v")))')
 ver_bin="v$(toml get -r versatiles/Cargo.toml package.version)"
@@ -37,6 +31,12 @@ new_tag=$ver_bin
 
 if [ $new_tag == $old_tag ]; then
 	echo -e "${RED}New version $new_tag already exists!${END}"
+	exit 1
+fi
+
+# check if nothing to commit
+if [ -n "$(git status --porcelain)" ]; then
+	echo "❗️ Please commit all uncommitted changes!"
 	exit 1
 fi
 
