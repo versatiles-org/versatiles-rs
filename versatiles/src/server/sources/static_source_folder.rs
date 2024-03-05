@@ -116,15 +116,15 @@ mod tests {
 	#[tokio::test]
 	async fn directory_with_index_html() {
 		// Setup: Create a temporary directory and place an index.html file inside it
-		let temp_dir = env::temp_dir();
-		let dir_path = temp_dir.join("testdir");
+		let temp_dir = tempfile::tempdir().unwrap();
+		let dir_path = temp_dir.path().join("testdir");
 		std::fs::create_dir(&dir_path).unwrap_or_default();
 
 		let index_path = dir_path.join("index.html");
 		std::fs::write(&index_path, b"Hello, world!").unwrap();
 
 		// Test initialization with the temporary directory
-		let folder_path = temp_dir.to_str().unwrap();
+		let folder_path = temp_dir.path().to_str().unwrap();
 		let folder = Folder::from(folder_path).unwrap();
 
 		// Attempt to retrieve data from the directory, expecting to get the contents of index.html

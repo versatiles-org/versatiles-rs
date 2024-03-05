@@ -11,14 +11,14 @@ categories = ["command-line-utilities", "science::geo", "web-programming::http-s
 readme = "README.md"
 license = "MIT"
 exclude = [
-".githooks/",
-".github/",
-".gitignore",
-".prettierignore",
-".vscode/",
-"/docker",
-"/helpers",
-"/testdata"
+	".githooks/",
+	".github/",
+	".gitignore",
+	".prettierignore",
+	".vscode/",
+	"/docker",
+	"/helpers",
+	"/testdata",
 ]
 
 [package.metadata.deb]
@@ -51,12 +51,13 @@ regex = { version = "1.10.3" }
 reqwest = { version = "0.11.24", default-features = false, features = ["rustls-tls"] }
 tar = { version = "0.4.40", default-features = false }
 terminal_size = { version = "0.3.0", default-features = false }
-tokio = { version = "1.36.0", default-features = false, features = ["macros", "rt-multi-thread", "sync"] }
+tokio = { version = "1.36.0", features = ["macros", "rt-multi-thread", "sync"] }
 webp = { version = "0.2.6", default-features = false, features = ["img"] }
 versatiles-lib = { path = "../versatiles-lib", version = "0.6.12", features = ["full"] }
 
 [dev-dependencies]
 assert_fs = { version = "1.1.1" }
+tempfile = "3.10.1"
 
 [[bin]]
 name = "versatiles"
