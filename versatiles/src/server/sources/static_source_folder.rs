@@ -41,6 +41,7 @@ impl Folder {
 
 #[async_trait]
 impl StaticSourceTrait for Folder {
+	#[cfg(test)]
 	fn get_type(&self) -> String {
 		String::from("folder")
 	}

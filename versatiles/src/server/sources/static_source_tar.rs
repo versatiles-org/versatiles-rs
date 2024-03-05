@@ -129,6 +129,7 @@ impl TarFile {
 
 #[async_trait]
 impl StaticSourceTrait for TarFile {
+	#[cfg(test)]
 	fn get_type(&self) -> String {
 		String::from("tar")
 	}

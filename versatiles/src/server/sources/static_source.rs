@@ -6,6 +6,7 @@ use versatiles_lib::shared::TargetCompression;
 
 #[async_trait]
 pub trait StaticSourceTrait: Send + Sync + Debug {
+	#[cfg(test)]
 	fn get_type(&self) -> String;
 	fn get_name(&self) -> Result<String>;
 	fn get_data(&self, path: &[&str], accept: &TargetCompression) -> Option<SourceResponse>;
