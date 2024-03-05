@@ -129,6 +129,10 @@ impl TarFile {
 
 #[async_trait]
 impl StaticSourceTrait for TarFile {
+	fn get_type(&self) -> String {
+		String::from("tar")
+	}
+
 	fn get_name(&self) -> Result<String> {
 		Ok(self.name.to_owned())
 	}

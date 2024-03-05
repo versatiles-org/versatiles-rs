@@ -6,6 +6,7 @@ use versatiles_lib::shared::TargetCompression;
 
 #[async_trait]
 pub trait StaticSourceTrait: Send + Sync + Debug {
+	fn get_type(&self) -> String;
 	fn get_name(&self) -> Result<String>;
 	fn get_data(&self, path: &[&str], accept: &TargetCompression) -> Option<SourceResponse>;
 }
@@ -35,6 +36,10 @@ impl StaticSource {
 			path,
 		})
 	}
+	#[cfg(test)]
+	pub fn get_type(&self) -> String {
+		self.source.get_type()
+	}
 	pub fn get_data(&self, path: &[&str], accept: &TargetCompression) -> Option<SourceResponse> {
 		if self.path.is_empty() {
 			self.source.get_data(path, accept)
@@ -63,6 +68,10 @@ mod tests {
 
 	#[async_trait]
 	impl StaticSourceTrait for MockStaticSource {
+		fn get_type(&self) -> String {
+			String::from("mock")
+		}
+
 		fn get_name(&self) -> Result<String> {
 			Ok("MockSource".into())
 		}
@@ -78,6 +87,24 @@ mod tests {
 				None
 			}
 		}
+	}
+
+	#[tokio::test]
+	async fn test_static_source_new_integration() {
+		// Create temporary file and directory for testing
+		let temp_dir = tempfile::tempdir().unwrap();
+		let temp_file_path = temp_dir.path().join("temp.tar");
+		let temp_folder_path = temp_dir.path().join("folder");
+		std::fs::create_dir(&temp_folder_path).unwrap();
+		std::fs::File::create(&temp_file_path).unwrap();
+
+		// Test initialization with a .tar file
+		let tar_source = StaticSource::new(temp_file_path.to_str().unwrap(), "").unwrap();
+		assert_eq!(tar_source.get_type(), "tar");
+
+		// Test initialization with a folder
+		let folder_source = StaticSource::new(temp_folder_path.to_str().unwrap(), "").unwrap();
+		assert_eq!(folder_source.get_type(), "folder");
 	}
 
 	#[tokio::test]

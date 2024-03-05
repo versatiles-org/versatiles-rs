@@ -41,6 +41,10 @@ impl Folder {
 
 #[async_trait]
 impl StaticSourceTrait for Folder {
+	fn get_type(&self) -> String {
+		String::from("folder")
+	}
+
 	// Returns the name of the folder
 	fn get_name(&self) -> Result<String> {
 		Ok(self.name.clone())
@@ -86,7 +90,6 @@ impl Debug for Folder {
 mod tests {
 	use super::Folder;
 	use crate::server::sources::static_source::StaticSourceTrait;
-	use std::env;
 	use versatiles_lib::shared::TargetCompression;
 
 	#[tokio::test]
