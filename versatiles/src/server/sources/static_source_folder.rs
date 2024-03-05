@@ -84,9 +84,9 @@ impl Debug for Folder {
 
 #[cfg(test)]
 mod tests {
-	use crate::server::sources::static_source::StaticSourceTrait;
-
 	use super::Folder;
+	use crate::server::sources::static_source::StaticSourceTrait;
+	use std::env;
 	use versatiles_lib::shared::TargetCompression;
 
 	#[tokio::test]
@@ -115,5 +115,29 @@ mod tests {
 
 		let result = result.unwrap().blob;
 		assert_eq!(result.len(), 26533888);
+	}
+
+	#[tokio::test]
+	async fn directory_with_index_html() {
+		// Setup: Create a temporary directory and place an index.html file inside it
+		let temp_dir = env::temp_dir();
+		let dir_path = temp_dir.join("testdir");
+		std::fs::create_dir(&dir_path).unwrap_or_default();
+
+		let index_path = dir_path.join("index.html");
+		std::fs::write(&index_path, b"Hello, world!").unwrap();
+
+		// Test initialization with the temporary directory
+		let folder_path = temp_dir.to_str().unwrap();
+		let folder = Folder::from(folder_path).unwrap();
+
+		// Attempt to retrieve data from the directory, expecting to get the contents of index.html
+		let response = folder
+			.get_data(&["testdir"], &TargetCompression::from_none())
+			.await
+			.unwrap();
+
+		let result = response.blob.as_str();
+		assert_eq!(result, "Hello, world!");
 	}
 }
