@@ -150,7 +150,7 @@ pub fn webp2img(data: Blob) -> Result<DynamicImage> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use ::image::{DynamicImage, GrayAlphaImage, GrayImage, Luma, LumaA, Rgb, RgbImage, Rgba, RgbaImage};
+	use ::image::{GrayAlphaImage, GrayImage, Luma, LumaA, Rgb, RgbImage, Rgba, RgbaImage};
 
 	/// Test PNG encoding and decoding for grayscale images
 	#[test]

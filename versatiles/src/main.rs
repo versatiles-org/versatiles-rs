@@ -66,7 +66,6 @@ fn run(cli: Cli) -> Result<()> {
 mod tests {
 	use crate::{run, Cli};
 	use clap::Parser;
-	use core::result::Result;
 
 	// Function for running command-line arguments in tests
 	pub fn run_command(arg_vec: Vec<&str>) -> Result<String, String> {

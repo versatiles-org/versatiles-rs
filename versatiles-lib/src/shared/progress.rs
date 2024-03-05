@@ -213,7 +213,6 @@ fn format_float(value: f64) -> String {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::time::Duration;
 
 	#[test]
 	fn format() {

@@ -336,7 +336,6 @@ mod tests {
 		shared::{Compression, TileCoord3, TileFormat},
 	};
 	use anyhow::Result;
-	use tokio;
 
 	#[tokio::test]
 	async fn test_reader() -> Result<()> {

@@ -3,7 +3,7 @@ use anyhow::{ensure, Result};
 #[cfg(test)]
 use image::Luma;
 use image::{ImageBuffer, Rgb, RgbImage};
-use std::{path::Path, vec::Vec};
+use std::path::Path;
 
 #[allow(dead_code)]
 pub struct StatusImage {

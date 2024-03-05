@@ -151,7 +151,6 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 mod tests {
 	use super::*;
 	use async_trait::async_trait;
-	use futures_util::StreamExt;
 
 	#[derive(Debug)]
 	struct TestReader {

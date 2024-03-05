@@ -2,4 +2,4 @@
 cd "$(dirname "$0")/.."
 
 echo -e "\033[1;30mfind unused dependencies\033[0m"
-cargo +nightly udeps --workspace
+cargo +nightly udeps --workspace --bins --examples --tests --benches --all-targets

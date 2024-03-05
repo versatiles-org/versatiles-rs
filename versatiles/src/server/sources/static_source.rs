@@ -1,7 +1,7 @@
 use super::{response::SourceResponse, static_source_folder::Folder, static_source_tar::TarFile};
 use anyhow::Result;
 use async_trait::async_trait;
-use std::{fmt::Debug, option::Option, sync::Arc};
+use std::{fmt::Debug, sync::Arc};
 use versatiles_lib::shared::TargetCompression;
 
 #[async_trait]
