@@ -48,7 +48,7 @@ impl StaticSourceTrait for Folder {
 
 	// Gets the data at the given path and responds with a compressed or uncompressed version
 	// based on the accept header
-	async fn get_data(&self, path: &[&str], _accept: &TargetCompression) -> Option<SourceResponse> {
+	fn get_data(&self, path: &[&str], _accept: &TargetCompression) -> Option<SourceResponse> {
 		let mut local_path = self.folder.clone();
 		local_path.push(PathBuf::from(path.join("/")));
 
@@ -69,7 +69,7 @@ impl StaticSourceTrait for Folder {
 
 		let mime = guess_mime(&local_path);
 
-		return SourceResponse::new_some(blob, &Compression::None, &mime);
+		SourceResponse::new_some(blob, &Compression::None, &mime)
 	}
 }
 
@@ -102,15 +102,11 @@ mod tests {
 		assert_eq!(folder.get_name().unwrap(), "../testdata");
 
 		// Test get_data function with a non-existent file
-		let result = folder
-			.get_data(&["recipes", "Queijo.txt"], &TargetCompression::from_none())
-			.await;
+		let result = folder.get_data(&["recipes", "Queijo.txt"], &TargetCompression::from_none());
 		assert!(result.is_none());
 
 		// Test get_data function with an existing file
-		let result = folder
-			.get_data(&["berlin.mbtiles"], &TargetCompression::from_none())
-			.await;
+		let result = folder.get_data(&["berlin.mbtiles"], &TargetCompression::from_none());
 		assert!(result.is_some());
 
 		let result = result.unwrap().blob;
@@ -132,10 +128,7 @@ mod tests {
 		let folder = Folder::from(folder_path).unwrap();
 
 		// Attempt to retrieve data from the directory, expecting to get the contents of index.html
-		let response = folder
-			.get_data(&["testdir"], &TargetCompression::from_none())
-			.await
-			.unwrap();
+		let response = folder.get_data(&["testdir"], &TargetCompression::from_none()).unwrap();
 
 		let result = response.blob.as_str();
 		assert_eq!(result, "Hello, world!");

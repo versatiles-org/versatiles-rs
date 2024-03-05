@@ -7,7 +7,7 @@ use versatiles_lib::shared::TargetCompression;
 #[async_trait]
 pub trait StaticSourceTrait: Send + Sync + Debug {
 	fn get_name(&self) -> Result<String>;
-	async fn get_data(&self, path: &[&str], accept: &TargetCompression) -> Option<SourceResponse>;
+	fn get_data(&self, path: &[&str], accept: &TargetCompression) -> Option<SourceResponse>;
 }
 
 #[derive(Clone)]
@@ -35,9 +35,9 @@ impl StaticSource {
 			path,
 		})
 	}
-	pub async fn get_data(&self, path: &[&str], accept: &TargetCompression) -> Option<SourceResponse> {
+	pub fn get_data(&self, path: &[&str], accept: &TargetCompression) -> Option<SourceResponse> {
 		if self.path.is_empty() {
-			self.source.get_data(path, accept).await
+			self.source.get_data(path, accept)
 		} else {
 			let mut path_vec: Vec<&str> = path.to_vec();
 			for segment in self.path.iter() {
@@ -46,7 +46,7 @@ impl StaticSource {
 				}
 				path_vec.remove(0);
 			}
-			self.source.get_data(path_vec.as_slice(), accept).await
+			self.source.get_data(path_vec.as_slice(), accept)
 		}
 	}
 }
@@ -67,7 +67,7 @@ mod tests {
 			Ok("MockSource".into())
 		}
 
-		async fn get_data(&self, path: &[&str], _accept: &TargetCompression) -> Option<SourceResponse> {
+		fn get_data(&self, path: &[&str], _accept: &TargetCompression) -> Option<SourceResponse> {
 			if path.contains(&"exists") {
 				SourceResponse::new_some(
 					Blob::from(vec![1, 2, 3, 4]),
@@ -86,9 +86,7 @@ mod tests {
 			source: Arc::new(Box::new(MockStaticSource)),
 			path: vec![],
 		};
-		let result = static_source
-			.get_data(&["exists"], &TargetCompression::from_none())
-			.await;
+		let result = static_source.get_data(&["exists"], &TargetCompression::from_none());
 		assert!(result.is_some());
 	}
 
@@ -98,9 +96,7 @@ mod tests {
 			source: Arc::new(Box::new(MockStaticSource)),
 			path: vec![],
 		};
-		let result = static_source
-			.get_data(&["does_not_exist"], &TargetCompression::from_none())
-			.await;
+		let result = static_source.get_data(&["does_not_exist"], &TargetCompression::from_none());
 		assert!(result.is_none());
 	}
 
@@ -111,15 +107,11 @@ mod tests {
 			path: vec!["path".into(), "to".into()],
 		};
 		// Should match and retrieve data
-		let result = static_source
-			.get_data(&["path", "to", "exists"], &TargetCompression::from_none())
-			.await;
+		let result = static_source.get_data(&["path", "to", "exists"], &TargetCompression::from_none());
 		assert!(result.is_some());
 
 		// Should fail due to path mismatch
-		let result = static_source
-			.get_data(&["path", "wrong", "exists"], &TargetCompression::from_none())
-			.await;
+		let result = static_source.get_data(&["path", "wrong", "exists"], &TargetCompression::from_none());
 		assert!(result.is_none());
 	}
 }

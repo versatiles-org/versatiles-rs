@@ -178,7 +178,7 @@ impl TileServer {
 			compressions.set_best_compression(best_compression);
 
 			for source in sources.iter() {
-				if let Some(result) = source.get_data(path_slice, &compressions).await {
+				if let Some(result) = source.get_data(path_slice, &compressions) {
 					return ok_data(result, compressions);
 				}
 			}
