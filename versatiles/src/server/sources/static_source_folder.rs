@@ -47,6 +47,7 @@ impl StaticSourceTrait for Folder {
 	}
 
 	// Returns the name of the folder
+	#[cfg(test)]
 	fn get_name(&self) -> Result<String> {
 		Ok(self.name.clone())
 	}

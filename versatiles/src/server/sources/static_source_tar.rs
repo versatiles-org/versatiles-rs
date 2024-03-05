@@ -134,6 +134,7 @@ impl StaticSourceTrait for TarFile {
 		String::from("tar")
 	}
 
+	#[cfg(test)]
 	fn get_name(&self) -> Result<String> {
 		Ok(self.name.to_owned())
 	}
