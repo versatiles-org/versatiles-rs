@@ -7,7 +7,6 @@ on:
     tags:
       - "!**" # Don't run twice on commits with tags
     paths-ignore:
-      - ".github/workflows/**"
       - "helpers/**"
       - "**.Dockerfile"
       - "**.md"
