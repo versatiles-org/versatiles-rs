@@ -50,3 +50,76 @@ impl StaticSource {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use anyhow::Ok;
+	use async_trait::async_trait;
+	use versatiles_lib::shared::{Blob, Compression};
+
+	#[derive(Debug)]
+	struct MockStaticSource;
+
+	#[async_trait]
+	impl StaticSourceTrait for MockStaticSource {
+		fn get_name(&self) -> Result<String> {
+			Ok("MockSource".into())
+		}
+
+		async fn get_data(&self, path: &[&str], _accept: &TargetCompression) -> Option<SourceResponse> {
+			if path.contains(&"exists") {
+				SourceResponse::new_some(
+					Blob::from(vec![1, 2, 3, 4]),
+					&Compression::None,
+					"application/octet-stream",
+				)
+			} else {
+				None
+			}
+		}
+	}
+
+	#[tokio::test]
+	async fn test_get_data_valid_path() {
+		let static_source = StaticSource {
+			source: Arc::new(Box::new(MockStaticSource)),
+			path: vec![],
+		};
+		let result = static_source
+			.get_data(&["exists"], &TargetCompression::from_none())
+			.await;
+		assert!(result.is_some());
+	}
+
+	#[tokio::test]
+	async fn test_get_data_invalid_path() {
+		let static_source = StaticSource {
+			source: Arc::new(Box::new(MockStaticSource)),
+			path: vec![],
+		};
+		let result = static_source
+			.get_data(&["does_not_exist"], &TargetCompression::from_none())
+			.await;
+		assert!(result.is_none());
+	}
+
+	#[tokio::test]
+	async fn test_get_data_with_path_filtering() {
+		let static_source = StaticSource {
+			source: Arc::new(Box::new(MockStaticSource)),
+			path: vec!["path".into(), "to".into()],
+		};
+		// Should match and retrieve data
+		let result = static_source
+			.get_data(&["path", "to", "exists"], &TargetCompression::from_none())
+			.await;
+		assert!(result.is_some());
+
+		// Should fail due to path mismatch
+		let result = static_source
+			.get_data(&["path", "wrong", "exists"], &TargetCompression::from_none())
+			.await;
+		assert!(result.is_none());
+	}
+}
