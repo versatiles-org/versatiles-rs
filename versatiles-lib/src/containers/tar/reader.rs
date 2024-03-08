@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
-use log::trace;
+use log;
 use std::{
 	collections::HashMap, env::current_dir, fmt::Debug, fs::File, io::Read, os::unix::prelude::FileExt, path::Path,
 };
@@ -39,7 +39,7 @@ impl TileReaderTrait for TileReader {
 	where
 		Self: Sized,
 	{
-		trace!("new {}", path);
+		log::trace!("new {}", path);
 		let mut filename = current_dir()?;
 		filename.push(Path::new(path));
 
@@ -149,7 +149,7 @@ impl TileReaderTrait for TileReader {
 				};
 			}
 
-			return create_error!("unknown file in tar: {path_tmp_string:?}");
+			log::warn!("unknown file in tar: {path_tmp_string:?}");
 		}
 
 		Ok(Box::new(TileReader {
@@ -170,7 +170,7 @@ impl TileReaderTrait for TileReader {
 		Ok(self.meta.clone())
 	}
 	async fn get_tile_data_original(&mut self, coord: &TileCoord3) -> Result<Blob> {
-		trace!("get_tile_data_original {:?}", coord);
+		log::trace!("get_tile_data_original {:?}", coord);
 
 		let range = self.tile_map.get(coord);
 		if range.is_none() {
