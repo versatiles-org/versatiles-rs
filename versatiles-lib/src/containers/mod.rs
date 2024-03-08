@@ -1,13 +1,14 @@
 #[cfg(feature = "full")]
 pub mod directory;
 #[cfg(feature = "full")]
-pub mod dummy;
-#[cfg(feature = "full")]
 mod getters;
 #[cfg(feature = "full")]
 pub mod mbtiles;
 #[cfg(feature = "full")]
 pub mod tar;
+
+#[cfg(feature = "mock")]
+pub mod mock;
 
 mod traits;
 pub mod versatiles;

@@ -9,7 +9,7 @@ use futures_util::StreamExt;
 #[allow(dead_code)]
 #[derive(Debug)]
 pub enum ConverterProfile {
-	Png,
+	PNG,
 	Whatever,
 }
 
@@ -18,12 +18,12 @@ pub struct TileConverter {
 }
 
 impl TileConverter {
-	pub fn new_dummy(profile: ConverterProfile, max_zoom_level: u8) -> TileConverterBox {
+	pub fn new_mock(profile: ConverterProfile, max_zoom_level: u8) -> TileConverterBox {
 		let mut bbox_pyramid = TileBBoxPyramid::new_full();
 		bbox_pyramid.set_zoom_max(max_zoom_level);
 
 		let config = match profile {
-			ConverterProfile::Png => {
+			ConverterProfile::PNG => {
 				TileConverterConfig::new(Some(TileFormat::PNG), Some(Compression::None), bbox_pyramid, false)
 			}
 			ConverterProfile::Whatever => TileConverterConfig::new(None, None, bbox_pyramid, false),
@@ -62,7 +62,7 @@ mod tests {
 	use super::{ConverterProfile, TileConverter};
 	use crate::{
 		containers::{
-			dummy::{reader::ReaderProfile, TileReader},
+			mock::{reader::ReaderProfile, TileReader},
 			TileConverterTrait,
 		},
 		shared::TileConverterConfig,
@@ -70,8 +70,8 @@ mod tests {
 
 	#[tokio::test]
 	async fn convert_from() {
-		let mut converter = TileConverter::new_dummy(ConverterProfile::Png, 8);
-		let mut reader = TileReader::new_dummy(ReaderProfile::PNG, 8);
+		let mut converter = TileConverter::new_mock(ConverterProfile::PNG, 8);
+		let mut reader = TileReader::new_mock(ReaderProfile::PNG, 8);
 		converter.convert_from(&mut reader).await.unwrap();
 	}
 

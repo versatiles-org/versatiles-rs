@@ -126,7 +126,7 @@ mod tests {
 	use super::TileSource;
 	use anyhow::Result;
 	use versatiles_lib::{
-		containers::dummy::{ReaderProfile, TileReader},
+		containers::mock::{ReaderProfile, TileReader},
 		shared::{
 			Compression::{self, *},
 			TargetCompression,
@@ -136,7 +136,7 @@ mod tests {
 	// Test the constructor function for TileSource
 	#[test]
 	fn tile_container_from() -> Result<()> {
-		let reader = TileReader::new_dummy(ReaderProfile::PNG, 8);
+		let reader = TileReader::new_mock(ReaderProfile::PNG, 8);
 		let container = TileSource::from(reader, "dummy id", "prefix")?;
 
 		assert_eq!(container.id, "dummy id");
@@ -148,7 +148,7 @@ mod tests {
 	// Test the debug function
 	#[test]
 	fn debug() {
-		let reader = TileReader::new_dummy(ReaderProfile::PNG, 8);
+		let reader = TileReader::new_mock(ReaderProfile::PNG, 8);
 		let container = TileSource::from(reader, "id", "prefix").unwrap();
 		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: TileReader:Dummy { parameters: Ok( { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: , flip_y: false, swap_xy: false, tile_compression: None, tile_format: PNG }) } }, tile_mime: \"image/png\", compression: None }");
 	}
@@ -176,7 +176,7 @@ mod tests {
 			Ok(true)
 		}
 
-		let c = &mut TileSource::from(TileReader::new_dummy(ReaderProfile::PNG, 8), "id", "prefix")?;
+		let c = &mut TileSource::from(TileReader::new_mock(ReaderProfile::PNG, 8), "id", "prefix")?;
 
 		assert_eq!(
 			&check_response(c, "0/0/0.png", None, "image/png").await?[0..6],

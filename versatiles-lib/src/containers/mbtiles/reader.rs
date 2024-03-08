@@ -299,7 +299,7 @@ struct RecordMetadata {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::containers::dummy::{self, ConverterProfile};
+	use crate::containers::mock::{self, ConverterProfile};
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
@@ -322,7 +322,7 @@ pub mod tests {
 			&[255, 15, 172, 89, 205, 237, 7, 134, 5, 0]
 		);
 
-		let mut converter = dummy::TileConverter::new_dummy(ConverterProfile::Whatever, 8);
+		let mut converter = mock::TileConverter::new_mock(ConverterProfile::Whatever, 8);
 
 		converter.convert_from(&mut reader).await?;
 

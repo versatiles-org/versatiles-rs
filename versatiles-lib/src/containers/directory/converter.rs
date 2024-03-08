@@ -120,7 +120,7 @@ impl TileConverterTrait for TileConverter {
 
 #[cfg(test)]
 mod tests {
-	use crate::containers::dummy;
+	use crate::containers::mock;
 
 	use super::*;
 	use std::fs::File;
@@ -167,13 +167,13 @@ mod tests {
 		let tile_config = TileConverterConfig::new_full();
 		let mut tile_converter = TileConverter::new(filename, tile_config).await?;
 
-		let mut mock_reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PNG, 3);
+		let mut mock_reader = mock::TileReader::new_mock(mock::ReaderProfile::PNG, 3);
 
 		tile_converter.convert_from(&mut mock_reader).await?;
 
 		assert_eq!(fs::read_to_string(temp_path.join("tiles.json"))?, "dummy meta data");
-		assert_eq!(fs::read(temp_path.join("0/0/0.png"))?, dummy::BYTES_PNG);
-		assert_eq!(fs::read(temp_path.join("3/7/7.png"))?, dummy::BYTES_PNG);
+		assert_eq!(fs::read(temp_path.join("0/0/0.png"))?, mock::BYTES_PNG);
+		assert_eq!(fs::read(temp_path.join("3/7/7.png"))?, mock::BYTES_PNG);
 
 		Ok(())
 	}

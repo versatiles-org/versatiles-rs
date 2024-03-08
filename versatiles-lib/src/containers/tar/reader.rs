@@ -207,7 +207,7 @@ impl Debug for TileReader {
 pub mod tests {
 	use super::*;
 	use crate::containers::{
-		dummy::{ConverterProfile, TileConverter},
+		mock::{ConverterProfile, TileConverter},
 		tests::make_test_file,
 	};
 
@@ -244,7 +244,7 @@ pub mod tests {
 			reader.get_parameters_mut()?;
 			format!("{:?}", reader);
 
-			let mut converter = TileConverter::new_dummy(ConverterProfile::Whatever, 4);
+			let mut converter = TileConverter::new_mock(ConverterProfile::Whatever, 4);
 			converter.convert_from(&mut reader).await?;
 			Ok(())
 		}

@@ -13,17 +13,23 @@ cargo check --workspace
 
 # get versions
 old_tag=$(curl -s "https://api.github.com/repos/versatiles-org/versatiles-rs/tags" | jq -r 'first(.[] | .name | select(startswith("v")))')
-ver_bin="v$(toml get -r versatiles/Cargo.toml package.version)"
 ver_lib="v$(toml get -r versatiles-lib/Cargo.toml package.version)"
+ver_bin="v$(toml get -r versatiles/Cargo.toml package.version)"
 ver_lib_dep="v$(toml get -r versatiles/Cargo.toml dependencies.versatiles-lib.version)"
+ver_lib_dev="v$(toml get -r versatiles/Cargo.toml dev-dependencies.versatiles-lib.version)"
 
-if [ $ver_bin != $ver_lib ]; then
+if [ $ver_lib != $ver_bin ]; then
 	echo -e "${RED}The versions of lib ($ver_lib) and bin ($ver_bin) must be same!${END}"
 	exit 1
 fi
 
 if [ $ver_lib != $ver_lib_dep ]; then
 	echo -e "${RED}The versions of lib ($ver_lib) and the lib dependency in bin ($ver_lib_dep) must be same!${END}"
+	exit 1
+fi
+
+if [ $ver_lib != $ver_lib_dev ]; then
+	echo -e "${RED}The versions of lib ($ver_lib) and the lib dev-dependency in bin ($ver_lib_dev) must be same!${END}"
 	exit 1
 fi
 

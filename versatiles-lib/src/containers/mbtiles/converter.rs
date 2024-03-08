@@ -25,7 +25,7 @@ impl TileConverterTrait for TileConverter {
 mod tests {
 	use super::TileConverter;
 	use crate::{
-		containers::{dummy, TileConverterTrait, TileReaderTrait},
+		containers::{mock, TileConverterTrait, TileReaderTrait},
 		shared::TileConverterConfig,
 	};
 
@@ -40,7 +40,7 @@ mod tests {
 	#[should_panic]
 	async fn panic2() {
 		let mut converter = TileConverter {};
-		let mut reader = dummy::TileReader::new("filename.txt").await.unwrap();
+		let mut reader = mock::TileReader::new("filename.txt").await.unwrap();
 		assert!(converter.convert_from(&mut reader).await.is_err())
 	}
 }

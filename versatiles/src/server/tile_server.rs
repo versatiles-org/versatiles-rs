@@ -288,7 +288,7 @@ mod tests {
 	use enumset::{enum_set, EnumSet};
 	use std::path::Path;
 	use versatiles_lib::{
-		containers::dummy,
+		containers::mock,
 		shared::{
 			Compression::{self, *},
 			TargetCompression,
@@ -361,7 +361,7 @@ mod tests {
 
 		let mut server = TileServer::new(IP, 50001, true, true);
 
-		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
+		let reader = mock::TileReader::new_mock(mock::ReaderProfile::PBF, 8);
 		server.add_tile_source("cheese", "burger", reader).unwrap();
 
 		server.start().await.unwrap();
@@ -385,10 +385,10 @@ mod tests {
 	async fn same_prefix_twice() {
 		let mut server = TileServer::new(IP, 50002, true, true);
 
-		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PNG, 8);
+		let reader = mock::TileReader::new_mock(mock::ReaderProfile::PNG, 8);
 		server.add_tile_source("cheese", "soup", reader).unwrap();
 
-		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
+		let reader = mock::TileReader::new_mock(mock::ReaderProfile::PBF, 8);
 		server.add_tile_source("cheese", "sandwich", reader).unwrap();
 	}
 
@@ -412,7 +412,7 @@ mod tests {
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50004);
 
-		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
+		let reader = mock::TileReader::new_mock(mock::ReaderProfile::PBF, 8);
 		server.add_tile_source("cheese", "pizza", reader).unwrap();
 
 		assert_eq!(server.tile_sources.len(), 1);
@@ -425,7 +425,7 @@ mod tests {
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50005);
 
-		let reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PBF, 8);
+		let reader = mock::TileReader::new_mock(mock::ReaderProfile::PBF, 8);
 		server.add_tile_source("cheese", "cake", reader).unwrap();
 
 		let mappings: Vec<(String, String)> = server.get_url_mapping().await;

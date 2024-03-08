@@ -81,6 +81,7 @@ full = [
 	"dep:terminal_size",
 	"dep:webp",
 ]
+mock = []
 
 [lib]
 name = "versatiles_lib"

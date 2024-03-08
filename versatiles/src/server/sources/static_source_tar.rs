@@ -183,7 +183,7 @@ mod tests {
 	use assert_fs::NamedTempFile;
 	use versatiles_lib::{
 		containers::{
-			dummy::{ReaderProfile, TileReader},
+			mock::{ReaderProfile, TileReader},
 			tar::TileConverter,
 			TileConverterTrait,
 		},
@@ -194,7 +194,7 @@ mod tests {
 		let reader_profile = ReaderProfile::PBF;
 
 		// get dummy reader
-		let mut reader = TileReader::new_dummy(reader_profile, 3);
+		let mut reader = TileReader::new_mock(reader_profile, 3);
 
 		// get to test container converter
 		let container_file = NamedTempFile::new("temp.tar").unwrap();

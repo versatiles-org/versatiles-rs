@@ -59,8 +59,8 @@ fn get_extension(path: &Path) -> String {
 pub mod tests {
 	use crate::{
 		containers::{
-			dummy::{self, ConverterProfile as CP, ReaderProfile as RP},
 			get_converter, get_reader,
+			mock::{self, ConverterProfile as CP, ReaderProfile as RP},
 		},
 		shared::{Compression as C, TileBBoxPyramid, TileConverterConfig, TileFormat as TF},
 	};
@@ -80,7 +80,7 @@ pub mod tests {
 		};
 
 		// get dummy reader
-		let mut reader = dummy::TileReader::new_dummy(reader_profile, max_zoom_level);
+		let mut reader = mock::TileReader::new_mock(reader_profile, max_zoom_level);
 
 		// get to test container comverter
 		let container_file = match extension {
@@ -120,7 +120,7 @@ pub mod tests {
 			let _start = Instant::now();
 
 			// get dummy reader
-			let mut reader1 = dummy::TileReader::new_dummy(reader_profile, max_zoom_level);
+			let mut reader1 = mock::TileReader::new_mock(reader_profile, max_zoom_level);
 
 			// get to test container comverter
 			let container_file = match container {
@@ -141,7 +141,7 @@ pub mod tests {
 
 			// get test container reader
 			let mut reader2 = get_reader(container_file.to_str().unwrap()).await?;
-			let mut converter2 = dummy::TileConverter::new_dummy(CP::Whatever, max_zoom_level);
+			let mut converter2 = mock::TileConverter::new_mock(CP::Whatever, max_zoom_level);
 			converter2.convert_from(&mut reader2).await?;
 
 			Ok(())

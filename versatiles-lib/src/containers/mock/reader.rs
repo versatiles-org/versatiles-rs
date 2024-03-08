@@ -1,7 +1,7 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
 	create_error,
-	shared::{Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters},
+	shared::{compress_gzip, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -13,8 +13,8 @@ pub enum ReaderProfile {
 	PBF,
 }
 
-pub const BYTES_PNG: &[u8; 103] = include_bytes!("./dummy.png");
-pub const BYTES_PBF: &[u8; 54] = include_bytes!("./dummy.pbf");
+pub const BYTES_PNG: &[u8; 103] = include_bytes!("./mock.png");
+pub const BYTES_PBF: &[u8; 54] = include_bytes!("./mock.pbf");
 
 pub struct TileReader {
 	parameters: TileReaderParameters,
@@ -22,7 +22,7 @@ pub struct TileReader {
 }
 
 impl TileReader {
-	pub fn new_dummy(profile: ReaderProfile, max_zoom_level: u8) -> TileReaderBox {
+	pub fn new_mock(profile: ReaderProfile, max_zoom_level: u8) -> TileReaderBox {
 		let mut bbox_pyramid = TileBBoxPyramid::new_full();
 		bbox_pyramid.set_zoom_max(max_zoom_level);
 
@@ -61,7 +61,7 @@ impl TileReaderTrait for TileReader {
 			Ok(match self.profile {
 				ReaderProfile::JSON => Blob::from(coord.as_json()),
 				ReaderProfile::PNG => Blob::from(BYTES_PNG.to_vec()),
-				ReaderProfile::PBF => Blob::from(BYTES_PBF.to_vec()),
+				ReaderProfile::PBF => compress_gzip(Blob::from(BYTES_PBF.to_vec()))?,
 			})
 		} else {
 			create_error!("invalid coordinates: {coord:?}")
@@ -81,14 +81,14 @@ impl std::fmt::Debug for TileReader {
 mod tests {
 	use super::{BYTES_PBF, BYTES_PNG};
 	use crate::{
-		containers::dummy::{converter::ConverterProfile, reader::ReaderProfile, TileConverter, TileReader},
+		containers::mock::{converter::ConverterProfile, reader::ReaderProfile, TileConverter, TileReader},
 		shared::{Blob, TileCoord3, TileReaderParameters},
 	};
 	use anyhow::Result;
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let mut reader = TileReader::new_dummy(ReaderProfile::PNG, 8);
+		let mut reader = TileReader::new_mock(ReaderProfile::PNG, 8);
 		assert_eq!(reader.get_container_name()?, "dummy container");
 		assert_eq!(reader.get_name()?, "dummy name");
 		assert_ne!(reader.get_parameters()?, &TileReaderParameters::new_dummy());
@@ -106,7 +106,7 @@ mod tests {
 	async fn get_tile_data_original() {
 		let test = |profile, blob| async move {
 			let coord = TileCoord3::new(23, 45, 6).unwrap();
-			let mut reader = TileReader::new_dummy(profile, 8);
+			let mut reader = TileReader::new_mock(profile, 8);
 			let tile = reader.get_tile_data_original(&coord).await.unwrap();
 			assert_eq!(tile, blob);
 		};
@@ -118,8 +118,8 @@ mod tests {
 
 	#[tokio::test]
 	async fn convert_from() {
-		let mut converter = TileConverter::new_dummy(ConverterProfile::Png, 8);
-		let mut reader = TileReader::new_dummy(ReaderProfile::PNG, 8);
+		let mut converter = TileConverter::new_mock(ConverterProfile::PNG, 8);
+		let mut reader = TileReader::new_mock(ReaderProfile::PNG, 8);
 		converter.convert_from(&mut reader).await.unwrap();
 	}
 }
