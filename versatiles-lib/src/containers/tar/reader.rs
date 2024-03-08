@@ -30,6 +30,7 @@ pub struct TileReader {
 	tile_map: HashMap<TileCoord3, TarByteRange>,
 	parameters: TileReaderParameters,
 }
+
 #[async_trait]
 impl TileReaderTrait for TileReader {
 	fn get_container_name(&self) -> Result<&str> {
@@ -53,8 +54,8 @@ impl TileReaderTrait for TileReader {
 
 		let mut meta: Option<Blob> = None;
 		let mut tile_map = HashMap::new();
-		let mut tile_form: Option<TileFormat> = None;
-		let mut tile_comp: Option<Compression> = None;
+		let mut tile_format: Option<TileFormat> = None;
+		let mut tile_compression: Option<Compression> = None;
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
 		for entry in archive.entries()? {
@@ -83,7 +84,7 @@ impl TileReaderTrait for TileReader {
 				let x = filename[0].parse::<u32>()?;
 
 				let mut extension = filename.pop().unwrap();
-				let file_comp = match extension {
+				let this_compression = match extension {
 					"gz" => {
 						extension = filename.pop().unwrap();
 						Compression::Gzip
@@ -95,7 +96,7 @@ impl TileReaderTrait for TileReader {
 					_ => Compression::None,
 				};
 
-				let this_form = match extension {
+				let this_format = match extension {
 					"png" => TileFormat::PNG,
 					"jpg" => TileFormat::JPG,
 					"jpeg" => TileFormat::JPG,
@@ -104,15 +105,15 @@ impl TileReaderTrait for TileReader {
 					_ => panic!("unknown extension for {path_vec:?}"),
 				};
 
-				if tile_form.is_none() {
-					tile_form = Some(this_form);
-				} else if tile_form.as_ref().unwrap() != &this_form {
+				if tile_format.is_none() {
+					tile_format = Some(this_format);
+				} else if tile_format.as_ref().unwrap() != &this_format {
 					return create_error!("unknown filename {path_tmp_string:?}, can't detect format");
 				}
 
-				if tile_comp.is_none() {
-					tile_comp = Some(file_comp);
-				} else if tile_comp.as_ref().unwrap() != &file_comp {
+				if tile_compression.is_none() {
+					tile_compression = Some(this_compression);
+				} else if tile_compression.as_ref().unwrap() != &this_compression {
 					return create_error!("unknown filename {path_tmp_string:?}, can't detect compression");
 				}
 
@@ -157,7 +158,7 @@ impl TileReaderTrait for TileReader {
 			name: path.to_string(),
 			file,
 			tile_map,
-			parameters: TileReaderParameters::new(tile_form.unwrap(), tile_comp.unwrap(), bbox_pyramid),
+			parameters: TileReaderParameters::new(tile_format.unwrap(), tile_compression.unwrap(), bbox_pyramid),
 		}))
 	}
 	fn get_parameters(&self) -> Result<&TileReaderParameters> {

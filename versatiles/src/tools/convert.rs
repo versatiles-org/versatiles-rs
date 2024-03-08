@@ -10,11 +10,11 @@ use versatiles_lib::{
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
 pub struct Subcommand {
-	/// supported container formats: *.versatiles, *.tar, *.mbtiles
+	/// supported container formats: *.versatiles, *.tar, *.mbtiles or a directory
 	#[arg()]
 	input_file: String,
 
-	/// supported container formats: *.versatiles, *.tar
+	/// supported container formats: *.versatiles, *.tar or a directory
 	#[arg()]
 	output_file: String,
 

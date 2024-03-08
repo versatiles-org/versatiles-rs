@@ -1,5 +1,6 @@
 use anyhow::Context;
 
+use super::directory;
 use super::mbtiles;
 use super::tar;
 use super::{versatiles, TileReaderBox, TileReaderTrait};
@@ -10,7 +11,15 @@ use anyhow::Result;
 use std::path::{Path, PathBuf};
 
 pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
-	let extension = get_extension(&PathBuf::from(filename));
+	let path = PathBuf::from(filename);
+
+	if path.is_dir() {
+		return directory::TileReader::new(filename)
+			.await
+			.with_context(|| format!("opening {filename} as directory"));
+	}
+
+	let extension = get_extension(&path);
 	match extension.as_str() {
 		"mbtiles" => Ok(mbtiles::TileReader::new(filename)
 			.await
@@ -27,10 +36,12 @@ pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
 
 pub async fn get_converter(filename: &str, config: TileConverterConfig) -> Result<TileConverterBox> {
 	let path = PathBuf::from(filename);
+
 	let extension = get_extension(&path);
 	match extension.as_str() {
 		"versatiles" => versatiles::TileConverter::new(filename, config).await,
 		"tar" => tar::TileConverter::new(filename, config).await,
+		"" => directory::TileConverter::new(filename, config).await,
 		_ => create_error!("Error when writing: file extension '{extension:?}' unknown"),
 	}
 }

@@ -1,4 +1,6 @@
 #[cfg(feature = "full")]
+pub mod directory;
+#[cfg(feature = "full")]
 pub mod dummy;
 #[cfg(feature = "full")]
 mod getters;
