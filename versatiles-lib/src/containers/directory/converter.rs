@@ -6,7 +6,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use std::{
-	fs,
+	env, fs,
 	path::{Path, PathBuf},
 };
 use tokio::sync::Mutex;
@@ -42,7 +42,7 @@ impl TileConverterTrait for TileConverter {
 	{
 		log::trace!("new {:?}", filename);
 
-		let dir = PathBuf::from(filename);
+		let dir = env::current_dir().unwrap().join(filename);
 
 		Ok(Box::new(TileConverter { dir, config }))
 	}

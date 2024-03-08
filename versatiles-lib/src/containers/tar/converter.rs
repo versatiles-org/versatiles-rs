@@ -2,11 +2,12 @@ use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
 	shared::{compress, Compression, ProgressBar, TileConverterConfig, TileFormat},
 };
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use log::trace;
 use std::{
+	env,
 	fs::File,
 	path::{Path, PathBuf},
 };
@@ -26,7 +27,11 @@ impl TileConverterTrait for TileConverter {
 	{
 		trace!("new {:?}", filename);
 
-		let file = File::create(filename)?;
+		let path = env::current_dir().unwrap().join(filename);
+		ensure!(path.exists(), "file {path:?} does not exist");
+		ensure!(path.is_absolute(), "path {path:?} must be absolute");
+
+		let file = File::create(path)?;
 		let builder = Builder::new(file);
 
 		Ok(Box::new(TileConverter { builder, config }))

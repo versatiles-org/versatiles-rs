@@ -8,6 +8,7 @@ use async_trait::async_trait;
 use log;
 use std::{
 	collections::HashMap,
+	env,
 	fmt::Debug,
 	fs,
 	path::{Path, PathBuf},
@@ -31,12 +32,12 @@ impl TileReaderTrait for TileReader {
 	fn get_container_name(&self) -> Result<&str> {
 		Ok("tar")
 	}
-	async fn new(directory: &str) -> Result<TileReaderBox>
+	async fn new(filename: &str) -> Result<TileReaderBox>
 	where
 		Self: Sized,
 	{
-		let path = PathBuf::from(directory);
-		log::trace!("new {:?}", path);
+		let path = env::current_dir().unwrap().join(filename);
+		log::trace!("read {:?}", path);
 
 		ensure!(path.is_dir(), "file {path:?} does not exist");
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
@@ -101,7 +102,6 @@ impl TileReaderTrait for TileReader {
 							"pbf" => TileFormat::PBF,
 							_ => panic!("unknown extension for {filename:?}"),
 						};
-						filename.pop();
 
 						let numeric3 = filename.join(".").parse::<u32>();
 						if numeric3.is_err() {

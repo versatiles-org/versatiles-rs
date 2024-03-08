@@ -4,6 +4,7 @@ use crate::shared::Blob;
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{
+	env,
 	fs::File,
 	io::{BufWriter, Seek, SeekFrom, Write},
 };
@@ -15,8 +16,9 @@ pub struct DataWriterFile {
 #[async_trait]
 impl DataWriterTrait for DataWriterFile {
 	fn new(filename: &str) -> Result<Box<Self>> {
+		let path = env::current_dir().unwrap().join(filename);
 		Ok(Box::new(DataWriterFile {
-			writer: BufWriter::new(File::create(filename)?),
+			writer: BufWriter::new(File::create(path)?),
 		}))
 	}
 

@@ -7,7 +7,12 @@ use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
 use log;
 use std::{
-	collections::HashMap, env::current_dir, fmt::Debug, fs::File, io::Read, os::unix::prelude::FileExt, path::Path,
+	collections::HashMap,
+	env::{self},
+	fmt::Debug,
+	fs::File,
+	io::Read,
+	os::unix::prelude::FileExt,
 };
 use tar::{Archive, EntryType};
 
@@ -36,20 +41,18 @@ impl TileReaderTrait for TileReader {
 	fn get_container_name(&self) -> Result<&str> {
 		Ok("tar")
 	}
-	async fn new(path: &str) -> Result<TileReaderBox>
+	async fn new(filename: &str) -> Result<TileReaderBox>
 	where
 		Self: Sized,
 	{
-		log::trace!("new {}", path);
-		let mut filename = current_dir()?;
-		filename.push(Path::new(path));
+		log::trace!("new {}", filename);
 
-		ensure!(filename.exists(), "file {filename:?} does not exist");
-		ensure!(filename.is_absolute(), "path {filename:?} must be absolute");
+		let path = env::current_dir().unwrap().join(filename);
 
-		filename = filename.canonicalize()?;
+		ensure!(path.exists(), "file {path:?} does not exist");
+		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
-		let file = File::open(filename)?;
+		let file = File::open(path)?;
 		let mut archive = Archive::new(&file);
 
 		let mut meta: Option<Blob> = None;
@@ -155,7 +158,7 @@ impl TileReaderTrait for TileReader {
 
 		Ok(Box::new(TileReader {
 			meta,
-			name: path.to_string(),
+			name: String::from(filename),
 			file,
 			tile_map,
 			parameters: TileReaderParameters::new(tile_format.unwrap(), tile_compression.unwrap(), bbox_pyramid),

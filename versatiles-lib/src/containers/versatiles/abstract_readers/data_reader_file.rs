@@ -1,13 +1,12 @@
 use super::super::types::ByteRange;
 use super::DataReaderTrait;
-use crate::{create_error, shared::Blob};
-use anyhow::Result;
+use crate::shared::Blob;
+use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use std::{
-	env::current_dir,
+	env,
 	fs::File,
 	io::{BufReader, Read, Seek, SeekFrom},
-	path::Path,
 };
 
 pub struct DataReaderFile {
@@ -17,23 +16,16 @@ pub struct DataReaderFile {
 
 #[async_trait]
 impl DataReaderTrait for DataReaderFile {
-	async fn new(source: &str) -> Result<Box<Self>> {
-		let mut filename = current_dir()?;
-		filename.push(Path::new(source));
+	async fn new(filename: &str) -> Result<Box<Self>> {
+		let path = env::current_dir().unwrap().join(filename);
 
-		if !filename.exists() {
-			return create_error!("file \"{filename:?}\" not found");
-		}
+		ensure!(path.exists(), "file {path:?} does not exist");
+		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
-		if !filename.is_absolute() {
-			return create_error!("filename \"{filename:?}\" must be absolute");
-		}
-
-		filename = filename.canonicalize()?;
-		let file = File::open(filename)?;
+		let file = File::open(path)?;
 
 		Ok(Box::new(Self {
-			name: source.to_string(),
+			name: filename.to_string(),
 			reader: BufReader::new(file),
 		}))
 	}

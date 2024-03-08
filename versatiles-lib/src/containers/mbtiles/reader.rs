@@ -9,10 +9,7 @@ use futures_util::StreamExt;
 use log::trace;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use std::{
-	env::current_dir,
-	path::{Path, PathBuf},
-};
+use std::{env, path::Path};
 
 pub struct TileReader {
 	name: String,
@@ -21,17 +18,15 @@ pub struct TileReader {
 	parameters: TileReaderParameters,
 }
 impl TileReader {
-	async fn load_from_sqlite(filename: &PathBuf) -> Result<TileReader> {
-		trace!("load_from_sqlite {:?}", filename);
+	async fn load_from_sqlite(path: &Path) -> Result<TileReader> {
+		trace!("load_from_sqlite {:?}", path);
 
-		let name = filename.to_string_lossy().to_string();
-
-		let manager = SqliteConnectionManager::file(&name);
+		let manager = SqliteConnectionManager::file(&path);
 		let pool = Pool::builder().max_size(10).build(manager)?;
 		let parameters = TileReaderParameters::new(TileFormat::PBF, Compression::None, TileBBoxPyramid::new_empty());
 
 		let mut reader = TileReader {
-			name,
+			name: String::from(path.to_str().unwrap()),
 			pool,
 			meta_data: None,
 			parameters,
@@ -188,13 +183,10 @@ impl TileReaderTrait for TileReader {
 	async fn new(filename: &str) -> Result<TileReaderBox> {
 		trace!("open {}", filename);
 
-		let mut path = current_dir()?;
-		path.push(Path::new(filename));
+		let path = env::current_dir().unwrap().join(filename);
 
 		ensure!(path.exists(), "file {path:?} does not exist");
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
-
-		path = path.canonicalize()?;
 
 		let mut db = Self::load_from_sqlite(&path).await?;
 		db.name = filename.to_string();
