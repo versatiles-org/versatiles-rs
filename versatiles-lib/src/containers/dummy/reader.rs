@@ -1,7 +1,7 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
 	create_error,
-	shared::{compress_gzip, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters},
+	shared::{Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -12,6 +12,9 @@ pub enum ReaderProfile {
 	PNG,
 	PBF,
 }
+
+pub const BYTES_PNG: &[u8; 103] = include_bytes!("./dummy.png");
+pub const BYTES_PBF: &[u8; 54] = include_bytes!("./dummy.pbf");
 
 pub struct TileReader {
 	parameters: TileReaderParameters,
@@ -57,8 +60,8 @@ impl TileReaderTrait for TileReader {
 		if coord.is_valid() {
 			Ok(match self.profile {
 				ReaderProfile::JSON => Blob::from(coord.as_json()),
-				ReaderProfile::PNG => Blob::from(include_bytes!("./dummy.png").to_vec()),
-				ReaderProfile::PBF => compress_gzip(Blob::from(include_bytes!("./dummy.pbf").to_vec()))?,
+				ReaderProfile::PNG => Blob::from(BYTES_PNG.to_vec()),
+				ReaderProfile::PBF => Blob::from(BYTES_PBF.to_vec()),
 			})
 		} else {
 			create_error!("invalid coordinates: {coord:?}")
@@ -76,6 +79,7 @@ impl std::fmt::Debug for TileReader {
 
 #[cfg(test)]
 mod tests {
+	use super::{BYTES_PBF, BYTES_PNG};
 	use crate::{
 		containers::dummy::{converter::ConverterProfile, reader::ReaderProfile, TileConverter, TileReader},
 		shared::{Blob, TileCoord3, TileReaderParameters},
@@ -107,8 +111,8 @@ mod tests {
 			assert_eq!(tile, blob);
 		};
 
-		test(ReaderProfile::PNG, Blob::from(b"\x89PNG\x0d\x0a\x1a\x0a\x00\x00\x00\x0dIHDR\x00\x00\x01\x00\x00\x00\x01\x00\x01\x03\x00\x00\x00f\xbc:%\x00\x00\x00\x03PLTE\xaa\xd3\xdf\xcf\xec\xbc\xf5\x00\x00\x00\x1fIDATh\x81\xed\xc1\x01\x0d\x00\x00\x00\xc2\xa0\xf7Om\x0e7\xa0\x00\x00\x00\x00\x00\x00\x00\x00\xbe\x0d!\x00\x00\x01\x9a`\xe1\xd5\x00\x00\x00\x00IEND\xaeB`\x82".to_vec())).await;
-		test(ReaderProfile::PBF, Blob::from(b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x02\xff\x016\x00\xc9\xff\x1a4\x0a\x05ocean\x12\x19\x12\x04\x00\x00\x01\x00\x18\x03\x22\x0f\x09)\xa8@\x1a\x00\xd1@\xd2@\x00\x00\xd2@\x0f\x1a\x01x\x1a\x01y\x22\x05\x15\x00\x00\x00\x00(\x80 x\x02C!\x1f_6\x00\x00\x00".to_vec())).await;
+		test(ReaderProfile::PNG, Blob::from(BYTES_PNG.to_vec())).await;
+		test(ReaderProfile::PBF, Blob::from(BYTES_PBF.to_vec())).await;
 		test(ReaderProfile::JSON, Blob::from("{x:23,y:45,z:6}")).await;
 	}
 

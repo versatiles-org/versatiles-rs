@@ -117,3 +117,64 @@ impl TileConverterTrait for TileConverter {
 		Ok(())
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use crate::containers::dummy;
+
+	use super::*;
+	use std::fs::File;
+	use std::io::Read;
+	use tempfile::tempdir;
+
+	#[test]
+	fn test_write() -> Result<()> {
+		let temp_dir = tempdir()?;
+		let tile_converter = TileConverter {
+			dir: temp_dir.path().to_path_buf(),
+			config: TileConverterConfig::new_full(),
+		};
+
+		let file_path = Path::new("test_write.txt");
+		let contents = b"Hello, world!";
+		tile_converter.write(file_path, contents)?;
+
+		let mut file = File::open(temp_dir.path().join(file_path))?;
+		let mut file_contents = Vec::new();
+		file.read_to_end(&mut file_contents)?;
+
+		assert_eq!(contents.as_ref(), file_contents.as_slice());
+		Ok(())
+	}
+
+	#[test]
+	fn test_ensure_directory() -> Result<()> {
+		let temp_dir = tempdir()?;
+		let nested_dir_path = temp_dir.path().join("a/b/c");
+		assert!(!nested_dir_path.exists());
+
+		TileConverter::ensure_directory(&nested_dir_path)?;
+
+		assert!(nested_dir_path.parent().unwrap().exists());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_convert_from() -> Result<()> {
+		let temp_dir = tempdir()?;
+		let temp_path = temp_dir.path();
+		let filename = temp_path.to_str().unwrap();
+		let tile_config = TileConverterConfig::new_full();
+		let mut tile_converter = TileConverter::new(filename, tile_config).await?;
+
+		let mut mock_reader = dummy::TileReader::new_dummy(dummy::ReaderProfile::PNG, 3);
+
+		tile_converter.convert_from(&mut mock_reader).await?;
+
+		assert_eq!(fs::read_to_string(temp_path.join("tiles.json"))?, "dummy meta data");
+		assert_eq!(fs::read(temp_path.join("0/0/0.png"))?, dummy::BYTES_PNG);
+		assert_eq!(fs::read(temp_path.join("3/7/7.png"))?, dummy::BYTES_PNG);
+
+		Ok(())
+	}
+}

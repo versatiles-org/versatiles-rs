@@ -1860,6 +1860,7 @@ dependencies = [
  "regex",
  "reqwest",
  "tar",
+ "tempfile",
  "terminal_size",
  "tokio",
  "webp",
