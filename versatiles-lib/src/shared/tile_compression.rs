@@ -17,3 +17,20 @@ pub fn compression_to_extension(compression: &Compression) -> String {
 		Compression::Brotli => ".br",
 	})
 }
+
+pub fn extract_compression(filename: &mut String) -> Compression {
+	if let Some(index) = filename.rfind(".") {
+		let compression = match filename.get(index..).unwrap() {
+			".gz" => Compression::Gzip,
+			".br" => Compression::Brotli,
+			_ => Compression::None,
+		};
+
+		if compression != Compression::None {
+			filename.truncate(index)
+		}
+		return compression;
+	}
+	Compression::None
+}
+

@@ -31,3 +31,26 @@ pub fn format_to_extension(format: &TileFormat) -> String {
 		TileFormat::WEBP => ".webp",
 	})
 }
+
+pub fn extract_format(filename: &mut String) -> TileFormat {
+	if let Some(index) = filename.rfind(".") {
+		let format = match filename.get(index..).unwrap() {
+			".avif" => TileFormat::AVIF,
+			".bin" => TileFormat::BIN,
+			".geojson" => TileFormat::GEOJSON,
+			".jpg" => TileFormat::JPG,
+			".jpeg" => TileFormat::JPG,
+			".json" => TileFormat::JSON,
+			".pbf" => TileFormat::PBF,
+			".png" => TileFormat::PNG,
+			".svg" => TileFormat::SVG,
+			".topojson" => TileFormat::TOPOJSON,
+			".webp" => TileFormat::WEBP,
+			_ => TileFormat::BIN,
+		};
+		filename.truncate(index);
+		return format;
+	}
+	TileFormat::BIN
+}
+
