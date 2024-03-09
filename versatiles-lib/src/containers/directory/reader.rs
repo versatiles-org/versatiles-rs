@@ -165,3 +165,35 @@ impl Debug for TileReader {
 			.finish()
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use assert_fs::TempDir;
+	use std::fs::{self};
+
+	#[tokio::test]
+	async fn test_tile_reader_new() -> Result<()> {
+		let dir = TempDir::new()?;
+
+		fs::create_dir_all(dir.path().join("1/2"))?;
+		fs::write(dir.path().join(".DS_Store"), "")?;
+		fs::write(dir.path().join("1/2/3.png"), "test tile data")?;
+		fs::write(dir.path().join("meta.json"), "test meta data")?;
+
+		let mut reader = TileReader::new(dir.to_str().unwrap()).await.unwrap();
+
+		assert_eq!(reader.get_meta().await?.unwrap().as_str(), "test meta data");
+
+		let coord = TileCoord3::new(2, 3, 1).unwrap();
+		let tile_data = reader.get_tile_data_original(&coord).await;
+		assert!(tile_data.is_ok());
+		assert_eq!(tile_data.unwrap(), Blob::from("test tile data"));
+
+		// Test for non-existent tile
+		let coord = TileCoord3::new(2, 2, 1).unwrap(); // Assuming these coordinates do not exist
+		assert!(reader.get_tile_data_original(&coord).await.is_err());
+
+		return Ok(());
+	}
+}
