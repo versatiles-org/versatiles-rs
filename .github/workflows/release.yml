@@ -23,7 +23,7 @@ jobs:
       tag: ${{ steps.create_release.outputs.tag }}
     steps:
       - name: Checkout code # From the void, form emerges.
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - id: create_release
         name: Get version via latest git tag # The tags, like our thoughts, are fleeting.
@@ -38,13 +38,13 @@ jobs:
       matrix:
         libc: [gnu, musl]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - uses: docker/setup-qemu-action@v2
-      - uses: docker/setup-buildx-action@v2
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
       - name: Test and Build Binary
         run: docker buildx build --platform="linux/arm64" --file="docker/build-linux.Dockerfile" --build-arg="ARCH=aarch64" --build-arg="LIBC=${{ matrix.libc }}" --progress="plain" --output="type=local,dest=output/" .
       - name: Pack and upload # The harvest, a testament to the labor.
@@ -59,13 +59,13 @@ jobs:
       matrix:
         libc: [gnu, musl]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - uses: docker/setup-qemu-action@v2
-      - uses: docker/setup-buildx-action@v2
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
       - name: Test and Build Binary
         run: docker buildx build --platform="linux/amd64" --file="docker/build-linux.Dockerfile" --build-arg="ARCH=x86_64" --build-arg="LIBC=${{ matrix.libc }}" --progress="plain" --output="type=local,dest=output/" .
       - name: Pack and upload # The harvest, a testament to the labor.
@@ -80,13 +80,11 @@ jobs:
       matrix:
         arch: [x86_64, aarch64]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          target: ${{ matrix.arch }}-apple-darwin
-          default: true
+          targets: ${{ matrix.arch }}-apple-darwin
       - run: |
           SDKROOT=$(xcrun --show-sdk-path)
           MACOSX_DEPLOYMENT_TARGET=$(xcrun --show-sdk-platform-version)
@@ -112,13 +110,11 @@ jobs:
         arch: [x86_64, aarch64]
         libc: [msvc]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@v1
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          target: ${{ matrix.arch }}-pc-windows-${{ matrix.libc }}
-          default: true
+          targets: ${{ matrix.arch }}-pc-windows-${{ matrix.libc }}
 
       - name: Test binary # Testing is the bridge between expectation and reality.
         run: cargo test --all-features --workspace --release --target "$TARGET"
@@ -139,7 +135,7 @@ jobs:
       #- build-windows
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
 
       - name: Finalize the release # The final stroke of the brush completes the masterpiece.
         run: gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest --prerelease=false
