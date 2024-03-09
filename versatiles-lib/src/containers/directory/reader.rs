@@ -1,7 +1,10 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
 	create_error,
-	shared::{decompress, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters},
+	shared::{
+		decompress, extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat,
+		TileReaderParameters,
+	},
 };
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
@@ -78,32 +81,11 @@ impl TileReaderTrait for TileReader {
 							continue;
 						}
 						let entry3 = result3.unwrap();
-						let name3 = entry3.file_name().into_string().unwrap();
+						let mut filename = entry3.file_name().into_string().unwrap();
+						let this_comp = extract_compression(&mut filename);
+						let this_form = extract_format(&mut filename);
 
-						let mut filename: Vec<&str> = name3.split('.').collect();
-						let mut extension = filename.pop().unwrap();
-						let this_comp = match extension {
-							"gz" => {
-								extension = filename.pop().unwrap();
-								Compression::Gzip
-							}
-							"br" => {
-								extension = filename.pop().unwrap();
-								Compression::Brotli
-							}
-							_ => Compression::None,
-						};
-
-						let this_form = match extension {
-							"png" => TileFormat::PNG,
-							"jpg" => TileFormat::JPG,
-							"jpeg" => TileFormat::JPG,
-							"webp" => TileFormat::WEBP,
-							"pbf" => TileFormat::PBF,
-							_ => panic!("unknown extension for {filename:?}"),
-						};
-
-						let numeric3 = filename.join(".").parse::<u32>();
+						let numeric3 = filename.parse::<u32>();
 						if numeric3.is_err() {
 							continue;
 						}

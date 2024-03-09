@@ -33,7 +33,7 @@ pub fn format_to_extension(format: &TileFormat) -> String {
 }
 
 pub fn extract_format(filename: &mut String) -> TileFormat {
-	if let Some(index) = filename.rfind(".") {
+	if let Some(index) = filename.rfind('.') {
 		let format = match filename.get(index..).unwrap() {
 			".avif" => TileFormat::AVIF,
 			".bin" => TileFormat::BIN,
