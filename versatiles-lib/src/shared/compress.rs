@@ -1,23 +1,13 @@
 #![allow(non_snake_case, dead_code)]
 
-use super::Blob;
+use super::{Blob, Compression};
 use crate::create_error;
 use anyhow::Result;
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
 #[cfg(feature = "full")]
-use clap::ValueEnum;
-use enumset::{EnumSet, EnumSetType};
+use enumset::EnumSet;
 use flate2::bufread::{GzDecoder, GzEncoder};
 use std::io::{Cursor, Read};
-
-/// Enum representing possible compression algorithms
-#[derive(Debug, EnumSetType)]
-#[cfg_attr(feature = "full", derive(ValueEnum))]
-pub enum Compression {
-	None,
-	Gzip,
-	Brotli,
-}
 
 #[derive(Debug, PartialEq)]
 pub struct TargetCompression {

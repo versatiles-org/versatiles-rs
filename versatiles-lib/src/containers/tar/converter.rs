@@ -1,6 +1,6 @@
 use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{compress, Compression, ProgressBar, TileConverterConfig, TileFormat},
+	shared::{compress, compression_to_extension, format_to_extension, ProgressBar, TileConverterConfig},
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
@@ -42,26 +42,8 @@ impl TileConverterTrait for TileConverter {
 
 		let tile_converter = self.config.get_tile_recompressor();
 
-		let ext_form = match self.config.get_tile_format() {
-			TileFormat::BIN => "",
-
-			TileFormat::PNG => ".png",
-			TileFormat::JPG => ".jpg",
-			TileFormat::WEBP => ".webp",
-			TileFormat::AVIF => ".avif",
-			TileFormat::SVG => ".svg",
-
-			TileFormat::PBF => ".pbf",
-			TileFormat::GEOJSON => ".geojson",
-			TileFormat::TOPOJSON => ".topojson",
-			TileFormat::JSON => ".json",
-		};
-
-		let ext_comp = match self.config.get_tile_compression() {
-			Compression::None => "",
-			Compression::Gzip => ".gz",
-			Compression::Brotli => ".br",
-		};
+		let extension_format = format_to_extension(self.config.get_tile_format());
+		let extension_compression = compression_to_extension(self.config.get_tile_compression());
 
 		let bbox_pyramid = self.config.get_bbox_pyramid();
 
@@ -69,7 +51,7 @@ impl TileConverterTrait for TileConverter {
 
 		if let Some(meta_data) = meta_data_option {
 			let meta_data = compress(meta_data, self.config.get_tile_compression())?;
-			let filename = format!("tiles.json{}", ext_comp);
+			let filename = format!("tiles.json{}", extension_compression);
 
 			let mut header = Header::new_gnu();
 			header.set_size(meta_data.len() as u64);
@@ -97,8 +79,8 @@ impl TileConverterTrait for TileConverter {
 						coord.get_z(),
 						coord.get_y(),
 						coord.get_x(),
-						ext_form,
-						ext_comp
+						extension_format,
+						extension_compression
 					);
 					let path = PathBuf::from(&filename);
 
