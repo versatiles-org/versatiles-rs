@@ -82,7 +82,7 @@ mod tests {
 	use super::{BYTES_PBF, BYTES_PNG};
 	use crate::{
 		containers::mock::{converter::ConverterProfile, reader::ReaderProfile, TileConverter, TileReader},
-		shared::{Blob, TileCoord3, TileReaderParameters},
+		shared::{decompress, Blob, TileCoord3, TileReaderParameters},
 	};
 	use anyhow::Result;
 
@@ -107,8 +107,9 @@ mod tests {
 		let test = |profile, blob| async move {
 			let coord = TileCoord3::new(23, 45, 6).unwrap();
 			let mut reader = TileReader::new_mock(profile, 8);
-			let tile = reader.get_tile_data_original(&coord).await.unwrap();
-			assert_eq!(tile, blob);
+			let tile_compressed = reader.get_tile_data_original(&coord).await.unwrap();
+			let tile_uncompressed = decompress(tile_compressed, reader.get_tile_compression().unwrap()).unwrap();
+			assert_eq!(tile_uncompressed, blob);
 		};
 
 		test(ReaderProfile::PNG, Blob::from(BYTES_PNG.to_vec())).await;

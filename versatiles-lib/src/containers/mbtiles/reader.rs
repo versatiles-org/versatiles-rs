@@ -21,7 +21,7 @@ impl TileReader {
 	async fn load_from_sqlite(path: &Path) -> Result<TileReader> {
 		trace!("load_from_sqlite {:?}", path);
 
-		let manager = SqliteConnectionManager::file(&path);
+		let manager = SqliteConnectionManager::file(path);
 		let pool = Pool::builder().max_size(10).build(manager)?;
 		let parameters = TileReaderParameters::new(TileFormat::PBF, Compression::None, TileBBoxPyramid::new_empty());
 

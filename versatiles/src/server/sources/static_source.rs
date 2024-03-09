@@ -94,7 +94,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_static_source_new_integration() {
 		// Create temporary file and directory for testing
-		let temp_dir = tempfile::tempdir().unwrap();
+		let temp_dir = assert_fs::TempDir::new().unwrap();
 		let temp_file_path = temp_dir.path().join("temp.tar");
 		let temp_folder_path = temp_dir.path().join("folder");
 		std::fs::create_dir(&temp_folder_path).unwrap();

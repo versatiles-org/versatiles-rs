@@ -2,7 +2,7 @@ use crate::{
 	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
 	shared::{compress, Compression, ProgressBar, TileConverterConfig, TileFormat},
 };
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use std::{
@@ -43,6 +43,8 @@ impl TileConverterTrait for TileConverter {
 		log::trace!("new {:?}", filename);
 
 		let dir = env::current_dir().unwrap().join(filename);
+		ensure!(dir.is_dir(), "path {dir:?} must be a directory");
+		ensure!(dir.is_absolute(), "path {dir:?} must be absolute");
 
 		Ok(Box::new(TileConverter { dir, config }))
 	}
@@ -120,16 +122,16 @@ impl TileConverterTrait for TileConverter {
 
 #[cfg(test)]
 mod tests {
-	use crate::containers::mock;
+	use assert_fs;
 
 	use super::*;
+	use crate::containers::mock;
 	use std::fs::File;
 	use std::io::Read;
-	use tempfile::tempdir;
 
 	#[test]
 	fn test_write() -> Result<()> {
-		let temp_dir = tempdir()?;
+		let temp_dir = assert_fs::TempDir::new()?;
 		let tile_converter = TileConverter {
 			dir: temp_dir.path().to_path_buf(),
 			config: TileConverterConfig::new_full(),
@@ -149,7 +151,7 @@ mod tests {
 
 	#[test]
 	fn test_ensure_directory() -> Result<()> {
-		let temp_dir = tempdir()?;
+		let temp_dir = assert_fs::TempDir::new()?;
 		let nested_dir_path = temp_dir.path().join("a/b/c");
 		assert!(!nested_dir_path.exists());
 
@@ -161,7 +163,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_convert_from() -> Result<()> {
-		let temp_dir = tempdir()?;
+		let temp_dir = assert_fs::TempDir::new()?;
 		let temp_path = temp_dir.path();
 		let filename = temp_path.to_str().unwrap();
 		let tile_config = TileConverterConfig::new_full();

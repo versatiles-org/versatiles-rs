@@ -28,7 +28,6 @@ impl TileConverterTrait for TileConverter {
 		trace!("new {:?}", filename);
 
 		let path = env::current_dir().unwrap().join(filename);
-		ensure!(path.exists(), "file {path:?} does not exist");
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
 		let file = File::create(path)?;

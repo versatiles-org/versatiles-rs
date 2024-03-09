@@ -92,6 +92,7 @@ impl Debug for Folder {
 mod tests {
 	use super::Folder;
 	use crate::server::sources::static_source::StaticSourceTrait;
+	use assert_fs;
 	use versatiles_lib::shared::TargetCompression;
 
 	#[tokio::test]
@@ -121,7 +122,7 @@ mod tests {
 	#[tokio::test]
 	async fn directory_with_index_html() {
 		// Setup: Create a temporary directory and place an index.html file inside it
-		let temp_dir = tempfile::tempdir().unwrap();
+		let temp_dir = assert_fs::TempDir::new().unwrap();
 		let dir_path = temp_dir.path().join("testdir");
 		std::fs::create_dir(&dir_path).unwrap_or_default();
 

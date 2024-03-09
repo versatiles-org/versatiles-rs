@@ -1,7 +1,7 @@
 use super::super::types::ByteRange;
 use super::DataWriterTrait;
 use crate::shared::Blob;
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use std::{
 	env,
@@ -17,6 +17,8 @@ pub struct DataWriterFile {
 impl DataWriterTrait for DataWriterFile {
 	fn new(filename: &str) -> Result<Box<Self>> {
 		let path = env::current_dir().unwrap().join(filename);
+		ensure!(path.is_absolute(), "path {path:?} must be absolute");
+
 		Ok(Box::new(DataWriterFile {
 			writer: BufWriter::new(File::create(path)?),
 		}))
