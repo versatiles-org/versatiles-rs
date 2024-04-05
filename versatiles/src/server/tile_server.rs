@@ -1,7 +1,7 @@
 use super::sources::{SourceResponse, StaticSource, TileSource};
 use anyhow::Result;
 use axum::{
-	body::{Bytes, Full},
+	body::Body,
 	extract::{Path, State},
 	http::{
 		header::{ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE},
@@ -9,7 +9,7 @@ use axum::{
 	},
 	response::Response,
 	routing::get,
-	Router, Server,
+	Router,
 };
 use tokio::sync::oneshot::Sender;
 use versatiles_lib::{
@@ -81,31 +81,26 @@ impl TileServer {
 		log::info!("starting server");
 
 		// Initialize App
-		let mut app = Router::new().route("/status", get(|| async { "ready!" }));
+		let mut router = Router::new().route("/status", get(|| async { "ready!" }));
 
-		app = self.add_tile_sources_to_app(app);
+		router = self.add_tile_sources_to_app(router);
 		if self.use_api {
-			app = self.add_api_to_app(app).await?;
+			router = self.add_api_to_app(router).await?;
 		}
-		app = self.add_static_sources_to_app(app);
+		router = self.add_static_sources_to_app(router);
 
 		let addr = format!("{}:{}", self.ip, self.port);
 		eprintln!("server starts listening on {}", addr);
 
-		let server = Server::bind(&addr.parse()?).serve(app.into_make_service());
-
+		let listener = tokio::net::TcpListener::bind(addr).await?;
 		let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-		let graceful = server.with_graceful_shutdown(async {
-			rx.await.ok();
-		});
+		axum::serve(listener, router)
+			.with_graceful_shutdown(async {
+				rx.await.ok();
+			})
+			.await?;
 
 		self.exit_signal = Some(tx);
-
-		tokio::spawn(async move {
-			if let Err(e) = graceful.await {
-				log::error!("server error: {}", e);
-			}
-		});
 
 		Ok(())
 	}
@@ -133,7 +128,7 @@ impl TileServer {
 			async fn serve_tile(
 				Path(path): Path<String>, headers: HeaderMap,
 				State((tile_source, best_compression)): State<(TileSource, bool)>,
-			) -> Response<Full<Bytes>> {
+			) -> Response<Body> {
 				let sub_path: Vec<&str> = path.split('/').collect();
 
 				let mut target_compressions = get_encoding(headers);
@@ -163,7 +158,7 @@ impl TileServer {
 
 		async fn serve_static(
 			uri: Uri, headers: HeaderMap, State((sources, best_compression)): State<(Vec<StaticSource>, bool)>,
-		) -> Response<Full<Bytes>> {
+		) -> Response<Body> {
 			let path = uri.path();
 			let mut path_vec: Vec<&str> = path.split('/').skip(1).collect();
 
@@ -219,11 +214,11 @@ impl TileServer {
 	}
 }
 
-fn ok_not_found() -> Response<Full<Bytes>> {
-	Response::builder().status(404).body(Full::from("Not Found")).unwrap()
+fn ok_not_found() -> Response<Body> {
+	Response::builder().status(404).body(Body::from("Not Found")).unwrap()
 }
 
-fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Response<Full<Bytes>> {
+fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Response<Body> {
 	let is_incompressible = matches!(
 		result.mime.as_str(),
 		"image/png" | "image/jpeg" | "image/webp" | "image/avif"
@@ -246,10 +241,10 @@ fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Re
 		Compression::Brotli => response = response.header(CONTENT_ENCODING, "br"),
 	}
 
-	response.body(Full::from(blob.as_vec())).unwrap()
+	response.body(Body::from(blob.as_vec())).unwrap()
 }
 
-fn ok_json(message: &str) -> Response<Full<Bytes>> {
+fn ok_json(message: &str) -> Response<Body> {
 	ok_data(
 		SourceResponse {
 			blob: Blob::from(message),

@@ -3,7 +3,7 @@ use crate::shared::Blob;
 use anyhow::Result;
 use image::{
 	codecs::{jpeg, png},
-	load_from_memory_with_format, DynamicImage, ImageEncoder, ImageFormat,
+	load_from_memory_with_format, DynamicImage, ExtendedColorType, ImageEncoder, ImageFormat,
 };
 use webp::{Decoder, Encoder};
 
@@ -25,7 +25,7 @@ pub fn img2png(image: DynamicImage) -> Result<Blob> {
 		image.as_bytes(),
 		image.width(),
 		image.height(),
-		image.color(),
+		ExtendedColorType::from(image.color()),
 	)?;
 
 	Ok(Blob::from(buffer))
@@ -59,7 +59,7 @@ pub fn img2jpg(image: DynamicImage) -> Result<Blob> {
 		image.as_bytes(),
 		image.width(),
 		image.height(),
-		image.color(),
+		ExtendedColorType::from(image.color()),
 	)?;
 
 	Ok(Blob::from(buffer))
