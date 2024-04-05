@@ -177,7 +177,7 @@ mod tests {
 			"65002",
 			"--auto-shutdown",
 			"500",
-			"[test]https://download.versatiles.org/planet-latest.versatiles",
+			"[test]https://download.versatiles.org/osm.versatiles",
 		])
 		.unwrap();
 	}

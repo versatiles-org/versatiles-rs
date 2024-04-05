@@ -12,4 +12,4 @@ fi
 set -x
 
 $cmd convert --max-zoom 3 "$dir/testdata/berlin.mbtiles" "$dir/testdata/test.versatiles"
-$cmd serve --auto-shutdown 1000 -p 8088 "https://download.versatiles.org/planet-latest.versatiles"
+$cmd serve --auto-shutdown 1000 -p 8088 "https://download.versatiles.org/osm.versatiles"

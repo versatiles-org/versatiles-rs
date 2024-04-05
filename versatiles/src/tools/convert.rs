@@ -179,7 +179,7 @@ mod tests {
 			"--bbox=-180,-85,180,85",
 			"--flip-y",
 			"--force-recompress",
-			"https://download.versatiles.org/planet-latest.versatiles",
+			"https://download.versatiles.org/osm.versatiles",
 			"../tmp/planet2.versatiles",
 		])
 		.unwrap();
@@ -195,7 +195,7 @@ mod tests {
 			"--min-zoom=12",
 			"--bbox=9.14,48.76,9.19,48.79",
 			"--flip-y",
-			"https://download.versatiles.org/planet-latest.versatiles",
+			"https://download.versatiles.org/osm.versatiles",
 			"../tmp/stuttgart.versatiles",
 		])
 		.unwrap();

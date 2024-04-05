@@ -45,7 +45,7 @@ mod tests {
 			"versatiles",
 			"probe",
 			"-q",
-			"https://download.versatiles.org/planet-latest.versatiles",
+			"https://download.versatiles.org/osm.versatiles",
 		])
 		.unwrap();
 	}
