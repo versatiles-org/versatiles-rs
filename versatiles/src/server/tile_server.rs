@@ -94,11 +94,15 @@ impl TileServer {
 
 		let listener = tokio::net::TcpListener::bind(addr).await?;
 		let (tx, rx) = tokio::sync::oneshot::channel::<()>();
-		axum::serve(listener, router)
-			.with_graceful_shutdown(async {
-				rx.await.ok();
-			})
-			.await?;
+
+		tokio::spawn(async {
+			axum::serve(listener, router.into_make_service())
+				.with_graceful_shutdown(async {
+					rx.await.ok();
+				})
+				.await
+				.unwrap()
+		});
 
 		self.exit_signal = Some(tx);
 
