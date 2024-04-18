@@ -11,6 +11,7 @@ use axum::{
 	routing::get,
 	Router,
 };
+use hyper::header::{ACCESS_CONTROL_ALLOW_ORIGIN, VARY};
 use tokio::sync::oneshot::Sender;
 use versatiles_lib::{
 	containers::TileReaderBox,
@@ -231,7 +232,9 @@ fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Re
 	let mut response = Response::builder()
 		.status(200)
 		.header(CONTENT_TYPE, result.mime)
-		.header(CACHE_CONTROL, "public");
+		.header(CACHE_CONTROL, "public, max-age=2419200, no-transform")
+		.header(VARY, "accept-encoding")
+		.header(ACCESS_CONTROL_ALLOW_ORIGIN, "*");
 
 	let (blob, compression) = if is_incompressible {
 		(result.blob, result.compression)
