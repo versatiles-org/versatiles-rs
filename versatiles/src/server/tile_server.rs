@@ -260,8 +260,15 @@ fn ok_json(message: &str) -> Response<Body> {
 }
 
 pub fn guess_mime(path: &std::path::Path) -> String {
-	let mime = mime_guess::from_path(path).first_or_octet_stream();
-	return mime.essence_str().to_owned();
+	let mime = mime_guess::from_path(path)
+		.first_or_octet_stream()
+		.essence_str()
+		.to_owned();
+	if mime.starts_with("text/") {
+		format!("{mime}; charset=utf-8")
+	} else {
+		mime
+	}
 }
 
 fn get_encoding(headers: HeaderMap) -> TargetCompression {
@@ -334,10 +341,10 @@ mod tests {
 			assert_eq!(guess_mime(Path::new(path)), mime);
 		};
 
-		test("fluffy.css", "text/css");
+		test("fluffy.css", "text/css; charset=utf-8");
 		test("fluffy.gif", "image/gif");
-		test("fluffy.htm", "text/html");
-		test("fluffy.html", "text/html");
+		test("fluffy.htm", "text/html; charset=utf-8");
+		test("fluffy.html", "text/html; charset=utf-8");
 		test("fluffy.jpeg", "image/jpeg");
 		test("fluffy.jpg", "image/jpeg");
 		test("fluffy.js", "application/javascript");
