@@ -19,13 +19,6 @@ use std::{
 };
 use tar::{Archive, EntryType};
 
-#[derive(PartialEq, Eq, Hash)]
-struct TileKey {
-	z: u8,
-	y: u64,
-	x: u64,
-}
-
 struct TarByteRange {
 	offset: u64,
 	length: u64,
