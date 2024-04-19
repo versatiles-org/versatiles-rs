@@ -24,7 +24,7 @@ exclude = [
 [dependencies]
 anyhow = { version = "1.0.82", features = ["std", "backtrace"] }
 async-trait = { version = "0.1.80", default-features = false }
-brotli = { version = "4.0.0", default-features = false, features = ["std"] }
+brotli = { version = "5.0.0", default-features = false, features = ["std"] }
 byteorder = { version = "1.5.0" }
 bytes = { version = "1.6.0", default-features = false }
 clap = { version = "4.5.4", optional = true, features = ["derive"] }
