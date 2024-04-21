@@ -10,6 +10,11 @@
 - You can also use [Homebrew (Mac)](https://github.com/versatiles-org/versatiles-documentation/blob/main/guides/install_versatiles.md#homebrew-for-macos)
 - And we have prepared [some Docker Images](https://github.com/versatiles-org/versatiles-docker).
 
+Example: Download and install the latest version for Debian on Intel
+```bash
+curl -sL https://github.com/versatiles-org/versatiles-rs/releases/latest/download/versatiles-linux-gnu-x86_64.tar.gz | tar -xzf - -C /usr/local/bin/
+```
+
 # Run
 
 Running `versatiles` will list you all available commands:
