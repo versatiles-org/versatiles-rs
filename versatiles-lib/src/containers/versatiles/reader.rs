@@ -79,7 +79,7 @@ impl TileReader {
 
 		assert_eq!(tile_index.len(), block.count_tiles() as usize);
 
-		return tile_index;
+		tile_index
 	}
 }
 
