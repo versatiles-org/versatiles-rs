@@ -13,8 +13,7 @@ pub struct TileConverterConfig {
 
 impl TileConverterConfig {
 	pub fn new(
-		tile_format: Option<TileFormat>, tile_compression: Option<Compression>, bbox_pyramid: TileBBoxPyramid,
-		force_recompress: bool,
+		tile_format: Option<TileFormat>, tile_compression: Option<Compression>, bbox_pyramid: TileBBoxPyramid, force_recompress: bool,
 	) -> Self {
 		TileConverterConfig {
 			tile_format,
@@ -83,8 +82,7 @@ mod tests {
 		let pyramid = TileBBoxPyramid::new_full();
 		let parameters = TileReaderParameters::new(TileFormat::PNG, Compression::Gzip, pyramid.clone());
 
-		let mut config =
-			TileConverterConfig::new(Some(TileFormat::JPG), Some(Compression::Brotli), pyramid.clone(), true);
+		let mut config = TileConverterConfig::new(Some(TileFormat::JPG), Some(Compression::Brotli), pyramid.clone(), true);
 
 		config.finalize_with_parameters(&parameters);
 

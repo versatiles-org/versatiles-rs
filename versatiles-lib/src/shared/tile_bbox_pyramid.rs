@@ -277,9 +277,6 @@ mod tests {
 		assert_eq!(pyramid.get_level_bbox(5), &TileBBox::new(5, 14, 13, 19, 20).unwrap());
 		assert_eq!(pyramid.get_level_bbox(6), &TileBBox::new(6, 29, 28, 35, 36).unwrap());
 		assert_eq!(pyramid.get_level_bbox(7), &TileBBox::new(7, 59, 58, 68, 69).unwrap());
-		assert_eq!(
-			pyramid.get_level_bbox(8),
-			&TileBBox::new(8, 120, 118, 134, 135).unwrap()
-		);
+		assert_eq!(pyramid.get_level_bbox(8), &TileBBox::new(8, 120, 118, 134, 135).unwrap());
 	}
 }

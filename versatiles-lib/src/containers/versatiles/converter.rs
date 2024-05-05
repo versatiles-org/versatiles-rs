@@ -50,10 +50,7 @@ impl TileConverterTrait for TileConverter {
 		let mut header = FileHeader::new(
 			self.config.get_tile_format(),
 			self.config.get_tile_compression(),
-			[
-				bbox_pyramid.get_zoom_min().unwrap(),
-				bbox_pyramid.get_zoom_max().unwrap(),
-			],
+			[bbox_pyramid.get_zoom_min().unwrap(), bbox_pyramid.get_zoom_max().unwrap()],
 			&bbox_pyramid.get_geo_bbox(),
 		)?;
 

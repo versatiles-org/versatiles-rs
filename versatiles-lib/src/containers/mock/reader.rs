@@ -94,10 +94,7 @@ mod tests {
 		assert_ne!(reader.get_parameters(), &TileReaderParameters::new_dummy());
 		assert_ne!(reader.get_parameters_mut(), &mut TileReaderParameters::new_dummy());
 		assert_eq!(reader.get_meta().await?, Some(Blob::from("dummy meta data")));
-		let blob = reader
-			.get_tile_data_original(&TileCoord3::new(0, 0, 0)?)
-			.await?
-			.as_vec();
+		let blob = reader.get_tile_data_original(&TileCoord3::new(0, 0, 0)?).await?.as_vec();
 		assert_eq!(&blob[0..4], b"\x89PNG");
 		Ok(())
 	}

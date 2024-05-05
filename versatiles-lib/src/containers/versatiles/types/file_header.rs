@@ -25,9 +25,7 @@ pub struct FileHeader {
 
 #[allow(dead_code)]
 impl FileHeader {
-	pub fn new(
-		tile_format: &TileFormat, compression: &Compression, zoom_range: [u8; 2], bbox: &[f64; 4],
-	) -> Result<FileHeader> {
+	pub fn new(tile_format: &TileFormat, compression: &Compression, zoom_range: [u8; 2], bbox: &[f64; 4]) -> Result<FileHeader> {
 		ensure!(
 			zoom_range[0] <= zoom_range[1],
 			"zoom_range[0] ({}) must be <= zoom_range[1] ({})",
@@ -96,10 +94,7 @@ impl FileHeader {
 		self.blocks_range.write_to_buf(&mut header)?;
 
 		if header.len() != HEADER_LENGTH {
-			return create_error!(
-				"header should be {HEADER_LENGTH} bytes long, but is {} bytes long",
-				header.len()
-			);
+			return create_error!("header should be {HEADER_LENGTH} bytes long, but is {} bytes long", header.len());
 		}
 
 		Ok(Blob::from(header))
@@ -107,18 +102,14 @@ impl FileHeader {
 
 	fn from_blob(blob: Blob) -> Result<FileHeader> {
 		if blob.len() != HEADER_LENGTH {
-			return create_error!(
-				"'{blob:?}' is not a valid versatiles header. A header should be {HEADER_LENGTH} bytes long."
-			);
+			return create_error!("'{blob:?}' is not a valid versatiles header. A header should be {HEADER_LENGTH} bytes long.");
 		}
 
 		let mut header = Cursor::new(blob.as_slice());
 		let mut magic_word = [0u8; 14];
 		header.read_exact(&mut magic_word)?;
 		if &magic_word != b"versatiles_v02" {
-			return create_error!(
-				"'{blob:?}' is not a valid versatiles header. A header should start with 'versatiles_v02'"
-			);
+			return create_error!("'{blob:?}' is not a valid versatiles header. A header should start with 'versatiles_v02'");
 		};
 
 		let tile_format = match header.read_u8()? {
@@ -239,14 +230,8 @@ mod tests {
 		assert_eq!(BE::read_i32(&blob.as_slice()[22..26]), -850511300);
 		assert_eq!(BE::read_i32(&blob.as_slice()[26..30]), 1800000000);
 		assert_eq!(BE::read_i32(&blob.as_slice()[30..34]), 850511300);
-		assert_eq!(
-			ByteRange::from_buf(&blob.as_slice()[34..50]).unwrap(),
-			ByteRange::empty()
-		);
-		assert_eq!(
-			ByteRange::from_buf(&blob.as_slice()[50..66]).unwrap(),
-			ByteRange::empty()
-		);
+		assert_eq!(ByteRange::from_buf(&blob.as_slice()[34..50]).unwrap(), ByteRange::empty());
+		assert_eq!(ByteRange::from_buf(&blob.as_slice()[50..66]).unwrap(), ByteRange::empty());
 
 		let header2 = FileHeader::from_blob(blob).unwrap();
 

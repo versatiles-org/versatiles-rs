@@ -242,10 +242,7 @@ mod tests {
 
 		// Test getting tile data
 		let coord = TileCoord3::new(0, 0, 0)?;
-		assert_eq!(
-			reader.get_tile_data_original(&coord).await?.to_string(),
-			"test tile data"
-		);
+		assert_eq!(reader.get_tile_data_original(&coord).await?.to_string(), "test tile data");
 
 		let mut converter = TestConverter::new("/hello", TileConverterConfig::new_full()).await?;
 		converter.convert_from(&mut reader).await?;

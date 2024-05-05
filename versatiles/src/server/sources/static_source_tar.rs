@@ -93,11 +93,7 @@ impl TarFile {
 			let mime = guess_mime(Path::new(&filename));
 
 			let mut add = |path: &Path, blob: Blob| {
-				let mut name = path
-					.iter()
-					.map(|s| s.to_str().unwrap())
-					.collect::<Vec<&str>>()
-					.join("/");
+				let mut name = path.iter().map(|s| s.to_str().unwrap()).collect::<Vec<&str>>().join("/");
 
 				while name.starts_with(['.', '/']) {
 					name = name[1..].to_string();
@@ -199,15 +195,8 @@ mod tests {
 		// get to test container converter
 		let container_file = NamedTempFile::new("temp.tar").unwrap();
 
-		let config = TileConverterConfig::new(
-			Some(TileFormat::PBF),
-			Some(compression),
-			TileBBoxPyramid::new_full(),
-			false,
-		);
-		let mut converter = TileConverter::new(container_file.to_str().unwrap(), config)
-			.await
-			.unwrap();
+		let config = TileConverterConfig::new(Some(TileFormat::PBF), Some(compression), TileBBoxPyramid::new_full(), false);
+		let mut converter = TileConverter::new(container_file.to_str().unwrap(), config).await.unwrap();
 
 		// convert
 		converter.convert_from(&mut reader).await.unwrap();
@@ -255,9 +244,7 @@ mod tests {
 
 			return Ok(());
 
-			async fn test2(
-				tar_file: &mut TarFile, compression_tar: &Compression, compression_accept: Compression,
-			) -> Result<()> {
+			async fn test2(tar_file: &mut TarFile, compression_tar: &Compression, compression_accept: Compression) -> Result<()> {
 				let accept = TargetCompression::from(compression_accept);
 
 				let path = ["non_existing_file"];

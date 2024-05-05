@@ -224,43 +224,16 @@ impl TileBBox {
 		let cols = 0..col_count;
 		let rows = 0..row_count;
 
-		rows.cartesian_product(cols).map(move |(row, col)| {
-			TileBBox::new(
-				self.level,
-				col_pos[col],
-				row_pos[row],
-				col_pos[col + 1] - 1,
-				row_pos[row + 1] - 1,
-			)
-			.unwrap()
-		})
+		rows
+			.cartesian_product(cols)
+			.map(move |(row, col)| TileBBox::new(self.level, col_pos[col], row_pos[row], col_pos[col + 1] - 1, row_pos[row + 1] - 1).unwrap())
 	}
 
 	fn check(&self) -> Result<()> {
-		ensure!(
-			self.x_min <= self.x_max,
-			"x_min ({}) must be <= x_max ({})",
-			self.x_min,
-			self.x_max
-		);
-		ensure!(
-			self.y_min <= self.y_max,
-			"y_min ({}) must be <= y_max ({})",
-			self.y_min,
-			self.y_max
-		);
-		ensure!(
-			self.x_max <= self.max,
-			"x_max ({}) must be <= max ({})",
-			self.x_max,
-			self.max
-		);
-		ensure!(
-			self.y_max <= self.max,
-			"y_max ({}) must be <= max ({})",
-			self.y_max,
-			self.max
-		);
+		ensure!(self.x_min <= self.x_max, "x_min ({}) must be <= x_max ({})", self.x_min, self.x_max);
+		ensure!(self.y_min <= self.y_max, "y_min ({}) must be <= y_max ({})", self.y_min, self.y_max);
+		ensure!(self.x_max <= self.max, "x_max ({}) must be <= max ({})", self.x_max, self.max);
+		ensure!(self.y_max <= self.max, "y_max ({}) must be <= max ({})", self.y_max, self.max);
 		Ok(())
 	}
 
@@ -301,10 +274,7 @@ impl TileBBox {
 	}
 
 	pub fn contains(&self, coord: &TileCoord2) -> bool {
-		(coord.get_x() >= self.x_min)
-			&& (coord.get_x() <= self.x_max)
-			&& (coord.get_y() >= self.y_min)
-			&& (coord.get_y() <= self.y_max)
+		(coord.get_x() >= self.x_min) && (coord.get_x() <= self.x_max) && (coord.get_y() >= self.y_min) && (coord.get_y() <= self.y_max)
 	}
 
 	pub fn contains3(&self, coord: &TileCoord3) -> bool {
@@ -331,10 +301,7 @@ impl TileBBox {
 		ensure!(index < self.count_tiles() as u32, "index out of bounds");
 
 		let width = self.x_max + 1 - self.x_min;
-		Ok(TileCoord2::new(
-			index.rem(width) + self.x_min,
-			index.div(width) + self.y_min,
-		))
+		Ok(TileCoord2::new(index.rem(width) + self.x_min, index.div(width) + self.y_min))
 	}
 
 	pub fn get_coord3_by_index(&self, index: u32) -> Result<TileCoord3> {

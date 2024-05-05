@@ -156,9 +156,7 @@ mod tests {
 	// Test the get_data method of the TileSource
 	#[tokio::test]
 	async fn tile_container_get_data() -> Result<()> {
-		async fn check_response(
-			container: &mut TileSource, url: &str, compression: Compression, mime_type: &str,
-		) -> Result<Vec<u8>> {
+		async fn check_response(container: &mut TileSource, url: &str, compression: Compression, mime_type: &str) -> Result<Vec<u8>> {
 			let path: Vec<&str> = url.split('/').collect();
 			let response = container.get_data(&path, &TargetCompression::from(compression)).await;
 			assert!(response.is_some());
@@ -178,10 +176,7 @@ mod tests {
 
 		let c = &mut TileSource::from(TileReader::new_mock(ReaderProfile::PNG, 8), "id", "prefix")?;
 
-		assert_eq!(
-			&check_response(c, "0/0/0.png", None, "image/png").await?[0..6],
-			b"\x89PNG\r\n"
-		);
+		assert_eq!(&check_response(c, "0/0/0.png", None, "image/png").await?[0..6], b"\x89PNG\r\n");
 
 		assert_eq!(
 			&check_response(c, "meta.json", None, "application/json").await?[..],

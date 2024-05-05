@@ -2,8 +2,7 @@ use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
 	create_error,
 	shared::{
-		decompress, extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat,
-		TileReaderParameters,
+		decompress, extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters,
 	},
 };
 use anyhow::{bail, ensure, Result};

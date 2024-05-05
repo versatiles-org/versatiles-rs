@@ -68,9 +68,7 @@ pub mod tests {
 	use assert_fs::fixture::NamedTempFile;
 	use std::time::Instant;
 
-	pub async fn make_test_file(
-		tile_format: TF, compression: C, max_zoom_level: u8, extension: &str,
-	) -> Result<NamedTempFile> {
+	pub async fn make_test_file(tile_format: TF, compression: C, max_zoom_level: u8, extension: &str) -> Result<NamedTempFile> {
 		let reader_profile = match tile_format {
 			TF::PNG => RP::PNG,
 			TF::JPG => RP::PNG,
@@ -109,8 +107,7 @@ pub mod tests {
 
 		#[tokio::main]
 		async fn test_converter_and_reader(
-			reader_profile: RP, max_zoom_level: u8, container: &Container, tile_format: TF, compression: C,
-			force_recompress: bool,
+			reader_profile: RP, max_zoom_level: u8, container: &Container, tile_format: TF, compression: C, force_recompress: bool,
 		) -> Result<()> {
 			let _test_name = format!(
 				"{:?}, {}, {:?}, {:?}, {:?}, {:?}",
@@ -128,12 +125,7 @@ pub mod tests {
 				Container::Versatiles => NamedTempFile::new("temp.versatiles"),
 			}?;
 
-			let config = TileConverterConfig::new(
-				Some(tile_format),
-				Some(compression),
-				TileBBoxPyramid::new_full(),
-				force_recompress,
-			);
+			let config = TileConverterConfig::new(Some(tile_format), Some(compression), TileBBoxPyramid::new_full(), force_recompress);
 			let mut converter1 = get_converter(container_file.to_str().unwrap(), config).await?;
 
 			// convert

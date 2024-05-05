@@ -16,11 +16,7 @@ pub async fn new_data_reader(url: &str) -> Result<Box<dyn DataReaderTrait>> {
 
 	Ok(match start {
 		#[cfg(feature = "full")]
-		Some("http" | "https") => DataReaderHttp::new(url)
-			.await
-			.with_context(|| format!("opening {url} as http"))?,
-		_ => DataReaderFile::new(url)
-			.await
-			.with_context(|| format!("opening {url} as file"))?,
+		Some("http" | "https") => DataReaderHttp::new(url).await.with_context(|| format!("opening {url} as http"))?,
+		_ => DataReaderFile::new(url).await.with_context(|| format!("opening {url} as file"))?,
 	})
 }

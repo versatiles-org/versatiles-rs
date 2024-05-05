@@ -28,32 +28,20 @@ pub struct TileReader {
 impl TileReader {
 	// Create a new TileReader from a given data reader
 	pub async fn from_src(mut reader: Box<dyn DataReaderTrait>) -> Result<TileReader> {
-		let header = FileHeader::from_reader(&mut reader)
-			.await
-			.context("reading the header")?;
+		let header = FileHeader::from_reader(&mut reader).await.context("reading the header")?;
 
 		let meta = if header.meta_range.length > 0 {
 			Some(
 				DataConverter::new_decompressor(&header.compression)
-					.process_blob(
-						reader
-							.read_range(&header.meta_range)
-							.await
-							.context("reading the meta data")?,
-					)
+					.process_blob(reader.read_range(&header.meta_range).await.context("reading the meta data")?)
 					.context("decompressing the meta data")?,
 			)
 		} else {
 			None
 		};
 
-		let block_index = BlockIndex::from_brotli_blob(
-			reader
-				.read_range(&header.blocks_range)
-				.await
-				.context("reading the block index")?,
-		)
-		.context("decompressing the block index")?;
+		let block_index = BlockIndex::from_brotli_blob(reader.read_range(&header.blocks_range).await.context("reading the block index")?)
+			.context("decompressing the block index")?;
 
 		let bbox_pyramid = block_index.get_bbox_pyramid();
 		let parameters = TileReaderParameters::new(header.tile_format, header.compression, bbox_pyramid);
@@ -298,9 +286,7 @@ impl TileReaderTrait for TileReader {
 	// deep probe of container meta
 	#[cfg(feature = "full")]
 	async fn probe_container(&mut self, print: PrettyPrint) -> Result<()> {
-		print
-			.add_key_value("meta size", &self.meta.as_ref().map_or(0, |b| b.len()))
-			.await;
+		print.add_key_value("meta size", &self.meta.as_ref().map_or(0, |b| b.len())).await;
 		print.add_key_value("block count", &self.block_index.len()).await;
 
 		let mut index_size = 0;
@@ -372,7 +358,10 @@ mod tests {
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(printer.get_category("container").await).await?;
-		assert_eq!(printer.as_string().await, "container:\n   meta size: 15\n   block count: 9\n   sum of block index sizes: 134\n   sum of block tiles sizes: 693\n");
+		assert_eq!(
+			printer.as_string().await,
+			"container:\n   meta size: 15\n   block count: 9\n   sum of block index sizes: 134\n   sum of block tiles sizes: 693\n"
+		);
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_tiles(printer.get_category("tiles").await).await?;

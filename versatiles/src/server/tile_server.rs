@@ -131,8 +131,7 @@ impl TileServer {
 			app = app.merge(tile_app);
 
 			async fn serve_tile(
-				Path(path): Path<String>, headers: HeaderMap,
-				State((tile_source, best_compression)): State<(TileSource, bool)>,
+				Path(path): Path<String>, headers: HeaderMap, State((tile_source, best_compression)): State<(TileSource, bool)>,
 			) -> Response<Body> {
 				let sub_path: Vec<&str> = path.split('/').collect();
 
@@ -198,10 +197,7 @@ impl TileServer {
 				tile_source.prefix, tile_source.id, tile_source.json_info
 			);
 			objects.push(object.clone());
-			api_app = api_app.route(
-				&format!("/api/source/{}", tile_source.id),
-				get(|| async move { ok_json(&object) }),
-			);
+			api_app = api_app.route(&format!("/api/source/{}", tile_source.id), get(|| async move { ok_json(&object) }));
 		}
 		let tile_sources_json: String = "[".to_owned() + &objects.join(",") + "]";
 
@@ -224,10 +220,7 @@ fn ok_not_found() -> Response<Body> {
 }
 
 fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Response<Body> {
-	let is_incompressible = matches!(
-		result.mime.as_str(),
-		"image/png" | "image/jpeg" | "image/webp" | "image/avif"
-	);
+	let is_incompressible = matches!(result.mime.as_str(), "image/png" | "image/jpeg" | "image/webp" | "image/avif");
 
 	let mut response = Response::builder()
 		.status(200)
@@ -263,10 +256,7 @@ fn ok_json(message: &str) -> Response<Body> {
 }
 
 pub fn guess_mime(path: &std::path::Path) -> String {
-	let mime = mime_guess::from_path(path)
-		.first_or_octet_stream()
-		.essence_str()
-		.to_owned();
+	let mime = mime_guess::from_path(path).first_or_octet_stream().essence_str().to_owned();
 	if mime.starts_with("text/") {
 		format!("{mime}; charset=utf-8")
 	} else {
@@ -330,10 +320,7 @@ mod tests {
 		test("deflate, gzip;q=1.0, *;q=0.5", enum_set!(None | Gzip));
 		test("gzip", enum_set!(None | Gzip));
 		test("gzip, compress, br", enum_set!(None | Brotli | Gzip));
-		test(
-			"gzip, deflate, br;q=1.0, identity;q=0.5, *;q=0.25",
-			enum_set!(None | Brotli | Gzip),
-		);
+		test("gzip, deflate, br;q=1.0, identity;q=0.5, *;q=0.25", enum_set!(None | Brotli | Gzip));
 		test("gzip;q=1.0, identity; q=0.5, *;q=0", enum_set!(None | Gzip));
 		test("identity", enum_set!(None));
 	}

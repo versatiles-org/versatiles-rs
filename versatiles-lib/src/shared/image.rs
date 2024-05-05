@@ -240,9 +240,7 @@ mod tests {
 	/// Returns a DynamicImage with 256x256 grayscale alpha colors from black to white. Each pixel in the
 	/// image is a LumaA<u8> value, with the alpha value determined by the y coordinate.
 	fn get_image_greya() -> DynamicImage {
-		DynamicImage::ImageLumaA8(GrayAlphaImage::from_fn(256, 256, |x, y| -> LumaA<u8> {
-			LumaA([x as u8, y as u8])
-		}))
+		DynamicImage::ImageLumaA8(GrayAlphaImage::from_fn(256, 256, |x, y| -> LumaA<u8> { LumaA([x as u8, y as u8]) }))
 	}
 
 	/// Compare two DynamicImages for similarity
