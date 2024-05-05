@@ -133,9 +133,9 @@ impl Debug for Blob {
 	}
 }
 
-impl ToString for Blob {
-	fn to_string(&self) -> String {
-		String::from_utf8_lossy(&self.0).to_string()
+impl std::fmt::Display for Blob {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", String::from_utf8_lossy(&self.0))
 	}
 }
 
