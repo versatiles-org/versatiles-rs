@@ -65,15 +65,21 @@ impl TileReader {
 			return tile_index.clone();
 		}
 
+		let tile_index = self.get_block_tile_index(block).await;
+
+		self.tile_index_cache.insert(*block_coord, Arc::new(tile_index));
+
+		return self.tile_index_cache.get(block_coord).unwrap().clone();
+	}
+
+	async fn get_block_tile_index(&mut self, block: &BlockDefinition) -> TileIndex {
 		let blob = self.reader.read_range(block.get_index_range()).await.unwrap();
 		let mut tile_index = TileIndex::from_brotli_blob(blob).unwrap();
 		tile_index.add_offset(block.get_tiles_range().offset);
 
 		assert_eq!(tile_index.len(), block.count_tiles() as usize);
 
-		self.tile_index_cache.insert(*block_coord, Arc::new(tile_index));
-
-		return self.tile_index_cache.get(block_coord).unwrap().clone();
+		return tile_index;
 	}
 }
 
@@ -323,7 +329,7 @@ impl TileReaderTrait for TileReader {
 		let mut progress = crate::shared::ProgressBar::new("scanning blocks", block_index.len() as u64);
 
 		for block in block_index.iter() {
-			let tile_index = self.get_block_tile_index_cached(block).await;
+			let tile_index = self.get_block_tile_index(block).await;
 			for (index, tile_range) in tile_index.iter().enumerate() {
 				let size = tile_range.length;
 
