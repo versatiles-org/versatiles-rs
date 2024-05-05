@@ -98,13 +98,11 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 		};
 
 		let mut reader = get_reader(url).await?;
-		let parameters = reader.get_parameters_mut();
-		parameters.swap_xy = arguments.swap_xy;
-		parameters.flip_y = arguments.flip_y;
-
-		if let Some(compression) = arguments.override_input_compression {
-			parameters.tile_compression = compression;
-		}
+		reader.set_configuration(
+			arguments.flip_y,
+			arguments.swap_xy,
+			arguments.override_input_compression,
+		);
 
 		server.add_tile_source(&format!("/tiles/{id}/"), id, reader)?;
 	}

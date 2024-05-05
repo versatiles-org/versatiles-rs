@@ -36,6 +36,15 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 
 	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters;
 
+	fn set_configuration(&mut self, flip_y: bool, swap_xy: bool, tile_compression: Option<Compression>) {
+		let parameters = self.get_parameters_mut();
+		parameters.swap_xy = swap_xy;
+		parameters.flip_y = flip_y;
+
+		if let Some(compression) = tile_compression {
+			parameters.tile_compression = compression;
+		}
+	}
 
 	fn get_tile_format(&self) -> Result<&TileFormat> {
 		Ok(&self.get_parameters().tile_format)
