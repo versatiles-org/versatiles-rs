@@ -49,9 +49,8 @@ impl DataReaderTrait for DataReaderHttp {
 			return create_error!("as a response to a range request it is expected to get the status code 206. instead we got {status_code}");
 		}
 
-		let content_range: &str;
-		match response.headers().get("content-range") {
-			Some(header_value) => content_range = header_value.to_str()?,
+		let content_range: &str = match response.headers().get("content-range") {
+			Some(header_value) => header_value.to_str()?,
 			None => return create_error!("content-range is not set for range request {range:?} to url {}", self.url),
 		};
 

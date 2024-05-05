@@ -328,7 +328,7 @@ impl TileReaderTrait for TileReader {
 				tile_count += 1;
 				size_sum += size;
 
-				if size <= min_size {
+				if size < min_size {
 					continue;
 				}
 
@@ -341,20 +341,20 @@ impl TileReaderTrait for TileReader {
 					y: coord.y,
 					z: coord.z,
 				});
-				biggest_tiles.sort_unstable_by(|a, b| b.size.cmp(&a.size));
+				biggest_tiles.sort_by(|a, b| b.size.cmp(&a.size));
 				while biggest_tiles.len() > 10 {
 					biggest_tiles.pop();
 				}
-				min_size = biggest_tiles.get(biggest_tiles.len() - 1).unwrap().size;
+				min_size = biggest_tiles.last().unwrap().size;
 			}
 		}
 
-		print.add_key_value("average tile size:", &size_sum.div_euclid(tile_count)).await;
+		print.add_key_value("average tile size", &size_sum.div_euclid(tile_count)).await;
 
 		for (index, entry) in biggest_tiles.iter().enumerate() {
 			print
 				.add_key_value(
-					&format!("#{} biggest tile:", index + 1),
+					&format!("#{} biggest tile", index + 1),
 					&format!("{} bytes (z:{},x:{},y:{})", entry.size, entry.z, entry.x, entry.y),
 				)
 				.await;
@@ -411,7 +411,7 @@ mod tests {
 	async fn probe() -> Result<()> {
 		use crate::shared::PrettyPrint;
 
-		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 8, "versatiles").await?;
+		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 4, "versatiles").await?;
 		let temp_file = temp_file.to_str().unwrap();
 
 		let mut reader = TileReader::new(temp_file).await?;
@@ -420,14 +420,14 @@ mod tests {
 		reader.probe_container(printer.get_category("container").await).await?;
 		assert_eq!(
 			printer.as_string().await,
-			"container:\n   meta size: 15\n   block count: 9\n   sum of block index sizes: 134\n   sum of block tiles sizes: 693\n"
+			"container:\n   meta size: 15\n   block count: 5\n   sum of block index sizes: 70\n   sum of block tiles sizes: 385\n"
 		);
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_tiles(printer.get_category("tiles").await).await?;
 		assert_eq!(
-			printer.as_string().await,
-			"tiles:\n   deep tile probing is not implemented for this container format\n"
+			printer.as_string().await.get(0..65).unwrap(),
+			"tiles:\n   average tile size: 77\n   #1 biggest tile: \"77 bytes (z:"
 		);
 
 		Ok(())
