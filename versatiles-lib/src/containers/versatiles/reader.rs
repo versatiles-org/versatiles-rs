@@ -302,6 +302,66 @@ impl TileReaderTrait for TileReader {
 
 		Ok(())
 	}
+
+	// deep probe of container tiles
+	#[cfg(feature = "full")]
+	async fn probe_tiles(&mut self, print: PrettyPrint) -> Result<()> {
+		#[derive(Debug)]
+		struct Entry {
+			size: u64,
+			x: u32,
+			y: u32,
+			z: u8,
+		}
+
+		let mut biggest_tiles: Vec<Entry> = Vec::new();
+		let mut min_size: u64 = 0;
+		let mut size_sum: u64 = 0;
+		let mut tile_count: u64 = 0;
+
+		let block_index = self.block_index.clone();
+		for block in block_index.iter() {
+			let tile_index = self.get_block_tile_index_cached(block).await;
+			for (index, tile_range) in tile_index.iter().enumerate() {
+				let size = tile_range.length;
+
+				tile_count += 1;
+				size_sum += size;
+
+				if size <= min_size {
+					continue;
+				}
+
+				let bbox = block.get_global_bbox();
+				let coord = bbox.get_coord3_by_index(index as u32)?;
+
+				biggest_tiles.push(Entry {
+					size,
+					x: coord.x,
+					y: coord.y,
+					z: coord.z,
+				});
+				biggest_tiles.sort_unstable_by(|a, b| b.size.cmp(&a.size));
+				while biggest_tiles.len() > 10 {
+					biggest_tiles.pop();
+				}
+				min_size = biggest_tiles.get(biggest_tiles.len() - 1).unwrap().size;
+			}
+		}
+
+		print.add_key_value("average tile size:", &size_sum.div_euclid(tile_count)).await;
+
+		for (index, entry) in biggest_tiles.iter().enumerate() {
+			print
+				.add_key_value(
+					&format!("#{} biggest tile:", index + 1),
+					&format!("{} bytes (z:{},x:{},y:{})", entry.size, entry.z, entry.x, entry.y),
+				)
+				.await;
+		}
+
+		Ok(())
+	}
 }
 
 // Implement Debug for TileReader

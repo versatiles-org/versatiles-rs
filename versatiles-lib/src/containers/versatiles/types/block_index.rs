@@ -9,7 +9,7 @@ use std::{
 
 const BLOCK_INDEX_LENGTH: usize = 33;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlockIndex {
 	lookup: HashMap<TileCoord3, BlockDefinition>,
 }

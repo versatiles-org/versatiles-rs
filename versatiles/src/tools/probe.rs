@@ -11,10 +11,10 @@ pub struct Subcommand {
 	filename: String,
 
 	/// deep scan (depending on the container implementation)
-	/// -d scans container
-	/// -dd scans tiles
-	/// -ddd scans tile contents
-	#[arg(long, short, action = Count,)]
+	///   -d: scans container
+	///  -dd: scans all tiles
+	/// -ddd: scans all tile contents
+	#[arg(long, short, action = Count, verbatim_doc_comment)]
 	deep: u8,
 }
 
