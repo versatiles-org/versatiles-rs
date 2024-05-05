@@ -41,8 +41,8 @@ impl TileConverterTrait for TileConverter {
 		Ok(Box::new(Self { config }))
 	}
 	async fn convert_from(&mut self, reader: &mut TileReaderBox) -> Result<()> {
-		let _temp = reader.get_container_name()?;
-		let _temp = reader.get_name()?;
+		let _temp = reader.get_container_name();
+		let _temp = reader.get_name();
 		let _temp = reader.get_meta().await?;
 
 		self.config.finalize_with_parameters(reader.get_parameters());

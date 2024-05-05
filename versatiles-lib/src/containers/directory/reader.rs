@@ -32,8 +32,8 @@ impl TileReader {
 
 #[async_trait]
 impl TileReaderTrait for TileReader {
-	fn get_container_name(&self) -> Result<&str> {
-		Ok("tar")
+	fn get_container_name(&self) -> &str {
+		"tar"
 	}
 	async fn new(filename: &str) -> Result<TileReaderBox>
 	where
@@ -153,8 +153,8 @@ impl TileReaderTrait for TileReader {
 
 		Ok(Self::read(path.unwrap())?)
 	}
-	fn get_name(&self) -> Result<&str> {
-		Ok(self.path.to_str().unwrap())
+	fn get_name(&self) -> &str {
+		self.path.to_str().unwrap()
 	}
 }
 

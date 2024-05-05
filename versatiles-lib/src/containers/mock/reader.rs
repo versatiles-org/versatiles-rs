@@ -41,11 +41,11 @@ impl TileReaderTrait for TileReader {
 	async fn new(_path: &str) -> Result<TileReaderBox> {
 		create_error!("don't want to")
 	}
-	fn get_container_name(&self) -> Result<&str> {
-		Ok("dummy container")
+	fn get_container_name(&self) -> &str {
+		"dummy container"
 	}
-	fn get_name(&self) -> Result<&str> {
-		Ok("dummy name")
+	fn get_name(&self) -> &str {
+		"dummy name"
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
 		&self.parameters
@@ -89,8 +89,8 @@ mod tests {
 	#[tokio::test]
 	async fn reader() -> Result<()> {
 		let mut reader = TileReader::new_mock(ReaderProfile::PNG, 8);
-		assert_eq!(reader.get_container_name()?, "dummy container");
-		assert_eq!(reader.get_name()?, "dummy name");
+		assert_eq!(reader.get_container_name(), "dummy container");
+		assert_eq!(reader.get_name(), "dummy name");
 		assert_ne!(reader.get_parameters(), &TileReaderParameters::new_dummy());
 		assert_ne!(reader.get_parameters_mut(), &mut TileReaderParameters::new_dummy());
 		assert_eq!(reader.get_meta().await?, Some(Blob::from("dummy meta data")));
@@ -108,7 +108,7 @@ mod tests {
 			let coord = TileCoord3::new(23, 45, 6).unwrap();
 			let mut reader = TileReader::new_mock(profile, 8);
 			let tile_compressed = reader.get_tile_data_original(&coord).await.unwrap();
-			let tile_uncompressed = decompress(tile_compressed, reader.get_tile_compression().unwrap()).unwrap();
+			let tile_uncompressed = decompress(tile_compressed, reader.get_tile_compression()).unwrap();
 			assert_eq!(tile_uncompressed, blob);
 		};
 

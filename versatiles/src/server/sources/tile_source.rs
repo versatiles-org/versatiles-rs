@@ -45,7 +45,7 @@ impl TileSource {
 		let tile_compression = format!("{:?}", parameters.tile_compression).to_lowercase();
 		let json_info = format!(
 			"{{\"type\":\"{}\",\"format\":\"{}\",\"compression\":\"{}\",\"zoom_min\":{},\"zoom_max\":{},\"bbox\":[{}]}}",
-			reader.get_container_name()?,
+			reader.get_container_name(),
 			tile_format,
 			tile_compression,
 			bbox_pyramid.get_zoom_min().unwrap(),

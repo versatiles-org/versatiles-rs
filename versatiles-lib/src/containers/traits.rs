@@ -30,7 +30,7 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 		Self: Sized;
 
 	/// some kine of name for this reader source, e.g. the filename
-	fn get_name(&self) -> Result<&str>;
+	fn get_name(&self) -> &str;
 
 	fn get_parameters(&self) -> &TileReaderParameters;
 
@@ -46,16 +46,16 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 		}
 	}
 
-	fn get_tile_format(&self) -> Result<&TileFormat> {
-		Ok(&self.get_parameters().tile_format)
+	fn get_tile_format(&self) -> &TileFormat {
+		&self.get_parameters().tile_format
 	}
 
-	fn get_tile_compression(&self) -> Result<&Compression> {
-		Ok(&self.get_parameters().tile_compression)
+	fn get_tile_compression(&self) -> &Compression {
+		&self.get_parameters().tile_compression
 	}
 
 	/// container name, e.g. versatiles, mbtiles, ...
-	fn get_container_name(&self) -> Result<&str>;
+	fn get_container_name(&self) -> &str;
 
 	/// get meta data, always uncompressed
 	async fn get_meta(&self) -> Result<Option<Blob>>;
@@ -112,8 +112,8 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 		let mut print = PrettyPrint::new();
 
 		let cat = print.get_category("meta_data").await;
-		cat.add_key_value("name", self.get_name()?).await;
-		cat.add_key_value("container", self.get_container_name()?).await;
+		cat.add_key_value("name", self.get_name()).await;
+		cat.add_key_value("container", self.get_container_name()).await;
 
 		let meta_option = self.get_meta().await?;
 		if let Some(meta) = meta_option {
@@ -179,8 +179,8 @@ mod tests {
 			Ok(Box::new(reader))
 		}
 
-		fn get_name(&self) -> Result<&str> {
-			Ok(&self.name)
+		fn get_name(&self) -> &str {
+			&self.name
 		}
 
 		fn get_parameters(&self) -> &TileReaderParameters {
@@ -195,8 +195,8 @@ mod tests {
 			Ok(Some(Blob::from("test metadata")))
 		}
 
-		fn get_container_name(&self) -> Result<&str> {
-			Ok("test container name")
+		fn get_container_name(&self) -> &str {
+			"test container name"
 		}
 
 		async fn get_tile_data_original(&mut self, _coord: &TileCoord3) -> Result<Blob> {
@@ -228,14 +228,14 @@ mod tests {
 		let mut reader = TestReader::new("test_path").await?;
 
 		// Test getting name
-		assert_eq!(reader.get_name()?, "test_path");
+		assert_eq!(reader.get_name(), "test_path");
 
 		// Test getting tile compression and format
-		assert_eq!(reader.get_tile_compression()?, &Compression::None);
-		assert_eq!(reader.get_tile_format()?, &TileFormat::PBF);
+		assert_eq!(reader.get_tile_compression(), &Compression::None);
+		assert_eq!(reader.get_tile_format(), &TileFormat::PBF);
 
 		// Test getting container name
-		assert_eq!(reader.get_container_name()?, "test container name");
+		assert_eq!(reader.get_container_name(), "test container name");
 
 		// Test getting metadata
 		assert_eq!(reader.get_meta().await?.unwrap().to_string(), "test metadata");
