@@ -117,13 +117,13 @@ impl TileReaderTrait for TileReader {
 	}
 
 	// Get TileReader parameters
-	fn get_parameters(&self) -> Result<&TileReaderParameters> {
-		Ok(&self.parameters)
+	fn get_parameters(&self) -> &TileReaderParameters {
+		&self.parameters
 	}
 
 	// Get mutable TileReader parameters
-	fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters> {
-		Ok(&mut self.parameters)
+	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
+		&mut self.parameters
 	}
 
 	// Get tile data for a given coordinate
@@ -322,7 +322,7 @@ impl TileReaderTrait for TileReader {
 impl Debug for TileReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TileReader:VersaTiles")
-			.field("parameters", &self.get_parameters().unwrap())
+			.field("parameters", &self.get_parameters())
 			.finish()
 	}
 }
@@ -350,7 +350,7 @@ mod tests {
 		assert_eq!(reader.get_container_name()?, "versatiles");
 		assert!(reader.get_name()?.ends_with(temp_file));
 		assert_eq!(reader.get_meta().await?, Some(Blob::from(b"dummy meta data".to_vec())));
-		assert_eq!(format!("{:?}", reader.get_parameters()?), " { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: UnGzip, flip_y: false, swap_xy: false, tile_compression: Gzip, tile_format: PBF }");
+		assert_eq!(format!("{:?}", reader.get_parameters()), " { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: UnGzip, flip_y: false, swap_xy: false, tile_compression: Gzip, tile_format: PBF }");
 		assert_eq!(reader.get_tile_compression()?, &Compression::Gzip);
 		assert_eq!(reader.get_tile_format()?, &TileFormat::PBF);
 

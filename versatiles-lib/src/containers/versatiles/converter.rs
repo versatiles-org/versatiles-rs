@@ -36,7 +36,7 @@ impl TileConverterTrait for TileConverter {
 
 		trace!("convert_from - self.config1: {:?}", self.config);
 
-		let parameters = reader.get_parameters()?;
+		let parameters = reader.get_parameters();
 		trace!("convert_from - parameters: {parameters:?}");
 
 		self.config.finalize_with_parameters(parameters);

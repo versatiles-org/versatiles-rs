@@ -134,11 +134,11 @@ impl TileReaderTrait for TileReader {
 			parameters: TileReaderParameters::new(tile_form.unwrap(), tile_comp.unwrap(), bbox_pyramid),
 		}))
 	}
-	fn get_parameters(&self) -> Result<&TileReaderParameters> {
-		Ok(&self.parameters)
+	fn get_parameters(&self) -> &TileReaderParameters {
+		&self.parameters
 	}
-	fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters> {
-		Ok(&mut self.parameters)
+	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
+		&mut self.parameters
 	}
 	async fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(self.meta.clone())

@@ -98,7 +98,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 		};
 
 		let mut reader = get_reader(url).await?;
-		let parameters = reader.get_parameters_mut()?;
+		let parameters = reader.get_parameters_mut();
 		parameters.swap_xy = arguments.swap_xy;
 		parameters.flip_y = arguments.flip_y;
 

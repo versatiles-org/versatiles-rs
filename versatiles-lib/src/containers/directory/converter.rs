@@ -51,7 +51,7 @@ impl TileConverterTrait for TileConverter {
 	async fn convert_from(&mut self, reader: &mut TileReaderBox) -> Result<()> {
 		log::trace!("convert_from");
 
-		self.config.finalize_with_parameters(reader.get_parameters()?);
+		self.config.finalize_with_parameters(reader.get_parameters());
 
 		let tile_converter = self.config.get_tile_recompressor();
 

@@ -45,7 +45,7 @@ impl TileConverterTrait for TileConverter {
 		let _temp = reader.get_name()?;
 		let _temp = reader.get_meta().await?;
 
-		self.config.finalize_with_parameters(reader.get_parameters()?);
+		self.config.finalize_with_parameters(reader.get_parameters());
 		let bbox_pyramid = self.config.get_bbox_pyramid();
 
 		for bbox in bbox_pyramid.iter_levels() {

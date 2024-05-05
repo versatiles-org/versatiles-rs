@@ -21,7 +21,7 @@ pub struct TileSource {
 impl TileSource {
 	// Constructor function for creating a TileSource instance
 	pub fn from(reader: TileReaderBox, id: &str, prefix: &str) -> Result<TileSource> {
-		let parameters = reader.get_parameters()?;
+		let parameters = reader.get_parameters();
 		let compression = parameters.tile_compression;
 
 		// Determine the MIME type based on the tile format
@@ -150,7 +150,7 @@ mod tests {
 	fn debug() {
 		let reader = TileReader::new_mock(ReaderProfile::PNG, 8);
 		let container = TileSource::from(reader, "id", "prefix").unwrap();
-		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: TileReader:Dummy { parameters: Ok( { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: , flip_y: false, swap_xy: false, tile_compression: None, tile_format: PNG }) } }, tile_mime: \"image/png\", compression: None }");
+		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: TileReader:Dummy { parameters:  { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: , flip_y: false, swap_xy: false, tile_compression: None, tile_format: PNG } } }, tile_mime: \"image/png\", compression: None }");
 	}
 
 	// Test the get_data method of the TileSource

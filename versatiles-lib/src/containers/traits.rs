@@ -32,16 +32,17 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 	/// some kine of name for this reader source, e.g. the filename
 	fn get_name(&self) -> Result<&str>;
 
-	fn get_parameters(&self) -> Result<&TileReaderParameters>;
+	fn get_parameters(&self) -> &TileReaderParameters;
 
-	fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters>;
+	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters;
+
 
 	fn get_tile_format(&self) -> Result<&TileFormat> {
-		Ok(&self.get_parameters()?.tile_format)
+		Ok(&self.get_parameters().tile_format)
 	}
 
 	fn get_tile_compression(&self) -> Result<&Compression> {
-		Ok(&self.get_parameters()?.tile_compression)
+		Ok(&self.get_parameters().tile_compression)
 	}
 
 	/// container name, e.g. versatiles, mbtiles, ...
@@ -58,7 +59,7 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 	/// returns the tile in the target coordinate system (after optional flipping)
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
 		let mut coord_inner: TileCoord3 = *coord;
-		self.get_parameters()?.transform_backward(&mut coord_inner);
+		self.get_parameters().transform_backward(&mut coord_inner);
 		self.get_tile_data_original(&coord_inner).await
 	}
 
@@ -85,7 +86,7 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 	/// always compressed with get_tile_compression and formatted with get_tile_format
 	/// returns the tiles in the target coordinate system (after optional flipping)
 	async fn get_bbox_tile_stream<'a>(&'a mut self, mut bbox: TileBBox) -> TileStream {
-		let parameters: TileReaderParameters = (*self.get_parameters().unwrap()).clone();
+		let parameters: TileReaderParameters = (*self.get_parameters()).clone();
 		parameters.transform_backward(&mut bbox);
 		let stream = self.get_bbox_tile_stream_original(bbox).await;
 		stream
@@ -113,7 +114,7 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 		}
 
 		self
-			.get_parameters()?
+			.get_parameters()
 			.probe(print.get_category("parameters").await)
 			.await?;
 
@@ -173,12 +174,12 @@ mod tests {
 			Ok(&self.name)
 		}
 
-		fn get_parameters(&self) -> Result<&TileReaderParameters> {
-			Ok(&self.parameters)
+		fn get_parameters(&self) -> &TileReaderParameters {
+			&self.parameters
 		}
 
-		fn get_parameters_mut(&mut self) -> Result<&mut TileReaderParameters> {
-			Ok(&mut self.parameters)
+		fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
+			&mut self.parameters
 		}
 
 		async fn get_meta(&self) -> Result<Option<Blob>> {
