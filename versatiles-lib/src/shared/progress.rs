@@ -18,8 +18,6 @@ pub struct ProgressBar {
 	next_update: SystemTime,
 	/// The current value of the progress bar.
 	value: u64,
-	/// Indicates whether the progress bar has finished.
-	finished: bool,
 	/// Indicates whether the progress bar is visible.
 	visible: bool,
 }
@@ -43,7 +41,6 @@ impl ProgressBar {
 			start: now,
 			next_update: now,
 			value: 0,
-			finished: false,
 			visible: max_level() >= LevelFilter::Error,
 		};
 		progress.update();
@@ -96,12 +93,18 @@ impl ProgressBar {
 
 	/// Finishes the progress bar and sets its value to the maximum.
 	pub fn finish(&mut self) {
-		self.finished = true;
 		self.value = self.max_value;
 
 		if self.visible {
 			self.draw();
 			eprintln!();
+		}
+	}
+
+	/// Finishes the progress bar and sets its value to the maximum.
+	pub fn remove(&mut self) {
+		if self.visible {
+			eprint!("\r\x1B[2K");
 		}
 	}
 

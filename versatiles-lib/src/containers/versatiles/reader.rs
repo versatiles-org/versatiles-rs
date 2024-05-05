@@ -320,6 +320,8 @@ impl TileReaderTrait for TileReader {
 		let mut tile_count: u64 = 0;
 
 		let block_index = self.block_index.clone();
+		let mut progress = crate::shared::ProgressBar::new("scanning blocks", block_index.len() as u64);
+
 		for block in block_index.iter() {
 			let tile_index = self.get_block_tile_index_cached(block).await;
 			for (index, tile_range) in tile_index.iter().enumerate() {
@@ -347,7 +349,9 @@ impl TileReaderTrait for TileReader {
 				}
 				min_size = biggest_tiles.last().unwrap().size;
 			}
+			progress.inc(1);
 		}
+		progress.remove();
 
 		print.add_key_value("average tile size", &size_sum.div_euclid(tile_count)).await;
 
@@ -355,7 +359,7 @@ impl TileReaderTrait for TileReader {
 			print
 				.add_key_value(
 					&format!("#{} biggest tile", index + 1),
-					&format!("{} bytes (z:{},x:{},y:{})", entry.size, entry.z, entry.x, entry.y),
+					&format!("{} bytes (z:{}, x:{}, y:{})", entry.size, entry.z, entry.x, entry.y),
 				)
 				.await;
 		}
