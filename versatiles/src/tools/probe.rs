@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{ArgAction::Count, Args};
-use versatiles_lib::containers::get_reader;
+use versatiles_lib::containers::{get_reader, ProbeDepth};
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -10,9 +10,10 @@ pub struct Subcommand {
 	#[arg(required = true, verbatim_doc_comment)]
 	filename: String,
 
-	/// deep scan (if supported yet)
+	/// deep scan (depending on the container implementation)
 	/// -d scans container
-	/// -dd scans every tile
+	/// -dd scans tiles
+	/// -ddd scans tile contents
 	#[arg(long, short, action = Count,)]
 	deep: u8,
 }
@@ -22,7 +23,15 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	eprintln!("probe {:?}", arguments.filename);
 
 	let mut reader = get_reader(&arguments.filename).await?;
-	reader.probe(arguments.deep).await?;
+
+	let level = match arguments.deep {
+		0 => ProbeDepth::Shallow,
+		1 => ProbeDepth::Container,
+		2 => ProbeDepth::Tiles,
+		3..=255 => ProbeDepth::TileContents,
+	};
+
+	reader.probe(level).await?;
 
 	Ok(())
 }

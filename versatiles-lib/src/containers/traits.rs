@@ -10,6 +10,13 @@ pub type TileConverterBox = Box<dyn TileConverterTrait>;
 pub type TileReaderBox = Box<dyn TileReaderTrait>;
 pub type TileStream<'a> = Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + Send + 'a>>;
 
+pub enum ProbeDepth {
+	Shallow = 0,
+	Container = 1,
+	Tiles = 2,
+	TileContents = 3,
+}
+
 #[allow(clippy::new_ret_no_self)]
 #[async_trait]
 #[cfg(feature = "full")]
@@ -108,7 +115,9 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 
 	#[cfg(feature = "full")]
 	/// probe container
-	async fn probe(&mut self, level: u8) -> Result<()> {
+	async fn probe(&mut self, level: ProbeDepth) -> Result<()> {
+		use ProbeDepth::*;
+
 		let mut print = PrettyPrint::new();
 
 		let cat = print.get_category("meta_data").await;
@@ -122,24 +131,25 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 			cat.add_key_value("meta", &meta_option).await;
 		}
 
-		self
-			.get_parameters()
-			.probe(print.get_category("parameters").await)
-			.await?;
+		self.get_parameters().probe(print.get_category("parameters").await).await?;
 
-		if level >= 1 {
+		if matches!(level, Container | Tiles | TileContents) {
 			self.probe_container(print.get_category("container").await).await?;
 		}
 
-		if level >= 2 {
-			self.probe_tiles(print.get_category("container_tiles").await).await?;
+		if matches!(level, Tiles | TileContents) {
+			self.probe_tiles(print.get_category("tiles").await).await?;
+		}
+
+		if matches!(level, TileContents) {
+			self.probe_tile_contents(print.get_category("tile contents").await).await?;
 		}
 
 		Ok(())
 	}
 
 	#[cfg(feature = "full")]
-	/// probe container deep
+	/// deep probe container
 	async fn probe_container(&mut self, print: PrettyPrint) -> Result<()> {
 		print
 			.add_warning("deep container probing is not implemented for this container format")
@@ -148,10 +158,19 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 	}
 
 	#[cfg(feature = "full")]
-	/// probe container
+	/// deep probe container tiles
 	async fn probe_tiles(&mut self, print: PrettyPrint) -> Result<()> {
 		print
-			.add_warning("deep tile probing is not implemented for this container format")
+			.add_warning("deep tiles probing is not implemented for this container format")
+			.await;
+		Ok(())
+	}
+
+	#[cfg(feature = "full")]
+	/// deep probe container tile contents
+	async fn probe_tile_contents(&mut self, print: PrettyPrint) -> Result<()> {
+		print
+			.add_warning("deep tile contents probing is not implemented for this container format")
 			.await;
 		Ok(())
 	}
