@@ -57,6 +57,7 @@ impl PrettyPrint {
 			printer: Arc::new(PrettyPrinter::new()),
 		}
 	}
+
 	fn new_indented(&mut self) -> Self {
 		Self {
 			prefix: format!("{}{}", self.prefix, self.printer.indention),
@@ -64,30 +65,38 @@ impl PrettyPrint {
 			printer: self.printer.clone(),
 		}
 	}
+
 	pub async fn get_category(&mut self, text: &str) -> PrettyPrint {
 		self.write_line(text.white().bold().to_string() + ":").await;
 		self.new_indented()
 	}
+
 	pub async fn get_list(&mut self, text: &str) -> PrettyPrint {
 		self.write_line(text.white().to_string() + ":").await;
 		self.new_indented()
 	}
+
 	pub async fn add_warning(&self, text: &str) {
 		self.write_line(text.yellow().bold()).await;
 	}
+
 	pub async fn add_key_value<K: Display + ?Sized, V: Debug + ?Sized>(&self, key: &K, value: &V) {
 		self.write_line(format!("{key}: {}", get_formatted_value(value))).await;
 	}
+
 	pub async fn add_value<V: Debug>(&self, value: &V) {
 		self.write_line(get_formatted_value(value)).await;
 	}
+
 	async fn write_line<T: Display>(&self, line: T) {
 		self.printer.write(format!("{}{}{}", self.prefix, line, self.suffix)).await;
 	}
+
 	#[cfg(test)]
 	pub async fn as_string(&self) -> String {
 		self.printer.as_string().await
 	}
+
 	#[allow(dead_code)]
 	pub async fn add_str(&self, text: String) {
 		self.printer.write(text).await;
