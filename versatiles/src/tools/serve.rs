@@ -28,9 +28,10 @@ pub struct Subcommand {
 	#[arg(short, long, default_value = "8080")]
 	pub port: u16,
 
-	/// Serve static content at "http:/.../" from a local folder or tar.
+	/// Serve static content at "http:/.../" from a local folder or a tar file.
+	/// Tar files can be compressed (.tar / .tar.gz / .tar.br).
 	/// If multiple static sources are defined, the first hit will be served.
-	/// You can also add an optional path like "[/assets/styles]styles.tar"
+	/// You can also add an optional url prefix like "[/assets/styles]styles.tar".
 	#[arg(short = 's', long = "static", verbatim_doc_comment)]
 	pub static_content: Vec<String>,
 
