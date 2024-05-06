@@ -10,16 +10,16 @@ use futures_util::{future::ready, StreamExt};
 use log::{debug, trace};
 use std::collections::HashMap;
 
-// Define TileConverter struct
+// Define TilesConverter struct
 pub struct VersaTilesConverter {
 	writer: Box<dyn DataWriterTrait>,
 	config: TilesConverterConfig,
 }
 
-// Implement TileConverterTrait for TileConverter
+// Implement TilesConverterTrait for TilesConverter
 #[async_trait]
 impl TilesConverterTrait for VersaTilesConverter {
-	// Create a new TileConverter instance
+	// Create a new TilesConverter instance
 	async fn new(filename: &str, tile_config: TilesConverterConfig) -> Result<TilesConverterBox>
 	where
 		Self: Sized,
@@ -30,7 +30,7 @@ impl TilesConverterTrait for VersaTilesConverter {
 		}))
 	}
 
-	// Convert tiles from the TileReader
+	// Convert tiles from the TilesReader
 	async fn convert_from(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
 		// Finalize the configuration
 
@@ -76,7 +76,7 @@ impl TilesConverterTrait for VersaTilesConverter {
 	}
 }
 
-// Implement additional methods for TileConverter
+// Implement additional methods for TilesConverter
 impl VersaTilesConverter {
 	// Write metadata
 	async fn write_meta(&mut self, reader: &TilesReaderBox) -> Result<ByteRange> {

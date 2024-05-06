@@ -13,7 +13,7 @@ use log::trace;
 use std::{collections::HashMap, fmt::Debug, ops::Shr, sync::Arc};
 use tokio::sync::Mutex;
 
-// Define the TileReader struct
+// Define the TilesReader struct
 pub struct VersaTilesReader {
 	meta: Option<Blob>,
 	reader: Box<dyn DataReaderTrait>,
@@ -22,9 +22,9 @@ pub struct VersaTilesReader {
 	tile_index_cache: HashMap<TileCoord3, Arc<TileIndex>>,
 }
 
-// Implement methods for the TileReader struct
+// Implement methods for the TilesReader struct
 impl VersaTilesReader {
-	// Create a new TileReader from a given data reader
+	// Create a new TilesReader from a given data reader
 	pub async fn from_src(mut reader: Box<dyn DataReaderTrait>) -> Result<VersaTilesReader> {
 		let header = FileHeader::from_reader(&mut reader)
 			.await
@@ -93,14 +93,14 @@ impl VersaTilesReader {
 	}
 }
 
-// Implement Send and Sync traits for TileReader
+// Implement Send and Sync traits for TilesReader
 unsafe impl Send for VersaTilesReader {}
 unsafe impl Sync for VersaTilesReader {}
 
-// Implement the TileReaderTrait for the TileReader struct
+// Implement the TilesReaderTrait for the TilesReader struct
 #[async_trait]
 impl TilesReaderTrait for VersaTilesReader {
-	// Create a new TileReader from a given filename
+	// Create a new TilesReader from a given filename
 	async fn new(filename: &str) -> Result<TilesReaderBox> {
 		let source = new_data_reader(filename).await?;
 		let reader = VersaTilesReader::from_src(source)
@@ -120,12 +120,12 @@ impl TilesReaderTrait for VersaTilesReader {
 		Ok(self.meta.clone())
 	}
 
-	// Get TileReader parameters
+	// Get TilesReader parameters
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
-	// Get mutable TileReader parameters
+	// Get mutable TilesReader parameters
 	fn get_parameters_mut(&mut self) -> &mut TilesReaderParameters {
 		&mut self.parameters
 	}
@@ -383,10 +383,10 @@ impl TilesReaderTrait for VersaTilesReader {
 	}
 }
 
-// Implement Debug for TileReader
+// Implement Debug for TilesReader
 impl Debug for VersaTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("TileReader:VersaTiles")
+		f.debug_struct("VersaTilesReader")
 			.field("parameters", &self.get_parameters())
 			.finish()
 	}
@@ -411,7 +411,7 @@ mod tests {
 
 		let mut reader = VersaTilesReader::new(temp_file).await?;
 
-		assert_eq!(format!("{:?}", reader), "TileReader:VersaTiles { parameters:  { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: UnGzip, flip_y: false, swap_xy: false, tile_compression: Gzip, tile_format: PBF } }");
+		assert_eq!(format!("{:?}", reader), "VersaTilesReader { parameters:  { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: UnGzip, flip_y: false, swap_xy: false, tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "versatiles");
 		assert!(reader.get_name().ends_with(temp_file));
 		assert_eq!(reader.get_meta().await?, Some(Blob::from(b"dummy meta data".to_vec())));

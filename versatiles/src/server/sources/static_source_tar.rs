@@ -179,7 +179,7 @@ mod tests {
 	use assert_fs::NamedTempFile;
 	use versatiles_lib::{
 		containers::{MockTilesReader, MockTilesReaderProfile, TarTilesConverter, TilesConverterTrait},
-		shared::{TileBBoxPyramid, TilesConverterConfig, TileFormat},
+		shared::{TileBBoxPyramid, TileFormat, TilesConverterConfig},
 	};
 
 	pub async fn make_test_tar(compression: Compression) -> NamedTempFile {

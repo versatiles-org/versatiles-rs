@@ -171,7 +171,7 @@ impl TilesReaderTrait for TarTilesReader {
 
 impl Debug for TarTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("TileReader:Tar")
+		f.debug_struct("TarTilesReader")
 			.field("parameters", &self.get_parameters())
 			.finish()
 	}
@@ -190,7 +190,7 @@ pub mod tests {
 		// get tar reader
 		let mut reader = TarTilesReader::new(temp_file).await?;
 
-		assert_eq!(format!("{:?}", reader), "TileReader:Tar { parameters:  { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], decompressor: UnBrotli, flip_y: false, swap_xy: false, tile_compression: Brotli, tile_format: PNG } }");
+		assert_eq!(format!("{:?}", reader), "TarTilesReader { parameters:  { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], decompressor: UnBrotli, flip_y: false, swap_xy: false, tile_compression: Brotli, tile_format: PNG } }");
 		assert_eq!(reader.get_container_name(), "tar");
 		assert!(reader.get_name().ends_with(temp_file));
 		assert_eq!(reader.get_meta().await?, Some(Blob::from(b"dummy meta data".to_vec())));

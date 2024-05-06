@@ -162,7 +162,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 
 impl Debug for DirectoryTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("TileReader:Directory")
+		f.debug_struct("DirectoryTilesReader")
 			.field("parameters", &self.get_parameters())
 			.finish()
 	}

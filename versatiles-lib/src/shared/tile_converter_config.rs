@@ -76,7 +76,7 @@ impl TilesConverterConfig {
 
 #[cfg(test)]
 mod tests {
-	use super::{Compression, TileBBoxPyramid, TilesConverterConfig, TileFormat, TilesReaderParameters};
+	use super::{Compression, TileBBoxPyramid, TileFormat, TilesConverterConfig, TilesReaderParameters};
 
 	#[test]
 	fn test() {

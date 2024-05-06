@@ -70,7 +70,7 @@ impl TilesReaderTrait for MockTilesReader {
 
 impl std::fmt::Debug for MockTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("TileReader:Dummy")
+		f.debug_struct("MockTilesReader")
 			.field("parameters", &self.get_parameters())
 			.finish()
 	}
