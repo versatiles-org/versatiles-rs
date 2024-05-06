@@ -42,10 +42,10 @@ impl TileReaderTrait for TileReader {
 		create_error!("don't want to")
 	}
 	fn get_container_name(&self) -> &str {
-		"dummy container"
+		"dummy_container"
 	}
 	fn get_name(&self) -> &str {
-		"dummy name"
+		"dummy_name"
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
 		&self.parameters
@@ -89,8 +89,8 @@ mod tests {
 	#[tokio::test]
 	async fn reader() -> Result<()> {
 		let mut reader = TileReader::new_mock(ReaderProfile::PNG, 8);
-		assert_eq!(reader.get_container_name(), "dummy container");
-		assert_eq!(reader.get_name(), "dummy name");
+		assert_eq!(reader.get_container_name(), "dummy_container");
+		assert_eq!(reader.get_name(), "dummy_name");
 		assert_ne!(reader.get_parameters(), &TileReaderParameters::new_dummy());
 		assert_ne!(reader.get_parameters_mut(), &mut TileReaderParameters::new_dummy());
 		assert_eq!(reader.get_meta().await?, Some(Blob::from("dummy meta data")));
