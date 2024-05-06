@@ -6,7 +6,7 @@ use crate::{
 	containers::{TileReaderBox, TileReaderTrait, TileStream},
 	shared::{Blob, DataConverter, TileBBox, TileCoord2, TileCoord3, TileReaderParameters},
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use futures_util::{stream, StreamExt};
 use log::trace;
@@ -124,13 +124,10 @@ impl TileReaderTrait for TileReader {
 		let block_coord = TileCoord3::new(coord.get_x().shr(8), coord.get_y().shr(8), coord.get_z())?;
 
 		// Get the block using the block coordinate
-		let block_option = self.block_index.get_block(&block_coord);
-		if block_option.is_none() {
-			bail!("block <{block_coord:#?}> for tile <{coord:#?}> does not exist");
-		}
+		let block = *(self.block_index.get_block(&block_coord))
+			.ok_or_else(|| anyhow!("block <{block_coord:#?}> for tile <{coord:#?}> does not exist"))?;
 
 		// Get the block and its bounding box
-		let block: BlockDefinition = *block_option.unwrap();
 		let bbox = block.get_global_bbox();
 
 		// Calculate tile coordinates within the block

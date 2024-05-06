@@ -88,12 +88,13 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 			.filter_map(move |coord| {
 				let mutex = mutex.clone();
 				async move {
-					let result = mutex.lock().await.get_tile_data_original(&coord).await;
-					if result.is_err() {
-						return None;
-					}
-					let blob = result.unwrap();
-					Some((coord, blob))
+					mutex
+						.lock()
+						.await
+						.get_tile_data_original(&coord)
+						.await
+						.map(|blob| (coord, blob))
+						.ok()
 				}
 			})
 			.boxed()

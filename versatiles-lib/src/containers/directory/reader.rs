@@ -37,7 +37,7 @@ impl TileReaderTrait for TileReader {
 	where
 		Self: Sized,
 	{
-		let path = env::current_dir().unwrap().join(filename);
+		let path = env::current_dir()?.join(filename);
 		log::trace!("read {:?}", path);
 
 		ensure!(path.is_dir(), "file {path:?} does not exist");
@@ -54,31 +54,31 @@ impl TileReaderTrait for TileReader {
 			if result1.is_err() {
 				continue;
 			}
-			let entry1 = result1.unwrap();
+			let entry1 = result1?;
 			let name1 = entry1.file_name().into_string().unwrap();
 			let numeric1 = name1.parse::<u8>();
 			if numeric1.is_ok() {
-				let z = numeric1.unwrap();
+				let z = numeric1?;
 
 				for result2 in fs::read_dir(entry1.path())? {
 					// x level
 					if result2.is_err() {
 						continue;
 					}
-					let entry2 = result2.unwrap();
+					let entry2 = result2?;
 					let name2 = entry2.file_name().into_string().unwrap();
 					let numeric2 = name2.parse::<u32>();
 					if numeric2.is_err() {
 						continue;
 					}
-					let x = numeric2.unwrap();
+					let x = numeric2?;
 
 					for result3 in fs::read_dir(entry2.path())? {
 						// y level
 						if result3.is_err() {
 							continue;
 						}
-						let entry3 = result3.unwrap();
+						let entry3 = result3?;
 						let mut filename = entry3.file_name().into_string().unwrap();
 						let this_comp = extract_compression(&mut filename);
 						let this_form = extract_format(&mut filename);
@@ -87,17 +87,17 @@ impl TileReaderTrait for TileReader {
 						if numeric3.is_err() {
 							continue;
 						}
-						let y = numeric3.unwrap();
+						let y = numeric3?;
 
 						if tile_form.is_none() {
 							tile_form = Some(this_form);
-						} else if tile_form.as_ref().unwrap() != &this_form {
+						} else if tile_form.as_ref().expect("must be specified") != &this_form {
 							bail!("unknown filename {filename:?}, can't detect format");
 						}
 
 						if tile_comp.is_none() {
 							tile_comp = Some(this_comp);
-						} else if tile_comp.as_ref().unwrap() != &this_comp {
+						} else if tile_comp.as_ref().expect("must be specified") != &this_comp {
 							bail!("unknown filename {filename:?}, can't detect compression");
 						}
 
@@ -129,7 +129,11 @@ impl TileReaderTrait for TileReader {
 			meta,
 			path,
 			tile_map,
-			parameters: TileReaderParameters::new(tile_form.unwrap(), tile_comp.unwrap(), bbox_pyramid),
+			parameters: TileReaderParameters::new(
+				tile_form.expect("tile format must be specified"),
+				tile_comp.expect("tile compression must be specified"),
+				bbox_pyramid,
+			),
 		}))
 	}
 	fn get_parameters(&self) -> &TileReaderParameters {
@@ -144,12 +148,11 @@ impl TileReaderTrait for TileReader {
 	async fn get_tile_data_original(&mut self, coord: &TileCoord3) -> Result<Blob> {
 		log::trace!("get_tile_data_original {:?}", coord);
 
-		let path = self.tile_map.get(coord);
-		if path.is_none() {
+		if let Some(path) = self.tile_map.get(coord) {
+			Self::read(path)
+		} else {
 			bail!("tile {:?} not found", coord);
 		}
-
-		Ok(Self::read(path.unwrap())?)
 	}
 	fn get_name(&self) -> &str {
 		self.path.to_str().unwrap()
@@ -179,17 +182,17 @@ mod tests {
 		fs::write(dir.path().join("1/2/3.png"), "test tile data")?;
 		fs::write(dir.path().join("meta.json"), "test meta data")?;
 
-		let mut reader = TileReader::new(dir.to_str().unwrap()).await.unwrap();
+		let mut reader = TileReader::new(dir.to_str().unwrap()).await?;
 
 		assert_eq!(reader.get_meta().await?.unwrap().as_str(), "test meta data");
 
-		let coord = TileCoord3::new(2, 3, 1).unwrap();
+		let coord = TileCoord3::new(2, 3, 1)?;
 		let tile_data = reader.get_tile_data_original(&coord).await;
 		assert!(tile_data.is_ok());
-		assert_eq!(tile_data.unwrap(), Blob::from("test tile data"));
+		assert_eq!(tile_data?, Blob::from("test tile data"));
 
 		// Test for non-existent tile
-		let coord = TileCoord3::new(2, 2, 1).unwrap(); // Assuming these coordinates do not exist
+		let coord = TileCoord3::new(2, 2, 1)?; // Assuming these coordinates do not exist
 		assert!(reader.get_tile_data_original(&coord).await.is_err());
 
 		return Ok(());

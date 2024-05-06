@@ -115,27 +115,30 @@ async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileCon
 #[allow(unused_imports)]
 #[cfg(test)]
 mod tests {
+	use anyhow::Result;
+
 	use crate::tests::run_command;
 	use std::fs;
 
 	#[test]
-	fn test_local() {
+	fn test_local() -> Result<()> {
 		fs::create_dir("../tmp/").unwrap_or_default();
+
 		run_command(vec![
 			"versatiles",
 			"convert",
 			"../testdata/berlin.mbtiles",
 			"../tmp/berlin1.versatiles",
-		])
-		.unwrap();
+		])?;
+
 		run_command(vec![
 			"versatiles",
 			"convert",
 			"--bbox=13.38,52.46,13.43,52.49",
 			"../tmp/berlin1.versatiles",
 			"../tmp/berlin2.versatiles",
-		])
-		.unwrap();
+		])?;
+
 		run_command(vec![
 			"versatiles",
 			"convert",
@@ -145,8 +148,9 @@ mod tests {
 			"--force-recompress",
 			"../tmp/berlin2.versatiles",
 			"../tmp/berlin3.versatiles",
-		])
-		.unwrap();
+		])?;
+
+		Ok(())
 	}
 
 	#[test]

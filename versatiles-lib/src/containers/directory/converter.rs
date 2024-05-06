@@ -42,7 +42,7 @@ impl TileConverterTrait for TileConverter {
 	{
 		log::trace!("new {:?}", filename);
 
-		let dir = env::current_dir().unwrap().join(filename);
+		let dir = env::current_dir()?.join(filename);
 		ensure!(dir.is_dir(), "path {dir:?} must be a directory");
 		ensure!(dir.is_absolute(), "path {dir:?} must be absolute");
 

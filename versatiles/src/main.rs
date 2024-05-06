@@ -65,24 +65,21 @@ fn run(cli: Cli) -> Result<()> {
 #[cfg(test)]
 mod tests {
 	use crate::{run, Cli};
+	use anyhow::Result;
 	use clap::Parser;
 
 	// Function for running command-line arguments in tests
-	pub fn run_command(arg_vec: Vec<&str>) -> Result<String, String> {
-		match Cli::try_parse_from(arg_vec) {
-			Ok(cli) => {
-				let msg = format!("{:?}", cli);
-				run(cli).unwrap();
-				Ok(msg)
-			}
-			Err(error) => Err(error.render().to_string()),
-		}
+	pub fn run_command(arg_vec: Vec<&str>) -> Result<String> {
+		let cli = Cli::try_parse_from(arg_vec)?;
+		let msg = format!("{:?}", cli);
+		run(cli)?;
+		Ok(msg)
 	}
 
 	// Test if versatiles generates help
 	#[test]
 	fn help() {
-		let err = run_command(vec!["versatiles"]).unwrap_err();
+		let err = run_command(vec!["versatiles"]).unwrap_err().to_string();
 		assert!(err.starts_with("A toolbox for converting, checking and serving map tiles in various formats."));
 		assert!(err.contains("\nUsage: versatiles [OPTIONS] <COMMAND>"));
 	}
@@ -90,28 +87,28 @@ mod tests {
 	// Test for version
 	#[test]
 	fn version() {
-		let err = run_command(vec!["versatiles", "-V"]).unwrap_err();
+		let err = run_command(vec!["versatiles", "-V"]).unwrap_err().to_string();
 		assert!(err.starts_with("versatiles "));
 	}
 
 	// Test for subcommand 'convert'
 	#[test]
 	fn convert_subcommand() {
-		let output = run_command(vec!["versatiles", "convert"]).unwrap_err();
+		let output = run_command(vec!["versatiles", "convert"]).unwrap_err().to_string();
 		assert!(output.starts_with("Convert between different tile containers"));
 	}
 
 	// Test for subcommand 'probe'
 	#[test]
 	fn probe_subcommand() {
-		let output = run_command(vec!["versatiles", "probe"]).unwrap_err();
+		let output = run_command(vec!["versatiles", "probe"]).unwrap_err().to_string();
 		assert!(output.starts_with("Show information about a tile container"));
 	}
 
 	// Test for subcommand 'serve'
 	#[test]
 	fn serve_subcommand() {
-		let output = run_command(vec!["versatiles", "serve"]).unwrap_err();
+		let output = run_command(vec!["versatiles", "serve"]).unwrap_err().to_string();
 		assert!(output.starts_with("Serve tiles via http"));
 	}
 }
