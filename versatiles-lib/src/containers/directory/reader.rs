@@ -1,6 +1,5 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
-	create_error,
 	shared::{
 		decompress, extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters,
 	},
@@ -93,13 +92,13 @@ impl TileReaderTrait for TileReader {
 						if tile_form.is_none() {
 							tile_form = Some(this_form);
 						} else if tile_form.as_ref().unwrap() != &this_form {
-							return create_error!("unknown filename {filename:?}, can't detect format");
+							bail!("unknown filename {filename:?}, can't detect format");
 						}
 
 						if tile_comp.is_none() {
 							tile_comp = Some(this_comp);
 						} else if tile_comp.as_ref().unwrap() != &this_comp {
-							return create_error!("unknown filename {filename:?}, can't detect compression");
+							bail!("unknown filename {filename:?}, can't detect compression");
 						}
 
 						let coord3 = TileCoord3::new(x, y, z)?;

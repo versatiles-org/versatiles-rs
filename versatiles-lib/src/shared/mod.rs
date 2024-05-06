@@ -1,7 +1,6 @@
 pub mod blob;
 pub mod compress;
 pub mod convert;
-pub mod error;
 pub mod tile_bbox;
 pub mod tile_bbox_pyramid;
 pub mod tile_compression;

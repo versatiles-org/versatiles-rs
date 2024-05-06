@@ -1,9 +1,8 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait, TileStream},
-	create_error,
 	shared::*,
 };
-use anyhow::{ensure, Result};
+use anyhow::{anyhow, ensure, Result};
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use log::trace;
@@ -49,8 +48,8 @@ impl TileReader {
 			})
 		})?;
 
-		let mut tile_format: Result<TileFormat> = create_error!("mbtiles file {} does not specify tile format", self.name);
-		let mut compression: Result<Compression> = create_error!("mbtiles file {} does not specify compression", self.name);
+		let mut tile_format: Result<TileFormat> = Err(anyhow!("mbtiles file {} does not specify tile format", self.name));
+		let mut compression: Result<Compression> = Err(anyhow!("mbtiles file {} does not specify compression", self.name));
 
 		for entry in entries {
 			let entry = entry?;

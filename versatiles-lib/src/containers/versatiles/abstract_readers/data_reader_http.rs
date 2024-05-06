@@ -1,8 +1,7 @@
 use super::super::types::ByteRange;
 use super::DataReaderTrait;
-use crate::create_error;
 use crate::shared::Blob;
-use anyhow::Result;
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use log::info;
@@ -33,7 +32,7 @@ impl DataReaderTrait for DataReaderHttp {
 				client,
 			}))
 		} else {
-			create_error!("source {source} must start with http:// or https://")
+			bail!("source {source} must start with http:// or https://")
 		}
 	}
 	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
@@ -46,12 +45,12 @@ impl DataReaderTrait for DataReaderHttp {
 		if response.status() != StatusCode::PARTIAL_CONTENT {
 			let status_code = response.status();
 			info!("response: {}", str::from_utf8(&response.bytes().await?)?);
-			return create_error!("as a response to a range request it is expected to get the status code 206. instead we got {status_code}");
+			bail!("as a response to a range request it is expected to get the status code 206. instead we got {status_code}");
 		}
 
 		let content_range: &str = match response.headers().get("content-range") {
 			Some(header_value) => header_value.to_str()?,
-			None => return create_error!("content-range is not set for range request {range:?} to url {}", self.url),
+			None => bail!("content-range is not set for range request {range:?} to url {}", self.url),
 		};
 
 		lazy_static! {
@@ -67,15 +66,15 @@ impl DataReaderTrait for DataReaderHttp {
 			content_range_start = captures.get(1).unwrap().as_str().parse::<u64>()?;
 			content_range_end = captures.get(2).unwrap().as_str().parse::<u64>()?;
 		} else {
-			return create_error!("format of content-range response is invalid: {content_range}");
+			bail!("format of content-range response is invalid: {content_range}");
 		}
 
 		if content_range_start != range.offset {
-			return create_error!("content-range-start {content_range_start} is not start of range {range:?}");
+			bail!("content-range-start {content_range_start} is not start of range {range:?}");
 		}
 
 		if content_range_end != range.offset + range.length - 1 {
-			return create_error!("content-range-end {content_range_end} is not end of range {range:?}");
+			bail!("content-range-end {content_range_end} is not end of range {range:?}");
 		}
 
 		let bytes = response.bytes().await?;

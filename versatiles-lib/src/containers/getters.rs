@@ -1,13 +1,10 @@
-use anyhow::Context;
-
 use super::directory;
 use super::mbtiles;
 use super::tar;
 use super::{versatiles, TileReaderBox, TileReaderTrait};
 use super::{TileConverterBox, TileConverterTrait};
-use crate::create_error;
 use crate::shared::TileConverterConfig;
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
 pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
@@ -30,7 +27,7 @@ pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
 		"versatiles" => Ok(versatiles::TileReader::new(filename)
 			.await
 			.with_context(|| format!("opening {filename} as versatiles"))?),
-		_ => create_error!("Error when reading: file extension '{extension:?}' unknown"),
+		_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
 	}
 }
 
@@ -42,7 +39,7 @@ pub async fn get_converter(filename: &str, config: TileConverterConfig) -> Resul
 		"versatiles" => versatiles::TileConverter::new(filename, config).await,
 		"tar" => tar::TileConverter::new(filename, config).await,
 		"" => directory::TileConverter::new(filename, config).await,
-		_ => create_error!("Error when writing: file extension '{extension:?}' unknown"),
+		_ => bail!("Error when writing: file extension '{extension:?}' unknown"),
 	}
 }
 

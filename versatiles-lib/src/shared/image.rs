@@ -1,6 +1,5 @@
-use crate::create_error;
 use crate::shared::Blob;
-use anyhow::Result;
+use anyhow::{bail, Result};
 use image::{
 	codecs::{jpeg, png},
 	load_from_memory_with_format, DynamicImage, ExtendedColorType, ImageEncoder, ImageFormat,
@@ -99,7 +98,7 @@ pub fn img2webp(image: DynamicImage) -> Result<Blob> {
 				.encode(WEBP_QUALITY)
 				.to_vec(),
 		)),
-		_ => create_error!("currently only 8 bit RGB/RGBA is supported for WebP lossy encoding"),
+		_ => bail!("currently only 8 bit RGB/RGBA is supported for WebP lossy encoding"),
 	}
 }
 
@@ -124,7 +123,7 @@ pub fn img2webplossless(image: DynamicImage) -> Result<Blob> {
 				.encode_lossless()
 				.to_vec(),
 		)),
-		_ => create_error!("currently only 8 bit RGB is supported for WebP lossless encoding"),
+		_ => bail!("currently only 8 bit RGB is supported for WebP lossless encoding"),
 	}
 }
 
@@ -143,7 +142,7 @@ pub fn webp2img(data: Blob) -> Result<DynamicImage> {
 	if let Some(image) = image {
 		Ok(image.to_image())
 	} else {
-		create_error!("cant read webp")
+		bail!("cant read webp")
 	}
 }
 

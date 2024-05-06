@@ -4,11 +4,9 @@ use super::{new_data_reader, types::*, DataReaderTrait};
 use crate::shared::PrettyPrint;
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait, TileStream},
-	create_error,
 	shared::{Blob, DataConverter, TileBBox, TileCoord2, TileCoord3, TileReaderParameters},
 };
-use anyhow::Context;
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use futures_util::{stream, StreamExt};
 use log::trace;
@@ -128,7 +126,7 @@ impl TileReaderTrait for TileReader {
 		// Get the block using the block coordinate
 		let block_option = self.block_index.get_block(&block_coord);
 		if block_option.is_none() {
-			return create_error!("block <{block_coord:#?}> for tile <{coord:#?}> does not exist");
+			bail!("block <{block_coord:#?}> for tile <{coord:#?}> does not exist");
 		}
 
 		// Get the block and its bounding box
@@ -140,7 +138,7 @@ impl TileReaderTrait for TileReader {
 
 		// Check if the tile is within the block definition
 		if !bbox.contains(&tile_coord) {
-			return create_error!("tile {coord:?} outside block definition");
+			bail!("tile {coord:?} outside block definition");
 		}
 
 		// Get the tile ID
@@ -150,9 +148,9 @@ impl TileReaderTrait for TileReader {
 		let tile_index: Arc<TileIndex> = self.get_block_tile_index_cached(&block).await;
 		let tile_range: &ByteRange = tile_index.get(tile_id);
 
-		// Return None if the tile range has zero length
+		//  None if the tile range has zero length
 		if tile_range.length == 0 {
-			return create_error!("tile_range.length == 0");
+			bail!("tile_range.length == 0");
 		}
 
 		// Read the tile data from the reader

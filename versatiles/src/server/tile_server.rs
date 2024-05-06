@@ -2,7 +2,7 @@ use super::{
 	helpers::Url,
 	sources::{SourceResponse, StaticSource, TileSource},
 };
-use anyhow::Result;
+use anyhow::{bail, Result};
 use axum::{
 	body::Body,
 	extract::State,
@@ -19,7 +19,6 @@ use std::path::Path;
 use tokio::sync::oneshot::Sender;
 use versatiles_lib::{
 	containers::TileReaderBox,
-	create_error,
 	shared::{optimize_compression, Blob, Compression, TargetCompression},
 };
 
@@ -55,7 +54,7 @@ impl TileServer {
 		for other_tile_source in self.tile_sources.iter() {
 			let other_prefix = &other_tile_source.prefix;
 			if other_prefix.starts_with(&url_prefix) || url_prefix.starts_with(other_prefix) {
-				return create_error!("multiple sources with the prefix '{url_prefix}' and '{other_prefix}' are defined");
+				bail!("multiple sources with the prefix '{url_prefix}' and '{other_prefix}' are defined");
 			};
 		}
 

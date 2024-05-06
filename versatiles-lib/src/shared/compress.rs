@@ -1,8 +1,7 @@
 #![allow(non_snake_case, dead_code)]
 
 use super::{Blob, Compression};
-use crate::create_error;
-use anyhow::Result;
+use anyhow::{bail, Result};
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
 #[cfg(feature = "full")]
 use enumset::EnumSet;
@@ -42,7 +41,7 @@ impl TargetCompression {
 #[allow(dead_code)]
 pub fn optimize_compression(data: Blob, input: &Compression, target: TargetCompression) -> Result<(Blob, Compression)> {
 	if target.compressions.is_empty() {
-		return create_error!("no compression allowed");
+		bail!("no compression allowed");
 	}
 
 	if !target.best_compression && target.compressions.contains(*input) {

@@ -1,8 +1,8 @@
 #[cfg(feature = "full")]
 use super::image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2img, webp2img};
 use super::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression, TileFormat};
-use crate::{containers::TileStream, create_error};
-use anyhow::Result;
+use crate::containers::TileStream;
+use anyhow::{bail, Result};
 use futures_util::StreamExt;
 use itertools::Itertools;
 use std::{
@@ -57,7 +57,7 @@ impl FnConv {
 			FnConv::Gzip => compress_gzip(tile),
 			FnConv::Brotli => compress_brotli(tile),
 
-			_ => create_error!("{self:?} is not supported"),
+			_ => bail!("{self:?} is not supported"),
 		}
 	}
 }

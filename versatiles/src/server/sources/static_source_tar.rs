@@ -1,6 +1,6 @@
 use super::{static_source::StaticSourceTrait, SourceResponse};
 use crate::server::helpers::{guess_mime, Url};
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
 use log::trace;
 use std::{collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::File, io::Read, path::Path};
@@ -50,7 +50,7 @@ impl TarFile {
 				"tar" => break,
 				"gz" => buffer = decompress_gzip(buffer)?,
 				"br" => buffer = decompress_brotli(buffer)?,
-				_ => return Err(anyhow!("{path:?} must be a name of a tar file")),
+				_ => bail!("{path:?} must be a name of a tar file"),
 			}
 		}
 

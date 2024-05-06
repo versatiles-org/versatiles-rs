@@ -1,6 +1,5 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
-	create_error,
 	shared::{
 		decompress, extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters,
 	},
@@ -86,13 +85,13 @@ impl TileReaderTrait for TileReader {
 				if tile_format.is_none() {
 					tile_format = Some(this_format);
 				} else if tile_format.as_ref().unwrap() != &this_format {
-					return create_error!("unknown filename {path_tmp_string:?}, can't detect format");
+					bail!("unknown filename {path_tmp_string:?}, can't detect format");
 				}
 
 				if tile_compression.is_none() {
 					tile_compression = Some(this_compression);
 				} else if tile_compression.as_ref().unwrap() != &this_compression {
-					return create_error!("unknown filename {path_tmp_string:?}, can't detect compression");
+					bail!("unknown filename {path_tmp_string:?}, can't detect compression");
 				}
 
 				let offset = entry.raw_file_position();

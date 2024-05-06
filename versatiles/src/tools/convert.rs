@@ -1,9 +1,8 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use clap::Args;
 use log::trace;
 use versatiles_lib::{
 	containers::{get_converter, get_reader, TileConverterBox, TileReaderBox},
-	create_error,
 	shared::{Compression, TileBBoxPyramid, TileConverterConfig, TileFormat},
 };
 
@@ -96,7 +95,7 @@ async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileCon
 			.collect();
 
 		if values.len() != 4 {
-			return create_error!("bbox must contain exactly 4 numbers, but instead i'v got: {bbox:?}");
+			bail!("bbox must contain exactly 4 numbers, but instead i'v got: {bbox:?}");
 		}
 
 		bbox_pyramid.intersect_geo_bbox(values.as_slice().try_into()?);
