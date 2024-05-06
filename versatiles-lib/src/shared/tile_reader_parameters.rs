@@ -107,7 +107,7 @@ mod tests {
 	#[test]
 	fn basic_tests() {
 		let test = |tile_format: TileFormat, tile_compression: Compression, bbox_pyramid: TileBBoxPyramid| {
-			let p = TilesReaderParameters::new(tile_format.clone(), tile_compression, bbox_pyramid.clone());
+			let p = TilesReaderParameters::new(tile_format, tile_compression, bbox_pyramid.clone());
 
 			assert_eq!(p.tile_format, tile_format);
 			assert_eq!(p.tile_compression, tile_compression);
@@ -128,8 +128,8 @@ mod tests {
 		assert_eq!(p.tile_compression, Compression::None);
 		assert_eq!(p.decompressor.as_string(), "");
 		assert_eq!(p.bbox_pyramid.to_string(), "[0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,1,6,7] (49), 4: [1,3,12,14] (144), 5: [3,6,25,28] (529), 6: [6,12,51,57] (2116), 7: [12,25,102,115] (8281), 8: [25,51,204,230] (32400), 9: [51,102,409,460] (128881), 10: [102,204,819,921] (515524), 11: [204,409,1638,1843] (2059225), 12: [409,819,3276,3686] (8225424), 13: [819,1638,6553,7372] (32890225), 14: [1638,3276,13107,14745] (131560900), 15: [3276,6553,26214,29491] (526197721)]");
-		assert_eq!(p.swap_xy, false);
-		assert_eq!(p.flip_y, false);
+		assert!(!p.swap_xy);
+		assert!(!p.flip_y);
 	}
 
 	// Testing transform_forward and transform_backward methods

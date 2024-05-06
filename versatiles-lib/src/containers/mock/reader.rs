@@ -37,9 +37,6 @@ impl MockTilesReader {
 
 #[async_trait]
 impl TilesReaderTrait for MockTilesReader {
-	async fn new(_path: &str) -> Result<TilesReaderBox> {
-		bail!("don't want to")
-	}
 	fn get_container_name(&self) -> &str {
 		"dummy_container"
 	}

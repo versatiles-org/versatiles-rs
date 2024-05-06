@@ -8,14 +8,7 @@ use crate::{
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
 use log;
-use std::{
-	collections::HashMap,
-	env::{self},
-	fmt::Debug,
-	fs::File,
-	io::Read,
-	os::unix::prelude::FileExt,
-};
+use std::{collections::HashMap, fmt::Debug, fs::File, io::Read, os::unix::prelude::FileExt, path::Path};
 use tar::{Archive, EntryType};
 
 struct TarByteRange {
@@ -31,18 +24,12 @@ pub struct TarTilesReader {
 	parameters: TilesReaderParameters,
 }
 
-#[async_trait]
-impl TilesReaderTrait for TarTilesReader {
-	fn get_container_name(&self) -> &str {
-		"tar"
-	}
-	async fn new(filename: &str) -> Result<TilesReaderBox>
+impl TarTilesReader {
+	pub async fn open(path: &Path) -> Result<TilesReaderBox>
 	where
 		Self: Sized,
 	{
-		log::trace!("new {}", filename);
-
-		let path = env::current_dir().unwrap().join(filename);
+		log::trace!("open {path:?}");
 
 		ensure!(path.exists(), "file {path:?} does not exist");
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
@@ -133,11 +120,18 @@ impl TilesReaderTrait for TarTilesReader {
 
 		Ok(Box::new(TarTilesReader {
 			meta,
-			name: String::from(filename),
+			name: path.to_str().unwrap().to_owned(),
 			file,
 			tile_map,
 			parameters: TilesReaderParameters::new(tile_format.unwrap(), tile_compression.unwrap(), bbox_pyramid),
 		}))
+	}
+}
+
+#[async_trait]
+impl TilesReaderTrait for TarTilesReader {
+	fn get_container_name(&self) -> &str {
+		"tar"
 	}
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
@@ -185,14 +179,13 @@ pub mod tests {
 	#[tokio::test]
 	async fn reader() -> Result<()> {
 		let temp_file = make_test_file(TileFormat::PNG, Compression::Brotli, 4, "tar").await?;
-		let temp_file = temp_file.to_str().unwrap();
 
 		// get tar reader
-		let mut reader = TarTilesReader::new(temp_file).await?;
+		let mut reader = TarTilesReader::open(&temp_file).await?;
 
 		assert_eq!(format!("{:?}", reader), "TarTilesReader { parameters:  { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], decompressor: UnBrotli, flip_y: false, swap_xy: false, tile_compression: Brotli, tile_format: PNG } }");
 		assert_eq!(reader.get_container_name(), "tar");
-		assert!(reader.get_name().ends_with(temp_file));
+		assert!(reader.get_name().ends_with(temp_file.to_str().unwrap()));
 		assert_eq!(reader.get_meta().await?, Some(Blob::from(b"dummy meta data".to_vec())));
 		assert_eq!(format!("{:?}", reader.get_parameters()), " { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], decompressor: UnBrotli, flip_y: false, swap_xy: false, tile_compression: Brotli, tile_format: PNG }");
 		assert_eq!(reader.get_tile_compression(), &Compression::Brotli);
@@ -208,10 +201,9 @@ pub mod tests {
 	async fn all_compressions() -> Result<()> {
 		async fn test_compression(compression: Compression) -> Result<()> {
 			let temp_file = make_test_file(TileFormat::PBF, compression, 4, "tar").await?;
-			let temp_file = temp_file.to_str().unwrap();
 
 			// get tar reader
-			let mut reader = TarTilesReader::new(temp_file).await?;
+			let mut reader = TarTilesReader::open(&temp_file).await?;
 			format!("{:?}", reader);
 
 			let mut converter = MockTilesConverter::new_mock(MockTilesConverterProfile::Whatever, 4);
@@ -231,9 +223,8 @@ pub mod tests {
 		use crate::shared::PrettyPrint;
 
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 4, "tar").await?;
-		let temp_file = temp_file.to_str().unwrap();
 
-		let mut reader = TarTilesReader::new(temp_file).await?;
+		let mut reader = TarTilesReader::open(&temp_file).await?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(printer.get_category("container").await).await?;

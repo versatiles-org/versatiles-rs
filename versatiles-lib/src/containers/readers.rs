@@ -11,10 +11,6 @@ pub type TilesReaderBox = Box<dyn TilesReaderTrait>;
 #[allow(clippy::new_ret_no_self)]
 #[async_trait]
 pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
-	async fn new(path: &str) -> Result<TilesReaderBox>
-	where
-		Self: Sized;
-
 	/// some kine of name for this reader source, e.g. the filename
 	fn get_name(&self) -> &str;
 
@@ -171,9 +167,8 @@ mod tests {
 		parameters: TilesReaderParameters,
 	}
 
-	#[async_trait]
-	impl TilesReaderTrait for TestReader {
-		async fn new(path: &str) -> Result<TilesReaderBox> {
+	impl TestReader {
+		async fn new_dummy(path: &str) -> Result<TilesReaderBox> {
 			let parameters = TilesReaderParameters::new_dummy();
 			let reader = TestReader {
 				name: path.to_owned(),
@@ -181,7 +176,10 @@ mod tests {
 			};
 			Ok(Box::new(reader))
 		}
+	}
 
+	#[async_trait]
+	impl TilesReaderTrait for TestReader {
 		fn get_name(&self) -> &str {
 			&self.name
 		}
@@ -212,7 +210,7 @@ mod tests {
 	async fn reader() -> Result<()> {
 		use crate::containers::{MockTilesConverter, MockTilesConverterProfile};
 
-		let mut reader = TestReader::new("test_path").await?;
+		let mut reader = TestReader::new_dummy("test_path").await?;
 
 		// Test getting name
 		assert_eq!(reader.get_name(), "test_path");
@@ -242,7 +240,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn get_bbox_tile_iter() -> Result<()> {
-		let mut reader = TestReader::new("test_path").await?;
+		let mut reader = TestReader::new_dummy("test_path").await?;
 		let bbox = TileBBox::new(4, 0, 0, 10, 10)?; // Or replace it with actual bbox
 		let mut stream = reader.get_bbox_tile_stream(bbox).await;
 

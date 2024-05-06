@@ -15,26 +15,30 @@ pub struct DataReaderHttp {
 	url: Url,
 	client: Client,
 }
+impl DataReaderHttp {
+	pub fn new(url: Url) -> Result<Box<Self>> {
+		match url.scheme() {
+			"http" => (),
+			"https" => (),
+			_ => bail!("url has wrong scheme {url}"),
+		}
 
+		let client = reqwest::Client::builder()
+			.tcp_keepalive(Duration::from_secs(600))
+			.connection_verbose(true)
+			.danger_accept_invalid_certs(true)
+			.use_rustls_tls()
+			.build()?;
+
+		Ok(Box::new(Self {
+			name: url.to_string(),
+			url,
+			client,
+		}))
+	}
+}
 #[async_trait]
 impl DataReaderTrait for DataReaderHttp {
-	async fn new(source: &str) -> Result<Box<Self>> {
-		if source.starts_with("https://") || source.starts_with("http://") {
-			let client = reqwest::Client::builder()
-				.tcp_keepalive(Duration::from_secs(600))
-				.connection_verbose(true)
-				.danger_accept_invalid_certs(true)
-				.use_rustls_tls()
-				.build()?;
-			Ok(Box::new(Self {
-				name: source.to_string(),
-				url: Url::parse(source)?,
-				client,
-			}))
-		} else {
-			bail!("source {source} must start with http:// or https://")
-		}
-	}
 	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
 		let mut request = Request::new(Method::GET, self.url.clone());
 		let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
@@ -96,24 +100,26 @@ mod tests {
 	use super::{DataReaderHttp, DataReaderTrait};
 	use crate::containers::versatiles::types::ByteRange;
 	use anyhow::Result;
+	use reqwest::Url;
 	use std::str;
 
 	// Test the 'new' method for valid and invalid URLs
 	#[tokio::test]
 	async fn new() {
-		let valid_url = "https://www.example.com";
-		let invalid_url = "ftp://www.example.com";
+		let valid_url = Url::parse("https://www.example.com").unwrap();
+		let invalid_url = Url::parse("ftp://www.example.com").unwrap();
 
 		// Test with a valid URL
-		let data_reader_http = DataReaderHttp::new(valid_url).await;
+		let data_reader_http = DataReaderHttp::new(valid_url);
 		assert!(data_reader_http.is_ok());
 
 		// Test with an invalid URL
-		let data_reader_http = DataReaderHttp::new(invalid_url).await;
+		let data_reader_http = DataReaderHttp::new(invalid_url);
 		assert!(data_reader_http.is_err());
 	}
 	async fn read_range_helper(url: &str, offset: u64, length: u64, expected: &str) -> Result<()> {
-		let mut data_reader_http = DataReaderHttp::new(url).await?;
+		let url = Url::parse(url).unwrap();
+		let mut data_reader_http = DataReaderHttp::new(url)?;
 
 		// Define a range to read
 		let range = ByteRange { offset, length };
@@ -164,8 +170,8 @@ mod tests {
 	// Test the 'get_name' method
 	#[tokio::test]
 	async fn get_name() -> Result<()> {
-		let url = "https://www.example.com";
-		let data_reader_http = DataReaderHttp::new(url).await?;
+		let url = "https://www.example.com/";
+		let data_reader_http = DataReaderHttp::new(Url::parse(url).unwrap())?;
 
 		// Check if the name matches the original URL
 		assert_eq!(data_reader_http.get_name(), url);

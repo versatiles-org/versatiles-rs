@@ -34,13 +34,13 @@ impl TilesConverterTrait for VersaTilesConverter {
 	async fn convert_from(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
 		// Finalize the configuration
 
-		trace!("convert_from - self.config1: {:?}", self.config);
+		trace!("convert_from - self.config original: {:?}", self.config);
 
 		let parameters = reader.get_parameters();
 		trace!("convert_from - parameters: {parameters:?}");
 
 		self.config.finalize_with_parameters(parameters);
-		trace!("convert_from - self.config2: {:?}", self.config);
+		trace!("convert_from - self.config patched: {:?}", self.config);
 
 		// Get the bounding box pyramid
 		let bbox_pyramid = self.config.get_bbox_pyramid();

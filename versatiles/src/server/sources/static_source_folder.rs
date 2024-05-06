@@ -91,7 +91,7 @@ impl Debug for Folder {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use assert_fs;
+
 	use std::path::Path;
 	use versatiles_lib::shared::TargetCompression;
 
@@ -127,7 +127,7 @@ mod tests {
 		std::fs::create_dir(&dir_path).unwrap_or_default();
 
 		let index_path = dir_path.join("index.html");
-		std::fs::write(&index_path, b"Hello, world!").unwrap();
+		std::fs::write(index_path, b"Hello, world!").unwrap();
 
 		// Test initialization with the temporary directory
 		let folder = Folder::from(temp_dir.path()).unwrap();

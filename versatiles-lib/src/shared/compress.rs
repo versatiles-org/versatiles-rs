@@ -299,58 +299,11 @@ mod tests {
 
 	/// Generate random binary data of a specified size.
 	fn random_data(size: usize) -> Blob {
-		let mut vec: Vec<u8> = Vec::new();
-		vec.resize(size, 0);
+		let mut vec: Vec<u8> = vec![0; size];
 		(0..size).for_each(|i| {
 			vec[i] = (((i as f64 + 1.78123).cos() * 6_513_814_013_423.454).fract() * 256f64) as u8;
 		});
 
 		Blob::from(vec)
 	}
-
-	/*
-	#[test]
-	fn bench_brotli() -> Result<()> {
-		// Generate random data.
-		let data1 = random_data(131072);
-
-		let test = |quality: i32, lgwin: i32| {
-			let data = data1.clone();
-
-			let start = Instant::now();
-			let params = BrotliEncoderParams {
-				quality,
-				lgwin,
-				size_hint: data.len(),
-				..Default::default()
-			};
-			let mut input = Cursor::new(data.as_slice());
-			let mut output: Vec<u8> = Vec::new();
-			let mut input_buffer: [u8; 4096] = [0; 4096];
-			let mut output_buffer: [u8; 4096] = [0; 4096];
-			let alloc = StandardAlloc::default();
-			BrotliCompressCustomAlloc(
-				&mut input,
-				&mut output,
-				&mut input_buffer[..],
-				&mut output_buffer[..],
-				&params,
-				alloc,
-			)
-			.unwrap();
-			let time = start.elapsed().as_micros();
-			let size = output.len();
-
-			println!("{quality}\t{lgwin}\t{size}\t{time}")
-		};
-
-		for quality in 1..=11 {
-			for window in 10..=22 {
-				test(quality, window);
-			}
-		}
-
-		Ok(())
-	}
-	*/
 }

@@ -1,32 +1,35 @@
-use super::directory;
-use super::mbtiles;
-use super::tar;
-use super::{versatiles, TilesReaderBox, TilesReaderTrait};
-use super::{TilesConverterBox, TilesConverterTrait};
+use super::*;
 use crate::shared::TilesConverterConfig;
 use anyhow::{bail, Context, Result};
-use std::path::{Path, PathBuf};
+use reqwest::Url;
+use std::{
+	env,
+	path::{Path, PathBuf},
+};
 
 pub async fn get_reader(filename: &str) -> Result<TilesReaderBox> {
-	let path = PathBuf::from(filename);
+	let path = env::current_dir()?.join(filename);
+
+	if filename.starts_with("http://") || filename.starts_with("https://") {
+		let url = Url::parse(filename)?;
+		let extension = get_extension(&path);
+		return match extension.as_str() {
+			"versatiles" => VersaTilesReader::open_url(url).await,
+			_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
+		};
+	}
 
 	if path.is_dir() {
-		return directory::DirectoryTilesReader::new(filename)
+		return DirectoryTilesReader::open(&path)
 			.await
-			.with_context(|| format!("opening {filename} as directory"));
+			.with_context(|| format!("opening {path:?} as directory"));
 	}
 
 	let extension = get_extension(&path);
 	match extension.as_str() {
-		"mbtiles" => Ok(mbtiles::MBTilesReader::new(filename)
-			.await
-			.with_context(|| format!("opening {filename} as mbtiles"))?),
-		"tar" => Ok(tar::TarTilesReader::new(filename)
-			.await
-			.with_context(|| format!("opening {filename} as tar"))?),
-		"versatiles" => Ok(versatiles::VersaTilesReader::new(filename)
-			.await
-			.with_context(|| format!("opening {filename} as versatiles"))?),
+		"mbtiles" => MBTilesReader::open(&path).await,
+		"tar" => TarTilesReader::open(&path).await,
+		"versatiles" => VersaTilesReader::open_file(&path).await,
 		_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
 	}
 }

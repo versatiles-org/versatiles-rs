@@ -389,11 +389,11 @@ mod tests {
 	fn from_geo_is_not_empty() {
 		let bbox1 = TileBBox::from_geo(0, &[8.0, 51.0, 8.000001f64, 51.0]).unwrap();
 		assert_eq!(bbox1.count_tiles(), 1);
-		assert_eq!(bbox1.is_empty(), false);
+		assert!(!bbox1.is_empty());
 
 		let bbox2 = TileBBox::from_geo(14, &[-132.000001, -40.0, -132.0, -40.0]).unwrap();
 		assert_eq!(bbox2.count_tiles(), 1);
-		assert_eq!(bbox2.is_empty(), false);
+		assert!(!bbox2.is_empty());
 	}
 
 	#[test]

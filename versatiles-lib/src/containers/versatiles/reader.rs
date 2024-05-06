@@ -1,5 +1,5 @@
 // Import necessary modules and traits
-use super::{new_data_reader, types::*, DataReaderTrait};
+use super::{types::*, DataReaderFile, DataReaderHttp, DataReaderTrait};
 #[cfg(feature = "full")]
 use crate::shared::PrettyPrint;
 use crate::{
@@ -10,7 +10,8 @@ use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use futures_util::{stream, StreamExt};
 use log::trace;
-use std::{collections::HashMap, fmt::Debug, ops::Shr, sync::Arc};
+use reqwest::Url;
+use std::{collections::HashMap, fmt::Debug, ops::Shr, path::Path, sync::Arc};
 use tokio::sync::Mutex;
 
 // Define the TilesReader struct
@@ -24,6 +25,16 @@ pub struct VersaTilesReader {
 
 // Implement methods for the TilesReader struct
 impl VersaTilesReader {
+	// Create a new TilesReader from a given filename
+	pub async fn open_file(path: &Path) -> Result<TilesReaderBox> {
+		Ok(Box::new(VersaTilesReader::from_src(DataReaderFile::new(path)?).await?))
+	}
+
+	// Create a new TilesReader from a given filename
+	pub async fn open_url(url: Url) -> Result<TilesReaderBox> {
+		Ok(Box::new(VersaTilesReader::from_src(DataReaderHttp::new(url)?).await?))
+	}
+
 	// Create a new TilesReader from a given data reader
 	pub async fn from_src(mut reader: Box<dyn DataReaderTrait>) -> Result<VersaTilesReader> {
 		let header = FileHeader::from_reader(&mut reader)
@@ -100,16 +111,6 @@ unsafe impl Sync for VersaTilesReader {}
 // Implement the TilesReaderTrait for the TilesReader struct
 #[async_trait]
 impl TilesReaderTrait for VersaTilesReader {
-	// Create a new TilesReader from a given filename
-	async fn new(filename: &str) -> Result<TilesReaderBox> {
-		let source = new_data_reader(filename).await?;
-		let reader = VersaTilesReader::from_src(source)
-			.await
-			.with_context(|| format!("new versatiles reader for {filename}"))?;
-
-		Ok(Box::new(reader))
-	}
-
 	// Get the container name
 	fn get_container_name(&self) -> &str {
 		"versatiles"
@@ -397,7 +398,7 @@ impl Debug for VersaTilesReader {
 mod tests {
 	use super::VersaTilesReader;
 	use crate::{
-		containers::{tests::make_test_file, TilesReaderTrait},
+		containers::tests::make_test_file,
 		shared::{Compression, TileCoord3, TileFormat},
 	};
 	use anyhow::Result;
@@ -407,13 +408,12 @@ mod tests {
 		use crate::shared::Blob;
 
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 8, "versatiles").await?;
-		let temp_file = temp_file.to_str().unwrap();
 
-		let mut reader = VersaTilesReader::new(temp_file).await?;
+		let mut reader = VersaTilesReader::open_file(&temp_file).await?;
 
 		assert_eq!(format!("{:?}", reader), "VersaTilesReader { parameters:  { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: UnGzip, flip_y: false, swap_xy: false, tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "versatiles");
-		assert!(reader.get_name().ends_with(temp_file));
+		assert!(reader.get_name().ends_with(temp_file.to_str().unwrap()));
 		assert_eq!(reader.get_meta().await?, Some(Blob::from(b"dummy meta data".to_vec())));
 		assert_eq!(format!("{:?}", reader.get_parameters()), " { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: UnGzip, flip_y: false, swap_xy: false, tile_compression: Gzip, tile_format: PBF }");
 		assert_eq!(reader.get_tile_compression(), &Compression::Gzip);
@@ -431,9 +431,8 @@ mod tests {
 		use crate::shared::PrettyPrint;
 
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 4, "versatiles").await?;
-		let temp_file = temp_file.to_str().unwrap();
 
-		let mut reader = VersaTilesReader::new(temp_file).await?;
+		let mut reader = VersaTilesReader::open_file(&temp_file).await?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(printer.get_category("container").await).await?;

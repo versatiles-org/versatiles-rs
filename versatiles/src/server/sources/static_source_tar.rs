@@ -211,7 +211,7 @@ mod tests {
 	async fn small_stuff() {
 		let file = make_test_tar(Compression::None).await;
 
-		let tar_file = TarFile::from(file.path()).unwrap();
+		let tar_file = TarFile::from(&file).unwrap();
 
 		assert!(tar_file.get_name().ends_with("temp.tar"));
 		assert!(format!("{:?}", tar_file).starts_with("TarFile { name:"));
@@ -239,7 +239,7 @@ mod tests {
 
 		async fn test1(compression_tar: Compression) -> Result<()> {
 			let file = make_test_tar(compression_tar).await;
-			let mut tar_file = TarFile::from(file.path())?;
+			let mut tar_file = TarFile::from(&file)?;
 
 			test2(&mut tar_file, &compression_tar, N).await?;
 			test2(&mut tar_file, &compression_tar, G).await?;

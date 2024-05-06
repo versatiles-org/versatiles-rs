@@ -10,7 +10,6 @@ use async_trait::async_trait;
 use log;
 use std::{
 	collections::HashMap,
-	env,
 	fmt::Debug,
 	fs,
 	path::{Path, PathBuf},
@@ -24,21 +23,10 @@ pub struct DirectoryTilesReader {
 }
 
 impl DirectoryTilesReader {
-	fn read(path: &Path) -> Result<Blob> {
-		Ok(Blob::from(fs::read(path)?))
-	}
-}
-
-#[async_trait]
-impl TilesReaderTrait for DirectoryTilesReader {
-	fn get_container_name(&self) -> &str {
-		"tar"
-	}
-	async fn new(filename: &str) -> Result<TilesReaderBox>
+	pub async fn open(path: &Path) -> Result<TilesReaderBox>
 	where
 		Self: Sized,
 	{
-		let path = env::current_dir()?.join(filename);
 		log::trace!("read {:?}", path);
 
 		ensure!(path.is_dir(), "file {path:?} does not exist");
@@ -50,7 +38,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 		let mut tile_comp: Option<Compression> = None;
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
-		for result1 in fs::read_dir(&path)? {
+		for result1 in fs::read_dir(path)? {
 			// z level
 			if result1.is_err() {
 				continue;
@@ -128,7 +116,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 
 		Ok(Box::new(DirectoryTilesReader {
 			meta,
-			path,
+			path: path.to_path_buf(),
 			tile_map,
 			parameters: TilesReaderParameters::new(
 				tile_form.expect("tile format must be specified"),
@@ -136,6 +124,17 @@ impl TilesReaderTrait for DirectoryTilesReader {
 				bbox_pyramid,
 			),
 		}))
+	}
+
+	fn read(path: &Path) -> Result<Blob> {
+		Ok(Blob::from(fs::read(path)?))
+	}
+}
+
+#[async_trait]
+impl TilesReaderTrait for DirectoryTilesReader {
+	fn get_container_name(&self) -> &str {
+		"tar"
 	}
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
@@ -183,7 +182,7 @@ mod tests {
 		fs::write(dir.path().join("1/2/3.png"), "test tile data")?;
 		fs::write(dir.path().join("meta.json"), "test meta data")?;
 
-		let mut reader = DirectoryTilesReader::new(dir.to_str().unwrap()).await?;
+		let mut reader = DirectoryTilesReader::open(&dir).await?;
 
 		assert_eq!(reader.get_meta().await?.unwrap().as_str(), "test meta data");
 
