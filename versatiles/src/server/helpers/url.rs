@@ -119,4 +119,31 @@ mod tests {
 		url.push("file");
 		assert_eq!(url.str, "/test/dir/file");
 	}
+
+	#[test]
+	fn test_be_dir() {
+		let mut url = Url::new("/test/dir");
+		assert!(!url.is_dir());
+		url.be_dir();
+		assert!(url.is_dir());
+		assert_eq!(url.str, "/test/dir/");
+
+		let mut url = Url::new("/test/dir/");
+		url.be_dir(); // should not change
+		assert_eq!(url.str, "/test/dir/");
+	}
+
+	#[test]
+	fn test_as_path() {
+		let url = Url::new("/test/dir/file");
+		let path = url.as_path(Path::new("/base"));
+		assert_eq!(path, PathBuf::from("/base/test/dir/file"));
+	}
+
+	#[test]
+	fn test_join_as_string() {
+		assert_eq!(Url::new("/test/dir/").join_as_string("file"), "/test/dir/file");
+
+		assert_eq!(Url::new("/test/dir").join_as_string("file"), "/test/dir/file");
+	}
 }
