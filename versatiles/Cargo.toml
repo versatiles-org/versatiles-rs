@@ -28,7 +28,7 @@ maintainer = "Michael Kreil <versatiles@michael-kreil.de>"
 anyhow = { version = "1.0.82", features = ["std", "backtrace"] }
 async-trait = { version = "0.1.80", default-features = false }
 axum = { version = "0.7.5", default-features = false, features = ["tokio", "http1", "http2"] }
-brotli = { version = "5.0.0", default-features = false, features = ["std"] }
+brotli = { version = "6.0.0", default-features = false, features = ["std"] }
 byteorder = { version = "1.5.0" }
 bytes = { version = "1.6.0", default-features = false }
 clap = { version = "4.5.4", features = ["wrap_help"] }
