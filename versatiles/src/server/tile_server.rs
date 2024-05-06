@@ -1,4 +1,7 @@
-use super::sources::{SourceResponse, StaticSource, TileSource};
+use super::{
+	helpers::Url,
+	sources::{SourceResponse, StaticSource, TileSource},
+};
 use anyhow::Result;
 use axum::{
 	body::Body,
@@ -255,15 +258,6 @@ fn ok_json(message: &str) -> Response<Body> {
 	)
 }
 
-pub fn guess_mime(path: &std::path::Path) -> String {
-	let mime = mime_guess::from_path(path).first_or_octet_stream().essence_str().to_owned();
-	if mime.starts_with("text/") {
-		format!("{mime}; charset=utf-8")
-	} else {
-		mime
-	}
-}
-
 fn get_encoding(headers: HeaderMap) -> TargetCompression {
 	let mut encoding_set: TargetCompression = TargetCompression::from_none();
 	let encoding_option = headers.get(ACCEPT_ENCODING);
@@ -323,25 +317,6 @@ mod tests {
 		test("gzip, deflate, br;q=1.0, identity;q=0.5, *;q=0.25", enum_set!(None | Brotli | Gzip));
 		test("gzip;q=1.0, identity; q=0.5, *;q=0", enum_set!(None | Gzip));
 		test("identity", enum_set!(None));
-	}
-
-	#[test]
-	fn test_guess_mime() {
-		let test = |path: &str, mime: &str| {
-			assert_eq!(guess_mime(Path::new(path)), mime);
-		};
-
-		test("fluffy.css", "text/css; charset=utf-8");
-		test("fluffy.gif", "image/gif");
-		test("fluffy.htm", "text/html; charset=utf-8");
-		test("fluffy.html", "text/html; charset=utf-8");
-		test("fluffy.jpeg", "image/jpeg");
-		test("fluffy.jpg", "image/jpeg");
-		test("fluffy.js", "application/javascript");
-		test("fluffy.json", "application/json");
-		test("fluffy.pbf", "application/octet-stream");
-		test("fluffy.png", "image/png");
-		test("fluffy.svg", "image/svg+xml");
 	}
 
 	#[tokio::test]

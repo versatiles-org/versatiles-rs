@@ -1,4 +1,5 @@
-use super::response::SourceResponse;
+use super::SourceResponse;
+use crate::server::helpers::Url;
 use anyhow::Result;
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
@@ -123,7 +124,7 @@ impl Debug for TileSource {
 
 #[cfg(test)]
 mod tests {
-	use super::TileSource;
+	use super::*;
 	use anyhow::Result;
 	use versatiles_lib::{
 		containers::mock::{ReaderProfile, TileReader},

@@ -1,4 +1,4 @@
-use crate::server::TileServer;
+use crate::server::{TileServer, Url};
 use anyhow::Result;
 use clap::Args;
 use regex::Regex;

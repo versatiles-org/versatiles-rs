@@ -1,5 +1,5 @@
-use super::{response::SourceResponse, static_source::StaticSourceTrait};
-use crate::server::guess_mime;
+use super::{static_source::StaticSourceTrait, SourceResponse};
+use crate::server::helpers::{guess_mime, Url};
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use std::{
