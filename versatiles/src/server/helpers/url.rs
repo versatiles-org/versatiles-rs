@@ -8,7 +8,11 @@ pub struct Url {
 
 impl Url {
 	pub fn new(url: &str) -> Url {
-		let str = if url.starts_with('/') { url.to_owned() } else { format!("/{url}") };
+		let str = if url.starts_with('/') {
+			url.to_owned()
+		} else {
+			format!("/{url}")
+		};
 		Url { str }
 	}
 

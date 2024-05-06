@@ -177,7 +177,10 @@ mod tests {
 	#[test]
 	fn debug() {
 		assert_eq!(format!("{:?}", TileCoord2::new(1, 2)), "TileCoord2(1, 2)");
-		assert_eq!(format!("{:?}", TileCoord3::new(1, 2, 3).unwrap()), "TileCoord3(1, 2, 3)");
+		assert_eq!(
+			format!("{:?}", TileCoord3::new(1, 2, 3).unwrap()),
+			"TileCoord3(1, 2, 3)"
+		);
 	}
 
 	#[test]
@@ -233,7 +236,10 @@ mod tests {
 	fn tilecoord3_as_geo() {
 		let coord = TileCoord3::new(3, 4, 5).unwrap();
 		assert_eq!(coord.as_geo(), [-146.25, 79.17133464081945]);
-		assert_eq!(coord.as_geo_bbox(), [-146.25, 79.17133464081945, -135.0, 76.84081641443098]);
+		assert_eq!(
+			coord.as_geo_bbox(),
+			[-146.25, 79.17133464081945, -135.0, 76.84081641443098]
+		);
 	}
 
 	#[test]

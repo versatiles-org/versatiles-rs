@@ -132,7 +132,10 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 			cat.add_key_value("meta", &meta_option).await;
 		}
 
-		self.get_parameters().probe(print.get_category("parameters").await).await?;
+		self
+			.get_parameters()
+			.probe(print.get_category("parameters").await)
+			.await?;
 
 		if matches!(level, Container | Tiles | TileContents) {
 			self.probe_container(print.get_category("container").await).await?;
@@ -143,7 +146,9 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 		}
 
 		if matches!(level, TileContents) {
-			self.probe_tile_contents(print.get_category("tile contents").await).await?;
+			self
+				.probe_tile_contents(print.get_category("tile contents").await)
+				.await?;
 		}
 
 		Ok(())
@@ -262,7 +267,10 @@ mod tests {
 
 		// Test getting tile data
 		let coord = TileCoord3::new(0, 0, 0)?;
-		assert_eq!(reader.get_tile_data_original(&coord).await?.to_string(), "test tile data");
+		assert_eq!(
+			reader.get_tile_data_original(&coord).await?.to_string(),
+			"test tile data"
+		);
 
 		let mut converter = TestConverter::new("/hello", TileConverterConfig::new_full()).await?;
 		converter.convert_from(&mut reader).await?;

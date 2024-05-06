@@ -24,7 +24,9 @@ pub struct FileHeader {
 
 #[allow(dead_code)]
 impl FileHeader {
-	pub fn new(tile_format: &TileFormat, compression: &Compression, zoom_range: [u8; 2], bbox: &[f64; 4]) -> Result<FileHeader> {
+	pub fn new(
+		tile_format: &TileFormat, compression: &Compression, zoom_range: [u8; 2], bbox: &[f64; 4],
+	) -> Result<FileHeader> {
 		ensure!(
 			zoom_range[0] <= zoom_range[1],
 			"zoom_range[0] ({}) must be <= zoom_range[1] ({})",
@@ -93,7 +95,10 @@ impl FileHeader {
 		self.blocks_range.write_to_buf(&mut header)?;
 
 		if header.len() != HEADER_LENGTH {
-			bail!("header should be {HEADER_LENGTH} bytes long, but is {} bytes long", header.len());
+			bail!(
+				"header should be {HEADER_LENGTH} bytes long, but is {} bytes long",
+				header.len()
+			);
 		}
 
 		Ok(Blob::from(header))
@@ -229,8 +234,14 @@ mod tests {
 		assert_eq!(BE::read_i32(&blob.as_slice()[22..26]), -850511300);
 		assert_eq!(BE::read_i32(&blob.as_slice()[26..30]), 1800000000);
 		assert_eq!(BE::read_i32(&blob.as_slice()[30..34]), 850511300);
-		assert_eq!(ByteRange::from_buf(&blob.as_slice()[34..50]).unwrap(), ByteRange::empty());
-		assert_eq!(ByteRange::from_buf(&blob.as_slice()[50..66]).unwrap(), ByteRange::empty());
+		assert_eq!(
+			ByteRange::from_buf(&blob.as_slice()[34..50]).unwrap(),
+			ByteRange::empty()
+		);
+		assert_eq!(
+			ByteRange::from_buf(&blob.as_slice()[50..66]).unwrap(),
+			ByteRange::empty()
+		);
 
 		let header2 = FileHeader::from_blob(blob).unwrap();
 

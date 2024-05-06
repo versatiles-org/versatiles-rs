@@ -50,6 +50,12 @@ mod tests {
 	#[test]
 
 	fn test_remote() {
-		run_command(vec!["versatiles", "probe", "-q", "https://download.versatiles.org/osm.versatiles"]).unwrap();
+		run_command(vec![
+			"versatiles",
+			"probe",
+			"-q",
+			"https://download.versatiles.org/osm.versatiles",
+		])
+		.unwrap();
 	}
 }

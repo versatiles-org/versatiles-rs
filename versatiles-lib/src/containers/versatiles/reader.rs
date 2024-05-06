@@ -26,20 +26,32 @@ pub struct TileReader {
 impl TileReader {
 	// Create a new TileReader from a given data reader
 	pub async fn from_src(mut reader: Box<dyn DataReaderTrait>) -> Result<TileReader> {
-		let header = FileHeader::from_reader(&mut reader).await.context("reading the header")?;
+		let header = FileHeader::from_reader(&mut reader)
+			.await
+			.context("reading the header")?;
 
 		let meta = if header.meta_range.length > 0 {
 			Some(
 				DataConverter::new_decompressor(&header.compression)
-					.process_blob(reader.read_range(&header.meta_range).await.context("reading the meta data")?)
+					.process_blob(
+						reader
+							.read_range(&header.meta_range)
+							.await
+							.context("reading the meta data")?,
+					)
 					.context("decompressing the meta data")?,
 			)
 		} else {
 			None
 		};
 
-		let block_index = BlockIndex::from_brotli_blob(reader.read_range(&header.blocks_range).await.context("reading the block index")?)
-			.context("decompressing the block index")?;
+		let block_index = BlockIndex::from_brotli_blob(
+			reader
+				.read_range(&header.blocks_range)
+				.await
+				.context("reading the block index")?,
+		)
+		.context("decompressing the block index")?;
 
 		let bbox_pyramid = block_index.get_bbox_pyramid();
 		let parameters = TileReaderParameters::new(header.tile_format, header.compression, bbox_pyramid);
@@ -287,7 +299,9 @@ impl TileReaderTrait for TileReader {
 	// deep probe of container meta
 	#[cfg(feature = "full")]
 	async fn probe_container(&mut self, print: PrettyPrint) -> Result<()> {
-		print.add_key_value("meta size", &self.meta.as_ref().map_or(0, |b| b.len())).await;
+		print
+			.add_key_value("meta size", &self.meta.as_ref().map_or(0, |b| b.len()))
+			.await;
 		print.add_key_value("block count", &self.block_index.len()).await;
 
 		let mut index_size = 0;
@@ -355,10 +369,14 @@ impl TileReaderTrait for TileReader {
 		}
 		progress.remove();
 
-		print.add_key_value("average tile size", &size_sum.div_euclid(tile_count)).await;
+		print
+			.add_key_value("average tile size", &size_sum.div_euclid(tile_count))
+			.await;
 
 		for (index, entry) in biggest_tiles.iter().enumerate() {
-			print.add_key_value(&format!("#{} biggest tile", index + 1), entry).await;
+			print
+				.add_key_value(&format!("#{} biggest tile", index + 1), entry)
+				.await;
 		}
 
 		Ok(())

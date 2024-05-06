@@ -156,8 +156,12 @@ mod tests {
 	// Test the get_data method of the TileSource
 	#[tokio::test]
 	async fn tile_container_get_data() -> Result<()> {
-		async fn check_response(container: &mut TileSource, url: &str, compression: Compression, mime_type: &str) -> Result<Vec<u8>> {
-			let response = container.get_data(&Url::new(url), &TargetCompression::from(compression)).await;
+		async fn check_response(
+			container: &mut TileSource, url: &str, compression: Compression, mime_type: &str,
+		) -> Result<Vec<u8>> {
+			let response = container
+				.get_data(&Url::new(url), &TargetCompression::from(compression))
+				.await;
 			assert!(response.is_some());
 
 			let response = response.unwrap();
@@ -167,7 +171,9 @@ mod tests {
 		}
 
 		async fn check_404(container: &mut TileSource, url: &str, compression: Compression) -> Result<bool> {
-			let response = container.get_data(&Url::new(url), &TargetCompression::from(compression)).await;
+			let response = container
+				.get_data(&Url::new(url), &TargetCompression::from(compression))
+				.await;
 			assert!(response.is_none());
 			Ok(true)
 		}

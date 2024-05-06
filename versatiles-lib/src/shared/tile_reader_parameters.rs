@@ -15,7 +15,9 @@ pub struct TileReaderParameters {
 }
 
 impl TileReaderParameters {
-	pub fn new(tile_format: TileFormat, tile_compression: Compression, bbox_pyramid: TileBBoxPyramid) -> TileReaderParameters {
+	pub fn new(
+		tile_format: TileFormat, tile_compression: Compression, bbox_pyramid: TileBBoxPyramid,
+	) -> TileReaderParameters {
 		let decompressor = DataConverter::new_decompressor(&tile_compression);
 
 		TileReaderParameters {

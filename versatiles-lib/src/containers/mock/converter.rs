@@ -23,7 +23,9 @@ impl TileConverter {
 		bbox_pyramid.set_zoom_max(max_zoom_level);
 
 		let config = match profile {
-			ConverterProfile::PNG => TileConverterConfig::new(Some(TileFormat::PNG), Some(Compression::None), bbox_pyramid, false),
+			ConverterProfile::PNG => {
+				TileConverterConfig::new(Some(TileFormat::PNG), Some(Compression::None), bbox_pyramid, false)
+			}
 			ConverterProfile::Whatever => TileConverterConfig::new(None, None, bbox_pyramid, false),
 		};
 		Box::new(TileConverter { config })

@@ -49,7 +49,8 @@ impl TileReader {
 		})?;
 
 		let mut tile_format: Result<TileFormat> = Err(anyhow!("mbtiles file {} does not specify tile format", self.name));
-		let mut compression: Result<Compression> = Err(anyhow!("mbtiles file {} does not specify compression", self.name));
+		let mut compression: Result<Compression> =
+			Err(anyhow!("mbtiles file {} does not specify compression", self.name));
 
 		for entry in entries {
 			let entry = entry?;
@@ -108,8 +109,12 @@ impl TileReader {
 		let mut progress = ProgressBar::new("get mbtiles bbox pyramid", (z1 - z0 + 1) as u64);
 
 		for z in z0..=z1 {
-			let x0 = self.simple_query("MIN(tile_column)", &format!("zoom_level = {z}")).await?;
-			let x1 = self.simple_query("MAX(tile_column)", &format!("zoom_level = {z}")).await?;
+			let x0 = self
+				.simple_query("MIN(tile_column)", &format!("zoom_level = {z}"))
+				.await?;
+			let x1 = self
+				.simple_query("MAX(tile_column)", &format!("zoom_level = {z}"))
+				.await?;
 			let xc = (x0 + x1) / 2;
 
 			/*
@@ -136,11 +141,19 @@ impl TileReader {
 			*/
 
 			let sql_prefix = format!("zoom_level = {z} AND tile_");
-			let mut y0 = self.simple_query("MIN(tile_row)", &format!("{sql_prefix}column = {xc}")).await?;
-			let mut y1 = self.simple_query("MAX(tile_row)", &format!("{sql_prefix}column = {xc}")).await?;
+			let mut y0 = self
+				.simple_query("MIN(tile_row)", &format!("{sql_prefix}column = {xc}"))
+				.await?;
+			let mut y1 = self
+				.simple_query("MAX(tile_row)", &format!("{sql_prefix}column = {xc}"))
+				.await?;
 
-			y0 = self.simple_query("MIN(tile_row)", &format!("{sql_prefix}row <= {y0}")).await?;
-			y1 = self.simple_query("MAX(tile_row)", &format!("{sql_prefix}row >= {y1}")).await?;
+			y0 = self
+				.simple_query("MIN(tile_row)", &format!("{sql_prefix}row <= {y0}"))
+				.await?;
+			y1 = self
+				.simple_query("MAX(tile_row)", &format!("{sql_prefix}row >= {y1}"))
+				.await?;
 
 			let max_value = 2i32.pow(z as u32) - 1;
 
@@ -204,7 +217,8 @@ impl TileReaderTrait for TileReader {
 		let z = coord.get_z() as u32;
 
 		let conn = self.pool.get()?;
-		let mut stmt = conn.prepare("SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")?;
+		let mut stmt =
+			conn.prepare("SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")?;
 
 		let blob = stmt.query_row([x, y, z], |row| row.get::<_, Vec<u8>>(0))?;
 
@@ -240,7 +254,12 @@ impl TileReaderTrait for TileReader {
 					bbox.level as u32,
 				],
 				move |row| {
-					let mut coord = TileCoord3::new(row.get::<_, u32>(0)?, max_index - row.get::<_, u32>(1)?, row.get::<_, u8>(2)?).unwrap();
+					let mut coord = TileCoord3::new(
+						row.get::<_, u32>(0)?,
+						max_index - row.get::<_, u32>(1)?,
+						row.get::<_, u8>(2)?,
+					)
+					.unwrap();
 					let blob = Blob::from(row.get::<_, Vec<u8>>(3)?);
 					parameters.transform_forward(&mut coord);
 					Ok((coord, blob))
@@ -296,7 +315,10 @@ pub mod tests {
 		let tile = reader.get_tile_data_original(&TileCoord3::new(8803, 5376, 14)?).await?;
 		assert_eq!(tile.len(), 172969);
 		assert_eq!(tile.get_range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
-		assert_eq!(tile.get_range(172959..172969), &[255, 15, 172, 89, 205, 237, 7, 134, 5, 0]);
+		assert_eq!(
+			tile.get_range(172959..172969),
+			&[255, 15, 172, 89, 205, 237, 7, 134, 5, 0]
+		);
 
 		let mut converter = mock::TileConverter::new_mock(ConverterProfile::Whatever, 8);
 

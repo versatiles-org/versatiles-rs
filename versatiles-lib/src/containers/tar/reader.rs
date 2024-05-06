@@ -1,7 +1,8 @@
 use crate::{
 	containers::{TileReaderBox, TileReaderTrait},
 	shared::{
-		decompress, extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat, TileReaderParameters,
+		decompress, extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat,
+		TileReaderParameters,
 	},
 };
 use anyhow::{anyhow, bail, ensure, Result};
@@ -150,7 +151,10 @@ impl TileReaderTrait for TileReader {
 	async fn get_tile_data_original(&mut self, coord: &TileCoord3) -> Result<Blob> {
 		log::trace!("get_tile_data_original {:?}", coord);
 
-		let range = self.tile_map.get(coord).ok_or_else(|| anyhow!("tile {coord:?} not found"))?;
+		let range = self
+			.tile_map
+			.get(coord)
+			.ok_or_else(|| anyhow!("tile {coord:?} not found"))?;
 
 		let offset = range.offset;
 		let length = range.length as usize;

@@ -30,7 +30,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn panic1() {
-		assert!(TileConverter::new("filename.txt", TileConverterConfig::new_full()).await.is_err());
+		assert!(TileConverter::new("filename.txt", TileConverterConfig::new_full())
+			.await
+			.is_err());
 	}
 
 	#[tokio::test]

@@ -66,7 +66,11 @@ mod tests {
 
 		fn get_data(&self, path: &Url, _accept: &TargetCompression) -> Option<SourceResponse> {
 			if path.starts_with(&Url::new("exists")) {
-				SourceResponse::new_some(Blob::from(vec![1, 2, 3, 4]), &Compression::None, "application/octet-stream")
+				SourceResponse::new_some(
+					Blob::from(vec![1, 2, 3, 4]),
+					&Compression::None,
+					"application/octet-stream",
+				)
 			} else {
 				None
 			}

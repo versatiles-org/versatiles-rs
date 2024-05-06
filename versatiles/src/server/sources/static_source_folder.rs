@@ -133,7 +133,9 @@ mod tests {
 		let folder = Folder::from(temp_dir.path()).unwrap();
 
 		// Attempt to retrieve data from the directory, expecting to get the contents of index.html
-		let response = folder.get_data(&Url::new("testdir"), &TargetCompression::from_none()).unwrap();
+		let response = folder
+			.get_data(&Url::new("testdir"), &TargetCompression::from_none())
+			.unwrap();
 
 		let result = response.blob.as_str();
 		assert_eq!(result, "Hello, world!");

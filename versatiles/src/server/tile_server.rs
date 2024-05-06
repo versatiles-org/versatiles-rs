@@ -216,7 +216,10 @@ fn ok_not_found() -> Response<Body> {
 }
 
 fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Response<Body> {
-	let is_incompressible = matches!(result.mime.as_str(), "image/png" | "image/jpeg" | "image/webp" | "image/avif");
+	let is_incompressible = matches!(
+		result.mime.as_str(),
+		"image/png" | "image/jpeg" | "image/webp" | "image/avif"
+	);
 
 	let mut response = Response::builder()
 		.status(200)
@@ -306,7 +309,10 @@ mod tests {
 		test("deflate, gzip;q=1.0, *;q=0.5", enum_set!(None | Gzip));
 		test("gzip", enum_set!(None | Gzip));
 		test("gzip, compress, br", enum_set!(None | Brotli | Gzip));
-		test("gzip, deflate, br;q=1.0, identity;q=0.5, *;q=0.25", enum_set!(None | Brotli | Gzip));
+		test(
+			"gzip, deflate, br;q=1.0, identity;q=0.5, *;q=0.25",
+			enum_set!(None | Brotli | Gzip),
+		);
 		test("gzip;q=1.0, identity; q=0.5, *;q=0", enum_set!(None | Gzip));
 		test("identity", enum_set!(None));
 	}

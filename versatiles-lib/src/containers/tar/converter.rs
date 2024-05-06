@@ -57,7 +57,9 @@ impl TileConverterTrait for TileConverter {
 			header.set_size(meta_data.len() as u64);
 			header.set_mode(0o644);
 
-			self.builder.append_data(&mut header, Path::new(&filename), meta_data.as_slice())?;
+			self
+				.builder
+				.append_data(&mut header, Path::new(&filename), meta_data.as_slice())?;
 		}
 
 		let mut bar = ProgressBar::new("converting tiles", bbox_pyramid.count_tiles());
@@ -88,7 +90,10 @@ impl TileConverterTrait for TileConverter {
 					header.set_mode(0o644);
 
 					// Write blob to file
-					mutex_builder.lock().await.append_data(&mut header, path, blob.as_slice())?;
+					mutex_builder
+						.lock()
+						.await
+						.append_data(&mut header, path, blob.as_slice())?;
 				}
 			}
 		}

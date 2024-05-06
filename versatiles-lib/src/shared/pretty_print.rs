@@ -89,7 +89,10 @@ impl PrettyPrint {
 	}
 
 	async fn write_line<T: Display>(&self, line: T) {
-		self.printer.write(format!("{}{}{}", self.prefix, line, self.suffix)).await;
+		self
+			.printer
+			.write(format!("{}{}{}", self.prefix, line, self.suffix))
+			.await;
 	}
 
 	#[cfg(test)]

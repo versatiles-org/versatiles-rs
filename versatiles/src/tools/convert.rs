@@ -26,7 +26,12 @@ pub struct Subcommand {
 	max_zoom: Option<u8>,
 
 	/// use only tiles inside a bounding box
-	#[arg(long, short, value_name = "lon_min,lat_min,lon_max,lat_max", allow_hyphen_values = true)]
+	#[arg(
+		long,
+		short,
+		value_name = "lon_min,lat_min,lon_max,lat_max",
+		allow_hyphen_values = true
+	)]
 	bbox: Option<String>,
 
 	/// also include additional tiles surrounding the bounding box as a border
@@ -70,7 +75,11 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 
 async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TileReaderBox> {
 	let mut reader = get_reader(filename).await?;
-	reader.set_configuration(arguments.flip_y, arguments.swap_xy, arguments.override_input_compression);
+	reader.set_configuration(
+		arguments.flip_y,
+		arguments.swap_xy,
+		arguments.override_input_compression,
+	);
 
 	Ok(reader)
 }
@@ -105,7 +114,12 @@ async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileCon
 		}
 	}
 
-	let config = TileConverterConfig::new(arguments.tile_format, arguments.compress, bbox_pyramid, arguments.force_recompress);
+	let config = TileConverterConfig::new(
+		arguments.tile_format,
+		arguments.compress,
+		bbox_pyramid,
+		arguments.force_recompress,
+	);
 
 	let converter = get_converter(filename, config).await?;
 

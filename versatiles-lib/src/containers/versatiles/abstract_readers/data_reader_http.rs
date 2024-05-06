@@ -45,12 +45,17 @@ impl DataReaderTrait for DataReaderHttp {
 		if response.status() != StatusCode::PARTIAL_CONTENT {
 			let status_code = response.status();
 			info!("response: {}", str::from_utf8(&response.bytes().await?)?);
-			bail!("as a response to a range request it is expected to get the status code 206. instead we got {status_code}");
+			bail!(
+				"as a response to a range request it is expected to get the status code 206. instead we got {status_code}"
+			);
 		}
 
 		let content_range: &str = match response.headers().get("content-range") {
 			Some(header_value) => header_value.to_str()?,
-			None => bail!("content-range is not set for range request {range:?} to url {}", self.url),
+			None => bail!(
+				"content-range is not set for range request {range:?} to url {}",
+				self.url
+			),
 		};
 
 		lazy_static! {
@@ -151,7 +156,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn read_range_google() {
-		read_range_helper("https://google.com/", 100, 110, "plingplong").await.unwrap_err();
+		read_range_helper("https://google.com/", 100, 110, "plingplong")
+			.await
+			.unwrap_err();
 	}
 
 	// Test the 'get_name' method

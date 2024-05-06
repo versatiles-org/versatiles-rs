@@ -1,7 +1,10 @@
 use std::path::Path;
 
 pub fn guess_mime(path: &Path) -> String {
-	let mime = mime_guess::from_path(path).first_or_octet_stream().essence_str().to_owned();
+	let mime = mime_guess::from_path(path)
+		.first_or_octet_stream()
+		.essence_str()
+		.to_owned();
 	if mime.starts_with("text/") {
 		format!("{mime}; charset=utf-8")
 	} else {

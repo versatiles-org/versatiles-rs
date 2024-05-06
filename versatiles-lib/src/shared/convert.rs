@@ -82,7 +82,8 @@ impl DataConverter {
 	/// Create a new `DataConverter` for tile recompression from `src_form` and `src_comp` to `dst_form` and `dst_comp`
 	/// with optional forced recompression
 	pub fn new_tile_recompressor(
-		src_form: &TileFormat, src_comp: &Compression, dst_form: &TileFormat, dst_comp: &Compression, force_recompress: bool,
+		src_form: &TileFormat, src_comp: &Compression, dst_form: &TileFormat, dst_comp: &Compression,
+		force_recompress: bool,
 	) -> DataConverter {
 		let mut converter = DataConverter::new_empty();
 
@@ -252,10 +253,11 @@ mod tests {
 	#[test]
 	fn new_tile_recompressor() {
 		fn test(
-			src_form: TileFormat, src_comp: Compression, dst_form: TileFormat, dst_comp: Compression, force_recompress: bool, length: usize,
-			description: &str,
+			src_form: TileFormat, src_comp: Compression, dst_form: TileFormat, dst_comp: Compression,
+			force_recompress: bool, length: usize, description: &str,
 		) {
-			let data_converter = DataConverter::new_tile_recompressor(&src_form, &src_comp, &dst_form, &dst_comp, force_recompress);
+			let data_converter =
+				DataConverter::new_tile_recompressor(&src_form, &src_comp, &dst_form, &dst_comp, force_recompress);
 			assert_eq!(data_converter.as_string(), description);
 			assert_eq!(data_converter.pipeline.len(), length);
 			assert_eq!(data_converter, data_converter.clone());
