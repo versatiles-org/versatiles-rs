@@ -46,8 +46,7 @@ impl TileServer {
 	}
 
 	pub fn add_tile_source(&mut self, url_prefix: Url, reader: TileReaderBox) -> Result<()> {
-		let mut url_prefix = url_prefix;
-		url_prefix.be_dir();
+		let url_prefix = url_prefix.as_dir();
 
 		log::info!("add source: prefix='{}', source={:?}", url_prefix, reader);
 
@@ -64,8 +63,7 @@ impl TileServer {
 	}
 
 	pub fn add_static_source(&mut self, path: &Path, url_prefix: Url) -> Result<()> {
-		let mut url_prefix = url_prefix;
-		url_prefix.be_dir();
+		let url_prefix = url_prefix.as_dir();
 
 		log::info!("add static: {path:?}");
 		self.static_sources.push(StaticSource::new(path, url_prefix)?);
