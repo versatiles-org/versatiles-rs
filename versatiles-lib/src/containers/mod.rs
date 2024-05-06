@@ -1,24 +1,33 @@
 #[cfg(feature = "full")]
-pub mod directory;
+mod directory;
+#[cfg(feature = "full")]
+pub use directory::*;
 
 #[cfg(feature = "full")]
 mod getters;
+#[cfg(feature = "full")]
+pub use getters::*;
 
 #[cfg(feature = "full")]
-pub mod mbtiles;
+mod mbtiles;
 
 #[cfg(feature = "full")]
-pub mod tar;
+pub use mbtiles::*;
+
+#[cfg(feature = "full")]
+mod tar;
+#[cfg(feature = "full")]
+pub use tar::*;
 
 #[cfg(feature = "mock")]
-pub mod mock;
+mod mock;
+#[cfg(feature = "mock")]
+pub use mock::*;
 
-pub mod versatiles;
+mod versatiles;
+pub use versatiles::*;
 
 mod readers;
 mod traits;
-
-#[cfg(feature = "full")]
-pub use getters::*;
 pub use readers::*;
 pub use traits::*;

@@ -1,4 +1,4 @@
-use super::TileReaderBox;
+use super::TilesReaderBox;
 use crate::shared::*;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -6,8 +6,8 @@ use futures_util::Stream;
 use std::pin::Pin;
 
 #[cfg(feature = "full")]
-pub type TileConverterBox = Box<dyn TileConverterTrait>;
-pub type TileStream<'a> = Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + Send + 'a>>;
+pub type TilesConverterBox = Box<dyn TilesConverterTrait>;
+pub type TilesStream<'a> = Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + Send + 'a>>;
 
 pub enum ProbeDepth {
 	Shallow = 0,
@@ -19,11 +19,11 @@ pub enum ProbeDepth {
 #[allow(clippy::new_ret_no_self)]
 #[async_trait]
 #[cfg(feature = "full")]
-pub trait TileConverterTrait {
-	async fn new(filename: &str, tile_config: TileConverterConfig) -> Result<TileConverterBox>
+pub trait TilesConverterTrait {
+	async fn new(filename: &str, tile_config: TilesConverterConfig) -> Result<TilesConverterBox>
 	where
 		Self: Sized;
 
 	// readers must be mutable, because they might use caching
-	async fn convert_from(&mut self, reader: &mut TileReaderBox) -> Result<()>;
+	async fn convert_from(&mut self, reader: &mut TilesReaderBox) -> Result<()>;
 }

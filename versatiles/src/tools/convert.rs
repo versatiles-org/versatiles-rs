@@ -2,8 +2,8 @@ use anyhow::{bail, Result};
 use clap::Args;
 use log::trace;
 use versatiles_lib::{
-	containers::{get_converter, get_reader, TileConverterBox, TileReaderBox},
-	shared::{Compression, TileBBoxPyramid, TileConverterConfig, TileFormat},
+	containers::{get_converter, get_reader, TilesConverterBox, TilesReaderBox},
+	shared::{Compression, TileBBoxPyramid, TileFormat, TilesConverterConfig},
 };
 
 #[derive(Args, Debug)]
@@ -73,7 +73,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	converter.convert_from(&mut reader).await
 }
 
-async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TileReaderBox> {
+async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TilesReaderBox> {
 	let mut reader = get_reader(filename).await?;
 	reader.set_configuration(
 		arguments.flip_y,
@@ -84,7 +84,7 @@ async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TileReader
 	Ok(reader)
 }
 
-async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileConverterBox> {
+async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TilesConverterBox> {
 	let mut bbox_pyramid = TileBBoxPyramid::new_full();
 
 	if let Some(min_zoom) = arguments.min_zoom {
@@ -114,7 +114,7 @@ async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TileCon
 		}
 	}
 
-	let config = TileConverterConfig::new(
+	let config = TilesConverterConfig::new(
 		arguments.tile_format,
 		arguments.compress,
 		bbox_pyramid,

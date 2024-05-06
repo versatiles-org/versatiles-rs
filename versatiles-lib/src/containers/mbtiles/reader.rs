@@ -1,5 +1,5 @@
 use crate::{
-	containers::{TileReaderBox, TileReaderTrait, TileStream},
+	containers::{TilesReaderBox, TilesReaderTrait, TilesStream},
 	shared::*,
 };
 use anyhow::{anyhow, ensure, Result};
@@ -10,21 +10,21 @@ use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use std::{env, path::Path};
 
-pub struct TileReader {
+pub struct MBTilesReader {
 	name: String,
 	pool: Pool<SqliteConnectionManager>,
 	meta_data: Option<String>,
-	parameters: TileReaderParameters,
+	parameters: TilesReaderParameters,
 }
-impl TileReader {
-	async fn load_from_sqlite(path: &Path) -> Result<TileReader> {
+impl MBTilesReader {
+	async fn load_from_sqlite(path: &Path) -> Result<MBTilesReader> {
 		trace!("load_from_sqlite {:?}", path);
 
 		let manager = SqliteConnectionManager::file(path);
 		let pool = Pool::builder().max_size(10).build(manager)?;
-		let parameters = TileReaderParameters::new(TileFormat::PBF, Compression::None, TileBBoxPyramid::new_empty());
+		let parameters = TilesReaderParameters::new(TileFormat::PBF, Compression::None, TileBBoxPyramid::new_empty());
 
-		let mut reader = TileReader {
+		let mut reader = MBTilesReader {
 			name: String::from(path.to_str().unwrap()),
 			pool,
 			meta_data: None,
@@ -177,8 +177,8 @@ impl TileReader {
 }
 
 #[async_trait]
-impl TileReaderTrait for TileReader {
-	async fn new(filename: &str) -> Result<TileReaderBox> {
+impl TilesReaderTrait for MBTilesReader {
+	async fn new(filename: &str) -> Result<TilesReaderBox> {
 		trace!("open {}", filename);
 
 		let path = env::current_dir().unwrap().join(filename);
@@ -197,10 +197,10 @@ impl TileReaderTrait for TileReader {
 	async fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(self.meta_data.as_ref().map(Blob::from))
 	}
-	fn get_parameters(&self) -> &TileReaderParameters {
+	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
-	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
+	fn get_parameters_mut(&mut self) -> &mut TilesReaderParameters {
 		&mut self.parameters
 	}
 	async fn get_tile_data_original(&mut self, coord: &TileCoord3) -> Result<Blob> {
@@ -224,7 +224,7 @@ impl TileReaderTrait for TileReader {
 
 		Ok(Blob::from(blob))
 	}
-	async fn get_bbox_tile_stream_original<'a>(&'a mut self, bbox: TileBBox) -> TileStream {
+	async fn get_bbox_tile_stream_original<'a>(&'a mut self, bbox: TileBBox) -> TilesStream {
 		trace!("read tile stream from bbox {bbox:?}");
 
 		if bbox.is_empty() {
@@ -281,7 +281,7 @@ impl TileReaderTrait for TileReader {
 	}
 }
 
-impl std::fmt::Debug for TileReader {
+impl std::fmt::Debug for MBTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TileReader:MBTiles")
 			.field("parameters", &self.get_parameters())
@@ -297,12 +297,12 @@ struct RecordMetadata {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::containers::mock::{self, ConverterProfile};
+	use crate::containers::{MockTilesConverter, MockTilesConverterProfile};
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
 		// get test container reader
-		let mut reader = TileReader::new("../testdata/berlin.mbtiles").await?;
+		let mut reader = MBTilesReader::new("../testdata/berlin.mbtiles").await?;
 
 		assert_eq!(format!("{:?}", reader), "TileReader:MBTiles { parameters:  { bbox_pyramid: [0: [0,0,0,0] (1), 1: [1,0,1,0] (1), 2: [2,1,2,1] (1), 3: [4,2,4,2] (1), 4: [8,5,8,5] (1), 5: [17,10,17,10] (1), 6: [34,20,34,21] (2), 7: [68,41,68,42] (2), 8: [137,83,137,84] (2), 9: [274,167,275,168] (4), 10: [549,335,551,336] (6), 11: [1098,670,1102,673] (20), 12: [2196,1340,2204,1346] (63), 13: [4393,2680,4409,2693] (238), 14: [8787,5361,8818,5387] (864)], decompressor: , flip_y: false, swap_xy: false, tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "mbtiles");
@@ -320,7 +320,7 @@ pub mod tests {
 			&[255, 15, 172, 89, 205, 237, 7, 134, 5, 0]
 		);
 
-		let mut converter = mock::TileConverter::new_mock(ConverterProfile::Whatever, 8);
+		let mut converter = MockTilesConverter::new_mock(MockTilesConverterProfile::Whatever, 8);
 
 		converter.convert_from(&mut reader).await?;
 
@@ -332,7 +332,7 @@ pub mod tests {
 	async fn probe() -> Result<()> {
 		use crate::shared::PrettyPrint;
 
-		let mut reader = TileReader::new("../testdata/berlin.mbtiles").await?;
+		let mut reader = MBTilesReader::new("../testdata/berlin.mbtiles").await?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(printer.get_category("container").await).await?;

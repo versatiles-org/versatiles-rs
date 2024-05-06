@@ -1,26 +1,26 @@
-use super::{ProbeDepth, TileStream};
-use crate::shared::{Blob, Compression, PrettyPrint, TileBBox, TileCoord3, TileFormat, TileReaderParameters};
+use super::{ProbeDepth, TilesStream};
+use crate::shared::{Blob, Compression, PrettyPrint, TileBBox, TileCoord3, TileFormat, TilesReaderParameters};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::{stream, StreamExt};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 
-pub type TileReaderBox = Box<dyn TileReaderTrait>;
+pub type TilesReaderBox = Box<dyn TilesReaderTrait>;
 
 #[allow(clippy::new_ret_no_self)]
 #[async_trait]
-pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
-	async fn new(path: &str) -> Result<TileReaderBox>
+pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
+	async fn new(path: &str) -> Result<TilesReaderBox>
 	where
 		Self: Sized;
 
 	/// some kine of name for this reader source, e.g. the filename
 	fn get_name(&self) -> &str;
 
-	fn get_parameters(&self) -> &TileReaderParameters;
+	fn get_parameters(&self) -> &TilesReaderParameters;
 
-	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters;
+	fn get_parameters_mut(&mut self) -> &mut TilesReaderParameters;
 
 	fn set_configuration(&mut self, flip_y: bool, swap_xy: bool, tile_compression: Option<Compression>) {
 		let parameters = self.get_parameters_mut();
@@ -60,7 +60,7 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
 	/// returns the tiles in the coordinate system of the source
-	async fn get_bbox_tile_stream_original<'a>(&'a mut self, bbox: TileBBox) -> TileStream {
+	async fn get_bbox_tile_stream_original<'a>(&'a mut self, bbox: TileBBox) -> TilesStream {
 		let mutex = Arc::new(Mutex::new(self));
 		let coords: Vec<TileCoord3> = bbox.iter_coords().collect();
 		stream::iter(coords)
@@ -81,8 +81,8 @@ pub trait TileReaderTrait: Debug + Send + Sync + Unpin {
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
 	/// returns the tiles in the target coordinate system (after optional flipping)
-	async fn get_bbox_tile_stream<'a>(&'a mut self, mut bbox: TileBBox) -> TileStream {
-		let parameters: TileReaderParameters = (*self.get_parameters()).clone();
+	async fn get_bbox_tile_stream<'a>(&'a mut self, mut bbox: TileBBox) -> TilesStream {
+		let parameters: TilesReaderParameters = (*self.get_parameters()).clone();
 		parameters.transform_backward(&mut bbox);
 		let stream = self.get_bbox_tile_stream_original(bbox).await;
 		stream
@@ -168,13 +168,13 @@ mod tests {
 	#[derive(Debug)]
 	struct TestReader {
 		name: String,
-		parameters: TileReaderParameters,
+		parameters: TilesReaderParameters,
 	}
 
 	#[async_trait]
-	impl TileReaderTrait for TestReader {
-		async fn new(path: &str) -> Result<TileReaderBox> {
-			let parameters = TileReaderParameters::new_dummy();
+	impl TilesReaderTrait for TestReader {
+		async fn new(path: &str) -> Result<TilesReaderBox> {
+			let parameters = TilesReaderParameters::new_dummy();
 			let reader = TestReader {
 				name: path.to_owned(),
 				parameters,
@@ -186,11 +186,11 @@ mod tests {
 			&self.name
 		}
 
-		fn get_parameters(&self) -> &TileReaderParameters {
+		fn get_parameters(&self) -> &TilesReaderParameters {
 			&self.parameters
 		}
 
-		fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
+		fn get_parameters_mut(&mut self) -> &mut TilesReaderParameters {
 			&mut self.parameters
 		}
 
@@ -210,7 +210,7 @@ mod tests {
 	#[tokio::test]
 	#[cfg(feature = "full")]
 	async fn reader() -> Result<()> {
-		use crate::containers::mock;
+		use crate::containers::{MockTilesConverter, MockTilesConverterProfile};
 
 		let mut reader = TestReader::new("test_path").await?;
 
@@ -234,7 +234,7 @@ mod tests {
 			"test tile data"
 		);
 
-		let mut converter = mock::TileConverter::new_mock(mock::ConverterProfile::Whatever, 3);
+		let mut converter = MockTilesConverter::new_mock(MockTilesConverterProfile::Whatever, 3);
 		converter.convert_from(&mut reader).await?;
 
 		Ok(())

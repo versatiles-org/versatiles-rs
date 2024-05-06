@@ -1,8 +1,8 @@
 // Import necessary modules and traits
 use super::{types::*, DataWriterFile, DataWriterTrait};
 use crate::{
-	containers::{TileConverterBox, TileConverterTrait, TileReaderBox, TileStream},
-	shared::{Blob, ProgressBar, TileBBox, TileConverterConfig},
+	containers::{TilesConverterBox, TilesConverterTrait, TilesReaderBox, TilesStream},
+	shared::{Blob, ProgressBar, TileBBox, TilesConverterConfig},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -11,27 +11,27 @@ use log::{debug, trace};
 use std::collections::HashMap;
 
 // Define TileConverter struct
-pub struct TileConverter {
+pub struct VersaTilesConverter {
 	writer: Box<dyn DataWriterTrait>,
-	config: TileConverterConfig,
+	config: TilesConverterConfig,
 }
 
 // Implement TileConverterTrait for TileConverter
 #[async_trait]
-impl TileConverterTrait for TileConverter {
+impl TilesConverterTrait for VersaTilesConverter {
 	// Create a new TileConverter instance
-	async fn new(filename: &str, tile_config: TileConverterConfig) -> Result<TileConverterBox>
+	async fn new(filename: &str, tile_config: TilesConverterConfig) -> Result<TilesConverterBox>
 	where
 		Self: Sized,
 	{
-		Ok(Box::new(TileConverter {
+		Ok(Box::new(VersaTilesConverter {
 			writer: DataWriterFile::new(filename)?,
 			config: tile_config,
 		}))
 	}
 
 	// Convert tiles from the TileReader
-	async fn convert_from(&mut self, reader: &mut TileReaderBox) -> Result<()> {
+	async fn convert_from(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
 		// Finalize the configuration
 
 		trace!("convert_from - self.config1: {:?}", self.config);
@@ -77,9 +77,9 @@ impl TileConverterTrait for TileConverter {
 }
 
 // Implement additional methods for TileConverter
-impl TileConverter {
+impl VersaTilesConverter {
 	// Write metadata
-	async fn write_meta(&mut self, reader: &TileReaderBox) -> Result<ByteRange> {
+	async fn write_meta(&mut self, reader: &TilesReaderBox) -> Result<ByteRange> {
 		let meta: Blob = reader.get_meta().await?.unwrap_or_default();
 		let compressed = self.config.get_compressor().process_blob(meta)?;
 
@@ -87,7 +87,7 @@ impl TileConverter {
 	}
 
 	// Write blocks
-	async fn write_blocks(&mut self, reader: &mut TileReaderBox) -> Result<ByteRange> {
+	async fn write_blocks(&mut self, reader: &mut TilesReaderBox) -> Result<ByteRange> {
 		let pyramid = self.config.get_bbox_pyramid();
 		if pyramid.is_empty() {
 			return Ok(ByteRange::empty());
@@ -142,7 +142,7 @@ impl TileConverter {
 
 	// Write a single block
 	async fn write_block<'a>(
-		&'a mut self, block: &BlockDefinition, reader: &'a mut TileReaderBox, progress: &'a mut ProgressBar,
+		&'a mut self, block: &BlockDefinition, reader: &'a mut TilesReaderBox, progress: &'a mut ProgressBar,
 	) -> Result<(ByteRange, ByteRange)> {
 		// Log the start of the block
 		debug!("start block {:?}", block);
@@ -160,7 +160,7 @@ impl TileConverter {
 		let tile_converter = self.config.get_tile_recompressor();
 
 		// Get the tile stream
-		let mut tile_stream: TileStream = reader.get_bbox_tile_stream(bbox).await;
+		let mut tile_stream: TilesStream = reader.get_bbox_tile_stream(bbox).await;
 
 		if !tile_converter.is_empty() {
 			tile_stream = tile_converter.process_stream(tile_stream)

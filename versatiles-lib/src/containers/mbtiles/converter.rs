@@ -1,36 +1,36 @@
 use crate::{
-	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::TileConverterConfig,
+	containers::{TilesConverterBox, TilesConverterTrait, TilesReaderBox},
+	shared::TilesConverterConfig,
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 
-pub struct TileConverter;
+pub struct MBTilesConverter;
 
 #[async_trait]
-impl TileConverterTrait for TileConverter {
-	async fn new(_filename: &str, _config: TileConverterConfig) -> Result<TileConverterBox>
+impl TilesConverterTrait for MBTilesConverter {
+	async fn new(_filename: &str, _config: TilesConverterConfig) -> Result<TilesConverterBox>
 	where
 		Self: Sized,
 	{
 		bail!("conversion to mbtiles is not supported")
 	}
-	async fn convert_from(&mut self, _reader: &mut TileReaderBox) -> Result<()> {
+	async fn convert_from(&mut self, _reader: &mut TilesReaderBox) -> Result<()> {
 		bail!("conversion to mbtiles is not supported")
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use super::TileConverter;
+	use super::MBTilesConverter;
 	use crate::{
-		containers::{mock, TileConverterTrait, TileReaderTrait},
-		shared::TileConverterConfig,
+		containers::{mock, TilesConverterTrait, TilesReaderTrait},
+		shared::TilesConverterConfig,
 	};
 
 	#[tokio::test]
 	async fn panic1() {
-		assert!(TileConverter::new("filename.txt", TileConverterConfig::new_full())
+		assert!(MBTilesConverter::new("filename.txt", TilesConverterConfig::new_full())
 			.await
 			.is_err());
 	}
@@ -38,8 +38,8 @@ mod tests {
 	#[tokio::test]
 	#[should_panic]
 	async fn panic2() {
-		let mut converter = TileConverter {};
-		let mut reader = mock::TileReader::new("filename.txt").await.unwrap();
+		let mut converter = MBTilesConverter {};
+		let mut reader = mock::MockTilesReader::new("filename.txt").await.unwrap();
 		assert!(converter.convert_from(&mut reader).await.is_err())
 	}
 }

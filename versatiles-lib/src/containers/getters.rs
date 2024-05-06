@@ -1,44 +1,44 @@
 use super::directory;
 use super::mbtiles;
 use super::tar;
-use super::{versatiles, TileReaderBox, TileReaderTrait};
-use super::{TileConverterBox, TileConverterTrait};
-use crate::shared::TileConverterConfig;
+use super::{versatiles, TilesReaderBox, TilesReaderTrait};
+use super::{TilesConverterBox, TilesConverterTrait};
+use crate::shared::TilesConverterConfig;
 use anyhow::{bail, Context, Result};
 use std::path::{Path, PathBuf};
 
-pub async fn get_reader(filename: &str) -> Result<TileReaderBox> {
+pub async fn get_reader(filename: &str) -> Result<TilesReaderBox> {
 	let path = PathBuf::from(filename);
 
 	if path.is_dir() {
-		return directory::TileReader::new(filename)
+		return directory::DirectoryTilesReader::new(filename)
 			.await
 			.with_context(|| format!("opening {filename} as directory"));
 	}
 
 	let extension = get_extension(&path);
 	match extension.as_str() {
-		"mbtiles" => Ok(mbtiles::TileReader::new(filename)
+		"mbtiles" => Ok(mbtiles::MBTilesReader::new(filename)
 			.await
 			.with_context(|| format!("opening {filename} as mbtiles"))?),
-		"tar" => Ok(tar::TileReader::new(filename)
+		"tar" => Ok(tar::TarTilesReader::new(filename)
 			.await
 			.with_context(|| format!("opening {filename} as tar"))?),
-		"versatiles" => Ok(versatiles::TileReader::new(filename)
+		"versatiles" => Ok(versatiles::VersaTilesReader::new(filename)
 			.await
 			.with_context(|| format!("opening {filename} as versatiles"))?),
 		_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
 	}
 }
 
-pub async fn get_converter(filename: &str, config: TileConverterConfig) -> Result<TileConverterBox> {
+pub async fn get_converter(filename: &str, config: TilesConverterConfig) -> Result<TilesConverterBox> {
 	let path = PathBuf::from(filename);
 
 	let extension = get_extension(&path);
 	match extension.as_str() {
-		"versatiles" => versatiles::TileConverter::new(filename, config).await,
-		"tar" => tar::TileConverter::new(filename, config).await,
-		"" => directory::TileConverter::new(filename, config).await,
+		"versatiles" => versatiles::VersaTilesConverter::new(filename, config).await,
+		"tar" => tar::TarTilesConverter::new(filename, config).await,
+		"" => directory::DirectoryTilesConverter::new(filename, config).await,
 		_ => bail!("Error when writing: file extension '{extension:?}' unknown"),
 	}
 }
@@ -56,10 +56,10 @@ fn get_extension(path: &Path) -> String {
 pub mod tests {
 	use crate::{
 		containers::{
-			get_converter, get_reader,
-			mock::{self, ConverterProfile as CP, ReaderProfile as RP},
+			get_converter, get_reader, MockTilesConverter, MockTilesConverterProfile as CP, MockTilesReader,
+			MockTilesReaderProfile as RP,
 		},
-		shared::{Compression as C, TileBBoxPyramid, TileConverterConfig, TileFormat as TF},
+		shared::{Compression as C, TileBBoxPyramid, TileFormat as TF, TilesConverterConfig},
 	};
 	use anyhow::Result;
 	use assert_fs::fixture::NamedTempFile;
@@ -77,7 +77,7 @@ pub mod tests {
 		};
 
 		// get dummy reader
-		let mut reader = mock::TileReader::new_mock(reader_profile, max_zoom_level);
+		let mut reader = MockTilesReader::new_mock(reader_profile, max_zoom_level);
 
 		// get to test container comverter
 		let container_file = match extension {
@@ -86,7 +86,7 @@ pub mod tests {
 			_ => panic!("make_test_file: extension {extension} not found"),
 		}?;
 
-		let config = TileConverterConfig::new(Some(tile_format), Some(compression), TileBBoxPyramid::new_full(), false);
+		let config = TilesConverterConfig::new(Some(tile_format), Some(compression), TileBBoxPyramid::new_full(), false);
 		let mut converter = get_converter(container_file.to_str().unwrap(), config).await?;
 
 		// convert
@@ -117,7 +117,7 @@ pub mod tests {
 			let _start = Instant::now();
 
 			// get dummy reader
-			let mut reader1 = mock::TileReader::new_mock(reader_profile, max_zoom_level);
+			let mut reader1 = MockTilesReader::new_mock(reader_profile, max_zoom_level);
 
 			// get to test container comverter
 			let container_file = match container {
@@ -125,7 +125,7 @@ pub mod tests {
 				Container::Versatiles => NamedTempFile::new("temp.versatiles"),
 			}?;
 
-			let config = TileConverterConfig::new(
+			let config = TilesConverterConfig::new(
 				Some(tile_format),
 				Some(compression),
 				TileBBoxPyramid::new_full(),
@@ -138,7 +138,7 @@ pub mod tests {
 
 			// get test container reader
 			let mut reader2 = get_reader(container_file.to_str().unwrap()).await?;
-			let mut converter2 = mock::TileConverter::new_mock(CP::Whatever, max_zoom_level);
+			let mut converter2 = MockTilesConverter::new_mock(CP::Whatever, max_zoom_level);
 			converter2.convert_from(&mut reader2).await?;
 
 			Ok(())

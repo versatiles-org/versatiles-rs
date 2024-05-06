@@ -1,6 +1,6 @@
 use crate::{
-	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{compress, compression_to_extension, format_to_extension, ProgressBar, TileConverterConfig},
+	containers::{TilesConverterBox, TilesConverterTrait, TilesReaderBox},
+	shared::{compress, compression_to_extension, format_to_extension, ProgressBar, TilesConverterConfig},
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
@@ -14,14 +14,14 @@ use std::{
 use tar::{Builder, Header};
 use tokio::sync::Mutex;
 
-pub struct TileConverter {
+pub struct TarTilesConverter {
 	builder: Builder<File>,
-	config: TileConverterConfig,
+	config: TilesConverterConfig,
 }
 
 #[async_trait]
-impl TileConverterTrait for TileConverter {
-	async fn new(filename: &str, config: TileConverterConfig) -> Result<TileConverterBox>
+impl TilesConverterTrait for TarTilesConverter {
+	async fn new(filename: &str, config: TilesConverterConfig) -> Result<TilesConverterBox>
 	where
 		Self: Sized,
 	{
@@ -33,9 +33,9 @@ impl TileConverterTrait for TileConverter {
 		let file = File::create(path)?;
 		let builder = Builder::new(file);
 
-		Ok(Box::new(TileConverter { builder, config }))
+		Ok(Box::new(TarTilesConverter { builder, config }))
 	}
-	async fn convert_from(&mut self, reader: &mut TileReaderBox) -> Result<()> {
+	async fn convert_from(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
 		trace!("convert_from");
 
 		self.config.finalize_with_parameters(reader.get_parameters());

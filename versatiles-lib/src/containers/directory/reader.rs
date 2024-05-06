@@ -1,8 +1,8 @@
 use crate::{
-	containers::{TileReaderBox, TileReaderTrait},
+	containers::{TilesReaderBox, TilesReaderTrait},
 	shared::{
 		decompress, extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat,
-		TileReaderParameters,
+		TilesReaderParameters,
 	},
 };
 use anyhow::{bail, ensure, Result};
@@ -16,25 +16,25 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-pub struct TileReader {
+pub struct DirectoryTilesReader {
 	meta: Option<Blob>,
 	path: PathBuf,
 	tile_map: HashMap<TileCoord3, PathBuf>,
-	parameters: TileReaderParameters,
+	parameters: TilesReaderParameters,
 }
 
-impl TileReader {
+impl DirectoryTilesReader {
 	fn read(path: &Path) -> Result<Blob> {
 		Ok(Blob::from(fs::read(path)?))
 	}
 }
 
 #[async_trait]
-impl TileReaderTrait for TileReader {
+impl TilesReaderTrait for DirectoryTilesReader {
 	fn get_container_name(&self) -> &str {
 		"tar"
 	}
-	async fn new(filename: &str) -> Result<TileReaderBox>
+	async fn new(filename: &str) -> Result<TilesReaderBox>
 	where
 		Self: Sized,
 	{
@@ -126,21 +126,21 @@ impl TileReaderTrait for TileReader {
 			}
 		}
 
-		Ok(Box::new(TileReader {
+		Ok(Box::new(DirectoryTilesReader {
 			meta,
 			path,
 			tile_map,
-			parameters: TileReaderParameters::new(
+			parameters: TilesReaderParameters::new(
 				tile_form.expect("tile format must be specified"),
 				tile_comp.expect("tile compression must be specified"),
 				bbox_pyramid,
 			),
 		}))
 	}
-	fn get_parameters(&self) -> &TileReaderParameters {
+	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
-	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
+	fn get_parameters_mut(&mut self) -> &mut TilesReaderParameters {
 		&mut self.parameters
 	}
 	async fn get_meta(&self) -> Result<Option<Blob>> {
@@ -160,7 +160,7 @@ impl TileReaderTrait for TileReader {
 	}
 }
 
-impl Debug for TileReader {
+impl Debug for DirectoryTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TileReader:Directory")
 			.field("parameters", &self.get_parameters())
@@ -183,7 +183,7 @@ mod tests {
 		fs::write(dir.path().join("1/2/3.png"), "test tile data")?;
 		fs::write(dir.path().join("meta.json"), "test meta data")?;
 
-		let mut reader = TileReader::new(dir.to_str().unwrap()).await?;
+		let mut reader = DirectoryTilesReader::new(dir.to_str().unwrap()).await?;
 
 		assert_eq!(reader.get_meta().await?.unwrap().as_str(), "test meta data");
 

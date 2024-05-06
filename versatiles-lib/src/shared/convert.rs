@@ -1,7 +1,7 @@
 #[cfg(feature = "full")]
 use super::image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2img, webp2img};
 use super::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression, TileFormat};
-use crate::containers::TileStream;
+use crate::containers::TilesStream;
 use anyhow::{bail, Result};
 use futures_util::StreamExt;
 use itertools::Itertools;
@@ -187,7 +187,7 @@ impl DataConverter {
 
 	#[allow(dead_code)]
 	/// Runs a stream through the pipeline of conversion functions
-	pub fn process_stream<'a>(&'a self, stream: TileStream<'a>) -> TileStream<'a> {
+	pub fn process_stream<'a>(&'a self, stream: TilesStream<'a>) -> TilesStream<'a> {
 		let pipeline = Arc::new(self.pipeline.clone());
 		stream
 			.map(move |(coord, mut blob)| {

@@ -10,5 +10,5 @@ pub use abstract_readers::*;
 #[cfg(feature = "full")]
 pub use abstract_writers::*;
 #[cfg(feature = "full")]
-pub use converter::TileConverter;
-pub use reader::TileReader;
+pub use converter::VersaTilesConverter;
+pub use reader::VersaTilesReader;

@@ -18,7 +18,7 @@ use hyper::header::{ACCESS_CONTROL_ALLOW_ORIGIN, VARY};
 use std::path::Path;
 use tokio::sync::oneshot::Sender;
 use versatiles_lib::{
-	containers::TileReaderBox,
+	containers::TilesReaderBox,
 	shared::{optimize_compression, Blob, Compression, TargetCompression},
 };
 
@@ -45,7 +45,7 @@ impl TileServer {
 		}
 	}
 
-	pub fn add_tile_source(&mut self, url_prefix: Url, reader: TileReaderBox) -> Result<()> {
+	pub fn add_tile_source(&mut self, url_prefix: Url, reader: TilesReaderBox) -> Result<()> {
 		let url_prefix = url_prefix.as_dir();
 
 		log::info!("add source: prefix='{}', source={:?}", url_prefix, reader);
@@ -292,7 +292,7 @@ mod tests {
 	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
 	use enumset::{enum_set, EnumSet};
 	use versatiles_lib::{
-		containers::mock,
+		containers::{MockTilesReader, MockTilesReaderProfile},
 		shared::{
 			Compression::{self, *},
 			TargetCompression,
@@ -346,7 +346,7 @@ mod tests {
 
 		let mut server = TileServer::new(IP, 50001, true, true);
 
-		let reader = mock::TileReader::new_mock(mock::ReaderProfile::PBF, 8);
+		let reader = MockTilesReader::new_mock(MockTilesReaderProfile::PBF, 8);
 		server.add_tile_source(Url::new("tiles/cheese"), reader).unwrap();
 
 		server.start().await.unwrap();
@@ -371,10 +371,10 @@ mod tests {
 	async fn same_prefix_twice() {
 		let mut server = TileServer::new(IP, 50002, true, true);
 
-		let reader = mock::TileReader::new_mock(mock::ReaderProfile::PNG, 8);
+		let reader = MockTilesReader::new_mock(MockTilesReaderProfile::PNG, 8);
 		server.add_tile_source(Url::new("cheese"), reader).unwrap();
 
-		let reader = mock::TileReader::new_mock(mock::ReaderProfile::PBF, 8);
+		let reader = MockTilesReader::new_mock(MockTilesReaderProfile::PBF, 8);
 		server.add_tile_source(Url::new("cheese"), reader).unwrap();
 	}
 
@@ -398,7 +398,7 @@ mod tests {
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50004);
 
-		let reader = mock::TileReader::new_mock(mock::ReaderProfile::PBF, 8);
+		let reader = MockTilesReader::new_mock(MockTilesReaderProfile::PBF, 8);
 		server.add_tile_source(Url::new("cheese"), reader).unwrap();
 
 		assert_eq!(server.tile_sources.len(), 1);
@@ -411,7 +411,7 @@ mod tests {
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50005);
 
-		let reader = mock::TileReader::new_mock(mock::ReaderProfile::PBF, 8);
+		let reader = MockTilesReader::new_mock(MockTilesReaderProfile::PBF, 8);
 		server.add_tile_source(Url::new("tiles/cheese"), reader).unwrap();
 
 		let mappings: Vec<(String, String)> = server.get_url_mapping().await;

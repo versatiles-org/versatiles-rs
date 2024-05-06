@@ -1,7 +1,7 @@
-use crate::shared::{Compression, DataConverter, TileBBoxPyramid, TileFormat, TileReaderParameters};
+use crate::shared::{Compression, DataConverter, TileBBoxPyramid, TileFormat, TilesReaderParameters};
 
 #[derive(Debug)]
-pub struct TileConverterConfig {
+pub struct TilesConverterConfig {
 	tile_format: Option<TileFormat>,
 	tile_compression: Option<Compression>,
 	tile_recompressor: Option<DataConverter>,
@@ -11,12 +11,12 @@ pub struct TileConverterConfig {
 	finalized: bool,
 }
 
-impl TileConverterConfig {
+impl TilesConverterConfig {
 	pub fn new(
 		tile_format: Option<TileFormat>, tile_compression: Option<Compression>, bbox_pyramid: TileBBoxPyramid,
 		force_recompress: bool,
 	) -> Self {
-		TileConverterConfig {
+		TilesConverterConfig {
 			tile_format,
 			tile_compression,
 			bbox_pyramid,
@@ -30,7 +30,7 @@ impl TileConverterConfig {
 	pub fn new_full() -> Self {
 		Self::new(None, None, TileBBoxPyramid::new_full(), false)
 	}
-	pub fn finalize_with_parameters(&mut self, parameters: &TileReaderParameters) {
+	pub fn finalize_with_parameters(&mut self, parameters: &TilesReaderParameters) {
 		let mut bbox_pyramid = parameters.bbox_pyramid.clone();
 		parameters.transform_forward(&mut bbox_pyramid);
 
@@ -76,15 +76,15 @@ impl TileConverterConfig {
 
 #[cfg(test)]
 mod tests {
-	use super::{Compression, TileBBoxPyramid, TileConverterConfig, TileFormat, TileReaderParameters};
+	use super::{Compression, TileBBoxPyramid, TilesConverterConfig, TileFormat, TilesReaderParameters};
 
 	#[test]
 	fn test() {
 		let pyramid = TileBBoxPyramid::new_full();
-		let parameters = TileReaderParameters::new(TileFormat::PNG, Compression::Gzip, pyramid.clone());
+		let parameters = TilesReaderParameters::new(TileFormat::PNG, Compression::Gzip, pyramid.clone());
 
 		let mut config =
-			TileConverterConfig::new(Some(TileFormat::JPG), Some(Compression::Brotli), pyramid.clone(), true);
+			TilesConverterConfig::new(Some(TileFormat::JPG), Some(Compression::Brotli), pyramid.clone(), true);
 
 		config.finalize_with_parameters(&parameters);
 

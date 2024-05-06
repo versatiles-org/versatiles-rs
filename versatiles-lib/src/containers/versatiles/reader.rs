@@ -3,8 +3,8 @@ use super::{new_data_reader, types::*, DataReaderTrait};
 #[cfg(feature = "full")]
 use crate::shared::PrettyPrint;
 use crate::{
-	containers::{TileReaderBox, TileReaderTrait, TileStream},
-	shared::{Blob, DataConverter, TileBBox, TileCoord2, TileCoord3, TileReaderParameters},
+	containers::{TilesReaderBox, TilesReaderTrait, TilesStream},
+	shared::{Blob, DataConverter, TileBBox, TileCoord2, TileCoord3, TilesReaderParameters},
 };
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
@@ -14,18 +14,18 @@ use std::{collections::HashMap, fmt::Debug, ops::Shr, sync::Arc};
 use tokio::sync::Mutex;
 
 // Define the TileReader struct
-pub struct TileReader {
+pub struct VersaTilesReader {
 	meta: Option<Blob>,
 	reader: Box<dyn DataReaderTrait>,
-	parameters: TileReaderParameters,
+	parameters: TilesReaderParameters,
 	block_index: BlockIndex,
 	tile_index_cache: HashMap<TileCoord3, Arc<TileIndex>>,
 }
 
 // Implement methods for the TileReader struct
-impl TileReader {
+impl VersaTilesReader {
 	// Create a new TileReader from a given data reader
-	pub async fn from_src(mut reader: Box<dyn DataReaderTrait>) -> Result<TileReader> {
+	pub async fn from_src(mut reader: Box<dyn DataReaderTrait>) -> Result<VersaTilesReader> {
 		let header = FileHeader::from_reader(&mut reader)
 			.await
 			.context("reading the header")?;
@@ -54,9 +54,9 @@ impl TileReader {
 		.context("decompressing the block index")?;
 
 		let bbox_pyramid = block_index.get_bbox_pyramid();
-		let parameters = TileReaderParameters::new(header.tile_format, header.compression, bbox_pyramid);
+		let parameters = TilesReaderParameters::new(header.tile_format, header.compression, bbox_pyramid);
 
-		Ok(TileReader {
+		Ok(VersaTilesReader {
 			meta,
 			reader,
 			parameters,
@@ -94,16 +94,16 @@ impl TileReader {
 }
 
 // Implement Send and Sync traits for TileReader
-unsafe impl Send for TileReader {}
-unsafe impl Sync for TileReader {}
+unsafe impl Send for VersaTilesReader {}
+unsafe impl Sync for VersaTilesReader {}
 
 // Implement the TileReaderTrait for the TileReader struct
 #[async_trait]
-impl TileReaderTrait for TileReader {
+impl TilesReaderTrait for VersaTilesReader {
 	// Create a new TileReader from a given filename
-	async fn new(filename: &str) -> Result<TileReaderBox> {
+	async fn new(filename: &str) -> Result<TilesReaderBox> {
 		let source = new_data_reader(filename).await?;
-		let reader = TileReader::from_src(source)
+		let reader = VersaTilesReader::from_src(source)
 			.await
 			.with_context(|| format!("new versatiles reader for {filename}"))?;
 
@@ -121,12 +121,12 @@ impl TileReaderTrait for TileReader {
 	}
 
 	// Get TileReader parameters
-	fn get_parameters(&self) -> &TileReaderParameters {
+	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
 	// Get mutable TileReader parameters
-	fn get_parameters_mut(&mut self) -> &mut TileReaderParameters {
+	fn get_parameters_mut(&mut self) -> &mut TilesReaderParameters {
 		&mut self.parameters
 	}
 
@@ -166,7 +166,7 @@ impl TileReaderTrait for TileReader {
 		self.reader.read_range(tile_range).await
 	}
 
-	async fn get_bbox_tile_stream_original<'a>(&'a mut self, bbox: TileBBox) -> TileStream<'a> {
+	async fn get_bbox_tile_stream_original<'a>(&'a mut self, bbox: TileBBox) -> TilesStream<'a> {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
@@ -384,7 +384,7 @@ impl TileReaderTrait for TileReader {
 }
 
 // Implement Debug for TileReader
-impl Debug for TileReader {
+impl Debug for VersaTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TileReader:VersaTiles")
 			.field("parameters", &self.get_parameters())
@@ -395,9 +395,9 @@ impl Debug for TileReader {
 #[cfg(test)]
 #[cfg(feature = "full")]
 mod tests {
-	use super::TileReader;
+	use super::VersaTilesReader;
 	use crate::{
-		containers::{tests::make_test_file, TileReaderTrait},
+		containers::{tests::make_test_file, TilesReaderTrait},
 		shared::{Compression, TileCoord3, TileFormat},
 	};
 	use anyhow::Result;
@@ -409,7 +409,7 @@ mod tests {
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 8, "versatiles").await?;
 		let temp_file = temp_file.to_str().unwrap();
 
-		let mut reader = TileReader::new(temp_file).await?;
+		let mut reader = VersaTilesReader::new(temp_file).await?;
 
 		assert_eq!(format!("{:?}", reader), "TileReader:VersaTiles { parameters:  { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: UnGzip, flip_y: false, swap_xy: false, tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "versatiles");
@@ -433,7 +433,7 @@ mod tests {
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 4, "versatiles").await?;
 		let temp_file = temp_file.to_str().unwrap();
 
-		let mut reader = TileReader::new(temp_file).await?;
+		let mut reader = VersaTilesReader::new(temp_file).await?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(printer.get_category("container").await).await?;

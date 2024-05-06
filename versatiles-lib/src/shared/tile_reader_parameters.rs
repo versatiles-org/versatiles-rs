@@ -5,7 +5,7 @@ use anyhow::Result;
 use std::fmt;
 
 #[derive(Clone, PartialEq, Eq)]
-pub struct TileReaderParameters {
+pub struct TilesReaderParameters {
 	pub bbox_pyramid: TileBBoxPyramid,
 	pub decompressor: DataConverter,
 	pub flip_y: bool,
@@ -14,13 +14,13 @@ pub struct TileReaderParameters {
 	pub tile_format: TileFormat,
 }
 
-impl TileReaderParameters {
+impl TilesReaderParameters {
 	pub fn new(
 		tile_format: TileFormat, tile_compression: Compression, bbox_pyramid: TileBBoxPyramid,
-	) -> TileReaderParameters {
+	) -> TilesReaderParameters {
 		let decompressor = DataConverter::new_decompressor(&tile_compression);
 
-		TileReaderParameters {
+		TilesReaderParameters {
 			decompressor,
 			tile_format,
 			tile_compression,
@@ -30,8 +30,8 @@ impl TileReaderParameters {
 		}
 	}
 	#[cfg(test)]
-	pub fn new_dummy() -> TileReaderParameters {
-		TileReaderParameters {
+	pub fn new_dummy() -> TilesReaderParameters {
+		TilesReaderParameters {
 			decompressor: DataConverter::new_empty(),
 			tile_format: TileFormat::PBF,
 			tile_compression: Compression::None,
@@ -86,7 +86,7 @@ impl TileReaderParameters {
 	}
 }
 
-impl fmt::Debug for TileReaderParameters {
+impl fmt::Debug for TilesReaderParameters {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("")
 			.field("bbox_pyramid", &self.bbox_pyramid)
@@ -107,7 +107,7 @@ mod tests {
 	#[test]
 	fn basic_tests() {
 		let test = |tile_format: TileFormat, tile_compression: Compression, bbox_pyramid: TileBBoxPyramid| {
-			let p = TileReaderParameters::new(tile_format.clone(), tile_compression, bbox_pyramid.clone());
+			let p = TilesReaderParameters::new(tile_format.clone(), tile_compression, bbox_pyramid.clone());
 
 			assert_eq!(p.tile_format, tile_format);
 			assert_eq!(p.tile_compression, tile_compression);
@@ -122,7 +122,7 @@ mod tests {
 	// Testing the new_dummy method
 	#[test]
 	fn new_dummy_test() {
-		let p = TileReaderParameters::new_dummy();
+		let p = TilesReaderParameters::new_dummy();
 
 		assert_eq!(p.tile_format, TileFormat::PBF);
 		assert_eq!(p.tile_compression, Compression::None);
@@ -136,7 +136,7 @@ mod tests {
 	#[test]
 	fn transform_forward_and_backward_test() {
 		fn test1(mut t: impl TransformCoord + Clone + std::fmt::Debug + Eq, flip_y: bool, swap_xy: bool) {
-			let mut p = TileReaderParameters::new_dummy();
+			let mut p = TilesReaderParameters::new_dummy();
 			p.flip_y = flip_y;
 			p.swap_xy = swap_xy;
 
@@ -167,7 +167,7 @@ mod tests {
 	fn transform_coord() {
 		fn test(flip_y: bool, swap_xy: bool, t: TileCoord3) {
 			let mut bbox = TileCoord3::new(12, 34, 6).unwrap();
-			let mut p = TileReaderParameters::new_dummy();
+			let mut p = TilesReaderParameters::new_dummy();
 
 			p.flip_y = flip_y;
 			p.swap_xy = swap_xy;
@@ -187,7 +187,7 @@ mod tests {
 	fn transform_bbox() {
 		fn test(flip_y: bool, swap_xy: bool, t: TileBBox) {
 			let mut bbox = TileBBox::new(8, 12, 34, 56, 78).unwrap();
-			let mut p = TileReaderParameters::new_dummy();
+			let mut p = TilesReaderParameters::new_dummy();
 
 			p.flip_y = flip_y;
 			p.swap_xy = swap_xy;

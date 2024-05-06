@@ -1,5 +1,5 @@
 mod converter;
 mod reader;
 
-pub use converter::TileConverter;
-pub use reader::TileReader;
+pub use converter::TarTilesConverter;
+pub use reader::TarTilesReader;

@@ -1,6 +1,6 @@
 use crate::{
-	containers::{TileConverterBox, TileConverterTrait, TileReaderBox},
-	shared::{compress, compression_to_extension, format_to_extension, ProgressBar, TileConverterConfig},
+	containers::{TilesConverterBox, TilesConverterTrait, TilesReaderBox},
+	shared::{compress, compression_to_extension, format_to_extension, ProgressBar, TilesConverterConfig},
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
@@ -11,12 +11,12 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-pub struct TileConverter {
+pub struct DirectoryTilesConverter {
 	dir: PathBuf,
-	config: TileConverterConfig,
+	config: TilesConverterConfig,
 }
 
-impl TileConverter {
+impl DirectoryTilesConverter {
 	fn write(&self, path: &Path, contents: &[u8]) -> Result<()> {
 		let path_buf = self.dir.join(path);
 		Self::ensure_directory(&path_buf.to_path_buf())?;
@@ -35,8 +35,8 @@ impl TileConverter {
 }
 
 #[async_trait]
-impl TileConverterTrait for TileConverter {
-	async fn new(filename: &str, config: TileConverterConfig) -> Result<TileConverterBox>
+impl TilesConverterTrait for DirectoryTilesConverter {
+	async fn new(filename: &str, config: TilesConverterConfig) -> Result<TilesConverterBox>
 	where
 		Self: Sized,
 	{
@@ -46,9 +46,9 @@ impl TileConverterTrait for TileConverter {
 		ensure!(dir.is_dir(), "path {dir:?} must be a directory");
 		ensure!(dir.is_absolute(), "path {dir:?} must be absolute");
 
-		Ok(Box::new(TileConverter { dir, config }))
+		Ok(Box::new(DirectoryTilesConverter { dir, config }))
 	}
-	async fn convert_from(&mut self, reader: &mut TileReaderBox) -> Result<()> {
+	async fn convert_from(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
 		log::trace!("convert_from");
 
 		self.config.finalize_with_parameters(reader.get_parameters());
@@ -104,19 +104,19 @@ impl TileConverterTrait for TileConverter {
 
 #[cfg(test)]
 mod tests {
-	use assert_fs;
+	use crate::containers::{MockTilesReader, MockTilesReaderProfile, MOCK_BYTES_PNG};
 
 	use super::*;
-	use crate::containers::mock;
+	use assert_fs;
 	use std::fs::File;
 	use std::io::Read;
 
 	#[test]
 	fn test_write() -> Result<()> {
 		let temp_dir = assert_fs::TempDir::new()?;
-		let tile_converter = TileConverter {
+		let tile_converter = DirectoryTilesConverter {
 			dir: temp_dir.path().to_path_buf(),
-			config: TileConverterConfig::new_full(),
+			config: TilesConverterConfig::new_full(),
 		};
 
 		let file_path = Path::new("test_write.txt");
@@ -137,7 +137,7 @@ mod tests {
 		let nested_dir_path = temp_dir.path().join("a/b/c");
 		assert!(!nested_dir_path.exists());
 
-		TileConverter::ensure_directory(&nested_dir_path)?;
+		DirectoryTilesConverter::ensure_directory(&nested_dir_path)?;
 
 		assert!(nested_dir_path.parent().unwrap().exists());
 		Ok(())
@@ -148,16 +148,16 @@ mod tests {
 		let temp_dir = assert_fs::TempDir::new()?;
 		let temp_path = temp_dir.path();
 		let filename = temp_path.to_str().unwrap();
-		let tile_config = TileConverterConfig::new_full();
-		let mut tile_converter = TileConverter::new(filename, tile_config).await?;
+		let tile_config = TilesConverterConfig::new_full();
+		let mut tile_converter = DirectoryTilesConverter::new(filename, tile_config).await?;
 
-		let mut mock_reader = mock::TileReader::new_mock(mock::ReaderProfile::PNG, 3);
+		let mut mock_reader = MockTilesReader::new_mock(MockTilesReaderProfile::PNG, 3);
 
 		tile_converter.convert_from(&mut mock_reader).await?;
 
 		assert_eq!(fs::read_to_string(temp_path.join("tiles.json"))?, "dummy meta data");
-		assert_eq!(fs::read(temp_path.join("0/0/0.png"))?, mock::BYTES_PNG);
-		assert_eq!(fs::read(temp_path.join("3/7/7.png"))?, mock::BYTES_PNG);
+		assert_eq!(fs::read(temp_path.join("0/0/0.png"))?, MOCK_BYTES_PNG);
+		assert_eq!(fs::read(temp_path.join("3/7/7.png"))?, MOCK_BYTES_PNG);
 
 		Ok(())
 	}

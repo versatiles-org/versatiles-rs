@@ -4,7 +4,7 @@ use anyhow::Result;
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 use versatiles_lib::{
-	containers::TileReaderBox,
+	containers::TilesReaderBox,
 	shared::{Compression, TargetCompression, TileCoord3, TileFormat},
 };
 
@@ -13,14 +13,14 @@ use versatiles_lib::{
 pub struct TileSource {
 	pub prefix: Url,
 	pub json_info: String,
-	reader: Arc<Mutex<TileReaderBox>>,
+	reader: Arc<Mutex<TilesReaderBox>>,
 	pub tile_mime: String,
 	pub compression: Compression,
 }
 
 impl TileSource {
 	// Constructor function for creating a TileSource instance
-	pub fn from(reader: TileReaderBox, prefix: Url) -> Result<TileSource> {
+	pub fn from(reader: TilesReaderBox, prefix: Url) -> Result<TileSource> {
 		let parameters = reader.get_parameters();
 		let compression = parameters.tile_compression;
 
@@ -131,12 +131,12 @@ impl Debug for TileSource {
 mod tests {
 	use super::*;
 	use anyhow::Result;
-	use versatiles_lib::containers::mock::{ReaderProfile, TileReader};
+	use versatiles_lib::containers::{MockTilesReader, MockTilesReaderProfile};
 
 	// Test the constructor function for TileSource
 	#[test]
 	fn tile_container_from() -> Result<()> {
-		let reader = TileReader::new_mock(ReaderProfile::PNG, 8);
+		let reader = MockTilesReader::new_mock(MockTilesReaderProfile::PNG, 8);
 		let container = TileSource::from(reader, Url::new("prefix"))?;
 
 		assert_eq!(container.prefix.str, "/prefix");
@@ -148,7 +148,7 @@ mod tests {
 	// Test the debug function
 	#[test]
 	fn debug() {
-		let reader = TileReader::new_mock(ReaderProfile::PNG, 8);
+		let reader = MockTilesReader::new_mock(MockTilesReaderProfile::PNG, 8);
 		let container = TileSource::from(reader, Url::new("prefix")).unwrap();
 		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: TileReader:Dummy { parameters:  { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: , flip_y: false, swap_xy: false, tile_compression: None, tile_format: PNG } } }, tile_mime: \"image/png\", compression: None }");
 	}
@@ -178,7 +178,10 @@ mod tests {
 			Ok(true)
 		}
 
-		let c = &mut TileSource::from(TileReader::new_mock(ReaderProfile::PNG, 8), Url::new("prefix"))?;
+		let c = &mut TileSource::from(
+			MockTilesReader::new_mock(MockTilesReaderProfile::PNG, 8),
+			Url::new("prefix"),
+		)?;
 
 		assert_eq!(
 			&check_response(c, "0/0/0.png", Compression::None, "image/png").await?[0..6],
