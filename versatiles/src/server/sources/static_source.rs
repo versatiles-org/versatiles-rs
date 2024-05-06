@@ -25,10 +25,10 @@ impl StaticSource {
 		ensure!(prefix.is_dir());
 
 		Ok(StaticSource {
-			source: Arc::new(if std::fs::metadata(path).unwrap().is_dir() {
-				Box::new(Folder::from(path).unwrap())
+			source: Arc::new(if std::fs::metadata(path)?.is_dir() {
+				Box::new(Folder::from(path)?)
 			} else {
-				Box::new(TarFile::from(path).unwrap())
+				Box::new(TarFile::from(path)?)
 			}),
 			prefix,
 		})

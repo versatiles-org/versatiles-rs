@@ -98,7 +98,7 @@ impl TileServer {
 					rx.await.ok();
 				})
 				.await
-				.unwrap()
+				.expect("should start server")
 		});
 
 		self.exit_signal = Some(tx);
@@ -113,7 +113,12 @@ impl TileServer {
 
 		log::info!("stopping server");
 
-		self.exit_signal.take().unwrap().send(()).unwrap();
+		self
+			.exit_signal
+			.take()
+			.expect("should have exit signal")
+			.send(())
+			.expect("should habe send exit signal");
 	}
 
 	fn add_tile_sources_to_app(&self, mut app: Router) -> Router {
@@ -135,7 +140,12 @@ impl TileServer {
 				target_compressions.set_best_compression(best_compression);
 
 				let response = tile_source
-					.get_data(&path.strip_prefix(&tile_source.prefix).unwrap(), &target_compressions)
+					.get_data(
+						&path
+							.strip_prefix(&tile_source.prefix)
+							.expect("should start with prefix"),
+						&target_compressions,
+					)
 					.await;
 
 				if let Some(response) = response {
@@ -186,7 +196,7 @@ impl TileServer {
 
 		let mut objects: Vec<String> = Vec::new();
 		for tile_source in self.tile_sources.iter() {
-			let id = tile_source.prefix.as_vec().last().unwrap().to_owned();
+			let id = tile_source.prefix.as_vec().last().expect("should end in id").to_owned();
 			let object = format!(
 				"{{\"url\":\"{}\",\"id\":\"{}\",\"container\":{}}}",
 				tile_source.prefix, id, tile_source.json_info
@@ -212,7 +222,10 @@ impl TileServer {
 }
 
 fn ok_not_found() -> Response<Body> {
-	Response::builder().status(404).body(Body::from("Not Found")).unwrap()
+	Response::builder()
+		.status(404)
+		.body(Body::from("Not Found"))
+		.expect("should have build a body")
 }
 
 fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Response<Body> {
@@ -231,7 +244,8 @@ fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Re
 	let (blob, compression) = if is_incompressible {
 		(result.blob, result.compression)
 	} else {
-		optimize_compression(result.blob, &result.compression, target_compressions).unwrap()
+		optimize_compression(result.blob, &result.compression, target_compressions)
+			.expect("should have optimized compression")
 	};
 
 	match compression {
@@ -240,7 +254,9 @@ fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Re
 		Compression::Brotli => response = response.header(CONTENT_ENCODING, "br"),
 	}
 
-	response.body(Body::from(blob.as_vec())).unwrap()
+	response
+		.body(Body::from(blob.as_vec()))
+		.expect("should have build a body")
 }
 
 fn ok_json(message: &str) -> Response<Body> {
@@ -322,10 +338,10 @@ mod tests {
 		async fn get(path: &str) -> String {
 			reqwest::get(format!("http://{IP}:50001/{path}"))
 				.await
-				.unwrap()
+				.expect("should have made a get request")
 				.text()
 				.await
-				.unwrap()
+				.expect("should have returned text")
 		}
 
 		let mut server = TileServer::new(IP, 50001, true, true);
