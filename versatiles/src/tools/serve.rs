@@ -2,6 +2,7 @@ use crate::server::{TileServer, Url};
 use anyhow::Result;
 use clap::Args;
 use regex::Regex;
+use std::path::Path;
 use tokio::time::{sleep, Duration};
 use versatiles_lib::{containers::get_reader, shared::Compression};
 
@@ -100,7 +101,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 		let mut reader = get_reader(url).await?;
 		reader.set_configuration(arguments.flip_y, arguments.swap_xy, arguments.override_input_compression);
 
-		server.add_tile_source(&format!("/tiles/{id}/"), id, reader)?;
+		server.add_tile_source(Url::new(&format!("/tiles/{id}/")), reader)?;
 	}
 
 	for argument in arguments.static_content.iter() {
@@ -112,12 +113,12 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 			.unwrap();
 
 		let filename: &str = capture.name("filename").unwrap().as_str();
-		let path: &str = match capture.name("path") {
+		let url_prefix: &str = match capture.name("path") {
 			None => "",
 			Some(m) => m.as_str(),
 		};
 
-		server.add_static_source(filename, path)?;
+		server.add_static_source(Path::new(filename), Url::new(url_prefix))?;
 	}
 
 	let mut list: Vec<(String, String)> = server.get_url_mapping().await;

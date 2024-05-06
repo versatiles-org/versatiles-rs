@@ -1,67 +1,53 @@
-use super::{response::SourceResponse, static_source_folder::Folder, static_source_tar::TarFile};
-use anyhow::Result;
+use super::{static_source_folder::Folder, static_source_tar::TarFile, SourceResponse};
+use crate::server::helpers::Url;
+use anyhow::{ensure, Result};
 use async_trait::async_trait;
-use std::{fmt::Debug, sync::Arc};
+use std::{fmt::Debug, path::Path, sync::Arc};
 use versatiles_lib::shared::TargetCompression;
 
 #[async_trait]
 pub trait StaticSourceTrait: Send + Sync + Debug {
 	#[cfg(test)]
-	fn get_type(&self) -> String;
+	fn get_type(&self) -> &str;
 	#[cfg(test)]
-	fn get_name(&self) -> Result<String>;
-	fn get_data(&self, path: &[&str], accept: &TargetCompression) -> Option<SourceResponse>;
+	fn get_name(&self) -> &str;
+	fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse>;
 }
 
 #[derive(Clone)]
 pub struct StaticSource {
 	source: Arc<Box<dyn StaticSourceTrait>>,
-	path: Vec<String>,
+	prefix: Url,
 }
 
 impl StaticSource {
-	pub fn new(filename: &str, uncleaned_path: &str) -> Result<StaticSource> {
-		let mut path: Vec<String> = uncleaned_path.trim().split('/').map(|s| s.to_string()).collect();
-		while path.first() == Some(&String::from("")) {
-			path.remove(0);
-		}
-		while path.last() == Some(&String::from("")) {
-			path.pop();
-		}
+	pub fn new(path: &Path, prefix: Url) -> Result<StaticSource> {
+		ensure!(prefix.is_dir());
 
 		Ok(StaticSource {
-			source: Arc::new(if filename.ends_with(".tar") {
-				Box::new(TarFile::from(filename)?)
+			source: Arc::new(if std::fs::metadata(path).unwrap().is_dir() {
+				Box::new(Folder::from(path).unwrap())
 			} else {
-				Box::new(Folder::from(filename)?)
+				Box::new(TarFile::from(path).unwrap())
 			}),
-			path,
+			prefix,
 		})
 	}
 	#[cfg(test)]
-	pub fn get_type(&self) -> String {
+	pub fn get_type(&self) -> &str {
 		self.source.get_type()
 	}
-	pub fn get_data(&self, path: &[&str], accept: &TargetCompression) -> Option<SourceResponse> {
-		if self.path.is_empty() {
-			self.source.get_data(path, accept)
-		} else {
-			let mut path_vec: Vec<&str> = path.to_vec();
-			for segment in self.path.iter() {
-				if path_vec.is_empty() || (segment != path_vec[0]) {
-					return None;
-				}
-				path_vec.remove(0);
-			}
-			self.source.get_data(path_vec.as_slice(), accept)
+	pub fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse> {
+		if !url.starts_with(&self.prefix) {
+			return None;
 		}
+		self.source.get_data(&url.strip_prefix(&self.prefix).unwrap(), accept)
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use anyhow::Ok;
 	use async_trait::async_trait;
 	use versatiles_lib::shared::{Blob, Compression};
 
@@ -70,16 +56,16 @@ mod tests {
 
 	#[async_trait]
 	impl StaticSourceTrait for MockStaticSource {
-		fn get_type(&self) -> String {
-			String::from("mock")
+		fn get_type(&self) -> &str {
+			"mock"
 		}
 
-		fn get_name(&self) -> Result<String> {
-			Ok("MockSource".into())
+		fn get_name(&self) -> &str {
+			"MockSource"
 		}
 
-		fn get_data(&self, path: &[&str], _accept: &TargetCompression) -> Option<SourceResponse> {
-			if path.contains(&"exists") {
+		fn get_data(&self, path: &Url, _accept: &TargetCompression) -> Option<SourceResponse> {
+			if path.starts_with(&Url::new("exists")) {
 				SourceResponse::new_some(Blob::from(vec![1, 2, 3, 4]), &Compression::None, "application/octet-stream")
 			} else {
 				None
@@ -97,11 +83,11 @@ mod tests {
 		std::fs::File::create(&temp_file_path).unwrap();
 
 		// Test initialization with a .tar file
-		let tar_source = StaticSource::new(temp_file_path.to_str().unwrap(), "").unwrap();
+		let tar_source = StaticSource::new(&temp_file_path, Url::new("")).unwrap();
 		assert_eq!(tar_source.get_type(), "tar");
 
 		// Test initialization with a folder
-		let folder_source = StaticSource::new(temp_folder_path.to_str().unwrap(), "").unwrap();
+		let folder_source = StaticSource::new(&temp_folder_path, Url::new("")).unwrap();
 		assert_eq!(folder_source.get_type(), "folder");
 	}
 
@@ -109,9 +95,9 @@ mod tests {
 	async fn test_get_data_valid_path() {
 		let static_source = StaticSource {
 			source: Arc::new(Box::new(MockStaticSource)),
-			path: vec![],
+			prefix: Url::new(""),
 		};
-		let result = static_source.get_data(&["exists"], &TargetCompression::from_none());
+		let result = static_source.get_data(&Url::new("exists"), &TargetCompression::from_none());
 		assert!(result.is_some());
 	}
 
@@ -119,9 +105,9 @@ mod tests {
 	async fn test_get_data_invalid_path() {
 		let static_source = StaticSource {
 			source: Arc::new(Box::new(MockStaticSource)),
-			path: vec![],
+			prefix: Url::new(""),
 		};
-		let result = static_source.get_data(&["does_not_exist"], &TargetCompression::from_none());
+		let result = static_source.get_data(&Url::new("does_not_exist"), &TargetCompression::from_none());
 		assert!(result.is_none());
 	}
 
@@ -129,14 +115,14 @@ mod tests {
 	async fn test_get_data_with_path_filtering() {
 		let static_source = StaticSource {
 			source: Arc::new(Box::new(MockStaticSource)),
-			path: vec!["path".into(), "to".into()],
+			prefix: Url::new("path/to"),
 		};
 		// Should match and retrieve data
-		let result = static_source.get_data(&["path", "to", "exists"], &TargetCompression::from_none());
+		let result = static_source.get_data(&Url::new("path/to/exists"), &TargetCompression::from_none());
 		assert!(result.is_some());
 
 		// Should fail due to path mismatch
-		let result = static_source.get_data(&["path", "wrong", "exists"], &TargetCompression::from_none());
+		let result = static_source.get_data(&Url::new("path/wrong/exists"), &TargetCompression::from_none());
 		assert!(result.is_none());
 	}
 }

@@ -1,24 +1,13 @@
-use crate::server::guess_mime;
-use anyhow::Result;
+use super::{static_source::StaticSourceTrait, SourceResponse};
+use crate::server::helpers::{guess_mime, Url};
+use anyhow::{anyhow, ensure, Result};
 use async_trait::async_trait;
 use log::trace;
-use std::{
-	collections::HashMap,
-	env::current_dir,
-	ffi::OsStr,
-	fmt::Debug,
-	fs::File,
-	io::{BufReader, Read},
-	path::Path,
-};
+use std::{collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::File, io::Read, path::Path};
 use tar::{Archive, EntryType};
-use versatiles_lib::{
-	create_error,
-	shared::{Blob, Compression, TargetCompression},
-};
+use versatiles_lib::shared::{decompress_brotli, decompress_gzip, Blob, Compression, TargetCompression};
 
-use super::{response::SourceResponse, static_source::StaticSourceTrait};
-
+#[derive(Debug)]
 struct FileEntry {
 	mime: String,
 	un: Option<Blob>,
@@ -43,23 +32,31 @@ pub struct TarFile {
 }
 
 impl TarFile {
-	pub fn from(path: &str) -> Result<Self> {
-		let filename = current_dir()?.join(Path::new(path)).canonicalize()?;
+	pub fn from(path: &Path) -> Result<Self> {
+		let path = current_dir()?.join(path).canonicalize()?;
 
-		if !filename.exists() {
-			return create_error!("path {filename:?} does not exist");
+		ensure!(path.exists(), "path {path:?} does not exist");
+		ensure!(path.is_absolute(), "path {path:?} must be absolute");
+		ensure!(path.is_file(), "path {path:?} must be a file");
+
+		let mut file = File::open(&path)?;
+		let mut buffer: Vec<u8> = Vec::new();
+		file.read_to_end(&mut buffer)?;
+		let mut buffer = Blob::from(buffer);
+		drop(file);
+
+		for part in path.to_str().unwrap().rsplit('.') {
+			match part {
+				"tar" => break,
+				"gz" => buffer = decompress_gzip(buffer)?,
+				"br" => buffer = decompress_brotli(buffer)?,
+				_ => return Err(anyhow!("{path:?} must be a name of a tar file")),
+			}
 		}
-		if !filename.is_absolute() {
-			return create_error!("path {filename:?} must be absolute");
-		}
-		if !filename.is_file() {
-			return create_error!("path {filename:?} must be a file");
-		}
+
+		let mut archive = Archive::new(buffer.as_slice());
 
 		let mut lookup: HashMap<String, FileEntry> = HashMap::new();
-		let file = BufReader::new(File::open(filename)?);
-		let mut archive = Archive::new(file);
-
 		for file_result in archive.entries()? {
 			let mut file = match file_result {
 				Ok(file) => file,
@@ -118,7 +115,7 @@ impl TarFile {
 
 		Ok(Self {
 			lookup,
-			name: path.to_string(),
+			name: path.to_str().unwrap().to_owned(),
 		})
 	}
 }
@@ -126,18 +123,17 @@ impl TarFile {
 #[async_trait]
 impl StaticSourceTrait for TarFile {
 	#[cfg(test)]
-	fn get_type(&self) -> String {
-		String::from("tar")
+	fn get_type(&self) -> &str {
+		"tar"
 	}
 
 	#[cfg(test)]
-	fn get_name(&self) -> Result<String> {
-		Ok(self.name.to_owned())
+	fn get_name(&self) -> &str {
+		&self.name
 	}
 
-	fn get_data(&self, path: &[&str], accept: &TargetCompression) -> Option<SourceResponse> {
-		let entry_name = path.join("/");
-		let file_entry = self.lookup.get(&entry_name)?.to_owned();
+	fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse> {
+		let file_entry = self.lookup.get(&url.str[1..])?.to_owned();
 
 		if accept.contains(Compression::Brotli) {
 			if let Some(blob) = &file_entry.br {
@@ -208,21 +204,21 @@ mod tests {
 	async fn small_stuff() {
 		let file = make_test_tar(Compression::None).await;
 
-		let tar_file = TarFile::from(file.to_str().unwrap()).unwrap();
+		let tar_file = TarFile::from(file.path()).unwrap();
 
-		assert!(tar_file.get_name().unwrap().ends_with("temp.tar"));
+		assert!(tar_file.get_name().ends_with("temp.tar"));
 		assert!(format!("{:?}", tar_file).starts_with("TarFile { name:"));
 	}
 
 	#[test]
 	fn from_non_existing_path() {
-		let path = "path/to/non-existing/file.tar";
+		let path = Path::new("path/to/non-existing/file.tar");
 		assert!(TarFile::from(path).is_err());
 	}
 
 	#[test]
 	fn from_directory() {
-		let path = ".";
+		let path = Path::new(".");
 		assert!(TarFile::from(path).is_err());
 	}
 
@@ -236,7 +232,7 @@ mod tests {
 
 		async fn test1(compression_tar: Compression) -> Result<()> {
 			let file = make_test_tar(compression_tar).await;
-			let mut tar_file = TarFile::from(file.to_str().unwrap())?;
+			let mut tar_file = TarFile::from(file.path())?;
 
 			test2(&mut tar_file, &compression_tar, N).await?;
 			test2(&mut tar_file, &compression_tar, G).await?;
@@ -247,13 +243,11 @@ mod tests {
 			async fn test2(tar_file: &mut TarFile, compression_tar: &Compression, compression_accept: Compression) -> Result<()> {
 				let accept = TargetCompression::from(compression_accept);
 
-				let path = ["non_existing_file"];
-				let result = tar_file.get_data(&path, &accept);
+				let result = tar_file.get_data(&Url::new("non_existing_file"), &accept);
 				assert!(result.is_none());
 
 				//let path = ["0", "0", "0"];
-				let path = ["tiles.json"];
-				let result = tar_file.get_data(&path, &accept);
+				let result = tar_file.get_data(&Url::new("tiles.json"), &accept);
 				assert!(result.is_some());
 
 				let result = result.unwrap();

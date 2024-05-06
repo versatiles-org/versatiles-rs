@@ -5,7 +5,7 @@ use super::{
 use anyhow::Result;
 use axum::{
 	body::Body,
-	extract::{Path, State},
+	extract::State,
 	http::{
 		header::{ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE},
 		HeaderMap, Uri,
@@ -15,6 +15,7 @@ use axum::{
 	Router,
 };
 use hyper::header::{ACCESS_CONTROL_ALLOW_ORIGIN, VARY};
+use std::path::Path;
 use tokio::sync::oneshot::Sender;
 use versatiles_lib::{
 	containers::TileReaderBox,
@@ -45,35 +46,30 @@ impl TileServer {
 		}
 	}
 
-	pub fn add_tile_source(&mut self, prefix: &str, id: &str, reader: TileReaderBox) -> Result<()> {
-		log::info!("add source: prefix='{}', source={:?}", prefix, reader);
+	pub fn add_tile_source(&mut self, url_prefix: Url, reader: TileReaderBox) -> Result<()> {
+		let mut url_prefix = url_prefix;
+		url_prefix.be_dir();
 
-		let mut prefix: String = prefix.trim().to_owned();
-		if !prefix.starts_with('/') {
-			prefix = "/".to_owned() + &prefix;
-		}
-		if !prefix.ends_with('/') {
-			prefix += "/";
-		}
+		log::info!("add source: prefix='{}', source={:?}", url_prefix, reader);
 
 		for other_tile_source in self.tile_sources.iter() {
-			if other_tile_source.prefix.starts_with(&prefix) || prefix.starts_with(&other_tile_source.prefix) {
-				return create_error!(
-					"multiple sources with the prefix '{}' and '{}' are defined",
-					prefix,
-					other_tile_source.prefix
-				);
+			let other_prefix = &other_tile_source.prefix;
+			if other_prefix.starts_with(&url_prefix) || url_prefix.starts_with(other_prefix) {
+				return create_error!("multiple sources with the prefix '{url_prefix}' and '{other_prefix}' are defined");
 			};
 		}
 
-		self.tile_sources.push(TileSource::from(reader, id, &prefix)?);
+		self.tile_sources.push(TileSource::from(reader, url_prefix)?);
 
 		Ok(())
 	}
 
-	pub fn add_static_source(&mut self, filename: &str, path: &str) -> Result<()> {
-		log::info!("add static: {filename}");
-		self.static_sources.push(StaticSource::new(filename, path)?);
+	pub fn add_static_source(&mut self, path: &Path, url_prefix: Url) -> Result<()> {
+		let mut url_prefix = url_prefix;
+		url_prefix.be_dir();
+
+		log::info!("add static: {path:?}");
+		self.static_sources.push(StaticSource::new(path, url_prefix)?);
 		Ok(())
 	}
 
@@ -125,7 +121,7 @@ impl TileServer {
 
 	fn add_tile_sources_to_app(&self, mut app: Router) -> Router {
 		for tile_source in self.tile_sources.iter() {
-			let route = tile_source.prefix.to_owned() + "*path";
+			let route = tile_source.prefix.join_as_string("*path");
 
 			let tile_app = Router::new()
 				.route(&route, get(serve_tile))
@@ -134,20 +130,22 @@ impl TileServer {
 			app = app.merge(tile_app);
 
 			async fn serve_tile(
-				Path(path): Path<String>, headers: HeaderMap, State((tile_source, best_compression)): State<(TileSource, bool)>,
+				uri: Uri, headers: HeaderMap, State((tile_source, best_compression)): State<(TileSource, bool)>,
 			) -> Response<Body> {
-				let sub_path: Vec<&str> = path.split('/').collect();
+				let path = Url::new(uri.path());
 
 				let mut target_compressions = get_encoding(headers);
 				target_compressions.set_best_compression(best_compression);
 
-				let response = tile_source.get_data(&sub_path, &target_compressions).await;
+				let response = tile_source
+					.get_data(&path.strip_prefix(&tile_source.prefix).unwrap(), &target_compressions)
+					.await;
 
 				if let Some(response) = response {
-					log::warn!("{}: {} found", tile_source.prefix, path);
+					log::warn!("{}: {path} found", tile_source.prefix);
 					ok_data(response, target_compressions)
 				} else {
-					log::warn!("{}: {} not found", tile_source.prefix, path);
+					log::warn!("{}: {path} not found", tile_source.prefix);
 					ok_not_found()
 				}
 			}
@@ -166,21 +164,17 @@ impl TileServer {
 		async fn serve_static(
 			uri: Uri, headers: HeaderMap, State((sources, best_compression)): State<(Vec<StaticSource>, bool)>,
 		) -> Response<Body> {
-			let path = uri.path();
-			let mut path_vec: Vec<&str> = path.split('/').skip(1).collect();
+			let mut url = Url::new(uri.path());
 
-			if let Some(last) = path_vec.last_mut() {
-				if last.is_empty() {
-					*last = "index.html";
-				}
+			if url.is_dir() {
+				url.push("index.html");
 			}
 
-			let path_slice = path_vec.as_slice();
 			let mut compressions = get_encoding(headers);
 			compressions.set_best_compression(best_compression);
 
 			for source in sources.iter() {
-				if let Some(result) = source.get_data(path_slice, &compressions) {
+				if let Some(result) = source.get_data(&url, &compressions) {
 					return ok_data(result, compressions);
 				}
 			}
@@ -195,12 +189,13 @@ impl TileServer {
 
 		let mut objects: Vec<String> = Vec::new();
 		for tile_source in self.tile_sources.iter() {
+			let id = tile_source.prefix.as_vec().last().unwrap().to_owned();
 			let object = format!(
 				"{{\"url\":\"{}\",\"id\":\"{}\",\"container\":{}}}",
-				tile_source.prefix, tile_source.id, tile_source.json_info
+				tile_source.prefix, id, tile_source.json_info
 			);
 			objects.push(object.clone());
-			api_app = api_app.route(&format!("/api/source/{}", tile_source.id), get(|| async move { ok_json(&object) }));
+			api_app = api_app.route(&format!("/api/source/{id}"), get(|| async move { ok_json(&object) }));
 		}
 		let tile_sources_json: String = "[".to_owned() + &objects.join(",") + "]";
 
@@ -212,7 +207,8 @@ impl TileServer {
 	pub async fn get_url_mapping(&self) -> Vec<(String, String)> {
 		let mut result = Vec::new();
 		for tile_source in self.tile_sources.iter() {
-			result.push((tile_source.prefix.to_owned(), tile_source.id.to_owned()))
+			let id = tile_source.get_id().await;
+			result.push((tile_source.prefix.as_string(), id.to_owned()))
 		}
 		result
 	}
@@ -276,10 +272,9 @@ fn get_encoding(headers: HeaderMap) -> TargetCompression {
 
 #[cfg(test)]
 mod tests {
-	use super::{get_encoding, guess_mime, TileServer};
+	use super::*;
 	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
 	use enumset::{enum_set, EnumSet};
-	use std::path::Path;
 	use versatiles_lib::{
 		containers::mock,
 		shared::{
@@ -333,19 +328,20 @@ mod tests {
 		let mut server = TileServer::new(IP, 50001, true, true);
 
 		let reader = mock::TileReader::new_mock(mock::ReaderProfile::PBF, 8);
-		server.add_tile_source("cheese", "burger", reader).unwrap();
+		server.add_tile_source(Url::new("tiles/cheese"), reader).unwrap();
 
 		server.start().await.unwrap();
 
-		const JSON:&str = "{\"url\":\"/cheese/\",\"id\":\"burger\",\"container\":{\"type\":\"dummy container\",\"format\":\"pbf\",\"compression\":\"gzip\",\"zoom_min\":0,\"zoom_max\":8,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}}";
+		const JSON:&str = "{\"url\":\"/tiles/cheese/\",\"id\":\"cheese\",\"container\":{\"type\":\"dummy_container\",\"format\":\"pbf\",\"compression\":\"gzip\",\"zoom_min\":0,\"zoom_max\":8,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}}";
 		assert_eq!(get("api/status").await, "{\"status\":\"ready\"}");
 		assert_eq!(get("api/sources").await, format!("[{JSON}]"));
-		assert_eq!(get("api/source/cheese").await, "Not Found");
-		assert_eq!(get("api/source/burger").await, JSON);
-		assert!(get("cheese/0/0/0.png").await.starts_with("\u{1a}4\n\u{5}ocean"));
-		assert_eq!(get("cheese/meta.json").await, "dummy meta data");
-		assert_eq!(get("cheese/tiles.json").await, "dummy meta data");
-		assert_eq!(get("cheese/brum.json").await, "Not Found");
+		assert_eq!(get("api/source/burger").await, "Not Found");
+		assert_eq!(get("api/source/dummy_name").await, "Not Found");
+		assert_eq!(get("api/source/cheese").await, JSON);
+		assert_eq!(get("tiles/cheese/brum.json").await, "Not Found");
+		assert_eq!(get("tiles/cheese/meta.json").await, "dummy meta data");
+		assert_eq!(get("tiles/cheese/tiles.json").await, "dummy meta data");
+		assert!(get("tiles/cheese/0/0/0.png").await.starts_with("\u{1a}4\n\u{5}ocean"));
 		assert_eq!(get("status").await, "ready!");
 
 		server.stop().await;
@@ -357,10 +353,10 @@ mod tests {
 		let mut server = TileServer::new(IP, 50002, true, true);
 
 		let reader = mock::TileReader::new_mock(mock::ReaderProfile::PNG, 8);
-		server.add_tile_source("cheese", "soup", reader).unwrap();
+		server.add_tile_source(Url::new("cheese"), reader).unwrap();
 
 		let reader = mock::TileReader::new_mock(mock::ReaderProfile::PBF, 8);
-		server.add_tile_source("cheese", "sandwich", reader).unwrap();
+		server.add_tile_source(Url::new("cheese"), reader).unwrap();
 	}
 
 	#[tokio::test]
@@ -384,10 +380,10 @@ mod tests {
 		assert_eq!(server.port, 50004);
 
 		let reader = mock::TileReader::new_mock(mock::ReaderProfile::PBF, 8);
-		server.add_tile_source("cheese", "pizza", reader).unwrap();
+		server.add_tile_source(Url::new("cheese"), reader).unwrap();
 
 		assert_eq!(server.tile_sources.len(), 1);
-		assert_eq!(server.tile_sources[0].prefix, "/cheese/");
+		assert_eq!(server.tile_sources[0].prefix.str, "/cheese/");
 	}
 
 	#[tokio::test]
@@ -397,11 +393,11 @@ mod tests {
 		assert_eq!(server.port, 50005);
 
 		let reader = mock::TileReader::new_mock(mock::ReaderProfile::PBF, 8);
-		server.add_tile_source("cheese", "cake", reader).unwrap();
+		server.add_tile_source(Url::new("tiles/cheese"), reader).unwrap();
 
 		let mappings: Vec<(String, String)> = server.get_url_mapping().await;
 		assert_eq!(mappings.len(), 1);
-		assert_eq!(mappings[0].0, "/cheese/");
-		assert_eq!(mappings[0].1, "cake");
+		assert_eq!(mappings[0].0, "/tiles/cheese/");
+		assert_eq!(mappings[0].1, "dummy_name");
 	}
 }

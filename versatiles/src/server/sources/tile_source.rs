@@ -11,8 +11,7 @@ use versatiles_lib::{
 // TileSource struct definition
 #[derive(Clone)]
 pub struct TileSource {
-	pub id: String,
-	pub prefix: String,
+	pub prefix: Url,
 	pub json_info: String,
 	reader: Arc<Mutex<TileReaderBox>>,
 	pub tile_mime: String,
@@ -21,7 +20,7 @@ pub struct TileSource {
 
 impl TileSource {
 	// Constructor function for creating a TileSource instance
-	pub fn from(reader: TileReaderBox, id: &str, prefix: &str) -> Result<TileSource> {
+	pub fn from(reader: TileReaderBox, prefix: Url) -> Result<TileSource> {
 		let parameters = reader.get_parameters();
 		let compression = parameters.tile_compression;
 
@@ -55,8 +54,7 @@ impl TileSource {
 		);
 
 		Ok(TileSource {
-			id: id.to_string(),
-			prefix: prefix.to_string(),
+			prefix,
 			json_info,
 			reader: Arc::new(Mutex::new(reader)),
 			tile_mime,
@@ -64,13 +62,20 @@ impl TileSource {
 		})
 	}
 
+	pub async fn get_id(&self) -> String {
+		let reader = self.reader.lock().await;
+		return reader.get_name().to_owned();
+	}
+
 	// Retrieve the tile data as an HTTP response
-	pub async fn get_data(&self, path: &[&str], _accept: &TargetCompression) -> Option<SourceResponse> {
-		if path.len() == 3 {
+	pub async fn get_data(&self, url: &Url, _accept: &TargetCompression) -> Option<SourceResponse> {
+		let parts: Vec<String> = url.as_vec();
+
+		if parts.len() >= 3 {
 			// Parse the tile coordinates
-			let z = path[0].parse::<u8>();
-			let x = path[1].parse::<u32>();
-			let y: String = path[2].chars().take_while(|c| c.is_numeric()).collect();
+			let z = parts[0].parse::<u8>();
+			let x = parts[1].parse::<u32>();
+			let y: String = parts[2].chars().take_while(|c| c.is_numeric()).collect();
 			let y = y.parse::<u32>();
 
 			// Check for parsing errors
@@ -81,7 +86,7 @@ impl TileSource {
 			// Create a TileCoord3 instance
 			let coord = TileCoord3::new(x.unwrap(), y.unwrap(), z.unwrap()).unwrap();
 
-			log::debug!("get tile {:?} - {:?}", self.id, coord);
+			log::debug!("get tile {} - {:?}", self.prefix, coord);
 
 			// Get tile data
 			let mut reader = self.reader.lock().await;
@@ -94,7 +99,7 @@ impl TileSource {
 			}
 
 			return SourceResponse::new_some(tile.unwrap(), &self.compression, &self.tile_mime);
-		} else if (path[0] == "meta.json") || (path[0] == "tiles.json") {
+		} else if (parts[0] == "meta.json") || (parts[0] == "tiles.json") {
 			// Get metadata
 			let reader = self.reader.lock().await;
 			let meta_option = reader.get_meta().await.unwrap();
@@ -126,22 +131,16 @@ impl Debug for TileSource {
 mod tests {
 	use super::*;
 	use anyhow::Result;
-	use versatiles_lib::{
-		containers::mock::{ReaderProfile, TileReader},
-		shared::{
-			Compression::{self, *},
-			TargetCompression,
-		},
-	};
+	use versatiles_lib::containers::mock::{ReaderProfile, TileReader};
 
 	// Test the constructor function for TileSource
 	#[test]
 	fn tile_container_from() -> Result<()> {
 		let reader = TileReader::new_mock(ReaderProfile::PNG, 8);
-		let container = TileSource::from(reader, "dummy id", "prefix")?;
+		let container = TileSource::from(reader, Url::new("prefix"))?;
 
-		assert_eq!(container.id, "dummy id");
-		assert_eq!(container.json_info, "{\"type\":\"dummy container\",\"format\":\"png\",\"compression\":\"none\",\"zoom_min\":0,\"zoom_max\":8,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}");
+		assert_eq!(container.prefix.str, "/prefix");
+		assert_eq!(container.json_info, "{\"type\":\"dummy_container\",\"format\":\"png\",\"compression\":\"none\",\"zoom_min\":0,\"zoom_max\":8,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}");
 
 		Ok(())
 	}
@@ -150,7 +149,7 @@ mod tests {
 	#[test]
 	fn debug() {
 		let reader = TileReader::new_mock(ReaderProfile::PNG, 8);
-		let container = TileSource::from(reader, "id", "prefix").unwrap();
+		let container = TileSource::from(reader, Url::new("prefix")).unwrap();
 		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: TileReader:Dummy { parameters:  { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: , flip_y: false, swap_xy: false, tile_compression: None, tile_format: PNG } } }, tile_mime: \"image/png\", compression: None }");
 	}
 
@@ -158,8 +157,7 @@ mod tests {
 	#[tokio::test]
 	async fn tile_container_get_data() -> Result<()> {
 		async fn check_response(container: &mut TileSource, url: &str, compression: Compression, mime_type: &str) -> Result<Vec<u8>> {
-			let path: Vec<&str> = url.split('/').collect();
-			let response = container.get_data(&path, &TargetCompression::from(compression)).await;
+			let response = container.get_data(&Url::new(url), &TargetCompression::from(compression)).await;
 			assert!(response.is_some());
 
 			let response = response.unwrap();
@@ -169,25 +167,27 @@ mod tests {
 		}
 
 		async fn check_404(container: &mut TileSource, url: &str, compression: Compression) -> Result<bool> {
-			let path: Vec<&str> = url.split('/').collect();
-			let response = container.get_data(&path, &TargetCompression::from(compression)).await;
+			let response = container.get_data(&Url::new(url), &TargetCompression::from(compression)).await;
 			assert!(response.is_none());
 			Ok(true)
 		}
 
-		let c = &mut TileSource::from(TileReader::new_mock(ReaderProfile::PNG, 8), "id", "prefix")?;
-
-		assert_eq!(&check_response(c, "0/0/0.png", None, "image/png").await?[0..6], b"\x89PNG\r\n");
+		let c = &mut TileSource::from(TileReader::new_mock(ReaderProfile::PNG, 8), Url::new("prefix"))?;
 
 		assert_eq!(
-			&check_response(c, "meta.json", None, "application/json").await?[..],
+			&check_response(c, "0/0/0.png", Compression::None, "image/png").await?[0..6],
+			b"\x89PNG\r\n"
+		);
+
+		assert_eq!(
+			&check_response(c, "meta.json", Compression::None, "application/json").await?[..],
 			b"dummy meta data"
 		);
 
-		assert!(check_404(c, "x/0/0.png", None).await?);
-		assert!(check_404(c, "-1/0/0.png", None).await?);
-		assert!(check_404(c, "0/0/-1.png", None).await?);
-		assert!(check_404(c, "0/0/1.png", None).await?);
+		assert!(check_404(c, "x/0/0.png", Compression::None).await?);
+		assert!(check_404(c, "-1/0/0.png", Compression::None).await?);
+		assert!(check_404(c, "0/0/-1.png", Compression::None).await?);
+		assert!(check_404(c, "0/0/1.png", Compression::None).await?);
 
 		Ok(())
 	}

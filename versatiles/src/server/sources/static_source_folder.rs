@@ -20,9 +20,10 @@ pub struct Folder {
 
 impl Folder {
 	// Constructor for the Folder struct
-	pub fn from(path: &str) -> Result<Folder> {
+	pub fn from(path: &Path) -> Result<Folder> {
 		let mut folder = current_dir()?;
 		folder.push(Path::new(path));
+		folder = folder.canonicalize()?;
 
 		// Check that the folder exists, is absolute and is a directory
 		ensure!(folder.exists(), "path {folder:?} does not exist");
@@ -34,7 +35,7 @@ impl Folder {
 		// Create a new Folder struct with the given path and name
 		Ok(Folder {
 			folder,
-			name: path.to_string(),
+			name: path.to_str().unwrap().to_owned(),
 		})
 	}
 }
@@ -42,21 +43,20 @@ impl Folder {
 #[async_trait]
 impl StaticSourceTrait for Folder {
 	#[cfg(test)]
-	fn get_type(&self) -> String {
-		String::from("folder")
+	fn get_type(&self) -> &str {
+		"folder"
 	}
 
 	// Returns the name of the folder
 	#[cfg(test)]
-	fn get_name(&self) -> Result<String> {
-		Ok(self.name.clone())
+	fn get_name(&self) -> &str {
+		&self.name
 	}
 
 	// Gets the data at the given path and responds with a compressed or uncompressed version
 	// based on the accept header
-	fn get_data(&self, path: &[&str], _accept: &TargetCompression) -> Option<SourceResponse> {
-		let mut local_path = self.folder.clone();
-		local_path.push(PathBuf::from(path.join("/")));
+	fn get_data(&self, url: &Url, _accept: &TargetCompression) -> Option<SourceResponse> {
+		let mut local_path = url.as_path(&self.folder);
 
 		// If the path is a directory, append 'index.html'
 		if local_path.is_dir() {
@@ -90,29 +90,29 @@ impl Debug for Folder {
 
 #[cfg(test)]
 mod tests {
-	use super::Folder;
-	use crate::server::sources::static_source::StaticSourceTrait;
+	use super::*;
 	use assert_fs;
+	use std::path::Path;
 	use versatiles_lib::shared::TargetCompression;
 
 	#[tokio::test]
 	async fn test() {
 		// Create a new Folder instance
-		let folder = Folder::from("../testdata").unwrap();
+		let folder = Folder::from(Path::new("../testdata")).unwrap();
 
 		let debug: String = format!("{:?}", folder);
 		assert!(debug.starts_with("Folder { folder: \""));
 		assert!(debug.ends_with("testdata\", name: \"../testdata\" }"));
 
 		// Test get_name function
-		assert_eq!(folder.get_name().unwrap(), "../testdata");
+		assert_eq!(folder.get_name(), "../testdata");
 
 		// Test get_data function with a non-existent file
-		let result = folder.get_data(&["recipes", "Queijo.txt"], &TargetCompression::from_none());
+		let result = folder.get_data(&Url::new("recipes/Queijo.txt"), &TargetCompression::from_none());
 		assert!(result.is_none());
 
 		// Test get_data function with an existing file
-		let result = folder.get_data(&["berlin.mbtiles"], &TargetCompression::from_none());
+		let result = folder.get_data(&Url::new("berlin.mbtiles"), &TargetCompression::from_none());
 		assert!(result.is_some());
 
 		let result = result.unwrap().blob;
@@ -130,11 +130,10 @@ mod tests {
 		std::fs::write(&index_path, b"Hello, world!").unwrap();
 
 		// Test initialization with the temporary directory
-		let folder_path = temp_dir.path().to_str().unwrap();
-		let folder = Folder::from(folder_path).unwrap();
+		let folder = Folder::from(temp_dir.path()).unwrap();
 
 		// Attempt to retrieve data from the directory, expecting to get the contents of index.html
-		let response = folder.get_data(&["testdir"], &TargetCompression::from_none()).unwrap();
+		let response = folder.get_data(&Url::new("testdir"), &TargetCompression::from_none()).unwrap();
 
 		let result = response.blob.as_str();
 		assert_eq!(result, "Hello, world!");
