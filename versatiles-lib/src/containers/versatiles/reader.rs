@@ -312,6 +312,7 @@ impl TileReaderTrait for TileReader {
 	// deep probe of container tiles
 	#[cfg(feature = "full")]
 	async fn probe_tiles(&mut self, print: PrettyPrint) -> Result<()> {
+		#[allow(dead_code)]
 		#[derive(Debug)]
 		struct Entry {
 			size: u64,
@@ -362,12 +363,7 @@ impl TileReaderTrait for TileReader {
 		print.add_key_value("average tile size", &size_sum.div_euclid(tile_count)).await;
 
 		for (index, entry) in biggest_tiles.iter().enumerate() {
-			print
-				.add_key_value(
-					&format!("#{} biggest tile", index + 1),
-					&format!("{} bytes (z:{}, x:{}, y:{})", entry.size, entry.z, entry.x, entry.y),
-				)
-				.await;
+			print.add_key_value(&format!("#{} biggest tile", index + 1), entry).await;
 		}
 
 		Ok(())
@@ -436,8 +432,8 @@ mod tests {
 		let mut printer = PrettyPrint::new();
 		reader.probe_tiles(printer.get_category("tiles").await).await?;
 		assert_eq!(
-			printer.as_string().await.get(0..65).unwrap(),
-			"tiles:\n   average tile size: 77\n   #1 biggest tile: \"77 bytes (z:"
+			printer.as_string().await.get(0..73).unwrap(),
+			"tiles:\n   average tile size: 77\n   #1 biggest tile: Entry { size: 77, x: "
 		);
 
 		Ok(())
