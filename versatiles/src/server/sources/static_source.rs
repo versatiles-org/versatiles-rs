@@ -49,7 +49,8 @@ impl StaticSource {
 mod tests {
 	use super::*;
 	use async_trait::async_trait;
-	use versatiles_lib::shared::{Blob, Compression};
+	use std::{fs::File, io::Write, path::PathBuf};
+	use versatiles_lib::shared::{compress, Blob, Compression};
 
 	#[derive(Debug)]
 	struct MockStaticSource;
@@ -77,26 +78,67 @@ mod tests {
 		}
 	}
 
-	#[tokio::test]
-	async fn test_static_source_new_integration() {
-		// Create temporary file and directory for testing
-		let temp_dir = assert_fs::TempDir::new().unwrap();
-		let temp_file_path = temp_dir.path().join("temp.tar");
-		let temp_folder_path = temp_dir.path().join("folder");
-		std::fs::create_dir(&temp_folder_path).unwrap();
-		std::fs::File::create(&temp_file_path).unwrap();
+	#[test]
+	fn new_static_source() -> Result<()> {
+		let check_type = |path: PathBuf, type_name: &str| {
+			let source = StaticSource::new(&path, Url::new("")).unwrap();
+			assert_eq!(source.get_type(), type_name);
+		};
 
-		// Test initialization with a .tar file
-		let tar_source = StaticSource::new(&temp_file_path, Url::new("")).unwrap();
-		assert_eq!(tar_source.get_type(), "tar");
+		let check_error = |path: PathBuf, error_should: &str| {
+			let source = StaticSource::new(&path, Url::new(""));
+			let error = source.err().unwrap().to_string();
+			assert!(
+				error.ends_with(error_should),
+				"{} must ends_with {}",
+				error,
+				error_should
+			);
+		};
+
+		let create_file = |path: &PathBuf, compression: Compression| {
+			let content = compress(Blob::new_empty(), &compression).unwrap();
+			let mut f = File::create(path).unwrap();
+			f.write_all(content.as_slice()).unwrap();
+		};
+
+		// Create temporary file and directory for testing
+		let temp_dir = assert_fs::TempDir::new()?;
+
+		// Test non existent file
+		let path = temp_dir.path().join("non_existent.tar");
+		check_error(path, "No such file or directory (os error 2)");
+
+		// Test .tar file
+		let path = temp_dir.path().join("temp.tar");
+		create_file(&path, Compression::None);
+		check_type(path, "tar");
+
+		// Test gzip compressed .tar file
+		let path = temp_dir.path().join("temp.tar.gz");
+		create_file(&path, Compression::Gzip);
+		check_type(path, "tar");
+
+		// Test brotli compressed .tar file
+		let path = temp_dir.path().join("temp.tar.br");
+		create_file(&path, Compression::Brotli);
+		check_type(path, "tar");
+
+		// Test non .tar file
+		let path = temp_dir.path().join("data.tar.bmp");
+		create_file(&path, Compression::None);
+		check_error(path, "\" must be a name of a tar file");
 
 		// Test initialization with a folder
-		let folder_source = StaticSource::new(&temp_folder_path, Url::new("")).unwrap();
-		assert_eq!(folder_source.get_type(), "folder");
+		let path = temp_dir.path().join("folder");
+		std::fs::create_dir(&path)?;
+		check_type(path, "folder");
+
+		Ok(())
 	}
 
 	#[tokio::test]
-	async fn test_get_data_valid_path() {
+	async fn get_data_valid_path() {
 		let static_source = StaticSource {
 			source: Arc::new(Box::new(MockStaticSource)),
 			prefix: Url::new(""),
@@ -106,7 +148,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_get_data_invalid_path() {
+	async fn get_data_invalid_path() {
 		let static_source = StaticSource {
 			source: Arc::new(Box::new(MockStaticSource)),
 			prefix: Url::new(""),
@@ -116,7 +158,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_get_data_with_path_filtering() {
+	async fn get_data_with_path_filtering() {
 		let static_source = StaticSource {
 			source: Arc::new(Box::new(MockStaticSource)),
 			prefix: Url::new("path/to"),
