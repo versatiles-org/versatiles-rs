@@ -1,5 +1,9 @@
-use super::{ProbeDepth, TilesStream};
-use crate::shared::{Blob, Compression, PrettyPrint, TileBBox, TileCoord3, TileFormat, TilesReaderParameters};
+#[cfg(feature = "full")]
+use crate::{containers::ProbeDepth, shared::PrettyPrint};
+use crate::{
+	containers::TilesStream,
+	shared::{Blob, Compression, TileBBox, TileBBoxPyramid, TileCoord3, TileFormat},
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::{stream, StreamExt};
@@ -8,55 +12,45 @@ use tokio::sync::Mutex;
 
 pub type TilesReaderBox = Box<dyn TilesReaderTrait>;
 
+#[derive(Debug, PartialEq)]
+pub struct TilesReaderParameters {
+	pub bbox_pyramid: TileBBoxPyramid,
+	pub tile_compression: Compression,
+	pub tile_format: TileFormat,
+}
+impl TilesReaderParameters {
+	pub fn new(
+		tile_format: TileFormat, tile_compression: Compression, bbox_pyramid: TileBBoxPyramid,
+	) -> TilesReaderParameters {
+		TilesReaderParameters {
+			tile_format,
+			tile_compression,
+			bbox_pyramid,
+		}
+	}
+}
+
 #[allow(clippy::new_ret_no_self)]
 #[async_trait]
 pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	/// some kine of name for this reader source, e.g. the filename
 	fn get_name(&self) -> &str;
 
-	fn get_parameters(&self) -> &TilesReaderParameters;
-
-	fn get_parameters_mut(&mut self) -> &mut TilesReaderParameters;
-
-	fn set_configuration(&mut self, flip_y: bool, swap_xy: bool, tile_compression: Option<Compression>) {
-		let parameters = self.get_parameters_mut();
-		parameters.swap_xy = swap_xy;
-		parameters.flip_y = flip_y;
-
-		if let Some(compression) = tile_compression {
-			parameters.tile_compression = compression;
-		}
-	}
-
-	fn get_tile_format(&self) -> &TileFormat {
-		&self.get_parameters().tile_format
-	}
-
-	fn get_tile_compression(&self) -> &Compression {
-		&self.get_parameters().tile_compression
-	}
-
 	/// container name, e.g. versatiles, mbtiles, ...
 	fn get_container_name(&self) -> &str;
+
+	fn get_parameters(&self) -> &TilesReaderParameters;
 
 	/// get meta data, always uncompressed
 	async fn get_meta(&self) -> Result<Option<Blob>>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
 	/// returns the tile in the coordinate system of the source
-	async fn get_tile_data_original(&mut self, coord: &TileCoord3) -> Result<Blob>;
-
-	/// always compressed with get_tile_compression and formatted with get_tile_format
-	/// returns the tile in the target coordinate system (after optional flipping)
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
-		let mut coord_inner: TileCoord3 = *coord;
-		self.get_parameters().transform_backward(&mut coord_inner);
-		self.get_tile_data_original(&coord_inner).await
-	}
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
 	/// returns the tiles in the coordinate system of the source
-	async fn get_bbox_tile_stream_original<'a>(&'a mut self, bbox: TileBBox) -> TilesStream {
+	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox: TileBBox) -> TilesStream {
 		let mutex = Arc::new(Mutex::new(self));
 		let coords: Vec<TileCoord3> = bbox.iter_coords().collect();
 		stream::iter(coords)
@@ -66,25 +60,11 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 					mutex
 						.lock()
 						.await
-						.get_tile_data_original(&coord)
+						.get_tile_data(&coord)
 						.await
 						.map(|blob| (coord, blob))
 						.ok()
 				}
-			})
-			.boxed()
-	}
-
-	/// always compressed with get_tile_compression and formatted with get_tile_format
-	/// returns the tiles in the target coordinate system (after optional flipping)
-	async fn get_bbox_tile_stream<'a>(&'a mut self, mut bbox: TileBBox) -> TilesStream {
-		let parameters: TilesReaderParameters = (*self.get_parameters()).clone();
-		parameters.transform_backward(&mut bbox);
-		let stream = self.get_bbox_tile_stream_original(bbox).await;
-		stream
-			.map(move |(mut coord, blob)| {
-				parameters.transform_forward(&mut coord);
-				(coord, blob)
 			})
 			.boxed()
 	}
@@ -107,10 +87,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 			cat.add_key_value("meta", &meta_option).await;
 		}
 
-		self
-			.get_parameters()
-			.probe(print.get_category("parameters").await)
-			.await?;
+		self.probe_parameters(print.get_category("parameters").await).await?;
 
 		if matches!(level, Container | Tiles | TileContents) {
 			self.probe_container(print.get_category("container").await).await?;
@@ -126,6 +103,23 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 				.await?;
 		}
 
+		Ok(())
+	}
+
+	#[cfg(feature = "full")]
+	async fn probe_parameters(&mut self, mut print: PrettyPrint) -> Result<()> {
+		let parameters = self.get_parameters();
+		let p = print.get_list("bbox_pyramid").await;
+		for level in parameters.bbox_pyramid.iter_levels() {
+			p.add_value(level).await
+		}
+		print
+			.add_key_value("bbox", &format!("{:?}", parameters.bbox_pyramid.get_geo_bbox()))
+			.await;
+		print
+			.add_key_value("tile compression", &parameters.tile_compression)
+			.await;
+		print.add_key_value("tile format", &parameters.tile_format).await;
 		Ok(())
 	}
 
@@ -163,44 +157,36 @@ mod tests {
 
 	#[derive(Debug)]
 	struct TestReader {
-		name: String,
 		parameters: TilesReaderParameters,
 	}
 
 	impl TestReader {
-		async fn new_dummy(path: &str) -> Result<TilesReaderBox> {
-			let parameters = TilesReaderParameters::new_dummy();
-			let reader = TestReader {
-				name: path.to_owned(),
-				parameters,
-			};
-			Ok(Box::new(reader))
+		fn new_dummy() -> TilesReaderBox {
+			Box::new(TestReader {
+				parameters: TilesReaderParameters {
+					bbox_pyramid: TileBBoxPyramid::new_dummy(),
+					tile_compression: Compression::Gzip,
+					tile_format: TileFormat::PBF,
+				},
+			})
 		}
 	}
 
 	#[async_trait]
 	impl TilesReaderTrait for TestReader {
 		fn get_name(&self) -> &str {
-			&self.name
+			"dummy"
 		}
-
 		fn get_parameters(&self) -> &TilesReaderParameters {
 			&self.parameters
 		}
-
-		fn get_parameters_mut(&mut self) -> &mut TilesReaderParameters {
-			&mut self.parameters
-		}
-
 		async fn get_meta(&self) -> Result<Option<Blob>> {
 			Ok(Some(Blob::from("test metadata")))
 		}
-
 		fn get_container_name(&self) -> &str {
 			"test container name"
 		}
-
-		async fn get_tile_data_original(&mut self, _coord: &TileCoord3) -> Result<Blob> {
+		async fn get_tile_data(&mut self, _coord: &TileCoord3) -> Result<Blob> {
 			Ok(Blob::from("test tile data"))
 		}
 	}
@@ -210,14 +196,15 @@ mod tests {
 	async fn reader() -> Result<()> {
 		use crate::containers::{MockTilesWriter, MockTilesWriterProfile};
 
-		let mut reader = TestReader::new_dummy("test_path").await?;
+		let mut reader = TestReader::new_dummy();
 
 		// Test getting name
 		assert_eq!(reader.get_name(), "test_path");
 
 		// Test getting tile compression and format
-		assert_eq!(reader.get_tile_compression(), &Compression::None);
-		assert_eq!(reader.get_tile_format(), &TileFormat::PBF);
+		let parameters = reader.get_parameters();
+		assert_eq!(parameters.tile_compression, Compression::None);
+		assert_eq!(parameters.tile_format, TileFormat::PBF);
 
 		// Test getting container name
 		assert_eq!(reader.get_container_name(), "test container name");
@@ -227,20 +214,17 @@ mod tests {
 
 		// Test getting tile data
 		let coord = TileCoord3::new(0, 0, 0)?;
-		assert_eq!(
-			reader.get_tile_data_original(&coord).await?.to_string(),
-			"test tile data"
-		);
+		assert_eq!(reader.get_tile_data(&coord).await?.to_string(), "test tile data");
 
-		let mut converter = MockTilesWriter::new_mock(MockTilesWriterProfile::Whatever, 3);
-		converter.convert_from(&mut reader).await?;
+		let mut writer = MockTilesWriter::new_mock(MockTilesWriterProfile::PBF, 3);
+		writer.write_from_reader(&mut reader).await?;
 
 		Ok(())
 	}
 
 	#[tokio::test]
 	async fn get_bbox_tile_iter() -> Result<()> {
-		let mut reader = TestReader::new_dummy("test_path").await?;
+		let mut reader = TestReader::new_dummy();
 		let bbox = TileBBox::new(4, 0, 0, 10, 10)?; // Or replace it with actual bbox
 		let mut stream = reader.get_bbox_tile_stream(bbox).await;
 

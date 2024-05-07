@@ -3,7 +3,6 @@
 use super::{Blob, Compression};
 use anyhow::{bail, Result};
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
-#[cfg(feature = "full")]
 use enumset::EnumSet;
 use flate2::bufread::{GzDecoder, GzEncoder};
 use std::io::{Cursor, Read};

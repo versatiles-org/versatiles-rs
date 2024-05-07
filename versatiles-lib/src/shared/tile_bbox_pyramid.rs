@@ -23,18 +23,11 @@ impl TileBBoxPyramid {
 	}
 	#[cfg(test)]
 	pub fn new_dummy() -> TileBBoxPyramid {
+		let geo_bbox = [-10.478, 34.633, 34.597, 70.096];
 		TileBBoxPyramid {
 			level_bbox: from_fn(|z| {
 				if z < 16 {
-					let n: f64 = 2_f64.powf(z as f64) - 1_f64;
-					TileBBox::new(
-						z as u8,
-						(n * 0.1).floor() as u32,
-						(n * 0.2).floor() as u32,
-						(n * 0.8).ceil() as u32,
-						(n * 0.9).ceil() as u32,
-					)
-					.unwrap()
+					TileBBox::from_geo(z as u8, &geo_bbox).unwrap()
 				} else {
 					TileBBox::new_empty(z as u8).unwrap()
 				}

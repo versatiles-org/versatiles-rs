@@ -1,6 +1,6 @@
 use crate::{
-	containers::{TilesReaderBox, TilesWriterBox, TilesWriterTrait},
-	shared::{compress, compression_to_extension, format_to_extension, ProgressBar, TilesWriterConfig},
+	containers::{TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
+	shared::{compress, compression_to_extension, format_to_extension, ProgressBar},
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 
 pub struct DirectoryTilesWriter {
 	dir: PathBuf,
-	config: TilesWriterConfig,
+	parameters: TilesWriterParameters,
 }
 
 impl DirectoryTilesWriter {
@@ -34,9 +34,8 @@ impl DirectoryTilesWriter {
 	}
 }
 
-#[async_trait]
-impl TilesWriterTrait for DirectoryTilesWriter {
-	async fn open_file(path: &Path, config: TilesWriterConfig) -> Result<TilesWriterBox>
+impl DirectoryTilesWriter {
+	fn open_file(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox>
 	where
 		Self: Sized,
 	{
@@ -46,25 +45,31 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 
 		Ok(Box::new(DirectoryTilesWriter {
 			dir: path.to_path_buf(),
-			config,
+			parameters,
 		}))
 	}
-	async fn convert_from(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
+}
+
+#[async_trait]
+impl TilesWriterTrait for DirectoryTilesWriter {
+	fn get_parameters(&self) -> &TilesWriterParameters {
+		&self.parameters
+	}
+
+	async fn write_tiles(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
 		log::trace!("convert_from");
 
-		self.config.finalize_with_parameters(reader.get_parameters());
+		let tile_compression = &self.parameters.tile_compression;
+		let tile_format = &self.parameters.tile_format;
+		let bbox_pyramid = &reader.get_parameters().bbox_pyramid.clone();
 
-		let tile_converter = self.config.get_tile_recompressor();
-
-		let extension_format = format_to_extension(self.config.get_tile_format());
-		let extension_compression = compression_to_extension(self.config.get_tile_compression());
-
-		let bbox_pyramid = self.config.get_bbox_pyramid();
+		let extension_format = format_to_extension(tile_format);
+		let extension_compression = compression_to_extension(tile_compression);
 
 		let meta_data_option = reader.get_meta().await?;
 
 		if let Some(meta_data) = meta_data_option {
-			let meta_data = compress(meta_data, self.config.get_tile_compression())?;
+			let meta_data = compress(meta_data, tile_compression)?;
 			let filename = format!("tiles.json{}", extension_compression);
 
 			self.write(Path::new(&filename), meta_data.as_slice())?;
@@ -80,20 +85,18 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 				let (coord, blob) = entry;
 				mutex_bar.lock().await.inc(1);
 
-				if let Ok(blob) = tile_converter.process_blob(blob) {
-					let filename = format!(
-						"./{}/{}/{}{}{}",
-						coord.get_z(),
-						coord.get_y(),
-						coord.get_x(),
-						extension_format,
-						extension_compression
-					);
-					let path = PathBuf::from(&filename);
+				let filename = format!(
+					"./{}/{}/{}{}{}",
+					coord.get_z(),
+					coord.get_y(),
+					coord.get_x(),
+					extension_format,
+					extension_compression
+				);
+				let path = PathBuf::from(&filename);
 
-					// Write blob to file
-					self.write(&path, blob.as_slice())?;
-				}
+				// Write blob to file
+				self.write(&path, blob.as_slice())?;
 			}
 		}
 
@@ -109,28 +112,6 @@ mod tests {
 
 	use super::*;
 	use assert_fs;
-	use std::fs::File;
-	use std::io::Read;
-
-	#[test]
-	fn test_write() -> Result<()> {
-		let temp_dir = assert_fs::TempDir::new()?;
-		let tile_converter = DirectoryTilesWriter {
-			dir: temp_dir.path().to_path_buf(),
-			config: TilesWriterConfig::new_full(),
-		};
-
-		let file_path = Path::new("test_write.txt");
-		let contents = b"Hello, world!";
-		tile_converter.write(file_path, contents)?;
-
-		let mut file = File::open(temp_dir.path().join(file_path))?;
-		let mut file_contents = Vec::new();
-		file.read_to_end(&mut file_contents)?;
-
-		assert_eq!(contents.as_ref(), file_contents.as_slice());
-		Ok(())
-	}
 
 	#[test]
 	fn test_ensure_directory() -> Result<()> {
@@ -148,12 +129,12 @@ mod tests {
 	async fn test_convert_from() -> Result<()> {
 		let temp_dir = assert_fs::TempDir::new()?;
 		let temp_path = temp_dir.path();
-		let tile_config = TilesWriterConfig::new_full();
-		let mut tile_converter = DirectoryTilesWriter::open_file(&temp_path, tile_config).await?;
+		let parameters = TilesWriterParameters::new(crate::shared::TileFormat::PBF, crate::shared::Compression::Gzip);
+		let mut tile_converter = DirectoryTilesWriter::open_file(&temp_path, parameters)?;
 
 		let mut mock_reader = MockTilesReader::new_mock(MockTilesReaderProfile::PNG, 3);
 
-		tile_converter.convert_from(&mut mock_reader).await?;
+		tile_converter.write_from_reader(&mut mock_reader).await?;
 
 		assert_eq!(fs::read_to_string(temp_path.join("tiles.json"))?, "dummy meta data");
 		assert_eq!(fs::read(temp_path.join("0/0/0.png"))?, MOCK_BYTES_PNG);

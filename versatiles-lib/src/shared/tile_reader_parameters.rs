@@ -5,22 +5,22 @@ use anyhow::Result;
 use std::fmt;
 
 #[derive(Clone, PartialEq, Eq)]
-pub struct TilesReaderParameters {
-	pub bbox_pyramid: TileBBoxPyramid,
-	pub decompressor: DataConverter,
-	pub flip_y: bool,
-	pub swap_xy: bool,
-	pub tile_compression: Compression,
-	pub tile_format: TileFormat,
+pub struct TilesReaderParametersOld {
+	bbox_pyramid: TileBBoxPyramid,
+	//decompressor: DataConverter,
+	//flip_y: bool,
+	//swap_xy: bool,
+	compression: Compression,
+	format: TileFormat,
 }
 
-impl TilesReaderParameters {
+impl TilesReaderParametersOld {
 	pub fn new(
 		tile_format: TileFormat, tile_compression: Compression, bbox_pyramid: TileBBoxPyramid,
-	) -> TilesReaderParameters {
+	) -> TilesReaderParametersOld {
 		let decompressor = DataConverter::new_decompressor(&tile_compression);
 
-		TilesReaderParameters {
+		TilesReaderParametersOld {
 			decompressor,
 			tile_format,
 			tile_compression,

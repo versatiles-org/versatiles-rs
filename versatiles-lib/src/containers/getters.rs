@@ -1,5 +1,4 @@
 use super::*;
-use crate::shared::TilesWriterConfig;
 use anyhow::{bail, Context, Result};
 use reqwest::Url;
 use std::{env, path::Path};
@@ -87,10 +86,10 @@ pub mod tests {
 		}?;
 
 		let config = TilesWriterConfig::new(Some(tile_format), Some(compression), TileBBoxPyramid::new_full(), false);
-		let mut converter = get_writer(container_file.to_str().unwrap(), config).await?;
+		let mut writer = get_writer(container_file.to_str().unwrap(), config).await?;
 
 		// convert
-		converter.convert_from(&mut reader).await?;
+		writer.fill_from_reader(&mut reader).await?;
 
 		Ok(container_file)
 	}

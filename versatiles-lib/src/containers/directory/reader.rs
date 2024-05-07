@@ -1,8 +1,7 @@
 use crate::{
-	containers::{TilesReaderBox, TilesReaderTrait},
+	containers::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
 	shared::{
 		decompress, extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat,
-		TilesReaderParameters,
 	},
 };
 use anyhow::{bail, ensure, Result};
@@ -34,8 +33,8 @@ impl DirectoryTilesReader {
 
 		let mut meta: Option<Blob> = None;
 		let mut tile_map = HashMap::new();
-		let mut tile_form: Option<TileFormat> = None;
-		let mut tile_comp: Option<Compression> = None;
+		let mut tile_format: Option<TileFormat> = None;
+		let mut tile_compression: Option<Compression> = None;
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
 		for result1 in fs::read_dir(path)? {
@@ -78,15 +77,15 @@ impl DirectoryTilesReader {
 						}
 						let y = numeric3?;
 
-						if tile_form.is_none() {
-							tile_form = Some(this_form);
-						} else if tile_form.as_ref().expect("must be specified") != &this_form {
+						if tile_format.is_none() {
+							tile_format = Some(this_form);
+						} else if tile_format.as_ref().expect("must be specified") != &this_form {
 							bail!("unknown filename {filename:?}, can't detect format");
 						}
 
-						if tile_comp.is_none() {
-							tile_comp = Some(this_comp);
-						} else if tile_comp.as_ref().expect("must be specified") != &this_comp {
+						if tile_compression.is_none() {
+							tile_compression = Some(this_comp);
+						} else if tile_compression.as_ref().expect("must be specified") != &this_comp {
 							bail!("unknown filename {filename:?}, can't detect compression");
 						}
 
@@ -119,8 +118,8 @@ impl DirectoryTilesReader {
 			path: path.to_path_buf(),
 			tile_map,
 			parameters: TilesReaderParameters::new(
-				tile_form.expect("tile format must be specified"),
-				tile_comp.expect("tile compression must be specified"),
+				tile_format.expect("tile format must be specified"),
+				tile_compression.expect("tile compression must be specified"),
 				bbox_pyramid,
 			),
 		}))
@@ -134,18 +133,15 @@ impl DirectoryTilesReader {
 #[async_trait]
 impl TilesReaderTrait for DirectoryTilesReader {
 	fn get_container_name(&self) -> &str {
-		"tar"
+		"directory"
 	}
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
-	fn get_parameters_mut(&mut self) -> &mut TilesReaderParameters {
-		&mut self.parameters
-	}
 	async fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(self.meta.clone())
 	}
-	async fn get_tile_data_original(&mut self, coord: &TileCoord3) -> Result<Blob> {
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
 		log::trace!("get_tile_data_original {:?}", coord);
 
 		if let Some(path) = self.tile_map.get(coord) {
@@ -187,13 +183,13 @@ mod tests {
 		assert_eq!(reader.get_meta().await?.unwrap().as_str(), "test meta data");
 
 		let coord = TileCoord3::new(2, 3, 1)?;
-		let tile_data = reader.get_tile_data_original(&coord).await;
+		let tile_data = reader.get_tile_data(&coord).await;
 		assert!(tile_data.is_ok());
 		assert_eq!(tile_data?, Blob::from("test tile data"));
 
 		// Test for non-existent tile
 		let coord = TileCoord3::new(2, 2, 1)?; // Assuming these coordinates do not exist
-		assert!(reader.get_tile_data_original(&coord).await.is_err());
+		assert!(reader.get_tile_data(&coord).await.is_err());
 
 		return Ok(());
 	}

@@ -1,21 +1,20 @@
 use crate::{
-	containers::{TilesReaderBox, TilesWriterBox, TilesWriterTrait},
-	shared::{Compression, TileBBoxPyramid, TileFormat, TilesWriterConfig},
+	containers::{TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
+	shared::{Compression, TileBBoxPyramid, TileFormat},
 };
 use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::StreamExt;
-use std::path::Path;
 
 #[allow(dead_code)]
 #[derive(Debug)]
 pub enum MockTilesWriterProfile {
 	PNG,
-	Whatever,
+	PBF,
 }
 
 pub struct MockTilesWriter {
-	config: TilesWriterConfig,
+	parameters: TilesWriterParameters,
 }
 
 impl MockTilesWriter {
@@ -24,30 +23,21 @@ impl MockTilesWriter {
 		bbox_pyramid.set_zoom_max(max_zoom_level);
 
 		let config = match profile {
-			MockTilesWriterProfile::PNG => {
-				TilesWriterConfig::new(Some(TileFormat::PNG), Some(Compression::None), bbox_pyramid, false)
-			}
-			MockTilesWriterProfile::Whatever => TilesWriterConfig::new(None, None, bbox_pyramid, false),
+			MockTilesWriterProfile::PNG => TilesWriterParameters::new(TileFormat::PNG, Compression::None),
+			MockTilesWriterProfile::PBF => TilesWriterParameters::new(TileFormat::PBF, Compression::Gzip),
 		};
-		Box::new(MockTilesWriter { config })
+		Box::new(MockTilesWriter { parameters: config })
 	}
 }
 
 #[async_trait]
 impl TilesWriterTrait for MockTilesWriter {
-	async fn open_file(_path: &Path, config: TilesWriterConfig) -> Result<TilesWriterBox>
-	where
-		Self: Sized,
-	{
-		Ok(Box::new(Self { config }))
-	}
-	async fn convert_from(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
+	async fn write_tiles(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
 		let _temp = reader.get_container_name();
 		let _temp = reader.get_name();
 		let _temp = reader.get_meta().await?;
 
-		self.config.finalize_with_parameters(reader.get_parameters());
-		let bbox_pyramid = self.config.get_bbox_pyramid();
+		let bbox_pyramid = reader.get_parameters().bbox_pyramid.clone();
 
 		for bbox in bbox_pyramid.iter_levels() {
 			let mut stream = reader.get_bbox_tile_stream(*bbox).await;
@@ -56,31 +46,27 @@ impl TilesWriterTrait for MockTilesWriter {
 
 		Ok(())
 	}
+	fn get_parameters(&self) -> &TilesWriterParameters {
+		&self.parameters
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::{MockTilesWriter, MockTilesWriterProfile};
-	use crate::{
-		containers::{
-			mock::{reader::MockTilesReaderProfile, MockTilesReader},
-			TilesWriterTrait,
-		},
-		shared::TilesWriterConfig,
-	};
-	use std::path::Path;
+	use crate::containers::mock::{reader::MockTilesReaderProfile, MockTilesReader};
 
 	#[tokio::test]
-	async fn convert_from() {
-		let mut converter = MockTilesWriter::new_mock(MockTilesWriterProfile::PNG, 8);
+	async fn convert_png() {
+		let mut writer = MockTilesWriter::new_mock(MockTilesWriterProfile::PNG, 8);
 		let mut reader = MockTilesReader::new_mock(MockTilesReaderProfile::PNG, 8);
-		converter.convert_from(&mut reader).await.unwrap();
+		writer.write_from_reader(&mut reader).await.unwrap();
 	}
 
 	#[tokio::test]
-	async fn dummy() {
-		MockTilesWriter::open_file(&Path::new("hi"), TilesWriterConfig::new_full())
-			.await
-			.unwrap();
+	async fn convert_pbf() {
+		let mut writer = MockTilesWriter::new_mock(MockTilesWriterProfile::PBF, 8);
+		let mut reader = MockTilesReader::new_mock(MockTilesReaderProfile::PBF, 8);
+		writer.write_from_reader(&mut reader).await.unwrap();
 	}
 }
