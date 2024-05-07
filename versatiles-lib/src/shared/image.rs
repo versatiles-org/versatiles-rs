@@ -39,8 +39,8 @@ pub fn img2png(image: DynamicImage) -> Result<Blob> {
 /// # Returns
 ///
 /// A `DynamicImage` object representing the decoded image.
-pub fn png2img(data: Blob) -> Result<DynamicImage> {
-	Ok(load_from_memory_with_format(data.as_slice(), ImageFormat::Png)?)
+pub fn png2img(blob: Blob) -> Result<DynamicImage> {
+	Ok(load_from_memory_with_format(blob.as_slice(), ImageFormat::Png)?)
 }
 
 /// Encodes a DynamicImage into JPEG format and returns it as a Blob.
@@ -73,8 +73,8 @@ pub fn img2jpg(image: DynamicImage) -> Result<Blob> {
 /// # Returns
 ///
 /// A `DynamicImage` object representing the decoded image.
-pub fn jpg2img(data: Blob) -> Result<DynamicImage> {
-	Ok(load_from_memory_with_format(data.as_slice(), ImageFormat::Jpeg)?)
+pub fn jpg2img(blob: Blob) -> Result<DynamicImage> {
+	Ok(load_from_memory_with_format(blob.as_slice(), ImageFormat::Jpeg)?)
 }
 
 /// Encodes a DynamicImage into WebP format and returns it as a Blob.
@@ -136,8 +136,8 @@ pub fn img2webplossless(image: DynamicImage) -> Result<Blob> {
 /// # Returns
 ///
 /// A `DynamicImage` containing the decoded image.
-pub fn webp2img(data: Blob) -> Result<DynamicImage> {
-	let decoder = Decoder::new(data.as_slice());
+pub fn webp2img(blob: Blob) -> Result<DynamicImage> {
+	let decoder = Decoder::new(blob.as_slice());
 	let image = decoder.decode();
 	if let Some(image) = image {
 		Ok(image.to_image())

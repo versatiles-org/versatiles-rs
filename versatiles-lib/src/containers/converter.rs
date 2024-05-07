@@ -143,12 +143,12 @@ mod tests {
 
 	use super::*;
 
-	fn get_reader(tf: TileFormat, tc: Compression) -> TilesReaderBox {
+	fn get_mock_reader(tf: TileFormat, tc: Compression) -> TilesReaderBox {
 		let bbox_pyramid = TileBBoxPyramid::new_full(2);
 		let reader_parameters = TilesReaderParameters::new(tf, tc, bbox_pyramid);
 		MockTilesReader::new_mock(reader_parameters)
 	}
-	fn get_converter(tf: TileFormat, tc: Compression, force_recompress: bool) -> TileConverterParameters {
+	fn get_converter_parameters(tf: TileFormat, tc: Compression, force_recompress: bool) -> TileConverterParameters {
 		TileConverterParameters {
 			tile_format: Some(tf),
 			tile_compression: Some(tc),
@@ -162,9 +162,9 @@ mod tests {
 	#[tokio::test]
 	async fn test_recompression() -> Result<()> {
 		async fn test(c_in: Compression, c_out: Compression) -> Result<()> {
-			let reader_in = get_reader(TileFormat::PBF, c_in);
+			let reader_in = get_mock_reader(TileFormat::PBF, c_in);
 			let temp_file = NamedTempFile::new("test.versatiles")?;
-			let cp = get_converter(TileFormat::PBF, c_out, false);
+			let cp = get_converter_parameters(TileFormat::PBF, c_out, false);
 			let filename = temp_file.to_str().unwrap();
 			convert(reader_in, cp, filename).await?;
 			let reader_out = VersaTilesReader::open_file(&temp_file).await?;
@@ -190,9 +190,9 @@ mod tests {
 	#[tokio::test]
 	async fn test_conversion() -> Result<()> {
 		async fn test(f_in: TileFormat, f_out: TileFormat) -> Result<()> {
-			let reader_in = get_reader(f_in, Compression::Gzip);
+			let reader_in = get_mock_reader(f_in, Compression::Gzip);
 			let temp_file = NamedTempFile::new("test.versatiles")?;
-			let cp = get_converter(f_out, Compression::Gzip, false);
+			let cp = get_converter_parameters(f_out, Compression::Gzip, false);
 			let filename = temp_file.to_str().unwrap();
 			convert(reader_in, cp, filename).await?;
 			let reader_out = VersaTilesReader::open_file(&temp_file).await?;

@@ -38,43 +38,43 @@ impl TargetCompression {
 }
 
 #[allow(dead_code)]
-pub fn optimize_compression(data: Blob, input: &Compression, target: TargetCompression) -> Result<(Blob, Compression)> {
+pub fn optimize_compression(blob: Blob, input: &Compression, target: TargetCompression) -> Result<(Blob, Compression)> {
 	if target.compressions.is_empty() {
 		bail!("no compression allowed");
 	}
 
 	if !target.best_compression && target.compressions.contains(*input) {
-		return Ok((data, *input));
+		return Ok((blob, *input));
 	}
 
 	match input {
 		Compression::None => {
 			if target.compressions.contains(Compression::Brotli) {
-				return Ok((compress_brotli(data)?, Compression::Brotli));
+				return Ok((compress_brotli(blob)?, Compression::Brotli));
 			}
 
 			if target.compressions.contains(Compression::Gzip) {
-				return Ok((compress_gzip(data)?, Compression::Gzip));
+				return Ok((compress_gzip(blob)?, Compression::Gzip));
 			}
 
-			Ok((data, Compression::None))
+			Ok((blob, Compression::None))
 		}
 		Compression::Gzip => {
 			if target.compressions.contains(Compression::Brotli) {
-				return Ok((compress_brotli(decompress_gzip(data)?)?, Compression::Brotli));
+				return Ok((compress_brotli(decompress_gzip(blob)?)?, Compression::Brotli));
 			}
 
 			if target.compressions.contains(Compression::Gzip) {
-				return Ok((data, Compression::Gzip));
+				return Ok((blob, Compression::Gzip));
 			}
 
-			Ok((decompress_gzip(data)?, Compression::None))
+			Ok((decompress_gzip(blob)?, Compression::None))
 		}
 		Compression::Brotli => {
 			if target.compressions.contains(Compression::Brotli) {
-				return Ok((data, Compression::Brotli));
+				return Ok((blob, Compression::Brotli));
 			}
-			let data = decompress_brotli(data)?;
+			let data = decompress_brotli(blob)?;
 
 			if target.compressions.contains(Compression::Gzip) {
 				return Ok((compress_gzip(data)?, Compression::Gzip));
@@ -91,11 +91,11 @@ pub fn optimize_compression(data: Blob, input: &Compression, target: TargetCompr
 ///
 /// * `data` - The blob of data to compress
 /// * `compression` - The compression algorithm to use
-pub fn compress(data: Blob, compression: &Compression) -> Result<Blob> {
+pub fn compress(blob: Blob, compression: &Compression) -> Result<Blob> {
 	match compression {
-		Compression::None => Ok(data),
-		Compression::Gzip => compress_gzip(data),
-		Compression::Brotli => compress_brotli(data),
+		Compression::None => Ok(blob),
+		Compression::Gzip => compress_gzip(blob),
+		Compression::Brotli => compress_brotli(blob),
 	}
 }
 
@@ -105,11 +105,11 @@ pub fn compress(data: Blob, compression: &Compression) -> Result<Blob> {
 ///
 /// * `data` - The blob of data to decompress
 /// * `compression` - The compression algorithm used for compression
-pub fn decompress(data: Blob, compression: &Compression) -> Result<Blob> {
+pub fn decompress(blob: Blob, compression: &Compression) -> Result<Blob> {
 	match compression {
-		Compression::None => Ok(data),
-		Compression::Gzip => decompress_gzip(data),
-		Compression::Brotli => decompress_brotli(data),
+		Compression::None => Ok(blob),
+		Compression::Gzip => decompress_gzip(blob),
+		Compression::Brotli => decompress_brotli(blob),
 	}
 }
 
@@ -118,10 +118,9 @@ pub fn decompress(data: Blob, compression: &Compression) -> Result<Blob> {
 /// # Arguments
 ///
 /// * `data` - The blob of data to compress
-pub fn compress_gzip(data: Blob) -> Result<Blob> {
+pub fn compress_gzip(blob: Blob) -> Result<Blob> {
 	let mut result: Vec<u8> = Vec::new();
-	GzEncoder::new(data.as_slice(), flate2::Compression::best()).read_to_end(&mut result)?;
-
+	GzEncoder::new(blob.as_slice(), flate2::Compression::best()).read_to_end(&mut result)?;
 	Ok(Blob::from(result))
 }
 
@@ -130,10 +129,9 @@ pub fn compress_gzip(data: Blob) -> Result<Blob> {
 /// # Arguments
 ///
 /// * `data` - The blob of data to decompress
-pub fn decompress_gzip(data: Blob) -> Result<Blob> {
+pub fn decompress_gzip(blob: Blob) -> Result<Blob> {
 	let mut result: Vec<u8> = Vec::new();
-	GzDecoder::new(data.as_slice()).read_to_end(&mut result)?;
-
+	GzDecoder::new(blob.as_slice()).read_to_end(&mut result)?;
 	Ok(Blob::from(result))
 }
 
@@ -142,14 +140,14 @@ pub fn decompress_gzip(data: Blob) -> Result<Blob> {
 /// # Arguments
 ///
 /// * `data` - The blob of data to compress
-pub fn compress_brotli(data: Blob) -> Result<Blob> {
+pub fn compress_brotli(blob: Blob) -> Result<Blob> {
 	let params = BrotliEncoderParams {
 		quality: 10, // smallest
 		lgwin: 19,   // smallest
-		size_hint: data.len(),
+		size_hint: blob.len(),
 		..Default::default()
 	};
-	let mut input = Cursor::new(data.as_slice());
+	let mut input = Cursor::new(blob.as_slice());
 	let mut output: Vec<u8> = Vec::new();
 	BrotliCompress(&mut input, &mut output, &params)?;
 
@@ -161,11 +159,10 @@ pub fn compress_brotli(data: Blob) -> Result<Blob> {
 /// # Arguments
 ///
 /// * `data` - The blob of data to decompress
-pub fn decompress_brotli(data: Blob) -> Result<Blob> {
-	let mut cursor = Cursor::new(data.as_slice());
+pub fn decompress_brotli(blob: Blob) -> Result<Blob> {
+	let mut cursor = Cursor::new(blob.as_slice());
 	let mut result: Vec<u8> = Vec::new();
 	BrotliDecompress(&mut cursor, &mut result)?;
-
 	Ok(Blob::from(result))
 }
 
