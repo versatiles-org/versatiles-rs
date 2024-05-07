@@ -1,6 +1,6 @@
 use crate::{
 	containers::{TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
-	shared::{compress, compression_to_extension, format_to_extension, ProgressBar},
+	shared::{compress, compression_to_extension, format_to_extension, Blob, ProgressBar},
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
@@ -17,30 +17,25 @@ pub struct DirectoryTilesWriter {
 }
 
 impl DirectoryTilesWriter {
-	fn write(&self, path: &Path, contents: &[u8]) -> Result<()> {
-		let path_buf = self.dir.join(path);
-		Self::ensure_directory(&path_buf.to_path_buf())?;
-		fs::write(path_buf, contents)?;
+	fn write(&self, filename: &str, blob: Blob) -> Result<()> {
+		let path = self.dir.join(filename);
+		Self::ensure_directory(&path)?;
+		fs::write(&path, blob.as_slice())?;
 		Ok(())
 	}
 	fn ensure_directory(path: &Path) -> Result<()> {
 		let parent = path.parent().unwrap();
-		if parent.is_dir() {
+		if parent.is_dir() && parent.exists() {
 			return Ok(());
 		}
-		Self::ensure_directory(parent)?;
-		fs::create_dir(parent)?;
+		fs::create_dir_all(parent)?;
 		Ok(())
 	}
-}
-
-impl DirectoryTilesWriter {
 	pub fn open_file(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox>
 	where
 		Self: Sized,
 	{
 		log::trace!("new {:?}", path);
-		ensure!(path.is_dir(), "path {path:?} must be a directory");
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
 		Ok(Box::new(DirectoryTilesWriter {
@@ -70,9 +65,9 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 
 		if let Some(meta_data) = meta_data_option {
 			let meta_data = compress(meta_data, tile_compression)?;
-			let filename = format!("tiles.json{}", extension_compression);
+			let filename = format!("tiles.json{extension_compression}");
 
-			self.write(Path::new(&filename), meta_data.as_slice())?;
+			self.write(&filename, meta_data)?;
 		}
 
 		let mut bar = ProgressBar::new("converting tiles", bbox_pyramid.count_tiles());
@@ -86,17 +81,16 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 				mutex_bar.lock().await.inc(1);
 
 				let filename = format!(
-					"./{}/{}/{}{}{}",
+					"{}/{}/{}{}{}",
 					coord.get_z(),
 					coord.get_y(),
 					coord.get_x(),
 					extension_format,
 					extension_compression
 				);
-				let path = PathBuf::from(&filename);
 
 				// Write blob to file
-				self.write(&path, blob.as_slice())?;
+				self.write(&filename, blob)?;
 			}
 		}
 
@@ -108,9 +102,9 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 
 #[cfg(test)]
 mod tests {
-	use crate::containers::{MockTilesReader, MockTilesReaderProfile, MOCK_BYTES_PNG};
-
 	use super::*;
+	use crate::containers::{MockTilesReader, MockTilesReaderProfile, MOCK_BYTES_PBF};
+	use crate::shared::decompress_gzip;
 	use assert_fs;
 
 	#[test]
@@ -129,16 +123,26 @@ mod tests {
 	async fn test_convert_from() -> Result<()> {
 		let temp_dir = assert_fs::TempDir::new()?;
 		let temp_path = temp_dir.path();
+
+		let mut mock_reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF);
+
 		let parameters = TilesWriterParameters::new(crate::shared::TileFormat::PBF, crate::shared::Compression::Gzip);
-		let mut tile_converter = DirectoryTilesWriter::open_file(&temp_path, parameters)?;
+		let mut writer = DirectoryTilesWriter::open_file(&temp_path, parameters)?;
 
-		let mut mock_reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG);
+		writer.write_from_reader(&mut mock_reader).await?;
 
-		tile_converter.write_from_reader(&mut mock_reader).await?;
+		let load = |filename| {
+			let path = temp_path.join(filename);
+			path.try_exists().expect(&format!("filename {filename} should exist"));
+			decompress_gzip(Blob::from(
+				fs::read(path).expect(&format!("filename {filename} should be readable")),
+			))
+			.expect(&format!("filename {filename} should be gzip compressed"))
+		};
 
-		assert_eq!(fs::read_to_string(temp_path.join("tiles.json"))?, "dummy meta data");
-		assert_eq!(fs::read(temp_path.join("0/0/0.png"))?, MOCK_BYTES_PNG);
-		assert_eq!(fs::read(temp_path.join("3/7/7.png"))?, MOCK_BYTES_PNG);
+		assert_eq!(load("tiles.json.gz").as_str(), "dummy meta data");
+		assert_eq!(load("0/0/0.pbf.gz").as_slice(), MOCK_BYTES_PBF);
+		assert_eq!(load("2/3/3.pbf.gz").as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())
 	}

@@ -16,20 +16,21 @@ use std::{
 
 pub struct DirectoryTilesReader {
 	meta: Option<Blob>,
-	path: PathBuf,
+	dir: PathBuf,
 	tile_map: HashMap<TileCoord3, PathBuf>,
 	parameters: TilesReaderParameters,
 }
 
 impl DirectoryTilesReader {
-	pub async fn open(path: &Path) -> Result<TilesReaderBox>
+	pub async fn open(dir: &Path) -> Result<TilesReaderBox>
 	where
 		Self: Sized,
 	{
-		log::trace!("read {:?}", path);
+		log::trace!("read {dir:?}");
 
-		ensure!(path.is_dir(), "file {path:?} does not exist");
-		ensure!(path.is_absolute(), "path {path:?} must be absolute");
+		ensure!(dir.is_absolute(), "path {dir:?} must be absolute");
+		ensure!(dir.exists(), "path {dir:?} does not exist");
+		ensure!(dir.is_dir(), "path {dir:?} is not a directory");
 
 		let mut meta: Option<Blob> = None;
 		let mut tile_map = HashMap::new();
@@ -37,7 +38,7 @@ impl DirectoryTilesReader {
 		let mut tile_compression: Option<Compression> = None;
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
-		for result1 in fs::read_dir(path)? {
+		for result1 in fs::read_dir(dir)? {
 			// z level
 			if result1.is_err() {
 				continue;
@@ -79,14 +80,14 @@ impl DirectoryTilesReader {
 
 						if tile_format.is_none() {
 							tile_format = Some(this_form);
-						} else if tile_format.as_ref().expect("must be specified") != &this_form {
-							bail!("unknown filename {filename:?}, can't detect format");
+						} else if tile_format != Some(this_form) {
+							bail!("unknown filename {filename:?}, can't detect tile format");
 						}
 
 						if tile_compression.is_none() {
 							tile_compression = Some(this_comp);
-						} else if tile_compression.as_ref().expect("must be specified") != &this_comp {
-							bail!("unknown filename {filename:?}, can't detect compression");
+						} else if tile_compression != Some(this_comp) {
+							bail!("unknown filename {filename:?}, can't detect tile compression");
 						}
 
 						let coord3 = TileCoord3::new(x, y, z)?;
@@ -115,7 +116,7 @@ impl DirectoryTilesReader {
 
 		Ok(Box::new(DirectoryTilesReader {
 			meta,
-			path: path.to_path_buf(),
+			dir: dir.to_path_buf(),
 			tile_map,
 			parameters: TilesReaderParameters::new(
 				tile_format.expect("tile format must be specified"),
@@ -151,7 +152,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 		}
 	}
 	fn get_name(&self) -> &str {
-		self.path.to_str().unwrap()
+		self.dir.to_str().unwrap()
 	}
 }
 

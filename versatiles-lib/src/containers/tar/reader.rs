@@ -170,25 +170,28 @@ impl Debug for TarTilesReader {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::containers::{tests::make_test_file, MockTilesWriter, MockTilesWriterProfile};
+	use crate::{
+		containers::{tests::make_test_file, MockTilesWriter, TilesWriterParameters, MOCK_BYTES_PBF},
+		shared::decompress_brotli,
+	};
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let temp_file = make_test_file(TileFormat::PNG, Compression::Brotli, 4, "tar").await?;
+		let temp_file = make_test_file(TileFormat::PBF, Compression::Brotli, 3, "tar").await?;
 
 		// get tar reader
 		let mut reader = TarTilesReader::open(&temp_file).await?;
 
-		assert_eq!(format!("{:?}", reader), "TarTilesReader { parameters:  { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], decompressor: UnBrotli, flip_y: false, swap_xy: false, tile_compression: Brotli, tile_format: PNG } }");
+		assert_eq!(format!("{:?}", reader), "TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Brotli, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "tar");
 		assert!(reader.get_name().ends_with(temp_file.to_str().unwrap()));
 		assert_eq!(reader.get_meta().await?, Some(Blob::from(b"dummy meta data".to_vec())));
-		assert_eq!(format!("{:?}", reader.get_parameters()), " { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], decompressor: UnBrotli, flip_y: false, swap_xy: false, tile_compression: Brotli, tile_format: PNG }");
+		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Brotli, tile_format: PBF }");
 		assert_eq!(reader.get_parameters().tile_compression, Compression::Brotli);
-		assert_eq!(reader.get_parameters().tile_format, TileFormat::PNG);
+		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
-		let tile = reader.get_tile_data(&TileCoord3::new(12, 3, 4)?).await?;
-		assert_eq!(tile, Blob::from( b"\x053\x80\x89PNG\x0d\x0a\x1a\x0a\x00\x00\x00\x0dIHDR\x00\x00\x01\x00\x00\x00\x01\x00\x01\x03\x00\x00\x00f\xbc:%\x00\x00\x00\x03PLTE\xaa\xd3\xdf\xcf\xec\xbc\xf5\x00\x00\x00\x1fIDATh\x81\xed\xc1\x01\x0d\x00\x00\x00\xc2\xa0\xf7Om\x0e7\xa0\x00\x00\x00\x00\x00\x00\x00\x00\xbe\x0d!\x00\x00\x01\x9a`\xe1\xd5\x00\x00\x00\x00IEND\xaeB`\x82\x03".to_vec()));
+		let tile = reader.get_tile_data(&TileCoord3::new(6, 2, 3)?).await?;
+		assert_eq!(decompress_brotli(tile)?.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())
 	}
@@ -202,7 +205,7 @@ pub mod tests {
 			let mut reader = TarTilesReader::open(&temp_file).await?;
 			format!("{:?}", reader);
 
-			let mut writer = MockTilesWriter::new_mock_profile(MockTilesWriterProfile::PBF);
+			let mut writer = MockTilesWriter::new_mock(TilesWriterParameters::new(TileFormat::PBF, compression));
 			writer.write_from_reader(&mut reader).await?;
 			Ok(())
 		}

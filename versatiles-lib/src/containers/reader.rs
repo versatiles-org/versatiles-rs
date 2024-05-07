@@ -199,11 +199,11 @@ mod tests {
 		let mut reader = TestReader::new_dummy();
 
 		// Test getting name
-		assert_eq!(reader.get_name(), "test_path");
+		assert_eq!(reader.get_name(), "dummy");
 
 		// Test getting tile compression and format
 		let parameters = reader.get_parameters();
-		assert_eq!(parameters.tile_compression, Compression::None);
+		assert_eq!(parameters.tile_compression, Compression::Gzip);
 		assert_eq!(parameters.tile_format, TileFormat::PBF);
 
 		// Test getting container name

@@ -76,7 +76,6 @@ full = [
 	"dep:webp",
 	"http",
 ]
-mock = []
 
 [lib]
 name = "versatiles_lib"

@@ -99,7 +99,7 @@ mod tests {
 
 		let bbox_pyramid = TileBBoxPyramid::new_full(4);
 
-		assert_ne!(
+		assert_eq!(
 			reader.get_parameters(),
 			&TilesReaderParameters::new(TileFormat::PNG, Compression::None, bbox_pyramid)
 		);

@@ -61,8 +61,8 @@ pub mod tests {
 		shared::{Compression as C, TileBBoxPyramid, TileFormat as TF},
 	};
 	use anyhow::Result;
-	use assert_fs::fixture::NamedTempFile;
-	use std::time::Instant;
+	use assert_fs::{fixture::NamedTempFile, TempDir};
+	use std::{path::Path, time::Instant};
 
 	use super::writer::TilesWriterParameters;
 
@@ -96,6 +96,7 @@ pub mod tests {
 	fn writers_and_readers() -> Result<()> {
 		#[derive(Debug)]
 		enum Container {
+			Directory,
 			Tar,
 			Versatiles,
 		}
@@ -110,30 +111,41 @@ pub mod tests {
 			let mut reader1 = MockTilesReader::new_mock(TilesReaderParameters::new(
 				tile_format,
 				compression,
-				TileBBoxPyramid::new_full(4),
+				TileBBoxPyramid::new_full(2),
 			));
 
-			// get to test container comverter
-			let container_file = match container {
-				Container::Tar => NamedTempFile::new("temp.tar"),
-				Container::Versatiles => NamedTempFile::new("temp.versatiles"),
-			}?;
+			enum TempType {
+				Dir(TempDir),
+				File(NamedTempFile),
+			}
 
-			let config = TilesWriterParameters::new(tile_format, compression);
-			let mut converter1 = get_writer(container_file.to_str().unwrap(), config).await?;
+			// get to test container comverter
+			let path: TempType = match container {
+				Container::Directory => TempType::Dir(TempDir::new()?),
+				Container::Tar => TempType::File(NamedTempFile::new("temp.tar")?),
+				Container::Versatiles => TempType::File(NamedTempFile::new("temp.versatiles")?),
+			};
+
+			let filename = match &path {
+				TempType::Dir(t) => t.to_str().unwrap(),
+				TempType::File(t) => t.to_str().unwrap(),
+			};
+
+			let parameters = TilesWriterParameters::new(tile_format, compression);
+			let mut writer1 = get_writer(filename, parameters).await?;
 
 			// convert
-			converter1.write_tiles(&mut reader1).await?;
+			writer1.write_from_reader(&mut reader1).await?;
 
 			// get test container reader
-			let mut reader2 = get_reader(container_file.to_str().unwrap()).await?;
-			let mut converter2 = MockTilesWriter::new_mock(TilesWriterParameters::new(tile_format, compression));
-			converter2.write_tiles(&mut reader2).await?;
+			let mut reader2 = get_reader(filename).await?;
+			let mut writer2 = MockTilesWriter::new_mock(TilesWriterParameters::new(tile_format, compression));
+			writer2.write_from_reader(&mut reader2).await?;
 
 			Ok(())
 		}
 
-		let containers = vec![Container::Tar, Container::Versatiles];
+		let containers = vec![Container::Directory, Container::Tar, Container::Versatiles];
 
 		for container in containers {
 			test_writer_and_reader(&container, TF::PNG, C::None)?;

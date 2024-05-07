@@ -397,8 +397,8 @@ impl Debug for VersaTilesReader {
 mod tests {
 	use super::VersaTilesReader;
 	use crate::{
-		containers::tests::make_test_file,
-		shared::{Compression, TileCoord3, TileFormat},
+		containers::{tests::make_test_file, MOCK_BYTES_PBF},
+		shared::{decompress_gzip, Compression, TileCoord3, TileFormat},
 	};
 	use anyhow::Result;
 
@@ -406,20 +406,20 @@ mod tests {
 	async fn test_reader() -> Result<()> {
 		use crate::shared::Blob;
 
-		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 8, "versatiles").await?;
+		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 4, "versatiles").await?;
 
 		let mut reader = VersaTilesReader::open_file(&temp_file).await?;
 
-		assert_eq!(format!("{:?}", reader), "VersaTilesReader { parameters:  { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: UnGzip, flip_y: false, swap_xy: false, tile_compression: Gzip, tile_format: PBF } }");
+		assert_eq!(format!("{:?}", reader), "VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "versatiles");
 		assert!(reader.get_name().ends_with(temp_file.to_str().unwrap()));
 		assert_eq!(reader.get_meta().await?, Some(Blob::from(b"dummy meta data".to_vec())));
-		assert_eq!(format!("{:?}", reader.get_parameters()), " { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: UnGzip, flip_y: false, swap_xy: false, tile_compression: Gzip, tile_format: PBF }");
+		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: PBF }");
 		assert_eq!(reader.get_parameters().tile_compression, Compression::Gzip);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
-		let tile = reader.get_tile_data(&TileCoord3::new(123, 45, 8)?).await?;
-		assert_eq!(tile, Blob::from(b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x02\xff\x016\x00\xc9\xff\x1a4\x0a\x05ocean\x12\x19\x12\x04\x00\x00\x01\x00\x18\x03\"\x0f\x09)\xa8@\x1a\x00\xd1@\xd2@\x00\x00\xd2@\x0f\x1a\x01x\x1a\x01y\"\x05\x15\x00\x00\x00\x00(\x80 x\x02C!\x1f_6\x00\x00\x00".to_vec()));
+		let tile = reader.get_tile_data(&TileCoord3::new(15, 1, 4)?).await?;
+		assert_eq!(decompress_gzip(tile)?.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())
 	}

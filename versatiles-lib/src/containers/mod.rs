@@ -1,11 +1,11 @@
-mod readers;
-pub use readers::*;
+mod reader;
+pub use reader::*;
 mod types;
 pub use types::*;
 
-#[cfg(feature = "full")]
+#[cfg(any(test, feature = "full"))]
 mod writer;
-#[cfg(feature = "full")]
+#[cfg(any(test, feature = "full"))]
 pub use writer::*;
 
 #[cfg(feature = "full")]
@@ -32,7 +32,7 @@ mod getters;
 #[cfg(feature = "full")]
 pub use getters::*;
 
-#[cfg(feature = "mock")]
+#[cfg(test)]
 mod mock;
-#[cfg(feature = "mock")]
+#[cfg(test)]
 pub use mock::*;
