@@ -208,7 +208,7 @@ mod tests {
 	#[tokio::test]
 	#[cfg(feature = "full")]
 	async fn reader() -> Result<()> {
-		use crate::containers::{MockTilesConverter, MockTilesConverterProfile};
+		use crate::containers::{MockTilesWriter, MockTilesWriterProfile};
 
 		let mut reader = TestReader::new_dummy("test_path").await?;
 
@@ -232,7 +232,7 @@ mod tests {
 			"test tile data"
 		);
 
-		let mut converter = MockTilesConverter::new_mock(MockTilesConverterProfile::Whatever, 3);
+		let mut converter = MockTilesWriter::new_mock(MockTilesWriterProfile::Whatever, 3);
 		converter.convert_from(&mut reader).await?;
 
 		Ok(())

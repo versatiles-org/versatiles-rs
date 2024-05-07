@@ -78,7 +78,7 @@ mod tests {
 	use super::{MOCK_BYTES_PBF, MOCK_BYTES_PNG};
 	use crate::{
 		containers::mock::{
-			converter::MockTilesConverterProfile, reader::MockTilesReaderProfile, MockTilesConverter, MockTilesReader,
+			reader::MockTilesReaderProfile, writer::MockTilesWriterProfile, MockTilesReader, MockTilesWriter,
 		},
 		shared::{decompress, Blob, TileCoord3, TilesReaderParameters},
 	};
@@ -117,7 +117,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn convert_from() {
-		let mut converter = MockTilesConverter::new_mock(MockTilesConverterProfile::PNG, 8);
+		let mut converter = MockTilesWriter::new_mock(MockTilesWriterProfile::PNG, 8);
 		let mut reader = MockTilesReader::new_mock(MockTilesReaderProfile::PNG, 8);
 		converter.convert_from(&mut reader).await.unwrap();
 	}

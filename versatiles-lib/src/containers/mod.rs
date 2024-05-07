@@ -27,8 +27,8 @@ pub use mock::*;
 mod versatiles;
 pub use versatiles::*;
 
-mod converters;
-pub use converters::*;
+mod writer;
+pub use writer::*;
 mod readers;
 pub use readers::*;
 mod types;

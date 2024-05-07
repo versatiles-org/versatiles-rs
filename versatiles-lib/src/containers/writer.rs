@@ -1,17 +1,17 @@
 use super::TilesReaderBox;
-use crate::shared::TilesConverterConfig;
+use crate::shared::TilesWriterConfig;
 use anyhow::Result;
 use async_trait::async_trait;
 use std::path::Path;
 
 #[cfg(feature = "full")]
-pub type TilesConverterBox = Box<dyn TilesConverterTrait>;
+pub type TilesWriterBox = Box<dyn TilesWriterTrait>;
 
 #[allow(clippy::new_ret_no_self)]
 #[async_trait]
 #[cfg(feature = "full")]
-pub trait TilesConverterTrait {
-	async fn open_file(path: &Path, tile_config: TilesConverterConfig) -> Result<TilesConverterBox>
+pub trait TilesWriterTrait {
+	async fn open_file(path: &Path, tile_config: TilesWriterConfig) -> Result<TilesWriterBox>
 	where
 		Self: Sized;
 

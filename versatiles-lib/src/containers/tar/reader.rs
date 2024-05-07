@@ -174,7 +174,7 @@ impl Debug for TarTilesReader {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::containers::{tests::make_test_file, MockTilesConverter, MockTilesConverterProfile};
+	use crate::containers::{tests::make_test_file, MockTilesWriter, MockTilesWriterProfile};
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
@@ -206,7 +206,7 @@ pub mod tests {
 			let mut reader = TarTilesReader::open(&temp_file).await?;
 			format!("{:?}", reader);
 
-			let mut converter = MockTilesConverter::new_mock(MockTilesConverterProfile::Whatever, 4);
+			let mut converter = MockTilesWriter::new_mock(MockTilesWriterProfile::Whatever, 4);
 			converter.convert_from(&mut reader).await?;
 			Ok(())
 		}

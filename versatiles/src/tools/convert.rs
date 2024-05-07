@@ -2,8 +2,8 @@ use anyhow::{bail, Result};
 use clap::Args;
 use log::trace;
 use versatiles_lib::{
-	containers::{get_converter, get_reader, TilesConverterBox, TilesReaderBox},
-	shared::{Compression, TileBBoxPyramid, TileFormat, TilesConverterConfig},
+	containers::{get_reader, get_writer, TilesReaderBox, TilesWriterBox},
+	shared::{Compression, TileBBoxPyramid, TileFormat, TilesWriterConfig},
 };
 
 #[derive(Args, Debug)]
@@ -84,7 +84,7 @@ async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TilesReade
 	Ok(reader)
 }
 
-async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TilesConverterBox> {
+async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TilesWriterBox> {
 	let mut bbox_pyramid = TileBBoxPyramid::new_full();
 
 	if let Some(min_zoom) = arguments.min_zoom {
@@ -114,14 +114,14 @@ async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TilesCo
 		}
 	}
 
-	let config = TilesConverterConfig::new(
+	let config = TilesWriterConfig::new(
 		arguments.tile_format,
 		arguments.compress,
 		bbox_pyramid,
 		arguments.force_recompress,
 	);
 
-	let converter = get_converter(filename, config).await?;
+	let converter = get_writer(filename, config).await?;
 
 	Ok(converter)
 }

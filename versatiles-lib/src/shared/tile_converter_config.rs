@@ -1,7 +1,7 @@
 use crate::shared::{Compression, DataConverter, TileBBoxPyramid, TileFormat, TilesReaderParameters};
 
 #[derive(Debug)]
-pub struct TilesConverterConfig {
+pub struct TilesWriterConfig {
 	tile_format: Option<TileFormat>,
 	tile_compression: Option<Compression>,
 	tile_recompressor: Option<DataConverter>,
@@ -11,12 +11,12 @@ pub struct TilesConverterConfig {
 	finalized: bool,
 }
 
-impl TilesConverterConfig {
+impl TilesWriterConfig {
 	pub fn new(
 		tile_format: Option<TileFormat>, tile_compression: Option<Compression>, bbox_pyramid: TileBBoxPyramid,
 		force_recompress: bool,
 	) -> Self {
-		TilesConverterConfig {
+		TilesWriterConfig {
 			tile_format,
 			tile_compression,
 			bbox_pyramid,
@@ -76,15 +76,14 @@ impl TilesConverterConfig {
 
 #[cfg(test)]
 mod tests {
-	use super::{Compression, TileBBoxPyramid, TileFormat, TilesConverterConfig, TilesReaderParameters};
+	use super::{Compression, TileBBoxPyramid, TileFormat, TilesReaderParameters, TilesWriterConfig};
 
 	#[test]
 	fn test() {
 		let pyramid = TileBBoxPyramid::new_full();
 		let parameters = TilesReaderParameters::new(TileFormat::PNG, Compression::Gzip, pyramid.clone());
 
-		let mut config =
-			TilesConverterConfig::new(Some(TileFormat::JPG), Some(Compression::Brotli), pyramid.clone(), true);
+		let mut config = TilesWriterConfig::new(Some(TileFormat::JPG), Some(Compression::Brotli), pyramid.clone(), true);
 
 		config.finalize_with_parameters(&parameters);
 

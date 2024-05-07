@@ -1,5 +1,5 @@
-mod converter;
 mod reader;
+mod writer;
 
-pub use converter::TarTilesConverter;
 pub use reader::TarTilesReader;
+pub use writer::TarTilesWriter;

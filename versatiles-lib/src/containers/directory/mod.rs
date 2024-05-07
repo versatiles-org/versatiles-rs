@@ -1,5 +1,5 @@
-mod converter;
 mod reader;
+mod writer;
 
-pub use converter::DirectoryTilesConverter;
 pub use reader::DirectoryTilesReader;
+pub use writer::DirectoryTilesWriter;

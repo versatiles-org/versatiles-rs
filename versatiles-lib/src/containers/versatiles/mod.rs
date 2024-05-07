@@ -1,14 +1,14 @@
 mod abstract_readers;
 #[cfg(feature = "full")]
 mod abstract_writers;
-#[cfg(feature = "full")]
-mod converter;
 mod reader;
 mod types;
+#[cfg(feature = "full")]
+mod writer;
 
 pub use abstract_readers::*;
 #[cfg(feature = "full")]
 pub use abstract_writers::*;
-#[cfg(feature = "full")]
-pub use converter::VersaTilesConverter;
 pub use reader::VersaTilesReader;
+#[cfg(feature = "full")]
+pub use writer::VersaTilesWriter;

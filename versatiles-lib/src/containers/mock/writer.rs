@@ -1,6 +1,6 @@
 use crate::{
-	containers::{TilesConverterBox, TilesConverterTrait, TilesReaderBox},
-	shared::{Compression, TileBBoxPyramid, TileFormat, TilesConverterConfig},
+	containers::{TilesReaderBox, TilesWriterBox, TilesWriterTrait},
+	shared::{Compression, TileBBoxPyramid, TileFormat, TilesWriterConfig},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -9,33 +9,33 @@ use std::path::Path;
 
 #[allow(dead_code)]
 #[derive(Debug)]
-pub enum MockTilesConverterProfile {
+pub enum MockTilesWriterProfile {
 	PNG,
 	Whatever,
 }
 
-pub struct MockTilesConverter {
-	config: TilesConverterConfig,
+pub struct MockTilesWriter {
+	config: TilesWriterConfig,
 }
 
-impl MockTilesConverter {
-	pub fn new_mock(profile: MockTilesConverterProfile, max_zoom_level: u8) -> TilesConverterBox {
+impl MockTilesWriter {
+	pub fn new_mock(profile: MockTilesWriterProfile, max_zoom_level: u8) -> TilesWriterBox {
 		let mut bbox_pyramid = TileBBoxPyramid::new_full();
 		bbox_pyramid.set_zoom_max(max_zoom_level);
 
 		let config = match profile {
-			MockTilesConverterProfile::PNG => {
-				TilesConverterConfig::new(Some(TileFormat::PNG), Some(Compression::None), bbox_pyramid, false)
+			MockTilesWriterProfile::PNG => {
+				TilesWriterConfig::new(Some(TileFormat::PNG), Some(Compression::None), bbox_pyramid, false)
 			}
-			MockTilesConverterProfile::Whatever => TilesConverterConfig::new(None, None, bbox_pyramid, false),
+			MockTilesWriterProfile::Whatever => TilesWriterConfig::new(None, None, bbox_pyramid, false),
 		};
-		Box::new(MockTilesConverter { config })
+		Box::new(MockTilesWriter { config })
 	}
 }
 
 #[async_trait]
-impl TilesConverterTrait for MockTilesConverter {
-	async fn open_file(_path: &Path, config: TilesConverterConfig) -> Result<TilesConverterBox>
+impl TilesWriterTrait for MockTilesWriter {
+	async fn open_file(_path: &Path, config: TilesWriterConfig) -> Result<TilesWriterBox>
 	where
 		Self: Sized,
 	{
@@ -60,26 +60,26 @@ impl TilesConverterTrait for MockTilesConverter {
 
 #[cfg(test)]
 mod tests {
-	use super::{MockTilesConverter, MockTilesConverterProfile};
+	use super::{MockTilesWriter, MockTilesWriterProfile};
 	use crate::{
 		containers::{
 			mock::{reader::MockTilesReaderProfile, MockTilesReader},
-			TilesConverterTrait,
+			TilesWriterTrait,
 		},
-		shared::TilesConverterConfig,
+		shared::TilesWriterConfig,
 	};
 	use std::path::Path;
 
 	#[tokio::test]
 	async fn convert_from() {
-		let mut converter = MockTilesConverter::new_mock(MockTilesConverterProfile::PNG, 8);
+		let mut converter = MockTilesWriter::new_mock(MockTilesWriterProfile::PNG, 8);
 		let mut reader = MockTilesReader::new_mock(MockTilesReaderProfile::PNG, 8);
 		converter.convert_from(&mut reader).await.unwrap();
 	}
 
 	#[tokio::test]
 	async fn dummy() {
-		MockTilesConverter::open_file(&Path::new("hi"), TilesConverterConfig::new_full())
+		MockTilesWriter::open_file(&Path::new("hi"), TilesWriterConfig::new_full())
 			.await
 			.unwrap();
 	}

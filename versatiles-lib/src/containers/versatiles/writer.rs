@@ -1,8 +1,8 @@
 // Import necessary modules and traits
 use super::{types::*, DataWriterFile, DataWriterTrait};
 use crate::{
-	containers::{TilesConverterBox, TilesConverterTrait, TilesReaderBox, TilesStream},
-	shared::{Blob, ProgressBar, TileBBox, TilesConverterConfig},
+	containers::{TilesReaderBox, TilesStream, TilesWriterBox, TilesWriterTrait},
+	shared::{Blob, ProgressBar, TileBBox, TilesWriterConfig},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -10,21 +10,21 @@ use futures_util::{future::ready, StreamExt};
 use log::{debug, trace};
 use std::{collections::HashMap, path::Path};
 
-// Define TilesConverter struct
-pub struct VersaTilesConverter {
+// Define TilesWriter struct
+pub struct VersaTilesWriter {
 	writer: Box<dyn DataWriterTrait>,
-	config: TilesConverterConfig,
+	config: TilesWriterConfig,
 }
 
-// Implement TilesConverterTrait for TilesConverter
+// Implement TilesWriterTrait for TilesWriter
 #[async_trait]
-impl TilesConverterTrait for VersaTilesConverter {
-	// Create a new TilesConverter instance
-	async fn open_file(path: &Path, config: TilesConverterConfig) -> Result<TilesConverterBox>
+impl TilesWriterTrait for VersaTilesWriter {
+	// Create a new TilesWriter instance
+	async fn open_file(path: &Path, config: TilesWriterConfig) -> Result<TilesWriterBox>
 	where
 		Self: Sized,
 	{
-		Ok(Box::new(VersaTilesConverter {
+		Ok(Box::new(VersaTilesWriter {
 			writer: DataWriterFile::new(path)?,
 			config,
 		}))
@@ -76,8 +76,8 @@ impl TilesConverterTrait for VersaTilesConverter {
 	}
 }
 
-// Implement additional methods for TilesConverter
-impl VersaTilesConverter {
+// Implement additional methods for TilesWriter
+impl VersaTilesWriter {
 	// Write metadata
 	async fn write_meta(&mut self, reader: &TilesReaderBox) -> Result<ByteRange> {
 		let meta: Blob = reader.get_meta().await?.unwrap_or_default();

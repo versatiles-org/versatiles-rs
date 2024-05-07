@@ -178,8 +178,8 @@ mod tests {
 	use super::*;
 	use assert_fs::NamedTempFile;
 	use versatiles_lib::{
-		containers::{MockTilesReader, MockTilesReaderProfile, TarTilesConverter, TilesConverterTrait},
-		shared::{TileBBoxPyramid, TileFormat, TilesConverterConfig},
+		containers::{MockTilesReader, MockTilesReaderProfile, TarTilesWriter, TilesWriterTrait},
+		shared::{TileBBoxPyramid, TileFormat, TilesWriterConfig},
 	};
 
 	pub async fn make_test_tar(compression: Compression) -> NamedTempFile {
@@ -191,13 +191,13 @@ mod tests {
 		// get to test container converter
 		let container_file = NamedTempFile::new("temp.tar").unwrap();
 
-		let config = TilesConverterConfig::new(
+		let config = TilesWriterConfig::new(
 			Some(TileFormat::PBF),
 			Some(compression),
 			TileBBoxPyramid::new_full(),
 			false,
 		);
-		let mut converter = TarTilesConverter::open_file(&container_file, config).await.unwrap();
+		let mut converter = TarTilesWriter::open_file(&container_file, config).await.unwrap();
 
 		// convert
 		converter.convert_from(&mut reader).await.unwrap();

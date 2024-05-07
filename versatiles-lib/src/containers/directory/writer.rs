@@ -1,6 +1,6 @@
 use crate::{
-	containers::{TilesConverterBox, TilesConverterTrait, TilesReaderBox},
-	shared::{compress, compression_to_extension, format_to_extension, ProgressBar, TilesConverterConfig},
+	containers::{TilesReaderBox, TilesWriterBox, TilesWriterTrait},
+	shared::{compress, compression_to_extension, format_to_extension, ProgressBar, TilesWriterConfig},
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
@@ -11,12 +11,12 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-pub struct DirectoryTilesConverter {
+pub struct DirectoryTilesWriter {
 	dir: PathBuf,
-	config: TilesConverterConfig,
+	config: TilesWriterConfig,
 }
 
-impl DirectoryTilesConverter {
+impl DirectoryTilesWriter {
 	fn write(&self, path: &Path, contents: &[u8]) -> Result<()> {
 		let path_buf = self.dir.join(path);
 		Self::ensure_directory(&path_buf.to_path_buf())?;
@@ -35,8 +35,8 @@ impl DirectoryTilesConverter {
 }
 
 #[async_trait]
-impl TilesConverterTrait for DirectoryTilesConverter {
-	async fn open_file(path: &Path, config: TilesConverterConfig) -> Result<TilesConverterBox>
+impl TilesWriterTrait for DirectoryTilesWriter {
+	async fn open_file(path: &Path, config: TilesWriterConfig) -> Result<TilesWriterBox>
 	where
 		Self: Sized,
 	{
@@ -44,7 +44,7 @@ impl TilesConverterTrait for DirectoryTilesConverter {
 		ensure!(path.is_dir(), "path {path:?} must be a directory");
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
-		Ok(Box::new(DirectoryTilesConverter {
+		Ok(Box::new(DirectoryTilesWriter {
 			dir: path.to_path_buf(),
 			config,
 		}))
@@ -115,9 +115,9 @@ mod tests {
 	#[test]
 	fn test_write() -> Result<()> {
 		let temp_dir = assert_fs::TempDir::new()?;
-		let tile_converter = DirectoryTilesConverter {
+		let tile_converter = DirectoryTilesWriter {
 			dir: temp_dir.path().to_path_buf(),
-			config: TilesConverterConfig::new_full(),
+			config: TilesWriterConfig::new_full(),
 		};
 
 		let file_path = Path::new("test_write.txt");
@@ -138,7 +138,7 @@ mod tests {
 		let nested_dir_path = temp_dir.path().join("a/b/c");
 		assert!(!nested_dir_path.exists());
 
-		DirectoryTilesConverter::ensure_directory(&nested_dir_path)?;
+		DirectoryTilesWriter::ensure_directory(&nested_dir_path)?;
 
 		assert!(nested_dir_path.parent().unwrap().exists());
 		Ok(())
@@ -148,8 +148,8 @@ mod tests {
 	async fn test_convert_from() -> Result<()> {
 		let temp_dir = assert_fs::TempDir::new()?;
 		let temp_path = temp_dir.path();
-		let tile_config = TilesConverterConfig::new_full();
-		let mut tile_converter = DirectoryTilesConverter::open_file(&temp_path, tile_config).await?;
+		let tile_config = TilesWriterConfig::new_full();
+		let mut tile_converter = DirectoryTilesWriter::open_file(&temp_path, tile_config).await?;
 
 		let mut mock_reader = MockTilesReader::new_mock(MockTilesReaderProfile::PNG, 3);
 

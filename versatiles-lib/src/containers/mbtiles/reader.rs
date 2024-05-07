@@ -295,7 +295,7 @@ struct RecordMetadata {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::containers::{MockTilesConverter, MockTilesConverterProfile};
+	use crate::containers::{MockTilesWriter, MockTilesWriterProfile};
 	use lazy_static::lazy_static;
 	use std::{env, path::PathBuf};
 
@@ -324,7 +324,7 @@ pub mod tests {
 			&[255, 15, 172, 89, 205, 237, 7, 134, 5, 0]
 		);
 
-		let mut converter = MockTilesConverter::new_mock(MockTilesConverterProfile::Whatever, 8);
+		let mut converter = MockTilesWriter::new_mock(MockTilesWriterProfile::Whatever, 8);
 
 		converter.convert_from(&mut reader).await?;
 

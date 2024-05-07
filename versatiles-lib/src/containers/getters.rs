@@ -1,5 +1,5 @@
 use super::*;
-use crate::shared::TilesConverterConfig;
+use crate::shared::TilesWriterConfig;
 use anyhow::{bail, Context, Result};
 use reqwest::Url;
 use std::{env, path::Path};
@@ -31,14 +31,14 @@ pub async fn get_reader(filename: &str) -> Result<TilesReaderBox> {
 	}
 }
 
-pub async fn get_converter(filename: &str, config: TilesConverterConfig) -> Result<TilesConverterBox> {
+pub async fn get_writer(filename: &str, config: TilesWriterConfig) -> Result<TilesWriterBox> {
 	let path = env::current_dir()?.join(filename);
 
 	let extension = get_extension(&path);
 	match extension.as_str() {
-		"versatiles" => versatiles::VersaTilesConverter::open_file(&path, config).await,
-		"tar" => tar::TarTilesConverter::open_file(&path, config).await,
-		"" => directory::DirectoryTilesConverter::open_file(&path, config).await,
+		"versatiles" => versatiles::VersaTilesWriter::open_file(&path, config).await,
+		"tar" => tar::TarTilesWriter::open_file(&path, config).await,
+		"" => directory::DirectoryTilesWriter::open_file(&path, config).await,
 		_ => bail!("Error when writing: file extension '{extension:?}' unknown"),
 	}
 }
@@ -56,10 +56,10 @@ fn get_extension(path: &Path) -> String {
 pub mod tests {
 	use crate::{
 		containers::{
-			get_converter, get_reader, MockTilesConverter, MockTilesConverterProfile as CP, MockTilesReader,
-			MockTilesReaderProfile as RP,
+			get_reader, get_writer, MockTilesReader, MockTilesReaderProfile as RP, MockTilesWriter,
+			MockTilesWriterProfile as CP,
 		},
-		shared::{Compression as C, TileBBoxPyramid, TileFormat as TF, TilesConverterConfig},
+		shared::{Compression as C, TileBBoxPyramid, TileFormat as TF, TilesWriterConfig},
 	};
 	use anyhow::Result;
 	use assert_fs::fixture::NamedTempFile;
@@ -86,8 +86,8 @@ pub mod tests {
 			_ => panic!("make_test_file: extension {extension} not found"),
 		}?;
 
-		let config = TilesConverterConfig::new(Some(tile_format), Some(compression), TileBBoxPyramid::new_full(), false);
-		let mut converter = get_converter(container_file.to_str().unwrap(), config).await?;
+		let config = TilesWriterConfig::new(Some(tile_format), Some(compression), TileBBoxPyramid::new_full(), false);
+		let mut converter = get_writer(container_file.to_str().unwrap(), config).await?;
 
 		// convert
 		converter.convert_from(&mut reader).await?;
@@ -97,7 +97,7 @@ pub mod tests {
 
 	#[test]
 
-	fn converters_and_readers() -> Result<()> {
+	fn writers_and_readers() -> Result<()> {
 		#[derive(Debug)]
 		enum Container {
 			Tar,
@@ -105,7 +105,7 @@ pub mod tests {
 		}
 
 		#[tokio::main]
-		async fn test_converter_and_reader(
+		async fn test_writer_and_reader(
 			reader_profile: RP, max_zoom_level: u8, container: &Container, tile_format: TF, compression: C,
 			force_recompress: bool,
 		) -> Result<()> {
@@ -125,20 +125,20 @@ pub mod tests {
 				Container::Versatiles => NamedTempFile::new("temp.versatiles"),
 			}?;
 
-			let config = TilesConverterConfig::new(
+			let config = TilesWriterConfig::new(
 				Some(tile_format),
 				Some(compression),
 				TileBBoxPyramid::new_full(),
 				force_recompress,
 			);
-			let mut converter1 = get_converter(container_file.to_str().unwrap(), config).await?;
+			let mut converter1 = get_writer(container_file.to_str().unwrap(), config).await?;
 
 			// convert
 			converter1.convert_from(&mut reader1).await?;
 
 			// get test container reader
 			let mut reader2 = get_reader(container_file.to_str().unwrap()).await?;
-			let mut converter2 = MockTilesConverter::new_mock(CP::Whatever, max_zoom_level);
+			let mut converter2 = MockTilesWriter::new_mock(CP::Whatever, max_zoom_level);
 			converter2.convert_from(&mut reader2).await?;
 
 			Ok(())
@@ -147,9 +147,9 @@ pub mod tests {
 		let containers = vec![Container::Tar, Container::Versatiles];
 
 		for container in containers {
-			test_converter_and_reader(RP::PNG, 7, &container, TF::PNG, C::None, false)?;
-			test_converter_and_reader(RP::PNG, 4, &container, TF::JPG, C::None, false)?;
-			test_converter_and_reader(RP::PBF, 7, &container, TF::PBF, C::Gzip, false)?;
+			test_writer_and_reader(RP::PNG, 7, &container, TF::PNG, C::None, false)?;
+			test_writer_and_reader(RP::PNG, 4, &container, TF::JPG, C::None, false)?;
+			test_writer_and_reader(RP::PBF, 7, &container, TF::PBF, C::Gzip, false)?;
 		}
 
 		Ok(())
