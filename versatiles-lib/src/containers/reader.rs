@@ -12,7 +12,7 @@ use tokio::sync::Mutex;
 
 pub type TilesReaderBox = Box<dyn TilesReaderTrait>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct TilesReaderParameters {
 	pub bbox_pyramid: TileBBoxPyramid,
 	pub tile_compression: Compression,
@@ -44,7 +44,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	/// get meta data, always uncompressed
 	async fn get_meta(&self) -> Result<Option<Blob>>;
 
-	/// always compressed with get_tile_compression and formatted with get_tile_format
+	/// always compressed with tile_compression and formatted with get_tile_format
 	/// returns the tile in the coordinate system of the source
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob>;
 
@@ -87,19 +87,21 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 			cat.add_key_value("meta", &meta_option).await;
 		}
 
-		self.probe_parameters(print.get_category("parameters").await).await?;
+		self
+			.probe_parameters(&mut print.get_category("parameters").await)
+			.await?;
 
 		if matches!(level, Container | Tiles | TileContents) {
-			self.probe_container(print.get_category("container").await).await?;
+			self.probe_container(&print.get_category("container").await).await?;
 		}
 
 		if matches!(level, Tiles | TileContents) {
-			self.probe_tiles(print.get_category("tiles").await).await?;
+			self.probe_tiles(&print.get_category("tiles").await).await?;
 		}
 
 		if matches!(level, TileContents) {
 			self
-				.probe_tile_contents(print.get_category("tile contents").await)
+				.probe_tile_contents(&print.get_category("tile contents").await)
 				.await?;
 		}
 
@@ -107,7 +109,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	}
 
 	#[cfg(feature = "full")]
-	async fn probe_parameters(&mut self, mut print: PrettyPrint) -> Result<()> {
+	async fn probe_parameters(&mut self, print: &mut PrettyPrint) -> Result<()> {
 		let parameters = self.get_parameters();
 		let p = print.get_list("bbox_pyramid").await;
 		for level in parameters.bbox_pyramid.iter_levels() {
@@ -125,7 +127,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 	#[cfg(feature = "full")]
 	/// deep probe container
-	async fn probe_container(&mut self, print: PrettyPrint) -> Result<()> {
+	async fn probe_container(&mut self, print: &PrettyPrint) -> Result<()> {
 		print
 			.add_warning("deep container probing is not implemented for this container format")
 			.await;
@@ -134,7 +136,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 	#[cfg(feature = "full")]
 	/// deep probe container tiles
-	async fn probe_tiles(&mut self, print: PrettyPrint) -> Result<()> {
+	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
 		print
 			.add_warning("deep tiles probing is not implemented for this container format")
 			.await;
@@ -143,7 +145,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 	#[cfg(feature = "full")]
 	/// deep probe container tile contents
-	async fn probe_tile_contents(&mut self, print: PrettyPrint) -> Result<()> {
+	async fn probe_tile_contents(&mut self, print: &PrettyPrint) -> Result<()> {
 		print
 			.add_warning("deep tile contents probing is not implemented for this container format")
 			.await;

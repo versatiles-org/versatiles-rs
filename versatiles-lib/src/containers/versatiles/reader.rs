@@ -170,7 +170,7 @@ impl TilesReaderTrait for VersaTilesReader {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
-		let mut block_coords: TileBBox = bbox;
+		let mut block_coords: TileBBox = bbox.clone();
 		block_coords.scale_down(256);
 		let block_coords: Vec<TileCoord3> = block_coords.iter_coords().collect();
 
@@ -197,7 +197,7 @@ impl TilesReaderTrait for VersaTilesReader {
 					trace!("tiles_bbox_block {tiles_bbox_block:?}");
 
 					// Get the bounding box of all tiles defined in this block
-					let mut tiles_bbox_used = bbox;
+					let mut tiles_bbox_used: TileBBox = bbox.clone();
 					tiles_bbox_used.intersect_bbox(tiles_bbox_block);
 					trace!("tiles_bbox_used {tiles_bbox_used:?}");
 
@@ -298,7 +298,7 @@ impl TilesReaderTrait for VersaTilesReader {
 
 	// deep probe of container meta
 	#[cfg(feature = "full")]
-	async fn probe_container(&mut self, print: PrettyPrint) -> Result<()> {
+	async fn probe_container(&mut self, print: &PrettyPrint) -> Result<()> {
 		print
 			.add_key_value("meta size", &self.meta.as_ref().map_or(0, |b| b.len()))
 			.await;
@@ -320,7 +320,7 @@ impl TilesReaderTrait for VersaTilesReader {
 
 	// deep probe of container tiles
 	#[cfg(feature = "full")]
-	async fn probe_tiles(&mut self, print: PrettyPrint) -> Result<()> {
+	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
 		#[allow(dead_code)]
 		#[derive(Debug)]
 		struct Entry {
@@ -434,14 +434,14 @@ mod tests {
 		let mut reader = VersaTilesReader::open_file(&temp_file).await?;
 
 		let mut printer = PrettyPrint::new();
-		reader.probe_container(printer.get_category("container").await).await?;
+		reader.probe_container(&printer.get_category("container").await).await?;
 		assert_eq!(
 			printer.as_string().await,
 			"container:\n   meta size: 15\n   block count: 5\n   sum of block index sizes: 70\n   sum of block tiles sizes: 385\n"
 		);
 
 		let mut printer = PrettyPrint::new();
-		reader.probe_tiles(printer.get_category("tiles").await).await?;
+		reader.probe_tiles(&printer.get_category("tiles").await).await?;
 		assert_eq!(
 			printer.as_string().await.get(0..73).unwrap(),
 			"tiles:\n   average tile size: 77\n   #1 biggest tile: Entry { size: 77, x: "

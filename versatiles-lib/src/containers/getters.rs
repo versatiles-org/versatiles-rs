@@ -30,14 +30,14 @@ pub async fn get_reader(filename: &str) -> Result<TilesReaderBox> {
 	}
 }
 
-pub async fn get_writer(filename: &str, config: TilesWriterParameters) -> Result<TilesWriterBox> {
+pub async fn get_writer(filename: &str, parameters: TilesWriterParameters) -> Result<TilesWriterBox> {
 	let path = env::current_dir()?.join(filename);
 
 	let extension = get_extension(&path);
 	match extension.as_str() {
-		"versatiles" => VersaTilesWriter::open_file(&path, config).await,
-		"tar" => TarTilesWriter::open_file(&path, config),
-		"" => DirectoryTilesWriter::open_file(&path, config),
+		"versatiles" => VersaTilesWriter::open_file(&path, parameters).await,
+		"tar" => TarTilesWriter::open_file(&path, parameters),
+		"" => DirectoryTilesWriter::open_file(&path, parameters),
 		_ => bail!("Error when writing: file extension '{extension:?}' unknown"),
 	}
 }

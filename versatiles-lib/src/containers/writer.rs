@@ -30,7 +30,7 @@ pub trait TilesWriterTrait: Send {
 	}
 
 	// readers must be mutable, because they might use caching
-	fn check_reader(&self, reader: &TilesReaderBox) -> Result<()> {
+	fn check_reader(&self, reader: &mut TilesReaderBox) -> Result<()> {
 		let reader_parameters = reader.get_parameters();
 		let writer_parameters = self.get_parameters();
 

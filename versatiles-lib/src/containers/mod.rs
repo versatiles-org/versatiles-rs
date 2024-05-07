@@ -32,6 +32,11 @@ mod getters;
 #[cfg(feature = "full")]
 pub use getters::*;
 
+#[cfg(feature = "full")]
+mod converter;
+#[cfg(feature = "full")]
+pub use converter::*;
+
 #[cfg(test)]
 mod mock;
 #[cfg(test)]

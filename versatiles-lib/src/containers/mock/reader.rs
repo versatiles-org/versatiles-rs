@@ -15,7 +15,7 @@ pub enum MockTilesReaderProfile {
 pub const MOCK_BYTES_AVIF: &[u8; 303] = include_bytes!("./mock_tiles/mock.avif");
 pub const MOCK_BYTES_JPG: &[u8; 125] = include_bytes!("./mock_tiles/mock.jpg");
 pub const MOCK_BYTES_PBF: &[u8; 54] = include_bytes!("./mock_tiles/mock.pbf");
-pub const MOCK_BYTES_PNG: &[u8; 67] = include_bytes!("./mock_tiles/mock.png");
+pub const MOCK_BYTES_PNG: &[u8; 103] = include_bytes!("./mock_tiles/mock.png");
 pub const MOCK_BYTES_WEBP: &[u8; 30] = include_bytes!("./mock_tiles/mock.webp");
 
 pub struct MockTilesReader {

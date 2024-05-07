@@ -4,7 +4,7 @@ use std::fmt;
 
 const MAX_ZOOM_LEVEL: u8 = 32;
 
-#[derive(Clone, Eq)]
+#[derive(Clone, Eq, Copy)]
 pub struct TileBBoxPyramid {
 	pub level_bbox: [TileBBox; MAX_ZOOM_LEVEL as usize],
 }
