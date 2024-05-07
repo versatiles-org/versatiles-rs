@@ -35,7 +35,7 @@ impl DirectoryTilesWriter {
 }
 
 impl DirectoryTilesWriter {
-	fn open_file(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox>
+	pub fn open_file(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox>
 	where
 		Self: Sized,
 	{
@@ -132,7 +132,7 @@ mod tests {
 		let parameters = TilesWriterParameters::new(crate::shared::TileFormat::PBF, crate::shared::Compression::Gzip);
 		let mut tile_converter = DirectoryTilesWriter::open_file(&temp_path, parameters)?;
 
-		let mut mock_reader = MockTilesReader::new_mock(MockTilesReaderProfile::PNG, 3);
+		let mut mock_reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG);
 
 		tile_converter.write_from_reader(&mut mock_reader).await?;
 

@@ -1,6 +1,6 @@
 use crate::{
 	containers::{TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
-	shared::{Compression, TileBBoxPyramid, TileFormat},
+	shared::{Compression, TileFormat},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -18,15 +18,14 @@ pub struct MockTilesWriter {
 }
 
 impl MockTilesWriter {
-	pub fn new_mock(profile: MockTilesWriterProfile, max_zoom_level: u8) -> TilesWriterBox {
-		let mut bbox_pyramid = TileBBoxPyramid::new_full();
-		bbox_pyramid.set_zoom_max(max_zoom_level);
-
-		let config = match profile {
+	pub fn new_mock_profile(profile: MockTilesWriterProfile) -> TilesWriterBox {
+		Self::new_mock(match profile {
 			MockTilesWriterProfile::PNG => TilesWriterParameters::new(TileFormat::PNG, Compression::None),
 			MockTilesWriterProfile::PBF => TilesWriterParameters::new(TileFormat::PBF, Compression::Gzip),
-		};
-		Box::new(MockTilesWriter { parameters: config })
+		})
+	}
+	pub fn new_mock(parameters: TilesWriterParameters) -> TilesWriterBox {
+		Box::new(MockTilesWriter { parameters })
 	}
 }
 
@@ -58,15 +57,15 @@ mod tests {
 
 	#[tokio::test]
 	async fn convert_png() {
-		let mut writer = MockTilesWriter::new_mock(MockTilesWriterProfile::PNG, 8);
-		let mut reader = MockTilesReader::new_mock(MockTilesReaderProfile::PNG, 8);
+		let mut writer = MockTilesWriter::new_mock_profile(MockTilesWriterProfile::PNG);
+		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG);
 		writer.write_from_reader(&mut reader).await.unwrap();
 	}
 
 	#[tokio::test]
 	async fn convert_pbf() {
-		let mut writer = MockTilesWriter::new_mock(MockTilesWriterProfile::PBF, 8);
-		let mut reader = MockTilesReader::new_mock(MockTilesReaderProfile::PBF, 8);
+		let mut writer = MockTilesWriter::new_mock_profile(MockTilesWriterProfile::PBF);
+		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF);
 		writer.write_from_reader(&mut reader).await.unwrap();
 	}
 }

@@ -216,7 +216,7 @@ mod tests {
 		let coord = TileCoord3::new(0, 0, 0)?;
 		assert_eq!(reader.get_tile_data(&coord).await?.to_string(), "test tile data");
 
-		let mut writer = MockTilesWriter::new_mock(MockTilesWriterProfile::PBF, 3);
+		let mut writer = MockTilesWriter::new_mock_profile(MockTilesWriterProfile::PBF);
 		writer.write_from_reader(&mut reader).await?;
 
 		Ok(())

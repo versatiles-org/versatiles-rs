@@ -1,15 +1,18 @@
 // Import necessary modules and traits
-use super::{types::*, DataReaderFile, DataReaderHttp, DataReaderTrait};
+#[cfg(feature = "http")]
+use super::DataReaderHttp;
+use super::{types::*, DataReaderFile, DataReaderTrait};
 #[cfg(feature = "full")]
 use crate::shared::PrettyPrint;
 use crate::{
-	containers::{TilesReaderBox, TilesReaderTrait, TilesStream},
-	shared::{Blob, DataConverter, TileBBox, TileCoord2, TileCoord3, TilesReaderParameters},
+	containers::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
+	shared::{Blob, DataConverter, TileBBox, TileCoord2, TileCoord3},
 };
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use futures_util::{stream, StreamExt};
 use log::trace;
+#[cfg(feature = "http")]
 use reqwest::Url;
 use std::{collections::HashMap, fmt::Debug, ops::Shr, path::Path, sync::Arc};
 use tokio::sync::Mutex;
@@ -31,6 +34,7 @@ impl VersaTilesReader {
 	}
 
 	// Create a new TilesReader from a given filename
+	#[cfg(feature = "http")]
 	pub async fn open_url(url: Url) -> Result<TilesReaderBox> {
 		Ok(Box::new(VersaTilesReader::from_src(DataReaderHttp::new(url)?).await?))
 	}
@@ -126,13 +130,8 @@ impl TilesReaderTrait for VersaTilesReader {
 		&self.parameters
 	}
 
-	// Get mutable TilesReader parameters
-	fn get_parameters_mut(&mut self) -> &mut TilesReaderParameters {
-		&mut self.parameters
-	}
-
 	// Get tile data for a given coordinate
-	async fn get_tile_data_original(&mut self, coord: &TileCoord3) -> Result<Blob> {
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
 		// Calculate block coordinate
 		let block_coord = TileCoord3::new(coord.get_x().shr(8), coord.get_y().shr(8), coord.get_z())?;
 
@@ -167,7 +166,7 @@ impl TilesReaderTrait for VersaTilesReader {
 		self.reader.read_range(tile_range).await
 	}
 
-	async fn get_bbox_tile_stream_original<'a>(&'a mut self, bbox: TileBBox) -> TilesStream<'a> {
+	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox: TileBBox) -> TilesStream<'a> {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
@@ -416,10 +415,10 @@ mod tests {
 		assert!(reader.get_name().ends_with(temp_file.to_str().unwrap()));
 		assert_eq!(reader.get_meta().await?, Some(Blob::from(b"dummy meta data".to_vec())));
 		assert_eq!(format!("{:?}", reader.get_parameters()), " { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: UnGzip, flip_y: false, swap_xy: false, tile_compression: Gzip, tile_format: PBF }");
-		assert_eq!(reader.get_tile_compression(), &Compression::Gzip);
-		assert_eq!(reader.get_tile_format(), &TileFormat::PBF);
+		assert_eq!(reader.get_parameters().tile_compression, Compression::Gzip);
+		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
-		let tile = reader.get_tile_data_original(&TileCoord3::new(123, 45, 8)?).await?;
+		let tile = reader.get_tile_data(&TileCoord3::new(123, 45, 8)?).await?;
 		assert_eq!(tile, Blob::from(b"\x1f\x8b\x08\x00\x00\x00\x00\x00\x02\xff\x016\x00\xc9\xff\x1a4\x0a\x05ocean\x12\x19\x12\x04\x00\x00\x01\x00\x18\x03\"\x0f\x09)\xa8@\x1a\x00\xd1@\xd2@\x00\x00\xd2@\x0f\x1a\x01x\x1a\x01y\"\x05\x15\x00\x00\x00\x00(\x80 x\x02C!\x1f_6\x00\x00\x00".to_vec()));
 
 		Ok(())

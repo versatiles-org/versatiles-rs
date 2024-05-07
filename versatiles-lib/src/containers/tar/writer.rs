@@ -1,6 +1,6 @@
 use crate::{
-	containers::{TilesReaderBox, TilesWriterBox, TilesWriterTrait},
-	shared::{compress, compression_to_extension, format_to_extension, ProgressBar, TilesWriterConfig},
+	containers::{TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
+	shared::{compress, compression_to_extension, format_to_extension, ProgressBar},
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
@@ -15,12 +15,11 @@ use tokio::sync::Mutex;
 
 pub struct TarTilesWriter {
 	builder: Builder<File>,
-	config: TilesWriterConfig,
+	parameters: TilesWriterParameters,
 }
 
-#[async_trait]
-impl TilesWriterTrait for TarTilesWriter {
-	async fn open_file(path: &Path, config: TilesWriterConfig) -> Result<TilesWriterBox>
+impl TarTilesWriter {
+	pub fn open_file(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox>
 	where
 		Self: Sized,
 	{
@@ -31,24 +30,28 @@ impl TilesWriterTrait for TarTilesWriter {
 		let file = File::create(path)?;
 		let builder = Builder::new(file);
 
-		Ok(Box::new(TarTilesWriter { builder, config }))
+		Ok(Box::new(TarTilesWriter { builder, parameters }))
 	}
-	async fn convert_from(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
+}
+
+#[async_trait]
+impl TilesWriterTrait for TarTilesWriter {
+	fn get_parameters(&self) -> &TilesWriterParameters {
+		&self.parameters
+	}
+	async fn write_tiles(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
 		trace!("convert_from");
+		let tile_format = &self.parameters.tile_format;
+		let tile_compression = &self.parameters.tile_compression;
+		let bbox_pyramid = reader.get_parameters().bbox_pyramid.clone();
 
-		self.config.finalize_with_parameters(reader.get_parameters());
-
-		let tile_converter = self.config.get_tile_recompressor();
-
-		let extension_format = format_to_extension(self.config.get_tile_format());
-		let extension_compression = compression_to_extension(self.config.get_tile_compression());
-
-		let bbox_pyramid = self.config.get_bbox_pyramid();
+		let extension_format = format_to_extension(tile_format);
+		let extension_compression = compression_to_extension(tile_compression);
 
 		let meta_data_option = reader.get_meta().await?;
 
 		if let Some(meta_data) = meta_data_option {
-			let meta_data = compress(meta_data, self.config.get_tile_compression())?;
+			let meta_data = compress(meta_data, tile_compression)?;
 			let filename = format!("tiles.json{}", extension_compression);
 
 			let mut header = Header::new_gnu();
@@ -71,28 +74,26 @@ impl TilesWriterTrait for TarTilesWriter {
 				let (coord, blob) = entry;
 				mutex_bar.lock().await.inc(1);
 
-				if let Ok(blob) = tile_converter.process_blob(blob) {
-					let filename = format!(
-						"./{}/{}/{}{}{}",
-						coord.get_z(),
-						coord.get_y(),
-						coord.get_x(),
-						extension_format,
-						extension_compression
-					);
-					let path = PathBuf::from(&filename);
+				let filename = format!(
+					"./{}/{}/{}{}{}",
+					coord.get_z(),
+					coord.get_y(),
+					coord.get_x(),
+					extension_format,
+					extension_compression
+				);
+				let path = PathBuf::from(&filename);
 
-					// Build header
-					let mut header = Header::new_gnu();
-					header.set_size(blob.len() as u64);
-					header.set_mode(0o644);
+				// Build header
+				let mut header = Header::new_gnu();
+				header.set_size(blob.len() as u64);
+				header.set_mode(0o644);
 
-					// Write blob to file
-					mutex_builder
-						.lock()
-						.await
-						.append_data(&mut header, path, blob.as_slice())?;
-				}
+				// Write blob to file
+				mutex_builder
+					.lock()
+					.await
+					.append_data(&mut header, path, blob.as_slice())?;
 			}
 		}
 

@@ -63,19 +63,18 @@ assert_fs = { version = "1.1.1" }
 
 [features]
 default = []
+http = ["dep:regex", "dep:reqwest", "dep:lazy_static"]
 full = [
 	"dep:clap",
 	"dep:colored",
 	"dep:hyper",
 	"dep:image",
-	"dep:lazy_static",
 	"dep:r2d2",
 	"dep:r2d2_sqlite",
-	"dep:regex",
-	"dep:reqwest",
 	"dep:tar",
 	"dep:terminal_size",
 	"dep:webp",
+	"http",
 ]
 mock = []
 

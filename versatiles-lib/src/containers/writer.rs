@@ -5,6 +5,7 @@ use async_trait::async_trait;
 
 pub type TilesWriterBox = Box<dyn TilesWriterTrait>;
 
+#[derive(Debug)]
 pub struct TilesWriterParameters {
 	pub tile_format: TileFormat,
 	pub tile_compression: Compression,

@@ -30,14 +30,14 @@ pub async fn get_reader(filename: &str) -> Result<TilesReaderBox> {
 	}
 }
 
-pub async fn get_writer(filename: &str, config: TilesWriterConfig) -> Result<TilesWriterBox> {
+pub async fn get_writer(filename: &str, config: TilesWriterParameters) -> Result<TilesWriterBox> {
 	let path = env::current_dir()?.join(filename);
 
 	let extension = get_extension(&path);
 	match extension.as_str() {
-		"versatiles" => versatiles::VersaTilesWriter::open_file(&path, config).await,
-		"tar" => tar::TarTilesWriter::open_file(&path, config).await,
-		"" => directory::DirectoryTilesWriter::open_file(&path, config).await,
+		"versatiles" => VersaTilesWriter::open_file(&path, config).await,
+		"tar" => TarTilesWriter::open_file(&path, config),
+		"" => DirectoryTilesWriter::open_file(&path, config),
 		_ => bail!("Error when writing: file extension '{extension:?}' unknown"),
 	}
 }
@@ -56,27 +56,25 @@ pub mod tests {
 	use crate::{
 		containers::{
 			get_reader, get_writer, MockTilesReader, MockTilesReaderProfile as RP, MockTilesWriter,
-			MockTilesWriterProfile as CP,
+			MockTilesWriterProfile as CP, TilesReaderParameters,
 		},
-		shared::{Compression as C, TileBBoxPyramid, TileFormat as TF, TilesWriterConfig},
+		shared::{Compression as C, TileBBoxPyramid, TileFormat as TF},
 	};
 	use anyhow::Result;
 	use assert_fs::fixture::NamedTempFile;
 	use std::time::Instant;
 
+	use super::writer::TilesWriterParameters;
+
 	pub async fn make_test_file(
 		tile_format: TF, compression: C, max_zoom_level: u8, extension: &str,
 	) -> Result<NamedTempFile> {
-		let reader_profile = match tile_format {
-			TF::PNG => RP::PNG,
-			TF::JPG => RP::PNG,
-			TF::WEBP => RP::PNG,
-			TF::PBF => RP::PBF,
-			_ => todo!(),
-		};
-
 		// get dummy reader
-		let mut reader = MockTilesReader::new_mock(reader_profile, max_zoom_level);
+		let mut reader = MockTilesReader::new_mock(TilesReaderParameters::new(
+			tile_format,
+			compression,
+			TileBBoxPyramid::new_full(max_zoom_level),
+		));
 
 		// get to test container comverter
 		let container_file = match extension {
@@ -85,17 +83,16 @@ pub mod tests {
 			_ => panic!("make_test_file: extension {extension} not found"),
 		}?;
 
-		let config = TilesWriterConfig::new(Some(tile_format), Some(compression), TileBBoxPyramid::new_full(), false);
+		let config = TilesWriterParameters::new(tile_format, compression);
 		let mut writer = get_writer(container_file.to_str().unwrap(), config).await?;
 
 		// convert
-		writer.fill_from_reader(&mut reader).await?;
+		writer.write_tiles(&mut reader).await?;
 
 		Ok(container_file)
 	}
 
 	#[test]
-
 	fn writers_and_readers() -> Result<()> {
 		#[derive(Debug)]
 		enum Container {
@@ -104,19 +101,17 @@ pub mod tests {
 		}
 
 		#[tokio::main]
-		async fn test_writer_and_reader(
-			reader_profile: RP, max_zoom_level: u8, container: &Container, tile_format: TF, compression: C,
-			force_recompress: bool,
-		) -> Result<()> {
-			let _test_name = format!(
-				"{:?}, {}, {:?}, {:?}, {:?}, {:?}",
-				reader_profile, max_zoom_level, container, tile_format, compression, force_recompress
-			);
+		async fn test_writer_and_reader(container: &Container, tile_format: TF, compression: C) -> Result<()> {
+			let _test_name = format!("{:?}, {:?}, {:?}", container, tile_format, compression);
 
 			let _start = Instant::now();
 
 			// get dummy reader
-			let mut reader1 = MockTilesReader::new_mock(reader_profile, max_zoom_level);
+			let mut reader1 = MockTilesReader::new_mock(TilesReaderParameters::new(
+				tile_format,
+				compression,
+				TileBBoxPyramid::new_full(4),
+			));
 
 			// get to test container comverter
 			let container_file = match container {
@@ -124,21 +119,16 @@ pub mod tests {
 				Container::Versatiles => NamedTempFile::new("temp.versatiles"),
 			}?;
 
-			let config = TilesWriterConfig::new(
-				Some(tile_format),
-				Some(compression),
-				TileBBoxPyramid::new_full(),
-				force_recompress,
-			);
+			let config = TilesWriterParameters::new(tile_format, compression);
 			let mut converter1 = get_writer(container_file.to_str().unwrap(), config).await?;
 
 			// convert
-			converter1.convert_from(&mut reader1).await?;
+			converter1.write_tiles(&mut reader1).await?;
 
 			// get test container reader
 			let mut reader2 = get_reader(container_file.to_str().unwrap()).await?;
-			let mut converter2 = MockTilesWriter::new_mock(CP::Whatever, max_zoom_level);
-			converter2.convert_from(&mut reader2).await?;
+			let mut converter2 = MockTilesWriter::new_mock(TilesWriterParameters::new(tile_format, compression));
+			converter2.write_tiles(&mut reader2).await?;
 
 			Ok(())
 		}
@@ -146,9 +136,9 @@ pub mod tests {
 		let containers = vec![Container::Tar, Container::Versatiles];
 
 		for container in containers {
-			test_writer_and_reader(RP::PNG, 7, &container, TF::PNG, C::None, false)?;
-			test_writer_and_reader(RP::PNG, 4, &container, TF::JPG, C::None, false)?;
-			test_writer_and_reader(RP::PBF, 7, &container, TF::PBF, C::Gzip, false)?;
+			test_writer_and_reader(&container, TF::PNG, C::None)?;
+			test_writer_and_reader(&container, TF::JPG, C::None)?;
+			test_writer_and_reader(&container, TF::PBF, C::Gzip)?;
 		}
 
 		Ok(())

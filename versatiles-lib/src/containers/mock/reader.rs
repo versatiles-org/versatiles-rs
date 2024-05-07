@@ -1,6 +1,6 @@
 use crate::{
 	containers::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
-	shared::{compress_gzip, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat},
+	shared::{compress, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat},
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -17,21 +17,20 @@ pub const MOCK_BYTES_PBF: &[u8; 54] = include_bytes!("./mock.pbf");
 
 pub struct MockTilesReader {
 	parameters: TilesReaderParameters,
-	profile: MockTilesReaderProfile,
 }
 
 impl MockTilesReader {
-	pub fn new_mock(profile: MockTilesReaderProfile, max_zoom_level: u8) -> TilesReaderBox {
-		let mut bbox_pyramid = TileBBoxPyramid::new_full();
-		bbox_pyramid.set_zoom_max(max_zoom_level);
+	pub fn new_mock_profile(profile: MockTilesReaderProfile) -> TilesReaderBox {
+		let bbox_pyramid = TileBBoxPyramid::new_full(4);
 
-		let parameters = match profile {
+		Self::new_mock(match profile {
 			MockTilesReaderProfile::JSON => TilesReaderParameters::new(TileFormat::JSON, Compression::None, bbox_pyramid),
 			MockTilesReaderProfile::PNG => TilesReaderParameters::new(TileFormat::PNG, Compression::None, bbox_pyramid),
 			MockTilesReaderProfile::PBF => TilesReaderParameters::new(TileFormat::PBF, Compression::Gzip, bbox_pyramid),
-		};
-
-		Box::new(Self { profile, parameters })
+		})
+	}
+	pub fn new_mock(parameters: TilesReaderParameters) -> TilesReaderBox {
+		Box::new(Self { parameters })
 	}
 }
 
@@ -51,11 +50,15 @@ impl TilesReaderTrait for MockTilesReader {
 	}
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
 		if coord.is_valid() {
-			Ok(match self.profile {
-				MockTilesReaderProfile::JSON => Blob::from(coord.as_json()),
-				MockTilesReaderProfile::PNG => Blob::from(MOCK_BYTES_PNG.to_vec()),
-				MockTilesReaderProfile::PBF => compress_gzip(Blob::from(MOCK_BYTES_PBF.to_vec()))?,
-			})
+			let format = self.parameters.tile_format;
+			let mut blob = match format {
+				TileFormat::JSON => Blob::from(coord.as_json()),
+				TileFormat::PNG => Blob::from(MOCK_BYTES_PNG.to_vec()),
+				TileFormat::PBF => Blob::from(MOCK_BYTES_PBF.to_vec()),
+				_ => bail!("not implemented"),
+			};
+			blob = compress(blob, &self.parameters.tile_compression)?;
+			Ok(blob)
 		} else {
 			bail!("invalid coordinates: {coord:?}")
 		}
@@ -84,12 +87,11 @@ mod tests {
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let mut reader = MockTilesReader::new_mock(MockTilesReaderProfile::PNG, 8);
+		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG);
 		assert_eq!(reader.get_container_name(), "dummy_container");
 		assert_eq!(reader.get_name(), "dummy_name");
 
-		let mut bbox_pyramid = TileBBoxPyramid::new_full();
-		bbox_pyramid.set_zoom_max(8);
+		let bbox_pyramid = TileBBoxPyramid::new_full(4);
 
 		assert_ne!(
 			reader.get_parameters(),
@@ -105,7 +107,7 @@ mod tests {
 	async fn get_tile_data() {
 		let test = |profile, blob| async move {
 			let coord = TileCoord3::new(23, 45, 6).unwrap();
-			let mut reader = MockTilesReader::new_mock(profile, 8);
+			let mut reader = MockTilesReader::new_mock_profile(profile);
 			let tile_compressed = reader.get_tile_data(&coord).await.unwrap();
 			let tile_uncompressed = decompress(tile_compressed, &reader.get_parameters().tile_compression).unwrap();
 			assert_eq!(tile_uncompressed, blob);
@@ -118,8 +120,8 @@ mod tests {
 
 	#[tokio::test]
 	async fn convert_from() {
-		let mut writer = MockTilesWriter::new_mock(MockTilesWriterProfile::PNG, 8);
-		let mut reader = MockTilesReader::new_mock(MockTilesReaderProfile::PNG, 8);
+		let mut writer = MockTilesWriter::new_mock_profile(MockTilesWriterProfile::PNG);
+		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG);
 		writer.write_from_reader(&mut reader).await.unwrap();
 	}
 }

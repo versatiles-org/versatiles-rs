@@ -11,9 +11,15 @@ pub struct TileBBoxPyramid {
 
 #[allow(dead_code)]
 impl TileBBoxPyramid {
-	pub fn new_full() -> TileBBoxPyramid {
+	pub fn new_full(max_zoom_level: u8) -> TileBBoxPyramid {
 		TileBBoxPyramid {
-			level_bbox: from_fn(|z| TileBBox::new_full(z as u8).unwrap()),
+			level_bbox: from_fn(|z| {
+				if z <= max_zoom_level as usize {
+					TileBBox::new_full(z as u8).unwrap()
+				} else {
+					TileBBox::new_empty(z as u8).unwrap()
+				}
+			}),
 		}
 	}
 	pub fn new_empty() -> TileBBoxPyramid {
@@ -103,8 +109,14 @@ impl TileBBoxPyramid {
 		self.level_bbox.iter().all(|bbox| bbox.is_empty())
 	}
 	#[cfg(test)]
-	pub fn is_full(&self) -> bool {
-		self.level_bbox.iter().all(|bbox| bbox.is_full())
+	pub fn is_full(&self, max_zoom_level: u8) -> bool {
+		self.level_bbox.iter().all(|bbox| {
+			if bbox.level <= max_zoom_level {
+				bbox.is_full()
+			} else {
+				bbox.is_empty()
+			}
+		})
 	}
 	pub fn get_geo_bbox(&self) -> [f64; 4] {
 		let level = self.get_zoom_max().unwrap();
@@ -154,23 +166,22 @@ mod tests {
 		pyramid1.intersect(&TileBBoxPyramid::new_empty());
 		assert!(pyramid1.is_empty());
 
-		let mut pyramid1 = TileBBoxPyramid::new_full();
+		let mut pyramid1 = TileBBoxPyramid::new_full(8);
 		pyramid1.intersect(&TileBBoxPyramid::new_empty());
 		assert!(pyramid1.is_empty());
 
 		let mut pyramid1 = TileBBoxPyramid::new_empty();
-		pyramid1.intersect(&TileBBoxPyramid::new_full());
+		pyramid1.intersect(&TileBBoxPyramid::new_full(8));
 		assert!(pyramid1.is_empty());
 
-		let mut pyramid1 = TileBBoxPyramid::new_full();
-		pyramid1.intersect(&TileBBoxPyramid::new_full());
-		assert!(pyramid1.is_full());
+		let mut pyramid1 = TileBBoxPyramid::new_full(8);
+		pyramid1.intersect(&TileBBoxPyramid::new_full(8));
+		assert!(pyramid1.is_full(8));
 	}
 
 	#[test]
 	fn limit_by_geo_bbox() {
-		let mut pyramid = TileBBoxPyramid::new_full();
-		pyramid.set_zoom_max(8);
+		let mut pyramid = TileBBoxPyramid::new_full(8);
 		pyramid.intersect_geo_bbox(&[8.0653f64, 51.3563f64, 12.3528f64, 52.2564f64]);
 
 		assert_eq!(pyramid.get_level_bbox(0), &TileBBox::new(0, 0, 0, 0, 0).unwrap());
@@ -239,9 +250,8 @@ mod tests {
 	#[test]
 	fn zoom_min_max() {
 		let test = |z0: u8, z1: u8| {
-			let mut pyramid = TileBBoxPyramid::new_full();
+			let mut pyramid = TileBBoxPyramid::new_full(z1);
 			pyramid.set_zoom_min(z0);
-			pyramid.set_zoom_max(z1);
 			assert_eq!(pyramid.get_zoom_min().unwrap(), z0);
 			assert_eq!(pyramid.get_zoom_max().unwrap(), z1);
 		};
@@ -257,7 +267,7 @@ mod tests {
 		pyramid.add_border(1, 2, 3, 4);
 		assert!(pyramid.is_empty());
 
-		let mut pyramid = TileBBoxPyramid::new_full();
+		let mut pyramid = TileBBoxPyramid::new_full(8);
 		pyramid.intersect_geo_bbox(&[-9., -5., 5., 10.]);
 		pyramid.add_border(1, 2, 3, 4);
 

@@ -1,8 +1,8 @@
 // Import necessary modules and traits
 use super::{types::*, DataWriterFile, DataWriterTrait};
 use crate::{
-	containers::{TilesReaderBox, TilesStream, TilesWriterBox, TilesWriterTrait},
-	shared::{Blob, ProgressBar, TileBBox, TilesWriterConfig},
+	containers::{TilesReaderBox, TilesStream, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
+	shared::{compress, Blob, ProgressBar, TileBBox},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -13,43 +13,46 @@ use std::{collections::HashMap, path::Path};
 // Define TilesWriter struct
 pub struct VersaTilesWriter {
 	writer: Box<dyn DataWriterTrait>,
-	config: TilesWriterConfig,
+	parameters: TilesWriterParameters,
 }
 
-// Implement TilesWriterTrait for TilesWriter
-#[async_trait]
-impl TilesWriterTrait for VersaTilesWriter {
+impl VersaTilesWriter {
 	// Create a new TilesWriter instance
-	async fn open_file(path: &Path, config: TilesWriterConfig) -> Result<TilesWriterBox>
+	pub async fn open_file(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox>
 	where
 		Self: Sized,
 	{
 		Ok(Box::new(VersaTilesWriter {
 			writer: DataWriterFile::new(path)?,
-			config,
+			parameters,
 		}))
+	}
+}
+
+// Implement TilesWriterTrait for TilesWriter
+#[async_trait]
+impl TilesWriterTrait for VersaTilesWriter {
+	fn get_parameters(&self) -> &TilesWriterParameters {
+		&self.parameters
 	}
 
 	// Convert tiles from the TilesReader
-	async fn convert_from(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
+	async fn write_tiles(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
 		// Finalize the configuration
 
-		trace!("convert_from - self.config original: {:?}", self.config);
+		trace!("convert_from - self.parameters: {:?}", &self.parameters);
 
 		let parameters = reader.get_parameters();
-		trace!("convert_from - parameters: {parameters:?}");
-
-		self.config.finalize_with_parameters(parameters);
-		trace!("convert_from - self.config patched: {:?}", self.config);
+		trace!("convert_from - reader.parameters: {parameters:?}");
 
 		// Get the bounding box pyramid
-		let bbox_pyramid = self.config.get_bbox_pyramid();
+		let bbox_pyramid = reader.get_parameters().bbox_pyramid.clone();
 		trace!("convert_from - bbox_pyramid: {bbox_pyramid:#}");
 
 		// Create the file header
 		let mut header = FileHeader::new(
-			self.config.get_tile_format(),
-			self.config.get_tile_compression(),
+			&self.parameters.tile_format,
+			&self.parameters.tile_compression,
 			[
 				bbox_pyramid.get_zoom_min().unwrap(),
 				bbox_pyramid.get_zoom_max().unwrap(),
@@ -81,21 +84,22 @@ impl VersaTilesWriter {
 	// Write metadata
 	async fn write_meta(&mut self, reader: &TilesReaderBox) -> Result<ByteRange> {
 		let meta: Blob = reader.get_meta().await?.unwrap_or_default();
-		let compressed = self.config.get_compressor().process_blob(meta)?;
+		let compressed = compress(meta, &self.parameters.tile_compression)?;
 
 		self.writer.append(&compressed)
 	}
 
 	// Write blocks
 	async fn write_blocks(&mut self, reader: &mut TilesReaderBox) -> Result<ByteRange> {
-		let pyramid = self.config.get_bbox_pyramid();
+		let pyramid = reader.get_parameters().bbox_pyramid.clone();
+
 		if pyramid.is_empty() {
 			return Ok(ByteRange::empty());
 		}
 
 		// Initialize blocks and populate them
 		let mut blocks: Vec<BlockDefinition> = Vec::new();
-		for bbox_tiles in self.config.get_bbox_pyramid().iter_levels() {
+		for bbox_tiles in pyramid.iter_levels() {
 			let mut bbox_blocks = *bbox_tiles;
 			bbox_blocks.scale_down(256);
 
@@ -156,15 +160,8 @@ impl VersaTilesWriter {
 		let mut tile_index = TileIndex::new_empty(bbox.count_tiles() as usize);
 		let mut tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
-		// Create the tile converter and set parameters
-		let tile_converter = self.config.get_tile_recompressor();
-
 		// Get the tile stream
-		let mut tile_stream: TilesStream = reader.get_bbox_tile_stream(bbox).await;
-
-		if !tile_converter.is_empty() {
-			tile_stream = tile_converter.process_stream(tile_stream)
-		}
+		let tile_stream: TilesStream = reader.get_bbox_tile_stream(bbox).await;
 
 		// Iterate through the blobs and process them
 		tile_stream

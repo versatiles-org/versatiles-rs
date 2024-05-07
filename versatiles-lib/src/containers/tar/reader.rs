@@ -1,8 +1,7 @@
 use crate::{
-	containers::{TilesReaderBox, TilesReaderTrait},
+	containers::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
 	shared::{
 		decompress, extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat,
-		TilesReaderParameters,
 	},
 };
 use anyhow::{anyhow, bail, ensure, Result};
@@ -136,13 +135,10 @@ impl TilesReaderTrait for TarTilesReader {
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
-	fn get_parameters_mut(&mut self) -> &mut TilesReaderParameters {
-		&mut self.parameters
-	}
 	async fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(self.meta.clone())
 	}
-	async fn get_tile_data_original(&mut self, coord: &TileCoord3) -> Result<Blob> {
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
 		log::trace!("get_tile_data_original {:?}", coord);
 
 		let range = self
@@ -188,10 +184,10 @@ pub mod tests {
 		assert!(reader.get_name().ends_with(temp_file.to_str().unwrap()));
 		assert_eq!(reader.get_meta().await?, Some(Blob::from(b"dummy meta data".to_vec())));
 		assert_eq!(format!("{:?}", reader.get_parameters()), " { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], decompressor: UnBrotli, flip_y: false, swap_xy: false, tile_compression: Brotli, tile_format: PNG }");
-		assert_eq!(reader.get_tile_compression(), &Compression::Brotli);
-		assert_eq!(reader.get_tile_format(), &TileFormat::PNG);
+		assert_eq!(reader.get_parameters().tile_compression, Compression::Brotli);
+		assert_eq!(reader.get_parameters().tile_format, TileFormat::PNG);
 
-		let tile = reader.get_tile_data_original(&TileCoord3::new(12, 3, 4)?).await?;
+		let tile = reader.get_tile_data(&TileCoord3::new(12, 3, 4)?).await?;
 		assert_eq!(tile, Blob::from( b"\x053\x80\x89PNG\x0d\x0a\x1a\x0a\x00\x00\x00\x0dIHDR\x00\x00\x01\x00\x00\x00\x01\x00\x01\x03\x00\x00\x00f\xbc:%\x00\x00\x00\x03PLTE\xaa\xd3\xdf\xcf\xec\xbc\xf5\x00\x00\x00\x1fIDATh\x81\xed\xc1\x01\x0d\x00\x00\x00\xc2\xa0\xf7Om\x0e7\xa0\x00\x00\x00\x00\x00\x00\x00\x00\xbe\x0d!\x00\x00\x01\x9a`\xe1\xd5\x00\x00\x00\x00IEND\xaeB`\x82\x03".to_vec()));
 
 		Ok(())
@@ -206,8 +202,8 @@ pub mod tests {
 			let mut reader = TarTilesReader::open(&temp_file).await?;
 			format!("{:?}", reader);
 
-			let mut converter = MockTilesWriter::new_mock(MockTilesWriterProfile::Whatever, 4);
-			converter.convert_from(&mut reader).await?;
+			let mut writer = MockTilesWriter::new_mock_profile(MockTilesWriterProfile::PBF);
+			writer.write_from_reader(&mut reader).await?;
 			Ok(())
 		}
 
