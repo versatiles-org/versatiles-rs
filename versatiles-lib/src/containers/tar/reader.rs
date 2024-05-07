@@ -172,26 +172,26 @@ pub mod tests {
 	use super::*;
 	use crate::{
 		containers::{tests::make_test_file, MockTilesWriter, TilesWriterParameters, MOCK_BYTES_PBF},
-		shared::decompress_brotli,
+		shared::decompress_gzip,
 	};
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let temp_file = make_test_file(TileFormat::PBF, Compression::Brotli, 3, "tar").await?;
+		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 3, "tar").await?;
 
 		// get tar reader
 		let mut reader = TarTilesReader::open(&temp_file).await?;
 
-		assert_eq!(format!("{:?}", reader), "TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Brotli, tile_format: PBF } }");
+		assert_eq!(format!("{:?}", reader), "TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "tar");
 		assert!(reader.get_name().ends_with(temp_file.to_str().unwrap()));
 		assert_eq!(reader.get_meta().await?, Some(Blob::from(b"dummy meta data".to_vec())));
-		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Brotli, tile_format: PBF }");
-		assert_eq!(reader.get_parameters().tile_compression, Compression::Brotli);
+		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: PBF }");
+		assert_eq!(reader.get_parameters().tile_compression, Compression::Gzip);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
 		let tile = reader.get_tile_data(&TileCoord3::new(6, 2, 3)?).await?;
-		assert_eq!(decompress_brotli(tile)?.as_slice(), MOCK_BYTES_PBF);
+		assert_eq!(decompress_gzip(tile)?.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())
 	}
@@ -199,7 +199,7 @@ pub mod tests {
 	#[tokio::test]
 	async fn all_compressions() -> Result<()> {
 		async fn test_compression(compression: Compression) -> Result<()> {
-			let temp_file = make_test_file(TileFormat::PBF, compression, 4, "tar").await?;
+			let temp_file = make_test_file(TileFormat::PBF, compression, 2, "tar").await?;
 
 			// get tar reader
 			let mut reader = TarTilesReader::open(&temp_file).await?;

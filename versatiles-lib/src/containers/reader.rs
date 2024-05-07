@@ -164,7 +164,7 @@ mod tests {
 		fn new_dummy() -> TilesReaderBox {
 			Box::new(TestReader {
 				parameters: TilesReaderParameters {
-					bbox_pyramid: TileBBoxPyramid::new_dummy(),
+					bbox_pyramid: TileBBoxPyramid::new_full(3),
 					tile_compression: Compression::Gzip,
 					tile_format: TileFormat::PBF,
 				},

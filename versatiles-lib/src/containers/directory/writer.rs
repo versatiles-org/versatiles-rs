@@ -103,8 +103,8 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::containers::{MockTilesReader, MockTilesReaderProfile, MOCK_BYTES_PBF};
-	use crate::shared::decompress_gzip;
+	use crate::containers::{MockTilesReader, TilesReaderParameters, MOCK_BYTES_PBF};
+	use crate::shared::{decompress_gzip, Compression, TileBBoxPyramid, TileFormat};
 	use assert_fs;
 
 	#[test]
@@ -124,10 +124,16 @@ mod tests {
 		let temp_dir = assert_fs::TempDir::new()?;
 		let temp_path = temp_dir.path();
 
-		let mut mock_reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF);
+		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters::new(
+			TileFormat::PBF,
+			Compression::Gzip,
+			TileBBoxPyramid::new_full(2),
+		));
 
-		let parameters = TilesWriterParameters::new(crate::shared::TileFormat::PBF, crate::shared::Compression::Gzip);
-		let mut writer = DirectoryTilesWriter::open_file(&temp_path, parameters)?;
+		let mut writer = DirectoryTilesWriter::open_file(
+			&temp_path,
+			TilesWriterParameters::new(TileFormat::PBF, Compression::Gzip),
+		)?;
 
 		writer.write_from_reader(&mut mock_reader).await?;
 

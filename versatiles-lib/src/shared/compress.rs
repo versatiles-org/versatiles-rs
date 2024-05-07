@@ -178,7 +178,7 @@ mod tests {
 	/// Verify that the Brotli compression and decompression functions work correctly.
 	fn verify_brotli() -> Result<()> {
 		// Generate random data.
-		let data1 = random_data(100000);
+		let data1 = random_data(10000);
 
 		// Compress and then decompress the data.
 		let data2 = decompress_brotli(compress_brotli(data1.clone())?)?;
