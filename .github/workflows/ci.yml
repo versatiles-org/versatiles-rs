@@ -50,8 +50,17 @@ jobs:
       - name: Cargo Check
         run: cargo check --workspace --all-features
 
-      - name: Cargo Test
-        run: cargo test --workspace --all-features
+      - name: Cargo Test Lib (minimal)
+        run: cargo test -p versatiles-lib
+
+      - name: Cargo Test Lib (HTTP)
+        run: cargo test -p versatiles-lib -F http
+
+      - name: Cargo Test Lib (Full)
+        run: cargo test -p versatiles-lib -F full
+
+      - name: Cargo Test Binary
+        run: cargo test -p versatiles
 
       - name: Install Cargo Coverage
         uses: taiki-e/install-action@cargo-llvm-cov
