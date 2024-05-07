@@ -5,6 +5,7 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::StreamExt;
+use std::path::Path;
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -34,7 +35,7 @@ impl MockTilesConverter {
 
 #[async_trait]
 impl TilesConverterTrait for MockTilesConverter {
-	async fn new(_filename: &str, config: TilesConverterConfig) -> Result<TilesConverterBox>
+	async fn open_file(_path: &Path, config: TilesConverterConfig) -> Result<TilesConverterBox>
 	where
 		Self: Sized,
 	{
@@ -67,6 +68,7 @@ mod tests {
 		},
 		shared::TilesConverterConfig,
 	};
+	use std::path::Path;
 
 	#[tokio::test]
 	async fn convert_from() {
@@ -77,7 +79,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn dummy() {
-		MockTilesConverter::new("hi", TilesConverterConfig::new_full())
+		MockTilesConverter::open_file(&Path::new("hi"), TilesConverterConfig::new_full())
 			.await
 			.unwrap();
 	}

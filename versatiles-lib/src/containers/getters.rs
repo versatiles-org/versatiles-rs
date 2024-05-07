@@ -2,10 +2,7 @@ use super::*;
 use crate::shared::TilesConverterConfig;
 use anyhow::{bail, Context, Result};
 use reqwest::Url;
-use std::{
-	env,
-	path::{Path, PathBuf},
-};
+use std::{env, path::Path};
 
 pub async fn get_reader(filename: &str) -> Result<TilesReaderBox> {
 	let path = env::current_dir()?.join(filename);
@@ -35,13 +32,13 @@ pub async fn get_reader(filename: &str) -> Result<TilesReaderBox> {
 }
 
 pub async fn get_converter(filename: &str, config: TilesConverterConfig) -> Result<TilesConverterBox> {
-	let path = PathBuf::from(filename);
+	let path = env::current_dir()?.join(filename);
 
 	let extension = get_extension(&path);
 	match extension.as_str() {
-		"versatiles" => versatiles::VersaTilesConverter::new(filename, config).await,
-		"tar" => tar::TarTilesConverter::new(filename, config).await,
-		"" => directory::DirectoryTilesConverter::new(filename, config).await,
+		"versatiles" => versatiles::VersaTilesConverter::open_file(&path, config).await,
+		"tar" => tar::TarTilesConverter::open_file(&path, config).await,
+		"" => directory::DirectoryTilesConverter::open_file(&path, config).await,
 		_ => bail!("Error when writing: file extension '{extension:?}' unknown"),
 	}
 }

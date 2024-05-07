@@ -7,7 +7,6 @@ use async_trait::async_trait;
 use futures_util::StreamExt;
 use log::trace;
 use std::{
-	env,
 	fs::File,
 	path::{Path, PathBuf},
 };
@@ -21,13 +20,12 @@ pub struct TarTilesConverter {
 
 #[async_trait]
 impl TilesConverterTrait for TarTilesConverter {
-	async fn new(filename: &str, config: TilesConverterConfig) -> Result<TilesConverterBox>
+	async fn open_file(path: &Path, config: TilesConverterConfig) -> Result<TilesConverterBox>
 	where
 		Self: Sized,
 	{
-		trace!("new {:?}", filename);
+		trace!("new {:?}", path);
 
-		let path = env::current_dir().unwrap().join(filename);
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
 		let file = File::create(path)?;

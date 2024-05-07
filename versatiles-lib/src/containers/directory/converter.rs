@@ -6,7 +6,7 @@ use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use std::{
-	env, fs,
+	fs,
 	path::{Path, PathBuf},
 };
 use tokio::sync::Mutex;
@@ -36,17 +36,18 @@ impl DirectoryTilesConverter {
 
 #[async_trait]
 impl TilesConverterTrait for DirectoryTilesConverter {
-	async fn new(filename: &str, config: TilesConverterConfig) -> Result<TilesConverterBox>
+	async fn open_file(path: &Path, config: TilesConverterConfig) -> Result<TilesConverterBox>
 	where
 		Self: Sized,
 	{
-		log::trace!("new {:?}", filename);
+		log::trace!("new {:?}", path);
+		ensure!(path.is_dir(), "path {path:?} must be a directory");
+		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
-		let dir = env::current_dir()?.join(filename);
-		ensure!(dir.is_dir(), "path {dir:?} must be a directory");
-		ensure!(dir.is_absolute(), "path {dir:?} must be absolute");
-
-		Ok(Box::new(DirectoryTilesConverter { dir, config }))
+		Ok(Box::new(DirectoryTilesConverter {
+			dir: path.to_path_buf(),
+			config,
+		}))
 	}
 	async fn convert_from(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
 		log::trace!("convert_from");
@@ -147,9 +148,8 @@ mod tests {
 	async fn test_convert_from() -> Result<()> {
 		let temp_dir = assert_fs::TempDir::new()?;
 		let temp_path = temp_dir.path();
-		let filename = temp_path.to_str().unwrap();
 		let tile_config = TilesConverterConfig::new_full();
-		let mut tile_converter = DirectoryTilesConverter::new(filename, tile_config).await?;
+		let mut tile_converter = DirectoryTilesConverter::open_file(&temp_path, tile_config).await?;
 
 		let mut mock_reader = MockTilesReader::new_mock(MockTilesReaderProfile::PNG, 3);
 

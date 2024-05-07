@@ -1,26 +1,17 @@
 use super::TilesReaderBox;
-use crate::shared::*;
+use crate::shared::TilesConverterConfig;
 use anyhow::Result;
 use async_trait::async_trait;
-use futures_util::Stream;
-use std::pin::Pin;
+use std::path::Path;
 
 #[cfg(feature = "full")]
 pub type TilesConverterBox = Box<dyn TilesConverterTrait>;
-pub type TilesStream<'a> = Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + Send + 'a>>;
-
-pub enum ProbeDepth {
-	Shallow = 0,
-	Container = 1,
-	Tiles = 2,
-	TileContents = 3,
-}
 
 #[allow(clippy::new_ret_no_self)]
 #[async_trait]
 #[cfg(feature = "full")]
 pub trait TilesConverterTrait {
-	async fn new(filename: &str, tile_config: TilesConverterConfig) -> Result<TilesConverterBox>
+	async fn open_file(path: &Path, tile_config: TilesConverterConfig) -> Result<TilesConverterBox>
 	where
 		Self: Sized;
 

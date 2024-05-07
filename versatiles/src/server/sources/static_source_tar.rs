@@ -197,9 +197,7 @@ mod tests {
 			TileBBoxPyramid::new_full(),
 			false,
 		);
-		let mut converter = TarTilesConverter::new(container_file.to_str().unwrap(), config)
-			.await
-			.unwrap();
+		let mut converter = TarTilesConverter::open_file(&container_file, config).await.unwrap();
 
 		// convert
 		converter.convert_from(&mut reader).await.unwrap();

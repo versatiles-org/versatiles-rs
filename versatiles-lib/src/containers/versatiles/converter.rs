@@ -8,7 +8,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::{future::ready, StreamExt};
 use log::{debug, trace};
-use std::collections::HashMap;
+use std::{collections::HashMap, path::Path};
 
 // Define TilesConverter struct
 pub struct VersaTilesConverter {
@@ -20,13 +20,13 @@ pub struct VersaTilesConverter {
 #[async_trait]
 impl TilesConverterTrait for VersaTilesConverter {
 	// Create a new TilesConverter instance
-	async fn new(filename: &str, tile_config: TilesConverterConfig) -> Result<TilesConverterBox>
+	async fn open_file(path: &Path, config: TilesConverterConfig) -> Result<TilesConverterBox>
 	where
 		Self: Sized,
 	{
 		Ok(Box::new(VersaTilesConverter {
-			writer: DataWriterFile::new(filename)?,
-			config: tile_config,
+			writer: DataWriterFile::new(path)?,
+			config,
 		}))
 	}
 

@@ -4,9 +4,9 @@ use crate::shared::Blob;
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use std::{
-	env,
 	fs::File,
 	io::{BufWriter, Seek, SeekFrom, Write},
+	path::Path,
 };
 
 pub struct DataWriterFile {
@@ -15,8 +15,7 @@ pub struct DataWriterFile {
 
 #[async_trait]
 impl DataWriterTrait for DataWriterFile {
-	fn new(filename: &str) -> Result<Box<Self>> {
-		let path = env::current_dir().unwrap().join(filename);
+	fn new(path: &Path) -> Result<Box<Self>> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
 		Ok(Box::new(DataWriterFile {
