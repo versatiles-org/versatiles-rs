@@ -114,11 +114,7 @@ impl DataConverter {
 		};
 
 		// Push the necessary conversion functions to the converter pipeline.
-		if (src_comp == dst_comp) && !force_recompress {
-			if let Some(format_converter) = format_converter_option {
-				converter.push(format_converter)
-			}
-		} else {
+		if force_recompress || (src_comp != dst_comp) || format_converter_option.is_some() {
 			use Compression::*;
 			match src_comp {
 				None => {}
@@ -132,6 +128,10 @@ impl DataConverter {
 				None => {}
 				Gzip => converter.push(FnConv::Gzip),
 				Brotli => converter.push(FnConv::Brotli),
+			}
+		} else {
+			if let Some(format_converter) = format_converter_option {
+				converter.push(format_converter)
 			}
 		};
 
@@ -258,9 +258,16 @@ mod tests {
 		) {
 			let data_converter =
 				DataConverter::new_tile_recompressor(&src_form, &src_comp, &dst_form, &dst_comp, force_recompress);
-			assert_eq!(data_converter.as_string(), description);
-			assert_eq!(data_converter.pipeline.len(), length);
-			assert_eq!(data_converter, data_converter.clone());
+			assert_eq!(
+				data_converter.as_string(),
+				description,
+				"description error in {src_form:?},{src_comp:?}->{dst_form:?},{dst_comp:?}"
+			);
+			assert_eq!(
+				data_converter.pipeline.len(),
+				length,
+				"length error in {src_form:?},{src_comp:?}->{dst_form:?},{dst_comp:?}"
+			);
 		}
 
 		assert!(catch_unwind(|| {
@@ -273,14 +280,17 @@ mod tests {
 		})
 		.is_err());
 
+		test(PBF, Gzip, PBF, Gzip, false, 0, "");
 		test(PBF, None, PBF, Brotli, false, 1, "Brotli");
 		test(PNG, Gzip, PNG, Brotli, false, 2, "UnGzip, Brotli");
 		test(PNG, None, PNG, None, false, 0, "");
 		test(PNG, None, PNG, None, true, 1, "Png2Png");
+		test(PNG, Gzip, PNG, Gzip, true, 3, "UnGzip, Png2Png, Gzip");
+		test(PNG, Gzip, PNG, Gzip, false, 0, "");
 		test(PNG, Gzip, PNG, Brotli, false, 2, "UnGzip, Brotli");
 		test(PNG, Gzip, PNG, Brotli, true, 3, "UnGzip, Png2Png, Brotli");
 
-		test(PNG, Gzip, JPG, Gzip, false, 1, "Png2Jpg");
+		test(PNG, Gzip, JPG, Gzip, false, 3, "UnGzip, Png2Jpg, Gzip");
 		test(PNG, Brotli, PNG, Gzip, true, 3, "UnBrotli, Png2Png, Gzip");
 		test(PNG, None, WEBP, None, false, 1, "Png2Webplossless");
 		test(JPG, Gzip, PNG, None, true, 2, "UnGzip, Jpg2Png");
