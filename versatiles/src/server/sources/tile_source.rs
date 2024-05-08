@@ -140,7 +140,7 @@ mod tests {
 		let container = TileSource::from(reader, Url::new("prefix"))?;
 
 		assert_eq!(container.prefix.str, "/prefix");
-		assert_eq!(container.json_info, "{\"type\":\"dummy_container\",\"format\":\"png\",\"compression\":\"none\",\"zoom_min\":0,\"zoom_max\":8,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}");
+		assert_eq!(container.json_info, "{\"type\":\"dummy_container\",\"format\":\"png\",\"compression\":\"none\",\"zoom_min\":0,\"zoom_max\":4,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}");
 
 		Ok(())
 	}
@@ -150,7 +150,7 @@ mod tests {
 	fn debug() {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG);
 		let container = TileSource::from(reader, Url::new("prefix")).unwrap();
-		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: MockTilesReader { parameters:  { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536)], decompressor: , flip_y: false, swap_xy: false, tile_compression: None, tile_format: PNG } } }, tile_mime: \"image/png\", compression: None }");
+		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: None, tile_format: PNG } } }, tile_mime: \"image/png\", compression: None }");
 	}
 
 	// Test the get_data method of the TileSource

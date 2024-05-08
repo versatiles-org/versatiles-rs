@@ -2,7 +2,7 @@ use crate::{
 	containers::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
 	shared::{compress, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat},
 };
-use anyhow::Result;
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 
 #[derive(Debug)]
@@ -69,7 +69,7 @@ impl TilesReaderTrait for MockTilesReader {
 			blob = compress(blob, &self.parameters.tile_compression)?;
 			Ok(blob)
 		} else {
-			panic!("invalid coordinates: {coord:?}")
+			bail!("invalid coordinates: {coord:?}")
 		}
 	}
 }
