@@ -1,7 +1,11 @@
 use crate::shared::Blob;
 use anyhow::{bail, Result};
 use image::{
-	codecs::{jpeg, png},
+	codecs::{
+		//avif,
+		jpeg,
+		png,
+	},
 	load_from_memory_with_format, DynamicImage, ExtendedColorType, ImageEncoder, ImageFormat,
 };
 use webp::{Decoder, Encoder};
@@ -10,13 +14,9 @@ const JPEG_QUALITY: u8 = 95;
 const WEBP_QUALITY: f32 = 95.0;
 
 /// Encodes a DynamicImage into PNG format and returns it as a Blob.
-///
 /// # Arguments
-///
 /// * `image` - A `DynamicImage` object representing the image to encode.
-///
 /// # Returns
-///
 /// A `Blob` object containing the PNG-encoded image.
 pub fn img2png(image: DynamicImage) -> Result<Blob> {
 	let mut buffer: Vec<u8> = Vec::new();
@@ -31,26 +31,47 @@ pub fn img2png(image: DynamicImage) -> Result<Blob> {
 }
 
 /// Decodes a PNG-encoded image from a Blob and returns it as a DynamicImage.
-///
 /// # Arguments
-///
 /// * `data` - A `Blob` object containing the PNG-encoded image data.
-///
 /// # Returns
-///
 /// A `DynamicImage` object representing the decoded image.
 pub fn png2img(blob: Blob) -> Result<DynamicImage> {
 	Ok(load_from_memory_with_format(blob.as_slice(), ImageFormat::Png)?)
 }
 
-/// Encodes a DynamicImage into JPEG format and returns it as a Blob.
-///
+/// Encodes a DynamicImage into AVIF format and returns it as a Blob.
 /// # Arguments
-///
 /// * `image` - A `DynamicImage` object representing the image to encode.
-///
 /// # Returns
-///
+/// A `Blob` object containing the AVIF-encoded image.
+//pub fn img2avif(image: DynamicImage) -> Result<Blob> {
+//	let mut buffer: Vec<u8> = Vec::new();
+//	avif::AvifEncoder::new_with_speed_quality(&mut buffer, 1, 100).write_image(
+//		image.as_bytes(),
+//		image.width(),
+//		image.height(),
+//		ExtendedColorType::from(image.color()),
+//	)?;
+//
+//	Ok(Blob::from(buffer))
+//}
+
+/// Decodes a AVIF-encoded image from a Blob and returns it as a DynamicImage.
+/// # Arguments
+/// * `data` - A `Blob` object containing the AVIF-encoded image data.
+/// # Returns
+/// A `DynamicImage` object representing the decoded image.
+//pub fn avif2img(blob: Blob) -> Result<DynamicImage> {
+//	println!("hallo {}", blob.len());
+//	let image = load_from_memory_with_format(blob.as_slice(), ImageFormat::Avif)?;
+//	println!("duda");
+//	Ok(image)
+//}
+
+/// Encodes a DynamicImage into JPEG format and returns it as a Blob.
+/// # Arguments
+/// * `image` - A `DynamicImage` object representing the image to encode.
+/// # Returns
 /// A `Blob` object containing the JPEG-encoded image.
 pub fn img2jpg(image: DynamicImage) -> Result<Blob> {
 	let mut buffer: Vec<u8> = Vec::new();
@@ -65,30 +86,20 @@ pub fn img2jpg(image: DynamicImage) -> Result<Blob> {
 }
 
 /// Decodes a JPEG-encoded image from a Blob and returns it as a DynamicImage.
-///
 /// # Arguments
-///
 /// * `data` - A `Blob` object containing the JPEG-encoded image data.
-///
 /// # Returns
-///
 /// A `DynamicImage` object representing the decoded image.
 pub fn jpg2img(blob: Blob) -> Result<DynamicImage> {
 	Ok(load_from_memory_with_format(blob.as_slice(), ImageFormat::Jpeg)?)
 }
 
 /// Encodes a DynamicImage into WebP format and returns it as a Blob.
-///
 /// # Arguments
-///
 /// * `image` - A `DynamicImage` object representing the image to encode.
-///
 /// # Returns
-///
 /// A `Blob` object containing the WebP-encoded image.
-///
 /// # Panics
-///
 /// Panics if the image color type is not 8-bit RGB or RGBA, as the crate "WebP" only supports these formats.
 pub fn img2webp(image: DynamicImage) -> Result<Blob> {
 	match image.color() {
@@ -103,17 +114,11 @@ pub fn img2webp(image: DynamicImage) -> Result<Blob> {
 }
 
 /// Encodes a DynamicImage into WebP lossless format and returns it as a Blob.
-///
 /// # Arguments
-///
 /// * `image` - A reference to a `DynamicImage` that is to be encoded.
-///
 /// # Panics
-///
 /// This function will panic if the image color type is not `Rgb8`, since currently only 8-bit RGB is supported for WebP lossless encoding.
-///
 /// # Returns
-///
 /// A `Blob` containing the WebP-encoded image data.
 pub fn img2webplossless(image: DynamicImage) -> Result<Blob> {
 	match image.color() {
@@ -128,13 +133,9 @@ pub fn img2webplossless(image: DynamicImage) -> Result<Blob> {
 }
 
 /// Decodes an image from WebP format.
-///
 /// # Arguments
-///
 /// * `data` - A `Blob` containing the WebP-encoded image data.
-///
 /// # Returns
-///
 /// A `DynamicImage` containing the decoded image.
 pub fn webp2img(blob: Blob) -> Result<DynamicImage> {
 	let decoder = Decoder::new(blob.as_slice());
@@ -227,7 +228,6 @@ mod tests {
 	}
 
 	/// Generate a DynamicImage with grayscale colors
-	///
 	/// Returns a DynamicImage with 256x256 grayscale colors from black to white. Each pixel in the image
 	/// is a Luma<u8> value.
 	fn get_image_grey() -> DynamicImage {
@@ -235,7 +235,6 @@ mod tests {
 	}
 
 	/// Generate a DynamicImage with grayscale alpha colors
-	///
 	/// Returns a DynamicImage with 256x256 grayscale alpha colors from black to white. Each pixel in the
 	/// image is a LumaA<u8> value, with the alpha value determined by the y coordinate.
 	fn get_image_greya() -> DynamicImage {
@@ -245,18 +244,13 @@ mod tests {
 	}
 
 	/// Compare two DynamicImages for similarity
-	///
 	/// Compares two DynamicImages to ensure that they have the same dimensions and that the maximum
 	/// difference between the pixel values in each image is less than or equal to a given threshold.
-	///
 	/// # Arguments
-	///
 	/// * `image1` - The first DynamicImage to compare
 	/// * `image2` - The second DynamicImage to compare
 	/// * `max_allowed_diff` - The maximum allowed difference between pixel values in the two images
-	///
 	/// # Panics
-	///
 	/// This function will panic if the two images have different dimensions or if the maximum difference
 	/// between the pixel values in the two images is greater than the specified threshold.
 	fn compare_images(image1: DynamicImage, image2: DynamicImage, max_allowed_diff: u8) {

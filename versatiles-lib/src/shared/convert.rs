@@ -1,8 +1,18 @@
 #[cfg(feature = "full")]
 use super::image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2img, webp2img};
-use super::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip, Blob, Compression, TileFormat};
+use super::{
+	//avif2img,
+	compress_brotli,
+	compress_gzip,
+	decompress_brotli,
+	decompress_gzip,
+	//img2avif,
+	Blob,
+	Compression,
+	TileFormat,
+};
 use crate::containers::TilesStream;
-use anyhow::{bail, Result};
+use anyhow::Result;
 use futures_util::StreamExt;
 use itertools::Itertools;
 use std::{
@@ -12,13 +22,20 @@ use std::{
 
 #[derive(Clone, Debug)]
 enum FnConv {
+	//	Avif2Jpg,
+	//Avif2Png,
+	//Avif2Webp,
+	//Jpg2Avif,
+	Jpg2Png,
+	Jpg2Webp,
+	//Png2Avif,
 	Png2Jpg,
 	Png2Png,
 	Png2Webplossless,
-	Jpg2Png,
-	Jpg2Webp,
+	//Webp2Avif,
 	Webp2Jpg,
 	Webp2Png,
+
 	UnGzip,
 	UnBrotli,
 	Gzip,
@@ -51,13 +68,22 @@ impl FnConv {
 			FnConv::Webp2Jpg => img2jpg(webp2img(tile)?),
 			#[cfg(feature = "full")]
 			FnConv::Webp2Png => img2png(webp2img(tile)?),
-
+			//#[cfg(feature = "full")]
+			//FnConv::Avif2Jpg => img2jpg(avif2img(tile)?),
+			//#[cfg(feature = "full")]
+			//FnConv::Avif2Png => img2png(avif2img(tile)?),
+			//#[cfg(feature = "full")]
+			//FnConv::Avif2Webp => img2webp(avif2img(tile)?),
+			//#[cfg(feature = "full")]
+			//FnConv::Jpg2Avif => img2avif(jpg2img(tile)?),
+			//#[cfg(feature = "full")]
+			//FnConv::Png2Avif => img2avif(png2img(tile)?),
+			//#[cfg(feature = "full")]
+			//FnConv::Webp2Avif => img2avif(webp2img(tile)?),
 			FnConv::UnGzip => decompress_gzip(tile),
 			FnConv::UnBrotli => decompress_brotli(tile),
 			FnConv::Gzip => compress_gzip(tile),
 			FnConv::Brotli => compress_brotli(tile),
-
-			_ => bail!("{self:?} is not supported"),
 		}
 	}
 }
@@ -91,16 +117,25 @@ impl DataConverter {
 		let format_converter_option: Option<FnConv> = if (src_form != dst_form) || force_recompress {
 			use TileFormat::*;
 			match (src_form, dst_form) {
+				//(AVIF, AVIF) => Some(),
+				//(AVIF, JPG) => Some(FnConv::Avif2Jpg),
+				//(AVIF, PNG) => Some(FnConv::Avif2Png),
+				//(AVIF, WEBP) => Some(FnConv::Avif2Webp),
+
+				//(JPG, AVIF) => Some(FnConv::Jpg2Avif),
+				//(JPG, JPG) => Some(),
+				(JPG, PNG) => Some(FnConv::Jpg2Png),
+				(JPG, WEBP) => Some(FnConv::Jpg2Webp),
+
+				//(PNG, AVIF) => Some(FnConv::Png2Avif),
 				(PNG, JPG) => Some(FnConv::Png2Jpg),
 				(PNG, PNG) => Some(FnConv::Png2Png),
 				(PNG, WEBP) => Some(FnConv::Png2Webplossless),
 
-				(JPG, PNG) => Some(FnConv::Jpg2Png),
-				(JPG, WEBP) => Some(FnConv::Jpg2Webp),
-
+				//(WEBP, AVIF) => Some(FnConv::Webp2Avif),
 				(WEBP, JPG) => Some(FnConv::Webp2Jpg),
 				(WEBP, PNG) => Some(FnConv::Webp2Png),
-
+				//(WEBP, WEBP) => Some(),
 				(_, _) => {
 					if src_form == dst_form {
 						None
@@ -232,6 +267,11 @@ impl Eq for DataConverter {}
 #[cfg(test)]
 mod tests {
 	use crate::shared::{
+		//avif2img,
+		jpg2img,
+		png2img,
+		webp2img,
+		Blob,
 		Compression::{self, *},
 		DataConverter,
 		TileFormat::{self, *},
@@ -299,5 +339,49 @@ mod tests {
 		test(WEBP, Gzip, PNG, Brotli, false, 3, "UnGzip, Webp2Png, Brotli");
 		test(PNG, Brotli, WEBP, Gzip, true, 3, "UnBrotli, Png2Webplossless, Gzip");
 		test(PNG, None, WEBP, Gzip, false, 2, "Png2Webplossless, Gzip");
+	}
+
+	#[test]
+	fn convert_images() {
+		use crate::containers::{
+			//MOCK_BYTES_AVIF,
+			MOCK_BYTES_JPG,
+			MOCK_BYTES_PNG,
+			MOCK_BYTES_WEBP,
+		};
+
+		let formats = vec![
+			//AVIF,
+			JPG, PNG, WEBP,
+		];
+		let comp = Compression::None;
+		for src_form in formats.iter() {
+			for dst_form in formats.iter() {
+				let (mut blob, should_size) = match src_form {
+					//AVIF => (Blob::from(MOCK_BYTES_AVIF.to_vec()), ""),
+					JPG => (Blob::from(MOCK_BYTES_JPG.to_vec()), ""),
+					PNG => (Blob::from(MOCK_BYTES_PNG.to_vec()), ""),
+					WEBP => (Blob::from(MOCK_BYTES_WEBP.to_vec()), ""),
+					_ => panic!("not allowed"),
+				};
+
+				let data_converter = DataConverter::new_tile_recompressor(&src_form, &comp, &dst_form, &comp, false);
+
+				blob = data_converter.process_blob(blob).unwrap();
+
+				println!("{:?}", blob);
+
+				let image = match dst_form {
+					//AVIF => avif2img(blob).unwrap(),
+					JPG => jpg2img(blob).unwrap(),
+					PNG => png2img(blob).unwrap(),
+					WEBP => webp2img(blob).unwrap(),
+					_ => panic!("not allowed"),
+				};
+
+				let size = format!("{}x{}", image.width(), image.height());
+				assert_eq!(size, should_size, "should have the correct size for {src_form:?}");
+			}
+		}
 	}
 }
