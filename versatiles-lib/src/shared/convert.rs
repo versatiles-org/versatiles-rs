@@ -12,7 +12,7 @@ use super::{
 	TileFormat,
 };
 use crate::containers::TilesStream;
-use anyhow::Result;
+use anyhow::{bail, Result};
 use futures_util::StreamExt;
 use itertools::Itertools;
 use std::{
@@ -52,22 +52,22 @@ impl fmt::Display for FnConv {
 
 impl FnConv {
 	#[allow(unreachable_patterns)]
-	fn run(&self, tile: Blob) -> Result<Blob> {
+	fn run(&self, blob: Blob) -> Result<Blob> {
 		match self {
 			#[cfg(feature = "full")]
-			FnConv::Png2Jpg => img2jpg(png2img(tile)?),
+			FnConv::Png2Jpg => img2jpg(&png2img(&blob)?),
 			#[cfg(feature = "full")]
-			FnConv::Png2Png => img2png(png2img(tile)?),
+			FnConv::Png2Png => img2png(&png2img(&blob)?),
 			#[cfg(feature = "full")]
-			FnConv::Png2Webplossless => img2webplossless(png2img(tile)?),
+			FnConv::Png2Webplossless => img2webplossless(&png2img(&blob)?),
 			#[cfg(feature = "full")]
-			FnConv::Jpg2Png => img2png(jpg2img(tile)?),
+			FnConv::Jpg2Png => img2png(&jpg2img(&blob)?),
 			#[cfg(feature = "full")]
-			FnConv::Jpg2Webp => img2webp(jpg2img(tile)?),
+			FnConv::Jpg2Webp => img2webp(&jpg2img(&blob)?),
 			#[cfg(feature = "full")]
-			FnConv::Webp2Jpg => img2jpg(webp2img(tile)?),
+			FnConv::Webp2Jpg => img2jpg(&webp2img(&blob)?),
 			#[cfg(feature = "full")]
-			FnConv::Webp2Png => img2png(webp2img(tile)?),
+			FnConv::Webp2Png => img2png(&webp2img(&blob)?),
 			//#[cfg(feature = "full")]
 			//FnConv::Avif2Jpg => img2jpg(avif2img(tile)?),
 			//#[cfg(feature = "full")]
@@ -80,10 +80,10 @@ impl FnConv {
 			//FnConv::Png2Avif => img2avif(png2img(tile)?),
 			//#[cfg(feature = "full")]
 			//FnConv::Webp2Avif => img2avif(webp2img(tile)?),
-			FnConv::UnGzip => decompress_gzip(tile),
-			FnConv::UnBrotli => decompress_brotli(tile),
-			FnConv::Gzip => compress_gzip(tile),
-			FnConv::Brotli => compress_brotli(tile),
+			FnConv::UnGzip => decompress_gzip(blob),
+			FnConv::UnBrotli => decompress_brotli(blob),
+			FnConv::Gzip => compress_gzip(blob),
+			FnConv::Brotli => compress_brotli(blob),
 		}
 	}
 }
@@ -110,7 +110,7 @@ impl DataConverter {
 	pub fn new_tile_recompressor(
 		src_form: &TileFormat, src_comp: &Compression, dst_form: &TileFormat, dst_comp: &Compression,
 		force_recompress: bool,
-	) -> DataConverter {
+	) -> Result<DataConverter> {
 		let mut converter = DataConverter::new_empty();
 
 		// Create a format converter function based on the source and destination formats.
@@ -140,7 +140,7 @@ impl DataConverter {
 					if src_form == dst_form {
 						None
 					} else {
-						todo!("convert {:?} -> {:?}", src_form, dst_form)
+						bail!("no conversion implemented for {:?} -> {:?}", src_form, dst_form);
 					}
 				}
 			}
@@ -170,7 +170,7 @@ impl DataConverter {
 			}
 		};
 
-		converter
+		Ok(converter)
 	}
 
 	/// Constructs a new `DataConverter` instance that compresses data using the specified compression algorithm.
@@ -266,12 +266,18 @@ impl Eq for DataConverter {}
 
 #[cfg(test)]
 mod tests {
+	use anyhow::Result;
+
 	use crate::shared::{
 		//avif2img,
+		compare_images,
+		create_image_rgb,
+		img2jpg,
+		img2png,
+		img2webp,
 		jpg2img,
 		png2img,
 		webp2img,
-		Blob,
 		Compression::{self, *},
 		DataConverter,
 		TileFormat::{self, *},
@@ -297,7 +303,7 @@ mod tests {
 			force_recompress: bool, length: usize, description: &str,
 		) {
 			let data_converter =
-				DataConverter::new_tile_recompressor(&src_form, &src_comp, &dst_form, &dst_comp, force_recompress);
+				DataConverter::new_tile_recompressor(&src_form, &src_comp, &dst_form, &dst_comp, force_recompress).unwrap();
 			assert_eq!(
 				data_converter.as_string(),
 				description,
@@ -342,14 +348,7 @@ mod tests {
 	}
 
 	#[test]
-	fn convert_images() {
-		use crate::containers::{
-			//MOCK_BYTES_AVIF,
-			MOCK_BYTES_JPG,
-			MOCK_BYTES_PNG,
-			MOCK_BYTES_WEBP,
-		};
-
+	fn convert_images() -> Result<()> {
 		let formats = vec![
 			//AVIF,
 			JPG, PNG, WEBP,
@@ -357,31 +356,33 @@ mod tests {
 		let comp = Compression::None;
 		for src_form in formats.iter() {
 			for dst_form in formats.iter() {
-				let (mut blob, should_size) = match src_form {
-					//AVIF => (Blob::from(MOCK_BYTES_AVIF.to_vec()), ""),
-					JPG => (Blob::from(MOCK_BYTES_JPG.to_vec()), ""),
-					PNG => (Blob::from(MOCK_BYTES_PNG.to_vec()), ""),
-					WEBP => (Blob::from(MOCK_BYTES_WEBP.to_vec()), ""),
+				let image1 = create_image_rgb();
+				let blob1 = match src_form {
+					//AVIF => img2avif(&image1)?,
+					JPG => img2jpg(&image1)?,
+					PNG => img2png(&image1)?,
+					WEBP => img2webp(&image1)?,
+					_ => panic!("unsupported format {src_form:?}"),
+				};
+
+				let data_converter = DataConverter::new_tile_recompressor(&src_form, &comp, &dst_form, &comp, true)?;
+
+				let blob2 = data_converter.process_blob(blob1)?;
+
+				let image2 = match dst_form {
+					//AVIF => avif2img(blob)?,
+					JPG => jpg2img(&blob2)?,
+					PNG => png2img(&blob2)?,
+					WEBP => webp2img(&blob2)?,
 					_ => panic!("not allowed"),
 				};
 
-				let data_converter = DataConverter::new_tile_recompressor(&src_form, &comp, &dst_form, &comp, false);
+				assert_eq!(image2.width(), 256, "image should be 256 pixels wide");
+				assert_eq!(image2.height(), 256, "image should be 256 pixels high");
 
-				blob = data_converter.process_blob(blob).unwrap();
-
-				println!("{:?}", blob);
-
-				let image = match dst_form {
-					//AVIF => avif2img(blob).unwrap(),
-					JPG => jpg2img(blob).unwrap(),
-					PNG => png2img(blob).unwrap(),
-					WEBP => webp2img(blob).unwrap(),
-					_ => panic!("not allowed"),
-				};
-
-				let size = format!("{}x{}", image.width(), image.height());
-				assert_eq!(size, should_size, "should have the correct size for {src_form:?}");
+				compare_images(image1, image2, 7);
 			}
 		}
+		Ok(())
 	}
 }

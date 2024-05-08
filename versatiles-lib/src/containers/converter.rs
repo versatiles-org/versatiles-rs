@@ -27,7 +27,7 @@ pub async fn convert(reader: TilesReaderBox, cp: TileConverterParameters, filena
 	};
 	let mut writer = get_writer(filename, wp).await?;
 
-	let mut converter = TileConvertReader::new(reader, cp);
+	let mut converter = TileConvertReader::new(reader, cp)?;
 	writer.write_from_reader(&mut converter).await
 }
 
@@ -42,7 +42,7 @@ struct TileConvertReader {
 }
 
 impl TileConvertReader {
-	pub fn new(reader: TilesReaderBox, cp: TileConverterParameters) -> TilesReaderBox {
+	pub fn new(reader: TilesReaderBox, cp: TileConverterParameters) -> Result<TilesReaderBox> {
 		let container_name = format!("converter({})", reader.get_container_name());
 		let name = format!("converter({})", reader.get_name());
 
@@ -69,16 +69,16 @@ impl TileConvertReader {
 			&new_rp.tile_format,
 			&new_rp.tile_compression,
 			cp.force_recompress,
-		));
+		)?);
 
-		Box::new(TileConvertReader {
+		Ok(Box::new(TileConvertReader {
 			reader,
 			converter_parameters: cp,
 			reader_parameters: new_rp,
 			container_name,
 			tile_recompressor,
 			name,
-		})
+		}))
 	}
 }
 
