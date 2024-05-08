@@ -99,14 +99,14 @@ mod tests {
 	#[tokio::test]
 	async fn test() {
 		// Create a new Folder instance
-		let folder = Folder::from(Path::new("../testdata")).unwrap();
+		let folder = Folder::from(Path::new("./testdata")).unwrap();
 
 		let debug: String = format!("{:?}", folder);
 		assert!(debug.starts_with("Folder { folder: \""));
-		assert!(debug.ends_with("testdata\", name: \"../testdata\" }"));
+		assert!(debug.ends_with("testdata\", name: \"./testdata\" }"));
 
 		// Test get_name function
-		assert_eq!(folder.get_name(), "../testdata");
+		assert_eq!(folder.get_name(), "./testdata");
 
 		// Test get_data function with a non-existent file
 		let result = folder.get_data(&Url::new("recipes/Queijo.txt"), &TargetCompression::from_none());

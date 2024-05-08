@@ -1,8 +1,10 @@
+#[cfg(feature = "cli")]
 use clap::ValueEnum;
 use enumset::EnumSetType;
 
 /// Enum representing possible compression algorithms
-#[derive(Debug, EnumSetType, PartialOrd, ValueEnum)]
+#[cfg_attr(feature = "cli", derive(ValueEnum))]
+#[derive(Debug, EnumSetType, PartialOrd)]
 pub enum Compression {
 	None,
 	Gzip,

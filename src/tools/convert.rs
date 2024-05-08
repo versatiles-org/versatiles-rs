@@ -138,7 +138,7 @@ mod tests {
 		run_command(vec![
 			"versatiles",
 			"convert",
-			"../testdata/berlin.mbtiles",
+			"./testdata/berlin.mbtiles",
 			"../tmp/berlin1.versatiles",
 		])?;
 

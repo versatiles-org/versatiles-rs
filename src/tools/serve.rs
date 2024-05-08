@@ -169,7 +169,7 @@ mod tests {
 			"65001",
 			"--auto-shutdown",
 			"500",
-			"../testdata/berlin.mbtiles[test]",
+			"./testdata/berlin.mbtiles[test]",
 		])
 		.unwrap();
 	}

@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use super::ByteRange;
 use crate::{
 	containers::versatiles::DataReaderTrait,

@@ -97,20 +97,26 @@ mod tests {
 	#[test]
 	fn convert_subcommand() {
 		let output = run_command(vec!["versatiles", "convert"]).unwrap_err().to_string();
-		assert!(output.starts_with("Convert between different tile containers"));
+		assert!(
+			output.starts_with("Convert between different tile containers"),
+			"{output}"
+		);
 	}
 
 	// Test for subcommand 'probe'
 	#[test]
 	fn probe_subcommand() {
 		let output = run_command(vec!["versatiles", "probe"]).unwrap_err().to_string();
-		assert!(output.starts_with("Show information about a tile container"));
+		assert!(
+			output.starts_with("Show information about a tile container"),
+			"{output}"
+		);
 	}
 
 	// Test for subcommand 'serve'
 	#[test]
 	fn serve_subcommand() {
 		let output = run_command(vec!["versatiles", "serve"]).unwrap_err().to_string();
-		assert!(output.starts_with("Serve tiles via http"));
+		assert!(output.starts_with("Serve tiles via http"), "{output}");
 	}
 }

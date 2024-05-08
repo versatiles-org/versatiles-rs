@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use super::ByteRange;
 use crate::shared::{compress_brotli, decompress_brotli, Blob};
 use anyhow::{ensure, Result};

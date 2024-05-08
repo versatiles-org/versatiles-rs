@@ -1,9 +1,9 @@
-#[cfg(feature = "full")]
+#[cfg(feature = "cli")]
 use clap::ValueEnum;
 // Enum representing supported tile formats
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "full", derive(ValueEnum))]
+#[cfg_attr(feature = "cli", derive(ValueEnum))]
 pub enum TileFormat {
 	AVIF,
 	BIN,

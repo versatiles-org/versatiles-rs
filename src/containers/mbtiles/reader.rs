@@ -294,7 +294,7 @@ pub mod tests {
 	use std::{env, path::PathBuf};
 
 	lazy_static! {
-		static ref PATH: PathBuf = env::current_dir().unwrap().join("../testdata/berlin.mbtiles");
+		static ref PATH: PathBuf = env::current_dir().unwrap().join("./testdata/berlin.mbtiles");
 	}
 
 	#[tokio::test]
