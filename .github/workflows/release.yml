@@ -85,9 +85,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.arch }}-apple-darwin
-      - run: |
-          SDKROOT=$(xcrun --show-sdk-path)
-          MACOSX_DEPLOYMENT_TARGET=$(xcrun --show-sdk-platform-version)
 
       - name: Test Binary # Test the waters before setting sail.
         if: matrix.arch == 'x86_64' # Because we can't run ARM binaries
