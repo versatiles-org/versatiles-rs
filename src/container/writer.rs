@@ -1,5 +1,5 @@
 use super::TilesReaderBox;
-use crate::types::{Compression, TileFormat};
+use crate::types::{TileCompression, TileFormat};
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 
@@ -8,11 +8,11 @@ pub type TilesWriterBox = Box<dyn TilesWriterTrait>;
 #[derive(Debug)]
 pub struct TilesWriterParameters {
 	pub tile_format: TileFormat,
-	pub tile_compression: Compression,
+	pub tile_compression: TileCompression,
 }
 impl TilesWriterParameters {
 	#[allow(dead_code)]
-	pub fn new(tile_format: TileFormat, tile_compression: Compression) -> TilesWriterParameters {
+	pub fn new(tile_format: TileFormat, tile_compression: TileCompression) -> TilesWriterParameters {
 		TilesWriterParameters {
 			tile_format,
 			tile_compression,

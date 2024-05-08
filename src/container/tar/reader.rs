@@ -1,7 +1,7 @@
 use crate::{
 	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
 	helper::decompress,
-	types::{extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat},
+	types::{extract_compression, extract_format, Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
@@ -37,7 +37,7 @@ impl TarTilesReader {
 		let mut meta: Option<Blob> = None;
 		let mut tile_map = HashMap::new();
 		let mut tile_format: Option<TileFormat> = None;
-		let mut tile_compression: Option<Compression> = None;
+		let mut tile_compression: Option<TileCompression> = None;
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
 		for entry in archive.entries()? {
@@ -101,11 +101,11 @@ impl TarTilesReader {
 						continue;
 					}
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
-						meta = Some(decompress(read_to_end(), &Compression::Gzip)?);
+						meta = Some(decompress(read_to_end(), &TileCompression::Gzip)?);
 						continue;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
-						meta = Some(decompress(read_to_end(), &Compression::Brotli)?);
+						meta = Some(decompress(read_to_end(), &TileCompression::Brotli)?);
 						continue;
 					}
 					&_ => {}
@@ -133,7 +133,7 @@ impl TilesReaderTrait for TarTilesReader {
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
-	fn override_compression(&mut self, tile_compression: Compression) {
+	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
 	async fn get_meta(&self) -> Result<Option<Blob>> {
@@ -178,7 +178,7 @@ pub mod tests {
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 3, "tar").await?;
+		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 3, "tar").await?;
 
 		// get tar reader
 		let mut reader = TarTilesReader::open(&temp_file).await?;
@@ -188,7 +188,7 @@ pub mod tests {
 		assert!(reader.get_name().ends_with(temp_file.to_str().unwrap()));
 		assert_eq!(reader.get_meta().await?, Some(Blob::from(b"dummy meta data".to_vec())));
 		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: PBF }");
-		assert_eq!(reader.get_parameters().tile_compression, Compression::Gzip);
+		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
 		let tile = reader.get_tile_data(&TileCoord3::new(6, 2, 3)?).await?;
@@ -199,7 +199,7 @@ pub mod tests {
 
 	#[tokio::test]
 	async fn all_compressions() -> Result<()> {
-		async fn test_compression(compression: Compression) -> Result<()> {
+		async fn test_compression(compression: TileCompression) -> Result<()> {
 			let temp_file = make_test_file(TileFormat::PBF, compression, 2, "tar").await?;
 
 			// get tar reader
@@ -211,9 +211,9 @@ pub mod tests {
 			Ok(())
 		}
 
-		test_compression(Compression::None).await?;
-		test_compression(Compression::Gzip).await?;
-		test_compression(Compression::Brotli).await?;
+		test_compression(TileCompression::None).await?;
+		test_compression(TileCompression::Gzip).await?;
+		test_compression(TileCompression::Brotli).await?;
 		Ok(())
 	}
 
@@ -222,7 +222,7 @@ pub mod tests {
 	async fn probe() -> Result<()> {
 		use crate::helper::PrettyPrint;
 
-		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 4, "tar").await?;
+		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "tar").await?;
 
 		let mut reader = TarTilesReader::open(&temp_file).await?;
 

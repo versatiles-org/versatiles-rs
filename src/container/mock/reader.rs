@@ -1,7 +1,7 @@
 use crate::{
 	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
 	helper::compress,
-	types::{Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat},
+	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -28,9 +28,15 @@ impl MockTilesReader {
 		let bbox_pyramid = TileBBoxPyramid::new_full(4);
 
 		Self::new_mock(match profile {
-			MockTilesReaderProfile::JSON => TilesReaderParameters::new(TileFormat::JSON, Compression::None, bbox_pyramid),
-			MockTilesReaderProfile::PNG => TilesReaderParameters::new(TileFormat::PNG, Compression::None, bbox_pyramid),
-			MockTilesReaderProfile::PBF => TilesReaderParameters::new(TileFormat::PBF, Compression::Gzip, bbox_pyramid),
+			MockTilesReaderProfile::JSON => {
+				TilesReaderParameters::new(TileFormat::JSON, TileCompression::None, bbox_pyramid)
+			}
+			MockTilesReaderProfile::PNG => {
+				TilesReaderParameters::new(TileFormat::PNG, TileCompression::None, bbox_pyramid)
+			}
+			MockTilesReaderProfile::PBF => {
+				TilesReaderParameters::new(TileFormat::PBF, TileCompression::Gzip, bbox_pyramid)
+			}
 		})
 	}
 	pub fn new_mock(parameters: TilesReaderParameters) -> TilesReaderBox {
@@ -49,7 +55,7 @@ impl TilesReaderTrait for MockTilesReader {
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
-	fn override_compression(&mut self, tile_compression: Compression) {
+	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
 	async fn get_meta(&self) -> Result<Option<Blob>> {
@@ -102,7 +108,7 @@ mod tests {
 
 		assert_eq!(
 			reader.get_parameters(),
-			&TilesReaderParameters::new(TileFormat::PNG, Compression::None, bbox_pyramid)
+			&TilesReaderParameters::new(TileFormat::PNG, TileCompression::None, bbox_pyramid)
 		);
 		assert_eq!(reader.get_meta().await?, Some(Blob::from("dummy meta data")));
 		let blob = reader.get_tile_data(&TileCoord3::new(0, 0, 0)?).await?.as_vec();

@@ -5,34 +5,34 @@ use enumset::EnumSetType;
 /// Enum representing possible compression algorithms
 #[cfg_attr(feature = "cli", derive(ValueEnum))]
 #[derive(Debug, EnumSetType, PartialOrd)]
-pub enum Compression {
+pub enum TileCompression {
 	None,
 	Gzip,
 	Brotli,
 }
 
-pub fn compression_to_extension(compression: &Compression) -> String {
+pub fn compression_to_extension(compression: &TileCompression) -> String {
 	String::from(match compression {
-		Compression::None => "",
-		Compression::Gzip => ".gz",
-		Compression::Brotli => ".br",
+		TileCompression::None => "",
+		TileCompression::Gzip => ".gz",
+		TileCompression::Brotli => ".br",
 	})
 }
 
-pub fn extract_compression(filename: &mut String) -> Compression {
+pub fn extract_compression(filename: &mut String) -> TileCompression {
 	if let Some(index) = filename.rfind('.') {
 		let compression = match filename.get(index..).unwrap() {
-			".gz" => Compression::Gzip,
-			".br" => Compression::Brotli,
-			_ => Compression::None,
+			".gz" => TileCompression::Gzip,
+			".br" => TileCompression::Brotli,
+			_ => TileCompression::None,
 		};
 
-		if compression != Compression::None {
+		if compression != TileCompression::None {
 			filename.truncate(index)
 		}
 		return compression;
 	}
-	Compression::None
+	TileCompression::None
 }
 
 #[cfg(test)]
@@ -41,7 +41,7 @@ mod tests {
 
 	#[test]
 	fn test_compression_to_extension() {
-		fn test(compression: Compression, expected_extension: &str) {
+		fn test(compression: TileCompression, expected_extension: &str) {
 			assert_eq!(
 				compression_to_extension(&compression),
 				expected_extension,
@@ -49,14 +49,14 @@ mod tests {
 			);
 		}
 
-		test(Compression::None, "");
-		test(Compression::Gzip, ".gz");
-		test(Compression::Brotli, ".br");
+		test(TileCompression::None, "");
+		test(TileCompression::Gzip, ".gz");
+		test(TileCompression::Brotli, ".br");
 	}
 
 	#[test]
 	fn test_extract_compression() {
-		fn test(expected_compression: Compression, filename: &str, expected_remainder: &str) {
+		fn test(expected_compression: TileCompression, filename: &str, expected_remainder: &str) {
 			let mut filename_string = String::from(filename);
 			assert_eq!(
 				extract_compression(&mut filename_string),
@@ -69,10 +69,10 @@ mod tests {
 			);
 		}
 
-		test(Compression::Gzip, "file.txt.gz", "file.txt");
-		test(Compression::Brotli, "archive.tar.br", "archive.tar");
-		test(Compression::None, "image.png", "image.png");
-		test(Compression::None, "document.pdf", "document.pdf");
-		test(Compression::None, "noextensionfile", "noextensionfile");
+		test(TileCompression::Gzip, "file.txt.gz", "file.txt");
+		test(TileCompression::Brotli, "archive.tar.br", "archive.tar");
+		test(TileCompression::None, "image.png", "image.png");
+		test(TileCompression::None, "document.pdf", "document.pdf");
+		test(TileCompression::None, "noextensionfile", "noextensionfile");
 	}
 }

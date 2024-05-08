@@ -7,7 +7,7 @@ use crate::helper::PrettyPrint;
 use crate::{
 	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
 	helper::DataConverter,
-	types::{Blob, Compression, TileBBox, TileCoord2, TileCoord3},
+	types::{Blob, TileBBox, TileCompression, TileCoord2, TileCoord3},
 };
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
@@ -131,7 +131,7 @@ impl TilesReaderTrait for VersaTilesReader {
 		&self.parameters
 	}
 
-	fn override_compression(&mut self, tile_compression: Compression) {
+	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
 
@@ -415,7 +415,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_reader() -> Result<()> {
-		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 4, "versatiles").await?;
+		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
 
 		let mut reader = VersaTilesReader::open_file(&temp_file).await?;
 
@@ -424,7 +424,7 @@ mod tests {
 		assert!(reader.get_name().ends_with(temp_file.to_str().unwrap()));
 		assert_eq!(reader.get_meta().await?, Some(Blob::from(b"dummy meta data".to_vec())));
 		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: PBF }");
-		assert_eq!(reader.get_parameters().tile_compression, Compression::Gzip);
+		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
 		let tile = reader.get_tile_data(&TileCoord3::new(15, 1, 4)?).await?;
@@ -438,7 +438,7 @@ mod tests {
 	async fn probe() -> Result<()> {
 		use crate::helper::PrettyPrint;
 
-		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 4, "versatiles").await?;
+		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
 
 		let mut reader = VersaTilesReader::open_file(&temp_file).await?;
 

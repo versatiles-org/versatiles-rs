@@ -1,6 +1,6 @@
 use crate::{
 	container::{convert_tiles_container, get_reader, TilesConverterParameters},
-	types::{Compression, TileBBoxPyramid, TileFormat},
+	types::{TileBBoxPyramid, TileCompression, TileFormat},
 };
 use anyhow::{bail, Result};
 use clap::Args;
@@ -52,7 +52,7 @@ pub struct Subcommand {
 
 	/// set new compression
 	#[arg(long, short, value_enum)]
-	compress: Option<Compression>,
+	compress: Option<TileCompression>,
 
 	/// force recompression, e.g. to improve an existing gzip compression
 	#[arg(long, short)]
@@ -60,7 +60,7 @@ pub struct Subcommand {
 
 	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
 	#[arg(long, value_enum, value_name = "COMPRESSION")]
-	override_input_compression: Option<Compression>,
+	override_input_compression: Option<TileCompression>,
 }
 
 #[tokio::main]

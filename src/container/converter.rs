@@ -3,7 +3,7 @@ use crate::{
 		get_writer, TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream, TilesWriterParameters,
 	},
 	helper::{DataConverter, TransformCoord},
-	types::{Blob, Compression, TileBBox, TileBBoxPyramid, TileCoord3, TileFormat},
+	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -12,7 +12,7 @@ use futures_util::StreamExt;
 #[derive(Debug)]
 pub struct TilesConverterParameters {
 	pub tile_format: Option<TileFormat>,
-	pub tile_compression: Option<Compression>,
+	pub tile_compression: Option<TileCompression>,
 	pub bbox_pyramid: Option<TileBBoxPyramid>,
 	pub force_recompress: bool,
 	pub flip_y: bool,
@@ -21,8 +21,8 @@ pub struct TilesConverterParameters {
 
 impl TilesConverterParameters {
 	pub fn new(
-		tile_format: Option<TileFormat>, tile_compression: Option<Compression>, bbox_pyramid: Option<TileBBoxPyramid>,
-		force_recompress: bool, flip_y: bool, swap_xy: bool,
+		tile_format: Option<TileFormat>, tile_compression: Option<TileCompression>,
+		bbox_pyramid: Option<TileBBoxPyramid>, force_recompress: bool, flip_y: bool, swap_xy: bool,
 	) -> TilesConverterParameters {
 		TilesConverterParameters {
 			tile_format,
@@ -125,7 +125,7 @@ impl TilesReaderTrait for TilesConvertReader {
 		&self.reader_parameters
 	}
 
-	fn override_compression(&mut self, tile_compression: Compression) {
+	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.reader.override_compression(tile_compression);
 	}
 
@@ -192,12 +192,14 @@ mod tests {
 	use crate::container::{MockTilesReader, VersaTilesReader};
 	use assert_fs::NamedTempFile;
 
-	fn get_mock_reader(tf: TileFormat, tc: Compression) -> TilesReaderBox {
+	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> TilesReaderBox {
 		let bbox_pyramid = TileBBoxPyramid::new_full(2);
 		let reader_parameters = TilesReaderParameters::new(tf, tc, bbox_pyramid);
 		MockTilesReader::new_mock(reader_parameters)
 	}
-	fn get_converter_parameters(tf: TileFormat, tc: Compression, force_recompress: bool) -> TilesConverterParameters {
+	fn get_converter_parameters(
+		tf: TileFormat, tc: TileCompression, force_recompress: bool,
+	) -> TilesConverterParameters {
 		TilesConverterParameters {
 			tile_format: Some(tf),
 			tile_compression: Some(tc),
@@ -210,9 +212,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn tile_recompression() -> Result<()> {
-		use Compression::*;
+		use TileCompression::*;
 
-		async fn test(c_in: Compression, c_out: Compression) -> Result<()> {
+		async fn test(c_in: TileCompression, c_out: TileCompression) -> Result<()> {
 			let reader_in = get_mock_reader(TileFormat::PBF, c_in);
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let cp = get_converter_parameters(TileFormat::PBF, c_out, false);
@@ -243,15 +245,15 @@ mod tests {
 		use TileFormat::*;
 
 		async fn test(f_in: TileFormat, f_out: TileFormat) -> Result<()> {
-			let reader_in = get_mock_reader(f_in, Compression::Gzip);
+			let reader_in = get_mock_reader(f_in, TileCompression::Gzip);
 			let temp_file = NamedTempFile::new("test.versatiles")?;
-			let cp = get_converter_parameters(f_out, Compression::Gzip, false);
+			let cp = get_converter_parameters(f_out, TileCompression::Gzip, false);
 			let filename = temp_file.to_str().unwrap();
 			convert_tiles_container(reader_in, cp, filename).await?;
 			let reader_out = VersaTilesReader::open_file(&temp_file).await?;
 			let parameters_out = reader_out.get_parameters();
 			assert_eq!(parameters_out.tile_format, f_out);
-			assert_eq!(parameters_out.tile_compression, Compression::Gzip);
+			assert_eq!(parameters_out.tile_compression, TileCompression::Gzip);
 			Ok(())
 		}
 
@@ -274,7 +276,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn bbox_and_tile_order() -> Result<()> {
-		use Compression::None;
+		use TileCompression::None;
 		use TileFormat::JSON;
 
 		test(false, false, [2, 3, 4, 5], "23 33 43 24 34 44 25 35 45").await?;

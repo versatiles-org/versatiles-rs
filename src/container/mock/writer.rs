@@ -1,6 +1,6 @@
 use crate::{
 	container::{TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
-	types::{Compression, TileFormat},
+	types::{TileCompression, TileFormat},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -19,8 +19,8 @@ pub struct MockTilesWriter {
 impl MockTilesWriter {
 	pub fn new_mock_profile(profile: MockTilesWriterProfile) -> TilesWriterBox {
 		Self::new_mock(match profile {
-			MockTilesWriterProfile::PNG => TilesWriterParameters::new(TileFormat::PNG, Compression::None),
-			MockTilesWriterProfile::PBF => TilesWriterParameters::new(TileFormat::PBF, Compression::Gzip),
+			MockTilesWriterProfile::PNG => TilesWriterParameters::new(TileFormat::PNG, TileCompression::None),
+			MockTilesWriterProfile::PBF => TilesWriterParameters::new(TileFormat::PBF, TileCompression::Gzip),
 		})
 	}
 	pub fn new_mock(parameters: TilesWriterParameters) -> TilesWriterBox {

@@ -1,13 +1,13 @@
-use crate::types::{Blob, Compression};
+use crate::types::{Blob, TileCompression};
 
 pub struct SourceResponse {
 	pub blob: Blob,
-	pub compression: Compression,
+	pub compression: TileCompression,
 	pub mime: String,
 }
 
 impl SourceResponse {
-	pub fn new_some(blob: Blob, compression: &Compression, mime: &str) -> Option<SourceResponse> {
+	pub fn new_some(blob: Blob, compression: &TileCompression, mime: &str) -> Option<SourceResponse> {
 		Some(SourceResponse {
 			blob,
 			compression: compression.to_owned(),

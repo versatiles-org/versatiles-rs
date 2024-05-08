@@ -3,7 +3,7 @@ use super::image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2im
 use crate::{
 	container::TilesStream,
 	helper::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip},
-	types::{Blob, Compression, TileFormat},
+	types::{Blob, TileCompression, TileFormat},
 };
 #[cfg(feature = "full")]
 use anyhow::bail;
@@ -112,7 +112,7 @@ impl DataConverter {
 	/// with optional forced recompression
 	#[allow(unused_variables)]
 	pub fn new_tile_recompressor(
-		src_form: &TileFormat, src_comp: &Compression, dst_form: &TileFormat, dst_comp: &Compression,
+		src_form: &TileFormat, src_comp: &TileCompression, dst_form: &TileFormat, dst_comp: &TileCompression,
 		force_recompress: bool,
 	) -> Result<DataConverter> {
 		let mut converter = DataConverter::new_empty();
@@ -158,7 +158,7 @@ impl DataConverter {
 
 		// Push the necessary conversion functions to the converter pipeline.
 		if force_recompress || (src_comp != dst_comp) || format_converter_option.is_some() {
-			use Compression::*;
+			use TileCompression::*;
 			match src_comp {
 				None => {}
 				Gzip => converter.push(FnConv::UnGzip),
@@ -181,16 +181,16 @@ impl DataConverter {
 
 	/// Constructs a new `DataConverter` instance that decompresses data using the specified compression algorithm.
 	/// The `src_comp` parameter specifies the compression algorithm to use: `Compression::Uncompressed`, `Compression::Gzip`, or `Compression::Brotli`.
-	pub fn new_decompressor(src_comp: &Compression) -> DataConverter {
+	pub fn new_decompressor(src_comp: &TileCompression) -> DataConverter {
 		let mut converter = DataConverter::new_empty();
 
 		match src_comp {
 			// If uncompressed, do nothing
-			Compression::None => {}
+			TileCompression::None => {}
 			// If gzip, add the gzip decompression function to the pipeline
-			Compression::Gzip => converter.push(FnConv::UnGzip),
+			TileCompression::Gzip => converter.push(FnConv::UnGzip),
 			// If brotli, add the brotli decompression function to the pipeline
-			Compression::Brotli => converter.push(FnConv::UnBrotli),
+			TileCompression::Brotli => converter.push(FnConv::UnBrotli),
 		}
 
 		converter
@@ -255,7 +255,7 @@ impl Eq for DataConverter {}
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::{Compression::*, TileFormat::*};
+	use crate::types::{TileCompression::*, TileFormat::*};
 	use anyhow::{ensure, Result};
 
 	#[test]
@@ -273,7 +273,7 @@ mod tests {
 	#[test]
 	fn new_tile_recompressor() {
 		fn test(
-			src_form: &TileFormat, src_comp: &Compression, dst_form: &TileFormat, dst_comp: &Compression,
+			src_form: &TileFormat, src_comp: &TileCompression, dst_form: &TileFormat, dst_comp: &TileCompression,
 			force_recompress: &bool, length: usize, description: &str,
 		) -> Result<()> {
 			let data_converter =
@@ -342,7 +342,7 @@ mod tests {
 			}
 		}
 
-		fn decomp(compression: &Compression) -> &str {
+		fn decomp(compression: &TileCompression) -> &str {
 			match compression {
 				None => "",
 				Gzip => "ungzip",
@@ -350,7 +350,7 @@ mod tests {
 			}
 		}
 
-		fn comp(compression: &Compression) -> &str {
+		fn comp(compression: &TileCompression) -> &str {
 			match compression {
 				None => "",
 				Gzip => "gzip",
@@ -413,9 +413,9 @@ mod tests {
 
 				let data_converter = DataConverter::new_tile_recompressor(
 					&src_form,
-					&Compression::None,
+					&TileCompression::None,
 					&dst_form,
-					&Compression::None,
+					&TileCompression::None,
 					true,
 				)?;
 

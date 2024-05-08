@@ -3,7 +3,7 @@
 use super::ByteRange;
 use crate::{
 	container::versatiles::DataReaderTrait,
-	types::{Blob, Compression, TileFormat},
+	types::{Blob, TileCompression, TileFormat},
 };
 use anyhow::{bail, ensure, Result};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
@@ -18,7 +18,7 @@ pub struct FileHeader {
 	pub bbox: [i32; 4],
 
 	pub tile_format: TileFormat,
-	pub compression: Compression,
+	pub compression: TileCompression,
 
 	pub meta_range: ByteRange,
 	pub blocks_range: ByteRange,
@@ -26,7 +26,7 @@ pub struct FileHeader {
 
 impl FileHeader {
 	pub fn new(
-		tile_format: &TileFormat, compression: &Compression, zoom_range: [u8; 2], bbox: &[f64; 4],
+		tile_format: &TileFormat, compression: &TileCompression, zoom_range: [u8; 2], bbox: &[f64; 4],
 	) -> Result<FileHeader> {
 		ensure!(
 			zoom_range[0] <= zoom_range[1],
@@ -79,9 +79,9 @@ impl FileHeader {
 
 		// compression
 		header.write_u8(match self.compression {
-			Compression::None => 0,
-			Compression::Gzip => 1,
-			Compression::Brotli => 2,
+			TileCompression::None => 0,
+			TileCompression::Gzip => 1,
+			TileCompression::Brotli => 2,
 		})?;
 
 		header.write_u8(self.zoom_range[0])?;
@@ -134,9 +134,9 @@ impl FileHeader {
 		};
 
 		let compression = match header.read_u8()? {
-			0 => Compression::None,
-			1 => Compression::Gzip,
-			2 => Compression::Brotli,
+			0 => TileCompression::None,
+			1 => TileCompression::Gzip,
+			2 => TileCompression::Brotli,
 			value => bail!("unknown compression value: {value}"),
 		};
 
@@ -172,7 +172,7 @@ mod tests {
 	#[test]
 	#[allow(clippy::zero_prefixed_literal)]
 	fn conversion() {
-		let test = |tile_format: &TileFormat, compression: &Compression, a: u64, b: u64, c: u64, d: u64| {
+		let test = |tile_format: &TileFormat, compression: &TileCompression, a: u64, b: u64, c: u64, d: u64| {
 			let mut header1 = FileHeader::new(tile_format, compression, [0, 0], &[0.0, 0.0, 0.0, 0.0]).unwrap();
 			header1.meta_range = ByteRange::new(a, b);
 			header1.blocks_range = ByteRange::new(c, d);
@@ -186,20 +186,20 @@ mod tests {
 		};
 		test(
 			&TileFormat::JPG,
-			&Compression::None,
+			&TileCompression::None,
 			314159265358979323,
 			846264338327950288,
 			419716939937510582,
 			097494459230781640,
 		);
 
-		test(&TileFormat::PBF, &Compression::Brotli, 29, 97, 92, 458);
+		test(&TileFormat::PBF, &TileCompression::Brotli, 29, 97, 92, 458);
 	}
 
 	#[test]
 	fn new_file_header() {
 		let tf = TileFormat::PNG;
-		let comp = Compression::Gzip;
+		let comp = TileCompression::Gzip;
 		let zoom = [10, 14];
 		let bbox = [-180.0, -85.0511, 180.0, 85.0511];
 		let header = FileHeader::new(&tf, &comp, zoom, &bbox).unwrap();
@@ -216,7 +216,7 @@ mod tests {
 	fn to_blob() {
 		let header = FileHeader::new(
 			&TileFormat::PBF,
-			&Compression::Gzip,
+			&TileCompression::Gzip,
 			[3, 8],
 			&[-180.0, -85.051_13, 180.0, 85.051_13],
 		)
@@ -248,7 +248,7 @@ mod tests {
 		assert_eq!(header2.zoom_range, [3, 8]);
 		assert_eq!(header2.bbox, [-1800000000, -850511300, 1800000000, 850511300]);
 		assert_eq!(header2.tile_format, TileFormat::PBF);
-		assert_eq!(header2.compression, Compression::Gzip);
+		assert_eq!(header2.compression, TileCompression::Gzip);
 		assert_eq!(header2.meta_range, ByteRange::empty());
 		assert_eq!(header2.blocks_range, ByteRange::empty());
 	}
@@ -256,7 +256,7 @@ mod tests {
 	#[test]
 	fn new_file_header_with_invalid_params() {
 		let tf = TileFormat::PNG;
-		let comp = Compression::Gzip;
+		let comp = TileCompression::Gzip;
 
 		let should_panic = |zoom: [u8; 2], bbox: [f64; 4]| {
 			assert!(catch_unwind(|| {
@@ -276,7 +276,7 @@ mod tests {
 
 	#[test]
 	fn all_tile_formats() {
-		let compression = Compression::Gzip;
+		let compression = TileCompression::Gzip;
 		let zoom_range = [0, 0];
 		let bbox = [0.0, 0.0, 0.0, 0.0];
 
@@ -309,7 +309,7 @@ mod tests {
 		let zoom_range = [0, 0];
 		let bbox = [0.0, 0.0, 0.0, 0.0];
 
-		let compressions = vec![Compression::None, Compression::Gzip, Compression::Brotli];
+		let compressions = vec![TileCompression::None, TileCompression::Gzip, TileCompression::Brotli];
 
 		for compression in compressions {
 			let header = FileHeader::new(&tile_format, &compression, zoom_range, &bbox).unwrap();
@@ -344,7 +344,7 @@ mod tests {
 
 	#[test]
 	fn unknown_tile_format() {
-		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &Compression::Gzip, [0, 0], &[0.0, 0.0, 0.0, 0.0])
+		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &TileCompression::Gzip, [0, 0], &[0.0, 0.0, 0.0, 0.0])
 			.unwrap()
 			.to_blob()
 			.unwrap();
@@ -359,7 +359,7 @@ mod tests {
 
 	#[test]
 	fn unknown_compression() {
-		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &Compression::Gzip, [0, 0], &[0.0, 0.0, 0.0, 0.0])
+		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &TileCompression::Gzip, [0, 0], &[0.0, 0.0, 0.0, 0.0])
 			.unwrap()
 			.to_blob()
 			.unwrap();

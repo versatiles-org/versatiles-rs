@@ -5,7 +5,7 @@ use super::{
 use crate::{
 	container::TilesReaderBox,
 	helper::{optimize_compression, TargetCompression},
-	types::{Blob, Compression},
+	types::{Blob, TileCompression},
 };
 use anyhow::{bail, Result};
 use axum::{
@@ -250,9 +250,9 @@ fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Re
 	};
 
 	match compression {
-		Compression::None => {}
-		Compression::Gzip => response = response.header(CONTENT_ENCODING, "gzip"),
-		Compression::Brotli => response = response.header(CONTENT_ENCODING, "br"),
+		TileCompression::None => {}
+		TileCompression::Gzip => response = response.header(CONTENT_ENCODING, "gzip"),
+		TileCompression::Brotli => response = response.header(CONTENT_ENCODING, "br"),
 	}
 
 	response
@@ -264,7 +264,7 @@ fn ok_json(message: &str) -> Response<Body> {
 	ok_data(
 		SourceResponse {
 			blob: Blob::from(message),
-			compression: Compression::None,
+			compression: TileCompression::None,
 			mime: String::from("application/json"),
 		},
 		TargetCompression::from_none(),
@@ -278,10 +278,10 @@ fn get_encoding(headers: HeaderMap) -> TargetCompression {
 		let encoding_string = encoding.to_str().unwrap_or("");
 
 		if encoding_string.contains("gzip") {
-			encoding_set.insert(Compression::Gzip);
+			encoding_set.insert(TileCompression::Gzip);
 		}
 		if encoding_string.contains("br") {
-			encoding_set.insert(Compression::Brotli);
+			encoding_set.insert(TileCompression::Brotli);
 		}
 	}
 	encoding_set
@@ -292,7 +292,7 @@ mod tests {
 	use super::*;
 	use crate::{
 		container::{MockTilesReader, MockTilesReaderProfile},
-		types::Compression::*,
+		types::TileCompression::*,
 	};
 	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
 	use enumset::{enum_set, EnumSet};
@@ -301,7 +301,7 @@ mod tests {
 
 	#[test]
 	fn test_get_encoding() {
-		let test = |encoding: &str, comp0: EnumSet<Compression>| {
+		let test = |encoding: &str, comp0: EnumSet<TileCompression>| {
 			let mut map = HeaderMap::new();
 			if encoding != "NONE" {
 				map.insert(ACCEPT_ENCODING, encoding.parse().unwrap());

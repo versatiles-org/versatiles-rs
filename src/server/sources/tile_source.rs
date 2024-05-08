@@ -3,7 +3,7 @@ use crate::{
 	container::TilesReaderBox,
 	helper::TargetCompression,
 	server::helpers::Url,
-	types::{Compression, TileCoord3, TileFormat},
+	types::{TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::Result;
 use std::{fmt::Debug, sync::Arc};
@@ -16,7 +16,7 @@ pub struct TileSource {
 	pub json_info: String,
 	reader: Arc<Mutex<TilesReaderBox>>,
 	pub tile_mime: String,
-	pub compression: Compression,
+	pub compression: TileCompression,
 }
 
 impl TileSource {
@@ -109,7 +109,7 @@ impl TileSource {
 			// If metadata is empty, return a not found response
 			meta_option.as_ref()?;
 
-			return SourceResponse::new_some(meta_option.unwrap(), &Compression::None, "application/json");
+			return SourceResponse::new_some(meta_option.unwrap(), &TileCompression::None, "application/json");
 		}
 
 		// If the request is unknown, return a not found response
@@ -158,7 +158,7 @@ mod tests {
 	#[tokio::test]
 	async fn tile_container_get_data() -> Result<()> {
 		async fn check_response(
-			container: &mut TileSource, url: &str, compression: Compression, mime_type: &str,
+			container: &mut TileSource, url: &str, compression: TileCompression, mime_type: &str,
 		) -> Result<Vec<u8>> {
 			let response = container
 				.get_data(&Url::new(url), &TargetCompression::from(compression))
@@ -171,7 +171,7 @@ mod tests {
 			Ok(response.blob.as_vec())
 		}
 
-		async fn check_404(container: &mut TileSource, url: &str, compression: Compression) -> Result<bool> {
+		async fn check_404(container: &mut TileSource, url: &str, compression: TileCompression) -> Result<bool> {
 			let response = container
 				.get_data(&Url::new(url), &TargetCompression::from(compression))
 				.await;
@@ -185,19 +185,19 @@ mod tests {
 		)?;
 
 		assert_eq!(
-			&check_response(c, "0/0/0.png", Compression::None, "image/png").await?[0..6],
+			&check_response(c, "0/0/0.png", TileCompression::None, "image/png").await?[0..6],
 			b"\x89PNG\r\n"
 		);
 
 		assert_eq!(
-			&check_response(c, "meta.json", Compression::None, "application/json").await?[..],
+			&check_response(c, "meta.json", TileCompression::None, "application/json").await?[..],
 			b"dummy meta data"
 		);
 
-		assert!(check_404(c, "x/0/0.png", Compression::None).await?);
-		assert!(check_404(c, "-1/0/0.png", Compression::None).await?);
-		assert!(check_404(c, "0/0/-1.png", Compression::None).await?);
-		assert!(check_404(c, "0/0/1.png", Compression::None).await?);
+		assert!(check_404(c, "x/0/0.png", TileCompression::None).await?);
+		assert!(check_404(c, "-1/0/0.png", TileCompression::None).await?);
+		assert!(check_404(c, "0/0/-1.png", TileCompression::None).await?);
+		assert!(check_404(c, "0/0/1.png", TileCompression::None).await?);
 
 		Ok(())
 	}

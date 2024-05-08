@@ -49,7 +49,7 @@ mod tests {
 	use super::*;
 	use crate::{
 		helper::compress,
-		types::{Blob, Compression},
+		types::{Blob, TileCompression},
 	};
 	use async_trait::async_trait;
 	use std::{fs::File, io::Write, path::PathBuf};
@@ -71,7 +71,7 @@ mod tests {
 			if path.starts_with(&Url::new("exists")) {
 				SourceResponse::new_some(
 					Blob::from(vec![1, 2, 3, 4]),
-					&Compression::None,
+					&TileCompression::None,
 					"application/octet-stream",
 				)
 			} else {
@@ -98,7 +98,7 @@ mod tests {
 			);
 		};
 
-		let create_file = |path: &PathBuf, compression: Compression| {
+		let create_file = |path: &PathBuf, compression: TileCompression| {
 			let content = compress(Blob::new_empty(), &compression).unwrap();
 			let mut f = File::create(path).unwrap();
 			f.write_all(content.as_slice()).unwrap();
@@ -113,22 +113,22 @@ mod tests {
 
 		// Test .tar file
 		let path = temp_dir.path().join("temp.tar");
-		create_file(&path, Compression::None);
+		create_file(&path, TileCompression::None);
 		check_type(path, "tar");
 
 		// Test gzip compressed .tar file
 		let path = temp_dir.path().join("temp.tar.gz");
-		create_file(&path, Compression::Gzip);
+		create_file(&path, TileCompression::Gzip);
 		check_type(path, "tar");
 
 		// Test brotli compressed .tar file
 		let path = temp_dir.path().join("temp.tar.br");
-		create_file(&path, Compression::Brotli);
+		create_file(&path, TileCompression::Brotli);
 		check_type(path, "tar");
 
 		// Test non .tar file
 		let path = temp_dir.path().join("data.tar.bmp");
-		create_file(&path, Compression::None);
+		create_file(&path, TileCompression::None);
 		check_error(path, "\" must be a name of a tar file");
 
 		// Test initialization with a folder

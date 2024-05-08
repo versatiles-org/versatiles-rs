@@ -2,7 +2,7 @@
 use crate::{container::ProbeDepth, helper::PrettyPrint};
 use crate::{
 	container::TilesStream,
-	types::{Blob, Compression, TileBBox, TileBBoxPyramid, TileCoord3, TileFormat},
+	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -15,12 +15,12 @@ pub type TilesReaderBox = Box<dyn TilesReaderTrait>;
 #[derive(Debug, PartialEq, Clone)]
 pub struct TilesReaderParameters {
 	pub bbox_pyramid: TileBBoxPyramid,
-	pub tile_compression: Compression,
+	pub tile_compression: TileCompression,
 	pub tile_format: TileFormat,
 }
 impl TilesReaderParameters {
 	pub fn new(
-		tile_format: TileFormat, tile_compression: Compression, bbox_pyramid: TileBBoxPyramid,
+		tile_format: TileFormat, tile_compression: TileCompression, bbox_pyramid: TileBBoxPyramid,
 	) -> TilesReaderParameters {
 		TilesReaderParameters {
 			tile_format,
@@ -41,7 +41,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 	fn get_parameters(&self) -> &TilesReaderParameters;
 
-	fn override_compression(&mut self, tile_compression: Compression);
+	fn override_compression(&mut self, tile_compression: TileCompression);
 
 	/// get meta data, always uncompressed
 	async fn get_meta(&self) -> Result<Option<Blob>>;
@@ -169,7 +169,7 @@ mod tests {
 			Box::new(TestReader {
 				parameters: TilesReaderParameters {
 					bbox_pyramid: TileBBoxPyramid::new_full(3),
-					tile_compression: Compression::Gzip,
+					tile_compression: TileCompression::Gzip,
 					tile_format: TileFormat::PBF,
 				},
 			})
@@ -184,7 +184,7 @@ mod tests {
 		fn get_parameters(&self) -> &TilesReaderParameters {
 			&self.parameters
 		}
-		fn override_compression(&mut self, tile_compression: Compression) {
+		fn override_compression(&mut self, tile_compression: TileCompression) {
 			self.parameters.tile_compression = tile_compression;
 		}
 		async fn get_meta(&self) -> Result<Option<Blob>> {
@@ -210,7 +210,7 @@ mod tests {
 
 		// Test getting tile compression and format
 		let parameters = reader.get_parameters();
-		assert_eq!(parameters.tile_compression, Compression::Gzip);
+		assert_eq!(parameters.tile_compression, TileCompression::Gzip);
 		assert_eq!(parameters.tile_format, TileFormat::PBF);
 
 		// Test getting container name

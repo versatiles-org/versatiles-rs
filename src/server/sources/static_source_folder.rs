@@ -2,7 +2,7 @@ use super::{static_source::StaticSourceTrait, SourceResponse};
 use crate::{
 	helper::TargetCompression,
 	server::helpers::{guess_mime, Url},
-	types::{Blob, Compression},
+	types::{Blob, TileCompression},
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
@@ -78,7 +78,7 @@ impl StaticSourceTrait for Folder {
 
 		let mime = guess_mime(&local_path);
 
-		SourceResponse::new_some(blob, &Compression::None, &mime)
+		SourceResponse::new_some(blob, &TileCompression::None, &mime)
 	}
 }
 

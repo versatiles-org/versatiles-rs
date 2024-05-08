@@ -58,14 +58,14 @@ pub mod tests {
 	use super::*;
 	use crate::{
 		container::{MockTilesReader, MockTilesWriter, TilesReaderParameters},
-		types::{Compression, TileBBoxPyramid, TileFormat},
+		types::{TileBBoxPyramid, TileCompression, TileFormat},
 	};
 	use anyhow::Result;
 	use assert_fs::{fixture::NamedTempFile, TempDir};
 	use std::time::Instant;
 
 	pub async fn make_test_file(
-		tile_format: TileFormat, compression: Compression, max_zoom_level: u8, extension: &str,
+		tile_format: TileFormat, compression: TileCompression, max_zoom_level: u8, extension: &str,
 	) -> Result<NamedTempFile> {
 		// get dummy reader
 		let mut reader = MockTilesReader::new_mock(TilesReaderParameters::new(
@@ -101,7 +101,7 @@ pub mod tests {
 
 		#[tokio::main]
 		async fn test_writer_and_reader(
-			container: &Container, tile_format: TileFormat, compression: Compression,
+			container: &Container, tile_format: TileFormat, compression: TileCompression,
 		) -> Result<()> {
 			let _test_name = format!("{:?}, {:?}, {:?}", container, tile_format, compression);
 
@@ -148,9 +148,9 @@ pub mod tests {
 		let containers = vec![Container::Directory, Container::Tar, Container::Versatiles];
 
 		for container in containers {
-			test_writer_and_reader(&container, TileFormat::PNG, Compression::None)?;
-			test_writer_and_reader(&container, TileFormat::JPG, Compression::None)?;
-			test_writer_and_reader(&container, TileFormat::PBF, Compression::Gzip)?;
+			test_writer_and_reader(&container, TileFormat::PNG, TileCompression::None)?;
+			test_writer_and_reader(&container, TileFormat::JPG, TileCompression::None)?;
+			test_writer_and_reader(&container, TileFormat::PBF, TileCompression::Gzip)?;
 		}
 
 		Ok(())

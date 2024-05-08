@@ -107,7 +107,7 @@ mod tests {
 	use crate::{
 		container::{MockTilesReader, TilesReaderParameters, MOCK_BYTES_PBF},
 		helper::decompress_gzip,
-		types::{Compression, TileBBoxPyramid, TileFormat},
+		types::{TileBBoxPyramid, TileCompression, TileFormat},
 	};
 	use assert_fs;
 
@@ -130,13 +130,13 @@ mod tests {
 
 		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters::new(
 			TileFormat::PBF,
-			Compression::Gzip,
+			TileCompression::Gzip,
 			TileBBoxPyramid::new_full(2),
 		));
 
 		let mut writer = DirectoryTilesWriter::open_file(
 			&temp_path,
-			TilesWriterParameters::new(TileFormat::PBF, Compression::Gzip),
+			TilesWriterParameters::new(TileFormat::PBF, TileCompression::Gzip),
 		)?;
 
 		writer.write_from_reader(&mut mock_reader).await?;

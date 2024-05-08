@@ -1,7 +1,7 @@
 use crate::{
 	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
 	helper::decompress,
-	types::{extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat},
+	types::{extract_compression, extract_format, Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
@@ -33,7 +33,7 @@ impl DirectoryTilesReader {
 		let mut meta: Option<Blob> = None;
 		let mut tile_map = HashMap::new();
 		let mut tile_format: Option<TileFormat> = None;
-		let mut tile_compression: Option<Compression> = None;
+		let mut tile_compression: Option<TileCompression> = None;
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
 		for result1 in fs::read_dir(dir)? {
@@ -100,11 +100,11 @@ impl DirectoryTilesReader {
 						continue;
 					}
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
-						meta = Some(decompress(Self::read(&entry1.path())?, &Compression::Gzip)?);
+						meta = Some(decompress(Self::read(&entry1.path())?, &TileCompression::Gzip)?);
 						continue;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
-						meta = Some(decompress(Self::read(&entry1.path())?, &Compression::Brotli)?);
+						meta = Some(decompress(Self::read(&entry1.path())?, &TileCompression::Brotli)?);
 						continue;
 					}
 					&_ => {}
@@ -137,7 +137,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
-	fn override_compression(&mut self, tile_compression: Compression) {
+	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
 	async fn get_meta(&self) -> Result<Option<Blob>> {

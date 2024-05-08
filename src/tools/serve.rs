@@ -1,7 +1,7 @@
 use crate::{
 	container::{get_reader, TilesConvertReader, TilesConverterParameters},
 	server::{TileServer, Url},
-	types::Compression,
+	types::TileCompression,
 };
 use anyhow::Result;
 use clap::Args;
@@ -61,7 +61,7 @@ pub struct Subcommand {
 	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
 	/// (deprecated in favor of a better solution that does not yet exist)
 	#[arg(long, value_enum, value_name = "COMPRESSION")]
-	override_input_compression: Option<Compression>,
+	override_input_compression: Option<TileCompression>,
 }
 
 #[tokio::main]

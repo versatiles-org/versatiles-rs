@@ -2,7 +2,7 @@ use super::{static_source::StaticSourceTrait, SourceResponse};
 use crate::{
 	helper::{decompress_brotli, decompress_gzip, TargetCompression},
 	server::helpers::{guess_mime, Url},
-	types::{Blob, Compression},
+	types::{Blob, TileCompression},
 };
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
@@ -75,13 +75,13 @@ impl TarFile {
 				.extension()
 				.and_then(OsStr::to_str)
 				.map(|ext| match ext {
-					"br" => Compression::Brotli,
-					"gz" => Compression::Gzip,
-					_ => Compression::None,
+					"br" => TileCompression::Brotli,
+					"gz" => TileCompression::Gzip,
+					_ => TileCompression::None,
 				})
-				.unwrap_or(Compression::None);
+				.unwrap_or(TileCompression::None);
 
-			if compression != Compression::None {
+			if compression != TileCompression::None {
 				entry_path.set_extension("");
 			}
 
@@ -108,9 +108,9 @@ impl TarFile {
 				let entry = lookup.entry(name);
 				let versions = entry.or_insert_with(|| FileEntry::new(mime.to_string()));
 				match compression {
-					Compression::None => versions.un = Some(blob),
-					Compression::Gzip => versions.gz = Some(blob),
-					Compression::Brotli => versions.br = Some(blob),
+					TileCompression::None => versions.un = Some(blob),
+					TileCompression::Gzip => versions.gz = Some(blob),
+					TileCompression::Brotli => versions.br = Some(blob),
 				}
 			};
 
@@ -142,28 +142,28 @@ impl StaticSourceTrait for TarFile {
 	fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse> {
 		let file_entry = self.lookup.get(&url.str[1..])?.to_owned();
 
-		if accept.contains(Compression::Brotli) {
+		if accept.contains(TileCompression::Brotli) {
 			if let Some(blob) = &file_entry.br {
-				return SourceResponse::new_some(blob.to_owned(), &Compression::Brotli, &file_entry.mime);
+				return SourceResponse::new_some(blob.to_owned(), &TileCompression::Brotli, &file_entry.mime);
 			}
 		}
 
-		if accept.contains(Compression::Gzip) {
+		if accept.contains(TileCompression::Gzip) {
 			if let Some(blob) = &file_entry.gz {
-				return SourceResponse::new_some(blob.to_owned(), &Compression::Gzip, &file_entry.mime);
+				return SourceResponse::new_some(blob.to_owned(), &TileCompression::Gzip, &file_entry.mime);
 			}
 		}
 
 		if let Some(blob) = &file_entry.un {
-			return SourceResponse::new_some(blob.to_owned(), &Compression::None, &file_entry.mime);
+			return SourceResponse::new_some(blob.to_owned(), &TileCompression::None, &file_entry.mime);
 		}
 
 		if let Some(blob) = &file_entry.br {
-			return SourceResponse::new_some(blob.to_owned(), &Compression::Brotli, &file_entry.mime);
+			return SourceResponse::new_some(blob.to_owned(), &TileCompression::Brotli, &file_entry.mime);
 		}
 
 		if let Some(blob) = &file_entry.gz {
-			return SourceResponse::new_some(blob.to_owned(), &Compression::Gzip, &file_entry.mime);
+			return SourceResponse::new_some(blob.to_owned(), &TileCompression::Gzip, &file_entry.mime);
 		}
 
 		None
@@ -182,7 +182,7 @@ mod tests {
 	use crate::container::{convert_tiles_container, MockTilesReader, MockTilesReaderProfile, TilesConverterParameters};
 	use assert_fs::NamedTempFile;
 
-	pub async fn make_test_tar(compression: Compression) -> NamedTempFile {
+	pub async fn make_test_tar(compression: TileCompression) -> NamedTempFile {
 		// get dummy reader
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF);
 
@@ -199,7 +199,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn small_stuff() {
-		let file = make_test_tar(Compression::None).await;
+		let file = make_test_tar(TileCompression::None).await;
 
 		let tar_file = TarFile::from(&file).unwrap();
 
@@ -221,13 +221,13 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_data() {
-		use Compression::{Brotli as B, Gzip as G, None as N};
+		use TileCompression::{Brotli as B, Gzip as G, None as N};
 
 		test1(N).await.unwrap();
 		test1(G).await.unwrap();
 		test1(B).await.unwrap();
 
-		async fn test1(compression_tar: Compression) -> Result<()> {
+		async fn test1(compression_tar: TileCompression) -> Result<()> {
 			let file = make_test_tar(compression_tar).await;
 			let mut tar_file = TarFile::from(&file)?;
 
@@ -238,7 +238,7 @@ mod tests {
 			return Ok(());
 
 			async fn test2(
-				tar_file: &mut TarFile, compression_tar: &Compression, compression_accept: Compression,
+				tar_file: &mut TarFile, compression_tar: &TileCompression, compression_accept: TileCompression,
 			) -> Result<()> {
 				let accept = TargetCompression::from(compression_accept);
 
