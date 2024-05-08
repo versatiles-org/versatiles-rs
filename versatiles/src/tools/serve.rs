@@ -1,10 +1,13 @@
-use crate::server::{TileServer, Url};
+use crate::{
+	libs::TileCompression,
+	server::{TileServer, Url},
+};
 use anyhow::Result;
 use clap::Args;
 use regex::Regex;
 use std::path::Path;
 use tokio::time::{sleep, Duration};
-use versatiles_lib::{containers::get_reader, shared::Compression};
+use versatiles_lib::containers::get_reader;
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]
@@ -58,7 +61,7 @@ pub struct Subcommand {
 	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
 	/// (deprecated in favor of a better solution that does not yet exist)
 	#[arg(long, value_enum, value_name = "COMPRESSION")]
-	override_input_compression: Option<Compression>,
+	override_input_compression: Option<TileCompression>,
 }
 
 #[tokio::main]
