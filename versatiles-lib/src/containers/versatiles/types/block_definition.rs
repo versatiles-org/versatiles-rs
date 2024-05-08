@@ -4,7 +4,7 @@ use anyhow::{ensure, Result};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::{fmt, io::Cursor, ops::Div};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct BlockDefinition {
 	offset: TileCoord3,       // block offset, for level 14 it's between [0,0] and [63,63]
 	global_bbox: TileBBox,    // tile coverage, is usually [0,0,255,255]
@@ -15,11 +15,11 @@ pub struct BlockDefinition {
 
 #[allow(dead_code)]
 impl BlockDefinition {
-	pub fn new(bbox: TileBBox) -> Self {
+	pub fn new(bbox: &TileBBox) -> Self {
 		let x = bbox.x_min.div(256u32);
 		let y = bbox.y_min.div(256u32);
 		let z = bbox.level;
-		let global_bbox = bbox;
+		let global_bbox: TileBBox = bbox.clone();
 
 		let tiles_coverage = TileBBox::new(
 			z.min(8),
@@ -164,7 +164,7 @@ mod tests {
 
 	#[test]
 	fn multitest() -> Result<()> {
-		let mut def = BlockDefinition::new(TileBBox::new(12, 300, 400, 320, 450)?);
+		let mut def = BlockDefinition::new(&TileBBox::new(12, 300, 400, 320, 450)?);
 		def.tiles_range = ByteRange::new(4, 5);
 		def.index_range = ByteRange::new(9, 6);
 
@@ -190,7 +190,7 @@ mod tests {
 	#[test]
 	fn test_set_tiles_range() -> Result<()> {
 		let bbox = TileBBox::new(14, 0, 0, 255, 255)?;
-		let mut def = BlockDefinition::new(bbox);
+		let mut def = BlockDefinition::new(&bbox);
 		let range = ByteRange::new(10, 20);
 
 		def.set_tiles_range(range);
@@ -202,7 +202,7 @@ mod tests {
 	#[test]
 	fn test_set_index_range() -> Result<()> {
 		let bbox = TileBBox::new(14, 0, 0, 255, 255)?;
-		let mut def = BlockDefinition::new(bbox);
+		let mut def = BlockDefinition::new(&bbox);
 		let range = ByteRange::new(10, 20);
 
 		def.set_index_range(range);

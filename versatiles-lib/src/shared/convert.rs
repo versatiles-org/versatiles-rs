@@ -164,10 +164,8 @@ impl DataConverter {
 				Gzip => converter.push(FnConv::Gzip),
 				Brotli => converter.push(FnConv::Brotli),
 			}
-		} else {
-			if let Some(format_converter) = format_converter_option {
-				converter.push(format_converter)
-			}
+		} else if let Some(format_converter) = format_converter_option {
+			converter.push(format_converter)
 		};
 
 		Ok(converter)

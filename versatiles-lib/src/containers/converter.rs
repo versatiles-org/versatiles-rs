@@ -25,9 +25,9 @@ impl TilesConverterParameters {
 		force_recompress: bool, flip_y: bool, swap_xy: bool,
 	) -> TilesConverterParameters {
 		TilesConverterParameters {
-			tile_format: tile_format,
-			tile_compression: tile_compression,
-			bbox_pyramid: bbox_pyramid,
+			tile_format,
+			tile_compression,
+			bbox_pyramid,
 			force_recompress,
 			flip_y,
 			swap_xy,
@@ -56,7 +56,7 @@ pub async fn convert_tiles_container(
 	};
 	let mut writer = get_writer(filename, wp).await?;
 
-	let mut converter = TilesConvertReader::new(reader, cp)?;
+	let mut converter = TilesConvertReader::new_from_reader(reader, cp)?;
 	writer.write_from_reader(&mut converter).await
 }
 
@@ -71,11 +71,11 @@ pub struct TilesConvertReader {
 }
 
 impl TilesConvertReader {
-	pub fn new(reader: TilesReaderBox, cp: TilesConverterParameters) -> Result<TilesReaderBox> {
+	pub fn new_from_reader(reader: TilesReaderBox, cp: TilesConverterParameters) -> Result<TilesReaderBox> {
 		let container_name = format!("converter({})", reader.get_container_name());
 		let name = format!("converter({})", reader.get_name());
 
-		let rp: TilesReaderParameters = *reader.get_parameters();
+		let rp: TilesReaderParameters = reader.get_parameters().to_owned();
 		let mut new_rp: TilesReaderParameters = rp.clone();
 
 		if cp.flip_y {

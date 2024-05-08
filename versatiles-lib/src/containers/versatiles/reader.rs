@@ -140,8 +140,11 @@ impl TilesReaderTrait for VersaTilesReader {
 		let block_coord = TileCoord3::new(coord.get_x().shr(8), coord.get_y().shr(8), coord.get_z())?;
 
 		// Get the block using the block coordinate
-		let block = *(self.block_index.get_block(&block_coord))
-			.ok_or_else(|| anyhow!("block <{block_coord:#?}> for tile <{coord:#?}> does not exist"))?;
+		let block = self
+			.block_index
+			.get_block(&block_coord)
+			.ok_or_else(|| anyhow!("block <{block_coord:#?}> for tile <{coord:#?}> does not exist"))?
+			.clone();
 
 		// Get the block and its bounding box
 		let bbox = block.get_global_bbox();
@@ -182,6 +185,7 @@ impl TilesReaderTrait for VersaTilesReader {
 
 		let chunks: Vec<Vec<Vec<(TileCoord3, ByteRange)>>> = futures_util::stream::iter(block_coords)
 			.then(|block_coord: TileCoord3| {
+				let bbox = bbox.clone();
 				let self_mutex = self_mutex.clone();
 				async move {
 					let mut myself = self_mutex.lock().await;
@@ -193,7 +197,7 @@ impl TilesReaderTrait for VersaTilesReader {
 					}
 
 					// Get the block
-					let block: BlockDefinition = *block_option.unwrap();
+					let block: BlockDefinition = block_option.unwrap().to_owned();
 					trace!("block {block:?}");
 
 					// Get the bounding box of all tiles defined in this block
@@ -259,6 +263,7 @@ impl TilesReaderTrait for VersaTilesReader {
 
 		stream::iter(chunks)
 			.then(move |chunk| {
+				let bbox = bbox.clone();
 				let self_mutex = self_mutex.clone();
 				async move {
 					let mut myself = self_mutex.lock().await;

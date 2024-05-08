@@ -12,7 +12,7 @@ use tokio::sync::Mutex;
 
 pub type TilesReaderBox = Box<dyn TilesReaderTrait>;
 
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct TilesReaderParameters {
 	pub bbox_pyramid: TileBBoxPyramid,
 	pub tile_compression: Compression,

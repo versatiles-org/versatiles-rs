@@ -4,7 +4,7 @@ use std::fmt;
 
 const MAX_ZOOM_LEVEL: u8 = 32;
 
-#[derive(Clone, Eq, Copy)]
+#[derive(Clone, Eq)]
 pub struct TileBBoxPyramid {
 	pub level_bbox: [TileBBox; MAX_ZOOM_LEVEL as usize],
 }
@@ -60,7 +60,8 @@ impl TileBBoxPyramid {
 		&self.level_bbox[level as usize]
 	}
 	pub fn set_level_bbox(&mut self, bbox: TileBBox) {
-		self.level_bbox[bbox.level as usize] = bbox;
+		let level = bbox.level as usize;
+		self.level_bbox[level] = bbox;
 	}
 	pub fn include_coord(&mut self, coord: &TileCoord3) {
 		self.level_bbox[coord.get_z() as usize].include_tile(coord.get_x(), coord.get_y());
@@ -237,8 +238,8 @@ mod tests {
 		let test = |level: u8| {
 			let mut pyramid = TileBBoxPyramid::new_empty();
 			let bbox = TileBBox::new_full(level).unwrap();
-			pyramid.set_level_bbox(bbox);
-			assert_eq!(pyramid.get_level_bbox(level).clone(), bbox);
+			pyramid.set_level_bbox(bbox.clone());
+			assert_eq!(pyramid.get_level_bbox(level), &bbox);
 		};
 
 		test(0);

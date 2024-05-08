@@ -44,7 +44,7 @@ pub trait TilesWriterTrait: Send {
 			"tile compression must be the same"
 		);
 
-		return Ok(());
+		Ok(())
 	}
 
 	fn get_parameters(&self) -> &TilesWriterParameters;

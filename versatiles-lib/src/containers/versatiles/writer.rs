@@ -100,7 +100,7 @@ impl VersaTilesWriter {
 		// Initialize blocks and populate them
 		let mut blocks: Vec<BlockDefinition> = Vec::new();
 		for bbox_tiles in pyramid.iter_levels() {
-			let mut bbox_blocks = *bbox_tiles;
+			let mut bbox_blocks = bbox_tiles.clone();
 			bbox_blocks.scale_down(256);
 
 			for coord in bbox_blocks.iter_coords() {
@@ -109,9 +109,9 @@ impl VersaTilesWriter {
 				let level = coord.get_z();
 				let size = 2u32.pow(level.min(8) as u32) - 1;
 
-				let mut bbox_block = *bbox_tiles;
+				let mut bbox_block = bbox_tiles.clone();
 				bbox_block.intersect_bbox(&TileBBox::new(level, x, y, x + size, y + size)?);
-				blocks.push(BlockDefinition::new(bbox_block))
+				blocks.push(BlockDefinition::new(&bbox_block))
 			}
 		}
 
@@ -155,13 +155,13 @@ impl VersaTilesWriter {
 		let offset0 = self.writer.get_position()?;
 
 		// Prepare the necessary data structures
-		let bbox = *block.get_global_bbox();
+		let bbox = &block.get_global_bbox().clone();
 
 		let mut tile_index = TileIndex::new_empty(bbox.count_tiles() as usize);
 		let mut tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
 		// Get the tile stream
-		let tile_stream: TilesStream = reader.get_bbox_tile_stream(bbox).await;
+		let tile_stream: TilesStream = reader.get_bbox_tile_stream(bbox.clone()).await;
 
 		// Iterate through the blobs and process them
 		tile_stream

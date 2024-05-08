@@ -6,7 +6,7 @@ use std::{
 	ops::{Div, Rem},
 };
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct TileBBox {
 	pub level: u8,
 	pub x_min: u32,
@@ -448,7 +448,7 @@ mod tests {
 		let bbox1 = TileBBox::new(4, 0, 11, 2, 13).unwrap();
 		let bbox2 = TileBBox::new(4, 1, 10, 3, 12).unwrap();
 
-		let mut bbox1_intersect = bbox1;
+		let mut bbox1_intersect = bbox1.clone();
 		bbox1_intersect.intersect_bbox(&bbox2);
 		assert_eq!(bbox1_intersect, TileBBox::new(4, 1, 11, 2, 12).unwrap());
 
