@@ -1,9 +1,10 @@
+use crate::libs::TileCompression;
 use anyhow::{bail, Result};
 use clap::Args;
 use log::trace;
 use versatiles_lib::{
-	containers::{get_reader, get_writer, TilesReaderBox, TilesWriterBox},
-	shared::{Compression, TileBBoxPyramid, TileFormat, TilesWriterConfig},
+	containers::{convert_tiles_container, get_reader, TilesConverterParameters},
+	shared::{TileBBoxPyramid, TileFormat},
 };
 
 #[derive(Args, Debug)]
@@ -52,7 +53,7 @@ pub struct Subcommand {
 
 	/// set new compression
 	#[arg(long, short, value_enum)]
-	compress: Option<Compression>,
+	compress: Option<TileCompression>,
 
 	/// force recompression, e.g. to improve an existing gzip compression
 	#[arg(long, short)]
@@ -60,32 +61,38 @@ pub struct Subcommand {
 
 	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
 	#[arg(long, value_enum, value_name = "COMPRESSION")]
-	override_input_compression: Option<Compression>,
+	override_input_compression: Option<TileCompression>,
 }
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
 	eprintln!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
-	let mut reader = new_reader(&arguments.input_file, arguments).await?;
-	let mut converter = new_converter(&arguments.output_file, arguments).await?;
+	let mut reader = get_reader(&arguments.input_file).await?;
 
-	converter.convert_from(&mut reader).await
-}
+	if arguments.override_input_compression.is_some() {
+		reader.override_compression(arguments.override_input_compression.as_ref().unwrap().to_value());
+	}
 
-async fn new_reader(filename: &str, arguments: &Subcommand) -> Result<TilesReaderBox> {
-	let mut reader = get_reader(filename).await?;
-	reader.set_configuration(
+	let cp = TilesConverterParameters::new(
+		arguments.tile_format,
+		arguments.compress.as_ref().map(|c| c.to_value()),
+		get_bbox_pyramid(arguments)?,
+		arguments.force_recompress,
 		arguments.flip_y,
 		arguments.swap_xy,
-		arguments.override_input_compression,
 	);
+	convert_tiles_container(reader, cp, &arguments.output_file).await?;
 
-	Ok(reader)
+	Ok(())
 }
 
-async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TilesWriterBox> {
-	let mut bbox_pyramid = TileBBoxPyramid::new_full();
+fn get_bbox_pyramid(arguments: &Subcommand) -> Result<Option<TileBBoxPyramid>> {
+	if arguments.min_zoom.is_none() && arguments.max_zoom.is_none() && arguments.bbox.is_none() {
+		return Ok(None);
+	}
+
+	let mut bbox_pyramid = TileBBoxPyramid::new_full(32);
 
 	if let Some(min_zoom) = arguments.min_zoom {
 		bbox_pyramid.set_zoom_min(min_zoom)
@@ -114,16 +121,7 @@ async fn new_converter(filename: &str, arguments: &Subcommand) -> Result<TilesWr
 		}
 	}
 
-	let config = TilesWriterConfig::new(
-		arguments.tile_format,
-		arguments.compress,
-		bbox_pyramid,
-		arguments.force_recompress,
-	);
-
-	let converter = get_writer(filename, config).await?;
-
-	Ok(converter)
+	Ok(Some(bbox_pyramid))
 }
 
 #[allow(unused_imports)]

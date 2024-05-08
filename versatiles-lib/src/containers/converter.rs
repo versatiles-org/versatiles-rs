@@ -11,23 +11,23 @@ use futures_util::StreamExt;
 
 #[derive(Debug)]
 pub struct TilesConverterParameters {
-	tile_format: Option<TileFormat>,
-	tile_compression: Option<Compression>,
-	bbox_pyramid: Option<TileBBoxPyramid>,
-	force_recompress: bool,
-	flip_y: bool,
-	swap_xy: bool,
+	pub tile_format: Option<TileFormat>,
+	pub tile_compression: Option<Compression>,
+	pub bbox_pyramid: Option<TileBBoxPyramid>,
+	pub force_recompress: bool,
+	pub flip_y: bool,
+	pub swap_xy: bool,
 }
 
 impl TilesConverterParameters {
 	pub fn new(
-		tile_format: TileFormat, tile_compression: Compression, bbox_pyramid: TileBBoxPyramid, force_recompress: bool,
-		flip_y: bool, swap_xy: bool,
+		tile_format: Option<TileFormat>, tile_compression: Option<Compression>, bbox_pyramid: Option<TileBBoxPyramid>,
+		force_recompress: bool, flip_y: bool, swap_xy: bool,
 	) -> TilesConverterParameters {
 		TilesConverterParameters {
-			tile_format: Some(tile_format),
-			tile_compression: Some(tile_compression),
-			bbox_pyramid: Some(bbox_pyramid),
+			tile_format: tile_format,
+			tile_compression: tile_compression,
+			bbox_pyramid: bbox_pyramid,
 			force_recompress,
 			flip_y,
 			swap_xy,
@@ -61,7 +61,7 @@ pub async fn convert_tiles_container(
 }
 
 #[derive(Debug)]
-struct TilesConvertReader {
+pub struct TilesConvertReader {
 	reader: TilesReaderBox,
 	converter_parameters: TilesConverterParameters,
 	reader_parameters: TilesReaderParameters,
@@ -295,7 +295,7 @@ mod tests {
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let filename = temp_file.to_str().unwrap();
 
-			let cp = TilesConverterParameters::new(JSON, None, pyramid_convert, false, flip_y, swap_xy);
+			let cp = TilesConverterParameters::new(Some(JSON), Some(None), Some(pyramid_convert), false, flip_y, swap_xy);
 			convert_tiles_container(reader, cp, filename).await?;
 
 			let mut reader_out = VersaTilesReader::open_file(&temp_file).await?;

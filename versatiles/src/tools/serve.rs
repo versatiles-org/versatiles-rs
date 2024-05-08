@@ -7,7 +7,7 @@ use clap::Args;
 use regex::Regex;
 use std::path::Path;
 use tokio::time::{sleep, Duration};
-use versatiles_lib::containers::get_reader;
+use versatiles_lib::containers::{get_reader, TilesConvertReader, TilesConverterParameters};
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]
