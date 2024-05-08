@@ -1,7 +1,8 @@
+use clap::ValueEnum;
 use enumset::EnumSetType;
 
 /// Enum representing possible compression algorithms
-#[derive(Debug, EnumSetType, PartialOrd)]
+#[derive(Debug, EnumSetType, PartialOrd, ValueEnum)]
 pub enum Compression {
 	None,
 	Gzip,

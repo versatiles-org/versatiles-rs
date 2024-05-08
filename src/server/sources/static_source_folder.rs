@@ -1,5 +1,8 @@
 use super::{static_source::StaticSourceTrait, SourceResponse};
-use crate::server::helpers::{guess_mime, Url};
+use crate::{
+	server::helpers::{guess_mime, Url},
+	shared::{Blob, Compression, TargetCompression},
+};
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use std::{
@@ -9,7 +12,6 @@ use std::{
 	io::{BufReader, Read},
 	path::{Path, PathBuf},
 };
-use versatiles_lib::shared::{Blob, Compression, TargetCompression};
 
 // Folder struct definition
 #[derive(Clone)]
@@ -91,9 +93,8 @@ impl Debug for Folder {
 #[cfg(test)]
 mod tests {
 	use super::*;
-
+	use crate::shared::TargetCompression;
 	use std::path::Path;
-	use versatiles_lib::shared::TargetCompression;
 
 	#[tokio::test]
 	async fn test() {

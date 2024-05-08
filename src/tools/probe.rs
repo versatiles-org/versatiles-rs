@@ -1,6 +1,6 @@
+use crate::containers::{get_reader, ProbeDepth};
 use anyhow::Result;
 use clap::{ArgAction::Count, Args};
-use versatiles_lib::containers::{get_reader, ProbeDepth};
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]

@@ -1,13 +1,13 @@
 use crate::{
-	libs::TileCompression,
+	containers::{get_reader, TilesConvertReader, TilesConverterParameters},
 	server::{TileServer, Url},
+	shared::Compression,
 };
 use anyhow::Result;
 use clap::Args;
 use regex::Regex;
 use std::path::Path;
 use tokio::time::{sleep, Duration};
-use versatiles_lib::containers::{get_reader, TilesConvertReader, TilesConverterParameters};
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]
@@ -61,7 +61,7 @@ pub struct Subcommand {
 	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
 	/// (deprecated in favor of a better solution that does not yet exist)
 	#[arg(long, value_enum, value_name = "COMPRESSION")]
-	override_input_compression: Option<TileCompression>,
+	override_input_compression: Option<Compression>,
 }
 
 #[tokio::main]
@@ -105,7 +105,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 		let mut reader = get_reader(url).await?;
 
 		if arguments.override_input_compression.is_some() {
-			reader.override_compression(arguments.override_input_compression.as_ref().unwrap().to_value())
+			reader.override_compression(arguments.override_input_compression.unwrap())
 		}
 		if arguments.flip_y || arguments.swap_xy {
 			let mut cp = TilesConverterParameters::new_default();

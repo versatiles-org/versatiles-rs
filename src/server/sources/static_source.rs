@@ -1,9 +1,8 @@
 use super::{static_source_folder::Folder, static_source_tar::TarFile, SourceResponse};
-use crate::server::helpers::Url;
+use crate::{server::helpers::Url, shared::TargetCompression};
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use std::{fmt::Debug, path::Path, sync::Arc};
-use versatiles_lib::shared::TargetCompression;
 
 #[async_trait]
 pub trait StaticSourceTrait: Send + Sync + Debug {
@@ -48,9 +47,9 @@ impl StaticSource {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::shared::{compress, Blob, Compression};
 	use async_trait::async_trait;
 	use std::{fs::File, io::Write, path::PathBuf};
-	use versatiles_lib::shared::{compress, Blob, Compression};
 
 	#[derive(Debug)]
 	struct MockStaticSource;

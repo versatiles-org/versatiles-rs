@@ -1,12 +1,12 @@
 use super::SourceResponse;
-use crate::server::helpers::Url;
+use crate::{
+	containers::TilesReaderBox,
+	server::helpers::Url,
+	shared::{Compression, TargetCompression, TileCoord3, TileFormat},
+};
 use anyhow::Result;
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
-use versatiles_lib::{
-	containers::TilesReaderBox,
-	shared::{Compression, TargetCompression, TileCoord3, TileFormat},
-};
 
 // TileSource struct definition
 #[derive(Clone)]
@@ -130,8 +130,8 @@ impl Debug for TileSource {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::containers::{MockTilesReader, MockTilesReaderProfile};
 	use anyhow::Result;
-	use versatiles_lib::containers::{MockTilesReader, MockTilesReaderProfile};
 
 	// Test the constructor function for TileSource
 	#[test]

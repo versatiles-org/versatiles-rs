@@ -1,4 +1,4 @@
-use versatiles_lib::shared::{Blob, Compression};
+use crate::shared::{Blob, Compression};
 
 pub struct SourceResponse {
 	pub blob: Blob,

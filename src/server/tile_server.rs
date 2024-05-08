@@ -2,6 +2,10 @@ use super::{
 	helpers::Url,
 	sources::{SourceResponse, StaticSource, TileSource},
 };
+use crate::{
+	containers::TilesReaderBox,
+	shared::{optimize_compression, Blob, Compression, TargetCompression},
+};
 use anyhow::{bail, Result};
 use axum::{
 	body::Body,
@@ -17,10 +21,6 @@ use axum::{
 use hyper::header::{ACCESS_CONTROL_ALLOW_ORIGIN, VARY};
 use std::path::Path;
 use tokio::sync::oneshot::Sender;
-use versatiles_lib::{
-	containers::TilesReaderBox,
-	shared::{optimize_compression, Blob, Compression, TargetCompression},
-};
 
 pub struct TileServer {
 	ip: String,
@@ -289,15 +289,15 @@ fn get_encoding(headers: HeaderMap) -> TargetCompression {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
-	use enumset::{enum_set, EnumSet};
-	use versatiles_lib::{
+	use crate::{
 		containers::{MockTilesReader, MockTilesReaderProfile},
 		shared::{
 			Compression::{self, *},
 			TargetCompression,
 		},
 	};
+	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
+	use enumset::{enum_set, EnumSet};
 
 	const IP: &str = "127.0.0.1";
 

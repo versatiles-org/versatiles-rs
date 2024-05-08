@@ -1,11 +1,10 @@
-use crate::libs::TileCompression;
+use crate::{
+	containers::{convert_tiles_container, get_reader, TilesConverterParameters},
+	shared::{Compression, TileBBoxPyramid, TileFormat},
+};
 use anyhow::{bail, Result};
 use clap::Args;
 use log::trace;
-use versatiles_lib::{
-	containers::{convert_tiles_container, get_reader, TilesConverterParameters},
-	shared::{TileBBoxPyramid, TileFormat},
-};
 
 #[derive(Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -53,7 +52,7 @@ pub struct Subcommand {
 
 	/// set new compression
 	#[arg(long, short, value_enum)]
-	compress: Option<TileCompression>,
+	compress: Option<Compression>,
 
 	/// force recompression, e.g. to improve an existing gzip compression
 	#[arg(long, short)]
@@ -61,7 +60,7 @@ pub struct Subcommand {
 
 	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
 	#[arg(long, value_enum, value_name = "COMPRESSION")]
-	override_input_compression: Option<TileCompression>,
+	override_input_compression: Option<Compression>,
 }
 
 #[tokio::main]
@@ -71,12 +70,12 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	let mut reader = get_reader(&arguments.input_file).await?;
 
 	if arguments.override_input_compression.is_some() {
-		reader.override_compression(arguments.override_input_compression.as_ref().unwrap().to_value());
+		reader.override_compression(arguments.override_input_compression.unwrap());
 	}
 
 	let cp = TilesConverterParameters::new(
 		arguments.tile_format,
-		arguments.compress.as_ref().map(|c| c.to_value()),
+		arguments.compress,
 		get_bbox_pyramid(arguments)?,
 		arguments.force_recompress,
 		arguments.flip_y,
