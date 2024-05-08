@@ -9,7 +9,7 @@ RED="\033[1;31m"
 GRE="\033[1;32m"
 END="\033[0m"
 
-./helpers/test.sh
+cargo check
 
 # get versions
 old_tag=$(curl -s "https://api.github.com/repos/versatiles-org/versatiles-rs/tags" | jq -r 'first(.[] | .name | select(startswith("v")))')
@@ -27,7 +27,7 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 
 # check cargo
-./helpers/check.sh
+./helpers/test.sh
 if [ $? -ne 0 ]; then
 	echo "❗️ Check failed!"
 	exit 1

@@ -8,6 +8,8 @@ on:
       - "!**" # Don't run twice on commits with tags
     paths-ignore:
       - "helpers/**"
+      - "docker/**"
+      - ".github/**"
       - "**.Dockerfile"
       - "**.md"
   pull_request:
