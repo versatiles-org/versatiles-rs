@@ -44,29 +44,29 @@ jobs:
       - name: Cargo Fmt
         run: cargo fmt --check
 
+      - name: Cargo Clippy Binary
+        run: cargo clippy --bins
+
       - name: Cargo Clippy Lib (minimal)
-        run: cargo clippy -p versatiles-lib
+        run: cargo clippy --lib --no-default-features
 
       - name: Cargo Clippy Lib (http)
-        run: cargo clippy -p versatiles-lib -F http
+        run: cargo clippy --lib --no-default-features -F http
 
       - name: Cargo Clippy Lib (full)
-        run: cargo clippy -p versatiles-lib -F full
-
-      - name: Cargo Clippy Binary
-        run: cargo clippy -p versatiles
-
-      - name: Cargo Test Lib (minimal)
-        run: cargo test -p versatiles-lib
-
-      - name: Cargo Test Lib (http)
-        run: cargo test -p versatiles-lib -F http
-
-      - name: Cargo Test Lib (full)
-        run: cargo test -p versatiles-lib -F full
+        run: cargo clippy --lib --no-default-features -F full
 
       - name: Cargo Test Binary
-        run: cargo test -p versatiles
+        run: cargo test --bins
+
+      - name: Cargo Test Lib (minimal)
+        run: cargo test --lib --no-default-features
+
+      - name: Cargo Test Lib (http)
+        run: cargo test --lib --no-default-features -F http
+
+      - name: Cargo Test Lib (full)
+        run: cargo test --lib --no-default-features -F full
 
       - name: Install Cargo Coverage
         uses: taiki-e/install-action@cargo-llvm-cov
