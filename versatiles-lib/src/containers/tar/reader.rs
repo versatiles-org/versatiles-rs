@@ -135,6 +135,9 @@ impl TilesReaderTrait for TarTilesReader {
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
+	fn override_compression(&mut self, tile_compression: Compression) {
+		self.parameters.tile_compression = tile_compression;
+	}
 	async fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(self.meta.clone())
 	}

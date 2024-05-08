@@ -198,6 +198,9 @@ impl TilesReaderTrait for MBTilesReader {
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
+	fn override_compression(&mut self, tile_compression: Compression) {
+		self.parameters.tile_compression = tile_compression;
+	}
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
 		trace!("read tile from coord {coord:?}");
 

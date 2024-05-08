@@ -6,7 +6,7 @@ use super::{types::*, DataReaderFile, DataReaderTrait};
 use crate::shared::PrettyPrint;
 use crate::{
 	containers::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
-	shared::{Blob, DataConverter, TileBBox, TileCoord2, TileCoord3},
+	shared::{Blob, Compression, DataConverter, TileBBox, TileCoord2, TileCoord3},
 };
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
@@ -128,6 +128,10 @@ impl TilesReaderTrait for VersaTilesReader {
 	// Get TilesReader parameters
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
+	}
+
+	fn override_compression(&mut self, tile_compression: Compression) {
+		self.parameters.tile_compression = tile_compression;
 	}
 
 	// Get tile data for a given coordinate

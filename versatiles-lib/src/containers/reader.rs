@@ -41,6 +41,8 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 	fn get_parameters(&self) -> &TilesReaderParameters;
 
+	fn override_compression(&mut self, tile_compression: Compression);
+
 	/// get meta data, always uncompressed
 	async fn get_meta(&self) -> Result<Option<Blob>>;
 
@@ -181,6 +183,9 @@ mod tests {
 		}
 		fn get_parameters(&self) -> &TilesReaderParameters {
 			&self.parameters
+		}
+		fn override_compression(&mut self, tile_compression: Compression) {
+			self.parameters.tile_compression = tile_compression;
 		}
 		async fn get_meta(&self) -> Result<Option<Blob>> {
 			Ok(Some(Blob::from("test metadata")))

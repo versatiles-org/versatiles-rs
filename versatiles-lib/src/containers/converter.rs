@@ -125,6 +125,10 @@ impl TilesReaderTrait for TilesConvertReader {
 		&self.reader_parameters
 	}
 
+	fn override_compression(&mut self, tile_compression: Compression) {
+		self.reader.override_compression(tile_compression);
+	}
+
 	async fn get_meta(&self) -> Result<Option<Blob>> {
 		self.reader.get_meta().await
 	}

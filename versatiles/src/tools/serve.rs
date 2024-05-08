@@ -103,11 +103,16 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 		};
 
 		let mut reader = get_reader(url).await?;
-		reader.set_configuration(
-			arguments.flip_y,
-			arguments.swap_xy,
-			arguments.override_input_compression,
-		);
+
+		if arguments.override_input_compression.is_some() {
+			reader.override_compression(arguments.override_input_compression.as_ref().unwrap().to_value())
+		}
+		if arguments.flip_y || arguments.swap_xy {
+			let mut cp = TilesConverterParameters::new_default();
+			cp.flip_y = arguments.flip_y;
+			cp.swap_xy = arguments.swap_xy;
+			reader = TilesConvertReader::new(reader, cp)?;
+		}
 
 		server.add_tile_source(Url::new(&format!("/tiles/{id}/")), reader)?;
 	}
