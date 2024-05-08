@@ -161,6 +161,8 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_recompression() -> Result<()> {
+		use Compression::*;
+
 		async fn test(c_in: Compression, c_out: Compression) -> Result<()> {
 			let reader_in = get_mock_reader(TileFormat::PBF, c_in);
 			let temp_file = NamedTempFile::new("test.versatiles")?;
@@ -174,21 +176,23 @@ mod tests {
 			Ok(())
 		}
 
-		test(Compression::None, Compression::None).await?;
-		test(Compression::None, Compression::Gzip).await?;
-		test(Compression::None, Compression::Brotli).await?;
-		test(Compression::Gzip, Compression::None).await?;
-		test(Compression::Gzip, Compression::Gzip).await?;
-		test(Compression::Gzip, Compression::Brotli).await?;
-		test(Compression::Brotli, Compression::None).await?;
-		test(Compression::Brotli, Compression::Gzip).await?;
-		test(Compression::Brotli, Compression::Brotli).await?;
+		test(None, None).await?;
+		test(None, Gzip).await?;
+		test(None, Brotli).await?;
+		test(Gzip, None).await?;
+		test(Gzip, Gzip).await?;
+		test(Gzip, Brotli).await?;
+		test(Brotli, None).await?;
+		test(Brotli, Gzip).await?;
+		test(Brotli, Brotli).await?;
 
 		Ok(())
 	}
 
 	#[tokio::test]
 	async fn test_conversion() -> Result<()> {
+		use TileFormat::*;
+
 		async fn test(f_in: TileFormat, f_out: TileFormat) -> Result<()> {
 			let reader_in = get_mock_reader(f_in, Compression::Gzip);
 			let temp_file = NamedTempFile::new("test.versatiles")?;
@@ -202,15 +206,19 @@ mod tests {
 			Ok(())
 		}
 
-		test(TileFormat::PNG, TileFormat::PNG).await?;
+		test(PNG, PNG).await?;
 
-		test(TileFormat::PNG, TileFormat::WEBP).await?;
-		test(TileFormat::PNG, TileFormat::JPG).await?;
-		test(TileFormat::PNG, TileFormat::AVIF).await?;
+		test(PNG, WEBP).await?;
+		test(PNG, JPG).await?;
+		test(PNG, AVIF).await.unwrap_err();
 
-		test(TileFormat::WEBP, TileFormat::PNG).await?;
-		test(TileFormat::JPG, TileFormat::PNG).await?;
-		test(TileFormat::AVIF, TileFormat::PNG).await?;
+		test(WEBP, PNG).await?;
+		test(PNG, WEBP).await?;
+		test(JPG, PNG).await?;
+		test(AVIF, PNG).await.unwrap_err();
+
+		test(PNG, PBF).await.unwrap_err();
+		test(PBF, PNG).await.unwrap_err();
 
 		Ok(())
 	}
