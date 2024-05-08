@@ -5,12 +5,12 @@ set -e
 
 cargo fmt --check
 
-cargo clippy --bins
-cargo clippy --lib --no-default-features
-cargo clippy --lib --no-default-features -F http
-cargo clippy --lib --no-default-features -F full
+cargo clippy --bins $1
+cargo clippy --lib --no-default-features $1
+cargo clippy --lib --no-default-features -F http $1
+cargo clippy --lib --no-default-features -F full $1
 
-cargo test --bins
-cargo test --lib --no-default-features
-cargo test --lib --no-default-features -F http
-cargo test --lib --no-default-features -F full
+cargo test --bins $1
+cargo test --lib --no-default-features $1
+cargo test --lib --no-default-features -F http $1
+cargo test --lib --no-default-features -F full $1
