@@ -6,31 +6,32 @@ use tokio::sync::Mutex;
 
 struct PrettyPrinter {
 	indention: String,
-	#[cfg(not(test))]
+	#[cfg(not(any(test, feature = "mock")))]
 	output: Arc<Mutex<Box<dyn Write + Send>>>,
-	#[cfg(test)]
+	#[cfg(any(test, feature = "mock"))]
 	output: Arc<Mutex<Vec<u8>>>,
 }
 
 impl PrettyPrinter {
 	pub fn new() -> Self {
-		#[cfg(not(test))]
+		#[cfg(not(any(test, feature = "mock")))]
 		use std::io::stderr;
 
 		Self {
 			indention: String::from("   "),
 
-			#[cfg(not(test))]
+			#[cfg(not(any(test, feature = "mock")))]
 			output: Arc::new(Mutex::new(Box::new(stderr()))),
 
-			#[cfg(test)]
+			#[cfg(any(test, feature = "mock"))]
 			output: Arc::new(Mutex::new(Vec::new())),
 		}
 	}
 	async fn write(&self, text: String) {
 		self.output.lock().await.write_all(text.as_bytes()).unwrap();
 	}
-	#[cfg(test)]
+	#[cfg(any(test, feature = "mock"))]
+	#[allow(dead_code)]
 	async fn as_string(&self) -> String {
 		use lazy_static::lazy_static;
 		use regex::{Regex, RegexBuilder};
