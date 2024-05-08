@@ -1,4 +1,4 @@
-use crate::containers::{get_reader, ProbeDepth};
+use crate::container::{get_reader, ProbeDepth};
 use anyhow::Result;
 use clap::{ArgAction::Count, Args};
 

@@ -1,7 +1,7 @@
 // Import necessary modules and traits
 use super::{types::*, DataWriterFile, DataWriterTrait};
 use crate::{
-	containers::{TilesReaderBox, TilesStream, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
+	container::{TilesReaderBox, TilesStream, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
 	shared::{compress, progress::ProgressBar, Blob, TileBBox},
 };
 use anyhow::Result;

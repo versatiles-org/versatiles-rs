@@ -3,7 +3,7 @@ use super::{
 	sources::{SourceResponse, StaticSource, TileSource},
 };
 use crate::{
-	containers::TilesReaderBox,
+	container::TilesReaderBox,
 	shared::{optimize_compression, Blob, Compression, TargetCompression},
 };
 use anyhow::{bail, Result};
@@ -290,7 +290,7 @@ fn get_encoding(headers: HeaderMap) -> TargetCompression {
 mod tests {
 	use super::*;
 	use crate::{
-		containers::{MockTilesReader, MockTilesReaderProfile},
+		container::{MockTilesReader, MockTilesReaderProfile},
 		shared::{
 			Compression::{self, *},
 			TargetCompression,

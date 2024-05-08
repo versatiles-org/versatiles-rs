@@ -5,7 +5,7 @@ use super::{types::*, DataReaderFile, DataReaderTrait};
 #[cfg(feature = "full")]
 use crate::shared::pretty_print::PrettyPrint;
 use crate::{
-	containers::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
+	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
 	shared::{Blob, Compression, DataConverter, TileBBox, TileCoord2, TileCoord3},
 };
 use anyhow::{anyhow, bail, Context, Result};
@@ -406,7 +406,7 @@ impl Debug for VersaTilesReader {
 mod tests {
 	use super::VersaTilesReader;
 	use crate::{
-		containers::{tests::make_test_file, MOCK_BYTES_PBF},
+		container::{tests::make_test_file, MOCK_BYTES_PBF},
 		shared::{decompress_gzip, Compression, TileCoord3, TileFormat},
 	};
 	use anyhow::Result;

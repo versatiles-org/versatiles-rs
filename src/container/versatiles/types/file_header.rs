@@ -2,7 +2,7 @@
 
 use super::ByteRange;
 use crate::{
-	containers::versatiles::DataReaderTrait,
+	container::versatiles::DataReaderTrait,
 	shared::{Blob, Compression, TileFormat},
 };
 use anyhow::{bail, ensure, Result};

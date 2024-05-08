@@ -2,7 +2,7 @@ use super::{get_writer, TilesReaderParameters, TilesWriterParameters};
 use crate::shared::transform_coord::TransformCoord;
 use crate::shared::DataConverter;
 use crate::{
-	containers::{TilesReaderBox, TilesReaderTrait, TilesStream},
+	container::{TilesReaderBox, TilesReaderTrait, TilesStream},
 	shared::{Blob, Compression, TileBBox, TileBBoxPyramid, TileCoord3, TileFormat},
 };
 use anyhow::Result;
@@ -190,7 +190,7 @@ impl TilesReaderTrait for TilesConvertReader {
 mod tests {
 	use assert_fs::NamedTempFile;
 
-	use crate::containers::{MockTilesReader, VersaTilesReader};
+	use crate::container::{MockTilesReader, VersaTilesReader};
 
 	use super::*;
 

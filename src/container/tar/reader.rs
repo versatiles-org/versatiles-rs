@@ -1,5 +1,5 @@
 use crate::{
-	containers::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
+	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
 	shared::{
 		decompress, extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat,
 	},
@@ -173,7 +173,7 @@ impl Debug for TarTilesReader {
 pub mod tests {
 	use super::*;
 	use crate::{
-		containers::{tests::make_test_file, MockTilesWriter, TilesWriterParameters, MOCK_BYTES_PBF},
+		container::{tests::make_test_file, MockTilesWriter, TilesWriterParameters, MOCK_BYTES_PBF},
 		shared::decompress_gzip,
 	};
 

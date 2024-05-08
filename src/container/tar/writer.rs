@@ -1,5 +1,5 @@
 use crate::{
-	containers::{TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
+	container::{TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
 	shared::{compress, compression_to_extension, format_to_extension, progress::ProgressBar},
 };
 use anyhow::{ensure, Result};

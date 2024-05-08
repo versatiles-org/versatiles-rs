@@ -98,7 +98,7 @@ impl DataReaderTrait for DataReaderHttp {
 #[cfg(test)]
 mod tests {
 	use super::{DataReaderHttp, DataReaderTrait};
-	use crate::containers::versatiles::types::ByteRange;
+	use crate::container::versatiles::types::ByteRange;
 	use anyhow::Result;
 	use reqwest::Url;
 	use std::str;

@@ -178,9 +178,7 @@ impl Debug for TarFile {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::containers::{
-		convert_tiles_container, MockTilesReader, MockTilesReaderProfile, TilesConverterParameters,
-	};
+	use crate::container::{convert_tiles_container, MockTilesReader, MockTilesReaderProfile, TilesConverterParameters};
 	use assert_fs::NamedTempFile;
 
 	pub async fn make_test_tar(compression: Compression) -> NamedTempFile {

@@ -1,5 +1,5 @@
 use crate::{
-	containers::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
+	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
 	shared::{
 		decompress, extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat,
 	},

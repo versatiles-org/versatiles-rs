@@ -1,5 +1,5 @@
 use crate::{
-	containers::{TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
+	container::{TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
 	shared::{compress, compression_to_extension, format_to_extension, progress::ProgressBar, Blob},
 };
 use anyhow::{ensure, Result};
@@ -103,7 +103,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::containers::{MockTilesReader, TilesReaderParameters, MOCK_BYTES_PBF};
+	use crate::container::{MockTilesReader, TilesReaderParameters, MOCK_BYTES_PBF};
 	use crate::shared::{decompress_gzip, Compression, TileBBoxPyramid, TileFormat};
 	use assert_fs;
 

@@ -11,7 +11,7 @@ use super::{
 	Compression,
 	TileFormat,
 };
-use crate::containers::TilesStream;
+use crate::container::TilesStream;
 #[cfg(feature = "full")]
 use anyhow::bail;
 use anyhow::Result;

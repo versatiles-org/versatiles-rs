@@ -1,7 +1,7 @@
 #[cfg(feature = "full")]
-use crate::{containers::ProbeDepth, shared::pretty_print::PrettyPrint};
+use crate::{container::ProbeDepth, shared::pretty_print::PrettyPrint};
 use crate::{
-	containers::TilesStream,
+	container::TilesStream,
 	shared::{Blob, Compression, TileBBox, TileBBoxPyramid, TileCoord3, TileFormat},
 };
 use anyhow::Result;
@@ -201,7 +201,7 @@ mod tests {
 	#[tokio::test]
 	#[cfg(feature = "full")]
 	async fn reader() -> Result<()> {
-		use crate::containers::{MockTilesWriter, MockTilesWriterProfile};
+		use crate::container::{MockTilesWriter, MockTilesWriterProfile};
 
 		let mut reader = TestReader::new_dummy();
 

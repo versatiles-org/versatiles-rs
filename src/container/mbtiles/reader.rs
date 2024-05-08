@@ -1,5 +1,5 @@
 use crate::{
-	containers::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
+	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
 	shared::{
 		progress::ProgressBar, Blob, Compression, TileBBox, TileBBoxPyramid, TileCoord3, TileFormat, TransformCoord,
 	},
@@ -289,7 +289,7 @@ struct RecordMetadata {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::containers::{MockTilesWriter, MockTilesWriterProfile};
+	use crate::container::{MockTilesWriter, MockTilesWriterProfile};
 	use lazy_static::lazy_static;
 	use std::{env, path::PathBuf};
 

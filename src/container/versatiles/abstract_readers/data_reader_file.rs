@@ -46,7 +46,7 @@ impl DataReaderTrait for DataReaderFile {
 #[cfg(test)]
 mod tests {
 	use super::DataReaderFile;
-	use crate::containers::versatiles::{abstract_readers::traits::DataReaderTrait, types::ByteRange};
+	use crate::container::versatiles::{abstract_readers::traits::DataReaderTrait, types::ByteRange};
 	use anyhow::Result;
 	use assert_fs::NamedTempFile;
 	use std::{fs::File, io::Write};

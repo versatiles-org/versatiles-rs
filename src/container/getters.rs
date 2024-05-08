@@ -54,7 +54,7 @@ fn get_extension(path: &Path) -> String {
 #[cfg(test)]
 pub mod tests {
 	use crate::{
-		containers::{
+		container::{
 			get_reader, get_writer, MockTilesReader, MockTilesReaderProfile as RP, MockTilesWriter,
 			MockTilesWriterProfile as CP, TilesReaderParameters,
 		},

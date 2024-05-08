@@ -1,6 +1,6 @@
 use super::SourceResponse;
 use crate::{
-	containers::TilesReaderBox,
+	container::TilesReaderBox,
 	server::helpers::Url,
 	shared::{Compression, TargetCompression, TileCoord3, TileFormat},
 };
@@ -130,7 +130,7 @@ impl Debug for TileSource {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::containers::{MockTilesReader, MockTilesReaderProfile};
+	use crate::container::{MockTilesReader, MockTilesReaderProfile};
 	use anyhow::Result;
 
 	// Test the constructor function for TileSource
