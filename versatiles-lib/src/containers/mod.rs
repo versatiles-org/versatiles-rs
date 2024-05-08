@@ -37,7 +37,7 @@ mod converter;
 #[cfg(feature = "full")]
 pub use converter::*;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "mock"))]
 mod mock;
-#[cfg(test)]
+#[cfg(any(test, feature = "mock"))]
 pub use mock::*;
