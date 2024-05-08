@@ -12,7 +12,9 @@ use super::{
 	TileFormat,
 };
 use crate::containers::TilesStream;
-use anyhow::{bail, Result};
+#[cfg(feature = "full")]
+use anyhow::bail;
+use anyhow::Result;
 use futures_util::StreamExt;
 use itertools::Itertools;
 use std::{
@@ -26,14 +28,21 @@ enum FnConv {
 	//Avif2Png,
 	//Avif2Webp,
 	//Jpg2Avif,
+	#[cfg(feature = "full")]
 	Jpg2Png,
+	#[cfg(feature = "full")]
 	Jpg2Webp,
 	//Png2Avif,
+	#[cfg(feature = "full")]
 	Png2Jpg,
+	#[cfg(feature = "full")]
 	Png2Png,
+	#[cfg(feature = "full")]
 	Png2Webplossless,
 	//Webp2Avif,
+	#[cfg(feature = "full")]
 	Webp2Jpg,
+	#[cfg(feature = "full")]
 	Webp2Png,
 
 	UnGzip,
@@ -107,6 +116,7 @@ impl DataConverter {
 
 	/// Create a new `DataConverter` for tile recompression from `src_form` and `src_comp` to `dst_form` and `dst_comp`
 	/// with optional forced recompression
+	#[allow(unused_variables)]
 	pub fn new_tile_recompressor(
 		src_form: &TileFormat, src_comp: &Compression, dst_form: &TileFormat, dst_comp: &Compression,
 		force_recompress: bool,
@@ -114,6 +124,10 @@ impl DataConverter {
 		let mut converter = DataConverter::new_empty();
 
 		// Create a format converter function based on the source and destination formats.
+		#[cfg(not(feature = "full"))]
+		let format_converter_option = None;
+
+		#[cfg(feature = "full")]
 		let format_converter_option: Option<FnConv> = if (src_form != dst_form) || force_recompress {
 			use TileFormat::*;
 			match (src_form, dst_form) {
@@ -266,16 +280,20 @@ impl Eq for DataConverter {}
 mod tests {
 	use anyhow::{ensure, Result};
 
+	#[cfg(feature = "full")]
 	use crate::shared::{
-		//avif2img,
 		compare_images,
 		create_image_rgb,
+		//avif2img,
 		img2jpg,
 		img2png,
 		img2webp,
 		jpg2img,
 		png2img,
 		webp2img,
+	};
+
+	use crate::shared::{
 		Compression::{self, *},
 		DataConverter,
 		TileFormat::{self, *},
@@ -343,6 +361,12 @@ mod tests {
 							s = s.strip_prefix(",").unwrap_or(&s).to_string();
 							s = s.strip_suffix(",").unwrap_or(&s).to_string();
 
+							#[cfg(not(feature = "full"))]
+							if s.contains('2') {
+								// if we don't use crate image, ignore image conversion
+								continue;
+							}
+
 							let length = if s.len() == 0 { 0 } else { s.split(',').count() };
 							let message = format!("{f_in:?},{c_in:?}->{f_out:?},{c_out:?} {force}");
 
@@ -408,6 +432,7 @@ mod tests {
 	}
 
 	#[test]
+	#[cfg(feature = "full")]
 	fn convert_images() -> Result<()> {
 		let formats = vec![
 			//AVIF,

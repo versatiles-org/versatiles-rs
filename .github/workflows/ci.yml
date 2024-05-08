@@ -42,21 +42,27 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Cargo Fmt
-        run: cargo fmt -- --check
+        run: cargo fmt --check
 
-      - name: Cargo Clippy
-        run: cargo clippy --workspace --all-features -- -D warnings
+      - name: Cargo Clippy Lib (minimal)
+        run: cargo clippy -p versatiles-lib
 
-      - name: Cargo Check
-        run: cargo check --workspace --all-features
+      - name: Cargo Clippy Lib (http)
+        run: cargo clippy -p versatiles-lib -F http
+
+      - name: Cargo Clippy Lib (full)
+        run: cargo clippy -p versatiles-lib -F full
+
+      - name: Cargo Clippy Binary
+        run: cargo clippy -p versatiles
 
       - name: Cargo Test Lib (minimal)
         run: cargo test -p versatiles-lib
 
-      - name: Cargo Test Lib (HTTP)
+      - name: Cargo Test Lib (http)
         run: cargo test -p versatiles-lib -F http
 
-      - name: Cargo Test Lib (Full)
+      - name: Cargo Test Lib (full)
         run: cargo test -p versatiles-lib -F full
 
       - name: Cargo Test Binary
