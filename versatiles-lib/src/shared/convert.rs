@@ -242,7 +242,7 @@ impl DataConverter {
 	/// Returns a string describing the pipeline of conversion functions.
 	pub fn as_string(&self) -> String {
 		let names: Vec<String> = self.pipeline.iter().map(|f| f.to_string()).collect();
-		names.join(", ")
+		names.join(",").to_lowercase()
 	}
 }
 
@@ -266,7 +266,7 @@ impl Eq for DataConverter {}
 
 #[cfg(test)]
 mod tests {
-	use anyhow::Result;
+	use anyhow::{ensure, Result};
 
 	use crate::shared::{
 		//avif2img,
@@ -282,7 +282,6 @@ mod tests {
 		DataConverter,
 		TileFormat::{self, *},
 	};
-	use std::panic::catch_unwind;
 
 	#[test]
 	fn new_empty() {
@@ -299,52 +298,115 @@ mod tests {
 	#[test]
 	fn new_tile_recompressor() {
 		fn test(
-			src_form: TileFormat, src_comp: Compression, dst_form: TileFormat, dst_comp: Compression,
-			force_recompress: bool, length: usize, description: &str,
-		) {
+			src_form: &TileFormat, src_comp: &Compression, dst_form: &TileFormat, dst_comp: &Compression,
+			force_recompress: &bool, length: usize, description: &str,
+		) -> Result<()> {
 			let data_converter =
-				DataConverter::new_tile_recompressor(&src_form, &src_comp, &dst_form, &dst_comp, force_recompress).unwrap();
-			assert_eq!(
+				DataConverter::new_tile_recompressor(src_form, src_comp, dst_form, dst_comp, *force_recompress)?;
+
+			ensure!(
+				data_converter.as_string() == description,
+				"description is \"{}\" but expected \"{}\"",
 				data_converter.as_string(),
-				description,
-				"description error in {src_form:?},{src_comp:?}->{dst_form:?},{dst_comp:?}"
+				description
 			);
-			assert_eq!(
+
+			ensure!(
+				data_converter.pipeline.len() == length,
+				"length is \"{}\" but expected \"{}\"",
 				data_converter.pipeline.len(),
-				length,
-				"length error in {src_form:?},{src_comp:?}->{dst_form:?},{dst_comp:?}"
+				length
 			);
+
+			Ok(())
 		}
 
-		assert!(catch_unwind(|| {
-			test(PBF, Brotli, PNG, Brotli, false, 3, "hello3");
-		})
-		.is_err());
+		let image_formats = vec![JPG, PNG, WEBP, PBF];
+		let compressions = vec![None, Gzip, Brotli];
+		let forcing = vec![false, true];
 
-		assert!(catch_unwind(|| {
-			test(PNG, None, PBF, Gzip, true, 3, "hello4");
-		})
-		.is_err());
+		for f_in in &image_formats {
+			for c_in in &compressions {
+				for f_out in &image_formats {
+					for c_out in &compressions {
+						for force in &forcing {
+							let mut s = format!("{},{}2{},{}", decomp(c_in), form(f_in), form(f_out), comp(c_out));
 
-		test(PBF, Gzip, PBF, Gzip, false, 0, "");
-		test(PBF, None, PBF, Brotli, false, 1, "Brotli");
-		test(PNG, Gzip, PNG, Brotli, false, 2, "UnGzip, Brotli");
-		test(PNG, None, PNG, None, false, 0, "");
-		test(PNG, None, PNG, None, true, 1, "Png2Png");
-		test(PNG, Gzip, PNG, Gzip, true, 3, "UnGzip, Png2Png, Gzip");
-		test(PNG, Gzip, PNG, Gzip, false, 0, "");
-		test(PNG, Gzip, PNG, Brotli, false, 2, "UnGzip, Brotli");
-		test(PNG, Gzip, PNG, Brotli, true, 3, "UnGzip, Png2Png, Brotli");
+							s = s.replace("png2webp", "png2webplossless");
+							s = s.replace("jpg2jpg,", "");
+							s = s.replace("webp2webp,", "");
+							s = s.replace("pbf2pbf,", "");
+							if !force {
+								s = s.replace("png2png,", "");
+								s = s.replace("ungzip,gzip", "");
+								s = s.replace("unbrotli,brotli", "");
+							}
+							s = s.replace(",,", ",");
+							s = s.strip_prefix(",").unwrap_or(&s).to_string();
+							s = s.strip_suffix(",").unwrap_or(&s).to_string();
 
-		test(PNG, Gzip, JPG, Gzip, false, 3, "UnGzip, Png2Jpg, Gzip");
-		test(PNG, Brotli, PNG, Gzip, true, 3, "UnBrotli, Png2Png, Gzip");
-		test(PNG, None, WEBP, None, false, 1, "Png2Webplossless");
-		test(JPG, Gzip, PNG, None, true, 2, "UnGzip, Jpg2Png");
-		test(JPG, Brotli, WEBP, None, false, 2, "UnBrotli, Jpg2Webp");
-		test(WEBP, None, JPG, Brotli, true, 2, "Webp2Jpg, Brotli");
-		test(WEBP, Gzip, PNG, Brotli, false, 3, "UnGzip, Webp2Png, Brotli");
-		test(PNG, Brotli, WEBP, Gzip, true, 3, "UnBrotli, Png2Webplossless, Gzip");
-		test(PNG, None, WEBP, Gzip, false, 2, "Png2Webplossless, Gzip");
+							let length = if s.len() == 0 { 0 } else { s.split(',').count() };
+							let message = format!("{f_in:?},{c_in:?}->{f_out:?},{c_out:?} {force}");
+
+							let result = test(f_in, c_in, f_out, c_out, force, length, &s);
+
+							if is_image(f_in) == is_image(f_out) {
+								assert!(result.is_ok(), "error for {message}: {}", result.err().unwrap());
+							} else {
+								assert!(result.is_err(), "error for {message}: should throw error");
+							}
+						}
+					}
+				}
+			}
+		}
+
+		fn decomp(compression: &Compression) -> &str {
+			match compression {
+				None => "",
+				Gzip => "ungzip",
+				Brotli => "unbrotli",
+			}
+		}
+
+		fn comp(compression: &Compression) -> &str {
+			match compression {
+				None => "",
+				Gzip => "gzip",
+				Brotli => "brotli",
+			}
+		}
+
+		fn form(format: &TileFormat) -> &str {
+			match format {
+				AVIF => "avif",
+				BIN => "bin",
+				GEOJSON => "geojson",
+				JPG => "jpg",
+				JSON => "json",
+				PBF => "pbf",
+				PNG => "png",
+				SVG => "svg",
+				TOPOJSON => "topojson",
+				WEBP => "webp",
+			}
+		}
+
+		fn is_image(format: &TileFormat) -> bool {
+			match format {
+				AVIF => true,
+				JPG => true,
+				PNG => true,
+				WEBP => true,
+
+				BIN => false,
+				GEOJSON => false,
+				JSON => false,
+				PBF => false,
+				SVG => false,
+				TOPOJSON => false,
+			}
+		}
 	}
 
 	#[test]
@@ -353,7 +415,7 @@ mod tests {
 			//AVIF,
 			JPG, PNG, WEBP,
 		];
-		let comp = Compression::None;
+
 		for src_form in formats.iter() {
 			for dst_form in formats.iter() {
 				let image1 = create_image_rgb();
@@ -365,7 +427,13 @@ mod tests {
 					_ => panic!("unsupported format {src_form:?}"),
 				};
 
-				let data_converter = DataConverter::new_tile_recompressor(&src_form, &comp, &dst_form, &comp, true)?;
+				let data_converter = DataConverter::new_tile_recompressor(
+					&src_form,
+					&Compression::None,
+					&dst_form,
+					&Compression::None,
+					true,
+				)?;
 
 				let blob2 = data_converter.process_blob(blob1)?;
 
