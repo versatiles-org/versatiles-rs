@@ -22,7 +22,7 @@ ENV PATH="/root/.cargo/bin:$PATH"
 RUN rustup target add "$TARGET"
 WORKDIR /versatiles
 COPY . .
-RUN cargo test --all-features --workspace --release --target "$TARGET"
+RUN cargo test --all-features --bin "versatiles" --release --target "$TARGET"
 RUN cargo build --all-features --package "versatiles" --bin "versatiles" --release --target "$TARGET"
 RUN ./helpers/versatiles_selftest.sh "/versatiles/target/$TARGET/release/versatiles"
 RUN mkdir "/output"
