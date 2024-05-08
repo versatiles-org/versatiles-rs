@@ -1,5 +1,3 @@
-#![allow(non_snake_case, dead_code)]
-
 use super::{Blob, Compression};
 use anyhow::{bail, Result};
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
@@ -12,7 +10,7 @@ pub struct TargetCompression {
 	compressions: EnumSet<Compression>,
 	best_compression: bool,
 }
-#[allow(dead_code)]
+
 impl TargetCompression {
 	pub fn from_set(compressions: EnumSet<Compression>) -> Self {
 		TargetCompression {
@@ -37,7 +35,6 @@ impl TargetCompression {
 	}
 }
 
-#[allow(dead_code)]
 pub fn optimize_compression(blob: Blob, input: &Compression, target: TargetCompression) -> Result<(Blob, Compression)> {
 	if target.compressions.is_empty() {
 		bail!("no compression allowed");
@@ -237,58 +234,58 @@ mod tests {
 			Ok(())
 		};
 
-		let N = Compression::None;
-		let G = Compression::Gzip;
-		let B = Compression::Brotli;
+		let cn = Compression::None;
+		let cg = Compression::Gzip;
+		let cb = Compression::Brotli;
 
-		let sN = enum_set!(Compression::None);
-		let sG = enum_set!(Compression::Gzip);
-		let sB = enum_set!(Compression::Brotli);
-		let sNG = enum_set!(Compression::None | Compression::Gzip);
-		let sNB = enum_set!(Compression::None | Compression::Brotli);
-		let sNGB = enum_set!(Compression::None | Compression::Gzip | Compression::Brotli);
+		let sn = enum_set!(Compression::None);
+		let sg = enum_set!(Compression::Gzip);
+		let sb = enum_set!(Compression::Brotli);
+		let sng = enum_set!(Compression::None | Compression::Gzip);
+		let snb = enum_set!(Compression::None | Compression::Brotli);
+		let sngb = enum_set!(Compression::None | Compression::Gzip | Compression::Brotli);
 
-		test(N, sN, true, N)?;
-		test(N, sG, true, G)?;
-		test(N, sB, true, B)?;
-		test(N, sNG, true, G)?;
-		test(N, sNB, true, B)?;
-		test(N, sNGB, true, B)?;
+		test(cn, sn, true, cn)?;
+		test(cn, sg, true, cg)?;
+		test(cn, sb, true, cb)?;
+		test(cn, sng, true, cg)?;
+		test(cn, snb, true, cb)?;
+		test(cn, sngb, true, cb)?;
 
-		test(G, sN, true, N)?;
-		test(G, sG, true, G)?;
-		test(G, sB, true, B)?;
-		test(G, sNG, true, G)?;
-		test(G, sNB, true, B)?;
-		test(G, sNGB, true, B)?;
+		test(cg, sn, true, cn)?;
+		test(cg, sg, true, cg)?;
+		test(cg, sb, true, cb)?;
+		test(cg, sng, true, cg)?;
+		test(cg, snb, true, cb)?;
+		test(cg, sngb, true, cb)?;
 
-		test(B, sN, true, N)?;
-		test(B, sG, true, G)?;
-		test(B, sB, true, B)?;
-		test(B, sNG, true, G)?;
-		test(B, sNB, true, B)?;
-		test(B, sNGB, true, B)?;
+		test(cb, sn, true, cn)?;
+		test(cb, sg, true, cg)?;
+		test(cb, sb, true, cb)?;
+		test(cb, sng, true, cg)?;
+		test(cb, snb, true, cb)?;
+		test(cb, sngb, true, cb)?;
 
-		test(N, sN, false, N)?;
-		test(N, sG, false, G)?;
-		test(N, sB, false, B)?;
-		test(N, sNG, false, N)?;
-		test(N, sNB, false, N)?;
-		test(N, sNGB, false, N)?;
+		test(cn, sn, false, cn)?;
+		test(cn, sg, false, cg)?;
+		test(cn, sb, false, cb)?;
+		test(cn, sng, false, cn)?;
+		test(cn, snb, false, cn)?;
+		test(cn, sngb, false, cn)?;
 
-		test(G, sN, false, N)?;
-		test(G, sG, false, G)?;
-		test(G, sB, false, B)?;
-		test(G, sNG, false, G)?;
-		test(G, sNB, false, B)?;
-		test(G, sNGB, false, G)?;
+		test(cg, sn, false, cn)?;
+		test(cg, sg, false, cg)?;
+		test(cg, sb, false, cb)?;
+		test(cg, sng, false, cg)?;
+		test(cg, snb, false, cb)?;
+		test(cg, sngb, false, cg)?;
 
-		test(B, sN, false, N)?;
-		test(B, sG, false, G)?;
-		test(B, sB, false, B)?;
-		test(B, sNG, false, G)?;
-		test(B, sNB, false, B)?;
-		test(B, sNGB, false, B)?;
+		test(cb, sn, false, cn)?;
+		test(cb, sg, false, cg)?;
+		test(cb, sb, false, cb)?;
+		test(cb, sng, false, cg)?;
+		test(cb, snb, false, cb)?;
+		test(cb, sngb, false, cb)?;
 
 		Ok(())
 	}

@@ -13,7 +13,6 @@ pub struct BlockDefinition {
 	index_range: ByteRange,
 }
 
-#[allow(dead_code)]
 impl BlockDefinition {
 	pub fn new(bbox: &TileBBox) -> Self {
 		let x = bbox.x_min.div(256u32);
@@ -124,6 +123,7 @@ impl BlockDefinition {
 		&self.index_range
 	}
 
+	#[allow(dead_code)]
 	pub fn get_z(&self) -> u8 {
 		self.offset.get_z()
 	}

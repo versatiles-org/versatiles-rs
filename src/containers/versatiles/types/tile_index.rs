@@ -13,7 +13,6 @@ pub struct TileIndex {
 
 unsafe impl Send for TileIndex {}
 
-#[allow(dead_code)]
 impl TileIndex {
 	pub fn new_empty(count: usize) -> Self {
 		let index = vec![ByteRange::new(0, 0); count];

@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use bytes::Bytes;
 use std::fmt::Debug;
 use std::ops::Range;
@@ -9,6 +7,7 @@ use std::str::from_utf8;
 #[derive(Clone, PartialEq, Eq)]
 pub struct Blob(Vec<u8>);
 
+#[allow(dead_code)]
 impl Blob {
 	/// Creates an empty `Blob`.
 	pub fn new_empty() -> Blob {

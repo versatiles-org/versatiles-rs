@@ -1,6 +1,8 @@
 use crate::{
 	containers::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
-	shared::*,
+	shared::{
+		progress::ProgressBar, Blob, Compression, TileBBox, TileBBoxPyramid, TileCoord3, TileFormat, TransformCoord,
+	},
 };
 use anyhow::{anyhow, ensure, Result};
 use async_trait::async_trait;
@@ -326,7 +328,7 @@ pub mod tests {
 	// Test tile fetching
 	#[tokio::test]
 	async fn probe() -> Result<()> {
-		use crate::shared::PrettyPrint;
+		use crate::shared::pretty_print::PrettyPrint;
 
 		let mut reader = MBTilesReader::open(&PATH).await?;
 

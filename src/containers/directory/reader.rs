@@ -6,7 +6,6 @@ use crate::{
 };
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
-use log;
 use std::{
 	collections::HashMap,
 	fmt::Debug,

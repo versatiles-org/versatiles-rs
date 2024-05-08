@@ -110,6 +110,7 @@ impl DataConverter {
 	}
 
 	/// Return `true` if the `DataConverter` has an empty pipeline
+	#[allow(dead_code)]
 	pub fn is_empty(&self) -> bool {
 		self.pipeline.is_empty()
 	}
@@ -185,23 +186,6 @@ impl DataConverter {
 		Ok(converter)
 	}
 
-	/// Constructs a new `DataConverter` instance that compresses data using the specified compression algorithm.
-	/// The `dst_comp` parameter specifies the compression algorithm to use: `Compression::Uncompressed`, `Compression::Gzip`, or `Compression::Brotli`.
-	pub fn new_compressor(dst_comp: &Compression) -> DataConverter {
-		let mut converter = DataConverter::new_empty();
-
-		match dst_comp {
-			// If uncompressed, do nothing
-			Compression::None => {}
-			// If gzip, add the gzip compression function to the pipeline
-			Compression::Gzip => converter.push(FnConv::Gzip),
-			// If brotli, add the brotli compression function to the pipeline
-			Compression::Brotli => converter.push(FnConv::Brotli),
-		}
-
-		converter
-	}
-
 	/// Constructs a new `DataConverter` instance that decompresses data using the specified compression algorithm.
 	/// The `src_comp` parameter specifies the compression algorithm to use: `Compression::Uncompressed`, `Compression::Gzip`, or `Compression::Brotli`.
 	pub fn new_decompressor(src_comp: &Compression) -> DataConverter {
@@ -232,7 +216,6 @@ impl DataConverter {
 		Ok(blob)
 	}
 
-	#[allow(dead_code)]
 	/// Runs a stream through the pipeline of conversion functions
 	pub fn process_stream<'a>(&'a self, stream: TilesStream<'a>) -> TilesStream<'a> {
 		let pipeline = Arc::new(self.pipeline.clone());
@@ -281,7 +264,7 @@ mod tests {
 	use anyhow::{ensure, Result};
 
 	#[cfg(feature = "full")]
-	use crate::shared::{
+	use crate::shared::image::{
 		compare_images,
 		create_image_rgb,
 		//avif2img,

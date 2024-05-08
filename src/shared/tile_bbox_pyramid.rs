@@ -9,7 +9,6 @@ pub struct TileBBoxPyramid {
 	pub level_bbox: [TileBBox; MAX_ZOOM_LEVEL as usize],
 }
 
-#[allow(dead_code)]
 impl TileBBoxPyramid {
 	pub fn new_full(max_zoom_level: u8) -> TileBBoxPyramid {
 		TileBBoxPyramid {
@@ -25,19 +24,6 @@ impl TileBBoxPyramid {
 	pub fn new_empty() -> TileBBoxPyramid {
 		TileBBoxPyramid {
 			level_bbox: from_fn(|z| TileBBox::new_empty(z as u8).unwrap()),
-		}
-	}
-	#[cfg(test)]
-	pub fn new_dummy() -> TileBBoxPyramid {
-		let geo_bbox = [-10.478, 34.633, 34.597, 70.096];
-		TileBBoxPyramid {
-			level_bbox: from_fn(|z| {
-				if z < 16 {
-					TileBBox::from_geo(z as u8, &geo_bbox).unwrap()
-				} else {
-					TileBBox::new_empty(z as u8).unwrap()
-				}
-			}),
 		}
 	}
 	pub fn intersect_geo_bbox(&mut self, geo_bbox: &[f64; 4]) {

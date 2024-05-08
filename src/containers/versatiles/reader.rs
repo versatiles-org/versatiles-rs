@@ -3,7 +3,7 @@
 use super::DataReaderHttp;
 use super::{types::*, DataReaderFile, DataReaderTrait};
 #[cfg(feature = "full")]
-use crate::shared::PrettyPrint;
+use crate::shared::pretty_print::PrettyPrint;
 use crate::{
 	containers::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
 	shared::{Blob, Compression, DataConverter, TileBBox, TileCoord2, TileCoord3},
@@ -330,8 +330,8 @@ impl TilesReaderTrait for VersaTilesReader {
 	// deep probe of container tiles
 	#[cfg(feature = "full")]
 	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
-		#[allow(dead_code)]
 		#[derive(Debug)]
+		#[allow(dead_code)]
 		struct Entry {
 			size: u64,
 			x: u32,
@@ -345,7 +345,7 @@ impl TilesReaderTrait for VersaTilesReader {
 		let mut tile_count: u64 = 0;
 
 		let block_index = self.block_index.clone();
-		let mut progress = crate::shared::ProgressBar::new("scanning blocks", block_index.len() as u64);
+		let mut progress = crate::shared::progress::ProgressBar::new("scanning blocks", block_index.len() as u64);
 
 		for block in block_index.iter() {
 			let tile_index = self.get_block_tile_index(block).await;
@@ -436,7 +436,7 @@ mod tests {
 	// Test tile fetching
 	#[tokio::test]
 	async fn probe() -> Result<()> {
-		use crate::shared::PrettyPrint;
+		use crate::shared::pretty_print::PrettyPrint;
 
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 4, "versatiles").await?;
 

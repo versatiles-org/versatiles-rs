@@ -1,6 +1,6 @@
 use crate::{
 	containers::{TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
-	shared::{compress, compression_to_extension, format_to_extension, Blob, ProgressBar},
+	shared::{compress, compression_to_extension, format_to_extension, progress::ProgressBar, Blob},
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;

@@ -16,7 +16,6 @@ pub struct TileBBox {
 	pub max: u32,
 }
 
-#[allow(dead_code)]
 impl TileBBox {
 	pub fn new(level: u8, x_min: u32, y_min: u32, x_max: u32, y_max: u32) -> Result<TileBBox> {
 		ensure!(level <= 31, "level ({level}) must be <= 31");
@@ -180,6 +179,7 @@ impl TileBBox {
 			.map(|(y, x)| TileCoord3::new(x, y, self.level).unwrap())
 	}
 
+	#[allow(dead_code)]
 	pub fn iter_bbox_row_slices(&self, max_count: usize) -> impl Iterator<Item = TileBBox> + '_ {
 		let mut col_count = (self.x_max - self.x_min + 1) as usize;
 		let mut row_count = (self.y_max - self.y_min + 1) as usize;
@@ -264,6 +264,7 @@ impl TileBBox {
 		Ok(())
 	}
 
+	#[allow(dead_code)]
 	pub fn shift_by(&mut self, x: u32, y: u32) {
 		self.x_min += x;
 		self.y_min += y;
@@ -273,6 +274,7 @@ impl TileBBox {
 		self.check().unwrap();
 	}
 
+	#[allow(dead_code)]
 	pub fn substract_coord2(&mut self, c: &TileCoord2) {
 		self.x_min = self.x_min.saturating_sub(c.get_x());
 		self.y_min = self.y_min.saturating_sub(c.get_y());
@@ -282,6 +284,7 @@ impl TileBBox {
 		self.check().unwrap();
 	}
 
+	#[allow(dead_code)]
 	pub fn substract_u32(&mut self, x: u32, y: u32) {
 		self.x_min = self.x_min.saturating_sub(x);
 		self.y_min = self.y_min.saturating_sub(y);
@@ -327,6 +330,7 @@ impl TileBBox {
 		index as usize
 	}
 
+	#[allow(dead_code)]
 	pub fn get_coord2_by_index(&self, index: u32) -> Result<TileCoord2> {
 		ensure!(index < self.count_tiles() as u32, "index out of bounds");
 

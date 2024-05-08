@@ -24,12 +24,6 @@ mod optional_modules {
 	pub mod image;
 	pub mod pretty_print;
 	pub mod progress;
-	pub mod status_image;
-
-	pub use image::*;
-	pub use pretty_print::*;
-	pub use progress::*;
-	pub use status_image::*;
 }
 
 #[cfg(feature = "full")]

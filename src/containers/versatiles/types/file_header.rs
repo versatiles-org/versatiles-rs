@@ -22,7 +22,6 @@ pub struct FileHeader {
 	pub blocks_range: ByteRange,
 }
 
-#[allow(dead_code)]
 impl FileHeader {
 	pub fn new(
 		tile_format: &TileFormat, compression: &Compression, zoom_range: [u8; 2], bbox: &[f64; 4],

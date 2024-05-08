@@ -1,8 +1,8 @@
 #[cfg(feature = "full")]
-use crate::{containers::ProbeDepth, shared::PrettyPrint};
 use crate::{
+	containers::ProbeDepth,
 	containers::TilesStream,
-	shared::{Blob, Compression, TileBBox, TileBBoxPyramid, TileCoord3, TileFormat},
+	shared::{pretty_print::PrettyPrint, Blob, Compression, TileBBox, TileBBoxPyramid, TileCoord3, TileFormat},
 };
 use anyhow::Result;
 use async_trait::async_trait;

@@ -2,7 +2,7 @@
 use super::{types::*, DataWriterFile, DataWriterTrait};
 use crate::{
 	containers::{TilesReaderBox, TilesStream, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
-	shared::{compress, Blob, ProgressBar, TileBBox},
+	shared::{compress, progress::ProgressBar, Blob, TileBBox},
 };
 use anyhow::Result;
 use async_trait::async_trait;

@@ -10,6 +10,8 @@ pub struct TileCoord2 {
 	x: u32,
 	y: u32,
 }
+
+#[allow(dead_code)]
 impl TileCoord2 {
 	pub fn new(x: u32, y: u32) -> TileCoord2 {
 		TileCoord2 { x, y }
@@ -45,12 +47,10 @@ impl TileCoord2 {
 	pub fn get_y(&self) -> u32 {
 		self.y
 	}
-	#[allow(dead_code)]
 	pub fn substract(&mut self, c: &TileCoord2) {
 		self.x -= c.x;
 		self.y -= c.y;
 	}
-	#[allow(dead_code)]
 	pub fn scale_by(&mut self, s: u32) {
 		self.x *= s;
 		self.y *= s;
@@ -79,6 +79,8 @@ pub struct TileCoord3 {
 	pub y: u32,
 	pub z: u8,
 }
+
+#[allow(dead_code)]
 impl TileCoord3 {
 	pub fn new(x: u32, y: u32, z: u8) -> Result<TileCoord3> {
 		ensure!(z <= 31, "z ({z}) must be <= 31");
@@ -101,7 +103,6 @@ impl TileCoord3 {
 			((PI32 * (1.0 - 2.0 * (self.y as f64) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
 		]
 	}
-	#[allow(dead_code)]
 	pub fn as_geo_bbox(&self) -> [f64; 4] {
 		let zoom: f64 = 2.0f64.powi(self.z as i32);
 

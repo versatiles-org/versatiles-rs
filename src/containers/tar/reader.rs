@@ -6,7 +6,6 @@ use crate::{
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
-use log;
 use std::{collections::HashMap, fmt::Debug, fs::File, io::Read, os::unix::prelude::FileExt, path::Path};
 use tar::{Archive, EntryType};
 
@@ -222,7 +221,7 @@ pub mod tests {
 	// Test tile fetching
 	#[tokio::test]
 	async fn probe() -> Result<()> {
-		use crate::shared::PrettyPrint;
+		use crate::shared::pretty_print::PrettyPrint;
 
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 4, "tar").await?;
 

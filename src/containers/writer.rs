@@ -11,6 +11,7 @@ pub struct TilesWriterParameters {
 	pub tile_compression: Compression,
 }
 impl TilesWriterParameters {
+	#[allow(dead_code)]
 	pub fn new(tile_format: TileFormat, tile_compression: Compression) -> TilesWriterParameters {
 		TilesWriterParameters {
 			tile_format,
