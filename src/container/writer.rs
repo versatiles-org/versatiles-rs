@@ -1,5 +1,5 @@
 use super::TilesReaderBox;
-use crate::shared::{Compression, TileFormat};
+use crate::types::{Compression, TileFormat};
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 

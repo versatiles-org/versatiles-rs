@@ -1,4 +1,4 @@
-use super::{Blob, Compression};
+use crate::types::{Blob, Compression};
 use anyhow::{bail, Result};
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
 use enumset::EnumSet;

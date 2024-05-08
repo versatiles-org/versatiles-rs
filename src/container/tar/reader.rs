@@ -1,8 +1,7 @@
 use crate::{
 	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
-	shared::{
-		decompress, extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat,
-	},
+	helper::decompress,
+	types::{extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat},
 };
 use anyhow::{anyhow, bail, ensure, Result};
 use async_trait::async_trait;
@@ -173,8 +172,8 @@ impl Debug for TarTilesReader {
 pub mod tests {
 	use super::*;
 	use crate::{
-		container::{tests::make_test_file, MockTilesWriter, TilesWriterParameters, MOCK_BYTES_PBF},
-		shared::decompress_gzip,
+		container::{make_test_file, MockTilesWriter, TilesWriterParameters, MOCK_BYTES_PBF},
+		helper::decompress_gzip,
 	};
 
 	#[tokio::test]
@@ -221,7 +220,7 @@ pub mod tests {
 	// Test tile fetching
 	#[tokio::test]
 	async fn probe() -> Result<()> {
-		use crate::shared::pretty_print::PrettyPrint;
+		use crate::helper::PrettyPrint;
 
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 4, "tar").await?;
 

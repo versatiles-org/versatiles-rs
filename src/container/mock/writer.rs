@@ -1,6 +1,6 @@
 use crate::{
 	container::{TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
-	shared::{Compression, TileFormat},
+	types::{Compression, TileFormat},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -51,8 +51,8 @@ impl TilesWriterTrait for MockTilesWriter {
 
 #[cfg(test)]
 mod tests {
-	use super::{MockTilesWriter, MockTilesWriterProfile};
-	use crate::container::mock::{reader::MockTilesReaderProfile, MockTilesReader};
+	use super::*;
+	use crate::container::{MockTilesReader, MockTilesReaderProfile};
 
 	#[tokio::test]
 	async fn convert_png() {

@@ -1,6 +1,6 @@
 use super::super::types::ByteRange;
 use super::DataReaderTrait;
-use crate::shared::Blob;
+use crate::types::Blob;
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
@@ -97,8 +97,7 @@ impl DataReaderTrait for DataReaderHttp {
 
 #[cfg(test)]
 mod tests {
-	use super::{DataReaderHttp, DataReaderTrait};
-	use crate::container::versatiles::types::ByteRange;
+	use super::*;
 	use anyhow::Result;
 	use reqwest::Url;
 	use std::str;

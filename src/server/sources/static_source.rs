@@ -1,5 +1,5 @@
 use super::{static_source_folder::Folder, static_source_tar::TarFile, SourceResponse};
-use crate::{server::helpers::Url, shared::TargetCompression};
+use crate::{helper::TargetCompression, server::helpers::Url};
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use std::{fmt::Debug, path::Path, sync::Arc};
@@ -47,7 +47,10 @@ impl StaticSource {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::shared::{compress, Blob, Compression};
+	use crate::{
+		helper::compress,
+		types::{Blob, Compression},
+	};
 	use async_trait::async_trait;
 	use std::{fs::File, io::Write, path::PathBuf};
 

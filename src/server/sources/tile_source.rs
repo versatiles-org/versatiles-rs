@@ -1,8 +1,9 @@
 use super::SourceResponse;
 use crate::{
 	container::TilesReaderBox,
+	helper::TargetCompression,
 	server::helpers::Url,
-	shared::{Compression, TargetCompression, TileCoord3, TileFormat},
+	types::{Compression, TileCoord3, TileFormat},
 };
 use anyhow::Result;
 use std::{fmt::Debug, sync::Arc};

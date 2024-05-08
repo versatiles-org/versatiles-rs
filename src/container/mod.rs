@@ -29,6 +29,8 @@ pub use versatiles::*;
 
 #[cfg(feature = "full")]
 mod getters;
+#[cfg(all(test, feature = "full"))]
+pub use getters::tests::*;
 #[cfg(feature = "full")]
 pub use getters::*;
 

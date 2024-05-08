@@ -1,17 +1,10 @@
 #[cfg(feature = "full")]
 use super::image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2img, webp2img};
-use super::{
-	//avif2img,
-	compress_brotli,
-	compress_gzip,
-	decompress_brotli,
-	decompress_gzip,
-	//img2avif,
-	Blob,
-	Compression,
-	TileFormat,
+use crate::{
+	container::TilesStream,
+	helper::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip},
+	types::{Blob, Compression, TileFormat},
 };
-use crate::container::TilesStream;
 #[cfg(feature = "full")]
 use anyhow::bail;
 use anyhow::Result;
@@ -261,26 +254,9 @@ impl Eq for DataConverter {}
 
 #[cfg(test)]
 mod tests {
+	use super::*;
+	use crate::types::{Compression::*, TileFormat::*};
 	use anyhow::{ensure, Result};
-
-	#[cfg(feature = "full")]
-	use crate::shared::image::{
-		compare_images,
-		create_image_rgb,
-		//avif2img,
-		img2jpg,
-		img2png,
-		img2webp,
-		jpg2img,
-		png2img,
-		webp2img,
-	};
-
-	use crate::shared::{
-		Compression::{self, *},
-		DataConverter,
-		TileFormat::{self, *},
-	};
 
 	#[test]
 	fn new_empty() {
@@ -417,6 +393,8 @@ mod tests {
 	#[test]
 	#[cfg(feature = "full")]
 	fn convert_images() -> Result<()> {
+		use crate::helper::image::{compare_images, create_image_rgb};
+
 		let formats = vec![
 			//AVIF,
 			JPG, PNG, WEBP,

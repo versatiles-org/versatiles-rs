@@ -1,4 +1,4 @@
-use crate::shared::{Blob, Compression};
+use crate::types::{Blob, Compression};
 
 pub struct SourceResponse {
 	pub blob: Blob,

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use super::ByteRange;
-use crate::shared::{TileBBox, TileCoord3};
+use crate::types::{TileBBox, TileCoord3};
 use anyhow::{ensure, Result};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::{fmt, io::Cursor, ops::Div};

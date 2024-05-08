@@ -1,7 +1,8 @@
 use super::{static_source::StaticSourceTrait, SourceResponse};
 use crate::{
+	helper::TargetCompression,
 	server::helpers::{guess_mime, Url},
-	shared::{Blob, Compression, TargetCompression},
+	types::{Blob, Compression},
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
@@ -93,7 +94,6 @@ impl Debug for Folder {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::shared::TargetCompression;
 	use std::path::Path;
 
 	#[tokio::test]

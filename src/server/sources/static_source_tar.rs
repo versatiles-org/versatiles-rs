@@ -1,7 +1,8 @@
 use super::{static_source::StaticSourceTrait, SourceResponse};
 use crate::{
+	helper::{decompress_brotli, decompress_gzip, TargetCompression},
 	server::helpers::{guess_mime, Url},
-	shared::{decompress_brotli, decompress_gzip, Blob, Compression, TargetCompression},
+	types::{Blob, Compression},
 };
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;

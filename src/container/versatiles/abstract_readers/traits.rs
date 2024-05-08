@@ -1,5 +1,5 @@
 use super::super::types::ByteRange;
-use crate::shared::Blob;
+use crate::types::Blob;
 use anyhow::Result;
 use async_trait::async_trait;
 

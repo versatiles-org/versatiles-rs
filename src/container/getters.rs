@@ -1,4 +1,7 @@
-use super::*;
+use super::{
+	DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, TarTilesReader, TarTilesWriter, TilesReaderBox,
+	TilesWriterBox, TilesWriterParameters, VersaTilesReader, VersaTilesWriter,
+};
 use anyhow::{bail, Context, Result};
 use reqwest::Url;
 use std::{env, path::Path};
@@ -50,24 +53,19 @@ fn get_extension(path: &Path) -> String {
 	}
 }
 
-#[allow(unused_imports)]
 #[cfg(test)]
 pub mod tests {
+	use super::*;
 	use crate::{
-		container::{
-			get_reader, get_writer, MockTilesReader, MockTilesReaderProfile as RP, MockTilesWriter,
-			MockTilesWriterProfile as CP, TilesReaderParameters,
-		},
-		shared::{Compression as C, TileBBoxPyramid, TileFormat as TF},
+		container::{MockTilesReader, MockTilesWriter, TilesReaderParameters},
+		types::{Compression, TileBBoxPyramid, TileFormat},
 	};
 	use anyhow::Result;
 	use assert_fs::{fixture::NamedTempFile, TempDir};
-	use std::{path::Path, time::Instant};
-
-	use super::writer::TilesWriterParameters;
+	use std::time::Instant;
 
 	pub async fn make_test_file(
-		tile_format: TF, compression: C, max_zoom_level: u8, extension: &str,
+		tile_format: TileFormat, compression: Compression, max_zoom_level: u8, extension: &str,
 	) -> Result<NamedTempFile> {
 		// get dummy reader
 		let mut reader = MockTilesReader::new_mock(TilesReaderParameters::new(
@@ -102,7 +100,9 @@ pub mod tests {
 		}
 
 		#[tokio::main]
-		async fn test_writer_and_reader(container: &Container, tile_format: TF, compression: C) -> Result<()> {
+		async fn test_writer_and_reader(
+			container: &Container, tile_format: TileFormat, compression: Compression,
+		) -> Result<()> {
 			let _test_name = format!("{:?}, {:?}, {:?}", container, tile_format, compression);
 
 			let _start = Instant::now();
@@ -148,9 +148,9 @@ pub mod tests {
 		let containers = vec![Container::Directory, Container::Tar, Container::Versatiles];
 
 		for container in containers {
-			test_writer_and_reader(&container, TF::PNG, C::None)?;
-			test_writer_and_reader(&container, TF::JPG, C::None)?;
-			test_writer_and_reader(&container, TF::PBF, C::Gzip)?;
+			test_writer_and_reader(&container, TileFormat::PNG, Compression::None)?;
+			test_writer_and_reader(&container, TileFormat::JPG, Compression::None)?;
+			test_writer_and_reader(&container, TileFormat::PBF, Compression::Gzip)?;
 		}
 
 		Ok(())

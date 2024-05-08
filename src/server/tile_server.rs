@@ -4,7 +4,8 @@ use super::{
 };
 use crate::{
 	container::TilesReaderBox,
-	shared::{optimize_compression, Blob, Compression, TargetCompression},
+	helper::{optimize_compression, TargetCompression},
+	types::{Blob, Compression},
 };
 use anyhow::{bail, Result};
 use axum::{
@@ -291,10 +292,7 @@ mod tests {
 	use super::*;
 	use crate::{
 		container::{MockTilesReader, MockTilesReaderProfile},
-		shared::{
-			Compression::{self, *},
-			TargetCompression,
-		},
+		types::Compression::*,
 	};
 	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
 	use enumset::{enum_set, EnumSet};

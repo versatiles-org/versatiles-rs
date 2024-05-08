@@ -1,9 +1,9 @@
-use super::{get_writer, TilesReaderParameters, TilesWriterParameters};
-use crate::shared::transform_coord::TransformCoord;
-use crate::shared::DataConverter;
 use crate::{
-	container::{TilesReaderBox, TilesReaderTrait, TilesStream},
-	shared::{Blob, Compression, TileBBox, TileBBoxPyramid, TileCoord3, TileFormat},
+	container::{
+		get_writer, TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream, TilesWriterParameters,
+	},
+	helper::{DataConverter, TransformCoord},
+	types::{Blob, Compression, TileBBox, TileBBoxPyramid, TileCoord3, TileFormat},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -188,11 +188,9 @@ impl TilesReaderTrait for TilesConvertReader {
 
 #[cfg(test)]
 mod tests {
-	use assert_fs::NamedTempFile;
-
-	use crate::container::{MockTilesReader, VersaTilesReader};
-
 	use super::*;
+	use crate::container::{MockTilesReader, VersaTilesReader};
+	use assert_fs::NamedTempFile;
 
 	fn get_mock_reader(tf: TileFormat, tc: Compression) -> TilesReaderBox {
 		let bbox_pyramid = TileBBoxPyramid::new_full(2);

@@ -3,10 +3,11 @@
 use super::DataReaderHttp;
 use super::{types::*, DataReaderFile, DataReaderTrait};
 #[cfg(feature = "full")]
-use crate::shared::pretty_print::PrettyPrint;
+use crate::helper::PrettyPrint;
 use crate::{
 	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
-	shared::{Blob, Compression, DataConverter, TileBBox, TileCoord2, TileCoord3},
+	helper::DataConverter,
+	types::{Blob, Compression, TileBBox, TileCoord2, TileCoord3},
 };
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
@@ -345,7 +346,7 @@ impl TilesReaderTrait for VersaTilesReader {
 		let mut tile_count: u64 = 0;
 
 		let block_index = self.block_index.clone();
-		let mut progress = crate::shared::progress::ProgressBar::new("scanning blocks", block_index.len() as u64);
+		let mut progress = crate::helper::ProgressBar::new("scanning blocks", block_index.len() as u64);
 
 		for block in block_index.iter() {
 			let tile_index = self.get_block_tile_index(block).await;
@@ -404,17 +405,16 @@ impl Debug for VersaTilesReader {
 #[cfg(test)]
 #[cfg(feature = "full")]
 mod tests {
-	use super::VersaTilesReader;
+	use super::*;
 	use crate::{
-		container::{tests::make_test_file, MOCK_BYTES_PBF},
-		shared::{decompress_gzip, Compression, TileCoord3, TileFormat},
+		container::{make_test_file, MOCK_BYTES_PBF},
+		helper::decompress_gzip,
+		types::TileFormat,
 	};
 	use anyhow::Result;
 
 	#[tokio::test]
 	async fn test_reader() -> Result<()> {
-		use crate::shared::Blob;
-
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 4, "versatiles").await?;
 
 		let mut reader = VersaTilesReader::open_file(&temp_file).await?;
@@ -436,7 +436,7 @@ mod tests {
 	// Test tile fetching
 	#[tokio::test]
 	async fn probe() -> Result<()> {
-		use crate::shared::pretty_print::PrettyPrint;
+		use crate::helper::PrettyPrint;
 
 		let temp_file = make_test_file(TileFormat::PBF, Compression::Gzip, 4, "versatiles").await?;
 

@@ -1,4 +1,4 @@
-use super::progress::ProgressBar;
+use super::ProgressBar;
 use anyhow::{ensure, Result};
 #[cfg(test)]
 use image::Luma;

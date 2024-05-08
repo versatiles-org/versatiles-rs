@@ -1,8 +1,7 @@
 use crate::{
 	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
-	shared::{
-		decompress, extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat,
-	},
+	helper::decompress,
+	types::{extract_compression, extract_format, Blob, Compression, TileBBoxPyramid, TileCoord3, TileFormat},
 };
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;

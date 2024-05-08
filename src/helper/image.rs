@@ -1,4 +1,4 @@
-use crate::shared::Blob;
+use crate::types::Blob;
 use anyhow::{bail, Result};
 use image::{
 	codecs::{

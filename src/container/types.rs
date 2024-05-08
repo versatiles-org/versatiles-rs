@@ -1,4 +1,4 @@
-use crate::shared::{Blob, TileCoord3};
+use crate::types::{Blob, TileCoord3};
 use futures_util::Stream;
 use std::pin::Pin;
 

@@ -1,4 +1,4 @@
-use super::{TileBBox, TileBBoxPyramid, TileCoord3};
+use crate::types::{TileBBox, TileBBoxPyramid, TileCoord3};
 use std::mem::swap;
 
 pub trait TransformCoord {
@@ -49,7 +49,7 @@ impl TransformCoord for TileBBoxPyramid {
 
 #[cfg(test)]
 mod tests {
-	use super::{TileBBox, TileCoord3, TransformCoord};
+	use super::*;
 
 	#[test]
 	fn tilecoord3_flip_y() {

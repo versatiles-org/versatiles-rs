@@ -3,7 +3,7 @@
 use super::ByteRange;
 use crate::{
 	container::versatiles::DataReaderTrait,
-	shared::{Blob, Compression, TileFormat},
+	types::{Blob, Compression, TileFormat},
 };
 use anyhow::{bail, ensure, Result};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
@@ -165,10 +165,9 @@ impl FileHeader {
 
 #[cfg(test)]
 mod tests {
-	use std::panic::catch_unwind;
-
 	use super::*;
 	use byteorder::ByteOrder;
+	use std::panic::catch_unwind;
 
 	#[test]
 	#[allow(clippy::zero_prefixed_literal)]

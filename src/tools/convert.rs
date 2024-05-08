@@ -1,6 +1,6 @@
 use crate::{
 	container::{convert_tiles_container, get_reader, TilesConverterParameters},
-	shared::{Compression, TileBBoxPyramid, TileFormat},
+	types::{Compression, TileBBoxPyramid, TileFormat},
 };
 use anyhow::{bail, Result};
 use clap::Args;
@@ -126,9 +126,8 @@ fn get_bbox_pyramid(arguments: &Subcommand) -> Result<Option<TileBBoxPyramid>> {
 #[allow(unused_imports)]
 #[cfg(test)]
 mod tests {
-	use anyhow::Result;
-
 	use crate::tests::run_command;
+	use anyhow::Result;
 	use std::fs;
 
 	#[test]

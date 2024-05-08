@@ -1,7 +1,10 @@
 #![allow(dead_code)]
 
 use super::BlockDefinition;
-use crate::shared::{compress_brotli, decompress_brotli, Blob, TileBBoxPyramid, TileCoord3};
+use crate::{
+	helper::{compress_brotli, decompress_brotli},
+	types::{Blob, TileBBoxPyramid, TileCoord3},
+};
 use anyhow::{ensure, Result};
 use std::{
 	collections::HashMap,
@@ -86,7 +89,7 @@ impl BlockIndex {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::shared::TileBBox;
+	use crate::types::TileBBox;
 
 	#[test]
 	fn conversion() -> Result<()> {

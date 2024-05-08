@@ -1,7 +1,7 @@
 use crate::{
 	container::{get_reader, TilesConvertReader, TilesConverterParameters},
 	server::{TileServer, Url},
-	shared::Compression,
+	types::Compression,
 };
 use anyhow::Result;
 use clap::Args;
