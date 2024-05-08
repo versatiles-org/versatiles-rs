@@ -7,9 +7,10 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
+use futures_util::StreamExt;
 
 #[derive(Debug)]
-pub struct TileConverterParameters {
+pub struct TilesConverterParameters {
 	tile_format: Option<TileFormat>,
 	tile_compression: Option<Compression>,
 	bbox_pyramid: Option<TileBBoxPyramid>,
@@ -18,7 +19,35 @@ pub struct TileConverterParameters {
 	swap_xy: bool,
 }
 
-pub async fn convert(reader: TilesReaderBox, cp: TileConverterParameters, filename: &str) -> Result<()> {
+impl TilesConverterParameters {
+	pub fn new(
+		tile_format: TileFormat, tile_compression: Compression, bbox_pyramid: TileBBoxPyramid, force_recompress: bool,
+		flip_y: bool, swap_xy: bool,
+	) -> TilesConverterParameters {
+		TilesConverterParameters {
+			tile_format: Some(tile_format),
+			tile_compression: Some(tile_compression),
+			bbox_pyramid: Some(bbox_pyramid),
+			force_recompress,
+			flip_y,
+			swap_xy,
+		}
+	}
+	pub fn new_default() -> TilesConverterParameters {
+		TilesConverterParameters {
+			tile_format: None,
+			tile_compression: None,
+			bbox_pyramid: None,
+			force_recompress: false,
+			flip_y: false,
+			swap_xy: false,
+		}
+	}
+}
+
+pub async fn convert_tiles_container(
+	reader: TilesReaderBox, cp: TilesConverterParameters, filename: &str,
+) -> Result<()> {
 	let rp = reader.get_parameters();
 
 	let wp = TilesWriterParameters {
@@ -27,22 +56,22 @@ pub async fn convert(reader: TilesReaderBox, cp: TileConverterParameters, filena
 	};
 	let mut writer = get_writer(filename, wp).await?;
 
-	let mut converter = TileConvertReader::new(reader, cp)?;
+	let mut converter = TilesConvertReader::new(reader, cp)?;
 	writer.write_from_reader(&mut converter).await
 }
 
 #[derive(Debug)]
-struct TileConvertReader {
+struct TilesConvertReader {
 	reader: TilesReaderBox,
-	converter_parameters: TileConverterParameters,
+	converter_parameters: TilesConverterParameters,
 	reader_parameters: TilesReaderParameters,
 	container_name: String,
 	tile_recompressor: Option<DataConverter>,
 	name: String,
 }
 
-impl TileConvertReader {
-	pub fn new(reader: TilesReaderBox, cp: TileConverterParameters) -> Result<TilesReaderBox> {
+impl TilesConvertReader {
+	pub fn new(reader: TilesReaderBox, cp: TilesConverterParameters) -> Result<TilesReaderBox> {
 		let container_name = format!("converter({})", reader.get_container_name());
 		let name = format!("converter({})", reader.get_name());
 
@@ -71,7 +100,7 @@ impl TileConvertReader {
 			cp.force_recompress,
 		)?);
 
-		Ok(Box::new(TileConvertReader {
+		Ok(Box::new(TilesConvertReader {
 			reader,
 			converter_parameters: cp,
 			reader_parameters: new_rp,
@@ -83,7 +112,7 @@ impl TileConvertReader {
 }
 
 #[async_trait]
-impl TilesReaderTrait for TileConvertReader {
+impl TilesReaderTrait for TilesConvertReader {
 	fn get_name(&self) -> &str {
 		&self.name
 	}
@@ -119,13 +148,31 @@ impl TilesReaderTrait for TileConvertReader {
 
 	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox: TileBBox) -> TilesStream {
 		let mut bbox: TileBBox = bbox.clone();
-		if self.converter_parameters.flip_y {
-			bbox.flip_y();
-		}
 		if self.converter_parameters.swap_xy {
 			bbox.swap_xy();
 		}
+		if self.converter_parameters.flip_y {
+			bbox.flip_y();
+		}
+
 		let mut stream = self.reader.get_bbox_tile_stream(bbox).await;
+
+		let flip_y = self.converter_parameters.flip_y;
+		let swap_xy = self.converter_parameters.swap_xy;
+
+		if flip_y || swap_xy {
+			stream = stream
+				.map(move |(mut coord, blob)| {
+					if flip_y {
+						coord.flip_y()
+					}
+					if swap_xy {
+						coord.swap_xy()
+					}
+					(coord, blob)
+				})
+				.boxed()
+		}
 
 		if self.tile_recompressor.is_some() {
 			stream = self.tile_recompressor.as_ref().unwrap().process_stream(stream);
@@ -148,8 +195,8 @@ mod tests {
 		let reader_parameters = TilesReaderParameters::new(tf, tc, bbox_pyramid);
 		MockTilesReader::new_mock(reader_parameters)
 	}
-	fn get_converter_parameters(tf: TileFormat, tc: Compression, force_recompress: bool) -> TileConverterParameters {
-		TileConverterParameters {
+	fn get_converter_parameters(tf: TileFormat, tc: Compression, force_recompress: bool) -> TilesConverterParameters {
+		TilesConverterParameters {
 			tile_format: Some(tf),
 			tile_compression: Some(tc),
 			bbox_pyramid: None,
@@ -160,7 +207,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_recompression() -> Result<()> {
+	async fn tile_recompression() -> Result<()> {
 		use Compression::*;
 
 		async fn test(c_in: Compression, c_out: Compression) -> Result<()> {
@@ -168,7 +215,7 @@ mod tests {
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let cp = get_converter_parameters(TileFormat::PBF, c_out, false);
 			let filename = temp_file.to_str().unwrap();
-			convert(reader_in, cp, filename).await?;
+			convert_tiles_container(reader_in, cp, filename).await?;
 			let reader_out = VersaTilesReader::open_file(&temp_file).await?;
 			let parameters_out = reader_out.get_parameters();
 			assert_eq!(parameters_out.tile_format, TileFormat::PBF);
@@ -190,7 +237,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_conversion() -> Result<()> {
+	async fn tile_conversion() -> Result<()> {
 		use TileFormat::*;
 
 		async fn test(f_in: TileFormat, f_out: TileFormat) -> Result<()> {
@@ -198,7 +245,7 @@ mod tests {
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let cp = get_converter_parameters(f_out, Compression::Gzip, false);
 			let filename = temp_file.to_str().unwrap();
-			convert(reader_in, cp, filename).await?;
+			convert_tiles_container(reader_in, cp, filename).await?;
 			let reader_out = VersaTilesReader::open_file(&temp_file).await?;
 			let parameters_out = reader_out.get_parameters();
 			assert_eq!(parameters_out.tile_format, f_out);
@@ -219,6 +266,56 @@ mod tests {
 
 		test(PNG, PBF).await.unwrap_err();
 		test(PBF, PNG).await.unwrap_err();
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn bbox_and_tile_order() -> Result<()> {
+		use Compression::None;
+		use TileFormat::JSON;
+
+		test(false, false, [2, 3, 4, 5], "23 33 43 24 34 44 25 35 45").await?;
+		test(false, true, [2, 3, 5, 4], "32 33 34 35 42 43 44 45").await?;
+		test(true, false, [2, 3, 4, 6], "24 34 44 23 33 43 22 32 42 21 31 41").await?;
+		test(true, true, [2, 3, 6, 4], "35 34 33 32 31 45 44 43 42 41").await?;
+
+		async fn test(flip_y: bool, swap_xy: bool, bbox_out: [u32; 4], tile_list: &str) -> Result<()> {
+			let pyramid_in = new_bbox([0, 1, 4, 5]);
+			let pyramid_convert = new_bbox([2, 3, 7, 7]);
+			let pyramid_out = new_bbox(bbox_out);
+
+			let reader_parameters = TilesReaderParameters::new(JSON, None, pyramid_in);
+			let reader = MockTilesReader::new_mock(reader_parameters);
+
+			let temp_file = NamedTempFile::new("test.versatiles")?;
+			let filename = temp_file.to_str().unwrap();
+
+			let cp = TilesConverterParameters::new(JSON, None, pyramid_convert, false, flip_y, swap_xy);
+			convert_tiles_container(reader, cp, filename).await?;
+
+			let mut reader_out = VersaTilesReader::open_file(&temp_file).await?;
+			let parameters_out = reader_out.get_parameters();
+			assert_eq!(parameters_out.bbox_pyramid, pyramid_out);
+
+			let bbox = pyramid_out.get_level_bbox(3);
+			let mut tiles: Vec<String> = Vec::new();
+			for coord in bbox.iter_coords() {
+				let mut text = reader_out.get_tile_data(&coord).await?.to_string();
+				text = text.replace("{x:", "").replace(",y:", "").replace(",z:3}", "");
+				tiles.push(text);
+			}
+			let tiles = tiles.join(" ");
+			assert_eq!(tiles, tile_list);
+
+			Ok(())
+		}
+
+		fn new_bbox(b: [u32; 4]) -> TileBBoxPyramid {
+			let mut pyramid = TileBBoxPyramid::new_empty();
+			pyramid.include_bbox(&TileBBox::new(3, b[0], b[1], b[2], b[3]).unwrap());
+			pyramid
+		}
 
 		Ok(())
 	}
