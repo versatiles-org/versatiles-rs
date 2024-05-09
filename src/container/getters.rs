@@ -1,4 +1,4 @@
-use super::{
+use crate::container::{
 	DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, TarTilesReader, TarTilesWriter, TilesReaderBox,
 	TilesWriterBox, TilesWriterParameters, VersaTilesReader, VersaTilesWriter,
 };

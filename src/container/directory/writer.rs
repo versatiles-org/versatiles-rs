@@ -1,6 +1,8 @@
+#[cfg(feature = "full")]
+use crate::helper::ProgressBar;
 use crate::{
 	container::{TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
-	helper::{compress, ProgressBar},
+	helper::compress,
 	types::{compression_to_extension, format_to_extension, Blob},
 };
 use anyhow::{ensure, Result};
@@ -10,7 +12,6 @@ use std::{
 	fs,
 	path::{Path, PathBuf},
 };
-use tokio::sync::Mutex;
 
 pub struct DirectoryTilesWriter {
 	dir: PathBuf,
@@ -71,15 +72,17 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 			self.write(&filename, meta_data)?;
 		}
 
+		#[cfg(feature = "full")]
 		let mut bar = ProgressBar::new("converting tiles", bbox_pyramid.count_tiles());
-		let mutex_bar = &Mutex::new(&mut bar);
 
 		for bbox in bbox_pyramid.iter_levels() {
 			let mut stream = reader.get_bbox_tile_stream(bbox.clone()).await;
 
 			while let Some(entry) = stream.next().await {
 				let (coord, blob) = entry;
-				mutex_bar.lock().await.inc(1);
+
+				#[cfg(feature = "full")]
+				bar.inc(1);
 
 				let filename = format!(
 					"{}/{}/{}{}{}",
@@ -95,6 +98,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 			}
 		}
 
+		#[cfg(feature = "full")]
 		bar.finish();
 
 		Ok(())

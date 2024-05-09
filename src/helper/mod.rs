@@ -1,19 +1,23 @@
-pub mod compression;
-pub mod tile_converter;
-pub mod transform_coord;
+//! helper functions, especially for converting and compressing tiles
 
+pub mod compression;
 pub use compression::*;
+
+pub mod tile_converter;
 pub use tile_converter::*;
+
+pub mod transform_coord;
 pub use transform_coord::*;
 
 #[cfg(feature = "full")]
 #[path = ""]
 mod optional_modules {
 	pub mod image;
-	pub mod pretty_print;
-	pub mod progress_bar;
 
+	pub mod pretty_print;
 	pub use pretty_print::*;
+
+	pub mod progress_bar;
 	pub use progress_bar::*;
 }
 

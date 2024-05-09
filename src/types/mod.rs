@@ -1,13 +1,19 @@
-pub mod blob;
-pub mod tile_bbox;
-pub mod tile_bbox_pyramid;
-pub mod tile_compression;
-pub mod tile_coords;
-pub mod tile_format;
+//! contains types like coordinates, bboxes, format types, ...
 
+mod blob;
 pub use blob::*;
+
+mod tile_bbox;
 pub use tile_bbox::*;
+
+mod tile_bbox_pyramid;
 pub use tile_bbox_pyramid::*;
+
+mod tile_compression;
 pub use tile_compression::*;
+
+mod tile_coords;
 pub use tile_coords::*;
+
+mod tile_format;
 pub use tile_format::*;

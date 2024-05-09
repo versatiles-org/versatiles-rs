@@ -1,3 +1,6 @@
+//! use a directory as tile container
+//!
+
 mod reader;
 mod writer;
 

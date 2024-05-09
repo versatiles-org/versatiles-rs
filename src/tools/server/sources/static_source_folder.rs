@@ -1,5 +1,5 @@
 use super::{
-	super::helpers::{guess_mime, Url},
+	super::helper::{guess_mime, Url},
 	static_source::StaticSourceTrait,
 	SourceResponse,
 };

@@ -1,4 +1,4 @@
-use super::super::helpers::{guess_mime, Url};
+use super::super::helper::{guess_mime, Url};
 use super::{static_source::StaticSourceTrait, SourceResponse};
 use crate::{
 	helper::{decompress_brotli, decompress_gzip, TargetCompression},

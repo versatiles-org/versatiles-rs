@@ -1,5 +1,5 @@
 use super::{
-	helpers::Url,
+	helper::Url,
 	sources::{SourceResponse, StaticSource, TileSource},
 };
 use crate::{

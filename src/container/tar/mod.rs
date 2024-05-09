@@ -1,3 +1,5 @@
+//! tar file containing tiles
+
 mod reader;
 mod writer;
 

@@ -1,3 +1,6 @@
+//! tile container mocks for testing
+//!
+
 mod reader;
 mod writer;
 

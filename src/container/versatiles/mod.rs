@@ -1,14 +1,18 @@
-mod abstract_readers;
-#[cfg(feature = "full")]
-mod abstract_writers;
-mod reader;
-mod types;
-#[cfg(feature = "full")]
-mod writer;
+//! `*.versatiles` container
+//!
+//! see [specification](https://github.com/versatiles-org/versatiles-spec)
+//!
 
+mod types;
+
+mod abstract_readers;
 pub use abstract_readers::*;
-#[cfg(feature = "full")]
+
+mod abstract_writers;
 pub use abstract_writers::*;
+
+mod reader;
 pub use reader::VersaTilesReader;
-#[cfg(feature = "full")]
+
+mod writer;
 pub use writer::VersaTilesWriter;

@@ -1,43 +1,51 @@
-mod reader;
-pub use reader::*;
+//! contains various tile container implementations
+//!
+//! ## Supported tile container formats
+//!
+//! | Format         | Read | Write | Feature   |
+//! |----------------|:----:|:-----:|-----------|
+//! | `*.versatiles` | ✅   | ✅     | `default` |
+//! | `*.mbtiles`    | ✅   | ⛔️     | `full`    |
+//! | `*.pmtiles`    | ⛔️   | ⛔️     | `full`    |
+//! | `*.tar`        | ✅   | ✅     | `full`    |
+//! | directory      | ✅   | ✅     | `default` |
+//!
+
 mod types;
 pub use types::*;
 
-#[cfg(any(test, feature = "full"))]
+mod reader;
+pub use reader::*;
+
 mod writer;
-#[cfg(any(test, feature = "full"))]
 pub use writer::*;
 
-#[cfg(feature = "full")]
 mod directory;
-#[cfg(feature = "full")]
 pub use directory::*;
-
-#[cfg(feature = "full")]
-mod mbtiles;
-
-#[cfg(feature = "full")]
-pub use mbtiles::*;
-
-#[cfg(feature = "full")]
-mod tar;
-#[cfg(feature = "full")]
-pub use tar::*;
 
 mod versatiles;
 pub use versatiles::*;
 
 #[cfg(feature = "full")]
-mod getters;
-#[cfg(all(test, feature = "full"))]
-pub use getters::tests::*;
-#[cfg(feature = "full")]
-pub use getters::*;
+#[path = ""]
+mod optional_modules {
+	mod converter;
+	pub use converter::*;
+
+	mod getters;
+	#[cfg(test)]
+	pub use getters::tests::*;
+	pub use getters::*;
+
+	mod mbtiles;
+	pub use mbtiles::*;
+
+	mod tar;
+	pub use tar::*;
+}
 
 #[cfg(feature = "full")]
-mod converter;
-#[cfg(feature = "full")]
-pub use converter::*;
+pub use optional_modules::*;
 
 #[cfg(test)]
 mod mock;
