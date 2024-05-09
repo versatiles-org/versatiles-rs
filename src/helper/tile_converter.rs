@@ -92,14 +92,14 @@ impl FnConv {
 
 /// A structure representing a pipeline of conversions to be applied to a blob
 #[derive(Clone)]
-pub struct DataConverter {
+pub struct TileConverter {
 	pipeline: Vec<FnConv>,
 }
 
-impl DataConverter {
+impl TileConverter {
 	/// Create a new empty `DataConverter`
-	pub fn new_empty() -> DataConverter {
-		DataConverter { pipeline: Vec::new() }
+	pub fn new_empty() -> TileConverter {
+		TileConverter { pipeline: Vec::new() }
 	}
 
 	/// Return `true` if the `DataConverter` has an empty pipeline
@@ -114,8 +114,8 @@ impl DataConverter {
 	pub fn new_tile_recompressor(
 		src_form: &TileFormat, src_comp: &TileCompression, dst_form: &TileFormat, dst_comp: &TileCompression,
 		force_recompress: bool,
-	) -> Result<DataConverter> {
-		let mut converter = DataConverter::new_empty();
+	) -> Result<TileConverter> {
+		let mut converter = TileConverter::new_empty();
 
 		// Create a format converter function based on the source and destination formats.
 		#[cfg(not(feature = "full"))]
@@ -181,8 +181,8 @@ impl DataConverter {
 
 	/// Constructs a new `DataConverter` instance that decompresses data using the specified compression algorithm.
 	/// The `src_comp` parameter specifies the compression algorithm to use: `Compression::Uncompressed`, `Compression::Gzip`, or `Compression::Brotli`.
-	pub fn new_decompressor(src_comp: &TileCompression) -> DataConverter {
-		let mut converter = DataConverter::new_empty();
+	pub fn new_decompressor(src_comp: &TileCompression) -> TileConverter {
+		let mut converter = TileConverter::new_empty();
 
 		match src_comp {
 			// If uncompressed, do nothing
@@ -236,13 +236,13 @@ impl DataConverter {
 
 /// Implements the `PartialEq` trait for the `DataConverter` struct.
 /// This function returns true if the `description` method of both `DataConverter` instances returns the same value.
-impl PartialEq for DataConverter {
+impl PartialEq for TileConverter {
 	fn eq(&self, other: &Self) -> bool {
 		self.as_string() == other.as_string()
 	}
 }
 
-impl fmt::Debug for DataConverter {
+impl fmt::Debug for TileConverter {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_str(&self.pipeline.iter().map(|f| f.to_string()).join(", "))
 	}
@@ -250,7 +250,7 @@ impl fmt::Debug for DataConverter {
 
 /// Implements the `Eq` trait for the `DataConverter` struct.
 /// This trait is used in conjunction with `PartialEq` to provide a total equality relation for `DataConverter` instances.
-impl Eq for DataConverter {}
+impl Eq for TileConverter {}
 
 #[cfg(test)]
 mod tests {
@@ -260,13 +260,13 @@ mod tests {
 
 	#[test]
 	fn new_empty() {
-		let data_converter = DataConverter::new_empty();
+		let data_converter = TileConverter::new_empty();
 		assert_eq!(data_converter.pipeline.len(), 0);
 	}
 
 	#[test]
 	fn is_empty() {
-		let data_converter = DataConverter::new_empty();
+		let data_converter = TileConverter::new_empty();
 		assert!(data_converter.is_empty());
 	}
 
@@ -277,7 +277,7 @@ mod tests {
 			force_recompress: &bool, length: usize, description: &str,
 		) -> Result<()> {
 			let data_converter =
-				DataConverter::new_tile_recompressor(src_form, src_comp, dst_form, dst_comp, *force_recompress)?;
+				TileConverter::new_tile_recompressor(src_form, src_comp, dst_form, dst_comp, *force_recompress)?;
 
 			ensure!(
 				data_converter.as_string() == description,
@@ -411,7 +411,7 @@ mod tests {
 					_ => panic!("unsupported format {src_form:?}"),
 				};
 
-				let data_converter = DataConverter::new_tile_recompressor(
+				let data_converter = TileConverter::new_tile_recompressor(
 					&src_form,
 					&TileCompression::None,
 					&dst_form,

@@ -2,7 +2,7 @@ use crate::{
 	container::{
 		get_writer, TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream, TilesWriterParameters,
 	},
-	helper::{DataConverter, TransformCoord},
+	helper::{TileConverter, TransformCoord},
 	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::Result;
@@ -66,7 +66,7 @@ pub struct TilesConvertReader {
 	converter_parameters: TilesConverterParameters,
 	reader_parameters: TilesReaderParameters,
 	container_name: String,
-	tile_recompressor: Option<DataConverter>,
+	tile_recompressor: Option<TileConverter>,
 	name: String,
 }
 
@@ -92,7 +92,7 @@ impl TilesConvertReader {
 		new_rp.tile_format = cp.tile_format.unwrap_or(rp.tile_format);
 		new_rp.tile_compression = cp.tile_compression.unwrap_or(rp.tile_compression);
 
-		let tile_recompressor = Some(DataConverter::new_tile_recompressor(
+		let tile_recompressor = Some(TileConverter::new_tile_recompressor(
 			&rp.tile_format,
 			&rp.tile_compression,
 			&new_rp.tile_format,

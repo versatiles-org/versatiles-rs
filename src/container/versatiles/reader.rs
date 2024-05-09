@@ -6,7 +6,7 @@ use super::{types::*, DataReaderFile, DataReaderTrait};
 use crate::helper::PrettyPrint;
 use crate::{
 	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
-	helper::DataConverter,
+	helper::TileConverter,
 	types::{Blob, TileBBox, TileCompression, TileCoord2, TileCoord3},
 };
 use anyhow::{anyhow, bail, Context, Result};
@@ -48,7 +48,7 @@ impl VersaTilesReader {
 
 		let meta = if header.meta_range.length > 0 {
 			Some(
-				DataConverter::new_decompressor(&header.compression)
+				TileConverter::new_decompressor(&header.compression)
 					.process_blob(
 						reader
 							.read_range(&header.meta_range)
