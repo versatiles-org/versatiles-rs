@@ -1,7 +1,7 @@
+use super::super::helpers::{guess_mime, Url};
 use super::{static_source::StaticSourceTrait, SourceResponse};
 use crate::{
 	helper::{decompress_brotli, decompress_gzip, TargetCompression},
-	server::helpers::{guess_mime, Url},
 	types::{Blob, TileCompression},
 };
 use anyhow::{bail, ensure, Result};

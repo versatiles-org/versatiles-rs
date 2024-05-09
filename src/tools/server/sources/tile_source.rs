@@ -1,8 +1,7 @@
-use super::SourceResponse;
+use super::{super::helpers::Url, SourceResponse};
 use crate::{
 	container::TilesReaderBox,
 	helper::TargetCompression,
-	server::helpers::Url,
 	types::{TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::Result;

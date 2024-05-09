@@ -1,7 +1,10 @@
-use super::{static_source::StaticSourceTrait, SourceResponse};
+use super::{
+	super::helpers::{guess_mime, Url},
+	static_source::StaticSourceTrait,
+	SourceResponse,
+};
 use crate::{
 	helper::TargetCompression,
-	server::helpers::{guess_mime, Url},
 	types::{Blob, TileCompression},
 };
 use anyhow::{ensure, Result};

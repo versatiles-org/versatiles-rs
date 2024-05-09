@@ -1,7 +1,6 @@
 // Import necessary modules and dependencies
 mod container;
 mod helper;
-mod server;
 mod tools;
 mod types;
 
