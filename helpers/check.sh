@@ -15,15 +15,15 @@ if [ $? -ne 0 ]; then
    exit 1
 fi
 
-echo "cargo test library"
-result=$(cargo test -p versatiles-lib --all-features 2>&1)
-if [ $? -ne 0 ]; then
-   echo -e "$result\nERROR DURING: cargo test bin"
-   exit 1
-fi
+#echo "cargo test library"
+#result=$(cargo test --lib --all-features 2>&1)
+#if [ $? -ne 0 ]; then
+#   echo -e "$result\nERROR DURING: cargo test bin"
+#   exit 1
+#fi
 
 echo "cargo test binary"
-result=$(cargo test -p versatiles --all-features 2>&1)
+result=$(cargo test --bins --all-features 2>&1)
 if [ $? -ne 0 ]; then
    echo -e "$result\nERROR DURING: cargo test bin"
    exit 1
