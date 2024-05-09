@@ -214,10 +214,10 @@ impl TilesReaderTrait for VersaTilesReader {
 					assert_eq!(bbox.level, tiles_bbox_used.level);
 
 					// Get the tile index of this block
-					let tile_index: Arc<TileIndex> = myself.get_block_tile_index_cached(&block).await;
+					let tile_index: TileIndex = myself.get_block_tile_index(&block).await;
 					trace!("tile_index {tile_index:?}");
 
-					//let tile_range: &ByteRange = tile_index.get(tile_id);
+					// let tile_range: &ByteRange = tile_index.get(tile_id);
 					let mut tile_ranges: Vec<(TileCoord3, ByteRange)> = tile_index
 						.iter()
 						.enumerate()
