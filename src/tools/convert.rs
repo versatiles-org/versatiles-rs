@@ -171,7 +171,7 @@ mod tests {
 			"versatiles",
 			"convert",
 			"--min-zoom=1",
-			"--max-zoom=3",
+			"--max-zoom=2",
 			"--bbox=-180,-85,180,85",
 			"--flip-y",
 			"--force-recompress",

@@ -193,7 +193,7 @@ mod tests {
 	use assert_fs::NamedTempFile;
 
 	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> TilesReaderBox {
-		let bbox_pyramid = TileBBoxPyramid::new_full(2);
+		let bbox_pyramid = TileBBoxPyramid::new_full(1);
 		let reader_parameters = TilesReaderParameters::new(tf, tc, bbox_pyramid);
 		MockTilesReader::new_mock(reader_parameters)
 	}
