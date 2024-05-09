@@ -81,8 +81,8 @@ pub mod tests {
 			_ => panic!("make_test_file: extension {extension} not found"),
 		}?;
 
-		let config = TilesWriterParameters::new(tile_format, compression);
-		let mut writer = get_writer(container_file.to_str().unwrap(), config).await?;
+		let parameters = TilesWriterParameters::new(tile_format, compression);
+		let mut writer = get_writer(container_file.to_str().unwrap(), parameters).await?;
 
 		// convert
 		writer.write_tiles(&mut reader).await?;
