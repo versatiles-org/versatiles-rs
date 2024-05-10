@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::{
-	container::versatiles::DataReaderTrait,
+	helper::DataReaderTrait,
 	types::{Blob, ByteRange, TileCompression, TileFormat},
 };
 use anyhow::{bail, ensure, Result};

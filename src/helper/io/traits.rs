@@ -1,7 +1,13 @@
 use crate::types::{Blob, ByteRange};
 use anyhow::Result;
 use async_trait::async_trait;
-use std::path::Path;
+use std::{fmt::Debug, path::Path};
+
+#[async_trait]
+pub trait DataReaderTrait: Debug + Send + Sync {
+	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob>;
+	fn get_name(&self) -> &str;
+}
 
 #[async_trait]
 pub trait DataWriterTrait: Send {

@@ -3,6 +3,9 @@
 pub mod compression;
 pub use compression::*;
 
+pub mod io;
+pub use io::*;
+
 pub mod tile_converter;
 pub use tile_converter::*;
 

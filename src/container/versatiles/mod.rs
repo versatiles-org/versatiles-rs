@@ -5,12 +5,6 @@
 
 mod types;
 
-mod abstract_readers;
-pub use abstract_readers::*;
-
-mod abstract_writers;
-pub use abstract_writers::*;
-
 mod reader;
 pub use reader::VersaTilesReader;
 

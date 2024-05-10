@@ -1,6 +1,7 @@
 use super::types::{Directory, EntriesV3, HeaderV3, TileId};
 use crate::{
-	container::{versatiles::DataReaderTrait, DataReaderFile, TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
+	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
+	helper::{DataReaderFile, DataReaderTrait},
 	types::{Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3},
 };
 use anyhow::{bail, ensure, Result};
