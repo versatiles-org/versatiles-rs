@@ -40,6 +40,9 @@ mod optional_modules {
 	mod mbtiles;
 	pub use mbtiles::*;
 
+	mod pmtiles;
+	pub use pmtiles::*;
+
 	mod tar;
 	pub use tar::*;
 }

@@ -3,7 +3,7 @@ use super::{types::*, DataWriterFile, DataWriterTrait};
 use crate::{
 	container::{TilesReaderBox, TilesStream, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
 	helper::{compress, ProgressBar},
-	types::{Blob, TileBBox},
+	types::Blob,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -99,22 +99,14 @@ impl VersaTilesWriter {
 		}
 
 		// Initialize blocks and populate them
-		let mut blocks: Vec<BlockDefinition> = Vec::new();
-		for bbox_tiles in pyramid.iter_levels() {
-			let mut bbox_blocks = bbox_tiles.clone();
-			bbox_blocks.scale_down(256);
-
-			for coord in bbox_blocks.iter_coords() {
-				let x = coord.get_x() * 256;
-				let y = coord.get_y() * 256;
-				let level = coord.get_z();
-				let size = 2u32.pow(level.min(8) as u32) - 1;
-
-				let mut bbox_block = bbox_tiles.clone();
-				bbox_block.intersect_bbox(&TileBBox::new(level, x, y, x + size, y + size)?);
-				blocks.push(BlockDefinition::new(&bbox_block))
-			}
-		}
+		let blocks: Vec<BlockDefinition> = pyramid
+			.iter_levels()
+			.flat_map(|level_bbox| {
+				level_bbox
+					.iter_bbox_grid(256)
+					.map(|bbox_block| BlockDefinition::new(&bbox_block))
+			})
+			.collect();
 
 		// Initialize progress bar
 		let sum = blocks.iter().map(|block| block.count_tiles()).sum::<u64>();

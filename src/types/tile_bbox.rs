@@ -179,6 +179,26 @@ impl TileBBox {
 			.map(|(y, x)| TileCoord3::new(x, y, self.level).unwrap())
 	}
 
+	/// splits the bbox into a grid of bboxes
+	pub fn iter_bbox_grid(&self, size: u32) -> impl Iterator<Item = TileBBox> + '_ {
+		let level = self.level;
+		let mut meta_bbox = self.clone();
+		meta_bbox.scale_down(size);
+
+		meta_bbox
+			.iter_coords()
+			.map(move |coord| {
+				let x = coord.x * size;
+				let y = coord.y * size;
+
+				let mut bbox = TileBBox::new(level, x, y, x + size - 1, y + size - 1).unwrap();
+				bbox.intersect_bbox(self);
+				bbox
+			})
+			.collect::<Vec<TileBBox>>()
+			.into_iter()
+	}
+
 	#[allow(dead_code)]
 	pub fn iter_bbox_row_slices(&self, max_count: usize) -> impl Iterator<Item = TileBBox> + '_ {
 		let mut col_count = (self.x_max - self.x_min + 1) as usize;
@@ -299,8 +319,6 @@ impl TileBBox {
 		self.y_min /= scale;
 		self.x_max /= scale;
 		self.y_max /= scale;
-
-		self.check().unwrap();
 	}
 
 	pub fn contains(&self, coord: &TileCoord2) -> bool {
