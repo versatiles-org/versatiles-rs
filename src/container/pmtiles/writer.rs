@@ -57,9 +57,9 @@ impl TilesWriterTrait for PMTilesWriter {
 
 		header.tile_data.offset = file.get_position()?;
 
-		for bbox in blocks {
+		for bbox in blocks.iter() {
 			let mut tiles: Vec<(u64, Blob)> = reader
-				.get_bbox_tile_stream(bbox.clone())
+				.get_bbox_tile_stream(bbox)
 				.await
 				.map(|t| (t.0.get_tile_id(), t.1))
 				.collect()

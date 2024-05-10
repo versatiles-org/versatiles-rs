@@ -220,7 +220,7 @@ impl TilesReaderTrait for MBTilesReader {
 
 		Ok(Blob::from(blob))
 	}
-	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox: TileBBox) -> TilesStream {
+	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox: &TileBBox) -> TilesStream {
 		trace!("read tile stream from bbox {bbox:?}");
 
 		if bbox.is_empty() {

@@ -177,9 +177,11 @@ impl TilesReaderTrait for VersaTilesReader {
 		self.reader.read_range(tile_range).await
 	}
 
-	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox: TileBBox) -> TilesStream<'a> {
+	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox: &TileBBox) -> TilesStream<'a> {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
+
+		let bbox = bbox.clone();
 
 		let mut block_coords: TileBBox = bbox.clone();
 		block_coords.scale_down(256);
