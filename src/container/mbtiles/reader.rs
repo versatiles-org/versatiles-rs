@@ -202,7 +202,7 @@ impl TilesReaderTrait for MBTilesReader {
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		trace!("read tile from coord {coord:?}");
 
 		trace!("corrected coord {coord:?}");
@@ -218,7 +218,7 @@ impl TilesReaderTrait for MBTilesReader {
 
 		let blob = stmt.query_row([x, y, z], |row| row.get::<_, Vec<u8>>(0))?;
 
-		Ok(Blob::from(blob))
+		Ok(Some(Blob::from(blob)))
 	}
 	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox: &TileBBox) -> TilesStream {
 		trace!("read tile stream from bbox {bbox:?}");
@@ -309,7 +309,7 @@ pub mod tests {
 		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
-		let tile = reader.get_tile_data(&TileCoord3::new(8803, 5376, 14)?).await?;
+		let tile = reader.get_tile_data(&TileCoord3::new(8803, 5376, 14)?).await?.unwrap();
 		assert_eq!(tile.len(), 172969);
 		assert_eq!(tile.get_range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
 		assert_eq!(

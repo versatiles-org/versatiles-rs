@@ -12,7 +12,7 @@ use crate::{
 	helper::TileConverter,
 	types::{Blob, ByteRange, TileBBox, TileCompression, TileCoord2, TileCoord3},
 };
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures_util::{stream, StreamExt};
 use log::trace;
@@ -139,16 +139,17 @@ impl TilesReaderTrait for VersaTilesReader {
 	}
 
 	// Get tile data for a given coordinate
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		// Calculate block coordinate
 		let block_coord = TileCoord3::new(coord.get_x().shr(8), coord.get_y().shr(8), coord.get_z())?;
 
 		// Get the block using the block coordinate
-		let block = self
-			.block_index
-			.get_block(&block_coord)
-			.ok_or_else(|| anyhow!("block <{block_coord:#?}> for tile <{coord:#?}> does not exist"))?
-			.clone();
+		let block = self.block_index.get_block(&block_coord);
+
+		if block.is_none() {
+			return Ok(None);
+		}
+		let block = block.unwrap().clone();
 
 		// Get the block and its bounding box
 		let bbox = block.get_global_bbox();
@@ -158,7 +159,8 @@ impl TilesReaderTrait for VersaTilesReader {
 
 		// Check if the tile is within the block definition
 		if !bbox.contains(&tile_coord) {
-			bail!("tile {coord:?} outside block definition");
+			trace!("tile {coord:?} outside block definition");
+			return Ok(None);
 		}
 
 		// Get the tile ID
@@ -170,11 +172,11 @@ impl TilesReaderTrait for VersaTilesReader {
 
 		//  None if the tile range has zero length
 		if tile_range.length == 0 {
-			bail!("tile_range.length == 0");
+			return Ok(None);
 		}
 
 		// Read the tile data from the reader
-		self.reader.read_range(tile_range).await
+		Ok(Some(self.reader.read_range(tile_range).await?))
 	}
 
 	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox: &TileBBox) -> TilesStream<'a> {
@@ -432,7 +434,7 @@ mod tests {
 		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
-		let tile = reader.get_tile_data(&TileCoord3::new(15, 1, 4)?).await?;
+		let tile = reader.get_tile_data(&TileCoord3::new(15, 1, 4)?).await?.unwrap();
 		assert_eq!(decompress_gzip(tile)?.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())

@@ -133,7 +133,7 @@ impl TilesReaderTrait for TilesConvertReader {
 		self.reader.get_meta().await
 	}
 
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		let coord = &mut coord.clone();
 		if self.converter_parameters.flip_y {
 			coord.flip_y();
@@ -141,13 +141,18 @@ impl TilesReaderTrait for TilesConvertReader {
 		if self.converter_parameters.swap_xy {
 			coord.swap_xy();
 		}
-		let mut blob = self.reader.get_tile_data(coord).await?;
+		let blob = self.reader.get_tile_data(coord).await?;
+
+		if blob.is_none() {
+			return Ok(None);
+		}
+		let mut blob = blob.unwrap();
 
 		if self.tile_recompressor.is_some() {
-			blob = self.tile_recompressor.as_ref().unwrap().process_blob(blob)?;
+			blob = self.tile_recompressor.as_ref().unwrap().process_blob(blob)?
 		}
 
-		Ok(blob)
+		Ok(Some(blob))
 	}
 
 	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox: &TileBBox) -> TilesStream {
@@ -305,7 +310,7 @@ mod tests {
 			let bbox = pyramid_out.get_level_bbox(3);
 			let mut tiles: Vec<String> = Vec::new();
 			for coord in bbox.iter_coords() {
-				let mut text = reader_out.get_tile_data(&coord).await?.to_string();
+				let mut text = reader_out.get_tile_data(&coord).await?.unwrap().to_string();
 				text = text.replace("{x:", "").replace(",y:", "").replace(",z:3}", "");
 				tiles.push(text);
 			}

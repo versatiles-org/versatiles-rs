@@ -98,7 +98,14 @@ impl TileSource {
 				return None;
 			}
 
-			return SourceResponse::new_some(tile.unwrap(), &self.compression, &self.tile_mime);
+			let tile = tile.unwrap();
+
+			// If tile data is not found, return a not found response
+			return if let Some(tile) = tile {
+				SourceResponse::new_some(tile, &self.compression, &self.tile_mime)
+			} else {
+				None
+			};
 		} else if (parts[0] == "meta.json") || (parts[0] == "tiles.json") {
 			// Get metadata
 			let reader = self.reader.lock().await;

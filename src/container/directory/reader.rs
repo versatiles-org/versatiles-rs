@@ -143,13 +143,13 @@ impl TilesReaderTrait for DirectoryTilesReader {
 	async fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(self.meta.clone())
 	}
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data_original {:?}", coord);
 
 		if let Some(path) = self.tile_map.get(coord) {
-			Self::read(path)
+			Self::read(path).map(Some)
 		} else {
-			bail!("tile {:?} not found", coord);
+			Ok(None)
 		}
 	}
 	fn get_name(&self) -> &str {
@@ -172,7 +172,7 @@ mod tests {
 	use std::fs::{self};
 
 	#[tokio::test]
-	async fn test_tile_reader_new() -> Result<()> {
+	async fn tile_reader_new() -> Result<()> {
 		let dir = TempDir::new()?;
 
 		fs::create_dir_all(dir.path().join("1/2"))?;
@@ -187,11 +187,11 @@ mod tests {
 		let coord = TileCoord3::new(2, 3, 1)?;
 		let tile_data = reader.get_tile_data(&coord).await;
 		assert!(tile_data.is_ok());
-		assert_eq!(tile_data?, Blob::from("test tile data"));
+		assert_eq!(tile_data?.unwrap(), Blob::from("test tile data"));
 
 		// Test for non-existent tile
 		let coord = TileCoord3::new(2, 2, 1)?; // Assuming these coordinates do not exist
-		assert!(reader.get_tile_data(&coord).await.is_err());
+		assert!(reader.get_tile_data(&coord).await.unwrap().is_none());
 
 		return Ok(());
 	}

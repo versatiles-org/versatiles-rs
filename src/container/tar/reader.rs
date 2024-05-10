@@ -3,7 +3,7 @@ use crate::{
 	helper::decompress,
 	types::{extract_compression, extract_format, Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, fs::File, io::Read, os::unix::prelude::FileExt, path::Path};
 use tar::{Archive, EntryType};
@@ -139,13 +139,16 @@ impl TilesReaderTrait for TarTilesReader {
 	async fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(self.meta.clone())
 	}
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data_original {:?}", coord);
 
-		let range = self
-			.tile_map
-			.get(coord)
-			.ok_or_else(|| anyhow!("tile {coord:?} not found"))?;
+		let range = self.tile_map.get(coord);
+
+		if range.is_none() {
+			return Ok(None);
+		}
+
+		let range = range.unwrap();
 
 		let offset = range.offset;
 		let length = range.length as usize;
@@ -153,7 +156,7 @@ impl TilesReaderTrait for TarTilesReader {
 		let mut buf: Vec<u8> = vec![0; length];
 		self.file.read_exact_at(&mut buf, offset)?;
 
-		Ok(Blob::from(buf))
+		Ok(Some(Blob::from(buf)))
 	}
 	fn get_name(&self) -> &str {
 		&self.name
@@ -191,7 +194,7 @@ pub mod tests {
 		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
-		let tile = reader.get_tile_data(&TileCoord3::new(6, 2, 3)?).await?;
+		let tile = reader.get_tile_data(&TileCoord3::new(6, 2, 3)?).await?.unwrap();
 		assert_eq!(decompress_gzip(tile)?.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())

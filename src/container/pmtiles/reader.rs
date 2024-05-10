@@ -80,7 +80,7 @@ impl TilesReaderTrait for PMTilesReader {
 	async fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(Some(self.meta.clone()))
 	}
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data_original {:?}", coord);
 
 		let tile_id: u64 = coord.get_tile_id();
@@ -91,17 +91,19 @@ impl TilesReaderTrait for PMTilesReader {
 			let entry = entries.find_tile(tile_id);
 
 			let entry = if entry.is_none() {
-				bail!("not found")
+				return Ok(None);
 			} else {
 				entry.unwrap()
 			};
 
 			if entry.range.length > 0 {
 				if entry.run_length > 0 {
-					return self
-						.data_reader
-						.read_range(&entry.range.shift(self.header.tile_data.offset))
-						.await;
+					return Ok(Some(
+						self
+							.data_reader
+							.read_range(&entry.range.shift(self.header.tile_data.offset))
+							.await?,
+					));
 				} else {
 					dir_blob = self
 						.data_reader
@@ -109,7 +111,7 @@ impl TilesReaderTrait for PMTilesReader {
 						.await?;
 				}
 			} else {
-				bail!("not found")
+				return Ok(None);
 			}
 		}
 

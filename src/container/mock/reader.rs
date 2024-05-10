@@ -3,7 +3,7 @@ use crate::{
 	helper::compress,
 	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
-use anyhow::{bail, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 
 #[derive(Debug)]
@@ -61,23 +61,23 @@ impl TilesReaderTrait for MockTilesReader {
 	async fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(Some(Blob::from("dummy meta data")))
 	}
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Blob> {
-		if coord.is_valid() {
-			let format = self.parameters.tile_format;
-			let mut blob = match format {
-				TileFormat::JSON => Blob::from(coord.as_json()),
-				TileFormat::PNG => Blob::from(MOCK_BYTES_PNG.to_vec()),
-				TileFormat::PBF => Blob::from(MOCK_BYTES_PBF.to_vec()),
-				//TileFormat::AVIF => Blob::from(MOCK_BYTES_AVIF.to_vec()),
-				TileFormat::JPG => Blob::from(MOCK_BYTES_JPG.to_vec()),
-				TileFormat::WEBP => Blob::from(MOCK_BYTES_WEBP.to_vec()),
-				_ => panic!("tile format {format:?} is not implemented for MockTileReader"),
-			};
-			blob = compress(blob, &self.parameters.tile_compression)?;
-			Ok(blob)
-		} else {
-			bail!("invalid coordinates: {coord:?}")
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+		if !coord.is_valid() {
+			return Ok(None);
 		}
+
+		let format = self.parameters.tile_format;
+		let mut blob = match format {
+			TileFormat::JSON => Blob::from(coord.as_json()),
+			TileFormat::PNG => Blob::from(MOCK_BYTES_PNG.to_vec()),
+			TileFormat::PBF => Blob::from(MOCK_BYTES_PBF.to_vec()),
+			//TileFormat::AVIF => Blob::from(MOCK_BYTES_AVIF.to_vec()),
+			TileFormat::JPG => Blob::from(MOCK_BYTES_JPG.to_vec()),
+			TileFormat::WEBP => Blob::from(MOCK_BYTES_WEBP.to_vec()),
+			_ => panic!("tile format {format:?} is not implemented for MockTileReader"),
+		};
+		blob = compress(blob, &self.parameters.tile_compression)?;
+		Ok(Some(blob))
 	}
 }
 
@@ -111,7 +111,11 @@ mod tests {
 			&TilesReaderParameters::new(TileFormat::PNG, TileCompression::None, bbox_pyramid)
 		);
 		assert_eq!(reader.get_meta().await?, Some(Blob::from("dummy meta data")));
-		let blob = reader.get_tile_data(&TileCoord3::new(0, 0, 0)?).await?.as_vec();
+		let blob = reader
+			.get_tile_data(&TileCoord3::new(0, 0, 0)?)
+			.await?
+			.unwrap()
+			.as_vec();
 		assert_eq!(&blob[0..4], b"\x89PNG");
 		Ok(())
 	}
@@ -121,7 +125,7 @@ mod tests {
 		let test = |profile, blob| async move {
 			let coord = TileCoord3::new(23, 45, 6).unwrap();
 			let mut reader = MockTilesReader::new_mock_profile(profile);
-			let tile_compressed = reader.get_tile_data(&coord).await.unwrap();
+			let tile_compressed = reader.get_tile_data(&coord).await.unwrap().unwrap();
 			let tile_uncompressed = decompress(tile_compressed, &reader.get_parameters().tile_compression).unwrap();
 			assert_eq!(tile_uncompressed, blob);
 		};
