@@ -4,7 +4,6 @@
 //!
 
 mod types;
-pub use types::ByteRange;
 
 mod abstract_readers;
 pub use abstract_readers::*;

@@ -1,4 +1,4 @@
-use crate::container::ByteRange;
+use crate::types::ByteRange;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EntryV3 {

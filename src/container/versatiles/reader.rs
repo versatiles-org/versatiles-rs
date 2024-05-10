@@ -1,13 +1,16 @@
 // Import necessary modules and traits
 #[cfg(feature = "http")]
 use super::DataReaderHttp;
-use super::{types::*, DataReaderFile, DataReaderTrait};
+use super::{
+	types::{BlockDefinition, BlockIndex, FileHeader, TileIndex},
+	DataReaderFile, DataReaderTrait,
+};
 #[cfg(feature = "full")]
 use crate::helper::PrettyPrint;
 use crate::{
 	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
 	helper::TileConverter,
-	types::{Blob, TileBBox, TileCompression, TileCoord2, TileCoord3},
+	types::{Blob, ByteRange, TileBBox, TileCompression, TileCoord2, TileCoord3},
 };
 use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;

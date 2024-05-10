@@ -1,5 +1,4 @@
-use super::super::types::ByteRange;
-use crate::types::Blob;
+use crate::types::{Blob, ByteRange};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;

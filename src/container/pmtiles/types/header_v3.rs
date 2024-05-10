@@ -1,7 +1,7 @@
 use super::{tile_compression::PMTilesCompression, tile_type::PMTilesType};
 use crate::{
-	container::{ByteRange, TilesReaderParameters},
-	types::Blob,
+	container::TilesReaderParameters,
+	types::{Blob, ByteRange},
 };
 use anyhow::{ensure, Result};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};

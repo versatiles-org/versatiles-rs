@@ -3,6 +3,9 @@
 mod blob;
 pub use blob::*;
 
+mod byte_range;
+pub use byte_range::*;
+
 mod tile_bbox;
 pub use tile_bbox::*;
 

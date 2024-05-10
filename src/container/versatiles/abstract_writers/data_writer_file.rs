@@ -1,6 +1,5 @@
-use super::super::types::ByteRange;
 use super::DataWriterTrait;
-use crate::types::Blob;
+use crate::types::{Blob, ByteRange};
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use std::{

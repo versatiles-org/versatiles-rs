@@ -1,9 +1,12 @@
 // Import necessary modules and traits
-use super::{types::*, DataWriterFile, DataWriterTrait};
+use super::{
+	types::{BlockDefinition, BlockIndex, FileHeader, TileIndex},
+	DataWriterFile, DataWriterTrait,
+};
 use crate::{
 	container::{TilesReaderBox, TilesStream, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
 	helper::{compress, ProgressBar},
-	types::Blob,
+	types::{Blob, ByteRange},
 };
 use anyhow::Result;
 use async_trait::async_trait;

@@ -1,9 +1,8 @@
 #![allow(dead_code)]
 
-use super::ByteRange;
 use crate::{
 	container::versatiles::DataReaderTrait,
-	types::{Blob, TileCompression, TileFormat},
+	types::{Blob, ByteRange, TileCompression, TileFormat},
 };
 use anyhow::{bail, ensure, Result};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};

@@ -1,9 +1,7 @@
 use super::types::{Directory, EntriesV3, HeaderV3, TileId};
 use crate::{
-	container::{
-		versatiles::DataReaderTrait, ByteRange, DataReaderFile, TilesReaderBox, TilesReaderParameters, TilesReaderTrait,
-	},
-	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3},
+	container::{versatiles::DataReaderTrait, DataReaderFile, TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
+	types::{Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3},
 };
 use anyhow::{bail, ensure, Result};
 use axum::async_trait;

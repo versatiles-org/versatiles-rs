@@ -1,6 +1,5 @@
-use super::super::types::ByteRange;
 use super::DataReaderTrait;
-use crate::types::Blob;
+use crate::types::{Blob, ByteRange};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
