@@ -3,15 +3,19 @@ use super::{
 	types::{BlockDefinition, BlockIndex, FileHeader, TileIndex},
 	DataWriterFile, DataWriterTrait,
 };
+#[cfg(feature = "full")]
+use crate::helper::ProgressBar;
 use crate::{
 	container::{TilesReaderBox, TilesStream, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
-	helper::{compress, ProgressBar},
+	helper::compress,
 	types::{Blob, ByteRange},
 };
 use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::{future::ready, StreamExt};
 use log::{debug, trace};
+#[cfg(feature = "full")]
+use std::sync::{Arc, Mutex};
 use std::{collections::HashMap, path::Path};
 
 // Define TilesWriter struct
@@ -112,15 +116,21 @@ impl VersaTilesWriter {
 			.collect();
 
 		// Initialize progress bar
+		#[cfg(feature = "full")]
 		let sum = blocks.iter().map(|block| block.count_tiles()).sum::<u64>();
-		let mut progress = ProgressBar::new("converting tiles", sum);
+		#[cfg(feature = "full")]
+		let progress = Arc::new(Mutex::new(ProgressBar::new("converting tiles", sum)));
+		#[cfg(feature = "full")]
+		let callback = |value| progress.clone().lock().unwrap().inc(value);
+		#[cfg(not(feature = "full"))]
+		let callback = |_value| ();
 
 		// Create the block index
 		let mut block_index = BlockIndex::new_empty();
 
 		// Iterate through blocks and write them
 		for mut block in blocks.into_iter() {
-			let (tiles_range, index_range) = self.write_block(&block, reader, &mut progress).await?;
+			let (tiles_range, index_range) = self.write_block(&block, reader, callback).await?;
 
 			if tiles_range.length + index_range.length == 0 {
 				// Block is empty, continue with the next block
@@ -134,16 +144,21 @@ impl VersaTilesWriter {
 		}
 
 		// Finish updating progress and write the block index
-		progress.finish();
+		#[cfg(feature = "full")]
+		progress.lock().unwrap().finish();
+
 		let range = self.writer.append(&block_index.as_brotli_blob())?;
 
 		Ok(range)
 	}
 
 	// Write a single block
-	async fn write_block<'a>(
-		&'a mut self, block: &BlockDefinition, reader: &'a mut TilesReaderBox, progress: &'a mut ProgressBar,
-	) -> Result<(ByteRange, ByteRange)> {
+	async fn write_block<'a, F>(
+		&'a mut self, block: &BlockDefinition, reader: &'a mut TilesReaderBox, inc_progress: F,
+	) -> Result<(ByteRange, ByteRange)>
+	where
+		F: Fn(u64),
+	{
 		// Log the start of the block
 		debug!("start block {:?}", block);
 
@@ -162,7 +177,7 @@ impl VersaTilesWriter {
 		// Iterate through the blobs and process them
 		tile_stream
 			.for_each(|(coord, blob)| {
-				progress.inc(1);
+				inc_progress(1);
 
 				let index = bbox.get_tile_index(&coord.as_coord2());
 
