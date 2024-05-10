@@ -4,7 +4,7 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures::StreamExt;
 
 #[derive(Debug)]
 pub enum MockTilesWriterProfile {

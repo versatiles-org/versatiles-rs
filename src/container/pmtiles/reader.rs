@@ -1,35 +1,32 @@
 use super::types::{Directory, EntriesV3, HeaderV3, TileId};
 use crate::{
 	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
-	helper::{DataReaderFile, DataReaderTrait},
+	helper::{DataReaderBox, DataReaderFile},
 	types::{Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3},
 };
-use anyhow::{bail, ensure, Result};
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use std::{fmt::Debug, path::Path};
 
 #[derive(Debug)]
 pub struct PMTilesReader {
-	data_reader: Box<dyn DataReaderTrait>,
+	data_reader: DataReaderBox,
 	header: HeaderV3,
 	meta: Blob,
 	directory: Directory,
 	parameters: TilesReaderParameters,
-	name: String,
 }
 
 impl PMTilesReader {
-	pub async fn open(path: &Path) -> Result<TilesReaderBox>
+	// Create a new TilesReader from a given filename
+	pub async fn open_path(path: &Path) -> Result<TilesReaderBox> {
+		Self::open_reader(DataReaderFile::from_path(path)?).await
+	}
+
+	pub async fn open_reader(mut data_reader: DataReaderBox) -> Result<TilesReaderBox>
 	where
 		Self: Sized,
 	{
-		log::trace!("read {path:?}");
-
-		ensure!(path.is_absolute(), "path {path:?} must be absolute");
-		ensure!(path.exists(), "path {path:?} does not exist");
-		ensure!(path.is_file(), "path {path:?} is not a file");
-
-		let mut data_reader = DataReaderFile::new(path)?;
 		let header = HeaderV3::deserialize(
 			&data_reader
 				.read_range(&ByteRange::new(0, HeaderV3::len() as u64))
@@ -62,7 +59,6 @@ impl PMTilesReader {
 			header,
 			meta,
 			parameters,
-			name: path.to_str().unwrap().to_string(),
 		}))
 	}
 }
@@ -80,6 +76,9 @@ impl TilesReaderTrait for PMTilesReader {
 	}
 	async fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(Some(self.meta.clone()))
+	}
+	fn get_name(&self) -> &str {
+		self.data_reader.get_name()
 	}
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data_original {:?}", coord);
@@ -117,8 +116,5 @@ impl TilesReaderTrait for PMTilesReader {
 		}
 
 		bail!("not found")
-	}
-	fn get_name(&self) -> &str {
-		&self.name
 	}
 }

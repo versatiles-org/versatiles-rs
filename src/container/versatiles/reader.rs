@@ -1,7 +1,5 @@
 // Import necessary modules and traits
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
-#[cfg(feature = "http")]
-use crate::helper::DataReaderHttp;
 #[cfg(feature = "full")]
 use crate::helper::PrettyPrint;
 use crate::{
@@ -11,10 +9,8 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use futures_util::{stream, StreamExt};
+use futures::{stream, StreamExt};
 use log::trace;
-#[cfg(feature = "http")]
-use reqwest::Url;
 use std::{collections::HashMap, fmt::Debug, ops::Shr, path::Path, sync::Arc};
 use tokio::sync::Mutex;
 
@@ -30,18 +26,12 @@ pub struct VersaTilesReader {
 // Implement methods for the TilesReader struct
 impl VersaTilesReader {
 	// Create a new TilesReader from a given filename
-	pub async fn open_file(path: &Path) -> Result<TilesReaderBox> {
-		Ok(Box::new(VersaTilesReader::from_src(DataReaderFile::new(path)?).await?))
-	}
-
-	// Create a new TilesReader from a given filename
-	#[cfg(feature = "http")]
-	pub async fn open_url(url: Url) -> Result<TilesReaderBox> {
-		Ok(Box::new(VersaTilesReader::from_src(DataReaderHttp::new(url)?).await?))
+	pub async fn open_path(path: &Path) -> Result<TilesReaderBox> {
+		Self::open_reader(DataReaderFile::from_path(path)?).await
 	}
 
 	// Create a new TilesReader from a given data reader
-	pub async fn from_src(mut reader: Box<dyn DataReaderTrait>) -> Result<VersaTilesReader> {
+	pub async fn open_reader(mut reader: Box<dyn DataReaderTrait>) -> Result<TilesReaderBox> {
 		let header = FileHeader::from_reader(&mut reader)
 			.await
 			.context("reading the header")?;
@@ -72,13 +62,13 @@ impl VersaTilesReader {
 		let bbox_pyramid = block_index.get_bbox_pyramid();
 		let parameters = TilesReaderParameters::new(header.tile_format, header.compression, bbox_pyramid);
 
-		Ok(VersaTilesReader {
+		Ok(Box::new(VersaTilesReader {
 			meta,
 			reader,
 			parameters,
 			block_index,
 			tile_index_cache: HashMap::new(),
-		})
+		}))
 	}
 
 	async fn get_block_tile_index_cached(&mut self, block: &BlockDefinition) -> Arc<TileIndex> {
@@ -188,7 +178,7 @@ impl TilesReaderTrait for VersaTilesReader {
 
 		let self_mutex = Arc::new(Mutex::new(self));
 
-		let chunks: Vec<Vec<Vec<(TileCoord3, ByteRange)>>> = futures_util::stream::iter(block_coords)
+		let chunks: Vec<Vec<Vec<(TileCoord3, ByteRange)>>> = futures::stream::iter(block_coords)
 			.then(|block_coord: TileCoord3| {
 				let bbox = bbox.clone();
 				let self_mutex = self_mutex.clone();
@@ -421,7 +411,7 @@ mod tests {
 	async fn reader() -> Result<()> {
 		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
 
-		let mut reader = VersaTilesReader::open_file(&temp_file).await?;
+		let mut reader = VersaTilesReader::open_path(&temp_file).await?;
 
 		assert_eq!(format!("{:?}", reader), "VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "versatiles");
@@ -444,7 +434,7 @@ mod tests {
 
 		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
 
-		let mut reader = VersaTilesReader::open_file(&temp_file).await?;
+		let mut reader = VersaTilesReader::open_path(&temp_file).await?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(&printer.get_category("container").await).await?;

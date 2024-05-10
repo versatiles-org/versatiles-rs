@@ -9,7 +9,7 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures_util::{future::ready, StreamExt};
+use futures::{future::ready, StreamExt};
 use log::{debug, trace};
 #[cfg(feature = "full")]
 use std::sync::{Arc, Mutex};
@@ -23,7 +23,7 @@ pub struct VersaTilesWriter {
 
 impl VersaTilesWriter {
 	// Create a new TilesWriter instance
-	pub async fn open_file(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox>
+	pub async fn open_path(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox>
 	where
 		Self: Sized,
 	{

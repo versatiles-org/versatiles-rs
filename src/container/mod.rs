@@ -6,7 +6,7 @@
 //! |----------------|:----:|:-----:|-----------|
 //! | `*.versatiles` | ✅   | ✅     | `default` |
 //! | `*.mbtiles`    | ✅   | ⛔️     | `full`    |
-//! | `*.pmtiles`    | ⛔️   | ⛔️     | `full`    |
+//! | `*.pmtiles`    | ✅   | ✅     | `full`    |
 //! | `*.tar`        | ✅   | ✅     | `full`    |
 //! | directory      | ✅   | ✅     | `default` |
 //!
@@ -27,28 +27,31 @@ mod versatiles;
 pub use versatiles::*;
 
 #[cfg(feature = "full")]
-#[path = ""]
-mod optional_modules {
-	mod converter;
-	pub use converter::*;
-
-	mod getters;
-	#[cfg(test)]
-	pub use getters::tests::*;
-	pub use getters::*;
-
-	mod mbtiles;
-	pub use mbtiles::*;
-
-	mod pmtiles;
-	pub use pmtiles::*;
-
-	mod tar;
-	pub use tar::*;
-}
+mod converter;
+#[cfg(feature = "full")]
+pub use converter::*;
 
 #[cfg(feature = "full")]
-pub use optional_modules::*;
+mod getters;
+#[cfg(all(feature = "full", test))]
+pub use getters::tests::*;
+#[cfg(feature = "full")]
+pub use getters::*;
+
+#[cfg(feature = "full")]
+mod mbtiles;
+#[cfg(feature = "full")]
+pub use mbtiles::*;
+
+#[cfg(feature = "full")]
+mod pmtiles;
+#[cfg(feature = "full")]
+pub use pmtiles::*;
+
+#[cfg(feature = "full")]
+mod tar;
+#[cfg(feature = "full")]
+pub use tar::*;
 
 #[cfg(test)]
 mod mock;

@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::{anyhow, ensure, Result};
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures::StreamExt;
 use log::trace;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -18,7 +18,7 @@ pub struct MBTilesReader {
 	parameters: TilesReaderParameters,
 }
 impl MBTilesReader {
-	pub async fn open(path: &Path) -> Result<TilesReaderBox> {
+	pub async fn open_path(path: &Path) -> Result<TilesReaderBox> {
 		trace!("open {path:?}");
 
 		ensure!(path.exists(), "file {path:?} does not exist");
@@ -224,7 +224,7 @@ impl TilesReaderTrait for MBTilesReader {
 		trace!("read tile stream from bbox {bbox:?}");
 
 		if bbox.is_empty() {
-			return futures_util::stream::empty().boxed();
+			return futures::stream::empty().boxed();
 		}
 
 		let max_index = bbox.max;
@@ -265,7 +265,7 @@ impl TilesReaderTrait for MBTilesReader {
 
 		trace!("got {} tiles", vec.len());
 
-		futures_util::stream::iter(vec).boxed()
+		futures::stream::iter(vec).boxed()
 	}
 	fn get_name(&self) -> &str {
 		&self.name
@@ -299,7 +299,7 @@ pub mod tests {
 	#[tokio::test]
 	async fn reader() -> Result<()> {
 		// get test container reader
-		let mut reader = MBTilesReader::open(&PATH).await?;
+		let mut reader = MBTilesReader::open_path(&PATH).await?;
 
 		assert_eq!(format!("{:?}", reader), "MBTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [1,0,1,0] (1), 2: [2,1,2,1] (1), 3: [4,2,4,2] (1), 4: [8,5,8,5] (1), 5: [17,10,17,10] (1), 6: [34,20,34,21] (2), 7: [68,41,68,42] (2), 8: [137,83,137,84] (2), 9: [274,167,275,168] (4), 10: [549,335,551,336] (6), 11: [1098,670,1102,673] (20), 12: [2196,1340,2204,1346] (63), 13: [4393,2680,4409,2693] (238), 14: [8787,5361,8818,5387] (864)], tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "mbtiles");
@@ -329,7 +329,7 @@ pub mod tests {
 	async fn probe() -> Result<()> {
 		use crate::helper::PrettyPrint;
 
-		let mut reader = MBTilesReader::open(&PATH).await?;
+		let mut reader = MBTilesReader::open_path(&PATH).await?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(&printer.get_category("container").await).await?;

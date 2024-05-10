@@ -20,7 +20,7 @@ pub struct DirectoryTilesReader {
 }
 
 impl DirectoryTilesReader {
-	pub async fn open(dir: &Path) -> Result<TilesReaderBox>
+	pub async fn open_path(dir: &Path) -> Result<TilesReaderBox>
 	where
 		Self: Sized,
 	{
@@ -180,7 +180,7 @@ mod tests {
 		fs::write(dir.path().join("1/2/3.png"), "test tile data")?;
 		fs::write(dir.path().join("meta.json"), "test meta data")?;
 
-		let mut reader = DirectoryTilesReader::open(&dir).await?;
+		let mut reader = DirectoryTilesReader::open_path(&dir).await?;
 
 		assert_eq!(reader.get_meta().await?.unwrap().as_str(), "test meta data");
 

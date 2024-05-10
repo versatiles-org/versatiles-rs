@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures::StreamExt;
 use log::trace;
 use std::{
 	fs::File,
@@ -20,7 +20,7 @@ pub struct TarTilesWriter {
 }
 
 impl TarTilesWriter {
-	pub fn open_file(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox>
+	pub fn open_path(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox>
 	where
 		Self: Sized,
 	{

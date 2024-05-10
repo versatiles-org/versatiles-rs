@@ -1,4 +1,4 @@
-use super::DataReaderTrait;
+use super::{DataReaderBox, DataReaderTrait};
 use crate::types::{Blob, ByteRange};
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
@@ -15,9 +15,10 @@ pub struct DataReaderFile {
 }
 
 impl DataReaderFile {
-	pub fn new(path: &Path) -> Result<Box<Self>> {
+	pub fn from_path(path: &Path) -> Result<DataReaderBox> {
 		ensure!(path.exists(), "file {path:?} does not exist");
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
+		ensure!(path.is_file(), "path {path:?} must be a file");
 
 		let file = File::open(path)?;
 
@@ -43,6 +44,12 @@ impl DataReaderTrait for DataReaderFile {
 	}
 }
 
+impl Read for DataReaderFile {
+	fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+		self.reader.read(buf)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -63,11 +70,11 @@ mod tests {
 		}
 
 		// Test with a valid file path
-		let data_reader_file = DataReaderFile::new(&temp_file_path);
+		let data_reader_file = DataReaderFile::from_path(&temp_file_path);
 		assert!(data_reader_file.is_ok());
 
 		// Test with an invalid file path
-		let data_reader_file = DataReaderFile::new(&invalid_path);
+		let data_reader_file = DataReaderFile::from_path(&invalid_path);
 		assert!(data_reader_file.is_err());
 
 		Ok(())
@@ -84,7 +91,7 @@ mod tests {
 			temp_file.write_all(b"Hello, world!")?;
 		}
 
-		let mut data_reader_file = DataReaderFile::new(&temp_file_path)?;
+		let mut data_reader_file = DataReaderFile::from_path(&temp_file_path)?;
 
 		// Define a range to read
 		let range = ByteRange { offset: 4, length: 6 };
@@ -109,7 +116,7 @@ mod tests {
 			temp_file.write_all(b"Hello, world!")?;
 		}
 
-		let data_reader_file = DataReaderFile::new(&temp_file_path)?;
+		let data_reader_file = DataReaderFile::from_path(&temp_file_path)?;
 
 		// Check if the name matches the original file path
 		assert_eq!(data_reader_file.get_name(), temp_file_path.to_str().unwrap());

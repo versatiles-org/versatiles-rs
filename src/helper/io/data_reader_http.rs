@@ -1,22 +1,24 @@
-use super::DataReaderTrait;
+use super::{DataReaderBox, DataReaderTrait};
 use crate::types::{Blob, ByteRange};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
+use futures::executor::block_on;
 use lazy_static::lazy_static;
 use log::info;
 use regex::{Regex, RegexBuilder};
 use reqwest::{Client, Method, Request, StatusCode, Url};
-use std::str;
-use std::time::Duration;
+use std::{io::Read, str, time::Duration};
 
 #[derive(Debug)]
 pub struct DataReaderHttp {
-	name: String,
-	url: Url,
 	client: Client,
+	max_length: Option<u64>,
+	name: String,
+	pos: u64,
+	url: Url,
 }
 impl DataReaderHttp {
-	pub fn new(url: Url) -> Result<Box<Self>> {
+	pub fn from_url(url: Url) -> Result<DataReaderBox> {
 		match url.scheme() {
 			"http" => (),
 			"https" => (),
@@ -31,12 +33,15 @@ impl DataReaderHttp {
 			.build()?;
 
 		Ok(Box::new(Self {
-			name: url.to_string(),
-			url,
 			client,
+			max_length: None,
+			name: url.to_string(),
+			pos: 0,
+			url,
 		}))
 	}
 }
+
 #[async_trait]
 impl DataReaderTrait for DataReaderHttp {
 	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
@@ -88,10 +93,46 @@ impl DataReaderTrait for DataReaderHttp {
 
 		let bytes = response.bytes().await?;
 
+		self.pos = range.offset + bytes.len() as u64;
+
 		Ok(Blob::from(bytes))
 	}
 	fn get_name(&self) -> &str {
 		&self.name
+	}
+}
+
+impl Read for DataReaderHttp {
+	fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+		block_on(async {
+			let max_length = if self.max_length.is_some() {
+				self.max_length.unwrap()
+			} else {
+				let request = Request::new(Method::HEAD, self.url.clone());
+				let response = self.client.execute(request).await.unwrap();
+
+				println!("{:?}", response.status());
+				let length = response
+					.headers()
+					.get("content-length")
+					.unwrap()
+					.to_str()
+					.unwrap()
+					.parse::<u64>()
+					.unwrap();
+
+				self.max_length = Some(length);
+
+				length
+			};
+
+			let len = (buf.len() as u64).min(max_length - self.pos.min(max_length));
+
+			let blob = self.read_range(&ByteRange::new(self.pos, len)).await.unwrap();
+			buf.copy_from_slice(blob.as_slice());
+
+			Ok(len as usize)
+		})
 	}
 }
 
@@ -109,16 +150,16 @@ mod tests {
 		let invalid_url = Url::parse("ftp://www.example.com").unwrap();
 
 		// Test with a valid URL
-		let data_reader_http = DataReaderHttp::new(valid_url);
+		let data_reader_http = DataReaderHttp::from_url(valid_url);
 		assert!(data_reader_http.is_ok());
 
 		// Test with an invalid URL
-		let data_reader_http = DataReaderHttp::new(invalid_url);
+		let data_reader_http = DataReaderHttp::from_url(invalid_url);
 		assert!(data_reader_http.is_err());
 	}
 	async fn read_range_helper(url: &str, offset: u64, length: u64, expected: &str) -> Result<()> {
 		let url = Url::parse(url).unwrap();
-		let mut data_reader_http = DataReaderHttp::new(url)?;
+		let mut data_reader_http = DataReaderHttp::from_url(url)?;
 
 		// Define a range to read
 		let range = ByteRange { offset, length };
@@ -170,7 +211,7 @@ mod tests {
 	#[tokio::test]
 	async fn get_name() -> Result<()> {
 		let url = "https://www.example.com/";
-		let data_reader_http = DataReaderHttp::new(Url::parse(url).unwrap())?;
+		let data_reader_http = DataReaderHttp::from_url(Url::parse(url).unwrap())?;
 
 		// Check if the name matches the original URL
 		assert_eq!(data_reader_http.get_name(), url);

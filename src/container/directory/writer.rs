@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures::StreamExt;
 use std::{
 	fs,
 	path::{Path, PathBuf},
@@ -33,7 +33,7 @@ impl DirectoryTilesWriter {
 		fs::create_dir_all(parent)?;
 		Ok(())
 	}
-	pub fn open_file(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox>
+	pub fn open_path(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox>
 	where
 		Self: Sized,
 	{
@@ -138,7 +138,7 @@ mod tests {
 			TileBBoxPyramid::new_full(2),
 		));
 
-		let mut writer = DirectoryTilesWriter::open_file(
+		let mut writer = DirectoryTilesWriter::open_path(
 			&temp_path,
 			TilesWriterParameters::new(TileFormat::PBF, TileCompression::Gzip),
 		)?;

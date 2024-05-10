@@ -1,60 +1,79 @@
-use crate::container::{
-	DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, TarTilesReader, TarTilesWriter, TilesReaderBox,
-	TilesWriterBox, TilesWriterParameters, VersaTilesReader, VersaTilesWriter,
+use super::{PMTilesReader, PMTilesWriter};
+use crate::{
+	container::{
+		DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, TarTilesReader, TarTilesWriter, TilesReaderBox,
+		TilesWriterBox, TilesWriterParameters, VersaTilesReader, VersaTilesWriter,
+	},
+	helper::{DataReaderBox, DataReaderHttp},
 };
 use anyhow::{bail, Context, Result};
 use reqwest::Url;
-use std::{env, path::Path};
-
-use super::{PMTilesReader, PMTilesWriter};
+use std::env;
 
 pub async fn get_reader(filename: &str) -> Result<TilesReaderBox> {
-	let path = env::current_dir()?.join(filename);
+	let extension = get_extension(filename);
 
-	if filename.starts_with("http://") || filename.starts_with("https://") {
-		let url = Url::parse(filename)?;
-		let extension = get_extension(&path);
-		return match extension.as_str() {
-			"versatiles" => VersaTilesReader::open_url(url).await,
+	if let Some(reader) = parse_as_url(filename) {
+		return match extension {
+			"pmtiles" => PMTilesReader::open_reader(reader).await,
+			"versatiles" => VersaTilesReader::open_reader(reader).await,
 			_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
 		};
 	}
 
+	let path = env::current_dir()?.join(filename);
+
+	if !path.exists() {
+		bail!("path '{path:?}' does not exist")
+	}
+
 	if path.is_dir() {
-		return DirectoryTilesReader::open(&path)
+		return DirectoryTilesReader::open_path(&path)
 			.await
 			.with_context(|| format!("opening {path:?} as directory"));
 	}
 
-	let extension = get_extension(&path);
-	match extension.as_str() {
-		"mbtiles" => MBTilesReader::open(&path).await,
-		"pmtiles" => PMTilesReader::open(&path).await,
-		"tar" => TarTilesReader::open(&path).await,
-		"versatiles" => VersaTilesReader::open_file(&path).await,
+	match extension {
+		"mbtiles" => MBTilesReader::open_path(&path).await,
+		"pmtiles" => PMTilesReader::open_path(&path).await,
+		"tar" => TarTilesReader::open_path(&path).await,
+		"versatiles" => VersaTilesReader::open_path(&path).await,
 		_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
+	}
+}
+
+fn parse_as_url(filename: &str) -> Option<DataReaderBox> {
+	if filename.starts_with("http://") || filename.starts_with("https://") {
+		Url::parse(filename)
+			.map(|url| DataReaderHttp::from_url(url).map(Some).unwrap_or(None))
+			.unwrap_or(None)
+	} else {
+		None
 	}
 }
 
 pub async fn get_writer(filename: &str, parameters: TilesWriterParameters) -> Result<TilesWriterBox> {
 	let path = env::current_dir()?.join(filename);
 
-	let extension = get_extension(&path);
-	match extension.as_str() {
-		"" => DirectoryTilesWriter::open_file(&path, parameters),
-		"tar" => TarTilesWriter::open_file(&path, parameters),
-		"pmtiles" => PMTilesWriter::open_file(&path, parameters),
-		"versatiles" => VersaTilesWriter::open_file(&path, parameters).await,
+	if path.is_dir() {
+		return DirectoryTilesWriter::open_path(&path, parameters);
+	}
+
+	let extension = get_extension(filename);
+	match extension {
+		"tar" => TarTilesWriter::open_path(&path, parameters),
+		"pmtiles" => PMTilesWriter::open_path(&path, parameters),
+		"versatiles" => VersaTilesWriter::open_path(&path, parameters).await,
 		_ => bail!("Error when writing: file extension '{extension:?}' unknown"),
 	}
 }
 
-fn get_extension(path: &Path) -> String {
-	if let Some(osstr) = path.extension() {
-		String::from(osstr.to_str().unwrap_or(""))
-	} else {
-		String::from("")
-	}
+fn get_extension(filename: &str) -> &str {
+	filename
+		.split('?')
+		.next()
+		.map(|filename| filename.rsplit('.').next().unwrap_or(""))
+		.unwrap_or("")
 }
 
 #[cfg(test)]

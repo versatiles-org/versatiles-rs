@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures::StreamExt;
 
 #[derive(Debug)]
 pub struct TilesConverterParameters {
@@ -225,7 +225,7 @@ mod tests {
 			let cp = get_converter_parameters(TileFormat::PBF, c_out, false);
 			let filename = temp_file.to_str().unwrap();
 			convert_tiles_container(reader_in, cp, filename).await?;
-			let reader_out = VersaTilesReader::open_file(&temp_file).await?;
+			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.get_parameters();
 			assert_eq!(parameters_out.tile_format, TileFormat::PBF);
 			assert_eq!(parameters_out.tile_compression, c_out);
@@ -255,7 +255,7 @@ mod tests {
 			let cp = get_converter_parameters(f_out, TileCompression::Gzip, false);
 			let filename = temp_file.to_str().unwrap();
 			convert_tiles_container(reader_in, cp, filename).await?;
-			let reader_out = VersaTilesReader::open_file(&temp_file).await?;
+			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.get_parameters();
 			assert_eq!(parameters_out.tile_format, f_out);
 			assert_eq!(parameters_out.tile_compression, TileCompression::Gzip);
@@ -303,7 +303,7 @@ mod tests {
 			let cp = TilesConverterParameters::new(Some(JSON), Some(None), Some(pyramid_convert), false, flip_y, swap_xy);
 			convert_tiles_container(reader, cp, filename).await?;
 
-			let mut reader_out = VersaTilesReader::open_file(&temp_file).await?;
+			let mut reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.get_parameters();
 			assert_eq!(parameters_out.bbox_pyramid, pyramid_out);
 

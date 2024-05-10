@@ -1,38 +1,33 @@
 use crate::{
 	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
-	helper::decompress,
-	types::{extract_compression, extract_format, Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
+	helper::{decompress, DataReaderBox, DataReaderFile},
+	types::{
+		extract_compression, extract_format, Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat,
+	},
 };
-use anyhow::{bail, ensure, Result};
+use anyhow::{bail, Result};
 use async_trait::async_trait;
-use std::{collections::HashMap, fmt::Debug, fs::File, io::Read, os::unix::prelude::FileExt, path::Path};
+use std::{collections::HashMap, fmt::Debug, io::Read, path::Path};
 use tar::{Archive, EntryType};
-
-struct TarByteRange {
-	offset: u64,
-	length: u64,
-}
 
 pub struct TarTilesReader {
 	meta: Option<Blob>,
-	name: String,
-	file: File,
-	tile_map: HashMap<TileCoord3, TarByteRange>,
+	data_reader: DataReaderBox,
+	tile_map: HashMap<TileCoord3, ByteRange>,
 	parameters: TilesReaderParameters,
 }
 
 impl TarTilesReader {
-	pub async fn open(path: &Path) -> Result<TilesReaderBox>
+	// Create a new TilesReader from a given filename
+	pub async fn open_path(path: &Path) -> Result<TilesReaderBox> {
+		Self::open_reader(DataReaderFile::from_path(path)?).await
+	}
+
+	pub async fn open_reader(mut data_reader: DataReaderBox) -> Result<TilesReaderBox>
 	where
 		Self: Sized,
 	{
-		log::trace!("open {path:?}");
-
-		ensure!(path.exists(), "file {path:?} does not exist");
-		ensure!(path.is_absolute(), "path {path:?} must be absolute");
-
-		let file = File::open(path)?;
-		let mut archive = Archive::new(&file);
+		let mut archive = Archive::new(&mut data_reader);
 
 		let mut meta: Option<Blob> = None;
 		let mut tile_map = HashMap::new();
@@ -84,7 +79,7 @@ impl TarTilesReader {
 
 				let coord3 = TileCoord3::new(x, y, z)?;
 				bbox_pyramid.include_coord(&coord3);
-				tile_map.insert(coord3, TarByteRange { offset, length });
+				tile_map.insert(coord3, ByteRange { offset, length });
 				continue;
 			}
 
@@ -117,8 +112,7 @@ impl TarTilesReader {
 
 		Ok(Box::new(TarTilesReader {
 			meta,
-			name: path.to_str().unwrap().to_owned(),
-			file,
+			data_reader,
 			tile_map,
 			parameters: TilesReaderParameters::new(tile_format.unwrap(), tile_compression.unwrap(), bbox_pyramid),
 		}))
@@ -148,18 +142,12 @@ impl TilesReaderTrait for TarTilesReader {
 			return Ok(None);
 		}
 
-		let range = range.unwrap();
+		let blob = self.data_reader.read_range(range.unwrap()).await?;
 
-		let offset = range.offset;
-		let length = range.length as usize;
-
-		let mut buf: Vec<u8> = vec![0; length];
-		self.file.read_exact_at(&mut buf, offset)?;
-
-		Ok(Some(Blob::from(buf)))
+		Ok(Some(blob))
 	}
 	fn get_name(&self) -> &str {
-		&self.name
+		self.data_reader.get_name()
 	}
 }
 
@@ -184,7 +172,7 @@ pub mod tests {
 		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 3, "tar").await?;
 
 		// get tar reader
-		let mut reader = TarTilesReader::open(&temp_file).await?;
+		let mut reader = TarTilesReader::open_path(&temp_file).await?;
 
 		assert_eq!(format!("{:?}", reader), "TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "tar");
@@ -206,7 +194,7 @@ pub mod tests {
 			let temp_file = make_test_file(TileFormat::PBF, compression, 2, "tar").await?;
 
 			// get tar reader
-			let mut reader = TarTilesReader::open(&temp_file).await?;
+			let mut reader = TarTilesReader::open_path(&temp_file).await?;
 			format!("{:?}", reader);
 
 			let mut writer = MockTilesWriter::new_mock(TilesWriterParameters::new(TileFormat::PBF, compression));
@@ -227,7 +215,7 @@ pub mod tests {
 
 		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "tar").await?;
 
-		let mut reader = TarTilesReader::open(&temp_file).await?;
+		let mut reader = TarTilesReader::open_path(&temp_file).await?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(&printer.get_category("container").await).await?;
