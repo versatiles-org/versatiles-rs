@@ -21,8 +21,8 @@ impl TileBBox {
 		ensure!(level <= 31, "level ({level}) must be <= 31");
 		let max = 2u32.pow(level as u32) - 1;
 
-		ensure!(x_max <= max, "x_max ({x_max}) must be <= 180");
-		ensure!(y_max <= max, "y_max ({y_max}) must be <= 90");
+		ensure!(x_max <= max, "x_max ({x_max}) must be <= max ({max})");
+		ensure!(y_max <= max, "y_max ({y_max}) must be <= max ({max})");
 		ensure!(x_min <= x_max, "x_min ({x_min}) must be <= x_max ({x_max})",);
 		ensure!(y_min <= y_max, "y_min ({y_min}) must be <= y_max ({y_max})",);
 
@@ -182,6 +182,7 @@ impl TileBBox {
 	/// splits the bbox into a grid of bboxes
 	pub fn iter_bbox_grid(&self, size: u32) -> impl Iterator<Item = TileBBox> + '_ {
 		let level = self.level;
+		let max = 2u32.pow(level as u32) - 1;
 		let mut meta_bbox = self.clone();
 		meta_bbox.scale_down(size);
 
@@ -191,7 +192,7 @@ impl TileBBox {
 				let x = coord.x * size;
 				let y = coord.y * size;
 
-				let mut bbox = TileBBox::new(level, x, y, x + size - 1, y + size - 1).unwrap();
+				let mut bbox = TileBBox::new(level, x, y, (x + size - 1).min(max), (y + size - 1).min(max)).unwrap();
 				bbox.intersect_bbox(self);
 				bbox
 			})
@@ -586,6 +587,7 @@ mod tests {
 		test(16, b(10, 5, 6, 16, 16), "5,6,15,15 16,6,16,15 5,16,15,16 16,16,16,16");
 		test(16, b(10, 5, 6, 16, 15), "5,6,15,15 16,6,16,15");
 		test(16, b(10, 6, 7, 6, 7), "6,7,6,7");
+		test(64, b(4, 6, 7, 6, 7), "6,7,6,7");
 		test(16, TileBBox::new_empty(10).unwrap(), "");
 	}
 

@@ -419,7 +419,7 @@ mod tests {
 	use anyhow::Result;
 
 	#[tokio::test]
-	async fn test_reader() -> Result<()> {
+	async fn reader() -> Result<()> {
 		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
 
 		let mut reader = VersaTilesReader::open_file(&temp_file).await?;
