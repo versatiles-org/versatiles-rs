@@ -195,6 +195,7 @@ impl TileBBox {
 				bbox.intersect_bbox(self);
 				bbox
 			})
+			.filter(|bbox| !bbox.is_empty())
 			.collect::<Vec<TileBBox>>()
 			.into_iter()
 	}
@@ -564,6 +565,28 @@ mod tests {
 		assert_eq!(vec.len(), 2);
 		assert_eq!(vec[0], TileBBox::new(10, 0, 1000, 99, 1001).unwrap());
 		assert_eq!(vec[1], TileBBox::new(10, 0, 1002, 99, 1003).unwrap());
+	}
+
+	#[test]
+	fn iter_bbox_grid() {
+		fn b(level: u8, x_min: u32, y_min: u32, x_max: u32, y_max: u32) -> TileBBox {
+			TileBBox::new(level, x_min, y_min, x_max, y_max).unwrap()
+		}
+		fn test(size: u32, bbox: TileBBox, bboxes: &str) {
+			let bboxes_result: String = bbox
+				.iter_bbox_grid(size)
+				.map(|bbox| format!("{},{},{},{}", bbox.x_min, bbox.y_min, bbox.x_max, bbox.y_max))
+				.collect::<Vec<String>>()
+				.join(" ");
+			assert_eq!(bboxes_result, bboxes);
+		}
+
+		test(16, b(10, 0, 0, 31, 31), "0,0,15,15 16,0,31,15 0,16,15,31 16,16,31,31");
+		test(16, b(10, 5, 6, 25, 26), "5,6,15,15 16,6,25,15 5,16,15,26 16,16,25,26");
+		test(16, b(10, 5, 6, 16, 16), "5,6,15,15 16,6,16,15 5,16,15,16 16,16,16,16");
+		test(16, b(10, 5, 6, 16, 15), "5,6,15,15 16,6,16,15");
+		test(16, b(10, 6, 7, 6, 7), "6,7,6,7");
+		test(16, TileBBox::new_empty(10).unwrap(), "");
 	}
 
 	#[test]
