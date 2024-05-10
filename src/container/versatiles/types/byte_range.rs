@@ -40,6 +40,13 @@ impl ByteRange {
 		Ok(())
 	}
 
+	pub fn shift(&self, offset: u64) -> Self {
+		Self {
+			offset: self.offset + offset,
+			length: self.length,
+		}
+	}
+
 	#[cfg(test)]
 	pub fn as_range_usize(&self) -> Range<usize> {
 		Range {

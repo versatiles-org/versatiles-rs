@@ -41,17 +41,11 @@ impl PMTilesReader {
 			bail!("source archive must be clustered for extracts");
 		}
 
-		let meta: Blob = data_reader
-			.read_range(&ByteRange::new(header.metadata_offset, header.metadata_length))
-			.await?;
+		let meta: Blob = data_reader.read_range(&header.metadata).await?;
 
 		let directory: Directory = Directory {
-			root_bytes: data_reader
-				.read_range(&ByteRange::new(header.root_dir_offset, header.root_dir_length))
-				.await?,
-			leaves_bytes: data_reader
-				.read_range(&ByteRange::new(header.leaf_dirs_offset, header.leaf_dirs_length))
-				.await?,
+			root_bytes: data_reader.read_range(&header.root_dir).await?,
+			leaves_bytes: data_reader.read_range(&header.leaf_dirs).await?,
 		};
 
 		let mut bbox_pyramid = TileBBoxPyramid::new_full(header.max_zoom);
@@ -104,22 +98,16 @@ impl TilesReaderTrait for PMTilesReader {
 				entry.unwrap()
 			};
 
-			if entry.length > 0 {
+			if entry.range.length > 0 {
 				if entry.run_length > 0 {
 					return self
 						.data_reader
-						.read_range(&ByteRange::new(
-							self.header.tile_data_offset + entry.offset,
-							entry.length as u64,
-						))
+						.read_range(&entry.range.shift(self.header.tile_data.offset))
 						.await;
 				} else {
 					dir_blob = self
 						.data_reader
-						.read_range(&ByteRange::new(
-							self.header.leaf_dirs_offset + entry.offset,
-							entry.length as u64,
-						))
+						.read_range(&entry.range.shift(self.header.leaf_dirs.offset))
 						.await?;
 				}
 			} else {

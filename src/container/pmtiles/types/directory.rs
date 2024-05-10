@@ -95,15 +95,15 @@ fn serialize_entries(entries: &[EntryV3]) -> Result<Blob> {
 
 	// Serialize Lengths
 	for entry in entries {
-		blob.write_u64::<LE>(entry.length as u64)?;
+		blob.write_u64::<LE>(entry.range.length)?;
 	}
 
 	// Serialize Offsets
 	for i in 0..entries.len() {
-		let offset = if i > 0 && entries[i].offset == entries[i - 1].offset + entries[i - 1].length as u64 {
+		let offset = if i > 0 && entries[i].range.offset == entries[i - 1].range.offset + entries[i - 1].range.length {
 			0
 		} else {
-			entries[i].offset + 1 // add 1 to not conflict with 0
+			entries[i].range.offset + 1 // add 1 to not conflict with 0
 		};
 		blob.write_u64::<LE>(offset)?;
 	}
@@ -144,15 +144,15 @@ impl EntriesV3 {
 		}
 
 		for entry in entries.iter_mut() {
-			entry.length = reader.read_u64::<LE>()? as u32;
+			entry.range.length = reader.read_u64::<LE>()?;
 		}
 
 		for i in 0..num_entries {
 			let tmp = reader.read_u64::<LE>()?;
 			if i > 0 && tmp == 0 {
-				entries[i].offset = entries[i - 1].offset + entries[i - 1].length as u64;
+				entries[i].range.offset = entries[i - 1].range.offset + entries[i - 1].range.length;
 			} else {
-				entries[i].offset = tmp - 1
+				entries[i].range.offset = tmp - 1
 			}
 		}
 

@@ -1,19 +1,18 @@
 use super::{tile_compression::PMTilesCompression, tile_type::PMTilesType};
-use crate::{container::TilesReaderParameters, types::Blob};
+use crate::{
+	container::{ByteRange, TilesReaderParameters},
+	types::Blob,
+};
 use anyhow::{ensure, Result};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::io::Cursor;
 
 #[derive(Debug, PartialEq)]
 pub struct HeaderV3 {
-	pub root_dir_offset: u64,
-	pub root_dir_length: u64,
-	pub metadata_offset: u64,
-	pub metadata_length: u64,
-	pub leaf_dirs_offset: u64,
-	pub leaf_dirs_length: u64,
-	pub tile_data_offset: u64,
-	pub tile_data_length: u64,
+	pub root_dir: ByteRange,
+	pub metadata: ByteRange,
+	pub leaf_dirs: ByteRange,
+	pub tile_data: ByteRange,
 	pub addressed_tiles_count: u64,
 	pub tile_entries_count: u64,
 	pub tile_contents_count: u64,
@@ -41,14 +40,10 @@ impl HeaderV3 {
 		let bbox = bbox_pyramid.get_geo_bbox();
 
 		Ok(Self {
-			root_dir_offset: 0,
-			root_dir_length: 0,
-			metadata_offset: 0,
-			metadata_length: 0,
-			leaf_dirs_offset: 0,
-			leaf_dirs_length: 0,
-			tile_data_offset: 0,
-			tile_data_length: 0,
+			root_dir: ByteRange::new(0, 0),
+			metadata: ByteRange::new(0, 0),
+			leaf_dirs: ByteRange::new(0, 0),
+			tile_data: ByteRange::new(0, 0),
 			addressed_tiles_count: 0,
 			tile_entries_count: 0,
 			tile_contents_count: 0,
@@ -74,14 +69,14 @@ impl HeaderV3 {
 		buffer.push(3); // Version
 
 		// Serialize fields to little-endian
-		buffer.write_u64::<LittleEndian>(self.root_dir_offset).unwrap();
-		buffer.write_u64::<LittleEndian>(self.root_dir_length).unwrap();
-		buffer.write_u64::<LittleEndian>(self.metadata_offset).unwrap();
-		buffer.write_u64::<LittleEndian>(self.metadata_length).unwrap();
-		buffer.write_u64::<LittleEndian>(self.leaf_dirs_offset).unwrap();
-		buffer.write_u64::<LittleEndian>(self.leaf_dirs_length).unwrap();
-		buffer.write_u64::<LittleEndian>(self.tile_data_offset).unwrap();
-		buffer.write_u64::<LittleEndian>(self.tile_data_length).unwrap();
+		buffer.write_u64::<LittleEndian>(self.root_dir.offset).unwrap();
+		buffer.write_u64::<LittleEndian>(self.root_dir.length).unwrap();
+		buffer.write_u64::<LittleEndian>(self.metadata.offset).unwrap();
+		buffer.write_u64::<LittleEndian>(self.metadata.length).unwrap();
+		buffer.write_u64::<LittleEndian>(self.leaf_dirs.offset).unwrap();
+		buffer.write_u64::<LittleEndian>(self.leaf_dirs.length).unwrap();
+		buffer.write_u64::<LittleEndian>(self.tile_data.offset).unwrap();
+		buffer.write_u64::<LittleEndian>(self.tile_data.length).unwrap();
 		buffer.write_u64::<LittleEndian>(self.addressed_tiles_count).unwrap();
 		buffer.write_u64::<LittleEndian>(self.tile_entries_count).unwrap();
 		buffer.write_u64::<LittleEndian>(self.tile_contents_count).unwrap();
@@ -118,14 +113,10 @@ impl HeaderV3 {
 		cursor.set_position(8); // Skip PMTiles and version byte
 
 		let header = Self {
-			root_dir_offset: cursor.read_u64::<LittleEndian>()?,
-			root_dir_length: cursor.read_u64::<LittleEndian>()?,
-			metadata_offset: cursor.read_u64::<LittleEndian>()?,
-			metadata_length: cursor.read_u64::<LittleEndian>()?,
-			leaf_dirs_offset: cursor.read_u64::<LittleEndian>()?,
-			leaf_dirs_length: cursor.read_u64::<LittleEndian>()?,
-			tile_data_offset: cursor.read_u64::<LittleEndian>()?,
-			tile_data_length: cursor.read_u64::<LittleEndian>()?,
+			root_dir: ByteRange::new(cursor.read_u64::<LittleEndian>()?, cursor.read_u64::<LittleEndian>()?),
+			metadata: ByteRange::new(cursor.read_u64::<LittleEndian>()?, cursor.read_u64::<LittleEndian>()?),
+			leaf_dirs: ByteRange::new(cursor.read_u64::<LittleEndian>()?, cursor.read_u64::<LittleEndian>()?),
+			tile_data: ByteRange::new(cursor.read_u64::<LittleEndian>()?, cursor.read_u64::<LittleEndian>()?),
 			addressed_tiles_count: cursor.read_u64::<LittleEndian>()?,
 			tile_entries_count: cursor.read_u64::<LittleEndian>()?,
 			tile_contents_count: cursor.read_u64::<LittleEndian>()?,
@@ -159,14 +150,10 @@ mod tests {
 	#[test]
 	fn header_serialization_deserialization() {
 		let header = HeaderV3 {
-			root_dir_offset: 123456789,
-			root_dir_length: 987654321,
-			metadata_offset: 111111111,
-			metadata_length: 222222222,
-			leaf_dirs_offset: 333333333,
-			leaf_dirs_length: 444444444,
-			tile_data_offset: 555555555,
-			tile_data_length: 666666666,
+			root_dir: ByteRange::new(123456789, 987654321),
+			metadata: ByteRange::new(111111111, 222222222),
+			leaf_dirs: ByteRange::new(333333333, 444444444),
+			tile_data: ByteRange::new(555555555, 666666666),
 			addressed_tiles_count: 777777777,
 			tile_entries_count: 888888888,
 			tile_contents_count: 999999999,

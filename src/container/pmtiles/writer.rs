@@ -55,7 +55,7 @@ impl TilesWriterTrait for PMTilesWriter {
 		let mut offset: u64 = 0;
 		let mut entries: Vec<EntryV3> = Vec::new();
 
-		header.tile_data_offset = file.get_position()?;
+		header.tile_data.offset = file.get_position()?;
 
 		for bbox in blocks {
 			let mut tiles: Vec<(u64, Blob)> = reader
@@ -78,7 +78,7 @@ impl TilesWriterTrait for PMTilesWriter {
 			progress.inc(bbox.count_tiles())
 		}
 
-		header.tile_data_length = offset;
+		header.tile_data.length = offset;
 		header.addressed_tiles_count = addressed_tiles;
 		header.tile_entries_count = entries.len() as u64;
 		header.tile_contents_count = entries.len() as u64;
@@ -88,19 +88,13 @@ impl TilesWriterTrait for PMTilesWriter {
 		let mut metadata = reader.get_meta().await?.unwrap_or(Blob::new_empty());
 		metadata = compress_gzip(metadata)?;
 
-		header.metadata_offset = file.get_position()?;
-		file.append(&metadata)?;
-		header.metadata_length = metadata.len() as u64;
+		header.metadata = file.append(&metadata)?;
 
 		let directory = Directory::new(&entries, 16384 - HeaderV3::len())?;
 
-		header.root_dir_offset = file.get_position()?;
-		file.append(&directory.root_bytes)?;
-		header.root_dir_length = directory.root_bytes.len() as u64;
+		header.root_dir = file.append(&directory.root_bytes)?;
 
-		header.leaf_dirs_offset = file.get_position()?;
-		file.append(&directory.leaves_bytes)?;
-		header.leaf_dirs_length = directory.leaves_bytes.len() as u64;
+		header.leaf_dirs = file.append(&directory.leaves_bytes)?;
 
 		file.write_start(&header.serialize())?;
 
