@@ -9,6 +9,7 @@ use std::{
 	path::Path,
 };
 
+#[derive(Debug)]
 pub struct DataReaderFile {
 	name: String,
 	reader: BufReader<File>,

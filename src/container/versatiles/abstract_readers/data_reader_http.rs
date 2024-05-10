@@ -10,6 +10,7 @@ use reqwest::{Client, Method, Request, StatusCode, Url};
 use std::str;
 use std::time::Duration;
 
+#[derive(Debug)]
 pub struct DataReaderHttp {
 	name: String,
 	url: Url,

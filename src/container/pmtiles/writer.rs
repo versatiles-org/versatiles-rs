@@ -1,13 +1,15 @@
 use super::types::{Directory, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
-	container::{DataWriterFile, DataWriterTrait, TilesReaderBox, TilesWriterParameters, TilesWriterTrait},
+	container::{
+		DataWriterFile, DataWriterTrait, TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait,
+	},
 	helper::{compress_gzip, ProgressBar},
 	types::{Blob, TileBBox},
 };
 use anyhow::Result;
 use axum::async_trait;
 use futures_util::StreamExt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub struct PMTilesWriter {
 	parameters: TilesWriterParameters,
@@ -15,8 +17,11 @@ pub struct PMTilesWriter {
 }
 
 impl PMTilesWriter {
-	fn new(path: PathBuf, parameters: TilesWriterParameters) -> Self {
-		Self { parameters, path }
+	pub fn open_file(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox> {
+		Ok(Box::new(Self {
+			parameters,
+			path: path.to_owned(),
+		}))
 	}
 }
 
@@ -32,7 +37,7 @@ impl TilesWriterTrait for PMTilesWriter {
 
 		let mut header = HeaderV3::try_from(parameters)?;
 		header.clustered = true;
-		header.internal_compression = PMTilesCompression::GZIP;
+		header.internal_compression = PMTilesCompression::Gzip;
 
 		let mut file = DataWriterFile::new(&self.path)?;
 		file.append(&header.serialize())?;
@@ -65,7 +70,7 @@ impl TilesWriterTrait for PMTilesWriter {
 			for (id, blob) in tiles {
 				addressed_tiles += 1;
 
-				entries.push(EntryV3::with_values(id, offset, blob.len() as u32, 1));
+				entries.push(EntryV3::new(id, offset, blob.len() as u32, 1));
 				offset += blob.len() as u64;
 				file.append(&blob)?;
 			}

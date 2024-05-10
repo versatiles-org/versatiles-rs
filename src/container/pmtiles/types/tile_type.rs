@@ -1,7 +1,7 @@
+use crate::types::TileFormat;
 use anyhow::{bail, Result};
 
-use crate::types::TileFormat;
-
+#[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PMTilesType {
 	UNKNOWN = 0x0,
@@ -36,6 +36,16 @@ impl PMTilesType {
 			TileFormat::SVG => bail!("PMTiles does not support TileFormat::SVG"),
 			TileFormat::TOPOJSON => bail!("PMTiles does not support TileFormat::TOPOJSON"),
 			TileFormat::WEBP => PMTilesType::WEBP,
+		})
+	}
+	pub fn as_value(&self) -> Result<TileFormat> {
+		Ok(match self {
+			PMTilesType::UNKNOWN => TileFormat::BIN,
+			PMTilesType::MVT => TileFormat::PBF,
+			PMTilesType::PNG => TileFormat::PNG,
+			PMTilesType::JPEG => TileFormat::JPG,
+			PMTilesType::WEBP => TileFormat::WEBP,
+			PMTilesType::AVIF => TileFormat::AVIF,
 		})
 	}
 }

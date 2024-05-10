@@ -10,4 +10,3 @@ pub use entry_v3::*;
 pub use header_v3::*;
 pub use tile_compression::*;
 pub use tile_id::*;
-pub use tile_type::*;

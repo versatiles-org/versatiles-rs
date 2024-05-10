@@ -6,6 +6,8 @@ use anyhow::{bail, Context, Result};
 use reqwest::Url;
 use std::{env, path::Path};
 
+use super::{PMTilesReader, PMTilesWriter};
+
 pub async fn get_reader(filename: &str) -> Result<TilesReaderBox> {
 	let path = env::current_dir()?.join(filename);
 
@@ -27,6 +29,7 @@ pub async fn get_reader(filename: &str) -> Result<TilesReaderBox> {
 	let extension = get_extension(&path);
 	match extension.as_str() {
 		"mbtiles" => MBTilesReader::open(&path).await,
+		"pmtiles" => PMTilesReader::open(&path).await,
 		"tar" => TarTilesReader::open(&path).await,
 		"versatiles" => VersaTilesReader::open_file(&path).await,
 		_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
@@ -38,9 +41,10 @@ pub async fn get_writer(filename: &str, parameters: TilesWriterParameters) -> Re
 
 	let extension = get_extension(&path);
 	match extension.as_str() {
-		"versatiles" => VersaTilesWriter::open_file(&path, parameters).await,
-		"tar" => TarTilesWriter::open_file(&path, parameters),
 		"" => DirectoryTilesWriter::open_file(&path, parameters),
+		"tar" => TarTilesWriter::open_file(&path, parameters),
+		"pmtiles" => PMTilesWriter::open_file(&path, parameters),
+		"versatiles" => VersaTilesWriter::open_file(&path, parameters).await,
 		_ => bail!("Error when writing: file extension '{extension:?}' unknown"),
 	}
 }
