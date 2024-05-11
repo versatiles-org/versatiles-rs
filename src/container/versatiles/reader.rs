@@ -9,7 +9,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use axum::async_trait;
-use futures::{executor::block_on, stream, StreamExt};
+use futures::{stream, StreamExt};
 use log::trace;
 use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
 use tokio::sync::Mutex;
@@ -144,7 +144,7 @@ impl TilesReaderTrait for VersaTilesReader {
 		Ok(Some(self.reader.read_range(&tile_range)?))
 	}
 
-	fn get_bbox_tile_stream<'a>(&'a mut self, bbox: &TileBBox) -> TilesStream<'a> {
+	async fn get_bbox_tile_stream(&mut self, bbox: &TileBBox) -> TilesStream {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
@@ -180,84 +180,78 @@ impl TilesReaderTrait for VersaTilesReader {
 
 		let self_mutex = Arc::new(Mutex::new(self));
 
-		let chunks: Vec<Vec<Chunk>> = block_on(async {
+		let stream = futures::stream::iter(block_coords).then(|block_coord: TileCoord3| {
 			let bbox = bbox.clone();
 			let self_mutex = self_mutex.clone();
+			async move {
+				let mut myself = self_mutex.lock().await;
 
-			futures::stream::iter(block_coords)
-				.then(|block_coord: TileCoord3| {
-					let bbox = bbox.clone();
-					let self_mutex = self_mutex.clone();
-					async move {
-						let mut myself = self_mutex.lock().await;
+				// Get the block using the block coordinate
+				let block_option = myself.block_index.get_block(&block_coord);
+				if block_option.is_none() {
+					panic!("block <{block_coord:#?}> does not exist");
+				}
 
-						// Get the block using the block coordinate
-						let block_option = myself.block_index.get_block(&block_coord);
-						if block_option.is_none() {
-							panic!("block <{block_coord:#?}> does not exist");
-						}
+				// Get the block
+				let block: BlockDefinition = block_option.unwrap().to_owned();
+				trace!("block {block:?}");
 
-						// Get the block
-						let block: BlockDefinition = block_option.unwrap().to_owned();
-						trace!("block {block:?}");
+				// Get the bounding box of all tiles defined in this block
+				let tiles_bbox_block = block.get_global_bbox();
+				trace!("tiles_bbox_block {tiles_bbox_block:?}");
 
-						// Get the bounding box of all tiles defined in this block
-						let tiles_bbox_block = block.get_global_bbox();
-						trace!("tiles_bbox_block {tiles_bbox_block:?}");
+				// Get the bounding box of all tiles defined in this block
+				let mut tiles_bbox_used: TileBBox = bbox.clone();
+				tiles_bbox_used.intersect_bbox(tiles_bbox_block);
+				trace!("tiles_bbox_used {tiles_bbox_used:?}");
 
-						// Get the bounding box of all tiles defined in this block
-						let mut tiles_bbox_used: TileBBox = bbox.clone();
-						tiles_bbox_used.intersect_bbox(tiles_bbox_block);
-						trace!("tiles_bbox_used {tiles_bbox_used:?}");
+				assert_eq!(bbox.level, tiles_bbox_block.level);
+				assert_eq!(bbox.level, tiles_bbox_used.level);
 
-						assert_eq!(bbox.level, tiles_bbox_block.level);
-						assert_eq!(bbox.level, tiles_bbox_used.level);
+				// Get the tile index of this block
+				let tile_index: &TileIndex = myself.get_block_tile_index(&block);
+				trace!("tile_index {tile_index:?}");
 
-						// Get the tile index of this block
-						let tile_index: &TileIndex = myself.get_block_tile_index(&block);
-						trace!("tile_index {tile_index:?}");
+				// let tile_range: &ByteRange = tile_index.get(tile_id);
+				let mut tile_ranges: Vec<(TileCoord3, ByteRange)> = tile_index
+					.iter()
+					.enumerate()
+					.map(|(index, range)| (tiles_bbox_block.get_coord3_by_index(index as u32).unwrap(), *range))
+					.filter(|(coord, range)| tiles_bbox_used.contains3(coord) && (range.length > 0))
+					.collect();
 
-						// let tile_range: &ByteRange = tile_index.get(tile_id);
-						let mut tile_ranges: Vec<(TileCoord3, ByteRange)> = tile_index
-							.iter()
-							.enumerate()
-							.map(|(index, range)| (tiles_bbox_block.get_coord3_by_index(index as u32).unwrap(), *range))
-							.filter(|(coord, range)| tiles_bbox_used.contains3(coord) && (range.length > 0))
-							.collect();
+				if tile_ranges.is_empty() {
+					return Vec::new();
+				}
 
-						if tile_ranges.is_empty() {
-							return Vec::new();
-						}
+				tile_ranges.sort_by_key(|e| e.1.offset);
 
-						tile_ranges.sort_by_key(|e| e.1.offset);
+				let mut chunks: Vec<Chunk> = Vec::new();
+				let mut chunk = Chunk::new(tile_ranges[0].1.offset);
 
-						let mut chunks: Vec<Chunk> = Vec::new();
-						let mut chunk = Chunk::new(tile_ranges[0].1.offset);
+				for entry in tile_ranges {
+					let chunk_start = chunk.range.offset;
+					let chunk_end = chunk.range.offset + chunk.range.length;
 
-						for entry in tile_ranges {
-							let chunk_start = chunk.range.offset;
-							let chunk_end = chunk.range.offset + chunk.range.length;
+					let tile_start = entry.1.offset;
+					let tile_end = entry.1.offset + entry.1.length;
 
-							let tile_start = entry.1.offset;
-							let tile_end = entry.1.offset + entry.1.length;
-
-							if (chunk_start + MAX_CHUNK_SIZE > tile_end) && (chunk_end + MAX_CHUNK_GAP > tile_start) {
-								// chunk size is still inside the limits
-								chunk.push(entry);
-							} else {
-								// chunk becomes to big, create a new one
-								chunks.push(chunk);
-								chunk = Chunk::new(entry.1.offset);
-								chunk.push(entry);
-							}
-						}
-
-						chunks
+					if (chunk_start + MAX_CHUNK_SIZE > tile_end) && (chunk_end + MAX_CHUNK_GAP > tile_start) {
+						// chunk size is still inside the limits
+						chunk.push(entry);
+					} else {
+						// chunk becomes to big, create a new one
+						chunks.push(chunk);
+						chunk = Chunk::new(entry.1.offset);
+						chunk.push(entry);
 					}
-				})
-				.collect()
-				.await
+				}
+
+				chunks
+			}
 		});
+
+		let chunks: Vec<Vec<Chunk>> = stream.collect().await;
 
 		let chunks: Vec<Chunk> = chunks.into_iter().flatten().collect();
 

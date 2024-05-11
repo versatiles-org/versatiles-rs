@@ -161,7 +161,7 @@ impl VersaTilesWriter {
 		let mut tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
 		// Get the tile stream
-		let tile_stream: TilesStream = reader.get_bbox_tile_stream(bbox);
+		let tile_stream: TilesStream = reader.get_bbox_tile_stream(bbox).await;
 
 		// Iterate through the blobs and process them
 		tile_stream

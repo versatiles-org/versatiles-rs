@@ -147,7 +147,7 @@ impl TilesReaderTrait for TilesConvertReader {
 		Ok(Some(blob))
 	}
 
-	fn get_bbox_tile_stream(&mut self, bbox: &TileBBox) -> TilesStream {
+	async fn get_bbox_tile_stream(&mut self, bbox: &TileBBox) -> TilesStream {
 		let mut bbox: TileBBox = bbox.clone();
 		if self.converter_parameters.swap_xy {
 			bbox.swap_xy();
@@ -156,7 +156,7 @@ impl TilesReaderTrait for TilesConvertReader {
 			bbox.flip_y();
 		}
 
-		let mut stream = self.reader.get_bbox_tile_stream(&bbox);
+		let mut stream = self.reader.get_bbox_tile_stream(&bbox).await;
 
 		let flip_y = self.converter_parameters.flip_y;
 		let swap_xy = self.converter_parameters.swap_xy;

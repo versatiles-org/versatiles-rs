@@ -50,6 +50,7 @@ impl TilesWriterTrait for PMTilesWriter {
 		for bbox in blocks.iter() {
 			let mut tiles: Vec<(u64, Blob)> = reader
 				.get_bbox_tile_stream(bbox)
+				.await
 				.map(|t| (t.0.get_tile_id(), t.1))
 				.collect()
 				.await;

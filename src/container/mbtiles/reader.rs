@@ -4,6 +4,7 @@ use crate::{
 	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::{anyhow, ensure, Result};
+use axum::async_trait;
 use futures::StreamExt;
 use log::trace;
 use r2d2::Pool;
@@ -175,6 +176,7 @@ impl MBTilesReader {
 	}
 }
 
+#[async_trait]
 impl TilesReaderTrait for MBTilesReader {
 	fn get_container_name(&self) -> &str {
 		"mbtiles"
@@ -206,7 +208,7 @@ impl TilesReaderTrait for MBTilesReader {
 
 		Ok(Some(Blob::from(blob)))
 	}
-	fn get_bbox_tile_stream(&mut self, bbox: &TileBBox) -> TilesStream {
+	async fn get_bbox_tile_stream(&mut self, bbox: &TileBBox) -> TilesStream {
 		trace!("read tile stream from bbox {bbox:?}");
 
 		if bbox.is_empty() {

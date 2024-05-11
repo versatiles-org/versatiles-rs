@@ -21,7 +21,7 @@ impl TilesWriterTrait for MockTilesWriter {
 		let bbox_pyramid = reader.get_parameters().bbox_pyramid.clone();
 
 		for bbox in bbox_pyramid.iter_levels() {
-			let mut stream = reader.get_bbox_tile_stream(bbox);
+			let mut stream = reader.get_bbox_tile_stream(bbox).await;
 			while let Some((_coord, _blob)) = stream.next().await {}
 		}
 
