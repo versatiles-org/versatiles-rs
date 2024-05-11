@@ -1,7 +1,7 @@
 // Import necessary modules and traits
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 #[cfg(feature = "full")]
-use crate::helper::ProgressBar;
+use crate::helper::progress_bar::ProgressBar;
 use crate::{
 	container::{TilesReaderBox, TilesStream, TilesWriterBox, TilesWriterTrait},
 	helper::{compress, DataWriterFile, DataWriterTrait},

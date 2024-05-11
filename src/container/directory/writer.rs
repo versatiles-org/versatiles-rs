@@ -1,5 +1,5 @@
 #[cfg(feature = "full")]
-use crate::helper::ProgressBar;
+use crate::helper::progress_bar::ProgressBar;
 use crate::{
 	container::{TilesReaderBox, TilesWriterBox, TilesWriterTrait},
 	helper::compress,

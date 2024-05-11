@@ -214,7 +214,7 @@ pub mod tests {
 	// Test tile fetching
 	#[tokio::test]
 	async fn probe() -> Result<()> {
-		use crate::helper::PrettyPrint;
+		use crate::helper::pretty_print::PrettyPrint;
 
 		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "tar").await?;
 

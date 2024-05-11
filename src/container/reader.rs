@@ -1,5 +1,5 @@
 #[cfg(feature = "full")]
-use crate::{container::ProbeDepth, helper::PrettyPrint};
+use crate::{container::ProbeDepth, helper::pretty_print::PrettyPrint};
 use crate::{
 	container::TilesStream,
 	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},

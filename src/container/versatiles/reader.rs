@@ -1,7 +1,7 @@
 // Import necessary modules and traits
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 #[cfg(feature = "full")]
-use crate::helper::PrettyPrint;
+use crate::helper::pretty_print::PrettyPrint;
 use crate::{
 	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
 	helper::{DataReaderFile, DataReaderTrait, TileConverter},
@@ -340,7 +340,7 @@ impl TilesReaderTrait for VersaTilesReader {
 		let mut tile_count: u64 = 0;
 
 		let block_index = self.block_index.clone();
-		let mut progress = crate::helper::ProgressBar::new("scanning blocks", block_index.len() as u64);
+		let mut progress = crate::helper::progress_bar::ProgressBar::new("scanning blocks", block_index.len() as u64);
 
 		for block in block_index.iter() {
 			let tile_index = self.get_block_tile_index(block).await;
@@ -430,7 +430,7 @@ mod tests {
 	// Test tile fetching
 	#[tokio::test]
 	async fn probe() -> Result<()> {
-		use crate::helper::PrettyPrint;
+		use crate::helper::pretty_print::PrettyPrint;
 
 		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
 

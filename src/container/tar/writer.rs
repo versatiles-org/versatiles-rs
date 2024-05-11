@@ -1,6 +1,6 @@
 use crate::{
 	container::{TilesReaderBox, TilesWriterBox, TilesWriterTrait},
-	helper::{compress, ProgressBar},
+	helper::{compress, progress_bar::ProgressBar},
 	types::{compression_to_extension, format_to_extension},
 };
 use anyhow::{ensure, Result};
