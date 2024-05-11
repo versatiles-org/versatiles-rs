@@ -35,7 +35,7 @@ impl DataReaderTrait for DataReaderFile {
 		self.reader.seek(SeekFrom::Start(range.offset))?;
 		self.reader.read_exact(&mut buffer)?;
 
-		return Ok(Blob::from(buffer));
+		Ok(Blob::from(buffer))
 	}
 	fn get_name(&self) -> &str {
 		&self.name

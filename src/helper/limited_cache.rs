@@ -15,7 +15,7 @@ where
 			max_length: maximum_size.div(size_of::<K>() + size_of::<V>()),
 		}
 	}
-	pub fn cache<'a, F>(&'a mut self, key: K, mut callback: F) -> &'a V
+	pub fn cache<F>(&mut self, key: K, mut callback: F) -> &V
 	where
 		F: FnMut() -> V,
 	{

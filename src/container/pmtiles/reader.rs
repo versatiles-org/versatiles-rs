@@ -84,10 +84,10 @@ impl TilesReaderTrait for PMTilesReader {
 			let entries = EntriesV3::deserialize(&dir_blob)?;
 			let entry = entries.find_tile(tile_id);
 
-			let entry = if entry.is_none() {
-				return Ok(None);
+			let entry = if let Some(entry) = entry {
+				entry
 			} else {
-				entry.unwrap()
+				return Ok(None);
 			};
 
 			if entry.range.length > 0 {

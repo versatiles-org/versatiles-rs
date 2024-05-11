@@ -51,7 +51,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
 	/// returns the tiles in the coordinate system of the source
-	fn get_bbox_tile_stream<'a>(&'a mut self, bbox: &TileBBox) -> TilesStream {
+	fn get_bbox_tile_stream(&mut self, bbox: &TileBBox) -> TilesStream {
 		let mutex = Arc::new(Mutex::new(self));
 		let coords: Vec<TileCoord3> = bbox.iter_coords().collect();
 		stream::iter(coords)

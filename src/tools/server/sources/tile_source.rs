@@ -90,7 +90,7 @@ impl TileSource {
 
 			// Get tile data
 			let mut reader = self.reader.lock().await;
-			let tile = reader.get_tile_data(&coord).await;
+			let tile = reader.get_tile_data(&coord);
 			drop(reader);
 
 			// If tile data is not found, return a not found response
@@ -109,7 +109,7 @@ impl TileSource {
 		} else if (parts[0] == "meta.json") || (parts[0] == "tiles.json") {
 			// Get metadata
 			let reader = self.reader.lock().await;
-			let meta_option = reader.get_meta().await.unwrap();
+			let meta_option = reader.get_meta().unwrap();
 			drop(reader);
 
 			// If metadata is empty, return a not found response
