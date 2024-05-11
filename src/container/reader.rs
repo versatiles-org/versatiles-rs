@@ -6,7 +6,7 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::{stream, StreamExt};
+use futures_util::{stream, StreamExt};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 

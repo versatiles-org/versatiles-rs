@@ -6,7 +6,7 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::StreamExt;
+use futures_util::StreamExt;
 use std::path::{Path, PathBuf};
 
 pub struct PMTilesWriter {

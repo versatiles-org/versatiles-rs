@@ -8,8 +8,8 @@ use crate::{
 	types::{Blob, ByteRange, TileBBox, TileCompression, TileCoord2, TileCoord3},
 };
 use anyhow::{Context, Result};
-use axum::async_trait;
-use futures::{stream, StreamExt};
+use async_trait::async_trait;
+use futures_util::{stream, StreamExt};
 use log::trace;
 use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
 use tokio::sync::Mutex;
@@ -196,7 +196,7 @@ impl TilesReaderTrait for VersaTilesReader {
 
 		let self_mutex = Arc::new(Mutex::new(self));
 
-		let stream = futures::stream::iter(block_coords).then(|block_coord: TileCoord3| {
+		let stream = futures_util::stream::iter(block_coords).then(|block_coord: TileCoord3| {
 			let bbox = bbox.clone();
 			let self_mutex = self_mutex.clone();
 			async move {

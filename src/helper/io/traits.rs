@@ -1,6 +1,6 @@
 use crate::types::{Blob, ByteRange};
 use anyhow::Result;
-use axum::async_trait;
+use async_trait::async_trait;
 use std::{fmt::Debug, path::Path};
 
 pub type DataReaderBox = Box<dyn DataReaderTrait>;

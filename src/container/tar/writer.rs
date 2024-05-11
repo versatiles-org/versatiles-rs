@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
-use futures::StreamExt;
+use futures_util::StreamExt;
 use log::trace;
 use std::{
 	fs::File,

@@ -4,7 +4,7 @@ use crate::{
 	types::{extract_compression, extract_format, Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::{bail, ensure, Result};
-use axum::async_trait;
+use async_trait::async_trait;
 use std::{
 	collections::HashMap,
 	fmt::Debug,

@@ -5,7 +5,7 @@ use crate::{
 	types::{Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3},
 };
 use anyhow::{bail, Result};
-use axum::async_trait;
+use async_trait::async_trait;
 use std::{fmt::Debug, path::Path};
 
 #[derive(Debug)]

@@ -6,7 +6,7 @@ use crate::{
 	},
 };
 use anyhow::{bail, Result};
-use axum::async_trait;
+use async_trait::async_trait;
 use std::{
 	collections::HashMap,
 	fmt::Debug,

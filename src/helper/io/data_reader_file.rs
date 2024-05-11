@@ -1,7 +1,7 @@
 use super::{DataReaderBox, DataReaderTrait};
 use crate::types::{Blob, ByteRange};
 use anyhow::{ensure, Result};
-use axum::async_trait;
+use async_trait::async_trait;
 use std::{
 	fs::File,
 	io::{BufReader, Read, Seek, SeekFrom},

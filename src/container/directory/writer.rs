@@ -7,7 +7,7 @@ use crate::{
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
-use futures::StreamExt;
+use futures_util::StreamExt;
 use std::{
 	fs,
 	path::{Path, PathBuf},

@@ -4,7 +4,7 @@ use crate::{
 	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::Result;
-use axum::async_trait;
+use async_trait::async_trait;
 
 #[derive(Debug)]
 pub enum MockTilesReaderProfile {

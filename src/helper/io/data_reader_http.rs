@@ -1,7 +1,7 @@
 use super::{DataReaderBox, DataReaderTrait};
 use crate::types::{Blob, ByteRange};
 use anyhow::{bail, Result};
-use axum::async_trait;
+use async_trait::async_trait;
 use lazy_static::lazy_static;
 use log::info;
 use regex::{Regex, RegexBuilder};

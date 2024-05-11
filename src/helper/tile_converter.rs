@@ -8,7 +8,7 @@ use crate::{
 #[cfg(feature = "full")]
 use anyhow::bail;
 use anyhow::Result;
-use futures::StreamExt;
+use futures_util::StreamExt;
 use itertools::Itertools;
 use std::{
 	fmt::{self, Debug},

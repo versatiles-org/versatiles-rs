@@ -4,8 +4,8 @@ use crate::{
 	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::{anyhow, ensure, Result};
-use axum::async_trait;
-use futures::StreamExt;
+use async_trait::async_trait;
+use futures_util::StreamExt;
 use log::trace;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -212,7 +212,7 @@ impl TilesReaderTrait for MBTilesReader {
 		trace!("read tile stream from bbox {bbox:?}");
 
 		if bbox.is_empty() {
-			return futures::stream::empty().boxed();
+			return futures_util::stream::empty().boxed();
 		}
 
 		let max_index = bbox.max;
@@ -253,7 +253,7 @@ impl TilesReaderTrait for MBTilesReader {
 
 		trace!("got {} tiles", vec.len());
 
-		futures::stream::iter(vec).boxed()
+		futures_util::stream::iter(vec).boxed()
 	}
 	fn get_name(&self) -> &str {
 		&self.name

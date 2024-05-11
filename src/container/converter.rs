@@ -5,7 +5,7 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::StreamExt;
+use futures_util::StreamExt;
 
 #[derive(Debug)]
 pub struct TilesConverterParameters {

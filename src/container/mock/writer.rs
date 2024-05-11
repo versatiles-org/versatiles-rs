@@ -1,7 +1,7 @@
 use crate::container::{TilesReaderBox, TilesWriterBox, TilesWriterTrait};
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::StreamExt;
+use futures_util::StreamExt;
 
 pub struct MockTilesWriter {}
 
