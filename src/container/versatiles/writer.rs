@@ -3,7 +3,7 @@ use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 #[cfg(feature = "full")]
 use crate::helper::ProgressBar;
 use crate::{
-	container::{TilesReaderBox, TilesStream, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
+	container::{TilesReaderBox, TilesStream, TilesWriterBox, TilesWriterTrait},
 	helper::{compress, DataWriterFile, DataWriterTrait},
 	types::{Blob, ByteRange},
 };
@@ -18,18 +18,16 @@ use std::{collections::HashMap, path::Path};
 // Define TilesWriter struct
 pub struct VersaTilesWriter {
 	writer: Box<dyn DataWriterTrait>,
-	parameters: TilesWriterParameters,
 }
 
 impl VersaTilesWriter {
 	// Create a new TilesWriter instance
-	pub async fn open_path(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox>
+	pub async fn open_path(path: &Path) -> Result<TilesWriterBox>
 	where
 		Self: Sized,
 	{
 		Ok(Box::new(VersaTilesWriter {
 			writer: DataWriterFile::new(path)?,
-			parameters,
 		}))
 	}
 }
@@ -37,15 +35,9 @@ impl VersaTilesWriter {
 // Implement TilesWriterTrait for TilesWriter
 #[async_trait]
 impl TilesWriterTrait for VersaTilesWriter {
-	fn get_parameters(&self) -> &TilesWriterParameters {
-		&self.parameters
-	}
-
 	// Convert tiles from the TilesReader
-	async fn write_tiles(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
+	async fn write_from_reader(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
 		// Finalize the configuration
-
-		trace!("convert_from - self.parameters: {:?}", &self.parameters);
 
 		let parameters = reader.get_parameters();
 		trace!("convert_from - reader.parameters: {parameters:?}");
@@ -56,8 +48,8 @@ impl TilesWriterTrait for VersaTilesWriter {
 
 		// Create the file header
 		let mut header = FileHeader::new(
-			&self.parameters.tile_format,
-			&self.parameters.tile_compression,
+			&parameters.tile_format,
+			&parameters.tile_compression,
 			[
 				bbox_pyramid.get_zoom_min().unwrap(),
 				bbox_pyramid.get_zoom_max().unwrap(),
@@ -89,7 +81,7 @@ impl VersaTilesWriter {
 	// Write metadata
 	async fn write_meta(&mut self, reader: &TilesReaderBox) -> Result<ByteRange> {
 		let meta: Blob = reader.get_meta().await?.unwrap_or_default();
-		let compressed = compress(meta, &self.parameters.tile_compression)?;
+		let compressed = compress(meta, &reader.get_parameters().tile_compression)?;
 
 		self.writer.append(&compressed)
 	}

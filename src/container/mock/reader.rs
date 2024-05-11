@@ -92,10 +92,7 @@ impl std::fmt::Debug for MockTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{
-		container::{MockTilesWriter, MockTilesWriterProfile},
-		helper::decompress,
-	};
+	use crate::{container::MockTilesWriter, helper::decompress};
 	use anyhow::Result;
 
 	#[tokio::test]
@@ -137,7 +134,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn convert_from() {
-		let mut writer = MockTilesWriter::new_mock_profile(MockTilesWriterProfile::PNG);
+		let mut writer = MockTilesWriter::new_mock();
 		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG);
 		writer.write_from_reader(&mut reader).await.unwrap();
 	}

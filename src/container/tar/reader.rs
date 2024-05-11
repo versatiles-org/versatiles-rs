@@ -163,7 +163,7 @@ impl Debug for TarTilesReader {
 pub mod tests {
 	use super::*;
 	use crate::{
-		container::{make_test_file, MockTilesWriter, TilesWriterParameters, MOCK_BYTES_PBF},
+		container::{make_test_file, MockTilesWriter, MOCK_BYTES_PBF},
 		helper::decompress_gzip,
 	};
 
@@ -197,7 +197,7 @@ pub mod tests {
 			let mut reader = TarTilesReader::open_path(&temp_file).await?;
 			format!("{:?}", reader);
 
-			let mut writer = MockTilesWriter::new_mock(TilesWriterParameters::new(TileFormat::PBF, compression));
+			let mut writer = MockTilesWriter::new_mock();
 			writer.write_from_reader(&mut reader).await?;
 			Ok(())
 		}

@@ -30,7 +30,6 @@ impl TilesReaderParameters {
 	}
 }
 
-#[allow(clippy::new_ret_no_self)]
 #[async_trait]
 pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	/// some kine of name for this reader source, e.g. the filename
@@ -201,7 +200,7 @@ mod tests {
 	#[tokio::test]
 	#[cfg(feature = "full")]
 	async fn reader() -> Result<()> {
-		use crate::container::{MockTilesWriter, MockTilesWriterProfile};
+		use crate::container::MockTilesWriter;
 
 		let mut reader = TestReader::new_dummy();
 
@@ -226,7 +225,7 @@ mod tests {
 			"test tile data"
 		);
 
-		let mut writer = MockTilesWriter::new_mock_profile(MockTilesWriterProfile::PBF);
+		let mut writer = MockTilesWriter::new_mock();
 		writer.write_from_reader(&mut reader).await?;
 
 		Ok(())

@@ -1,6 +1,6 @@
 use super::types::{Directory, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
-	container::{TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
+	container::{TilesReaderBox, TilesWriterBox, TilesWriterTrait},
 	helper::{compress_gzip, DataWriterFile, DataWriterTrait, ProgressBar},
 	types::{Blob, TileBBox},
 };
@@ -10,26 +10,18 @@ use futures::StreamExt;
 use std::path::{Path, PathBuf};
 
 pub struct PMTilesWriter {
-	parameters: TilesWriterParameters,
 	path: PathBuf,
 }
 
 impl PMTilesWriter {
-	pub fn open_path(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox> {
-		Ok(Box::new(Self {
-			parameters,
-			path: path.to_owned(),
-		}))
+	pub fn open_path(path: &Path) -> Result<TilesWriterBox> {
+		Ok(Box::new(Self { path: path.to_owned() }))
 	}
 }
 
 #[async_trait]
 impl TilesWriterTrait for PMTilesWriter {
-	fn get_parameters(&self) -> &TilesWriterParameters {
-		&self.parameters
-	}
-
-	async fn write_tiles(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
+	async fn write_from_reader(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
 		let parameters = reader.get_parameters();
 		let pyramid = &parameters.bbox_pyramid;
 

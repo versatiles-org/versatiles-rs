@@ -1,7 +1,5 @@
 use crate::{
-	container::{
-		get_writer, TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream, TilesWriterParameters,
-	},
+	container::{get_writer, TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
 	helper::{TileConverter, TransformCoord},
 	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
@@ -48,13 +46,7 @@ impl TilesConverterParameters {
 pub async fn convert_tiles_container(
 	reader: TilesReaderBox, cp: TilesConverterParameters, filename: &str,
 ) -> Result<()> {
-	let rp = reader.get_parameters();
-
-	let wp = TilesWriterParameters {
-		tile_format: cp.tile_format.unwrap_or(rp.tile_format),
-		tile_compression: cp.tile_compression.unwrap_or(rp.tile_compression),
-	};
-	let mut writer = get_writer(filename, wp).await?;
+	let mut writer = get_writer(filename).await?;
 
 	let mut converter = TilesConvertReader::new_from_reader(reader, cp)?;
 	writer.write_from_reader(&mut converter).await

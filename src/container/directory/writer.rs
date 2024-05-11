@@ -1,7 +1,7 @@
 #[cfg(feature = "full")]
 use crate::helper::ProgressBar;
 use crate::{
-	container::{TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
+	container::{TilesReaderBox, TilesWriterBox, TilesWriterTrait},
 	helper::compress,
 	types::{compression_to_extension, format_to_extension, Blob},
 };
@@ -15,7 +15,6 @@ use std::{
 
 pub struct DirectoryTilesWriter {
 	dir: PathBuf,
-	parameters: TilesWriterParameters,
 }
 
 impl DirectoryTilesWriter {
@@ -33,7 +32,7 @@ impl DirectoryTilesWriter {
 		fs::create_dir_all(parent)?;
 		Ok(())
 	}
-	pub fn open_path(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox>
+	pub fn open_path(path: &Path) -> Result<TilesWriterBox>
 	where
 		Self: Sized,
 	{
@@ -42,22 +41,18 @@ impl DirectoryTilesWriter {
 
 		Ok(Box::new(DirectoryTilesWriter {
 			dir: path.to_path_buf(),
-			parameters,
 		}))
 	}
 }
 
 #[async_trait]
 impl TilesWriterTrait for DirectoryTilesWriter {
-	fn get_parameters(&self) -> &TilesWriterParameters {
-		&self.parameters
-	}
-
-	async fn write_tiles(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
+	async fn write_from_reader(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
 		log::trace!("convert_from");
 
-		let tile_compression = &self.parameters.tile_compression;
-		let tile_format = &self.parameters.tile_format;
+		let parameters = reader.get_parameters();
+		let tile_compression = &parameters.tile_compression;
+		let tile_format = &parameters.tile_format;
 		let bbox_pyramid = &reader.get_parameters().bbox_pyramid.clone();
 
 		let extension_format = format_to_extension(tile_format);
@@ -138,10 +133,7 @@ mod tests {
 			TileBBoxPyramid::new_full(2),
 		));
 
-		let mut writer = DirectoryTilesWriter::open_path(
-			&temp_path,
-			TilesWriterParameters::new(TileFormat::PBF, TileCompression::Gzip),
-		)?;
+		let mut writer = DirectoryTilesWriter::open_path(&temp_path)?;
 
 		writer.write_from_reader(&mut mock_reader).await?;
 

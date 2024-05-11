@@ -1,5 +1,5 @@
 use crate::{
-	container::{TilesReaderBox, TilesWriterBox, TilesWriterParameters, TilesWriterTrait},
+	container::{TilesReaderBox, TilesWriterBox, TilesWriterTrait},
 	helper::{compress, ProgressBar},
 	types::{compression_to_extension, format_to_extension},
 };
@@ -16,11 +16,10 @@ use tokio::sync::Mutex;
 
 pub struct TarTilesWriter {
 	builder: Builder<File>,
-	parameters: TilesWriterParameters,
 }
 
 impl TarTilesWriter {
-	pub fn open_path(path: &Path, parameters: TilesWriterParameters) -> Result<TilesWriterBox>
+	pub fn open_path(path: &Path) -> Result<TilesWriterBox>
 	where
 		Self: Sized,
 	{
@@ -31,19 +30,17 @@ impl TarTilesWriter {
 		let file = File::create(path)?;
 		let builder = Builder::new(file);
 
-		Ok(Box::new(TarTilesWriter { builder, parameters }))
+		Ok(Box::new(TarTilesWriter { builder }))
 	}
 }
 
 #[async_trait]
 impl TilesWriterTrait for TarTilesWriter {
-	fn get_parameters(&self) -> &TilesWriterParameters {
-		&self.parameters
-	}
-	async fn write_tiles(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
+	async fn write_from_reader(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
 		trace!("convert_from");
-		let tile_format = &self.parameters.tile_format;
-		let tile_compression = &self.parameters.tile_compression;
+		let parameters = reader.get_parameters();
+		let tile_format = &parameters.tile_format;
+		let tile_compression = &parameters.tile_compression;
 		let bbox_pyramid = reader.get_parameters().bbox_pyramid.clone();
 
 		let extension_format = format_to_extension(tile_format);

@@ -2,7 +2,7 @@ use super::{PMTilesReader, PMTilesWriter};
 use crate::{
 	container::{
 		DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, TarTilesReader, TarTilesWriter, TilesReaderBox,
-		TilesWriterBox, TilesWriterParameters, VersaTilesReader, VersaTilesWriter,
+		TilesWriterBox, VersaTilesReader, VersaTilesWriter,
 	},
 	helper::{DataReaderBox, DataReaderHttp},
 };
@@ -52,18 +52,18 @@ fn parse_as_url(filename: &str) -> Option<DataReaderBox> {
 	}
 }
 
-pub async fn get_writer(filename: &str, parameters: TilesWriterParameters) -> Result<TilesWriterBox> {
+pub async fn get_writer(filename: &str) -> Result<TilesWriterBox> {
 	let path = env::current_dir()?.join(filename);
 
 	if path.is_dir() {
-		return DirectoryTilesWriter::open_path(&path, parameters);
+		return DirectoryTilesWriter::open_path(&path);
 	}
 
 	let extension = get_extension(filename);
 	match extension {
-		"tar" => TarTilesWriter::open_path(&path, parameters),
-		"pmtiles" => PMTilesWriter::open_path(&path, parameters),
-		"versatiles" => VersaTilesWriter::open_path(&path, parameters).await,
+		"tar" => TarTilesWriter::open_path(&path),
+		"pmtiles" => PMTilesWriter::open_path(&path),
+		"versatiles" => VersaTilesWriter::open_path(&path).await,
 		_ => bail!("Error when writing: file extension '{extension:?}' unknown"),
 	}
 }
@@ -104,11 +104,10 @@ pub mod tests {
 			_ => panic!("make_test_file: extension {extension} not found"),
 		}?;
 
-		let parameters = TilesWriterParameters::new(tile_format, compression);
-		let mut writer = get_writer(container_file.to_str().unwrap(), parameters).await?;
+		let mut writer = get_writer(container_file.to_str().unwrap()).await?;
 
 		// convert
-		writer.write_tiles(&mut reader).await?;
+		writer.write_from_reader(&mut reader).await?;
 
 		Ok(container_file)
 	}
@@ -154,15 +153,14 @@ pub mod tests {
 				TempType::File(t) => t.to_str().unwrap(),
 			};
 
-			let parameters = TilesWriterParameters::new(tile_format, compression);
-			let mut writer1 = get_writer(filename, parameters).await?;
+			let mut writer1 = get_writer(filename).await?;
 
 			// convert
 			writer1.write_from_reader(&mut reader1).await?;
 
 			// get test container reader
 			let mut reader2 = get_reader(filename).await?;
-			let mut writer2 = MockTilesWriter::new_mock(TilesWriterParameters::new(tile_format, compression));
+			let mut writer2 = MockTilesWriter::new_mock();
 			writer2.write_from_reader(&mut reader2).await?;
 
 			Ok(())
