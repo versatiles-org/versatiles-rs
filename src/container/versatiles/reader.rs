@@ -66,7 +66,7 @@ impl VersaTilesReader {
 	fn get_block_tile_index(&mut self, block: &BlockDefinition) -> &TileIndex {
 		let block_coord = block.get_coord3();
 
-		return self.tile_index_cache.cache(block_coord.clone(), || {
+		return self.tile_index_cache.cache(*block_coord, || {
 			let blob = self.reader.read_range(block.get_index_range()).unwrap();
 			let mut tile_index = TileIndex::from_brotli_blob(blob).unwrap();
 			tile_index.add_offset(block.get_tiles_range().offset);
@@ -133,7 +133,7 @@ impl TilesReaderTrait for VersaTilesReader {
 
 		// Retrieve the tile index from cache or read from the reader
 		let tile_index: &TileIndex = self.get_block_tile_index(&block);
-		let tile_range: ByteRange = tile_index.get(tile_id).clone();
+		let tile_range: ByteRange = *tile_index.get(tile_id);
 
 		//  None if the tile range has zero length
 		if tile_range.length == 0 {
@@ -148,6 +148,30 @@ impl TilesReaderTrait for VersaTilesReader {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
+		struct Chunk {
+			tiles: Vec<(TileCoord3, ByteRange)>,
+			range: ByteRange,
+		}
+
+		impl Chunk {
+			fn new(start: u64) -> Self {
+				Self {
+					tiles: Vec::new(),
+					range: ByteRange::new(start, 0),
+				}
+			}
+			fn push(&mut self, entry: (TileCoord3, ByteRange)) {
+				self.tiles.push(entry);
+				if entry.1.offset < self.range.offset {
+					panic!()
+				};
+				self.range.length = self
+					.range
+					.length
+					.max(entry.1.offset + entry.1.length - self.range.offset)
+			}
+		}
+
 		let bbox = bbox.clone();
 
 		let mut block_coords: TileBBox = bbox.clone();
@@ -156,7 +180,7 @@ impl TilesReaderTrait for VersaTilesReader {
 
 		let self_mutex = Arc::new(Mutex::new(self));
 
-		let chunks: Vec<Vec<Vec<(TileCoord3, ByteRange)>>> = block_on(async {
+		let chunks: Vec<Vec<Chunk>> = block_on(async {
 			let bbox = bbox.clone();
 			let self_mutex = self_mutex.clone();
 
@@ -201,33 +225,31 @@ impl TilesReaderTrait for VersaTilesReader {
 							.filter(|(coord, range)| tiles_bbox_used.contains3(coord) && (range.length > 0))
 							.collect();
 
-						tile_ranges.sort_by_key(|e| e.1.offset);
-
-						let mut chunks: Vec<Vec<(TileCoord3, ByteRange)>> = Vec::new();
-						let mut chunk: Vec<(TileCoord3, ByteRange)> = Vec::new();
-
-						for entry in tile_ranges {
-							if chunk.is_empty() {
-								chunk.push(entry)
-							} else {
-								let newest = &entry.1;
-								let first = &chunk.first().unwrap().1;
-								let last = &chunk.last().unwrap().1;
-								if (first.offset + MAX_CHUNK_SIZE > newest.offset + newest.length)
-									&& (last.offset + last.length + MAX_CHUNK_GAP > newest.offset)
-								{
-									// chunk size is still inside the limits
-									chunk.push(entry);
-								} else {
-									// chunk becomes to big
-									chunks.push(chunk);
-									chunk = Vec::new();
-								}
-							}
+						if tile_ranges.is_empty() {
+							return Vec::new();
 						}
 
-						if !chunk.is_empty() {
-							chunks.push(chunk);
+						tile_ranges.sort_by_key(|e| e.1.offset);
+
+						let mut chunks: Vec<Chunk> = Vec::new();
+						let mut chunk = Chunk::new(tile_ranges[0].1.offset);
+
+						for entry in tile_ranges {
+							let chunk_start = chunk.range.offset;
+							let chunk_end = chunk.range.offset + chunk.range.length;
+
+							let tile_start = entry.1.offset;
+							let tile_end = entry.1.offset + entry.1.length;
+
+							if (chunk_start + MAX_CHUNK_SIZE > tile_end) && (chunk_end + MAX_CHUNK_GAP > tile_start) {
+								// chunk size is still inside the limits
+								chunk.push(entry);
+							} else {
+								// chunk becomes to big, create a new one
+								chunks.push(chunk);
+								chunk = Chunk::new(entry.1.offset);
+								chunk.push(entry);
+							}
 						}
 
 						chunks
@@ -237,7 +259,7 @@ impl TilesReaderTrait for VersaTilesReader {
 				.await
 		});
 
-		let chunks: Vec<Vec<(TileCoord3, ByteRange)>> = chunks.into_iter().flatten().collect();
+		let chunks: Vec<Chunk> = chunks.into_iter().flatten().collect();
 
 		stream::iter(chunks)
 			.then(move |chunk| {
@@ -246,20 +268,13 @@ impl TilesReaderTrait for VersaTilesReader {
 				async move {
 					let mut myself = self_mutex.lock().await;
 
-					let first = chunk.first().unwrap().1;
-					let last = chunk.last().unwrap().1;
-
-					let offset = first.offset;
-					let end = last.offset + last.length;
-
-					let chunk_range = ByteRange::new(offset, end - offset);
-
-					let big_blob = myself.reader.read_range(&chunk_range).unwrap();
+					let big_blob = myself.reader.read_range(&chunk.range).unwrap();
 
 					let entries: Vec<(TileCoord3, Blob)> = chunk
+						.tiles
 						.into_iter()
 						.map(|(coord, range)| {
-							let start = range.offset - offset;
+							let start = range.offset - chunk.range.offset;
 							let end = start + range.length;
 							let tile_range = (start as usize)..(end as usize);
 
