@@ -5,7 +5,6 @@ use crate::{
 	types::{Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3},
 };
 use anyhow::{bail, Result};
-use async_trait::async_trait;
 use std::{fmt::Debug, path::Path};
 
 #[derive(Debug)]
@@ -19,29 +18,25 @@ pub struct PMTilesReader {
 
 impl PMTilesReader {
 	// Create a new TilesReader from a given filename
-	pub async fn open_path(path: &Path) -> Result<TilesReaderBox> {
-		Self::open_reader(DataReaderFile::from_path(path)?).await
+	pub fn open_path(path: &Path) -> Result<TilesReaderBox> {
+		Self::open_reader(DataReaderFile::from_path(path)?)
 	}
 
-	pub async fn open_reader(mut data_reader: DataReaderBox) -> Result<TilesReaderBox>
+	pub fn open_reader(mut data_reader: DataReaderBox) -> Result<TilesReaderBox>
 	where
 		Self: Sized,
 	{
-		let header = HeaderV3::deserialize(
-			&data_reader
-				.read_range(&ByteRange::new(0, HeaderV3::len() as u64))
-				.await?,
-		)?;
+		let header = HeaderV3::deserialize(&data_reader.read_range(&ByteRange::new(0, HeaderV3::len() as u64))?)?;
 
 		if !header.clustered {
 			bail!("source archive must be clustered for extracts");
 		}
 
-		let meta: Blob = data_reader.read_range(&header.metadata).await?;
+		let meta: Blob = data_reader.read_range(&header.metadata)?;
 
 		let directory: Directory = Directory {
-			root_bytes: data_reader.read_range(&header.root_dir).await?,
-			leaves_bytes: data_reader.read_range(&header.leaf_dirs).await?,
+			root_bytes: data_reader.read_range(&header.root_dir)?,
+			leaves_bytes: data_reader.read_range(&header.leaf_dirs)?,
 		};
 
 		let mut bbox_pyramid = TileBBoxPyramid::new_full(header.max_zoom);
@@ -63,7 +58,6 @@ impl PMTilesReader {
 	}
 }
 
-#[async_trait]
 impl TilesReaderTrait for PMTilesReader {
 	fn get_container_name(&self) -> &str {
 		"pmtiles"
@@ -74,13 +68,13 @@ impl TilesReaderTrait for PMTilesReader {
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
-	async fn get_meta(&self) -> Result<Option<Blob>> {
+	fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(Some(self.meta.clone()))
 	}
 	fn get_name(&self) -> &str {
 		self.data_reader.get_name()
 	}
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data_original {:?}", coord);
 
 		let tile_id: u64 = coord.get_tile_id();
@@ -101,14 +95,12 @@ impl TilesReaderTrait for PMTilesReader {
 					return Ok(Some(
 						self
 							.data_reader
-							.read_range(&entry.range.shift(self.header.tile_data.offset))
-							.await?,
+							.read_range(&entry.range.shift(self.header.tile_data.offset))?,
 					));
 				} else {
 					dir_blob = self
 						.data_reader
-						.read_range(&entry.range.shift(self.header.leaf_dirs.offset))
-						.await?;
+						.read_range(&entry.range.shift(self.header.leaf_dirs.offset))?;
 				}
 			} else {
 				return Ok(None);

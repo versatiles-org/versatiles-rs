@@ -43,15 +43,15 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	fn override_compression(&mut self, tile_compression: TileCompression);
 
 	/// get meta data, always uncompressed
-	async fn get_meta(&self) -> Result<Option<Blob>>;
+	fn get_meta(&self) -> Result<Option<Blob>>;
 
 	/// always compressed with tile_compression and formatted with get_tile_format
 	/// returns the tile in the coordinate system of the source
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>>;
+	fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
 	/// returns the tiles in the coordinate system of the source
-	async fn get_bbox_tile_stream<'a>(&'a mut self, bbox: &TileBBox) -> TilesStream {
+	fn get_bbox_tile_stream<'a>(&'a mut self, bbox: &TileBBox) -> TilesStream {
 		let mutex = Arc::new(Mutex::new(self));
 		let coords: Vec<TileCoord3> = bbox.iter_coords().collect();
 		stream::iter(coords)
@@ -62,7 +62,6 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 						.lock()
 						.await
 						.get_tile_data(&coord)
-						.await
 						.map(|blob_option| blob_option.map(|blob| (coord, blob)))
 						.unwrap_or(None)
 				}
@@ -81,7 +80,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		cat.add_key_value("name", self.get_name()).await;
 		cat.add_key_value("container", self.get_container_name()).await;
 
-		let meta_option = self.get_meta().await?;
+		let meta_option = self.get_meta()?;
 		if let Some(meta) = meta_option {
 			cat.add_key_value("meta", meta.as_str()).await;
 		} else {
@@ -186,13 +185,13 @@ mod tests {
 		fn override_compression(&mut self, tile_compression: TileCompression) {
 			self.parameters.tile_compression = tile_compression;
 		}
-		async fn get_meta(&self) -> Result<Option<Blob>> {
+		fn get_meta(&self) -> Result<Option<Blob>> {
 			Ok(Some(Blob::from("test metadata")))
 		}
 		fn get_container_name(&self) -> &str {
 			"test container name"
 		}
-		async fn get_tile_data(&mut self, _coord: &TileCoord3) -> Result<Option<Blob>> {
+		fn get_tile_data(&mut self, _coord: &TileCoord3) -> Result<Option<Blob>> {
 			Ok(Some(Blob::from("test tile data")))
 		}
 	}
@@ -216,14 +215,11 @@ mod tests {
 		assert_eq!(reader.get_container_name(), "test container name");
 
 		// Test getting metadata
-		assert_eq!(reader.get_meta().await?.unwrap().to_string(), "test metadata");
+		assert_eq!(reader.get_meta()?.unwrap().to_string(), "test metadata");
 
 		// Test getting tile data
 		let coord = TileCoord3::new(0, 0, 0)?;
-		assert_eq!(
-			reader.get_tile_data(&coord).await?.unwrap().to_string(),
-			"test tile data"
-		);
+		assert_eq!(reader.get_tile_data(&coord)?.unwrap().to_string(), "test tile data");
 
 		let mut writer = MockTilesWriter::new_mock();
 		writer.write_from_reader(&mut reader).await?;
@@ -235,7 +231,7 @@ mod tests {
 	async fn get_bbox_tile_iter() -> Result<()> {
 		let mut reader = TestReader::new_dummy();
 		let bbox = TileBBox::new(4, 0, 0, 10, 10)?; // Or replace it with actual bbox
-		let mut stream = reader.get_bbox_tile_stream(&bbox).await;
+		let mut stream = reader.get_bbox_tile_stream(&bbox);
 
 		while let Some((_coord, _blob)) = stream.next().await {}
 

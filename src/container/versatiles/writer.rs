@@ -80,7 +80,7 @@ impl TilesWriterTrait for VersaTilesWriter {
 impl VersaTilesWriter {
 	// Write metadata
 	async fn write_meta(&mut self, reader: &TilesReaderBox) -> Result<ByteRange> {
-		let meta: Blob = reader.get_meta().await?.unwrap_or_default();
+		let meta: Blob = reader.get_meta()?.unwrap_or_default();
 		let compressed = compress(meta, &reader.get_parameters().tile_compression)?;
 
 		self.writer.append(&compressed)
@@ -161,7 +161,7 @@ impl VersaTilesWriter {
 		let mut tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
 		// Get the tile stream
-		let tile_stream: TilesStream = reader.get_bbox_tile_stream(bbox).await;
+		let tile_stream: TilesStream = reader.get_bbox_tile_stream(bbox);
 
 		// Iterate through the blobs and process them
 		tile_stream

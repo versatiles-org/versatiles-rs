@@ -1,7 +1,6 @@
 use super::{DataReaderBox, DataReaderTrait};
 use crate::types::{Blob, ByteRange};
 use anyhow::{bail, Result};
-use async_trait::async_trait;
 use futures::executor::block_on;
 use lazy_static::lazy_static;
 use log::info;
@@ -42,60 +41,61 @@ impl DataReaderHttp {
 	}
 }
 
-#[async_trait]
 impl DataReaderTrait for DataReaderHttp {
-	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
-		let mut request = Request::new(Method::GET, self.url.clone());
-		let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
-		request.headers_mut().append("range", request_range.parse()?);
+	fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
+		block_on(async {
+			let mut request = Request::new(Method::GET, self.url.clone());
+			let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
+			request.headers_mut().append("range", request_range.parse()?);
 
-		let response = self.client.execute(request).await?;
+			let response = self.client.execute(request).await?;
 
-		if response.status() != StatusCode::PARTIAL_CONTENT {
-			let status_code = response.status();
-			info!("response: {}", str::from_utf8(&response.bytes().await?)?);
-			bail!(
+			if response.status() != StatusCode::PARTIAL_CONTENT {
+				let status_code = response.status();
+				info!("response: {}", str::from_utf8(&response.bytes().await?)?);
+				bail!(
 				"as a response to a range request it is expected to get the status code 206. instead we got {status_code}"
 			);
-		}
+			}
 
-		let content_range: &str = match response.headers().get("content-range") {
-			Some(header_value) => header_value.to_str()?,
-			None => bail!(
-				"content-range is not set for range request {range:?} to url {}",
-				self.url
-			),
-		};
+			let content_range: &str = match response.headers().get("content-range") {
+				Some(header_value) => header_value.to_str()?,
+				None => bail!(
+					"content-range is not set for range request {range:?} to url {}",
+					self.url
+				),
+			};
 
-		lazy_static! {
-			static ref RE_RANGE: Regex = RegexBuilder::new(r"^bytes (\d+)-(\d+)/\d+$")
-				.case_insensitive(true)
-				.build()
-				.unwrap();
-		}
+			lazy_static! {
+				static ref RE_RANGE: Regex = RegexBuilder::new(r"^bytes (\d+)-(\d+)/\d+$")
+					.case_insensitive(true)
+					.build()
+					.unwrap();
+			}
 
-		let content_range_start: u64;
-		let content_range_end: u64;
-		if let Some(captures) = RE_RANGE.captures(content_range) {
-			content_range_start = captures.get(1).unwrap().as_str().parse::<u64>()?;
-			content_range_end = captures.get(2).unwrap().as_str().parse::<u64>()?;
-		} else {
-			bail!("format of content-range response is invalid: {content_range}");
-		}
+			let content_range_start: u64;
+			let content_range_end: u64;
+			if let Some(captures) = RE_RANGE.captures(content_range) {
+				content_range_start = captures.get(1).unwrap().as_str().parse::<u64>()?;
+				content_range_end = captures.get(2).unwrap().as_str().parse::<u64>()?;
+			} else {
+				bail!("format of content-range response is invalid: {content_range}");
+			}
 
-		if content_range_start != range.offset {
-			bail!("content-range-start {content_range_start} is not start of range {range:?}");
-		}
+			if content_range_start != range.offset {
+				bail!("content-range-start {content_range_start} is not start of range {range:?}");
+			}
 
-		if content_range_end != range.offset + range.length - 1 {
-			bail!("content-range-end {content_range_end} is not end of range {range:?}");
-		}
+			if content_range_end != range.offset + range.length - 1 {
+				bail!("content-range-end {content_range_end} is not end of range {range:?}");
+			}
 
-		let bytes = response.bytes().await?;
+			let bytes = response.bytes().await?;
 
-		self.pos = range.offset + bytes.len() as u64;
+			self.pos = range.offset + bytes.len() as u64;
 
-		Ok(Blob::from(bytes))
+			Ok(Blob::from(bytes))
+		})
 	}
 	fn get_name(&self) -> &str {
 		&self.name
@@ -128,7 +128,7 @@ impl Read for DataReaderHttp {
 
 			let len = (buf.len() as u64).min(max_length - self.pos.min(max_length));
 
-			let blob = self.read_range(&ByteRange::new(self.pos, len)).await.unwrap();
+			let blob = self.read_range(&ByteRange::new(self.pos, len)).unwrap();
 			buf.copy_from_slice(blob.as_slice());
 
 			Ok(len as usize)
@@ -165,7 +165,7 @@ mod tests {
 		let range = ByteRange { offset, length };
 
 		// Read the specified range from the URL
-		let blob = data_reader_http.read_range(&range).await?;
+		let blob = data_reader_http.read_range(&range)?;
 
 		// Convert the resulting Blob to a string
 		let result_text = str::from_utf8(blob.as_slice())?;

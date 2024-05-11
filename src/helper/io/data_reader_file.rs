@@ -1,7 +1,6 @@
 use super::{DataReaderBox, DataReaderTrait};
 use crate::types::{Blob, ByteRange};
 use anyhow::{ensure, Result};
-use async_trait::async_trait;
 use std::{
 	fs::File,
 	io::{BufReader, Read, Seek, SeekFrom},
@@ -29,9 +28,8 @@ impl DataReaderFile {
 	}
 }
 
-#[async_trait]
 impl DataReaderTrait for DataReaderFile {
-	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
+	fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
 		let mut buffer = vec![0; range.length as usize];
 
 		self.reader.seek(SeekFrom::Start(range.offset))?;
@@ -97,7 +95,7 @@ mod tests {
 		let range = ByteRange { offset: 4, length: 6 };
 
 		// Read the specified range from the file
-		let blob = data_reader_file.read_range(&range).await?;
+		let blob = data_reader_file.read_range(&range)?;
 
 		// Check if the read range matches the expected text
 		assert_eq!(blob.as_str(), "o, wor");

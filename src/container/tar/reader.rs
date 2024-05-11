@@ -6,7 +6,6 @@ use crate::{
 	},
 };
 use anyhow::{bail, Result};
-use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path};
 use tar::{Archive, EntryType};
 
@@ -19,11 +18,11 @@ pub struct TarTilesReader {
 
 impl TarTilesReader {
 	// Create a new TilesReader from a given filename
-	pub async fn open_path(path: &Path) -> Result<TilesReaderBox> {
-		Self::open_reader(DataReaderFile::from_path(path)?).await
+	pub fn open_path(path: &Path) -> Result<TilesReaderBox> {
+		Self::open_reader(DataReaderFile::from_path(path)?)
 	}
 
-	pub async fn open_reader(mut data_reader: DataReaderBox) -> Result<TilesReaderBox>
+	pub fn open_reader(mut data_reader: DataReaderBox) -> Result<TilesReaderBox>
 	where
 		Self: Sized,
 	{
@@ -119,7 +118,6 @@ impl TarTilesReader {
 	}
 }
 
-#[async_trait]
 impl TilesReaderTrait for TarTilesReader {
 	fn get_container_name(&self) -> &str {
 		"tar"
@@ -130,10 +128,10 @@ impl TilesReaderTrait for TarTilesReader {
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
-	async fn get_meta(&self) -> Result<Option<Blob>> {
+	fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(self.meta.clone())
 	}
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data_original {:?}", coord);
 
 		let range = self.tile_map.get(coord);
@@ -142,7 +140,7 @@ impl TilesReaderTrait for TarTilesReader {
 			return Ok(None);
 		}
 
-		let blob = self.data_reader.read_range(range.unwrap()).await?;
+		let blob = self.data_reader.read_range(range.unwrap())?;
 
 		Ok(Some(blob))
 	}
@@ -175,17 +173,17 @@ pub mod tests {
 		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 3, "tar").await?;
 
 		// get tar reader
-		let mut reader = TarTilesReader::open_path(&temp_file).await?;
+		let mut reader = TarTilesReader::open_path(&temp_file)?;
 
 		assert_eq!(format!("{:?}", reader), "TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "tar");
 		assert!(reader.get_name().ends_with(temp_file.to_str().unwrap()));
-		assert_eq!(reader.get_meta().await?, Some(Blob::from(b"dummy meta data".to_vec())));
+		assert_eq!(reader.get_meta()?, Some(Blob::from(b"dummy meta data".to_vec())));
 		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: PBF }");
 		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
-		let tile = reader.get_tile_data(&TileCoord3::new(6, 2, 3)?).await?.unwrap();
+		let tile = reader.get_tile_data(&TileCoord3::new(6, 2, 3)?)?.unwrap();
 		assert_eq!(decompress_gzip(tile)?.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())
@@ -197,7 +195,7 @@ pub mod tests {
 			let temp_file = make_test_file(TileFormat::PBF, compression, 2, "tar").await?;
 
 			// get tar reader
-			let mut reader = TarTilesReader::open_path(&temp_file).await?;
+			let mut reader = TarTilesReader::open_path(&temp_file)?;
 			format!("{:?}", reader);
 
 			let mut writer = MockTilesWriter::new_mock();
@@ -218,7 +216,7 @@ pub mod tests {
 
 		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "tar").await?;
 
-		let mut reader = TarTilesReader::open_path(&temp_file).await?;
+		let mut reader = TarTilesReader::open_path(&temp_file)?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(&printer.get_category("container").await).await?;

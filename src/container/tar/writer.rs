@@ -46,7 +46,7 @@ impl TilesWriterTrait for TarTilesWriter {
 		let extension_format = format_to_extension(tile_format);
 		let extension_compression = compression_to_extension(tile_compression);
 
-		let meta_data_option = reader.get_meta().await?;
+		let meta_data_option = reader.get_meta()?;
 
 		if let Some(meta_data) = meta_data_option {
 			let meta_data = compress(meta_data, tile_compression)?;
@@ -66,7 +66,7 @@ impl TilesWriterTrait for TarTilesWriter {
 		let mutex_builder = &Mutex::new(&mut self.builder);
 
 		for bbox in bbox_pyramid.iter_levels() {
-			let mut stream = reader.get_bbox_tile_stream(bbox).await;
+			let mut stream = reader.get_bbox_tile_stream(bbox);
 
 			while let Some(entry) = stream.next().await {
 				let (coord, blob) = entry;

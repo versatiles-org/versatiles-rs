@@ -6,6 +6,9 @@ pub use compression::*;
 mod io;
 pub use io::*;
 
+mod limited_cache;
+pub use limited_cache::*;
+
 mod tile_converter;
 pub use tile_converter::*;
 

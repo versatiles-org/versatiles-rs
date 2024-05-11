@@ -50,9 +50,9 @@ impl FileHeader {
 		})
 	}
 
-	pub async fn from_reader(reader: &mut Box<dyn DataReaderTrait>) -> Result<FileHeader> {
+	pub fn from_reader(reader: &mut Box<dyn DataReaderTrait>) -> Result<FileHeader> {
 		let range = ByteRange::new(0, HEADER_LENGTH as u64);
-		let blob = reader.read_range(&range).await?;
+		let blob = reader.read_range(&range)?;
 		FileHeader::from_blob(blob)
 	}
 

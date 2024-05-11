@@ -16,12 +16,12 @@ impl TilesWriterTrait for MockTilesWriter {
 	async fn write_from_reader(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
 		let _temp = reader.get_container_name();
 		let _temp = reader.get_name();
-		let _temp = reader.get_meta().await?;
+		let _temp = reader.get_meta()?;
 
 		let bbox_pyramid = reader.get_parameters().bbox_pyramid.clone();
 
 		for bbox in bbox_pyramid.iter_levels() {
-			let mut stream = reader.get_bbox_tile_stream(bbox).await;
+			let mut stream = reader.get_bbox_tile_stream(bbox);
 			while let Some((_coord, _blob)) = stream.next().await {}
 		}
 

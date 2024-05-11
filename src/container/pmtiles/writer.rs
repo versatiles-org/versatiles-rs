@@ -50,7 +50,6 @@ impl TilesWriterTrait for PMTilesWriter {
 		for bbox in blocks.iter() {
 			let mut tiles: Vec<(u64, Blob)> = reader
 				.get_bbox_tile_stream(bbox)
-				.await
 				.map(|t| (t.0.get_tile_id(), t.1))
 				.collect()
 				.await;
@@ -75,7 +74,7 @@ impl TilesWriterTrait for PMTilesWriter {
 
 		//setZoomCenterDefaults(&header, resolve.Entries)
 
-		let mut metadata = reader.get_meta().await?.unwrap_or(Blob::new_empty());
+		let mut metadata = reader.get_meta()?.unwrap_or(Blob::new_empty());
 		metadata = compress_gzip(metadata)?;
 
 		header.metadata = file.append(&metadata)?;
