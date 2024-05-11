@@ -47,7 +47,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 	/// always compressed with tile_compression and formatted with get_tile_format
 	/// returns the tile in the coordinate system of the source
-	fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>>;
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>>;
 
 	/// always compressed with get_tile_compression and formatted with get_tile_format
 	/// returns the tiles in the coordinate system of the source
@@ -62,6 +62,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 						.lock()
 						.await
 						.get_tile_data(&coord)
+						.await
 						.map(|blob_option| blob_option.map(|blob| (coord, blob)))
 						.unwrap_or(None)
 				}
@@ -191,7 +192,7 @@ mod tests {
 		fn get_container_name(&self) -> &str {
 			"test container name"
 		}
-		fn get_tile_data(&mut self, _coord: &TileCoord3) -> Result<Option<Blob>> {
+		async fn get_tile_data(&mut self, _coord: &TileCoord3) -> Result<Option<Blob>> {
 			Ok(Some(Blob::from("test tile data")))
 		}
 	}
@@ -219,7 +220,10 @@ mod tests {
 
 		// Test getting tile data
 		let coord = TileCoord3::new(0, 0, 0)?;
-		assert_eq!(reader.get_tile_data(&coord)?.unwrap().to_string(), "test tile data");
+		assert_eq!(
+			reader.get_tile_data(&coord).await?.unwrap().to_string(),
+			"test tile data"
+		);
 
 		let mut writer = MockTilesWriter::new_mock();
 		writer.write_from_reader(&mut reader).await?;

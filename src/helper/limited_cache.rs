@@ -7,6 +7,7 @@ pub struct LimitedCache<K, V> {
 
 impl<K, V> LimitedCache<K, V>
 where
+	V: Clone,
 	K: Clone + Eq + Hash + PartialEq,
 {
 	pub fn with_maximum_size(maximum_size: usize) -> Self {
@@ -15,34 +16,20 @@ where
 			max_length: maximum_size.div(size_of::<K>() + size_of::<V>()),
 		}
 	}
-	pub fn cache<F>(&mut self, key: K, mut callback: F) -> &V
-	where
-		F: FnMut() -> V,
-	{
-		if self.cache.len() >= self.max_length {
-			self.cleanup();
-		}
-
-		let entry = self.cache.entry(key).or_insert_with(|| (callback(), 0));
-		entry.1 += 1;
-		&entry.0
-	}
-	#[allow(dead_code)]
-	fn get(&mut self, key: &K) -> Option<&V> {
-		if let Some(entry) = self.cache.get_mut(key) {
-			entry.1 += 1;
-			Some(&entry.0)
+	pub fn get(&mut self, key: &K) -> Option<V> {
+		if let Some(value) = self.cache.get_mut(key) {
+			value.1 += 1;
+			Some(value.0.clone())
 		} else {
 			None
 		}
 	}
-	#[allow(dead_code)]
-	fn insert(&mut self, key: K, value: V) -> Option<V> {
+	pub fn add(&mut self, key: K, value: V) -> V {
 		if self.cache.len() >= self.max_length {
 			self.cleanup();
 		}
 
-		self.cache.insert(key, (value, 0)).map(|e| e.0)
+		self.cache.entry(key).or_insert((value, 0)).0.clone()
 	}
 	fn cleanup(&mut self) {
 		let mut sizes: Vec<usize> = self.cache.values().map(|e| e.1).collect();

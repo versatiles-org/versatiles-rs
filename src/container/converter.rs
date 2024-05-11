@@ -125,7 +125,7 @@ impl TilesReaderTrait for TilesConvertReader {
 		self.reader.get_meta()
 	}
 
-	fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		let coord = &mut coord.clone();
 		if self.converter_parameters.flip_y {
 			coord.flip_y();
@@ -133,7 +133,7 @@ impl TilesReaderTrait for TilesConvertReader {
 		if self.converter_parameters.swap_xy {
 			coord.swap_xy();
 		}
-		let blob = self.reader.get_tile_data(coord)?;
+		let blob = self.reader.get_tile_data(coord).await?;
 
 		if blob.is_none() {
 			return Ok(None);
@@ -217,7 +217,7 @@ mod tests {
 			let cp = get_converter_parameters(TileFormat::PBF, c_out, false);
 			let filename = temp_file.to_str().unwrap();
 			convert_tiles_container(reader_in, cp, filename).await?;
-			let reader_out = VersaTilesReader::open_path(&temp_file)?;
+			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.get_parameters();
 			assert_eq!(parameters_out.tile_format, TileFormat::PBF);
 			assert_eq!(parameters_out.tile_compression, c_out);
@@ -247,7 +247,7 @@ mod tests {
 			let cp = get_converter_parameters(f_out, TileCompression::Gzip, false);
 			let filename = temp_file.to_str().unwrap();
 			convert_tiles_container(reader_in, cp, filename).await?;
-			let reader_out = VersaTilesReader::open_path(&temp_file)?;
+			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.get_parameters();
 			assert_eq!(parameters_out.tile_format, f_out);
 			assert_eq!(parameters_out.tile_compression, TileCompression::Gzip);
@@ -295,14 +295,14 @@ mod tests {
 			let cp = TilesConverterParameters::new(Some(JSON), Some(None), Some(pyramid_convert), false, flip_y, swap_xy);
 			convert_tiles_container(reader, cp, filename).await?;
 
-			let mut reader_out = VersaTilesReader::open_path(&temp_file)?;
+			let mut reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.get_parameters();
 			assert_eq!(parameters_out.bbox_pyramid, pyramid_out);
 
 			let bbox = pyramid_out.get_level_bbox(3);
 			let mut tiles: Vec<String> = Vec::new();
 			for coord in bbox.iter_coords() {
-				let mut text = reader_out.get_tile_data(&coord)?.unwrap().to_string();
+				let mut text = reader_out.get_tile_data(&coord).await?.unwrap().to_string();
 				text = text.replace("{x:", "").replace(",y:", "").replace(",z:3}", "");
 				tiles.push(text);
 			}

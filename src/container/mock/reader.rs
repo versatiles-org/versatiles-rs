@@ -4,6 +4,7 @@ use crate::{
 	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::Result;
+use axum::async_trait;
 
 #[derive(Debug)]
 pub enum MockTilesReaderProfile {
@@ -43,6 +44,7 @@ impl MockTilesReader {
 	}
 }
 
+#[async_trait]
 impl TilesReaderTrait for MockTilesReader {
 	fn get_container_name(&self) -> &str {
 		"dummy_container"
@@ -59,7 +61,7 @@ impl TilesReaderTrait for MockTilesReader {
 	fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(Some(Blob::from("dummy meta data")))
 	}
-	fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		if !coord.is_valid() {
 			return Ok(None);
 		}
@@ -93,8 +95,8 @@ mod tests {
 	use crate::{container::mock::MockTilesWriter, helper::decompress};
 	use anyhow::Result;
 
-	#[test]
-	fn reader() -> Result<()> {
+	#[tokio::test]
+	async fn reader() -> Result<()> {
 		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG);
 		assert_eq!(reader.get_container_name(), "dummy_container");
 		assert_eq!(reader.get_name(), "dummy_name");
@@ -106,24 +108,28 @@ mod tests {
 			&TilesReaderParameters::new(TileFormat::PNG, TileCompression::None, bbox_pyramid)
 		);
 		assert_eq!(reader.get_meta()?, Some(Blob::from("dummy meta data")));
-		let blob = reader.get_tile_data(&TileCoord3::new(0, 0, 0)?)?.unwrap().as_vec();
+		let blob = reader
+			.get_tile_data(&TileCoord3::new(0, 0, 0)?)
+			.await?
+			.unwrap()
+			.as_vec();
 		assert_eq!(&blob[0..4], b"\x89PNG");
 		Ok(())
 	}
 
-	#[test]
-	fn get_tile_data() {
-		let test = move |profile, blob| {
+	#[tokio::test]
+	async fn get_tile_data() {
+		let test = |profile, blob| async move {
 			let coord = TileCoord3::new(23, 45, 6).unwrap();
 			let mut reader = MockTilesReader::new_mock_profile(profile);
-			let tile_compressed = reader.get_tile_data(&coord).unwrap().unwrap();
+			let tile_compressed = reader.get_tile_data(&coord).await.unwrap().unwrap();
 			let tile_uncompressed = decompress(tile_compressed, &reader.get_parameters().tile_compression).unwrap();
 			assert_eq!(tile_uncompressed, blob);
 		};
 
-		test(MockTilesReaderProfile::PNG, Blob::from(MOCK_BYTES_PNG.to_vec()));
-		test(MockTilesReaderProfile::PBF, Blob::from(MOCK_BYTES_PBF.to_vec()));
-		test(MockTilesReaderProfile::JSON, Blob::from("{x:23,y:45,z:6}"));
+		test(MockTilesReaderProfile::PNG, Blob::from(MOCK_BYTES_PNG.to_vec())).await;
+		test(MockTilesReaderProfile::PBF, Blob::from(MOCK_BYTES_PBF.to_vec())).await;
+		test(MockTilesReaderProfile::JSON, Blob::from("{x:23,y:45,z:6}")).await;
 	}
 
 	#[tokio::test]

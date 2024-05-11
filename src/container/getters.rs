@@ -18,8 +18,8 @@ pub async fn get_reader(filename: &str) -> Result<TilesReaderBox> {
 
 	if let Some(reader) = parse_as_url(filename) {
 		return match extension {
-			"pmtiles" => PMTilesReader::open_reader(reader),
-			"versatiles" => VersaTilesReader::open_reader(reader),
+			"pmtiles" => PMTilesReader::open_reader(reader).await,
+			"versatiles" => VersaTilesReader::open_reader(reader).await,
 			_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
 		};
 	}
@@ -36,9 +36,9 @@ pub async fn get_reader(filename: &str) -> Result<TilesReaderBox> {
 
 	match extension {
 		"mbtiles" => MBTilesReader::open_path(&path),
-		"pmtiles" => PMTilesReader::open_path(&path),
+		"pmtiles" => PMTilesReader::open_path(&path).await,
 		"tar" => TarTilesReader::open_path(&path),
-		"versatiles" => VersaTilesReader::open_path(&path),
+		"versatiles" => VersaTilesReader::open_path(&path).await,
 		_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
 	}
 }

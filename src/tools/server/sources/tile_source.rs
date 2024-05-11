@@ -90,7 +90,7 @@ impl TileSource {
 
 			// Get tile data
 			let mut reader = self.reader.lock().await;
-			let tile = reader.get_tile_data(&coord);
+			let tile = reader.get_tile_data(&coord).await;
 			drop(reader);
 
 			// If tile data is not found, return a not found response

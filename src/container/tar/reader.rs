@@ -1,17 +1,25 @@
 use crate::{
 	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
-	helper::{decompress, DataReaderBox, DataReaderFile},
+	helper::decompress,
 	types::{
 		extract_compression, extract_format, Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat,
 	},
 };
 use anyhow::{bail, Result};
-use std::{collections::HashMap, fmt::Debug, io::Read, path::Path};
+use axum::async_trait;
+use std::{
+	collections::HashMap,
+	fmt::Debug,
+	fs::File,
+	io::{BufReader, Read, Seek, SeekFrom},
+	path::Path,
+};
 use tar::{Archive, EntryType};
 
 pub struct TarTilesReader {
 	meta: Option<Blob>,
-	data_reader: DataReaderBox,
+	name: String,
+	reader: BufReader<File>,
 	tile_map: HashMap<TileCoord3, ByteRange>,
 	parameters: TilesReaderParameters,
 }
@@ -19,14 +27,8 @@ pub struct TarTilesReader {
 impl TarTilesReader {
 	// Create a new TilesReader from a given filename
 	pub fn open_path(path: &Path) -> Result<TilesReaderBox> {
-		Self::open_reader(DataReaderFile::from_path(path)?)
-	}
-
-	pub fn open_reader(mut data_reader: DataReaderBox) -> Result<TilesReaderBox>
-	where
-		Self: Sized,
-	{
-		let mut archive = Archive::new(&mut data_reader);
+		let mut reader = BufReader::new(File::open(path)?);
+		let mut archive = Archive::new(&mut reader);
 
 		let mut meta: Option<Blob> = None;
 		let mut tile_map = HashMap::new();
@@ -111,13 +113,15 @@ impl TarTilesReader {
 
 		Ok(Box::new(TarTilesReader {
 			meta,
-			data_reader,
-			tile_map,
+			name: path.to_str().unwrap().to_string(),
 			parameters: TilesReaderParameters::new(tile_format.unwrap(), tile_compression.unwrap(), bbox_pyramid),
+			reader,
+			tile_map,
 		}))
 	}
 }
 
+#[async_trait]
 impl TilesReaderTrait for TarTilesReader {
 	fn get_container_name(&self) -> &str {
 		"tar"
@@ -131,21 +135,24 @@ impl TilesReaderTrait for TarTilesReader {
 	fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(self.meta.clone())
 	}
-	fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data_original {:?}", coord);
 
 		let range = self.tile_map.get(coord);
 
-		if range.is_none() {
-			return Ok(None);
+		if let Some(range) = range {
+			let mut buffer = vec![0; range.length as usize];
+
+			self.reader.seek(SeekFrom::Start(range.offset))?;
+			self.reader.read_exact(&mut buffer)?;
+
+			Ok(Some(Blob::from(buffer)))
+		} else {
+			Ok(None)
 		}
-
-		let blob = self.data_reader.read_range(range.unwrap())?;
-
-		Ok(Some(blob))
 	}
 	fn get_name(&self) -> &str {
-		self.data_reader.get_name()
+		&self.name
 	}
 }
 
@@ -183,7 +190,7 @@ pub mod tests {
 		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
-		let tile = reader.get_tile_data(&TileCoord3::new(6, 2, 3)?)?.unwrap();
+		let tile = reader.get_tile_data(&TileCoord3::new(6, 2, 3)?).await?.unwrap();
 		assert_eq!(decompress_gzip(tile)?.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())

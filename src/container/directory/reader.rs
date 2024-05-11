@@ -4,6 +4,7 @@ use crate::{
 	types::{extract_compression, extract_format, Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::{bail, ensure, Result};
+use axum::async_trait;
 use std::{
 	collections::HashMap,
 	fmt::Debug,
@@ -128,6 +129,7 @@ impl DirectoryTilesReader {
 	}
 }
 
+#[async_trait]
 impl TilesReaderTrait for DirectoryTilesReader {
 	fn get_container_name(&self) -> &str {
 		"directory"
@@ -141,7 +143,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 	fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(self.meta.clone())
 	}
-	fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data_original {:?}", coord);
 
 		if let Some(path) = self.tile_map.get(coord) {
@@ -169,8 +171,8 @@ mod tests {
 	use assert_fs::TempDir;
 	use std::fs::{self};
 
-	#[test]
-	fn tile_reader_new() -> Result<()> {
+	#[tokio::test]
+	async fn tile_reader_new() -> Result<()> {
 		let dir = TempDir::new()?;
 
 		fs::create_dir_all(dir.path().join("1/2"))?;
@@ -183,13 +185,13 @@ mod tests {
 		assert_eq!(reader.get_meta()?.unwrap().as_str(), "test meta data");
 
 		let coord = TileCoord3::new(2, 3, 1)?;
-		let tile_data = reader.get_tile_data(&coord);
+		let tile_data = reader.get_tile_data(&coord).await;
 		assert!(tile_data.is_ok());
 		assert_eq!(tile_data?.unwrap(), Blob::from("test tile data"));
 
 		// Test for non-existent tile
 		let coord = TileCoord3::new(2, 2, 1)?; // Assuming these coordinates do not exist
-		assert!(reader.get_tile_data(&coord).unwrap().is_none());
+		assert!(reader.get_tile_data(&coord).await?.is_none());
 
 		return Ok(());
 	}

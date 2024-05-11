@@ -1,11 +1,13 @@
 use crate::types::{Blob, ByteRange};
 use anyhow::Result;
-use std::{fmt::Debug, io::Read, path::Path};
+use axum::async_trait;
+use std::{fmt::Debug, path::Path};
 
 pub type DataReaderBox = Box<dyn DataReaderTrait>;
 
-pub trait DataReaderTrait: Debug + Read + Send + Sync {
-	fn read_range(&mut self, range: &ByteRange) -> Result<Blob>;
+#[async_trait]
+pub trait DataReaderTrait: Debug + Send + Sync {
+	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob>;
 	fn get_name(&self) -> &str;
 }
 

@@ -1,19 +1,16 @@
 use super::{DataReaderBox, DataReaderTrait};
 use crate::types::{Blob, ByteRange};
 use anyhow::{bail, Result};
+use axum::async_trait;
 use lazy_static::lazy_static;
 use log::info;
 use regex::{Regex, RegexBuilder};
-use reqwest::{
-	blocking::{Client, Request},
-	Method, StatusCode, Url,
-};
-use std::{io::Read, str, time::Duration};
+use reqwest::{Client, Method, Request, StatusCode, Url};
+use std::{str, time::Duration};
 
 #[derive(Debug)]
 pub struct DataReaderHttp {
 	client: Client,
-	max_length: Option<u64>,
 	name: String,
 	pos: u64,
 	url: Url,
@@ -35,7 +32,6 @@ impl DataReaderHttp {
 
 		Ok(Box::new(Self {
 			client,
-			max_length: None,
 			name: url.to_string(),
 			pos: 0,
 			url,
@@ -43,17 +39,18 @@ impl DataReaderHttp {
 	}
 }
 
+#[async_trait]
 impl DataReaderTrait for DataReaderHttp {
-	fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
+	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
 		let mut request = Request::new(Method::GET, self.url.clone());
 		let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
 		request.headers_mut().append("range", request_range.parse()?);
 
-		let response = self.client.execute(request)?;
+		let response = self.client.execute(request).await?;
 
 		if response.status() != StatusCode::PARTIAL_CONTENT {
 			let status_code = response.status();
-			info!("response: {}", str::from_utf8(&response.bytes()?)?);
+			info!("response: {}", str::from_utf8(&response.bytes().await?)?);
 			bail!("expected 206 as a response to a range request. instead we got {status_code}");
 		}
 
@@ -89,7 +86,7 @@ impl DataReaderTrait for DataReaderHttp {
 			bail!("content-range-end {content_range_end} is not end of range {range:?}");
 		}
 
-		let bytes = response.bytes()?;
+		let bytes = response.bytes().await?;
 
 		self.pos = range.offset + bytes.len() as u64;
 
@@ -97,38 +94,6 @@ impl DataReaderTrait for DataReaderHttp {
 	}
 	fn get_name(&self) -> &str {
 		&self.name
-	}
-}
-
-impl Read for DataReaderHttp {
-	fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-		let max_length = if self.max_length.is_some() {
-			self.max_length.unwrap()
-		} else {
-			let request = Request::new(Method::HEAD, self.url.clone());
-			let response = self.client.execute(request).unwrap();
-
-			println!("{:?}", response.status());
-			let length = response
-				.headers()
-				.get("content-length")
-				.unwrap()
-				.to_str()
-				.unwrap()
-				.parse::<u64>()
-				.unwrap();
-
-			self.max_length = Some(length);
-
-			length
-		};
-
-		let len = (buf.len() as u64).min(max_length - self.pos.min(max_length));
-
-		let blob = self.read_range(&ByteRange::new(self.pos, len)).unwrap();
-		buf.copy_from_slice(blob.as_slice());
-
-		Ok(len as usize)
 	}
 }
 
@@ -153,7 +118,7 @@ mod tests {
 		let data_reader_http = DataReaderHttp::from_url(invalid_url);
 		assert!(data_reader_http.is_err());
 	}
-	fn read_range_helper(url: &str, offset: u64, length: u64, expected: &str) -> Result<()> {
+	async fn read_range_helper(url: &str, offset: u64, length: u64, expected: &str) -> Result<()> {
 		let url = Url::parse(url).unwrap();
 		let mut data_reader_http = DataReaderHttp::from_url(url)?;
 
@@ -161,7 +126,7 @@ mod tests {
 		let range = ByteRange { offset, length };
 
 		// Read the specified range from the URL
-		let blob = data_reader_http.read_range(&range)?;
+		let blob = data_reader_http.read_range(&range).await?;
 
 		// Convert the resulting Blob to a string
 		let result_text = str::from_utf8(blob.as_slice())?;
@@ -172,31 +137,35 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn read_range_git() {
+	#[tokio::test]
+	async fn read_range_git() {
 		read_range_helper(
 			"https://raw.githubusercontent.com/versatiles-org/versatiles-rs/main/testdata/berlin.mbtiles",
 			7,
 			8,
 			"format 3",
 		)
+		.await
 		.unwrap()
 	}
 
-	#[test]
-	fn read_range_googleapis() {
+	#[tokio::test]
+	async fn read_range_googleapis() {
 		read_range_helper(
 			"https://storage.googleapis.com/versatiles/download/planet/planet-20230529.versatiles",
 			3,
 			12,
 			"satiles_v02 ",
 		)
+		.await
 		.unwrap();
 	}
 
-	#[test]
-	fn read_range_google() {
-		read_range_helper("https://google.com/", 100, 110, "plingplong").unwrap_err();
+	#[tokio::test]
+	async fn read_range_google() {
+		read_range_helper("https://google.com/", 100, 110, "plingplong")
+			.await
+			.unwrap_err();
 	}
 
 	// Test the 'get_name' method

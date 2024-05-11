@@ -87,7 +87,6 @@ r2d2_sqlite = { version = "0.24.0", default-features = false, optional = true, f
 ] }
 regex = { version = "1.10.4", default-features = false, optional = true, features = ["unicode"] }
 reqwest = { version = "0.12.4", default-features = false, optional = true, features = [
-	"blocking",
 	"rustls-tls",
 ] }
 tar = { version = "0.4.40", default-features = false, optional = true }

@@ -190,7 +190,7 @@ impl TilesReaderTrait for MBTilesReader {
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
-	fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		trace!("read tile from coord {coord:?}");
 
 		trace!("corrected coord {coord:?}");
@@ -297,7 +297,7 @@ pub mod tests {
 		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
-		let tile = reader.get_tile_data(&TileCoord3::new(8803, 5376, 14)?)?.unwrap();
+		let tile = reader.get_tile_data(&TileCoord3::new(8803, 5376, 14)?).await?.unwrap();
 		assert_eq!(tile.len(), 172969);
 		assert_eq!(tile.get_range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
 		assert_eq!(

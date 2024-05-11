@@ -20,24 +20,31 @@ pub struct VersaTilesReader {
 	reader: Box<dyn DataReaderTrait>,
 	parameters: TilesReaderParameters,
 	block_index: BlockIndex,
-	tile_index_cache: LimitedCache<TileCoord3, TileIndex>,
+	tile_index_cache: LimitedCache<TileCoord3, Arc<TileIndex>>,
 }
 
 // Implement methods for the TilesReader struct
 impl VersaTilesReader {
 	// Create a new TilesReader from a given filename
-	pub fn open_path(path: &Path) -> Result<TilesReaderBox> {
-		Self::open_reader(DataReaderFile::from_path(path)?)
+	pub async fn open_path(path: &Path) -> Result<TilesReaderBox> {
+		Self::open_reader(DataReaderFile::from_path(path)?).await
 	}
 
 	// Create a new TilesReader from a given data reader
-	pub fn open_reader(mut reader: Box<dyn DataReaderTrait>) -> Result<TilesReaderBox> {
-		let header = FileHeader::from_reader(&mut reader).context("reading the header")?;
+	pub async fn open_reader(mut reader: Box<dyn DataReaderTrait>) -> Result<TilesReaderBox> {
+		let header = FileHeader::from_reader(&mut reader)
+			.await
+			.context("reading the header")?;
 
 		let meta = if header.meta_range.length > 0 {
 			Some(
 				TileConverter::new_decompressor(&header.compression)
-					.process_blob(reader.read_range(&header.meta_range).context("reading the meta data")?)
+					.process_blob(
+						reader
+							.read_range(&header.meta_range)
+							.await
+							.context("reading the meta data")?,
+					)
 					.context("decompressing the meta data")?,
 			)
 		} else {
@@ -47,6 +54,7 @@ impl VersaTilesReader {
 		let block_index = BlockIndex::from_brotli_blob(
 			reader
 				.read_range(&header.blocks_range)
+				.await
 				.context("reading the block index")?,
 		)
 		.context("decompressing the block index")?;
@@ -63,17 +71,25 @@ impl VersaTilesReader {
 		}))
 	}
 
-	fn get_block_tile_index(&mut self, block: &BlockDefinition) -> &TileIndex {
+	async fn get_block_tile_index(&mut self, block: &BlockDefinition) -> Result<Arc<TileIndex>> {
 		let block_coord = block.get_coord3();
 
-		return self.tile_index_cache.cache(*block_coord, || {
-			let blob = self.reader.read_range(block.get_index_range()).unwrap();
-			let mut tile_index = TileIndex::from_brotli_blob(blob).unwrap();
-			tile_index.add_offset(block.get_tiles_range().offset);
+		{
+			let a = &mut self.tile_index_cache;
+			if let Some(entry) = a.get(block_coord) {
+				return Ok(entry);
+			}
+		}
 
-			assert_eq!(tile_index.len(), block.count_tiles() as usize);
-			tile_index
-		});
+		let b = &mut self.tile_index_cache;
+
+		let blob = self.reader.read_range(block.get_index_range()).await?;
+		let mut tile_index = TileIndex::from_brotli_blob(blob)?;
+		tile_index.add_offset(block.get_tiles_range().offset);
+
+		assert_eq!(tile_index.len(), block.count_tiles() as usize);
+
+		Ok(b.add(*block_coord, Arc::new(tile_index)))
 	}
 }
 
@@ -104,7 +120,7 @@ impl TilesReaderTrait for VersaTilesReader {
 	}
 
 	// Get tile data for a given coordinate
-	fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		// Calculate block coordinate
 		let block_coord = TileCoord3::new(coord.get_x().shr(8), coord.get_y().shr(8), coord.get_z())?;
 
@@ -132,7 +148,7 @@ impl TilesReaderTrait for VersaTilesReader {
 		let tile_id = bbox.get_tile_index(&tile_coord);
 
 		// Retrieve the tile index from cache or read from the reader
-		let tile_index: &TileIndex = self.get_block_tile_index(&block);
+		let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await?;
 		let tile_range: ByteRange = *tile_index.get(tile_id);
 
 		//  None if the tile range has zero length
@@ -141,7 +157,7 @@ impl TilesReaderTrait for VersaTilesReader {
 		}
 
 		// Read the tile data from the reader
-		Ok(Some(self.reader.read_range(&tile_range)?))
+		Ok(Some(self.reader.read_range(&tile_range).await?))
 	}
 
 	async fn get_bbox_tile_stream(&mut self, bbox: &TileBBox) -> TilesStream {
@@ -209,7 +225,7 @@ impl TilesReaderTrait for VersaTilesReader {
 				assert_eq!(bbox.level, tiles_bbox_used.level);
 
 				// Get the tile index of this block
-				let tile_index: &TileIndex = myself.get_block_tile_index(&block);
+				let tile_index: Arc<TileIndex> = myself.get_block_tile_index(&block).await.unwrap();
 				trace!("tile_index {tile_index:?}");
 
 				// let tile_range: &ByteRange = tile_index.get(tile_id);
@@ -262,7 +278,7 @@ impl TilesReaderTrait for VersaTilesReader {
 				async move {
 					let mut myself = self_mutex.lock().await;
 
-					let big_blob = myself.reader.read_range(&chunk.range).unwrap();
+					let big_blob = myself.reader.read_range(&chunk.range).await.unwrap();
 
 					let entries: Vec<(TileCoord3, Blob)> = chunk
 						.tiles
@@ -335,7 +351,7 @@ impl TilesReaderTrait for VersaTilesReader {
 		let mut progress = crate::helper::progress_bar::ProgressBar::new("scanning blocks", block_index.len() as u64);
 
 		for block in block_index.iter() {
-			let tile_index = self.get_block_tile_index(block);
+			let tile_index = self.get_block_tile_index(block).await?;
 			for (index, tile_range) in tile_index.iter().enumerate() {
 				let size = tile_range.length;
 
@@ -403,7 +419,7 @@ mod tests {
 	async fn reader() -> Result<()> {
 		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
 
-		let mut reader = VersaTilesReader::open_path(&temp_file)?;
+		let mut reader = VersaTilesReader::open_path(&temp_file).await?;
 
 		assert_eq!(format!("{:?}", reader), "VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "versatiles");
@@ -413,7 +429,7 @@ mod tests {
 		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
-		let tile = reader.get_tile_data(&TileCoord3::new(15, 1, 4)?)?.unwrap();
+		let tile = reader.get_tile_data(&TileCoord3::new(15, 1, 4)?).await?.unwrap();
 		assert_eq!(decompress_gzip(tile)?.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())
@@ -426,7 +442,7 @@ mod tests {
 
 		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
 
-		let mut reader = VersaTilesReader::open_path(&temp_file)?;
+		let mut reader = VersaTilesReader::open_path(&temp_file).await?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(&printer.get_category("container").await).await?;
