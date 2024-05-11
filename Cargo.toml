@@ -57,9 +57,9 @@ path = "src/lib.rs"
 anyhow = { version = "1.0.83", default-features = false, features = ["std", "backtrace"] }
 async-trait = { version = "0.1.80", default-features = false }
 axum = { version = "0.7.5", default-features = false, optional = true, features = [
-	"tokio",
 	"http1",
 	"http2",
+	"tokio",
 ] }
 brotli = { version = "6.0.0", default-features = false, features = ["std"] }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
@@ -87,6 +87,7 @@ r2d2_sqlite = { version = "0.24.0", default-features = false, optional = true, f
 ] }
 regex = { version = "1.10.4", default-features = false, optional = true, features = ["unicode"] }
 reqwest = { version = "0.12.4", default-features = false, optional = true, features = [
+	"blocking",
 	"rustls-tls",
 ] }
 tar = { version = "0.4.40", default-features = false, optional = true }
