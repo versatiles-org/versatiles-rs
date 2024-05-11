@@ -32,7 +32,7 @@ impl TilesWriterTrait for MockTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::{MockTilesReader, MockTilesReaderProfile};
+	use crate::container::mock::{MockTilesReader, MockTilesReaderProfile};
 
 	#[tokio::test]
 	async fn convert_png() {

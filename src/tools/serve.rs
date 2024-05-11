@@ -1,6 +1,9 @@
 use super::server::{TileServer, Url};
 use crate::{
-	container::{get_reader, TilesConvertReader, TilesConverterParameters},
+	container::{
+		converter::{TilesConvertReader, TilesConverterParameters},
+		get_reader,
+	},
 	types::TileCompression,
 };
 use anyhow::Result;

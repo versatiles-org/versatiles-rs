@@ -1,8 +1,11 @@
-use super::{PMTilesReader, PMTilesWriter};
 use crate::{
 	container::{
-		DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, TarTilesReader, TarTilesWriter, TilesReaderBox,
-		TilesWriterBox, VersaTilesReader, VersaTilesWriter,
+		directory::{DirectoryTilesReader, DirectoryTilesWriter},
+		mbtiles::MBTilesReader,
+		pmtiles::{PMTilesReader, PMTilesWriter},
+		tar::{TarTilesReader, TarTilesWriter},
+		versatiles::{VersaTilesReader, VersaTilesWriter},
+		TilesReaderBox, TilesWriterBox,
 	},
 	helper::{DataReaderBox, DataReaderHttp},
 };
@@ -80,7 +83,10 @@ fn get_extension(filename: &str) -> &str {
 pub mod tests {
 	use super::*;
 	use crate::{
-		container::{MockTilesReader, MockTilesWriter, TilesReaderParameters},
+		container::{
+			mock::{MockTilesReader, MockTilesWriter},
+			TilesReaderParameters,
+		},
 		types::{TileBBoxPyramid, TileCompression, TileFormat},
 	};
 	use anyhow::Result;

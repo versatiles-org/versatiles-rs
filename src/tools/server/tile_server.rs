@@ -291,7 +291,7 @@ fn get_encoding(headers: HeaderMap) -> TargetCompression {
 mod tests {
 	use super::*;
 	use crate::{
-		container::{MockTilesReader, MockTilesReaderProfile},
+		container::mock::{MockTilesReader, MockTilesReaderProfile},
 		types::TileCompression::*,
 	};
 	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};

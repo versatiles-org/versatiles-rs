@@ -186,7 +186,7 @@ impl TilesReaderTrait for TilesConvertReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::{MockTilesReader, VersaTilesReader};
+	use crate::container::{mock::MockTilesReader, versatiles::VersaTilesReader};
 	use assert_fs::NamedTempFile;
 
 	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> TilesReaderBox {

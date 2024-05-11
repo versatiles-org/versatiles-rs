@@ -288,7 +288,7 @@ struct RecordMetadata {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::container::MockTilesWriter;
+	use crate::container::mock::MockTilesWriter;
 	use lazy_static::lazy_static;
 	use std::{env, path::PathBuf};
 

@@ -200,7 +200,7 @@ mod tests {
 	#[tokio::test]
 	#[cfg(feature = "full")]
 	async fn reader() -> Result<()> {
-		use crate::container::MockTilesWriter;
+		use crate::container::mock::MockTilesWriter;
 
 		let mut reader = TestReader::new_dummy();
 

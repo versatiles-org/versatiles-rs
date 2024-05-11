@@ -20,16 +20,12 @@ pub use reader::*;
 mod writer;
 pub use writer::*;
 
-mod directory;
-pub use directory::*;
+pub mod directory;
 
-mod versatiles;
-pub use versatiles::*;
+pub mod versatiles;
 
 #[cfg(feature = "full")]
-mod converter;
-#[cfg(feature = "full")]
-pub use converter::*;
+pub mod converter;
 
 #[cfg(feature = "full")]
 mod getters;
@@ -40,20 +36,12 @@ pub use getters::*;
 
 #[cfg(feature = "full")]
 mod mbtiles;
-#[cfg(feature = "full")]
-pub use mbtiles::*;
 
 #[cfg(feature = "full")]
-mod pmtiles;
-#[cfg(feature = "full")]
-pub use pmtiles::*;
+pub mod pmtiles;
 
 #[cfg(feature = "full")]
-mod tar;
-#[cfg(feature = "full")]
-pub use tar::*;
+pub mod tar;
 
 #[cfg(test)]
-mod mock;
-#[cfg(test)]
-pub use mock::*;
+pub mod mock;

@@ -163,7 +163,10 @@ impl Debug for TarTilesReader {
 pub mod tests {
 	use super::*;
 	use crate::{
-		container::{make_test_file, MockTilesWriter, MOCK_BYTES_PBF},
+		container::{
+			make_test_file,
+			mock::{MockTilesWriter, MOCK_BYTES_PBF},
+		},
 		helper::decompress_gzip,
 	};
 

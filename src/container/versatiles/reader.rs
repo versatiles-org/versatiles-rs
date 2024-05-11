@@ -401,7 +401,7 @@ impl Debug for VersaTilesReader {
 mod tests {
 	use super::*;
 	use crate::{
-		container::{make_test_file, MOCK_BYTES_PBF},
+		container::{make_test_file, mock::MOCK_BYTES_PBF},
 		helper::decompress_gzip,
 		types::TileFormat,
 	};

@@ -92,7 +92,7 @@ impl std::fmt::Debug for MockTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{container::MockTilesWriter, helper::decompress};
+	use crate::{container::mock::MockTilesWriter, helper::decompress};
 	use anyhow::Result;
 
 	#[tokio::test]

@@ -104,7 +104,10 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 mod tests {
 	use super::*;
 	use crate::{
-		container::{MockTilesReader, TilesReaderParameters, MOCK_BYTES_PBF},
+		container::{
+			mock::{MockTilesReader, MOCK_BYTES_PBF},
+			TilesReaderParameters,
+		},
 		helper::decompress_gzip,
 		types::{TileBBoxPyramid, TileCompression, TileFormat},
 	};
