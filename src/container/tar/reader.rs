@@ -60,7 +60,13 @@ impl TarTilesReader {
 
 				let mut filename: String = String::from(path_vec[2]);
 				let this_compression = extract_compression(&mut filename);
+
 				let this_format = extract_format(&mut filename);
+				if this_format.is_none() {
+					continue;
+				}
+				let this_format = this_format.unwrap();
+
 				let x = filename.parse::<u32>()?;
 
 				if tile_format.is_none() {

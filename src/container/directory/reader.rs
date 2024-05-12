@@ -70,6 +70,11 @@ impl DirectoryTilesReader {
 						let this_comp = extract_compression(&mut filename);
 						let this_form = extract_format(&mut filename);
 
+						if this_form.is_none() {
+							continue;
+						}
+						let file_form = this_form.unwrap();
+
 						let numeric3 = filename.parse::<u32>();
 						if numeric3.is_err() {
 							continue;

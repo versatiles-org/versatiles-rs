@@ -32,7 +32,7 @@ pub fn format_to_extension(format: &TileFormat) -> String {
 	})
 }
 
-pub fn extract_format(filename: &mut String) -> TileFormat {
+pub fn extract_format(filename: &mut String) -> Option<TileFormat> {
 	if let Some(index) = filename.rfind('.') {
 		let format = match filename.get(index..).unwrap() {
 			".avif" => TileFormat::AVIF,
@@ -46,12 +46,12 @@ pub fn extract_format(filename: &mut String) -> TileFormat {
 			".svg" => TileFormat::SVG,
 			".topojson" => TileFormat::TOPOJSON,
 			".webp" => TileFormat::WEBP,
-			_ => TileFormat::BIN,
+			_ => return None,
 		};
 		filename.truncate(index);
-		return format;
+		return Some(format);
 	}
-	TileFormat::BIN
+	None
 }
 
 #[cfg(test)]
@@ -82,7 +82,7 @@ mod tests {
 
 	#[test]
 	fn test_extract_format() {
-		fn test(expected_format: TileFormat, filename: &str, rest: &str) {
+		fn test(expected_format: Option<TileFormat>, filename: &str, rest: &str) {
 			let mut filename_string = String::from(filename);
 			assert_eq!(
 				extract_format(&mut filename_string),
@@ -95,21 +95,20 @@ mod tests {
 			);
 		}
 
-		test(TileFormat::AVIF, "image.avif", "image");
-		test(TileFormat::BIN, "archive.zip", "archive");
-		test(TileFormat::BIN, "binary.bin", "binary");
-		test(TileFormat::BIN, "binary", "binary");
-		test(TileFormat::BIN, "noextensionfile", "noextensionfile");
-		test(TileFormat::BIN, "unknown.ext", "unknown");
-		test(TileFormat::GEOJSON, "data.geojson", "data");
-		test(TileFormat::JPG, "image.jpeg", "image");
-		test(TileFormat::JPG, "image.jpg", "image");
-		test(TileFormat::JSON, "document.json", "document");
-		test(TileFormat::PBF, "map.pbf", "map");
-		test(TileFormat::PNG, "picture.png", "picture");
-		test(TileFormat::SVG, "diagram.svg", "diagram");
-		test(TileFormat::SVG, "vector.svg", "vector");
-		test(TileFormat::TOPOJSON, "topography.topojson", "topography");
-		test(TileFormat::WEBP, "photo.webp", "photo");
+		test(Some(TileFormat::AVIF), "image.avif", "image");
+		test(None, "archive.zip", "archive.zip");
+		test(Some(TileFormat::BIN), "binary.bin", "binary");
+		test(None, "noextensionfile", "noextensionfile");
+		test(None, "unknown.ext", "unknown.ext");
+		test(Some(TileFormat::GEOJSON), "data.geojson", "data");
+		test(Some(TileFormat::JPG), "image.jpeg", "image");
+		test(Some(TileFormat::JPG), "image.jpg", "image");
+		test(Some(TileFormat::JSON), "document.json", "document");
+		test(Some(TileFormat::PBF), "map.pbf", "map");
+		test(Some(TileFormat::PNG), "picture.png", "picture");
+		test(Some(TileFormat::SVG), "diagram.svg", "diagram");
+		test(Some(TileFormat::SVG), "vector.svg", "vector");
+		test(Some(TileFormat::TOPOJSON), "topography.topojson", "topography");
+		test(Some(TileFormat::WEBP), "photo.webp", "photo");
 	}
 }
