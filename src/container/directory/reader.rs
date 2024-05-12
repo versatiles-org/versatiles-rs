@@ -1,5 +1,5 @@
 use crate::{
-	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
+	container::{TilesReaderParameters, TilesReaderTrait},
 	helper::decompress,
 	types::{extract_compression, extract_format, Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
@@ -21,7 +21,7 @@ pub struct DirectoryTilesReader {
 }
 
 impl DirectoryTilesReader {
-	pub fn open_path(dir: &Path) -> Result<TilesReaderBox>
+	pub fn open_path(dir: &Path) -> Result<DirectoryTilesReader>
 	where
 		Self: Sized,
 	{
@@ -130,12 +130,12 @@ impl DirectoryTilesReader {
 		let tile_format = container_form.context("tile format must be specified")?;
 		let tile_compression = container_comp.context("tile compression must be specified")?;
 
-		Ok(Box::new(DirectoryTilesReader {
+		Ok(DirectoryTilesReader {
 			meta,
 			dir: dir.to_path_buf(),
 			tile_map,
 			parameters: TilesReaderParameters::new(tile_format, tile_compression, bbox_pyramid),
-		}))
+		})
 	}
 
 	fn read(path: &Path) -> Result<Blob> {

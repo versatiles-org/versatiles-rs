@@ -1,6 +1,6 @@
 use super::types::{Directory, EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
-	container::{TilesReaderBox, TilesWriterBox, TilesWriterTrait},
+	container::{ TilesReaderTrait, TilesWriterTrait},
 	helper::{compress_gzip, progress_bar::ProgressBar, DataWriterFile, DataWriterTrait},
 	types::{Blob, TileBBox},
 };
@@ -14,14 +14,14 @@ pub struct PMTilesWriter {
 }
 
 impl PMTilesWriter {
-	pub fn open_path(path: &Path) -> Result<TilesWriterBox> {
-		Ok(Box::new(Self { path: path.to_owned() }))
+	pub fn open_path(path: &Path) -> Result<PMTilesWriter> {
+		Ok(Self { path: path.to_owned() })
 	}
 }
 
 #[async_trait]
 impl TilesWriterTrait for PMTilesWriter {
-	async fn write_from_reader(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
+	async fn write_from_reader(&mut self, reader: &mut dyn TilesReaderTrait) -> Result<()> {
 		let parameters = reader.get_parameters();
 		let pyramid = &parameters.bbox_pyramid;
 

@@ -1,4 +1,4 @@
-use crate::container::{TilesReaderBox, TilesWriterBox, TilesWriterTrait};
+use crate::container::{ TilesReaderTrait, TilesWriterTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::StreamExt;
@@ -6,14 +6,14 @@ use futures_util::StreamExt;
 pub struct MockTilesWriter {}
 
 impl MockTilesWriter {
-	pub fn new_mock() -> TilesWriterBox {
-		Box::new(MockTilesWriter {})
+	pub fn new_mock() -> MockTilesWriter {
+		MockTilesWriter {}
 	}
 }
 
 #[async_trait]
 impl TilesWriterTrait for MockTilesWriter {
-	async fn write_from_reader(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
+	async fn write_from_reader(&mut self, reader: &mut dyn TilesReaderTrait) -> Result<()> {
 		let _temp = reader.get_container_name();
 		let _temp = reader.get_name();
 		let _temp = reader.get_meta()?;

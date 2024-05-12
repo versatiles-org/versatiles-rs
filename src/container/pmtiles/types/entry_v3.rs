@@ -115,7 +115,7 @@ impl EntriesV3 {
 
 impl From<&Blob> for EntriesV3 {
 	fn from(blob: &Blob) -> Self {
-		EntriesV3::deserialize(&blob).unwrap()
+		EntriesV3::deserialize(blob).unwrap()
 	}
 }
 
@@ -174,6 +174,6 @@ impl<'a> EntriesSliceV3<'a> {
 			writer.write_varint(offset)?;
 		}
 
-		compress_gzip(&writer.to_blob())
+		compress_gzip(&writer.into_blob())
 	}
 }

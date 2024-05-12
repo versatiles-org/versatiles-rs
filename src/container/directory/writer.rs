@@ -1,7 +1,7 @@
 #[cfg(feature = "full")]
 use crate::helper::progress_bar::ProgressBar;
 use crate::{
-	container::{TilesReaderBox, TilesWriterBox, TilesWriterTrait},
+	container::{TilesReaderTrait, TilesWriterTrait},
 	helper::compress,
 	types::{compression_to_extension, format_to_extension, Blob},
 };
@@ -18,6 +18,17 @@ pub struct DirectoryTilesWriter {
 }
 
 impl DirectoryTilesWriter {
+	pub fn open_path(path: &Path) -> Result<DirectoryTilesWriter>
+	where
+		Self: Sized,
+	{
+		log::trace!("new {:?}", path);
+		ensure!(path.is_absolute(), "path {path:?} must be absolute");
+
+		Ok(DirectoryTilesWriter {
+			dir: path.to_path_buf(),
+		})
+	}
 	fn write(&self, filename: &str, blob: Blob) -> Result<()> {
 		let path = self.dir.join(filename);
 		Self::ensure_directory(&path)?;
@@ -32,22 +43,11 @@ impl DirectoryTilesWriter {
 		fs::create_dir_all(parent)?;
 		Ok(())
 	}
-	pub fn open_path(path: &Path) -> Result<TilesWriterBox>
-	where
-		Self: Sized,
-	{
-		log::trace!("new {:?}", path);
-		ensure!(path.is_absolute(), "path {path:?} must be absolute");
-
-		Ok(Box::new(DirectoryTilesWriter {
-			dir: path.to_path_buf(),
-		}))
-	}
 }
 
 #[async_trait]
 impl TilesWriterTrait for DirectoryTilesWriter {
-	async fn write_from_reader(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
+	async fn write_from_reader(&mut self, reader: &mut dyn TilesReaderTrait) -> Result<()> {
 		log::trace!("convert_from");
 
 		let parameters = reader.get_parameters();

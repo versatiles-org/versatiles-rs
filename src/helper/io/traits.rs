@@ -3,7 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, path::Path};
 
-pub type DataReaderBox = Box<dyn DataReaderTrait>;
+pub type DataReader = Box<dyn DataReaderTrait>;
 
 #[async_trait]
 pub trait DataReaderTrait: Debug + Send + Sync {

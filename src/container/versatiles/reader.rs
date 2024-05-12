@@ -3,7 +3,7 @@ use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 #[cfg(feature = "full")]
 use crate::helper::pretty_print::PrettyPrint;
 use crate::{
-	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
+	container::{TilesReaderParameters, TilesReaderTrait, TilesStream},
 	helper::{DataReaderFile, DataReaderTrait, LimitedCache, TileConverter},
 	types::{Blob, ByteRange, TileBBox, TileCompression, TileCoord2, TileCoord3},
 };
@@ -26,12 +26,12 @@ pub struct VersaTilesReader {
 // Implement methods for the TilesReader struct
 impl VersaTilesReader {
 	// Create a new TilesReader from a given filename
-	pub async fn open_path(path: &Path) -> Result<TilesReaderBox> {
-		Self::open_reader(DataReaderFile::from_path(path)?).await
+	pub async fn open_path(path: &Path) -> Result<VersaTilesReader> {
+		VersaTilesReader::open_reader(DataReaderFile::from_path(path)?).await
 	}
 
 	// Create a new TilesReader from a given data reader
-	pub async fn open_reader(mut reader: Box<dyn DataReaderTrait>) -> Result<TilesReaderBox> {
+	pub async fn open_reader(mut reader: Box<dyn DataReaderTrait>) -> Result<VersaTilesReader> {
 		let header = FileHeader::from_reader(&mut reader)
 			.await
 			.context("reading the header")?;
@@ -62,13 +62,13 @@ impl VersaTilesReader {
 		let bbox_pyramid = block_index.get_bbox_pyramid();
 		let parameters = TilesReaderParameters::new(header.tile_format, header.compression, bbox_pyramid);
 
-		Ok(Box::new(VersaTilesReader {
+		Ok(VersaTilesReader {
 			meta,
 			reader,
 			parameters,
 			block_index,
 			tile_index_cache: LimitedCache::with_maximum_size(1e8 as usize),
-		}))
+		})
 	}
 
 	async fn get_block_tile_index(&mut self, block: &BlockDefinition) -> Result<Arc<TileIndex>> {

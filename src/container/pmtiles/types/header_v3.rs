@@ -97,7 +97,7 @@ impl HeaderV3 {
 		buffer.write_i32(self.center_lon_e7)?;
 		buffer.write_i32(self.center_lat_e7)?;
 
-		Ok(buffer.to_blob())
+		Ok(buffer.into_blob())
 	}
 
 	pub fn deserialize(blob: &Blob) -> Result<Self> {

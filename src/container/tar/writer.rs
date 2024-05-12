@@ -1,5 +1,5 @@
 use crate::{
-	container::{TilesReaderBox, TilesWriterBox, TilesWriterTrait},
+	container::{TilesReaderTrait, TilesWriterTrait},
 	helper::{compress, progress_bar::ProgressBar},
 	types::{compression_to_extension, format_to_extension},
 };
@@ -19,7 +19,7 @@ pub struct TarTilesWriter {
 }
 
 impl TarTilesWriter {
-	pub fn open_path(path: &Path) -> Result<TilesWriterBox>
+	pub fn open_path(path: &Path) -> Result<TarTilesWriter>
 	where
 		Self: Sized,
 	{
@@ -30,13 +30,13 @@ impl TarTilesWriter {
 		let file = File::create(path)?;
 		let builder = Builder::new(file);
 
-		Ok(Box::new(TarTilesWriter { builder }))
+		Ok(TarTilesWriter { builder })
 	}
 }
 
 #[async_trait]
 impl TilesWriterTrait for TarTilesWriter {
-	async fn write_from_reader(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
+	async fn write_from_reader(&mut self, reader: &mut dyn TilesReaderTrait) -> Result<()> {
 		trace!("convert_from");
 		let parameters = reader.get_parameters();
 		let tile_format = &parameters.tile_format;

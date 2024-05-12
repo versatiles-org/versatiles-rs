@@ -1,4 +1,4 @@
-use super::{DataReaderBox, DataReaderTrait};
+use super::{DataReader, DataReaderTrait};
 use crate::types::{Blob, ByteRange};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -16,7 +16,7 @@ pub struct DataReaderHttp {
 	url: Url,
 }
 impl DataReaderHttp {
-	pub fn from_url(url: Url) -> Result<DataReaderBox> {
+	pub fn from_url(url: Url) -> Result<DataReader> {
 		match url.scheme() {
 			"http" => (),
 			"https" => (),

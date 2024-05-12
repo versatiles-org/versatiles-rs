@@ -1,11 +1,13 @@
 use crate::{
-	container::{get_writer, TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
+	container::{get_writer, TilesReaderParameters, TilesReaderTrait, TilesStream},
 	helper::{TileConverter, TransformCoord},
 	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::StreamExt;
+
+use super::TilesReader;
 
 #[derive(Debug)]
 pub struct TilesConverterParameters {
@@ -43,9 +45,7 @@ impl TilesConverterParameters {
 	}
 }
 
-pub async fn convert_tiles_container(
-	reader: TilesReaderBox, cp: TilesConverterParameters, filename: &str,
-) -> Result<()> {
+pub async fn convert_tiles_container(reader: TilesReader, cp: TilesConverterParameters, filename: &str) -> Result<()> {
 	let mut writer = get_writer(filename).await?;
 
 	let mut converter = TilesConvertReader::new_from_reader(reader, cp)?;
@@ -54,7 +54,7 @@ pub async fn convert_tiles_container(
 
 #[derive(Debug)]
 pub struct TilesConvertReader {
-	reader: TilesReaderBox,
+	reader: TilesReader,
 	converter_parameters: TilesConverterParameters,
 	reader_parameters: TilesReaderParameters,
 	container_name: String,
@@ -63,7 +63,7 @@ pub struct TilesConvertReader {
 }
 
 impl TilesConvertReader {
-	pub fn new_from_reader(reader: TilesReaderBox, cp: TilesConverterParameters) -> Result<TilesReaderBox> {
+	pub fn new_from_reader(reader: TilesReader, cp: TilesConverterParameters) -> Result<Self> {
 		let container_name = format!("converter({})", reader.get_container_name());
 		let name = format!("converter({})", reader.get_name());
 
@@ -92,14 +92,14 @@ impl TilesConvertReader {
 			cp.force_recompress,
 		)?);
 
-		Ok(Box::new(TilesConvertReader {
+		Ok(TilesConvertReader {
 			reader,
 			converter_parameters: cp,
 			reader_parameters: new_rp,
 			container_name,
 			tile_recompressor,
 			name,
-		}))
+		})
 	}
 }
 
@@ -189,7 +189,7 @@ mod tests {
 	use crate::container::{mock::MockTilesReader, versatiles::VersaTilesReader};
 	use assert_fs::NamedTempFile;
 
-	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> TilesReaderBox {
+	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> MockTilesReader {
 		let bbox_pyramid = TileBBoxPyramid::new_full(1);
 		let reader_parameters = TilesReaderParameters::new(tf, tc, bbox_pyramid);
 		MockTilesReader::new_mock(reader_parameters)
@@ -216,7 +216,7 @@ mod tests {
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let cp = get_converter_parameters(TileFormat::PBF, c_out, false);
 			let filename = temp_file.to_str().unwrap();
-			convert_tiles_container(reader_in, cp, filename).await?;
+			convert_tiles_container(Box::new(reader_in), cp, filename).await?;
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.get_parameters();
 			assert_eq!(parameters_out.tile_format, TileFormat::PBF);
@@ -246,7 +246,7 @@ mod tests {
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let cp = get_converter_parameters(f_out, TileCompression::Gzip, false);
 			let filename = temp_file.to_str().unwrap();
-			convert_tiles_container(reader_in, cp, filename).await?;
+			convert_tiles_container(Box::new(reader_in), cp, filename).await?;
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.get_parameters();
 			assert_eq!(parameters_out.tile_format, f_out);
@@ -293,7 +293,7 @@ mod tests {
 			let filename = temp_file.to_str().unwrap();
 
 			let cp = TilesConverterParameters::new(Some(JSON), Some(None), Some(pyramid_convert), false, flip_y, swap_xy);
-			convert_tiles_container(reader, cp, filename).await?;
+			convert_tiles_container(Box::new(reader), cp, filename).await?;
 
 			let mut reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.get_parameters();

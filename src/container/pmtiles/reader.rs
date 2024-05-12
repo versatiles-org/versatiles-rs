@@ -2,8 +2,8 @@ use super::types::{Directory, EntriesV3, HeaderV3, TileId};
 #[cfg(feature = "full")]
 use crate::helper::pretty_print::PrettyPrint;
 use crate::{
-	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
-	helper::{decompress, DataReaderBox, DataReaderFile},
+	container::{TilesReaderParameters, TilesReaderTrait},
+	helper::{decompress, DataReader, DataReaderFile},
 	types::{Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3},
 };
 use anyhow::{bail, Result};
@@ -22,11 +22,11 @@ pub struct PMTilesReader {
 
 impl PMTilesReader {
 	// Create a new TilesReader from a given filename
-	pub async fn open_path(path: &Path) -> Result<TilesReaderBox> {
-		Self::open_reader(DataReaderFile::from_path(path)?).await
+	pub async fn open_path(path: &Path) -> Result<PMTilesReader> {
+		PMTilesReader::open_reader(DataReaderFile::from_path(path)?).await
 	}
 
-	pub async fn open_reader(mut data_reader: DataReaderBox) -> Result<TilesReaderBox>
+	pub async fn open_reader(mut data_reader: DataReader) -> Result<PMTilesReader>
 	where
 		Self: Sized,
 	{
@@ -55,14 +55,14 @@ impl PMTilesReader {
 			bbox_pyramid,
 		);
 
-		Ok(Box::new(PMTilesReader {
+		Ok(PMTilesReader {
 			data_reader,
 			directory,
 			header,
 			internal_compression,
 			meta,
 			parameters,
-		}))
+		})
 	}
 }
 
@@ -96,6 +96,7 @@ impl TilesReaderTrait for PMTilesReader {
 
 		for _depth in 0..3 {
 			let entries = EntriesV3::deserialize(&dir_blob)?;
+			println!("{:?}", entries);
 			let entry = entries.find_tile(tile_id);
 
 			let entry = if let Some(entry) = entry {

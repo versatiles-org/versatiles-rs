@@ -1,5 +1,5 @@
 use crate::{
-	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
+	container::{TilesReaderParameters, TilesReaderTrait},
 	helper::decompress,
 	types::{
 		extract_compression, extract_format, Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat,
@@ -26,7 +26,7 @@ pub struct TarTilesReader {
 
 impl TarTilesReader {
 	// Create a new TilesReader from a given filename
-	pub fn open_path(path: &Path) -> Result<TilesReaderBox> {
+	pub fn open_path(path: &Path) -> Result<TarTilesReader> {
 		let mut reader = BufReader::new(File::open(path)?);
 		let mut archive = Archive::new(&mut reader);
 
@@ -117,13 +117,13 @@ impl TarTilesReader {
 			log::warn!("unknown file in tar: {path_tmp_string:?}");
 		}
 
-		Ok(Box::new(TarTilesReader {
+		Ok(TarTilesReader {
 			meta,
 			name: path.to_str().unwrap().to_string(),
 			parameters: TilesReaderParameters::new(tile_format.unwrap(), tile_compression.unwrap(), bbox_pyramid),
 			reader,
 			tile_map,
-		}))
+		})
 	}
 }
 
@@ -177,6 +177,7 @@ pub mod tests {
 		container::{
 			make_test_file,
 			mock::{MockTilesWriter, MOCK_BYTES_PBF},
+			TilesWriterTrait,
 		},
 		helper::decompress_gzip,
 	};

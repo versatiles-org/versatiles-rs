@@ -1,5 +1,5 @@
 use crate::{
-	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
+	container::{TilesReaderParameters, TilesReaderTrait},
 	helper::compress,
 	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
@@ -24,10 +24,10 @@ pub struct MockTilesReader {
 }
 
 impl MockTilesReader {
-	pub fn new_mock_profile(profile: MockTilesReaderProfile) -> TilesReaderBox {
+	pub fn new_mock_profile(profile: MockTilesReaderProfile) -> MockTilesReader {
 		let bbox_pyramid = TileBBoxPyramid::new_full(4);
 
-		Self::new_mock(match profile {
+		MockTilesReader::new_mock(match profile {
 			MockTilesReaderProfile::JSON => {
 				TilesReaderParameters::new(TileFormat::JSON, TileCompression::None, bbox_pyramid)
 			}
@@ -39,8 +39,8 @@ impl MockTilesReader {
 			}
 		})
 	}
-	pub fn new_mock(parameters: TilesReaderParameters) -> TilesReaderBox {
-		Box::new(Self { parameters })
+	pub fn new_mock(parameters: TilesReaderParameters) -> MockTilesReader {
+		MockTilesReader { parameters }
 	}
 }
 
@@ -92,7 +92,10 @@ impl std::fmt::Debug for MockTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{container::mock::MockTilesWriter, helper::decompress};
+	use crate::{
+		container::{mock::MockTilesWriter, TilesWriterTrait},
+		helper::decompress,
+	};
 	use anyhow::Result;
 
 	#[tokio::test]

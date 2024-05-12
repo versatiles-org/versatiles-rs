@@ -1,4 +1,4 @@
-use super::{DataReaderBox, DataReaderTrait};
+use super::{DataReader, DataReaderTrait};
 use crate::types::{Blob, ByteRange};
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
@@ -15,7 +15,7 @@ pub struct DataReaderFile {
 }
 
 impl DataReaderFile {
-	pub fn from_path(path: &Path) -> Result<DataReaderBox> {
+	pub fn from_path(path: &Path) -> Result<DataReader> {
 		ensure!(path.exists(), "file {path:?} does not exist");
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 		ensure!(path.is_file(), "path {path:?} must be a file");

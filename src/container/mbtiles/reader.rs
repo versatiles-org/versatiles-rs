@@ -1,5 +1,5 @@
 use crate::{
-	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait, TilesStream},
+	container::{TilesReaderParameters, TilesReaderTrait, TilesStream},
 	helper::{progress_bar::ProgressBar, TransformCoord},
 	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
@@ -18,16 +18,13 @@ pub struct MBTilesReader {
 	parameters: TilesReaderParameters,
 }
 impl MBTilesReader {
-	pub fn open_path(path: &Path) -> Result<TilesReaderBox> {
+	pub fn open_path(path: &Path) -> Result<MBTilesReader> {
 		trace!("open {path:?}");
 
 		ensure!(path.exists(), "file {path:?} does not exist");
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
-		let mut db = Self::load_from_sqlite(path)?;
-		path.to_str().unwrap().clone_into(&mut db.name);
-
-		Ok(Box::new(db))
+		MBTilesReader::load_from_sqlite(path)
 	}
 	fn load_from_sqlite(path: &Path) -> Result<MBTilesReader> {
 		trace!("load_from_sqlite {:?}", path);
@@ -276,7 +273,7 @@ struct RecordMetadata {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::container::mock::MockTilesWriter;
+	use crate::container::{mock::MockTilesWriter, TilesReaderTrait, TilesWriterTrait};
 	use lazy_static::lazy_static;
 	use std::{env, path::PathBuf};
 

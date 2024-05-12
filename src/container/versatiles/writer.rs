@@ -3,7 +3,7 @@ use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 #[cfg(feature = "full")]
 use crate::helper::progress_bar::ProgressBar;
 use crate::{
-	container::{TilesReaderBox, TilesStream, TilesWriterBox, TilesWriterTrait},
+	container::{TilesReaderTrait, TilesStream, TilesWriterTrait},
 	helper::{compress, DataWriterFile, DataWriterTrait},
 	types::{Blob, ByteRange},
 };
@@ -22,13 +22,13 @@ pub struct VersaTilesWriter {
 
 impl VersaTilesWriter {
 	// Create a new TilesWriter instance
-	pub async fn open_path(path: &Path) -> Result<TilesWriterBox>
+	pub async fn open_path(path: &Path) -> Result<VersaTilesWriter>
 	where
 		Self: Sized,
 	{
-		Ok(Box::new(VersaTilesWriter {
+		Ok(VersaTilesWriter {
 			writer: DataWriterFile::new(path)?,
-		}))
+		})
 	}
 }
 
@@ -36,7 +36,7 @@ impl VersaTilesWriter {
 #[async_trait]
 impl TilesWriterTrait for VersaTilesWriter {
 	// Convert tiles from the TilesReader
-	async fn write_from_reader(&mut self, reader: &mut TilesReaderBox) -> Result<()> {
+	async fn write_from_reader(&mut self, reader: &mut dyn TilesReaderTrait) -> Result<()> {
 		// Finalize the configuration
 
 		let parameters = reader.get_parameters();
@@ -79,7 +79,7 @@ impl TilesWriterTrait for VersaTilesWriter {
 // Implement additional methods for TilesWriter
 impl VersaTilesWriter {
 	// Write metadata
-	async fn write_meta(&mut self, reader: &TilesReaderBox) -> Result<ByteRange> {
+	async fn write_meta(&mut self, reader: &dyn TilesReaderTrait) -> Result<ByteRange> {
 		let meta: Blob = reader.get_meta()?.unwrap_or_default();
 		let compressed = compress(meta, &reader.get_parameters().tile_compression)?;
 
@@ -87,7 +87,7 @@ impl VersaTilesWriter {
 	}
 
 	// Write blocks
-	async fn write_blocks(&mut self, reader: &mut TilesReaderBox) -> Result<ByteRange> {
+	async fn write_blocks(&mut self, reader: &mut dyn TilesReaderTrait) -> Result<ByteRange> {
 		let pyramid = reader.get_parameters().bbox_pyramid.clone();
 
 		if pyramid.is_empty() {
@@ -143,7 +143,7 @@ impl VersaTilesWriter {
 
 	// Write a single block
 	async fn write_block<'a, F>(
-		&'a mut self, block: &BlockDefinition, reader: &'a mut TilesReaderBox, inc_progress: F,
+		&'a mut self, block: &BlockDefinition, reader: &'a mut dyn TilesReaderTrait, inc_progress: F,
 	) -> Result<(ByteRange, ByteRange)>
 	where
 		F: Fn(u64),

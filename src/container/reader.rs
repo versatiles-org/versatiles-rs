@@ -10,8 +10,6 @@ use futures_util::{stream, StreamExt};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 
-pub type TilesReaderBox = Box<dyn TilesReaderTrait>;
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct TilesReaderParameters {
 	pub bbox_pyramid: TileBBoxPyramid,
@@ -29,6 +27,8 @@ impl TilesReaderParameters {
 		}
 	}
 }
+
+pub type TilesReader = Box<dyn TilesReaderTrait>;
 
 #[async_trait]
 pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
@@ -157,6 +157,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::container::writer::TilesWriterTrait;
 
 	#[derive(Debug)]
 	struct TestReader {
@@ -164,7 +165,7 @@ mod tests {
 	}
 
 	impl TestReader {
-		fn new_dummy() -> TilesReaderBox {
+		fn new_dummy() -> TilesReader {
 			Box::new(TestReader {
 				parameters: TilesReaderParameters {
 					bbox_pyramid: TileBBoxPyramid::new_full(3),
@@ -226,7 +227,7 @@ mod tests {
 		);
 
 		let mut writer = MockTilesWriter::new_mock();
-		writer.write_from_reader(&mut reader).await?;
+		writer.write_from_reader(reader.as_mut()).await?;
 
 		Ok(())
 	}
