@@ -430,7 +430,7 @@ mod tests {
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
 		let tile = reader.get_tile_data(&TileCoord3::new(15, 1, 4)?).await?.unwrap();
-		assert_eq!(decompress_gzip(tile)?.as_slice(), MOCK_BYTES_PBF);
+		assert_eq!(decompress_gzip(&tile)?.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())
 	}

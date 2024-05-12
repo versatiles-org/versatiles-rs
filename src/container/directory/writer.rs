@@ -143,7 +143,7 @@ mod tests {
 		let load = |filename| {
 			let path = temp_path.join(filename);
 			path.try_exists().expect(&format!("filename {filename} should exist"));
-			decompress_gzip(Blob::from(
+			decompress_gzip(&Blob::from(
 				fs::read(path).expect(&format!("filename {filename} should be readable")),
 			))
 			.expect(&format!("filename {filename} should be gzip compressed"))

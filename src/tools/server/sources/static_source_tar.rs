@@ -51,8 +51,8 @@ impl TarFile {
 		for part in path.to_str().unwrap().rsplit('.') {
 			match part {
 				"tar" => break,
-				"gz" => buffer = decompress_gzip(buffer)?,
-				"br" => buffer = decompress_brotli(buffer)?,
+				"gz" => buffer = decompress_gzip(&buffer)?,
+				"br" => buffer = decompress_brotli(&buffer)?,
 				_ => bail!("{path:?} must be a name of a tar file"),
 			}
 		}

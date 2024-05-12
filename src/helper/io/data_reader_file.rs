@@ -20,7 +20,9 @@ impl DataReaderFile {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 		ensure!(path.is_file(), "path {path:?} must be a file");
 
-		let file = File::open(path)?;
+		let path = path.canonicalize()?;
+
+		let file = File::open(&path)?;
 
 		Ok(Box::new(Self {
 			name: path.to_str().unwrap().to_owned(),

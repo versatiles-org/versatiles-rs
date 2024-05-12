@@ -1,7 +1,7 @@
 use super::types::{Directory, EntriesV3, HeaderV3, TileId};
 use crate::{
 	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
-	helper::{DataReaderBox, DataReaderFile},
+	helper::{decompress, DataReaderBox, DataReaderFile},
 	types::{Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3},
 };
 use anyhow::{bail, Result};
@@ -37,7 +37,8 @@ impl PMTilesReader {
 			bail!("source archive must be clustered for extracts");
 		}
 
-		let meta: Blob = data_reader.read_range(&header.metadata).await?;
+		let meta = data_reader.read_range(&header.metadata).await?;
+		let meta = decompress(meta, &header.internal_compression.as_value()?)?;
 
 		let directory: Directory = Directory {
 			root_bytes: data_reader.read_range(&header.root_dir).await?,
@@ -68,18 +69,23 @@ impl TilesReaderTrait for PMTilesReader {
 	fn get_container_name(&self) -> &str {
 		"pmtiles"
 	}
+
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
+
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
+
 	fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(Some(self.meta.clone()))
 	}
+
 	fn get_name(&self) -> &str {
 		self.data_reader.get_name()
 	}
+
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data_original {:?}", coord);
 

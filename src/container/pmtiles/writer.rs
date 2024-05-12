@@ -75,8 +75,8 @@ impl TilesWriterTrait for PMTilesWriter {
 
 		//setZoomCenterDefaults(&header, resolve.Entries)
 
-		let mut metadata = reader.get_meta()?.unwrap_or(Blob::new_empty());
-		metadata = compress_gzip(metadata)?;
+		let metadata = reader.get_meta()?.unwrap_or(Blob::new_empty());
+		let metadata = compress_gzip(&metadata)?;
 
 		header.metadata = file.append(&metadata)?;
 

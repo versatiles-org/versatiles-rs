@@ -43,7 +43,7 @@ impl BlockIndex {
 	}
 
 	pub fn from_brotli_blob(buf: Blob) -> Result<Self> {
-		Self::from_blob(decompress_brotli(buf)?)
+		Self::from_blob(decompress_brotli(&buf)?)
 	}
 
 	pub fn get_bbox_pyramid(&self) -> TileBBoxPyramid {
@@ -70,7 +70,7 @@ impl BlockIndex {
 	}
 
 	pub fn as_brotli_blob(&self) -> Blob {
-		compress_brotli(self.as_blob()).unwrap()
+		compress_brotli(&self.as_blob()).unwrap()
 	}
 
 	pub fn get_block(&self, coord: &TileCoord3) -> Option<&BlockDefinition> {

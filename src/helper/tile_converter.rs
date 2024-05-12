@@ -82,10 +82,10 @@ impl FnConv {
 			//FnConv::Png2Avif => img2avif(png2img(tile)?),
 			//#[cfg(feature = "full")]
 			//FnConv::Webp2Avif => img2avif(webp2img(tile)?),
-			FnConv::UnGzip => decompress_gzip(blob),
-			FnConv::UnBrotli => decompress_brotli(blob),
-			FnConv::Gzip => compress_gzip(blob),
-			FnConv::Brotli => compress_brotli(blob),
+			FnConv::UnGzip => decompress_gzip(&blob),
+			FnConv::UnBrotli => decompress_brotli(&blob),
+			FnConv::Gzip => compress_gzip(&blob),
+			FnConv::Brotli => compress_brotli(&blob),
 		}
 	}
 }
