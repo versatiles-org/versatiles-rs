@@ -2,7 +2,5 @@
 cd "$(dirname "$0")/.."
 
 mkdir -p target/llvm-cov
-cargo llvm-cov test --workspace --all-features --tests --lcov --output-path target/llvm-cov/lcov.info
-cargo llvm-cov report --html
-clear
+cargo llvm-cov test --bins --all-features --tests --lcov --output-path target/llvm-cov/lcov.info $1
 cargo llvm-cov report
