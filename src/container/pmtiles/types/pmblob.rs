@@ -38,9 +38,13 @@ impl<'a> BlobReader<'a> {
 	pub fn read_i32(&mut self) -> Result<i32> {
 		Ok(self.cursor.read_i32::<LE>()?)
 	}
+	pub fn read_u64(&mut self) -> Result<u64> {
+		Ok(self.cursor.read_u64::<LE>()?)
+	}
 	pub fn set_position(&mut self, pos: u64) {
 		self.cursor.set_position(pos);
 	}
+	#[allow(dead_code)]
 	pub fn get_position(&mut self) -> u64 {
 		self.cursor.position()
 	}
@@ -71,18 +75,15 @@ impl BlobWriter {
 		Ok(())
 	}
 	pub fn write_u8(&mut self, value: u8) -> Result<()> {
-		self.cursor.write_u8(value)?;
-		Ok(())
+		Ok(self.cursor.write_u8(value)?)
 	}
 	pub fn write_i32(&mut self, value: i32) -> Result<()> {
-		self.cursor.write_i32::<LE>(value)?;
-		Ok(())
+		Ok(self.cursor.write_i32::<LE>(value)?)
 	}
-	pub fn write_slice(&mut self, buf: &[u8]) -> Result<()> {
-		self.cursor.write(buf)?;
-		Ok(())
+	pub fn write_slice(&mut self, buf: &[u8]) -> Result<usize> {
+		Ok(self.cursor.write(buf)?)
 	}
-	pub fn to_blob(self) -> Blob {
+	pub fn into_blob(self) -> Blob {
 		Blob::from(self.cursor.into_inner())
 	}
 }

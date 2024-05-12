@@ -111,13 +111,13 @@ impl HeaderV3 {
 		cursor.set_position(8); // Skip PMTiles and version byte
 
 		let header = Self {
-			root_dir: ByteRange::new(cursor.read_varint()?, cursor.read_varint()?),
-			metadata: ByteRange::new(cursor.read_varint()?, cursor.read_varint()?),
-			leaf_dirs: ByteRange::new(cursor.read_varint()?, cursor.read_varint()?),
-			tile_data: ByteRange::new(cursor.read_varint()?, cursor.read_varint()?),
-			addressed_tiles_count: cursor.read_varint()?,
-			tile_entries_count: cursor.read_varint()?,
-			tile_contents_count: cursor.read_varint()?,
+			root_dir: ByteRange::new(cursor.read_u64()?, cursor.read_u64()?),
+			metadata: ByteRange::new(cursor.read_u64()?, cursor.read_u64()?),
+			leaf_dirs: ByteRange::new(cursor.read_u64()?, cursor.read_u64()?),
+			tile_data: ByteRange::new(cursor.read_u64()?, cursor.read_u64()?),
+			addressed_tiles_count: cursor.read_u64()?,
+			tile_entries_count: cursor.read_u64()?,
+			tile_contents_count: cursor.read_u64()?,
 			clustered: cursor.read_u8()? == 1,
 			internal_compression: PMTilesCompression::from_u8(cursor.read_u8()?)?,
 			tile_compression: PMTilesCompression::from_u8(cursor.read_u8()?)?,

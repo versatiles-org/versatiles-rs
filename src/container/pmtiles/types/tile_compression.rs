@@ -35,7 +35,7 @@ impl PMTilesCompression {
 			PMTilesCompression::None => TileCompression::None,
 			PMTilesCompression::Gzip => TileCompression::Gzip,
 			PMTilesCompression::Brotli => TileCompression::Brotli,
-			PMTilesCompression::Zstd => bail!("unknown compression"),
+			PMTilesCompression::Zstd => bail!("Zstd not supported yet"),
 		})
 	}
 }

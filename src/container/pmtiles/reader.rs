@@ -12,12 +12,12 @@ use std::{fmt::Debug, path::Path};
 
 #[derive(Debug)]
 pub struct PMTilesReader {
-	data_reader: DataReaderBox,
-	header: HeaderV3,
-	meta: Blob,
-	internal_compression: TileCompression,
-	directory: Directory,
-	parameters: TilesReaderParameters,
+	pub data_reader: DataReader,
+	pub header: HeaderV3,
+	pub meta: Blob,
+	pub internal_compression: TileCompression,
+	pub directory: Directory,
+	pub parameters: TilesReaderParameters,
 }
 
 impl PMTilesReader {
@@ -154,12 +154,14 @@ mod test {
 
 		assert_eq!(reader.get_container_name(), "pmtiles");
 
+		assert_wildcard!(reader.get_name(), "*/testdata/berlin.pmtiles");
+
+		assert_eq!(format!("{:?}", reader.header), "   ");
+
 		assert_wildcard!(
 			reader.get_meta()?.unwrap().as_str(),
 			"{\"author\":\"OpenStreetMap contributors, Geofabrik GmbH\",*,\"version\":\"3.0\"}"
 		);
-
-		assert_wildcard!(reader.get_name(), "*/testdata/berlin.pmtiles");
 
 		assert_wildcard!(
 			format!("{:?}", reader.get_parameters()), 
@@ -167,14 +169,20 @@ mod test {
 		);
 
 		assert_eq!(
-			reader.get_tile_data(&TileCoord3::new(0, 0, 14)?).await?.unwrap().len(),
+			reader.get_tile_data(&TileCoord3::new(0, 0, 0)?).await?.unwrap().len(),
 			12
 		);
 
 		assert_eq!(
-			reader.get_tile_data(&TileCoord3::new(0, 0, 14)?).await?.unwrap().len(),
+			reader
+				.get_tile_data(&TileCoord3::new(8800, 5370, 14)?)
+				.await?
+				.unwrap()
+				.len(),
 			12
 		);
+
+		assert!(reader.get_tile_data(&TileCoord3::new(0, 0, 16)?).await?.is_none());
 
 		Ok(())
 	}

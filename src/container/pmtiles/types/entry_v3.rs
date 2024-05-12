@@ -25,6 +25,7 @@ impl EntryV3 {
 	}
 }
 
+#[derive(Debug)]
 pub struct EntriesV3 {
 	entries: Vec<EntryV3>,
 }
@@ -35,13 +36,10 @@ impl EntriesV3 {
 	}
 
 	pub fn deserialize(data: &Blob) -> Result<Self> {
-		println!("{:?}", data);
-
 		let mut entries: Vec<EntryV3> = Vec::new();
 		let mut reader = BlobReader::new(data);
 
 		let num_entries = reader.read_varint()? as usize;
-		println!("{num_entries}");
 
 		if num_entries > 10_000_000_000 {
 			panic!("there is something wrong: PMTiles with more then 10 billion tiles?")
@@ -51,7 +49,6 @@ impl EntriesV3 {
 
 		for _ in 0..num_entries {
 			let diff = reader.read_varint()?;
-			println!("{last_id} {diff}");
 			last_id += diff;
 			entries.push(EntryV3::new(last_id, 0, 0, 0));
 		}
@@ -71,10 +68,6 @@ impl EntriesV3 {
 			} else {
 				entries[i].range.offset = tmp - 1
 			}
-		}
-
-		if reader.get_position() != data.len() as u64 {
-			panic!("didn't read the complete directory")
 		}
 
 		Ok(EntriesV3 { entries })
