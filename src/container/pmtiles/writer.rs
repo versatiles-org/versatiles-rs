@@ -1,4 +1,4 @@
-use super::types::{Directory, EntryV3, HeaderV3, PMTilesCompression, TileId};
+use super::types::{Directory, EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
 	container::{TilesReaderBox, TilesWriterBox, TilesWriterTrait},
 	helper::{compress_gzip, progress_bar::ProgressBar, DataWriterFile, DataWriterTrait},
@@ -30,7 +30,7 @@ impl TilesWriterTrait for PMTilesWriter {
 		header.internal_compression = PMTilesCompression::Gzip;
 
 		let mut file = DataWriterFile::new(&self.path)?;
-		file.append(&header.serialize())?;
+		file.append(&header.serialize()?)?;
 
 		let mut blocks: Vec<TileBBox> = pyramid
 			.iter_levels()
@@ -43,7 +43,7 @@ impl TilesWriterTrait for PMTilesWriter {
 
 		let mut addressed_tiles: u64 = 0;
 		let mut offset: u64 = 0;
-		let mut entries: Vec<EntryV3> = Vec::new();
+		let mut entries = EntriesV3::new();
 
 		header.tile_data.offset = file.get_position()?;
 
@@ -86,7 +86,7 @@ impl TilesWriterTrait for PMTilesWriter {
 
 		header.leaf_dirs = file.append(&directory.leaves_bytes)?;
 
-		file.write_start(&header.serialize())?;
+		file.write_start(&header.serialize()?)?;
 
 		Ok(())
 	}

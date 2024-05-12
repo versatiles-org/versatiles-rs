@@ -1,11 +1,9 @@
-use super::{tile_compression::PMTilesCompression, tile_type::PMTilesType};
+use super::{pmblob::BlobWriter, tile_compression::PMTilesCompression, tile_type::PMTilesType};
 use crate::{
-	container::TilesReaderParameters,
+	container::{pmtiles::types::pmblob::BlobReader, TilesReaderParameters},
 	types::{Blob, ByteRange},
 };
 use anyhow::{ensure, Result};
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use std::io::Cursor;
 
 #[derive(Debug, PartialEq)]
 pub struct HeaderV3 {
@@ -63,43 +61,43 @@ impl HeaderV3 {
 		})
 	}
 
-	pub fn serialize(&self) -> Blob {
-		let mut buffer = Vec::new();
-		buffer.extend_from_slice(b"PMTiles");
-		buffer.push(3); // Version
+	pub fn serialize(&self) -> Result<Blob> {
+		let mut buffer = BlobWriter::new();
+		buffer.write_slice(b"PMTiles")?;
+		buffer.write_u8(3)?; // Version
 
 		// Serialize fields to little-endian
-		buffer.write_u64::<LittleEndian>(self.root_dir.offset).unwrap();
-		buffer.write_u64::<LittleEndian>(self.root_dir.length).unwrap();
-		buffer.write_u64::<LittleEndian>(self.metadata.offset).unwrap();
-		buffer.write_u64::<LittleEndian>(self.metadata.length).unwrap();
-		buffer.write_u64::<LittleEndian>(self.leaf_dirs.offset).unwrap();
-		buffer.write_u64::<LittleEndian>(self.leaf_dirs.length).unwrap();
-		buffer.write_u64::<LittleEndian>(self.tile_data.offset).unwrap();
-		buffer.write_u64::<LittleEndian>(self.tile_data.length).unwrap();
-		buffer.write_u64::<LittleEndian>(self.addressed_tiles_count).unwrap();
-		buffer.write_u64::<LittleEndian>(self.tile_entries_count).unwrap();
-		buffer.write_u64::<LittleEndian>(self.tile_contents_count).unwrap();
+		buffer.write_varint(self.root_dir.offset)?;
+		buffer.write_varint(self.root_dir.length)?;
+		buffer.write_varint(self.metadata.offset)?;
+		buffer.write_varint(self.metadata.length)?;
+		buffer.write_varint(self.leaf_dirs.offset)?;
+		buffer.write_varint(self.leaf_dirs.length)?;
+		buffer.write_varint(self.tile_data.offset)?;
+		buffer.write_varint(self.tile_data.length)?;
+		buffer.write_varint(self.addressed_tiles_count)?;
+		buffer.write_varint(self.tile_entries_count)?;
+		buffer.write_varint(self.tile_contents_count)?;
 
 		// Serialize the boolean `clustered` as a byte
 		let clustered_val = if self.clustered { 1u8 } else { 0u8 };
-		buffer.push(clustered_val);
+		buffer.write_u8(clustered_val)?;
 
 		// Continue with the rest of the fields
-		buffer.push(self.internal_compression as u8);
-		buffer.push(self.tile_compression as u8);
-		buffer.push(self.tile_type as u8);
-		buffer.push(self.min_zoom);
-		buffer.push(self.max_zoom);
-		buffer.write_i32::<LittleEndian>(self.min_lon_e7).unwrap();
-		buffer.write_i32::<LittleEndian>(self.min_lat_e7).unwrap();
-		buffer.write_i32::<LittleEndian>(self.max_lon_e7).unwrap();
-		buffer.write_i32::<LittleEndian>(self.max_lat_e7).unwrap();
-		buffer.push(self.center_zoom);
-		buffer.write_i32::<LittleEndian>(self.center_lon_e7).unwrap();
-		buffer.write_i32::<LittleEndian>(self.center_lat_e7).unwrap();
+		buffer.write_u8(self.internal_compression as u8)?;
+		buffer.write_u8(self.tile_compression as u8)?;
+		buffer.write_u8(self.tile_type as u8)?;
+		buffer.write_u8(self.min_zoom)?;
+		buffer.write_u8(self.max_zoom)?;
+		buffer.write_i32(self.min_lon_e7)?;
+		buffer.write_i32(self.min_lat_e7)?;
+		buffer.write_i32(self.max_lon_e7)?;
+		buffer.write_i32(self.max_lat_e7)?;
+		buffer.write_u8(self.center_zoom)?;
+		buffer.write_i32(self.center_lon_e7)?;
+		buffer.write_i32(self.center_lat_e7)?;
 
-		Blob::from(buffer)
+		Ok(buffer.to_blob())
 	}
 
 	pub fn deserialize(blob: &Blob) -> Result<Self> {
@@ -109,30 +107,30 @@ impl HeaderV3 {
 		ensure!(&buffer[0..7] == b"PMTiles", "pmtiles magic number exception");
 		ensure!(buffer[7] == 3, "pmtiles version: must be 3");
 
-		let mut cursor = Cursor::new(buffer);
+		let mut cursor = BlobReader::new(blob);
 		cursor.set_position(8); // Skip PMTiles and version byte
 
 		let header = Self {
-			root_dir: ByteRange::new(cursor.read_u64::<LittleEndian>()?, cursor.read_u64::<LittleEndian>()?),
-			metadata: ByteRange::new(cursor.read_u64::<LittleEndian>()?, cursor.read_u64::<LittleEndian>()?),
-			leaf_dirs: ByteRange::new(cursor.read_u64::<LittleEndian>()?, cursor.read_u64::<LittleEndian>()?),
-			tile_data: ByteRange::new(cursor.read_u64::<LittleEndian>()?, cursor.read_u64::<LittleEndian>()?),
-			addressed_tiles_count: cursor.read_u64::<LittleEndian>()?,
-			tile_entries_count: cursor.read_u64::<LittleEndian>()?,
-			tile_contents_count: cursor.read_u64::<LittleEndian>()?,
+			root_dir: ByteRange::new(cursor.read_varint()?, cursor.read_varint()?),
+			metadata: ByteRange::new(cursor.read_varint()?, cursor.read_varint()?),
+			leaf_dirs: ByteRange::new(cursor.read_varint()?, cursor.read_varint()?),
+			tile_data: ByteRange::new(cursor.read_varint()?, cursor.read_varint()?),
+			addressed_tiles_count: cursor.read_varint()?,
+			tile_entries_count: cursor.read_varint()?,
+			tile_contents_count: cursor.read_varint()?,
 			clustered: cursor.read_u8()? == 1,
 			internal_compression: PMTilesCompression::from_u8(cursor.read_u8()?)?,
 			tile_compression: PMTilesCompression::from_u8(cursor.read_u8()?)?,
 			tile_type: PMTilesType::from_u8(cursor.read_u8()?)?,
 			min_zoom: cursor.read_u8()?,
 			max_zoom: cursor.read_u8()?,
-			min_lon_e7: cursor.read_i32::<LittleEndian>()?,
-			min_lat_e7: cursor.read_i32::<LittleEndian>()?,
-			max_lon_e7: cursor.read_i32::<LittleEndian>()?,
-			max_lat_e7: cursor.read_i32::<LittleEndian>()?,
+			min_lon_e7: cursor.read_i32()?,
+			min_lat_e7: cursor.read_i32()?,
+			max_lon_e7: cursor.read_i32()?,
+			max_lat_e7: cursor.read_i32()?,
 			center_zoom: cursor.read_u8()?,
-			center_lon_e7: cursor.read_i32::<LittleEndian>()?,
-			center_lat_e7: cursor.read_i32::<LittleEndian>()?,
+			center_lon_e7: cursor.read_i32()?,
+			center_lat_e7: cursor.read_i32()?,
 		};
 
 		Ok(header)
@@ -172,7 +170,7 @@ mod tests {
 			center_lat_e7: 12000000,
 		};
 
-		let serialized_data = header.serialize();
+		let serialized_data = header.serialize().unwrap();
 		let deserialized_header = HeaderV3::deserialize(&serialized_data).unwrap();
 
 		assert_eq!(header, deserialized_header);

@@ -1,4 +1,6 @@
 use super::types::{Directory, EntriesV3, HeaderV3, TileId};
+#[cfg(feature = "full")]
+use crate::helper::pretty_print::PrettyPrint;
 use crate::{
 	container::{TilesReaderBox, TilesReaderParameters, TilesReaderTrait},
 	helper::{decompress, DataReaderBox, DataReaderFile},
@@ -13,6 +15,7 @@ pub struct PMTilesReader {
 	data_reader: DataReaderBox,
 	header: HeaderV3,
 	meta: Blob,
+	internal_compression: TileCompression,
 	directory: Directory,
 	parameters: TilesReaderParameters,
 }
@@ -33,12 +36,10 @@ impl PMTilesReader {
 				.await?,
 		)?;
 
-		if !header.clustered {
-			bail!("source archive must be clustered for extracts");
-		}
+		let internal_compression = header.internal_compression.as_value()?;
 
 		let meta = data_reader.read_range(&header.metadata).await?;
-		let meta = decompress(meta, &header.internal_compression.as_value()?)?;
+		let meta = decompress(meta, &internal_compression)?;
 
 		let directory: Directory = Directory {
 			root_bytes: data_reader.read_range(&header.root_dir).await?,
@@ -58,6 +59,7 @@ impl PMTilesReader {
 			data_reader,
 			directory,
 			header,
+			internal_compression,
 			meta,
 			parameters,
 		}))
@@ -90,7 +92,7 @@ impl TilesReaderTrait for PMTilesReader {
 		log::trace!("get_tile_data_original {:?}", coord);
 
 		let tile_id: u64 = coord.get_tile_id();
-		let mut dir_blob = self.directory.root_bytes.clone();
+		let mut dir_blob = decompress(self.directory.root_bytes.clone(), &self.internal_compression)?;
 
 		for _depth in 0..3 {
 			let entries = EntriesV3::deserialize(&dir_blob)?;
@@ -122,5 +124,58 @@ impl TilesReaderTrait for PMTilesReader {
 		}
 
 		bail!("not found")
+	}
+
+	// deep probe of container meta
+	#[cfg(feature = "full")]
+	async fn probe_container(&mut self, print: &PrettyPrint) -> Result<()> {
+		print.add_key_value("meta size", &self.meta.len()).await;
+		print.add_key_value("header", &self.header).await;
+
+		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod test {
+	use crate::assert_wildcard;
+
+	use super::*;
+	use lazy_static::lazy_static;
+	use std::{env::current_dir, path::PathBuf};
+
+	lazy_static! {
+		static ref PATH: PathBuf = current_dir().unwrap().join("./testdata/berlin.pmtiles");
+	}
+
+	#[tokio::test]
+	async fn reader() -> Result<()> {
+		let mut reader = PMTilesReader::open_path(&PATH).await?;
+
+		assert_eq!(reader.get_container_name(), "pmtiles");
+
+		assert_wildcard!(
+			reader.get_meta()?.unwrap().as_str(),
+			"{\"author\":\"OpenStreetMap contributors, Geofabrik GmbH\",*,\"version\":\"3.0\"}"
+		);
+
+		assert_wildcard!(reader.get_name(), "*/testdata/berlin.pmtiles");
+
+		assert_wildcard!(
+			format!("{:?}", reader.get_parameters()), 
+			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), * 14: [0,0,16383,16383] (268435456)], tile_compression: Gzip, tile_format: PBF }"
+		);
+
+		assert_eq!(
+			reader.get_tile_data(&TileCoord3::new(0, 0, 14)?).await?.unwrap().len(),
+			12
+		);
+
+		assert_eq!(
+			reader.get_tile_data(&TileCoord3::new(0, 0, 14)?).await?.unwrap().len(),
+			12
+		);
+
+		Ok(())
 	}
 }
