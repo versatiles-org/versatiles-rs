@@ -1,7 +1,6 @@
 use bytes::Bytes;
 use std::fmt::Debug;
 use std::ops::Range;
-use std::str::from_utf8;
 
 /// A simple wrapper around `bytesMut::Bytes` that provides additional methods for working with byte data.
 #[derive(Clone, PartialEq, Eq)]
@@ -111,23 +110,15 @@ impl From<String> for Blob {
 impl Debug for Blob {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.write_fmt(format_args!(
-			"Blob({}: b\"{}\")",
+			"Blob({}:\n{}\n)",
 			self.0.len(),
 			self
 				.0
 				.clone()
 				.into_iter()
-				.map(|c| {
-					if !(32..=126).contains(&c) {
-						format!("\\x{:02x}", c)
-					} else if c == 34 || c == 92 {
-						String::from("\\") + from_utf8(&[c]).unwrap()
-					} else {
-						from_utf8(&[c]).unwrap().to_string()
-					}
-				})
+				.map(|c| { format!("{:02x}", c) })
 				.collect::<Vec<String>>()
-				.join("")
+				.join(" ")
 		))
 	}
 }
