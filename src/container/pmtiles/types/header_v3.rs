@@ -1,6 +1,6 @@
-use super::{pmblob::BlobWriter, tile_compression::PMTilesCompression, tile_type::PMTilesType};
+use super::{blob_io::BlobWriter, tile_compression::PMTilesCompression, tile_type::PMTilesType};
 use crate::{
-	container::{pmtiles::types::pmblob::BlobReader, TilesReaderParameters},
+	container::{pmtiles::types::blob_io::BlobReader, TilesReaderParameters},
 	types::{Blob, ByteRange},
 };
 use anyhow::{ensure, Result};
@@ -67,17 +67,17 @@ impl HeaderV3 {
 		buffer.write_u8(3)?; // Version
 
 		// Serialize fields to little-endian
-		buffer.write_varint(self.root_dir.offset)?;
-		buffer.write_varint(self.root_dir.length)?;
-		buffer.write_varint(self.metadata.offset)?;
-		buffer.write_varint(self.metadata.length)?;
-		buffer.write_varint(self.leaf_dirs.offset)?;
-		buffer.write_varint(self.leaf_dirs.length)?;
-		buffer.write_varint(self.tile_data.offset)?;
-		buffer.write_varint(self.tile_data.length)?;
-		buffer.write_varint(self.addressed_tiles_count)?;
-		buffer.write_varint(self.tile_entries_count)?;
-		buffer.write_varint(self.tile_contents_count)?;
+		buffer.write_u64(self.root_dir.offset)?;
+		buffer.write_u64(self.root_dir.length)?;
+		buffer.write_u64(self.metadata.offset)?;
+		buffer.write_u64(self.metadata.length)?;
+		buffer.write_u64(self.leaf_dirs.offset)?;
+		buffer.write_u64(self.leaf_dirs.length)?;
+		buffer.write_u64(self.tile_data.offset)?;
+		buffer.write_u64(self.tile_data.length)?;
+		buffer.write_u64(self.addressed_tiles_count)?;
+		buffer.write_u64(self.tile_entries_count)?;
+		buffer.write_u64(self.tile_contents_count)?;
 
 		// Serialize the boolean `clustered` as a byte
 		let clustered_val = if self.clustered { 1u8 } else { 0u8 };

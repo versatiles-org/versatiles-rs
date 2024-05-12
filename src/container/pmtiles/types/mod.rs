@@ -1,7 +1,7 @@
+mod blob_io;
 mod directory;
 mod entry_v3;
 mod header_v3;
-mod pmblob;
 mod tile_compression;
 mod tile_id;
 mod tile_type;

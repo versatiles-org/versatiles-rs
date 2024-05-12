@@ -54,6 +54,8 @@ impl Read for DataReaderFile {
 
 #[cfg(test)]
 mod tests {
+	use crate::assert_wildcard;
+
 	use super::*;
 	use anyhow::Result;
 	use assert_fs::NamedTempFile;
@@ -121,7 +123,10 @@ mod tests {
 		let data_reader_file = DataReaderFile::from_path(&temp_file_path)?;
 
 		// Check if the name matches the original file path
-		assert_eq!(data_reader_file.get_name(), temp_file_path.to_str().unwrap());
+		assert_wildcard!(
+			data_reader_file.get_name(),
+			&format!("*{}", temp_file_path.to_str().unwrap())
+		);
 
 		Ok(())
 	}

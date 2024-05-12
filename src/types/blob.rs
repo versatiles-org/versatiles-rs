@@ -110,7 +110,7 @@ impl From<String> for Blob {
 impl Debug for Blob {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.write_fmt(format_args!(
-			"Blob({}:\n{}\n)",
+			"Blob({}): {}",
 			self.0.len(),
 			self
 				.0
@@ -208,11 +208,11 @@ mod tests {
 	fn debug() {
 		assert_eq!(
 			format!("{:?}", Blob::from("Voisilmäpulla")),
-			"Blob(14: b\"Voisilm\\xc3\\xa4pulla\")"
+			"Blob(14): 56 6f 69 73 69 6c 6d c3 a4 70 75 6c 6c 61"
 		);
 		assert_eq!(
 			format!("{:?}", Blob::from("01234567890123456789012345678901")),
-			"Blob(32: b\"01234567890123456789012345678901\")"
+			"Blob(32): 30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35 36 37 38 39 30 31 32 33 34 35 36 37 38 39 30 31"
 		);
 	}
 }

@@ -142,7 +142,7 @@ impl TilesReaderTrait for TarTilesReader {
 		Ok(self.meta.clone())
 	}
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		log::trace!("get_tile_data_original {:?}", coord);
+		log::trace!("get_tile_data {:?}", coord);
 
 		let range = self.tile_map.get(coord);
 

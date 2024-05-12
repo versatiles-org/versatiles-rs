@@ -1,6 +1,6 @@
 use super::types::{Directory, EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
-	container::{ TilesReaderTrait, TilesWriterTrait},
+	container::{TilesReaderTrait, TilesWriterTrait},
 	helper::{compress_gzip, progress_bar::ProgressBar, DataWriterFile, DataWriterTrait},
 	types::{Blob, TileBBox},
 };

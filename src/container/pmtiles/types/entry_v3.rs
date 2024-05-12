@@ -1,12 +1,12 @@
 use crate::{
-	container::pmtiles::types::pmblob::BlobReader,
+	container::pmtiles::types::blob_io::BlobReader,
 	helper::compress_gzip,
 	types::{Blob, ByteRange},
 };
 use anyhow::Result;
 use std::{cmp::Ordering, fmt::Debug, slice::SliceIndex};
 
-use super::pmblob::BlobWriter;
+use super::blob_io::BlobWriter;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EntryV3 {
@@ -110,6 +110,12 @@ impl EntriesV3 {
 		}
 
 		None
+	}
+}
+
+impl Default for EntriesV3 {
+	fn default() -> Self {
+		Self::new()
 	}
 }
 

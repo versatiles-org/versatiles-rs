@@ -157,6 +157,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	#[cfg(feature = "full")]
 	use crate::container::writer::TilesWriterTrait;
 
 	#[derive(Debug)]

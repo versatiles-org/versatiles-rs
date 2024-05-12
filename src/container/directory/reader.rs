@@ -158,7 +158,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 		Ok(self.meta.clone())
 	}
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		log::trace!("get_tile_data_original {:?}", coord);
+		log::trace!("get_tile_data {:?}", coord);
 
 		if let Some(path) = self.tile_map.get(coord) {
 			Self::read(path).map(Some)

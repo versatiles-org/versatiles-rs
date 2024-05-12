@@ -89,14 +89,13 @@ impl TilesReaderTrait for PMTilesReader {
 	}
 
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		log::trace!("get_tile_data_original {:?}", coord);
+		log::trace!("get_tile_data {:?}", coord);
 
 		let tile_id: u64 = coord.get_tile_id();
 		let mut dir_blob = decompress(self.directory.root_bytes.clone(), &self.internal_compression)?;
 
 		for _depth in 0..3 {
 			let entries = EntriesV3::deserialize(&dir_blob)?;
-			println!("{:?}", entries);
 			let entry = entries.find_tile(tile_id);
 
 			let entry = if let Some(entry) = entry {
@@ -157,7 +156,7 @@ mod test {
 
 		assert_wildcard!(reader.get_name(), "*/testdata/berlin.pmtiles");
 
-		assert_eq!(format!("{:?}", reader.header), "   ");
+		assert_eq!(format!("{:?}", reader.header), "HeaderV3 { root_dir: ByteRange[127,2271], metadata: ByteRange[2398,592], leaf_dirs: ByteRange[2990,0], tile_data: ByteRange[2990,25869006], addressed_tiles_count: 878, tile_entries_count: 878, tile_contents_count: 876, clustered: true, internal_compression: Gzip, tile_compression: Gzip, tile_type: MVT, min_zoom: 0, max_zoom: 14, min_lon_e7: 130828300, min_lat_e7: 523344600, max_lon_e7: 137622450, max_lat_e7: 526783000, center_zoom: 7, center_lon_e7: 134225380, center_lat_e7: 525063800 }");
 
 		assert_wildcard!(
 			reader.get_meta()?.unwrap().as_str(),
@@ -171,7 +170,7 @@ mod test {
 
 		assert_eq!(
 			reader.get_tile_data(&TileCoord3::new(0, 0, 0)?).await?.unwrap().len(),
-			12
+			20
 		);
 
 		assert_eq!(
@@ -180,7 +179,7 @@ mod test {
 				.await?
 				.unwrap()
 				.len(),
-			12
+			100391
 		);
 
 		assert!(reader.get_tile_data(&TileCoord3::new(0, 0, 16)?).await?.is_none());

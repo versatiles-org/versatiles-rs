@@ -1,4 +1,4 @@
-use crate::container::{ TilesReaderTrait, TilesWriterTrait};
+use crate::container::{TilesReaderTrait, TilesWriterTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::StreamExt;
