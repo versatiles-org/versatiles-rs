@@ -3,8 +3,9 @@ use crate::{
 	helper::decompress,
 	types::{extract_compression, extract_format, Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
-use anyhow::{bail, ensure, Result};
+use anyhow::{bail, ensure, Context, Result};
 use async_trait::async_trait;
+use itertools::Itertools;
 use std::{
 	collections::HashMap,
 	fmt::Debug,
@@ -32,8 +33,8 @@ impl DirectoryTilesReader {
 
 		let mut meta: Option<Blob> = None;
 		let mut tile_map = HashMap::new();
-		let mut tile_format: Option<TileFormat> = None;
-		let mut tile_compression: Option<TileCompression> = None;
+		let mut container_form: Option<TileFormat> = None;
+		let mut container_comp: Option<TileCompression> = None;
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
 		for result1 in fs::read_dir(dir)? {
@@ -60,14 +61,13 @@ impl DirectoryTilesReader {
 					}
 					let x = numeric2?;
 
-					for result3 in fs::read_dir(entry2.path())? {
+					let files = fs::read_dir(entry2.path())?.map(|f| f.unwrap());
+					let files = files.sorted_unstable_by(|a, b| a.file_name().partial_cmp(&b.file_name()).unwrap());
+
+					for entry3 in files {
 						// y level
-						if result3.is_err() {
-							continue;
-						}
-						let entry3 = result3?;
 						let mut filename = entry3.file_name().into_string().unwrap();
-						let this_comp = extract_compression(&mut filename);
+						let file_comp = extract_compression(&mut filename);
 						let this_form = extract_format(&mut filename);
 
 						if this_form.is_none() {
@@ -81,16 +81,22 @@ impl DirectoryTilesReader {
 						}
 						let y = numeric3?;
 
-						if tile_format.is_none() {
-							tile_format = Some(this_form);
-						} else if tile_format != Some(this_form) {
-							bail!("unknown filename {filename:?}, can't detect tile format");
+						if container_form.is_none() {
+							container_form = Some(file_form);
+						} else if container_form != Some(file_form) {
+							bail!(
+								"found multiple tile formats {:?} and {file_form:?}",
+								container_form.unwrap()
+							);
 						}
 
-						if tile_compression.is_none() {
-							tile_compression = Some(this_comp);
-						} else if tile_compression != Some(this_comp) {
-							bail!("unknown filename {filename:?}, can't detect tile compression");
+						if container_comp.is_none() {
+							container_comp = Some(file_comp);
+						} else if container_comp != Some(file_comp) {
+							bail!(
+								"found multiple tile compressions {:?} and {file_comp:?}",
+								container_comp.unwrap()
+							);
 						}
 
 						let coord3 = TileCoord3::new(x, y, z)?;
@@ -117,15 +123,18 @@ impl DirectoryTilesReader {
 			}
 		}
 
+		if tile_map.is_empty() {
+			bail!("no tiles found");
+		}
+
+		let tile_format = container_form.context("tile format must be specified")?;
+		let tile_compression = container_comp.context("tile compression must be specified")?;
+
 		Ok(Box::new(DirectoryTilesReader {
 			meta,
 			dir: dir.to_path_buf(),
 			tile_map,
-			parameters: TilesReaderParameters::new(
-				tile_format.expect("tile format must be specified"),
-				tile_compression.expect("tile compression must be specified"),
-				bbox_pyramid,
-			),
+			parameters: TilesReaderParameters::new(tile_format, tile_compression, bbox_pyramid),
 		}))
 	}
 
@@ -165,6 +174,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 impl Debug for DirectoryTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("DirectoryTilesReader")
+			.field("name", &self.get_name())
 			.field("parameters", &self.get_parameters())
 			.finish()
 	}
@@ -173,31 +183,161 @@ impl Debug for DirectoryTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use assert_fs::TempDir;
+	use crate::{assert_wildcard, helper::compress};
+	use assert_fs::{
+		fixture::{FileWriteStr, PathChild},
+		TempDir,
+	};
 	use std::fs::{self};
 
 	#[tokio::test]
 	async fn tile_reader_new() -> Result<()> {
 		let dir = TempDir::new()?;
-
-		fs::create_dir_all(dir.path().join("1/2"))?;
-		fs::write(dir.path().join(".DS_Store"), "")?;
-		fs::write(dir.path().join("1/2/3.png"), "test tile data")?;
-		fs::write(dir.path().join("meta.json"), "test meta data")?;
+		dir.child(".DS_Store").write_str("")?;
+		dir.child("1/2/3.png").write_str("test tile data")?;
+		dir.child("meta.json").write_str("test meta data")?;
 
 		let mut reader = DirectoryTilesReader::open_path(&dir)?;
 
 		assert_eq!(reader.get_meta()?.unwrap().as_str(), "test meta data");
 
-		let coord = TileCoord3::new(2, 3, 1)?;
-		let tile_data = reader.get_tile_data(&coord).await;
-		assert!(tile_data.is_ok());
-		assert_eq!(tile_data?.unwrap(), Blob::from("test tile data"));
+		let tile_data = reader.get_tile_data(&TileCoord3::new(2, 3, 1)?).await?.unwrap();
+		assert_eq!(tile_data, Blob::from("test tile data"));
 
-		// Test for non-existent tile
-		let coord = TileCoord3::new(2, 2, 1)?; // Assuming these coordinates do not exist
-		assert!(reader.get_tile_data(&coord).await?.is_none());
+		assert!(reader.get_tile_data(&TileCoord3::new(2, 2, 1)?).await?.is_none());
 
-		return Ok(());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn open_path_with_nonexistent_directory() -> Result<()> {
+		let dir = TempDir::new()?;
+
+		let msg = DirectoryTilesReader::open_path(&dir.join("dont_exist"))
+			.unwrap_err()
+			.to_string();
+		assert_eq!(
+			&msg[msg.len() - 16..],
+			"\" does not exist",
+			"Should return error on non-existent directory"
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn open_path_with_unsupported_file_format() -> Result<()> {
+		let dir = TempDir::new()?;
+		dir.child("1/2/3.unknown").write_str("unsupported format")?;
+
+		assert_eq!(
+			DirectoryTilesReader::open_path(dir.path()).unwrap_err().to_string(),
+			"no tiles found",
+			"Should return error on unsupported file formats"
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn read_compressed_meta_files() -> Result<()> {
+		let dir = TempDir::new().unwrap();
+		fs::write(
+			dir.path().join("meta.json.gz"),
+			compress(Blob::from("test meta data gzip"), &TileCompression::Gzip)
+				.unwrap()
+				.as_slice(),
+		)
+		.unwrap();
+		fs::create_dir_all(dir.path().join("0/1")).unwrap();
+		fs::write(dir.path().join("0/1/2.png"), "tile at 0/1/2").unwrap();
+
+		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
+		assert_eq!(reader.get_meta().unwrap().unwrap(), Blob::from("test meta data gzip"));
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn complex_directory_structure() -> Result<()> {
+		let dir = TempDir::new().unwrap();
+		fs::create_dir_all(dir.path().join("0/1")).unwrap();
+		fs::write(dir.path().join("0/1/2.png"), "tile at 0/1/2").unwrap();
+		fs::write(dir.path().join("meta.json"), "global meta").unwrap();
+
+		let mut reader = DirectoryTilesReader::open_path(&dir).unwrap();
+		let coord = TileCoord3::new(1, 2, 0).unwrap();
+		let tile_data = reader.get_tile_data(&coord).await.unwrap().unwrap();
+
+		assert_eq!(tile_data, Blob::from("tile at 0/1/2"));
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn incorrect_format_and_compression_handling() -> Result<()> {
+		let dir = TempDir::new().unwrap();
+		fs::create_dir_all(dir.path().join("1/2")).unwrap();
+		fs::write(dir.path().join("1/2/3.txt"), "wrong format").unwrap();
+
+		assert_eq!(
+			&DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
+			"no tiles found",
+			"Should error on incorrect tile format"
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn error_different_tile_formats() -> Result<()> {
+		let dir = TempDir::new()?;
+		dir.child("1/2/3.png").write_str("test tile data")?;
+		dir.child("1/2/4.jpg").write_str("test tile data")?;
+
+		assert_eq!(
+			DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
+			"found multiple tile formats PNG and JPG"
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn error_different_tile_compressions() -> Result<()> {
+		let dir = TempDir::new()?;
+		dir.child("1/2/3.pbf").write_str("test tile data")?;
+		dir.child("1/2/4.pbf.br").write_str("test tile data")?;
+
+		assert_eq!(
+			DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
+			"found multiple tile compressions None and Brotli"
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_minor_functions() -> Result<()> {
+		let dir = assert_fs::TempDir::new()?;
+		dir.child("meta.json").write_str("{\"key\": \"value\"}")?;
+		dir.child("1/2/3.png.br").write_str("tile data")?;
+
+		let mut reader = DirectoryTilesReader::open_path(dir.path())?;
+
+		assert_eq!(reader.get_container_name(), "directory");
+
+		assert_wildcard!(
+			format!("{reader:?}"), 
+			"DirectoryTilesReader { name: \"*\", parameters: TilesReaderParameters { bbox_pyramid: [1: [2,3,2,3] (1)], tile_compression: Brotli, tile_format: PNG } }"
+		);
+
+		assert_eq!(reader.get_meta()?.unwrap(), Blob::from("{\"key\": \"value\"}"));
+
+		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Brotli);
+		reader.override_compression(TileCompression::Gzip);
+		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
+
+		Ok(())
 	}
 }
