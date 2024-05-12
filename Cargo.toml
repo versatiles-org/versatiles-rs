@@ -99,8 +99,9 @@ tokio = { version = "1.37.0", default-features = false, features = [
 webp = { version = "0.3.0", default-features = false, optional = true, features = ["img"] }
 
 [dev-dependencies]
-assert_fs = { version = "1.1.1", default-features = false }
-lazy_static = { version = "1.4.0", default-features = false }
+assert_fs = "1.1.1"
+lazy_static = "1.4.0"
+wildmatch = "2.3.3"
 
 [features]
 default = ["full", "cli"]

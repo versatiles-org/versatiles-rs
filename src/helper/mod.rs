@@ -23,3 +23,6 @@ pub mod pretty_print;
 
 #[cfg(feature = "full")]
 pub mod progress_bar;
+
+#[cfg(test)]
+pub mod assert;

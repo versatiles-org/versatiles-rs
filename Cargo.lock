@@ -1827,6 +1827,7 @@ dependencies = [
  "terminal_size",
  "tokio",
  "webp",
+ "wildmatch",
 ]
 
 [[package]]
@@ -1954,6 +1955,12 @@ checksum = "b3de34ae270483955a94f4b21bdaaeb83d508bb84a01435f393818edb0012009"
 dependencies = [
  "rustls-pki-types",
 ]
+
+[[package]]
+name = "wildmatch"
+version = "2.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "939e59c1bc731542357fdaad98b209ef78c8743d652bb61439d16b16a79eb025"
 
 [[package]]
 name = "winapi-util"
