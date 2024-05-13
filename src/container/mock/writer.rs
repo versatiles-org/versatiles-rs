@@ -6,8 +6,8 @@ use futures_util::StreamExt;
 pub struct MockTilesWriter {}
 
 impl MockTilesWriter {
-	pub fn new_mock() -> MockTilesWriter {
-		MockTilesWriter {}
+	pub fn new_mock() -> Result<MockTilesWriter> {
+		Ok(MockTilesWriter {})
 	}
 }
 
@@ -35,16 +35,18 @@ mod tests {
 	use crate::container::mock::{MockTilesReader, MockTilesReaderProfile};
 
 	#[tokio::test]
-	async fn convert_png() {
-		let mut writer = MockTilesWriter::new_mock();
-		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG);
+	async fn convert_png() -> Result<()> {
+		let mut writer = MockTilesWriter::new_mock()?;
+		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
 		writer.write_from_reader(&mut reader).await.unwrap();
+		Ok(())
 	}
 
 	#[tokio::test]
-	async fn convert_pbf() {
-		let mut writer = MockTilesWriter::new_mock();
-		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF);
+	async fn convert_pbf() -> Result<()> {
+		let mut writer = MockTilesWriter::new_mock()?;
+		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF)?;
 		writer.write_from_reader(&mut reader).await.unwrap();
+		Ok(())
 	}
 }

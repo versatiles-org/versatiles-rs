@@ -212,7 +212,7 @@ pub mod tests {
 			let mut reader = TarTilesReader::open_path(&temp_file)?;
 			format!("{:?}", reader);
 
-			let mut writer = MockTilesWriter::new_mock();
+			let mut writer = MockTilesWriter::new_mock()?;
 			writer.write_from_reader(&mut reader).await?;
 			Ok(())
 		}

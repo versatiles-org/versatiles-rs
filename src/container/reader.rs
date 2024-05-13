@@ -28,8 +28,6 @@ impl TilesReaderParameters {
 	}
 }
 
-pub type TilesReader = Box<dyn TilesReaderTrait>;
-
 #[async_trait]
 pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	/// some kine of name for this reader source, e.g. the filename
@@ -158,22 +156,20 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 mod tests {
 	use super::*;
 	#[cfg(feature = "full")]
-	use crate::container::writer::TilesWriterTrait;
-
 	#[derive(Debug)]
 	struct TestReader {
 		parameters: TilesReaderParameters,
 	}
 
 	impl TestReader {
-		fn new_dummy() -> TilesReader {
-			Box::new(TestReader {
+		fn new_dummy() -> TestReader {
+			TestReader {
 				parameters: TilesReaderParameters {
 					bbox_pyramid: TileBBoxPyramid::new_full(3),
 					tile_compression: TileCompression::Gzip,
 					tile_format: TileFormat::PBF,
 				},
-			})
+			}
 		}
 	}
 
@@ -202,7 +198,7 @@ mod tests {
 	#[tokio::test]
 	#[cfg(feature = "full")]
 	async fn reader() -> Result<()> {
-		use crate::container::mock::MockTilesWriter;
+		use crate::container::{mock::MockTilesWriter, TilesWriterTrait};
 
 		let mut reader = TestReader::new_dummy();
 
@@ -227,8 +223,8 @@ mod tests {
 			"test tile data"
 		);
 
-		let mut writer = MockTilesWriter::new_mock();
-		writer.write_from_reader(reader.as_mut()).await?;
+		let mut writer = MockTilesWriter::new_mock()?;
+		writer.write_from_reader(&mut reader).await?;
 
 		Ok(())
 	}

@@ -1,5 +1,5 @@
 use crate::{
-	container::{TilesReaderParameters, TilesReaderTrait},
+	container::{TilesReaderParameters, TilesReaderTrait, TilesWriterTrait},
 	helper::compress,
 	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
@@ -24,7 +24,7 @@ pub struct MockTilesReader {
 }
 
 impl MockTilesReader {
-	pub fn new_mock_profile(profile: MockTilesReaderProfile) -> MockTilesReader {
+	pub fn new_mock_profile(profile: MockTilesReaderProfile) -> Result<MockTilesReader> {
 		let bbox_pyramid = TileBBoxPyramid::new_full(4);
 
 		MockTilesReader::new_mock(match profile {
@@ -39,8 +39,8 @@ impl MockTilesReader {
 			}
 		})
 	}
-	pub fn new_mock(parameters: TilesReaderParameters) -> MockTilesReader {
-		MockTilesReader { parameters }
+	pub fn new_mock(parameters: TilesReaderParameters) -> Result<MockTilesReader> {
+		Ok(MockTilesReader { parameters })
 	}
 }
 
@@ -92,15 +92,12 @@ impl std::fmt::Debug for MockTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{
-		container::{mock::MockTilesWriter, TilesWriterTrait},
-		helper::decompress,
-	};
+	use crate::{container::mock::MockTilesWriter, helper::decompress};
 	use anyhow::Result;
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG);
+		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
 		assert_eq!(reader.get_container_name(), "dummy_container");
 		assert_eq!(reader.get_name(), "dummy_name");
 
@@ -124,7 +121,7 @@ mod tests {
 	async fn get_tile_data() {
 		let test = |profile, blob| async move {
 			let coord = TileCoord3::new(23, 45, 6).unwrap();
-			let mut reader = MockTilesReader::new_mock_profile(profile);
+			let mut reader = MockTilesReader::new_mock_profile(profile).unwrap();
 			let tile_compressed = reader.get_tile_data(&coord).await.unwrap().unwrap();
 			let tile_uncompressed = decompress(tile_compressed, &reader.get_parameters().tile_compression).unwrap();
 			assert_eq!(tile_uncompressed, blob);
@@ -136,9 +133,10 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn convert_from() {
-		let mut writer = MockTilesWriter::new_mock();
-		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG);
+	async fn convert_from() -> Result<()> {
+		let mut writer = MockTilesWriter::new_mock()?;
+		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
 		writer.write_from_reader(&mut reader).await.unwrap();
+		Ok(())
 	}
 }

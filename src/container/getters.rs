@@ -1,3 +1,4 @@
+use super::{TilesReaderTrait, TilesWriterTrait};
 use crate::{
 	container::{
 		directory::{DirectoryTilesReader, DirectoryTilesWriter},
@@ -5,7 +6,6 @@ use crate::{
 		pmtiles::{PMTilesReader, PMTilesWriter},
 		tar::{TarTilesReader, TarTilesWriter},
 		versatiles::{VersaTilesReader, VersaTilesWriter},
-		TilesReader, TilesWriter,
 	},
 	helper::{DataReader, DataReaderHttp},
 };
@@ -13,7 +13,7 @@ use anyhow::{bail, Context, Result};
 use reqwest::Url;
 use std::env;
 
-pub async fn get_reader(filename: &str) -> Result<TilesReader> {
+pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReaderTrait>> {
 	let extension = get_extension(filename);
 
 	if let Ok(reader) = parse_as_url(filename) {
@@ -53,7 +53,7 @@ fn parse_as_url(filename: &str) -> Result<DataReader> {
 	}
 }
 
-pub async fn get_writer(filename: &str) -> Result<TilesWriter> {
+pub async fn get_writer(filename: &str) -> Result<Box<dyn TilesWriterTrait>> {
 	let path = env::current_dir()?.join(filename);
 
 	if path.is_dir() {
@@ -83,7 +83,6 @@ pub mod tests {
 	use crate::{
 		container::{
 			mock::{MockTilesReader, MockTilesWriter},
-			writer::TilesWriterTrait,
 			TilesReaderParameters,
 		},
 		types::{TileBBoxPyramid, TileCompression, TileFormat},
@@ -100,7 +99,7 @@ pub mod tests {
 			tile_format,
 			compression,
 			TileBBoxPyramid::new_full(max_zoom_level),
-		));
+		))?;
 
 		// get to test container comverter
 		let container_file = match extension {
@@ -139,7 +138,7 @@ pub mod tests {
 				tile_format,
 				compression,
 				TileBBoxPyramid::new_full(2),
-			));
+			))?;
 
 			enum TempType {
 				Dir(TempDir),
@@ -165,7 +164,7 @@ pub mod tests {
 
 			// get test container reader
 			let mut reader2 = get_reader(filename).await?;
-			let mut writer2 = MockTilesWriter::new_mock();
+			let mut writer2 = MockTilesWriter::new_mock()?;
 			writer2.write_from_reader(reader2.as_mut()).await?;
 
 			Ok(())

@@ -187,7 +187,7 @@ mod tests {
 
 	pub async fn make_test_tar(compression: TileCompression) -> NamedTempFile {
 		// get dummy reader
-		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF);
+		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF).unwrap();
 
 		// get to test container converter
 		let container_file = NamedTempFile::new("temp.tar").unwrap();

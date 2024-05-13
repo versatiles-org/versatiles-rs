@@ -134,7 +134,7 @@ mod tests {
 			TileFormat::PBF,
 			TileCompression::Gzip,
 			TileBBoxPyramid::new_full(2),
-		));
+		))?;
 
 		let mut writer = DirectoryTilesWriter::open_path(&temp_path)?;
 

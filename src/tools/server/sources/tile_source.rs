@@ -1,6 +1,6 @@
 use super::{super::helper::Url, SourceResponse};
 use crate::{
-	container::TilesReader,
+	container::TilesReaderTrait,
 	helper::TargetCompression,
 	types::{TileCompression, TileCoord3, TileFormat},
 };
@@ -13,14 +13,14 @@ use tokio::sync::Mutex;
 pub struct TileSource {
 	pub prefix: Url,
 	pub json_info: String,
-	reader: Arc<Mutex<TilesReader>>,
+	reader: Arc<Mutex<Box<dyn TilesReaderTrait>>>,
 	pub tile_mime: String,
 	pub compression: TileCompression,
 }
 
 impl TileSource {
 	// Constructor function for creating a TileSource instance
-	pub fn from(reader: TilesReader, prefix: Url) -> Result<TileSource> {
+	pub fn from(reader: Box<dyn TilesReaderTrait>, prefix: Url) -> Result<TileSource> {
 		let parameters = reader.get_parameters();
 		let compression = parameters.tile_compression;
 
@@ -143,7 +143,7 @@ mod tests {
 	// Test the constructor function for TileSource
 	#[test]
 	fn tile_container_from() -> Result<()> {
-		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG);
+		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
 		let container = TileSource::from(Box::new(reader), Url::new("prefix"))?;
 
 		assert_eq!(container.prefix.str, "/prefix");
@@ -154,10 +154,11 @@ mod tests {
 
 	// Test the debug function
 	#[test]
-	fn debug() {
-		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG);
+	fn debug() -> Result<()> {
+		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
 		let container = TileSource::from(Box::new(reader), Url::new("prefix")).unwrap();
 		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: None, tile_format: PNG } } }, tile_mime: \"image/png\", compression: None }");
+		Ok(())
 	}
 
 	// Test the get_data method of the TileSource
@@ -186,7 +187,7 @@ mod tests {
 		}
 
 		let c = &mut TileSource::from(
-			Box::new(MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)),
+			Box::new(MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?),
 			Url::new("prefix"),
 		)?;
 
