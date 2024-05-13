@@ -46,3 +46,74 @@ impl<'a> BlobReader<'a> {
 		self.cursor.position()
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::types::Blob;
+
+	#[test]
+	fn test_read_varint() -> Result<()> {
+		let data = vec![0b10101100, 0b00000010]; // Represents the varint for 300
+		let blob = Blob::from(data);
+		let mut reader = BlobReader::new(&blob);
+
+		let varint = reader.read_varint()?;
+		assert_eq!(varint, 300);
+		Ok(())
+	}
+
+	#[test]
+	fn test_read_varint_too_long() -> Result<()> {
+		let data = vec![0x80; 10]; // More than 9 bytes with the MSB set to 1
+		let blob = Blob::from(data);
+		let mut reader = BlobReader::new(&blob);
+
+		let result = reader.read_varint();
+		assert!(result.is_err());
+		Ok(())
+	}
+
+	#[test]
+	fn test_read_u8() -> Result<()> {
+		let data = vec![0x01, 0x02];
+		let blob = Blob::from(data);
+		let mut reader = BlobReader::new(&blob);
+
+		assert_eq!(reader.read_u8()?, 0x01);
+		assert_eq!(reader.read_u8()?, 0x02);
+		Ok(())
+	}
+
+	#[test]
+	fn test_read_i32() -> Result<()> {
+		let data = vec![0xFF, 0xFF, 0xFF, 0xFF]; // -1 in little-endian 32-bit
+		let blob = Blob::from(data);
+		let mut reader = BlobReader::new(&blob);
+
+		assert_eq!(reader.read_i32()?, -1);
+		Ok(())
+	}
+
+	#[test]
+	fn test_read_u64() -> Result<()> {
+		let data = vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]; // Max u64
+		let blob = Blob::from(data);
+		let mut reader = BlobReader::new(&blob);
+
+		assert_eq!(reader.read_u64()?, u64::MAX);
+		Ok(())
+	}
+
+	#[test]
+	fn test_set_and_get_position() -> Result<()> {
+		let data = vec![0x01, 0x02, 0x03, 0x04];
+		let blob = Blob::from(data);
+		let mut reader = BlobReader::new(&blob);
+
+		reader.set_position(2);
+		assert_eq!(reader.get_position(), 2);
+		assert_eq!(reader.read_u8()?, 0x03);
+		Ok(())
+	}
+}
