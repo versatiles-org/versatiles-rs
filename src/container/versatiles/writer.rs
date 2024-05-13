@@ -4,7 +4,7 @@ use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 use crate::helper::progress_bar::ProgressBar;
 use crate::{
 	container::{TilesReaderTrait, TilesStream, TilesWriterTrait},
-	helper::{compress, DataWriterFile, DataWriterTrait},
+	helper::{compress, DataWriter, DataWriterFile},
 	types::{Blob, ByteRange},
 };
 use anyhow::Result;
@@ -17,7 +17,7 @@ use std::{collections::HashMap, path::Path};
 
 // Define TilesWriter struct
 pub struct VersaTilesWriter {
-	writer: Box<dyn DataWriterTrait>,
+	writer: DataWriter,
 }
 
 impl VersaTilesWriter {
@@ -27,7 +27,7 @@ impl VersaTilesWriter {
 		Self: Sized,
 	{
 		Ok(VersaTilesWriter {
-			writer: DataWriterFile::new(path)?,
+			writer: Box::new(DataWriterFile::from_path(path)?),
 		})
 	}
 }

@@ -1,29 +1,25 @@
+#![allow(dead_code)]
+
 use super::DataWriterTrait;
 use crate::types::{Blob, ByteRange};
-use anyhow::{ensure, Result};
+use anyhow::Result;
 use async_trait::async_trait;
-use std::{
-	fs::File,
-	io::{BufWriter, Seek, SeekFrom, Write},
-	path::Path,
-};
+use std::io::{Cursor, Seek, SeekFrom, Write};
 
-pub struct DataWriterFile {
-	writer: BufWriter<File>,
+pub struct DataWriterBlob {
+	writer: Cursor<Vec<u8>>,
 }
 
-impl DataWriterFile {
-	pub fn from_path(path: &Path) -> Result<DataWriterFile> {
-		ensure!(path.is_absolute(), "path {path:?} must be absolute");
-
-		Ok(DataWriterFile {
-			writer: BufWriter::new(File::create(path)?),
+impl DataWriterBlob {
+	pub fn new() -> Result<DataWriterBlob> {
+		Ok(DataWriterBlob {
+			writer: Cursor::new(Vec::new()),
 		})
 	}
 }
 
 #[async_trait]
-impl DataWriterTrait for DataWriterFile {
+impl DataWriterTrait for DataWriterBlob {
 	fn append(&mut self, blob: &Blob) -> Result<ByteRange> {
 		let pos = self.writer.stream_position()?;
 		let len = self.writer.write(blob.as_slice())?;

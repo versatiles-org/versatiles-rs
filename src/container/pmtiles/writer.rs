@@ -29,7 +29,7 @@ impl TilesWriterTrait for PMTilesWriter {
 		header.clustered = true;
 		header.internal_compression = PMTilesCompression::Gzip;
 
-		let mut file = DataWriterFile::new(&self.path)?;
+		let mut file = DataWriterFile::from_path(&self.path)?;
 		file.append(&header.serialize()?)?;
 
 		let mut blocks: Vec<TileBBox> = pyramid

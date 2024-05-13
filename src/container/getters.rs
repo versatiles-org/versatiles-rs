@@ -16,7 +16,7 @@ use std::env;
 pub async fn get_reader(filename: &str) -> Result<TilesReader> {
 	let extension = get_extension(filename);
 
-	if let Some(reader) = parse_as_url(filename) {
+	if let Ok(reader) = parse_as_url(filename) {
 		match extension {
 			"pmtiles" => return Ok(Box::new(PMTilesReader::open_reader(reader).await?)),
 			"versatiles" => return Ok(Box::new(VersaTilesReader::open_reader(reader).await?)),
@@ -45,13 +45,13 @@ pub async fn get_reader(filename: &str) -> Result<TilesReader> {
 	}
 }
 
-fn parse_as_url(filename: &str) -> Option<DataReader> {
+fn parse_as_url(filename: &str) -> Result<DataReader> {
 	if filename.starts_with("http://") || filename.starts_with("https://") {
-		Url::parse(filename)
-			.map(|url| DataReaderHttp::from_url(url).map(Some).unwrap_or(None))
-			.unwrap_or(None)
+		let url = Url::parse(filename)?;
+		let reader = DataReaderHttp::from_url(url)?;
+		Ok(Box::new(reader))
 	} else {
-		None
+		bail!("not an url")
 	}
 }
 
