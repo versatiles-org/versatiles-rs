@@ -150,6 +150,13 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 			.await;
 		Ok(())
 	}
+
+	fn boxed(self) -> Box<dyn TilesReaderTrait>
+	where
+		Self: Sized + 'static,
+	{
+		Box::new(self)
+	}
 }
 
 #[cfg(test)]

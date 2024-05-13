@@ -18,8 +18,8 @@ pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReaderTrait>> {
 
 	if let Ok(reader) = parse_as_url(filename) {
 		match extension {
-			"pmtiles" => return Ok(Box::new(PMTilesReader::open_reader(reader).await?)),
-			"versatiles" => return Ok(Box::new(VersaTilesReader::open_reader(reader).await?)),
+			"pmtiles" => return Ok(PMTilesReader::open_reader(reader).await?.boxed()),
+			"versatiles" => return Ok(VersaTilesReader::open_reader(reader).await?.boxed()),
 			_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
 		}
 	}
@@ -31,16 +31,16 @@ pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReaderTrait>> {
 	}
 
 	if path.is_dir() {
-		return Ok(Box::new(
-			DirectoryTilesReader::open_path(&path).with_context(|| format!("opening {path:?} as directory"))?,
-		));
+		return Ok(DirectoryTilesReader::open_path(&path)
+			.with_context(|| format!("opening {path:?} as directory"))?
+			.boxed());
 	}
 
 	match extension {
-		"mbtiles" => Ok(Box::new(MBTilesReader::open_path(&path)?)),
-		"pmtiles" => Ok(Box::new(PMTilesReader::open_path(&path).await?)),
-		"tar" => Ok(Box::new(TarTilesReader::open_path(&path)?)),
-		"versatiles" => Ok(Box::new(VersaTilesReader::open_path(&path).await?)),
+		"mbtiles" => Ok(MBTilesReader::open_path(&path)?.boxed()),
+		"pmtiles" => Ok(PMTilesReader::open_path(&path).await?.boxed()),
+		"tar" => Ok(TarTilesReader::open_path(&path)?.boxed()),
+		"versatiles" => Ok(VersaTilesReader::open_path(&path).await?.boxed()),
 		_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
 	}
 }
@@ -57,14 +57,14 @@ pub async fn get_writer(filename: &str) -> Result<Box<dyn TilesWriterTrait>> {
 	let path = env::current_dir()?.join(filename);
 
 	if path.is_dir() {
-		return Ok(Box::new(DirectoryTilesWriter::open_path(&path)?));
+		return Ok(DirectoryTilesWriter::open_path(&path)?.boxed());
 	}
 
 	let extension = get_extension(filename);
 	match extension {
-		"tar" => Ok(Box::new(TarTilesWriter::open_path(&path)?)),
-		"pmtiles" => Ok(Box::new(PMTilesWriter::open_path(&path)?)),
-		"versatiles" => Ok(Box::new(VersaTilesWriter::open_path(&path).await?)),
+		"tar" => Ok(TarTilesWriter::open_path(&path)?.boxed()),
+		"pmtiles" => Ok(PMTilesWriter::open_path(&path)?.boxed()),
+		"versatiles" => Ok(VersaTilesWriter::open_path(&path).await?.boxed()),
 		_ => bail!("Error when writing: file extension '{extension:?}' unknown"),
 	}
 }

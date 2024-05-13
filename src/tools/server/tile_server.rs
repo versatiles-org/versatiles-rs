@@ -344,7 +344,9 @@ mod tests {
 
 		let mut server = TileServer::new(IP, 50001, true, true);
 
-		let reader = Box::new(MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF).unwrap());
+		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF)
+			.unwrap()
+			.boxed();
 		server.add_tile_source(Url::new("tiles/cheese"), reader).unwrap();
 
 		server.start().await.unwrap();
@@ -369,10 +371,14 @@ mod tests {
 	async fn same_prefix_twice() {
 		let mut server = TileServer::new(IP, 50002, true, true);
 
-		let reader = Box::new(MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG).unwrap());
+		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)
+			.unwrap()
+			.boxed();
 		server.add_tile_source(Url::new("cheese"), reader).unwrap();
 
-		let reader = Box::new(MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF).unwrap());
+		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF)
+			.unwrap()
+			.boxed();
 		server.add_tile_source(Url::new("cheese"), reader).unwrap();
 	}
 
@@ -396,7 +402,9 @@ mod tests {
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50004);
 
-		let reader = Box::new(MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF).unwrap());
+		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF)
+			.unwrap()
+			.boxed();
 		server.add_tile_source(Url::new("cheese"), reader).unwrap();
 
 		assert_eq!(server.tile_sources.len(), 1);
@@ -409,7 +417,9 @@ mod tests {
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50005);
 
-		let reader = Box::new(MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF).unwrap());
+		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF)
+			.unwrap()
+			.boxed();
 		server.add_tile_source(Url::new("tiles/cheese"), reader).unwrap();
 
 		let mappings: Vec<(String, String)> = server.get_url_mapping().await;

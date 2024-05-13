@@ -218,7 +218,7 @@ mod tests {
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let cp = get_converter_parameters(TileFormat::PBF, c_out, false);
 			let filename = temp_file.to_str().unwrap();
-			convert_tiles_container(Box::new(reader_in), cp, filename).await?;
+			convert_tiles_container(reader_in.boxed(), cp, filename).await?;
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.get_parameters();
 			assert_eq!(parameters_out.tile_format, TileFormat::PBF);
@@ -248,7 +248,7 @@ mod tests {
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let cp = get_converter_parameters(f_out, TileCompression::Gzip, false);
 			let filename = temp_file.to_str().unwrap();
-			convert_tiles_container(Box::new(reader_in), cp, filename).await?;
+			convert_tiles_container(reader_in.boxed(), cp, filename).await?;
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.get_parameters();
 			assert_eq!(parameters_out.tile_format, f_out);
@@ -295,7 +295,7 @@ mod tests {
 			let filename = temp_file.to_str().unwrap();
 
 			let cp = TilesConverterParameters::new(Some(JSON), Some(None), Some(pyramid_convert), false, flip_y, swap_xy);
-			convert_tiles_container(Box::new(reader), cp, filename).await?;
+			convert_tiles_container(reader.boxed(), cp, filename).await?;
 
 			let mut reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.get_parameters();

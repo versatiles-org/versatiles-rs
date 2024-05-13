@@ -144,7 +144,7 @@ mod tests {
 	#[test]
 	fn tile_container_from() -> Result<()> {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
-		let container = TileSource::from(Box::new(reader), Url::new("prefix"))?;
+		let container = TileSource::from(reader.boxed(), Url::new("prefix"))?;
 
 		assert_eq!(container.prefix.str, "/prefix");
 		assert_eq!(container.json_info, "{\"type\":\"dummy_container\",\"format\":\"png\",\"compression\":\"none\",\"zoom_min\":0,\"zoom_max\":4,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}");
@@ -156,7 +156,7 @@ mod tests {
 	#[test]
 	fn debug() -> Result<()> {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
-		let container = TileSource::from(Box::new(reader), Url::new("prefix")).unwrap();
+		let container = TileSource::from(reader.boxed(), Url::new("prefix")).unwrap();
 		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: None, tile_format: PNG } } }, tile_mime: \"image/png\", compression: None }");
 		Ok(())
 	}
@@ -187,7 +187,7 @@ mod tests {
 		}
 
 		let c = &mut TileSource::from(
-			Box::new(MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?),
+			MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?.boxed(),
 			Url::new("prefix"),
 		)?;
 

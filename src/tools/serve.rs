@@ -2,7 +2,7 @@ use super::server::{TileServer, Url};
 use crate::{
 	container::{
 		converter::{TilesConvertReader, TilesConverterParameters},
-		get_reader,
+		get_reader, TilesReaderTrait,
 	},
 	types::TileCompression,
 };
@@ -114,7 +114,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 			let mut cp = TilesConverterParameters::new_default();
 			cp.flip_y = arguments.flip_y;
 			cp.swap_xy = arguments.swap_xy;
-			reader = Box::new(TilesConvertReader::new_from_reader(reader, cp)?);
+			reader = TilesConvertReader::new_from_reader(reader, cp)?.boxed();
 		}
 
 		server.add_tile_source(Url::new(&format!("/tiles/{id}/")), reader)?;
