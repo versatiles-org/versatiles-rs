@@ -3,7 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
 
-pub type DataReader = Box<dyn crate::helper::DataReaderTrait>;
+pub type DataReader = Box<dyn DataReaderTrait>;
 
 #[async_trait]
 pub trait DataReaderTrait: Debug + Send + Sync {
@@ -11,7 +11,7 @@ pub trait DataReaderTrait: Debug + Send + Sync {
 	fn get_name(&self) -> &str;
 }
 
-pub type DataWriter = Box<dyn crate::helper::DataWriterTrait>;
+pub type DataWriter = Box<dyn DataWriterTrait>;
 
 pub trait DataWriterTrait: Send {
 	fn append(&mut self, blob: &Blob) -> Result<ByteRange>;

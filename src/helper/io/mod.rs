@@ -21,5 +21,5 @@ pub use data_writer_blob::*;
 mod data_writer_file;
 pub use data_writer_file::*;
 
-mod traits;
-pub use traits::*;
+mod types;
+pub use types::*;

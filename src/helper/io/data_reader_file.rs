@@ -1,4 +1,4 @@
-use super::DataReaderTrait;
+use super::types::DataReaderTrait;
 use crate::types::{Blob, ByteRange};
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
@@ -15,7 +15,7 @@ pub struct DataReaderFile {
 }
 
 impl DataReaderFile {
-	pub fn from_path(path: &Path) -> Result<DataReaderFile> {
+	pub fn from_path(path: &Path) -> Result<Box<DataReaderFile>> {
 		ensure!(path.exists(), "file {path:?} does not exist");
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 		ensure!(path.is_file(), "path {path:?} must be a file");
@@ -24,10 +24,10 @@ impl DataReaderFile {
 
 		let file = File::open(&path)?;
 
-		Ok(DataReaderFile {
+		Ok(Box::new(DataReaderFile {
 			name: path.to_str().unwrap().to_owned(),
 			reader: BufReader::new(file),
-		})
+		}))
 	}
 }
 

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::{
-	helper::DataReaderTrait,
+	helper::DataReader,
 	types::{Blob, ByteRange, TileCompression, TileFormat},
 };
 use anyhow::{bail, ensure, Result};
@@ -50,7 +50,7 @@ impl FileHeader {
 		})
 	}
 
-	pub async fn from_reader(reader: &mut Box<dyn DataReaderTrait>) -> Result<FileHeader> {
+	pub async fn from_reader(reader: &mut DataReader) -> Result<FileHeader> {
 		let range = ByteRange::new(0, HEADER_LENGTH as u64);
 		let blob = reader.read_range(&range).await?;
 		FileHeader::from_blob(blob)

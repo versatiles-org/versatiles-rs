@@ -1,4 +1,4 @@
-use super::DataWriterTrait;
+use super::types::DataWriterTrait;
 use crate::types::{Blob, ByteRange};
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
@@ -13,12 +13,12 @@ pub struct DataWriterFile {
 }
 
 impl DataWriterFile {
-	pub fn from_path(path: &Path) -> Result<DataWriterFile> {
+	pub fn from_path(path: &Path) -> Result<Box<DataWriterFile>> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
-		Ok(DataWriterFile {
+		Ok(Box::new(DataWriterFile {
 			writer: BufWriter::new(File::create(path)?),
-		})
+		}))
 	}
 }
 

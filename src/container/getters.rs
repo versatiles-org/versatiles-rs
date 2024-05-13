@@ -47,9 +47,7 @@ pub async fn get_reader(filename: &str) -> Result<TilesReader> {
 
 fn parse_as_url(filename: &str) -> Result<DataReader> {
 	if filename.starts_with("http://") || filename.starts_with("https://") {
-		let url = Url::parse(filename)?;
-		let reader = DataReaderHttp::from_url(url)?;
-		Ok(Box::new(reader))
+		Ok(DataReaderHttp::from_url(Url::parse(filename)?)?)
 	} else {
 		bail!("not an url")
 	}

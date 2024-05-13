@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use super::DataReaderTrait;
+use super::types::DataReaderTrait;
 use crate::types::{Blob, ByteRange};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -12,10 +12,10 @@ pub struct DataReaderBlob {
 }
 
 impl DataReaderBlob {
-	pub fn from_blob(blob: Blob) -> Result<DataReaderBlob> {
-		Ok(DataReaderBlob {
+	pub fn from_blob(blob: Blob) -> Result<Box<DataReaderBlob>> {
+		Ok(Box::new(DataReaderBlob {
 			reader: Cursor::new(blob.as_vec()),
-		})
+		}))
 	}
 }
 

@@ -27,7 +27,7 @@ impl VersaTilesWriter {
 		Self: Sized,
 	{
 		Ok(VersaTilesWriter {
-			writer: Box::new(DataWriterFile::from_path(path)?),
+			writer: DataWriterFile::from_path(path)?,
 		})
 	}
 }

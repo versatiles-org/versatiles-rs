@@ -4,7 +4,7 @@ use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 use crate::helper::pretty_print::PrettyPrint;
 use crate::{
 	container::{TilesReaderParameters, TilesReaderTrait, TilesStream},
-	helper::{DataReaderFile, DataReaderTrait, LimitedCache, TileConverter},
+	helper::{DataReader, DataReaderFile, LimitedCache, TileConverter},
 	types::{Blob, ByteRange, TileBBox, TileCompression, TileCoord2, TileCoord3},
 };
 use anyhow::{Context, Result};
@@ -17,7 +17,7 @@ use tokio::sync::Mutex;
 // Define the TilesReader struct
 pub struct VersaTilesReader {
 	meta: Option<Blob>,
-	reader: Box<dyn DataReaderTrait>,
+	reader: DataReader,
 	parameters: TilesReaderParameters,
 	block_index: BlockIndex,
 	tile_index_cache: LimitedCache<TileCoord3, Arc<TileIndex>>,
@@ -27,11 +27,11 @@ pub struct VersaTilesReader {
 impl VersaTilesReader {
 	// Create a new TilesReader from a given filename
 	pub async fn open_path(path: &Path) -> Result<VersaTilesReader> {
-		VersaTilesReader::open_reader(Box::new(DataReaderFile::from_path(path)?)).await
+		VersaTilesReader::open_reader(DataReaderFile::from_path(path)?).await
 	}
 
 	// Create a new TilesReader from a given data reader
-	pub async fn open_reader(mut reader: Box<dyn DataReaderTrait>) -> Result<VersaTilesReader> {
+	pub async fn open_reader(mut reader: DataReader) -> Result<VersaTilesReader> {
 		let header = FileHeader::from_reader(&mut reader)
 			.await
 			.context("reading the header")?;

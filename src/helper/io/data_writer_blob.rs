@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use super::DataWriterTrait;
+use super::types::DataWriterTrait;
 use crate::types::{Blob, ByteRange};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -11,10 +11,10 @@ pub struct DataWriterBlob {
 }
 
 impl DataWriterBlob {
-	pub fn new() -> Result<DataWriterBlob> {
-		Ok(DataWriterBlob {
+	pub fn new() -> Result<Box<DataWriterBlob>> {
+		Ok(Box::new(DataWriterBlob {
 			writer: Cursor::new(Vec::new()),
-		})
+		}))
 	}
 }
 
