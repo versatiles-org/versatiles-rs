@@ -162,7 +162,7 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	#[cfg(feature = "full")]
+
 	#[derive(Debug)]
 	struct TestReader {
 		parameters: TilesReaderParameters,
