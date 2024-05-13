@@ -38,6 +38,15 @@ impl Blob {
 		std::str::from_utf8(&self.0).unwrap()
 	}
 
+	pub fn as_hex(&self) -> String {
+		self
+			.0
+			.iter()
+			.map(|c| format!("{:02x}", c))
+			.collect::<Vec<String>>()
+			.join(" ")
+	}
+
 	/// Returns the length of the underlying byte slice.
 	pub fn len(&self) -> usize {
 		self.0.len()
@@ -109,17 +118,7 @@ impl From<String> for Blob {
 
 impl Debug for Blob {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.write_fmt(format_args!(
-			"Blob({}): {}",
-			self.0.len(),
-			self
-				.0
-				.clone()
-				.into_iter()
-				.map(|c| { format!("{:02x}", c) })
-				.collect::<Vec<String>>()
-				.join(" ")
-		))
+		f.write_fmt(format_args!("Blob({}): {}", self.0.len(), self.as_hex()))
 	}
 }
 

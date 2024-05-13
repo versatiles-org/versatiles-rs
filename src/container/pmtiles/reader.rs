@@ -95,7 +95,7 @@ impl TilesReader for PMTilesReader {
 		let mut dir_blob = decompress(self.directory.root_bytes.clone(), &self.internal_compression)?;
 
 		for _depth in 0..3 {
-			let entries = EntriesV3::deserialize(&dir_blob)?;
+			let entries = EntriesV3::from_blob(&dir_blob)?;
 			let entry = entries.find_tile(tile_id);
 
 			let entry = if let Some(entry) = entry {

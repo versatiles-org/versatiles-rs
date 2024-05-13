@@ -1,9 +1,9 @@
 use super::{BlobReader, BlobWriter, Directory, EntryV3};
-use crate::{helper::compress_gzip, types::Blob};
+use crate::types::Blob;
 use anyhow::Result;
 use std::{cmp::Ordering, slice::SliceIndex};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct EntriesV3 {
 	entries: Vec<EntryV3>,
 }
@@ -13,7 +13,7 @@ impl EntriesV3 {
 		Self { entries: Vec::new() }
 	}
 
-	pub fn deserialize(data: &Blob) -> Result<Self> {
+	pub fn from_blob(data: &Blob) -> Result<Self> {
 		let mut entries: Vec<EntryV3> = Vec::new();
 		let mut reader = BlobReader::new(data);
 
@@ -160,7 +160,7 @@ impl Default for EntriesV3 {
 
 impl From<&Blob> for EntriesV3 {
 	fn from(blob: &Blob) -> Self {
-		EntriesV3::deserialize(blob).unwrap()
+		EntriesV3::from_blob(blob).unwrap()
 	}
 }
 
@@ -219,6 +219,58 @@ impl<'a> EntriesSliceV3<'a> {
 			writer.write_varint(offset)?;
 		}
 
-		compress_gzip(&writer.into_blob())
+		Ok(writer.into_blob())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	// Helper function to create sample entries
+	fn create_entries() -> EntriesV3 {
+		let mut entries = EntriesV3::new();
+		entries.push(EntryV3::new(1, 100, 1000, 0)); // Example EntryV3::new(tile_id, offset, length, run_length)
+		entries.push(EntryV3::new(2, 200, 1000, 1));
+		entries.push(EntryV3::new(3, 300, 1000, 0));
+		entries
+	}
+
+	#[test]
+	fn serialize_entries() -> Result<()> {
+		let entries = create_entries();
+		let serialized = entries.as_slice().serialize_entries()?;
+		assert_eq!(
+			serialized.as_hex(),
+			"03 01 01 01 00 01 00 e8 07 e8 07 e8 07 65 c9 01 ad 02"
+		);
+
+		let new_entries = EntriesV3::from_blob(&serialized)?;
+		assert_eq!(entries, new_entries);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_find_tile() {
+		let entries = create_entries();
+		let entry = entries.find_tile(2).unwrap();
+		assert_eq!(entry.tile_id, 2);
+	}
+
+	#[test]
+	fn test_push_and_len() {
+		let mut entries = EntriesV3::new();
+		assert_eq!(entries.len(), 0);
+		entries.push(EntryV3::new(1, 0, 0, 0));
+		assert_eq!(entries.len(), 1);
+	}
+
+	#[test]
+	fn test_as_directory() -> Result<()> {
+		let entries = create_entries();
+		let directory = entries.as_directory(1000)?; // Assuming 1000 is enough size for root
+		assert!(!directory.root_bytes.is_empty());
+		Ok(())
 	}
 }
