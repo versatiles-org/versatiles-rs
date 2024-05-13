@@ -1,5 +1,5 @@
 use crate::{
-	container::{get_writer, TilesReaderParameters, TilesReaderTrait, TilesStream},
+	container::{get_writer, TilesReader, TilesReaderParameters, TilesStream},
 	helper::{TileConverter, TransformCoord},
 	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
@@ -44,7 +44,7 @@ impl TilesConverterParameters {
 }
 
 pub async fn convert_tiles_container(
-	reader: Box<dyn TilesReaderTrait>, cp: TilesConverterParameters, filename: &str,
+	reader: Box<dyn TilesReader>, cp: TilesConverterParameters, filename: &str,
 ) -> Result<()> {
 	let mut writer = get_writer(filename).await?;
 
@@ -54,7 +54,7 @@ pub async fn convert_tiles_container(
 
 #[derive(Debug)]
 pub struct TilesConvertReader {
-	reader: Box<dyn TilesReaderTrait>,
+	reader: Box<dyn TilesReader>,
 	converter_parameters: TilesConverterParameters,
 	reader_parameters: TilesReaderParameters,
 	container_name: String,
@@ -63,9 +63,7 @@ pub struct TilesConvertReader {
 }
 
 impl TilesConvertReader {
-	pub fn new_from_reader(
-		reader: Box<dyn TilesReaderTrait>, cp: TilesConverterParameters,
-	) -> Result<TilesConvertReader> {
+	pub fn new_from_reader(reader: Box<dyn TilesReader>, cp: TilesConverterParameters) -> Result<TilesConvertReader> {
 		let container_name = format!("converter({})", reader.get_container_name());
 		let name = format!("converter({})", reader.get_name());
 
@@ -106,7 +104,7 @@ impl TilesConvertReader {
 }
 
 #[async_trait]
-impl TilesReaderTrait for TilesConvertReader {
+impl TilesReader for TilesConvertReader {
 	fn get_name(&self) -> &str {
 		&self.name
 	}

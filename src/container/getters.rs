@@ -1,4 +1,4 @@
-use super::{TilesReaderTrait, TilesWriterTrait};
+use super::{TilesReader, TilesWriter};
 use crate::{
 	container::{
 		directory::{DirectoryTilesReader, DirectoryTilesWriter},
@@ -13,7 +13,7 @@ use anyhow::{bail, Context, Result};
 use reqwest::Url;
 use std::env;
 
-pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReaderTrait>> {
+pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReader>> {
 	let extension = get_extension(filename);
 
 	if let Ok(reader) = parse_as_url(filename) {
@@ -53,7 +53,7 @@ fn parse_as_url(filename: &str) -> Result<DataReader> {
 	}
 }
 
-pub async fn get_writer(filename: &str) -> Result<Box<dyn TilesWriterTrait>> {
+pub async fn get_writer(filename: &str) -> Result<Box<dyn TilesWriter>> {
 	let path = env::current_dir()?.join(filename);
 
 	if path.is_dir() {

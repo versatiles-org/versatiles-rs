@@ -1,5 +1,5 @@
 use crate::{
-	container::{TilesReaderParameters, TilesReaderTrait},
+	container::{TilesReader, TilesReaderParameters},
 	helper::decompress,
 	types::{extract_compression, extract_format, Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
@@ -144,7 +144,7 @@ impl DirectoryTilesReader {
 }
 
 #[async_trait]
-impl TilesReaderTrait for DirectoryTilesReader {
+impl TilesReader for DirectoryTilesReader {
 	fn get_container_name(&self) -> &str {
 		"directory"
 	}

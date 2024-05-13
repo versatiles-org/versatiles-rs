@@ -1,5 +1,5 @@
 use crate::{
-	container::{TilesReaderParameters, TilesReaderTrait, TilesStream},
+	container::{TilesReader, TilesReaderParameters, TilesStream},
 	helper::{progress_bar::ProgressBar, TransformCoord},
 	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
@@ -174,7 +174,7 @@ impl MBTilesReader {
 }
 
 #[async_trait]
-impl TilesReaderTrait for MBTilesReader {
+impl TilesReader for MBTilesReader {
 	fn get_container_name(&self) -> &str {
 		"mbtiles"
 	}
@@ -273,7 +273,7 @@ struct RecordMetadata {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::container::{mock::MockTilesWriter, TilesReaderTrait, TilesWriterTrait};
+	use crate::container::{mock::MockTilesWriter, TilesReader, TilesWriter};
 	use lazy_static::lazy_static;
 	use std::{env, path::PathBuf};
 

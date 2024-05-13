@@ -1,5 +1,5 @@
 use crate::{
-	container::{TilesReaderParameters, TilesReaderTrait},
+	container::{TilesReader, TilesReaderParameters},
 	helper::decompress,
 	types::{
 		extract_compression, extract_format, Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat,
@@ -128,7 +128,7 @@ impl TarTilesReader {
 }
 
 #[async_trait]
-impl TilesReaderTrait for TarTilesReader {
+impl TilesReader for TarTilesReader {
 	fn get_container_name(&self) -> &str {
 		"tar"
 	}
@@ -177,7 +177,7 @@ pub mod tests {
 		container::{
 			make_test_file,
 			mock::{MockTilesWriter, MOCK_BYTES_PBF},
-			TilesWriterTrait,
+			TilesWriter,
 		},
 		helper::decompress_gzip,
 	};

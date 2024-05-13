@@ -182,7 +182,7 @@ mod tests {
 	use crate::container::{
 		converter::{convert_tiles_container, TilesConverterParameters},
 		mock::{MockTilesReader, MockTilesReaderProfile},
-		TilesReaderTrait,
+		TilesReader,
 	};
 	use assert_fs::NamedTempFile;
 

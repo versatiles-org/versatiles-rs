@@ -1,6 +1,6 @@
 use super::types::{Directory, EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
-	container::{TilesReaderTrait, TilesWriterTrait},
+	container::{TilesReader, TilesWriter},
 	helper::{compress_gzip, progress_bar::ProgressBar, DataWriterFile, DataWriterTrait},
 	types::{Blob, TileBBox},
 };
@@ -20,8 +20,8 @@ impl PMTilesWriter {
 }
 
 #[async_trait]
-impl TilesWriterTrait for PMTilesWriter {
-	async fn write_from_reader(&mut self, reader: &mut dyn TilesReaderTrait) -> Result<()> {
+impl TilesWriter for PMTilesWriter {
+	async fn write_from_reader(&mut self, reader: &mut dyn TilesReader) -> Result<()> {
 		let parameters = reader.get_parameters();
 		let pyramid = &parameters.bbox_pyramid;
 

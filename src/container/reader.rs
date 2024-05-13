@@ -29,7 +29,7 @@ impl TilesReaderParameters {
 }
 
 #[async_trait]
-pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
+pub trait TilesReader: Debug + Send + Sync + Unpin {
 	/// some kine of name for this reader source, e.g. the filename
 	fn get_name(&self) -> &str;
 
@@ -151,7 +151,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
-	fn boxed(self) -> Box<dyn TilesReaderTrait>
+	fn boxed(self) -> Box<dyn TilesReader>
 	where
 		Self: Sized + 'static,
 	{
@@ -181,7 +181,7 @@ mod tests {
 	}
 
 	#[async_trait]
-	impl TilesReaderTrait for TestReader {
+	impl TilesReader for TestReader {
 		fn get_name(&self) -> &str {
 			"dummy"
 		}
@@ -205,7 +205,7 @@ mod tests {
 	#[tokio::test]
 	#[cfg(feature = "full")]
 	async fn reader() -> Result<()> {
-		use crate::container::{mock::MockTilesWriter, TilesWriterTrait};
+		use crate::container::{mock::MockTilesWriter, TilesWriter};
 
 		let mut reader = TestReader::new_dummy();
 

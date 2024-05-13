@@ -1,5 +1,5 @@
 use crate::{
-	container::{TilesReaderParameters, TilesReaderTrait, TilesWriterTrait},
+	container::{TilesReader, TilesReaderParameters, TilesWriter},
 	helper::compress,
 	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
@@ -45,7 +45,7 @@ impl MockTilesReader {
 }
 
 #[async_trait]
-impl TilesReaderTrait for MockTilesReader {
+impl TilesReader for MockTilesReader {
 	fn get_container_name(&self) -> &str {
 		"dummy_container"
 	}

@@ -2,7 +2,7 @@ use super::server::{TileServer, Url};
 use crate::{
 	container::{
 		converter::{TilesConvertReader, TilesConverterParameters},
-		get_reader, TilesReaderTrait,
+		get_reader, TilesReader,
 	},
 	types::TileCompression,
 };

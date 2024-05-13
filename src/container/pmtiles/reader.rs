@@ -2,7 +2,7 @@ use super::types::{Directory, EntriesV3, HeaderV3, TileId};
 #[cfg(feature = "full")]
 use crate::helper::pretty_print::PrettyPrint;
 use crate::{
-	container::{TilesReaderParameters, TilesReaderTrait},
+	container::{TilesReader, TilesReaderParameters},
 	helper::{decompress, DataReader, DataReaderFile},
 	types::{Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3},
 };
@@ -67,7 +67,7 @@ impl PMTilesReader {
 }
 
 #[async_trait]
-impl TilesReaderTrait for PMTilesReader {
+impl TilesReader for PMTilesReader {
 	fn get_container_name(&self) -> &str {
 		"pmtiles"
 	}

@@ -1,7 +1,7 @@
 #[cfg(feature = "full")]
 use crate::helper::progress_bar::ProgressBar;
 use crate::{
-	container::{TilesReaderTrait, TilesWriterTrait},
+	container::{TilesReader, TilesWriter},
 	helper::compress,
 	types::{compression_to_extension, format_to_extension, Blob},
 };
@@ -46,8 +46,8 @@ impl DirectoryTilesWriter {
 }
 
 #[async_trait]
-impl TilesWriterTrait for DirectoryTilesWriter {
-	async fn write_from_reader(&mut self, reader: &mut dyn TilesReaderTrait) -> Result<()> {
+impl TilesWriter for DirectoryTilesWriter {
+	async fn write_from_reader(&mut self, reader: &mut dyn TilesReader) -> Result<()> {
 		log::trace!("convert_from");
 
 		let parameters = reader.get_parameters();

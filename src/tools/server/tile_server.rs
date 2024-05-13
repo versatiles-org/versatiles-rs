@@ -3,7 +3,7 @@ use super::{
 	sources::{SourceResponse, StaticSource, TileSource},
 };
 use crate::{
-	container::TilesReaderTrait,
+	container::TilesReader,
 	helper::{optimize_compression, TargetCompression},
 	types::{Blob, TileCompression},
 };
@@ -46,7 +46,7 @@ impl TileServer {
 		}
 	}
 
-	pub fn add_tile_source(&mut self, url_prefix: Url, reader: Box<dyn TilesReaderTrait>) -> Result<()> {
+	pub fn add_tile_source(&mut self, url_prefix: Url, reader: Box<dyn TilesReader>) -> Result<()> {
 		let url_prefix = url_prefix.as_dir();
 
 		log::info!("add source: prefix='{}', source={:?}", url_prefix, reader);

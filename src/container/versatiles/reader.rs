@@ -3,7 +3,7 @@ use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 #[cfg(feature = "full")]
 use crate::helper::pretty_print::PrettyPrint;
 use crate::{
-	container::{TilesReaderParameters, TilesReaderTrait, TilesStream},
+	container::{TilesReader, TilesReaderParameters, TilesStream},
 	helper::{DataReader, DataReaderFile, LimitedCache, TileConverter},
 	types::{Blob, ByteRange, TileBBox, TileCompression, TileCoord2, TileCoord3},
 };
@@ -99,7 +99,7 @@ unsafe impl Sync for VersaTilesReader {}
 
 // Implement the TilesReaderTrait for the TilesReader struct
 #[async_trait]
-impl TilesReaderTrait for VersaTilesReader {
+impl TilesReader for VersaTilesReader {
 	// Get the container name
 	fn get_container_name(&self) -> &str {
 		"versatiles"
