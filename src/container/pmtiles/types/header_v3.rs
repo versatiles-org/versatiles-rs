@@ -1,6 +1,6 @@
-use super::{blob_io::BlobWriter, tile_compression::PMTilesCompression, tile_type::PMTilesType};
+use super::{BlobReader, BlobWriter, PMTilesCompression, PMTilesType};
 use crate::{
-	container::{pmtiles::types::blob_io::BlobReader, TilesReaderParameters},
+	container::TilesReaderParameters,
 	types::{Blob, ByteRange},
 };
 use anyhow::{ensure, Result};

@@ -1,4 +1,4 @@
-use super::types::{Directory, EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
+use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
 	container::{TilesReader, TilesWriter},
 	helper::{compress_gzip, progress_bar::ProgressBar, DataWriterFile, DataWriterTrait},
@@ -80,7 +80,7 @@ impl TilesWriter for PMTilesWriter {
 
 		header.metadata = file.append(&metadata)?;
 
-		let directory = Directory::new(&entries, 16384 - HeaderV3::len())?;
+		let directory = entries.as_directory(16384 - HeaderV3::len())?;
 
 		header.root_dir = file.append(&directory.root_bytes)?;
 
