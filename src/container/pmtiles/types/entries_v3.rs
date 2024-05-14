@@ -10,16 +10,30 @@ use std::{
 	slice::{Iter, SliceIndex},
 };
 
+/// A collection of `EntryV3` that provides various utility functions
+/// for handling tile data entries, including serialization, deserialization,
+/// and querying.
 #[derive(Debug, PartialEq)]
 pub struct EntriesV3 {
 	entries: Vec<EntryV3>,
 }
 
 impl EntriesV3 {
+	/// Constructs a new, empty `EntriesV3`.
 	pub fn new() -> Self {
 		Self { entries: Vec::new() }
 	}
 
+	/// Deserializes a `Blob` into an `EntriesV3` instance.
+	///
+	/// # Arguments
+	/// * `data` - A reference to the `Blob` containing the serialized entries.
+	///
+	/// # Errors
+	/// Returns an error if the `Blob` format is incorrect or the data cannot be parsed.
+	///
+	/// # Panics
+	/// Panics if the number of entries exceeds 10 billion, which is considered an error.
 	pub fn from_blob(data: &Blob) -> Result<Self> {
 		let mut entries: Vec<EntryV3> = Vec::new();
 		let mut reader = BlobReader::new(data);
@@ -58,22 +72,35 @@ impl EntriesV3 {
 		Ok(EntriesV3 { entries })
 	}
 
+	/// Returns the number of entries in the collection.
 	pub fn len(&self) -> usize {
 		self.entries.len()
 	}
 
+	/// Adds a new `EntryV3` to the collection.
+	///
+	/// # Arguments
+	/// * `entry` - The `EntryV3` to be added.
 	pub fn push(&mut self, entry: EntryV3) {
 		self.entries.push(entry)
 	}
 
+	/// Returns a slice view into the entries.
 	pub fn as_slice(&self) -> EntriesSliceV3 {
 		EntriesSliceV3 { entries: &self.entries }
 	}
 
+	/// Iterates over the entries.
 	pub fn iter(&self) -> Iter<EntryV3> {
 		self.entries.iter()
 	}
 
+	/// Finds an `EntryV3` by its tile ID using a binary search.
+	///
+	/// # Arguments
+	/// * `tile_id` - The tile ID to search for.
+	///
+	/// Returns `Some(EntryV3)` if found, or `None` if no entry matches the tile ID.
 	pub fn find_tile(&self, tile_id: u64) -> Option<EntryV3> {
 		let mut m: i64 = 0;
 		let mut n: i64 = self.entries.len() as i64 - 1;
@@ -101,6 +128,15 @@ impl EntriesV3 {
 		None
 	}
 
+	/// Converts the entries to a directory format, potentially compressing them,
+	/// based on the provided root length and compression settings.
+	///
+	/// # Arguments
+	/// * `target_root_len` - The maximum size of the root directory in bytes.
+	/// * `compression` - The compression method to be applied.
+	///
+	/// # Errors
+	/// Returns an error if the entries cannot be serialized or compressed as specified.
 	pub fn as_directory(&self, target_root_len: usize, compression: &TileCompression) -> Result<Directory> {
 		let entries: &EntriesSliceV3 = &self.as_slice();
 
@@ -166,25 +202,37 @@ impl EntriesV3 {
 }
 
 impl Default for EntriesV3 {
+	/// Provides a default instance of `EntriesV3`, which is empty.
 	fn default() -> Self {
 		Self::new()
 	}
 }
 
 impl From<&Blob> for EntriesV3 {
+	/// Creates an `EntriesV3` from a `Blob` by deserializing it.
+	///
+	/// # Panics
+	/// Panics if deserialization fails.
 	fn from(blob: &Blob) -> Self {
 		EntriesV3::from_blob(blob).unwrap()
 	}
 }
 
+/// A slice of `EntryV3`, supporting partial views into `EntriesV3`.
 pub struct EntriesSliceV3<'a> {
 	entries: &'a [EntryV3],
 }
 
 impl<'a> EntriesSliceV3<'a> {
+	/// Returns the number of entries in the slice.
 	pub fn len(&self) -> usize {
 		self.entries.len()
 	}
+
+	/// Creates a sub-slice of entries.
+	///
+	/// # Arguments
+	/// * `range` - The range within the current slice to create a sub-slice from.
 	pub fn slice<T>(&self, range: T) -> EntriesSliceV3
 	where
 		T: SliceIndex<[EntryV3], Output = [EntryV3]>,
@@ -193,9 +241,21 @@ impl<'a> EntriesSliceV3<'a> {
 			entries: &self.entries[range],
 		}
 	}
+
+	/// Retrieves an entry by its index.
+	///
+	/// # Arguments
+	/// * `index` - The index of the entry to retrieve.
+	///
+	/// Returns a reference to the `EntryV3` at the specified index.
 	pub fn get(&self, index: usize) -> &EntryV3 {
 		self.entries.get(index).unwrap()
 	}
+
+	/// Serializes the entries slice into a `Blob`.
+	///
+	/// # Errors
+	/// Returns an error if any part of the serialization process fails.
 	pub fn serialize_entries(&self) -> Result<Blob> {
 		let mut writer = BlobWriter::new();
 		let entries = self.entries;
