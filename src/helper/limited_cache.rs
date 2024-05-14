@@ -1,5 +1,23 @@
 use std::{collections::HashMap, fmt::Debug, hash::Hash, mem::size_of, ops::Div};
 
+/// A generic limited cache that stores key-value pairs up to a specified size limit.
+///
+/// The `LimitedCache` manages entries to ensure that it does not exceed a predefined number of elements.
+/// It uses a Least Recently Used (LRU) strategy for cache eviction once the limit is reached.
+///
+/// # Type Parameters
+/// - `K`: The type of the keys stored in the cache.
+/// - `V`: The type of the values stored in the cache.
+///
+/// # Examples
+///
+/// ```
+/// use your_crate::LimitedCache;
+///
+/// let mut cache = LimitedCache::<i32, String>::with_maximum_size(10);
+/// cache.add(1, "one".to_string());
+/// assert_eq!(cache.get(&1), Some("one".to_string()));
+/// ```
 pub struct LimitedCache<K, V> {
 	cache: HashMap<K, (V, u64)>,
 	max_length: usize,
@@ -11,13 +29,33 @@ where
 	V: Clone,
 	K: Clone + Eq + Hash + PartialEq,
 {
+	/// Creates a new `LimitedCache` with a specified maximum size.
+	///
+	/// The size limit is determined by the size of the stored types and the provided `maximum_size`.
+	///
+	/// # Arguments
+	/// * `maximum_size` - The maximum size of the cache, in bytes.
+	///
+	/// # Panics
+	/// Panics if the `maximum_size` is smaller than the size of a single element.
 	pub fn with_maximum_size(maximum_size: usize) -> Self {
+		let max_length = maximum_size.div(size_of::<K>() + size_of::<V>());
+		if max_length < 1 {
+			panic!("size is to small to store a single element")
+		};
 		Self {
 			cache: HashMap::new(),
-			max_length: maximum_size.div(size_of::<K>() + size_of::<V>()),
+			max_length,
 			last_index: 0,
 		}
 	}
+
+	/// Retrieves a value from the cache by its key, updating the last access time.
+	///
+	/// Returns `None` if the key is not present in the cache.
+	///
+	/// # Arguments
+	/// * `key` - A reference to the key of the value to retrieve.
 	pub fn get(&mut self, key: &K) -> Option<V> {
 		if let Some(value) = self.cache.get_mut(key) {
 			self.last_index += 1;
@@ -27,13 +65,30 @@ where
 			None
 		}
 	}
+
+	/// Adds a key-value pair to the cache.
+	///
+	/// If adding this key-value pair causes the cache to exceed its maximum size,
+	/// the least recently accessed item(s) will be removed.
+	///
+	/// # Arguments
+	/// * `key` - The key to insert.
+	/// * `value` - The value to associate with the key.
+	///
+	/// Returns the value just inserted (for chaining or further manipulation).
 	pub fn add(&mut self, key: K, value: V) -> V {
 		if self.cache.len() >= self.max_length {
 			self.cleanup();
 		}
 
-		self.cache.entry(key).or_insert((value, 0)).0.clone()
+		self.last_index += 1;
+		self.cache.entry(key).or_insert((value, self.last_index)).0.clone()
 	}
+
+	/// A private method to clean up the cache by removing least recently accessed items.
+	///
+	/// This method calculates the median access index and removes any items that have an access index
+	/// less than or equal to the median.
 	fn cleanup(&mut self) {
 		let mut latest_access: Vec<u64> = self.cache.values().map(|e| e.1).collect();
 		latest_access.sort_unstable();
