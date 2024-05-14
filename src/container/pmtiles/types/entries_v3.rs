@@ -352,7 +352,7 @@ mod tests {
 	fn create_filled_entries(num: u64) -> EntriesV3 {
 		let mut entries = EntriesV3::new();
 		for i in 0..num {
-			entries.push(EntryV3::new(i as u64, ByteRange::new(i * 100, 1000), 1));
+			entries.push(EntryV3::new(i, ByteRange::new(i * 100, 100), 1));
 		}
 		entries
 	}
@@ -382,6 +382,7 @@ mod tests {
 		let entries = create_filled_entries(1_000_000);
 		assert!(entries.find_tile(999_999).is_some());
 		assert!(entries.find_tile(1_000_000).is_none());
+		assert_eq!(entries.len(), 1_000_000);
 	}
 
 	/// Verifies that `EntriesV3` can handle the maximum allowed number of entries without panicking.

@@ -54,8 +54,10 @@ impl TilesWriter for PMTilesWriter {
 					async move {
 						let id = coord.get_tile_id().unwrap();
 						let range = mutex_writer.lock().await.append(&blob).unwrap();
-						range.shift_backward(tile_data_start);
-						mutex_entries.lock().await.push(EntryV3::new(id, range, 1));
+						mutex_entries
+							.lock()
+							.await
+							.push(EntryV3::new(id, range.get_shifted_backward(tile_data_start), 1));
 					}
 				})
 				.await;

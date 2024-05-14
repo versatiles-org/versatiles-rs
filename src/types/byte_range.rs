@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use anyhow::Result;
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 #[cfg(test)]
@@ -41,18 +43,26 @@ impl ByteRange {
 		Ok(())
 	}
 
-	pub fn shift_forward(&self, offset: u64) -> Self {
+	pub fn get_shifted_forward(&self, offset: u64) -> Self {
 		Self {
 			offset: self.offset + offset,
 			length: self.length,
 		}
 	}
 
-	pub fn shift_backward(&self, offset: u64) -> Self {
+	pub fn get_shifted_backward(&self, offset: u64) -> Self {
 		Self {
 			offset: self.offset - offset,
 			length: self.length,
 		}
+	}
+
+	pub fn shift_forward(&mut self, offset: u64) {
+		self.offset += offset;
+	}
+
+	pub fn shift_backward(&mut self, offset: u64) {
+		self.offset -= offset;
 	}
 
 	pub fn as_range_usize(&self) -> Range<usize> {

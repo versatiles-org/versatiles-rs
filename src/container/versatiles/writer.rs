@@ -166,7 +166,8 @@ impl VersaTilesWriter {
 				}
 
 				let mut range = writer.append(&blob).unwrap();
-				range.offset -= offset0;
+				range.shift_backward(offset0);
+
 				tile_index.set(index, range);
 
 				if let Some(tile_hash) = tile_hash_option {
