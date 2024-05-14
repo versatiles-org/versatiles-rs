@@ -57,8 +57,7 @@ fn rotate(s: i64, tx: &mut i64, ty: &mut i64, rx: u8, ry: u8) {
 	}
 }
 
-#[cfg(test)]
-fn tile_id_to_coord(tileid: u64) -> Result<TileCoord3> {
+pub fn tile_id_to_coord(tileid: u64) -> Result<TileCoord3> {
 	let mut acc = 0;
 	for t_z in 0..32 {
 		let num_tiles = (1 << t_z) * (1 << t_z);

@@ -1,6 +1,9 @@
+use anyhow::{bail, Result};
 use bytes::Bytes;
 use std::fmt::Debug;
 use std::ops::Range;
+
+use super::ByteRange;
 
 /// A simple wrapper around `bytesMut::Bytes` that provides additional methods for working with byte data.
 #[derive(Clone, PartialEq, Eq)]
@@ -16,6 +19,14 @@ impl Blob {
 	/// Returns a new `Blob` containing the bytes in the specified range.
 	pub fn get_range(&self, range: Range<usize>) -> &[u8] {
 		&self.0[range]
+	}
+
+	/// Returns a new `Blob` containing the bytes in the specified range.
+	pub fn read_range(&self, range: &ByteRange) -> Result<Blob> {
+		if range.offset + range.length > self.0.len() as u64 {
+			bail!("read outside range")
+		}
+		Ok(Blob::from(&self.0[range.as_range_usize()]))
 	}
 
 	/// Returns a reference to the underlying byte slice.

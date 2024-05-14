@@ -1,8 +1,9 @@
 use anyhow::Result;
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
-use std::{fmt, io::Read};
 #[cfg(test)]
-use std::{io::Cursor, ops::Range};
+use std::io::Cursor;
+use std::ops::Range;
+use std::{fmt, io::Read};
 
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct ByteRange {
@@ -47,7 +48,6 @@ impl ByteRange {
 		}
 	}
 
-	#[cfg(test)]
 	pub fn as_range_usize(&self) -> Range<usize> {
 		Range {
 			start: self.offset as usize,

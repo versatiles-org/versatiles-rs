@@ -4,7 +4,11 @@ use crate::{
 	types::{Blob, TileCompression},
 };
 use anyhow::Result;
-use std::{cmp::Ordering, io::Write, slice::SliceIndex};
+use std::{
+	cmp::Ordering,
+	io::Write,
+	slice::{Iter, SliceIndex},
+};
 
 #[derive(Debug, PartialEq)]
 pub struct EntriesV3 {
@@ -64,6 +68,10 @@ impl EntriesV3 {
 
 	pub fn as_slice(&self) -> EntriesSliceV3 {
 		EntriesSliceV3 { entries: &self.entries }
+	}
+
+	pub fn iter(&self) -> Iter<EntryV3> {
+		self.entries.iter()
 	}
 
 	pub fn find_tile(&self, tile_id: u64) -> Option<EntryV3> {

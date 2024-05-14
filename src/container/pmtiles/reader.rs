@@ -2,7 +2,7 @@ use super::types::{EntriesV3, HeaderV3, TileId};
 #[cfg(feature = "full")]
 use crate::helper::pretty_print::PrettyPrint;
 use crate::{
-	container::{TilesReader, TilesReaderParameters},
+	container::{pmtiles::types::tile_id_to_coord, TilesReader, TilesReaderParameters},
 	helper::{decompress, DataReader, DataReaderFile, LimitedCache},
 	types::{Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3},
 };
@@ -15,6 +15,7 @@ pub struct PMTilesReader {
 	pub data_reader: DataReader,
 	pub header: HeaderV3,
 	pub internal_compression: TileCompression,
+	pub leaves_bytes: Blob,
 	pub leaves_cache: LimitedCache<ByteRange, Blob>,
 	pub meta: Blob,
 	pub parameters: TilesReaderParameters,
@@ -43,9 +44,9 @@ impl PMTilesReader {
 		let meta = decompress(meta, &internal_compression)?;
 
 		let root_bytes_uncompressed = decompress(data_reader.read_range(&header.root_dir).await?, &internal_compression)?;
+		let leaves_bytes = data_reader.read_range(&header.leaf_dirs).await?;
 
-		let mut bbox_pyramid = TileBBoxPyramid::new_full(header.max_zoom);
-		bbox_pyramid.set_zoom_min(header.min_zoom);
+		let bbox_pyramid = calc_bbox_pyramid(&root_bytes_uncompressed, &leaves_bytes, &internal_compression)?;
 
 		let parameters = TilesReaderParameters::new(
 			header.tile_type.as_value()?,
@@ -57,12 +58,45 @@ impl PMTilesReader {
 			data_reader,
 			header,
 			internal_compression,
+			leaves_bytes,
 			leaves_cache: LimitedCache::with_maximum_size(100_000_000),
 			meta,
 			parameters,
 			root_bytes_uncompressed,
 		})
 	}
+}
+
+fn calc_bbox_pyramid(
+	root_bytes_uncompressed: &Blob, leaves_bytes: &Blob, compression: &TileCompression,
+) -> Result<TileBBoxPyramid> {
+	let mut bbox_pyramid = TileBBoxPyramid::new_empty();
+
+	parse_directories(&mut bbox_pyramid, root_bytes_uncompressed, leaves_bytes, compression)?;
+
+	fn parse_directories(
+		bbox_pyramid: &mut TileBBoxPyramid, dir: &Blob, leaves_bytes: &Blob, compression: &TileCompression,
+	) -> Result<()> {
+		let entries = EntriesV3::from_blob(dir)?;
+		for entry in entries.iter() {
+			if entry.range.length > 0 {
+				if entry.run_length > 0 {
+					for i in 1..=entry.run_length as u64 {
+						let coord = tile_id_to_coord(i + entry.tile_id)?;
+						bbox_pyramid.include_coord(&coord);
+					}
+				} else {
+					let range = entry.range;
+					let mut blob = leaves_bytes.read_range(&range)?;
+					blob = decompress(blob, compression)?;
+					parse_directories(bbox_pyramid, &blob, leaves_bytes, compression)?;
+				}
+			}
+		}
+		Ok(())
+	}
+
+	Ok(bbox_pyramid)
 }
 
 #[async_trait]
@@ -112,11 +146,11 @@ impl TilesReader for PMTilesReader {
 							.await?,
 					));
 				} else {
-					let range = entry.range.shift(self.header.leaf_dirs.offset);
+					let range = entry.range;
 					dir_bytes = if let Some(blob) = self.leaves_cache.get(&range) {
 						blob
 					} else {
-						let mut blob = self.data_reader.read_range(&range).await?;
+						let mut blob = self.leaves_bytes.read_range(&range)?;
 						blob = decompress(blob, &self.internal_compression)?;
 						self.leaves_cache.add(range, blob)
 					};

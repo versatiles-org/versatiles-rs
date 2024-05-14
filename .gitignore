@@ -11,5 +11,6 @@
 /frontend
 /releases
 /target
+/testdata/test.*
 /tiles
 /tmp

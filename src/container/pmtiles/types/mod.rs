@@ -15,5 +15,5 @@ pub use entries_v3::EntriesV3;
 pub use entry_v3::EntryV3;
 pub use header_v3::HeaderV3;
 pub use tile_compression::PMTilesCompression;
-pub use tile_id::TileId;
+pub use tile_id::{tile_id_to_coord, TileId};
 use tile_type::PMTilesType;
