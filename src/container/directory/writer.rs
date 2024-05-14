@@ -48,7 +48,7 @@ impl TilesWriter for DirectoryTilesWriter {
 			let meta_data = compress(meta_data, tile_compression)?;
 			let filename = format!("tiles.json{extension_compression}");
 
-			Self::write(path.join(&filename), meta_data)?;
+			Self::write(path.join(filename), meta_data)?;
 		}
 
 		#[cfg(feature = "full")]
@@ -73,7 +73,7 @@ impl TilesWriter for DirectoryTilesWriter {
 				);
 
 				// Write blob to file
-				Self::write(path.join(&filename), blob)?;
+				Self::write(path.join(filename), blob)?;
 			}
 		}
 
