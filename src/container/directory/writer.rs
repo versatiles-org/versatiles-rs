@@ -2,10 +2,10 @@
 use crate::helper::progress_bar::ProgressBar;
 use crate::{
 	container::{TilesReader, TilesWriter},
-	helper::compress,
+	helper::{compress, DataWriterTrait},
 	types::{compression_to_extension, format_to_extension, Blob},
 };
-use anyhow::{ensure, Result};
+use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use std::{
@@ -13,41 +13,25 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-pub struct DirectoryTilesWriter {
-	dir: PathBuf,
-}
+pub struct DirectoryTilesWriter {}
 
 impl DirectoryTilesWriter {
-	pub fn open_path(path: &Path) -> Result<DirectoryTilesWriter>
-	where
-		Self: Sized,
-	{
-		log::trace!("new {:?}", path);
-		ensure!(path.is_absolute(), "path {path:?} must be absolute");
-
-		Ok(DirectoryTilesWriter {
-			dir: path.to_path_buf(),
-		})
-	}
-	fn write(&self, filename: &str, blob: Blob) -> Result<()> {
-		let path = self.dir.join(filename);
-		Self::ensure_directory(&path)?;
-		fs::write(&path, blob.as_slice())?;
-		Ok(())
-	}
-	fn ensure_directory(path: &Path) -> Result<()> {
+	fn write(path: PathBuf, blob: Blob) -> Result<()> {
 		let parent = path.parent().unwrap();
-		if parent.is_dir() && parent.exists() {
-			return Ok(());
+		if !parent.exists() {
+			fs::create_dir_all(parent)?;
 		}
-		fs::create_dir_all(parent)?;
+
+		fs::write(&path, blob.as_slice())?;
 		Ok(())
 	}
 }
 
 #[async_trait]
 impl TilesWriter for DirectoryTilesWriter {
-	async fn write_from_reader(&mut self, reader: &mut dyn TilesReader) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReader, path: &Path) -> Result<()> {
+		ensure!(path.is_absolute(), "path {path:?} must be absolute");
+
 		log::trace!("convert_from");
 
 		let parameters = reader.get_parameters();
@@ -64,7 +48,7 @@ impl TilesWriter for DirectoryTilesWriter {
 			let meta_data = compress(meta_data, tile_compression)?;
 			let filename = format!("tiles.json{extension_compression}");
 
-			self.write(&filename, meta_data)?;
+			Self::write(path.join(&filename), meta_data)?;
 		}
 
 		#[cfg(feature = "full")]
@@ -89,7 +73,7 @@ impl TilesWriter for DirectoryTilesWriter {
 				);
 
 				// Write blob to file
-				self.write(&filename, blob)?;
+				Self::write(path.join(&filename), blob)?;
 			}
 		}
 
@@ -97,6 +81,9 @@ impl TilesWriter for DirectoryTilesWriter {
 		bar.finish();
 
 		Ok(())
+	}
+	async fn write_to_writer(_reader: &mut dyn TilesReader, _writer: &mut dyn DataWriterTrait) -> Result<()> {
+		bail!("not implemented")
 	}
 }
 
@@ -113,18 +100,6 @@ mod tests {
 	};
 	use assert_fs;
 
-	#[test]
-	fn test_ensure_directory() -> Result<()> {
-		let temp_dir = assert_fs::TempDir::new()?;
-		let nested_dir_path = temp_dir.path().join("a/b/c");
-		assert!(!nested_dir_path.exists());
-
-		DirectoryTilesWriter::ensure_directory(&nested_dir_path)?;
-
-		assert!(nested_dir_path.parent().unwrap().exists());
-		Ok(())
-	}
-
 	#[tokio::test]
 	async fn test_convert_from() -> Result<()> {
 		let temp_dir = assert_fs::TempDir::new()?;
@@ -136,9 +111,7 @@ mod tests {
 			TileBBoxPyramid::new_full(2),
 		))?;
 
-		let mut writer = DirectoryTilesWriter::open_path(&temp_path)?;
-
-		writer.write_from_reader(&mut mock_reader).await?;
+		DirectoryTilesWriter::write_to_path(&mut mock_reader, &temp_path).await?;
 
 		let load = |filename| {
 			let path = temp_path.join(filename);

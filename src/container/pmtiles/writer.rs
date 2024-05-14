@@ -1,30 +1,18 @@
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
 	container::{TilesReader, TilesWriter},
-	helper::{compress_gzip, progress_bar::ProgressBar, DataWriter, DataWriterFile},
+	helper::{compress_gzip, progress_bar::ProgressBar, DataWriterTrait},
 	types::{Blob, TileBBox},
 };
 use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::StreamExt;
-use std::path::Path;
 
-pub struct PMTilesWriter {
-	writer: DataWriter,
-}
-
-impl PMTilesWriter {
-	pub async fn open_path(path: &Path) -> Result<PMTilesWriter> {
-		PMTilesWriter::open_data_writer(DataWriterFile::from_path(path)?).await
-	}
-	pub async fn open_data_writer(writer: DataWriter) -> Result<PMTilesWriter> {
-		Ok(PMTilesWriter { writer })
-	}
-}
+pub struct PMTilesWriter {}
 
 #[async_trait]
 impl TilesWriter for PMTilesWriter {
-	async fn write_from_reader(&mut self, reader: &mut dyn TilesReader) -> Result<()> {
+	async fn write_to_writer(reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait) -> Result<()> {
 		let parameters = reader.get_parameters();
 		let pyramid = &parameters.bbox_pyramid;
 
@@ -32,7 +20,7 @@ impl TilesWriter for PMTilesWriter {
 		header.clustered = true;
 		header.internal_compression = PMTilesCompression::Gzip;
 
-		self.writer.append(&header.serialize()?)?;
+		writer.append(&header.serialize()?)?;
 
 		let mut blocks: Vec<TileBBox> = pyramid
 			.iter_levels()
@@ -47,7 +35,7 @@ impl TilesWriter for PMTilesWriter {
 		let mut offset: u64 = 0;
 		let mut entries = EntriesV3::new();
 
-		header.tile_data.offset = self.writer.get_position()?;
+		header.tile_data.offset = writer.get_position()?;
 
 		for bbox in blocks.iter() {
 			let mut tiles: Vec<(u64, Blob)> = reader
@@ -64,7 +52,7 @@ impl TilesWriter for PMTilesWriter {
 
 				entries.push(EntryV3::new(id, offset, blob.len() as u32, 1));
 				offset += blob.len() as u64;
-				self.writer.append(&blob)?;
+				writer.append(&blob)?;
 			}
 
 			progress.inc(bbox.count_tiles())
@@ -80,15 +68,15 @@ impl TilesWriter for PMTilesWriter {
 		let metadata = reader.get_meta()?.unwrap_or(Blob::new_empty());
 		let metadata = compress_gzip(&metadata)?;
 
-		header.metadata = self.writer.append(&metadata)?;
+		header.metadata = writer.append(&metadata)?;
 
 		let directory = entries.as_directory(16384 - HeaderV3::len())?;
 
-		header.root_dir = self.writer.append(&directory.root_bytes)?;
+		header.root_dir = writer.append(&directory.root_bytes)?;
 
-		header.leaf_dirs = self.writer.append(&directory.leaves_bytes)?;
+		header.leaf_dirs = writer.append(&directory.leaves_bytes)?;
 
-		self.writer.write_start(&header.serialize()?)?;
+		writer.write_start(&header.serialize()?)?;
 
 		Ok(())
 	}

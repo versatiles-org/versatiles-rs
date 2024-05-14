@@ -4,36 +4,25 @@ use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 use crate::helper::progress_bar::ProgressBar;
 use crate::{
 	container::{TilesReader, TilesStream, TilesWriter},
-	helper::{compress, DataWriter, DataWriterFile},
+	helper::{compress, DataWriterTrait},
 	types::{Blob, ByteRange},
 };
 use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::{future::ready, StreamExt};
 use log::{debug, trace};
+use std::collections::HashMap;
 #[cfg(feature = "full")]
 use std::sync::{Arc, Mutex};
-use std::{collections::HashMap, path::Path};
 
 // Define TilesWriter struct
-pub struct VersaTilesWriter {
-	writer: DataWriter,
-}
-
-impl VersaTilesWriter {
-	pub async fn open_path(path: &Path) -> Result<VersaTilesWriter> {
-		VersaTilesWriter::open_data_writer(DataWriterFile::from_path(path)?).await
-	}
-	pub async fn open_data_writer(writer: DataWriter) -> Result<VersaTilesWriter> {
-		Ok(VersaTilesWriter { writer })
-	}
-}
+pub struct VersaTilesWriter {}
 
 // Implement TilesWriterTrait for TilesWriter
 #[async_trait]
 impl TilesWriter for VersaTilesWriter {
 	// Convert tiles from the TilesReader
-	async fn write_from_reader(&mut self, reader: &mut dyn TilesReader) -> Result<()> {
+	async fn write_to_writer(reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait) -> Result<()> {
 		// Finalize the configuration
 
 		let parameters = reader.get_parameters();
@@ -57,17 +46,17 @@ impl TilesWriter for VersaTilesWriter {
 		// Convert the header to a blob and write it
 		let blob: Blob = header.to_blob()?;
 		trace!("write header");
-		self.writer.append(&blob)?;
+		writer.append(&blob)?;
 
 		trace!("write meta");
-		header.meta_range = self.write_meta(reader).await?;
+		header.meta_range = Self::write_meta(reader, writer).await?;
 
 		trace!("write blocks");
-		header.blocks_range = self.write_blocks(reader).await?;
+		header.blocks_range = Self::write_blocks(reader, writer).await?;
 
 		trace!("update header");
 		let blob: Blob = header.to_blob()?;
-		self.writer.write_start(&blob)?;
+		writer.write_start(&blob)?;
 
 		Ok(())
 	}
@@ -76,15 +65,15 @@ impl TilesWriter for VersaTilesWriter {
 // Implement additional methods for TilesWriter
 impl VersaTilesWriter {
 	// Write metadata
-	async fn write_meta(&mut self, reader: &dyn TilesReader) -> Result<ByteRange> {
+	async fn write_meta(reader: &dyn TilesReader, writer: &mut dyn DataWriterTrait) -> Result<ByteRange> {
 		let meta: Blob = reader.get_meta()?.unwrap_or_default();
 		let compressed = compress(meta, &reader.get_parameters().tile_compression)?;
 
-		self.writer.append(&compressed)
+		writer.append(&compressed)
 	}
 
 	// Write blocks
-	async fn write_blocks(&mut self, reader: &mut dyn TilesReader) -> Result<ByteRange> {
+	async fn write_blocks(reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait) -> Result<ByteRange> {
 		let pyramid = reader.get_parameters().bbox_pyramid.clone();
 
 		if pyramid.is_empty() {
@@ -116,7 +105,7 @@ impl VersaTilesWriter {
 
 		// Iterate through blocks and write them
 		for mut block in blocks.into_iter() {
-			let (tiles_range, index_range) = self.write_block(&block, reader, callback).await?;
+			let (tiles_range, index_range) = Self::write_block(&block, reader, writer, callback).await?;
 
 			if tiles_range.length + index_range.length == 0 {
 				// Block is empty, continue with the next block
@@ -133,14 +122,14 @@ impl VersaTilesWriter {
 		#[cfg(feature = "full")]
 		progress.lock().unwrap().finish();
 
-		let range = self.writer.append(&block_index.as_brotli_blob())?;
+		let range = writer.append(&block_index.as_brotli_blob())?;
 
 		Ok(range)
 	}
 
 	// Write a single block
 	async fn write_block<'a, F>(
-		&'a mut self, block: &BlockDefinition, reader: &'a mut dyn TilesReader, inc_progress: F,
+		block: &BlockDefinition, reader: &'a mut dyn TilesReader, writer: &mut dyn DataWriterTrait, inc_progress: F,
 	) -> Result<(ByteRange, ByteRange)>
 	where
 		F: Fn(u64),
@@ -149,7 +138,7 @@ impl VersaTilesWriter {
 		debug!("start block {:?}", block);
 
 		// Get the initial writer position
-		let offset0 = self.writer.get_position()?;
+		let offset0 = writer.get_position()?;
 
 		// Prepare the necessary data structures
 		let bbox = &block.get_global_bbox().clone();
@@ -176,7 +165,7 @@ impl VersaTilesWriter {
 					tile_hash_option = Some(blob.clone());
 				}
 
-				let mut range = self.writer.append(&blob).unwrap();
+				let mut range = writer.append(&blob).unwrap();
 				range.offset -= offset0;
 				tile_index.set(index, range);
 
@@ -193,8 +182,8 @@ impl VersaTilesWriter {
 
 		//let mut writer = writer_mut.lock().await;
 		//let mut writer = writer_mut1.lock().await;
-		let offset1 = self.writer.get_position()?;
-		let index_range = self.writer.append(&tile_index.as_brotli_blob())?;
+		let offset1 = writer.get_position()?;
+		let index_range = writer.append(&tile_index.as_brotli_blob())?;
 
 		Ok((ByteRange::new(offset0, offset1 - offset0), index_range))
 	}

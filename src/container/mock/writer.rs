@@ -1,4 +1,7 @@
-use crate::container::{TilesReader, TilesWriter};
+use crate::{
+	container::{TilesReader, TilesWriter},
+	helper::DataWriterTrait,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::StreamExt;
@@ -6,14 +9,7 @@ use futures_util::StreamExt;
 pub struct MockTilesWriter {}
 
 impl MockTilesWriter {
-	pub fn new_mock() -> Result<MockTilesWriter> {
-		Ok(MockTilesWriter {})
-	}
-}
-
-#[async_trait]
-impl TilesWriter for MockTilesWriter {
-	async fn write_from_reader(&mut self, reader: &mut dyn TilesReader) -> Result<()> {
+	pub async fn write(reader: &mut dyn TilesReader) -> Result<()> {
 		let _temp = reader.get_container_name();
 		let _temp = reader.get_name();
 		let _temp = reader.get_meta()?;
@@ -29,6 +25,13 @@ impl TilesWriter for MockTilesWriter {
 	}
 }
 
+#[async_trait]
+impl TilesWriter for MockTilesWriter {
+	async fn write_to_writer(reader: &mut dyn TilesReader, _writer: &mut dyn DataWriterTrait) -> Result<()> {
+		MockTilesWriter::write(reader).await
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -36,17 +39,15 @@ mod tests {
 
 	#[tokio::test]
 	async fn convert_png() -> Result<()> {
-		let mut writer = MockTilesWriter::new_mock()?;
 		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
-		writer.write_from_reader(&mut reader).await.unwrap();
+		MockTilesWriter::write(&mut reader).await?;
 		Ok(())
 	}
 
 	#[tokio::test]
 	async fn convert_pbf() -> Result<()> {
-		let mut writer = MockTilesWriter::new_mock()?;
 		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF)?;
-		writer.write_from_reader(&mut reader).await.unwrap();
+		MockTilesWriter::write(&mut reader).await?;
 		Ok(())
 	}
 }

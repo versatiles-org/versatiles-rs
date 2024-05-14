@@ -11,8 +11,6 @@ pub trait DataReaderTrait: Debug + Send + Sync {
 	fn get_name(&self) -> &str;
 }
 
-pub type DataWriter = Box<dyn DataWriterTrait>;
-
 pub trait DataWriterTrait: Send {
 	fn append(&mut self, blob: &Blob) -> Result<ByteRange>;
 	fn write_start(&mut self, blob: &Blob) -> Result<()>;

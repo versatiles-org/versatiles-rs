@@ -13,12 +13,12 @@ pub struct DataWriterFile {
 }
 
 impl DataWriterFile {
-	pub fn from_path(path: &Path) -> Result<Box<DataWriterFile>> {
+	pub fn from_path(path: &Path) -> Result<DataWriterFile> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
-		Ok(Box::new(DataWriterFile {
+		Ok(DataWriterFile {
 			writer: BufWriter::new(File::create(path)?),
-		}))
+		})
 	}
 }
 

@@ -177,7 +177,6 @@ pub mod tests {
 		container::{
 			make_test_file,
 			mock::{MockTilesWriter, MOCK_BYTES_PBF},
-			TilesWriter,
 		},
 		helper::decompress_gzip,
 	};
@@ -212,8 +211,7 @@ pub mod tests {
 			let mut reader = TarTilesReader::open_path(&temp_file)?;
 			format!("{:?}", reader);
 
-			let mut writer = MockTilesWriter::new_mock()?;
-			writer.write_from_reader(&mut reader).await?;
+			MockTilesWriter::write(&mut reader).await?;
 			Ok(())
 		}
 

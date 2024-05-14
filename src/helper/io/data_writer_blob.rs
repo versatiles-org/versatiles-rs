@@ -11,10 +11,10 @@ pub struct DataWriterBlob {
 }
 
 impl DataWriterBlob {
-	pub fn new() -> Result<Box<DataWriterBlob>> {
-		Ok(Box::new(DataWriterBlob {
+	pub fn new() -> Result<DataWriterBlob> {
+		Ok(DataWriterBlob {
 			writer: Cursor::new(Vec::new()),
-		}))
+		})
 	}
 	pub fn as_slice(&self) -> &[u8] {
 		self.writer.get_ref().as_slice()

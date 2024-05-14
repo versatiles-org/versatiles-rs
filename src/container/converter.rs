@@ -1,11 +1,13 @@
 use crate::{
-	container::{get_writer, TilesReader, TilesReaderParameters, TilesStream},
+	container::{TilesReader, TilesReaderParameters, TilesStream},
 	helper::{TileConverter, TransformCoord},
 	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::StreamExt;
+
+use super::write_to_filename;
 
 #[derive(Debug)]
 pub struct TilesConverterParameters {
@@ -46,10 +48,8 @@ impl TilesConverterParameters {
 pub async fn convert_tiles_container(
 	reader: Box<dyn TilesReader>, cp: TilesConverterParameters, filename: &str,
 ) -> Result<()> {
-	let mut writer = get_writer(filename).await?;
-
 	let mut converter = TilesConvertReader::new_from_reader(reader, cp)?;
-	writer.write_from_reader(&mut converter).await
+	write_to_filename(&mut converter, filename).await
 }
 
 #[derive(Debug)]

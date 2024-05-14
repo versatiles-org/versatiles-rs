@@ -1,5 +1,5 @@
 use crate::{
-	container::{TilesReader, TilesReaderParameters, TilesWriter},
+	container::{TilesReader, TilesReaderParameters},
 	helper::compress,
 	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
@@ -134,9 +134,8 @@ mod tests {
 
 	#[tokio::test]
 	async fn convert_from() -> Result<()> {
-		let mut writer = MockTilesWriter::new_mock()?;
 		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
-		writer.write_from_reader(&mut reader).await.unwrap();
+		MockTilesWriter::write(&mut reader).await.unwrap();
 		Ok(())
 	}
 }

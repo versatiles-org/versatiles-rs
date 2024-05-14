@@ -273,7 +273,7 @@ struct RecordMetadata {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::container::{mock::MockTilesWriter, TilesReader, TilesWriter};
+	use crate::container::{mock::MockTilesWriter, TilesReader};
 	use lazy_static::lazy_static;
 	use std::{env, path::PathBuf};
 
@@ -302,9 +302,7 @@ pub mod tests {
 			&[255, 15, 172, 89, 205, 237, 7, 134, 5, 0]
 		);
 
-		let mut converter = MockTilesWriter::new_mock()?;
-
-		converter.write_from_reader(&mut reader).await?;
+		MockTilesWriter::write(&mut reader).await?;
 
 		Ok(())
 	}

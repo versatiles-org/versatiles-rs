@@ -1,12 +1,11 @@
 use crate::{
 	container::{TilesReader, TilesWriter},
-	helper::{compress, progress_bar::ProgressBar},
+	helper::{compress, progress_bar::ProgressBar, DataWriterTrait},
 	types::{compression_to_extension, format_to_extension},
 };
-use anyhow::{ensure, Result};
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use futures_util::StreamExt;
-use log::trace;
 use std::{
 	fs::File,
 	path::{Path, PathBuf},
@@ -14,30 +13,14 @@ use std::{
 use tar::{Builder, Header};
 use tokio::sync::Mutex;
 
-pub struct TarTilesWriter {
-	builder: Builder<File>,
-}
-
-impl TarTilesWriter {
-	pub fn open_path(path: &Path) -> Result<TarTilesWriter>
-	where
-		Self: Sized,
-	{
-		trace!("new {:?}", path);
-
-		ensure!(path.is_absolute(), "path {path:?} must be absolute");
-
-		let file = File::create(path)?;
-		let builder = Builder::new(file);
-
-		Ok(TarTilesWriter { builder })
-	}
-}
+pub struct TarTilesWriter {}
 
 #[async_trait]
 impl TilesWriter for TarTilesWriter {
-	async fn write_from_reader(&mut self, reader: &mut dyn TilesReader) -> Result<()> {
-		trace!("convert_from");
+	async fn write_to_path(reader: &mut dyn TilesReader, path: &Path) -> Result<()> {
+		let file = File::create(path)?;
+		let mut builder = Builder::new(file);
+
 		let parameters = reader.get_parameters();
 		let tile_format = &parameters.tile_format;
 		let tile_compression = &parameters.tile_compression;
@@ -56,14 +39,12 @@ impl TilesWriter for TarTilesWriter {
 			header.set_size(meta_data.len() as u64);
 			header.set_mode(0o644);
 
-			self
-				.builder
-				.append_data(&mut header, Path::new(&filename), meta_data.as_slice())?;
+			builder.append_data(&mut header, Path::new(&filename), meta_data.as_slice())?;
 		}
 
 		let mut bar = ProgressBar::new("converting tiles", bbox_pyramid.count_tiles());
 		let mutex_bar = &Mutex::new(&mut bar);
-		let mutex_builder = &Mutex::new(&mut self.builder);
+		let mutex_builder = &Mutex::new(&mut builder);
 
 		for bbox in bbox_pyramid.iter_levels() {
 			let mut stream = reader.get_bbox_tile_stream(bbox).await;
@@ -96,8 +77,11 @@ impl TilesWriter for TarTilesWriter {
 		}
 
 		bar.finish();
-		self.builder.finish()?;
+		builder.finish()?;
 
 		Ok(())
+	}
+	async fn write_to_writer(_reader: &mut dyn TilesReader, _writer: &mut dyn DataWriterTrait) -> Result<()> {
+		bail!("not implemented")
 	}
 }
