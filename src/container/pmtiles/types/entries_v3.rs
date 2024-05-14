@@ -3,7 +3,7 @@ use crate::{
 	helper::compress,
 	types::{Blob, TileCompression},
 };
-use anyhow::Result;
+use anyhow::{bail, Result};
 use std::{
 	cmp::Ordering,
 	io::Write,
@@ -41,7 +41,7 @@ impl EntriesV3 {
 		let num_entries = reader.read_varint()? as usize;
 
 		if num_entries > 10_000_000_000 {
-			panic!("there is something wrong: PMTiles with more then 10 billion tiles?")
+			bail!("there is something wrong: PMTiles with more then 10 billion tiles?")
 		}
 
 		let mut last_id: u64 = 0;
@@ -344,6 +344,73 @@ mod tests {
 		let entries = create_entries();
 		let directory = entries.as_directory(1000, &TileCompression::None)?; // Assuming 1000 is enough size for root
 		assert!(!directory.root_bytes.is_empty());
+		Ok(())
+	}
+
+	/// Helper function to create and fill `EntriesV3` with a predetermined number of entries.
+	fn create_filled_entries(num: u64) -> EntriesV3 {
+		let mut entries = EntriesV3::new();
+		for i in 0..num {
+			entries.push(EntryV3::new(i as u64, i * 100, 1000, 1));
+		}
+		entries
+	}
+
+	#[test]
+	fn test_serialization_deserialization_integrity() -> Result<()> {
+		let entries = create_filled_entries(10);
+		let blob = entries.as_slice().serialize_entries()?;
+		let deserialized_entries = EntriesV3::from_blob(&blob)?;
+		assert_eq!(entries, deserialized_entries);
+		Ok(())
+	}
+
+	#[test]
+	fn test_boundary_conditions() -> Result<()> {
+		let entries = create_filled_entries(0);
+		assert_eq!(entries.len(), 0);
+
+		let blob = entries.as_slice().serialize_entries()?;
+		let deserialized_entries = EntriesV3::from_blob(&blob)?;
+		assert_eq!(deserialized_entries.len(), 0);
+		Ok(())
+	}
+
+	#[test]
+	fn test_large_dataset_find_tile() {
+		let entries = create_filled_entries(1_000_000);
+		assert!(entries.find_tile(999_999).is_some());
+		assert!(entries.find_tile(1_000_000).is_none());
+	}
+
+	/// Verifies that `EntriesV3` can handle the maximum allowed number of entries without panicking.
+	#[test]
+	fn test_excessive_entries_panic() {
+		let mut writer = BlobWriter::new();
+		// Mocking an excessively large number of entries, e.g., 10 billion + 1
+		writer.write_varint(10_000_000_001).unwrap();
+		let blob = writer.into_blob();
+		assert_eq!(
+			EntriesV3::from_blob(&blob).unwrap_err().to_string(),
+			"there is something wrong: PMTiles with more then 10 billion tiles?"
+		);
+	}
+
+	/// Tests the as_directory function for correct directory structure creation
+	#[test]
+	fn test_as_directory_structure() -> Result<()> {
+		let entries = create_filled_entries(500); // A reasonable number of entries for testing
+		let directory = entries.as_directory(1024, &TileCompression::None)?; // Assuming a small root directory size
+
+		assert!(
+			!directory.root_bytes.is_empty(),
+			"Directory root bytes should not be empty"
+		);
+		assert!(
+			directory.leaves_bytes.len() > 0,
+			"Directory leaves bytes should be non-zero for valid entries"
+		);
+
 		Ok(())
 	}
 }
