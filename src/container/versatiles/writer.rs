@@ -170,7 +170,7 @@ impl VersaTilesWriter {
 				tile_index.set(index, range);
 
 				if let Some(tile_hash) = tile_hash_option {
-					tile_hash_lookup.insert(tile_hash.to_vec(), range);
+					tile_hash_lookup.insert(tile_hash.into_vec(), range);
 				}
 
 				ready(())

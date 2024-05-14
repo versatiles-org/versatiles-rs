@@ -29,7 +29,7 @@ impl Blob {
 	}
 
 	/// Returns a new `Vec<u8>` containing a copy of the underlying bytes.
-	pub fn to_vec(self) -> Vec<u8> {
+	pub fn into_vec(self) -> Vec<u8> {
 		self.0
 	}
 
@@ -160,7 +160,7 @@ mod tests {
 		assert_eq!(blob.get_range(2..5), &vec![2, 3, 4]);
 
 		// Assert that the Blob's underlying bytes are the same as the original vector
-		assert_eq!(blob.to_vec(), vec);
+		assert_eq!(blob.into_vec(), vec);
 	}
 
 	// Test creating a Blob from a string

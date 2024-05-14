@@ -175,7 +175,7 @@ mod tests {
 			let response = response.unwrap();
 			assert_eq!(response.mime, mime_type);
 
-			Ok(response.blob.to_vec())
+			Ok(response.blob.into_vec())
 		}
 
 		async fn check_404(container: &mut TileSource, url: &str, compression: TileCompression) -> Result<bool> {

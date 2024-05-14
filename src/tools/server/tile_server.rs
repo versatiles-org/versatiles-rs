@@ -256,7 +256,7 @@ fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Re
 	}
 
 	response
-		.body(Body::from(blob.to_vec()))
+		.body(Body::from(blob.into_vec()))
 		.expect("should have build a body")
 }
 
