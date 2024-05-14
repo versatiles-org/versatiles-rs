@@ -9,10 +9,10 @@ pub struct EntryV3 {
 }
 
 impl EntryV3 {
-	pub fn new(tile_id: u64, offset: u64, length: u32, run_length: u32) -> Self {
+	pub fn new(tile_id: u64, range: ByteRange, run_length: u32) -> Self {
 		Self {
 			tile_id,
-			range: ByteRange::new(offset, length as u64),
+			range,
 			run_length,
 		}
 	}

@@ -1,7 +1,7 @@
 use super::{BlobReader, BlobWriter, Directory, EntryV3};
 use crate::{
 	helper::compress,
-	types::{Blob, TileCompression},
+	types::{Blob, ByteRange, TileCompression},
 };
 use anyhow::{bail, Result};
 use std::{
@@ -49,7 +49,7 @@ impl EntriesV3 {
 		for _ in 0..num_entries {
 			let diff = reader.read_varint()?;
 			last_id += diff;
-			entries.push(EntryV3::new(last_id, 0, 0, 0));
+			entries.push(EntryV3::new(last_id, ByteRange::empty(), 0));
 		}
 
 		for entry in entries.iter_mut() {
@@ -137,7 +137,8 @@ impl EntriesV3 {
 	///
 	/// # Errors
 	/// Returns an error if the entries cannot be serialized or compressed as specified.
-	pub fn as_directory(&self, target_root_len: usize, compression: &TileCompression) -> Result<Directory> {
+	pub fn as_directory(&mut self, target_root_len: usize, compression: &TileCompression) -> Result<Directory> {
+		self.entries.sort_by_cached_key(|e| e.tile_id);
 		let entries: &EntriesSliceV3 = &self.as_slice();
 
 		if entries.len() < 16384 {
@@ -182,8 +183,7 @@ impl EntriesV3 {
 
 				root_entries.push(EntryV3::new(
 					entries.get(idx).tile_id,
-					leaves_bytes.len() as u64,
-					serialized.len() as u32,
+					ByteRange::new(leaves_bytes.len() as u64, serialized.len() as u64),
 					0,
 				));
 				leaves_bytes.write_all(serialized.as_slice())?;
@@ -198,6 +198,10 @@ impl EntriesV3 {
 				leaves_bytes: Blob::from(leaves_bytes),
 			})
 		}
+	}
+
+	pub fn tile_count(&self) -> u64 {
+		self.entries.len() as u64
 	}
 }
 
@@ -303,9 +307,9 @@ mod tests {
 	// Helper function to create sample entries
 	fn create_entries() -> EntriesV3 {
 		let mut entries = EntriesV3::new();
-		entries.push(EntryV3::new(1, 100, 1000, 0)); // Example EntryV3::new(tile_id, offset, length, run_length)
-		entries.push(EntryV3::new(2, 200, 1000, 1));
-		entries.push(EntryV3::new(3, 300, 1000, 0));
+		entries.push(EntryV3::new(1, ByteRange::new(100, 100), 0)); // Example EntryV3::new(tile_id, offset, length, run_length)
+		entries.push(EntryV3::new(2, ByteRange::new(200, 100), 1));
+		entries.push(EntryV3::new(3, ByteRange::new(300, 100), 0));
 		entries
 	}
 
@@ -313,10 +317,7 @@ mod tests {
 	fn serialize_entries() -> Result<()> {
 		let entries = create_entries();
 		let serialized = entries.as_slice().serialize_entries()?;
-		assert_eq!(
-			serialized.as_hex(),
-			"03 01 01 01 00 01 00 e8 07 e8 07 e8 07 65 c9 01 ad 02"
-		);
+		assert_eq!(serialized.as_hex(), "03 01 01 01 00 01 00 64 64 64 65 00 00");
 
 		let new_entries = EntriesV3::from_blob(&serialized)?;
 		assert_eq!(entries, new_entries);
@@ -335,13 +336,13 @@ mod tests {
 	fn test_push_and_len() {
 		let mut entries = EntriesV3::new();
 		assert_eq!(entries.len(), 0);
-		entries.push(EntryV3::new(1, 0, 0, 0));
+		entries.push(EntryV3::new(1, ByteRange::new(0, 0), 0));
 		assert_eq!(entries.len(), 1);
 	}
 
 	#[test]
 	fn test_as_directory() -> Result<()> {
-		let entries = create_entries();
+		let mut entries = create_entries();
 		let directory = entries.as_directory(1000, &TileCompression::None)?; // Assuming 1000 is enough size for root
 		assert!(!directory.root_bytes.is_empty());
 		Ok(())
@@ -351,7 +352,7 @@ mod tests {
 	fn create_filled_entries(num: u64) -> EntriesV3 {
 		let mut entries = EntriesV3::new();
 		for i in 0..num {
-			entries.push(EntryV3::new(i as u64, i * 100, 1000, 1));
+			entries.push(EntryV3::new(i as u64, ByteRange::new(i * 100, 1000), 1));
 		}
 		entries
 	}
@@ -399,7 +400,7 @@ mod tests {
 	/// Tests the as_directory function for correct directory structure creation
 	#[test]
 	fn test_as_directory_structure() -> Result<()> {
-		let entries = create_filled_entries(500); // A reasonable number of entries for testing
+		let mut entries = create_filled_entries(500); // A reasonable number of entries for testing
 		let directory = entries.as_directory(1024, &TileCompression::None)?; // Assuming a small root directory size
 
 		assert!(

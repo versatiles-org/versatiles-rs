@@ -47,4 +47,8 @@ impl DataWriterTrait for DataWriterBlob {
 	fn get_position(&mut self) -> Result<u64> {
 		Ok(self.writer.stream_position()?)
 	}
+	fn set_position(&mut self, position: u64) -> Result<()> {
+		self.writer.seek(SeekFrom::Start(position))?;
+		Ok(())
+	}
 }

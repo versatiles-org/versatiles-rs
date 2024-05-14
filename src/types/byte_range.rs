@@ -41,9 +41,16 @@ impl ByteRange {
 		Ok(())
 	}
 
-	pub fn shift(&self, offset: u64) -> Self {
+	pub fn shift_forward(&self, offset: u64) -> Self {
 		Self {
 			offset: self.offset + offset,
+			length: self.length,
+		}
+	}
+
+	pub fn shift_backward(&self, offset: u64) -> Self {
+		Self {
+			offset: self.offset - offset,
 			length: self.length,
 		}
 	}

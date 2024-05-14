@@ -142,7 +142,7 @@ impl TilesReader for PMTilesReader {
 					return Ok(Some(
 						self
 							.data_reader
-							.read_range(&entry.range.shift(self.header.tile_data.offset))
+							.read_range(&entry.range.shift_forward(self.header.tile_data.offset))
 							.await?,
 					));
 				} else {

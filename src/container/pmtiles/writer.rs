@@ -1,12 +1,14 @@
+use std::sync::Arc;
+
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
 	container::{TilesReader, TilesWriter},
 	helper::{compress, progress_bar::ProgressBar, DataWriterTrait},
-	types::{Blob, TileBBox, TileCompression},
+	types::{Blob, ByteRange, TileBBox, TileCompression},
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures_util::{lock::Mutex, StreamExt};
 
 pub struct PMTilesWriter {}
 
@@ -18,65 +20,68 @@ impl TilesWriter for PMTilesWriter {
 		let parameters = reader.get_parameters().clone();
 		let pyramid = &parameters.bbox_pyramid;
 
-		let mut header = HeaderV3::from(&parameters);
-		header.clustered = true;
-		header.internal_compression = PMTilesCompression::from_value(INTERNAL_COMPRESSION)?;
-
-		writer.append(&header.serialize()?)?;
-
 		let mut blocks: Vec<TileBBox> = pyramid
 			.iter_levels()
-			.flat_map(|level_bbox| level_bbox.iter_bbox_grid(32))
+			.flat_map(|level_bbox| level_bbox.iter_bbox_grid(256))
 			.collect();
 		blocks.sort_by_cached_key(|b| b.get_tile_id().unwrap());
 
 		let tile_count = blocks.iter().map(|block| block.count_tiles()).sum::<u64>();
 		let mut progress = ProgressBar::new("converting tiles", tile_count);
 
-		let mut addressed_tiles: u64 = 0;
-		let mut offset: u64 = 0;
-		let mut entries = EntriesV3::new();
+		let entries = EntriesV3::new();
 
-		header.tile_data.offset = writer.get_position()?;
+		writer.set_position(16384)?;
+
+		let mut header = HeaderV3::from(&parameters);
+
+		let mut metadata = reader.get_meta()?.unwrap_or(Blob::new_empty());
+		metadata = compress(metadata, &INTERNAL_COMPRESSION)?;
+		header.metadata = writer.append(&metadata)?;
+
+		let tile_data_start = writer.get_position()?;
+
+		let mutex_writer = Arc::new(Mutex::new(writer));
+		let mutex_entries = Arc::new(Mutex::new(entries));
 
 		for bbox in blocks.iter() {
-			let mut tiles: Vec<(u64, Blob)> = reader
+			reader
 				.get_bbox_tile_stream(bbox)
 				.await
-				.map(|t| (t.0.get_tile_id().unwrap(), t.1))
-				.collect()
+				.for_each(|(coord, blob)| {
+					let mutex_writer = mutex_writer.clone();
+					let mutex_entries = mutex_entries.clone();
+					async move {
+						let id = coord.get_tile_id().unwrap();
+						let range = mutex_writer.lock().await.append(&blob).unwrap();
+						range.shift_backward(tile_data_start);
+						mutex_entries.lock().await.push(EntryV3::new(id, range, 1));
+					}
+				})
 				.await;
-
-			tiles.sort_by_cached_key(|t| t.0);
-
-			for (id, blob) in tiles {
-				addressed_tiles += 1;
-
-				entries.push(EntryV3::new(id, offset, blob.len() as u32, 1));
-				offset += blob.len() as u64;
-				writer.append(&blob)?;
-			}
 
 			progress.inc(bbox.count_tiles())
 		}
 
-		header.tile_data.length = offset;
-		header.addressed_tiles_count = addressed_tiles;
-		header.tile_entries_count = entries.len() as u64;
-		header.tile_contents_count = entries.len() as u64;
+		let mut writer = mutex_writer.lock().await;
+		let mut entries = mutex_entries.lock().await;
 
-		//setZoomCenterDefaults(&header, resolve.Entries)
+		let tile_data_end = writer.get_position()?;
 
-		let mut metadata = reader.get_meta()?.unwrap_or(Blob::new_empty());
-		metadata = compress(metadata, &INTERNAL_COMPRESSION)?;
+		header.tile_data = ByteRange::new(tile_data_start, tile_data_end - tile_data_start);
 
-		header.metadata = writer.append(&metadata)?;
-
+		writer.set_position(HeaderV3::len() as u64)?;
 		let directory = entries.as_directory(16384 - HeaderV3::len(), &INTERNAL_COMPRESSION)?;
-
 		header.root_dir = writer.append(&directory.root_bytes)?;
 
+		writer.set_position(tile_data_end)?;
 		header.leaf_dirs = writer.append(&directory.leaves_bytes)?;
+
+		header.clustered = true;
+		header.internal_compression = PMTilesCompression::from_value(INTERNAL_COMPRESSION)?;
+		header.addressed_tiles_count = entries.tile_count();
+		header.tile_entries_count = entries.len() as u64;
+		header.tile_contents_count = entries.len() as u64;
 
 		writer.write_start(&header.serialize()?)?;
 
