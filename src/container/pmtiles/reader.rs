@@ -91,7 +91,7 @@ impl TilesReader for PMTilesReader {
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data {:?}", coord);
 
-		let tile_id: u64 = coord.get_tile_id();
+		let tile_id: u64 = coord.get_tile_id()?;
 		let mut dir_blob = decompress(self.directory.root_bytes.clone(), &self.internal_compression)?;
 
 		for _depth in 0..3 {

@@ -26,7 +26,7 @@ impl TilesWriter for PMTilesWriter {
 			.iter_levels()
 			.flat_map(|level_bbox| level_bbox.iter_bbox_grid(32))
 			.collect();
-		blocks.sort_by_cached_key(|b| b.get_tile_id());
+		blocks.sort_by_cached_key(|b| b.get_tile_id().unwrap());
 
 		let tile_count = blocks.iter().map(|block| block.count_tiles()).sum::<u64>();
 		let mut progress = ProgressBar::new("converting tiles", tile_count);
@@ -41,7 +41,7 @@ impl TilesWriter for PMTilesWriter {
 			let mut tiles: Vec<(u64, Blob)> = reader
 				.get_bbox_tile_stream(bbox)
 				.await
-				.map(|t| (t.0.get_tile_id(), t.1))
+				.map(|t| (t.0.get_tile_id().unwrap(), t.1))
 				.collect()
 				.await;
 

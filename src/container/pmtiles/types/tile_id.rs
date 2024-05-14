@@ -1,31 +1,30 @@
 use crate::types::{TileBBox, TileCoord3};
-#[cfg(test)]
 use anyhow::{bail, Result};
 
 pub trait TileId {
-	fn get_tile_id(&self) -> u64;
+	fn get_tile_id(&self) -> Result<u64>;
 }
 
 impl TileId for TileBBox {
-	fn get_tile_id(&self) -> u64 {
+	fn get_tile_id(&self) -> Result<u64> {
 		coord_to_tile_id(self.x_min, self.y_min, self.level)
 	}
 }
 
 impl TileId for TileCoord3 {
-	fn get_tile_id(&self) -> u64 {
+	fn get_tile_id(&self) -> Result<u64> {
 		coord_to_tile_id(self.x, self.y, self.z)
 	}
 }
 
-fn coord_to_tile_id(x: u32, y: u32, z: u8) -> u64 {
+fn coord_to_tile_id(x: u32, y: u32, z: u8) -> Result<u64> {
 	if z >= 32 {
-		panic!("tile zoom exceeds 64-bit limit");
+		bail!("tile zoom exceeds 64-bit limit");
 	}
 
 	let n = 1u32 << z;
 	if x >= n || y >= n {
-		panic!("tile x/y outside zoom level bounds");
+		bail!("tile x/y outside zoom level bounds");
 	}
 
 	let mut acc: i64 = 0;
@@ -45,7 +44,7 @@ fn coord_to_tile_id(x: u32, y: u32, z: u8) -> u64 {
 		s /= 2;
 	}
 
-	(acc + d) as u64
+	Ok((acc + d) as u64)
 }
 
 fn rotate(s: i64, tx: &mut i64, ty: &mut i64, rx: u8, ry: u8) {
@@ -96,37 +95,42 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn test_coord_to_tile_id_basic_inputs() {
-		assert_eq!(coord_to_tile_id(1, 1, 1), 3);
-		assert_eq!(coord_to_tile_id(0, 0, 0), 0);
-		assert_eq!(coord_to_tile_id(2, 2, 2), 13);
-		assert_eq!(coord_to_tile_id(5, 3, 3), 73);
-		assert_eq!(coord_to_tile_id(7, 7, 3), 63);
+	fn test_coord_to_tile_id_basic_inputs() -> Result<()> {
+		assert_eq!(coord_to_tile_id(1, 1, 1)?, 3);
+		assert_eq!(coord_to_tile_id(0, 0, 0)?, 0);
+		assert_eq!(coord_to_tile_id(2, 2, 2)?, 13);
+		assert_eq!(coord_to_tile_id(5, 3, 3)?, 73);
+		assert_eq!(coord_to_tile_id(7, 7, 3)?, 63);
 
-		assert_eq!(coord_to_tile_id(0, 0, 31), 1537228672809129301); // Smallest x, y at max valid z
-		assert_eq!(coord_to_tile_id((1 << 31) - 1, (1 << 31) - 1, 31), 4611686018427387903);
-		// Largest x, y at max valid z
+		assert_eq!(coord_to_tile_id(0, 0, 31)?, 1537228672809129301);
+		assert_eq!(coord_to_tile_id((1 << 31) - 1, (1 << 31) - 1, 31)?, 4611686018427387903);
+
+		Ok(())
 	}
 
 	#[test]
-	#[should_panic(expected = "tile zoom exceeds 64-bit limit")]
 	fn test_coord_to_tile_id_invalid_zoom() {
-		coord_to_tile_id(1, 1, 32); // Zoom level too high
+		assert_eq!(
+			coord_to_tile_id(1, 1, 32).unwrap_err().to_string(),
+			"tile zoom exceeds 64-bit limit"
+		);
 	}
 
 	#[test]
-	#[should_panic(expected = "tile x/y outside zoom level bounds")]
 	fn test_coord_to_tile_id_out_of_bounds() {
-		coord_to_tile_id(1, 0, 0); // X is out of bounds for z=0
+		assert_eq!(
+			coord_to_tile_id(1, 0, 0).unwrap_err().to_string(),
+			"tile x/y outside zoom level bounds"
+		);
 	}
 
 	#[test]
-	fn test_tile_id_to_coord() {
+	fn test_tile_id_to_coord() -> Result<()> {
 		let mut f = 0f64;
 		loop {
 			let id0 = f as u64;
 			let coord = tile_id_to_coord(id0).unwrap();
-			let id1 = coord_to_tile_id(coord.x, coord.y, coord.z);
+			let id1 = coord_to_tile_id(coord.x, coord.y, coord.z)?;
 			assert_eq!(id0, id1);
 
 			if coord.z > 30 {
@@ -134,5 +138,6 @@ mod tests {
 			}
 			f = f * 1.1 + 1.0;
 		}
+		Ok(())
 	}
 }
