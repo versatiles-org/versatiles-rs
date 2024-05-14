@@ -12,11 +12,11 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash, mem::size_of, ops::Div};
 /// # Examples
 ///
 /// ```
-/// use your_crate::LimitedCache;
+/// use versatiles::helper::LimitedCache;
 ///
-/// let mut cache = LimitedCache::<i32, String>::with_maximum_size(10);
-/// cache.add(1, "one".to_string());
-/// assert_eq!(cache.get(&1), Some("one".to_string()));
+/// let mut cache = LimitedCache::<i32, u64>::with_maximum_size(1000_000);
+/// cache.add(1, 42);
+/// assert_eq!(cache.get(&1), Some(42));
 /// ```
 pub struct LimitedCache<K, V> {
 	cache: HashMap<K, (V, u64)>,
