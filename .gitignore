@@ -12,5 +12,6 @@
 /releases
 /target
 /testdata/test.*
+/testdata/temp.*
 /tiles
 /tmp
