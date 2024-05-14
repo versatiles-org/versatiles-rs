@@ -21,14 +21,11 @@ pub struct VersaTilesWriter {
 }
 
 impl VersaTilesWriter {
-	// Create a new TilesWriter instance
-	pub async fn open_path(path: &Path) -> Result<VersaTilesWriter>
-	where
-		Self: Sized,
-	{
-		Ok(VersaTilesWriter {
-			writer: DataWriterFile::from_path(path)?,
-		})
+	pub async fn open_path(path: &Path) -> Result<VersaTilesWriter> {
+		VersaTilesWriter::open_data_writer(DataWriterFile::from_path(path)?).await
+	}
+	pub async fn open_data_writer(writer: DataWriter) -> Result<VersaTilesWriter> {
+		Ok(VersaTilesWriter { writer })
 	}
 }
 

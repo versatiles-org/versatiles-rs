@@ -1,21 +1,24 @@
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
 	container::{TilesReader, TilesWriter},
-	helper::{compress_gzip, progress_bar::ProgressBar, DataWriterFile, DataWriterTrait},
+	helper::{compress_gzip, progress_bar::ProgressBar, DataWriter, DataWriterFile},
 	types::{Blob, TileBBox},
 };
 use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::StreamExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 pub struct PMTilesWriter {
-	path: PathBuf,
+	writer: DataWriter,
 }
 
 impl PMTilesWriter {
-	pub fn open_path(path: &Path) -> Result<PMTilesWriter> {
-		Ok(Self { path: path.to_owned() })
+	pub async fn open_path(path: &Path) -> Result<PMTilesWriter> {
+		PMTilesWriter::open_data_writer(DataWriterFile::from_path(path)?).await
+	}
+	pub async fn open_data_writer(writer: DataWriter) -> Result<PMTilesWriter> {
+		Ok(PMTilesWriter { writer })
 	}
 }
 
@@ -29,8 +32,7 @@ impl TilesWriter for PMTilesWriter {
 		header.clustered = true;
 		header.internal_compression = PMTilesCompression::Gzip;
 
-		let mut file = DataWriterFile::from_path(&self.path)?;
-		file.append(&header.serialize()?)?;
+		self.writer.append(&header.serialize()?)?;
 
 		let mut blocks: Vec<TileBBox> = pyramid
 			.iter_levels()
@@ -45,7 +47,7 @@ impl TilesWriter for PMTilesWriter {
 		let mut offset: u64 = 0;
 		let mut entries = EntriesV3::new();
 
-		header.tile_data.offset = file.get_position()?;
+		header.tile_data.offset = self.writer.get_position()?;
 
 		for bbox in blocks.iter() {
 			let mut tiles: Vec<(u64, Blob)> = reader
@@ -62,7 +64,7 @@ impl TilesWriter for PMTilesWriter {
 
 				entries.push(EntryV3::new(id, offset, blob.len() as u32, 1));
 				offset += blob.len() as u64;
-				file.append(&blob)?;
+				self.writer.append(&blob)?;
 			}
 
 			progress.inc(bbox.count_tiles())
@@ -78,15 +80,15 @@ impl TilesWriter for PMTilesWriter {
 		let metadata = reader.get_meta()?.unwrap_or(Blob::new_empty());
 		let metadata = compress_gzip(&metadata)?;
 
-		header.metadata = file.append(&metadata)?;
+		header.metadata = self.writer.append(&metadata)?;
 
 		let directory = entries.as_directory(16384 - HeaderV3::len())?;
 
-		header.root_dir = file.append(&directory.root_bytes)?;
+		header.root_dir = self.writer.append(&directory.root_bytes)?;
 
-		header.leaf_dirs = file.append(&directory.leaves_bytes)?;
+		header.leaf_dirs = self.writer.append(&directory.leaves_bytes)?;
 
-		file.write_start(&header.serialize()?)?;
+		self.writer.write_start(&header.serialize()?)?;
 
 		Ok(())
 	}

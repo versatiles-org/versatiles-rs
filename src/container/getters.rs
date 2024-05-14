@@ -63,7 +63,7 @@ pub async fn get_writer(filename: &str) -> Result<Box<dyn TilesWriter>> {
 	let extension = get_extension(filename);
 	match extension {
 		"tar" => Ok(TarTilesWriter::open_path(&path)?.boxed()),
-		"pmtiles" => Ok(PMTilesWriter::open_path(&path)?.boxed()),
+		"pmtiles" => Ok(PMTilesWriter::open_path(&path).await?.boxed()),
 		"versatiles" => Ok(VersaTilesWriter::open_path(&path).await?.boxed()),
 		_ => bail!("Error when writing: file extension '{extension:?}' unknown"),
 	}
