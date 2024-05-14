@@ -202,7 +202,7 @@ mod test {
 
 		assert_wildcard!(
 			format!("{:?}", reader.get_parameters()), 
-			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), * 14: [0,0,16383,16383] (268435456)], tile_compression: Gzip, tile_format: PBF }"
+			"TilesReaderParameters { bbox_pyramid: [1: [0,0,0,0] (1), * 14: [8786,5360,8819,5387] (952)], tile_compression: Gzip, tile_format: PBF }"
 		);
 
 		assert_eq!(

@@ -30,14 +30,14 @@ pub struct HeaderV3 {
 }
 
 impl HeaderV3 {
-	pub fn try_from(parameters: &TilesReaderParameters) -> Result<Self> {
+	pub fn from(parameters: &TilesReaderParameters) -> HeaderV3 {
 		use PMTilesCompression as PC;
 		use PMTilesType as PT;
 
 		let bbox_pyramid = &parameters.bbox_pyramid;
 		let bbox = bbox_pyramid.get_geo_bbox();
 
-		Ok(Self {
+		Self {
 			root_dir: ByteRange::new(0, 0),
 			metadata: ByteRange::new(0, 0),
 			leaf_dirs: ByteRange::new(0, 0),
@@ -55,10 +55,10 @@ impl HeaderV3 {
 			min_lat_e7: (bbox[1] * 1e7) as i32,
 			max_lon_e7: (bbox[2] * 1e7) as i32,
 			max_lat_e7: (bbox[3] * 1e7) as i32,
-			center_zoom: 0,
-			center_lon_e7: ((bbox[2] - bbox[0]) * 5e6) as i32,
-			center_lat_e7: ((bbox[3] - bbox[1]) * 5e6) as i32,
-		})
+			center_zoom: bbox_pyramid.get_good_zoom().unwrap_or(0),
+			center_lon_e7: ((bbox[0] + bbox[2]) * 5e6) as i32,
+			center_lat_e7: ((bbox[1] + bbox[3]) * 5e6) as i32,
+		}
 	}
 
 	pub fn serialize(&self) -> Result<Blob> {

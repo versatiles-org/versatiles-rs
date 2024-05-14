@@ -62,18 +62,24 @@ impl TileBBoxPyramid {
 		self
 			.level_bbox
 			.iter()
-			.enumerate()
-			.find(|(_level, bbox)| !bbox.is_empty())
-			.map(|(level, _bbox)| level as u8)
+			.find(|bbox| !bbox.is_empty())
+			.map(|bbox| bbox.level)
 	}
 	pub fn get_zoom_max(&self) -> Option<u8> {
 		self
 			.level_bbox
 			.iter()
-			.enumerate()
 			.rev()
-			.find(|(_level, bbox)| !bbox.is_empty())
-			.map(|(level, _bbox)| level as u8)
+			.find(|bbox| !bbox.is_empty())
+			.map(|bbox| bbox.level)
+	}
+	pub fn get_good_zoom(&self) -> Option<u8> {
+		self
+			.level_bbox
+			.iter()
+			.rev()
+			.find(|bbox| bbox.count_tiles() > 10)
+			.map(|bbox| bbox.level)
 	}
 	pub fn set_zoom_min(&mut self, zoom_level_min: u8) {
 		for (index, bbox) in self.level_bbox.iter_mut().enumerate() {

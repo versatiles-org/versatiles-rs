@@ -15,10 +15,10 @@ impl TilesWriter for PMTilesWriter {
 	async fn write_to_writer(reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait) -> Result<()> {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
 
-		let parameters = reader.get_parameters();
+		let parameters = reader.get_parameters().clone();
 		let pyramid = &parameters.bbox_pyramid;
 
-		let mut header = HeaderV3::try_from(parameters)?;
+		let mut header = HeaderV3::from(&parameters);
 		header.clustered = true;
 		header.internal_compression = PMTilesCompression::from_value(INTERNAL_COMPRESSION)?;
 
@@ -100,7 +100,7 @@ mod test {
 	#[tokio::test]
 	async fn read_write() -> Result<()> {
 		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
-			bbox_pyramid: TileBBoxPyramid::new_full(8),
+			bbox_pyramid: TileBBoxPyramid::new_full(4),
 			tile_compression: TileCompression::Gzip,
 			tile_format: TileFormat::PBF,
 		})?;
