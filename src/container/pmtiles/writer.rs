@@ -81,3 +81,36 @@ impl TilesWriter for PMTilesWriter {
 		Ok(())
 	}
 }
+
+#[cfg(test)]
+mod test {
+	use super::*;
+	use crate::{
+		container::{
+			mock::{MockTilesReader, MockTilesWriter},
+			pmtiles::PMTilesReader,
+			TilesReaderParameters,
+		},
+		helper::{DataReaderBlob, DataWriterBlob},
+		types::{TileBBoxPyramid, TileCompression, TileFormat},
+	};
+
+	#[tokio::test]
+	async fn read_write() -> Result<()> {
+		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+			bbox_pyramid: TileBBoxPyramid::new_full(8),
+			tile_compression: TileCompression::Gzip,
+			tile_format: TileFormat::PBF,
+		})?;
+
+		let mut data_writer = DataWriterBlob::new()?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer).await?;
+
+		let data_reader = DataReaderBlob::from(data_writer);
+		let mut reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;
+		MockTilesWriter::write(&mut reader).await?;
+
+		Ok(())
+		// test
+	}
+}

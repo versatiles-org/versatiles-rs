@@ -1,7 +1,7 @@
 use super::{BlobReader, BlobWriter, Directory, EntryV3};
 use crate::types::Blob;
 use anyhow::Result;
-use std::{cmp::Ordering, slice::SliceIndex};
+use std::{cmp::Ordering, io::Write, slice::SliceIndex};
 
 #[derive(Debug, PartialEq)]
 pub struct EntriesV3 {
@@ -137,7 +137,7 @@ impl EntriesV3 {
 					serialized.len() as u32,
 					0,
 				));
-				leaves_bytes.copy_from_slice(serialized.as_slice());
+				leaves_bytes.write_all(serialized.as_slice())?;
 
 				idx += leaf_size;
 			}
