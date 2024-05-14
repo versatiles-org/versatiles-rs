@@ -112,7 +112,7 @@ mod tests {
 			.get_tile_data(&TileCoord3::new(0, 0, 0)?)
 			.await?
 			.unwrap()
-			.as_vec();
+			.to_vec();
 		assert_eq!(&blob[0..4], b"\x89PNG");
 		Ok(())
 	}

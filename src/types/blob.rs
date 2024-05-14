@@ -29,8 +29,8 @@ impl Blob {
 	}
 
 	/// Returns a new `Vec<u8>` containing a copy of the underlying bytes.
-	pub fn as_vec(&self) -> Vec<u8> {
-		self.0.to_vec()
+	pub fn to_vec(self) -> Vec<u8> {
+		self.0
 	}
 
 	/// Returns the underlying bytes as a string, assuming they represent valid UTF-8 encoded text.
@@ -153,14 +153,14 @@ mod tests {
 		// Create a Blob instance from the vector
 		let blob = Blob::from(&vec);
 
-		// Assert that the Blob's underlying bytes are the same as the original vector
-		assert_eq!(blob.as_vec(), vec);
-
 		// Assert that the Blob's length is correct
 		assert_eq!(blob.len(), 8);
 
 		// Assert that a range of bytes can be extracted from the Blob correctly
 		assert_eq!(blob.get_range(2..5), &vec![2, 3, 4]);
+
+		// Assert that the Blob's underlying bytes are the same as the original vector
+		assert_eq!(blob.to_vec(), vec);
 	}
 
 	// Test creating a Blob from a string

@@ -53,7 +53,7 @@ impl From<DataWriterBlob> for DataReaderBlob {
 impl From<Blob> for DataReaderBlob {
 	fn from(value: Blob) -> Self {
 		DataReaderBlob {
-			reader: Cursor::new(value.as_vec()),
+			reader: Cursor::new(value.to_vec()),
 		}
 	}
 }
