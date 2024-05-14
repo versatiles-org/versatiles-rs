@@ -164,6 +164,7 @@ impl TilesReader for VersaTilesReader {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
+		#[derive(Debug)]
 		struct Chunk {
 			tiles: Vec<(TileCoord3, ByteRange)>,
 			range: ByteRange,
@@ -185,6 +186,9 @@ impl TilesReader for VersaTilesReader {
 					.range
 					.length
 					.max(entry.1.offset + entry.1.length - self.range.offset)
+			}
+			fn len(&self) -> usize {
+				self.tiles.len()
 			}
 		}
 
@@ -261,6 +265,10 @@ impl TilesReader for VersaTilesReader {
 						chunk = Chunk::new(entry.1.offset);
 						chunk.push(entry);
 					}
+				}
+
+				if chunk.len() > 0 {
+					chunks.push(chunk);
 				}
 
 				chunks
@@ -409,9 +417,14 @@ impl Debug for VersaTilesReader {
 mod tests {
 	use super::*;
 	use crate::{
-		container::{make_test_file, mock::MOCK_BYTES_PBF},
-		helper::decompress_gzip,
-		types::TileFormat,
+		container::{
+			make_test_file,
+			mock::{MockTilesReader, MOCK_BYTES_PBF},
+			versatiles::VersaTilesWriter,
+			TilesWriter,
+		},
+		helper::{decompress_gzip, DataWriterBlob},
+		types::{TileBBoxPyramid, TileFormat},
 	};
 	use anyhow::Result;
 
@@ -431,6 +444,34 @@ mod tests {
 
 		let tile = reader.get_tile_data(&TileCoord3::new(15, 1, 4)?).await?.unwrap();
 		assert_eq!(decompress_gzip(&tile)?.as_slice(), MOCK_BYTES_PBF);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn reader_your_own_dog_food() -> Result<()> {
+		let mut reader1 = MockTilesReader::new_mock(TilesReaderParameters::new(
+			TileFormat::JSON,
+			TileCompression::Gzip,
+			TileBBoxPyramid::new_full(4),
+		))?;
+
+		let mut data_writer1 = DataWriterBlob::new()?;
+		VersaTilesWriter::write_to_writer(&mut reader1, &mut data_writer1).await?;
+
+		let data_reader1 = data_writer1.to_reader();
+		let mut reader2 = VersaTilesReader::open_reader(Box::new(data_reader1)).await?;
+
+		let mut data_writer2 = DataWriterBlob::new()?;
+		VersaTilesWriter::write_to_writer(&mut reader2, &mut data_writer2).await?;
+
+		let data_reader2 = data_writer2.to_reader();
+		let mut reader3 = VersaTilesReader::open_reader(Box::new(data_reader2)).await?;
+
+		let mut data_writer3 = DataWriterBlob::new()?;
+		VersaTilesWriter::write_to_writer(&mut reader3, &mut data_writer3).await?;
+
+		assert_eq!(data_writer1.len(), data_writer2.len());
 
 		Ok(())
 	}

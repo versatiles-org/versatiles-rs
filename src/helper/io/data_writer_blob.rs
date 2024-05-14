@@ -25,6 +25,12 @@ impl DataWriterBlob {
 	pub fn into_reader(self) -> DataReaderBlob {
 		DataReaderBlob::from(self)
 	}
+	pub fn to_reader(&self) -> DataReaderBlob {
+		DataReaderBlob::from(self.writer.get_ref().clone())
+	}
+	pub fn len(&self) -> usize {
+		self.writer.get_ref().len()
+	}
 }
 
 #[async_trait]

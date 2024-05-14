@@ -12,8 +12,8 @@ pub struct DataReaderBlob {
 }
 
 impl DataReaderBlob {
-	pub fn from_blob(blob: Blob) -> Result<Box<DataReaderBlob>> {
-		Ok(Box::new(DataReaderBlob::from(blob)))
+	pub fn len(&self) -> usize {
+		self.reader.get_ref().len()
 	}
 }
 
@@ -58,6 +58,14 @@ impl From<Blob> for DataReaderBlob {
 	}
 }
 
+impl From<Vec<u8>> for DataReaderBlob {
+	fn from(value: Vec<u8>) -> Self {
+		DataReaderBlob {
+			reader: Cursor::new(value),
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -67,10 +75,7 @@ mod tests {
 	async fn from_blob() -> Result<()> {
 		let blob = Blob::from(vec![0, 1, 2, 3, 4, 5, 6, 7]);
 
-		let data_reader = DataReaderBlob::from_blob(blob.clone());
-		assert!(data_reader.is_ok());
-
-		let mut data_reader = data_reader.unwrap();
+		let mut data_reader = DataReaderBlob::from(blob.clone());
 
 		assert_eq!(data_reader.get_name(), "memory");
 
