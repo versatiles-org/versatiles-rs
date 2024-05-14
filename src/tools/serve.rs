@@ -16,7 +16,7 @@ use tokio::time::{sleep, Duration};
 #[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]
 pub struct Subcommand {
 	/// One or more tile containers you want to serve.
-	/// Supported container formats are: *.versatiles, *.tar, *.mbtiles or a directory
+	/// Supported container formats are: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory
 	/// Container files have to be on the local filesystem, except VersaTiles containers:
 	///    VersaTiles containers can also be served from http://... or https://...
 	/// The id used in the url (/tiles/$id/) will be generated automatically from the file id:
