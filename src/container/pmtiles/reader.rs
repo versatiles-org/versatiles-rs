@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use std::{fmt::Debug, path::Path};
+use std::{fmt::Debug, path::Path, sync::Arc};
 
 #[derive(Debug)]
 pub struct PMTilesReader {
@@ -16,10 +16,10 @@ pub struct PMTilesReader {
 	pub header: HeaderV3,
 	pub internal_compression: TileCompression,
 	pub leaves_bytes: Blob,
-	pub leaves_cache: LimitedCache<ByteRange, Blob>,
+	pub leaves_cache: LimitedCache<ByteRange, Arc<Blob>>,
 	pub meta: Blob,
 	pub parameters: TilesReaderParameters,
-	pub root_bytes_uncompressed: Blob,
+	pub root_bytes_uncompressed: Arc<Blob>,
 }
 
 impl PMTilesReader {
@@ -62,7 +62,7 @@ impl PMTilesReader {
 			leaves_cache: LimitedCache::with_maximum_size(100_000_000),
 			meta,
 			parameters,
-			root_bytes_uncompressed,
+			root_bytes_uncompressed: Arc::new(root_bytes_uncompressed),
 		})
 	}
 }
@@ -152,7 +152,7 @@ impl TilesReader for PMTilesReader {
 					} else {
 						let mut blob = self.leaves_bytes.read_range(&range)?;
 						blob = decompress(blob, &self.internal_compression)?;
-						self.leaves_cache.add(range, blob)
+						self.leaves_cache.add(range, Arc::new(blob))
 					};
 				}
 			} else {
