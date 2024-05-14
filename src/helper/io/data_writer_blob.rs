@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use super::types::DataWriterTrait;
+use super::{types::DataWriterTrait, DataReaderBlob};
 use crate::types::{Blob, ByteRange};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -15,6 +15,15 @@ impl DataWriterBlob {
 		Ok(Box::new(DataWriterBlob {
 			writer: Cursor::new(Vec::new()),
 		}))
+	}
+	pub fn as_slice(&self) -> &[u8] {
+		self.writer.get_ref().as_slice()
+	}
+	pub fn into_blob(self) -> Blob {
+		Blob::from(self.writer.into_inner())
+	}
+	pub fn into_reader(self) -> DataReaderBlob {
+		DataReaderBlob::from(self)
 	}
 }
 

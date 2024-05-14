@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use super::types::DataReaderTrait;
+use super::{types::DataReaderTrait, DataWriterBlob};
 use crate::types::{Blob, ByteRange};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -13,9 +13,7 @@ pub struct DataReaderBlob {
 
 impl DataReaderBlob {
 	pub fn from_blob(blob: Blob) -> Result<Box<DataReaderBlob>> {
-		Ok(Box::new(DataReaderBlob {
-			reader: Cursor::new(blob.as_vec()),
-		}))
+		Ok(Box::new(DataReaderBlob::from(blob)))
 	}
 }
 
@@ -37,6 +35,26 @@ impl DataReaderTrait for DataReaderBlob {
 impl Read for DataReaderBlob {
 	fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
 		self.reader.read(buf)
+	}
+}
+
+impl From<Box<DataWriterBlob>> for DataReaderBlob {
+	fn from(value: Box<DataWriterBlob>) -> Self {
+		DataReaderBlob::from(value.into_blob())
+	}
+}
+
+impl From<DataWriterBlob> for DataReaderBlob {
+	fn from(value: DataWriterBlob) -> Self {
+		DataReaderBlob::from(value.into_blob())
+	}
+}
+
+impl From<Blob> for DataReaderBlob {
+	fn from(value: Blob) -> Self {
+		DataReaderBlob {
+			reader: Cursor::new(value.as_vec()),
+		}
 	}
 }
 
