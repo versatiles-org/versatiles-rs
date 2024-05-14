@@ -1,4 +1,4 @@
-use std::{collections::HashMap, hash::Hash, mem::size_of, ops::Div};
+use std::{collections::HashMap, fmt::Debug, hash::Hash, mem::size_of, ops::Div};
 
 pub struct LimitedCache<K, V> {
 	cache: HashMap<K, (V, usize)>,
@@ -43,5 +43,14 @@ where
 				true
 			}
 		});
+	}
+}
+
+impl<K, V> Debug for LimitedCache<K, V> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("LimitedCache")
+			.field("length", &self.cache.len())
+			.field("max_length", &self.max_length)
+			.finish()
 	}
 }

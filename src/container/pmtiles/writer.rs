@@ -1,8 +1,8 @@
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
 	container::{TilesReader, TilesWriter},
-	helper::{compress_gzip, progress_bar::ProgressBar, DataWriterTrait},
-	types::{Blob, TileBBox},
+	helper::{compress, progress_bar::ProgressBar, DataWriterTrait},
+	types::{Blob, TileBBox, TileCompression},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -13,12 +13,14 @@ pub struct PMTilesWriter {}
 #[async_trait]
 impl TilesWriter for PMTilesWriter {
 	async fn write_to_writer(reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait) -> Result<()> {
+		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
+
 		let parameters = reader.get_parameters();
 		let pyramid = &parameters.bbox_pyramid;
 
 		let mut header = HeaderV3::try_from(parameters)?;
 		header.clustered = true;
-		header.internal_compression = PMTilesCompression::Gzip;
+		header.internal_compression = PMTilesCompression::from_value(INTERNAL_COMPRESSION)?;
 
 		writer.append(&header.serialize()?)?;
 
@@ -65,12 +67,12 @@ impl TilesWriter for PMTilesWriter {
 
 		//setZoomCenterDefaults(&header, resolve.Entries)
 
-		let metadata = reader.get_meta()?.unwrap_or(Blob::new_empty());
-		let metadata = compress_gzip(&metadata)?;
+		let mut metadata = reader.get_meta()?.unwrap_or(Blob::new_empty());
+		metadata = compress(metadata, &INTERNAL_COMPRESSION)?;
 
 		header.metadata = writer.append(&metadata)?;
 
-		let directory = entries.as_directory(16384 - HeaderV3::len())?;
+		let directory = entries.as_directory(16384 - HeaderV3::len(), &INTERNAL_COMPRESSION)?;
 
 		header.root_dir = writer.append(&directory.root_bytes)?;
 

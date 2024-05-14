@@ -1,9 +1,9 @@
-use super::types::{Directory, EntriesV3, HeaderV3, TileId};
+use super::types::{EntriesV3, HeaderV3, TileId};
 #[cfg(feature = "full")]
 use crate::helper::pretty_print::PrettyPrint;
 use crate::{
 	container::{TilesReader, TilesReaderParameters},
-	helper::{decompress, DataReader, DataReaderFile},
+	helper::{decompress, DataReader, DataReaderFile, LimitedCache},
 	types::{Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3},
 };
 use anyhow::{bail, Result};
@@ -14,10 +14,11 @@ use std::{fmt::Debug, path::Path};
 pub struct PMTilesReader {
 	pub data_reader: DataReader,
 	pub header: HeaderV3,
-	pub meta: Blob,
 	pub internal_compression: TileCompression,
-	pub directory: Directory,
+	pub leaves_cache: LimitedCache<ByteRange, Blob>,
+	pub meta: Blob,
 	pub parameters: TilesReaderParameters,
+	pub root_bytes_uncompressed: Blob,
 }
 
 impl PMTilesReader {
@@ -41,10 +42,7 @@ impl PMTilesReader {
 		let meta = data_reader.read_range(&header.metadata).await?;
 		let meta = decompress(meta, &internal_compression)?;
 
-		let directory: Directory = Directory {
-			root_bytes: data_reader.read_range(&header.root_dir).await?,
-			leaves_bytes: data_reader.read_range(&header.leaf_dirs).await?,
-		};
+		let root_bytes_uncompressed = decompress(data_reader.read_range(&header.root_dir).await?, &internal_compression)?;
 
 		let mut bbox_pyramid = TileBBoxPyramid::new_full(header.max_zoom);
 		bbox_pyramid.set_zoom_min(header.min_zoom);
@@ -57,11 +55,12 @@ impl PMTilesReader {
 
 		Ok(PMTilesReader {
 			data_reader,
-			directory,
 			header,
 			internal_compression,
+			leaves_cache: LimitedCache::with_maximum_size(100_000_000),
 			meta,
 			parameters,
+			root_bytes_uncompressed,
 		})
 	}
 }
@@ -92,10 +91,10 @@ impl TilesReader for PMTilesReader {
 		log::trace!("get_tile_data {:?}", coord);
 
 		let tile_id: u64 = coord.get_tile_id()?;
-		let mut dir_blob = decompress(self.directory.root_bytes.clone(), &self.internal_compression)?;
+		let mut dir_bytes = self.root_bytes_uncompressed.clone();
 
 		for _depth in 0..3 {
-			let entries = EntriesV3::from_blob(&dir_blob)?;
+			let entries = EntriesV3::from_blob(&dir_bytes)?;
 			let entry = entries.find_tile(tile_id);
 
 			let entry = if let Some(entry) = entry {
@@ -113,10 +112,14 @@ impl TilesReader for PMTilesReader {
 							.await?,
 					));
 				} else {
-					dir_blob = self
-						.data_reader
-						.read_range(&entry.range.shift(self.header.leaf_dirs.offset))
-						.await?;
+					let range = entry.range.shift(self.header.leaf_dirs.offset);
+					dir_bytes = if let Some(blob) = self.leaves_cache.get(&range) {
+						blob
+					} else {
+						let mut blob = self.data_reader.read_range(&range).await?;
+						blob = decompress(blob, &self.internal_compression)?;
+						self.leaves_cache.add(range, blob)
+					};
 				}
 			} else {
 				return Ok(None);

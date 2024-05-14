@@ -4,7 +4,7 @@ use std::{fmt, io::Read};
 #[cfg(test)]
 use std::{io::Cursor, ops::Range};
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct ByteRange {
 	pub offset: u64,
 	pub length: u64,

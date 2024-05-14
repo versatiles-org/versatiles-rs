@@ -1,5 +1,8 @@
 use super::{BlobReader, BlobWriter, Directory, EntryV3};
-use crate::types::Blob;
+use crate::{
+	helper::compress,
+	types::{Blob, TileCompression},
+};
 use anyhow::Result;
 use std::{cmp::Ordering, io::Write, slice::SliceIndex};
 
@@ -90,11 +93,11 @@ impl EntriesV3 {
 		None
 	}
 
-	pub fn as_directory(&self, target_root_len: usize) -> Result<Directory> {
+	pub fn as_directory(&self, target_root_len: usize, compression: &TileCompression) -> Result<Directory> {
 		let entries: &EntriesSliceV3 = &self.as_slice();
 
 		if entries.len() < 16384 {
-			let root_bytes = entries.serialize_entries()?;
+			let root_bytes = compress(entries.serialize_entries()?, compression)?;
 			// Case1: the entire directory fits into the target len
 			if root_bytes.len() <= target_root_len {
 				return Ok(Directory {
@@ -112,14 +115,16 @@ impl EntriesV3 {
 		let mut leaf_size: f32 = (entries.len() as f32 / 3500f32).max(4096f32);
 
 		loop {
-			let d = build_roots_leaves(entries, leaf_size as usize)?;
+			let d = build_roots_leaves(entries, leaf_size as usize, compression)?;
 			if d.root_bytes.len() <= target_root_len {
 				return Ok(d);
 			}
 			leaf_size *= 1.2
 		}
 
-		fn build_roots_leaves(entries: &EntriesSliceV3, leaf_size: usize) -> Result<Directory> {
+		fn build_roots_leaves(
+			entries: &EntriesSliceV3, leaf_size: usize, compression: &TileCompression,
+		) -> Result<Directory> {
 			let mut root_entries = EntriesV3::new();
 			let mut leaves_bytes: Vec<u8> = Vec::new();
 
@@ -129,7 +134,7 @@ impl EntriesV3 {
 				if idx + leaf_size > entries.len() {
 					end = entries.len()
 				}
-				let serialized = entries.slice(idx..end).serialize_entries()?;
+				let serialized = compress(entries.slice(idx..end).serialize_entries()?, compression)?;
 
 				root_entries.push(EntryV3::new(
 					entries.get(idx).tile_id,
@@ -142,7 +147,7 @@ impl EntriesV3 {
 				idx += leaf_size;
 			}
 
-			let root_bytes = root_entries.as_slice().serialize_entries()?;
+			let root_bytes = compress(root_entries.as_slice().serialize_entries()?, compression)?;
 
 			Ok(Directory {
 				root_bytes,
@@ -269,7 +274,7 @@ mod tests {
 	#[test]
 	fn test_as_directory() -> Result<()> {
 		let entries = create_entries();
-		let directory = entries.as_directory(1000)?; // Assuming 1000 is enough size for root
+		let directory = entries.as_directory(1000, &TileCompression::None)?; // Assuming 1000 is enough size for root
 		assert!(!directory.root_bytes.is_empty());
 		Ok(())
 	}
