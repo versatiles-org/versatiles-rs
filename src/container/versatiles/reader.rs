@@ -93,6 +93,14 @@ impl VersaTilesReader {
 
 		Ok(b.add(*block_coord, Arc::new(tile_index)))
 	}
+	#[allow(dead_code)]
+	fn get_index_size(&self) -> u64 {
+		self.block_index.iter().map(|b| b.get_index_range().length).sum()
+	}
+	#[allow(dead_code)]
+	fn get_tiles_size(&self) -> u64 {
+		self.block_index.iter().map(|b| b.get_tiles_range().length).sum()
+	}
 }
 
 // Implement Send and Sync traits for TilesReader
@@ -326,16 +334,12 @@ impl TilesReader for VersaTilesReader {
 			.await;
 		print.add_key_value("block count", &self.block_index.len()).await;
 
-		let mut index_size = 0;
-		let mut tiles_size = 0;
-
-		for block in self.block_index.iter() {
-			index_size += block.get_index_range().length;
-			tiles_size += block.get_tiles_range().length;
-		}
-
-		print.add_key_value("sum of block index sizes", &index_size).await;
-		print.add_key_value("sum of block tiles sizes", &tiles_size).await;
+		print
+			.add_key_value("sum of block index sizes", &self.get_index_size())
+			.await;
+		print
+			.add_key_value("sum of block tiles sizes", &self.get_tiles_size())
+			.await;
 
 		Ok(())
 	}
@@ -416,6 +420,12 @@ impl Debug for VersaTilesReader {
 	}
 }
 
+impl PartialEq for VersaTilesReader {
+	fn eq(&self, other: &Self) -> bool {
+		self.meta == other.meta && self.parameters == other.parameters && self.get_tiles_size() == other.get_tiles_size()
+	}
+}
+
 #[cfg(test)]
 #[cfg(feature = "full")]
 mod tests {
@@ -453,7 +463,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn reader_your_own_dog_food() -> Result<()> {
+	async fn read_your_own_dog_food() -> Result<()> {
 		let mut reader1 = MockTilesReader::new_mock(TilesReaderParameters::new(
 			TileFormat::JSON,
 			TileCompression::Gzip,
@@ -470,12 +480,9 @@ mod tests {
 		VersaTilesWriter::write_to_writer(&mut reader2, &mut data_writer2).await?;
 
 		let data_reader2 = data_writer2.to_reader();
-		let mut reader3 = VersaTilesReader::open_reader(Box::new(data_reader2)).await?;
+		let reader3 = VersaTilesReader::open_reader(Box::new(data_reader2)).await?;
 
-		let mut data_writer3 = DataWriterBlob::new()?;
-		VersaTilesWriter::write_to_writer(&mut reader3, &mut data_writer3).await?;
-
-		assert_eq!(data_writer1.len(), data_writer2.len());
+		assert_eq!(reader2, reader3);
 
 		Ok(())
 	}
