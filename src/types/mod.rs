@@ -6,6 +6,15 @@ pub use blob::*;
 mod byte_range;
 pub use byte_range::*;
 
+mod io;
+pub use io::*;
+
+mod limited_cache;
+pub use limited_cache::*;
+
+#[cfg(feature = "full")]
+pub mod progress_bar;
+
 mod tile_bbox;
 pub use tile_bbox::*;
 

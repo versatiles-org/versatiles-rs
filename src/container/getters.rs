@@ -7,7 +7,7 @@ use crate::{
 		versatiles::{VersaTilesReader, VersaTilesWriter},
 		TilesReader, TilesWriter,
 	},
-	helper::{DataReader, DataReaderHttp},
+	types::{DataReader, DataReaderHttp},
 };
 use anyhow::{bail, Context, Result};
 use reqwest::Url;

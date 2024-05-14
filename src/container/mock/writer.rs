@@ -1,6 +1,6 @@
 use crate::{
 	container::{TilesReader, TilesWriter},
-	helper::DataWriterTrait,
+	types::DataWriterTrait,
 };
 use anyhow::Result;
 use async_trait::async_trait;

@@ -1,7 +1,7 @@
 use crate::{
 	container::{TilesReader, TilesWriter},
-	helper::{compress, progress_bar::ProgressBar, DataWriterTrait},
-	types::{compression_to_extension, format_to_extension},
+	helper::compress,
+	types::{compression_to_extension, format_to_extension, progress_bar::ProgressBar, DataWriterTrait},
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;

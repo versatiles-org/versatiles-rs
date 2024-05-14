@@ -1,9 +1,9 @@
 #[cfg(feature = "full")]
-use crate::helper::progress_bar::ProgressBar;
+use crate::types::progress_bar::ProgressBar;
 use crate::{
 	container::{TilesReader, TilesWriter},
-	helper::{compress, DataWriterTrait},
-	types::{compression_to_extension, format_to_extension, Blob},
+	helper::compress,
+	types::{compression_to_extension, format_to_extension, Blob, DataWriterTrait},
 };
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;

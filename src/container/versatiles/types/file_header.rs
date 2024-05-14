@@ -1,9 +1,6 @@
 #![allow(dead_code)]
 
-use crate::{
-	helper::DataReader,
-	types::{Blob, ByteRange, TileCompression, TileFormat},
-};
+use crate::types::{Blob, ByteRange, DataReader, TileCompression, TileFormat};
 use anyhow::{bail, ensure, Result};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read, Write};

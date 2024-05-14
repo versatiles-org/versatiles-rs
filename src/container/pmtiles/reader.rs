@@ -3,8 +3,8 @@ use super::types::{EntriesV3, HeaderV3, TileId};
 use crate::helper::pretty_print::PrettyPrint;
 use crate::{
 	container::{pmtiles::types::tile_id_to_coord, TilesReader, TilesReaderParameters},
-	helper::{decompress, DataReader, DataReaderFile, LimitedCache},
-	types::{Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3},
+	helper::decompress,
+	types::{Blob, ByteRange, DataReader, DataReaderFile, LimitedCache, TileBBoxPyramid, TileCompression, TileCoord3},
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;

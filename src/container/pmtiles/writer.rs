@@ -3,8 +3,8 @@ use std::sync::Arc;
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
 	container::{TilesReader, TilesWriter},
-	helper::{compress, progress_bar::ProgressBar, DataWriterTrait},
-	types::{Blob, ByteRange, TileBBox, TileCompression},
+	helper::compress,
+	types::{progress_bar::ProgressBar, Blob, ByteRange, DataWriterTrait, TileBBox, TileCompression},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -100,8 +100,7 @@ mod test {
 			pmtiles::PMTilesReader,
 			TilesReaderParameters,
 		},
-		helper::{DataReaderBlob, DataWriterBlob},
-		types::{TileBBoxPyramid, TileCompression, TileFormat},
+		types::{DataReaderBlob, DataWriterBlob, TileBBoxPyramid, TileCompression, TileFormat},
 	};
 
 	#[tokio::test]

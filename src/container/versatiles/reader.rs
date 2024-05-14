@@ -4,8 +4,10 @@ use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 use crate::helper::pretty_print::PrettyPrint;
 use crate::{
 	container::{TilesReader, TilesReaderParameters, TilesStream},
-	helper::{DataReader, DataReaderFile, LimitedCache, TileConverter},
-	types::{Blob, ByteRange, TileBBox, TileCompression, TileCoord2, TileCoord3},
+	helper::TileConverter,
+	types::{
+		Blob, ByteRange, DataReader, DataReaderFile, LimitedCache, TileBBox, TileCompression, TileCoord2, TileCoord3,
+	},
 };
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -341,6 +343,8 @@ impl TilesReader for VersaTilesReader {
 	// deep probe of container tiles
 	#[cfg(feature = "full")]
 	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
+		use crate::types::progress_bar::ProgressBar;
+
 		#[derive(Debug)]
 		#[allow(dead_code)]
 		struct Entry {
@@ -356,7 +360,7 @@ impl TilesReader for VersaTilesReader {
 		let mut tile_count: u64 = 0;
 
 		let block_index = self.block_index.clone();
-		let mut progress = crate::helper::progress_bar::ProgressBar::new("scanning blocks", block_index.len() as u64);
+		let mut progress = ProgressBar::new("scanning blocks", block_index.len() as u64);
 
 		for block in block_index.iter() {
 			let tile_index = self.get_block_tile_index(block).await?;
@@ -423,8 +427,8 @@ mod tests {
 			versatiles::VersaTilesWriter,
 			TilesWriter,
 		},
-		helper::{decompress_gzip, DataWriterBlob},
-		types::{TileBBoxPyramid, TileFormat},
+		helper::decompress_gzip,
+		types::{DataWriterBlob, TileBBoxPyramid, TileFormat},
 	};
 	use anyhow::Result;
 

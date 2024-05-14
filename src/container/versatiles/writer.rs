@@ -1,11 +1,11 @@
 // Import necessary modules and traits
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 #[cfg(feature = "full")]
-use crate::helper::progress_bar::ProgressBar;
+use crate::types::progress_bar::ProgressBar;
 use crate::{
 	container::{TilesReader, TilesStream, TilesWriter},
-	helper::{compress, DataWriterTrait},
-	types::{Blob, ByteRange},
+	helper::compress,
+	types::{Blob, ByteRange, DataWriterTrait},
 };
 use anyhow::Result;
 use async_trait::async_trait;

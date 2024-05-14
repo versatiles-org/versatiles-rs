@@ -1,7 +1,7 @@
 use crate::{
 	container::{TilesReader, TilesReaderParameters, TilesStream},
-	helper::{progress_bar::ProgressBar, TransformCoord},
-	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
+	helper::TransformCoord,
+	types::{progress_bar::ProgressBar, Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::{anyhow, ensure, Result};
 use async_trait::async_trait;
