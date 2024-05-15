@@ -1,8 +1,8 @@
-use super::super::helper::{guess_mime, Url};
+use super::super::utils::{guess_mime, Url};
 use super::{static_source::StaticSourceTrait, SourceResponse};
 use crate::{
-	helper::{decompress_brotli, decompress_gzip, TargetCompression},
 	types::{Blob, TileCompression},
+	utils::{decompress_brotli, decompress_gzip, TargetCompression},
 };
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;

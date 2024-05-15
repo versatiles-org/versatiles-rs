@@ -2,11 +2,11 @@
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 use crate::{
 	container::{TilesReader, TilesStream, TilesWriter},
-	helper::compress,
 	types::{
 		progress::{get_progress_bar, ProgressTrait},
 		Blob, ByteRange, DataWriterTrait,
 	},
+	utils::compress,
 };
 use anyhow::Result;
 use async_trait::async_trait;

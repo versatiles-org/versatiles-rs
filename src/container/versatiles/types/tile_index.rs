@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use crate::{
-	helper::{compress_brotli, decompress_brotli},
 	types::{Blob, ByteRange},
+	utils::{compress_brotli, decompress_brotli},
 };
 use anyhow::{ensure, Result};
 use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};

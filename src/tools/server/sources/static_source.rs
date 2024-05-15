@@ -1,5 +1,5 @@
-use super::{super::helper::Url, static_source_folder::Folder, static_source_tar::TarFile, SourceResponse};
-use crate::helper::TargetCompression;
+use super::{super::utils::Url, static_source_folder::Folder, static_source_tar::TarFile, SourceResponse};
+use crate::utils::TargetCompression;
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use std::{fmt::Debug, path::Path, sync::Arc};
@@ -48,8 +48,8 @@ impl StaticSource {
 mod tests {
 	use super::*;
 	use crate::{
-		helper::compress,
 		types::{Blob, TileCompression},
+		utils::compress,
 	};
 	use async_trait::async_trait;
 	use std::{fs::File, io::Write, path::PathBuf};

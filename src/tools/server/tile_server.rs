@@ -1,11 +1,11 @@
 use super::{
-	helper::Url,
 	sources::{SourceResponse, StaticSource, TileSource},
+	utils::Url,
 };
 use crate::{
 	container::TilesReader,
-	helper::{optimize_compression, TargetCompression},
 	types::{Blob, TileCompression},
+	utils::{optimize_compression, TargetCompression},
 };
 use anyhow::{bail, Result};
 use axum::{

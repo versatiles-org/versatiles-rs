@@ -1,7 +1,7 @@
 use crate::{
 	container::{TilesReader, TilesReaderParameters, TilesStream},
-	helper::{TileConverter, TransformCoord},
 	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
+	utils::{TileConverter, TransformCoord},
 };
 use anyhow::Result;
 use async_trait::async_trait;

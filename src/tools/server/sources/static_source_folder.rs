@@ -1,11 +1,11 @@
 use super::{
-	super::helper::{guess_mime, Url},
+	super::utils::{guess_mime, Url},
 	static_source::StaticSourceTrait,
 	SourceResponse,
 };
 use crate::{
-	helper::TargetCompression,
 	types::{Blob, TileCompression},
+	utils::TargetCompression,
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;

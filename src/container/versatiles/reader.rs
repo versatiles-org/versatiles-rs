@@ -1,13 +1,13 @@
 // Import necessary modules and traits
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 #[cfg(feature = "full")]
-use crate::helper::pretty_print::PrettyPrint;
+use crate::utils::pretty_print::PrettyPrint;
 use crate::{
 	container::{TilesReader, TilesReaderParameters, TilesStream},
-	helper::TileConverter,
 	types::{
 		Blob, ByteRange, DataReader, DataReaderFile, LimitedCache, TileBBox, TileCompression, TileCoord2, TileCoord3,
 	},
+	utils::TileConverter,
 };
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -437,8 +437,8 @@ mod tests {
 			versatiles::VersaTilesWriter,
 			TilesWriter,
 		},
-		helper::decompress_gzip,
 		types::{DataWriterBlob, TileBBoxPyramid, TileFormat},
+		utils::decompress_gzip,
 	};
 	use anyhow::Result;
 
@@ -490,7 +490,7 @@ mod tests {
 	// Test tile fetching
 	#[tokio::test]
 	async fn probe() -> Result<()> {
-		use crate::helper::pretty_print::PrettyPrint;
+		use crate::utils::pretty_print::PrettyPrint;
 
 		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
 

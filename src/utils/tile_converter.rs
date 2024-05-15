@@ -2,8 +2,8 @@
 use super::image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2img, webp2img};
 use crate::{
 	container::TilesStream,
-	helper::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip},
 	types::{Blob, TileCompression, TileFormat},
+	utils::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip},
 };
 #[cfg(feature = "full")]
 use anyhow::bail;
@@ -393,7 +393,7 @@ mod tests {
 	#[test]
 	#[cfg(feature = "full")]
 	fn convert_images() -> Result<()> {
-		use crate::helper::image::{compare_images, create_image_rgb};
+		use crate::utils::image::{compare_images, create_image_rgb};
 
 		let formats = vec![
 			//AVIF,

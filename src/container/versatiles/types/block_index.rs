@@ -2,8 +2,8 @@
 
 use super::BlockDefinition;
 use crate::{
-	helper::{compress_brotli, decompress_brotli},
 	types::{Blob, TileBBoxPyramid, TileCoord3},
+	utils::{compress_brotli, decompress_brotli},
 };
 use anyhow::{ensure, Result};
 use std::{

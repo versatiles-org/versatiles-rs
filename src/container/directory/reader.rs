@@ -1,7 +1,7 @@
 use crate::{
 	container::{TilesReader, TilesReaderParameters},
-	helper::decompress,
 	types::{extract_compression, extract_format, Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
+	utils::decompress,
 };
 use anyhow::{bail, ensure, Context, Result};
 use async_trait::async_trait;
@@ -183,7 +183,7 @@ impl Debug for DirectoryTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{assert_wildcard, helper::compress};
+	use crate::{assert_wildcard, utils::compress};
 	use assert_fs::{
 		fixture::{FileWriteStr, PathChild},
 		TempDir,

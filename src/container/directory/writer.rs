@@ -1,7 +1,7 @@
 use crate::{
 	container::{TilesReader, TilesWriter},
-	helper::compress,
 	types::{compression_to_extension, format_to_extension, progress::get_progress_bar, Blob, DataWriterTrait},
+	utils::compress,
 };
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
@@ -90,8 +90,8 @@ mod tests {
 			mock::{MockTilesReader, MOCK_BYTES_PBF},
 			TilesReaderParameters,
 		},
-		helper::decompress_gzip,
 		types::{TileBBoxPyramid, TileCompression, TileFormat},
+		utils::decompress_gzip,
 	};
 	use assert_fs;
 

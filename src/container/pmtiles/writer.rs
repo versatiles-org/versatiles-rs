@@ -3,8 +3,8 @@ use std::sync::Arc;
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
 	container::{TilesReader, TilesWriter},
-	helper::compress,
 	types::{progress::get_progress_bar, Blob, ByteRange, DataWriterTrait, TileBBox, TileCompression},
+	utils::compress,
 };
 use anyhow::Result;
 use async_trait::async_trait;

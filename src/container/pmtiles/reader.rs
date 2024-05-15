@@ -1,10 +1,10 @@
 use super::types::{EntriesV3, HeaderV3, TileId};
 #[cfg(feature = "full")]
-use crate::helper::pretty_print::PrettyPrint;
+use crate::utils::pretty_print::PrettyPrint;
 use crate::{
 	container::{pmtiles::types::tile_id_to_coord, TilesReader, TilesReaderParameters},
-	helper::decompress,
 	types::{Blob, ByteRange, DataReader, DataReaderFile, LimitedCache, TileBBoxPyramid, TileCompression, TileCoord3},
+	utils::decompress,
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;

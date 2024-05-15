@@ -1,7 +1,7 @@
 use crate::{
 	container::{TilesReader, TilesReaderParameters},
-	helper::compress,
 	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
+	utils::compress,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -92,7 +92,7 @@ impl std::fmt::Debug for MockTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{container::mock::MockTilesWriter, helper::decompress};
+	use crate::{container::mock::MockTilesWriter, utils::decompress};
 	use anyhow::Result;
 
 	#[tokio::test]
