@@ -1,7 +1,7 @@
 use crate::{
 	container::{TilesReader, TilesWriter},
 	helper::compress,
-	types::{compression_to_extension, format_to_extension, progress_bar::ProgressBar, DataWriterTrait},
+	types::{compression_to_extension, format_to_extension, progress::get_progress_bar, DataWriterTrait},
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -42,8 +42,7 @@ impl TilesWriter for TarTilesWriter {
 			builder.append_data(&mut header, Path::new(&filename), meta_data.as_slice())?;
 		}
 
-		let mut bar = ProgressBar::new("converting tiles", bbox_pyramid.count_tiles());
-		let mutex_bar = &Mutex::new(&mut bar);
+		let mut progress = get_progress_bar("converting tiles", bbox_pyramid.count_tiles());
 		let mutex_builder = &Mutex::new(&mut builder);
 
 		for bbox in bbox_pyramid.iter_levels() {
@@ -51,7 +50,7 @@ impl TilesWriter for TarTilesWriter {
 
 			while let Some(entry) = stream.next().await {
 				let (coord, blob) = entry;
-				mutex_bar.lock().await.inc(1);
+				progress.inc(1);
 
 				let filename = format!(
 					"./{}/{}/{}{}{}",
@@ -76,7 +75,7 @@ impl TilesWriter for TarTilesWriter {
 			}
 		}
 
-		bar.finish();
+		progress.finish();
 		builder.finish()?;
 
 		Ok(())

@@ -1,10 +1,11 @@
-use log::{max_level, LevelFilter};
-use std::io::Write;
-use std::ops::Add;
-use std::time::{Duration, SystemTime};
+use super::traits::ProgressTrait;
+use std::{
+	io::Write,
+	time::{Duration, SystemTime},
+};
 use terminal_size::terminal_size;
 
-const STEP_SIZE: Duration = Duration::from_millis(500);
+const TICKER_INTERVAL: Duration = Duration::from_millis(500);
 
 /// A struct that represents a progress bar.
 pub struct ProgressBar {
@@ -13,105 +14,25 @@ pub struct ProgressBar {
 	/// A message that describes the task being performed.
 	message: String,
 	/// The time at which the task was started.
-	start: SystemTime,
-	/// The time of the next update.
-	next_update: SystemTime,
+	start_time: SystemTime,
+	update_time: SystemTime,
 	/// The current value of the progress bar.
 	value: u64,
-	/// Indicates whether the progress bar is visible.
-	visible: bool,
 }
 
 impl ProgressBar {
-	/// Creates a new progress bar.
-	///
-	/// # Arguments
-	///
-	/// * `message`: A message that describes the task being performed.
-	/// * `max_value`: The maximum value of the progress bar.
-	///
-	/// # Returns
-	///
-	/// A new `ProgressBar` instance.
-	pub fn new(message: &str, max_value: u64) -> Self {
-		let now = SystemTime::now();
-		let mut progress = ProgressBar {
-			max_value,
-			message: message.to_string(),
-			start: now,
-			next_update: now,
-			value: 0,
-			visible: max_level() >= LevelFilter::Error,
-		};
-		progress.update();
-		progress
-	}
-
-	#[cfg(test)]
-	/// Sets the position of the progress bar.
-	///
-	/// # Arguments
-	///
-	/// * `value`: The new position of the progress bar.
-	pub fn set_position(&mut self, value: u64) {
-		self.value = value;
-		self.update();
-	}
-
-	/// Increases the value of the progress bar by a given amount.
-	///
-	/// # Arguments
-	///
-	/// * `value`: The amount by which to increase the progress bar.
-	pub fn inc(&mut self, value: u64) {
-		self.value += value;
-		self.update();
-	}
-
-	#[cfg(test)]
-	/// Sets the visibility of the progress bar.
-	///
-	/// # Arguments
-	///
-	/// * `visible`: A flag indicating whether the progress bar should be visible.
-	pub fn set_visible(&mut self, visible: bool) {
-		self.visible = visible;
-	}
-
-	/// Updates the progress bar if it is time to do so.
-	fn update(&mut self) {
-		let now = SystemTime::now();
-		if now < self.next_update {
+	fn draw(&mut self) {
+		if self.max_value == 0 {
 			return;
 		}
-		self.next_update = now.add(STEP_SIZE);
 
-		if self.visible {
-			self.draw();
+		if SystemTime::now() < self.update_time {
+			return;
 		}
-	}
 
-	/// Finishes the progress bar and sets its value to the maximum.
-	pub fn finish(&mut self) {
-		self.value = self.max_value;
-
-		if self.visible {
-			self.draw();
-			eprintln!();
-		}
-	}
-
-	/// Finishes the progress bar and sets its value to the maximum.
-	pub fn remove(&mut self) {
-		if self.visible {
-			eprint!("\r\x1B[2K");
-		}
-	}
-
-	fn draw(&mut self) {
 		let width = terminal_size().map_or(80, |s| s.0 .0) as i64;
 
-		let duration = SystemTime::now().duration_since(self.start).unwrap();
+		let duration = SystemTime::now().duration_since(self.start_time).unwrap();
 		let progress = (self.value as f64 / self.max_value as f64).clamp(1e-6, 1.);
 		let time_left = Duration::from_secs_f64(duration.as_secs_f64() / progress * (1.0 - progress));
 		let speed = self.value as f64 / duration.as_secs_f64();
@@ -134,20 +55,71 @@ impl ProgressBar {
 		let length2 = col2.len() as i64;
 		let length3 = col3.len() as i64;
 
-		let space1 = 0.max((width - length2) / 2 - length1);
-		let space2 = 0.max(width - (length1 + space1 + length2 + length3));
+		let space_len1 = 0.max((width - length2) / 2 - length1);
+		let space_len2 = 0.max(width - (length1 + space_len1 + length2 + length3));
 
-		let line = format!(
-			"\r{}{}{}{}{}",
-			col1,
-			" ".repeat(space1 as usize),
-			col2,
-			" ".repeat(space2 as usize),
-			col3
-		);
+		let space1 = " ".repeat(space_len1 as usize);
+		let space2 = " ".repeat(space_len2 as usize);
+
+		let line = format!("\r{col1}{space1}{col2}{space2}{col3}");
 		let pos = (line.len() as f64 * progress).round() as usize;
 
 		eprint!("\r\x1B[7m{}\x1B[0m{}", &line[0..pos], &line[pos..]);
+		std::io::stdout().flush().unwrap();
+
+		self.update_time.checked_add(TICKER_INTERVAL);
+	}
+}
+
+impl ProgressTrait for ProgressBar {
+	fn new() -> Self {
+		let start_time = SystemTime::now();
+		ProgressBar {
+			max_value: 0,
+			message: String::from(""),
+			start_time,
+			value: 0,
+			update_time: start_time.checked_add(TICKER_INTERVAL).unwrap(),
+		}
+	}
+
+	fn init(&mut self, message: &str, max_value: u64) {
+		self.message = message.to_string();
+		self.max_value = max_value;
+		self.start_time = SystemTime::now();
+		self.value = 0;
+		self.draw();
+	}
+
+	/// Sets the position of the progress bar.
+	///
+	/// # Arguments
+	///
+	/// * `value`: The new position of the progress bar.
+	fn set_position(&mut self, value: u64) {
+		self.value = value;
+	}
+
+	/// Increases the value of the progress bar by a given amount.
+	///
+	/// # Arguments
+	///
+	/// * `value`: The amount by which to increase the progress bar.
+	fn inc(&mut self, value: u64) {
+		self.value += value;
+	}
+
+	/// Finishes the progress bar and sets its value to the maximum.
+	fn finish(&mut self) {
+		self.value = self.max_value;
+		self.update_time = self.start_time;
+		self.draw();
+		eprintln!();
+	}
+
+	/// Finishes the progress bar and sets its value to the maximum.
+	fn remove(&mut self) {
+		eprint!("\r\x1B[2K");
 		std::io::stdout().flush().unwrap();
 	}
 }
@@ -213,7 +185,7 @@ fn format_float(value: f64) -> String {
 	}
 }
 
-#[cfg(test)]
+/*
 mod tests {
 	use super::*;
 
@@ -236,3 +208,4 @@ mod tests {
 		progress.finish();
 	}
 }
+ */

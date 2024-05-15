@@ -1,9 +1,7 @@
-#[cfg(feature = "full")]
-use crate::types::progress_bar::ProgressBar;
 use crate::{
 	container::{TilesReader, TilesWriter},
 	helper::compress,
-	types::{compression_to_extension, format_to_extension, Blob, DataWriterTrait},
+	types::{compression_to_extension, format_to_extension, progress::get_progress_bar, Blob, DataWriterTrait},
 };
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
@@ -51,8 +49,7 @@ impl TilesWriter for DirectoryTilesWriter {
 			Self::write(path.join(filename), meta_data)?;
 		}
 
-		#[cfg(feature = "full")]
-		let mut bar = ProgressBar::new("converting tiles", bbox_pyramid.count_tiles());
+		let mut progress = get_progress_bar("converting tiles", bbox_pyramid.count_tiles());
 
 		for bbox in bbox_pyramid.iter_levels() {
 			let mut stream = reader.get_bbox_tile_stream(bbox).await;
@@ -60,8 +57,7 @@ impl TilesWriter for DirectoryTilesWriter {
 			while let Some(entry) = stream.next().await {
 				let (coord, blob) = entry;
 
-				#[cfg(feature = "full")]
-				bar.inc(1);
+				progress.inc(1);
 
 				let filename = format!(
 					"{}/{}/{}{}{}",
@@ -77,8 +73,7 @@ impl TilesWriter for DirectoryTilesWriter {
 			}
 		}
 
-		#[cfg(feature = "full")]
-		bar.finish();
+		progress.finish();
 
 		Ok(())
 	}

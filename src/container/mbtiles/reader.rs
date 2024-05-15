@@ -1,7 +1,7 @@
 use crate::{
 	container::{TilesReader, TilesReaderParameters, TilesStream},
 	helper::TransformCoord,
-	types::{progress_bar::ProgressBar, Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
+	types::{progress::get_progress_bar, Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::{anyhow, ensure, Result};
 use async_trait::async_trait;
@@ -115,7 +115,7 @@ impl MBTilesReader {
 		let z0 = self.simple_query("MIN(zoom_level)", "")?;
 		let z1 = self.simple_query("MAX(zoom_level)", "")?;
 
-		let mut progress = ProgressBar::new("get mbtiles bbox pyramid", (z1 - z0 + 1) as u64);
+		let mut progress = get_progress_bar("get mbtiles bbox pyramid", (z1 - z0 + 1) as u64);
 
 		for z in z0..=z1 {
 			let x0 = self.simple_query("MIN(tile_column)", &format!("zoom_level = {z}"))?;

@@ -4,7 +4,7 @@ use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
 	container::{TilesReader, TilesWriter},
 	helper::compress,
-	types::{progress_bar::ProgressBar, Blob, ByteRange, DataWriterTrait, TileBBox, TileCompression},
+	types::{progress::get_progress_bar, Blob, ByteRange, DataWriterTrait, TileBBox, TileCompression},
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -27,7 +27,7 @@ impl TilesWriter for PMTilesWriter {
 		blocks.sort_by_cached_key(|b| b.get_tile_id().unwrap());
 
 		let tile_count = blocks.iter().map(|block| block.count_tiles()).sum::<u64>();
-		let mut progress = ProgressBar::new("converting tiles", tile_count);
+		let mut progress = get_progress_bar("converting tiles", tile_count);
 
 		let entries = EntriesV3::new();
 

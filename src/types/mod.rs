@@ -12,8 +12,7 @@ pub use io::*;
 mod limited_cache;
 pub use limited_cache::*;
 
-#[cfg(feature = "full")]
-pub mod progress_bar;
+pub mod progress;
 
 mod tile_bbox;
 pub use tile_bbox::*;

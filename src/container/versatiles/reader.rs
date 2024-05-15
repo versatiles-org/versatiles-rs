@@ -347,7 +347,7 @@ impl TilesReader for VersaTilesReader {
 	// deep probe of container tiles
 	#[cfg(feature = "full")]
 	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
-		use crate::types::progress_bar::ProgressBar;
+		use crate::types::progress::get_progress_bar;
 
 		#[derive(Debug)]
 		#[allow(dead_code)]
@@ -364,7 +364,7 @@ impl TilesReader for VersaTilesReader {
 		let mut tile_count: u64 = 0;
 
 		let block_index = self.block_index.clone();
-		let mut progress = ProgressBar::new("scanning blocks", block_index.len() as u64);
+		let mut progress = get_progress_bar("scanning blocks", block_index.len() as u64);
 
 		for block in block_index.iter() {
 			let tile_index = self.get_block_tile_index(block).await?;
