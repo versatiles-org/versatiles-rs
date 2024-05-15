@@ -26,8 +26,11 @@ impl TilesWriter for PMTilesWriter {
 			.collect();
 		blocks.sort_by_cached_key(|b| b.get_tile_id().unwrap());
 
-		let tile_count = blocks.iter().map(|block| block.count_tiles()).sum::<u64>();
-		let mut progress = get_progress_bar("converting tiles", tile_count);
+		let mut progress = get_progress_bar(
+			"converting tiles",
+			blocks.iter().map(|block| block.count_tiles()).sum::<u64>(),
+		);
+		let mut tile_count = 0;
 
 		let entries = EntriesV3::new();
 
@@ -49,6 +52,7 @@ impl TilesWriter for PMTilesWriter {
 				.get_bbox_tile_stream(bbox)
 				.await
 				.for_each(|(coord, blob)| {
+					progress.inc(1);
 					let mutex_writer = mutex_writer.clone();
 					let mutex_entries = mutex_entries.clone();
 					async move {
@@ -62,8 +66,10 @@ impl TilesWriter for PMTilesWriter {
 				})
 				.await;
 
-			progress.inc(bbox.count_tiles())
+			tile_count += bbox.count_tiles();
+			progress.set_position(tile_count);
 		}
+		progress.finish();
 
 		let mut writer = mutex_writer.lock().await;
 		let mut entries = mutex_entries.lock().await;

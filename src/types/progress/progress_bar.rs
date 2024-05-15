@@ -5,7 +5,7 @@ use std::{
 };
 use terminal_size::terminal_size;
 
-const TICKER_INTERVAL: Duration = Duration::from_millis(500);
+const TICKER_INTERVAL: Duration = Duration::from_millis(200);
 
 /// A struct that represents a progress bar.
 pub struct ProgressBar {
@@ -67,7 +67,7 @@ impl ProgressBar {
 		eprint!("\r\x1B[7m{}\x1B[0m{}", &line[0..pos], &line[pos..]);
 		std::io::stdout().flush().unwrap();
 
-		self.update_time.checked_add(TICKER_INTERVAL);
+		self.update_time = self.update_time.checked_add(TICKER_INTERVAL).unwrap();
 	}
 }
 
@@ -98,6 +98,7 @@ impl ProgressTrait for ProgressBar {
 	/// * `value`: The new position of the progress bar.
 	fn set_position(&mut self, value: u64) {
 		self.value = value;
+		self.draw();
 	}
 
 	/// Increases the value of the progress bar by a given amount.
@@ -107,6 +108,7 @@ impl ProgressTrait for ProgressBar {
 	/// * `value`: The amount by which to increase the progress bar.
 	fn inc(&mut self, value: u64) {
 		self.value += value;
+		self.draw();
 	}
 
 	/// Finishes the progress bar and sets its value to the maximum.
