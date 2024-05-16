@@ -49,3 +49,45 @@ impl PMTilesType {
 		})
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_from_u8() {
+		assert_eq!(PMTilesType::from_u8(0).unwrap(), PMTilesType::UNKNOWN);
+		assert_eq!(PMTilesType::from_u8(1).unwrap(), PMTilesType::MVT);
+		assert_eq!(PMTilesType::from_u8(2).unwrap(), PMTilesType::PNG);
+		assert_eq!(PMTilesType::from_u8(3).unwrap(), PMTilesType::JPEG);
+		assert_eq!(PMTilesType::from_u8(4).unwrap(), PMTilesType::WEBP);
+		assert_eq!(PMTilesType::from_u8(5).unwrap(), PMTilesType::AVIF);
+		assert!(PMTilesType::from_u8(6).is_err());
+	}
+
+	#[test]
+	fn test_from_value() {
+		assert_eq!(PMTilesType::from_value(TileFormat::AVIF).unwrap(), PMTilesType::AVIF);
+		assert_eq!(PMTilesType::from_value(TileFormat::JPG).unwrap(), PMTilesType::JPEG);
+		assert_eq!(PMTilesType::from_value(TileFormat::PBF).unwrap(), PMTilesType::MVT);
+		assert_eq!(PMTilesType::from_value(TileFormat::PNG).unwrap(), PMTilesType::PNG);
+		assert_eq!(PMTilesType::from_value(TileFormat::WEBP).unwrap(), PMTilesType::WEBP);
+
+		// Test unsupported TileFormats
+		assert!(PMTilesType::from_value(TileFormat::BIN).is_err());
+		assert!(PMTilesType::from_value(TileFormat::GEOJSON).is_err());
+		assert!(PMTilesType::from_value(TileFormat::JSON).is_err());
+		assert!(PMTilesType::from_value(TileFormat::SVG).is_err());
+		assert!(PMTilesType::from_value(TileFormat::TOPOJSON).is_err());
+	}
+
+	#[test]
+	fn test_as_value() {
+		assert_eq!(PMTilesType::UNKNOWN.as_value().unwrap(), TileFormat::BIN);
+		assert_eq!(PMTilesType::MVT.as_value().unwrap(), TileFormat::PBF);
+		assert_eq!(PMTilesType::PNG.as_value().unwrap(), TileFormat::PNG);
+		assert_eq!(PMTilesType::JPEG.as_value().unwrap(), TileFormat::JPG);
+		assert_eq!(PMTilesType::WEBP.as_value().unwrap(), TileFormat::WEBP);
+		assert_eq!(PMTilesType::AVIF.as_value().unwrap(), TileFormat::AVIF);
+	}
+}
