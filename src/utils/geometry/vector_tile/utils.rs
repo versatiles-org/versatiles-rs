@@ -1,5 +1,6 @@
-use crate::{types::Blob, utils::BlobReader};
+use crate::utils::BlobReader;
 use anyhow::Result;
+use byteorder::LE;
 
 pub fn parse_key(key: u64) -> (u32, u8) {
 	let field_number = (key >> 3) as u32;
@@ -7,10 +8,9 @@ pub fn parse_key(key: u64) -> (u32, u8) {
 	(field_number, wire_type)
 }
 
-pub fn parse_packed_uint32(blob: &Blob) -> Result<Vec<u32>> {
-	let mut reader = BlobReader::new_le(blob);
+pub fn parse_packed_uint32(reader: &mut BlobReader<LE>) -> Result<Vec<u32>> {
 	let mut values = Vec::new();
-	while reader.data_left() {
+	while reader.has_remaining() {
 		values.push(reader.read_varint()? as u32);
 	}
 	Ok(values)

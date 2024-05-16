@@ -1,6 +1,7 @@
 use super::{parse_key, Feature, Value};
-use crate::{types::Blob, utils::BlobReader};
+use crate::utils::BlobReader;
 use anyhow::{bail, Result};
+use byteorder::LE;
 
 #[derive(Debug, Default, PartialEq)]
 pub struct Layer {
@@ -13,10 +14,9 @@ pub struct Layer {
 }
 
 impl Layer {
-	pub fn decode(blob: &Blob) -> Result<Layer> {
-		let mut reader = BlobReader::new_le(blob);
+	pub fn decode(reader: &mut BlobReader<LE>) -> Result<Layer> {
 		let mut layer = Layer::default();
-		while reader.data_left() {
+		while reader.has_remaining() {
 			let (field_number, wire_type) = parse_key(reader.read_varint()?);
 			let value = reader.read_varint()?;
 			match (field_number, wire_type) {
@@ -24,13 +24,15 @@ impl Layer {
 					layer.name = Some(reader.read_string(value)?);
 				}
 				(2, 2) => {
-					layer.features.push(Feature::decode(&reader.read_blob(value)?)?);
+					layer
+						.features
+						.push(Feature::decode(&mut reader.get_sub_reader(value)?)?);
 				}
 				(3, 2) => {
 					layer.keys.push(reader.read_string(value)?);
 				}
 				(4, 2) => {
-					layer.values.push(Value::decode(&reader.read_blob(value)?)?);
+					layer.values.push(Value::decode(&mut reader.get_sub_reader(value)?)?);
 				}
 				(5, 0) => {
 					layer.extent = Some(value as u32);

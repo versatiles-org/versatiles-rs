@@ -1,5 +1,5 @@
 use crate::types::{Blob, ByteRange};
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
 use std::{
 	io::{Cursor, Read},
@@ -28,8 +28,12 @@ impl<'a, E: ByteOrder> BlobReader<'a, E> {
 		self.len() == 0
 	}
 
-	pub fn data_left(&self) -> bool {
-		self.get_position() < self.len()
+	pub fn remaining(&self) -> u64 {
+		self.cursor.get_ref().len() as u64 - self.cursor.position()
+	}
+
+	pub fn has_remaining(&self) -> bool {
+		self.remaining() > 0
 	}
 
 	pub fn read_varint(&mut self) -> Result<u64> {
@@ -78,11 +82,28 @@ impl<'a, E: ByteOrder> BlobReader<'a, E> {
 		Ok(self.cursor.read_u64::<E>()?)
 	}
 
+	//#[allow(dead_code)]
+	//pub fn read_blob(&mut self, length: u64) -> Result<Blob> {
+	//	let mut vec = vec![0u8; length as usize];
+	//	self.cursor.read_exact(&mut vec)?;
+	//	Ok(Blob::from(vec))
+	//}
+
 	#[allow(dead_code)]
-	pub fn read_blob(&mut self, length: u64) -> Result<Blob> {
-		let mut vec = vec![0u8; length as usize];
-		self.cursor.read_exact(&mut vec)?;
-		Ok(Blob::from(vec))
+	pub fn get_sub_reader(&mut self, length: u64) -> Result<BlobReader<E>> {
+		let start = self.cursor.position() as usize;
+		let end = start as u64 + length;
+		self.cursor.set_position(end);
+		Ok(BlobReader {
+			_phantom: PhantomData,
+			cursor: Cursor::new(
+				self
+					.cursor
+					.get_ref()
+					.get(start..end as usize)
+					.ok_or(anyhow!("out of bounds"))?,
+			),
+		})
 	}
 
 	pub fn read_string(&mut self, length: u64) -> Result<String> {
@@ -103,7 +124,7 @@ impl<'a, E: ByteOrder> BlobReader<'a, E> {
 	}
 
 	#[allow(dead_code)]
-	pub fn get_position(&self) -> u64 {
+	pub fn position(&self) -> u64 {
 		self.cursor.position()
 	}
 }
@@ -185,7 +206,7 @@ mod tests {
 		let mut reader = BlobReader::new_le(&blob);
 
 		reader.set_position(2);
-		assert_eq!(reader.get_position(), 2);
+		assert_eq!(reader.position(), 2);
 		assert_eq!(reader.read_u8()?, 0x03);
 		Ok(())
 	}

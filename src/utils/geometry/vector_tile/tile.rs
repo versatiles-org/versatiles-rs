@@ -13,7 +13,7 @@ impl VectorTile {
 		let mut reader = BlobReader::new_le(&blob);
 
 		let mut tile = VectorTile::default();
-		while reader.data_left() {
+		while reader.has_remaining() {
 			let (field_number, wire_type) = parse_key(reader.read_varint()?);
 
 			println!("{field_number}, {wire_type}");
@@ -21,8 +21,7 @@ impl VectorTile {
 			match (field_number, wire_type) {
 				(3, 2) => {
 					let length = reader.read_varint()?;
-					let layer_data = reader.read_blob(length)?;
-					let layer = Layer::decode(&layer_data)?;
+					let layer = Layer::decode(&mut reader.get_sub_reader(length)?)?;
 					tile.layers.push(layer);
 				}
 				_ => bail!("Unexpected field number or wire type".to_string()),

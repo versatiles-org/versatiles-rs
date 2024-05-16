@@ -1,7 +1,7 @@
-use crate::{types::Blob, utils::BlobReader};
-
 use super::parse_key;
+use crate::utils::BlobReader;
 use anyhow::{bail, Result};
+use byteorder::LE;
 
 #[derive(Debug, Default, PartialEq)]
 pub struct Value {
@@ -15,11 +15,10 @@ pub struct Value {
 }
 
 impl Value {
-	pub fn decode(blob: &Blob) -> Result<Value> {
-		let mut reader = BlobReader::new_le(blob);
+	pub fn decode(reader: &mut BlobReader<LE>) -> Result<Value> {
 		let mut value = Value::default();
 
-		while reader.data_left() {
+		while reader.has_remaining() {
 			let (field_number, wire_type) = parse_key(reader.read_varint()?);
 
 			match (field_number, wire_type) {
