@@ -37,7 +37,7 @@ impl Value {
 					value.int_value = Some(reader.read_varint()? as i64);
 				}
 				(5, 0) => {
-					value.uint_value = Some(reader.read_varint()? as u64);
+					value.uint_value = Some(reader.read_varint()?);
 				}
 				(6, 0) => {
 					let sint_value = reader.read_varint()?;

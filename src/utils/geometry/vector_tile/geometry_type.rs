@@ -8,8 +8,8 @@ pub enum GeomType {
 
 impl GeomType {
 	#[allow(dead_code)]
-	pub fn to_i32(&self) -> i32 {
-		*self as i32
+	pub fn as_u64(&self) -> u64 {
+		*self as u64
 	}
 }
 

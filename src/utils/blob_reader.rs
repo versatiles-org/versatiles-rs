@@ -23,6 +23,11 @@ impl<'a, E: ByteOrder> BlobReader<'a, E> {
 		self.cursor.get_ref().len() as u64
 	}
 
+	#[allow(dead_code)]
+	pub fn is_empty(&self) -> bool {
+		self.len() == 0
+	}
+
 	pub fn data_left(&self) -> bool {
 		self.get_position() < self.len()
 	}

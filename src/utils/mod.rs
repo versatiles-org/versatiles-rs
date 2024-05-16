@@ -1,4 +1,5 @@
-//! helper functions, especially for converting and compressing tiles
+#[cfg(test)]
+pub mod assert;
 
 mod blob_reader;
 pub use blob_reader::*;
@@ -9,13 +10,8 @@ pub use blob_writer::*;
 mod compression;
 pub use compression::*;
 
+#[cfg(feature = "full")]
 pub mod geometry;
-
-mod tile_converter;
-pub use tile_converter::*;
-
-mod transform_coord;
-pub use transform_coord::*;
 
 #[cfg(feature = "full")]
 pub mod image;
@@ -23,5 +19,8 @@ pub mod image;
 #[cfg(feature = "full")]
 pub mod pretty_print;
 
-#[cfg(test)]
-pub mod assert;
+mod tile_converter;
+pub use tile_converter::*;
+
+mod transform_coord;
+pub use transform_coord::*;
