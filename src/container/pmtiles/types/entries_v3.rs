@@ -1,7 +1,7 @@
-use super::{BlobReader, BlobWriter, Directory, EntryV3};
+use super::{Directory, EntryV3};
 use crate::{
 	types::{Blob, ByteRange, TileCompression},
-	utils::compress,
+	utils::{compress, BlobReader, BlobWriter},
 };
 use anyhow::{bail, Result};
 use std::{

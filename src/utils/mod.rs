@@ -1,5 +1,11 @@
 //! helper functions, especially for converting and compressing tiles
 
+mod blob_reader;
+pub use blob_reader::*;
+
+mod blob_writer;
+pub use blob_writer::*;
+
 mod compression;
 pub use compression::*;
 

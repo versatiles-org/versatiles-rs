@@ -1,7 +1,8 @@
-use super::{BlobReader, BlobWriter, PMTilesCompression, PMTilesType};
+use super::{PMTilesCompression, PMTilesType};
 use crate::{
 	container::TilesReaderParameters,
 	types::{Blob, ByteRange},
+	utils::{BlobReader, BlobWriter},
 };
 use anyhow::{ensure, Result};
 

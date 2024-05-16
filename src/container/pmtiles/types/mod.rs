@@ -1,5 +1,3 @@
-mod blob_reader;
-mod blob_writer;
 mod directory_v3;
 mod entries_v3;
 mod entry_v3;
@@ -8,8 +6,6 @@ mod tile_compression;
 mod tile_id;
 mod tile_type;
 
-use blob_reader::BlobReader;
-use blob_writer::BlobWriter;
 pub use directory_v3::Directory;
 pub use entries_v3::EntriesV3;
 pub use entry_v3::EntryV3;
