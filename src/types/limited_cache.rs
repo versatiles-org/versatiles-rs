@@ -12,7 +12,7 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash, mem::size_of, ops::Div};
 /// # Examples
 ///
 /// ```
-/// use versatiles::helper::LimitedCache;
+/// use versatiles::types::LimitedCache;
 ///
 /// let mut cache = LimitedCache::<i32, u64>::with_maximum_size(1000_000);
 /// cache.add(1, 42);
