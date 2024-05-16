@@ -3,9 +3,11 @@ pub type RingGeometry = Vec<PointGeometry>;
 pub type PolygonGeometry = Vec<RingGeometry>;
 pub type MultiPolygonGeometry = Vec<PolygonGeometry>;
 
+pub struct Attribute {}
+pub type Attributes = Vec<Attribute>;
+
 pub struct PointFeature {
 	pub id: Option<u64>,
-	pub tags: Vec<u32>,
-	pub geom_type: Option<GeomType>,
-	pub geometry: Vec<u32>,
+	pub geometry: PointGeometry,
+	pub attributes: Attributes,
 }

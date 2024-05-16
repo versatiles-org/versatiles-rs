@@ -11,7 +11,11 @@ pub struct Feature {
 
 impl Feature {
 	pub fn decode(data: &[u8]) -> Result<Feature> {
-		let mut feature = Feature::default();
+		let mut id: Option<u64> = None;
+		let mut tags: Vec<u32> = Vec::new();
+		let mut geom_type: Option<GeomType> = None;
+		let mut geometry: Vec<u32> = Vec::new();
+
 		let mut i = 0;
 		while i < data.len() {
 			let (field_number, wire_type, read_bytes) = parse_key(&data[i..])?;
@@ -19,32 +23,37 @@ impl Feature {
 
 			match (field_number, wire_type) {
 				(1, 0) => {
-					let (id, read_bytes) = parse_varint(&data[i..])?;
+					let (v, read_bytes) = parse_varint(&data[i..])?;
 					i += read_bytes;
-					feature.id = Some(id as u64);
+					id = Some(v as u64);
 				}
 				(2, 2) => {
 					let (len, read_bytes) = parse_varint(&data[i..])?;
 					i += read_bytes;
 					let tags_data = &data[i..i + len as usize];
 					i += len as usize;
-					feature.tags = parse_packed_uint32(tags_data)?;
+					tags = parse_packed_uint32(tags_data)?;
 				}
 				(3, 0) => {
 					let (type_, read_bytes) = parse_varint(&data[i..])?;
 					i += read_bytes;
-					feature.geom_type = Some(GeomType::from_i32(type_ as i32));
+					geom_type = Some(GeomType::from_i32(type_ as i32));
 				}
 				(4, 2) => {
 					let (len, read_bytes) = parse_varint(&data[i..])?;
 					i += read_bytes;
 					let geometry_data = &data[i..i + len as usize];
 					i += len as usize;
-					feature.geometry = parse_packed_uint32(geometry_data)?;
+					geometry = parse_packed_uint32(geometry_data)?;
 				}
 				_ => bail!("Unexpected field number or wire type"),
 			}
 		}
-		Ok(feature)
+		Ok(Feature {
+			id,
+			tags,
+			geom_type,
+			geometry,
+		})
 	}
 }
