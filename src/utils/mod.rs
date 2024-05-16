@@ -3,6 +3,8 @@
 mod compression;
 pub use compression::*;
 
+pub mod geometry;
+
 mod tile_converter;
 pub use tile_converter::*;
 
