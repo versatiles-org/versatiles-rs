@@ -63,7 +63,7 @@ impl HeaderV3 {
 	}
 
 	pub fn serialize(&self) -> Result<Blob> {
-		let mut buffer = BlobWriter::new();
+		let mut buffer = BlobWriter::new_le();
 		buffer.write_slice(b"PMTiles")?;
 		buffer.write_u8(3)?; // Version
 
@@ -108,7 +108,7 @@ impl HeaderV3 {
 		ensure!(&buffer[0..7] == b"PMTiles", "pmtiles magic number exception");
 		ensure!(buffer[7] == 3, "pmtiles version: must be 3");
 
-		let mut cursor = BlobReader::new(blob);
+		let mut cursor = BlobReader::new_le(blob);
 		cursor.set_position(8); // Skip PMTiles and version byte
 
 		let header = Self {

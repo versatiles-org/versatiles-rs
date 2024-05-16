@@ -36,7 +36,7 @@ impl EntriesV3 {
 	/// Panics if the number of entries exceeds 10 billion, which is considered an error.
 	pub fn from_blob(data: &Blob) -> Result<Self> {
 		let mut entries: Vec<EntryV3> = Vec::new();
-		let mut reader = BlobReader::new(data);
+		let mut reader = BlobReader::new_le(data);
 
 		let num_entries = reader.read_varint()? as usize;
 
@@ -261,7 +261,7 @@ impl<'a> EntriesSliceV3<'a> {
 	/// # Errors
 	/// Returns an error if any part of the serialization process fails.
 	pub fn serialize_entries(&self) -> Result<Blob> {
-		let mut writer = BlobWriter::new();
+		let mut writer = BlobWriter::new_le();
 		let entries = self.entries;
 
 		// Serialize the length of entries
@@ -388,7 +388,7 @@ mod tests {
 	/// Verifies that `EntriesV3` can handle the maximum allowed number of entries without panicking.
 	#[test]
 	fn test_excessive_entries_panic() {
-		let mut writer = BlobWriter::new();
+		let mut writer = BlobWriter::new_le();
 		// Mocking an excessively large number of entries, e.g., 10 billion + 1
 		writer.write_varint(10_000_000_001).unwrap();
 		let blob = writer.into_blob();
