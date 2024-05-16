@@ -194,6 +194,7 @@ mod tests {
 		let reader_parameters = TilesReaderParameters::new(tf, tc, bbox_pyramid);
 		MockTilesReader::new_mock(reader_parameters).unwrap()
 	}
+
 	fn get_converter_parameters(
 		tf: TileFormat, tc: TileCompression, force_recompress: bool,
 	) -> TilesConverterParameters {
@@ -255,7 +256,6 @@ mod tests {
 		}
 
 		test(PNG, PNG).await?;
-
 		test(PNG, WEBP).await?;
 		test(PNG, JPG).await?;
 		test(PNG, AVIF).await.unwrap_err();
@@ -317,6 +317,117 @@ mod tests {
 			pyramid.include_bbox(&TileBBox::new(3, b[0], b[1], b[2], b[3]).unwrap());
 			pyramid
 		}
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_tiles_converter_parameters_new() {
+		let cp = TilesConverterParameters::new(
+			Some(TileFormat::PNG),
+			Some(TileCompression::Gzip),
+			Some(TileBBoxPyramid::new_full(1)),
+			true,
+			true,
+			true,
+		);
+
+		assert_eq!(cp.tile_format, Some(TileFormat::PNG));
+		assert_eq!(cp.tile_compression, Some(TileCompression::Gzip));
+		assert!(cp.bbox_pyramid.is_some());
+		assert!(cp.force_recompress);
+		assert!(cp.flip_y);
+		assert!(cp.swap_xy);
+	}
+
+	#[test]
+	fn test_tiles_converter_parameters_new_default() {
+		let cp = TilesConverterParameters::new_default();
+
+		assert_eq!(cp.tile_format, None);
+		assert_eq!(cp.tile_compression, None);
+		assert_eq!(cp.bbox_pyramid, None);
+		assert!(!cp.force_recompress);
+		assert!(!cp.flip_y);
+		assert!(!cp.swap_xy);
+	}
+
+	#[test]
+	fn test_tiles_convert_reader_new_from_reader() {
+		let reader = get_mock_reader(TileFormat::PBF, TileCompression::None);
+		let cp = TilesConverterParameters::new_default();
+
+		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
+
+		assert_eq!(tcr.reader.get_container_name(), "dummy_container");
+		assert_eq!(tcr.converter_parameters.tile_format, None);
+		assert_eq!(tcr.converter_parameters.tile_compression, None);
+		assert_eq!(tcr.name, "converter(dummy_name)");
+		assert_eq!(tcr.container_name, "converter(dummy_container)");
+	}
+
+	#[tokio::test]
+	async fn test_get_tile_data() -> Result<()> {
+		let reader = get_mock_reader(TileFormat::PBF, TileCompression::None);
+		let cp = TilesConverterParameters::new_default();
+		let mut tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp)?;
+
+		let coord = TileCoord3::new(0, 0, 0)?;
+		let data = tcr.get_tile_data(&coord).await?;
+		assert!(data.is_some());
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_get_name() {
+		let reader = get_mock_reader(TileFormat::PBF, TileCompression::None);
+		let cp = TilesConverterParameters::new_default();
+		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
+
+		assert_eq!(tcr.get_name(), "converter(dummy_name)");
+	}
+
+	#[test]
+	fn test_get_container_name() {
+		let reader = get_mock_reader(TileFormat::PBF, TileCompression::None);
+		let cp = TilesConverterParameters::new_default();
+		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
+
+		assert_eq!(tcr.get_container_name(), "converter(dummy_container)");
+	}
+
+	#[test]
+	fn test_override_compression() {
+		let reader = get_mock_reader(TileFormat::PBF, TileCompression::None);
+		let cp = TilesConverterParameters::new_default();
+		let mut tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
+
+		tcr.override_compression(TileCompression::Gzip);
+		assert_eq!(tcr.reader.get_parameters().tile_compression, TileCompression::Gzip);
+	}
+
+	#[tokio::test]
+	async fn test_flip_y_and_swap_xy() -> Result<()> {
+		let reader = get_mock_reader(TileFormat::PBF, TileCompression::None);
+		let cp = TilesConverterParameters::new(
+			Some(TileFormat::PBF),
+			Some(TileCompression::None),
+			None,
+			false,
+			true,
+			true,
+		);
+		let mut tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp)?;
+
+		let mut coord = TileCoord3::new(1, 2, 3)?;
+		let data = tcr.get_tile_data(&coord).await?;
+		assert!(data.is_some());
+
+		coord.flip_y();
+		coord.swap_xy();
+		let data_flipped = tcr.get_tile_data(&coord).await?;
+		assert_eq!(data, data_flipped);
 
 		Ok(())
 	}
