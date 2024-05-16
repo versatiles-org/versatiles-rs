@@ -6,6 +6,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::io::{Cursor, Seek, SeekFrom, Write};
 
+#[derive(Clone)]
 pub struct DataWriterBlob {
 	writer: Cursor<Vec<u8>>,
 }
@@ -55,6 +56,107 @@ impl DataWriterTrait for DataWriterBlob {
 	}
 	fn set_position(&mut self, position: u64) -> Result<()> {
 		self.writer.seek(SeekFrom::Start(position))?;
+		Ok(())
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::types::{Blob, DataReaderTrait};
+
+	#[test]
+	fn test_new() -> Result<()> {
+		let writer = DataWriterBlob::new()?;
+		assert_eq!(writer.len(), 0);
+		Ok(())
+	}
+
+	#[test]
+	fn test_append() -> Result<()> {
+		let mut writer = DataWriterBlob::new()?;
+		let blob = Blob::from(vec![1, 2, 3, 4]);
+
+		let range = writer.append(&blob)?;
+		assert_eq!(range, ByteRange::new(0, 4));
+		assert_eq!(writer.as_slice(), blob.as_slice());
+
+		let more_data = Blob::from(vec![5, 6, 7, 8]);
+		let range = writer.append(&more_data)?;
+		assert_eq!(range, ByteRange::new(4, 4));
+		assert_eq!(writer.as_slice(), &[1, 2, 3, 4, 5, 6, 7, 8]);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_write_start() -> Result<()> {
+		let mut writer = DataWriterBlob::new()?;
+		let blob = Blob::from(vec![1, 2, 3, 4]);
+
+		writer.append(&blob)?;
+		writer.write_start(&Blob::from(vec![5, 6, 7, 8]))?;
+
+		assert_eq!(writer.as_slice(), &[5, 6, 7, 8]);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_get_and_set_position() -> Result<()> {
+		let mut writer = DataWriterBlob::new()?;
+		writer.append(&Blob::from(vec![1, 2, 3, 4]))?;
+
+		assert_eq!(writer.get_position()?, 4);
+		writer.set_position(2)?;
+		assert_eq!(writer.get_position()?, 2);
+
+		writer.append(&Blob::from(vec![5, 6]))?;
+		assert_eq!(writer.as_slice(), &[1, 2, 5, 6]);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_as_slice() -> Result<()> {
+		let mut writer = DataWriterBlob::new()?;
+		let blob = Blob::from(vec![1, 2, 3, 4]);
+
+		writer.append(&blob)?;
+		assert_eq!(writer.as_slice(), blob.as_slice());
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_into_reader_blob() -> Result<()> {
+		let mut writer = DataWriterBlob::new()?;
+		let blob = Blob::from(vec![1, 2, 3, 4]);
+		let range = ByteRange::new(0, 4);
+
+		writer.append(&blob)?;
+
+		assert_eq!(writer.clone().to_reader().read_range(&range).await?, blob);
+
+		assert_eq!(writer.clone().into_reader().read_range(&range).await?, blob);
+
+		assert_eq!(writer.clone().into_blob(), blob);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_len() -> Result<()> {
+		let mut writer = DataWriterBlob::new()?;
+		let blob = Blob::from(vec![1, 2, 3, 4]);
+
+		writer.append(&blob)?;
+		assert_eq!(writer.len(), 4);
+
+		let more_data = Blob::from(vec![5, 6, 7, 8]);
+		writer.append(&more_data)?;
+		assert_eq!(writer.len(), 8);
+
 		Ok(())
 	}
 }
