@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 pub type PointGeometry = [i64; 2];
 pub type RingGeometry = Vec<PointGeometry>;
 pub type PolygonGeometry = Vec<RingGeometry>;

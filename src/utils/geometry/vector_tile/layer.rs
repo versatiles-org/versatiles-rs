@@ -1,4 +1,5 @@
-use super::{parse_key, parse_varint, Feature, Value};
+use super::{parse_key, Feature, Value};
+use crate::{types::Blob, utils::BlobReader};
 use anyhow::{bail, Result};
 
 #[derive(Debug, Default, PartialEq)]
@@ -12,53 +13,30 @@ pub struct Layer {
 }
 
 impl Layer {
-	pub fn decode(data: &[u8]) -> Result<Layer> {
+	pub fn decode(blob: &Blob) -> Result<Layer> {
+		let mut reader = BlobReader::new_le(blob);
 		let mut layer = Layer::default();
-		let mut i = 0;
-		while i < data.len() {
-			let (field_number, wire_type, read_bytes) = parse_key(&data[i..])?;
-			i += read_bytes;
-
+		while reader.data_left() {
+			let (field_number, wire_type) = parse_key(reader.read_varint()?);
+			let value = reader.read_varint()?;
 			match (field_number, wire_type) {
 				(1, 2) => {
-					let (len, read_bytes) = parse_varint(&data[i..])?;
-					i += read_bytes;
-					let name_data = &data[i..i + len as usize];
-					i += len as usize;
-					layer.name = Some(String::from_utf8(name_data.to_vec())?);
+					layer.name = Some(reader.read_string(value)?);
 				}
 				(2, 2) => {
-					let (len, read_bytes) = parse_varint(&data[i..])?;
-					i += read_bytes;
-					let feature_data = &data[i..i + len as usize];
-					i += len as usize;
-					let feature = Feature::decode(feature_data)?;
-					layer.features.push(feature);
+					layer.features.push(Feature::decode(&reader.read_blob(value)?)?);
 				}
 				(3, 2) => {
-					let (len, read_bytes) = parse_varint(&data[i..])?;
-					i += read_bytes;
-					let key_data = &data[i..i + len as usize];
-					i += len as usize;
-					layer.keys.push(String::from_utf8(key_data.to_vec())?);
+					layer.keys.push(reader.read_string(value)?);
 				}
 				(4, 2) => {
-					let (len, read_bytes) = parse_varint(&data[i..])?;
-					i += read_bytes;
-					let value_data = &data[i..i + len as usize];
-					i += len as usize;
-					let value = Value::decode(value_data)?;
-					layer.values.push(value);
+					layer.values.push(Value::decode(&reader.read_blob(value)?)?);
 				}
 				(5, 0) => {
-					let (extent, read_bytes) = parse_varint(&data[i..])?;
-					i += read_bytes;
-					layer.extent = Some(extent as u32);
+					layer.extent = Some(value as u32);
 				}
 				(15, 0) => {
-					let (version, read_bytes) = parse_varint(&data[i..])?;
-					i += read_bytes;
-					layer.version = Some(version as u32);
+					layer.version = Some(value as u32);
 				}
 				_ => bail!("Unexpected field number or wire type"),
 			}

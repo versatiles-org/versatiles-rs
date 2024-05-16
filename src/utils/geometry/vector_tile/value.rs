@@ -1,4 +1,6 @@
-use super::{parse_key, parse_varint};
+use crate::{types::Blob, utils::BlobReader};
+
+use super::parse_key;
 use anyhow::{bail, Result};
 
 #[derive(Debug, Default, PartialEq)]
@@ -13,47 +15,36 @@ pub struct Value {
 }
 
 impl Value {
-	pub fn decode(data: &[u8]) -> Result<Value> {
+	pub fn decode(blob: &Blob) -> Result<Value> {
+		let mut reader = BlobReader::new_le(blob);
 		let mut value = Value::default();
-		let mut i = 0;
-		while i < data.len() {
-			let (field_number, wire_type, read_bytes) = parse_key(&data[i..])?;
-			i += read_bytes;
+
+		while reader.data_left() {
+			let (field_number, wire_type) = parse_key(reader.read_varint()?);
 
 			match (field_number, wire_type) {
 				(1, 2) => {
-					let (len, read_bytes) = parse_varint(&data[i..])?;
-					i += read_bytes;
-					let string_data = &data[i..i + len as usize];
-					i += len as usize;
-					value.string_value = Some(String::from_utf8(string_data.to_vec())?);
+					let len = reader.read_varint()?;
+					value.string_value = Some(reader.read_string(len)?);
 				}
 				(2, 5) => {
-					value.float_value = Some(f32::from_le_bytes(data[i..i + 4].try_into()?));
-					i += 4;
+					value.float_value = Some(reader.read_f32()?);
 				}
 				(3, 1) => {
-					value.double_value = Some(f64::from_le_bytes(data[i..i + 8].try_into()?));
-					i += 8;
+					value.double_value = Some(reader.read_f64()?);
 				}
 				(4, 0) => {
-					let (int_value, read_bytes) = parse_varint(&data[i..])?;
-					i += read_bytes;
-					value.int_value = Some(int_value as i64);
+					value.int_value = Some(reader.read_varint()? as i64);
 				}
 				(5, 0) => {
-					let (uint_value, read_bytes) = parse_varint(&data[i..])?;
-					i += read_bytes;
-					value.uint_value = Some(uint_value as u64);
+					value.uint_value = Some(reader.read_varint()? as u64);
 				}
 				(6, 0) => {
-					let (sint_value, read_bytes) = parse_varint(&data[i..])?;
-					i += read_bytes;
+					let sint_value = reader.read_varint()?;
 					value.sint_value = Some((sint_value >> 1) as i64 ^ -((sint_value & 1) as i64));
 				}
 				(7, 0) => {
-					let (bool_value, read_bytes) = parse_varint(&data[i..])?;
-					i += read_bytes;
+					let bool_value = reader.read_varint()?;
 					value.bool_value = Some(bool_value != 0);
 				}
 				_ => bail!("Unexpected field number or wire type".to_string()),

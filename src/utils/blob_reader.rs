@@ -19,6 +19,14 @@ impl<'a, E: ByteOrder> BlobReader<'a, E> {
 		}
 	}
 
+	pub fn len(&self) -> u64 {
+		self.cursor.get_ref().len() as u64
+	}
+
+	pub fn data_left(&self) -> bool {
+		self.get_position() < self.len()
+	}
+
 	pub fn read_varint(&mut self) -> Result<u64> {
 		let mut value = 0;
 		let mut shift = 0;
@@ -36,12 +44,25 @@ impl<'a, E: ByteOrder> BlobReader<'a, E> {
 		Ok(value)
 	}
 
+	pub fn read_f32(&mut self) -> Result<f32> {
+		Ok(self.cursor.read_f32::<E>()?)
+	}
+
+	pub fn read_f64(&mut self) -> Result<f64> {
+		Ok(self.cursor.read_f64::<E>()?)
+	}
+
 	pub fn read_u8(&mut self) -> Result<u8> {
 		Ok(self.cursor.read_u8()?)
 	}
 
 	pub fn read_i32(&mut self) -> Result<i32> {
 		Ok(self.cursor.read_i32::<E>()?)
+	}
+
+	#[allow(dead_code)]
+	pub fn read_i64(&mut self) -> Result<i64> {
+		Ok(self.cursor.read_i64::<E>()?)
 	}
 
 	pub fn read_u32(&mut self) -> Result<u32> {
