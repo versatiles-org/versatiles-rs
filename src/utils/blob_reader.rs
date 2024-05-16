@@ -1,7 +1,10 @@
-use crate::types::Blob;
+use crate::types::{Blob, ByteRange};
 use anyhow::{bail, Result};
 use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
-use std::{io::Cursor, marker::PhantomData};
+use std::{
+	io::{Cursor, Read},
+	marker::PhantomData,
+};
 
 pub struct BlobReader<'a, E: ByteOrder> {
 	_phantom: PhantomData<E>,
@@ -41,8 +44,32 @@ impl<'a, E: ByteOrder> BlobReader<'a, E> {
 		Ok(self.cursor.read_i32::<E>()?)
 	}
 
+	pub fn read_u32(&mut self) -> Result<u32> {
+		Ok(self.cursor.read_u32::<E>()?)
+	}
+
 	pub fn read_u64(&mut self) -> Result<u64> {
 		Ok(self.cursor.read_u64::<E>()?)
+	}
+
+	#[allow(dead_code)]
+	pub fn read_blob(&mut self, length: u64) -> Result<Blob> {
+		let mut vec = vec![0u8; length as usize];
+		self.cursor.read_exact(&mut vec)?;
+		Ok(Blob::from(vec))
+	}
+
+	pub fn read_string(&mut self, length: u64) -> Result<String> {
+		let mut vec = vec![0u8; length as usize];
+		self.cursor.read_exact(&mut vec)?;
+		Ok(String::from_utf8(vec)?)
+	}
+
+	pub fn read_range(&mut self) -> Result<ByteRange> {
+		Ok(ByteRange::new(
+			self.cursor.read_u64::<E>()?,
+			self.cursor.read_u64::<E>()?,
+		))
 	}
 
 	pub fn set_position(&mut self, pos: u64) {

@@ -1,4 +1,4 @@
-use crate::types::Blob;
+use crate::types::{Blob, ByteRange};
 use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder, LittleEndian, WriteBytesExt};
 use std::{
@@ -18,6 +18,16 @@ impl<E: ByteOrder> BlobWriter<E> {
 			cursor: Cursor::new(Vec::new()),
 		}
 	}
+
+	pub fn len(&self) -> u64 {
+		self.cursor.get_ref().len() as u64
+	}
+
+	#[allow(dead_code)]
+	pub fn is_empty(&self) -> bool {
+		self.cursor.get_ref().len() == 0
+	}
+
 	pub fn write_varint(&mut self, mut value: u64) -> Result<()> {
 		while value >= 0x80 {
 			self.cursor.write_all(&[((value as u8) & 0x7F) | 0x80])?;
@@ -26,30 +36,51 @@ impl<E: ByteOrder> BlobWriter<E> {
 		self.cursor.write_all(&[value as u8])?;
 		Ok(())
 	}
+
 	pub fn write_u8(&mut self, value: u8) -> Result<()> {
 		Ok(self.cursor.write_u8(value)?)
 	}
+
 	pub fn write_i32(&mut self, value: i32) -> Result<()> {
 		Ok(self.cursor.write_i32::<E>(value)?)
 	}
+
+	pub fn write_u32(&mut self, value: u32) -> Result<()> {
+		Ok(self.cursor.write_u32::<E>(value)?)
+	}
+
 	pub fn write_u64(&mut self, value: u64) -> Result<()> {
 		Ok(self.cursor.write_u64::<E>(value)?)
 	}
-	pub fn write_slice(&mut self, buf: &[u8]) -> Result<usize> {
-		Ok(self.cursor.write(buf)?)
+
+	pub fn write_blob(&mut self, blob: &Blob) -> Result<()> {
+		self.cursor.write_all(blob.as_slice())?;
+		Ok(())
 	}
+
+	pub fn write_slice(&mut self, buf: &[u8]) -> Result<()> {
+		self.cursor.write_all(buf)?;
+		Ok(())
+	}
+
+	pub fn write_range(&mut self, range: &ByteRange) -> Result<()> {
+		self.cursor.write_u64::<E>(range.offset)?;
+		self.cursor.write_u64::<E>(range.length)?;
+		Ok(())
+	}
+
 	pub fn into_blob(self) -> Blob {
 		Blob::from(self.cursor.into_inner())
 	}
 }
 
-impl<'a> BlobWriter<LittleEndian> {
+impl BlobWriter<LittleEndian> {
 	pub fn new_le() -> BlobWriter<LittleEndian> {
 		BlobWriter::new()
 	}
 }
 
-impl<'a> BlobWriter<BigEndian> {
+impl BlobWriter<BigEndian> {
 	pub fn new_be() -> BlobWriter<BigEndian> {
 		BlobWriter::new()
 	}

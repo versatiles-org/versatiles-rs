@@ -120,7 +120,7 @@ impl VersaTilesWriter {
 		// Finish updating progress and write the block index
 		progress.finish();
 
-		let range = writer.append(&block_index.as_brotli_blob())?;
+		let range = writer.append(&block_index.as_brotli_blob()?)?;
 
 		Ok(range)
 	}
@@ -180,7 +180,7 @@ impl VersaTilesWriter {
 		//let mut writer = writer_mut.lock().await;
 		//let mut writer = writer_mut1.lock().await;
 		let offset1 = writer.get_position()?;
-		let index_range = writer.append(&tile_index.as_brotli_blob())?;
+		let index_range = writer.append(&tile_index.as_brotli_blob()?)?;
 
 		Ok((ByteRange::new(offset0, offset1 - offset0), index_range))
 	}

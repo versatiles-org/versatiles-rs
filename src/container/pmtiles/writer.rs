@@ -78,7 +78,7 @@ impl TilesWriter for PMTilesWriter {
 
 		header.tile_data = ByteRange::new(tile_data_start, tile_data_end - tile_data_start);
 
-		writer.set_position(HeaderV3::len() as u64)?;
+		writer.set_position(HeaderV3::len())?;
 		let directory = entries.as_directory(16384 - HeaderV3::len(), &INTERNAL_COMPRESSION)?;
 		header.root_dir = writer.append(&directory.root_bytes)?;
 

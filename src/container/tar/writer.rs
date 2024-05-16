@@ -64,7 +64,7 @@ impl TilesWriter for TarTilesWriter {
 
 				// Build header
 				let mut header = Header::new_gnu();
-				header.set_size(blob.len() as u64);
+				header.set_size(blob.len());
 				header.set_mode(0o644);
 
 				// Write blob to file

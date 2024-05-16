@@ -143,7 +143,7 @@ pub fn compress_brotli(blob: &Blob) -> Result<Blob> {
 	let params = BrotliEncoderParams {
 		quality: 10, // smallest
 		lgwin: 19,   // smallest
-		size_hint: blob.len(),
+		size_hint: blob.len() as usize,
 		..Default::default()
 	};
 	let mut input = Cursor::new(blob.as_slice());

@@ -32,6 +32,9 @@ impl DataWriterBlob {
 	pub fn len(&self) -> usize {
 		self.writer.get_ref().len()
 	}
+	pub fn is_empty(&self) -> bool {
+		self.writer.get_ref().len() == 0
+	}
 }
 
 #[async_trait]

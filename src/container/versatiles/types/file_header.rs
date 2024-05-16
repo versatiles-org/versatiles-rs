@@ -1,11 +1,12 @@
 #![allow(dead_code)]
 
-use crate::types::{Blob, ByteRange, DataReader, TileCompression, TileFormat};
+use crate::{
+	types::{Blob, ByteRange, DataReader, TileCompression, TileFormat},
+	utils::{BlobReader, BlobWriter},
+};
 use anyhow::{bail, ensure, Result};
-use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
-use std::io::{Cursor, Read, Write};
 
-const HEADER_LENGTH: usize = 66;
+const HEADER_LENGTH: u64 = 66;
 const BBOX_SCALE: i32 = 10000000;
 
 #[derive(Debug, PartialEq)]
@@ -48,17 +49,17 @@ impl FileHeader {
 	}
 
 	pub async fn from_reader(reader: &mut DataReader) -> Result<FileHeader> {
-		let range = ByteRange::new(0, HEADER_LENGTH as u64);
+		let range = ByteRange::new(0, HEADER_LENGTH);
 		let blob = reader.read_range(&range).await?;
 		FileHeader::from_blob(blob)
 	}
 
 	pub fn to_blob(&self) -> Result<Blob> {
-		let mut header: Vec<u8> = Vec::new();
-		header.write_all(b"versatiles_v02")?;
+		let mut writer = BlobWriter::new_be();
+		writer.write_slice(b"versatiles_v02")?;
 
 		// tile type
-		header.write_u8(match self.tile_format {
+		writer.write_u8(match self.tile_format {
 			TileFormat::BIN => 0x00,
 
 			TileFormat::PNG => 0x10,
@@ -74,31 +75,31 @@ impl FileHeader {
 		})?;
 
 		// compression
-		header.write_u8(match self.compression {
+		writer.write_u8(match self.compression {
 			TileCompression::None => 0,
 			TileCompression::Gzip => 1,
 			TileCompression::Brotli => 2,
 		})?;
 
-		header.write_u8(self.zoom_range[0])?;
-		header.write_u8(self.zoom_range[1])?;
+		writer.write_u8(self.zoom_range[0])?;
+		writer.write_u8(self.zoom_range[1])?;
 
-		header.write_i32::<BE>(self.bbox[0])?;
-		header.write_i32::<BE>(self.bbox[1])?;
-		header.write_i32::<BE>(self.bbox[2])?;
-		header.write_i32::<BE>(self.bbox[3])?;
+		writer.write_i32(self.bbox[0])?;
+		writer.write_i32(self.bbox[1])?;
+		writer.write_i32(self.bbox[2])?;
+		writer.write_i32(self.bbox[3])?;
 
-		self.meta_range.write_to_buf(&mut header)?;
-		self.blocks_range.write_to_buf(&mut header)?;
+		writer.write_range(&self.meta_range)?;
+		writer.write_range(&self.blocks_range)?;
 
-		if header.len() != HEADER_LENGTH {
+		if writer.len() != HEADER_LENGTH {
 			bail!(
 				"header should be {HEADER_LENGTH} bytes long, but is {} bytes long",
-				header.len()
+				writer.len()
 			);
 		}
 
-		Ok(Blob::from(header))
+		Ok(writer.into_blob())
 	}
 
 	fn from_blob(blob: Blob) -> Result<FileHeader> {
@@ -106,14 +107,13 @@ impl FileHeader {
 			bail!("'{blob:?}' is not a valid versatiles header. A header should be {HEADER_LENGTH} bytes long.");
 		}
 
-		let mut header = Cursor::new(blob.as_slice());
-		let mut magic_word = [0u8; 14];
-		header.read_exact(&mut magic_word)?;
-		if &magic_word != b"versatiles_v02" {
+		let mut reader = BlobReader::new_be(&blob);
+		let magic_word = reader.read_string(14)?;
+		if &magic_word != "versatiles_v02" {
 			bail!("'{blob:?}' is not a valid versatiles header. A header should start with 'versatiles_v02'");
 		};
 
-		let tile_format = match header.read_u8()? {
+		let tile_format = match reader.read_u8()? {
 			0x00 => TileFormat::BIN,
 
 			0x10 => TileFormat::PNG,
@@ -129,24 +129,24 @@ impl FileHeader {
 			value => bail!("unknown tile_type value: {value}"),
 		};
 
-		let compression = match header.read_u8()? {
+		let compression = match reader.read_u8()? {
 			0 => TileCompression::None,
 			1 => TileCompression::Gzip,
 			2 => TileCompression::Brotli,
 			value => bail!("unknown compression value: {value}"),
 		};
 
-		let zoom_range: [u8; 2] = [header.read_u8()?, header.read_u8()?];
+		let zoom_range: [u8; 2] = [reader.read_u8()?, reader.read_u8()?];
 
 		let bbox: [i32; 4] = [
-			header.read_i32::<BE>()?,
-			header.read_i32::<BE>()?,
-			header.read_i32::<BE>()?,
-			header.read_i32::<BE>()?,
+			reader.read_i32()?,
+			reader.read_i32()?,
+			reader.read_i32()?,
+			reader.read_i32()?,
 		];
 
-		let meta_range = ByteRange::from_reader(&mut header)?;
-		let blocks_range = ByteRange::from_reader(&mut header)?;
+		let meta_range = reader.read_range()?;
+		let blocks_range = reader.read_range()?;
 
 		Ok(FileHeader {
 			zoom_range,
@@ -162,7 +162,6 @@ impl FileHeader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use byteorder::ByteOrder;
 	use std::panic::catch_unwind;
 
 	#[test]
@@ -209,37 +208,31 @@ mod tests {
 	}
 
 	#[test]
-	fn to_blob() {
+	fn to_blob() -> Result<()> {
 		let header = FileHeader::new(
 			&TileFormat::PBF,
 			&TileCompression::Gzip,
 			[3, 8],
 			&[-180.0, -85.051_13, 180.0, 85.051_13],
-		)
-		.unwrap();
+		)?;
 
-		let blob = header.to_blob().unwrap();
+		let blob = header.to_blob()?;
+		let mut reader = BlobReader::new_be(&blob);
 
 		assert_eq!(blob.len(), HEADER_LENGTH);
-		assert_eq!(&blob.as_slice()[0..14], b"versatiles_v02");
-		assert_eq!(blob.as_slice()[14], 0x20);
-		assert_eq!(blob.as_slice()[15], 1);
-		assert_eq!(blob.as_slice()[16], 3);
-		assert_eq!(blob.as_slice()[17], 8);
-		assert_eq!(BE::read_i32(&blob.as_slice()[18..22]), -1800000000);
-		assert_eq!(BE::read_i32(&blob.as_slice()[22..26]), -850511300);
-		assert_eq!(BE::read_i32(&blob.as_slice()[26..30]), 1800000000);
-		assert_eq!(BE::read_i32(&blob.as_slice()[30..34]), 850511300);
-		assert_eq!(
-			ByteRange::from_buf(&blob.as_slice()[34..50]).unwrap(),
-			ByteRange::empty()
-		);
-		assert_eq!(
-			ByteRange::from_buf(&blob.as_slice()[50..66]).unwrap(),
-			ByteRange::empty()
-		);
+		assert_eq!(reader.read_string(14)?, "versatiles_v02");
+		assert_eq!(reader.read_u8()?, 0x20);
+		assert_eq!(reader.read_u8()?, 1);
+		assert_eq!(reader.read_u8()?, 3);
+		assert_eq!(reader.read_u8()?, 8);
+		assert_eq!(reader.read_i32()?, -1800000000);
+		assert_eq!(reader.read_i32()?, -850511300);
+		assert_eq!(reader.read_i32()?, 1800000000);
+		assert_eq!(reader.read_i32()?, 850511300);
+		assert_eq!(reader.read_range()?, ByteRange::empty());
+		assert_eq!(reader.read_range()?, ByteRange::empty());
 
-		let header2 = FileHeader::from_blob(blob).unwrap();
+		let header2 = FileHeader::from_blob(blob)?;
 
 		assert_eq!(header2.zoom_range, [3, 8]);
 		assert_eq!(header2.bbox, [-1800000000, -850511300, 1800000000, 850511300]);
@@ -247,6 +240,8 @@ mod tests {
 		assert_eq!(header2.compression, TileCompression::Gzip);
 		assert_eq!(header2.meta_range, ByteRange::empty());
 		assert_eq!(header2.blocks_range, ByteRange::empty());
+
+		Ok(())
 	}
 
 	#[test]
@@ -319,23 +314,15 @@ mod tests {
 
 	#[test]
 	fn invalid_header_length() {
-		let invalid_blob = Blob::from(vec![0; HEADER_LENGTH - 1]);
-		let result = catch_unwind(|| {
-			FileHeader::from_blob(invalid_blob).unwrap();
-		});
-
-		assert!(result.is_err());
+		let invalid_blob = Blob::from(vec![0; HEADER_LENGTH as usize - 1]);
+		assert!(FileHeader::from_blob(invalid_blob).is_err());
 	}
 
 	#[test]
 	fn invalid_magic_word() {
-		let mut invalid_blob = Blob::from(vec![0; HEADER_LENGTH]);
+		let mut invalid_blob = Blob::from(vec![0; HEADER_LENGTH as usize]);
 		invalid_blob.as_mut_slice()[0..14].copy_from_slice(b"invalid_header");
-		let result = catch_unwind(|| {
-			FileHeader::from_blob(invalid_blob).unwrap();
-		});
-
-		assert!(result.is_err());
+		assert!(FileHeader::from_blob(invalid_blob).is_err());
 	}
 
 	#[test]

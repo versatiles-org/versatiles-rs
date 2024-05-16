@@ -137,7 +137,7 @@ impl EntriesV3 {
 	///
 	/// # Errors
 	/// Returns an error if the entries cannot be serialized or compressed as specified.
-	pub fn as_directory(&mut self, target_root_len: usize, compression: &TileCompression) -> Result<Directory> {
+	pub fn as_directory(&mut self, target_root_len: u64, compression: &TileCompression) -> Result<Directory> {
 		self.entries.sort_by_cached_key(|e| e.tile_id);
 		let entries: &EntriesSliceV3 = &self.as_slice();
 

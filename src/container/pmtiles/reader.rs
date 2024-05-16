@@ -32,11 +32,7 @@ impl PMTilesReader {
 	where
 		Self: Sized,
 	{
-		let header = HeaderV3::deserialize(
-			&data_reader
-				.read_range(&ByteRange::new(0, HeaderV3::len() as u64))
-				.await?,
-		)?;
+		let header = HeaderV3::deserialize(&data_reader.read_range(&ByteRange::new(0, HeaderV3::len())).await?)?;
 
 		let internal_compression = header.internal_compression.as_value()?;
 

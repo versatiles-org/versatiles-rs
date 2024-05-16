@@ -1,9 +1,11 @@
 #![allow(dead_code)]
 
-use crate::types::{ByteRange, TileBBox, TileCoord3};
+use crate::{
+	types::{Blob, ByteRange, TileBBox, TileCoord3},
+	utils::{BlobReader, BlobWriter},
+};
 use anyhow::{ensure, Result};
-use byteorder::{BigEndian as BE, ReadBytesExt, WriteBytesExt};
-use std::{fmt, io::Cursor, ops::Div};
+use std::{fmt, ops::Div};
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct BlockDefinition {
@@ -39,23 +41,23 @@ impl BlockDefinition {
 		}
 	}
 
-	pub fn from_slice(slice: &[u8]) -> Result<Self> {
-		let mut cursor = Cursor::new(slice);
+	pub fn from_blob(blob: &Blob) -> Result<Self> {
+		let mut reader = BlobReader::new_be(blob);
 
-		let z = cursor.read_u8()?;
-		let x = cursor.read_u32::<BE>()?;
-		let y = cursor.read_u32::<BE>()?;
+		let z = reader.read_u8()?;
+		let x = reader.read_u32()?;
+		let y = reader.read_u32()?;
 
-		let x_min = cursor.read_u8()? as u32;
-		let y_min = cursor.read_u8()? as u32;
-		let x_max = cursor.read_u8()? as u32;
-		let y_max = cursor.read_u8()? as u32;
+		let x_min = reader.read_u8()? as u32;
+		let y_min = reader.read_u8()? as u32;
+		let x_max = reader.read_u8()? as u32;
+		let y_max = reader.read_u8()? as u32;
 
 		let tiles_bbox = TileBBox::new(z.min(8), x_min, y_min, x_max, y_max)?;
 
-		let offset = cursor.read_u64::<BE>()?;
-		let tiles_length = cursor.read_u64::<BE>()?;
-		let index_length = cursor.read_u32::<BE>()? as u64;
+		let offset = reader.read_u64()?;
+		let tiles_length = reader.read_u64()?;
+		let index_length = reader.read_u32()? as u64;
 
 		let tiles_range = ByteRange::new(offset, tiles_length);
 		let index_range = ByteRange::new(offset + tiles_length, index_length);
@@ -83,27 +85,27 @@ impl BlockDefinition {
 		self.tiles_coverage.count_tiles()
 	}
 
-	pub fn as_vec(&self) -> Result<Vec<u8>> {
-		let mut vec: Vec<u8> = Vec::with_capacity(33);
-		vec.write_u8(self.offset.get_z())?;
-		vec.write_u32::<BE>(self.offset.get_x())?;
-		vec.write_u32::<BE>(self.offset.get_y())?;
+	pub fn as_blob(&self) -> Result<Blob> {
+		let mut writer = BlobWriter::new_be();
+		writer.write_u8(self.offset.get_z())?;
+		writer.write_u32(self.offset.get_x())?;
+		writer.write_u32(self.offset.get_y())?;
 
-		vec.write_u8(self.tiles_coverage.x_min as u8)?;
-		vec.write_u8(self.tiles_coverage.y_min as u8)?;
-		vec.write_u8(self.tiles_coverage.x_max as u8)?;
-		vec.write_u8(self.tiles_coverage.y_max as u8)?;
+		writer.write_u8(self.tiles_coverage.x_min as u8)?;
+		writer.write_u8(self.tiles_coverage.y_min as u8)?;
+		writer.write_u8(self.tiles_coverage.x_max as u8)?;
+		writer.write_u8(self.tiles_coverage.y_max as u8)?;
 
 		ensure!(
 			self.tiles_range.offset + self.tiles_range.length == self.index_range.offset,
 			"tiles_range and index_range do not match"
 		);
 
-		vec.write_u64::<BE>(self.tiles_range.offset)?;
-		vec.write_u64::<BE>(self.tiles_range.length)?;
-		vec.write_u32::<BE>(self.index_range.length as u32)?;
+		writer.write_u64(self.tiles_range.offset)?;
+		writer.write_u64(self.tiles_range.length)?;
+		writer.write_u32(self.index_range.length as u32)?;
 
-		Ok(vec)
+		Ok(writer.into_blob())
 	}
 
 	#[allow(dead_code)]
@@ -169,9 +171,9 @@ mod tests {
 		def.tiles_range = ByteRange::new(4, 5);
 		def.index_range = ByteRange::new(9, 6);
 
-		assert_eq!(def, BlockDefinition::from_slice(&def.as_vec()?)?);
+		assert_eq!(def, BlockDefinition::from_blob(&def.as_blob()?)?);
 		assert_eq!(def.count_tiles(), 1071);
-		assert_eq!(def.as_vec()?.len(), 33);
+		assert_eq!(def.as_blob()?.len(), 33);
 		assert_eq!(def.get_sort_index(), 5596502);
 		assert_eq!(def.as_str(), "[12,[300,400],[320,450]]");
 		assert_eq!(def.get_z(), 12);
@@ -182,7 +184,7 @@ mod tests {
 			"BlockDefinition { x/y/z: TileCoord3(1, 1, 12), bbox: 8: [44,144,64,194] (1071), tiles_range: ByteRange[4,5], index_range: ByteRange[9,6] }"
 		);
 
-		let def2 = BlockDefinition::from_slice(&def.as_vec()?)?;
+		let def2 = BlockDefinition::from_blob(&def.as_blob()?)?;
 		assert_eq!(def, def2);
 
 		Ok(())

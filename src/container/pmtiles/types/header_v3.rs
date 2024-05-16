@@ -63,42 +63,42 @@ impl HeaderV3 {
 	}
 
 	pub fn serialize(&self) -> Result<Blob> {
-		let mut buffer = BlobWriter::new_le();
-		buffer.write_slice(b"PMTiles")?;
-		buffer.write_u8(3)?; // Version
+		let mut writer = BlobWriter::new_le();
+		writer.write_slice(b"PMTiles")?;
+		writer.write_u8(3)?; // Version
 
 		// Serialize fields to little-endian
-		buffer.write_u64(self.root_dir.offset)?;
-		buffer.write_u64(self.root_dir.length)?;
-		buffer.write_u64(self.metadata.offset)?;
-		buffer.write_u64(self.metadata.length)?;
-		buffer.write_u64(self.leaf_dirs.offset)?;
-		buffer.write_u64(self.leaf_dirs.length)?;
-		buffer.write_u64(self.tile_data.offset)?;
-		buffer.write_u64(self.tile_data.length)?;
-		buffer.write_u64(self.addressed_tiles_count)?;
-		buffer.write_u64(self.tile_entries_count)?;
-		buffer.write_u64(self.tile_contents_count)?;
+		writer.write_u64(self.root_dir.offset)?;
+		writer.write_u64(self.root_dir.length)?;
+		writer.write_u64(self.metadata.offset)?;
+		writer.write_u64(self.metadata.length)?;
+		writer.write_u64(self.leaf_dirs.offset)?;
+		writer.write_u64(self.leaf_dirs.length)?;
+		writer.write_u64(self.tile_data.offset)?;
+		writer.write_u64(self.tile_data.length)?;
+		writer.write_u64(self.addressed_tiles_count)?;
+		writer.write_u64(self.tile_entries_count)?;
+		writer.write_u64(self.tile_contents_count)?;
 
 		// Serialize the boolean `clustered` as a byte
 		let clustered_val = if self.clustered { 1u8 } else { 0u8 };
-		buffer.write_u8(clustered_val)?;
+		writer.write_u8(clustered_val)?;
 
 		// Continue with the rest of the fields
-		buffer.write_u8(self.internal_compression as u8)?;
-		buffer.write_u8(self.tile_compression as u8)?;
-		buffer.write_u8(self.tile_type as u8)?;
-		buffer.write_u8(self.min_zoom)?;
-		buffer.write_u8(self.max_zoom)?;
-		buffer.write_i32(self.min_lon_e7)?;
-		buffer.write_i32(self.min_lat_e7)?;
-		buffer.write_i32(self.max_lon_e7)?;
-		buffer.write_i32(self.max_lat_e7)?;
-		buffer.write_u8(self.center_zoom)?;
-		buffer.write_i32(self.center_lon_e7)?;
-		buffer.write_i32(self.center_lat_e7)?;
+		writer.write_u8(self.internal_compression as u8)?;
+		writer.write_u8(self.tile_compression as u8)?;
+		writer.write_u8(self.tile_type as u8)?;
+		writer.write_u8(self.min_zoom)?;
+		writer.write_u8(self.max_zoom)?;
+		writer.write_i32(self.min_lon_e7)?;
+		writer.write_i32(self.min_lat_e7)?;
+		writer.write_i32(self.max_lon_e7)?;
+		writer.write_i32(self.max_lat_e7)?;
+		writer.write_u8(self.center_zoom)?;
+		writer.write_i32(self.center_lon_e7)?;
+		writer.write_i32(self.center_lat_e7)?;
 
-		Ok(buffer.into_blob())
+		Ok(writer.into_blob())
 	}
 
 	pub fn deserialize(blob: &Blob) -> Result<Self> {
@@ -108,36 +108,36 @@ impl HeaderV3 {
 		ensure!(&buffer[0..7] == b"PMTiles", "pmtiles magic number exception");
 		ensure!(buffer[7] == 3, "pmtiles version: must be 3");
 
-		let mut cursor = BlobReader::new_le(blob);
-		cursor.set_position(8); // Skip PMTiles and version byte
+		let mut reader = BlobReader::new_le(blob);
+		reader.set_position(8); // Skip PMTiles and version byte
 
 		let header = Self {
-			root_dir: ByteRange::new(cursor.read_u64()?, cursor.read_u64()?),
-			metadata: ByteRange::new(cursor.read_u64()?, cursor.read_u64()?),
-			leaf_dirs: ByteRange::new(cursor.read_u64()?, cursor.read_u64()?),
-			tile_data: ByteRange::new(cursor.read_u64()?, cursor.read_u64()?),
-			addressed_tiles_count: cursor.read_u64()?,
-			tile_entries_count: cursor.read_u64()?,
-			tile_contents_count: cursor.read_u64()?,
-			clustered: cursor.read_u8()? == 1,
-			internal_compression: PMTilesCompression::from_u8(cursor.read_u8()?)?,
-			tile_compression: PMTilesCompression::from_u8(cursor.read_u8()?)?,
-			tile_type: PMTilesType::from_u8(cursor.read_u8()?)?,
-			min_zoom: cursor.read_u8()?,
-			max_zoom: cursor.read_u8()?,
-			min_lon_e7: cursor.read_i32()?,
-			min_lat_e7: cursor.read_i32()?,
-			max_lon_e7: cursor.read_i32()?,
-			max_lat_e7: cursor.read_i32()?,
-			center_zoom: cursor.read_u8()?,
-			center_lon_e7: cursor.read_i32()?,
-			center_lat_e7: cursor.read_i32()?,
+			root_dir: ByteRange::new(reader.read_u64()?, reader.read_u64()?),
+			metadata: ByteRange::new(reader.read_u64()?, reader.read_u64()?),
+			leaf_dirs: ByteRange::new(reader.read_u64()?, reader.read_u64()?),
+			tile_data: ByteRange::new(reader.read_u64()?, reader.read_u64()?),
+			addressed_tiles_count: reader.read_u64()?,
+			tile_entries_count: reader.read_u64()?,
+			tile_contents_count: reader.read_u64()?,
+			clustered: reader.read_u8()? == 1,
+			internal_compression: PMTilesCompression::from_u8(reader.read_u8()?)?,
+			tile_compression: PMTilesCompression::from_u8(reader.read_u8()?)?,
+			tile_type: PMTilesType::from_u8(reader.read_u8()?)?,
+			min_zoom: reader.read_u8()?,
+			max_zoom: reader.read_u8()?,
+			min_lon_e7: reader.read_i32()?,
+			min_lat_e7: reader.read_i32()?,
+			max_lon_e7: reader.read_i32()?,
+			max_lat_e7: reader.read_i32()?,
+			center_zoom: reader.read_u8()?,
+			center_lon_e7: reader.read_i32()?,
+			center_lat_e7: reader.read_i32()?,
 		};
 
 		Ok(header)
 	}
 
-	pub fn len() -> usize {
+	pub fn len() -> u64 {
 		127
 	}
 }

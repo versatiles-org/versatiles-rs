@@ -2,17 +2,13 @@
 
 use super::BlockDefinition;
 use crate::{
-	types::{Blob, TileBBoxPyramid, TileCoord3},
-	utils::{compress_brotli, decompress_brotli},
+	types::{Blob, ByteRange, TileBBoxPyramid, TileCoord3},
+	utils::{compress_brotli, decompress_brotli, BlobWriter},
 };
 use anyhow::{ensure, Result};
-use std::{
-	collections::HashMap,
-	io::{Cursor, Write},
-	ops::Div,
-};
+use std::{collections::HashMap, ops::Div};
 
-const BLOCK_INDEX_LENGTH: usize = 33;
+const BLOCK_INDEX_LENGTH: u64 = 33;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlockIndex {
@@ -34,9 +30,8 @@ impl BlockIndex {
 
 		let mut block_index = Self::new_empty();
 		for i in 0..count {
-			block_index.add_block(BlockDefinition::from_slice(
-				buf.get_range(i * BLOCK_INDEX_LENGTH..(i + 1) * BLOCK_INDEX_LENGTH),
-			)?);
+			let range = &ByteRange::new(i * BLOCK_INDEX_LENGTH, BLOCK_INDEX_LENGTH);
+			block_index.add_block(BlockDefinition::from_blob(&buf.read_range(range)?)?);
 		}
 
 		Ok(block_index)
@@ -59,18 +54,17 @@ impl BlockIndex {
 		self.lookup.insert(*block.get_coord3(), block);
 	}
 
-	pub fn as_blob(&self) -> Blob {
-		let vec = Vec::new();
-		let mut cursor = Cursor::new(vec);
+	pub fn as_blob(&self) -> Result<Blob> {
+		let mut writer = BlobWriter::new_be();
 		for (_coord, block) in self.lookup.iter() {
-			cursor.write_all(&block.as_vec().unwrap()).unwrap();
+			writer.write_blob(&block.as_blob()?)?;
 		}
 
-		Blob::from(cursor.into_inner())
+		Ok(writer.into_blob())
 	}
 
-	pub fn as_brotli_blob(&self) -> Blob {
-		compress_brotli(&self.as_blob()).unwrap()
+	pub fn as_brotli_blob(&self) -> Result<Blob> {
+		compress_brotli(&self.as_blob()?)
 	}
 
 	pub fn get_block(&self, coord: &TileCoord3) -> Option<&BlockDefinition> {
@@ -95,7 +89,7 @@ mod tests {
 	fn conversion() -> Result<()> {
 		let mut index1 = BlockIndex::new_empty();
 		index1.add_block(BlockDefinition::new(&TileBBox::new(3, 1, 2, 3, 4)?));
-		let index2 = BlockIndex::from_brotli_blob(index1.as_brotli_blob())?;
+		let index2 = BlockIndex::from_brotli_blob(index1.as_brotli_blob()?)?;
 		assert_eq!(index1, index2);
 		Ok(())
 	}

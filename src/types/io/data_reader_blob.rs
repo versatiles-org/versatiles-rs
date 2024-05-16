@@ -15,6 +15,9 @@ impl DataReaderBlob {
 	pub fn len(&self) -> usize {
 		self.reader.get_ref().len()
 	}
+	pub fn is_empty(&self) -> bool {
+		self.reader.get_ref().len() == 0
+	}
 }
 
 #[async_trait]

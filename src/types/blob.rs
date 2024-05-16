@@ -59,8 +59,8 @@ impl Blob {
 	}
 
 	/// Returns the length of the underlying byte slice.
-	pub fn len(&self) -> usize {
-		self.0.len()
+	pub fn len(&self) -> u64 {
+		self.0.len() as u64
 	}
 
 	/// Returns `true` if the underlying byte slice is empty, `false` otherwise.
