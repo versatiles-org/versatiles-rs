@@ -175,9 +175,10 @@ fn format_integer(value: u64) -> String {
 		.join("'")
 }
 
-fn format_float(value: f64) -> String {
+fn format_float(mut value: f64) -> String {
+	value *= 1.0000000000001;
 	if value > 1000.0 {
-		format_integer(value as u64)
+		format_integer(value.round() as u64)
 	} else if value > 100.0 {
 		format!("{:.1}", value)
 	} else if value > 10.0 {
@@ -187,27 +188,91 @@ fn format_float(value: f64) -> String {
 	}
 }
 
-/*
+#[cfg(test)]
 mod tests {
 	use super::*;
 
 	#[test]
-	fn format() {
-		assert_eq!(format_integer(123456789), "123'456'789");
+	fn test_format_integer() {
 		assert_eq!(format_integer(1234567890), "1'234'567'890");
+		assert_eq!(format_integer(123456789), "123'456'789");
+		assert_eq!(format_integer(1000), "1'000");
+		assert_eq!(format_integer(100), "100");
+	}
+
+	#[test]
+	fn test_format_duration() {
 		assert_eq!(format_duration(Duration::from_secs(1)), "00:00:01");
 		assert_eq!(format_duration(Duration::from_secs(60)), "00:01:00");
 		assert_eq!(format_duration(Duration::from_secs(60 * 60)), "01:00:00");
 		assert_eq!(format_duration(Duration::from_secs(60 * 60 * 24)), "1d 00:00:00");
+		assert_eq!(format_duration(Duration::from_secs(60 * 60 * 24 + 3661)), "1d 01:01:01");
 	}
 
 	#[test]
-	fn progress_bar() {
-		let mut progress = ProgressBar::new("hello", 100);
-		progress.set_visible(true);
-		progress.set_position(1);
-		progress.inc(1);
+	fn test_format_float() {
+		assert_eq!(format_float(1234.5), "1'235");
+		assert_eq!(format_float(123.45), "123.5");
+		assert_eq!(format_float(12.345), "12.35");
+		assert_eq!(format_float(1.2345), "1.235");
+		assert_eq!(format_float(0.2345), "0.235");
+	}
+
+	#[test]
+	fn test_progress_bar_new() {
+		let progress = ProgressBar::new();
+		assert_eq!(progress.max_value, 0);
+		assert_eq!(progress.message, "");
+		assert_eq!(progress.value, 0);
+	}
+
+	#[test]
+	fn test_progress_bar_init() {
+		let mut progress = ProgressBar::new();
+		progress.init("Test", 100);
+		assert_eq!(progress.max_value, 100);
+		assert_eq!(progress.message, "Test");
+		assert_eq!(progress.value, 0);
+	}
+
+	#[test]
+	fn test_progress_bar_set_position() {
+		let mut progress = ProgressBar::new();
+		progress.init("Test", 100);
+		progress.set_position(50);
+		assert_eq!(progress.value, 50);
+	}
+
+	#[test]
+	fn test_progress_bar_inc() {
+		let mut progress = ProgressBar::new();
+		progress.init("Test", 100);
+		progress.set_position(10);
+		progress.inc(20);
+		assert_eq!(progress.value, 30);
+	}
+
+	#[test]
+	fn test_progress_bar_finish() {
+		let mut progress = ProgressBar::new();
+		progress.init("Test", 100);
+		progress.set_position(50);
 		progress.finish();
+		assert_eq!(progress.value, 100);
+	}
+
+	#[test]
+	fn test_progress_bar_remove() {
+		let mut progress = ProgressBar::new();
+		progress.init("Test", 100);
+		progress.remove();
+	}
+
+	#[test]
+	fn test_progress_bar_draw() {
+		let mut progress = ProgressBar::new();
+		progress.init("Test", 100);
+		progress.set_position(50);
+		progress.draw();
 	}
 }
- */
