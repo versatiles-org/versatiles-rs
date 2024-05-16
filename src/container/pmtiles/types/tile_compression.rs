@@ -39,3 +39,60 @@ impl PMTilesCompression {
 		})
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_from_u8() {
+		assert_eq!(PMTilesCompression::from_u8(0).unwrap(), PMTilesCompression::Unknown);
+		assert_eq!(PMTilesCompression::from_u8(1).unwrap(), PMTilesCompression::None);
+		assert_eq!(PMTilesCompression::from_u8(2).unwrap(), PMTilesCompression::Gzip);
+		assert_eq!(PMTilesCompression::from_u8(3).unwrap(), PMTilesCompression::Brotli);
+		assert_eq!(PMTilesCompression::from_u8(4).unwrap(), PMTilesCompression::Zstd);
+		assert!(PMTilesCompression::from_u8(5).is_err());
+	}
+
+	#[test]
+	fn test_from_value() {
+		assert_eq!(
+			PMTilesCompression::from_value(TileCompression::None).unwrap(),
+			PMTilesCompression::None
+		);
+		assert_eq!(
+			PMTilesCompression::from_value(TileCompression::Gzip).unwrap(),
+			PMTilesCompression::Gzip
+		);
+		assert_eq!(
+			PMTilesCompression::from_value(TileCompression::Brotli).unwrap(),
+			PMTilesCompression::Brotli
+		);
+
+		// Zstd is not supported in TileCompression, so we don't test it here
+	}
+
+	#[test]
+	fn test_as_value() {
+		assert!(PMTilesCompression::Unknown.as_value().is_err());
+		assert_eq!(PMTilesCompression::None.as_value().unwrap(), TileCompression::None);
+		assert_eq!(PMTilesCompression::Gzip.as_value().unwrap(), TileCompression::Gzip);
+		assert_eq!(PMTilesCompression::Brotli.as_value().unwrap(), TileCompression::Brotli);
+		assert!(PMTilesCompression::Zstd.as_value().is_err());
+	}
+
+	#[test]
+	fn test_conversion_cycle() {
+		// Test cycle: PMTilesCompression -> u8 -> PMTilesCompression
+		let compression = PMTilesCompression::Gzip;
+		let value = compression as u8;
+		let converted_back = PMTilesCompression::from_u8(value).unwrap();
+		assert_eq!(compression, converted_back);
+
+		// Test cycle: TileCompression -> PMTilesCompression -> TileCompression
+		let tile_compression = TileCompression::Gzip;
+		let pm_compression = PMTilesCompression::from_value(tile_compression).unwrap();
+		let converted_back = pm_compression.as_value().unwrap();
+		assert_eq!(tile_compression, converted_back);
+	}
+}
