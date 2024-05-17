@@ -1,10 +1,10 @@
-use super::{parse_key, Layer};
+use super::{parse_key, VectorTileLayer};
 use crate::{types::Blob, utils::BlobReader};
 use anyhow::{bail, Result};
 
 #[derive(Debug, Default, PartialEq)]
 pub struct VectorTile {
-	pub layers: Vec<Layer>,
+	pub layers: Vec<VectorTileLayer>,
 }
 
 impl VectorTile {
@@ -19,7 +19,7 @@ impl VectorTile {
 			match (field_number, wire_type) {
 				(3, 2) => {
 					let length = reader.read_varint()?;
-					let layer = Layer::decode(&mut reader.get_sub_reader(length)?)?;
+					let layer = VectorTileLayer::decode(&mut reader.get_sub_reader(length)?)?;
 					tile.layers.push(layer);
 				}
 				_ => bail!("Unexpected field number or wire type".to_string()),

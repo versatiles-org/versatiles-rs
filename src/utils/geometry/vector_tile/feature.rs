@@ -13,39 +13,41 @@ use byteorder::LE;
 pub struct VectorTileFeature {
 	pub id: Option<u64>,
 	pub tag_ids: Vec<u32>,
-	pub geometry_type: GeomType,
+	pub geom_type: GeomType,
 	pub linestrings: MultiLinestringGeometry,
 }
 
 impl VectorTileFeature {
+	/// Decodes a `VectorTileFeature` from a `BlobReader`.
 	pub fn decode(reader: &mut BlobReader<LE>) -> Result<VectorTileFeature> {
-		let mut id: Option<u64> = None;
+		let mut feature_id: Option<u64> = None;
 		let mut tag_ids: Vec<u32> = Vec::new();
-		let mut geometry_type = GeomType::Unknown;
-		let mut geometry: MultiLinestringGeometry = Vec::new();
+		let mut geometry_type: GeomType = GeomType::Unknown;
+		let mut linestrings: MultiLinestringGeometry = Vec::new();
 
 		while reader.has_remaining() {
 			let (field_number, wire_type) = parse_key(reader.read_varint()?);
 			let value = reader.read_varint()?;
 
 			match (field_number, wire_type) {
-				(1, 0) => id = Some(value),
+				(1, 0) => feature_id = Some(value),
 				(2, 2) => tag_ids = parse_packed_uint32(&mut reader.get_sub_reader(value)?)?,
 				(3, 0) => geometry_type = GeomType::from(value),
-				(4, 2) => geometry = decode_geometry(&mut reader.get_sub_reader(value)?)?,
+				(4, 2) => linestrings = decode_linestring_geometry(&mut reader.get_sub_reader(value)?)?,
 				_ => bail!("Unexpected field number or wire type: ({field_number}, {wire_type})"),
 			}
 		}
 
 		Ok(VectorTileFeature {
-			id,
+			id: feature_id,
 			tag_ids,
-			geometry_type,
-			linestrings: geometry,
+			geom_type: geometry_type,
+			linestrings,
 		})
 	}
 
-	pub fn into_multi_point_feature(mut self, attributes: &AttributeLookup) -> Result<MultiPointFeature> {
+	/// Converts the `VectorTileFeature` into a `MultiPointFeature`.
+	pub fn to_multi_point_feature(mut self, attributes: &AttributeLookup) -> Result<MultiPointFeature> {
 		ensure!(self.linestrings.len() == 1, "(Multi)Points must have exactly one entry");
 		let geometry = self.linestrings.pop().unwrap();
 		ensure!(!geometry.is_empty(), "The entry in (Multi)Points must not be empty");
@@ -57,14 +59,15 @@ impl VectorTileFeature {
 		})
 	}
 
-	pub fn into_multi_linestring_feature(self, attributes: &AttributeLookup) -> Result<MultiLinestringFeature> {
+	/// Converts the `VectorTileFeature` into a `MultiLinestringFeature`.
+	pub fn to_multi_linestring_feature(self, attributes: &AttributeLookup) -> Result<MultiLinestringFeature> {
 		ensure!(
 			!self.linestrings.is_empty(),
 			"MultiLinestrings must have at least one entry"
 		);
-		for line in &self.linestrings {
+		for linestring in &self.linestrings {
 			ensure!(
-				line.len() >= 2,
+				linestring.len() >= 2,
 				"Each entry in MultiLinestrings must have at least two points"
 			);
 		}
@@ -76,10 +79,11 @@ impl VectorTileFeature {
 		})
 	}
 
-	pub fn into_multi_polygon_feature(self, attributes: &AttributeLookup) -> Result<MultiPolygonFeature> {
+	/// Converts the `VectorTileFeature` into a `MultiPolygonFeature`.
+	pub fn to_multi_polygon_feature(self, attributes: &AttributeLookup) -> Result<MultiPolygonFeature> {
 		ensure!(!self.linestrings.is_empty(), "Polygons must have at least one entry");
 		let mut current_polygon: PolygonGeometry = Vec::new();
-		let mut geometry: MultiPolygonGeometry = Vec::new();
+		let mut polygons: MultiPolygonGeometry = Vec::new();
 
 		for ring in self.linestrings {
 			ensure!(
@@ -97,7 +101,7 @@ impl VectorTileFeature {
 			if area > 1e-10 {
 				// Outer ring
 				if !current_polygon.is_empty() {
-					geometry.push(current_polygon);
+					polygons.push(current_polygon);
 					current_polygon = Vec::new();
 				}
 				current_polygon.push(ring);
@@ -111,22 +115,23 @@ impl VectorTileFeature {
 		}
 
 		if !current_polygon.is_empty() {
-			geometry.push(current_polygon);
+			polygons.push(current_polygon);
 		}
 
 		Ok(MultiPolygonFeature {
 			id: self.id,
 			attributes: attributes.translate_tag_ids(&self.tag_ids)?,
-			geometry,
+			geometry: polygons,
 		})
 	}
 }
 
-fn decode_geometry(reader: &mut BlobReader<LE>) -> Result<MultiLinestringGeometry> {
+/// Decodes linestring geometry from a `BlobReader`.
+fn decode_linestring_geometry(reader: &mut BlobReader<LE>) -> Result<MultiLinestringGeometry> {
 	// https://github.com/mapbox/vector-tile-spec/blob/master/2.1/README.md#43-geometry-encoding
 
 	let mut linestrings: MultiLinestringGeometry = Vec::new();
-	let mut current_line: LinestringGeometry = Vec::new();
+	let mut current_linestring: LinestringGeometry = Vec::new();
 	let mut x = 0;
 	let mut y = 0;
 
@@ -138,16 +143,16 @@ fn decode_geometry(reader: &mut BlobReader<LE>) -> Result<MultiLinestringGeometr
 		match command {
 			1 | 2 => {
 				// MoveTo or LineTo command
-				if command == 1 && !current_line.is_empty() {
+				if command == 1 && !current_linestring.is_empty() {
 					// MoveTo command indicates the start of a new linestring
-					linestrings.push(current_line);
-					current_line = Vec::new();
+					linestrings.push(current_linestring);
+					current_linestring = Vec::new();
 				}
 
 				for _ in 0..count {
 					x += reader.read_svarint()?;
 					y += reader.read_svarint()?;
-					current_line.push(PointGeometry {
+					current_linestring.push(PointGeometry {
 						x: x as f64,
 						y: y as f64,
 					});
@@ -156,17 +161,17 @@ fn decode_geometry(reader: &mut BlobReader<LE>) -> Result<MultiLinestringGeometr
 			7 => {
 				// ClosePath command
 				ensure!(
-					!current_line.is_empty(),
+					!current_linestring.is_empty(),
 					"ClosePath command found on an empty linestring"
 				);
-				current_line.push(current_line[0].clone());
+				current_linestring.push(current_linestring[0].clone());
 			}
 			_ => bail!("Unknown command {}", command),
 		}
 	}
 
-	if !current_line.is_empty() {
-		linestrings.push(current_line);
+	if !current_linestring.is_empty() {
+		linestrings.push(current_linestring);
 	}
 
 	Ok(linestrings)
