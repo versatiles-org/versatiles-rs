@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::types::{Blob, ByteRange};
 use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder, LittleEndian, WriteBytesExt};
@@ -23,7 +25,6 @@ impl<E: ByteOrder> BlobWriter<E> {
 		self.cursor.get_ref().len() as u64
 	}
 
-	#[allow(dead_code)]
 	pub fn is_empty(&self) -> bool {
 		self.cursor.get_ref().len() == 0
 	}
@@ -37,12 +38,24 @@ impl<E: ByteOrder> BlobWriter<E> {
 		Ok(())
 	}
 
+	pub fn write_svarint(&mut self, value: i64) -> Result<()> {
+		self.write_varint(((value << 1) ^ (value >> 63)) as u64)
+	}
+
 	pub fn write_u8(&mut self, value: u8) -> Result<()> {
 		Ok(self.cursor.write_u8(value)?)
 	}
 
 	pub fn write_i32(&mut self, value: i32) -> Result<()> {
 		Ok(self.cursor.write_i32::<E>(value)?)
+	}
+
+	pub fn write_f32(&mut self, value: f32) -> Result<()> {
+		Ok(self.cursor.write_f32::<E>(value)?)
+	}
+
+	pub fn write_f64(&mut self, value: f64) -> Result<()> {
+		Ok(self.cursor.write_f64::<E>(value)?)
 	}
 
 	pub fn write_u32(&mut self, value: u32) -> Result<()> {
@@ -60,6 +73,11 @@ impl<E: ByteOrder> BlobWriter<E> {
 
 	pub fn write_slice(&mut self, buf: &[u8]) -> Result<()> {
 		self.cursor.write_all(buf)?;
+		Ok(())
+	}
+
+	pub fn write_string(&mut self, text: &str) -> Result<()> {
+		self.cursor.write_all(text.as_bytes())?;
 		Ok(())
 	}
 

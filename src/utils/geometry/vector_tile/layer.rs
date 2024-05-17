@@ -31,24 +31,12 @@ impl Layer {
 			let (field_number, wire_type) = parse_key(reader.read_varint()?);
 			let value = reader.read_varint()?;
 			match (field_number, wire_type) {
-				(1, 2) => {
-					name = Some(reader.read_string(value)?);
-				}
-				(2, 2) => {
-					features.push(VTFeature::decode(&mut reader.get_sub_reader(value)?)?);
-				}
-				(3, 2) => {
-					attributes.add_key(reader.read_string(value)?);
-				}
-				(4, 2) => {
-					attributes.add_value(decode_value(&mut reader.get_sub_reader(value)?)?);
-				}
-				(5, 0) => {
-					extent = Some(value as u32);
-				}
-				(15, 0) => {
-					version = Some(value as u32);
-				}
+				(1, 2) => name = Some(reader.read_string(value)?),
+				(2, 2) => features.push(VTFeature::decode(&mut reader.get_sub_reader(value)?)?),
+				(3, 2) => attributes.add_key(reader.read_string(value)?),
+				(4, 2) => attributes.add_value(decode_value(&mut reader.get_sub_reader(value)?)?),
+				(5, 0) => extent = Some(value as u32),
+				(15, 0) => version = Some(value as u32),
 				_ => bail!("Unexpected field number or wire type"),
 			}
 		}
