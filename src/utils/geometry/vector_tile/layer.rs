@@ -1,4 +1,4 @@
-use super::{attributes::AttributeLookup, decode_value, parse_key, VTFeature};
+use super::{attributes::AttributeLookup, decode_value, parse_key, VectorTileFeature};
 use crate::utils::{
 	geometry::types::{MultiLinestringFeature, MultiPointFeature, MultiPolygonFeature},
 	BlobReader,
@@ -19,7 +19,7 @@ pub struct Layer {
 impl Layer {
 	pub fn decode(reader: &mut BlobReader<LE>) -> Result<Layer> {
 		let mut attributes = AttributeLookup::new();
-		let mut features: Vec<VTFeature> = Vec::new();
+		let mut features: Vec<VectorTileFeature> = Vec::new();
 		let mut version: Option<u32> = None;
 		let mut name: Option<String> = None;
 		let mut points: Vec<MultiPointFeature> = Vec::new();
@@ -32,7 +32,7 @@ impl Layer {
 			let value = reader.read_varint()?;
 			match (field_number, wire_type) {
 				(1, 2) => name = Some(reader.read_string(value)?),
-				(2, 2) => features.push(VTFeature::decode(&mut reader.get_sub_reader(value)?)?),
+				(2, 2) => features.push(VectorTileFeature::decode(&mut reader.get_sub_reader(value)?)?),
 				(3, 2) => attributes.add_key(reader.read_string(value)?),
 				(4, 2) => attributes.add_value(decode_value(&mut reader.get_sub_reader(value)?)?),
 				(5, 0) => extent = Some(value as u32),
@@ -42,11 +42,11 @@ impl Layer {
 		}
 
 		for feature in features {
-			match feature.geom_type {
+			match feature.geometry_type {
 				super::GeomType::Unknown => (),
-				super::GeomType::Point => points.push(feature.into_points(&attributes)?),
-				super::GeomType::Linestring => line_strings.push(feature.into_linestrings(&attributes)?),
-				super::GeomType::Polygon => polygons.push(feature.into_polygons(&attributes)?),
+				super::GeomType::Point => points.push(feature.into_multi_point_feature(&attributes)?),
+				super::GeomType::Linestring => line_strings.push(feature.into_multi_linestring_feature(&attributes)?),
+				super::GeomType::Polygon => polygons.push(feature.into_multi_polygon_feature(&attributes)?),
 			}
 		}
 
