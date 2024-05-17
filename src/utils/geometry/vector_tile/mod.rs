@@ -1,3 +1,4 @@
+mod attributes;
 mod feature;
 mod geometry_type;
 mod layer;

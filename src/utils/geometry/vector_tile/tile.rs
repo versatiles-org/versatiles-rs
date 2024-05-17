@@ -16,8 +16,6 @@ impl VectorTile {
 		while reader.has_remaining() {
 			let (field_number, wire_type) = parse_key(reader.read_varint()?);
 
-			println!("{field_number}, {wire_type}");
-
 			match (field_number, wire_type) {
 				(3, 2) => {
 					let length = reader.read_varint()?;
@@ -27,7 +25,6 @@ impl VectorTile {
 				_ => bail!("Unexpected field number or wire type".to_string()),
 			}
 		}
-		println!("{:?}", tile);
 		Ok(tile)
 	}
 }
@@ -54,6 +51,7 @@ mod test {
 		let mut blob = reader.get_tile_data(&TileCoord3::new(8803, 5376, 14)?).await?.unwrap();
 		blob = decompress(blob, &reader.get_parameters().tile_compression)?;
 		VectorTile::from_blob(blob)?;
+		//println!("{:?}", tile);
 		Ok(())
 	}
 }

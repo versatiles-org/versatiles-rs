@@ -53,6 +53,11 @@ impl<'a, E: ByteOrder> BlobReader<'a, E> {
 		Ok(value)
 	}
 
+	pub fn read_svarint(&mut self) -> Result<i64> {
+		let sint_value = self.read_varint()? as i64;
+		Ok((sint_value >> 1) ^ -(sint_value & 1))
+	}
+
 	pub fn read_f32(&mut self) -> Result<f32> {
 		Ok(self.cursor.read_f32::<E>()?)
 	}
