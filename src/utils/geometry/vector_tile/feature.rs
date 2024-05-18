@@ -144,7 +144,7 @@ impl VectorTileFeature {
 				ensure!(geometry.len() == 1, "(Multi)Points must have exactly one entry");
 				let geometry = geometry.pop().unwrap();
 				ensure!(!geometry.is_empty(), "The entry in (Multi)Points must not be empty");
-				Ok(MultiPoint(geometry))
+				Ok(Point(geometry))
 			}
 
 			GeomType::Linestring => {
@@ -155,7 +155,7 @@ impl VectorTileFeature {
 						"Each entry in MultiLinestrings must have at least two points"
 					);
 				}
-				Ok(MultiLinestring(geometry))
+				Ok(Linestring(geometry))
 			}
 
 			GeomType::Polygon => {
@@ -196,7 +196,7 @@ impl VectorTileFeature {
 					polygons.push(current_polygon);
 				}
 
-				Ok(MultiPolygon(polygons))
+				Ok(Polygon(polygons))
 			}
 		}
 	}

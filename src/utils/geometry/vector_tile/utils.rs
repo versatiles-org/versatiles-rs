@@ -68,11 +68,11 @@ impl<E: ByteOrder> BlobWriterPBF for BlobWriter<E> {
 
 	fn write_pbf_blob(&mut self, blob: &Blob) -> Result<()> {
 		self.write_varint(blob.len())?;
-		self.write_blob(&blob)
+		self.write_blob(blob)
 	}
 
 	fn write_pbf_string(&mut self, text: &str) -> Result<()> {
 		self.write_varint(text.len() as u64)?;
-		self.write_string(&text)
+		self.write_string(text)
 	}
 }

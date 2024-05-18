@@ -50,7 +50,7 @@ pub enum Geometry {
 }
 
 pub enum MultiGeometry {
-	MultiPoint(MultiPointGeometry),
-	MultiLinestring(MultiLinestringGeometry),
-	MultiPolygon(MultiPolygonGeometry),
+	Point(MultiPointGeometry),
+	Linestring(MultiLinestringGeometry),
+	Polygon(MultiPolygonGeometry),
 }

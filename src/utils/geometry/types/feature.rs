@@ -45,9 +45,9 @@ impl Debug for Feature {
 }
 
 pub enum MultiFeature {
-	MultiPoint(MultiPointFeature),
-	MultiLinestring(MultiLinestringFeature),
-	MultiPolygon(MultiPolygonFeature),
+	Point(MultiPointFeature),
+	Linestring(MultiLinestringFeature),
+	Polygon(MultiPolygonFeature),
 }
 
 impl MultiFeature {
@@ -55,17 +55,17 @@ impl MultiFeature {
 		use MultiFeature as F;
 		use MultiGeometry as G;
 		match geometry {
-			G::MultiPoint(geometry) => F::MultiPoint(MultiPointFeature {
+			G::Point(geometry) => F::Point(MultiPointFeature {
 				id,
 				geometry,
 				properties,
 			}),
-			G::MultiLinestring(geometry) => F::MultiLinestring(MultiLinestringFeature {
+			G::Linestring(geometry) => F::Linestring(MultiLinestringFeature {
 				id,
 				geometry,
 				properties,
 			}),
-			G::MultiPolygon(geometry) => F::MultiPolygon(MultiPolygonFeature {
+			G::Polygon(geometry) => F::Polygon(MultiPolygonFeature {
 				id,
 				geometry,
 				properties,
@@ -74,9 +74,9 @@ impl MultiFeature {
 	}
 	pub fn into_feature(self) -> Feature {
 		match self {
-			MultiFeature::MultiPoint(f) => Feature::MultiPoint(f),
-			MultiFeature::MultiLinestring(f) => Feature::MultiLinestring(f),
-			MultiFeature::MultiPolygon(f) => Feature::MultiPolygon(f),
+			MultiFeature::Point(f) => Feature::MultiPoint(f),
+			MultiFeature::Linestring(f) => Feature::MultiLinestring(f),
+			MultiFeature::Polygon(f) => Feature::MultiPolygon(f),
 		}
 	}
 }

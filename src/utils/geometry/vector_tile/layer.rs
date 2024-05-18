@@ -66,7 +66,7 @@ impl VectorTileLayer {
 
 		for key in self.property_keys.iter() {
 			writer.write_pbf_key(3, 2)?;
-			writer.write_pbf_string(&key)?;
+			writer.write_pbf_string(key)?;
 		}
 
 		for value in self.property_values.iter() {

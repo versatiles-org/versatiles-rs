@@ -1,5 +1,6 @@
-#[derive(Copy, Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub enum GeomType {
+	#[default]
 	Unknown = 0,
 	Point = 1,
 	Linestring = 2,
@@ -21,11 +22,5 @@ impl From<u64> for GeomType {
 			3 => GeomType::Polygon,
 			_ => GeomType::Unknown,
 		}
-	}
-}
-
-impl Default for GeomType {
-	fn default() -> Self {
-		GeomType::Unknown
 	}
 }
