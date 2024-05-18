@@ -38,7 +38,7 @@ impl VectorTile {
 
 		for layer in self.layers.iter() {
 			writer.write_pbf_key(3, 2)?;
-			layer.write(&mut writer)?;
+			writer.write_pbf_blob(&layer.to_blob()?)?;
 		}
 
 		Ok(writer.into_blob())
@@ -47,6 +47,8 @@ impl VectorTile {
 
 #[cfg(test)]
 mod test {
+	use anyhow::Context;
+
 	use super::*;
 	use crate::types::{DataReaderFile, DataReaderTrait};
 	use std::env::current_dir;
@@ -59,10 +61,11 @@ mod test {
 
 	#[tokio::test]
 	async fn from_to_blob() -> Result<()> {
-		let blob1 = get_pbf().await?;
-		let tile1 = VectorTile::from_blob(&blob1)?;
-		let blob2 = tile1.to_blob()?;
-		let tile2 = VectorTile::from_blob(&blob2)?;
+		let blob1 = get_pbf().await.context("get pbf")?;
+		let tile1 = VectorTile::from_blob(&blob1).context("from blob 1")?;
+
+		let blob2 = tile1.to_blob().context("to blob")?;
+		let tile2 = VectorTile::from_blob(&blob2).context("from blob 2")?;
 		assert_eq!(tile1, tile2);
 		Ok(())
 	}

@@ -1,6 +1,8 @@
+#![allow(dead_code)]
+
 use super::{
-	attributes::AttributeLookup,
 	geometry_type::GeomType,
+	layer::VectorTileLayer,
 	utils::{BlobReaderPBF, BlobWriterPBF},
 };
 use crate::{
@@ -53,7 +55,9 @@ impl VectorTileFeature {
 		Ok(f)
 	}
 
-	pub fn write(&self, writer: &mut BlobWriter<LE>) -> Result<()> {
+	pub fn to_blob(&self) -> Result<Blob> {
+		let mut writer = BlobWriter::new_le();
+
 		if self.id != 0 {
 			writer.write_pbf_key(1, 0)?;
 			writer.write_varint(self.id)?;
@@ -66,11 +70,13 @@ impl VectorTileFeature {
 		writer.write_varint(self.geom_type.as_u64())?;
 
 		writer.write_pbf_key(4, 2)?;
-		writer.write_pbf_blob(&self.geom_data)
+		writer.write_pbf_blob(&self.geom_data)?;
+
+		Ok(writer.into_blob())
 	}
 
-	pub fn to_attributes(&self, attributes: &AttributeLookup) -> Result<GeoProperties> {
-		attributes.translate_tag_ids(&self.tag_ids)
+	pub fn to_attributes(&self, layer: &VectorTileLayer) -> Result<GeoProperties> {
+		layer.translate_tag_ids(&self.tag_ids)
 	}
 
 	/// Decodes linestring geometry from a `BlobReader`.
@@ -195,11 +201,11 @@ impl VectorTileFeature {
 		}
 	}
 
-	pub fn to_feature(&self, attributes_lookup: &AttributeLookup) -> Result<MultiFeature> {
+	pub fn to_feature(&self, layer: &VectorTileLayer) -> Result<MultiFeature> {
 		Ok(MultiFeature::new(
 			Some(self.id),
 			self.to_geometry()?,
-			self.to_attributes(attributes_lookup)?,
+			self.to_attributes(layer)?,
 		))
 	}
 }

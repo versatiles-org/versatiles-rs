@@ -8,6 +8,7 @@ pub type DataReader = Box<dyn DataReaderTrait>;
 #[async_trait]
 pub trait DataReaderTrait: Debug + Send + Sync {
 	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob>;
+	#[allow(dead_code)]
 	async fn read_all(&mut self) -> Result<Blob>;
 	fn get_name(&self) -> &str;
 }

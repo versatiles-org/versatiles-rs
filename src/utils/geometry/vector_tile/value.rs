@@ -1,16 +1,19 @@
 #![allow(dead_code)]
 
 use super::utils::BlobWriterPBF;
-use crate::utils::{
-	geometry::{types::GeoValue, vector_tile::utils::BlobReaderPBF},
-	BlobReader, BlobWriter,
+use crate::{
+	types::Blob,
+	utils::{
+		geometry::{types::GeoValue, vector_tile::utils::BlobReaderPBF},
+		BlobReader, BlobWriter,
+	},
 };
 use anyhow::{anyhow, bail, Result};
 use byteorder::LE;
 
 pub trait GeoValuePBF {
 	fn read(reader: &mut BlobReader<LE>) -> Result<GeoValue>;
-	fn write(&self, writer: &mut BlobWriter<LE>) -> Result<()>;
+	fn to_blob(&self) -> Result<Blob>;
 }
 
 impl GeoValuePBF for GeoValue {
@@ -39,7 +42,9 @@ impl GeoValuePBF for GeoValue {
 		value.ok_or(anyhow!("no value found"))
 	}
 
-	fn write(&self, writer: &mut BlobWriter<LE>) -> Result<()> {
+	fn to_blob(&self) -> Result<Blob> {
+		let mut writer = BlobWriter::new_le();
+
 		match self {
 			GeoValue::String(s) => {
 				writer.write_pbf_key(1, 2)?;
@@ -67,6 +72,6 @@ impl GeoValuePBF for GeoValue {
 			}
 		}
 
-		Ok(())
+		Ok(writer.into_blob())
 	}
 }
