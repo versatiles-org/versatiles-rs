@@ -14,8 +14,8 @@ pub struct AbstractFeature<T> {
 pub type PointFeature = AbstractFeature<PointGeometry>;
 pub type MultiPointFeature = AbstractFeature<MultiPointGeometry>;
 
-pub type LinestringFeature = AbstractFeature<LinestringGeometry>;
-pub type MultiLinestringFeature = AbstractFeature<MultiLinestringGeometry>;
+pub type LineStringFeature = AbstractFeature<LineStringGeometry>;
+pub type MultiLineStringFeature = AbstractFeature<MultiLineStringGeometry>;
 
 pub type PolygonFeature = AbstractFeature<PolygonGeometry>;
 pub type MultiPolygonFeature = AbstractFeature<MultiPolygonGeometry>;
@@ -23,11 +23,11 @@ pub type MultiPolygonFeature = AbstractFeature<MultiPolygonGeometry>;
 #[derive(PartialEq)]
 pub enum Feature {
 	Point(PointFeature),
-	Linestring(LinestringFeature),
+	LineString(LineStringFeature),
 	Polygon(PolygonFeature),
 
 	MultiPoint(MultiPointFeature),
-	MultiLinestring(MultiLinestringFeature),
+	MultiLineString(MultiLineStringFeature),
 	MultiPolygon(MultiPolygonFeature),
 }
 
@@ -35,10 +35,10 @@ impl Debug for Feature {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Self::Point(a) => a.fmt(f),
-			Self::Linestring(a) => a.fmt(f),
+			Self::LineString(a) => a.fmt(f),
 			Self::Polygon(a) => a.fmt(f),
 			Self::MultiPoint(a) => a.fmt(f),
-			Self::MultiLinestring(a) => a.fmt(f),
+			Self::MultiLineString(a) => a.fmt(f),
 			Self::MultiPolygon(a) => a.fmt(f),
 		}
 	}
@@ -46,7 +46,7 @@ impl Debug for Feature {
 
 pub enum MultiFeature {
 	Point(MultiPointFeature),
-	Linestring(MultiLinestringFeature),
+	LineString(MultiLineStringFeature),
 	Polygon(MultiPolygonFeature),
 }
 
@@ -60,7 +60,7 @@ impl MultiFeature {
 				geometry,
 				properties,
 			}),
-			G::Linestring(geometry) => F::Linestring(MultiLinestringFeature {
+			G::LineString(geometry) => F::LineString(MultiLineStringFeature {
 				id,
 				geometry,
 				properties,
@@ -75,7 +75,7 @@ impl MultiFeature {
 	pub fn into_feature(self) -> Feature {
 		match self {
 			MultiFeature::Point(f) => Feature::MultiPoint(f),
-			MultiFeature::Linestring(f) => Feature::MultiLinestring(f),
+			MultiFeature::LineString(f) => Feature::MultiLineString(f),
 			MultiFeature::Polygon(f) => Feature::MultiPolygon(f),
 		}
 	}

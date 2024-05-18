@@ -9,7 +9,7 @@ use crate::{
 	types::Blob,
 	utils::{
 		geometry::types::{
-			GeoProperties, LinestringGeometry, MultiFeature, MultiGeometry, MultiLinestringGeometry, MultiPolygonGeometry,
+			GeoProperties, LineStringGeometry, MultiFeature, MultiGeometry, MultiLineStringGeometry, MultiPolygonGeometry,
 			PointGeometry, PolygonGeometry, Ring,
 		},
 		BlobReader, BlobWriter,
@@ -96,13 +96,13 @@ impl VectorTileFeature {
 	}
 
 	/// Decodes linestring geometry from a `BlobReader`.
-	fn decode_geometry(&self) -> Result<MultiLinestringGeometry> {
+	fn decode_geometry(&self) -> Result<MultiLineStringGeometry> {
 		// https://github.com/mapbox/vector-tile-spec/blob/master/2.1/README.md#43-geometry-encoding
 
 		let mut reader = BlobReader::new_le(&self.geom_data);
 
-		let mut linestrings: MultiLinestringGeometry = Vec::new();
-		let mut current_linestring: LinestringGeometry = Vec::new();
+		let mut linestrings: MultiLineStringGeometry = Vec::new();
+		let mut current_linestring: LineStringGeometry = Vec::new();
 		let mut x = 0;
 		let mut y = 0;
 
@@ -165,15 +165,15 @@ impl VectorTileFeature {
 				Ok(Point(geometry))
 			}
 
-			GeomType::Linestring => {
-				ensure!(!geometry.is_empty(), "MultiLinestrings must have at least one entry");
+			GeomType::LineString => {
+				ensure!(!geometry.is_empty(), "MultiLineStrings must have at least one entry");
 				for line in &geometry {
 					ensure!(
 						line.len() >= 2,
-						"Each entry in MultiLinestrings must have at least two points"
+						"Each entry in MultiLineStrings must have at least two points"
 					);
 				}
-				Ok(Linestring(geometry))
+				Ok(LineString(geometry))
 			}
 
 			GeomType::Polygon => {

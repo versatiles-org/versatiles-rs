@@ -3,7 +3,7 @@ pub enum GeomType {
 	#[default]
 	Unknown = 0,
 	Point = 1,
-	Linestring = 2,
+	LineString = 2,
 	Polygon = 3,
 }
 
@@ -18,7 +18,7 @@ impl From<u64> for GeomType {
 	fn from(value: u64) -> Self {
 		match value {
 			1 => GeomType::Point,
-			2 => GeomType::Linestring,
+			2 => GeomType::LineString,
 			3 => GeomType::Polygon,
 			_ => GeomType::Unknown,
 		}

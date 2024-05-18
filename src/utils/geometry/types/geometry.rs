@@ -9,10 +9,10 @@ pub struct PointGeometry {
 }
 
 pub type MultiPointGeometry = Vec<PointGeometry>;
-pub type LinestringGeometry = Vec<PointGeometry>;
+pub type LineStringGeometry = Vec<PointGeometry>;
 pub type RingGeometry = Vec<PointGeometry>;
 
-pub type MultiLinestringGeometry = Vec<LinestringGeometry>;
+pub type MultiLineStringGeometry = Vec<LineStringGeometry>;
 pub type PolygonGeometry = Vec<RingGeometry>;
 
 pub type MultiPolygonGeometry = Vec<PolygonGeometry>;
@@ -41,16 +41,16 @@ impl Debug for PointGeometry {
 
 pub enum Geometry {
 	Point(PointGeometry),
-	Linestring(LinestringGeometry),
+	LineString(LineStringGeometry),
 	Polygon(PolygonGeometry),
 
 	MultiPoint(MultiPointGeometry),
-	MultiLinestring(MultiLinestringGeometry),
+	MultiLineString(MultiLineStringGeometry),
 	MultiPolygon(MultiPolygonGeometry),
 }
 
 pub enum MultiGeometry {
 	Point(MultiPointGeometry),
-	Linestring(MultiLinestringGeometry),
+	LineString(MultiLineStringGeometry),
 	Polygon(MultiPolygonGeometry),
 }
