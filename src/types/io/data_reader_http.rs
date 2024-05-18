@@ -1,6 +1,6 @@
 use super::types::DataReaderTrait;
 use crate::types::{Blob, ByteRange};
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use log::info;
@@ -91,6 +91,9 @@ impl DataReaderTrait for DataReaderHttp {
 		self.pos = range.offset + bytes.len() as u64;
 
 		Ok(Blob::from(bytes))
+	}
+	async fn read_all(&mut self) -> Result<Blob> {
+		bail!("not implemented yet")
 	}
 	fn get_name(&self) -> &str {
 		&self.name

@@ -24,10 +24,14 @@ impl DataReaderBlob {
 impl DataReaderTrait for DataReaderBlob {
 	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
 		let mut buffer = vec![0; range.length as usize];
-
 		self.reader.seek(SeekFrom::Start(range.offset))?;
 		self.reader.read_exact(&mut buffer)?;
-
+		Ok(Blob::from(buffer))
+	}
+	async fn read_all(&mut self) -> Result<Blob> {
+		let mut buffer = vec![];
+		self.reader.seek(SeekFrom::Start(0))?;
+		self.reader.read_to_end(&mut buffer)?;
 		Ok(Blob::from(buffer))
 	}
 	fn get_name(&self) -> &str {

@@ -15,7 +15,7 @@ pub struct DataReaderFile {
 }
 
 impl DataReaderFile {
-	pub fn from_path(path: &Path) -> Result<Box<DataReaderFile>> {
+	pub fn open(path: &Path) -> Result<Box<DataReaderFile>> {
 		ensure!(path.exists(), "file {path:?} does not exist");
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 		ensure!(path.is_file(), "path {path:?} must be a file");
@@ -39,6 +39,12 @@ impl DataReaderTrait for DataReaderFile {
 		self.reader.seek(SeekFrom::Start(range.offset))?;
 		self.reader.read_exact(&mut buffer)?;
 
+		Ok(Blob::from(buffer))
+	}
+	async fn read_all(&mut self) -> Result<Blob> {
+		let mut buffer = vec![];
+		self.reader.seek(SeekFrom::Start(0))?;
+		self.reader.read_to_end(&mut buffer)?;
 		Ok(Blob::from(buffer))
 	}
 	fn get_name(&self) -> &str {
@@ -74,11 +80,11 @@ mod tests {
 		}
 
 		// Test with a valid file path
-		let data_reader_file = DataReaderFile::from_path(&temp_file_path);
+		let data_reader_file = DataReaderFile::open(&temp_file_path);
 		assert!(data_reader_file.is_ok());
 
 		// Test with an invalid file path
-		let data_reader_file = DataReaderFile::from_path(&invalid_path);
+		let data_reader_file = DataReaderFile::open(&invalid_path);
 		assert!(data_reader_file.is_err());
 
 		Ok(())
@@ -95,7 +101,7 @@ mod tests {
 			temp_file.write_all(b"Hello, world!")?;
 		}
 
-		let mut data_reader_file = DataReaderFile::from_path(&temp_file_path)?;
+		let mut data_reader_file = DataReaderFile::open(&temp_file_path)?;
 
 		// Define a range to read
 		let range = ByteRange { offset: 4, length: 6 };
@@ -120,7 +126,7 @@ mod tests {
 			temp_file.write_all(b"Hello, world!")?;
 		}
 
-		let data_reader_file = DataReaderFile::from_path(&temp_file_path)?;
+		let data_reader_file = DataReaderFile::open(&temp_file_path)?;
 
 		// Check if the name matches the original file path
 		assert_wildcard!(

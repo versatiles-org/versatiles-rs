@@ -29,7 +29,7 @@ pub struct VersaTilesReader {
 impl VersaTilesReader {
 	// Create a new TilesReader from a given filename
 	pub async fn open_path(path: &Path) -> Result<VersaTilesReader> {
-		VersaTilesReader::open_reader(DataReaderFile::from_path(path)?).await
+		VersaTilesReader::open_reader(DataReaderFile::open(path)?).await
 	}
 
 	// Create a new TilesReader from a given data reader

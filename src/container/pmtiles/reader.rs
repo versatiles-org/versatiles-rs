@@ -25,7 +25,7 @@ pub struct PMTilesReader {
 impl PMTilesReader {
 	// Create a new TilesReader from a given filename
 	pub async fn open_path(path: &Path) -> Result<PMTilesReader> {
-		PMTilesReader::open_reader(DataReaderFile::from_path(path)?).await
+		PMTilesReader::open_reader(DataReaderFile::open(path)?).await
 	}
 
 	pub async fn open_reader(mut data_reader: DataReader) -> Result<PMTilesReader>
