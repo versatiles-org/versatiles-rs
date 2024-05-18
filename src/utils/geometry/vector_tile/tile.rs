@@ -1,5 +1,13 @@
-use super::{layer::VectorTileLayer, utils::BlobReaderPBF};
-use crate::{types::Blob, utils::BlobReader};
+#![allow(dead_code)]
+
+use super::{
+	layer::VectorTileLayer,
+	utils::{BlobReaderPBF, BlobWriterPBF},
+};
+use crate::{
+	types::Blob,
+	utils::{BlobReader, BlobWriter},
+};
 use anyhow::{bail, Result};
 
 #[derive(Debug, Default, PartialEq)]
@@ -8,7 +16,6 @@ pub struct VectorTile {
 }
 
 impl VectorTile {
-	#[allow(dead_code)]
 	pub fn from_blob(blob: &Blob) -> Result<VectorTile> {
 		let mut reader = BlobReader::new_le(blob);
 
@@ -23,33 +30,40 @@ impl VectorTile {
 				(f, w) => bail!("Unexpected combination of field number ({f}) and wire type ({w})"),
 			}
 		}
+
 		Ok(tile)
+	}
+	pub fn to_blob(&self) -> Result<Blob> {
+		let mut writer = BlobWriter::new_le();
+
+		for layer in self.layers.iter() {
+			writer.write_pbf_key(3, 2)?;
+			layer.write(&mut writer)?;
+		}
+
+		Ok(writer.into_blob())
 	}
 }
 
 #[cfg(test)]
 mod test {
-	use super::VectorTile;
-	use crate::{
-		container::{pmtiles::PMTilesReader, TilesReader},
-		types::TileCoord3,
-		utils::decompress,
-	};
-	use anyhow::Result;
-	use lazy_static::lazy_static;
-	use std::{env::current_dir, path::PathBuf};
+	use super::*;
+	use crate::types::{DataReaderFile, DataReaderTrait};
+	use std::env::current_dir;
 
-	lazy_static! {
-		static ref PATH: PathBuf = current_dir().unwrap().join("./testdata/berlin.pmtiles");
+	async fn get_pbf() -> Result<Blob> {
+		DataReaderFile::open(&current_dir().unwrap().join("./testdata/shortbread-tile.pbf"))?
+			.read_all()
+			.await
 	}
 
 	#[tokio::test]
-	async fn from_blob() -> Result<()> {
-		let mut reader = PMTilesReader::open_path(&PATH).await?;
-		let mut blob = reader.get_tile_data(&TileCoord3::new(8803, 5376, 14)?).await?.unwrap();
-		blob = decompress(blob, &reader.get_parameters().tile_compression)?;
-		VectorTile::from_blob(&blob)?;
-		//println!("{:?}", tile);
+	async fn from_to_blob() -> Result<()> {
+		let blob1 = get_pbf().await?;
+		let tile1 = VectorTile::from_blob(&blob1)?;
+		let blob2 = tile1.to_blob()?;
+		let tile2 = VectorTile::from_blob(&blob2)?;
+		assert_eq!(tile1, tile2);
 		Ok(())
 	}
 }
