@@ -15,7 +15,7 @@ use crate::{
 		BlobReader, BlobWriter,
 	},
 };
-use anyhow::{bail, ensure, Result};
+use anyhow::{bail, ensure, Context, Result};
 use byteorder::LE;
 
 #[derive(Debug, PartialEq)]
@@ -43,11 +43,11 @@ impl VectorTileFeature {
 		let mut f = VectorTileFeature::default();
 
 		while reader.has_remaining() {
-			match reader.read_pbf_key()? {
-				(1, 0) => f.id = reader.read_varint()?,
-				(2, 2) => f.tag_ids = reader.read_pbf_packed_uint32()?,
-				(3, 0) => f.geom_type = GeomType::from(reader.read_varint()?),
-				(4, 2) => f.geom_data = reader.read_pbf_blob()?,
+			match reader.read_pbf_key().context("Failed to read PBF key")? {
+				(1, 0) => f.id = reader.read_varint().context("Failed to read feature ID")?,
+				(2, 2) => f.tag_ids = reader.read_pbf_packed_uint32().context("Failed to read tag IDs")?,
+				(3, 0) => f.geom_type = GeomType::from(reader.read_varint().context("Failed to read geometry type")?),
+				(4, 2) => f.geom_data = reader.read_pbf_blob().context("Failed to read geometry data")?,
 				(f, w) => bail!("Unexpected combination of field number ({f}) and wire type ({w})"),
 			}
 		}
@@ -59,24 +59,40 @@ impl VectorTileFeature {
 		let mut writer = BlobWriter::new_le();
 
 		if self.id != 0 {
-			writer.write_pbf_key(1, 0)?;
-			writer.write_varint(self.id)?;
+			writer
+				.write_pbf_key(1, 0)
+				.context("Failed to write PBF key for feature ID")?;
+			writer.write_varint(self.id).context("Failed to write feature ID")?;
 		}
 
-		writer.write_pbf_key(2, 2)?;
-		writer.write_pbf_packed_uint32(&self.tag_ids)?;
+		writer
+			.write_pbf_key(2, 2)
+			.context("Failed to write PBF key for tag IDs")?;
+		writer
+			.write_pbf_packed_uint32(&self.tag_ids)
+			.context("Failed to write tag IDs")?;
 
-		writer.write_pbf_key(3, 0)?;
-		writer.write_varint(self.geom_type.as_u64())?;
+		writer
+			.write_pbf_key(3, 0)
+			.context("Failed to write PBF key for geometry type")?;
+		writer
+			.write_varint(self.geom_type.as_u64())
+			.context("Failed to write geometry type")?;
 
-		writer.write_pbf_key(4, 2)?;
-		writer.write_pbf_blob(&self.geom_data)?;
+		writer
+			.write_pbf_key(4, 2)
+			.context("Failed to write PBF key for geometry data")?;
+		writer
+			.write_pbf_blob(&self.geom_data)
+			.context("Failed to write geometry data")?;
 
 		Ok(writer.into_blob())
 	}
 
 	pub fn to_attributes(&self, layer: &VectorTileLayer) -> Result<GeoProperties> {
-		layer.translate_tag_ids(&self.tag_ids)
+		layer
+			.translate_tag_ids(&self.tag_ids)
+			.context("Failed to translate tag IDs to attributes")
 	}
 
 	/// Decodes linestring geometry from a `BlobReader`.
@@ -91,7 +107,9 @@ impl VectorTileFeature {
 		let mut y = 0;
 
 		while reader.has_remaining() {
-			let value = reader.read_varint()?;
+			let value = reader
+				.read_varint()
+				.context("Failed to read varint for geometry command")?;
 			let command = value & 0x7;
 			let count = value >> 3;
 
@@ -105,8 +123,8 @@ impl VectorTileFeature {
 					}
 
 					for _ in 0..count {
-						x += reader.read_svarint()?;
-						y += reader.read_svarint()?;
+						x += reader.read_svarint().context("Failed to read x coordinate")?;
+						y += reader.read_svarint().context("Failed to read y coordinate")?;
 						current_linestring.push(PointGeometry {
 							x: x as f64,
 							y: y as f64,
@@ -135,10 +153,10 @@ impl VectorTileFeature {
 	pub fn to_geometry(&self) -> Result<MultiGeometry> {
 		use MultiGeometry::*;
 
-		let mut geometry = self.decode_geometry()?;
+		let mut geometry = self.decode_geometry().context("Failed to decode geometry")?;
 
 		match self.geom_type {
-			GeomType::Unknown => bail!("unknown geometry"),
+			GeomType::Unknown => bail!("Unknown geometry type"),
 
 			GeomType::Point => {
 				ensure!(geometry.len() == 1, "(Multi)Points must have exactly one entry");
@@ -204,8 +222,8 @@ impl VectorTileFeature {
 	pub fn to_feature(&self, layer: &VectorTileLayer) -> Result<MultiFeature> {
 		Ok(MultiFeature::new(
 			Some(self.id),
-			self.to_geometry()?,
-			self.to_attributes(layer)?,
+			self.to_geometry().context("Failed to convert to geometry")?,
+			self.to_attributes(layer).context("Failed to convert to attributes")?,
 		))
 	}
 }

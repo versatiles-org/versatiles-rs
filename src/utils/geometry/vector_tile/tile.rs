@@ -8,7 +8,7 @@ use crate::{
 	types::Blob,
 	utils::{BlobReader, BlobWriter},
 };
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 
 #[derive(Debug, Default, PartialEq)]
 pub struct VectorTile {
@@ -21,11 +21,12 @@ impl VectorTile {
 
 		let mut tile = VectorTile::default();
 		while reader.has_remaining() {
-			match reader.read_pbf_key()? {
+			match reader.read_pbf_key().context("Failed to read PBF key")? {
 				(3, 2) => {
-					tile
-						.layers
-						.push(VectorTileLayer::read(&mut reader.get_pbf_sub_reader()?)?);
+					tile.layers.push(
+						VectorTileLayer::read(&mut reader.get_pbf_sub_reader().context("Failed to get PBF sub-reader")?)
+							.context("Failed to read VectorTileLayer")?,
+					);
 				}
 				(f, w) => bail!("Unexpected combination of field number ({f}) and wire type ({w})"),
 			}
@@ -33,12 +34,15 @@ impl VectorTile {
 
 		Ok(tile)
 	}
+
 	pub fn to_blob(&self) -> Result<Blob> {
 		let mut writer = BlobWriter::new_le();
 
 		for layer in self.layers.iter() {
-			writer.write_pbf_key(3, 2)?;
-			writer.write_pbf_blob(&layer.to_blob()?)?;
+			writer.write_pbf_key(3, 2).context("Failed to write PBF key")?;
+			writer
+				.write_pbf_blob(&layer.to_blob().context("Failed to convert VectorTileLayer to blob")?)
+				.context("Failed to write PBF blob")?;
 		}
 
 		Ok(writer.into_blob())
@@ -47,25 +51,27 @@ impl VectorTile {
 
 #[cfg(test)]
 mod test {
-	use anyhow::Context;
-
 	use super::*;
 	use crate::types::{DataReaderFile, DataReaderTrait};
 	use std::env::current_dir;
 
 	async fn get_pbf() -> Result<Blob> {
-		DataReaderFile::open(&current_dir().unwrap().join("./testdata/shortbread-tile.pbf"))?
+		DataReaderFile::open(&current_dir().unwrap().join("./testdata/shortbread-tile.pbf"))
+			.context("Failed to open PBF file")?
 			.read_all()
 			.await
+			.context("Failed to read all data from PBF file")
+	}
+
+	async fn get_tile() -> Result<VectorTile> {
+		VectorTile::from_blob(&get_pbf().await?).context("Failed to convert blob to VectorTile")
 	}
 
 	#[tokio::test]
 	async fn from_to_blob() -> Result<()> {
-		let blob1 = get_pbf().await.context("get pbf")?;
-		let tile1 = VectorTile::from_blob(&blob1).context("from blob 1")?;
-
-		let blob2 = tile1.to_blob().context("to blob")?;
-		let tile2 = VectorTile::from_blob(&blob2).context("from blob 2")?;
+		let tile1 = get_tile().await.context("Failed to get initial VectorTile")?;
+		let blob2 = tile1.to_blob().context("Failed to convert VectorTile to blob")?;
+		let tile2 = VectorTile::from_blob(&blob2).context("Failed to convert blob back to VectorTile")?;
 		assert_eq!(tile1, tile2);
 		Ok(())
 	}
