@@ -4,7 +4,7 @@ use super::{feature::VectorTileFeature, utils::BlobReaderPBF, utils::BlobWriterP
 use crate::{
 	types::Blob,
 	utils::{
-		geometry::types::{GeoProperties, GeoValue},
+		geometry::types::{GeoProperties, GeoValue, MultiFeature},
 		BlobReader, BlobWriter,
 	},
 };
@@ -147,5 +147,17 @@ impl VectorTileLayer {
 			);
 		}
 		Ok(attributes)
+	}
+
+	pub fn to_features(&self) -> Result<Vec<MultiFeature>> {
+		let mut features = Vec::new();
+		for feature in &self.features {
+			features.push(
+				feature
+					.to_feature(self)
+					.context("Failed to convert VectorTileFeature to MultiFeature")?,
+			);
+		}
+		Ok(features)
 	}
 }
