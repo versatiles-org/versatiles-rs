@@ -23,3 +23,9 @@ impl From<u64> for GeomType {
 		}
 	}
 }
+
+impl Default for GeomType {
+	fn default() -> Self {
+		GeomType::Unknown
+	}
+}

@@ -111,6 +111,12 @@ impl<'a, E: ByteOrder> BlobReader<'a, E> {
 		})
 	}
 
+	pub fn read_blob(&mut self, length: u64) -> Result<Blob> {
+		let mut blob = Blob::new_sized(length as usize);
+		self.cursor.read_exact(blob.as_mut_slice())?;
+		Ok(blob)
+	}
+
 	pub fn read_string(&mut self, length: u64) -> Result<String> {
 		let mut vec = vec![0u8; length as usize];
 		self.cursor.read_exact(&mut vec)?;

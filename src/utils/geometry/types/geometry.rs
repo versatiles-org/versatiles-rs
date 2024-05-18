@@ -38,3 +38,19 @@ impl Debug for PointGeometry {
 		f.debug_list().entry(&self.x).entry(&self.y).finish()
 	}
 }
+
+pub enum Geometry {
+	Point(PointGeometry),
+	Linestring(LinestringGeometry),
+	Polygon(PolygonGeometry),
+
+	MultiPoint(MultiPointGeometry),
+	MultiLinestring(MultiLinestringGeometry),
+	MultiPolygon(MultiPolygonGeometry),
+}
+
+pub enum MultiGeometry {
+	MultiPoint(MultiPointGeometry),
+	MultiLinestring(MultiLinestringGeometry),
+	MultiPolygon(MultiPolygonGeometry),
+}

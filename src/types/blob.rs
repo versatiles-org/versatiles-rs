@@ -16,6 +16,10 @@ impl Blob {
 		Blob(Vec::new())
 	}
 
+	pub fn new_sized(length: usize) -> Blob {
+		Blob(vec![0u8; length])
+	}
+
 	/// Returns a new `Blob` containing the bytes in the specified range.
 	pub fn get_range(&self, range: Range<usize>) -> &[u8] {
 		&self.0[range]
@@ -47,6 +51,10 @@ impl Blob {
 	/// Returns the underlying bytes as a string, assuming they represent valid UTF-8 encoded text.
 	pub fn as_str(&self) -> &str {
 		std::str::from_utf8(&self.0).unwrap()
+	}
+
+	pub fn into_string(self) -> String {
+		String::from_utf8(self.0).unwrap()
 	}
 
 	pub fn as_hex(&self) -> String {
@@ -123,7 +131,7 @@ impl From<&String> for Blob {
 impl From<String> for Blob {
 	/// Converts a `String` instance into a `Blob`.
 	fn from(item: String) -> Self {
-		Blob(item.as_bytes().to_vec())
+		Blob(item.into_bytes())
 	}
 }
 

@@ -1,4 +1,4 @@
-use super::{parse_key, VectorTileLayer};
+use super::{layer::VectorTileLayer, utils::BlobReaderPBF};
 use crate::{types::Blob, utils::BlobReader};
 use anyhow::{bail, Result};
 
@@ -9,20 +9,18 @@ pub struct VectorTile {
 
 impl VectorTile {
 	#[allow(dead_code)]
-	pub fn from_blob(blob: Blob) -> Result<VectorTile> {
-		let mut reader = BlobReader::new_le(&blob);
+	pub fn from_blob(blob: &Blob) -> Result<VectorTile> {
+		let mut reader = BlobReader::new_le(blob);
 
 		let mut tile = VectorTile::default();
 		while reader.has_remaining() {
-			let (field_number, wire_type) = parse_key(reader.read_varint()?);
-
-			match (field_number, wire_type) {
+			match reader.read_pbf_key()? {
 				(3, 2) => {
-					let length = reader.read_varint()?;
-					let layer = VectorTileLayer::decode(&mut reader.get_sub_reader(length)?)?;
-					tile.layers.push(layer);
+					tile
+						.layers
+						.push(VectorTileLayer::read(&mut reader.get_pbf_sub_reader()?)?);
 				}
-				_ => bail!("Unexpected field number or wire type".to_string()),
+				(f, w) => bail!("Unexpected combination of field number ({f}) and wire type ({w})"),
 			}
 		}
 		Ok(tile)
@@ -50,7 +48,7 @@ mod test {
 		let mut reader = PMTilesReader::open_path(&PATH).await?;
 		let mut blob = reader.get_tile_data(&TileCoord3::new(8803, 5376, 14)?).await?.unwrap();
 		blob = decompress(blob, &reader.get_parameters().tile_compression)?;
-		VectorTile::from_blob(blob)?;
+		VectorTile::from_blob(&blob)?;
 		//println!("{:?}", tile);
 		Ok(())
 	}
