@@ -1,6 +1,6 @@
 use crate::{
 	container::{TilesReader, TilesWriter},
-	types::{compression_to_extension, format_to_extension, progress::get_progress_bar, Blob, DataWriterTrait},
+	types::{progress::get_progress_bar, Blob, DataWriterTrait},
 	utils::compress,
 };
 use anyhow::{bail, ensure, Result};
@@ -33,12 +33,12 @@ impl TilesWriter for DirectoryTilesWriter {
 		log::trace!("convert_from");
 
 		let parameters = reader.get_parameters();
-		let tile_compression = &parameters.tile_compression;
-		let tile_format = &parameters.tile_format;
+		let tile_compression = &parameters.tile_compression.clone();
+		let tile_format = &parameters.tile_format.clone();
 		let bbox_pyramid = &reader.get_parameters().bbox_pyramid.clone();
 
-		let extension_format = format_to_extension(tile_format);
-		let extension_compression = compression_to_extension(tile_compression);
+		let extension_format = tile_format.extension();
+		let extension_compression = tile_compression.extension();
 
 		let meta_data_option = reader.get_meta()?;
 

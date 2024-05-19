@@ -1,7 +1,7 @@
-use std::fmt::Display;
-
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
+use std::fmt::Display;
+
 // Enum representing supported tile formats
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -36,41 +36,43 @@ impl Display for TileFormat {
 	}
 }
 
-pub fn format_to_extension(format: &TileFormat) -> String {
-	String::from(match format {
-		TileFormat::AVIF => ".avif",
-		TileFormat::BIN => ".bin",
-		TileFormat::GEOJSON => ".geojson",
-		TileFormat::JPG => ".jpg",
-		TileFormat::JSON => ".json",
-		TileFormat::PBF => ".pbf",
-		TileFormat::PNG => ".png",
-		TileFormat::SVG => ".svg",
-		TileFormat::TOPOJSON => ".topojson",
-		TileFormat::WEBP => ".webp",
-	})
-}
-
-pub fn extract_format(filename: &mut String) -> Option<TileFormat> {
-	if let Some(index) = filename.rfind('.') {
-		let format = match filename.get(index..).unwrap() {
-			".avif" => TileFormat::AVIF,
-			".bin" => TileFormat::BIN,
-			".geojson" => TileFormat::GEOJSON,
-			".jpg" => TileFormat::JPG,
-			".jpeg" => TileFormat::JPG,
-			".json" => TileFormat::JSON,
-			".pbf" => TileFormat::PBF,
-			".png" => TileFormat::PNG,
-			".svg" => TileFormat::SVG,
-			".topojson" => TileFormat::TOPOJSON,
-			".webp" => TileFormat::WEBP,
-			_ => return None,
-		};
-		filename.truncate(index);
-		return Some(format);
+impl TileFormat {
+	pub fn extension(&self) -> &str {
+		match self {
+			TileFormat::AVIF => ".avif",
+			TileFormat::BIN => ".bin",
+			TileFormat::GEOJSON => ".geojson",
+			TileFormat::JPG => ".jpg",
+			TileFormat::JSON => ".json",
+			TileFormat::PBF => ".pbf",
+			TileFormat::PNG => ".png",
+			TileFormat::SVG => ".svg",
+			TileFormat::TOPOJSON => ".topojson",
+			TileFormat::WEBP => ".webp",
+		}
 	}
-	None
+
+	pub fn from_filename(filename: &mut String) -> Option<TileFormat> {
+		if let Some(index) = filename.rfind('.') {
+			let format = match filename.get(index..).unwrap() {
+				".avif" => TileFormat::AVIF,
+				".bin" => TileFormat::BIN,
+				".geojson" => TileFormat::GEOJSON,
+				".jpg" => TileFormat::JPG,
+				".jpeg" => TileFormat::JPG,
+				".json" => TileFormat::JSON,
+				".pbf" => TileFormat::PBF,
+				".png" => TileFormat::PNG,
+				".svg" => TileFormat::SVG,
+				".topojson" => TileFormat::TOPOJSON,
+				".webp" => TileFormat::WEBP,
+				_ => return None,
+			};
+			filename.truncate(index);
+			return Some(format);
+		}
+		None
+	}
 }
 
 #[cfg(test)]
@@ -81,7 +83,7 @@ mod tests {
 	fn test_format_to_extension() {
 		fn test(format: TileFormat, expected_extension: &str) {
 			assert_eq!(
-				format_to_extension(&format),
+				format.extension(),
 				expected_extension,
 				"Extension does not match {expected_extension}"
 			);
@@ -104,7 +106,7 @@ mod tests {
 		fn test(expected_format: Option<TileFormat>, filename: &str, rest: &str) {
 			let mut filename_string = String::from(filename);
 			assert_eq!(
-				extract_format(&mut filename_string),
+				TileFormat::from_filename(&mut filename_string),
 				expected_format,
 				"Extracted compression does not match expected for filename: {filename}"
 			);

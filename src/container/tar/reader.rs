@@ -1,8 +1,6 @@
 use crate::{
 	container::{TilesReader, TilesReaderParameters},
-	types::{
-		extract_compression, extract_format, Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat,
-	},
+	types::{Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 	utils::decompress,
 };
 use anyhow::{bail, Result};
@@ -59,9 +57,9 @@ impl TarTilesReader {
 				let y = path_vec[1].parse::<u32>()?;
 
 				let mut filename: String = String::from(path_vec[2]);
-				let this_compression = extract_compression(&mut filename);
+				let this_compression = TileCompression::from_filename(&mut filename);
+				let this_format = TileFormat::from_filename(&mut filename);
 
-				let this_format = extract_format(&mut filename);
 				if this_format.is_none() {
 					continue;
 				}

@@ -1,6 +1,6 @@
 use crate::{
 	container::{TilesReader, TilesReaderParameters},
-	types::{extract_compression, extract_format, Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
+	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 	utils::decompress,
 };
 use anyhow::{bail, ensure, Context, Result};
@@ -67,8 +67,8 @@ impl DirectoryTilesReader {
 					for entry3 in files {
 						// y level
 						let mut filename = entry3.file_name().into_string().unwrap();
-						let file_comp = extract_compression(&mut filename);
-						let this_form = extract_format(&mut filename);
+						let file_comp = TileCompression::from_filename(&mut filename);
+						let this_form = TileFormat::from_filename(&mut filename);
 
 						if this_form.is_none() {
 							continue;

@@ -1,8 +1,7 @@
-use std::fmt::Display;
-
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
 use enumset::EnumSetType;
+use std::fmt::Display;
 
 /// Enum representing possible compression algorithms
 #[cfg_attr(feature = "cli", derive(ValueEnum))]
@@ -23,28 +22,29 @@ impl Display for TileCompression {
 	}
 }
 
-pub fn compression_to_extension(compression: &TileCompression) -> String {
-	String::from(match compression {
-		TileCompression::None => "",
-		TileCompression::Gzip => ".gz",
-		TileCompression::Brotli => ".br",
-	})
-}
-
-pub fn extract_compression(filename: &mut String) -> TileCompression {
-	if let Some(index) = filename.rfind('.') {
-		let compression = match filename.get(index..).unwrap() {
-			".gz" => TileCompression::Gzip,
-			".br" => TileCompression::Brotli,
-			_ => TileCompression::None,
-		};
-
-		if compression != TileCompression::None {
-			filename.truncate(index)
+impl TileCompression {
+	pub fn extension(&self) -> &str {
+		match self {
+			TileCompression::None => "",
+			TileCompression::Gzip => ".gz",
+			TileCompression::Brotli => ".br",
 		}
-		return compression;
 	}
-	TileCompression::None
+	pub fn from_filename(filename: &mut String) -> TileCompression {
+		if let Some(index) = filename.rfind('.') {
+			let compression = match filename.get(index..).unwrap() {
+				".gz" => TileCompression::Gzip,
+				".br" => TileCompression::Brotli,
+				_ => TileCompression::None,
+			};
+
+			if compression != TileCompression::None {
+				filename.truncate(index)
+			}
+			return compression;
+		}
+		TileCompression::None
+	}
 }
 
 #[cfg(test)]
@@ -55,7 +55,7 @@ mod tests {
 	fn test_compression_to_extension() {
 		fn test(compression: TileCompression, expected_extension: &str) {
 			assert_eq!(
-				compression_to_extension(&compression),
+				compression.extension(),
 				expected_extension,
 				"Extension does not match {expected_extension}"
 			);
@@ -71,7 +71,7 @@ mod tests {
 		fn test(expected_compression: TileCompression, filename: &str, expected_remainder: &str) {
 			let mut filename_string = String::from(filename);
 			assert_eq!(
-				extract_compression(&mut filename_string),
+				TileCompression::from_filename(&mut filename_string),
 				expected_compression,
 				"Extracted compression does not match expected for filename: {filename}"
 			);

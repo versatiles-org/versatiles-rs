@@ -31,7 +31,7 @@ impl MBTilesWriter {
 	}
 
 	/// Adds multiple tiles to the MBTiles file within a single transaction.
-	fn add_tiles(&mut self, tiles: Vec<(TileCoord3, Blob)>) -> Result<()> {
+	fn add_tiles(&mut self, tiles: &Vec<(TileCoord3, Blob)>) -> Result<()> {
 		let mut conn = self.pool.get()?;
 		let transaction = conn.transaction()?;
 		for (coords, blob) in tiles {
@@ -91,11 +91,12 @@ impl TilesWriter for MBTilesWriter {
 				progress.inc(1);
 
 				if tile_buffer.len() >= 2000 {
-					writer.add_tiles(tile_buffer.drain(..).collect())?;
+					writer.add_tiles(&tile_buffer)?;
+					tile_buffer.clear();
 				}
 			}
 			if !tile_buffer.is_empty() {
-				writer.add_tiles(tile_buffer)?;
+				writer.add_tiles(&tile_buffer)?;
 			}
 		}
 
