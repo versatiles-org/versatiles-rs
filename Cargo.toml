@@ -1,7 +1,7 @@
 [package]
 name = "versatiles"
 edition = "2021"
-version = "0.9.1"
+version = "0.10.0"
 description = "A toolbox for converting, checking and serving map tiles in various formats."
 homepage = "https://versatiles.org"
 repository = "https://github.com/versatiles-org/versatiles-rs"
@@ -91,17 +91,18 @@ reqwest = { version = "0.12.4", default-features = false, optional = true, featu
 ] }
 tar = { version = "0.4.40", default-features = false, optional = true }
 terminal_size = { version = "0.3.0", default-features = false, optional = true }
-tokio = { version = "1.37.0", default-features = false, features = [
-	"macros",
-	"rt-multi-thread",
-	"sync",
-] }
+tokio = { version = "1.37.0", default-features = false, features = ["rt-multi-thread", "sync"] }
 webp = { version = "0.3.0", default-features = false, optional = true, features = ["img"] }
 
 [dev-dependencies]
 assert_fs = "1.1.1"
 lazy_static = "1.4.0"
 wildmatch = "2.3.3"
+tokio = { version = "1.37.0", default-features = false, features = [
+	"macros",
+	"rt-multi-thread",
+	"sync",
+] }
 
 [features]
 default = ["full", "cli"]
