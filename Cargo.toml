@@ -54,7 +54,7 @@ name = "versatiles"
 path = "src/lib.rs"
 
 [dependencies]
-anyhow = { version = "1.0.83", default-features = false, features = ["std", "backtrace"] }
+anyhow = { version = "1.0.86", default-features = false, features = ["std", "backtrace"] }
 async-trait = { version = "0.1.80", default-features = false }
 axum = { version = "0.7.5", default-features = false, optional = true, features = [
 	"http1",
@@ -76,7 +76,7 @@ image = { version = "0.25.1", default-features = false, optional = true, feature
 	"jpeg",
 	"png",
 ] }
-itertools = { version = "0.12.1", default-features = false, features = ["use_alloc"] }
+itertools = { version = "0.13.0", default-features = false, features = ["use_alloc"] }
 lazy_static = { version = "1.4.0", optional = true }
 log = { version = "0.4.21", default-features = false }
 mime_guess = { version = "2.0.4", default-features = false, optional = true }
