@@ -106,7 +106,7 @@ mod test {
 			pmtiles::PMTilesReader,
 			TilesReaderParameters,
 		},
-		types::{DataReaderBlob, DataWriterBlob, TileBBoxPyramid, TileCompression, TileFormat},
+		types::{DataReaderBlob, DataWriterBlob, TileBBoxPyramid, TileFormat},
 	};
 
 	#[tokio::test]

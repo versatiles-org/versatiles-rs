@@ -16,7 +16,7 @@ pub struct Subcommand {
 	#[arg()]
 	input_file: String,
 
-	/// supported container formats: *.versatiles, *.tar, *.pmtiles or a directory
+	/// supported container formats: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory
 	#[arg()]
 	output_file: String,
 

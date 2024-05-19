@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
 // Enum representing supported tile formats
@@ -15,6 +17,23 @@ pub enum TileFormat {
 	SVG,
 	TOPOJSON,
 	WEBP,
+}
+
+impl Display for TileFormat {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str(match self {
+			TileFormat::AVIF => "avif",
+			TileFormat::BIN => "bin",
+			TileFormat::GEOJSON => "geojson",
+			TileFormat::JPG => "jpg",
+			TileFormat::JSON => "json",
+			TileFormat::PBF => "pbf",
+			TileFormat::PNG => "png",
+			TileFormat::SVG => "svg",
+			TileFormat::TOPOJSON => "topojson",
+			TileFormat::WEBP => "webp",
+		})
+	}
 }
 
 pub fn format_to_extension(format: &TileFormat) -> String {

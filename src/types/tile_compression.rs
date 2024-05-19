@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
 use enumset::EnumSetType;
@@ -9,6 +11,16 @@ pub enum TileCompression {
 	None,
 	Gzip,
 	Brotli,
+}
+
+impl Display for TileCompression {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str(match self {
+			TileCompression::None => "none",
+			TileCompression::Gzip => "gzip",
+			TileCompression::Brotli => "brotli",
+		})
+	}
 }
 
 pub fn compression_to_extension(compression: &TileCompression) -> String {

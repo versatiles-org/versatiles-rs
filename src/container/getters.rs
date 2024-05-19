@@ -13,6 +13,8 @@ use anyhow::{bail, Context, Result};
 use reqwest::Url;
 use std::env;
 
+use super::mbtiles::MBTilesWriter;
+
 pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReader>> {
 	let extension = get_extension(filename);
 
@@ -62,8 +64,9 @@ pub async fn write_to_filename(reader: &mut dyn TilesReader, filename: &str) -> 
 
 	let extension = get_extension(filename);
 	match extension {
-		"tar" => TarTilesWriter::write_to_path(reader, &path).await,
+		"mbtiles" => MBTilesWriter::write_to_path(reader, &path).await,
 		"pmtiles" => PMTilesWriter::write_to_path(reader, &path).await,
+		"tar" => TarTilesWriter::write_to_path(reader, &path).await,
 		"versatiles" => VersaTilesWriter::write_to_path(reader, &path).await,
 		_ => bail!("Error when writing: file extension '{extension:?}' unknown"),
 	}
