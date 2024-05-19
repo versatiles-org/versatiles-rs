@@ -324,3 +324,81 @@ impl VectorTileFeature {
 		})
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	fn round_trip_feature(geometry: Geometry) -> Result<()> {
+		// Convert to VectorTileFeature
+		let vector_tile_feature = VectorTileFeature::from_geometry(None, vec![], &geometry.clone())?;
+
+		// Compare original and converted features
+		assert_eq!(geometry.into_multi(), vector_tile_feature.to_geometry()?);
+		Ok(())
+	}
+
+	fn to_point(data: [i32; 2]) -> PointGeometry {
+		PointGeometry::new(data[0] as f64, data[1] as f64)
+	}
+
+	fn to_vec1(data: &[[i32; 2]]) -> Vec<PointGeometry> {
+		data.into_iter().map(|p| to_point(*p)).collect()
+	}
+
+	fn to_vec2(data: &[&[[i32; 2]]]) -> Vec<Vec<PointGeometry>> {
+		data.into_iter().map(|p| to_vec1(p)).collect()
+	}
+
+	fn to_vec3(data: &[&[&[[i32; 2]]]]) -> Vec<Vec<Vec<PointGeometry>>> {
+		data.into_iter().map(|p| to_vec2(p)).collect()
+	}
+
+	#[test]
+	fn point_geometry_round_trip() -> Result<()> {
+		let geometry = Geometry::new_point(to_point([1, 2]));
+		round_trip_feature(geometry)
+	}
+
+	#[test]
+	fn line_string_geometry_round_trip() -> Result<()> {
+		let geometry = Geometry::new_line_string(to_vec1(&[[0, 1], [0, 3]]));
+		round_trip_feature(geometry)
+	}
+
+	#[test]
+	fn polygon_geometry_round_trip() -> Result<()> {
+		let geometry = Geometry::new_polygon(to_vec2(&[
+			&[[0, 0], [3, 0], [3, 3], [0, 3], [0, 0]],
+			&[[1, 1], [1, 2], [2, 2], [1, 1]],
+		]));
+		round_trip_feature(geometry)
+	}
+
+	#[test]
+	fn multi_point_geometry_round_trip() -> Result<()> {
+		let geometry = Geometry::new_multi_point(to_vec1(&[[2, 3], [4, 5]]));
+		round_trip_feature(geometry)
+	}
+
+	#[test]
+	fn multi_line_string_geometry_round_trip() -> Result<()> {
+		let geometry = Geometry::new_multi_line_string(to_vec2(&[&[[0, 0], [1, 1], [2, 0]], &[[0, 2], [1, 1], [2, 2]]]));
+		round_trip_feature(geometry)
+	}
+
+	#[test]
+	fn multi_polygon_geometry_round_trip() -> Result<()> {
+		let geometry = Geometry::new_multi_polygon(to_vec3(&[
+			&[
+				&[[0, 0], [3, 0], [3, 3], [0, 3], [0, 0]],
+				&[[1, 1], [1, 2], [2, 2], [1, 1]],
+			],
+			&[
+				&[[4, 0], [7, 0], [7, 3], [4, 3], [4, 0]],
+				&[[5, 1], [5, 2], [6, 2], [5, 1]],
+			],
+		]));
+		round_trip_feature(geometry)
+	}
+}
