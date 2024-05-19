@@ -1,4 +1,4 @@
-use crate::utils::geometry::types::{Geometry, GeometryValue};
+use crate::utils::geometry::basic::Geometry;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub enum GeomType {
@@ -27,10 +27,10 @@ impl From<u64> for GeomType {
 	}
 }
 
-impl From<Geometry> for GeomType {
-	fn from(geometry: Geometry) -> Self {
-		use GeometryValue::*;
-		match geometry.value {
+impl From<&Geometry> for GeomType {
+	fn from(geometry: &Geometry) -> Self {
+		use Geometry::*;
+		match geometry {
 			MultiPoint(_) => GeomType::MultiPoint,
 			MultiLineString(_) => GeomType::MultiLineString,
 			MultiPolygon(_) => GeomType::MultiPolygon,

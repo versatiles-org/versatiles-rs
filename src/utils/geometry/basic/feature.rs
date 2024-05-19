@@ -4,7 +4,7 @@ use std::fmt::Debug;
 
 use super::*;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct Feature {
 	pub id: Option<u64>,
 	pub geometry: Geometry,

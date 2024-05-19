@@ -4,7 +4,7 @@ use super::{feature::VectorTileFeature, utils::BlobReaderPBF, utils::BlobWriterP
 use crate::{
 	types::Blob,
 	utils::{
-		geometry::types::{Feature, GeoProperties, GeoValue},
+		geometry::basic::{Feature, GeoProperties, GeoValue},
 		BlobReader, BlobWriter,
 	},
 };
@@ -200,7 +200,11 @@ impl VectorTileLayer {
 				}
 			}
 
-			features_vec.push(VectorTileFeature::from_geometry(feature.id, tag_ids, feature.geometry)?);
+			features_vec.push(VectorTileFeature::from_geometry(
+				feature.id,
+				tag_ids,
+				&feature.geometry,
+			)?);
 		}
 
 		Ok(VectorTileLayer {

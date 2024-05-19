@@ -1,2 +1,2 @@
-pub mod types;
+pub mod basic;
 pub mod vector_tile;

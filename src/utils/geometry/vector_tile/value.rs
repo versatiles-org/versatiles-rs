@@ -4,7 +4,7 @@ use super::utils::BlobWriterPBF;
 use crate::{
 	types::Blob,
 	utils::{
-		geometry::{types::GeoValue, vector_tile::utils::BlobReaderPBF},
+		geometry::{basic::GeoValue, vector_tile::utils::BlobReaderPBF},
 		BlobReader, BlobWriter,
 	},
 };

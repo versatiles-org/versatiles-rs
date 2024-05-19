@@ -8,9 +8,9 @@ use super::{
 use crate::{
 	types::Blob,
 	utils::{
-		geometry::types::{
-			Feature, GeoProperties, Geometry, LineStringGeometry, MultiPolygonGeometry, PointGeometry, PolygonGeometry,
-			Ring,
+		geometry::basic::{
+			AreaTrait, Feature, GeoProperties, Geometry, LineStringGeometry, MultiPointGeometry, PointGeometry,
+			PolygonGeometry,
 		},
 		BlobReader, BlobWriter,
 	},
@@ -125,10 +125,7 @@ impl VectorTileFeature {
 							x += reader.read_svarint().context("Failed to read x coordinate")?;
 							y += reader.read_svarint().context("Failed to read y coordinate")?;
 
-							line.push(PointGeometry {
-								x: x as f64,
-								y: y as f64,
-							});
+							line.push(PointGeometry::new(x as f64, y as f64));
 						}
 					}
 					7 => {
@@ -160,7 +157,7 @@ impl VectorTileFeature {
 							ensure!(line.len() == 1, "(Multi)Point entries must have exactly one entry");
 							Ok(line.pop().unwrap())
 						})
-						.collect::<Result<Vec<PointGeometry>>>()?,
+						.collect::<Result<MultiPointGeometry>>()?,
 				))
 			}
 
@@ -177,8 +174,8 @@ impl VectorTileFeature {
 
 			GeomType::MultiPolygon => {
 				ensure!(!geometry.is_empty(), "Polygons must have at least one entry");
-				let mut current_polygon = PolygonGeometry::new();
-				let mut polygons = MultiPolygonGeometry::new();
+				let mut current_polygon = Vec::new();
+				let mut polygons = Vec::new();
 
 				for ring in geometry {
 					ensure!(
@@ -193,14 +190,14 @@ impl VectorTileFeature {
 
 					let area = ring.area();
 
-					if area > 1e-10 {
+					if area > 1e-14 {
 						// Outer ring
 						if !current_polygon.is_empty() {
 							polygons.push(current_polygon);
 							current_polygon = Vec::new();
 						}
 						current_polygon.push(ring);
-					} else if area < -1e-10 {
+					} else if area < -1e-14 {
 						// Inner ring
 						ensure!(!current_polygon.is_empty(), "An outer ring must precede inner rings");
 						current_polygon.push(ring);
@@ -230,7 +227,7 @@ impl VectorTileFeature {
 		Ok(feature)
 	}
 
-	pub fn from_geometry(id: Option<u64>, tag_ids: Vec<u32>, geometry: Geometry) -> Result<VectorTileFeature> {
+	pub fn from_geometry(id: Option<u64>, tag_ids: Vec<u32>, geometry: &Geometry) -> Result<VectorTileFeature> {
 		fn write_point(writer: &mut BlobWriter<LE>, point0: &mut (i64, i64), point: &PointGeometry) -> Result<()> {
 			let x = point.x.round() as i64;
 			let y = point.y.round() as i64;
@@ -241,17 +238,17 @@ impl VectorTileFeature {
 			Ok(())
 		}
 
-		fn write_points(points: Vec<PointGeometry>) -> Result<Blob> {
+		fn write_points(points: &Vec<&PointGeometry>) -> Result<Blob> {
 			let mut writer = BlobWriter::new_le();
 			let point0 = &mut (0i64, 0i64);
 			writer.write_varint((points.len() as u64) << 3 | 0x1)?;
-			for point in &points {
+			for point in points {
 				write_point(&mut writer, point0, point)?
 			}
 			Ok(writer.into_blob())
 		}
 
-		fn write_line_strings(line_strings: Vec<LineStringGeometry>) -> Result<Blob> {
+		fn write_line_strings(line_strings: &Vec<&LineStringGeometry>) -> Result<Blob> {
 			let mut writer = BlobWriter::new_le();
 			let point0 = &mut (0i64, 0i64);
 
@@ -276,11 +273,11 @@ impl VectorTileFeature {
 			Ok(writer.into_blob())
 		}
 
-		fn write_polygons(polygons: Vec<PolygonGeometry>) -> Result<Blob> {
+		fn write_polygons(polygons: &Vec<&PolygonGeometry>) -> Result<Blob> {
 			let mut writer = BlobWriter::new_le();
 			let point0 = &mut (0i64, 0i64);
 
-			for polygon in polygons {
+			for &polygon in polygons {
 				for ring in polygon {
 					if ring.is_empty() {
 						continue;
@@ -292,7 +289,7 @@ impl VectorTileFeature {
 
 					// Write the LineTo command for the remaining points
 					if ring.len() > 2 {
-						writer.write_varint((ring.len() as u64 - 2) << 3 | 0x1)?; // LineTo command
+						writer.write_varint((ring.len() as u64 - 2) << 3 | 0x2)?; // LineTo command
 						for point in &ring[1..ring.len() - 1] {
 							write_point(&mut writer, point0, point)?;
 						}
@@ -306,14 +303,17 @@ impl VectorTileFeature {
 			Ok(writer.into_blob())
 		}
 
-		use crate::utils::geometry::types::GeometryValue::*;
-		let (geom_type, geom_data) = match geometry.value {
-			Point(g) => (GeomType::MultiPoint, write_points(vec![g])?),
-			MultiPoint(g) => (GeomType::MultiPoint, write_points(g)?),
-			LineString(g) => (GeomType::MultiLineString, write_line_strings(vec![g])?),
-			MultiLineString(g) => (GeomType::MultiLineString, write_line_strings(g)?),
-			Polygon(g) => (GeomType::MultiPolygon, write_polygons(vec![g])?),
-			MultiPolygon(g) => (GeomType::MultiPolygon, write_polygons(g)?),
+		fn m<T>(g: &[T]) -> Vec<&T> {
+			g.iter().collect()
+		}
+		use crate::utils::geometry::basic::Geometry::*;
+		let (geom_type, geom_data) = match geometry {
+			Point(g) => (GeomType::MultiPoint, write_points(&vec![g])?),
+			MultiPoint(g) => (GeomType::MultiPoint, write_points(&m(g))?),
+			LineString(g) => (GeomType::MultiLineString, write_line_strings(&vec![g])?),
+			MultiLineString(g) => (GeomType::MultiLineString, write_line_strings(&m(g))?),
+			Polygon(g) => (GeomType::MultiPolygon, write_polygons(&vec![g])?),
+			MultiPolygon(g) => (GeomType::MultiPolygon, write_polygons(&m(g))?),
 		};
 
 		Ok(VectorTileFeature {
