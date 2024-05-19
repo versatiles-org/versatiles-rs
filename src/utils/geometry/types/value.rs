@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, hash::Hash};
 
 #[derive(Clone, PartialEq)]
 pub enum GeoValue {
@@ -20,5 +20,12 @@ impl Debug for GeoValue {
 			Self::UInt(v) => f.debug_tuple("U64").field(v).finish(),
 			Self::Bool(v) => f.debug_tuple("Bool").field(v).finish(),
 		}
+	}
+}
+
+impl Eq for GeoValue {}
+impl Hash for GeoValue {
+	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+		core::mem::discriminant(self).hash(state);
 	}
 }
