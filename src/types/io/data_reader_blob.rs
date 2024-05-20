@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use super::{types::DataReaderTrait, DataWriterBlob};
+use super::{DataReaderTrait, DataWriterBlob};
 use crate::types::{Blob, ByteRange};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -75,8 +75,7 @@ impl From<Vec<u8>> for DataReaderBlob {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use crate::types::io::types::DataWriterTrait;
+	use super::{super::DataWriterTrait, *};
 
 	#[tokio::test]
 	async fn from_blob() -> Result<()> {

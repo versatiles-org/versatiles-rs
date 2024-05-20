@@ -1,4 +1,4 @@
-use super::types::DataReaderTrait;
+use super::DataReaderTrait;
 use crate::types::{Blob, ByteRange};
 use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
@@ -103,9 +103,6 @@ impl DataReaderTrait for DataReaderHttp {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use anyhow::Result;
-	use reqwest::Url;
-	use std::str;
 
 	// Test the 'new' method for valid and invalid URLs
 	#[test]

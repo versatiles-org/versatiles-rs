@@ -1,4 +1,4 @@
-use super::types::DataReaderTrait;
+use super::DataReaderTrait;
 use crate::types::{Blob, ByteRange};
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
@@ -60,12 +60,10 @@ impl Read for DataReaderFile {
 
 #[cfg(test)]
 mod tests {
-	use crate::assert_wildcard;
-
 	use super::*;
-	use anyhow::Result;
+	use crate::assert_wildcard;
 	use assert_fs::NamedTempFile;
-	use std::{fs::File, io::Write};
+	use std::io::Write;
 
 	// Test the 'new' method for valid and invalid files
 	#[tokio::test]

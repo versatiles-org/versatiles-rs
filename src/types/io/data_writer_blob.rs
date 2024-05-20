@@ -1,6 +1,5 @@
 #![allow(dead_code)]
-
-use super::{types::DataWriterTrait, DataReaderBlob};
+use super::{DataReaderBlob, DataWriterTrait};
 use crate::types::{Blob, ByteRange};
 use anyhow::Result;
 use async_trait::async_trait;
@@ -66,7 +65,7 @@ impl DataWriterTrait for DataWriterBlob {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::{Blob, DataReaderTrait};
+	use crate::types::DataReaderTrait;
 
 	#[test]
 	fn test_new() -> Result<()> {
