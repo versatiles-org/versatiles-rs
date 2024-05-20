@@ -1,11 +1,11 @@
 #![allow(dead_code)]
 
-use super::{feature::VectorTileFeature, utils::BlobReaderPBF, utils::BlobWriterPBF, value::GeoValuePBF};
+use super::{feature::VectorTileFeature, utils::BlobWriterPBF, value::GeoValuePBF};
 use crate::{
-	types::Blob,
+	types::{Blob, ValueReader},
 	utils::{
 		geometry::basic::{Feature, GeoProperties, GeoValue},
-		BlobReader, BlobWriter,
+		BlobWriter,
 	},
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};
@@ -24,7 +24,7 @@ pub struct VectorTileLayer {
 }
 
 impl VectorTileLayer {
-	pub fn read(reader: &mut BlobReader<LE>) -> Result<VectorTileLayer> {
+	pub fn read(reader: &mut dyn ValueReader<'_, LE>) -> Result<VectorTileLayer> {
 		let mut extent = 4096;
 		let mut features: Vec<VectorTileFeature> = Vec::new();
 		let mut name = None;
@@ -37,18 +37,20 @@ impl VectorTileLayer {
 				(1, 2) => name = Some(reader.read_pbf_string().context("Failed to read layer name")?),
 				(2, 2) => features.push(
 					VectorTileFeature::read(
-						&mut reader
+						reader
 							.get_pbf_sub_reader()
-							.context("Failed to get PBF sub-reader for feature")?,
+							.context("Failed to get PBF sub-reader for feature")?
+							.as_mut(),
 					)
 					.context("Failed to read VectorTileFeature")?,
 				),
 				(3, 2) => property_keys.push(reader.read_pbf_string().context("Failed to read property key")?),
 				(4, 2) => property_values.push(
 					GeoValue::read(
-						&mut reader
+						reader
 							.get_pbf_sub_reader()
-							.context("Failed to get PBF sub-reader for property value")?,
+							.context("Failed to get PBF sub-reader for property value")?
+							.as_mut(),
 					)
 					.context("Failed to read GeoValue")?,
 				),

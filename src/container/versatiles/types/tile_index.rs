@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use crate::{
-	types::{Blob, ByteRange},
-	utils::{compress_brotli, decompress_brotli, BlobReader, BlobWriter},
+	types::{Blob, ByteRange, ValueReader, ValueReaderBlob},
+	utils::{compress_brotli, decompress_brotli, BlobWriter},
 };
 use anyhow::{ensure, Result};
 use std::ops::Div;
@@ -31,7 +31,7 @@ impl TileIndex {
 		);
 
 		let mut index = Vec::new();
-		let mut reader = BlobReader::new_be(&blob);
+		let mut reader = ValueReaderBlob::new_be(&blob);
 		for _ in 0..count {
 			index.push(ByteRange::new(reader.read_u64()?, reader.read_u32()? as u64));
 		}

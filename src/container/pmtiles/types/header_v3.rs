@@ -1,8 +1,8 @@
 use super::{PMTilesCompression, PMTilesType};
 use crate::{
 	container::TilesReaderParameters,
-	types::{Blob, ByteRange},
-	utils::{BlobReader, BlobWriter},
+	types::{Blob, ByteRange, ValueReader, ValueReaderBlob},
+	utils::BlobWriter,
 };
 use anyhow::{ensure, Result};
 
@@ -108,8 +108,8 @@ impl HeaderV3 {
 		ensure!(&buffer[0..7] == b"PMTiles", "pmtiles magic number exception");
 		ensure!(buffer[7] == 3, "pmtiles version: must be 3");
 
-		let mut reader = BlobReader::new_le(blob);
-		reader.set_position(8); // Skip PMTiles and version byte
+		let mut reader = ValueReaderBlob::new_le(blob);
+		reader.set_position(8)?; // Skip PMTiles and version byte
 
 		let header = Self {
 			root_dir: ByteRange::new(reader.read_u64()?, reader.read_u64()?),

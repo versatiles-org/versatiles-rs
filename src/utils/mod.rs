@@ -1,9 +1,6 @@
 #[cfg(test)]
 pub mod assert;
 
-mod blob_reader;
-pub use blob_reader::*;
-
 mod blob_writer;
 pub use blob_writer::*;
 

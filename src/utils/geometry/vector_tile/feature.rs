@@ -1,18 +1,14 @@
 #![allow(dead_code)]
 
-use super::{
-	geometry_type::GeomType,
-	layer::VectorTileLayer,
-	utils::{BlobReaderPBF, BlobWriterPBF},
-};
+use super::{geometry_type::GeomType, layer::VectorTileLayer, utils::BlobWriterPBF};
 use crate::{
-	types::Blob,
+	types::{Blob, ValueReader, ValueReaderBlob},
 	utils::{
 		geometry::basic::{
 			AreaTrait, Feature, GeoProperties, Geometry, LineStringGeometry, MultiPointGeometry, PointGeometry,
 			PolygonGeometry,
 		},
-		BlobReader, BlobWriter,
+		BlobWriter,
 	},
 };
 use anyhow::{bail, ensure, Context, Result};
@@ -39,7 +35,7 @@ impl Default for VectorTileFeature {
 
 impl VectorTileFeature {
 	/// Decodes a `VectorTileFeature` from a `BlobReader`.
-	pub fn read(reader: &mut BlobReader<LE>) -> Result<VectorTileFeature> {
+	pub fn read(reader: &mut dyn ValueReader<'_, LE>) -> Result<VectorTileFeature> {
 		let mut f = VectorTileFeature::default();
 
 		while reader.has_remaining() {
@@ -99,7 +95,7 @@ impl VectorTileFeature {
 		// https://github.com/mapbox/vector-tile-spec/blob/master/2.1/README.md#43-geometry-encoding
 
 		let geometry = {
-			let mut reader = BlobReader::new_le(&self.geom_data);
+			let mut reader = ValueReaderBlob::new_le(&self.geom_data);
 
 			let mut lines: Vec<Vec<PointGeometry>> = Vec::new();
 			let mut line: Vec<PointGeometry> = Vec::new();

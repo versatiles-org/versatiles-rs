@@ -2,22 +2,19 @@
 
 use super::utils::BlobWriterPBF;
 use crate::{
-	types::Blob,
-	utils::{
-		geometry::{basic::GeoValue, vector_tile::utils::BlobReaderPBF},
-		BlobReader, BlobWriter,
-	},
+	types::{Blob, ValueReader},
+	utils::{geometry::basic::GeoValue, BlobWriter},
 };
 use anyhow::{anyhow, bail, Context, Result};
 use byteorder::LE;
 
-pub trait GeoValuePBF {
-	fn read(reader: &mut BlobReader<LE>) -> Result<GeoValue>;
+pub trait GeoValuePBF<'a> {
+	fn read(reader: &mut dyn ValueReader<'a, LE>) -> Result<GeoValue>;
 	fn to_blob(&self) -> Result<Blob>;
 }
 
-impl GeoValuePBF for GeoValue {
-	fn read(reader: &mut BlobReader<LE>) -> Result<GeoValue> {
+impl<'a> GeoValuePBF<'a> for GeoValue {
+	fn read(reader: &mut dyn ValueReader<'a, LE>) -> Result<GeoValue> {
 		// source: https://protobuf.dev/programming-guides/encoding/
 
 		use GeoValue::*;

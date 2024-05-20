@@ -1,12 +1,9 @@
 #![allow(dead_code)]
 
-use super::{
-	layer::VectorTileLayer,
-	utils::{BlobReaderPBF, BlobWriterPBF},
-};
+use super::{layer::VectorTileLayer, utils::BlobWriterPBF};
 use crate::{
-	types::Blob,
-	utils::{BlobReader, BlobWriter},
+	types::{Blob, ValueReader, ValueReaderBlob},
+	utils::BlobWriter,
 };
 use anyhow::{bail, Context, Result};
 
@@ -17,15 +14,20 @@ pub struct VectorTile {
 
 impl VectorTile {
 	pub fn from_blob(blob: &Blob) -> Result<VectorTile> {
-		let mut reader = BlobReader::new_le(blob);
+		let mut reader = ValueReaderBlob::new_le(blob);
 
 		let mut tile = VectorTile::default();
 		while reader.has_remaining() {
 			match reader.read_pbf_key().context("Failed to read PBF key")? {
 				(3, 2) => {
 					tile.layers.push(
-						VectorTileLayer::read(&mut reader.get_pbf_sub_reader().context("Failed to get PBF sub-reader")?)
-							.context("Failed to read VectorTileLayer")?,
+						VectorTileLayer::read(
+							reader
+								.get_pbf_sub_reader()
+								.context("Failed to get PBF sub-reader")?
+								.as_mut(),
+						)
+						.context("Failed to read VectorTileLayer")?,
 					);
 				}
 				(f, w) => bail!("Unexpected combination of field number ({f}) and wire type ({w})"),

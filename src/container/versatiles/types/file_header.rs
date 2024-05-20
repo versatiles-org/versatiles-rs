@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use crate::{
-	types::{Blob, ByteRange, DataReader, TileCompression, TileFormat},
-	utils::{BlobReader, BlobWriter},
+	types::{Blob, ByteRange, DataReader, TileCompression, TileFormat, ValueReader, ValueReaderBlob},
+	utils::BlobWriter,
 };
 use anyhow::{bail, ensure, Result};
 
@@ -107,7 +107,7 @@ impl FileHeader {
 			bail!("'{blob:?}' is not a valid versatiles header. A header should be {HEADER_LENGTH} bytes long.");
 		}
 
-		let mut reader = BlobReader::new_be(&blob);
+		let mut reader = ValueReaderBlob::new_be(&blob);
 		let magic_word = reader.read_string(14)?;
 		if &magic_word != "versatiles_v02" {
 			bail!("'{blob:?}' is not a valid versatiles header. A header should start with 'versatiles_v02'");
@@ -217,7 +217,7 @@ mod tests {
 		)?;
 
 		let blob = header.to_blob()?;
-		let mut reader = BlobReader::new_be(&blob);
+		let mut reader = ValueReaderBlob::new_be(&blob);
 
 		assert_eq!(blob.len(), HEADER_LENGTH);
 		assert_eq!(reader.read_string(14)?, "versatiles_v02");
