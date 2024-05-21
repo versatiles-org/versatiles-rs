@@ -1,4 +1,4 @@
-//! contains types like coordinates, bboxes, format types, ...
+//! Contains types like coordinates, bounding boxes (bboxes), format types, and more.
 
 mod blob;
 pub use blob::*;

@@ -1,3 +1,30 @@
+//! This module provides the `Blob` struct, a wrapper around `Vec<u8>` that provides additional methods
+//! for working with byte data.
+//!
+//! # Overview
+//!
+//! The `Blob` struct is a simple wrapper around a `Vec<u8>` that provides methods for creating, accessing,
+//! and manipulating byte data. It includes various utility methods for common operations on byte slices,
+//! such as creating slices, reading ranges, and converting to and from different types.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use versatiles::types::Blob;
+//!
+//! // Creating a new Blob from a vector of bytes
+//! let vec = vec![0, 1, 2, 3, 4, 5, 6, 7];
+//! let blob = Blob::from(&vec);
+//! assert_eq!(blob.len(), 8);
+//! assert_eq!(blob.get_range(2..5), &vec![2, 3, 4]);
+//! assert_eq!(blob.into_vec(), vec);
+//!
+//! // Creating a new Blob from a string
+//! let text = String::from("Xylofön");
+//! let blob = Blob::from(&text);
+//! assert_eq!(blob.as_str(), "Xylofön");
+//! ```
+
 use anyhow::{bail, Result};
 use bytes::Bytes;
 use std::fmt::Debug;
@@ -5,7 +32,7 @@ use std::ops::Range;
 
 use super::ByteRange;
 
-/// A simple wrapper around `bytesMut::Bytes` that provides additional methods for working with byte data.
+/// A simple wrapper around `Vec<u8>` that provides additional methods for working with byte data.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Blob(Vec<u8>);
 
@@ -16,16 +43,45 @@ impl Blob {
 		Blob(Vec::new())
 	}
 
+	/// Creates a `Blob` with the specified size, filled with zeros.
+	///
+	/// # Arguments
+	///
+	/// * `length` - The size of the `Blob`.
+	///
+	/// # Returns
+	///
+	/// A `Blob` filled with zeros of the specified size.
 	pub fn new_sized(length: usize) -> Blob {
 		Blob(vec![0u8; length])
 	}
 
 	/// Returns a new `Blob` containing the bytes in the specified range.
+	///
+	/// # Arguments
+	///
+	/// * `range` - The range of bytes to extract.
+	///
+	/// # Returns
+	///
+	/// A slice of the `Blob` in the specified range.
 	pub fn get_range(&self, range: Range<usize>) -> &[u8] {
 		&self.0[range]
 	}
 
 	/// Returns a new `Blob` containing the bytes in the specified range.
+	///
+	/// # Arguments
+	///
+	/// * `range` - The range of bytes to extract as a `ByteRange`.
+	///
+	/// # Returns
+	///
+	/// A new `Blob` containing the bytes in the specified range.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the range is out of bounds.
 	pub fn read_range(&self, range: &ByteRange) -> Result<Blob> {
 		if range.offset + range.length > self.0.len() as u64 {
 			bail!("read outside range")
@@ -49,14 +105,24 @@ impl Blob {
 	}
 
 	/// Returns the underlying bytes as a string, assuming they represent valid UTF-8 encoded text.
+	///
+	/// # Panics
+	///
+	/// Panics if the bytes are not valid UTF-8.
 	pub fn as_str(&self) -> &str {
 		std::str::from_utf8(&self.0).unwrap()
 	}
 
+	/// Converts the `Blob` into a `String`, assuming it contains valid UTF-8 encoded text.
+	///
+	/// # Panics
+	///
+	/// Panics if the bytes are not valid UTF-8.
 	pub fn into_string(self) -> String {
 		String::from_utf8(self.0).unwrap()
 	}
 
+	/// Returns a hexadecimal string representation of the underlying bytes.
 	pub fn as_hex(&self) -> String {
 		self
 			.0
@@ -76,15 +142,6 @@ impl Blob {
 		self.len() == 0
 	}
 }
-
-/*
-impl From<BytesMut> for Blob {
-	/// Converts a `bytes::BytesMut` instance into a `Blob`.
-	fn from(item: BytesMut) -> Self {
-		Blob(item)
-	}
-}
-*/
 
 impl From<Bytes> for Blob {
 	/// Converts a `bytes::Bytes` instance into a `Blob`.
@@ -108,7 +165,7 @@ impl From<&Vec<u8>> for Blob {
 }
 
 impl From<&[u8]> for Blob {
-	/// Converts a `Vec<u8>` instance into a `Blob`.
+	/// Converts a slice into a `Blob`.
 	fn from(item: &[u8]) -> Self {
 		Blob(item.to_vec())
 	}

@@ -1,9 +1,35 @@
+//! This module defines the `TileCompression` enum and associated methods and traits for handling
+//! various compression algorithms used in tiles. It includes functionality for converting
+//! compression types to file extensions, determining compression from filenames, and displaying
+//! compression types as strings.
+//!
+//! # Features
+//!
+//! - Supports `None`, `Gzip`, and `Brotli` compression algorithms.
+//! - Provides methods for getting file extensions and extracting compression type from filenames.
+//!
+//! # Examples
+//!
+//! ```
+//! use versatiles::types::TileCompression;
+//!
+//! // Getting file extensions for compression types
+//! assert_eq!(TileCompression::None.extension(), "");
+//! assert_eq!(TileCompression::Gzip.extension(), ".gz");
+//! assert_eq!(TileCompression::Brotli.extension(), ".br");
+//!
+//! // Determining compression type from filename
+//! let mut filename = String::from("file.txt.gz");
+//! assert_eq!(TileCompression::from_filename(&mut filename), TileCompression::Gzip);
+//! assert_eq!(filename, "file.txt");
+//! ```
+
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
 use enumset::EnumSetType;
 use std::fmt::Display;
 
-/// Enum representing possible compression algorithms
+/// Enum representing possible compression algorithms.
 #[cfg_attr(feature = "cli", derive(ValueEnum))]
 #[derive(Debug, EnumSetType, PartialOrd)]
 pub enum TileCompression {
@@ -23,6 +49,17 @@ impl Display for TileCompression {
 }
 
 impl TileCompression {
+	/// Returns the file extension associated with the compression type.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles::types::TileCompression;
+	///
+	/// assert_eq!(TileCompression::None.extension(), "");
+	/// assert_eq!(TileCompression::Gzip.extension(), ".gz");
+	/// assert_eq!(TileCompression::Brotli.extension(), ".br");
+	/// ```
 	pub fn extension(&self) -> &str {
 		match self {
 			TileCompression::None => "",
@@ -30,6 +67,24 @@ impl TileCompression {
 			TileCompression::Brotli => ".br",
 		}
 	}
+
+	/// Determines the compression type from a given filename.
+	///
+	/// This method also removes the compression extension from the filename if one is found.
+	///
+	/// # Arguments
+	///
+	/// * `filename` - A mutable reference to the filename string.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles::types::TileCompression;
+	///
+	/// let mut filename = String::from("file.txt.gz");
+	/// assert_eq!(TileCompression::from_filename(&mut filename), TileCompression::Gzip);
+	/// assert_eq!(filename, "file.txt");
+	/// ```
 	pub fn from_filename(filename: &mut String) -> TileCompression {
 		if let Some(index) = filename.rfind('.') {
 			let compression = match filename.get(index..).unwrap() {
@@ -39,7 +94,7 @@ impl TileCompression {
 			};
 
 			if compression != TileCompression::None {
-				filename.truncate(index)
+				filename.truncate(index);
 			}
 			return compression;
 		}

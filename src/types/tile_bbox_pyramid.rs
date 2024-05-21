@@ -1,15 +1,29 @@
+//! This module defines the `TileBBoxPyramid` struct, which represents a pyramid of tile bounding boxes
+//! across multiple zoom levels. It provides methods to create, manipulate, and query these bounding boxes.
+
 use super::{TileBBox, TileCoord3};
 use std::array::from_fn;
 use std::fmt;
 
 const MAX_ZOOM_LEVEL: u8 = 32;
 
+/// A struct that represents a pyramid of tile bounding boxes across multiple zoom levels.
 #[derive(Clone, Eq)]
 pub struct TileBBoxPyramid {
+	/// An array of tile bounding boxes, one for each zoom level up to `MAX_ZOOM_LEVEL`.
 	pub level_bbox: [TileBBox; MAX_ZOOM_LEVEL as usize],
 }
 
 impl TileBBoxPyramid {
+	/// Creates a new `TileBBoxPyramid` with full coverage up to the specified maximum zoom level.
+	///
+	/// # Arguments
+	///
+	/// * `max_zoom_level` - The maximum zoom level to be covered.
+	///
+	/// # Returns
+	///
+	/// A new `TileBBoxPyramid` instance.
 	pub fn new_full(max_zoom_level: u8) -> TileBBoxPyramid {
 		TileBBoxPyramid {
 			level_bbox: from_fn(|z| {
@@ -21,43 +35,110 @@ impl TileBBoxPyramid {
 			}),
 		}
 	}
+
+	/// Creates a new `TileBBoxPyramid` with empty coverage for all zoom levels.
+	///
+	/// # Returns
+	///
+	/// A new `TileBBoxPyramid` instance.
 	pub fn new_empty() -> TileBBoxPyramid {
 		TileBBoxPyramid {
 			level_bbox: from_fn(|z| TileBBox::new_empty(z as u8).unwrap()),
 		}
 	}
+
+	/// Intersects the current pyramid with the specified geographical bounding box.
+	///
+	/// # Arguments
+	///
+	/// * `geo_bbox` - A reference to an array of four `f64` values representing the geographical bounding box.
 	pub fn intersect_geo_bbox(&mut self, geo_bbox: &[f64; 4]) {
 		for (z, bbox) in self.level_bbox.iter_mut().enumerate() {
 			bbox.intersect_bbox(&TileBBox::from_geo(z as u8, geo_bbox).unwrap());
 		}
 	}
+
+	/// Adds a border to each level's bounding box.
+	///
+	/// # Arguments
+	///
+	/// * `x_min` - The minimum x-value of the border.
+	/// * `y_min` - The minimum y-value of the border.
+	/// * `x_max` - The maximum x-value of the border.
+	/// * `y_max` - The maximum y-value of the border.
 	pub fn add_border(&mut self, x_min: u32, y_min: u32, x_max: u32, y_max: u32) {
 		for bbox in self.level_bbox.iter_mut() {
 			bbox.add_border(x_min, y_min, x_max, y_max);
 		}
 	}
+
+	/// Intersects the current pyramid with another `TileBBoxPyramid`.
+	///
+	/// # Arguments
+	///
+	/// * `other_bbox_pyramid` - A reference to the other `TileBBoxPyramid`.
 	pub fn intersect(&mut self, other_bbox_pyramid: &TileBBoxPyramid) {
 		for (level, bbox) in self.level_bbox.iter_mut().enumerate() {
 			let other_bbox = other_bbox_pyramid.get_level_bbox(level as u8);
 			bbox.intersect_bbox(other_bbox);
 		}
 	}
+
+	/// Returns a reference to the bounding box at the specified zoom level.
+	///
+	/// # Arguments
+	///
+	/// * `level` - The zoom level.
+	///
+	/// # Returns
+	///
+	/// A reference to the `TileBBox` at the specified level.
 	pub fn get_level_bbox(&self, level: u8) -> &TileBBox {
 		&self.level_bbox[level as usize]
 	}
+
+	/// Sets the bounding box at the specified level.
+	///
+	/// # Arguments
+	///
+	/// * `bbox` - The new bounding box to set.
 	pub fn set_level_bbox(&mut self, bbox: TileBBox) {
 		let level = bbox.level as usize;
 		self.level_bbox[level] = bbox;
 	}
+
+	/// Includes a tile coordinate in the bounding box pyramid.
+	///
+	/// # Arguments
+	///
+	/// * `coord` - A reference to the `TileCoord3` to include.
 	pub fn include_coord(&mut self, coord: &TileCoord3) {
 		self.level_bbox[coord.get_z() as usize].include_tile(coord.get_x(), coord.get_y());
 	}
+
+	/// Includes a bounding box in the bounding box pyramid.
+	///
+	/// # Arguments
+	///
+	/// * `bbox` - A reference to the `TileBBox` to include.
 	pub fn include_bbox(&mut self, bbox: &TileBBox) {
 		self.level_bbox[bbox.level as usize].union_bbox(bbox);
 	}
+
+	/// Returns an iterator over the non-empty bounding boxes in the pyramid.
+	///
+	/// # Returns
+	///
+	/// An iterator over the non-empty `TileBBox` instances.
 	pub fn iter_levels(&self) -> impl Iterator<Item = &TileBBox> {
 		self.level_bbox.iter().filter(|bbox| !bbox.is_empty())
 	}
+
+	/// Returns the minimum zoom level that contains tiles.
+	///
+	/// # Returns
+	///
+	/// An `Option<u8>` representing the minimum zoom level, or `None` if all levels are empty.
 	pub fn get_zoom_min(&self) -> Option<u8> {
 		self
 			.level_bbox
@@ -65,6 +146,12 @@ impl TileBBoxPyramid {
 			.find(|bbox| !bbox.is_empty())
 			.map(|bbox| bbox.level)
 	}
+
+	/// Returns the maximum zoom level that contains tiles.
+	///
+	/// # Returns
+	///
+	/// An `Option<u8>` representing the maximum zoom level, or `None` if all levels are empty.
 	pub fn get_zoom_max(&self) -> Option<u8> {
 		self
 			.level_bbox
@@ -73,6 +160,12 @@ impl TileBBoxPyramid {
 			.find(|bbox| !bbox.is_empty())
 			.map(|bbox| bbox.level)
 	}
+
+	/// Returns a zoom level with a good number of tiles.
+	///
+	/// # Returns
+	///
+	/// An `Option<u8>` representing a good zoom level, or `None` if no levels contain more than 10 tiles.
 	pub fn get_good_zoom(&self) -> Option<u8> {
 		self
 			.level_bbox
@@ -81,6 +174,12 @@ impl TileBBoxPyramid {
 			.find(|bbox| bbox.count_tiles() > 10)
 			.map(|bbox| bbox.level)
 	}
+
+	/// Sets the minimum zoom level, clearing any bounding boxes below this level.
+	///
+	/// # Arguments
+	///
+	/// * `zoom_level_min` - The minimum zoom level to set.
 	pub fn set_zoom_min(&mut self, zoom_level_min: u8) {
 		for (index, bbox) in self.level_bbox.iter_mut().enumerate() {
 			if (index as u8) < zoom_level_min {
@@ -88,6 +187,12 @@ impl TileBBoxPyramid {
 			}
 		}
 	}
+
+	/// Sets the maximum zoom level, clearing any bounding boxes above this level.
+	///
+	/// # Arguments
+	///
+	/// * `zoom_level_max` - The maximum zoom level to set.
 	pub fn set_zoom_max(&mut self, zoom_level_max: u8) {
 		for (index, bbox) in self.level_bbox.iter_mut().enumerate() {
 			if (index as u8) > zoom_level_max {
@@ -95,12 +200,34 @@ impl TileBBoxPyramid {
 			}
 		}
 	}
+
+	/// Counts the total number of tiles in the pyramid.
+	///
+	/// # Returns
+	///
+	/// The total number of tiles in the pyramid.
 	pub fn count_tiles(&self) -> u64 {
-		return self.level_bbox.iter().map(|bbox| bbox.count_tiles()).sum();
+		self.level_bbox.iter().map(|bbox| bbox.count_tiles()).sum()
 	}
+
+	/// Checks if the pyramid is empty.
+	///
+	/// # Returns
+	///
+	/// `true` if the pyramid is empty, `false` otherwise.
 	pub fn is_empty(&self) -> bool {
 		self.level_bbox.iter().all(|bbox| bbox.is_empty())
 	}
+
+	/// Checks if the pyramid is full up to the specified maximum zoom level.
+	///
+	/// # Arguments
+	///
+	/// * `max_zoom_level` - The maximum zoom level to check.
+	///
+	/// # Returns
+	///
+	/// `true` if the pyramid is full up to the specified zoom level, `false` otherwise.
 	#[cfg(test)]
 	pub fn is_full(&self, max_zoom_level: u8) -> bool {
 		self.level_bbox.iter().all(|bbox| {
@@ -111,9 +238,14 @@ impl TileBBoxPyramid {
 			}
 		})
 	}
+
+	/// Returns the geographical bounding box of the pyramid.
+	///
+	/// # Returns
+	///
+	/// A four-element array of `f64` values representing the geographical bounding box.
 	pub fn get_geo_bbox(&self) -> [f64; 4] {
 		let level = self.get_zoom_max().unwrap();
-
 		self.get_level_bbox(level).as_geo_bbox(level)
 	}
 }

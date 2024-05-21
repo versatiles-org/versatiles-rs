@@ -1,3 +1,27 @@
+//! This module defines the `TileFormat` enum, representing various tile formats and their associated
+//! extensions. It includes methods for converting between tile formats and file extensions, and
+//! extracting the format from a filename.
+//!
+//! The `TileFormat` enum supports a variety of tile formats such as `AVIF`, `BIN`, `GEOJSON`, `JPG`,
+//! `JSON`, `PBF`, `PNG`, `SVG`, `TOPOJSON`, and `WEBP`. Each variant has a method to get its corresponding
+//! file extension and to extract the format from a filename.
+//!
+//! # Examples
+//!
+//! ```
+//! use versatiles::types::TileFormat;
+//!
+//! // Getting the file extension for a tile format
+//! let format = TileFormat::PNG;
+//! assert_eq!(format.extension(), ".png");
+//!
+//! // Extracting the tile format from a filename
+//! let mut filename = String::from("map.pbf");
+//! let format = TileFormat::from_filename(&mut filename).unwrap();
+//! assert_eq!(format, TileFormat::PBF);
+//! assert_eq!(filename, "map");
+//! ```
+
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
 use std::fmt::Display;
@@ -108,7 +132,7 @@ mod tests {
 			assert_eq!(
 				TileFormat::from_filename(&mut filename_string),
 				expected_format,
-				"Extracted compression does not match expected for filename: {filename}"
+				"Extracted format does not match expected for filename: {filename}"
 			);
 			assert_eq!(
 				filename_string, rest,

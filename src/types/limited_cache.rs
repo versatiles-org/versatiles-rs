@@ -1,23 +1,25 @@
+//! This module provides a generic limited cache that stores key-value pairs up to a specified size limit.
+//!
+//! The `LimitedCache` manages entries to ensure that it does not exceed a predefined number of elements.
+//! It uses a Least Recently Used (LRU) strategy for cache eviction once the limit is reached.
+//!
+//! # Type Parameters
+//! - `K`: The type of the keys stored in the cache.
+//! - `V`: The type of the values stored in the cache.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use versatiles::types::LimitedCache;
+//!
+//! let mut cache = LimitedCache::<i32, u64>::with_maximum_size(1000_000);
+//! cache.add(1, 42);
+//! assert_eq!(cache.get(&1), Some(42));
+//! ```
+
 use std::{collections::HashMap, fmt::Debug, hash::Hash, mem::size_of, ops::Div};
 
 /// A generic limited cache that stores key-value pairs up to a specified size limit.
-///
-/// The `LimitedCache` manages entries to ensure that it does not exceed a predefined number of elements.
-/// It uses a Least Recently Used (LRU) strategy for cache eviction once the limit is reached.
-///
-/// # Type Parameters
-/// - `K`: The type of the keys stored in the cache.
-/// - `V`: The type of the values stored in the cache.
-///
-/// # Examples
-///
-/// ```
-/// use versatiles::types::LimitedCache;
-///
-/// let mut cache = LimitedCache::<i32, u64>::with_maximum_size(1000_000);
-/// cache.add(1, 42);
-/// assert_eq!(cache.get(&1), Some(42));
-/// ```
 pub struct LimitedCache<K, V> {
 	cache: HashMap<K, (V, u64)>,
 	max_length: usize,
@@ -41,8 +43,8 @@ where
 	pub fn with_maximum_size(maximum_size: usize) -> Self {
 		let max_length = maximum_size.div(size_of::<K>() + size_of::<V>());
 		if max_length < 1 {
-			panic!("size is to small to store a single element")
-		};
+			panic!("size is too small to store a single element");
+		}
 		Self {
 			cache: HashMap::new(),
 			max_length,

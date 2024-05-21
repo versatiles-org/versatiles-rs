@@ -1,3 +1,27 @@
+//! This module defines the `TileCoord2` and `TileCoord3` structures, representing tile coordinates
+//! in two and three dimensions, respectively. It includes methods for creating and manipulating
+//! tile coordinates, converting them to geographic coordinates, and various utility functions.
+//!
+//! # Examples
+//!
+//! ```
+//! use versatiles::types::{TileCoord2, TileCoord3};
+//!
+//! // Creating a new TileCoord2 instance
+//! let coord2 = TileCoord2::new(3, 4);
+//! assert_eq!(coord2.get_x(), 3);
+//! assert_eq!(coord2.get_y(), 4);
+//!
+//! // Creating a new TileCoord3 instance
+//! let coord3 = TileCoord3::new(5, 6, 7).unwrap();
+//! assert_eq!(coord3.get_x(), 5);
+//! assert_eq!(coord3.get_y(), 6);
+//! assert_eq!(coord3.get_z(), 7);
+//!
+//! // Converting TileCoord3 to geographic coordinates
+//! let geo = coord3.as_geo();
+//! ```
+
 use anyhow::{ensure, Result};
 use std::{
 	f64::consts::PI as PI32,
@@ -16,6 +40,7 @@ impl TileCoord2 {
 	pub fn new(x: u32, y: u32) -> TileCoord2 {
 		TileCoord2 { x, y }
 	}
+
 	pub fn from_geo(x: f64, y: f64, z: u8, round_up: bool) -> Result<TileCoord2> {
 		ensure!(z <= 31, "z {z} must be <= 31");
 		ensure!(x >= -180., "x must be >= -180");
@@ -27,7 +52,7 @@ impl TileCoord2 {
 		let mut x = zoom * (x / 360.0 + 0.5);
 		let mut y = zoom * (0.5 - 0.5 * (y * PI32 / 360.0 + PI32 / 4.0).tan().ln() / PI32);
 
-		// add/substract a little offset to compensate for floating point rounding issues
+		// add/subtract a little offset to compensate for floating point rounding issues
 		if round_up {
 			x = x.sub(1e-6).floor();
 			y = y.sub(1e-6).floor();
@@ -41,16 +66,20 @@ impl TileCoord2 {
 			y: y.min(zoom - 1.0).max(0.0) as u32,
 		})
 	}
+
 	pub fn get_x(&self) -> u32 {
 		self.x
 	}
+
 	pub fn get_y(&self) -> u32 {
 		self.y
 	}
-	pub fn substract(&mut self, c: &TileCoord2) {
+
+	pub fn subtract(&mut self, c: &TileCoord2) {
 		self.x -= c.x;
 		self.y -= c.y;
 	}
+
 	pub fn scale_by(&mut self, s: u32) {
 		self.x *= s;
 		self.y *= s;
@@ -86,15 +115,19 @@ impl TileCoord3 {
 		ensure!(z <= 31, "z ({z}) must be <= 31");
 		Ok(TileCoord3 { x, y, z })
 	}
+
 	pub fn get_x(&self) -> u32 {
 		self.x
 	}
+
 	pub fn get_y(&self) -> u32 {
 		self.y
 	}
+
 	pub fn get_z(&self) -> u8 {
 		self.z
 	}
+
 	pub fn as_geo(&self) -> [f64; 2] {
 		let zoom: f64 = 2.0f64.powi(self.z as i32);
 
@@ -103,6 +136,7 @@ impl TileCoord3 {
 			((PI32 * (1.0 - 2.0 * (self.y as f64) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
 		]
 	}
+
 	pub fn as_geo_bbox(&self) -> [f64; 4] {
 		let zoom: f64 = 2.0f64.powi(self.z as i32);
 
@@ -113,12 +147,15 @@ impl TileCoord3 {
 			((PI32 * (1.0 - 2.0 * ((self.y + 1) as f64) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
 		]
 	}
+
 	pub fn as_coord2(&self) -> TileCoord2 {
 		TileCoord2 { x: self.x, y: self.y }
 	}
+
 	pub fn as_json(&self) -> String {
 		format!("{{x:{},y:{},z:{}}}", self.x, self.y, self.z)
 	}
+
 	pub fn is_valid(&self) -> bool {
 		if self.z > 30 {
 			return false;
@@ -126,6 +163,7 @@ impl TileCoord3 {
 		let max = 2u32.pow(self.z as u32);
 		(self.x < max) && (self.y < max)
 	}
+
 	pub fn get_sort_index(&self) -> u64 {
 		let size = 2u64.pow(self.z as u32);
 		let offset = (size * size - 1) / 3;
@@ -211,10 +249,10 @@ mod tests {
 	}
 
 	#[test]
-	fn tilecoord2_substract() {
+	fn tilecoord2_subtract() {
 		let mut coord1 = TileCoord2::new(5, 7);
 		let coord2 = TileCoord2::new(2, 3);
-		coord1.substract(&coord2);
+		coord1.subtract(&coord2);
 		assert_eq!(coord1, TileCoord2::new(3, 4));
 	}
 
@@ -269,16 +307,6 @@ mod tests {
 		TileCoord3::new(2, 2, 2).unwrap().hash(&mut hasher);
 		assert_eq!(hasher.finish(), 8202047236025635059);
 	}
-
-	/*
-	#[test]
-	fn as_geo_bbox() {
-		assert_eq!(
-			TileCoord3::new(33, 22, 6).as_geo_bbox(),
-			[5.625, 48.92249926375825, 11.25, 45.089035564831]
-		);
-	}
-	*/
 
 	#[test]
 	fn partial_cmp2() {
