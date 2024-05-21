@@ -120,3 +120,93 @@ impl GeoValue {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_geo_value_ord() {
+		// Test ordering within the same variant
+		assert!(GeoValue::from("a") < GeoValue::from("b"));
+		assert!(GeoValue::from(1.0f32) < GeoValue::from(2.0f32));
+		assert!(GeoValue::from(1.0f64) < GeoValue::from(2.0f64));
+		assert!(GeoValue::from(1) < GeoValue::from(2));
+		assert!(GeoValue::from(1u64) < GeoValue::from(2u64));
+		assert!(GeoValue::from(false) < GeoValue::from(true));
+
+		// Test ordering between different variants
+		assert!(GeoValue::from("a") < GeoValue::from(1.0f32));
+		assert!(GeoValue::from(1.0f32) < GeoValue::from(1.0f64));
+		assert!(GeoValue::from(1.0f64) < GeoValue::from(1));
+		assert!(GeoValue::from(1) < GeoValue::from(1u64));
+		assert!(GeoValue::from(1u64) < GeoValue::from(false));
+	}
+
+	#[test]
+	fn test_geo_value_partial_cmp() {
+		// Test partial_cmp within the same variant
+		assert_eq!(
+			GeoValue::from("a").partial_cmp(&GeoValue::from("b")),
+			Some(Ordering::Less)
+		);
+		assert_eq!(
+			GeoValue::from(1.0f32).partial_cmp(&GeoValue::from(2.0f32)),
+			Some(Ordering::Less)
+		);
+		assert_eq!(
+			GeoValue::from(1.0f64).partial_cmp(&GeoValue::from(2.0f64)),
+			Some(Ordering::Less)
+		);
+		assert_eq!(GeoValue::from(1).partial_cmp(&GeoValue::from(2)), Some(Ordering::Less));
+		assert_eq!(
+			GeoValue::from(1u64).partial_cmp(&GeoValue::from(2u64)),
+			Some(Ordering::Less)
+		);
+		assert_eq!(
+			GeoValue::from(false).partial_cmp(&GeoValue::from(true)),
+			Some(Ordering::Less)
+		);
+
+		// Test partial_cmp between different variants
+		assert_eq!(
+			GeoValue::from("a").partial_cmp(&GeoValue::from(1.0f32)),
+			Some(Ordering::Less)
+		);
+		assert_eq!(
+			GeoValue::from(1.0f32).partial_cmp(&GeoValue::from(1.0f64)),
+			Some(Ordering::Less)
+		);
+		assert_eq!(
+			GeoValue::from(1.0f64).partial_cmp(&GeoValue::from(1)),
+			Some(Ordering::Less)
+		);
+		assert_eq!(
+			GeoValue::from(1).partial_cmp(&GeoValue::from(1u64)),
+			Some(Ordering::Less)
+		);
+		assert_eq!(
+			GeoValue::from(1u64).partial_cmp(&GeoValue::from(false)),
+			Some(Ordering::Less)
+		);
+	}
+
+	#[test]
+	fn test_geo_value_eq() {
+		// Test equality within the same variant
+		assert_eq!(GeoValue::from("a"), GeoValue::from("a"));
+		assert_eq!(GeoValue::from(1.0f32), GeoValue::from(1.0f32));
+		assert_eq!(GeoValue::from(1.0f64), GeoValue::from(1.0f64));
+		assert_eq!(GeoValue::from(1), GeoValue::from(1));
+		assert_eq!(GeoValue::from(1u64), GeoValue::from(1u64));
+		assert_eq!(GeoValue::from(false), GeoValue::from(false));
+
+		// Test inequality within the same variant
+		assert_ne!(GeoValue::from("a"), GeoValue::from("b"));
+		assert_ne!(GeoValue::from(1.0f32), GeoValue::from(2.0f32));
+		assert_ne!(GeoValue::from(1.0f64), GeoValue::from(2.0f64));
+		assert_ne!(GeoValue::from(1), GeoValue::from(2));
+		assert_ne!(GeoValue::from(1u64), GeoValue::from(2u64));
+		assert_ne!(GeoValue::from(false), GeoValue::from(true));
+	}
+}
