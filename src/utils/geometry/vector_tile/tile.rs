@@ -49,7 +49,7 @@ impl VectorTile {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 	use super::*;
 	use crate::types::{DataReaderFile, DataReaderTrait};
 	use std::env::current_dir;

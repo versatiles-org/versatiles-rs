@@ -128,6 +128,7 @@ impl VectorTileLayer {
 	pub fn translate_tag_ids(&self, tag_ids: &[u32]) -> Result<GeoProperties> {
 		ensure!(tag_ids.len() % 2 == 0, "Tag IDs must be even");
 		let mut attributes = GeoProperties::new();
+
 		for i in 0..tag_ids.len().div(2) {
 			let tag_key = tag_ids[i * 2] as usize;
 			let tag_val = tag_ids[i * 2 + 1] as usize;
@@ -135,13 +136,13 @@ impl VectorTileLayer {
 				self
 					.property_keys
 					.get(tag_key)
-					.ok_or(anyhow!("Property key not found"))
+					.ok_or(anyhow!("Property key '{tag_key}' not found"))
 					.context("Failed to get property key")?
 					.to_owned(),
 				self
 					.property_values
 					.get(tag_val)
-					.ok_or(anyhow!("Property value not found"))
+					.ok_or(anyhow!("Property value '{tag_val}' not found"))
 					.context("Failed to get property value")?
 					.clone(),
 			);
@@ -177,10 +178,10 @@ impl VectorTileLayer {
 
 		fn make_lookup<T>(map: HashMap<T, u32>) -> (Vec<T>, HashMap<T, u32>)
 		where
-			T: Clone + Eq + std::hash::Hash,
+			T: Clone + Eq + std::hash::Hash + Ord,
 		{
 			let mut vec: Vec<(T, u32)> = map.into_iter().collect();
-			vec.sort_unstable_by_key(|(_, n)| *n);
+			vec.sort_unstable_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
 			let vec = vec.into_iter().map(|(v, _)| v).collect_vec();
 			let map: HashMap<T, u32> = HashMap::from_iter(vec.iter().enumerate().map(|(i, v)| (v.clone(), i as u32)));
 			(vec, map)
@@ -214,5 +215,115 @@ impl VectorTileLayer {
 			property_values: prop_val_vec,
 			version,
 		})
+	}
+
+	#[cfg(test)]
+	pub fn new_example() -> Self {
+		VectorTileLayer::from_features(String::from("layer1"), vec![Feature::new_example()], 4096, 1).unwrap()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::types::ValueReaderSlice;
+
+	use super::*;
+
+	#[test]
+	fn test_read_vector_tile_layer() -> Result<()> {
+		// Example data for a vector tile layer
+		let data = vec![
+			0x0A, 0x05, b'h', b'e', b'l', b'l', b'o', // name: "hello"
+			18, 50, 8, 3, 18, 2, 1, 2, 24, 3, 34, 40, 9, 0, 0, 18, 10, 0, 3, 8, 7, 9, 1, 5, 18, 2, 2, 0, 1, 7, 9, 6, 1,
+			26, 6, 0, 0, 8, 5, 0, 7, 9, 2, 5, 26, 0, 4, 2, 0, 0, 3, 7, // feature
+			0x1A, 0x03, b'k', b'e', b'y', // property key: "key"
+			0x22, 0x04, 0x0A, 0x02, b'v', b'l', // property value: "vl"
+		];
+		let mut reader = ValueReaderSlice::new_le(&data);
+		let layer = VectorTileLayer::read(&mut reader)?;
+
+		assert_eq!(layer.name, "hello");
+		assert_eq!(layer.features.len(), 1);
+		assert_eq!(layer.property_keys, vec!["key"]);
+		assert_eq!(layer.property_values, vec![GeoValue::from("vl")]);
+		assert_eq!(layer.extent, 4096);
+		assert_eq!(layer.version, 1);
+		Ok(())
+	}
+
+	#[test]
+	fn test_to_blob() -> Result<()> {
+		let layer = VectorTileLayer {
+			name: "hello".to_string(),
+			features: vec![VectorTileFeature::new_example()],
+			property_keys: vec!["key".to_string()],
+			property_values: vec![GeoValue::String("vl".to_string())],
+			extent: 4096,
+			version: 1,
+		};
+		let blob = layer.to_blob()?;
+		let expected_data = vec![
+			0x0A, 0x05, b'h', b'e', b'l', b'l', b'o', // name: "hello"
+			18, 50, 8, 3, 18, 2, 1, 2, 24, 3, 34, 40, 9, 0, 0, 18, 10, 0, 3, 8, 7, 9, 1, 5, 18, 2, 2, 0, 1, 7, 9, 6, 1,
+			26, 6, 0, 0, 8, 5, 0, 7, 9, 2, 5, 26, 0, 4, 2, 0, 0, 3, 7, // feature
+			0x1A, 0x03, b'k', b'e', b'y', // property key: "key"
+			0x22, 0x04, 0x0A, 0x02, b'v', b'l', // property value: "vl"
+		];
+		assert_eq!(blob.into_vec(), expected_data);
+		Ok(())
+	}
+
+	#[test]
+	fn test_translate_tag_ids() -> Result<()> {
+		let layer = VectorTileLayer {
+			name: "hello".to_string(),
+			features: vec![],
+			property_keys: vec!["key".to_string()],
+			property_values: vec![GeoValue::String("vl".to_string())],
+			extent: 4096,
+			version: 1,
+		};
+		let tag_ids = vec![0, 0]; // (key, value)
+		let properties = layer.translate_tag_ids(&tag_ids)?;
+		let expected_properties = HashMap::from([("key".to_string(), GeoValue::String("vl".to_string()))]);
+		assert_eq!(properties, expected_properties);
+		Ok(())
+	}
+
+	#[test]
+	fn test_to_features() -> Result<()> {
+		let feature = Feature::new_example();
+		let layer = VectorTileLayer::from_features("hello".to_string(), vec![feature.clone()], 2048, 3)?;
+		let features = layer.to_features()?;
+		println!("{:?}", features[0].properties);
+		assert_eq!(features.len(), 1);
+		assert_eq!(
+			features[0].properties.as_ref().unwrap()["name"],
+			GeoValue::from("Berlin")
+		);
+		Ok(())
+	}
+
+	#[test]
+	fn test_from_features() -> Result<()> {
+		let features = vec![Feature::new_example()];
+		let layer = VectorTileLayer::from_features("hello".to_string(), features, 4096, 1)?;
+		assert_eq!(layer.name, "hello");
+		assert_eq!(layer.features.len(), 1);
+		assert_eq!(
+			layer.property_keys,
+			vec![
+				"it_would_actually_be_quite_a_nice_place_if_so_many_hipsters_hadn_t_moved_there",
+				"name",
+				"population"
+			]
+		);
+		assert_eq!(
+			layer.property_values,
+			vec![GeoValue::from("Berlin"), GeoValue::from(3755251), GeoValue::from(true)]
+		);
+		assert_eq!(layer.extent, 4096);
+		assert_eq!(layer.version, 1);
+		Ok(())
 	}
 }

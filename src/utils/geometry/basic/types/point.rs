@@ -28,3 +28,21 @@ impl From<&[f64; 2]> for PointGeometry {
 		}
 	}
 }
+
+impl From<[f64; 2]> for PointGeometry {
+	fn from(value: [f64; 2]) -> Self {
+		Self {
+			x: value[0],
+			y: value[1],
+		}
+	}
+}
+
+impl From<[i64; 2]> for PointGeometry {
+	fn from(value: [i64; 2]) -> Self {
+		Self {
+			x: value[0] as f64,
+			y: value[1] as f64,
+		}
+	}
+}

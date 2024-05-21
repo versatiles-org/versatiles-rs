@@ -11,7 +11,7 @@ use crate::{
 use anyhow::{bail, ensure, Context, Result};
 use byteorder::LE;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct VectorTileFeature {
 	pub id: Option<u64>,
 	pub tag_ids: Vec<u32>,
@@ -315,6 +315,11 @@ impl VectorTileFeature {
 			geom_type,
 			geom_data,
 		})
+	}
+
+	#[cfg(test)]
+	pub fn new_example() -> Self {
+		VectorTileFeature::from_geometry(Some(3), vec![1, 2], &Geometry::new_example()).unwrap()
 	}
 }
 

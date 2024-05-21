@@ -1,6 +1,8 @@
 #![allow(dead_code)]
 
+use super::PointGeometry;
 use std::fmt::Debug;
+use Geometry::*;
 
 pub type LineStringGeometry = Vec<PointGeometry>;
 pub type MultiLineStringGeometry = Vec<LineStringGeometry>;
@@ -18,10 +20,6 @@ pub enum Geometry {
 	MultiLineString(MultiLineStringGeometry),
 	MultiPolygon(MultiPolygonGeometry),
 }
-
-use Geometry::*;
-
-use super::PointGeometry;
 
 impl Geometry {
 	pub fn new_point(geometry: PointGeometry) -> Self {
@@ -62,6 +60,37 @@ impl Geometry {
 			MultiPolygon(g) => MultiPolygon(g),
 		}
 	}
+
+	#[cfg(test)]
+	pub fn new_example() -> Self {
+		Self::new_multi_polygon(parse3(
+			vec![
+				vec![
+					vec![[0.0, 0.0], [5.0, 0.0], [2.5, 4.0], [0.0, 0.0]],
+					vec![[2.0, 1.0], [2.5, 2.0], [3.0, 1.0], [2.0, 1.0]],
+				],
+				vec![
+					vec![[6.0, 0.0], [9.0, 0.0], [9.0, 4.0], [6.0, 4.0], [6.0, 0.0]],
+					vec![[7.0, 1.0], [7.0, 3.0], [8.0, 3.0], [8.0, 1.0], [7.0, 1.0]],
+				],
+			]
+			.into(),
+		))
+	}
+}
+
+fn parse3<I>(value: Vec<Vec<Vec<I>>>) -> MultiPolygonGeometry
+where
+	PointGeometry: From<I>,
+{
+	value
+		.into_iter()
+		.map(|a| {
+			a.into_iter()
+				.map(|b| b.into_iter().map(|c| PointGeometry::from(c)).collect())
+				.collect()
+		})
+		.collect()
 }
 
 impl Debug for Geometry {
@@ -91,5 +120,15 @@ impl AreaTrait for RingGeometry {
 			p2 = p1
 		}
 		sum
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	//use super::Geometry;
+
+	#[test]
+	fn test_area() {
+		//let multipolygon = Geometry::new_example();
 	}
 }

@@ -170,7 +170,7 @@ impl TilesReader for PMTilesReader {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 	use crate::assert_wildcard;
 
 	use super::*;
