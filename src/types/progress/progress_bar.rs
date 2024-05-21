@@ -1,4 +1,24 @@
-use super::traits::ProgressTrait;
+//! This module provides a `ProgressBar` struct that implements a terminal-based progress bar.
+//!
+//! # Overview
+//!
+//! The `ProgressBar` struct represents a progress bar that can be used to display the progress of a task in the terminal.
+//! It implements the `ProgressTrait` trait, which provides methods for initializing the progress bar, setting its position,
+//! incrementing its value, and finishing or removing it.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use versatiles::types::progress::{ProgressBar, ProgressTrait};
+//!
+//! let mut progress = ProgressBar::new();
+//! progress.init("Processing", 100);
+//! progress.set_position(50);
+//! progress.inc(10);
+//! progress.finish();
+//! ```
+
+use super::ProgressTrait;
 use std::{
 	io::Write,
 	time::{Duration, SystemTime},
@@ -15,12 +35,14 @@ pub struct ProgressBar {
 	message: String,
 	/// The time at which the task was started.
 	start_time: SystemTime,
+	/// The time at which the progress bar was last updated.
 	update_time: SystemTime,
 	/// The current value of the progress bar.
 	value: u64,
 }
 
 impl ProgressBar {
+	/// Draws the progress bar in the terminal.
 	fn draw(&mut self) {
 		if self.max_value == 0 {
 			return;
@@ -119,7 +141,7 @@ impl ProgressTrait for ProgressBar {
 		eprintln!();
 	}
 
-	/// Finishes the progress bar and sets its value to the maximum.
+	/// Removes the progress bar from the terminal.
 	fn remove(&mut self) {
 		eprint!("\r\x1B[2K");
 		std::io::stdout().flush().unwrap();
@@ -136,7 +158,6 @@ impl ProgressTrait for ProgressBar {
 /// # Returns
 ///
 /// A string representing the formatted duration.
-///
 fn format_duration(duration: Duration) -> String {
 	let mut t = duration.as_secs();
 	let seconds = t % 60;
@@ -162,7 +183,6 @@ fn format_duration(duration: Duration) -> String {
 /// # Returns
 ///
 /// A string representing the formatted integer.
-///
 fn format_integer(value: u64) -> String {
 	value
 		.to_string()
@@ -175,6 +195,15 @@ fn format_integer(value: u64) -> String {
 		.join("'")
 }
 
+/// Formats a floating-point value to a string with varying decimal places based on its magnitude.
+///
+/// # Arguments
+///
+/// * `value` - A floating-point value to format.
+///
+/// # Returns
+///
+/// A string representing the formatted floating-point value.
 fn format_float(mut value: f64) -> String {
 	value *= 1.0000000000001;
 	if value > 1000.0 {
