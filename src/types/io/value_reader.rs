@@ -9,22 +9,22 @@ use std::marker::PhantomData;
 
 pub trait SeekRead: Seek + Read {}
 
-pub trait ValueReader<'a, E: ByteOrder> {
+pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	fn get_reader(&mut self) -> &mut dyn SeekRead;
 
 	fn len(&self) -> u64;
-	fn position(&self) -> u64;
+	fn position(&mut self) -> u64;
 	fn set_position(&mut self, position: u64) -> Result<()>;
 
 	fn is_empty(&self) -> bool {
 		self.len() == 0
 	}
 
-	fn remaining(&self) -> u64 {
+	fn remaining(&mut self) -> u64 {
 		self.len() - self.position()
 	}
 
-	fn has_remaining(&self) -> bool {
+	fn has_remaining(&mut self) -> bool {
 		self.remaining() > 0
 	}
 
@@ -78,8 +78,6 @@ pub trait ValueReader<'a, E: ByteOrder> {
 		Ok(self.get_reader().read_u64::<E>()?)
 	}
 
-	fn get_sub_reader(&mut self, length: u64) -> Result<Box<dyn ValueReader<'a, E> + 'a>>;
-
 	fn read_blob(&mut self, length: u64) -> Result<Blob> {
 		let mut blob = Blob::new_sized(length as usize);
 		self.get_reader().read_exact(blob.as_mut_slice())?;
@@ -103,6 +101,20 @@ pub trait ValueReader<'a, E: ByteOrder> {
 		Ok(((value >> 3) as u32, (value & 0x07) as u8))
 	}
 
+	fn get_sub_reader<'b>(&'b mut self, length: u64) -> Result<Box<dyn ValueReader<'b, E> + 'b>>
+	where
+		E: 'b;
+
+	fn get_pbf_sub_reader<'b>(&'b mut self) -> Result<Box<dyn ValueReader<'b, E> + 'b>>
+	where
+		E: 'b,
+	{
+		let length = self
+			.read_varint()
+			.context("Failed to read varint for sub-reader length")?;
+		self.get_sub_reader(length).context("Failed to get sub-reader")
+	}
+
 	fn read_pbf_packed_uint32(&mut self) -> Result<Vec<u32>> {
 		let mut reader = self
 			.get_pbf_sub_reader()
@@ -115,14 +127,8 @@ pub trait ValueReader<'a, E: ByteOrder> {
 					.context("Failed to read varint for packed uint32")? as u32,
 			);
 		}
+		drop(reader);
 		Ok(values)
-	}
-
-	fn get_pbf_sub_reader(&mut self) -> Result<Box<dyn ValueReader<'a, E> + 'a>> {
-		let length = self
-			.read_varint()
-			.context("Failed to read varint for sub-reader length")?;
-		self.get_sub_reader(length).context("Failed to get sub-reader")
 	}
 
 	fn read_pbf_string(&mut self) -> Result<String> {

@@ -2,7 +2,7 @@
 
 use super::{layer::VectorTileLayer, utils::BlobWriterPBF};
 use crate::{
-	types::{Blob, ValueReader, ValueReaderBlob},
+	types::{Blob, ValueReader, ValueReaderSlice},
 	utils::BlobWriter,
 };
 use anyhow::{bail, Context, Result};
@@ -14,7 +14,7 @@ pub struct VectorTile {
 
 impl VectorTile {
 	pub fn from_blob(blob: &Blob) -> Result<VectorTile> {
-		let mut reader = ValueReaderBlob::new_le(blob);
+		let mut reader = ValueReaderSlice::new_le(blob.as_slice());
 
 		let mut tile = VectorTile::default();
 		while reader.has_remaining() {

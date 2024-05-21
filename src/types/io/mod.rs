@@ -28,3 +28,9 @@ pub use value_reader::*;
 
 mod value_reader_blob;
 pub use value_reader_blob::*;
+
+mod value_reader_file;
+pub use value_reader_file::*;
+
+mod value_reader_slice;
+pub use value_reader_slice::*;

@@ -1,6 +1,6 @@
 use super::{Directory, EntryV3};
 use crate::{
-	types::{Blob, ByteRange, TileCompression, ValueReader, ValueReaderBlob},
+	types::{Blob, ByteRange, TileCompression, ValueReader, ValueReaderSlice},
 	utils::{compress, BlobWriter},
 };
 use anyhow::{bail, Result};
@@ -36,7 +36,7 @@ impl EntriesV3 {
 	/// Panics if the number of entries exceeds 10 billion, which is considered an error.
 	pub fn from_blob(data: &Blob) -> Result<Self> {
 		let mut entries: Vec<EntryV3> = Vec::new();
-		let mut reader = ValueReaderBlob::new_le(data);
+		let mut reader = ValueReaderSlice::new_le(data.as_slice());
 
 		let num_entries = reader.read_varint()? as usize;
 

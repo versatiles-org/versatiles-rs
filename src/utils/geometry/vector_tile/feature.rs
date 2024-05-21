@@ -2,7 +2,7 @@
 
 use super::{geometry_type::GeomType, layer::VectorTileLayer, utils::BlobWriterPBF};
 use crate::{
-	types::{Blob, ValueReader, ValueReaderBlob},
+	types::{Blob, ValueReader, ValueReaderSlice},
 	utils::{
 		geometry::basic::{
 			AreaTrait, Feature, GeoProperties, Geometry, LineStringGeometry, MultiPointGeometry, PointGeometry,
@@ -95,7 +95,7 @@ impl VectorTileFeature {
 		// https://github.com/mapbox/vector-tile-spec/blob/master/2.1/README.md#43-geometry-encoding
 
 		let geometry = {
-			let mut reader = ValueReaderBlob::new_le(&self.geom_data);
+			let mut reader = ValueReaderSlice::new_le(self.geom_data.as_slice());
 
 			let mut lines: Vec<Vec<PointGeometry>> = Vec::new();
 			let mut line: Vec<PointGeometry> = Vec::new();

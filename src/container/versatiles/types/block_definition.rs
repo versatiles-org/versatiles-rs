@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::{
-	types::{Blob, ByteRange, TileBBox, TileCoord3, ValueReader, ValueReaderBlob},
+	types::{Blob, ByteRange, TileBBox, TileCoord3, ValueReader, ValueReaderSlice},
 	utils::BlobWriter,
 };
 use anyhow::{ensure, Result};
@@ -42,7 +42,7 @@ impl BlockDefinition {
 	}
 
 	pub fn from_blob(blob: &Blob) -> Result<Self> {
-		let mut reader = ValueReaderBlob::new_be(blob);
+		let mut reader = ValueReaderSlice::new_be(blob.as_slice());
 
 		let z = reader.read_u8()?;
 		let x = reader.read_u32()?;

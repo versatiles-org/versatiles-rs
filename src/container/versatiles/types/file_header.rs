@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::{
-	types::{Blob, ByteRange, DataReader, TileCompression, TileFormat, ValueReader, ValueReaderBlob},
+	types::{Blob, ByteRange, DataReader, TileCompression, TileFormat, ValueReader, ValueReaderSlice},
 	utils::BlobWriter,
 };
 use anyhow::{bail, ensure, Result};
@@ -51,7 +51,7 @@ impl FileHeader {
 	pub async fn from_reader(reader: &mut DataReader) -> Result<FileHeader> {
 		let range = ByteRange::new(0, HEADER_LENGTH);
 		let blob = reader.read_range(&range).await?;
-		FileHeader::from_blob(blob)
+		FileHeader::from_blob(&blob)
 	}
 
 	pub fn to_blob(&self) -> Result<Blob> {
@@ -102,12 +102,12 @@ impl FileHeader {
 		Ok(writer.into_blob())
 	}
 
-	fn from_blob(blob: Blob) -> Result<FileHeader> {
+	fn from_blob(blob: &Blob) -> Result<FileHeader> {
 		if blob.len() != HEADER_LENGTH {
 			bail!("'{blob:?}' is not a valid versatiles header. A header should be {HEADER_LENGTH} bytes long.");
 		}
 
-		let mut reader = ValueReaderBlob::new_be(&blob);
+		let mut reader = ValueReaderSlice::new_be(blob.as_slice());
 		let magic_word = reader.read_string(14)?;
 		if &magic_word != "versatiles_v02" {
 			bail!("'{blob:?}' is not a valid versatiles header. A header should start with 'versatiles_v02'");
@@ -172,7 +172,7 @@ mod tests {
 			header1.meta_range = ByteRange::new(a, b);
 			header1.blocks_range = ByteRange::new(c, d);
 
-			let header2 = FileHeader::from_blob(header1.to_blob().unwrap()).unwrap();
+			let header2 = FileHeader::from_blob(&header1.to_blob().unwrap()).unwrap();
 			assert_eq!(header1, header2);
 			assert_eq!(&header2.tile_format, tile_format);
 			assert_eq!(&header2.compression, compression);
@@ -217,7 +217,7 @@ mod tests {
 		)?;
 
 		let blob = header.to_blob()?;
-		let mut reader = ValueReaderBlob::new_be(&blob);
+		let mut reader = ValueReaderSlice::new_be(blob.as_slice());
 
 		assert_eq!(blob.len(), HEADER_LENGTH);
 		assert_eq!(reader.read_string(14)?, "versatiles_v02");
@@ -232,7 +232,7 @@ mod tests {
 		assert_eq!(reader.read_range()?, ByteRange::empty());
 		assert_eq!(reader.read_range()?, ByteRange::empty());
 
-		let header2 = FileHeader::from_blob(blob)?;
+		let header2 = FileHeader::from_blob(&blob)?;
 
 		assert_eq!(header2.zoom_range, [3, 8]);
 		assert_eq!(header2.bbox, [-1800000000, -850511300, 1800000000, 850511300]);
@@ -287,7 +287,7 @@ mod tests {
 		for tile_format in tile_formats {
 			let header = FileHeader::new(&tile_format, &compression, zoom_range, &bbox).unwrap();
 			let blob = header.to_blob().unwrap();
-			let header2 = FileHeader::from_blob(blob).unwrap();
+			let header2 = FileHeader::from_blob(&blob).unwrap();
 
 			assert_eq!(&header2.tile_format, &tile_format);
 			assert_eq!(&header2.compression, &compression);
@@ -305,7 +305,7 @@ mod tests {
 		for compression in compressions {
 			let header = FileHeader::new(&tile_format, &compression, zoom_range, &bbox).unwrap();
 			let blob = header.to_blob().unwrap();
-			let header2 = FileHeader::from_blob(blob).unwrap();
+			let header2 = FileHeader::from_blob(&blob).unwrap();
 
 			assert_eq!(&header2.tile_format, &tile_format);
 			assert_eq!(&header2.compression, &compression);
@@ -315,14 +315,14 @@ mod tests {
 	#[test]
 	fn invalid_header_length() {
 		let invalid_blob = Blob::from(vec![0; HEADER_LENGTH as usize - 1]);
-		assert!(FileHeader::from_blob(invalid_blob).is_err());
+		assert!(FileHeader::from_blob(&invalid_blob).is_err());
 	}
 
 	#[test]
 	fn invalid_magic_word() {
 		let mut invalid_blob = Blob::from(vec![0; HEADER_LENGTH as usize]);
 		invalid_blob.as_mut_slice()[0..14].copy_from_slice(b"invalid_header");
-		assert!(FileHeader::from_blob(invalid_blob).is_err());
+		assert!(FileHeader::from_blob(&invalid_blob).is_err());
 	}
 
 	#[test]
@@ -334,7 +334,7 @@ mod tests {
 		invalid_blob.as_mut_slice()[14] = 0xFF; // Set an unknown tile format value
 
 		let result = catch_unwind(|| {
-			FileHeader::from_blob(invalid_blob).unwrap();
+			FileHeader::from_blob(&invalid_blob).unwrap();
 		});
 
 		assert!(result.is_err());
@@ -349,7 +349,7 @@ mod tests {
 		invalid_blob.as_mut_slice()[15] = 0xFF; // Set an unknown compression value
 
 		let result = catch_unwind(|| {
-			FileHeader::from_blob(invalid_blob).unwrap();
+			FileHeader::from_blob(&invalid_blob).unwrap();
 		});
 
 		assert!(result.is_err());
