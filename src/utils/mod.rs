@@ -1,9 +1,6 @@
 #[cfg(test)]
 pub mod assert;
 
-mod blob_writer;
-pub use blob_writer::*;
-
 mod compression;
 pub use compression::*;
 

@@ -1,8 +1,7 @@
 use super::{PMTilesCompression, PMTilesType};
 use crate::{
 	container::TilesReaderParameters,
-	types::{Blob, ByteRange, ValueReader, ValueReaderSlice},
-	utils::BlobWriter,
+	types::{Blob, ByteRange, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 };
 use anyhow::{ensure, Result};
 
@@ -63,7 +62,7 @@ impl HeaderV3 {
 	}
 
 	pub fn serialize(&self) -> Result<Blob> {
-		let mut writer = BlobWriter::new_le();
+		let mut writer = ValueWriterBlob::new_le();
 		writer.write_slice(b"PMTiles")?;
 		writer.write_u8(3)?; // Version
 

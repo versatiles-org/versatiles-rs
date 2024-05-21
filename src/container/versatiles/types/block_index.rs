@@ -2,8 +2,8 @@
 
 use super::BlockDefinition;
 use crate::{
-	types::{Blob, ByteRange, TileBBoxPyramid, TileCoord3},
-	utils::{compress_brotli, decompress_brotli, BlobWriter},
+	types::{Blob, ByteRange, TileBBoxPyramid, TileCoord3, ValueWriter, ValueWriterBlob},
+	utils::{compress_brotli, decompress_brotli},
 };
 use anyhow::{ensure, Result};
 use std::{collections::HashMap, ops::Div};
@@ -55,7 +55,7 @@ impl BlockIndex {
 	}
 
 	pub fn as_blob(&self) -> Result<Blob> {
-		let mut writer = BlobWriter::new_be();
+		let mut writer = ValueWriterBlob::new_be();
 		for (_coord, block) in self.lookup.iter() {
 			writer.write_blob(&block.as_blob()?)?;
 		}

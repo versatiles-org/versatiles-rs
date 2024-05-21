@@ -1,7 +1,7 @@
 use super::{Directory, EntryV3};
 use crate::{
-	types::{Blob, ByteRange, TileCompression, ValueReader, ValueReaderSlice},
-	utils::{compress, BlobWriter},
+	types::{Blob, ByteRange, TileCompression, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+	utils::compress,
 };
 use anyhow::{bail, Result};
 use std::{
@@ -261,7 +261,7 @@ impl<'a> EntriesSliceV3<'a> {
 	/// # Errors
 	/// Returns an error if any part of the serialization process fails.
 	pub fn serialize_entries(&self) -> Result<Blob> {
-		let mut writer = BlobWriter::new_le();
+		let mut writer = ValueWriterBlob::new_le();
 		let entries = self.entries;
 
 		// Serialize the length of entries
@@ -388,7 +388,7 @@ mod tests {
 	/// Verifies that `EntriesV3` can handle the maximum allowed number of entries without panicking.
 	#[test]
 	fn test_excessive_entries_panic() {
-		let mut writer = BlobWriter::new_le();
+		let mut writer = ValueWriterBlob::new_le();
 		// Mocking an excessively large number of entries, e.g., 10 billion + 1
 		writer.write_varint(10_000_000_001).unwrap();
 		let blob = writer.into_blob();

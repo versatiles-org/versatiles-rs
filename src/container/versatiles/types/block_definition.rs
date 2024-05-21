@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 
-use crate::{
-	types::{Blob, ByteRange, TileBBox, TileCoord3, ValueReader, ValueReaderSlice},
-	utils::BlobWriter,
+use crate::types::{
+	Blob, ByteRange, TileBBox, TileCoord3, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob,
 };
 use anyhow::{ensure, Result};
 use std::{fmt, ops::Div};
@@ -86,7 +85,7 @@ impl BlockDefinition {
 	}
 
 	pub fn as_blob(&self) -> Result<Blob> {
-		let mut writer = BlobWriter::new_be();
+		let mut writer = ValueWriterBlob::new_be();
 		writer.write_u8(self.offset.get_z())?;
 		writer.write_u32(self.offset.get_x())?;
 		writer.write_u32(self.offset.get_y())?;

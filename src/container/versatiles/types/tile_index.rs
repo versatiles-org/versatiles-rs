@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
 use crate::{
-	types::{Blob, ByteRange, ValueReader, ValueReaderBlob},
-	utils::{compress_brotli, decompress_brotli, BlobWriter},
+	types::{Blob, ByteRange, ValueReader, ValueReaderBlob, ValueWriter, ValueWriterBlob},
+	utils::{compress_brotli, decompress_brotli},
 };
 use anyhow::{ensure, Result};
 use std::ops::Div;
@@ -48,7 +48,7 @@ impl TileIndex {
 	}
 
 	pub fn as_blob(&self) -> Result<Blob> {
-		let mut writer = BlobWriter::new_be();
+		let mut writer = ValueWriterBlob::new_be();
 		for range in &self.index {
 			writer.write_u64(range.offset)?;
 			writer.write_u32(range.length as u32)?;

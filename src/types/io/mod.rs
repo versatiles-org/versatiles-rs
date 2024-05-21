@@ -34,3 +34,9 @@ pub use value_reader_file::*;
 
 mod value_reader_slice;
 pub use value_reader_slice::*;
+
+mod value_writer;
+pub use value_writer::*;
+
+mod value_writer_blob;
+pub use value_writer_blob::*;

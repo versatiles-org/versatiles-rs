@@ -1,10 +1,7 @@
 #![allow(dead_code)]
 
-use super::{layer::VectorTileLayer, utils::BlobWriterPBF};
-use crate::{
-	types::{Blob, ValueReader, ValueReaderSlice},
-	utils::BlobWriter,
-};
+use super::layer::VectorTileLayer;
+use crate::types::{Blob, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob};
 use anyhow::{bail, Context, Result};
 
 #[derive(Debug, Default, PartialEq)]
@@ -38,7 +35,7 @@ impl VectorTile {
 	}
 
 	pub fn to_blob(&self) -> Result<Blob> {
-		let mut writer = BlobWriter::new_le();
+		let mut writer = ValueWriterBlob::new_le();
 
 		for layer in self.layers.iter() {
 			writer.write_pbf_key(3, 2).context("Failed to write PBF key")?;

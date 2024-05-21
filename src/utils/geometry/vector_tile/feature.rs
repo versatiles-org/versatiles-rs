@@ -1,14 +1,11 @@
 #![allow(dead_code)]
 
-use super::{geometry_type::GeomType, layer::VectorTileLayer, utils::BlobWriterPBF};
+use super::{geometry_type::GeomType, layer::VectorTileLayer};
 use crate::{
-	types::{Blob, ValueReader, ValueReaderSlice},
-	utils::{
-		geometry::basic::{
-			AreaTrait, Feature, GeoProperties, Geometry, LineStringGeometry, MultiPointGeometry, PointGeometry,
-			PolygonGeometry,
-		},
-		BlobWriter,
+	types::{Blob, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+	utils::geometry::basic::{
+		AreaTrait, Feature, GeoProperties, Geometry, LineStringGeometry, MultiPointGeometry, PointGeometry,
+		PolygonGeometry,
 	},
 };
 use anyhow::{bail, ensure, Context, Result};
@@ -52,7 +49,7 @@ impl VectorTileFeature {
 	}
 
 	pub fn to_blob(&self) -> Result<Blob> {
-		let mut writer = BlobWriter::new_le();
+		let mut writer = ValueWriterBlob::new_le();
 
 		if let Some(id) = self.id {
 			writer
@@ -224,7 +221,7 @@ impl VectorTileFeature {
 	}
 
 	pub fn from_geometry(id: Option<u64>, tag_ids: Vec<u32>, geometry: &Geometry) -> Result<VectorTileFeature> {
-		fn write_point(writer: &mut BlobWriter<LE>, point0: &mut (i64, i64), point: &PointGeometry) -> Result<()> {
+		fn write_point(writer: &mut ValueWriterBlob<LE>, point0: &mut (i64, i64), point: &PointGeometry) -> Result<()> {
 			let x = point.x.round() as i64;
 			let y = point.y.round() as i64;
 			writer.write_svarint(x - point0.0)?;
@@ -235,7 +232,7 @@ impl VectorTileFeature {
 		}
 
 		fn write_points(points: &Vec<&PointGeometry>) -> Result<Blob> {
-			let mut writer = BlobWriter::new_le();
+			let mut writer = ValueWriterBlob::new_le();
 			let point0 = &mut (0i64, 0i64);
 			writer.write_varint((points.len() as u64) << 3 | 0x1)?;
 			for point in points {
@@ -245,7 +242,7 @@ impl VectorTileFeature {
 		}
 
 		fn write_line_strings(line_strings: &Vec<&LineStringGeometry>) -> Result<Blob> {
-			let mut writer = BlobWriter::new_le();
+			let mut writer = ValueWriterBlob::new_le();
 			let point0 = &mut (0i64, 0i64);
 
 			for line_string in line_strings {
@@ -270,7 +267,7 @@ impl VectorTileFeature {
 		}
 
 		fn write_polygons(polygons: &Vec<&PolygonGeometry>) -> Result<Blob> {
-			let mut writer = BlobWriter::new_le();
+			let mut writer = ValueWriterBlob::new_le();
 			let point0 = &mut (0i64, 0i64);
 
 			for &polygon in polygons {

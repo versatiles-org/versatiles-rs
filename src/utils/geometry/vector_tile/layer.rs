@@ -1,12 +1,9 @@
 #![allow(dead_code)]
 
-use super::{feature::VectorTileFeature, utils::BlobWriterPBF, value::GeoValuePBF};
+use super::{feature::VectorTileFeature, value::GeoValuePBF};
 use crate::{
-	types::{Blob, ValueReader},
-	utils::{
-		geometry::basic::{Feature, GeoProperties, GeoValue},
-		BlobWriter,
-	},
+	types::{Blob, ValueReader, ValueWriter, ValueWriterBlob},
+	utils::geometry::basic::{Feature, GeoProperties, GeoValue},
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};
 use byteorder::LE;
@@ -73,7 +70,7 @@ impl VectorTileLayer {
 	}
 
 	pub fn to_blob(&self) -> Result<Blob> {
-		let mut writer = BlobWriter::new_le();
+		let mut writer = ValueWriterBlob::new_le();
 
 		writer
 			.write_pbf_key(1, 2)

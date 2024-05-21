@@ -1,9 +1,8 @@
 #![allow(dead_code)]
 
-use super::utils::BlobWriterPBF;
 use crate::{
-	types::{Blob, ValueReader},
-	utils::{geometry::basic::GeoValue, BlobWriter},
+	types::{Blob, ValueReader, ValueWriter, ValueWriterBlob},
+	utils::geometry::basic::GeoValue,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use byteorder::LE;
@@ -44,7 +43,7 @@ impl<'a> GeoValuePBF<'a> for GeoValue {
 	}
 
 	fn to_blob(&self) -> Result<Blob> {
-		let mut writer = BlobWriter::new_le();
+		let mut writer = ValueWriterBlob::new_le();
 
 		match self {
 			GeoValue::String(s) => {

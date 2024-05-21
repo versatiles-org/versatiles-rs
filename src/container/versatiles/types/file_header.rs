@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
-use crate::{
-	types::{Blob, ByteRange, DataReader, TileCompression, TileFormat, ValueReader, ValueReaderSlice},
-	utils::BlobWriter,
+use crate::types::{
+	Blob, ByteRange, DataReader, TileCompression, TileFormat, ValueReader, ValueReaderSlice, ValueWriter,
+	ValueWriterBlob,
 };
 use anyhow::{bail, ensure, Result};
 
@@ -55,7 +55,7 @@ impl FileHeader {
 	}
 
 	pub fn to_blob(&self) -> Result<Blob> {
-		let mut writer = BlobWriter::new_be();
+		let mut writer = ValueWriterBlob::new_be();
 		writer.write_slice(b"versatiles_v02")?;
 
 		// tile type
@@ -92,10 +92,10 @@ impl FileHeader {
 		writer.write_range(&self.meta_range)?;
 		writer.write_range(&self.blocks_range)?;
 
-		if writer.len() != HEADER_LENGTH {
+		if writer.position() != HEADER_LENGTH {
 			bail!(
 				"header should be {HEADER_LENGTH} bytes long, but is {} bytes long",
-				writer.len()
+				writer.position()
 			);
 		}
 
