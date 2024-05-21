@@ -46,3 +46,54 @@ impl From<[i64; 2]> for PointGeometry {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_point_geometry_new() {
+		let point = PointGeometry::new(1.0, 2.0);
+		assert_eq!(point.x, 1.0);
+		assert_eq!(point.y, 2.0);
+	}
+
+	#[test]
+	fn test_point_geometry_eq() {
+		let point1 = PointGeometry::new(1.0, 2.0);
+		let point2 = PointGeometry::new(1.0, 2.0);
+		let point3 = PointGeometry::new(3.0, 4.0);
+		assert_eq!(point1, point2);
+		assert_ne!(point1, point3);
+	}
+
+	#[test]
+	fn test_point_geometry_debug() {
+		let point = PointGeometry::new(1.0, 2.0);
+		assert_eq!(format!("{:?}", point), "[1.0, 2.0]");
+	}
+
+	#[test]
+	fn test_point_geometry_from_f64_array_ref() {
+		let arr = &[1.0, 2.0];
+		let point: PointGeometry = PointGeometry::from(arr);
+		assert_eq!(point.x, 1.0);
+		assert_eq!(point.y, 2.0);
+	}
+
+	#[test]
+	fn test_point_geometry_from_f64_array() {
+		let arr = [1.0, 2.0];
+		let point: PointGeometry = PointGeometry::from(arr);
+		assert_eq!(point.x, 1.0);
+		assert_eq!(point.y, 2.0);
+	}
+
+	#[test]
+	fn test_point_geometry_from_i64_array() {
+		let arr = [1, 2];
+		let point: PointGeometry = PointGeometry::from(arr);
+		assert_eq!(point.x, 1.0);
+		assert_eq!(point.y, 2.0);
+	}
+}
