@@ -40,3 +40,6 @@ pub use value_writer::*;
 
 mod value_writer_blob;
 pub use value_writer_blob::*;
+
+mod value_writer_file;
+pub use value_writer_file::*;

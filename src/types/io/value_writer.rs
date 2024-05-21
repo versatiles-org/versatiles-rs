@@ -9,10 +9,10 @@ use super::ValueWriterBlob;
 
 pub trait ValueWriter<E: ByteOrder> {
 	fn get_writer(&mut self) -> &mut dyn Write;
-	fn position(&self) -> u64;
+	fn position(&mut self) -> Result<u64>;
 
-	fn is_empty(&self) -> bool {
-		self.position() == 0
+	fn is_empty(&mut self) -> Result<bool> {
+		Ok(self.position()? == 0)
 	}
 
 	fn write_varint(&mut self, mut value: u64) -> Result<()> {

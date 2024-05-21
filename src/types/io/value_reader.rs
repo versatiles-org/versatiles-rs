@@ -141,3 +141,135 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 		self.read_blob(length).context("Failed to read PBF blob")
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::types::ValueReaderSlice;
+
+	#[test]
+	fn test_is_empty() {
+		assert_eq!(ValueReaderSlice::new_le(&[]).is_empty(), true);
+		assert_eq!(ValueReaderSlice::new_le(&[0]).is_empty(), false);
+	}
+
+	#[test]
+	fn test_read_varint() {
+		let mut reader = ValueReaderSlice::new_le(&[0xAC, 0x02]);
+		let value = reader.read_varint().unwrap();
+		assert_eq!(value, 300);
+	}
+
+	#[test]
+	fn test_read_svarint1() {
+		let mut reader = ValueReaderSlice::new_le(&[0x96, 0x01]);
+		assert_eq!(reader.read_svarint().unwrap(), 75);
+	}
+
+	#[test]
+	fn test_read_svarint2() {
+		let mut reader = ValueReaderSlice::new_le(&[0x95, 0x01]);
+		assert_eq!(reader.read_svarint().unwrap(), -75);
+	}
+
+	#[test]
+	fn test_read_f32_le() {
+		let mut reader = ValueReaderSlice::new_le(&[0, 0, 0x80, 0x3F]); // 1.0 in f32
+		assert_eq!(reader.read_f32().unwrap(), 1.0);
+	}
+
+	#[test]
+	fn test_read_f32_be() {
+		let mut reader = ValueReaderSlice::new_be(&[0x3F, 0x80, 0, 0]); // 1.0 in f32
+		assert_eq!(reader.read_f32().unwrap(), 1.0);
+	}
+
+	#[test]
+	fn test_read_f64_le() {
+		let mut reader = ValueReaderSlice::new_le(&[0, 0, 0, 0, 0, 0, 0xF0, 0x3F]); // 1.0 in f64
+		assert_eq!(reader.read_f64().unwrap(), 1.0);
+	}
+
+	#[test]
+	fn test_read_f64_be() {
+		let mut reader = ValueReaderSlice::new_be(&[0x3F, 0xF0, 0, 0, 0, 0, 0, 0]); // 1.0 in f64
+		assert_eq!(reader.read_f64().unwrap(), 1.0);
+	}
+
+	#[test]
+	fn test_read_u8() {
+		let mut reader = ValueReaderSlice::new_le(&[0xFF]);
+		assert_eq!(reader.read_u8().unwrap(), 255);
+	}
+
+	#[test]
+	fn test_read_i32() {
+		let mut reader = ValueReaderSlice::new_le(&[0xFF, 0xFF, 0xFF, 0xFF]); // -1 in i32
+		assert_eq!(reader.read_i32().unwrap(), -1);
+	}
+
+	#[test]
+	fn test_read_i64() {
+		let mut reader = ValueReaderSlice::new_le(&[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]); // -1 in i64
+		assert_eq!(reader.read_i64().unwrap(), -1);
+	}
+
+	#[test]
+	fn test_read_u32() {
+		let mut reader = ValueReaderSlice::new_le(&[0xFF, 0xFF, 0xFF, 0xFF]); // 4294967295 in u32
+		assert_eq!(reader.read_u32().unwrap(), 4294967295);
+	}
+
+	#[test]
+	fn test_read_u64() {
+		let mut reader = ValueReaderSlice::new_le(&[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]); // 18446744073709551615 in u64
+		assert_eq!(reader.read_u64().unwrap(), 18446744073709551615);
+	}
+
+	#[test]
+	fn test_read_blob() {
+		let data = vec![0x01, 0x02, 0x03, 0x04];
+		let mut reader = ValueReaderSlice::new_le(&data);
+		assert_eq!(reader.read_blob(3).unwrap().as_slice(), &data[0..3]);
+	}
+
+	#[test]
+	fn test_read_string() {
+		let mut reader = ValueReaderSlice::new_le(b"hello");
+		assert_eq!(reader.read_string(5).unwrap(), "hello");
+	}
+
+	#[test]
+	fn test_read_range() {
+		let mut reader = ValueReaderSlice::new_be(&[0, 0, 0, 0, 0, 0, 0, 0x01, 0, 0, 0, 0, 0, 0, 0, 0x02]);
+		let range = reader.read_range().unwrap();
+		assert_eq!(range.offset, 1);
+		assert_eq!(range.length, 2);
+	}
+
+	#[test]
+	fn test_read_pbf_key() {
+		let mut reader = ValueReaderSlice::new_le(&[0x08]);
+		let (field_number, wire_type) = reader.read_pbf_key().unwrap();
+		assert_eq!(field_number, 1);
+		assert_eq!(wire_type, 0);
+	}
+
+	#[test]
+	fn test_read_pbf_packed_uint32() {
+		let mut reader = ValueReaderSlice::new_le(&[0x05, 0x64, 0x96, 0x01, 0xAC, 0x02]);
+		assert_eq!(reader.read_pbf_packed_uint32().unwrap(), vec![100, 150, 300]);
+	}
+
+	#[test]
+	fn test_read_pbf_string() {
+		let mut reader = ValueReaderSlice::new_le(&[0x05, b'h', b'e', b'l', b'l', b'o']);
+		assert_eq!(reader.read_pbf_string().unwrap(), "hello");
+	}
+
+	#[test]
+	fn test_read_pbf_blob() {
+		let mut reader = ValueReaderSlice::new_le(&[0x03, 0x01, 0x02, 0x03]);
+		assert_eq!(reader.read_pbf_blob().unwrap().as_slice(), &[0x01, 0x02, 0x03]);
+	}
+}

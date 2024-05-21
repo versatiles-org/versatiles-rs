@@ -14,6 +14,7 @@ pub struct ValueReaderSlice<'a, E: ByteOrder> {
 }
 
 impl<'a, E: ByteOrder> ValueReaderSlice<'a, E> {
+	/// Creates a new ValueReaderSlice from a byte slice.
 	pub fn new(slice: &'a [u8]) -> ValueReaderSlice<'a, E> {
 		ValueReaderSlice {
 			_phantom: PhantomData,
@@ -24,12 +25,14 @@ impl<'a, E: ByteOrder> ValueReaderSlice<'a, E> {
 }
 
 impl<'a> ValueReaderSlice<'a, LittleEndian> {
+	/// Creates a new ValueReaderSlice with LittleEndian byte order.
 	pub fn new_le(slice: &'a [u8]) -> ValueReaderSlice<'a, LittleEndian> {
 		ValueReaderSlice::new(slice)
 	}
 }
 
 impl<'a> ValueReaderSlice<'a, BigEndian> {
+	/// Creates a new ValueReaderSlice with BigEndian byte order.
 	pub fn new_be(slice: &'a [u8]) -> ValueReaderSlice<'a, BigEndian> {
 		ValueReaderSlice::new(slice)
 	}
@@ -64,6 +67,10 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderSlice<'a, E> {
 	{
 		let start = self.cursor.position();
 		let end = start + length;
+		if end > self.len {
+			bail!("Requested sub-reader length exceeds remaining data");
+		}
+
 		self.cursor.set_position(end);
 		Ok(Box::new(ValueReaderSlice {
 			_phantom: PhantomData,
@@ -82,6 +89,13 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderSlice<'a, E> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn test_len() -> Result<()> {
+		let reader = ValueReaderSlice::new_le(&[0x80; 42]);
+		assert_eq!(reader.len(), 42);
+		Ok(())
+	}
 
 	#[test]
 	fn test_read_varint() -> Result<()> {
@@ -114,11 +128,20 @@ mod tests {
 	}
 
 	#[test]
-	fn test_read_i32() -> Result<()> {
-		let blob = vec![0xFF, 0xFF, 0xFF, 0xFF]; // -1 in little-endian 32-bit
+	fn test_read_i32_le() -> Result<()> {
+		let blob = vec![0xFD, 0xFF, 0xFF, 0xFF]; // -1 in little-endian 32-bit
 		let mut reader = ValueReaderSlice::new_le(&blob);
 
-		assert_eq!(reader.read_i32()?, -1);
+		assert_eq!(reader.read_i32()?, -3);
+		Ok(())
+	}
+
+	#[test]
+	fn test_read_i32_be() -> Result<()> {
+		let blob = vec![0xFF, 0xFF, 0xFF, 0xFD]; // -1 in big-endian 32-bit
+		let mut reader = ValueReaderSlice::new_be(&blob);
+
+		assert_eq!(reader.read_i32()?, -3);
 		Ok(())
 	}
 
@@ -135,10 +158,31 @@ mod tests {
 	fn test_set_and_get_position() -> Result<()> {
 		let blob = vec![0x01, 0x02, 0x03, 0x04];
 		let mut reader = ValueReaderSlice::new_le(&blob);
-
 		reader.set_position(2)?;
 		assert_eq!(reader.position(), 2);
 		assert_eq!(reader.read_u8()?, 0x03);
+		Ok(())
+	}
+
+	#[test]
+	fn test_get_sub_reader() -> Result<()> {
+		let buf = vec![0x01, 0x02, 0x03, 0x04, 0x05];
+		let mut reader = ValueReaderSlice::new_le(&buf);
+		reader.set_position(1)?;
+		let mut sub_reader = reader.get_sub_reader(3)?;
+		assert_eq!(sub_reader.read_u8()?, 0x02);
+		assert_eq!(sub_reader.read_u8()?, 0x03);
+		assert_eq!(sub_reader.read_u8()?, 0x04);
+		assert!(sub_reader.read_u8().is_err()); // Should be out of data
+		Ok(())
+	}
+
+	#[test]
+	fn test_sub_reader_out_of_bounds() -> Result<()> {
+		let buf = vec![0x01, 0x02, 0x03];
+		let mut reader = ValueReaderSlice::new_le(&buf);
+		let result = reader.get_sub_reader(5);
+		assert!(result.is_err());
 		Ok(())
 	}
 }

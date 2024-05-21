@@ -3,6 +3,7 @@
 use crate::types::Blob;
 
 use super::ValueWriter;
+use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use std::{
 	io::{Cursor, Write},
@@ -44,8 +45,8 @@ impl<E: ByteOrder> ValueWriter<E> for ValueWriterBlob<E> {
 		&mut self.cursor
 	}
 
-	fn position(&self) -> u64 {
-		self.cursor.position()
+	fn position(&mut self) -> Result<u64> {
+		Ok(self.cursor.position())
 	}
 }
 

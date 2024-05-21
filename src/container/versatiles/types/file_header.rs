@@ -92,10 +92,10 @@ impl FileHeader {
 		writer.write_range(&self.meta_range)?;
 		writer.write_range(&self.blocks_range)?;
 
-		if writer.position() != HEADER_LENGTH {
+		if writer.position()? != HEADER_LENGTH {
 			bail!(
 				"header should be {HEADER_LENGTH} bytes long, but is {} bytes long",
-				writer.position()
+				writer.position()?
 			);
 		}
 
