@@ -89,3 +89,155 @@ impl<'a> GeoValuePBF<'a> for GeoValue {
 		Ok(writer.into_blob())
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::types::ValueReaderSlice;
+
+	#[test]
+	fn test_read_string() -> Result<()> {
+		let data = vec![
+			0x0A, // PBF key (field number 1, wire type 2)
+			0x05, // Length of the string
+			b'h', b'e', b'l', b'l', b'o', // The string "hello"
+		];
+		let mut reader = ValueReaderSlice::new_le(&data);
+		let geo_value = GeoValue::read(&mut reader)?;
+		assert_eq!(geo_value, GeoValue::from("hello"));
+		Ok(())
+	}
+
+	#[test]
+	fn test_to_blob_string() -> Result<()> {
+		let geo_value = GeoValue::from("hello");
+		let blob = geo_value.to_blob()?;
+		let expected = vec![
+			0x0A, // PBF key (field number 1, wire type 2)
+			0x05, // Length of the string
+			b'h', b'e', b'l', b'l', b'o', // The string "hello"
+		];
+		assert_eq!(blob.into_vec(), expected);
+		Ok(())
+	}
+
+	#[test]
+	fn test_read_float() -> Result<()> {
+		let data = vec![
+			0x15, // PBF key (field number 2, wire type 5)
+			0x00, 0x00, 0x80, 0x3F, // The float value 1.0
+		];
+		let mut reader = ValueReaderSlice::new_le(&data);
+		let geo_value = GeoValue::read(&mut reader)?;
+		assert_eq!(geo_value, GeoValue::Float(1.0));
+		Ok(())
+	}
+
+	#[test]
+	fn test_to_blob_float() -> Result<()> {
+		let geo_value = GeoValue::Float(1.0);
+		let blob = geo_value.to_blob()?;
+		let expected = vec![
+			0x15, // PBF key (field number 2, wire type 5)
+			0x00, 0x00, 0x80, 0x3F, // The float value 1.0
+		];
+		assert_eq!(blob.into_vec(), expected);
+		Ok(())
+	}
+
+	#[test]
+	fn test_read_double() -> Result<()> {
+		let data = vec![
+			0x19, // PBF key (field number 3, wire type 1)
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F, // The double value 1.0
+		];
+		let mut reader = ValueReaderSlice::new_le(&data);
+		let geo_value = GeoValue::read(&mut reader)?;
+		assert_eq!(geo_value, GeoValue::Double(1.0));
+		Ok(())
+	}
+
+	#[test]
+	fn test_to_blob_double() -> Result<()> {
+		let geo_value = GeoValue::Double(1.0);
+		let blob = geo_value.to_blob()?;
+		let expected = vec![
+			0x19, // PBF key (field number 3, wire type 1)
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F, // The double value 1.0
+		];
+		assert_eq!(blob.into_vec(), expected);
+		Ok(())
+	}
+
+	#[test]
+	fn test_read_int() -> Result<()> {
+		let data = vec![
+			0x30, // PBF key (field number 6, wire type 0)
+			0x96, 0x01, // The varint value 150
+		];
+		let mut reader = ValueReaderSlice::new_le(&data);
+		let geo_value = GeoValue::read(&mut reader)?;
+		assert_eq!(geo_value, GeoValue::Int(75));
+		Ok(())
+	}
+
+	#[test]
+	fn test_to_blob_int() -> Result<()> {
+		let geo_value = GeoValue::Int(75);
+		let blob = geo_value.to_blob()?;
+		let expected = vec![
+			0x30, // PBF key (field number 6, wire type 0)
+			0x96, 0x01, // The varint value 150
+		];
+		assert_eq!(blob.into_vec(), expected);
+		Ok(())
+	}
+
+	#[test]
+	fn test_read_uint() -> Result<()> {
+		let data = vec![
+			0x28, // PBF key (field number 5, wire type 0)
+			0x96, 0x01, // The varint value 150
+		];
+		let mut reader = ValueReaderSlice::new_le(&data);
+		let geo_value = GeoValue::read(&mut reader)?;
+		assert_eq!(geo_value, GeoValue::UInt(150));
+		Ok(())
+	}
+
+	#[test]
+	fn test_to_blob_uint() -> Result<()> {
+		let geo_value = GeoValue::UInt(150);
+		let blob = geo_value.to_blob()?;
+		let expected = vec![
+			0x28, // PBF key (field number 5, wire type 0)
+			0x96, 0x01, // The varint value 150
+		];
+		assert_eq!(blob.into_vec(), expected);
+		Ok(())
+	}
+
+	#[test]
+	fn test_read_bool() -> Result<()> {
+		let data = vec![
+			0x38, // PBF key (field number 7, wire type 0)
+			0x01, // The varint value 1 (true)
+		];
+		let mut reader = ValueReaderSlice::new_le(&data);
+		let geo_value = GeoValue::read(&mut reader)?;
+		assert_eq!(geo_value, GeoValue::Bool(true));
+		Ok(())
+	}
+
+	#[test]
+	fn test_to_blob_bool() -> Result<()> {
+		let geo_value = GeoValue::Bool(true);
+		let blob = geo_value.to_blob()?;
+		let expected = vec![
+			0x38, // PBF key (field number 7, wire type 0)
+			0x01, // The varint value 1 (true)
+		];
+		assert_eq!(blob.into_vec(), expected);
+		Ok(())
+	}
+}
