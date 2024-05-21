@@ -61,9 +61,30 @@ impl Geometry {
 		}
 	}
 
+	pub fn parse1<I>(value: Vec<I>) -> Vec<PointGeometry>
+	where
+		PointGeometry: From<I>,
+	{
+		value.into_iter().map(|p| PointGeometry::from(p)).collect()
+	}
+
+	pub fn parse2<I>(value: Vec<Vec<I>>) -> Vec<Vec<PointGeometry>>
+	where
+		PointGeometry: From<I>,
+	{
+		value.into_iter().map(Self::parse1).collect()
+	}
+
+	pub fn parse3<I>(value: Vec<Vec<Vec<I>>>) -> Vec<Vec<Vec<PointGeometry>>>
+	where
+		PointGeometry: From<I>,
+	{
+		value.into_iter().map(Self::parse2).collect()
+	}
+
 	#[cfg(test)]
 	pub fn new_example() -> Self {
-		Self::new_multi_polygon(parse3(
+		Self::new_multi_polygon(Self::parse3(
 			vec![
 				vec![
 					vec![[0.0, 0.0], [5.0, 0.0], [2.5, 4.0], [0.0, 0.0]],
@@ -77,27 +98,6 @@ impl Geometry {
 			.into(),
 		))
 	}
-}
-
-fn parse1<I>(value: Vec<I>) -> Vec<PointGeometry>
-where
-	PointGeometry: From<I>,
-{
-	value.into_iter().map(|p| PointGeometry::from(p)).collect()
-}
-
-fn parse2<I>(value: Vec<Vec<I>>) -> Vec<Vec<PointGeometry>>
-where
-	PointGeometry: From<I>,
-{
-	value.into_iter().map(parse1).collect()
-}
-
-fn parse3<I>(value: Vec<Vec<Vec<I>>>) -> Vec<Vec<Vec<PointGeometry>>>
-where
-	PointGeometry: From<I>,
-{
-	value.into_iter().map(parse2).collect()
 }
 
 impl Debug for Geometry {
@@ -136,45 +136,42 @@ mod tests {
 
 	#[test]
 	fn test_new_point() {
-		let point = PointGeometry { x: 1.0, y: 2.0 };
+		let point = PointGeometry::from([1.0, 2.0]);
 		let geometry = Geometry::new_point(point.clone());
 		assert_eq!(geometry, Geometry::Point(point));
 	}
 
 	#[test]
 	fn test_new_line_string() {
-		let line_string = vec![PointGeometry { x: 1.0, y: 2.0 }, PointGeometry { x: 3.0, y: 4.0 }];
+		let line_string = Geometry::parse1(vec![[1.0, 2.0], [3.0, 4.0]]);
 		let geometry = Geometry::new_line_string(line_string.clone());
 		assert_eq!(geometry, Geometry::LineString(line_string));
 	}
 
 	#[test]
 	fn test_new_polygon() {
-		let polygon = parse2(vec![vec![[0.0, 0.0], [5.0, 0.0], [2.5, 4.0], [0.0, 0.0]]]);
+		let polygon = Geometry::parse2(vec![vec![[0.0, 0.0], [5.0, 0.0], [2.5, 4.0], [0.0, 0.0]]]);
 		let geometry = Geometry::new_polygon(polygon.clone());
 		assert_eq!(geometry, Geometry::Polygon(polygon));
 	}
 
 	#[test]
 	fn test_new_multi_point() {
-		let multi_point = vec![PointGeometry { x: 1.0, y: 2.0 }, PointGeometry { x: 3.0, y: 4.0 }];
+		let multi_point = Geometry::parse1(vec![[1.0, 2.0], [3.0, 4.0]]);
 		let geometry = Geometry::new_multi_point(multi_point.clone());
 		assert_eq!(geometry, Geometry::MultiPoint(multi_point));
 	}
 
 	#[test]
 	fn test_new_multi_line_string() {
-		let multi_line_string = vec![
-			vec![PointGeometry { x: 1.0, y: 2.0 }, PointGeometry { x: 3.0, y: 4.0 }],
-			vec![PointGeometry { x: 5.0, y: 6.0 }, PointGeometry { x: 7.0, y: 8.0 }],
-		];
+		let multi_line_string = Geometry::parse2(vec![vec![[1.0, 2.0], [3.0, 4.0]], vec![[5.0, 6.0], [7.0, 8.0]]]);
 		let geometry = Geometry::new_multi_line_string(multi_line_string.clone());
 		assert_eq!(geometry, Geometry::MultiLineString(multi_line_string));
 	}
 
 	#[test]
 	fn test_new_multi_polygon() {
-		let multi_polygon = parse3(vec![
+		let multi_polygon = Geometry::parse3(vec![
 			vec![vec![[0.0, 0.0], [5.0, 0.0], [2.5, 4.0], [0.0, 0.0]]],
 			vec![vec![[6.0, 0.0], [9.0, 0.0], [9.0, 4.0], [6.0, 4.0], [6.0, 0.0]]],
 		]);
@@ -184,22 +181,22 @@ mod tests {
 
 	#[test]
 	fn test_into_multi() {
-		let point = PointGeometry { x: 1.0, y: 2.0 };
+		let point = PointGeometry::from([1.0, 2.0]);
 		let geometry = Geometry::new_point(point.clone()).into_multi();
 		assert_eq!(geometry, Geometry::MultiPoint(vec![point]));
 
-		let line_string = vec![PointGeometry { x: 1.0, y: 2.0 }, PointGeometry { x: 3.0, y: 4.0 }];
+		let line_string = Geometry::parse1(vec![[1.0, 2.0], [3.0, 4.0]]);
 		let geometry = Geometry::new_line_string(line_string.clone()).into_multi();
 		assert_eq!(geometry, Geometry::MultiLineString(vec![line_string]));
 
-		let polygon = parse2(vec![vec![[0.0, 0.0], [5.0, 0.0], [2.5, 4.0], [0.0, 0.0]]]);
+		let polygon = Geometry::parse2(vec![vec![[0.0, 0.0], [5.0, 0.0], [2.5, 4.0], [0.0, 0.0]]]);
 		let geometry = Geometry::new_polygon(polygon.clone()).into_multi();
 		assert_eq!(geometry, Geometry::MultiPolygon(vec![polygon]));
 	}
 
 	#[test]
 	fn test_area() {
-		let ring = parse1(vec![[0.0, 0.0], [5.0, 0.0], [5.0, 5.0], [0.0, 5.0], [0.0, 0.0]]);
+		let ring = Geometry::parse1(vec![[0.0, 0.0], [5.0, 0.0], [5.0, 5.0], [0.0, 5.0], [0.0, 0.0]]);
 		let area = ring.area();
 		assert_eq!(area, 50.0);
 	}
