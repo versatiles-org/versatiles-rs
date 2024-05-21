@@ -1,4 +1,56 @@
-#![allow(dead_code)]
+//! This module defines the `ValueWriter` trait for writing various types of values to different destinations.
+//!
+//! # Overview
+//!
+//! The `ValueWriter` trait provides an interface for writing data types such as integers, floating-point numbers,
+//! strings, and custom binary formats (e.g., Protocol Buffers) to various destinations. Implementations of this trait
+//! can handle writing data with little-endian or big-endian byte order and provide methods for managing the write
+//! position and writing specific portions of the data.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use versatiles::types::{Blob, ByteRange, ValueWriter};
+//! use anyhow::Result;
+//! use byteorder::LittleEndian;
+//! use std::io::Cursor;
+//!
+//! struct MockValueWriter {
+//!     cursor: Cursor<Vec<u8>>,
+//! }
+//!
+//! impl MockValueWriter {
+//!     pub fn new() -> Self {
+//!         Self {
+//!             cursor: Cursor::new(Vec::new()),
+//!         }
+//!     }
+//!
+//!     pub fn into_inner(self) -> Vec<u8> {
+//!         self.cursor.into_inner()
+//!     }
+//! }
+//!
+//! impl ValueWriter<LittleEndian> for MockValueWriter {
+//!     fn get_writer(&mut self) -> &mut dyn std::io::Write {
+//!         &mut self.cursor
+//!     }
+//!
+//!     fn position(&mut self) -> Result<u64> {
+//!         Ok(self.cursor.position())
+//!     }
+//! }
+//!
+//! fn main() -> Result<()> {
+//!     let mut writer = MockValueWriter::new();
+//!
+//!     // Writing a varint
+//!     writer.write_varint(300)?;
+//!     assert_eq!(writer.into_inner(), vec![0b10101100, 0b00000010]);
+//!
+//!     Ok(())
+//! }
+//! ```
 
 use super::ValueWriterBlob;
 use crate::types::{Blob, ByteRange};
@@ -6,6 +58,8 @@ use anyhow::{Context, Result};
 use byteorder::{ByteOrder, WriteBytesExt};
 use std::io::Write;
 
+/// A trait for writing values to various destinations with support for different byte orders.
+#[allow(dead_code)]
 pub trait ValueWriter<E: ByteOrder> {
 	fn get_writer(&mut self) -> &mut dyn Write;
 	fn position(&mut self) -> Result<u64>;

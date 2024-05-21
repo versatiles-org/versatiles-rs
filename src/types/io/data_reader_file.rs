@@ -1,3 +1,32 @@
+//! This module provides functionality for reading data from files.
+//!
+//! # Overview
+//!
+//! The `DataReaderFile` struct allows for reading data stored in files. It implements the
+//! `DataReaderTrait` to provide asynchronous reading capabilities and the standard library's
+//! `Read` trait for synchronous reading. The module ensures the file exists, is absolute,
+//! and is a regular file before attempting to open it.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use versatiles::types::{Blob, ByteRange, DataReaderFile, DataReaderTrait};
+//! use anyhow::Result;
+//! use std::path::Path;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<()> {
+//!     let path = std::env::current_dir()?.join("Cargo.toml");
+//!     let mut reader = DataReaderFile::open(&path)?;
+//!
+//!     // Reading all data
+//!     let all_data = reader.read_range(&ByteRange::new(10,19)).await?;
+//!     assert_eq!(all_data.as_slice(), b"name = \"versatiles\"");
+//!
+//!     Ok(())
+//! }
+//! ```
+
 use super::DataReaderTrait;
 use crate::types::{Blob, ByteRange};
 use anyhow::{ensure, Result};
@@ -8,6 +37,7 @@ use std::{
 	path::Path,
 };
 
+/// A struct that provides reading capabilities from a file.
 #[derive(Debug)]
 pub struct DataReaderFile {
 	name: String,
@@ -15,6 +45,15 @@ pub struct DataReaderFile {
 }
 
 impl DataReaderFile {
+	/// Opens a file and creates a `DataReaderFile` instance.
+	///
+	/// # Arguments
+	///
+	/// * `path` - A reference to the file path to open.
+	///
+	/// # Returns
+	///
+	/// * A Result containing a boxed `DataReaderFile` or an error.
 	pub fn open(path: &Path) -> Result<Box<DataReaderFile>> {
 		ensure!(path.exists(), "file {path:?} does not exist");
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
@@ -33,6 +72,15 @@ impl DataReaderFile {
 
 #[async_trait]
 impl DataReaderTrait for DataReaderFile {
+	/// Reads a specific range of bytes from the file.
+	///
+	/// # Arguments
+	///
+	/// * `range` - A ByteRange struct specifying the offset and length of the range to read.
+	///
+	/// # Returns
+	///
+	/// * A Result containing a Blob with the read data or an error.
 	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
 		let mut buffer = vec![0; range.length as usize];
 
@@ -41,18 +89,39 @@ impl DataReaderTrait for DataReaderFile {
 
 		Ok(Blob::from(buffer))
 	}
+
+	/// Reads all the data from the file.
+	///
+	/// # Returns
+	///
+	/// * A Result containing a Blob with all the data or an error.
 	async fn read_all(&mut self) -> Result<Blob> {
 		let mut buffer = vec![];
 		self.reader.seek(SeekFrom::Start(0))?;
 		self.reader.read_to_end(&mut buffer)?;
 		Ok(Blob::from(buffer))
 	}
+
+	/// Gets the name of the data source.
+	///
+	/// # Returns
+	///
+	/// * A string slice representing the name of the data source.
 	fn get_name(&self) -> &str {
 		&self.name
 	}
 }
 
 impl Read for DataReaderFile {
+	/// Reads data into the provided buffer.
+	///
+	/// # Arguments
+	///
+	/// * `buf` - A mutable byte slice to read data into.
+	///
+	/// # Returns
+	///
+	/// * The number of bytes read or an error.
 	fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
 		self.reader.read(buf)
 	}

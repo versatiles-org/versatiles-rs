@@ -1,21 +1,56 @@
+//! This module provides the `ValueWriterFile` struct for writing values to a file.
+//!
+//! # Overview
+//!
+//! The `ValueWriterFile` struct allows for writing various data types to a file using
+//! either little-endian or big-endian byte order. It implements the `ValueWriter` trait to provide
+//! methods for writing integers, floating-point numbers, strings, and custom binary formats.
+//! The module also provides methods for managing the write position within the file.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use versatiles::types::{ValueWriter, ValueWriterFile};
+//! use anyhow::Result;
+//! use std::fs::File;
+//!
+//! fn main() -> Result<()> {
+//!     let path = std::env::current_dir()?.join("testdata/temp.txt");
+//!     let file = File::create(&path)?;
+//!     let mut writer = ValueWriterFile::new_le(file);
+//!
+//!     // Writing a string
+//!     writer.write_string("hello")?;
+//!
+//!     Ok(())
+//! }
+//! ```
+
 #![allow(dead_code)]
 
 use super::ValueWriter;
-use crate::types::Blob;
 use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use std::{
-	fs::File,
-	io::{BufWriter, Seek, Write},
-	marker::PhantomData,
-};
+use std::fs::File;
+use std::io::{BufWriter, Seek, Write};
+use std::marker::PhantomData;
 
+/// A struct that provides writing capabilities to a file using a specified byte order.
 pub struct ValueWriterFile<E: ByteOrder> {
 	_phantom: PhantomData<E>,
 	writer: BufWriter<File>,
 }
 
 impl<E: ByteOrder> ValueWriterFile<E> {
+	/// Creates a new `ValueWriterFile` instance from a `File`.
+	///
+	/// # Arguments
+	///
+	/// * `file` - A `File` instance to write to.
+	///
+	/// # Returns
+	///
+	/// * A new `ValueWriterFile` instance.
 	pub fn new(file: File) -> ValueWriterFile<E> {
 		ValueWriterFile {
 			_phantom: PhantomData,
@@ -25,12 +60,30 @@ impl<E: ByteOrder> ValueWriterFile<E> {
 }
 
 impl ValueWriterFile<LittleEndian> {
+	/// Creates a new `ValueWriterFile` instance with little-endian byte order from a `File`.
+	///
+	/// # Arguments
+	///
+	/// * `file` - A `File` instance to write to.
+	///
+	/// # Returns
+	///
+	/// * A new `ValueWriterFile` instance with little-endian byte order.
 	pub fn new_le(file: File) -> ValueWriterFile<LittleEndian> {
 		ValueWriterFile::new(file)
 	}
 }
 
 impl ValueWriterFile<BigEndian> {
+	/// Creates a new `ValueWriterFile` instance with big-endian byte order from a `File`.
+	///
+	/// # Arguments
+	///
+	/// * `file` - A `File` instance to write to.
+	///
+	/// # Returns
+	///
+	/// * A new `ValueWriterFile` instance with big-endian byte order.
 	pub fn new_be(file: File) -> ValueWriterFile<BigEndian> {
 		ValueWriterFile::new(file)
 	}
@@ -48,26 +101,27 @@ impl<E: ByteOrder> ValueWriter<E> for ValueWriterFile<E> {
 
 #[cfg(test)]
 mod tests {
-	use assert_fs::NamedTempFile;
-
-	use crate::types::ByteRange;
-
 	use super::*;
+	use crate::types::{Blob, ByteRange};
+	use assert_fs::NamedTempFile;
 	use std::fs::File;
 	use std::io::{Read, SeekFrom};
 
 	struct TempFile {
 		f: NamedTempFile,
 	}
+
 	impl TempFile {
 		pub fn new() -> Self {
 			Self {
 				f: NamedTempFile::new("temp.bin").unwrap(),
 			}
 		}
+
 		pub fn file(&self) -> File {
 			File::create(self.f.path()).unwrap()
 		}
+
 		pub fn content(&self) -> Vec<u8> {
 			let mut content = Vec::new();
 			let mut file = File::open(self.f.path()).unwrap();

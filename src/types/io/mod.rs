@@ -1,4 +1,21 @@
-#![allow(unused_imports)]
+//! This module re-exports all the data reader and writer modules, along with the value reader and writer modules.
+//!
+//! # Overview
+//!
+//! The module provides a unified interface for importing all the necessary components for reading and writing data
+//! in various formats and from various sources. It includes readers and writers for blobs, files, HTTP sources (if enabled),
+//! and more. The value readers and writers support different byte orders and offer functionality for handling various data types.
+//!
+//! # Examples
+//!
+//! ```rust
+//! // Importing all the necessary components
+//! use versatiles::types::io::*;
+//!
+//! fn main() {
+//!     // Now you can use all the imported modules and structs, such as `DataReaderBlob`, `DataWriterFile`, etc.
+//! }
+//! ```
 
 mod data_reader;
 pub use data_reader::*;
@@ -30,6 +47,7 @@ mod value_reader_blob;
 pub use value_reader_blob::*;
 
 mod value_reader_file;
+#[allow(unused_imports)]
 pub use value_reader_file::*;
 
 mod value_reader_slice;
@@ -42,4 +60,5 @@ mod value_writer_blob;
 pub use value_writer_blob::*;
 
 mod value_writer_file;
+#[allow(unused_imports)]
 pub use value_writer_file::*;

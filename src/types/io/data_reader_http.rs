@@ -1,6 +1,35 @@
+//! This module provides functionality for reading data from HTTP endpoints.
+//!
+//! # Overview
+//!
+//! The `DataReaderHttp` struct allows for reading data from HTTP and HTTPS URLs. It implements the
+//! `DataReaderTrait` to provide asynchronous reading capabilities. The module ensures the URL has
+//! a valid scheme (`http` or `https`) and uses the `reqwest` library to handle HTTP requests.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use versatiles::types::{Blob, ByteRange, DataReaderHttp, DataReaderTrait};
+//! use anyhow::Result;
+//! use reqwest::Url;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<()> {
+//!     let url = Url::parse("https://versatiles.org/").unwrap();
+//!     let mut reader = DataReaderHttp::from_url(url)?;
+//!
+//!     // Reading a range of data
+//!     let range = ByteRange::new(0, 15);
+//!     let partial_data = reader.read_range(&range).await?;
+//!     assert_eq!(partial_data.as_slice(), b"<!DOCTYPE html>");
+//!
+//!     Ok(())
+//! }
+//! ```
+
 use super::DataReaderTrait;
 use crate::types::{Blob, ByteRange};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use log::info;
@@ -8,6 +37,7 @@ use regex::{Regex, RegexBuilder};
 use reqwest::{Client, Method, Request, StatusCode, Url};
 use std::{str, time::Duration};
 
+/// A struct that provides reading capabilities from an HTTP(S) endpoint.
 #[derive(Debug)]
 pub struct DataReaderHttp {
 	client: Client,
@@ -15,11 +45,20 @@ pub struct DataReaderHttp {
 	pos: u64,
 	url: Url,
 }
+
 impl DataReaderHttp {
+	/// Creates a `DataReaderHttp` from a URL.
+	///
+	/// # Arguments
+	///
+	/// * `url` - The URL of the HTTP(S) endpoint.
+	///
+	/// # Returns
+	///
+	/// * A Result containing a boxed `DataReaderHttp` or an error.
 	pub fn from_url(url: Url) -> Result<Box<DataReaderHttp>> {
 		match url.scheme() {
-			"http" => (),
-			"https" => (),
+			"http" | "https" => (),
 			_ => bail!("url has wrong scheme {url}"),
 		}
 
@@ -41,6 +80,15 @@ impl DataReaderHttp {
 
 #[async_trait]
 impl DataReaderTrait for DataReaderHttp {
+	/// Reads a specific range of bytes from the HTTP(S) endpoint.
+	///
+	/// # Arguments
+	///
+	/// * `range` - A ByteRange struct specifying the offset and length of the range to read.
+	///
+	/// # Returns
+	///
+	/// * A Result containing a Blob with the read data or an error.
 	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
 		let mut request = Request::new(Method::GET, self.url.clone());
 		let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
@@ -92,9 +140,21 @@ impl DataReaderTrait for DataReaderHttp {
 
 		Ok(Blob::from(bytes))
 	}
+
+	/// Reads all the data from the HTTP(S) endpoint.
+	///
+	/// # Returns
+	///
+	/// * A Result containing a Blob with all the data or an error.
 	async fn read_all(&mut self) -> Result<Blob> {
 		bail!("not implemented yet")
 	}
+
+	/// Gets the name of the data source.
+	///
+	/// # Returns
+	///
+	/// * A string slice representing the name of the data source.
 	fn get_name(&self) -> &str {
 		&self.name
 	}
@@ -118,6 +178,7 @@ mod tests {
 		let data_reader_http = DataReaderHttp::from_url(invalid_url);
 		assert!(data_reader_http.is_err());
 	}
+
 	async fn read_range_helper(url: &str, offset: u64, length: u64, expected: &str) -> Result<()> {
 		let url = Url::parse(url).unwrap();
 		let mut data_reader_http = DataReaderHttp::from_url(url)?;

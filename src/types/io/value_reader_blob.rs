@@ -1,14 +1,45 @@
+//! This module provides the `ValueReaderBlob` struct for reading values from an in-memory blob of data.
+//!
+//! # Overview
+//!
+//! The `ValueReaderBlob` struct allows for reading various data types from an in-memory blob using
+//! either little-endian or big-endian byte order. It implements the `ValueReader` trait to provide
+//! methods for reading integers, floating-point numbers, and other types of data from the blob. The
+//! module also provides methods for managing the read position and creating sub-readers for reading
+//! specific portions of the data.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use versatiles::types::{Blob, ValueReader, ValueReaderBlob};
+//! use anyhow::Result;
+//!
+//! fn main() -> Result<()> {
+//!     let data = Blob::from(vec![1,2,3,4,5,6,7,8]);
+//!
+//!     // Reading data with little-endian byte order
+//!     let mut reader_le = ValueReaderBlob::new_le(data.clone());
+//!     assert_eq!(reader_le.read_u32()?, 0x04030201);
+//!     assert_eq!(reader_le.read_u32()?, 0x08070605);
+//!
+//!     // Reading data with big-endian byte order
+//!     let mut reader_be = ValueReaderBlob::new_be(data);
+//!     assert_eq!(reader_be.read_u32()?, 0x01020304);
+//!     assert_eq!(reader_be.read_u32()?, 0x05060708);
+//!
+//!     Ok(())
+//! }
+//! ```
+
 #![allow(dead_code)]
 
 use super::{SeekRead, ValueReader, ValueReaderSlice};
 use crate::types::Blob;
 use anyhow::{anyhow, bail, Result};
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use std::{
-	io::{Cursor, Read, Seek, SeekFrom},
-	marker::PhantomData,
-};
+use std::{io::Cursor, marker::PhantomData};
 
+/// A struct that provides reading capabilities from an in-memory blob of data using a specified byte order.
 pub struct ValueReaderBlob<E: ByteOrder> {
 	_phantom: PhantomData<E>,
 	cursor: Cursor<Vec<u8>>,
@@ -16,6 +47,15 @@ pub struct ValueReaderBlob<E: ByteOrder> {
 }
 
 impl<E: ByteOrder> ValueReaderBlob<E> {
+	/// Creates a new `ValueReaderBlob` instance.
+	///
+	/// # Arguments
+	///
+	/// * `blob` - A `Blob` containing the data to read.
+	///
+	/// # Returns
+	///
+	/// * A new `ValueReaderBlob` instance.
 	pub fn new(blob: Blob) -> ValueReaderBlob<E> {
 		ValueReaderBlob {
 			_phantom: PhantomData,
@@ -26,12 +66,30 @@ impl<E: ByteOrder> ValueReaderBlob<E> {
 }
 
 impl ValueReaderBlob<LittleEndian> {
+	/// Creates a new `ValueReaderBlob` instance with little-endian byte order.
+	///
+	/// # Arguments
+	///
+	/// * `blob` - A `Blob` containing the data to read.
+	///
+	/// # Returns
+	///
+	/// * A new `ValueReaderBlob` instance with little-endian byte order.
 	pub fn new_le(blob: Blob) -> ValueReaderBlob<LittleEndian> {
 		ValueReaderBlob::new(blob)
 	}
 }
 
 impl ValueReaderBlob<BigEndian> {
+	/// Creates a new `ValueReaderBlob` instance with big-endian byte order.
+	///
+	/// # Arguments
+	///
+	/// * `blob` - A `Blob` containing the data to read.
+	///
+	/// # Returns
+	///
+	/// * A new `ValueReaderBlob` instance with big-endian byte order.
 	pub fn new_be(blob: Blob) -> ValueReaderBlob<BigEndian> {
 		ValueReaderBlob::new(blob)
 	}

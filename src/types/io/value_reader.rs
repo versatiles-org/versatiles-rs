@@ -1,14 +1,43 @@
-#![allow(dead_code)]
+//! This module defines the `ValueReader` trait for reading various types of values from different sources.
+//!
+//! # Overview
+//!
+//! The `ValueReader` trait provides an interface for reading data types such as integers, floating-point numbers,
+//! strings, and custom binary formats (e.g., Protocol Buffers) from various sources. Implementations of this trait
+//! can handle reading data with little-endian or big-endian byte order and provide methods for managing the read
+//! position and creating sub-readers for reading specific portions of the data.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use versatiles::types::{ValueReader, ValueReaderSlice};
+//! use anyhow::Result;
+//!
+//! fn main() -> Result<()> {
+//!     let data = &[0x01, 0x02, 0x03, 0x04];
+//!
+//!     // Reading data with little-endian byte order
+//!     let mut reader_le = ValueReaderSlice::new_le(data);
+//!     assert_eq!(reader_le.read_u16()?, 0x0201);
+//!
+//!     // Reading data with big-endian byte order
+//!     let mut reader_be = ValueReaderSlice::new_be(data);
+//!     assert_eq!(reader_be.read_u16()?, 0x0102);
+//!
+//!     Ok(())
+//! }
+//! ```
 
 use crate::types::{Blob, ByteRange};
-use anyhow::{anyhow, bail, Context, Result};
-use byteorder::{BigEndian, ByteOrder, LittleEndian, ReadBytesExt};
-use std::fs::File;
-use std::io::{BufReader, Cursor, Read, Seek, SeekFrom};
-use std::marker::PhantomData;
+use anyhow::{bail, Context, Result};
+use byteorder::{ByteOrder, ReadBytesExt};
+use std::io::{Read, Seek};
 
+/// A trait that extends both `Seek` and `Read`.
 pub trait SeekRead: Seek + Read {}
 
+#[allow(dead_code)]
+/// A trait for reading values from various sources with support for different byte orders.
 pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	fn get_reader(&mut self) -> &mut dyn SeekRead;
 
@@ -62,12 +91,20 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 		Ok(self.get_reader().read_u8()?)
 	}
 
+	fn read_i16(&mut self) -> Result<i16> {
+		Ok(self.get_reader().read_i16::<E>()?)
+	}
+
 	fn read_i32(&mut self) -> Result<i32> {
 		Ok(self.get_reader().read_i32::<E>()?)
 	}
 
 	fn read_i64(&mut self) -> Result<i64> {
 		Ok(self.get_reader().read_i64::<E>()?)
+	}
+
+	fn read_u16(&mut self) -> Result<u16> {
+		Ok(self.get_reader().read_u16::<E>()?)
 	}
 
 	fn read_u32(&mut self) -> Result<u32> {
@@ -96,6 +133,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 			self.get_reader().read_u64::<E>()?,
 		))
 	}
+
 	fn read_pbf_key(&mut self) -> Result<(u32, u8)> {
 		let value = self.read_varint().context("Failed to read varint for PBF key")?;
 		Ok(((value >> 3) as u32, (value & 0x07) as u8))

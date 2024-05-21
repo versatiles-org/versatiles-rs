@@ -1,17 +1,53 @@
+//! This module provides the `ValueReaderFile` struct for reading values from files.
+//!
+//! # Overview
+//!
+//! The `ValueReaderFile` struct allows for reading various data types from files using
+//! either little-endian or big-endian byte order. It implements the `ValueReader` trait to provide
+//! methods for reading integers, floating-point numbers, and other types of data from the file. The
+//! module also provides methods for managing the read position and creating sub-readers for reading
+//! specific portions of the data.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use versatiles::types::{ValueReader, ValueReaderFile};
+//! use anyhow::Result;
+//! use std::fs::File;
+//!
+//! fn main() -> Result<()> {
+//!     let path = std::env::current_dir()?.join("testdata/berlin.mbtiles");
+//!
+//!
+//!     // Reading data with little-endian byte order
+//!     let file = File::open(&path)?;
+//!     let mut reader_le = ValueReaderFile::new_le(file)?;
+//!     assert_eq!(reader_le.read_string(15)?, "SQLite format 3");
+//!     assert_eq!(reader_le.read_u16()?, 0x1000);
+//!
+//!     // Reading data with big-endian byte order
+//!     let file = File::open(&path)?;
+//!     let mut reader_be = ValueReaderFile::new_be(file)?;
+//!     assert_eq!(reader_be.read_string(15)?, "SQLite format 3");
+//!     assert_eq!(reader_le.read_u16()?, 0x0100);
+//!
+//!     Ok(())
+//! }
+//! ```
+
 #![allow(dead_code)]
 
 use super::{SeekRead, ValueReader, ValueReaderBlob};
 use crate::types::Blob;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{bail, Result};
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use std::{
 	fs::File,
-	io::{BufReader, Cursor, Read, Seek, SeekFrom, Write},
+	io::{BufReader, Read, Seek, SeekFrom},
 	marker::PhantomData,
-	sync::Arc,
 };
 
-// Define the ValueReaderFile struct
+/// A struct that provides reading capabilities from a file using a specified byte order.
 pub struct ValueReaderFile<E: ByteOrder> {
 	_phantom: PhantomData<E>,
 	reader: BufReader<File>,
@@ -19,6 +55,15 @@ pub struct ValueReaderFile<E: ByteOrder> {
 }
 
 impl<E: ByteOrder> ValueReaderFile<E> {
+	/// Creates a new `ValueReaderFile` instance.
+	///
+	/// # Arguments
+	///
+	/// * `file` - A `File` object representing the file to read.
+	///
+	/// # Returns
+	///
+	/// * A Result containing the new `ValueReaderFile` instance or an error.
 	pub fn new(file: File) -> Result<ValueReaderFile<E>> {
 		let len = file.metadata()?.len();
 		Ok(ValueReaderFile {
@@ -32,12 +77,30 @@ impl<E: ByteOrder> ValueReaderFile<E> {
 impl SeekRead for BufReader<File> {}
 
 impl ValueReaderFile<LittleEndian> {
+	/// Creates a new `ValueReaderFile` instance with little-endian byte order.
+	///
+	/// # Arguments
+	///
+	/// * `file` - A `File` object representing the file to read.
+	///
+	/// # Returns
+	///
+	/// * A Result containing the new `ValueReaderFile` instance with little-endian byte order.
 	pub fn new_le(file: File) -> Result<ValueReaderFile<LittleEndian>> {
 		ValueReaderFile::new(file)
 	}
 }
 
 impl ValueReaderFile<BigEndian> {
+	/// Creates a new `ValueReaderFile` instance with big-endian byte order.
+	///
+	/// # Arguments
+	///
+	/// * `file` - A `File` object representing the file to read.
+	///
+	/// # Returns
+	///
+	/// * A Result containing the new `ValueReaderFile` instance with big-endian byte order.
 	pub fn new_be(file: File) -> Result<ValueReaderFile<BigEndian>> {
 		ValueReaderFile::new(file)
 	}

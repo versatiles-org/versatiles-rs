@@ -1,21 +1,50 @@
+//! This module provides the `ValueWriterBlob` struct for writing values to an in-memory blob of data.
+//!
+//! # Overview
+//!
+//! The `ValueWriterBlob` struct allows for writing various data types to an in-memory blob using
+//! either little-endian or big-endian byte order. It implements the `ValueWriter` trait to provide
+//! methods for writing integers, floating-point numbers, strings, and custom binary formats. The
+//! module also provides methods for converting the written data into a `Blob`.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use versatiles::types::{Blob, ValueWriter, ValueWriterBlob};
+//! use anyhow::Result;
+//!
+//! fn main() -> Result<()> {
+//!     let mut writer = ValueWriterBlob::new_le();
+//!
+//!     // Writing a varint
+//!     writer.write_varint(1025)?;
+//!     assert_eq!(writer.into_blob().into_vec(), vec![0b10000001,0b00001000]);
+//!
+//!     Ok(())
+//! }
+//! ```
+
 #![allow(dead_code)]
 
-use crate::types::Blob;
-
 use super::ValueWriter;
+use crate::types::Blob;
 use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use std::{
-	io::{Cursor, Write},
-	marker::PhantomData,
-};
+use std::io::{Cursor, Write};
+use std::marker::PhantomData;
 
+/// A struct that provides writing capabilities to an in-memory blob using a specified byte order.
 pub struct ValueWriterBlob<E: ByteOrder> {
 	_phantom: PhantomData<E>,
 	cursor: Cursor<Vec<u8>>,
 }
 
 impl<E: ByteOrder> ValueWriterBlob<E> {
+	/// Creates a new `ValueWriterBlob` instance.
+	///
+	/// # Returns
+	///
+	/// * A new `ValueWriterBlob` instance.
 	pub fn new() -> ValueWriterBlob<E> {
 		ValueWriterBlob {
 			_phantom: PhantomData,
@@ -23,18 +52,33 @@ impl<E: ByteOrder> ValueWriterBlob<E> {
 		}
 	}
 
+	/// Converts the written data into a `Blob`.
+	///
+	/// # Returns
+	///
+	/// * A `Blob` containing the written data.
 	pub fn into_blob(self) -> Blob {
 		Blob::from(self.cursor.into_inner())
 	}
 }
 
 impl ValueWriterBlob<LittleEndian> {
+	/// Creates a new `ValueWriterBlob` instance with little-endian byte order.
+	///
+	/// # Returns
+	///
+	/// * A new `ValueWriterBlob` instance with little-endian byte order.
 	pub fn new_le() -> ValueWriterBlob<LittleEndian> {
 		ValueWriterBlob::new()
 	}
 }
 
 impl ValueWriterBlob<BigEndian> {
+	/// Creates a new `ValueWriterBlob` instance with big-endian byte order.
+	///
+	/// # Returns
+	///
+	/// * A new `ValueWriterBlob` instance with big-endian byte order.
 	pub fn new_be() -> ValueWriterBlob<BigEndian> {
 		ValueWriterBlob::new()
 	}

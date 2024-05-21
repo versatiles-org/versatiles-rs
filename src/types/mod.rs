@@ -6,7 +6,7 @@ pub use blob::*;
 mod byte_range;
 pub use byte_range::*;
 
-mod io;
+pub mod io;
 pub use io::*;
 
 mod limited_cache;

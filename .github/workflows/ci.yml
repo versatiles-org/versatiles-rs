@@ -70,6 +70,9 @@ jobs:
       - name: Cargo Test Lib (full)
         run: cargo test --lib --no-default-features -F full
 
+      - name: Cargo Test Doc
+        run: cargo test --doc -F full
+
       - name: Install Cargo Coverage
         uses: taiki-e/install-action@cargo-llvm-cov
 

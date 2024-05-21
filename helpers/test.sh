@@ -29,3 +29,6 @@ cargo test --quiet --lib --no-default-features -F http $1
 
 echo -e "\033[1;33mRunning tests for library (full)...\033[0m"
 cargo test --quiet --lib --no-default-features -F full $1
+
+echo -e "\033[1;33mRunning doc tests (full)...\033[0m"
+cargo test --quiet --doc -F full $1

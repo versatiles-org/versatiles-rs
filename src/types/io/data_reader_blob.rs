@@ -1,3 +1,36 @@
+//! This module provides functionality for reading data from in-memory blobs.
+//!
+//! # Overview
+//!
+//! The `DataReaderBlob` struct allows for reading data stored in an in-memory
+//! vector of bytes (`Vec<u8>`). It implements the `DataReaderTrait` to provide
+//! asynchronous reading capabilities and the standard library's `Read` trait for
+//! synchronous reading.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use versatiles::types::{Blob, ByteRange, DataReaderBlob, DataReaderTrait};
+//! use anyhow::Result;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<()> {
+//!     let data = vec![1, 2, 3, 4, 5];
+//!     let mut reader = DataReaderBlob::from(data);
+//!     
+//!     // Reading all data
+//!     let all_data = reader.read_all().await?;
+//!     assert_eq!(all_data.as_slice(), &[1, 2, 3, 4, 5]);
+//!
+//!     // Reading a range of data
+//!     let range = ByteRange::new(1, 3);
+//!     let partial_data = reader.read_range(&range).await?;
+//!     assert_eq!(partial_data.as_slice(), &[2, 3, 4]);
+//!
+//!     Ok(())
+//! }
+//! ```
+
 #![allow(dead_code)]
 
 use super::{DataReaderTrait, DataWriterBlob};
@@ -6,15 +39,19 @@ use anyhow::Result;
 use async_trait::async_trait;
 use std::io::{Cursor, Read, Seek, SeekFrom};
 
+/// A struct that provides reading capabilities from an in-memory blob of data.
 #[derive(Debug)]
 pub struct DataReaderBlob {
 	reader: Cursor<Vec<u8>>,
 }
 
 impl DataReaderBlob {
+	/// Returns the length of the data in the reader.
 	pub fn len(&self) -> usize {
 		self.reader.get_ref().len()
 	}
+
+	/// Checks if the reader is empty.
 	pub fn is_empty(&self) -> bool {
 		self.reader.get_ref().len() == 0
 	}
@@ -22,42 +59,99 @@ impl DataReaderBlob {
 
 #[async_trait]
 impl DataReaderTrait for DataReaderBlob {
+	/// Reads a specific range of bytes from the data.
+	///
+	/// # Arguments
+	///
+	/// * `range` - A ByteRange struct specifying the offset and length of the range to read.
+	///
+	/// # Returns
+	///
+	/// * A Result containing a Blob with the read data or an error.
 	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
 		let mut buffer = vec![0; range.length as usize];
 		self.reader.seek(SeekFrom::Start(range.offset))?;
 		self.reader.read_exact(&mut buffer)?;
 		Ok(Blob::from(buffer))
 	}
+
+	/// Reads all the data from the reader.
+	///
+	/// # Returns
+	///
+	/// * A Result containing a Blob with all the data or an error.
 	async fn read_all(&mut self) -> Result<Blob> {
 		let mut buffer = vec![];
 		self.reader.seek(SeekFrom::Start(0))?;
 		self.reader.read_to_end(&mut buffer)?;
 		Ok(Blob::from(buffer))
 	}
+
+	/// Gets the name of the data source.
+	///
+	/// # Returns
+	///
+	/// * A string slice representing the name of the data source.
 	fn get_name(&self) -> &str {
 		"memory"
 	}
 }
 
 impl Read for DataReaderBlob {
+	/// Reads data into the provided buffer.
+	///
+	/// # Arguments
+	///
+	/// * `buf` - A mutable byte slice to read data into.
+	///
+	/// # Returns
+	///
+	/// * The number of bytes read or an error.
 	fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
 		self.reader.read(buf)
 	}
 }
 
 impl From<Box<DataWriterBlob>> for DataReaderBlob {
+	/// Creates a DataReaderBlob from a boxed DataWriterBlob.
+	///
+	/// # Arguments
+	///
+	/// * `value` - A boxed DataWriterBlob.
+	///
+	/// # Returns
+	///
+	/// * A new DataReaderBlob.
 	fn from(value: Box<DataWriterBlob>) -> Self {
 		DataReaderBlob::from(value.into_blob())
 	}
 }
 
 impl From<DataWriterBlob> for DataReaderBlob {
+	/// Creates a DataReaderBlob from a DataWriterBlob.
+	///
+	/// # Arguments
+	///
+	/// * `value` - A DataWriterBlob.
+	///
+	/// # Returns
+	///
+	/// * A new DataReaderBlob.
 	fn from(value: DataWriterBlob) -> Self {
 		DataReaderBlob::from(value.into_blob())
 	}
 }
 
 impl From<Blob> for DataReaderBlob {
+	/// Creates a DataReaderBlob from a Blob.
+	///
+	/// # Arguments
+	///
+	/// * `value` - A Blob.
+	///
+	/// # Returns
+	///
+	/// * A new DataReaderBlob.
 	fn from(value: Blob) -> Self {
 		DataReaderBlob {
 			reader: Cursor::new(value.into_vec()),
@@ -66,6 +160,15 @@ impl From<Blob> for DataReaderBlob {
 }
 
 impl From<Vec<u8>> for DataReaderBlob {
+	/// Creates a DataReaderBlob from a vector of bytes.
+	///
+	/// # Arguments
+	///
+	/// * `value` - A vector of bytes.
+	///
+	/// # Returns
+	///
+	/// * A new DataReaderBlob.
 	fn from(value: Vec<u8>) -> Self {
 		DataReaderBlob {
 			reader: Cursor::new(value),

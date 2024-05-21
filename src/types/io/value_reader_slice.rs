@@ -1,12 +1,42 @@
+//! This module provides the `ValueReaderSlice` struct for reading values from a byte slice.
+//!
+//! # Overview
+//!
+//! The `ValueReaderSlice` struct allows for reading various data types from a byte slice using
+//! either little-endian or big-endian byte order. It implements the `ValueReader` trait to provide
+//! methods for reading integers, floating-point numbers, and other types of data from the slice. The
+//! module also provides methods for managing the read position and creating sub-readers for reading
+//! specific portions of the data.
+//!
+//! # Examples
+//!
+//! ```rust
+//! use versatiles::types::{ValueReader, ValueReaderSlice};
+//! use anyhow::Result;
+//!
+//! fn main() -> Result<()> {
+//!     let data = &[0x01, 0x02, 0x03, 0x04];
+//!
+//!     // Reading data with little-endian byte order
+//!     let mut reader_le = ValueReaderSlice::new_le(data);
+//!     assert_eq!(reader_le.read_u16()?, 0x0201);
+//!
+//!     // Reading data with big-endian byte order
+//!     let mut reader_be = ValueReaderSlice::new_be(data);
+//!     assert_eq!(reader_be.read_u16()?, 0x0102);
+//!
+//!     Ok(())
+//! }
+//! ```
+
+#![allow(dead_code)]
+
 use super::{SeekRead, ValueReader};
-use crate::types::Blob;
 use anyhow::{anyhow, bail, Result};
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
-use std::{
-	io::{Cursor, Read, Seek},
-	marker::PhantomData,
-};
+use std::{io::Cursor, marker::PhantomData};
 
+/// A struct that provides reading capabilities from a byte slice using a specified byte order.
 pub struct ValueReaderSlice<'a, E: ByteOrder> {
 	pub _phantom: PhantomData<E>,
 	pub cursor: Cursor<&'a [u8]>,
@@ -14,7 +44,15 @@ pub struct ValueReaderSlice<'a, E: ByteOrder> {
 }
 
 impl<'a, E: ByteOrder> ValueReaderSlice<'a, E> {
-	/// Creates a new ValueReaderSlice from a byte slice.
+	/// Creates a new `ValueReaderSlice` from a byte slice.
+	///
+	/// # Arguments
+	///
+	/// * `slice` - A reference to the byte slice to read.
+	///
+	/// # Returns
+	///
+	/// * A new `ValueReaderSlice` instance.
 	pub fn new(slice: &'a [u8]) -> ValueReaderSlice<'a, E> {
 		ValueReaderSlice {
 			_phantom: PhantomData,
@@ -25,14 +63,30 @@ impl<'a, E: ByteOrder> ValueReaderSlice<'a, E> {
 }
 
 impl<'a> ValueReaderSlice<'a, LittleEndian> {
-	/// Creates a new ValueReaderSlice with LittleEndian byte order.
+	/// Creates a new `ValueReaderSlice` with little-endian byte order.
+	///
+	/// # Arguments
+	///
+	/// * `slice` - A reference to the byte slice to read.
+	///
+	/// # Returns
+	///
+	/// * A new `ValueReaderSlice` instance with little-endian byte order.
 	pub fn new_le(slice: &'a [u8]) -> ValueReaderSlice<'a, LittleEndian> {
 		ValueReaderSlice::new(slice)
 	}
 }
 
 impl<'a> ValueReaderSlice<'a, BigEndian> {
-	/// Creates a new ValueReaderSlice with BigEndian byte order.
+	/// Creates a new `ValueReaderSlice` with big-endian byte order.
+	///
+	/// # Arguments
+	///
+	/// * `slice` - A reference to the byte slice to read.
+	///
+	/// # Returns
+	///
+	/// * A new `ValueReaderSlice` instance with big-endian byte order.
 	pub fn new_be(slice: &'a [u8]) -> ValueReaderSlice<'a, BigEndian> {
 		ValueReaderSlice::new(slice)
 	}
