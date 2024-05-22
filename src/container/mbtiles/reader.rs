@@ -1,3 +1,45 @@
+//! Provides functionality for reading tile data from an MBTiles SQLite database.
+//!
+//! The `MBTilesReader` struct is the primary component of this module, offering methods to read metadata and tile data from an MBTiles SQLite database.
+//!
+//! ## Features
+//! - Supports reading metadata and tile data in multiple formats and compressions
+//! - Provides methods to query the database for tile data based on coordinates or bounding boxes
+//! - Allows overriding the tile compression method
+//!
+//! ## Usage Example
+//! ```rust
+//! use versatiles::{container::{MBTilesReader, TilesReader}, types::{TileCoord3, Blob}};
+//! use anyhow::Result;
+//! use std::path::Path;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<()> {
+//!     // Open the MBTiles database
+//!     let path = std::env::current_dir()?.join("testdata/berlin.mbtiles");
+//!     let mut reader = MBTilesReader::open_path(&path)?;
+//!
+//!     // Get metadata
+//!     if let Some(meta) = reader.get_meta()? {
+//!         println!("Metadata: {:?}", meta);
+//!     }
+//!
+//!     // Get tile data for specific coordinates
+//!     let coord = TileCoord3::new(1, 1, 1)?;
+//!     if let Some(tile_data) = reader.get_tile_data(&coord).await? {
+//!         println!("Tile data: {:?}", tile_data);
+//!     }
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ## Errors
+//! - Returns errors if the database file does not exist, if the path is not absolute, or if there are issues querying the database.
+//!
+//! ## Testing
+//! This module includes comprehensive tests to ensure the correct functionality of reading metadata, handling different file formats, and verifying tile data.
+
 use crate::{
 	container::{TilesReader, TilesReaderParameters, TilesStream},
 	types::{progress::get_progress_bar, Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
@@ -11,13 +53,22 @@ use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use std::path::Path;
 
+/// A struct that provides functionality to read tile data from an MBTiles SQLite database.
 pub struct MBTilesReader {
 	name: String,
 	pool: Pool<SqliteConnectionManager>,
 	meta_data: Option<String>,
 	parameters: TilesReaderParameters,
 }
+
 impl MBTilesReader {
+	/// Opens the SQLite database and creates an `MBTilesReader` instance.
+	///
+	/// # Arguments
+	/// * `path` - The path to the SQLite database file.
+	///
+	/// # Errors
+	/// Returns an error if the file does not exist, if the path is not absolute, or if there is an error loading from SQLite.
 	pub fn open_path(path: &Path) -> Result<MBTilesReader> {
 		trace!("open {path:?}");
 
@@ -26,6 +77,14 @@ impl MBTilesReader {
 
 		MBTilesReader::load_from_sqlite(path)
 	}
+
+	/// Loads the MBTiles data from the SQLite database.
+	///
+	/// # Arguments
+	/// * `path` - The path to the SQLite database file.
+	///
+	/// # Errors
+	/// Returns an error if there is an issue connecting to the database or loading metadata.
 	fn load_from_sqlite(path: &Path) -> Result<MBTilesReader> {
 		trace!("load_from_sqlite {:?}", path);
 
@@ -44,6 +103,11 @@ impl MBTilesReader {
 
 		Ok(reader)
 	}
+
+	/// Loads the metadata from the MBTiles database.
+	///
+	/// # Errors
+	/// Returns an error if the tile format or compression is not specified or if there is an issue querying the database.
 	fn load_meta_data(&mut self) -> Result<()> {
 		trace!("load_meta_data");
 
@@ -94,6 +158,15 @@ impl MBTilesReader {
 
 		Ok(())
 	}
+
+	/// Executes a simple query on the MBTiles database.
+	///
+	/// # Arguments
+	/// * `sql1` - The SQL query to execute.
+	/// * `sql2` - Additional SQL conditions.
+	///
+	/// # Errors
+	/// Returns an error if there is an issue executing the query.
 	fn simple_query(&self, sql1: &str, sql2: &str) -> Result<i32> {
 		let sql = if sql2.is_empty() {
 			format!("SELECT {sql1} FROM tiles")
@@ -107,6 +180,11 @@ impl MBTilesReader {
 		let mut stmt = conn.prepare(&sql)?;
 		Ok(stmt.query_row([], |row| row.get::<_, i32>(0))?)
 	}
+
+	/// Gets the bounding box pyramid from the MBTiles database.
+	///
+	/// # Errors
+	/// Returns an error if there is an issue querying the database.
 	fn get_bbox_pyramid(&self) -> Result<TileBBoxPyramid> {
 		trace!("get_bbox_pyramid");
 
@@ -175,22 +253,41 @@ impl MBTilesReader {
 
 #[async_trait]
 impl TilesReader for MBTilesReader {
+	/// Returns the container name.
 	fn get_container_name(&self) -> &str {
 		"mbtiles"
 	}
+
+	/// Returns the metadata as a `Blob`.
+	///
+	/// # Errors
+	/// Returns an error if there is an issue retrieving the metadata.
 	fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(self.meta_data.as_ref().map(Blob::from))
 	}
+
+	/// Returns the parameters of the tiles reader.
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
+
+	/// Overrides the tile compression method.
+	///
+	/// # Arguments
+	/// * `tile_compression` - The new tile compression method.
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
+
+	/// Returns the tile data for the specified coordinates as a `Blob`.
+	///
+	/// # Arguments
+	/// * `coord` - The coordinates of the tile.
+	///
+	/// # Errors
+	/// Returns an error if there is an issue retrieving the tile data.
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		trace!("read tile from coord {coord:?}");
-
-		trace!("corrected coord {coord:?}");
 
 		let max_index = 2u32.pow(coord.get_z() as u32) - 1;
 		let x = coord.get_x();
@@ -201,10 +298,20 @@ impl TilesReader for MBTilesReader {
 		let mut stmt =
 			conn.prepare("SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")?;
 
-		let blob = stmt.query_row([x, y, z], |row| row.get::<_, Vec<u8>>(0))?;
-
-		Ok(Some(Blob::from(blob)))
+		if let Ok(vec) = stmt.query_row([x, y, z], |row| row.get::<_, Vec<u8>>(0)) {
+			Ok(Some(Blob::from(vec)))
+		} else {
+			Ok(None)
+		}
 	}
+
+	/// Returns a stream of tile data for the specified bounding box.
+	///
+	/// # Arguments
+	/// * `bbox` - The bounding box of the tiles.
+	///
+	/// # Errors
+	/// Returns an error if there is an issue querying the database.
 	async fn get_bbox_tile_stream(&mut self, bbox: &TileBBox) -> TilesStream {
 		trace!("read tile stream from bbox {bbox:?}");
 
@@ -218,7 +325,9 @@ impl TilesReader for MBTilesReader {
 
 		let conn = self.pool.get().unwrap();
 		let mut stmt = conn
-			 .prepare("SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?")
+			 .prepare(
+					"SELECT tile_column, tile_row, zoom_level, tile_data FROM tiles WHERE tile_column >= ? AND tile_column <= ? AND tile_row >= ? AND tile_row <= ? AND zoom_level = ?",
+			 )
 			 .unwrap();
 
 		let vec: Vec<(TileCoord3, Blob)> = stmt
@@ -252,6 +361,8 @@ impl TilesReader for MBTilesReader {
 
 		futures_util::stream::iter(vec).boxed()
 	}
+
+	/// Returns the name of the MBTiles database.
 	fn get_name(&self) -> &str {
 		&self.name
 	}
@@ -265,6 +376,7 @@ impl std::fmt::Debug for MBTilesReader {
 	}
 }
 
+/// A struct representing a metadata record in the MBTiles database.
 struct RecordMetadata {
 	name: String,
 	value: String,
@@ -273,7 +385,7 @@ struct RecordMetadata {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::container::{mock::MockTilesWriter, TilesReader};
+	use crate::container::{MockTilesWriter, TilesReader};
 	use lazy_static::lazy_static;
 	use std::{env, path::PathBuf};
 

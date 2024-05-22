@@ -1,4 +1,38 @@
-use std::sync::Arc;
+//! Provides functionality for writing tile data to a PMTiles container.
+//!
+//! The `PMTilesWriter` struct is the primary component of this module, offering methods to write metadata and tile data to a PMTiles container.
+//!
+//! ## Features
+//! - Supports writing metadata and tile data with internal compression
+//! - Efficiently organizes and compresses tile data for storage
+//! - Implements progress feedback during the write process
+//!
+//! ## Usage Example
+//! ```ignore
+//! use versatiles::container::{PMTilesWriter, TilesWriter};
+//! use versatiles::types::{DataWriterBlob, TileFormat, TileCompression, TileBBoxPyramid, TilesReaderParameters};
+//! use std::path::Path;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     // Initialize a reader with sample data
+//!     let reader = ...;
+//!
+//!     // Create a writer to write data to a new PMTiles container
+//!     let mut data_writer = DataWriterBlob::new()?;
+//!     PMTilesWriter::write_to_writer(&mut reader, &mut data_writer).await?;
+//!
+//!     // Further operations with data_writer...
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ## Errors
+//! - Returns errors if there are issues with compression, writing data, or internal processing.
+//!
+//! ## Testing
+//! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different tile formats, and verifying the integrity of the written data.
 
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
@@ -9,11 +43,21 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::{lock::Mutex, StreamExt};
+use std::sync::Arc;
 
+/// A struct that provides functionality to write tile data to a PMTiles container.
 pub struct PMTilesWriter {}
 
 #[async_trait]
 impl TilesWriter for PMTilesWriter {
+	/// Writes tile data from a `TilesReader` to a `DataWriterTrait` (such as a PMTiles container).
+	///
+	/// # Arguments
+	/// * `reader` - The tiles reader providing the tile data.
+	/// * `writer` - The data writer to write the tile data to.
+	///
+	/// # Errors
+	/// Returns an error if there are issues with writing data or internal processing.
 	async fn write_to_writer(reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait) -> Result<()> {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
 
@@ -125,6 +169,5 @@ mod tests {
 		MockTilesWriter::write(&mut reader).await?;
 
 		Ok(())
-		// test
 	}
 }

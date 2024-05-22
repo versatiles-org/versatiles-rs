@@ -1,3 +1,5 @@
+//! Provides functionality for reading tile data from a tar archive.
+
 use crate::{
 	container::{TilesReader, TilesReaderParameters},
 	types::{Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
@@ -14,6 +16,7 @@ use std::{
 };
 use tar::{Archive, EntryType};
 
+/// A struct that provides functionality to read tile data from a tar archive.
 pub struct TarTilesReader {
 	meta: Option<Blob>,
 	name: String,
@@ -23,7 +26,13 @@ pub struct TarTilesReader {
 }
 
 impl TarTilesReader {
-	// Create a new TilesReader from a given filename
+	/// Creates a new `TarTilesReader` from a given file path.
+	///
+	/// # Arguments
+	/// * `path` - The path to the tar archive file.
+	///
+	/// # Errors
+	/// Returns an error if the file cannot be opened or read.
 	pub fn open_path(path: &Path) -> Result<TarTilesReader> {
 		let mut reader = BufReader::new(File::open(path)?);
 		let mut archive = Archive::new(&mut reader);
@@ -127,18 +136,39 @@ impl TarTilesReader {
 
 #[async_trait]
 impl TilesReader for TarTilesReader {
+	/// Returns the container name.
 	fn get_container_name(&self) -> &str {
 		"tar"
 	}
+
+	/// Returns the parameters of the tiles reader.
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
+
+	/// Overrides the tile compression method.
+	///
+	/// # Arguments
+	/// * `tile_compression` - The new tile compression method.
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
+
+	/// Returns the metadata as a `Blob`.
+	///
+	/// # Errors
+	/// Returns an error if there is an issue retrieving the metadata.
 	fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(self.meta.clone())
 	}
+
+	/// Returns the tile data for the specified coordinates as a `Blob`.
+	///
+	/// # Arguments
+	/// * `coord` - The coordinates of the tile.
+	///
+	/// # Errors
+	/// Returns an error if there is an issue retrieving the tile data.
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data {:?}", coord);
 
@@ -155,6 +185,8 @@ impl TilesReader for TarTilesReader {
 			Ok(None)
 		}
 	}
+
+	/// Returns the name of the tar archive.
 	fn get_name(&self) -> &str {
 		&self.name
 	}
@@ -172,10 +204,7 @@ impl Debug for TarTilesReader {
 pub mod tests {
 	use super::*;
 	use crate::{
-		container::{
-			make_test_file,
-			mock::{MockTilesWriter, MOCK_BYTES_PBF},
-		},
+		container::{make_test_file, MockTilesWriter, MOCK_BYTES_PBF},
 		utils::decompress_gzip,
 	};
 

@@ -1,3 +1,27 @@
+//! This module provides functionality for writing tile data to an MBTiles SQLite database.
+//!
+//! The `MBTilesWriter` struct is the primary component of this module, offering methods to write metadata and tile data to a specified MBTiles file.
+//!
+//! ## Features
+//! - Supports writing metadata and tile data in multiple formats and compressions.
+//! - Ensures the necessary tables and indices are created in the SQLite database.
+//! - Provides progress feedback during the write process.
+//!
+//! ## Usage
+//! ```ignore
+//! use versatiles::container::MBTilesWriter;
+//! use std::path::Path;
+//!
+//! let reader = // initialize your TilesReader
+//! MBTilesWriter::write_to_path(reader, Path::new("/path/to/output.mbtiles")).await.unwrap();
+//! ```
+//!
+//! ## Errors
+//! - Returns errors if there are issues with the SQLite database, if unsupported tile formats or compressions are encountered, or if there are I/O issues.
+//!
+//! ## Testing
+//! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying the database structure.
+
 use crate::{
 	container::{TilesReader, TilesWriter},
 	types::{progress::get_progress_bar, Blob, DataWriterTrait, TileCompression, TileCoord3, TileFormat},
@@ -9,12 +33,19 @@ use r2d2::Pool;
 use r2d2_sqlite::{rusqlite::params, SqliteConnectionManager};
 use std::path::Path;
 
+/// A writer for creating and populating MBTiles databases.
 pub struct MBTilesWriter {
 	pool: Pool<SqliteConnectionManager>,
 }
 
 impl MBTilesWriter {
 	/// Creates a new MBTilesWriter.
+	///
+	/// # Arguments
+	/// * `path` - The path to the MBTiles file.
+	///
+	/// # Errors
+	/// Returns an error if the SQLite connection cannot be established or if the necessary tables cannot be created.
 	fn new(path: &Path) -> Result<Self> {
 		let manager = SqliteConnectionManager::file(path);
 		let pool = Pool::builder().max_size(10).build(manager)?;
@@ -31,6 +62,12 @@ impl MBTilesWriter {
 	}
 
 	/// Adds multiple tiles to the MBTiles file within a single transaction.
+	///
+	/// # Arguments
+	/// * `tiles` - A vector of tuples containing tile coordinates and tile data.
+	///
+	/// # Errors
+	/// Returns an error if the transaction fails.
 	fn add_tiles(&mut self, tiles: &Vec<(TileCoord3, Blob)>) -> Result<()> {
 		let mut conn = self.pool.get()?;
 		let transaction = conn.transaction()?;
@@ -45,6 +82,13 @@ impl MBTilesWriter {
 	}
 
 	/// Sets metadata for the MBTiles file.
+	///
+	/// # Arguments
+	/// * `name` - The metadata key.
+	/// * `value` - The metadata value.
+	///
+	/// # Errors
+	/// Returns an error if the metadata cannot be inserted or replaced.
 	fn set_metadata(&self, name: &str, value: &str) -> Result<()> {
 		self.pool.get()?.execute(
 			"INSERT OR REPLACE INTO metadata (name, value) VALUES (?1, ?2)",
@@ -56,6 +100,14 @@ impl MBTilesWriter {
 
 #[async_trait]
 impl TilesWriter for MBTilesWriter {
+	/// Writes tiles and metadata to the MBTiles file.
+	///
+	/// # Arguments
+	/// * `reader` - The reader from which to fetch tiles and metadata.
+	/// * `path` - The path to the MBTiles file.
+	///
+	/// # Errors
+	/// Returns an error if the file format or compression is not supported, or if there are issues with writing to the SQLite database.
 	async fn write_to_path(reader: &mut dyn TilesReader, path: &Path) -> Result<()> {
 		let mut writer = MBTilesWriter::new(path)?;
 
@@ -105,6 +157,7 @@ impl TilesWriter for MBTilesWriter {
 		Ok(())
 	}
 
+	/// Not implemented: Writes tiles and metadata to a generic data writer.
 	async fn write_to_writer(_reader: &mut dyn TilesReader, _writer: &mut dyn DataWriterTrait) -> Result<()> {
 		bail!("not implemented")
 	}
@@ -115,11 +168,7 @@ mod tests {
 	use assert_fs::NamedTempFile;
 
 	use crate::{
-		container::{
-			mbtiles::MBTilesReader,
-			mock::{MockTilesReader, MockTilesWriter},
-			TilesReaderParameters,
-		},
+		container::{MBTilesReader, MockTilesReader, MockTilesWriter, TilesReaderParameters},
 		types::{TileBBoxPyramid, TileCompression, TileFormat},
 	};
 

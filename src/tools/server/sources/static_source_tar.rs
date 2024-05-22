@@ -180,9 +180,7 @@ impl Debug for TarFile {
 mod tests {
 	use super::*;
 	use crate::container::{
-		converter::{convert_tiles_container, TilesConverterParameters},
-		mock::{MockTilesReader, MockTilesReaderProfile},
-		TilesReader,
+		convert_tiles_container, MockTilesReader, MockTilesReaderProfile, TilesConverterParameters, TilesReader,
 	};
 	use assert_fs::NamedTempFile;
 

@@ -1,3 +1,28 @@
+//! Mock implementation of tile readers for testing purposes
+//!
+//! This module provides a mock implementation of the `TilesReader` trait, allowing for testing of tile reading functionality without relying on actual tile data or I/O operations.
+//!
+//! ## MockTilesReader
+//! The `MockTilesReader` struct is the main component, which can be initialized with different profiles representing various tile formats and compressions.
+//!
+//! ## Usage
+//! These mocks can be used to simulate tile reading operations in tests, allowing verification of code behavior under controlled conditions.
+//!
+//! ```rust
+//! use crate::container::mock::MockTilesReader;
+//! use crate::container::mock::MockTilesReaderProfile;
+//! use crate::container::TilesReader;
+//! use std::result::Result;
+//!
+//! #[tokio::test]
+//! async fn test_mock_reader() -> Result<()> {
+//!     let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
+//!     let tile_data = reader.get_tile_data(&TileCoord3::new(0, 0, 0)?).await?;
+//!     assert!(tile_data.is_some());
+//!     Ok(())
+//! }
+//! ```
+
 use crate::{
 	container::{TilesReader, TilesReaderParameters},
 	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
@@ -6,24 +31,29 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 
+/// Enum representing different mock profiles for tile data.
 #[derive(Debug)]
 pub enum MockTilesReaderProfile {
+	/// Mock profile for JSON format.
 	JSON,
+	/// Mock profile for PNG format.
 	PNG,
+	/// Mock profile for PBF format.
 	PBF,
 }
 
-//pub const MOCK_BYTES_AVIF: &[u8; 323] = include_bytes!("./mock_tiles/mock.avif");
 pub const MOCK_BYTES_JPG: &[u8; 671] = include_bytes!("./mock_tiles/mock.jpg");
 pub const MOCK_BYTES_PBF: &[u8; 54] = include_bytes!("./mock_tiles/mock.pbf");
 pub const MOCK_BYTES_PNG: &[u8; 103] = include_bytes!("./mock_tiles/mock.png");
 pub const MOCK_BYTES_WEBP: &[u8; 44] = include_bytes!("./mock_tiles/mock.webp");
 
+/// Mock implementation of a `TilesReader`.
 pub struct MockTilesReader {
 	parameters: TilesReaderParameters,
 }
 
 impl MockTilesReader {
+	/// Creates a new mock tiles reader with the specified profile.
 	pub fn new_mock_profile(profile: MockTilesReaderProfile) -> Result<MockTilesReader> {
 		let bbox_pyramid = TileBBoxPyramid::new_full(4);
 
@@ -39,6 +69,8 @@ impl MockTilesReader {
 			}
 		})
 	}
+
+	/// Creates a new mock tiles reader with the specified parameters.
 	pub fn new_mock(parameters: TilesReaderParameters) -> Result<MockTilesReader> {
 		Ok(MockTilesReader { parameters })
 	}
@@ -49,18 +81,23 @@ impl TilesReader for MockTilesReader {
 	fn get_container_name(&self) -> &str {
 		"dummy_container"
 	}
+
 	fn get_name(&self) -> &str {
 		"dummy_name"
 	}
+
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
+
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
+
 	fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(Some(Blob::from("dummy meta data")))
 	}
+
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		if !coord.is_valid() {
 			return Ok(None);
@@ -92,7 +129,7 @@ impl std::fmt::Debug for MockTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{container::mock::MockTilesWriter, utils::decompress};
+	use crate::{container::MockTilesWriter, utils::decompress};
 	use anyhow::Result;
 
 	#[tokio::test]

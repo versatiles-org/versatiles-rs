@@ -1,11 +1,16 @@
 #![allow(dead_code)]
 
+//! This module defines the `BlockDefinition` struct which represents a block of tiles within a larger tile set.
+//!
+//! The `BlockDefinition` struct contains metadata about the tile block, including its coordinates, bounding box, and byte ranges for tiles and index data.
+
 use crate::types::{
 	Blob, ByteRange, TileBBox, TileCoord3, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob,
 };
 use anyhow::{ensure, Result};
 use std::{fmt, ops::Div};
 
+/// A struct representing a block of tiles within a larger tile set.
 #[derive(Clone, PartialEq, Eq)]
 pub struct BlockDefinition {
 	offset: TileCoord3,       // block offset, for level 14 it's between [0,0] and [63,63]
@@ -16,6 +21,13 @@ pub struct BlockDefinition {
 }
 
 impl BlockDefinition {
+	/// Creates a new `BlockDefinition` from a given bounding box.
+	///
+	/// # Arguments
+	/// * `bbox` - The bounding box of the tiles.
+	///
+	/// # Returns
+	/// A new `BlockDefinition` instance.
 	pub fn new(bbox: &TileBBox) -> Self {
 		let x = bbox.x_min.div(256u32);
 		let y = bbox.y_min.div(256u32);
@@ -40,6 +52,13 @@ impl BlockDefinition {
 		}
 	}
 
+	/// Creates a `BlockDefinition` from a binary blob.
+	///
+	/// # Arguments
+	/// * `blob` - The binary data representing the block definition.
+	///
+	/// # Errors
+	/// Returns an error if the binary data cannot be parsed correctly.
 	pub fn from_blob(blob: &Blob) -> Result<Self> {
 		let mut reader = ValueReaderSlice::new_be(blob.as_slice());
 
@@ -72,18 +91,37 @@ impl BlockDefinition {
 		})
 	}
 
+	/// Sets the byte range for the tiles data.
+	///
+	/// # Arguments
+	/// * `range` - The byte range for the tiles data.
 	pub fn set_tiles_range(&mut self, range: ByteRange) {
 		self.tiles_range = range;
 	}
 
+	/// Sets the byte range for the index data.
+	///
+	/// # Arguments
+	/// * `range` - The byte range for the index data.
 	pub fn set_index_range(&mut self, range: ByteRange) {
 		self.index_range = range;
 	}
 
+	/// Returns the number of tiles in the block.
+	///
+	/// # Returns
+	/// The number of tiles in the block.
 	pub fn count_tiles(&self) -> u64 {
 		self.tiles_coverage.count_tiles()
 	}
 
+	/// Converts the `BlockDefinition` to a binary blob.
+	///
+	/// # Returns
+	/// A binary blob representing the `BlockDefinition`.
+	///
+	/// # Errors
+	/// Returns an error if the conversion fails.
 	pub fn as_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_be();
 		writer.write_u8(self.offset.get_z())?;
@@ -107,29 +145,52 @@ impl BlockDefinition {
 		Ok(writer.into_blob())
 	}
 
+	/// Returns the sort index for the block.
+	///
+	/// # Returns
+	/// The sort index for the block.
 	#[allow(dead_code)]
 	pub fn get_sort_index(&self) -> u64 {
 		self.offset.get_sort_index()
 	}
 
-	/// global bbox of the defined tiles, e.g. [4096,4096,4351,4351]
+	/// Returns the global bounding box of the defined tiles.
+	///
+	/// # Returns
+	/// A reference to the global bounding box of the defined tiles.
 	pub fn get_global_bbox(&self) -> &TileBBox {
 		&self.global_bbox
 	}
 
+	/// Returns the byte range for the tiles data.
+	///
+	/// # Returns
+	/// A reference to the byte range for the tiles data.
 	pub fn get_tiles_range(&self) -> &ByteRange {
 		&self.tiles_range
 	}
 
+	/// Returns the byte range for the index data.
+	///
+	/// # Returns
+	/// A reference to the byte range for the index data.
 	pub fn get_index_range(&self) -> &ByteRange {
 		&self.index_range
 	}
 
+	/// Returns the zoom level of the block.
+	///
+	/// # Returns
+	/// The zoom level of the block.
 	#[allow(dead_code)]
 	pub fn get_z(&self) -> u8 {
 		self.offset.get_z()
 	}
 
+	/// Returns the coordinate of the block.
+	///
+	/// # Returns
+	/// A reference to the coordinate of the block.
 	pub fn get_coord3(&self) -> &TileCoord3 {
 		&self.offset
 	}

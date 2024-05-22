@@ -1,8 +1,5 @@
 use crate::{
-	container::{
-		converter::{convert_tiles_container, TilesConverterParameters},
-		get_reader,
-	},
+	container::{convert_tiles_container, get_reader, TilesConverterParameters},
 	types::{TileBBoxPyramid, TileCompression, TileFormat},
 };
 use anyhow::{bail, Result};

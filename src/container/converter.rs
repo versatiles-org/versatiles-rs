@@ -1,3 +1,40 @@
+//! `converter` module provides functionalities to convert tile data between different formats and compressions.
+//!
+//! # Example Usage
+//!
+//! ```rust
+//! use versatiles::container::{convert_tiles_container, MBTilesReader, TilesConverterParameters, TilesReader, TilesReaderParameters};
+//! use versatiles::types::{TileFormat, TileCompression, TileBBoxPyramid};
+//! use std::path::Path;
+//! use anyhow::Result;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<()> {
+//!     let path_mbtiles = std::env::current_dir()?.join("testdata/berlin.mbtiles");
+//!     let path_versatiles = std::env::current_dir()?.join("testdata/temp2.versatiles");
+//!
+//!     // Create a mbtiles reader
+//!     let mut reader = MBTilesReader::open_path(&path_mbtiles)?;
+//!
+//!     // Define converter parameters
+//!     let converter_params = TilesConverterParameters::new(
+//!         None,
+//!         Some(TileCompression::Brotli),
+//!         Some(TileBBoxPyramid::new_full(8)),
+//!         false,
+//!         false,
+//!         false,
+//!     );
+//!
+//!     // Convert the tiles container
+//!     convert_tiles_container(Box::new(reader), converter_params, &path_versatiles.to_str().unwrap()).await?;
+//!
+//!     println!("Tiles have been successfully converted and saved to {path_versatiles:?}");
+//!     Ok(())
+//! }
+//! ```
+
+use super::write_to_filename;
 use crate::{
 	container::{TilesReader, TilesReaderParameters, TilesStream},
 	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
@@ -7,8 +44,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures_util::StreamExt;
 
-use super::write_to_filename;
-
+/// Parameters for tile conversion.
 #[derive(Debug)]
 pub struct TilesConverterParameters {
 	pub tile_format: Option<TileFormat>,
@@ -20,6 +56,7 @@ pub struct TilesConverterParameters {
 }
 
 impl TilesConverterParameters {
+	/// Create new converter parameters with specific settings.
 	pub fn new(
 		tile_format: Option<TileFormat>, tile_compression: Option<TileCompression>,
 		bbox_pyramid: Option<TileBBoxPyramid>, force_recompress: bool, flip_y: bool, swap_xy: bool,
@@ -33,6 +70,8 @@ impl TilesConverterParameters {
 			swap_xy,
 		}
 	}
+
+	/// Create new converter parameters with default settings.
 	pub fn new_default() -> TilesConverterParameters {
 		TilesConverterParameters {
 			tile_format: None,
@@ -45,6 +84,7 @@ impl TilesConverterParameters {
 	}
 }
 
+/// Converts tiles from a given reader and writes them to a file.
 pub async fn convert_tiles_container(
 	reader: Box<dyn TilesReader>, cp: TilesConverterParameters, filename: &str,
 ) -> Result<()> {
@@ -52,6 +92,7 @@ pub async fn convert_tiles_container(
 	write_to_filename(&mut converter, filename).await
 }
 
+/// A reader that converts tiles from one format to another.
 #[derive(Debug)]
 pub struct TilesConvertReader {
 	reader: Box<dyn TilesReader>,
@@ -63,6 +104,7 @@ pub struct TilesConvertReader {
 }
 
 impl TilesConvertReader {
+	/// Creates a new converter reader from an existing reader.
 	pub fn new_from_reader(reader: Box<dyn TilesReader>, cp: TilesConverterParameters) -> Result<TilesConvertReader> {
 		let container_name = format!("converter({})", reader.get_container_name());
 		let name = format!("converter({})", reader.get_name());
@@ -77,8 +119,8 @@ impl TilesConvertReader {
 			new_rp.bbox_pyramid.swap_xy();
 		}
 
-		if cp.bbox_pyramid.is_some() {
-			new_rp.bbox_pyramid.intersect(cp.bbox_pyramid.as_ref().unwrap());
+		if let Some(bbox_pyramid) = &cp.bbox_pyramid {
+			new_rp.bbox_pyramid.intersect(bbox_pyramid);
 		}
 
 		new_rp.tile_format = cp.tile_format.unwrap_or(rp.tile_format);
@@ -126,29 +168,26 @@ impl TilesReader for TilesConvertReader {
 	}
 
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		let coord = &mut coord.clone();
+		let mut coord = *coord;
 		if self.converter_parameters.flip_y {
 			coord.flip_y();
 		}
 		if self.converter_parameters.swap_xy {
 			coord.swap_xy();
 		}
-		let blob = self.reader.get_tile_data(coord).await?;
+		let mut blob = self.reader.get_tile_data(&coord).await?;
 
-		if blob.is_none() {
-			return Ok(None);
-		}
-		let mut blob = blob.unwrap();
-
-		if self.tile_recompressor.is_some() {
-			blob = self.tile_recompressor.as_ref().unwrap().process_blob(blob)?
+		if let Some(tile_recompressor) = &self.tile_recompressor {
+			if let Some(b) = blob {
+				blob = Some(tile_recompressor.process_blob(b)?);
+			}
 		}
 
-		Ok(Some(blob))
+		Ok(blob)
 	}
 
 	async fn get_bbox_tile_stream(&mut self, bbox: &TileBBox) -> TilesStream {
-		let mut bbox: TileBBox = bbox.clone();
+		let mut bbox = bbox.clone();
 		if self.converter_parameters.swap_xy {
 			bbox.swap_xy();
 		}
@@ -172,11 +211,11 @@ impl TilesReader for TilesConvertReader {
 					}
 					(coord, blob)
 				})
-				.boxed()
+				.boxed();
 		}
 
-		if self.tile_recompressor.is_some() {
-			stream = self.tile_recompressor.as_ref().unwrap().process_stream(stream);
+		if let Some(tile_recompressor) = &self.tile_recompressor {
+			stream = tile_recompressor.process_stream(stream);
 		}
 
 		stream
@@ -186,7 +225,7 @@ impl TilesReader for TilesConvertReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::{mock::MockTilesReader, versatiles::VersaTilesReader};
+	use crate::container::{MockTilesReader, VersaTilesReader};
 	use assert_fs::NamedTempFile;
 
 	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> MockTilesReader {

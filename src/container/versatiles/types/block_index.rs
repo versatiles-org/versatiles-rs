@@ -1,5 +1,9 @@
 #![allow(dead_code)]
 
+//! This module defines the `BlockIndex` struct, which represents an index of blocks within a tile set.
+//!
+//! The `BlockIndex` struct contains metadata about the blocks, including their coordinates and bounding boxes, and provides methods to manipulate and query this data.
+
 use super::BlockDefinition;
 use crate::{
 	types::{Blob, ByteRange, TileBBoxPyramid, TileCoord3, ValueWriter, ValueWriterBlob},
@@ -10,16 +14,28 @@ use std::{collections::HashMap, ops::Div};
 
 const BLOCK_INDEX_LENGTH: u64 = 33;
 
+/// A struct representing an index of blocks within a tile set.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlockIndex {
 	lookup: HashMap<TileCoord3, BlockDefinition>,
 }
 
 impl BlockIndex {
+	/// Creates a new empty `BlockIndex`.
+	///
+	/// # Returns
+	/// A new empty `BlockIndex`.
 	pub fn new_empty() -> Self {
 		Self { lookup: HashMap::new() }
 	}
 
+	/// Creates a `BlockIndex` from a binary blob.
+	///
+	/// # Arguments
+	/// * `buf` - The binary data representing the block index.
+	///
+	/// # Errors
+	/// Returns an error if the binary data cannot be parsed correctly.
 	pub fn from_blob(buf: Blob) -> Result<Self> {
 		let count = buf.len().div(BLOCK_INDEX_LENGTH);
 		ensure!(
@@ -37,10 +53,21 @@ impl BlockIndex {
 		Ok(block_index)
 	}
 
+	/// Creates a `BlockIndex` from a Brotli compressed binary blob.
+	///
+	/// # Arguments
+	/// * `buf` - The Brotli compressed binary data representing the block index.
+	///
+	/// # Errors
+	/// Returns an error if the binary data cannot be decompressed or parsed correctly.
 	pub fn from_brotli_blob(buf: Blob) -> Result<Self> {
 		Self::from_blob(decompress_brotli(&buf)?)
 	}
 
+	/// Returns a `TileBBoxPyramid` representing the bounding boxes of the blocks in the index.
+	///
+	/// # Returns
+	/// A `TileBBoxPyramid` representing the bounding boxes of the blocks.
 	pub fn get_bbox_pyramid(&self) -> TileBBoxPyramid {
 		let mut pyramid = TileBBoxPyramid::new_empty();
 		for (_coord, block) in self.lookup.iter() {
@@ -50,10 +77,21 @@ impl BlockIndex {
 		pyramid
 	}
 
+	/// Adds a block to the index.
+	///
+	/// # Arguments
+	/// * `block` - The block to add.
 	pub fn add_block(&mut self, block: BlockDefinition) {
 		self.lookup.insert(*block.get_coord3(), block);
 	}
 
+	/// Converts the `BlockIndex` to a binary blob.
+	///
+	/// # Returns
+	/// A binary blob representing the `BlockIndex`.
+	///
+	/// # Errors
+	/// Returns an error if the conversion fails.
 	pub fn as_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_be();
 		for (_coord, block) in self.lookup.iter() {
@@ -63,18 +101,40 @@ impl BlockIndex {
 		Ok(writer.into_blob())
 	}
 
+	/// Converts the `BlockIndex` to a Brotli compressed binary blob.
+	///
+	/// # Returns
+	/// A Brotli compressed binary blob representing the `BlockIndex`.
+	///
+	/// # Errors
+	/// Returns an error if the conversion fails.
 	pub fn as_brotli_blob(&self) -> Result<Blob> {
 		compress_brotli(&self.as_blob()?)
 	}
 
+	/// Retrieves a block from the index by its coordinates.
+	///
+	/// # Arguments
+	/// * `coord` - The coordinates of the block.
+	///
+	/// # Returns
+	/// An option containing a reference to the block if found, or `None` if not found.
 	pub fn get_block(&self, coord: &TileCoord3) -> Option<&BlockDefinition> {
 		self.lookup.get(coord)
 	}
 
+	/// Returns the number of blocks in the index.
+	///
+	/// # Returns
+	/// The number of blocks in the index.
 	pub fn len(&self) -> usize {
 		self.lookup.len()
 	}
 
+	/// Returns an iterator over the blocks in the index.
+	///
+	/// # Returns
+	/// An iterator over the blocks in the index.
 	pub fn iter(&self) -> impl Iterator<Item = &BlockDefinition> {
 		self.lookup.values()
 	}

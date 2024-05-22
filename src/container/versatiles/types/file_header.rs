@@ -1,5 +1,9 @@
 #![allow(dead_code)]
 
+//! This module defines the `FileHeader` struct, which represents the header of a versatiles file.
+//!
+//! The `FileHeader` struct contains metadata about the file, including its tile format, compression, zoom range, bounding box, and byte ranges for metadata and blocks.
+
 use crate::types::{
 	Blob, ByteRange, DataReader, TileCompression, TileFormat, ValueReader, ValueReaderSlice, ValueWriter,
 	ValueWriterBlob,
@@ -9,19 +13,28 @@ use anyhow::{bail, ensure, Result};
 const HEADER_LENGTH: u64 = 66;
 const BBOX_SCALE: i32 = 10000000;
 
+/// A struct representing the header of a versatiles file.
 #[derive(Debug, PartialEq)]
 pub struct FileHeader {
 	pub zoom_range: [u8; 2],
 	pub bbox: [i32; 4],
-
 	pub tile_format: TileFormat,
 	pub compression: TileCompression,
-
 	pub meta_range: ByteRange,
 	pub blocks_range: ByteRange,
 }
 
 impl FileHeader {
+	/// Creates a new `FileHeader`.
+	///
+	/// # Arguments
+	/// * `tile_format` - The format of the tiles in the file.
+	/// * `compression` - The compression method used for the tiles.
+	/// * `zoom_range` - The range of zoom levels in the file.
+	/// * `bbox` - The bounding box of the tiles in the file.
+	///
+	/// # Errors
+	/// Returns an error if the zoom range or bounding box is invalid.
 	pub fn new(
 		tile_format: &TileFormat, compression: &TileCompression, zoom_range: [u8; 2], bbox: &[f64; 4],
 	) -> Result<FileHeader> {
@@ -48,12 +61,23 @@ impl FileHeader {
 		})
 	}
 
+	/// Reads a `FileHeader` from a `DataReader`.
+	///
+	/// # Arguments
+	/// * `reader` - The data reader to read from.
+	///
+	/// # Errors
+	/// Returns an error if the header cannot be read or parsed correctly.
 	pub async fn from_reader(reader: &mut DataReader) -> Result<FileHeader> {
 		let range = ByteRange::new(0, HEADER_LENGTH);
 		let blob = reader.read_range(&range).await?;
 		FileHeader::from_blob(&blob)
 	}
 
+	/// Converts the `FileHeader` to a binary blob.
+	///
+	/// # Errors
+	/// Returns an error if the conversion fails.
 	pub fn to_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_be();
 		writer.write_slice(b"versatiles_v02")?;
@@ -102,6 +126,13 @@ impl FileHeader {
 		Ok(writer.into_blob())
 	}
 
+	/// Creates a `FileHeader` from a binary blob.
+	///
+	/// # Arguments
+	/// * `blob` - The binary data representing the file header.
+	///
+	/// # Errors
+	/// Returns an error if the binary data cannot be parsed correctly.
 	fn from_blob(blob: &Blob) -> Result<FileHeader> {
 		if blob.len() != HEADER_LENGTH {
 			bail!("'{blob:?}' is not a valid versatiles header. A header should be {HEADER_LENGTH} bytes long.");

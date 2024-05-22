@@ -1,11 +1,34 @@
+//! Module `getter` provides functionalities to read and write tile containers from various sources such as local files, directories, and URLs.
+//!
+//! # Example Usage
+//!
+//! ```rust
+//! use versatiles::container::{get_reader, TilesReader, write_to_filename};
+//! use versatiles::types::TileFormat;
+//! use std::path::Path;
+//! use anyhow::Result;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<()> {
+//!     // Define the input filename (local file or URL)
+//!     let input_filename = "testdata/berlin.pmtiles";
+//!     let mut reader = get_reader(input_filename).await?;
+//!
+//!     // Define the output filename
+//!     let output_filename = "testdata/temp3.versatiles";
+//!
+//!     // Write the tiles to the output file
+//!     write_to_filename(&mut *reader, output_filename).await?;
+//!
+//!     println!("Tiles have been successfully converted and saved to {output_filename}");
+//!     Ok(())
+//! }
+//! ```
+
 use crate::{
 	container::{
-		directory::{DirectoryTilesReader, DirectoryTilesWriter},
-		mbtiles::MBTilesReader,
-		pmtiles::{PMTilesReader, PMTilesWriter},
-		tar::{TarTilesReader, TarTilesWriter},
-		versatiles::{VersaTilesReader, VersaTilesWriter},
-		TilesReader, TilesWriter,
+		DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, PMTilesReader, PMTilesWriter, TarTilesReader,
+		TarTilesWriter, TilesReader, TilesWriter, VersaTilesReader, VersaTilesWriter,
 	},
 	types::{DataReader, DataReaderHttp},
 };
@@ -15,6 +38,7 @@ use std::env;
 
 use super::mbtiles::MBTilesWriter;
 
+/// Get a reader for a given filename or URL.
 pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReader>> {
 	let extension = get_extension(filename);
 
@@ -47,6 +71,7 @@ pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReader>> {
 	}
 }
 
+/// Parse a filename as a URL and return a DataReader if successful.
 fn parse_as_url(filename: &str) -> Result<DataReader> {
 	if filename.starts_with("http://") || filename.starts_with("https://") {
 		Ok(DataReaderHttp::from_url(Url::parse(filename)?)?)
@@ -55,6 +80,7 @@ fn parse_as_url(filename: &str) -> Result<DataReader> {
 	}
 }
 
+/// Write tiles from a reader to a file.
 pub async fn write_to_filename(reader: &mut dyn TilesReader, filename: &str) -> Result<()> {
 	let path = env::current_dir()?.join(filename);
 
@@ -72,6 +98,7 @@ pub async fn write_to_filename(reader: &mut dyn TilesReader, filename: &str) -> 
 	}
 }
 
+/// Get the file extension from a filename.
 fn get_extension(filename: &str) -> &str {
 	filename
 		.split('?')
@@ -84,16 +111,14 @@ fn get_extension(filename: &str) -> &str {
 pub mod tests {
 	use super::*;
 	use crate::{
-		container::{
-			mock::{MockTilesReader, MockTilesWriter},
-			TilesReaderParameters,
-		},
+		container::{MockTilesReader, MockTilesWriter, TilesReaderParameters},
 		types::{TileBBoxPyramid, TileCompression, TileFormat},
 	};
 	use anyhow::Result;
 	use assert_fs::{fixture::NamedTempFile, TempDir};
 	use std::time::Instant;
 
+	/// Create a test file with given parameters.
 	pub async fn make_test_file(
 		tile_format: TileFormat, compression: TileCompression, max_zoom_level: u8, extension: &str,
 	) -> Result<NamedTempFile> {
@@ -104,7 +129,7 @@ pub mod tests {
 			TileBBoxPyramid::new_full(max_zoom_level),
 		))?;
 
-		// get to test container comverter
+		// get to test container converter
 		let container_file = match extension {
 			"tar" => NamedTempFile::new("temp.tar"),
 			"versatiles" => NamedTempFile::new("temp.versatiles"),
@@ -116,6 +141,7 @@ pub mod tests {
 		Ok(container_file)
 	}
 
+	/// Test writers and readers for various formats.
 	#[test]
 	fn writers_and_readers() -> Result<()> {
 		#[derive(Debug)]
@@ -145,7 +171,7 @@ pub mod tests {
 				File(NamedTempFile),
 			}
 
-			// get to test container comverter
+			// get to test container converter
 			let path: TempType = match container {
 				Container::Directory => TempType::Dir(TempDir::new()?),
 				Container::Tar => TempType::File(NamedTempFile::new("temp.tar")?),

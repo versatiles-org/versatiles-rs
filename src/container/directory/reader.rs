@@ -1,3 +1,49 @@
+//! This module provides functionality for reading tile data from a directory structure.
+//!
+//! The `DirectoryTilesReader` struct is the primary component of this module, offering methods to open a directory, read metadata, and fetch tile data based on coordinates.
+//!
+//! ## Directory Structure
+//! The directory should follow a specific structure to organize the tiles:
+//! ```text
+//! <root>/<z>/<x>/<y>.<format>[.<compression>]
+//! ```
+//! - `<z>`: Zoom level (directory)
+//! - `<x>`: Tile X coordinate (directory)
+//! - `<y>.<format>[.<compression>]`: Tile Y coordinate with the tile format and optional compression type as the file extension
+//!
+//! Example:
+//! ```text
+//! /tiles/1/2/3.png
+//! /tiles/1/2/4.jpg.br
+//! /tiles/meta.json
+//! ```
+//!
+//! ## Features
+//! - Supports multiple tile formats and compressions
+//! - Automatically detects and reads metadata files in the directory
+//! - Provides asynchronous methods to fetch tile data
+//!
+//! ## Usage
+//! ```no_run
+//! use versatiles::{
+//!     container::{DirectoryTilesReader, TilesReader},
+//!     types::TileCoord3
+//! };
+//! use std::path::Path;
+//!
+//! #[tokio::main]
+//! async fn main() {
+//!     let mut reader = DirectoryTilesReader::open_path(Path::new("/path/to/tiles")).unwrap();
+//!     let tile_data = reader.get_tile_data(&TileCoord3::new(1, 2, 3).unwrap()).await.unwrap();
+//! }
+//! ```
+//!
+//! ## Errors
+//! - Returns errors if the directory is not found, is not in the correct format, or contains inconsistent tile formats or compressions.
+//!
+//! ## Testing
+//! This module includes comprehensive tests to ensure the correct functionality of opening paths, reading metadata, handling different file formats, and edge cases.
+
 use crate::{
 	container::{TilesReader, TilesReaderParameters},
 	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
@@ -13,6 +59,12 @@ use std::{
 	path::{Path, PathBuf},
 };
 
+/// A reader for tiles stored in a directory structure.
+/// The directory should be structured as follows:
+/// ```text
+/// <root>/<z>/<x>/<y>.<format>[.<compression>]
+/// ```
+/// Where `<z>` is the zoom level, `<x>` and `<y>` are the tile coordinates, `<format>` is the tile format, and `<compression>` is the compression type (optional).
 pub struct DirectoryTilesReader {
 	meta: Option<Blob>,
 	dir: PathBuf,
@@ -21,6 +73,15 @@ pub struct DirectoryTilesReader {
 }
 
 impl DirectoryTilesReader {
+	/// Opens a directory and initializes a `DirectoryTilesReader`.
+	///
+	/// # Arguments
+	///
+	/// * `dir` - A path to the directory containing the tiles.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the directory does not exist, is not a directory, or if no tiles are found.
 	pub fn open_path(dir: &Path) -> Result<DirectoryTilesReader>
 	where
 		Self: Sized,

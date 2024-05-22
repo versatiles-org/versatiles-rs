@@ -137,7 +137,7 @@ impl Debug for TileSource {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::mock::{MockTilesReader, MockTilesReaderProfile};
+	use crate::container::{MockTilesReader, MockTilesReaderProfile};
 	use anyhow::Result;
 
 	// Test the constructor function for TileSource

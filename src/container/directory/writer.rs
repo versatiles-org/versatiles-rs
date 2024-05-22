@@ -1,3 +1,43 @@
+//! This module provides functionality for writing tile data to a directory structure.
+//!
+//! The `DirectoryTilesWriter` struct is the primary component of this module, offering methods to write metadata and tile data to a specified directory path.
+//!
+//! ## Directory Structure
+//! The directory structure for writing tiles follows the same format as reading:
+//! ```text
+//! <root>/<z>/<x>/<y>.<format>[.<compression>]
+//! ```
+//! - `<z>`: Zoom level (directory)
+//! - `<x>`: Tile X coordinate (directory)
+//! - `<y>.<format>[.<compression>]`: Tile Y coordinate with the tile format and optional compression type as the file extension
+//!
+//! Example:
+//! ```text
+//! /tiles/1/2/3.png
+//! /tiles/1/2/4.jpg.br
+//! /tiles/meta.json
+//! ```
+//!
+//! ## Features
+//! - Supports writing metadata and tile data in multiple formats and compressions
+//! - Ensures directory structure is created if it does not exist
+//! - Provides progress feedback during the write process
+//!
+//! ## Usage
+//! ```ignore
+//! use versatiles::container::{DirectoryTilesWriter, TilesWriter};
+//! use std::path::Path;
+//!
+//! let reader = // initialize your TilesReader
+//! DirectoryTilesWriter::write_to_path(reader, Path::new("/path/to/output")).await.unwrap();
+//! ```
+//!
+//! ## Errors
+//! - Returns errors if the directory path is not absolute, if there are issues with file I/O, or if multiple tile formats/compressions are found.
+//!
+//! ## Testing
+//! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying directory structure.
+
 use crate::{
 	container::{TilesReader, TilesWriter},
 	types::{progress::get_progress_bar, Blob, DataWriterTrait},
@@ -11,9 +51,18 @@ use std::{
 	path::{Path, PathBuf},
 };
 
+/// A struct that provides functionality to write tile data to a directory structure.
 pub struct DirectoryTilesWriter {}
 
 impl DirectoryTilesWriter {
+	/// Writes the given blob to the specified path. Creates the necessary directory structure if it doesn't exist.
+	///
+	/// # Arguments
+	/// * `path` - The path where the blob should be written.
+	/// * `blob` - The blob data to write.
+	///
+	/// # Errors
+	/// Returns an error if the parent directory cannot be created or if writing to the file fails.
 	fn write(path: PathBuf, blob: Blob) -> Result<()> {
 		let parent = path.parent().unwrap();
 		if !parent.exists() {
@@ -27,6 +76,14 @@ impl DirectoryTilesWriter {
 
 #[async_trait]
 impl TilesWriter for DirectoryTilesWriter {
+	/// Writes the tile data and metadata from the given `TilesReader` to the specified directory path.
+	///
+	/// # Arguments
+	/// * `reader` - A mutable reference to the `TilesReader` providing the data.
+	/// * `path` - The directory path where the data should be written.
+	///
+	/// # Errors
+	/// Returns an error if the path is not absolute, if there are issues with file I/O, or if compression fails.
 	async fn write_to_path(reader: &mut dyn TilesReader, path: &Path) -> Result<()> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
@@ -77,6 +134,15 @@ impl TilesWriter for DirectoryTilesWriter {
 
 		Ok(())
 	}
+
+	/// Writes the tile data from the given `TilesReader` to the specified `DataWriterTrait`.
+	///
+	/// # Arguments
+	/// * `reader` - A mutable reference to the `TilesReader` providing the data.
+	/// * `writer` - A mutable reference to the `DataWriterTrait` where the data should be written.
+	///
+	/// # Errors
+	/// This function always returns an error as it is not implemented.
 	async fn write_to_writer(_reader: &mut dyn TilesReader, _writer: &mut dyn DataWriterTrait) -> Result<()> {
 		bail!("not implemented")
 	}
@@ -86,15 +152,13 @@ impl TilesWriter for DirectoryTilesWriter {
 mod tests {
 	use super::*;
 	use crate::{
-		container::{
-			mock::{MockTilesReader, MOCK_BYTES_PBF},
-			TilesReaderParameters,
-		},
+		container::{MockTilesReader, TilesReaderParameters, MOCK_BYTES_PBF},
 		types::{TileBBoxPyramid, TileCompression, TileFormat},
 		utils::decompress_gzip,
 	};
 	use assert_fs;
 
+	/// Tests the functionality of writing tile data to a directory from a mock reader.
 	#[tokio::test]
 	async fn test_convert_from() -> Result<()> {
 		let temp_dir = assert_fs::TempDir::new()?;

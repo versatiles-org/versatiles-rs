@@ -1,8 +1,50 @@
-use super::types::{EntriesV3, HeaderV3, TileId};
+//! Provides functionality for reading tile data from a PMTiles container.
+//!
+//! The `PMTilesReader` struct is the primary component of this module, offering methods to read metadata and tile data from a PMTiles container.
+//!
+//! ## Features
+//! - Supports reading metadata and tile data with internal compression
+//! - Provides methods to query the container for tile data based on coordinates
+//! - Implements caching for efficient data retrieval
+//!
+//! ## Usage Example
+//! ```rust
+//! use versatiles::container::{PMTilesReader, TilesReader};
+//! use versatiles::types::TileCoord3;
+//! use std::path::Path;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     // Open the PMTiles container
+//!     let path = std::env::current_dir()?.join("testdata/berlin.pmtiles");
+//!     let mut reader = PMTilesReader::open_path(&path).await?;
+//!
+//!     // Get metadata
+//!     if let Some(meta) = reader.get_meta()? {
+//!         println!("Metadata: {:?}", meta);
+//!     }
+//!
+//!     // Get tile data for specific coordinates
+//!     let coord = TileCoord3::new(1, 1, 1)?;
+//!     if let Some(tile_data) = reader.get_tile_data(&coord).await? {
+//!         println!("Tile data: {:?}", tile_data);
+//!     }
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ## Errors
+//! - Returns errors if the container file does not exist, if the path is not absolute, or if there are issues querying the container.
+//!
+//! ## Testing
+//! This module includes comprehensive tests to ensure the correct functionality of reading metadata, handling different file formats, and verifying tile data.
+
+use super::types::{tile_id_to_coord, EntriesV3, HeaderV3, TileId};
 #[cfg(feature = "full")]
 use crate::utils::pretty_print::PrettyPrint;
 use crate::{
-	container::{pmtiles::types::tile_id_to_coord, TilesReader, TilesReaderParameters},
+	container::{TilesReader, TilesReaderParameters},
 	types::{Blob, ByteRange, DataReader, DataReaderFile, LimitedCache, TileBBoxPyramid, TileCompression, TileCoord3},
 	utils::decompress,
 };
@@ -10,6 +52,7 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use std::{fmt::Debug, path::Path, sync::Arc};
 
+/// A struct that provides functionality to read tile data from a PMTiles container.
 #[derive(Debug)]
 pub struct PMTilesReader {
 	pub data_reader: DataReader,
@@ -23,11 +66,24 @@ pub struct PMTilesReader {
 }
 
 impl PMTilesReader {
-	// Create a new TilesReader from a given filename
+	/// Creates a new `PMTilesReader` from a given filename.
+	///
+	/// # Arguments
+	/// * `path` - The path to the PMTiles container file.
+	///
+	/// # Errors
+	/// Returns an error if the file does not exist or if there is an error opening the reader.
 	pub async fn open_path(path: &Path) -> Result<PMTilesReader> {
 		PMTilesReader::open_reader(DataReaderFile::open(path)?).await
 	}
 
+	/// Creates a new `PMTilesReader` from a given `DataReader`.
+	///
+	/// # Arguments
+	/// * `data_reader` - A data reader for the PMTiles container.
+	///
+	/// # Errors
+	/// Returns an error if there is an issue reading or decompressing data.
 	pub async fn open_reader(mut data_reader: DataReader) -> Result<PMTilesReader>
 	where
 		Self: Sized,
@@ -63,6 +119,7 @@ impl PMTilesReader {
 	}
 }
 
+/// Calculates the bounding box pyramid from the provided data.
 fn calc_bbox_pyramid(
 	root_bytes_uncompressed: &Blob, leaves_bytes: &Blob, compression: &TileCompression,
 ) -> Result<TileBBoxPyramid> {
@@ -97,26 +154,44 @@ fn calc_bbox_pyramid(
 
 #[async_trait]
 impl TilesReader for PMTilesReader {
+	/// Returns the container name.
 	fn get_container_name(&self) -> &str {
 		"pmtiles"
 	}
 
+	/// Returns the parameters of the tiles reader.
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
+	/// Overrides the tile compression method.
+	///
+	/// # Arguments
+	/// * `tile_compression` - The new tile compression method.
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
 
+	/// Returns the metadata as a `Blob`.
+	///
+	/// # Errors
+	/// Returns an error if there is an issue retrieving the metadata.
 	fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(Some(self.meta.clone()))
 	}
 
+	/// Returns the name of the PMTiles container.
 	fn get_name(&self) -> &str {
 		self.data_reader.get_name()
 	}
 
+	/// Returns the tile data for the specified coordinates as a `Blob`.
+	///
+	/// # Arguments
+	/// * `coord` - The coordinates of the tile.
+	///
+	/// # Errors
+	/// Returns an error if there is an issue retrieving the tile data.
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data {:?}", coord);
 

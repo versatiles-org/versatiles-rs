@@ -1,3 +1,9 @@
+//! Module `reader` provides traits and implementations for reading tiles from various container formats.
+//!
+//! The `TilesReader` trait defines the necessary methods to be implemented by any tile reader.
+//! It includes methods for retrieving metadata, tile data, and streaming tiles within a bounding box.
+//!
+
 #[cfg(feature = "full")]
 use crate::{container::ProbeDepth, utils::pretty_print::PrettyPrint};
 use crate::{
@@ -10,13 +16,16 @@ use futures_util::{stream, StreamExt};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 
+/// Parameters for configuring a `TilesReader`.
 #[derive(Debug, PartialEq, Clone)]
 pub struct TilesReaderParameters {
 	pub bbox_pyramid: TileBBoxPyramid,
 	pub tile_compression: TileCompression,
 	pub tile_format: TileFormat,
 }
+
 impl TilesReaderParameters {
+	/// Create a new `TilesReaderParameters`.
 	pub fn new(
 		tile_format: TileFormat, tile_compression: TileCompression, bbox_pyramid: TileBBoxPyramid,
 	) -> TilesReaderParameters {
@@ -28,27 +37,28 @@ impl TilesReaderParameters {
 	}
 }
 
+/// Trait defining the behavior of a tile reader.
 #[async_trait]
 pub trait TilesReader: Debug + Send + Sync + Unpin {
-	/// some kine of name for this reader source, e.g. the filename
+	/// Get the name of the reader source, e.g., the filename.
 	fn get_name(&self) -> &str;
 
-	/// container name, e.g. versatiles, mbtiles, ...
+	/// Get the container name, e.g., versatiles, mbtiles, etc.
 	fn get_container_name(&self) -> &str;
 
+	/// Get the reader parameters.
 	fn get_parameters(&self) -> &TilesReaderParameters;
 
+	/// Override the tile compression.
 	fn override_compression(&mut self, tile_compression: TileCompression);
 
-	/// get meta data, always uncompressed
+	/// Get the metadata, always uncompressed.
 	fn get_meta(&self) -> Result<Option<Blob>>;
 
-	/// always compressed with tile_compression and formatted with get_tile_format
-	/// returns the tile in the coordinate system of the source
+	/// Get tile data for the given coordinate, always compressed and formatted.
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>>;
 
-	/// always compressed with get_tile_compression and formatted with get_tile_format
-	/// returns the tiles in the coordinate system of the source
+	/// Get a stream of tiles within the bounding box.
 	async fn get_bbox_tile_stream(&mut self, bbox: &TileBBox) -> TilesStream {
 		let mutex = Arc::new(Mutex::new(self));
 		let coords: Vec<TileCoord3> = bbox.iter_coords().collect();
@@ -185,18 +195,23 @@ mod tests {
 		fn get_name(&self) -> &str {
 			"dummy"
 		}
-		fn get_parameters(&self) -> &TilesReaderParameters {
-			&self.parameters
-		}
-		fn override_compression(&mut self, tile_compression: TileCompression) {
-			self.parameters.tile_compression = tile_compression;
-		}
-		fn get_meta(&self) -> Result<Option<Blob>> {
-			Ok(Some(Blob::from("test metadata")))
-		}
+
 		fn get_container_name(&self) -> &str {
 			"test container name"
 		}
+
+		fn get_parameters(&self) -> &TilesReaderParameters {
+			&self.parameters
+		}
+
+		fn override_compression(&mut self, tile_compression: TileCompression) {
+			self.parameters.tile_compression = tile_compression;
+		}
+
+		fn get_meta(&self) -> Result<Option<Blob>> {
+			Ok(Some(Blob::from("test metadata")))
+		}
+
 		async fn get_tile_data(&mut self, _coord: &TileCoord3) -> Result<Option<Blob>> {
 			Ok(Some(Blob::from("test tile data")))
 		}
@@ -205,7 +220,7 @@ mod tests {
 	#[tokio::test]
 	#[cfg(feature = "full")]
 	async fn reader() -> Result<()> {
-		use crate::container::mock::MockTilesWriter;
+		use crate::container::MockTilesWriter;
 
 		let mut reader = TestReader::new_dummy();
 

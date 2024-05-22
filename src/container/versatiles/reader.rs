@@ -1,4 +1,48 @@
-// Import necessary modules and traits
+//! Module for reading `versatiles` tile containers.
+//!
+//! This module provides the `VersaTilesReader` struct, which implements the `TilesReader` trait for reading tile data from a `versatiles` container. It supports reading metadata, tile data, and probing the container for debugging purposes.
+//!
+//! ```no_run
+//! use versatiles::container::{TilesReader, TilesReaderParameters, VersaTilesReader};
+//! use versatiles::types::{TileCoord3, TileCompression, TileFormat, TileBBoxPyramid};
+//! use anyhow::Result;
+//! use futures_util::StreamExt;
+//! use std::path::Path;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<()> {
+//!     // Specify the path to the .versatiles file
+//!     let path = Path::new("path/to/your/file.versatiles");
+//!     
+//!     // Open the VersaTilesReader
+//!     let mut reader = VersaTilesReader::open_path(&path).await?;
+//!
+//!     // Print container information
+//!     println!("Container Name: {}", reader.get_container_name());
+//!     println!("Container Parameters: {:?}", reader.get_parameters());
+//!     if let Some(meta) = reader.get_meta()? {
+//!         println!("Metadata: {meta:?}");
+//!     }
+//!
+//!     // Fetch a specific tile
+//!     let coord = TileCoord3::new(15, 1, 4)?;
+//!     if let Some(tile_data) = reader.get_tile_data(&coord).await? {
+//!         println!("Tile Data: {tile_data:?}");
+//!     } else {
+//!         println!("Tile not found");
+//!     }
+//!
+//!     // Fetch tiles in a bounding box
+//!     let bbox = reader.get_parameters().bbox_pyramid.get_level_bbox(4).clone();
+//!     let mut stream = reader.get_bbox_tile_stream(&bbox).await;
+//!     while let Some((coord, tile_data)) = stream.next().await {
+//!         println!("Tile Coord: {coord:?}, Data: {tile_data:?}");
+//!     }
+//!
+//!     Ok(())
+//! }
+//! ```
+
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 #[cfg(feature = "full")]
 use crate::utils::pretty_print::PrettyPrint;
@@ -16,7 +60,7 @@ use log::trace;
 use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
 use tokio::sync::Mutex;
 
-// Define the TilesReader struct
+/// `VersaTilesReader` is responsible for reading tile data from a `versatiles` container.
 pub struct VersaTilesReader {
 	meta: Option<Blob>,
 	reader: DataReader,
@@ -25,14 +69,30 @@ pub struct VersaTilesReader {
 	tile_index_cache: LimitedCache<TileCoord3, Arc<TileIndex>>,
 }
 
-// Implement methods for the TilesReader struct
+#[allow(dead_code)]
 impl VersaTilesReader {
-	// Create a new TilesReader from a given filename
+	/// Opens a `versatiles` container from a file path.
+	///
+	/// # Arguments
+	///
+	/// * `path` - The path to the `versatiles` file.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the file cannot be opened or read.
 	pub async fn open_path(path: &Path) -> Result<VersaTilesReader> {
 		VersaTilesReader::open_reader(DataReaderFile::open(path)?).await
 	}
 
-	// Create a new TilesReader from a given data reader
+	/// Opens a `versatiles` container from a `DataReader`.
+	///
+	/// # Arguments
+	///
+	/// * `reader` - A `DataReader` instance.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the reader cannot be initialized.
 	pub async fn open_reader(mut reader: DataReader) -> Result<VersaTilesReader> {
 		let header = FileHeader::from_reader(&mut reader)
 			.await
@@ -73,6 +133,15 @@ impl VersaTilesReader {
 		})
 	}
 
+	/// Retrieves the tile index for a given block.
+	///
+	/// # Arguments
+	///
+	/// * `block` - A `BlockDefinition` instance.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the tile index cannot be retrieved.
 	async fn get_block_tile_index(&mut self, block: &BlockDefinition) -> Result<Arc<TileIndex>> {
 		let block_coord = block.get_coord3();
 
@@ -93,34 +162,34 @@ impl VersaTilesReader {
 
 		Ok(b.add(*block_coord, Arc::new(tile_index)))
 	}
-	#[allow(dead_code)]
+
+	/// Retrieves the size of the index.
 	fn get_index_size(&self) -> u64 {
 		self.block_index.iter().map(|b| b.get_index_range().length).sum()
 	}
-	#[allow(dead_code)]
+
+	/// Retrieves the size of the tiles.
 	fn get_tiles_size(&self) -> u64 {
 		self.block_index.iter().map(|b| b.get_tiles_range().length).sum()
 	}
 }
 
-// Implement Send and Sync traits for TilesReader
 unsafe impl Send for VersaTilesReader {}
 unsafe impl Sync for VersaTilesReader {}
 
-// Implement the TilesReaderTrait for the TilesReader struct
 #[async_trait]
 impl TilesReader for VersaTilesReader {
-	// Get the container name
+	/// Gets the container name.
 	fn get_container_name(&self) -> &str {
 		"versatiles"
 	}
 
-	// Get metadata
+	/// Gets metadata.
 	fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(self.meta.clone())
 	}
 
-	// Get TilesReader parameters
+	/// Gets the parameters.
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
@@ -129,7 +198,7 @@ impl TilesReader for VersaTilesReader {
 		self.parameters.tile_compression = tile_compression;
 	}
 
-	// Get tile data for a given coordinate
+	/// Gets tile data for a given coordinate.
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		// Calculate block coordinate
 		let block_coord = TileCoord3::new(coord.get_x().shr(8), coord.get_y().shr(8), coord.get_z())?;
@@ -170,6 +239,7 @@ impl TilesReader for VersaTilesReader {
 		Ok(Some(self.reader.read_range(&tile_range).await?))
 	}
 
+	/// Gets a stream of tile data for a given bounding box.
 	async fn get_bbox_tile_stream(&mut self, bbox: &TileBBox) -> TilesStream {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
@@ -426,21 +496,14 @@ impl PartialEq for VersaTilesReader {
 	}
 }
 
-#[cfg(test)]
-#[cfg(feature = "full")]
+#[cfg(all(test, feature = "full"))]
 mod tests {
 	use super::*;
 	use crate::{
-		container::{
-			make_test_file,
-			mock::{MockTilesReader, MOCK_BYTES_PBF},
-			versatiles::VersaTilesWriter,
-			TilesWriter,
-		},
+		container::{make_test_file, MockTilesReader, TilesWriter, VersaTilesWriter, MOCK_BYTES_PBF},
 		types::{DataWriterBlob, TileBBoxPyramid, TileFormat},
 		utils::decompress_gzip,
 	};
-	use anyhow::Result;
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
@@ -487,7 +550,6 @@ mod tests {
 		Ok(())
 	}
 
-	// Test tile fetching
 	#[tokio::test]
 	async fn probe() -> Result<()> {
 		use crate::utils::pretty_print::PrettyPrint;

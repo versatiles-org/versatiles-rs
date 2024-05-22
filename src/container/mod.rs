@@ -5,11 +5,13 @@
 //! | Format         | Read | Write | Feature   |
 //! |----------------|:----:|:-----:|-----------|
 //! | `*.versatiles` | ✅   | ✅     | `default` |
-//! | `*.mbtiles`    | ✅   | ⛔️     | `full`    |
+//! | `*.mbtiles`    | ✅   | ✅     | `full`    |
 //! | `*.pmtiles`    | ✅   | ✅     | `full`    |
 //! | `*.tar`        | ✅   | ✅     | `full`    |
 //! | directory      | ✅   | ✅     | `default` |
 //!
+//! This module provides a unified interface for reading and writing various tile container formats.
+//! Depending on the enabled features, it supports different formats with corresponding read and write capabilities.
 
 mod types;
 pub use types::*;
@@ -20,12 +22,16 @@ pub use reader::*;
 mod writer;
 pub use writer::*;
 
-pub mod directory;
+mod directory;
+pub use directory::*;
 
-pub mod versatiles;
+mod versatiles;
+pub use versatiles::*;
 
 #[cfg(feature = "full")]
-pub mod converter;
+mod converter;
+#[cfg(feature = "full")]
+pub use converter::*;
 
 #[cfg(feature = "full")]
 mod getters;
@@ -36,12 +42,20 @@ pub use getters::*;
 
 #[cfg(feature = "full")]
 mod mbtiles;
+#[cfg(feature = "full")]
+pub use mbtiles::*;
 
 #[cfg(feature = "full")]
-pub mod pmtiles;
+mod pmtiles;
+#[cfg(feature = "full")]
+pub use pmtiles::*;
 
 #[cfg(feature = "full")]
-pub mod tar;
+mod tar;
+#[cfg(feature = "full")]
+pub use tar::*;
 
 #[cfg(test)]
-pub mod mock;
+mod mock;
+#[cfg(test)]
+pub use mock::*;

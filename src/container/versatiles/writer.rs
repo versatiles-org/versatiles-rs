@@ -1,4 +1,31 @@
-// Import necessary modules and traits
+//! This module provides functionality for writing tiles to `*.versatiles` containers.
+//!
+//! # Example
+//!
+//! ```rust
+//! use versatiles::container::{MBTilesReader, TilesWriter, VersaTilesWriter};
+//! use versatiles::types::{TileBBoxPyramid, TileCompression, TileFormat};
+//! use std::path::Path;
+//! use anyhow::Result;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<()> {
+//!     // Create a mock tiles reader
+//!     let path_in = std::env::current_dir()?.join("testdata/berlin.mbtiles");
+//!     let mut reader = MBTilesReader::open_path(&path_in)?;
+//!
+//!     // Specify the output path for the .versatiles file
+//!     let path_out = std::env::current_dir()?.join("testdata/temp5.versatiles");
+//!
+//!     // Write the tiles to the .versatiles file
+//!     VersaTilesWriter::write_to_path(&mut reader, &path_out).await?;
+//!
+//!     println!("Tiles have been successfully written to {path_out:?}");
+//!
+//!     Ok(())
+//! }
+//! ```
+
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 use crate::{
 	container::{TilesReader, TilesStream, TilesWriter},
@@ -14,16 +41,14 @@ use futures_util::{future::ready, StreamExt};
 use log::{debug, trace};
 use std::collections::HashMap;
 
-// Define TilesWriter struct
+/// A struct for writing tiles to a VersaTiles container.
 pub struct VersaTilesWriter {}
 
-// Implement TilesWriterTrait for TilesWriter
 #[async_trait]
 impl TilesWriter for VersaTilesWriter {
-	// Convert tiles from the TilesReader
+	/// Convert tiles from the TilesReader and write them to the writer.
 	async fn write_to_writer(reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait) -> Result<()> {
 		// Finalize the configuration
-
 		let parameters = reader.get_parameters();
 		trace!("convert_from - reader.parameters: {parameters:?}");
 
@@ -61,9 +86,8 @@ impl TilesWriter for VersaTilesWriter {
 	}
 }
 
-// Implement additional methods for TilesWriter
 impl VersaTilesWriter {
-	// Write metadata
+	/// Write metadata to the writer.
 	async fn write_meta(reader: &dyn TilesReader, writer: &mut dyn DataWriterTrait) -> Result<ByteRange> {
 		let meta: Blob = reader.get_meta()?.unwrap_or_default();
 		let compressed = compress(meta, &reader.get_parameters().tile_compression)?;
@@ -71,7 +95,7 @@ impl VersaTilesWriter {
 		writer.append(&compressed)
 	}
 
-	// Write blocks
+	/// Write blocks to the writer.
 	async fn write_blocks(reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait) -> Result<ByteRange> {
 		let pyramid = reader.get_parameters().bbox_pyramid.clone();
 
@@ -125,7 +149,7 @@ impl VersaTilesWriter {
 		Ok(range)
 	}
 
-	// Write a single block
+	/// Write a single block to the writer.
 	async fn write_block<'a>(
 		block: &BlockDefinition, reader: &'a mut dyn TilesReader, writer: &mut dyn DataWriterTrait,
 		progress: &mut Box<dyn ProgressTrait>,
@@ -177,8 +201,7 @@ impl VersaTilesWriter {
 		// Finish the block and write the index
 		debug!("finish block and write index {:?}", block);
 
-		//let mut writer = writer_mut.lock().await;
-		//let mut writer = writer_mut1.lock().await;
+		// Get the final writer position
 		let offset1 = writer.get_position()?;
 		let index_range = writer.append(&tile_index.as_brotli_blob()?)?;
 
