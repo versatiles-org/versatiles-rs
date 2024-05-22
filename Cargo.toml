@@ -93,6 +93,7 @@ tar = { version = "0.4.40", default-features = false, optional = true }
 terminal_size = { version = "0.3.0", default-features = false, optional = true }
 tokio = { version = "1.37.0", default-features = false, features = ["rt-multi-thread", "sync"] }
 webp = { version = "0.3.0", default-features = false, optional = true, features = ["img"] }
+yaml-rust2 = { version = "0.8.0", default-features = false, optional = true }
 
 [dev-dependencies]
 assert_fs = "1.1.1"
@@ -126,6 +127,7 @@ full = [
 	"dep:tar",
 	"dep:terminal_size",
 	"dep:webp",
+	"dep:yaml-rust2",
 	"http",
 ]
 http = ["dep:lazy_static", "dep:regex", "dep:reqwest"]

@@ -27,8 +27,8 @@
 
 use crate::{
 	container::{
-		DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, PMTilesReader, PMTilesWriter, TarTilesReader,
-		TarTilesWriter, TilesReader, TilesWriter, VersaTilesReader, VersaTilesWriter,
+		DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, MBTilesWriter, PMTilesReader, PMTilesWriter,
+		TarTilesReader, TarTilesWriter, TilesReader, TilesWriter, VersaTilesReader, VersaTilesWriter, VirtualTilesReader,
 	},
 	types::{DataReader, DataReaderHttp},
 };
@@ -36,10 +36,43 @@ use anyhow::{bail, Context, Result};
 use reqwest::Url;
 use std::env;
 
-use super::mbtiles::MBTilesWriter;
-
 /// Get a reader for a given filename or URL.
 pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReader>> {
+	let extension = get_extension(filename);
+
+	if let Ok(reader) = parse_as_url(filename) {
+		match extension {
+			"pmtiles" => return Ok(PMTilesReader::open_reader(reader).await?.boxed()),
+			"versatiles" => return Ok(VersaTilesReader::open_reader(reader).await?.boxed()),
+			"yaml" => return Ok(VirtualTilesReader::open_reader(reader).await?.boxed()),
+			_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
+		}
+	}
+
+	let path = env::current_dir()?.join(filename);
+
+	if !path.exists() {
+		bail!("path '{path:?}' does not exist")
+	}
+
+	if path.is_dir() {
+		return Ok(DirectoryTilesReader::open_path(&path)
+			.with_context(|| format!("opening {path:?} as directory"))?
+			.boxed());
+	}
+
+	match extension {
+		"mbtiles" => Ok(MBTilesReader::open_path(&path)?.boxed()),
+		"pmtiles" => Ok(PMTilesReader::open_path(&path).await?.boxed()),
+		"tar" => Ok(TarTilesReader::open_path(&path)?.boxed()),
+		"versatiles" => Ok(VersaTilesReader::open_path(&path).await?.boxed()),
+		"yaml" => Ok(VirtualTilesReader::open_path(&path).await?.boxed()),
+		_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
+	}
+}
+
+/// Get a reader for a given filename or URL.
+pub async fn get_simple_reader(filename: &str) -> Result<Box<dyn TilesReader>> {
 	let extension = get_extension(filename);
 
 	if let Ok(reader) = parse_as_url(filename) {
