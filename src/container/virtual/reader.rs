@@ -1,14 +1,25 @@
+use super::{operations::VirtualTileOperation, output::VirtualTilesOutput};
 use crate::{
-	container::{getters::get_simple_reader, TilesReader, TilesReaderParameters},
-	types::{Blob, DataReader, TileCompression, TileCoord3},
+	container::{
+		getters::get_simple_reader, r#virtual::operations::new_virtual_tile_operation, TilesReader, TilesReaderParameters,
+	},
+	types::{Blob, DataReader, TileCompression, TileCoord3, TileFormat},
+	utils::YamlWrapper,
 };
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use axum::async_trait;
-use std::{collections::HashMap, path::Path};
-use yaml_rust2::{Yaml, YamlLoader};
+use std::{collections::HashMap, path::Path, sync::Arc};
+use tokio::sync::Mutex;
+
+pub type VReader = Arc<Mutex<Box<dyn TilesReader>>>;
+pub type VOperation = Arc<Box<dyn VirtualTileOperation>>;
 
 pub struct VirtualTilesReader {
-	inputs: HashMap<String, Box<dyn TilesReader>>,
+	inputs: HashMap<String, VReader>,
+	operations: HashMap<String, VOperation>,
+	output: Vec<VirtualTilesOutput>,
+	tile_compression: TileCompression,
+	tile_format: TileFormat,
 	name: String,
 }
 
@@ -28,34 +39,57 @@ impl VirtualTilesReader {
 	}
 
 	async fn from_str(yaml: &str, name: &str) -> Result<VirtualTilesReader> {
-		let yaml = YamlLoader::load_from_str(yaml)?;
-		let yaml = yaml.get(0).ok_or(anyhow!("YAML is empty"))?;
+		let yaml = YamlWrapper::from_str(yaml)?;
 
-		let yaml = yaml.as_hash().ok_or(anyhow!("YAML has no keys"))?;
+		ensure!(yaml.is_hash(), "YAML must be an object");
 
-		let inputs = yaml
-			.get(&Yaml::from_str("inputs"))
-			.ok_or(anyhow!("YAML needs an entry 'inputs'"))?;
-		let inputs = parse_inputs(inputs).await.context("while parsing 'inputs'")?;
+		let (tile_compression, tile_format) = parse_parameters(&yaml.hash_get_value("parameters")?)
+			.await
+			.context("while parsing 'parameters'")?;
+
+		let inputs = parse_inputs(&yaml.hash_get_value("inputs")?)
+			.await
+			.context("while parsing 'inputs'")?;
+
+		let operations = if yaml.hash_has_key("operations") {
+			parse_operations(&yaml.hash_get_value("operations")?).context("while parsing 'operations'")?
+		} else {
+			HashMap::new()
+		};
+
+		let output =
+			parse_output(&yaml.hash_get_value("output")?, &inputs, &operations).context("while parsing 'output'")?;
 
 		Ok(VirtualTilesReader {
 			inputs,
+			operations,
+			output,
+			tile_compression,
+			tile_format,
 			name: name.to_string(),
 		})
 	}
 }
 
-async fn parse_inputs(yaml: &Yaml) -> Result<HashMap<String, Box<dyn TilesReader>>> {
-	let yaml = yaml.as_vec().ok_or(anyhow!("inputs must be an array"))?;
-	let mut inputs: HashMap<String, Box<dyn TilesReader>> = HashMap::new();
+async fn parse_parameters(yaml: &YamlWrapper) -> Result<(TileCompression, TileFormat)> {
+	ensure!(yaml.is_hash(), "'parameters' must be an object");
+	Ok((
+		TileCompression::from_str(yaml.hash_get_str("compression")?)?,
+		TileFormat::from_str(yaml.hash_get_str("format")?)?,
+	))
+}
 
-	for entry in yaml.iter() {
-		let name = get_yaml_str(entry, "name")?;
-		let filename = get_yaml_str(entry, "filename")?;
+async fn parse_inputs(yaml: &YamlWrapper) -> Result<HashMap<String, VReader>> {
+	ensure!(yaml.is_hash(), "'inputs' must be an object");
+
+	let mut inputs: HashMap<String, VReader> = HashMap::new();
+
+	for (name, entry) in yaml.hash_get_as_vec()? {
+		let filename = entry.hash_get_str("filename")?;
 		if inputs.contains_key(&name) {
 			bail!("input '{name}' is duplicated")
 		}
-		inputs.insert(name, get_simple_reader(&filename).await?);
+		inputs.insert(name, Arc::new(Mutex::new(get_simple_reader(filename).await?)));
 	}
 
 	if inputs.is_empty() {
@@ -64,15 +98,39 @@ async fn parse_inputs(yaml: &Yaml) -> Result<HashMap<String, Box<dyn TilesReader
 
 	Ok(inputs)
 }
-fn get_yaml_str(yaml: &Yaml, key: &str) -> Result<String> {
-	Ok(yaml
-		.as_hash()
-		.ok_or(anyhow!("entry must be an objects"))?
-		.get(&Yaml::from_str(key))
-		.ok_or(anyhow!("entry must contain key '{key}'"))?
-		.as_str()
-		.with_context(|| format!("value of '{key}' must be a string"))?
-		.to_string())
+
+fn parse_operations(yaml: &YamlWrapper) -> Result<HashMap<String, VOperation>> {
+	ensure!(yaml.is_hash(), "'operations' must be an object");
+
+	let mut operations: HashMap<String, VOperation> = HashMap::new();
+
+	for (index, (name, entry)) in yaml.hash_get_as_vec()?.iter().enumerate() {
+		operations.insert(
+			name.to_string(),
+			Arc::new(
+				new_virtual_tile_operation(entry).with_context(|| format!("while parsing operation no {}", index + 1))?,
+			),
+		);
+	}
+
+	Ok(operations)
+}
+
+fn parse_output(
+	yaml: &YamlWrapper, inputs: &HashMap<String, VReader>, operations: &HashMap<String, VOperation>,
+) -> Result<Vec<VirtualTilesOutput>> {
+	ensure!(yaml.is_array(), "'output' must be an array");
+
+	let mut output: Vec<VirtualTilesOutput> = Vec::new();
+
+	for (index, entry) in yaml.array_get_as_vec()?.iter().enumerate() {
+		output.push(
+			VirtualTilesOutput::new(entry, inputs, operations)
+				.with_context(|| format!("while parsing output no {}", index + 1))?,
+		);
+	}
+
+	Ok(output)
 }
 
 #[async_trait]

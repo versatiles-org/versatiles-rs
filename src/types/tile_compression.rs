@@ -24,6 +24,7 @@
 //! assert_eq!(filename, "file.txt");
 //! ```
 
+use anyhow::{bail, Result};
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
 use enumset::EnumSetType;
@@ -99,6 +100,18 @@ impl TileCompression {
 			return compression;
 		}
 		TileCompression::None
+	}
+
+	pub fn from_str(value: &str) -> Result<Self> {
+		Ok(match value.to_lowercase().trim() {
+			"br" => TileCompression::Brotli,
+			"brotli" => TileCompression::Brotli,
+			"gz" => TileCompression::Gzip,
+			"gzip" => TileCompression::Gzip,
+			"none" => TileCompression::None,
+			"raw" => TileCompression::None,
+			_ => bail!("Unknown tile compression. Expected brotli, gzip or none"),
+		})
 	}
 }
 

@@ -22,6 +22,7 @@
 //! assert_eq!(filename, "map");
 //! ```
 
+use anyhow::{bail, Result};
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
 use std::fmt::Display;
@@ -96,6 +97,13 @@ impl TileFormat {
 			return Some(format);
 		}
 		None
+	}
+
+	pub fn from_str(value: &str) -> Result<Self> {
+		Ok(match value.to_lowercase().trim_matches([' ', '.']) {
+			"pbf" => Self::PBF,
+			_ => bail!("Unknown tile format. Expected: PBF"),
+		})
 	}
 }
 
