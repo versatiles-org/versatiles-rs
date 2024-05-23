@@ -1,5 +1,8 @@
 use std::{cmp::Ordering, fmt::Debug, hash::Hash};
 
+use lazy_static::lazy_static;
+use regex::{Regex, RegexBuilder};
+
 #[derive(Clone, PartialEq)]
 pub enum GeoValue {
 	String(String),
@@ -117,6 +120,40 @@ impl GeoValue {
 			GeoValue::Int(_) => 3,
 			GeoValue::UInt(_) => 4,
 			GeoValue::Bool(_) => 5,
+		}
+	}
+	pub fn to_string(&self) -> String {
+		match self {
+			GeoValue::String(v) => v.to_string(),
+			GeoValue::Float(v) => v.to_string(),
+			GeoValue::Double(v) => v.to_string(),
+			GeoValue::Int(v) => v.to_string(),
+			GeoValue::UInt(v) => v.to_string(),
+			GeoValue::Bool(v) => v.to_string(),
+		}
+	}
+	pub fn parse_str(value: &str) -> Self {
+		lazy_static! {
+			static ref REG_DOUBLE: Regex = RegexBuilder::new(r"^\d*\.\d+$").build().unwrap();
+			static ref REG_INT: Regex = RegexBuilder::new(r"^\-\d+$").build().unwrap();
+			static ref REG_UINT: Regex = RegexBuilder::new(r"^\d+$").build().unwrap();
+		}
+
+		match value {
+			"" => GeoValue::String("".to_string()),
+			"true" => GeoValue::Bool(true),
+			"false" => GeoValue::Bool(false),
+			_ => {
+				if REG_DOUBLE.is_match(value) {
+					GeoValue::Double(value.parse::<f64>().unwrap())
+				} else if REG_INT.is_match(value) {
+					GeoValue::Int(value.parse::<i64>().unwrap())
+				} else if REG_UINT.is_match(value) {
+					GeoValue::UInt(value.parse::<u64>().unwrap())
+				} else {
+					GeoValue::String(value.to_string())
+				}
+			}
 		}
 	}
 }

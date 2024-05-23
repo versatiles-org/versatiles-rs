@@ -8,12 +8,13 @@ use crate::{
 	utils::{decompress, YamlWrapper},
 };
 use anyhow::{ensure, Context, Result};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 
 pub struct VirtualTilesOutput {
 	pub input: Arc<Mutex<Box<dyn TilesReader>>>,
 	pub input_compression: TileCompression,
+	pub input_name: String,
 	pub operations: Vec<Arc<Box<dyn VirtualTileOperation>>>,
 	pub bbox_pyramid: TileBBoxPyramid,
 }
@@ -28,6 +29,7 @@ impl VirtualTilesOutput {
 			.with_context(|| format!("while trying to lookup the input name"))?
 			.clone();
 
+		let input_name = input.lock().await.get_name().to_string();
 		let parameters = input.lock().await.get_parameters().clone();
 		let bbox_pyramid = parameters.bbox_pyramid.clone();
 		let input_compression = parameters.tile_compression.clone();
@@ -48,6 +50,7 @@ impl VirtualTilesOutput {
 		Ok(VirtualTilesOutput {
 			input,
 			input_compression,
+			input_name,
 			operations,
 			bbox_pyramid,
 		})
@@ -70,5 +73,16 @@ impl VirtualTilesOutput {
 		}
 
 		Ok(Some(tile))
+	}
+}
+
+impl Debug for VirtualTilesOutput {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("VirtualTilesOutput")
+			.field("input", &self.input_name)
+			.field("input_compression", &self.input_compression)
+			.field("operations", &self.operations)
+			.field("bbox_pyramid", &self.bbox_pyramid)
+			.finish()
 	}
 }

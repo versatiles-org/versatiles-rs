@@ -30,16 +30,14 @@ impl Feature {
 
 	#[cfg(test)]
 	pub fn new_example() -> Self {
-		use std::collections::HashMap;
-
 		Self {
 			id: Some(13),
 			geometry: Geometry::new_example(),
-			properties: Some(HashMap::from([
-				(String::from("name"), GeoValue::from("Berlin")),
-				(String::from("population"), GeoValue::from(3755251)),
+			properties: Some(GeoProperties::from(vec![
+				("name", GeoValue::from("Berlin")),
+				("population", GeoValue::from(3755251)),
 				(
-					String::from("it_would_actually_be_quite_a_nice_place_if_so_many_hipsters_hadn_t_moved_there"),
+					"it_would_actually_be_quite_a_nice_place_if_so_many_hipsters_hadn_t_moved_there",
 					GeoValue::from(true),
 				),
 			])),

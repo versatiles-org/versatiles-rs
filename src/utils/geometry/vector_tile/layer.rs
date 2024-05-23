@@ -127,12 +127,12 @@ impl VectorTileLayer {
 
 	pub fn translate_tag_ids(&self, tag_ids: &[u32]) -> Result<GeoProperties> {
 		ensure!(tag_ids.len() % 2 == 0, "Tag IDs must be even");
-		let mut attributes = GeoProperties::new();
+		let mut properties = GeoProperties::new();
 
 		for i in 0..tag_ids.len().div(2) {
 			let tag_key = tag_ids[i * 2] as usize;
 			let tag_val = tag_ids[i * 2 + 1] as usize;
-			attributes.insert(
+			properties.insert(
 				self
 					.property_keys
 					.get(tag_key)
@@ -147,7 +147,7 @@ impl VectorTileLayer {
 					.clone(),
 			);
 		}
-		Ok(attributes)
+		Ok(properties)
 	}
 
 	pub fn to_features(&self) -> Result<Vec<Feature>> {
@@ -169,7 +169,7 @@ impl VectorTileLayer {
 
 		for feature in features.iter() {
 			if let Some(properties) = &feature.properties {
-				for (k, v) in properties {
+				for (k, v) in properties.iter() {
 					prop_key_map.entry(k.clone()).and_modify(|n| *n += 1).or_insert(0);
 					prop_val_map.entry(v.clone()).and_modify(|n| *n += 1).or_insert(0);
 				}
@@ -194,9 +194,9 @@ impl VectorTileLayer {
 			let mut tag_ids: Vec<u32> = Vec::new();
 
 			if let Some(properties) = feature.properties {
-				for (key, val) in properties {
-					tag_ids.push(*prop_key_map.get(&key).unwrap());
-					tag_ids.push(*prop_val_map.get(&val).unwrap());
+				for (key, val) in properties.iter() {
+					tag_ids.push(*prop_key_map.get(key).unwrap());
+					tag_ids.push(*prop_val_map.get(val).unwrap());
 				}
 			}
 
@@ -257,7 +257,7 @@ mod tests {
 			name: "hello".to_string(),
 			features: vec![VectorTileFeature::new_example()],
 			property_keys: vec!["key".to_string()],
-			property_values: vec![GeoValue::String("vl".to_string())],
+			property_values: vec![GeoValue::from("vl")],
 			extent: 4096,
 			version: 1,
 		};
@@ -279,13 +279,13 @@ mod tests {
 			name: "hello".to_string(),
 			features: vec![],
 			property_keys: vec!["key".to_string()],
-			property_values: vec![GeoValue::String("vl".to_string())],
+			property_values: vec![GeoValue::from("vl")],
 			extent: 4096,
 			version: 1,
 		};
 		let tag_ids = vec![0, 0]; // (key, value)
 		let properties = layer.translate_tag_ids(&tag_ids)?;
-		let expected_properties = HashMap::from([("key".to_string(), GeoValue::String("vl".to_string()))]);
+		let expected_properties = GeoProperties::from(vec![("key", GeoValue::from("vl"))]);
 		assert_eq!(properties, expected_properties);
 		Ok(())
 	}
@@ -298,8 +298,8 @@ mod tests {
 		println!("{:?}", features[0].properties);
 		assert_eq!(features.len(), 1);
 		assert_eq!(
-			features[0].properties.as_ref().unwrap()["name"],
-			GeoValue::from("Berlin")
+			features[0].properties.as_ref().unwrap().get("name").unwrap(),
+			&GeoValue::from("Berlin")
 		);
 		Ok(())
 	}

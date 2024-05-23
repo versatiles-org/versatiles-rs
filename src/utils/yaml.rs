@@ -21,31 +21,34 @@ impl YamlWrapper {
 	pub fn is_array(&self) -> bool {
 		self.yaml.as_vec().is_some()
 	}
+	fn hash_get(&self, key: &str) -> Result<&Yaml> {
+		self
+			.yaml
+			.as_hash()
+			.context("must be an object")?
+			.get(&Yaml::from_str(key))
+			.ok_or(anyhow!("no entry '{key}' found"))
+	}
 	pub fn hash_get_value(&self, key: &str) -> Result<YamlWrapper> {
-		YamlWrapper::new(
-			self
-				.yaml
-				.as_hash()
-				.context("must be an object")?
-				.get(&Yaml::from_str(key))
-				.ok_or(anyhow!("no entry '{key}' found"))?,
-		)
+		YamlWrapper::new(self.hash_get(key)?)
 	}
 	pub fn as_str(&self) -> Result<&str> {
 		self.yaml.as_str().ok_or(anyhow!("value be a string"))
 	}
 	pub fn hash_get_str(&self, key: &str) -> Result<&str> {
 		self
-			.yaml
-			.as_hash()
-			.context("must be an object")?
-			.get(&Yaml::from_str(key))
-			.ok_or(anyhow!("no entry '{key}' found"))?
+			.hash_get(key)?
 			.as_str()
 			.ok_or(anyhow!("value of '{key}' must be a string"))
 	}
 	pub fn hash_get_string(&self, key: &str) -> Result<String> {
 		Ok(self.hash_get_str(key)?.to_string())
+	}
+	pub fn hash_get_bool(&self, key: &str) -> Result<bool> {
+		self
+			.hash_get(key)?
+			.as_bool()
+			.ok_or(anyhow!("value of '{key}' must be a boolean"))
 	}
 	pub fn hash_get_as_vec(&self) -> Result<Vec<(String, YamlWrapper)>> {
 		self

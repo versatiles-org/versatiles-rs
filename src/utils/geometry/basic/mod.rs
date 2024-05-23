@@ -1,5 +1,5 @@
-mod attribute;
-pub use attribute::*;
+mod properties;
+pub use properties::*;
 
 mod feature;
 pub use feature::*;

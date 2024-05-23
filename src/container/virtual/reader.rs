@@ -15,10 +15,8 @@ pub type VReader = Arc<Mutex<Box<dyn TilesReader>>>;
 pub type VOperation = Arc<Box<dyn VirtualTileOperation>>;
 
 pub struct VirtualTilesReader {
-	inputs: HashMap<String, VReader>,
 	name: String,
-	operations: HashMap<String, VOperation>,
-	outputs: Vec<VirtualTilesOutput>,
+	output_definitions: Vec<VirtualTilesOutput>,
 	tiles_reader_parameters: TilesReaderParameters,
 }
 
@@ -52,18 +50,16 @@ impl VirtualTilesReader {
 			HashMap::new()
 		};
 
-		let outputs = parse_output(&yaml.hash_get_value("output")?, &inputs, &operations)
+		let output_definitions = parse_output(&yaml.hash_get_value("output")?, &inputs, &operations)
 			.await
 			.context("while parsing 'output'")?;
 
-		let tiles_reader_parameters =
-			parse_parameters(&yaml.hash_get_value("parameters")?, &outputs).context("while parsing 'parameters'")?;
+		let tiles_reader_parameters = parse_parameters(&yaml.hash_get_value("parameters")?, &output_definitions)
+			.context("while parsing 'parameters'")?;
 
 		Ok(VirtualTilesReader {
-			inputs,
 			name: name.to_string(),
-			operations,
-			outputs,
+			output_definitions,
 			tiles_reader_parameters,
 		})
 	}
@@ -170,11 +166,12 @@ impl TilesReader for VirtualTilesReader {
 
 	#[doc = "Get tile data for the given coordinate, always compressed and formatted."]
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		for output in self.outputs.iter() {
-			if !output.bbox_pyramid.contains_coord(coord) {
+		println!("{coord:?}");
+		for output_definition in self.output_definitions.iter() {
+			if !output_definition.bbox_pyramid.contains_coord(coord) {
 				continue;
 			}
-			if let Some(mut tile) = output.get_tile_data(coord).await? {
+			if let Some(mut tile) = output_definition.get_tile_data(coord).await? {
 				tile = compress(tile, &self.tiles_reader_parameters.tile_compression)?;
 				return Ok(Some(tile));
 			} else {
@@ -188,19 +185,25 @@ impl TilesReader for VirtualTilesReader {
 impl std::fmt::Debug for VirtualTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("VirtualTilesReader")
-			//.field("parameters", &self.get_parameters())
+			.field("name", &self.name)
+			.field("reader parameters", &self.tiles_reader_parameters)
+			.field("output definitions", &self.output_definitions)
 			.finish()
 	}
 }
 
 #[cfg(test)]
 mod tests {
+	use crate::container::MockTilesWriter;
+
 	use super::*;
 
 	#[tokio::test]
 	async fn open_yaml() -> Result<()> {
-		let reader = VirtualTilesReader::open_path(&Path::new("testdata/test.yaml")).await?;
+		let mut reader = VirtualTilesReader::open_path(&Path::new("testdata/test.yaml")).await?;
 		println!("{reader:?}");
+		MockTilesWriter::write(&mut reader).await?;
+
 		Ok(())
 	}
 }

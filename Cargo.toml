@@ -67,6 +67,7 @@ bytes = { version = "1.6.0", default-features = false }
 clap = { version = "4.5.4", optional = true, features = ["wrap_help"] }
 clap-verbosity-flag = { version = "2.2.0", default-features = false, optional = true }
 colored = { version = "2.1.0", default-features = false, optional = true }
+csv = "1.3.0"
 enumset = { version = "1.1.3", default-features = false }
 env_logger = { version = "0.11.3", default-features = false, optional = true }
 flate2 = { version = "1.0.30", default-features = false, features = ["default"] }
