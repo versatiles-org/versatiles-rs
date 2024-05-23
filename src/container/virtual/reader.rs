@@ -3,8 +3,8 @@ use crate::{
 	container::{
 		getters::get_simple_reader, r#virtual::operations::new_virtual_tile_operation, TilesReader, TilesReaderParameters,
 	},
-	types::{Blob, DataReader, TileCompression, TileCoord3, TileFormat},
-	utils::YamlWrapper,
+	types::{Blob, DataReader, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
+	utils::{compress, YamlWrapper},
 };
 use anyhow::{bail, ensure, Context, Result};
 use axum::async_trait;
@@ -16,11 +16,10 @@ pub type VOperation = Arc<Box<dyn VirtualTileOperation>>;
 
 pub struct VirtualTilesReader {
 	inputs: HashMap<String, VReader>,
-	operations: HashMap<String, VOperation>,
-	output: Vec<VirtualTilesOutput>,
-	tile_compression: TileCompression,
-	tile_format: TileFormat,
 	name: String,
+	operations: HashMap<String, VOperation>,
+	outputs: Vec<VirtualTilesOutput>,
+	tiles_reader_parameters: TilesReaderParameters,
 }
 
 impl VirtualTilesReader {
@@ -43,10 +42,6 @@ impl VirtualTilesReader {
 
 		ensure!(yaml.is_hash(), "YAML must be an object");
 
-		let (tile_compression, tile_format) = parse_parameters(&yaml.hash_get_value("parameters")?)
-			.await
-			.context("while parsing 'parameters'")?;
-
 		let inputs = parse_inputs(&yaml.hash_get_value("inputs")?)
 			.await
 			.context("while parsing 'inputs'")?;
@@ -57,26 +52,21 @@ impl VirtualTilesReader {
 			HashMap::new()
 		};
 
-		let output =
-			parse_output(&yaml.hash_get_value("output")?, &inputs, &operations).context("while parsing 'output'")?;
+		let outputs = parse_output(&yaml.hash_get_value("output")?, &inputs, &operations)
+			.await
+			.context("while parsing 'output'")?;
+
+		let tiles_reader_parameters =
+			parse_parameters(&yaml.hash_get_value("parameters")?, &outputs).context("while parsing 'parameters'")?;
 
 		Ok(VirtualTilesReader {
 			inputs,
-			operations,
-			output,
-			tile_compression,
-			tile_format,
 			name: name.to_string(),
+			operations,
+			outputs,
+			tiles_reader_parameters,
 		})
 	}
-}
-
-async fn parse_parameters(yaml: &YamlWrapper) -> Result<(TileCompression, TileFormat)> {
-	ensure!(yaml.is_hash(), "'parameters' must be an object");
-	Ok((
-		TileCompression::from_str(yaml.hash_get_str("compression")?)?,
-		TileFormat::from_str(yaml.hash_get_str("format")?)?,
-	))
 }
 
 async fn parse_inputs(yaml: &YamlWrapper) -> Result<HashMap<String, VReader>> {
@@ -116,8 +106,8 @@ fn parse_operations(yaml: &YamlWrapper) -> Result<HashMap<String, VOperation>> {
 	Ok(operations)
 }
 
-fn parse_output(
-	yaml: &YamlWrapper, inputs: &HashMap<String, VReader>, operations: &HashMap<String, VOperation>,
+async fn parse_output(
+	yaml: &YamlWrapper, input_lookup: &HashMap<String, VReader>, operation_lookup: &HashMap<String, VOperation>,
 ) -> Result<Vec<VirtualTilesOutput>> {
 	ensure!(yaml.is_array(), "'output' must be an array");
 
@@ -125,12 +115,30 @@ fn parse_output(
 
 	for (index, entry) in yaml.array_get_as_vec()?.iter().enumerate() {
 		output.push(
-			VirtualTilesOutput::new(entry, inputs, operations)
+			VirtualTilesOutput::new(entry, input_lookup, operation_lookup)
+				.await
 				.with_context(|| format!("while parsing output no {}", index + 1))?,
 		);
 	}
 
 	Ok(output)
+}
+
+fn parse_parameters(yaml: &YamlWrapper, outputs: &Vec<VirtualTilesOutput>) -> Result<TilesReaderParameters> {
+	ensure!(yaml.is_hash(), "'parameters' must be an object");
+	let tile_compression = TileCompression::from_str(yaml.hash_get_str("compression")?)?;
+	let tile_format = TileFormat::from_str(yaml.hash_get_str("format")?)?;
+
+	let mut bbox_pyramid = TileBBoxPyramid::new_empty();
+	for output in outputs.iter() {
+		bbox_pyramid.include_bbox_pyramid(&output.bbox_pyramid);
+	}
+
+	Ok(TilesReaderParameters {
+		bbox_pyramid,
+		tile_compression,
+		tile_format,
+	})
 }
 
 #[async_trait]
@@ -147,7 +155,7 @@ impl TilesReader for VirtualTilesReader {
 
 	#[doc = "Get the reader parameters."]
 	fn get_parameters(&self) -> &TilesReaderParameters {
-		todo!()
+		&self.tiles_reader_parameters
 	}
 
 	#[doc = "Override the tile compression."]
@@ -157,12 +165,23 @@ impl TilesReader for VirtualTilesReader {
 
 	#[doc = "Get the metadata, always uncompressed."]
 	fn get_meta(&self) -> Result<Option<Blob>> {
-		todo!()
+		Ok(None)
 	}
 
 	#[doc = "Get tile data for the given coordinate, always compressed and formatted."]
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		todo!()
+		for output in self.outputs.iter() {
+			if !output.bbox_pyramid.contains_coord(coord) {
+				continue;
+			}
+			if let Some(mut tile) = output.get_tile_data(coord).await? {
+				tile = compress(tile, &self.tiles_reader_parameters.tile_compression)?;
+				return Ok(Some(tile));
+			} else {
+				continue;
+			}
+		}
+		Ok(None)
 	}
 }
 

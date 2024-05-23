@@ -125,6 +125,20 @@ impl TileBBoxPyramid {
 		self.level_bbox[bbox.level as usize].union_bbox(bbox);
 	}
 
+	pub fn include_bbox_pyramid(&mut self, pyramid: &TileBBoxPyramid) {
+		for bbox in pyramid.iter_levels() {
+			self.level_bbox[bbox.level as usize].union_bbox(bbox);
+		}
+	}
+
+	pub fn contains_coord(&self, coord: &TileCoord3) -> bool {
+		if let Some(bbox) = self.level_bbox.get(coord.z as usize) {
+			bbox.contains3(coord)
+		} else {
+			false
+		}
+	}
+
 	/// Returns an iterator over the non-empty bounding boxes in the pyramid.
 	///
 	/// # Returns
