@@ -135,7 +135,7 @@ impl TilesWriter for MBTilesWriter {
 		let mut progress = get_progress_bar("converting tiles", bbox_pyramid.count_tiles());
 
 		for bbox in bbox_pyramid.iter_levels() {
-			let mut stream = reader.get_bbox_tile_stream(bbox).await;
+			let mut stream = reader.get_bbox_tile_stream(bbox.clone()).await;
 
 			let mut tile_buffer = Vec::new();
 			while let Some((coord, blob)) = stream.next().await {

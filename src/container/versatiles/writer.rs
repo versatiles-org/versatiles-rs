@@ -167,7 +167,7 @@ impl VersaTilesWriter {
 		let mut tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
 		// Get the tile stream
-		let tile_stream: TilesStream = reader.get_bbox_tile_stream(bbox).await;
+		let tile_stream: TilesStream = reader.get_bbox_tile_stream(bbox.clone()).await;
 
 		// Iterate through the blobs and process them
 		tile_stream
@@ -176,13 +176,13 @@ impl VersaTilesWriter {
 
 				let index = bbox.get_tile_index(&coord.as_coord2());
 
-				let mut tile_hash_option = None;
+				let mut save_hash = false;
 				if blob.len() < 1000 {
-					if tile_hash_lookup.contains_key(blob.as_slice()) {
-						tile_index.set(index, *tile_hash_lookup.get(blob.as_slice()).unwrap());
+					if let Some(range) = tile_hash_lookup.get(blob.as_slice()) {
+						tile_index.set(index, *range);
 						return ready(());
 					}
-					tile_hash_option = Some(blob.clone());
+					save_hash = true;
 				}
 
 				let mut range = writer.append(&blob).unwrap();
@@ -190,8 +190,8 @@ impl VersaTilesWriter {
 
 				tile_index.set(index, range);
 
-				if let Some(tile_hash) = tile_hash_option {
-					tile_hash_lookup.insert(tile_hash.into_vec(), range);
+				if save_hash {
+					tile_hash_lookup.insert(blob.into_vec(), range);
 				}
 
 				ready(())

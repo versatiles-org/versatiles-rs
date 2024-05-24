@@ -209,10 +209,18 @@ impl TileBBox {
 	/// # Arguments
 	///
 	/// * `bbox` - A reference to the bounding box to include.
-	pub fn union_bbox(&mut self, bbox: &TileBBox) {
+	pub fn include_bbox(&mut self, bbox: &TileBBox) {
+		if self.level != bbox.level {
+			panic!()
+		}
 		if !bbox.is_empty() {
 			if self.is_empty() {
-				self.set_bbox(bbox);
+				self.level = bbox.level;
+				self.max = bbox.max;
+				self.x_min = bbox.x_min;
+				self.y_min = bbox.y_min;
+				self.x_max = bbox.x_max;
+				self.y_max = bbox.y_max;
 			} else {
 				self.x_min = self.x_min.min(bbox.x_min);
 				self.y_min = self.y_min.min(bbox.y_min);
@@ -228,12 +236,25 @@ impl TileBBox {
 	///
 	/// * `bbox` - A reference to the bounding box to intersect with.
 	pub fn intersect_bbox(&mut self, bbox: &TileBBox) {
+		if self.level != bbox.level {
+			panic!()
+		}
 		if !self.is_empty() {
 			self.x_min = self.x_min.max(bbox.x_min);
 			self.y_min = self.y_min.max(bbox.y_min);
 			self.x_max = self.x_max.min(bbox.x_max);
 			self.y_max = self.y_max.min(bbox.y_max);
 		}
+	}
+
+	pub fn overlaps_bbox(&self, bbox: &TileBBox) -> bool {
+		if self.level != bbox.level {
+			panic!()
+		}
+		if self.is_empty() || bbox.is_empty() {
+			return false;
+		}
+		self.x_min <= bbox.x_max || self.y_min <= bbox.y_max || self.x_max >= bbox.x_min || self.y_max >= bbox.y_min
 	}
 
 	/// Adds a border to the bounding box.
@@ -251,18 +272,6 @@ impl TileBBox {
 			self.x_max = (self.x_max + x_max).min(self.max);
 			self.y_max = (self.y_max + y_max).min(self.max);
 		}
-	}
-
-	/// Sets the bounding box to the specified bounding box.
-	///
-	/// # Arguments
-	///
-	/// * `bbox` - A reference to the bounding box to set.
-	pub fn set_bbox(&mut self, bbox: &TileBBox) {
-		self.x_min = bbox.x_min;
-		self.y_min = bbox.y_min;
-		self.x_max = bbox.x_max;
-		self.y_max = bbox.y_max;
 	}
 
 	/// Returns an iterator over the tile coordinates within the bounding box.
@@ -673,7 +682,7 @@ mod tests {
 		assert_eq!(bbox1_intersect, TileBBox::new(4, 1, 11, 2, 12).unwrap());
 
 		let mut bbox1_union = bbox1;
-		bbox1_union.union_bbox(&bbox2);
+		bbox1_union.include_bbox(&bbox2);
 		assert_eq!(bbox1_union, TileBBox::new(4, 0, 10, 3, 13).unwrap());
 	}
 

@@ -14,6 +14,7 @@ pub struct TileBBoxPyramid {
 	pub level_bbox: [TileBBox; MAX_ZOOM_LEVEL as usize],
 }
 
+#[allow(dead_code)]
 impl TileBBoxPyramid {
 	/// Creates a new `TileBBoxPyramid` with full coverage up to the specified maximum zoom level.
 	///
@@ -122,18 +123,26 @@ impl TileBBoxPyramid {
 	///
 	/// * `bbox` - A reference to the `TileBBox` to include.
 	pub fn include_bbox(&mut self, bbox: &TileBBox) {
-		self.level_bbox[bbox.level as usize].union_bbox(bbox);
+		self.level_bbox[bbox.level as usize].include_bbox(bbox);
 	}
 
 	pub fn include_bbox_pyramid(&mut self, pyramid: &TileBBoxPyramid) {
 		for bbox in pyramid.iter_levels() {
-			self.level_bbox[bbox.level as usize].union_bbox(bbox);
+			self.level_bbox[bbox.level as usize].include_bbox(bbox);
 		}
 	}
 
 	pub fn contains_coord(&self, coord: &TileCoord3) -> bool {
 		if let Some(bbox) = self.level_bbox.get(coord.z as usize) {
 			bbox.contains3(coord)
+		} else {
+			false
+		}
+	}
+
+	pub fn overlaps_bbox(&self, bbox: &TileBBox) -> bool {
+		if let Some(bbox) = self.level_bbox.get(bbox.level as usize) {
+			bbox.overlaps_bbox(bbox)
 		} else {
 			false
 		}

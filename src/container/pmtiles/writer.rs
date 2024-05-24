@@ -93,7 +93,7 @@ impl TilesWriter for PMTilesWriter {
 
 		for bbox in blocks.iter() {
 			reader
-				.get_bbox_tile_stream(bbox)
+				.get_bbox_tile_stream(bbox.clone())
 				.await
 				.for_each(|(coord, blob)| {
 					progress.inc(1);

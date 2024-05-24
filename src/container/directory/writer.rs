@@ -109,7 +109,7 @@ impl TilesWriter for DirectoryTilesWriter {
 		let mut progress = get_progress_bar("converting tiles", bbox_pyramid.count_tiles());
 
 		for bbox in bbox_pyramid.iter_levels() {
-			let mut stream = reader.get_bbox_tile_stream(bbox).await;
+			let mut stream = reader.get_bbox_tile_stream(bbox.clone()).await;
 
 			while let Some(entry) = stream.next().await {
 				let (coord, blob) = entry;

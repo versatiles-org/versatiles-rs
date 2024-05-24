@@ -192,10 +192,13 @@ impl VectorTileFeature {
 						current_polygon.push(ring);
 					} else if area < -1e-14 {
 						// Inner ring
-						ensure!(!current_polygon.is_empty(), "An outer ring must precede inner rings");
-						current_polygon.push(ring);
+						if current_polygon.is_empty() {
+							eprintln!("An outer ring must precede inner rings");
+						} else {
+							current_polygon.push(ring);
+						}
 					} else {
-						bail!("Error: Ring with zero area")
+						eprintln!("Error: Ring with zero area")
 					}
 				}
 

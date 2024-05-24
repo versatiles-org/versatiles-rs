@@ -26,7 +26,7 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures_util::{future::ready, StreamExt};
 
 /// Mock implementation of a `TilesWriter`.
 pub struct MockTilesWriter {}
@@ -51,8 +51,8 @@ impl MockTilesWriter {
 		let bbox_pyramid = reader.get_parameters().bbox_pyramid.clone();
 
 		for bbox in bbox_pyramid.iter_levels() {
-			let mut stream = reader.get_bbox_tile_stream(bbox).await;
-			while let Some((_coord, _blob)) = stream.next().await {}
+			let stream = reader.get_bbox_tile_stream(bbox.clone()).await;
+			stream.for_each(|_| ready(())).await;
 		}
 
 		Ok(())

@@ -1,19 +1,22 @@
 use super::{operations::VirtualTileOperation, output::VirtualTilesOutput};
 use crate::{
 	container::{
-		getters::get_simple_reader, r#virtual::operations::new_virtual_tile_operation, TilesReader, TilesReaderParameters,
+		getters::get_simple_reader, r#virtual::operations::new_virtual_tile_operation, TilesReader,
+		TilesReaderParameters, TilesStream,
 	},
-	types::{Blob, DataReader, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
+	types::{Blob, DataReader, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 	utils::{compress, YamlWrapper},
 };
 use anyhow::{bail, ensure, Context, Result};
 use axum::async_trait;
+use futures_util::StreamExt;
 use std::{collections::HashMap, path::Path, sync::Arc};
 use tokio::sync::Mutex;
 
 pub type VReader = Arc<Mutex<Box<dyn TilesReader>>>;
 pub type VOperation = Arc<Box<dyn VirtualTileOperation>>;
 
+#[derive(Clone)]
 pub struct VirtualTilesReader {
 	name: String,
 	output_definitions: Vec<VirtualTilesOutput>,
@@ -62,6 +65,91 @@ impl VirtualTilesReader {
 			output_definitions,
 			tiles_reader_parameters,
 		})
+	}
+
+	async fn get_bbox_tile_stream_small(&mut self, bbox: TileBBox) -> TilesStream {
+		let n = bbox.count_tiles();
+
+		if n > 2000 {
+			panic!("two much tiles at once")
+		}
+
+		let tile_compression = self.tiles_reader_parameters.tile_compression.clone();
+
+		for output_definition in self.output_definitions.iter_mut() {
+			if !output_definition.bbox_pyramid.overlaps_bbox(&bbox) {
+				continue;
+			}
+
+			let stream = output_definition.get_bbox_tile_stream(bbox).await;
+			return stream
+				.map(move |(coord, blob)| (coord, compress(blob, &tile_compression).unwrap()))
+				.boxed();
+		}
+
+		//todo!();
+		/*
+
+		// Wrap self in an Arc<AsyncMutex<YourStruct>>
+		let self_arc = Arc::new(Mutex::new(self));
+
+		let a = stream::iter(bboxes).map(|bbox| {
+			let self_arc_clone = self_arc.clone();
+			async move {
+				let mut locked_self = self_arc_clone.lock().await;
+				locked_self.get_bbox_tile_stream_small(bbox)
+			}
+		});
+		*/
+
+		//todo!();
+		// Create a FuturesUnordered
+
+		// Collect the resulting streams
+		//let streams: Vec<TilesStream> = futures.collect();
+
+		// Combine all streams into one using select_all
+		//let combined_stream = select_all(streams);
+
+		// Box and pin the combined stream
+		//Box::pin(combined_stream)
+
+		// limit bbox to 1024x1024
+		// note already deliviered tiles in a [[bool]]
+		// get bbox of tile not fetched yet
+		// ask next output
+
+		/*
+		for output_definition in self.output_definitions.iter() {
+			if !output_definition.bbox_pyramid.contains_coord(bbox) {
+				continue;
+			}
+			if let Some(mut tile) = output_definition.get_tile_data(coord).await? {
+				tile = compress(tile, &self.tiles_reader_parameters.tile_compression)?;
+				return Ok(Some(tile));
+			} else {
+				continue;
+			}
+		}
+
+		let mutex = Arc::new(Mutex::new(self));
+		let coords: Vec<TileCoord3> = bbox.iter_coords().collect();
+		stream::iter(coords)
+			.filter_map(move |coord| {
+				let mutex = mutex.clone();
+				async move {
+					mutex
+						.lock()
+						.await
+						.get_tile_data(&coord)
+						.await
+						.map(|blob_option| blob_option.map(|blob| (coord, blob)))
+						.unwrap_or(None)
+				}
+			})
+			.boxed()
+			 */
+		todo!()
 	}
 }
 
@@ -139,34 +227,33 @@ fn parse_parameters(yaml: &YamlWrapper, outputs: &Vec<VirtualTilesOutput>) -> Re
 
 #[async_trait]
 impl TilesReader for VirtualTilesReader {
-	#[doc = "Get the name of the reader source, e.g., the filename."]
+	/// Get the name of the reader source, e.g., the filename.
 	fn get_name(&self) -> &str {
 		&self.name
 	}
 
-	#[doc = "Get the container name, e.g., versatiles, mbtiles, etc."]
+	/// Get the container name, e.g., versatiles, mbtiles, etc.
 	fn get_container_name(&self) -> &str {
 		"virtual"
 	}
 
-	#[doc = "Get the reader parameters."]
+	/// Get the reader parameters.
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.tiles_reader_parameters
 	}
 
-	#[doc = "Override the tile compression."]
+	/// Override the tile compression.
 	fn override_compression(&mut self, _tile_compression: TileCompression) {
 		panic!("you can't override the compression of virtual tile sources")
 	}
 
-	#[doc = "Get the metadata, always uncompressed."]
+	/// Get the metadata, always uncompressed.
 	fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(None)
 	}
 
-	#[doc = "Get tile data for the given coordinate, always compressed and formatted."]
+	/// Get tile data for the given coordinate, always compressed and formatted.
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		println!("{coord:?}");
 		for output_definition in self.output_definitions.iter() {
 			if !output_definition.bbox_pyramid.contains_coord(coord) {
 				continue;
@@ -179,6 +266,26 @@ impl TilesReader for VirtualTilesReader {
 			}
 		}
 		Ok(None)
+	}
+
+	/// Get a stream of tiles within the bounding box.
+	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TilesStream {
+		let bboxes: Vec<TileBBox> = bbox.iter_bbox_grid(32).collect();
+
+		let self_mutex = Arc::new(Mutex::new(self));
+
+		futures_util::stream::iter(bboxes)
+			.then(move |bbox| {
+				let self_mutex = self_mutex.clone();
+				async move {
+					let mut myself = self_mutex.lock().await;
+					let stream = myself.get_bbox_tile_stream_small(bbox).await;
+					let entries: Vec<(TileCoord3, Blob)> = stream.collect().await;
+					futures_util::stream::iter(entries)
+				}
+			})
+			.flatten()
+			.boxed()
 	}
 }
 
@@ -198,10 +305,9 @@ mod tests {
 
 	use super::*;
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread", worker_threads = 16)]
 	async fn open_yaml() -> Result<()> {
 		let mut reader = VirtualTilesReader::open_path(&Path::new("testdata/test.yaml")).await?;
-		println!("{reader:?}");
 		MockTilesWriter::write(&mut reader).await?;
 
 		Ok(())

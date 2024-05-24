@@ -55,7 +55,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use futures_util::{stream, StreamExt};
+use futures_util::stream::StreamExt;
 use log::trace;
 use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
 use tokio::sync::Mutex;
@@ -240,7 +240,7 @@ impl TilesReader for VersaTilesReader {
 	}
 
 	/// Gets a stream of tile data for a given bounding box.
-	async fn get_bbox_tile_stream(&mut self, bbox: &TileBBox) -> TilesStream {
+	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TilesStream {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
@@ -271,8 +271,6 @@ impl TilesReader for VersaTilesReader {
 				self.tiles.len()
 			}
 		}
-
-		let bbox = bbox.clone();
 
 		let mut block_coords: TileBBox = bbox.clone();
 		block_coords.scale_down(256);
@@ -359,7 +357,7 @@ impl TilesReader for VersaTilesReader {
 
 		let chunks: Vec<Chunk> = chunks.into_iter().flatten().collect();
 
-		stream::iter(chunks)
+		futures_util::stream::iter(chunks)
 			.then(move |chunk| {
 				let bbox = bbox.clone();
 				let self_mutex = self_mutex.clone();
@@ -384,7 +382,7 @@ impl TilesReader for VersaTilesReader {
 						})
 						.collect();
 
-					stream::iter(entries)
+					futures_util::stream::iter(entries)
 				}
 			})
 			.flatten()

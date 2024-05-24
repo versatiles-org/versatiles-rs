@@ -3,14 +3,16 @@ use super::{
 	reader::{VOperation, VReader},
 };
 use crate::{
-	container::TilesReader,
-	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3},
+	container::{TilesReader, TilesStream},
+	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3},
 	utils::{decompress, YamlWrapper},
 };
 use anyhow::{ensure, Context, Result};
+use futures_util::{StreamExt, TryStreamExt};
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 
+#[derive(Clone)]
 pub struct VirtualTilesOutput {
 	pub input: Arc<Mutex<Box<dyn TilesReader>>>,
 	pub input_compression: TileCompression,
@@ -56,23 +58,58 @@ impl VirtualTilesOutput {
 		})
 	}
 	pub async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		let mut tile = if let Some(blob) = self.input.lock().await.get_tile_data(coord).await? {
+		let mut blob = if let Some(blob) = self.input.lock().await.get_tile_data(coord).await? {
 			blob
 		} else {
 			return Ok(None);
 		};
 
-		tile = decompress(tile, &self.input_compression)?;
+		blob = decompress(blob, &self.input_compression)?;
 
 		for operation in self.operations.iter() {
-			if let Some(blob) = operation.run(&tile)? {
-				tile = blob
+			if let Some(new_blob) = operation.run(&blob)? {
+				blob = new_blob
 			} else {
 				return Ok(None);
 			}
 		}
 
-		Ok(Some(tile))
+		Ok(Some(blob))
+	}
+	pub async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TilesStream {
+		let entries: Vec<(TileCoord3, Blob)> = self.input.lock().await.get_bbox_tile_stream(bbox).await.collect().await;
+
+		println!("process tile count: {} with num cpu {}", entries.len(), num_cpus::get());
+
+		let entries: Vec<Option<(TileCoord3, Blob)>> = futures_util::stream::iter(entries.into_iter())
+			.map(|(coord, blob)| {
+				let operations = self.operations.clone();
+				let input_compression = self.input_compression;
+				tokio::spawn(async move {
+					println!("{coord:?} start");
+					let mut blob = decompress(blob, &input_compression).unwrap();
+
+					for operation in operations.iter() {
+						if let Some(new_blob) = operation.run(&blob).unwrap() {
+							blob = new_blob
+						} else {
+							return None;
+						}
+					}
+
+					println!("{coord:?} end");
+					Some((coord, blob))
+				})
+			})
+			.buffer_unordered(num_cpus::get())
+			.try_collect()
+			.await
+			.unwrap();
+		//.try_collect()
+		//.await
+		//.unwrap();
+
+		futures_util::stream::iter(entries.into_iter().filter_map(|o| o)).boxed()
 	}
 }
 
