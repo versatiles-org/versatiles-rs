@@ -158,7 +158,7 @@ mod tests {
 
 	#[test]
 	fn test_len() -> Result<()> {
-		let file = create_temp_file_with_content(&vec![0x80; 42])?;
+		let file = create_temp_file_with_content(&[0x80; 42])?;
 		let reader = ValueReaderFile::new_le(file)?;
 		assert_eq!(reader.len(), 42);
 		Ok(())

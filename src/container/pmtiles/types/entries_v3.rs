@@ -409,7 +409,7 @@ mod tests {
 			"Directory root bytes should not be empty"
 		);
 		assert!(
-			directory.leaves_bytes.len() > 0,
+			!directory.leaves_bytes.is_empty(),
 			"Directory leaves bytes should be non-zero for valid entries"
 		);
 

@@ -317,8 +317,8 @@ mod tests {
 								s = s.replace("unbrotli,brotli", "");
 							}
 							s = s.replace(",,", ",");
-							s = s.strip_prefix(",").unwrap_or(&s).to_string();
-							s = s.strip_suffix(",").unwrap_or(&s).to_string();
+							s = s.strip_prefix(',').unwrap_or(&s).to_string();
+							s = s.strip_suffix(',').unwrap_or(&s).to_string();
 
 							#[cfg(not(feature = "full"))]
 							if s.contains('2') {
@@ -326,7 +326,7 @@ mod tests {
 								continue;
 							}
 
-							let length = if s.len() == 0 { 0 } else { s.split(',').count() };
+							let length = if s.is_empty() { 0 } else { s.split(',').count() };
 							let message = format!("{f_in:?},{c_in:?}->{f_out:?},{c_out:?} {force}");
 
 							let result = test(f_in, c_in, f_out, c_out, force, length, &s);
@@ -395,10 +395,7 @@ mod tests {
 	fn convert_images() -> Result<()> {
 		use crate::utils::image::{compare_images, create_image_rgb};
 
-		let formats = vec![
-			//AVIF,
-			JPG, PNG, WEBP,
-		];
+		let formats = [JPG, PNG, WEBP];
 
 		for src_form in formats.iter() {
 			for dst_form in formats.iter() {
@@ -412,9 +409,9 @@ mod tests {
 				};
 
 				let data_converter = TileConverter::new_tile_recompressor(
-					&src_form,
+					src_form,
 					&TileCompression::None,
-					&dst_form,
+					dst_form,
 					&TileCompression::None,
 					true,
 				)?;

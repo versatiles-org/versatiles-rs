@@ -143,7 +143,7 @@ mod tests {
 	// Test the constructor function for TileSource
 	#[test]
 	fn tile_container_from() -> Result<()> {
-		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
+		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
 		let container = TileSource::from(reader.boxed(), Url::new("prefix"))?;
 
 		assert_eq!(container.prefix.str, "/prefix");
@@ -155,7 +155,7 @@ mod tests {
 	// Test the debug function
 	#[test]
 	fn debug() -> Result<()> {
-		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
+		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
 		let container = TileSource::from(reader.boxed(), Url::new("prefix")).unwrap();
 		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: None, tile_format: PNG } } }, tile_mime: \"image/png\", compression: None }");
 		Ok(())
@@ -187,7 +187,7 @@ mod tests {
 		}
 
 		let c = &mut TileSource::from(
-			MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?.boxed(),
+			MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?.boxed(),
 			Url::new("prefix"),
 		)?;
 

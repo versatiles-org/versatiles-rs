@@ -1,7 +1,10 @@
-use std::{cmp::Ordering, fmt::Debug, hash::Hash};
-
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
+use std::{
+	cmp::Ordering,
+	fmt::{Debug, Display},
+	hash::Hash,
+};
 
 #[derive(Clone, PartialEq)]
 pub enum GeoValue {
@@ -110,6 +113,22 @@ impl Ord for GeoValue {
 		}
 	}
 }
+impl Display for GeoValue {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"{}",
+			match self {
+				GeoValue::String(v) => v.to_string(),
+				GeoValue::Float(v) => v.to_string(),
+				GeoValue::Double(v) => v.to_string(),
+				GeoValue::Int(v) => v.to_string(),
+				GeoValue::UInt(v) => v.to_string(),
+				GeoValue::Bool(v) => v.to_string(),
+			}
+		)
+	}
+}
 
 impl GeoValue {
 	fn variant_order(&self) -> u8 {
@@ -120,16 +139,6 @@ impl GeoValue {
 			GeoValue::Int(_) => 3,
 			GeoValue::UInt(_) => 4,
 			GeoValue::Bool(_) => 5,
-		}
-	}
-	pub fn to_string(&self) -> String {
-		match self {
-			GeoValue::String(v) => v.to_string(),
-			GeoValue::Float(v) => v.to_string(),
-			GeoValue::Double(v) => v.to_string(),
-			GeoValue::Int(v) => v.to_string(),
-			GeoValue::UInt(v) => v.to_string(),
-			GeoValue::Bool(v) => v.to_string(),
 		}
 	}
 	pub fn parse_str(value: &str) -> Self {

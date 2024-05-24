@@ -42,7 +42,7 @@ impl VirtualTileOperation for PBFReplacePropertiesOperation {
 		let remove_empty_properties = yaml.hash_get_bool("remove_empty_properties").unwrap_or(false);
 		let also_save_id = yaml.hash_get_bool("also_save_id").unwrap_or(false);
 
-		let data = read_csv_file(&Path::new(&data_source_path))
+		let data = read_csv_file(Path::new(&data_source_path))
 			.with_context(|| format!("Failed to read CSV file from '{data_source_path}'"))?;
 
 		let properties_map = data
@@ -80,7 +80,7 @@ impl VirtualTileOperation for PBFReplacePropertiesOperation {
 
 			for feature in features.iter_mut() {
 				if let Some(prop) = &feature.properties {
-					if let Some(id) = prop.get(&self.id_field_tiles).clone() {
+					if let Some(id) = prop.get(&self.id_field_tiles) {
 						if let Some(new_prop) = self.properties_map.get(&id.to_string()) {
 							if self.replace_properties {
 								feature.properties = Some(new_prop.clone());
@@ -128,6 +128,7 @@ impl Debug for PBFReplacePropertiesOperation {
 mod tests {
 	use super::*;
 	use crate::utils::geometry::{Feature, GeoValue, Geometry};
+	use std::str::FromStr;
 
 	fn test(parameters: (&str, &str, &[(&str, bool)]), debug_operation: &str, debug_result: &str) -> Result<()> {
 		let mut yaml = vec![

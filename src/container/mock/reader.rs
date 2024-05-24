@@ -35,11 +35,11 @@ use async_trait::async_trait;
 #[derive(Debug)]
 pub enum MockTilesReaderProfile {
 	/// Mock profile for JSON format.
-	JSON,
+	Json,
 	/// Mock profile for PNG format.
-	PNG,
+	Png,
 	/// Mock profile for PBF format.
-	PBF,
+	Pbf,
 }
 
 pub const MOCK_BYTES_JPG: &[u8; 671] = include_bytes!("./mock_tiles/mock.jpg");
@@ -58,13 +58,13 @@ impl MockTilesReader {
 		let bbox_pyramid = TileBBoxPyramid::new_full(4);
 
 		MockTilesReader::new_mock(match profile {
-			MockTilesReaderProfile::JSON => {
+			MockTilesReaderProfile::Json => {
 				TilesReaderParameters::new(TileFormat::JSON, TileCompression::None, bbox_pyramid)
 			}
-			MockTilesReaderProfile::PNG => {
+			MockTilesReaderProfile::Png => {
 				TilesReaderParameters::new(TileFormat::PNG, TileCompression::None, bbox_pyramid)
 			}
-			MockTilesReaderProfile::PBF => {
+			MockTilesReaderProfile::Pbf => {
 				TilesReaderParameters::new(TileFormat::PBF, TileCompression::Gzip, bbox_pyramid)
 			}
 		})
@@ -134,7 +134,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
+		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
 		assert_eq!(reader.get_container_name(), "dummy_container");
 		assert_eq!(reader.get_name(), "dummy_name");
 
@@ -164,14 +164,14 @@ mod tests {
 			assert_eq!(tile_uncompressed, blob);
 		};
 
-		test(MockTilesReaderProfile::PNG, Blob::from(MOCK_BYTES_PNG.to_vec())).await;
-		test(MockTilesReaderProfile::PBF, Blob::from(MOCK_BYTES_PBF.to_vec())).await;
-		test(MockTilesReaderProfile::JSON, Blob::from("{x:23,y:45,z:6}")).await;
+		test(MockTilesReaderProfile::Png, Blob::from(MOCK_BYTES_PNG.to_vec())).await;
+		test(MockTilesReaderProfile::Pbf, Blob::from(MOCK_BYTES_PBF.to_vec())).await;
+		test(MockTilesReaderProfile::Json, Blob::from("{x:23,y:45,z:6}")).await;
 	}
 
 	#[tokio::test]
 	async fn convert_from() -> Result<()> {
-		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
+		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
 		MockTilesWriter::write(&mut reader).await.unwrap();
 		Ok(())
 	}

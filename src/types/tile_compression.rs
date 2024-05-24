@@ -102,7 +102,7 @@ impl TileCompression {
 		TileCompression::None
 	}
 
-	pub fn from_str(value: &str) -> Result<Self> {
+	pub fn parse_str(value: &str) -> Result<Self> {
 		Ok(match value.to_lowercase().trim() {
 			"br" => TileCompression::Brotli,
 			"brotli" => TileCompression::Brotli,

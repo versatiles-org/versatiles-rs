@@ -1,11 +1,20 @@
 #![allow(dead_code)]
 
 use super::GeoValue;
-use std::{collections::HashMap, fmt::Debug};
+use std::{
+	collections::{hash_map, HashMap},
+	fmt::Debug,
+};
 
 #[derive(Clone, PartialEq)]
 pub struct GeoProperties {
 	properties: HashMap<String, GeoValue>,
+}
+
+impl Default for GeoProperties {
+	fn default() -> Self {
+		Self::new()
+	}
 }
 
 impl GeoProperties {
@@ -25,14 +34,19 @@ impl GeoProperties {
 	pub fn remove(&mut self, key: &str) {
 		self.properties.remove(key);
 	}
+	pub fn get(&self, key: &str) -> Option<&GeoValue> {
+		self.properties.get(key)
+	}
 	pub fn iter(&self) -> std::collections::hash_map::Iter<String, GeoValue> {
 		self.properties.iter()
 	}
-	pub fn into_iter(self) -> std::collections::hash_map::IntoIter<String, GeoValue> {
+}
+
+impl IntoIterator for GeoProperties {
+	type Item = (String, GeoValue);
+	type IntoIter = hash_map::IntoIter<String, GeoValue>;
+	fn into_iter(self) -> Self::IntoIter {
 		self.properties.into_iter()
-	}
-	pub fn get(&self, key: &str) -> Option<&GeoValue> {
-		self.properties.get(key)
 	}
 }
 

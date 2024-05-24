@@ -17,11 +17,9 @@ pub fn new_virtual_tile_operation(def: &YamlWrapper) -> Result<Box<dyn VirtualTi
 	let action = def.hash_get_str("action").context("while parsing an action")?;
 
 	match action {
-		"pbf_replace_properties" => {
-			return Ok(Box::new(
-				PBFReplacePropertiesOperation::new(def).with_context(|| format!("while parsing action '{action}'"))?,
-			))
-		}
+		"pbf_replace_properties" => Ok(Box::new(
+			PBFReplacePropertiesOperation::new(def).with_context(|| format!("while parsing action '{action}'"))?,
+		)),
 		_ => bail!("operation '{action}' is unknown"),
-	};
+	}
 }

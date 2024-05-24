@@ -8,9 +8,9 @@ use crate::{
 	utils::{compress, YamlWrapper},
 };
 use anyhow::{bail, ensure, Context, Result};
-use axum::async_trait;
+use async_trait::async_trait;
 use futures_util::StreamExt;
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{collections::HashMap, path::Path, str::FromStr, sync::Arc};
 use tokio::sync::Mutex;
 
 pub type VReader = Arc<Mutex<Box<dyn TilesReader>>>;
@@ -28,18 +28,25 @@ impl VirtualTilesReader {
 		let yaml = std::fs::read_to_string(path)?;
 		Self::from_str(&yaml, path.to_str().unwrap())
 			.await
-			.with_context(|| format!("while parsing {path:?}"))
+			.with_context(|| format!("while parsing {path:?} as YAML"))
 	}
 
 	pub async fn open_reader(mut reader: DataReader) -> Result<VirtualTilesReader> {
 		let yaml = reader.read_all().await?.into_string();
 		Self::from_str(&yaml, reader.get_name())
 			.await
-			.with_context(|| format!("while parsing {}", reader.get_name()))
+			.with_context(|| format!("while parsing {} as YAML", reader.get_name()))
+	}
+
+	#[cfg(test)]
+	pub async fn open_str(yaml: &str) -> Result<VirtualTilesReader> {
+		Self::from_str(yaml, "String")
+			.await
+			.with_context(|| "while parsing a String as YAML".to_string())
 	}
 
 	async fn from_str(yaml: &str, name: &str) -> Result<VirtualTilesReader> {
-		let yaml = YamlWrapper::from_str(yaml)?;
+		let yaml = YamlWrapper::from_str(yaml).context("parsing the YAML")?;
 
 		ensure!(yaml.is_hash(), "YAML must be an object");
 
@@ -74,82 +81,16 @@ impl VirtualTilesReader {
 			panic!("two much tiles at once")
 		}
 
-		let tile_compression = self.tiles_reader_parameters.tile_compression.clone();
+		let output_compression = self.tiles_reader_parameters.tile_compression;
 
 		for output_definition in self.output_definitions.iter_mut() {
 			if !output_definition.bbox_pyramid.overlaps_bbox(&bbox) {
 				continue;
 			}
-
-			let stream = output_definition.get_bbox_tile_stream(bbox).await;
-			return stream
-				.map(move |(coord, blob)| (coord, compress(blob, &tile_compression).unwrap()))
-				.boxed();
+			return output_definition.get_bbox_tile_stream(bbox, output_compression).await;
 		}
 
-		//todo!();
-		/*
-
-		// Wrap self in an Arc<AsyncMutex<YourStruct>>
-		let self_arc = Arc::new(Mutex::new(self));
-
-		let a = stream::iter(bboxes).map(|bbox| {
-			let self_arc_clone = self_arc.clone();
-			async move {
-				let mut locked_self = self_arc_clone.lock().await;
-				locked_self.get_bbox_tile_stream_small(bbox)
-			}
-		});
-		*/
-
-		//todo!();
-		// Create a FuturesUnordered
-
-		// Collect the resulting streams
-		//let streams: Vec<TilesStream> = futures.collect();
-
-		// Combine all streams into one using select_all
-		//let combined_stream = select_all(streams);
-
-		// Box and pin the combined stream
-		//Box::pin(combined_stream)
-
-		// limit bbox to 1024x1024
-		// note already deliviered tiles in a [[bool]]
-		// get bbox of tile not fetched yet
-		// ask next output
-
-		/*
-		for output_definition in self.output_definitions.iter() {
-			if !output_definition.bbox_pyramid.contains_coord(bbox) {
-				continue;
-			}
-			if let Some(mut tile) = output_definition.get_tile_data(coord).await? {
-				tile = compress(tile, &self.tiles_reader_parameters.tile_compression)?;
-				return Ok(Some(tile));
-			} else {
-				continue;
-			}
-		}
-
-		let mutex = Arc::new(Mutex::new(self));
-		let coords: Vec<TileCoord3> = bbox.iter_coords().collect();
-		stream::iter(coords)
-			.filter_map(move |coord| {
-				let mutex = mutex.clone();
-				async move {
-					mutex
-						.lock()
-						.await
-						.get_tile_data(&coord)
-						.await
-						.map(|blob_option| blob_option.map(|blob| (coord, blob)))
-						.unwrap_or(None)
-				}
-			})
-			.boxed()
-			 */
-		todo!()
+		futures_util::stream::iter(vec![]).boxed()
 	}
 }
 
@@ -208,10 +149,10 @@ async fn parse_output(
 	Ok(output)
 }
 
-fn parse_parameters(yaml: &YamlWrapper, outputs: &Vec<VirtualTilesOutput>) -> Result<TilesReaderParameters> {
+fn parse_parameters(yaml: &YamlWrapper, outputs: &[VirtualTilesOutput]) -> Result<TilesReaderParameters> {
 	ensure!(yaml.is_hash(), "'parameters' must be an object");
-	let tile_compression = TileCompression::from_str(yaml.hash_get_str("compression")?)?;
-	let tile_format = TileFormat::from_str(yaml.hash_get_str("format")?)?;
+	let tile_compression = TileCompression::parse_str(yaml.hash_get_str("compression")?)?;
+	let tile_format = TileFormat::parse_str(yaml.hash_get_str("format")?)?;
 
 	let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 	for output in outputs.iter() {
@@ -306,8 +247,26 @@ mod tests {
 	use super::*;
 
 	#[tokio::test(flavor = "multi_thread", worker_threads = 16)]
-	async fn open_yaml() -> Result<()> {
-		let mut reader = VirtualTilesReader::open_path(&Path::new("testdata/test.yaml")).await?;
+	async fn open_yaml_str() -> Result<()> {
+		let yaml = r"
+inputs:
+  tiles:
+    filename: testdata/berlin.versatiles
+operations:	
+  set_values:
+    action: pbf_replace_properties
+    data_source_path: testdata/cities.csv
+    id_field_tiles: id
+    id_field_values: city_id
+parameters:
+  compression: none
+  format: pbf
+output:
+  - input: tiles
+    operations:
+    - set_values
+";
+		let mut reader = VirtualTilesReader::open_str(yaml).await?;
 		MockTilesWriter::write(&mut reader).await?;
 
 		Ok(())

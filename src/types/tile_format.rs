@@ -99,9 +99,19 @@ impl TileFormat {
 		None
 	}
 
-	pub fn from_str(value: &str) -> Result<Self> {
+	pub fn parse_str(value: &str) -> Result<Self> {
 		Ok(match value.to_lowercase().trim_matches([' ', '.']) {
-			"pbf" => Self::PBF,
+			"avif" => TileFormat::AVIF,
+			"bin" => TileFormat::BIN,
+			"geojson" => TileFormat::GEOJSON,
+			"jpeg" => TileFormat::JPG,
+			"jpg" => TileFormat::JPG,
+			"json" => TileFormat::JSON,
+			"pbf" => TileFormat::PBF,
+			"png" => TileFormat::PNG,
+			"svg" => TileFormat::SVG,
+			"topojson" => TileFormat::TOPOJSON,
+			"webp" => TileFormat::WEBP,
 			_ => bail!("Unknown tile format. Expected: PBF"),
 		})
 	}

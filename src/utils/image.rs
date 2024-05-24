@@ -148,72 +148,6 @@ pub fn webp2img(blob: &Blob) -> Result<DynamicImage> {
 }
 
 #[cfg(test)]
-mod tests {
-	use super::*;
-
-	/// Test PNG encoding and decoding for grayscale images
-	#[test]
-	fn png() -> Result<()> {
-		let image1 = create_image_grey();
-		compare_images(png2img(&img2png(&image1)?)?, image1, 0);
-
-		let image2 = create_image_greya();
-		compare_images(png2img(&img2png(&image2)?)?, image2, 0);
-
-		let image3 = create_image_rgb();
-		compare_images(png2img(&img2png(&image3)?)?, image3, 0);
-
-		let image4 = create_image_rgba();
-		compare_images(png2img(&img2png(&image4)?)?, image4, 0);
-
-		Ok(())
-	}
-
-	/// Test JPEG encoding and decoding for grayscale and RGB images
-	#[test]
-	fn jpg() -> Result<()> {
-		let image1 = create_image_grey();
-		compare_images(jpg2img(&img2jpg(&image1)?)?, image1, 0);
-
-		let image3 = create_image_rgb();
-		compare_images(jpg2img(&img2jpg(&image3)?)?, image3, 4);
-
-		Ok(())
-	}
-
-	/// Test WebP encoding and decoding for grayscale, grayscale with alpha, RGB, and RGBA images
-	#[test]
-	fn webp() -> Result<()> {
-		assert!(img2webp(&create_image_grey()).is_err());
-
-		assert!(img2webp(&create_image_greya()).is_err());
-
-		let image3 = create_image_rgb();
-		compare_images(webp2img(&img2webp(&image3)?)?, image3, 4);
-
-		let image4 = create_image_rgba();
-		compare_images(webp2img(&img2webp(&image4)?)?, image4, 6);
-
-		Ok(())
-	}
-
-	/// Test lossless WebP encoding and decoding for grayscale and grayscale with alpha images
-	#[test]
-	fn webplossless() -> Result<()> {
-		assert!(img2webplossless(&create_image_grey()).is_err());
-
-		assert!(img2webplossless(&create_image_greya()).is_err());
-
-		let image3 = create_image_rgb();
-		compare_images(webp2img(&img2webplossless(&image3)?)?, image3, 0);
-
-		assert!(img2webplossless(&create_image_rgba()).is_err());
-
-		Ok(())
-	}
-}
-
-#[cfg(test)]
 use image::{GrayAlphaImage, GrayImage, Luma, LumaA, Rgb, RgbImage, Rgba, RgbaImage};
 
 /// Generate a DynamicImage with RGBA colors
@@ -281,4 +215,70 @@ pub fn compare_images(image1: DynamicImage, image2: DynamicImage, max_allowed_di
 		max_diff <= max_allowed_diff,
 		"max_diff ({max_diff}) > max_allowed_diff ({max_allowed_diff})"
 	);
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	/// Test PNG encoding and decoding for grayscale images
+	#[test]
+	fn png() -> Result<()> {
+		let image1 = create_image_grey();
+		compare_images(png2img(&img2png(&image1)?)?, image1, 0);
+
+		let image2 = create_image_greya();
+		compare_images(png2img(&img2png(&image2)?)?, image2, 0);
+
+		let image3 = create_image_rgb();
+		compare_images(png2img(&img2png(&image3)?)?, image3, 0);
+
+		let image4 = create_image_rgba();
+		compare_images(png2img(&img2png(&image4)?)?, image4, 0);
+
+		Ok(())
+	}
+
+	/// Test JPEG encoding and decoding for grayscale and RGB images
+	#[test]
+	fn jpg() -> Result<()> {
+		let image1 = create_image_grey();
+		compare_images(jpg2img(&img2jpg(&image1)?)?, image1, 0);
+
+		let image3 = create_image_rgb();
+		compare_images(jpg2img(&img2jpg(&image3)?)?, image3, 4);
+
+		Ok(())
+	}
+
+	/// Test WebP encoding and decoding for grayscale, grayscale with alpha, RGB, and RGBA images
+	#[test]
+	fn webp() -> Result<()> {
+		assert!(img2webp(&create_image_grey()).is_err());
+
+		assert!(img2webp(&create_image_greya()).is_err());
+
+		let image3 = create_image_rgb();
+		compare_images(webp2img(&img2webp(&image3)?)?, image3, 4);
+
+		let image4 = create_image_rgba();
+		compare_images(webp2img(&img2webp(&image4)?)?, image4, 6);
+
+		Ok(())
+	}
+
+	/// Test lossless WebP encoding and decoding for grayscale and grayscale with alpha images
+	#[test]
+	fn webplossless() -> Result<()> {
+		assert!(img2webplossless(&create_image_grey()).is_err());
+
+		assert!(img2webplossless(&create_image_greya()).is_err());
+
+		let image3 = create_image_rgb();
+		compare_images(webp2img(&img2webplossless(&image3)?)?, image3, 0);
+
+		assert!(img2webplossless(&create_image_rgba()).is_err());
+
+		Ok(())
+	}
 }

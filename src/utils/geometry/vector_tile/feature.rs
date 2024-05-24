@@ -10,6 +10,7 @@ use crate::{
 };
 use anyhow::{bail, ensure, Context, Result};
 use byteorder::LE;
+use log::trace;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct VectorTileFeature {
@@ -193,12 +194,12 @@ impl VectorTileFeature {
 					} else if area < -1e-14 {
 						// Inner ring
 						if current_polygon.is_empty() {
-							eprintln!("An outer ring must precede inner rings");
+							trace!("An outer ring must precede inner rings");
 						} else {
 							current_polygon.push(ring);
 						}
 					} else {
-						eprintln!("Error: Ring with zero area")
+						trace!("Error: Ring with zero area")
 					}
 				}
 
@@ -344,15 +345,15 @@ mod tests {
 	}
 
 	fn to_vec1(data: &[[i32; 2]]) -> Vec<PointGeometry> {
-		data.into_iter().map(|p| to_point(*p)).collect()
+		data.iter().map(|p| to_point(*p)).collect()
 	}
 
 	fn to_vec2(data: &[&[[i32; 2]]]) -> Vec<Vec<PointGeometry>> {
-		data.into_iter().map(|p| to_vec1(p)).collect()
+		data.iter().map(|p| to_vec1(p)).collect()
 	}
 
 	fn to_vec3(data: &[&[&[[i32; 2]]]]) -> Vec<Vec<Vec<PointGeometry>>> {
-		data.into_iter().map(|p| to_vec2(p)).collect()
+		data.iter().map(|p| to_vec2(p)).collect()
 	}
 
 	#[test]

@@ -187,8 +187,8 @@ mod tests {
 
 	#[test]
 	fn test_is_empty() {
-		assert_eq!(ValueReaderSlice::new_le(&[]).is_empty(), true);
-		assert_eq!(ValueReaderSlice::new_le(&[0]).is_empty(), false);
+		assert!(ValueReaderSlice::new_le(&[]).is_empty());
+		assert!(!ValueReaderSlice::new_le(&[0]).is_empty());
 	}
 
 	#[test]

@@ -85,14 +85,14 @@ mod tests {
 
 	#[tokio::test]
 	async fn convert_png() -> Result<()> {
-		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
+		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
 		MockTilesWriter::write(&mut reader).await?;
 		Ok(())
 	}
 
 	#[tokio::test]
 	async fn convert_pbf() -> Result<()> {
-		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PBF)?;
+		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Pbf)?;
 		MockTilesWriter::write(&mut reader).await?;
 		Ok(())
 	}

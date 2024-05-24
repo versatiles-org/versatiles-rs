@@ -156,7 +156,6 @@ mod tests {
 		types::{TileBBoxPyramid, TileCompression, TileFormat},
 		utils::decompress_gzip,
 	};
-	use assert_fs;
 
 	/// Tests the functionality of writing tile data to a directory from a mock reader.
 	#[tokio::test]
@@ -170,15 +169,17 @@ mod tests {
 			TileBBoxPyramid::new_full(2),
 		))?;
 
-		DirectoryTilesWriter::write_to_path(&mut mock_reader, &temp_path).await?;
+		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path).await?;
 
 		let load = |filename| {
 			let path = temp_path.join(filename);
-			path.try_exists().expect(&format!("filename {filename} should exist"));
+			path
+				.try_exists()
+				.unwrap_or_else(|_| panic!("filename {filename} should exist"));
 			decompress_gzip(&Blob::from(
-				fs::read(path).expect(&format!("filename {filename} should be readable")),
+				fs::read(path).unwrap_or_else(|_| panic!("filename {filename} should be readable")),
 			))
-			.expect(&format!("filename {filename} should be gzip compressed"))
+			.unwrap_or_else(|_| panic!("filename {filename} should be gzip compressed"))
 		};
 
 		assert_eq!(load("tiles.json.gz").as_str(), "dummy meta data");

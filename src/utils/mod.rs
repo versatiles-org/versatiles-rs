@@ -21,4 +21,5 @@ pub use transform_coord::*;
 
 #[cfg(feature = "full")]
 mod yaml;
+#[cfg(feature = "full")]
 pub use yaml::*;

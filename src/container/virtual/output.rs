@@ -5,7 +5,7 @@ use super::{
 use crate::{
 	container::{TilesReader, TilesStream},
 	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3},
-	utils::{decompress, YamlWrapper},
+	utils::{compress, decompress, YamlWrapper},
 };
 use anyhow::{ensure, Context, Result};
 use futures_util::{StreamExt, TryStreamExt};
@@ -28,13 +28,13 @@ impl VirtualTilesOutput {
 		let input = def.hash_get_str("input")?;
 		let input = input_lookup
 			.get(input)
-			.with_context(|| format!("while trying to lookup the input name"))?
+			.with_context(|| "while trying to lookup the input name".to_string())?
 			.clone();
 
 		let input_name = input.lock().await.get_name().to_string();
 		let parameters = input.lock().await.get_parameters().clone();
 		let bbox_pyramid = parameters.bbox_pyramid.clone();
-		let input_compression = parameters.tile_compression.clone();
+		let input_compression = parameters.tile_compression;
 
 		let operations = def.hash_get_value("operations")?;
 		ensure!(operations.is_array(), "'operations' must be an array");
@@ -44,7 +44,7 @@ impl VirtualTilesOutput {
 			.map(|o| -> Result<VOperation> {
 				Ok(operation_lookup
 					.get(o.as_str()?)
-					.with_context(|| format!("while trying to lookup the operation name"))?
+					.with_context(|| "while trying to lookup the operation name".to_string())?
 					.clone())
 			})
 			.collect::<Result<Vec<VOperation>>>()?;
@@ -76,17 +76,14 @@ impl VirtualTilesOutput {
 
 		Ok(Some(blob))
 	}
-	pub async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TilesStream {
+	pub async fn get_bbox_tile_stream(&mut self, bbox: TileBBox, output_compression: TileCompression) -> TilesStream {
 		let entries: Vec<(TileCoord3, Blob)> = self.input.lock().await.get_bbox_tile_stream(bbox).await.collect().await;
 
-		println!("process tile count: {} with num cpu {}", entries.len(), num_cpus::get());
-
+		let input_compression = self.input_compression;
 		let entries: Vec<Option<(TileCoord3, Blob)>> = futures_util::stream::iter(entries.into_iter())
 			.map(|(coord, blob)| {
 				let operations = self.operations.clone();
-				let input_compression = self.input_compression;
 				tokio::spawn(async move {
-					println!("{coord:?} start");
 					let mut blob = decompress(blob, &input_compression).unwrap();
 
 					for operation in operations.iter() {
@@ -97,7 +94,8 @@ impl VirtualTilesOutput {
 						}
 					}
 
-					println!("{coord:?} end");
+					blob = compress(blob, &output_compression).unwrap();
+
 					Some((coord, blob))
 				})
 			})
@@ -105,11 +103,10 @@ impl VirtualTilesOutput {
 			.try_collect()
 			.await
 			.unwrap();
-		//.try_collect()
-		//.await
-		//.unwrap();
 
-		futures_util::stream::iter(entries.into_iter().filter_map(|o| o)).boxed()
+		let result = futures_util::stream::iter(entries.into_iter().flatten()).boxed();
+
+		result
 	}
 }
 
