@@ -1,4 +1,6 @@
-use super::{super::utils::Url, static_source_folder::Folder, static_source_tar::TarFile, SourceResponse};
+use super::{
+	super::utils::Url, static_source_folder::Folder, static_source_tar::TarFile, SourceResponse,
+};
 use crate::utils::TargetCompression;
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
@@ -40,7 +42,9 @@ impl StaticSource {
 		if !url.starts_with(&self.prefix) {
 			return None;
 		}
-		self.source.get_data(&url.strip_prefix(&self.prefix).unwrap(), accept)
+		self
+			.source
+			.get_data(&url.strip_prefix(&self.prefix).unwrap(), accept)
 	}
 }
 
@@ -155,7 +159,8 @@ mod tests {
 			source: Arc::new(Box::new(MockStaticSource)),
 			prefix: Url::new(""),
 		};
-		let result = static_source.get_data(&Url::new("does_not_exist"), &TargetCompression::from_none());
+		let result =
+			static_source.get_data(&Url::new("does_not_exist"), &TargetCompression::from_none());
 		assert!(result.is_none());
 	}
 
@@ -166,11 +171,15 @@ mod tests {
 			prefix: Url::new("path/to"),
 		};
 		// Should match and retrieve data
-		let result = static_source.get_data(&Url::new("path/to/exists"), &TargetCompression::from_none());
+		let result =
+			static_source.get_data(&Url::new("path/to/exists"), &TargetCompression::from_none());
 		assert!(result.is_some());
 
 		// Should fail due to path mismatch
-		let result = static_source.get_data(&Url::new("path/wrong/exists"), &TargetCompression::from_none());
+		let result = static_source.get_data(
+			&Url::new("path/wrong/exists"),
+			&TargetCompression::from_none(),
+		);
 		assert!(result.is_none());
 	}
 }

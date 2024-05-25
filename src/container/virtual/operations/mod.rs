@@ -1,10 +1,8 @@
+mod pbf_update_properties;
+
 use crate::{types::Blob, utils::YamlWrapper};
 use anyhow::{bail, Context, Result};
 use std::fmt::Debug;
-
-use self::pbf_update_properties::PBFReplacePropertiesOperation;
-
-mod pbf_update_properties;
 
 pub trait VirtualTileOperation: Debug + Send + Sync {
 	fn new(def: &YamlWrapper) -> Result<Self>
@@ -14,11 +12,14 @@ pub trait VirtualTileOperation: Debug + Send + Sync {
 }
 
 pub fn new_virtual_tile_operation(def: &YamlWrapper) -> Result<Box<dyn VirtualTileOperation>> {
-	let action = def.hash_get_str("action").context("while parsing an action")?;
+	let action = def
+		.hash_get_str("action")
+		.context("while parsing an action")?;
 
 	match action {
 		"pbf_replace_properties" => Ok(Box::new(
-			PBFReplacePropertiesOperation::new(def).with_context(|| format!("while parsing action '{action}'"))?,
+			pbf_update_properties::PBFReplacePropertiesOperation::new(def)
+				.with_context(|| format!("while parsing action '{action}'"))?,
 		)),
 		_ => bail!("operation '{action}' is unknown"),
 	}

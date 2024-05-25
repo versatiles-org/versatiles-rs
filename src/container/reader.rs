@@ -87,7 +87,8 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 
 		let cat = print.get_category("meta_data").await;
 		cat.add_key_value("name", self.get_name()).await;
-		cat.add_key_value("container", self.get_container_name()).await;
+		cat.add_key_value("container", self.get_container_name())
+			.await;
 
 		let meta_option = self.get_meta()?;
 		if let Some(meta) = meta_option {
@@ -101,7 +102,9 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 			.await?;
 
 		if matches!(level, Container | Tiles | TileContents) {
-			self.probe_container(&print.get_category("container").await).await?;
+			self
+				.probe_container(&print.get_category("container").await)
+				.await?;
 		}
 
 		if matches!(level, Tiles | TileContents) {
@@ -125,12 +128,17 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 			p.add_value(level).await
 		}
 		print
-			.add_key_value("bbox", &format!("{:?}", parameters.bbox_pyramid.get_geo_bbox()))
+			.add_key_value(
+				"bbox",
+				&format!("{:?}", parameters.bbox_pyramid.get_geo_bbox()),
+			)
 			.await;
 		print
 			.add_key_value("tile compression", &parameters.tile_compression)
 			.await;
-		print.add_key_value("tile format", &parameters.tile_format).await;
+		print
+			.add_key_value("tile format", &parameters.tile_format)
+			.await;
 		Ok(())
 	}
 

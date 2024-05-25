@@ -60,7 +60,10 @@ pub fn optimize_compression(
 		}
 		TileCompression::Gzip => {
 			if target.compressions.contains(TileCompression::Brotli) {
-				return Ok((compress_brotli(&decompress_gzip(&blob)?)?, TileCompression::Brotli));
+				return Ok((
+					compress_brotli(&decompress_gzip(&blob)?)?,
+					TileCompression::Brotli,
+				));
 			}
 
 			if target.compressions.contains(TileCompression::Gzip) {

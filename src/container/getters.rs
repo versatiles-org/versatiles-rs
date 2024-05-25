@@ -27,8 +27,9 @@
 
 use crate::{
 	container::{
-		DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, MBTilesWriter, PMTilesReader, PMTilesWriter,
-		TarTilesReader, TarTilesWriter, TilesReader, TilesWriter, VersaTilesReader, VersaTilesWriter, VirtualTilesReader,
+		DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, MBTilesWriter, PMTilesReader,
+		PMTilesWriter, TarTilesReader, TarTilesWriter, TilesReader, TilesWriter, VersaTilesReader,
+		VersaTilesWriter, VirtualTilesReader,
 	},
 	types::{DataReader, DataReaderHttp},
 };

@@ -234,8 +234,14 @@ mod tests {
 		assert_eq!(format_duration(Duration::from_secs(1)), "00:00:01");
 		assert_eq!(format_duration(Duration::from_secs(60)), "00:01:00");
 		assert_eq!(format_duration(Duration::from_secs(60 * 60)), "01:00:00");
-		assert_eq!(format_duration(Duration::from_secs(60 * 60 * 24)), "1d 00:00:00");
-		assert_eq!(format_duration(Duration::from_secs(60 * 60 * 24 + 3661)), "1d 01:01:01");
+		assert_eq!(
+			format_duration(Duration::from_secs(60 * 60 * 24)),
+			"1d 00:00:00"
+		);
+		assert_eq!(
+			format_duration(Duration::from_secs(60 * 60 * 24 + 3661)),
+			"1d 01:01:01"
+		);
 	}
 
 	#[test]

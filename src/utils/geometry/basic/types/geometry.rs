@@ -161,7 +161,10 @@ mod tests {
 
 	#[test]
 	fn test_new_multi_line_string() {
-		let multi_line_string = Geometry::parse2(vec![vec![[1.0, 2.0], [3.0, 4.0]], vec![[5.0, 6.0], [7.0, 8.0]]]);
+		let multi_line_string = Geometry::parse2(vec![
+			vec![[1.0, 2.0], [3.0, 4.0]],
+			vec![[5.0, 6.0], [7.0, 8.0]],
+		]);
 		let geometry = Geometry::new_multi_line_string(multi_line_string.clone());
 		assert_eq!(geometry, Geometry::MultiLineString(multi_line_string));
 	}
@@ -170,7 +173,13 @@ mod tests {
 	fn test_new_multi_polygon() {
 		let multi_polygon = Geometry::parse3(vec![
 			vec![vec![[0.0, 0.0], [5.0, 0.0], [2.5, 4.0], [0.0, 0.0]]],
-			vec![vec![[6.0, 0.0], [9.0, 0.0], [9.0, 4.0], [6.0, 4.0], [6.0, 0.0]]],
+			vec![vec![
+				[6.0, 0.0],
+				[9.0, 0.0],
+				[9.0, 4.0],
+				[6.0, 4.0],
+				[6.0, 0.0],
+			]],
 		]);
 		let geometry = Geometry::new_multi_polygon(multi_polygon.clone());
 		assert_eq!(geometry, Geometry::MultiPolygon(multi_polygon));
@@ -193,7 +202,13 @@ mod tests {
 
 	#[test]
 	fn test_area() {
-		let ring = Geometry::parse1(vec![[0.0, 0.0], [5.0, 0.0], [5.0, 5.0], [0.0, 5.0], [0.0, 0.0]]);
+		let ring = Geometry::parse1(vec![
+			[0.0, 0.0],
+			[5.0, 0.0],
+			[5.0, 5.0],
+			[0.0, 5.0],
+			[0.0, 0.0],
+		]);
 		let area = ring.area();
 		assert_eq!(area, 50.0);
 	}

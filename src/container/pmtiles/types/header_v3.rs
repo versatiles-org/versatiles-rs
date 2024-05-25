@@ -104,7 +104,10 @@ impl HeaderV3 {
 		let buffer = blob.as_slice();
 
 		ensure!(buffer.len() == 127, "pmtiles magic number exception");
-		ensure!(&buffer[0..7] == b"PMTiles", "pmtiles magic number exception");
+		ensure!(
+			&buffer[0..7] == b"PMTiles",
+			"pmtiles magic number exception"
+		);
 		ensure!(buffer[7] == 3, "pmtiles version: must be 3");
 
 		let mut reader = ValueReaderSlice::new_le(blob.as_slice());

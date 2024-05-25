@@ -67,11 +67,26 @@ mod tests {
 
 	#[test]
 	fn test_from_value() {
-		assert_eq!(PMTilesType::from_value(TileFormat::AVIF).unwrap(), PMTilesType::AVIF);
-		assert_eq!(PMTilesType::from_value(TileFormat::JPG).unwrap(), PMTilesType::JPEG);
-		assert_eq!(PMTilesType::from_value(TileFormat::PBF).unwrap(), PMTilesType::MVT);
-		assert_eq!(PMTilesType::from_value(TileFormat::PNG).unwrap(), PMTilesType::PNG);
-		assert_eq!(PMTilesType::from_value(TileFormat::WEBP).unwrap(), PMTilesType::WEBP);
+		assert_eq!(
+			PMTilesType::from_value(TileFormat::AVIF).unwrap(),
+			PMTilesType::AVIF
+		);
+		assert_eq!(
+			PMTilesType::from_value(TileFormat::JPG).unwrap(),
+			PMTilesType::JPEG
+		);
+		assert_eq!(
+			PMTilesType::from_value(TileFormat::PBF).unwrap(),
+			PMTilesType::MVT
+		);
+		assert_eq!(
+			PMTilesType::from_value(TileFormat::PNG).unwrap(),
+			PMTilesType::PNG
+		);
+		assert_eq!(
+			PMTilesType::from_value(TileFormat::WEBP).unwrap(),
+			PMTilesType::WEBP
+		);
 
 		// Test unsupported TileFormats
 		assert!(PMTilesType::from_value(TileFormat::BIN).is_err());

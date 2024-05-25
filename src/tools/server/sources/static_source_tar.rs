@@ -7,7 +7,9 @@ use crate::{
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
 use log::trace;
-use std::{collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::File, io::Read, path::Path};
+use std::{
+	collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::File, io::Read, path::Path,
+};
 use tar::{Archive, EntryType};
 
 #[derive(Debug)]
@@ -144,26 +146,46 @@ impl StaticSourceTrait for TarFile {
 
 		if accept.contains(TileCompression::Brotli) {
 			if let Some(blob) = &file_entry.br {
-				return SourceResponse::new_some(blob.to_owned(), &TileCompression::Brotli, &file_entry.mime);
+				return SourceResponse::new_some(
+					blob.to_owned(),
+					&TileCompression::Brotli,
+					&file_entry.mime,
+				);
 			}
 		}
 
 		if accept.contains(TileCompression::Gzip) {
 			if let Some(blob) = &file_entry.gz {
-				return SourceResponse::new_some(blob.to_owned(), &TileCompression::Gzip, &file_entry.mime);
+				return SourceResponse::new_some(
+					blob.to_owned(),
+					&TileCompression::Gzip,
+					&file_entry.mime,
+				);
 			}
 		}
 
 		if let Some(blob) = &file_entry.un {
-			return SourceResponse::new_some(blob.to_owned(), &TileCompression::None, &file_entry.mime);
+			return SourceResponse::new_some(
+				blob.to_owned(),
+				&TileCompression::None,
+				&file_entry.mime,
+			);
 		}
 
 		if let Some(blob) = &file_entry.br {
-			return SourceResponse::new_some(blob.to_owned(), &TileCompression::Brotli, &file_entry.mime);
+			return SourceResponse::new_some(
+				blob.to_owned(),
+				&TileCompression::Brotli,
+				&file_entry.mime,
+			);
 		}
 
 		if let Some(blob) = &file_entry.gz {
-			return SourceResponse::new_some(blob.to_owned(), &TileCompression::Gzip, &file_entry.mime);
+			return SourceResponse::new_some(
+				blob.to_owned(),
+				&TileCompression::Gzip,
+				&file_entry.mime,
+			);
 		}
 
 		None
@@ -180,7 +202,8 @@ impl Debug for TarFile {
 mod tests {
 	use super::*;
 	use crate::container::{
-		convert_tiles_container, MockTilesReader, MockTilesReaderProfile, TilesConverterParameters, TilesReader,
+		convert_tiles_container, MockTilesReader, MockTilesReaderProfile, TilesConverterParameters,
+		TilesReader,
 	};
 	use assert_fs::NamedTempFile;
 
@@ -191,7 +214,8 @@ mod tests {
 		// get to test container converter
 		let container_file = NamedTempFile::new("temp.tar").unwrap();
 
-		let parameters = TilesConverterParameters::new(None, Some(compression), None, false, false, false);
+		let parameters =
+			TilesConverterParameters::new(None, Some(compression), None, false, false, false);
 		convert_tiles_container(reader.boxed(), parameters, container_file.to_str().unwrap())
 			.await
 			.unwrap();
@@ -240,7 +264,8 @@ mod tests {
 			return Ok(());
 
 			async fn test2(
-				tar_file: &mut TarFile, compression_tar: &TileCompression, compression_accept: TileCompression,
+				tar_file: &mut TarFile, compression_tar: &TileCompression,
+				compression_accept: TileCompression,
 			) -> Result<()> {
 				let accept = TargetCompression::from(compression_accept);
 

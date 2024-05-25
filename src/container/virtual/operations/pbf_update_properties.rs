@@ -36,7 +36,9 @@ impl VirtualTileOperation for PBFReplacePropertiesOperation {
 			.hash_get_string("id_field_values")
 			.context("Failed to get 'id_field_values' from YAML configuration")?;
 		let replace_properties = yaml.hash_get_bool("replace_properties").unwrap_or(false);
-		let remove_empty_properties = yaml.hash_get_bool("remove_empty_properties").unwrap_or(false);
+		let remove_empty_properties = yaml
+			.hash_get_bool("remove_empty_properties")
+			.unwrap_or(false);
 		let also_save_id = yaml.hash_get_bool("also_save_id").unwrap_or(false);
 
 		let data = read_csv_file(Path::new(&data_source_path))
@@ -45,11 +47,14 @@ impl VirtualTileOperation for PBFReplacePropertiesOperation {
 		let properties_map = data
 			.into_iter()
 			.map(|mut properties| {
-				let key = properties
-					.get(&id_field_values)
-					.ok_or_else(|| anyhow!("Key '{id_field_values}' not found in CSV data"))
-					.with_context(|| format!("Failed to find key '{id_field_values}' in the CSV data row: {properties:?}"))?
-					.to_string();
+				let key =
+					properties
+						.get(&id_field_values)
+						.ok_or_else(|| anyhow!("Key '{id_field_values}' not found in CSV data"))
+						.with_context(|| {
+							format!("Failed to find key '{id_field_values}' in the CSV data row: {properties:?}")
+						})?
+						.to_string();
 				if !also_save_id {
 					properties.remove(&id_field_values)
 				}
@@ -67,7 +72,8 @@ impl VirtualTileOperation for PBFReplacePropertiesOperation {
 	}
 
 	fn run(&self, blob: &Blob) -> Result<Option<Blob>> {
-		let mut tile = VectorTile::from_blob(blob).context("Failed to create VectorTile from Blob")?;
+		let mut tile =
+			VectorTile::from_blob(blob).context("Failed to create VectorTile from Blob")?;
 
 		for layer in tile.layers.iter_mut() {
 			layer.map_properties(|properties| {
@@ -91,14 +97,21 @@ impl VirtualTileOperation for PBFReplacePropertiesOperation {
 			}
 		}
 
-		Ok(Some(tile.to_blob().context("Failed to convert VectorTile to Blob")?))
+		Ok(Some(
+			tile
+				.to_blob()
+				.context("Failed to convert VectorTile to Blob")?,
+		))
 	}
 }
 
 impl Debug for PBFReplacePropertiesOperation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("PBFReplacePropertiesOperation")
-			.field("properties_map", &BTreeMap::from_iter(self.properties_map.iter()))
+			.field(
+				"properties_map",
+				&BTreeMap::from_iter(self.properties_map.iter()),
+			)
 			.field("id_field_tiles", &self.id_field_tiles)
 			.field("remove_empty_properties", &self.remove_empty_properties)
 			.finish()
@@ -111,7 +124,9 @@ mod tests {
 	use crate::utils::geometry::{vector_tile::VectorTileLayer, Feature, GeoValue, Geometry};
 	use std::str::FromStr;
 
-	fn test(parameters: (&str, &str, &[(&str, bool)]), debug_operation: &str, debug_result: &str) -> Result<()> {
+	fn test(
+		parameters: (&str, &str, &[(&str, bool)]), debug_operation: &str, debug_result: &str,
+	) -> Result<()> {
 		let mut yaml = vec![
 			"data_source_path: \"testdata/cities.csv\"".to_string(),
 			format!("id_field_tiles: \"{}\"", parameters.0),

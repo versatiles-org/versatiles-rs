@@ -46,11 +46,26 @@ mod tests {
 
 	#[test]
 	fn test_from_u8() {
-		assert_eq!(PMTilesCompression::from_u8(0).unwrap(), PMTilesCompression::Unknown);
-		assert_eq!(PMTilesCompression::from_u8(1).unwrap(), PMTilesCompression::None);
-		assert_eq!(PMTilesCompression::from_u8(2).unwrap(), PMTilesCompression::Gzip);
-		assert_eq!(PMTilesCompression::from_u8(3).unwrap(), PMTilesCompression::Brotli);
-		assert_eq!(PMTilesCompression::from_u8(4).unwrap(), PMTilesCompression::Zstd);
+		assert_eq!(
+			PMTilesCompression::from_u8(0).unwrap(),
+			PMTilesCompression::Unknown
+		);
+		assert_eq!(
+			PMTilesCompression::from_u8(1).unwrap(),
+			PMTilesCompression::None
+		);
+		assert_eq!(
+			PMTilesCompression::from_u8(2).unwrap(),
+			PMTilesCompression::Gzip
+		);
+		assert_eq!(
+			PMTilesCompression::from_u8(3).unwrap(),
+			PMTilesCompression::Brotli
+		);
+		assert_eq!(
+			PMTilesCompression::from_u8(4).unwrap(),
+			PMTilesCompression::Zstd
+		);
 		assert!(PMTilesCompression::from_u8(5).is_err());
 	}
 
@@ -75,9 +90,18 @@ mod tests {
 	#[test]
 	fn test_as_value() {
 		assert!(PMTilesCompression::Unknown.as_value().is_err());
-		assert_eq!(PMTilesCompression::None.as_value().unwrap(), TileCompression::None);
-		assert_eq!(PMTilesCompression::Gzip.as_value().unwrap(), TileCompression::Gzip);
-		assert_eq!(PMTilesCompression::Brotli.as_value().unwrap(), TileCompression::Brotli);
+		assert_eq!(
+			PMTilesCompression::None.as_value().unwrap(),
+			TileCompression::None
+		);
+		assert_eq!(
+			PMTilesCompression::Gzip.as_value().unwrap(),
+			TileCompression::Gzip
+		);
+		assert_eq!(
+			PMTilesCompression::Brotli.as_value().unwrap(),
+			TileCompression::Brotli
+		);
 		assert!(PMTilesCompression::Zstd.as_value().is_err());
 	}
 

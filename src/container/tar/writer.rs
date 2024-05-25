@@ -100,7 +100,9 @@ impl TilesWriter for TarTilesWriter {
 	///
 	/// # Errors
 	/// This function is not implemented and will return an error.
-	async fn write_to_writer(_reader: &mut dyn TilesReader, _writer: &mut dyn DataWriterTrait) -> Result<()> {
+	async fn write_to_writer(
+		_reader: &mut dyn TilesReader, _writer: &mut dyn DataWriterTrait,
+	) -> Result<()> {
 		bail!("not implemented")
 	}
 }

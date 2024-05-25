@@ -33,7 +33,10 @@ impl Url {
 	}
 
 	pub fn strip_prefix(&self, prefix: &Url) -> Result<Url> {
-		ensure!(self.str.starts_with(&prefix.str), "url does not start with prefix");
+		ensure!(
+			self.str.starts_with(&prefix.str),
+			"url does not start with prefix"
+		);
 
 		Ok(Url::new(&self.str[prefix.str.len()..]))
 	}
@@ -42,7 +45,13 @@ impl Url {
 		self
 			.str
 			.split('/')
-			.filter_map(|s| if s.is_empty() { None } else { Some(s.to_owned()) })
+			.filter_map(|s| {
+				if s.is_empty() {
+					None
+				} else {
+					Some(s.to_owned())
+				}
+			})
 			.collect()
 	}
 
@@ -107,7 +116,10 @@ mod tests {
 
 	#[test]
 	fn test_as_vec() {
-		assert_eq!(Url::new("/test/dir/file").as_vec(), vec!["test", "dir", "file"]);
+		assert_eq!(
+			Url::new("/test/dir/file").as_vec(),
+			vec!["test", "dir", "file"]
+		);
 	}
 
 	#[test]
@@ -148,8 +160,14 @@ mod tests {
 
 	#[test]
 	fn test_join_as_string() {
-		assert_eq!(Url::new("/test/dir/").join_as_string("file"), "/test/dir/file");
+		assert_eq!(
+			Url::new("/test/dir/").join_as_string("file"),
+			"/test/dir/file"
+		);
 
-		assert_eq!(Url::new("/test/dir").join_as_string("file"), "/test/dir/file");
+		assert_eq!(
+			Url::new("/test/dir").join_as_string("file"),
+			"/test/dir/file"
+		);
 	}
 }

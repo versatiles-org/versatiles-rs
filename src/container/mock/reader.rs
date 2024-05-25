@@ -160,12 +160,21 @@ mod tests {
 			let coord = TileCoord3::new(23, 45, 6).unwrap();
 			let mut reader = MockTilesReader::new_mock_profile(profile).unwrap();
 			let tile_compressed = reader.get_tile_data(&coord).await.unwrap().unwrap();
-			let tile_uncompressed = decompress(tile_compressed, &reader.get_parameters().tile_compression).unwrap();
+			let tile_uncompressed =
+				decompress(tile_compressed, &reader.get_parameters().tile_compression).unwrap();
 			assert_eq!(tile_uncompressed, blob);
 		};
 
-		test(MockTilesReaderProfile::Png, Blob::from(MOCK_BYTES_PNG.to_vec())).await;
-		test(MockTilesReaderProfile::Pbf, Blob::from(MOCK_BYTES_PBF.to_vec())).await;
+		test(
+			MockTilesReaderProfile::Png,
+			Blob::from(MOCK_BYTES_PNG.to_vec()),
+		)
+		.await;
+		test(
+			MockTilesReaderProfile::Pbf,
+			Blob::from(MOCK_BYTES_PBF.to_vec()),
+		)
+		.await;
 		test(MockTilesReaderProfile::Json, Blob::from("{x:23,y:45,z:6}")).await;
 	}
 

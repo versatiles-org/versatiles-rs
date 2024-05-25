@@ -24,7 +24,9 @@
 
 use crate::{
 	container::{TilesReader, TilesWriter},
-	types::{progress::get_progress_bar, Blob, DataWriterTrait, TileCompression, TileCoord3, TileFormat},
+	types::{
+		progress::get_progress_bar, Blob, DataWriterTrait, TileCompression, TileCoord3, TileFormat,
+	},
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -158,7 +160,9 @@ impl TilesWriter for MBTilesWriter {
 	}
 
 	/// Not implemented: Writes tiles and metadata to a generic data writer.
-	async fn write_to_writer(_reader: &mut dyn TilesReader, _writer: &mut dyn DataWriterTrait) -> Result<()> {
+	async fn write_to_writer(
+		_reader: &mut dyn TilesReader, _writer: &mut dyn DataWriterTrait,
+	) -> Result<()> {
 		bail!("not implemented")
 	}
 }

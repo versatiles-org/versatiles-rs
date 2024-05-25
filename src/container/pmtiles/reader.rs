@@ -45,7 +45,10 @@ use super::types::{tile_id_to_coord, EntriesV3, HeaderV3, TileId};
 use crate::utils::pretty_print::PrettyPrint;
 use crate::{
 	container::{TilesReader, TilesReaderParameters},
-	types::{Blob, ByteRange, DataReader, DataReaderFile, LimitedCache, TileBBoxPyramid, TileCompression, TileCoord3},
+	types::{
+		Blob, ByteRange, DataReader, DataReaderFile, LimitedCache, TileBBoxPyramid, TileCompression,
+		TileCoord3,
+	},
 	utils::decompress,
 };
 use anyhow::{bail, Result};
@@ -88,17 +91,28 @@ impl PMTilesReader {
 	where
 		Self: Sized,
 	{
-		let header = HeaderV3::deserialize(&data_reader.read_range(&ByteRange::new(0, HeaderV3::len())).await?)?;
+		let header = HeaderV3::deserialize(
+			&data_reader
+				.read_range(&ByteRange::new(0, HeaderV3::len()))
+				.await?,
+		)?;
 
 		let internal_compression = header.internal_compression.as_value()?;
 
 		let meta = data_reader.read_range(&header.metadata).await?;
 		let meta = decompress(meta, &internal_compression)?;
 
-		let root_bytes_uncompressed = decompress(data_reader.read_range(&header.root_dir).await?, &internal_compression)?;
+		let root_bytes_uncompressed = decompress(
+			data_reader.read_range(&header.root_dir).await?,
+			&internal_compression,
+		)?;
 		let leaves_bytes = data_reader.read_range(&header.leaf_dirs).await?;
 
-		let bbox_pyramid = calc_bbox_pyramid(&root_bytes_uncompressed, &leaves_bytes, &internal_compression)?;
+		let bbox_pyramid = calc_bbox_pyramid(
+			&root_bytes_uncompressed,
+			&leaves_bytes,
+			&internal_compression,
+		)?;
 
 		let parameters = TilesReaderParameters::new(
 			header.tile_type.as_value()?,
@@ -125,10 +139,16 @@ fn calc_bbox_pyramid(
 ) -> Result<TileBBoxPyramid> {
 	let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
-	parse_directories(&mut bbox_pyramid, root_bytes_uncompressed, leaves_bytes, compression)?;
+	parse_directories(
+		&mut bbox_pyramid,
+		root_bytes_uncompressed,
+		leaves_bytes,
+		compression,
+	)?;
 
 	fn parse_directories(
-		bbox_pyramid: &mut TileBBoxPyramid, dir: &Blob, leaves_bytes: &Blob, compression: &TileCompression,
+		bbox_pyramid: &mut TileBBoxPyramid, dir: &Blob, leaves_bytes: &Blob,
+		compression: &TileCompression,
 	) -> Result<()> {
 		let entries = EntriesV3::from_blob(dir)?;
 		for entry in entries.iter() {
@@ -213,7 +233,11 @@ impl TilesReader for PMTilesReader {
 					return Ok(Some(
 						self
 							.data_reader
-							.read_range(&entry.range.get_shifted_forward(self.header.tile_data.offset))
+							.read_range(
+								&entry
+									.range
+									.get_shifted_forward(self.header.tile_data.offset),
+							)
 							.await?,
 					));
 				} else {
@@ -277,7 +301,11 @@ mod tests {
 		);
 
 		assert_eq!(
-			reader.get_tile_data(&TileCoord3::new(0, 0, 0)?).await?.unwrap().len(),
+			reader
+				.get_tile_data(&TileCoord3::new(0, 0, 0)?)
+				.await?
+				.unwrap()
+				.len(),
 			20
 		);
 
@@ -290,7 +318,10 @@ mod tests {
 			100391
 		);
 
-		assert!(reader.get_tile_data(&TileCoord3::new(0, 0, 16)?).await?.is_none());
+		assert!(reader
+			.get_tile_data(&TileCoord3::new(0, 0, 16)?)
+			.await?
+			.is_none());
 
 		Ok(())
 	}

@@ -60,7 +60,10 @@ impl From<Vec<(&str, GeoValue)>> for GeoProperties {
 
 impl Debug for GeoProperties {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let mut fields = self.clone().into_iter().collect::<Vec<(String, GeoValue)>>();
+		let mut fields = self
+			.clone()
+			.into_iter()
+			.collect::<Vec<(String, GeoValue)>>();
 		fields.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 
 		f.debug_map().entries(fields).finish()

@@ -54,11 +54,15 @@ impl TileServer {
 		for other_tile_source in self.tile_sources.iter() {
 			let other_prefix = &other_tile_source.prefix;
 			if other_prefix.starts_with(&url_prefix) || url_prefix.starts_with(other_prefix) {
-				bail!("multiple sources with the prefix '{url_prefix}' and '{other_prefix}' are defined");
+				bail!(
+					"multiple sources with the prefix '{url_prefix}' and '{other_prefix}' are defined"
+				);
 			};
 		}
 
-		self.tile_sources.push(TileSource::from(reader, url_prefix)?);
+		self
+			.tile_sources
+			.push(TileSource::from(reader, url_prefix)?);
 
 		Ok(())
 	}
@@ -67,7 +71,9 @@ impl TileServer {
 		let url_prefix = url_prefix.as_dir();
 
 		log::info!("add static: {path:?}");
-		self.static_sources.push(StaticSource::new(path, url_prefix)?);
+		self
+			.static_sources
+			.push(StaticSource::new(path, url_prefix)?);
 		Ok(())
 	}
 
@@ -133,7 +139,8 @@ impl TileServer {
 			app = app.merge(tile_app);
 
 			async fn serve_tile(
-				uri: Uri, headers: HeaderMap, State((tile_source, best_compression)): State<(TileSource, bool)>,
+				uri: Uri, headers: HeaderMap,
+				State((tile_source, best_compression)): State<(TileSource, bool)>,
 			) -> Response<Body> {
 				let path = Url::new(uri.path());
 
@@ -170,7 +177,8 @@ impl TileServer {
 		return app.merge(static_app);
 
 		async fn serve_static(
-			uri: Uri, headers: HeaderMap, State((sources, best_compression)): State<(Vec<StaticSource>, bool)>,
+			uri: Uri, headers: HeaderMap,
+			State((sources, best_compression)): State<(Vec<StaticSource>, bool)>,
 		) -> Response<Body> {
 			let mut url = Url::new(uri.path());
 
@@ -193,21 +201,35 @@ impl TileServer {
 
 	async fn add_api_to_app(&self, app: Router) -> Result<Router> {
 		let mut api_app = Router::new();
-		api_app = api_app.route("/api/status", get(|| async { ok_json("{\"status\":\"ready\"}") }));
+		api_app = api_app.route(
+			"/api/status",
+			get(|| async { ok_json("{\"status\":\"ready\"}") }),
+		);
 
 		let mut objects: Vec<String> = Vec::new();
 		for tile_source in self.tile_sources.iter() {
-			let id = tile_source.prefix.as_vec().last().expect("should end in id").to_owned();
+			let id = tile_source
+				.prefix
+				.as_vec()
+				.last()
+				.expect("should end in id")
+				.to_owned();
 			let object = format!(
 				"{{\"url\":\"{}\",\"id\":\"{}\",\"container\":{}}}",
 				tile_source.prefix, id, tile_source.json_info
 			);
 			objects.push(object.clone());
-			api_app = api_app.route(&format!("/api/source/{id}"), get(|| async move { ok_json(&object) }));
+			api_app = api_app.route(
+				&format!("/api/source/{id}"),
+				get(|| async move { ok_json(&object) }),
+			);
 		}
 		let tile_sources_json: String = "[".to_owned() + &objects.join(",") + "]";
 
-		api_app = api_app.route("/api/sources", get(|| async move { ok_json(&tile_sources_json) }));
+		api_app = api_app.route(
+			"/api/sources",
+			get(|| async move { ok_json(&tile_sources_json) }),
+		);
 
 		Ok(app.merge(api_app))
 	}
@@ -315,7 +337,10 @@ mod tests {
 		test("", enum_set!(None));
 		test("*", enum_set!(None));
 		test("br", enum_set!(None | Brotli));
-		test("br;q=1.0, gzip;q=0.8, *;q=0.1", enum_set!(None | Brotli | Gzip));
+		test(
+			"br;q=1.0, gzip;q=0.8, *;q=0.1",
+			enum_set!(None | Brotli | Gzip),
+		);
 		test("compress", enum_set!(None));
 		test("compress, gzip", enum_set!(None | Gzip));
 		test("compress;q=0.5, gzip;q=1.0", enum_set!(None | Gzip));
@@ -347,7 +372,9 @@ mod tests {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Pbf)
 			.unwrap()
 			.boxed();
-		server.add_tile_source(Url::new("tiles/cheese"), reader).unwrap();
+		server
+			.add_tile_source(Url::new("tiles/cheese"), reader)
+			.unwrap();
 
 		server.start().await.unwrap();
 
@@ -360,7 +387,9 @@ mod tests {
 		assert_eq!(get("tiles/cheese/brum.json").await, "Not Found");
 		assert_eq!(get("tiles/cheese/meta.json").await, "dummy meta data");
 		assert_eq!(get("tiles/cheese/tiles.json").await, "dummy meta data");
-		assert!(get("tiles/cheese/0/0/0.png").await.starts_with("\u{1a}4\n\u{5}ocean"));
+		assert!(get("tiles/cheese/0/0/0.png")
+			.await
+			.starts_with("\u{1a}4\n\u{5}ocean"));
 		assert_eq!(get("status").await, "ready!");
 
 		server.stop().await;
@@ -420,7 +449,9 @@ mod tests {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Pbf)
 			.unwrap()
 			.boxed();
-		server.add_tile_source(Url::new("tiles/cheese"), reader).unwrap();
+		server
+			.add_tile_source(Url::new("tiles/cheese"), reader)
+			.unwrap();
 
 		let mappings: Vec<(String, String)> = server.get_url_mapping().await;
 		assert_eq!(mappings.len(), 1);

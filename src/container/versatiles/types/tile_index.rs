@@ -49,7 +49,10 @@ impl TileIndex {
 		let mut index = Vec::new();
 		let mut reader = ValueReaderBlob::new_be(blob);
 		for _ in 0..count {
-			index.push(ByteRange::new(reader.read_u64()?, reader.read_u32()? as u64));
+			index.push(ByteRange::new(
+				reader.read_u64()?,
+				reader.read_u32()? as u64,
+			));
 		}
 
 		Ok(Self { index })

@@ -99,7 +99,9 @@ pub struct TileConverter {
 impl TileConverter {
 	/// Create a new empty `DataConverter`
 	pub fn new_empty() -> TileConverter {
-		TileConverter { pipeline: Vec::new() }
+		TileConverter {
+			pipeline: Vec::new(),
+		}
 	}
 
 	/// Return `true` if the `DataConverter` has an empty pipeline
@@ -112,8 +114,8 @@ impl TileConverter {
 	/// with optional forced recompression
 	#[allow(unused_variables)]
 	pub fn new_tile_recompressor(
-		src_form: &TileFormat, src_comp: &TileCompression, dst_form: &TileFormat, dst_comp: &TileCompression,
-		force_recompress: bool,
+		src_form: &TileFormat, src_comp: &TileCompression, dst_form: &TileFormat,
+		dst_comp: &TileCompression, force_recompress: bool,
 	) -> Result<TileConverter> {
 		let mut converter = TileConverter::new_empty();
 
@@ -148,7 +150,11 @@ impl TileConverter {
 					if src_form == dst_form {
 						None
 					} else {
-						bail!("no conversion implemented for {:?} -> {:?}", src_form, dst_form);
+						bail!(
+							"no conversion implemented for {:?} -> {:?}",
+							src_form,
+							dst_form
+						);
 					}
 				}
 			}
@@ -273,11 +279,16 @@ mod tests {
 	#[test]
 	fn new_tile_recompressor() {
 		fn test(
-			src_form: &TileFormat, src_comp: &TileCompression, dst_form: &TileFormat, dst_comp: &TileCompression,
-			force_recompress: &bool, length: usize, description: &str,
+			src_form: &TileFormat, src_comp: &TileCompression, dst_form: &TileFormat,
+			dst_comp: &TileCompression, force_recompress: &bool, length: usize, description: &str,
 		) -> Result<()> {
-			let data_converter =
-				TileConverter::new_tile_recompressor(src_form, src_comp, dst_form, dst_comp, *force_recompress)?;
+			let data_converter = TileConverter::new_tile_recompressor(
+				src_form,
+				src_comp,
+				dst_form,
+				dst_comp,
+				*force_recompress,
+			)?;
 
 			ensure!(
 				data_converter.as_string() == description,
@@ -305,7 +316,13 @@ mod tests {
 				for f_out in &image_formats {
 					for c_out in &compressions {
 						for force in &forcing {
-							let mut s = format!("{},{}2{},{}", decomp(c_in), form(f_in), form(f_out), comp(c_out));
+							let mut s = format!(
+								"{},{}2{},{}",
+								decomp(c_in),
+								form(f_in),
+								form(f_out),
+								comp(c_out)
+							);
 
 							s = s.replace("png2webp", "png2webplossless");
 							s = s.replace("jpg2jpg,", "");
@@ -326,13 +343,21 @@ mod tests {
 								continue;
 							}
 
-							let length = if s.is_empty() { 0 } else { s.split(',').count() };
+							let length = if s.is_empty() {
+								0
+							} else {
+								s.split(',').count()
+							};
 							let message = format!("{f_in:?},{c_in:?}->{f_out:?},{c_out:?} {force}");
 
 							let result = test(f_in, c_in, f_out, c_out, force, length, &s);
 
 							if is_image(f_in) == is_image(f_out) {
-								assert!(result.is_ok(), "error for {message}: {}", result.err().unwrap());
+								assert!(
+									result.is_ok(),
+									"error for {message}: {}",
+									result.err().unwrap()
+								);
 							} else {
 								assert!(result.is_err(), "error for {message}: should throw error");
 							}

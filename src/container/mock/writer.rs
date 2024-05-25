@@ -73,7 +73,9 @@ impl TilesWriter for MockTilesWriter {
 	/// # Returns
 	///
 	/// A `Result` indicating the success or failure of the operation.
-	async fn write_to_writer(reader: &mut dyn TilesReader, _writer: &mut dyn DataWriterTrait) -> Result<()> {
+	async fn write_to_writer(
+		reader: &mut dyn TilesReader, _writer: &mut dyn DataWriterTrait,
+	) -> Result<()> {
 		MockTilesWriter::write(reader).await
 	}
 }

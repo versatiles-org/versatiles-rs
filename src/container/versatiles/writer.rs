@@ -47,7 +47,9 @@ pub struct VersaTilesWriter {}
 #[async_trait]
 impl TilesWriter for VersaTilesWriter {
 	/// Convert tiles from the TilesReader and write them to the writer.
-	async fn write_to_writer(reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait) -> Result<()> {
+	async fn write_to_writer(
+		reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait,
+	) -> Result<()> {
 		// Finalize the configuration
 		let parameters = reader.get_parameters();
 		trace!("convert_from - reader.parameters: {parameters:?}");
@@ -88,7 +90,9 @@ impl TilesWriter for VersaTilesWriter {
 
 impl VersaTilesWriter {
 	/// Write metadata to the writer.
-	async fn write_meta(reader: &dyn TilesReader, writer: &mut dyn DataWriterTrait) -> Result<ByteRange> {
+	async fn write_meta(
+		reader: &dyn TilesReader, writer: &mut dyn DataWriterTrait,
+	) -> Result<ByteRange> {
 		let meta: Blob = reader.get_meta()?.unwrap_or_default();
 		let compressed = compress(meta, &reader.get_parameters().tile_compression)?;
 
@@ -96,7 +100,9 @@ impl VersaTilesWriter {
 	}
 
 	/// Write blocks to the writer.
-	async fn write_blocks(reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait) -> Result<ByteRange> {
+	async fn write_blocks(
+		reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait,
+	) -> Result<ByteRange> {
 		let pyramid = reader.get_parameters().bbox_pyramid.clone();
 
 		if pyramid.is_empty() {
@@ -125,7 +131,8 @@ impl VersaTilesWriter {
 
 		// Iterate through blocks and write them
 		for mut block in blocks.into_iter() {
-			let (tiles_range, index_range) = Self::write_block(&block, reader, writer, &mut progress).await?;
+			let (tiles_range, index_range) =
+				Self::write_block(&block, reader, writer, &mut progress).await?;
 
 			if tiles_range.length + index_range.length == 0 {
 				// Block is empty, continue with the next block

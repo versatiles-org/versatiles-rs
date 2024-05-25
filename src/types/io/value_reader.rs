@@ -135,7 +135,9 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	}
 
 	fn read_pbf_key(&mut self) -> Result<(u32, u8)> {
-		let value = self.read_varint().context("Failed to read varint for PBF key")?;
+		let value = self
+			.read_varint()
+			.context("Failed to read varint for PBF key")?;
 		Ok(((value >> 3) as u32, (value & 0x07) as u8))
 	}
 
@@ -150,7 +152,9 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 		let length = self
 			.read_varint()
 			.context("Failed to read varint for sub-reader length")?;
-		self.get_sub_reader(length).context("Failed to get sub-reader")
+		self
+			.get_sub_reader(length)
+			.context("Failed to get sub-reader")
 	}
 
 	fn read_pbf_packed_uint32(&mut self) -> Result<Vec<u32>> {
@@ -170,12 +174,18 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 	}
 
 	fn read_pbf_string(&mut self) -> Result<String> {
-		let length = self.read_varint().context("Failed to read varint for string length")?;
-		self.read_string(length).context("Failed to read PBF string")
+		let length = self
+			.read_varint()
+			.context("Failed to read varint for string length")?;
+		self
+			.read_string(length)
+			.context("Failed to read PBF string")
 	}
 
 	fn read_pbf_blob(&mut self) -> Result<Blob> {
-		let length = self.read_varint().context("Failed to read varint for blob length")?;
+		let length = self
+			.read_varint()
+			.context("Failed to read varint for blob length")?;
 		self.read_blob(length).context("Failed to read PBF blob")
 	}
 }
@@ -279,7 +289,8 @@ mod tests {
 
 	#[test]
 	fn test_read_range() {
-		let mut reader = ValueReaderSlice::new_be(&[0, 0, 0, 0, 0, 0, 0, 0x01, 0, 0, 0, 0, 0, 0, 0, 0x02]);
+		let mut reader =
+			ValueReaderSlice::new_be(&[0, 0, 0, 0, 0, 0, 0, 0x01, 0, 0, 0, 0, 0, 0, 0, 0x02]);
 		let range = reader.read_range().unwrap();
 		assert_eq!(range.offset, 1);
 		assert_eq!(range.length, 2);
@@ -296,7 +307,10 @@ mod tests {
 	#[test]
 	fn test_read_pbf_packed_uint32() {
 		let mut reader = ValueReaderSlice::new_le(&[0x05, 0x64, 0x96, 0x01, 0xAC, 0x02]);
-		assert_eq!(reader.read_pbf_packed_uint32().unwrap(), vec![100, 150, 300]);
+		assert_eq!(
+			reader.read_pbf_packed_uint32().unwrap(),
+			vec![100, 150, 300]
+		);
 	}
 
 	#[test]
@@ -308,6 +322,9 @@ mod tests {
 	#[test]
 	fn test_read_pbf_blob() {
 		let mut reader = ValueReaderSlice::new_le(&[0x03, 0x01, 0x02, 0x03]);
-		assert_eq!(reader.read_pbf_blob().unwrap().as_slice(), &[0x01, 0x02, 0x03]);
+		assert_eq!(
+			reader.read_pbf_blob().unwrap().as_slice(),
+			&[0x01, 0x02, 0x03]
+		);
 	}
 }

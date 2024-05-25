@@ -8,7 +8,9 @@ pub struct YamlWrapper {
 
 impl YamlWrapper {
 	fn new(yaml: &Yaml) -> Result<YamlWrapper> {
-		Ok(YamlWrapper { yaml: yaml.to_owned() })
+		Ok(YamlWrapper {
+			yaml: yaml.to_owned(),
+		})
 	}
 
 	pub fn is_hash(&self) -> bool {
@@ -70,7 +72,11 @@ impl YamlWrapper {
 	}
 
 	pub fn hash_has_key(&self, key: &str) -> bool {
-		self.yaml.as_hash().unwrap().contains_key(&Yaml::from_str(key))
+		self
+			.yaml
+			.as_hash()
+			.unwrap()
+			.contains_key(&Yaml::from_str(key))
 	}
 
 	pub fn array_get_as_vec(&self) -> Result<Vec<YamlWrapper>> {

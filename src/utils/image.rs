@@ -20,7 +20,12 @@ const WEBP_QUALITY: f32 = 95.0;
 /// A `Blob` object containing the PNG-encoded image.
 pub fn img2png(image: &DynamicImage) -> Result<Blob> {
 	let mut buffer: Vec<u8> = Vec::new();
-	png::PngEncoder::new_with_quality(&mut buffer, png::CompressionType::Best, png::FilterType::Adaptive).write_image(
+	png::PngEncoder::new_with_quality(
+		&mut buffer,
+		png::CompressionType::Best,
+		png::FilterType::Adaptive,
+	)
+	.write_image(
 		image.as_bytes(),
 		image.width(),
 		image.height(),
@@ -36,7 +41,10 @@ pub fn img2png(image: &DynamicImage) -> Result<Blob> {
 /// # Returns
 /// A `DynamicImage` object representing the decoded image.
 pub fn png2img(blob: &Blob) -> Result<DynamicImage> {
-	Ok(load_from_memory_with_format(blob.as_slice(), ImageFormat::Png)?)
+	Ok(load_from_memory_with_format(
+		blob.as_slice(),
+		ImageFormat::Png,
+	)?)
 }
 
 /// Encodes a DynamicImage into AVIF format and returns it as a Blob.
@@ -91,7 +99,10 @@ pub fn img2jpg(image: &DynamicImage) -> Result<Blob> {
 /// # Returns
 /// A `DynamicImage` object representing the decoded image.
 pub fn jpg2img(blob: &Blob) -> Result<DynamicImage> {
-	Ok(load_from_memory_with_format(blob.as_slice(), ImageFormat::Jpeg)?)
+	Ok(load_from_memory_with_format(
+		blob.as_slice(),
+		ImageFormat::Jpeg,
+	)?)
 }
 
 /// Encodes a DynamicImage into WebP format and returns it as a Blob.
@@ -171,7 +182,9 @@ pub fn create_image_rgb() -> DynamicImage {
 /// is a Luma<u8> value.
 #[cfg(test)]
 pub fn create_image_grey() -> DynamicImage {
-	DynamicImage::ImageLuma8(GrayImage::from_fn(256, 256, |x, _y| -> Luma<u8> { Luma([x as u8]) }))
+	DynamicImage::ImageLuma8(GrayImage::from_fn(256, 256, |x, _y| -> Luma<u8> {
+		Luma([x as u8])
+	}))
 }
 
 /// Generate a DynamicImage with grayscale alpha colors

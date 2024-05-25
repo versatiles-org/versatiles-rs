@@ -171,7 +171,10 @@ mod tests {
 		let mut data_reader_file = DataReaderFile::open(&temp_file_path)?;
 
 		// Define a range to read
-		let range = ByteRange { offset: 4, length: 6 };
+		let range = ByteRange {
+			offset: 4,
+			length: 6,
+		};
 
 		// Read the specified range from the file
 		let blob = data_reader_file.read_range(&range).await?;

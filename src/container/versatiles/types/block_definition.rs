@@ -5,7 +5,8 @@
 //! The `BlockDefinition` struct contains metadata about the tile block, including its coordinates, bounding box, and byte ranges for tiles and index data.
 
 use crate::types::{
-	Blob, ByteRange, TileBBox, TileCoord3, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob,
+	Blob, ByteRange, TileBBox, TileCoord3, ValueReader, ValueReaderSlice, ValueWriter,
+	ValueWriterBlob,
 };
 use anyhow::{ensure, Result};
 use std::{fmt, ops::Div};
@@ -13,8 +14,8 @@ use std::{fmt, ops::Div};
 /// A struct representing a block of tiles within a larger tile set.
 #[derive(Clone, PartialEq, Eq)]
 pub struct BlockDefinition {
-	offset: TileCoord3,       // block offset, for level 14 it's between [0,0] and [63,63]
-	global_bbox: TileBBox,    // tile coverage, is usually [0,0,255,255]
+	offset: TileCoord3,    // block offset, for level 14 it's between [0,0] and [63,63]
+	global_bbox: TileBBox, // tile coverage, is usually [0,0,255,255]
 	tiles_coverage: TileBBox, // tile coverage, is usually [0,0,255,255]
 	tiles_range: ByteRange,
 	index_range: ByteRange,
@@ -80,7 +81,13 @@ impl BlockDefinition {
 		let tiles_range = ByteRange::new(offset, tiles_length);
 		let index_range = ByteRange::new(offset + tiles_length, index_length);
 
-		let global_bbox = TileBBox::new(z, x_min + x * 256, y_min + y * 256, x_max + x * 256, y_max + y * 256)?;
+		let global_bbox = TileBBox::new(
+			z,
+			x_min + x * 256,
+			y_min + y * 256,
+			x_max + x * 256,
+			y_max + y * 256,
+		)?;
 
 		Ok(Self {
 			offset: TileCoord3::new(x, y, z)?,
@@ -238,7 +245,10 @@ mod tests {
 		assert_eq!(def.as_str(), "[12,[300,400],[320,450]]");
 		assert_eq!(def.get_z(), 12);
 		assert_eq!(def.get_coord3(), &TileCoord3::new(1, 1, 12)?);
-		assert_eq!(def.get_global_bbox(), &TileBBox::new(12, 300, 400, 320, 450)?);
+		assert_eq!(
+			def.get_global_bbox(),
+			&TileBBox::new(12, 300, 400, 320, 450)?
+		);
 		assert_eq!(
 			format!("{:?}", def),
 			"BlockDefinition { x/y/z: TileCoord3(1, 1, 12), bbox: 8: [44,144,64,194] (1071), tiles_range: ByteRange[4,5], index_range: ByteRange[9,6] }"

@@ -23,7 +23,8 @@ pub struct VirtualTilesOutput {
 
 impl VirtualTilesOutput {
 	pub async fn new(
-		def: &YamlWrapper, input_lookup: &HashMap<String, VReader>, operation_lookup: &HashMap<String, VOperation>,
+		def: &YamlWrapper, input_lookup: &HashMap<String, VReader>,
+		operation_lookup: &HashMap<String, VOperation>,
 	) -> Result<VirtualTilesOutput> {
 		let input = def.hash_get_str("input")?;
 		let input = input_lookup
@@ -76,33 +77,43 @@ impl VirtualTilesOutput {
 
 		Ok(Some(blob))
 	}
-	pub async fn get_bbox_tile_stream(&mut self, bbox: TileBBox, output_compression: TileCompression) -> TilesStream {
-		let entries: Vec<(TileCoord3, Blob)> = self.input.lock().await.get_bbox_tile_stream(bbox).await.collect().await;
+	pub async fn get_bbox_tile_stream(
+		&mut self, bbox: TileBBox, output_compression: TileCompression,
+	) -> TilesStream {
+		let entries: Vec<(TileCoord3, Blob)> = self
+			.input
+			.lock()
+			.await
+			.get_bbox_tile_stream(bbox)
+			.await
+			.collect()
+			.await;
 
 		let input_compression = self.input_compression;
-		let entries: Vec<Option<(TileCoord3, Blob)>> = futures_util::stream::iter(entries.into_iter())
-			.map(|(coord, blob)| {
-				let operations = self.operations.clone();
-				tokio::spawn(async move {
-					let mut blob = decompress(blob, &input_compression).unwrap();
+		let entries: Vec<Option<(TileCoord3, Blob)>> =
+			futures_util::stream::iter(entries.into_iter())
+				.map(|(coord, blob)| {
+					let operations = self.operations.clone();
+					tokio::spawn(async move {
+						let mut blob = decompress(blob, &input_compression).unwrap();
 
-					for operation in operations.iter() {
-						if let Some(new_blob) = operation.run(&blob).unwrap() {
-							blob = new_blob
-						} else {
-							return None;
+						for operation in operations.iter() {
+							if let Some(new_blob) = operation.run(&blob).unwrap() {
+								blob = new_blob
+							} else {
+								return None;
+							}
 						}
-					}
 
-					blob = compress(blob, &output_compression).unwrap();
+						blob = compress(blob, &output_compression).unwrap();
 
-					Some((coord, blob))
+						Some((coord, blob))
+					})
 				})
-			})
-			.buffer_unordered(num_cpus::get())
-			.try_collect()
-			.await
-			.unwrap();
+				.buffer_unordered(num_cpus::get())
+				.try_collect()
+				.await
+				.unwrap();
 
 		let result = futures_util::stream::iter(entries.into_iter().flatten()).boxed();
 

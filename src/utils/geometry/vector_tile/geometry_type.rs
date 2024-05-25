@@ -69,11 +69,20 @@ mod tests {
 		]));
 		let multi_polygon = Geometry::new_multi_polygon(Geometry::parse3(vec![
 			vec![vec![[0.0, 0.0], [5.0, 0.0], [2.5, 4.0], [0.0, 0.0]]],
-			vec![vec![[6.0, 0.0], [9.0, 0.0], [9.0, 4.0], [6.0, 4.0], [6.0, 0.0]]],
+			vec![vec![
+				[6.0, 0.0],
+				[9.0, 0.0],
+				[9.0, 4.0],
+				[6.0, 4.0],
+				[6.0, 0.0],
+			]],
 		]));
 
 		assert_eq!(GeomType::from(&multi_point), GeomType::MultiPoint);
-		assert_eq!(GeomType::from(&multi_line_string), GeomType::MultiLineString);
+		assert_eq!(
+			GeomType::from(&multi_line_string),
+			GeomType::MultiLineString
+		);
 		assert_eq!(GeomType::from(&multi_polygon), GeomType::MultiPolygon);
 	}
 }

@@ -105,7 +105,9 @@ pub struct TilesConvertReader {
 
 impl TilesConvertReader {
 	/// Creates a new converter reader from an existing reader.
-	pub fn new_from_reader(reader: Box<dyn TilesReader>, cp: TilesConverterParameters) -> Result<TilesConvertReader> {
+	pub fn new_from_reader(
+		reader: Box<dyn TilesReader>, cp: TilesConverterParameters,
+	) -> Result<TilesConvertReader> {
 		let container_name = format!("converter({})", reader.get_container_name());
 		let name = format!("converter({})", reader.get_name());
 
@@ -317,10 +319,18 @@ mod tests {
 
 		test(false, false, [2, 3, 4, 5], "23 33 43 24 34 44 25 35 45").await?;
 		test(false, true, [2, 3, 5, 4], "32 33 34 35 42 43 44 45").await?;
-		test(true, false, [2, 3, 4, 6], "24 34 44 23 33 43 22 32 42 21 31 41").await?;
+		test(
+			true,
+			false,
+			[2, 3, 4, 6],
+			"24 34 44 23 33 43 22 32 42 21 31 41",
+		)
+		.await?;
 		test(true, true, [2, 3, 6, 4], "35 34 33 32 31 45 44 43 42 41").await?;
 
-		async fn test(flip_y: bool, swap_xy: bool, bbox_out: [u32; 4], tile_list: &str) -> Result<()> {
+		async fn test(
+			flip_y: bool, swap_xy: bool, bbox_out: [u32; 4], tile_list: &str,
+		) -> Result<()> {
 			let pyramid_in = new_bbox([0, 1, 4, 5]);
 			let pyramid_convert = new_bbox([2, 3, 7, 7]);
 			let pyramid_out = new_bbox(bbox_out);
@@ -331,7 +341,14 @@ mod tests {
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let filename = temp_file.to_str().unwrap();
 
-			let cp = TilesConverterParameters::new(Some(JSON), Some(None), Some(pyramid_convert), false, flip_y, swap_xy);
+			let cp = TilesConverterParameters::new(
+				Some(JSON),
+				Some(None),
+				Some(pyramid_convert),
+				false,
+				flip_y,
+				swap_xy,
+			);
 			convert_tiles_container(reader.boxed(), cp, filename).await?;
 
 			let mut reader_out = VersaTilesReader::open_path(&temp_file).await?;
@@ -342,7 +359,10 @@ mod tests {
 			let mut tiles: Vec<String> = Vec::new();
 			for coord in bbox.iter_coords() {
 				let mut text = reader_out.get_tile_data(&coord).await?.unwrap().to_string();
-				text = text.replace("{x:", "").replace(",y:", "").replace(",z:3}", "");
+				text = text
+					.replace("{x:", "")
+					.replace(",y:", "")
+					.replace(",z:3}", "");
 				tiles.push(text);
 			}
 			let tiles = tiles.join(" ");
@@ -443,7 +463,10 @@ mod tests {
 		let mut tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
 
 		tcr.override_compression(TileCompression::Gzip);
-		assert_eq!(tcr.reader.get_parameters().tile_compression, TileCompression::Gzip);
+		assert_eq!(
+			tcr.reader.get_parameters().tile_compression,
+			TileCompression::Gzip
+		);
 	}
 
 	#[tokio::test]

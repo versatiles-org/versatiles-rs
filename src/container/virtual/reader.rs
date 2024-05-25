@@ -55,7 +55,8 @@ impl VirtualTilesReader {
 			.context("while parsing 'inputs'")?;
 
 		let operations = if yaml.hash_has_key("operations") {
-			parse_operations(&yaml.hash_get_value("operations")?).context("while parsing 'operations'")?
+			parse_operations(&yaml.hash_get_value("operations")?)
+				.context("while parsing 'operations'")?
 		} else {
 			HashMap::new()
 		};
@@ -64,8 +65,9 @@ impl VirtualTilesReader {
 			.await
 			.context("while parsing 'output'")?;
 
-		let tiles_reader_parameters = parse_parameters(&yaml.hash_get_value("parameters")?, &output_definitions)
-			.context("while parsing 'parameters'")?;
+		let tiles_reader_parameters =
+			parse_parameters(&yaml.hash_get_value("parameters")?, &output_definitions)
+				.context("while parsing 'parameters'")?;
 
 		Ok(VirtualTilesReader {
 			name: name.to_string(),
@@ -87,7 +89,9 @@ impl VirtualTilesReader {
 			if !output_definition.bbox_pyramid.overlaps_bbox(&bbox) {
 				continue;
 			}
-			return output_definition.get_bbox_tile_stream(bbox, output_compression).await;
+			return output_definition
+				.get_bbox_tile_stream(bbox, output_compression)
+				.await;
 		}
 
 		futures_util::stream::iter(vec![]).boxed()
@@ -104,7 +108,10 @@ async fn parse_inputs(yaml: &YamlWrapper) -> Result<HashMap<String, VReader>> {
 		if inputs.contains_key(&name) {
 			bail!("input '{name}' is duplicated")
 		}
-		inputs.insert(name, Arc::new(Mutex::new(get_simple_reader(filename).await?)));
+		inputs.insert(
+			name,
+			Arc::new(Mutex::new(get_simple_reader(filename).await?)),
+		);
 	}
 
 	if inputs.is_empty() {
@@ -123,7 +130,8 @@ fn parse_operations(yaml: &YamlWrapper) -> Result<HashMap<String, VOperation>> {
 		operations.insert(
 			name.to_string(),
 			Arc::new(
-				new_virtual_tile_operation(entry).with_context(|| format!("while parsing operation no {}", index + 1))?,
+				new_virtual_tile_operation(entry)
+					.with_context(|| format!("while parsing operation no {}", index + 1))?,
 			),
 		);
 	}
@@ -132,7 +140,8 @@ fn parse_operations(yaml: &YamlWrapper) -> Result<HashMap<String, VOperation>> {
 }
 
 async fn parse_output(
-	yaml: &YamlWrapper, input_lookup: &HashMap<String, VReader>, operation_lookup: &HashMap<String, VOperation>,
+	yaml: &YamlWrapper, input_lookup: &HashMap<String, VReader>,
+	operation_lookup: &HashMap<String, VOperation>,
 ) -> Result<Vec<VirtualTilesOutput>> {
 	ensure!(yaml.is_array(), "'output' must be an array");
 
@@ -149,7 +158,9 @@ async fn parse_output(
 	Ok(output)
 }
 
-fn parse_parameters(yaml: &YamlWrapper, outputs: &[VirtualTilesOutput]) -> Result<TilesReaderParameters> {
+fn parse_parameters(
+	yaml: &YamlWrapper, outputs: &[VirtualTilesOutput],
+) -> Result<TilesReaderParameters> {
 	ensure!(yaml.is_hash(), "'parameters' must be an object");
 	let tile_compression = TileCompression::parse_str(yaml.hash_get_str("compression")?)?;
 	let tile_format = TileFormat::parse_str(yaml.hash_get_str("format")?)?;

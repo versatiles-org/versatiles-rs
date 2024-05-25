@@ -187,7 +187,10 @@ mod tests {
 		let mut writer = ValueWriterFile::new_le(temp.file());
 		writer.write_f64(1.0)?;
 		drop(writer);
-		assert_eq!(temp.content(), vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F]);
+		assert_eq!(
+			temp.content(),
+			vec![0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xF0, 0x3F]
+		);
 		Ok(())
 	}
 
@@ -207,7 +210,10 @@ mod tests {
 		let mut writer = ValueWriterFile::new_le(temp.file());
 		writer.write_u64(18446744073709551615)?;
 		drop(writer);
-		assert_eq!(temp.content(), vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
+		assert_eq!(
+			temp.content(),
+			vec![0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]
+		);
 		Ok(())
 	}
 
@@ -236,12 +242,18 @@ mod tests {
 	fn test_write_range() -> Result<()> {
 		let temp = TempFile::new();
 		let mut writer = ValueWriterFile::new_le(temp.file());
-		let range = ByteRange { offset: 1, length: 2 };
+		let range = ByteRange {
+			offset: 1,
+			length: 2,
+		};
 		writer.write_range(&range)?;
 		drop(writer);
 		assert_eq!(
 			temp.content(),
-			vec![0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+			vec![
+				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00,
+				0x00, 0x00
+			]
 		);
 		Ok(())
 	}

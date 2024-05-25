@@ -76,7 +76,13 @@ mod tests {
 		assert_eq!(test(1, 0, 0, 1, 1), TileBBox::new(1, 0, 0, 1, 1).unwrap());
 		assert_eq!(test(2, 0, 0, 1, 1), TileBBox::new(2, 0, 2, 1, 3).unwrap());
 		assert_eq!(test(3, 0, 0, 1, 1), TileBBox::new(3, 0, 6, 1, 7).unwrap());
-		assert_eq!(test(9, 10, 0, 10, 511), TileBBox::new(9, 10, 0, 10, 511).unwrap());
-		assert_eq!(test(9, 0, 10, 511, 10), TileBBox::new(9, 0, 501, 511, 501).unwrap());
+		assert_eq!(
+			test(9, 10, 0, 10, 511),
+			TileBBox::new(9, 10, 0, 10, 511).unwrap()
+		);
+		assert_eq!(
+			test(9, 0, 10, 511, 10),
+			TileBBox::new(9, 0, 501, 511, 501).unwrap()
+		);
 	}
 }

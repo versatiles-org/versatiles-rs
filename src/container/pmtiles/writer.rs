@@ -37,7 +37,9 @@
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
 	container::{TilesReader, TilesWriter},
-	types::{progress::get_progress_bar, Blob, ByteRange, DataWriterTrait, TileBBox, TileCompression},
+	types::{
+		progress::get_progress_bar, Blob, ByteRange, DataWriterTrait, TileBBox, TileCompression,
+	},
 	utils::compress,
 };
 use anyhow::Result;
@@ -58,7 +60,9 @@ impl TilesWriter for PMTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if there are issues with writing data or internal processing.
-	async fn write_to_writer(reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait) -> Result<()> {
+	async fn write_to_writer(
+		reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait,
+	) -> Result<()> {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
 
 		let parameters = reader.get_parameters().clone();
@@ -102,10 +106,11 @@ impl TilesWriter for PMTilesWriter {
 					async move {
 						let id = coord.get_tile_id().unwrap();
 						let range = mutex_writer.lock().await.append(&blob).unwrap();
-						mutex_entries
-							.lock()
-							.await
-							.push(EntryV3::new(id, range.get_shifted_backward(tile_data_start), 1));
+						mutex_entries.lock().await.push(EntryV3::new(
+							id,
+							range.get_shifted_backward(tile_data_start),
+							1,
+						));
 					}
 				})
 				.await;

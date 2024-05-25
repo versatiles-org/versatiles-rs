@@ -42,7 +42,10 @@ mod tests {
 	async fn process_tiles_stream(mut tiles_stream: TilesStream<'_>) {
 		let mut count = 0;
 		while let Some((coord, blob)) = tiles_stream.next().await {
-			println!("Processing tile at coord: {:?}, with data: {:?}", coord, blob);
+			println!(
+				"Processing tile at coord: {:?}, with data: {:?}",
+				coord, blob
+			);
 			count += 1;
 		}
 		assert_eq!(count, 2);

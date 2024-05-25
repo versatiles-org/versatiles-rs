@@ -123,7 +123,8 @@ impl DirectoryTilesReader {
 					let x = numeric2?;
 
 					let files = fs::read_dir(entry2.path())?.map(|f| f.unwrap());
-					let files = files.sorted_unstable_by(|a, b| a.file_name().partial_cmp(&b.file_name()).unwrap());
+					let files = files
+						.sorted_unstable_by(|a, b| a.file_name().partial_cmp(&b.file_name()).unwrap());
 
 					for entry3 in files {
 						// y level
@@ -172,11 +173,17 @@ impl DirectoryTilesReader {
 						continue;
 					}
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
-						meta = Some(decompress(Self::read(&entry1.path())?, &TileCompression::Gzip)?);
+						meta = Some(decompress(
+							Self::read(&entry1.path())?,
+							&TileCompression::Gzip,
+						)?);
 						continue;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
-						meta = Some(decompress(Self::read(&entry1.path())?, &TileCompression::Brotli)?);
+						meta = Some(decompress(
+							Self::read(&entry1.path())?,
+							&TileCompression::Brotli,
+						)?);
 						continue;
 					}
 					&_ => {}
@@ -262,10 +269,16 @@ mod tests {
 
 		assert_eq!(reader.get_meta()?.unwrap().as_str(), "test meta data");
 
-		let tile_data = reader.get_tile_data(&TileCoord3::new(2, 3, 1)?).await?.unwrap();
+		let tile_data = reader
+			.get_tile_data(&TileCoord3::new(2, 3, 1)?)
+			.await?
+			.unwrap();
 		assert_eq!(tile_data, Blob::from("test tile data"));
 
-		assert!(reader.get_tile_data(&TileCoord3::new(2, 2, 1)?).await?.is_none());
+		assert!(reader
+			.get_tile_data(&TileCoord3::new(2, 2, 1)?)
+			.await?
+			.is_none());
 
 		Ok(())
 	}
@@ -292,7 +305,9 @@ mod tests {
 		dir.child("1/2/3.unknown").write_str("unsupported format")?;
 
 		assert_eq!(
-			DirectoryTilesReader::open_path(dir.path()).unwrap_err().to_string(),
+			DirectoryTilesReader::open_path(dir.path())
+				.unwrap_err()
+				.to_string(),
 			"no tiles found",
 			"Should return error on unsupported file formats"
 		);
@@ -314,7 +329,10 @@ mod tests {
 		fs::write(dir.path().join("0/1/2.png"), "tile at 0/1/2").unwrap();
 
 		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
-		assert_eq!(reader.get_meta().unwrap().unwrap(), Blob::from("test meta data gzip"));
+		assert_eq!(
+			reader.get_meta().unwrap().unwrap(),
+			Blob::from("test meta data gzip")
+		);
 
 		Ok(())
 	}
@@ -342,7 +360,9 @@ mod tests {
 		fs::write(dir.path().join("1/2/3.txt"), "wrong format").unwrap();
 
 		assert_eq!(
-			&DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
+			&DirectoryTilesReader::open_path(&dir)
+				.unwrap_err()
+				.to_string(),
 			"no tiles found",
 			"Should error on incorrect tile format"
 		);
@@ -357,7 +377,9 @@ mod tests {
 		dir.child("1/2/4.jpg").write_str("test tile data")?;
 
 		assert_eq!(
-			DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
+			DirectoryTilesReader::open_path(&dir)
+				.unwrap_err()
+				.to_string(),
 			"found multiple tile formats PNG and JPG"
 		);
 
@@ -371,7 +393,9 @@ mod tests {
 		dir.child("1/2/4.pbf.br").write_str("test tile data")?;
 
 		assert_eq!(
-			DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
+			DirectoryTilesReader::open_path(&dir)
+				.unwrap_err()
+				.to_string(),
 			"found multiple tile compressions None and Brotli"
 		);
 
@@ -393,11 +417,20 @@ mod tests {
 			"DirectoryTilesReader { name: \"*\", parameters: TilesReaderParameters { bbox_pyramid: [1: [2,3,2,3] (1)], tile_compression: Brotli, tile_format: PNG } }"
 		);
 
-		assert_eq!(reader.get_meta()?.unwrap(), Blob::from("{\"key\": \"value\"}"));
+		assert_eq!(
+			reader.get_meta()?.unwrap(),
+			Blob::from("{\"key\": \"value\"}")
+		);
 
-		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Brotli);
+		assert_eq!(
+			reader.get_parameters().tile_compression,
+			TileCompression::Brotli
+		);
 		reader.override_compression(TileCompression::Gzip);
-		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
+		assert_eq!(
+			reader.get_parameters().tile_compression,
+			TileCompression::Gzip
+		);
 
 		Ok(())
 	}

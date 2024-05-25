@@ -39,7 +39,11 @@ where
 			return;
 		}
 		self.map = Some(HashMap::from_iter(
-			self.list.iter().enumerate().map(|(i, v)| (v.clone(), i as u32)),
+			self
+				.list
+				.iter()
+				.enumerate()
+				.map(|(i, v)| (v.clone(), i as u32)),
 		));
 	}
 
@@ -135,8 +139,14 @@ impl PropertyManager {
 
 		for properties in geo_property_iter {
 			for (k, v) in properties.iter() {
-				key_map.entry(k.clone()).and_modify(|n| *n += 1).or_insert(0);
-				val_map.entry(v.clone()).and_modify(|n| *n += 1).or_insert(0);
+				key_map
+					.entry(k.clone())
+					.and_modify(|n| *n += 1)
+					.or_insert(0);
+				val_map
+					.entry(v.clone())
+					.and_modify(|n| *n += 1)
+					.or_insert(0);
 			}
 		}
 
@@ -181,8 +191,16 @@ impl PropertyManager {
 			let tag_key = tag_ids[i * 2];
 			let tag_val = tag_ids[i * 2 + 1];
 			properties.insert(
-				self.key.get(tag_key).context("Failed to get property key")?.to_owned(),
-				self.val.get(tag_val).context("Failed to get property value")?.clone(),
+				self
+					.key
+					.get(tag_key)
+					.context("Failed to get property key")?
+					.to_owned(),
+				self
+					.val
+					.get(tag_val)
+					.context("Failed to get property value")?
+					.clone(),
 			);
 		}
 		Ok(properties)

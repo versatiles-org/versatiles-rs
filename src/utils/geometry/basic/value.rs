@@ -210,7 +210,10 @@ mod tests {
 			GeoValue::from(1.0f64).partial_cmp(&GeoValue::from(2.0f64)),
 			Some(Ordering::Less)
 		);
-		assert_eq!(GeoValue::from(1).partial_cmp(&GeoValue::from(2)), Some(Ordering::Less));
+		assert_eq!(
+			GeoValue::from(1).partial_cmp(&GeoValue::from(2)),
+			Some(Ordering::Less)
+		);
 		assert_eq!(
 			GeoValue::from(1u64).partial_cmp(&GeoValue::from(2u64)),
 			Some(Ordering::Less)

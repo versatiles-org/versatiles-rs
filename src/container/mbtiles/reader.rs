@@ -42,7 +42,10 @@
 
 use crate::{
 	container::{TilesReader, TilesReaderParameters, TilesStream},
-	types::{progress::get_progress_bar, Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
+	types::{
+		progress::get_progress_bar, Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3,
+		TileFormat,
+	},
 	utils::TransformCoord,
 };
 use anyhow::{anyhow, ensure, Result};
@@ -90,7 +93,11 @@ impl MBTilesReader {
 
 		let manager = SqliteConnectionManager::file(path);
 		let pool = Pool::builder().max_size(10).build(manager)?;
-		let parameters = TilesReaderParameters::new(TileFormat::PBF, TileCompression::None, TileBBoxPyramid::new_empty());
+		let parameters = TilesReaderParameters::new(
+			TileFormat::PBF,
+			TileCompression::None,
+			TileBBoxPyramid::new_empty(),
+		);
 
 		let mut reader = MBTilesReader {
 			name: String::from(path.to_str().unwrap()),
@@ -121,9 +128,14 @@ impl MBTilesReader {
 			})
 		})?;
 
-		let mut tile_format: Result<TileFormat> = Err(anyhow!("mbtiles file {} does not specify tile format", self.name));
-		let mut compression: Result<TileCompression> =
-			Err(anyhow!("mbtiles file {} does not specify compression", self.name));
+		let mut tile_format: Result<TileFormat> = Err(anyhow!(
+			"mbtiles file {} does not specify tile format",
+			self.name
+		));
+		let mut compression: Result<TileCompression> = Err(anyhow!(
+			"mbtiles file {} does not specify compression",
+			self.name
+		));
 
 		for entry in entries {
 			let entry = entry?;
@@ -295,8 +307,9 @@ impl TilesReader for MBTilesReader {
 		let z = coord.get_z() as u32;
 
 		let conn = self.pool.get()?;
-		let mut stmt =
-			conn.prepare("SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")?;
+		let mut stmt = conn.prepare(
+			"SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?",
+		)?;
 
 		if let Ok(vec) = stmt.query_row([x, y, z], |row| row.get::<_, Vec<u8>>(0)) {
 			Ok(Some(Blob::from(vec)))
@@ -390,7 +403,9 @@ pub mod tests {
 	use std::{env, path::PathBuf};
 
 	lazy_static! {
-		static ref PATH: PathBuf = env::current_dir().unwrap().join("./testdata/berlin.mbtiles");
+		static ref PATH: PathBuf = env::current_dir()
+			.unwrap()
+			.join("./testdata/berlin.mbtiles");
 	}
 
 	#[tokio::test]
@@ -403,10 +418,16 @@ pub mod tests {
 		assert!(reader.get_name().ends_with("testdata/berlin.mbtiles"));
 		assert_eq!(reader.get_meta()?, Some(Blob::from(b"{\"vector_layers\":[{\"id\":\"place_labels\",\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"population\":\"Number\"},\"minzoom\":3,\"maxzoom\":14},{\"id\":\"boundaries\",\"fields\":{\"admin_level\":\"Number\",\"maritime\":\"Boolean\"},\"minzoom\":0,\"maxzoom\":14},{\"id\":\"boundary_labels\",\"fields\":{\"admin_level\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"way_area\":\"Number\"},\"minzoom\":2,\"maxzoom\":14},{\"id\":\"addresses\",\"fields\":{\"name\":\"String\",\"number\":\"String\"},\"minzoom\":14,\"maxzoom\":14},{\"id\":\"water_lines\",\"fields\":{\"kind\":\"String\"},\"minzoom\":4,\"maxzoom\":14},{\"id\":\"water_lines_labels\",\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"minzoom\":4,\"maxzoom\":14},{\"id\":\"street_polygons\",\"fields\":{\"bridge\":\"Boolean\",\"kind\":\"String\",\"rail\":\"Boolean\",\"service\":\"String\",\"surface\":\"String\",\"tunnel\":\"Boolean\"},\"minzoom\":14,\"maxzoom\":14},{\"id\":\"streets_polygons_labels\",\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"minzoom\":14,\"maxzoom\":14},{\"id\":\"streets\",\"fields\":{\"bicycle\":\"String\",\"bridge\":\"Boolean\",\"horse\":\"String\",\"kind\":\"String\",\"link\":\"Boolean\",\"rail\":\"Boolean\",\"service\":\"String\",\"surface\":\"String\",\"tracktype\":\"String\",\"tunnel\":\"Boolean\"},\"minzoom\":14,\"maxzoom\":14},{\"id\":\"street_labels\",\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"ref\":\"String\",\"ref_cols\":\"Number\",\"ref_rows\":\"Number\",\"tunnel\":\"Boolean\"},\"minzoom\":10,\"maxzoom\":14},{\"id\":\"street_labels_points\",\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"ref\":\"String\"},\"minzoom\":12,\"maxzoom\":14},{\"id\":\"aerialways\",\"fields\":{\"kind\":\"String\"},\"minzoom\":12,\"maxzoom\":14},{\"id\":\"public_transport\",\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"minzoom\":11,\"maxzoom\":14},{\"id\":\"buildings\",\"fields\":{\"dummy\":\"Number\"},\"minzoom\":14,\"maxzoom\":14},{\"id\":\"water_polygons\",\"fields\":{\"kind\":\"String\"},\"minzoom\":4,\"maxzoom\":14},{\"id\":\"ocean\",\"fields\":{},\"minzoom\":8,\"maxzoom\":14},{\"id\":\"water_polygons_labels\",\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"minzoom\":14,\"maxzoom\":14},{\"id\":\"land\",\"fields\":{\"kind\":\"String\"},\"minzoom\":7,\"maxzoom\":14},{\"id\":\"sites\",\"fields\":{\"kind\":\"String\"},\"minzoom\":14,\"maxzoom\":14}]}".to_vec())));
 		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [1,0,1,0] (1), 2: [2,1,2,1] (1), 3: [4,2,4,2] (1), 4: [8,5,8,5] (1), 5: [17,10,17,10] (1), 6: [34,20,34,21] (2), 7: [68,41,68,42] (2), 8: [137,83,137,84] (2), 9: [274,167,275,168] (4), 10: [549,335,551,336] (6), 11: [1098,670,1102,673] (20), 12: [2196,1340,2204,1346] (63), 13: [4393,2680,4409,2693] (238), 14: [8787,5361,8818,5387] (864)], tile_compression: Gzip, tile_format: PBF }");
-		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
+		assert_eq!(
+			reader.get_parameters().tile_compression,
+			TileCompression::Gzip
+		);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
-		let tile = reader.get_tile_data(&TileCoord3::new(8803, 5376, 14)?).await?.unwrap();
+		let tile = reader
+			.get_tile_data(&TileCoord3::new(8803, 5376, 14)?)
+			.await?
+			.unwrap();
 		assert_eq!(tile.len(), 172969);
 		assert_eq!(tile.get_range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
 		assert_eq!(
@@ -427,14 +448,18 @@ pub mod tests {
 		let mut reader = MBTilesReader::open_path(&PATH)?;
 
 		let mut printer = PrettyPrint::new();
-		reader.probe_container(&printer.get_category("container").await).await?;
+		reader
+			.probe_container(&printer.get_category("container").await)
+			.await?;
 		assert_eq!(
 			printer.as_string().await,
 			"container:\n   deep container probing is not implemented for this container format\n"
 		);
 
 		let mut printer = PrettyPrint::new();
-		reader.probe_tiles(&printer.get_category("tiles").await).await?;
+		reader
+			.probe_tiles(&printer.get_category("tiles").await)
+			.await?;
 		assert_eq!(
 			printer.as_string().await,
 			"tiles:\n   deep tiles probing is not implemented for this container format\n"

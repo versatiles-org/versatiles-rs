@@ -81,7 +81,9 @@ impl PrettyPrint {
 	}
 
 	pub async fn add_key_value<K: Display + ?Sized, V: Debug + ?Sized>(&self, key: &K, value: &V) {
-		self.write_line(format!("{key}: {}", get_formatted_value(value))).await;
+		self
+			.write_line(format!("{key}: {}", get_formatted_value(value)))
+			.await;
 	}
 
 	pub async fn add_value<V: Debug>(&self, value: &V) {
@@ -156,7 +158,10 @@ mod tests {
 
 		printer.add_warning("test_warning_1").await;
 		let mut cat = printer.get_category("test_category_1").await;
-		cat.get_list("test_list_1").await.add_key_value("string_1", &4).await;
+		cat.get_list("test_list_1")
+			.await
+			.add_key_value("string_1", &4)
+			.await;
 		cat.add_str(String::from("string_2")).await;
 		cat.add_warning("test_warning_2").await;
 		printer.add_warning("test_warning_3").await;

@@ -115,7 +115,11 @@ impl TileSource {
 			// If metadata is empty, return a not found response
 			meta_option.as_ref()?;
 
-			return SourceResponse::new_some(meta_option.unwrap(), &TileCompression::None, "application/json");
+			return SourceResponse::new_some(
+				meta_option.unwrap(),
+				&TileCompression::None,
+				"application/json",
+			);
 		}
 
 		// If the request is unknown, return a not found response
@@ -178,7 +182,9 @@ mod tests {
 			Ok(response.blob.into_vec())
 		}
 
-		async fn check_404(container: &mut TileSource, url: &str, compression: TileCompression) -> Result<bool> {
+		async fn check_404(
+			container: &mut TileSource, url: &str, compression: TileCompression,
+		) -> Result<bool> {
 			let response = container
 				.get_data(&Url::new(url), &TargetCompression::from(compression))
 				.await;

@@ -113,9 +113,21 @@ impl TileBBox {
 	/// A `Result` containing the new `TileBBox` or an error if the coordinates are invalid.
 	pub fn from_geo(level: u8, geo_bbox: &[f64; 4]) -> Result<TileBBox> {
 		ensure!(level <= 31, "level ({level}) must be <= 31");
-		ensure!(geo_bbox[0] >= -180., "x_min ({}) must be >= -180", geo_bbox[0]);
-		ensure!(geo_bbox[1] >= -90., "y_min ({}) must be >= -90", geo_bbox[1]);
-		ensure!(geo_bbox[2] <= 180., "x_max ({}) must be <= 180", geo_bbox[2]);
+		ensure!(
+			geo_bbox[0] >= -180.,
+			"x_min ({}) must be >= -180",
+			geo_bbox[0]
+		);
+		ensure!(
+			geo_bbox[1] >= -90.,
+			"y_min ({}) must be >= -90",
+			geo_bbox[1]
+		);
+		ensure!(
+			geo_bbox[2] <= 180.,
+			"x_max ({}) must be <= 180",
+			geo_bbox[2]
+		);
 		ensure!(geo_bbox[3] <= 90., "y_max ({}) must be <= 90", geo_bbox[3]);
 		ensure!(
 			geo_bbox[0] <= geo_bbox[2],
@@ -133,7 +145,13 @@ impl TileBBox {
 		let p_min = TileCoord2::from_geo(geo_bbox[0], geo_bbox[3], level, false)?;
 		let p_max = TileCoord2::from_geo(geo_bbox[2], geo_bbox[1], level, true)?;
 
-		TileBBox::new(level, p_min.get_x(), p_min.get_y(), p_max.get_x(), p_max.get_y())
+		TileBBox::new(
+			level,
+			p_min.get_x(),
+			p_min.get_y(),
+			p_max.get_x(),
+			p_max.get_y(),
+		)
 	}
 
 	/// Sets the bounding box to an empty state.
@@ -254,7 +272,10 @@ impl TileBBox {
 		if self.is_empty() || bbox.is_empty() {
 			return false;
 		}
-		self.x_min <= bbox.x_max || self.y_min <= bbox.y_max || self.x_max >= bbox.x_min || self.y_max >= bbox.y_min
+		self.x_min <= bbox.x_max
+			|| self.y_min <= bbox.y_max
+			|| self.x_max >= bbox.x_min
+			|| self.y_max >= bbox.y_min
 	}
 
 	/// Adds a border to the bounding box.
@@ -308,7 +329,14 @@ impl TileBBox {
 				let x = coord.x * size;
 				let y = coord.y * size;
 
-				let mut bbox = TileBBox::new(level, x, y, (x + size - 1).min(max), (y + size - 1).min(max)).unwrap();
+				let mut bbox = TileBBox::new(
+					level,
+					x,
+					y,
+					(x + size - 1).min(max),
+					(y + size - 1).min(max),
+				)
+				.unwrap();
 				bbox.intersect_bbox(self);
 				bbox
 			})
@@ -353,7 +381,10 @@ impl TileBBox {
 			let row_chunk_count = (row_count as f64 / row_chunk_max_size as f64).ceil() as usize;
 			let row_chunk_size = row_count as f64 / row_chunk_count as f64;
 			for row in 0..=row_chunk_count {
-				row_pos.insert(row, (row_chunk_size * row as f64).round() as u32 + self.y_min)
+				row_pos.insert(
+					row,
+					(row_chunk_size * row as f64).round() as u32 + self.y_min,
+				)
 			}
 			row_count = row_chunk_count;
 
@@ -561,7 +592,11 @@ impl TileBBox {
 		ensure!(index < self.count_tiles() as u32, "index out of bounds");
 
 		let width = self.x_max + 1 - self.x_min;
-		TileCoord3::new(index.rem(width) + self.x_min, index.div(width) + self.y_min, self.level)
+		TileCoord3::new(
+			index.rem(width) + self.x_min,
+			index.div(width) + self.y_min,
+			self.level,
+		)
 	}
 
 	/// Converts the bounding box to geographical coordinates.
@@ -574,8 +609,12 @@ impl TileBBox {
 	///
 	/// An array of four `f64` values representing the geographical bounding box.
 	pub fn as_geo_bbox(&self, z: u8) -> [f64; 4] {
-		let p_min = TileCoord3::new(self.x_min, self.y_max + 1, z).unwrap().as_geo();
-		let p_max = TileCoord3::new(self.x_max + 1, self.y_min, z).unwrap().as_geo();
+		let p_min = TileCoord3::new(self.x_min, self.y_max + 1, z)
+			.unwrap()
+			.as_geo();
+		let p_max = TileCoord3::new(self.x_max + 1, self.y_min, z)
+			.unwrap()
+			.as_geo();
 
 		[p_min[0], p_min[1], p_max[0], p_max[1]]
 	}
@@ -781,15 +820,32 @@ mod tests {
 		fn test(size: u32, bbox: TileBBox, bboxes: &str) {
 			let bboxes_result: String = bbox
 				.iter_bbox_grid(size)
-				.map(|bbox| format!("{},{},{},{}", bbox.x_min, bbox.y_min, bbox.x_max, bbox.y_max))
+				.map(|bbox| {
+					format!(
+						"{},{},{},{}",
+						bbox.x_min, bbox.y_min, bbox.x_max, bbox.y_max
+					)
+				})
 				.collect::<Vec<String>>()
 				.join(" ");
 			assert_eq!(bboxes_result, bboxes);
 		}
 
-		test(16, b(10, 0, 0, 31, 31), "0,0,15,15 16,0,31,15 0,16,15,31 16,16,31,31");
-		test(16, b(10, 5, 6, 25, 26), "5,6,15,15 16,6,25,15 5,16,15,26 16,16,25,26");
-		test(16, b(10, 5, 6, 16, 16), "5,6,15,15 16,6,16,15 5,16,15,16 16,16,16,16");
+		test(
+			16,
+			b(10, 0, 0, 31, 31),
+			"0,0,15,15 16,0,31,15 0,16,15,31 16,16,31,31",
+		);
+		test(
+			16,
+			b(10, 5, 6, 25, 26),
+			"5,6,15,15 16,6,25,15 5,16,15,26 16,16,25,26",
+		);
+		test(
+			16,
+			b(10, 5, 6, 16, 16),
+			"5,6,15,15 16,6,16,15 5,16,15,16 16,16,16,16",
+		);
 		test(16, b(10, 5, 6, 16, 15), "5,6,15,15 16,6,16,15");
 		test(16, b(10, 6, 7, 6, 7), "6,7,6,7");
 		test(64, b(4, 6, 7, 6, 7), "6,7,6,7");

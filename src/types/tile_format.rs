@@ -171,7 +171,11 @@ mod tests {
 		test(Some(TileFormat::PNG), "picture.png", "picture");
 		test(Some(TileFormat::SVG), "diagram.svg", "diagram");
 		test(Some(TileFormat::SVG), "vector.svg", "vector");
-		test(Some(TileFormat::TOPOJSON), "topography.topojson", "topography");
+		test(
+			Some(TileFormat::TOPOJSON),
+			"topography.topojson",
+			"topography",
+		);
 		test(Some(TileFormat::WEBP), "photo.webp", "photo");
 	}
 }

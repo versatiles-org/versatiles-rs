@@ -31,6 +31,7 @@ impl VectorTileLayer {
 			version,
 		}
 	}
+
 	pub fn read(reader: &mut dyn ValueReader<'_, LE>) -> Result<VectorTileLayer> {
 		let mut extent = 4096;
 		let mut features: Vec<VectorTileFeature> = Vec::new();
@@ -40,7 +41,13 @@ impl VectorTileLayer {
 
 		while reader.has_remaining() {
 			match reader.read_pbf_key().context("Failed to read PBF key")? {
-				(1, 2) => name = Some(reader.read_pbf_string().context("Failed to read layer name")?),
+				(1, 2) => {
+					name = Some(
+						reader
+							.read_pbf_string()
+							.context("Failed to read layer name")?,
+					)
+				}
 				(2, 2) => features.push(
 					VectorTileFeature::read(
 						reader
@@ -50,7 +57,11 @@ impl VectorTileLayer {
 					)
 					.context("Failed to read VectorTileFeature")?,
 				),
-				(3, 2) => property_manager.add_key(reader.read_pbf_string().context("Failed to read property key")?)?,
+				(3, 2) => property_manager.add_key(
+					reader
+						.read_pbf_string()
+						.context("Failed to read property key")?,
+				)?,
 				(4, 2) => property_manager.add_val(
 					GeoValue::read(
 						reader
@@ -92,7 +103,11 @@ impl VectorTileLayer {
 				.write_pbf_key(2, 2)
 				.context("Failed to write PBF key for feature")?;
 			writer
-				.write_pbf_blob(&feature.to_blob().context("Failed to convert feature to blob")?)
+				.write_pbf_blob(
+					&feature
+						.to_blob()
+						.context("Failed to convert feature to blob")?,
+				)
 				.context("Failed to write feature blob")?;
 		}
 
@@ -100,7 +115,9 @@ impl VectorTileLayer {
 			writer
 				.write_pbf_key(3, 2)
 				.context("Failed to write PBF key for property key")?;
-			writer.write_pbf_string(key).context("Failed to write property key")?;
+			writer
+				.write_pbf_string(key)
+				.context("Failed to write property key")?;
 		}
 
 		for value in self.property_manager.iter_val() {
@@ -108,7 +125,11 @@ impl VectorTileLayer {
 				.write_pbf_key(4, 2)
 				.context("Failed to write PBF key for property value")?;
 			writer
-				.write_pbf_blob(&value.to_blob().context("Failed to convert property value to blob")?)
+				.write_pbf_blob(
+					&value
+						.to_blob()
+						.context("Failed to convert property value to blob")?,
+				)
 				.context("Failed to write property value blob")?;
 		}
 
@@ -196,8 +217,11 @@ impl VectorTileLayer {
 		}
 	}
 
-	pub fn from_features(name: String, features: Vec<Feature>, extent: u32, version: u32) -> Result<VectorTileLayer> {
-		let property_manager = PropertyManager::from_iter(features.iter().filter_map(|f| f.properties.as_ref()));
+	pub fn from_features(
+		name: String, features: Vec<Feature>, extent: u32, version: u32,
+	) -> Result<VectorTileLayer> {
+		let property_manager =
+			PropertyManager::from_iter(features.iter().filter_map(|f| f.properties.as_ref()));
 
 		let features = features
 			.iter()
@@ -221,7 +245,13 @@ impl VectorTileLayer {
 
 	#[cfg(test)]
 	pub fn new_example() -> Self {
-		VectorTileLayer::from_features(String::from("layer1"), vec![Feature::new_example()], 4096, 1).unwrap()
+		VectorTileLayer::from_features(
+			String::from("layer1"),
+			vec![Feature::new_example()],
+			4096,
+			1,
+		)
+		.unwrap()
 	}
 }
 
@@ -236,8 +266,9 @@ mod tests {
 		// Example data for a vector tile layer
 		let data = vec![
 			0x0A, 0x05, b'h', b'e', b'l', b'l', b'o', // name: "hello"
-			18, 50, 8, 3, 18, 2, 1, 2, 24, 3, 34, 40, 9, 0, 0, 18, 10, 0, 3, 8, 7, 9, 1, 5, 18, 2, 2, 0, 1, 7, 9, 6, 1,
-			26, 6, 0, 0, 8, 5, 0, 7, 9, 2, 5, 26, 0, 4, 2, 0, 0, 3, 7, // feature
+			18, 50, 8, 3, 18, 2, 1, 2, 24, 3, 34, 40, 9, 0, 0, 18, 10, 0, 3, 8, 7, 9, 1, 5, 18, 2, 2,
+			0, 1, 7, 9, 6, 1, 26, 6, 0, 0, 8, 5, 0, 7, 9, 2, 5, 26, 0, 4, 2, 0, 0, 3,
+			7, // feature
 			0x1A, 0x03, b'k', b'e', b'y', // property key: "key"
 			0x22, 0x04, 0x0A, 0x02, b'v', b'l', // property value: "vl"
 		];
@@ -267,8 +298,9 @@ mod tests {
 		let blob = layer.to_blob()?;
 		let expected_data = vec![
 			0x0A, 0x05, b'h', b'e', b'l', b'l', b'o', // name: "hello"
-			18, 50, 8, 3, 18, 2, 1, 2, 24, 3, 34, 40, 9, 0, 0, 18, 10, 0, 3, 8, 7, 9, 1, 5, 18, 2, 2, 0, 1, 7, 9, 6, 1,
-			26, 6, 0, 0, 8, 5, 0, 7, 9, 2, 5, 26, 0, 4, 2, 0, 0, 3, 7, // feature
+			18, 50, 8, 3, 18, 2, 1, 2, 24, 3, 34, 40, 9, 0, 0, 18, 10, 0, 3, 8, 7, 9, 1, 5, 18, 2, 2,
+			0, 1, 7, 9, 6, 1, 26, 6, 0, 0, 8, 5, 0, 7, 9, 2, 5, 26, 0, 4, 2, 0, 0, 3,
+			7, // feature
 			0x1A, 0x03, b'k', b'e', b'y', // property key: "key"
 			0x22, 0x07, 0x0A, 0x05, b'v', b'a', b'l', b'u', b'e', // property value: "value"
 		];
@@ -290,7 +322,8 @@ mod tests {
 	#[test]
 	fn test_to_features() -> Result<()> {
 		let feature = Feature::new_example();
-		let layer = VectorTileLayer::from_features("hello".to_string(), vec![feature.clone()], 2048, 3)?;
+		let layer =
+			VectorTileLayer::from_features("hello".to_string(), vec![feature.clone()], 2048, 3)?;
 		let features = layer.to_features()?;
 		println!("{:?}", features[0].properties);
 		assert_eq!(features.len(), 1);
@@ -307,10 +340,17 @@ mod tests {
 		let layer = VectorTileLayer::from_features("hello".to_string(), features, 4096, 1)?;
 		assert_eq!(layer.name, "hello");
 		assert_eq!(layer.features.len(), 1);
-		assert_eq!(layer.property_manager.key.list, vec!["is_nice", "name", "population"]);
+		assert_eq!(
+			layer.property_manager.key.list,
+			vec!["is_nice", "name", "population"]
+		);
 		assert_eq!(
 			layer.property_manager.val.list,
-			vec![GeoValue::from("Nice"), GeoValue::from(348085), GeoValue::from(true)]
+			vec![
+				GeoValue::from("Nice"),
+				GeoValue::from(348085),
+				GeoValue::from(true)
+			]
 		);
 		assert_eq!(layer.extent, 4096);
 		assert_eq!(layer.version, 1);
