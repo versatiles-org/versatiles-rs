@@ -3,4 +3,4 @@ mod output;
 mod utils;
 
 mod reader;
-pub use reader::VirtualTilesReader;
+pub use reader::TileComposerReader;

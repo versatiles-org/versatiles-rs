@@ -1,6 +1,6 @@
-use super::VirtualTileOperation;
+use super::TileComposerOperation;
 use crate::{
-	container::r#virtual::utils::read_csv_file,
+	container::composer::utils::read_csv_file,
 	types::Blob,
 	utils::{
 		geometry::{vector_tile::VectorTile, GeoProperties},
@@ -21,7 +21,7 @@ pub struct PBFReplacePropertiesOperation {
 	pub replace_properties: bool,
 }
 
-impl VirtualTileOperation for PBFReplacePropertiesOperation {
+impl TileComposerOperation for PBFReplacePropertiesOperation {
 	fn new(yaml: &YamlWrapper) -> Result<PBFReplacePropertiesOperation>
 	where
 		Self: Sized,

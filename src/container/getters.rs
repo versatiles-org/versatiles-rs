@@ -28,8 +28,8 @@
 use crate::{
 	container::{
 		DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, MBTilesWriter, PMTilesReader,
-		PMTilesWriter, TarTilesReader, TarTilesWriter, TilesReader, TilesWriter, VersaTilesReader,
-		VersaTilesWriter, VirtualTilesReader,
+		PMTilesWriter, TarTilesReader, TarTilesWriter, TileComposerReader, TilesReader, TilesWriter,
+		VersaTilesReader, VersaTilesWriter,
 	},
 	types::{DataReader, DataReaderHttp},
 };
@@ -45,7 +45,7 @@ pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReader>> {
 		match extension {
 			"pmtiles" => return Ok(PMTilesReader::open_reader(reader).await?.boxed()),
 			"versatiles" => return Ok(VersaTilesReader::open_reader(reader).await?.boxed()),
-			"yaml" => return Ok(VirtualTilesReader::open_reader(reader).await?.boxed()),
+			"yaml" => return Ok(TileComposerReader::open_reader(reader).await?.boxed()),
 			_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
 		}
 	}
@@ -67,7 +67,7 @@ pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReader>> {
 		"pmtiles" => Ok(PMTilesReader::open_path(&path).await?.boxed()),
 		"tar" => Ok(TarTilesReader::open_path(&path)?.boxed()),
 		"versatiles" => Ok(VersaTilesReader::open_path(&path).await?.boxed()),
-		"yaml" => Ok(VirtualTilesReader::open_path(&path).await?.boxed()),
+		"yaml" => Ok(TileComposerReader::open_path(&path).await?.boxed()),
 		_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
 	}
 }

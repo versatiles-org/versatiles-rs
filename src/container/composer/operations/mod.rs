@@ -4,14 +4,14 @@ use crate::{types::Blob, utils::YamlWrapper};
 use anyhow::{bail, Context, Result};
 use std::fmt::Debug;
 
-pub trait VirtualTileOperation: Debug + Send + Sync {
+pub trait TileComposerOperation: Debug + Send + Sync {
 	fn new(def: &YamlWrapper) -> Result<Self>
 	where
 		Self: Sized;
 	fn run(&self, blob: &Blob) -> Result<Option<Blob>>;
 }
 
-pub fn new_virtual_tile_operation(def: &YamlWrapper) -> Result<Box<dyn VirtualTileOperation>> {
+pub fn new_tile_composer_operation(def: &YamlWrapper) -> Result<Box<dyn TileComposerOperation>> {
 	let action = def
 		.hash_get_str("action")
 		.context("while parsing an action")?;

@@ -1,7 +1,7 @@
-use super::{operations::VirtualTileOperation, output::VirtualTilesOutput};
+use super::{operations::TileComposerOperation, output::TileComposerOutput};
 use crate::{
 	container::{
-		getters::get_simple_reader, r#virtual::operations::new_virtual_tile_operation, TilesReader,
+		composer::operations::new_tile_composer_operation, getters::get_simple_reader, TilesReader,
 		TilesReaderParameters, TilesStream,
 	},
 	types::{Blob, DataReader, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
@@ -14,24 +14,24 @@ use std::{collections::HashMap, path::Path, str::FromStr, sync::Arc};
 use tokio::sync::Mutex;
 
 pub type VReader = Arc<Mutex<Box<dyn TilesReader>>>;
-pub type VOperation = Arc<Box<dyn VirtualTileOperation>>;
+pub type VOperation = Arc<Box<dyn TileComposerOperation>>;
 
 #[derive(Clone)]
-pub struct VirtualTilesReader {
+pub struct TileComposerReader {
 	name: String,
-	output_definitions: Vec<VirtualTilesOutput>,
+	output_definitions: Vec<TileComposerOutput>,
 	tiles_reader_parameters: TilesReaderParameters,
 }
 
-impl VirtualTilesReader {
-	pub async fn open_path(path: &Path) -> Result<VirtualTilesReader> {
+impl TileComposerReader {
+	pub async fn open_path(path: &Path) -> Result<TileComposerReader> {
 		let yaml = std::fs::read_to_string(path)?;
 		Self::from_str(&yaml, path.to_str().unwrap())
 			.await
 			.with_context(|| format!("while parsing {path:?} as YAML"))
 	}
 
-	pub async fn open_reader(mut reader: DataReader) -> Result<VirtualTilesReader> {
+	pub async fn open_reader(mut reader: DataReader) -> Result<TileComposerReader> {
 		let yaml = reader.read_all().await?.into_string();
 		Self::from_str(&yaml, reader.get_name())
 			.await
@@ -39,13 +39,13 @@ impl VirtualTilesReader {
 	}
 
 	#[cfg(test)]
-	pub async fn open_str(yaml: &str) -> Result<VirtualTilesReader> {
+	pub async fn open_str(yaml: &str) -> Result<TileComposerReader> {
 		Self::from_str(yaml, "String")
 			.await
 			.with_context(|| "while parsing a String as YAML".to_string())
 	}
 
-	async fn from_str(yaml: &str, name: &str) -> Result<VirtualTilesReader> {
+	async fn from_str(yaml: &str, name: &str) -> Result<TileComposerReader> {
 		let yaml = YamlWrapper::from_str(yaml).context("parsing the YAML")?;
 
 		ensure!(yaml.is_hash(), "YAML must be an object");
@@ -69,7 +69,7 @@ impl VirtualTilesReader {
 			parse_parameters(&yaml.hash_get_value("parameters")?, &output_definitions)
 				.context("while parsing 'parameters'")?;
 
-		Ok(VirtualTilesReader {
+		Ok(TileComposerReader {
 			name: name.to_string(),
 			output_definitions,
 			tiles_reader_parameters,
@@ -130,7 +130,7 @@ fn parse_operations(yaml: &YamlWrapper) -> Result<HashMap<String, VOperation>> {
 		operations.insert(
 			name.to_string(),
 			Arc::new(
-				new_virtual_tile_operation(entry)
+				new_tile_composer_operation(entry)
 					.with_context(|| format!("while parsing operation no {}", index + 1))?,
 			),
 		);
@@ -142,14 +142,14 @@ fn parse_operations(yaml: &YamlWrapper) -> Result<HashMap<String, VOperation>> {
 async fn parse_output(
 	yaml: &YamlWrapper, input_lookup: &HashMap<String, VReader>,
 	operation_lookup: &HashMap<String, VOperation>,
-) -> Result<Vec<VirtualTilesOutput>> {
+) -> Result<Vec<TileComposerOutput>> {
 	ensure!(yaml.is_array(), "'output' must be an array");
 
-	let mut output: Vec<VirtualTilesOutput> = Vec::new();
+	let mut output: Vec<TileComposerOutput> = Vec::new();
 
 	for (index, entry) in yaml.array_get_as_vec()?.iter().enumerate() {
 		output.push(
-			VirtualTilesOutput::new(entry, input_lookup, operation_lookup)
+			TileComposerOutput::new(entry, input_lookup, operation_lookup)
 				.await
 				.with_context(|| format!("while parsing output no {}", index + 1))?,
 		);
@@ -159,7 +159,7 @@ async fn parse_output(
 }
 
 fn parse_parameters(
-	yaml: &YamlWrapper, outputs: &[VirtualTilesOutput],
+	yaml: &YamlWrapper, outputs: &[TileComposerOutput],
 ) -> Result<TilesReaderParameters> {
 	ensure!(yaml.is_hash(), "'parameters' must be an object");
 	let tile_compression = TileCompression::parse_str(yaml.hash_get_str("compression")?)?;
@@ -178,7 +178,7 @@ fn parse_parameters(
 }
 
 #[async_trait]
-impl TilesReader for VirtualTilesReader {
+impl TilesReader for TileComposerReader {
 	/// Get the name of the reader source, e.g., the filename.
 	fn get_name(&self) -> &str {
 		&self.name
@@ -186,7 +186,7 @@ impl TilesReader for VirtualTilesReader {
 
 	/// Get the container name, e.g., versatiles, mbtiles, etc.
 	fn get_container_name(&self) -> &str {
-		"virtual"
+		"composer"
 	}
 
 	/// Get the reader parameters.
@@ -196,7 +196,7 @@ impl TilesReader for VirtualTilesReader {
 
 	/// Override the tile compression.
 	fn override_compression(&mut self, _tile_compression: TileCompression) {
-		panic!("you can't override the compression of virtual tile sources")
+		panic!("you can't override the compression of tile composer sources")
 	}
 
 	/// Get the metadata, always uncompressed.
@@ -241,9 +241,9 @@ impl TilesReader for VirtualTilesReader {
 	}
 }
 
-impl std::fmt::Debug for VirtualTilesReader {
+impl std::fmt::Debug for TileComposerReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("VirtualTilesReader")
+		f.debug_struct("TileComposerReader")
 			.field("name", &self.name)
 			.field("reader parameters", &self.tiles_reader_parameters)
 			.field("output definitions", &self.output_definitions)
@@ -277,7 +277,7 @@ output:
     operations:
     - set_values
 ";
-		let mut reader = VirtualTilesReader::open_str(yaml).await?;
+		let mut reader = TileComposerReader::open_str(yaml).await?;
 		MockTilesWriter::write(&mut reader).await?;
 
 		Ok(())

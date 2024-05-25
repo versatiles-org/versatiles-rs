@@ -9,7 +9,7 @@
 //! | `*.pmtiles`    | ✅   | ✅     | `full`    |
 //! | `*.tar`        | ✅   | ✅     | `full`    |
 //! | directory      | ✅   | ✅     | `default` |
-//! | virtual        | ✅   | ❌     | `full`    |
+//! | composer       | ✅   | ❌     | `full`    |
 //!
 //! This module provides a unified interface for reading and writing various tile container formats.
 //! Depending on the enabled features, it supports different formats with corresponding read and write capabilities.
@@ -62,6 +62,6 @@ mod writer;
 pub use writer::*;
 
 #[cfg(feature = "full")]
-mod r#virtual;
+mod composer;
 #[cfg(feature = "full")]
-pub use r#virtual::*;
+pub use composer::*;

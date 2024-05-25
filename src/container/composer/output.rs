@@ -1,5 +1,5 @@
 use super::{
-	operations::VirtualTileOperation,
+	operations::TileComposerOperation,
 	reader::{VOperation, VReader},
 };
 use crate::{
@@ -13,19 +13,19 @@ use std::{collections::HashMap, fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 
 #[derive(Clone)]
-pub struct VirtualTilesOutput {
+pub struct TileComposerOutput {
 	pub input: Arc<Mutex<Box<dyn TilesReader>>>,
 	pub input_compression: TileCompression,
 	pub input_name: String,
-	pub operations: Vec<Arc<Box<dyn VirtualTileOperation>>>,
+	pub operations: Vec<Arc<Box<dyn TileComposerOperation>>>,
 	pub bbox_pyramid: TileBBoxPyramid,
 }
 
-impl VirtualTilesOutput {
+impl TileComposerOutput {
 	pub async fn new(
 		def: &YamlWrapper, input_lookup: &HashMap<String, VReader>,
 		operation_lookup: &HashMap<String, VOperation>,
-	) -> Result<VirtualTilesOutput> {
+	) -> Result<TileComposerOutput> {
 		let input = def.hash_get_str("input")?;
 		let input = input_lookup
 			.get(input)
@@ -50,7 +50,7 @@ impl VirtualTilesOutput {
 			})
 			.collect::<Result<Vec<VOperation>>>()?;
 
-		Ok(VirtualTilesOutput {
+		Ok(TileComposerOutput {
 			input,
 			input_compression,
 			input_name,
@@ -121,9 +121,9 @@ impl VirtualTilesOutput {
 	}
 }
 
-impl Debug for VirtualTilesOutput {
+impl Debug for TileComposerOutput {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("VirtualTilesOutput")
+		f.debug_struct("TileComposerOutput")
 			.field("input", &self.input_name)
 			.field("input_compression", &self.input_compression)
 			.field("operations", &self.operations)
