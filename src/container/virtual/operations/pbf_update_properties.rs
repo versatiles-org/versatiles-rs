@@ -204,7 +204,7 @@ mod tests {
 		test(
 			("tile_id", "city_id", &[]),
 			 "PBFReplacePropertiesOperation { properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			 "Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": Int(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: Some({}) }]])"
+			 "Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": Int(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
 		)
 	}
 
@@ -224,12 +224,12 @@ mod tests {
 		test(
 			("tile_id", "city_id", &[("replace_properties", false)]), 
 			"PBFReplacePropertiesOperation { properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": Int(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: Some({}) }]])"
+			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": Int(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
 		)?;
 		test(
 			("tile_id", "city_id", &[("replace_properties", true)]), 
 			"PBFReplacePropertiesOperation { properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…}) }, Feature { id: None, …geometry… properties: Some({}) }]])"
+			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…}) }, Feature { id: None, …geometry… properties: None }]])"
 		)
 	}
 
@@ -238,7 +238,7 @@ mod tests {
 		test(
 			("tile_id", "city_id", &[("remove_empty_properties", false)]), 
 			"PBFReplacePropertiesOperation { properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": Int(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: Some({}) }]])"
+			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": Int(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
 		)?;
 		test(
 			("tile_id", "city_id", &[("remove_empty_properties", true)]), 
@@ -252,12 +252,12 @@ mod tests {
 		test(
 			("tile_id", "city_id", &[("also_save_id", false)]), 
 			"PBFReplacePropertiesOperation { properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": Int(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: Some({}) }]])"
+			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": Int(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
 		)?;
 		test(
 			("tile_id", "city_id", &[("also_save_id", true)]), 
 			"PBFReplacePropertiesOperation { properties_map: {\"1\": {\"city_id\": UInt(1), …Berlin…}, \"2\": {\"city_id\": UInt(2), …Kyiv…}, \"3\": {\"city_id\": UInt(3), …Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			"Some([[Feature { id: None, …geometry… properties: Some({\"city_id\": UInt(1), …Berlin…, \"tile_id\": Int(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: Some({}) }]])"
+			"Some([[Feature { id: None, …geometry… properties: Some({\"city_id\": UInt(1), …Berlin…, \"tile_id\": Int(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
 		)
 	}
 }

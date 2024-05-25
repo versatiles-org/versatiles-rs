@@ -35,6 +35,12 @@ impl From<&str> for GeoValue {
 	}
 }
 
+impl From<String> for GeoValue {
+	fn from(value: String) -> Self {
+		GeoValue::String(value)
+	}
+}
+
 impl From<i32> for GeoValue {
 	fn from(value: i32) -> Self {
 		GeoValue::Int(value as i64)

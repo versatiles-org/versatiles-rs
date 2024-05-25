@@ -251,7 +251,7 @@ mod tests {
 		let yaml = r"
 inputs:
   tiles:
-    filename: testdata/berlin.versatiles
+    filename: testdata/berlin.pmtiles
 operations:	
   set_values:
     action: pbf_replace_properties

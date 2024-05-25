@@ -4,8 +4,7 @@ use super::{geometry_type::GeomType, layer::VectorTileLayer};
 use crate::{
 	types::{Blob, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 	utils::geometry::basic::{
-		AreaTrait, Feature, GeoProperties, Geometry, LineStringGeometry, MultiPointGeometry, PointGeometry,
-		PolygonGeometry,
+		AreaTrait, Feature, Geometry, LineStringGeometry, MultiPointGeometry, PointGeometry, PolygonGeometry,
 	},
 };
 use anyhow::{bail, ensure, Context, Result};
@@ -59,12 +58,14 @@ impl VectorTileFeature {
 			writer.write_varint(id).context("Failed to write feature ID")?;
 		}
 
-		writer
-			.write_pbf_key(2, 2)
-			.context("Failed to write PBF key for tag IDs")?;
-		writer
-			.write_pbf_packed_uint32(&self.tag_ids)
-			.context("Failed to write tag IDs")?;
+		if !self.tag_ids.is_empty() {
+			writer
+				.write_pbf_key(2, 2)
+				.context("Failed to write PBF key for tag IDs")?;
+			writer
+				.write_pbf_packed_uint32(&self.tag_ids)
+				.context("Failed to write tag IDs")?;
+		}
 
 		writer
 			.write_pbf_key(3, 0)
@@ -73,20 +74,16 @@ impl VectorTileFeature {
 			.write_varint(self.geom_type.as_u64())
 			.context("Failed to write geometry type")?;
 
-		writer
-			.write_pbf_key(4, 2)
-			.context("Failed to write PBF key for geometry data")?;
-		writer
-			.write_pbf_blob(&self.geom_data)
-			.context("Failed to write geometry data")?;
+		if !self.geom_data.is_empty() {
+			writer
+				.write_pbf_key(4, 2)
+				.context("Failed to write PBF key for geometry data")?;
+			writer
+				.write_pbf_blob(&self.geom_data)
+				.context("Failed to write geometry data")?;
+		}
 
 		Ok(writer.into_blob())
-	}
-
-	pub fn to_properties(&self, layer: &VectorTileLayer) -> Result<GeoProperties> {
-		layer
-			.translate_tag_ids(&self.tag_ids)
-			.context("Failed to translate tag IDs to attributes")
 	}
 
 	pub fn to_geometry(&self) -> Result<Geometry> {
@@ -219,7 +216,9 @@ impl VectorTileFeature {
 			feature.set_id(id);
 		}
 
-		feature.set_properties(self.to_properties(layer).context("Failed to convert to attributes")?);
+		feature.properties = layer
+			.decode_tag_ids(&self.tag_ids)
+			.context("Failed to convert to attributes")?;
 
 		Ok(feature)
 	}

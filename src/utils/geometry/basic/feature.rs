@@ -34,12 +34,9 @@ impl Feature {
 			id: Some(13),
 			geometry: Geometry::new_example(),
 			properties: Some(GeoProperties::from(vec![
-				("name", GeoValue::from("Berlin")),
-				("population", GeoValue::from(3755251)),
-				(
-					"it_would_actually_be_quite_a_nice_place_if_so_many_hipsters_hadn_t_moved_there",
-					GeoValue::from(true),
-				),
+				("name", GeoValue::from("Nice")),
+				("population", GeoValue::from(348085)),
+				("is_nice", GeoValue::from(true)),
 			])),
 		}
 	}
