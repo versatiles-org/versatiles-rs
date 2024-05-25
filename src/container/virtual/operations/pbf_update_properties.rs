@@ -3,10 +3,7 @@ use crate::{
 	container::r#virtual::utils::read_csv_file,
 	types::Blob,
 	utils::{
-		geometry::{
-			vector_tile::{VectorTile, VectorTileLayer},
-			GeoProperties,
-		},
+		geometry::{vector_tile::VectorTile, GeoProperties},
 		YamlWrapper,
 	},
 };
@@ -72,43 +69,27 @@ impl VirtualTileOperation for PBFReplacePropertiesOperation {
 	fn run(&self, blob: &Blob) -> Result<Option<Blob>> {
 		let mut tile = VectorTile::from_blob(blob).context("Failed to create VectorTile from Blob")?;
 
-		let mut new_layers = Vec::new();
 		for layer in tile.layers.iter_mut() {
-			let mut features = layer
-				.to_features()
-				.context("Failed to convert VectorTileLayer to features")?;
-
-			for feature in features.iter_mut() {
-				if let Some(prop) = &feature.properties {
+			layer.map_properties(|properties| {
+				if let Some(mut prop) = properties {
 					if let Some(id) = prop.get(&self.id_field_tiles) {
 						if let Some(new_prop) = self.properties_map.get(&id.to_string()) {
 							if self.replace_properties {
-								feature.properties = Some(new_prop.clone());
+								prop = new_prop.clone();
 							} else {
-								feature.properties.as_mut().unwrap().update(new_prop.clone());
+								prop.update(new_prop.clone());
 							}
-						} else {
-							feature.properties = None;
+							return Some(prop);
 						}
-					} else {
-						feature.properties = None;
 					}
 				}
-			}
+				None
+			})?;
 
 			if self.remove_empty_properties {
-				features.retain(|feature| feature.properties.is_some());
-			}
-
-			if !self.remove_empty_properties || !features.is_empty() {
-				new_layers.push(
-					VectorTileLayer::from_features(layer.name.clone(), features, layer.extent, layer.version)
-						.context("Failed to create VectorTileLayer from features")?,
-				);
+				layer.retain_features(|feature| !feature.tag_ids.is_empty());
 			}
 		}
-
-		tile.layers = new_layers;
 
 		Ok(Some(tile.to_blob().context("Failed to convert VectorTile to Blob")?))
 	}
@@ -127,7 +108,7 @@ impl Debug for PBFReplacePropertiesOperation {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::utils::geometry::{Feature, GeoValue, Geometry};
+	use crate::utils::geometry::{vector_tile::VectorTileLayer, Feature, GeoValue, Geometry};
 	use std::str::FromStr;
 
 	fn test(parameters: (&str, &str, &[(&str, bool)]), debug_operation: &str, debug_result: &str) -> Result<()> {

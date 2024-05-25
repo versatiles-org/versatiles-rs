@@ -177,6 +177,13 @@ impl VectorTileLayer {
 		Ok(())
 	}
 
+	pub fn retain_features<F>(&mut self, filter_fn: F)
+	where
+		F: Fn(&VectorTileFeature) -> bool,
+	{
+		self.features.retain(filter_fn);
+	}
+
 	pub fn encode_tag_ids(&self, properties: &Option<GeoProperties>) -> Result<Vec<u32>> {
 		self.property_manager.encode_tag_ids(properties)
 	}
