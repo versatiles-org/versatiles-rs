@@ -28,46 +28,47 @@ impl TileComposerReader {
 		let yaml = std::fs::read_to_string(path)?;
 		Self::from_str(&yaml, path.to_str().unwrap())
 			.await
-			.with_context(|| format!("while parsing {path:?} as YAML"))
+			.with_context(|| format!("Failed parsing {path:?} as YAML"))
 	}
 
 	pub async fn open_reader(mut reader: DataReader) -> Result<TileComposerReader> {
 		let yaml = reader.read_all().await?.into_string();
 		Self::from_str(&yaml, reader.get_name())
 			.await
-			.with_context(|| format!("while parsing {} as YAML", reader.get_name()))
+			.with_context(|| format!("Failed parsing {} as YAML", reader.get_name()))
 	}
 
 	#[cfg(test)]
 	pub async fn open_str(yaml: &str) -> Result<TileComposerReader> {
 		Self::from_str(yaml, "String")
 			.await
-			.with_context(|| "while parsing a String as YAML".to_string())
+			.with_context(|| format!("Failed parsing '{yaml}' as YAML"))
 	}
 
 	async fn from_str(yaml: &str, name: &str) -> Result<TileComposerReader> {
-		let yaml = YamlWrapper::from_str(yaml).context("parsing the YAML")?;
+		let yaml =
+			YamlWrapper::from_str(yaml).with_context(|| format!("Failed parsing '{yaml}' as YAML"))?;
 
 		ensure!(yaml.is_hash(), "YAML must be an object");
 
 		let inputs = parse_inputs(&yaml.hash_get_value("inputs")?)
 			.await
-			.context("while parsing 'inputs'")?;
+			.context("Failed parsing 'inputs'")?;
 
 		let operations = if yaml.hash_has_key("operations") {
 			parse_operations(&yaml.hash_get_value("operations")?)
-				.context("while parsing 'operations'")?
+				.context("Failed parsing 'operations'")?
 		} else {
 			HashMap::new()
 		};
 
 		let output_definitions = parse_output(&yaml.hash_get_value("output")?, &inputs, &operations)
 			.await
-			.context("while parsing 'output'")?;
+			.context("Failed parsing 'output'")?;
 
 		let tiles_reader_parameters =
 			parse_parameters(&yaml.hash_get_value("parameters")?, &output_definitions)
-				.context("while parsing 'parameters'")?;
+				.context("Failed parsing 'parameters'")?;
 
 		Ok(TileComposerReader {
 			name: name.to_string(),
@@ -131,7 +132,7 @@ fn parse_operations(yaml: &YamlWrapper) -> Result<HashMap<String, VOperation>> {
 			name.to_string(),
 			Arc::new(
 				new_tile_composer_operation(entry)
-					.with_context(|| format!("while parsing operation no {}", index + 1))?,
+					.with_context(|| format!("Failed parsing operation no {}", index + 1))?,
 			),
 		);
 	}
@@ -151,7 +152,7 @@ async fn parse_output(
 		output.push(
 			TileComposerOutput::new(entry, input_lookup, operation_lookup)
 				.await
-				.with_context(|| format!("while parsing output no {}", index + 1))?,
+				.with_context(|| format!("Failed parsing output no {}", index + 1))?,
 		);
 	}
 

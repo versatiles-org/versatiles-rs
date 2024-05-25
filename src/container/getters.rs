@@ -58,7 +58,7 @@ pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReader>> {
 
 	if path.is_dir() {
 		return Ok(DirectoryTilesReader::open_path(&path)
-			.with_context(|| format!("opening {path:?} as directory"))?
+			.with_context(|| format!("Failed opening {path:?} as directory"))?
 			.boxed());
 	}
 
@@ -92,7 +92,7 @@ pub async fn get_simple_reader(filename: &str) -> Result<Box<dyn TilesReader>> {
 
 	if path.is_dir() {
 		return Ok(DirectoryTilesReader::open_path(&path)
-			.with_context(|| format!("opening {path:?} as directory"))?
+			.with_context(|| format!("Failed opening {path:?} as directory"))?
 			.boxed());
 	}
 

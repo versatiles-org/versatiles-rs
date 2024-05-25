@@ -1,5 +1,5 @@
 use anyhow::{anyhow, ensure, Context, Result};
-use std::str::FromStr;
+use std::{fmt::Debug, str::FromStr};
 use yaml_rust2::{Yaml, YamlLoader};
 
 pub struct YamlWrapper {
@@ -98,5 +98,13 @@ impl FromStr for YamlWrapper {
 		ensure!(!yaml.is_empty(), "YAML is empty");
 		ensure!(yaml.len() == 1, "YAML contains multiple documents");
 		YamlWrapper::new(yaml.first().unwrap())
+	}
+}
+
+impl Debug for YamlWrapper {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("YamlWrapper")
+			.field("yaml", &self.yaml.as_str())
+			.finish()
 	}
 }

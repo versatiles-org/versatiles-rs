@@ -97,7 +97,7 @@ impl VersaTilesReader {
 	pub async fn open_reader(mut reader: DataReader) -> Result<VersaTilesReader> {
 		let header = FileHeader::from_reader(&mut reader)
 			.await
-			.context("reading the header")?;
+			.context("Failed reading the header")?;
 
 		let meta = if header.meta_range.length > 0 {
 			Some(
@@ -106,9 +106,9 @@ impl VersaTilesReader {
 						reader
 							.read_range(&header.meta_range)
 							.await
-							.context("reading the meta data")?,
+							.context("Failed reading the meta data")?,
 					)
-					.context("decompressing the meta data")?,
+					.context("Failed decompressing the meta data")?,
 			)
 		} else {
 			None
@@ -118,9 +118,9 @@ impl VersaTilesReader {
 			reader
 				.read_range(&header.blocks_range)
 				.await
-				.context("reading the block index")?,
+				.context("Failed reading the block index")?,
 		)
-		.context("decompressing the block index")?;
+		.context("Failed decompressing the block index")?;
 
 		let bbox_pyramid = block_index.get_bbox_pyramid();
 		let parameters =

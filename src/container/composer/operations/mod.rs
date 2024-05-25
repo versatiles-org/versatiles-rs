@@ -12,14 +12,12 @@ pub trait TileComposerOperation: Debug + Send + Sync {
 }
 
 pub fn new_tile_composer_operation(def: &YamlWrapper) -> Result<Box<dyn TileComposerOperation>> {
-	let action = def
-		.hash_get_str("action")
-		.context("while parsing an action")?;
+	let action = def.hash_get_str("action").context("while parsing action")?;
 
 	match action {
 		"pbf_replace_properties" => Ok(Box::new(
 			pbf_update_properties::PBFReplacePropertiesOperation::new(def)
-				.with_context(|| format!("while parsing action '{action}'"))?,
+				.with_context(|| format!("Failed parsing action '{action}'"))?,
 		)),
 		_ => bail!("operation '{action}' is unknown"),
 	}

@@ -32,7 +32,7 @@ pub fn parse_csv(reader: &mut dyn Read) -> Result<Vec<GeoProperties>> {
 				GeoValue::parse_str(
 					record
 						.get(*col_index)
-						.with_context(|| format!("Failed to get value for column: {}", name))?,
+						.with_context(|| format!("Failed to get value for column: {name}"))?,
 				),
 			);
 		}

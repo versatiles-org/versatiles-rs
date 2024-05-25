@@ -29,7 +29,7 @@ impl TileComposerOutput {
 		let input = def.hash_get_str("input")?;
 		let input = input_lookup
 			.get(input)
-			.with_context(|| "while trying to lookup the input name".to_string())?
+			.with_context(|| format!("Failed to lookup the input name '{input}'"))?
 			.clone();
 
 		let input_name = input.lock().await.get_name().to_string();
@@ -45,7 +45,7 @@ impl TileComposerOutput {
 			.map(|o| -> Result<VOperation> {
 				Ok(operation_lookup
 					.get(o.as_str()?)
-					.with_context(|| "while trying to lookup the operation name".to_string())?
+					.with_context(|| format!("Failed to lookup the operation name '{o:?}'"))?
 					.clone())
 			})
 			.collect::<Result<Vec<VOperation>>>()?;
