@@ -88,5 +88,5 @@ terminal_size = { version = "0.3.0", default-features = false }
 tokio = { version = "1.37.0", default-features = false }	
 versatiles_derive = { path = "versatiles_derive" }
 webp = { version = "0.3.0", default-features = false }
-wildmatch = { version = "2.3.3", default-features = false }
+wildmatch = { version = "2.3.4", default-features = false }
 yaml-rust2 = { version = "0.8.0", default-features = false }
