@@ -14,6 +14,8 @@ use std::{
 	path::Path,
 };
 
+/// The `PBFReplacePropertiesOperation` struct represents an operation that replaces properties in PBF tiles
+/// based on a mapping provided in a CSV file.
 pub struct PBFReplacePropertiesOperation {
 	pub properties_map: HashMap<String, GeoProperties>,
 	pub id_field_tiles: String,
@@ -22,6 +24,15 @@ pub struct PBFReplacePropertiesOperation {
 }
 
 impl TileComposerOperation for PBFReplacePropertiesOperation {
+	/// Creates a new `PBFReplacePropertiesOperation` from the provided YAML configuration.
+	///
+	/// # Arguments
+	///
+	/// * `yaml` - A reference to a `YamlWrapper` containing the configuration.
+	///
+	/// # Returns
+	///
+	/// * `Result<PBFReplacePropertiesOperation>` - The constructed operation or an error if the configuration is invalid.
 	fn new(yaml: &YamlWrapper) -> Result<PBFReplacePropertiesOperation>
 	where
 		Self: Sized,
@@ -71,6 +82,15 @@ impl TileComposerOperation for PBFReplacePropertiesOperation {
 		})
 	}
 
+	/// Runs the operation on the provided blob, replacing properties in the PBF tile.
+	///
+	/// # Arguments
+	///
+	/// * `blob` - A reference to the `Blob` to be processed.
+	///
+	/// # Returns
+	///
+	/// * `Result<Option<Blob>>` - The processed blob or an error if processing failed.
 	fn run(&self, blob: &Blob) -> Result<Option<Blob>> {
 		let mut tile =
 			VectorTile::from_blob(blob).context("Failed to create VectorTile from Blob")?;
@@ -200,7 +220,7 @@ mod tests {
 		test(
 			("tile_id", "city_id", &[]),
 			 "PBFReplacePropertiesOperation { properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			 "Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": Int(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
+			 "Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
 		)
 	}
 
@@ -220,7 +240,7 @@ mod tests {
 		test(
 			("tile_id", "city_id", &[("replace_properties", false)]), 
 			"PBFReplacePropertiesOperation { properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": Int(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
+			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
 		)?;
 		test(
 			("tile_id", "city_id", &[("replace_properties", true)]), 
@@ -234,12 +254,12 @@ mod tests {
 		test(
 			("tile_id", "city_id", &[("remove_empty_properties", false)]), 
 			"PBFReplacePropertiesOperation { properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": Int(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
+			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
 		)?;
 		test(
 			("tile_id", "city_id", &[("remove_empty_properties", true)]), 
 			"PBFReplacePropertiesOperation { properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: true }",
-			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": Int(1), \"tile_name\": String(\"Bärlin\")}) }]])"
+			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }]])"
 		)
 	}
 
@@ -248,12 +268,12 @@ mod tests {
 		test(
 			("tile_id", "city_id", &[("also_save_id", false)]), 
 			"PBFReplacePropertiesOperation { properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": Int(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
+			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
 		)?;
 		test(
 			("tile_id", "city_id", &[("also_save_id", true)]), 
 			"PBFReplacePropertiesOperation { properties_map: {\"1\": {\"city_id\": UInt(1), …Berlin…}, \"2\": {\"city_id\": UInt(2), …Kyiv…}, \"3\": {\"city_id\": UInt(3), …Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			"Some([[Feature { id: None, …geometry… properties: Some({\"city_id\": UInt(1), …Berlin…, \"tile_id\": Int(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
+			"Some([[Feature { id: None, …geometry… properties: Some({\"city_id\": UInt(1), …Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
 		)
 	}
 }

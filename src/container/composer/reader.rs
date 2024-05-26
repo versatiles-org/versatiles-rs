@@ -7,7 +7,7 @@ use crate::{
 	types::{Blob, DataReader, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 	utils::{compress, YamlWrapper},
 };
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use async_trait::async_trait;
 use futures_util::StreamExt;
 use std::{collections::HashMap, path::Path, str::FromStr, sync::Arc};
@@ -16,6 +16,8 @@ use tokio::sync::Mutex;
 pub type VReader = Arc<Mutex<Box<dyn TilesReader>>>;
 pub type VOperation = Arc<Box<dyn TileComposerOperation>>;
 
+/// The `TileComposerReader` struct is responsible for managing the tile reading process,
+/// applying operations, and returning the composed tiles.
 #[derive(Clone)]
 pub struct TileComposerReader {
 	name: String,
@@ -24,51 +26,70 @@ pub struct TileComposerReader {
 }
 
 impl TileComposerReader {
+	/// Opens a TileComposerReader from a YAML file path.
+	///
+	/// # Arguments
+	///
+	/// * `path` - The path to the YAML file.
+	///
+	/// # Returns
+	///
+	/// * `Result<TileComposerReader>` - The constructed TileComposerReader or an error if the configuration is invalid.
 	pub async fn open_path(path: &Path) -> Result<TileComposerReader> {
-		let yaml = std::fs::read_to_string(path)?;
+		let yaml =
+			std::fs::read_to_string(path).with_context(|| anyhow!("Failed to open {path:?}"))?;
 		Self::from_str(&yaml, path.to_str().unwrap())
 			.await
-			.with_context(|| format!("Failed parsing {path:?} as YAML"))
+			.with_context(|| format!("failed parsing {path:?} as YAML"))
 	}
 
+	/// Opens a TileComposerReader from a DataReader.
+	///
+	/// # Arguments
+	///
+	/// * `reader` - The DataReader containing the YAML configuration.
+	///
+	/// # Returns
+	///
+	/// * `Result<TileComposerReader>` - The constructed TileComposerReader or an error if the configuration is invalid.
 	pub async fn open_reader(mut reader: DataReader) -> Result<TileComposerReader> {
 		let yaml = reader.read_all().await?.into_string();
 		Self::from_str(&yaml, reader.get_name())
 			.await
-			.with_context(|| format!("Failed parsing {} as YAML", reader.get_name()))
+			.with_context(|| format!("failed parsing {} as YAML", reader.get_name()))
 	}
 
 	#[cfg(test)]
 	pub async fn open_str(yaml: &str) -> Result<TileComposerReader> {
 		Self::from_str(yaml, "String")
 			.await
-			.with_context(|| format!("Failed parsing '{yaml}' as YAML"))
+			.with_context(|| format!("failed parsing '{yaml}' as YAML"))
 	}
 
 	async fn from_str(yaml: &str, name: &str) -> Result<TileComposerReader> {
 		let yaml =
-			YamlWrapper::from_str(yaml).with_context(|| format!("Failed parsing '{yaml}' as YAML"))?;
+			YamlWrapper::from_str(yaml).with_context(|| format!("failed parsing '{yaml}' as YAML"))?;
 
 		ensure!(yaml.is_hash(), "YAML must be an object");
 
 		let inputs = parse_inputs(&yaml.hash_get_value("inputs")?)
 			.await
-			.context("Failed parsing 'inputs'")?;
+			.context("failed parsing 'inputs'")?;
 
 		let operations = if yaml.hash_has_key("operations") {
 			parse_operations(&yaml.hash_get_value("operations")?)
-				.context("Failed parsing 'operations'")?
+				.context("failed parsing 'operations'")?
 		} else {
 			HashMap::new()
 		};
 
 		let output_definitions = parse_output(&yaml.hash_get_value("output")?, &inputs, &operations)
 			.await
-			.context("Failed parsing 'output'")?;
+			.context("failed parsing 'output'")?;
 
 		let tiles_reader_parameters =
 			parse_parameters(&yaml.hash_get_value("parameters")?, &output_definitions)
-				.context("Failed parsing 'parameters'")?;
+				.context("failed parsing 'parameters'")?;
 
 		Ok(TileComposerReader {
 			name: name.to_string(),
@@ -81,7 +102,7 @@ impl TileComposerReader {
 		let n = bbox.count_tiles();
 
 		if n > 2000 {
-			panic!("two much tiles at once")
+			panic!("too many tiles at once")
 		}
 
 		let output_compression = self.tiles_reader_parameters.tile_compression;
@@ -132,7 +153,7 @@ fn parse_operations(yaml: &YamlWrapper) -> Result<HashMap<String, VOperation>> {
 			name.to_string(),
 			Arc::new(
 				new_tile_composer_operation(entry)
-					.with_context(|| format!("Failed parsing operation no {}", index + 1))?,
+					.with_context(|| format!("failed parsing operation no {}", index + 1))?,
 			),
 		);
 	}
@@ -152,7 +173,7 @@ async fn parse_output(
 		output.push(
 			TileComposerOutput::new(entry, input_lookup, operation_lookup)
 				.await
-				.with_context(|| format!("Failed parsing output no {}", index + 1))?,
+				.with_context(|| format!("failed parsing output no {}", index + 1))?,
 		);
 	}
 
@@ -280,6 +301,81 @@ output:
 ";
 		let mut reader = TileComposerReader::open_str(yaml).await?;
 		MockTilesWriter::write(&mut reader).await?;
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_tile_composer_reader_open_path() -> Result<()> {
+		let path = Path::new("testdata/composer.yaml");
+		let result = TileComposerReader::open_path(path).await;
+		assert_eq!(
+			result.unwrap_err().to_string(),
+			"Failed to open \"testdata/composer.yaml\""
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_tile_composer_reader_get_tile_data() -> Result<()> {
+		let yaml = r"
+inputs:
+  tiles:
+    filename: testdata/berlin.pmtiles
+operations:
+  set_values:
+    action: pbf_replace_properties
+    data_source_path: testdata/cities.csv
+    id_field_tiles: id
+    id_field_values: city_id
+parameters:
+  compression: none
+  format: pbf
+output:
+  - input: tiles
+    operations:
+    - set_values
+";
+		let mut reader = TileComposerReader::open_str(yaml).await?;
+
+		let result = reader.get_tile_data(&TileCoord3::new(0, 0, 0)?).await;
+		assert_eq!(result?, None);
+
+		let result = reader
+			.get_tile_data(&TileCoord3::new(8800, 5377, 14)?)
+			.await;
+		assert!(result?.unwrap().len() > 100000);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_tile_composer_reader_get_bbox_tile_stream() -> Result<()> {
+		let yaml = r"
+inputs:
+  tiles:
+    filename: testdata/berlin.pmtiles
+operations:
+  set_values:
+    action: pbf_replace_properties
+    data_source_path: testdata/cities.csv
+    id_field_tiles: id
+    id_field_values: city_id
+parameters:
+  compression: none
+  format: pbf
+output:
+  - input: tiles
+    operations:
+    - set_values
+";
+		let mut reader = TileComposerReader::open_str(yaml).await?;
+		let bbox = TileBBox::new(1, 0, 0, 1, 1)?;
+		let result_stream = reader.get_bbox_tile_stream(bbox).await;
+		let result: Vec<(TileCoord3, Blob)> = result_stream.collect().await;
+
+		assert!(!result.is_empty());
 
 		Ok(())
 	}

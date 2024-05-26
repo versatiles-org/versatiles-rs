@@ -329,7 +329,7 @@ mod tests {
 		assert_eq!(features.len(), 1);
 		assert_eq!(
 			format!("{:?}", features[0].properties.as_ref().unwrap()),
-			"{\"is_nice\": Bool(true), \"name\": String(\"Nice\"), \"population\": Int(348085)}"
+			"{\"is_nice\": Bool(true), \"name\": String(\"Nice\"), \"population\": UInt(348085)}"
 		);
 		Ok(())
 	}

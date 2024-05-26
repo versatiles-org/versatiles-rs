@@ -43,7 +43,11 @@ impl From<String> for GeoValue {
 
 impl From<i32> for GeoValue {
 	fn from(value: i32) -> Self {
-		GeoValue::Int(value as i64)
+		if value < 0 {
+			GeoValue::Int(value as i64)
+		} else {
+			GeoValue::UInt(value as u64)
+		}
 	}
 }
 
@@ -191,7 +195,6 @@ mod tests {
 		assert!(GeoValue::from("a") < GeoValue::from(1.0f32));
 		assert!(GeoValue::from(1.0f32) < GeoValue::from(1.0f64));
 		assert!(GeoValue::from(1.0f64) < GeoValue::from(1));
-		assert!(GeoValue::from(1) < GeoValue::from(1u64));
 		assert!(GeoValue::from(1u64) < GeoValue::from(false));
 	}
 
@@ -234,10 +237,6 @@ mod tests {
 		);
 		assert_eq!(
 			GeoValue::from(1.0f64).partial_cmp(&GeoValue::from(1)),
-			Some(Ordering::Less)
-		);
-		assert_eq!(
-			GeoValue::from(1).partial_cmp(&GeoValue::from(1u64)),
 			Some(Ordering::Less)
 		);
 		assert_eq!(
