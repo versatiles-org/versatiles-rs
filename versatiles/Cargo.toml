@@ -1,0 +1,89 @@
+[package]
+name = "versatiles"
+authors.workspace = true
+categories.workspace = true
+description.workspace = true
+edition.workspace = true
+exclude.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[[bin]]
+name = "versatiles"
+path = "src/main.rs"
+required-features = ["cli"]
+
+[lib]
+name = "versatiles"
+path = "src/lib.rs"
+
+[dependencies]
+async-trait.workspace = true
+bytes.workspace = true
+csv.workspace = true
+enumset.workspace = true
+log.workspace = true
+num_cpus.workspace = true
+anyhow = { workspace = true, features = ["std", "backtrace"] }
+axum = { workspace = true, optional = true, features = ["http1", "http2", "tokio"] }
+brotli = { workspace = true, features = ["std"] }
+byteorder = { workspace = true, features = ["std"] }
+clap = { workspace = true, optional = true, features = ["wrap_help"] }
+clap-verbosity-flag = { workspace = true, optional = true }
+colored = { workspace = true, optional = true }
+env_logger = { workspace = true, optional = true }
+flate2 = { workspace = true, features = ["default"] }
+futures-util = { workspace = true, features = ["std"] }
+hyper = { workspace = true, optional = true, features = ["http2"] }
+image = { workspace = true, optional = true, features = ["jpeg", "png"] }
+itertools = { workspace = true, features = ["use_alloc"] }
+lazy_static = { workspace = true, optional = true }
+mime_guess = { workspace = true, optional = true }
+r2d2 = { workspace = true, optional = true }
+r2d2_sqlite = { workspace = true, optional = true, features = ["bundled"] }
+regex = { workspace = true, optional = true, features = ["unicode"] }
+reqwest = { workspace = true, optional = true, features = ["rustls-tls"] }
+tar = { workspace = true, optional = true }
+terminal_size = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
+versatiles_derive = { workspace = true, optional = true }
+webp = { workspace = true, optional = true, features = ["img"] }
+yaml-rust2 = { workspace = true, optional = true }
+
+[dev-dependencies]
+assert_fs.workspace = true
+lazy_static.workspace = true
+wildmatch.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
+
+[features]
+default = ["full", "cli"]
+cli = [
+	"dep:axum",
+	"dep:clap-verbosity-flag",
+	"dep:clap",
+	"dep:env_logger",
+	"dep:hyper",
+	"dep:mime_guess",
+	"dep:tar",
+	"full",
+]
+full = [
+	"dep:colored",
+	"dep:hyper",
+	"dep:image",
+	"dep:lazy_static",
+	"dep:r2d2_sqlite",
+	"dep:r2d2",
+	"dep:tar",
+	"dep:terminal_size",
+	"dep:webp",
+	"dep:versatiles_derive",
+	"dep:yaml-rust2",
+	"http",
+]
+http = ["dep:lazy_static", "dep:regex", "dep:reqwest"]

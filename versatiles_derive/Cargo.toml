@@ -1,0 +1,21 @@
+[package]
+name = "versatiles_derive"
+authors.workspace = true
+categories.workspace = true
+description.workspace = true
+exclude.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[lib]
+proc-macro = true
+
+[dependencies]
+anyhow = "1.0.86"
+proc-macro2 = { workspace = true, default-features = false, features = ["proc-macro"] }
+quote = { workspace = true, default-features = false, features = ["proc-macro"] }
+syn = { workspace = true, default-features = false, features = [] }

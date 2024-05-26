@@ -1,4 +1,0 @@
-edition = "2021"
-hard_tabs = true
-newline_style = "Unix"
-tab_spaces = 3
