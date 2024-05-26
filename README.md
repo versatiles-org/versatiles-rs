@@ -6,10 +6,29 @@
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Matrix Chat](https://img.shields.io/matrix/versatiles:matrix.org?label=matrix)](https://matrix.to/#/#versatiles:matrix.org)
 
-# versatiles-rs
+# Versatiles
 
-This repo contains the source code for:
-- [**versatiles**](./versatiles/README.md): A CLI application containing a tiles server and a container converter.  
-You can read more about [installation](https://github.com/versatiles-org/versatiles-documentation/blob/main/guides/install_versatiles.md) and [usage](https://github.com/versatiles-org/versatiles-documentation#beginners-guide) of versatiles in the [documentation](https://github.com/versatiles-org/versatiles-documentation).
-- [**versatiles-lib**](./versatiles-lib/README.md): A Rust [crate library](https://crates.io/crates/versatiles-lib) for reading `*.versatiles` containers.
+Versatiles is a Rust-based project for processing and serving tile data.
 
+## Installation
+
+1. **Clone the Repository**:
+	```sh
+	git clone https://github.com/versatiles-org/versatiles-rs.git
+	cd versatiles-rs
+	```
+
+2. **Build the Project**:
+    ```sh
+    cargo build
+    ```
+
+## Usage
+
+## Contributing
+
+Contributions are welcome! Please open an issue or submit a pull request on GitHub.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

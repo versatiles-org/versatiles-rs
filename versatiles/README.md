@@ -27,29 +27,6 @@ Commands:
    serve    Serve tiles via http
 ```
 
-# supported file formats
-
-<table>
-   <thead>
-      <tr><th>Feature</th><th>.versatiles</th><th>.mbtiles</th><th>.tar</th></tr>
-   </thead>
-   <tbody>
-      <tr><th colspan="4" style="text-align:center">read container</th></tr>
-      <tr><td>from file</td><td>✅</td><td>✅</td><td>✅</td></tr>
-      <tr><td>from http</td><td>✅</td><td>🚫</td><td>🚫</td></tr>
-      <tr><td>from gcs</td><td>🚧</td><td>🚫</td><td>🚫</td></tr>
-      <tr><td>from S3</td><td>🚧</td><td>🚫</td><td>🚫</td></tr>
-      <tr><th colspan="4" style="text-align:center">write container</th></tr>
-      <tr><td>to file</td><td>✅</td><td>🚫</td><td>✅</td></tr>
-      <tr><th colspan="4" style="text-align:center">compression</th></tr>
-      <tr><td>uncompressed</td><td>✅</td><td>🚫</td><td>✅</td></tr>
-      <tr><td>gzip</td><td>✅</td><td>✅</td><td>✅</td></tr>
-      <tr><td>brotli</td><td>✅</td><td>🚫</td><td>✅</td></tr>
-   </tbody>
-</table>
-
-More about the VersaTiles container format: [github.com/versatiles-org/**versatiles-spec**](https://github.com/versatiles-org/versatiles-spec)
-
 # examples
 
 ```bash
