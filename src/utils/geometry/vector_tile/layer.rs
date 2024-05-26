@@ -218,7 +218,10 @@ impl VectorTileLayer {
 	}
 
 	pub fn from_features(
-		name: String, features: Vec<Feature>, extent: u32, version: u32,
+		name: String,
+		features: Vec<Feature>,
+		extent: u32,
+		version: u32,
 	) -> Result<VectorTileLayer> {
 		let property_manager =
 			PropertyManager::from_iter(features.iter().filter_map(|f| f.properties.as_ref()));

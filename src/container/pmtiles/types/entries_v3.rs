@@ -145,7 +145,9 @@ impl EntriesV3 {
 	/// # Errors
 	/// Returns an error if the entries cannot be serialized or compressed as specified.
 	pub fn as_directory(
-		&mut self, target_root_len: u64, compression: &TileCompression,
+		&mut self,
+		target_root_len: u64,
+		compression: &TileCompression,
 	) -> Result<Directory> {
 		self.entries.sort_by_cached_key(|e| e.tile_id);
 		let entries: &EntriesSliceV3 = &self.as_slice();
@@ -177,7 +179,9 @@ impl EntriesV3 {
 		}
 
 		fn build_roots_leaves(
-			entries: &EntriesSliceV3, leaf_size: usize, compression: &TileCompression,
+			entries: &EntriesSliceV3,
+			leaf_size: usize,
+			compression: &TileCompression,
 		) -> Result<Directory> {
 			let mut root_entries = EntriesV3::new();
 			let mut leaves_bytes: Vec<u8> = Vec::new();

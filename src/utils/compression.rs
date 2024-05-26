@@ -36,7 +36,9 @@ impl TargetCompression {
 }
 
 pub fn optimize_compression(
-	blob: Blob, input: &TileCompression, target: TargetCompression,
+	blob: Blob,
+	input: &TileCompression,
+	target: TargetCompression,
 ) -> Result<(Blob, TileCompression)> {
 	if target.compressions.is_empty() {
 		bail!("no compression allowed");

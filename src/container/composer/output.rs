@@ -36,7 +36,8 @@ impl TileComposerOutput {
 	///
 	/// * `Result<TileComposerOutput>` - The constructed `TileComposerOutput` or an error if the configuration is invalid.
 	pub async fn new(
-		def: &YamlWrapper, input_lookup: &HashMap<String, VReader>,
+		def: &YamlWrapper,
+		input_lookup: &HashMap<String, VReader>,
 		operation_lookup: &HashMap<String, VOperation>,
 	) -> Result<TileComposerOutput> {
 		let input = def.hash_get_str("input")?;
@@ -112,7 +113,9 @@ impl TileComposerOutput {
 	///
 	/// * `TilesStream` - A stream of processed tiles.
 	pub async fn get_bbox_tile_stream(
-		&mut self, bbox: TileBBox, output_compression: TileCompression,
+		&mut self,
+		bbox: TileBBox,
+		output_compression: TileCompression,
 	) -> TilesStream {
 		let entries: Vec<(TileCoord3, Blob)> = self
 			.input

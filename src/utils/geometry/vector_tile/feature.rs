@@ -261,10 +261,14 @@ impl VectorTileFeature {
 	}
 
 	pub fn from_geometry(
-		id: Option<u64>, tag_ids: Vec<u32>, geometry: &Geometry,
+		id: Option<u64>,
+		tag_ids: Vec<u32>,
+		geometry: &Geometry,
 	) -> Result<VectorTileFeature> {
 		fn write_point(
-			writer: &mut ValueWriterBlob<LE>, point0: &mut (i64, i64), point: &PointGeometry,
+			writer: &mut ValueWriterBlob<LE>,
+			point0: &mut (i64, i64),
+			point: &PointGeometry,
 		) -> Result<()> {
 			let x = point.x.round() as i64;
 			let y = point.y.round() as i64;

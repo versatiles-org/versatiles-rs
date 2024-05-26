@@ -264,7 +264,8 @@ mod tests {
 			return Ok(());
 
 			async fn test2(
-				tar_file: &mut TarFile, compression_tar: &TileCompression,
+				tar_file: &mut TarFile,
+				compression_tar: &TileCompression,
 				compression_accept: TileCompression,
 			) -> Result<()> {
 				let accept = TargetCompression::from(compression_accept);

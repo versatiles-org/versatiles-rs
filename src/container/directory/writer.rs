@@ -144,7 +144,8 @@ impl TilesWriter for DirectoryTilesWriter {
 	/// # Errors
 	/// This function always returns an error as it is not implemented.
 	async fn write_to_writer(
-		_reader: &mut dyn TilesReader, _writer: &mut dyn DataWriterTrait,
+		_reader: &mut dyn TilesReader,
+		_writer: &mut dyn DataWriterTrait,
 	) -> Result<()> {
 		bail!("not implemented")
 	}

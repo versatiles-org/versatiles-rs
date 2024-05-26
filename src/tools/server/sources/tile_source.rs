@@ -169,7 +169,10 @@ mod tests {
 	#[tokio::test]
 	async fn tile_container_get_data() -> Result<()> {
 		async fn check_response(
-			container: &mut TileSource, url: &str, compression: TileCompression, mime_type: &str,
+			container: &mut TileSource,
+			url: &str,
+			compression: TileCompression,
+			mime_type: &str,
 		) -> Result<Vec<u8>> {
 			let response = container
 				.get_data(&Url::new(url), &TargetCompression::from(compression))
@@ -183,7 +186,9 @@ mod tests {
 		}
 
 		async fn check_404(
-			container: &mut TileSource, url: &str, compression: TileCompression,
+			container: &mut TileSource,
+			url: &str,
+			compression: TileCompression,
 		) -> Result<bool> {
 			let response = container
 				.get_data(&Url::new(url), &TargetCompression::from(compression))

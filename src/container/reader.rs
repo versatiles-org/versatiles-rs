@@ -27,7 +27,9 @@ pub struct TilesReaderParameters {
 impl TilesReaderParameters {
 	/// Create a new `TilesReaderParameters`.
 	pub fn new(
-		tile_format: TileFormat, tile_compression: TileCompression, bbox_pyramid: TileBBoxPyramid,
+		tile_format: TileFormat,
+		tile_compression: TileCompression,
+		bbox_pyramid: TileBBoxPyramid,
 	) -> TilesReaderParameters {
 		TilesReaderParameters {
 			tile_format,

@@ -162,7 +162,8 @@ fn parse_operations(yaml: &YamlWrapper) -> Result<HashMap<String, VOperation>> {
 }
 
 async fn parse_output(
-	yaml: &YamlWrapper, input_lookup: &HashMap<String, VReader>,
+	yaml: &YamlWrapper,
+	input_lookup: &HashMap<String, VReader>,
 	operation_lookup: &HashMap<String, VOperation>,
 ) -> Result<Vec<TileComposerOutput>> {
 	ensure!(yaml.is_array(), "'output' must be an array");
@@ -181,7 +182,8 @@ async fn parse_output(
 }
 
 fn parse_parameters(
-	yaml: &YamlWrapper, outputs: &[TileComposerOutput],
+	yaml: &YamlWrapper,
+	outputs: &[TileComposerOutput],
 ) -> Result<TilesReaderParameters> {
 	ensure!(yaml.is_hash(), "'parameters' must be an object");
 	let tile_compression = TileCompression::parse_str(yaml.hash_get_str("compression")?)?;

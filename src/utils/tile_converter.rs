@@ -114,8 +114,11 @@ impl TileConverter {
 	/// with optional forced recompression
 	#[allow(unused_variables)]
 	pub fn new_tile_recompressor(
-		src_form: &TileFormat, src_comp: &TileCompression, dst_form: &TileFormat,
-		dst_comp: &TileCompression, force_recompress: bool,
+		src_form: &TileFormat,
+		src_comp: &TileCompression,
+		dst_form: &TileFormat,
+		dst_comp: &TileCompression,
+		force_recompress: bool,
 	) -> Result<TileConverter> {
 		let mut converter = TileConverter::new_empty();
 
@@ -279,8 +282,13 @@ mod tests {
 	#[test]
 	fn new_tile_recompressor() {
 		fn test(
-			src_form: &TileFormat, src_comp: &TileCompression, dst_form: &TileFormat,
-			dst_comp: &TileCompression, force_recompress: &bool, length: usize, description: &str,
+			src_form: &TileFormat,
+			src_comp: &TileCompression,
+			dst_form: &TileFormat,
+			dst_comp: &TileCompression,
+			force_recompress: &bool,
+			length: usize,
+			description: &str,
 		) -> Result<()> {
 			let data_converter = TileConverter::new_tile_recompressor(
 				src_form,

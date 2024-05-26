@@ -154,7 +154,10 @@ pub mod tests {
 
 	/// Create a test file with given parameters.
 	pub async fn make_test_file(
-		tile_format: TileFormat, compression: TileCompression, max_zoom_level: u8, extension: &str,
+		tile_format: TileFormat,
+		compression: TileCompression,
+		max_zoom_level: u8,
+		extension: &str,
 	) -> Result<NamedTempFile> {
 		// get dummy reader
 		let mut reader = MockTilesReader::new_mock(TilesReaderParameters::new(
@@ -187,7 +190,9 @@ pub mod tests {
 
 		#[tokio::main]
 		async fn test_writer_and_reader(
-			container: &Container, tile_format: TileFormat, compression: TileCompression,
+			container: &Container,
+			tile_format: TileFormat,
+			compression: TileCompression,
 		) -> Result<()> {
 			let _test_name = format!("{:?}, {:?}, {:?}", container, tile_format, compression);
 

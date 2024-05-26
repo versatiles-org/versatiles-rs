@@ -13,14 +13,23 @@ use std::{
 	fmt::Debug,
 	path::Path,
 };
+use versatiles_derive::YamlParser;
+
+#[derive(YamlParser)]
+struct Config {
+	data_source_path: String,
+	id_field_tiles: String,
+	id_field_values: String,
+	replace_properties: bool,
+	remove_empty_properties: bool,
+	also_save_id: bool,
+}
 
 /// The `PBFReplacePropertiesOperation` struct represents an operation that replaces properties in PBF tiles
 /// based on a mapping provided in a CSV file.
 pub struct PBFReplacePropertiesOperation {
 	pub properties_map: HashMap<String, GeoProperties>,
-	pub id_field_tiles: String,
-	pub remove_empty_properties: bool,
-	pub replace_properties: bool,
+	config: Config,
 }
 
 impl TileComposerOperation for PBFReplacePropertiesOperation {
@@ -37,37 +46,26 @@ impl TileComposerOperation for PBFReplacePropertiesOperation {
 	where
 		Self: Sized,
 	{
-		let data_source_path = yaml
-			.hash_get_string("data_source_path")
-			.context("Failed to get 'data_source_path' from YAML configuration")?;
-		let id_field_tiles = yaml
-			.hash_get_string("id_field_tiles")
-			.context("Failed to get 'id_field_tiles' from YAML configuration")?;
-		let id_field_values = yaml
-			.hash_get_string("id_field_values")
-			.context("Failed to get 'id_field_values' from YAML configuration")?;
-		let replace_properties = yaml.hash_get_bool("replace_properties").unwrap_or(false);
-		let remove_empty_properties = yaml
-			.hash_get_bool("remove_empty_properties")
-			.unwrap_or(false);
-		let also_save_id = yaml.hash_get_bool("also_save_id").unwrap_or(false);
+		let config = Config::from_yaml(yaml)?;
 
-		let data = read_csv_file(Path::new(&data_source_path))
-			.with_context(|| format!("Failed to read CSV file from '{data_source_path}'"))?;
+		let data = read_csv_file(Path::new(&config.data_source_path))
+			.with_context(|| format!("Failed to read CSV file from '{}'", config.data_source_path))?;
 
 		let properties_map = data
 			.into_iter()
 			.map(|mut properties| {
-				let key =
-					properties
-						.get(&id_field_values)
-						.ok_or_else(|| anyhow!("Key '{id_field_values}' not found in CSV data"))
-						.with_context(|| {
-							format!("Failed to find key '{id_field_values}' in the CSV data row: {properties:?}")
-						})?
-						.to_string();
-				if !also_save_id {
-					properties.remove(&id_field_values)
+				let key = properties
+					.get(&config.id_field_values)
+					.ok_or_else(|| anyhow!("Key '{}' not found in CSV data", config.id_field_values))
+					.with_context(|| {
+						format!(
+							"Failed to find key '{}' in the CSV data row: {properties:?}",
+							config.id_field_values
+						)
+					})?
+					.to_string();
+				if !config.also_save_id {
+					properties.remove(&config.id_field_values)
 				}
 				Ok((key, properties))
 			})
@@ -75,10 +73,8 @@ impl TileComposerOperation for PBFReplacePropertiesOperation {
 			.context("Failed to build properties map from CSV data")?;
 
 		Ok(PBFReplacePropertiesOperation {
-			id_field_tiles,
 			properties_map,
-			remove_empty_properties,
-			replace_properties,
+			config,
 		})
 	}
 
@@ -98,9 +94,9 @@ impl TileComposerOperation for PBFReplacePropertiesOperation {
 		for layer in tile.layers.iter_mut() {
 			layer.map_properties(|properties| {
 				if let Some(mut prop) = properties {
-					if let Some(id) = prop.get(&self.id_field_tiles) {
+					if let Some(id) = prop.get(&self.config.id_field_tiles) {
 						if let Some(new_prop) = self.properties_map.get(&id.to_string()) {
-							if self.replace_properties {
+							if self.config.replace_properties {
 								prop = new_prop.clone();
 							} else {
 								prop.update(new_prop.clone());
@@ -112,7 +108,7 @@ impl TileComposerOperation for PBFReplacePropertiesOperation {
 				None
 			})?;
 
-			if self.remove_empty_properties {
+			if self.config.remove_empty_properties {
 				layer.retain_features(|feature| !feature.tag_ids.is_empty());
 			}
 		}
@@ -132,8 +128,11 @@ impl Debug for PBFReplacePropertiesOperation {
 				"properties_map",
 				&BTreeMap::from_iter(self.properties_map.iter()),
 			)
-			.field("id_field_tiles", &self.id_field_tiles)
-			.field("remove_empty_properties", &self.remove_empty_properties)
+			.field("id_field_tiles", &self.config.id_field_tiles)
+			.field(
+				"remove_empty_properties",
+				&self.config.remove_empty_properties,
+			)
 			.finish()
 	}
 }
@@ -145,7 +144,9 @@ mod tests {
 	use std::str::FromStr;
 
 	fn test(
-		parameters: (&str, &str, &[(&str, bool)]), debug_operation: &str, debug_result: &str,
+		parameters: (&str, &str, &[(&str, bool)]),
+		debug_operation: &str,
+		debug_result: &str,
 	) -> Result<()> {
 		let mut yaml = vec![
 			"data_source_path: \"testdata/cities.csv\"".to_string(),

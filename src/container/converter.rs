@@ -58,8 +58,12 @@ pub struct TilesConverterParameters {
 impl TilesConverterParameters {
 	/// Create new converter parameters with specific settings.
 	pub fn new(
-		tile_format: Option<TileFormat>, tile_compression: Option<TileCompression>,
-		bbox_pyramid: Option<TileBBoxPyramid>, force_recompress: bool, flip_y: bool, swap_xy: bool,
+		tile_format: Option<TileFormat>,
+		tile_compression: Option<TileCompression>,
+		bbox_pyramid: Option<TileBBoxPyramid>,
+		force_recompress: bool,
+		flip_y: bool,
+		swap_xy: bool,
 	) -> TilesConverterParameters {
 		TilesConverterParameters {
 			tile_format,
@@ -86,7 +90,9 @@ impl TilesConverterParameters {
 
 /// Converts tiles from a given reader and writes them to a file.
 pub async fn convert_tiles_container(
-	reader: Box<dyn TilesReader>, cp: TilesConverterParameters, filename: &str,
+	reader: Box<dyn TilesReader>,
+	cp: TilesConverterParameters,
+	filename: &str,
 ) -> Result<()> {
 	let mut converter = TilesConvertReader::new_from_reader(reader, cp)?;
 	write_to_filename(&mut converter, filename).await
@@ -106,7 +112,8 @@ pub struct TilesConvertReader {
 impl TilesConvertReader {
 	/// Creates a new converter reader from an existing reader.
 	pub fn new_from_reader(
-		reader: Box<dyn TilesReader>, cp: TilesConverterParameters,
+		reader: Box<dyn TilesReader>,
+		cp: TilesConverterParameters,
 	) -> Result<TilesConvertReader> {
 		let container_name = format!("converter({})", reader.get_container_name());
 		let name = format!("converter({})", reader.get_name());
@@ -237,7 +244,9 @@ mod tests {
 	}
 
 	fn get_converter_parameters(
-		tf: TileFormat, tc: TileCompression, force_recompress: bool,
+		tf: TileFormat,
+		tc: TileCompression,
+		force_recompress: bool,
 	) -> TilesConverterParameters {
 		TilesConverterParameters {
 			tile_format: Some(tf),
@@ -329,7 +338,10 @@ mod tests {
 		test(true, true, [2, 3, 6, 4], "35 34 33 32 31 45 44 43 42 41").await?;
 
 		async fn test(
-			flip_y: bool, swap_xy: bool, bbox_out: [u32; 4], tile_list: &str,
+			flip_y: bool,
+			swap_xy: bool,
+			bbox_out: [u32; 4],
+			tile_list: &str,
 		) -> Result<()> {
 			let pyramid_in = new_bbox([0, 1, 4, 5]);
 			let pyramid_convert = new_bbox([2, 3, 7, 7]);

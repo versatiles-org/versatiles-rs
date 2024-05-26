@@ -135,7 +135,9 @@ impl PMTilesReader {
 
 /// Calculates the bounding box pyramid from the provided data.
 fn calc_bbox_pyramid(
-	root_bytes_uncompressed: &Blob, leaves_bytes: &Blob, compression: &TileCompression,
+	root_bytes_uncompressed: &Blob,
+	leaves_bytes: &Blob,
+	compression: &TileCompression,
 ) -> Result<TileBBoxPyramid> {
 	let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
@@ -147,7 +149,9 @@ fn calc_bbox_pyramid(
 	)?;
 
 	fn parse_directories(
-		bbox_pyramid: &mut TileBBoxPyramid, dir: &Blob, leaves_bytes: &Blob,
+		bbox_pyramid: &mut TileBBoxPyramid,
+		dir: &Blob,
+		leaves_bytes: &Blob,
 		compression: &TileCompression,
 	) -> Result<()> {
 		let entries = EntriesV3::from_blob(dir)?;

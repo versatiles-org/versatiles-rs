@@ -139,7 +139,8 @@ impl TileServer {
 			app = app.merge(tile_app);
 
 			async fn serve_tile(
-				uri: Uri, headers: HeaderMap,
+				uri: Uri,
+				headers: HeaderMap,
 				State((tile_source, best_compression)): State<(TileSource, bool)>,
 			) -> Response<Body> {
 				let path = Url::new(uri.path());
@@ -177,7 +178,8 @@ impl TileServer {
 		return app.merge(static_app);
 
 		async fn serve_static(
-			uri: Uri, headers: HeaderMap,
+			uri: Uri,
+			headers: HeaderMap,
 			State((sources, best_compression)): State<(Vec<StaticSource>, bool)>,
 		) -> Response<Body> {
 			let mut url = Url::new(uri.path());

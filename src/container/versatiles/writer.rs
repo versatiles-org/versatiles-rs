@@ -48,7 +48,8 @@ pub struct VersaTilesWriter {}
 impl TilesWriter for VersaTilesWriter {
 	/// Convert tiles from the TilesReader and write them to the writer.
 	async fn write_to_writer(
-		reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait,
+		reader: &mut dyn TilesReader,
+		writer: &mut dyn DataWriterTrait,
 	) -> Result<()> {
 		// Finalize the configuration
 		let parameters = reader.get_parameters();
@@ -91,7 +92,8 @@ impl TilesWriter for VersaTilesWriter {
 impl VersaTilesWriter {
 	/// Write metadata to the writer.
 	async fn write_meta(
-		reader: &dyn TilesReader, writer: &mut dyn DataWriterTrait,
+		reader: &dyn TilesReader,
+		writer: &mut dyn DataWriterTrait,
 	) -> Result<ByteRange> {
 		let meta: Blob = reader.get_meta()?.unwrap_or_default();
 		let compressed = compress(meta, &reader.get_parameters().tile_compression)?;
@@ -101,7 +103,8 @@ impl VersaTilesWriter {
 
 	/// Write blocks to the writer.
 	async fn write_blocks(
-		reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait,
+		reader: &mut dyn TilesReader,
+		writer: &mut dyn DataWriterTrait,
 	) -> Result<ByteRange> {
 		let pyramid = reader.get_parameters().bbox_pyramid.clone();
 
@@ -158,7 +161,9 @@ impl VersaTilesWriter {
 
 	/// Write a single block to the writer.
 	async fn write_block<'a>(
-		block: &BlockDefinition, reader: &'a mut dyn TilesReader, writer: &mut dyn DataWriterTrait,
+		block: &BlockDefinition,
+		reader: &'a mut dyn TilesReader,
+		writer: &mut dyn DataWriterTrait,
 		progress: &mut Box<dyn ProgressTrait>,
 	) -> Result<(ByteRange, ByteRange)> {
 		// Log the start of the block

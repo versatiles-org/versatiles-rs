@@ -161,7 +161,8 @@ impl TilesWriter for MBTilesWriter {
 
 	/// Not implemented: Writes tiles and metadata to a generic data writer.
 	async fn write_to_writer(
-		_reader: &mut dyn TilesReader, _writer: &mut dyn DataWriterTrait,
+		_reader: &mut dyn TilesReader,
+		_writer: &mut dyn DataWriterTrait,
 	) -> Result<()> {
 		bail!("not implemented")
 	}

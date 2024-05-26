@@ -8,7 +8,9 @@ pub struct SourceResponse {
 
 impl SourceResponse {
 	pub fn new_some(
-		blob: Blob, compression: &TileCompression, mime: &str,
+		blob: Blob,
+		compression: &TileCompression,
+		mime: &str,
 	) -> Option<SourceResponse> {
 		Some(SourceResponse {
 			blob,

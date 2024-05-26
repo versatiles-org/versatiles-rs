@@ -36,7 +36,10 @@ impl FileHeader {
 	/// # Errors
 	/// Returns an error if the zoom range or bounding box is invalid.
 	pub fn new(
-		tile_format: &TileFormat, compression: &TileCompression, zoom_range: [u8; 2], bbox: &[f64; 4],
+		tile_format: &TileFormat,
+		compression: &TileCompression,
+		zoom_range: [u8; 2],
+		bbox: &[f64; 4],
 	) -> Result<FileHeader> {
 		ensure!(
 			zoom_range[0] <= zoom_range[1],

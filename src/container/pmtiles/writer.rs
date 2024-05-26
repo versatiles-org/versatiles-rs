@@ -61,7 +61,8 @@ impl TilesWriter for PMTilesWriter {
 	/// # Errors
 	/// Returns an error if there are issues with writing data or internal processing.
 	async fn write_to_writer(
-		reader: &mut dyn TilesReader, writer: &mut dyn DataWriterTrait,
+		reader: &mut dyn TilesReader,
+		writer: &mut dyn DataWriterTrait,
 	) -> Result<()> {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
 
