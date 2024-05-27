@@ -6,13 +6,8 @@ pub use blob::*;
 mod byte_range;
 pub use byte_range::*;
 
-pub mod io;
-pub use io::*;
-
 mod limited_cache;
 pub use limited_cache::*;
-
-pub mod progress;
 
 mod tile_bbox;
 pub use tile_bbox::*;

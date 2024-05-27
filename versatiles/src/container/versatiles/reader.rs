@@ -48,10 +48,8 @@ use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 use crate::utils::pretty_print::PrettyPrint;
 use crate::{
 	container::{TilesReader, TilesReaderParameters, TilesStream},
-	types::{
-		Blob, ByteRange, DataReader, DataReaderFile, LimitedCache, TileBBox, TileCompression,
-		TileCoord2, TileCoord3,
-	},
+	io::{DataReader, DataReaderFile},
+	types::{Blob, ByteRange, LimitedCache, TileBBox, TileCompression, TileCoord2, TileCoord3},
 	utils::TileConverter,
 };
 use anyhow::{Context, Result};
@@ -437,7 +435,7 @@ impl TilesReader for VersaTilesReader {
 	// deep probe of container tiles
 	#[cfg(feature = "full")]
 	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
-		use crate::types::progress::get_progress_bar;
+		use crate::progress::get_progress_bar;
 
 		#[derive(Debug)]
 		#[allow(dead_code)]
@@ -523,7 +521,8 @@ mod tests {
 	use super::*;
 	use crate::{
 		container::{make_test_file, MockTilesReader, TilesWriter, VersaTilesWriter, MOCK_BYTES_PBF},
-		types::{DataWriterBlob, TileBBoxPyramid, TileFormat},
+		io::DataWriterBlob,
+		types::{TileBBoxPyramid, TileFormat},
 		utils::decompress_gzip,
 	};
 

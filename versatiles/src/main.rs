@@ -27,8 +27,9 @@
 // Import necessary modules and dependencies
 mod container;
 mod tools;
-mod types;
 mod utils;
+
+pub use versatiles_core::*;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};

@@ -29,10 +29,9 @@
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 use crate::{
 	container::{TilesReader, TilesStream, TilesWriter},
-	types::{
-		progress::{get_progress_bar, ProgressTrait},
-		Blob, ByteRange, DataWriterTrait,
-	},
+	io::DataWriterTrait,
+	progress::{get_progress_bar, ProgressTrait},
+	types::{Blob, ByteRange},
 	utils::compress,
 };
 use anyhow::Result;

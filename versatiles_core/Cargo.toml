@@ -1,0 +1,31 @@
+[package]
+name = "versatiles_core"
+authors.workspace = true
+categories.workspace = true
+description.workspace = true
+edition.workspace = true
+exclude.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+byteorder = { workspace = true, features = [] }
+bytes.workspace = true
+clap = { workspace = true, features = ["std", "derive"] }
+enumset.workspace = true
+itertools.workspace = true
+lazy_static.workspace = true
+log.workspace = true
+regex = { workspace = true, features = ["unicode-case", "unicode-perl"] }
+reqwest = { workspace = true, features = ["rustls-tls"] }
+wildmatch.workspace = true
+
+[dev-dependencies]
+assert_fs.workspace = true
+tokio.workspace = true

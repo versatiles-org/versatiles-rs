@@ -10,7 +10,7 @@
 //!
 //! ```rust
 //! // Importing all the necessary components
-//! use versatiles::types::io::*;
+//! use versatiles_core::io::*;
 //!
 //! fn main() {
 //!     // Now you can use all the imported modules and structs, such as `DataReaderBlob`, `DataWriterFile`, etc.
@@ -26,9 +26,7 @@ pub use data_reader_blob::*;
 mod data_reader_file;
 pub use data_reader_file::*;
 
-#[cfg(feature = "http")]
 mod data_reader_http;
-#[cfg(feature = "http")]
 pub use data_reader_http::*;
 
 mod data_writer_blob;

@@ -40,7 +40,9 @@
 
 use crate::{
 	container::{TilesReader, TilesWriter},
-	types::{progress::get_progress_bar, Blob, DataWriterTrait},
+	io::DataWriterTrait,
+	progress::get_progress_bar,
+	types::Blob,
 	utils::compress,
 };
 use anyhow::{bail, ensure, Result};

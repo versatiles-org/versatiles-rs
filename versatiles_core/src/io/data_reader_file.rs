@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::types::{Blob, ByteRange, DataReaderFile, DataReaderTrait};
+//! use versatiles_core::{io::{DataReaderFile, DataReaderTrait}, types::{Blob, ByteRange}};
 //! use anyhow::Result;
 //! use std::path::Path;
 //!
@@ -20,8 +20,8 @@
 //!     let mut reader = DataReaderFile::open(&path)?;
 //!
 //!     // Reading all data
-//!     let all_data = reader.read_range(&ByteRange::new(10,19)).await?;
-//!     assert_eq!(all_data.as_slice(), b"name = \"versatiles\"");
+//!     let all_data = reader.read_range(&ByteRange::new(10,24)).await?;
+//!     assert_eq!(all_data.as_slice(), b"name = \"versatiles_core\"");
 //!
 //!     Ok(())
 //! }

@@ -11,7 +11,7 @@
 //! # Examples
 //!
 //! ```
-//! use versatiles::types::TileCompression;
+//! use versatiles_core::types::TileCompression;
 //!
 //! // Getting file extensions for compression types
 //! assert_eq!(TileCompression::None.extension(), "");
@@ -25,14 +25,12 @@
 //! ```
 
 use anyhow::{bail, Result};
-#[cfg(feature = "cli")]
 use clap::ValueEnum;
 use enumset::EnumSetType;
 use std::fmt::Display;
 
 /// Enum representing possible compression algorithms.
-#[cfg_attr(feature = "cli", derive(ValueEnum))]
-#[derive(Debug, EnumSetType, PartialOrd)]
+#[derive(ValueEnum, Debug, EnumSetType, PartialOrd)]
 pub enum TileCompression {
 	None,
 	Gzip,
@@ -55,7 +53,7 @@ impl TileCompression {
 	/// # Examples
 	///
 	/// ```
-	/// use versatiles::types::TileCompression;
+	/// use versatiles_core::types::TileCompression;
 	///
 	/// assert_eq!(TileCompression::None.extension(), "");
 	/// assert_eq!(TileCompression::Gzip.extension(), ".gz");
@@ -80,7 +78,7 @@ impl TileCompression {
 	/// # Examples
 	///
 	/// ```
-	/// use versatiles::types::TileCompression;
+	/// use versatiles_core::types::TileCompression;
 	///
 	/// let mut filename = String::from("file.txt.gz");
 	/// assert_eq!(TileCompression::from_filename(&mut filename), TileCompression::Gzip);

@@ -45,10 +45,8 @@ use super::types::{tile_id_to_coord, EntriesV3, HeaderV3, TileId};
 use crate::utils::pretty_print::PrettyPrint;
 use crate::{
 	container::{TilesReader, TilesReaderParameters},
-	types::{
-		Blob, ByteRange, DataReader, DataReaderFile, LimitedCache, TileBBoxPyramid, TileCompression,
-		TileCoord3,
-	},
+	io::{DataReader, DataReaderFile},
+	types::{Blob, ByteRange, LimitedCache, TileBBoxPyramid, TileCompression, TileCoord3},
 	utils::decompress,
 };
 use anyhow::{bail, Result};

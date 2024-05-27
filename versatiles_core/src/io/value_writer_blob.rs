@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::types::{Blob, ValueWriter, ValueWriterBlob};
+//! use versatiles_core::{io::{ValueWriter, ValueWriterBlob}, types::Blob};
 //! use anyhow::Result;
 //!
 //! fn main() -> Result<()> {

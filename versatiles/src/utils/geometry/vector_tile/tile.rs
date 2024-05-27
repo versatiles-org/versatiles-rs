@@ -1,7 +1,10 @@
 #![allow(dead_code)]
 
 use super::layer::VectorTileLayer;
-use crate::types::{Blob, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob};
+use crate::{
+	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+	types::Blob,
+};
 use anyhow::{bail, Context, Result};
 
 #[derive(Debug, Default, PartialEq)]
@@ -57,7 +60,7 @@ impl VectorTile {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::{DataReaderFile, DataReaderTrait};
+	use crate::io::{DataReaderFile, DataReaderTrait};
 	use std::env::current_dir;
 
 	async fn get_pbf() -> Result<Blob> {

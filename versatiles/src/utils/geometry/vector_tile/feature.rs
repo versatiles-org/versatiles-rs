@@ -2,7 +2,8 @@
 
 use super::{geometry_type::GeomType, layer::VectorTileLayer};
 use crate::{
-	types::{Blob, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+	types::Blob,
 	utils::geometry::basic::{
 		AreaTrait, Feature, Geometry, LineStringGeometry, MultiPointGeometry, PointGeometry,
 		PolygonGeometry,

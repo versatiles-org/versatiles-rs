@@ -50,9 +50,11 @@ reqwest = { workspace = true, optional = true, features = ["rustls-tls"] }
 tar = { workspace = true, optional = true }
 terminal_size = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
-versatiles_derive = { workspace = true, optional = true }
 webp = { workspace = true, optional = true, features = ["img"] }
 yaml-rust2 = { workspace = true, optional = true }
+
+versatiles_core = { workspace = true }
+versatiles_derive = { workspace = true, optional = true }
 
 [dev-dependencies]
 assert_fs.workspace = true

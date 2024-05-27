@@ -3,6 +3,7 @@ name = "versatiles_derive"
 authors.workspace = true
 categories.workspace = true
 description.workspace = true
+edition.workspace = true
 exclude.workspace = true
 homepage.workspace = true
 keywords.workspace = true

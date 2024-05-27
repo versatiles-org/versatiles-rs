@@ -9,7 +9,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::types::{Blob, ByteRange, DataWriterFile, DataWriterTrait};
+//! use versatiles_core::{io::{DataWriterFile, DataWriterTrait}, types::{Blob, ByteRange}};
 //! use anyhow::Result;
 //! use std::path::Path;
 //!
@@ -32,7 +32,10 @@
 //! }
 //! ```
 
-use crate::types::{Blob, ByteRange, DataWriterTrait};
+use crate::{
+	io::DataWriterTrait,
+	types::{Blob, ByteRange},
+};
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use std::{

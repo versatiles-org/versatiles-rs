@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::types::{ValueReader, ValueReaderSlice};
+//! use versatiles_core::io::{ValueReader, ValueReaderSlice};
 //! use anyhow::Result;
 //!
 //! fn main() -> Result<()> {
@@ -193,7 +193,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::ValueReaderSlice;
+	use crate::io::ValueReaderSlice;
 
 	#[test]
 	fn test_is_empty() {

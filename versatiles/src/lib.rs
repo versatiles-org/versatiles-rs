@@ -39,5 +39,5 @@
 //! ```
 
 pub mod container;
-pub mod types;
 pub mod utils;
+pub use versatiles_core::*;

@@ -9,7 +9,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::types::progress::{ProgressBar, ProgressTrait};
+//! use versatiles_core::progress::{ProgressBar, ProgressTrait};
 //!
 //! let mut progress = ProgressBar::new();
 //! progress.init("Processing", 100);

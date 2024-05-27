@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::types::{Blob, ByteRange, DataWriterBlob, DataWriterTrait};
+//! use versatiles_core::{io::{DataWriterBlob, DataWriterTrait}, types::{Blob, ByteRange}};
 //! use anyhow::Result;
 //!
 //! #[tokio::main]
@@ -32,7 +32,10 @@
 
 #![allow(dead_code)]
 
-use crate::types::{Blob, ByteRange, DataReaderBlob, DataWriterTrait};
+use crate::{
+	io::{DataReaderBlob, DataWriterTrait},
+	types::{Blob, ByteRange},
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::io::{Cursor, Seek, SeekFrom, Write};
@@ -172,7 +175,7 @@ impl DataWriterTrait for DataWriterBlob {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::DataReaderTrait;
+	use crate::io::DataReaderTrait;
 
 	#[test]
 	fn test_new() -> Result<()> {

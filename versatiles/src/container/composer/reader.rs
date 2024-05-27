@@ -4,7 +4,8 @@ use crate::{
 		composer::operations::new_tile_composer_operation, getters::get_simple_reader, TilesReader,
 		TilesReaderParameters, TilesStream,
 	},
-	types::{Blob, DataReader, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
+	io::DataReader,
+	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 	utils::{compress, YamlWrapper},
 };
 use anyhow::{anyhow, bail, ensure, Context, Result};

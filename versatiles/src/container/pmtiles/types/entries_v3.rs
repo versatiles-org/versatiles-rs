@@ -1,8 +1,7 @@
 use super::{Directory, EntryV3};
 use crate::{
-	types::{
-		Blob, ByteRange, TileCompression, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob,
-	},
+	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+	types::{Blob, ByteRange, TileCompression},
 	utils::compress,
 };
 use anyhow::{bail, Result};

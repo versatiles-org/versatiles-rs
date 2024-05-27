@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::types::{Blob, ByteRange, ValueWriter};
+//! use versatiles_core::{io::ValueWriter, types::{Blob, ByteRange}};
 //! use anyhow::Result;
 //! use byteorder::LittleEndian;
 //! use std::io::Cursor;

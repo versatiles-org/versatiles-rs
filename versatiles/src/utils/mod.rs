@@ -1,6 +1,3 @@
-#[cfg(test)]
-pub mod assert;
-
 mod compression;
 pub use compression::*;
 

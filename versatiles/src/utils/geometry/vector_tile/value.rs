@@ -1,7 +1,8 @@
 #![allow(dead_code)]
 
 use crate::{
-	types::{Blob, ValueReader, ValueWriter, ValueWriterBlob},
+	io::{ValueReader, ValueWriter, ValueWriterBlob},
+	types::Blob,
 	utils::geometry::basic::GeoValue,
 };
 use anyhow::{anyhow, bail, Context, Result};
@@ -126,7 +127,7 @@ impl<'a> GeoValuePBF<'a> for GeoValue {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::ValueReaderSlice;
+	use crate::io::ValueReaderSlice;
 
 	#[test]
 	fn test_read_string() -> Result<()> {

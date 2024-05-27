@@ -22,7 +22,7 @@
 
 use crate::{
 	container::{TilesReader, TilesWriter},
-	types::DataWriterTrait,
+	io::DataWriterTrait,
 };
 use anyhow::Result;
 use async_trait::async_trait;

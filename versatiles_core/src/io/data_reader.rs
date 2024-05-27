@@ -9,7 +9,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::types::{Blob, ByteRange, DataReaderTrait, DataReader};
+//! use versatiles_core::{io::{DataReaderTrait, DataReader}, types::{Blob, ByteRange}};
 //! use anyhow::Result;
 //! use async_trait::async_trait;
 //!

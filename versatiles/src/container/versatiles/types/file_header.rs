@@ -4,9 +4,9 @@
 //!
 //! The `FileHeader` struct contains metadata about the file, including its tile format, compression, zoom range, bounding box, and byte ranges for metadata and blocks.
 
-use crate::types::{
-	Blob, ByteRange, DataReader, TileCompression, TileFormat, ValueReader, ValueReaderSlice,
-	ValueWriter, ValueWriterBlob,
+use crate::{
+	io::{DataReader, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+	types::{Blob, ByteRange, TileCompression, TileFormat},
 };
 use anyhow::{bail, ensure, Result};
 

@@ -24,9 +24,9 @@
 
 use crate::{
 	container::{TilesReader, TilesWriter},
-	types::{
-		progress::get_progress_bar, Blob, DataWriterTrait, TileCompression, TileCoord3, TileFormat,
-	},
+	io::DataWriterTrait,
+	progress::get_progress_bar,
+	types::{Blob, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;

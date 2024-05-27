@@ -5,7 +5,8 @@
 //! The `TileIndex` struct is used to manage the byte ranges of tiles within a versatiles file. It provides methods to create, manipulate, and convert the index to and from binary blobs.
 
 use crate::{
-	types::{Blob, ByteRange, ValueReader, ValueReaderBlob, ValueWriter, ValueWriterBlob},
+	io::{ValueReader, ValueReaderBlob, ValueWriter, ValueWriterBlob},
+	types::{Blob, ByteRange},
 	utils::{compress_brotli, decompress_brotli},
 };
 use anyhow::{ensure, Result};

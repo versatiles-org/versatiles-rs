@@ -37,9 +37,9 @@
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
 	container::{TilesReader, TilesWriter},
-	types::{
-		progress::get_progress_bar, Blob, ByteRange, DataWriterTrait, TileBBox, TileCompression,
-	},
+	io::DataWriterTrait,
+	progress::get_progress_bar,
+	types::{Blob, ByteRange, TileBBox, TileCompression},
 	utils::compress,
 };
 use anyhow::Result;
@@ -156,7 +156,8 @@ mod tests {
 			pmtiles::PMTilesReader,
 			TilesReaderParameters,
 		},
-		types::{DataReaderBlob, DataWriterBlob, TileBBoxPyramid, TileFormat},
+		io::{DataReaderBlob, DataWriterBlob},
+		types::{TileBBoxPyramid, TileFormat},
 	};
 
 	#[tokio::test]

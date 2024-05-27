@@ -42,10 +42,8 @@
 
 use crate::{
 	container::{TilesReader, TilesReaderParameters, TilesStream},
-	types::{
-		progress::get_progress_bar, Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3,
-		TileFormat,
-	},
+	progress::get_progress_bar,
+	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 	utils::TransformCoord,
 };
 use anyhow::{anyhow, ensure, Result};

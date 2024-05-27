@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::types::progress::{ProgressDrain, ProgressTrait};
+//! use versatiles_core::progress::{ProgressDrain, ProgressTrait};
 //!
 //! let mut progress = ProgressDrain::new();
 //! progress.init("Processing", 100);

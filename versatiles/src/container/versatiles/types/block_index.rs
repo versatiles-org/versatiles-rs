@@ -6,7 +6,8 @@
 
 use super::BlockDefinition;
 use crate::{
-	types::{Blob, ByteRange, TileBBoxPyramid, TileCoord3, ValueWriter, ValueWriterBlob},
+	io::{ValueWriter, ValueWriterBlob},
+	types::{Blob, ByteRange, TileBBoxPyramid, TileCoord3},
 	utils::{compress_brotli, decompress_brotli},
 };
 use anyhow::{ensure, Result};

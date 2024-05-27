@@ -31,7 +31,7 @@ use crate::{
 		PMTilesWriter, TarTilesReader, TarTilesWriter, TileComposerReader, TilesReader, TilesWriter,
 		VersaTilesReader, VersaTilesWriter,
 	},
-	types::{DataReader, DataReaderHttp},
+	io::{DataReader, DataReaderHttp},
 };
 use anyhow::{bail, Context, Result};
 use reqwest::Url;

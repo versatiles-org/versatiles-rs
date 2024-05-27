@@ -43,35 +43,8 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Cargo Fmt
-        run: cargo fmt --check
-
-      - name: Cargo Clippy Binary
-        run: cargo clippy --bins
-
-      - name: Cargo Clippy Lib (minimal)
-        run: cargo clippy --lib --no-default-features
-
-      - name: Cargo Clippy Lib (http)
-        run: cargo clippy --lib --no-default-features -F http
-
-      - name: Cargo Clippy Lib (full)
-        run: cargo clippy --lib --no-default-features -F full
-
-      - name: Cargo Test Binary
-        run: cargo test --bins
-
-      - name: Cargo Test Lib (minimal)
-        run: cargo test --lib --no-default-features
-
-      - name: Cargo Test Lib (http)
-        run: cargo test --lib --no-default-features -F http
-
-      - name: Cargo Test Lib (full)
-        run: cargo test --lib --no-default-features -F full
-
-      - name: Cargo Test Doc
-        run: cargo test --doc -F full
+      - name: Run Fmt, Clippy and Test
+        run: ./helpers/test.sh
 
       - name: Install Cargo Coverage
         uses: taiki-e/install-action@cargo-llvm-cov

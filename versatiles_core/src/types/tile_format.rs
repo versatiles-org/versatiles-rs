@@ -9,7 +9,7 @@
 //! # Examples
 //!
 //! ```
-//! use versatiles::types::TileFormat;
+//! use versatiles_core::types::TileFormat;
 //!
 //! // Getting the file extension for a tile format
 //! let format = TileFormat::PNG;
@@ -23,14 +23,12 @@
 //! ```
 
 use anyhow::{bail, Result};
-#[cfg(feature = "cli")]
 use clap::ValueEnum;
 use std::fmt::Display;
 
 // Enum representing supported tile formats
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-#[cfg_attr(feature = "cli", derive(ValueEnum))]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
 pub enum TileFormat {
 	AVIF,
 	BIN,

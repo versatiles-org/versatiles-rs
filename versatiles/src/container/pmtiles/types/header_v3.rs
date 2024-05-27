@@ -1,7 +1,8 @@
 use super::{PMTilesCompression, PMTilesType};
 use crate::{
 	container::TilesReaderParameters,
-	types::{Blob, ByteRange, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+	types::{Blob, ByteRange},
 };
 use anyhow::{ensure, Result};
 

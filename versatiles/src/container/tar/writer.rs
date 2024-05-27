@@ -2,7 +2,8 @@
 
 use crate::{
 	container::{TilesReader, TilesWriter},
-	types::{progress::get_progress_bar, DataWriterTrait},
+	io::DataWriterTrait,
+	progress::get_progress_bar,
 	utils::compress,
 };
 use anyhow::{bail, Result};

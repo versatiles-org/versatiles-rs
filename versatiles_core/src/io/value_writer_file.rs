@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::types::{ValueWriter, ValueWriterFile};
+//! use versatiles_core::io::{ValueWriter, ValueWriterFile};
 //! use anyhow::Result;
 //! use std::fs::File;
 //!
