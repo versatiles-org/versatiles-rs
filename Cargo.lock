@@ -1817,7 +1817,6 @@ dependencies = [
 name = "versatiles_derive"
 version = "0.11.0"
 dependencies = [
- "anyhow",
  "proc-macro2",
  "quote",
  "syn",
