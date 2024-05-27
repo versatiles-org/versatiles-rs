@@ -10,7 +10,8 @@ GRE="\033[1;32m"
 END="\033[0m"
 
 if [ -z "$1" ]; then
-	echo "Need argument for bumping version: \"patch\", \"minor\" or \"major\""
+	echo "❗️ Need argument for bumping version: \"patch\", \"minor\" or \"major\""
+	exit 1
 fi
 
 cargo check
