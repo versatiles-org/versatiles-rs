@@ -116,6 +116,7 @@ mod tests {
 		container::{MockTilesReader, MockTilesWriter, TarTilesReader, TilesReaderParameters},
 		types::{Blob, TileBBoxPyramid, TileCompression, TileFormat},
 	};
+	use assert_fs::NamedTempFile;
 
 	#[tokio::test]
 	async fn read_write() -> Result<()> {
@@ -125,10 +126,10 @@ mod tests {
 			tile_format: TileFormat::PBF,
 		})?;
 
-		let temp_path = Path::new("test_output.tar");
-		TarTilesWriter::write_to_path(&mut mock_reader, temp_path).await?;
+		let temp_path = NamedTempFile::new("test_output.tar")?;
+		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path).await?;
 
-		let mut reader = TarTilesReader::open_path(temp_path)?;
+		let mut reader = TarTilesReader::open_path(&temp_path)?;
 		MockTilesWriter::write(&mut reader).await?;
 
 		Ok(())
@@ -142,10 +143,10 @@ mod tests {
 			tile_format: TileFormat::JSON,
 		})?;
 
-		let temp_path = Path::new("test_meta_output.tar");
-		TarTilesWriter::write_to_path(&mut mock_reader, temp_path).await?;
+		let temp_path = NamedTempFile::new("test_meta_output.tar")?;
+		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path).await?;
 
-		let reader = TarTilesReader::open_path(temp_path)?;
+		let reader = TarTilesReader::open_path(&temp_path)?;
 		assert_eq!(reader.get_meta()?, Some(Blob::from("dummy meta data")));
 
 		Ok(())
