@@ -9,22 +9,11 @@ RED="\033[1;31m"
 GRE="\033[1;32m"
 END="\033[0m"
 
+if [ -z "$1" ]; then
+	echo "Need argument for bumping version: \"patch\", \"minor\" or \"major\""
+fi
+
 cargo check
-
-# get versions
-old_tag=$(curl -s "https://api.github.com/repos/versatiles-org/versatiles-rs/tags" | jq -r 'first(.[] | .name | select(startswith("v")))')
-new_tag="v$(toml get -r Cargo.toml package.version)"
-
-if [ $new_tag == $old_tag ]; then
-	echo -e "${RED}New version $new_tag already exists!${END}"
-	exit 1
-fi
-
-# check if nothing to commit
-if [ -n "$(git status --porcelain)" ]; then
-	echo "❗️ Please commit all uncommitted changes!"
-	exit 1
-fi
 
 # check cargo
 ./helpers/test.sh
@@ -34,7 +23,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # publish to crates.io
-cargo publish --no-verify
+cargo workspaces publish --allow-branch main "$1"
 
 # git tag
 git tag -f -a "$new_tag" -m "new release: $new_tag"
