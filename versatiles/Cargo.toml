@@ -22,19 +22,17 @@ name = "versatiles"
 path = "src/lib.rs"
 
 [dependencies]
-async-trait.workspace = true
-bytes.workspace = true
-csv.workspace = true
-enumset.workspace = true
-log.workspace = true
-num_cpus.workspace = true
 anyhow = { workspace = true, features = ["std", "backtrace"] }
+async-trait.workspace = true
 axum = { workspace = true, optional = true, features = ["http1", "http2", "tokio"] }
 brotli = { workspace = true, features = ["std"] }
 byteorder = { workspace = true, features = ["std"] }
+bytes.workspace = true
 clap = { workspace = true, optional = true, features = ["wrap_help"] }
 clap-verbosity-flag = { workspace = true, optional = true }
 colored = { workspace = true, optional = true }
+csv = { workspace = true, optional = true }
+enumset.workspace = true
 env_logger = { workspace = true, optional = true }
 flate2 = { workspace = true, features = ["default"] }
 futures-util = { workspace = true, features = ["std"] }
@@ -42,13 +40,14 @@ hyper = { workspace = true, optional = true, features = ["http2"] }
 image = { workspace = true, optional = true, features = ["jpeg", "png"] }
 itertools = { workspace = true, features = ["use_alloc"] }
 lazy_static = { workspace = true, optional = true }
+log.workspace = true
 mime_guess = { workspace = true, optional = true }
+num_cpus.workspace = true
 r2d2 = { workspace = true, optional = true }
 r2d2_sqlite = { workspace = true, optional = true, features = ["bundled"] }
 regex = { workspace = true, optional = true, features = ["unicode"] }
 reqwest = { workspace = true, optional = true, features = ["rustls-tls"] }
 tar = { workspace = true, optional = true }
-terminal_size = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 webp = { workspace = true, optional = true, features = ["img"] }
 yaml-rust2 = { workspace = true, optional = true }
@@ -72,20 +71,21 @@ cli = [
 	"dep:hyper",
 	"dep:mime_guess",
 	"dep:tar",
+	"versatiles_core/cli",
 	"full",
 ]
 full = [
 	"dep:colored",
+	"dep:csv",
 	"dep:hyper",
 	"dep:image",
 	"dep:lazy_static",
 	"dep:r2d2_sqlite",
 	"dep:r2d2",
 	"dep:tar",
-	"dep:terminal_size",
 	"dep:webp",
 	"dep:versatiles_derive",
 	"dep:yaml-rust2",
 	"http",
 ]
-http = ["dep:lazy_static", "dep:regex", "dep:reqwest"]
+http = ["dep:lazy_static", "dep:regex", "dep:reqwest", "versatiles_core/http"]

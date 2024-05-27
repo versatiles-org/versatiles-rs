@@ -32,7 +32,6 @@ use crate::types::{Blob, ByteRange};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
-use log::info;
 use regex::{Regex, RegexBuilder};
 use reqwest::{Client, Method, Request, StatusCode, Url};
 use std::{str, time::Duration};
@@ -101,7 +100,6 @@ impl DataReaderTrait for DataReaderHttp {
 
 		if response.status() != StatusCode::PARTIAL_CONTENT {
 			let status_code = response.status();
-			info!("response: {}", str::from_utf8(&response.bytes().await?)?);
 			bail!("expected 206 as a response to a range request. instead we got {status_code}");
 		}
 

@@ -23,12 +23,14 @@
 //! ```
 
 use anyhow::{bail, Result};
+#[cfg(feature = "cli")]
 use clap::ValueEnum;
 use std::fmt::Display;
 
 // Enum representing supported tile formats
 #[allow(clippy::upper_case_acronyms)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+#[cfg_attr(feature = "cli", derive(ValueEnum))]
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum TileFormat {
 	AVIF,
 	BIN,

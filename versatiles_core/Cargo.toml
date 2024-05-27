@@ -17,15 +17,19 @@ anyhow.workspace = true
 async-trait.workspace = true
 byteorder = { workspace = true, features = [] }
 bytes.workspace = true
-clap = { workspace = true, features = ["std", "derive"] }
+clap = { workspace = true, optional = true, features = ["std", "derive"] }
 enumset.workspace = true
 itertools.workspace = true
-lazy_static.workspace = true
-log.workspace = true
-regex = { workspace = true, features = ["unicode-case", "unicode-perl"] }
-reqwest = { workspace = true, features = ["rustls-tls"] }
-wildmatch.workspace = true
+lazy_static = { workspace = true, optional = true }
+regex = { workspace = true, optional = true, features = ["unicode-case", "unicode-perl"] }
+reqwest = { workspace = true, optional = true, features = ["rustls-tls"] }
 
 [dev-dependencies]
 assert_fs.workspace = true
 tokio.workspace = true
+wildmatch.workspace = true
+
+[features]
+default = []
+cli = ["dep:clap"]
+http = ["dep:lazy_static", "dep:regex", "dep:reqwest"]

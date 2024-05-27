@@ -25,12 +25,14 @@
 //! ```
 
 use anyhow::{bail, Result};
+#[cfg(feature = "cli")]
 use clap::ValueEnum;
 use enumset::EnumSetType;
 use std::fmt::Display;
 
 /// Enum representing possible compression algorithms.
-#[derive(ValueEnum, Debug, EnumSetType, PartialOrd)]
+#[cfg_attr(feature = "cli", derive(ValueEnum))]
+#[derive(Debug, EnumSetType, PartialOrd)]
 pub enum TileCompression {
 	None,
 	Gzip,
