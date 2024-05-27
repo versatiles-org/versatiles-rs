@@ -24,8 +24,4 @@ if [ $? -ne 0 ]; then
 fi
 
 # publish to crates.io
-cargo workspaces publish --allow-branch main "$1"
-
-# git tag
-git tag -f -a "$new_tag" -m "new release: $new_tag"
-git push --no-verify --follow-tags
+cargo workspaces publish --no-individual-tag --allow-branch main "$1"
