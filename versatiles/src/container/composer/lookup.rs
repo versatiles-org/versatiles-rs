@@ -36,7 +36,7 @@ impl TileComposerOperationLookup {
 			bail!("operation '{name}' not found")
 		}
 		let yaml = self.operations.remove(name).unwrap();
-		Ok(new_tile_composer_operation(name, yaml, self).await?)
+		new_tile_composer_operation(name, yaml, self).await
 	}
 }
 

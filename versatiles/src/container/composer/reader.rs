@@ -67,7 +67,7 @@ impl TileComposerReader {
 
 		let output = TileComposerOutput::new(&yaml.hash_get_value("output")?, lookup)
 			.await
-			.with_context(|| format!("failed parsing output"))?;
+			.context("failed parsing output")?;
 
 		Ok(TileComposerReader {
 			name: name.to_string(),

@@ -30,10 +30,7 @@ impl TileComposerOutput {
 		yaml: &YamlWrapper,
 		mut lookup: TileComposerOperationLookup,
 	) -> Result<TileComposerOutput> {
-		let operation_name = yaml.as_str()?;
-
-		let operation = lookup.construct(&operation_name).await?;
-
+		let operation = lookup.construct(yaml.as_str()?).await?;
 		let parameters = operation.get_parameters().await.clone();
 
 		Ok(TileComposerOutput {

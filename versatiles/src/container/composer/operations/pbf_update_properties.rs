@@ -151,11 +151,7 @@ impl TileComposerOperation for PBFUpdatePropertiesOperation {
 			.filter_map(|(coord, blob)| {
 				let blob = decompress(blob, &self.input_compression).unwrap();
 				let blob = self.run(blob).unwrap();
-				ready(if let Some(inner) = blob {
-					Some((coord, inner))
-				} else {
-					None
-				})
+				ready(blob.map(|inner| (coord, inner)))
 			})
 			.boxed()
 	}
