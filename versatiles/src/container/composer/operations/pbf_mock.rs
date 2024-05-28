@@ -16,13 +16,13 @@ use std::fmt::Debug;
 use versatiles_core::types::{Blob, TileBBox, TileCompression, TileCoord3, TileFormat};
 
 #[derive(Debug)]
-pub struct Operation {
+pub struct PBFMock {
 	blob: Blob,
 	parameters: TilesReaderParameters,
 }
 
 #[async_trait]
-impl TileComposerOperation for Operation {
+impl TileComposerOperation for PBFMock {
 	async fn new(
 		_name: &str,
 		_yaml: YamlWrapper,
@@ -51,7 +51,7 @@ impl TileComposerOperation for Operation {
 		})
 		.to_blob()?;
 
-		Ok(Operation {
+		Ok(PBFMock {
 			blob,
 			parameters: TilesReaderParameters::new_full(TileFormat::PBF, TileCompression::None),
 		})

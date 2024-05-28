@@ -2,6 +2,7 @@ use anyhow::{anyhow, ensure, Context, Result};
 use std::{fmt::Debug, str::FromStr};
 use yaml_rust2::{Yaml, YamlLoader};
 
+#[derive(Clone)]
 pub struct YamlWrapper {
 	yaml: Yaml,
 }

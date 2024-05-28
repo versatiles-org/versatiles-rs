@@ -18,14 +18,14 @@ struct Config {
 
 /// The `ReadOperation` struct represents an operation that replaces properties in PBF tiles
 /// based on a mapping provided in a CSV file.
-pub struct Operation {
+pub struct ReadOperation {
 	config: Config,
 	name: String,
 	parameters: TilesReaderParameters,
 	reader: Arc<Mutex<Box<dyn TilesReader>>>,
 }
 
-impl Operation {
+impl ReadOperation {
 	async fn read_stream(&self, bbox: TileBBox) -> TilesStream {
 		let (mut tx, rx) = channel::<(TileCoord3, Blob)>(64);
 		let reader = self.reader.clone();
@@ -55,7 +55,7 @@ impl Operation {
 }
 
 #[async_trait]
-impl TileComposerOperation for Operation {
+impl TileComposerOperation for ReadOperation {
 	/// Creates a new `ReadOperation` from the provided YAML configuration.
 	///
 	/// # Arguments
@@ -78,7 +78,7 @@ impl TileComposerOperation for Operation {
 		let reader = get_reader(&config.filename).await?;
 		let parameters = reader.get_parameters().clone();
 
-		Ok(Operation {
+		Ok(ReadOperation {
 			config,
 			name: name.to_string(),
 			parameters,
@@ -101,9 +101,9 @@ impl TileComposerOperation for Operation {
 	}
 }
 
-impl Debug for Operation {
+impl Debug for ReadOperation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("Read")
+		f.debug_struct("ReadOperation")
 			.field("name", &self.name)
 			.field("filename", &self.config.filename)
 			.finish()
@@ -155,7 +155,7 @@ mod tests {
 		}
 	}
 
-	fn get_read_operation() -> Operation {
+	fn get_read_operation() -> ReadOperation {
 		let mock_reader = Box::new(MockTilesReader) as Box<dyn TilesReader>;
 		let reader = Arc::new(Mutex::new(mock_reader));
 		let config = Config {
@@ -163,7 +163,7 @@ mod tests {
 		};
 		let parameters = TilesReaderParameters::new_full(TileFormat::PBF, TileCompression::None);
 
-		Operation {
+		ReadOperation {
 			config,
 			name: "test".to_string(),
 			parameters,

@@ -71,10 +71,12 @@ pub async fn new_tile_composer_operation(
 	}
 
 	let result = match action.as_str() {
-		"pbf_update_properties" => build::<pbf_update_properties::Operation>(args).await,
-		"read" => build::<read::Operation>(args).await,
+		"pbf_update_properties" => {
+			build::<pbf_update_properties::PBFUpdatePropertiesOperation>(args).await
+		}
+		"read" => build::<read::ReadOperation>(args).await,
 		#[cfg(test)]
-		"pbf_mock" => build::<pbf_mock::Operation>(args).await,
+		"pbf_mock" => build::<pbf_mock::PBFMock>(args).await,
 		_ => Err(anyhow!("operation '{action}' is unknown")),
 	};
 
