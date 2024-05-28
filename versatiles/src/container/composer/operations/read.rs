@@ -111,3 +111,93 @@ impl Debug for ReadOperation {
 			.finish()
 	}
 }
+
+// Tests
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use futures::stream;
+	use versatiles_core::types::{TileCompression, TileFormat};
+
+	#[derive(Debug)]
+	struct MockTilesReader;
+
+	fn get_test_tiles() -> Vec<(TileCoord3, Blob)> {
+		vec![((0, 0, 1), vec![7, 8, 9]), ((1, 1, 1), vec![10, 11, 12])]
+			.into_iter()
+			.map(|(c, v)| (TileCoord3::new(c.0, c.1, c.2).unwrap(), Blob::from(v)))
+			.collect()
+	}
+
+	#[async_trait]
+	impl TilesReader for MockTilesReader {
+		fn get_meta(&self) -> Result<Option<Blob>> {
+			Ok(Some(Blob::from(vec![1, 2, 3])))
+		}
+
+		async fn get_tile_data(&mut self, _coord: &TileCoord3) -> Result<Option<Blob>> {
+			Ok(Some(Blob::from(vec![4, 5, 6])))
+		}
+
+		async fn get_bbox_tile_stream(&mut self, _bbox: TileBBox) -> TilesStream {
+			Box::pin(stream::iter(get_test_tiles()))
+		}
+
+		fn get_parameters(&self) -> &TilesReaderParameters {
+			unimplemented!()
+		}
+		fn get_name(&self) -> &str {
+			"mock_name"
+		}
+		fn get_container_name(&self) -> &str {
+			"mock_container"
+		}
+		fn override_compression(&mut self, _tile_compression: TileCompression) {
+			panic!()
+		}
+	}
+
+	fn get_read_operation() -> ReadOperation {
+		let mock_reader = Box::new(MockTilesReader) as Box<dyn TilesReader>;
+		let reader = Arc::new(Mutex::new(mock_reader));
+		let config = Config {
+			filename: "mock_file".to_string(),
+		};
+		let parameters = TilesReaderParameters::new_full(TileFormat::PBF, TileCompression::None);
+
+		ReadOperation {
+			config,
+			name: "test".to_string(),
+			parameters,
+			reader,
+		}
+	}
+
+	#[tokio::test]
+	async fn test_read_stream() {
+		let read_operation = get_read_operation();
+
+		let bbox = TileBBox::new_full(1).unwrap();
+		let stream = read_operation.read_stream(bbox).await;
+
+		let result: Vec<_> = stream.collect().await;
+		assert_eq!(result, get_test_tiles());
+	}
+
+	#[tokio::test]
+	async fn test_get_meta() {
+		let read_operation = get_read_operation();
+
+		let meta = read_operation.get_meta().await.unwrap().unwrap();
+		assert_eq!(meta.into_vec(), vec![1, 2, 3]);
+	}
+
+	#[tokio::test]
+	async fn test_get_tile_data() {
+		let read_operation = get_read_operation();
+
+		let coord = TileCoord3::new(0, 0, 0).unwrap();
+		let tile_data = read_operation.get_tile_data(&coord).await.unwrap().unwrap();
+		assert_eq!(tile_data.into_vec(), vec![4, 5, 6]);
+	}
+}
