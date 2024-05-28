@@ -1,8 +1,6 @@
-use super::TileComposerOperation;
+use super::{TileComposerOperation, TileComposerOperationLookup};
 use crate::{
-	container::{
-		get_reader, TileComposerOperationLookup, TilesReader, TilesReaderParameters, TilesStream,
-	},
+	container::{get_reader, TilesReader, TilesReaderParameters, TilesStream},
 	utils::YamlWrapper,
 };
 use anyhow::{Context, Result};
@@ -20,14 +18,14 @@ struct Config {
 
 /// The `ReadOperation` struct represents an operation that replaces properties in PBF tiles
 /// based on a mapping provided in a CSV file.
-pub struct ReadOperation {
+pub struct Operation {
 	config: Config,
 	name: String,
 	parameters: TilesReaderParameters,
 	reader: Arc<Mutex<Box<dyn TilesReader>>>,
 }
 
-impl ReadOperation {
+impl Operation {
 	async fn read_stream(&self, bbox: TileBBox) -> TilesStream {
 		let (mut tx, rx) = channel::<(TileCoord3, Blob)>(64);
 		let reader = self.reader.clone();
@@ -57,7 +55,7 @@ impl ReadOperation {
 }
 
 #[async_trait]
-impl TileComposerOperation for ReadOperation {
+impl TileComposerOperation for Operation {
 	/// Creates a new `ReadOperation` from the provided YAML configuration.
 	///
 	/// # Arguments
@@ -80,7 +78,7 @@ impl TileComposerOperation for ReadOperation {
 		let reader = get_reader(&config.filename).await?;
 		let parameters = reader.get_parameters().clone();
 
-		Ok(ReadOperation {
+		Ok(Operation {
 			config,
 			name: name.to_string(),
 			parameters,
@@ -103,7 +101,7 @@ impl TileComposerOperation for ReadOperation {
 	}
 }
 
-impl Debug for ReadOperation {
+impl Debug for Operation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("Read")
 			.field("name", &self.name)
@@ -157,7 +155,7 @@ mod tests {
 		}
 	}
 
-	fn get_read_operation() -> ReadOperation {
+	fn get_read_operation() -> Operation {
 		let mock_reader = Box::new(MockTilesReader) as Box<dyn TilesReader>;
 		let reader = Arc::new(Mutex::new(mock_reader));
 		let config = Config {
@@ -165,7 +163,7 @@ mod tests {
 		};
 		let parameters = TilesReaderParameters::new_full(TileFormat::PBF, TileCompression::None);
 
-		ReadOperation {
+		Operation {
 			config,
 			name: "test".to_string(),
 			parameters,

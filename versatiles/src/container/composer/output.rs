@@ -1,20 +1,17 @@
-use super::{operations::TileComposerOperation, TileComposerOperationLookup};
+use super::{lookup::TileComposerOperationLookup, operations::TileComposerOperation};
 use crate::{
 	container::{TilesReaderParameters, TilesStream},
-	types::{Blob, TileBBox, TileCompression, TileCoord3},
-	utils::{recompress, YamlWrapper},
+	types::{Blob, TileBBox, TileCoord3},
+	utils::YamlWrapper,
 };
-use anyhow::{Context, Result};
-use futures::StreamExt;
+use anyhow::Result;
 use std::fmt::Debug;
-use versatiles_derive::YamlParser;
 
 /// The `TileComposerOutput` struct represents the output of the tile composition process.
 /// It holds references to the input reader, compression settings, operations, and the bounding box pyramid.
 pub struct TileComposerOutput {
-	pub input: Box<dyn TileComposerOperation>,
-	pub input_parameters: TilesReaderParameters,
-	pub output_parameters: TilesReaderParameters,
+	pub operation: Box<dyn TileComposerOperation>,
+	pub parameters: TilesReaderParameters,
 }
 
 impl TileComposerOutput {
@@ -33,29 +30,15 @@ impl TileComposerOutput {
 		yaml: &YamlWrapper,
 		mut lookup: TileComposerOperationLookup,
 	) -> Result<TileComposerOutput> {
-		#[derive(YamlParser)]
-		struct Definition {
-			compression: Option<String>,
-			input: String,
-		}
-		let def = Definition::from_yaml(yaml)?;
+		let operation_name = yaml.as_str()?;
 
-		let input = lookup.construct(&def.input).await?;
+		let operation = lookup.construct(&operation_name).await?;
 
-		let input_parameters = input.get_parameters().await.clone();
-
-		let output_parameters = TilesReaderParameters::new(
-			input_parameters.tile_format,
-			def.compression
-				.map(|s| TileCompression::parse_str(&s).unwrap())
-				.unwrap_or(input_parameters.tile_compression),
-			input_parameters.bbox_pyramid.clone(),
-		);
+		let parameters = operation.get_parameters().await.clone();
 
 		Ok(TileComposerOutput {
-			input,
-			input_parameters,
-			output_parameters,
+			operation,
+			parameters,
 		})
 	}
 
@@ -69,19 +52,7 @@ impl TileComposerOutput {
 	///
 	/// * `Result<Option<Blob>>` - The processed tile data or `None` if the tile does not exist.
 	pub async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		let mut blob = if let Some(blob) = self.input.get_tile_data(coord).await? {
-			blob
-		} else {
-			return Ok(None);
-		};
-
-		blob = recompress(
-			blob,
-			&self.input_parameters.tile_compression,
-			&self.output_parameters.tile_compression,
-		)?;
-
-		Ok(Some(blob))
+		self.operation.get_tile_data(coord).await
 	}
 
 	/// Retrieves a stream of tiles within the specified bounding box, applying the configured operations.
@@ -95,27 +66,15 @@ impl TileComposerOutput {
 	///
 	/// * `TilesStream` - A stream of processed tiles.
 	pub async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TilesStream {
-		let input_compression = &self.input_parameters.tile_compression;
-		let output_compression = &self.output_parameters.tile_compression;
-
-		self
-			.input
-			.get_bbox_tile_stream(bbox)
-			.await
-			.map(|(coord, mut blob)| {
-				blob = recompress(blob, input_compression, output_compression).unwrap();
-				(coord, blob)
-			})
-			.boxed()
+		self.operation.get_bbox_tile_stream(bbox).await
 	}
 }
 
 impl Debug for TileComposerOutput {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TileComposerOutput")
-			.field("input", &self.input)
-			.field("input_parameters", &self.input_parameters)
-			.field("output_parameters", &self.output_parameters)
+			.field("operation", &self.operation)
+			.field("parameters", &self.parameters)
 			.finish()
 	}
 }

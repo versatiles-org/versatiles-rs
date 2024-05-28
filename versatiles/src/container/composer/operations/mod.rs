@@ -1,12 +1,15 @@
 mod pbf_update_properties;
 mod read;
 
-use super::TileComposerOperationLookup;
+#[cfg(test)]
+mod pbf_mock;
+
+pub use super::lookup::TileComposerOperationLookup;
 use crate::{
 	container::{TilesReaderParameters, TilesStream},
 	utils::YamlWrapper,
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use std::fmt::Debug;
 use versatiles_core::types::{Blob, TileBBox, TileCoord3};
@@ -57,12 +60,23 @@ pub async fn new_tile_composer_operation(
 		.context("while parsing action")?
 		.to_owned();
 
-	match action.as_str() {
-		"pbf_replace_properties" => Ok(Box::new(
-			pbf_update_properties::PBFReplacePropertiesOperation::new(name, yaml, lookup)
-				.await
-				.with_context(|| format!("Failed parsing action '{action}'"))?,
-		)),
-		_ => bail!("operation '{action}' is unknown"),
+	let args = (name, yaml, lookup);
+
+	async fn build<T: TileComposerOperation + 'static>(
+		args: (&str, YamlWrapper, &mut TileComposerOperationLookup),
+	) -> Result<Box<dyn TileComposerOperation>> {
+		T::new(args.0, args.1, args.2)
+			.await
+			.map(|op| Box::new(op) as Box<dyn TileComposerOperation>)
 	}
+
+	let result = match action.as_str() {
+		"pbf_update_properties" => build::<pbf_update_properties::Operation>(args).await,
+		"read" => build::<read::Operation>(args).await,
+		#[cfg(test)]
+		"pbf_mock" => build::<pbf_mock::Operation>(args).await,
+		_ => Err(anyhow!("operation '{action}' is unknown")),
+	};
+
+	result.with_context(|| format!("Failed parsing action '{action}'"))
 }

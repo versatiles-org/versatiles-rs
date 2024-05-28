@@ -1,16 +1,14 @@
-use super::TileComposerOperation;
+use super::{TileComposerOperation, TileComposerOperationLookup};
 use crate::{
-	container::{
-		composer::utils::read_csv_file, TileComposerOperationLookup, TilesReaderParameters,
-		TilesStream,
-	},
+	container::{composer::utils::read_csv_file, TilesReaderParameters, TilesStream},
 	types::Blob,
 	utils::{
+		decompress,
 		geometry::{vector_tile::VectorTile, GeoProperties},
 		YamlWrapper,
 	},
 };
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use async_trait::async_trait;
 use futures::{future::ready, StreamExt};
 use std::{
@@ -18,7 +16,7 @@ use std::{
 	fmt::Debug,
 	path::Path,
 };
-use versatiles_core::types::{TileBBox, TileCoord3};
+use versatiles_core::types::{TileBBox, TileCompression, TileCoord3, TileFormat};
 use versatiles_derive::YamlParser;
 
 #[derive(YamlParser)]
@@ -34,17 +32,19 @@ struct Config {
 
 /// The `PBFReplacePropertiesOperation` struct represents an operation that replaces properties in PBF tiles
 /// based on a mapping provided in a CSV file.
-pub struct PBFReplacePropertiesOperation {
-	properties_map: HashMap<String, GeoProperties>,
-	input: Box<dyn TileComposerOperation>,
+pub struct Operation {
 	config: Config,
+	input: Box<dyn TileComposerOperation>,
 	name: String,
+	parameters: TilesReaderParameters,
+	input_compression: TileCompression,
+	properties_map: HashMap<String, GeoProperties>,
 }
 
-impl PBFReplacePropertiesOperation {
-	fn run(&self, blob: &Blob) -> Result<Option<Blob>> {
+impl Operation {
+	fn run(&self, blob: Blob) -> Result<Option<Blob>> {
 		let mut tile =
-			VectorTile::from_blob(blob).context("Failed to create VectorTile from Blob")?;
+			VectorTile::from_blob(&blob).context("Failed to create VectorTile from Blob")?;
 
 		for layer in tile.layers.iter_mut() {
 			layer.map_properties(|properties| {
@@ -77,7 +77,7 @@ impl PBFReplacePropertiesOperation {
 }
 
 #[async_trait]
-impl TileComposerOperation for PBFReplacePropertiesOperation {
+impl TileComposerOperation for Operation {
 	/// Creates a new `PBFReplacePropertiesOperation` from the provided YAML configuration.
 	///
 	/// # Arguments
@@ -123,11 +123,23 @@ impl TileComposerOperation for PBFReplacePropertiesOperation {
 
 		let input = lookup.construct(&config.input).await?;
 
-		Ok(PBFReplacePropertiesOperation {
-			properties_map,
-			input,
+		let mut parameters = input.get_parameters().await.clone();
+		ensure!(
+			parameters.tile_format == TileFormat::PBF,
+			"operation '{name}' needs vector tiles (PBF) from '{}'",
+			config.input
+		);
+
+		let input_compression = parameters.tile_compression;
+		parameters.tile_compression = TileCompression::None;
+
+		Ok(Operation {
 			config,
+			input,
+			input_compression,
 			name: name.to_string(),
+			parameters,
+			properties_map,
 		})
 	}
 
@@ -137,7 +149,8 @@ impl TileComposerOperation for PBFReplacePropertiesOperation {
 			.get_bbox_tile_stream(bbox)
 			.await
 			.filter_map(|(coord, blob)| {
-				let blob = self.run(&blob).unwrap();
+				let blob = decompress(blob, &self.input_compression).unwrap();
+				let blob = self.run(blob).unwrap();
 				ready(if let Some(inner) = blob {
 					Some((coord, inner))
 				} else {
@@ -148,7 +161,7 @@ impl TileComposerOperation for PBFReplacePropertiesOperation {
 	}
 
 	async fn get_parameters(&self) -> &TilesReaderParameters {
-		self.input.get_parameters().await
+		&self.parameters
 	}
 
 	async fn get_meta(&self) -> Result<Option<Blob>> {
@@ -158,14 +171,14 @@ impl TileComposerOperation for PBFReplacePropertiesOperation {
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		let blob = self.input.get_tile_data(coord).await?;
 		if let Some(blob) = blob {
-			self.run(&blob)
+			self.run(decompress(blob, &self.input_compression)?)
 		} else {
 			Ok(None)
 		}
 	}
 }
 
-impl Debug for PBFReplacePropertiesOperation {
+impl Debug for Operation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("PBFReplacePropertiesOperation")
 			.field("name", &self.name)
@@ -182,62 +195,55 @@ impl Debug for PBFReplacePropertiesOperation {
 	}
 }
 
-/*
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::utils::geometry::{vector_tile::VectorTileLayer, Feature, GeoValue, Geometry};
-	use std::str::FromStr;
+	use crate::container::{TileComposerReader, TilesReader};
 
-	fn test(
+	async fn test(
 		parameters: (&str, &str, &[(&str, bool)]),
 		debug_operation: &str,
 		debug_result: &str,
 	) -> Result<()> {
-		let mut yaml = vec![
-			"data_source_path: \"../testdata/cities.csv\"".to_string(),
-			format!("id_field_tiles: \"{}\"", parameters.0),
-			format!("id_field_values: \"{}\"", parameters.1),
-		];
-		for (key, val) in parameters.2.iter() {
-			yaml.push(format!("{key}: {}", if *val { "true" } else { "false" }));
-		}
-		let yaml = yaml.join("\n");
-		let operation = PBFReplacePropertiesOperation::new("dummy", &YamlWrapper::from_str(&yaml)?)?;
+		let flags = parameters
+			.2
+			.iter()
+			.map(|(key, val)| format!("    {key}: {}", if *val { "true" } else { "false" }))
+			.collect::<Vec<String>>()
+			.join("\n");
 
-		assert_eq!(cleanup(format!("{operation:?}")), debug_operation);
+		let yaml = vec![
+			"operations:",
+			"  source:",
+			"    action: pbf_mock",
+			"  update_values:",
+			"    action: pbf_update_properties",
+			"    input: source",
+			"    data_source_path: ../testdata/cities.csv",
+			&format!("    id_field_tiles: {}", parameters.0),
+			&format!("    id_field_values: {}", parameters.1),
+			&flags,
+			"output: update_values",
+		]
+		.join("\n");
 
-		let tile_blob = (VectorTile {
-			layers: vec![VectorTileLayer::from_features(
-				"test_layer".to_string(),
-				vec![(1, "Bärlin"), (4, "Madrid")]
-					.into_iter()
-					.map(|(id, name)| Feature {
-						id: None,
-						geometry: Geometry::new_example(),
-						properties: Some(GeoProperties::from(vec![
-							("tile_id", GeoValue::from(id)),
-							("tile_name", GeoValue::from(name)),
-						])),
-					})
-					.collect(),
-				4096,
-				2,
-			)?],
-		})
-		.to_blob()?;
+		let mut reader = TileComposerReader::open_str(&yaml).await?;
 
-		let result = operation.run(&tile_blob)?.map(|blob| {
-			VectorTile::from_blob(&blob)
-				.unwrap()
-				.layers
-				.iter()
-				.map(|layer| layer.to_features())
-				.collect::<Result<Vec<Vec<Feature>>>>()
-				.unwrap()
-		});
+		assert_eq!(
+			cleanup(format!("{:?}", reader.output.operation)),
+			debug_operation
+		);
 
-		assert_eq!(cleanup(format!("{result:?}")), debug_result);
+		let blob = reader
+			.get_tile_data(&TileCoord3::new(0, 0, 0)?)
+			.await?
+			.unwrap();
+
+		let layers = VectorTile::from_blob(&blob)?.layers;
+		assert_eq!(layers.len(), 1);
+		let tile = layers[0].to_features()?;
+
+		assert_eq!(cleanup(format!("{tile:?}")), debug_result);
 
 		fn cleanup(text: String) -> String {
 			text
@@ -262,66 +268,68 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn test_new() -> Result<()> {
+	#[tokio::test]
+	async fn test_new() -> Result<()> {
 		test(
 			("tile_id", "city_id", &[]),
-			 "PBFReplacePropertiesOperation { properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			 "Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
-		)
+			"PBFReplacePropertiesOperation { name: \"update_values\", properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
+			"[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]"
+		).await
 	}
 
-	#[test]
-	fn test_unknown_key() {
+	#[tokio::test]
+	async fn test_unknown_key() {
 		assert_eq!(
 			test(("tile_id", "unknown_id", &[]), "", "")
+				.await
 				.unwrap_err()
-				.root_cause()
+				.chain()
+				.last()
+				.unwrap()
 				.to_string(),
 			"Key 'unknown_id' not found in CSV data"
 		);
 	}
 
-	#[test]
-	fn test_replace_properties() -> Result<()> {
+	#[tokio::test]
+	async fn test_replace_properties() -> Result<()> {
 		test(
 			("tile_id", "city_id", &[("replace_properties", false)]),
-			"PBFReplacePropertiesOperation { properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
-		)?;
+			"PBFReplacePropertiesOperation { name: \"update_values\", properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
+			"[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]"
+		).await?;
 		test(
 			("tile_id", "city_id", &[("replace_properties", true)]),
-			"PBFReplacePropertiesOperation { properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…}) }, Feature { id: None, …geometry… properties: None }]])"
-		)
+			"PBFReplacePropertiesOperation { name: \"update_values\", properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
+			"[Feature { id: None, …geometry… properties: Some({…Berlin…}) }, Feature { id: None, …geometry… properties: None }]"
+		).await
 	}
 
-	#[test]
-	fn test_remove_empty_properties() -> Result<()> {
+	#[tokio::test]
+	async fn test_remove_empty_properties() -> Result<()> {
 		test(
 			("tile_id", "city_id", &[("remove_empty_properties", false)]),
-			"PBFReplacePropertiesOperation { properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
-		)?;
+			"PBFReplacePropertiesOperation { name: \"update_values\", properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
+			"[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]"
+		).await?;
 		test(
 			("tile_id", "city_id", &[("remove_empty_properties", true)]),
-			"PBFReplacePropertiesOperation { properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: true }",
-			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }]])"
-		)
+			"PBFReplacePropertiesOperation { name: \"update_values\", properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: true }",
+			"[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }]"
+		).await
 	}
 
-	#[test]
-	fn test_also_save_id() -> Result<()> {
+	#[tokio::test]
+	async fn test_also_save_id() -> Result<()> {
 		test(
 			("tile_id", "city_id", &[("also_save_id", false)]),
-			"PBFReplacePropertiesOperation { properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			"Some([[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
-		)?;
+			"PBFReplacePropertiesOperation { name: \"update_values\", properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
+			"[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]"
+		).await?;
 		test(
 			("tile_id", "city_id", &[("also_save_id", true)]),
-			"PBFReplacePropertiesOperation { properties_map: {\"1\": {\"city_id\": UInt(1), …Berlin…}, \"2\": {\"city_id\": UInt(2), …Kyiv…}, \"3\": {\"city_id\": UInt(3), …Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
-			"Some([[Feature { id: None, …geometry… properties: Some({\"city_id\": UInt(1), …Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]])"
-		)
+			"PBFReplacePropertiesOperation { name: \"update_values\", properties_map: {\"1\": {\"city_id\": UInt(1), …Berlin…}, \"2\": {\"city_id\": UInt(2), …Kyiv…}, \"3\": {\"city_id\": UInt(3), …Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
+			"[Feature { id: None, …geometry… properties: Some({\"city_id\": UInt(1), …Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]"
+		).await
 	}
 }
-*/

@@ -1,6 +1,6 @@
-use super::output::TileComposerOutput;
+use super::{lookup::TileComposerOperationLookup, output::TileComposerOutput};
 use crate::{
-	container::{TileComposerOperationLookup, TilesReader, TilesReaderParameters, TilesStream},
+	container::{TilesReader, TilesReaderParameters, TilesStream},
 	io::DataReader,
 	types::{Blob, TileBBox, TileCompression, TileCoord3},
 	utils::YamlWrapper,
@@ -12,8 +12,8 @@ use std::{path::Path, str::FromStr};
 /// The `TileComposerReader` struct is responsible for managing the tile reading process,
 /// applying operations, and returning the composed tiles.
 pub struct TileComposerReader {
-	name: String,
-	output: TileComposerOutput,
+	pub name: String,
+	pub output: TileComposerOutput,
 }
 
 impl TileComposerReader {
@@ -52,7 +52,7 @@ impl TileComposerReader {
 
 	#[cfg(test)]
 	pub async fn open_str(yaml: &str) -> Result<TileComposerReader> {
-		Self::from_str(yaml, "String")
+		Self::from_str(yaml, "from str")
 			.await
 			.with_context(|| format!("failed parsing '{yaml}' as YAML"))
 	}
@@ -90,7 +90,7 @@ impl TilesReader for TileComposerReader {
 
 	/// Get the reader parameters.
 	fn get_parameters(&self) -> &TilesReaderParameters {
-		&self.output.output_parameters
+		&self.output.parameters
 	}
 
 	/// Override the tile compression.
@@ -118,7 +118,7 @@ impl std::fmt::Debug for TileComposerReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TileComposerReader")
 			.field("name", &self.name)
-			.field("reader parameters", &self.output.output_parameters)
+			.field("reader parameters", &self.output.parameters)
 			.field("output definitions", &self.output)
 			.finish()
 	}
@@ -138,15 +138,7 @@ operations:
   berlin:
     action: read
     filename: ../testdata/berlin.pmtiles
-  update_values:
-    action: pbf_replace_properties
-    input: berlin
-    data_source_path: ../testdata/cities.csv
-    id_field_tiles: id
-    id_field_values: city_id
-output:
-  compression: none
-  input: update_values
+output: berlin
 ",
 		)
 	}
@@ -175,13 +167,15 @@ output:
 	async fn test_tile_composer_reader_get_tile_data() -> Result<()> {
 		let mut reader = TileComposerReader::open_str(&get_yaml()).await?;
 
-		let result = reader.get_tile_data(&TileCoord3::new(0, 0, 0)?).await;
+		let result = reader.get_tile_data(&TileCoord3::new(0, 0, 14)?).await;
 		assert_eq!(result?, None);
 
 		let result = reader
 			.get_tile_data(&TileCoord3::new(8800, 5377, 14)?)
-			.await;
-		assert!(result?.unwrap().len() > 100000);
+			.await?
+			.unwrap();
+
+		assert_eq!(result.len(), 71480);
 
 		Ok(())
 	}
