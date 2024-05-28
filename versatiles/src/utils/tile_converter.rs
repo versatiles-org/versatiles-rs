@@ -8,7 +8,7 @@ use crate::{
 #[cfg(feature = "full")]
 use anyhow::bail;
 use anyhow::Result;
-use futures_util::StreamExt;
+use futures::StreamExt;
 use itertools::Itertools;
 use std::{
 	fmt::{self, Debug},
@@ -316,7 +316,11 @@ mod tests {
 		}
 
 		let image_formats = vec![JPG, PNG, WEBP, PBF];
-		let compressions = vec![None, Gzip, Brotli];
+		let compressions = vec![
+			TileCompression::None,
+			TileCompression::Gzip,
+			TileCompression::Brotli,
+		];
 		let forcing = vec![false, true];
 
 		for f_in in &image_formats {

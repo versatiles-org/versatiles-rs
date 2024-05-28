@@ -48,7 +48,7 @@ use crate::{
 };
 use anyhow::{anyhow, ensure, Result};
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures::StreamExt;
 use log::trace;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -327,7 +327,7 @@ impl TilesReader for MBTilesReader {
 		trace!("read tile stream from bbox {bbox:?}");
 
 		if bbox.is_empty() {
-			return futures_util::stream::empty().boxed();
+			return futures::stream::empty().boxed();
 		}
 
 		let max_index = bbox.max;
@@ -370,7 +370,7 @@ impl TilesReader for MBTilesReader {
 
 		trace!("got {} tiles", vec.len());
 
-		futures_util::stream::iter(vec).boxed()
+		futures::stream::iter(vec).boxed()
 	}
 
 	/// Returns the name of the MBTiles database.

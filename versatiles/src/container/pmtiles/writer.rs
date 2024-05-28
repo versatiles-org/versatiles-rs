@@ -44,7 +44,7 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures_util::{lock::Mutex, StreamExt};
+use futures::{lock::Mutex, StreamExt};
 use std::sync::Arc;
 
 /// A struct that provides functionality to write tile data to a PMTiles container.

@@ -1,20 +1,13 @@
-use super::{operations::TileComposerOperation, output::TileComposerOutput};
+use super::output::TileComposerOutput;
 use crate::{
-	container::{
-		getters::get_simple_reader, TileComposerOperationLookup, TilesReader, TilesReaderParameters,
-		TilesStream,
-	},
+	container::{TileComposerOperationLookup, TilesReader, TilesReaderParameters, TilesStream},
 	io::DataReader,
 	types::{Blob, TileBBox, TileCompression, TileCoord3},
 	utils::YamlWrapper,
 };
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use async_trait::async_trait;
-use std::{collections::HashMap, path::Path, str::FromStr, sync::Arc};
-use tokio::sync::Mutex;
-
-pub type VReader = Arc<Mutex<Box<dyn TilesReader>>>;
-pub type VOperation = Arc<Box<dyn TileComposerOperation>>;
+use std::{path::Path, str::FromStr};
 
 /// The `TileComposerReader` struct is responsible for managing the tile reading process,
 /// applying operations, and returning the composed tiles.
@@ -83,29 +76,6 @@ impl TileComposerReader {
 	}
 }
 
-async fn parse_inputs(yaml: &YamlWrapper) -> Result<HashMap<String, VReader>> {
-	ensure!(yaml.is_hash(), "'inputs' must be an object");
-
-	let mut inputs: HashMap<String, VReader> = HashMap::new();
-
-	for (name, entry) in yaml.hash_get_as_vec()? {
-		let filename = entry.hash_get_str("filename")?;
-		if inputs.contains_key(&name) {
-			bail!("input '{name}' is duplicated")
-		}
-		inputs.insert(
-			name,
-			Arc::new(Mutex::new(get_simple_reader(filename).await?)),
-		);
-	}
-
-	if inputs.is_empty() {
-		bail!("YAML needs at least one input")
-	}
-
-	Ok(inputs)
-}
-
 #[async_trait]
 impl TilesReader for TileComposerReader {
 	/// Get the name of the reader source, e.g., the filename.
@@ -156,7 +126,7 @@ impl std::fmt::Debug for TileComposerReader {
 
 #[cfg(test)]
 mod tests {
-	use futures_util::StreamExt;
+	use futures::StreamExt;
 
 	use super::*;
 	use crate::container::MockTilesWriter;

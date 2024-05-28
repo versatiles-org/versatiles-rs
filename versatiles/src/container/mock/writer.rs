@@ -26,7 +26,7 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures_util::{future::ready, StreamExt};
+use futures::{future::ready, StreamExt};
 
 /// Mock implementation of a `TilesWriter`.
 pub struct MockTilesWriter {}

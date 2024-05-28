@@ -6,6 +6,7 @@ pub struct YamlWrapper {
 	yaml: Yaml,
 }
 
+#[allow(dead_code)]
 impl YamlWrapper {
 	fn new(yaml: &Yaml) -> Result<YamlWrapper> {
 		Ok(YamlWrapper {

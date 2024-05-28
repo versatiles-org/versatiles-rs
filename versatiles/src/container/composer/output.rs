@@ -5,7 +5,7 @@ use crate::{
 	utils::{recompress, YamlWrapper},
 };
 use anyhow::{Context, Result};
-use futures_util::StreamExt;
+use futures::StreamExt;
 use std::fmt::Debug;
 use versatiles_derive::YamlParser;
 

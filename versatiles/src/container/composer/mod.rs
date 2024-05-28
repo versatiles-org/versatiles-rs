@@ -29,7 +29,7 @@ impl TileComposerOperationLookup {
 		ensure!(yaml.is_hash(), "must be an object");
 		let mut lookup = Self::new();
 		for (name, entry) in yaml.hash_get_as_vec()?.into_iter() {
-			lookup.insert(name, entry);
+			lookup.insert(name, entry)?;
 		}
 		Ok(lookup)
 	}

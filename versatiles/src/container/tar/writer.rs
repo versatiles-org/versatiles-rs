@@ -8,7 +8,7 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures::StreamExt;
 use std::{
 	fs::File,
 	path::{Path, PathBuf},

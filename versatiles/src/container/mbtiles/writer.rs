@@ -30,7 +30,7 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use futures_util::StreamExt;
+use futures::StreamExt;
 use r2d2::Pool;
 use r2d2_sqlite::{rusqlite::params, SqliteConnectionManager};
 use std::path::Path;

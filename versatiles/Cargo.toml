@@ -35,7 +35,7 @@ csv = { workspace = true, optional = true }
 enumset.workspace = true
 env_logger = { workspace = true, optional = true }
 flate2 = { workspace = true, features = ["default"] }
-futures-util = { workspace = true, features = ["std"] }
+futures = { workspace = true, features = ["default"] }
 hyper = { workspace = true, optional = true, features = ["http2"] }
 image = { workspace = true, optional = true, features = ["jpeg", "png"] }
 itertools = { workspace = true, features = ["use_alloc"] }

@@ -3,7 +3,7 @@
 //! This module provides types and utilities for managing tile data streams and probing the depth of tile containers.
 
 use crate::types::{Blob, TileCoord3};
-use futures_util::Stream;
+use futures::Stream;
 use std::pin::Pin;
 
 /// A type alias for a stream of tiles, where each item is a tuple containing a tile coordinate and its associated data.
@@ -25,7 +25,7 @@ pub enum ProbeDepth {
 mod tests {
 	use super::*;
 	use crate::types::TileCoord3;
-	use futures_util::{stream, StreamExt};
+	use futures::{stream, StreamExt};
 
 	#[tokio::test]
 	async fn test_tiles_stream() {

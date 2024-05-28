@@ -6,7 +6,7 @@
 //! use versatiles::container::{TilesReader, TilesReaderParameters, VersaTilesReader};
 //! use versatiles::types::{TileCoord3, TileCompression, TileFormat, TileBBoxPyramid};
 //! use anyhow::Result;
-//! use futures_util::StreamExt;
+//! use futures::StreamExt;
 //! use std::path::Path;
 //!
 //! #[tokio::main]
@@ -54,7 +54,7 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use futures_util::stream::StreamExt;
+use futures::stream::StreamExt;
 use log::trace;
 use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
 use tokio::sync::Mutex;
@@ -286,7 +286,7 @@ impl TilesReader for VersaTilesReader {
 
 		let self_mutex = Arc::new(Mutex::new(self));
 
-		let stream = futures_util::stream::iter(block_coords).then(|block_coord: TileCoord3| {
+		let stream = futures::stream::iter(block_coords).then(|block_coord: TileCoord3| {
 			let bbox = bbox.clone();
 			let self_mutex = self_mutex.clone();
 			async move {
@@ -372,7 +372,7 @@ impl TilesReader for VersaTilesReader {
 
 		let chunks: Vec<Chunk> = chunks.into_iter().flatten().collect();
 
-		futures_util::stream::iter(chunks)
+		futures::stream::iter(chunks)
 			.then(move |chunk| {
 				let bbox = bbox.clone();
 				let self_mutex = self_mutex.clone();
@@ -400,7 +400,7 @@ impl TilesReader for VersaTilesReader {
 						})
 						.collect();
 
-					futures_util::stream::iter(entries)
+					futures::stream::iter(entries)
 				}
 			})
 			.flatten()

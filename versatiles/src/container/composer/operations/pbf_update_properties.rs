@@ -12,7 +12,7 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use futures_util::{future::ready, StreamExt};
+use futures::{future::ready, StreamExt};
 use std::{
 	collections::{BTreeMap, HashMap},
 	fmt::Debug,
@@ -168,6 +168,7 @@ impl TileComposerOperation for PBFReplacePropertiesOperation {
 impl Debug for PBFReplacePropertiesOperation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("PBFReplacePropertiesOperation")
+			.field("name", &self.name)
 			.field(
 				"properties_map",
 				&BTreeMap::from_iter(self.properties_map.iter()),
