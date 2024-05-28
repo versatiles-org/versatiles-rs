@@ -89,6 +89,19 @@ pub fn optimize_compression(
 	}
 }
 
+pub fn recompress(
+	mut blob: Blob,
+	input_compression: &TileCompression,
+	output_compression: &TileCompression,
+) -> Result<Blob> {
+	if input_compression == output_compression {
+		return Ok(blob);
+	}
+	blob = decompress(blob, input_compression)?;
+	blob = compress(blob, output_compression)?;
+	Ok(blob)
+}
+
 /// Compresses data based on the given compression algorithm
 ///
 /// # Arguments
