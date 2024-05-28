@@ -1,6 +1,5 @@
+use crate::types::TileCompression::{self, *};
 use anyhow::{bail, Result};
-
-use crate::types::TileCompression;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PMTilesCompression {
@@ -24,17 +23,17 @@ impl PMTilesCompression {
 	}
 	pub fn from_value(value: TileCompression) -> Result<Self> {
 		Ok(match value {
-			TileCompression::None => PMTilesCompression::None,
-			TileCompression::Gzip => PMTilesCompression::Gzip,
-			TileCompression::Brotli => PMTilesCompression::Brotli,
+			Uncompressed => PMTilesCompression::None,
+			Gzip => PMTilesCompression::Gzip,
+			Brotli => PMTilesCompression::Brotli,
 		})
 	}
 	pub fn as_value(&self) -> Result<TileCompression> {
 		Ok(match self {
 			PMTilesCompression::Unknown => bail!("unknown compression"),
-			PMTilesCompression::None => TileCompression::None,
-			PMTilesCompression::Gzip => TileCompression::Gzip,
-			PMTilesCompression::Brotli => TileCompression::Brotli,
+			PMTilesCompression::None => Uncompressed,
+			PMTilesCompression::Gzip => Gzip,
+			PMTilesCompression::Brotli => Brotli,
 			PMTilesCompression::Zstd => bail!("Zstd not supported yet"),
 		})
 	}
@@ -72,15 +71,15 @@ mod tests {
 	#[test]
 	fn test_from_value() {
 		assert_eq!(
-			PMTilesCompression::from_value(TileCompression::None).unwrap(),
+			PMTilesCompression::from_value(Uncompressed).unwrap(),
 			PMTilesCompression::None
 		);
 		assert_eq!(
-			PMTilesCompression::from_value(TileCompression::Gzip).unwrap(),
+			PMTilesCompression::from_value(Gzip).unwrap(),
 			PMTilesCompression::Gzip
 		);
 		assert_eq!(
-			PMTilesCompression::from_value(TileCompression::Brotli).unwrap(),
+			PMTilesCompression::from_value(Brotli).unwrap(),
 			PMTilesCompression::Brotli
 		);
 
@@ -90,18 +89,9 @@ mod tests {
 	#[test]
 	fn test_as_value() {
 		assert!(PMTilesCompression::Unknown.as_value().is_err());
-		assert_eq!(
-			PMTilesCompression::None.as_value().unwrap(),
-			TileCompression::None
-		);
-		assert_eq!(
-			PMTilesCompression::Gzip.as_value().unwrap(),
-			TileCompression::Gzip
-		);
-		assert_eq!(
-			PMTilesCompression::Brotli.as_value().unwrap(),
-			TileCompression::Brotli
-		);
+		assert_eq!(PMTilesCompression::None.as_value().unwrap(), Uncompressed);
+		assert_eq!(PMTilesCompression::Gzip.as_value().unwrap(), Gzip);
+		assert_eq!(PMTilesCompression::Brotli.as_value().unwrap(), Brotli);
 		assert!(PMTilesCompression::Zstd.as_value().is_err());
 	}
 
@@ -114,7 +104,7 @@ mod tests {
 		assert_eq!(compression, converted_back);
 
 		// Test cycle: TileCompression -> PMTilesCompression -> TileCompression
-		let tile_compression = TileCompression::Gzip;
+		let tile_compression = Gzip;
 		let pm_compression = PMTilesCompression::from_value(tile_compression).unwrap();
 		let converted_back = pm_compression.as_value().unwrap();
 		assert_eq!(tile_compression, converted_back);

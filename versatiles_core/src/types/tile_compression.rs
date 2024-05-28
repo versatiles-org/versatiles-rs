@@ -14,7 +14,7 @@
 //! use versatiles_core::types::TileCompression;
 //!
 //! // Getting file extensions for compression types
-//! assert_eq!(TileCompression::None.extension(), "");
+//! assert_eq!(TileCompression::Uncompressed.extension(), "");
 //! assert_eq!(TileCompression::Gzip.extension(), ".gz");
 //! assert_eq!(TileCompression::Brotli.extension(), ".br");
 //!
@@ -34,7 +34,7 @@ use std::fmt::Display;
 #[cfg_attr(feature = "cli", derive(ValueEnum))]
 #[derive(Debug, EnumSetType, PartialOrd)]
 pub enum TileCompression {
-	None,
+	Uncompressed,
 	Gzip,
 	Brotli,
 }
@@ -42,7 +42,7 @@ pub enum TileCompression {
 impl Display for TileCompression {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.write_str(match self {
-			TileCompression::None => "none",
+			TileCompression::Uncompressed => "none",
 			TileCompression::Gzip => "gzip",
 			TileCompression::Brotli => "brotli",
 		})
@@ -57,13 +57,13 @@ impl TileCompression {
 	/// ```
 	/// use versatiles_core::types::TileCompression;
 	///
-	/// assert_eq!(TileCompression::None.extension(), "");
+	/// assert_eq!(TileCompression::Uncompressed.extension(), "");
 	/// assert_eq!(TileCompression::Gzip.extension(), ".gz");
 	/// assert_eq!(TileCompression::Brotli.extension(), ".br");
 	/// ```
 	pub fn extension(&self) -> &str {
 		match self {
-			TileCompression::None => "",
+			TileCompression::Uncompressed => "",
 			TileCompression::Gzip => ".gz",
 			TileCompression::Brotli => ".br",
 		}
@@ -91,15 +91,15 @@ impl TileCompression {
 			let compression = match filename.get(index..).unwrap() {
 				".gz" => TileCompression::Gzip,
 				".br" => TileCompression::Brotli,
-				_ => TileCompression::None,
+				_ => TileCompression::Uncompressed,
 			};
 
-			if compression != TileCompression::None {
+			if compression != TileCompression::Uncompressed {
 				filename.truncate(index);
 			}
 			return compression;
 		}
-		TileCompression::None
+		TileCompression::Uncompressed
 	}
 
 	pub fn parse_str(value: &str) -> Result<Self> {
@@ -108,8 +108,8 @@ impl TileCompression {
 			"brotli" => TileCompression::Brotli,
 			"gz" => TileCompression::Gzip,
 			"gzip" => TileCompression::Gzip,
-			"none" => TileCompression::None,
-			"raw" => TileCompression::None,
+			"none" => TileCompression::Uncompressed,
+			"raw" => TileCompression::Uncompressed,
 			_ => bail!("Unknown tile compression. Expected brotli, gzip or none"),
 		})
 	}
@@ -129,7 +129,7 @@ mod tests {
 			);
 		}
 
-		test(TileCompression::None, "");
+		test(TileCompression::Uncompressed, "");
 		test(TileCompression::Gzip, ".gz");
 		test(TileCompression::Brotli, ".br");
 	}
@@ -151,8 +151,16 @@ mod tests {
 
 		test(TileCompression::Gzip, "file.txt.gz", "file.txt");
 		test(TileCompression::Brotli, "archive.tar.br", "archive.tar");
-		test(TileCompression::None, "image.png", "image.png");
-		test(TileCompression::None, "document.pdf", "document.pdf");
-		test(TileCompression::None, "noextensionfile", "noextensionfile");
+		test(TileCompression::Uncompressed, "image.png", "image.png");
+		test(
+			TileCompression::Uncompressed,
+			"document.pdf",
+			"document.pdf",
+		);
+		test(
+			TileCompression::Uncompressed,
+			"noextensionfile",
+			"noextensionfile",
+		);
 	}
 }

@@ -58,11 +58,13 @@ impl MockTilesReader {
 		let bbox_pyramid = TileBBoxPyramid::new_full(4);
 
 		MockTilesReader::new_mock(match profile {
-			MockTilesReaderProfile::Json => {
-				TilesReaderParameters::new(TileFormat::JSON, TileCompression::None, bbox_pyramid)
-			}
+			MockTilesReaderProfile::Json => TilesReaderParameters::new(
+				TileFormat::JSON,
+				TileCompression::Uncompressed,
+				bbox_pyramid,
+			),
 			MockTilesReaderProfile::Png => {
-				TilesReaderParameters::new(TileFormat::PNG, TileCompression::None, bbox_pyramid)
+				TilesReaderParameters::new(TileFormat::PNG, TileCompression::Uncompressed, bbox_pyramid)
 			}
 			MockTilesReaderProfile::Pbf => {
 				TilesReaderParameters::new(TileFormat::PBF, TileCompression::Gzip, bbox_pyramid)
@@ -99,18 +101,20 @@ impl TilesReader for MockTilesReader {
 	}
 
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+		use TileFormat::*;
+
 		if !coord.is_valid() {
 			return Ok(None);
 		}
 
 		let format = self.parameters.tile_format;
 		let mut blob = match format {
-			TileFormat::JSON => Blob::from(coord.as_json()),
-			TileFormat::PNG => Blob::from(MOCK_BYTES_PNG.to_vec()),
-			TileFormat::PBF => Blob::from(MOCK_BYTES_PBF.to_vec()),
-			//TileFormat::AVIF => Blob::from(MOCK_BYTES_AVIF.to_vec()),
-			TileFormat::JPG => Blob::from(MOCK_BYTES_JPG.to_vec()),
-			TileFormat::WEBP => Blob::from(MOCK_BYTES_WEBP.to_vec()),
+			JSON => Blob::from(coord.as_json()),
+			PNG => Blob::from(MOCK_BYTES_PNG.to_vec()),
+			PBF => Blob::from(MOCK_BYTES_PBF.to_vec()),
+			//AVIF => Blob::from(MOCK_BYTES_AVIF.to_vec()),
+			JPG => Blob::from(MOCK_BYTES_JPG.to_vec()),
+			WEBP => Blob::from(MOCK_BYTES_WEBP.to_vec()),
 			_ => panic!("tile format {format:?} is not implemented for MockTileReader"),
 		};
 		blob = compress(blob, &self.parameters.tile_compression)?;
@@ -142,7 +146,7 @@ mod tests {
 
 		assert_eq!(
 			reader.get_parameters(),
-			&TilesReaderParameters::new(TileFormat::PNG, TileCompression::None, bbox_pyramid)
+			&TilesReaderParameters::new(TileFormat::PNG, TileCompression::Uncompressed, bbox_pyramid)
 		);
 		assert_eq!(reader.get_meta()?, Some(Blob::from("dummy meta data")));
 		let blob = reader

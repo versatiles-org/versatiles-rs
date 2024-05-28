@@ -38,6 +38,8 @@ pub struct TarFile {
 
 impl TarFile {
 	pub fn from(path: &Path) -> Result<Self> {
+		use TileCompression::*;
+
 		let path = current_dir()?.join(path).canonicalize()?;
 
 		ensure!(path.exists(), "path {path:?} does not exist");
@@ -77,13 +79,13 @@ impl TarFile {
 				.extension()
 				.and_then(OsStr::to_str)
 				.map(|ext| match ext {
-					"br" => TileCompression::Brotli,
-					"gz" => TileCompression::Gzip,
-					_ => TileCompression::None,
+					"br" => Brotli,
+					"gz" => Gzip,
+					_ => Uncompressed,
 				})
-				.unwrap_or(TileCompression::None);
+				.unwrap_or(Uncompressed);
 
-			if compression != TileCompression::None {
+			if compression != Uncompressed {
 				entry_path.set_extension("");
 			}
 
@@ -110,9 +112,9 @@ impl TarFile {
 				let entry = lookup.entry(name);
 				let versions = entry.or_insert_with(|| FileEntry::new(mime.to_string()));
 				match compression {
-					TileCompression::None => versions.un = Some(blob),
-					TileCompression::Gzip => versions.gz = Some(blob),
-					TileCompression::Brotli => versions.br = Some(blob),
+					Uncompressed => versions.un = Some(blob),
+					Gzip => versions.gz = Some(blob),
+					Brotli => versions.br = Some(blob),
 				}
 			};
 
@@ -142,50 +144,32 @@ impl StaticSourceTrait for TarFile {
 	}
 
 	fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse> {
+		use TileCompression::*;
+
 		let file_entry = self.lookup.get(&url.str[1..])?.to_owned();
 
-		if accept.contains(TileCompression::Brotli) {
+		if accept.contains(Brotli) {
 			if let Some(blob) = &file_entry.br {
-				return SourceResponse::new_some(
-					blob.to_owned(),
-					&TileCompression::Brotli,
-					&file_entry.mime,
-				);
+				return SourceResponse::new_some(blob.to_owned(), &Brotli, &file_entry.mime);
 			}
 		}
 
-		if accept.contains(TileCompression::Gzip) {
+		if accept.contains(Gzip) {
 			if let Some(blob) = &file_entry.gz {
-				return SourceResponse::new_some(
-					blob.to_owned(),
-					&TileCompression::Gzip,
-					&file_entry.mime,
-				);
+				return SourceResponse::new_some(blob.to_owned(), &Gzip, &file_entry.mime);
 			}
 		}
 
 		if let Some(blob) = &file_entry.un {
-			return SourceResponse::new_some(
-				blob.to_owned(),
-				&TileCompression::None,
-				&file_entry.mime,
-			);
+			return SourceResponse::new_some(blob.to_owned(), &Uncompressed, &file_entry.mime);
 		}
 
 		if let Some(blob) = &file_entry.br {
-			return SourceResponse::new_some(
-				blob.to_owned(),
-				&TileCompression::Brotli,
-				&file_entry.mime,
-			);
+			return SourceResponse::new_some(blob.to_owned(), &Brotli, &file_entry.mime);
 		}
 
 		if let Some(blob) = &file_entry.gz {
-			return SourceResponse::new_some(
-				blob.to_owned(),
-				&TileCompression::Gzip,
-				&file_entry.mime,
-			);
+			return SourceResponse::new_some(blob.to_owned(), &Gzip, &file_entry.mime);
 		}
 
 		None
@@ -225,7 +209,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn small_stuff() {
-		let file = make_test_tar(TileCompression::None).await;
+		let file = make_test_tar(TileCompression::Uncompressed).await;
 
 		let tar_file = TarFile::from(&file).unwrap();
 
@@ -247,7 +231,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_data() {
-		use TileCompression::{Brotli as B, Gzip as G, None as N};
+		use TileCompression::{Brotli as B, Gzip as G, Uncompressed as N};
 
 		test1(N).await.unwrap();
 		test1(G).await.unwrap();

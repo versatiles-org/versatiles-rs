@@ -92,30 +92,33 @@ impl FileHeader {
 	/// # Errors
 	/// Returns an error if the conversion fails.
 	pub fn to_blob(&self) -> Result<Blob> {
+		use TileCompression::*;
+		use TileFormat::*;
+
 		let mut writer = ValueWriterBlob::new_be();
 		writer.write_slice(b"versatiles_v02")?;
 
 		// tile type
 		writer.write_u8(match self.tile_format {
-			TileFormat::BIN => 0x00,
+			BIN => 0x00,
 
-			TileFormat::PNG => 0x10,
-			TileFormat::JPG => 0x11,
-			TileFormat::WEBP => 0x12,
-			TileFormat::AVIF => 0x13,
-			TileFormat::SVG => 0x14,
+			PNG => 0x10,
+			JPG => 0x11,
+			WEBP => 0x12,
+			AVIF => 0x13,
+			SVG => 0x14,
 
-			TileFormat::PBF => 0x20,
-			TileFormat::GEOJSON => 0x21,
-			TileFormat::TOPOJSON => 0x22,
-			TileFormat::JSON => 0x23,
+			PBF => 0x20,
+			GEOJSON => 0x21,
+			TOPOJSON => 0x22,
+			JSON => 0x23,
 		})?;
 
 		// compression
 		writer.write_u8(match self.compression {
-			TileCompression::None => 0,
-			TileCompression::Gzip => 1,
-			TileCompression::Brotli => 2,
+			Uncompressed => 0,
+			Gzip => 1,
+			Brotli => 2,
 		})?;
 
 		writer.write_u8(self.zoom_range[0])?;
@@ -147,6 +150,9 @@ impl FileHeader {
 	/// # Errors
 	/// Returns an error if the binary data cannot be parsed correctly.
 	fn from_blob(blob: &Blob) -> Result<FileHeader> {
+		use TileCompression::*;
+		use TileFormat::*;
+
 		if blob.len() != HEADER_LENGTH {
 			bail!("'{blob:?}' is not a valid versatiles header. A header should be {HEADER_LENGTH} bytes long.");
 		}
@@ -158,25 +164,25 @@ impl FileHeader {
 		};
 
 		let tile_format = match reader.read_u8()? {
-			0x00 => TileFormat::BIN,
+			0x00 => BIN,
 
-			0x10 => TileFormat::PNG,
-			0x11 => TileFormat::JPG,
-			0x12 => TileFormat::WEBP,
-			0x13 => TileFormat::AVIF,
-			0x14 => TileFormat::SVG,
+			0x10 => PNG,
+			0x11 => JPG,
+			0x12 => WEBP,
+			0x13 => AVIF,
+			0x14 => SVG,
 
-			0x20 => TileFormat::PBF,
-			0x21 => TileFormat::GEOJSON,
-			0x22 => TileFormat::TOPOJSON,
-			0x23 => TileFormat::JSON,
+			0x20 => PBF,
+			0x21 => GEOJSON,
+			0x22 => TOPOJSON,
+			0x23 => JSON,
 			value => bail!("unknown tile_type value: {value}"),
 		};
 
 		let compression = match reader.read_u8()? {
-			0 => TileCompression::None,
-			1 => TileCompression::Gzip,
-			2 => TileCompression::Brotli,
+			0 => Uncompressed,
+			1 => Gzip,
+			2 => Brotli,
 			value => bail!("unknown compression value: {value}"),
 		};
 
@@ -207,6 +213,7 @@ impl FileHeader {
 mod tests {
 	use super::*;
 	use std::panic::catch_unwind;
+	use TileCompression::*;
 
 	#[test]
 	#[allow(clippy::zero_prefixed_literal)]
@@ -231,20 +238,20 @@ mod tests {
 		};
 		test(
 			&TileFormat::JPG,
-			&TileCompression::None,
+			&Uncompressed,
 			314159265358979323,
 			846264338327950288,
 			419716939937510582,
 			097494459230781640,
 		);
 
-		test(&TileFormat::PBF, &TileCompression::Brotli, 29, 97, 92, 458);
+		test(&TileFormat::PBF, &Brotli, 29, 97, 92, 458);
 	}
 
 	#[test]
 	fn new_file_header() {
 		let tf = TileFormat::PNG;
-		let comp = TileCompression::Gzip;
+		let comp = Gzip;
 		let zoom = [10, 14];
 		let bbox = [-180.0, -85.0511, 180.0, 85.0511];
 		let header = FileHeader::new(&tf, &comp, zoom, &bbox).unwrap();
@@ -264,7 +271,7 @@ mod tests {
 	fn to_blob() -> Result<()> {
 		let header = FileHeader::new(
 			&TileFormat::PBF,
-			&TileCompression::Gzip,
+			&Gzip,
 			[3, 8],
 			&[-180.0, -85.051_13, 180.0, 85.051_13],
 		)?;
@@ -293,7 +300,7 @@ mod tests {
 			[-1800000000, -850511300, 1800000000, 850511300]
 		);
 		assert_eq!(header2.tile_format, TileFormat::PBF);
-		assert_eq!(header2.compression, TileCompression::Gzip);
+		assert_eq!(header2.compression, Gzip);
 		assert_eq!(header2.meta_range, ByteRange::empty());
 		assert_eq!(header2.blocks_range, ByteRange::empty());
 
@@ -303,7 +310,7 @@ mod tests {
 	#[test]
 	fn new_file_header_with_invalid_params() {
 		let tf = TileFormat::PNG;
-		let comp = TileCompression::Gzip;
+		let comp = Gzip;
 
 		let should_panic = |zoom: [u8; 2], bbox: [f64; 4]| {
 			assert!(catch_unwind(|| {
@@ -323,22 +330,13 @@ mod tests {
 
 	#[test]
 	fn all_tile_formats() {
-		let compression = TileCompression::Gzip;
+		use TileFormat::*;
+
+		let compression = Gzip;
 		let zoom_range = [0, 0];
 		let bbox = [0.0, 0.0, 0.0, 0.0];
 
-		let tile_formats = vec![
-			TileFormat::BIN,
-			TileFormat::PNG,
-			TileFormat::JPG,
-			TileFormat::WEBP,
-			TileFormat::AVIF,
-			TileFormat::SVG,
-			TileFormat::PBF,
-			TileFormat::GEOJSON,
-			TileFormat::TOPOJSON,
-			TileFormat::JSON,
-		];
+		let tile_formats = vec![BIN, PNG, JPG, WEBP, AVIF, SVG, PBF, GEOJSON, TOPOJSON, JSON];
 
 		for tile_format in tile_formats {
 			let header = FileHeader::new(&tile_format, &compression, zoom_range, &bbox).unwrap();
@@ -356,11 +354,7 @@ mod tests {
 		let zoom_range = [0, 0];
 		let bbox = [0.0, 0.0, 0.0, 0.0];
 
-		let compressions = vec![
-			TileCompression::None,
-			TileCompression::Gzip,
-			TileCompression::Brotli,
-		];
+		let compressions = vec![Uncompressed, Gzip, Brotli];
 
 		for compression in compressions {
 			let header = FileHeader::new(&tile_format, &compression, zoom_range, &bbox).unwrap();
@@ -387,15 +381,11 @@ mod tests {
 
 	#[test]
 	fn unknown_tile_format() {
-		let mut invalid_blob = FileHeader::new(
-			&TileFormat::PNG,
-			&TileCompression::Gzip,
-			[0, 0],
-			&[0.0, 0.0, 0.0, 0.0],
-		)
-		.unwrap()
-		.to_blob()
-		.unwrap();
+		let mut invalid_blob =
+			FileHeader::new(&TileFormat::PNG, &Gzip, [0, 0], &[0.0, 0.0, 0.0, 0.0])
+				.unwrap()
+				.to_blob()
+				.unwrap();
 		invalid_blob.as_mut_slice()[14] = 0xFF; // Set an unknown tile format value
 
 		let result = catch_unwind(|| {
@@ -407,15 +397,11 @@ mod tests {
 
 	#[test]
 	fn unknown_compression() {
-		let mut invalid_blob = FileHeader::new(
-			&TileFormat::PNG,
-			&TileCompression::Gzip,
-			[0, 0],
-			&[0.0, 0.0, 0.0, 0.0],
-		)
-		.unwrap()
-		.to_blob()
-		.unwrap();
+		let mut invalid_blob =
+			FileHeader::new(&TileFormat::PNG, &Gzip, [0, 0], &[0.0, 0.0, 0.0, 0.0])
+				.unwrap()
+				.to_blob()
+				.unwrap();
 		invalid_blob.as_mut_slice()[15] = 0xFF; // Set an unknown compression value
 
 		let result = catch_unwind(|| {

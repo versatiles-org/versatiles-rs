@@ -396,7 +396,7 @@ mod tests {
 			DirectoryTilesReader::open_path(&dir)
 				.unwrap_err()
 				.to_string(),
-			"found multiple tile compressions None and Brotli"
+			"found multiple tile compressions Uncompressed and Brotli"
 		);
 
 		Ok(())

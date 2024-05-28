@@ -111,15 +111,18 @@ impl TilesWriter for MBTilesWriter {
 	/// # Errors
 	/// Returns an error if the file format or compression is not supported, or if there are issues with writing to the SQLite database.
 	async fn write_to_path(reader: &mut dyn TilesReader, path: &Path) -> Result<()> {
+		use TileCompression::*;
+		use TileFormat::*;
+
 		let mut writer = MBTilesWriter::new(path)?;
 
 		let parameters = reader.get_parameters().clone();
 
 		let format = match (parameters.tile_format, parameters.tile_compression) {
-			(TileFormat::JPG, TileCompression::None) => "jpg",
-			(TileFormat::PBF, TileCompression::Gzip) => "pbf",
-			(TileFormat::PNG, TileCompression::None) => "png",
-			(TileFormat::WEBP, TileCompression::None) => "webp",
+			(JPG, Uncompressed) => "jpg",
+			(PBF, Gzip) => "pbf",
+			(PNG, Uncompressed) => "png",
+			(WEBP, Uncompressed) => "webp",
 			_ => bail!(
 				"combination of format ({}) and compression ({}) is not supported. MBTiles supports only uncompressed jpg/png/webp or gzipped pbf",
 				parameters.tile_format,

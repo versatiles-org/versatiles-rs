@@ -75,7 +75,7 @@ mod tests {
 			if path.starts_with(&Url::new("exists")) {
 				SourceResponse::new_some(
 					Blob::from(vec![1, 2, 3, 4]),
-					&TileCompression::None,
+					&TileCompression::Uncompressed,
 					"application/octet-stream",
 				)
 			} else {
@@ -86,6 +86,8 @@ mod tests {
 
 	#[test]
 	fn new_static_source() -> Result<()> {
+		use TileCompression::*;
+
 		let check_type = |path: PathBuf, type_name: &str| {
 			let source = StaticSource::new(&path, Url::new("")).unwrap();
 			assert_eq!(source.get_type(), type_name);
@@ -117,22 +119,22 @@ mod tests {
 
 		// Test .tar file
 		let path = temp_dir.path().join("temp.tar");
-		create_file(&path, TileCompression::None);
+		create_file(&path, Uncompressed);
 		check_type(path, "tar");
 
 		// Test gzip compressed .tar file
 		let path = temp_dir.path().join("temp.tar.gz");
-		create_file(&path, TileCompression::Gzip);
+		create_file(&path, Gzip);
 		check_type(path, "tar");
 
 		// Test brotli compressed .tar file
 		let path = temp_dir.path().join("temp.tar.br");
-		create_file(&path, TileCompression::Brotli);
+		create_file(&path, Brotli);
 		check_type(path, "tar");
 
 		// Test non .tar file
 		let path = temp_dir.path().join("data.tar.bmp");
-		create_file(&path, TileCompression::None);
+		create_file(&path, Uncompressed);
 		check_error(path, "\" must be a name of a tar file");
 
 		// Test initialization with a folder

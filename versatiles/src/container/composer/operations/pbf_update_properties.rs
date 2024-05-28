@@ -128,7 +128,7 @@ impl TileComposerOperation for PBFUpdatePropertiesOperation {
 		);
 
 		let input_compression = parameters.tile_compression;
-		parameters.tile_compression = TileCompression::None;
+		parameters.tile_compression = TileCompression::Uncompressed;
 
 		Ok(PBFUpdatePropertiesOperation {
 			config,

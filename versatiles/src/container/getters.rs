@@ -201,8 +201,8 @@ pub mod tests {
 		let containers = vec![Container::Directory, Container::Tar, Container::Versatiles];
 
 		for container in containers {
-			test_writer_and_reader(&container, TileFormat::PNG, TileCompression::None)?;
-			test_writer_and_reader(&container, TileFormat::JPG, TileCompression::None)?;
+			test_writer_and_reader(&container, TileFormat::PNG, TileCompression::Uncompressed)?;
+			test_writer_and_reader(&container, TileFormat::JPG, TileCompression::Uncompressed)?;
 			test_writer_and_reader(&container, TileFormat::PBF, TileCompression::Gzip)?;
 		}
 

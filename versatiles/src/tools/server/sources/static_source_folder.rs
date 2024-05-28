@@ -81,7 +81,7 @@ impl StaticSourceTrait for Folder {
 
 		let mime = guess_mime(&local_path);
 
-		SourceResponse::new_some(blob, &TileCompression::None, &mime)
+		SourceResponse::new_some(blob, &TileCompression::Uncompressed, &mime)
 	}
 }
 

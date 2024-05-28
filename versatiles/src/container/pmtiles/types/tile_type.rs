@@ -25,27 +25,29 @@ impl PMTilesType {
 		}
 	}
 	pub fn from_value(value: TileFormat) -> Result<Self> {
+		use TileFormat::*;
 		Ok(match value {
-			TileFormat::AVIF => PMTilesType::AVIF,
-			TileFormat::BIN => bail!("PMTiles does not support TileFormat::BIN"),
-			TileFormat::GEOJSON => bail!("PMTiles does not support TileFormat::GEOJSON"),
-			TileFormat::JPG => PMTilesType::JPEG,
-			TileFormat::JSON => bail!("PMTiles does not support TileFormat::JSON"),
-			TileFormat::PBF => PMTilesType::MVT,
-			TileFormat::PNG => PMTilesType::PNG,
-			TileFormat::SVG => bail!("PMTiles does not support TileFormat::SVG"),
-			TileFormat::TOPOJSON => bail!("PMTiles does not support TileFormat::TOPOJSON"),
-			TileFormat::WEBP => PMTilesType::WEBP,
+			AVIF => PMTilesType::AVIF,
+			BIN => bail!("PMTiles does not support BIN"),
+			GEOJSON => bail!("PMTiles does not support GEOJSON"),
+			JPG => PMTilesType::JPEG,
+			JSON => bail!("PMTiles does not support JSON"),
+			PBF => PMTilesType::MVT,
+			PNG => PMTilesType::PNG,
+			SVG => bail!("PMTiles does not support SVG"),
+			TOPOJSON => bail!("PMTiles does not support TOPOJSON"),
+			WEBP => PMTilesType::WEBP,
 		})
 	}
 	pub fn as_value(&self) -> Result<TileFormat> {
+		use TileFormat::*;
 		Ok(match self {
-			PMTilesType::UNKNOWN => TileFormat::BIN,
-			PMTilesType::MVT => TileFormat::PBF,
-			PMTilesType::PNG => TileFormat::PNG,
-			PMTilesType::JPEG => TileFormat::JPG,
-			PMTilesType::WEBP => TileFormat::WEBP,
-			PMTilesType::AVIF => TileFormat::AVIF,
+			PMTilesType::UNKNOWN => BIN,
+			PMTilesType::MVT => PBF,
+			PMTilesType::PNG => PNG,
+			PMTilesType::JPEG => JPG,
+			PMTilesType::WEBP => WEBP,
+			PMTilesType::AVIF => AVIF,
 		})
 	}
 }
@@ -53,6 +55,7 @@ impl PMTilesType {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use TileFormat::*;
 
 	#[test]
 	fn test_from_u8() {
@@ -67,42 +70,27 @@ mod tests {
 
 	#[test]
 	fn test_from_value() {
-		assert_eq!(
-			PMTilesType::from_value(TileFormat::AVIF).unwrap(),
-			PMTilesType::AVIF
-		);
-		assert_eq!(
-			PMTilesType::from_value(TileFormat::JPG).unwrap(),
-			PMTilesType::JPEG
-		);
-		assert_eq!(
-			PMTilesType::from_value(TileFormat::PBF).unwrap(),
-			PMTilesType::MVT
-		);
-		assert_eq!(
-			PMTilesType::from_value(TileFormat::PNG).unwrap(),
-			PMTilesType::PNG
-		);
-		assert_eq!(
-			PMTilesType::from_value(TileFormat::WEBP).unwrap(),
-			PMTilesType::WEBP
-		);
+		assert_eq!(PMTilesType::from_value(AVIF).unwrap(), PMTilesType::AVIF);
+		assert_eq!(PMTilesType::from_value(JPG).unwrap(), PMTilesType::JPEG);
+		assert_eq!(PMTilesType::from_value(PBF).unwrap(), PMTilesType::MVT);
+		assert_eq!(PMTilesType::from_value(PNG).unwrap(), PMTilesType::PNG);
+		assert_eq!(PMTilesType::from_value(WEBP).unwrap(), PMTilesType::WEBP);
 
 		// Test unsupported TileFormats
-		assert!(PMTilesType::from_value(TileFormat::BIN).is_err());
-		assert!(PMTilesType::from_value(TileFormat::GEOJSON).is_err());
-		assert!(PMTilesType::from_value(TileFormat::JSON).is_err());
-		assert!(PMTilesType::from_value(TileFormat::SVG).is_err());
-		assert!(PMTilesType::from_value(TileFormat::TOPOJSON).is_err());
+		assert!(PMTilesType::from_value(BIN).is_err());
+		assert!(PMTilesType::from_value(GEOJSON).is_err());
+		assert!(PMTilesType::from_value(JSON).is_err());
+		assert!(PMTilesType::from_value(SVG).is_err());
+		assert!(PMTilesType::from_value(TOPOJSON).is_err());
 	}
 
 	#[test]
 	fn test_as_value() {
-		assert_eq!(PMTilesType::UNKNOWN.as_value().unwrap(), TileFormat::BIN);
-		assert_eq!(PMTilesType::MVT.as_value().unwrap(), TileFormat::PBF);
-		assert_eq!(PMTilesType::PNG.as_value().unwrap(), TileFormat::PNG);
-		assert_eq!(PMTilesType::JPEG.as_value().unwrap(), TileFormat::JPG);
-		assert_eq!(PMTilesType::WEBP.as_value().unwrap(), TileFormat::WEBP);
-		assert_eq!(PMTilesType::AVIF.as_value().unwrap(), TileFormat::AVIF);
+		assert_eq!(PMTilesType::UNKNOWN.as_value().unwrap(), BIN);
+		assert_eq!(PMTilesType::MVT.as_value().unwrap(), PBF);
+		assert_eq!(PMTilesType::PNG.as_value().unwrap(), PNG);
+		assert_eq!(PMTilesType::JPEG.as_value().unwrap(), JPG);
+		assert_eq!(PMTilesType::WEBP.as_value().unwrap(), WEBP);
+		assert_eq!(PMTilesType::AVIF.as_value().unwrap(), AVIF);
 	}
 }

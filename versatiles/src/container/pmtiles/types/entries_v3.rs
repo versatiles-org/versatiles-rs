@@ -360,7 +360,7 @@ mod tests {
 	#[test]
 	fn test_as_directory() -> Result<()> {
 		let mut entries = create_entries();
-		let directory = entries.as_directory(1000, &TileCompression::None)?; // Assuming 1000 is enough size for root
+		let directory = entries.as_directory(1000, &TileCompression::Uncompressed)?; // Assuming 1000 is enough size for root
 		assert!(!directory.root_bytes.is_empty());
 		Ok(())
 	}
@@ -419,7 +419,7 @@ mod tests {
 	#[test]
 	fn test_as_directory_structure() -> Result<()> {
 		let mut entries = create_filled_entries(500); // A reasonable number of entries for testing
-		let directory = entries.as_directory(1024, &TileCompression::None)?; // Assuming a small root directory size
+		let directory = entries.as_directory(1024, &TileCompression::Uncompressed)?; // Assuming a small root directory size
 
 		assert!(
 			!directory.root_bytes.is_empty(),

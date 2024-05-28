@@ -51,7 +51,10 @@ impl TileComposerOperation for PBFMock {
 
 		Ok(PBFMock {
 			blob,
-			parameters: TilesReaderParameters::new_full(TileFormat::PBF, TileCompression::None),
+			parameters: TilesReaderParameters::new_full(
+				TileFormat::PBF,
+				TileCompression::Uncompressed,
+			),
 		})
 	}
 

@@ -161,7 +161,8 @@ mod tests {
 		let config = Config {
 			filename: "mock_file".to_string(),
 		};
-		let parameters = TilesReaderParameters::new_full(TileFormat::PBF, TileCompression::None);
+		let parameters =
+			TilesReaderParameters::new_full(TileFormat::PBF, TileCompression::Uncompressed);
 
 		ReadOperation {
 			config,

@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 
-use crate::types::{Blob, TileCompression};
+use crate::types::{
+	Blob,
+	TileCompression::{self, *},
+};
 use anyhow::{bail, Result};
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
 use enumset::EnumSet;
@@ -24,7 +27,7 @@ impl TargetCompression {
 		Self::from_set(EnumSet::only(compression))
 	}
 	pub fn from_none() -> Self {
-		Self::from(TileCompression::None)
+		Self::from(Uncompressed)
 	}
 	pub fn set_best_compression(&mut self, best_compression: bool) {
 		self.best_compression = best_compression;
@@ -51,42 +54,39 @@ pub fn optimize_compression(
 	}
 
 	match input {
-		TileCompression::None => {
-			if target.compressions.contains(TileCompression::Brotli) {
-				return Ok((compress_brotli(&blob)?, TileCompression::Brotli));
+		Uncompressed => {
+			if target.compressions.contains(Brotli) {
+				return Ok((compress_brotli(&blob)?, Brotli));
 			}
 
-			if target.compressions.contains(TileCompression::Gzip) {
-				return Ok((compress_gzip(&blob)?, TileCompression::Gzip));
+			if target.compressions.contains(Gzip) {
+				return Ok((compress_gzip(&blob)?, Gzip));
 			}
 
-			Ok((blob, TileCompression::None))
+			Ok((blob, Uncompressed))
 		}
-		TileCompression::Gzip => {
-			if target.compressions.contains(TileCompression::Brotli) {
-				return Ok((
-					compress_brotli(&decompress_gzip(&blob)?)?,
-					TileCompression::Brotli,
-				));
+		Gzip => {
+			if target.compressions.contains(Brotli) {
+				return Ok((compress_brotli(&decompress_gzip(&blob)?)?, Brotli));
 			}
 
-			if target.compressions.contains(TileCompression::Gzip) {
-				return Ok((blob, TileCompression::Gzip));
+			if target.compressions.contains(Gzip) {
+				return Ok((blob, Gzip));
 			}
 
-			Ok((decompress_gzip(&blob)?, TileCompression::None))
+			Ok((decompress_gzip(&blob)?, Uncompressed))
 		}
-		TileCompression::Brotli => {
-			if target.compressions.contains(TileCompression::Brotli) {
-				return Ok((blob, TileCompression::Brotli));
+		Brotli => {
+			if target.compressions.contains(Brotli) {
+				return Ok((blob, Brotli));
 			}
 			let data = decompress_brotli(&blob)?;
 
-			if target.compressions.contains(TileCompression::Gzip) {
-				return Ok((compress_gzip(&data)?, TileCompression::Gzip));
+			if target.compressions.contains(Gzip) {
+				return Ok((compress_gzip(&data)?, Gzip));
 			}
 
-			Ok((data, TileCompression::None))
+			Ok((data, Uncompressed))
 		}
 	}
 }
@@ -112,9 +112,9 @@ pub fn recompress(
 /// * `compression` - The compression algorithm to use
 pub fn compress(blob: Blob, compression: &TileCompression) -> Result<Blob> {
 	match compression {
-		TileCompression::None => Ok(blob),
-		TileCompression::Gzip => compress_gzip(&blob),
-		TileCompression::Brotli => compress_brotli(&blob),
+		Uncompressed => Ok(blob),
+		Gzip => compress_gzip(&blob),
+		Brotli => compress_brotli(&blob),
 	}
 }
 
@@ -126,9 +126,9 @@ pub fn compress(blob: Blob, compression: &TileCompression) -> Result<Blob> {
 /// * `compression` - The compression algorithm used for compression
 pub fn decompress(blob: Blob, compression: &TileCompression) -> Result<Blob> {
 	match compression {
-		TileCompression::None => Ok(blob),
-		TileCompression::Gzip => decompress_gzip(&blob),
-		TileCompression::Brotli => decompress_brotli(&blob),
+		Uncompressed => Ok(blob),
+		Gzip => decompress_gzip(&blob),
+		Brotli => decompress_brotli(&blob),
 	}
 }
 
@@ -237,14 +237,14 @@ mod tests {
 				best_compression,
 			};
 			let data_in = match compression_in {
-				TileCompression::None => blob.clone(),
-				TileCompression::Gzip => blob_gzip.clone(),
-				TileCompression::Brotli => blob_brotli.clone(),
+				Uncompressed => blob.clone(),
+				Gzip => blob_gzip.clone(),
+				Brotli => blob_brotli.clone(),
 			};
 			let data_exp = match compression_exp {
-				TileCompression::None => blob.clone(),
-				TileCompression::Gzip => blob_gzip.clone(),
-				TileCompression::Brotli => blob_brotli.clone(),
+				Uncompressed => blob.clone(),
+				Gzip => blob_gzip.clone(),
+				Brotli => blob_brotli.clone(),
 			};
 			let (data_res, compression_res) = optimize_compression(data_in, &compression_in, target)?;
 			assert_eq!(
@@ -256,16 +256,16 @@ mod tests {
 			Ok(())
 		};
 
-		let cn = TileCompression::None;
-		let cg = TileCompression::Gzip;
-		let cb = TileCompression::Brotli;
+		let cn = Uncompressed;
+		let cg = Gzip;
+		let cb = Brotli;
 
-		let sn = enum_set!(TileCompression::None);
-		let sg = enum_set!(TileCompression::Gzip);
-		let sb = enum_set!(TileCompression::Brotli);
-		let sng = enum_set!(TileCompression::None | TileCompression::Gzip);
-		let snb = enum_set!(TileCompression::None | TileCompression::Brotli);
-		let sngb = enum_set!(TileCompression::None | TileCompression::Gzip | TileCompression::Brotli);
+		let sn = enum_set!(Uncompressed);
+		let sg = enum_set!(Gzip);
+		let sb = enum_set!(Brotli);
+		let sng = enum_set!(Uncompressed | Gzip);
+		let snb = enum_set!(Uncompressed | Brotli);
+		let sngb = enum_set!(Uncompressed | Gzip | Brotli);
 
 		test(cn, sn, true, cn)?;
 		test(cn, sg, true, cg)?;

@@ -273,10 +273,11 @@ fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Re
 			.expect("should have optimized compression")
 	};
 
+	use TileCompression::*;
 	match compression {
-		TileCompression::None => {}
-		TileCompression::Gzip => response = response.header(CONTENT_ENCODING, "gzip"),
-		TileCompression::Brotli => response = response.header(CONTENT_ENCODING, "br"),
+		Uncompressed => {}
+		Gzip => response = response.header(CONTENT_ENCODING, "gzip"),
+		Brotli => response = response.header(CONTENT_ENCODING, "br"),
 	}
 
 	response
@@ -288,7 +289,7 @@ fn ok_json(message: &str) -> Response<Body> {
 	ok_data(
 		SourceResponse {
 			blob: Blob::from(message),
-			compression: TileCompression::None,
+			compression: TileCompression::Uncompressed,
 			mime: String::from("application/json"),
 		},
 		TargetCompression::from_none(),
@@ -335,27 +336,36 @@ mod tests {
 			assert_eq!(comp, comp0);
 		};
 
-		test("NONE", enum_set!(None));
-		test("", enum_set!(None));
-		test("*", enum_set!(None));
-		test("br", enum_set!(None | Brotli));
+		test("NONE", enum_set!(Uncompressed));
+		test("", enum_set!(Uncompressed));
+		test("*", enum_set!(Uncompressed));
+		test("br", enum_set!(Uncompressed | Brotli));
 		test(
 			"br;q=1.0, gzip;q=0.8, *;q=0.1",
-			enum_set!(None | Brotli | Gzip),
+			enum_set!(Uncompressed | Brotli | Gzip),
 		);
-		test("compress", enum_set!(None));
-		test("compress, gzip", enum_set!(None | Gzip));
-		test("compress;q=0.5, gzip;q=1.0", enum_set!(None | Gzip));
-		test("deflate", enum_set!(None));
-		test("deflate, gzip;q=1.0, *;q=0.5", enum_set!(None | Gzip));
-		test("gzip", enum_set!(None | Gzip));
-		test("gzip, compress, br", enum_set!(None | Brotli | Gzip));
+		test("compress", enum_set!(Uncompressed));
+		test("compress, gzip", enum_set!(Uncompressed | Gzip));
+		test("compress;q=0.5, gzip;q=1.0", enum_set!(Uncompressed | Gzip));
+		test("deflate", enum_set!(Uncompressed));
+		test(
+			"deflate, gzip;q=1.0, *;q=0.5",
+			enum_set!(Uncompressed | Gzip),
+		);
+		test("gzip", enum_set!(Uncompressed | Gzip));
+		test(
+			"gzip, compress, br",
+			enum_set!(Uncompressed | Brotli | Gzip),
+		);
 		test(
 			"gzip, deflate, br;q=1.0, identity;q=0.5, *;q=0.25",
-			enum_set!(None | Brotli | Gzip),
+			enum_set!(Uncompressed | Brotli | Gzip),
 		);
-		test("gzip;q=1.0, identity; q=0.5, *;q=0", enum_set!(None | Gzip));
-		test("identity", enum_set!(None));
+		test(
+			"gzip;q=1.0, identity; q=0.5, *;q=0",
+			enum_set!(Uncompressed | Gzip),
+		);
+		test("identity", enum_set!(Uncompressed));
 	}
 
 	#[tokio::test]

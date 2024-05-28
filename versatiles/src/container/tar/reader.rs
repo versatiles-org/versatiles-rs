@@ -255,7 +255,7 @@ pub mod tests {
 			Ok(())
 		}
 
-		test_compression(TileCompression::None).await?;
+		test_compression(TileCompression::Uncompressed).await?;
 		test_compression(TileCompression::Gzip).await?;
 		test_compression(TileCompression::Brotli).await?;
 		Ok(())

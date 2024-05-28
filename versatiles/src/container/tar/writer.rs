@@ -139,7 +139,7 @@ mod tests {
 	async fn test_meta_data() -> Result<()> {
 		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
 			bbox_pyramid: TileBBoxPyramid::new_full(1),
-			tile_compression: TileCompression::None,
+			tile_compression: TileCompression::Uncompressed,
 			tile_format: TileFormat::JSON,
 		})?;
 

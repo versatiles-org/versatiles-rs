@@ -169,7 +169,7 @@ impl TileConverter {
 		if force_recompress || (src_comp != dst_comp) || format_converter_option.is_some() {
 			use TileCompression::*;
 			match src_comp {
-				None => {}
+				Uncompressed => {}
 				Gzip => converter.push(FnConv::UnGzip),
 				Brotli => converter.push(FnConv::UnBrotli),
 			}
@@ -177,7 +177,7 @@ impl TileConverter {
 				converter.push(format_converter)
 			}
 			match dst_comp {
-				None => {}
+				Uncompressed => {}
 				Gzip => converter.push(FnConv::Gzip),
 				Brotli => converter.push(FnConv::Brotli),
 			}
@@ -191,15 +191,16 @@ impl TileConverter {
 	/// Constructs a new `DataConverter` instance that decompresses data using the specified compression algorithm.
 	/// The `src_comp` parameter specifies the compression algorithm to use: `Compression::Uncompressed`, `Compression::Gzip`, or `Compression::Brotli`.
 	pub fn new_decompressor(src_comp: &TileCompression) -> TileConverter {
+		use TileCompression::*;
 		let mut converter = TileConverter::new_empty();
 
 		match src_comp {
 			// If uncompressed, do nothing
-			TileCompression::None => {}
+			Uncompressed => {}
 			// If gzip, add the gzip decompression function to the pipeline
-			TileCompression::Gzip => converter.push(FnConv::UnGzip),
+			Gzip => converter.push(FnConv::UnGzip),
 			// If brotli, add the brotli decompression function to the pipeline
-			TileCompression::Brotli => converter.push(FnConv::UnBrotli),
+			Brotli => converter.push(FnConv::UnBrotli),
 		}
 
 		converter
@@ -264,7 +265,7 @@ impl Eq for TileConverter {}
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::{TileCompression::*, TileFormat::*};
+	use crate::types::TileFormat::*;
 	use anyhow::{ensure, Result};
 
 	#[test]
@@ -316,11 +317,8 @@ mod tests {
 		}
 
 		let image_formats = vec![JPG, PNG, WEBP, PBF];
-		let compressions = vec![
-			TileCompression::None,
-			TileCompression::Gzip,
-			TileCompression::Brotli,
-		];
+		use TileCompression::*;
+		let compressions = vec![Uncompressed, Gzip, Brotli];
 		let forcing = vec![false, true];
 
 		for f_in in &image_formats {
@@ -381,7 +379,7 @@ mod tests {
 
 		fn decomp(compression: &TileCompression) -> &str {
 			match compression {
-				None => "",
+				Uncompressed => "",
 				Gzip => "ungzip",
 				Brotli => "unbrotli",
 			}
@@ -389,7 +387,7 @@ mod tests {
 
 		fn comp(compression: &TileCompression) -> &str {
 			match compression {
-				None => "",
+				Uncompressed => "",
 				Gzip => "gzip",
 				Brotli => "brotli",
 			}
@@ -447,9 +445,9 @@ mod tests {
 
 				let data_converter = TileConverter::new_tile_recompressor(
 					src_form,
-					&TileCompression::None,
+					&TileCompression::Uncompressed,
 					dst_form,
-					&TileCompression::None,
+					&TileCompression::Uncompressed,
 					true,
 				)?;
 

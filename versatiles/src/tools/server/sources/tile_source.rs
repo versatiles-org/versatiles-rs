@@ -21,22 +21,24 @@ pub struct TileSource {
 impl TileSource {
 	// Constructor function for creating a TileSource instance
 	pub fn from(reader: Box<dyn TilesReader>, prefix: Url) -> Result<TileSource> {
+		use TileFormat::*;
+
 		let parameters = reader.get_parameters();
 		let compression = parameters.tile_compression;
 
 		// Determine the MIME type based on the tile format
 		let tile_mime = match parameters.tile_format {
 			// Various tile formats with their corresponding MIME types
-			TileFormat::BIN => "application/octet-stream",
-			TileFormat::PNG => "image/png",
-			TileFormat::JPG => "image/jpeg",
-			TileFormat::WEBP => "image/webp",
-			TileFormat::AVIF => "image/avif",
-			TileFormat::SVG => "image/svg+xml",
-			TileFormat::PBF => "application/x-protobuf",
-			TileFormat::GEOJSON => "application/geo+json",
-			TileFormat::TOPOJSON => "application/topo+json",
-			TileFormat::JSON => "application/json",
+			BIN => "application/octet-stream",
+			PNG => "image/png",
+			JPG => "image/jpeg",
+			WEBP => "image/webp",
+			AVIF => "image/avif",
+			SVG => "image/svg+xml",
+			PBF => "application/x-protobuf",
+			GEOJSON => "application/geo+json",
+			TOPOJSON => "application/topo+json",
+			JSON => "application/json",
 		}
 		.to_string();
 
@@ -117,7 +119,7 @@ impl TileSource {
 
 			return SourceResponse::new_some(
 				meta_option.unwrap(),
-				&TileCompression::None,
+				&TileCompression::Uncompressed,
 				"application/json",
 			);
 		}
@@ -151,7 +153,7 @@ mod tests {
 		let container = TileSource::from(reader.boxed(), Url::new("prefix"))?;
 
 		assert_eq!(container.prefix.str, "/prefix");
-		assert_eq!(container.json_info, "{\"type\":\"dummy_container\",\"format\":\"png\",\"compression\":\"none\",\"zoom_min\":0,\"zoom_max\":4,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}");
+		assert_eq!(container.json_info, "{\"type\":\"dummy_container\",\"format\":\"png\",\"compression\":\"uncompressed\",\"zoom_min\":0,\"zoom_max\":4,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}");
 
 		Ok(())
 	}
@@ -161,13 +163,15 @@ mod tests {
 	fn debug() -> Result<()> {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
 		let container = TileSource::from(reader.boxed(), Url::new("prefix")).unwrap();
-		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: None, tile_format: PNG } } }, tile_mime: \"image/png\", compression: None }");
+		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Uncompressed, tile_format: PNG } } }, tile_mime: \"image/png\", compression: Uncompressed }");
 		Ok(())
 	}
 
 	// Test the get_data method of the TileSource
 	#[tokio::test]
 	async fn tile_container_get_data() -> Result<()> {
+		use TileCompression::*;
+
 		async fn check_response(
 			container: &mut TileSource,
 			url: &str,
@@ -203,19 +207,19 @@ mod tests {
 		)?;
 
 		assert_eq!(
-			&check_response(c, "0/0/0.png", TileCompression::None, "image/png").await?[0..6],
+			&check_response(c, "0/0/0.png", Uncompressed, "image/png").await?[0..6],
 			b"\x89PNG\r\n"
 		);
 
 		assert_eq!(
-			&check_response(c, "meta.json", TileCompression::None, "application/json").await?[..],
+			&check_response(c, "meta.json", Uncompressed, "application/json").await?[..],
 			b"dummy meta data"
 		);
 
-		assert!(check_404(c, "x/0/0.png", TileCompression::None).await?);
-		assert!(check_404(c, "-1/0/0.png", TileCompression::None).await?);
-		assert!(check_404(c, "0/0/-1.png", TileCompression::None).await?);
-		assert!(check_404(c, "0/0/1.png", TileCompression::None).await?);
+		assert!(check_404(c, "x/0/0.png", Uncompressed).await?);
+		assert!(check_404(c, "-1/0/0.png", Uncompressed).await?);
+		assert!(check_404(c, "0/0/-1.png", Uncompressed).await?);
+		assert!(check_404(c, "0/0/1.png", Uncompressed).await?);
 
 		Ok(())
 	}
