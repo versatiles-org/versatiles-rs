@@ -2,12 +2,12 @@
 
 use super::{geometry_type::GeomType, layer::VectorTileLayer};
 use crate::{
-	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
-	types::Blob,
-	utils::geometry::basic::{
+	basic::{
 		AreaTrait, Feature, Geometry, LineStringGeometry, MultiPointGeometry, PointGeometry,
 		PolygonGeometry,
 	},
+	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+	types::Blob,
 };
 use anyhow::{bail, ensure, Context, Result};
 use byteorder::LE;
@@ -348,7 +348,7 @@ impl VectorTileFeature {
 		fn m<T>(g: &[T]) -> Vec<&T> {
 			g.iter().collect()
 		}
-		use crate::utils::geometry::basic::Geometry::*;
+		use crate::basic::Geometry::*;
 		let (geom_type, geom_data) = match geometry {
 			Point(g) => (GeomType::MultiPoint, write_points(&vec![g])?),
 			MultiPoint(g) => (GeomType::MultiPoint, write_points(&m(g))?),

@@ -30,6 +30,8 @@ mod tools;
 mod utils;
 
 pub use versatiles_core::*;
+#[cfg(feature = "full")]
+pub use versatiles_geometry as geometry;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};

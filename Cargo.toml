@@ -1,6 +1,6 @@
 [workspace]
-members = ["versatiles", "versatiles_core", "versatiles_derive"]
-default-members = ["versatiles", "versatiles_core", "versatiles_derive"]
+members = ["versatiles", "versatiles_core", "versatiles_derive", "versatiles_geometry"]
+default-members = ["versatiles", "versatiles_core", "versatiles_derive", "versatiles_geometry"]
 resolver = "2"
 
 [workspace.package]
@@ -91,3 +91,4 @@ yaml-rust2 = { version = "0.8.0", default-features = false }
 
 versatiles_core = { path = "versatiles_core" }
 versatiles_derive = { path = "versatiles_derive" }
+versatiles_geometry = { path = "versatiles_geometry" }

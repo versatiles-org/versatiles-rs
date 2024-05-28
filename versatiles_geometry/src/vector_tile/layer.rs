@@ -4,7 +4,7 @@ use super::{feature::VectorTileFeature, property_manager::PropertyManager, value
 use crate::{
 	io::{ValueReader, ValueWriter, ValueWriterBlob},
 	types::Blob,
-	utils::geometry::{
+	{
 		basic::{Feature, GeoValue},
 		GeoProperties,
 	},
@@ -261,7 +261,7 @@ impl VectorTileLayer {
 
 #[cfg(test)]
 mod tests {
-	use crate::{io::ValueReaderSlice, utils::geometry::GeoProperties};
+	use crate::{io::ValueReaderSlice, GeoProperties};
 
 	use super::*;
 

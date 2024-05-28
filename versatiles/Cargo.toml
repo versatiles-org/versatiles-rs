@@ -54,6 +54,7 @@ yaml-rust2 = { workspace = true, optional = true }
 
 versatiles_core = { workspace = true }
 versatiles_derive = { workspace = true, optional = true }
+versatiles_geometry = { workspace = true, optional = true }
 
 [dev-dependencies]
 assert_fs.workspace = true
@@ -85,6 +86,7 @@ full = [
 	"dep:tar",
 	"dep:webp",
 	"dep:versatiles_derive",
+	"dep:versatiles_geometry",
 	"dep:yaml-rust2",
 	"http",
 ]

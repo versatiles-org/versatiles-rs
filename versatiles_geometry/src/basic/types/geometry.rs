@@ -82,7 +82,6 @@ impl Geometry {
 		value.into_iter().map(Self::parse2).collect()
 	}
 
-	#[cfg(test)]
 	pub fn new_example() -> Self {
 		Self::new_multi_polygon(Self::parse3(vec![
 			vec![

@@ -2,9 +2,6 @@ mod compression;
 pub use compression::*;
 
 #[cfg(feature = "full")]
-pub mod geometry;
-
-#[cfg(feature = "full")]
 pub mod image;
 
 #[cfg(feature = "full")]

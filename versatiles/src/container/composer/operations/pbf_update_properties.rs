@@ -1,12 +1,9 @@
 use super::{TileComposerOperation, TileComposerOperationLookup};
 use crate::{
 	container::{composer::utils::read_csv_file, TilesReaderParameters, TilesStream},
+	geometry::{vector_tile::VectorTile, GeoProperties},
 	types::Blob,
-	utils::{
-		decompress,
-		geometry::{vector_tile::VectorTile, GeoProperties},
-		YamlWrapper,
-	},
+	utils::{decompress, YamlWrapper},
 };
 use anyhow::{anyhow, ensure, Context, Result};
 use async_trait::async_trait;

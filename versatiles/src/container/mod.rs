@@ -15,6 +15,11 @@
 //! Depending on the enabled features, it supports different formats with corresponding read and write capabilities.
 
 #[cfg(feature = "full")]
+mod composer;
+#[cfg(feature = "full")]
+pub use composer::*;
+
+#[cfg(feature = "full")]
 mod converter;
 #[cfg(feature = "full")]
 pub use converter::*;
@@ -60,8 +65,3 @@ pub use versatiles::*;
 
 mod writer;
 pub use writer::*;
-
-#[cfg(feature = "full")]
-mod composer;
-#[cfg(feature = "full")]
-pub use composer::*;

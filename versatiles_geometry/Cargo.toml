@@ -1,0 +1,27 @@
+[package]
+name = "versatiles_geometry"
+authors.workspace = true
+categories.workspace = true
+description.workspace = true
+edition.workspace = true
+exclude.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+byteorder.workspace = true
+lazy_static.workspace = true
+log.workspace = true
+regex.workspace = true
+versatiles_core.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true
+
+[features]
+default = []

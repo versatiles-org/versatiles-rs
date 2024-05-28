@@ -1,13 +1,11 @@
 use super::{TileComposerOperation, TileComposerOperationLookup};
 use crate::{
 	container::{TilesReaderParameters, TilesStream},
-	utils::{
-		geometry::{
-			vector_tile::{VectorTile, VectorTileLayer},
-			Feature, GeoProperties, GeoValue, Geometry,
-		},
-		YamlWrapper,
+	geometry::{
+		vector_tile::{VectorTile, VectorTileLayer},
+		Feature, GeoProperties, GeoValue, Geometry,
 	},
+	utils::YamlWrapper,
 };
 use anyhow::Result;
 use async_trait::async_trait;

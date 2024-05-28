@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
 use crate::{
+	basic::GeoValue,
 	io::{ValueReader, ValueWriter, ValueWriterBlob},
 	types::Blob,
-	utils::geometry::basic::GeoValue,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use byteorder::LE;

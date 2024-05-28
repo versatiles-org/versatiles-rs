@@ -1,4 +1,4 @@
-use crate::utils::geometry::{GeoProperties, GeoValue};
+use crate::geometry::{GeoProperties, GeoValue};
 use anyhow::{Context, Result};
 use std::{io::Read, path::Path};
 
