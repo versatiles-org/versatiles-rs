@@ -61,6 +61,7 @@ assert_fs.workspace = true
 lazy_static.workspace = true
 wildmatch.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
+versatiles_core = { workspace = true, features = ["test"] }
 
 [features]
 default = ["full", "cli"]

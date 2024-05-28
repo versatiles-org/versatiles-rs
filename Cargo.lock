@@ -1878,6 +1878,7 @@ dependencies = [
  "lazy_static",
  "regex",
  "reqwest",
+ "terminal_size",
  "tokio",
  "wildmatch",
 ]

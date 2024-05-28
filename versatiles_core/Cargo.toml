@@ -23,6 +23,7 @@ itertools.workspace = true
 lazy_static = { workspace = true, optional = true }
 regex = { workspace = true, optional = true, features = ["unicode-case", "unicode-perl"] }
 reqwest = { workspace = true, optional = true, features = ["rustls-tls"] }
+terminal_size.workspace = true
 
 [dev-dependencies]
 assert_fs.workspace = true
@@ -33,3 +34,4 @@ wildmatch.workspace = true
 default = []
 cli = ["dep:clap"]
 http = ["dep:lazy_static", "dep:regex", "dep:reqwest"]
+test = []
