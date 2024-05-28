@@ -4,7 +4,6 @@ The `composer` module provides functionality for reading, processing, and compos
 
 mod lookup;
 mod operations;
-mod output;
 mod reader;
 mod utils;
 

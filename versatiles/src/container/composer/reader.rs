@@ -1,4 +1,4 @@
-use super::{lookup::TileComposerOperationLookup, output::TileComposerOutput};
+use super::{lookup::TileComposerOperationLookup, operations::TileComposerOperation};
 use crate::{
 	container::{TilesReader, TilesReaderParameters, TilesStream},
 	io::DataReader,
@@ -13,7 +13,8 @@ use std::{path::Path, str::FromStr};
 /// applying operations, and returning the composed tiles.
 pub struct TileComposerReader {
 	pub name: String,
-	pub output: TileComposerOutput,
+	pub output: Box<dyn TileComposerOperation>,
+	pub parameters: TilesReaderParameters,
 }
 
 impl TileComposerReader {
@@ -63,15 +64,19 @@ impl TileComposerReader {
 
 		ensure!(yaml.is_hash(), "YAML must be an object");
 
-		let lookup = TileComposerOperationLookup::from_yaml(yaml.hash_get_value("operations")?)?;
+		let mut lookup = TileComposerOperationLookup::from_yaml(yaml.hash_get_value("operations")?)?;
 
-		let output = TileComposerOutput::new(&yaml.hash_get_value("output")?, lookup)
-			.await
+		let operation = yaml
+			.hash_get_value("output")
 			.context("failed parsing output")?;
+		let operation = operation.as_str().context("failed parsing output")?;
+		let operation = lookup.construct(operation).await?;
+		let parameters = operation.get_parameters().await.clone();
 
 		Ok(TileComposerReader {
 			name: name.to_string(),
-			output,
+			output: operation,
+			parameters,
 		})
 	}
 }
@@ -90,7 +95,7 @@ impl TilesReader for TileComposerReader {
 
 	/// Get the reader parameters.
 	fn get_parameters(&self) -> &TilesReaderParameters {
-		&self.output.parameters
+		&self.parameters
 	}
 
 	/// Override the tile compression.
@@ -118,8 +123,8 @@ impl std::fmt::Debug for TileComposerReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TileComposerReader")
 			.field("name", &self.name)
-			.field("reader parameters", &self.output.parameters)
-			.field("output definitions", &self.output)
+			.field("parameters", &self.parameters)
+			.field("output", &self.output)
 			.finish()
 	}
 }

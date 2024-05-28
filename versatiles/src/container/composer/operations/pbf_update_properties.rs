@@ -222,10 +222,7 @@ mod tests {
 
 		let mut reader = TileComposerReader::open_str(&yaml).await?;
 
-		assert_eq!(
-			cleanup(format!("{:?}", reader.output.operation)),
-			debug_operation
-		);
+		assert_eq!(cleanup(format!("{:?}", reader.output)), debug_operation);
 
 		let blob = reader
 			.get_tile_data(&TileCoord3::new(0, 0, 0)?)
