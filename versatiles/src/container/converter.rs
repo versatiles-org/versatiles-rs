@@ -36,8 +36,8 @@
 
 use super::write_to_filename;
 use crate::{
-	container::{TileStream, TilesReader, TilesReaderParameters},
-	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
+	container::{TilesReader, TilesReaderParameters},
+	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TileStream},
 	utils::{TileConverter, TransformCoord},
 };
 use anyhow::Result;

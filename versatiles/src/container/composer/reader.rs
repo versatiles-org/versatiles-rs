@@ -1,8 +1,8 @@
 use super::{lookup::TileComposerOperationLookup, operations::TileComposerOperation};
 use crate::{
-	container::{TileStream, TilesReader, TilesReaderParameters},
+	container::{TilesReader, TilesReaderParameters},
 	io::DataReader,
-	types::{Blob, TileBBox, TileCompression, TileCoord3},
+	types::{Blob, TileBBox, TileCompression, TileCoord3, TileStream},
 	utils::YamlWrapper,
 };
 use anyhow::{anyhow, ensure, Context, Result};

@@ -23,3 +23,6 @@ pub use tile_coords::*;
 
 mod tile_format;
 pub use tile_format::*;
+
+mod tile_stream;
+pub use tile_stream::*;

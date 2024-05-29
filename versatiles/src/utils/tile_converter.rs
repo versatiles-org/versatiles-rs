@@ -1,8 +1,7 @@
 #[cfg(feature = "full")]
 use super::image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2img, webp2img};
 use crate::{
-	container::TileStream,
-	types::{Blob, TileCompression, TileFormat},
+	types::{Blob, TileCompression, TileFormat, TileStream},
 	utils::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip},
 };
 #[cfg(feature = "full")]

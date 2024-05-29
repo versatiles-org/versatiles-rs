@@ -41,13 +41,14 @@
 //! This module includes comprehensive tests to ensure the correct functionality of reading metadata, handling different file formats, and verifying tile data.
 
 use crate::{
-	container::{TileStream, TilesReader, TilesReaderParameters},
+	container::{TilesReader, TilesReaderParameters},
 	progress::get_progress_bar,
 	types::{
 		Blob, TileBBox, TileBBoxPyramid,
 		TileCompression::{self, *},
 		TileCoord3,
 		TileFormat::{self, *},
+		TileStream,
 	},
 	utils::TransformCoord,
 };

@@ -1,6 +1,6 @@
+use crate::types::{Blob, TileCoord3};
 use futures::{future::ready, stream, Future, Stream, StreamExt};
 use std::pin::Pin;
-use versatiles_core::types::{Blob, TileCoord3};
 
 /// A wrapper to handle streams of tiles, where each item is a tuple containing a tile coordinate and its associated data.
 pub struct TileStream<'a> {
@@ -134,7 +134,6 @@ impl<'a> TileStream<'a> {
 		}
 	}
 
-	#[cfg(test)]
 	pub async fn drain_and_count(self) -> u64 {
 		let mut count = 0;
 		self

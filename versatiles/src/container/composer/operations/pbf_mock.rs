@@ -1,10 +1,11 @@
 use super::{TileComposerOperation, TileComposerOperationLookup};
 use crate::{
-	container::{TileStream, TilesReaderParameters},
+	container::TilesReaderParameters,
 	geometry::{
 		vector_tile::{VectorTile, VectorTileLayer},
 		Feature, GeoProperties, GeoValue, Geometry,
 	},
+	types::TileStream,
 	utils::YamlWrapper,
 };
 use anyhow::Result;

@@ -4,12 +4,11 @@
 //! It includes methods for retrieving metadata, tile data, and streaming tiles within a bounding box.
 //!
 
+use crate::types::{
+	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TileStream,
+};
 #[cfg(feature = "full")]
 use crate::{container::ProbeDepth, utils::pretty_print::PrettyPrint};
-use crate::{
-	container::TileStream,
-	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
-};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};

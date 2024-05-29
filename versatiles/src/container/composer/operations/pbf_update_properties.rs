@@ -1,8 +1,8 @@
 use super::{TileComposerOperation, TileComposerOperationLookup};
 use crate::{
-	container::{composer::utils::read_csv_file, TileStream, TilesReaderParameters},
+	container::{composer::utils::read_csv_file, TilesReaderParameters},
 	geometry::{vector_tile::VectorTile, GeoProperties},
-	types::Blob,
+	types::{Blob, TileStream},
 	utils::{decompress, YamlWrapper},
 };
 use anyhow::{anyhow, ensure, Context, Result};

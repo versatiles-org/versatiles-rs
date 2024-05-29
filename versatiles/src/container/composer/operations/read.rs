@@ -1,6 +1,7 @@
 use super::{TileComposerOperation, TileComposerOperationLookup};
 use crate::{
-	container::{get_reader, TileStream, TilesReader, TilesReaderParameters},
+	container::{get_reader, TilesReader, TilesReaderParameters},
+	types::TileStream,
 	utils::YamlWrapper,
 };
 use anyhow::{Context, Result};

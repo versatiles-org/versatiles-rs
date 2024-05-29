@@ -47,9 +47,11 @@ use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 #[cfg(feature = "full")]
 use crate::utils::pretty_print::PrettyPrint;
 use crate::{
-	container::{TileStream, TilesReader, TilesReaderParameters},
+	container::{TilesReader, TilesReaderParameters},
 	io::{DataReader, DataReaderFile},
-	types::{Blob, ByteRange, LimitedCache, TileBBox, TileCompression, TileCoord2, TileCoord3},
+	types::{
+		Blob, ByteRange, LimitedCache, TileBBox, TileCompression, TileCoord2, TileCoord3, TileStream,
+	},
 	utils::TileConverter,
 };
 use anyhow::{Context, Result};
