@@ -44,8 +44,6 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::{lock::Mutex, StreamExt};
-use std::sync::Arc;
 
 /// A struct that provides functionality to write tile data to a PMTiles container.
 pub struct PMTilesWriter {}
@@ -81,7 +79,7 @@ impl TilesWriter for PMTilesWriter {
 		);
 		let mut tile_count = 0;
 
-		let entries = EntriesV3::new();
+		let mut entries = EntriesV3::new();
 
 		writer.set_position(16384)?;
 
@@ -93,36 +91,23 @@ impl TilesWriter for PMTilesWriter {
 
 		let tile_data_start = writer.get_position()?;
 
-		let mutex_writer = Arc::new(Mutex::new(writer));
-		let mutex_entries = Arc::new(Mutex::new(entries));
-
 		for bbox in blocks.iter() {
-			reader
-				.get_bbox_tile_stream(bbox.clone())
-				.await
-				.for_each(|(coord, blob)| {
-					progress.inc(1);
-					let mutex_writer = mutex_writer.clone();
-					let mutex_entries = mutex_entries.clone();
-					async move {
-						let id = coord.get_tile_id().unwrap();
-						let range = mutex_writer.lock().await.append(&blob).unwrap();
-						mutex_entries.lock().await.push(EntryV3::new(
-							id,
-							range.get_shifted_backward(tile_data_start),
-							1,
-						));
-					}
-				})
-				.await;
+			let mut stream = reader.get_bbox_tile_stream(bbox.clone()).await;
+			while let Some((coord, blob)) = stream.next().await {
+				progress.inc(1);
+				let id = coord.get_tile_id().unwrap();
+				let range = writer.append(&blob).unwrap();
+				entries.push(EntryV3::new(
+					id,
+					range.get_shifted_backward(tile_data_start),
+					1,
+				));
+			}
 
 			tile_count += bbox.count_tiles();
 			progress.set_position(tile_count);
 		}
 		progress.finish();
-
-		let mut writer = mutex_writer.lock().await;
-		let mut entries = mutex_entries.lock().await;
 
 		let tile_data_end = writer.get_position()?;
 

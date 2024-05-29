@@ -7,12 +7,11 @@
 #[cfg(feature = "full")]
 use crate::{container::ProbeDepth, utils::pretty_print::PrettyPrint};
 use crate::{
-	container::TilesStream,
+	container::TileStream,
 	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::{stream, StreamExt};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 
@@ -73,23 +72,21 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>>;
 
 	/// Get a stream of tiles within the bounding box.
-	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TilesStream {
+	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TileStream {
 		let mutex = Arc::new(Mutex::new(self));
 		let coords: Vec<TileCoord3> = bbox.iter_coords().collect();
-		stream::iter(coords)
-			.filter_map(move |coord| {
-				let mutex = mutex.clone();
-				async move {
-					mutex
-						.lock()
-						.await
-						.get_tile_data(&coord)
-						.await
-						.map(|blob_option| blob_option.map(|blob| (coord, blob)))
-						.unwrap_or(None)
-				}
-			})
-			.boxed()
+		TileStream::from_coord_vec_async(coords, move |coord| {
+			let mutex = mutex.clone();
+			async move {
+				mutex
+					.lock()
+					.await
+					.get_tile_data(&coord)
+					.await
+					.map(|blob_option| blob_option.map(|blob| (coord, blob)))
+					.unwrap_or(None)
+			}
+		})
 	}
 
 	#[cfg(feature = "full")]
@@ -275,10 +272,10 @@ mod tests {
 	#[tokio::test]
 	async fn get_bbox_tile_iter() -> Result<()> {
 		let mut reader = TestReader::new_dummy();
-		let bbox = TileBBox::new(4, 0, 0, 10, 10)?; // Or replace it with actual bbox
-		let mut stream = reader.get_bbox_tile_stream(bbox).await;
+		let bbox = TileBBox::new(4, 0, 1, 9, 10)?;
+		let stream = reader.get_bbox_tile_stream(bbox).await;
 
-		while let Some((_coord, _blob)) = stream.next().await {}
+		assert_eq!(stream.drain_and_count().await, 100);
 
 		Ok(())
 	}

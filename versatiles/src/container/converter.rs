@@ -36,13 +36,12 @@
 
 use super::write_to_filename;
 use crate::{
-	container::{TilesReader, TilesReaderParameters, TilesStream},
+	container::{TileStream, TilesReader, TilesReaderParameters},
 	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
 	utils::{TileConverter, TransformCoord},
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::StreamExt;
 
 /// Parameters for tile conversion.
 #[derive(Debug)]
@@ -195,7 +194,7 @@ impl TilesReader for TilesConvertReader {
 		Ok(blob)
 	}
 
-	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TilesStream {
+	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TileStream {
 		let mut bbox = bbox.clone();
 		if self.converter_parameters.swap_xy {
 			bbox.swap_xy();
@@ -210,17 +209,15 @@ impl TilesReader for TilesConvertReader {
 		let swap_xy = self.converter_parameters.swap_xy;
 
 		if flip_y || swap_xy {
-			stream = stream
-				.map(move |(mut coord, blob)| {
-					if flip_y {
-						coord.flip_y()
-					}
-					if swap_xy {
-						coord.swap_xy()
-					}
-					(coord, blob)
-				})
-				.boxed();
+			stream = stream.map_coord(move |mut coord| {
+				if flip_y {
+					coord.flip_y()
+				}
+				if swap_xy {
+					coord.swap_xy()
+				}
+				coord
+			});
 		}
 
 		if let Some(tile_recompressor) = &self.tile_recompressor {

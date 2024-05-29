@@ -41,7 +41,7 @@
 //! This module includes comprehensive tests to ensure the correct functionality of reading metadata, handling different file formats, and verifying tile data.
 
 use crate::{
-	container::{TilesReader, TilesReaderParameters, TilesStream},
+	container::{TileStream, TilesReader, TilesReaderParameters},
 	progress::get_progress_bar,
 	types::{
 		Blob, TileBBox, TileBBoxPyramid,
@@ -53,7 +53,6 @@ use crate::{
 };
 use anyhow::{anyhow, ensure, Result};
 use async_trait::async_trait;
-use futures::StreamExt;
 use log::trace;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
@@ -324,11 +323,11 @@ impl TilesReader for MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue querying the database.
-	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TilesStream {
+	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TileStream {
 		trace!("read tile stream from bbox {bbox:?}");
 
 		if bbox.is_empty() {
-			return futures::stream::empty().boxed();
+			return TileStream::new_empty();
 		}
 
 		let max_index = bbox.max;
@@ -371,7 +370,7 @@ impl TilesReader for MBTilesReader {
 
 		trace!("got {} tiles", vec.len());
 
-		futures::stream::iter(vec).boxed()
+		TileStream::from_vec(vec)
 	}
 
 	/// Returns the name of the MBTiles database.

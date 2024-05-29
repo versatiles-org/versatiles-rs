@@ -1,13 +1,12 @@
 use super::{TileComposerOperation, TileComposerOperationLookup};
 use crate::{
-	container::{composer::utils::read_csv_file, TilesReaderParameters, TilesStream},
+	container::{composer::utils::read_csv_file, TileStream, TilesReaderParameters},
 	geometry::{vector_tile::VectorTile, GeoProperties},
 	types::Blob,
 	utils::{decompress, YamlWrapper},
 };
 use anyhow::{anyhow, ensure, Context, Result};
 use async_trait::async_trait;
-use futures::StreamExt;
 use std::{collections::HashMap, fmt::Debug, path::Path, sync::Arc};
 use versatiles_core::types::{TileBBox, TileCompression, TileCoord3, TileFormat};
 use versatiles_derive::YamlParser;
@@ -166,7 +165,7 @@ impl TileComposerOperation for PBFUpdatePropertiesOperation {
 		&self.name
 	}
 
-	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TilesStream {
+	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
 		let compression = self.input_compression;
 		let runner = self.runner.clone();
 
@@ -174,17 +173,10 @@ impl TileComposerOperation for PBFUpdatePropertiesOperation {
 			.input
 			.get_bbox_tile_stream(bbox)
 			.await
-			.map(move |(coord, blob)| {
-				let runner = runner.clone();
-				tokio::spawn(async move {
-					let blob = decompress(blob, &compression).unwrap();
-					let blob = runner.run(blob).unwrap();
-					blob.map(|inner| (coord, inner))
-				})
+			.filter_map_blob_parallel(move |blob| {
+				let blob = decompress(blob, &compression).unwrap();
+				runner.run(blob).unwrap()
 			})
-			.buffer_unordered(num_cpus::get())
-			.filter_map(|e| futures::future::ready(e.unwrap()))
-			.boxed()
 	}
 
 	fn get_parameters(&self) -> &TilesReaderParameters {

@@ -28,7 +28,7 @@
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 use crate::{
-	container::{TilesReader, TilesStream, TilesWriter},
+	container::{TileStream, TilesReader, TilesWriter},
 	io::DataWriterTrait,
 	progress::{get_progress_bar, ProgressTrait},
 	types::{Blob, ByteRange},
@@ -36,7 +36,6 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::{future::ready, StreamExt};
 use log::{debug, trace};
 use std::collections::HashMap;
 
@@ -178,11 +177,11 @@ impl VersaTilesWriter {
 		let mut tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
 
 		// Get the tile stream
-		let tile_stream: TilesStream = reader.get_bbox_tile_stream(bbox.clone()).await;
+		let tile_stream: TileStream = reader.get_bbox_tile_stream(bbox.clone()).await;
 
 		// Iterate through the blobs and process them
 		tile_stream
-			.for_each(|(coord, blob)| {
+			.for_each_sync(|(coord, blob)| {
 				progress.inc(1);
 
 				let index = bbox.get_tile_index(&coord.as_coord2());
@@ -191,7 +190,7 @@ impl VersaTilesWriter {
 				if blob.len() < 1000 {
 					if let Some(range) = tile_hash_lookup.get(blob.as_slice()) {
 						tile_index.set(index, *range);
-						return ready(());
+						return;
 					}
 					save_hash = true;
 				}
@@ -204,8 +203,6 @@ impl VersaTilesWriter {
 				if save_hash {
 					tile_hash_lookup.insert(blob.into_vec(), range);
 				}
-
-				ready(())
 			})
 			.await;
 

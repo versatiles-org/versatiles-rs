@@ -54,6 +54,9 @@ mod tar;
 #[cfg(feature = "full")]
 pub use tar::*;
 
+mod tile_stream;
+pub use tile_stream::*;
+
 mod types;
 pub use types::*;
 

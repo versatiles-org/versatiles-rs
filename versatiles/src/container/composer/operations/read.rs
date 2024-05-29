@@ -1,11 +1,11 @@
 use super::{TileComposerOperation, TileComposerOperationLookup};
 use crate::{
-	container::{get_reader, TilesReader, TilesReaderParameters, TilesStream},
+	container::{get_reader, TileStream, TilesReader, TilesReaderParameters},
 	utils::YamlWrapper,
 };
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use futures::{channel::mpsc::channel, lock::Mutex, SinkExt, StreamExt};
+use futures::{channel::mpsc::channel, lock::Mutex, SinkExt};
 use std::{fmt::Debug, sync::Arc};
 use tokio::task::JoinHandle;
 use versatiles_core::types::{Blob, TileBBox, TileCoord3};
@@ -26,7 +26,7 @@ pub struct ReadOperation {
 }
 
 impl ReadOperation {
-	async fn read_stream(&self, bbox: TileBBox) -> TilesStream {
+	async fn read_stream(&self, bbox: TileBBox) -> TileStream {
 		let (mut tx, rx) = channel::<(TileCoord3, Blob)>(64);
 		let reader = self.reader.clone();
 
@@ -50,7 +50,7 @@ impl ReadOperation {
 			}
 		});
 
-		Box::pin(rx)
+		TileStream::from_stream(Box::pin(rx))
 	}
 }
 
@@ -102,7 +102,7 @@ impl TileComposerOperation for ReadOperation {
 		self.reader.lock().await.get_tile_data(coord).await
 	}
 
-	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TilesStream {
+	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
 		self.read_stream(bbox).await
 	}
 }
@@ -120,7 +120,6 @@ impl Debug for ReadOperation {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use futures::stream;
 	use versatiles_core::types::{TileCompression, TileFormat};
 
 	#[derive(Debug)]
@@ -143,8 +142,8 @@ mod tests {
 			Ok(Some(Blob::from(vec![4, 5, 6])))
 		}
 
-		async fn get_bbox_tile_stream(&mut self, _bbox: TileBBox) -> TilesStream {
-			Box::pin(stream::iter(get_test_tiles()))
+		async fn get_bbox_tile_stream(&mut self, _bbox: TileBBox) -> TileStream {
+			TileStream::from_vec(get_test_tiles())
 		}
 
 		fn get_parameters(&self) -> &TilesReaderParameters {

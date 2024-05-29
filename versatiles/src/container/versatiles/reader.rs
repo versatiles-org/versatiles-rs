@@ -47,7 +47,7 @@ use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 #[cfg(feature = "full")]
 use crate::utils::pretty_print::PrettyPrint;
 use crate::{
-	container::{TilesReader, TilesReaderParameters, TilesStream},
+	container::{TileStream, TilesReader, TilesReaderParameters},
 	io::{DataReader, DataReaderFile},
 	types::{Blob, ByteRange, LimitedCache, TileBBox, TileCompression, TileCoord2, TileCoord3},
 	utils::TileConverter,
@@ -248,7 +248,7 @@ impl TilesReader for VersaTilesReader {
 	}
 
 	/// Gets a stream of tile data for a given bounding box.
-	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TilesStream {
+	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TileStream {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
@@ -372,39 +372,41 @@ impl TilesReader for VersaTilesReader {
 
 		let chunks: Vec<Chunk> = chunks.into_iter().flatten().collect();
 
-		futures::stream::iter(chunks)
-			.then(move |chunk| {
-				let bbox = bbox.clone();
-				let self_mutex = self_mutex.clone();
-				async move {
-					let mut myself = self_mutex.lock().await;
+		TileStream::from_stream(
+			futures::stream::iter(chunks)
+				.then(move |chunk| {
+					let bbox = bbox.clone();
+					let self_mutex = self_mutex.clone();
+					async move {
+						let mut myself = self_mutex.lock().await;
 
-					let big_blob = myself.reader.read_range(&chunk.range).await.unwrap();
+						let big_blob = myself.reader.read_range(&chunk.range).await.unwrap();
 
-					let entries: Vec<(TileCoord3, Blob)> = chunk
-						.tiles
-						.into_iter()
-						.map(|(coord, range)| {
-							let start = range.offset - chunk.range.offset;
-							let end = start + range.length;
-							let tile_range = (start as usize)..(end as usize);
+						let entries: Vec<(TileCoord3, Blob)> = chunk
+							.tiles
+							.into_iter()
+							.map(|(coord, range)| {
+								let start = range.offset - chunk.range.offset;
+								let end = start + range.length;
+								let tile_range = (start as usize)..(end as usize);
 
-							let blob = Blob::from(big_blob.get_range(tile_range));
+								let blob = Blob::from(big_blob.get_range(tile_range));
 
-							assert!(
-								bbox.contains3(&coord),
-								"outer_bbox {bbox:?} does not contain {coord:?}"
-							);
+								assert!(
+									bbox.contains3(&coord),
+									"outer_bbox {bbox:?} does not contain {coord:?}"
+								);
 
-							(coord, blob)
-						})
-						.collect();
+								(coord, blob)
+							})
+							.collect();
 
-					futures::stream::iter(entries)
-				}
-			})
-			.flatten()
-			.boxed()
+						futures::stream::iter(entries)
+					}
+				})
+				.flatten()
+				.boxed(),
+		)
 	}
 
 	// Get the name of the reader

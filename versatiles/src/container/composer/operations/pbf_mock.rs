@@ -1,6 +1,6 @@
 use super::{TileComposerOperation, TileComposerOperationLookup};
 use crate::{
-	container::{TilesReaderParameters, TilesStream},
+	container::{TileStream, TilesReaderParameters},
 	geometry::{
 		vector_tile::{VectorTile, VectorTileLayer},
 		Feature, GeoProperties, GeoValue, Geometry,
@@ -9,7 +9,6 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::{stream, StreamExt};
 use std::fmt::Debug;
 use versatiles_core::types::{Blob, TileBBox, TileCompression, TileCoord3, TileFormat};
 
@@ -76,8 +75,8 @@ impl TileComposerOperation for PBFMock {
 		Ok(Some(self.blob.clone()))
 	}
 
-	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TilesStream {
+	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
 		let coords = bbox.iter_coords().collect::<Vec<TileCoord3>>();
-		stream::iter(coords).map(|c| (c, self.blob.clone())).boxed()
+		TileStream::from_coord_vec_sync(coords, |c| Some((c, self.blob.clone())))
 	}
 }

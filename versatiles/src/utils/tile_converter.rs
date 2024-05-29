@@ -1,14 +1,13 @@
 #[cfg(feature = "full")]
 use super::image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2img, webp2img};
 use crate::{
-	container::TilesStream,
+	container::TileStream,
 	types::{Blob, TileCompression, TileFormat},
 	utils::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip},
 };
 #[cfg(feature = "full")]
 use anyhow::bail;
 use anyhow::Result;
-use futures::StreamExt;
 use itertools::Itertools;
 use std::{
 	fmt::{self, Debug},
@@ -220,21 +219,14 @@ impl TileConverter {
 	}
 
 	/// Runs a stream through the pipeline of conversion functions
-	pub fn process_stream<'a>(&'a self, stream: TilesStream<'a>) -> TilesStream<'a> {
+	pub fn process_stream<'a>(&'a self, stream: TileStream<'a>) -> TileStream<'a> {
 		let pipeline = self.pipeline.clone();
-		stream
-			.map(move |(coord, mut blob)| {
-				let pipeline = pipeline.clone();
-				tokio::spawn(async move {
-					for f in pipeline.iter() {
-						blob = f.run(blob).unwrap();
-					}
-					(coord, blob)
-				})
-			})
-			.buffer_unordered(num_cpus::get())
-			.map(|e| e.unwrap())
-			.boxed()
+		stream.map_blob_parallel(move |mut blob| {
+			for f in pipeline.iter() {
+				blob = f.run(blob).unwrap();
+			}
+			blob
+		})
 	}
 
 	/// Returns a string describing the pipeline of conversion functions.

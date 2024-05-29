@@ -1,6 +1,6 @@
 use super::{lookup::TileComposerOperationLookup, operations::TileComposerOperation};
 use crate::{
-	container::{TilesReader, TilesReaderParameters, TilesStream},
+	container::{TileStream, TilesReader, TilesReaderParameters},
 	io::DataReader,
 	types::{Blob, TileBBox, TileCompression, TileCoord3},
 	utils::YamlWrapper,
@@ -114,7 +114,7 @@ impl TilesReader for TileComposerReader {
 	}
 
 	/// Get a stream of tiles within the bounding box.
-	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TilesStream {
+	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TileStream {
 		self.output.get_bbox_tile_stream(bbox).await
 	}
 }
@@ -131,8 +131,6 @@ impl std::fmt::Debug for TileComposerReader {
 
 #[cfg(test)]
 mod tests {
-	use futures::StreamExt;
-
 	use super::*;
 	use crate::container::MockTilesWriter;
 
@@ -190,7 +188,7 @@ output: berlin
 		let mut reader = TileComposerReader::open_str(&get_yaml()).await?;
 		let bbox = TileBBox::new(1, 0, 0, 1, 1)?;
 		let result_stream = reader.get_bbox_tile_stream(bbox).await;
-		let result: Vec<(TileCoord3, Blob)> = result_stream.collect().await;
+		let result = result_stream.collect().await;
 
 		assert!(!result.is_empty());
 

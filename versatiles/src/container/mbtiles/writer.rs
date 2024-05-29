@@ -30,7 +30,6 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use futures::StreamExt;
 use r2d2::Pool;
 use r2d2_sqlite::{rusqlite::params, SqliteConnectionManager};
 use std::path::Path;
@@ -140,21 +139,11 @@ impl TilesWriter for MBTilesWriter {
 		let mut progress = get_progress_bar("converting tiles", bbox_pyramid.count_tiles());
 
 		for bbox in bbox_pyramid.iter_levels() {
-			let mut stream = reader.get_bbox_tile_stream(bbox.clone()).await;
+			let stream = reader.get_bbox_tile_stream(bbox.clone()).await;
 
-			let mut tile_buffer = Vec::new();
-			while let Some((coord, blob)) = stream.next().await {
-				tile_buffer.push((coord, blob));
-				progress.inc(1);
-
-				if tile_buffer.len() >= 2000 {
-					writer.add_tiles(&tile_buffer)?;
-					tile_buffer.clear();
-				}
-			}
-			if !tile_buffer.is_empty() {
-				writer.add_tiles(&tile_buffer)?;
-			}
+			stream
+				.for_each_buffered(2000, |v| writer.add_tiles(&v).unwrap())
+				.await;
 		}
 
 		progress.finish();

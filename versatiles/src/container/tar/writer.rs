@@ -8,13 +8,11 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use futures::StreamExt;
 use std::{
 	fs::File,
 	path::{Path, PathBuf},
 };
 use tar::{Builder, Header};
-use tokio::sync::Mutex;
 
 /// A struct that provides functionality to write tile data to a tar archive.
 pub struct TarTilesWriter {}
@@ -55,13 +53,11 @@ impl TilesWriter for TarTilesWriter {
 		}
 
 		let mut progress = get_progress_bar("converting tiles", bbox_pyramid.count_tiles());
-		let mutex_builder = &Mutex::new(&mut builder);
 
 		for bbox in bbox_pyramid.iter_levels() {
 			let mut stream = reader.get_bbox_tile_stream(bbox.clone()).await;
 
-			while let Some(entry) = stream.next().await {
-				let (coord, blob) = entry;
+			while let Some((coord, blob)) = stream.next().await {
 				progress.inc(1);
 
 				let filename = format!(
@@ -80,10 +76,7 @@ impl TilesWriter for TarTilesWriter {
 				header.set_mode(0o644);
 
 				// Write blob to file
-				mutex_builder
-					.lock()
-					.await
-					.append_data(&mut header, path, blob.as_slice())?;
+				builder.append_data(&mut header, path, blob.as_slice())?;
 			}
 		}
 
