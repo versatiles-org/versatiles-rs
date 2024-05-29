@@ -10,7 +10,7 @@ use std::{fmt::Debug, sync::Arc};
 use versatiles_core::types::{TileBBox, TileCompression, TileCoord3, TileFormat};
 
 pub trait Runner: Debug + Send + Sync {
-	fn new(yaml: &YamlWrapper) -> Result<Self>
+	fn new(yaml: &YamlWrapper, path: &std::path::Path) -> Result<Self>
 	where
 		Self: Sized;
 	fn run(&self, blob: Blob) -> Result<Option<Blob>>;
@@ -38,7 +38,7 @@ impl<T: Runner + 'static> TileComposerOperation for RunnerOperation<T> {
 	where
 		Self: Sized,
 	{
-		let runner = Arc::new(T::new(&yaml)?);
+		let runner = Arc::new(T::new(&yaml, lookup.get_path())?);
 
 		let input_name = yaml.hash_get_str("input")?;
 		let input = lookup.construct(input_name).await?;

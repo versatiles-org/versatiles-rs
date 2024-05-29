@@ -69,14 +69,14 @@ impl TileComposerOperation for ReadOperation {
 	async fn new(
 		name: &str,
 		yaml: YamlWrapper,
-		_lookup: &mut TileComposerOperationLookup,
+		lookup: &mut TileComposerOperationLookup,
 	) -> Result<Self>
 	where
 		Self: Sized,
 	{
 		let config = Config::from_yaml(&yaml)?;
 
-		let reader = get_reader(&config.filename).await?;
+		let reader = get_reader(&lookup.get_absolute_str(&config.filename)).await?;
 		let parameters = reader.get_parameters().clone();
 
 		Ok(ReadOperation {

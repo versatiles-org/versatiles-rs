@@ -17,6 +17,7 @@ pub struct TileComposerReader {
 	pub parameters: TilesReaderParameters,
 }
 
+#[allow(dead_code)]
 impl TileComposerReader {
 	/// Opens a TileComposerReader from a YAML file path.
 	///
@@ -30,7 +31,7 @@ impl TileComposerReader {
 	pub async fn open_path(path: &Path) -> Result<TileComposerReader> {
 		let yaml =
 			std::fs::read_to_string(path).with_context(|| anyhow!("Failed to open {path:?}"))?;
-		Self::from_str(&yaml, path.to_str().unwrap())
+		Self::from_str(&yaml, path.to_str().unwrap(), path.parent().unwrap())
 			.await
 			.with_context(|| format!("failed parsing {path:?} as YAML"))
 	}
@@ -44,27 +45,28 @@ impl TileComposerReader {
 	/// # Returns
 	///
 	/// * `Result<TileComposerReader>` - The constructed TileComposerReader or an error if the configuration is invalid.
-	pub async fn open_reader(mut reader: DataReader) -> Result<TileComposerReader> {
+	pub async fn open_reader(mut reader: DataReader, path: &Path) -> Result<TileComposerReader> {
 		let yaml = reader.read_all().await?.into_string();
-		Self::from_str(&yaml, reader.get_name())
+		Self::from_str(&yaml, reader.get_name(), path)
 			.await
 			.with_context(|| format!("failed parsing {} as YAML", reader.get_name()))
 	}
 
 	#[cfg(test)]
-	pub async fn open_str(yaml: &str) -> Result<TileComposerReader> {
-		Self::from_str(yaml, "from str")
+	pub async fn open_str(yaml: &str, path: &Path) -> Result<TileComposerReader> {
+		Self::from_str(yaml, "from str", path)
 			.await
 			.with_context(|| format!("failed parsing '{yaml}' as YAML"))
 	}
 
-	async fn from_str(yaml: &str, name: &str) -> Result<TileComposerReader> {
+	async fn from_str(yaml: &str, name: &str, path: &Path) -> Result<TileComposerReader> {
 		let yaml =
 			YamlWrapper::from_str(yaml).with_context(|| format!("failed parsing '{yaml}' as YAML"))?;
 
 		ensure!(yaml.is_hash(), "YAML must be an object");
 
-		let mut lookup = TileComposerOperationLookup::from_yaml(yaml.hash_get_value("operations")?)?;
+		let mut lookup =
+			TileComposerOperationLookup::from_yaml(yaml.hash_get_value("operations")?, path)?;
 
 		let operation = yaml
 			.hash_get_value("output")
@@ -140,7 +142,7 @@ mod tests {
 operations:
   berlin:
     action: read
-    filename: ../testdata/berlin.pmtiles
+    filename: berlin.pmtiles
 output: berlin
 ",
 		)
@@ -148,7 +150,7 @@ output: berlin
 
 	#[tokio::test(flavor = "multi_thread", worker_threads = 16)]
 	async fn open_yaml_str() -> Result<()> {
-		let mut reader = TileComposerReader::open_str(&get_yaml()).await?;
+		let mut reader = TileComposerReader::open_str(&get_yaml(), Path::new("../testdata/")).await?;
 		MockTilesWriter::write(&mut reader).await?;
 
 		Ok(())
@@ -168,7 +170,7 @@ output: berlin
 
 	#[tokio::test]
 	async fn test_tile_composer_reader_get_tile_data() -> Result<()> {
-		let mut reader = TileComposerReader::open_str(&get_yaml()).await?;
+		let mut reader = TileComposerReader::open_str(&get_yaml(), Path::new("../testdata/")).await?;
 
 		let result = reader.get_tile_data(&TileCoord3::new(0, 0, 14)?).await;
 		assert_eq!(result?, None);
@@ -185,7 +187,7 @@ output: berlin
 
 	#[tokio::test]
 	async fn test_tile_composer_reader_get_bbox_tile_stream() -> Result<()> {
-		let mut reader = TileComposerReader::open_str(&get_yaml()).await?;
+		let mut reader = TileComposerReader::open_str(&get_yaml(), Path::new("../testdata/")).await?;
 		let bbox = TileBBox::new(1, 0, 0, 1, 1)?;
 		let result_stream = reader.get_bbox_tile_stream(bbox).await;
 		let result = result_stream.collect().await;

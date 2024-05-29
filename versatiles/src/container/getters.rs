@@ -45,7 +45,6 @@ pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReader>> {
 		match extension {
 			"pmtiles" => return Ok(PMTilesReader::open_reader(reader).await?.boxed()),
 			"versatiles" => return Ok(VersaTilesReader::open_reader(reader).await?.boxed()),
-			"yaml" => return Ok(TileComposerReader::open_reader(reader).await?.boxed()),
 			_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
 		}
 	}

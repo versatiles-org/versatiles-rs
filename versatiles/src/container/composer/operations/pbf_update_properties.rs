@@ -6,7 +6,7 @@ use crate::{
 	utils::YamlWrapper,
 };
 use anyhow::{anyhow, Context, Result};
-use std::{collections::HashMap, fmt::Debug, path::Path};
+use std::{collections::HashMap, fmt::Debug};
 use versatiles_derive::YamlParser;
 
 #[derive(Debug, YamlParser)]
@@ -27,13 +27,13 @@ pub struct PBFUpdatePropertiesRunner {
 }
 
 impl Runner for PBFUpdatePropertiesRunner {
-	fn new(yaml: &YamlWrapper) -> Result<Self>
+	fn new(yaml: &YamlWrapper, path: &std::path::Path) -> Result<Self>
 	where
 		Self: Sized,
 	{
 		let config = Config::from_yaml(yaml)?;
 
-		let data = read_csv_file(Path::new(&config.data_source_path))
+		let data = read_csv_file(&path.join(&config.data_source_path))
 			.with_context(|| format!("Failed to read CSV file from '{}'", config.data_source_path))?;
 
 		let properties_map = data
@@ -141,7 +141,8 @@ mod tests {
 		]
 		.join("\n");
 
-		let mut reader = TileComposerReader::open_str(&yaml).await?;
+		let mut reader =
+			TileComposerReader::open_str(&yaml, std::path::Path::new("../testdata")).await?;
 
 		assert_eq!(cleanup(format!("{:?}", reader.output)), debug_operation);
 
