@@ -7,18 +7,13 @@ use crate::{
 };
 use anyhow::{anyhow, ensure, Context, Result};
 use async_trait::async_trait;
-use futures::{future::ready, StreamExt};
-use std::{
-	collections::{BTreeMap, HashMap},
-	fmt::Debug,
-	path::Path,
-};
+use futures::StreamExt;
+use std::{collections::HashMap, fmt::Debug, path::Path, sync::Arc};
 use versatiles_core::types::{TileBBox, TileCompression, TileCoord3, TileFormat};
 use versatiles_derive::YamlParser;
 
-#[derive(YamlParser)]
+#[derive(Debug, YamlParser)]
 struct Config {
-	input: String,
 	data_source_path: String,
 	id_field_tiles: String,
 	id_field_values: String,
@@ -29,16 +24,48 @@ struct Config {
 
 /// The `PBFUpdatePropertiesOperation` struct represents an operation that replaces properties in PBF tiles
 /// based on a mapping provided in a CSV file.
-pub struct PBFUpdatePropertiesOperation {
+#[derive(Debug)]
+pub struct Runner {
 	config: Config,
-	input: Box<dyn TileComposerOperation>,
-	name: String,
-	parameters: TilesReaderParameters,
-	input_compression: TileCompression,
 	properties_map: HashMap<String, GeoProperties>,
 }
 
-impl PBFUpdatePropertiesOperation {
+impl Runner {
+	fn new(yaml: &YamlWrapper) -> Result<Self>
+	where
+		Self: Sized,
+	{
+		let config = Config::from_yaml(yaml)?;
+
+		let data = read_csv_file(Path::new(&config.data_source_path))
+			.with_context(|| format!("Failed to read CSV file from '{}'", config.data_source_path))?;
+
+		let properties_map = data
+			.into_iter()
+			.map(|mut properties| {
+				let key = properties
+					.get(&config.id_field_values)
+					.ok_or_else(|| anyhow!("Key '{}' not found in CSV data", config.id_field_values))
+					.with_context(|| {
+						format!(
+							"Failed to find key '{}' in the CSV data row: {properties:?}",
+							config.id_field_values
+						)
+					})?
+					.to_string();
+				if !config.also_save_id {
+					properties.remove(&config.id_field_values)
+				}
+				Ok((key, properties))
+			})
+			.collect::<Result<HashMap<String, GeoProperties>>>()
+			.context("Failed to build properties map from CSV data")?;
+
+		Ok(Runner {
+			config,
+			properties_map,
+		})
+	}
 	fn run(&self, blob: Blob) -> Result<Option<Blob>> {
 		let mut tile =
 			VectorTile::from_blob(&blob).context("Failed to create VectorTile from Blob")?;
@@ -73,6 +100,16 @@ impl PBFUpdatePropertiesOperation {
 	}
 }
 
+#[derive(Debug)]
+#[allow(dead_code)]
+pub struct PBFUpdatePropertiesOperation {
+	runner: Arc<Runner>,
+	input: Box<dyn TileComposerOperation>,
+	name: String,
+	parameters: TilesReaderParameters,
+	input_compression: TileCompression,
+}
+
 #[async_trait]
 impl TileComposerOperation for PBFUpdatePropertiesOperation {
 	/// Creates a new `PBFUpdatePropertiesOperation` from the provided YAML configuration.
@@ -92,64 +129,47 @@ impl TileComposerOperation for PBFUpdatePropertiesOperation {
 	where
 		Self: Sized,
 	{
-		let config = Config::from_yaml(&yaml)?;
+		let runner = Arc::new(Runner::new(&yaml)?);
 
-		let data = read_csv_file(Path::new(&config.data_source_path))
-			.with_context(|| format!("Failed to read CSV file from '{}'", config.data_source_path))?;
-
-		let properties_map = data
-			.into_iter()
-			.map(|mut properties| {
-				let key = properties
-					.get(&config.id_field_values)
-					.ok_or_else(|| anyhow!("Key '{}' not found in CSV data", config.id_field_values))
-					.with_context(|| {
-						format!(
-							"Failed to find key '{}' in the CSV data row: {properties:?}",
-							config.id_field_values
-						)
-					})?
-					.to_string();
-				if !config.also_save_id {
-					properties.remove(&config.id_field_values)
-				}
-				Ok((key, properties))
-			})
-			.collect::<Result<HashMap<String, GeoProperties>>>()
-			.context("Failed to build properties map from CSV data")?;
-
-		let input = lookup.construct(&config.input).await?;
+		let input_name = yaml.hash_get_str("input")?;
+		let input = lookup.construct(&input_name).await?;
 
 		let mut parameters = input.get_parameters().await.clone();
 		ensure!(
 			parameters.tile_format == TileFormat::PBF,
-			"operation '{name}' needs vector tiles (PBF) from '{}'",
-			config.input
+			"operation '{name}' needs vector tiles (PBF) from '{input_name}'",
 		);
 
 		let input_compression = parameters.tile_compression;
 		parameters.tile_compression = TileCompression::Uncompressed;
 
 		Ok(PBFUpdatePropertiesOperation {
-			config,
+			runner,
 			input,
 			input_compression,
 			name: name.to_string(),
 			parameters,
-			properties_map,
 		})
 	}
 
 	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TilesStream {
+		let compression = self.input_compression.clone();
+		let runner = self.runner.clone();
+
 		self
 			.input
 			.get_bbox_tile_stream(bbox)
 			.await
-			.filter_map(|(coord, blob)| {
-				let blob = decompress(blob, &self.input_compression).unwrap();
-				let blob = self.run(blob).unwrap();
-				ready(blob.map(|inner| (coord, inner)))
+			.map(move |(coord, blob)| {
+				let runner = runner.clone();
+				tokio::spawn(async move {
+					let blob = decompress(blob, &compression).unwrap();
+					let blob = runner.run(blob).unwrap();
+					blob.map(|inner| (coord, inner))
+				})
 			})
+			.buffer_unordered(num_cpus::get())
+			.filter_map(|e| futures::future::ready(e.unwrap()))
 			.boxed()
 	}
 
@@ -164,27 +184,10 @@ impl TileComposerOperation for PBFUpdatePropertiesOperation {
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		let blob = self.input.get_tile_data(coord).await?;
 		if let Some(blob) = blob {
-			self.run(decompress(blob, &self.input_compression)?)
+			self.runner.run(decompress(blob, &self.input_compression)?)
 		} else {
 			Ok(None)
 		}
-	}
-}
-
-impl Debug for PBFUpdatePropertiesOperation {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("PBFUpdatePropertiesOperation")
-			.field("name", &self.name)
-			.field(
-				"properties_map",
-				&BTreeMap::from_iter(self.properties_map.iter()),
-			)
-			.field("id_field_tiles", &self.config.id_field_tiles)
-			.field(
-				"remove_empty_properties",
-				&self.config.remove_empty_properties,
-			)
-			.finish()
 	}
 }
 

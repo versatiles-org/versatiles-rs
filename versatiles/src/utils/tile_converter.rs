@@ -93,14 +93,14 @@ impl FnConv {
 /// A structure representing a pipeline of conversions to be applied to a blob
 #[derive(Clone)]
 pub struct TileConverter {
-	pipeline: Vec<FnConv>,
+	pipeline: Arc<Vec<FnConv>>,
 }
 
 impl TileConverter {
 	/// Create a new empty `DataConverter`
 	pub fn new_empty() -> TileConverter {
 		TileConverter {
-			pipeline: Vec::new(),
+			pipeline: Arc::new(Vec::new()),
 		}
 	}
 
@@ -208,7 +208,7 @@ impl TileConverter {
 
 	/// Adds a new conversion function to the pipeline.
 	fn push(&mut self, f: FnConv) {
-		self.pipeline.push(f);
+		Arc::get_mut(&mut self.pipeline).unwrap().push(f);
 	}
 
 	/// Runs the data through the pipeline of conversion functions and returns the result.
@@ -221,7 +221,7 @@ impl TileConverter {
 
 	/// Runs a stream through the pipeline of conversion functions
 	pub fn process_stream<'a>(&'a self, stream: TilesStream<'a>) -> TilesStream<'a> {
-		let pipeline = Arc::new(self.pipeline.clone());
+		let pipeline = self.pipeline.clone();
 		stream
 			.map(move |(coord, mut blob)| {
 				let pipeline = pipeline.clone();
@@ -233,7 +233,7 @@ impl TileConverter {
 				})
 			})
 			.buffer_unordered(num_cpus::get())
-			.map(|r| r.unwrap())
+			.map(|e| e.unwrap())
 			.boxed()
 	}
 
