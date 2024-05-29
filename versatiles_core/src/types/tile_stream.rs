@@ -1,6 +1,6 @@
 use crate::types::{Blob, TileCoord3};
 use futures::{future::ready, stream, Future, Stream, StreamExt};
-use std::pin::Pin;
+use std::{pin::Pin, sync::Arc};
 
 /// A wrapper to handle streams of tiles, where each item is a tuple containing a tile coordinate and its associated data.
 pub struct TileStream<'a> {
@@ -91,28 +91,36 @@ impl<'a> TileStream<'a> {
 		}
 	}
 
-	pub fn map_blob_parallel<F>(self, mut callback: F) -> Self
+	pub fn map_blob_parallel<F>(self, callback: F) -> Self
 	where
-		F: FnMut(Blob) -> Blob + Send + 'a,
+		F: Fn(Blob) -> Blob + Send + Sync + 'static,
 	{
+		let callback = Arc::new(callback);
 		TileStream {
 			stream: self
 				.stream
-				.map(move |(coord, blob)| tokio::spawn(ready((coord, callback(blob)))))
+				.map(move |(coord, blob)| {
+					let callback = Arc::clone(&callback);
+					tokio::spawn(async move { (coord, callback(blob)) })
+				})
 				.buffer_unordered(num_cpus::get())
 				.map(|e| e.unwrap())
 				.boxed(),
 		}
 	}
 
-	pub fn filter_map_blob_parallel<F>(self, mut callback: F) -> Self
+	pub fn filter_map_blob_parallel<F>(self, callback: F) -> Self
 	where
-		F: FnMut(Blob) -> Option<Blob> + Send + 'a,
+		F: Fn(Blob) -> Option<Blob> + Send + Sync + 'static,
 	{
+		let callback = Arc::new(callback);
 		TileStream {
 			stream: self
 				.stream
-				.map(move |(coord, blob)| tokio::spawn(ready((coord, callback(blob)))))
+				.map(move |(coord, blob)| {
+					let callback = Arc::clone(&callback);
+					tokio::spawn(async move { (coord, callback(blob)) })
+				})
 				.buffer_unordered(num_cpus::get())
 				.filter_map(|e| async {
 					let (coord, option) = e.unwrap();
