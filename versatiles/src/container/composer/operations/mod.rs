@@ -35,8 +35,9 @@ pub trait TileComposerOperation: Debug + Send + Sync {
 	where
 		Self: Sized;
 
+	fn get_parameters(&self) -> &TilesReaderParameters;
+
 	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TilesStream;
-	async fn get_parameters(&self) -> &TilesReaderParameters;
 	async fn get_meta(&self) -> Result<Option<Blob>>;
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>>;
 }

@@ -71,7 +71,7 @@ impl TileComposerReader {
 			.context("failed parsing output")?;
 		let operation = operation.as_str().context("failed parsing output")?;
 		let operation = lookup.construct(operation).await?;
-		let parameters = operation.get_parameters().await.clone();
+		let parameters = operation.get_parameters().clone();
 
 		Ok(TileComposerReader {
 			name: name.to_string(),

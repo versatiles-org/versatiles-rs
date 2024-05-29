@@ -134,7 +134,7 @@ impl TileComposerOperation for PBFUpdatePropertiesOperation {
 		let input_name = yaml.hash_get_str("input")?;
 		let input = lookup.construct(&input_name).await?;
 
-		let mut parameters = input.get_parameters().await.clone();
+		let mut parameters = input.get_parameters().clone();
 		ensure!(
 			parameters.tile_format == TileFormat::PBF,
 			"operation '{name}' needs vector tiles (PBF) from '{input_name}'",
@@ -173,7 +173,7 @@ impl TileComposerOperation for PBFUpdatePropertiesOperation {
 			.boxed()
 	}
 
-	async fn get_parameters(&self) -> &TilesReaderParameters {
+	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 

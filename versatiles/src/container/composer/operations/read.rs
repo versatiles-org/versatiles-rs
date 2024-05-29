@@ -86,12 +86,14 @@ impl TileComposerOperation for ReadOperation {
 		})
 	}
 
-	async fn get_parameters(&self) -> &TilesReaderParameters {
+	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
+
 	async fn get_meta(&self) -> Result<Option<Blob>> {
 		self.reader.lock().await.get_meta()
 	}
+
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		self.reader.lock().await.get_tile_data(coord).await
 	}

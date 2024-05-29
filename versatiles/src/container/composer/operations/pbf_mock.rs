@@ -58,12 +58,14 @@ impl TileComposerOperation for PBFMock {
 		})
 	}
 
-	async fn get_parameters(&self) -> &TilesReaderParameters {
+	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
+
 	async fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(Some(Blob::from("mock_meta")))
 	}
+
 	async fn get_tile_data(&self, _coord: &TileCoord3) -> Result<Option<Blob>> {
 		Ok(Some(self.blob.clone()))
 	}
