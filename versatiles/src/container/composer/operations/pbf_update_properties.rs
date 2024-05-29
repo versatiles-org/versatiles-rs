@@ -24,7 +24,6 @@ struct Config {
 
 /// The `PBFUpdatePropertiesOperation` struct represents an operation that replaces properties in PBF tiles
 /// based on a mapping provided in a CSV file.
-#[derive(Debug)]
 pub struct Runner {
 	config: Config,
 	properties_map: HashMap<String, GeoProperties>,
@@ -100,7 +99,18 @@ impl Runner {
 	}
 }
 
-#[derive(Debug)]
+impl Debug for Runner {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Runner")
+			.field("config", &self.config)
+			.field(
+				"properties_map",
+				&std::collections::BTreeMap::from_iter(self.properties_map.iter()),
+			)
+			.finish()
+	}
+}
+
 #[allow(dead_code)]
 pub struct PBFUpdatePropertiesOperation {
 	runner: Arc<Runner>,
@@ -195,6 +205,18 @@ impl TileComposerOperation for PBFUpdatePropertiesOperation {
 	}
 }
 
+impl Debug for PBFUpdatePropertiesOperation {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("PBFUpdatePropertiesOperation")
+			.field("name", &self.name)
+			.field("input", &self.input.get_name())
+			.field("input_compression", &self.input_compression)
+			.field("parameters", &self.parameters)
+			.field("runner", &self.runner)
+			.finish()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -244,6 +266,10 @@ mod tests {
 
 		fn cleanup(text: String) -> String {
 			text
+			.replace(
+				"PBFUpdatePropertiesOperation { name: \"update_values\", input: \"source\", input_compression: Uncompressed, parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256), 5: [0,0,31,31] (1024), 6: [0,0,63,63] (4096), 7: [0,0,127,127] (16384), 8: [0,0,255,255] (65536), 9: [0,0,511,511] (262144), 10: [0,0,1023,1023] (1048576), 11: [0,0,2047,2047] (4194304), 12: [0,0,4095,4095] (16777216), 13: [0,0,8191,8191] (67108864), 14: [0,0,16383,16383] (268435456), 15: [0,0,32767,32767] (1073741824), 16: [0,0,65535,65535] (4294967296), 17: [0,0,131071,131071] (17179869184), 18: [0,0,262143,262143] (68719476736), 19: [0,0,524287,524287] (274877906944), 20: [0,0,1048575,1048575] (1099511627776), 21: [0,0,2097151,2097151] (4398046511104), 22: [0,0,4194303,4194303] (17592186044416), 23: [0,0,8388607,8388607] (70368744177664), 24: [0,0,16777215,16777215] (281474976710656), 25: [0,0,33554431,33554431] (1125899906842624), 26: [0,0,67108863,67108863] (4503599627370496), 27: [0,0,134217727,134217727] (18014398509481984), 28: [0,0,268435455,268435455] (72057594037927936), 29: [0,0,536870911,536870911] (288230376151711744), 30: [0,0,1073741823,1073741823] (1152921504606846976), 31: [0,0,2147483647,2147483647] (4611686018427387904)], tile_compression: Uncompressed, tile_format: PBF }, runner: Runner { config: Config { data_source_path: \"../testdata/cities.csv\",",
+				"Intro…",
+			)
 				.replace(
 					"\"city_name\": String(\"Berlin\"), \"city_population\": UInt(3755251)",
 					"…Berlin…",
@@ -269,7 +295,7 @@ mod tests {
 	async fn test_new() -> Result<()> {
 		test(
 			("tile_id", "city_id", &[]),
-			"PBFUpdatePropertiesOperation { name: \"update_values\", properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
+			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: false, also_save_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
 			"[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]"
 		).await
 	}
@@ -292,12 +318,12 @@ mod tests {
 	async fn test_replace_properties() -> Result<()> {
 		test(
 			("tile_id", "city_id", &[("replace_properties", false)]),
-			"PBFUpdatePropertiesOperation { name: \"update_values\", properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
+			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: false, also_save_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
 			"[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]"
 		).await?;
 		test(
 			("tile_id", "city_id", &[("replace_properties", true)]),
-			"PBFUpdatePropertiesOperation { name: \"update_values\", properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
+			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: true, remove_empty_properties: false, also_save_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
 			"[Feature { id: None, …geometry… properties: Some({…Berlin…}) }, Feature { id: None, …geometry… properties: None }]"
 		).await
 	}
@@ -306,12 +332,12 @@ mod tests {
 	async fn test_remove_empty_properties() -> Result<()> {
 		test(
 			("tile_id", "city_id", &[("remove_empty_properties", false)]),
-			"PBFUpdatePropertiesOperation { name: \"update_values\", properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
+			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: false, also_save_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
 			"[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]"
 		).await?;
 		test(
 			("tile_id", "city_id", &[("remove_empty_properties", true)]),
-			"PBFUpdatePropertiesOperation { name: \"update_values\", properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: true }",
+			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: true, also_save_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
 			"[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }]"
 		).await
 	}
@@ -320,12 +346,12 @@ mod tests {
 	async fn test_also_save_id() -> Result<()> {
 		test(
 			("tile_id", "city_id", &[("also_save_id", false)]),
-			"PBFUpdatePropertiesOperation { name: \"update_values\", properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
+			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: false, also_save_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
 			"[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]"
 		).await?;
 		test(
 			("tile_id", "city_id", &[("also_save_id", true)]),
-			"PBFUpdatePropertiesOperation { name: \"update_values\", properties_map: {\"1\": {\"city_id\": UInt(1), …Berlin…}, \"2\": {\"city_id\": UInt(2), …Kyiv…}, \"3\": {\"city_id\": UInt(3), …Plovdiv…}}, id_field_tiles: \"tile_id\", remove_empty_properties: false }",
+			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: false, also_save_id: true }, properties_map: {\"1\": {\"city_id\": UInt(1), …Berlin…}, \"2\": {\"city_id\": UInt(2), …Kyiv…}, \"3\": {\"city_id\": UInt(3), …Plovdiv…}} } }",
 			"[Feature { id: None, …geometry… properties: Some({\"city_id\": UInt(1), …Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]"
 		).await
 	}
