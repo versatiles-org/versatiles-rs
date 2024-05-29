@@ -1,14 +1,12 @@
-use super::{TileComposerOperation, TileComposerOperationLookup};
+use super::runner::Runner;
 use crate::{
-	container::{composer::utils::read_csv_file, TilesReaderParameters},
+	container::composer::utils::read_csv_file,
 	geometry::{vector_tile::VectorTile, GeoProperties},
-	types::{Blob, TileStream},
-	utils::{decompress, YamlWrapper},
+	types::Blob,
+	utils::YamlWrapper,
 };
-use anyhow::{anyhow, ensure, Context, Result};
-use async_trait::async_trait;
-use std::{collections::HashMap, fmt::Debug, path::Path, sync::Arc};
-use versatiles_core::types::{TileBBox, TileCompression, TileCoord3, TileFormat};
+use anyhow::{anyhow, Context, Result};
+use std::{collections::HashMap, fmt::Debug, path::Path};
 use versatiles_derive::YamlParser;
 
 #[derive(Debug, YamlParser)]
@@ -23,12 +21,12 @@ struct Config {
 
 /// The `PBFUpdatePropertiesOperation` struct represents an operation that replaces properties in PBF tiles
 /// based on a mapping provided in a CSV file.
-pub struct Runner {
+pub struct PBFUpdatePropertiesRunner {
 	config: Config,
 	properties_map: HashMap<String, GeoProperties>,
 }
 
-impl Runner {
+impl Runner for PBFUpdatePropertiesRunner {
 	fn new(yaml: &YamlWrapper) -> Result<Self>
 	where
 		Self: Sized,
@@ -59,7 +57,7 @@ impl Runner {
 			.collect::<Result<HashMap<String, GeoProperties>>>()
 			.context("Failed to build properties map from CSV data")?;
 
-		Ok(Runner {
+		Ok(PBFUpdatePropertiesRunner {
 			config,
 			properties_map,
 		})
@@ -98,7 +96,7 @@ impl Runner {
 	}
 }
 
-impl Debug for Runner {
+impl Debug for PBFUpdatePropertiesRunner {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("Runner")
 			.field("config", &self.config)
@@ -110,109 +108,11 @@ impl Debug for Runner {
 	}
 }
 
-#[allow(dead_code)]
-pub struct PBFUpdatePropertiesOperation {
-	runner: Arc<Runner>,
-	input: Box<dyn TileComposerOperation>,
-	name: String,
-	parameters: TilesReaderParameters,
-	input_compression: TileCompression,
-}
-
-#[async_trait]
-impl TileComposerOperation for PBFUpdatePropertiesOperation {
-	/// Creates a new `PBFUpdatePropertiesOperation` from the provided YAML configuration.
-	///
-	/// # Arguments
-	///
-	/// * `yaml` - A reference to a `YamlWrapper` containing the configuration.
-	///
-	/// # Returns
-	///
-	/// * `Result<PBFUpdatePropertiesOperation>` - The constructed operation or an error if the configuration is invalid.
-	async fn new(
-		name: &str,
-		yaml: YamlWrapper,
-		lookup: &mut TileComposerOperationLookup,
-	) -> Result<Self>
-	where
-		Self: Sized,
-	{
-		let runner = Arc::new(Runner::new(&yaml)?);
-
-		let input_name = yaml.hash_get_str("input")?;
-		let input = lookup.construct(input_name).await?;
-
-		let mut parameters = input.get_parameters().clone();
-		ensure!(
-			parameters.tile_format == TileFormat::PBF,
-			"operation '{name}' needs vector tiles (PBF) from '{input_name}'",
-		);
-
-		let input_compression = parameters.tile_compression;
-		parameters.tile_compression = TileCompression::Uncompressed;
-
-		Ok(PBFUpdatePropertiesOperation {
-			runner,
-			input,
-			input_compression,
-			name: name.to_string(),
-			parameters,
-		})
-	}
-
-	fn get_name(&self) -> &str {
-		&self.name
-	}
-
-	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
-		let compression = self.input_compression;
-		let runner = self.runner.clone();
-
-		self
-			.input
-			.get_bbox_tile_stream(bbox)
-			.await
-			.filter_map_blob_parallel(move |blob| {
-				let blob = decompress(blob, &compression).unwrap();
-				runner.run(blob).unwrap()
-			})
-	}
-
-	fn get_parameters(&self) -> &TilesReaderParameters {
-		&self.parameters
-	}
-
-	async fn get_meta(&self) -> Result<Option<Blob>> {
-		self.input.get_meta().await
-	}
-
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		let blob = self.input.get_tile_data(coord).await?;
-		if let Some(blob) = blob {
-			self.runner.run(decompress(blob, &self.input_compression)?)
-		} else {
-			Ok(None)
-		}
-	}
-}
-
-impl Debug for PBFUpdatePropertiesOperation {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("PBFUpdatePropertiesOperation")
-			.field("name", &self.name)
-			.field("input", &self.input.get_name())
-			.field("input_compression", &self.input_compression)
-			.field("parameters", &self.parameters)
-			.field("runner", &self.runner)
-			.finish()
-	}
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::container::{TileComposerReader, TilesReader};
+	use versatiles_core::types::TileCoord3;
 
 	async fn test(
 		parameters: (&str, &str, &[(&str, bool)]),

@@ -1,5 +1,6 @@
 mod pbf_update_properties;
 mod read;
+mod runner;
 
 #[cfg(test)]
 mod pbf_mock;
@@ -54,6 +55,9 @@ pub async fn new_tile_composer_operation(
 	yaml: YamlWrapper,
 	lookup: &mut TileComposerOperationLookup,
 ) -> Result<Box<dyn TileComposerOperation>> {
+	use pbf_update_properties::*;
+	use runner::RunnerOperation;
+
 	let action = yaml
 		.hash_get_str("action")
 		.context("while parsing action")?
@@ -70,9 +74,7 @@ pub async fn new_tile_composer_operation(
 	}
 
 	let result = match action.as_str() {
-		"pbf_update_properties" => {
-			build::<pbf_update_properties::PBFUpdatePropertiesOperation>(args).await
-		}
+		"pbf_update_properties" => build::<RunnerOperation<PBFUpdatePropertiesRunner>>(args).await,
 		"read" => build::<read::ReadOperation>(args).await,
 		#[cfg(test)]
 		"pbf_mock" => build::<pbf_mock::PBFMock>(args).await,
