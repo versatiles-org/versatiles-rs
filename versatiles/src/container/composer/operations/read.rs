@@ -86,6 +86,10 @@ impl TileComposerOperation for ReadOperation {
 		})
 	}
 
+	fn get_name(&self) -> &str {
+		&self.name
+	}
+
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}

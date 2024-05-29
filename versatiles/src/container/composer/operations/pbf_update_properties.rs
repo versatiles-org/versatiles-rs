@@ -132,7 +132,7 @@ impl TileComposerOperation for PBFUpdatePropertiesOperation {
 		let runner = Arc::new(Runner::new(&yaml)?);
 
 		let input_name = yaml.hash_get_str("input")?;
-		let input = lookup.construct(&input_name).await?;
+		let input = lookup.construct(input_name).await?;
 
 		let mut parameters = input.get_parameters().clone();
 		ensure!(
@@ -152,8 +152,12 @@ impl TileComposerOperation for PBFUpdatePropertiesOperation {
 		})
 	}
 
+	fn get_name(&self) -> &str {
+		&self.name
+	}
+
 	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TilesStream {
-		let compression = self.input_compression.clone();
+		let compression = self.input_compression;
 		let runner = self.runner.clone();
 
 		self

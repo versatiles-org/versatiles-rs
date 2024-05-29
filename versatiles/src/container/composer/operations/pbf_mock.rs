@@ -16,13 +16,14 @@ use versatiles_core::types::{Blob, TileBBox, TileCompression, TileCoord3, TileFo
 #[derive(Debug)]
 pub struct PBFMock {
 	blob: Blob,
+	name: String,
 	parameters: TilesReaderParameters,
 }
 
 #[async_trait]
 impl TileComposerOperation for PBFMock {
 	async fn new(
-		_name: &str,
+		name: &str,
 		_yaml: YamlWrapper,
 		_lookup: &mut TileComposerOperationLookup,
 	) -> Result<Self>
@@ -51,11 +52,16 @@ impl TileComposerOperation for PBFMock {
 
 		Ok(PBFMock {
 			blob,
+			name: name.to_string(),
 			parameters: TilesReaderParameters::new_full(
 				TileFormat::PBF,
 				TileCompression::Uncompressed,
 			),
 		})
+	}
+
+	fn get_name(&self) -> &str {
+		&self.name
 	}
 
 	fn get_parameters(&self) -> &TilesReaderParameters {
