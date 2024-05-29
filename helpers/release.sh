@@ -24,4 +24,4 @@ if [ $? -ne 0 ]; then
 fi
 
 # publish to crates.io
-cargo workspaces publish --force * --no-individual-tags --allow-branch main "$1"
+cargo workspaces publish --force "*" --no-individual-tags --allow-branch main "$1"
