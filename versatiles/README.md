@@ -1,36 +1,66 @@
+# Versatiles
 
-# Install
+## Install
 
-- You need [Rust](https://doc.rust-lang.org/cargo/getting-started/installation.html)
-- run `cargo install versatiles`
+### Linux
 
-## Alternatively:
-
-- You can also use the latest [precompiled binary releases](https://github.com/versatiles-org/versatiles-rs/releases/latest/).
-- You can also use [Homebrew (Mac)](https://github.com/versatiles-org/versatiles-documentation/blob/main/guides/install_versatiles.md#homebrew-for-macos)
-- And we have prepared [some Docker Images](https://github.com/versatiles-org/versatiles-docker).
-
-Example: Download and install the latest version for Debian on Intel
+The [installation script](https://github.com/versatiles-org/versatiles-rs/blob/main/helpers/install-linux.sh) will download the correct [precompiled binary](https://github.com/versatiles-org/versatiles-rs/releases/latest/) and copy it to `/usr/local/bin/`:
 ```bash
-curl -sL https://github.com/versatiles-org/versatiles-rs/releases/latest/download/versatiles-linux-gnu-x86_64.tar.gz | tar -xzf - -C /usr/local/bin/
+curl -Ls "https://github.com/versatiles-org/versatiles-rs/raw/main/helpers/install-linux.sh" | bash
 ```
 
-# Run
+### Mac
 
-Running `versatiles` will list you all available commands:
+You can install Versatiles using [Homebrew](https://github.com/versatiles-org/versatiles-documentation/blob/main/guides/install_versatiles.md#homebrew-for-macos):
+```bash
+brew tap versatiles-org/versatiles
+brew install versatiles
+```
+
+### Docker
+
+We have prepared [Docker Images](https://github.com/versatiles-org/versatiles-docker) for easy deployment:
+```bash
+docker pull versatiles-org/versatiles
+```
+
+## Build from Source
+
+To build Versatiles from source, you need [Rust](https://doc.rust-lang.org/cargo/getting-started/installation.html) installed. Then, run the following command:
+```bash
+cargo install versatiles
+```
+
+## Run
+
+Running the `versatiles` command will list all available commands:
 ```
 Usage: versatiles <COMMAND>
 
 Commands:
-   convert  Convert between different tile containers
-   probe    Show information about a tile container
-   serve    Serve tiles via http
+  convert  Convert between different tile containers
+  probe    Show information about a tile container
+  serve    Serve tiles via http
 ```
 
-# examples
+## Examples
 
+### Convert Tiles
+Convert between different tile formats:
 ```bash
 versatiles convert --tile-format webp satellite_tiles.tar satellite_tiles.versatiles
+```
 
+### Serve Tiles
+Serve tiles via HTTP:
+```bash
 versatiles serve satellite_tiles.versatiles
 ```
+
+## Additional Information
+
+For more details, guides, and advanced usage, please refer to the [official documentation](https://github.com/versatiles-org/versatiles-documentation).
+
+## Note on Development and Documentation
+
+Please note that this project is under heavy development, and the documentation may not always be up to date. We appreciate your understanding and patience as we work to improve Versatiles. If you encounter any issues or have questions, feel free to open an issue or contribute improvements to our [code](https://github.com/versatiles-org/versatiles-rs) or [documentation](https://github.com/versatiles-org/versatiles-documentation).
