@@ -20,12 +20,12 @@ bytes.workspace = true
 clap = { workspace = true, optional = true, features = ["std", "derive"] }
 enumset.workspace = true
 futures = { workspace = true, features = ["default"] }
+indicatif.workspace = true
 itertools.workspace = true
 lazy_static = { workspace = true, optional = true }
 num_cpus.workspace = true
 regex = { workspace = true, optional = true, features = ["unicode-case", "unicode-perl"] }
 reqwest = { workspace = true, optional = true, features = ["rustls-tls"] }
-terminal_size.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
 [dev-dependencies]
