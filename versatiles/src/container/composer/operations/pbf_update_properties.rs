@@ -6,6 +6,7 @@ use crate::{
 	utils::YamlWrapper,
 };
 use anyhow::{anyhow, Context, Result};
+use log::warn;
 use std::{collections::HashMap, fmt::Debug};
 use versatiles_derive::YamlParser;
 
@@ -77,7 +78,11 @@ impl Runner for PBFUpdatePropertiesRunner {
 								prop.update(new_prop.clone());
 							}
 							return Some(prop);
+						} else {
+							warn!("id \"{id}\" not found in data source");
 						}
+					} else {
+						warn!("id field \"{}\" not found", &self.config.id_field_tiles);
 					}
 				}
 				None
