@@ -1,6 +1,5 @@
 [workspace]
 members = ["versatiles", "versatiles_core", "versatiles_derive", "versatiles_geometry"]
-default-members = ["versatiles", "versatiles_core", "versatiles_derive", "versatiles_geometry"]
 resolver = "2"
 
 [workspace.package]
@@ -24,6 +23,12 @@ exclude = [
 	"/helpers",
 	"/testdata",
 ]
+
+[workspace.metadata.release]
+allow-branch = ["main"]
+sign-commit = true
+sign-tag = true
+shared-version = true
 
 [profile.dev]
 opt-level = 1
@@ -84,11 +89,11 @@ regex = { version = "1.10.4", default-features = false }
 reqwest = { version = "0.12.4", default-features = false }
 syn = { version = "2.0.66", default-features = false }
 tar = { version = "0.4.40", default-features = false }
-tokio = { version = "1.37.0", default-features = false }
+tokio = { version = "1.38.0", default-features = false }
 webp = { version = "0.3.0", default-features = false }
 wildmatch = { version = "2.3.4", default-features = false }
-yaml-rust2 = { version = "0.8.0", default-features = false }
+yaml-rust2 = { version = "0.8.1", default-features = false }
 
-versatiles_core = { path = "versatiles_core" }
-versatiles_derive = { path = "versatiles_derive" }
-versatiles_geometry = { path = "versatiles_geometry" }
+versatiles_core = { version = "0.11.1", path = "versatiles_core" }
+versatiles_derive = { version = "0.11.1", path = "versatiles_derive" }
+versatiles_geometry = { version = "0.11.1", path = "versatiles_geometry" }

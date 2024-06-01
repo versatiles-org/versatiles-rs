@@ -21,7 +21,7 @@ regex.workspace = true
 versatiles_core.workspace = true
 
 [dev-dependencies]
-tokio.workspace = true
+tokio = { workspace = true, features = ["macros"] }
 
 [features]
 default = []
