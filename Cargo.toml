@@ -26,9 +26,13 @@ exclude = [
 
 [workspace.metadata.release]
 allow-branch = ["main"]
+consolidate-commits = true
+dependent-version = "upgrade"
+pre-release-commit-message = "release: v{{version}}"
+shared-version = true
 sign-commit = true
 sign-tag = true
-shared-version = true
+tag-name = "v{{version}}"
 
 [profile.dev]
 opt-level = 1
