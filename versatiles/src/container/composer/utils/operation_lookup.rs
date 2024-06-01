@@ -1,5 +1,7 @@
-use super::operations::{new_tile_composer_operation, TileComposerOperation};
-use crate::utils::YamlWrapper;
+use crate::{
+	container::composer::operations::{new_tile_composer_operation, TileComposerOperation},
+	utils::YamlWrapper,
+};
 use anyhow::{bail, ensure, Result};
 use std::{
 	collections::HashMap,

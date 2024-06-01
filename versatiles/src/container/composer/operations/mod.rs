@@ -5,8 +5,11 @@ mod runner;
 #[cfg(test)]
 mod pbf_mock;
 
-pub use super::lookup::TileComposerOperationLookup;
-use crate::{container::TilesReaderParameters, types::TileStream, utils::YamlWrapper};
+use crate::{
+	container::{composer::utils::TileComposerOperationLookup, TilesReaderParameters},
+	types::TileStream,
+	utils::YamlWrapper,
+};
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use std::fmt::Debug;

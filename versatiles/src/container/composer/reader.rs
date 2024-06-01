@@ -1,6 +1,6 @@
-use super::{lookup::TileComposerOperationLookup, operations::TileComposerOperation};
+use super::operations::TileComposerOperation;
 use crate::{
-	container::{TilesReader, TilesReaderParameters},
+	container::{composer::utils::TileComposerOperationLookup, TilesReader, TilesReaderParameters},
 	io::DataReader,
 	types::{Blob, TileBBox, TileCompression, TileCoord3, TileStream},
 	utils::YamlWrapper,
