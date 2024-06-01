@@ -12,7 +12,7 @@ keywords = ["versatiles", "mbtiles", "tiles", "map"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/versatiles-org/versatiles-rs"
-version = "0.11.4"
+version = "0.11.5"
 exclude = [
 	".githooks/",
 	".github/",
@@ -94,6 +94,6 @@ webp = { version = "0.3.0", default-features = false }
 wildmatch = { version = "2.3.4", default-features = false }
 yaml-rust2 = { version = "0.8.1", default-features = false }
 
-versatiles_core = { version = "0.11.1", path = "versatiles_core" }
-versatiles_derive = { version = "0.11.1", path = "versatiles_derive" }
-versatiles_geometry = { version = "0.11.1", path = "versatiles_geometry" }
+versatiles_core = { version = "0.11.5", path = "versatiles_core" }
+versatiles_derive = { version = "0.11.5", path = "versatiles_derive" }
+versatiles_geometry = { version = "0.11.5", path = "versatiles_geometry" }
