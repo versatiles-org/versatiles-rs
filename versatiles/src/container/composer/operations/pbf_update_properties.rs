@@ -11,17 +11,23 @@ use std::{collections::HashMap, fmt::Debug};
 use versatiles_derive::YamlParser;
 
 #[derive(Debug, YamlParser)]
+/// This operation loads a data source (like a CSV file).
+/// For each feature in the vector tiles, it uses the id to fetch the correct row in the data source and uses this row to update the properties of the feature.
 struct Config {
+	/// Path of the data source, e.g., data.csv
 	data_source_path: String,
+	/// Field name of the id in the vector tiles
 	id_field_tiles: String,
+	/// Field name of the id in the data source
 	id_field_values: String,
+	/// By default, the old properties in the tiles are updated with the new ones. Set "replace_properties" if the properties should be replaced with the new ones.
 	replace_properties: bool,
+	/// Should all features be deleted that have no properties?
 	remove_empty_properties: bool,
-	also_save_id: bool,
+	/// By default, only the new values without the id are added. Set "add_id" to include the id field.
+	add_id: bool,
 }
 
-/// The `PBFUpdatePropertiesOperation` struct represents an operation that replaces properties in PBF tiles
-/// based on a mapping provided in a CSV file.
 pub struct PBFUpdatePropertiesRunner {
 	config: Config,
 	properties_map: HashMap<String, GeoProperties>,
@@ -50,7 +56,7 @@ impl Runner for PBFUpdatePropertiesRunner {
 						)
 					})?
 					.to_string();
-				if !config.also_save_id {
+				if !config.add_id {
 					properties.remove(&config.id_field_values)
 				}
 				Ok((key, properties))
@@ -193,7 +199,7 @@ mod tests {
 	async fn test_new() -> Result<()> {
 		test(
 			("tile_id", "city_id", &[]),
-			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: false, also_save_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
+			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: false, add_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
 			"[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]"
 		).await
 	}
@@ -216,12 +222,12 @@ mod tests {
 	async fn test_replace_properties() -> Result<()> {
 		test(
 			("tile_id", "city_id", &[("replace_properties", false)]),
-			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: false, also_save_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
+			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: false, add_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
 			"[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]"
 		).await?;
 		test(
 			("tile_id", "city_id", &[("replace_properties", true)]),
-			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: true, remove_empty_properties: false, also_save_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
+			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: true, remove_empty_properties: false, add_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
 			"[Feature { id: None, …geometry… properties: Some({…Berlin…}) }, Feature { id: None, …geometry… properties: None }]"
 		).await
 	}
@@ -230,26 +236,26 @@ mod tests {
 	async fn test_remove_empty_properties() -> Result<()> {
 		test(
 			("tile_id", "city_id", &[("remove_empty_properties", false)]),
-			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: false, also_save_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
+			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: false, add_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
 			"[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]"
 		).await?;
 		test(
 			("tile_id", "city_id", &[("remove_empty_properties", true)]),
-			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: true, also_save_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
+			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: true, add_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
 			"[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }]"
 		).await
 	}
 
 	#[tokio::test]
-	async fn test_also_save_id() -> Result<()> {
+	async fn test_add_id() -> Result<()> {
 		test(
-			("tile_id", "city_id", &[("also_save_id", false)]),
-			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: false, also_save_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
+			("tile_id", "city_id", &[("add_id", false)]),
+			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: false, add_id: false }, properties_map: {\"1\": {…Berlin…}, \"2\": {…Kyiv…}, \"3\": {…Plovdiv…}} } }",
 			"[Feature { id: None, …geometry… properties: Some({…Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]"
 		).await?;
 		test(
-			("tile_id", "city_id", &[("also_save_id", true)]),
-			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: false, also_save_id: true }, properties_map: {\"1\": {\"city_id\": UInt(1), …Berlin…}, \"2\": {\"city_id\": UInt(2), …Kyiv…}, \"3\": {\"city_id\": UInt(3), …Plovdiv…}} } }",
+			("tile_id", "city_id", &[("add_id", true)]),
+			"Intro… id_field_tiles: \"tile_id\", id_field_values: \"city_id\", replace_properties: false, remove_empty_properties: false, add_id: true }, properties_map: {\"1\": {\"city_id\": UInt(1), …Berlin…}, \"2\": {\"city_id\": UInt(2), …Kyiv…}, \"3\": {\"city_id\": UInt(3), …Plovdiv…}} } }",
 			"[Feature { id: None, …geometry… properties: Some({\"city_id\": UInt(1), …Berlin…, \"tile_id\": UInt(1), \"tile_name\": String(\"Bärlin\")}) }, Feature { id: None, …geometry… properties: None }]"
 		).await
 	}

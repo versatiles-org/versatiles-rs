@@ -13,7 +13,9 @@ use versatiles_core::types::{Blob, TileBBox, TileCoord3};
 use versatiles_derive::YamlParser;
 
 #[derive(YamlParser)]
+/// Reads a tile source, such as a VersaTiles container.
 struct Config {
+	/// The filename of the tile container, e.g., "world.versatiles".
 	filename: String,
 }
 

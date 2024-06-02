@@ -4,12 +4,33 @@ extern crate syn;
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Fields};
+use syn::{parse_macro_input, Attribute, Data, DeriveInput, Fields, Meta};
 
 #[proc_macro_derive(YamlParser)]
 pub fn yaml_parser_derive(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
 	let name = input.ident;
+
+	fn extract_comment(attr: &Attribute) -> Option<String> {
+		if attr.path().is_ident("doc") {
+			if let Meta::NameValue(meta) = &attr.meta {
+				if let syn::Expr::Lit(lit) = &meta.value {
+					if let syn::Lit::Str(lit_str) = &lit.lit {
+						return Some(lit_str.value().trim().to_string());
+					}
+				}
+			}
+		}
+		None
+	}
+
+	// Extract the doc comments from the struct attributes
+	let struct_docs = input
+		.attrs
+		.iter()
+		.filter_map(extract_comment)
+		.collect::<Vec<String>>()
+		.join("\n");
 
 	let fields = if let Data::Struct(data_struct) = input.data {
 		if let Fields::Named(fields_named) = data_struct.fields {
@@ -21,26 +42,44 @@ pub fn yaml_parser_derive(input: TokenStream) -> TokenStream {
 		panic!("YamlParser can only be derived for structs");
 	};
 
-	let field_parsing = fields.iter().map(|field| {
+	let (field_parsing, field_docs): (Vec<_>, Vec<_>) = fields.iter().map(|field| {
 		let field_name = &field.ident;
 		let field_type = &field.ty;
 		let field_str = field_name.as_ref().unwrap().to_string();
 
-		match quote!(#field_type).to_string().as_str() {
-			"String" => quote! {
-				#field_name: yaml.hash_get_string(#field_str).context(format!("Failed to get '{}'", #field_str))?
-			},
-			"bool" => quote! {
-				#field_name: yaml.hash_get_bool(#field_str).unwrap_or(false)
-			},
-			"Option < String >" => quote! {
-				#field_name: yaml.hash_get_string(#field_str).ok()
-			},
-			_ => quote! {
-				#field_name: yaml.hash_get_str(#field_str).context(format!("Failed to get '{}'", #field_str))?.parse::<#field_type>().context(format!("Failed to parse '{}'", #field_str))?
-			},
-		}
-	});
+		let (type_name, parsing_logic) = match quote!(#field_type).to_string().as_str() {
+			"String" => (
+				"String (required)",
+				quote! { #field_name: yaml.hash_get_string(#field_str).context(format!("Failed to get '{}'", #field_str))? }
+			),
+			"bool" => (
+				"Boolean (optional, default: false)",
+				quote! { #field_name: yaml.hash_get_bool(#field_str).unwrap_or(false) }
+			),
+			"Option < String >" => (
+				"String (optional)",
+				quote! { #field_name: yaml.hash_get_string(#field_str).ok() }
+			),
+			_ => (
+				"unknown",
+				quote! { #field_name: yaml.hash_get_str(#field_str).context(format!("Failed to get '{}'", #field_str))?.parse::<#field_type>().context(format!("Failed to parse '{}'", #field_str))? }
+			),
+		};
+
+		let field_docs = field.attrs.iter().filter_map(extract_comment).collect::<Vec<String>>().join(" ");
+
+		let doc_string = if field_docs.is_empty() {
+			quote! {
+				docs.push_str(&format!("  {}: {}\n", #field_str, #type_name));
+			}
+		} else {
+			quote! {
+				docs.push_str(&format!("  {}: {} - {}\n", #field_str, #type_name, #field_docs));
+			}
+		};
+
+		(parsing_logic, doc_string)
+	}).unzip();
 
 	let expanded = quote! {
 		impl #name {
@@ -48,6 +87,14 @@ pub fn yaml_parser_derive(input: TokenStream) -> TokenStream {
 				Ok(Self {
 					#(#field_parsing),*
 				})
+			}
+
+			pub fn generate_docs() -> String {
+				let mut docs = String::new();
+				docs.push_str(&format!("{}\n", #struct_docs));
+				docs.push_str("Parameters:\n");
+				#(#field_docs)*
+				docs
 			}
 		}
 	};
