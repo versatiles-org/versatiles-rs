@@ -28,7 +28,7 @@ axum = { workspace = true, optional = true, features = ["http1", "http2", "tokio
 brotli = { workspace = true, features = ["std"] }
 byteorder = { workspace = true, features = ["std"] }
 bytes.workspace = true
-clap = { workspace = true, optional = true, features = ["wrap_help"] }
+clap = { workspace = true, optional = true }
 clap-verbosity-flag = { workspace = true, optional = true }
 colored = { workspace = true, optional = true }
 csv = { workspace = true, optional = true }
