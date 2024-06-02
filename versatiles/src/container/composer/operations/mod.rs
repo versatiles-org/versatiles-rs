@@ -95,10 +95,10 @@ pub async fn new_tile_composer_operation(
 }
 
 pub fn get_composer_operation_docs() -> String {
-	vec![
-		("read".to_string(), read::ReadOperation::get_docs()),
+	[
+		("read", read::ReadOperation::get_docs()),
 		(
-			"pbf_update_properties".to_string(),
+			"pbf_update_properties",
 			RunnerOperation::<PBFUpdatePropertiesRunner>::get_docs(),
 		),
 	]
