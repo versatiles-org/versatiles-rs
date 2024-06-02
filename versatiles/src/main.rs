@@ -40,12 +40,12 @@ use clap_verbosity_flag::{ErrorLevel, Verbosity};
 /// Command-line interface for VersaTiles
 #[derive(Parser, Debug)]
 #[command(
-    author, // Set the author
-    version, // Set the version
-    about, // Set a short description
-    long_about = None, // Disable long description
-    propagate_version = true, // Enable version flag for subcommands
-    disable_help_subcommand = true, // Disable help subcommand
+	author, // Set the author
+	version, // Set the version
+	about, // Set a short description
+	long_about = None, // Disable long description
+	propagate_version = false, // Enable version flag for subcommands
+	disable_help_subcommand = true, // Disable help subcommand
 )]
 struct Cli {
 	#[command(subcommand)]
@@ -68,6 +68,9 @@ enum Commands {
 	#[clap(alias = "server")]
 	/// Serve tiles via http
 	Serve(tools::serve::Subcommand),
+
+	/// Show detailed help
+	Help(tools::help::Subcommand),
 }
 
 /// Main function for running the command-line interface
@@ -87,6 +90,7 @@ fn main() -> Result<()> {
 fn run(cli: Cli) -> Result<()> {
 	match &cli.command {
 		Commands::Convert(arguments) => tools::convert::run(arguments),
+		Commands::Help(arguments) => tools::help::run(arguments),
 		Commands::Probe(arguments) => tools::probe::run(arguments),
 		Commands::Serve(arguments) => tools::serve::run(arguments),
 	}

@@ -1,8 +1,7 @@
 use crate::container::{get_reader, ProbeDepth};
 use anyhow::Result;
-use clap::{ArgAction::Count, Args};
 
-#[derive(Args, Debug)]
+#[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
 pub struct Subcommand {
 	/// tile container you want to probe
@@ -14,7 +13,7 @@ pub struct Subcommand {
 	///   -d: scans container
 	///  -dd: scans all tiles
 	/// -ddd: scans all tile contents
-	#[arg(long, short, action = Count, verbatim_doc_comment)]
+	#[arg(long, short, action = clap::ArgAction::Count, verbatim_doc_comment)]
 	deep: u8,
 }
 

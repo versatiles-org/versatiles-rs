@@ -34,6 +34,9 @@ pub struct PBFUpdatePropertiesRunner {
 }
 
 impl Runner for PBFUpdatePropertiesRunner {
+	fn get_docs() -> String {
+		Config::generate_docs()
+	}
 	fn new(yaml: &YamlWrapper, path: &std::path::Path) -> Result<Self>
 	where
 		Self: Sized,

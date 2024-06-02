@@ -22,6 +22,9 @@ pub struct PBFMock {
 
 #[async_trait]
 impl TileComposerOperation for PBFMock {
+	fn get_docs() -> String {
+		"mock".to_string()
+	}
 	async fn new(
 		name: &str,
 		_yaml: YamlWrapper,

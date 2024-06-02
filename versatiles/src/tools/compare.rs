@@ -1,7 +1,6 @@
 use crate::container::get_reader;
-use clap::Args;
 
-#[derive(Args)]
+#[derive(clap::Args)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
 pub struct Subcommand {
 	file1: String,

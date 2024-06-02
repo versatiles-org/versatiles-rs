@@ -4,12 +4,11 @@ use crate::{
 	types::TileCompression,
 };
 use anyhow::Result;
-use clap::Args;
 use regex::Regex;
 use std::path::Path;
 use tokio::time::{sleep, Duration};
 
-#[derive(Args, Debug)]
+#[derive(clap::Args, Debug)]
 #[command(
 	arg_required_else_help = true,
 	disable_version_flag = true,

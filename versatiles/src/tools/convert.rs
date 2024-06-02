@@ -3,10 +3,9 @@ use crate::{
 	types::{TileBBoxPyramid, TileCompression, TileFormat},
 };
 use anyhow::{bail, Result};
-use clap::Args;
 use log::trace;
 
-#[derive(Args, Debug)]
+#[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
 pub struct Subcommand {
 	/// supported container formats: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory

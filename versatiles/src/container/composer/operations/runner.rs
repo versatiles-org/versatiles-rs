@@ -13,6 +13,7 @@ pub trait Runner: Debug + Send + Sync {
 	fn new(yaml: &YamlWrapper, path: &std::path::Path) -> Result<Self>
 	where
 		Self: Sized;
+	fn get_docs() -> String;
 	fn run(&self, blob: Blob) -> Result<Option<Blob>>;
 }
 
@@ -59,6 +60,10 @@ impl<T: Runner + 'static> TileComposerOperation for RunnerOperation<T> {
 			name: name.to_string(),
 			parameters,
 		})
+	}
+
+	fn get_docs() -> String {
+		T::get_docs()
 	}
 
 	fn get_name(&self) -> &str {

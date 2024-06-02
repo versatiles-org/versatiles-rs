@@ -12,6 +12,9 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use itertools::Itertools;
+use pbf_update_properties::PBFUpdatePropertiesRunner;
+use runner::RunnerOperation;
 use std::fmt::Debug;
 use versatiles_core::types::{Blob, TileBBox, TileCoord3};
 
@@ -33,6 +36,10 @@ pub trait TileComposerOperation: Debug + Send + Sync {
 		yaml: YamlWrapper,
 		lookup: &mut TileComposerOperationLookup,
 	) -> Result<Self>
+	where
+		Self: Sized;
+
+	fn get_docs() -> String
 	where
 		Self: Sized;
 
@@ -85,4 +92,18 @@ pub async fn new_tile_composer_operation(
 	};
 
 	result.with_context(|| format!("Failed parsing action '{action}'"))
+}
+
+pub fn get_composer_operation_docs() -> String {
+	vec![
+		("read".to_string(), read::ReadOperation::get_docs()),
+		(
+			"pbf_update_properties".to_string(),
+			RunnerOperation::<PBFUpdatePropertiesRunner>::get_docs(),
+		),
+	]
+	.iter()
+	.map(|(name, doc)| format!("Operation \"{name}\":\n\n{doc}"))
+	.join("\n\n")
+	.to_string()
 }

@@ -16,7 +16,8 @@ pub fn yaml_parser_derive(input: TokenStream) -> TokenStream {
 			if let Meta::NameValue(meta) = &attr.meta {
 				if let syn::Expr::Lit(lit) = &meta.value {
 					if let syn::Lit::Str(lit_str) = &lit.lit {
-						return Some(lit_str.value().trim().to_string());
+						let text = lit_str.value().trim().to_string();
+						return if text.is_empty() { None } else { Some(text) };
 					}
 				}
 			}
@@ -66,19 +67,19 @@ pub fn yaml_parser_derive(input: TokenStream) -> TokenStream {
 			),
 		};
 
-		let field_docs = field.attrs.iter().filter_map(extract_comment).collect::<Vec<String>>().join(" ");
+		let comment = field.attrs.iter().filter_map(extract_comment).collect::<Vec<String>>().join(" ");
 
-		let doc_string = if field_docs.is_empty() {
+		let field_doc = if comment.is_empty() {
 			quote! {
 				docs.push_str(&format!("  {}: {}\n", #field_str, #type_name));
 			}
 		} else {
 			quote! {
-				docs.push_str(&format!("  {}: {} - {}\n", #field_str, #type_name, #field_docs));
+				docs.push_str(&format!("  {}: {} - {}\n", #field_str, #type_name, #comment));
 			}
 		};
 
-		(parsing_logic, doc_string)
+		(parsing_logic, field_doc)
 	}).unzip();
 
 	let expanded = quote! {

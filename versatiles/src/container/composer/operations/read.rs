@@ -89,6 +89,10 @@ impl TileComposerOperation for ReadOperation {
 		})
 	}
 
+	fn get_docs() -> String {
+		Config::generate_docs()
+	}
+
 	fn get_name(&self) -> &str {
 		&self.name
 	}
