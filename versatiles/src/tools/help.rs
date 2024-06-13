@@ -1,6 +1,5 @@
+use crate::container::get_composer_operation_docs;
 use anyhow::Result;
-
-use crate::container;
 
 #[derive(clap::Args, Debug)]
 #[command(
@@ -20,7 +19,7 @@ enum Topic {
 
 pub fn run(command: &Subcommand) -> Result<()> {
 	match command.topic {
-		Topic::Composer => eprintln!("{}", container::get_composer_operation_docs()),
+		Topic::Composer => eprintln!("{}", get_composer_operation_docs()),
 	};
 	Ok(())
 }

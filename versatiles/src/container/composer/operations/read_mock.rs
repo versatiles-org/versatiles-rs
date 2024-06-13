@@ -1,6 +1,8 @@
-use super::{TileComposerOperation, TileComposerOperationLookup};
 use crate::{
-	container::TilesReaderParameters,
+	container::{
+		composer::{Factory, OperationTrait, ReadableOperationTrait},
+		TilesReaderParameters,
+	},
 	geometry::{
 		vector_tile::{VectorTile, VectorTileLayer},
 		Feature, GeoProperties, GeoValue, Geometry,
@@ -14,22 +16,40 @@ use std::fmt::Debug;
 use versatiles_core::types::{Blob, TileBBox, TileCompression, TileCoord3, TileFormat};
 
 #[derive(Debug)]
-pub struct PBFMock {
+pub struct Operation {
 	blob: Blob,
-	name: String,
 	parameters: TilesReaderParameters,
 }
 
 #[async_trait]
-impl TileComposerOperation for PBFMock {
+impl OperationTrait for Operation {
 	fn get_docs() -> String {
 		"mock".to_string()
 	}
-	async fn new(
-		name: &str,
-		_yaml: YamlWrapper,
-		_lookup: &mut TileComposerOperationLookup,
-	) -> Result<Self>
+	fn get_parameters(&self) -> &TilesReaderParameters {
+		&self.parameters
+	}
+	fn get_id() -> &'static str {
+		"mock"
+	}
+
+	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
+		let coords = bbox.iter_coords().collect::<Vec<TileCoord3>>();
+		TileStream::from_coord_vec_sync(coords, |c| Some((c, self.blob.clone())))
+	}
+
+	async fn get_meta(&self) -> Result<Option<Blob>> {
+		Ok(Some(Blob::from("mock_meta")))
+	}
+
+	async fn get_tile_data(&self, _coord: &TileCoord3) -> Result<Option<Blob>> {
+		Ok(Some(self.blob.clone()))
+	}
+}
+
+#[async_trait]
+impl ReadableOperationTrait for Operation {
+	async fn new(_yaml: YamlWrapper, _factory: &Factory) -> Result<Self>
 	where
 		Self: Sized,
 	{
@@ -53,34 +73,12 @@ impl TileComposerOperation for PBFMock {
 		})
 		.to_blob()?;
 
-		Ok(PBFMock {
+		Ok(Operation {
 			blob,
-			name: name.to_string(),
 			parameters: TilesReaderParameters::new_full(
 				TileFormat::PBF,
 				TileCompression::Uncompressed,
 			),
 		})
-	}
-
-	fn get_name(&self) -> &str {
-		&self.name
-	}
-
-	fn get_parameters(&self) -> &TilesReaderParameters {
-		&self.parameters
-	}
-
-	async fn get_meta(&self) -> Result<Option<Blob>> {
-		Ok(Some(Blob::from("mock_meta")))
-	}
-
-	async fn get_tile_data(&self, _coord: &TileCoord3) -> Result<Option<Blob>> {
-		Ok(Some(self.blob.clone()))
-	}
-
-	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
-		let coords = bbox.iter_coords().collect::<Vec<TileCoord3>>();
-		TileStream::from_coord_vec_sync(coords, |c| Some((c, self.blob.clone())))
 	}
 }

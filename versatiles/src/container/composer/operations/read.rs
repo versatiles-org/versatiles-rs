@@ -1,6 +1,8 @@
-use super::{TileComposerOperation, TileComposerOperationLookup};
 use crate::{
-	container::{get_reader, TilesReader, TilesReaderParameters},
+	container::{
+		composer::{Factory, OperationTrait, ReadableOperationTrait},
+		get_reader, TilesReader, TilesReaderParameters,
+	},
 	types::TileStream,
 	utils::YamlWrapper,
 };
@@ -14,21 +16,20 @@ use versatiles_derive::YamlParser;
 
 #[derive(YamlParser)]
 /// Reads a tile source, such as a VersaTiles container.
-struct Config {
+struct Arguments {
 	/// The filename of the tile container, e.g., "world.versatiles".
 	filename: String,
 }
 
 /// The `ReadOperation` struct represents an operation that replaces properties in PBF tiles
 /// based on a mapping provided in a CSV file.
-pub struct ReadOperation {
-	config: Config,
-	name: String,
+pub struct Operation {
+	args: Arguments,
 	parameters: TilesReaderParameters,
 	reader: Arc<Mutex<Box<dyn TilesReader>>>,
 }
 
-impl ReadOperation {
+impl Operation {
 	async fn read_stream(&self, bbox: TileBBox) -> TileStream {
 		let (mut tx, rx) = channel::<(TileCoord3, Blob)>(64);
 		let reader = self.reader.clone();
@@ -58,47 +59,17 @@ impl ReadOperation {
 }
 
 #[async_trait]
-impl TileComposerOperation for ReadOperation {
-	/// Creates a new `ReadOperation` from the provided YAML configuration.
-	///
-	/// # Arguments
-	///
-	/// * `yaml` - A reference to a `YamlWrapper` containing the configuration.
-	///
-	/// # Returns
-	///
-	/// * `Result<ReadOperation>` - The constructed operation or an error if the configuration is invalid.
-	async fn new(
-		name: &str,
-		yaml: YamlWrapper,
-		lookup: &mut TileComposerOperationLookup,
-	) -> Result<Self>
-	where
-		Self: Sized,
-	{
-		let config = Config::from_yaml(&yaml)?;
-
-		let reader = get_reader(&lookup.get_absolute_str(&config.filename)).await?;
-		let parameters = reader.get_parameters().clone();
-
-		Ok(ReadOperation {
-			config,
-			name: name.to_string(),
-			parameters,
-			reader: Arc::new(Mutex::new(reader)),
-		})
-	}
-
+impl OperationTrait for Operation {
 	fn get_docs() -> String {
-		Config::generate_docs()
-	}
-
-	fn get_name(&self) -> &str {
-		&self.name
+		Arguments::generate_docs()
 	}
 
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
+	}
+
+	fn get_id() -> &'static str {
+		"read"
 	}
 
 	async fn get_meta(&self) -> Result<Option<Blob>> {
@@ -114,11 +85,38 @@ impl TileComposerOperation for ReadOperation {
 	}
 }
 
-impl Debug for ReadOperation {
+#[async_trait]
+impl ReadableOperationTrait for Operation {
+	/// Creates a new `ReadOperation` from the provided YAML configuration.
+	///
+	/// # Arguments
+	///
+	/// * `yaml` - A reference to a `YamlWrapper` containing the configuration.
+	///
+	/// # Returns
+	///
+	/// * `Result<ReadOperation>` - The constructed operation or an error if the configuration is invalid.
+	async fn new(yaml: YamlWrapper, factory: &Factory) -> Result<Self>
+	where
+		Self: Sized,
+	{
+		let args = Arguments::from_yaml(&yaml.hash_get_value("arg")?)?;
+
+		let reader = get_reader(&factory.get_absolute_str(&args.filename)).await?;
+		let parameters = reader.get_parameters().clone();
+
+		Ok(Operation {
+			args,
+			parameters,
+			reader: Arc::new(Mutex::new(reader)),
+		})
+	}
+}
+
+impl Debug for Operation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("ReadOperation")
-			.field("name", &self.name)
-			.field("filename", &self.config.filename)
+			.field("filename", &self.args.filename)
 			.finish()
 	}
 }
@@ -167,18 +165,17 @@ mod tests {
 		}
 	}
 
-	fn get_read_operation() -> ReadOperation {
+	fn get_read_operation() -> Operation {
 		let mock_reader = Box::new(MockTilesReader) as Box<dyn TilesReader>;
 		let reader = Arc::new(Mutex::new(mock_reader));
-		let config = Config {
+		let args = Arguments {
 			filename: "mock_file".to_string(),
 		};
 		let parameters =
 			TilesReaderParameters::new_full(TileFormat::PBF, TileCompression::Uncompressed);
 
-		ReadOperation {
-			config,
-			name: "test".to_string(),
+		Operation {
+			args,
 			parameters,
 			reader,
 		}

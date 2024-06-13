@@ -93,7 +93,7 @@ pub fn yaml_parser_derive(input: TokenStream) -> TokenStream {
 			pub fn generate_docs() -> String {
 				let mut docs = String::new();
 				docs.push_str(&format!("{}\n", #struct_docs));
-				docs.push_str("Parameters:\n");
+				docs.push_str("Arguments:\n");
 				#(#field_docs)*
 				docs
 			}

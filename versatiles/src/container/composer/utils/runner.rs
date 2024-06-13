@@ -1,73 +1,43 @@
-use super::{TileComposerOperation, TileComposerOperationLookup};
+use super::{Factory, OperationTrait, TransformOperationTrait};
 use crate::{
 	container::TilesReaderParameters,
 	types::{Blob, TileStream},
 	utils::{decompress, YamlWrapper},
 };
-use anyhow::{ensure, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, sync::Arc};
 use versatiles_core::types::{TileBBox, TileCompression, TileCoord3, TileFormat};
 
-pub trait Runner: Debug + Send + Sync {
-	fn new(yaml: &YamlWrapper, path: &std::path::Path) -> Result<Self>
+pub trait RunnerTrait: Debug + Send + Sync {
+	fn new(arg_yaml: &YamlWrapper, path: &std::path::Path) -> Result<Self>
 	where
 		Self: Sized;
-	fn get_docs() -> String;
+	fn check_input(&self, tile_format: TileFormat, tile_compression: TileCompression) -> Result<()>;
 	fn run(&self, blob: Blob) -> Result<Option<Blob>>;
+	fn get_docs() -> String;
+	fn get_id() -> &'static str;
 }
 
 #[allow(dead_code)]
-pub struct RunnerOperation<T>
+pub struct Runner<T>
 where
-	T: Runner,
+	T: RunnerTrait,
 {
 	runner: Arc<T>,
-	input: Box<dyn TileComposerOperation>,
-	name: String,
+	input: Box<dyn OperationTrait>,
 	parameters: TilesReaderParameters,
 	input_compression: TileCompression,
 }
 
 #[async_trait]
-impl<T: Runner + 'static> TileComposerOperation for RunnerOperation<T> {
-	async fn new(
-		name: &str,
-		yaml: YamlWrapper,
-		lookup: &mut TileComposerOperationLookup,
-	) -> Result<Self>
-	where
-		Self: Sized,
-	{
-		let runner = Arc::new(T::new(&yaml, lookup.get_path())?);
-
-		let input_name = yaml.hash_get_str("input")?;
-		let input = lookup.construct(input_name).await?;
-
-		let mut parameters = input.get_parameters().clone();
-		ensure!(
-			parameters.tile_format == TileFormat::PBF,
-			"operation '{name}' needs vector tiles (PBF) from '{input_name}'",
-		);
-
-		let input_compression = parameters.tile_compression;
-		parameters.tile_compression = TileCompression::Uncompressed;
-
-		Ok(RunnerOperation {
-			runner,
-			input,
-			input_compression,
-			name: name.to_string(),
-			parameters,
-		})
-	}
-
+impl<T: RunnerTrait + 'static> OperationTrait for Runner<T> {
 	fn get_docs() -> String {
 		T::get_docs()
 	}
 
-	fn get_name(&self) -> &str {
-		&self.name
+	fn get_id() -> &'static str {
+		T::get_id()
 	}
 
 	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
@@ -102,11 +72,37 @@ impl<T: Runner + 'static> TileComposerOperation for RunnerOperation<T> {
 	}
 }
 
-impl<T: Runner> Debug for RunnerOperation<T> {
+#[async_trait]
+impl<T: RunnerTrait + 'static> TransformOperationTrait for Runner<T> {
+	async fn new(
+		yaml: YamlWrapper,
+		input: Box<dyn OperationTrait>,
+		factory: &Factory,
+	) -> Result<Self>
+	where
+		Self: Sized,
+	{
+		let arg_yaml = yaml.hash_get_value("arg")?;
+		let runner = Arc::new(T::new(&arg_yaml, factory.get_path())?);
+
+		let mut parameters = input.get_parameters().clone();
+		runner.check_input(parameters.tile_format, parameters.tile_compression)?;
+
+		let input_compression = parameters.tile_compression;
+		parameters.tile_compression = TileCompression::Uncompressed;
+
+		Ok(Runner {
+			runner,
+			input,
+			input_compression,
+			parameters,
+		})
+	}
+}
+
+impl<T: RunnerTrait> Debug for Runner<T> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("PBFUpdatePropertiesOperation")
-			.field("name", &self.name)
-			.field("input", &self.input.get_name())
 			.field("input_compression", &self.input_compression)
 			.field("parameters", &self.parameters)
 			.field("runner", &self.runner)

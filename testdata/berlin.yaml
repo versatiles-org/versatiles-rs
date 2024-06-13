@@ -1,0 +1,5 @@
+- run: read
+  arg: { filename: berlin.mbtiles }
+
+- run: vectortiles_update_properties
+  arg: { data_source_path: cities.csv, id_field_tiles: id, id_field_values: city_id }

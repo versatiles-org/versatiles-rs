@@ -1,19 +1,19 @@
-use super::runner::Runner;
 use crate::{
-	container::composer::utils::read_csv_file,
+	container::composer::{read_csv_file, Runner, RunnerTrait},
 	geometry::{vector_tile::VectorTile, GeoProperties},
 	types::Blob,
 	utils::YamlWrapper,
 };
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use log::warn;
 use std::{collections::HashMap, fmt::Debug};
+use versatiles_core::types::{TileCompression, TileFormat};
 use versatiles_derive::YamlParser;
 
 #[derive(Debug, YamlParser)]
 /// This operation loads a data source (like a CSV file).
 /// For each feature in the vector tiles, it uses the id to fetch the correct row in the data source and uses this row to update the properties of the feature.
-struct Config {
+struct Arguments {
 	/// Path of the data source, e.g., data.csv
 	data_source_path: String,
 	/// Field name of the id in the vector tiles
@@ -30,47 +30,63 @@ struct Config {
 	add_id: bool,
 }
 
-pub struct PBFUpdatePropertiesRunner {
-	config: Config,
+pub type Operation = Runner<VectortilesUpdateProperties>;
+
+pub struct VectortilesUpdateProperties {
+	args: Arguments,
 	properties_map: HashMap<String, GeoProperties>,
 }
 
-impl Runner for PBFUpdatePropertiesRunner {
-	fn get_docs() -> String {
-		Config::generate_docs()
+impl RunnerTrait for VectortilesUpdateProperties {
+	fn get_id() -> &'static str {
+		"vectortiles_update_properties"
 	}
-	fn new(yaml: &YamlWrapper, path: &std::path::Path) -> Result<Self>
+
+	fn get_docs() -> String {
+		Arguments::generate_docs()
+	}
+
+	fn check_input(&self, tile_format: TileFormat, tile_compression: TileCompression) -> Result<()> {
+		ensure!(tile_format == TileFormat::PBF, "tile format must be PBF");
+		ensure!(
+			tile_compression == TileCompression::Uncompressed,
+			"tiles must be uncompressed"
+		);
+		Ok(())
+	}
+
+	fn new(arg_yaml: &YamlWrapper, path: &std::path::Path) -> Result<Self>
 	where
 		Self: Sized,
 	{
-		let config = Config::from_yaml(yaml)?;
+		let args = Arguments::from_yaml(&arg_yaml)?;
 
-		let data = read_csv_file(&path.join(&config.data_source_path))
-			.with_context(|| format!("Failed to read CSV file from '{}'", config.data_source_path))?;
+		let data = read_csv_file(&path.join(&args.data_source_path))
+			.with_context(|| format!("Failed to read CSV file from '{}'", args.data_source_path))?;
 
 		let properties_map = data
 			.into_iter()
 			.map(|mut properties| {
 				let key = properties
-					.get(&config.id_field_values)
-					.ok_or_else(|| anyhow!("Key '{}' not found in CSV data", config.id_field_values))
+					.get(&args.id_field_values)
+					.ok_or_else(|| anyhow!("Key '{}' not found in CSV data", args.id_field_values))
 					.with_context(|| {
 						format!(
 							"Failed to find key '{}' in the CSV data row: {properties:?}",
-							config.id_field_values
+							args.id_field_values
 						)
 					})?
 					.to_string();
-				if !config.add_id {
-					properties.remove(&config.id_field_values)
+				if !args.add_id {
+					properties.remove(&args.id_field_values)
 				}
 				Ok((key, properties))
 			})
 			.collect::<Result<HashMap<String, GeoProperties>>>()
 			.context("Failed to build properties map from CSV data")?;
 
-		Ok(PBFUpdatePropertiesRunner {
-			config,
+		Ok(VectortilesUpdateProperties {
+			args,
 			properties_map,
 		})
 	}
@@ -78,7 +94,7 @@ impl Runner for PBFUpdatePropertiesRunner {
 		let mut tile =
 			VectorTile::from_blob(&blob).context("Failed to create VectorTile from Blob")?;
 
-		let layer_name = self.config.layer_name.as_ref();
+		let layer_name = self.args.layer_name.as_ref();
 
 		for layer in tile.layers.iter_mut() {
 			if layer_name.map_or(false, |layer_name| &layer.name != layer_name) {
@@ -87,9 +103,9 @@ impl Runner for PBFUpdatePropertiesRunner {
 
 			layer.map_properties(|properties| {
 				if let Some(mut prop) = properties {
-					if let Some(id) = prop.get(&self.config.id_field_tiles) {
+					if let Some(id) = prop.get(&self.args.id_field_tiles) {
 						if let Some(new_prop) = self.properties_map.get(&id.to_string()) {
-							if self.config.replace_properties {
+							if self.args.replace_properties {
 								prop = new_prop.clone();
 							} else {
 								prop.update(new_prop.clone());
@@ -99,13 +115,13 @@ impl Runner for PBFUpdatePropertiesRunner {
 							warn!("id \"{id}\" not found in data source");
 						}
 					} else {
-						warn!("id field \"{}\" not found", &self.config.id_field_tiles);
+						warn!("id field \"{}\" not found", &self.args.id_field_tiles);
 					}
 				}
 				None
 			})?;
 
-			if self.config.remove_empty_properties {
+			if self.args.remove_empty_properties {
 				layer.retain_features(|feature| !feature.tag_ids.is_empty());
 			}
 		}
@@ -118,10 +134,10 @@ impl Runner for PBFUpdatePropertiesRunner {
 	}
 }
 
-impl Debug for PBFUpdatePropertiesRunner {
+impl Debug for VectortilesUpdateProperties {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("Runner")
-			.field("config", &self.config)
+			.field("args", &self.args)
 			.field(
 				"properties_map",
 				&std::collections::BTreeMap::from_iter(self.properties_map.iter()),
@@ -149,17 +165,14 @@ mod tests {
 			.join("\n");
 
 		let yaml = vec![
-			"operations:",
-			"  source:",
-			"    action: pbf_mock",
-			"  update_values:",
-			"    action: pbf_update_properties",
-			"    input: source",
-			"    data_source_path: ../testdata/cities.csv",
-			&format!("    id_field_tiles: {}", parameters.0),
-			&format!("    id_field_values: {}", parameters.1),
+			"run: vt_update_properties",
+			"arg:",
+			"  data_source_path: ../testdata/cities.csv",
+			&format!("  id_field_tiles: {}", parameters.0),
+			&format!("  id_field_values: {}", parameters.1),
 			&flags,
-			"output: update_values",
+			"src:",
+			"  run: vt_mock",
 		]
 		.join("\n");
 
