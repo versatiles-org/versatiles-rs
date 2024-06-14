@@ -70,9 +70,9 @@ pub fn yaml_parser_derive(input: TokenStream) -> TokenStream {
 		let comment = field.attrs.iter().filter_map(extract_comment).collect::<Vec<String>>().join(" ");
 
 		let field_doc = if comment.is_empty() {
-			quote! { docs.push_str(&format!("  - {}\n", #field_doc)); }
+			quote! { docs.push_str(&format!("* {}\n", #field_doc)); }
 		} else {
-			quote! { docs.push_str(&format!("  - {} - {}\n", #field_doc, #comment)); }
+			quote! { docs.push_str(&format!("* {} - {}\n", #field_doc, #comment)); }
 		};
 
 		(parsing_logic, field_doc)

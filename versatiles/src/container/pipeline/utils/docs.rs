@@ -19,8 +19,8 @@ pub fn get_pipeline_operation_docs() -> String {
 			"# {title}\n\n{}",
 			list
 				.iter()
-				.map(|b| format!("## {}:\n\n{}", b.get_id(), b.get_docs()))
-				.sorted()
+				.sorted_by_key(|b| b.get_id())
+				.map(|b| format!("## {}:\n{}", b.get_id(), b.get_docs()))
 				.join("\n\n")
 				.to_string()
 		);
