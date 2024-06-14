@@ -31,8 +31,8 @@ use std::{
 
 #[derive(Eq, PartialEq, Clone, Hash)]
 pub struct TileCoord2 {
-	x: u32,
-	y: u32,
+	pub x: u32,
+	pub y: u32,
 }
 
 #[allow(dead_code)]
@@ -65,14 +65,6 @@ impl TileCoord2 {
 			x: x.min(zoom - 1.0).max(0.0) as u32,
 			y: y.min(zoom - 1.0).max(0.0) as u32,
 		})
-	}
-
-	pub fn get_x(&self) -> u32 {
-		self.x
-	}
-
-	pub fn get_y(&self) -> u32 {
-		self.y
 	}
 
 	pub fn subtract(&mut self, c: &TileCoord2) {
@@ -114,18 +106,6 @@ impl TileCoord3 {
 	pub fn new(x: u32, y: u32, z: u8) -> Result<TileCoord3> {
 		ensure!(z <= 31, "z ({z}) must be <= 31");
 		Ok(TileCoord3 { x, y, z })
-	}
-
-	pub fn get_x(&self) -> u32 {
-		self.x
-	}
-
-	pub fn get_y(&self) -> u32 {
-		self.y
-	}
-
-	pub fn get_z(&self) -> u8 {
-		self.z
 	}
 
 	pub fn as_geo(&self) -> [f64; 2] {
@@ -259,8 +239,8 @@ mod tests {
 	#[test]
 	fn tilecoord2_new_and_getters() {
 		let coord = TileCoord2::new(3, 4);
-		assert_eq!(coord.get_x(), 3);
-		assert_eq!(coord.get_y(), 4);
+		assert_eq!(coord.x, 3);
+		assert_eq!(coord.y, 4);
 	}
 
 	#[test]
@@ -281,9 +261,9 @@ mod tests {
 	#[test]
 	fn tilecoord3_new_and_getters() {
 		let coord = TileCoord3::new(3, 4, 5).unwrap();
-		assert_eq!(coord.get_x(), 3);
-		assert_eq!(coord.get_y(), 4);
-		assert_eq!(coord.get_z(), 5);
+		assert_eq!(coord.x, 3);
+		assert_eq!(coord.y, 4);
+		assert_eq!(coord.z, 5);
 	}
 
 	#[test]

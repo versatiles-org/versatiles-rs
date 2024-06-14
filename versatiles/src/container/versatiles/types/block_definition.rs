@@ -131,9 +131,9 @@ impl BlockDefinition {
 	/// Returns an error if the conversion fails.
 	pub fn as_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_be();
-		writer.write_u8(self.offset.get_z())?;
-		writer.write_u32(self.offset.get_x())?;
-		writer.write_u32(self.offset.get_y())?;
+		writer.write_u8(self.offset.z)?;
+		writer.write_u32(self.offset.x)?;
+		writer.write_u32(self.offset.y)?;
 
 		writer.write_u8(self.tiles_coverage.x_min as u8)?;
 		writer.write_u8(self.tiles_coverage.y_min as u8)?;
@@ -191,7 +191,7 @@ impl BlockDefinition {
 	/// The zoom level of the block.
 	#[allow(dead_code)]
 	pub fn get_z(&self) -> u8 {
-		self.offset.get_z()
+		self.offset.z
 	}
 
 	/// Returns the coordinate of the block.
@@ -204,11 +204,11 @@ impl BlockDefinition {
 
 	#[cfg(test)]
 	pub fn as_str(&self) -> String {
-		let x_offset = self.offset.get_x() * 256;
-		let y_offset = self.offset.get_y() * 256;
+		let x_offset = self.offset.x * 256;
+		let y_offset = self.offset.y * 256;
 		format!(
 			"[{},[{},{}],[{},{}]]",
-			self.offset.get_z(),
+			self.offset.z,
 			self.tiles_coverage.x_min + x_offset,
 			self.tiles_coverage.y_min + y_offset,
 			self.tiles_coverage.x_max + x_offset,

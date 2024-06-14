@@ -211,7 +211,7 @@ impl TilesReader for VersaTilesReader {
 	/// Gets tile data for a given coordinate.
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		// Calculate block coordinate
-		let block_coord = TileCoord3::new(coord.get_x().shr(8), coord.get_y().shr(8), coord.get_z())?;
+		let block_coord = TileCoord3::new(coord.x.shr(8), coord.y.shr(8), coord.z)?;
 
 		// Get the block using the block coordinate
 		let block = self.block_index.get_block(&block_coord);
@@ -228,13 +228,13 @@ impl TilesReader for VersaTilesReader {
 		let tile_coord: TileCoord2 = coord.as_coord2();
 
 		// Check if the tile is within the block definition
-		if !bbox.contains(&tile_coord) {
+		if !bbox.contains2(&tile_coord) {
 			trace!("tile {coord:?} outside block definition");
 			return Ok(None);
 		}
 
 		// Get the tile ID
-		let tile_id = bbox.get_tile_index(&tile_coord);
+		let tile_id = bbox.get_tile_index2(&tile_coord);
 
 		// Retrieve the tile index from cache or read from the reader
 		let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await?;

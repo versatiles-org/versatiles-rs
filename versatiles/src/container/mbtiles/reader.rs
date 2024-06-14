@@ -300,10 +300,10 @@ impl TilesReader for MBTilesReader {
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		trace!("read tile from coord {coord:?}");
 
-		let max_index = 2u32.pow(coord.get_z() as u32) - 1;
-		let x = coord.get_x();
-		let y = max_index - coord.get_y();
-		let z = coord.get_z() as u32;
+		let max_index = 2u32.pow(coord.z as u32) - 1;
+		let x = coord.x;
+		let y = max_index - coord.y;
+		let z = coord.z as u32;
 
 		let conn = self.pool.get()?;
 		let mut stmt = conn.prepare(

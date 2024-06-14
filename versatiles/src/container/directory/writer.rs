@@ -119,11 +119,7 @@ impl TilesWriter for DirectoryTilesWriter {
 
 				let filename = format!(
 					"{}/{}/{}{}{}",
-					coord.get_z(),
-					coord.get_y(),
-					coord.get_x(),
-					extension_format,
-					extension_compression
+					coord.z, coord.y, coord.x, extension_format, extension_compression
 				);
 
 				// Write blob to file

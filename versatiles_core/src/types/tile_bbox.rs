@@ -145,13 +145,7 @@ impl TileBBox {
 		let p_min = TileCoord2::from_geo(geo_bbox[0], geo_bbox[3], level, false)?;
 		let p_max = TileCoord2::from_geo(geo_bbox[2], geo_bbox[1], level, true)?;
 
-		TileBBox::new(
-			level,
-			p_min.get_x(),
-			p_min.get_y(),
-			p_max.get_x(),
-			p_max.get_y(),
-		)
+		TileBBox::new(level, p_min.x, p_min.y, p_max.x, p_max.y)
 	}
 
 	/// Sets the bounding box to an empty state.
@@ -467,10 +461,10 @@ impl TileBBox {
 	///
 	/// * `c` - A reference to the coordinates to subtract.
 	pub fn substract_coord2(&mut self, c: &TileCoord2) {
-		self.x_min = self.x_min.saturating_sub(c.get_x());
-		self.y_min = self.y_min.saturating_sub(c.get_y());
-		self.x_max = self.x_max.saturating_sub(c.get_x());
-		self.y_max = self.y_max.saturating_sub(c.get_y());
+		self.x_min = self.x_min.saturating_sub(c.x);
+		self.y_min = self.y_min.saturating_sub(c.y);
+		self.x_max = self.x_max.saturating_sub(c.x);
+		self.y_max = self.y_max.saturating_sub(c.y);
 
 		self.check().unwrap();
 	}
@@ -511,11 +505,11 @@ impl TileBBox {
 	/// # Returns
 	///
 	/// `true` if the bounding box contains the coordinate, `false` otherwise.
-	pub fn contains(&self, coord: &TileCoord2) -> bool {
-		(coord.get_x() >= self.x_min)
-			&& (coord.get_x() <= self.x_max)
-			&& (coord.get_y() >= self.y_min)
-			&& (coord.get_y() <= self.y_max)
+	pub fn contains2(&self, coord: &TileCoord2) -> bool {
+		(coord.x >= self.x_min)
+			&& (coord.x <= self.x_max)
+			&& (coord.y >= self.y_min)
+			&& (coord.y <= self.y_max)
 	}
 
 	/// Checks if the bounding box contains the specified tile coordinate at the same zoom level.
@@ -528,11 +522,11 @@ impl TileBBox {
 	///
 	/// `true` if the bounding box contains the coordinate at the same zoom level, `false` otherwise.
 	pub fn contains3(&self, coord: &TileCoord3) -> bool {
-		(coord.get_z() == self.level)
-			&& (coord.get_x() >= self.x_min)
-			&& (coord.get_x() <= self.x_max)
-			&& (coord.get_y() >= self.y_min)
-			&& (coord.get_y() <= self.y_max)
+		(coord.z == self.level)
+			&& (coord.x >= self.x_min)
+			&& (coord.x <= self.x_max)
+			&& (coord.y >= self.y_min)
+			&& (coord.y <= self.y_max)
 	}
 
 	/// Returns the index of the specified tile coordinate within the bounding box.
@@ -548,13 +542,25 @@ impl TileBBox {
 	/// # Panics
 	///
 	/// Panics if the coordinate is not within the bounding box.
-	pub fn get_tile_index(&self, coord: &TileCoord2) -> usize {
-		if !self.contains(coord) {
+	pub fn get_tile_index2(&self, coord: &TileCoord2) -> usize {
+		if !self.contains2(coord) {
 			panic!("coord '{coord:?}' is not in '{self:?}'")
 		}
 
-		let x = coord.get_x() - self.x_min;
-		let y = coord.get_y() - self.y_min;
+		let x = coord.x - self.x_min;
+		let y = coord.y - self.y_min;
+		let index = y * (self.x_max + 1 - self.x_min) + x;
+
+		index as usize
+	}
+
+	pub fn get_tile_index3(&self, coord: &TileCoord3) -> usize {
+		if !self.contains3(coord) {
+			panic!("coord '{coord:?}' is not in '{self:?}'")
+		}
+
+		let x = coord.x - self.x_min;
+		let y = coord.y - self.y_min;
 		let index = y * (self.x_max + 1 - self.x_min) + x;
 
 		index as usize
@@ -696,12 +702,12 @@ mod tests {
 	#[test]
 	fn get_tile_index() {
 		let bbox = TileBBox::new(8, 100, 100, 199, 199).unwrap();
-		assert_eq!(bbox.get_tile_index(&TileCoord2::new(100, 100)), 0);
-		assert_eq!(bbox.get_tile_index(&TileCoord2::new(101, 100)), 1);
-		assert_eq!(bbox.get_tile_index(&TileCoord2::new(199, 100)), 99);
-		assert_eq!(bbox.get_tile_index(&TileCoord2::new(100, 101)), 100);
-		assert_eq!(bbox.get_tile_index(&TileCoord2::new(100, 199)), 9900);
-		assert_eq!(bbox.get_tile_index(&TileCoord2::new(199, 199)), 9999);
+		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(100, 100)), 0);
+		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(101, 100)), 1);
+		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(199, 100)), 99);
+		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(100, 101)), 100);
+		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(100, 199)), 9900);
+		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(199, 199)), 9999);
 	}
 
 	#[test]
