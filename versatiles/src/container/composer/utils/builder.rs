@@ -6,16 +6,18 @@ use anyhow::Result;
 use async_trait::async_trait;
 
 #[async_trait]
-pub trait ReadableBuilderTrait: Send + Sync {
+pub trait BuilderTrait: Send + Sync {
 	fn get_id(&self) -> &'static str;
 	fn get_docs(&self) -> String;
+}
+
+#[async_trait]
+pub trait ReadableBuilderTrait: BuilderTrait + Send + Sync {
 	async fn build(&self, yaml: YamlWrapper, factory: &Factory) -> Result<Box<dyn OperationTrait>>;
 }
 
 #[async_trait]
-pub trait TransformBuilderTrait: Send + Sync {
-	fn get_id(&self) -> &'static str;
-	fn get_docs(&self) -> String;
+pub trait TransformBuilderTrait: BuilderTrait + Send + Sync {
 	async fn build(
 		&self,
 		yaml: YamlWrapper,
@@ -33,7 +35,7 @@ where
 }
 
 #[async_trait]
-impl<T> ReadableBuilderTrait for ReadableBuilder<T>
+impl<T> BuilderTrait for ReadableBuilder<T>
 where
 	T: ReadableOperationTrait + 'static,
 {
@@ -43,6 +45,13 @@ where
 	fn get_id(&self) -> &'static str {
 		T::get_id()
 	}
+}
+
+#[async_trait]
+impl<T> ReadableBuilderTrait for ReadableBuilder<T>
+where
+	T: ReadableOperationTrait + 'static,
+{
 	async fn build(&self, yaml: YamlWrapper, factory: &Factory) -> Result<Box<dyn OperationTrait>> {
 		Ok(Box::new(T::new(yaml, factory).await?))
 	}
@@ -66,7 +75,7 @@ where
 }
 
 #[async_trait]
-impl<T> TransformBuilderTrait for TransformBuilder<T>
+impl<T> BuilderTrait for TransformBuilder<T>
 where
 	T: TransformOperationTrait + 'static,
 {
@@ -76,6 +85,13 @@ where
 	fn get_docs(&self) -> String {
 		T::get_docs()
 	}
+}
+
+#[async_trait]
+impl<T> TransformBuilderTrait for TransformBuilder<T>
+where
+	T: TransformOperationTrait + 'static,
+{
 	async fn build(
 		&self,
 		yaml: YamlWrapper,

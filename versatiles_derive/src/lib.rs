@@ -48,21 +48,21 @@ pub fn yaml_parser_derive(input: TokenStream) -> TokenStream {
 		let field_type = &field.ty;
 		let field_str = field_name.as_ref().unwrap().to_string();
 
-		let (type_name, parsing_logic) = match quote!(#field_type).to_string().as_str() {
+		let (field_doc, parsing_logic) = match quote!(#field_type).to_string().as_str() {
 			"String" => (
-				"String (*required*)",
+				format!("**`{field_str}`: String (required)**"),
 				quote! { #field_name: yaml.hash_get_string(#field_str).context(format!("Failed to get '{}'", #field_str))? }
 			),
 			"bool" => (
-				"Boolean (*optional, default: false*)",
+				format!("`{field_str}`: *Boolean (optional, default: false)*"),
 				quote! { #field_name: yaml.hash_get_bool(#field_str).unwrap_or(false) }
 			),
 			"Option < String >" => (
-				"String (*optional*)",
+				format!("`{field_str}`: *String (optional)*"),
 				quote! { #field_name: yaml.hash_get_string(#field_str).ok() }
 			),
 			_ => (
-				"unknown",
+				format!("unknown format `{field_type:?}`"),
 				quote! { #field_name: yaml.hash_get_str(#field_str).context(format!("Failed to get '{}'", #field_str))?.parse::<#field_type>().context(format!("Failed to parse '{}'", #field_str))? }
 			),
 		};
@@ -70,13 +70,9 @@ pub fn yaml_parser_derive(input: TokenStream) -> TokenStream {
 		let comment = field.attrs.iter().filter_map(extract_comment).collect::<Vec<String>>().join(" ");
 
 		let field_doc = if comment.is_empty() {
-			quote! {
-				docs.push_str(&format!("  - **{}**: {}\n", #field_str, #type_name));
-			}
+			quote! { docs.push_str(&format!("  - {}\n", #field_doc)); }
 		} else {
-			quote! {
-				docs.push_str(&format!("  - **{}**: {} - {}\n", #field_str, #type_name, #comment));
-			}
+			quote! { docs.push_str(&format!("  - {} - {}\n", #field_doc, #comment)); }
 		};
 
 		(parsing_logic, field_doc)

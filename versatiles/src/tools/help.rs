@@ -19,7 +19,18 @@ enum Topic {
 }
 
 pub fn run(command: &Subcommand) -> Result<()> {
-	let skin = MadSkin::default();
+	use termimad::crossterm::style::{Attribute, Color};
+
+	let mut skin = MadSkin::default();
+	skin.headers.get_mut(0).unwrap().set_fg(Color::Yellow);
+	let h2 = skin.headers.get_mut(1).unwrap();
+	h2.set_fg(Color::Yellow);
+	h2.compound_style.add_attr(Attribute::Bold);
+	skin.headers.get_mut(2).unwrap().set_fg(Color::White);
+	skin.bold.set_fg(Color::White);
+	skin.italic.set_fg(Color::White);
+	skin.inline_code.set_bg(Color::Reset);
+	skin.inline_code.set_fg(Color::Green);
 
 	match command.topic {
 		Topic::Composer => eprintln!("{}", skin.term_text(&get_composer_operation_docs())),
