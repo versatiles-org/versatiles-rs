@@ -1,5 +1,6 @@
 use crate::container::get_composer_operation_docs;
 use anyhow::Result;
+use termimad::MadSkin;
 
 #[derive(clap::Args, Debug)]
 #[command(
@@ -18,8 +19,10 @@ enum Topic {
 }
 
 pub fn run(command: &Subcommand) -> Result<()> {
+	let skin = MadSkin::default();
+
 	match command.topic {
-		Topic::Composer => eprintln!("{}", get_composer_operation_docs()),
+		Topic::Composer => eprintln!("{}", skin.term_text(&get_composer_operation_docs())),
 	};
 	Ok(())
 }

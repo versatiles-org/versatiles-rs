@@ -1,6 +1,6 @@
 use super::{OperationTrait, ReadableBuilderTrait, TransformBuilderTrait};
 use crate::{
-	container::composer::operations::{READABLES, TRANSFORMS},
+	container::composer::operations::{READERS, TRANSFORMERS},
 	utils::YamlWrapper,
 };
 use anyhow::{anyhow, ensure, Result};
@@ -18,14 +18,14 @@ pub struct Factory<'a> {
 impl<'a> Factory<'a> {
 	pub fn new(path: &Path) -> Self {
 		let mut lookup_readable = HashMap::new();
-		for e in READABLES.iter() {
+		for e in READERS.iter() {
 			lookup_readable.insert(e.get_id().to_string(), e);
 		}
 
 		Self {
 			lookup_readable,
 			lookup_transform: HashMap::from_iter(
-				TRANSFORMS.iter().map(|e| (e.get_id().to_string(), e)),
+				TRANSFORMERS.iter().map(|e| (e.get_id().to_string(), e)),
 			),
 			path: path.to_owned(),
 		}

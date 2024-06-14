@@ -47,6 +47,7 @@ r2d2_sqlite = { workspace = true, optional = true, features = ["bundled"] }
 regex = { workspace = true, optional = true, features = ["unicode"] }
 reqwest = { workspace = true, optional = true, features = ["rustls-tls"] }
 tar = { workspace = true, optional = true }
+termimad = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 webp = { workspace = true, optional = true, features = ["img"] }
 yaml-rust2 = { workspace = true, optional = true }
@@ -72,6 +73,7 @@ cli = [
 	"dep:hyper",
 	"dep:mime_guess",
 	"dep:tar",
+	"dep:termimad",
 	"versatiles_core/cli",
 	"full",
 ]

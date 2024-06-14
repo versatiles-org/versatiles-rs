@@ -50,15 +50,15 @@ pub fn yaml_parser_derive(input: TokenStream) -> TokenStream {
 
 		let (type_name, parsing_logic) = match quote!(#field_type).to_string().as_str() {
 			"String" => (
-				"String (required)",
+				"String (*required*)",
 				quote! { #field_name: yaml.hash_get_string(#field_str).context(format!("Failed to get '{}'", #field_str))? }
 			),
 			"bool" => (
-				"Boolean (optional, default: false)",
+				"Boolean (*optional, default: false*)",
 				quote! { #field_name: yaml.hash_get_bool(#field_str).unwrap_or(false) }
 			),
 			"Option < String >" => (
-				"String (optional)",
+				"String (*optional*)",
 				quote! { #field_name: yaml.hash_get_string(#field_str).ok() }
 			),
 			_ => (
@@ -71,11 +71,11 @@ pub fn yaml_parser_derive(input: TokenStream) -> TokenStream {
 
 		let field_doc = if comment.is_empty() {
 			quote! {
-				docs.push_str(&format!("  {}: {}\n", #field_str, #type_name));
+				docs.push_str(&format!("  - **{}**: {}\n", #field_str, #type_name));
 			}
 		} else {
 			quote! {
-				docs.push_str(&format!("  {}: {} - {}\n", #field_str, #type_name, #comment));
+				docs.push_str(&format!("  - **{}**: {} - {}\n", #field_str, #type_name, #comment));
 			}
 		};
 
@@ -93,7 +93,7 @@ pub fn yaml_parser_derive(input: TokenStream) -> TokenStream {
 			pub fn generate_docs() -> String {
 				let mut docs = String::new();
 				docs.push_str(&format!("{}\n", #struct_docs));
-				docs.push_str("Arguments:\n");
+				docs.push_str("### Arguments:\n");
 				#(#field_docs)*
 				docs
 			}
