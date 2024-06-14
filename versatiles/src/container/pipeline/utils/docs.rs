@@ -4,7 +4,7 @@ use crate::container::pipeline::{
 };
 use itertools::Itertools;
 
-pub fn get_composer_operation_docs() -> String {
+pub fn get_pipeline_operation_docs() -> String {
 	return vec![
 		vec2string("Readers", &READERS),
 		vec2string("Transformers", &TRANSFORMERS),

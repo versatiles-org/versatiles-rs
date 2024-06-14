@@ -28,7 +28,7 @@
 use crate::{
 	container::{
 		DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, MBTilesWriter, PMTilesReader,
-		PMTilesWriter, TarTilesReader, TarTilesWriter, TileComposerReader, TilesReader, TilesWriter,
+		PMTilesWriter, PipelineReader, TarTilesReader, TarTilesWriter, TilesReader, TilesWriter,
 		VersaTilesReader, VersaTilesWriter,
 	},
 	io::{DataReader, DataReaderHttp},
@@ -66,7 +66,7 @@ pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReader>> {
 		"pmtiles" => Ok(PMTilesReader::open_path(&path).await?.boxed()),
 		"tar" => Ok(TarTilesReader::open_path(&path)?.boxed()),
 		"versatiles" => Ok(VersaTilesReader::open_path(&path).await?.boxed()),
-		"yaml" => Ok(TileComposerReader::open_path(&path).await?.boxed()),
+		"yaml" => Ok(PipelineReader::open_path(&path).await?.boxed()),
 		_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
 	}
 }

@@ -149,7 +149,7 @@ impl Debug for VectortilesUpdateProperties {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::{TileComposerReader, TilesReader};
+	use crate::container::{PipelineReader, TilesReader};
 	use versatiles_core::types::TileCoord3;
 
 	async fn test(
@@ -177,7 +177,7 @@ mod tests {
 		.join("\n");
 
 		let mut reader =
-			TileComposerReader::open_str(&yaml, std::path::Path::new("../testdata")).await?;
+			PipelineReader::open_str(&yaml, std::path::Path::new("../testdata")).await?;
 
 		assert_eq!(cleanup(format!("{:?}", reader.output)), debug_operation);
 

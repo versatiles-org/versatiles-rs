@@ -9,7 +9,7 @@
 //! | `*.pmtiles`    | ✅   | ✅     | `full`    |
 //! | `*.tar`        | ✅   | ✅     | `full`    |
 //! | directory      | ✅   | ✅     | `default` |
-//! | composer       | ✅   | ❌     | `full`    |
+//! | pipeline       | ✅   | ❌     | `full`    |
 //!
 //! This module provides a unified interface for reading and writing various tile container formats.
 //! Depending on the enabled features, it supports different formats with corresponding read and write capabilities.

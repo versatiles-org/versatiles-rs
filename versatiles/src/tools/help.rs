@@ -1,4 +1,4 @@
-use crate::container::get_composer_operation_docs;
+use crate::container::get_pipeline_operation_docs;
 use anyhow::Result;
 use termimad::MadSkin;
 
@@ -15,7 +15,7 @@ pub struct Subcommand {
 
 #[derive(clap::Subcommand, Debug)]
 enum Topic {
-	Composer,
+	Pipeline,
 }
 
 pub fn run(command: &Subcommand) -> Result<()> {
@@ -33,7 +33,7 @@ pub fn run(command: &Subcommand) -> Result<()> {
 	skin.inline_code.set_fg(Color::Green);
 
 	match command.topic {
-		Topic::Composer => eprintln!("{}", skin.term_text(&get_composer_operation_docs())),
+		Topic::Pipeline => eprintln!("{}", skin.term_text(&get_pipeline_operation_docs())),
 	};
 	Ok(())
 }
