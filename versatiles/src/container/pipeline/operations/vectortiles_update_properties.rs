@@ -1,5 +1,5 @@
 use crate::{
-	container::composer::{read_csv_file, Runner, RunnerTrait},
+	container::pipeline::{read_csv_file, Runner, RunnerTrait},
 	geometry::{vector_tile::VectorTile, GeoProperties},
 	types::Blob,
 	utils::YamlWrapper,

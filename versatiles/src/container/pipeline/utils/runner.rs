@@ -1,4 +1,4 @@
-use super::{Factory, OperationTrait, TransformOperationTrait};
+use super::{Factory, OperationTrait, TransformerOperationTrait};
 use crate::{
 	container::TilesReaderParameters,
 	types::{Blob, TileStream},
@@ -73,7 +73,7 @@ impl<T: RunnerTrait + 'static> OperationTrait for Runner<T> {
 }
 
 #[async_trait]
-impl<T: RunnerTrait + 'static> TransformOperationTrait for Runner<T> {
+impl<T: RunnerTrait + 'static> TransformerOperationTrait for Runner<T> {
 	async fn new(
 		yaml: YamlWrapper,
 		input: Box<dyn OperationTrait>,

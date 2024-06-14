@@ -1,4 +1,4 @@
-use crate::container::composer::{
+use crate::container::pipeline::{
 	operations::{READERS, TRANSFORMERS},
 	BuilderTrait,
 };

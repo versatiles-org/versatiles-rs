@@ -1,6 +1,6 @@
-use super::{OperationTrait, ReadableBuilderTrait, TransformBuilderTrait};
+use super::{OperationTrait, ReaderBuilderTrait, TransformerBuilderTrait};
 use crate::{
-	container::composer::operations::{READERS, TRANSFORMERS},
+	container::pipeline::operations::{READERS, TRANSFORMERS},
 	utils::YamlWrapper,
 };
 use anyhow::{anyhow, ensure, Result};
@@ -11,8 +11,8 @@ use std::{
 
 pub struct Factory<'a> {
 	path: PathBuf,
-	lookup_readable: HashMap<String, &'a Box<dyn ReadableBuilderTrait>>,
-	lookup_transform: HashMap<String, &'a Box<dyn TransformBuilderTrait>>,
+	lookup_readers: HashMap<String, &'a Box<dyn ReaderBuilderTrait>>,
+	lookup_transformers: HashMap<String, &'a Box<dyn TransformerBuilderTrait>>,
 }
 
 impl<'a> Factory<'a> {
@@ -23,8 +23,8 @@ impl<'a> Factory<'a> {
 		}
 
 		Self {
-			lookup_readable,
-			lookup_transform: HashMap::from_iter(
+			lookup_readers: lookup_readable,
+			lookup_transformers: HashMap::from_iter(
 				TRANSFORMERS.iter().map(|e| (e.get_id().to_string(), e)),
 			),
 			path: path.to_owned(),
@@ -48,7 +48,7 @@ impl<'a> Factory<'a> {
 	async fn readable_from_yaml(&self, yaml: YamlWrapper) -> Result<Box<dyn OperationTrait>> {
 		let run = yaml.hash_get_str("run")?;
 		let builder = self
-			.lookup_readable
+			.lookup_readers
 			.get(run)
 			.ok_or_else(|| anyhow!("Readable '{run}' not found"))?;
 		builder.build(yaml, self).await
@@ -61,7 +61,7 @@ impl<'a> Factory<'a> {
 	) -> Result<Box<dyn OperationTrait>> {
 		let run = yaml.hash_get_str("run")?;
 		let builder = self
-			.lookup_transform
+			.lookup_transformers
 			.get(run)
 			.ok_or_else(|| anyhow!("Transform '{run}' not found"))?;
 		builder.build(yaml, reader, self).await

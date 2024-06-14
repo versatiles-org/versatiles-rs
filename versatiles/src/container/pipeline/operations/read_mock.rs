@@ -1,6 +1,6 @@
 use crate::{
 	container::{
-		composer::{Factory, OperationTrait, ReadableOperationTrait},
+		pipeline::{Factory, OperationTrait, ReaderOperationTrait},
 		TilesReaderParameters,
 	},
 	geometry::{
@@ -48,7 +48,7 @@ impl OperationTrait for Operation {
 }
 
 #[async_trait]
-impl ReadableOperationTrait for Operation {
+impl ReaderOperationTrait for Operation {
 	async fn new(_yaml: YamlWrapper, _factory: &Factory) -> Result<Self>
 	where
 		Self: Sized,

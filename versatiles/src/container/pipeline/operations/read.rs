@@ -1,7 +1,8 @@
 use crate::{
 	container::{
-		composer::{Factory, OperationTrait, ReadableOperationTrait},
-		get_reader, TilesReader, TilesReaderParameters,
+		get_reader,
+		pipeline::{Factory, OperationTrait, ReaderOperationTrait},
+		TilesReader, TilesReaderParameters,
 	},
 	types::TileStream,
 	utils::YamlWrapper,
@@ -86,7 +87,7 @@ impl OperationTrait for Operation {
 }
 
 #[async_trait]
-impl ReadableOperationTrait for Operation {
+impl ReaderOperationTrait for Operation {
 	/// Creates a new `ReadOperation` from the provided YAML configuration.
 	///
 	/// # Arguments

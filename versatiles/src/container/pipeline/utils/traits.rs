@@ -20,14 +20,14 @@ pub trait OperationTrait: Debug + Send + Sync {
 }
 
 #[async_trait]
-pub trait ReadableOperationTrait: OperationTrait {
+pub trait ReaderOperationTrait: OperationTrait {
 	async fn new(yaml: YamlWrapper, builder: &Factory) -> Result<Self>
 	where
 		Self: Sized;
 }
 
 #[async_trait]
-pub trait TransformOperationTrait: OperationTrait {
+pub trait TransformerOperationTrait: OperationTrait {
 	async fn new(
 		yaml: YamlWrapper,
 		reader: Box<dyn OperationTrait>,

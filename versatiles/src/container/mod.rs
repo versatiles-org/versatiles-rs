@@ -15,9 +15,9 @@
 //! Depending on the enabled features, it supports different formats with corresponding read and write capabilities.
 
 #[cfg(feature = "full")]
-mod composer;
+mod pipeline;
 #[cfg(feature = "full")]
-pub use composer::*;
+pub use pipeline::*;
 
 #[cfg(feature = "full")]
 mod converter;
