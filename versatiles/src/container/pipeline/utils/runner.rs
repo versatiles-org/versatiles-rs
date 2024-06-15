@@ -25,7 +25,7 @@ where
 	T: RunnerTrait,
 {
 	runner: Arc<T>,
-	input: Box<dyn OperationTrait>,
+	source: Box<dyn OperationTrait>,
 	parameters: TilesReaderParameters,
 	input_compression: TileCompression,
 }
@@ -45,7 +45,7 @@ impl<T: RunnerTrait + 'static> OperationTrait for Runner<T> {
 		let runner = self.runner.clone();
 
 		self
-			.input
+			.source
 			.get_bbox_tile_stream(bbox)
 			.await
 			.filter_map_blob_parallel(move |blob| {
@@ -59,11 +59,11 @@ impl<T: RunnerTrait + 'static> OperationTrait for Runner<T> {
 	}
 
 	async fn get_meta(&self) -> Result<Option<Blob>> {
-		self.input.get_meta().await
+		self.source.get_meta().await
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		let blob = self.input.get_tile_data(coord).await?;
+		let blob = self.source.get_tile_data(coord).await?;
 		if let Some(blob) = blob {
 			self.runner.run(decompress(blob, &self.input_compression)?)
 		} else {
@@ -76,7 +76,7 @@ impl<T: RunnerTrait + 'static> OperationTrait for Runner<T> {
 impl<T: RunnerTrait + 'static> TransformerOperationTrait for Runner<T> {
 	async fn new(
 		yaml: YamlWrapper,
-		input: Box<dyn OperationTrait>,
+		source: Box<dyn OperationTrait>,
 		factory: &Factory,
 	) -> Result<Self>
 	where
@@ -85,7 +85,7 @@ impl<T: RunnerTrait + 'static> TransformerOperationTrait for Runner<T> {
 		let arg_yaml = yaml.hash_get_value("arg")?;
 		let runner = Arc::new(T::new(&arg_yaml, factory.get_path())?);
 
-		let mut parameters = input.get_parameters().clone();
+		let mut parameters = source.get_parameters().clone();
 		runner.check_input(parameters.tile_format, parameters.tile_compression)?;
 
 		let input_compression = parameters.tile_compression;
@@ -93,7 +93,7 @@ impl<T: RunnerTrait + 'static> TransformerOperationTrait for Runner<T> {
 
 		Ok(Runner {
 			runner,
-			input,
+			source,
 			input_compression,
 			parameters,
 		})

@@ -36,3 +36,14 @@ pub trait TransformerOperationTrait: OperationTrait {
 	where
 		Self: Sized;
 }
+
+#[async_trait]
+pub trait ComposerOperationTrait: OperationTrait {
+	async fn new(
+		yaml: YamlWrapper,
+		readers: Vec<Box<dyn OperationTrait>>,
+		builder: &Factory,
+	) -> Result<Self>
+	where
+		Self: Sized;
+}

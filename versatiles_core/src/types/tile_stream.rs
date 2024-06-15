@@ -4,7 +4,7 @@ use std::{pin::Pin, sync::Arc};
 
 /// A wrapper to handle streams of tiles, where each item is a tuple containing a tile coordinate and its associated data.
 pub struct TileStream<'a> {
-	stream: Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + Send + 'a>>,
+	pub stream: Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + Send + 'a>>,
 }
 
 #[allow(dead_code)]
@@ -12,6 +12,19 @@ impl<'a> TileStream<'a> {
 	pub fn new_empty() -> Self {
 		TileStream {
 			stream: futures::stream::empty().boxed(),
+		}
+	}
+
+	pub async fn from_stream_iter<Fut>(iter: impl Iterator<Item = Fut> + Send + 'a) -> TileStream<'a>
+	where
+		Fut: Future<Output = TileStream<'a>> + Send + 'a,
+	{
+		TileStream {
+			stream: Box::pin(
+				stream::iter(iter)
+					.then(|s| async move { s.await.stream })
+					.flatten(),
+			),
 		}
 	}
 

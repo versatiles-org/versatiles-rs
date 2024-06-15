@@ -54,11 +54,11 @@ pub fn yaml_parser_derive(input: TokenStream) -> TokenStream {
 				quote! { #field_name: yaml.hash_get_string(#field_str).context(format!("Failed to get '{}'", #field_str))? }
 			),
 			"bool" => (
-				format!("`{field_str}`: *Boolean (optional, default: false)*"),
+				format!("*`{field_str}`: Boolean (optional, default: false)*"),
 				quote! { #field_name: yaml.hash_get_bool(#field_str).unwrap_or(false) }
 			),
 			"Option < String >" => (
-				format!("`{field_str}`: *String (optional)*"),
+				format!("*`{field_str}`: String (optional)*"),
 				quote! { #field_name: yaml.hash_get_string(#field_str).ok() }
 			),
 			_ => (

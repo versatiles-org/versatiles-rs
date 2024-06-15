@@ -1,8 +1,27 @@
-use super::{Factory, OperationTrait, ReaderOperationTrait, TransformerOperationTrait};
+use super::{
+	ComposerOperationTrait, Factory, OperationTrait, ReaderOperationTrait, TransformerOperationTrait,
+};
 use crate::utils::YamlWrapper;
 use anyhow::Result;
 use async_trait::async_trait;
 use std::marker::PhantomData;
+
+#[derive(Clone)]
+pub struct Builder<T>
+where
+	T: 'static,
+{
+	_type: PhantomData<T>,
+}
+
+impl<T> Builder<T>
+where
+	T: 'static,
+{
+	pub fn new() -> Box<Self> {
+		Box::new(Self { _type: PhantomData })
+	}
+}
 
 #[async_trait]
 pub trait BuilderTrait: Send + Sync {
@@ -11,43 +30,26 @@ pub trait BuilderTrait: Send + Sync {
 }
 
 #[async_trait]
+impl<T> BuilderTrait for Builder<T>
+where
+	T: OperationTrait + 'static,
+{
+	fn get_id(&self) -> &'static str {
+		T::get_id()
+	}
+
+	fn get_docs(&self) -> String {
+		T::get_docs()
+	}
+}
+
+#[async_trait]
 pub trait ReaderBuilderTrait: BuilderTrait + Send + Sync {
 	async fn build(&self, yaml: YamlWrapper, factory: &Factory) -> Result<Box<dyn OperationTrait>>;
 }
 
 #[async_trait]
-pub trait TransformerBuilderTrait: BuilderTrait + Send + Sync {
-	async fn build(
-		&self,
-		yaml: YamlWrapper,
-		reader: Box<dyn OperationTrait>,
-		factory: &Factory,
-	) -> Result<Box<dyn OperationTrait>>;
-}
-
-#[derive(Clone)]
-pub struct ReaderBuilder<T>
-where
-	T: ReaderOperationTrait + 'static,
-{
-	_type: PhantomData<T>,
-}
-
-#[async_trait]
-impl<T> BuilderTrait for ReaderBuilder<T>
-where
-	T: ReaderOperationTrait + 'static,
-{
-	fn get_docs(&self) -> String {
-		T::get_docs()
-	}
-	fn get_id(&self) -> &'static str {
-		T::get_id()
-	}
-}
-
-#[async_trait]
-impl<T> ReaderBuilderTrait for ReaderBuilder<T>
+impl<T> ReaderBuilderTrait for Builder<T>
 where
 	T: ReaderOperationTrait + 'static,
 {
@@ -56,56 +58,52 @@ where
 	}
 }
 
-impl<T> ReaderBuilder<T>
-where
-	T: ReaderOperationTrait + 'static,
-{
-	pub fn new() -> Box<Self> {
-		Box::new(Self { _type: PhantomData })
-	}
-}
-
-#[derive(Clone)]
-pub struct TransformerBuilder<T>
-where
-	T: TransformerOperationTrait + 'static,
-{
-	_type: PhantomData<T>,
+#[async_trait]
+pub trait TransformerBuilderTrait: BuilderTrait + Send + Sync {
+	async fn build(
+		&self,
+		yaml: YamlWrapper,
+		source: Box<dyn OperationTrait>,
+		factory: &Factory,
+	) -> Result<Box<dyn OperationTrait>>;
 }
 
 #[async_trait]
-impl<T> BuilderTrait for TransformerBuilder<T>
-where
-	T: TransformerOperationTrait + 'static,
-{
-	fn get_id(&self) -> &'static str {
-		T::get_id()
-	}
-	fn get_docs(&self) -> String {
-		T::get_docs()
-	}
-}
-
-#[async_trait]
-impl<T> TransformerBuilderTrait for TransformerBuilder<T>
+impl<T> TransformerBuilderTrait for Builder<T>
 where
 	T: TransformerOperationTrait + 'static,
 {
 	async fn build(
 		&self,
 		yaml: YamlWrapper,
-		reader: Box<dyn OperationTrait>,
+		source: Box<dyn OperationTrait>,
 		factory: &Factory,
 	) -> Result<Box<dyn OperationTrait>> {
-		Ok(Box::new(T::new(yaml, reader, factory).await?))
+		Ok(Box::new(T::new(yaml, source, factory).await?))
 	}
 }
 
-impl<T> TransformerBuilder<T>
+#[async_trait]
+pub trait ComposerBuilderTrait: BuilderTrait + Send + Sync {
+	async fn build(
+		&self,
+		yaml: YamlWrapper,
+		sources: Vec<Box<dyn OperationTrait>>,
+		factory: &Factory,
+	) -> Result<Box<dyn OperationTrait>>;
+}
+
+#[async_trait]
+impl<T> ComposerBuilderTrait for Builder<T>
 where
-	T: TransformerOperationTrait + 'static,
+	T: ComposerOperationTrait + 'static,
 {
-	pub fn new() -> Box<Self> {
-		Box::new(Self { _type: PhantomData })
+	async fn build(
+		&self,
+		yaml: YamlWrapper,
+		sources: Vec<Box<dyn OperationTrait>>,
+		factory: &Factory,
+	) -> Result<Box<dyn OperationTrait>> {
+		Ok(Box::new(T::new(yaml, sources, factory).await?))
 	}
 }

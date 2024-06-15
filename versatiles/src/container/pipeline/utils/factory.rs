@@ -1,6 +1,8 @@
-use super::{OperationTrait, ReaderBuilderTrait, TransformerBuilderTrait};
+use super::{
+	BuilderTrait, ComposerBuilderTrait, OperationTrait, ReaderBuilderTrait, TransformerBuilderTrait,
+};
 use crate::{
-	container::pipeline::operations::{READERS, TRANSFORMERS},
+	container::pipeline::operations::{COMPOSERS, READERS, TRANSFORMERS},
 	utils::YamlWrapper,
 };
 use anyhow::{anyhow, ensure, Result};
@@ -9,24 +11,28 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-pub struct Factory<'a> {
+pub struct Factory {
 	path: PathBuf,
-	lookup_readers: HashMap<String, &'a Box<dyn ReaderBuilderTrait>>,
-	lookup_transformers: HashMap<String, &'a Box<dyn TransformerBuilderTrait>>,
+	lookup_composers: HashMap<String, &'static Box<dyn ComposerBuilderTrait>>,
+	lookup_readers: HashMap<String, &'static Box<dyn ReaderBuilderTrait>>,
+	lookup_transformers: HashMap<String, &'static Box<dyn TransformerBuilderTrait>>,
 }
 
-impl<'a> Factory<'a> {
+impl Factory {
 	pub fn new(path: &Path) -> Self {
-		let mut lookup_readable = HashMap::new();
-		for e in READERS.iter() {
-			lookup_readable.insert(e.get_id().to_string(), e);
+		fn build_lookup<T>(
+			i: impl Iterator<Item = &'static Box<T>>,
+		) -> HashMap<String, &'static Box<T>>
+		where
+			T: BuilderTrait + ?Sized + 'static,
+		{
+			HashMap::from_iter(i.map(|e| (e.get_id().to_string(), e)))
 		}
 
 		Self {
-			lookup_readers: lookup_readable,
-			lookup_transformers: HashMap::from_iter(
-				TRANSFORMERS.iter().map(|e| (e.get_id().to_string(), e)),
-			),
+			lookup_composers: build_lookup(COMPOSERS.iter()),
+			lookup_readers: build_lookup(READERS.iter()),
+			lookup_transformers: build_lookup(TRANSFORMERS.iter()),
 			path: path.to_owned(),
 		}
 	}
