@@ -1,5 +1,6 @@
-use crate::container::get_pipeline_operation_docs;
 use anyhow::Result;
+
+use crate::container::Factory;
 
 #[derive(clap::Args, Debug)]
 #[command(
@@ -39,7 +40,7 @@ pub fn run(command: &Subcommand) -> Result<()> {
 	skin.inline_code.set_fg(Color::Green);
 
 	let md = match command.topic {
-		Topic::Pipeline => get_pipeline_operation_docs(),
+		Topic::Pipeline => Factory::get_docs(),
 	};
 
 	let area = Area::full_screen();

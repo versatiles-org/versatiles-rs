@@ -1,3 +1,58 @@
+use super::OperationTrait;
+use crate::container::pipeline::{operations as op, OperationDocsTrait};
+use anyhow::{ensure, Result};
+use std::{
+	path::{Path, PathBuf},
+	pin::Pin,
+};
+
+#[derive(versatiles_derive::KDLDecode)]
+pub enum OperationKDLEnum {
+	Read(op::ReadOperationKDL),
+	//OverlayTiles(KDLOverlayTiles),
+	//VectortilesUpdateProperties(KDLVectortilesUpdateProperties),
+}
+
+pub struct Factory {
+	dir: PathBuf,
+}
+
+impl Factory {
+	pub async fn operation_from_kdl(
+		filename: &Path,
+		text: &str,
+	) -> Result<Pin<Box<dyn OperationTrait>>> {
+		let mut nodes = knuffel::parse::<Vec<OperationKDLEnum>>(filename.to_str().unwrap(), text)?;
+		ensure!(nodes.len() == 1, "KDL must contain exactly one top node");
+		let node = nodes.pop().unwrap();
+
+		let factory = Factory::new(filename.parent().unwrap());
+
+		let operation = factory.build(node).await?;
+
+		Ok(operation)
+	}
+	pub fn new(dir: &Path) -> Self {
+		Self {
+			dir: dir.to_path_buf(),
+		}
+	}
+	pub async fn build(&self, node: OperationKDLEnum) -> Result<Pin<Box<dyn OperationTrait>>> {
+		match node {
+			OperationKDLEnum::Read(p) => Ok(Box::pin(op::ReadOperation::new(p, self).await?)),
+		}
+	}
+	pub fn resolve_filename(&self, filename: &str) -> String {
+		String::from(self.dir.join(filename).to_str().unwrap())
+	}
+	pub fn get_docs() -> String {
+		let mut docs: Vec<String> = Vec::new();
+		docs.push(op::ReadOperationKDL::generate_docs());
+		return docs.join("\n\n").to_string();
+	}
+}
+
+/*
 use super::{
 	BuilderTrait, ComposerBuilderTrait, OperationTrait, ReaderBuilderTrait, TransformerBuilderTrait,
 };
@@ -81,3 +136,5 @@ impl Factory {
 		&self.path
 	}
 }
+
+*/

@@ -39,6 +39,7 @@ futures = { workspace = true, features = ["default"] }
 hyper = { workspace = true, optional = true, features = ["http2"] }
 image = { workspace = true, optional = true, features = ["jpeg", "png"] }
 itertools = { workspace = true, features = ["use_alloc"] }
+knuffel = { workspace = true, optional = true }
 lazy_static = { workspace = true, optional = true }
 log.workspace = true
 mime_guess = { workspace = true, optional = true }
@@ -50,7 +51,6 @@ tar = { workspace = true, optional = true }
 termimad = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 webp = { workspace = true, optional = true, features = ["img"] }
-yaml-rust2 = { workspace = true, optional = true }
 
 versatiles_core = { workspace = true }
 versatiles_derive = { workspace = true, optional = true }
@@ -82,14 +82,14 @@ full = [
 	"dep:csv",
 	"dep:hyper",
 	"dep:image",
+	"dep:knuffel",
 	"dep:lazy_static",
 	"dep:r2d2_sqlite",
 	"dep:r2d2",
 	"dep:tar",
-	"dep:webp",
 	"dep:versatiles_derive",
 	"dep:versatiles_geometry",
-	"dep:yaml-rust2",
+	"dep:webp",
 	"http",
 ]
 http = ["dep:lazy_static", "dep:regex", "dep:reqwest", "versatiles_core/http"]

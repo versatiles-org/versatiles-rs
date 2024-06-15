@@ -3,17 +3,16 @@ use crate::{
 	container::{TilesReader, TilesReaderParameters},
 	io::DataReader,
 	types::{Blob, TileBBox, TileCompression, TileCoord3, TileStream},
-	utils::YamlWrapper,
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use std::{path::Path, str::FromStr};
+use std::{path::Path, pin::Pin};
 
 /// The `PipelineReader` struct is responsible for managing the tile reading process,
 /// applying operations, and returning the composed tiles.
 pub struct PipelineReader {
 	pub name: String,
-	pub output: Box<dyn OperationTrait>,
+	pub operation: Box<dyn OperationTrait>,
 	pub parameters: TilesReaderParameters,
 }
 
@@ -46,30 +45,27 @@ impl PipelineReader {
 	///
 	/// * `Result<PipelineReader>` - The constructed PipelineReader or an error if the configuration is invalid.
 	pub async fn open_reader(mut reader: DataReader, path: &Path) -> Result<PipelineReader> {
-		let yaml = reader.read_all().await?.into_string();
-		Self::from_str(&yaml, reader.get_name(), path)
+		let kdl = reader.read_all().await?.into_string();
+		Self::from_str(&kdl, reader.get_name(), path)
 			.await
-			.with_context(|| format!("failed parsing {} as YAML", reader.get_name()))
+			.with_context(|| format!("failed parsing {} as KDL", reader.get_name()))
 	}
 
 	#[cfg(test)]
-	pub async fn open_str(yaml: &str, path: &Path) -> Result<PipelineReader> {
-		Self::from_str(yaml, "from str", path)
+	pub async fn open_str(kdl: &str, path: &Path) -> Result<PipelineReader> {
+		Self::from_str(kdl, "from str", path)
 			.await
-			.with_context(|| format!("failed parsing '{yaml}' as YAML"))
+			.with_context(|| format!("failed parsing '{kdl}' as KDL"))
 	}
 
-	async fn from_str(yaml: &str, name: &str, path: &Path) -> Result<PipelineReader> {
-		let yaml =
-			YamlWrapper::from_str(yaml).with_context(|| format!("failed parsing '{yaml}' as YAML"))?;
-
-		let factory = Factory::new(path);
-		let output = factory.from_yaml(yaml).await?;
-		let parameters = output.get_parameters().clone();
+	async fn from_str(kdl: &str, name: &str, path: &Path) -> Result<PipelineReader> {
+		let operation: Box<dyn OperationTrait> =
+			Pin::into_inner(Factory::operation_from_kdl(path, kdl).await?);
+		let parameters = operation.get_parameters().clone();
 
 		Ok(PipelineReader {
 			name: name.to_string(),
-			output,
+			operation,
 			parameters,
 		})
 	}
@@ -99,17 +95,17 @@ impl TilesReader for PipelineReader {
 
 	/// Get the metadata, always uncompressed.
 	fn get_meta(&self) -> Result<Option<Blob>> {
-		Ok(None)
+		Ok(self.operation.get_meta())
 	}
 
 	/// Get tile data for the given coordinate, always compressed and formatted.
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		self.output.get_tile_data(coord).await
+		self.operation.get_tile_data(coord).await
 	}
 
 	/// Get a stream of tiles within the bounding box.
 	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TileStream {
-		self.output.get_bbox_tile_stream(bbox).await
+		self.operation.get_bbox_tile_stream(bbox).await
 	}
 }
 
@@ -118,7 +114,7 @@ impl std::fmt::Debug for PipelineReader {
 		f.debug_struct("PipelineReader")
 			.field("name", &self.name)
 			.field("parameters", &self.parameters)
-			.field("output", &self.output)
+			.field("output", &self.operation)
 			.finish()
 	}
 }

@@ -81,6 +81,7 @@ hyper = { version = "1.3.1", default-features = false }
 image = { version = "0.25.1", default-features = false }
 indicatif = { version = "0.17.8", default-features = false, features = ["unicode-width"] }
 itertools = { version = "0.13.0", default-features = false }
+knuffel = { version = "3.2.0", default-features = false }
 lazy_static = { version = "1.4.0", default-features = false }
 log = { version = "0.4.21", default-features = false }
 mime_guess = { version = "2.0.4", default-features = false }
@@ -97,7 +98,6 @@ termimad = { version = "0.29.3" }
 tokio = { version = "1.38.0", default-features = false }
 webp = { version = "0.3.0", default-features = false }
 wildmatch = { version = "2.3.4", default-features = false }
-yaml-rust2 = { version = "0.8.1", default-features = false }
 
 versatiles_core = { version = "0.11.5", path = "versatiles_core" }
 versatiles_derive = { version = "0.11.5", path = "versatiles_derive" }

@@ -16,6 +16,8 @@ version.workspace = true
 proc-macro = true
 
 [dependencies]
+heck = { version = "0.4.1", features = ["unicode"] }
+proc-macro-error = "1.0.4"
 proc-macro2 = { workspace = true, features = ["proc-macro"] }
 quote = { workspace = true, features = ["proc-macro"] }
 syn = { workspace = true, features = ["derive", "parsing", "printing", "proc-macro"] }
