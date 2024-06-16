@@ -6,7 +6,7 @@ use crate::{
 };
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
-use std::{path::Path, pin::Pin};
+use std::path::Path;
 
 /// The `PipelineReader` struct is responsible for managing the tile reading process,
 /// applying operations, and returning the composed tiles.
@@ -44,23 +44,22 @@ impl PipelineReader {
 	/// # Returns
 	///
 	/// * `Result<PipelineReader>` - The constructed PipelineReader or an error if the configuration is invalid.
-	pub async fn open_reader(mut reader: DataReader, path: &Path) -> Result<PipelineReader> {
+	pub async fn open_reader(mut reader: DataReader, dir: &Path) -> Result<PipelineReader> {
 		let kdl = reader.read_all().await?.into_string();
-		Self::from_str(&kdl, reader.get_name(), path)
+		Self::from_str(&kdl, reader.get_name(), dir)
 			.await
 			.with_context(|| format!("failed parsing {} as KDL", reader.get_name()))
 	}
 
 	#[cfg(test)]
-	pub async fn open_str(kdl: &str, path: &Path) -> Result<PipelineReader> {
-		Self::from_str(kdl, "from str", path)
+	pub async fn open_str(kdl: &str, dir: &Path) -> Result<PipelineReader> {
+		Self::from_str(kdl, "from str", dir)
 			.await
 			.with_context(|| format!("failed parsing '{kdl}' as KDL"))
 	}
 
-	async fn from_str(kdl: &str, name: &str, path: &Path) -> Result<PipelineReader> {
-		let operation: Box<dyn OperationTrait> =
-			Pin::into_inner(Factory::operation_from_kdl(path, kdl).await?);
+	async fn from_str(kdl: &str, name: &str, dir: &Path) -> Result<PipelineReader> {
+		let operation: Box<dyn OperationTrait> = Factory::operation_from_kdl(dir, kdl).await?;
 		let parameters = operation.get_parameters().clone();
 
 		Ok(PipelineReader {

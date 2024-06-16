@@ -5,6 +5,7 @@ use crate::{
 		TilesReader, TilesReaderParameters,
 	},
 	types::TileStream,
+	utils::KDLNode,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -12,10 +13,9 @@ use futures::{future::BoxFuture, lock::Mutex};
 use std::{fmt::Debug, sync::Arc};
 use versatiles_core::types::{Blob, TileBBox, TileCoord3};
 
-#[derive(versatiles_derive::KDLDecode)]
+#[derive(versatiles_derive::KDLDecode, Clone, Debug)]
 /// Reads a tile source, such as a VersaTiles container.
 pub struct ReadOperationKDL {
-	#[kdl(argument)]
 	/// The filename of the tile container, e.g., "world.versatiles".
 	filename: String,
 }
@@ -28,16 +28,13 @@ pub struct ReadOperation {
 }
 
 impl<'a> ReadOperation {
-	pub fn new(
-		args: ReadOperationKDL,
-		factory: &'a Factory,
-	) -> BoxFuture<'a, Result<ReadOperation>> {
+	pub fn new(node: ReadOperationKDL, factory: &'a Factory) -> BoxFuture<'a, Result<Self>> {
 		Box::pin(async move {
-			let reader = get_reader(&factory.resolve_filename(&args.filename)).await?;
+			let reader = get_reader(&factory.resolve_filename(&node.filename)).await?;
 			let parameters = reader.get_parameters().clone();
 			let meta = reader.get_meta()?;
 
-			Ok(ReadOperation {
+			Ok(Self {
 				parameters,
 				meta,
 				reader: Arc::new(Mutex::new(reader)),

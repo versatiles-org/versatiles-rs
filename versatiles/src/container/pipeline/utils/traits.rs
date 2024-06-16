@@ -11,7 +11,3 @@ pub trait OperationTrait: Debug + Send + Sync + Unpin {
 	fn get_meta(&self) -> Option<Blob>;
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>>;
 }
-
-pub trait OperationDocsTrait {
-	fn generate_docs() -> String;
-}

@@ -1,7 +1,10 @@
-//mod overlay_tiles;
+mod overlay_tiles;
 mod read;
+mod vectortiles_update_properties;
+
+pub use overlay_tiles::*;
 pub use read::*;
-//mod vectortiles_update_properties;
+pub use vectortiles_update_properties::*;
 
 //#[cfg(test)]
 //mod read_mock;
