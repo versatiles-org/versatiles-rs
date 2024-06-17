@@ -27,7 +27,10 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 	for field in fields {
 		let field_name = &field.ident;
 		let field_type = &field.ty;
-		let field_str = field_name.as_ref().unwrap().to_string();
+		let field_str = field_name
+			.as_ref()
+			.expect("could not get field_name")
+			.to_string();
 		let field_type_str = quote!(#field_type).to_string();
 
 		let mut comment = field
@@ -52,7 +55,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 				"### Child:\n* **one child must be set**{comment}\n"
 			));
 			parser_fields.push(
-				quote! { child: Box::new(OperationKDLEnum::from_kdl_node(node.children.get(0).unwrap())?) },
+				quote! { child: Box::new(OperationKDLEnum::from_kdl_node(node.children.first().ok_or(anyhow!("could not get first child"))?)?) },
 			);
 		} else if field_str == "children" {
 			if doc_children.is_some() {
