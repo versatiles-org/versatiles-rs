@@ -7,7 +7,7 @@ use nom::{
 	character::complete::{alphanumeric1, char, line_ending, none_of, one_of, space1},
 	combinator::{eof, map, opt, recognize, value},
 	error::{context, ContextError, ParseError},
-	multi::{many1, separated_list0},
+	multi::{many0, many1, separated_list0},
 	sequence::{delimited, pair, terminated},
 	IResult, Parser,
 };
@@ -196,8 +196,8 @@ fn parse_linespace<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
 
 #[allow(dead_code)]
 fn debug<I: Clone + Debug, E: ContextError<I>, F, O: Debug>(
-	mut f: F,
 	context: &'static str,
+	mut f: F,
 ) -> impl FnMut(I) -> IResult<I, O, E>
 where
 	F: Parser<I, O, E>,
@@ -205,11 +205,11 @@ where
 	move |i: I| {
 		let result = f.parse(i.clone());
 		println!("CONTEXT: {context}");
-		println!("INPUT: {i:?}");
+		println!("  INPUT: {i:?}");
 		if let Ok(v) = &result {
-			println!("RESULT: {v:?}");
+			println!("  \x1b[0;32mRESULT: {v:?}\x1b[0m");
 		} else {
-			println!("ERROR!!!");
+			println!("  \x1b[0;31mERROR!!!\x1b[0m");
 		}
 		result
 	}
@@ -220,11 +220,14 @@ fn parse_node_list<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
 ) -> IResult<&'a str, Vec<KDLNode>, E> {
 	context(
 		"parse_node_list",
-		separated_list0(
-			many1(parse_node_terminator),
-			alt((parse_node, map(parse_linespace, |_| None))),
+		terminated(
+			separated_list0(
+				many1(parse_node_terminator),
+				alt((parse_node, map(parse_linespace, |_| None))),
+			),
+			many0(parse_linespace),
 		)
-		.map(|v| v.into_iter().filter_map(|e| e).collect::<Vec<_>>()),
+		.map(|v| v.into_iter().flatten().collect::<Vec<_>>()),
 	)(input)
 }
 
@@ -437,6 +440,26 @@ mod tests {
 			},
 		];
 		assert_eq!(parse_kdl(input).unwrap(), expected);
+	}
+
+	#[test]
+	fn test_parse_nodes4() {
+		pub const INPUT: &str = include_str!("../../../testdata/berlin.kdl");
+
+		let expected = vec![KDLNode {
+			name: "vectortiles_update_properties".to_string(),
+			properties: vec![
+				("data_source_path".to_string(), "cities.csv".to_string()),
+				("id_field_tiles".to_string(), "id".to_string()),
+				("id_field_values".to_string(), "city_id".to_string()),
+			],
+			children: vec![KDLNode {
+				name: "read".to_string(),
+				properties: vec![("filename".to_string(), "berlin.mbtiles".to_string())],
+				children: vec![],
+			}],
+		}];
+		assert_eq!(parse_kdl(INPUT).unwrap(), expected);
 	}
 
 	#[test]

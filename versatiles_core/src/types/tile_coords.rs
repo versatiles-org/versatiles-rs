@@ -9,14 +9,14 @@
 //!
 //! // Creating a new TileCoord2 instance
 //! let coord2 = TileCoord2::new(3, 4);
-//! assert_eq!(coord2.get_x(), 3);
-//! assert_eq!(coord2.get_y(), 4);
+//! assert_eq!(coord2.x, 3);
+//! assert_eq!(coord2.y, 4);
 //!
 //! // Creating a new TileCoord3 instance
 //! let coord3 = TileCoord3::new(5, 6, 7).unwrap();
-//! assert_eq!(coord3.get_x(), 5);
-//! assert_eq!(coord3.get_y(), 6);
-//! assert_eq!(coord3.get_z(), 7);
+//! assert_eq!(coord3.x, 5);
+//! assert_eq!(coord3.y, 6);
+//! assert_eq!(coord3.z, 7);
 //!
 //! // Converting TileCoord3 to geographic coordinates
 //! let geo = coord3.as_geo();
