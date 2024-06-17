@@ -1,6 +1,6 @@
 use super::OperationTrait;
 use crate::{
-	container::pipeline::operations as op,
+	container::pipeline::operations::{self as op},
 	utils::{parse_kdl, KDLNode},
 };
 use anyhow::{ensure, Result};
@@ -8,9 +8,9 @@ use std::path::{Path, PathBuf};
 
 #[derive(versatiles_derive::KDLDecode, Clone, Debug)]
 pub enum OperationKDLEnum {
-	Read(op::ReadOperationKDL),
-	OverlayTiles(op::OverlayTilesOperationKDL),
-	VectortilesUpdateProperties(op::VectortilesUpdatePropertiesOperationKDL),
+	Read(op::read::Args),
+	OverlayTiles(op::overlay_tiles::Args),
+	VectortilesUpdateProperties(op::vectortiles_update_properties::Args),
 }
 
 pub struct Factory {
@@ -38,10 +38,10 @@ impl Factory {
 	pub async fn build_operation(&self, node: OperationKDLEnum) -> Result<Box<dyn OperationTrait>> {
 		use OperationKDLEnum::*;
 		Ok(match node {
-			Read(n) => Box::new(op::ReadOperation::new(n, self).await?),
-			OverlayTiles(n) => Box::new(op::OverlayTilesOperation::new(n, self).await?),
+			Read(n) => Box::new(op::read::Operation::new(n, self).await?),
+			OverlayTiles(n) => Box::new(op::overlay_tiles::Operation::new(n, self).await?),
 			VectortilesUpdateProperties(n) => {
-				Box::new(op::VectortilesUpdatePropertiesOperation::new(n, self).await?)
+				Box::new(op::vectortiles_update_properties::Operation::new(n, self).await?)
 			}
 		})
 	}

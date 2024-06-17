@@ -18,28 +18,28 @@ pub struct PipelineReader {
 
 #[allow(dead_code)]
 impl PipelineReader {
-	/// Opens a PipelineReader from a YAML file path.
+	/// Opens a PipelineReader from a kdl file path.
 	///
 	/// # Arguments
 	///
-	/// * `path` - The path to the YAML file.
+	/// * `path` - The path to the kdl file.
 	///
 	/// # Returns
 	///
 	/// * `Result<PipelineReader>` - The constructed PipelineReader or an error if the configuration is invalid.
 	pub async fn open_path(path: &Path) -> Result<PipelineReader> {
-		let yaml =
+		let kdl =
 			std::fs::read_to_string(path).with_context(|| anyhow!("Failed to open {path:?}"))?;
-		Self::from_str(&yaml, path.to_str().unwrap(), path.parent().unwrap())
+		Self::from_str(&kdl, path.to_str().unwrap(), path.parent().unwrap())
 			.await
-			.with_context(|| format!("failed parsing {path:?} as YAML"))
+			.with_context(|| format!("failed parsing {path:?} as kdl"))
 	}
 
 	/// Opens a PipelineReader from a DataReader.
 	///
 	/// # Arguments
 	///
-	/// * `reader` - The DataReader containing the YAML configuration.
+	/// * `reader` - The DataReader containing the kdl configuration.
 	///
 	/// # Returns
 	///
@@ -123,11 +123,11 @@ mod tests {
 	use super::*;
 	use crate::container::MockTilesWriter;
 
-	pub const YAML: &str = include_str!("../../../../testdata/berlin.yaml");
+	pub const KDL: &str = include_str!("../../../../testdata/berlin.kdl");
 
 	#[tokio::test(flavor = "multi_thread", worker_threads = 16)]
-	async fn open_yaml_str() -> Result<()> {
-		let mut reader = PipelineReader::open_str(YAML, Path::new("../testdata/")).await?;
+	async fn open_kdl_str() -> Result<()> {
+		let mut reader = PipelineReader::open_str(KDL, Path::new("../testdata/")).await?;
 		MockTilesWriter::write(&mut reader).await?;
 
 		Ok(())
@@ -135,11 +135,11 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_pipeline_reader_open_path() -> Result<()> {
-		let path = Path::new("../testdata/pipeline.yaml");
+		let path = Path::new("../testdata/pipeline.kdl");
 		let result = PipelineReader::open_path(path).await;
 		assert_eq!(
 			result.unwrap_err().to_string(),
-			"Failed to open \"../testdata/pipeline.yaml\""
+			"Failed to open \"../testdata/pipeline.kdl\""
 		);
 
 		Ok(())
@@ -147,7 +147,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_pipeline_reader_get_tile_data() -> Result<()> {
-		let mut reader = PipelineReader::open_str(YAML, Path::new("../testdata/")).await?;
+		let mut reader = PipelineReader::open_str(KDL, Path::new("../testdata/")).await?;
 
 		let result = reader.get_tile_data(&TileCoord3::new(0, 0, 14)?).await;
 		assert_eq!(result?, None);
@@ -164,7 +164,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_pipeline_reader_get_bbox_tile_stream() -> Result<()> {
-		let mut reader = PipelineReader::open_str(YAML, Path::new("../testdata/")).await?;
+		let mut reader = PipelineReader::open_str(KDL, Path::new("../testdata/")).await?;
 		let bbox = TileBBox::new(1, 0, 0, 1, 1)?;
 		let result_stream = reader.get_bbox_tile_stream(bbox).await;
 		let result = result_stream.collect().await;

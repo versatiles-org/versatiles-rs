@@ -2,7 +2,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{DataEnum, DeriveInput, Fields};
 
-use crate::decode_kdl::camel_to_kebab;
+use crate::decode_kdl::camel_to_snake;
 
 pub fn decode_enum(input: DeriveInput, data_enum: DataEnum) -> TokenStream {
 	let name = input.ident;
@@ -21,7 +21,7 @@ pub fn decode_enum(input: DeriveInput, data_enum: DataEnum) -> TokenStream {
 		} else {
 			panic!("KDLDecode can only be derived for enums with unnamed fields");
 		};
-		let node_name = camel_to_kebab(&variant_name.to_string());
+		let node_name = camel_to_snake(&variant_name.to_string());
 
 		variants.push(quote! {
 			if node.name == #node_name {

@@ -15,22 +15,22 @@ use versatiles_core::types::{Blob, TileBBox, TileCoord3};
 
 #[derive(versatiles_derive::KDLDecode, Clone, Debug)]
 /// Reads a tile source, such as a VersaTiles container.
-pub struct ReadOperationKDL {
+pub struct Args {
 	/// The filename of the tile container, e.g., "world.versatiles".
 	filename: String,
 }
 
 #[derive(Debug)]
-pub struct ReadOperation {
+pub struct Operation {
 	parameters: TilesReaderParameters,
 	reader: Arc<Mutex<Box<dyn TilesReader>>>,
 	meta: Option<Blob>,
 }
 
-impl<'a> ReadOperation {
-	pub fn new(node: ReadOperationKDL, factory: &'a Factory) -> BoxFuture<'a, Result<Self>> {
+impl<'a> Operation {
+	pub fn new(args: Args, factory: &'a Factory) -> BoxFuture<'a, Result<Self>> {
 		Box::pin(async move {
-			let reader = get_reader(&factory.resolve_filename(&node.filename)).await?;
+			let reader = get_reader(&factory.resolve_filename(&args.filename)).await?;
 			let parameters = reader.get_parameters().clone();
 			let meta = reader.get_meta()?;
 
@@ -44,7 +44,7 @@ impl<'a> ReadOperation {
 }
 
 #[async_trait]
-impl OperationTrait for ReadOperation {
+impl OperationTrait for Operation {
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}

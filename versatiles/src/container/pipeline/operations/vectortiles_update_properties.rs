@@ -5,19 +5,19 @@ use crate::{
 	},
 	geometry::{vector_tile::VectorTile, GeoProperties},
 	types::Blob,
-	utils::KDLNode,
+	utils::{decompress, KDLNode},
 };
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, ensure, Context, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use log::warn;
-use std::collections::HashMap;
-use versatiles_core::types::{TileBBox, TileCoord3, TileStream};
+use std::{collections::HashMap, sync::Arc};
+use versatiles_core::types::{TileBBox, TileCompression, TileCoord3, TileFormat, TileStream};
 
 #[derive(versatiles_derive::KDLDecode, Clone, Debug)]
 /// This operation loads a data source (like a CSV file).
 /// For each feature in the vector tiles, it uses the id to fetch the correct row in the data source and uses this row to update the properties of the feature.
-pub struct VectortilesUpdatePropertiesOperationKDL {
+pub struct Args {
 	/// Path of the data source, e.g., data.csv
 	data_source_path: String,
 	/// Field name of the id in the vector tiles
@@ -36,52 +36,15 @@ pub struct VectortilesUpdatePropertiesOperationKDL {
 }
 
 #[derive(Debug)]
-pub struct VectortilesUpdatePropertiesOperation {
-	args: VectortilesUpdatePropertiesOperationKDL,
+pub struct Runner {
+	args: Args,
+	tile_compression: TileCompression,
 	properties_map: HashMap<String, GeoProperties>,
-	source: Box<dyn OperationTrait>,
 }
 
-impl<'a> VectortilesUpdatePropertiesOperation {
-	pub fn new(
-		args: VectortilesUpdatePropertiesOperationKDL,
-		factory: &'a Factory,
-	) -> BoxFuture<'a, Result<Self>> {
-		Box::pin(async move {
-			let data = read_csv_file(&factory.resolve_path(&args.data_source_path))
-				.with_context(|| format!("Failed to read CSV file from '{}'", args.data_source_path))?;
-
-			let properties_map = data
-				.into_iter()
-				.map(|mut properties| {
-					let key = properties
-						.get(&args.id_field_values)
-						.ok_or_else(|| anyhow!("Key '{}' not found in CSV data", args.id_field_values))
-						.with_context(|| {
-							format!(
-								"Failed to find key '{}' in the CSV data row: {properties:?}",
-								args.id_field_values
-							)
-						})?
-						.to_string();
-					if !args.add_id {
-						properties.remove(&args.id_field_values)
-					}
-					Ok((key, properties))
-				})
-				.collect::<Result<HashMap<String, GeoProperties>>>()
-				.context("Failed to build properties map from CSV data")?;
-
-			let source = factory.build_operation(*args.child.clone()).await?;
-
-			Ok(Self {
-				args,
-				properties_map,
-				source,
-			})
-		})
-	}
-	fn run(&self, blob: Blob) -> Result<Option<Blob>> {
+impl Runner {
+	fn run(&self, mut blob: Blob) -> Result<Option<Blob>> {
+		blob = decompress(blob, &self.tile_compression)?;
 		let mut tile =
 			VectorTile::from_blob(&blob).context("Failed to create VectorTile from Blob")?;
 
@@ -125,18 +88,89 @@ impl<'a> VectortilesUpdatePropertiesOperation {
 	}
 }
 
+#[derive(Debug)]
+pub struct Operation {
+	runner: Arc<Runner>,
+	parameters: TilesReaderParameters,
+	source: Box<dyn OperationTrait>,
+	meta: Option<Blob>,
+}
+
+impl<'a> Operation {
+	pub fn new(args: Args, factory: &'a Factory) -> BoxFuture<'a, Result<Self>> {
+		Box::pin(async move {
+			let data = read_csv_file(&factory.resolve_path(&args.data_source_path))
+				.with_context(|| format!("Failed to read CSV file from '{}'", args.data_source_path))?;
+
+			let properties_map = data
+				.into_iter()
+				.map(|mut properties| {
+					let key = properties
+						.get(&args.id_field_values)
+						.ok_or_else(|| anyhow!("Key '{}' not found in CSV data", args.id_field_values))
+						.with_context(|| {
+							format!(
+								"Failed to find key '{}' in the CSV data row: {properties:?}",
+								args.id_field_values
+							)
+						})?
+						.to_string();
+					if !args.add_id {
+						properties.remove(&args.id_field_values)
+					}
+					Ok((key, properties))
+				})
+				.collect::<Result<HashMap<String, GeoProperties>>>()
+				.context("Failed to build properties map from CSV data")?;
+
+			let source = factory.build_operation(*args.child.clone()).await?;
+			let parameters = source.get_parameters().clone();
+			ensure!(
+				parameters.tile_format == TileFormat::PBF,
+				"source must be vector tiles"
+			);
+
+			let meta = source.get_meta();
+
+			let runner = Arc::new(Runner {
+				args,
+				properties_map,
+				tile_compression: parameters.tile_compression,
+			});
+
+			Ok(Self {
+				runner,
+				meta,
+				parameters,
+				source,
+			})
+		})
+	}
+}
+
 #[async_trait]
-impl OperationTrait for VectortilesUpdatePropertiesOperation {
+impl OperationTrait for Operation {
 	fn get_parameters(&self) -> &TilesReaderParameters {
-		todo!()
+		&self.parameters
 	}
 	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
-		todo!()
+		let runner = self.runner.clone();
+		self
+			.source
+			.get_bbox_tile_stream(bbox)
+			.await
+			.filter_map_blob_parallel(move |blob| runner.run(blob).unwrap())
 	}
 	fn get_meta(&self) -> Option<Blob> {
-		todo!()
+		self.meta.clone()
 	}
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		todo!()
+		Ok(
+			if let Some(blob) = self.source.get_tile_data(coord).await? {
+				self.runner.run(blob)?
+			} else {
+				None
+			},
+		)
 	}
 }

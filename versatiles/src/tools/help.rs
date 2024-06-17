@@ -1,6 +1,5 @@
-use anyhow::Result;
-
 use crate::container::Factory;
+use anyhow::Result;
 
 #[derive(clap::Args, Debug)]
 #[command(
@@ -21,11 +20,10 @@ enum Topic {
 pub fn run(command: &Subcommand) -> Result<()> {
 	use termimad::{
 		crossterm::style::{Attribute, Color},
-		Area, ListItemsIndentationMode, MadSkin,
+		Area, MadSkin,
 	};
 
 	let mut skin = MadSkin::default();
-	skin.list_items_indentation_mode = ListItemsIndentationMode::Block;
 	skin.headers.get_mut(0).unwrap().set_fg(Color::Yellow);
 
 	let h2 = skin.headers.get_mut(1).unwrap();

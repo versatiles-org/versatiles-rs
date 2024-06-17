@@ -6,21 +6,21 @@ pub use decode_struct::decode_struct;
 
 use syn::{Attribute, Meta};
 
-pub fn camel_to_kebab(input: &str) -> String {
-	let mut kebab = String::new();
+pub fn camel_to_snake(input: &str) -> String {
+	let mut snake = String::new();
 
 	for (i, c) in input.chars().enumerate() {
 		if c.is_uppercase() {
 			if i != 0 {
-				kebab.push('-');
+				snake.push('_');
 			}
-			kebab.push(c.to_ascii_lowercase());
+			snake.push(c.to_ascii_lowercase());
 		} else {
-			kebab.push(c);
+			snake.push(c);
 		}
 	}
 
-	kebab
+	snake
 }
 
 pub fn extract_comment(attr: &Attribute) -> Option<String> {
