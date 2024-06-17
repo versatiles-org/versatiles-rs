@@ -87,11 +87,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 		}
 	}
 
-	let doc_children = if let Some(doc_children) = doc_children {
-		doc_children
-	} else {
-		String::from("")
-	};
+	let doc_children = doc_children.unwrap_or_default();
 
 	let doc_fields = if doc_fields.is_empty() {
 		String::from("")
