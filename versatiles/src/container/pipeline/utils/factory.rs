@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 #[derive(versatiles_derive::KDLDecode, Clone, Debug)]
 pub enum OperationKDLEnum {
 	Read(op::read::Args),
+	DummyTiles(op::dummy_tiles::Args),
 	OverlayTiles(op::overlay_tiles::Args),
 	VectortilesUpdateProperties(op::vectortiles_update_properties::Args),
 }
@@ -38,6 +39,7 @@ impl Factory {
 	pub async fn build_operation(&self, node: OperationKDLEnum) -> Result<Box<dyn OperationTrait>> {
 		use OperationKDLEnum::*;
 		Ok(match node {
+			DummyTiles(n) => Box::new(op::dummy_tiles::Operation::new(n, self).await?),
 			Read(n) => Box::new(op::read::Operation::new(n, self).await?),
 			OverlayTiles(n) => Box::new(op::overlay_tiles::Operation::new(n, self).await?),
 			VectortilesUpdateProperties(n) => {

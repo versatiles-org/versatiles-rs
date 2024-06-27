@@ -80,6 +80,18 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 					format!("* *`{field_str}`: String (optional)*{comment}"),
 					quote! { #field_name: node.get_property(#field_str).map(|v| v.clone()) },
 				),
+				"Option < f32 >" => (
+					format!("* *`{field_str}`: f32 (optional)*{comment}"),
+					quote! { #field_name: node.get_property(#field_str).map(|v| f32::from_str(&v).expect("value must be an f32")) },
+				),
+				"Option < u8 >" => (
+					format!("* *`{field_str}`: u8 (optional)*{comment}"),
+					quote! { #field_name: node.get_property(#field_str).map(|v| u8::from_str(&v).expect("value must be an u8")) },
+				),
+				"Option < u32 >" => (
+					format!("* *`{field_str}`: u32 (optional)*{comment}"),
+					quote! { #field_name: node.get_property(#field_str).map(|v| u32::from_str(&v).expect("value must be an u32")) },
+				),
 				_ => panic!("unknown type field: {field_type_str}"),
 			};
 			doc_fields.push(doc_field);
