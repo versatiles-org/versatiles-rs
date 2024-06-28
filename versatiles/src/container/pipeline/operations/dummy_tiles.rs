@@ -6,7 +6,7 @@ use crate::{
 		TilesReaderParameters,
 	},
 	types::TileStream,
-	utils::KDLNode,
+	utils::kdl::KDLNode,
 };
 use anyhow::Result;
 use async_trait::async_trait;

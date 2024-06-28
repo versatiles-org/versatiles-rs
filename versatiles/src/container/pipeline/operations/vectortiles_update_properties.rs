@@ -5,7 +5,7 @@ use crate::{
 	},
 	geometry::{vector_tile::VectorTile, GeoProperties},
 	types::Blob,
-	utils::{decompress, KDLNode},
+	utils::{decompress, kdl::KDLNode},
 };
 use anyhow::{anyhow, ensure, Context, Result};
 use async_trait::async_trait;

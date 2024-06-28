@@ -1,7 +1,7 @@
 use super::OperationTrait;
 use crate::{
 	container::pipeline::operations::{self as op},
-	utils::{parse_kdl, KDLNode},
+	utils::kdl::{parse_kdl, KDLNode},
 };
 use anyhow::{ensure, Result};
 use std::path::{Path, PathBuf};

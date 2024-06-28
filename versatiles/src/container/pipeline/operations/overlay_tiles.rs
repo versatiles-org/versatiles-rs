@@ -4,7 +4,7 @@ use crate::{
 		TilesReaderParameters,
 	},
 	types::{Blob, TileBBox, TileCoord3, TileStream},
-	utils::{recompress, KDLNode},
+	utils::{kdl::KDLNode, recompress},
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
