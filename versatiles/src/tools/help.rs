@@ -11,6 +11,10 @@ use std::path::Path;
 pub struct Subcommand {
 	#[command(subcommand)]
 	topic: Topic,
+
+	/// print raw markdown help without formatting
+	#[arg(long)]
+	raw: bool,
 }
 
 #[derive(clap::Subcommand, Debug)]
@@ -19,6 +23,20 @@ enum Topic {
 }
 
 pub fn run(command: &Subcommand) -> Result<()> {
+	let md = match command.topic {
+		Topic::Pipeline => PipelineFactory::default(Path::new("")).get_docs(),
+	};
+
+	if command.raw {
+		eprintln!("{md}");
+	} else {
+		print_markdown(md)
+	}
+
+	Ok(())
+}
+
+fn print_markdown(md: String) {
 	use termimad::{
 		crossterm::style::{Attribute, Color},
 		Area, MadSkin,
@@ -38,13 +56,7 @@ pub fn run(command: &Subcommand) -> Result<()> {
 	skin.inline_code.set_bg(Color::Reset);
 	skin.inline_code.set_fg(Color::Green);
 
-	let md = match command.topic {
-		Topic::Pipeline => PipelineFactory::default(Path::new("")).get_docs(),
-	};
-
 	let area = Area::full_screen();
 	let text = skin.area_text(&md, &area);
 	eprintln!("{text}");
-
-	Ok(())
 }
