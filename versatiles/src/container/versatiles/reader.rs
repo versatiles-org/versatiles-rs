@@ -3,8 +3,8 @@
 //! This module provides the `VersaTilesReader` struct, which implements the `TilesReader` trait for reading tile data from a `versatiles` container. It supports reading metadata, tile data, and probing the container for debugging purposes.
 //!
 //! ```no_run
-//! use versatiles::container::{TilesReader, TilesReaderParameters, VersaTilesReader};
-//! use versatiles::types::{TileCoord3, TileCompression, TileFormat, TileBBoxPyramid};
+//! use versatiles::container::VersaTilesReader;
+//! use versatiles::types::{TileCoord3, TileCompression, TileFormat, TileBBoxPyramid, TilesReader, TilesReaderParameters};
 //! use anyhow::Result;
 //! use futures::StreamExt;
 //! use std::path::Path;
@@ -44,14 +44,7 @@
 //! ```
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
-use crate::utils::TileConverter;
-use anyhow::{Context, Result};
-use async_trait::async_trait;
-use futures::stream::StreamExt;
-use log::trace;
-use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
-use tokio::sync::Mutex;
-use versatiles_core::{
+use crate::{
 	io::{DataReader, DataReaderFile},
 	types::{
 		Blob, ByteRange, LimitedCache, TileBBox, TileCompression, TileCoord2, TileCoord3, TileStream,
@@ -59,6 +52,13 @@ use versatiles_core::{
 	},
 	utils::PrettyPrint,
 };
+use anyhow::{Context, Result};
+use async_trait::async_trait;
+use futures::stream::StreamExt;
+use log::trace;
+use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
+use tokio::sync::Mutex;
+use versatiles_core::utils::decompress;
 
 /// `VersaTilesReader` is responsible for reading tile data from a `versatiles` container.
 pub struct VersaTilesReader {
@@ -99,16 +99,11 @@ impl VersaTilesReader {
 			.context("Failed reading the header")?;
 
 		let meta = if header.meta_range.length > 0 {
-			Some(
-				TileConverter::new_decompressor(&header.compression)
-					.process_blob(
-						reader
-							.read_range(&header.meta_range)
-							.await
-							.context("Failed reading the meta data")?,
-					)
-					.context("Failed decompressing the meta data")?,
-			)
+			let blob = reader
+				.read_range(&header.meta_range)
+				.await
+				.context("Failed reading the meta data")?;
+			Some(decompress(blob, &header.compression).context("Failed decompressing the meta data")?)
 		} else {
 			None
 		};
@@ -436,7 +431,7 @@ impl TilesReader for VersaTilesReader {
 
 	// deep probe of container tiles
 	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
-		use versatiles_core::progress::get_progress_bar;
+		use crate::progress::get_progress_bar;
 
 		#[derive(Debug)]
 		#[allow(dead_code)]
@@ -520,10 +515,8 @@ impl PartialEq for VersaTilesReader {
 #[cfg(all(test, feature = "full"))]
 mod tests {
 	use super::*;
-	use crate::container::{
-		make_test_file, MockTilesReader, TilesWriter, VersaTilesWriter, MOCK_BYTES_PBF,
-	};
-	use versatiles_core::{
+	use crate::{
+		container::{make_test_file, MockTilesReader, TilesWriter, VersaTilesWriter, MOCK_BYTES_PBF},
 		io::DataWriterBlob,
 		types::{TileBBoxPyramid, TileFormat},
 		utils::decompress_gzip,

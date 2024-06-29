@@ -1,4 +1,4 @@
-use versatiles_core::types::{Blob, TileCompression};
+use crate::types::{Blob, TileCompression};
 
 pub struct SourceResponse {
 	pub blob: Blob,

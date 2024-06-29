@@ -1,14 +1,14 @@
-use crate::container::get_reader;
-use anyhow::{anyhow, Context, Result};
-use async_trait::async_trait;
-use futures::future::BoxFuture;
-use std::path::Path;
-use versatiles_core::{
+use crate::{
+	container::get_reader,
 	io::DataReader,
 	types::{
 		Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReader, TilesReaderParameters,
 	},
 };
+use anyhow::{anyhow, Context, Result};
+use async_trait::async_trait;
+use futures::future::BoxFuture;
+use std::path::Path;
 use versatiles_pipeline::{OperationTrait, PipelineFactory};
 
 /// The `PipelineReader` struct is responsible for managing the tile reading process,

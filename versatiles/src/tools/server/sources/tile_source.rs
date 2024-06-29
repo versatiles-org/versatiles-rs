@@ -1,11 +1,11 @@
 use super::{super::utils::Url, SourceResponse};
-use anyhow::Result;
-use std::{fmt::Debug, sync::Arc};
-use tokio::sync::Mutex;
-use versatiles_core::{
+use crate::{
 	types::{TileCompression, TileCoord3, TileFormat, TilesReader},
 	utils::TargetCompression,
 };
+use anyhow::Result;
+use std::{fmt::Debug, sync::Arc};
+use tokio::sync::Mutex;
 
 // TileSource struct definition
 #[derive(Clone)]

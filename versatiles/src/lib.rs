@@ -16,8 +16,10 @@
 //! ## Usage Example
 //!
 //! ```rust
-//! use versatiles::container::{get_reader, TilesReader, write_to_filename};
-//! use versatiles::types::TileFormat;
+//! use versatiles::{
+//!     container::{get_reader, write_to_filename},
+//!     types::{TileFormat, TilesReader}
+//! };
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -39,7 +41,8 @@
 //! ```
 
 pub mod container;
-pub mod utils;
+
+pub use versatiles_core::*;
 
 #[cfg(feature = "full")]
 pub use versatiles_geometry as geometry;

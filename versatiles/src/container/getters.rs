@@ -3,8 +3,8 @@
 //! # Example Usage
 //!
 //! ```rust
-//! use versatiles::container::{get_reader, TilesReader, write_to_filename};
-//! use versatiles::types::TileFormat;
+//! use versatiles::container::{get_reader, write_to_filename};
+//! use versatiles::types::{TileFormat, TilesReader};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -25,18 +25,18 @@
 //! }
 //! ```
 
-use crate::container::{
-	DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, MBTilesWriter, PMTilesReader,
-	PMTilesWriter, PipelineReader, TarTilesReader, TarTilesWriter, TilesWriter, VersaTilesReader,
-	VersaTilesWriter,
+use crate::{
+	container::{
+		DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, MBTilesWriter, PMTilesReader,
+		PMTilesWriter, PipelineReader, TarTilesReader, TarTilesWriter, TilesWriter, VersaTilesReader,
+		VersaTilesWriter,
+	},
+	io::{DataReader, DataReaderHttp},
+	types::TilesReader,
 };
 use anyhow::{bail, Context, Result};
 use reqwest::Url;
 use std::env;
-use versatiles_core::{
-	io::{DataReader, DataReaderHttp},
-	types::TilesReader,
-};
 
 /// Get a reader for a given filename or URL.
 pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReader>> {
@@ -111,13 +111,13 @@ fn get_extension(filename: &str) -> &str {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::container::{MockTilesReader, MockTilesWriter};
+	use crate::{
+		container::{MockTilesReader, MockTilesWriter},
+		types::{TileBBoxPyramid, TileCompression, TileFormat, TilesReaderParameters},
+	};
 	use anyhow::Result;
 	use assert_fs::{fixture::NamedTempFile, TempDir};
 	use std::time::Instant;
-	use versatiles_core::types::{
-		TileBBoxPyramid, TileCompression, TileFormat, TilesReaderParameters,
-	};
 
 	/// Create a test file with given parameters.
 	pub async fn make_test_file(

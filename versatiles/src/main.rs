@@ -27,7 +27,8 @@
 // Import necessary modules and dependencies
 mod container;
 mod tools;
-mod utils;
+
+pub use versatiles_core::*;
 
 #[cfg(feature = "full")]
 pub use versatiles_geometry as geometry;

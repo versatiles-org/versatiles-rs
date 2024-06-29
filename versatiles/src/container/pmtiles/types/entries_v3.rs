@@ -1,14 +1,14 @@
 use super::{Directory, EntryV3};
+use crate::{
+	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+	types::{Blob, ByteRange, TileCompression},
+	utils::compress,
+};
 use anyhow::{bail, Result};
 use std::{
 	cmp::Ordering,
 	io::Write,
 	slice::{Iter, SliceIndex},
-};
-use versatiles_core::utils::compress;
-use versatiles_core::{
-	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
-	types::{Blob, ByteRange, TileCompression},
 };
 
 /// A collection of `EntryV3` that provides various utility functions

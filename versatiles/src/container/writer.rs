@@ -4,13 +4,13 @@
 //! It includes methods for writing tile data from a `TilesReader` to a specified path or writer.
 //!
 
-use anyhow::Result;
-use async_trait::async_trait;
-use std::path::Path;
-use versatiles_core::{
+use crate::{
 	io::{DataWriterFile, DataWriterTrait},
 	types::TilesReader,
 };
+use anyhow::Result;
+use async_trait::async_trait;
+use std::path::Path;
 
 /// Trait defining the behavior of a tile writer.
 #[async_trait]

@@ -1,5 +1,9 @@
 use super::super::utils::{guess_mime, Url};
 use super::{static_source::StaticSourceTrait, SourceResponse};
+use crate::{
+	types::{Blob, TileCompression},
+	utils::{decompress_brotli, decompress_gzip, TargetCompression},
+};
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
 use log::trace;
@@ -7,10 +11,6 @@ use std::{
 	collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::File, io::Read, path::Path,
 };
 use tar::{Archive, EntryType};
-use versatiles_core::{
-	types::{Blob, TileCompression},
-	utils::{decompress_brotli, decompress_gzip, TargetCompression},
-};
 
 #[derive(Debug)]
 struct FileEntry {
@@ -185,11 +185,13 @@ impl Debug for TarFile {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::{
-		convert_tiles_container, MockTilesReader, MockTilesReaderProfile, TilesConverterParameters,
+	use crate::{
+		container::{
+			convert_tiles_container, MockTilesReader, MockTilesReaderProfile, TilesConverterParameters,
+		},
+		types::TilesReader,
 	};
 	use assert_fs::NamedTempFile;
-	use versatiles_core::types::TilesReader;
 
 	pub async fn make_test_tar(compression: TileCompression) -> NamedTempFile {
 		// get dummy reader

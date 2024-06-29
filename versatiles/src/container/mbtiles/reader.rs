@@ -9,7 +9,8 @@
 //!
 //! ## Usage Example
 //! ```rust
-//! use versatiles::{container::{MBTilesReader, TilesReader}, types::{TileCoord3, Blob}};
+//! use versatiles::container::MBTilesReader;
+//! use versatiles::types::{Blob, TileCoord3, TilesReader};
 //! use anyhow::Result;
 //! use std::path::Path;
 //!
@@ -40,24 +41,23 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of reading metadata, handling different file formats, and verifying tile data.
 
-use anyhow::{anyhow, ensure, Result};
-use async_trait::async_trait;
-use log::trace;
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
-use std::path::Path;
-use versatiles_core::types::{TilesReader, TilesReaderParameters};
-use versatiles_core::{
+use crate::{
 	progress::get_progress_bar,
 	types::{
 		Blob, TileBBox, TileBBoxPyramid,
 		TileCompression::{self, *},
 		TileCoord3,
 		TileFormat::{self, *},
-		TileStream,
+		TileStream, TilesReader, TilesReaderParameters,
 	},
 	utils::TransformCoord,
 };
+use anyhow::{anyhow, ensure, Result};
+use async_trait::async_trait;
+use log::trace;
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
+use std::path::Path;
 
 /// A struct that provides functionality to read tile data from an MBTiles SQLite database.
 pub struct MBTilesReader {
@@ -439,7 +439,7 @@ pub mod tests {
 	// Test tile fetching
 	#[tokio::test]
 	async fn probe() -> Result<()> {
-		use versatiles_core::utils::PrettyPrint;
+		use crate::utils::PrettyPrint;
 
 		let mut reader = MBTilesReader::open_path(&PATH)?;
 

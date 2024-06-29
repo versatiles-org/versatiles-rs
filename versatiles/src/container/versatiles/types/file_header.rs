@@ -4,11 +4,11 @@
 //!
 //! The `FileHeader` struct contains metadata about the file, including its tile format, compression, zoom range, bounding box, and byte ranges for metadata and blocks.
 
-use anyhow::{bail, ensure, Result};
-use versatiles_core::{
+use crate::{
 	io::{DataReader, ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 	types::{Blob, ByteRange, TileCompression, TileFormat},
 };
+use anyhow::{bail, ensure, Result};
 
 const HEADER_LENGTH: u64 = 66;
 const BBOX_SCALE: i32 = 10000000;

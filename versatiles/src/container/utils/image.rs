@@ -1,3 +1,4 @@
+use crate::types::Blob;
 use anyhow::{bail, Result};
 use image::{
 	codecs::{
@@ -7,7 +8,6 @@ use image::{
 	},
 	load_from_memory_with_format, DynamicImage, ExtendedColorType, ImageEncoder, ImageFormat,
 };
-use versatiles_core::types::Blob;
 use webp::{Decoder, Encoder};
 
 const JPEG_QUALITY: u8 = 95;

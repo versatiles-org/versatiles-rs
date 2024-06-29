@@ -3,8 +3,8 @@
 //! # Example Usage
 //!
 //! ```rust
-//! use versatiles::container::{convert_tiles_container, MBTilesReader, TilesConverterParameters, TilesReader, TilesReaderParameters};
-//! use versatiles::types::{TileFormat, TileCompression, TileBBoxPyramid};
+//! use versatiles::container::{convert_tiles_container, MBTilesReader, TilesConverterParameters};
+//! use versatiles::types::{TileFormat, TileCompression, TileBBoxPyramid, TilesReader, TilesReaderParameters};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -34,18 +34,16 @@
 //! }
 //! ```
 
-use crate::utils::TileConverter;
-
-use super::write_to_filename;
-use anyhow::Result;
-use async_trait::async_trait;
-use versatiles_core::{
+use super::{utils::TileConverter, write_to_filename};
+use crate::{
 	types::{
 		Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TileStream,
 		TilesReader, TilesReaderParameters,
 	},
 	utils::TransformCoord,
 };
+use anyhow::Result;
+use async_trait::async_trait;
 
 /// Parameters for tile conversion.
 #[derive(Debug)]

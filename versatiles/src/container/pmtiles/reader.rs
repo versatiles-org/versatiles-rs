@@ -9,8 +9,8 @@
 //!
 //! ## Usage Example
 //! ```rust
-//! use versatiles::container::{PMTilesReader, TilesReader};
-//! use versatiles::types::TileCoord3;
+//! use versatiles::container::PMTilesReader;
+//! use versatiles::types::{TileCoord3, TilesReader};
 //! use std::path::Path;
 //!
 //! #[tokio::main]
@@ -41,17 +41,17 @@
 //! This module includes comprehensive tests to ensure the correct functionality of reading metadata, handling different file formats, and verifying tile data.
 
 use super::types::{tile_id_to_coord, EntriesV3, HeaderV3, TileId};
+use crate::{
+	io::{DataReader, DataReaderFile},
+	types::{
+		Blob, ByteRange, LimitedCache, TileBBoxPyramid, TileCompression, TileCoord3, TilesReader,
+		TilesReaderParameters,
+	},
+	utils::{decompress, PrettyPrint},
+};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use std::{fmt::Debug, path::Path, sync::Arc};
-use versatiles_core::{
-	io::{DataReader, DataReaderFile},
-	types::{Blob, ByteRange, LimitedCache, TileBBoxPyramid, TileCompression, TileCoord3},
-};
-use versatiles_core::{
-	types::{TilesReader, TilesReaderParameters},
-	utils::{decompress, PrettyPrint},
-};
 
 /// A struct that provides functionality to read tile data from a PMTiles container.
 #[derive(Debug)]
@@ -272,9 +272,9 @@ impl TilesReader for PMTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::assert_wildcard;
 	use lazy_static::lazy_static;
 	use std::{env::current_dir, path::PathBuf};
-	use versatiles_core::assert_wildcard;
 
 	lazy_static! {
 		static ref PATH: PathBuf = current_dir().unwrap().join("../testdata/berlin.pmtiles");

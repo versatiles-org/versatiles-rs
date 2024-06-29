@@ -9,9 +9,8 @@
 //! These mocks can be used to simulate tile reading operations in tests, allowing verification of code behavior under controlled conditions.
 //!
 //! ```rust
-//! use crate::container::mock::MockTilesReader;
-//! use crate::container::mock::MockTilesReaderProfile;
-//! use crate::container::TilesReader;
+//! use versatiles::container::{mock::{MockTilesReader, MockTilesReaderProfile}};
+//! use versatiles::types::TilesReader;
 //! use std::result::Result;
 //!
 //! #[tokio::test]
@@ -23,15 +22,15 @@
 //! }
 //! ```
 
-use anyhow::Result;
-use async_trait::async_trait;
-use versatiles_core::{
+use crate::{
 	types::{
 		Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TilesReader,
 		TilesReaderParameters,
 	},
 	utils::compress,
 };
+use anyhow::Result;
+use async_trait::async_trait;
 
 /// Enum representing different mock profiles for tile data.
 #[derive(Debug)]
@@ -135,9 +134,8 @@ impl std::fmt::Debug for MockTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::MockTilesWriter;
+	use crate::{container::MockTilesWriter, utils::decompress};
 	use anyhow::Result;
-	use versatiles_core::utils::decompress;
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {

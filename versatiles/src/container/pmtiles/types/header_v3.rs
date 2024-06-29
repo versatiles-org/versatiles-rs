@@ -1,10 +1,9 @@
 use super::{PMTilesCompression, PMTilesType};
-use anyhow::{ensure, Result};
-use versatiles_core::types::TilesReaderParameters;
-use versatiles_core::{
+use crate::{
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
-	types::{Blob, ByteRange},
+	types::{Blob, ByteRange, TilesReaderParameters},
 };
+use anyhow::{ensure, Result};
 
 #[derive(Debug, PartialEq)]
 pub struct HeaderV3 {

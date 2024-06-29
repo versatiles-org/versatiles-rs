@@ -54,6 +54,8 @@ mod tar;
 #[cfg(feature = "full")]
 pub use tar::*;
 
+mod utils;
+
 mod versatiles;
 pub use versatiles::*;
 

@@ -1,5 +1,5 @@
+use crate::types::Blob;
 use std::fmt::Debug;
-use versatiles_core::types::Blob;
 
 pub struct Directory {
 	pub root_bytes: Blob,

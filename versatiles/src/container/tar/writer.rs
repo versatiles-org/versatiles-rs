@@ -1,6 +1,9 @@
 //! Provides functionality for writing tile data to a tar archive.
 
-use crate::container::TilesWriter;
+use crate::{
+	container::TilesWriter, io::DataWriterTrait, progress::get_progress_bar, types::TilesReader,
+	utils::compress,
+};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use std::{
@@ -8,9 +11,6 @@ use std::{
 	path::{Path, PathBuf},
 };
 use tar::{Builder, Header};
-use versatiles_core::{
-	io::DataWriterTrait, progress::get_progress_bar, types::TilesReader, utils::compress,
-};
 
 /// A struct that provides functionality to write tile data to a tar archive.
 pub struct TarTilesWriter {}
@@ -99,11 +99,11 @@ impl TilesWriter for TarTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::{MockTilesReader, MockTilesWriter, TarTilesReader};
-	use assert_fs::NamedTempFile;
-	use versatiles_core::types::{
-		Blob, TileBBoxPyramid, TileCompression, TileFormat, TilesReaderParameters,
+	use crate::{
+		container::{MockTilesReader, MockTilesWriter, TarTilesReader},
+		types::{Blob, TileBBoxPyramid, TileCompression, TileFormat, TilesReaderParameters},
 	};
+	use assert_fs::NamedTempFile;
 
 	#[tokio::test]
 	async fn read_write() -> Result<()> {

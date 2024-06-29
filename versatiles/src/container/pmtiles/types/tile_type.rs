@@ -1,5 +1,5 @@
+use crate::types::TileFormat;
 use anyhow::{bail, Result};
-use versatiles_core::types::TileFormat;
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Copy, Debug, PartialEq)]

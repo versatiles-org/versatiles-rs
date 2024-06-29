@@ -1,5 +1,9 @@
 #[cfg(feature = "full")]
 use super::image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2img, webp2img};
+use crate::{
+	types::{Blob, TileCompression, TileFormat, TileStream},
+	utils::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip},
+};
 #[cfg(feature = "full")]
 use anyhow::bail;
 use anyhow::Result;
@@ -7,10 +11,6 @@ use itertools::Itertools;
 use std::{
 	fmt::{self, Debug},
 	sync::Arc,
-};
-use versatiles_core::{
-	types::{Blob, TileCompression, TileFormat, TileStream},
-	utils::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip},
 };
 
 #[derive(Clone, Debug)]
@@ -94,6 +94,7 @@ pub struct TileConverter {
 	pipeline: Arc<Vec<FnConv>>,
 }
 
+#[allow(dead_code)]
 impl TileConverter {
 	/// Create a new empty `DataConverter`
 	pub fn new_empty() -> TileConverter {
@@ -103,7 +104,6 @@ impl TileConverter {
 	}
 
 	/// Return `true` if the `DataConverter` has an empty pipeline
-	#[allow(dead_code)]
 	pub fn is_empty(&self) -> bool {
 		self.pipeline.is_empty()
 	}
@@ -256,8 +256,8 @@ impl Eq for TileConverter {}
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::types::TileFormat::*;
 	use anyhow::{ensure, Result};
-	use versatiles_core::types::TileFormat::*;
 
 	#[test]
 	fn new_empty() {
@@ -419,7 +419,7 @@ mod tests {
 	#[test]
 	#[cfg(feature = "full")]
 	fn convert_images() -> Result<()> {
-		use crate::utils::image::{compare_images, create_image_rgb};
+		use super::super::image::{compare_images, create_image_rgb};
 
 		let formats = [JPG, PNG, WEBP];
 
