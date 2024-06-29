@@ -1,21 +1,22 @@
-use crate::{
-	container::{
-		pipeline::utils::{
-			read_csv_file, OperationTrait, PipelineFactory, TransformOperationFactoryTrait,
-		},
-		utils::OperationFactoryTrait,
-		TilesReaderParameters,
-	},
-	geometry::{vector_tile::VectorTile, GeoProperties},
-	types::Blob,
-	utils::{decompress, vpl::VPLNode},
-};
 use anyhow::{anyhow, ensure, Context, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use log::warn;
 use std::{collections::HashMap, sync::Arc};
-use versatiles_core::types::{TileBBox, TileCompression, TileCoord3, TileFormat, TileStream};
+use versatiles_core::{
+	types::{
+		Blob, TileBBox, TileCompression, TileCoord3, TileFormat, TileStream, TilesReaderParameters,
+	},
+	utils::decompress,
+};
+use versatiles_geometry::{vector_tile::VectorTile, GeoProperties};
+
+use crate::{
+	traits::{OperationFactoryTrait, OperationTrait, TransformOperationFactoryTrait},
+	utils::read_csv_file,
+	vpl::VPLNode,
+	PipelineFactory,
+};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Updates properties of vector tile features using data from an external source (e.g., CSV file). Matches features based on an ID field.

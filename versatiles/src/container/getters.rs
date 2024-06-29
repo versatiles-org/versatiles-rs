@@ -25,17 +25,18 @@
 //! }
 //! ```
 
-use crate::{
-	container::{
-		DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, MBTilesWriter, PMTilesReader,
-		PMTilesWriter, PipelineReader, TarTilesReader, TarTilesWriter, TilesReader, TilesWriter,
-		VersaTilesReader, VersaTilesWriter,
-	},
-	io::{DataReader, DataReaderHttp},
+use crate::container::{
+	DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, MBTilesWriter, PMTilesReader,
+	PMTilesWriter, PipelineReader, TarTilesReader, TarTilesWriter, TilesWriter, VersaTilesReader,
+	VersaTilesWriter,
 };
 use anyhow::{bail, Context, Result};
 use reqwest::Url;
 use std::env;
+use versatiles_core::{
+	io::{DataReader, DataReaderHttp},
+	types::TilesReader,
+};
 
 /// Get a reader for a given filename or URL.
 pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReader>> {
@@ -110,13 +111,13 @@ fn get_extension(filename: &str) -> &str {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::{
-		container::{MockTilesReader, MockTilesWriter, TilesReaderParameters},
-		types::{TileBBoxPyramid, TileCompression, TileFormat},
-	};
+	use crate::container::{MockTilesReader, MockTilesWriter};
 	use anyhow::Result;
 	use assert_fs::{fixture::NamedTempFile, TempDir};
 	use std::time::Instant;
+	use versatiles_core::types::{
+		TileBBoxPyramid, TileCompression, TileFormat, TilesReaderParameters,
+	};
 
 	/// Create a test file with given parameters.
 	pub async fn make_test_file(

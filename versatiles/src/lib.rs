@@ -40,7 +40,6 @@
 
 pub mod container;
 pub mod utils;
-pub use versatiles_core::*;
 
 #[cfg(feature = "full")]
 pub use versatiles_geometry as geometry;

@@ -1,12 +1,15 @@
-use super::utils::{OperationTrait, PipelineFactory};
-use crate::{
-	container::{TilesReader, TilesReaderParameters},
-	io::DataReader,
-	types::{Blob, TileBBox, TileCompression, TileCoord3, TileStream},
-};
+use crate::container::get_reader;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
+use futures::future::BoxFuture;
 use std::path::Path;
+use versatiles_core::{
+	io::DataReader,
+	types::{
+		Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReader, TilesReaderParameters,
+	},
+};
+use versatiles_pipeline::{OperationTrait, PipelineFactory};
 
 /// The `PipelineReader` struct is responsible for managing the tile reading process,
 /// applying operations, and returning the composed tiles.
@@ -17,7 +20,7 @@ pub struct PipelineReader {
 }
 
 #[allow(dead_code)]
-impl PipelineReader {
+impl<'a> PipelineReader {
 	/// Opens a PipelineReader from a vpl file path.
 	///
 	/// # Arguments
@@ -58,15 +61,26 @@ impl PipelineReader {
 			.with_context(|| format!("failed parsing '{vpl}' as VPL"))
 	}
 
-	async fn from_str(vpl: &str, name: &str, dir: &Path) -> Result<PipelineReader> {
-		let factory = PipelineFactory::default(dir);
-		let operation: Box<dyn OperationTrait> = factory.operation_from_vpl(vpl).await?;
-		let parameters = operation.get_parameters().clone();
+	fn from_str(
+		vpl: &'a str,
+		name: &'a str,
+		dir: &'a Path,
+	) -> BoxFuture<'a, Result<PipelineReader>> {
+		Box::pin(async {
+			let callback = Box::new(
+				|filename: String| -> BoxFuture<Result<Box<dyn TilesReader>>> {
+					Box::pin(async move { get_reader(&filename).await })
+				},
+			);
+			let factory = PipelineFactory::default(dir, Some(callback));
+			let operation: Box<dyn OperationTrait> = factory.operation_from_vpl(vpl).await?;
+			let parameters = operation.get_parameters().clone();
 
-		Ok(PipelineReader {
-			name: name.to_string(),
-			operation,
-			parameters,
+			Ok(PipelineReader {
+				name: name.to_string(),
+				operation,
+				parameters,
+			})
 		})
 	}
 }

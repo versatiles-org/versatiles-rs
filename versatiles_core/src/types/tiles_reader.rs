@@ -1,54 +1,13 @@
-//! Module `reader` provides traits and implementations for reading tiles from various container formats.
-//!
-//! The `TilesReader` trait defines the necessary methods to be implemented by any tile reader.
-//! It includes methods for retrieving metadata, tile data, and streaming tiles within a bounding box.
-//!
-
-use crate::types::{
-	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TileStream,
+use crate::{
+	types::{Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters},
+	utils::PrettyPrint,
 };
-#[cfg(feature = "full")]
-use crate::{container::ProbeDepth, utils::pretty_print::PrettyPrint};
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::lock::Mutex;
 use std::{fmt::Debug, sync::Arc};
-use tokio::sync::Mutex;
 
-/// Parameters for configuring a `TilesReader`.
-#[derive(Debug, PartialEq, Clone)]
-pub struct TilesReaderParameters {
-	pub bbox_pyramid: TileBBoxPyramid,
-	pub tile_compression: TileCompression,
-	pub tile_format: TileFormat,
-}
-
-impl TilesReaderParameters {
-	/// Create a new `TilesReaderParameters`.
-	pub fn new(
-		tile_format: TileFormat,
-		tile_compression: TileCompression,
-		bbox_pyramid: TileBBoxPyramid,
-	) -> TilesReaderParameters {
-		TilesReaderParameters {
-			tile_format,
-			tile_compression,
-			bbox_pyramid,
-		}
-	}
-
-	#[cfg(test)]
-	#[allow(dead_code)]
-	pub fn new_full(
-		tile_format: TileFormat,
-		tile_compression: TileCompression,
-	) -> TilesReaderParameters {
-		TilesReaderParameters {
-			tile_format,
-			tile_compression,
-			bbox_pyramid: TileBBoxPyramid::new_full(31),
-		}
-	}
-}
+use super::ProbeDepth;
 
 /// Trait defining the behavior of a tile reader.
 #[async_trait]
@@ -89,7 +48,6 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 		})
 	}
 
-	#[cfg(feature = "full")]
 	/// probe container
 	async fn probe(&mut self, level: ProbeDepth) -> Result<()> {
 		use ProbeDepth::*;
@@ -131,7 +89,6 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
-	#[cfg(feature = "full")]
 	async fn probe_parameters(&mut self, print: &mut PrettyPrint) -> Result<()> {
 		let parameters = self.get_parameters();
 		let p = print.get_list("bbox_pyramid").await;
@@ -153,7 +110,6 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
-	#[cfg(feature = "full")]
 	/// deep probe container
 	async fn probe_container(&mut self, print: &PrettyPrint) -> Result<()> {
 		print
@@ -162,7 +118,6 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
-	#[cfg(feature = "full")]
 	/// deep probe container tiles
 	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
 		print
@@ -171,7 +126,6 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
-	#[cfg(feature = "full")]
 	/// deep probe container tile contents
 	async fn probe_tile_contents(&mut self, print: &PrettyPrint) -> Result<()> {
 		print
@@ -190,6 +144,8 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 
 #[cfg(test)]
 mod tests {
+	use crate::types::{TileBBoxPyramid, TileFormat};
+
 	use super::*;
 
 	#[derive(Debug)]
@@ -234,39 +190,6 @@ mod tests {
 		async fn get_tile_data(&mut self, _coord: &TileCoord3) -> Result<Option<Blob>> {
 			Ok(Some(Blob::from("test tile data")))
 		}
-	}
-
-	#[tokio::test]
-	#[cfg(feature = "full")]
-	async fn reader() -> Result<()> {
-		use crate::container::MockTilesWriter;
-
-		let mut reader = TestReader::new_dummy();
-
-		// Test getting name
-		assert_eq!(reader.get_name(), "dummy");
-
-		// Test getting tile compression and format
-		let parameters = reader.get_parameters();
-		assert_eq!(parameters.tile_compression, TileCompression::Gzip);
-		assert_eq!(parameters.tile_format, TileFormat::PBF);
-
-		// Test getting container name
-		assert_eq!(reader.get_container_name(), "test container name");
-
-		// Test getting metadata
-		assert_eq!(reader.get_meta()?.unwrap().to_string(), "test metadata");
-
-		// Test getting tile data
-		let coord = TileCoord3::new(0, 0, 0)?;
-		assert_eq!(
-			reader.get_tile_data(&coord).await?.unwrap().to_string(),
-			"test tile data"
-		);
-
-		MockTilesWriter::write(&mut reader).await?;
-
-		Ok(())
 	}
 
 	#[tokio::test]

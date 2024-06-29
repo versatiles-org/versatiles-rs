@@ -27,17 +27,17 @@
 //! ```
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
-use crate::{
-	container::{TilesReader, TilesWriter},
-	io::DataWriterTrait,
-	progress::{get_progress_bar, ProgressTrait},
-	types::{Blob, ByteRange, TileStream},
-	utils::compress,
-};
+use crate::container::TilesWriter;
 use anyhow::Result;
 use async_trait::async_trait;
 use log::{debug, trace};
 use std::collections::HashMap;
+use versatiles_core::{
+	io::DataWriterTrait,
+	progress::{get_progress_bar, ProgressTrait},
+	types::{Blob, ByteRange, TileStream, TilesReader},
+	utils::compress,
+};
 
 /// A struct for writing tiles to a VersaTiles container.
 pub struct VersaTilesWriter {}

@@ -305,7 +305,7 @@ mod tests {
 
 	#[test]
 	fn test_parse_nodes4() {
-		pub const INPUT: &str = include_str!("../../../../testdata/berlin.vpl");
+		pub const INPUT: &str = include_str!("../../../testdata/berlin.vpl");
 
 		let expected = VPLPipeline::from(vec![
 			VPLNode::from(("get_tiles", ("filename", "berlin.mbtiles"))),

@@ -1,5 +1,5 @@
-use crate::types::ByteRange;
 use std::fmt::Debug;
+use versatiles_core::types::ByteRange;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct EntryV3 {

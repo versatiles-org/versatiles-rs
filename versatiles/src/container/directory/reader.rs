@@ -44,11 +44,6 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of opening paths, reading metadata, handling different file formats, and edge cases.
 
-use crate::{
-	container::{TilesReader, TilesReaderParameters},
-	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
-	utils::decompress,
-};
 use anyhow::{bail, ensure, Context, Result};
 use async_trait::async_trait;
 use itertools::Itertools;
@@ -57,6 +52,13 @@ use std::{
 	fmt::Debug,
 	fs,
 	path::{Path, PathBuf},
+};
+use versatiles_core::{
+	types::{
+		Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TilesReader,
+		TilesReaderParameters,
+	},
+	utils::decompress,
 };
 
 /// A reader for tiles stored in a directory structure.
@@ -251,12 +253,12 @@ impl Debug for DirectoryTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{assert_wildcard, utils::compress};
 	use assert_fs::{
 		fixture::{FileWriteStr, PathChild},
 		TempDir,
 	};
 	use std::fs::{self};
+	use versatiles_core::{assert_wildcard, utils::compress};
 
 	#[tokio::test]
 	async fn tile_reader_new() -> Result<()> {

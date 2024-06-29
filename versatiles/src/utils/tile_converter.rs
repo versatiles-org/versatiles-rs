@@ -1,9 +1,5 @@
 #[cfg(feature = "full")]
 use super::image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2img, webp2img};
-use crate::{
-	types::{Blob, TileCompression, TileFormat, TileStream},
-	utils::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip},
-};
 #[cfg(feature = "full")]
 use anyhow::bail;
 use anyhow::Result;
@@ -11,6 +7,10 @@ use itertools::Itertools;
 use std::{
 	fmt::{self, Debug},
 	sync::Arc,
+};
+use versatiles_core::{
+	types::{Blob, TileCompression, TileFormat, TileStream},
+	utils::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip},
 };
 
 #[derive(Clone, Debug)]
@@ -256,8 +256,8 @@ impl Eq for TileConverter {}
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::TileFormat::*;
 	use anyhow::{ensure, Result};
+	use versatiles_core::types::TileFormat::*;
 
 	#[test]
 	fn new_empty() {

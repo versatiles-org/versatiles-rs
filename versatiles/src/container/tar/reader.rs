@@ -1,10 +1,5 @@
 //! Provides functionality for reading tile data from a tar archive.
 
-use crate::{
-	container::{TilesReader, TilesReaderParameters},
-	types::{Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat},
-	utils::decompress,
-};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use std::{
@@ -15,6 +10,13 @@ use std::{
 	path::Path,
 };
 use tar::{Archive, EntryType};
+use versatiles_core::{
+	types::{
+		Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TilesReader,
+		TilesReaderParameters,
+	},
+	utils::decompress,
+};
 
 /// A struct that provides functionality to read tile data from a tar archive.
 pub struct TarTilesReader {
@@ -207,10 +209,8 @@ impl Debug for TarTilesReader {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::{
-		container::{make_test_file, MockTilesWriter, MOCK_BYTES_PBF},
-		utils::decompress_gzip,
-	};
+	use crate::container::{make_test_file, MockTilesWriter, MOCK_BYTES_PBF};
+	use versatiles_core::utils::{decompress_gzip, PrettyPrint};
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
@@ -264,8 +264,6 @@ pub mod tests {
 	// Test tile fetching
 	#[tokio::test]
 	async fn probe() -> Result<()> {
-		use crate::utils::pretty_print::PrettyPrint;
-
 		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "tar").await?;
 
 		let mut reader = TarTilesReader::open_path(&temp_file)?;

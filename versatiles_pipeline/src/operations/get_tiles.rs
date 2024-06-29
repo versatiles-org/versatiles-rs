@@ -1,18 +1,16 @@
-use crate::{
-	container::{
-		get_reader,
-		pipeline::utils::{OperationTrait, PipelineFactory, ReadOperationFactoryTrait},
-		utils::OperationFactoryTrait,
-		TilesReader, TilesReaderParameters,
-	},
-	types::TileStream,
-	utils::vpl::VPLNode,
-};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, lock::Mutex};
 use std::{fmt::Debug, sync::Arc};
-use versatiles_core::types::{Blob, TileBBox, TileCoord3};
+use versatiles_core::types::{
+	Blob, TileBBox, TileCoord3, TileStream, TilesReader, TilesReaderParameters,
+};
+
+use crate::{
+	traits::{OperationFactoryTrait, OperationTrait, ReadOperationFactoryTrait},
+	vpl::VPLNode,
+	PipelineFactory,
+};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a tile source, such as a VersaTiles container.
@@ -38,7 +36,9 @@ impl<'a> Operation {
 	{
 		Box::pin(async move {
 			let args = Args::from_vpl_node(&vpl_node)?;
-			let reader = get_reader(&factory.resolve_filename(&args.filename)).await?;
+			let reader = factory
+				.get_reader(&factory.resolve_filename(&args.filename))
+				.await?;
 			let parameters = reader.get_parameters().clone();
 			let meta = reader.get_meta()?;
 

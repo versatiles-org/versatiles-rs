@@ -1,6 +1,6 @@
-use crate::container::utils::PipelineFactory;
 use anyhow::Result;
 use std::path::Path;
+use versatiles_pipeline::PipelineFactory;
 
 #[derive(clap::Args, Debug)]
 #[command(
@@ -24,7 +24,7 @@ enum Topic {
 
 pub fn run(command: &Subcommand) -> Result<()> {
 	let md = match command.topic {
-		Topic::Pipeline => PipelineFactory::default(Path::new("")).get_docs(),
+		Topic::Pipeline => PipelineFactory::default(Path::new(""), None).get_docs(),
 	};
 
 	if command.raw {

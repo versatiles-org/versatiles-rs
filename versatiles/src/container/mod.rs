@@ -54,12 +54,6 @@ mod tar;
 #[cfg(feature = "full")]
 pub use tar::*;
 
-mod types;
-pub use types::*;
-
-mod reader;
-pub use reader::*;
-
 mod versatiles;
 pub use versatiles::*;
 

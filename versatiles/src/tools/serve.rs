@@ -1,12 +1,10 @@
 use super::server::{TileServer, Url};
-use crate::{
-	container::{get_reader, TilesConvertReader, TilesConverterParameters, TilesReader},
-	types::TileCompression,
-};
+use crate::container::{get_reader, TilesConvertReader, TilesConverterParameters};
 use anyhow::Result;
 use regex::Regex;
 use std::path::Path;
 use tokio::time::{sleep, Duration};
+use versatiles_core::types::{TileCompression, TilesReader};
 
 #[derive(clap::Args, Debug)]
 #[command(

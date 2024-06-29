@@ -44,22 +44,21 @@
 //! ```
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
-#[cfg(feature = "full")]
-use crate::utils::pretty_print::PrettyPrint;
-use crate::{
-	container::{TilesReader, TilesReaderParameters},
-	io::{DataReader, DataReaderFile},
-	types::{
-		Blob, ByteRange, LimitedCache, TileBBox, TileCompression, TileCoord2, TileCoord3, TileStream,
-	},
-	utils::TileConverter,
-};
+use crate::utils::TileConverter;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::stream::StreamExt;
 use log::trace;
 use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
 use tokio::sync::Mutex;
+use versatiles_core::{
+	io::{DataReader, DataReaderFile},
+	types::{
+		Blob, ByteRange, LimitedCache, TileBBox, TileCompression, TileCoord2, TileCoord3, TileStream,
+		TilesReader, TilesReaderParameters,
+	},
+	utils::PrettyPrint,
+};
 
 /// `VersaTilesReader` is responsible for reading tile data from a `versatiles` container.
 pub struct VersaTilesReader {
@@ -417,7 +416,6 @@ impl TilesReader for VersaTilesReader {
 	}
 
 	// deep probe of container meta
-	#[cfg(feature = "full")]
 	async fn probe_container(&mut self, print: &PrettyPrint) -> Result<()> {
 		print
 			.add_key_value("meta size", &self.meta.as_ref().map_or(0, |b| b.len()))
@@ -437,9 +435,8 @@ impl TilesReader for VersaTilesReader {
 	}
 
 	// deep probe of container tiles
-	#[cfg(feature = "full")]
 	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
-		use crate::progress::get_progress_bar;
+		use versatiles_core::progress::get_progress_bar;
 
 		#[derive(Debug)]
 		#[allow(dead_code)]
@@ -523,8 +520,10 @@ impl PartialEq for VersaTilesReader {
 #[cfg(all(test, feature = "full"))]
 mod tests {
 	use super::*;
-	use crate::{
-		container::{make_test_file, MockTilesReader, TilesWriter, VersaTilesWriter, MOCK_BYTES_PBF},
+	use crate::container::{
+		make_test_file, MockTilesReader, TilesWriter, VersaTilesWriter, MOCK_BYTES_PBF,
+	};
+	use versatiles_core::{
 		io::DataWriterBlob,
 		types::{TileBBoxPyramid, TileFormat},
 		utils::decompress_gzip,
@@ -587,8 +586,6 @@ mod tests {
 
 	#[tokio::test]
 	async fn probe() -> Result<()> {
-		use crate::utils::pretty_print::PrettyPrint;
-
 		let temp_file =
 			make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
 

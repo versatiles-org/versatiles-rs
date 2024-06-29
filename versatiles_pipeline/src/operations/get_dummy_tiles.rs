@@ -1,17 +1,14 @@
 #![allow(dead_code, unused_variables, unreachable_code)]
 
 use crate::{
-	container::{
-		utils::{OperationFactoryTrait, OperationTrait, PipelineFactory, ReadOperationFactoryTrait},
-		TilesReaderParameters,
-	},
-	types::TileStream,
-	utils::vpl::VPLNode,
+	traits::{OperationFactoryTrait, OperationTrait, ReadOperationFactoryTrait},
+	vpl::VPLNode,
+	PipelineFactory,
 };
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
-use versatiles_core::types::{Blob, TileBBox, TileCoord3};
+use versatiles_core::types::{Blob, TileBBox, TileCoord3, TileStream, TilesReaderParameters};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Generates mocked tiles.

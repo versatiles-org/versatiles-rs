@@ -9,6 +9,9 @@ pub use byte_range::*;
 mod limited_cache;
 pub use limited_cache::*;
 
+mod probe_depth;
+pub use probe_depth::*;
+
 mod tile_bbox;
 pub use tile_bbox::*;
 
@@ -26,3 +29,9 @@ pub use tile_format::*;
 
 mod tile_stream;
 pub use tile_stream::*;
+
+mod tiles_reader_parameters;
+pub use tiles_reader_parameters::*;
+
+mod tiles_reader;
+pub use tiles_reader::*;

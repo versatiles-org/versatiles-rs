@@ -34,8 +34,6 @@ byteorder = { workspace = true, features = ["std"] }
 bytes.workspace = true
 clap = { workspace = true, optional = true }
 clap-verbosity-flag = { workspace = true, optional = true }
-colored = { version = "2.1.0", default-features = false, optional = true }
-csv = { version = "1.3.0", default-features = false, optional = true }
 enumset.workspace = true
 env_logger = { version = "0.11.3", default-features = false, optional = true }
 flate2 = { version = "1.0.30", default-features = false, features = ["default"] }
@@ -48,7 +46,6 @@ image = { version = "0.25.1", default-features = false, optional = true, feature
 itertools = { workspace = true, features = ["use_alloc"] }
 lazy_static = { workspace = true, optional = true }
 log.workspace = true
-nom = { version = "7.1.3", optional = true }
 mime_guess = { version = "2.0.4", default-features = false, optional = true }
 r2d2 = { version = "0.8.10", default-features = false, optional = true }
 r2d2_sqlite = { version = "0.24.0", default-features = false, optional = true, features = [
@@ -64,6 +61,7 @@ webp = { version = "0.3.0", default-features = false, optional = true, features 
 versatiles_core = { workspace = true }
 versatiles_derive = { workspace = true, optional = true }
 versatiles_geometry = { workspace = true, optional = true }
+versatiles_pipeline = { workspace = true, optional = true }
 
 [dev-dependencies]
 assert_fs.workspace = true
@@ -87,17 +85,15 @@ cli = [
 	"full",
 ]
 full = [
-	"dep:colored",
-	"dep:csv",
 	"dep:hyper",
 	"dep:image",
 	"dep:lazy_static",
-	"dep:nom",
 	"dep:r2d2_sqlite",
 	"dep:r2d2",
 	"dep:tar",
 	"dep:versatiles_derive",
 	"dep:versatiles_geometry",
+	"dep:versatiles_pipeline",
 	"dep:webp",
 	"http",
 ]

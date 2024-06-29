@@ -1,5 +1,6 @@
-use crate::container::{get_reader, ProbeDepth};
+use crate::container::get_reader;
 use anyhow::Result;
+use versatiles_core::types::ProbeDepth;
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]

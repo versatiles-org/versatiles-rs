@@ -40,8 +40,14 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of reading metadata, handling different file formats, and verifying tile data.
 
-use crate::{
-	container::{TilesReader, TilesReaderParameters},
+use anyhow::{anyhow, ensure, Result};
+use async_trait::async_trait;
+use log::trace;
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
+use std::path::Path;
+use versatiles_core::types::{TilesReader, TilesReaderParameters};
+use versatiles_core::{
 	progress::get_progress_bar,
 	types::{
 		Blob, TileBBox, TileBBoxPyramid,
@@ -52,12 +58,6 @@ use crate::{
 	},
 	utils::TransformCoord,
 };
-use anyhow::{anyhow, ensure, Result};
-use async_trait::async_trait;
-use log::trace;
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
-use std::path::Path;
 
 /// A struct that provides functionality to read tile data from an MBTiles SQLite database.
 pub struct MBTilesReader {
@@ -397,7 +397,7 @@ struct RecordMetadata {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::container::{MockTilesWriter, TilesReader};
+	use crate::container::MockTilesWriter;
 	use lazy_static::lazy_static;
 	use std::{env, path::PathBuf};
 
@@ -439,7 +439,7 @@ pub mod tests {
 	// Test tile fetching
 	#[tokio::test]
 	async fn probe() -> Result<()> {
-		use crate::utils::pretty_print::PrettyPrint;
+		use versatiles_core::utils::PrettyPrint;
 
 		let mut reader = MBTilesReader::open_path(&PATH)?;
 

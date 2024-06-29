@@ -38,18 +38,18 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying directory structure.
 
-use crate::{
-	container::{TilesReader, TilesWriter},
-	io::DataWriterTrait,
-	progress::get_progress_bar,
-	types::Blob,
-	utils::compress,
-};
+use crate::container::TilesWriter;
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
 use std::{
 	fs,
 	path::{Path, PathBuf},
+};
+use versatiles_core::{
+	io::DataWriterTrait,
+	progress::get_progress_bar,
+	types::{Blob, TilesReader},
+	utils::compress,
 };
 
 /// A struct that provides functionality to write tile data to a directory structure.
@@ -151,9 +151,9 @@ impl TilesWriter for DirectoryTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{
-		container::{MockTilesReader, TilesReaderParameters, MOCK_BYTES_PBF},
-		types::{TileBBoxPyramid, TileCompression, TileFormat},
+	use crate::container::{MockTilesReader, MOCK_BYTES_PBF};
+	use versatiles_core::{
+		types::{TileBBoxPyramid, TileCompression, TileFormat, TilesReaderParameters},
 		utils::decompress_gzip,
 	};
 

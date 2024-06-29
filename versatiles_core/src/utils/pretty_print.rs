@@ -6,31 +6,33 @@ use tokio::sync::Mutex;
 
 struct PrettyPrinter {
 	indention: String,
-	#[cfg(not(test))]
+	#[cfg(not(feature = "test"))]
 	output: Arc<Mutex<Box<dyn Write + Send>>>,
-	#[cfg(test)]
+	#[cfg(feature = "test")]
 	output: Arc<Mutex<Vec<u8>>>,
 }
 
 impl PrettyPrinter {
 	pub fn new() -> Self {
-		#[cfg(not(test))]
+		#[cfg(not(feature = "test"))]
 		use std::io::stderr;
 
 		Self {
 			indention: String::from("   "),
 
-			#[cfg(not(test))]
+			#[cfg(not(feature = "test"))]
 			output: Arc::new(Mutex::new(Box::new(stderr()))),
 
-			#[cfg(test)]
+			#[cfg(feature = "test")]
 			output: Arc::new(Mutex::new(Vec::new())),
 		}
 	}
+
 	async fn write(&self, text: String) {
 		self.output.lock().await.write_all(text.as_bytes()).unwrap();
 	}
-	#[cfg(test)]
+
+	#[cfg(feature = "test")]
 	async fn as_string(&self) -> String {
 		use lazy_static::lazy_static;
 		use regex::{Regex, RegexBuilder};
@@ -38,6 +40,7 @@ impl PrettyPrinter {
 		lazy_static! {
 			static ref RE_COLORS: Regex = RegexBuilder::new("\u{001b}\\[[0-9;]*m").build().unwrap();
 		}
+
 		let text: String = String::from_utf8(self.output.lock().await.to_vec()).unwrap();
 		RE_COLORS.replace_all(&text, "").to_string()
 	}
@@ -97,7 +100,7 @@ impl PrettyPrint {
 			.await;
 	}
 
-	#[cfg(test)]
+	#[cfg(feature = "test")]
 	pub async fn as_string(&self) -> String {
 		self.printer.as_string().await
 	}

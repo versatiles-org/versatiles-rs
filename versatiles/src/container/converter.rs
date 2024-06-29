@@ -34,14 +34,18 @@
 //! }
 //! ```
 
+use crate::utils::TileConverter;
+
 use super::write_to_filename;
-use crate::{
-	container::{TilesReader, TilesReaderParameters},
-	types::{Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TileStream},
-	utils::{TileConverter, TransformCoord},
-};
 use anyhow::Result;
 use async_trait::async_trait;
+use versatiles_core::{
+	types::{
+		Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TileStream,
+		TilesReader, TilesReaderParameters,
+	},
+	utils::TransformCoord,
+};
 
 /// Parameters for tile conversion.
 #[derive(Debug)]

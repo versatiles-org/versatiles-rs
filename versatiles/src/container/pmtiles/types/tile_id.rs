@@ -1,5 +1,5 @@
-use crate::types::{TileBBox, TileCoord3};
 use anyhow::{bail, Result};
+use versatiles_core::types::{TileBBox, TileCoord3};
 
 pub trait TileId {
 	fn get_tile_id(&self) -> Result<u64>;

@@ -22,17 +22,17 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying the database structure.
 
-use crate::{
-	container::{TilesReader, TilesWriter},
-	io::DataWriterTrait,
-	progress::get_progress_bar,
-	types::{Blob, TileCompression, TileCoord3, TileFormat},
-};
+use crate::container::TilesWriter;
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use r2d2::Pool;
 use r2d2_sqlite::{rusqlite::params, SqliteConnectionManager};
 use std::path::Path;
+use versatiles_core::{
+	io::DataWriterTrait,
+	progress::get_progress_bar,
+	types::{Blob, TileCompression, TileCoord3, TileFormat, TilesReader},
+};
 
 /// A writer for creating and populating MBTiles databases.
 pub struct MBTilesWriter {
@@ -162,14 +162,12 @@ impl TilesWriter for MBTilesWriter {
 
 #[cfg(test)]
 mod tests {
-	use assert_fs::NamedTempFile;
-
-	use crate::{
-		container::{MBTilesReader, MockTilesReader, MockTilesWriter, TilesReaderParameters},
-		types::{TileBBoxPyramid, TileCompression, TileFormat},
-	};
-
 	use super::*;
+	use crate::container::{MBTilesReader, MockTilesReader, MockTilesWriter};
+	use assert_fs::NamedTempFile;
+	use versatiles_core::types::{
+		TileBBoxPyramid, TileCompression, TileFormat, TilesReaderParameters,
+	};
 
 	#[tokio::test]
 	async fn read_write() -> Result<()> {

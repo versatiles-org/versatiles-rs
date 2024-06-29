@@ -1,32 +1,38 @@
-use super::{
-	super::operations as op, OperationTrait, ReadOperationFactoryTrait,
-	TransformOperationFactoryTrait,
+use crate::{
+	operations as op,
+	traits::{OperationTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
+	vpl::{parse_vpl, VPLNode, VPLPipeline},
 };
-use crate::utils::vpl::{parse_vpl, VPLNode, VPLPipeline};
 use anyhow::{anyhow, Result};
+use futures::future::BoxFuture;
 use itertools::Itertools;
 use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
 };
+use versatiles_core::types::TilesReader;
+
+type Callback = Option<Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesReader>>>>>;
 
 pub struct PipelineFactory {
 	read_ops: HashMap<String, Box<dyn ReadOperationFactoryTrait>>,
 	tran_ops: HashMap<String, Box<dyn TransformOperationFactoryTrait>>,
 	dir: PathBuf,
+	create_reader: Callback,
 }
 
 impl PipelineFactory {
-	pub fn new(dir: &Path) -> Self {
+	pub fn new(dir: &Path, create_reader: Callback) -> Self {
 		PipelineFactory {
 			read_ops: HashMap::new(),
 			tran_ops: HashMap::new(),
 			dir: dir.to_path_buf(),
+			create_reader,
 		}
 	}
 
-	pub fn default(dir: &Path) -> Self {
-		let mut factory = PipelineFactory::new(dir);
+	pub fn default(dir: &Path, create_reader: Callback) -> Self {
+		let mut factory = PipelineFactory::new(dir, create_reader);
 
 		factory.add_read_factory(Box::new(op::get_dummy_tiles::Factory {}));
 		factory.add_read_factory(Box::new(op::get_tiles::Factory {}));
@@ -47,6 +53,11 @@ impl PipelineFactory {
 		self
 			.tran_ops
 			.insert(factory.get_tag_name().to_string(), factory);
+	}
+
+	pub async fn get_reader(&self, filename: &str) -> Result<Box<dyn TilesReader>> {
+		(self.create_reader.as_ref().unwrap())(self.dir.join(filename).to_string_lossy().to_string())
+			.await
 	}
 
 	pub async fn operation_from_vpl(&self, text: &str) -> Result<Box<dyn OperationTrait>> {
@@ -117,3 +128,6 @@ impl PipelineFactory {
 		.join("\n")
 	}
 }
+
+unsafe impl Sync for PipelineFactory {}
+unsafe impl Send for PipelineFactory {}
