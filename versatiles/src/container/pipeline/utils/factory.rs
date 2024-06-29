@@ -28,9 +28,9 @@ impl PipelineFactory {
 	pub fn default(dir: &Path) -> Self {
 		let mut factory = PipelineFactory::new(dir);
 
-		factory.add_read_factory(Box::new(op::dummy_tiles::Factory {}));
-		factory.add_read_factory(Box::new(op::read::Factory {}));
-		factory.add_read_factory(Box::new(op::overlay_tiles::Factory {}));
+		factory.add_read_factory(Box::new(op::get_dummy_tiles::Factory {}));
+		factory.add_read_factory(Box::new(op::get_tiles::Factory {}));
+		factory.add_read_factory(Box::new(op::get_overlayed::Factory {}));
 
 		factory.add_tran_factory(Box::new(op::vectortiles_update_properties::Factory {}));
 
@@ -104,14 +104,14 @@ impl PipelineFactory {
 				.read_ops
 				.values()
 				.sorted_by_cached_key(|f| f.get_tag_name().to_string())
-				.map(|f| format!("## {}\n{}\n\n", f.get_tag_name(), f.get_docs()))
+				.map(|f| format!("\n## {}\n{}\n", f.get_tag_name(), f.get_docs()))
 				.join(""),
 			String::from("---\n# TRANSFORM operations"),
 			self
 				.tran_ops
 				.values()
 				.sorted_by_cached_key(|f| f.get_tag_name().to_string())
-				.map(|f| format!("## {}\n{}\n\n", f.get_tag_name(), f.get_docs()))
+				.map(|f| format!("\n## {}\n{}\n", f.get_tag_name(), f.get_docs()))
 				.join(""),
 		]
 		.join("\n")

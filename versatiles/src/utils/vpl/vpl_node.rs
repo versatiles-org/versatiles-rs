@@ -6,7 +6,7 @@ use std::{collections::HashMap, fmt::Debug, str::FromStr};
 pub struct VPLNode {
 	pub name: String,
 	pub properties: HashMap<String, Vec<String>>,
-	pub children: Vec<VPLPipeline>,
+	pub sources: Vec<VPLPipeline>,
 }
 
 #[allow(dead_code)]
@@ -74,7 +74,7 @@ impl From<&str> for VPLNode {
 		VPLNode {
 			name: name.to_string(),
 			properties: HashMap::new(),
-			children: vec![],
+			sources: vec![],
 		}
 	}
 }
@@ -91,7 +91,7 @@ impl From<(&str, (&str, &str))> for VPLNode {
 		VPLNode {
 			name: input.0.to_string(),
 			properties: make_properties(vec![input.1]),
-			children: vec![],
+			sources: vec![],
 		}
 	}
 }
@@ -101,7 +101,7 @@ impl From<(&str, Vec<(&str, &str)>)> for VPLNode {
 		VPLNode {
 			name: input.0.to_string(),
 			properties: make_properties(input.1),
-			children: vec![],
+			sources: vec![],
 		}
 	}
 }
@@ -111,7 +111,7 @@ impl From<(&str, Vec<(&str, &str)>, VPLPipeline)> for VPLNode {
 		VPLNode {
 			name: input.0.to_string(),
 			properties: make_properties(input.1),
-			children: vec![input.2],
+			sources: vec![input.2],
 		}
 	}
 }
@@ -121,7 +121,7 @@ impl From<(&str, Vec<(&str, &str)>, Vec<VPLPipeline>)> for VPLNode {
 		VPLNode {
 			name: input.0.to_string(),
 			properties: make_properties(input.1),
-			children: input.2,
+			sources: input.2,
 		}
 	}
 }
@@ -142,7 +142,7 @@ mod tests {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_properties(&[("key1", "value1"), ("key2", "value2")]),
-			children: vec![],
+			sources: vec![],
 		};
 		assert_eq!(
 			node.get_property_vec("key1", 0)?,

@@ -22,7 +22,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 
 	let mut parser_fields: Vec<TokenStream> = Vec::new();
 	let mut doc_fields: Vec<String> = Vec::new();
-	let mut doc_children: Option<String> = None;
+	let mut doc_sources: Option<String> = None;
 
 	for field in fields {
 		let field_name = &field.ident;
@@ -44,15 +44,15 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 			comment = format!(" - {comment}");
 		}
 
-		if field_str == "children" {
-			if doc_children.is_some() {
-				panic!("'children' are already defined: {doc_children:?}")
+		if field_str == "sources" {
+			if doc_sources.is_some() {
+				panic!("'sources' are already defined: {doc_sources:?}")
 			}
 			if field_type_str != "Vec < VPLPipeline >" {
-				panic!("type of 'children' must be 'Vec<VPLPipeline>', but is '{field_type_str}'")
+				panic!("type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'")
 			}
-			doc_children = Some(format!("### Children:\n{comment}\n"));
-			parser_fields.push(quote! { children: node.children.clone() });
+			doc_sources = Some(format!("### Sources:\n{comment}\n"));
+			parser_fields.push(quote! { sources: node.sources.clone() });
 		} else {
 			let (doc_field, parser_field) = match field_type_str.as_str() {
 				"String" => (
@@ -86,7 +86,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 		}
 	}
 
-	let doc_children = doc_children.unwrap_or_default();
+	let doc_children = doc_sources.unwrap_or_default();
 
 	let doc_fields = if doc_fields.is_empty() {
 		String::from("")

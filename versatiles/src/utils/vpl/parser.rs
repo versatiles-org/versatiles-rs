@@ -158,7 +158,7 @@ fn parse_node<'a>(input: &'a str) -> IResult<&str, VPLNode> {
 			VPLNode {
 				name,
 				properties,
-				children,
+				sources: children,
 			},
 		))
 	})(input)

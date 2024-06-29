@@ -16,10 +16,10 @@ use futures::future::{join_all, BoxFuture};
 use versatiles_core::types::TileCompression;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Overlays multiple tile sources. The tile of the first source that returns a tile is used.
+/// Overlays multiple tile sources, using the tile from the first source that provides it.
 struct Args {
-	/// All tile source must have the same tile format.
-	children: Vec<VPLPipeline>,
+	/// All tile sources must have the same format.
+	sources: Vec<VPLPipeline>,
 }
 
 #[derive(Debug)]
@@ -38,7 +38,7 @@ impl<'a> Operation {
 	{
 		Box::pin(async move {
 			let args = Args::from_vpl_node(&vpl_node)?;
-			let sources = join_all(args.children.into_iter().map(|c| factory.build_pipeline(c)))
+			let sources = join_all(args.sources.into_iter().map(|c| factory.build_pipeline(c)))
 				.await
 				.into_iter()
 				.collect::<Result<Vec<_>>>()?;
@@ -133,7 +133,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"overlay_tiles"
+		"get_overlayed"
 	}
 }
 

@@ -14,16 +14,23 @@ use std::fmt::Debug;
 use versatiles_core::types::{Blob, TileBBox, TileCoord3};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// generates mocked tiles
+/// Generates mocked tiles.
 struct Args {
-	/// All tile source must have the same tile format.
+	/// Specifies the tile format.
 	format: Option<String>,
+	/// Compression type.
 	compression: Option<String>,
+	/// Minimum zoom level.
 	min_zoom: Option<u8>,
+	/// Maximum zoom level.
 	max_zoom: Option<u8>,
+	/// Minimum latitude.
 	min_lat: Option<f32>,
+	/// Maximum latitude.
 	max_lat: Option<f32>,
+	/// Minimum longitude.
 	min_lng: Option<f32>,
+	/// Maximum longitude.
 	max_lng: Option<f32>,
 }
 
@@ -76,7 +83,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"dummy_tiles"
+		"get_dummy_tiles"
 	}
 }
 

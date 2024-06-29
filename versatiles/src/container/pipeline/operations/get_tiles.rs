@@ -17,7 +17,7 @@ use versatiles_core::types::{Blob, TileBBox, TileCoord3};
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a tile source, such as a VersaTiles container.
 struct Args {
-	/// The filename of the tile container, e.g., "world.versatiles".
+	/// The filename of the tile container, e.g., `"world.versatiles"`.
 	filename: String,
 }
 
@@ -94,7 +94,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"read"
+		"get_tiles"
 	}
 }
 

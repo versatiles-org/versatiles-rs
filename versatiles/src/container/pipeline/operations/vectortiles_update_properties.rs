@@ -18,22 +18,21 @@ use std::{collections::HashMap, sync::Arc};
 use versatiles_core::types::{TileBBox, TileCompression, TileCoord3, TileFormat, TileStream};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// This operation uses a data source (like a CSV file).
-/// For each feature in the vector tiles, it uses the id (id_field_tiles) to fetch the correct row in the data source (using id_field_data) and uses this row to update the properties of the vector tile feature.
+/// Updates properties of vector tile features using data from an external source (e.g., CSV file). Matches features based on an ID field.
 struct Args {
-	/// Path of the data source, e.g., data.csv
+	/// Path to the data source file, e.g., `data.csv`.
 	data_source_path: String,
-	/// Field name of the id in the vector tiles
+	/// ID field name in the vector tiles.
 	id_field_tiles: String,
-	/// Field name of the id in the data source
+	/// ID field name in the data source.
 	id_field_data: String,
-	/// Name of the layer in which properties should be replaced. If not set, properties in all layers will be replaced.
+	/// Name of the layer to update. If unspecified, all layers will be updated.
 	layer_name: Option<String>,
-	/// By default, the old properties in the tiles are updated with the new ones. Set "replace_properties" if the properties should be deleted first.
+	/// If set, old properties will be deleted before new ones are added.
 	replace_properties: bool,
-	/// Should all features be deleted that have no properties?
+	/// If set, features with no properties will be removed.
 	remove_empty_properties: bool,
-	/// By default, only the new values without the id are added. Set "include_id" to include the id field.
+	/// If set, includes the ID field in the updated properties.
 	include_id: bool,
 }
 
