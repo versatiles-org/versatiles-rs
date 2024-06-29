@@ -285,14 +285,17 @@ mod tests {
 
 	#[test]
 	fn test_parse_nodes3() {
-		let input = "node1 key1=value1 [ child1 key2=value2 | child2 key3=\"value3\" ] | node2";
+		let input = "node1 key1=value1 [ child1 key2=value2 | child2 key3=\"value3\", child3 key4=value4 ] | node2";
 		let expected = VPLPipeline::from(vec![
 			VPLNode::from((
 				"node1",
 				vec![("key1", "value1")],
 				vec![
-					VPLPipeline::from(VPLNode::from(("child1", ("key2", "value2")))),
-					VPLPipeline::from(VPLNode::from(("child2", ("key3", "value3")))),
+					VPLPipeline::from(vec![
+						VPLNode::from(("child1", ("key2", "value2"))),
+						VPLNode::from(("child2", ("key3", "value3"))),
+					]),
+					VPLPipeline::from(VPLNode::from(("child3", ("key4", "value4")))),
 				],
 			)),
 			VPLNode::from("node2"),
@@ -305,13 +308,13 @@ mod tests {
 		pub const INPUT: &str = include_str!("../../../../testdata/berlin.vpl");
 
 		let expected = VPLPipeline::from(vec![
-			VPLNode::from(("read", ("filename", "berlin.mbtiles"))),
+			VPLNode::from(("get_tiles", ("filename", "berlin.mbtiles"))),
 			VPLNode::from((
 				"vectortiles_update_properties",
 				vec![
 					("data_source_path", "cities.csv"),
 					("id_field_tiles", "id"),
-					("id_field_values", "city_id"),
+					("id_field_data", "city_id"),
 				],
 			)),
 		]);

@@ -2,7 +2,7 @@ use super::VPLPipeline;
 use anyhow::{anyhow, ensure, Result};
 use std::{collections::HashMap, fmt::Debug, str::FromStr};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct VPLNode {
 	pub name: String,
 	pub properties: HashMap<String, Vec<String>>,
@@ -126,6 +126,20 @@ impl From<(&str, Vec<(&str, &str)>, Vec<VPLPipeline>)> for VPLNode {
 	}
 }
 
+impl Debug for VPLNode {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let mut s = f.debug_struct("VPLNode");
+		s.field("name", &self.name);
+		if !self.properties.is_empty() {
+			s.field("properties", &self.properties);
+		}
+		if !self.sources.is_empty() {
+			s.field("sources", &self.sources);
+		}
+		s.finish()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -152,7 +166,7 @@ mod tests {
 			node.get_property_vec("key2", 0)?,
 			&vec!["value2".to_string()]
 		);
-		assert!(node.get_property_vec("key3", 0)?.len() == 0);
+		assert!(node.get_property_vec("key3", 0).is_err());
 		Ok(())
 	}
 }
