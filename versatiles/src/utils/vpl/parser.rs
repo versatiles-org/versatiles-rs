@@ -131,7 +131,7 @@ fn parse_children(input: &str) -> IResult<&str, Vec<VPLPipeline>> {
 			separated_list0(char(','), parse_pipeline),
 			tuple((multispace0, char(']'))),
 		))
-		.map(|r| r.unwrap_or(vec![])),
+		.map(|r| r.unwrap_or_default()),
 	)(input)
 }
 

@@ -41,7 +41,7 @@ struct Operation {
 }
 
 impl<'a> Operation {
-	fn new(vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn OperationTrait>>
+	fn build(vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
 	{
@@ -94,6 +94,6 @@ impl ReadOperationFactoryTrait for Factory {
 		vpl_node: VPLNode,
 		factory: &'a PipelineFactory,
 	) -> Result<Box<dyn OperationTrait>> {
-		Operation::new(vpl_node, factory)
+		Operation::build(vpl_node, factory)
 	}
 }

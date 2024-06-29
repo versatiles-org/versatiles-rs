@@ -39,7 +39,7 @@ pub fn run(command: &Subcommand) -> Result<()> {
 	skin.inline_code.set_fg(Color::Green);
 
 	let md = match command.topic {
-		Topic::Pipeline => PipelineFactory::default(&Path::new("")).get_docs(),
+		Topic::Pipeline => PipelineFactory::default(Path::new("")).get_docs(),
 	};
 
 	let area = Area::full_screen();

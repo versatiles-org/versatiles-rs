@@ -98,7 +98,7 @@ struct Operation {
 }
 
 impl<'a> Operation {
-	fn new(
+	fn build(
 		vpl_node: VPLNode,
 		source: Box<dyn OperationTrait>,
 		factory: &'a PipelineFactory,
@@ -202,6 +202,6 @@ impl TransformOperationFactoryTrait for Factory {
 		source: Box<dyn OperationTrait>,
 		factory: &'a PipelineFactory,
 	) -> Result<Box<dyn OperationTrait>> {
-		Operation::new(vpl_node, source, factory).await
+		Operation::build(vpl_node, source, factory).await
 	}
 }

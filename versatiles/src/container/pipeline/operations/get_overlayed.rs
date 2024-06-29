@@ -29,7 +29,7 @@ struct Operation {
 }
 
 impl<'a> Operation {
-	fn new(
+	fn build(
 		vpl_node: VPLNode,
 		factory: &'a PipelineFactory,
 	) -> BoxFuture<'a, Result<Box<dyn OperationTrait>, anyhow::Error>>
@@ -144,6 +144,6 @@ impl ReadOperationFactoryTrait for Factory {
 		vpl_node: VPLNode,
 		factory: &'a PipelineFactory,
 	) -> Result<Box<dyn OperationTrait>> {
-		Operation::new(vpl_node, factory).await
+		Operation::build(vpl_node, factory).await
 	}
 }

@@ -31,7 +31,7 @@ impl VPLNode {
 				list.len() == 1,
 				"field '{field}' must have exactly one entry"
 			);
-			Ok(list.get(0))
+			Ok(list.first())
 		})
 	}
 

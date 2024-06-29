@@ -72,7 +72,7 @@ impl PipelineFactory {
 			.get(&node.name)
 			.ok_or_else(|| anyhow!("read operation '{}' unknown", node.name))?;
 
-		factory.build(node, &self).await
+		factory.build(node, self).await
 	}
 
 	async fn tran_operation_from_node(
@@ -85,7 +85,7 @@ impl PipelineFactory {
 			.get(&node.name)
 			.ok_or_else(|| anyhow!("transform operation '{}' unknown", node.name))?;
 
-		factory.build(node, source, &self).await
+		factory.build(node, source, self).await
 	}
 
 	pub fn resolve_filename(&self, filename: &str) -> String {
@@ -97,7 +97,7 @@ impl PipelineFactory {
 	}
 
 	pub fn get_docs(&self) -> String {
-		vec![
+		[
 			include_str!("help.md").to_string(),
 			String::from("---\n# READ operations"),
 			self
