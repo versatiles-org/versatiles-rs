@@ -1,51 +1,89 @@
-use super::OperationTrait;
-use crate::{
-	container::pipeline::operations::{self as op},
-	utils::kdl::{parse_kdl, KDLNode},
+use super::{
+	super::operations as op, OperationTrait, ReadOperationFactoryTrait,
+	TransformOperationFactoryTrait,
 };
-use anyhow::{ensure, Result};
-use std::path::{Path, PathBuf};
+use crate::utils::vdl::{parse_vdl, VDLNode, VDLPipeline};
+use anyhow::{anyhow, Result};
+use std::{
+	collections::HashMap,
+	path::{Path, PathBuf},
+};
 
-#[derive(versatiles_derive::KDLDecode, Clone, Debug)]
-pub enum OperationKDLEnum {
-	Read(op::read::Args),
-	DummyTiles(op::dummy_tiles::Args),
-	OverlayTiles(op::overlay_tiles::Args),
-	VectortilesUpdateProperties(op::vectortiles_update_properties::Args),
-}
-
-pub struct Factory {
+pub struct PipelineFactory {
+	read_ops: HashMap<String, Box<dyn ReadOperationFactoryTrait>>,
+	tran_ops: HashMap<String, Box<dyn TransformOperationFactoryTrait>>,
 	dir: PathBuf,
 }
 
-impl Factory {
-	pub async fn operation_from_kdl(dir: &Path, text: &str) -> Result<Box<dyn OperationTrait>> {
-		let mut kdl_nodes = parse_kdl(text)?;
-		ensure!(
-			kdl_nodes.len() == 1,
-			"KDL must contain exactly one top node"
-		);
-		let kdl_node = kdl_nodes.pop().unwrap();
-
-		let kdl_operation = OperationKDLEnum::from_kdl_node(&kdl_node)?;
-
-		let factory = Factory {
+impl PipelineFactory {
+	pub fn new(dir: &Path) -> Self {
+		PipelineFactory {
+			read_ops: HashMap::new(),
+			tran_ops: HashMap::new(),
 			dir: dir.to_path_buf(),
-		};
-
-		factory.build_operation(kdl_operation).await
+		}
 	}
 
-	pub async fn build_operation(&self, node: OperationKDLEnum) -> Result<Box<dyn OperationTrait>> {
-		use OperationKDLEnum::*;
-		Ok(match node {
-			DummyTiles(n) => Box::new(op::dummy_tiles::Operation::new(n, self).await?),
-			Read(n) => Box::new(op::read::Operation::new(n, self).await?),
-			OverlayTiles(n) => Box::new(op::overlay_tiles::Operation::new(n, self).await?),
-			VectortilesUpdateProperties(n) => {
-				Box::new(op::vectortiles_update_properties::Operation::new(n, self).await?)
-			}
-		})
+	pub fn default(dir: &Path) -> Self {
+		let mut factory = PipelineFactory::new(dir);
+
+		factory.add_read_factory(Box::new(op::read::Factory {}));
+		factory.add_read_factory(Box::new(op::overlay_tiles::Factory {}));
+
+		factory.add_tran_factory(Box::new(op::vectortiles_update_properties::Factory {}));
+
+		todo!("add_read_builder and add_transform_builder");
+	}
+
+	fn add_read_factory(&mut self, factory: Box<dyn ReadOperationFactoryTrait>) {
+		self
+			.read_ops
+			.insert(factory.get_tag_name().to_string(), factory);
+	}
+
+	fn add_tran_factory(&mut self, factory: Box<dyn TransformOperationFactoryTrait>) {
+		self
+			.tran_ops
+			.insert(factory.get_tag_name().to_string(), factory);
+	}
+
+	pub async fn operation_from_vdl(&self, text: &str) -> Result<Box<dyn OperationTrait>> {
+		let pipeline = parse_vdl(text)?;
+		self.build_pipeline(pipeline).await
+	}
+
+	pub async fn build_pipeline(&self, pipeline: VDLPipeline) -> Result<Box<dyn OperationTrait>> {
+		let (head, tail) = pipeline.split()?;
+
+		let mut vdl_operation = self.read_operation_from_node(head).await?;
+
+		for node in tail {
+			vdl_operation = self.tran_operation_from_node(node, vdl_operation).await?;
+		}
+
+		Ok(vdl_operation)
+	}
+
+	async fn read_operation_from_node(&self, node: VDLNode) -> Result<Box<dyn OperationTrait>> {
+		let factory = self
+			.read_ops
+			.get(&node.name)
+			.ok_or_else(|| anyhow!("read operation '{}' unknown", node.name))?;
+
+		factory.build(node, &self).await
+	}
+
+	async fn tran_operation_from_node(
+		&self,
+		node: VDLNode,
+		source: Box<dyn OperationTrait>,
+	) -> Result<Box<dyn OperationTrait>> {
+		let factory = self
+			.tran_ops
+			.get(&node.name)
+			.ok_or_else(|| anyhow!("transform operation '{}' unknown", node.name))?;
+
+		factory.build(node, source, &self).await
 	}
 
 	pub fn resolve_filename(&self, filename: &str) -> String {
@@ -57,6 +95,8 @@ impl Factory {
 	}
 
 	pub fn get_docs() -> String {
-		OperationKDLEnum::get_docs()
+		todo!();
+		//OperationVDLEnum::get_docs()
+		"".to_string()
 	}
 }

@@ -7,5 +7,4 @@ mod reader;
 mod utils;
 
 pub use reader::PipelineReader;
-pub use utils::Factory;
 use utils::*;

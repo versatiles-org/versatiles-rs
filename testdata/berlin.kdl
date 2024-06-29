@@ -1,3 +1,0 @@
-vectortiles_update_properties data_source_path="cities.csv" id_field_tiles="id" id_field_values="city_id" {
-  read filename="berlin.mbtiles"
-}

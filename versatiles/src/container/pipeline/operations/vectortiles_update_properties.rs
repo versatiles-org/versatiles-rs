@@ -1,11 +1,11 @@
 use crate::{
 	container::{
-		pipeline::{read_csv_file, OperationKDLEnum, OperationTrait},
-		Factory, TilesReaderParameters,
+		pipeline::{read_csv_file, OperationTrait, PipelineFactory, TransformOperationFactoryTrait},
+		TilesReaderParameters,
 	},
 	geometry::{vector_tile::VectorTile, GeoProperties},
 	types::Blob,
-	utils::{decompress, kdl::KDLNode},
+	utils::{decompress, vdl::VDLNode},
 };
 use anyhow::{anyhow, ensure, Context, Result};
 use async_trait::async_trait;
@@ -14,7 +14,7 @@ use log::warn;
 use std::{collections::HashMap, sync::Arc};
 use versatiles_core::types::{TileBBox, TileCompression, TileCoord3, TileFormat, TileStream};
 
-#[derive(versatiles_derive::KDLDecode, Clone, Debug)]
+#[derive(versatiles_derive::VDLDecode, Clone, Debug)]
 /// This operation loads a data source (like a CSV file).
 /// For each feature in the vector tiles, it uses the id to fetch the correct row in the data source and uses this row to update the properties of the feature.
 pub struct Args {
@@ -32,7 +32,6 @@ pub struct Args {
 	remove_empty_properties: bool,
 	/// By default, only the new values without the id are added. Set "add_id" to include the id field.
 	add_id: bool,
-	child: Box<OperationKDLEnum>,
 }
 
 #[derive(Debug)]
@@ -97,8 +96,16 @@ pub struct Operation {
 }
 
 impl<'a> Operation {
-	pub fn new(args: Args, factory: &'a Factory) -> BoxFuture<'a, Result<Self>> {
+	fn new(
+		vdl_node: VDLNode,
+		source: Box<dyn OperationTrait>,
+		factory: &'a PipelineFactory,
+	) -> BoxFuture<'a, Result<Box<dyn OperationTrait>, anyhow::Error>>
+	where
+		Self: Sized + OperationTrait,
+	{
 		Box::pin(async move {
+			let args = Args::from_vdl_node(&vdl_node)?;
 			let data = read_csv_file(&factory.resolve_path(&args.data_source_path))
 				.with_context(|| format!("Failed to read CSV file from '{}'", args.data_source_path))?;
 
@@ -123,7 +130,6 @@ impl<'a> Operation {
 				.collect::<Result<HashMap<String, GeoProperties>>>()
 				.context("Failed to build properties map from CSV data")?;
 
-			let source = factory.build_operation(*args.child.clone()).await?;
 			let parameters = source.get_parameters().clone();
 			ensure!(
 				parameters.tile_format == TileFormat::PBF,
@@ -138,12 +144,12 @@ impl<'a> Operation {
 				tile_compression: parameters.tile_compression,
 			});
 
-			Ok(Self {
+			Ok(Box::new(Self {
 				runner,
 				meta,
 				parameters,
 				source,
-			})
+			}) as Box<dyn OperationTrait>)
 		})
 	}
 }
@@ -172,5 +178,22 @@ impl OperationTrait for Operation {
 				None
 			},
 		)
+	}
+}
+
+pub struct Factory {}
+
+#[async_trait]
+impl TransformOperationFactoryTrait for Factory {
+	fn get_tag_name(&self) -> &str {
+		"read"
+	}
+	async fn build<'a>(
+		&self,
+		vdl_node: VDLNode,
+		source: Box<dyn OperationTrait>,
+		factory: &'a PipelineFactory,
+	) -> Result<Box<dyn OperationTrait>> {
+		Operation::new(vdl_node, source, factory).await
 	}
 }

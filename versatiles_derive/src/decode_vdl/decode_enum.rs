@@ -1,4 +1,4 @@
-use crate::decode_kdl::camel_to_snake;
+use crate::decode_vdl::camel_to_snake;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{DataEnum, DeriveInput, Fields};
@@ -19,16 +19,16 @@ pub fn decode_enum(input: DeriveInput, data_enum: DataEnum) -> TokenStream {
 					.expect("could not get first unnamed field")
 					.ty
 			} else {
-				panic!("KDLDecode can only be derived for enums with single unnamed field variants");
+				panic!("VDLDecode can only be derived for enums with single unnamed field variants");
 			}
 		} else {
-			panic!("KDLDecode can only be derived for enums with unnamed fields");
+			panic!("VDLDecode can only be derived for enums with unnamed fields");
 		};
 		let node_name = camel_to_snake(&variant_name.to_string());
 
 		variants.push(quote! {
 			if node.name == #node_name {
-				return Ok(Self::#variant_name(#variant_type ::from_kdl_node(node)?));
+				return Ok(Self::#variant_name(#variant_type ::from_vdl_node(node)?));
 			}
 		});
 
@@ -42,7 +42,7 @@ pub fn decode_enum(input: DeriveInput, data_enum: DataEnum) -> TokenStream {
 
 	quote! {
 		impl #name {
-			pub fn from_kdl_node(node: &KDLNode) -> Result<#name> {
+			pub fn from_vdl_node(node: &VDLNode) -> Result<#name> {
 				#(#variants)*
 				Err(anyhow::anyhow!("Unknown variant: {}", node.name))
 			}

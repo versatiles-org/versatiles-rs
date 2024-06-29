@@ -1,11 +1,11 @@
 use crate::{
 	container::{
 		get_reader,
-		pipeline::{Factory, OperationTrait},
+		pipeline::{OperationTrait, PipelineFactory, ReadOperationFactoryTrait},
 		TilesReader, TilesReaderParameters,
 	},
 	types::TileStream,
-	utils::kdl::KDLNode,
+	utils::vdl::VDLNode,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -13,32 +13,39 @@ use futures::{future::BoxFuture, lock::Mutex};
 use std::{fmt::Debug, sync::Arc};
 use versatiles_core::types::{Blob, TileBBox, TileCoord3};
 
-#[derive(versatiles_derive::KDLDecode, Clone, Debug)]
+#[derive(versatiles_derive::VDLDecode, Clone, Debug)]
 /// Reads a tile source, such as a VersaTiles container.
-pub struct Args {
+struct Args {
 	/// The filename of the tile container, e.g., "world.versatiles".
 	filename: String,
 }
 
 #[derive(Debug)]
-pub struct Operation {
+struct Operation {
 	parameters: TilesReaderParameters,
 	reader: Arc<Mutex<Box<dyn TilesReader>>>,
 	meta: Option<Blob>,
 }
 
 impl<'a> Operation {
-	pub fn new(args: Args, factory: &'a Factory) -> BoxFuture<'a, Result<Self>> {
+	fn new(
+		vdl_node: VDLNode,
+		factory: &'a PipelineFactory,
+	) -> BoxFuture<'a, Result<Box<dyn OperationTrait>, anyhow::Error>>
+	where
+		Self: Sized + OperationTrait,
+	{
 		Box::pin(async move {
+			let args = Args::from_vdl_node(&vdl_node)?;
 			let reader = get_reader(&factory.resolve_filename(&args.filename)).await?;
 			let parameters = reader.get_parameters().clone();
 			let meta = reader.get_meta()?;
 
-			Ok(Self {
+			Ok(Box::new(Self {
 				parameters,
 				meta,
 				reader: Arc::new(Mutex::new(reader)),
-			})
+			}) as Box<dyn OperationTrait>)
 		})
 	}
 }
@@ -76,5 +83,21 @@ impl OperationTrait for Operation {
 			}
 		}))
 		.await
+	}
+}
+
+pub struct Factory {}
+
+#[async_trait]
+impl ReadOperationFactoryTrait for Factory {
+	fn get_tag_name(&self) -> &str {
+		"read"
+	}
+	async fn build<'a>(
+		&self,
+		vdl_node: VDLNode,
+		factory: &'a PipelineFactory,
+	) -> Result<Box<dyn OperationTrait>> {
+		Operation::new(vdl_node, factory).await
 	}
 }

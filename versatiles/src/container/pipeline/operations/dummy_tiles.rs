@@ -6,14 +6,14 @@ use crate::{
 		TilesReaderParameters,
 	},
 	types::TileStream,
-	utils::kdl::KDLNode,
+	utils::vdl::VDLNode,
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use std::{fmt::Debug, str::FromStr};
+use std::fmt::Debug;
 use versatiles_core::types::{Blob, TileBBox, TileCoord3};
 
-#[derive(versatiles_derive::KDLDecode, Clone, Debug)]
+#[derive(versatiles_derive::VDLDecode, Clone, Debug)]
 /// generates mocked tiles
 pub struct Args {
 	/// All tile source must have the same tile format.

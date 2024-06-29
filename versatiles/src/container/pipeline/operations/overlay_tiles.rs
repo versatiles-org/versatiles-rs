@@ -1,41 +1,46 @@
 use crate::{
 	container::{
-		pipeline::{Factory, OperationKDLEnum, OperationTrait},
+		pipeline::{OperationTrait, PipelineFactory, ReadOperationFactoryTrait},
 		TilesReaderParameters,
 	},
 	types::{Blob, TileBBox, TileCoord3, TileStream},
-	utils::{kdl::KDLNode, recompress},
+	utils::{
+		recompress,
+		vdl::{VDLNode, VDLPipeline},
+	},
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use futures::future::{join_all, BoxFuture};
 use versatiles_core::types::TileCompression;
 
-#[derive(versatiles_derive::KDLDecode, Clone, Debug)]
+#[derive(versatiles_derive::VDLDecode, Clone, Debug)]
 /// Overlays multiple tile sources. The tile of the first source that returns a tile is used.
-pub struct Args {
+struct Args {
 	/// All tile source must have the same tile format.
-	children: Vec<OperationKDLEnum>,
+	children: Vec<VDLPipeline>,
 }
 
 #[derive(Debug)]
-pub struct Operation {
+struct Operation {
 	parameters: TilesReaderParameters,
 	sources: Vec<Box<dyn OperationTrait>>,
 }
 
 impl<'a> Operation {
-	pub fn new(args: Args, factory: &'a Factory) -> BoxFuture<'a, Result<Self>> {
+	fn new(
+		vdl_node: VDLNode,
+		factory: &'a PipelineFactory,
+	) -> BoxFuture<'a, Result<Box<dyn OperationTrait>, anyhow::Error>>
+	where
+		Self: Sized + OperationTrait,
+	{
 		Box::pin(async move {
-			let sources = join_all(
-				args
-					.children
-					.into_iter()
-					.map(|c| factory.build_operation(c)),
-			)
-			.await
-			.into_iter()
-			.collect::<Result<Vec<_>>>()?;
+			let args = Args::from_vdl_node(&vdl_node)?;
+			let sources = join_all(args.children.into_iter().map(|c| factory.build_pipeline(c)))
+				.await
+				.into_iter()
+				.collect::<Result<Vec<_>>>()?;
 
 			ensure!(!sources.is_empty(), "must have at least one child");
 
@@ -57,10 +62,10 @@ impl<'a> Operation {
 			}
 
 			let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
-			Ok(Self {
+			Ok(Box::new(Self {
 				parameters,
 				sources,
-			})
+			}) as Box<dyn OperationTrait>)
 		})
 	}
 }
@@ -117,5 +122,21 @@ impl OperationTrait for Operation {
 			TileStream::from_vec(tiles)
 		}))
 		.await
+	}
+}
+
+pub struct Factory {}
+
+#[async_trait]
+impl ReadOperationFactoryTrait for Factory {
+	fn get_tag_name(&self) -> &str {
+		"overlay_tiles"
+	}
+	async fn build<'a>(
+		&self,
+		vdl_node: VDLNode,
+		factory: &'a PipelineFactory,
+	) -> Result<Box<dyn OperationTrait>> {
+		Operation::new(vdl_node, factory).await
 	}
 }
