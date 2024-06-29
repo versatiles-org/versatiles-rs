@@ -1,4 +1,4 @@
-use crate::decode_vdl::extract_comment;
+use crate::decode_vpl::extract_comment;
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{DataStruct, DeriveInput, Fields};
@@ -17,7 +17,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 	let fields = if let Fields::Named(fields_named) = data_struct.fields {
 		fields_named.named
 	} else {
-		panic!("VDLDecode can only be derived for structs with named fields");
+		panic!("VPLDecode can only be derived for structs with named fields");
 	};
 
 	let mut parser_fields: Vec<TokenStream> = Vec::new();
@@ -48,8 +48,8 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 			if doc_children.is_some() {
 				panic!("'children' are already defined: {doc_children:?}")
 			}
-			if field_type_str != "Vec < VDLPipeline >" {
-				panic!("type of 'children' must be 'Vec<VDLPipeline>', but is '{field_type_str}'")
+			if field_type_str != "Vec < VPLPipeline >" {
+				panic!("type of 'children' must be 'Vec<VPLPipeline>', but is '{field_type_str}'")
 			}
 			doc_children = Some(format!("### Children:\n{comment}\n"));
 			parser_fields.push(quote! { children: node.children.clone() });
@@ -96,18 +96,18 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 
 	quote! {
 		impl #name {
-			pub fn from_vdl_node(node: &VDLNode) -> Result<Self> {
+			pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {
 				Ok(Self {
 					#(#parser_fields),*
 				})
 			}
 
 			pub fn get_docs() -> String {
-				let mut docs = String::new();
-				docs.push_str(&format!("{}\n", #doc_struct));
-				docs.push_str(#doc_fields);
-				docs.push_str(#doc_children);
-				docs
+				vec![
+					&format!("{}\n", #doc_struct),
+					#doc_fields,
+					#doc_children,
+				].join("")
 			}
 		}
 	}

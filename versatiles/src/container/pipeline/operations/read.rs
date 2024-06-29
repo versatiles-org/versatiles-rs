@@ -1,11 +1,12 @@
 use crate::{
 	container::{
 		get_reader,
-		pipeline::{OperationTrait, PipelineFactory, ReadOperationFactoryTrait},
+		pipeline::utils::{OperationTrait, PipelineFactory, ReadOperationFactoryTrait},
+		utils::OperationFactoryTrait,
 		TilesReader, TilesReaderParameters,
 	},
 	types::TileStream,
-	utils::vdl::VDLNode,
+	utils::vpl::VPLNode,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -13,7 +14,7 @@ use futures::{future::BoxFuture, lock::Mutex};
 use std::{fmt::Debug, sync::Arc};
 use versatiles_core::types::{Blob, TileBBox, TileCoord3};
 
-#[derive(versatiles_derive::VDLDecode, Clone, Debug)]
+#[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a tile source, such as a VersaTiles container.
 struct Args {
 	/// The filename of the tile container, e.g., "world.versatiles".
@@ -29,14 +30,14 @@ struct Operation {
 
 impl<'a> Operation {
 	fn new(
-		vdl_node: VDLNode,
+		vpl_node: VPLNode,
 		factory: &'a PipelineFactory,
-	) -> BoxFuture<'a, Result<Box<dyn OperationTrait>, anyhow::Error>>
+	) -> BoxFuture<'a, Result<Box<dyn OperationTrait>>>
 	where
 		Self: Sized + OperationTrait,
 	{
 		Box::pin(async move {
-			let args = Args::from_vdl_node(&vdl_node)?;
+			let args = Args::from_vpl_node(&vpl_node)?;
 			let reader = get_reader(&factory.resolve_filename(&args.filename)).await?;
 			let parameters = reader.get_parameters().clone();
 			let meta = reader.get_meta()?;
@@ -88,16 +89,22 @@ impl OperationTrait for Operation {
 
 pub struct Factory {}
 
-#[async_trait]
-impl ReadOperationFactoryTrait for Factory {
+impl OperationFactoryTrait for Factory {
+	fn get_docs(&self) -> String {
+		Args::get_docs()
+	}
 	fn get_tag_name(&self) -> &str {
 		"read"
 	}
+}
+
+#[async_trait]
+impl ReadOperationFactoryTrait for Factory {
 	async fn build<'a>(
 		&self,
-		vdl_node: VDLNode,
+		vpl_node: VPLNode,
 		factory: &'a PipelineFactory,
 	) -> Result<Box<dyn OperationTrait>> {
-		Operation::new(vdl_node, factory).await
+		Operation::new(vpl_node, factory).await
 	}
 }

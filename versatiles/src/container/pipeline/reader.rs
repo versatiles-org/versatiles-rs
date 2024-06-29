@@ -1,4 +1,4 @@
-use super::{OperationTrait, PipelineFactory};
+use super::utils::{OperationTrait, PipelineFactory};
 use crate::{
 	container::{TilesReader, TilesReaderParameters},
 	io::DataReader,
@@ -18,49 +18,49 @@ pub struct PipelineReader {
 
 #[allow(dead_code)]
 impl PipelineReader {
-	/// Opens a PipelineReader from a vdl file path.
+	/// Opens a PipelineReader from a vpl file path.
 	///
 	/// # Arguments
 	///
-	/// * `path` - The path to the vdl file.
+	/// * `path` - The path to the vpl file.
 	///
 	/// # Returns
 	///
 	/// * `Result<PipelineReader>` - The constructed PipelineReader or an error if the configuration is invalid.
 	pub async fn open_path(path: &Path) -> Result<PipelineReader> {
-		let vdl =
+		let vpl =
 			std::fs::read_to_string(path).with_context(|| anyhow!("Failed to open {path:?}"))?;
-		Self::from_str(&vdl, path.to_str().unwrap(), path.parent().unwrap())
+		Self::from_str(&vpl, path.to_str().unwrap(), path.parent().unwrap())
 			.await
-			.with_context(|| format!("failed parsing {path:?} as VDL"))
+			.with_context(|| format!("failed parsing {path:?} as VPL"))
 	}
 
 	/// Opens a PipelineReader from a DataReader.
 	///
 	/// # Arguments
 	///
-	/// * `reader` - The DataReader containing the vdl configuration.
+	/// * `reader` - The DataReader containing the vpl configuration.
 	///
 	/// # Returns
 	///
 	/// * `Result<PipelineReader>` - The constructed PipelineReader or an error if the configuration is invalid.
 	pub async fn open_reader(mut reader: DataReader, dir: &Path) -> Result<PipelineReader> {
-		let vdl = reader.read_all().await?.into_string();
-		Self::from_str(&vdl, reader.get_name(), dir)
+		let vpl = reader.read_all().await?.into_string();
+		Self::from_str(&vpl, reader.get_name(), dir)
 			.await
-			.with_context(|| format!("failed parsing {} as VDL", reader.get_name()))
+			.with_context(|| format!("failed parsing {} as VPL", reader.get_name()))
 	}
 
 	#[cfg(test)]
-	pub async fn open_str(vdl: &str, dir: &Path) -> Result<PipelineReader> {
-		Self::from_str(vdl, "from str", dir)
+	pub async fn open_str(vpl: &str, dir: &Path) -> Result<PipelineReader> {
+		Self::from_str(vpl, "from str", dir)
 			.await
-			.with_context(|| format!("failed parsing '{vdl}' as VDL"))
+			.with_context(|| format!("failed parsing '{vpl}' as VPL"))
 	}
 
-	async fn from_str(vdl: &str, name: &str, dir: &Path) -> Result<PipelineReader> {
+	async fn from_str(vpl: &str, name: &str, dir: &Path) -> Result<PipelineReader> {
 		let factory = PipelineFactory::default(dir);
-		let operation: Box<dyn OperationTrait> = factory.operation_from_vdl(vdl).await?;
+		let operation: Box<dyn OperationTrait> = factory.operation_from_vpl(vpl).await?;
 		let parameters = operation.get_parameters().clone();
 
 		Ok(PipelineReader {
@@ -124,11 +124,11 @@ mod tests {
 	use super::*;
 	use crate::container::MockTilesWriter;
 
-	pub const VDL: &str = include_str!("../../../../testdata/berlin.vdl");
+	pub const VPL: &str = include_str!("../../../../testdata/berlin.vpl");
 
 	#[tokio::test(flavor = "multi_thread", worker_threads = 16)]
-	async fn open_vdl_str() -> Result<()> {
-		let mut reader = PipelineReader::open_str(VDL, Path::new("../testdata/")).await?;
+	async fn open_vpl_str() -> Result<()> {
+		let mut reader = PipelineReader::open_str(VPL, Path::new("../testdata/")).await?;
 		MockTilesWriter::write(&mut reader).await?;
 
 		Ok(())
@@ -136,11 +136,11 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_pipeline_reader_open_path() -> Result<()> {
-		let path = Path::new("../testdata/pipeline.vdl");
+		let path = Path::new("../testdata/pipeline.vpl");
 		let result = PipelineReader::open_path(path).await;
 		assert_eq!(
 			result.unwrap_err().to_string(),
-			"Failed to open \"../testdata/pipeline.vdl\""
+			"Failed to open \"../testdata/pipeline.vpl\""
 		);
 
 		Ok(())
@@ -148,7 +148,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_pipeline_reader_get_tile_data() -> Result<()> {
-		let mut reader = PipelineReader::open_str(VDL, Path::new("../testdata/")).await?;
+		let mut reader = PipelineReader::open_str(VPL, Path::new("../testdata/")).await?;
 
 		let result = reader.get_tile_data(&TileCoord3::new(0, 0, 14)?).await;
 		assert_eq!(result?, None);
@@ -165,7 +165,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_pipeline_reader_get_bbox_tile_stream() -> Result<()> {
-		let mut reader = PipelineReader::open_str(VDL, Path::new("../testdata/")).await?;
+		let mut reader = PipelineReader::open_str(VPL, Path::new("../testdata/")).await?;
 		let bbox = TileBBox::new(1, 0, 0, 1, 1)?;
 		let result_stream = reader.get_bbox_tile_stream(bbox).await;
 		let result = result_stream.collect().await;

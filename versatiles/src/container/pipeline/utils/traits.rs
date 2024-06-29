@@ -1,4 +1,4 @@
-use crate::{container::TilesReaderParameters, utils::vdl::VDLNode};
+use crate::{container::TilesReaderParameters, utils::vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
@@ -14,22 +14,25 @@ pub trait OperationTrait: Debug + Send + Sync + Unpin {
 	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream;
 }
 
-#[async_trait]
-pub trait ReadOperationFactoryTrait: Send + Sync {
+pub trait OperationFactoryTrait: Send + Sync {
 	fn get_tag_name(&self) -> &str;
+	fn get_docs(&self) -> String;
+}
+
+#[async_trait]
+pub trait ReadOperationFactoryTrait: OperationFactoryTrait {
 	async fn build<'a>(
 		&self,
-		vdl_node: VDLNode,
+		vpl_node: VPLNode,
 		factory: &'a PipelineFactory,
 	) -> Result<Box<dyn OperationTrait>>;
 }
 
 #[async_trait]
-pub trait TransformOperationFactoryTrait: Send + Sync {
-	fn get_tag_name(&self) -> &str;
+pub trait TransformOperationFactoryTrait: OperationFactoryTrait {
 	async fn build<'a>(
 		&self,
-		vdl_node: VDLNode,
+		vpl_node: VPLNode,
 		source: Box<dyn OperationTrait>,
 		factory: &'a PipelineFactory,
 	) -> Result<Box<dyn OperationTrait>>;

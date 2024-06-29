@@ -4,7 +4,6 @@ The `pipeline` module provides functionality for reading, processing, and compos
 
 mod operations;
 mod reader;
-mod utils;
+pub mod utils;
 
 pub use reader::PipelineReader;
-use utils::*;

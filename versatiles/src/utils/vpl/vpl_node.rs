@@ -1,16 +1,16 @@
-use super::VDLPipeline;
+use super::VPLPipeline;
 use anyhow::{anyhow, ensure, Result};
 use std::{collections::HashMap, fmt::Debug, str::FromStr};
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct VDLNode {
+pub struct VPLNode {
 	pub name: String,
 	pub properties: HashMap<String, Vec<String>>,
-	pub children: Vec<VDLPipeline>,
+	pub children: Vec<VPLPipeline>,
 }
 
-impl VDLNode {
-	#[allow(dead_code)]
+#[allow(dead_code)]
+impl VPLNode {
 	fn get_property_vec(&self, field: &str, min_size: usize) -> Result<&Vec<String>> {
 		self
 			.properties
@@ -69,9 +69,9 @@ impl VDLNode {
 	}
 }
 
-impl From<&str> for VDLNode {
+impl From<&str> for VPLNode {
 	fn from(name: &str) -> Self {
-		VDLNode {
+		VPLNode {
 			name: name.to_string(),
 			properties: HashMap::new(),
 			children: vec![],
@@ -86,9 +86,9 @@ fn make_properties(input: Vec<(&str, &str)>) -> HashMap<String, Vec<String>> {
 		.collect()
 }
 
-impl From<(&str, (&str, &str))> for VDLNode {
+impl From<(&str, (&str, &str))> for VPLNode {
 	fn from(input: (&str, (&str, &str))) -> Self {
-		VDLNode {
+		VPLNode {
 			name: input.0.to_string(),
 			properties: make_properties(vec![input.1]),
 			children: vec![],
@@ -96,9 +96,9 @@ impl From<(&str, (&str, &str))> for VDLNode {
 	}
 }
 
-impl From<(&str, Vec<(&str, &str)>)> for VDLNode {
+impl From<(&str, Vec<(&str, &str)>)> for VPLNode {
 	fn from(input: (&str, Vec<(&str, &str)>)) -> Self {
-		VDLNode {
+		VPLNode {
 			name: input.0.to_string(),
 			properties: make_properties(input.1),
 			children: vec![],
@@ -106,9 +106,9 @@ impl From<(&str, Vec<(&str, &str)>)> for VDLNode {
 	}
 }
 
-impl From<(&str, Vec<(&str, &str)>, VDLPipeline)> for VDLNode {
-	fn from(input: (&str, Vec<(&str, &str)>, VDLPipeline)) -> Self {
-		VDLNode {
+impl From<(&str, Vec<(&str, &str)>, VPLPipeline)> for VPLNode {
+	fn from(input: (&str, Vec<(&str, &str)>, VPLPipeline)) -> Self {
+		VPLNode {
 			name: input.0.to_string(),
 			properties: make_properties(input.1),
 			children: vec![input.2],
@@ -116,9 +116,9 @@ impl From<(&str, Vec<(&str, &str)>, VDLPipeline)> for VDLNode {
 	}
 }
 
-impl From<(&str, Vec<(&str, &str)>, Vec<VDLPipeline>)> for VDLNode {
-	fn from(input: (&str, Vec<(&str, &str)>, Vec<VDLPipeline>)) -> Self {
-		VDLNode {
+impl From<(&str, Vec<(&str, &str)>, Vec<VPLPipeline>)> for VPLNode {
+	fn from(input: (&str, Vec<(&str, &str)>, Vec<VPLPipeline>)) -> Self {
+		VPLNode {
 			name: input.0.to_string(),
 			properties: make_properties(input.1),
 			children: input.2,
@@ -138,8 +138,8 @@ mod tests {
 	}
 
 	#[test]
-	fn test_vdlnode_get_property() -> Result<()> {
-		let node = VDLNode {
+	fn test_vplnode_get_property() -> Result<()> {
+		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_properties(&[("key1", "value1"), ("key2", "value2")]),
 			children: vec![],

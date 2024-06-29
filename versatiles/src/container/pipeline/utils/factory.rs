@@ -2,8 +2,9 @@ use super::{
 	super::operations as op, OperationTrait, ReadOperationFactoryTrait,
 	TransformOperationFactoryTrait,
 };
-use crate::utils::vdl::{parse_vdl, VDLNode, VDLPipeline};
+use crate::utils::vpl::{parse_vpl, VPLNode, VPLPipeline};
 use anyhow::{anyhow, Result};
+use itertools::Itertools;
 use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
@@ -27,12 +28,13 @@ impl PipelineFactory {
 	pub fn default(dir: &Path) -> Self {
 		let mut factory = PipelineFactory::new(dir);
 
+		factory.add_read_factory(Box::new(op::dummy_tiles::Factory {}));
 		factory.add_read_factory(Box::new(op::read::Factory {}));
 		factory.add_read_factory(Box::new(op::overlay_tiles::Factory {}));
 
 		factory.add_tran_factory(Box::new(op::vectortiles_update_properties::Factory {}));
 
-		todo!("add_read_builder and add_transform_builder");
+		factory
 	}
 
 	fn add_read_factory(&mut self, factory: Box<dyn ReadOperationFactoryTrait>) {
@@ -47,24 +49,24 @@ impl PipelineFactory {
 			.insert(factory.get_tag_name().to_string(), factory);
 	}
 
-	pub async fn operation_from_vdl(&self, text: &str) -> Result<Box<dyn OperationTrait>> {
-		let pipeline = parse_vdl(text)?;
+	pub async fn operation_from_vpl(&self, text: &str) -> Result<Box<dyn OperationTrait>> {
+		let pipeline = parse_vpl(text)?;
 		self.build_pipeline(pipeline).await
 	}
 
-	pub async fn build_pipeline(&self, pipeline: VDLPipeline) -> Result<Box<dyn OperationTrait>> {
+	pub async fn build_pipeline(&self, pipeline: VPLPipeline) -> Result<Box<dyn OperationTrait>> {
 		let (head, tail) = pipeline.split()?;
 
-		let mut vdl_operation = self.read_operation_from_node(head).await?;
+		let mut vpl_operation = self.read_operation_from_node(head).await?;
 
 		for node in tail {
-			vdl_operation = self.tran_operation_from_node(node, vdl_operation).await?;
+			vpl_operation = self.tran_operation_from_node(node, vpl_operation).await?;
 		}
 
-		Ok(vdl_operation)
+		Ok(vpl_operation)
 	}
 
-	async fn read_operation_from_node(&self, node: VDLNode) -> Result<Box<dyn OperationTrait>> {
+	async fn read_operation_from_node(&self, node: VPLNode) -> Result<Box<dyn OperationTrait>> {
 		let factory = self
 			.read_ops
 			.get(&node.name)
@@ -75,7 +77,7 @@ impl PipelineFactory {
 
 	async fn tran_operation_from_node(
 		&self,
-		node: VDLNode,
+		node: VPLNode,
 		source: Box<dyn OperationTrait>,
 	) -> Result<Box<dyn OperationTrait>> {
 		let factory = self
@@ -94,9 +96,24 @@ impl PipelineFactory {
 		self.dir.join(filename)
 	}
 
-	pub fn get_docs() -> String {
-		todo!();
-		//OperationVDLEnum::get_docs()
-		"".to_string()
+	pub fn get_docs(&self) -> String {
+		vec![
+			include_str!("help.md").to_string(),
+			String::from("---\n# READ operations"),
+			self
+				.read_ops
+				.values()
+				.sorted_by_cached_key(|f| f.get_tag_name().to_string())
+				.map(|f| format!("## {}\n{}\n\n", f.get_tag_name(), f.get_docs()))
+				.join(""),
+			String::from("---\n# TRANSFORM operations"),
+			self
+				.tran_ops
+				.values()
+				.sorted_by_cached_key(|f| f.get_tag_name().to_string())
+				.map(|f| format!("## {}\n{}\n\n", f.get_tag_name(), f.get_docs()))
+				.join(""),
+		]
+		.join("\n")
 	}
 }

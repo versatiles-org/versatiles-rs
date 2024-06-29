@@ -1,4 +1,4 @@
-use super::{VDLNode, VDLPipeline};
+use super::{VPLNode, VPLPipeline};
 use anyhow::{bail, Context, Result};
 use nom::{
 	branch::alt,
@@ -123,7 +123,7 @@ fn parse_identifier(input: &str) -> IResult<&str, String> {
 	)(input)
 }
 
-fn parse_children(input: &str) -> IResult<&str, Vec<VDLPipeline>> {
+fn parse_children(input: &str) -> IResult<&str, Vec<VPLPipeline>> {
 	context(
 		"parse_children",
 		opt(delimited(
@@ -135,7 +135,7 @@ fn parse_children(input: &str) -> IResult<&str, Vec<VDLPipeline>> {
 	)(input)
 }
 
-fn parse_node<'a>(input: &'a str) -> IResult<&str, VDLNode> {
+fn parse_node<'a>(input: &'a str) -> IResult<&str, VPLNode> {
 	context("parse_node", |input: &'a str| {
 		let (input, _) = multispace0(input)?;
 		let (input, name) = parse_identifier(input)?;
@@ -155,7 +155,7 @@ fn parse_node<'a>(input: &'a str) -> IResult<&str, VDLNode> {
 
 		Ok((
 			input,
-			VDLNode {
+			VPLNode {
 				name,
 				properties,
 				children,
@@ -164,28 +164,28 @@ fn parse_node<'a>(input: &'a str) -> IResult<&str, VDLNode> {
 	})(input)
 }
 
-fn parse_pipeline(input: &str) -> IResult<&str, VDLPipeline> {
+fn parse_pipeline(input: &str) -> IResult<&str, VPLPipeline> {
 	context(
 		"parse_pipeline",
 		delimited(
 			multispace0,
-			separated_list0(char('|'), parse_node).map(|pipeline| VDLPipeline { pipeline }),
+			separated_list0(char('|'), parse_node).map(|pipeline| VPLPipeline { pipeline }),
 			multispace0,
 		),
 	)(input)
 }
 
-pub fn parse_vdl(input: &str) -> Result<VDLPipeline> {
+pub fn parse_vpl(input: &str) -> Result<VPLPipeline> {
 	match parse_pipeline(input) {
 		Ok((leftover, nodes)) => {
 			if leftover.trim().is_empty() {
 				Ok(nodes)
 			} else {
-				bail!("VDL didn't parse till the end: '{leftover}'")
+				bail!("VPL didn't parse till the end: '{leftover}'")
 			}
 		}
 		Err(e) => {
-			Err(anyhow::anyhow!("Error parsing VDL: {:?}", e)).context("Failed to parse VDL input")
+			Err(anyhow::anyhow!("Error parsing VPL: {:?}", e)).context("Failed to parse VPL input")
 		}
 	}
 }
@@ -253,10 +253,10 @@ mod tests {
 	#[test]
 	fn test_parse_node() {
 		let input = "node key1=value1 key2=\"value2\" key3=\"a=\\\"b\\\"\" [ child ]";
-		let expected = VDLNode::from((
+		let expected = VPLNode::from((
 			"node",
 			vec![("key1", "value1"), ("key2", "value2"), ("key3", "a=\"b\"")],
-			VDLPipeline::from(VDLNode::from("child")),
+			VPLPipeline::from(VPLNode::from("child")),
 		));
 		assert_eq!(parse_node(input), Ok(("", expected)));
 	}
@@ -264,49 +264,49 @@ mod tests {
 	#[test]
 	fn test_parse_nodes1() {
 		let input = "node1 key1=value1|\nnode2 key2=\"value2\"";
-		let expected = VDLPipeline::from(vec![
-			VDLNode::from(("node1", ("key1", "value1"))),
-			VDLNode::from(("node2", ("key2", "value2"))),
+		let expected = VPLPipeline::from(vec![
+			VPLNode::from(("node1", ("key1", "value1"))),
+			VPLNode::from(("node2", ("key2", "value2"))),
 		]);
-		assert_eq!(parse_vdl(input).unwrap(), expected);
+		assert_eq!(parse_vpl(input).unwrap(), expected);
 	}
 
 	#[test]
 	fn test_parse_nodes2() {
 		let input = "node1 key1=value1|node2 key2=\"value2\"| node3 key3=value3 |\nnode4 key4=value4";
-		let expected = VDLPipeline::from(vec![
-			VDLNode::from(("node1", ("key1", "value1"))),
-			VDLNode::from(("node2", ("key2", "value2"))),
-			VDLNode::from(("node3", ("key3", "value3"))),
-			VDLNode::from(("node4", ("key4", "value4"))),
+		let expected = VPLPipeline::from(vec![
+			VPLNode::from(("node1", ("key1", "value1"))),
+			VPLNode::from(("node2", ("key2", "value2"))),
+			VPLNode::from(("node3", ("key3", "value3"))),
+			VPLNode::from(("node4", ("key4", "value4"))),
 		]);
-		assert_eq!(parse_vdl(input).unwrap(), expected);
+		assert_eq!(parse_vpl(input).unwrap(), expected);
 	}
 
 	#[test]
 	fn test_parse_nodes3() {
 		let input = "node1 key1=value1 [ child1 key2=value2 | child2 key3=\"value3\" ] | node2";
-		let expected = VDLPipeline::from(vec![
-			VDLNode::from((
+		let expected = VPLPipeline::from(vec![
+			VPLNode::from((
 				"node1",
 				vec![("key1", "value1")],
 				vec![
-					VDLPipeline::from(VDLNode::from(("child1", ("key2", "value2")))),
-					VDLPipeline::from(VDLNode::from(("child2", ("key3", "value3")))),
+					VPLPipeline::from(VPLNode::from(("child1", ("key2", "value2")))),
+					VPLPipeline::from(VPLNode::from(("child2", ("key3", "value3")))),
 				],
 			)),
-			VDLNode::from("node2"),
+			VPLNode::from("node2"),
 		]);
-		assert_eq!(parse_vdl(input).unwrap(), expected);
+		assert_eq!(parse_vpl(input).unwrap(), expected);
 	}
 
 	#[test]
 	fn test_parse_nodes4() {
-		pub const INPUT: &str = include_str!("../../../../testdata/berlin.vdl");
+		pub const INPUT: &str = include_str!("../../../../testdata/berlin.vpl");
 
-		let expected = VDLPipeline::from(vec![
-			VDLNode::from(("read", ("filename", "berlin.mbtiles"))),
-			VDLNode::from((
+		let expected = VPLPipeline::from(vec![
+			VPLNode::from(("read", ("filename", "berlin.mbtiles"))),
+			VPLNode::from((
 				"vectortiles_update_properties",
 				vec![
 					("data_source_path", "cities.csv"),
@@ -315,7 +315,7 @@ mod tests {
 				],
 			)),
 		]);
-		assert_eq!(parse_vdl(INPUT).unwrap(), expected);
+		assert_eq!(parse_vpl(INPUT).unwrap(), expected);
 	}
 
 	#[test]
@@ -346,9 +346,9 @@ mod tests {
 	}
 
 	#[test]
-	fn test_parse_vdl_with_error() {
+	fn test_parse_vpl_with_error() {
 		let input = "node1 key1=value1 [ child1 key2=value2 | child2 key3=\"value3\" ] node2";
-		let result = parse_vdl(input);
+		let result = parse_vpl(input);
 		assert!(result.is_err());
 	}
 }

@@ -1,5 +1,6 @@
-use crate::container::Factory;
+use crate::container::utils::PipelineFactory;
 use anyhow::Result;
+use std::path::Path;
 
 #[derive(clap::Args, Debug)]
 #[command(
@@ -38,7 +39,7 @@ pub fn run(command: &Subcommand) -> Result<()> {
 	skin.inline_code.set_fg(Color::Green);
 
 	let md = match command.topic {
-		Topic::Pipeline => Factory::get_docs(),
+		Topic::Pipeline => PipelineFactory::default(&Path::new("")).get_docs(),
 	};
 
 	let area = Area::full_screen();

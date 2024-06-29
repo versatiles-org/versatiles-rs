@@ -1,11 +1,14 @@
 use crate::{
 	container::{
-		pipeline::{read_csv_file, OperationTrait, PipelineFactory, TransformOperationFactoryTrait},
+		pipeline::utils::{
+			read_csv_file, OperationTrait, PipelineFactory, TransformOperationFactoryTrait,
+		},
+		utils::OperationFactoryTrait,
 		TilesReaderParameters,
 	},
 	geometry::{vector_tile::VectorTile, GeoProperties},
 	types::Blob,
-	utils::{decompress, vdl::VDLNode},
+	utils::{decompress, vpl::VPLNode},
 };
 use anyhow::{anyhow, ensure, Context, Result};
 use async_trait::async_trait;
@@ -14,28 +17,28 @@ use log::warn;
 use std::{collections::HashMap, sync::Arc};
 use versatiles_core::types::{TileBBox, TileCompression, TileCoord3, TileFormat, TileStream};
 
-#[derive(versatiles_derive::VDLDecode, Clone, Debug)]
-/// This operation loads a data source (like a CSV file).
-/// For each feature in the vector tiles, it uses the id to fetch the correct row in the data source and uses this row to update the properties of the feature.
-pub struct Args {
+#[derive(versatiles_derive::VPLDecode, Clone, Debug)]
+/// This operation uses a data source (like a CSV file).
+/// For each feature in the vector tiles, it uses the id (id_field_tiles) to fetch the correct row in the data source (using id_field_data) and uses this row to update the properties of the vector tile feature.
+struct Args {
 	/// Path of the data source, e.g., data.csv
 	data_source_path: String,
 	/// Field name of the id in the vector tiles
 	id_field_tiles: String,
 	/// Field name of the id in the data source
-	id_field_values: String,
+	id_field_data: String,
 	/// Name of the layer in which properties should be replaced. If not set, properties in all layers will be replaced.
 	layer_name: Option<String>,
-	/// By default, the old properties in the tiles are updated with the new ones. Set "replace_properties" if the properties should be replaced with the new ones.
+	/// By default, the old properties in the tiles are updated with the new ones. Set "replace_properties" if the properties should be deleted first.
 	replace_properties: bool,
 	/// Should all features be deleted that have no properties?
 	remove_empty_properties: bool,
-	/// By default, only the new values without the id are added. Set "add_id" to include the id field.
-	add_id: bool,
+	/// By default, only the new values without the id are added. Set "include_id" to include the id field.
+	include_id: bool,
 }
 
 #[derive(Debug)]
-pub struct Runner {
+struct Runner {
 	args: Args,
 	tile_compression: TileCompression,
 	properties_map: HashMap<String, GeoProperties>,
@@ -88,7 +91,7 @@ impl Runner {
 }
 
 #[derive(Debug)]
-pub struct Operation {
+struct Operation {
 	runner: Arc<Runner>,
 	parameters: TilesReaderParameters,
 	source: Box<dyn OperationTrait>,
@@ -97,7 +100,7 @@ pub struct Operation {
 
 impl<'a> Operation {
 	fn new(
-		vdl_node: VDLNode,
+		vpl_node: VPLNode,
 		source: Box<dyn OperationTrait>,
 		factory: &'a PipelineFactory,
 	) -> BoxFuture<'a, Result<Box<dyn OperationTrait>, anyhow::Error>>
@@ -105,7 +108,7 @@ impl<'a> Operation {
 		Self: Sized + OperationTrait,
 	{
 		Box::pin(async move {
-			let args = Args::from_vdl_node(&vdl_node)?;
+			let args = Args::from_vpl_node(&vpl_node)?;
 			let data = read_csv_file(&factory.resolve_path(&args.data_source_path))
 				.with_context(|| format!("Failed to read CSV file from '{}'", args.data_source_path))?;
 
@@ -113,17 +116,17 @@ impl<'a> Operation {
 				.into_iter()
 				.map(|mut properties| {
 					let key = properties
-						.get(&args.id_field_values)
-						.ok_or_else(|| anyhow!("Key '{}' not found in CSV data", args.id_field_values))
+						.get(&args.id_field_data)
+						.ok_or_else(|| anyhow!("Key '{}' not found in CSV data", args.id_field_data))
 						.with_context(|| {
 							format!(
 								"Failed to find key '{}' in the CSV data row: {properties:?}",
-								args.id_field_values
+								args.id_field_data
 							)
 						})?
 						.to_string();
-					if !args.add_id {
-						properties.remove(&args.id_field_values)
+					if !args.include_id {
+						properties.remove(&args.id_field_data)
 					}
 					Ok((key, properties))
 				})
@@ -183,17 +186,23 @@ impl OperationTrait for Operation {
 
 pub struct Factory {}
 
+impl OperationFactoryTrait for Factory {
+	fn get_docs(&self) -> String {
+		Args::get_docs()
+	}
+	fn get_tag_name(&self) -> &str {
+		"vectortiles_update_properties"
+	}
+}
+
 #[async_trait]
 impl TransformOperationFactoryTrait for Factory {
-	fn get_tag_name(&self) -> &str {
-		"read"
-	}
 	async fn build<'a>(
 		&self,
-		vdl_node: VDLNode,
+		vpl_node: VPLNode,
 		source: Box<dyn OperationTrait>,
 		factory: &'a PipelineFactory,
 	) -> Result<Box<dyn OperationTrait>> {
-		Operation::new(vdl_node, source, factory).await
+		Operation::new(vpl_node, source, factory).await
 	}
 }

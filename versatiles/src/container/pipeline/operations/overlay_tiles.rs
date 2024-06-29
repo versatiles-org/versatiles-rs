@@ -1,12 +1,13 @@
 use crate::{
 	container::{
-		pipeline::{OperationTrait, PipelineFactory, ReadOperationFactoryTrait},
+		pipeline::utils::{OperationTrait, PipelineFactory, ReadOperationFactoryTrait},
+		utils::OperationFactoryTrait,
 		TilesReaderParameters,
 	},
 	types::{Blob, TileBBox, TileCoord3, TileStream},
 	utils::{
 		recompress,
-		vdl::{VDLNode, VDLPipeline},
+		vpl::{VPLNode, VPLPipeline},
 	},
 };
 use anyhow::{ensure, Result};
@@ -14,11 +15,11 @@ use async_trait::async_trait;
 use futures::future::{join_all, BoxFuture};
 use versatiles_core::types::TileCompression;
 
-#[derive(versatiles_derive::VDLDecode, Clone, Debug)]
+#[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Overlays multiple tile sources. The tile of the first source that returns a tile is used.
 struct Args {
 	/// All tile source must have the same tile format.
-	children: Vec<VDLPipeline>,
+	children: Vec<VPLPipeline>,
 }
 
 #[derive(Debug)]
@@ -29,14 +30,14 @@ struct Operation {
 
 impl<'a> Operation {
 	fn new(
-		vdl_node: VDLNode,
+		vpl_node: VPLNode,
 		factory: &'a PipelineFactory,
 	) -> BoxFuture<'a, Result<Box<dyn OperationTrait>, anyhow::Error>>
 	where
 		Self: Sized + OperationTrait,
 	{
 		Box::pin(async move {
-			let args = Args::from_vdl_node(&vdl_node)?;
+			let args = Args::from_vpl_node(&vpl_node)?;
 			let sources = join_all(args.children.into_iter().map(|c| factory.build_pipeline(c)))
 				.await
 				.into_iter()
@@ -127,16 +128,22 @@ impl OperationTrait for Operation {
 
 pub struct Factory {}
 
-#[async_trait]
-impl ReadOperationFactoryTrait for Factory {
+impl OperationFactoryTrait for Factory {
+	fn get_docs(&self) -> String {
+		Args::get_docs()
+	}
 	fn get_tag_name(&self) -> &str {
 		"overlay_tiles"
 	}
+}
+
+#[async_trait]
+impl ReadOperationFactoryTrait for Factory {
 	async fn build<'a>(
 		&self,
-		vdl_node: VDLNode,
+		vpl_node: VPLNode,
 		factory: &'a PipelineFactory,
 	) -> Result<Box<dyn OperationTrait>> {
-		Operation::new(vdl_node, factory).await
+		Operation::new(vpl_node, factory).await
 	}
 }
