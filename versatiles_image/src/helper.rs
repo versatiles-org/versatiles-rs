@@ -27,8 +27,7 @@ pub fn create_dummy_image(coord: &TileCoord3) -> DynamicImage {
 		font,
 		&format!("{}/{}/{}", coord.z, coord.x, coord.y),
 	);
-	let image2 = DynamicImage::ImageRgb8(image1);
-	image2
+	DynamicImage::ImageRgb8(image1)
 }
 
 /// Generate a DynamicImage with RGBA colors

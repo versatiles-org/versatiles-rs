@@ -60,7 +60,7 @@ impl TileBBoxPyramid {
 	) -> TileBBoxPyramid {
 		let mut pyramid = TileBBoxPyramid::new_empty();
 		for z in [zoom_level_min, zoom_level_max] {
-			pyramid.set_level_bbox(TileBBox::from_geo(z as u8, geo_bbox).unwrap());
+			pyramid.set_level_bbox(TileBBox::from_geo(z, geo_bbox).unwrap());
 		}
 		pyramid
 	}

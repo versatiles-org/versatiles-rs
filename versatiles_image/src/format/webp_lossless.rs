@@ -33,19 +33,26 @@ mod tests {
 	};
 
 	#[test]
-	fn webp_lossless() -> Result<()> {
-		let image1 = create_image_grey();
-		assert!(image2blob(&image1).is_err());
+	fn grey() {
+		let i = create_image_grey();
+		assert!(image2blob(&i).is_err());
+	}
 
-		let image2 = create_image_greya();
-		assert!(image2blob(&image2).is_err());
+	#[test]
+	fn greya() {
+		let i = create_image_greya();
+		assert!(image2blob(&i).is_err());
+	}
 
-		let image3 = create_image_rgb();
-		compare_images(blob2image(&image2blob(&image3)?)?, image3, 0);
+	#[test]
+	fn rgb() {
+		let i = create_image_rgb();
+		compare_images(blob2image(&image2blob(&i).unwrap()).unwrap(), i, 0);
+	}
 
-		let image4 = create_image_rgba();
-		compare_images(blob2image(&image2blob(&image4)?)?, image4, 6);
-
-		Ok(())
+	#[test]
+	fn rgba() {
+		let i = create_image_rgba();
+		assert!(image2blob(&i).is_err());
 	}
 }

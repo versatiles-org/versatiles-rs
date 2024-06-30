@@ -18,7 +18,6 @@
 //!
 //!     // Define converter parameters
 //!     let converter_params = TilesConverterParameters::new(
-//!         None,
 //!         Some(TileCompression::Brotli),
 //!         Some(TileBBoxPyramid::new_full(8)),
 //!         false,
