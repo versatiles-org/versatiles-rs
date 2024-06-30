@@ -1,0 +1,28 @@
+[package]
+name = "versatiles_image"
+authors.workspace = true
+categories.workspace = true
+description.workspace = true
+edition.workspace = true
+exclude.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+readme.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+image = { version = "0.25.1", default-features = false, features = [
+	"jpeg",
+	"png",
+] }
+webp = { version = "0.3.0", default-features = false, optional = true, features = ["img"] }
+
+versatiles_core.workspace = true
+
+[dev-dependencies]
+
+[features]
+default = []

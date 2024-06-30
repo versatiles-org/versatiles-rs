@@ -1,5 +1,5 @@
 [workspace]
-members = ["versatiles", "versatiles_core", "versatiles_derive", "versatiles_geometry", "versatiles_pipeline"]
+members = ["versatiles", "versatiles_core", "versatiles_derive", "versatiles_geometry", "versatiles_image", "versatiles_pipeline"]
 resolver = "2"
 
 [workspace.package]
@@ -83,4 +83,5 @@ versatiles = { version = "0.11.5", path = "versatiles" }
 versatiles_core = { version = "0.11.5", path = "versatiles_core" }
 versatiles_derive = { version = "0.11.5", path = "versatiles_derive" }
 versatiles_geometry = { version = "0.11.5", path = "versatiles_geometry" }
+versatiles_image = { version = "0.11.5", path = "versatiles_image" }
 versatiles_pipeline = { version = "0.11.5", path = "versatiles_pipeline" }

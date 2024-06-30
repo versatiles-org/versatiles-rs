@@ -1,11 +1,7 @@
-#[cfg(feature = "full")]
-use super::image::{img2jpg, img2png, img2webp, img2webplossless, jpg2img, png2img, webp2img};
 use crate::{
-	types::{Blob, TileCompression, TileFormat, TileStream},
+	types::{Blob, TileCompression, TileStream},
 	utils::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip},
 };
-#[cfg(feature = "full")]
-use anyhow::bail;
 use anyhow::Result;
 use itertools::Itertools;
 use std::{
@@ -15,27 +11,6 @@ use std::{
 
 #[derive(Clone, Debug)]
 enum FnConv {
-	//	Avif2Jpg,
-	//Avif2Png,
-	//Avif2Webp,
-	//Jpg2Avif,
-	#[cfg(feature = "full")]
-	Jpg2Png,
-	#[cfg(feature = "full")]
-	Jpg2Webp,
-	//Png2Avif,
-	#[cfg(feature = "full")]
-	Png2Jpg,
-	#[cfg(feature = "full")]
-	Png2Png,
-	#[cfg(feature = "full")]
-	Png2Webplossless,
-	//Webp2Avif,
-	#[cfg(feature = "full")]
-	Webp2Jpg,
-	#[cfg(feature = "full")]
-	Webp2Png,
-
 	UnGzip,
 	UnBrotli,
 	Gzip,
@@ -54,32 +29,6 @@ impl FnConv {
 	#[allow(unreachable_patterns)]
 	fn run(&self, blob: Blob) -> Result<Blob> {
 		match self {
-			#[cfg(feature = "full")]
-			FnConv::Png2Jpg => img2jpg(&png2img(&blob)?),
-			#[cfg(feature = "full")]
-			FnConv::Png2Png => img2png(&png2img(&blob)?),
-			#[cfg(feature = "full")]
-			FnConv::Png2Webplossless => img2webplossless(&png2img(&blob)?),
-			#[cfg(feature = "full")]
-			FnConv::Jpg2Png => img2png(&jpg2img(&blob)?),
-			#[cfg(feature = "full")]
-			FnConv::Jpg2Webp => img2webp(&jpg2img(&blob)?),
-			#[cfg(feature = "full")]
-			FnConv::Webp2Jpg => img2jpg(&webp2img(&blob)?),
-			#[cfg(feature = "full")]
-			FnConv::Webp2Png => img2png(&webp2img(&blob)?),
-			//#[cfg(feature = "full")]
-			//FnConv::Avif2Jpg => img2jpg(avif2img(tile)?),
-			//#[cfg(feature = "full")]
-			//FnConv::Avif2Png => img2png(avif2img(tile)?),
-			//#[cfg(feature = "full")]
-			//FnConv::Avif2Webp => img2webp(avif2img(tile)?),
-			//#[cfg(feature = "full")]
-			//FnConv::Jpg2Avif => img2avif(jpg2img(tile)?),
-			//#[cfg(feature = "full")]
-			//FnConv::Png2Avif => img2avif(png2img(tile)?),
-			//#[cfg(feature = "full")]
-			//FnConv::Webp2Avif => img2avif(webp2img(tile)?),
 			FnConv::UnGzip => decompress_gzip(&blob),
 			FnConv::UnBrotli => decompress_brotli(&blob),
 			FnConv::Gzip => compress_gzip(&blob),
@@ -112,75 +61,25 @@ impl TileConverter {
 	/// with optional forced recompression
 	#[allow(unused_variables)]
 	pub fn new_tile_recompressor(
-		src_form: &TileFormat,
 		src_comp: &TileCompression,
-		dst_form: &TileFormat,
 		dst_comp: &TileCompression,
 		force_recompress: bool,
 	) -> Result<TileConverter> {
 		let mut converter = TileConverter::new_empty();
 
-		// Create a format converter function based on the source and destination formats.
-		#[cfg(not(feature = "full"))]
-		let format_converter_option = None;
-
-		#[cfg(feature = "full")]
-		let format_converter_option: Option<FnConv> = if (src_form != dst_form) || force_recompress {
-			use TileFormat::*;
-			match (src_form, dst_form) {
-				//(AVIF, AVIF) => Some(),
-				//(AVIF, JPG) => Some(FnConv::Avif2Jpg),
-				//(AVIF, PNG) => Some(FnConv::Avif2Png),
-				//(AVIF, WEBP) => Some(FnConv::Avif2Webp),
-
-				//(JPG, AVIF) => Some(FnConv::Jpg2Avif),
-				//(JPG, JPG) => Some(),
-				(JPG, PNG) => Some(FnConv::Jpg2Png),
-				(JPG, WEBP) => Some(FnConv::Jpg2Webp),
-
-				//(PNG, AVIF) => Some(FnConv::Png2Avif),
-				(PNG, JPG) => Some(FnConv::Png2Jpg),
-				(PNG, PNG) => Some(FnConv::Png2Png),
-				(PNG, WEBP) => Some(FnConv::Png2Webplossless),
-
-				//(WEBP, AVIF) => Some(FnConv::Webp2Avif),
-				(WEBP, JPG) => Some(FnConv::Webp2Jpg),
-				(WEBP, PNG) => Some(FnConv::Webp2Png),
-				//(WEBP, WEBP) => Some(),
-				(_, _) => {
-					if src_form == dst_form {
-						None
-					} else {
-						bail!(
-							"no conversion implemented for {:?} -> {:?}",
-							src_form,
-							dst_form
-						);
-					}
-				}
-			}
-		} else {
-			None
-		};
-
 		// Push the necessary conversion functions to the converter pipeline.
-		if force_recompress || (src_comp != dst_comp) || format_converter_option.is_some() {
+		if force_recompress || (src_comp != dst_comp) {
 			use TileCompression::*;
 			match src_comp {
 				Uncompressed => {}
 				Gzip => converter.push(FnConv::UnGzip),
 				Brotli => converter.push(FnConv::UnBrotli),
 			}
-			if let Some(format_converter) = format_converter_option {
-				converter.push(format_converter)
-			}
 			match dst_comp {
 				Uncompressed => {}
 				Gzip => converter.push(FnConv::Gzip),
 				Brotli => converter.push(FnConv::Brotli),
 			}
-		} else if let Some(format_converter) = format_converter_option {
-			converter.push(format_converter)
 		};
 
 		Ok(converter)
@@ -256,8 +155,7 @@ impl Eq for TileConverter {}
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::TileFormat::*;
-	use anyhow::{ensure, Result};
+	use anyhow::ensure;
 
 	#[test]
 	fn new_empty() {
@@ -274,21 +172,14 @@ mod tests {
 	#[test]
 	fn new_tile_recompressor() {
 		fn test(
-			src_form: &TileFormat,
 			src_comp: &TileCompression,
-			dst_form: &TileFormat,
 			dst_comp: &TileCompression,
 			force_recompress: &bool,
 			length: usize,
 			description: &str,
 		) -> Result<()> {
-			let data_converter = TileConverter::new_tile_recompressor(
-				src_form,
-				src_comp,
-				dst_form,
-				dst_comp,
-				*force_recompress,
-			)?;
+			let data_converter =
+				TileConverter::new_tile_recompressor(src_comp, dst_comp, *force_recompress)?;
 
 			ensure!(
 				data_converter.as_string() == description,
@@ -307,63 +198,37 @@ mod tests {
 			Ok(())
 		}
 
-		let image_formats = vec![JPG, PNG, WEBP, PBF];
 		use TileCompression::*;
 		let compressions = vec![Uncompressed, Gzip, Brotli];
 		let forcing = vec![false, true];
 
-		for f_in in &image_formats {
-			for c_in in &compressions {
-				for f_out in &image_formats {
-					for c_out in &compressions {
-						for force in &forcing {
-							let mut s = format!(
-								"{},{}2{},{}",
-								decomp(c_in),
-								form(f_in),
-								form(f_out),
-								comp(c_out)
-							);
+		for c_in in &compressions {
+			for c_out in &compressions {
+				for force in &forcing {
+					let mut s = format!("{},{}", decomp(c_in), comp(c_out));
 
-							s = s.replace("png2webp", "png2webplossless");
-							s = s.replace("jpg2jpg,", "");
-							s = s.replace("webp2webp,", "");
-							s = s.replace("pbf2pbf,", "");
-							if !force {
-								s = s.replace("png2png,", "");
-								s = s.replace("ungzip,gzip", "");
-								s = s.replace("unbrotli,brotli", "");
-							}
-							s = s.replace(",,", ",");
-							s = s.strip_prefix(',').unwrap_or(&s).to_string();
-							s = s.strip_suffix(',').unwrap_or(&s).to_string();
-
-							#[cfg(not(feature = "full"))]
-							if s.contains('2') {
-								// if we don't use crate image, ignore image conversion
-								continue;
-							}
-
-							let length = if s.is_empty() {
-								0
-							} else {
-								s.split(',').count()
-							};
-							let message = format!("{f_in:?},{c_in:?}->{f_out:?},{c_out:?} {force}");
-
-							let result = test(f_in, c_in, f_out, c_out, force, length, &s);
-
-							if is_image(f_in) == is_image(f_out) {
-								assert!(
-									result.is_ok(),
-									"error for {message}: {}",
-									result.err().unwrap()
-								);
-							} else {
-								assert!(result.is_err(), "error for {message}: should throw error");
-							}
-						}
+					if !force {
+						s = s.replace("ungzip,gzip", "");
+						s = s.replace("unbrotli,brotli", "");
 					}
+					s = s.replace(",,", ",");
+					s = s.strip_prefix(',').unwrap_or(&s).to_string();
+					s = s.strip_suffix(',').unwrap_or(&s).to_string();
+
+					let length = if s.is_empty() {
+						0
+					} else {
+						s.split(',').count()
+					};
+					let message = format!("{c_in:?}->{c_out:?} {force}");
+
+					let result = test(c_in, c_out, force, length, &s);
+
+					assert!(
+						result.is_ok(),
+						"error for {message}: {}",
+						result.err().unwrap()
+					);
 				}
 			}
 		}
@@ -383,81 +248,5 @@ mod tests {
 				Brotli => "brotli",
 			}
 		}
-
-		fn form(format: &TileFormat) -> &str {
-			match format {
-				AVIF => "avif",
-				BIN => "bin",
-				GEOJSON => "geojson",
-				JPG => "jpg",
-				JSON => "json",
-				PBF => "pbf",
-				PNG => "png",
-				SVG => "svg",
-				TOPOJSON => "topojson",
-				WEBP => "webp",
-			}
-		}
-
-		fn is_image(format: &TileFormat) -> bool {
-			match format {
-				AVIF => true,
-				JPG => true,
-				PNG => true,
-				WEBP => true,
-
-				BIN => false,
-				GEOJSON => false,
-				JSON => false,
-				PBF => false,
-				SVG => false,
-				TOPOJSON => false,
-			}
-		}
-	}
-
-	#[test]
-	#[cfg(feature = "full")]
-	fn convert_images() -> Result<()> {
-		use super::super::image::{compare_images, create_image_rgb};
-
-		let formats = [JPG, PNG, WEBP];
-
-		for src_form in formats.iter() {
-			for dst_form in formats.iter() {
-				let image1 = create_image_rgb();
-				let blob1 = match src_form {
-					//AVIF => img2avif(&image1)?,
-					JPG => img2jpg(&image1)?,
-					PNG => img2png(&image1)?,
-					WEBP => img2webp(&image1)?,
-					_ => panic!("unsupported format {src_form:?}"),
-				};
-
-				let data_converter = TileConverter::new_tile_recompressor(
-					src_form,
-					&TileCompression::Uncompressed,
-					dst_form,
-					&TileCompression::Uncompressed,
-					true,
-				)?;
-
-				let blob2 = data_converter.process_blob(blob1)?;
-
-				let image2 = match dst_form {
-					//AVIF => avif2img(blob)?,
-					JPG => jpg2img(&blob2)?,
-					PNG => png2img(&blob2)?,
-					WEBP => webp2img(&blob2)?,
-					_ => panic!("not allowed"),
-				};
-
-				assert_eq!(image2.width(), 256, "image should be 256 pixels wide");
-				assert_eq!(image2.height(), 256, "image should be 256 pixels high");
-
-				compare_images(image1, image2, 7);
-			}
-		}
-		Ok(())
 	}
 }

@@ -200,8 +200,7 @@ mod tests {
 		// get to test container converter
 		let container_file = NamedTempFile::new("temp.tar").unwrap();
 
-		let parameters =
-			TilesConverterParameters::new(None, Some(compression), None, false, false, false);
+		let parameters = TilesConverterParameters::new(Some(compression), None, false, false, false);
 		convert_tiles_container(reader.boxed(), parameters, container_file.to_str().unwrap())
 			.await
 			.unwrap();

@@ -1,6 +1,6 @@
 use crate::{
 	container::{convert_tiles_container, get_reader, TilesConverterParameters},
-	types::{TileBBoxPyramid, TileCompression, TileFormat},
+	types::{TileBBoxPyramid, TileCompression},
 };
 use anyhow::{bail, Result};
 use log::trace;
@@ -45,10 +45,6 @@ pub struct Subcommand {
 	#[arg(long)]
 	flip_y: bool,
 
-	/// convert tiles to new format
-	#[arg(long, short, value_enum)]
-	tile_format: Option<TileFormat>,
-
 	/// set new compression
 	#[arg(long, short, value_enum)]
 	compress: Option<TileCompression>,
@@ -76,7 +72,6 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	}
 
 	let cp = TilesConverterParameters::new(
-		arguments.tile_format,
 		arguments.compress,
 		get_bbox_pyramid(arguments)?,
 		arguments.force_recompress,

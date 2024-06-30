@@ -39,10 +39,6 @@ env_logger = { version = "0.11.3", default-features = false, optional = true }
 flate2 = { version = "1.0.30", default-features = false, features = ["default"] }
 futures = { workspace = true, features = ["default"] }
 hyper = { version = "1.3.1", default-features = false, optional = true, features = ["http2"] }
-image = { version = "0.25.1", default-features = false, optional = true, features = [
-	"jpeg",
-	"png",
-] }
 itertools = { workspace = true, features = ["use_alloc"] }
 lazy_static = { workspace = true, optional = true }
 log.workspace = true
@@ -56,11 +52,11 @@ reqwest = { workspace = true, optional = true, features = ["rustls-tls"] }
 tar = { version = "0.4.41", default-features = false, optional = true }
 termimad = { version = "0.29.4", optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
-webp = { version = "0.3.0", default-features = false, optional = true, features = ["img"] }
 
 versatiles_core = { workspace = true }
 versatiles_derive = { workspace = true, optional = true }
 versatiles_geometry = { workspace = true, optional = true }
+versatiles_image = { workspace = true, optional = true }
 versatiles_pipeline = { workspace = true, optional = true }
 
 [dev-dependencies]
@@ -86,15 +82,14 @@ cli = [
 ]
 full = [
 	"dep:hyper",
-	"dep:image",
 	"dep:lazy_static",
 	"dep:r2d2_sqlite",
 	"dep:r2d2",
 	"dep:tar",
 	"dep:versatiles_derive",
 	"dep:versatiles_geometry",
+	"dep:versatiles_image",
 	"dep:versatiles_pipeline",
-	"dep:webp",
 	"http",
 ]
 http = ["dep:lazy_static", "dep:regex", "dep:reqwest", "versatiles_core/http"]

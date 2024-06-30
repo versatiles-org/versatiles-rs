@@ -2358,7 +2358,6 @@ dependencies = [
  "flate2",
  "futures",
  "hyper",
- "image",
  "itertools",
  "lazy_static",
  "log",
@@ -2373,8 +2372,8 @@ dependencies = [
  "versatiles_core",
  "versatiles_derive",
  "versatiles_geometry",
+ "versatiles_image",
  "versatiles_pipeline",
- "webp",
  "wildmatch",
 ]
 
@@ -2423,6 +2422,16 @@ dependencies = [
  "regex",
  "tokio",
  "versatiles_core",
+]
+
+[[package]]
+name = "versatiles_image"
+version = "0.11.5"
+dependencies = [
+ "anyhow",
+ "image",
+ "versatiles_core",
+ "webp",
 ]
 
 [[package]]
