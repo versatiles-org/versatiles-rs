@@ -53,6 +53,23 @@ impl TileBBoxPyramid {
 	/// # Arguments
 	///
 	/// * `geo_bbox` - A reference to an array of four `f64` values representing the geographical bounding box.
+	pub fn from_geo_bbox(
+		zoom_level_min: u8,
+		zoom_level_max: u8,
+		geo_bbox: &[f64; 4],
+	) -> TileBBoxPyramid {
+		let mut pyramid = TileBBoxPyramid::new_empty();
+		for z in [zoom_level_min, zoom_level_max] {
+			pyramid.set_level_bbox(TileBBox::from_geo(z as u8, geo_bbox).unwrap());
+		}
+		pyramid
+	}
+
+	/// Intersects the current pyramid with the specified geographical bounding box.
+	///
+	/// # Arguments
+	///
+	/// * `geo_bbox` - A reference to an array of four `f64` values representing the geographical bounding box.
 	pub fn intersect_geo_bbox(&mut self, geo_bbox: &[f64; 4]) {
 		for (z, bbox) in self.level_bbox.iter_mut().enumerate() {
 			bbox.intersect_bbox(&TileBBox::from_geo(z as u8, geo_bbox).unwrap());

@@ -1,5 +1,5 @@
 use crate::{
-	operations as op,
+	operations::{get_read_operation_factories, get_transform_operation_factories},
 	traits::{OperationTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
 	vpl::{parse_vpl, VPLNode, VPLPipeline},
 };
@@ -34,11 +34,13 @@ impl PipelineFactory {
 	pub fn default(dir: &Path, create_reader: Callback) -> Self {
 		let mut factory = PipelineFactory::new(dir, create_reader);
 
-		factory.add_read_factory(Box::new(op::get_dummy_tiles::Factory {}));
-		factory.add_read_factory(Box::new(op::get_tiles::Factory {}));
-		factory.add_read_factory(Box::new(op::get_overlayed::Factory {}));
+		for f in get_read_operation_factories() {
+			factory.add_read_factory(f)
+		}
 
-		factory.add_tran_factory(Box::new(op::vectortiles_update_properties::Factory {}));
+		for f in get_transform_operation_factories() {
+			factory.add_tran_factory(f)
+		}
 
 		factory
 	}

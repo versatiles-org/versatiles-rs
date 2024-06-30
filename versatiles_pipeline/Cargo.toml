@@ -19,9 +19,11 @@ futures.workspace = true
 itertools.workspace = true
 log.workspace = true
 nom = { version = "7.1.3" }
+
 versatiles_core.workspace = true
 versatiles_derive.workspace = true
 versatiles_geometry.workspace = true
+versatiles_image.workspace = true
 
 [dev-dependencies]
 assert_fs.workspace = true

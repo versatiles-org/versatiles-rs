@@ -7,7 +7,7 @@ use versatiles_core::types::Blob;
 
 const JPEG_QUALITY: u8 = 95;
 
-pub fn img2blob(image: &DynamicImage) -> Result<Blob> {
+pub fn image2blob(image: &DynamicImage) -> Result<Blob> {
 	let mut buffer: Vec<u8> = Vec::new();
 	JpegEncoder::new_with_quality(&mut buffer, JPEG_QUALITY).write_image(
 		image.as_bytes(),
@@ -19,7 +19,7 @@ pub fn img2blob(image: &DynamicImage) -> Result<Blob> {
 	Ok(Blob::from(buffer))
 }
 
-pub fn blob2img(blob: &Blob) -> Result<DynamicImage> {
+pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 	Ok(load_from_memory_with_format(
 		blob.as_slice(),
 		ImageFormat::Jpeg,
@@ -29,16 +29,16 @@ pub fn blob2img(blob: &Blob) -> Result<DynamicImage> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::helper::*;
+	use crate::helper::{compare_images, create_image_grey, create_image_rgb};
 
 	/// Test JPEG encoding and decoding for grayscale and RGB images
 	#[test]
 	fn jpg() -> Result<()> {
 		let image1 = create_image_grey();
-		compare_images(blob2img(&img2blob(&image1)?)?, image1, 0);
+		compare_images(blob2image(&image2blob(&image1)?)?, image1, 0);
 
 		let image2 = create_image_rgb();
-		compare_images(blob2img(&img2blob(&image2)?)?, image2, 4);
+		compare_images(blob2image(&image2blob(&image2)?)?, image2, 4);
 
 		Ok(())
 	}
