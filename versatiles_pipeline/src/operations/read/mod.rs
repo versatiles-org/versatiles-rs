@@ -1,13 +1,13 @@
 use crate::traits::ReadOperationFactoryTrait;
 
-mod get_dummy_tiles;
-mod get_overlayed;
-mod get_tiles;
+mod from_container;
+mod from_dummy;
+mod from_overlayed;
 
 pub fn get_read_operation_factories() -> Vec<Box<dyn ReadOperationFactoryTrait>> {
 	return vec![
-		Box::new(get_dummy_tiles::Factory {}),
-		Box::new(get_overlayed::Factory {}),
-		Box::new(get_tiles::Factory {}),
+		Box::new(from_dummy::Factory {}),
+		Box::new(from_overlayed::Factory {}),
+		Box::new(from_container::Factory {}),
 	];
 }

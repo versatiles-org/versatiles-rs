@@ -308,7 +308,7 @@ mod tests {
 		pub const INPUT: &str = include_str!("../../../testdata/berlin.vpl");
 
 		let expected = VPLPipeline::from(vec![
-			VPLNode::from(("get_tiles", ("filename", "berlin.mbtiles"))),
+			VPLNode::from(("from_container", ("filename", "berlin.mbtiles"))),
 			VPLNode::from((
 				"vectortiles_update_properties",
 				vec![

@@ -129,7 +129,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"get_overlayed"
+		"from_overlayed"
 	}
 }
 
