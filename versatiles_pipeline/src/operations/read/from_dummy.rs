@@ -25,14 +25,8 @@ struct Args {
 	zoom_min: Option<u8>,
 	/// Maximum zoom level.
 	zoom_max: Option<u8>,
-	/// Minimum latitude.
-	lat_min: Option<f32>,
-	/// Maximum latitude.
-	lat_max: Option<f32>,
-	/// Minimum longitude.
-	lng_min: Option<f32>,
-	/// Maximum longitude.
-	lng_max: Option<f32>,
+	/// Bounding box: [min long, min lat, max long, max lat].
+	bbox: Option<[f64; 4]>,
 }
 
 #[derive(Debug)]
@@ -56,12 +50,7 @@ impl<'a> Operation {
 		let bbox = TileBBoxPyramid::from_geo_bbox(
 			args.zoom_min.unwrap_or(0),
 			args.zoom_max.unwrap_or(12),
-			&[
-				args.lng_min.unwrap_or(-180.0) as f64,
-				args.lat_min.unwrap_or(-90.0) as f64,
-				args.lng_max.unwrap_or(180.0) as f64,
-				args.lat_max.unwrap_or(90.0) as f64,
-			],
+			args.bbox.as_ref().unwrap_or(&[-180.0, -90.0, 180.0, 90.0]),
 		);
 
 		let parameters = TilesReaderParameters::new(format, compression, bbox);

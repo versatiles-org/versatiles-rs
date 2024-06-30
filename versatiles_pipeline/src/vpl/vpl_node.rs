@@ -11,18 +11,8 @@ pub struct VPLNode {
 
 #[allow(dead_code)]
 impl VPLNode {
-	fn get_property_vec(&self, field: &str, min_size: usize) -> Result<&Vec<String>> {
-		self
-			.properties
-			.get(field)
-			.ok_or_else(|| anyhow!("field '{field}' not found"))
-			.and_then(|list| {
-				ensure!(
-					list.len() >= min_size,
-					"field '{field}' must have at least {min_size} entries"
-				);
-				Ok(list)
-			})
+	fn get_property_vec(&self, field: &str) -> Option<&Vec<String>> {
+		self.properties.get(field)
 	}
 
 	fn get_property0(&self, field: &str) -> Result<Option<&String>> {
@@ -66,6 +56,24 @@ impl VPLNode {
 		self
 			.get_property0(field)?
 			.map_or(Ok(None), |v| v.parse::<T>().map(Some).map_err(Into::into))
+	}
+
+	pub fn get_property_number_array4<T>(&self, field: &str) -> Result<Option<[T; 4]>>
+	where
+		T: FromStr,
+		<T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
+	{
+		Ok(if let Some(vec) = self.get_property_vec(field) {
+			ensure!(vec.len() == 4, "field '{field}' must have 4 values");
+			Some([
+				vec[0].parse::<T>()?,
+				vec[1].parse::<T>()?,
+				vec[2].parse::<T>()?,
+				vec[3].parse::<T>()?,
+			])
+		} else {
+			None
+		})
 	}
 }
 
@@ -159,14 +167,14 @@ mod tests {
 			sources: vec![],
 		};
 		assert_eq!(
-			node.get_property_vec("key1", 0)?,
+			node.get_property_vec("key1").unwrap(),
 			&vec!["value1".to_string()]
 		);
 		assert_eq!(
-			node.get_property_vec("key2", 0)?,
+			node.get_property_vec("key2").unwrap(),
 			&vec!["value2".to_string()]
 		);
-		assert!(node.get_property_vec("key3", 0).is_err());
+		assert!(node.get_property_vec("key3").is_none());
 		Ok(())
 	}
 }

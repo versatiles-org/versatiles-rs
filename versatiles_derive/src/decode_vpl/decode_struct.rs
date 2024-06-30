@@ -31,7 +31,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 			.as_ref()
 			.expect("could not get field_name")
 			.to_string();
-		let field_type_str = quote!(#field_type).to_string();
+		let field_type_str = quote!(#field_type).to_string().replace(' ', "");
 
 		let mut comment = field
 			.attrs
@@ -48,7 +48,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 			if doc_sources.is_some() {
 				panic!("'sources' are already defined: {doc_sources:?}")
 			}
-			if field_type_str != "Vec < VPLPipeline >" {
+			if field_type_str != "Vec<VPLPipeline>" {
 				panic!("type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'")
 			}
 			doc_sources = Some(format!("### Sources:\n{comment}\n"));
@@ -63,21 +63,25 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 					format!("* *`{field_str}`: Boolean (optional, default: false)*{comment}"),
 					quote! { #field_name: node.get_property_bool(#field_str)? },
 				),
-				"Option < String >" => (
+				"Option<String>" => (
 					format!("* *`{field_str}`: String (optional)*{comment}"),
 					quote! { #field_name: node.get_property_string0(#field_str)? },
 				),
-				"Option < f32 >" => (
+				"Option<f32>" => (
 					format!("* *`{field_str}`: f32 (optional)*{comment}"),
 					quote! { #field_name: node.get_property_number0::<f32>(#field_str)? },
 				),
-				"Option < u8 >" => (
+				"Option<u8>" => (
 					format!("* *`{field_str}`: u8 (optional)*{comment}"),
 					quote! { #field_name: node.get_property_number0::<u8>(#field_str)? },
 				),
-				"Option < u32 >" => (
+				"Option<u32>" => (
 					format!("* *`{field_str}`: u32 (optional)*{comment}"),
 					quote! { #field_name: node.get_property_number0::<u32>(#field_str)? },
+				),
+				"Option<[f64;4]>" => (
+					format!("* *`{field_str}`: [f64,f64,f64,f64] (optional)*{comment}"),
+					quote! { #field_name: node.get_property_number_array4::<f64>(#field_str)? },
 				),
 				_ => panic!("unknown type field: {field_type_str}"),
 			};
