@@ -17,7 +17,7 @@ ab_glyph = { version = "0.2.23", default-features = false }
 anyhow.workspace = true
 image = { version = "0.25.0", default-features = false, features = ["jpeg", "png"] }
 imageproc = { version = "0.25.0", default-features = false }
-webp = { version = "0.3.0", default-features = false, optional = true, features = ["img"] }
+webp = { version = "0.3.0", default-features = false, features = ["img"] }
 
 versatiles_core.workspace = true
 
