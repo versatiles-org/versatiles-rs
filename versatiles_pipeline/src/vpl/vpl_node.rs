@@ -19,16 +19,20 @@ impl VPLNode {
 		self.properties.get(field).map_or(Ok(None), |list| {
 			ensure!(
 				list.len() == 1,
-				"field '{field}' must have exactly one entry"
+				"In operation '{}' the parameter '{field}' must have exactly one entry.",
+				self.name
 			);
 			Ok(list.first())
 		})
 	}
 
 	fn get_property1(&self, field: &str) -> Result<&String> {
-		self
-			.get_property0(field)?
-			.ok_or_else(|| anyhow!("field '{field}' does not exist"))
+		self.get_property0(field)?.ok_or_else(|| {
+			anyhow!(
+				"In operation '{}' the parameter '{field}' is required.",
+				self.name
+			)
+		})
 	}
 
 	pub fn get_property_string0(&self, field: &str) -> Result<Option<String>> {
@@ -64,7 +68,11 @@ impl VPLNode {
 		<T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
 	{
 		Ok(if let Some(vec) = self.get_property_vec(field) {
-			ensure!(vec.len() == 4, "field '{field}' must have 4 values");
+			ensure!(
+				vec.len() == 4,
+				"In operation '{}' the parameter '{field}' must have 4 values.",
+				self.name
+			);
 			Some([
 				vec[0].parse::<T>()?,
 				vec[1].parse::<T>()?,
