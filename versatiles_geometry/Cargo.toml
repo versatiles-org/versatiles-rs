@@ -13,6 +13,7 @@ repository.workspace = true
 version.workspace = true
 
 [dependencies]
+ab_glyph.workspace = true
 anyhow.workspace = true
 byteorder.workspace = true
 lazy_static.workspace = true

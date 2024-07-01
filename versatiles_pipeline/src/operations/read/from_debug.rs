@@ -12,7 +12,8 @@ use versatiles_core::{
 	},
 	utils::compress,
 };
-use versatiles_image::helper::{create_dummy_image, image2blob};
+use versatiles_geometry::vector_tile::create_debug_vector_tile;
+use versatiles_image::helper::{create_debug_image, image2blob};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Generates mocked tiles.
@@ -31,6 +32,7 @@ struct Args {
 
 #[derive(Debug)]
 struct Operation {
+	meta: Option<Blob>,
 	parameters: TilesReaderParameters,
 }
 
@@ -40,9 +42,9 @@ impl Operation {
 			let format = self.parameters.tile_format;
 			let blob = match format {
 				TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => {
-					let image = create_dummy_image(coord);
-					image2blob(&image, format)?
+					image2blob(&create_debug_image(coord), format)?
 				}
+				TileFormat::PBF => create_debug_vector_tile(coord)?,
 				_ => bail!("tile format '{format}' is not implemented yet"),
 			};
 			Some(compress(blob, &self.parameters.tile_compression)?)
@@ -69,15 +71,19 @@ impl ReadOperationTrait for Operation {
 			} else {
 				TileCompression::Uncompressed
 			};
-			let bbox = TileBBoxPyramid::from_geo_bbox(
-				args.zoom_min.unwrap_or(0),
-				args.zoom_max.unwrap_or(12),
-				args.bbox.as_ref().unwrap_or(&[-180.0, -90.0, 180.0, 90.0]),
-			);
+			let zoom_min = args.zoom_min.unwrap_or(0);
+			let zoom_max = args.zoom_max.unwrap_or(12);
+			let bbox = args.bbox.as_ref().unwrap_or(&[-180.0, -90.0, 180.0, 90.0]);
 
+			let bbox = TileBBoxPyramid::from_geo_bbox(zoom_min, zoom_max, bbox);
 			let parameters = TilesReaderParameters::new(format, compression, bbox);
 
-			Ok(Box::new(Self { parameters }) as Box<dyn OperationTrait>)
+			let meta = match format {
+				TileFormat::PBF => Some(Blob::from(format!("{{\"vector_layers\":[{{\"id\":\"debug\",\"fields\":{{}},\"minzoom\":{zoom_min},\"maxzoom\":{zoom_min}}}]}}"))),
+				_ => None
+			};
+
+			Ok(Box::new(Self { meta, parameters }) as Box<dyn OperationTrait>)
 		})
 	}
 }
@@ -89,7 +95,7 @@ impl OperationTrait for Operation {
 	}
 
 	fn get_meta(&self) -> Option<Blob> {
-		None
+		self.meta.clone()
 	}
 
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {

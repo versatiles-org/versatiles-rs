@@ -2629,6 +2629,7 @@ dependencies = [
 name = "versatiles_geometry"
 version = "0.11.5"
 dependencies = [
+ "ab_glyph",
  "anyhow",
  "byteorder",
  "lazy_static",

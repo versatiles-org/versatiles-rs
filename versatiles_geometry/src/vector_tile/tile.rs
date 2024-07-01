@@ -13,6 +13,10 @@ pub struct VectorTile {
 }
 
 impl VectorTile {
+	pub fn new(layers: Vec<VectorTileLayer>) -> VectorTile {
+		VectorTile { layers }
+	}
+
 	pub fn from_blob(blob: &Blob) -> Result<VectorTile> {
 		let mut reader = ValueReaderSlice::new_le(blob.as_slice());
 

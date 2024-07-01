@@ -13,7 +13,7 @@ repository.workspace = true
 version.workspace = true
 
 [dependencies]
-ab_glyph = { version = "0.2.23", default-features = false }
+ab_glyph.workspace = true
 anyhow.workspace = true
 image = { version = "0.25.0", default-features = false, features = ["jpeg", "png"] }
 imageproc = { version = "0.25.0", default-features = false }

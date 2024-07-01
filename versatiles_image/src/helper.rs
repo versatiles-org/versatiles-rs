@@ -7,7 +7,7 @@ use versatiles_core::types::{Blob, TileCoord3, TileFormat};
 
 static mut FONT: Option<FontArc> = None;
 
-pub fn create_dummy_image(coord: &TileCoord3) -> DynamicImage {
+pub fn create_debug_image(coord: &TileCoord3) -> DynamicImage {
 	let font = unsafe {
 		if FONT.is_none() {
 			FONT.insert(FontArc::try_from_slice(include_bytes!("../assets/trim.ttf")).unwrap())
