@@ -67,7 +67,7 @@ pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReader>> {
 		"pmtiles" => Ok(PMTilesReader::open_path(&path).await?.boxed()),
 		"tar" => Ok(TarTilesReader::open_path(&path)?.boxed()),
 		"versatiles" => Ok(VersaTilesReader::open_path(&path).await?.boxed()),
-		"yaml" => Ok(PipelineReader::open_path(&path).await?.boxed()),
+		"vpl" => Ok(PipelineReader::open_path(&path).await?.boxed()),
 		_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
 	}
 }
