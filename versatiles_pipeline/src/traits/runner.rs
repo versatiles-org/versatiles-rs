@@ -42,46 +42,14 @@ struct Runner {
 	properties_map: HashMap<String, GeoProperties>,
 }
 
-impl Runner {
-	fn run(&self, mut blob: Blob) -> Result<Option<Blob>> {
-		blob = decompress(blob, &self.tile_compression)?;
-		let mut tile =
-			VectorTile::from_blob(&blob).context("Failed to create VectorTile from Blob")?;
-
-		let layer_name = self.args.layer_name.as_ref();
-
-		for layer in tile.layers.iter_mut() {
-			if layer_name.map_or(false, |layer_name| &layer.name != layer_name) {
-				continue;
-			}
-
-			layer.map_properties(|properties| {
-				if let Some(mut prop) = properties {
-					if let Some(id) = prop.get(&self.args.id_field_tiles) {
-						if let Some(new_prop) = self.properties_map.get(&id.to_string()) {
-							if self.args.replace_properties {
-								prop = new_prop.clone();
-							} else {
-								prop.update(new_prop.clone());
-							}
-							return Some(prop);
-						} else {
-							warn!("id \"{id}\" not found in data source");
-						}
-					} else {
-						warn!("id field \"{}\" not found", &self.args.id_field_tiles);
-					}
-				}
-				None
-			})?;
-		}
-
-		Ok(Some(
-			tile
-				.to_blob()
-				.context("Failed to convert VectorTile to Blob")?,
-		))
-	}
+#[async_trait]
+trait RunnerTrait {
+	fn run(&self, blob: Blob) -> Result<Option<Blob>>;
+	fn build<'a>(
+		vpl_node: VPLNode,
+		source: Box<dyn OperationTrait>,
+		factory: &'a PipelineFactory,
+	) -> Result<Box<dyn OperationTrait>>;
 }
 
 #[derive(Debug)]

@@ -1,5 +1,5 @@
 use crate::{
-	traits::{OperationFactoryTrait, OperationTrait, ReadOperationFactoryTrait},
+	traits::*,
 	vpl::{VPLNode, VPLPipeline},
 	PipelineFactory,
 };
@@ -22,13 +22,14 @@ struct Args {
 struct Operation {
 	parameters: TilesReaderParameters,
 	sources: Vec<Box<dyn OperationTrait>>,
+	meta: Option<Blob>,
 }
 
-impl<'a> Operation {
+impl ReadOperationTrait for Operation {
 	fn build(
 		vpl_node: VPLNode,
-		factory: &'a PipelineFactory,
-	) -> BoxFuture<'a, Result<Box<dyn OperationTrait>, anyhow::Error>>
+		factory: &PipelineFactory,
+	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>, anyhow::Error>>
 	where
 		Self: Sized + OperationTrait,
 	{
@@ -39,8 +40,9 @@ impl<'a> Operation {
 				.into_iter()
 				.collect::<Result<Vec<_>>>()?;
 
-			ensure!(!sources.is_empty(), "must have at least one child");
+			ensure!(sources.len() > 1, "must have at least two sources");
 
+			let meta = sources.first().unwrap().get_meta();
 			let parameters = sources.first().unwrap().get_parameters();
 			let mut pyramid = parameters.bbox_pyramid.clone();
 			let tile_format = parameters.tile_format;
@@ -59,7 +61,9 @@ impl<'a> Operation {
 			}
 
 			let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
+
 			Ok(Box::new(Self {
+				meta,
 				parameters,
 				sources,
 			}) as Box<dyn OperationTrait>)
@@ -74,8 +78,7 @@ impl OperationTrait for Operation {
 	}
 
 	fn get_meta(&self) -> Option<Blob> {
-		todo!();
-		//self.reader.lock().await.get_meta()
+		self.meta.clone()
 	}
 
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
@@ -96,6 +99,7 @@ impl OperationTrait for Operation {
 	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
 		let output_compression = &self.parameters.tile_compression;
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
+
 		TileStream::from_stream_iter(bboxes.into_iter().map(move |bbox| async move {
 			let mut tiles: Vec<(TileCoord3, Blob)> = Vec::new();
 			for source in self.sources.iter() {

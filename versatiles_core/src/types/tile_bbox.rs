@@ -1,7 +1,7 @@
 //! This module defines the `TileBBox` struct, which represents a bounding box for tiles at a specific zoom level.
 //! It provides methods to create, manipulate, and query these bounding boxes.
 
-use super::{TileCoord2, TileCoord3};
+use super::{TileBBoxPyramid, TileCoord2, TileCoord3};
 use anyhow::{ensure, Result};
 use itertools::Itertools;
 use std::{
@@ -257,6 +257,10 @@ impl TileBBox {
 			self.x_max = self.x_max.min(bbox.x_max);
 			self.y_max = self.y_max.min(bbox.y_max);
 		}
+	}
+
+	pub fn intersect_pyramid(&mut self, pyramid: &TileBBoxPyramid) {
+		self.intersect_bbox(pyramid.get_level_bbox(self.level));
 	}
 
 	pub fn overlaps_bbox(&self, bbox: &TileBBox) -> bool {

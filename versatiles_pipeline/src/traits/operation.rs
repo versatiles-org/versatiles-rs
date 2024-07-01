@@ -1,6 +1,7 @@
 use crate::{vpl::VPLNode, PipelineFactory};
 use anyhow::Result;
 use async_trait::async_trait;
+use futures::future::BoxFuture;
 use std::fmt::Debug;
 use versatiles_core::types::{Blob, TileBBox, TileCoord3, TileStream, TilesReaderParameters};
 
@@ -12,26 +13,11 @@ pub trait OperationTrait: Debug + Send + Sync + Unpin {
 	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream;
 }
 
-pub trait OperationFactoryTrait: Send + Sync {
-	fn get_tag_name(&self) -> &str;
-	fn get_docs(&self) -> String;
-}
-
-#[async_trait]
-pub trait ReadOperationFactoryTrait: OperationFactoryTrait {
-	async fn build<'a>(
-		&self,
+pub trait ReadOperationTrait: OperationTrait {
+	fn build(
 		vpl_node: VPLNode,
-		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>>;
-}
-
-#[async_trait]
-pub trait TransformOperationFactoryTrait: OperationFactoryTrait {
-	async fn build<'a>(
-		&self,
-		vpl_node: VPLNode,
-		source: Box<dyn OperationTrait>,
-		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>>;
+		factory: &PipelineFactory,
+	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
+	where
+		Self: Sized + OperationTrait;
 }

@@ -1,15 +1,10 @@
+use crate::{traits::*, vpl::VPLNode, PipelineFactory};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, lock::Mutex};
 use std::{fmt::Debug, sync::Arc};
 use versatiles_core::types::{
 	Blob, TileBBox, TileCoord3, TileStream, TilesReader, TilesReaderParameters,
-};
-
-use crate::{
-	traits::{OperationFactoryTrait, OperationTrait, ReadOperationFactoryTrait},
-	vpl::VPLNode,
-	PipelineFactory,
 };
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -26,11 +21,11 @@ struct Operation {
 	meta: Option<Blob>,
 }
 
-impl<'a> Operation {
+impl ReadOperationTrait for Operation {
 	fn build(
 		vpl_node: VPLNode,
-		factory: &'a PipelineFactory,
-	) -> BoxFuture<'a, Result<Box<dyn OperationTrait>>>
+		factory: &PipelineFactory,
+	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
 	where
 		Self: Sized + OperationTrait,
 	{
