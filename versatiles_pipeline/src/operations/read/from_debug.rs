@@ -112,7 +112,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"from_dummy"
+		"from_debug"
 	}
 }
 

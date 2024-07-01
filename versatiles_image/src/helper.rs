@@ -16,17 +16,17 @@ pub fn create_dummy_image(coord: &TileCoord3) -> DynamicImage {
 		}
 	};
 
-	let br = (coord.x + coord.y % 2) as u8 * 32 + 191;
-	let mut image1 = RgbImage::from_pixel(256, 256, Rgb::from([br, br, br]));
-	draw_text_mut(
-		&mut image1,
-		Rgb([32, 32, 32]),
-		100,
-		100,
-		PxScale::from(16f32),
-		font,
-		&format!("{}/{}/{}", coord.z, coord.x, coord.y),
-	);
+	let br = ((coord.x + coord.y) % 2) as u8 * 16 + 224;
+	let mut image1 = RgbImage::from_pixel(512, 512, Rgb::from([br, br, br]));
+
+	let mut draw = |y: i32, c: Rgb<u8>, text: String| {
+		draw_text_mut(&mut image1, c, 220, y, PxScale::from(40f32), font, &text)
+	};
+
+	draw(195, Rgb([127, 30, 16]), format!("z: {}", coord.z));
+	draw(225, Rgb([0, 92, 45]), format!("x: {}", coord.x));
+	draw(255, Rgb([30, 23, 98]), format!("y: {}", coord.y));
+
 	DynamicImage::ImageRgb8(image1)
 }
 
