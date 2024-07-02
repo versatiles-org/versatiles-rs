@@ -1,7 +1,7 @@
 use crate::traits::ReadOperationFactoryTrait;
 
 mod from_container;
-mod from_debug;
+pub mod from_debug;
 mod from_overlayed;
 
 pub fn get_read_operation_factories() -> Vec<Box<dyn ReadOperationFactoryTrait>> {

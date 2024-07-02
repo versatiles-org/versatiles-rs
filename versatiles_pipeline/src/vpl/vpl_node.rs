@@ -1,4 +1,5 @@
 use super::VPLPipeline;
+use crate::vpl::parse_vpl;
 use anyhow::{anyhow, ensure, Result};
 use std::{collections::HashMap, fmt::Debug, str::FromStr};
 
@@ -11,6 +12,12 @@ pub struct VPLNode {
 
 #[allow(dead_code)]
 impl VPLNode {
+	pub fn from_str(vpl: &str) -> Result<Self> {
+		let mut pipeline = parse_vpl(vpl)?;
+		assert_eq!(pipeline.len(), 1);
+		pipeline.pop().ok_or(anyhow!("pipeline is empty"))
+	}
+
 	fn get_property_vec(&self, field: &str) -> Option<&Vec<String>> {
 		self.properties.get(field)
 	}

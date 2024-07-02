@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use anyhow::{ensure, Result};
 
-use super::VPLNode;
+use super::{parse_vpl, VPLNode};
 
 #[derive(Clone, PartialEq)]
 pub struct VPLPipeline {
@@ -10,6 +10,18 @@ pub struct VPLPipeline {
 }
 
 impl VPLPipeline {
+	pub fn from_str(vpl: &str) -> Self {
+		parse_vpl(vpl).unwrap()
+	}
+
+	pub fn len(&self) -> usize {
+		self.pipeline.len()
+	}
+
+	pub fn pop(&mut self) -> Option<VPLNode> {
+		self.pipeline.pop()
+	}
+
 	pub fn split(mut self) -> Result<(VPLNode, Vec<VPLNode>)> {
 		ensure!(!self.pipeline.is_empty(), "pipeline is empty");
 		let first_element = self.pipeline.remove(0);

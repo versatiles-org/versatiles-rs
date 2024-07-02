@@ -92,3 +92,64 @@ impl TransformOperationFactoryTrait for Factory {
 		Operation::build(vpl_node, source, factory).await
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	async fn test_filter_zoom(
+		min: Option<u8>,
+		max: Option<u8>,
+		tests: Vec<(u32, bool)>,
+	) -> Result<()> {
+		let factory = PipelineFactory::dummy();
+
+		let vpl = format!(
+			"from_debug format=pbf | filter_zoom{}{}",
+			min.map_or_else(String::new, |m| format!(" min={}", m)),
+			max.map_or_else(String::new, |m| format!(" max={}", m)),
+		);
+
+		let mut operation = factory.operation_from_vpl(&vpl).await?;
+
+		for (z, expected) in tests.into_iter() {
+			let coord = TileCoord3::new(z, z, z as u8)?;
+			let result = operation.get_tile_data(&coord).await?;
+			if expected {
+				assert!(
+					result.is_some(),
+					"Expected tile data for {coord:?} with min={:?} max={:?}",
+					min,
+					max
+				);
+			} else {
+				assert!(
+					result.is_none(),
+					"Expected no tile data for {coord:?} with min={:?} max={:?}",
+					min,
+					max
+				);
+			}
+		}
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_filter_zoom_inside() {
+		let tests = vec![(0, false), (1, true), (2, true), (3, true), (4, false)];
+		test_filter_zoom(Some(1), Some(3), tests).await.unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_filter_zoom_no_min() {
+		let tests = vec![(0, true), (1, true), (2, true), (3, true), (4, false)];
+		test_filter_zoom(None, Some(3), tests).await.unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_filter_zoom_no_max() {
+		let tests = vec![(0, false), (1, true), (2, true), (3, true), (4, true)];
+		test_filter_zoom(Some(1), None, tests).await.unwrap();
+	}
+}

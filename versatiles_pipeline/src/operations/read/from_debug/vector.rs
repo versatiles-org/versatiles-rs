@@ -180,3 +180,32 @@ fn lerp(t: f32, p0: Point, p1: Point) -> Point {
 		y: p0.y + t * (p1.y - p0.y),
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_create_debug_vector_tile() {
+		let coord = TileCoord3::new(1, 2, 3).unwrap();
+		let blob = create_debug_vector_tile(&coord).unwrap();
+		let vt = VectorTile::from_blob(&blob).unwrap();
+		assert_eq!(vt.layers.len(), 4);
+		assert_eq!(vt.layers[0].features.len(), 1);
+		assert_eq!(vt.layers[1].features.len(), 3);
+		assert_eq!(vt.layers[2].features.len(), 3);
+		assert_eq!(vt.layers[3].features.len(), 3);
+	}
+
+	#[test]
+	fn test_create_debug_vector_tile_different_coord() {
+		let coord = TileCoord3::new(99, 100, 9).unwrap();
+		let blob = create_debug_vector_tile(&coord).unwrap();
+		let vt = VectorTile::from_blob(&blob).unwrap();
+		assert_eq!(vt.layers.len(), 4);
+		assert_eq!(vt.layers[0].features.len(), 1);
+		assert_eq!(vt.layers[1].features.len(), 3);
+		assert_eq!(vt.layers[2].features.len(), 4);
+		assert_eq!(vt.layers[3].features.len(), 5);
+	}
+}

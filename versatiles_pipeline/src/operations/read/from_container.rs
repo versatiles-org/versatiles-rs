@@ -103,3 +103,64 @@ impl ReadOperationFactoryTrait for Factory {
 		Operation::build(vpl_node, factory).await
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[allow(dead_code)]
+	async fn test(filename: &str, expected_meta: &str) -> Result<()> {
+		let factory = PipelineFactory::dummy();
+		let mut operation = factory
+			.operation_from_vpl(&format!("from_container filename={filename}"))
+			.await?;
+
+		let coord = TileCoord3 { x: 1, y: 2, z: 3 };
+		let blob = operation.get_tile_data(&coord).await?.unwrap();
+
+		assert!(!blob.is_empty(), "for '{filename}'");
+		assert_eq!(
+			operation.get_meta().unwrap().as_str(),
+			expected_meta,
+			"for '{filename}'",
+		);
+
+		let mut stream = operation
+			.get_bbox_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?)
+			.await;
+
+		let mut n = 0;
+		while let Some((coord, blob)) = stream.next().await {
+			assert!(!blob.is_empty(), "for '{filename}'");
+			assert!(coord.x >= 1 && coord.x <= 2, "for '{filename}'");
+			assert!(coord.y >= 1 && coord.y <= 3, "for '{filename}'");
+			assert_eq!(coord.z, 3, "for '{filename}'");
+			n += 1;
+		}
+		assert_eq!(n, 6, "for '{filename}'");
+
+		Ok(())
+	}
+
+	/*
+	#[tokio::test]
+	async fn test_read_container_1() {
+		test(
+			"test_container_1.versatiles",
+			"{\"meta_key\":\"meta_value_1\"}",
+		)
+		.await
+		.unwrap();
+	}
+
+	#[tokio::test]
+	async fn test_read_container_2() {
+		test(
+			"test_container_2.versatiles",
+			"{\"meta_key\":\"meta_value_2\"}",
+		)
+		.await
+		.unwrap();
+	}
+	 */
+}

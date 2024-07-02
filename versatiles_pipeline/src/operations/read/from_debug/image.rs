@@ -29,3 +29,17 @@ pub fn create_debug_image(coord: &TileCoord3) -> DynamicImage {
 
 	DynamicImage::ImageRgb8(image1)
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_create_debug_image() {
+		let coord = TileCoord3 { x: 1, y: 2, z: 3 };
+		let image = create_debug_image(&coord);
+
+		assert_eq!(image.width(), 512);
+		assert_eq!(image.height(), 512);
+	}
+}

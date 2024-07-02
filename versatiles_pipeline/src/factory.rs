@@ -45,6 +45,11 @@ impl PipelineFactory {
 		factory
 	}
 
+	#[cfg(test)]
+	pub fn dummy() -> Self {
+		PipelineFactory::default(&Path::new("/"), None)
+	}
+
 	fn add_read_factory(&mut self, factory: Box<dyn ReadOperationFactoryTrait>) {
 		self
 			.read_ops
