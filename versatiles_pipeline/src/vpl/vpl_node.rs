@@ -15,7 +15,7 @@ impl VPLNode {
 		self.properties.get(field)
 	}
 
-	fn get_property0(&self, field: &str) -> Result<Option<&String>> {
+	fn get_property(&self, field: &str) -> Result<Option<&String>> {
 		self.properties.get(field).map_or(Ok(None), |list| {
 			ensure!(
 				list.len() == 1,
@@ -26,25 +26,16 @@ impl VPLNode {
 		})
 	}
 
-	fn get_property1(&self, field: &str) -> Result<&String> {
-		self.get_property0(field)?.ok_or_else(|| {
-			anyhow!(
-				"In operation '{}' the parameter '{field}' is required.",
-				self.name
-			)
-		})
+	pub fn get_property_string(&self, field: &str) -> Result<Option<String>> {
+		Ok(self.get_property(field)?.map(|v| v.to_string()))
 	}
 
-	pub fn get_property_string0(&self, field: &str) -> Result<Option<String>> {
-		Ok(self.get_property0(field)?.map(|v| v.to_string()))
+	pub fn get_property_string_req(&self, field: &str) -> Result<String> {
+		self.required(field, self.get_property_string(field))
 	}
 
-	pub fn get_property_string1(&self, field: &str) -> Result<String> {
-		self.get_property1(field).map(|v| v.to_string())
-	}
-
-	pub fn get_property_bool(&self, field: &str) -> Result<bool> {
-		Ok(self.get_property0(field)?.map_or(false, |v| {
+	pub fn get_property_bool_req(&self, field: &str) -> Result<bool> {
+		Ok(self.get_property(field)?.map_or(false, |v| {
 			matches!(
 				v.trim().to_lowercase().as_str(),
 				"1" | "true" | "yes" | "ok"
@@ -52,14 +43,18 @@ impl VPLNode {
 		}))
 	}
 
-	pub fn get_property_number0<T>(&self, field: &str) -> Result<Option<T>>
+	pub fn get_property_number<T>(&self, field: &str) -> Result<Option<T>>
 	where
 		T: FromStr,
 		<T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
 	{
 		self
-			.get_property0(field)?
+			.get_property(field)?
 			.map_or(Ok(None), |v| v.parse::<T>().map(Some).map_err(Into::into))
+	}
+
+	pub fn get_property_number_req(&self, field: &str) -> Result<String> {
+		self.required(field, self.get_property_number(field))
 	}
 
 	pub fn get_property_number_array4<T>(&self, field: &str) -> Result<Option<[T; 4]>>
@@ -70,7 +65,7 @@ impl VPLNode {
 		Ok(if let Some(vec) = self.get_property_vec(field) {
 			ensure!(
 				vec.len() == 4,
-				"In operation '{}' the parameter '{field}' must have 4 values.",
+				"In operation '{}' the parameter '{field}' must be an array of 4 numbers.",
 				self.name
 			);
 			Some([
@@ -81,6 +76,24 @@ impl VPLNode {
 			])
 		} else {
 			None
+		})
+	}
+
+	pub fn get_property_number_array4_req<T>(&self, field: &str) -> Result<[T; 4]>
+	where
+		T: FromStr,
+		<T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
+	{
+		self.required(field, self.get_property_number_array4(field))
+	}
+
+	fn required<T>(&self, field: &str, result: Result<Option<T>>) -> Result<T> {
+		result?.ok_or_else(|| {
+			anyhow!(
+				"In operation '{}' the parameter '{}' is required.",
+				self.name,
+				field
+			)
 		})
 	}
 }

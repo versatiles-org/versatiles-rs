@@ -92,12 +92,12 @@ struct Operation {
 	meta: Option<Blob>,
 }
 
-impl<'a> Operation {
+impl Operation {
 	fn build(
 		vpl_node: VPLNode,
 		source: Box<dyn OperationTrait>,
-		factory: &'a PipelineFactory,
-	) -> BoxFuture<'a, Result<Box<dyn OperationTrait>, anyhow::Error>>
+		factory: &PipelineFactory,
+	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>, anyhow::Error>>
 	where
 		Self: Sized + OperationTrait,
 	{

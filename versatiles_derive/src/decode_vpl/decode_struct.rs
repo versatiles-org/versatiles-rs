@@ -57,27 +57,31 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 			let (doc_field, parser_field) = match field_type_str.as_str() {
 				"String" => (
 					format!("* **`{field_str}`: String (required)**{comment}"),
-					quote! { #field_name: node.get_property_string1(#field_str)? },
+					quote! { #field_name: node.get_property_string_req(#field_str)? },
 				),
 				"bool" => (
 					format!("* *`{field_str}`: Boolean (optional, default: false)*{comment}"),
-					quote! { #field_name: node.get_property_bool(#field_str)? },
+					quote! { #field_name: node.get_property_bool_req(#field_str)? },
+				),
+				"[f64;4]" => (
+					format!("* **`{field_str}`: [f64,f64,f64,f64] (required)**{comment}"),
+					quote! { #field_name: node.get_property_number_array4_req::<f64>(#field_str)? },
 				),
 				"Option<String>" => (
 					format!("* *`{field_str}`: String (optional)*{comment}"),
-					quote! { #field_name: node.get_property_string0(#field_str)? },
+					quote! { #field_name: node.get_property_string(#field_str)? },
 				),
 				"Option<f32>" => (
 					format!("* *`{field_str}`: f32 (optional)*{comment}"),
-					quote! { #field_name: node.get_property_number0::<f32>(#field_str)? },
+					quote! { #field_name: node.get_property_number::<f32>(#field_str)? },
 				),
 				"Option<u8>" => (
 					format!("* *`{field_str}`: u8 (optional)*{comment}"),
-					quote! { #field_name: node.get_property_number0::<u8>(#field_str)? },
+					quote! { #field_name: node.get_property_number::<u8>(#field_str)? },
 				),
 				"Option<u32>" => (
 					format!("* *`{field_str}`: u32 (optional)*{comment}"),
-					quote! { #field_name: node.get_property_number0::<u32>(#field_str)? },
+					quote! { #field_name: node.get_property_number::<u32>(#field_str)? },
 				),
 				"Option<[f64;4]>" => (
 					format!("* *`{field_str}`: [f64,f64,f64,f64] (optional)*{comment}"),
