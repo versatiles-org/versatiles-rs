@@ -1,13 +1,27 @@
 use super::{VectorTile, VectorTileLayer};
-use crate::{Feature, Geometry, LineStringGeometry, MultiLineStringGeometry, PointGeometry};
-use ab_glyph::{Font, FontArc, OutlineCurve::*, Point};
+use crate::{
+	AreaTrait, Feature, Geometry, LineStringGeometry, MultiLineStringGeometry, MultiPolygonGeometry,
+	PointGeometry, RingGeometry,
+};
+use ab_glyph::{Font, FontArc, Outline, OutlineCurve::*, Point};
 use anyhow::Result;
-use std::{f64::consts::PI, ops::Div};
+use std::{f64::consts::PI, ops::Div, vec};
 use versatiles_core::types::{Blob, TileCoord3};
 
 static mut FONT: Option<FontArc> = None;
 
 pub fn create_debug_vector_tile(coord: &TileCoord3) -> Result<Blob> {
+	let tile = VectorTile::new(vec![
+		get_background_layer()?,
+		draw_text("debug_z", 140.0, format!("z:{}", coord.z)),
+		draw_text("debug_x", 190.0, format!("x:{}", coord.x)),
+		draw_text("debug_y", 240.0, format!("y:{}", coord.y)),
+	]);
+
+	tile.to_blob()
+}
+
+fn draw_text(name: &str, y: f32, text: String) -> VectorTileLayer {
 	let font = unsafe {
 		if FONT.is_none() {
 			FONT.insert(FontArc::try_from_slice(include_bytes!("../../assets/trim.ttf")).unwrap())
@@ -16,42 +30,82 @@ pub fn create_debug_vector_tile(coord: &TileCoord3) -> Result<Blob> {
 		}
 	};
 
-	let mut geometry = MultiLineStringGeometry::new();
+	let mut features: Vec<Feature> = Vec::new();
 	let height = font.height_unscaled();
-	let scale: f32 = 40.0 / height;
+	let scale: f32 = 80.0 / height;
 
-	let mut draw_text = |y: f32, text: String| {
-		let mut position = Point { x: 220.0, y };
-		for c in text.chars() {
-			let glyph_id = font.glyph_id(c);
-			if let Some(outline) = font.outline(glyph_id) {
-				for curve in outline.curves {
-					let points = match curve {
-						Line(p0, p1) => vec![p0, p1],
-						Quad(p0, c0, p1) => draw_quad(p0, c0, p1),
-						Cubic(p0, c0, c1, p1) => draw_cubic(p0, c0, c1, p1),
-					};
-					geometry.push(
-						points
-							.iter()
-							.map(|p| {
-								PointGeometry::new(
-									8.0 * (p.x * scale + position.x) as f64,
-									8.0 * ((height - p.y) * scale + position.y) as f64,
-								)
-							})
-							.collect::<LineStringGeometry>(),
-					);
-				}
-			}
-			position.x += scale * font.h_advance_unscaled(glyph_id);
+	let mut position = Point { x: 100.0, y };
+
+	let get_char_as_feature = |outline: Outline, position: &Point| {
+		let mut multi = MultiLineStringGeometry::new();
+		for curve in outline.curves {
+			let points = match curve {
+				Line(p0, p1) => vec![p0, p1],
+				Quad(p0, c0, p1) => draw_quad(p0, c0, p1),
+				Cubic(p0, c0, c1, p1) => draw_cubic(p0, c0, c1, p1),
+			};
+			multi.push(
+				points
+					.iter()
+					.map(|p| {
+						PointGeometry::new(
+							8.0 * (p.x * scale + position.x) as f64,
+							8.0 * ((height - p.y) * scale + position.y) as f64,
+						)
+					})
+					.collect::<LineStringGeometry>(),
+			);
 		}
+
+		let multipolygon = get_multipolygon(multi.into_iter());
+
+		Feature::new(Geometry::MultiPolygon(multipolygon))
 	};
 
-	draw_text(195.0, format!("z: {}", coord.z));
-	draw_text(225.0, format!("x: {}", coord.x));
-	draw_text(255.0, format!("y: {}", coord.y));
+	for c in text.chars() {
+		let glyph_id = font.glyph_id(c);
+		if let Some(outline) = font.outline(glyph_id) {
+			features.push(get_char_as_feature(outline, &position));
+		}
+		position.x += scale * font.h_advance_unscaled(glyph_id);
+	}
 
+	VectorTileLayer::from_features(String::from(name), features, 4096, 1).unwrap()
+}
+
+fn get_multipolygon(mut iter: impl Iterator<Item = LineStringGeometry>) -> MultiPolygonGeometry {
+	fn get_ring(mut iter: impl Iterator<Item = LineStringGeometry>) -> Option<RingGeometry> {
+		let mut ring: RingGeometry = iter.next()?;
+		let p0 = ring.first().unwrap().clone();
+		while ring.last().unwrap() != &p0 {
+			let line = iter.next().unwrap();
+			for point in line.into_iter().skip(1) {
+				ring.push(point);
+			}
+		}
+		Some(ring)
+	}
+
+	let mut multipolygon = MultiPolygonGeometry::new();
+
+	while let Some(ring) = get_ring(&mut iter) {
+		if ring.len() == 2 {
+			continue;
+		}
+		if ring.area() > 0.0 {
+			multipolygon.push(vec![ring])
+		} else {
+			multipolygon
+				.last_mut()
+				.expect("first ring is missing")
+				.push(ring)
+		}
+	}
+
+	multipolygon
+}
+
+fn get_background_layer() -> Result<VectorTileLayer> {
 	let mut circle: LineStringGeometry = vec![];
 	for i in 0..=100 {
 		let a = PI * i as f64 / 50.0;
@@ -60,13 +114,9 @@ pub fn create_debug_vector_tile(coord: &TileCoord3) -> Result<Blob> {
 			y: (a.sin() + 1.0) * 2047.5,
 		})
 	}
-	geometry.push(circle);
 
-	let feature = Feature::new(Geometry::MultiLineString(geometry));
-	let layer = VectorTileLayer::from_features(String::from("debug"), vec![feature], 4096, 1)?;
-	let tile = VectorTile::new(vec![layer]);
-
-	tile.to_blob()
+	let feature = Feature::new(Geometry::LineString(circle));
+	VectorTileLayer::from_features(String::from("background"), vec![feature], 4096, 1)
 }
 
 fn draw_quad(p0: Point, c0: Point, p1: Point) -> Vec<Point> {

@@ -79,8 +79,15 @@ impl ReadOperationTrait for Operation {
 			let parameters = TilesReaderParameters::new(format, compression, bbox);
 
 			let meta = match format {
-				TileFormat::PBF => Some(Blob::from(format!("{{\"vector_layers\":[{{\"id\":\"debug\",\"fields\":{{}},\"minzoom\":{zoom_min},\"maxzoom\":{zoom_min}}}]}}"))),
-				_ => None
+				TileFormat::PBF => Some(Blob::from(format!(
+					"{{\"vector_layers\":[{}]}}",
+					["background", "debug_x", "debug_y", "debug_z"]
+						.map(|n| format!(
+							"{{\"id\":\"{n}\",\"minzoom\":{zoom_min},\"maxzoom\":{zoom_min}}}"
+						))
+						.join(",")
+				))),
+				_ => None,
 			};
 
 			Ok(Box::new(Self { meta, parameters }) as Box<dyn OperationTrait>)
