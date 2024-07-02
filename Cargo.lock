@@ -2629,7 +2629,6 @@ dependencies = [
 name = "versatiles_geometry"
 version = "0.11.5"
 dependencies = [
- "ab_glyph",
  "anyhow",
  "byteorder",
  "lazy_static",
@@ -2643,10 +2642,8 @@ dependencies = [
 name = "versatiles_image"
 version = "0.11.5"
 dependencies = [
- "ab_glyph",
  "anyhow",
  "image",
- "imageproc",
  "versatiles_core",
  "webp",
 ]
@@ -2655,10 +2652,12 @@ dependencies = [
 name = "versatiles_pipeline"
 version = "0.11.5"
 dependencies = [
+ "ab_glyph",
  "anyhow",
  "assert_fs",
  "async-trait",
  "futures",
+ "imageproc",
  "itertools 0.13.0",
  "log",
  "nom",

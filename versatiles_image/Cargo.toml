@@ -13,10 +13,8 @@ repository.workspace = true
 version.workspace = true
 
 [dependencies]
-ab_glyph.workspace = true
 anyhow.workspace = true
-image = { version = "0.25.0", default-features = false, features = ["jpeg", "png"] }
-imageproc = { version = "0.25.0", default-features = false }
+image.workspace = true
 webp = { version = "0.3.0", default-features = false, features = ["img"] }
 
 versatiles_core.workspace = true

@@ -13,9 +13,11 @@ repository.workspace = true
 version.workspace = true
 
 [dependencies]
+ab_glyph.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 futures.workspace = true
+imageproc = { version = "0.25.0", default-features = false }
 itertools.workspace = true
 log.workspace = true
 nom = { version = "7.1.3" }

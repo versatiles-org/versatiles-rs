@@ -1,12 +1,12 @@
-use super::{VectorTile, VectorTileLayer};
-use crate::{
-	AreaTrait, Feature, Geometry, LineStringGeometry, MultiLineStringGeometry, MultiPolygonGeometry,
-	PointGeometry, RingGeometry,
-};
 use ab_glyph::{Font, FontArc, Outline, OutlineCurve::*, Point};
 use anyhow::Result;
 use std::{f64::consts::PI, ops::Div, vec};
 use versatiles_core::types::{Blob, TileCoord3};
+use versatiles_geometry::{
+	vector_tile::{VectorTile, VectorTileLayer},
+	AreaTrait, Feature, Geometry, LineStringGeometry, MultiLineStringGeometry, MultiPolygonGeometry,
+	PointGeometry, RingGeometry,
+};
 
 static mut FONT: Option<FontArc> = None;
 
@@ -24,7 +24,7 @@ pub fn create_debug_vector_tile(coord: &TileCoord3) -> Result<Blob> {
 fn draw_text(name: &str, y: f32, text: String) -> VectorTileLayer {
 	let font = unsafe {
 		if FONT.is_none() {
-			FONT.insert(FontArc::try_from_slice(include_bytes!("../../assets/trim.ttf")).unwrap())
+			FONT.insert(FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap())
 		} else {
 			FONT.as_ref().unwrap()
 		}

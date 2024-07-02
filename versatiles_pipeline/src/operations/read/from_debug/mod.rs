@@ -1,10 +1,13 @@
-#![allow(dead_code, unused_variables, unreachable_code)]
+mod image;
+mod vector;
 
 use crate::{traits::*, vpl::VPLNode, PipelineFactory};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
+use image::create_debug_image;
 use std::fmt::Debug;
+use vector::create_debug_vector_tile;
 use versatiles_core::{
 	types::{
 		Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TileStream,
@@ -12,8 +15,7 @@ use versatiles_core::{
 	},
 	utils::compress,
 };
-use versatiles_geometry::vector_tile::create_debug_vector_tile;
-use versatiles_image::helper::{create_debug_image, image2blob};
+use versatiles_image::helper::image2blob;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Generates mocked tiles.
@@ -57,7 +59,7 @@ impl Operation {
 impl ReadOperationTrait for Operation {
 	fn build(
 		vpl_node: VPLNode,
-		factory: &PipelineFactory,
+		_factory: &PipelineFactory,
 	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
 	where
 		Self: Sized + OperationTrait,
