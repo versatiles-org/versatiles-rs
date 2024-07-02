@@ -80,17 +80,17 @@ impl ReadOperationTrait for Operation {
 			let bbox = TileBBoxPyramid::from_geo_bbox(zoom_min, zoom_max, bbox);
 			let parameters = TilesReaderParameters::new(format, compression, bbox);
 
-			let meta = match format {
-				TileFormat::PBF => Some(Blob::from(format!(
+			let meta = Some(match format {
+				TileFormat::PBF => Blob::from(format!(
 					"{{\"vector_layers\":[{}]}}",
 					["background", "debug_x", "debug_y", "debug_z"]
 						.map(|n| format!(
 							"{{\"id\":\"{n}\",\"minzoom\":{zoom_min},\"maxzoom\":{zoom_min}}}"
 						))
 						.join(",")
-				))),
-				_ => None,
-			};
+				)),
+				_ => Blob::from("{}"),
+			});
 
 			Ok(Box::new(Self { meta, parameters }) as Box<dyn OperationTrait>)
 		})
