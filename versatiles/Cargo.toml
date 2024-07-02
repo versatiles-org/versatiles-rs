@@ -38,11 +38,11 @@ enumset.workspace = true
 env_logger = { version = "0.11.3", default-features = false, optional = true }
 flate2 = { version = "1.0.30", default-features = false, features = ["default"] }
 futures = { workspace = true, features = ["default"] }
-hyper = { version = "1.3.1", default-features = false, optional = true, features = ["http2"] }
+hyper = { version = "1.4.0", default-features = false, optional = true, features = ["http2"] }
 itertools = { workspace = true, features = ["use_alloc"] }
 lazy_static = { workspace = true, optional = true }
 log.workspace = true
-mime_guess = { version = "2.0.4", default-features = false, optional = true }
+mime_guess = { version = "2.0.5", default-features = false, optional = true }
 r2d2 = { version = "0.8.10", default-features = false, optional = true }
 r2d2_sqlite = { version = "0.24.0", default-features = false, optional = true, features = [
 	"bundled",

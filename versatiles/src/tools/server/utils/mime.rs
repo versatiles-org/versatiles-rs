@@ -20,7 +20,7 @@ mod tests {
 	#[test]
 	fn test_guess_mime() {
 		let test = |path: &str, mime: &str| {
-			assert_eq!(guess_mime(Path::new(path)), mime);
+			assert_eq!(guess_mime(Path::new(path)), mime, "for {path}");
 		};
 
 		test("fluffy.css", "text/css; charset=utf-8");
@@ -29,7 +29,7 @@ mod tests {
 		test("fluffy.html", "text/html; charset=utf-8");
 		test("fluffy.jpeg", "image/jpeg");
 		test("fluffy.jpg", "image/jpeg");
-		test("fluffy.js", "application/javascript");
+		test("fluffy.js", "text/javascript; charset=utf-8");
 		test("fluffy.json", "application/json");
 		test("fluffy.pbf", "application/octet-stream");
 		test("fluffy.png", "image/png");

@@ -16,6 +16,6 @@ version.workspace = true
 proc-macro = true
 
 [dependencies]
-proc-macro2 = { version = "1.0.85", features = ["proc-macro"] }
+proc-macro2 = { version = "1.0.86", features = ["proc-macro"] }
 quote = { version = "1.0.36", features = ["proc-macro"] }
-syn = { version = "2.0.66", features = ["derive", "parsing", "printing", "proc-macro"] }
+syn = { version = "2.0.68", features = ["derive", "parsing", "printing", "proc-macro"] }
