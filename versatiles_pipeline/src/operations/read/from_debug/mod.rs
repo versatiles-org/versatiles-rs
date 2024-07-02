@@ -8,28 +8,17 @@ use futures::future::BoxFuture;
 use image::create_debug_image;
 use std::fmt::Debug;
 use vector::create_debug_vector_tile;
-use versatiles_core::{
-	types::{
-		Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TileStream,
-		TilesReaderParameters,
-	},
-	utils::compress,
+use versatiles_core::types::{
+	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TileStream,
+	TilesReaderParameters,
 };
 use versatiles_image::helper::image2blob;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Generates mocked tiles.
+/// Produces debugging tiles, showing their coordinates.
 struct Args {
-	/// Specifies the tile format.
+	/// tile format: "pbf", "jpg", "png" or "webp"
 	format: String,
-	/// Compression type.
-	compression: Option<String>,
-	/// Minimum zoom level.
-	zoom_min: Option<u8>,
-	/// Maximum zoom level.
-	zoom_max: Option<u8>,
-	/// Bounding box: [min long, min lat, max long, max lat].
-	bbox: Option<[f64; 4]>,
 }
 
 #[derive(Debug)]
@@ -49,7 +38,7 @@ impl Operation {
 				TileFormat::PBF => create_debug_vector_tile(coord)?,
 				_ => bail!("tile format '{format}' is not implemented yet"),
 			};
-			Some(compress(blob, &self.parameters.tile_compression)?)
+			Some(blob)
 		} else {
 			None
 		})
@@ -68,25 +57,17 @@ impl ReadOperationTrait for Operation {
 			let args = Args::from_vpl_node(&vpl_node)?;
 
 			let format = TileFormat::parse_str(&args.format)?;
-			let compression = if let Some(c) = args.compression {
-				TileCompression::parse_str(&c)?
-			} else {
-				TileCompression::Uncompressed
-			};
-			let zoom_min = args.zoom_min.unwrap_or(0);
-			let zoom_max = args.zoom_max.unwrap_or(12);
-			let bbox = args.bbox.as_ref().unwrap_or(&[-180.0, -90.0, 180.0, 90.0]);
-
-			let bbox = TileBBoxPyramid::from_geo_bbox(zoom_min, zoom_max, bbox);
-			let parameters = TilesReaderParameters::new(format, compression, bbox);
+			let parameters = TilesReaderParameters::new(
+				format,
+				TileCompression::Uncompressed,
+				TileBBoxPyramid::new_full(31),
+			);
 
 			let meta = Some(match format {
 				TileFormat::PBF => Blob::from(format!(
 					"{{\"vector_layers\":[{}]}}",
 					["background", "debug_x", "debug_y", "debug_z"]
-						.map(|n| format!(
-							"{{\"id\":\"{n}\",\"minzoom\":{zoom_min},\"maxzoom\":{zoom_min}}}"
-						))
+						.map(|n| format!("{{\"id\":\"{n}\",\"minzoom\":0,\"maxzoom\":31}}"))
 						.join(",")
 				)),
 				_ => Blob::from("{}"),
