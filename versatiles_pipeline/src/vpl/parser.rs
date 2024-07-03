@@ -181,7 +181,7 @@ pub fn parse_vpl(input: &str) -> Result<VPLPipeline> {
 			if leftover.trim().is_empty() {
 				Ok(nodes)
 			} else {
-				bail!("VPL didn't parse till the end: '{leftover}'")
+				bail!("VPL didn't parse till the end. The rest: '{leftover}'")
 			}
 		}
 		Err(e) => {
