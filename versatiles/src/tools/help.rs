@@ -60,3 +60,18 @@ fn print_markdown(md: String) {
 	let text = skin.area_text(&md, &area);
 	eprintln!("{text}");
 }
+
+#[cfg(test)]
+mod test {
+	use crate::tests::run_command;
+
+	#[test]
+	fn test_help1() {
+		run_command(vec!["versatiles", "help", "pipeline"]).unwrap();
+	}
+
+	#[test]
+	fn test_help2() {
+		run_command(vec!["versatiles", "help", "--raw", "pipeline"]).unwrap();
+	}
+}
