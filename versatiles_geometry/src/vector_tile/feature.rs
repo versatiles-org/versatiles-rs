@@ -2,11 +2,9 @@
 
 use super::{geometry_type::GeomType, layer::VectorTileLayer};
 use crate::{
-	basic::{
-		AreaTrait, Feature, Geometry, LineStringGeometry, MultiPointGeometry, PointGeometry,
-		PolygonGeometry,
-	},
+	geometry::*,
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+	math::area_ring,
 	types::Blob,
 };
 use anyhow::{bail, ensure, Context, Result};
@@ -110,8 +108,8 @@ impl VectorTileFeature {
 		let geometry = {
 			let mut reader = ValueReaderSlice::new_le(self.geom_data.as_slice());
 
-			let mut lines: Vec<Vec<PointGeometry>> = Vec::new();
-			let mut line: Vec<PointGeometry> = Vec::new();
+			let mut lines: Coordinates2 = Vec::new();
+			let mut line: Coordinates1 = Vec::new();
 			let mut x = 0;
 			let mut y = 0;
 
@@ -138,7 +136,7 @@ impl VectorTileFeature {
 								.read_svarint()
 								.context("Failed to read y coordinate")?;
 
-							line.push(PointGeometry::new(x as f64, y as f64));
+							line.push([x as f64, y as f64]);
 						}
 					}
 					7 => {
@@ -147,7 +145,7 @@ impl VectorTileFeature {
 							!line.is_empty(),
 							"ClosePath command found on an empty linestring"
 						);
-						line.push(line[0].clone());
+						line.push(line[0]);
 					}
 					_ => bail!("Unknown command {}", command),
 				}
@@ -176,7 +174,7 @@ impl VectorTileFeature {
 							);
 							Ok(line.pop().unwrap())
 						})
-						.collect::<Result<MultiPointGeometry>>()?,
+						.collect::<Result<Coordinates1>>()?,
 				))
 			}
 
@@ -213,7 +211,7 @@ impl VectorTileFeature {
 						"First and last point of the ring must be the same"
 					);
 
-					let area = ring.area();
+					let area = area_ring(&ring);
 
 					if area > 1e-14 {
 						// Outer ring
@@ -264,15 +262,15 @@ impl VectorTileFeature {
 	pub fn from_geometry(
 		id: Option<u64>,
 		tag_ids: Vec<u32>,
-		geometry: &Geometry,
+		geometry: Geometry,
 	) -> Result<VectorTileFeature> {
 		fn write_point(
 			writer: &mut ValueWriterBlob<LE>,
 			point0: &mut (i64, i64),
-			point: &PointGeometry,
+			point: PointGeometry,
 		) -> Result<()> {
-			let x = point.x.round() as i64;
-			let y = point.y.round() as i64;
+			let x = point.0[0].round() as i64;
+			let y = point.0[1].round() as i64;
 			writer.write_svarint(x - point0.0)?;
 			writer.write_svarint(y - point0.1)?;
 			point0.0 = x;
@@ -280,33 +278,35 @@ impl VectorTileFeature {
 			Ok(())
 		}
 
-		fn write_points(points: &Vec<&PointGeometry>) -> Result<Blob> {
+		fn write_points(points: MultiPointGeometry) -> Result<Blob> {
 			let mut writer = ValueWriterBlob::new_le();
 			let point0 = &mut (0i64, 0i64);
 			writer.write_varint((points.len() as u64) << 3 | 0x1)?;
-			for point in points {
+			for point in points.into_iter() {
 				write_point(&mut writer, point0, point)?
 			}
 			Ok(writer.into_blob())
 		}
 
-		fn write_line_strings(line_strings: &Vec<&LineStringGeometry>) -> Result<Blob> {
+		fn write_line_strings(line_strings: MultiLineStringGeometry) -> Result<Blob> {
 			let mut writer = ValueWriterBlob::new_le();
 			let point0 = &mut (0i64, 0i64);
 
-			for line_string in line_strings {
+			for line_string in line_strings.into_iter() {
 				if line_string.is_empty() {
 					continue;
 				}
 
+				let (first, rest) = line_string.into_first_and_rest();
+
 				// Write the MoveTo command for the first point
 				writer.write_varint(1 << 3 | 0x1)?; // MoveTo command
-				write_point(&mut writer, point0, &line_string[0])?;
+				write_point(&mut writer, point0, first)?;
 
 				// Write the LineTo command for the remaining points
-				if line_string.len() > 1 {
-					writer.write_varint((line_string.len() as u64 - 1) << 3 | 0x2)?; // LineTo command
-					for point in &line_string[1..] {
+				if !rest.is_empty() {
+					writer.write_varint((rest.len() as u64) << 3 | 0x2)?; // LineTo command
+					for point in rest.into_iter() {
 						write_point(&mut writer, point0, point)?;
 					}
 				}
@@ -315,24 +315,27 @@ impl VectorTileFeature {
 			Ok(writer.into_blob())
 		}
 
-		fn write_polygons(polygons: &Vec<&PolygonGeometry>) -> Result<Blob> {
+		fn write_polygons(polygons: MultiPolygonGeometry) -> Result<Blob> {
 			let mut writer = ValueWriterBlob::new_le();
 			let point0 = &mut (0i64, 0i64);
 
-			for &polygon in polygons {
-				for ring in polygon {
-					if ring.is_empty() {
+			for polygon in polygons.into_iter() {
+				for ring in polygon.into_iter() {
+					if ring.len() < 4 {
 						continue;
 					}
 
+					let (first, mut rest) = ring.into_first_and_rest();
+					rest.pop();
+
 					// Write the MoveTo command for the first point
 					writer.write_varint(1 << 3 | 0x1)?; // MoveTo command
-					write_point(&mut writer, point0, &ring[0])?;
+					write_point(&mut writer, point0, first)?;
 
 					// Write the LineTo command for the remaining points
-					if ring.len() > 2 {
-						writer.write_varint((ring.len() as u64 - 2) << 3 | 0x2)?; // LineTo command
-						for point in &ring[1..ring.len() - 1] {
+					if !rest.is_empty() {
+						writer.write_varint((rest.len() as u64) << 3 | 0x2)?; // LineTo command
+						for point in rest.into_iter() {
 							write_point(&mut writer, point0, point)?;
 						}
 					}
@@ -348,14 +351,17 @@ impl VectorTileFeature {
 		fn m<T>(g: &[T]) -> Vec<&T> {
 			g.iter().collect()
 		}
-		use crate::basic::Geometry::*;
+		use crate::geometry::Geometry::*;
 		let (geom_type, geom_data) = match geometry {
-			Point(g) => (GeomType::MultiPoint, write_points(&vec![g])?),
-			MultiPoint(g) => (GeomType::MultiPoint, write_points(&m(g))?),
-			LineString(g) => (GeomType::MultiLineString, write_line_strings(&vec![g])?),
-			MultiLineString(g) => (GeomType::MultiLineString, write_line_strings(&m(g))?),
-			Polygon(g) => (GeomType::MultiPolygon, write_polygons(&vec![g])?),
-			MultiPolygon(g) => (GeomType::MultiPolygon, write_polygons(&m(g))?),
+			Point(g) => (GeomType::MultiPoint, write_points(g.into_multi())?),
+			MultiPoint(g) => (GeomType::MultiPoint, write_points(g)?),
+			LineString(g) => (
+				GeomType::MultiLineString,
+				write_line_strings(g.into_multi())?,
+			),
+			MultiLineString(g) => (GeomType::MultiLineString, write_line_strings(g)?),
+			Polygon(g) => (GeomType::MultiPolygon, write_polygons(g.into_multi())?),
+			MultiPolygon(g) => (GeomType::MultiPolygon, write_polygons(g)?),
 		};
 
 		Ok(VectorTileFeature {
@@ -368,7 +374,7 @@ impl VectorTileFeature {
 
 	#[cfg(test)]
 	pub fn new_example() -> Self {
-		VectorTileFeature::from_geometry(Some(3), vec![1, 2], &Geometry::new_example()).unwrap()
+		VectorTileFeature::from_geometry(Some(3), vec![1, 2], Geometry::new_example()).unwrap()
 	}
 }
 
@@ -378,77 +384,61 @@ mod tests {
 
 	fn round_trip_feature(geometry: Geometry) -> Result<()> {
 		// Convert to VectorTileFeature
-		let vector_tile_feature = VectorTileFeature::from_geometry(None, vec![], &geometry.clone())?;
+		let vector_tile_feature = VectorTileFeature::from_geometry(None, vec![], geometry.clone())?;
 
 		// Compare original and converted features
 		assert_eq!(geometry.into_multi(), vector_tile_feature.to_geometry()?);
 		Ok(())
 	}
 
-	fn to_point(data: [i32; 2]) -> PointGeometry {
-		PointGeometry::new(data[0] as f64, data[1] as f64)
-	}
-
-	fn to_vec1(data: &[[i32; 2]]) -> Vec<PointGeometry> {
-		data.iter().map(|p| to_point(*p)).collect()
-	}
-
-	fn to_vec2(data: &[&[[i32; 2]]]) -> Vec<Vec<PointGeometry>> {
-		data.iter().map(|p| to_vec1(p)).collect()
-	}
-
-	fn to_vec3(data: &[&[&[[i32; 2]]]]) -> Vec<Vec<Vec<PointGeometry>>> {
-		data.iter().map(|p| to_vec2(p)).collect()
-	}
-
 	#[test]
 	fn point_geometry_round_trip() -> Result<()> {
-		let geometry = Geometry::new_point(to_point([1, 2]));
+		let geometry = Geometry::new_point([1, 2]);
 		round_trip_feature(geometry)
 	}
 
 	#[test]
 	fn line_string_geometry_round_trip() -> Result<()> {
-		let geometry = Geometry::new_line_string(to_vec1(&[[0, 1], [0, 3]]));
+		let geometry = Geometry::new_line_string(vec![[0, 1], [0, 3]]);
 		round_trip_feature(geometry)
 	}
 
 	#[test]
 	fn polygon_geometry_round_trip() -> Result<()> {
-		let geometry = Geometry::new_polygon(to_vec2(&[
-			&[[0, 0], [3, 0], [3, 3], [0, 3], [0, 0]],
-			&[[1, 1], [1, 2], [2, 2], [1, 1]],
-		]));
+		let geometry = Geometry::new_polygon(vec![
+			vec![[0, 0], [3, 0], [3, 3], [0, 3], [0, 0]],
+			vec![[1, 1], [1, 2], [2, 2], [1, 1]],
+		]);
 		round_trip_feature(geometry)
 	}
 
 	#[test]
 	fn multi_point_geometry_round_trip() -> Result<()> {
-		let geometry = Geometry::new_multi_point(to_vec1(&[[2, 3], [4, 5]]));
+		let geometry = Geometry::new_multi_point(vec![[2, 3], [4, 5]]);
 		round_trip_feature(geometry)
 	}
 
 	#[test]
 	fn multi_line_string_geometry_round_trip() -> Result<()> {
-		let geometry = Geometry::new_multi_line_string(to_vec2(&[
-			&[[0, 0], [1, 1], [2, 0]],
-			&[[0, 2], [1, 1], [2, 2]],
-		]));
+		let geometry = Geometry::new_multi_line_string(vec![
+			vec![[0, 0], [1, 1], [2, 0]],
+			vec![[0, 2], [1, 1], [2, 2]],
+		]);
 		round_trip_feature(geometry)
 	}
 
 	#[test]
 	fn multi_polygon_geometry_round_trip() -> Result<()> {
-		let geometry = Geometry::new_multi_polygon(to_vec3(&[
-			&[
-				&[[0, 0], [3, 0], [3, 3], [0, 3], [0, 0]],
-				&[[1, 1], [1, 2], [2, 2], [1, 1]],
+		let geometry = Geometry::new_multi_polygon(vec![
+			vec![
+				vec![[0, 0], [3, 0], [3, 3], [0, 3], [0, 0]],
+				vec![[1, 1], [1, 2], [2, 2], [1, 1]],
 			],
-			&[
-				&[[4, 0], [7, 0], [7, 3], [4, 3], [4, 0]],
-				&[[5, 1], [5, 2], [6, 2], [5, 1]],
+			vec![
+				vec![[4, 0], [7, 0], [7, 3], [4, 3], [4, 0]],
+				vec![[5, 1], [5, 2], [6, 2], [5, 1]],
 			],
-		]));
+		]);
 		round_trip_feature(geometry)
 	}
 }

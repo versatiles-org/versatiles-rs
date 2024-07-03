@@ -4,10 +4,7 @@ use super::{feature::VectorTileFeature, property_manager::PropertyManager, value
 use crate::{
 	io::{ValueReader, ValueWriter, ValueWriterBlob},
 	types::Blob,
-	{
-		basic::{Feature, GeoValue},
-		GeoProperties,
-	},
+	Feature, GeoProperties, GeoValue,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use byteorder::LE;
@@ -228,12 +225,12 @@ impl VectorTileLayer {
 			PropertyManager::from_iter(features.iter().filter_map(|f| f.properties.as_ref()));
 
 		let features = features
-			.iter()
+			.into_iter()
 			.map(|feature| {
 				VectorTileFeature::from_geometry(
 					feature.id,
 					property_manager.encode_tag_ids(&feature.properties)?,
-					&feature.geometry,
+					feature.geometry,
 				)
 			})
 			.collect::<Result<Vec<VectorTileFeature>>>()?;

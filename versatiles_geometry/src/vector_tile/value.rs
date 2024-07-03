@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::{
-	basic::GeoValue,
+	geometry::GeoValue,
 	io::{ValueReader, ValueWriter, ValueWriterBlob},
 	types::Blob,
 };
