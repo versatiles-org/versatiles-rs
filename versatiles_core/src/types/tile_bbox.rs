@@ -915,4 +915,186 @@ mod tests {
 		let bbox = TileBBox::new(4, 1, 1, 3, 3).unwrap();
 		assert_eq!(bbox.max, 15);
 	}
+
+	#[test]
+	fn test_new_full() {
+		let bbox = TileBBox::new_full(4).unwrap();
+		assert_eq!(bbox, TileBBox::new(4, 0, 0, 15, 15).unwrap());
+	}
+
+	#[test]
+	fn test_new_empty() {
+		let bbox = TileBBox::new_empty(4).unwrap();
+		assert_eq!(
+			bbox,
+			TileBBox {
+				level: 4,
+				max: 15,
+				x_min: 16,
+				y_min: 16,
+				x_max: 0,
+				y_max: 0,
+			}
+		);
+		assert!(bbox.is_empty());
+	}
+
+	#[test]
+	fn test_check() {
+		let bbox = TileBBox::new(4, 0, 0, 15, 15).unwrap();
+		assert!(bbox.check().is_ok());
+	}
+
+	#[test]
+	fn test_set_empty() {
+		let mut bbox = TileBBox::new(4, 0, 0, 15, 15).unwrap();
+		bbox.set_empty();
+		assert!(bbox.is_empty());
+	}
+
+	#[test]
+	fn test_is_empty() {
+		let bbox = TileBBox::new_empty(4).unwrap();
+		assert!(bbox.is_empty());
+	}
+
+	#[test]
+	fn test_set_full() {
+		let mut bbox = TileBBox::new_empty(4).unwrap();
+		bbox.set_full();
+		assert!(bbox.is_full());
+	}
+
+	#[test]
+	fn test_is_full() {
+		let bbox = TileBBox::new_full(4).unwrap();
+		assert!(bbox.is_full());
+	}
+
+	#[test]
+	fn test_include_tile() {
+		let mut bbox = TileBBox::new(6, 5, 10, 20, 30).unwrap();
+		bbox.include_tile(25, 35);
+		assert_eq!(bbox, TileBBox::new(6, 5, 10, 25, 35).unwrap());
+	}
+
+	#[test]
+	fn test_include_bbox() {
+		let mut bbox1 = TileBBox::new(4, 0, 11, 2, 13).unwrap();
+		let bbox2 = TileBBox::new(4, 1, 10, 3, 12).unwrap();
+		bbox1.include_bbox(&bbox2);
+		assert_eq!(bbox1, TileBBox::new(4, 0, 10, 3, 13).unwrap());
+	}
+
+	#[test]
+	fn test_intersect_bbox() {
+		let mut bbox1 = TileBBox::new(4, 0, 11, 2, 13).unwrap();
+		let bbox2 = TileBBox::new(4, 1, 10, 3, 12).unwrap();
+		bbox1.intersect_bbox(&bbox2);
+		assert_eq!(bbox1, TileBBox::new(4, 1, 11, 2, 12).unwrap());
+	}
+
+	#[test]
+	fn test_overlaps_bbox() {
+		let bbox1 = TileBBox::new(4, 0, 11, 2, 13).unwrap();
+		let bbox2 = TileBBox::new(4, 1, 10, 3, 12).unwrap();
+		assert!(bbox1.overlaps_bbox(&bbox2));
+	}
+
+	#[test]
+	fn test_get_tile_index2() {
+		let bbox = TileBBox::new(8, 100, 100, 199, 199).unwrap();
+		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(100, 100)), 0);
+		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(101, 100)), 1);
+		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(199, 100)), 99);
+		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(100, 101)), 100);
+		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(100, 199)), 9900);
+		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(199, 199)), 9999);
+	}
+
+	#[test]
+	fn test_get_tile_index3() {
+		let bbox = TileBBox::new(8, 100, 100, 199, 199).unwrap();
+		assert_eq!(
+			bbox.get_tile_index3(&TileCoord3::new(100, 100, 8).unwrap()),
+			0
+		);
+		assert_eq!(
+			bbox.get_tile_index3(&TileCoord3::new(101, 100, 8).unwrap()),
+			1
+		);
+		assert_eq!(
+			bbox.get_tile_index3(&TileCoord3::new(199, 100, 8).unwrap()),
+			99
+		);
+		assert_eq!(
+			bbox.get_tile_index3(&TileCoord3::new(100, 101, 8).unwrap()),
+			100
+		);
+		assert_eq!(
+			bbox.get_tile_index3(&TileCoord3::new(100, 199, 8).unwrap()),
+			9900
+		);
+		assert_eq!(
+			bbox.get_tile_index3(&TileCoord3::new(199, 199, 8).unwrap()),
+			9999
+		);
+	}
+
+	#[test]
+	fn test_get_coord2_by_index() {
+		let bbox = TileBBox::new(4, 5, 10, 7, 12).unwrap();
+		assert_eq!(bbox.get_coord2_by_index(0).unwrap(), TileCoord2::new(5, 10));
+		assert_eq!(bbox.get_coord2_by_index(1).unwrap(), TileCoord2::new(6, 10));
+		assert_eq!(bbox.get_coord2_by_index(2).unwrap(), TileCoord2::new(7, 10));
+		assert_eq!(bbox.get_coord2_by_index(3).unwrap(), TileCoord2::new(5, 11));
+		assert_eq!(bbox.get_coord2_by_index(8).unwrap(), TileCoord2::new(7, 12));
+	}
+
+	#[test]
+	fn test_get_coord3_by_index() {
+		let bbox = TileBBox::new(4, 5, 10, 7, 12).unwrap();
+		assert_eq!(
+			bbox.get_coord3_by_index(0).unwrap(),
+			TileCoord3::new(5, 10, 4).unwrap()
+		);
+		assert_eq!(
+			bbox.get_coord3_by_index(1).unwrap(),
+			TileCoord3::new(6, 10, 4).unwrap()
+		);
+		assert_eq!(
+			bbox.get_coord3_by_index(2).unwrap(),
+			TileCoord3::new(7, 10, 4).unwrap()
+		);
+		assert_eq!(
+			bbox.get_coord3_by_index(3).unwrap(),
+			TileCoord3::new(5, 11, 4).unwrap()
+		);
+		assert_eq!(
+			bbox.get_coord3_by_index(8).unwrap(),
+			TileCoord3::new(7, 12, 4).unwrap()
+		);
+	}
+
+	#[test]
+	fn test_as_geo_bbox() {
+		let bbox = TileBBox::new(4, 5, 10, 7, 12).unwrap();
+		let geo_bbox = bbox.as_geo_bbox(4);
+		assert_eq!(geo_bbox.len(), 4);
+	}
+
+	#[test]
+	fn test_contains2() {
+		let bbox = TileBBox::new(4, 5, 10, 7, 12).unwrap();
+		assert!(bbox.contains2(&TileCoord2::new(6, 11)));
+		assert!(!bbox.contains2(&TileCoord2::new(4, 9)));
+	}
+
+	#[test]
+	fn test_contains3() {
+		let bbox = TileBBox::new(4, 5, 10, 7, 12).unwrap();
+		assert!(bbox.contains3(&TileCoord3::new(6, 11, 4).unwrap()));
+		assert!(!bbox.contains3(&TileCoord3::new(4, 9, 4).unwrap()));
+		assert!(!bbox.contains3(&TileCoord3::new(6, 11, 5).unwrap()));
+	}
 }
