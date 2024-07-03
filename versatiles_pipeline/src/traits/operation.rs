@@ -1,9 +1,12 @@
-use crate::{vpl::VPLNode, PipelineFactory};
+use crate::{
+	types::{Blob, TileBBox, TileCoord3, TileStream, TilesReaderParameters},
+	vpl::VPLNode,
+	PipelineFactory,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::fmt::Debug;
-use versatiles_core::types::{Blob, TileBBox, TileCoord3, TileStream, TilesReaderParameters};
 
 #[async_trait]
 pub trait OperationTrait: Debug + Send + Sync + Unpin {

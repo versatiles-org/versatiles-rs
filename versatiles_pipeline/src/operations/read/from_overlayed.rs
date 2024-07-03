@@ -1,15 +1,13 @@
 use crate::{
 	traits::*,
+	types::{Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters},
+	utils::recompress,
 	vpl::{VPLNode, VPLPipeline},
 	PipelineFactory,
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use futures::future::{join_all, BoxFuture};
-use versatiles_core::{
-	types::{Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters},
-	utils::recompress,
-};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Overlays multiple tile sources, using the tile from the first source that provides it.

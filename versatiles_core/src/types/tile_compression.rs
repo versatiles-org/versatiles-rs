@@ -11,7 +11,7 @@
 //! # Examples
 //!
 //! ```
-//! use versatiles_core::types::TileCompression;
+//! use versatiles::types::TileCompression;
 //!
 //! // Getting file extensions for compression types
 //! assert_eq!(TileCompression::Uncompressed.extension(), "");
@@ -55,7 +55,7 @@ impl TileCompression {
 	/// # Examples
 	///
 	/// ```
-	/// use versatiles_core::types::TileCompression;
+	/// use versatiles::types::TileCompression;
 	///
 	/// assert_eq!(TileCompression::Uncompressed.extension(), "");
 	/// assert_eq!(TileCompression::Gzip.extension(), ".gz");
@@ -80,7 +80,7 @@ impl TileCompression {
 	/// # Examples
 	///
 	/// ```
-	/// use versatiles_core::types::TileCompression;
+	/// use versatiles::types::TileCompression;
 	///
 	/// let mut filename = String::from("file.txt.gz");
 	/// assert_eq!(TileCompression::from_filename(&mut filename), TileCompression::Gzip);

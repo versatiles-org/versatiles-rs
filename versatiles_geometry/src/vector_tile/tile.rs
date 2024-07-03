@@ -2,8 +2,8 @@
 
 use super::layer::VectorTileLayer;
 use crate::{
-	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 	types::Blob,
+	utils::io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 };
 use anyhow::{bail, Context, Result};
 
@@ -64,7 +64,7 @@ impl VectorTile {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::io::{DataReaderFile, DataReaderTrait};
+	use crate::utils::io::{DataReaderFile, DataReaderTrait};
 	use std::env::current_dir;
 
 	async fn get_pbf() -> Result<Blob> {

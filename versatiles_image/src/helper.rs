@@ -1,7 +1,7 @@
 use crate::format::*;
+use crate::types::{Blob, TileFormat};
 use anyhow::Result;
 use image::{DynamicImage, GrayAlphaImage, GrayImage, Luma, LumaA, Rgb, RgbImage, Rgba, RgbaImage};
-use versatiles_core::types::{Blob, TileFormat};
 
 /// Generate a DynamicImage with RGBA colors
 pub fn create_image_rgba() -> DynamicImage {

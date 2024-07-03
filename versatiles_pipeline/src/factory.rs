@@ -1,6 +1,7 @@
 use crate::{
 	operations::{get_read_operation_factories, get_transform_operation_factories},
 	traits::{OperationTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
+	types::TilesReader,
 	vpl::{parse_vpl, VPLNode, VPLPipeline},
 };
 use anyhow::{anyhow, Result};
@@ -10,7 +11,6 @@ use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
 };
-use versatiles_core::types::TilesReader;
 
 type Callback = Option<Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesReader>>>>>;
 

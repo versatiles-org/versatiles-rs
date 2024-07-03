@@ -3,9 +3,9 @@
 use super::{geometry_type::GeomType, layer::VectorTileLayer};
 use crate::{
 	geometry::*,
-	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 	math::area_ring,
 	types::Blob,
+	utils::io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 };
 use anyhow::{bail, ensure, Context, Result};
 use byteorder::LE;

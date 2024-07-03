@@ -1,9 +1,9 @@
+use crate::types::Blob;
 use anyhow::Result;
 use image::{
 	codecs::png, load_from_memory_with_format, DynamicImage, ExtendedColorType, ImageEncoder,
 	ImageFormat,
 };
-use versatiles_core::types::Blob;
 
 pub fn image2blob(image: &DynamicImage) -> Result<Blob> {
 	let mut buffer: Vec<u8> = Vec::new();

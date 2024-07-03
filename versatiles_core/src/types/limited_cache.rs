@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::types::LimitedCache;
+//! use versatiles::types::LimitedCache;
 //!
 //! let mut cache = LimitedCache::<i32, u64>::with_maximum_size(1000_000);
 //! cache.add(1, 42);

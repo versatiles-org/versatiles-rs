@@ -18,10 +18,13 @@ byteorder.workspace = true
 lazy_static.workspace = true
 log.workspace = true
 regex.workspace = true
+
 versatiles_core.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros"] }
+
+versatiles.workspace = true
 
 [features]
 default = []

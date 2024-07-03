@@ -30,11 +30,13 @@ num_cpus = { version = "1.16.0", default-features = false }
 regex = { workspace = true, optional = true, features = ["unicode-case", "unicode-perl"] }
 reqwest = { workspace = true, optional = true, features = ["rustls-tls"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
+wildmatch.workspace = true
 
 [dev-dependencies]
 assert_fs.workspace = true
 tokio = { workspace = true, features = ["macros"] }
-wildmatch.workspace = true
+
+versatiles.workspace = true
 
 [features]
 default = []

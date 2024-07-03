@@ -1,15 +1,17 @@
+use crate::{
+	core::{
+		types::{
+			Blob, TileBBox, TileCompression, TileCoord3, TileFormat, TileStream, TilesReaderParameters,
+		},
+		utils::decompress,
+	},
+	geometry::{vector_tile::VectorTile, GeoProperties},
+};
 use anyhow::{anyhow, ensure, Context, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use log::warn;
 use std::{collections::HashMap, sync::Arc};
-use versatiles_core::{
-	types::{
-		Blob, TileBBox, TileCompression, TileCoord3, TileFormat, TileStream, TilesReaderParameters,
-	},
-	utils::decompress,
-};
-use versatiles_geometry::{vector_tile::VectorTile, GeoProperties};
 
 use crate::{
 	traits::{OperationFactoryTrait, OperationTrait, TransformOperationFactoryTrait},

@@ -1,9 +1,9 @@
+use crate::types::Blob;
 use anyhow::Result;
 use image::{
 	codecs::jpeg::JpegEncoder, load_from_memory_with_format, DynamicImage, ExtendedColorType,
 	ImageEncoder, ImageFormat,
 };
-use versatiles_core::types::Blob;
 
 const JPEG_QUALITY: u8 = 95;
 

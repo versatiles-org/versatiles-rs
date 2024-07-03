@@ -1,9 +1,11 @@
 #![allow(dead_code)]
 
-use super::{feature::VectorTileFeature, property_manager::PropertyManager, value::GeoValuePBF};
 use crate::{
-	io::{ValueReader, ValueWriter, ValueWriterBlob},
 	types::Blob,
+	utils::io::{ValueReader, ValueWriter, ValueWriterBlob},
+	vector_tile::{
+		feature::VectorTileFeature, property_manager::PropertyManager, value::GeoValuePBF,
+	},
 	Feature, GeoProperties, GeoValue,
 };
 use anyhow::{anyhow, bail, Context, Result};
@@ -258,9 +260,8 @@ impl VectorTileLayer {
 
 #[cfg(test)]
 mod tests {
-	use crate::{io::ValueReaderSlice, GeoProperties};
-
 	use super::*;
+	use crate::{utils::io::ValueReaderSlice, GeoProperties};
 
 	#[test]
 	fn test_read_vector_tile_layer() -> Result<()> {

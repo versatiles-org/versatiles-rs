@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::types::Blob;
+//! use versatiles::types::Blob;
 //!
 //! // Creating a new Blob from a vector of bytes
 //! let vec = vec![0, 1, 2, 3, 4, 5, 6, 7];

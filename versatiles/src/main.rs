@@ -25,13 +25,13 @@
 //! ```
 
 // Import necessary modules and dependencies
-mod container;
 mod tools;
 
-pub use versatiles_core::*;
+use versatiles_container as container;
+use versatiles_core::*;
 
 #[cfg(feature = "full")]
-pub use versatiles_geometry as geometry;
+use versatiles_pipeline as pipeline;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};

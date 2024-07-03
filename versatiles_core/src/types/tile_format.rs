@@ -9,7 +9,7 @@
 //! # Examples
 //!
 //! ```
-//! use versatiles_core::types::TileFormat;
+//! use versatiles::types::TileFormat;
 //!
 //! // Getting the file extension for a tile format
 //! let format = TileFormat::PNG;

@@ -1,6 +1,6 @@
+use crate::types::Blob;
 use anyhow::{bail, Result};
 use image::DynamicImage;
-use versatiles_core::types::Blob;
 use webp::{Decoder, Encoder};
 
 const WEBP_QUALITY: f32 = 95.0;

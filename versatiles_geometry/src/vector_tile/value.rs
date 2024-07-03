@@ -2,8 +2,8 @@
 
 use crate::{
 	geometry::GeoValue,
-	io::{ValueReader, ValueWriter, ValueWriterBlob},
 	types::Blob,
+	utils::io::{ValueReader, ValueWriter, ValueWriterBlob},
 };
 use anyhow::{anyhow, bail, Context, Result};
 use byteorder::LE;
@@ -127,7 +127,7 @@ impl<'a> GeoValuePBF<'a> for GeoValue {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::io::ValueReaderSlice;
+	use crate::utils::io::ValueReaderSlice;
 
 	#[test]
 	fn test_read_string() -> Result<()> {

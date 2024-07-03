@@ -1,9 +1,9 @@
+use crate::types::TileCoord3;
 use ab_glyph::{FontArc, PxScale};
 use imageproc::{
 	drawing::draw_text_mut,
 	image::{DynamicImage, Rgb, RgbImage},
 };
-use versatiles_core::types::TileCoord3;
 
 static mut FONT: Option<FontArc> = None;
 

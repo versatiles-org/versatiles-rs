@@ -39,20 +39,16 @@ env_logger = { version = "0.11.3", default-features = false, optional = true }
 flate2 = { version = "1.0.30", default-features = false, features = ["default"] }
 futures = { workspace = true, features = ["default"] }
 hyper = { version = "1.4.0", default-features = false, optional = true, features = ["http2"] }
-itertools = { workspace = true, features = ["use_alloc"] }
 lazy_static = { workspace = true, optional = true }
 log.workspace = true
 mime_guess = { version = "2.0.5", default-features = false, optional = true }
-r2d2 = { version = "0.8.10", default-features = false, optional = true }
-r2d2_sqlite = { version = "0.24.0", default-features = false, optional = true, features = [
-	"bundled",
-] }
 regex = { workspace = true, optional = true, features = ["unicode"] }
 reqwest = { workspace = true, optional = true, features = ["rustls-tls"] }
-tar = { version = "0.4.41", default-features = false, optional = true }
+tar = { version = "0.4.41", default-features = false }
 termimad = { version = "0.29.4", optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 
+versatiles_container = { workspace = true }
 versatiles_core = { workspace = true }
 versatiles_derive = { workspace = true, optional = true }
 versatiles_geometry = { workspace = true, optional = true }
@@ -62,8 +58,9 @@ versatiles_pipeline = { workspace = true, optional = true }
 [dev-dependencies]
 assert_fs.workspace = true
 lazy_static.workspace = true
-wildmatch.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
+
+versatiles_container = { workspace = true, features = ["test"] }
 versatiles_core = { workspace = true, features = ["test"] }
 
 [features]
@@ -75,7 +72,6 @@ cli = [
 	"dep:env_logger",
 	"dep:hyper",
 	"dep:mime_guess",
-	"dep:tar",
 	"dep:termimad",
 	"versatiles_core/cli",
 	"full",
@@ -83,9 +79,6 @@ cli = [
 full = [
 	"dep:hyper",
 	"dep:lazy_static",
-	"dep:r2d2_sqlite",
-	"dep:r2d2",
-	"dep:tar",
 	"dep:versatiles_derive",
 	"dep:versatiles_geometry",
 	"dep:versatiles_image",

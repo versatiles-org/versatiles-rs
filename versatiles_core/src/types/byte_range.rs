@@ -8,7 +8,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::types::ByteRange;
+//! use versatiles::types::ByteRange;
 //!
 //! let range = ByteRange::new(23, 42);
 //! assert_eq!(range.offset, 23);

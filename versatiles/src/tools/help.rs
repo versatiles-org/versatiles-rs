@@ -1,6 +1,6 @@
+use crate::pipeline::PipelineFactory;
 use anyhow::Result;
 use std::path::Path;
-use versatiles_pipeline::PipelineFactory;
 
 #[derive(clap::Args, Debug)]
 #[command(

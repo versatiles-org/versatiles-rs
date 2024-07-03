@@ -1,6 +1,6 @@
+use crate::types::Blob;
 use anyhow::{bail, Result};
 use image::DynamicImage;
-use versatiles_core::types::Blob;
 use webp::{Decoder, Encoder};
 
 pub fn image2blob(image: &DynamicImage) -> Result<Blob> {

@@ -30,4 +30,5 @@ versatiles_image.workspace = true
 [dev-dependencies]
 assert_fs.workspace = true
 tokio.workspace = true
+
 versatiles.workspace = true

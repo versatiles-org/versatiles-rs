@@ -1,11 +1,13 @@
-use crate::{traits::*, vpl::VPLNode, PipelineFactory};
+use crate::{
+	traits::*,
+	types::{Blob, TileBBox, TileCoord3, TileStream, TilesReader, TilesReaderParameters},
+	vpl::VPLNode,
+	PipelineFactory,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, lock::Mutex};
 use std::{fmt::Debug, sync::Arc};
-use versatiles_core::types::{
-	Blob, TileBBox, TileCoord3, TileStream, TilesReader, TilesReaderParameters,
-};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a tile containe, such as a VersaTiles file.
