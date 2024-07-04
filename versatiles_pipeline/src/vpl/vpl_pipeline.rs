@@ -10,12 +10,19 @@ pub struct VPLPipeline {
 }
 
 impl VPLPipeline {
+	pub fn new(pipeline: Vec<VPLNode>) -> Self {
+		VPLPipeline { pipeline }
+	}
 	pub fn from_str(vpl: &str) -> Self {
 		parse_vpl(vpl).unwrap()
 	}
 
 	pub fn len(&self) -> usize {
 		self.pipeline.len()
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.pipeline.is_empty()
 	}
 
 	pub fn pop(&mut self) -> Option<VPLNode> {

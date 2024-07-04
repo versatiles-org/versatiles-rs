@@ -1,4 +1,5 @@
 use crate::{
+	helpers::mock_vector_source::MockVectorSource,
 	operations::{get_read_operation_factories, get_transform_operation_factories},
 	traits::{OperationTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
 	types::TilesReaderTrait,
@@ -12,8 +13,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-type Callback =
-	Option<Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesReaderTrait>>>>>;
+type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesReaderTrait>>>>;
 
 pub struct PipelineFactory {
 	read_ops: HashMap<String, Box<dyn ReadOperationFactoryTrait>>,
@@ -46,9 +46,19 @@ impl PipelineFactory {
 		factory
 	}
 
-	#[cfg(test)]
-	pub fn dummy() -> Self {
-		PipelineFactory::default(&Path::new("/"), None)
+	pub fn new_dummy() -> Self {
+		let callback = Box::new(
+			|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
+				Box::pin(async {
+					let filename = filename;
+					Ok(Box::new(MockVectorSource::new(
+						&[("mock", &[&[("filename", &filename)]])],
+						None,
+					)) as Box<dyn TilesReaderTrait>)
+				})
+			},
+		);
+		PipelineFactory::default(Path::new(""), callback)
 	}
 
 	fn add_read_factory(&mut self, factory: Box<dyn ReadOperationFactoryTrait>) {
@@ -64,8 +74,7 @@ impl PipelineFactory {
 	}
 
 	pub async fn get_reader(&self, filename: &str) -> Result<Box<dyn TilesReaderTrait>> {
-		(self.create_reader.as_ref().unwrap())(self.dir.join(filename).to_string_lossy().to_string())
-			.await
+		(self.create_reader.as_ref())(self.dir.join(filename).to_string_lossy().to_string()).await
 	}
 
 	pub async fn operation_from_vpl(&self, text: &str) -> Result<Box<dyn OperationTrait>> {

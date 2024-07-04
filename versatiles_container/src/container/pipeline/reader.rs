@@ -73,7 +73,7 @@ impl<'a> PipelineReader {
 					Box::pin(async move { get_reader(&filename).await })
 				},
 			);
-			let factory = PipelineFactory::default(dir, Some(callback));
+			let factory = PipelineFactory::default(dir, callback);
 			let operation: Box<dyn OperationTrait> = factory.operation_from_vpl(vpl).await?;
 			let parameters = operation.get_parameters().clone();
 

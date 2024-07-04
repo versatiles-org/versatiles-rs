@@ -99,26 +99,29 @@ impl OperationTrait for Operation {
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
 		TileStream::from_stream_iter(bboxes.into_iter().map(move |bbox| async move {
-			let mut tiles: Vec<(TileCoord3, Blob)> = Vec::new();
+			let mut tiles: Vec<Option<(TileCoord3, Blob)>> = Vec::new();
+			tiles.resize(bbox.count_tiles() as usize, None);
+
 			for source in self.sources.iter() {
 				source
 					.get_bbox_tile_stream(bbox.clone())
 					.await
 					.for_each_sync(|(coord, mut blob)| {
 						let index = bbox.get_tile_index3(&coord);
-						if tiles.get(index).is_none() {
+						if tiles[index].is_none() {
 							blob = recompress(
 								blob,
 								&source.get_parameters().tile_compression,
 								output_compression,
 							)
 							.unwrap();
-							tiles.insert(index, (coord, blob));
+							tiles[index] = Some((coord, blob));
 						}
 					})
 					.await;
 			}
-			TileStream::from_vec(tiles)
+
+			TileStream::from_vec(tiles.into_iter().flatten().collect())
 		}))
 		.await
 	}
@@ -143,5 +146,145 @@ impl ReadOperationFactoryTrait for Factory {
 		factory: &'a PipelineFactory,
 	) -> Result<Box<dyn OperationTrait>> {
 		Operation::build(vpl_node, factory).await
+	}
+}
+#[cfg(test)]
+mod tests {
+	use versatiles_geometry::{vector_tile::VectorTile, GeoValue};
+
+	use super::*;
+
+	fn check_tile(blob: &Blob, coord: &TileCoord3) -> Result<String> {
+		let tile = VectorTile::from_blob(blob)?;
+		assert_eq!(tile.layers.len(), 1);
+
+		let layer = &tile.layers[0];
+		assert_eq!(layer.name, "mock");
+		assert_eq!(layer.features.len(), 1);
+
+		let feature = &layer.features[0].to_feature(layer)?;
+		let properties = feature.properties.as_ref().unwrap();
+
+		assert_eq!(properties.get("x").unwrap(), &GeoValue::from(coord.x));
+		assert_eq!(properties.get("y").unwrap(), &GeoValue::from(coord.y));
+		assert_eq!(properties.get("z").unwrap(), &GeoValue::from(coord.z));
+
+		Ok(properties.get("filename").unwrap().to_string())
+	}
+
+	fn arrange_tiles<T: ToString>(
+		tiles: Vec<(TileCoord3, Blob)>,
+		cb: impl Fn(TileCoord3, Blob) -> T,
+	) -> Vec<String> {
+		let mut bbox = TileBBox::new_empty(tiles.get(0).unwrap().0.z).unwrap();
+		tiles.iter().for_each(|t| bbox.include_tile(t.0.x, t.0.y));
+
+		let mut result: Vec<Vec<String>> = (0..bbox.height())
+			.into_iter()
+			.map(|_| {
+				(0..bbox.width())
+					.into_iter()
+					.map(|_| String::from(""))
+					.collect()
+			})
+			.collect();
+
+		for (coord, blob) in tiles.into_iter() {
+			let x = (coord.x - bbox.x_min) as usize;
+			let y = (coord.y - bbox.y_min) as usize;
+			result[y][x] = cb(coord, blob).to_string();
+		}
+		result
+			.into_iter()
+			.map(|r| r.join(","))
+			.collect::<Vec<String>>()
+	}
+
+	#[tokio::test]
+	async fn test_operation_error1() -> Result<()> {
+		let vpl_node = VPLNode::from("from_overlayed");
+		let factory = PipelineFactory::new_dummy();
+
+		assert_eq!(
+			&Operation::build(vpl_node, &factory)
+				.await
+				.unwrap_err()
+				.to_string(),
+			"must have at least two sources"
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_operation_error2() {
+		let factory = PipelineFactory::new_dummy();
+		let result = factory.operation_from_vpl("from_overlayed [ ]").await;
+
+		assert_eq!(
+			&result.unwrap_err().to_string(),
+			"must have at least two sources"
+		);
+	}
+
+	#[tokio::test]
+	async fn test_operation_error3() {
+		let factory = PipelineFactory::new_dummy();
+		let result = factory
+			.operation_from_vpl("from_overlayed [ from_container filename=1 ]")
+			.await;
+
+		assert_eq!(
+			&result.unwrap_err().to_string(),
+			"must have at least two sources"
+		);
+	}
+
+	#[tokio::test]
+	async fn test_operation_get_tile_data() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let mut result = factory
+			.operation_from_vpl(
+				"from_overlayed [ from_container filename=1, from_container filename=2 ]",
+			)
+			.await?;
+
+		let coord = TileCoord3::new(1, 2, 3)?;
+		let blob = result.get_tile_data(&coord).await?.unwrap();
+
+		assert_eq!(check_tile(&blob, &coord)?, "1");
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_operation_get_bbox_tile_stream() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let result = factory
+			.operation_from_vpl(
+				&[
+					"from_overlayed [",
+					"   from_container filename=1 | filter_bbox bbox=[-180,-20,20,85],",
+					"   from_container filename=2 | filter_bbox bbox=[-20,-85,180,20],",
+					"   from_container filename=3",
+					"]",
+				]
+				.join(""),
+			)
+			.await?;
+
+		let bbox = TileBBox::new(2, 0, 0, 3, 3)?;
+		let tiles = result
+			.get_bbox_tile_stream(bbox.clone())
+			.await
+			.collect()
+			.await;
+
+		assert_eq!(
+			arrange_tiles(tiles, |coord, blob| check_tile(&blob, &coord).unwrap()),
+			vec!["1,1,1,3", "1,1,1,2", "1,1,1,2", "3,2,2,2"]
+		);
+
+		Ok(())
 	}
 }

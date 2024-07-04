@@ -10,7 +10,7 @@ use futures::{future::BoxFuture, lock::Mutex};
 use std::{fmt::Debug, sync::Arc};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Reads a tile containe, such as a VersaTiles file.
+/// Reads a tile container, such as a VersaTiles file.
 struct Args {
 	/// The filename of the tile container, e.g., `"world.versatiles"`.
 	filename: String,
@@ -112,7 +112,7 @@ mod tests {
 
 	#[allow(dead_code)]
 	async fn test(filename: &str, expected_meta: &str) -> Result<()> {
-		let factory = PipelineFactory::dummy();
+		let factory = PipelineFactory::new_dummy();
 		let mut operation = factory
 			.operation_from_vpl(&format!("from_container filename={filename}"))
 			.await?;

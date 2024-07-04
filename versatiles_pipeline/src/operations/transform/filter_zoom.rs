@@ -106,7 +106,7 @@ mod tests {
 		max: Option<u8>,
 		tests: Vec<(u32, bool)>,
 	) -> Result<()> {
-		let factory = PipelineFactory::dummy();
+		let factory = PipelineFactory::new_dummy();
 
 		let vpl = format!(
 			"from_debug format=pbf | filter_zoom{}{}",

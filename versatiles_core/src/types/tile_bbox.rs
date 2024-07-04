@@ -180,6 +180,14 @@ impl TileBBox {
 		(self.x_min == 0) && (self.y_min == 0) && (self.x_max == self.max) && (self.y_max == self.max)
 	}
 
+	pub fn width(&self) -> u32 {
+		self.x_max - self.x_min + 1
+	}
+
+	pub fn height(&self) -> u32 {
+		self.y_max - self.y_min + 1
+	}
+
 	/// Counts the number of tiles within the bounding box.
 	///
 	/// # Returns

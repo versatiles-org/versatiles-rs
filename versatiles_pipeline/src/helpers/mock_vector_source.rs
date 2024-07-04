@@ -11,11 +11,13 @@ use versatiles_geometry::{
 
 #[derive(Debug)]
 pub struct MockVectorSource {
+	#[allow(clippy::type_complexity)]
 	data: Vec<(String, Vec<Vec<(String, String)>>)>,
 	parameters: TilesReaderParameters,
 }
 
 impl MockVectorSource {
+	#[allow(clippy::type_complexity)]
 	pub fn new(layers: &[(&str, &[&[(&str, &str)]])], bbox: Option<TileBBoxPyramid>) -> Self {
 		// Convert the layers input into the required data structure
 		let data = layers

@@ -135,7 +135,7 @@ mod tests {
 	use super::*;
 
 	async fn test(format: &str, len: u64, meta: &str) -> Result<()> {
-		let factory = PipelineFactory::dummy();
+		let factory = PipelineFactory::new_dummy();
 		let mut operation = factory
 			.operation_from_vpl(&format!("from_debug format={format}"))
 			.await?;

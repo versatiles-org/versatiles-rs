@@ -1,12 +1,12 @@
 use super::{VPLNode, VPLPipeline};
-use anyhow::{bail, Context, Result};
+use anyhow::{ensure, Context, Result};
 use nom::{
 	branch::alt,
 	bytes::complete::{escaped_transform, tag, take_while, take_while1},
 	character::complete::{alphanumeric1, char, multispace0, multispace1, none_of, one_of},
 	combinator::{opt, recognize, value},
-	error::{context, ContextError},
-	multi::{many1, separated_list0},
+	error::{context, convert_error, ContextError, VerboseError},
+	multi::{many1, separated_list0, separated_list1},
 	sequence::{delimited, pair, separated_pair, tuple},
 	IResult, Parser,
 };
@@ -33,7 +33,7 @@ where
 	}
 }
 
-fn parse_unquoted_value(input: &str) -> IResult<&str, String> {
+fn parse_unquoted_value(input: &str) -> IResult<&str, String, VerboseError<&str>> {
 	context(
 		"parse_unquoted_value",
 		recognize(many1(alt((alphanumeric1, recognize(one_of(".-_")))))),
@@ -41,7 +41,7 @@ fn parse_unquoted_value(input: &str) -> IResult<&str, String> {
 	.map(|(a, b)| (a, b.to_string()))
 }
 
-fn parse_string(input: &str) -> IResult<&str, String> {
+fn parse_string(input: &str) -> IResult<&str, String, VerboseError<&str>> {
 	context(
 		"parse_string",
 		escaped_transform(
@@ -57,7 +57,7 @@ fn parse_string(input: &str) -> IResult<&str, String> {
 	)(input)
 }
 
-fn parse_bare_identifier(input: &str) -> IResult<&str, String> {
+fn parse_bare_identifier(input: &str) -> IResult<&str, String, VerboseError<&str>> {
 	fn is_initial_identifier_char(c: char) -> bool {
 		!c.is_ascii_digit() && is_identifier_char(c)
 	}
@@ -76,14 +76,14 @@ fn parse_bare_identifier(input: &str) -> IResult<&str, String> {
 	.map(|(a, b)| (a, b.to_string()))
 }
 
-fn parse_quoted_string(input: &str) -> IResult<&str, String> {
+fn parse_quoted_string(input: &str) -> IResult<&str, String, VerboseError<&str>> {
 	context(
 		"parse_quoted_string",
 		delimited(char('\"'), parse_string, char('\"')),
 	)(input)
 }
 
-fn parse_array(input: &str) -> IResult<&str, Vec<String>> {
+fn parse_array(input: &str) -> IResult<&str, Vec<String>, VerboseError<&str>> {
 	delimited(
 		tuple((char('['), multispace0)),
 		separated_list0(
@@ -94,7 +94,7 @@ fn parse_array(input: &str) -> IResult<&str, Vec<String>> {
 	)(input)
 }
 
-fn parse_value(input: &str) -> IResult<&str, Vec<String>> {
+fn parse_value(input: &str) -> IResult<&str, Vec<String>, VerboseError<&str>> {
 	context(
 		"parse_value",
 		alt((
@@ -105,7 +105,7 @@ fn parse_value(input: &str) -> IResult<&str, Vec<String>> {
 	)(input)
 }
 
-fn parse_prop(input: &str) -> IResult<&str, (String, Vec<String>)> {
+fn parse_prop(input: &str) -> IResult<&str, (String, Vec<String>), VerboseError<&str>> {
 	context(
 		"parse_prop",
 		separated_pair(
@@ -116,14 +116,14 @@ fn parse_prop(input: &str) -> IResult<&str, (String, Vec<String>)> {
 	)(input)
 }
 
-fn parse_identifier(input: &str) -> IResult<&str, String> {
+fn parse_identifier(input: &str) -> IResult<&str, String, VerboseError<&str>> {
 	context(
 		"parse_identifier",
 		alt((parse_quoted_string, parse_bare_identifier)),
 	)(input)
 }
 
-fn parse_children(input: &str) -> IResult<&str, Vec<VPLPipeline>> {
+fn parse_children(input: &str) -> IResult<&str, Vec<VPLPipeline>, VerboseError<&str>> {
 	context(
 		"parse_children",
 		opt(delimited(
@@ -135,7 +135,7 @@ fn parse_children(input: &str) -> IResult<&str, Vec<VPLPipeline>> {
 	)(input)
 }
 
-fn parse_node<'a>(input: &'a str) -> IResult<&str, VPLNode> {
+fn parse_node<'a>(input: &'a str) -> IResult<&str, VPLNode, VerboseError<&str>> {
 	context("parse_node", |input: &'a str| {
 		let (input, _) = multispace0(input)?;
 		let (input, name) = parse_identifier(input)?;
@@ -164,12 +164,12 @@ fn parse_node<'a>(input: &'a str) -> IResult<&str, VPLNode> {
 	})(input)
 }
 
-fn parse_pipeline(input: &str) -> IResult<&str, VPLPipeline> {
+fn parse_pipeline(input: &str) -> IResult<&str, VPLPipeline, VerboseError<&str>> {
 	context(
 		"parse_pipeline",
 		delimited(
 			multispace0,
-			separated_list0(char('|'), parse_node).map(|pipeline| VPLPipeline { pipeline }),
+			separated_list1(char('|'), parse_node).map(VPLPipeline::new),
 			multispace0,
 		),
 	)(input)
@@ -177,12 +177,15 @@ fn parse_pipeline(input: &str) -> IResult<&str, VPLPipeline> {
 
 pub fn parse_vpl(input: &str) -> Result<VPLPipeline> {
 	match parse_pipeline(input) {
-		Ok((leftover, nodes)) => {
-			if leftover.trim().is_empty() {
-				Ok(nodes)
-			} else {
-				bail!("VPL didn't parse till the end. The rest: '{leftover}'")
-			}
+		Ok((leftover, pipeline)) => {
+			ensure!(
+				leftover.trim().is_empty(),
+				"VPL didn't parse till the end. The rest: '{leftover}'"
+			);
+			Ok(pipeline)
+		}
+		Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
+			Err(anyhow::anyhow!("{}", convert_error(input, e)))
 		}
 		Err(e) => {
 			Err(anyhow::anyhow!("Error parsing VPL: {:?}", e)).context("Failed to parse VPL input")

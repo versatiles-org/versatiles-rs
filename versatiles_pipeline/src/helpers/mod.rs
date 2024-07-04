@@ -1,6 +1,4 @@
 mod csv;
+pub mod mock_vector_source;
 
 pub use csv::*;
-
-#[cfg(test)]
-pub mod mock_source;

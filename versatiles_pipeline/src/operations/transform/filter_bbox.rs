@@ -92,7 +92,7 @@ mod tests {
 	use super::*;
 
 	async fn test_filter_bbox(bbox: [f64; 4], tests: Vec<(TileCoord3, bool)>) -> Result<()> {
-		let factory = PipelineFactory::dummy();
+		let factory = PipelineFactory::new_dummy();
 		let mut operation = factory
 			.operation_from_vpl(&format!(
 				"from_debug format=pbf | filter_bbox bbox={bbox:?}"
