@@ -28,6 +28,20 @@ impl Feature {
 		self.properties = Some(properties);
 	}
 
+	pub fn set_property<T>(&mut self, key: String, value: T)
+	where
+		GeoValue: From<T>,
+	{
+		if self.properties.is_none() {
+			self.properties = Some(GeoProperties::new());
+		}
+		self
+			.properties
+			.as_mut()
+			.unwrap()
+			.insert(key, GeoValue::from(value));
+	}
+
 	#[cfg(test)]
 	pub fn new_example() -> Self {
 		Self {

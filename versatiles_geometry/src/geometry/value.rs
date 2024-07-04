@@ -35,9 +35,21 @@ impl From<&str> for GeoValue {
 	}
 }
 
+impl From<&String> for GeoValue {
+	fn from(value: &String) -> Self {
+		GeoValue::String(value.clone())
+	}
+}
+
 impl From<String> for GeoValue {
 	fn from(value: String) -> Self {
 		GeoValue::String(value)
+	}
+}
+
+impl From<u8> for GeoValue {
+	fn from(value: u8) -> Self {
+		GeoValue::UInt(value as u64)
 	}
 }
 
@@ -51,15 +63,15 @@ impl From<i32> for GeoValue {
 	}
 }
 
-impl From<i64> for GeoValue {
-	fn from(value: i64) -> Self {
-		GeoValue::Int(value)
-	}
-}
-
 impl From<u32> for GeoValue {
 	fn from(value: u32) -> Self {
 		GeoValue::UInt(value as u64)
+	}
+}
+
+impl From<i64> for GeoValue {
+	fn from(value: i64) -> Self {
+		GeoValue::Int(value)
 	}
 }
 
