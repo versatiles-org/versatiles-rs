@@ -4,7 +4,7 @@
 //!
 //! ```rust
 //! use versatiles::container::{get_reader, write_to_filename};
-//! use versatiles::types::{TileFormat, TilesReader};
+//! use versatiles::types::{TileFormat, TilesReaderTrait};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -26,12 +26,8 @@
 //! ```
 
 use crate::{
-	container::{
-		DirectoryTilesReader, DirectoryTilesWriter, MBTilesReader, MBTilesWriter, PMTilesReader,
-		PMTilesWriter, PipelineReader, TarTilesReader, TarTilesWriter, TilesWriter, VersaTilesReader,
-		VersaTilesWriter,
-	},
-	types::TilesReader,
+	container::*,
+	types::TilesReaderTrait,
 	utils::io::{DataReader, DataReaderHttp},
 };
 use anyhow::{bail, Context, Result};
@@ -39,7 +35,7 @@ use reqwest::Url;
 use std::env;
 
 /// Get a reader for a given filename or URL.
-pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReader>> {
+pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReaderTrait>> {
 	let extension = get_extension(filename);
 
 	if let Ok(reader) = parse_as_url(filename) {
@@ -82,7 +78,7 @@ fn parse_as_url(filename: &str) -> Result<DataReader> {
 }
 
 /// Write tiles from a reader to a file.
-pub async fn write_to_filename(reader: &mut dyn TilesReader, filename: &str) -> Result<()> {
+pub async fn write_to_filename(reader: &mut dyn TilesReaderTrait, filename: &str) -> Result<()> {
 	let path = env::current_dir()?.join(filename);
 
 	if path.is_dir() {

@@ -14,29 +14,18 @@
 //! This module provides a unified interface for reading and writing various tile container formats.
 //! Depending on the enabled features, it supports different formats with corresponding read and write capabilities.
 
-#[cfg(feature = "full")]
 mod pipeline;
-#[cfg(feature = "full")]
 pub use pipeline::*;
 
-#[cfg(feature = "full")]
 mod converter;
-#[cfg(feature = "full")]
 pub use converter::*;
 
-mod directory;
-pub use directory::*;
-
-#[cfg(feature = "full")]
 mod getters;
-#[cfg(all(feature = "full", test))]
+#[cfg(test)]
 pub use getters::tests::*;
-#[cfg(feature = "full")]
 pub use getters::{get_reader, write_to_filename};
 
-#[cfg(feature = "full")]
 mod mbtiles;
-#[cfg(feature = "full")]
 pub use mbtiles::*;
 
 #[cfg(feature = "test")]
@@ -44,17 +33,16 @@ mod mock;
 #[cfg(feature = "test")]
 pub use mock::*;
 
-#[cfg(feature = "full")]
 mod pmtiles;
-#[cfg(feature = "full")]
 pub use pmtiles::*;
 
-#[cfg(feature = "full")]
 mod tar;
-#[cfg(feature = "full")]
 pub use tar::*;
 
-mod utils;
+pub mod tile_converter;
+
+mod directory;
+pub use directory::*;
 
 mod versatiles;
 pub use versatiles::*;

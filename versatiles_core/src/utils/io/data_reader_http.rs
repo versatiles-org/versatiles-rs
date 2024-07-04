@@ -34,7 +34,7 @@ use async_trait::async_trait;
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
 use reqwest::{Client, Method, Request, StatusCode, Url};
-use std::{str, time::Duration};
+use std::{ops::Deref, str, time::Duration};
 
 /// A struct that provides reading capabilities from an HTTP(S) endpoint.
 #[derive(Debug)]
@@ -139,7 +139,7 @@ impl DataReaderTrait for DataReaderHttp {
 
 		self.pos = range.offset + bytes.len() as u64;
 
-		Ok(Blob::from(bytes))
+		Ok(Blob::from(bytes.deref()))
 	}
 
 	/// Reads all the data from the HTTP(S) endpoint.

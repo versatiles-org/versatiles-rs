@@ -10,7 +10,7 @@
 //! ## Usage Example
 //! ```rust
 //! use versatiles::container::MBTilesReader;
-//! use versatiles::types::{Blob, TileCoord3, TilesReader};
+//! use versatiles::types::{Blob, TileCoord3, TilesReaderTrait};
 //! use anyhow::Result;
 //! use std::path::Path;
 //!
@@ -47,7 +47,7 @@ use crate::{
 		TileCompression::{self, *},
 		TileCoord3,
 		TileFormat::{self, *},
-		TileStream, TilesReader, TilesReaderParameters,
+		TileStream, TilesReaderParameters, TilesReaderTrait,
 	},
 	utils::{progress::get_progress_bar, TransformCoord},
 };
@@ -262,7 +262,7 @@ impl MBTilesReader {
 }
 
 #[async_trait]
-impl TilesReader for MBTilesReader {
+impl TilesReaderTrait for MBTilesReader {
 	/// Returns the container name.
 	fn get_container_name(&self) -> &str {
 		"mbtiles"
@@ -436,6 +436,7 @@ pub mod tests {
 	}
 
 	// Test tile fetching
+	#[cfg(feature = "cli")]
 	#[tokio::test]
 	async fn probe() -> Result<()> {
 		use crate::utils::PrettyPrint;

@@ -10,7 +10,7 @@
 //! ## Usage Example
 //! ```rust
 //! use versatiles::container::PMTilesReader;
-//! use versatiles::types::{TileCoord3, TilesReader};
+//! use versatiles::types::{TileCoord3, TilesReaderTrait};
 //! use std::path::Path;
 //!
 //! #[tokio::main]
@@ -41,13 +41,17 @@
 //! This module includes comprehensive tests to ensure the correct functionality of reading metadata, handling different file formats, and verifying tile data.
 
 use super::types::{tile_id_to_coord, EntriesV3, HeaderV3, TileId};
+#[cfg(feature = "cli")]
+use crate::utils::PrettyPrint;
 use crate::{
 	types::{
-		Blob, ByteRange, LimitedCache, TileBBoxPyramid, TileCompression, TileCoord3, TilesReader,
-		TilesReaderParameters,
+		Blob, ByteRange, LimitedCache, TileBBoxPyramid, TileCompression, TileCoord3,
+		TilesReaderParameters, TilesReaderTrait,
 	},
-	utils::io::{DataReader, DataReaderFile},
-	utils::{decompress, PrettyPrint},
+	utils::{
+		decompress,
+		io::{DataReader, DataReaderFile},
+	},
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;
@@ -175,7 +179,7 @@ fn calc_bbox_pyramid(
 }
 
 #[async_trait]
-impl TilesReader for PMTilesReader {
+impl TilesReaderTrait for PMTilesReader {
 	/// Returns the container name.
 	fn get_container_name(&self) -> &str {
 		"pmtiles"
@@ -261,6 +265,7 @@ impl TilesReader for PMTilesReader {
 	}
 
 	// deep probe of container meta
+	#[cfg(feature = "cli")]
 	async fn probe_container(&mut self, print: &PrettyPrint) -> Result<()> {
 		print.add_key_value("meta size", &self.meta.len()).await;
 		print.add_key_value("header", &self.header).await;

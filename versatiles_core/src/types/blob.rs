@@ -25,12 +25,10 @@
 //! assert_eq!(blob.as_str(), "Xylofön");
 //! ```
 
+use super::ByteRange;
 use anyhow::{bail, Result};
-use bytes::Bytes;
 use std::fmt::Debug;
 use std::ops::Range;
-
-use super::ByteRange;
 
 /// A simple wrapper around `Vec<u8>` that provides additional methods for working with byte data.
 #[derive(Clone, PartialEq, Eq)]
@@ -143,13 +141,6 @@ impl Blob {
 	}
 }
 
-impl From<Bytes> for Blob {
-	/// Converts a `bytes::Bytes` instance into a `Blob`.
-	fn from(item: Bytes) -> Self {
-		Blob(item.to_vec())
-	}
-}
-
 impl From<Vec<u8>> for Blob {
 	/// Converts a `Vec<u8>` instance into a `Blob`.
 	fn from(item: Vec<u8>) -> Self {
@@ -215,9 +206,6 @@ unsafe impl Sync for Blob {}
 
 #[cfg(test)]
 mod tests {
-	use bytes::Bytes;
-
-	// Import the Blob struct from the parent module
 	use super::Blob;
 
 	// Test basic functionality of the Blob struct
@@ -264,18 +252,6 @@ mod tests {
 
 		// Assert that a Blob can be created from the empty string and correctly identified as empty
 		assert!(Blob::from(&text).is_empty());
-	}
-
-	// Test creating a Blob from bytes
-	#[test]
-	fn bytes() {
-		// Create a string with non-ASCII characters
-		let text = String::from("Smørrebrød");
-
-		let bytes = Bytes::from(text.clone());
-
-		// Assert that a Blob can be created from the Bytes instance and converted back to the string correctly
-		assert_eq!(Blob::from(bytes).as_str(), text);
 	}
 
 	// Test the debug format of the Blob struct

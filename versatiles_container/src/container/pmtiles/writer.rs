@@ -9,7 +9,7 @@
 //!
 //! ## Usage Example
 //! ```ignore
-//! use versatiles::container::{PMTilesWriter, TilesWriter};
+//! use versatiles::container::{PMTilesWriter, TilesWriterTrait};
 //! use versatiles::types::{DataWriterBlob, TileFormat, TileCompression, TileBBoxPyramid, TilesReaderParameters};
 //! use std::path::Path;
 //!
@@ -36,8 +36,8 @@
 
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::{
-	container::TilesWriter,
-	types::{Blob, ByteRange, TileBBox, TileCompression, TilesReader},
+	container::TilesWriterTrait,
+	types::{Blob, ByteRange, TileBBox, TileCompression, TilesReaderTrait},
 	utils::{compress, io::DataWriterTrait, progress::get_progress_bar},
 };
 use anyhow::Result;
@@ -47,7 +47,7 @@ use async_trait::async_trait;
 pub struct PMTilesWriter {}
 
 #[async_trait]
-impl TilesWriter for PMTilesWriter {
+impl TilesWriterTrait for PMTilesWriter {
 	/// Writes tile data from a `TilesReader` to a `DataWriterTrait` (such as a PMTiles container).
 	///
 	/// # Arguments
@@ -57,7 +57,7 @@ impl TilesWriter for PMTilesWriter {
 	/// # Errors
 	/// Returns an error if there are issues with writing data or internal processing.
 	async fn write_to_writer(
-		reader: &mut dyn TilesReader,
+		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
 	) -> Result<()> {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;

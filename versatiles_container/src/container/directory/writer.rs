@@ -25,7 +25,7 @@
 //!
 //! ## Usage
 //! ```ignore
-//! use versatiles::container::{DirectoryTilesWriter, TilesWriter};
+//! use versatiles::container::{DirectoryTilesWriter, TilesWriterTrait};
 //! use std::path::Path;
 //!
 //! let reader = // initialize your TilesReader
@@ -39,8 +39,8 @@
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying directory structure.
 
 use crate::{
-	container::TilesWriter,
-	types::{Blob, TilesReader},
+	container::TilesWriterTrait,
+	types::{Blob, TilesReaderTrait},
 	utils::{compress, io::DataWriterTrait, progress::get_progress_bar},
 };
 use anyhow::{bail, ensure, Result};
@@ -74,7 +74,7 @@ impl DirectoryTilesWriter {
 }
 
 #[async_trait]
-impl TilesWriter for DirectoryTilesWriter {
+impl TilesWriterTrait for DirectoryTilesWriter {
 	/// Writes the tile data and metadata from the given `TilesReader` to the specified directory path.
 	///
 	/// # Arguments
@@ -83,7 +83,7 @@ impl TilesWriter for DirectoryTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the path is not absolute, if there are issues with file I/O, or if compression fails.
-	async fn write_to_path(reader: &mut dyn TilesReader, path: &Path) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path) -> Result<()> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
 		log::trace!("convert_from");
@@ -139,7 +139,7 @@ impl TilesWriter for DirectoryTilesWriter {
 	/// # Errors
 	/// This function always returns an error as it is not implemented.
 	async fn write_to_writer(
-		_reader: &mut dyn TilesReader,
+		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
 	) -> Result<()> {
 		bail!("not implemented")

@@ -22,14 +22,14 @@
 
 #![allow(unused)]
 
-#[cfg(not(feature = "test"))]
+#[cfg(all(not(feature = "test"), feature = "cli"))]
 mod progress_bar;
-#[cfg(not(feature = "test"))]
+#[cfg(all(not(feature = "test"), feature = "cli"))]
 pub use progress_bar::ProgressBar;
 
-#[cfg(feature = "test")]
+#[cfg(any(feature = "test", not(feature = "cli")))]
 mod progress_drain;
-#[cfg(feature = "test")]
+#[cfg(any(feature = "test", not(feature = "cli")))]
 pub use progress_drain::ProgressDrain;
 
 mod traits;

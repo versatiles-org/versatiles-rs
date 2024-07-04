@@ -11,7 +11,7 @@
 //! ```rust
 //! use versatiles::{
 //!     container::{MockTilesReader, MockTilesReaderProfile},
-//!     types::TilesReader
+//!     types::TilesReaderTrait
 //! };
 //! use std::result::Result;
 //!
@@ -26,8 +26,8 @@
 
 use crate::{
 	types::{
-		Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TilesReader,
-		TilesReaderParameters,
+		Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TilesReaderParameters,
+		TilesReaderTrait,
 	},
 	utils::compress,
 };
@@ -82,7 +82,7 @@ impl MockTilesReader {
 }
 
 #[async_trait]
-impl TilesReader for MockTilesReader {
+impl TilesReaderTrait for MockTilesReader {
 	fn get_container_name(&self) -> &str {
 		"dummy_container"
 	}

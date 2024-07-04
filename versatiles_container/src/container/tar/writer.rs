@@ -1,8 +1,8 @@
 //! Provides functionality for writing tile data to a tar archive.
 
 use crate::{
-	container::TilesWriter,
-	types::TilesReader,
+	container::TilesWriterTrait,
+	types::TilesReaderTrait,
 	utils::{compress, io::DataWriterTrait, progress::get_progress_bar},
 };
 use anyhow::{bail, Result};
@@ -17,7 +17,7 @@ use tar::{Builder, Header};
 pub struct TarTilesWriter {}
 
 #[async_trait]
-impl TilesWriter for TarTilesWriter {
+impl TilesWriterTrait for TarTilesWriter {
 	/// Writes the tile data from the `TilesReader` to a tar archive at the specified path.
 	///
 	/// # Arguments
@@ -26,7 +26,7 @@ impl TilesWriter for TarTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue creating the tar archive or writing the data.
-	async fn write_to_path(reader: &mut dyn TilesReader, path: &Path) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path) -> Result<()> {
 		let file = File::create(path)?;
 		let mut builder = Builder::new(file);
 
@@ -90,7 +90,7 @@ impl TilesWriter for TarTilesWriter {
 	/// # Errors
 	/// This function is not implemented and will return an error.
 	async fn write_to_writer(
-		_reader: &mut dyn TilesReader,
+		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
 	) -> Result<()> {
 		bail!("not implemented")

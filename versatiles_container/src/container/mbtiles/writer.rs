@@ -23,8 +23,8 @@
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying the database structure.
 
 use crate::{
-	container::TilesWriter,
-	types::{Blob, TileCompression, TileCoord3, TileFormat, TilesReader},
+	container::TilesWriterTrait,
+	types::{Blob, TileCompression, TileCoord3, TileFormat, TilesReaderTrait},
 	utils::{io::DataWriterTrait, progress::get_progress_bar},
 };
 use anyhow::{bail, Result};
@@ -99,7 +99,7 @@ impl MBTilesWriter {
 }
 
 #[async_trait]
-impl TilesWriter for MBTilesWriter {
+impl TilesWriterTrait for MBTilesWriter {
 	/// Writes tiles and metadata to the MBTiles file.
 	///
 	/// # Arguments
@@ -108,7 +108,7 @@ impl TilesWriter for MBTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the file format or compression is not supported, or if there are issues with writing to the SQLite database.
-	async fn write_to_path(reader: &mut dyn TilesReader, path: &Path) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path) -> Result<()> {
 		use TileCompression::*;
 		use TileFormat::*;
 
@@ -152,7 +152,7 @@ impl TilesWriter for MBTilesWriter {
 
 	/// Not implemented: Writes tiles and metadata to a generic data writer.
 	async fn write_to_writer(
-		_reader: &mut dyn TilesReader,
+		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
 	) -> Result<()> {
 		bail!("not implemented")

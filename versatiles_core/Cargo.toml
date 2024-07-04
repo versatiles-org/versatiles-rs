@@ -17,29 +17,29 @@ anyhow.workspace = true
 async-trait.workspace = true
 brotli = { version = "6.0.0", default-features = false, features = ["std"] }
 byteorder = { workspace = true, features = [] }
-bytes.workspace = true
 clap = { workspace = true, optional = true, features = ["std", "derive"] }
-colored = { version = "2.1.0", default-features = false }
+colored = { version = "2.1.0", default-features = false, optional = true }
 enumset.workspace = true
 flate2 = { version = "1.0.30", default-features = false, features = ["default"] }
 futures = { workspace = true, features = ["default"] }
-indicatif = { version = "0.17.8", default-features = false, features = ["unicode-width"] }
+indicatif = { version = "0.17.8", default-features = false, features = [
+	"unicode-width",
+], optional = true }
 itertools.workspace = true
-lazy_static = { workspace = true, optional = true }
+lazy_static = { workspace = true }
 num_cpus = { version = "1.16.0", default-features = false }
-regex = { workspace = true, optional = true, features = ["unicode-case", "unicode-perl"] }
-reqwest = { workspace = true, optional = true, features = ["rustls-tls"] }
+regex = { workspace = true, features = ["unicode-case", "unicode-perl"] }
+reqwest = { workspace = true, features = ["rustls-tls"] }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
-wildmatch.workspace = true
 
 [dev-dependencies]
 assert_fs.workspace = true
 tokio = { workspace = true, features = ["macros"] }
+wildmatch.workspace = true
 
 versatiles.workspace = true
 
 [features]
-default = []
-cli = ["dep:clap"]
-http = ["dep:lazy_static", "dep:regex", "dep:reqwest"]
+default = ["cli"]
+cli = ["dep:clap", "dep:colored", "dep:indicatif"]
 test = []

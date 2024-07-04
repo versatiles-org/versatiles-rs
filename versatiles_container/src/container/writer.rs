@@ -5,7 +5,7 @@
 //!
 
 use crate::{
-	types::TilesReader,
+	types::TilesReaderTrait,
 	utils::io::{DataWriterFile, DataWriterTrait},
 };
 use anyhow::Result;
@@ -14,15 +14,15 @@ use std::path::Path;
 
 /// Trait defining the behavior of a tile writer.
 #[async_trait]
-pub trait TilesWriter: Send {
+pub trait TilesWriterTrait: Send {
 	/// Write tile data from a reader to a specified path.
-	async fn write_to_path(reader: &mut dyn TilesReader, path: &Path) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path) -> Result<()> {
 		Self::write_to_writer(reader, &mut DataWriterFile::from_path(path)?).await
 	}
 
 	/// Write tile data from a reader to a writer.
 	async fn write_to_writer(
-		reader: &mut dyn TilesReader,
+		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
 	) -> Result<()>;
 }

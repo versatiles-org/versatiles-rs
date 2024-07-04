@@ -2,8 +2,8 @@
 
 use crate::{
 	types::{
-		Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TilesReader,
-		TilesReaderParameters,
+		Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat,
+		TilesReaderParameters, TilesReaderTrait,
 	},
 	utils::decompress,
 };
@@ -141,7 +141,7 @@ impl TarTilesReader {
 }
 
 #[async_trait]
-impl TilesReader for TarTilesReader {
+impl TilesReaderTrait for TarTilesReader {
 	/// Returns the container name.
 	fn get_container_name(&self) -> &str {
 		"tar"
@@ -209,9 +209,11 @@ impl Debug for TarTilesReader {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
+	#[cfg(feature = "cli")]
+	use crate::utils::PrettyPrint;
 	use crate::{
 		container::{make_test_file, MockTilesWriter, MOCK_BYTES_PBF},
-		utils::{decompress_gzip, PrettyPrint},
+		utils::decompress_gzip,
 	};
 
 	#[tokio::test]
@@ -264,6 +266,7 @@ pub mod tests {
 	}
 
 	// Test tile fetching
+	#[cfg(feature = "cli")]
 	#[tokio::test]
 	async fn probe() -> Result<()> {
 		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "tar").await?;

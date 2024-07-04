@@ -27,15 +27,12 @@
 // Import necessary modules and dependencies
 mod tools;
 
-use versatiles_container as container;
-use versatiles_core::*;
-
-#[cfg(feature = "full")]
-use versatiles_pipeline as pipeline;
-
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use clap_verbosity_flag::{ErrorLevel, Verbosity};
+use versatiles_container as container;
+use versatiles_core::*;
+use versatiles_pipeline as pipeline;
 
 /// Command-line interface for VersaTiles
 #[derive(Parser, Debug)]

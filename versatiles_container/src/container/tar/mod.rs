@@ -10,8 +10,8 @@
 //! ## Usage Example
 //!
 //! ```no_run
-//! use versatiles::container::{TarTilesReader, TarTilesWriter, TilesWriter};
-//! use versatiles::types::{TileCoord3, TilesReader};
+//! use versatiles::container::{TarTilesReader, TarTilesWriter, TilesWriterTrait};
+//! use versatiles::types::{TileCoord3, TilesReaderTrait};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!

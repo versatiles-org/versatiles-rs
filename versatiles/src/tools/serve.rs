@@ -1,7 +1,7 @@
 use super::server::{TileServer, Url};
 use crate::{
 	container::{get_reader, TilesConvertReader, TilesConverterParameters},
-	types::{TileCompression, TilesReader},
+	types::{TileCompression, TilesReaderTrait},
 };
 use anyhow::Result;
 use regex::Regex;
@@ -121,6 +121,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 		if arguments.override_input_compression.is_some() {
 			reader.override_compression(arguments.override_input_compression.unwrap())
 		}
+
 		if arguments.flip_y || arguments.swap_xy {
 			let mut cp = TilesConverterParameters::new_default();
 			cp.flip_y = arguments.flip_y;

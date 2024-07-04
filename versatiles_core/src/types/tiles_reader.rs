@@ -1,17 +1,18 @@
-use crate::{
-	types::{Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters},
-	utils::PrettyPrint,
+#[cfg(feature = "cli")]
+use super::ProbeDepth;
+use crate::types::{
+	Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters,
 };
+#[cfg(feature = "cli")]
+use crate::utils::PrettyPrint;
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::{fmt::Debug, sync::Arc};
 
-use super::ProbeDepth;
-
 /// Trait defining the behavior of a tile reader.
 #[async_trait]
-pub trait TilesReader: Debug + Send + Sync + Unpin {
+pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	/// Get the name of the reader source, e.g., the filename.
 	fn get_name(&self) -> &str;
 
@@ -49,6 +50,7 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 	}
 
 	/// probe container
+	#[cfg(feature = "cli")]
 	async fn probe(&mut self, level: ProbeDepth) -> Result<()> {
 		use ProbeDepth::*;
 
@@ -89,6 +91,7 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
+	#[cfg(feature = "cli")]
 	async fn probe_parameters(&mut self, print: &mut PrettyPrint) -> Result<()> {
 		let parameters = self.get_parameters();
 		let p = print.get_list("bbox_pyramid").await;
@@ -111,6 +114,7 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 	}
 
 	/// deep probe container
+	#[cfg(feature = "cli")]
 	async fn probe_container(&mut self, print: &PrettyPrint) -> Result<()> {
 		print
 			.add_warning("deep container probing is not implemented for this container format")
@@ -119,6 +123,7 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 	}
 
 	/// deep probe container tiles
+	#[cfg(feature = "cli")]
 	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
 		print
 			.add_warning("deep tiles probing is not implemented for this container format")
@@ -127,6 +132,7 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 	}
 
 	/// deep probe container tile contents
+	#[cfg(feature = "cli")]
 	async fn probe_tile_contents(&mut self, print: &PrettyPrint) -> Result<()> {
 		print
 			.add_warning("deep tile contents probing is not implemented for this container format")
@@ -134,7 +140,7 @@ pub trait TilesReader: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
-	fn boxed(self) -> Box<dyn TilesReader>
+	fn boxed(self) -> Box<dyn TilesReaderTrait>
 	where
 		Self: Sized + 'static,
 	{
@@ -166,7 +172,7 @@ mod tests {
 	}
 
 	#[async_trait]
-	impl TilesReader for TestReader {
+	impl TilesReaderTrait for TestReader {
 		fn get_name(&self) -> &str {
 			"dummy"
 		}

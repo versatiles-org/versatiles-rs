@@ -3,7 +3,7 @@
 //! # Example
 //!
 //! ```rust
-//! use versatiles::container::{MBTilesReader, TilesWriter, VersaTilesWriter};
+//! use versatiles::container::{MBTilesReader, TilesWriterTrait, VersaTilesWriter};
 //! use versatiles::types::{TileBBoxPyramid, TileCompression, TileFormat};
 //! use std::path::Path;
 //! use anyhow::Result;
@@ -28,8 +28,8 @@
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 use crate::{
-	container::TilesWriter,
-	types::{Blob, ByteRange, TileStream, TilesReader},
+	container::TilesWriterTrait,
+	types::{Blob, ByteRange, TileStream, TilesReaderTrait},
 	utils::{
 		compress,
 		io::DataWriterTrait,
@@ -45,10 +45,10 @@ use std::collections::HashMap;
 pub struct VersaTilesWriter {}
 
 #[async_trait]
-impl TilesWriter for VersaTilesWriter {
+impl TilesWriterTrait for VersaTilesWriter {
 	/// Convert tiles from the TilesReader and write them to the writer.
 	async fn write_to_writer(
-		reader: &mut dyn TilesReader,
+		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
 	) -> Result<()> {
 		// Finalize the configuration
@@ -92,7 +92,7 @@ impl TilesWriter for VersaTilesWriter {
 impl VersaTilesWriter {
 	/// Write metadata to the writer.
 	async fn write_meta(
-		reader: &dyn TilesReader,
+		reader: &dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
 	) -> Result<ByteRange> {
 		let meta: Blob = reader.get_meta()?.unwrap_or_default();
@@ -103,7 +103,7 @@ impl VersaTilesWriter {
 
 	/// Write blocks to the writer.
 	async fn write_blocks(
-		reader: &mut dyn TilesReader,
+		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
 	) -> Result<ByteRange> {
 		let pyramid = reader.get_parameters().bbox_pyramid.clone();
@@ -162,7 +162,7 @@ impl VersaTilesWriter {
 	/// Write a single block to the writer.
 	async fn write_block<'a>(
 		block: &BlockDefinition,
-		reader: &'a mut dyn TilesReader,
+		reader: &'a mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
 		progress: &mut Box<dyn ProgressTrait>,
 	) -> Result<(ByteRange, ByteRange)> {

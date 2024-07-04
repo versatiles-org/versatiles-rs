@@ -4,7 +4,7 @@
 //!
 //! ```rust
 //! use versatiles::container::{convert_tiles_container, MBTilesReader, TilesConverterParameters};
-//! use versatiles::types::{TileFormat, TileCompression, TileBBoxPyramid, TilesReader, TilesReaderParameters};
+//! use versatiles::types::{TileFormat, TileCompression, TileBBoxPyramid, TilesReaderTrait, TilesReaderParameters};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -33,11 +33,11 @@
 //! }
 //! ```
 
-use super::{utils::TileConverter, write_to_filename};
+use super::{tile_converter::TileConverter, write_to_filename};
 use crate::{
 	types::{
-		Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileStream, TilesReader,
-		TilesReaderParameters,
+		Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileStream,
+		TilesReaderParameters, TilesReaderTrait,
 	},
 	utils::TransformCoord,
 };
@@ -86,7 +86,7 @@ impl TilesConverterParameters {
 
 /// Converts tiles from a given reader and writes them to a file.
 pub async fn convert_tiles_container(
-	reader: Box<dyn TilesReader>,
+	reader: Box<dyn TilesReaderTrait>,
 	cp: TilesConverterParameters,
 	filename: &str,
 ) -> Result<()> {
@@ -97,7 +97,7 @@ pub async fn convert_tiles_container(
 /// A reader that converts tiles from one format to another.
 #[derive(Debug)]
 pub struct TilesConvertReader {
-	reader: Box<dyn TilesReader>,
+	reader: Box<dyn TilesReaderTrait>,
 	converter_parameters: TilesConverterParameters,
 	reader_parameters: TilesReaderParameters,
 	container_name: String,
@@ -108,7 +108,7 @@ pub struct TilesConvertReader {
 impl TilesConvertReader {
 	/// Creates a new converter reader from an existing reader.
 	pub fn new_from_reader(
-		reader: Box<dyn TilesReader>,
+		reader: Box<dyn TilesReaderTrait>,
 		cp: TilesConverterParameters,
 	) -> Result<TilesConvertReader> {
 		let container_name = format!("converter({})", reader.get_container_name());
@@ -149,7 +149,7 @@ impl TilesConvertReader {
 }
 
 #[async_trait]
-impl TilesReader for TilesConvertReader {
+impl TilesReaderTrait for TilesConvertReader {
 	fn get_name(&self) -> &str {
 		&self.name
 	}

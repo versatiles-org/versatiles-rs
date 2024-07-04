@@ -18,16 +18,16 @@ async-trait.workspace = true
 futures.workspace = true
 itertools = { workspace = true, features = ["use_alloc"] }
 log.workspace = true
-r2d2 = { version = "0.8.10", default-features = false, optional = true }
-r2d2_sqlite = { version = "0.24.0", default-features = false, optional = true, features = [
+r2d2 = { version = "0.8.10", default-features = false }
+r2d2_sqlite = { version = "0.24.0", default-features = false, features = [
 	"bundled",
 ] }
-reqwest = { workspace = true, optional = true, features = ["rustls-tls"] }
-tar = { version = "0.4.41", default-features = false, optional = true }
+reqwest = { workspace = true, features = ["rustls-tls"] }
+tar = { version = "0.4.41", default-features = false }
 tokio.workspace = true
 
-versatiles_core = { workspace = true, features = ["http"] }
-versatiles_pipeline = { workspace = true, optional = true }
+versatiles_core = { workspace = true, default-features = false }
+versatiles_pipeline = { workspace = true }
 
 [dev-dependencies]
 lazy_static.workspace = true
@@ -37,6 +37,6 @@ wildmatch.workspace = true
 versatiles.workspace = true
 
 [features]
-default = ["full"]
-full = ["dep:r2d2", "dep:r2d2_sqlite", "dep:reqwest", "dep:tar", "versatiles_pipeline"]
+default = []
+cli = ["versatiles_core/cli"]
 test = []

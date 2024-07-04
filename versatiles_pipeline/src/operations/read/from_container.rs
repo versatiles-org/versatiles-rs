@@ -1,6 +1,6 @@
 use crate::{
 	traits::*,
-	types::{Blob, TileBBox, TileCoord3, TileStream, TilesReader, TilesReaderParameters},
+	types::{Blob, TileBBox, TileCoord3, TileStream, TilesReaderParameters, TilesReaderTrait},
 	vpl::VPLNode,
 	PipelineFactory,
 };
@@ -19,7 +19,7 @@ struct Args {
 #[derive(Debug)]
 struct Operation {
 	parameters: TilesReaderParameters,
-	reader: Arc<Mutex<Box<dyn TilesReader>>>,
+	reader: Arc<Mutex<Box<dyn TilesReaderTrait>>>,
 	meta: Option<Blob>,
 }
 

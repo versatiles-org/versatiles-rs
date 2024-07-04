@@ -4,7 +4,7 @@
 //!
 //! ```no_run
 //! use versatiles::container::VersaTilesReader;
-//! use versatiles::types::{TileCoord3, TileCompression, TileFormat, TileBBoxPyramid, TilesReader, TilesReaderParameters};
+//! use versatiles::types::{TileCoord3, TileCompression, TileFormat, TileBBoxPyramid, TilesReaderTrait, TilesReaderParameters};
 //! use anyhow::Result;
 //! use futures::StreamExt;
 //! use std::path::Path;
@@ -44,15 +44,16 @@
 //! ```
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
+#[cfg(feature = "cli")]
+use crate::utils::PrettyPrint;
 use crate::{
 	types::{
 		Blob, ByteRange, LimitedCache, TileBBox, TileCompression, TileCoord2, TileCoord3, TileStream,
-		TilesReader, TilesReaderParameters,
+		TilesReaderParameters, TilesReaderTrait,
 	},
 	utils::{
 		decompress,
 		io::{DataReader, DataReaderFile},
-		PrettyPrint,
 	},
 };
 use anyhow::{Context, Result};
@@ -184,7 +185,7 @@ unsafe impl Send for VersaTilesReader {}
 unsafe impl Sync for VersaTilesReader {}
 
 #[async_trait]
-impl TilesReader for VersaTilesReader {
+impl TilesReaderTrait for VersaTilesReader {
 	/// Gets the container name.
 	fn get_container_name(&self) -> &str {
 		"versatiles"
@@ -413,6 +414,7 @@ impl TilesReader for VersaTilesReader {
 	}
 
 	// deep probe of container meta
+	#[cfg(feature = "cli")]
 	async fn probe_container(&mut self, print: &PrettyPrint) -> Result<()> {
 		print
 			.add_key_value("meta size", &self.meta.as_ref().map_or(0, |b| b.len()))
@@ -432,6 +434,7 @@ impl TilesReader for VersaTilesReader {
 	}
 
 	// deep probe of container tiles
+	#[cfg(feature = "cli")]
 	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
 		use crate::utils::progress::get_progress_bar;
 
@@ -514,11 +517,13 @@ impl PartialEq for VersaTilesReader {
 	}
 }
 
-#[cfg(all(test, feature = "full"))]
+#[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::{
-		container::{make_test_file, MockTilesReader, TilesWriter, VersaTilesWriter, MOCK_BYTES_PBF},
+		container::{
+			make_test_file, MockTilesReader, TilesWriterTrait, VersaTilesWriter, MOCK_BYTES_PBF,
+		},
 		types::{TileBBoxPyramid, TileFormat},
 		utils::{decompress_gzip, io::DataWriterBlob},
 	};
@@ -579,6 +584,7 @@ mod tests {
 	}
 
 	#[tokio::test]
+	#[cfg(feature = "cli")]
 	async fn probe() -> Result<()> {
 		let temp_file =
 			make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;

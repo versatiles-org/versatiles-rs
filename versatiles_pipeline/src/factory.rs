@@ -1,7 +1,7 @@
 use crate::{
 	operations::{get_read_operation_factories, get_transform_operation_factories},
 	traits::{OperationTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
-	types::TilesReader,
+	types::TilesReaderTrait,
 	vpl::{parse_vpl, VPLNode, VPLPipeline},
 };
 use anyhow::{anyhow, Result};
@@ -12,7 +12,8 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-type Callback = Option<Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesReader>>>>>;
+type Callback =
+	Option<Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesReaderTrait>>>>>;
 
 pub struct PipelineFactory {
 	read_ops: HashMap<String, Box<dyn ReadOperationFactoryTrait>>,
@@ -62,7 +63,7 @@ impl PipelineFactory {
 			.insert(factory.get_tag_name().to_string(), factory);
 	}
 
-	pub async fn get_reader(&self, filename: &str) -> Result<Box<dyn TilesReader>> {
+	pub async fn get_reader(&self, filename: &str) -> Result<Box<dyn TilesReaderTrait>> {
 		(self.create_reader.as_ref().unwrap())(self.dir.join(filename).to_string_lossy().to_string())
 			.await
 	}

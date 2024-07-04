@@ -7,8 +7,8 @@
 //! # Usage Example
 //!
 //! ```rust
-//! use versatiles::container::{MBTilesReader, TilesWriter, VersaTilesReader, VersaTilesWriter};
-//! use versatiles::types::{TileCoord3, TilesReader};
+//! use versatiles::container::{MBTilesReader, TilesWriterTrait, VersaTilesReader, VersaTilesWriter};
+//! use versatiles::types::{TileCoord3, TilesReaderTrait};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!

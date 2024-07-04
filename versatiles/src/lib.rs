@@ -18,7 +18,7 @@
 //! ```rust
 //! use versatiles::{
 //!     container::{get_reader, write_to_filename},
-//!     types::{TileFormat, TilesReader}
+//!     types::{TileFormat, TilesReaderTrait}
 //! };
 //! use std::path::Path;
 //! use anyhow::Result;
@@ -42,15 +42,7 @@
 
 pub use versatiles_container as container;
 pub use versatiles_core::*;
-
-#[cfg(feature = "full")]
 pub use versatiles_derive as derive;
-
-#[cfg(feature = "full")]
 pub use versatiles_geometry as geometry;
-
-#[cfg(feature = "full")]
 pub use versatiles_image as image;
-
-#[cfg(feature = "full")]
 pub use versatiles_pipeline as pipeline;

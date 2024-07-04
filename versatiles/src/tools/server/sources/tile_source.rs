@@ -1,6 +1,6 @@
 use super::{super::utils::Url, SourceResponse};
 use crate::{
-	types::{TileCompression, TileCoord3, TileFormat, TilesReader},
+	types::{TileCompression, TileCoord3, TileFormat, TilesReaderTrait},
 	utils::TargetCompression,
 };
 use anyhow::Result;
@@ -12,14 +12,14 @@ use tokio::sync::Mutex;
 pub struct TileSource {
 	pub prefix: Url,
 	pub json_info: String,
-	reader: Arc<Mutex<Box<dyn TilesReader>>>,
+	reader: Arc<Mutex<Box<dyn TilesReaderTrait>>>,
 	pub tile_mime: String,
 	pub compression: TileCompression,
 }
 
 impl TileSource {
 	// Constructor function for creating a TileSource instance
-	pub fn from(reader: Box<dyn TilesReader>, prefix: Url) -> Result<TileSource> {
+	pub fn from(reader: Box<dyn TilesReaderTrait>, prefix: Url) -> Result<TileSource> {
 		use TileFormat::*;
 
 		let parameters = reader.get_parameters();

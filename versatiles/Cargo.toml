@@ -24,65 +24,49 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true, features = ["std", "backtrace"] }
 async-trait.workspace = true
-axum = { version = "0.7.5", default-features = false, optional = true, features = [
-	"http1",
-	"http2",
-	"tokio",
-] }
-brotli = { version = "6.0.0", default-features = false, features = ["std"] }
-byteorder = { workspace = true, features = ["std"] }
-bytes.workspace = true
+axum = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 clap-verbosity-flag = { workspace = true, optional = true }
-enumset.workspace = true
+enumset = { workspace = true, optional = true }
 env_logger = { version = "0.11.3", default-features = false, optional = true }
-flate2 = { version = "1.0.30", default-features = false, features = ["default"] }
-futures = { workspace = true, features = ["default"] }
-hyper = { version = "1.4.0", default-features = false, optional = true, features = ["http2"] }
-lazy_static = { workspace = true, optional = true }
-log.workspace = true
+hyper = { workspace = true, optional = true }
+log = { workspace = true, optional = true }
 mime_guess = { version = "2.0.5", default-features = false, optional = true }
 regex = { workspace = true, optional = true, features = ["unicode"] }
-reqwest = { workspace = true, optional = true, features = ["rustls-tls"] }
-tar = { version = "0.4.41", default-features = false }
+tar = { version = "0.4.41", default-features = false, optional = true }
 termimad = { version = "0.29.4", optional = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "sync"], optional = true }
 
 versatiles_container = { workspace = true }
 versatiles_core = { workspace = true }
-versatiles_derive = { workspace = true, optional = true }
-versatiles_geometry = { workspace = true, optional = true }
-versatiles_image = { workspace = true, optional = true }
-versatiles_pipeline = { workspace = true, optional = true }
+versatiles_derive = { workspace = true }
+versatiles_geometry = { workspace = true }
+versatiles_image = { workspace = true }
+versatiles_pipeline = { workspace = true }
 
 [dev-dependencies]
 assert_fs.workspace = true
 lazy_static.workspace = true
+reqwest = { workspace = true, features = ["rustls-tls"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
 
 versatiles_container = { workspace = true, features = ["test"] }
 versatiles_core = { workspace = true, features = ["test"] }
 
 [features]
-default = ["full", "cli"]
+default = ["cli"]
 cli = [
 	"dep:axum",
 	"dep:clap-verbosity-flag",
 	"dep:clap",
 	"dep:env_logger",
+	"dep:enumset",
 	"dep:hyper",
+	"dep:log",
 	"dep:mime_guess",
+	"dep:regex",
+	"dep:tar",
 	"dep:termimad",
+	"dep:tokio",
 	"versatiles_core/cli",
-	"full",
 ]
-full = [
-	"dep:hyper",
-	"dep:lazy_static",
-	"dep:versatiles_derive",
-	"dep:versatiles_geometry",
-	"dep:versatiles_image",
-	"dep:versatiles_pipeline",
-	"http",
-]
-http = ["dep:lazy_static", "dep:regex", "dep:reqwest", "versatiles_core/http"]

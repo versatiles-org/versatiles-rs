@@ -189,7 +189,7 @@ mod tests {
 		container::{
 			convert_tiles_container, MockTilesReader, MockTilesReaderProfile, TilesConverterParameters,
 		},
-		types::TilesReader,
+		types::TilesReaderTrait,
 	};
 	use assert_fs::NamedTempFile;
 

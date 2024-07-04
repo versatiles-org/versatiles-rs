@@ -30,9 +30,9 @@
 ///
 /// A boxed implementation of `ProgressTrait`.
 pub fn get_progress_bar(message: &str, max_value: u64) -> Box<dyn ProgressTrait> {
-	#[cfg(not(feature = "test"))]
+	#[cfg(all(not(feature = "test"), feature = "cli"))]
 	let mut progress = super::progress_bar::ProgressBar::new();
-	#[cfg(feature = "test")]
+	#[cfg(any(feature = "test", not(feature = "cli")))]
 	let mut progress = super::progress_drain::ProgressDrain::new();
 	progress.init(message, max_value);
 	Box::new(progress)

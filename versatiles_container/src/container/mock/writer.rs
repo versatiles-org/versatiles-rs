@@ -9,7 +9,7 @@
 //! These mocks can be used to simulate tile writing operations in tests, allowing verification of code behavior under controlled conditions.
 //!
 //! ```rust
-//! use versatiles::container::{MockTilesReader, MockTilesReaderProfile, MockTilesWriter, TilesWriter};
+//! use versatiles::container::{MockTilesReader, MockTilesReaderProfile, MockTilesWriter, TilesWriterTrait};
 //! use anyhow::Result;
 //!
 //! #[tokio::test]
@@ -20,7 +20,7 @@
 //! }
 //! ```
 
-use crate::{container::TilesWriter, types::TilesReader, utils::io::DataWriterTrait};
+use crate::{container::TilesWriterTrait, types::TilesReaderTrait, utils::io::DataWriterTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 
@@ -39,7 +39,7 @@ impl MockTilesWriter {
 	/// # Returns
 	///
 	/// A `Result` indicating the success or failure of the operation.
-	pub async fn write(reader: &mut dyn TilesReader) -> Result<()> {
+	pub async fn write(reader: &mut dyn TilesReaderTrait) -> Result<()> {
 		let _temp = reader.get_container_name();
 		let _temp = reader.get_name();
 		let _temp = reader.get_meta()?;
@@ -48,7 +48,7 @@ impl MockTilesWriter {
 
 		for bbox in bbox_pyramid.iter_levels() {
 			let mut stream = reader.get_bbox_tile_stream(bbox.clone()).await;
-			while let Some(_) = stream.next().await {}
+			while stream.next().await.is_some() {}
 		}
 
 		Ok(())
@@ -56,7 +56,7 @@ impl MockTilesWriter {
 }
 
 #[async_trait]
-impl TilesWriter for MockTilesWriter {
+impl TilesWriterTrait for MockTilesWriter {
 	/// Writes tile data from a `TilesReader` to a `DataWriterTrait`.
 	///
 	/// This method is not implemented for the mock writer and simply calls `MockTilesWriter::write`.
@@ -70,7 +70,7 @@ impl TilesWriter for MockTilesWriter {
 	///
 	/// A `Result` indicating the success or failure of the operation.
 	async fn write_to_writer(
-		reader: &mut dyn TilesReader,
+		reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
 	) -> Result<()> {
 		MockTilesWriter::write(reader).await

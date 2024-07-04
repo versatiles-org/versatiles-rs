@@ -2,7 +2,8 @@ use crate::{
 	container::get_reader,
 	pipeline::{OperationTrait, PipelineFactory},
 	types::{
-		Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReader, TilesReaderParameters,
+		Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters,
+		TilesReaderTrait,
 	},
 	utils::io::DataReader,
 };
@@ -68,7 +69,7 @@ impl<'a> PipelineReader {
 	) -> BoxFuture<'a, Result<PipelineReader>> {
 		Box::pin(async {
 			let callback = Box::new(
-				|filename: String| -> BoxFuture<Result<Box<dyn TilesReader>>> {
+				|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
 					Box::pin(async move { get_reader(&filename).await })
 				},
 			);
@@ -86,7 +87,7 @@ impl<'a> PipelineReader {
 }
 
 #[async_trait]
-impl TilesReader for PipelineReader {
+impl TilesReaderTrait for PipelineReader {
 	/// Get the name of the reader source, e.g., the filename.
 	fn get_name(&self) -> &str {
 		&self.name

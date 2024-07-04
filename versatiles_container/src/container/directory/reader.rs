@@ -25,7 +25,7 @@
 //!
 //! ## Usage
 //! ```no_run
-//! use versatiles::{container::DirectoryTilesReader, types::{TileCoord3, TilesReader}};
+//! use versatiles::{container::DirectoryTilesReader, types::{TileCoord3, TilesReaderTrait}};
 //! use std::path::Path;
 //!
 //! #[tokio::main]
@@ -43,8 +43,8 @@
 
 use crate::{
 	types::{
-		Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TilesReader,
-		TilesReaderParameters,
+		Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TilesReaderParameters,
+		TilesReaderTrait,
 	},
 	utils::decompress,
 };
@@ -211,7 +211,7 @@ impl DirectoryTilesReader {
 }
 
 #[async_trait]
-impl TilesReader for DirectoryTilesReader {
+impl TilesReaderTrait for DirectoryTilesReader {
 	fn get_container_name(&self) -> &str {
 		"directory"
 	}
