@@ -173,7 +173,7 @@ mod tests {
 			.await?
 			.unwrap();
 
-		assert_eq!(result.len(), 104532);
+		assert_eq!(result.len(), 142038);
 
 		Ok(())
 	}

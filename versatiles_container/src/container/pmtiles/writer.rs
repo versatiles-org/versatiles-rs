@@ -8,23 +8,17 @@
 //! - Implements progress feedback during the write process
 //!
 //! ## Usage Example
-//! ```ignore
-//! use versatiles::container::{PMTilesWriter, TilesWriterTrait};
-//! use versatiles::types::{DataWriterBlob, TileFormat, TileCompression, TileBBoxPyramid, TilesReaderParameters};
+//! ```rust
+//! use versatiles::container::{MBTilesReader, PMTilesWriter, TilesWriterTrait};
 //! use std::path::Path;
 //!
 //! #[tokio::main]
-//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Initialize a reader with sample data
-//!     let reader = ...;
+//! async fn main() {
+//!     let path = std::env::current_dir().unwrap().join("../testdata/berlin.mbtiles");
+//!     let mut reader = MBTilesReader::open_path(&path).unwrap();
 //!
-//!     // Create a writer to write data to a new PMTiles container
-//!     let mut data_writer = DataWriterBlob::new()?;
-//!     PMTilesWriter::write_to_writer(&mut reader, &mut data_writer).await?;
-//!
-//!     // Further operations with data_writer...
-//!
-//!     Ok(())
+//!     let temp_path = std::env::temp_dir().join("temp.pmtiles");
+//!     PMTilesWriter::write_to_path(&mut reader, &temp_path).await.unwrap();
 //! }
 //! ```
 //!

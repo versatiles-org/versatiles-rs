@@ -24,12 +24,18 @@
 //! - Provides progress feedback during the write process
 //!
 //! ## Usage
-//! ```ignore
-//! use versatiles::container::{DirectoryTilesWriter, TilesWriterTrait};
+//! ```rust
+//! use versatiles::container::{DirectoryTilesWriter, MBTilesReader, TilesWriterTrait};
 //! use std::path::Path;
 //!
-//! let reader = // initialize your TilesReader
-//! DirectoryTilesWriter::write_to_path(reader, Path::new("/path/to/output")).await.unwrap();
+//! #[tokio::main]
+//! async fn main() {
+//!     let path = std::env::current_dir().unwrap().join("../testdata/berlin.mbtiles");
+//!     let mut reader = MBTilesReader::open_path(&path).unwrap();
+//!
+//!     let temp_path = std::env::temp_dir().join("temp_tiles");
+//!     DirectoryTilesWriter::write_to_path(&mut reader, &temp_path).await.unwrap();
+//! }
 //! ```
 //!
 //! ## Errors

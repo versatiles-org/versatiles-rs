@@ -8,12 +8,18 @@
 //! - Provides progress feedback during the write process.
 //!
 //! ## Usage
-//! ```ignore
-//! use versatiles::container::MBTilesWriter;
+//! ```rust
+//! use versatiles::container::{MBTilesWriter, PMTilesReader, TilesWriterTrait};
 //! use std::path::Path;
 //!
-//! let reader = // initialize your TilesReader
-//! MBTilesWriter::write_to_path(reader, Path::new("/path/to/output.mbtiles")).await.unwrap();
+//! #[tokio::main]
+//! async fn main() {
+//!     let path = std::env::current_dir().unwrap().join("../testdata/berlin.pmtiles");
+//!     let mut reader = PMTilesReader::open_path(&path).await.unwrap();
+//!
+//!     let temp_path = std::env::temp_dir().join("temp.mbtiles");
+//!     MBTilesWriter::write_to_path(&mut reader, &temp_path).await.unwrap();
+//! }
 //! ```
 //!
 //! ## Errors
@@ -31,7 +37,7 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use r2d2::Pool;
 use r2d2_sqlite::{rusqlite::params, SqliteConnectionManager};
-use std::path::Path;
+use std::{fs::remove_file, path::Path};
 
 /// A writer for creating and populating MBTiles databases.
 pub struct MBTilesWriter {
@@ -47,14 +53,17 @@ impl MBTilesWriter {
 	/// # Errors
 	/// Returns an error if the SQLite connection cannot be established or if the necessary tables cannot be created.
 	fn new(path: &Path) -> Result<Self> {
+		if path.exists() {
+			remove_file(path)?;
+		}
 		let manager = SqliteConnectionManager::file(path);
 		let pool = Pool::builder().max_size(10).build(manager)?;
 
 		pool.get()?.execute_batch(
 			"
-			  CREATE TABLE IF NOT EXISTS metadata (name text, value text, UNIQUE (name));
-			  CREATE TABLE IF NOT EXISTS tiles (zoom_level integer, tile_column integer, tile_row integer, tile_data blob);
-			  CREATE UNIQUE INDEX IF NOT EXISTS tile_index on tiles (zoom_level, tile_column, tile_row);
+			  CREATE TABLE metadata (name TEXT, value TEXT, UNIQUE (name));
+			  CREATE TABLE tiles (zoom_level INT UNSIGNED, tile_column INT UNSIGNED, tile_row INT UNSIGNED, tile_data BLOB);
+			  CREATE UNIQUE INDEX tile_index on tiles (zoom_level, tile_column, tile_row);
 			  ",
 		)?;
 
@@ -62,7 +71,7 @@ impl MBTilesWriter {
 	}
 
 	/// Adds multiple tiles to the MBTiles file within a single transaction.
-	///
+	///s
 	/// # Arguments
 	/// * `tiles` - A vector of tuples containing tile coordinates and tile data.
 	///
@@ -72,6 +81,7 @@ impl MBTilesWriter {
 		let mut conn = self.pool.get()?;
 		let transaction = conn.transaction()?;
 		for (coords, blob) in tiles {
+			println!("{:?}", coords);
 			transaction.execute(
 				"INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?1, ?2, ?3, ?4)",
 				params![coords.z, coords.x, coords.y, blob.as_slice()],

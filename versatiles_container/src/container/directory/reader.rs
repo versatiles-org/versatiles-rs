@@ -27,6 +27,7 @@
 //! ```no_run
 //! use versatiles::{container::DirectoryTilesReader, types::{TileCoord3, TilesReaderTrait}};
 //! use std::path::Path;
+//! use tokio;
 //!
 //! #[tokio::main]
 //! async fn main() {

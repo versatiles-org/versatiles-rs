@@ -11,8 +11,7 @@
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     // Define the input filename (local file or URL)
-//!     let input_filename = "../testdata/berlin.pmtiles";
-//!     let mut reader = get_reader(input_filename).await?;
+//!     let mut reader = get_reader("../testdata/berlin.mbtiles").await?;
 //!
 //!     // Define the output filename
 //!     let output_filename = "../testdata/temp3.versatiles";
