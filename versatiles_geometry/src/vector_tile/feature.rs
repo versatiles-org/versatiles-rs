@@ -252,9 +252,7 @@ impl VectorTileFeature {
 			feature.set_id(id);
 		}
 
-		feature.properties = layer
-			.decode_tag_ids(&self.tag_ids)
-			.context("Failed to convert to attributes")?;
+		feature.properties = layer.decode_tag_ids(&self.tag_ids)?;
 
 		Ok(feature)
 	}

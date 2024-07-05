@@ -52,24 +52,21 @@ impl Runner {
 				continue;
 			}
 
-			layer.map_properties(|properties| {
-				if let Some(mut prop) = properties {
-					if let Some(id) = prop.get(&self.args.id_field_tiles) {
-						if let Some(new_prop) = self.properties_map.get(&id.to_string()) {
-							if self.args.replace_properties {
-								prop = new_prop.clone();
-							} else {
-								prop.update(new_prop.clone());
-							}
-							return Some(prop);
+			layer.map_properties(|mut prop| {
+				if let Some(id) = prop.get(&self.args.id_field_tiles) {
+					if let Some(new_prop) = self.properties_map.get(&id.to_string()) {
+						if self.args.replace_properties {
+							prop = new_prop.clone();
 						} else {
-							warn!("id \"{id}\" not found in data source");
+							prop.update(new_prop.clone());
 						}
 					} else {
-						warn!("id field \"{}\" not found", &self.args.id_field_tiles);
+						warn!("id \"{id}\" not found in data source");
 					}
+				} else {
+					warn!("id field \"{}\" not found", &self.args.id_field_tiles);
 				}
-				None
+				prop
 			})?;
 		}
 

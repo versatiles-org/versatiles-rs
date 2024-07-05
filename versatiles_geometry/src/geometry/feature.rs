@@ -8,7 +8,7 @@ use super::*;
 pub struct Feature {
 	pub id: Option<u64>,
 	pub geometry: Geometry,
-	pub properties: Option<GeoProperties>,
+	pub properties: GeoProperties,
 }
 
 impl Feature {
@@ -16,7 +16,7 @@ impl Feature {
 		Self {
 			id: None,
 			geometry,
-			properties: None,
+			properties: GeoProperties::new(),
 		}
 	}
 
@@ -25,21 +25,14 @@ impl Feature {
 	}
 
 	pub fn set_properties(&mut self, properties: GeoProperties) {
-		self.properties = Some(properties);
+		self.properties = properties;
 	}
 
 	pub fn set_property<T>(&mut self, key: String, value: T)
 	where
 		GeoValue: From<T>,
 	{
-		if self.properties.is_none() {
-			self.properties = Some(GeoProperties::new());
-		}
-		self
-			.properties
-			.as_mut()
-			.unwrap()
-			.insert(key, GeoValue::from(value));
+		self.properties.insert(key, GeoValue::from(value));
 	}
 
 	#[cfg(test)]
@@ -47,11 +40,11 @@ impl Feature {
 		Self {
 			id: Some(13),
 			geometry: Geometry::new_example(),
-			properties: Some(GeoProperties::from(vec![
+			properties: GeoProperties::from(vec![
 				("name", GeoValue::from("Nice")),
 				("population", GeoValue::from(348085)),
 				("is_nice", GeoValue::from(true)),
-			])),
+			]),
 		}
 	}
 }

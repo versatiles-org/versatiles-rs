@@ -210,7 +210,7 @@ impl TileBBox {
 	///
 	/// * `x` - The x-coordinate of the tile.
 	/// * `y` - The y-coordinate of the tile.
-	pub fn include_tile(&mut self, x: u32, y: u32) {
+	pub fn include_coord(&mut self, x: u32, y: u32) {
 		if self.is_empty() {
 			self.x_min = x;
 			self.y_min = y;
@@ -222,6 +222,17 @@ impl TileBBox {
 			self.x_max = self.x_max.max(x).min(self.max);
 			self.y_max = self.y_max.max(y).min(self.max);
 		}
+	}
+
+	pub fn include_coord2(&mut self, coord: &TileCoord2) {
+		self.include_coord(coord.x, coord.y);
+	}
+
+	pub fn include_coord3(&mut self, coord: &TileCoord3) {
+		if coord.z != self.level {
+			panic!()
+		}
+		self.include_coord(coord.x, coord.y);
 	}
 
 	/// Expands the bounding box to include another bounding box.
@@ -746,7 +757,7 @@ mod tests {
 	#[test]
 	fn include_tile() {
 		let mut bbox = TileBBox::new(4, 0, 1, 2, 3).unwrap();
-		bbox.include_tile(4, 5);
+		bbox.include_coord(4, 5);
 		assert_eq!(bbox, TileBBox::new(4, 0, 1, 4, 5).unwrap());
 	}
 
@@ -982,7 +993,7 @@ mod tests {
 	#[test]
 	fn test_include_tile() {
 		let mut bbox = TileBBox::new(6, 5, 10, 20, 30).unwrap();
-		bbox.include_tile(25, 35);
+		bbox.include_coord(25, 35);
 		assert_eq!(bbox, TileBBox::new(6, 5, 10, 25, 35).unwrap());
 	}
 

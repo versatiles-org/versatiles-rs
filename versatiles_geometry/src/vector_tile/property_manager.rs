@@ -8,50 +8,35 @@ where
 	T: Clone + Eq + Hash,
 {
 	pub list: Vec<T>,
-	pub map: Option<HashMap<T, u32>>,
+	pub map: HashMap<T, u32>,
 }
 
 impl<T> VTLPMap<T>
 where
 	T: Clone + Debug + Eq + Hash,
 {
-	pub fn new() -> VTLPMap<T> {
-		VTLPMap {
-			list: vec![],
-			map: None,
-		}
+	pub fn new(list: Vec<T>) -> VTLPMap<T> {
+		let map = HashMap::from_iter(list.iter().enumerate().map(|(i, e)| (e.clone(), i as u32)));
+		VTLPMap { list, map }
 	}
 
-	pub fn add(&mut self, entry: T) -> Result<()> {
-		if let Some(map) = &mut self.map {
-			map.insert(entry.clone(), self.list.len() as u32);
+	pub fn add(&mut self, entry: T) -> u32 {
+		if let Some(index) = self.map.get(&entry) {
+			return *index;
 		}
+		let index = self.list.len() as u32;
+		self.map.insert(entry.clone(), index);
 		self.list.push(entry);
-		Ok(())
+		index
 	}
 
 	pub fn iter(&self) -> impl Iterator<Item = &T> + '_ {
 		self.list.iter()
 	}
 
-	fn ensure_map(&mut self) {
-		if self.map.is_some() {
-			return;
-		}
-		self.map = Some(HashMap::from_iter(
-			self
-				.list
-				.iter()
-				.enumerate()
-				.map(|(i, v)| (v.clone(), i as u32)),
-		));
-	}
-
 	pub fn find(&self, entry: &T) -> Result<u32> {
 		self
 			.map
-			.as_ref()
-			.ok_or(anyhow!("map does not exist"))?
 			.get(entry)
 			.ok_or_else(|| anyhow!("entry '{entry:?}' not found"))
 			.copied()
@@ -67,7 +52,7 @@ where
 
 impl<T: Clone + Debug + Eq + Hash> Default for VTLPMap<T> {
 	fn default() -> VTLPMap<T> {
-		VTLPMap::new()
+		VTLPMap::new(vec![])
 	}
 }
 
@@ -76,10 +61,7 @@ where
 	T: Clone + Debug + Eq + Hash + From<String>,
 {
 	fn from(value: &[&str]) -> Self {
-		VTLPMap {
-			list: value.iter().map(|v| T::from(v.to_string())).collect(),
-			map: None,
-		}
+		VTLPMap::new(value.iter().map(|v| T::from(v.to_string())).collect())
 	}
 }
 
@@ -101,8 +83,8 @@ pub struct PropertyManager {
 impl PropertyManager {
 	pub fn new() -> Self {
 		Self {
-			key: VTLPMap::new(),
-			val: VTLPMap::new(),
+			key: VTLPMap::default(),
+			val: VTLPMap::default(),
 		}
 	}
 
@@ -114,11 +96,11 @@ impl PropertyManager {
 		}
 	}
 
-	pub fn add_key(&mut self, key: String) -> Result<()> {
+	pub fn add_key(&mut self, key: String) -> u32 {
 		self.key.add(key)
 	}
 
-	pub fn add_val(&mut self, value: GeoValue) -> Result<()> {
+	pub fn add_val(&mut self, value: GeoValue) -> u32 {
 		self.val.add(value)
 	}
 
@@ -152,35 +134,29 @@ impl PropertyManager {
 
 		fn make_lookup<T>(map: HashMap<T, u32>) -> VTLPMap<T>
 		where
-			T: Clone + Eq + Hash + Ord,
+			T: Clone + Debug + Eq + Hash + Ord,
 		{
 			let mut vec: Vec<(T, u32)> = map.into_iter().collect();
 			vec.sort_unstable_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
 			let list: Vec<T> = vec.into_iter().map(|(v, _)| v).collect();
-			VTLPMap { list, map: None }
+			VTLPMap::new(list)
 		}
 
-		let mut properties = Self {
+		Self {
 			key: make_lookup(key_map),
 			val: make_lookup(val_map),
-		};
-
-		properties.ensure_map();
-
-		properties
+		}
 	}
 
-	pub fn encode_tag_ids(&self, properties: &Option<GeoProperties>) -> Result<Vec<u32>> {
+	pub fn encode_tag_ids(&mut self, properties: GeoProperties) -> Vec<u32> {
 		let mut tag_ids: Vec<u32> = Vec::new();
 
-		if let Some(properties) = properties {
-			for (key, val) in properties.iter() {
-				tag_ids.push(self.key.find(key)?);
-				tag_ids.push(self.val.find(val)?);
-			}
+		for (key, val) in properties.into_iter() {
+			tag_ids.push(self.key.add(key));
+			tag_ids.push(self.val.add(val));
 		}
 
-		Ok(tag_ids)
+		tag_ids
 	}
 
 	pub fn decode_tag_ids(&self, tag_ids: &[u32]) -> Result<GeoProperties> {
@@ -204,10 +180,5 @@ impl PropertyManager {
 			);
 		}
 		Ok(properties)
-	}
-
-	pub fn ensure_map(&mut self) {
-		self.key.ensure_map();
-		self.val.ensure_map();
 	}
 }

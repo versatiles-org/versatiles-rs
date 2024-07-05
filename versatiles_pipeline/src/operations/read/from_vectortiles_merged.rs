@@ -1,13 +1,16 @@
+use std::collections::HashMap;
+
 use crate::{
 	traits::*,
 	types::{Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters},
-	utils::recompress,
 	vpl::{VPLNode, VPLPipeline},
 	PipelineFactory,
 };
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use futures::future::{join_all, BoxFuture};
+use versatiles_core::{types::TileFormat, utils::decompress};
+use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Overlays multiple tile sources, using the tile from the first source that provides it.
@@ -21,6 +24,21 @@ struct Operation {
 	parameters: TilesReaderParameters,
 	sources: Vec<Box<dyn OperationTrait>>,
 	meta: Option<Blob>,
+}
+
+fn merge_tiles(blobs: Vec<Blob>) -> Result<Blob> {
+	let mut layers = HashMap::<String, VectorTileLayer>::new();
+	for blob in blobs.into_iter() {
+		let tile = VectorTile::from_blob(&blob)?;
+		for new_layer in tile.layers {
+			if let Some(layer) = layers.get_mut(&new_layer.name) {
+				layer.add_from_layer(new_layer)?;
+			} else {
+				layers.insert(new_layer.name.clone(), new_layer);
+			}
+		}
+	}
+	VectorTile::new(layers.into_values().collect()).to_blob()
 }
 
 impl ReadOperationTrait for Operation {
@@ -44,18 +62,15 @@ impl ReadOperationTrait for Operation {
 			let parameters = sources.first().unwrap().get_parameters();
 			let mut pyramid = parameters.bbox_pyramid.clone();
 			let tile_format = parameters.tile_format;
-			let mut tile_compression = parameters.tile_compression;
+			let tile_compression = TileCompression::Uncompressed;
 
 			for source in sources.iter() {
 				let parameters = source.get_parameters();
 				pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
 				ensure!(
-					parameters.tile_format == tile_format,
-					"all sources must have the same tile format"
+					tile_format == TileFormat::PBF,
+					"all sources must be vector tiles"
 				);
-				if parameters.tile_compression != tile_compression {
-					tile_compression = TileCompression::Uncompressed;
-				}
 			}
 
 			let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
@@ -80,58 +95,56 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+		let mut blobs: Vec<Blob> = vec![];
 		for source in self.sources.iter_mut() {
 			let result = source.get_tile_data(coord).await?;
 			if let Some(mut blob) = result {
-				blob = recompress(
-					blob,
-					&source.get_parameters().tile_compression,
-					&self.parameters.tile_compression,
-				)?;
-				return Ok(Some(blob));
+				blob = decompress(blob, &source.get_parameters().tile_compression)?;
+				blobs.push(blob);
 			}
 		}
-		return Ok(None);
+		if blobs.is_empty() {
+			return Ok(None);
+		} else {
+			return Ok(Some(merge_tiles(blobs)?));
+		}
 	}
 
 	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
-		let output_compression = &self.parameters.tile_compression;
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
 		TileStream::from_stream_iter(bboxes.into_iter().map(move |bbox| async move {
-			let mut tiles: Vec<Option<(TileCoord3, Blob)>> = Vec::new();
-			tiles.resize(bbox.count_tiles() as usize, None);
+			let mut tiles: Vec<Vec<Blob>> = Vec::new();
+			tiles.resize(bbox.count_tiles() as usize, vec![]);
 
 			for source in self.sources.iter() {
-				let mut bbox_left = TileBBox::new_empty(bbox.level).unwrap();
-				for (index, t) in tiles.iter().enumerate() {
-					if t.is_none() {
-						bbox_left.include_coord2(&bbox.get_coord2_by_index(index as u32).unwrap())
-					}
-				}
-				if bbox_left.is_empty() {
-					continue;
-				}
-
 				source
-					.get_bbox_tile_stream(bbox_left)
+					.get_bbox_tile_stream(bbox.clone())
 					.await
 					.for_each_sync(|(coord, mut blob)| {
 						let index = bbox.get_tile_index3(&coord);
-						if tiles[index].is_none() {
-							blob = recompress(
-								blob,
-								&source.get_parameters().tile_compression,
-								output_compression,
-							)
-							.unwrap();
-							tiles[index] = Some((coord, blob));
-						}
+						blob = decompress(blob, &source.get_parameters().tile_compression).unwrap();
+						tiles[index].push(blob);
 					})
 					.await;
 			}
 
-			TileStream::from_vec(tiles.into_iter().flatten().collect())
+			TileStream::from_vec(
+				tiles
+					.into_iter()
+					.enumerate()
+					.filter_map(|(i, v)| {
+						if v.is_empty() {
+							None
+						} else {
+							Some((
+								bbox.get_coord3_by_index(i as u32).unwrap(),
+								merge_tiles(v).unwrap(),
+							))
+						}
+					})
+					.collect(),
+			)
 		}))
 		.await
 	}
@@ -144,7 +157,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"from_overlayed"
+		"from_vectortiles_merged"
 	}
 }
 
@@ -160,27 +173,33 @@ impl ReadOperationFactoryTrait for Factory {
 }
 #[cfg(test)]
 mod tests {
+	use itertools::Itertools;
+
 	use super::*;
 	use crate::helpers::mock_vector_source::arrange_tiles;
 
-	pub fn check_tile(blob: &Blob, coord: &TileCoord3) -> Result<String> {
-		use versatiles_geometry::{vector_tile::VectorTile, GeoValue};
+	pub fn check_tile(blob: &Blob, coord: &TileCoord3) -> String {
+		use versatiles_geometry::GeoValue;
 
-		let tile = VectorTile::from_blob(blob)?;
+		let tile = VectorTile::from_blob(blob).unwrap();
 		assert_eq!(tile.layers.len(), 1);
 
 		let layer = &tile.layers[0];
 		assert_eq!(layer.name, "mock");
-		assert_eq!(layer.features.len(), 1);
 
-		let feature = &layer.features[0].to_feature(layer)?;
-		let properties = &feature.properties;
+		layer
+			.features
+			.iter()
+			.map(|vtf| {
+				let p = vtf.to_feature(layer).unwrap().properties;
 
-		assert_eq!(properties.get("x").unwrap(), &GeoValue::from(coord.x));
-		assert_eq!(properties.get("y").unwrap(), &GeoValue::from(coord.y));
-		assert_eq!(properties.get("z").unwrap(), &GeoValue::from(coord.z));
+				assert_eq!(p.get("x").unwrap(), &GeoValue::from(coord.x));
+				assert_eq!(p.get("y").unwrap(), &GeoValue::from(coord.y));
+				assert_eq!(p.get("z").unwrap(), &GeoValue::from(coord.z));
 
-		Ok(properties.get("filename").unwrap().to_string())
+				p.get("filename").unwrap().to_string()
+			})
+			.join(",")
 	}
 
 	#[tokio::test]
@@ -197,9 +216,9 @@ mod tests {
 			)
 		};
 
-		error("from_overlayed").await;
-		error("from_overlayed [ ]").await;
-		error("from_overlayed [ from_container filename=1 ]").await;
+		error("from_vectortiles_merged").await;
+		error("from_vectortiles_merged [ ]").await;
+		error("from_vectortiles_merged [ from_container filename=1 ]").await;
 	}
 
 	#[tokio::test]
@@ -207,14 +226,14 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let mut result = factory
 			.operation_from_vpl(
-				"from_overlayed [ from_container filename=1, from_container filename=2 ]",
+				"from_vectortiles_merged [ from_container filename=1, from_container filename=2 ]",
 			)
 			.await?;
 
 		let coord = TileCoord3::new(1, 2, 3)?;
 		let blob = result.get_tile_data(&coord).await?.unwrap();
 
-		assert_eq!(check_tile(&blob, &coord)?, "1");
+		assert_eq!(check_tile(&blob, &coord), "1,2");
 
 		Ok(())
 	}
@@ -225,10 +244,9 @@ mod tests {
 		let result = factory
 			.operation_from_vpl(
 				&[
-					"from_overlayed [",
-					"   from_container filename=\"🟥\" | filter_bbox bbox=[-180,-20,20,85],",
-					"   from_container filename=\"🟨\" | filter_bbox bbox=[-20,-85,180,20],",
-					"   from_container filename=\"🟦\"",
+					"from_vectortiles_merged [",
+					"   from_container filename=\"A\" | filter_bbox bbox=[-180,-45,90,85],",
+					"   from_container filename=\"B\" | filter_bbox bbox=[-90,-85,180,45]",
 					"]",
 				]
 				.join(""),
@@ -243,16 +261,23 @@ mod tests {
 			.await;
 
 		assert_eq!(
-			arrange_tiles(tiles, |coord, blob| check_tile(&blob, &coord).unwrap()),
+			arrange_tiles(tiles, |coord, blob| {
+				match check_tile(&blob, &coord).as_str() {
+					"A" => "🟦",
+					"B" => "🟨",
+					"A,B" => "🟩",
+					e => panic!("{}", e),
+				}
+			}),
 			vec![
-				"🟥 🟥 🟥 🟥 🟥 🟦 🟦 🟦",
-				"🟥 🟥 🟥 🟥 🟥 🟦 🟦 🟦",
-				"🟥 🟥 🟥 🟥 🟥 🟦 🟦 🟦",
-				"🟥 🟥 🟥 🟥 🟥 🟨 🟨 🟨",
-				"🟥 🟥 🟥 🟥 🟥 🟨 🟨 🟨",
-				"🟦 🟦 🟦 🟨 🟨 🟨 🟨 🟨",
-				"🟦 🟦 🟦 🟨 🟨 🟨 🟨 🟨",
-				"🟦 🟦 🟦 🟨 🟨 🟨 🟨 🟨"
+				"🟦 🟦 🟦 🟦 🟦 🟦 ❌ ❌",
+				"🟦 🟦 🟦 🟦 🟦 🟦 ❌ ❌",
+				"🟦 🟦 🟩 🟩 🟩 🟩 🟨 🟨",
+				"🟦 🟦 🟩 🟩 🟩 🟩 🟨 🟨",
+				"🟦 🟦 🟩 🟩 🟩 🟩 🟨 🟨",
+				"🟦 🟦 🟩 🟩 🟩 🟩 🟨 🟨",
+				"❌ ❌ 🟨 🟨 🟨 🟨 🟨 🟨",
+				"❌ ❌ 🟨 🟨 🟨 🟨 🟨 🟨"
 			]
 		);
 

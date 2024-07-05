@@ -131,7 +131,7 @@ impl TileBBoxPyramid {
 	///
 	/// * `coord` - A reference to the `TileCoord3` to include.
 	pub fn include_coord(&mut self, coord: &TileCoord3) {
-		self.level_bbox[coord.z as usize].include_tile(coord.x, coord.y);
+		self.level_bbox[coord.z as usize].include_coord(coord.x, coord.y);
 	}
 
 	/// Includes a bounding box in the bounding box pyramid.

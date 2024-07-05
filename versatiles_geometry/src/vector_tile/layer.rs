@@ -57,20 +57,24 @@ impl VectorTileLayer {
 					)
 					.context("Failed to read VectorTileFeature")?,
 				),
-				(3, 2) => property_manager.add_key(
-					reader
-						.read_pbf_string()
-						.context("Failed to read property key")?,
-				)?,
-				(4, 2) => property_manager.add_val(
-					GeoValue::read(
+				(3, 2) => {
+					property_manager.add_key(
 						reader
-							.get_pbf_sub_reader()
-							.context("Failed to get PBF sub-reader for property value")?
-							.as_mut(),
-					)
-					.context("Failed to read GeoValue")?,
-				)?,
+							.read_pbf_string()
+							.context("Failed to read property key")?,
+					);
+				}
+				(4, 2) => {
+					property_manager.add_val(
+						GeoValue::read(
+							reader
+								.get_pbf_sub_reader()
+								.context("Failed to get PBF sub-reader for property value")?
+								.as_mut(),
+						)
+						.context("Failed to read GeoValue")?,
+					);
+				}
 				(5, 0) => extent = reader.read_varint().context("Failed to read extent")? as u32,
 				(15, 0) => version = reader.read_varint().context("Failed to read version")? as u32,
 				(f, w) => bail!("Unexpected combination of field number ({f}) and wire type ({w})"),
@@ -168,7 +172,7 @@ impl VectorTileLayer {
 
 	pub fn map_properties<F>(&mut self, filter_fn: F) -> Result<()>
 	where
-		F: Fn(Option<GeoProperties>) -> Option<GeoProperties>,
+		F: Fn(GeoProperties) -> GeoProperties,
 	{
 		let mut features: Vec<VectorTileFeature> = vec![];
 		swap(&mut features, &mut self.features);
@@ -179,22 +183,37 @@ impl VectorTileLayer {
 				let properties = filter_fn(self.decode_tag_ids(&feature.tag_ids)?);
 				Ok((feature, properties))
 			})
-			.collect::<Result<Vec<(VectorTileFeature, Option<GeoProperties>)>>>()?;
+			.collect::<Result<Vec<(VectorTileFeature, GeoProperties)>>>()?;
 
-		self.property_manager = PropertyManager::from_iter(
-			feature_prop_list
-				.iter()
-				.filter_map(|(_, properties)| properties.as_ref()),
-		);
+		self.property_manager = PropertyManager::from_iter(feature_prop_list.iter().map(|(_, p)| p));
 
 		self.features = feature_prop_list
 			.into_iter()
 			.map(|(mut f, p)| {
-				f.tag_ids = self.encode_tag_ids(&p)?;
+				f.tag_ids = self.encode_tag_ids(p);
 				Ok(f)
 			})
 			.collect::<Result<Vec<VectorTileFeature>>>()?;
 
+		Ok(())
+	}
+
+	pub fn add_vector_tile_features(
+		&mut self,
+		mut feature: VectorTileFeature,
+		properties: GeoProperties,
+	) {
+		feature.tag_ids = self.encode_tag_ids(properties);
+		self.features.push(feature);
+	}
+
+	pub fn add_from_layer(&mut self, mut layer: VectorTileLayer) -> Result<()> {
+		let mut features = vec![];
+		swap(&mut features, &mut layer.features);
+		for feature in features {
+			let properties = layer.decode_tag_ids(&feature.tag_ids)?;
+			self.add_vector_tile_features(feature, properties);
+		}
 		Ok(())
 	}
 
@@ -205,16 +224,12 @@ impl VectorTileLayer {
 		self.features.retain(filter_fn);
 	}
 
-	pub fn encode_tag_ids(&self, properties: &Option<GeoProperties>) -> Result<Vec<u32>> {
+	pub fn encode_tag_ids(&mut self, properties: GeoProperties) -> Vec<u32> {
 		self.property_manager.encode_tag_ids(properties)
 	}
 
-	pub fn decode_tag_ids(&self, tag_ids: &[u32]) -> Result<Option<GeoProperties>> {
-		if tag_ids.is_empty() {
-			Ok(None)
-		} else {
-			Ok(Some(self.property_manager.decode_tag_ids(tag_ids)?))
-		}
+	pub fn decode_tag_ids(&self, tag_ids: &[u32]) -> Result<GeoProperties> {
+		self.property_manager.decode_tag_ids(tag_ids)
 	}
 
 	pub fn from_features(
@@ -223,15 +238,14 @@ impl VectorTileLayer {
 		extent: u32,
 		version: u32,
 	) -> Result<VectorTileLayer> {
-		let property_manager =
-			PropertyManager::from_iter(features.iter().filter_map(|f| f.properties.as_ref()));
+		let mut property_manager = PropertyManager::from_iter(features.iter().map(|f| &f.properties));
 
 		let features = features
 			.into_iter()
 			.map(|feature| {
 				VectorTileFeature::from_geometry(
 					feature.id,
-					property_manager.encode_tag_ids(&feature.properties)?,
+					property_manager.encode_tag_ids(feature.properties),
 					feature.geometry,
 				)
 			})
@@ -315,7 +329,7 @@ mod tests {
 		let mut layer = VectorTileLayer::new("hello".to_string(), 4096, 1);
 		layer.property_manager = PropertyManager::from_slices(&["key"], &["value"]);
 		assert_eq!(
-			layer.decode_tag_ids(&vec![0, 0])?.unwrap(),
+			layer.decode_tag_ids(&vec![0, 0])?,
 			GeoProperties::from(vec![("key", GeoValue::from("value"))])
 		);
 		Ok(())
@@ -330,7 +344,7 @@ mod tests {
 		println!("{:?}", features[0].properties);
 		assert_eq!(features.len(), 1);
 		assert_eq!(
-			format!("{:?}", features[0].properties.as_ref().unwrap()),
+			format!("{:?}", features[0].properties),
 			"{\"is_nice\": Bool(true), \"name\": String(\"Nice\"), \"population\": UInt(348085)}"
 		);
 		Ok(())
