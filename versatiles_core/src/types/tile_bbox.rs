@@ -325,6 +325,14 @@ impl TileBBox {
 			.map(|(y, x)| TileCoord3::new(x, y, self.level).unwrap())
 	}
 
+	pub fn into_iter_coords(self) -> impl Iterator<Item = TileCoord3> {
+		let y_range = self.y_min..=self.y_max;
+		let x_range = self.x_min..=self.x_max;
+		y_range
+			.cartesian_product(x_range)
+			.map(move |(y, x)| TileCoord3::new(x, y, self.level).unwrap())
+	}
+
 	/// Splits the bounding box into a grid of bounding boxes of the specified size.
 	///
 	/// # Arguments

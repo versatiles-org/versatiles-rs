@@ -62,27 +62,25 @@ impl Operation {
 			fast_compression: args.fast,
 		}) as Box<dyn OperationTrait>)
 	}
+}
 
-	fn build_tile(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		Ok(if self.parameters.bbox_pyramid.contains_coord(coord) {
-			let format = self.parameters.tile_format;
-			let blob = match format {
-				TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => {
-					let image = create_debug_image(coord);
-					if self.fast_compression {
-						image2blob_fast(&image, format)?
-					} else {
-						image2blob(&image, format)?
-					}
-				}
-				TileFormat::PBF => create_debug_vector_tile(coord)?,
-				_ => bail!("tile format '{format}' is not implemented yet"),
-			};
-			Some(blob)
-		} else {
-			None
-		})
-	}
+fn build_tile(
+	coord: &TileCoord3,
+	format: TileFormat,
+	fast_compression: bool,
+) -> Result<Option<Blob>> {
+	Ok(Some(match format {
+		TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => {
+			let image = create_debug_image(coord);
+			if fast_compression {
+				image2blob_fast(&image, format)?
+			} else {
+				image2blob(&image, format)?
+			}
+		}
+		TileFormat::PBF => create_debug_vector_tile(coord)?,
+		_ => bail!("tile format '{format}' is not implemented yet"),
+	}))
 }
 
 impl ReadOperationTrait for Operation {
@@ -108,14 +106,15 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		self.build_tile(coord)
+		build_tile(coord, self.parameters.tile_format, self.fast_compression)
 	}
 
-	async fn get_bbox_tile_stream(&self, mut bbox: TileBBox) -> TileStream {
-		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
-		let coords = bbox.iter_coords().collect::<Vec<TileCoord3>>();
-		TileStream::from_coord_vec_sync(coords, |c| {
-			self.build_tile(&c).ok().flatten().map(|b| (c, b))
+	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
+		let format = self.parameters.tile_format.clone();
+		let fast = self.fast_compression.clone();
+
+		TileStream::from_coord_iter_parallel(bbox.into_iter_coords(), move |c| {
+			build_tile(&c, format, fast).ok().flatten()
 		})
 	}
 }

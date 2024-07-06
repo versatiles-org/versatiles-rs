@@ -85,6 +85,32 @@ impl<'a> TileStream<'a> {
 		}
 	}
 
+	pub fn from_coord_iter_parallel<F>(
+		iter: impl Iterator<Item = TileCoord3> + Send + 'a,
+		callback: F,
+	) -> Self
+	where
+		F: Fn(TileCoord3) -> Option<Blob> + Send + Sync + 'static,
+	{
+		let callback = Arc::new(callback);
+		let stream = stream::iter(iter)
+			.map(move |coord| {
+				let callback = Arc::clone(&callback);
+				tokio::spawn(async move { (coord, callback(coord)) })
+			})
+			.buffer_unordered(num_cpus::get())
+			.filter_map(|result| async {
+				match result {
+					Ok((coord, Some(blob))) => Some((coord, blob)),
+					_ => None,
+				}
+			});
+
+		TileStream {
+			stream: Box::pin(stream),
+		}
+	}
+
 	pub fn from_coord_vec_async<F, Fut>(vec: Vec<TileCoord3>, callback: F) -> Self
 	where
 		F: FnMut(TileCoord3) -> Fut + Send + 'a,
