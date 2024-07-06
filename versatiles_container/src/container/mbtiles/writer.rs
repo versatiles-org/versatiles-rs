@@ -81,7 +81,6 @@ impl MBTilesWriter {
 		let mut conn = self.pool.get()?;
 		let transaction = conn.transaction()?;
 		for (coords, blob) in tiles {
-			println!("{:?}", coords);
 			transaction.execute(
 				"INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?1, ?2, ?3, ?4)",
 				params![coords.z, coords.x, coords.y, blob.as_slice()],
@@ -153,6 +152,8 @@ impl TilesWriterTrait for MBTilesWriter {
 			stream
 				.for_each_buffered(2000, |v| writer.add_tiles(&v).unwrap())
 				.await;
+
+			progress.inc(bbox.count_tiles());
 		}
 
 		progress.finish();
