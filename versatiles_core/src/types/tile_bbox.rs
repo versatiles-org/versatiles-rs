@@ -1116,4 +1116,25 @@ mod tests {
 		assert!(!bbox.contains3(&TileCoord3::new(4, 9, 4).unwrap()));
 		assert!(!bbox.contains3(&TileCoord3::new(6, 11, 5).unwrap()));
 	}
+	#[test]
+	fn test_include_coord2() {
+		let mut bbox = TileBBox::new(6, 5, 10, 20, 30).unwrap();
+
+		bbox.include_coord2(&TileCoord2::new(25, 35));
+		assert_eq!(bbox, TileBBox::new(6, 5, 10, 25, 35).unwrap());
+
+		bbox.include_coord2(&TileCoord2::new(4, 9));
+		assert_eq!(bbox, TileBBox::new(6, 4, 9, 25, 35).unwrap());
+	}
+
+	#[test]
+	fn test_include_coord3() {
+		let mut bbox = TileBBox::new(6, 5, 10, 20, 30).unwrap();
+
+		bbox.include_coord3(&TileCoord3::new(25, 35, 6).unwrap());
+		assert_eq!(bbox, TileBBox::new(6, 5, 10, 25, 35).unwrap());
+
+		bbox.include_coord3(&TileCoord3::new(4, 9, 6).unwrap());
+		assert_eq!(bbox, TileBBox::new(6, 4, 9, 25, 35).unwrap());
+	}
 }
