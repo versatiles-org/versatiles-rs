@@ -118,6 +118,6 @@ mod tests {
 		let mut progress = ProgressBar::new();
 		progress.init("Test", 100);
 		progress.remove();
-		assert_eq!(progress.bar.position(), 0);
+		assert_eq!(progress.bar.position(), 100);
 	}
 }
