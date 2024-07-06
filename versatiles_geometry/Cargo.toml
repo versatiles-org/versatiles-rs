@@ -25,6 +25,3 @@ versatiles_core.workspace = true
 tokio = { workspace = true, features = ["macros"] }
 
 versatiles.workspace = true
-
-[features]
-default = []

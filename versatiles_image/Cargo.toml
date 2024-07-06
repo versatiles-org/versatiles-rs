@@ -22,6 +22,3 @@ versatiles_core.workspace = true
 [dev-dependencies]
 
 versatiles.workspace = true
-
-[features]
-default = []
