@@ -130,7 +130,7 @@ fn draw_quad(p0: Point, c0: Point, p1: Point) -> Vec<Point> {
 	result
 }
 
-pub fn draw_cubic(p0: Point, c0: Point, c1: Point, p1: Point) -> Vec<Point> {
+fn draw_cubic(p0: Point, c0: Point, c1: Point, p1: Point) -> Vec<Point> {
 	let mut result: Vec<Point> = vec![p0];
 	tessellate_cubic(&mut result, p0, c0, c1, p1, 0);
 	return result;
@@ -193,13 +193,13 @@ mod tests {
 
 	#[test]
 	fn test_create_debug_vector_tile_different_coord() {
-		let coord = TileCoord3::new(99, 100, 9).unwrap();
+		let coord = TileCoord3::new(6789, 2345, 10).unwrap();
 		let blob = create_debug_vector_tile(&coord).unwrap();
 		let vt = VectorTile::from_blob(&blob).unwrap();
 		assert_eq!(vt.layers.len(), 4);
 		assert_eq!(vt.layers[0].features.len(), 1);
-		assert_eq!(vt.layers[1].features.len(), 3);
-		assert_eq!(vt.layers[2].features.len(), 4);
-		assert_eq!(vt.layers[3].features.len(), 5);
+		assert_eq!(vt.layers[1].features.len(), 4);
+		assert_eq!(vt.layers[2].features.len(), 6);
+		assert_eq!(vt.layers[3].features.len(), 6);
 	}
 }
