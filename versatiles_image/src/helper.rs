@@ -75,7 +75,22 @@ pub fn image2blob(image: &DynamicImage, format: TileFormat) -> Result<Blob> {
 		TileFormat::JPG => jpeg::image2blob(image),
 		TileFormat::JSON => todo!(),
 		TileFormat::PBF => todo!(),
-		TileFormat::PNG => png::image2blob(image),
+		TileFormat::PNG => png::image2blob(image, true),
+		TileFormat::SVG => todo!(),
+		TileFormat::TOPOJSON => todo!(),
+		TileFormat::WEBP => webp::image2blob(image),
+	}
+}
+
+pub fn image2blob_fast(image: &DynamicImage, format: TileFormat) -> Result<Blob> {
+	match format {
+		TileFormat::AVIF => todo!(),
+		TileFormat::BIN => todo!(),
+		TileFormat::GEOJSON => todo!(),
+		TileFormat::JPG => jpeg::image2blob(image),
+		TileFormat::JSON => todo!(),
+		TileFormat::PBF => todo!(),
+		TileFormat::PNG => png::image2blob(image, false),
 		TileFormat::SVG => todo!(),
 		TileFormat::TOPOJSON => todo!(),
 		TileFormat::WEBP => webp::image2blob(image),

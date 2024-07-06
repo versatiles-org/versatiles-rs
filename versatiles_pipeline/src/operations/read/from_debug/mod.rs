@@ -17,22 +17,29 @@ use futures::future::BoxFuture;
 use image::create_debug_image;
 use std::fmt::Debug;
 use vector::create_debug_vector_tile;
+use versatiles_image::helper::image2blob_fast;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Produces debugging tiles, each showing their coordinates as text.
 struct Args {
 	/// tile format: "pbf", "jpg", "png" or "webp"
 	format: String,
+	/// use fast compression
+	fast: bool,
 }
 
 #[derive(Debug)]
 pub struct Operation {
 	meta: Option<Blob>,
 	parameters: TilesReaderParameters,
+	fast_compression: bool,
 }
 
 impl Operation {
-	pub fn from_format(format: TileFormat) -> Result<Box<dyn OperationTrait>> {
+	pub fn new(vpl_node: &VPLNode) -> Result<Box<dyn OperationTrait>> {
+		let args = Args::from_vpl_node(&vpl_node)?;
+		let format = TileFormat::parse_str(&args.format)?;
+
 		let parameters = TilesReaderParameters::new(
 			format,
 			TileCompression::Uncompressed,
@@ -49,7 +56,11 @@ impl Operation {
 			_ => Blob::from("{}"),
 		});
 
-		Ok(Box::new(Self { meta, parameters }) as Box<dyn OperationTrait>)
+		Ok(Box::new(Self {
+			meta,
+			parameters,
+			fast_compression: args.fast,
+		}) as Box<dyn OperationTrait>)
 	}
 
 	fn build_tile(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
@@ -57,7 +68,12 @@ impl Operation {
 			let format = self.parameters.tile_format;
 			let blob = match format {
 				TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => {
-					image2blob(&create_debug_image(coord), format)?
+					let image = create_debug_image(coord);
+					if self.fast_compression {
+						image2blob_fast(&image, format)?
+					} else {
+						image2blob(&image, format)?
+					}
 				}
 				TileFormat::PBF => create_debug_vector_tile(coord)?,
 				_ => bail!("tile format '{format}' is not implemented yet"),
@@ -77,11 +93,7 @@ impl ReadOperationTrait for Operation {
 	where
 		Self: Sized + OperationTrait,
 	{
-		Box::pin(async move {
-			let args = Args::from_vpl_node(&vpl_node)?;
-			let format = TileFormat::parse_str(&args.format)?;
-			Operation::from_format(format)
-		})
+		Box::pin(async move { Operation::new(&vpl_node) })
 	}
 }
 
