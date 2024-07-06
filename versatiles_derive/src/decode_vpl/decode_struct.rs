@@ -38,11 +38,9 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 			.iter()
 			.filter_map(extract_comment)
 			.collect::<Vec<String>>()
-			.join(" ");
-
-		if !comment.is_empty() {
-			comment = format!(" - {comment}");
-		}
+			.join(" ")
+			.trim()
+			.to_string();
 
 		if field_str == "sources" {
 			if doc_sources.is_some() {
@@ -54,6 +52,9 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 			doc_sources = Some(format!("### Sources:\n{comment}\n"));
 			parser_fields.push(quote! { sources: node.sources.clone() });
 		} else {
+			if !comment.is_empty() {
+				comment = format!(" - {comment}");
+			}
 			let (doc_field, parser_field) = match field_type_str.as_str() {
 				"String" => (
 					format!("* **`{field_str}`: String (required)**{comment}"),
@@ -89,7 +90,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 				),
 				_ => panic!("unknown type field: {field_type_str}"),
 			};
-			doc_fields.push(doc_field);
+			doc_fields.push(doc_field.trim().to_string());
 			parser_fields.push(parser_field);
 		}
 	}
@@ -115,7 +116,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 					&format!("{}\n", #doc_struct),
 					#doc_fields,
 					#doc_children,
-				].join("")
+				].join("").trim().to_string()
 			}
 		}
 	}
