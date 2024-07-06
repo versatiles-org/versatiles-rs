@@ -10,7 +10,7 @@ use futures::future::BoxFuture;
 use std::fmt::Debug;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Filter tiles by bounding box.
+/// Filter tiles by zoom level.
 struct Args {
 	/// minimal zoom level
 	min: Option<u8>,

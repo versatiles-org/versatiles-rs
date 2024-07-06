@@ -19,7 +19,7 @@ use std::fmt::Debug;
 use vector::create_debug_vector_tile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Produces debugging tiles, showing their coordinates.
+/// Produces debugging tiles, each showing their coordinates as text.
 struct Args {
 	/// tile format: "pbf", "jpg", "png" or "webp"
 	format: String,

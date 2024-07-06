@@ -18,7 +18,7 @@ use std::{collections::HashMap, sync::Arc};
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Updates properties of vector tile features using data from an external source (e.g., CSV file). Matches features based on an ID field.
 struct Args {
-	/// Path to the data source file, e.g., `data.csv`.
+	/// Path to the data source file, e.g., `data_source_path="data.csv"`.
 	data_source_path: String,
 	/// ID field name in the vector tiles.
 	id_field_tiles: String,

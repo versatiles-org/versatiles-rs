@@ -12,7 +12,8 @@ use std::{fmt::Debug, sync::Arc};
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a tile container, such as a VersaTiles file.
 struct Args {
-	/// The filename of the tile container, e.g., `"world.versatiles"`.
+	/// The filename of the tile container. This is relative to the path of the VPL file.
+	/// For example: `filename="world.versatiles"`.
 	filename: String,
 }
 
@@ -143,26 +144,4 @@ mod tests {
 
 		Ok(())
 	}
-
-	/*
-	#[tokio::test]
-	async fn test_read_container_1() {
-		test(
-			"test_container_1.versatiles",
-			"{\"meta_key\":\"meta_value_1\"}",
-		)
-		.await
-		.unwrap();
-	}
-
-	#[tokio::test]
-	async fn test_read_container_2() {
-		test(
-			"test_container_2.versatiles",
-			"{\"meta_key\":\"meta_value_2\"}",
-		)
-		.await
-		.unwrap();
-	}
-	 */
 }

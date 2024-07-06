@@ -10,7 +10,7 @@ use futures::future::BoxFuture;
 use std::fmt::Debug;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Filter tiles by bounding box.
+/// Filter tiles by a geographic bounding box.
 struct Args {
 	/// Bounding box: [min long, min lat, max long, max lat].
 	bbox: [f64; 4],
