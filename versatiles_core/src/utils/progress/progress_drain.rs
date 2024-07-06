@@ -6,18 +6,6 @@
 //! the same interface as a progress bar but does nothing when its methods are called. This can be useful
 //! in situations where a progress indicator is required by an interface, but you do not want any actual
 //! progress output.
-//!
-//! # Examples
-//!
-//! ```rust
-//! use versatiles::utils::progress::{ProgressDrain, ProgressTrait};
-//!
-//! let mut progress = ProgressDrain::new();
-//! progress.init("Processing", 100);
-//! progress.set_position(50);
-//! progress.inc(10);
-//! progress.finish();
-//! ```
 
 use super::ProgressTrait;
 
