@@ -150,10 +150,11 @@ impl TilesWriterTrait for MBTilesWriter {
 			let stream = reader.get_bbox_tile_stream(bbox.clone()).await;
 
 			stream
-				.for_each_buffered(2000, |v| writer.add_tiles(&v).unwrap())
+				.for_each_buffered(2000, |v| {
+					writer.add_tiles(&v).unwrap();
+					progress.inc(v.len() as u64)
+				})
 				.await;
-
-			progress.inc(bbox.count_tiles());
 		}
 
 		progress.finish();
