@@ -13,9 +13,9 @@ use versatiles_core::{types::TileFormat, utils::decompress};
 use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Overlays multiple tile sources, using the tile from the first source that provides it.
+/// Merges multiple vector tile sources. Each layer will contain all features from the same layer of all sources.
 struct Args {
-	/// All tile sources must have the same format.
+	/// All tile sources must provide vector tiles.
 	sources: Vec<VPLPipeline>,
 }
 
