@@ -24,13 +24,28 @@
 
 #[cfg(all(not(feature = "test"), feature = "cli"))]
 mod progress_bar;
-#[cfg(all(not(feature = "test"), feature = "cli"))]
-pub use progress_bar::ProgressBar;
 
 #[cfg(any(feature = "test", not(feature = "cli")))]
 mod progress_drain;
-#[cfg(any(feature = "test", not(feature = "cli")))]
-pub use progress_drain::ProgressDrain;
+
+/// Factory function to create a progress bar or a no-op progress drain based on the build configuration.
+///
+/// # Arguments
+///
+/// * `message` - A message describing the task being performed.
+/// * `max_value` - The maximum value of the progress.
+///
+/// # Returns
+///
+/// A boxed implementation of `ProgressTrait`.
+pub fn get_progress_bar(message: &str, max_value: u64) -> Box<dyn ProgressTrait> {
+	#[cfg(all(not(feature = "test"), feature = "cli"))]
+	let mut progress = progress_bar::ProgressBar::new();
+	#[cfg(any(feature = "test", not(feature = "cli")))]
+	let mut progress = progress_drain::ProgressDrain::new();
+	progress.init(message, max_value);
+	Box::new(progress)
+}
 
 mod traits;
-pub use traits::{get_progress_bar, ProgressTrait};
+pub use traits::ProgressTrait;

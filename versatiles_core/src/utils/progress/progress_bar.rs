@@ -76,7 +76,7 @@ mod tests {
 	fn test_bar_new() {
 		let progress = ProgressBar::new();
 		assert_eq!(progress.bar.length().unwrap(), 0);
-		assert_eq!(pb.position(), 0);
+		assert_eq!(progress.bar.position(), 0);
 	}
 
 	#[test]
@@ -84,7 +84,7 @@ mod tests {
 		let mut progress = ProgressBar::new();
 		progress.init("Test", 100);
 		assert_eq!(progress.bar.length().unwrap(), 100);
-		assert_eq!(pb.message(), "Test");
+		assert_eq!(progress.bar.message(), "Test");
 	}
 
 	#[test]

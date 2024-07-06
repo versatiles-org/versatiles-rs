@@ -7,36 +7,6 @@
 //! trait can be used to display progress information for long-running tasks. The `get_progress_bar`
 //! function provides a convenient way to create an instance of a progress indicator based on the
 //! current build configuration.
-//!
-//! # Examples
-//!
-//! ```rust
-//! use versatiles::utils::progress::{get_progress_bar, ProgressTrait};
-//!
-//! let mut progress = get_progress_bar("Processing", 100);
-//! progress.set_position(50);
-//! progress.inc(10);
-//! progress.finish();
-//! ```
-
-/// Factory function to create a progress bar or a no-op progress drain based on the build configuration.
-///
-/// # Arguments
-///
-/// * `message` - A message describing the task being performed.
-/// * `max_value` - The maximum value of the progress.
-///
-/// # Returns
-///
-/// A boxed implementation of `ProgressTrait`.
-pub fn get_progress_bar(message: &str, max_value: u64) -> Box<dyn ProgressTrait> {
-	#[cfg(all(not(feature = "test"), feature = "cli"))]
-	let mut progress = super::progress_bar::ProgressBar::new();
-	#[cfg(any(feature = "test", not(feature = "cli")))]
-	let mut progress = super::progress_drain::ProgressDrain::new();
-	progress.init(message, max_value);
-	Box::new(progress)
-}
 
 /// A trait defining the interface for progress indicators.
 pub trait ProgressTrait: Send + Sync {

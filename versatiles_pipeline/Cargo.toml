@@ -20,7 +20,7 @@ futures.workspace = true
 imageproc = { version = "0.25.0", default-features = false }
 itertools.workspace = true
 log.workspace = true
-nom = { version = "7.1.3" }
+nom.workspace = true
 
 versatiles_core.workspace = true
 versatiles_derive.workspace = true

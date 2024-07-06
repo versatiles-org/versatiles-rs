@@ -27,6 +27,7 @@ indicatif = { version = "0.17.8", default-features = false, features = [
 ], optional = true }
 itertools.workspace = true
 lazy_static = { workspace = true }
+nom = { workspace = true }
 num_cpus = { version = "1.16.0", default-features = false }
 regex = { workspace = true, features = ["unicode-case", "unicode-perl"] }
 reqwest = { workspace = true, features = ["rustls-tls"] }
