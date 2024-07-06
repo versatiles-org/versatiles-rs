@@ -35,6 +35,7 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;
+use itertools::Itertools;
 use r2d2::Pool;
 use r2d2_sqlite::{rusqlite::params, SqliteConnectionManager};
 use std::{fs::remove_file, path::Path};
@@ -60,11 +61,9 @@ impl MBTilesWriter {
 		let pool = Pool::builder().max_size(10).build(manager)?;
 
 		pool.get()?.execute_batch(
-			"
-			  CREATE TABLE metadata (name TEXT, value TEXT, UNIQUE (name));
-			  CREATE TABLE tiles (zoom_level INT UNSIGNED, tile_column INT UNSIGNED, tile_row INT UNSIGNED, tile_data BLOB);
-			  CREATE UNIQUE INDEX tile_index on tiles (zoom_level, tile_column, tile_row);
-			  ",
+			"CREATE TABLE metadata (name TEXT, value TEXT, UNIQUE (name));
+			CREATE TABLE tiles (zoom_level INTEGER, tile_column INTEGER, tile_row INTEGER, tile_data BLOB, UNIQUE (zoom_level, tile_column, tile_row));
+			CREATE UNIQUE INDEX tile_index on tiles (zoom_level, tile_column, tile_row);",
 		)?;
 
 		Ok(MBTilesWriter { pool })
@@ -137,7 +136,35 @@ impl TilesWriterTrait for MBTilesWriter {
 			),
 		};
 
+		writer.set_metadata("name", reader.get_name())?;
 		writer.set_metadata("format", format)?;
+		writer.set_metadata("type", "baselayer")?;
+		writer.set_metadata("version", "3.0")?;
+		writer.set_metadata(
+			"bounds",
+			&std::slice::Iter::<f64>::join(
+				&mut reader.get_parameters().bbox_pyramid.get_geo_bbox().iter(),
+				",",
+			),
+		)?;
+		writer.set_metadata(
+			"minzoom",
+			&reader
+				.get_parameters()
+				.bbox_pyramid
+				.get_zoom_min()
+				.unwrap()
+				.to_string(),
+		)?;
+		writer.set_metadata(
+			"maxzoom",
+			&reader
+				.get_parameters()
+				.bbox_pyramid
+				.get_zoom_max()
+				.unwrap()
+				.to_string(),
+		)?;
 
 		if let Some(meta_data) = reader.get_meta()? {
 			writer.set_metadata("json", meta_data.as_str())?;
