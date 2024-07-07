@@ -111,22 +111,22 @@ impl ReadOperationFactoryTrait for Factory {
 mod tests {
 	use super::*;
 
-	#[allow(dead_code)]
-	async fn test(filename: &str, expected_meta: &str) -> Result<()> {
+	#[tokio::test]
+	async fn test() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let mut operation = factory
-			.operation_from_vpl(&format!("from_container filename={filename}"))
+			.operation_from_vpl(&format!("from_container filename=\"test.mbtiles\""))
 			.await?;
 
-		let coord = TileCoord3 { x: 1, y: 2, z: 3 };
+		assert_eq!(
+			&operation.get_meta().unwrap().to_string(),
+			"{\"mock\":true}"
+		);
+
+		let coord = TileCoord3 { x: 2, y: 3, z: 4 };
 		let blob = operation.get_tile_data(&coord).await?.unwrap();
 
-		assert!(!blob.is_empty(), "for '{filename}'");
-		assert_eq!(
-			operation.get_meta().unwrap().as_str(),
-			expected_meta,
-			"for '{filename}'",
-		);
+		assert!(blob.len() > 50);
 
 		let mut stream = operation
 			.get_bbox_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?)
@@ -134,13 +134,13 @@ mod tests {
 
 		let mut n = 0;
 		while let Some((coord, blob)) = stream.next().await {
-			assert!(!blob.is_empty(), "for '{filename}'");
-			assert!(coord.x >= 1 && coord.x <= 2, "for '{filename}'");
-			assert!(coord.y >= 1 && coord.y <= 3, "for '{filename}'");
-			assert_eq!(coord.z, 3, "for '{filename}'");
+			assert!(blob.len() > 50);
+			assert!(coord.x >= 1 && coord.x <= 2);
+			assert!(coord.y >= 1 && coord.y <= 3);
+			assert_eq!(coord.z, 3);
 			n += 1;
 		}
-		assert_eq!(n, 6, "for '{filename}'");
+		assert_eq!(n, 6);
 
 		Ok(())
 	}

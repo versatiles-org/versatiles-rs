@@ -66,7 +66,7 @@ impl TilesReaderTrait for MockVectorSource {
 	}
 
 	fn get_meta(&self) -> Result<Option<Blob>> {
-		Ok(None)
+		Ok(Some(Blob::from(r##"{"mock":true}"##)))
 	}
 
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
