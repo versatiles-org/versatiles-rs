@@ -36,8 +36,8 @@ pub struct Operation {
 }
 
 impl Operation {
-	pub fn new(vpl_node: &VPLNode) -> Result<Box<dyn OperationTrait>> {
-		let args = Args::from_vpl_node(&vpl_node)?;
+	pub fn from_vpl_node(vpl_node: &VPLNode) -> Result<Box<dyn OperationTrait>> {
+		let args = Args::from_vpl_node(vpl_node)?;
 		let format = TileFormat::parse_str(&args.format)?;
 
 		let parameters = TilesReaderParameters::new(
@@ -91,7 +91,7 @@ impl ReadOperationTrait for Operation {
 	where
 		Self: Sized + OperationTrait,
 	{
-		Box::pin(async move { Operation::new(&vpl_node) })
+		Box::pin(async move { Operation::from_vpl_node(&vpl_node) })
 	}
 }
 
@@ -110,8 +110,8 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
-		let format = self.parameters.tile_format.clone();
-		let fast = self.fast_compression.clone();
+		let format = self.parameters.tile_format;
+		let fast = self.fast_compression;
 
 		TileStream::from_coord_iter_parallel(bbox.into_iter_coords(), move |c| {
 			build_tile(&c, format, fast).ok().flatten()

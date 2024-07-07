@@ -329,7 +329,7 @@ mod tests {
 		let mut layer = VectorTileLayer::new("hello".to_string(), 4096, 1);
 		layer.property_manager = PropertyManager::from_slices(&["key"], &["value"]);
 		assert_eq!(
-			layer.decode_tag_ids(&vec![0, 0])?,
+			layer.decode_tag_ids(&[0, 0])?,
 			GeoProperties::from(vec![("key", GeoValue::from("value"))])
 		);
 		Ok(())

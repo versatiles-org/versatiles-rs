@@ -100,6 +100,10 @@ fn parse_value(input: &str) -> IResult<&str, Vec<String>, VerboseError<&str>> {
 	)(input)
 }
 
+fn parse_identifier(input: &str) -> IResult<&str, String, VerboseError<&str>> {
+	context("node identifier", parse_bare_identifier)(input)
+}
+
 fn parse_property(input: &str) -> IResult<&str, (String, Vec<String>), VerboseError<&str>> {
 	context(
 		"property",
@@ -111,16 +115,12 @@ fn parse_property(input: &str) -> IResult<&str, (String, Vec<String>), VerboseEr
 	)(input)
 }
 
-fn parse_identifier(input: &str) -> IResult<&str, String, VerboseError<&str>> {
-	context("node identifier", parse_bare_identifier)(input)
-}
-
 fn parse_sources(input: &str) -> IResult<&str, Vec<VPLPipeline>, VerboseError<&str>> {
 	context(
 		"sources",
 		opt(delimited(
 			tuple((char('['), multispace0)),
-			separated_list0(char(','), cut(parse_pipeline)),
+			separated_list0(char(','), parse_pipeline),
 			tuple((multispace0, cut(char(']')))),
 		))
 		.map(|r| r.unwrap_or_default()),
@@ -130,7 +130,7 @@ fn parse_sources(input: &str) -> IResult<&str, Vec<VPLPipeline>, VerboseError<&s
 fn parse_node<'a>(input: &'a str) -> IResult<&str, VPLNode, VerboseError<&str>> {
 	context("node", |input: &'a str| {
 		let (input, _) = multispace0(input)?;
-		let (input, name) = cut(parse_identifier)(input)?;
+		let (input, name) = parse_identifier(input)?;
 		let (input, _) = multispace0(input)?;
 		let (input, property_list) = separated_list0(multispace1, parse_property)(input)?;
 		let (input, _) = multispace0(input)?;
@@ -352,8 +352,8 @@ mod tests {
 			let mut error = parse_vpl(vpl)
 				.unwrap_err()
 				.to_string()
-				.replace("^", " ")
-				.replace("\n", " ");
+				.replace('^', " ")
+				.replace('\n', " ");
 			error = error.replace(vpl, "");
 			error = REG_MGS1.replace_all(&error, " ").to_string();
 			error = REG_MGS2
@@ -372,16 +372,16 @@ mod tests {
 			"expected '=', found k; in property; in node; in pipeline",
 		);
 		run("node key=\"2.1", "expected '\"', got end of input; in quoted string; in value; in property; in node; in pipeline");
-		run("node [n key=2,1]", "in TakeWhile1; in parse_bare_identifier; in node identifier; in node; in pipeline; in sources; in node; in pipeline");
+		run(
+			"node [n key=2,1]",
+			"expected ']', found ,; in sources; in node; in pipeline",
+		);
 		run("node [n key=2]]", "in Eof");
-		run("node [ ] [ ]", "in TakeWhile1; in parse_bare_identifier; in node identifier; in node; in pipeline; in sources; in node; in pipeline");
+		run("node [ ] [ ]", "in Eof");
 		run(
 			"node [ a; b ]",
 			"expected ']', found ;; in sources; in node; in pipeline",
 		);
-		run(
-			"node | | node",
-			"in TakeWhile1; in parse_bare_identifier; in node identifier; in node; in pipeline",
-		);
+		run("node | | node", "in Eof");
 	}
 }

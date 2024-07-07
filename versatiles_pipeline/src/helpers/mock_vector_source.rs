@@ -111,17 +111,11 @@ pub fn arrange_tiles<T: ToString>(
 ) -> Vec<String> {
 	use versatiles_core::types::TileBBox;
 
-	let mut bbox = TileBBox::new_empty(tiles.get(0).unwrap().0.z).unwrap();
+	let mut bbox = TileBBox::new_empty(tiles.first().unwrap().0.z).unwrap();
 	tiles.iter().for_each(|t| bbox.include_coord(t.0.x, t.0.y));
 
 	let mut result: Vec<Vec<String>> = (0..bbox.height())
-		.into_iter()
-		.map(|_| {
-			(0..bbox.width())
-				.into_iter()
-				.map(|_| String::from("❌"))
-				.collect()
-		})
+		.map(|_| (0..bbox.width()).map(|_| String::from("❌")).collect())
 		.collect();
 
 	for (coord, blob) in tiles.into_iter() {
