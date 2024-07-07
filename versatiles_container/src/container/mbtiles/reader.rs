@@ -62,7 +62,7 @@ use std::path::Path;
 pub struct MBTilesReader {
 	name: String,
 	pool: Pool<SqliteConnectionManager>,
-	meta_data: Option<String>,
+	meta_data: Option<Blob>,
 	parameters: TilesReaderParameters,
 }
 
@@ -157,7 +157,7 @@ impl MBTilesReader {
 					}
 					_ => panic!("unknown file format: {}", entry.value),
 				},
-				"json" => self.meta_data = Some(entry.value),
+				"json" => self.meta_data = Some(Blob::from(entry.value)),
 				&_ => {}
 			}
 		}
@@ -273,7 +273,7 @@ impl TilesReaderTrait for MBTilesReader {
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the metadata.
 	fn get_meta(&self) -> Result<Option<Blob>> {
-		Ok(self.meta_data.as_ref().map(Blob::from))
+		Ok(self.meta_data.clone())
 	}
 
 	/// Returns the parameters of the tiles reader.
