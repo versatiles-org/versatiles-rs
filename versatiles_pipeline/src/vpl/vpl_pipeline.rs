@@ -1,10 +1,8 @@
+use super::{parse_vpl, VPLNode};
+use anyhow::{ensure, Result};
 use std::fmt::Debug;
 
-use anyhow::{ensure, Result};
-
-use super::{parse_vpl, VPLNode};
-
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Default, PartialEq)]
 pub struct VPLPipeline {
 	pub pipeline: Vec<VPLNode>,
 }
@@ -13,6 +11,7 @@ impl VPLPipeline {
 	pub fn new(pipeline: Vec<VPLNode>) -> Self {
 		VPLPipeline { pipeline }
 	}
+
 	pub fn from_str(vpl: &str) -> Self {
 		parse_vpl(vpl).unwrap()
 	}

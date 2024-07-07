@@ -122,11 +122,11 @@ impl From<&str> for VPLNode {
 #[cfg(test)]
 fn make_properties(input: Vec<(&str, Vec<&str>)>) -> HashMap<String, Vec<String>> {
 	input
-		.iter()
+		.into_iter()
 		.map(|(k, v)| {
 			(
 				k.to_string(),
-				Vec::from_iter(v.into_iter().map(|f| f.to_string())),
+				v.into_iter().map(|f| f.to_string()).collect(),
 			)
 		})
 		.collect()
@@ -134,7 +134,7 @@ fn make_properties(input: Vec<(&str, Vec<&str>)>) -> HashMap<String, Vec<String>
 
 fn make_property(input: Vec<(&str, &str)>) -> HashMap<String, Vec<String>> {
 	input
-		.iter()
+		.into_iter()
 		.map(|(k, v)| (k.to_string(), vec![v.to_string()]))
 		.collect()
 }
@@ -326,25 +326,124 @@ mod tests {
 	}
 
 	#[test]
-	fn test_vplnode_from_str() -> Result<()> {
-		let vpl = r#"
-		node key1 = "value1" key2 = [1,"2",3] [
-			child
-		]
-		"#;
-		let node = VPLNode::from_str(vpl)?;
+	fn test_vplnode_from_str() {
+		fn run(vpl: &str) {
+			let node = VPLNode::from_str(vpl).unwrap();
 
-		assert_eq!(node.name, "node");
+			assert_eq!(node.name, "node");
+			assert_eq!(
+				node.properties.get("key1").unwrap(),
+				&vec!["value1".to_string()]
+			);
+			assert_eq!(
+				node.properties.get("key2").unwrap(),
+				&vec![String::from("1"), String::from("2"), String::from("3")]
+			);
+			assert_eq!(node.sources[0].pipeline[0].name, "child");
+		}
+
+		run(
+			r#" node key1 = "value1" key2 = [1,"2",3] [
+   child
+ ]
+		"#,
+		);
+
+		run(r#" node key1 = "value1" key2 = [ 1 , "2" , 3 ] [ child ] "#);
+		run(r#"node key1="value1" key2=[1,"2",3][child]"#);
+	}
+
+	#[test]
+	fn test_debug_impl() {
+		let node = VPLNode {
+			name: "test_node".to_string(),
+			properties: make_properties(vec![
+				("key1", vec!["value1", "value2"]),
+				("key2", vec!["value3"]),
+			]),
+			sources: vec![VPLPipeline::default()],
+		};
+		let debug_str = format!("{:?}", node);
+		assert!(debug_str.contains("VPLNode"));
+		assert!(debug_str.contains("test_node"));
+		assert!(debug_str.contains("properties"));
+		assert!(debug_str.contains("sources"));
+	}
+
+	#[test]
+	fn test_from_str() {
+		let node: VPLNode = "test_node".into();
+		assert_eq!(node.name, "test_node");
+		assert!(node.properties.is_empty());
+		assert!(node.sources.is_empty());
+	}
+
+	#[test]
+	fn test_from_tuple_str_str() {
+		let node: VPLNode = ("test_node", ("key", "value")).into();
+		assert_eq!(node.name, "test_node");
+		assert_eq!(
+			node.properties.get("key").unwrap(),
+			&vec!["value".to_string()]
+		);
+		assert!(node.sources.is_empty());
+	}
+
+	#[test]
+	fn test_from_tuple_str_vec_tuple_str_str() {
+		let node: VPLNode = ("test_node", vec![("key1", "value1"), ("key2", "value2")]).into();
+		assert_eq!(node.name, "test_node");
 		assert_eq!(
 			node.properties.get("key1").unwrap(),
 			&vec!["value1".to_string()]
 		);
 		assert_eq!(
 			node.properties.get("key2").unwrap(),
-			&vec![String::from("1"), String::from("2"), String::from("3")]
+			&vec!["value2".to_string()]
 		);
-		assert_eq!(node.sources[0].pipeline[0].name, "child");
+		assert!(node.sources.is_empty());
+	}
 
-		Ok(())
+	#[test]
+	fn test_from_tuple_str_vec_tuple_str_str_pipeline() {
+		let pipeline = VPLPipeline::default();
+		let node: VPLNode = (
+			"test_node",
+			vec![("key1", "value1"), ("key2", "value2")],
+			pipeline.clone(),
+		)
+			.into();
+		assert_eq!(node.name, "test_node");
+		assert_eq!(
+			node.properties.get("key1").unwrap(),
+			&vec!["value1".to_string()]
+		);
+		assert_eq!(
+			node.properties.get("key2").unwrap(),
+			&vec!["value2".to_string()]
+		);
+		assert_eq!(node.sources, vec![pipeline]);
+	}
+
+	#[test]
+	fn test_from_tuple_str_vec_tuple_str_str_vec_pipeline() {
+		let pipeline1 = VPLPipeline::default();
+		let pipeline2 = VPLPipeline::default();
+		let node: VPLNode = (
+			"test_node",
+			vec![("key1", "value1"), ("key2", "value2")],
+			vec![pipeline1.clone(), pipeline2.clone()],
+		)
+			.into();
+		assert_eq!(node.name, "test_node");
+		assert_eq!(
+			node.properties.get("key1").unwrap(),
+			&vec!["value1".to_string()]
+		);
+		assert_eq!(
+			node.properties.get("key2").unwrap(),
+			&vec!["value2".to_string()]
+		);
+		assert_eq!(node.sources, vec![pipeline1, pipeline2]);
 	}
 }
