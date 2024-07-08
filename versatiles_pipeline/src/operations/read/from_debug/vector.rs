@@ -1,13 +1,13 @@
 use crate::{
-	geometry::{
-		vector_tile::{VectorTile, VectorTileLayer},
-		*,
-	},
+	geometry::vector_tile::{VectorTile, VectorTileLayer},
 	types::{Blob, TileCoord3},
 };
 use ab_glyph::{Font, FontArc, Outline, OutlineCurve::*, Point};
 use anyhow::Result;
 use std::{f64::consts::PI, ops::Div, vec};
+use versatiles_geometry::{
+	math, Coordinates1, Coordinates2, Coordinates3, Feature, Geometry, MultiPolygonGeometry,
+};
 
 static mut FONT: Option<FontArc> = None;
 

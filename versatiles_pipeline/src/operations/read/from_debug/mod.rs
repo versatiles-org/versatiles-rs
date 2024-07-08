@@ -36,17 +36,17 @@ pub struct Operation {
 }
 
 impl Operation {
-	pub fn from_vpl_node(vpl_node: &VPLNode) -> Result<Box<dyn OperationTrait>> {
-		let args = Args::from_vpl_node(vpl_node)?;
-		let format = TileFormat::parse_str(&args.format)?;
-
+	pub fn from_parameters(
+		tile_format: TileFormat,
+		fast_compression: bool,
+	) -> Result<Box<dyn OperationTrait>> {
 		let parameters = TilesReaderParameters::new(
-			format,
+			tile_format,
 			TileCompression::Uncompressed,
 			TileBBoxPyramid::new_full(31),
 		);
 
-		let meta = Some(match format {
+		let meta = Some(match tile_format {
 			TileFormat::PBF => Blob::from(format!(
 				"{{\"vector_layers\":[{}]}}",
 				["background", "debug_x", "debug_y", "debug_z"]
@@ -59,8 +59,12 @@ impl Operation {
 		Ok(Box::new(Self {
 			meta,
 			parameters,
-			fast_compression: args.fast,
+			fast_compression,
 		}) as Box<dyn OperationTrait>)
+	}
+	pub fn from_vpl_node(vpl_node: &VPLNode) -> Result<Box<dyn OperationTrait>> {
+		let args = Args::from_vpl_node(vpl_node)?;
+		Self::from_parameters(TileFormat::parse_str(&args.format)?, args.fast)
 	}
 }
 

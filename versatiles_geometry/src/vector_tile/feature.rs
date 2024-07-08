@@ -241,6 +241,10 @@ impl VectorTileFeature {
 		}
 	}
 
+	pub fn decode_properties(&self, layer: &VectorTileLayer) -> Result<GeoProperties> {
+		layer.decode_tag_ids(&self.tag_ids)
+	}
+
 	pub fn to_feature(&self, layer: &VectorTileLayer) -> Result<Feature> {
 		let mut feature = Feature::new(
 			self

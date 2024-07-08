@@ -58,6 +58,17 @@ impl From<Vec<(&str, GeoValue)>> for GeoProperties {
 	}
 }
 
+impl From<Vec<(&str, &str)>> for GeoProperties {
+	fn from(value: Vec<(&str, &str)>) -> Self {
+		GeoProperties {
+			properties: value
+				.into_iter()
+				.map(|(k, v)| (k.to_string(), GeoValue::from(v)))
+				.collect(),
+		}
+	}
+}
+
 impl Debug for GeoProperties {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let mut fields = self
