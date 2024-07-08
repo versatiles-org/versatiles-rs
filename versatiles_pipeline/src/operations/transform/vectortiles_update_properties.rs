@@ -121,7 +121,7 @@ impl Operation {
 				.collect::<Result<HashMap<String, GeoProperties>>>()
 				.context("Failed to build properties map from CSV data")?;
 
-			let parameters = source.get_parameters().clone();
+			let mut parameters = source.get_parameters().clone();
 			ensure!(
 				parameters.tile_format == TileFormat::PBF,
 				"source must be vector tiles"
@@ -134,6 +134,8 @@ impl Operation {
 				properties_map,
 				tile_compression: parameters.tile_compression,
 			});
+
+			parameters.tile_compression = TileCompression::Uncompressed;
 
 			Ok(Box::new(Self {
 				runner,
