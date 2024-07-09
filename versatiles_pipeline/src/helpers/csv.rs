@@ -35,17 +35,18 @@ pub fn read_csv_file(path: &Path) -> Result<Vec<GeoProperties>> {
 
 	let mut progress = get_progress_bar("read csv", size);
 	for (record, pos) in lines {
-		let mut entry = GeoProperties::new();
-		for (col_index, name) in header.iter() {
-			entry.insert(
+		let entry = GeoProperties::from_iter(header.iter().map(|(col_index, name)| {
+			(
 				name.to_string(),
 				GeoValue::parse_str(
 					record
 						.get(*col_index)
-						.with_context(|| format!("Failed to get value for column: {name}"))?,
+						.with_context(|| format!("Failed to get value for column: {name}"))
+						.unwrap(),
 				),
-			);
-		}
+			)
+		}));
+
 		data.push(entry);
 		progress.set_position(pos as u64);
 	}
