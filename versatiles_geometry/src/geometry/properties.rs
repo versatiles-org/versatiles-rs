@@ -26,9 +26,9 @@ impl GeoProperties {
 	pub fn insert(&mut self, key: String, value: GeoValue) {
 		self.properties.insert(key, value);
 	}
-	pub fn update(&mut self, new_properties: GeoProperties) {
-		for (k, v) in new_properties.into_iter() {
-			self.properties.insert(k, v);
+	pub fn update(&mut self, new_properties: &GeoProperties) {
+		for (k, v) in new_properties.iter() {
+			self.properties.insert(k.to_string(), v.clone());
 		}
 	}
 	pub fn remove(&mut self, key: &str) {

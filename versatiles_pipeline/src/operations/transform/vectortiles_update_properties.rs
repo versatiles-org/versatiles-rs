@@ -28,6 +28,8 @@ struct Args {
 	layer_name: Option<String>,
 	/// If set, old properties will be deleted before new ones are added.
 	replace_properties: bool,
+	/// If set, removes all features (in the layer) that do not match.
+	remove_non_matching: bool,
 	/// If set, includes the ID field in the updated properties.
 	include_id: bool,
 }
@@ -52,21 +54,24 @@ impl Runner {
 				continue;
 			}
 
-			layer.map_properties(|mut prop| {
+			layer.filter_map_properties(|mut prop| {
 				if let Some(id) = prop.get(&self.args.id_field_tiles) {
 					if let Some(new_prop) = self.properties_map.get(&id.to_string()) {
 						if self.args.replace_properties {
 							prop = new_prop.clone();
 						} else {
-							prop.update(new_prop.clone());
+							prop.update(new_prop);
 						}
 					} else {
+						if self.args.remove_non_matching {
+							return None;
+						}
 						warn!("id \"{id}\" not found in data source");
 					}
 				} else {
 					warn!("id field \"{}\" not found", &self.args.id_field_tiles);
 				}
-				prop
+				Some(prop)
 			})?;
 		}
 
@@ -233,6 +238,7 @@ mod tests {
 				id_field_data: "id".to_string(),
 				layer_name: None,
 				replace_properties: false,
+				remove_non_matching: false,
 				include_id: false,
 			},
 			tile_compression: TileCompression::Uncompressed,

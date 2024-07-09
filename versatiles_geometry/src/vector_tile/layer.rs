@@ -170,6 +170,34 @@ impl VectorTileLayer {
 		Ok(features)
 	}
 
+	pub fn filter_map_properties<F>(&mut self, filter_fn: F) -> Result<()>
+	where
+		F: Fn(GeoProperties) -> Option<GeoProperties>,
+	{
+		let mut features: Vec<VectorTileFeature> = vec![];
+		swap(&mut features, &mut self.features);
+
+		let feature_prop_list = features
+			.into_iter()
+			.filter_map(|feature: VectorTileFeature| {
+				filter_fn(self.decode_tag_ids(&feature.tag_ids).unwrap())
+					.map(|properties| Ok((feature, properties)))
+			})
+			.collect::<Result<Vec<(VectorTileFeature, GeoProperties)>>>()?;
+
+		self.property_manager = PropertyManager::from_iter(feature_prop_list.iter().map(|(_, p)| p));
+
+		self.features = feature_prop_list
+			.into_iter()
+			.map(|(mut f, p)| {
+				f.tag_ids = self.encode_tag_ids(p);
+				Ok(f)
+			})
+			.collect::<Result<Vec<VectorTileFeature>>>()?;
+
+		Ok(())
+	}
+
 	pub fn map_properties<F>(&mut self, filter_fn: F) -> Result<()>
 	where
 		F: Fn(GeoProperties) -> GeoProperties,
