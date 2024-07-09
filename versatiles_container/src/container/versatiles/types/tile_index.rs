@@ -7,7 +7,7 @@
 use crate::{
 	types::{Blob, ByteRange},
 	utils::io::{ValueReader, ValueReaderBlob, ValueWriter, ValueWriterBlob},
-	utils::{compress_brotli, decompress_brotli},
+	utils::{compress_brotli_fast, decompress_brotli},
 };
 use anyhow::{ensure, Result};
 use std::ops::Div;
@@ -98,7 +98,7 @@ impl TileIndex {
 	/// # Errors
 	/// Returns an error if the compression or conversion fails.
 	pub fn as_brotli_blob(&self) -> Result<Blob> {
-		compress_brotli(&self.as_blob()?)
+		compress_brotli_fast(&self.as_blob()?)
 	}
 
 	/// Gets the byte range for a specific index.

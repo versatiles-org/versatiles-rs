@@ -161,8 +161,27 @@ pub fn decompress_gzip(blob: &Blob) -> Result<Blob> {
 /// * `data` - The blob of data to compress
 pub fn compress_brotli(blob: &Blob) -> Result<Blob> {
 	let params = BrotliEncoderParams {
-		quality: 10, // smallest
-		lgwin: 19,   // smallest
+		quality: 10,
+		lgwin: 19,
+		size_hint: blob.len() as usize,
+		..Default::default()
+	};
+	let mut input = Cursor::new(blob.as_slice());
+	let mut output: Vec<u8> = Vec::new();
+	BrotliCompress(&mut input, &mut output, &params)?;
+
+	Ok(Blob::from(output))
+}
+
+/// Compresses data using Brotli, but faster
+///
+/// # Arguments
+///
+/// * `data` - The blob of data to compress
+pub fn compress_brotli_fast(blob: &Blob) -> Result<Blob> {
+	let params = BrotliEncoderParams {
+		quality: 3,
+		lgwin: 16,
 		size_hint: blob.len() as usize,
 		..Default::default()
 	};
@@ -191,32 +210,24 @@ mod tests {
 	use enumset::enum_set;
 
 	#[test]
-	/// Verify that the Brotli compression and decompression functions work correctly.
 	fn verify_brotli() -> Result<()> {
-		// Generate random data.
 		let data1 = random_data(10000);
+		assert_eq!(data1, decompress_brotli(&compress_brotli(&data1)?)?);
+		Ok(())
+	}
 
-		// Compress and then decompress the data.
-		let data2 = decompress_brotli(&compress_brotli(&data1)?)?;
-
-		// Check that the original and decompressed data match.
-		assert_eq!(data1, data2);
-
+	#[test]
+	fn verify_fast_brotli() -> Result<()> {
+		let data1 = random_data(10000);
+		assert_eq!(data1, decompress_brotli(&compress_brotli_fast(&data1)?)?);
 		Ok(())
 	}
 
 	#[test]
 	/// Verify that the Gzip compression and decompression functions work correctly.
 	fn verify_gzip() -> Result<()> {
-		// Generate random data.
 		let data1 = random_data(100000);
-
-		// Compress and then decompress the data.
-		let data2 = decompress_gzip(&compress_gzip(&data1)?)?;
-
-		// Check that the original and decompressed data match.
-		assert_eq!(data1, data2);
-
+		assert_eq!(data1, decompress_gzip(&compress_gzip(&data1)?)?);
 		Ok(())
 	}
 

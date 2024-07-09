@@ -8,7 +8,7 @@ use super::BlockDefinition;
 use crate::{
 	types::{Blob, ByteRange, TileBBoxPyramid, TileCoord3},
 	utils::io::{ValueWriter, ValueWriterBlob},
-	utils::{compress_brotli, decompress_brotli},
+	utils::{compress_brotli_fast, decompress_brotli},
 };
 use anyhow::{ensure, Result};
 use std::{collections::HashMap, ops::Div};
@@ -112,7 +112,7 @@ impl BlockIndex {
 	/// # Errors
 	/// Returns an error if the conversion fails.
 	pub fn as_brotli_blob(&self) -> Result<Blob> {
-		compress_brotli(&self.as_blob()?)
+		compress_brotli_fast(&self.as_blob()?)
 	}
 
 	/// Retrieves a block from the index by its coordinates.
