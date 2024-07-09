@@ -37,7 +37,7 @@ impl<B: BufRead> Iterator for Lines<B> {
 						buf.pop();
 					}
 				}
-				Some(Ok((buf, n)))
+				Some(Ok((buf, self.pos)))
 			}
 			Err(e) => Some(Err(anyhow!(e))),
 		}
