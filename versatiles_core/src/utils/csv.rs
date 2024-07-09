@@ -1,3 +1,4 @@
+use anyhow::{anyhow, Result};
 use nom::{
 	branch::alt,
 	bytes::complete::{escaped_transform, tag, take_till},
@@ -10,15 +11,51 @@ use nom::{
 };
 use std::io::BufRead;
 
-pub fn read_csv_as_iterator(
-	reader: &mut dyn BufRead,
+pub struct Lines<B> {
+	buf: B,
+	pos: usize,
+}
+
+impl<B> Lines<B> {
+	fn new(buf: B) -> Self {
+		Self { buf, pos: 0 }
+	}
+}
+
+impl<B: BufRead> Iterator for Lines<B> {
+	type Item = Result<(String, usize)>;
+
+	fn next(&mut self) -> Option<Result<(String, usize)>> {
+		let mut buf = String::new();
+		match self.buf.read_line(&mut buf) {
+			Ok(0) => None,
+			Ok(n) => {
+				self.pos += n;
+				if buf.ends_with('\n') {
+					buf.pop();
+					if buf.ends_with('\r') {
+						buf.pop();
+					}
+				}
+				Some(Ok((buf, n)))
+			}
+			Err(e) => Some(Err(anyhow!(e))),
+		}
+	}
+}
+
+pub fn read_csv_as_iterator<T>(
+	reader: &mut T,
 	separator: char,
-) -> impl Iterator<Item = Vec<String>> + '_ {
-	reader.lines().filter_map(move |line| {
+) -> impl Iterator<Item = (Vec<String>, usize)> + '_
+where
+	T: BufRead,
+{
+	Lines::new(reader).filter_map(move |line| {
 		if line.is_err() {
 			return None;
 		}
-		let line = line.unwrap();
+		let (line, pos) = line.unwrap();
 		if line.is_empty() {
 			return None;
 		}
@@ -42,7 +79,7 @@ pub fn read_csv_as_iterator(
 				take_till(|c| c == separator).map(|s: &str| s.to_string()),
 			)),
 		)(line.as_str());
-		Some(result.unwrap().1)
+		Some((result.unwrap().1, pos))
 	})
 }
 
@@ -50,6 +87,12 @@ pub fn read_csv_as_iterator(
 mod tests {
 	use super::*;
 	use std::io::Cursor;
+
+	fn check(iter: &mut impl Iterator<Item = (Vec<String>, usize)>, result: &[&str]) {
+		let entry = iter.next().unwrap();
+		let record = entry.0.iter().map(|e| e.as_str()).collect::<Vec<&str>>();
+		assert_eq!(record, result);
+	}
 
 	#[test]
 	fn test_read_csv_as_iterator_basic() {
@@ -59,18 +102,9 @@ mod tests {
 
 		let mut iter = read_csv_as_iterator(&mut reader, separator);
 
-		assert_eq!(
-			iter.next(),
-			Some(vec!["name".to_string(), "age".to_string()])
-		);
-		assert_eq!(
-			iter.next(),
-			Some(vec!["John Doe".to_string(), "30".to_string()])
-		);
-		assert_eq!(
-			iter.next(),
-			Some(vec!["Jane Doe".to_string(), "29".to_string()])
-		);
+		check(&mut iter, &["name", "age"]);
+		check(&mut iter, &["John Doe", "30"]);
+		check(&mut iter, &["Jane Doe", "29"]);
 		assert_eq!(iter.next(), None);
 	}
 
@@ -82,18 +116,9 @@ mod tests {
 
 		let mut iter = read_csv_as_iterator(&mut reader, separator);
 
-		assert_eq!(
-			iter.next(),
-			Some(vec!["name".to_string(), "age".to_string()])
-		);
-		assert_eq!(
-			iter.next(),
-			Some(vec!["John, A. Doe".to_string(), "30".to_string()])
-		);
-		assert_eq!(
-			iter.next(),
-			Some(vec!["Jane Doe".to_string(), "29".to_string()])
-		);
+		check(&mut iter, &["name", "age"]);
+		check(&mut iter, &["John, A. Doe", "30"]);
+		check(&mut iter, &["Jane Doe", "29"]);
 		assert_eq!(iter.next(), None);
 	}
 
@@ -105,18 +130,9 @@ mod tests {
 
 		let mut iter = read_csv_as_iterator(&mut reader, separator);
 
-		assert_eq!(
-			iter.next(),
-			Some(vec!["name".to_string(), "age".to_string()])
-		);
-		assert_eq!(
-			iter.next(),
-			Some(vec!["John \"The Man\" Doe".to_string(), "30".to_string()])
-		);
-		assert_eq!(
-			iter.next(),
-			Some(vec!["Jane Doe".to_string(), "29".to_string()])
-		);
+		check(&mut iter, &["name", "age"]);
+		check(&mut iter, &["John \"The Man\" Doe", "30"]);
+		check(&mut iter, &["Jane Doe", "29"]);
 		assert_eq!(iter.next(), None);
 	}
 
@@ -128,18 +144,9 @@ mod tests {
 
 		let mut iter = read_csv_as_iterator(&mut reader, separator);
 
-		assert_eq!(
-			iter.next(),
-			Some(vec!["name".to_string(), "age".to_string()])
-		);
-		assert_eq!(
-			iter.next(),
-			Some(vec!["John Doe".to_string(), "30".to_string()])
-		);
-		assert_eq!(
-			iter.next(),
-			Some(vec!["Jane Doe".to_string(), "29".to_string()])
-		);
+		check(&mut iter, &["name", "age"]);
+		check(&mut iter, &["John Doe", "30"]);
+		check(&mut iter, &["Jane Doe", "29"]);
 		assert_eq!(iter.next(), None);
 	}
 
@@ -151,18 +158,9 @@ mod tests {
 
 		let mut iter = read_csv_as_iterator(&mut reader, separator);
 
-		assert_eq!(
-			iter.next(),
-			Some(vec!["name".to_string(), "age".to_string()])
-		);
-		assert_eq!(
-			iter.next(),
-			Some(vec!["John Doe".to_string(), "30".to_string()])
-		);
-		assert_eq!(
-			iter.next(),
-			Some(vec!["Jane Doe".to_string(), "29".to_string()])
-		);
+		check(&mut iter, &["name", "age"]);
+		check(&mut iter, &["John Doe", "30"]);
+		check(&mut iter, &["Jane Doe", "29"]);
 		assert_eq!(iter.next(), None);
 	}
 }

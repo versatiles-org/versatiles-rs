@@ -28,15 +28,13 @@ pub fn read_csv_file(path: &Path) -> Result<Vec<GeoProperties>> {
 	let header: Vec<(usize, String)> = lines
 		.next()
 		.unwrap()
+		.0
 		.into_iter()
 		.enumerate()
 		.collect::<Vec<_>>();
 
 	let mut progress = get_progress_bar("read csv", size);
-	for line in lines {
-		//progress.set_position(line.1 as u64);
-
-		let record = line;
+	for (record, pos) in lines {
 		let mut entry = GeoProperties::new();
 		for (col_index, name) in header.iter() {
 			entry.insert(
@@ -49,6 +47,7 @@ pub fn read_csv_file(path: &Path) -> Result<Vec<GeoProperties>> {
 			);
 		}
 		data.push(entry);
+		progress.set_position(pos as u64);
 	}
 	progress.finish();
 
