@@ -132,7 +132,7 @@ pub fn parse_json<'a>(input: &'a str) -> Result<JsonValue> {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 	use std::collections::HashMap;
 
 	use super::parse_json;

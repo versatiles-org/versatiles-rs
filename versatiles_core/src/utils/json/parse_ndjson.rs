@@ -13,7 +13,7 @@ pub fn parse_ndjson(reader: impl BufRead) -> impl Iterator<Item = Result<JsonVal
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 	use super::*;
 	use std::io::Cursor;
 

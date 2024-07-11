@@ -49,7 +49,7 @@ impl<T: Convertible> From<Vec<[T; 2]>> for PolygonGeometry {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 	use super::*;
 
 	#[test]

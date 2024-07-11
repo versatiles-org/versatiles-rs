@@ -64,7 +64,7 @@ fn print_markdown(md: String) {
 }
 
 #[cfg(test)]
-mod test {
+mod tests {
 	use crate::tests::run_command;
 
 	#[test]
