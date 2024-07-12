@@ -48,7 +48,7 @@ impl<'a> PipelineReader {
 	/// # Returns
 	///
 	/// * `Result<PipelineReader>` - The constructed PipelineReader or an error if the configuration is invalid.
-	pub async fn open_reader(mut reader: DataReader, dir: &Path) -> Result<PipelineReader> {
+	pub async fn open_reader(reader: DataReader, dir: &Path) -> Result<PipelineReader> {
 		let vpl = reader.read_all().await?.into_string();
 		Self::from_str(&vpl, reader.get_name(), dir)
 			.await
@@ -114,12 +114,12 @@ impl TilesReaderTrait for PipelineReader {
 	}
 
 	/// Get tile data for the given coordinate, always compressed and formatted.
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		self.operation.get_tile_data(coord).await
 	}
 
 	/// Get a stream of tiles within the bounding box.
-	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TileStream {
+	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
 		self.operation.get_bbox_tile_stream(bbox).await
 	}
 }
@@ -163,7 +163,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_pipeline_reader_get_tile_data() -> Result<()> {
-		let mut reader = PipelineReader::open_str(VPL, Path::new("../testdata/")).await?;
+		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/")).await?;
 
 		let result = reader.get_tile_data(&TileCoord3::new(0, 0, 14)?).await;
 		assert_eq!(result?, None);
@@ -180,7 +180,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_pipeline_reader_get_bbox_tile_stream() -> Result<()> {
-		let mut reader = PipelineReader::open_str(VPL, Path::new("../testdata/")).await?;
+		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/")).await?;
 		let bbox = TileBBox::new(1, 0, 0, 1, 1)?;
 		let result_stream = reader.get_bbox_tile_stream(bbox).await;
 		let result = result_stream.collect().await;

@@ -9,20 +9,15 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use std::{
-	collections::HashMap,
-	fmt::Debug,
-	fs::File,
-	io::{BufReader, Read, Seek, SeekFrom},
-	path::Path,
-};
+use std::{collections::HashMap, fmt::Debug, io::Read, path::Path};
 use tar::{Archive, EntryType};
+use versatiles_core::utils::io::{DataReaderFile, DataReaderTrait};
 
 /// A struct that provides functionality to read tile data from a tar archive.
 pub struct TarTilesReader {
 	meta: Option<Blob>,
 	name: String,
-	reader: BufReader<File>,
+	reader: Box<DataReaderFile>,
 	tile_map: HashMap<TileCoord3, ByteRange>,
 	parameters: TilesReaderParameters,
 }
@@ -36,7 +31,7 @@ impl TarTilesReader {
 	/// # Errors
 	/// Returns an error if the file cannot be opened or read.
 	pub fn open_path(path: &Path) -> Result<TarTilesReader> {
-		let mut reader = BufReader::new(File::open(path)?);
+		let mut reader = DataReaderFile::open(path)?;
 		let mut archive = Archive::new(&mut reader);
 
 		let mut meta: Option<Blob> = None;
@@ -175,18 +170,14 @@ impl TilesReaderTrait for TarTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data {:?}", coord);
 
 		let range = self.tile_map.get(coord);
 
 		if let Some(range) = range {
-			let mut buffer = vec![0; range.length as usize];
-
-			self.reader.seek(SeekFrom::Start(range.offset))?;
-			self.reader.read_exact(&mut buffer)?;
-
-			Ok(Some(Blob::from(buffer)))
+			let blob = self.reader.read_range(range).await?;
+			Ok(Some(blob))
 		} else {
 			Ok(None)
 		}
@@ -221,7 +212,7 @@ pub mod tests {
 		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 3, "tar").await?;
 
 		// get tar reader
-		let mut reader = TarTilesReader::open_path(&temp_file)?;
+		let reader = TarTilesReader::open_path(&temp_file)?;
 
 		assert_eq!(format!("{:?}", reader), "TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "tar");

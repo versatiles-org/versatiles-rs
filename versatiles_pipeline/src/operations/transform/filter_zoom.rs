@@ -60,7 +60,7 @@ impl OperationTrait for Operation {
 		self.source.get_meta()
 	}
 
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		if self.parameters.bbox_pyramid.contains_coord(coord) {
 			self.source.get_tile_data(coord).await
 		} else {
@@ -114,7 +114,7 @@ mod tests {
 			max.map_or_else(String::new, |m| format!(" max={}", m)),
 		);
 
-		let mut operation = factory.operation_from_vpl(&vpl).await?;
+		let operation = factory.operation_from_vpl(&vpl).await?;
 
 		for (z, expected) in tests.into_iter() {
 			let coord = TileCoord3::new(z, z, z as u8)?;

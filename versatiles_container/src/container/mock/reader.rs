@@ -103,7 +103,7 @@ impl TilesReaderTrait for MockTilesReader {
 		Ok(Some(Blob::from("dummy meta data")))
 	}
 
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		use TileFormat::*;
 
 		if !coord.is_valid() {
@@ -141,7 +141,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
+		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
 		assert_eq!(reader.get_container_name(), "dummy_container");
 		assert_eq!(reader.get_name(), "dummy_name");
 
@@ -165,7 +165,7 @@ mod tests {
 	async fn get_tile_data() {
 		let test = |profile, blob| async move {
 			let coord = TileCoord3::new(23, 45, 6).unwrap();
-			let mut reader = MockTilesReader::new_mock_profile(profile).unwrap();
+			let reader = MockTilesReader::new_mock_profile(profile).unwrap();
 			let tile_compressed = reader.get_tile_data(&coord).await.unwrap().unwrap();
 			let tile_uncompressed =
 				decompress(tile_compressed, &reader.get_parameters().tile_compression).unwrap();

@@ -109,7 +109,7 @@ impl OperationTrait for Operation {
 		self.meta.clone()
 	}
 
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		build_tile(coord, self.parameters.tile_format, self.fast_compression)
 	}
 
@@ -151,7 +151,7 @@ mod tests {
 
 	async fn test(format: &str, len: u64, meta: &str) -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
-		let mut operation = factory
+		let operation = factory
 			.operation_from_vpl(&format!("from_debug format={format}"))
 			.await?;
 

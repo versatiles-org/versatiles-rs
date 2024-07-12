@@ -55,6 +55,7 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;
+use futures::lock::Mutex;
 use std::{fmt::Debug, path::Path, sync::Arc};
 
 /// A struct that provides functionality to read tile data from a PMTiles container.
@@ -64,7 +65,7 @@ pub struct PMTilesReader {
 	pub header: HeaderV3,
 	pub internal_compression: TileCompression,
 	pub leaves_bytes: Blob,
-	pub leaves_cache: LimitedCache<ByteRange, Arc<Blob>>,
+	pub leaves_cache: Mutex<LimitedCache<ByteRange, Arc<Blob>>>,
 	pub meta: Blob,
 	pub parameters: TilesReaderParameters,
 	pub root_bytes_uncompressed: Arc<Blob>,
@@ -89,7 +90,7 @@ impl PMTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue reading or decompressing data.
-	pub async fn open_reader(mut data_reader: DataReader) -> Result<PMTilesReader>
+	pub async fn open_reader(data_reader: DataReader) -> Result<PMTilesReader>
 	where
 		Self: Sized,
 	{
@@ -127,7 +128,7 @@ impl PMTilesReader {
 			header,
 			internal_compression,
 			leaves_bytes,
-			leaves_cache: LimitedCache::with_maximum_size(100_000_000),
+			leaves_cache: Mutex::new(LimitedCache::with_maximum_size(100_000_000)),
 			meta,
 			parameters,
 			root_bytes_uncompressed: Arc::new(root_bytes_uncompressed),
@@ -218,7 +219,7 @@ impl TilesReaderTrait for PMTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data {:?}", coord);
 
 		let tile_id: u64 = coord.get_tile_id()?;
@@ -248,13 +249,12 @@ impl TilesReaderTrait for PMTilesReader {
 					));
 				} else {
 					let range = entry.range;
-					dir_bytes = if let Some(blob) = self.leaves_cache.get(&range) {
-						blob
-					} else {
+					let mut cache = self.leaves_cache.lock().await;
+					dir_bytes = cache.get_or_set(&range, || {
 						let mut blob = self.leaves_bytes.read_range(&range)?;
 						blob = decompress(blob, &self.internal_compression)?;
-						self.leaves_cache.add(range, Arc::new(blob))
-					};
+						Ok(Arc::new(blob))
+					})?;
 				}
 			} else {
 				return Ok(None);
@@ -287,7 +287,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let mut reader = PMTilesReader::open_path(&PATH).await?;
+		let reader = PMTilesReader::open_path(&PATH).await?;
 
 		assert_eq!(reader.get_container_name(), "pmtiles");
 

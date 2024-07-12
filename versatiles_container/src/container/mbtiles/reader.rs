@@ -296,7 +296,7 @@ impl TilesReaderTrait for MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		trace!("read tile from coord {coord:?}");
 
 		let max_index = 2u32.pow(coord.z as u32) - 1;
@@ -323,7 +323,7 @@ impl TilesReaderTrait for MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue querying the database.
-	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TileStream {
+	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
 		trace!("read tile stream from bbox {bbox:?}");
 
 		if bbox.is_empty() {

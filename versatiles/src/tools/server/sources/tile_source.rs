@@ -90,7 +90,7 @@ impl TileSource {
 			log::debug!("get tile {} - {:?}", self.prefix, coord);
 
 			// Get tile data
-			let mut reader = self.reader.lock().await;
+			let reader = self.reader.lock().await;
 			let tile = reader.get_tile_data(&coord).await;
 			drop(reader);
 

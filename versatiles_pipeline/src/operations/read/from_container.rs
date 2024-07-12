@@ -6,8 +6,8 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::{future::BoxFuture, lock::Mutex};
-use std::{fmt::Debug, sync::Arc};
+use futures::future::BoxFuture;
+use std::fmt::Debug;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a tile container, such as a VersaTiles file.
@@ -20,7 +20,7 @@ struct Args {
 #[derive(Debug)]
 struct Operation {
 	parameters: TilesReaderParameters,
-	reader: Arc<Mutex<Box<dyn TilesReaderTrait>>>,
+	reader: Box<dyn TilesReaderTrait>,
 	meta: Option<Blob>,
 }
 
@@ -43,7 +43,7 @@ impl ReadOperationTrait for Operation {
 			Ok(Box::new(Self {
 				parameters,
 				meta,
-				reader: Arc::new(Mutex::new(reader)),
+				reader,
 			}) as Box<dyn OperationTrait>)
 		})
 	}
@@ -59,29 +59,12 @@ impl OperationTrait for Operation {
 		self.meta.clone()
 	}
 
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		self.reader.lock().await.get_tile_data(coord).await
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
+		self.reader.get_tile_data(coord).await
 	}
 
 	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
-		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
-		let reader = self.reader.clone();
-
-		TileStream::from_stream_iter(bboxes.into_iter().map(move |bbox| {
-			let reader = reader.clone();
-			async move {
-				let tiles: Vec<(TileCoord3, Blob)> = reader
-					.lock()
-					.await
-					.get_bbox_tile_stream(bbox.clone())
-					.await
-					.collect()
-					.await;
-
-				TileStream::from_vec(tiles)
-			}
-		}))
-		.await
+		self.reader.get_bbox_tile_stream(bbox).await
 	}
 }
 
@@ -114,7 +97,7 @@ mod tests {
 	#[tokio::test]
 	async fn test() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
-		let mut operation = factory
+		let operation = factory
 			.operation_from_vpl(&"from_container filename=\"test.mbtiles\"".to_string())
 			.await?;
 

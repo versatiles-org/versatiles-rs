@@ -29,10 +29,10 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	fn get_meta(&self) -> Result<Option<Blob>>;
 
 	/// Get tile data for the given coordinate, always compressed and formatted.
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>>;
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>>;
 
 	/// Get a stream of tiles within the bounding box.
-	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TileStream {
+	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
 		let mutex = Arc::new(Mutex::new(self));
 		let coords: Vec<TileCoord3> = bbox.iter_coords().collect();
 		TileStream::from_coord_vec_async(coords, move |coord| {
@@ -193,14 +193,14 @@ mod tests {
 			Ok(Some(Blob::from("test metadata")))
 		}
 
-		async fn get_tile_data(&mut self, _coord: &TileCoord3) -> Result<Option<Blob>> {
+		async fn get_tile_data(&self, _coord: &TileCoord3) -> Result<Option<Blob>> {
 			Ok(Some(Blob::from("test tile data")))
 		}
 	}
 
 	#[tokio::test]
 	async fn get_bbox_tile_iter() -> Result<()> {
-		let mut reader = TestReader::new_dummy();
+		let reader = TestReader::new_dummy();
 		let bbox = TileBBox::new(4, 0, 1, 9, 10)?;
 		let stream = reader.get_bbox_tile_stream(bbox).await;
 

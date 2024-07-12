@@ -35,25 +35,25 @@
 
 use super::{DataReaderTrait, DataWriterBlob};
 use crate::types::{Blob, ByteRange};
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use async_trait::async_trait;
-use std::io::{Cursor, Read, Seek, SeekFrom};
+use std::io::{Cursor, Read};
 
 /// A struct that provides reading capabilities from an in-memory blob of data.
 #[derive(Debug)]
 pub struct DataReaderBlob {
-	reader: Cursor<Vec<u8>>,
+	blob: Cursor<Vec<u8>>,
 }
 
 impl DataReaderBlob {
 	/// Returns the length of the data in the reader.
 	pub fn len(&self) -> usize {
-		self.reader.get_ref().len()
+		self.blob.get_ref().len()
 	}
 
 	/// Checks if the reader is empty.
 	pub fn is_empty(&self) -> bool {
-		self.reader.get_ref().len() == 0
+		self.blob.get_ref().len() == 0
 	}
 }
 
@@ -68,11 +68,16 @@ impl DataReaderTrait for DataReaderBlob {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with the read data or an error.
-	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
-		let mut buffer = vec![0; range.length as usize];
-		self.reader.seek(SeekFrom::Start(range.offset))?;
-		self.reader.read_exact(&mut buffer)?;
-		Ok(Blob::from(buffer))
+	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
+		let start = range.offset as usize;
+		let end = (range.offset + range.length) as usize;
+		let blob = self.blob.get_ref();
+		ensure!(
+			end <= blob.len(),
+			"end of range ({start}..{end}) is outside blob ({})",
+			blob.len()
+		);
+		Ok(Blob::from(&blob[start..end]))
 	}
 
 	/// Reads all the data from the reader.
@@ -80,11 +85,8 @@ impl DataReaderTrait for DataReaderBlob {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with all the data or an error.
-	async fn read_all(&mut self) -> Result<Blob> {
-		let mut buffer = vec![];
-		self.reader.seek(SeekFrom::Start(0))?;
-		self.reader.read_to_end(&mut buffer)?;
-		Ok(Blob::from(buffer))
+	async fn read_all(&self) -> Result<Blob> {
+		Ok(Blob::from(self.blob.get_ref()))
 	}
 
 	/// Gets the name of the data source.
@@ -108,7 +110,7 @@ impl Read for DataReaderBlob {
 	///
 	/// * The number of bytes read or an error.
 	fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-		self.reader.read(buf)
+		self.blob.read(buf)
 	}
 }
 
@@ -154,7 +156,7 @@ impl From<Blob> for DataReaderBlob {
 	/// * A new DataReaderBlob.
 	fn from(value: Blob) -> Self {
 		DataReaderBlob {
-			reader: Cursor::new(value.into_vec()),
+			blob: Cursor::new(value.into_vec()),
 		}
 	}
 }
@@ -171,7 +173,7 @@ impl From<Vec<u8>> for DataReaderBlob {
 	/// * A new DataReaderBlob.
 	fn from(value: Vec<u8>) -> Self {
 		DataReaderBlob {
-			reader: Cursor::new(value),
+			blob: Cursor::new(value),
 		}
 	}
 }
@@ -184,7 +186,7 @@ mod tests {
 	async fn from_blob() -> Result<()> {
 		let blob = Blob::from(vec![0, 1, 2, 3, 4, 5, 6, 7]);
 
-		let mut data_reader = DataReaderBlob::from(blob.clone());
+		let data_reader = DataReaderBlob::from(blob.clone());
 
 		assert_eq!(data_reader.get_name(), "memory");
 
@@ -206,7 +208,7 @@ mod tests {
 	#[tokio::test]
 	async fn from_vec() -> Result<()> {
 		let data = vec![10, 20, 30, 40, 50, 60, 70, 80];
-		let mut data_reader = DataReaderBlob::from(data.clone());
+		let data_reader = DataReaderBlob::from(data.clone());
 
 		assert_eq!(data_reader.get_name(), "memory");
 		assert_eq!(data_reader.len(), data.len());
@@ -223,7 +225,7 @@ mod tests {
 		let data = [100u8, 101, 102, 103, 104, 105].as_slice();
 		let mut data_writer = DataWriterBlob::new()?;
 		data_writer.append(&Blob::from(data))?;
-		let mut data_reader: DataReaderBlob = data_writer.into();
+		let data_reader: DataReaderBlob = data_writer.into();
 
 		assert_eq!(data_reader.get_name(), "memory");
 		assert_eq!(data_reader.len(), 6);
@@ -240,7 +242,7 @@ mod tests {
 		let data = [100u8, 101, 102, 103, 104, 105].as_slice();
 		let mut data_writer = DataWriterBlob::new()?;
 		data_writer.append(&Blob::from(data))?;
-		let mut data_reader: DataReaderBlob = Box::new(data_writer).into();
+		let data_reader: DataReaderBlob = Box::new(data_writer).into();
 
 		assert_eq!(data_reader.get_name(), "memory");
 		assert_eq!(data_reader.len(), 6);
@@ -278,7 +280,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_read_range_edge_cases() -> Result<()> {
 		let data = vec![10, 20, 30, 40, 50, 60, 70, 80];
-		let mut data_reader = DataReaderBlob::from(data);
+		let data_reader = DataReaderBlob::from(data);
 
 		// Range starts at the end of the data
 		assert!(data_reader.read_range(&ByteRange::new(8, 1)).await.is_err());

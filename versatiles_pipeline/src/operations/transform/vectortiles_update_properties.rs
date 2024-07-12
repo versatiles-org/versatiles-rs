@@ -168,7 +168,7 @@ impl OperationTrait for Operation {
 	fn get_meta(&self) -> Option<Blob> {
 		self.meta.clone()
 	}
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		Ok(
 			if let Some(blob) = self.source.get_tile_data(coord).await? {
 				self.runner.run(blob)?
@@ -289,7 +289,7 @@ mod tests {
 		};
 
 		let factory = PipelineFactory::new_dummy();
-		let mut operation = factory
+		let operation = factory
 			.operation_from_vpl(
 				&vec![
 					"from_container filename=dummy |",

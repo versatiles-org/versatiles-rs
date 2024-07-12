@@ -50,7 +50,7 @@ impl OperationTrait for Operation {
 		self.source.get_meta()
 	}
 
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		if self.parameters.bbox_pyramid.contains_coord(coord) {
 			self.source.get_tile_data(coord).await
 		} else {
@@ -93,7 +93,7 @@ mod tests {
 
 	async fn test_filter_bbox(bbox: [f64; 4], tests: Vec<(TileCoord3, bool)>) -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
-		let mut operation = factory
+		let operation = factory
 			.operation_from_vpl(&format!(
 				"from_debug format=pbf | filter_bbox bbox={bbox:?}"
 			))

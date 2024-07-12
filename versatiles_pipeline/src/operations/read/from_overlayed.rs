@@ -79,8 +79,8 @@ impl OperationTrait for Operation {
 		self.meta.clone()
 	}
 
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		for source in self.sources.iter_mut() {
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
+		for source in self.sources.iter() {
 			let result = source.get_tile_data(coord).await?;
 			if let Some(mut blob) = result {
 				blob = recompress(
@@ -205,7 +205,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_operation_get_tile_data() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
-		let mut result = factory
+		let result = factory
 			.operation_from_vpl(
 				"from_overlayed [ from_container filename=1, from_container filename=2 ]",
 			)

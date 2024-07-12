@@ -131,14 +131,14 @@ impl PipelineFactory {
 			self
 				.read_ops
 				.values()
-				.sorted_by_cached_key(|f| f.get_tag_name().to_string())
+				.sorted_by_key(|f| f.get_tag_name())
 				.map(|f| format!("\n## {}\n{}\n", f.get_tag_name(), f.get_docs()))
 				.join(""),
 			String::from("---\n# TRANSFORM operations"),
 			self
 				.tran_ops
 				.values()
-				.sorted_by_cached_key(|f| f.get_tag_name().to_string())
+				.sorted_by_key(|f| f.get_tag_name())
 				.map(|f| format!("\n## {}\n{}\n", f.get_tag_name(), f.get_docs()))
 				.join(""),
 		]

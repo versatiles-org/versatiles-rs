@@ -41,7 +41,6 @@ use std::{ops::Deref, str, time::Duration};
 pub struct DataReaderHttp {
 	client: Client,
 	name: String,
-	pos: u64,
 	url: Url,
 }
 
@@ -71,7 +70,6 @@ impl DataReaderHttp {
 		Ok(Box::new(DataReaderHttp {
 			client,
 			name: url.to_string(),
-			pos: 0,
 			url,
 		}))
 	}
@@ -88,7 +86,7 @@ impl DataReaderTrait for DataReaderHttp {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with the read data or an error.
-	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
+	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
 		let mut request = Request::new(Method::GET, self.url.clone());
 		let request_range: String =
 			format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
@@ -137,8 +135,6 @@ impl DataReaderTrait for DataReaderHttp {
 
 		let bytes = response.bytes().await?;
 
-		self.pos = range.offset + bytes.len() as u64;
-
 		Ok(Blob::from(bytes.deref()))
 	}
 
@@ -147,7 +143,7 @@ impl DataReaderTrait for DataReaderHttp {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with all the data or an error.
-	async fn read_all(&mut self) -> Result<Blob> {
+	async fn read_all(&self) -> Result<Blob> {
 		bail!("not implemented yet")
 	}
 
@@ -182,7 +178,7 @@ mod tests {
 
 	async fn read_range_helper(url: &str, offset: u64, length: u64, expected: &str) -> Result<()> {
 		let url = Url::parse(url).unwrap();
-		let mut data_reader_http = DataReaderHttp::from_url(url)?;
+		let data_reader_http = DataReaderHttp::from_url(url)?;
 
 		// Define a range to read
 		let range = ByteRange { offset, length };

@@ -20,13 +20,13 @@
 //!
 //! #[async_trait]
 //! impl DataReaderTrait for MockDataReader {
-//!     async fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
+//!     async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
 //!         let end = (range.offset + range.length) as usize;
 //!         let data_slice = &self.data[range.offset as usize..end];
 //!         Ok(Blob::from(data_slice.to_vec()))
 //!     }
 //!
-//!     async fn read_all(&mut self) -> Result<Blob> {
+//!     async fn read_all(&self) -> Result<Blob> {
 //!         Ok(Blob::from(self.data.clone()))
 //!     }
 //!
@@ -78,7 +78,7 @@ pub trait DataReaderTrait: Debug + Send + Sync {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with the read data or an error.
-	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob>;
+	async fn read_range(&self, range: &ByteRange) -> Result<Blob>;
 
 	/// Reads all the data from the data source.
 	///
@@ -86,7 +86,7 @@ pub trait DataReaderTrait: Debug + Send + Sync {
 	///
 	/// * A Result containing a Blob with all the data or an error.
 	#[allow(dead_code)]
-	async fn read_all(&mut self) -> Result<Blob>;
+	async fn read_all(&self) -> Result<Blob>;
 
 	/// Gets the name of the data source.
 	///

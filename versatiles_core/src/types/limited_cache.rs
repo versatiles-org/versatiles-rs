@@ -17,6 +17,7 @@
 //! assert_eq!(cache.get(&1), Some(42));
 //! ```
 
+use anyhow::Result;
 use std::{collections::HashMap, fmt::Debug, hash::Hash, mem::size_of, ops::Div};
 
 /// A generic limited cache that stores key-value pairs up to a specified size limit.
@@ -66,6 +67,18 @@ where
 		} else {
 			None
 		}
+	}
+
+	pub fn get_or_set<F>(&mut self, key: &K, callback: F) -> Result<V>
+	where
+		F: Fn() -> Result<V>,
+	{
+		Ok(if let Some(value) = self.get(key) {
+			value
+		} else {
+			let value = callback()?;
+			self.add(key.clone(), value.clone())
+		})
 	}
 
 	/// Adds a key-value pair to the cache.

@@ -69,7 +69,7 @@ impl TilesReaderTrait for MockVectorSource {
 		Ok(Some(Blob::from(r##"{"mock":true}"##)))
 	}
 
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		let mut layers = vec![];
 
 		// Iterate over each layer and convert features

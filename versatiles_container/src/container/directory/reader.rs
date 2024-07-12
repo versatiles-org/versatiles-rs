@@ -225,7 +225,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 	fn get_meta(&self) -> Result<Option<Blob>> {
 		Ok(self.meta.clone())
 	}
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data {:?}", coord);
 
 		if let Some(path) = self.tile_map.get(coord) {
@@ -265,7 +265,7 @@ mod tests {
 		dir.child("1/2/3.png").write_str("test tile data")?;
 		dir.child("meta.json").write_str("test meta data")?;
 
-		let mut reader = DirectoryTilesReader::open_path(&dir)?;
+		let reader = DirectoryTilesReader::open_path(&dir)?;
 
 		assert_eq!(reader.get_meta()?.unwrap().as_str(), "test meta data");
 
@@ -344,7 +344,7 @@ mod tests {
 		fs::write(dir.path().join("0/1/2.png"), "tile at 0/1/2").unwrap();
 		fs::write(dir.path().join("meta.json"), "global meta").unwrap();
 
-		let mut reader = DirectoryTilesReader::open_path(&dir).unwrap();
+		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
 		let coord = TileCoord3::new(1, 2, 0).unwrap();
 		let tile_data = reader.get_tile_data(&coord).await.unwrap().unwrap();
 

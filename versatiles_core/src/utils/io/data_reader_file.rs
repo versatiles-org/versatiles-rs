@@ -33,7 +33,8 @@ use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use std::{
 	fs::File,
-	io::{BufReader, Read, Seek, SeekFrom},
+	io::Read,
+	os::unix::fs::{FileExt, MetadataExt},
 	path::Path,
 };
 
@@ -41,7 +42,8 @@ use std::{
 #[derive(Debug)]
 pub struct DataReaderFile {
 	name: String,
-	reader: BufReader<File>,
+	file: File,
+	size: u64,
 }
 
 impl DataReaderFile {
@@ -60,12 +62,13 @@ impl DataReaderFile {
 		ensure!(path.is_file(), "path {path:?} must be a file");
 
 		let path = path.canonicalize()?;
-
 		let file = File::open(&path)?;
+		let size = path.metadata()?.size();
 
 		Ok(Box::new(DataReaderFile {
 			name: path.to_str().unwrap().to_owned(),
-			reader: BufReader::new(file),
+			file,
+			size,
 		}))
 	}
 }
@@ -81,12 +84,9 @@ impl DataReaderTrait for DataReaderFile {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with the read data or an error.
-	async fn read_range(&mut self, range: &ByteRange) -> Result<Blob> {
+	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
 		let mut buffer = vec![0; range.length as usize];
-
-		self.reader.seek(SeekFrom::Start(range.offset))?;
-		self.reader.read_exact(&mut buffer)?;
-
+		self.file.read_exact_at(&mut buffer, range.offset)?;
 		Ok(Blob::from(buffer))
 	}
 
@@ -95,10 +95,9 @@ impl DataReaderTrait for DataReaderFile {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with all the data or an error.
-	async fn read_all(&mut self) -> Result<Blob> {
-		let mut buffer = vec![];
-		self.reader.seek(SeekFrom::Start(0))?;
-		self.reader.read_to_end(&mut buffer)?;
+	async fn read_all(&self) -> Result<Blob> {
+		let mut buffer = vec![0; self.size as usize];
+		self.file.read_exact_at(&mut buffer, 0)?;
 		Ok(Blob::from(buffer))
 	}
 
@@ -123,7 +122,7 @@ impl Read for DataReaderFile {
 	///
 	/// * The number of bytes read or an error.
 	fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-		self.reader.read(buf)
+		self.file.read(buf)
 	}
 }
 
@@ -168,7 +167,7 @@ mod tests {
 			temp_file.write_all(b"Hello, world!")?;
 		}
 
-		let mut data_reader_file = DataReaderFile::open(&temp_file_path)?;
+		let data_reader_file = DataReaderFile::open(&temp_file_path)?;
 
 		// Define a range to read
 		let range = ByteRange {

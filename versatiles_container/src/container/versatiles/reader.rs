@@ -58,10 +58,9 @@ use crate::{
 };
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use futures::stream::StreamExt;
+use futures::{lock::Mutex, stream::StreamExt};
 use log::trace;
 use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
-use tokio::sync::Mutex;
 
 /// `VersaTilesReader` is responsible for reading tile data from a `versatiles` container.
 pub struct VersaTilesReader {
@@ -69,7 +68,7 @@ pub struct VersaTilesReader {
 	reader: DataReader,
 	parameters: TilesReaderParameters,
 	block_index: BlockIndex,
-	tile_index_cache: LimitedCache<TileCoord3, Arc<TileIndex>>,
+	tile_index_cache: Mutex<LimitedCache<TileCoord3, Arc<TileIndex>>>,
 }
 
 #[allow(dead_code)]
@@ -128,7 +127,7 @@ impl VersaTilesReader {
 			reader,
 			parameters,
 			block_index,
-			tile_index_cache: LimitedCache::with_maximum_size(1e8 as usize),
+			tile_index_cache: Mutex::new(LimitedCache::with_maximum_size(100_000_000)),
 		})
 	}
 
@@ -141,25 +140,22 @@ impl VersaTilesReader {
 	/// # Errors
 	///
 	/// Returns an error if the tile index cannot be retrieved.
-	async fn get_block_tile_index(&mut self, block: &BlockDefinition) -> Result<Arc<TileIndex>> {
+	async fn get_block_tile_index(&self, block: &BlockDefinition) -> Result<Arc<TileIndex>> {
 		let block_coord = block.get_coord3();
 
-		{
-			let a = &mut self.tile_index_cache;
-			if let Some(entry) = a.get(block_coord) {
-				return Ok(entry);
-			}
-		}
+		let mut cache = self.tile_index_cache.lock().await;
 
-		let b = &mut self.tile_index_cache;
+		Ok(if let Some(value) = cache.get(block_coord) {
+			value
+		} else {
+			let blob = self.reader.read_range(block.get_index_range()).await?;
+			let mut tile_index = TileIndex::from_brotli_blob(blob)?;
+			tile_index.add_offset(block.get_tiles_range().offset);
 
-		let blob = self.reader.read_range(block.get_index_range()).await?;
-		let mut tile_index = TileIndex::from_brotli_blob(blob)?;
-		tile_index.add_offset(block.get_tiles_range().offset);
+			assert_eq!(tile_index.len(), block.count_tiles() as usize);
 
-		assert_eq!(tile_index.len(), block.count_tiles() as usize);
-
-		Ok(b.add(*block_coord, Arc::new(tile_index)))
+			cache.add(*block_coord, Arc::new(tile_index))
+		})
 	}
 
 	/// Retrieves the size of the index.
@@ -206,7 +202,7 @@ impl TilesReaderTrait for VersaTilesReader {
 	}
 
 	/// Gets tile data for a given coordinate.
-	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		// Calculate block coordinate
 		let block_coord = TileCoord3::new(coord.x.shr(8), coord.y.shr(8), coord.z)?;
 
@@ -247,7 +243,7 @@ impl TilesReaderTrait for VersaTilesReader {
 	}
 
 	/// Gets a stream of tile data for a given bounding box.
-	async fn get_bbox_tile_stream(&mut self, bbox: TileBBox) -> TileStream {
+	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
@@ -283,16 +279,11 @@ impl TilesReaderTrait for VersaTilesReader {
 		block_coords.scale_down(256);
 		let block_coords: Vec<TileCoord3> = block_coords.iter_coords().collect();
 
-		let self_mutex = Arc::new(Mutex::new(self));
-
 		let stream = futures::stream::iter(block_coords).then(|block_coord: TileCoord3| {
 			let bbox = bbox.clone();
-			let self_mutex = self_mutex.clone();
 			async move {
-				let mut myself = self_mutex.lock().await;
-
 				// Get the block using the block coordinate
-				let block_option = myself.block_index.get_block(&block_coord);
+				let block_option = self.block_index.get_block(&block_coord);
 				if block_option.is_none() {
 					panic!("block <{block_coord:#?}> does not exist");
 				}
@@ -314,7 +305,7 @@ impl TilesReaderTrait for VersaTilesReader {
 				assert_eq!(bbox.level, tiles_bbox_used.level);
 
 				// Get the tile index of this block
-				let tile_index: Arc<TileIndex> = myself.get_block_tile_index(&block).await.unwrap();
+				let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await.unwrap();
 				trace!("tile_index {tile_index:?}");
 
 				// let tile_range: &ByteRange = tile_index.get(tile_id);
@@ -375,11 +366,8 @@ impl TilesReaderTrait for VersaTilesReader {
 			futures::stream::iter(chunks)
 				.then(move |chunk| {
 					let bbox = bbox.clone();
-					let self_mutex = self_mutex.clone();
 					async move {
-						let mut myself = self_mutex.lock().await;
-
-						let big_blob = myself.reader.read_range(&chunk.range).await.unwrap();
+						let big_blob = self.reader.read_range(&chunk.range).await.unwrap();
 
 						let entries: Vec<(TileCoord3, Blob)> = chunk
 							.tiles
@@ -533,7 +521,7 @@ mod tests {
 		let temp_file =
 			make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
 
-		let mut reader = VersaTilesReader::open_path(&temp_file).await?;
+		let reader = VersaTilesReader::open_path(&temp_file).await?;
 
 		assert_eq!(format!("{:?}", reader), "VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "versatiles");
