@@ -1,5 +1,5 @@
-mod geometry;
-pub use geometry::*;
+mod geo;
+pub use geo::*;
 
 pub mod math;
 pub mod osm;

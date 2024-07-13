@@ -2,7 +2,7 @@
 
 use super::{geometry_type::GeomType, layer::VectorTileLayer};
 use crate::{
-	geometry::*,
+	geo::*,
 	math::area_ring,
 	types::Blob,
 	utils::io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
@@ -353,7 +353,7 @@ impl VectorTileFeature {
 		fn m<T>(g: &[T]) -> Vec<&T> {
 			g.iter().collect()
 		}
-		use crate::geometry::Geometry::*;
+		use crate::geo::Geometry::*;
 		let (geom_type, geom_data) = match geometry {
 			Point(g) => (GeomType::MultiPoint, write_points(g.into_multi())?),
 			MultiPoint(g) => (GeomType::MultiPoint, write_points(g)?),

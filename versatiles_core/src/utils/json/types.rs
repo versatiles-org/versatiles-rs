@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 #[derive(Debug, PartialEq)]
 pub enum JsonValue {
@@ -7,7 +7,7 @@ pub enum JsonValue {
 	Boolean(bool),
 	Num(f64),
 	Array(Vec<JsonValue>),
-	Object(HashMap<String, JsonValue>),
+	Object(BTreeMap<String, JsonValue>),
 }
 
 impl From<&str> for JsonValue {
@@ -45,7 +45,7 @@ where
 	JsonValue: From<T>,
 {
 	fn from(input: Vec<(&str, T)>) -> Self {
-		JsonValue::Object(HashMap::from_iter(
+		JsonValue::Object(BTreeMap::from_iter(
 			input
 				.into_iter()
 				.map(|(key, value)| (key.to_string(), JsonValue::from(value))),

@@ -1,4 +1,4 @@
-use crate::geometry::Geometry;
+use crate::geo::Geometry;
 
 #[derive(Copy, Clone, Debug, Default, PartialEq)]
 pub enum GeomType {

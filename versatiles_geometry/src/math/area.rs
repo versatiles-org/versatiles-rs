@@ -1,4 +1,4 @@
-use crate::geometry::*;
+use crate::geo::*;
 
 pub fn area_ring(c: &Coordinates1) -> f64 {
 	let mut sum = 0f64;
