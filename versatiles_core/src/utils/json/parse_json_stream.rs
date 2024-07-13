@@ -12,7 +12,7 @@ pub struct JsonParser<'a> {
 
 #[allow(dead_code)]
 impl<'a> JsonParser<'a> {
-	fn new(chars: Chars<'a>, debug: bool) -> Result<Self> {
+	pub fn new(chars: Chars<'a>, debug: bool) -> Result<Self> {
 		let parser = JsonParser {
 			chars: CharIterator::new(chars, debug)?,
 		};
@@ -58,7 +58,7 @@ impl<'a> JsonParser<'a> {
 						}
 						']' => continue,
 						_ => {
-							self.error("expected ',' or ']'")?;
+							self.error("parsing array, expected ',' or ']'")?;
 						}
 					}
 				}
@@ -70,7 +70,7 @@ impl<'a> JsonParser<'a> {
 	fn parse_object(&mut self) -> Result<JsonValue> {
 		ensure!(self.chars.get_next()? == '{');
 
-		let mut object = BTreeMap::new();
+		let mut list: Vec<(String, JsonValue)> = Vec::new();
 		loop {
 			self.chars.skip_whitespace()?;
 			match self.chars.get_peek()? {
@@ -78,7 +78,7 @@ impl<'a> JsonParser<'a> {
 					self.chars.skip();
 					break;
 				}
-				_ => {
+				'"' => {
 					let key = self.parse_string()?;
 
 					self.chars.skip_whitespace()?;
@@ -91,7 +91,7 @@ impl<'a> JsonParser<'a> {
 
 					self.chars.skip_whitespace()?;
 					let value = self.parse_json()?;
-					object.insert(key, value);
+					list.push((key, value));
 
 					self.chars.skip_whitespace()?;
 					match self.chars.get_peek()? {
@@ -102,9 +102,12 @@ impl<'a> JsonParser<'a> {
 						}
 					}
 				}
+				_ => {
+					self.error("parsing object, expected '\"' or '}'")?;
+				}
 			}
 		}
-		Ok(JsonValue::Object(object))
+		Ok(JsonValue::Object(BTreeMap::from_iter(list)))
 	}
 
 	fn parse_string(&mut self) -> Result<String> {
@@ -349,7 +352,7 @@ mod tests {
 		let json = parse_json(r##"{"key": "value""##);
 		assert_eq!(
 			json.unwrap_err().to_string(),
-			"expected ',' or '}' at pos 16: {\"key\": \"value\"<EOF>"
+			"unexpected end at pos 16: {\"key\": \"value\"<EOF>"
 		);
 	}
 
@@ -358,7 +361,7 @@ mod tests {
 		let json = parse_json(r##"["key", "value""##);
 		assert_eq!(
 			json.unwrap_err().to_string(),
-			"unexpected end of file at pos 16: [\"key\", \"value\"<EOF>"
+			"unexpected end at pos 16: [\"key\", \"value\"<EOF>"
 		);
 	}
 }

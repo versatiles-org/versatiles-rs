@@ -72,13 +72,13 @@ impl<'a> CharIterator<'a> {
 	pub fn get_next(&mut self) -> Result<char> {
 		self
 			.next()
-			.ok_or_else(|| self.error("unexpected end of file").unwrap_err())
+			.ok_or_else(|| self.error("unexpected end").unwrap_err())
 	}
 
 	pub fn get_peek(&mut self) -> Result<char> {
 		self
 			.peek()
-			.ok_or_else(|| self.error("unexpected end of file").unwrap_err())
+			.ok_or_else(|| self.error("unexpected end").unwrap_err())
 	}
 
 	pub fn skip_whitespace(&mut self) -> Result<()> {
