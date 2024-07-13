@@ -1,100 +1,31 @@
 use super::JsonValue;
-use anyhow::{bail, ensure, Result};
+use crate::utils::io::CharIterator;
+use anyhow::{ensure, Result};
 use std::{
 	collections::BTreeMap,
 	str::{self, Chars},
 };
 
-const RING_SIZE: usize = 16;
-
-struct JsonParser<'a> {
-	iter: Chars<'a>,
-	next_char: Option<char>,
-	pos: u64,
-	debug: bool,
-	ring: Vec<String>,
+pub struct JsonParser<'a> {
+	chars: CharIterator<'a>,
 }
 
 #[allow(dead_code)]
 impl<'a> JsonParser<'a> {
-	fn new(inner_chars: Chars<'a>, debug: bool) -> Result<Self> {
-		let mut parser = JsonParser {
-			iter: inner_chars,
-			next_char: None,
-			pos: 0,
-			debug,
-			ring: Vec::new(),
+	fn new(chars: Chars<'a>, debug: bool) -> Result<Self> {
+		let parser = JsonParser {
+			chars: CharIterator::new(chars, debug)?,
 		};
-		parser.skip();
 		Ok(parser)
 	}
 
 	fn error(&self, msg: &str) -> Result<JsonValue> {
-		if self.debug {
-			let mut ring = String::new();
-			for i in 0..RING_SIZE as u64 {
-				let index = (self.pos + i) % RING_SIZE as u64;
-				ring.push_str(self.ring.get(index as usize).unwrap_or(&String::new()));
-			}
-			bail!("{msg} at pos {}: {}", self.pos, ring);
-		} else {
-			bail!("{msg} at pos {}", self.pos);
-		}
-	}
-
-	fn peek(&self) -> &Option<char> {
-		&self.next_char
-	}
-
-	fn skip(&mut self) -> () {
-		self.next_char = self.iter.next();
-		if self.debug {
-			let char = if let Some(c) = self.next_char {
-				c.to_string()
-			} else {
-				String::from("<EOF>")
-			};
-			let index = self.pos as usize % RING_SIZE;
-			if self.ring.len() <= index {
-				self.ring.push(char);
-			} else {
-				self.ring[index] = char;
-			}
-		}
-		self.pos += 1;
-	}
-
-	fn next(&mut self) -> Option<char> {
-		let next_char = self.next_char;
-		self.skip();
-		next_char
-	}
-
-	fn get_next(&mut self) -> Result<char> {
-		self
-			.next()
-			.ok_or_else(|| self.error("unexpected end of file").unwrap_err())
-	}
-
-	fn get_peek(&mut self) -> Result<char> {
-		self
-			.peek()
-			.ok_or_else(|| self.error("unexpected end of file").unwrap_err())
-	}
-
-	fn skip_whitespace(&mut self) -> Result<()> {
-		while let Some(b) = self.peek() {
-			if !b.is_ascii_whitespace() {
-				break;
-			}
-			self.next();
-		}
-		Ok(())
+		self.chars.error(msg).map(|()| JsonValue::Null)
 	}
 
 	pub fn parse_json(&mut self) -> Result<JsonValue> {
-		self.skip_whitespace()?;
-		match self.get_peek()? {
+		self.chars.skip_whitespace()?;
+		match self.chars.get_peek()? {
 			'[' => self.parse_array(),
 			'{' => self.parse_object(),
 			'"' => Ok(JsonValue::Str(self.parse_string()?)),
@@ -107,22 +38,22 @@ impl<'a> JsonParser<'a> {
 	}
 
 	fn parse_array(&mut self) -> Result<JsonValue> {
-		ensure!(self.get_next()? == '[');
+		ensure!(self.chars.get_next()? == '[');
 
 		let mut array = Vec::new();
 		loop {
-			self.skip_whitespace()?;
-			match self.get_peek()? {
+			self.chars.skip_whitespace()?;
+			match self.chars.get_peek()? {
 				']' => {
-					self.skip();
+					self.chars.skip();
 					break;
 				}
 				_ => {
 					array.push(self.parse_json()?);
-					self.skip_whitespace()?;
-					match self.get_peek()? {
+					self.chars.skip_whitespace()?;
+					match self.chars.get_peek()? {
 						',' => {
-							self.skip();
+							self.chars.skip();
 							continue;
 						}
 						']' => continue,
@@ -137,34 +68,34 @@ impl<'a> JsonParser<'a> {
 	}
 
 	fn parse_object(&mut self) -> Result<JsonValue> {
-		ensure!(self.get_next()? == '{');
+		ensure!(self.chars.get_next()? == '{');
 
 		let mut object = BTreeMap::new();
 		loop {
-			self.skip_whitespace()?;
-			match self.get_peek()? {
+			self.chars.skip_whitespace()?;
+			match self.chars.get_peek()? {
 				'}' => {
-					self.skip();
+					self.chars.skip();
 					break;
 				}
 				_ => {
 					let key = self.parse_string()?;
 
-					self.skip_whitespace()?;
-					match self.get_peek()? {
-						':' => self.skip(),
+					self.chars.skip_whitespace()?;
+					match self.chars.get_peek()? {
+						':' => self.chars.skip(),
 						_ => {
 							self.error("expected ':'")?;
 						}
 					};
 
-					self.skip_whitespace()?;
+					self.chars.skip_whitespace()?;
 					let value = self.parse_json()?;
 					object.insert(key, value);
 
-					self.skip_whitespace()?;
-					match self.get_peek()? {
-						',' => self.skip(),
+					self.chars.skip_whitespace()?;
+					match self.chars.get_peek()? {
+						',' => self.chars.skip(),
 						'}' => continue,
 						_ => {
 							self.error("expected ',' or '}'")?;
@@ -177,13 +108,13 @@ impl<'a> JsonParser<'a> {
 	}
 
 	fn parse_string(&mut self) -> Result<String> {
-		ensure!(self.get_next()? == '"');
+		ensure!(self.chars.get_next()? == '"');
 
 		let mut string = String::new();
 		loop {
-			match self.get_next()? {
+			match self.chars.get_next()? {
 				'"' => break,
-				'\\' => match self.get_next()? {
+				'\\' => match self.chars.get_next()? {
 					'"' => string.push('"'),
 					'\\' => string.push('\\'),
 					'/' => string.push('/'),
@@ -195,7 +126,7 @@ impl<'a> JsonParser<'a> {
 					'u' => {
 						let mut hex = String::new();
 						for _ in 0..4 {
-							hex.push(self.get_next()?);
+							hex.push(self.chars.get_next()?);
 						}
 						let code_point = u16::from_str_radix(&hex, 16)
 							.map_err(|_| self.error("invalid unicode code point").unwrap_err())?;
@@ -214,10 +145,10 @@ impl<'a> JsonParser<'a> {
 
 	fn parse_number(&mut self) -> Result<JsonValue> {
 		let mut number = String::new();
-		while let Some(c) = self.peek() {
+		while let Some(c) = self.chars.peek() {
 			if c.is_ascii_digit() || *c == '-' || *c == '.' {
 				number.push(*c);
-				self.skip();
+				self.chars.skip();
 			} else {
 				break;
 			}
@@ -232,7 +163,7 @@ impl<'a> JsonParser<'a> {
 	fn parse_true(&mut self) -> Result<JsonValue> {
 		let true_str = ['t', 'r', 'u', 'e'];
 		for &c in &true_str {
-			match self.get_next()? {
+			match self.chars.get_next()? {
 				b if b == c => continue,
 				_ => {
 					self.error("unexpected character while parsing 'true'")?;
@@ -245,7 +176,7 @@ impl<'a> JsonParser<'a> {
 	fn parse_false(&mut self) -> Result<JsonValue> {
 		let false_str = ['f', 'a', 'l', 's', 'e'];
 		for &c in &false_str {
-			match self.get_next()? {
+			match self.chars.get_next()? {
 				b if b == c => continue,
 				_ => {
 					self.error("unexpected character while parsing 'false'")?;
@@ -258,7 +189,7 @@ impl<'a> JsonParser<'a> {
 	fn parse_null(&mut self) -> Result<JsonValue> {
 		let null_str = ['n', 'u', 'l', 'l'];
 		for &c in &null_str {
-			match self.get_next()? {
+			match self.chars.get_next()? {
 				b if b == c => continue,
 				_ => {
 					self.error("unexpected character while parsing 'null'")?;

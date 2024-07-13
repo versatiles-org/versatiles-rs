@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 //! This module re-exports all the data reader and writer modules, along with the value reader and writer modules.
 //!
 //! # Overview
@@ -17,46 +19,34 @@
 //! }
 //! ```
 
+mod char_iterator;
 mod data_reader;
-pub use data_reader::*;
-
 mod data_reader_blob;
-pub use data_reader_blob::*;
-
 mod data_reader_file;
-pub use data_reader_file::*;
-
 mod data_reader_http;
-pub use data_reader_http::*;
-
-mod data_writer_blob;
-pub use data_writer_blob::*;
-
-mod data_writer_file;
-pub use data_writer_file::*;
-
 mod data_writer;
-pub use data_writer::*;
-
+mod data_writer_blob;
+mod data_writer_file;
 mod value_reader;
-pub use value_reader::*;
-
 mod value_reader_blob;
-pub use value_reader_blob::*;
-
 mod value_reader_file;
-#[allow(unused_imports)]
-pub use value_reader_file::*;
-
 mod value_reader_slice;
-pub use value_reader_slice::*;
-
 mod value_writer;
-pub use value_writer::*;
-
 mod value_writer_blob;
-pub use value_writer_blob::*;
-
 mod value_writer_file;
-#[allow(unused_imports)]
+
+pub use char_iterator::*;
+pub use data_reader::*;
+pub use data_reader_blob::*;
+pub use data_reader_file::*;
+pub use data_reader_http::*;
+pub use data_writer::*;
+pub use data_writer_blob::*;
+pub use data_writer_file::*;
+pub use value_reader::*;
+pub use value_reader_blob::*;
+pub use value_reader_file::*;
+pub use value_reader_slice::*;
+pub use value_writer::*;
+pub use value_writer_blob::*;
 pub use value_writer_file::*;
