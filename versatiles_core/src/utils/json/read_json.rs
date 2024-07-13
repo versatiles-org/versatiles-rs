@@ -1,7 +1,7 @@
 use super::{parse_json_stream::JsonParser, JsonValue};
 use anyhow::Result;
 
-pub fn parse_json<'a>(input: &'a str) -> Result<JsonValue> {
+pub fn parse_json(input: &str) -> Result<JsonValue> {
 	JsonParser::new(input.chars(), true)?.parse_json()
 }
 

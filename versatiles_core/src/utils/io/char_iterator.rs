@@ -24,11 +24,11 @@ impl<'a> CharIterator<'a> {
 			debug,
 			ring: Vec::new(),
 		};
-		me.skip();
+		me.skip_char();
 		Ok(me)
 	}
 
-	pub fn error(&self, msg: &str) -> Result<()> {
+	pub fn build_error(&self, msg: &str) -> Result<()> {
 		if self.debug {
 			let mut ring = String::new();
 			for i in 0..RING_SIZE as u64 {
@@ -41,11 +41,11 @@ impl<'a> CharIterator<'a> {
 		}
 	}
 
-	pub fn peek(&self) -> &Option<char> {
+	pub fn peek_char(&self) -> &Option<char> {
 		&self.next_char
 	}
 
-	pub fn skip(&mut self) -> () {
+	pub fn skip_char(&mut self) {
 		self.next_char = self.iter.next();
 		if self.debug {
 			let char = if let Some(c) = self.next_char {
@@ -63,30 +63,30 @@ impl<'a> CharIterator<'a> {
 		self.pos += 1;
 	}
 
-	pub fn next(&mut self) -> Option<char> {
+	pub fn next_char(&mut self) -> Option<char> {
 		let next_char = self.next_char;
-		self.skip();
+		self.skip_char();
 		next_char
 	}
 
-	pub fn get_next(&mut self) -> Result<char> {
+	pub fn get_next_char(&mut self) -> Result<char> {
 		self
-			.next()
-			.ok_or_else(|| self.error("unexpected end").unwrap_err())
+			.next_char()
+			.ok_or_else(|| self.build_error("unexpected end").unwrap_err())
 	}
 
-	pub fn get_peek(&mut self) -> Result<char> {
+	pub fn get_peek_char(&mut self) -> Result<char> {
 		self
-			.peek()
-			.ok_or_else(|| self.error("unexpected end").unwrap_err())
+			.peek_char()
+			.ok_or_else(|| self.build_error("unexpected end").unwrap_err())
 	}
 
 	pub fn skip_whitespace(&mut self) -> Result<()> {
-		while let Some(b) = self.peek() {
+		while let Some(b) = self.peek_char() {
 			if !b.is_ascii_whitespace() {
 				break;
 			}
-			self.next();
+			self.next_char();
 		}
 		Ok(())
 	}

@@ -20,12 +20,12 @@ impl<'a> JsonParser<'a> {
 	}
 
 	fn error(&self, msg: &str) -> Result<JsonValue> {
-		self.chars.error(msg).map(|()| JsonValue::Null)
+		self.chars.build_error(msg).map(|()| JsonValue::Null)
 	}
 
 	pub fn parse_json(&mut self) -> Result<JsonValue> {
 		self.chars.skip_whitespace()?;
-		match self.chars.get_peek()? {
+		match self.chars.get_peek_char()? {
 			'[' => self.parse_array(),
 			'{' => self.parse_object(),
 			'"' => Ok(JsonValue::Str(self.parse_string()?)),
@@ -38,22 +38,22 @@ impl<'a> JsonParser<'a> {
 	}
 
 	fn parse_array(&mut self) -> Result<JsonValue> {
-		ensure!(self.chars.get_next()? == '[');
+		ensure!(self.chars.get_next_char()? == '[');
 
 		let mut array = Vec::new();
 		loop {
 			self.chars.skip_whitespace()?;
-			match self.chars.get_peek()? {
+			match self.chars.get_peek_char()? {
 				']' => {
-					self.chars.skip();
+					self.chars.skip_char();
 					break;
 				}
 				_ => {
 					array.push(self.parse_json()?);
 					self.chars.skip_whitespace()?;
-					match self.chars.get_peek()? {
+					match self.chars.get_peek_char()? {
 						',' => {
-							self.chars.skip();
+							self.chars.skip_char();
 							continue;
 						}
 						']' => continue,
@@ -68,22 +68,22 @@ impl<'a> JsonParser<'a> {
 	}
 
 	fn parse_object(&mut self) -> Result<JsonValue> {
-		ensure!(self.chars.get_next()? == '{');
+		ensure!(self.chars.get_next_char()? == '{');
 
 		let mut list: Vec<(String, JsonValue)> = Vec::new();
 		loop {
 			self.chars.skip_whitespace()?;
-			match self.chars.get_peek()? {
+			match self.chars.get_peek_char()? {
 				'}' => {
-					self.chars.skip();
+					self.chars.skip_char();
 					break;
 				}
 				'"' => {
 					let key = self.parse_string()?;
 
 					self.chars.skip_whitespace()?;
-					match self.chars.get_peek()? {
-						':' => self.chars.skip(),
+					match self.chars.get_peek_char()? {
+						':' => self.chars.skip_char(),
 						_ => {
 							self.error("expected ':'")?;
 						}
@@ -94,8 +94,8 @@ impl<'a> JsonParser<'a> {
 					list.push((key, value));
 
 					self.chars.skip_whitespace()?;
-					match self.chars.get_peek()? {
-						',' => self.chars.skip(),
+					match self.chars.get_peek_char()? {
+						',' => self.chars.skip_char(),
 						'}' => continue,
 						_ => {
 							self.error("expected ',' or '}'")?;
@@ -111,13 +111,13 @@ impl<'a> JsonParser<'a> {
 	}
 
 	fn parse_string(&mut self) -> Result<String> {
-		ensure!(self.chars.get_next()? == '"');
+		ensure!(self.chars.get_next_char()? == '"');
 
 		let mut string = String::new();
 		loop {
-			match self.chars.get_next()? {
+			match self.chars.get_next_char()? {
 				'"' => break,
-				'\\' => match self.chars.get_next()? {
+				'\\' => match self.chars.get_next_char()? {
 					'"' => string.push('"'),
 					'\\' => string.push('\\'),
 					'/' => string.push('/'),
@@ -129,7 +129,7 @@ impl<'a> JsonParser<'a> {
 					'u' => {
 						let mut hex = String::new();
 						for _ in 0..4 {
-							hex.push(self.chars.get_next()?);
+							hex.push(self.chars.get_next_char()?);
 						}
 						let code_point = u16::from_str_radix(&hex, 16)
 							.map_err(|_| self.error("invalid unicode code point").unwrap_err())?;
@@ -148,10 +148,10 @@ impl<'a> JsonParser<'a> {
 
 	fn parse_number(&mut self) -> Result<JsonValue> {
 		let mut number = String::new();
-		while let Some(c) = self.chars.peek() {
+		while let Some(c) = self.chars.peek_char() {
 			if c.is_ascii_digit() || *c == '-' || *c == '.' {
 				number.push(*c);
-				self.chars.skip();
+				self.chars.skip_char();
 			} else {
 				break;
 			}
@@ -166,7 +166,7 @@ impl<'a> JsonParser<'a> {
 	fn parse_true(&mut self) -> Result<JsonValue> {
 		let true_str = ['t', 'r', 'u', 'e'];
 		for &c in &true_str {
-			match self.chars.get_next()? {
+			match self.chars.get_next_char()? {
 				b if b == c => continue,
 				_ => {
 					self.error("unexpected character while parsing 'true'")?;
@@ -179,7 +179,7 @@ impl<'a> JsonParser<'a> {
 	fn parse_false(&mut self) -> Result<JsonValue> {
 		let false_str = ['f', 'a', 'l', 's', 'e'];
 		for &c in &false_str {
-			match self.chars.get_next()? {
+			match self.chars.get_next_char()? {
 				b if b == c => continue,
 				_ => {
 					self.error("unexpected character while parsing 'false'")?;
@@ -192,7 +192,7 @@ impl<'a> JsonParser<'a> {
 	fn parse_null(&mut self) -> Result<JsonValue> {
 		let null_str = ['n', 'u', 'l', 'l'];
 		for &c in &null_str {
-			match self.chars.get_next()? {
+			match self.chars.get_next_char()? {
 				b if b == c => continue,
 				_ => {
 					self.error("unexpected character while parsing 'null'")?;
