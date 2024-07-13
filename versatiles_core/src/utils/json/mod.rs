@@ -1,7 +1,8 @@
 mod parse_json;
-mod parse_ndjson;
+mod parse_json_stream;
+mod read_json;
 mod types;
 
 pub use parse_json::*;
-pub use parse_ndjson::*;
+pub use read_json::*;
 pub use types::*;

@@ -2,7 +2,20 @@ use super::{parse_json, JsonValue};
 use anyhow::Result;
 use std::io::BufRead;
 
-pub fn parse_ndjson(reader: impl BufRead) -> impl Iterator<Item = Result<JsonValue>> {
+pub fn read_ndjson(reader: impl BufRead) -> impl Iterator<Item = Result<JsonValue>> {
+	reader.lines().filter_map(|line| {
+		match line {
+			Ok(line) if line.trim().is_empty() => None, // Skip empty or whitespace-only lines
+			Ok(line) => Some(parse_json(&line).map_err(anyhow::Error::from)),
+			Err(e) => Some(Err(anyhow::Error::from(e))),
+		}
+	})
+}
+
+pub fn read_json_array(
+	reader: impl BufRead,
+	property_path: Vec<String>,
+) -> impl Iterator<Item = Result<JsonValue>> {
 	reader.lines().filter_map(|line| {
 		match line {
 			Ok(line) if line.trim().is_empty() => None, // Skip empty or whitespace-only lines
@@ -25,7 +38,7 @@ mod tests {
 	fn test_single_line() {
 		let data = r#"{"key": "value"}"#;
 		let reader = Cursor::new(data);
-		let mut iter = parse_ndjson(reader);
+		let mut iter = read_ndjson(reader);
 
 		assert_eq!(iter.next().unwrap().unwrap(), json_from_str(data));
 		assert!(iter.next().is_none());
@@ -39,7 +52,7 @@ mod tests {
         {"key3": "value3"}
         "#;
 		let reader = Cursor::new(data.trim());
-		let mut iter = parse_ndjson(reader);
+		let mut iter = read_ndjson(reader);
 
 		assert_eq!(
 			iter.next().unwrap().unwrap(),
@@ -66,7 +79,7 @@ mod tests {
         {"key3": "value3"}
         "#;
 		let reader = Cursor::new(data.trim());
-		let mut iter = parse_ndjson(reader);
+		let mut iter = read_ndjson(reader);
 
 		assert_eq!(
 			iter.next().unwrap().unwrap(),
@@ -91,7 +104,7 @@ mod tests {
         {"key2": "value2"}
         "#;
 		let reader = Cursor::new(data.trim());
-		let mut iter = parse_ndjson(reader);
+		let mut iter = read_ndjson(reader);
 
 		assert_eq!(
 			iter.next().unwrap().unwrap(),
@@ -113,7 +126,7 @@ mod tests {
         {"key2": "value2"}
         "#;
 		let reader = Cursor::new(data.trim());
-		let mut iter = parse_ndjson(reader);
+		let mut iter = read_ndjson(reader);
 
 		assert_eq!(
 			iter.next().unwrap().unwrap(),
@@ -131,7 +144,7 @@ mod tests {
 	fn test_empty_input() {
 		let data = "";
 		let reader = Cursor::new(data);
-		let mut iter = parse_ndjson(reader);
+		let mut iter = read_ndjson(reader);
 
 		assert!(iter.next().is_none());
 	}

@@ -2,16 +2,16 @@ use super::JsonValue;
 use anyhow::{bail, Result};
 use nom::{
 	branch::alt,
-	bytes::complete::{escaped, tag, take_while},
-	character::complete::{alphanumeric1 as alphanumeric, char, one_of},
+	bytes::streaming::{escaped, tag, take_while},
+	character::streaming::{alphanumeric1 as alphanumeric, char, one_of},
 	combinator::{cut, map, value},
 	error::{context, convert_error, ContextError, ParseError, VerboseError},
 	multi::separated_list0,
-	number::complete::double,
+	number::streaming::double,
 	sequence::{preceded, separated_pair, terminated},
 	Err, IResult, Parser,
 };
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::str;
 
 pub fn parse_json<'a>(input: &'a str) -> Result<JsonValue> {
@@ -41,7 +41,7 @@ pub fn parse_json<'a>(input: &'a str) -> Result<JsonValue> {
 
 	fn hash<'a, E: ParseError<&'a str> + ContextError<&'a str>>(
 		i: &'a str,
-	) -> IResult<&'a str, HashMap<String, JsonValue>, E> {
+	) -> IResult<&'a str, BTreeMap<String, JsonValue>, E> {
 		context(
 			"object",
 			preceded(
@@ -133,7 +133,7 @@ pub fn parse_json<'a>(input: &'a str) -> Result<JsonValue> {
 
 #[cfg(test)]
 mod tests {
-	use std::collections::HashMap;
+	use std::collections::BTreeMap;
 
 	use super::parse_json;
 	use crate::utils::JsonValue;
@@ -205,7 +205,7 @@ expected ':', found ,
 	#[test]
 	fn test_empty_object() {
 		let json = parse_json("{}").unwrap();
-		assert_eq!(json, JsonValue::Object(HashMap::new()));
+		assert_eq!(json, JsonValue::Object(BTreeMap::new()));
 	}
 
 	#[test]
