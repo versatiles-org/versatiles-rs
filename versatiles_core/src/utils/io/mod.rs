@@ -19,7 +19,6 @@
 //! }
 //! ```
 
-mod char_iterator;
 mod data_reader;
 mod data_reader_blob;
 mod data_reader_file;
@@ -35,7 +34,6 @@ mod value_writer;
 mod value_writer_blob;
 mod value_writer_file;
 
-pub use char_iterator::*;
 pub use data_reader::*;
 pub use data_reader_blob::*;
 pub use data_reader_file::*;

@@ -1,8 +1,5 @@
-use anyhow::{bail, ensure, Result};
-use std::{
-	collections::BTreeMap,
-	str::{self, Chars},
-};
+use anyhow::{anyhow, Error, Result};
+use std::str::{self, Chars};
 
 const RING_SIZE: usize = 16;
 
@@ -28,16 +25,16 @@ impl<'a> CharIterator<'a> {
 		Ok(me)
 	}
 
-	pub fn build_error(&self, msg: &str) -> Result<()> {
+	pub fn build_error(&self, msg: &str) -> Error {
 		if self.debug {
 			let mut ring = String::new();
 			for i in 0..RING_SIZE as u64 {
 				let index = (self.pos + i) % RING_SIZE as u64;
 				ring.push_str(self.ring.get(index as usize).unwrap_or(&String::new()));
 			}
-			bail!("{msg} at pos {}: {}", self.pos, ring);
+			anyhow!("{msg} at pos {}: {}", self.pos, ring)
 		} else {
-			bail!("{msg} at pos {}", self.pos);
+			anyhow!("{msg} at pos {}", self.pos)
 		}
 	}
 
@@ -72,13 +69,13 @@ impl<'a> CharIterator<'a> {
 	pub fn get_next_char(&mut self) -> Result<char> {
 		self
 			.next_char()
-			.ok_or_else(|| self.build_error("unexpected end").unwrap_err())
+			.ok_or_else(|| self.build_error("unexpected end"))
 	}
 
 	pub fn get_peek_char(&mut self) -> Result<char> {
 		self
 			.peek_char()
-			.ok_or_else(|| self.build_error("unexpected end").unwrap_err())
+			.ok_or_else(|| self.build_error("unexpected end"))
 	}
 
 	pub fn skip_whitespace(&mut self) -> Result<()> {
