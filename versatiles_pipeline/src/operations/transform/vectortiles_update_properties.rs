@@ -208,11 +208,11 @@ mod tests {
 	use assert_fs::NamedTempFile;
 	use std::{fs::File, io::Write};
 	use versatiles_geometry::{
-		vector_tile::VectorTileLayer, Feature, GeoProperties, GeoValue, Geometry,
+		vector_tile::VectorTileLayer, GeoFeature, GeoProperties, GeoValue, Geometry,
 	};
 
 	fn create_sample_vector_tile_blob() -> Blob {
-		let mut feature = Feature::new(Geometry::new_example());
+		let mut feature = GeoFeature::new(Geometry::new_example());
 		feature.properties = GeoProperties::from(vec![
 			("id", GeoValue::from("feature_1")),
 			("property1", GeoValue::from("value1")),

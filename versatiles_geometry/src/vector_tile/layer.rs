@@ -6,7 +6,7 @@ use crate::{
 	vector_tile::{
 		feature::VectorTileFeature, property_manager::PropertyManager, value::GeoValuePBF,
 	},
-	Feature, GeoProperties, GeoValue,
+	GeoFeature, GeoProperties, GeoValue,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use byteorder::LE;
@@ -158,7 +158,7 @@ impl VectorTileLayer {
 		Ok(writer.into_blob())
 	}
 
-	pub fn to_features(&self) -> Result<Vec<Feature>> {
+	pub fn to_features(&self) -> Result<Vec<GeoFeature>> {
 		let mut features = Vec::new();
 		for feature in &self.features {
 			features.push(
@@ -262,7 +262,7 @@ impl VectorTileLayer {
 
 	pub fn from_features(
 		name: String,
-		features: Vec<Feature>,
+		features: Vec<GeoFeature>,
 		extent: u32,
 		version: u32,
 	) -> Result<VectorTileLayer> {
@@ -292,7 +292,7 @@ impl VectorTileLayer {
 	pub fn new_example() -> Self {
 		VectorTileLayer::from_features(
 			String::from("layer1"),
-			vec![Feature::new_example()],
+			vec![GeoFeature::new_example()],
 			4096,
 			1,
 		)
@@ -365,7 +365,7 @@ mod tests {
 
 	#[test]
 	fn test_to_features() -> Result<()> {
-		let feature = Feature::new_example();
+		let feature = GeoFeature::new_example();
 		let layer =
 			VectorTileLayer::from_features("hello".to_string(), vec![feature.clone()], 2048, 3)?;
 		let features = layer.to_features()?;
@@ -380,7 +380,7 @@ mod tests {
 
 	#[test]
 	fn test_from_features() -> Result<()> {
-		let features = vec![Feature::new_example()];
+		let features = vec![GeoFeature::new_example()];
 		let layer = VectorTileLayer::from_features("hello".to_string(), features, 4096, 1)?;
 		assert_eq!(layer.name, "hello");
 		assert_eq!(layer.features.len(), 1);

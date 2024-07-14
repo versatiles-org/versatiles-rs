@@ -6,7 +6,7 @@ use ab_glyph::{Font, FontArc, Outline, OutlineCurve::*, Point};
 use anyhow::Result;
 use std::{f64::consts::PI, ops::Div, vec};
 use versatiles_geometry::{
-	math, Coordinates1, Coordinates2, Coordinates3, Feature, Geometry, MultiPolygonGeometry,
+	math, Coordinates1, Coordinates2, Coordinates3, GeoFeature, Geometry, MultiPolygonGeometry,
 };
 
 static mut FONT: Option<FontArc> = None;
@@ -31,7 +31,7 @@ fn draw_text(name: &str, y: f32, text: String) -> VectorTileLayer {
 		}
 	};
 
-	let mut features: Vec<Feature> = Vec::new();
+	let mut features: Vec<GeoFeature> = Vec::new();
 	let height = font.height_unscaled();
 	let scale: f32 = 80.0 / height;
 
@@ -55,7 +55,7 @@ fn draw_text(name: &str, y: f32, text: String) -> VectorTileLayer {
 
 		let multipolygon = get_multipolygon(multilinestring);
 
-		Feature::new(Geometry::MultiPolygon(multipolygon))
+		GeoFeature::new(Geometry::MultiPolygon(multipolygon))
 	};
 
 	for c in text.chars() {
@@ -109,7 +109,7 @@ fn get_background_layer() -> Result<VectorTileLayer> {
 		circle.push([(a.cos() + 1.0) * 2047.5, (a.sin() + 1.0) * 2047.5])
 	}
 
-	let feature = Feature::new(Geometry::new_line_string(circle));
+	let feature = GeoFeature::new(Geometry::new_line_string(circle));
 	VectorTileLayer::from_features(String::from("background"), vec![feature], 4096, 1)
 }
 

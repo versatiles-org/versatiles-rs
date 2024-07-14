@@ -1,13 +1,47 @@
 use std::collections::BTreeMap;
 
+use anyhow::{bail, Result};
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum JsonValue {
-	Null,
-	Str(String),
-	Boolean(bool),
-	Num(f64),
 	Array(Vec<JsonValue>),
+	Boolean(bool),
+	Null,
+	Num(f64),
 	Object(BTreeMap<String, JsonValue>),
+	Str(String),
+}
+
+impl JsonValue {
+	pub fn type_as_str(&self) -> &str {
+		use JsonValue::*;
+		match self {
+			Array(_) => "array",
+			Boolean(_) => "boolean",
+			Null => "null",
+			Num(_) => "number",
+			Object(_) => "object",
+			Str(_) => "string",
+		}
+	}
+	pub fn as_u64(&self) -> Result<u64> {
+		match self {
+			JsonValue::Num(v) => Ok(*v as u64),
+			_ => bail!("value has type '{}' and not 'number'", self.type_as_str()),
+		}
+	}
+	pub fn as_str(&self) -> Result<&str> {
+		match self {
+			JsonValue::Str(v) => Ok(v),
+			_ => bail!("value has type '{}' and not 'string'", self.type_as_str()),
+		}
+	}
+	pub fn as_string(&self) -> Result<String> {
+		match self {
+			JsonValue::Str(v) => Ok(v.to_string()),
+			_ => bail!("value has type '{}' and not 'string'", self.type_as_str()),
+		}
+	}
 }
 
 impl From<&str> for JsonValue {

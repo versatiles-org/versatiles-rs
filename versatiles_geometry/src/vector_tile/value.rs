@@ -70,6 +70,7 @@ impl<'a> GeoValuePBF<'a> for GeoValue {
 		let mut writer = ValueWriterBlob::new_le();
 
 		match self {
+			GeoValue::Null => {}
 			GeoValue::String(s) => {
 				writer
 					.write_pbf_key(1, 2)

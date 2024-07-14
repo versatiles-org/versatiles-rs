@@ -8,12 +8,13 @@ use std::{
 
 #[derive(Clone, PartialEq)]
 pub enum GeoValue {
-	String(String),
-	Float(f32),
-	Double(f64),
-	Int(i64),
-	UInt(u64),
 	Bool(bool),
+	Double(f64),
+	Float(f32),
+	Int(i64),
+	Null,
+	String(String),
+	UInt(u64),
 }
 
 impl Debug for GeoValue {
@@ -25,6 +26,7 @@ impl Debug for GeoValue {
 			Self::Int(v) => f.debug_tuple("Int").field(v).finish(),
 			Self::UInt(v) => f.debug_tuple("UInt").field(v).finish(),
 			Self::Bool(v) => f.debug_tuple("Bool").field(v).finish(),
+			Self::Null => f.debug_tuple("Null").finish(),
 		}
 	}
 }
@@ -105,12 +107,13 @@ impl Hash for GeoValue {
 	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		core::mem::discriminant(self).hash(state);
 		match self {
-			GeoValue::String(v) => v.hash(state),
-			GeoValue::Float(v) => v.to_bits().hash(state),
-			GeoValue::Double(v) => v.to_bits().hash(state),
-			GeoValue::Int(v) => v.hash(state),
-			GeoValue::UInt(v) => v.hash(state),
 			GeoValue::Bool(v) => v.hash(state),
+			GeoValue::Double(v) => v.to_bits().hash(state),
+			GeoValue::Float(v) => v.to_bits().hash(state),
+			GeoValue::Int(v) => v.hash(state),
+			GeoValue::Null => (),
+			GeoValue::String(v) => v.hash(state),
+			GeoValue::UInt(v) => v.hash(state),
 		}
 	}
 }
@@ -141,12 +144,13 @@ impl Display for GeoValue {
 			f,
 			"{}",
 			match self {
-				GeoValue::String(v) => v.to_string(),
-				GeoValue::Float(v) => v.to_string(),
-				GeoValue::Double(v) => v.to_string(),
-				GeoValue::Int(v) => v.to_string(),
-				GeoValue::UInt(v) => v.to_string(),
 				GeoValue::Bool(v) => v.to_string(),
+				GeoValue::Double(v) => v.to_string(),
+				GeoValue::Float(v) => v.to_string(),
+				GeoValue::Int(v) => v.to_string(),
+				GeoValue::Null => String::from("null"),
+				GeoValue::String(v) => v.to_string(),
+				GeoValue::UInt(v) => v.to_string(),
 			}
 		)
 	}
@@ -161,6 +165,7 @@ impl GeoValue {
 			GeoValue::Int(_) => 3,
 			GeoValue::UInt(_) => 4,
 			GeoValue::Bool(_) => 5,
+			GeoValue::Null => 6,
 		}
 	}
 	pub fn parse_str(value: &str) -> Self {

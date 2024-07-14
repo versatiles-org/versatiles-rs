@@ -6,7 +6,7 @@ use versatiles_core::types::{
 };
 use versatiles_geometry::{
 	vector_tile::{VectorTile, VectorTileLayer},
-	Feature, Geometry,
+	GeoFeature, Geometry,
 };
 
 #[derive(Debug)]
@@ -74,11 +74,11 @@ impl TilesReaderTrait for MockVectorSource {
 
 		// Iterate over each layer and convert features
 		for (name, features_def) in self.data.iter() {
-			let mut features: Vec<Feature> = vec![];
+			let mut features: Vec<GeoFeature> = vec![];
 
 			// Create features for the current layer
 			for properties in features_def {
-				let mut feature = Feature::new(Geometry::new_point([1, 2]));
+				let mut feature = GeoFeature::new(Geometry::new_point([1, 2]));
 				feature.set_property("x".to_string(), coord.x);
 				feature.set_property("y".to_string(), coord.y);
 				feature.set_property("z".to_string(), coord.z);

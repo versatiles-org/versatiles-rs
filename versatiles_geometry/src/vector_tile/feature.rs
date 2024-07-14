@@ -245,8 +245,8 @@ impl VectorTileFeature {
 		layer.decode_tag_ids(&self.tag_ids)
 	}
 
-	pub fn to_feature(&self, layer: &VectorTileLayer) -> Result<Feature> {
-		let mut feature = Feature::new(
+	pub fn to_feature(&self, layer: &VectorTileLayer) -> Result<GeoFeature> {
+		let mut feature = GeoFeature::new(
 			self
 				.to_geometry()
 				.context("Failed to convert to geometry")?,

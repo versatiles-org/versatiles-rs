@@ -1,4 +1,4 @@
-use super::{parse_json_stream::JsonParser, JsonValue};
+use super::{parse_stream::JsonParser, JsonValue};
 use anyhow::Result;
 
 pub fn parse_json(input: &str) -> Result<JsonValue> {

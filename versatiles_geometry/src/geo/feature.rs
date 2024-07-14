@@ -5,13 +5,13 @@ use std::fmt::Debug;
 use super::*;
 
 #[derive(Clone, Debug)]
-pub struct Feature {
+pub struct GeoFeature {
 	pub id: Option<u64>,
 	pub geometry: Geometry,
 	pub properties: GeoProperties,
 }
 
-impl Feature {
+impl GeoFeature {
 	pub fn new(geometry: Geometry) -> Self {
 		Self {
 			id: None,
