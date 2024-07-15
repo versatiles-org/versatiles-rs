@@ -1,5 +1,5 @@
 use crate::{
-	utils::{parse_string, parse_tag, CharIterator},
+	utils::{parse_tag, CharIterator},
 	Coordinates0, Coordinates1, Coordinates2, Coordinates3, GeoCollection, GeoFeature,
 	GeoProperties, GeoValue, Geometry,
 };
@@ -7,7 +7,7 @@ use anyhow::{anyhow, bail, Result};
 use std::str;
 use versatiles_core::utils::{
 	parse_array_entries, parse_json_value, parse_number_as, parse_number_as_string,
-	parse_object_entries,
+	parse_object_entries, parse_quoted_json_string,
 };
 
 pub fn parse_geojson(json: &str) -> Result<GeoCollection> {
@@ -21,7 +21,7 @@ pub fn parse_geojson_collection(iter: &mut CharIterator) -> Result<GeoCollection
 
 	parse_object_entries(iter, |key, iter2| {
 		match key.as_str() {
-			"type" => object_type = Some(parse_string(iter2)?),
+			"type" => object_type = Some(parse_quoted_json_string(iter2)?),
 			"features" => parse_array_entries(iter2, |iter3| {
 				features.push(parse_geojson_feature(iter3)?);
 				Ok(())
@@ -53,7 +53,7 @@ pub fn parse_geojson_feature(iter: &mut CharIterator) -> Result<GeoFeature> {
 
 	parse_object_entries(iter, |key, iter2| {
 		match key.as_str() {
-			"type" => object_type = Some(parse_string(iter2)?),
+			"type" => object_type = Some(parse_quoted_json_string(iter2)?),
 			"id" => id = Some(parse_geojson_id(iter2)?),
 			"geometry" => geometry = Some(parse_geojson_geometry(iter2)?),
 			"properties" => properties = Some(parse_geojson_properties(iter2)?),
@@ -74,7 +74,7 @@ pub fn parse_geojson_feature(iter: &mut CharIterator) -> Result<GeoFeature> {
 fn parse_geojson_id(iter: &mut CharIterator) -> Result<GeoValue> {
 	iter.skip_whitespace()?;
 	match iter.get_peek_char()? {
-		'"' => parse_string(iter).map(GeoValue::from),
+		'"' => parse_quoted_json_string(iter).map(GeoValue::from),
 		d if d.is_ascii_digit() => parse_number_as::<u64>(iter).map(GeoValue::UInt),
 		c => Err(iter.build_error(&format!(
 			"expected a string or integer, but got character '{c}'"
@@ -109,7 +109,7 @@ fn parse_geojson_number(iter: &mut CharIterator) -> Result<GeoValue> {
 fn parse_geojson_value(iter: &mut CharIterator) -> Result<GeoValue> {
 	iter.skip_whitespace()?;
 	match iter.get_peek_char()? {
-		'"' => parse_string(iter).map(GeoValue::from),
+		'"' => parse_quoted_json_string(iter).map(GeoValue::from),
 		d if d.is_ascii_digit() || d == '.' || d == '-' => parse_geojson_number(iter),
 		't' => parse_tag(iter, "true").map(|_| GeoValue::Bool(true)),
 		'f' => parse_tag(iter, "false").map(|_| GeoValue::Bool(false)),
@@ -137,7 +137,7 @@ fn parse_geojson_geometry(iter: &mut CharIterator) -> Result<Geometry> {
 
 	parse_object_entries(iter, |key, iter2| {
 		match key.as_str() {
-			"type" => geometry_type = Some(parse_string(iter2)?),
+			"type" => geometry_type = Some(parse_quoted_json_string(iter2)?),
 			"coordinates" => coordinates = Some(parse_geojson_coordinates(iter2)?),
 			_ => _ = parse_json_value(iter2)?,
 		};

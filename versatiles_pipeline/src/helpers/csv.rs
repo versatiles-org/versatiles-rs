@@ -2,9 +2,10 @@ use crate::{
 	geometry::{GeoProperties, GeoValue},
 	utils::progress::get_progress_bar,
 };
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
+use futures::{future::ready, stream, StreamExt};
 use std::{io::BufReader, os::unix::fs::MetadataExt, path::Path};
-use versatiles_core::utils::read_csv_as_iterator;
+use versatiles_core::utils::read_csv_iter;
 
 /// Reads a CSV file from the given path and returns a vector of `GeoProperties`.
 ///
@@ -15,42 +16,41 @@ use versatiles_core::utils::read_csv_as_iterator;
 /// # Returns
 ///
 /// * `Result<Vec<GeoProperties>>` - A vector of `GeoProperties` or an error if the file could not be read.
-pub fn read_csv_file(path: &Path) -> Result<Vec<GeoProperties>> {
+pub async fn read_csv_file(path: &Path) -> Result<Vec<GeoProperties>> {
 	let file = std::fs::File::open(path)
 		.with_context(|| format!("Failed to open file at path: {:?}", path))?;
 
 	let size = path.metadata()?.size();
-
-	let mut data: Vec<GeoProperties> = Vec::new();
-
-	let mut reader = BufReader::new(file);
-	let mut lines = read_csv_as_iterator(&mut reader, ',');
-	let header: Vec<(usize, String)> = lines
-		.next()
-		.unwrap()
-		.0
-		.into_iter()
-		.enumerate()
-		.collect::<Vec<_>>();
-
 	let mut progress = get_progress_bar("read csv", size);
-	for (record, pos) in lines {
-		let entry = GeoProperties::from_iter(header.iter().map(|(col_index, name)| {
-			(
-				name.to_string(),
-				GeoValue::parse_str(
-					record
-						.get(*col_index)
-						.with_context(|| format!("Failed to get value for column: {name}"))
-						.unwrap(),
-				),
-			)
-		}));
 
-		data.push(entry);
-		progress.set_position(pos as u64);
-	}
+	let reader = BufReader::new(file);
+
+	let mut errors = vec![];
+	let data: Vec<GeoProperties> = stream::iter(read_csv_iter(reader, &',')?)
+		.filter_map(|e| {
+			ready(
+				e.map(|(bytepos, fields)| {
+					progress.set_position(bytepos as u64);
+
+					GeoProperties::from_iter(
+						fields
+							.into_iter()
+							.map(|(key, value)| (key, GeoValue::parse_str(&value))),
+					)
+				})
+				.map_err(|e| errors.push(e))
+				.ok(),
+			)
+		})
+		.collect::<Vec<_>>()
+		.await;
+
 	progress.finish();
+
+	if !errors.is_empty() {
+		println!("{:?}", errors);
+		bail!("found {} error(s) while reading csv", errors.len());
+	}
 
 	Ok(data)
 }
@@ -71,12 +71,12 @@ mod tests {
 		Ok(temp_file)
 	}
 
-	#[test]
-	fn test_read_csv_file() -> Result<()> {
+	#[tokio::test]
+	async fn test_read_csv_file() -> Result<()> {
 		let file_path = make_temp_csv(
 			"name,age,city\nJohn Doe,30,New York\nJane Smith,25,Los Angeles\nAlice Johnson,28,Chicago",
 		)?;
-		let data = read_csv_file(&file_path)?;
+		let data = read_csv_file(&file_path).await?;
 
 		assert_eq!(data.len(), 3);
 
@@ -98,20 +98,20 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn test_read_empty_csv_file() -> Result<()> {
+	#[tokio::test]
+	async fn test_read_empty_csv_file() -> Result<()> {
 		let file_path = make_temp_csv("name,age,city")?;
-		let data = read_csv_file(&file_path)?;
+		let data = read_csv_file(&file_path).await?;
 		assert!(data.is_empty());
 		Ok(())
 	}
 
-	#[test]
-	fn test_read_csv_file_missing_values() -> Result<()> {
+	#[tokio::test]
+	async fn test_read_csv_file_missing_values() -> Result<()> {
 		let file_path =
 			make_temp_csv("name,age,city\nJohn Doe,,New York\n,25,Los Angeles\nAlice Johnson,28,")?;
 
-		let data = read_csv_file(&file_path)?;
+		let data = read_csv_file(&file_path).await?;
 
 		assert_eq!(data.len(), 3);
 
@@ -133,10 +133,10 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn test_read_csv_file_incorrect_path() {
+	#[tokio::test]
+	async fn test_read_csv_file_incorrect_path() {
 		let path = Path::new("non_existent.csv");
-		let result = read_csv_file(path);
+		let result = read_csv_file(path).await;
 		assert!(result.is_err());
 	}
 }

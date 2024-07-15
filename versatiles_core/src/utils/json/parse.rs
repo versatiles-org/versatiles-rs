@@ -1,6 +1,6 @@
 use super::JsonValue;
 use crate::utils::{
-	parse_array_entries, parse_number_as, parse_object_entries, parse_string, parse_tag,
+	parse_array_entries, parse_number_as, parse_object_entries, parse_quoted_json_string, parse_tag,
 	CharIterator,
 };
 use anyhow::Result;
@@ -45,7 +45,7 @@ fn parse_json_object(iter: &mut CharIterator) -> Result<JsonValue> {
 }
 
 fn parse_json_string(iter: &mut CharIterator) -> Result<JsonValue> {
-	parse_string(iter).map(JsonValue::Str)
+	parse_quoted_json_string(iter).map(JsonValue::Str)
 }
 
 fn parse_json_number(iter: &mut CharIterator) -> Result<JsonValue> {

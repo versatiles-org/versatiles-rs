@@ -1,23 +1,24 @@
 use anyhow::{anyhow, Error, Result};
-use std::str::{self, Chars};
 
 const RING_SIZE: usize = 16;
 
 pub struct CharIterator<'a> {
-	iter: Chars<'a>,
+	iter: Box<dyn Iterator<Item = char> + Send + 'a>,
 	next_char: Option<char>,
-	pos: u64,
+	char_pos: usize,
+	byte_pos: usize,
 	debug: bool,
 	ring: Vec<String>,
 }
 
 #[allow(dead_code)]
 impl<'a> CharIterator<'a> {
-	pub fn new(inner_chars: Chars<'a>, debug: bool) -> Result<Self> {
+	pub fn new(chars: impl Iterator<Item = char> + Send + 'a, debug: bool) -> Result<Self> {
 		let mut me = CharIterator {
-			iter: inner_chars,
+			iter: Box::new(chars),
 			next_char: None,
-			pos: 0,
+			char_pos: 0,
+			byte_pos: 0,
 			debug,
 			ring: Vec::new(),
 		};
@@ -28,14 +29,18 @@ impl<'a> CharIterator<'a> {
 	pub fn build_error(&self, msg: &str) -> Error {
 		if self.debug {
 			let mut ring = String::new();
-			for i in 0..RING_SIZE as u64 {
-				let index = (self.pos + i) % RING_SIZE as u64;
-				ring.push_str(self.ring.get(index as usize).unwrap_or(&String::new()));
+			for i in 0..RING_SIZE {
+				let index = (self.char_pos + i) % RING_SIZE;
+				ring.push_str(self.ring.get(index).unwrap_or(&String::new()));
 			}
-			anyhow!("{msg} at pos {}: {}", self.pos, ring)
+			anyhow!("{msg} at pos {}: {}", self.char_pos, ring)
 		} else {
-			anyhow!("{msg} at pos {}", self.pos)
+			anyhow!("{msg} at pos {}", self.char_pos)
 		}
+	}
+
+	pub fn byte_pos(&self) -> usize {
+		self.byte_pos
 	}
 
 	pub fn peek_char(&self) -> &Option<char> {
@@ -50,14 +55,17 @@ impl<'a> CharIterator<'a> {
 			} else {
 				String::from("<EOF>")
 			};
-			let index = self.pos as usize % RING_SIZE;
+			let index = self.char_pos % RING_SIZE;
 			if self.ring.len() <= index {
 				self.ring.push(char);
 			} else {
 				self.ring[index] = char;
 			}
 		}
-		self.pos += 1;
+		self.char_pos += 1;
+		if let Some(c) = self.next_char {
+			self.byte_pos += c.len_utf8();
+		}
 	}
 
 	pub fn next_char(&mut self) -> Option<char> {
@@ -86,5 +94,9 @@ impl<'a> CharIterator<'a> {
 			self.next_char();
 		}
 		Ok(())
+	}
+
+	pub fn into_string(mut self) -> String {
+		std::iter::from_fn(move || self.next_char()).collect()
 	}
 }

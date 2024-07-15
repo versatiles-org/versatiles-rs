@@ -103,6 +103,7 @@ impl Operation {
 		Box::pin(async move {
 			let args = Args::from_vpl_node(&vpl_node)?;
 			let data = read_csv_file(&factory.resolve_path(&args.data_source_path))
+				.await
 				.with_context(|| format!("Failed to read CSV file from '{}'", args.data_source_path))?;
 
 			let properties_map = data

@@ -12,7 +12,7 @@ pub fn parse_tag(iter: &mut CharIterator, text: &str) -> Result<()> {
 	Ok(())
 }
 
-pub fn parse_string(iter: &mut CharIterator) -> Result<String> {
+pub fn parse_quoted_json_string(iter: &mut CharIterator) -> Result<String> {
 	iter.skip_whitespace()?;
 	if iter.get_next_char()? != '"' {
 		bail!(iter.build_error("expected '\"' while parsing a string"));
@@ -87,7 +87,7 @@ pub fn parse_object_entries<R>(
 				break;
 			}
 			'"' => {
-				let key = parse_string(iter)?;
+				let key = parse_quoted_json_string(iter)?;
 
 				iter.skip_whitespace()?;
 				match iter.get_peek_char()? {
