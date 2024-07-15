@@ -3,7 +3,7 @@ use crate::utils::{
 	parse_array_entries, parse_number_as, parse_object_entries, parse_string, parse_tag,
 	CharIterator,
 };
-use anyhow::{ensure, Result};
+use anyhow::Result;
 use std::{collections::BTreeMap, str};
 
 pub fn parse_json(json: &str) -> Result<JsonValue> {
@@ -26,10 +26,11 @@ pub fn parse_json_value(iter: &mut CharIterator) -> Result<JsonValue> {
 }
 
 fn parse_json_array(iter: &mut CharIterator) -> Result<JsonValue> {
-	ensure!(iter.get_next_char()? == '[');
-
 	let mut array = Vec::new();
-	parse_array_entries(iter, |iter2| Ok(array.push(parse_json_value(iter2)?)))?;
+	parse_array_entries(iter, |iter2| {
+		array.push(parse_json_value(iter2)?);
+		Ok(())
+	})?;
 	Ok(JsonValue::Array(array))
 }
 

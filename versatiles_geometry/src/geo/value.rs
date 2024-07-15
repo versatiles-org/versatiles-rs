@@ -198,7 +198,7 @@ impl GeoValue {
 	pub fn as_u64(&self) -> Result<u64> {
 		match self {
 			GeoValue::Int(v) => Ok(*v as u64),
-			GeoValue::UInt(v) => Ok(*v as u64),
+			GeoValue::UInt(v) => Ok(*v),
 			_ => bail!("value is not an integer"),
 		}
 	}

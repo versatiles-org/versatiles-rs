@@ -1,7 +1,6 @@
-use std::str::FromStr;
-
 use super::iterator::CharIterator;
-use anyhow::{ensure, Result};
+use anyhow::{bail, Result};
+use std::str::FromStr;
 
 pub fn parse_tag(iter: &mut CharIterator, text: &str) -> Result<()> {
 	for c in text.chars() {
@@ -14,7 +13,10 @@ pub fn parse_tag(iter: &mut CharIterator, text: &str) -> Result<()> {
 }
 
 pub fn parse_string(iter: &mut CharIterator) -> Result<String> {
-	ensure!(iter.get_next_char()? == '"');
+	iter.skip_whitespace()?;
+	if iter.get_next_char()? != '"' {
+		bail!(iter.build_error("expected '\"' while parsing a string"));
+	}
 
 	let mut string = String::new();
 	loop {
@@ -73,7 +75,9 @@ pub fn parse_object_entries<R>(
 	mut parse_value: impl FnMut(String, &mut CharIterator) -> Result<R>,
 ) -> Result<()> {
 	iter.skip_whitespace()?;
-	ensure!(iter.get_next_char()? == '{');
+	if iter.get_next_char()? != '{' {
+		bail!(iter.build_error("expected '{' while parsing an object"));
+	}
 
 	loop {
 		iter.skip_whitespace()?;
@@ -116,7 +120,9 @@ pub fn parse_array_entries<R>(
 	mut parse_value: impl FnMut(&mut CharIterator) -> Result<R>,
 ) -> Result<()> {
 	iter.skip_whitespace()?;
-	ensure!(iter.get_next_char()? == '[');
+	if iter.get_next_char()? != '[' {
+		bail!(iter.build_error("expected '[' while parsing an array"));
+	}
 
 	loop {
 		iter.skip_whitespace()?;

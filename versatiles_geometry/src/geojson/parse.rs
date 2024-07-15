@@ -23,7 +23,8 @@ pub fn parse_geojson_collection(iter: &mut CharIterator) -> Result<GeoCollection
 		match key.as_str() {
 			"type" => object_type = Some(parse_string(iter2)?),
 			"features" => parse_array_entries(iter2, |iter3| {
-				Ok(features.push(parse_geojson_feature(iter3)?))
+				features.push(parse_geojson_feature(iter3)?);
+				Ok(())
 			})?,
 			_ => _ = parse_json_value(iter2)?,
 		};
@@ -66,7 +67,7 @@ pub fn parse_geojson_feature(iter: &mut CharIterator) -> Result<GeoFeature> {
 	Ok(GeoFeature {
 		id,
 		geometry: geometry.ok_or(anyhow!("feature is missing 'geometry'"))?,
-		properties: properties.unwrap_or_else(|| GeoProperties::new()),
+		properties: properties.unwrap_or_default(),
 	})
 }
 
@@ -213,11 +214,11 @@ fn parse_geojson_coordinates(iter: &mut CharIterator) -> Result<TemporaryCoordin
 					Ok(())
 				})?;
 
-				if list.len() == 0 {
+				if list.is_empty() {
 					bail!("empty arrays are not allowed in coordinates")
 				};
 
-				let list = match list.get(0).unwrap() {
+				let list = match list.first().unwrap() {
 					V(_) => {
 						if list.len() != 2 {
 							bail!("points in coordinates must have exactly two values")
