@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use super::iterator::CharIterator;
 use anyhow::{ensure, Result};
 
@@ -47,7 +49,7 @@ pub fn parse_string(iter: &mut CharIterator) -> Result<String> {
 	Ok(string)
 }
 
-pub fn parse_number_as_f64(iter: &mut CharIterator) -> Result<f64> {
+pub fn parse_number_as_string(iter: &mut CharIterator) -> Result<String> {
 	let mut number = String::new();
 	while let Some(c) = iter.peek_char() {
 		if c.is_ascii_digit() || *c == '-' || *c == '.' {
@@ -57,7 +59,85 @@ pub fn parse_number_as_f64(iter: &mut CharIterator) -> Result<f64> {
 			break;
 		}
 	}
-	number
-		.parse::<f64>()
+	Ok(number)
+}
+
+pub fn parse_number_as<R: FromStr>(iter: &mut CharIterator) -> Result<R> {
+	parse_number_as_string(iter)?
+		.parse::<R>()
 		.map_err(|_| iter.build_error("invalid number"))
+}
+
+pub fn parse_object_entries<R>(
+	iter: &mut CharIterator,
+	mut parse_value: impl FnMut(String, &mut CharIterator) -> Result<R>,
+) -> Result<()> {
+	iter.skip_whitespace()?;
+	ensure!(iter.get_next_char()? == '{');
+
+	loop {
+		iter.skip_whitespace()?;
+		match iter.get_peek_char()? {
+			'}' => {
+				iter.skip_char();
+				break;
+			}
+			'"' => {
+				let key = parse_string(iter)?;
+
+				iter.skip_whitespace()?;
+				match iter.get_peek_char()? {
+					':' => iter.skip_char(),
+					_ => return Err(iter.build_error("expected ':'")),
+				};
+
+				iter.skip_whitespace()?;
+				parse_value(key, iter)?;
+
+				iter.skip_whitespace()?;
+				match iter.get_peek_char()? {
+					',' => iter.skip_char(),
+					'}' => continue,
+					_ => {
+						return Err(iter.build_error("expected ',' or '}'"));
+					}
+				}
+			}
+			_ => {
+				return Err(iter.build_error("parsing object, expected '\"' or '}'"));
+			}
+		}
+	}
+	Ok(())
+}
+
+pub fn parse_array_entries<R>(
+	iter: &mut CharIterator,
+	mut parse_value: impl FnMut(&mut CharIterator) -> Result<R>,
+) -> Result<()> {
+	iter.skip_whitespace()?;
+	ensure!(iter.get_next_char()? == '[');
+
+	loop {
+		iter.skip_whitespace()?;
+		match iter.get_peek_char()? {
+			']' => {
+				iter.skip_char();
+				break;
+			}
+			_ => {
+				parse_value(iter)?;
+				iter.skip_whitespace()?;
+				match iter.get_peek_char()? {
+					',' => {
+						iter.skip_char();
+						continue;
+					}
+					']' => continue,
+					_ => return Err(iter.build_error("parsing array, expected ',' or ']'")),
+				}
+			}
+		}
+	}
+	Ok(())
 }

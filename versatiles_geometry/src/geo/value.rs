@@ -1,3 +1,4 @@
+use anyhow::{bail, Result};
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
 use std::{
@@ -168,6 +169,7 @@ impl GeoValue {
 			GeoValue::Null => 6,
 		}
 	}
+
 	pub fn parse_str(value: &str) -> Self {
 		lazy_static! {
 			static ref REG_DOUBLE: Regex = RegexBuilder::new(r"^\d*\.\d+$").build().unwrap();
@@ -190,6 +192,14 @@ impl GeoValue {
 					GeoValue::String(value.to_string())
 				}
 			}
+		}
+	}
+
+	pub fn as_u64(&self) -> Result<u64> {
+		match self {
+			GeoValue::Int(v) => Ok(*v as u64),
+			GeoValue::UInt(v) => Ok(*v as u64),
+			_ => bail!("value is not an integer"),
 		}
 	}
 }

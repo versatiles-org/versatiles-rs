@@ -6,7 +6,7 @@ use super::*;
 
 #[derive(Clone, Debug)]
 pub struct GeoFeature {
-	pub id: Option<u64>,
+	pub id: Option<GeoValue>,
 	pub geometry: Geometry,
 	pub properties: GeoProperties,
 }
@@ -20,7 +20,7 @@ impl GeoFeature {
 		}
 	}
 
-	pub fn set_id(&mut self, id: u64) {
+	pub fn set_id(&mut self, id: GeoValue) {
 		self.id = Some(id);
 	}
 
@@ -38,7 +38,7 @@ impl GeoFeature {
 	#[cfg(test)]
 	pub fn new_example() -> Self {
 		Self {
-			id: Some(13),
+			id: Some(GeoValue::from(13)),
 			geometry: Geometry::new_example(),
 			properties: GeoProperties::from(vec![
 				("name", GeoValue::from("Nice")),

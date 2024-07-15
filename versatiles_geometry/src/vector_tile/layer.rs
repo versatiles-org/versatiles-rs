@@ -271,8 +271,9 @@ impl VectorTileLayer {
 		let features = features
 			.into_iter()
 			.map(|feature| {
+				let id = feature.id.map(|id| id.as_u64()).transpose()?;
 				VectorTileFeature::from_geometry(
-					feature.id,
+					id,
 					property_manager.encode_tag_ids(feature.properties),
 					feature.geometry,
 				)

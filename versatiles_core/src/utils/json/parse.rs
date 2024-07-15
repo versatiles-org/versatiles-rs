@@ -1,5 +1,8 @@
 use super::JsonValue;
-use crate::utils::{parse_number_as_f64, parse_string, parse_tag, CharIterator};
+use crate::utils::{
+	parse_array_entries, parse_number_as, parse_object_entries, parse_string, parse_tag,
+	CharIterator,
+};
 use anyhow::{ensure, Result};
 use std::{collections::BTreeMap, str};
 
@@ -8,13 +11,13 @@ pub fn parse_json(json: &str) -> Result<JsonValue> {
 	parse_json_value(&mut iter)
 }
 
-fn parse_json_value(iter: &mut CharIterator) -> Result<JsonValue> {
+pub fn parse_json_value(iter: &mut CharIterator) -> Result<JsonValue> {
 	iter.skip_whitespace()?;
 	match iter.get_peek_char()? {
-		'[' => parse_array(iter),
-		'{' => parse_object(iter),
+		'[' => parse_json_array(iter),
+		'{' => parse_json_object(iter),
 		'"' => parse_json_string(iter),
-		d if d.is_ascii_digit() || d == '.' || d == '-' => parse_number(iter),
+		d if d.is_ascii_digit() || d == '.' || d == '-' => parse_json_number(iter),
 		't' => parse_true(iter),
 		'f' => parse_false(iter),
 		'n' => parse_null(iter),
@@ -22,72 +25,21 @@ fn parse_json_value(iter: &mut CharIterator) -> Result<JsonValue> {
 	}
 }
 
-fn parse_array(iter: &mut CharIterator) -> Result<JsonValue> {
+fn parse_json_array(iter: &mut CharIterator) -> Result<JsonValue> {
 	ensure!(iter.get_next_char()? == '[');
 
 	let mut array = Vec::new();
-	loop {
-		iter.skip_whitespace()?;
-		match iter.get_peek_char()? {
-			']' => {
-				iter.skip_char();
-				break;
-			}
-			_ => {
-				array.push(parse_json_value(iter)?);
-				iter.skip_whitespace()?;
-				match iter.get_peek_char()? {
-					',' => {
-						iter.skip_char();
-						continue;
-					}
-					']' => continue,
-					_ => return Err(iter.build_error("parsing array, expected ',' or ']'")),
-				}
-			}
-		}
-	}
+	parse_array_entries(iter, |iter2| Ok(array.push(parse_json_value(iter2)?)))?;
 	Ok(JsonValue::Array(array))
 }
 
-fn parse_object(iter: &mut CharIterator) -> Result<JsonValue> {
-	ensure!(iter.get_next_char()? == '{');
-
+fn parse_json_object(iter: &mut CharIterator) -> Result<JsonValue> {
 	let mut list: Vec<(String, JsonValue)> = Vec::new();
-	loop {
-		iter.skip_whitespace()?;
-		match iter.get_peek_char()? {
-			'}' => {
-				iter.skip_char();
-				break;
-			}
-			'"' => {
-				let key = parse_string(iter)?;
-
-				iter.skip_whitespace()?;
-				match iter.get_peek_char()? {
-					':' => iter.skip_char(),
-					_ => return Err(iter.build_error("expected ':'")),
-				};
-
-				iter.skip_whitespace()?;
-				let value = parse_json_value(iter)?;
-				list.push((key, value));
-
-				iter.skip_whitespace()?;
-				match iter.get_peek_char()? {
-					',' => iter.skip_char(),
-					'}' => continue,
-					_ => {
-						return Err(iter.build_error("expected ',' or '}'"));
-					}
-				}
-			}
-			_ => {
-				return Err(iter.build_error("parsing object, expected '\"' or '}'"));
-			}
-		}
-	}
+	parse_object_entries(iter, |key, iter2| {
+		let value = parse_json_value(iter2)?;
+		list.push((key, value));
+		Ok(())
+	})?;
 	Ok(JsonValue::Object(BTreeMap::from_iter(list)))
 }
 
@@ -95,8 +47,8 @@ fn parse_json_string(iter: &mut CharIterator) -> Result<JsonValue> {
 	parse_string(iter).map(JsonValue::Str)
 }
 
-fn parse_number(iter: &mut CharIterator) -> Result<JsonValue> {
-	parse_number_as_f64(iter).map(JsonValue::Num)
+fn parse_json_number(iter: &mut CharIterator) -> Result<JsonValue> {
+	parse_number_as::<f64>(iter).map(JsonValue::Num)
 }
 
 fn parse_true(iter: &mut CharIterator) -> Result<JsonValue> {

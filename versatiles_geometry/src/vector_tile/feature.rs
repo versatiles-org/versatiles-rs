@@ -253,7 +253,7 @@ impl VectorTileFeature {
 		);
 
 		if let Some(id) = self.id {
-			feature.set_id(id);
+			feature.set_id(GeoValue::from(id));
 		}
 
 		feature.properties = layer.decode_tag_ids(&self.tag_ids)?;

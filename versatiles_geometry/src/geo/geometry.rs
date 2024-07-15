@@ -33,7 +33,7 @@ impl Geometry {
 		Self::MultiPolygon(MultiPolygonGeometry::from(value))
 	}
 
-	fn get_type(&self) -> &str {
+	pub fn get_type_name(&self) -> &str {
 		match self {
 			Geometry::Point(_) => "Point",
 			Geometry::LineString(_) => "LineString",
