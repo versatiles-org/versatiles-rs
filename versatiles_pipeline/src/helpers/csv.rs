@@ -26,7 +26,7 @@ pub async fn read_csv_file(path: &Path) -> Result<Vec<GeoProperties>> {
 	let reader = BufReader::new(file);
 
 	let mut errors = vec![];
-	let data: Vec<GeoProperties> = stream::iter(read_csv_iter(reader, &',')?)
+	let data: Vec<GeoProperties> = stream::iter(read_csv_iter(reader, b',')?)
 		.filter_map(|e| {
 			ready(
 				e.map(|(bytepos, fields)| {

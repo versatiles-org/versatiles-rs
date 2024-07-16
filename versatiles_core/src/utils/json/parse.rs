@@ -1,31 +1,31 @@
 use super::JsonValue;
 use crate::utils::{
 	parse_array_entries, parse_number_as, parse_object_entries, parse_quoted_json_string, parse_tag,
-	CharIterator,
+	ByteIterator,
 };
 use anyhow::Result;
 use std::{collections::BTreeMap, str};
 
 pub fn parse_json(json: &str) -> Result<JsonValue> {
-	let mut iter = CharIterator::new(json.chars(), true)?;
+	let mut iter = ByteIterator::new(json.bytes(), true)?;
 	parse_json_value(&mut iter)
 }
 
-pub fn parse_json_value(iter: &mut CharIterator) -> Result<JsonValue> {
+pub fn parse_json_value(iter: &mut ByteIterator) -> Result<JsonValue> {
 	iter.skip_whitespace()?;
-	match iter.get_peek_char()? {
-		'[' => parse_json_array(iter),
-		'{' => parse_json_object(iter),
-		'"' => parse_json_string(iter),
-		d if d.is_ascii_digit() || d == '.' || d == '-' => parse_json_number(iter),
-		't' => parse_true(iter),
-		'f' => parse_false(iter),
-		'n' => parse_null(iter),
-		c => Err(iter.build_error(&format!("unexpected character '{c}'"))),
+	match iter.get_peek_byte()? {
+		b'[' => parse_json_array(iter),
+		b'{' => parse_json_object(iter),
+		b'"' => parse_json_string(iter),
+		d if d.is_ascii_digit() || d == b'.' || d == b'-' => parse_json_number(iter),
+		b't' => parse_true(iter),
+		b'f' => parse_false(iter),
+		b'n' => parse_null(iter),
+		c => Err(iter.build_error(&format!("unexpected character '{}'", c as char))),
 	}
 }
 
-fn parse_json_array(iter: &mut CharIterator) -> Result<JsonValue> {
+fn parse_json_array(iter: &mut ByteIterator) -> Result<JsonValue> {
 	let mut array = Vec::new();
 	parse_array_entries(iter, |iter2| {
 		array.push(parse_json_value(iter2)?);
@@ -34,7 +34,7 @@ fn parse_json_array(iter: &mut CharIterator) -> Result<JsonValue> {
 	Ok(JsonValue::Array(array))
 }
 
-fn parse_json_object(iter: &mut CharIterator) -> Result<JsonValue> {
+fn parse_json_object(iter: &mut ByteIterator) -> Result<JsonValue> {
 	let mut list: Vec<(String, JsonValue)> = Vec::new();
 	parse_object_entries(iter, |key, iter2| {
 		let value = parse_json_value(iter2)?;
@@ -44,23 +44,23 @@ fn parse_json_object(iter: &mut CharIterator) -> Result<JsonValue> {
 	Ok(JsonValue::Object(BTreeMap::from_iter(list)))
 }
 
-fn parse_json_string(iter: &mut CharIterator) -> Result<JsonValue> {
+fn parse_json_string(iter: &mut ByteIterator) -> Result<JsonValue> {
 	parse_quoted_json_string(iter).map(JsonValue::Str)
 }
 
-fn parse_json_number(iter: &mut CharIterator) -> Result<JsonValue> {
+fn parse_json_number(iter: &mut ByteIterator) -> Result<JsonValue> {
 	parse_number_as::<f64>(iter).map(JsonValue::Num)
 }
 
-fn parse_true(iter: &mut CharIterator) -> Result<JsonValue> {
+fn parse_true(iter: &mut ByteIterator) -> Result<JsonValue> {
 	parse_tag(iter, "true").map(|_| JsonValue::Boolean(true))
 }
 
-fn parse_false(iter: &mut CharIterator) -> Result<JsonValue> {
+fn parse_false(iter: &mut ByteIterator) -> Result<JsonValue> {
 	parse_tag(iter, "false").map(|_| JsonValue::Boolean(false))
 }
 
-fn parse_null(iter: &mut CharIterator) -> Result<JsonValue> {
+fn parse_null(iter: &mut ByteIterator) -> Result<JsonValue> {
 	parse_tag(iter, "null").map(|_| JsonValue::Null)
 }
 

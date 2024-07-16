@@ -1,72 +1,62 @@
-use super::CharIterator;
-use anyhow::{anyhow, bail, Result};
+use super::ByteIterator;
+use anyhow::{anyhow, bail, Error, Result};
 use std::io::BufRead;
 
-fn parse_quoted_csv_string(iter: &mut CharIterator) -> Result<String> {
-	if iter.get_next_char()? != '"' {
+fn parse_quoted_csv_string(iter: &mut ByteIterator) -> Result<String> {
+	if iter.get_next_byte()? != b'"' {
 		bail!(iter.build_error("expected '\"' while parsing a string"));
 	}
 
-	let mut string = String::new();
+	let mut bytes: Vec<u8> = Vec::new();
 	loop {
-		match iter.next_char() {
-			Some('"') => match iter.peek_char() {
-				Some('"') => {
-					string.push('"');
-					iter.skip_char();
+		match iter.next_byte() {
+			Some(b'"') => match iter.peek_byte() {
+				Some(b'"') => {
+					bytes.push(b'"');
+					iter.skip_byte();
 				}
-				_ => return Ok(string),
+				_ => return String::from_utf8(bytes).map_err(Error::from),
 			},
-			Some(c) => string.push(c),
+			Some(c) => bytes.push(c),
 			None => bail!("unexpected end of file"),
 		}
 	}
 }
 
-fn parse_simple_csv_string(iter: &mut CharIterator, separator: &char) -> Result<String> {
-	if iter.get_peek_char()? == '"' {
+fn parse_simple_csv_string(iter: &mut ByteIterator, separator: u8) -> Result<String> {
+	if iter.get_peek_byte()? == b'"' {
 		bail!(iter.build_error("unexpected '\"' while parsing a string"));
 	}
 
-	let mut string = String::new();
+	let mut bytes: Vec<u8> = Vec::new();
 	loop {
-		match iter.peek_char() {
-			Some(s) if s == separator => return Ok(string),
-			Some('\r') | Some('\n') | None => return Ok(string),
+		match iter.peek_byte() {
+			Some(s) if s == &separator => return String::from_utf8(bytes).map_err(Error::from),
+			Some(b'\r') | Some(b'\n') | None => return String::from_utf8(bytes).map_err(Error::from),
 			Some(c) => {
-				string.push(*c);
-				iter.skip_char();
+				bytes.push(*c);
+				iter.skip_byte();
 			}
 		}
 	}
 }
 
 fn read_csv_fields<'a>(
-	mut reader: impl BufRead + Send + 'a,
-	separator: &'a char,
+	reader: impl BufRead + Send + 'a,
+	separator: u8,
 ) -> Result<impl Iterator<Item = Result<(usize, Vec<String>)>> + Send + 'a> {
-	let chars = std::iter::from_fn(move || {
-		let mut line = String::new();
-		match reader.read_line(&mut line) {
-			Ok(0) => None,
-			Ok(_) => Some(line.chars().collect::<Vec<char>>()),
-			Err(_) => None,
-		}
-	})
-	.flat_map(|line| line.into_iter());
-
-	let mut iter = CharIterator::new(chars, true)?;
+	let mut iter = ByteIterator::from_reader(reader, true)?;
 
 	let lines = std::iter::from_fn(move || -> Option<Result<(usize, Vec<String>)>> {
-		if iter.peek_char().is_none() {
+		if iter.peek_byte().is_none() {
 			return None;
 		}
 
 		let mut fields = Vec::new();
 
 		loop {
-			let value = match iter.peek_char() {
-				Some('"') => match parse_quoted_csv_string(&mut iter) {
+			let value = match iter.peek_byte() {
+				Some(b'"') => match parse_quoted_csv_string(&mut iter) {
 					Ok(v) => v,
 					Err(e) => return Some(Err(e)),
 				},
@@ -78,9 +68,9 @@ fn read_csv_fields<'a>(
 			};
 			fields.push(value);
 			loop {
-				match iter.next_char() {
-					Some('\r') => continue,
-					Some('\n') => {
+				match iter.next_byte() {
+					Some(b'\r') => continue,
+					Some(b'\n') => {
 						if (fields.len() == 1) && (fields.first().unwrap().is_empty()) {
 							fields.clear();
 							break;
@@ -93,7 +83,7 @@ fn read_csv_fields<'a>(
 						}
 						return Some(Ok((iter.byte_pos(), fields)));
 					}
-					Some(e) if &e == separator => break,
+					Some(e) if e == separator => break,
 					Some(_) => panic!(),
 				}
 			}
@@ -105,7 +95,7 @@ fn read_csv_fields<'a>(
 
 pub fn read_csv_iter<'a>(
 	reader: impl BufRead + Send + 'a,
-	separator: &'a char,
+	separator: u8,
 ) -> Result<impl Iterator<Item = Result<(usize, Vec<(String, String)>)>> + Send + 'a> {
 	let mut iter = read_csv_fields(reader, separator)?;
 
@@ -129,8 +119,8 @@ mod tests {
 	#[test]
 	fn test_parse_simple_csv_string() {
 		fn test(input: &str, part1: &str, part2: &str) {
-			let mut reader = CharIterator::new(input.chars(), true).unwrap();
-			let value = parse_simple_csv_string(&mut reader, &',').unwrap();
+			let mut reader = ByteIterator::new(input.bytes(), true).unwrap();
+			let value = parse_simple_csv_string(&mut reader, b',').unwrap();
 			assert_eq!(value, part1);
 			assert_eq!(reader.into_string(), part2);
 		}
@@ -144,7 +134,7 @@ mod tests {
 	#[test]
 	fn test_parse_quoted_csv_string() {
 		fn test(input: &str, part1: &str, part2: &str) {
-			let mut reader = CharIterator::new(input.chars(), true).unwrap();
+			let mut reader = ByteIterator::new(input.bytes(), true).unwrap();
 			let value = parse_quoted_csv_string(&mut reader).unwrap();
 			assert_eq!(value, part1);
 			assert_eq!(reader.into_string(), part2);
@@ -163,7 +153,7 @@ mod tests {
 	#[test]
 	fn test_read_csv_fields_basic() {
 		let mut reader = Cursor::new("name,age\nJohn Doe,30\r\nJane Doe,29");
-		let iter = read_csv_fields(&mut reader, &',').unwrap();
+		let iter = read_csv_fields(&mut reader, b',').unwrap();
 
 		assert_eq!(
 			check(iter),
@@ -178,7 +168,7 @@ mod tests {
 	#[test]
 	fn test_read_csv_fields_with_quotes() {
 		let mut reader = Cursor::new("name,age\n\"John, A. Doe\",30\r\n\"Jane Doe\",29");
-		let iter = read_csv_fields(&mut reader, &',').unwrap();
+		let iter = read_csv_fields(&mut reader, b',').unwrap();
 
 		assert_eq!(
 			check(iter),
@@ -193,7 +183,7 @@ mod tests {
 	#[test]
 	fn test_read_csv_fields_with_escaped_quotes() {
 		let mut reader = Cursor::new("name,age\n\"John \"\"The Man\"\" Doe\",30\n\"Jane Doe\",29");
-		let iter = read_csv_fields(&mut reader, &',').unwrap();
+		let iter = read_csv_fields(&mut reader, b',').unwrap();
 
 		assert_eq!(
 			check(iter),
@@ -208,7 +198,7 @@ mod tests {
 	#[test]
 	fn test_read_csv_fields_empty_lines() {
 		let mut reader = Cursor::new("name,age\n\nJohn Doe,30\n\nJane Doe,29\n\n");
-		let iter = read_csv_fields(&mut reader, &',').unwrap();
+		let iter = read_csv_fields(&mut reader, b',').unwrap();
 
 		assert_eq!(
 			check(iter),
@@ -223,7 +213,7 @@ mod tests {
 	#[test]
 	fn test_read_csv_fields_different_separator() {
 		let mut reader = Cursor::new("name|age\nJohn Doe|30\nJane Doe|29");
-		let iter = read_csv_fields(&mut reader, &'|').unwrap();
+		let iter = read_csv_fields(&mut reader, b'|').unwrap();
 
 		assert_eq!(
 			check(iter),
