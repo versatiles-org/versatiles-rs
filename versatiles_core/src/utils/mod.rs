@@ -1,4 +1,4 @@
-mod char_parser;
+mod byte_iterator;
 mod compression;
 mod csv;
 pub mod io;
@@ -8,7 +8,7 @@ mod pretty_print;
 pub mod progress;
 mod transform_coord;
 
-pub use char_parser::*;
+pub use byte_iterator::*;
 pub use compression::*;
 pub use csv::*;
 pub use json::*;
