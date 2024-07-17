@@ -3,18 +3,18 @@ name: Continuous Integration
 on:
   push:
     branches:
-      - "**"
+      - '**'
     tags:
-      - "!**" # Don't run twice on commits with tags
+      - '!**' # Don't run twice on commits with tags
     paths-ignore:
-      - "helpers/**"
-      - "docker/**"
-      - ".github/**"
-      - "**.Dockerfile"
-      - "**.md"
+      - 'helpers/**'
+      - 'docker/**'
+      - '.github/**'
+      - '**.Dockerfile'
+      - '**.md'
   pull_request:
   schedule:
-    - cron: "0 3 5,20 * *"
+    - cron: '15 6 * * 2'
   workflow_dispatch:
 
 env:
