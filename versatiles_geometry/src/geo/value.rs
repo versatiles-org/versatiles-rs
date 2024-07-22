@@ -172,7 +172,7 @@ impl GeoValue {
 
 	pub fn parse_str(value: &str) -> Self {
 		lazy_static! {
-			static ref REG_DOUBLE: Regex = RegexBuilder::new(r"^\d*\.\d+$").build().unwrap();
+			static ref REG_DOUBLE: Regex = RegexBuilder::new(r"^\-?\d*\.\d+$").build().unwrap();
 			static ref REG_INT: Regex = RegexBuilder::new(r"^\-\d+$").build().unwrap();
 			static ref REG_UINT: Regex = RegexBuilder::new(r"^\d+$").build().unwrap();
 		}
@@ -289,5 +289,18 @@ mod tests {
 		assert_ne!(GeoValue::from(1), GeoValue::from(2));
 		assert_ne!(GeoValue::from(1u64), GeoValue::from(2u64));
 		assert_ne!(GeoValue::from(false), GeoValue::from(true));
+	}
+
+	#[test]
+	fn test_parse_str() {
+		assert_eq!(GeoValue::parse_str("true"), GeoValue::Bool(true));
+		assert_eq!(GeoValue::parse_str("false"), GeoValue::Bool(false));
+		assert_eq!(GeoValue::parse_str("3.14"), GeoValue::Double(3.14));
+		assert_eq!(GeoValue::parse_str("-3.14"), GeoValue::Double(-3.14));
+		assert_eq!(GeoValue::parse_str("-42"), GeoValue::Int(-42));
+		assert_eq!(GeoValue::parse_str("42"), GeoValue::UInt(42));
+		assert_eq!(GeoValue::parse_str("hello"), GeoValue::from("hello"));
+		assert_eq!(GeoValue::parse_str("123abc"), GeoValue::from("123abc"));
+		assert_eq!(GeoValue::parse_str(""), GeoValue::from(""));
 	}
 }
