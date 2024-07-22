@@ -19,7 +19,7 @@ futures.workspace = true
 itertools = { workspace = true, features = ["use_alloc"] }
 log.workspace = true
 r2d2 = { version = "0.8.10", default-features = false }
-r2d2_sqlite = { version = "0.24.0", default-features = false, features = ["bundled"] }
+r2d2_sqlite = { version = "0.25.0", default-features = false, features = ["bundled"] }
 reqwest = { workspace = true, features = ["rustls-tls"] }
 tar = { version = "0.4.41", default-features = false }
 tokio = { workspace = true, features = ["macros", "rt"] }
