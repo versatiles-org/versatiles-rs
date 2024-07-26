@@ -36,8 +36,14 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
+      - name: Install cargo-edit
+        run: cargo install cargo-edit
+
       - name: Upgrade Dependencies
-        run: ./helpers/upgrade_dependencies.sh
+        run: cargo upgrade --incompatible
+
+      - name: Update Dependencies
+        run: cargo update
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6

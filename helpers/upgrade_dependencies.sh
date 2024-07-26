@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")/.."
+set -e
 
-echo "Update rust"
+echo "Update Rust"
 rustup update
 
 #echo "check features"
@@ -9,8 +10,9 @@ rustup update
 
 rm Cargo.lock
 
-echo "upgrade dependencies"
-# cargo install cargo-edit
+echo "Upgrade Dependencies"
+
+# to use "cargo upgrade": cargo install cargo-edit
 cargo upgrade --incompatible
 
 cargo check --workspace
