@@ -12,6 +12,7 @@ on:
       - '.github/**'
       - '**.Dockerfile'
       - '**.md'
+  pull_request:
   schedule:
     - cron: '15 6 * * 2'
   workflow_dispatch:
