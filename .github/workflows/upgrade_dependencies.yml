@@ -2,7 +2,7 @@ name: Upgrade Dependencies
 
 on:
   schedule:
-    - cron: '25 6 * * 1'
+    - cron: '25 6 3,17 * *'
   workflow_dispatch:
 
 permissions:
@@ -48,5 +48,6 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
+          token: ${{ secrets.PAT_TOKEN }}
           commit-message: 'build(deps): Upgrade Dependencies'
           title: 'Upgrade Dependencies'
