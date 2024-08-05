@@ -48,5 +48,6 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
+          token: ${{ secrets.PAT_TOKEN }}
           commit-message: 'build(deps): Upgrade Dependencies'
           title: 'Upgrade Dependencies'
