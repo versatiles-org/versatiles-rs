@@ -16,12 +16,12 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!     let path = std::env::current_dir()?.join("Cargo.toml");
-//!     let mut reader = DataReaderFile::open(&path)?;
+//!      let path = std::env::current_dir()?.join("Cargo.toml");
+//!      let mut reader = DataReaderFile::open(&path)?;
 //!
-//!     // Reading all data
-//!     let all_data = reader.read_range(&ByteRange::new(10,24)).await?;
-//!     assert_eq!(all_data.as_slice(), b"name = \"versatiles_core\"");
+//!      // Reading all data
+//!      let all_data = reader.read_range(&ByteRange::new(10,24)).await?;
+//!      assert_eq!(all_data.as_slice(), b"name = \"versatiles_core\"");
 //!
 //!     Ok(())
 //! }
@@ -33,8 +33,7 @@ use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use std::{
 	fs::File,
-	io::Read,
-	os::unix::fs::{FileExt, MetadataExt},
+	io::{Read, Seek, SeekFrom},
 	path::Path,
 };
 
@@ -63,7 +62,7 @@ impl DataReaderFile {
 
 		let path = path.canonicalize()?;
 		let file = File::open(&path)?;
-		let size = path.metadata()?.size();
+		let size = file.metadata()?.len();
 
 		Ok(Box::new(DataReaderFile {
 			name: path.to_str().unwrap().to_owned(),
@@ -86,7 +85,9 @@ impl DataReaderTrait for DataReaderFile {
 	/// * A Result containing a Blob with the read data or an error.
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
 		let mut buffer = vec![0; range.length as usize];
-		self.file.read_exact_at(&mut buffer, range.offset)?;
+		let mut file = self.file.try_clone()?;
+		file.seek(SeekFrom::Start(range.offset))?;
+		file.read_exact(&mut buffer)?;
 		Ok(Blob::from(buffer))
 	}
 
@@ -97,7 +98,9 @@ impl DataReaderTrait for DataReaderFile {
 	/// * A Result containing a Blob with all the data or an error.
 	async fn read_all(&self) -> Result<Blob> {
 		let mut buffer = vec![0; self.size as usize];
-		self.file.read_exact_at(&mut buffer, 0)?;
+		let mut file = self.file.try_clone()?;
+		file.seek(SeekFrom::Start(0))?;
+		file.read_exact(&mut buffer)?;
 		Ok(Blob::from(buffer))
 	}
 
@@ -146,11 +149,11 @@ mod tests {
 		}
 
 		// Test with a valid file path
-		let data_reader_file = DataReaderFile::open(&temp_file_path);
+		let data_reader_file = DataReaderFile::open(temp_file_path.path());
 		assert!(data_reader_file.is_ok());
 
 		// Test with an invalid file path
-		let data_reader_file = DataReaderFile::open(&invalid_path);
+		let data_reader_file = DataReaderFile::open(invalid_path.path());
 		assert!(data_reader_file.is_err());
 
 		Ok(())
@@ -167,7 +170,7 @@ mod tests {
 			temp_file.write_all(b"Hello, world!")?;
 		}
 
-		let data_reader_file = DataReaderFile::open(&temp_file_path)?;
+		let data_reader_file = DataReaderFile::open(temp_file_path.path())?;
 
 		// Define a range to read
 		let range = ByteRange {
@@ -195,12 +198,12 @@ mod tests {
 			temp_file.write_all(b"Hello, world!")?;
 		}
 
-		let data_reader_file = DataReaderFile::open(&temp_file_path)?;
+		let data_reader_file = DataReaderFile::open(temp_file_path.path())?;
 
 		// Check if the name matches the original file path
 		assert_wildcard!(
 			data_reader_file.get_name(),
-			&format!("*{}", temp_file_path.to_str().unwrap())
+			&format!("*{}", temp_file_path.path().to_str().unwrap())
 		);
 
 		Ok(())
