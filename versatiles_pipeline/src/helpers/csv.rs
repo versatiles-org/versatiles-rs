@@ -4,7 +4,7 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use futures::{future::ready, stream, StreamExt};
-use std::{io::BufReader, os::unix::fs::MetadataExt, path::Path};
+use std::{io::BufReader, path::Path};
 use versatiles_core::utils::read_csv_iter;
 
 /// Reads a CSV file from the given path and returns a vector of `GeoProperties`.
@@ -20,7 +20,7 @@ pub async fn read_csv_file(path: &Path) -> Result<Vec<GeoProperties>> {
 	let file = std::fs::File::open(path)
 		.with_context(|| format!("Failed to open file at path: {:?}", path))?;
 
-	let size = path.metadata()?.size();
+	let size = file.metadata()?.len();
 	let mut progress = get_progress_bar("read csv", size);
 
 	let reader = BufReader::new(file);
@@ -76,7 +76,7 @@ mod tests {
 		let file_path = make_temp_csv(
 			"name,age,city\nJohn Doe,30,New York\nJane Smith,25,Los Angeles\nAlice Johnson,28,Chicago",
 		)?;
-		let data = read_csv_file(&file_path).await?;
+		let data = read_csv_file(file_path.path()).await?;
 
 		assert_eq!(data.len(), 3);
 
@@ -101,7 +101,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_read_empty_csv_file() -> Result<()> {
 		let file_path = make_temp_csv("name,age,city")?;
-		let data = read_csv_file(&file_path).await?;
+		let data = read_csv_file(file_path.path()).await?;
 		assert!(data.is_empty());
 		Ok(())
 	}
@@ -111,7 +111,7 @@ mod tests {
 		let file_path =
 			make_temp_csv("name,age,city\nJohn Doe,,New York\n,25,Los Angeles\nAlice Johnson,28,")?;
 
-		let data = read_csv_file(&file_path).await?;
+		let data = read_csv_file(file_path.path()).await?;
 
 		assert_eq!(data.len(), 3);
 
