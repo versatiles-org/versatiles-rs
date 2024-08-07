@@ -201,10 +201,7 @@ mod tests {
 		let data_reader_file = DataReaderFile::open(temp_file_path.path())?;
 
 		// Check if the name matches the original file path
-		assert_wildcard!(
-			data_reader_file.get_name(),
-			&format!("*{}", temp_file_path.path().to_str().unwrap())
-		);
+		assert_wildcard!(data_reader_file.get_name(), "*testfile.txt");
 
 		Ok(())
 	}

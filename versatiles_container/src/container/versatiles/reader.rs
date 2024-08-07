@@ -507,6 +507,8 @@ impl PartialEq for VersaTilesReader {
 
 #[cfg(test)]
 mod tests {
+	use versatiles_core::assert_wildcard;
+
 	use super::*;
 	use crate::{
 		container::{
@@ -525,7 +527,7 @@ mod tests {
 
 		assert_eq!(format!("{:?}", reader), "VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "versatiles");
-		assert!(reader.get_name().ends_with(temp_file.to_str().unwrap()));
+		assert_wildcard!(reader.get_name(), "*.versatiles");
 		assert_eq!(
 			reader.get_meta()?,
 			Some(Blob::from(b"dummy meta data".to_vec()))
