@@ -22,10 +22,15 @@ jobs:
         with:
           targets: ${{ matrix.arch }}-pc-windows-${{ matrix.libc }}
 
-      - run: cargo clippy --bin versatiles --all-features
-      - run: cargo clippy --lib --no-default-features
-      - run: cargo clippy --lib --all-features
-      - run: cargo test --bins --all-features
-      - run: cargo test --lib --no-default-features
-      - run: cargo test --lib --all-features
-      - run: cargo test --doc --all-features
+      - run: |
+          set RUST_BACKTRACE=1
+          cargo test --bins --all-features
+      - run: |
+          set RUST_BACKTRACE=1
+          cargo test --lib --no-default-features
+      - run: |
+          set RUST_BACKTRACE=1
+          cargo test --lib --all-features
+      - run: |
+          set RUST_BACKTRACE=1
+          cargo test --doc --all-features
