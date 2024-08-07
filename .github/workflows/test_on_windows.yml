@@ -10,7 +10,6 @@ jobs:
   test:
     name: Test on Windows # Windows to the soul, insight to the code.
     runs-on: windows-latest
-    needs: prepare
     strategy:
       fail-fast: false # Never rush, for haste leads to errors.
       matrix:
