@@ -1,39 +1,57 @@
-# get ARGs
+# Get ARGs
 ARG LIBC
 
-# CREATE BUILDER SYSTEM MUSL
-FROM --platform=${TARGETPLATFORM} rust:alpine as builder_musl
+# CREATE BUILDER SYSTEM FOR MUSL
+FROM rust:alpine AS builder_musl
+# Enable static linking
 ENV RUSTFLAGS="-C target-feature=+crt-static"
-RUN apk add bash musl-dev
+# Install necessary packages
+RUN apk add --no-cache bash musl-dev
 
-# CREATE BUILDER SYSTEM GNU
-FROM --platform=${TARGETPLATFORM} rust:latest as builder_gnu
+# CREATE BUILDER SYSTEM FOR GNU
+FROM rust:slim AS builder_gnu
+# Avoid prompts during package installation
 ENV DEBIAN_FRONTEND=noninteractive
-RUN apt update -y && apt install -y bash
+# Install necessary packages
+RUN apt update -y && apt install -y bash && rm -rf /var/lib/apt/lists/*
 
-# CREATE FINAL BUILDER SYSTEM RUST
-FROM builder_${LIBC} as builder
+# SELECT BUILDER BASED ON LIBC
+FROM builder_${LIBC} AS builder
+
+# Set up build arguments
 ARG ARCH
 ARG LIBC
 
-# set target, then test, build and test again
-ENV TARGET $ARCH-unknown-linux-$LIBC
-ENV PATH="/root/.cargo/bin:$PATH"
+# Set the target architecture
+ENV TARGET="${ARCH}-unknown-linux-${LIBC}"
+# Add Rust target
 RUN rustup target add "$TARGET"
+
+# Set working directory
 WORKDIR /versatiles
+
+# Copy the source code
 COPY . .
-RUN cargo test --all-features --bin "versatiles" --release --target "$TARGET"
+
+# Run tests, build the project, and run self-tests
+RUN cargo test --all-features --target "$TARGET"
 RUN cargo build --all-features --package "versatiles" --bin "versatiles" --release --target "$TARGET"
 RUN ./helpers/versatiles_selftest.sh "/versatiles/target/$TARGET/release/versatiles"
-RUN mkdir "/output"
-RUN cp "/versatiles/target/$TARGET/release/versatiles" "/output"
+
+# Prepare output directory
+RUN mkdir /output && cp "/versatiles/target/$TARGET/release/versatiles" /output/
+
+# Build .deb package if using GNU
 RUN if [ "$LIBC" = "gnu" ]; then \
-    cargo install cargo-deb; \
-    cargo deb --target "$TARGET" --package "versatiles" --output "/output/versatiles-linux-${LIBC}-${ARCH}.deb"; \
+    cargo install cargo-deb && \
+    cargo deb --no-build --target "$TARGET" --package "versatiles" --output "/output/versatiles-linux-${LIBC}-${ARCH}.deb"; \
 fi
 
-# EXTRACT RESULT
+# FINAL STAGE TO EXTRACT RESULT
 FROM scratch
 ARG ARCH
 ARG LIBC
+
+# Copy the compiled binary and package from the builder
 COPY --from=builder /output /
+
