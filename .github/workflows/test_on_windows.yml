@@ -22,5 +22,10 @@ jobs:
         with:
           targets: ${{ matrix.arch }}-pc-windows-${{ matrix.libc }}
 
-      - name: Test binary # Testing is the bridge between expectation and reality.
-        run: cargo test --all-features --workspace --release --target "$TARGET"
+      - run: cargo clippy --bin versatiles --all-features
+      - run: cargo clippy --lib --no-default-features
+      - run: cargo clippy --lib --all-features
+      - run: cargo test --bins --all-features
+      - run: cargo test --lib --no-default-features
+      - run: cargo test --lib --all-features
+      - run: cargo test --doc --all-features
