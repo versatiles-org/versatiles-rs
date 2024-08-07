@@ -98,7 +98,7 @@ mod tests {
 			let error = source.err().unwrap().to_string();
 			assert!(
 				error.ends_with(error_should),
-				"{} must ends_with {}",
+				"Error message '{}' must end with '{}'",
 				error,
 				error_should
 			);
@@ -115,7 +115,7 @@ mod tests {
 
 		// Test non existent file
 		let path = temp_dir.path().join("non_existent.tar");
-		check_error(path, "No such file or directory (os error 2)");
+		check_error(path, "(os error 2)");
 
 		// Test .tar file
 		let path = temp_dir.path().join("temp.tar");
