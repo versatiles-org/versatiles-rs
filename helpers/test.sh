@@ -3,6 +3,9 @@ cd "$(dirname "$0")/.."
 
 set -e
 
+# Set environment variable
+RUST_BACKTRACE=1
+
 echo -e "\033[1;33mFormatting...\033[0m"
 cargo fmt
 

@@ -6,6 +6,9 @@ Set-Location (Join-Path -Path (Get-Location) -ChildPath "..")
 # Enable strict error handling
 $ErrorActionPreference = "Stop"
 
+# Set environment variable
+$env:RUST_BACKTRACE = 1
+
 Write-Host "Formatting..."
 cargo fmt
 
