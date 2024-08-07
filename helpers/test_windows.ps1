@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 
-# Change to the parent directory of the script
-Set-Location (Join-Path -Path (Get-Location) -ChildPath "..")
+# Ensure the script runs from the directory containing Cargo.toml
+Set-Location -Path $PSScriptRoot\..
 
 # Enable strict error handling
 $ErrorActionPreference = "Stop"

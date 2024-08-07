@@ -83,6 +83,5 @@ jobs:
 
       - name: Run Fmt, Clippy and Test
         shell: pwsh
-        run: |
-          Set-Location $env:GITHUB_WORKSPACE
-          .\helpers\test_windows.ps1
+        working-directory: ${{ env.GITHUB_WORKSPACE }}
+        run: .\helpers\test_windows.ps1
