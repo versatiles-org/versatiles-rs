@@ -295,7 +295,10 @@ mod tests {
 				&vec![
 					"from_container filename=dummy |",
 					"vectortiles_update_properties",
-					&format!("data_source_path=\"{}\"", temp_file.to_str().unwrap().replace("\\", "\\\\")),
+					&format!(
+						"data_source_path=\"{}\"",
+						temp_file.to_str().unwrap().replace("\\", "\\\\")
+					),
 					&replace(parts[0], "id_field_tiles"),
 					&replace(parts[1], "id_field_data"),
 					&replace(parts[2], "layername"),
