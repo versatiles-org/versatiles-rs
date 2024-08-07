@@ -12,12 +12,12 @@ gzip -9 "$FILENAME.tar"
 
 case $(uname -s) in
    Linux*)
-      sha256sum "$FILENAME.tar.gz" | sed 's/ .*//' >"$FILENAME.tar.gz.sha256"
-      md5sum "$FILENAME.tar.gz" | sed 's/ .*//' >"$FILENAME.tar.gz.md5"
+      sha256sum "$FILENAME.tar.gz" >"$FILENAME.tar.gz.sha256"
+      md5sum "$FILENAME.tar.gz" >"$FILENAME.tar.gz.md5"
       ;;
    Darwin*)
-      shasum -a 256 "$FILENAME.tar.gz" | sed 's/ .*//' >"$FILENAME.tar.gz.sha256"
-      md5 -q "$FILENAME.tar.gz"  >"$FILENAME.tar.gz.md5"
+      shasum -a 256 "$FILENAME.tar.gz" >"$FILENAME.tar.gz.sha256"
+      md5 "$FILENAME.tar.gz" >"$FILENAME.tar.gz.md5"
       ;;
    *)
       echo "Unknown OS: $(uname -s)"
