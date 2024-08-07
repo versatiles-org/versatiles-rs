@@ -22,15 +22,5 @@ jobs:
         with:
           targets: ${{ matrix.arch }}-pc-windows-${{ matrix.libc }}
 
-      - run: |
-          set RUST_BACKTRACE=1
-          cargo test --bins --all-features
-      - run: |
-          set RUST_BACKTRACE=1
-          cargo test --lib --no-default-features
-      - run: |
-          set RUST_BACKTRACE=1
-          cargo test --lib --all-features
-      - run: |
-          set RUST_BACKTRACE=1
-          cargo test --doc --all-features
+      - name: Run Fmt, Clippy and Test
+        run: .\helpers\test_windows.ps1
