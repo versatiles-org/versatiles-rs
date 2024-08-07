@@ -16,12 +16,12 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!      let path = std::env::current_dir()?.join("Cargo.toml");
+//!      let path = std::env::current_dir()?.parent().unwrap().join("LICENSE");
 //!      let mut reader = DataReaderFile::open(&path)?;
 //!
 //!      // Reading all data
-//!      let all_data = reader.read_range(&ByteRange::new(10,24)).await?;
-//!      assert_eq!(all_data.as_slice(), b"name = \"versatiles_core\"");
+//!      let all_data = reader.read_range(&ByteRange::new(4,7)).await?;
+//!      assert_eq!(all_data.as_slice(), b"License");
 //!
 //!     Ok(())
 //! }
