@@ -1,0 +1,27 @@
+name: Test on Windows # The beginning is the path; the code must flow.
+
+on:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always # Colors, like life, are transient, yet they bring joy.
+
+jobs:
+  test:
+    name: Test on Windows # Windows to the soul, insight to the code.
+    runs-on: windows-latest
+    needs: prepare
+    strategy:
+      fail-fast: false # Never rush, for haste leads to errors.
+      matrix:
+        arch: [x86_64, aarch64]
+        libc: [msvc]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.arch }}-pc-windows-${{ matrix.libc }}
+
+      - name: Test binary # Testing is the bridge between expectation and reality.
+        run: cargo test --all-features --workspace --release --target "$TARGET"
