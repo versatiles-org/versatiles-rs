@@ -88,6 +88,9 @@ function Install-Package {
       Write-Host "Adding $installDir to system PATH..." -ForegroundColor Green
       $env:Path += ";$installDir"
       [Environment]::SetEnvironmentVariable("Path", $env:Path, [EnvironmentVariableTarget]::Machine)
+
+      # Reload the PATH in the current session
+      $env:Path = [System.Environment]::GetEnvironmentVariable("Path", [System.EnvironmentVariableTarget]::Machine)
    }
 
    # Clean up
