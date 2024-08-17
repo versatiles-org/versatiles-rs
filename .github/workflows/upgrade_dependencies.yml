@@ -5,16 +5,13 @@ on:
     - cron: '25 6 3,17 * *'
   workflow_dispatch:
 
-permissions:
-  contents: write
-  pull-requests: write
-
 env:
   CARGO_TERM_COLOR: always
   GITHUB_TOKEN: ${{ github.token }}
 
 jobs:
-  check:
+  update-dep:
+    name: Upgrade Dependencies
     runs-on: ubuntu-latest
     steps:
       - name: Check out
@@ -51,3 +48,4 @@ jobs:
           token: ${{ secrets.PAT_TOKEN }}
           commit-message: 'build(deps): Upgrade Dependencies'
           title: 'Upgrade Dependencies'
+          branch: upgrade-dependencies
