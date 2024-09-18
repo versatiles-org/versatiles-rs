@@ -244,7 +244,6 @@ pub mod tests {
 
 			// get tar reader
 			let mut reader = TarTilesReader::open_path(&temp_file)?;
-			format!("{:?}", reader);
 
 			MockTilesWriter::write(&mut reader).await?;
 			Ok(())
