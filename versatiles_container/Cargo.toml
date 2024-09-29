@@ -21,7 +21,7 @@ log.workspace = true
 r2d2 = { version = "0.8.10", default-features = false }
 r2d2_sqlite = { version = "0.25.0", default-features = false, features = ["bundled"] }
 reqwest = { workspace = true, features = ["rustls-tls"] }
-tar = { version = "0.4.41", default-features = false }
+tar = { version = "0.4.42", default-features = false }
 tokio = { workspace = true, features = ["macros", "rt"] }
 
 versatiles_core = { workspace = true, default-features = false }
