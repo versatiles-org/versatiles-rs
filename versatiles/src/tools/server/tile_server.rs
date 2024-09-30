@@ -144,14 +144,16 @@ impl TileServer {
 			async fn serve_tile(
 				uri: Uri,
 				headers: HeaderMap,
-				State((tile_source, best_compression)): State<(TileSource, bool)>,
+				State((tile_source, use_best_compression)): State<(TileSource, bool)>,
 			) -> Response<Body> {
 				let path = Url::new(uri.path());
 
 				log::debug!("handle tile request: {path}");
 
 				let mut target_compressions = get_encoding(headers);
-				target_compressions.set_best_compression(best_compression);
+				if !use_best_compression {
+					target_compressions.set_fast_compression();
+				}
 
 				let response = tile_source
 					.get_data(
@@ -185,7 +187,7 @@ impl TileServer {
 		async fn serve_static(
 			uri: Uri,
 			headers: HeaderMap,
-			State((sources, best_compression)): State<(Vec<StaticSource>, bool)>,
+			State((sources, use_best_compression)): State<(Vec<StaticSource>, bool)>,
 		) -> Response<Body> {
 			let mut url = Url::new(uri.path());
 
@@ -195,13 +197,15 @@ impl TileServer {
 				url.push("index.html");
 			}
 
-			let mut compressions = get_encoding(headers);
-			compressions.set_best_compression(best_compression);
+			let mut target_compressions = get_encoding(headers);
+			if !use_best_compression {
+				target_compressions.set_fast_compression();
+			}
 
 			for source in sources.iter() {
-				if let Some(result) = source.get_data(&url, &compressions) {
+				if let Some(result) = source.get_data(&url, &target_compressions) {
 					log::info!("send response to static request: {url}");
-					return ok_data(result, compressions);
+					return ok_data(result, target_compressions);
 				}
 			}
 
@@ -262,11 +266,13 @@ fn ok_not_found() -> Response<Body> {
 		.expect("should have build a body")
 }
 
-fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Response<Body> {
-	let is_incompressible = matches!(
+fn ok_data(result: SourceResponse, mut target_compressions: TargetCompression) -> Response<Body> {
+	if matches!(
 		result.mime.as_str(),
 		"image/png" | "image/jpeg" | "image/webp" | "image/avif"
-	);
+	) {
+		target_compressions.set_incompressible();
+	}
 
 	let mut response = Response::builder()
 		.status(200)
@@ -275,17 +281,14 @@ fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Re
 		.header(VARY, "accept-encoding")
 		.header(ACCESS_CONTROL_ALLOW_ORIGIN, "*");
 
-	let (blob, compression) = if is_incompressible {
-		(result.blob, result.compression)
-	} else {
-		log::trace!(
-			"optimize_compression from \"{}\" to {:?}",
-			result.compression,
-			target_compressions
-		);
-		optimize_compression(result.blob, &result.compression, target_compressions)
-			.expect("should have optimized compression")
-	};
+	log::trace!(
+		"optimize_compression from \"{}\" to {:?}",
+		result.compression,
+		target_compressions
+	);
+	let (blob, compression) =
+		optimize_compression(result.blob, &result.compression, &target_compressions)
+			.expect("should have optimized compression");
 
 	use TileCompression::*;
 	match compression {

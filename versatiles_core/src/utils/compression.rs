@@ -16,14 +16,31 @@ use std::{
 #[derive(PartialEq)]
 pub struct TargetCompression {
 	compressions: EnumSet<TileCompression>,
-	use_best_compression: bool,
+	compression_goal: CompressionGoal,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum CompressionGoal {
+	UseFastCompression,
+	UseBestCompression,
+	IsIncompressible,
+}
+
+impl Debug for CompressionGoal {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::UseFastCompression => write!(f, "use fast compression"),
+			Self::UseBestCompression => write!(f, "use best compression"),
+			Self::IsIncompressible => write!(f, "is incompressible"),
+		}
+	}
 }
 
 impl TargetCompression {
 	pub fn from_set(compressions: EnumSet<TileCompression>) -> Self {
 		TargetCompression {
 			compressions,
-			use_best_compression: true,
+			compression_goal: CompressionGoal::UseBestCompression,
 		}
 	}
 	pub fn from(compression: TileCompression) -> Self {
@@ -32,8 +49,11 @@ impl TargetCompression {
 	pub fn from_none() -> Self {
 		Self::from(Uncompressed)
 	}
-	pub fn set_best_compression(&mut self, best_compression: bool) {
-		self.use_best_compression = best_compression;
+	pub fn set_fast_compression(&mut self) {
+		self.compression_goal = CompressionGoal::UseFastCompression;
+	}
+	pub fn set_incompressible(&mut self) {
+		self.compression_goal = CompressionGoal::IsIncompressible;
 	}
 	pub fn contains(&self, compression: TileCompression) -> bool {
 		self.compressions.contains(compression)
@@ -46,40 +66,50 @@ impl TargetCompression {
 impl Debug for TargetCompression {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.write_fmt(format_args!(
-			"TargetCompression {{ allow: {}, use_best_compression: {} }}",
+			"TargetCompression {{ allow: {}, use_best_compression: {:?} }}",
 			&self.compressions.to_string(),
-			&self.use_best_compression
+			&self.compression_goal
 		))
 	}
 }
 
 pub fn optimize_compression(
 	blob: Blob,
-	input: &TileCompression,
-	target: TargetCompression,
+	input_compression: &TileCompression,
+	target: &TargetCompression,
 ) -> Result<(Blob, TileCompression)> {
 	if target.compressions.is_empty() {
-		bail!("no compression allowed");
+		bail!("at least one compression must be allowed");
 	}
 
-	if !target.use_best_compression && target.compressions.contains(*input) {
-		return Ok((blob, *input));
+	if !target.compressions.contains(Uncompressed) {
+		bail!("'Uncompressed' must always be supported");
 	}
 
-	match input {
+	use CompressionGoal::*;
+
+	if target.compression_goal != UseBestCompression
+		&& target.compressions.contains(*input_compression)
+	{
+		return Ok((blob, *input_compression));
+	}
+
+	match input_compression {
 		Uncompressed => {
-			if target.compressions.contains(Brotli) {
-				return Ok((compress_brotli(&blob)?, Brotli));
-			}
+			if target.compression_goal != IsIncompressible {
+				if target.compressions.contains(Brotli) {
+					return Ok((compress_brotli(&blob)?, Brotli));
+				}
 
-			if target.compressions.contains(Gzip) {
-				return Ok((compress_gzip(&blob)?, Gzip));
+				if target.compressions.contains(Gzip) {
+					return Ok((compress_gzip(&blob)?, Gzip));
+				}
 			}
 
 			Ok((blob, Uncompressed))
 		}
 		Gzip => {
-			if target.compressions.contains(Brotli) {
+			if target.compression_goal != IsIncompressible && target.compressions.contains(Brotli) {
 				return Ok((compress_brotli(&decompress_gzip(&blob)?)?, Brotli));
 			}
 
@@ -95,7 +125,7 @@ pub fn optimize_compression(
 			}
 			let data = decompress_brotli(&blob)?;
 
-			if target.compressions.contains(Gzip) {
+			if target.compression_goal != IsIncompressible && target.compressions.contains(Gzip) {
 				return Ok((compress_gzip(&data)?, Gzip));
 			}
 
@@ -253,12 +283,12 @@ mod tests {
 
 		let test = |compression_in: TileCompression,
 		            compressions_out: EnumSet<TileCompression>,
-		            use_best_compression: bool,
+		            compression_goal: CompressionGoal,
 		            compression_exp: TileCompression|
 		 -> Result<()> {
 			let target = TargetCompression {
 				compressions: compressions_out,
-				use_best_compression,
+				compression_goal,
 			};
 			let data_in = match compression_in {
 				Uncompressed => blob.clone(),
@@ -270,10 +300,10 @@ mod tests {
 				Gzip => blob_gzip.clone(),
 				Brotli => blob_brotli.clone(),
 			};
-			let (data_res, compression_res) = optimize_compression(data_in, &compression_in, target)?;
+			let (data_res, compression_res) = optimize_compression(data_in, &compression_in, &target)?;
 			assert_eq!(
 				compression_res, compression_exp,
-				"compressing from {compression_in:?} to {compressions_out:?} using best compression ({use_best_compression}) should result {compression_exp:?} and not {compression_res:?}"
+				"compressing from {compression_in:?} to {compressions_out:?} using compression goal ({compression_goal:?}) should result {compression_exp:?} and not {compression_res:?}"
 			);
 
 			assert_eq!(data_res, data_exp);
@@ -285,53 +315,33 @@ mod tests {
 		let cb = Brotli;
 
 		let sn = enum_set!(Uncompressed);
-		let sg = enum_set!(Gzip);
-		let sb = enum_set!(Brotli);
 		let sng = enum_set!(Uncompressed | Gzip);
 		let snb = enum_set!(Uncompressed | Brotli);
 		let sngb = enum_set!(Uncompressed | Gzip | Brotli);
 
-		test(cn, sn, true, cn)?;
-		test(cn, sg, true, cg)?;
-		test(cn, sb, true, cb)?;
-		test(cn, sng, true, cg)?;
-		test(cn, snb, true, cb)?;
-		test(cn, sngb, true, cb)?;
+		let test_many = |comp_in: TileCompression,
+		                 compression_goal: CompressionGoal,
+		                 comps_exp: [TileCompression; 4]|
+		 -> Result<()> {
+			test(comp_in, sn, compression_goal, comps_exp[0])?;
+			test(comp_in, sng, compression_goal, comps_exp[1])?;
+			test(comp_in, snb, compression_goal, comps_exp[2])?;
+			test(comp_in, sngb, compression_goal, comps_exp[3])
+		};
 
-		test(cg, sn, true, cn)?;
-		test(cg, sg, true, cg)?;
-		test(cg, sb, true, cb)?;
-		test(cg, sng, true, cg)?;
-		test(cg, snb, true, cb)?;
-		test(cg, sngb, true, cb)?;
+		use CompressionGoal::*;
 
-		test(cb, sn, true, cn)?;
-		test(cb, sg, true, cg)?;
-		test(cb, sb, true, cb)?;
-		test(cb, sng, true, cg)?;
-		test(cb, snb, true, cb)?;
-		test(cb, sngb, true, cb)?;
+		test_many(cn, UseBestCompression, [cn, cg, cb, cb])?;
+		test_many(cg, UseBestCompression, [cn, cg, cb, cb])?;
+		test_many(cb, UseBestCompression, [cn, cg, cb, cb])?;
 
-		test(cn, sn, false, cn)?;
-		test(cn, sg, false, cg)?;
-		test(cn, sb, false, cb)?;
-		test(cn, sng, false, cn)?;
-		test(cn, snb, false, cn)?;
-		test(cn, sngb, false, cn)?;
+		test_many(cn, UseFastCompression, [cn, cn, cn, cn])?;
+		test_many(cg, UseFastCompression, [cn, cg, cb, cg])?;
+		test_many(cb, UseFastCompression, [cn, cg, cb, cb])?;
 
-		test(cg, sn, false, cn)?;
-		test(cg, sg, false, cg)?;
-		test(cg, sb, false, cb)?;
-		test(cg, sng, false, cg)?;
-		test(cg, snb, false, cb)?;
-		test(cg, sngb, false, cg)?;
-
-		test(cb, sn, false, cn)?;
-		test(cb, sg, false, cg)?;
-		test(cb, sb, false, cb)?;
-		test(cb, sng, false, cg)?;
-		test(cb, snb, false, cb)?;
-		test(cb, sngb, false, cb)?;
+		test_many(cn, IsIncompressible, [cn, cn, cn, cn])?;
+		test_many(cg, IsIncompressible, [cn, cg, cn, cg])?;
+		test_many(cb, IsIncompressible, [cn, cn, cb, cb])?;
 
 		Ok(())
 	}
