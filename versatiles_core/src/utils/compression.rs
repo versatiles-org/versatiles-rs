@@ -8,19 +8,22 @@ use anyhow::{bail, Result};
 use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
 use enumset::EnumSet;
 use flate2::bufread::{GzDecoder, GzEncoder};
-use std::io::{Cursor, Read};
+use std::{
+	fmt::Debug,
+	io::{Cursor, Read},
+};
 
-#[derive(Debug, PartialEq)]
+#[derive(PartialEq)]
 pub struct TargetCompression {
 	compressions: EnumSet<TileCompression>,
-	best_compression: bool,
+	use_best_compression: bool,
 }
 
 impl TargetCompression {
 	pub fn from_set(compressions: EnumSet<TileCompression>) -> Self {
 		TargetCompression {
 			compressions,
-			best_compression: true,
+			use_best_compression: true,
 		}
 	}
 	pub fn from(compression: TileCompression) -> Self {
@@ -30,13 +33,23 @@ impl TargetCompression {
 		Self::from(Uncompressed)
 	}
 	pub fn set_best_compression(&mut self, best_compression: bool) {
-		self.best_compression = best_compression;
+		self.use_best_compression = best_compression;
 	}
 	pub fn contains(&self, compression: TileCompression) -> bool {
 		self.compressions.contains(compression)
 	}
 	pub fn insert(&mut self, compression: TileCompression) {
 		self.compressions.insert(compression);
+	}
+}
+
+impl Debug for TargetCompression {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_fmt(format_args!(
+			"TargetCompression {{ allow: {}, use_best_compression: {} }}",
+			&self.compressions.to_string(),
+			&self.use_best_compression
+		))
 	}
 }
 
@@ -49,7 +62,7 @@ pub fn optimize_compression(
 		bail!("no compression allowed");
 	}
 
-	if !target.best_compression && target.compressions.contains(*input) {
+	if !target.use_best_compression && target.compressions.contains(*input) {
 		return Ok((blob, *input));
 	}
 
@@ -240,12 +253,12 @@ mod tests {
 
 		let test = |compression_in: TileCompression,
 		            compressions_out: EnumSet<TileCompression>,
-		            best_compression: bool,
+		            use_best_compression: bool,
 		            compression_exp: TileCompression|
 		 -> Result<()> {
 			let target = TargetCompression {
 				compressions: compressions_out,
-				best_compression,
+				use_best_compression,
 			};
 			let data_in = match compression_in {
 				Uncompressed => blob.clone(),
@@ -260,7 +273,7 @@ mod tests {
 			let (data_res, compression_res) = optimize_compression(data_in, &compression_in, target)?;
 			assert_eq!(
 				compression_res, compression_exp,
-				"compressing from {compression_in:?} to {compressions_out:?} using best compression ({best_compression}) should result {compression_exp:?} and not {compression_res:?}"
+				"compressing from {compression_in:?} to {compressions_out:?} using best compression ({use_best_compression}) should result {compression_exp:?} and not {compression_res:?}"
 			);
 
 			assert_eq!(data_res, data_exp);
