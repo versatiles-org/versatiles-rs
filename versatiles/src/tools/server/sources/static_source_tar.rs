@@ -6,7 +6,6 @@ use crate::{
 };
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
-use log::trace;
 use std::{
 	collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::File, io::Read, path::Path,
 };
@@ -107,7 +106,7 @@ impl TarFile {
 					name = name[1..].to_string();
 				}
 
-				trace!("Adding file from tar: {} ({:?})", name, compression);
+				log::trace!("Adding file from tar: {} ({:?})", name, compression);
 
 				let entry = lookup.entry(name);
 				let versions = entry.or_insert_with(|| FileEntry::new(mime.to_string()));

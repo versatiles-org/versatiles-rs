@@ -87,7 +87,11 @@ impl TileSource {
 			// Create a TileCoord3 instance
 			let coord = TileCoord3::new(x.unwrap(), y.unwrap(), z.unwrap()).unwrap();
 
-			log::debug!("get tile {} - {:?}", self.prefix, coord);
+			log::debug!(
+				"get tile, prefix: {}, coord: {}",
+				self.prefix,
+				coord.as_json()
+			);
 
 			// Get tile data
 			let reader = self.reader.lock().await;

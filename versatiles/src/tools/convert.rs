@@ -3,7 +3,6 @@ use crate::{
 	types::{TileBBoxPyramid, TileCompression},
 };
 use anyhow::{bail, Result};
-use log::trace;
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -99,7 +98,7 @@ fn get_bbox_pyramid(arguments: &Subcommand) -> Result<Option<TileBBoxPyramid>> {
 	}
 
 	if let Some(bbox) = &arguments.bbox {
-		trace!("parsing bbox argument: {:?}", bbox);
+		log::trace!("parsing bbox argument: {:?}", bbox);
 		let values: Vec<f64> = bbox
 			.split(&[' ', ',', ';'])
 			.filter(|s| !s.is_empty())

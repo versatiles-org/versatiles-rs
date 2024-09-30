@@ -148,6 +148,8 @@ impl TileServer {
 			) -> Response<Body> {
 				let path = Url::new(uri.path());
 
+				log::debug!("handle tile request: {path}");
+
 				let mut target_compressions = get_encoding(headers);
 				target_compressions.set_best_compression(best_compression);
 
@@ -161,10 +163,10 @@ impl TileServer {
 					.await;
 
 				if let Some(response) = response {
-					log::warn!("{}: {path} found", tile_source.prefix);
+					log::info!("send response to tile request: {path}");
 					ok_data(response, target_compressions)
 				} else {
-					log::warn!("{}: {path} not found", tile_source.prefix);
+					log::warn!("send 404 to tile request: {path}");
 					ok_not_found()
 				}
 			}
@@ -187,6 +189,8 @@ impl TileServer {
 		) -> Response<Body> {
 			let mut url = Url::new(uri.path());
 
+			log::debug!("handle static request: {url}");
+
 			if url.is_dir() {
 				url.push("index.html");
 			}
@@ -196,10 +200,12 @@ impl TileServer {
 
 			for source in sources.iter() {
 				if let Some(result) = source.get_data(&url, &compressions) {
+					log::info!("send response to static request: {url}");
 					return ok_data(result, compressions);
 				}
 			}
 
+			log::warn!("send 404 to static request: {url}");
 			ok_not_found()
 		}
 	}
@@ -272,6 +278,11 @@ fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Re
 	let (blob, compression) = if is_incompressible {
 		(result.blob, result.compression)
 	} else {
+		log::trace!(
+			"optimize_compression from \"{}\" to {:?}",
+			result.compression,
+			target_compressions
+		);
 		optimize_compression(result.blob, &result.compression, target_compressions)
 			.expect("should have optimized compression")
 	};
@@ -282,6 +293,8 @@ fn ok_data(result: SourceResponse, target_compressions: TargetCompression) -> Re
 		Gzip => response = response.header(CONTENT_ENCODING, "gzip"),
 		Brotli => response = response.header(CONTENT_ENCODING, "br"),
 	}
+
+	log::trace!("send repsonse using headers: {:?}", response.headers_ref());
 
 	response
 		.body(Body::from(blob.into_vec()))
