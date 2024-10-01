@@ -26,7 +26,6 @@ anyhow = { workspace = true, features = ["std", "backtrace"] }
 async-trait.workspace = true
 axum = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
-clap-verbosity-flag = { workspace = true, optional = true }
 enumset = { workspace = true, optional = true }
 env_logger = { version = "0.11.5", default-features = false, optional = true }
 hyper = { workspace = true, optional = true }
@@ -57,7 +56,6 @@ versatiles_core = { workspace = true, features = ["test"] }
 default = ["cli"]
 cli = [
 	"dep:axum",
-	"dep:clap-verbosity-flag",
 	"dep:clap",
 	"dep:env_logger",
 	"dep:enumset",

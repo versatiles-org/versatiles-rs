@@ -29,7 +29,7 @@ mod tools;
 
 use anyhow::Result;
 use clap::{Parser, Subcommand};
-use clap_verbosity_flag::{ErrorLevel, Verbosity};
+use log::LevelFilter;
 use versatiles_container as container;
 use versatiles_core::*;
 use versatiles_pipeline as pipeline;
@@ -48,8 +48,32 @@ struct Cli {
 	#[command(subcommand)]
 	command: Commands, // Set subcommands
 
-	#[command(flatten)]
-	verbose: Verbosity<ErrorLevel>, // Set verbosity flag
+	#[arg(
+		long,
+		short = 'q',
+		action = clap::ArgAction::Count,
+		global = true,
+		help = "Decrease logging verbosity",
+		long_help = "Decrease the logging verbosity level.",
+		conflicts_with = "verbose",
+		display_order = 100,
+	)]
+	quiet: u8,
+
+	#[arg(
+		long,
+		short = 'v',
+		action = clap::ArgAction::Count,
+		global = true,
+		help = "Increase logging verbosity\n(add more 'v' for greater detail, e.g., '-vvvv' for trace-level logs).",
+		long_help = "Increase the logging verbosity level. Each 'v' increases the log level by one step:\n\
+			- `-v` enables warnings\n\
+			- `-vv` enables informational logs\n\
+			- `-vvv` enables debugging logs\n\
+			- `-vvvv` enables trace logs, which give the most detailed information about the tool's execution.",
+		display_order = 100,
+	)]
+	verbose: u8,
 }
 
 /// Define subcommands for the command-line interface
@@ -75,8 +99,18 @@ fn main() -> Result<()> {
 	let cli = Cli::parse();
 
 	// Initialize logger and set log level based on verbosity flag
+	let verbosity = cli.verbose as i16 - cli.quiet as i16;
+	let log_level = match verbosity {
+		i16::MIN..=-1 => LevelFilter::Off,
+		0 => LevelFilter::Error,
+		1 => LevelFilter::Warn,
+		2 => LevelFilter::Info,
+		3 => LevelFilter::Debug,
+		4..=i16::MAX => LevelFilter::Trace,
+	};
+
 	env_logger::Builder::new()
-		.filter_level(cli.verbose.log_level_filter())
+		.filter_level(log_level)
 		.format_timestamp(None)
 		.init();
 

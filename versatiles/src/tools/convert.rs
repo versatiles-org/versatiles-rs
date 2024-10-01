@@ -16,11 +16,11 @@ pub struct Subcommand {
 	output_file: String,
 
 	/// minimum zoom level
-	#[arg(long, value_name = "int")]
+	#[arg(long, value_name = "int", display_order = 1)]
 	min_zoom: Option<u8>,
 
 	/// maximum zoom level
-	#[arg(long, value_name = "int")]
+	#[arg(long, value_name = "int", display_order = 1)]
 	max_zoom: Option<u8>,
 
 	/// use only tiles inside a bounding box
@@ -28,33 +28,34 @@ pub struct Subcommand {
 		long,
 		short,
 		value_name = "lon_min,lat_min,lon_max,lat_max",
-		allow_hyphen_values = true
+		allow_hyphen_values = true,
+		display_order = 1
 	)]
 	bbox: Option<String>,
 
 	/// also include additional tiles surrounding the bounding box as a border
-	#[arg(long, value_name = "int")]
+	#[arg(long, value_name = "int", display_order = 1)]
 	bbox_border: Option<u32>,
 
-	/// swap rows and columns, e.g. z/x/y -> z/y/x
-	#[arg(long)]
-	swap_xy: bool,
-
-	/// flip input vertically
-	#[arg(long)]
-	flip_y: bool,
-
 	/// set new compression
-	#[arg(long, short, value_enum)]
+	#[arg(long, short, value_enum, display_order = 2)]
 	compress: Option<TileCompression>,
 
 	/// force recompression, e.g. to improve an existing gzip compression
-	#[arg(long, short)]
+	#[arg(long, short, display_order = 2)]
 	force_recompress: bool,
 
 	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
-	#[arg(long, value_enum, value_name = "COMPRESSION")]
+	#[arg(long, value_enum, value_name = "COMPRESSION", display_order = 2)]
 	override_input_compression: Option<TileCompression>,
+
+	/// swap rows and columns, e.g. z/x/y -> z/y/x
+	#[arg(long, display_order = 3)]
+	swap_xy: bool,
+
+	/// flip input vertically
+	#[arg(long, display_order = 3)]
+	flip_y: bool,
 }
 
 #[tokio::main]

@@ -27,43 +27,43 @@ pub struct Subcommand {
 	pub tile_sources: Vec<String>,
 
 	/// Serve via socket ip.
-	#[arg(short = 'i', long, default_value = "0.0.0.0")]
+	#[arg(short = 'i', long, default_value = "0.0.0.0", display_order = 0)]
 	pub ip: String,
 
 	/// Serve via port.
-	#[arg(short, long, default_value = "8080")]
+	#[arg(short, long, default_value = "8080", display_order = 0)]
 	pub port: u16,
 
 	/// Serve static content at "http:/.../" from a local folder or a tar file.
 	/// Tar files can be compressed (.tar / .tar.gz / .tar.br).
 	/// If multiple static sources are defined, the first hit will be served.
 	/// You can also add an optional url prefix like "[/assets/styles]styles.tar".
-	#[arg(short = 's', long = "static", verbatim_doc_comment)]
+	#[arg(short = 's', long = "static", verbatim_doc_comment, display_order = 1)]
 	pub static_content: Vec<String>,
 
 	/// Shutdown server automatically after x milliseconds.
-	#[arg(long)]
+	#[arg(long, display_order = 4)]
 	pub auto_shutdown: Option<u64>,
 
 	/// swap rows and columns, e.g. z/x/y -> z/y/x
-	#[arg(long)]
+	#[arg(long, display_order = 3)]
 	pub swap_xy: bool,
 
 	/// flip input vertically
-	#[arg(long)]
+	#[arg(long, display_order = 3)]
 	pub flip_y: bool,
 
 	/// use minimal recompression to reduce server response time
-	#[arg(long)]
+	#[arg(long, display_order = 2)]
 	pub fast: bool,
 
 	/// disable API
-	#[arg(long)]
+	#[arg(long, display_order = 4)]
 	pub disable_api: bool,
 
 	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
 	/// (deprecated in favor of a better solution that does not yet exist)
-	#[arg(long, value_enum, value_name = "COMPRESSION")]
+	#[arg(long, value_enum, value_name = "COMPRESSION", display_order = 4)]
 	override_input_compression: Option<TileCompression>,
 }
 
