@@ -91,9 +91,9 @@ regex = { version = "1.11.0", default-features = false, features = [
 	"unicode-case",
 	"unicode-perl",
 ] }
-reqwest = { version = "0.12.7", default-features = false }
+reqwest = { version = "0.12.8", default-features = false }
 tokio = { version = "1.40.0", features = ["rt-multi-thread", "sync"] }
-wildmatch = { version = "2.3.4", default-features = false }
+wildmatch = { version = "2.4.0", default-features = false }
 
 versatiles = { version = "0.12.8", path = "versatiles", default-features = false }
 versatiles_container = { version = "0.12.8", path = "versatiles_container", default-features = false }
