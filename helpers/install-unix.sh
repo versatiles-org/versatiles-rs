@@ -1,60 +1,41 @@
-#!/bin/bash
+#!/bin/sh
 
-# Function to detect the system architecture
-detect_architecture() {
-   ARCH=$(uname -m)
-   case $ARCH in
-      x86_64)
-         ARCH="x86_64"
-         ;;
-      arm64 | aarch64)
-         ARCH="aarch64"
-         ;;
-      *)
-         echo "Unsupported architecture: $ARCH"
-         exit 1
-         ;;
-   esac
-}
+set -e
 
-# Function to detect the system OS and libc type
-detect_os() {
-   case "$(uname)" in
-      Linux)
-         if ldd --version 2>&1 | grep -q "musl"; then
-            OS="linux-musl"
-         else
-            OS="linux-gnu"
-         fi
-         ;;
-      Darwin)
-         OS="macos"
-         ;;
-      *)
-         echo "Unsupported OS: $(uname)"
-         exit 1
-         ;;
-   esac
-}
+# Detect architecture
 
-# Function to download and install the package
-install_package() {
-   PACKAGE_URL="https://github.com/versatiles-org/versatiles-rs/releases/latest/download/versatiles-$OS-$ARCH.tar.gz"
-
-   wget -q -O versatiles.tar.gz "$PACKAGE_URL"
-   if [ $? -ne 0 ]; then
-      echo "Failed to download the tarball"
+ARCH=$(uname -m)
+case $ARCH in
+   x86_64) ARCH="x86_64" ;;
+   aarch64 | arm64 | aarch64_be | armv8b | armv8l) ARCH="aarch64" ;;
+   *)
+      echo "Unsupported architecture: $ARCH"
       exit 1
-   fi
+      ;;
+esac
+echo "Detected architecture: $ARCH"
 
-   tar -xzf versatiles.tar.gz
-   sudo mv versatiles /usr/local/bin/
-   rm -f versatiles.tar.gz
+# Detect OS and libc type
+OS=$(uname)
+case $OS in
+   Linux) OS="linux-$(ldd --version 2>&1 | grep -q 'musl' && echo 'musl' || echo 'gnu')" ;;
+   Darwin) OS="macos" ;;
+   *)
+      echo "Unsupported OS: $OS"
+      exit 1
+      ;;
+esac
+echo "Detected OS: $OS"
 
-   echo "Versatiles installed successfully."
-}
+# Download and install the package
+PACKAGE_URL="https://github.com/versatiles-org/versatiles-rs/releases/latest/download/versatiles-$OS-$ARCH.tar.gz"
+if command -v curl >/dev/null 2>&1; then
+   curl -Ls "$PACKAGE_URL"
+elif command -v wget >/dev/null 2>&1; then
+   wget -qO- "$PACKAGE_URL"
+else
+   echo "Error: Neither curl nor wget is installed." >&2
+   exit 1
+fi | sudo tar -xzf - -C /usr/local/bin versatiles
 
-# Main script execution
-detect_architecture
-detect_os
-install_package
+echo "VersaTiles installed successfully."
