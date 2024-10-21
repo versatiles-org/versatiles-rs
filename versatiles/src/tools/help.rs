@@ -45,20 +45,30 @@ fn print_markdown(md: String) {
 	};
 
 	let mut skin = MadSkin::default();
+
+	// Configure header level 1
 	skin.headers.get_mut(0).unwrap().set_fg(Color::Yellow);
 
+	// Configure header level 2
 	let h2 = skin.headers.get_mut(1).unwrap();
 	h2.set_fg(Color::Yellow);
 	h2.compound_style.add_attr(Attribute::Bold);
 	h2.compound_style.remove_attr(Attribute::Underlined);
 
+	// Configure header level 3
 	skin.headers.get_mut(2).unwrap().set_fg(Color::White);
+
+	// Set the other text styles
 	skin.bold.set_fg(Color::White);
 	skin.italic.set_fg(Color::White);
 	skin.inline_code.set_bg(Color::Reset);
 	skin.inline_code.set_fg(Color::Green);
 
-	let area = Area::full_screen();
+	// Ensure minimum dimensions for the area
+	let mut area = Area::full_screen();
+	area.width = area.width.max(50);
+	area.height = area.height.max(20);
+
 	let text = skin.area_text(&md, &area);
 	eprintln!("{text}");
 }
