@@ -177,11 +177,11 @@ impl MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue executing the query.
-	fn simple_query(&self, sql1: &str, sql2: &str) -> Result<i32> {
-		let sql = if sql2.is_empty() {
-			format!("SELECT {sql1} FROM tiles")
+	fn simple_query(&self, sql_value: &str, sql_where: &str) -> Result<i32> {
+		let sql = if sql_where.is_empty() {
+			format!("SELECT {sql_value} FROM tiles")
 		} else {
-			format!("SELECT {sql1} FROM tiles WHERE {sql2}")
+			format!("SELECT {sql_value} FROM tiles WHERE {sql_where}")
 		};
 
 		trace!("SQL: {}", sql);
