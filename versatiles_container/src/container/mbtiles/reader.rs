@@ -208,7 +208,6 @@ impl MBTilesReader {
 		for z in z0..=z1 {
 			let x0 = self.simple_query("MIN(tile_column)", &format!("zoom_level = {z}"))?;
 			let x1 = self.simple_query("MAX(tile_column)", &format!("zoom_level = {z}"))?;
-			let xc = (x0 + x1) / 2;
 
 			/*
 				SQLite is not very fast. In particular, the following query is slow for very large tables:
@@ -224,7 +223,7 @@ impl MBTilesReader {
 				To increase the speed of the above query by a factor of about 10, we split it into 2 queries.
 
 				The first query gives a good estimate by calculating MIN(tile_row) for the middle (or any other used) tile_column:
-				> SELECT MIN(tile_row) FROM tiles WHERE zoom_level = 14 AND tile_column = $center_column
+				> SELECT MIN(tile_row) FROM tiles WHERE zoom_level = 14 AND tile_column = $some_column
 				This takes only a few milliseconds.
 
 				The second query calculates MIN(tile_row) for all columns, but starting with the estimate:
@@ -234,8 +233,8 @@ impl MBTilesReader {
 			*/
 
 			let sql_prefix = format!("zoom_level = {z} AND tile_");
-			let mut y0 = self.simple_query("MIN(tile_row)", &format!("{sql_prefix}column = {xc}"))?;
-			let mut y1 = self.simple_query("MAX(tile_row)", &format!("{sql_prefix}column = {xc}"))?;
+			let mut y0 = self.simple_query("MIN(tile_row)", &format!("{sql_prefix}column = {x0}"))?;
+			let mut y1 = self.simple_query("MAX(tile_row)", &format!("{sql_prefix}column = {x0}"))?;
 
 			y0 = self.simple_query("MIN(tile_row)", &format!("{sql_prefix}row <= {y0}"))?;
 			y1 = self.simple_query("MAX(tile_row)", &format!("{sql_prefix}row >= {y1}"))?;
