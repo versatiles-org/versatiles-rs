@@ -129,7 +129,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 			reader = TilesConvertReader::new_from_reader(reader, cp)?.boxed();
 		}
 
-		server.add_tile_source(Url::new(&format!("/tiles/{id}/")), reader)?;
+		server.add_tile_source(id, reader)?;
 	}
 
 	for argument in arguments.static_content.iter() {

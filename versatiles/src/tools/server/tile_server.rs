@@ -45,27 +45,22 @@ impl TileServer {
 		}
 	}
 
-	pub fn add_tile_source(
-		&mut self,
-		url_prefix: Url,
-		reader: Box<dyn TilesReaderTrait>,
-	) -> Result<()> {
-		let url_prefix = url_prefix.as_dir();
+	pub fn add_tile_source(&mut self, id: &str, reader: Box<dyn TilesReaderTrait>) -> Result<()> {
+		log::info!("add source: id='{}', source={:?}", id, reader);
 
-		log::info!("add source: prefix='{}', source={:?}", url_prefix, reader);
+		let source = TileSource::from(reader, id)?;
+		let url_prefix = &source.prefix;
 
 		for other_tile_source in self.tile_sources.iter() {
 			let other_prefix = &other_tile_source.prefix;
-			if other_prefix.starts_with(&url_prefix) || url_prefix.starts_with(other_prefix) {
+			if other_prefix.starts_with(url_prefix) || url_prefix.starts_with(other_prefix) {
 				bail!(
 					"multiple sources with the prefix '{url_prefix}' and '{other_prefix}' are defined"
 				);
 			};
 		}
 
-		self
-			.tile_sources
-			.push(TileSource::from(reader, url_prefix)?);
+		self.tile_sources.push(source);
 
 		Ok(())
 	}
@@ -223,12 +218,7 @@ impl TileServer {
 
 		let mut objects: Vec<String> = Vec::new();
 		for tile_source in self.tile_sources.iter() {
-			let id = tile_source
-				.prefix
-				.as_vec()
-				.last()
-				.expect("should end in id")
-				.to_owned();
+			let id = &tile_source.id;
 			let object = format!(
 				"{{\"url\":\"{}\",\"id\":\"{}\",\"container\":{}}}",
 				tile_source.prefix, id, tile_source.json_info
@@ -239,11 +229,25 @@ impl TileServer {
 				get(|| async move { ok_json(&object) }),
 			);
 		}
-		let tile_sources_json: String = "[".to_owned() + &objects.join(",") + "]";
-
+		let tile_sources_json = "[".to_owned() + &objects.join(",") + "]";
 		api_app = api_app.route(
 			"/api/sources",
 			get(|| async move { ok_json(&tile_sources_json) }),
+		);
+
+		let tiles_index_json: String = format!(
+			"[{}]",
+			self
+				.tile_sources
+				.iter()
+				.map(|s| format!("\"{}\"", s.id))
+				.collect::<Vec<String>>()
+				.join("\",\""),
+		);
+
+		api_app = api_app.route(
+			"/tiles/index.json",
+			get(|| async move { ok_json(&tiles_index_json) }),
 		);
 
 		Ok(app.merge(api_app))
@@ -403,9 +407,7 @@ mod tests {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Pbf)
 			.unwrap()
 			.boxed();
-		server
-			.add_tile_source(Url::new("tiles/cheese"), reader)
-			.unwrap();
+		server.add_tile_source("cheese", reader).unwrap();
 
 		server.start().await.unwrap();
 
@@ -421,6 +423,7 @@ mod tests {
 		assert!(get("tiles/cheese/0/0/0.png")
 			.await
 			.starts_with("\u{1a}4\n\u{5}ocean"));
+		assert_eq!(get("tiles/index.json").await, "[\"cheese\"]");
 		assert_eq!(get("status").await, "ready!");
 
 		server.stop().await;
@@ -434,12 +437,12 @@ mod tests {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)
 			.unwrap()
 			.boxed();
-		server.add_tile_source(Url::new("cheese"), reader).unwrap();
+		server.add_tile_source("cheese", reader).unwrap();
 
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Pbf)
 			.unwrap()
 			.boxed();
-		server.add_tile_source(Url::new("cheese"), reader).unwrap();
+		server.add_tile_source("cheese", reader).unwrap();
 	}
 
 	#[tokio::test]
@@ -465,10 +468,10 @@ mod tests {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Pbf)
 			.unwrap()
 			.boxed();
-		server.add_tile_source(Url::new("cheese"), reader).unwrap();
+		server.add_tile_source("cheese", reader).unwrap();
 
 		assert_eq!(server.tile_sources.len(), 1);
-		assert_eq!(server.tile_sources[0].prefix.str, "/cheese/");
+		assert_eq!(server.tile_sources[0].prefix.str, "/tiles/cheese/");
 	}
 
 	#[tokio::test]
@@ -480,9 +483,7 @@ mod tests {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Pbf)
 			.unwrap()
 			.boxed();
-		server
-			.add_tile_source(Url::new("tiles/cheese"), reader)
-			.unwrap();
+		server.add_tile_source("cheese", reader).unwrap();
 
 		let mappings: Vec<(String, String)> = server.get_url_mapping().await;
 		assert_eq!(mappings.len(), 1);

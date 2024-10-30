@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 #[derive(Clone)]
 pub struct TileSource {
 	pub prefix: Url,
+	pub id: String,
 	pub json_info: String,
 	reader: Arc<Mutex<Box<dyn TilesReaderTrait>>>,
 	pub tile_mime: String,
@@ -19,7 +20,7 @@ pub struct TileSource {
 
 impl TileSource {
 	// Constructor function for creating a TileSource instance
-	pub fn from(reader: Box<dyn TilesReaderTrait>, prefix: Url) -> Result<TileSource> {
+	pub fn from(reader: Box<dyn TilesReaderTrait>, id: &str) -> Result<TileSource> {
 		use TileFormat::*;
 
 		let parameters = reader.get_parameters();
@@ -55,7 +56,8 @@ impl TileSource {
 		);
 
 		Ok(TileSource {
-			prefix,
+			prefix: Url::new(&format!("/tiles/{id}/")).as_dir(),
+			id: id.to_owned(),
 			json_info,
 			reader: Arc::new(Mutex::new(reader)),
 			tile_mime,
@@ -153,9 +155,9 @@ mod tests {
 	#[test]
 	fn tile_container_from() -> Result<()> {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
-		let container = TileSource::from(reader.boxed(), Url::new("prefix"))?;
+		let container = TileSource::from(reader.boxed(), "prefix")?;
 
-		assert_eq!(container.prefix.str, "/prefix");
+		assert_eq!(container.prefix.str, "/tiles/prefix/");
 		assert_eq!(container.json_info, "{\"type\":\"dummy_container\",\"format\":\"png\",\"compression\":\"uncompressed\",\"zoom_min\":0,\"zoom_max\":4,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}");
 
 		Ok(())
@@ -165,7 +167,7 @@ mod tests {
 	#[test]
 	fn debug() -> Result<()> {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
-		let container = TileSource::from(reader.boxed(), Url::new("prefix")).unwrap();
+		let container = TileSource::from(reader.boxed(), "prefix").unwrap();
 		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Uncompressed, tile_format: PNG } } }, tile_mime: \"image/png\", compression: Uncompressed }");
 		Ok(())
 	}
@@ -206,7 +208,7 @@ mod tests {
 
 		let c = &mut TileSource::from(
 			MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?.boxed(),
-			Url::new("prefix"),
+			"prefix",
 		)?;
 
 		assert_eq!(
