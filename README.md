@@ -27,6 +27,31 @@ brew tap versatiles-org/versatiles
 brew install versatiles
 ```
 
+### NixOS
+
+VersaTiles is available via nixpkgs beginning with 24.05. An up to date version is part of nixpkgs-unstable.  
+For installation add following snippet into your [configuration.nix](https://nixos.org/manual/nixos/stable/#sec-configuration-file):
+
+```shell
+environment.systemPackages = with pkgs; [ versatiles ];
+```
+
+You can also use versatiles via [shell environments](https://nixos.wiki/wiki/Development_environment_with_nix-shell):
+
+```shell
+{ pkgs ? import <nixpkgs> {} }:
+
+pkgs.mkShell {
+  buildInputs = with pkgs; [
+    versatiles
+  ];
+
+}
+```
+
+Additional information can be found at [Nix search](https://search.nixos.org/packages?channel=unstable&from=0&size=50&sort=relevance&type=packages&query=versatiles).
+
+
 ### Docker
 
 Pull the prepared [Docker Images](https://github.com/versatiles-org/versatiles-docker) for easy deployment:
