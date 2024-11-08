@@ -208,6 +208,7 @@ impl MBTilesReader {
 		for z in z0..=z1 {
 			let x0 = self.simple_query("MIN(tile_column)", &format!("zoom_level = {z}"))?;
 			let x1 = self.simple_query("MAX(tile_column)", &format!("zoom_level = {z}"))?;
+			let xc = (x0 + x1) / 2;
 
 			/*
 				SQLite is not very fast. In particular, the following query is slow for very large tables:
@@ -223,7 +224,7 @@ impl MBTilesReader {
 				To increase the speed of the above query by a factor of about 10, we split it into 2 queries.
 
 				The first query gives a good estimate by calculating MIN(tile_row) for the middle (or any other used) tile_column:
-				> SELECT MIN(tile_row) FROM tiles WHERE zoom_level = 14 AND tile_column = $some_column
+				> SELECT MIN(tile_row) FROM tiles WHERE zoom_level = 14 AND tile_column = $known_columns
 				This takes only a few milliseconds.
 
 				The second query calculates MIN(tile_row) for all columns, but starting with the estimate:
@@ -232,12 +233,14 @@ impl MBTilesReader {
 				This seems to be a great help. I suspect it helps SQLite so it doesn't have to scan the entire index/table.
 			*/
 
-			let sql_prefix = format!("zoom_level = {z} AND tile_");
-			let mut y0 = self.simple_query("MIN(tile_row)", &format!("{sql_prefix}column = {x0}"))?;
-			let mut y1 = self.simple_query("MAX(tile_row)", &format!("{sql_prefix}column = {x0}"))?;
+			let sql_prefix = format!("zoom_level = {z} AND");
+			let columns = format!("(tile_column = {x0} OR tile_column = {xc} OR tile_column = {x1})");
 
-			y0 = self.simple_query("MIN(tile_row)", &format!("{sql_prefix}row <= {y0}"))?;
-			y1 = self.simple_query("MAX(tile_row)", &format!("{sql_prefix}row >= {y1}"))?;
+			let mut y0 = self.simple_query("MIN(tile_row)", &format!("{sql_prefix} {columns}"))?;
+			let mut y1 = self.simple_query("MAX(tile_row)", &format!("{sql_prefix} {columns}"))?;
+
+			y0 = self.simple_query("MIN(tile_row)", &format!("{sql_prefix} tile_row <= {y0}"))?;
+			y1 = self.simple_query("MAX(tile_row)", &format!("{sql_prefix} tile_row >= {y1}"))?;
 
 			let max_value = 2i32.pow(z as u32) - 1;
 
