@@ -53,6 +53,10 @@ impl ProgressTrait for ProgressBar {
 		self.bar.set_position(value);
 	}
 
+	fn set_max_value(&mut self, value: u64) {
+		self.bar.set_max_value(value);
+	}
+
 	fn inc(&mut self, value: u64) {
 		self.bar.inc(value);
 	}

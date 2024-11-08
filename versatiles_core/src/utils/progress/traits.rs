@@ -27,6 +27,13 @@ pub trait ProgressTrait: Send + Sync {
 	/// * `max_value` - The maximum value of the progress.
 	fn init(&mut self, message: &str, max_value: u64);
 
+	/// Sets the maxiumum value of the progress.
+	///
+	/// # Arguments
+	///
+	/// * `value` - The new position of the progress.
+	fn set_max_value(&mut self, max_value: u64);
+
 	/// Sets the position of the progress.
 	///
 	/// # Arguments

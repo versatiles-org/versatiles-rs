@@ -26,7 +26,7 @@
 mod progress_bar;
 
 #[cfg(any(feature = "test", not(feature = "cli")))]
-mod progress_drain;
+mod progress_dummy;
 
 /// Factory function to create a progress bar or a no-op progress drain based on the build configuration.
 ///
@@ -42,7 +42,7 @@ pub fn get_progress_bar(message: &str, max_value: u64) -> Box<dyn ProgressTrait>
 	#[cfg(all(not(feature = "test"), feature = "cli"))]
 	let mut progress = progress_bar::ProgressBar::new();
 	#[cfg(any(feature = "test", not(feature = "cli")))]
-	let mut progress = progress_drain::ProgressDrain::new();
+	let mut progress = progress_dummy::ProgressDummy::new();
 	progress.init(message, max_value);
 	Box::new(progress)
 }
