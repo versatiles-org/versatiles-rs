@@ -54,7 +54,7 @@ impl ProgressTrait for ProgressBar {
 	}
 
 	fn set_max_value(&mut self, value: u64) {
-		self.bar.set_max_value(value);
+		self.bar.set_length(value);
 	}
 
 	fn inc(&mut self, value: u64) {
