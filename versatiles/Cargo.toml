@@ -66,5 +66,6 @@ cli = [
 	"dep:tar",
 	"dep:termimad",
 	"dep:tokio",
+	"versatiles_container/cli",
 	"versatiles_core/cli",
 ]
