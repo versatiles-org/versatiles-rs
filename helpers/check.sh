@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")/.."
 
+echo "cargo check"
+result=$(cargo check 2>&1)
+if [ $? -ne 0 ]; then
+   echo -e "$result\nERROR DURING: cargo check"
+   exit 1
+fi
+
 echo "cargo fmt"
 result=$(cargo fmt -- --check 2>&1)
 if [ $? -ne 0 ]; then
