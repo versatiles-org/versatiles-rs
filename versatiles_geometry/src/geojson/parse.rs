@@ -4,14 +4,14 @@ use crate::{
 	GeoProperties, GeoValue, Geometry,
 };
 use anyhow::{anyhow, bail, Result};
-use std::str;
+use std::{io::Cursor, str};
 use versatiles_core::utils::{
 	parse_array_entries, parse_json_value, parse_number_as, parse_number_as_string,
 	parse_object_entries, parse_quoted_json_string,
 };
 
 pub fn parse_geojson(json: &str) -> Result<GeoCollection> {
-	let mut iter = ByteIterator::from_iterator(json.bytes(), true);
+	let mut iter = ByteIterator::from_reader(Cursor::new(json), true);
 	parse_geojson_collection(&mut iter)
 }
 

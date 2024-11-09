@@ -4,10 +4,10 @@ use crate::utils::{
 	ByteIterator,
 };
 use anyhow::Result;
-use std::{collections::BTreeMap, str};
+use std::{collections::BTreeMap, io::Cursor, str};
 
 pub fn parse_json(json: &str) -> Result<JsonValue> {
-	let mut iter = ByteIterator::from_iterator(json.bytes(), true);
+	let mut iter = ByteIterator::from_reader(Cursor::new(json), true);
 	parse_json_value(&mut iter)
 }
 

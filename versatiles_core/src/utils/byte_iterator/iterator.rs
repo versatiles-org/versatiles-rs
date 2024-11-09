@@ -2,42 +2,64 @@ use anyhow::{anyhow, Error, Result};
 use std::io::Read;
 
 const DEBUG_RING_BUFFER_SIZE: usize = 16;
+const BUFFER_SIZE: usize = 1024; // Adjust based on expected file size and memory constraints
 
 pub struct ByteIterator<'a> {
-	iter: Box<dyn Iterator<Item = u8> + Send + 'a>,
+	buffer: [u8; BUFFER_SIZE],
+	buffer_len: usize,
+	buffer_pos: usize,
+	source: Box<dyn Read + 'a>,
 	peeked_byte: Option<u8>,
 	position: usize,
 	is_debug_enabled: bool,
-	debug_buffer: Vec<u8>,
+	debug_buffer: [u8; DEBUG_RING_BUFFER_SIZE],
 }
 
 impl<'a> ByteIterator<'a> {
-	pub fn from_iterator(bytes: impl Iterator<Item = u8> + Send + 'a, debug: bool) -> Self {
+	pub fn from_reader(reader: impl Read + 'a, debug: bool) -> Self {
 		let mut instance = ByteIterator {
-			iter: Box::new(bytes),
+			buffer: [0; BUFFER_SIZE],
+			buffer_len: 0,
+			buffer_pos: 0,
+			source: Box::new(reader),
 			peeked_byte: None,
 			position: 0,
 			is_debug_enabled: debug,
-			debug_buffer: Vec::new(),
+			debug_buffer: [0; DEBUG_RING_BUFFER_SIZE],
 		};
+		instance.fill_buffer();
 		instance.advance();
 		instance
 	}
 
-	pub fn from_reader(reader: impl Read + Send + 'a, debug: bool) -> Self {
-		ByteIterator::from_iterator(reader.bytes().map(|b| b.unwrap()), debug)
+	fn fill_buffer(&mut self) {
+		self.buffer_len = self.source.read(&mut self.buffer).unwrap_or(0);
+		self.buffer_pos = 0;
+	}
+
+	fn next_byte(&mut self) -> Option<u8> {
+		if self.buffer_pos >= self.buffer_len {
+			self.fill_buffer();
+			if self.buffer_len == 0 {
+				return None;
+			}
+		}
+		let byte = self.buffer[self.buffer_pos];
+		self.buffer_pos += 1;
+		Some(byte)
 	}
 
 	pub fn format_error(&self, msg: &str) -> Error {
 		if self.is_debug_enabled {
-			let mut ring = Vec::new();
-			for i in 0..DEBUG_RING_BUFFER_SIZE {
-				let index = (self.position + i) % DEBUG_RING_BUFFER_SIZE;
-				if let Some(&value) = self.debug_buffer.get(index) {
-					ring.push(value);
-				}
-			}
-			let mut debug_output = String::from_utf8(ring).unwrap();
+			let debug_snapshot: Vec<u8> = self
+				.debug_buffer
+				.iter()
+				.cycle()
+				.skip(self.position % DEBUG_RING_BUFFER_SIZE)
+				.take(DEBUG_RING_BUFFER_SIZE)
+				.copied()
+				.collect();
+			let mut debug_output = String::from_utf8(debug_snapshot).unwrap();
 			if self.peeked_byte.is_none() {
 				debug_output.push_str("<EOF>");
 			}
@@ -47,24 +69,23 @@ impl<'a> ByteIterator<'a> {
 		}
 	}
 
+	#[inline]
 	pub fn position(&self) -> usize {
 		self.position
 	}
 
-	pub fn peek(&self) -> &Option<u8> {
-		&self.peeked_byte
+	#[inline]
+	pub fn peek(&self) -> Option<u8> {
+		self.peeked_byte
 	}
 
+	#[inline]
 	pub fn advance(&mut self) {
-		self.peeked_byte = self.iter.next();
+		self.peeked_byte = self.next_byte();
 		if self.is_debug_enabled {
 			if let Some(byte) = self.peeked_byte {
 				let index = self.position % DEBUG_RING_BUFFER_SIZE;
-				if self.debug_buffer.len() <= index {
-					self.debug_buffer.push(byte);
-				} else {
-					self.debug_buffer[index] = byte;
-				}
+				self.debug_buffer[index] = byte;
 			}
 		}
 		self.position += 1;
@@ -98,7 +119,11 @@ impl<'a> ByteIterator<'a> {
 	}
 
 	pub fn into_string(mut self) -> String {
-		String::from_utf8(std::iter::from_fn(move || self.consume()).collect()).unwrap()
+		let mut result = Vec::new();
+		while let Some(byte) = self.consume() {
+			result.push(byte);
+		}
+		String::from_utf8(result).unwrap()
 	}
 }
 
@@ -109,8 +134,8 @@ mod tests {
 
 	#[test]
 	fn test_from_iterator() {
-		let data = vec![b'a', b'b', b'c'];
-		let mut b = ByteIterator::from_iterator(data.into_iter(), false);
+		let reader = Cursor::new(vec![b'a', b'b', b'c']);
+		let mut b = ByteIterator::from_reader(reader, false);
 
 		assert_eq!(b.consume(), Some(b'a'));
 		assert_eq!(b.consume(), Some(b'b'));
@@ -120,8 +145,8 @@ mod tests {
 
 	#[test]
 	fn test_from_reader() {
-		let data = Cursor::new(vec![b'x', b'y', b'z']);
-		let mut b = ByteIterator::from_reader(data, false);
+		let reader = Cursor::new(vec![b'x', b'y', b'z']);
+		let mut b = ByteIterator::from_reader(reader, false);
 
 		assert_eq!(b.consume(), Some(b'x'));
 		assert_eq!(b.consume(), Some(b'y'));
@@ -131,21 +156,21 @@ mod tests {
 
 	#[test]
 	fn test_peek_and_consume() {
-		let data = vec![b'1', b'2', b'3'];
-		let mut b = ByteIterator::from_iterator(data.into_iter(), false);
+		let reader = Cursor::new(vec![b'1', b'2', b'3']);
+		let mut b = ByteIterator::from_reader(reader, false);
 
-		assert_eq!(b.peek(), &Some(b'1'));
+		assert_eq!(b.peek(), Some(b'1'));
 		assert_eq!(b.consume(), Some(b'1'));
-		assert_eq!(b.peek(), &Some(b'2'));
+		assert_eq!(b.peek(), Some(b'2'));
 		assert_eq!(b.consume(), Some(b'2'));
 		assert_eq!(b.consume(), Some(b'3'));
-		assert_eq!(b.peek(), &None);
+		assert_eq!(b.peek(), None);
 	}
 
 	#[test]
 	fn test_expect_next_byte() {
-		let data = vec![b'A', b'B'];
-		let mut b = ByteIterator::from_iterator(data.into_iter(), false);
+		let reader = Cursor::new(vec![b'A', b'B']);
+		let mut b = ByteIterator::from_reader(reader, false);
 
 		assert_eq!(b.expect_next_byte().unwrap(), b'A');
 		assert_eq!(b.expect_next_byte().unwrap(), b'B');
@@ -154,8 +179,8 @@ mod tests {
 
 	#[test]
 	fn test_expect_peeked_byte() {
-		let data = vec![b'X', b'Y'];
-		let mut b = ByteIterator::from_iterator(data.into_iter(), false);
+		let reader = Cursor::new(vec![b'X', b'Y']);
+		let mut b = ByteIterator::from_reader(reader, false);
 
 		assert_eq!(b.expect_peeked_byte().unwrap(), b'X');
 		b.consume();
@@ -166,8 +191,8 @@ mod tests {
 
 	#[test]
 	fn test_skip_whitespace() {
-		let data = vec![b' ', b'\t', b'\n', b'A', b'B'];
-		let mut b = ByteIterator::from_iterator(data.into_iter(), false);
+		let reader = Cursor::new(vec![b' ', b'\t', b'\n', b'A', b'B']);
+		let mut b = ByteIterator::from_reader(reader, false);
 
 		b.skip_whitespace();
 		assert_eq!(b.consume(), Some(b'A'));
@@ -176,16 +201,16 @@ mod tests {
 
 	#[test]
 	fn test_into_string() {
-		let data = vec![b'H', b'e', b'l', b'l', b'o'];
-		let b = ByteIterator::from_iterator(data.into_iter(), false);
+		let reader = Cursor::new(vec![b'H', b'e', b'l', b'l', b'o']);
+		let b = ByteIterator::from_reader(reader, false);
 
 		assert_eq!(b.into_string(), "Hello");
 	}
 
 	#[test]
 	fn test_debug_error_formatting() {
-		let data = vec![b'R', b'u', b's', b't'];
-		let mut b = ByteIterator::from_iterator(data.into_iter(), true);
+		let reader = Cursor::new(vec![b'R', b'u', b's', b't']);
+		let mut b = ByteIterator::from_reader(reader, true);
 
 		b.consume(); // R
 		b.consume(); // u
@@ -197,8 +222,8 @@ mod tests {
 
 	#[test]
 	fn test_debug_ring_buffer() {
-		let data = vec![b'a'; DEBUG_RING_BUFFER_SIZE + 5];
-		let mut b = ByteIterator::from_iterator(data.into_iter(), true);
+		let reader = Cursor::new(vec![b'a'; DEBUG_RING_BUFFER_SIZE + 5]);
+		let mut b = ByteIterator::from_reader(reader, true);
 
 		for _ in 0..DEBUG_RING_BUFFER_SIZE + 5 {
 			b.consume();

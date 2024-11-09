@@ -53,8 +53,8 @@ pub fn parse_quoted_json_string(iter: &mut ByteIterator) -> Result<String> {
 pub fn parse_number_as_string(iter: &mut ByteIterator) -> Result<String> {
 	let mut number = String::new();
 	while let Some(c) = iter.peek() {
-		if c.is_ascii_digit() || *c == b'-' || *c == b'.' {
-			number.push(*c as char);
+		if c.is_ascii_digit() || c == b'-' || c == b'.' {
+			number.push(c as char);
 			iter.advance();
 		} else {
 			break;
