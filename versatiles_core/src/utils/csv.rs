@@ -45,7 +45,7 @@ fn read_csv_fields<'a>(
 	reader: impl BufRead + Send + 'a,
 	separator: u8,
 ) -> Result<impl Iterator<Item = Result<(usize, Vec<String>)>> + Send + 'a> {
-	let mut iter = ByteIterator::from_reader(reader, true)?;
+	let mut iter = ByteIterator::from_reader(reader, true);
 
 	let lines = std::iter::from_fn(move || -> Option<Result<(usize, Vec<String>)>> {
 		if iter.peek_byte().is_none() {
@@ -119,7 +119,7 @@ mod tests {
 	#[test]
 	fn test_parse_simple_csv_string() {
 		fn test(input: &str, part1: &str, part2: &str) {
-			let mut reader = ByteIterator::new(input.bytes(), true).unwrap();
+			let mut reader = ByteIterator::new(input.bytes(), true);
 			let value = parse_simple_csv_string(&mut reader, b',').unwrap();
 			assert_eq!(value, part1);
 			assert_eq!(reader.into_string(), part2);
@@ -134,7 +134,7 @@ mod tests {
 	#[test]
 	fn test_parse_quoted_csv_string() {
 		fn test(input: &str, part1: &str, part2: &str) {
-			let mut reader = ByteIterator::new(input.bytes(), true).unwrap();
+			let mut reader = ByteIterator::new(input.bytes(), true);
 			let value = parse_quoted_csv_string(&mut reader).unwrap();
 			assert_eq!(value, part1);
 			assert_eq!(reader.into_string(), part2);

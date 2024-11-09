@@ -11,7 +11,7 @@ use versatiles_core::utils::{
 };
 
 pub fn parse_geojson(json: &str) -> Result<GeoCollection> {
-	let mut iter = ByteIterator::new(json.bytes(), true)?;
+	let mut iter = ByteIterator::new(json.bytes(), true);
 	parse_geojson_collection(&mut iter)
 }
 

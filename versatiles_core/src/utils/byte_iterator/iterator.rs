@@ -14,7 +14,7 @@ pub struct ByteIterator<'a> {
 
 #[allow(dead_code)]
 impl<'a> ByteIterator<'a> {
-	pub fn new(bytes: impl Iterator<Item = u8> + Send + 'a, debug: bool) -> Result<Self> {
+	pub fn new(bytes: impl Iterator<Item = u8> + Send + 'a, debug: bool) -> Self {
 		let mut me = ByteIterator {
 			iter: Box::new(bytes),
 			next_byte: None,
@@ -23,10 +23,10 @@ impl<'a> ByteIterator<'a> {
 			ring: Vec::new(),
 		};
 		me.skip_byte();
-		Ok(me)
+		me
 	}
 
-	pub fn from_reader(reader: impl Read + Send + 'a, debug: bool) -> Result<Self> {
+	pub fn from_reader(reader: impl Read + Send + 'a, debug: bool) -> Self {
 		ByteIterator::new(reader.bytes().map(|e| e.unwrap()), debug)
 	}
 

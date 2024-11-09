@@ -7,7 +7,7 @@ use anyhow::Result;
 use std::{collections::BTreeMap, str};
 
 pub fn parse_json(json: &str) -> Result<JsonValue> {
-	let mut iter = ByteIterator::new(json.bytes(), true)?;
+	let mut iter = ByteIterator::new(json.bytes(), true);
 	parse_json_value(&mut iter)
 }
 
