@@ -102,3 +102,109 @@ impl<'a> ByteIterator<'a> {
 		String::from_utf8(std::iter::from_fn(move || self.consume()).collect()).unwrap()
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::io::Cursor;
+
+	#[test]
+	fn test_from_iterator() {
+		let data = vec![b'a', b'b', b'c'];
+		let mut b = ByteIterator::from_iterator(data.into_iter(), false);
+
+		assert_eq!(b.consume(), Some(b'a'));
+		assert_eq!(b.consume(), Some(b'b'));
+		assert_eq!(b.consume(), Some(b'c'));
+		assert_eq!(b.consume(), None);
+	}
+
+	#[test]
+	fn test_from_reader() {
+		let data = Cursor::new(vec![b'x', b'y', b'z']);
+		let mut b = ByteIterator::from_reader(data, false);
+
+		assert_eq!(b.consume(), Some(b'x'));
+		assert_eq!(b.consume(), Some(b'y'));
+		assert_eq!(b.consume(), Some(b'z'));
+		assert_eq!(b.consume(), None);
+	}
+
+	#[test]
+	fn test_peek_and_consume() {
+		let data = vec![b'1', b'2', b'3'];
+		let mut b = ByteIterator::from_iterator(data.into_iter(), false);
+
+		assert_eq!(b.peek(), &Some(b'1'));
+		assert_eq!(b.consume(), Some(b'1'));
+		assert_eq!(b.peek(), &Some(b'2'));
+		assert_eq!(b.consume(), Some(b'2'));
+		assert_eq!(b.consume(), Some(b'3'));
+		assert_eq!(b.peek(), &None);
+	}
+
+	#[test]
+	fn test_expect_next_byte() {
+		let data = vec![b'A', b'B'];
+		let mut b = ByteIterator::from_iterator(data.into_iter(), false);
+
+		assert_eq!(b.expect_next_byte().unwrap(), b'A');
+		assert_eq!(b.expect_next_byte().unwrap(), b'B');
+		assert!(b.expect_next_byte().is_err());
+	}
+
+	#[test]
+	fn test_expect_peeked_byte() {
+		let data = vec![b'X', b'Y'];
+		let mut b = ByteIterator::from_iterator(data.into_iter(), false);
+
+		assert_eq!(b.expect_peeked_byte().unwrap(), b'X');
+		b.consume();
+		assert_eq!(b.expect_peeked_byte().unwrap(), b'Y');
+		b.consume();
+		assert!(b.expect_peeked_byte().is_err());
+	}
+
+	#[test]
+	fn test_skip_whitespace() {
+		let data = vec![b' ', b'\t', b'\n', b'A', b'B'];
+		let mut b = ByteIterator::from_iterator(data.into_iter(), false);
+
+		b.skip_whitespace().unwrap();
+		assert_eq!(b.consume(), Some(b'A'));
+		assert_eq!(b.consume(), Some(b'B'));
+	}
+
+	#[test]
+	fn test_into_string() {
+		let data = vec![b'H', b'e', b'l', b'l', b'o'];
+		let b = ByteIterator::from_iterator(data.into_iter(), false);
+
+		assert_eq!(b.into_string(), "Hello");
+	}
+
+	#[test]
+	fn test_debug_error_formatting() {
+		let data = vec![b'R', b'u', b's', b't'];
+		let mut b = ByteIterator::from_iterator(data.into_iter(), true);
+
+		b.consume(); // R
+		b.consume(); // u
+		b.consume(); // s
+		let error = b.format_error("Testing error");
+
+		assert!(format!("{}", error).contains("Testing error at position"));
+	}
+
+	#[test]
+	fn test_debug_ring_buffer() {
+		let data = vec![b'a'; DEBUG_RING_BUFFER_SIZE + 5];
+		let mut b = ByteIterator::from_iterator(data.into_iter(), true);
+
+		for _ in 0..DEBUG_RING_BUFFER_SIZE + 5 {
+			b.consume();
+		}
+
+		assert_eq!(b.debug_buffer.len(), DEBUG_RING_BUFFER_SIZE);
+	}
+}
