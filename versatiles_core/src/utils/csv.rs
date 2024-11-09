@@ -1,5 +1,5 @@
 use super::ByteIterator;
-use anyhow::{anyhow, bail, Error, Result};
+use anyhow::{bail, Error, Result};
 use std::io::BufRead;
 
 fn parse_quoted_csv_string(iter: &mut ByteIterator) -> Result<String> {
@@ -31,10 +31,10 @@ fn parse_simple_csv_string(iter: &mut ByteIterator, separator: u8) -> Result<Str
 	let mut bytes: Vec<u8> = Vec::new();
 	loop {
 		match iter.peek() {
-			Some(s) if s == &separator => return String::from_utf8(bytes).map_err(Error::from),
+			Some(s) if s == separator => return String::from_utf8(bytes).map_err(Error::from),
 			Some(b'\r') | Some(b'\n') | None => return String::from_utf8(bytes).map_err(Error::from),
 			Some(c) => {
-				bytes.push(*c);
+				bytes.push(c);
 				iter.advance();
 			}
 		}
@@ -44,10 +44,10 @@ fn parse_simple_csv_string(iter: &mut ByteIterator, separator: u8) -> Result<Str
 fn read_csv_fields<'a>(
 	reader: impl BufRead + Send + 'a,
 	separator: u8,
-) -> Result<impl Iterator<Item = Result<(usize, Vec<String>)>> + Send + 'a> {
+) -> Result<impl Iterator<Item = Result<(Vec<String>, usize)>> + 'a> {
 	let mut iter = ByteIterator::from_reader(reader, true);
 
-	let lines = std::iter::from_fn(move || -> Option<Result<(usize, Vec<String>)>> {
+	let lines = std::iter::from_fn(move || -> Option<Result<(Vec<String>, usize)>> {
 		if iter.peek().is_none() {
 			return None;
 		}
@@ -75,13 +75,13 @@ fn read_csv_fields<'a>(
 							fields.clear();
 							break;
 						}
-						return Some(Ok((iter.position(), fields)));
+						return Some(Ok((fields, iter.position())));
 					}
 					None => {
 						if (fields.len() == 1) && (fields.first().unwrap().is_empty()) {
 							return None;
 						}
-						return Some(Ok((iter.position(), fields)));
+						return Some(Ok((fields, iter.position())));
 					}
 					Some(e) if e == separator => break,
 					Some(_) => panic!(),
@@ -96,17 +96,22 @@ fn read_csv_fields<'a>(
 pub fn read_csv_iter<'a>(
 	reader: impl BufRead + Send + 'a,
 	separator: u8,
-) -> Result<impl Iterator<Item = Result<(usize, Vec<(String, String)>)>> + Send + 'a> {
-	let mut iter = read_csv_fields(reader, separator)?;
-
-	let header = iter.next().ok_or(anyhow!("can not find a header"))??.1;
+) -> Result<impl Iterator<Item = Result<(Vec<String>, usize, usize)>> + 'a> {
+	let iter = read_csv_fields(reader, separator)?;
+	let mut line_pos = 0usize;
+	let mut option_len: Option<usize> = None;
 
 	Ok(iter.map(move |entry| {
-		entry.and_then(|(byte_pos, fields)| {
-			if fields.len() != header.len() {
-				bail!("At byte {byte_pos}: header and line have different number of fields")
+		entry.and_then(|(fields, byte_pos)| {
+			if let Some(len) = option_len {
+				if fields.len() != len {
+					bail!("At byte {byte_pos}: line {line_pos} has different number of fields");
+				}
+			} else {
+				option_len = Some(fields.len());
 			}
-			Ok((byte_pos, header.clone().into_iter().zip(fields).collect()))
+			line_pos += 1;
+			Ok((fields, line_pos, byte_pos))
 		})
 	}))
 }
@@ -119,10 +124,10 @@ mod tests {
 	#[test]
 	fn test_parse_simple_csv_string() {
 		fn test(input: &str, part1: &str, part2: &str) {
-			let mut reader = ByteIterator::from_iterator(input.bytes(), true);
+			let mut reader = ByteIterator::from_reader(Cursor::new(input), true);
 			let value = parse_simple_csv_string(&mut reader, b',').unwrap();
 			assert_eq!(value, part1);
-			assert_eq!(reader.into_string(), part2);
+			assert_eq!(reader.into_string().unwrap(), part2);
 		}
 
 		test("name,age", "name", ",age");
@@ -134,10 +139,10 @@ mod tests {
 	#[test]
 	fn test_parse_quoted_csv_string() {
 		fn test(input: &str, part1: &str, part2: &str) {
-			let mut reader = ByteIterator::from_iterator(input.bytes(), true);
+			let mut reader = ByteIterator::from_reader(Cursor::new(input), true);
 			let value = parse_quoted_csv_string(&mut reader).unwrap();
 			assert_eq!(value, part1);
-			assert_eq!(reader.into_string(), part2);
+			assert_eq!(reader.into_string().unwrap(), part2);
 		}
 
 		test("\"name\"rest", "name", "rest");
@@ -146,8 +151,8 @@ mod tests {
 		test("\"na,me\"rest", "na,me", "rest");
 	}
 
-	fn check(iter: impl Iterator<Item = Result<(usize, Vec<String>)>>) -> Vec<Vec<String>> {
-		iter.map(|e| e.unwrap().1).collect()
+	fn check(iter: impl Iterator<Item = Result<(Vec<String>, usize)>>) -> Vec<Vec<String>> {
+		iter.map(|e| e.unwrap().0).collect()
 	}
 
 	#[test]

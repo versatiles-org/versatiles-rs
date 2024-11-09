@@ -3,7 +3,6 @@ use crate::{
 	utils::progress::get_progress_bar,
 };
 use anyhow::{bail, Context, Result};
-use futures::{future::ready, stream, StreamExt};
 use std::{io::BufReader, path::Path};
 use versatiles_core::utils::read_csv_iter;
 
@@ -26,24 +25,24 @@ pub async fn read_csv_file(path: &Path) -> Result<Vec<GeoProperties>> {
 	let reader = BufReader::new(file);
 
 	let mut errors = vec![];
-	let data: Vec<GeoProperties> = stream::iter(read_csv_iter(reader, b',')?)
+	let mut iter = read_csv_iter(reader, b',')?;
+	let header: Vec<String> = iter.next().unwrap()?.0;
+	let data: Vec<GeoProperties> = iter
 		.filter_map(|e| {
-			ready(
-				e.map(|(bytepos, fields)| {
-					progress.set_position(bytepos as u64);
+			e.map(|(fields, _line_pos, byte_pos)| {
+				progress.set_position(byte_pos as u64);
 
-					GeoProperties::from_iter(
-						fields
-							.into_iter()
-							.map(|(key, value)| (key, GeoValue::parse_str(&value))),
-					)
-				})
-				.map_err(|e| errors.push(e))
-				.ok(),
-			)
+				GeoProperties::from_iter(
+					fields
+						.into_iter()
+						.enumerate()
+						.map(|(col, value)| (header[col].clone(), GeoValue::parse_str(&value))),
+				)
+			})
+			.map_err(|e| errors.push(e))
+			.ok()
 		})
-		.collect::<Vec<_>>()
-		.await;
+		.collect::<Vec<_>>();
 
 	progress.finish();
 

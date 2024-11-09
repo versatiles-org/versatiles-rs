@@ -2,7 +2,7 @@ use anyhow::{anyhow, Error, Result};
 use std::io::Read;
 
 const DEBUG_RING_BUFFER_SIZE: usize = 16;
-const BUFFER_SIZE: usize = 1024; // Adjust based on expected file size and memory constraints
+const BUFFER_SIZE: usize = 4096;
 
 pub struct ByteIterator<'a> {
 	buffer: [u8; BUFFER_SIZE],
@@ -32,11 +32,13 @@ impl<'a> ByteIterator<'a> {
 		instance
 	}
 
+	#[inline]
 	fn fill_buffer(&mut self) {
 		self.buffer_len = self.source.read(&mut self.buffer).unwrap_or(0);
 		self.buffer_pos = 0;
 	}
 
+	#[inline]
 	fn next_byte(&mut self) -> Option<u8> {
 		if self.buffer_pos >= self.buffer_len {
 			self.fill_buffer();
@@ -51,14 +53,16 @@ impl<'a> ByteIterator<'a> {
 
 	pub fn format_error(&self, msg: &str) -> Error {
 		if self.is_debug_enabled {
+			let start_index = self.position % DEBUG_RING_BUFFER_SIZE;
 			let debug_snapshot: Vec<u8> = self
 				.debug_buffer
 				.iter()
 				.cycle()
-				.skip(self.position % DEBUG_RING_BUFFER_SIZE)
+				.skip(start_index)
 				.take(DEBUG_RING_BUFFER_SIZE)
 				.copied()
 				.collect();
+
 			let mut debug_output = String::from_utf8(debug_snapshot).unwrap();
 			if self.peeked_byte.is_none() {
 				debug_output.push_str("<EOF>");
@@ -91,24 +95,28 @@ impl<'a> ByteIterator<'a> {
 		self.position += 1;
 	}
 
+	#[inline]
 	pub fn consume(&mut self) -> Option<u8> {
 		let current_byte = self.peeked_byte;
 		self.advance();
 		current_byte
 	}
 
+	#[inline]
 	pub fn expect_next_byte(&mut self) -> Result<u8> {
 		self
 			.consume()
 			.ok_or_else(|| self.format_error("unexpected end"))
 	}
 
+	#[inline]
 	pub fn expect_peeked_byte(&self) -> Result<u8> {
 		self
 			.peek()
 			.ok_or_else(|| self.format_error("unexpected end"))
 	}
 
+	#[inline]
 	pub fn skip_whitespace(&mut self) {
 		while let Some(byte) = self.peek() {
 			if !byte.is_ascii_whitespace() {
@@ -118,12 +126,12 @@ impl<'a> ByteIterator<'a> {
 		}
 	}
 
-	pub fn into_string(mut self) -> String {
+	pub fn into_string(mut self) -> Result<String> {
 		let mut result = Vec::new();
 		while let Some(byte) = self.consume() {
 			result.push(byte);
 		}
-		String::from_utf8(result).unwrap()
+		String::from_utf8(result).map_err(anyhow::Error::from)
 	}
 }
 
@@ -204,7 +212,7 @@ mod tests {
 		let reader = Cursor::new(vec![b'H', b'e', b'l', b'l', b'o']);
 		let b = ByteIterator::from_reader(reader, false);
 
-		assert_eq!(b.into_string(), "Hello");
+		assert_eq!(b.into_string().unwrap(), "Hello");
 	}
 
 	#[test]
