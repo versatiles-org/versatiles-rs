@@ -12,7 +12,7 @@ pub fn parse_json(json: &str) -> Result<JsonValue> {
 }
 
 pub fn parse_json_value(iter: &mut ByteIterator) -> Result<JsonValue> {
-	iter.skip_whitespace()?;
+	iter.skip_whitespace();
 	match iter.expect_peeked_byte()? {
 		b'[' => parse_json_array(iter),
 		b'{' => parse_json_object(iter),

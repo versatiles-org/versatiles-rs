@@ -88,14 +88,13 @@ impl<'a> ByteIterator<'a> {
 			.ok_or_else(|| self.format_error("unexpected end"))
 	}
 
-	pub fn skip_whitespace(&mut self) -> Result<()> {
+	pub fn skip_whitespace(&mut self) {
 		while let Some(byte) = self.peek() {
 			if !byte.is_ascii_whitespace() {
 				break;
 			}
 			self.consume();
 		}
-		Ok(())
 	}
 
 	pub fn into_string(mut self) -> String {
@@ -170,7 +169,7 @@ mod tests {
 		let data = vec![b' ', b'\t', b'\n', b'A', b'B'];
 		let mut b = ByteIterator::from_iterator(data.into_iter(), false);
 
-		b.skip_whitespace().unwrap();
+		b.skip_whitespace();
 		assert_eq!(b.consume(), Some(b'A'));
 		assert_eq!(b.consume(), Some(b'B'));
 	}

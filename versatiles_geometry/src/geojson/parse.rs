@@ -72,7 +72,7 @@ pub fn parse_geojson_feature(iter: &mut ByteIterator) -> Result<GeoFeature> {
 }
 
 fn parse_geojson_id(iter: &mut ByteIterator) -> Result<GeoValue> {
-	iter.skip_whitespace()?;
+	iter.skip_whitespace();
 	match iter.expect_peeked_byte()? {
 		b'"' => parse_quoted_json_string(iter).map(GeoValue::from),
 		d if d.is_ascii_digit() => parse_number_as::<u64>(iter).map(GeoValue::UInt),
@@ -108,7 +108,7 @@ fn parse_geojson_number(iter: &mut ByteIterator) -> Result<GeoValue> {
 }
 
 fn parse_geojson_value(iter: &mut ByteIterator) -> Result<GeoValue> {
-	iter.skip_whitespace()?;
+	iter.skip_whitespace();
 	match iter.expect_peeked_byte()? {
 		b'"' => parse_quoted_json_string(iter).map(GeoValue::from),
 		d if d.is_ascii_digit() || d == b'.' || d == b'-' => parse_geojson_number(iter),
@@ -207,7 +207,7 @@ fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordin
 	fn recursive(iter: &mut ByteIterator) -> Result<TemporaryCoordinates> {
 		use TemporaryCoordinates::*;
 
-		iter.skip_whitespace()?;
+		iter.skip_whitespace();
 		match iter.expect_peeked_byte()? {
 			b'[' => {
 				let mut list = Vec::new();

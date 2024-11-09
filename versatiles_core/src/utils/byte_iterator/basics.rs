@@ -13,7 +13,7 @@ pub fn parse_tag(iter: &mut ByteIterator, text: &str) -> Result<()> {
 }
 
 pub fn parse_quoted_json_string(iter: &mut ByteIterator) -> Result<String> {
-	iter.skip_whitespace()?;
+	iter.skip_whitespace();
 	if iter.expect_next_byte()? != b'"' {
 		bail!(iter.format_error("expected '\"' while parsing a string"));
 	}
@@ -73,13 +73,13 @@ pub fn parse_object_entries<R>(
 	iter: &mut ByteIterator,
 	mut parse_value: impl FnMut(String, &mut ByteIterator) -> Result<R>,
 ) -> Result<()> {
-	iter.skip_whitespace()?;
+	iter.skip_whitespace();
 	if iter.expect_next_byte()? != b'{' {
 		bail!(iter.format_error("expected '{' while parsing an object"));
 	}
 
 	loop {
-		iter.skip_whitespace()?;
+		iter.skip_whitespace();
 		match iter.expect_peeked_byte()? {
 			b'}' => {
 				iter.advance();
@@ -88,16 +88,16 @@ pub fn parse_object_entries<R>(
 			b'"' => {
 				let key = parse_quoted_json_string(iter)?;
 
-				iter.skip_whitespace()?;
+				iter.skip_whitespace();
 				match iter.expect_peeked_byte()? {
 					b':' => iter.advance(),
 					_ => return Err(iter.format_error("expected ':'")),
 				};
 
-				iter.skip_whitespace()?;
+				iter.skip_whitespace();
 				parse_value(key, iter)?;
 
-				iter.skip_whitespace()?;
+				iter.skip_whitespace();
 				match iter.expect_peeked_byte()? {
 					b',' => iter.advance(),
 					b'}' => continue,
@@ -118,13 +118,13 @@ pub fn parse_array_entries<R>(
 	iter: &mut ByteIterator,
 	mut parse_value: impl FnMut(&mut ByteIterator) -> Result<R>,
 ) -> Result<()> {
-	iter.skip_whitespace()?;
+	iter.skip_whitespace();
 	if iter.expect_next_byte()? != b'[' {
 		bail!(iter.format_error("expected '[' while parsing an array"));
 	}
 
 	loop {
-		iter.skip_whitespace()?;
+		iter.skip_whitespace();
 		match iter.expect_peeked_byte()? {
 			b']' => {
 				iter.advance();
@@ -132,7 +132,7 @@ pub fn parse_array_entries<R>(
 			}
 			_ => {
 				parse_value(iter)?;
-				iter.skip_whitespace()?;
+				iter.skip_whitespace();
 				match iter.expect_peeked_byte()? {
 					b',' => {
 						iter.advance();
