@@ -11,7 +11,7 @@ use versatiles_core::utils::{
 };
 
 pub fn parse_geojson(json: &str) -> Result<GeoCollection> {
-	let mut iter = ByteIterator::new(json.bytes(), true);
+	let mut iter = ByteIterator::from_iterator(json.bytes(), true);
 	parse_geojson_collection(&mut iter)
 }
 
@@ -73,10 +73,10 @@ pub fn parse_geojson_feature(iter: &mut ByteIterator) -> Result<GeoFeature> {
 
 fn parse_geojson_id(iter: &mut ByteIterator) -> Result<GeoValue> {
 	iter.skip_whitespace()?;
-	match iter.get_peek_byte()? {
+	match iter.expect_peeked_byte()? {
 		b'"' => parse_quoted_json_string(iter).map(GeoValue::from),
 		d if d.is_ascii_digit() => parse_number_as::<u64>(iter).map(GeoValue::UInt),
-		c => Err(iter.build_error(&format!(
+		c => Err(iter.format_error(&format!(
 			"expected a string or integer, but got character '{}'",
 			c as char
 		))),
@@ -90,32 +90,32 @@ fn parse_geojson_number(iter: &mut ByteIterator) -> Result<GeoValue> {
 		GeoValue::from(
 			number
 				.parse::<f64>()
-				.map_err(|_| iter.build_error("invalid double"))?,
+				.map_err(|_| iter.format_error("invalid double"))?,
 		)
 	} else if number.contains('-') {
 		GeoValue::from(
 			number
 				.parse::<i64>()
-				.map_err(|_| iter.build_error("invalid integer"))?,
+				.map_err(|_| iter.format_error("invalid integer"))?,
 		)
 	} else {
 		GeoValue::from(
 			number
 				.parse::<u64>()
-				.map_err(|_| iter.build_error("invalid integer"))?,
+				.map_err(|_| iter.format_error("invalid integer"))?,
 		)
 	})
 }
 
 fn parse_geojson_value(iter: &mut ByteIterator) -> Result<GeoValue> {
 	iter.skip_whitespace()?;
-	match iter.get_peek_byte()? {
+	match iter.expect_peeked_byte()? {
 		b'"' => parse_quoted_json_string(iter).map(GeoValue::from),
 		d if d.is_ascii_digit() || d == b'.' || d == b'-' => parse_geojson_number(iter),
 		b't' => parse_tag(iter, "true").map(|_| GeoValue::Bool(true)),
 		b'f' => parse_tag(iter, "false").map(|_| GeoValue::Bool(false)),
 		b'n' => parse_tag(iter, "null").map(|_| GeoValue::Null),
-		c => Err(iter.build_error(&format!(
+		c => Err(iter.format_error(&format!(
 			"expected a string or number, but got character '{}'",
 			c as char
 		))),
@@ -208,7 +208,7 @@ fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordin
 		use TemporaryCoordinates::*;
 
 		iter.skip_whitespace()?;
-		match iter.get_peek_byte()? {
+		match iter.expect_peeked_byte()? {
 			b'[' => {
 				let mut list = Vec::new();
 				parse_array_entries(iter, |iter2| {
@@ -243,7 +243,7 @@ fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordin
 				Ok(list)
 			}
 			d if d.is_ascii_digit() || d == b'.' || d == b'-' => parse_number_as(iter).map(V),
-			c => Err(iter.build_error(&format!(
+			c => Err(iter.format_error(&format!(
 				"expected an array or number while parsing coordinates, but got character '{}'",
 				c as char
 			))),

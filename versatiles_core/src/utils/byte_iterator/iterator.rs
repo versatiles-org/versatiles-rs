@@ -1,106 +1,104 @@
+use anyhow::{anyhow, Error, Result};
 use std::io::Read;
 
-use anyhow::{anyhow, Error, Result};
-
-const RING_SIZE: usize = 16;
+const DEBUG_RING_BUFFER_SIZE: usize = 16;
 
 pub struct ByteIterator<'a> {
 	iter: Box<dyn Iterator<Item = u8> + Send + 'a>,
-	next_byte: Option<u8>,
-	byte_pos: usize,
-	debug: bool,
-	ring: Vec<u8>,
+	peeked_byte: Option<u8>,
+	position: usize,
+	is_debug_enabled: bool,
+	debug_buffer: Vec<u8>,
 }
 
-#[allow(dead_code)]
 impl<'a> ByteIterator<'a> {
-	pub fn new(bytes: impl Iterator<Item = u8> + Send + 'a, debug: bool) -> Self {
-		let mut me = ByteIterator {
+	pub fn from_iterator(bytes: impl Iterator<Item = u8> + Send + 'a, debug: bool) -> Self {
+		let mut instance = ByteIterator {
 			iter: Box::new(bytes),
-			next_byte: None,
-			byte_pos: 0,
-			debug,
-			ring: Vec::new(),
+			peeked_byte: None,
+			position: 0,
+			is_debug_enabled: debug,
+			debug_buffer: Vec::new(),
 		};
-		me.skip_byte();
-		me
+		instance.advance();
+		instance
 	}
 
 	pub fn from_reader(reader: impl Read + Send + 'a, debug: bool) -> Self {
-		ByteIterator::new(reader.bytes().map(|e| e.unwrap()), debug)
+		ByteIterator::from_iterator(reader.bytes().map(|b| b.unwrap()), debug)
 	}
 
-	pub fn build_error(&self, msg: &str) -> Error {
-		if self.debug {
+	pub fn format_error(&self, msg: &str) -> Error {
+		if self.is_debug_enabled {
 			let mut ring = Vec::new();
-			for i in 0..RING_SIZE {
-				let index = (self.byte_pos + i) % RING_SIZE;
-				if let Some(v) = self.ring.get(index) {
-					ring.push(*v)
+			for i in 0..DEBUG_RING_BUFFER_SIZE {
+				let index = (self.position + i) % DEBUG_RING_BUFFER_SIZE;
+				if let Some(&value) = self.debug_buffer.get(index) {
+					ring.push(value);
 				}
 			}
-			let mut ring = String::from_utf8(ring).unwrap();
-			if self.next_byte.is_none() {
-				ring.push_str("<EOF>");
+			let mut debug_output = String::from_utf8(ring).unwrap();
+			if self.peeked_byte.is_none() {
+				debug_output.push_str("<EOF>");
 			}
-			anyhow!("{msg} at pos {}: {}", self.byte_pos, ring)
+			anyhow!("{msg} at position {}: {}", self.position, debug_output)
 		} else {
-			anyhow!("{msg} at pos {}", self.byte_pos)
+			anyhow!("{msg} at position {}", self.position)
 		}
 	}
 
-	pub fn byte_pos(&self) -> usize {
-		self.byte_pos
+	pub fn position(&self) -> usize {
+		self.position
 	}
 
-	pub fn peek_byte(&self) -> &Option<u8> {
-		&self.next_byte
+	pub fn peek(&self) -> &Option<u8> {
+		&self.peeked_byte
 	}
 
-	pub fn skip_byte(&mut self) {
-		self.next_byte = self.iter.next();
-		if self.debug {
-			if let Some(byte) = self.next_byte {
-				let index = self.byte_pos % RING_SIZE;
-				if self.ring.len() <= index {
-					self.ring.push(byte);
+	pub fn advance(&mut self) {
+		self.peeked_byte = self.iter.next();
+		if self.is_debug_enabled {
+			if let Some(byte) = self.peeked_byte {
+				let index = self.position % DEBUG_RING_BUFFER_SIZE;
+				if self.debug_buffer.len() <= index {
+					self.debug_buffer.push(byte);
 				} else {
-					self.ring[index] = byte;
+					self.debug_buffer[index] = byte;
 				}
 			}
 		}
-		self.byte_pos += 1;
+		self.position += 1;
 	}
 
-	pub fn next_byte(&mut self) -> Option<u8> {
-		let next_byte = self.next_byte;
-		self.skip_byte();
-		next_byte
+	pub fn consume(&mut self) -> Option<u8> {
+		let current_byte = self.peeked_byte;
+		self.advance();
+		current_byte
 	}
 
-	pub fn get_next_byte(&mut self) -> Result<u8> {
+	pub fn expect_next_byte(&mut self) -> Result<u8> {
 		self
-			.next_byte()
-			.ok_or_else(|| self.build_error("unexpected end"))
+			.consume()
+			.ok_or_else(|| self.format_error("unexpected end"))
 	}
 
-	pub fn get_peek_byte(&mut self) -> Result<u8> {
+	pub fn expect_peeked_byte(&self) -> Result<u8> {
 		self
-			.peek_byte()
-			.ok_or_else(|| self.build_error("unexpected end"))
+			.peek()
+			.ok_or_else(|| self.format_error("unexpected end"))
 	}
 
 	pub fn skip_whitespace(&mut self) -> Result<()> {
-		while let Some(b) = self.peek_byte() {
-			if !b.is_ascii_whitespace() {
+		while let Some(byte) = self.peek() {
+			if !byte.is_ascii_whitespace() {
 				break;
 			}
-			self.next_byte();
+			self.consume();
 		}
 		Ok(())
 	}
 
 	pub fn into_string(mut self) -> String {
-		String::from_utf8(std::iter::from_fn(move || self.next_byte()).collect()).unwrap()
+		String::from_utf8(std::iter::from_fn(move || self.consume()).collect()).unwrap()
 	}
 }

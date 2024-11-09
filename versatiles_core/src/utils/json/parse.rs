@@ -7,13 +7,13 @@ use anyhow::Result;
 use std::{collections::BTreeMap, str};
 
 pub fn parse_json(json: &str) -> Result<JsonValue> {
-	let mut iter = ByteIterator::new(json.bytes(), true);
+	let mut iter = ByteIterator::from_iterator(json.bytes(), true);
 	parse_json_value(&mut iter)
 }
 
 pub fn parse_json_value(iter: &mut ByteIterator) -> Result<JsonValue> {
 	iter.skip_whitespace()?;
-	match iter.get_peek_byte()? {
+	match iter.expect_peeked_byte()? {
 		b'[' => parse_json_array(iter),
 		b'{' => parse_json_object(iter),
 		b'"' => parse_json_string(iter),
@@ -21,7 +21,7 @@ pub fn parse_json_value(iter: &mut ByteIterator) -> Result<JsonValue> {
 		b't' => parse_true(iter),
 		b'f' => parse_false(iter),
 		b'n' => parse_null(iter),
-		c => Err(iter.build_error(&format!("unexpected character '{}'", c as char))),
+		c => Err(iter.format_error(&format!("unexpected character '{}'", c as char))),
 	}
 }
 
