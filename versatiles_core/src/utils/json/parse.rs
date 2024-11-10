@@ -14,54 +14,26 @@ pub fn parse_json(json: &str) -> Result<JsonValue> {
 pub fn parse_json_value(iter: &mut ByteIterator) -> Result<JsonValue> {
 	iter.skip_whitespace();
 	match iter.expect_peeked_byte()? {
-		b'[' => parse_json_array(iter),
+		b'[' => parse_array_entries(iter, parse_json_value).map(JsonValue::Array),
 		b'{' => parse_json_object(iter),
-		b'"' => parse_json_string(iter),
-		d if d.is_ascii_digit() || d == b'.' || d == b'-' => parse_json_number(iter),
-		b't' => parse_true(iter),
-		b'f' => parse_false(iter),
-		b'n' => parse_null(iter),
+		b'"' => parse_quoted_json_string(iter).map(JsonValue::Str),
+		d if d.is_ascii_digit() || d == b'.' || d == b'-' => {
+			parse_number_as::<f64>(iter).map(JsonValue::Num)
+		}
+		b't' => parse_tag(iter, "true").map(|_| JsonValue::Boolean(true)),
+		b'f' => parse_tag(iter, "false").map(|_| JsonValue::Boolean(false)),
+		b'n' => parse_tag(iter, "null").map(|_| JsonValue::Null),
 		c => Err(iter.format_error(&format!("unexpected character '{}'", c as char))),
 	}
-}
-
-fn parse_json_array(iter: &mut ByteIterator) -> Result<JsonValue> {
-	let mut array = Vec::new();
-	parse_array_entries(iter, |iter2| {
-		array.push(parse_json_value(iter2)?);
-		Ok(())
-	})?;
-	Ok(JsonValue::Array(array))
 }
 
 fn parse_json_object(iter: &mut ByteIterator) -> Result<JsonValue> {
 	let mut list: Vec<(String, JsonValue)> = Vec::new();
 	parse_object_entries(iter, |key, iter2| {
-		let value = parse_json_value(iter2)?;
-		list.push((key, value));
+		list.push((key, parse_json_value(iter2)?));
 		Ok(())
 	})?;
 	Ok(JsonValue::Object(BTreeMap::from_iter(list)))
-}
-
-fn parse_json_string(iter: &mut ByteIterator) -> Result<JsonValue> {
-	parse_quoted_json_string(iter).map(JsonValue::Str)
-}
-
-fn parse_json_number(iter: &mut ByteIterator) -> Result<JsonValue> {
-	parse_number_as::<f64>(iter).map(JsonValue::Num)
-}
-
-fn parse_true(iter: &mut ByteIterator) -> Result<JsonValue> {
-	parse_tag(iter, "true").map(|_| JsonValue::Boolean(true))
-}
-
-fn parse_false(iter: &mut ByteIterator) -> Result<JsonValue> {
-	parse_tag(iter, "false").map(|_| JsonValue::Boolean(false))
-}
-
-fn parse_null(iter: &mut ByteIterator) -> Result<JsonValue> {
-	parse_tag(iter, "null").map(|_| JsonValue::Null)
 }
 
 #[cfg(test)]
