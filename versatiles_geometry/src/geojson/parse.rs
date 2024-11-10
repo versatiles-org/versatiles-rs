@@ -22,10 +22,7 @@ pub fn parse_geojson_collection(iter: &mut ByteIterator) -> Result<GeoCollection
 	parse_object_entries(iter, |key, iter2| {
 		match key.as_str() {
 			"type" => object_type = Some(parse_quoted_json_string(iter2)?),
-			"features" => parse_array_entries(iter2, |iter3| {
-				features.push(parse_geojson_feature(iter3)?);
-				Ok(())
-			})?,
+			"features" => features = parse_array_entries(iter2, parse_geojson_feature)?,
 			_ => _ = parse_json_value(iter2)?,
 		};
 		Ok(())
