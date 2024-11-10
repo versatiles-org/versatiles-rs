@@ -123,7 +123,7 @@ mod tests {
 		);
 		assert_eq!(
 			vec[1].as_ref().unwrap_err().to_string(),
-			"line 2: parsing object, expected '\"' or '}' at pos 2: {i"
+			"line 2: parsing object, expected '\"' or '}' at position 1: {"
 		);
 		assert_eq!(
 			vec[2].as_ref().unwrap(),
@@ -145,7 +145,7 @@ mod tests {
 		);
 		assert_eq!(
 			vec[1].as_ref().unwrap_err().to_string(),
-			"line 2: unexpected character while parsing 'null' at pos 3: not"
+			"line 2: unexpected character while parsing tag 'null' at position 2: no"
 		);
 		assert_eq!(
 			vec[2].as_ref().unwrap(),

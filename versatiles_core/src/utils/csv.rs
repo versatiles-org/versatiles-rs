@@ -48,9 +48,7 @@ fn read_csv_fields<'a>(
 	let mut iter = ByteIterator::from_reader(reader, true);
 
 	let lines = std::iter::from_fn(move || -> Option<Result<(Vec<String>, usize)>> {
-		if iter.peek().is_none() {
-			return None;
-		}
+		iter.peek()?;
 
 		let mut fields = Vec::new();
 

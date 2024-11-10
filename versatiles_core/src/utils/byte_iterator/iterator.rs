@@ -53,13 +53,21 @@ impl<'a> ByteIterator<'a> {
 
 	pub fn format_error(&self, msg: &str) -> Error {
 		if self.is_debug_enabled {
-			let start_index = self.position % DEBUG_RING_BUFFER_SIZE;
+			let (start_index, length) = if self.position < DEBUG_RING_BUFFER_SIZE {
+				(0, self.position - 1)
+			} else {
+				(
+					self.position % DEBUG_RING_BUFFER_SIZE,
+					DEBUG_RING_BUFFER_SIZE - 1,
+				)
+			};
+
 			let debug_snapshot: Vec<u8> = self
 				.debug_buffer
 				.iter()
 				.cycle()
 				.skip(start_index)
-				.take(DEBUG_RING_BUFFER_SIZE)
+				.take(length)
 				.copied()
 				.collect();
 
@@ -67,9 +75,9 @@ impl<'a> ByteIterator<'a> {
 			if self.peeked_byte.is_none() {
 				debug_output.push_str("<EOF>");
 			}
-			anyhow!("{msg} at position {}: {}", self.position, debug_output)
+			anyhow!("{msg} at position {}: {}", self.position - 1, debug_output)
 		} else {
-			anyhow!("{msg} at position {}", self.position)
+			anyhow!("{msg} at position {}", self.position - 1)
 		}
 	}
 
@@ -104,15 +112,18 @@ impl<'a> ByteIterator<'a> {
 
 	#[inline]
 	pub fn expect_next_byte(&mut self) -> Result<u8> {
-		self
-			.consume()
-			.ok_or_else(|| self.format_error("unexpected end"))
+		if let Some(current_byte) = self.peeked_byte {
+			self.advance();
+			Ok(current_byte)
+		} else {
+			Err(self.format_error("unexpected end"))
+		}
 	}
 
 	#[inline]
 	pub fn expect_peeked_byte(&self) -> Result<u8> {
 		self
-			.peek()
+			.peeked_byte
 			.ok_or_else(|| self.format_error("unexpected end"))
 	}
 
@@ -122,7 +133,7 @@ impl<'a> ByteIterator<'a> {
 			if !byte.is_ascii_whitespace() {
 				break;
 			}
-			self.consume();
+			self.advance();
 		}
 	}
 

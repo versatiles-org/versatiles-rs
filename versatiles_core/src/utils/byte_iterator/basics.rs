@@ -2,11 +2,15 @@ use super::iterator::ByteIterator;
 use anyhow::{bail, Error, Result};
 use std::str::FromStr;
 
-pub fn parse_tag(iter: &mut ByteIterator, text: &str) -> Result<()> {
-	for c in text.bytes() {
+pub fn parse_tag(iter: &mut ByteIterator, tag: &str) -> Result<()> {
+	for c in tag.bytes() {
 		match iter.expect_next_byte()? {
 			b if b == c => continue,
-			_ => return Err(iter.format_error("unexpected character while parsing tag")),
+			_ => {
+				return Err(
+					iter.format_error(&format!("unexpected character while parsing tag '{tag}'")),
+				)
+			}
 		}
 	}
 	Ok(())
@@ -19,7 +23,7 @@ pub fn parse_quoted_json_string(iter: &mut ByteIterator) -> Result<String> {
 	}
 
 	let mut bytes = Vec::with_capacity(32); // Pre-allocate based on expected JSON string sizes
-	let mut hex = [0; 4];
+	let mut hex = [0u8; 4];
 
 	loop {
 		match iter.expect_next_byte()? {
@@ -34,8 +38,8 @@ pub fn parse_quoted_json_string(iter: &mut ByteIterator) -> Result<String> {
 				b'r' => bytes.push(b'\r'),
 				b't' => bytes.push(b'\t'),
 				b'u' => {
-					for i in 0..4 {
-						hex[i] = iter.expect_next_byte()?;
+					for i in &mut hex {
+						*i = iter.expect_next_byte()?;
 					}
 					let code_point = u16::from_str_radix(std::str::from_utf8(&hex).unwrap(), 16)
 						.map_err(|_| iter.format_error("invalid unicode code point"))?;
@@ -137,9 +141,9 @@ pub fn parse_object_entries<R>(
 				parse_value(key, iter)?;
 
 				iter.skip_whitespace();
-				match iter.expect_peeked_byte()? {
-					b',' => iter.advance(),
-					b'}' => continue,
+				match iter.expect_next_byte()? {
+					b',' => continue,
+					b'}' => break,
 					_ => return Err(iter.format_error("expected ',' or '}'")),
 				}
 			}
@@ -160,17 +164,24 @@ pub fn parse_array_entries<R>(
 
 	let mut result = Vec::new();
 
+	// Check if the array is empty
 	iter.skip_whitespace();
+	if let Some(b']') = iter.peek() {
+		iter.advance(); // Consume the closing bracket
+		return Ok(result); // Return empty Vec
+	}
+
+	// Parse the first array element
 	result.push(parse_value(iter)?);
 
-	'items: loop {
+	// Continue parsing additional elements, if any
+	loop {
 		iter.skip_whitespace();
 		match iter.expect_next_byte()? {
-			b']' => break 'items,
+			b']' => break,
 			b',' => {
 				iter.skip_whitespace();
 				result.push(parse_value(iter)?);
-				continue 'items;
 			}
 			_ => return Err(iter.format_error("parsing array, expected ',' or ']'")),
 		}

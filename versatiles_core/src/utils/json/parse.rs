@@ -85,7 +85,7 @@ mod tests {
 		let json = parse_json(data);
 		assert_eq!(
 			json.unwrap_err().to_string(),
-			"expected ':' at pos 27: ntes\",\"country\","
+			"expected ':' at position 27: tes\",\"country\","
 		);
 	}
 
@@ -171,7 +171,7 @@ mod tests {
 		let json = parse_json(r##"{"key" "value"}"##);
 		assert_eq!(
 			json.unwrap_err().to_string(),
-			"expected ':' at pos 8: {\"key\" \""
+			"expected ':' at position 8: {\"key\" \""
 		);
 	}
 
@@ -180,7 +180,7 @@ mod tests {
 		let json = parse_json(r##"{"key": "value""##);
 		assert_eq!(
 			json.unwrap_err().to_string(),
-			"unexpected end at pos 16: {\"key\": \"value\"<EOF>"
+			"unexpected end at position 15: {\"key\": \"value\"<EOF>"
 		);
 	}
 
@@ -189,7 +189,7 @@ mod tests {
 		let json = parse_json(r##"["key", "value""##);
 		assert_eq!(
 			json.unwrap_err().to_string(),
-			"unexpected end at pos 16: [\"key\", \"value\"<EOF>"
+			"unexpected end at position 15: [\"key\", \"value\"<EOF>"
 		);
 	}
 }
