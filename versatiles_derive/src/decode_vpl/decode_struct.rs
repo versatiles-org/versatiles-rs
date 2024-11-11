@@ -64,6 +64,10 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 					format!("* *`{field_str}`: Boolean (optional, default: false)*{comment}"),
 					quote! { #field_name: node.get_property_bool_req(#field_str)? },
 				),
+				"u8" => (
+					format!("* *`{field_str}`: u8 *{comment}"),
+					quote! { #field_name: node.get_property_number_req::<u8>(#field_str)? },
+				),
 				"[f64;4]" => (
 					format!("* **`{field_str}`: [f64,f64,f64,f64] (required)**{comment}"),
 					quote! { #field_name: node.get_property_number_array4_req::<f64>(#field_str)? },

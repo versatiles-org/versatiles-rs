@@ -32,6 +32,10 @@ impl VectorTileLayer {
 		}
 	}
 
+	pub fn new_standard(name: String) -> VectorTileLayer {
+		VectorTileLayer::new(name, 4096, 1)
+	}
+
 	pub fn read(reader: &mut dyn ValueReader<'_, LE>) -> Result<VectorTileLayer> {
 		let mut extent = 4096;
 		let mut features: Vec<VectorTileFeature> = Vec::new();
