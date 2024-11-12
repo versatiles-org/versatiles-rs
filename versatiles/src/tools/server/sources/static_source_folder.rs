@@ -68,19 +68,29 @@ impl StaticSourceTrait for Folder {
 			local_path.push("index.html");
 		}
 
-		// If the local path is not a subpath of the folder or it doesn't exist, return not found
-		if !local_path.starts_with(&self.folder) || !local_path.exists() || !local_path.is_file() {
+		// If the local path is not a subpath of the folder, return not found
+		if !local_path.starts_with(&self.folder) {
 			return None;
 		}
 
-		let f = File::open(&local_path).unwrap();
-		let mut buffer = Vec::new();
-		BufReader::new(f).read_to_end(&mut buffer).unwrap();
-		let blob = Blob::from(buffer);
-
 		let mime = guess_mime(&local_path);
 
-		SourceResponse::new_some(blob, &TileCompression::Uncompressed, &mime)
+		// Check for compressed versions first (".br" and ".gz"), falling back to uncompressed if neither is found
+
+		let (file, compression) = if let Ok(file) = File::open(&local_path) {
+			(file, TileCompression::Uncompressed)
+		} else if let Ok(file) = File::open(format!("{}.br", local_path.display())) {
+			(file, TileCompression::Brotli)
+		} else if let Ok(file) = File::open(format!("{}.gz", local_path.display())) {
+			(file, TileCompression::Gzip)
+		} else {
+			return None;
+		};
+
+		let mut buffer = Vec::new();
+		BufReader::new(file).read_to_end(&mut buffer).unwrap();
+
+		SourceResponse::new_some(Blob::from(buffer), &compression, &mime)
 	}
 }
 
@@ -96,7 +106,6 @@ impl Debug for Folder {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::path::Path;
 
 	#[tokio::test]
 	async fn test() {
@@ -117,12 +126,13 @@ mod tests {
 		);
 		assert!(result.is_none());
 
-		// Test get_data function with an existing file
+		// Test get_data function with an existing uncompressed file
 		let result = folder.get_data(&Url::new("berlin.mbtiles"), &TargetCompression::from_none());
 		assert!(result.is_some());
 
-		let result = result.unwrap().blob;
-		assert_eq!(result.len(), 26533888);
+		let result = result.unwrap();
+		assert_eq!(result.blob.len(), 26533888);
+		assert_eq!(result.compression, TileCompression::Uncompressed);
 	}
 
 	#[tokio::test]
@@ -133,7 +143,7 @@ mod tests {
 		std::fs::create_dir(&dir_path).unwrap_or_default();
 
 		let index_path = dir_path.join("index.html");
-		std::fs::write(index_path, b"Hello, world!").unwrap();
+		std::fs::write(&index_path, b"Hello, world!").unwrap();
 
 		// Test initialization with the temporary directory
 		let folder = Folder::from(temp_dir.path()).unwrap();
@@ -145,5 +155,46 @@ mod tests {
 
 		let result = response.blob.as_str();
 		assert_eq!(result, "Hello, world!");
+		assert_eq!(response.compression, TileCompression::Uncompressed);
+	}
+
+	#[tokio::test]
+	async fn test_compressed_files() {
+		// Setup: Create a temporary directory with Brotli and Gzip compressed files
+		let temp_dir = assert_fs::TempDir::new().unwrap();
+		let file_path = temp_dir.path().join("compressed.txt");
+
+		// Create Brotli-compressed file
+		let br_file_path = file_path.with_extension("txt.br");
+		std::fs::write(&br_file_path, b"Brotli compressed content").unwrap();
+
+		// Create Gzip-compressed file
+		let gz_file_path = file_path.with_extension("txt.gz");
+		std::fs::write(&gz_file_path, b"Gzip compressed content").unwrap();
+
+		// Initialize folder and test get_data with Brotli file
+		let folder = Folder::from(temp_dir.path()).unwrap();
+
+		// Test Brotli compression
+		let response_br = folder
+			.get_data(&Url::new("compressed.txt"), &TargetCompression::from_none())
+			.unwrap();
+
+		assert_eq!(response_br.blob.as_str(), "Brotli compressed content");
+		assert_eq!(response_br.compression, TileCompression::Brotli);
+
+		// Remove Brotli file to test Gzip fallback
+		std::fs::remove_file(&br_file_path).unwrap();
+
+		// Test Gzip compression
+		let response_gz = folder
+			.get_data(&Url::new("compressed.txt"), &TargetCompression::from_none())
+			.unwrap();
+
+		assert_eq!(response_gz.blob.as_str(), "Gzip compressed content");
+		assert_eq!(response_gz.compression, TileCompression::Gzip);
+
+		// Cleanup
+		temp_dir.close().unwrap();
 	}
 }
