@@ -14,9 +14,9 @@ VersaTiles is a Rust-based project designed for processing and serving tile data
 
 ### Linux
 
-Use the [installation script](https://github.com/versatiles-org/versatiles-rs/blob/main/helpers/install-linux.sh) to download the correct [precompiled binary](https://github.com/versatiles-org/versatiles-rs/releases/latest/) and copy it to `/usr/local/bin/`:
+Use the [installation script](https://github.com/versatiles-org/versatiles-rs/blob/main/helpers/install-unix.sh) to download the correct [precompiled binary](https://github.com/versatiles-org/versatiles-rs/releases/latest/) and copy it to `/usr/local/bin/`:
 ```shell
-curl -Ls "https://github.com/versatiles-org/versatiles-rs/raw/main/helpers/install-linux.sh" | bash
+curl -Ls "https://github.com/versatiles-org/versatiles-rs/raw/main/helpers/install-unix.sh" | bash
 ```
 
 ### MacOS
