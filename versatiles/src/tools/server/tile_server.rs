@@ -242,7 +242,7 @@ impl TileServer {
 				.iter()
 				.map(|s| format!("\"{}\"", s.id))
 				.collect::<Vec<String>>()
-				.join("\",\""),
+				.join(","),
 		);
 
 		api_app = api_app.route(
