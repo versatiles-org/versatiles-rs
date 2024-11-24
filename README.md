@@ -6,9 +6,9 @@
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Matrix Chat](https://img.shields.io/matrix/versatiles:matrix.org?label=matrix)](https://matrix.to/#/#versatiles:matrix.org)
 
-TOC:
+**Table of contents:**
 - [Installation](#installation): [Linux](#linux), [MacOS](#macos), [NixOS](#nixos), [Docker](#docker), [using `cargo install`](#building-locally-using-cargo-install), [from source](#building-from-source)
-- [Usage](#usage)
+- [Usage](#usage): [convert tiles](#example-convert-tiles), [serve tiles](#example-serve-tiles)
 
 # VersaTiles
 
