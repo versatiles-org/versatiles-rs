@@ -161,7 +161,7 @@ fn calc_bbox_pyramid(
 		for entry in entries.iter() {
 			if entry.range.length > 0 {
 				if entry.run_length > 0 {
-					for i in 1..=entry.run_length as u64 {
+					for i in 0..entry.run_length as u64 {
 						let coord = tile_id_to_coord(i + entry.tile_id)?;
 						bbox_pyramid.include_coord(&coord);
 					}
@@ -302,7 +302,7 @@ mod tests {
 
 		assert_wildcard!(
 			format!("{:?}", reader.get_parameters()), 
-			"TilesReaderParameters { bbox_pyramid: [1: [0,0,0,0] (1), * 14: [8786,5360,8819,5387] (952)], tile_compression: Gzip, tile_format: PBF }"
+			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [1,0,1,0] (1), 2: [2,1,2,1] (1), 3: [4,2,4,2] (1), 4: [8,5,8,5] (1), 5: [17,10,17,10] (1), 6: [34,20,34,21] (2), 7: [68,41,68,42] (2), 8: [137,83,137,84] (2), 9: [274,167,275,168] (4), 10: [549,335,551,336] (6), 11: [1098,670,1102,673] (20), 12: [2196,1340,2204,1346] (63), 13: [4393,2680,4409,2693] (238), 14: [8787,5361,8818,5387] (864)], tile_compression: Gzip, tile_format: PBF }"
 		);
 
 		assert_eq!(
