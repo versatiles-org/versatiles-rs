@@ -6,15 +6,15 @@ use crate::utils::{
 use anyhow::Result;
 use std::{collections::BTreeMap, io::Cursor, str};
 
-pub fn parse_json(json: &str) -> Result<JsonValue> {
+pub fn parse_json_str(json: &str) -> Result<JsonValue> {
 	let mut iter = ByteIterator::from_reader(Cursor::new(json), true);
-	parse_json_value(&mut iter)
+	parse_json_iter(&mut iter)
 }
 
-pub fn parse_json_value(iter: &mut ByteIterator) -> Result<JsonValue> {
+pub fn parse_json_iter(iter: &mut ByteIterator) -> Result<JsonValue> {
 	iter.skip_whitespace();
 	match iter.expect_peeked_byte()? {
-		b'[' => parse_array_entries(iter, parse_json_value).map(JsonValue::Array),
+		b'[' => parse_array_entries(iter, parse_json_iter).map(JsonValue::Array),
 		b'{' => parse_json_object(iter),
 		b'"' => parse_quoted_json_string(iter).map(JsonValue::Str),
 		d if d.is_ascii_digit() || d == b'.' || d == b'-' => {
@@ -30,7 +30,7 @@ pub fn parse_json_value(iter: &mut ByteIterator) -> Result<JsonValue> {
 fn parse_json_object(iter: &mut ByteIterator) -> Result<JsonValue> {
 	let mut list: Vec<(String, JsonValue)> = Vec::new();
 	parse_object_entries(iter, |key, iter2| {
-		list.push((key, parse_json_value(iter2)?));
+		list.push((key, parse_json_iter(iter2)?));
 		Ok(())
 	})?;
 	Ok(JsonValue::Object(BTreeMap::from_iter(list)))
@@ -52,7 +52,7 @@ mod tests {
 	#[test]
 	fn simple() {
 		let data = r##"{"users":{"user1":{"city":"Nantes","country":"France"},"user2":{"city":"Bruxelles","country":"Belgium"},"user3":{"city":"Paris","country":"France","age":30}},"countries":["France","Belgium"]}"##;
-		let json = parse_json(data).unwrap();
+		let json = parse_json_str(data).unwrap();
 		assert_eq!(
 			json,
 			v(vec![
@@ -82,7 +82,7 @@ mod tests {
 	#[test]
 	fn error() {
 		let data = r##"{"city":"Nantes","country","France"}"##;
-		let json = parse_json(data);
+		let json = parse_json_str(data);
 		assert_eq!(
 			json.unwrap_err().to_string(),
 			"expected ':' at position 27: tes\",\"country\","
@@ -109,66 +109,66 @@ mod tests {
 		let data =
 			r##"_{_"a"_:_[_{_"b"_:_7_,_"c"_:_true_}_,_{_"d"_:_false_,_"e"_:_null_,_"f"_:_"g"_}_]_}_"##;
 
-		assert_eq!(parse_json(&data.replace('_', ""))?, result);
-		assert_eq!(parse_json(&data.replace('_', " "))?, result);
-		assert_eq!(parse_json(&data.replace('_', "\t"))?, result);
-		assert_eq!(parse_json(&data.replace('_', "\n"))?, result);
-		assert_eq!(parse_json(&data.replace('_', "\r"))?, result);
+		assert_eq!(parse_json_str(&data.replace('_', ""))?, result);
+		assert_eq!(parse_json_str(&data.replace('_', " "))?, result);
+		assert_eq!(parse_json_str(&data.replace('_', "\t"))?, result);
+		assert_eq!(parse_json_str(&data.replace('_', "\n"))?, result);
+		assert_eq!(parse_json_str(&data.replace('_', "\r"))?, result);
 
 		Ok(())
 	}
 
 	#[test]
 	fn test_empty_object() {
-		let json = parse_json("{}").unwrap();
+		let json = parse_json_str("{}").unwrap();
 		assert_eq!(json, JsonValue::Object(BTreeMap::new()));
 	}
 
 	#[test]
 	fn test_empty_array() {
-		let json = parse_json("[]").unwrap();
+		let json = parse_json_str("[]").unwrap();
 		assert_eq!(json, JsonValue::Array(vec![]));
 	}
 
 	#[test]
 	fn test_nested_array() {
-		let json = parse_json("[1, [2, 3], 4]").unwrap();
+		let json = parse_json_str("[1, [2, 3], 4]").unwrap();
 		assert_eq!(json, v(vec![v(1.0), v(vec![v(2.0), v(3.0)]), v(4.0)]));
 	}
 
 	#[test]
 	fn test_nested_object() {
-		let json = parse_json(r##"{"a": {"b": {"c": "d"}}}"##).unwrap();
+		let json = parse_json_str(r##"{"a": {"b": {"c": "d"}}}"##).unwrap();
 		assert_eq!(json, v(vec![("a", v(vec![("b", v(vec![("c", v("d"))]))]))]));
 	}
 
 	#[test]
 	fn test_null_value() {
-		let json = parse_json(r##"{"key": null}"##).unwrap();
+		let json = parse_json_str(r##"{"key": null}"##).unwrap();
 		assert_eq!(json, v(vec![("key", JsonValue::Null)]));
 	}
 
 	#[test]
 	fn test_boolean_value() {
-		let json = parse_json(r##"{"key1": true, "key2": false}"##).unwrap();
+		let json = parse_json_str(r##"{"key1": true, "key2": false}"##).unwrap();
 		assert_eq!(json, v(vec![("key1", v(true)), ("key2", v(false))]));
 	}
 
 	#[test]
 	fn test_number_value() {
-		let json = parse_json(r##"{"integer": 42, "float": 3.14}"##).unwrap();
+		let json = parse_json_str(r##"{"integer": 42, "float": 3.14}"##).unwrap();
 		assert_eq!(json, v(vec![("integer", v(42.0)), ("float", v(3.14))]));
 	}
 
 	#[test]
 	fn test_string_value() {
-		let json = parse_json(r##"{"key": "value"}"##).unwrap();
+		let json = parse_json_str(r##"{"key": "value"}"##).unwrap();
 		assert_eq!(json, v(vec![("key", v("value"))]));
 	}
 
 	#[test]
 	fn test_invalid_json_missing_colon() {
-		let json = parse_json(r##"{"key" "value"}"##);
+		let json = parse_json_str(r##"{"key" "value"}"##);
 		assert_eq!(
 			json.unwrap_err().to_string(),
 			"expected ':' at position 8: {\"key\" \""
@@ -177,7 +177,7 @@ mod tests {
 
 	#[test]
 	fn test_invalid_json_unclosed_brace() {
-		let json = parse_json(r##"{"key": "value""##);
+		let json = parse_json_str(r##"{"key": "value""##);
 		assert_eq!(
 			json.unwrap_err().to_string(),
 			"unexpected end at position 15: {\"key\": \"value\"<EOF>"
@@ -186,7 +186,7 @@ mod tests {
 
 	#[test]
 	fn test_invalid_json_unclosed_bracket() {
-		let json = parse_json(r##"["key", "value""##);
+		let json = parse_json_str(r##"["key", "value""##);
 		assert_eq!(
 			json.unwrap_err().to_string(),
 			"unexpected end at position 15: [\"key\", \"value\"<EOF>"

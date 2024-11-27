@@ -1,4 +1,4 @@
-use super::{parse_json, JsonValue};
+use super::{parse_json_str, JsonValue};
 use anyhow::{anyhow, Error, Result};
 use futures::{future::ready, stream, Stream, StreamExt};
 use std::io::{BufRead, Read};
@@ -6,13 +6,13 @@ use std::io::{BufRead, Read};
 pub fn read_json(mut reader: impl Read) -> Result<JsonValue> {
 	let mut buffer = String::new();
 	reader.read_to_string(&mut buffer)?;
-	parse_json(&buffer)
+	parse_json_str(&buffer)
 }
 
 fn process_line(line: std::io::Result<String>, index: usize) -> Option<Result<JsonValue>> {
 	match line {
 		Ok(line) if line.trim().is_empty() => None, // Skip empty or whitespace-only lines
-		Ok(line) => Some(parse_json(&line).map_err(|e| anyhow!("line {}: {}", index + 1, e))),
+		Ok(line) => Some(parse_json_str(&line).map_err(|e| anyhow!("line {}: {}", index + 1, e))),
 		Err(e) => Some(Err(anyhow!("line {}: {}", index + 1, e))),
 	}
 }
@@ -42,7 +42,7 @@ mod tests {
 	use std::io::Cursor;
 
 	fn json_from_str<T: AsRef<str>>(s: T) -> Result<JsonValue> {
-		parse_json(s.as_ref())
+		parse_json_str(s.as_ref())
 	}
 
 	#[test]

@@ -1,6 +1,6 @@
 use crate::{
 	utils::{
-		parse_array_entries, parse_json_value, parse_number_as, parse_number_as_string,
+		parse_array_entries, parse_json_iter, parse_number_as, parse_number_as_string,
 		parse_object_entries, parse_quoted_json_string, parse_tag, ByteIterator,
 	},
 	Coordinates0, Coordinates1, Coordinates2, Coordinates3, GeoCollection, GeoFeature,
@@ -22,7 +22,7 @@ pub fn parse_geojson_collection(iter: &mut ByteIterator) -> Result<GeoCollection
 		match key.as_str() {
 			"type" => object_type = Some(parse_quoted_json_string(iter2)?),
 			"features" => features = parse_array_entries(iter2, parse_geojson_feature)?,
-			_ => _ = parse_json_value(iter2)?,
+			_ => _ = parse_json_iter(iter2)?,
 		};
 		Ok(())
 	})?;
@@ -53,7 +53,7 @@ pub fn parse_geojson_feature(iter: &mut ByteIterator) -> Result<GeoFeature> {
 			"id" => id = Some(parse_geojson_id(iter2)?),
 			"geometry" => geometry = Some(parse_geojson_geometry(iter2)?),
 			"properties" => properties = Some(parse_geojson_properties(iter2)?),
-			_ => _ = parse_json_value(iter2)?,
+			_ => _ = parse_json_iter(iter2)?,
 		};
 		Ok(())
 	})?;
@@ -137,7 +137,7 @@ fn parse_geojson_geometry(iter: &mut ByteIterator) -> Result<Geometry> {
 		match key.as_str() {
 			"type" => geometry_type = Some(parse_quoted_json_string(iter2)?),
 			"coordinates" => coordinates = Some(parse_geojson_coordinates(iter2)?),
-			_ => _ = parse_json_value(iter2)?,
+			_ => _ = parse_json_iter(iter2)?,
 		};
 		Ok(())
 	})?;

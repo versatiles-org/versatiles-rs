@@ -1,6 +1,6 @@
-use std::collections::BTreeMap;
-
+use super::stringify::json_as_string;
 use anyhow::{bail, Result};
+use std::collections::BTreeMap;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum JsonValue {
@@ -24,22 +24,24 @@ impl JsonValue {
 			Str(_) => "string",
 		}
 	}
-	pub fn as_u64(&self) -> Result<u64> {
-		match self {
-			JsonValue::Num(v) => Ok(*v as u64),
-			_ => bail!("value has type '{}' and not 'number'", self.type_as_str()),
-		}
-	}
-	pub fn as_str(&self) -> Result<&str> {
-		match self {
-			JsonValue::Str(v) => Ok(v),
-			_ => bail!("value has type '{}' and not 'string'", self.type_as_str()),
-		}
-	}
 	pub fn as_string(&self) -> Result<String> {
-		match self {
-			JsonValue::Str(v) => Ok(v.to_string()),
-			_ => bail!("value has type '{}' and not 'string'", self.type_as_str()),
+		json_as_string(self)
+	}
+	pub fn empty_object() -> JsonValue {
+		JsonValue::Object(BTreeMap::new())
+	}
+	pub fn assign_object(&mut self, object: JsonValue) -> Result<()> {
+		if let JsonValue::Object(self_tree) = self {
+			if let JsonValue::Object(object_tree) = object {
+				for entry in object_tree.into_iter() {
+					self_tree.insert(entry.0, entry.1);
+				}
+				Ok(())
+			} else {
+				bail!("object must be a JSON object")
+			}
+		} else {
+			bail!("self must be a JSON object")
 		}
 	}
 }
