@@ -418,8 +418,8 @@ mod tests {
 		assert_eq!(get("api/source/dummy_name").await, "Not Found");
 		assert_eq!(get("api/source/cheese").await, JSON);
 		assert_eq!(get("tiles/cheese/brum.json").await, "Not Found");
-		assert_eq!(get("tiles/cheese/meta.json").await, "dummy meta data");
-		assert_eq!(get("tiles/cheese/tiles.json").await, "dummy meta data");
+		assert_eq!(get("tiles/cheese/meta.json").await, "{\"type\":\"dummy\"}");
+		assert_eq!(get("tiles/cheese/tiles.json").await, "{\"type\":\"dummy\"}");
 		assert!(get("tiles/cheese/0/0/0.png")
 			.await
 			.starts_with("\u{1a}4\n\u{5}ocean"));

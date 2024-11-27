@@ -3,12 +3,12 @@ use crate::utils::{
 	parse_array_entries, parse_number_as, parse_object_entries, parse_quoted_json_string, parse_tag,
 	ByteIterator,
 };
-use anyhow::Result;
+use anyhow::{Context, Result};
 use std::{collections::BTreeMap, io::Cursor, str};
 
 pub fn parse_json_str(json: &str) -> Result<JsonValue> {
 	let mut iter = ByteIterator::from_reader(Cursor::new(json), true);
-	parse_json_iter(&mut iter)
+	parse_json_iter(&mut iter).with_context(|| format!("while parsing JSON '{json}'"))
 }
 
 pub fn parse_json_iter(iter: &mut ByteIterator) -> Result<JsonValue> {

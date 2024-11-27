@@ -100,7 +100,7 @@ impl TilesReaderTrait for MockTilesReader {
 	}
 
 	fn get_meta(&self) -> Result<Option<Blob>> {
-		Ok(Some(Blob::from("dummy meta data")))
+		Ok(Some(Blob::from("{\"type\":\"dummy\"}")))
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {

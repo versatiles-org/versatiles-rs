@@ -264,7 +264,7 @@ mod tests {
 				let result = result.unwrap();
 
 				if result.compression == N {
-					assert_eq!(result.blob.as_str(), "dummy meta data");
+					assert_eq!(result.blob.as_str(), "{\"type\":\"dummy\"}");
 				}
 
 				assert_eq!(result.mime, "application/json");

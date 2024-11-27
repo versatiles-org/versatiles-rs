@@ -217,8 +217,10 @@ mod tests {
 		);
 
 		assert_eq!(
-			&check_response(c, "meta.json", Uncompressed, "application/json").await?[..],
-			b"dummy meta data"
+			String::from_utf8(
+				check_response(c, "meta.json", Uncompressed, "application/json").await?
+			)?,
+			"{\"type\":\"dummy\"}"
 		);
 
 		assert!(check_404(c, "x/0/0.png", Uncompressed).await?);
