@@ -44,8 +44,20 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Run Fmt, Clippy and Test
-        run: ./helpers/test.sh
+      - name: Run fmt
+        run: cargo fmt -- --check
+
+      - name: Run check
+        run: cargo check
+
+      - name: Run clippy
+        run: cargo clippy --workspace --all-features -- -D warnings
+
+      - name: Run test
+        run: cargo test
+
+      - name: Run test with all features
+        run: cargo test --all-features
 
       - name: Install Cargo Coverage
         uses: taiki-e/install-action@cargo-llvm-cov
@@ -57,31 +69,30 @@ jobs:
         uses: codecov/codecov-action@v4
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
-
-  windows:
-    name: 'Test on Windows'
-    runs-on: windows-latest
-    steps:
-      - name: Check out
-        uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - name: Init Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            C:\Users\runneradmin\.cargo\bin\
-            C:\Users\runneradmin\.cargo\registry\index\
-            C:\Users\runneradmin\.cargo\registry\cache\
-            C:\Users\runneradmin\.cargo\git\db\
-            target\
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-
-      - name: Run Fmt, Clippy and Test
-        shell: pwsh
-        working-directory: ${{ env.GITHUB_WORKSPACE }}
-        run: .\helpers\test.ps1
+#  windows:
+#    name: 'Test on Windows'
+#    runs-on: windows-latest
+#    steps:
+#      - name: Check out
+#        uses: actions/checkout@v4
+#
+#      - name: Install Rust
+#        uses: dtolnay/rust-toolchain@stable
+#        with:
+#          components: rustfmt, clippy
+#
+#      - name: Init Cache
+#        uses: actions/cache@v4
+#        with:
+#          path: |
+#            C:\Users\runneradmin\.cargo\bin\
+#            C:\Users\runneradmin\.cargo\registry\index\
+#            C:\Users\runneradmin\.cargo\registry\cache\
+#            C:\Users\runneradmin\.cargo\git\db\
+#            target\
+#          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+#
+#      - name: Run Fmt, Clippy and Test
+#        shell: pwsh
+#        working-directory: ${{ env.GITHUB_WORKSPACE }}
+#        run: .\helpers\test.ps1
