@@ -13,7 +13,7 @@ fn bench_advance(c: &mut Criterion) {
 			|mut byte_iter| {
 				for _ in 0..DATA_SIZE {
 					byte_iter.advance();
-     black_box(());
+					black_box(());
 				}
 			},
 			BATCH_SIZE,
@@ -43,9 +43,9 @@ fn bench_skip_whitespace(c: &mut Criterion) {
 		b.iter_batched(
 			|| ByteIterator::from_reader(reader.clone(), false),
 			|mut byte_iter| {
-       byte_iter.skip_whitespace();
-       black_box(())
-   },
+				byte_iter.skip_whitespace();
+				black_box(())
+			},
 			BATCH_SIZE,
 		)
 	});
