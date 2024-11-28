@@ -1,9 +1,22 @@
 version: 2
 updates:
+  # Weekly security audits
+  - package-ecosystem: cargo
+    directory: /
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 0
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 0
+
+  # Monthly regular updates
   - package-ecosystem: cargo
     directory: /
     schedule: { interval: monthly }
     groups: { npm: { patterns: ['*'] } }
+
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: monthly }
