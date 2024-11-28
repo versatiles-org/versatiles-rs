@@ -49,8 +49,8 @@ fn escape_json_string(input: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+	use super::super::parse::parse_json_str;
 	use super::json_as_string;
-	use crate::utils::parse_json_str;
 	use anyhow::Result;
 
 	#[test]

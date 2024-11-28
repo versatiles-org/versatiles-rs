@@ -4,7 +4,7 @@ use crate::utils::{
 	ByteIterator,
 };
 use anyhow::{Context, Result};
-use std::{collections::BTreeMap, io::Cursor, str};
+use std::{collections::BTreeMap, io::Cursor};
 
 pub fn parse_json_str(json: &str) -> Result<JsonValue> {
 	let mut iter = ByteIterator::from_reader(Cursor::new(json), true);

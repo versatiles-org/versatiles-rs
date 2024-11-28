@@ -1,4 +1,4 @@
-use super::stringify::json_as_string;
+use super::{parse::parse_json_str, stringify::json_as_string};
 use anyhow::{bail, Result};
 use std::collections::BTreeMap;
 
@@ -13,6 +13,9 @@ pub enum JsonValue {
 }
 
 impl JsonValue {
+	pub fn parse(json: &str) -> Result<JsonValue> {
+		parse_json_str(json)
+	}
 	pub fn type_as_str(&self) -> &str {
 		use JsonValue::*;
 		match self {
