@@ -35,3 +35,37 @@ impl TilesReaderParameters {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_tiles_reader_parameters_new() {
+		let bbox_pyramid = TileBBoxPyramid::new_full(10);
+		let tile_format = TileFormat::PNG;
+		let tile_compression = TileCompression::Gzip;
+
+		let params = TilesReaderParameters::new(
+			tile_format.clone(),
+			tile_compression.clone(),
+			bbox_pyramid.clone(),
+		);
+
+		assert_eq!(params.tile_format, tile_format);
+		assert_eq!(params.tile_compression, tile_compression);
+		assert_eq!(params.bbox_pyramid, bbox_pyramid);
+	}
+
+	#[test]
+	fn test_tiles_reader_parameters_new_full() {
+		let tile_format = TileFormat::JPG;
+		let tile_compression = TileCompression::Gzip;
+
+		let params = TilesReaderParameters::new_full(tile_format.clone(), tile_compression.clone());
+
+		assert_eq!(params.tile_format, tile_format);
+		assert_eq!(params.tile_compression, tile_compression);
+		assert_eq!(params.bbox_pyramid, TileBBoxPyramid::new_full(31));
+	}
+}
