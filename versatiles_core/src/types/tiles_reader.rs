@@ -184,9 +184,8 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 #[cfg(test)]
 mod tests {
-	use crate::types::{TileBBoxPyramid, TileFormat};
-
 	use super::*;
+	use crate::types::{TileBBoxPyramid, TileFormat};
 
 	#[derive(Debug)]
 	struct TestReader {
@@ -233,13 +232,82 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn get_bbox_tile_iter() -> Result<()> {
+	async fn test_get_name() {
 		let reader = TestReader::new_dummy();
-		let bbox = TileBBox::new(4, 0, 1, 9, 10)?;
+		assert_eq!(reader.get_name(), "dummy");
+	}
+
+	#[tokio::test]
+	async fn test_get_container_name() {
+		let reader = TestReader::new_dummy();
+		assert_eq!(reader.get_container_name(), "test container name");
+	}
+
+	#[tokio::test]
+	async fn test_get_parameters() {
+		let reader = TestReader::new_dummy();
+		let parameters = reader.get_parameters();
+		assert_eq!(parameters.tile_compression, TileCompression::Gzip);
+		assert_eq!(parameters.tile_format, TileFormat::PBF);
+		assert_eq!(parameters.bbox_pyramid.get_zoom_min().unwrap(), 0);
+		assert_eq!(parameters.bbox_pyramid.get_zoom_max().unwrap(), 3);
+	}
+
+	#[tokio::test]
+	async fn test_override_compression() {
+		let mut reader = TestReader::new_dummy();
+		assert_eq!(
+			reader.get_parameters().tile_compression,
+			TileCompression::Gzip
+		);
+
+		reader.override_compression(TileCompression::Brotli);
+		assert_eq!(
+			reader.get_parameters().tile_compression,
+			TileCompression::Brotli
+		);
+	}
+
+	#[tokio::test]
+	async fn test_get_meta() -> Result<()> {
+		let reader = TestReader::new_dummy();
+		let meta = reader.get_meta()?;
+		assert_eq!(meta, Some(Blob::from("test metadata")));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_get_tile_data() -> Result<()> {
+		let reader = TestReader::new_dummy();
+		let coord = TileCoord3::new(0, 0, 0)?;
+		let tile_data = reader.get_tile_data(&coord).await?;
+		assert_eq!(tile_data, Some(Blob::from("test tile data")));
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_get_bbox_tile_stream() -> Result<()> {
+		let reader = TestReader::new_dummy();
+		let bbox = TileBBox::new(1, 0, 0, 1, 1)?;
 		let stream = reader.get_bbox_tile_stream(bbox).await;
 
-		assert_eq!(stream.drain_and_count().await, 100);
+		assert_eq!(stream.drain_and_count().await, 4); // Assuming 4 tiles in a 2x2 bbox
+		Ok(())
+	}
 
+	#[tokio::test]
+	async fn test_probe_tile_contents() -> Result<()> {
+		let mut reader = TestReader::new_dummy();
+
+		#[cfg(feature = "cli")]
+		{
+			use crate::utils::PrettyPrint;
+
+			let mut print = PrettyPrint::new();
+			reader
+				.probe_tile_contents(&print.get_category("tile contents").await)
+				.await?;
+		}
 		Ok(())
 	}
 }
