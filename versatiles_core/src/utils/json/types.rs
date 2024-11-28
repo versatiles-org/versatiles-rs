@@ -30,10 +30,10 @@ impl JsonValue {
 	pub fn as_string(&self) -> Result<String> {
 		json_as_string(self)
 	}
-	pub fn empty_object() -> JsonValue {
+	pub fn object_new_empty() -> JsonValue {
 		JsonValue::Object(BTreeMap::new())
 	}
-	pub fn assign_object(&mut self, object: JsonValue) -> Result<()> {
+	pub fn object_assign(&mut self, object: JsonValue) -> Result<()> {
 		if let JsonValue::Object(self_tree) = self {
 			if let JsonValue::Object(object_tree) = object {
 				for entry in object_tree.into_iter() {
@@ -43,6 +43,14 @@ impl JsonValue {
 			} else {
 				bail!("object must be a JSON object")
 			}
+		} else {
+			bail!("self must be a JSON object")
+		}
+	}
+	pub fn object_set_key_value(&mut self, key: &str, value: JsonValue) -> Result<()> {
+		if let JsonValue::Object(self_tree) = self {
+			self_tree.insert(key.to_owned(), value);
+			Ok(())
 		} else {
 			bail!("self must be a JSON object")
 		}
@@ -70,6 +78,12 @@ impl From<bool> for JsonValue {
 impl From<f64> for JsonValue {
 	fn from(input: f64) -> Self {
 		JsonValue::Num(input)
+	}
+}
+
+impl From<u8> for JsonValue {
+	fn from(input: u8) -> Self {
+		JsonValue::Num(input as f64)
 	}
 }
 

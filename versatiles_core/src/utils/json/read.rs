@@ -1,12 +1,14 @@
 use super::JsonValue;
-use anyhow::{anyhow, Error, Result};
+use anyhow::{anyhow, Context, Error, Result};
 use futures::{future::ready, stream, Stream, StreamExt};
 use std::io::BufRead;
 
 fn process_line(line: std::io::Result<String>, index: usize) -> Option<Result<JsonValue>> {
 	match line {
 		Ok(line) if line.trim().is_empty() => None, // Skip empty or whitespace-only lines
-		Ok(line) => Some(JsonValue::parse(&line).map_err(|e| anyhow!("line {}: {}", index + 1, e))),
+		Ok(line) => {
+			Some(JsonValue::parse(&line).with_context(|| format!("error in line {}", index + 1)))
+		}
 		Err(e) => Some(Err(anyhow!("line {}: {}", index + 1, e))),
 	}
 }
@@ -34,6 +36,13 @@ pub fn read_ndjson_stream(reader: impl BufRead) -> impl Stream<Item = Result<Jso
 mod tests {
 	use super::*;
 	use std::io::Cursor;
+
+	fn join_errors(e: &Error) -> String {
+		e.chain()
+			.map(|e| e.to_string())
+			.collect::<Vec<String>>()
+			.join("\n")
+	}
 
 	fn json_from_str<T: AsRef<str>>(s: T) -> Result<JsonValue> {
 		JsonValue::parse(s.as_ref())
@@ -116,8 +125,8 @@ mod tests {
 			&json_from_str(r#"{"key1": "value1"}"#)?
 		);
 		assert_eq!(
-			vec[1].as_ref().unwrap_err().to_string(),
-			"line 2: parsing object, expected '\"' or '}' at position 1: {"
+			join_errors(vec[1].as_ref().unwrap_err()),
+			"error in line 2\nwhile parsing JSON '{invalid json}'\nparsing object, expected '\"' or '}' at position 1: {"
 		);
 		assert_eq!(
 			vec[2].as_ref().unwrap(),
@@ -138,8 +147,8 @@ mod tests {
 			&json_from_str(r#"{"key1": "value1"}"#)?
 		);
 		assert_eq!(
-			vec[1].as_ref().unwrap_err().to_string(),
-			"line 2: unexpected character while parsing tag 'null' at position 2: no"
+			join_errors(vec[1].as_ref().unwrap_err()),
+			"error in line 2\nwhile parsing JSON 'not a json'\nunexpected character while parsing tag 'null' at position 2: no"
 		);
 		assert_eq!(
 			vec[2].as_ref().unwrap(),

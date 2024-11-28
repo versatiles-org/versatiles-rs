@@ -186,7 +186,7 @@ mod tests {
 			.unwrap_or_else(|_| panic!("filename {filename} should be gzip compressed"))
 		};
 
-		assert_eq!(load("tiles.json.gz").as_str(), "dummy meta data");
+		assert_eq!(load("tiles.json.gz").as_str(), "{\"type\":\"dummy\"}");
 		assert_eq!(load("0/0/0.pbf.gz").as_slice(), MOCK_BYTES_PBF);
 		assert_eq!(load("2/3/3.pbf.gz").as_slice(), MOCK_BYTES_PBF);
 

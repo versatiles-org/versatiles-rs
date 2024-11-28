@@ -151,7 +151,7 @@ mod tests {
 			reader.get_parameters(),
 			&TilesReaderParameters::new(TileFormat::PNG, TileCompression::Uncompressed, bbox_pyramid)
 		);
-		assert_eq!(reader.get_meta()?, Some(Blob::from("dummy meta data")));
+		assert_eq!(reader.get_meta()?.unwrap().as_str(), "{\"type\":\"dummy\"}");
 		let blob = reader
 			.get_tile_data(&TileCoord3::new(0, 0, 0)?)
 			.await?

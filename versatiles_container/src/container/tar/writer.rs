@@ -102,7 +102,7 @@ mod tests {
 	use super::*;
 	use crate::{
 		container::{MockTilesReader, MockTilesWriter, TarTilesReader},
-		types::{Blob, TileBBoxPyramid, TileCompression, TileFormat, TilesReaderParameters},
+		types::{TileBBoxPyramid, TileCompression, TileFormat, TilesReaderParameters},
 	};
 	use assert_fs::NamedTempFile;
 
@@ -135,7 +135,7 @@ mod tests {
 		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path).await?;
 
 		let reader = TarTilesReader::open_path(&temp_path)?;
-		assert_eq!(reader.get_meta()?, Some(Blob::from("dummy meta data")));
+		assert_eq!(reader.get_meta()?.unwrap().as_str(), "{\"type\":\"dummy\"}");
 
 		Ok(())
 	}
