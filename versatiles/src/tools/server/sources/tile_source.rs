@@ -3,7 +3,7 @@ use crate::{
 	types::{TileCompression, TileCoord3, TileFormat, TilesReaderTrait},
 	utils::TargetCompression,
 };
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 
@@ -71,7 +71,11 @@ impl TileSource {
 	}
 
 	// Retrieve the tile data as an HTTP response
-	pub async fn get_data(&self, url: &Url, _accept: &TargetCompression) -> Option<SourceResponse> {
+	pub async fn get_data(
+		&self,
+		url: &Url,
+		_accept: &TargetCompression,
+	) -> Result<Option<SourceResponse>> {
 		let parts: Vec<String> = url.as_vec();
 
 		if parts.len() >= 3 {
@@ -82,12 +86,12 @@ impl TileSource {
 			let y = y.parse::<u32>();
 
 			// Check for parsing errors
-			if x.is_err() || y.is_err() || z.is_err() {
-				return None;
-			}
+			ensure!(z.is_ok(), "value for z is not a number");
+			ensure!(x.is_ok(), "value for x is not a number");
+			ensure!(y.is_ok(), "value for y is not a number");
 
 			// Create a TileCoord3 instance
-			let coord = TileCoord3::new(x.unwrap(), y.unwrap(), z.unwrap()).unwrap();
+			let coord = TileCoord3::new(x?, y?, z?)?;
 
 			log::debug!(
 				"get tile, prefix: {}, coord: {}",
@@ -102,35 +106,37 @@ impl TileSource {
 
 			// If tile data is not found, return a not found response
 			if tile.is_err() {
-				return None;
+				return Ok(None);
 			}
 
-			let tile = tile.unwrap();
-
 			// If tile data is not found, return a not found response
-			return if let Some(tile) = tile {
-				SourceResponse::new_some(tile, &self.compression, &self.tile_mime)
+			return if let Some(tile) = tile? {
+				Ok(SourceResponse::new_some(
+					tile,
+					&self.compression,
+					&self.tile_mime,
+				))
 			} else {
-				None
+				Ok(None)
 			};
 		} else if (parts[0] == "meta.json") || (parts[0] == "tiles.json") {
 			// Get metadata
 			let reader = self.reader.lock().await;
-			let meta_option = reader.get_meta().unwrap();
+			let tile_json = reader.get_tile_json(Some(&format!(
+				"{}{{z}}/{{x}}/{{y}}",
+				self.prefix.as_string()
+			)))?;
 			drop(reader);
 
-			// If metadata is empty, return a not found response
-			meta_option.as_ref()?;
-
-			return SourceResponse::new_some(
-				meta_option.unwrap(),
+			return Ok(SourceResponse::new_some(
+				tile_json,
 				&TileCompression::Uncompressed,
 				"application/json",
-			);
+			));
 		}
 
 		// If the request is unknown, return a not found response
-		None
+		Ok(None)
 	}
 }
 
@@ -167,7 +173,7 @@ mod tests {
 	#[test]
 	fn debug() -> Result<()> {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
-		let container = TileSource::from(reader.boxed(), "prefix").unwrap();
+		let container = TileSource::from(reader.boxed(), "prefix")?;
 		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Uncompressed, tile_format: PNG } } }, tile_mime: \"image/png\", compression: Uncompressed }");
 		Ok(())
 	}
@@ -185,7 +191,7 @@ mod tests {
 		) -> Result<Vec<u8>> {
 			let response = container
 				.get_data(&Url::new(url), &TargetCompression::from(compression))
-				.await;
+				.await?;
 			assert!(response.is_some());
 
 			let response = response.unwrap();
@@ -194,7 +200,7 @@ mod tests {
 			Ok(response.blob.into_vec())
 		}
 
-		async fn check_404(
+		async fn check_error_400(
 			container: &mut TileSource,
 			url: &str,
 			compression: TileCompression,
@@ -202,6 +208,18 @@ mod tests {
 			let response = container
 				.get_data(&Url::new(url), &TargetCompression::from(compression))
 				.await;
+			assert!(response.is_err());
+			Ok(true)
+		}
+
+		async fn check_error_404(
+			container: &mut TileSource,
+			url: &str,
+			compression: TileCompression,
+		) -> Result<bool> {
+			let response = container
+				.get_data(&Url::new(url), &TargetCompression::from(compression))
+				.await?;
 			assert!(response.is_none());
 			Ok(true)
 		}
@@ -220,13 +238,13 @@ mod tests {
 			String::from_utf8(
 				check_response(c, "meta.json", Uncompressed, "application/json").await?
 			)?,
-			"{\"type\":\"dummy\"}"
+			"{\"bounds\":[-180,-85.05112877980659,180,85.05112877980659],\"center\":[0,0,2],\"maxzoom\":4,\"minzoom\":0,\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
 		);
 
-		assert!(check_404(c, "x/0/0.png", Uncompressed).await?);
-		assert!(check_404(c, "-1/0/0.png", Uncompressed).await?);
-		assert!(check_404(c, "0/0/-1.png", Uncompressed).await?);
-		assert!(check_404(c, "0/0/1.png", Uncompressed).await?);
+		assert!(check_error_400(c, "x/0/0.png", Uncompressed).await?);
+		assert!(check_error_400(c, "-1/0/0.png", Uncompressed).await?);
+		assert!(check_error_400(c, "0/0/-1.png", Uncompressed).await?);
+		assert!(check_error_404(c, "0/0/1.png", Uncompressed).await?);
 
 		Ok(())
 	}

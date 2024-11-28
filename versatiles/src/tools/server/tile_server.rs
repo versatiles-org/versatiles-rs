@@ -159,12 +159,17 @@ impl TileServer {
 					)
 					.await;
 
-				if let Some(response) = response {
-					log::info!("send response to tile request: {path}");
+				if let Ok(Some(response)) = response {
+					log::info!("send response for tile request: {path}");
 					ok_data(response, target_compressions)
 				} else {
-					log::warn!("send 404 to tile request: {path}");
-					ok_not_found()
+					if let Err(err) = response {
+						log::warn!("send 400 for tile request: {path}. Reason: {err}");
+						error_400()
+					} else {
+						log::warn!("send 404 for tile request: {path}");
+						error_404()
+					}
 				}
 			}
 		}
@@ -205,7 +210,7 @@ impl TileServer {
 			}
 
 			log::warn!("send 404 to static request: {url}");
-			ok_not_found()
+			error_404()
 		}
 	}
 
@@ -263,7 +268,14 @@ impl TileServer {
 	}
 }
 
-fn ok_not_found() -> Response<Body> {
+fn error_400() -> Response<Body> {
+	Response::builder()
+		.status(400)
+		.body(Body::from("Bad Request"))
+		.expect("should have build a body")
+}
+
+fn error_404() -> Response<Body> {
 	Response::builder()
 		.status(404)
 		.body(Body::from("Not Found"))
@@ -418,8 +430,10 @@ mod tests {
 		assert_eq!(get("api/source/dummy_name").await, "Not Found");
 		assert_eq!(get("api/source/cheese").await, JSON);
 		assert_eq!(get("tiles/cheese/brum.json").await, "Not Found");
-		assert_eq!(get("tiles/cheese/meta.json").await, "{\"type\":\"dummy\"}");
-		assert_eq!(get("tiles/cheese/tiles.json").await, "{\"type\":\"dummy\"}");
+
+		let meta = "{\"bounds\":[-180,-85.05112877980659,180,85.05112877980659],\"center\":[0,0,2],\"maxzoom\":4,\"minzoom\":0,\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/cheese/{z}/{x}/{y}\"],\"type\":\"dummy\"}";
+		assert_eq!(get("tiles/cheese/meta.json").await, meta);
+		assert_eq!(get("tiles/cheese/tiles.json").await, meta);
 		assert!(get("tiles/cheese/0/0/0.png")
 			.await
 			.starts_with("\u{1a}4\n\u{5}ocean"));

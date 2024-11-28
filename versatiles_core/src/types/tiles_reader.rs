@@ -1,14 +1,15 @@
 #[cfg(feature = "cli")]
 use super::ProbeDepth;
-use crate::types::{
-	Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters,
-};
 #[cfg(feature = "cli")]
 use crate::utils::PrettyPrint;
+use crate::{
+	types::{Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters},
+	utils::JsonValue,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use std::{fmt::Debug, sync::Arc};
+use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 
 /// Trait defining the behavior of a tile reader.
 #[async_trait]
@@ -27,6 +28,39 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 	/// Get the metadata, always uncompressed.
 	fn get_meta(&self) -> Result<Option<Blob>>;
+
+	fn get_tile_json(&self, tiles_url: Option<&str>) -> Result<Blob> {
+		let meta_original = self.get_meta()?;
+		let pyramide = &self.get_parameters().bbox_pyramid;
+		let bbox = pyramide.get_geo_bbox();
+		let zoom_min = pyramide.get_zoom_min().unwrap();
+		let zoom_max = pyramide.get_zoom_max().unwrap();
+
+		let mut meta = JsonValue::Object(BTreeMap::from([
+			(String::from("tilejson"), JsonValue::from("3.0.0")),
+			(String::from("bounds"), JsonValue::from(bbox.to_vec())),
+			(String::from("minzoom"), JsonValue::from(zoom_min)),
+			(String::from("maxzoom"), JsonValue::from(zoom_max)),
+			(
+				String::from("center"),
+				JsonValue::from(vec![
+					(bbox[0] + bbox[2]) / 2.,
+					(bbox[1] + bbox[3]) / 2.,
+					(zoom_min + 2).min(zoom_max) as f64,
+				]),
+			),
+		]));
+
+		if let Some(tiles_url) = tiles_url {
+			meta.object_set_key_value("tiles", JsonValue::from(vec![tiles_url]))?
+		}
+
+		if let Some(meta_original) = meta_original {
+			meta.object_assign(JsonValue::parse(meta_original.as_str())?)?
+		}
+
+		Ok(Blob::from(meta.as_string()?))
+	}
 
 	/// Get tile data for the given coordinate, always compressed and formatted.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>>;
