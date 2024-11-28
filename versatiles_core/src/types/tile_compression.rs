@@ -163,4 +163,49 @@ mod tests {
 			"noextensionfile",
 		);
 	}
+
+	#[test]
+	fn test_parse_str() {
+		fn test(input: &str, expected: Result<TileCompression>) {
+			let result = TileCompression::parse_str(input);
+			assert_eq!(
+				result.is_ok(),
+				expected.is_ok(),
+				"Unexpected result for input: {input}"
+			);
+			if let Ok(expected_value) = expected {
+				assert_eq!(
+					result.unwrap(),
+					expected_value,
+					"Parsed compression does not match expected for input: {input}"
+				);
+			} else {
+				assert!(result.is_err(), "Expected error for input: {input}");
+			}
+		}
+
+		test("none", Ok(TileCompression::Uncompressed));
+		test("gzip", Ok(TileCompression::Gzip));
+		test("brotli", Ok(TileCompression::Brotli));
+		test("br", Ok(TileCompression::Brotli));
+		test("gz", Ok(TileCompression::Gzip));
+		test("raw", Ok(TileCompression::Uncompressed));
+		test("unknown", Err(anyhow::anyhow!("Unknown tile compression")));
+		test("", Err(anyhow::anyhow!("Unknown tile compression")));
+	}
+
+	#[test]
+	fn test_display_trait() {
+		fn test(compression: TileCompression, expected_display: &str) {
+			assert_eq!(
+				format!("{}", compression),
+				expected_display,
+				"Display output does not match expected for {compression:?}"
+			);
+		}
+
+		test(TileCompression::Uncompressed, "none");
+		test(TileCompression::Gzip, "gzip");
+		test(TileCompression::Brotli, "brotli");
+	}
 }
