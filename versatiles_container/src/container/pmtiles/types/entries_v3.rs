@@ -241,7 +241,7 @@ pub struct EntriesSliceV3<'a> {
 	entries: &'a [EntryV3],
 }
 
-impl<'a> EntriesSliceV3<'a> {
+impl EntriesSliceV3<'_> {
 	/// Returns the number of entries in the slice.
 	pub fn len(&self) -> usize {
 		self.entries.len()

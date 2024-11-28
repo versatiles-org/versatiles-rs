@@ -4,12 +4,15 @@ use crate::{
 };
 use ab_glyph::{Font, FontArc, Outline, OutlineCurve::*, Point};
 use anyhow::Result;
+use lazy_static::lazy_static;
 use std::{f64::consts::PI, ops::Div, vec};
 use versatiles_geometry::{
 	math, Coordinates1, Coordinates2, Coordinates3, GeoFeature, Geometry, MultiPolygonGeometry,
 };
 
-static mut FONT: Option<FontArc> = None;
+lazy_static! {
+	static ref FONT: FontArc = FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap();
+}
 
 pub fn create_debug_vector_tile(coord: &TileCoord3) -> Result<Blob> {
 	let tile = VectorTile::new(vec![
@@ -23,13 +26,7 @@ pub fn create_debug_vector_tile(coord: &TileCoord3) -> Result<Blob> {
 }
 
 fn draw_text(name: &str, y: f32, text: String) -> VectorTileLayer {
-	let font = unsafe {
-		if FONT.is_none() {
-			FONT.insert(FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap())
-		} else {
-			FONT.as_ref().unwrap()
-		}
-	};
+	let font: &FontArc = &FONT;
 
 	let mut features: Vec<GeoFeature> = Vec::new();
 	let height = font.height_unscaled();

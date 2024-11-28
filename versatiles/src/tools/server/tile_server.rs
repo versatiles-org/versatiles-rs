@@ -162,14 +162,12 @@ impl TileServer {
 				if let Ok(Some(response)) = response {
 					log::info!("send response for tile request: {path}");
 					ok_data(response, target_compressions)
+				} else if let Err(err) = response {
+					log::warn!("send 400 for tile request: {path}. Reason: {err}");
+					error_400()
 				} else {
-					if let Err(err) = response {
-						log::warn!("send 400 for tile request: {path}. Reason: {err}");
-						error_400()
-					} else {
-						log::warn!("send 404 for tile request: {path}");
-						error_404()
-					}
+					log::warn!("send 404 for tile request: {path}");
+					error_404()
 				}
 			}
 		}

@@ -24,7 +24,6 @@ impl fmt::Display for FnConv {
 }
 
 /// A structure representing a function that converts a blob to another blob
-
 impl FnConv {
 	#[allow(unreachable_patterns)]
 	fn run(&self, blob: Blob) -> Result<Blob> {

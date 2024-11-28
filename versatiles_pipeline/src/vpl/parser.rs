@@ -127,7 +127,7 @@ fn parse_sources(input: &str) -> IResult<&str, Vec<VPLPipeline>, VerboseError<&s
 	)(input)
 }
 
-fn parse_node<'a>(input: &'a str) -> IResult<&str, VPLNode, VerboseError<&str>> {
+fn parse_node<'a>(input: &'a str) -> IResult<&'a str, VPLNode, VerboseError<&'a str>> {
 	context("node", |input: &'a str| {
 		let (input, _) = multispace0(input)?;
 		let (input, name) = parse_identifier(input)?;
@@ -352,8 +352,7 @@ mod tests {
 			let mut error = parse_vpl(vpl)
 				.unwrap_err()
 				.to_string()
-				.replace('^', " ")
-				.replace('\n', " ");
+				.replace(['^', '\n'], " ");
 			error = error.replace(vpl, "");
 			error = REG_MGS1.replace_all(&error, " ").to_string();
 			error = REG_MGS2

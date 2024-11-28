@@ -98,7 +98,7 @@ mod tests {
 	async fn test() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let operation = factory
-			.operation_from_vpl(&"from_container filename=\"test.mbtiles\"".to_string())
+			.operation_from_vpl("from_container filename=\"test.mbtiles\"")
 			.await?;
 
 		assert_eq!(

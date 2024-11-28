@@ -4,21 +4,17 @@ use imageproc::{
 	drawing::draw_text_mut,
 	image::{DynamicImage, Rgb, RgbImage},
 };
+use lazy_static::lazy_static;
 
-static mut FONT: Option<FontArc> = None;
+lazy_static! {
+	static ref FONT: FontArc = FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap();
+}
 
 pub fn create_debug_image(coord: &TileCoord3) -> DynamicImage {
-	let font = unsafe {
-		if FONT.is_none() {
-			FONT.insert(FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap())
-		} else {
-			FONT.as_ref().unwrap()
-		}
-	};
-
 	let br = ((coord.x + coord.y) % 2) as u8 * 16 + 224;
 	let mut image1 = RgbImage::from_pixel(512, 512, Rgb::from([br, br, br]));
 
+	let font: &FontArc = &FONT;
 	let mut draw = |y: i32, c: Rgb<u8>, text: String| {
 		draw_text_mut(&mut image1, c, 220, y, PxScale::from(40f32), font, &text)
 	};

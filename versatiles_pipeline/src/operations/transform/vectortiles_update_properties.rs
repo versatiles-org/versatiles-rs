@@ -292,8 +292,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let operation = factory
 			.operation_from_vpl(
-				&vec![
-					"from_container filename=dummy |",
+				&["from_container filename=dummy |",
 					"vectortiles_update_properties",
 					&format!(
 						"data_source_path=\"{}\"",
@@ -303,8 +302,7 @@ mod tests {
 					&replace(parts[1], "id_field_data"),
 					&replace(parts[2], "layername"),
 					&replace(parts[3], "replace_properties"),
-					&replace(parts[4], "include_id"),
-				]
+					&replace(parts[4], "include_id")]
 				.join(" "),
 			)
 			.await?;
