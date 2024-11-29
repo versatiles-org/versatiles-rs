@@ -14,7 +14,7 @@ use std::{fmt::Debug, sync::Arc};
 #[async_trait]
 pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	/// Get the name of the reader source, e.g., the filename.
-	fn get_name(&self) -> &str;
+	fn get_source_name(&self) -> &str;
 
 	/// Get the container name, e.g., versatiles, mbtiles, etc.
 	fn get_container_name(&self) -> &str;
@@ -57,7 +57,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		let mut print = PrettyPrint::new();
 
 		let cat = print.get_category("meta_data").await;
-		cat.add_key_value("name", self.get_name()).await;
+		cat.add_key_value("name", self.get_source_name()).await;
 		cat.add_key_value("container", self.get_container_name())
 			.await;
 
@@ -172,7 +172,7 @@ mod tests {
 
 	#[async_trait]
 	impl TilesReaderTrait for TestReader {
-		fn get_name(&self) -> &str {
+		fn get_source_name(&self) -> &str {
 			"dummy"
 		}
 
@@ -200,7 +200,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_get_name() {
 		let reader = TestReader::new_dummy();
-		assert_eq!(reader.get_name(), "dummy");
+		assert_eq!(reader.get_source_name(), "dummy");
 	}
 
 	#[tokio::test]

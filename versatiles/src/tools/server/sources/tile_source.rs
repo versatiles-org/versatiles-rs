@@ -65,9 +65,9 @@ impl TileSource {
 		})
 	}
 
-	pub async fn get_id(&self) -> String {
+	pub async fn get_source_name(&self) -> String {
 		let reader = self.reader.lock().await;
-		reader.get_name().to_owned()
+		reader.get_source_name().to_owned()
 	}
 
 	// Retrieve the tile data as an HTTP response

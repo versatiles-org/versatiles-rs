@@ -136,7 +136,7 @@ impl TilesWriterTrait for MBTilesWriter {
 			),
 		};
 
-		writer.set_metadata("name", reader.get_name())?;
+		writer.set_metadata("name", reader.get_source_name())?;
 		writer.set_metadata("format", format)?;
 		writer.set_metadata("type", "baselayer")?;
 		writer.set_metadata("version", "3.0")?;

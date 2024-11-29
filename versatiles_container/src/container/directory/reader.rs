@@ -234,7 +234,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 			Ok(None)
 		}
 	}
-	fn get_name(&self) -> &str {
+	fn get_source_name(&self) -> &str {
 		self.dir.to_str().unwrap()
 	}
 }
@@ -242,7 +242,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 impl Debug for DirectoryTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("DirectoryTilesReader")
-			.field("name", &self.get_name())
+			.field("name", &self.get_source_name())
 			.field("parameters", &self.get_parameters())
 			.finish()
 	}

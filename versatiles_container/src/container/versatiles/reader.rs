@@ -397,7 +397,7 @@ impl TilesReaderTrait for VersaTilesReader {
 	}
 
 	// Get the name of the reader
-	fn get_name(&self) -> &str {
+	fn get_source_name(&self) -> &str {
 		self.reader.get_name()
 	}
 
@@ -527,7 +527,7 @@ mod tests {
 
 		assert_eq!(format!("{:?}", reader), "VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "versatiles");
-		assert_wildcard!(reader.get_name(), "*.versatiles");
+		assert_wildcard!(reader.get_source_name(), "*.versatiles");
 		assert_eq!(reader.get_meta()?.unwrap().as_str(), "{\"type\":\"dummy\"}");
 		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: PBF }");
 		assert_eq!(

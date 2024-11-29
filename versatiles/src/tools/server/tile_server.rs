@@ -259,7 +259,7 @@ impl TileServer {
 	pub async fn get_url_mapping(&self) -> Vec<(String, String)> {
 		let mut result = Vec::new();
 		for tile_source in self.tile_sources.iter() {
-			let id = tile_source.get_id().await;
+			let id = tile_source.get_source_name().await;
 			result.push((tile_source.prefix.as_string(), id.to_owned()))
 		}
 		result

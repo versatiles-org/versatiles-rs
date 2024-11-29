@@ -112,7 +112,7 @@ impl TilesConvertReader {
 		cp: TilesConverterParameters,
 	) -> Result<TilesConvertReader> {
 		let container_name = format!("converter({})", reader.get_container_name());
-		let name = format!("converter({})", reader.get_name());
+		let name = format!("converter({})", reader.get_source_name());
 
 		let rp: TilesReaderParameters = reader.get_parameters().to_owned();
 		let mut new_rp: TilesReaderParameters = rp.clone();
@@ -150,7 +150,7 @@ impl TilesConvertReader {
 
 #[async_trait]
 impl TilesReaderTrait for TilesConvertReader {
-	fn get_name(&self) -> &str {
+	fn get_source_name(&self) -> &str {
 		&self.name
 	}
 
@@ -409,7 +409,7 @@ mod tests {
 		let cp = TilesConverterParameters::new_default();
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
 
-		assert_eq!(tcr.get_name(), "converter(dummy_name)");
+		assert_eq!(tcr.get_source_name(), "converter(dummy_name)");
 	}
 
 	#[test]

@@ -87,7 +87,7 @@ impl TilesReaderTrait for MockTilesReader {
 		"dummy_container"
 	}
 
-	fn get_name(&self) -> &str {
+	fn get_source_name(&self) -> &str {
 		"dummy_name"
 	}
 
@@ -143,7 +143,7 @@ mod tests {
 	async fn reader() -> Result<()> {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
 		assert_eq!(reader.get_container_name(), "dummy_container");
-		assert_eq!(reader.get_name(), "dummy_name");
+		assert_eq!(reader.get_source_name(), "dummy_name");
 
 		let bbox_pyramid = TileBBoxPyramid::new_full(4);
 

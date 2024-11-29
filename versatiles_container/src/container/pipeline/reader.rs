@@ -89,7 +89,7 @@ impl<'a> PipelineReader {
 #[async_trait]
 impl TilesReaderTrait for PipelineReader {
 	/// Get the name of the reader source, e.g., the filename.
-	fn get_name(&self) -> &str {
+	fn get_source_name(&self) -> &str {
 		&self.name
 	}
 

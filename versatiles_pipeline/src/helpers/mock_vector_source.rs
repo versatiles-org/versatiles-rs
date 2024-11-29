@@ -49,7 +49,7 @@ impl MockVectorSource {
 
 #[async_trait]
 impl TilesReaderTrait for MockVectorSource {
-	fn get_name(&self) -> &str {
+	fn get_source_name(&self) -> &str {
 		"MockVectorSource"
 	}
 

@@ -41,7 +41,7 @@ impl MockTilesWriter {
 	/// A `Result` indicating the success or failure of the operation.
 	pub async fn write(reader: &mut dyn TilesReaderTrait) -> Result<()> {
 		let _temp = reader.get_container_name();
-		let _temp = reader.get_name();
+		let _temp = reader.get_source_name();
 		let _temp = reader.get_meta()?;
 
 		let bbox_pyramid = reader.get_parameters().bbox_pyramid.clone();
