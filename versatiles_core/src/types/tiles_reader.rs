@@ -263,12 +263,11 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_probe_tile_contents() -> Result<()> {
-		let mut reader = TestReader::new_dummy();
-
 		#[cfg(feature = "cli")]
 		{
 			use crate::utils::PrettyPrint;
 
+			let mut reader = TestReader::new_dummy();
 			let mut print = PrettyPrint::new();
 			reader
 				.probe_tile_contents(&print.get_category("tile contents").await)
