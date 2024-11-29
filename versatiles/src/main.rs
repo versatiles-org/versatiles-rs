@@ -30,9 +30,6 @@ mod tools;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use log::LevelFilter;
-use versatiles_container as container;
-use versatiles_core::*;
-use versatiles_pipeline as pipeline;
 
 /// Command-line interface for VersaTiles
 #[derive(Parser, Debug)]

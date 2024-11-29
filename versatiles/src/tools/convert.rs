@@ -1,8 +1,6 @@
-use crate::{
-	container::{convert_tiles_container, get_reader, TilesConverterParameters},
-	types::{TileBBoxPyramid, TileCompression},
-};
 use anyhow::{bail, Result};
+use versatiles_container::{convert_tiles_container, get_reader, TilesConverterParameters};
+use versatiles_core::types::{TileBBoxPyramid, TileCompression};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]

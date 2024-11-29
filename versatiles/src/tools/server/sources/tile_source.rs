@@ -1,11 +1,11 @@
 use super::{super::utils::Url, SourceResponse};
-use crate::{
-	types::{Blob, TileCompression, TileCoord3, TileFormat, TilesReaderTrait},
-	utils::{JsonValue, TargetCompression},
-};
 use anyhow::{ensure, Result};
 use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
+use versatiles_core::{
+	types::{Blob, TileCompression, TileCoord3, TileFormat, TilesReaderTrait},
+	utils::{JsonValue, TargetCompression},
+};
 
 // TileSource struct definition
 #[derive(Clone)]
@@ -200,8 +200,8 @@ impl Debug for TileSource {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::{MockTilesReader, MockTilesReaderProfile};
 	use anyhow::Result;
+	use versatiles_container::{MockTilesReader, MockTilesReaderProfile};
 
 	// Test the constructor function for TileSource
 	#[test]

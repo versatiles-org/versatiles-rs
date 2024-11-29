@@ -1,7 +1,3 @@
-use crate::{
-	types::{Blob, TileCompression},
-	utils::TargetCompression,
-};
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use std::{
@@ -10,6 +6,10 @@ use std::{
 	fs::File,
 	io::{BufReader, Read},
 	path::{Path, PathBuf},
+};
+use versatiles_core::{
+	types::{Blob, TileCompression},
+	utils::TargetCompression,
 };
 
 use crate::tools::server::{utils::guess_mime, Url};
