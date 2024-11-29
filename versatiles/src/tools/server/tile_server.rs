@@ -427,7 +427,7 @@ mod tests {
 		assert_eq!(get("api/source/cheese").await, JSON);
 		assert_eq!(get("tiles/cheese/brum.json").await, "Not Found");
 
-		let meta = "{\"bounds\":[-180,-85.05112877980659,180,85.05112877980659],\"center\":[0,0,2],\"format\":\"vector\",\"maxzoom\":4,\"minzoom\":0,\"name\":\"dummy_name\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/cheese/{z}/{x}/{y}\"],\"type\":\"dummy\"}";
+		let meta = "{\"bounds\":[-180,-85.05112877980659,180,85.05112877980659],\"center\":[0,0,2],\"format\":\"vector\",\"maxzoom\":4,\"minzoom\":0,\"name\":\"cheese\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/cheese/{z}/{x}/{y}\"],\"type\":\"dummy\"}";
 		assert_eq!(get("tiles/cheese/meta.json").await, meta);
 		assert_eq!(get("tiles/cheese/tiles.json").await, meta);
 		assert!(get("tiles/cheese/0/0/0.png")

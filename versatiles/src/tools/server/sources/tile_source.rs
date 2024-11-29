@@ -121,12 +121,7 @@ impl TileSource {
 			};
 		} else if (parts[0] == "meta.json") || (parts[0] == "tiles.json") {
 			// Get metadata
-			let reader = self.reader.lock().await;
-			let tile_json = build_tile_json(
-				reader.as_ref(),
-				&format!("{}{{z}}/{{x}}/{{y}}", self.prefix.as_string()),
-			)?;
-			drop(reader);
+			let tile_json = self.build_tile_json().await?;
 
 			return Ok(SourceResponse::new_some(
 				tile_json,
@@ -138,52 +133,58 @@ impl TileSource {
 		// If the request is unknown, return a not found response
 		Ok(None)
 	}
-}
 
-fn build_tile_json(reader: &dyn TilesReaderTrait, tiles_url: &str) -> Result<Blob> {
-	let meta = reader.get_meta()?;
-	let parameters = reader.get_parameters();
-	let bbox = parameters.bbox_pyramid.get_geo_bbox();
-	let zoom_min = parameters.bbox_pyramid.get_zoom_min().unwrap();
-	let zoom_max = parameters.bbox_pyramid.get_zoom_max().unwrap();
+	async fn build_tile_json(&self) -> Result<Blob> {
+		let tiles_url = format!("{}{{z}}/{{x}}/{{y}}", self.prefix.as_string());
 
-	let (tile_format, tile_type) = match parameters.tile_format {
-		TileFormat::AVIF => ("image", "avif"),
-		TileFormat::BIN => ("unknown", "bin"),
-		TileFormat::GEOJSON => ("vector", "geojson"),
-		TileFormat::JPG => ("image", "jpeg"),
-		TileFormat::JSON => ("unknown", "json"),
-		TileFormat::PBF => ("vector", "pbf"),
-		TileFormat::PNG => ("image", "png"),
-		TileFormat::SVG => ("image", "svg"),
-		TileFormat::TOPOJSON => ("vector", "topojson"),
-		TileFormat::WEBP => ("image", "webp"),
-	};
+		let reader = self.reader.lock().await;
+		let meta = reader.get_meta()?;
+		let parameters = reader.get_parameters();
 
-	let mut tilejson = JsonValue::Object(BTreeMap::from([
-		(String::from("bounds"), JsonValue::from(bbox.to_vec())),
-		(String::from("format"), JsonValue::from(tile_format)),
-		(String::from("maxzoom"), JsonValue::from(zoom_max)),
-		(String::from("minzoom"), JsonValue::from(zoom_min)),
-		(String::from("name"), JsonValue::from(reader.get_name())),
-		(String::from("tilejson"), JsonValue::from("3.0.0")),
-		(String::from("tiles"), JsonValue::from(vec![tiles_url])),
-		(String::from("type"), JsonValue::from(tile_type)),
-		(
-			String::from("center"),
-			JsonValue::from(vec![
-				(bbox[0] + bbox[2]) / 2.,
-				(bbox[1] + bbox[3]) / 2.,
-				(zoom_min + 2).min(zoom_max) as f64,
-			]),
-		),
-	]));
+		let bbox = parameters.bbox_pyramid.get_geo_bbox();
+		let zoom_min = parameters.bbox_pyramid.get_zoom_min().unwrap();
+		let zoom_max = parameters.bbox_pyramid.get_zoom_max().unwrap();
 
-	if let Some(meta) = meta {
-		tilejson.object_assign(JsonValue::parse(meta.as_str())?)?
+		let (tile_format, tile_type) = match parameters.tile_format {
+			TileFormat::AVIF => ("image", "avif"),
+			TileFormat::BIN => ("unknown", "bin"),
+			TileFormat::GEOJSON => ("vector", "geojson"),
+			TileFormat::JPG => ("image", "jpeg"),
+			TileFormat::JSON => ("unknown", "json"),
+			TileFormat::PBF => ("vector", "pbf"),
+			TileFormat::PNG => ("image", "png"),
+			TileFormat::SVG => ("image", "svg"),
+			TileFormat::TOPOJSON => ("vector", "topojson"),
+			TileFormat::WEBP => ("image", "webp"),
+		};
+
+		drop(reader);
+
+		let mut tilejson = JsonValue::Object(BTreeMap::from([
+			(String::from("bounds"), JsonValue::from(bbox.to_vec())),
+			(String::from("format"), JsonValue::from(tile_format)),
+			(String::from("maxzoom"), JsonValue::from(zoom_max)),
+			(String::from("minzoom"), JsonValue::from(zoom_min)),
+			(String::from("name"), JsonValue::from(self.id.as_str())),
+			(String::from("tilejson"), JsonValue::from("3.0.0")),
+			(String::from("tiles"), JsonValue::from(vec![tiles_url])),
+			(String::from("type"), JsonValue::from(tile_type)),
+			(
+				String::from("center"),
+				JsonValue::from(vec![
+					(bbox[0] + bbox[2]) / 2.,
+					(bbox[1] + bbox[3]) / 2.,
+					(zoom_min + 2).min(zoom_max) as f64,
+				]),
+			),
+		]));
+
+		if let Some(meta) = meta {
+			tilejson.object_assign(JsonValue::parse(meta.as_str())?)?
+		}
+
+		Ok(Blob::from(tilejson.as_string()?))
 	}
-
-	Ok(Blob::from(tilejson.as_string()?))
 }
 
 // Debug implementation for TileSource
@@ -284,7 +285,7 @@ mod tests {
 			String::from_utf8(
 				check_response(c, "meta.json", Uncompressed, "application/json").await?
 			)?,
-			"{\"bounds\":[-180,-85.05112877980659,180,85.05112877980659],\"center\":[0,0,2],\"format\":\"image\",\"maxzoom\":4,\"minzoom\":0,\"name\":\"dummy_name\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
+			"{\"bounds\":[-180,-85.05112877980659,180,85.05112877980659],\"center\":[0,0,2],\"format\":\"image\",\"maxzoom\":4,\"minzoom\":0,\"name\":\"prefix\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
 		);
 
 		assert!(check_error_400(c, "x/0/0.png", Uncompressed).await?);
