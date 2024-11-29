@@ -211,7 +211,7 @@ mod tests {
 		let container = TileSource::from(reader.boxed(), "prefix")?;
 
 		assert_eq!(container.prefix.str, "/tiles/prefix/");
-		assert_eq!(container.json_info, "{\"type\":\"dummy_container\",\"format\":\"png\",\"compression\":\"uncompressed\",\"zoom_min\":0,\"zoom_max\":4,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}");
+		assert_eq!(container.json_info, "{\"type\":\"dummy_container\",\"format\":\"png\",\"compression\":\"uncompressed\",\"zoom_min\":2,\"zoom_max\":3,\"bbox\":[-180,-79.17133464081944,45,66.51326044311185]}");
 
 		Ok(())
 	}
@@ -221,7 +221,7 @@ mod tests {
 	fn debug() -> Result<()> {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
 		let container = TileSource::from(reader.boxed(), "prefix")?;
-		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Uncompressed, tile_format: PNG } } }, tile_mime: \"image/png\", compression: Uncompressed }");
+		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [2: [0,1,2,3] (9), 3: [0,2,4,6] (25)], tile_compression: Uncompressed, tile_format: PNG } } }, tile_mime: \"image/png\", compression: Uncompressed }");
 		Ok(())
 	}
 
@@ -285,7 +285,7 @@ mod tests {
 			String::from_utf8(
 				check_response(c, "meta.json", Uncompressed, "application/json").await?
 			)?,
-			"{\"bounds\":[-180,-85.05112877980659,180,85.05112877980659],\"center\":[0,0,2],\"format\":\"image\",\"maxzoom\":4,\"minzoom\":0,\"name\":\"prefix\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
+			"{\"bounds\":[-180,-79.17133464081944,45,66.51326044311185],\"center\":[-67.5,-6.329037098853796,3],\"format\":\"image\",\"maxzoom\":3,\"minzoom\":2,\"name\":\"prefix\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
 		);
 
 		assert!(check_error_400(c, "x/0/0.png", Uncompressed).await?);

@@ -33,6 +33,7 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
+use versatiles_core::types::TileBBox;
 
 /// Enum representing different mock profiles for tile data.
 #[derive(Debug)]
@@ -58,7 +59,9 @@ pub struct MockTilesReader {
 impl MockTilesReader {
 	/// Creates a new mock tiles reader with the specified profile.
 	pub fn new_mock_profile(profile: MockTilesReaderProfile) -> Result<MockTilesReader> {
-		let bbox_pyramid = TileBBoxPyramid::new_full(4);
+		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
+		bbox_pyramid.set_level_bbox(TileBBox::new(2, 0, 1, 2, 3)?);
+		bbox_pyramid.set_level_bbox(TileBBox::new(3, 0, 2, 4, 6)?);
 
 		MockTilesReader::new_mock(match profile {
 			MockTilesReaderProfile::Json => TilesReaderParameters::new(
@@ -145,7 +148,9 @@ mod tests {
 		assert_eq!(reader.get_container_name(), "dummy_container");
 		assert_eq!(reader.get_source_name(), "dummy_name");
 
-		let bbox_pyramid = TileBBoxPyramid::new_full(4);
+		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
+		bbox_pyramid.set_level_bbox(TileBBox::new(2, 0, 1, 2, 3)?);
+		bbox_pyramid.set_level_bbox(TileBBox::new(3, 0, 2, 4, 6)?);
 
 		assert_eq!(
 			reader.get_parameters(),

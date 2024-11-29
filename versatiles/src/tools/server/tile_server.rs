@@ -419,7 +419,7 @@ mod tests {
 
 		server.start().await.unwrap();
 
-		const JSON:&str = "{\"url\":\"/tiles/cheese/\",\"id\":\"cheese\",\"container\":{\"type\":\"dummy_container\",\"format\":\"pbf\",\"compression\":\"gzip\",\"zoom_min\":0,\"zoom_max\":4,\"bbox\":[-180,-85.05112877980659,180,85.05112877980659]}}";
+		const JSON:&str = "{\"url\":\"/tiles/cheese/\",\"id\":\"cheese\",\"container\":{\"type\":\"dummy_container\",\"format\":\"pbf\",\"compression\":\"gzip\",\"zoom_min\":2,\"zoom_max\":3,\"bbox\":[-180,-79.17133464081944,45,66.51326044311185]}}";
 		assert_eq!(get("api/status").await, "{\"status\":\"ready\"}");
 		assert_eq!(get("api/sources").await, format!("[{JSON}]"));
 		assert_eq!(get("api/source/burger").await, "Not Found");
@@ -427,7 +427,7 @@ mod tests {
 		assert_eq!(get("api/source/cheese").await, JSON);
 		assert_eq!(get("tiles/cheese/brum.json").await, "Not Found");
 
-		let meta = "{\"bounds\":[-180,-85.05112877980659,180,85.05112877980659],\"center\":[0,0,2],\"format\":\"vector\",\"maxzoom\":4,\"minzoom\":0,\"name\":\"cheese\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/cheese/{z}/{x}/{y}\"],\"type\":\"dummy\"}";
+		let meta = "{\"bounds\":[-180,-79.17133464081944,45,66.51326044311185],\"center\":[-67.5,-6.329037098853796,3],\"format\":\"vector\",\"maxzoom\":3,\"minzoom\":2,\"name\":\"cheese\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/cheese/{z}/{x}/{y}\"],\"type\":\"dummy\"}";
 		assert_eq!(get("tiles/cheese/meta.json").await, meta);
 		assert_eq!(get("tiles/cheese/tiles.json").await, meta);
 		assert!(get("tiles/cheese/0/0/0.png")
