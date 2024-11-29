@@ -35,7 +35,6 @@ use crate::{
 };
 use anyhow::{bail, Result};
 use async_trait::async_trait;
-use itertools::Itertools;
 use r2d2::Pool;
 use r2d2_sqlite::{rusqlite::params, SqliteConnectionManager};
 use std::{fs::remove_file, path::Path};
@@ -140,40 +139,33 @@ impl TilesWriterTrait for MBTilesWriter {
 		writer.set_metadata("format", format)?;
 		writer.set_metadata("type", "baselayer")?;
 		writer.set_metadata("version", "3.0")?;
+		let pyramid = &reader.get_parameters().bbox_pyramid;
+		let bbox = pyramid.get_geo_bbox();
+		let zoom_min = pyramid.get_zoom_min().unwrap();
+		let zoom_max = pyramid.get_zoom_max().unwrap();
 		writer.set_metadata(
 			"bounds",
-			&std::slice::Iter::<f64>::join(
-				&mut reader.get_parameters().bbox_pyramid.get_geo_bbox().iter(),
-				",",
+			&format!("{},{},{},{}", bbox[0], bbox[1], bbox[2], bbox[3]),
+		)?;
+		writer.set_metadata(
+			"center",
+			&format!(
+				"{},{},{}",
+				(bbox[0] + bbox[2]) / 2.0,
+				(bbox[1] + bbox[3]) / 2.0,
+				(zoom_min + 2).min(zoom_max)
 			),
 		)?;
-		writer.set_metadata(
-			"minzoom",
-			&reader
-				.get_parameters()
-				.bbox_pyramid
-				.get_zoom_min()
-				.unwrap()
-				.to_string(),
-		)?;
-		writer.set_metadata(
-			"maxzoom",
-			&reader
-				.get_parameters()
-				.bbox_pyramid
-				.get_zoom_max()
-				.unwrap()
-				.to_string(),
-		)?;
+		writer.set_metadata("minzoom", &zoom_min.to_string())?;
+		writer.set_metadata("maxzoom", &zoom_max.to_string())?;
 
 		if let Some(meta_data) = reader.get_meta()? {
 			writer.set_metadata("json", meta_data.as_str())?;
 		}
 
-		let bbox_pyramid = reader.get_parameters().bbox_pyramid.clone();
-		let mut progress = get_progress_bar("converting tiles", bbox_pyramid.count_tiles());
+		let mut progress = get_progress_bar("converting tiles", pyramid.count_tiles());
 
-		for bbox in bbox_pyramid.iter_levels() {
+		for bbox in pyramid.iter_levels() {
 			let stream = reader.get_bbox_tile_stream(bbox.clone()).await;
 
 			stream
