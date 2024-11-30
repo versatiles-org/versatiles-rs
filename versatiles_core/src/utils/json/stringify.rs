@@ -1,31 +1,21 @@
 use super::JsonValue;
-use anyhow::Result;
 
-pub fn json_as_string(json: &JsonValue) -> Result<String> {
+pub fn stringify(json: &JsonValue) -> String {
 	match json {
-		JsonValue::Str(s) => Ok(format!("\"{}\"", escape_json_string(s))),
-		JsonValue::Num(n) => Ok(n.to_string()),
-		JsonValue::Boolean(b) => Ok(b.to_string()),
-		JsonValue::Null => Ok(String::from("null")),
+		JsonValue::Str(s) => format!("\"{}\"", escape_json_string(s)),
+		JsonValue::Num(n) => n.to_string(),
+		JsonValue::Boolean(b) => b.to_string(),
+		JsonValue::Null => String::from("null"),
 		JsonValue::Array(arr) => {
-			let elements = arr
-				.iter()
-				.map(|item| item.as_string())
-				.collect::<Result<Vec<String>>>()?;
-			Ok(format!("[{}]", elements.join(",")))
+			let items = arr.iter().map(stringify).collect::<Vec<_>>();
+			format!("[{}]", items.join(","))
 		}
 		JsonValue::Object(obj) => {
-			let elements = obj
+			let items = obj
 				.iter()
-				.map(|(key, value)| {
-					Ok(format!(
-						"\"{}\":{}",
-						escape_json_string(key),
-						value.as_string()?
-					))
-				})
-				.collect::<Result<Vec<String>>>()?;
-			Ok(format!("{{{}}}", elements.join(",")))
+				.map(|(key, value)| format!("\"{}\":{}", escape_json_string(key), stringify(value)))
+				.collect::<Vec<_>>();
+			format!("{{{}}}", items.join(","))
 		}
 	}
 }
@@ -50,26 +40,26 @@ fn escape_json_string(input: &str) -> String {
 #[cfg(test)]
 mod tests {
 	use super::super::parse::parse_json_str;
-	use super::json_as_string;
+	use super::stringify;
 	use anyhow::Result;
 
 	#[test]
 	fn test_as_string_primitives() -> Result<()> {
 		let json = parse_json_str("\"Hello, World!\"")?;
 		assert_eq!(
-			json_as_string(&json)?,
+			stringify(&json),
 			"\"Hello, World!\"",
 			"String with normal characters failed"
 		);
 
 		let json = parse_json_str("42")?;
-		assert_eq!(json_as_string(&json)?, "42", "Number test failed");
+		assert_eq!(stringify(&json), "42", "Number test failed");
 
 		let json = parse_json_str("true")?;
-		assert_eq!(json_as_string(&json)?, "true", "Boolean true test failed");
+		assert_eq!(stringify(&json), "true", "Boolean true test failed");
 
 		let json = parse_json_str("null")?;
-		assert_eq!(json_as_string(&json)?, "null", "Null test failed");
+		assert_eq!(stringify(&json), "null", "Null test failed");
 		Ok(())
 	}
 
@@ -77,14 +67,14 @@ mod tests {
 	fn test_as_string_special_characters() -> Result<()> {
 		let json = parse_json_str("\"Line1\\nLine2\\rTab\\tBackslash\\\\\"")?;
 		assert_eq!(
-			json_as_string(&json)?,
+			stringify(&json),
 			"\"Line1\\nLine2\\rTab\\tBackslash\\\\\"",
 			"Special character escaping failed"
 		);
 
 		let json = parse_json_str("\"Hello \\\"World\\\"\"")?;
 		assert_eq!(
-			json_as_string(&json)?,
+			stringify(&json),
 			"\"Hello \\\"World\\\"\"",
 			"Escaped quotes test failed"
 		);
@@ -95,14 +85,14 @@ mod tests {
 	fn test_as_string_unicode() -> Result<()> {
 		let json = parse_json_str("\"Unicode: 😊\"")?;
 		assert_eq!(
-			json_as_string(&json)?,
+			stringify(&json),
 			"\"Unicode: 😊\"",
 			"Unicode character test failed"
 		);
 
 		let json = parse_json_str("\"Emoji and text 🌟✨\"")?;
 		assert_eq!(
-			json_as_string(&json)?,
+			stringify(&json),
 			"\"Emoji and text 🌟✨\"",
 			"Emoji and text test failed"
 		);
@@ -113,13 +103,13 @@ mod tests {
 	fn test_as_string_array() -> Result<()> {
 		let json = parse_json_str("[\"item1\", 123, false, null]")?;
 		assert_eq!(
-			json_as_string(&json)?,
+			stringify(&json),
 			"[\"item1\",123,false,null]",
 			"Mixed type array test failed"
 		);
 
 		let json = parse_json_str("[]")?;
-		assert_eq!(json_as_string(&json)?, "[]", "Empty array test failed");
+		assert_eq!(stringify(&json), "[]", "Empty array test failed");
 		Ok(())
 	}
 
@@ -127,13 +117,13 @@ mod tests {
 	fn test_as_string_object() -> Result<()> {
 		let json = parse_json_str("{\"key1\": \"value1\", \"key2\": 42}")?;
 		assert_eq!(
-			json_as_string(&json)?,
+			stringify(&json),
 			"{\"key1\":\"value1\",\"key2\":42}",
 			"Simple object test failed"
 		);
 
 		let json = parse_json_str("{}")?;
-		assert_eq!(json_as_string(&json)?, "{}", "Empty object test failed");
+		assert_eq!(stringify(&json), "{}", "Empty object test failed");
 		Ok(())
 	}
 
@@ -143,7 +133,7 @@ mod tests {
 			"{\"nested\": {\"array\": [\"value\", {\"inner_key\": 3.14}], \"boolean\": true}}",
 		)?;
 		assert_eq!(
-			json_as_string(&json)?,
+			stringify(&json),
 			"{\"nested\":{\"array\":[\"value\",{\"inner_key\":3.14}],\"boolean\":true}}",
 			"Nested structure test failed"
 		);
@@ -168,7 +158,7 @@ mod tests {
             "#,
 		)?;
 		assert_eq!(
-            json_as_string(&json)?,
+            stringify(&json),
             "{\"array\":[1,\"two\",true],\"boolean\":false,\"null_value\":null,\"number\":123.45,\"object\":{\"key\":\"value\",\"nested_array\":[3,4,5]},\"string\":\"value\"}",
             "Complex object test failed"
         );

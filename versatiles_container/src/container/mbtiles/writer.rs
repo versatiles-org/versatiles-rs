@@ -36,7 +36,7 @@ use r2d2_sqlite::{rusqlite::params, SqliteConnectionManager};
 use std::{fs::remove_file, path::Path};
 use versatiles_core::{
 	types::*,
-	utils::{io::DataWriterTrait, progress::get_progress_bar},
+	utils::{io::DataWriterTrait, progress::get_progress_bar, JsonValue},
 };
 
 /// A writer for creating and populating MBTiles databases.
@@ -78,10 +78,11 @@ impl MBTilesWriter {
 	fn add_tiles(&mut self, tiles: &Vec<(TileCoord3, Blob)>) -> Result<()> {
 		let mut conn = self.pool.get()?;
 		let transaction = conn.transaction()?;
-		for (coords, blob) in tiles {
+		for (c, blob) in tiles {
+			let max_index = 2u32.pow(c.z as u32) - 1;
 			transaction.execute(
 				"INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?1, ?2, ?3, ?4)",
-				params![coords.z, coords.x, coords.y, blob.as_slice()],
+				params![c.z, c.x, max_index-c.y, blob.as_slice()],
 			)?;
 		}
 		transaction.commit()?;
@@ -135,7 +136,6 @@ impl TilesWriterTrait for MBTilesWriter {
 			),
 		};
 
-		writer.set_metadata("name", reader.get_source_name())?;
 		writer.set_metadata("format", format)?;
 		writer.set_metadata("type", "baselayer")?;
 		writer.set_metadata("version", "3.0")?;
@@ -159,8 +159,24 @@ impl TilesWriterTrait for MBTilesWriter {
 		writer.set_metadata("minzoom", &zoom_min.to_string())?;
 		writer.set_metadata("maxzoom", &zoom_max.to_string())?;
 
-		if let Some(meta_data) = reader.get_meta()? {
-			writer.set_metadata("json", meta_data.as_str())?;
+		if let Some(meta) = reader.get_meta()? {
+			let meta = meta.as_str();
+			writer.set_metadata("json", meta)?;
+
+			let tilejson = JsonValue::parse_str(meta)?;
+
+			for key in [
+				"name",
+				"author",
+				"type",
+				"description",
+				"version",
+				"license",
+			] {
+				if let Some(name) = tilejson.object_get_value(key)? {
+					writer.set_metadata(key, &name.as_string())?;
+				}
+			}
 		}
 
 		let mut progress = get_progress_bar("converting tiles", pyramid.count_tiles());

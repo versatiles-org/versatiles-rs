@@ -160,13 +160,13 @@ impl MBTilesReader {
 				},
 				"json" => meta.object_assign(JsonValue::parse_str(value)?)?,
 				"attribution" | "author" | "description" | "license" | "name" | "type" | "version" => {
-					meta.object_set_key_value(key, JsonValue::from(value))?
+					meta.object_set_key_value(key.to_owned(), JsonValue::from(value))?
 				}
 				_ => {}
 			}
 		}
 
-		self.meta_data = Some(Blob::from(meta.as_string()?));
+		self.meta_data = Some(Blob::from(meta.stringify()));
 
 		self.parameters.tile_format = tile_format?;
 		self.parameters.tile_compression = compression?;
@@ -307,17 +307,15 @@ impl TilesReaderTrait for MBTilesReader {
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		trace!("read tile from coord {coord:?}");
 
-		let max_index = 2u32.pow(coord.z as u32) - 1;
-		let x = coord.x;
-		let y = max_index - coord.y;
-		let z = coord.z as u32;
-
 		let conn = self.pool.get()?;
 		let mut stmt = conn.prepare(
 			"SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?",
 		)?;
 
-		if let Ok(vec) = stmt.query_row([x, y, z], |row| row.get::<_, Vec<u8>>(0)) {
+		let max_index = 2u32.pow(coord.z as u32) - 1;
+		if let Ok(vec) = stmt.query_row([coord.x, max_index - coord.y, coord.z as u32], |row| {
+			row.get::<_, Vec<u8>>(0)
+		}) {
 			Ok(Some(Blob::from(vec)))
 		} else {
 			Ok(None)

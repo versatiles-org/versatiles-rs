@@ -183,7 +183,7 @@ impl TileSource {
 			tilejson.object_assign(JsonValue::parse_blob(&meta)?)?
 		}
 
-		Ok(Blob::from(tilejson.as_string()?))
+		Ok(Blob::from(tilejson.stringify()))
 	}
 }
 

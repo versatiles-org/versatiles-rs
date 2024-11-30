@@ -1,4 +1,4 @@
-use super::{parse::parse_json_str, stringify::json_as_string};
+use super::{parse::parse_json_str, stringify::stringify};
 use crate::types::Blob;
 use anyhow::{bail, Result};
 use std::collections::BTreeMap;
@@ -31,8 +31,14 @@ impl JsonValue {
 			Str(_) => "string",
 		}
 	}
-	pub fn as_string(&self) -> Result<String> {
-		json_as_string(self)
+	pub fn as_string(&self) -> String {
+		match self {
+			JsonValue::Str(text) => text.to_owned(),
+			_ => stringify(self),
+		}
+	}
+	pub fn stringify(&self) -> String {
+		stringify(self)
 	}
 	pub fn object_new_empty() -> JsonValue {
 		JsonValue::Object(BTreeMap::new())
@@ -51,10 +57,17 @@ impl JsonValue {
 			bail!("self must be a JSON object")
 		}
 	}
-	pub fn object_set_key_value(&mut self, key: &str, value: JsonValue) -> Result<()> {
+	pub fn object_set_key_value(&mut self, key: String, value: JsonValue) -> Result<()> {
 		if let JsonValue::Object(self_tree) = self {
-			self_tree.insert(key.to_owned(), value);
+			self_tree.insert(key, value);
 			Ok(())
+		} else {
+			bail!("self must be a JSON object")
+		}
+	}
+	pub fn object_get_value(&self, key: &str) -> Result<Option<&JsonValue>> {
+		if let JsonValue::Object(self_tree) = self {
+			Ok(self_tree.get(key))
 		} else {
 			bail!("self must be a JSON object")
 		}
