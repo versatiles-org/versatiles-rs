@@ -1,8 +1,6 @@
 #![allow(dead_code)]
 
 use crate::{
-	types::Blob,
-	utils::io::{ValueReader, ValueWriter, ValueWriterBlob},
 	vector_tile::{
 		feature::VectorTileFeature, property_manager::PropertyManager, value::GeoValuePBF,
 	},
@@ -11,6 +9,7 @@ use crate::{
 use anyhow::{anyhow, bail, Context, Result};
 use byteorder::LE;
 use std::mem::swap;
+use versatiles_core::{types::Blob, utils::io::*};
 
 #[derive(Debug, Default, PartialEq)]
 pub struct VectorTileLayer {
@@ -308,7 +307,6 @@ impl VectorTileLayer {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{utils::io::ValueReaderSlice, GeoProperties};
 
 	#[test]
 	fn test_read_vector_tile_layer() -> Result<()> {

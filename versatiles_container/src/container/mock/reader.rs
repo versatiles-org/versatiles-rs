@@ -24,16 +24,10 @@
 //! }
 //! ```
 
-use crate::{
-	types::{
-		Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TilesReaderParameters,
-		TilesReaderTrait,
-	},
-	utils::compress,
-};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::types::TileBBox;
+use versatiles_core::{types::*, utils::compress};
 
 /// Enum representing different mock profiles for tile data.
 #[derive(Debug)]
@@ -139,8 +133,9 @@ impl std::fmt::Debug for MockTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{container::MockTilesWriter, utils::decompress};
+	use crate::container::MockTilesWriter;
 	use anyhow::Result;
+	use versatiles_core::utils::decompress;
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {

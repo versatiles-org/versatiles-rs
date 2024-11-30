@@ -1,13 +1,10 @@
-use crate::{
-	types::{Blob, TileCompression, TileStream},
-	utils::{compress_brotli, compress_gzip, decompress_brotli, decompress_gzip},
-};
 use anyhow::Result;
 use itertools::Itertools;
 use std::{
 	fmt::{self, Debug},
 	sync::Arc,
 };
+use versatiles_core::{types::*, utils::*};
 
 #[derive(Clone, Debug)]
 enum FnConv {

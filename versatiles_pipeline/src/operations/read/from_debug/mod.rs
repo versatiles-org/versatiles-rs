@@ -1,23 +1,15 @@
 mod image;
 mod vector;
 
-use crate::{
-	image::helper::image2blob,
-	traits::*,
-	types::{
-		Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TileStream,
-		TilesReaderParameters,
-	},
-	vpl::VPLNode,
-	PipelineFactory,
-};
+use crate::{traits::*, vpl::VPLNode, PipelineFactory};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use image::create_debug_image;
 use std::fmt::Debug;
 use vector::create_debug_vector_tile;
-use versatiles_image::helper::image2blob_fast;
+use versatiles_core::types::*;
+use versatiles_image::helper::{image2blob, image2blob_fast};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Produces debugging tiles, each showing their coordinates as text.

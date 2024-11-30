@@ -29,13 +29,13 @@
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different tile formats, and verifying the integrity of the written data.
 
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
-use crate::{
-	container::TilesWriterTrait,
-	types::{Blob, ByteRange, TileBBox, TileCompression, TilesReaderTrait},
-	utils::{compress, io::DataWriterTrait, progress::get_progress_bar},
-};
+use crate::container::TilesWriterTrait;
 use anyhow::Result;
 use async_trait::async_trait;
+use versatiles_core::{
+	types::*,
+	utils::{compress, io::DataWriterTrait, progress::get_progress_bar},
+};
 
 /// A struct that provides functionality to write tile data to a PMTiles container.
 pub struct PMTilesWriter {}
@@ -127,14 +127,11 @@ impl TilesWriterTrait for PMTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{
-		container::{
-			mock::{MockTilesReader, MockTilesWriter},
-			pmtiles::PMTilesReader,
-		},
-		types::{TileBBoxPyramid, TileFormat, TilesReaderParameters},
-		utils::io::{DataReaderBlob, DataWriterBlob},
+	use crate::container::{
+		mock::{MockTilesReader, MockTilesWriter},
+		pmtiles::PMTilesReader,
 	};
+	use versatiles_core::utils::io::*;
 
 	#[tokio::test]
 	async fn read_write() -> Result<()> {

@@ -4,12 +4,9 @@
 //!
 //! The `BlockDefinition` struct contains metadata about the tile block, including its coordinates, bounding box, and byte ranges for tiles and index data.
 
-use crate::{
-	types::{Blob, ByteRange, TileBBox, TileCoord3},
-	utils::io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
-};
 use anyhow::{ensure, Result};
 use std::{fmt, ops::Div};
+use versatiles_core::{types::*, utils::io::*};
 
 /// A struct representing a block of tiles within a larger tile set.
 #[derive(Clone, PartialEq, Eq)]

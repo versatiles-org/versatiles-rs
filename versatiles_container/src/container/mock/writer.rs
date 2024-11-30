@@ -20,9 +20,10 @@
 //! }
 //! ```
 
-use crate::{container::TilesWriterTrait, types::TilesReaderTrait, utils::io::DataWriterTrait};
+use crate::container::TilesWriterTrait;
 use anyhow::Result;
 use async_trait::async_trait;
+use versatiles_core::{types::TilesReaderTrait, utils::io::DataWriterTrait};
 
 /// Mock implementation of a `TilesWriter`.
 pub struct MockTilesWriter {}

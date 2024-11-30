@@ -1,13 +1,12 @@
-use crate::{
-	geometry::vector_tile::{VectorTile, VectorTileLayer},
-	types::{Blob, TileCoord3},
-};
 use ab_glyph::{Font, FontArc, Outline, OutlineCurve::*, Point};
 use anyhow::Result;
 use lazy_static::lazy_static;
 use std::{f64::consts::PI, ops::Div, vec};
+use versatiles_core::types::{Blob, TileCoord3};
 use versatiles_geometry::{
-	math, Coordinates1, Coordinates2, Coordinates3, GeoFeature, Geometry, MultiPolygonGeometry,
+	math,
+	vector_tile::{VectorTile, VectorTileLayer},
+	Coordinates1, Coordinates2, Coordinates3, GeoFeature, Geometry, MultiPolygonGeometry,
 };
 
 lazy_static! {

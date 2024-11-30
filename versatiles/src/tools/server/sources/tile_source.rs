@@ -180,7 +180,7 @@ impl TileSource {
 		]));
 
 		if let Some(meta) = meta {
-			tilejson.object_assign(JsonValue::parse(meta.as_str())?)?
+			tilejson.object_assign(JsonValue::parse_blob(&meta)?)?
 		}
 
 		Ok(Blob::from(tilejson.as_string()?))

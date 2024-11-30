@@ -2,7 +2,6 @@ use crate::{
 	helpers::mock_vector_source::MockVectorSource,
 	operations::{get_read_operation_factories, get_transform_operation_factories},
 	traits::{OperationTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
-	types::TilesReaderTrait,
 	vpl::{parse_vpl, VPLNode, VPLPipeline},
 };
 use anyhow::{anyhow, Result};
@@ -12,6 +11,7 @@ use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
 };
+use versatiles_core::types::TilesReaderTrait;
 
 type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesReaderTrait>>>>;
 

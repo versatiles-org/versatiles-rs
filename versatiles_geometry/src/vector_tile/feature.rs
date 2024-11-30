@@ -1,15 +1,11 @@
 #![allow(dead_code)]
 
 use super::{geometry_type::GeomType, layer::VectorTileLayer};
-use crate::{
-	geo::*,
-	math::area_ring,
-	types::Blob,
-	utils::io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
-};
+use crate::{geo::*, math::area_ring};
 use anyhow::{bail, ensure, Context, Result};
 use byteorder::LE;
 use log::trace;
+use versatiles_core::{types::Blob, utils::io::*};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct VectorTileFeature {

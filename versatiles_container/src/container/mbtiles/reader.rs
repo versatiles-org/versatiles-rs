@@ -41,22 +41,16 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of reading metadata, handling different file formats, and verifying tile data.
 
-use crate::{
-	types::{
-		Blob, TileBBox, TileBBoxPyramid,
-		TileCompression::{self, *},
-		TileCoord3,
-		TileFormat::{self, *},
-		TileStream, TilesReaderParameters, TilesReaderTrait,
-	},
-	utils::{progress::get_progress_bar, JsonValue, TransformCoord},
-};
 use anyhow::{anyhow, ensure, Result};
 use async_trait::async_trait;
 use log::trace;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use std::{collections::BTreeMap, path::Path};
+use versatiles_core::{
+	types::{TileCompression::*, TileFormat::*, *},
+	utils::{progress::get_progress_bar, JsonValue, TransformCoord},
+};
 
 /// A struct that provides functionality to read tile data from an MBTiles SQLite database.
 pub struct MBTilesReader {
@@ -164,7 +158,7 @@ impl MBTilesReader {
 					}
 					_ => panic!("unknown file format: {}", value),
 				},
-				"json" => meta.object_assign(JsonValue::parse(value)?)?,
+				"json" => meta.object_assign(JsonValue::parse_str(value)?)?,
 				"attribution" | "author" | "description" | "license" | "name" | "type" | "version" => {
 					meta.object_set_key_value(key, JsonValue::from(value))?
 				}
@@ -455,7 +449,7 @@ pub mod tests {
 	#[cfg(feature = "cli")]
 	#[tokio::test]
 	async fn probe() -> Result<()> {
-		use crate::utils::PrettyPrint;
+		use versatiles_core::utils::PrettyPrint;
 
 		let mut reader = MBTilesReader::open_path(&PATH)?;
 

@@ -1,9 +1,9 @@
 use super::{PMTilesCompression, PMTilesType};
-use crate::{
+use anyhow::{ensure, Result};
+use versatiles_core::{
 	types::{Blob, ByteRange, TilesReaderParameters},
 	utils::io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 };
-use anyhow::{ensure, Result};
 
 #[derive(Debug, PartialEq)]
 pub struct HeaderV3 {

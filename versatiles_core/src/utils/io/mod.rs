@@ -1,5 +1,3 @@
-#![allow(unused_imports)]
-
 //! This module re-exports all the data reader and writer modules, along with the value reader and writer modules.
 //!
 //! # Overview

@@ -1,10 +1,10 @@
-use crate::types::TileCoord3;
 use ab_glyph::{FontArc, PxScale};
 use imageproc::{
 	drawing::draw_text_mut,
 	image::{DynamicImage, Rgb, RgbImage},
 };
 use lazy_static::lazy_static;
+use versatiles_core::types::TileCoord3;
 
 lazy_static! {
 	static ref FONT: FontArc = FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap();

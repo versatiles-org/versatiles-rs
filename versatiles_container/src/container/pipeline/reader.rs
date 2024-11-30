@@ -1,16 +1,10 @@
-use crate::{
-	container::get_reader,
-	pipeline::{OperationTrait, PipelineFactory},
-	types::{
-		Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters,
-		TilesReaderTrait,
-	},
-	utils::io::DataReader,
-};
+use crate::container::get_reader;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::path::Path;
+use versatiles_core::{types::*, utils::io::DataReader};
+use versatiles_pipeline::{OperationTrait, PipelineFactory};
 
 /// The `PipelineReader` struct is responsible for managing the tile reading process,
 /// applying operations, and returning the composed tiles.

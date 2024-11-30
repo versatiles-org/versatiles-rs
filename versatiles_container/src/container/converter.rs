@@ -34,15 +34,9 @@
 //! ```
 
 use super::{tile_converter::TileConverter, write_to_filename};
-use crate::{
-	types::{
-		Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileStream,
-		TilesReaderParameters, TilesReaderTrait,
-	},
-	utils::TransformCoord,
-};
 use anyhow::Result;
 use async_trait::async_trait;
+use versatiles_core::{types::*, utils::TransformCoord};
 
 /// Parameters for tile conversion.
 #[derive(Debug)]
@@ -226,14 +220,12 @@ impl TilesReaderTrait for TilesConvertReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{
-		container::{MockTilesReader, VersaTilesReader},
-		types::{
-			TileCompression::*,
-			TileFormat::{self, *},
-		},
-	};
+	use crate::container::{MockTilesReader, VersaTilesReader};
 	use assert_fs::NamedTempFile;
+	use versatiles_core::types::{
+		TileCompression::*,
+		TileFormat::{self, *},
+	};
 
 	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> MockTilesReader {
 		let bbox_pyramid = TileBBoxPyramid::new_full(1);

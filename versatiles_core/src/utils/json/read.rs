@@ -7,7 +7,7 @@ fn process_line(line: std::io::Result<String>, index: usize) -> Option<Result<Js
 	match line {
 		Ok(line) if line.trim().is_empty() => None, // Skip empty or whitespace-only lines
 		Ok(line) => {
-			Some(JsonValue::parse(&line).with_context(|| format!("error in line {}", index + 1)))
+			Some(JsonValue::parse_str(&line).with_context(|| format!("error in line {}", index + 1)))
 		}
 		Err(e) => Some(Err(anyhow!("line {}: {}", index + 1, e))),
 	}
@@ -45,7 +45,7 @@ mod tests {
 	}
 
 	fn json_from_str<T: AsRef<str>>(s: T) -> Result<JsonValue> {
-		JsonValue::parse(s.as_ref())
+		JsonValue::parse_str(s.as_ref())
 	}
 
 	#[test]

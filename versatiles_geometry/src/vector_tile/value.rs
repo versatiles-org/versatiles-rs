@@ -1,12 +1,9 @@
 #![allow(dead_code)]
 
-use crate::{
-	geo::GeoValue,
-	types::Blob,
-	utils::io::{ValueReader, ValueWriter, ValueWriterBlob},
-};
+use crate::geo::GeoValue;
 use anyhow::{anyhow, bail, Context, Result};
 use byteorder::LE;
+use versatiles_core::{types::Blob, utils::io::*};
 
 pub trait GeoValuePBF<'a> {
 	fn read(reader: &mut dyn ValueReader<'a, LE>) -> Result<GeoValue>;
@@ -128,7 +125,6 @@ impl<'a> GeoValuePBF<'a> for GeoValue {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::utils::io::ValueReaderSlice;
 
 	#[test]
 	fn test_read_string() -> Result<()> {

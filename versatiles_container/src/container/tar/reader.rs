@@ -1,17 +1,10 @@
 //! Provides functionality for reading tile data from a tar archive.
 
-use crate::{
-	types::{
-		Blob, ByteRange, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat,
-		TilesReaderParameters, TilesReaderTrait,
-	},
-	utils::decompress,
-};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path};
 use tar::{Archive, EntryType};
-use versatiles_core::utils::io::{DataReaderFile, DataReaderTrait};
+use versatiles_core::{types::*, utils::decompress, utils::io::*};
 
 /// A struct that provides functionality to read tile data from a tar archive.
 pub struct TarTilesReader {
@@ -200,12 +193,10 @@ impl Debug for TarTilesReader {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
+	use crate::container::{make_test_file, MockTilesWriter, MOCK_BYTES_PBF};
+	use versatiles_core::utils::decompress_gzip;
 	#[cfg(feature = "cli")]
-	use crate::utils::PrettyPrint;
-	use crate::{
-		container::{make_test_file, MockTilesWriter, MOCK_BYTES_PBF},
-		utils::decompress_gzip,
-	};
+	use versatiles_core::utils::PrettyPrint;
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {

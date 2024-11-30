@@ -1,11 +1,8 @@
 #![allow(dead_code)]
 
 use super::layer::VectorTileLayer;
-use crate::{
-	types::Blob,
-	utils::io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
-};
 use anyhow::{bail, Context, Result};
+use versatiles_core::{types::Blob, utils::io::*};
 
 #[derive(Debug, Default, PartialEq)]
 pub struct VectorTile {
@@ -64,7 +61,6 @@ impl VectorTile {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::utils::io::{DataReaderFile, DataReaderTrait};
 	use std::env::current_dir;
 
 	async fn get_pbf() -> Result<Blob> {

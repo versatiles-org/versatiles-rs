@@ -118,7 +118,6 @@ fn get_bbox_pyramid(arguments: &Subcommand) -> Result<Option<TileBBoxPyramid>> {
 	Ok(Some(bbox_pyramid))
 }
 
-#[allow(unused_imports)]
 #[cfg(test)]
 mod tests {
 	use crate::tests::run_command;

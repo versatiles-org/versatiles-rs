@@ -6,4 +6,3 @@ pub mod vector_tile;
 
 pub use geo::*;
 pub use geojson::*;
-use versatiles_core::*;

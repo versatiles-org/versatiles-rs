@@ -36,7 +36,6 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	Ok(())
 }
 
-#[allow(unused_imports)]
 #[cfg(test)]
 mod tests {
 	use crate::tests::run_command;

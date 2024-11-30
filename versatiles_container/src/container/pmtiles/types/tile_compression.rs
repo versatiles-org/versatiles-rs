@@ -1,5 +1,5 @@
-use crate::types::TileCompression::{self, *};
 use anyhow::{bail, Result};
+use versatiles_core::types::TileCompression::{self, *};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PMTilesCompression {

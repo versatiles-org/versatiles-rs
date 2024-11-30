@@ -1,7 +1,4 @@
-#![allow(unreachable_code, unused_variables, unused_imports)]
-
 use anyhow::Result;
-use std::path::Path;
 use versatiles_pipeline::PipelineFactory;
 
 #[derive(clap::Args, Debug)]

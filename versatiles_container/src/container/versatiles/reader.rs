@@ -44,23 +44,20 @@
 //! ```
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
-#[cfg(feature = "cli")]
-use crate::utils::PrettyPrint;
-use crate::{
-	types::{
-		Blob, ByteRange, LimitedCache, TileBBox, TileCompression, TileCoord2, TileCoord3, TileStream,
-		TilesReaderParameters, TilesReaderTrait,
-	},
-	utils::{
-		decompress,
-		io::{DataReader, DataReaderFile},
-	},
-};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::{lock::Mutex, stream::StreamExt};
 use log::trace;
 use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
+#[cfg(feature = "cli")]
+use versatiles_core::utils::PrettyPrint;
+use versatiles_core::{
+	types::*,
+	utils::{
+		decompress,
+		io::{DataReader, DataReaderFile},
+	},
+};
 
 /// `VersaTilesReader` is responsible for reading tile data from a `versatiles` container.
 pub struct VersaTilesReader {
@@ -424,7 +421,7 @@ impl TilesReaderTrait for VersaTilesReader {
 	// deep probe of container tiles
 	#[cfg(feature = "cli")]
 	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
-		use crate::utils::progress::get_progress_bar;
+		use versatiles_core::utils::progress::get_progress_bar;
 
 		#[derive(Debug)]
 		#[allow(dead_code)]
@@ -507,14 +504,12 @@ impl PartialEq for VersaTilesReader {
 
 #[cfg(test)]
 mod tests {
-	use versatiles_core::assert_wildcard;
-
 	use super::*;
-	use crate::{
-		container::{
-			make_test_file, MockTilesReader, TilesWriterTrait, VersaTilesWriter, MOCK_BYTES_PBF,
-		},
-		types::{TileBBoxPyramid, TileFormat},
+	use crate::container::{
+		make_test_file, MockTilesReader, TilesWriterTrait, VersaTilesWriter, MOCK_BYTES_PBF,
+	};
+	use versatiles_core::{
+		assert_wildcard,
 		utils::{decompress_gzip, io::DataWriterBlob},
 	};
 
