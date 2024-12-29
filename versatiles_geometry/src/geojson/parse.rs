@@ -252,23 +252,12 @@ mod tests {
 
 	#[test]
 	fn test_parse_geojson_valid_feature_collection() -> Result<()> {
-		let json = r#"
-        {
-            "type": "FeatureCollection",
-            "features": [
-                {
-                    "type": "Feature",
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": [102.0, 0.5]
-                    },
-                    "properties": {
-                        "prop0": "value0"
-                    }
-                }
-            ]
-        }
-        "#;
+		let json = r#"{
+			"type": "FeatureCollection",
+			"features": [
+				{"type":"Feature","geometry":{"type":"Point","coordinates":[1,2]},"properties":{"p":"v"}}
+			]
+		}"#;
 
 		let collection = parse_geojson(json)?;
 		assert_eq!(collection.features.len(), 1);
@@ -276,12 +265,12 @@ mod tests {
 		let feature = &collection.features[0];
 		assert_eq!(feature.geometry.get_type_name(), "Point");
 		if let Geometry::Point(coords) = &feature.geometry {
-			assert_eq!(coords.0[0], 102.0);
-			assert_eq!(coords.0[1], 0.5);
+			assert_eq!(coords.0[0], 1.0);
+			assert_eq!(coords.0[1], 2.0);
 		}
 		assert_eq!(
-			feature.properties.get("prop0"),
-			Some(&GeoValue::String("value0".to_string()))
+			feature.properties.get("p"),
+			Some(&GeoValue::String("v".to_string()))
 		);
 
 		Ok(())
