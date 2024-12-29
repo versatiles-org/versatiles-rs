@@ -169,12 +169,13 @@ impl ReadOperationFactoryTrait for Factory {
 		Operation::build(vpl_node, factory).await
 	}
 }
+
 #[cfg(test)]
 mod tests {
-	use itertools::Itertools;
-
 	use super::*;
-	use crate::helpers::mock_vector_source::arrange_tiles;
+	use crate::helpers::mock_vector_source::{arrange_tiles, MockVectorSource};
+	use itertools::Itertools;
+	use std::path::Path;
 
 	pub fn check_tile(blob: &Blob, coord: &TileCoord3) -> String {
 		use versatiles_geometry::GeoValue;
@@ -241,13 +242,10 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
 			.operation_from_vpl(
-				&[
-					"from_vectortiles_merged [",
-					"   from_container filename=\"A\" | filter_bbox bbox=[-180,-45,90,85],",
-					"   from_container filename=\"B\" | filter_bbox bbox=[-90,-85,180,45]",
-					"]",
-				]
-				.join(""),
+				r#"from_vectortiles_merged [
+					from_container filename="A" | filter_bbox bbox=[-180,-45,90,85],
+					from_container filename="B" | filter_bbox bbox=[-90,-85,180,45]
+				]"#,
 			)
 			.await?;
 
@@ -278,6 +276,67 @@ mod tests {
 				"❌ ❌ 🟨 🟨 🟨 🟨 🟨 🟨"
 			]
 		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_operation_parameters() -> Result<()> {
+		let factory = PipelineFactory::default(
+			Path::new(""),
+			Box::new(
+				|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
+					Box::pin(async move {
+						let mut pyramide = TileBBoxPyramid::new_empty();
+						match filename.as_str() {
+							"1" => {
+								pyramide.include_bbox(&TileBBox::new_full(0)?);
+								pyramide.include_bbox(&TileBBox::new_full(1)?);
+							}
+							"2" => {
+								pyramide.include_bbox(&TileBBox::new_full(1)?);
+								pyramide.include_bbox(&TileBBox::new_full(2)?);
+							}
+							_ => panic!("unexpected filename"),
+						}
+						Ok(Box::new(MockVectorSource::new(
+							&[("mock", &[&[("filename", &filename)]])],
+							Some(pyramide),
+						)) as Box<dyn TilesReaderTrait>)
+					})
+				},
+			),
+		);
+
+		let result = factory
+			.operation_from_vpl(
+				r#"from_vectortiles_merged [ from_container filename="1", from_container filename="2" ]"#,
+			)
+			.await?;
+
+		let parameters = result.get_parameters();
+
+		assert_eq!(parameters.tile_format, TileFormat::PBF);
+		assert_eq!(parameters.tile_compression, TileCompression::Uncompressed);
+		assert_eq!(
+			format!("{}", parameters.bbox_pyramid),
+			"[0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16)]"
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_merge_tiles_multiple_layers() -> Result<()> {
+		let blob1 = VectorTile::new(vec![VectorTileLayer::new_standard("layer1")]).to_blob()?;
+		let blob2 = VectorTile::new(vec![VectorTileLayer::new_standard("layer2")]).to_blob()?;
+
+		let merged_blob = merge_tiles(vec![blob1, blob2])?;
+		let merged_tile = VectorTile::from_blob(&merged_blob)?;
+
+		assert_eq!(merged_tile.layers.len(), 2);
+		assert!(merged_tile.layers.iter().any(|l| l.name == "layer1"));
+		assert!(merged_tile.layers.iter().any(|l| l.name == "layer2"));
 
 		Ok(())
 	}
