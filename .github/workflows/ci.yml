@@ -48,22 +48,22 @@ jobs:
         run: cargo fmt -- --check
 
       - name: Run check
-        run: cargo check
+        run: cargo check --workspace --all-features --all-targets
 
       - name: Run clippy
-        run: cargo clippy --workspace --all-features -- -D warnings
+        run: cargo clippy --workspace --all-features --all-targets -- -D warnings
 
       - name: Run test
-        run: cargo test
+        run: cargo test --workspace
 
       - name: Run test with all features
-        run: cargo test --all-features
+        run: cargo test --workspace --all-features
 
       - name: Install Cargo Coverage
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Cargo Coverage
-        run: cargo llvm-cov test --bins --all-features --tests --lcov --output-path ./lcov.info
+        run: cargo llvm-cov test --workspace --all-features --tests --lcov --output-path ./lcov.info
 
       - name: Upload Coverage
         uses: codecov/codecov-action@v5
