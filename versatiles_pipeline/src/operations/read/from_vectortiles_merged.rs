@@ -95,8 +95,7 @@ impl OperationTrait for Operation {
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		let mut blobs: Vec<Blob> = vec![];
 		for source in self.sources.iter() {
-			let result = source.get_tile_data(coord).await?;
-			if let Some(mut blob) = result {
+			if let Some(mut blob) = source.get_tile_data(coord).await? {
 				blob = decompress(blob, &source.get_parameters().tile_compression)?;
 				blobs.push(blob);
 			}
@@ -288,16 +287,8 @@ mod tests {
 				|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
 					Box::pin(async move {
 						let mut pyramide = TileBBoxPyramid::new_empty();
-						match filename.as_str() {
-							"1" => {
-								pyramide.include_bbox(&TileBBox::new_full(0)?);
-								pyramide.include_bbox(&TileBBox::new_full(1)?);
-							}
-							"2" => {
-								pyramide.include_bbox(&TileBBox::new_full(1)?);
-								pyramide.include_bbox(&TileBBox::new_full(2)?);
-							}
-							_ => panic!("unexpected filename"),
+						for c in filename.chars() {
+							pyramide.include_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?);
 						}
 						Ok(Box::new(MockVectorSource::new(
 							&[("mock", &[&[("filename", &filename)]])],
@@ -310,7 +301,7 @@ mod tests {
 
 		let result = factory
 			.operation_from_vpl(
-				r#"from_vectortiles_merged [ from_container filename="1", from_container filename="2" ]"#,
+				r#"from_vectortiles_merged [ from_container filename="12", from_container filename="23" ]"#,
 			)
 			.await?;
 
@@ -320,8 +311,19 @@ mod tests {
 		assert_eq!(parameters.tile_compression, TileCompression::Uncompressed);
 		assert_eq!(
 			format!("{}", parameters.bbox_pyramid),
-			"[0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16)]"
+			"[1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)]"
 		);
+
+		for level in 0..=4 {
+			let mut correct = result
+				.get_tile_data(&TileCoord3::new(0, 0, level)?)
+				.await?
+				.is_some();
+			if level < 1 || level > 3 {
+				correct = !correct;
+			}
+			assert!(correct, "level: {level}");
+		}
 
 		Ok(())
 	}

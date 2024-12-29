@@ -70,6 +70,10 @@ impl TilesReaderTrait for MockVectorSource {
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
+		if !self.parameters.bbox_pyramid.contains_coord(coord) {
+			return Ok(None);
+		}
+
 		let mut layers = vec![];
 
 		// Iterate over each layer and convert features
