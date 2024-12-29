@@ -295,8 +295,8 @@ mod tests {
 	fn test_parse_str() {
 		assert_eq!(GeoValue::parse_str("true"), GeoValue::Bool(true));
 		assert_eq!(GeoValue::parse_str("false"), GeoValue::Bool(false));
-		assert_eq!(GeoValue::parse_str("3.14"), GeoValue::Double(3.14));
-		assert_eq!(GeoValue::parse_str("-3.14"), GeoValue::Double(-3.14));
+		assert_eq!(GeoValue::parse_str("23.42"), GeoValue::Double(23.42));
+		assert_eq!(GeoValue::parse_str("-23.42"), GeoValue::Double(-23.42));
 		assert_eq!(GeoValue::parse_str("-42"), GeoValue::Int(-42));
 		assert_eq!(GeoValue::parse_str("42"), GeoValue::UInt(42));
 		assert_eq!(GeoValue::parse_str("hello"), GeoValue::from("hello"));

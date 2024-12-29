@@ -156,8 +156,8 @@ mod tests {
 
 	#[test]
 	fn test_number_value() {
-		let json = parse_json_str(r##"{"integer": 42, "float": 3.14}"##).unwrap();
-		assert_eq!(json, v(vec![("integer", v(42.0)), ("float", v(3.14))]));
+		let json = parse_json_str(r##"{"integer": 42, "float": 23.42}"##).unwrap();
+		assert_eq!(json, v(vec![("integer", v(42.0)), ("float", v(23.42))]));
 	}
 
 	#[test]

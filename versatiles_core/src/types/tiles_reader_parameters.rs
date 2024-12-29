@@ -46,11 +46,7 @@ mod tests {
 		let tile_format = TileFormat::PNG;
 		let tile_compression = TileCompression::Gzip;
 
-		let params = TilesReaderParameters::new(
-			tile_format.clone(),
-			tile_compression.clone(),
-			bbox_pyramid.clone(),
-		);
+		let params = TilesReaderParameters::new(tile_format, tile_compression, bbox_pyramid.clone());
 
 		assert_eq!(params.tile_format, tile_format);
 		assert_eq!(params.tile_compression, tile_compression);
@@ -62,7 +58,7 @@ mod tests {
 		let tile_format = TileFormat::JPG;
 		let tile_compression = TileCompression::Gzip;
 
-		let params = TilesReaderParameters::new_full(tile_format.clone(), tile_compression.clone());
+		let params = TilesReaderParameters::new_full(tile_format, tile_compression);
 
 		assert_eq!(params.tile_format, tile_format);
 		assert_eq!(params.tile_compression, tile_compression);

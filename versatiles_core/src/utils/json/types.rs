@@ -160,8 +160,8 @@ mod tests {
 
 	#[test]
 	fn test_from_f64() {
-		let result: JsonValue = 3.14.into();
-		assert_eq!(result, JsonValue::Num(3.14));
+		let result: JsonValue = 23.42.into();
+		assert_eq!(result, JsonValue::Num(23.42));
 	}
 
 	#[test]
@@ -191,7 +191,7 @@ mod tests {
 		let result: JsonValue = vec![
 			JsonValue::Str("value1".to_string()),
 			JsonValue::Boolean(true),
-			JsonValue::Num(3.14),
+			JsonValue::Num(23.42),
 		]
 		.into();
 		assert_eq!(
@@ -199,7 +199,7 @@ mod tests {
 			JsonValue::Array(vec![
 				JsonValue::Str("value1".to_string()),
 				JsonValue::Boolean(true),
-				JsonValue::Num(3.14),
+				JsonValue::Num(23.42),
 			])
 		);
 	}
