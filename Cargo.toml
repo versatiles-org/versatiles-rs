@@ -71,15 +71,15 @@ strip = true
 
 [workspace.dependencies]
 ab_glyph = { version = "0.2.29", default-features = false }
-anyhow = { version = "1.0.93", default-features = false, features = ["std"] }
+anyhow = { version = "1.0.95", default-features = false, features = ["std"] }
 assert_fs = { version = "1.1.2", default-features = false }
 async-trait = { version = "0.1.83", default-features = false }
 axum = { version = "0.7.9", default-features = false, features = ["http1", "http2", "tokio"] }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
-clap = { version = "4.5.21", features = ["derive"] }
+clap = { version = "4.5.23", features = ["derive"] }
 enumset = { version = "1.1.5", default-features = false }
 futures = { version = "0.3.31", features = ["default"] }
-hyper = { version = "1.5.1", default-features = false, features = ["http2"] }
+hyper = { version = "1.5.2", default-features = false, features = ["http2"] }
 image = { version = "0.25.5", default-features = false, features = ["jpeg", "png"] }
 itertools = { version = "0.13.0", default-features = false }
 lazy_static = { version = "1.5.0", default-features = false }
@@ -89,8 +89,8 @@ regex = { version = "1.11.1", default-features = false, features = [
 	"unicode-case",
 	"unicode-perl",
 ] }
-reqwest = { version = "0.12.9", default-features = false }
-tokio = { version = "1.41.1", features = ["rt-multi-thread", "sync"] }
+reqwest = { version = "0.12.11", default-features = false }
+tokio = { version = "1.42.0", features = ["rt-multi-thread", "sync"] }
 wildmatch = { version = "2.4.0", default-features = false }
 
 versatiles = { version = "0.14.5", path = "versatiles", default-features = false }
