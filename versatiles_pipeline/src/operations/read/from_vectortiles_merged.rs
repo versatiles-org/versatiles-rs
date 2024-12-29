@@ -174,7 +174,7 @@ mod tests {
 	use super::*;
 	use crate::helpers::mock_vector_source::{arrange_tiles, MockVectorSource};
 	use itertools::Itertools;
-	use std::path::Path;
+	use std::{ops::BitXor, path::Path};
 
 	pub fn check_tile(blob: &Blob, coord: &TileCoord3) -> String {
 		use versatiles_geometry::GeoValue;
@@ -315,14 +315,14 @@ mod tests {
 		);
 
 		for level in 0..=4 {
-			let mut correct = result
-				.get_tile_data(&TileCoord3::new(0, 0, level)?)
-				.await?
-				.is_some();
-			if level < 1 || level > 3 {
-				correct = !correct;
-			}
-			assert!(correct, "level: {level}");
+			assert!(
+				result
+					.get_tile_data(&TileCoord3::new(0, 0, level)?)
+					.await?
+					.is_some()
+					.bitxor(!(1..=3).contains(&level)),
+				"level: {level}"
+			);
 		}
 
 		Ok(())
