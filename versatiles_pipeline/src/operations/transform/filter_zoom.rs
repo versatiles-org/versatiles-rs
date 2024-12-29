@@ -64,9 +64,9 @@ impl OperationTrait for Operation {
 		}
 	}
 
-	async fn get_bbox_tile_stream(&self, mut bbox: TileBBox) -> TileStream {
+	async fn get_tile_stream(&self, mut bbox: TileBBox) -> TileStream {
 		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
-		self.source.get_bbox_tile_stream(bbox).await
+		self.source.get_tile_stream(bbox).await
 	}
 }
 

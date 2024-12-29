@@ -114,7 +114,7 @@ impl TilesReaderTrait for PipelineReader {
 
 	/// Get a stream of tiles within the bounding box.
 	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
-		self.operation.get_bbox_tile_stream(bbox).await
+		self.operation.get_tile_stream(bbox).await
 	}
 }
 

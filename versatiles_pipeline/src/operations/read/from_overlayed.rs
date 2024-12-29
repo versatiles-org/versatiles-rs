@@ -93,7 +93,7 @@ impl OperationTrait for Operation {
 		return Ok(None);
 	}
 
-	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> TileStream {
 		let output_compression = &self.parameters.tile_compression;
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
@@ -113,7 +113,7 @@ impl OperationTrait for Operation {
 				}
 
 				source
-					.get_bbox_tile_stream(bbox_left)
+					.get_tile_stream(bbox_left)
 					.await
 					.for_each_sync(|(coord, mut blob)| {
 						let index = bbox.get_tile_index3(&coord);
@@ -219,7 +219,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_operation_get_bbox_tile_stream() -> Result<()> {
+	async fn test_operation_get_tile_stream() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
 			.operation_from_vpl(
@@ -234,11 +234,7 @@ mod tests {
 			.await?;
 
 		let bbox = TileBBox::new_full(3)?;
-		let tiles = result
-			.get_bbox_tile_stream(bbox.clone())
-			.await
-			.collect()
-			.await;
+		let tiles = result.get_tile_stream(bbox.clone()).await.collect().await;
 
 		assert_eq!(
 			arrange_tiles(tiles, |coord, blob| check_tile(&blob, &coord).unwrap()),

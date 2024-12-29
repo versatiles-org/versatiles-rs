@@ -59,7 +59,7 @@ impl OperationTrait for Operation {
 		self.reader.get_tile_data(coord).await
 	}
 
-	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> TileStream {
 		self.reader.get_bbox_tile_stream(bbox).await
 	}
 }
@@ -108,7 +108,7 @@ mod tests {
 		assert!(blob.len() > 50);
 
 		let mut stream = operation
-			.get_bbox_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?)
+			.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?)
 			.await;
 
 		let mut n = 0;

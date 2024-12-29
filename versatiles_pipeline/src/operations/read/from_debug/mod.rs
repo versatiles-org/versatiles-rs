@@ -105,7 +105,7 @@ impl OperationTrait for Operation {
 		build_tile(coord, self.parameters.tile_format, self.fast_compression)
 	}
 
-	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> TileStream {
 		let format = self.parameters.tile_format;
 		let fast = self.fast_compression;
 
@@ -158,7 +158,7 @@ mod tests {
 		);
 
 		let mut stream = operation
-			.get_bbox_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?)
+			.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?)
 			.await;
 
 		let mut n = 0;

@@ -155,11 +155,11 @@ impl OperationTrait for Operation {
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
-	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> TileStream {
 		let runner = self.runner.clone();
 		self
 			.source
-			.get_bbox_tile_stream(bbox)
+			.get_tile_stream(bbox)
 			.await
 			.filter_map_blob_parallel(move |blob| runner.run(blob).unwrap())
 	}
