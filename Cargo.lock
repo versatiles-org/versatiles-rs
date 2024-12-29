@@ -2824,7 +2824,6 @@ dependencies = [
  "indicatif",
  "itertools 0.13.0",
  "lazy_static",
- "nom",
  "num_cpus",
  "regex",
  "reqwest",
