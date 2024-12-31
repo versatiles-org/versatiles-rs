@@ -2,8 +2,8 @@ use super::JsonValue;
 
 pub fn stringify(json: &JsonValue) -> String {
 	match json {
-		JsonValue::Str(s) => format!("\"{}\"", escape_json_string(s)),
-		JsonValue::Num(n) => n.to_string(),
+		JsonValue::String(s) => format!("\"{}\"", escape_json_string(s)),
+		JsonValue::Number(n) => n.to_string(),
 		JsonValue::Boolean(b) => b.to_string(),
 		JsonValue::Null => String::from("null"),
 		JsonValue::Array(arr) => arr.stringify(),

@@ -124,15 +124,145 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
+
 	#[test]
-	fn test_from_vec_of_tuples() {
-		let result: JsonValue = vec![("key1", "value1"), ("key2", "value2")].into();
+	fn test_object_assign() {
+		let mut obj1 = JsonObject::from(vec![("key1", "value1")]);
+		let obj2 = JsonObject::from(vec![("key2", "value2"), ("key3", "value3")]);
+		obj1.object_assign(obj2).unwrap();
+
 		assert_eq!(
-			result,
-			JsonValue::Object(JsonObject(BTreeMap::from_iter(vec![
-				("key1".to_string(), JsonValue::Str("value1".to_string())),
-				("key2".to_string(), JsonValue::Str("value2".to_string())),
-			])))
+			obj1,
+			JsonObject::from(vec![
+				("key1", "value1"),
+				("key2", "value2"),
+				("key3", "value3"),
+			])
 		);
+	}
+
+	#[test]
+	fn test_object_set_key_value() {
+		let mut obj = JsonObject::default();
+		obj.object_set_key_value("key".to_string(), JsonValue::from("value"))
+			.unwrap();
+
+		assert_eq!(
+			obj,
+			JsonObject(BTreeMap::from_iter(vec![(
+				"key".to_string(),
+				JsonValue::from("value")
+			)]))
+		);
+	}
+
+	#[test]
+	fn test_object_get_value() {
+		let obj = JsonObject::from(vec![("key", "value")]);
+		let value = obj.object_get_value("key").unwrap();
+
+		assert_eq!(value, Some(&JsonValue::from("value")));
+	}
+
+	#[test]
+	fn test_get_string() {
+		let obj = JsonObject::from(vec![("key", "value")]);
+		let value = obj.get_string("key").unwrap();
+
+		assert_eq!(value, Some("value".to_string()));
+
+		let missing = obj.get_string("missing").unwrap();
+		assert_eq!(missing, None);
+	}
+
+	#[test]
+	fn test_get_number() {
+		let obj = JsonObject::from(vec![("key", 42)]);
+		let value: Option<u8> = obj.get_number("key").unwrap();
+
+		assert_eq!(value, Some(42));
+
+		let missing: Option<u8> = obj.get_number("missing").unwrap();
+		assert_eq!(missing, None);
+	}
+
+	#[test]
+	fn test_get_array() {
+		let array = JsonArray(vec![JsonValue::from("item1"), JsonValue::from("item2")]);
+		let obj = JsonObject::from(vec![("key", JsonValue::Array(array.clone()))]);
+
+		let value = obj.get_array("key").unwrap();
+		assert_eq!(value, Some(&array));
+	}
+
+	#[test]
+	fn test_get_string_vec() {
+		let array = JsonArray(vec![JsonValue::from("item1"), JsonValue::from("item2")]);
+		let obj = JsonObject::from(vec![("key", JsonValue::Array(array))]);
+
+		let value = obj.get_string_vec("key").unwrap();
+		assert_eq!(value, Some(vec!["item1".to_string(), "item2".to_string()]));
+	}
+
+	#[test]
+	fn test_get_number_vec() {
+		let array = JsonArray::from(vec![1, 2, 3]);
+		let obj = JsonObject::from(vec![("key", JsonValue::Array(array))]);
+
+		let value: Option<Vec<u8>> = obj.get_number_vec("key").unwrap();
+		assert_eq!(value, Some(vec![1, 2, 3]));
+	}
+
+	#[test]
+	fn test_get_number_array() {
+		let array = JsonArray::from(vec![1, 2, 3]);
+		let obj = JsonObject::from(vec![("key", JsonValue::Array(array))]);
+
+		let value: Option<[u8; 3]> = obj.get_number_array("key").unwrap();
+		assert_eq!(value, Some([1, 2, 3]));
+	}
+
+	#[test]
+	fn test_set_and_set_optional() {
+		let mut obj = JsonObject::default();
+		obj.set("key1", &42);
+		obj.set_optional("key2", &Some(84));
+		obj.set_optional::<i32>("key3", &None);
+
+		assert_eq!(
+			obj,
+			JsonObject(BTreeMap::from_iter(vec![
+				("key1".to_string(), JsonValue::from(42)),
+				("key2".to_string(), JsonValue::from(84)),
+			]))
+		);
+	}
+
+	#[test]
+	fn test_stringify() {
+		let obj = JsonObject::from(vec![
+			("key1", JsonValue::from("value1")),
+			("key2", JsonValue::from(42)),
+			("key3", JsonValue::from(vec![1, 2])),
+		]);
+
+		let json_string = obj.stringify();
+		let expected = r#"{"key1":"value1","key2":42,"key3":[1,2]}"#;
+
+		assert_eq!(json_string, expected);
+	}
+
+	#[test]
+	fn test_parse_str() {
+		let json = r#"{"key1":"value1","key2":42,"key3":[1,2]}"#;
+		let parsed = JsonObject::parse_str(json).unwrap();
+
+		let expected = JsonObject::from(vec![
+			("key1", JsonValue::from("value1")),
+			("key2", JsonValue::from(42)),
+			("key3", JsonValue::from(vec![1, 2])),
+		]);
+
+		assert_eq!(parsed, expected);
 	}
 }

@@ -16,9 +16,9 @@ pub fn parse_json_iter(iter: &mut ByteIterator) -> Result<JsonValue> {
 	match iter.expect_peeked_byte()? {
 		b'[' => parse_array_entries(iter, parse_json_iter).map(|i| JsonValue::Array(JsonArray(i))),
 		b'{' => parse_json_object(iter),
-		b'"' => parse_quoted_json_string(iter).map(JsonValue::Str),
+		b'"' => parse_quoted_json_string(iter).map(JsonValue::String),
 		d if d.is_ascii_digit() || d == b'.' || d == b'-' => {
-			parse_number_as::<f64>(iter).map(JsonValue::Num)
+			parse_number_as::<f64>(iter).map(JsonValue::Number)
 		}
 		b't' => parse_tag(iter, "true").map(|_| JsonValue::Boolean(true)),
 		b'f' => parse_tag(iter, "false").map(|_| JsonValue::Boolean(false)),

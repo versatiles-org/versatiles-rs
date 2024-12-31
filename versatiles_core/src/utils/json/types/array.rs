@@ -50,45 +50,111 @@ where
 	JsonValue: From<T>,
 {
 	fn from(input: Vec<T>) -> Self {
-		JsonValue::Array(JsonArray(Vec::from_iter(
-			input.into_iter().map(JsonValue::from),
-		)))
+		JsonValue::Array(JsonArray::from(input))
+	}
+}
+
+impl<T> From<Vec<T>> for JsonArray
+where
+	JsonValue: From<T>,
+{
+	fn from(input: Vec<T>) -> Self {
+		JsonArray(Vec::from_iter(input.into_iter().map(JsonValue::from)))
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::utils::JsonValue;
 
 	#[test]
-	fn test_from_vec_of_json_values() {
-		let result: JsonValue = vec![
-			JsonValue::from("value1"),
+	fn test_stringify() {
+		let array = JsonArray(vec![
+			JsonValue::from("hello"),
+			JsonValue::from(42.0),
 			JsonValue::from(true),
-			JsonValue::from(23.42),
-		]
-		.into();
-		assert_eq!(
-			result,
-			JsonValue::Array(JsonArray(vec![
-				JsonValue::Str("value1".to_string()),
-				JsonValue::Boolean(true),
-				JsonValue::Num(23.42),
-			]))
-		);
+		]);
+
+		assert_eq!(array.stringify(), r#"["hello",42,true]"#);
 	}
 
 	#[test]
-	fn test_from_vec_of_str() {
-		let result: JsonValue = vec!["value1", "value2", "value3"].into();
+	fn test_as_string_vec() -> Result<()> {
+		let array = JsonArray::from(vec!["hello", "world"]);
+
+		assert_eq!(array.as_string_vec()?, vec!["hello", "world"]);
+
+		// Test with a non-string element
 		assert_eq!(
-			result,
-			JsonValue::Array(JsonArray(vec![
-				JsonValue::Str("value1".to_string()),
-				JsonValue::Str("value2".to_string()),
-				JsonValue::Str("value3".to_string()),
-			]))
+			JsonArray::from(vec![1, 2])
+				.as_string_vec()
+				.unwrap_err()
+				.to_string(),
+			"expected a string, found a number"
 		);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_as_number_vec() -> Result<()> {
+		let array = JsonArray::from(vec![1.2, 3.4, 5.6]);
+
+		assert_eq!(array.as_number_vec::<f64>()?, vec![1.2, 3.4, 5.6]);
+		assert_eq!(array.as_number_vec::<u8>()?, vec![1, 3, 5]);
+		assert_eq!(array.as_number_vec::<i32>()?, vec![1, 3, 5]);
+
+		// Test with a non-number element
+		assert_eq!(
+			JsonArray::from(vec!["a"])
+				.as_number_vec::<f64>()
+				.unwrap_err()
+				.to_string(),
+			"expected a number, found a string"
+		);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_as_number_array() -> Result<()> {
+		let array = JsonArray::from(vec![1.2, 3.4, 5.6]);
+
+		let number_array: [f64; 3] = array.as_number_array()?;
+		assert_eq!(number_array, [1.2, 3.4, 5.6]);
+
+		let number_array: [u8; 3] = array.as_number_array()?;
+		assert_eq!(number_array, [1, 3, 5]);
+
+		// Test with incorrect length
+		assert_eq!(
+			array.as_number_array::<f64, 2>().unwrap_err().to_string(),
+			"vector length mismatch 3 != 2"
+		);
+
+		// Test with a non-number element
+		assert_eq!(
+			JsonArray::from(vec!["a"])
+				.as_number_array::<f64, 1>()
+				.unwrap_err()
+				.to_string(),
+			"expected a number, found a string"
+		);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_debug_impl() {
+		let array = JsonArray(vec![JsonValue::from("debug"), JsonValue::from(42.0)]);
+
+		assert_eq!(format!("{:?}", array), r#"[String("debug"), Number(42.0)]"#);
+	}
+
+	#[test]
+	fn test_from_vec() {
+		let json_array = JsonArray::from(vec![1, 2, 3]);
+		assert_eq!(json_array.0.len(), 3);
+		assert_eq!(json_array.0[0], JsonValue::from(1));
 	}
 }
