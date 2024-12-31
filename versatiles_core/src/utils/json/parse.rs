@@ -1,4 +1,4 @@
-use super::JsonValue;
+use super::{JsonArray, JsonObject, JsonValue};
 use crate::utils::{
 	parse_array_entries, parse_number_as, parse_object_entries, parse_quoted_json_string, parse_tag,
 	ByteIterator,
@@ -14,7 +14,7 @@ pub fn parse_json_str(json: &str) -> Result<JsonValue> {
 pub fn parse_json_iter(iter: &mut ByteIterator) -> Result<JsonValue> {
 	iter.skip_whitespace();
 	match iter.expect_peeked_byte()? {
-		b'[' => parse_array_entries(iter, parse_json_iter).map(JsonValue::Array),
+		b'[' => parse_array_entries(iter, parse_json_iter).map(|i| JsonValue::Array(JsonArray(i))),
 		b'{' => parse_json_object(iter),
 		b'"' => parse_quoted_json_string(iter).map(JsonValue::Str),
 		d if d.is_ascii_digit() || d == b'.' || d == b'-' => {
@@ -33,14 +33,13 @@ fn parse_json_object(iter: &mut ByteIterator) -> Result<JsonValue> {
 		list.push((key, parse_json_iter(iter2)?));
 		Ok(())
 	})?;
-	Ok(JsonValue::Object(BTreeMap::from_iter(list)))
+	Ok(JsonValue::Object(JsonObject(BTreeMap::from_iter(list))))
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use crate::utils::JsonValue;
-	use std::collections::BTreeMap;
 
 	fn v<T>(input: T) -> JsonValue
 	where
@@ -121,13 +120,13 @@ mod tests {
 	#[test]
 	fn test_empty_object() {
 		let json = parse_json_str("{}").unwrap();
-		assert_eq!(json, JsonValue::Object(BTreeMap::new()));
+		assert_eq!(json, JsonValue::new_object());
 	}
 
 	#[test]
 	fn test_empty_array() {
 		let json = parse_json_str("[]").unwrap();
-		assert_eq!(json, JsonValue::Array(vec![]));
+		assert_eq!(json, JsonValue::new_array());
 	}
 
 	#[test]

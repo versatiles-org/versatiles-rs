@@ -6,21 +6,12 @@ pub fn stringify(json: &JsonValue) -> String {
 		JsonValue::Num(n) => n.to_string(),
 		JsonValue::Boolean(b) => b.to_string(),
 		JsonValue::Null => String::from("null"),
-		JsonValue::Array(arr) => {
-			let items = arr.iter().map(stringify).collect::<Vec<_>>();
-			format!("[{}]", items.join(","))
-		}
-		JsonValue::Object(obj) => {
-			let items = obj
-				.iter()
-				.map(|(key, value)| format!("\"{}\":{}", escape_json_string(key), stringify(value)))
-				.collect::<Vec<_>>();
-			format!("{{{}}}", items.join(","))
-		}
+		JsonValue::Array(arr) => arr.stringify(),
+		JsonValue::Object(obj) => obj.stringify(),
 	}
 }
 
-fn escape_json_string(input: &str) -> String {
+pub fn escape_json_string(input: &str) -> String {
 	input
 		.chars()
 		.map(|c| match c {

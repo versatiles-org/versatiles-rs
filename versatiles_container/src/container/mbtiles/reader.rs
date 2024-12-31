@@ -46,10 +46,10 @@ use async_trait::async_trait;
 use log::trace;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
-use std::{collections::BTreeMap, path::Path};
+use std::path::Path;
 use versatiles_core::{
 	types::{TileCompression::*, TileFormat::*, *},
-	utils::{progress::get_progress_bar, JsonValue, TransformCoord},
+	utils::{progress::get_progress_bar, JsonObject, JsonValue, TransformCoord},
 };
 
 /// A struct that provides functionality to read tile data from an MBTiles SQLite database.
@@ -129,10 +129,7 @@ impl MBTilesReader {
 			self.name
 		));
 
-		let mut meta = JsonValue::Object(BTreeMap::from([(
-			String::from("tilejson"),
-			JsonValue::from("3.0.0"),
-		)]));
+		let mut meta = JsonObject::from(vec![("tilejson", "3.0.0")]);
 
 		for entry in entries {
 			let entry = entry?;
@@ -158,7 +155,7 @@ impl MBTilesReader {
 					}
 					_ => panic!("unknown file format: {}", value),
 				},
-				"json" => meta.object_assign(JsonValue::parse_str(value)?)?,
+				"json" => meta.object_assign(JsonObject::parse_str(value)?)?,
 				"attribution" | "author" | "description" | "license" | "name" | "type" | "version" => {
 					meta.object_set_key_value(key.to_owned(), JsonValue::from(value))?
 				}

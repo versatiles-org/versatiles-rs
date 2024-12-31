@@ -36,7 +36,7 @@ use r2d2_sqlite::{rusqlite::params, SqliteConnectionManager};
 use std::{fs::remove_file, path::Path};
 use versatiles_core::{
 	types::*,
-	utils::{io::DataWriterTrait, progress::get_progress_bar, JsonValue},
+	utils::{io::DataWriterTrait, progress::get_progress_bar, JsonObject},
 };
 
 /// A writer for creating and populating MBTiles databases.
@@ -163,7 +163,7 @@ impl TilesWriterTrait for MBTilesWriter {
 			let meta = meta.as_str();
 			writer.set_metadata("json", meta)?;
 
-			let tilejson = JsonValue::parse_str(meta)?;
+			let tilejson = JsonObject::parse_str(meta)?;
 
 			for key in [
 				"name",
@@ -174,7 +174,7 @@ impl TilesWriterTrait for MBTilesWriter {
 				"license",
 			] {
 				if let Some(name) = tilejson.object_get_value(key)? {
-					writer.set_metadata(key, &name.as_string())?;
+					writer.set_metadata(key, &name.as_string()?)?;
 				}
 			}
 		}

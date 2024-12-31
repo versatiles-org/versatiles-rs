@@ -1,7 +1,8 @@
 use super::{super::utils::Url, SourceResponse};
 use anyhow::{ensure, Result};
-use std::{collections::BTreeMap, fmt::Debug, sync::Arc};
+use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
+use versatiles::utils::JsonObject;
 use versatiles_core::{
 	types::{Blob, TileCompression, TileCoord3, TileFormat, TilesReaderTrait},
 	utils::{JsonValue, TargetCompression},
@@ -160,27 +161,27 @@ impl TileSource {
 
 		drop(reader);
 
-		let mut tilejson = JsonValue::Object(BTreeMap::from([
-			(String::from("bounds"), JsonValue::from(bbox.to_vec())),
-			(String::from("format"), JsonValue::from(tile_format)),
-			(String::from("maxzoom"), JsonValue::from(zoom_max)),
-			(String::from("minzoom"), JsonValue::from(zoom_min)),
-			(String::from("name"), JsonValue::from(self.id.as_str())),
-			(String::from("tilejson"), JsonValue::from("3.0.0")),
-			(String::from("tiles"), JsonValue::from(vec![tiles_url])),
-			(String::from("type"), JsonValue::from(tile_type)),
+		let mut tilejson = JsonObject::from(vec![
+			("bounds", JsonValue::from(bbox.to_vec())),
+			("format", JsonValue::from(tile_format)),
+			("maxzoom", JsonValue::from(zoom_max)),
+			("minzoom", JsonValue::from(zoom_min)),
+			("name", JsonValue::from(self.id.as_str())),
+			("tilejson", JsonValue::from("3.0.0")),
+			("tiles", JsonValue::from(vec![tiles_url])),
+			("type", JsonValue::from(tile_type)),
 			(
-				String::from("center"),
+				"center",
 				JsonValue::from(vec![
 					(bbox[0] + bbox[2]) / 2.,
 					(bbox[1] + bbox[3]) / 2.,
 					(zoom_min + 2).min(zoom_max) as f64,
 				]),
 			),
-		]));
+		]);
 
 		if let Some(meta) = meta {
-			tilejson.object_assign(JsonValue::parse_blob(&meta)?)?
+			tilejson.object_assign(JsonObject::parse_str(meta.as_str())?)?
 		}
 
 		Ok(Blob::from(tilejson.stringify()))
