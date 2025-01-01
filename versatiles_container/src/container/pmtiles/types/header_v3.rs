@@ -30,12 +30,12 @@ pub struct HeaderV3 {
 }
 
 impl HeaderV3 {
-	pub fn from(parameters: &TilesReaderParameters) -> HeaderV3 {
+	pub fn from_parameters(parameters: &TilesReaderParameters) -> HeaderV3 {
 		use PMTilesCompression as PC;
 		use PMTilesType as PT;
 
 		let bbox_pyramid = &parameters.bbox_pyramid;
-		let bbox = bbox_pyramid.get_geo_bbox();
+		let bbox = bbox_pyramid.get_geo_bbox().unwrap();
 
 		Self {
 			root_dir: ByteRange::new(0, 0),
@@ -51,13 +51,13 @@ impl HeaderV3 {
 			tile_type: PT::from_value(parameters.tile_format).unwrap_or(PT::UNKNOWN),
 			min_zoom: bbox_pyramid.get_zoom_min().unwrap_or(0),
 			max_zoom: bbox_pyramid.get_zoom_max().unwrap_or(14),
-			min_lon_e7: (bbox[0] * 1e7) as i32,
-			min_lat_e7: (bbox[1] * 1e7) as i32,
-			max_lon_e7: (bbox[2] * 1e7) as i32,
-			max_lat_e7: (bbox[3] * 1e7) as i32,
+			min_lon_e7: (bbox.0 * 1e7) as i32,
+			min_lat_e7: (bbox.1 * 1e7) as i32,
+			max_lon_e7: (bbox.2 * 1e7) as i32,
+			max_lat_e7: (bbox.3 * 1e7) as i32,
 			center_zoom: bbox_pyramid.get_good_zoom().unwrap_or(0),
-			center_lon_e7: ((bbox[0] + bbox[2]) * 5e6) as i32,
-			center_lat_e7: ((bbox[1] + bbox[3]) * 5e6) as i32,
+			center_lon_e7: ((bbox.0 + bbox.2) * 5e6) as i32,
+			center_lat_e7: ((bbox.1 + bbox.3) * 5e6) as i32,
 		}
 	}
 
@@ -104,10 +104,7 @@ impl HeaderV3 {
 		let buffer = blob.as_slice();
 
 		ensure!(buffer.len() == 127, "pmtiles magic number exception");
-		ensure!(
-			&buffer[0..7] == b"PMTiles",
-			"pmtiles magic number exception"
-		);
+		ensure!(&buffer[0..7] == b"PMTiles", "pmtiles magic number exception");
 		ensure!(buffer[7] == 3, "pmtiles version: must be 3");
 
 		let mut reader = ValueReaderSlice::new_le(blob.as_slice());

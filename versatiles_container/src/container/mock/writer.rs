@@ -43,7 +43,7 @@ impl MockTilesWriter {
 	pub async fn write(reader: &mut dyn TilesReaderTrait) -> Result<()> {
 		let _temp = reader.get_container_name();
 		let _temp = reader.get_source_name();
-		let _temp = reader.get_meta()?;
+		let _temp = reader.get_tilejson();
 
 		let bbox_pyramid = reader.get_parameters().bbox_pyramid.clone();
 
@@ -70,10 +70,7 @@ impl TilesWriterTrait for MockTilesWriter {
 	/// # Returns
 	///
 	/// A `Result` indicating the success or failure of the operation.
-	async fn write_to_writer(
-		reader: &mut dyn TilesReaderTrait,
-		_writer: &mut dyn DataWriterTrait,
-	) -> Result<()> {
+	async fn write_to_writer(reader: &mut dyn TilesReaderTrait, _writer: &mut dyn DataWriterTrait) -> Result<()> {
 		MockTilesWriter::write(reader).await
 	}
 }

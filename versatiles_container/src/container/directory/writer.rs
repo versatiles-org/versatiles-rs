@@ -102,14 +102,10 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 		let extension_format = tile_format.extension();
 		let extension_compression = tile_compression.extension();
 
-		let meta_data_option = reader.get_meta()?;
-
-		if let Some(meta_data) = meta_data_option {
-			let meta_data = compress(meta_data.into(), tile_compression)?;
-			let filename = format!("tiles.json{extension_compression}");
-
-			Self::write(path.join(filename), meta_data)?;
-		}
+		let tilejson = reader.get_tilejson();
+		let meta_data = compress(tilejson.into(), tile_compression)?;
+		let filename = format!("tiles.json{extension_compression}");
+		Self::write(path.join(filename), meta_data)?;
 
 		let mut progress = get_progress_bar("converting tiles", bbox_pyramid.count_tiles());
 
@@ -144,10 +140,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	///
 	/// # Errors
 	/// This function always returns an error as it is not implemented.
-	async fn write_to_writer(
-		_reader: &mut dyn TilesReaderTrait,
-		_writer: &mut dyn DataWriterTrait,
-	) -> Result<()> {
+	async fn write_to_writer(_reader: &mut dyn TilesReaderTrait, _writer: &mut dyn DataWriterTrait) -> Result<()> {
 		bail!("not implemented")
 	}
 }

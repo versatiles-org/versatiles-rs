@@ -44,8 +44,7 @@ struct Runner {
 impl Runner {
 	fn run(&self, mut blob: Blob) -> Result<Option<Blob>> {
 		blob = decompress(blob, &self.tile_compression)?;
-		let mut tile =
-			VectorTile::from_blob(&blob).context("Failed to create VectorTile from Blob")?;
+		let mut tile = VectorTile::from_blob(&blob).context("Failed to create VectorTile from Blob")?;
 
 		let layer_name = self.args.layer_name.as_ref();
 
@@ -75,11 +74,7 @@ impl Runner {
 			})?;
 		}
 
-		Ok(Some(
-			tile
-				.to_blob()
-				.context("Failed to convert VectorTile to Blob")?,
-		))
+		Ok(Some(tile.to_blob().context("Failed to convert VectorTile to Blob")?))
 	}
 }
 
@@ -127,10 +122,7 @@ impl Operation {
 				.context("Failed to build properties map from CSV data")?;
 
 			let mut parameters = source.get_parameters().clone();
-			ensure!(
-				parameters.tile_format == TileFormat::PBF,
-				"source must be vector tiles"
-			);
+			ensure!(parameters.tile_format == TileFormat::PBF, "source must be vector tiles");
 
 			let runner = Arc::new(Runner {
 				args,
@@ -162,18 +154,16 @@ impl OperationTrait for Operation {
 			.await
 			.filter_map_blob_parallel(move |blob| runner.run(blob).unwrap())
 	}
-	fn get_meta(&self) -> &TileJSON {
-		todo!("implement get_meta, check for fields");
-		self.source.get_meta()
+	fn get_tilejson(&self) -> &TileJSON {
+		todo!("implement get_tilejson, check for fields");
+		self.source.get_tilejson()
 	}
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		Ok(
-			if let Some(blob) = self.source.get_tile_data(coord).await? {
-				self.runner.run(blob)?
-			} else {
-				None
-			},
-		)
+		Ok(if let Some(blob) = self.source.get_tile_data(coord).await? {
+			self.runner.run(blob)?
+		} else {
+			None
+		})
 	}
 }
 
@@ -205,9 +195,7 @@ mod tests {
 	use super::*;
 	use assert_fs::NamedTempFile;
 	use std::{fs::File, io::Write};
-	use versatiles_geometry::{
-		vector_tile::VectorTileLayer, GeoFeature, GeoProperties, GeoValue, Geometry,
-	};
+	use versatiles_geometry::{vector_tile::VectorTileLayer, GeoFeature, GeoProperties, GeoValue, Geometry};
 
 	fn create_sample_vector_tile_blob() -> Blob {
 		let mut feature = GeoFeature::new(Geometry::new_example());
@@ -215,9 +203,7 @@ mod tests {
 			("id", GeoValue::from("feature_1")),
 			("property1", GeoValue::from("value1")),
 		]);
-		let layer =
-			VectorTileLayer::from_features(String::from("test_layer"), vec![feature], 4096, 1)
-				.unwrap();
+		let layer = VectorTileLayer::from_features(String::from("test_layer"), vec![feature], 4096, 1).unwrap();
 		let tile = VectorTile::new(vec![layer]);
 		tile.to_blob().unwrap()
 	}
@@ -247,14 +233,9 @@ mod tests {
 		let result_blob = runner.run(blob).unwrap().unwrap();
 		let tile = VectorTile::from_blob(&result_blob).unwrap();
 
-		let properties = tile.layers[0].features[0]
-			.decode_properties(&tile.layers[0])
-			.unwrap();
+		let properties = tile.layers[0].features[0].decode_properties(&tile.layers[0]).unwrap();
 
-		assert_eq!(
-			properties.get("property2").unwrap(),
-			&GeoValue::from("new_value")
-		);
+		assert_eq!(properties.get("property2").unwrap(), &GeoValue::from("new_value"));
 	}
 
 	#[test]
@@ -306,10 +287,7 @@ mod tests {
 			)
 			.await?;
 
-		let blob = operation
-			.get_tile_data(&TileCoord3::new(0, 0, 0)?)
-			.await?
-			.unwrap();
+		let blob = operation.get_tile_data(&TileCoord3::new(0, 0, 0)?).await?.unwrap();
 		let tile = VectorTile::from_blob(&blob)?;
 
 		assert_eq!(tile.layers.len(), 1);
@@ -338,10 +316,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_run_variation3() -> Result<()> {
-		assert_eq!(
-			run("x,data_id,,true,false").await?,
-			"{\"value\": String(\"test\")}"
-		);
+		assert_eq!(run("x,data_id,,true,false").await?, "{\"value\": String(\"test\")}");
 		Ok(())
 	}
 

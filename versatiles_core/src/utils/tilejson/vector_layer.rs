@@ -27,9 +27,7 @@ impl VectorLayers {
 			let object = entry.as_object()?;
 
 			// Required: "id"
-			let id = object
-				.get_string("id")?
-				.ok_or_else(|| anyhow!("missing `id`"))?;
+			let id = object.get_string("id")?.ok_or_else(|| anyhow!("missing `id`"))?;
 
 			// Optional: "description", "minzoom", "maxzoom"
 			let description = object.get_string("description")?;
@@ -37,10 +35,7 @@ impl VectorLayers {
 			let maxzoom = object.get_number("maxzoom")?;
 
 			// Required: "fields", which is an object
-			let fields_val = object
-				.get("fields")?
-				.ok_or(anyhow!("missing `fields`"))?
-				.as_object()?;
+			let fields_val = object.get("fields").ok_or(anyhow!("missing `fields`"))?.as_object()?;
 
 			// Convert each entry in "fields" to a (String, String) pair
 			let fields = fields_val

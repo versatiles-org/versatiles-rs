@@ -6,7 +6,7 @@ use std::fmt::Debug;
 /// - `f64` latitude (range: [-90, 90])
 /// - `u8` zoom level (typical range: 0 to 30)
 #[derive(Clone, Copy, PartialEq)]
-pub struct GeoCenter(f64, f64, u8);
+pub struct GeoCenter(pub f64, pub f64, pub u8);
 
 impl GeoCenter {
 	/// Tries to construct an optional `GeoCenter` from an optional `Vec<f64>`.

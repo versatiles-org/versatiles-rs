@@ -54,9 +54,7 @@ impl TileServer {
 		for other_tile_source in self.tile_sources.iter() {
 			let other_prefix = &other_tile_source.prefix;
 			if other_prefix.starts_with(url_prefix) || url_prefix.starts_with(other_prefix) {
-				bail!(
-					"multiple sources with the prefix '{url_prefix}' and '{other_prefix}' are defined"
-				);
+				bail!("multiple sources with the prefix '{url_prefix}' and '{other_prefix}' are defined");
 			};
 		}
 
@@ -69,9 +67,7 @@ impl TileServer {
 		let url_prefix = url_prefix.as_dir();
 
 		log::info!("add static: {path:?}");
-		self
-			.static_sources
-			.push(StaticSource::new(path, url_prefix)?);
+		self.static_sources.push(StaticSource::new(path, url_prefix)?);
 		Ok(())
 	}
 
@@ -214,29 +210,6 @@ impl TileServer {
 
 	async fn add_api_to_app(&self, app: Router) -> Result<Router> {
 		let mut api_app = Router::new();
-		api_app = api_app.route(
-			"/api/status",
-			get(|| async { ok_json("{\"status\":\"ready\"}") }),
-		);
-
-		let mut objects: Vec<String> = Vec::new();
-		for tile_source in self.tile_sources.iter() {
-			let id = &tile_source.id;
-			let object = format!(
-				"{{\"url\":\"{}\",\"id\":\"{}\",\"container\":{}}}",
-				tile_source.prefix, id, tile_source.json_info
-			);
-			objects.push(object.clone());
-			api_app = api_app.route(
-				&format!("/api/source/{id}"),
-				get(|| async move { ok_json(&object) }),
-			);
-		}
-		let tile_sources_json = "[".to_owned() + &objects.join(",") + "]";
-		api_app = api_app.route(
-			"/api/sources",
-			get(|| async move { ok_json(&tile_sources_json) }),
-		);
 
 		let tiles_index_json: String = format!(
 			"[{}]",
@@ -248,10 +221,7 @@ impl TileServer {
 				.join(","),
 		);
 
-		api_app = api_app.route(
-			"/tiles/index.json",
-			get(|| async move { ok_json(&tiles_index_json) }),
-		);
+		api_app = api_app.route("/tiles/index.json", get(|| async move { ok_json(&tiles_index_json) }));
 
 		Ok(app.merge(api_app))
 	}
@@ -300,9 +270,8 @@ fn ok_data(result: SourceResponse, mut target_compressions: TargetCompression) -
 		result.compression,
 		target_compressions
 	);
-	let (blob, compression) =
-		optimize_compression(result.blob, &result.compression, &target_compressions)
-			.expect("should have optimized compression");
+	let (blob, compression) = optimize_compression(result.blob, &result.compression, &target_compressions)
+		.expect("should have optimized compression");
 
 	use TileCompression::*;
 	match compression {
@@ -371,31 +340,19 @@ mod tests {
 		test("", enum_set!(Uncompressed));
 		test("*", enum_set!(Uncompressed));
 		test("br", enum_set!(Uncompressed | Brotli));
-		test(
-			"br;q=1.0, gzip;q=0.8, *;q=0.1",
-			enum_set!(Uncompressed | Brotli | Gzip),
-		);
+		test("br;q=1.0, gzip;q=0.8, *;q=0.1", enum_set!(Uncompressed | Brotli | Gzip));
 		test("compress", enum_set!(Uncompressed));
 		test("compress, gzip", enum_set!(Uncompressed | Gzip));
 		test("compress;q=0.5, gzip;q=1.0", enum_set!(Uncompressed | Gzip));
 		test("deflate", enum_set!(Uncompressed));
-		test(
-			"deflate, gzip;q=1.0, *;q=0.5",
-			enum_set!(Uncompressed | Gzip),
-		);
+		test("deflate, gzip;q=1.0, *;q=0.5", enum_set!(Uncompressed | Gzip));
 		test("gzip", enum_set!(Uncompressed | Gzip));
-		test(
-			"gzip, compress, br",
-			enum_set!(Uncompressed | Brotli | Gzip),
-		);
+		test("gzip, compress, br", enum_set!(Uncompressed | Brotli | Gzip));
 		test(
 			"gzip, deflate, br;q=1.0, identity;q=0.5, *;q=0.25",
 			enum_set!(Uncompressed | Brotli | Gzip),
 		);
-		test(
-			"gzip;q=1.0, identity; q=0.5, *;q=0",
-			enum_set!(Uncompressed | Gzip),
-		);
+		test("gzip;q=1.0, identity; q=0.5, *;q=0", enum_set!(Uncompressed | Gzip));
 		test("identity", enum_set!(Uncompressed));
 	}
 
@@ -430,9 +387,7 @@ mod tests {
 		let meta = "{\"bounds\":[-180,-79.17133464081944,45,66.51326044311185],\"center\":[-67.5,-6.329037098853796,3],\"format\":\"vector\",\"maxzoom\":3,\"minzoom\":2,\"name\":\"cheese\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/cheese/{z}/{x}/{y}\"],\"type\":\"dummy\"}";
 		assert_eq!(get("tiles/cheese/meta.json").await, meta);
 		assert_eq!(get("tiles/cheese/tiles.json").await, meta);
-		assert!(get("tiles/cheese/0/0/0.png")
-			.await
-			.starts_with("\u{1a}4\n\u{5}ocean"));
+		assert!(get("tiles/cheese/0/0/0.png").await.starts_with("\u{1a}4\n\u{5}ocean"));
 		assert_eq!(get("tiles/index.json").await, "[\"cheese\"]");
 		assert_eq!(get("status").await, "ready!");
 

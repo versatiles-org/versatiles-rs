@@ -24,7 +24,7 @@ struct Args {
 struct Operation {
 	parameters: TilesReaderParameters,
 	sources: Vec<Box<dyn OperationTrait>>,
-	meta: TileJSON,
+	tilejson: TileJSON,
 }
 
 fn merge_tiles(blobs: Vec<Blob>) -> Result<Blob> {
@@ -66,20 +66,17 @@ impl ReadOperationTrait for Operation {
 			let tile_compression = TileCompression::Uncompressed;
 
 			for source in sources.iter() {
-				meta.merge(source.get_meta());
+				meta.merge(source.get_tilejson())?;
 
 				let parameters = source.get_parameters();
 				pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
-				ensure!(
-					tile_format == TileFormat::PBF,
-					"all sources must be vector tiles"
-				);
+				ensure!(tile_format == TileFormat::PBF, "all sources must be vector tiles");
 			}
 
 			let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
 
 			Ok(Box::new(Self {
-				meta,
+				tilejson: meta,
 				parameters,
 				sources,
 			}) as Box<dyn OperationTrait>)
@@ -93,8 +90,8 @@ impl OperationTrait for Operation {
 		&self.parameters
 	}
 
-	fn get_meta(&self) -> &TileJSON {
-		&self.meta
+	fn get_tilejson(&self) -> &TileJSON {
+		&self.tilejson
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
@@ -139,10 +136,7 @@ impl OperationTrait for Operation {
 						if v.is_empty() {
 							None
 						} else {
-							Some((
-								bbox.get_coord3_by_index(i as u32).unwrap(),
-								merge_tiles(v).unwrap(),
-							))
+							Some((bbox.get_coord3_by_index(i as u32).unwrap(), merge_tiles(v).unwrap()))
 						}
 					})
 					.collect(),
@@ -165,11 +159,7 @@ impl OperationFactoryTrait for Factory {
 
 #[async_trait]
 impl ReadOperationFactoryTrait for Factory {
-	async fn build<'a>(
-		&self,
-		vpl_node: VPLNode,
-		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>> {
+	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn OperationTrait>> {
 		Operation::build(vpl_node, factory).await
 	}
 }
@@ -210,11 +200,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let error = |command: &'static str| async {
 			assert_eq!(
-				factory
-					.operation_from_vpl(command)
-					.await
-					.unwrap_err()
-					.to_string(),
+				factory.operation_from_vpl(command).await.unwrap_err().to_string(),
 				"must have at least two sources"
 			)
 		};
@@ -228,9 +214,7 @@ mod tests {
 	async fn test_operation_get_tile_data() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
-			.operation_from_vpl(
-				"from_vectortiles_merged [ from_container filename=1, from_container filename=2 ]",
-			)
+			.operation_from_vpl("from_vectortiles_merged [ from_container filename=1, from_container filename=2 ]")
 			.await?;
 
 		let coord = TileCoord3::new(1, 2, 3)?;
@@ -284,20 +268,18 @@ mod tests {
 	async fn test_operation_parameters() -> Result<()> {
 		let factory = PipelineFactory::default(
 			Path::new(""),
-			Box::new(
-				|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
-					Box::pin(async move {
-						let mut pyramide = TileBBoxPyramid::new_empty();
-						for c in filename.chars() {
-							pyramide.include_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?);
-						}
-						Ok(Box::new(MockVectorSource::new(
-							&[("mock", &[&[("filename", &filename)]])],
-							Some(pyramide),
-						)) as Box<dyn TilesReaderTrait>)
-					})
-				},
-			),
+			Box::new(|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
+				Box::pin(async move {
+					let mut pyramide = TileBBoxPyramid::new_empty();
+					for c in filename.chars() {
+						pyramide.include_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?);
+					}
+					Ok(Box::new(MockVectorSource::new(
+						&[("mock", &[&[("filename", &filename)]])],
+						Some(pyramide),
+					)) as Box<dyn TilesReaderTrait>)
+				})
+			}),
 		);
 
 		let result = factory

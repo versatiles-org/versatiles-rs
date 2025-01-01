@@ -38,18 +38,12 @@ impl TilesWriterTrait for TarTilesWriter {
 		let extension_format = tile_format.extension();
 		let extension_compression = tile_compression.extension();
 
-		let meta_data_option = reader.get_meta()?;
-
-		if let Some(meta_data) = meta_data_option {
-			let meta_data = compress(meta_data, tile_compression)?;
-			let filename = format!("tiles.json{}", extension_compression);
-
-			let mut header = Header::new_gnu();
-			header.set_size(meta_data.len() as u64);
-			header.set_mode(0o644);
-
-			builder.append_data(&mut header, Path::new(&filename), meta_data.as_slice())?;
-		}
+		let meta_data = compress(reader.get_tilejson().into(), tile_compression)?;
+		let filename = format!("tiles.json{}", extension_compression);
+		let mut header = Header::new_gnu();
+		header.set_size(meta_data.len() as u64);
+		header.set_mode(0o644);
+		builder.append_data(&mut header, Path::new(&filename), meta_data.as_slice())?;
 
 		let mut progress = get_progress_bar("converting tiles", bbox_pyramid.count_tiles());
 
@@ -89,10 +83,7 @@ impl TilesWriterTrait for TarTilesWriter {
 	///
 	/// # Errors
 	/// This function is not implemented and will return an error.
-	async fn write_to_writer(
-		_reader: &mut dyn TilesReaderTrait,
-		_writer: &mut dyn DataWriterTrait,
-	) -> Result<()> {
+	async fn write_to_writer(_reader: &mut dyn TilesReaderTrait, _writer: &mut dyn DataWriterTrait) -> Result<()> {
 		bail!("not implemented")
 	}
 }
@@ -133,7 +124,7 @@ mod tests {
 		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path).await?;
 
 		let reader = TarTilesReader::open_path(&temp_path)?;
-		assert_eq!(reader.get_meta()?.unwrap().as_str(), "{\"type\":\"dummy\"}");
+		assert_eq!(reader.get_tilejson().as_string(), "{\"type\":\"dummy\"}");
 
 		Ok(())
 	}

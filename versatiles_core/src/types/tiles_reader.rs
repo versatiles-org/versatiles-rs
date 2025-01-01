@@ -25,7 +25,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	fn override_compression(&mut self, tile_compression: TileCompression);
 
 	/// Get the metadata, always uncompressed.
-	fn get_meta(&self) -> &TileJSON;
+	fn get_tilejson(&self) -> &TileJSON;
 
 	/// Get tile data for the given coordinate, always compressed and formatted.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>>;
@@ -57,20 +57,16 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 		let cat = print.get_category("meta_data").await;
 		cat.add_key_value("name", self.get_source_name()).await;
-		cat.add_key_value("container", self.get_container_name())
-			.await;
+		cat.add_key_value("container", self.get_container_name()).await;
 
-		cat.add_key_value("meta", &self.get_meta().stringify())
-			.await;
+		cat.add_key_value("meta", &self.get_tilejson().stringify()).await;
 
 		self
 			.probe_parameters(&mut print.get_category("parameters").await)
 			.await?;
 
 		if matches!(level, Container | Tiles | TileContents) {
-			self
-				.probe_container(&print.get_category("container").await)
-				.await?;
+			self.probe_container(&print.get_category("container").await).await?;
 		}
 
 		if matches!(level, Tiles | TileContents) {
@@ -94,17 +90,12 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 			p.add_value(level).await
 		}
 		print
-			.add_key_value(
-				"bbox",
-				&format!("{:?}", parameters.bbox_pyramid.get_geo_bbox()),
-			)
+			.add_key_value("bbox", &format!("{:?}", parameters.bbox_pyramid.get_geo_bbox()))
 			.await;
 		print
 			.add_key_value("tile compression", &parameters.tile_compression)
 			.await;
-		print
-			.add_key_value("tile format", &parameters.tile_format)
-			.await;
+		print.add_key_value("tile format", &parameters.tile_format).await;
 		Ok(())
 	}
 
@@ -151,16 +142,20 @@ mod tests {
 	#[derive(Debug)]
 	struct TestReader {
 		parameters: TilesReaderParameters,
+		tilejson: TileJSON,
 	}
 
 	impl TestReader {
 		fn new_dummy() -> TestReader {
+			let mut tilejson = TileJSON::default();
+			tilejson.set_string("metadata", "test").unwrap();
 			TestReader {
 				parameters: TilesReaderParameters {
 					bbox_pyramid: TileBBoxPyramid::new_full(3),
 					tile_compression: TileCompression::Gzip,
 					tile_format: TileFormat::PBF,
 				},
+				tilejson,
 			}
 		}
 	}
@@ -183,8 +178,8 @@ mod tests {
 			self.parameters.tile_compression = tile_compression;
 		}
 
-		fn get_meta(&self) -> Result<Option<Blob>> {
-			Ok(Some(Blob::from("test metadata")))
+		fn get_tilejson(&self) -> &TileJSON {
+			&self.tilejson
 		}
 
 		async fn get_tile_data(&self, _coord: &TileCoord3) -> Result<Option<Blob>> {
@@ -217,23 +212,16 @@ mod tests {
 	#[tokio::test]
 	async fn test_override_compression() {
 		let mut reader = TestReader::new_dummy();
-		assert_eq!(
-			reader.get_parameters().tile_compression,
-			TileCompression::Gzip
-		);
+		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
 
 		reader.override_compression(TileCompression::Brotli);
-		assert_eq!(
-			reader.get_parameters().tile_compression,
-			TileCompression::Brotli
-		);
+		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Brotli);
 	}
 
 	#[tokio::test]
 	async fn test_get_meta() -> Result<()> {
 		let reader = TestReader::new_dummy();
-		let meta = reader.get_meta()?;
-		assert_eq!(meta, Some(Blob::from("test metadata")));
+		assert_eq!(reader.get_tilejson().as_string(), "test metadata");
 		Ok(())
 	}
 

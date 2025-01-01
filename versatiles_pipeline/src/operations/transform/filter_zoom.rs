@@ -52,9 +52,9 @@ impl OperationTrait for Operation {
 		&self.parameters
 	}
 
-	fn get_meta(&self) -> &TileJSON {
-		todo!("implement get_meta, check for zoom");
-		self.source.get_meta()
+	fn get_tilejson(&self) -> &TileJSON {
+		todo!("implement get_tilejson, check for zoom");
+		self.source.get_tilejson()
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
@@ -98,11 +98,7 @@ impl TransformOperationFactoryTrait for Factory {
 mod tests {
 	use super::*;
 
-	async fn test_filter_zoom(
-		min: Option<u8>,
-		max: Option<u8>,
-		tests: Vec<(u32, bool)>,
-	) -> Result<()> {
+	async fn test_filter_zoom(min: Option<u8>, max: Option<u8>, tests: Vec<(u32, bool)>) -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 
 		let vpl = format!(

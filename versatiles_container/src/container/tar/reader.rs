@@ -4,11 +4,14 @@ use anyhow::{bail, Result};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path};
 use tar::{Archive, EntryType};
-use versatiles_core::{types::*, utils::decompress, utils::io::*};
+use versatiles_core::{
+	types::*,
+	utils::{decompress, io::*, TileJSON},
+};
 
 /// A struct that provides functionality to read tile data from a tar archive.
 pub struct TarTilesReader {
-	meta: Option<Blob>,
+	tilejson: TileJSON,
 	name: String,
 	reader: Box<DataReaderFile>,
 	tile_map: HashMap<TileCoord3, ByteRange>,
@@ -27,7 +30,7 @@ impl TarTilesReader {
 		let mut reader = DataReaderFile::open(path)?;
 		let mut archive = Archive::new(&mut reader);
 
-		let mut meta: Option<Blob> = None;
+		let mut tilejson = TileJSON::default();
 		let mut tile_map = HashMap::new();
 		let mut tile_format: Option<TileFormat> = None;
 		let mut tile_compression: Option<TileCompression> = None;
@@ -96,15 +99,21 @@ impl TarTilesReader {
 			if path_vec.len() == 1 {
 				match path_vec[0] {
 					"meta.json" | "tiles.json" | "metadata.json" => {
-						meta = Some(read_to_end());
+						tilejson.merge(&TileJSON::try_from(&read_to_end())?)?;
 						continue;
 					}
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
-						meta = Some(decompress(read_to_end(), &TileCompression::Gzip)?);
+						tilejson.merge(&TileJSON::try_from(&decompress(
+							read_to_end(),
+							&TileCompression::Gzip,
+						)?)?)?;
 						continue;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
-						meta = Some(decompress(read_to_end(), &TileCompression::Brotli)?);
+						tilejson.merge(&TileJSON::try_from(&decompress(
+							read_to_end(),
+							&TileCompression::Brotli,
+						)?)?)?;
 						continue;
 					}
 					&_ => {}
@@ -115,13 +124,9 @@ impl TarTilesReader {
 		}
 
 		Ok(TarTilesReader {
-			meta,
+			tilejson,
 			name: path.to_str().unwrap().to_string(),
-			parameters: TilesReaderParameters::new(
-				tile_format.unwrap(),
-				tile_compression.unwrap(),
-				bbox_pyramid,
-			),
+			parameters: TilesReaderParameters::new(tile_format.unwrap(), tile_compression.unwrap(), bbox_pyramid),
 			reader,
 			tile_map,
 		})
@@ -152,8 +157,8 @@ impl TilesReaderTrait for TarTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the metadata.
-	fn get_meta(&self) -> Result<Option<Blob>> {
-		Ok(self.meta.clone())
+	fn get_tilejson(&self) -> &TileJSON {
+		&self.tilejson
 	}
 
 	/// Returns the tile data for the specified coordinates as a `Blob`.
@@ -207,21 +212,13 @@ pub mod tests {
 
 		assert_eq!(format!("{:?}", reader), "TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "tar");
-		assert!(reader
-			.get_source_name()
-			.ends_with(temp_file.to_str().unwrap()));
-		assert_eq!(reader.get_meta()?.unwrap().as_str(), "{\"type\":\"dummy\"}");
+		assert!(reader.get_source_name().ends_with(temp_file.to_str().unwrap()));
+		assert_eq!(reader.get_tilejson().as_string(), "{\"type\":\"dummy\"}");
 		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: PBF }");
-		assert_eq!(
-			reader.get_parameters().tile_compression,
-			TileCompression::Gzip
-		);
+		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
-		let tile = reader
-			.get_tile_data(&TileCoord3::new(6, 2, 3)?)
-			.await?
-			.unwrap();
+		let tile = reader.get_tile_data(&TileCoord3::new(6, 2, 3)?).await?.unwrap();
 		assert_eq!(decompress_gzip(&tile)?.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())
@@ -254,18 +251,14 @@ pub mod tests {
 		let mut reader = TarTilesReader::open_path(&temp_file)?;
 
 		let mut printer = PrettyPrint::new();
-		reader
-			.probe_container(&printer.get_category("container").await)
-			.await?;
+		reader.probe_container(&printer.get_category("container").await).await?;
 		assert_eq!(
 			printer.as_string().await,
 			"container:\n   deep container probing is not implemented for this container format\n"
 		);
 
 		let mut printer = PrettyPrint::new();
-		reader
-			.probe_tiles(&printer.get_category("tiles").await)
-			.await?;
+		reader.probe_tiles(&printer.get_category("tiles").await).await?;
 		assert_eq!(
 			printer.as_string().await,
 			"tiles:\n   deep tiles probing is not implemented for this container format\n"

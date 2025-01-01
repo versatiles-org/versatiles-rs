@@ -27,6 +27,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::types::TileBBox;
+use versatiles_core::utils::TileJSON;
 use versatiles_core::{types::*, utils::compress};
 
 /// Enum representing different mock profiles for tile data.
@@ -48,6 +49,7 @@ pub const MOCK_BYTES_WEBP: &[u8; 44] = include_bytes!("./mock_tiles/mock.webp");
 /// Mock implementation of a `TilesReader`.
 pub struct MockTilesReader {
 	parameters: TilesReaderParameters,
+	tilejson: TileJSON,
 }
 
 impl MockTilesReader {
@@ -58,11 +60,9 @@ impl MockTilesReader {
 		bbox_pyramid.set_level_bbox(TileBBox::new(3, 0, 2, 4, 6)?);
 
 		MockTilesReader::new_mock(match profile {
-			MockTilesReaderProfile::Json => TilesReaderParameters::new(
-				TileFormat::JSON,
-				TileCompression::Uncompressed,
-				bbox_pyramid,
-			),
+			MockTilesReaderProfile::Json => {
+				TilesReaderParameters::new(TileFormat::JSON, TileCompression::Uncompressed, bbox_pyramid)
+			}
 			MockTilesReaderProfile::Png => {
 				TilesReaderParameters::new(TileFormat::PNG, TileCompression::Uncompressed, bbox_pyramid)
 			}
@@ -74,7 +74,9 @@ impl MockTilesReader {
 
 	/// Creates a new mock tiles reader with the specified parameters.
 	pub fn new_mock(parameters: TilesReaderParameters) -> Result<MockTilesReader> {
-		Ok(MockTilesReader { parameters })
+		let mut tilejson = TileJSON::default();
+		tilejson.set_string("type", "dummy")?;
+		Ok(MockTilesReader { parameters, tilejson })
 	}
 }
 
@@ -96,8 +98,8 @@ impl TilesReaderTrait for MockTilesReader {
 		self.parameters.tile_compression = tile_compression;
 	}
 
-	fn get_meta(&self) -> Result<Option<Blob>> {
-		Ok(Some(Blob::from("{\"type\":\"dummy\"}")))
+	fn get_tilejson(&self) -> &TileJSON {
+		&self.tilejson
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
@@ -151,7 +153,7 @@ mod tests {
 			reader.get_parameters(),
 			&TilesReaderParameters::new(TileFormat::PNG, TileCompression::Uncompressed, bbox_pyramid)
 		);
-		assert_eq!(reader.get_meta()?.unwrap().as_str(), "{\"type\":\"dummy\"}");
+		assert_eq!(reader.get_tilejson().as_string(), "{\"type\":\"dummy\"}");
 		let blob = reader
 			.get_tile_data(&TileCoord3::new(0, 0, 0)?)
 			.await?
@@ -167,21 +169,12 @@ mod tests {
 			let coord = TileCoord3::new(23, 45, 6).unwrap();
 			let reader = MockTilesReader::new_mock_profile(profile).unwrap();
 			let tile_compressed = reader.get_tile_data(&coord).await.unwrap().unwrap();
-			let tile_uncompressed =
-				decompress(tile_compressed, &reader.get_parameters().tile_compression).unwrap();
+			let tile_uncompressed = decompress(tile_compressed, &reader.get_parameters().tile_compression).unwrap();
 			assert_eq!(tile_uncompressed, blob);
 		};
 
-		test(
-			MockTilesReaderProfile::Png,
-			Blob::from(MOCK_BYTES_PNG.to_vec()),
-		)
-		.await;
-		test(
-			MockTilesReaderProfile::Pbf,
-			Blob::from(MOCK_BYTES_PBF.to_vec()),
-		)
-		.await;
+		test(MockTilesReaderProfile::Png, Blob::from(MOCK_BYTES_PNG.to_vec())).await;
+		test(MockTilesReaderProfile::Pbf, Blob::from(MOCK_BYTES_PBF.to_vec())).await;
 		test(MockTilesReaderProfile::Json, Blob::from("{x:23,y:45,z:6}")).await;
 	}
 

@@ -29,6 +29,8 @@ use std::{
 	ops::{Add, Sub},
 };
 
+use super::GeoBBox;
+
 #[derive(Eq, PartialEq, Clone, Hash)]
 pub struct TileCoord2 {
 	pub x: u32,
@@ -117,25 +119,19 @@ impl TileCoord3 {
 		]
 	}
 
-	pub fn as_geo_bbox(&self) -> [f64; 4] {
+	pub fn as_geo_bbox(&self) -> GeoBBox {
 		let zoom: f64 = 2.0f64.powi(self.z as i32);
 
-		[
+		GeoBBox(
 			((self.x as f64) / zoom - 0.5) * 360.0,
 			((PI32 * (1.0 - 2.0 * (self.y as f64) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
 			(((self.x + 1) as f64) / zoom - 0.5) * 360.0,
-			((PI32 * (1.0 - 2.0 * ((self.y + 1) as f64) / zoom))
-				.exp()
-				.atan() / PI32
-				- 0.25) * 360.0,
-		]
+			((PI32 * (1.0 - 2.0 * ((self.y + 1) as f64) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
+		)
 	}
 
 	pub fn as_coord2(&self) -> TileCoord2 {
-		TileCoord2 {
-			x: self.x,
-			y: self.y,
-		}
+		TileCoord2 { x: self.x, y: self.y }
 	}
 
 	pub fn as_json(&self) -> String {
@@ -159,10 +155,7 @@ impl TileCoord3 {
 
 impl Debug for TileCoord3 {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_fmt(format_args!(
-			"TileCoord3({}, {}, {})",
-			&self.x, &self.y, &self.z
-		))
+		f.write_fmt(format_args!("TileCoord3({}, {}, {})", &self.x, &self.y, &self.z))
 	}
 }
 
@@ -191,14 +184,8 @@ mod tests {
 	#[test]
 	fn from_geo() {
 		let test = |z: u8, x: u32, y: u32, xf: f64, yf: f64| {
-			assert_eq!(
-				TileCoord2::from_geo(xf, yf, z, false).unwrap(),
-				TileCoord2::new(x, y)
-			);
-			assert_eq!(
-				TileCoord2::from_geo(xf, yf, z, true).unwrap(),
-				TileCoord2::new(x, y)
-			);
+			assert_eq!(TileCoord2::from_geo(xf, yf, z, false).unwrap(), TileCoord2::new(x, y));
+			assert_eq!(TileCoord2::from_geo(xf, yf, z, true).unwrap(), TileCoord2::new(x, y));
 		};
 
 		test(9, 267, 168, 8.0653, 52.2564);
@@ -271,7 +258,7 @@ mod tests {
 		let coord = TileCoord3::new(3, 4, 5).unwrap();
 		assert_eq!(coord.as_geo(), [-146.25, 79.17133464081945]);
 		assert_eq!(
-			coord.as_geo_bbox(),
+			coord.as_geo_bbox().as_array(),
 			[-146.25, 79.17133464081945, -135.0, 76.84081641443098]
 		);
 	}

@@ -49,14 +49,14 @@ use r2d2_sqlite::SqliteConnectionManager;
 use std::path::Path;
 use versatiles_core::{
 	types::{TileCompression::*, TileFormat::*, *},
-	utils::{progress::get_progress_bar, JsonObject, JsonValue, TileJSON, TransformCoord},
+	utils::{parse_json_str, progress::get_progress_bar, TileJSON, TransformCoord},
 };
 
 /// A struct that provides functionality to read tile data from an MBTiles SQLite database.
 pub struct MBTilesReader {
 	name: String,
 	pool: Pool<SqliteConnectionManager>,
-	meta_data: Option<Blob>,
+	tilejson: TileJSON,
 	parameters: TilesReaderParameters,
 }
 
@@ -94,7 +94,7 @@ impl MBTilesReader {
 		let mut reader = MBTilesReader {
 			name: String::from(path.to_str().unwrap()),
 			pool,
-			meta_data: None,
+			tilejson: TileJSON::default(),
 			parameters,
 		};
 
@@ -110,7 +110,7 @@ impl MBTilesReader {
 	fn load_meta_data(&mut self) -> Result<()> {
 		trace!("load_meta_data");
 
-		let pyramide = self.get_bbox_pyramid()?;
+		let pyramid = self.get_bbox_pyramid()?;
 		let conn = self.pool.get()?;
 		let mut stmt = conn.prepare("SELECT name, value FROM metadata")?;
 		let entries = stmt.query_map([], |row| {
@@ -120,16 +120,9 @@ impl MBTilesReader {
 			})
 		})?;
 
-		let mut tile_format: Result<TileFormat> = Err(anyhow!(
-			"mbtiles file {} does not specify tile format",
-			self.name
-		));
-		let mut compression: Result<TileCompression> = Err(anyhow!(
-			"mbtiles file {} does not specify compression",
-			self.name
-		));
-
-		let mut meta = TileJSON::default();
+		let mut tile_format: Result<TileFormat> = Err(anyhow!("mbtiles file {} does not specify tile format", self.name));
+		let mut compression: Result<TileCompression> =
+			Err(anyhow!("mbtiles file {} does not specify compression", self.name));
 
 		for entry in entries {
 			let entry = entry?;
@@ -155,22 +148,27 @@ impl MBTilesReader {
 					}
 					_ => panic!("unknown file format: {}", value),
 				},
-				"json" => meta.add(JsonObject::parse_str(value)?)?,
-				"attribution" => meta.attribution = Some(value.to_owned()),
-				"author" => meta.author = Some(value.to_owned()),
-				"license" => meta.license = Some(value.to_owned()),
-				"name" => meta.name = Some(value.to_owned()),
-				"type" => meta.type = Some(value.to_owned()),
-				"version" => meta.version = Some(value.to_owned()),
+				// https://github.com/mapbox/mbtiles-spec/blob/master/1.3/spec.md#content
+				"bounds" => {
+					let bounds = value
+						.split(',')
+						.map(|s| s.parse::<f64>())
+						.collect::<Result<Vec<f64>, _>>()?;
+					self.tilejson.limit_bbox(GeoBBox::try_from(bounds)?);
+				}
+				"name" | "attribution" | "author" | "description" | "license" | "type" | "version" => {
+					self.tilejson.set_string(key, value)?
+				}
+				"minzoom" | "maxzoom" => self.tilejson.set_byte(key, value.parse::<u8>()?)?,
+				"json" => self.tilejson.set_vector_layers(parse_json_str(value)?)?,
 				_ => {}
 			}
 		}
 
-		self.meta_data = Some(Blob::from(meta.stringify()));
-
+		self.tilejson.update_from_pyramid(&pyramid);
 		self.parameters.tile_format = tile_format?;
 		self.parameters.tile_compression = compression?;
-		self.parameters.bbox_pyramid = pyramide;
+		self.parameters.bbox_pyramid = pyramid;
 
 		Ok(())
 	}
@@ -280,8 +278,8 @@ impl TilesReaderTrait for MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the metadata.
-	fn get_meta(&self) -> Result<Option<&TileJSON>> {
-		Ok(self.meta_data.as_ref())
+	fn get_tilejson(&self) -> &TileJSON {
+		&self.tilejson
 	}
 
 	/// Returns the parameters of the tiles reader.
@@ -308,9 +306,8 @@ impl TilesReaderTrait for MBTilesReader {
 		trace!("read tile from coord {coord:?}");
 
 		let conn = self.pool.get()?;
-		let mut stmt = conn.prepare(
-			"SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?",
-		)?;
+		let mut stmt =
+			conn.prepare("SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")?;
 
 		let max_index = 2u32.pow(coord.z as u32) - 1;
 		if let Ok(vec) = stmt.query_row([coord.x, max_index - coord.y, coord.z as u32], |row| {
@@ -407,9 +404,7 @@ pub mod tests {
 	use std::{env, path::PathBuf};
 
 	lazy_static! {
-		static ref PATH: PathBuf = env::current_dir()
-			.unwrap()
-			.join("../testdata/berlin.mbtiles");
+		static ref PATH: PathBuf = env::current_dir().unwrap().join("../testdata/berlin.mbtiles");
 	}
 
 	#[tokio::test]
@@ -419,18 +414,13 @@ pub mod tests {
 
 		assert_eq!(format!("{:?}", reader), "MBTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [1,0,1,0] (1), 2: [2,1,2,1] (1), 3: [4,2,4,2] (1), 4: [8,5,8,5] (1), 5: [17,10,17,10] (1), 6: [34,20,34,21] (2), 7: [68,41,68,42] (2), 8: [137,83,137,84] (2), 9: [274,167,275,168] (4), 10: [549,335,551,336] (6), 11: [1098,670,1102,673] (20), 12: [2196,1340,2204,1346] (63), 13: [4393,2680,4409,2693] (238), 14: [8787,5361,8818,5387] (864)], tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "mbtiles");
-		assert!(reader
-			.get_source_name()
-			.ends_with("../testdata/berlin.mbtiles"));
-		assert_eq!(reader.get_meta()?.unwrap().as_str(),  "{\"author\":\"OpenStreetMap contributors, Geofabrik GmbH\",\"description\":\"Tile config for simple vector tiles schema\",\"license\":\"Open Database License 1.0\",\"name\":\"Tilemaker to Geofabrik Vector Tiles schema\",\"tilejson\":\"3.0.0\",\"type\":\"baselayer\",\"vector_layers\":[{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"population\":\"Number\"},\"id\":\"place_labels\",\"maxzoom\":14,\"minzoom\":3},{\"fields\":{\"admin_level\":\"Number\",\"maritime\":\"Boolean\"},\"id\":\"boundaries\",\"maxzoom\":14,\"minzoom\":0},{\"fields\":{\"admin_level\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"way_area\":\"Number\"},\"id\":\"boundary_labels\",\"maxzoom\":14,\"minzoom\":2},{\"fields\":{\"name\":\"String\",\"number\":\"String\"},\"id\":\"addresses\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\"},\"id\":\"water_lines\",\"maxzoom\":14,\"minzoom\":4},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"id\":\"water_lines_labels\",\"maxzoom\":14,\"minzoom\":4},{\"fields\":{\"bridge\":\"Boolean\",\"kind\":\"String\",\"rail\":\"Boolean\",\"service\":\"String\",\"surface\":\"String\",\"tunnel\":\"Boolean\"},\"id\":\"street_polygons\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"id\":\"streets_polygons_labels\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"bicycle\":\"String\",\"bridge\":\"Boolean\",\"horse\":\"String\",\"kind\":\"String\",\"link\":\"Boolean\",\"rail\":\"Boolean\",\"service\":\"String\",\"surface\":\"String\",\"tracktype\":\"String\",\"tunnel\":\"Boolean\"},\"id\":\"streets\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"ref\":\"String\",\"ref_cols\":\"Number\",\"ref_rows\":\"Number\",\"tunnel\":\"Boolean\"},\"id\":\"street_labels\",\"maxzoom\":14,\"minzoom\":10},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"ref\":\"String\"},\"id\":\"street_labels_points\",\"maxzoom\":14,\"minzoom\":12},{\"fields\":{\"kind\":\"String\"},\"id\":\"aerialways\",\"maxzoom\":14,\"minzoom\":12},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"id\":\"public_transport\",\"maxzoom\":14,\"minzoom\":11},{\"fields\":{\"dummy\":\"Number\"},\"id\":\"buildings\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\"},\"id\":\"water_polygons\",\"maxzoom\":14,\"minzoom\":4},{\"fields\":{},\"id\":\"ocean\",\"maxzoom\":14,\"minzoom\":8},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"id\":\"water_polygons_labels\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\"},\"id\":\"land\",\"maxzoom\":14,\"minzoom\":7},{\"fields\":{\"kind\":\"String\"},\"id\":\"sites\",\"maxzoom\":14,\"minzoom\":14}],\"version\":\"3.0\"}");
+		assert!(reader.get_source_name().ends_with("../testdata/berlin.mbtiles"));
+		assert_eq!(reader.get_tilejson().as_string(),  "{\"author\":\"OpenStreetMap contributors, Geofabrik GmbH\",\"description\":\"Tile config for simple vector tiles schema\",\"license\":\"Open Database License 1.0\",\"name\":\"Tilemaker to Geofabrik Vector Tiles schema\",\"tilejson\":\"3.0.0\",\"type\":\"baselayer\",\"vector_layers\":[{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"population\":\"Number\"},\"id\":\"place_labels\",\"maxzoom\":14,\"minzoom\":3},{\"fields\":{\"admin_level\":\"Number\",\"maritime\":\"Boolean\"},\"id\":\"boundaries\",\"maxzoom\":14,\"minzoom\":0},{\"fields\":{\"admin_level\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"way_area\":\"Number\"},\"id\":\"boundary_labels\",\"maxzoom\":14,\"minzoom\":2},{\"fields\":{\"name\":\"String\",\"number\":\"String\"},\"id\":\"addresses\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\"},\"id\":\"water_lines\",\"maxzoom\":14,\"minzoom\":4},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"id\":\"water_lines_labels\",\"maxzoom\":14,\"minzoom\":4},{\"fields\":{\"bridge\":\"Boolean\",\"kind\":\"String\",\"rail\":\"Boolean\",\"service\":\"String\",\"surface\":\"String\",\"tunnel\":\"Boolean\"},\"id\":\"street_polygons\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"id\":\"streets_polygons_labels\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"bicycle\":\"String\",\"bridge\":\"Boolean\",\"horse\":\"String\",\"kind\":\"String\",\"link\":\"Boolean\",\"rail\":\"Boolean\",\"service\":\"String\",\"surface\":\"String\",\"tracktype\":\"String\",\"tunnel\":\"Boolean\"},\"id\":\"streets\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"ref\":\"String\",\"ref_cols\":\"Number\",\"ref_rows\":\"Number\",\"tunnel\":\"Boolean\"},\"id\":\"street_labels\",\"maxzoom\":14,\"minzoom\":10},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\",\"ref\":\"String\"},\"id\":\"street_labels_points\",\"maxzoom\":14,\"minzoom\":12},{\"fields\":{\"kind\":\"String\"},\"id\":\"aerialways\",\"maxzoom\":14,\"minzoom\":12},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"id\":\"public_transport\",\"maxzoom\":14,\"minzoom\":11},{\"fields\":{\"dummy\":\"Number\"},\"id\":\"buildings\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\"},\"id\":\"water_polygons\",\"maxzoom\":14,\"minzoom\":4},{\"fields\":{},\"id\":\"ocean\",\"maxzoom\":14,\"minzoom\":8},{\"fields\":{\"kind\":\"String\",\"name\":\"String\",\"name_de\":\"String\",\"name_en\":\"String\"},\"id\":\"water_polygons_labels\",\"maxzoom\":14,\"minzoom\":14},{\"fields\":{\"kind\":\"String\"},\"id\":\"land\",\"maxzoom\":14,\"minzoom\":7},{\"fields\":{\"kind\":\"String\"},\"id\":\"sites\",\"maxzoom\":14,\"minzoom\":14}],\"version\":\"3.0\"}");
 		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [1,0,1,0] (1), 2: [2,1,2,1] (1), 3: [4,2,4,2] (1), 4: [8,5,8,5] (1), 5: [17,10,17,10] (1), 6: [34,20,34,21] (2), 7: [68,41,68,42] (2), 8: [137,83,137,84] (2), 9: [274,167,275,168] (4), 10: [549,335,551,336] (6), 11: [1098,670,1102,673] (20), 12: [2196,1340,2204,1346] (63), 13: [4393,2680,4409,2693] (238), 14: [8787,5361,8818,5387] (864)], tile_compression: Gzip, tile_format: PBF }");
 		assert_eq!(reader.get_parameters().tile_compression, Gzip);
 		assert_eq!(reader.get_parameters().tile_format, PBF);
 
-		let tile = reader
-			.get_tile_data(&TileCoord3::new(8803, 5376, 14)?)
-			.await?
-			.unwrap();
+		let tile = reader.get_tile_data(&TileCoord3::new(8803, 5376, 14)?).await?.unwrap();
 		assert_eq!(tile.len(), 172969);
 		assert_eq!(tile.get_range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
 		assert_eq!(
@@ -452,18 +442,14 @@ pub mod tests {
 		let mut reader = MBTilesReader::open_path(&PATH)?;
 
 		let mut printer = PrettyPrint::new();
-		reader
-			.probe_container(&printer.get_category("container").await)
-			.await?;
+		reader.probe_container(&printer.get_category("container").await).await?;
 		assert_eq!(
 			printer.as_string().await,
 			"container:\n   deep container probing is not implemented for this container format\n"
 		);
 
 		let mut printer = PrettyPrint::new();
-		reader
-			.probe_tiles(&printer.get_category("tiles").await)
-			.await?;
+		reader.probe_tiles(&printer.get_category("tiles").await).await?;
 		assert_eq!(
 			printer.as_string().await,
 			"tiles:\n   deep tiles probing is not implemented for this container format\n"

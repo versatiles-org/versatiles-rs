@@ -3,7 +3,10 @@ use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::path::Path;
-use versatiles_core::{types::*, utils::io::DataReader};
+use versatiles_core::{
+	types::*,
+	utils::{io::DataReader, TileJSON},
+};
 use versatiles_pipeline::{OperationTrait, PipelineFactory};
 
 /// The `PipelineReader` struct is responsible for managing the tile reading process,
@@ -26,8 +29,7 @@ impl<'a> PipelineReader {
 	///
 	/// * `Result<PipelineReader>` - The constructed PipelineReader or an error if the configuration is invalid.
 	pub async fn open_path(path: &Path) -> Result<PipelineReader> {
-		let vpl =
-			std::fs::read_to_string(path).with_context(|| anyhow!("Failed to open {path:?}"))?;
+		let vpl = std::fs::read_to_string(path).with_context(|| anyhow!("Failed to open {path:?}"))?;
 		Self::from_str(&vpl, path.to_str().unwrap(), path.parent().unwrap())
 			.await
 			.with_context(|| format!("failed parsing {path:?} as VPL"))
@@ -56,17 +58,11 @@ impl<'a> PipelineReader {
 			.with_context(|| format!("failed parsing '{vpl}' as VPL"))
 	}
 
-	fn from_str(
-		vpl: &'a str,
-		name: &'a str,
-		dir: &'a Path,
-	) -> BoxFuture<'a, Result<PipelineReader>> {
+	fn from_str(vpl: &'a str, name: &'a str, dir: &'a Path) -> BoxFuture<'a, Result<PipelineReader>> {
 		Box::pin(async {
-			let callback = Box::new(
-				|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
-					Box::pin(async move { get_reader(&filename).await })
-				},
-			);
+			let callback = Box::new(|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
+				Box::pin(async move { get_reader(&filename).await })
+			});
 			let factory = PipelineFactory::default(dir, callback);
 			let operation: Box<dyn OperationTrait> = factory.operation_from_vpl(vpl).await?;
 			let parameters = operation.get_parameters().clone();
@@ -103,8 +99,8 @@ impl TilesReaderTrait for PipelineReader {
 	}
 
 	/// Get the metadata, always uncompressed.
-	fn get_meta(&self) -> Result<Option<&TileJSON>> {
-		Ok(self.operation.get_meta())
+	fn get_tilejson(&self) -> &TileJSON {
+		self.operation.get_tilejson()
 	}
 
 	/// Get tile data for the given coordinate, always compressed and formatted.
@@ -162,10 +158,7 @@ mod tests {
 		let result = reader.get_tile_data(&TileCoord3::new(0, 0, 14)?).await;
 		assert_eq!(result?, None);
 
-		let result = reader
-			.get_tile_data(&TileCoord3::new(8800, 5377, 14)?)
-			.await?
-			.unwrap();
+		let result = reader.get_tile_data(&TileCoord3::new(8800, 5377, 14)?).await?.unwrap();
 
 		assert_eq!(result.len(), 142038);
 

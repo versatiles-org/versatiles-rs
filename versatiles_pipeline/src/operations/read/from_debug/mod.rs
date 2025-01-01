@@ -22,16 +22,13 @@ struct Args {
 
 #[derive(Debug)]
 pub struct Operation {
-	meta: TileJSON,
+	tilejson: TileJSON,
 	parameters: TilesReaderParameters,
 	fast_compression: bool,
 }
 
 impl Operation {
-	pub fn from_parameters(
-		tile_format: TileFormat,
-		fast_compression: bool,
-	) -> Result<Box<dyn OperationTrait>> {
+	pub fn from_parameters(tile_format: TileFormat, fast_compression: bool) -> Result<Box<dyn OperationTrait>> {
 		let parameters = TilesReaderParameters::new(
 			tile_format,
 			TileCompression::Uncompressed,
@@ -49,7 +46,7 @@ impl Operation {
 		};
 
 		Ok(Box::new(Self {
-			meta,
+			tilejson: meta,
 			parameters,
 			fast_compression,
 		}) as Box<dyn OperationTrait>)
@@ -60,11 +57,7 @@ impl Operation {
 	}
 }
 
-fn build_tile(
-	coord: &TileCoord3,
-	format: TileFormat,
-	fast_compression: bool,
-) -> Result<Option<Blob>> {
+fn build_tile(coord: &TileCoord3, format: TileFormat, fast_compression: bool) -> Result<Option<Blob>> {
 	Ok(Some(match format {
 		TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => {
 			let image = create_debug_image(coord);
@@ -80,10 +73,7 @@ fn build_tile(
 }
 
 impl ReadOperationTrait for Operation {
-	fn build(
-		vpl_node: VPLNode,
-		_factory: &PipelineFactory,
-	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
+	fn build(vpl_node: VPLNode, _factory: &PipelineFactory) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
 	where
 		Self: Sized + OperationTrait,
 	{
@@ -97,8 +87,8 @@ impl OperationTrait for Operation {
 		&self.parameters
 	}
 
-	fn get_meta(&self) -> &TileJSON {
-		&self.meta
+	fn get_tilejson(&self) -> &TileJSON {
+		&self.tilejson
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
@@ -128,11 +118,7 @@ impl OperationFactoryTrait for Factory {
 
 #[async_trait]
 impl ReadOperationFactoryTrait for Factory {
-	async fn build<'a>(
-		&self,
-		vpl_node: VPLNode,
-		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>> {
+	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn OperationTrait>> {
 		Operation::build(vpl_node, factory).await
 	}
 }
@@ -151,15 +137,9 @@ mod tests {
 		let blob = operation.get_tile_data(&coord).await?.unwrap();
 
 		assert_eq!(blob.len(), len, "for '{format}'");
-		assert_eq!(
-			operation.get_meta().unwrap().as_str(),
-			meta,
-			"for '{format}'"
-		);
+		assert_eq!(operation.get_tilejson().as_string(), meta, "for '{format}'");
 
-		let mut stream = operation
-			.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?)
-			.await;
+		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await;
 
 		let mut n = 0;
 		while let Some((coord, blob)) = stream.next().await {

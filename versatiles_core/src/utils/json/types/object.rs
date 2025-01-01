@@ -13,35 +13,29 @@ impl JsonObject {
 		}
 		Ok(())
 	}
-	pub fn get(&self, key: &str) -> Result<Option<&JsonValue>> {
-		Ok(self.0.get(key))
+	pub fn get(&self, key: &str) -> Option<&JsonValue> {
+		self.0.get(key)
 	}
 	pub fn get_string(&self, key: &str) -> Result<Option<String>> {
-		self.get(key)?.map(JsonValue::as_string).transpose()
+		self.get(key).map(JsonValue::as_string).transpose()
 	}
 	pub fn get_number<T>(&self, key: &str) -> Result<Option<T>>
 	where
 		T: AsNumber<T>,
 	{
-		self.get(key)?.map(JsonValue::as_number).transpose()
+		self.get(key).map(JsonValue::as_number).transpose()
 	}
 	pub fn get_array(&self, key: &str) -> Result<Option<&JsonArray>> {
-		self.get(key)?.map(JsonValue::as_array).transpose()
+		self.get(key).map(JsonValue::as_array).transpose()
 	}
 	pub fn get_string_vec(&self, key: &str) -> Result<Option<Vec<String>>> {
-		self
-			.get_array(key)?
-			.map(|array| array.as_string_vec())
-			.transpose()
+		self.get_array(key)?.map(|array| array.as_string_vec()).transpose()
 	}
 	pub fn get_number_vec<T>(&self, key: &str) -> Result<Option<Vec<T>>>
 	where
 		T: AsNumber<T>,
 	{
-		self
-			.get_array(key)?
-			.map(|array| array.as_number_vec::<T>())
-			.transpose()
+		self.get_array(key)?.map(|array| array.as_number_vec::<T>()).transpose()
 	}
 	pub fn get_number_array<T, const N: usize>(&self, key: &str) -> Result<Option<[T; N]>>
 	where
@@ -124,39 +118,30 @@ mod tests {
 	fn test_object_assign() {
 		let mut obj1 = JsonObject::from(vec![("key1", "value1")]);
 		let obj2 = JsonObject::from(vec![("key2", "value2"), ("key3", "value3")]);
-		obj1.object_assign(obj2).unwrap();
+		obj1.assign(obj2).unwrap();
 
 		assert_eq!(
 			obj1,
-			JsonObject::from(vec![
-				("key1", "value1"),
-				("key2", "value2"),
-				("key3", "value3"),
-			])
+			JsonObject::from(vec![("key1", "value1"), ("key2", "value2"), ("key3", "value3"),])
 		);
 	}
 
 	#[test]
 	fn test_object_set_key_value() {
 		let mut obj = JsonObject::default();
-		obj.object_set_key_value("key".to_string(), JsonValue::from("value"))
-			.unwrap();
+		obj.set("key", JsonValue::from("value"));
 
 		assert_eq!(
 			obj,
-			JsonObject(BTreeMap::from_iter(vec![(
-				"key".to_string(),
-				JsonValue::from("value")
-			)]))
+			JsonObject(BTreeMap::from_iter(vec![("key".to_string(), JsonValue::from("value"))]))
 		);
 	}
 
 	#[test]
-	fn test_object_get_value() {
+	fn test_get() {
 		let obj = JsonObject::from(vec![("key", "value")]);
-		let value = obj.object_get_value("key").unwrap();
 
-		assert_eq!(value, Some(&JsonValue::from("value")));
+		assert_eq!(obj.get("key"), Some(&JsonValue::from("value")));
 	}
 
 	#[test]
@@ -220,7 +205,7 @@ mod tests {
 	#[test]
 	fn test_set_and_set_optional() {
 		let mut obj = JsonObject::default();
-		obj.set("key1", &42);
+		obj.set("key1", 42);
 		obj.set_optional("key2", &Some(84));
 		obj.set_optional::<i32>("key3", &None);
 

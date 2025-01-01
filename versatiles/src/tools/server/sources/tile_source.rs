@@ -2,10 +2,9 @@ use super::{super::utils::Url, SourceResponse};
 use anyhow::{ensure, Result};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
-use versatiles::utils::JsonObject;
 use versatiles_core::{
-	types::{Blob, TileCompression, TileCoord3, TileFormat, TilesReaderTrait},
-	utils::{JsonValue, TargetCompression},
+	types::{Blob, TileCompression, TileCoord3, TilesReaderTrait},
+	utils::TargetCompression,
 };
 
 // TileSource struct definition
@@ -13,7 +12,6 @@ use versatiles_core::{
 pub struct TileSource {
 	pub prefix: Url,
 	pub id: String,
-	pub json_info: String,
 	reader: Arc<Mutex<Box<dyn TilesReaderTrait>>>,
 	pub tile_mime: String,
 	pub compression: TileCompression,
@@ -22,44 +20,13 @@ pub struct TileSource {
 impl TileSource {
 	// Constructor function for creating a TileSource instance
 	pub fn from(reader: Box<dyn TilesReaderTrait>, id: &str) -> Result<TileSource> {
-		use TileFormat::*;
-
 		let parameters = reader.get_parameters();
+		let tile_mime = parameters.tile_format.as_mime_str().to_string();
 		let compression = parameters.tile_compression;
-
-		// Determine the MIME type based on the tile format
-		let tile_mime = match parameters.tile_format {
-			// Various tile formats with their corresponding MIME types
-			BIN => "application/octet-stream",
-			PNG => "image/png",
-			JPG => "image/jpeg",
-			WEBP => "image/webp",
-			AVIF => "image/avif",
-			SVG => "image/svg+xml",
-			PBF => "application/x-protobuf",
-			GEOJSON => "application/geo+json",
-			TOPOJSON => "application/topo+json",
-			JSON => "application/json",
-		}
-		.to_string();
-
-		let bbox_pyramid = &parameters.bbox_pyramid;
-		let tile_format = format!("{:?}", parameters.tile_format).to_lowercase();
-		let tile_compression = format!("{:?}", parameters.tile_compression).to_lowercase();
-		let json_info = format!(
-			"{{\"type\":\"{}\",\"format\":\"{}\",\"compression\":\"{}\",\"zoom_min\":{},\"zoom_max\":{},\"bbox\":[{}]}}",
-			reader.get_container_name(),
-			tile_format,
-			tile_compression,
-			bbox_pyramid.get_zoom_min().unwrap(),
-			bbox_pyramid.get_zoom_max().unwrap(),
-			bbox_pyramid.get_geo_bbox().map(|f| f.to_string()).join(","),
-		);
 
 		Ok(TileSource {
 			prefix: Url::new(&format!("/tiles/{id}/")).as_dir(),
 			id: id.to_owned(),
-			json_info,
 			reader: Arc::new(Mutex::new(reader)),
 			tile_mime,
 			compression,
@@ -72,11 +39,7 @@ impl TileSource {
 	}
 
 	// Retrieve the tile data as an HTTP response
-	pub async fn get_data(
-		&self,
-		url: &Url,
-		_accept: &TargetCompression,
-	) -> Result<Option<SourceResponse>> {
+	pub async fn get_data(&self, url: &Url, _accept: &TargetCompression) -> Result<Option<SourceResponse>> {
 		let parts: Vec<String> = url.as_vec();
 
 		if parts.len() >= 3 {
@@ -94,11 +57,7 @@ impl TileSource {
 			// Create a TileCoord3 instance
 			let coord = TileCoord3::new(x?, y?, z?)?;
 
-			log::debug!(
-				"get tile, prefix: {}, coord: {}",
-				self.prefix,
-				coord.as_json()
-			);
+			log::debug!("get tile, prefix: {}, coord: {}", self.prefix, coord.as_json());
 
 			// Get tile data
 			let reader = self.reader.lock().await;
@@ -112,11 +71,7 @@ impl TileSource {
 
 			// If tile data is not found, return a not found response
 			return if let Some(tile) = tile? {
-				Ok(SourceResponse::new_some(
-					tile,
-					&self.compression,
-					&self.tile_mime,
-				))
+				Ok(SourceResponse::new_some(tile, &self.compression, &self.tile_mime))
 			} else {
 				Ok(None)
 			};
@@ -136,55 +91,20 @@ impl TileSource {
 	}
 
 	async fn build_tile_json(&self) -> Result<Blob> {
-		let tiles_url = format!("{}{{z}}/{{x}}/{{y}}", self.prefix.as_string());
-
 		let reader = self.reader.lock().await;
-		let meta = reader.get_meta()?;
+		let mut tilejson = reader.get_tilejson().clone();
 		let parameters = reader.get_parameters();
 
-		let bbox = parameters.bbox_pyramid.get_geo_bbox();
-		let zoom_min = parameters.bbox_pyramid.get_zoom_min().unwrap();
-		let zoom_max = parameters.bbox_pyramid.get_zoom_max().unwrap();
+		tilejson.update_from_pyramid(&parameters.bbox_pyramid);
+		tilejson.set_string("type", parameters.tile_format.as_type_str())?;
+		tilejson.set_string("name", self.id.as_str())?;
+		tilejson.set_string("format", parameters.tile_format.as_str())?;
+		tilejson.set_string("compression", parameters.tile_compression.as_str())?;
 
-		let (tile_format, tile_type) = match parameters.tile_format {
-			TileFormat::AVIF => ("image", "avif"),
-			TileFormat::BIN => ("unknown", "bin"),
-			TileFormat::GEOJSON => ("vector", "geojson"),
-			TileFormat::JPG => ("image", "jpeg"),
-			TileFormat::JSON => ("unknown", "json"),
-			TileFormat::PBF => ("vector", "pbf"),
-			TileFormat::PNG => ("image", "png"),
-			TileFormat::SVG => ("image", "svg"),
-			TileFormat::TOPOJSON => ("vector", "topojson"),
-			TileFormat::WEBP => ("image", "webp"),
-		};
+		let tiles_url = format!("{}{{z}}/{{x}}/{{y}}", self.prefix.as_string());
+		tilejson.set_list("tiles", vec![tiles_url])?;
 
-		drop(reader);
-
-		let mut tilejson = JsonObject::from(vec![
-			("bounds", JsonValue::from(bbox.to_vec())),
-			("format", JsonValue::from(tile_format)),
-			("maxzoom", JsonValue::from(zoom_max)),
-			("minzoom", JsonValue::from(zoom_min)),
-			("name", JsonValue::from(self.id.as_str())),
-			("tilejson", JsonValue::from("3.0.0")),
-			("tiles", JsonValue::from(vec![tiles_url])),
-			("type", JsonValue::from(tile_type)),
-			(
-				"center",
-				JsonValue::from(vec![
-					(bbox[0] + bbox[2]) / 2.,
-					(bbox[1] + bbox[3]) / 2.,
-					(zoom_min + 2).min(zoom_max) as f64,
-				]),
-			),
-		]);
-
-		if let Some(meta) = meta {
-			tilejson.object_assign(JsonObject::parse_str(meta.as_str())?)?
-		}
-
-		Ok(Blob::from(tilejson.stringify()))
+		Ok(tilejson.into())
 	}
 }
 
@@ -206,13 +126,13 @@ mod tests {
 	use versatiles_container::{MockTilesReader, MockTilesReaderProfile};
 
 	// Test the constructor function for TileSource
-	#[test]
-	fn tile_container_from() -> Result<()> {
+	#[tokio::test]
+	async fn tile_container_from() -> Result<()> {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
 		let container = TileSource::from(reader.boxed(), "prefix")?;
 
 		assert_eq!(container.prefix.str, "/tiles/prefix/");
-		assert_eq!(container.json_info, "{\"type\":\"dummy_container\",\"format\":\"png\",\"compression\":\"uncompressed\",\"zoom_min\":2,\"zoom_max\":3,\"bbox\":[-180,-79.17133464081944,45,66.51326044311185]}");
+		assert_eq!(container.build_tile_json().await?.as_str(), "{\"type\":\"dummy_container\",\"format\":\"png\",\"compression\":\"uncompressed\",\"zoom_min\":2,\"zoom_max\":3,\"bbox\":[-180,-79.17133464081944,45,66.51326044311185]}");
 
 		Ok(())
 	}
@@ -248,11 +168,7 @@ mod tests {
 			Ok(response.blob.into_vec())
 		}
 
-		async fn check_error_400(
-			container: &mut TileSource,
-			url: &str,
-			compression: TileCompression,
-		) -> Result<bool> {
+		async fn check_error_400(container: &mut TileSource, url: &str, compression: TileCompression) -> Result<bool> {
 			let response = container
 				.get_data(&Url::new(url), &TargetCompression::from(compression))
 				.await;
@@ -260,11 +176,7 @@ mod tests {
 			Ok(true)
 		}
 
-		async fn check_error_404(
-			container: &mut TileSource,
-			url: &str,
-			compression: TileCompression,
-		) -> Result<bool> {
+		async fn check_error_404(container: &mut TileSource, url: &str, compression: TileCompression) -> Result<bool> {
 			let response = container
 				.get_data(&Url::new(url), &TargetCompression::from(compression))
 				.await?;

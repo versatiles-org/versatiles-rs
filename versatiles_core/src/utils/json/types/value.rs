@@ -121,6 +121,12 @@ impl From<bool> for JsonValue {
 	}
 }
 
+impl From<&JsonValue> for JsonValue {
+	fn from(input: &JsonValue) -> Self {
+		input.clone()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -189,18 +195,12 @@ mod tests {
 
 	#[test]
 	fn test_type_as_str() {
-		assert_eq!(
-			JsonValue::String("value".to_string()).type_as_str(),
-			"string"
-		);
+		assert_eq!(JsonValue::String("value".to_string()).type_as_str(), "string");
 		assert_eq!(JsonValue::Number(42.0).type_as_str(), "number");
 		assert_eq!(JsonValue::Boolean(true).type_as_str(), "boolean");
 		assert_eq!(JsonValue::Null.type_as_str(), "null");
 		assert_eq!(JsonValue::Array(JsonArray(vec![])).type_as_str(), "array");
-		assert_eq!(
-			JsonValue::Object(JsonObject::default()).type_as_str(),
-			"object"
-		);
+		assert_eq!(JsonValue::Object(JsonObject::default()).type_as_str(), "object");
 	}
 
 	#[test]
@@ -223,10 +223,7 @@ mod tests {
 	#[test]
 	fn test_new_array_and_object() {
 		assert_eq!(JsonValue::new_array(), JsonValue::Array(JsonArray(vec![])));
-		assert_eq!(
-			JsonValue::new_object(),
-			JsonValue::Object(JsonObject::default())
-		);
+		assert_eq!(JsonValue::new_object(), JsonValue::Object(JsonObject::default()));
 	}
 
 	#[test]

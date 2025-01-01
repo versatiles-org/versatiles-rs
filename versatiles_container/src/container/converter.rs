@@ -36,7 +36,10 @@
 use super::{tile_converter::TileConverter, write_to_filename};
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{types::*, utils::TransformCoord};
+use versatiles_core::{
+	types::*,
+	utils::{TileJSON, TransformCoord},
+};
 
 /// Parameters for tile conversion.
 #[derive(Debug)]
@@ -160,8 +163,8 @@ impl TilesReaderTrait for TilesConvertReader {
 		self.reader.override_compression(tile_compression);
 	}
 
-	fn get_meta(&self) -> Result<Option<&TileJSON>> {
-		self.reader.get_meta()
+	fn get_tilejson(&self) -> &TileJSON {
+		self.reader.get_tilejson()
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
@@ -233,10 +236,7 @@ mod tests {
 		MockTilesReader::new_mock(reader_parameters).unwrap()
 	}
 
-	fn get_converter_parameters(
-		tc: TileCompression,
-		force_recompress: bool,
-	) -> TilesConverterParameters {
+	fn get_converter_parameters(tc: TileCompression, force_recompress: bool) -> TilesConverterParameters {
 		TilesConverterParameters {
 			tile_compression: Some(tc),
 			bbox_pyramid: None,
@@ -278,21 +278,10 @@ mod tests {
 	async fn bbox_and_tile_order() -> Result<()> {
 		test(false, false, [2, 3, 4, 5], "23 33 43 24 34 44 25 35 45").await?;
 		test(false, true, [2, 3, 5, 4], "32 33 34 35 42 43 44 45").await?;
-		test(
-			true,
-			false,
-			[2, 3, 4, 6],
-			"24 34 44 23 33 43 22 32 42 21 31 41",
-		)
-		.await?;
+		test(true, false, [2, 3, 4, 6], "24 34 44 23 33 43 22 32 42 21 31 41").await?;
 		test(true, true, [2, 3, 6, 4], "35 34 33 32 31 45 44 43 42 41").await?;
 
-		async fn test(
-			flip_y: bool,
-			swap_xy: bool,
-			bbox_out: [u32; 4],
-			tile_list: &str,
-		) -> Result<()> {
+		async fn test(flip_y: bool, swap_xy: bool, bbox_out: [u32; 4], tile_list: &str) -> Result<()> {
 			let pyramid_in = new_bbox([0, 1, 4, 5]);
 			let pyramid_convert = new_bbox([2, 3, 7, 7]);
 			let pyramid_out = new_bbox(bbox_out);
@@ -303,13 +292,7 @@ mod tests {
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let filename = temp_file.to_str().unwrap();
 
-			let cp = TilesConverterParameters::new(
-				Some(Uncompressed),
-				Some(pyramid_convert),
-				false,
-				flip_y,
-				swap_xy,
-			);
+			let cp = TilesConverterParameters::new(Some(Uncompressed), Some(pyramid_convert), false, flip_y, swap_xy);
 			convert_tiles_container(reader.boxed(), cp, filename).await?;
 
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
@@ -320,10 +303,7 @@ mod tests {
 			let mut tiles: Vec<String> = Vec::new();
 			for coord in bbox.iter_coords() {
 				let mut text = reader_out.get_tile_data(&coord).await?.unwrap().to_string();
-				text = text
-					.replace("{x:", "")
-					.replace(",y:", "")
-					.replace(",z:3}", "");
+				text = text.replace("{x:", "").replace(",y:", "").replace(",z:3}", "");
 				tiles.push(text);
 			}
 			let tiles = tiles.join(" ");
@@ -343,13 +323,7 @@ mod tests {
 
 	#[test]
 	fn test_tiles_converter_parameters_new() {
-		let cp = TilesConverterParameters::new(
-			Some(Gzip),
-			Some(TileBBoxPyramid::new_full(1)),
-			true,
-			true,
-			true,
-		);
+		let cp = TilesConverterParameters::new(Some(Gzip), Some(TileBBoxPyramid::new_full(1)), true, true, true);
 
 		assert_eq!(cp.tile_compression, Some(Gzip));
 		assert!(cp.bbox_pyramid.is_some());

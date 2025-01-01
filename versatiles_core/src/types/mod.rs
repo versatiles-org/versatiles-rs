@@ -6,6 +6,12 @@ pub use blob::*;
 mod byte_range;
 pub use byte_range::*;
 
+mod geo_bbox;
+pub use geo_bbox::*;
+
+mod geo_center;
+pub use geo_center::*;
+
 mod limited_cache;
 pub use limited_cache::*;
 

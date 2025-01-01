@@ -30,7 +30,7 @@ impl Operation {
 		Box::pin(async move {
 			let args = Args::from_vpl_node(&vpl_node)?;
 			let mut parameters = source.get_parameters().clone();
-			parameters.bbox_pyramid.intersect_geo_bbox(&args.bbox);
+			parameters.bbox_pyramid.intersect_geo_bbox(&GeoBBox::from(&args.bbox));
 			Ok(Box::new(Self { parameters, source }) as Box<dyn OperationTrait>)
 		})
 	}
@@ -42,9 +42,9 @@ impl OperationTrait for Operation {
 		&self.parameters
 	}
 
-	fn get_meta(&self) -> &TileJSON {
-		todo!("implement get_meta, check for bbox");
-		self.source.get_meta()
+	fn get_tilejson(&self) -> &TileJSON {
+		todo!("implement get_tilejson, check for bbox");
+		self.source.get_tilejson()
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
@@ -91,23 +91,15 @@ mod tests {
 	async fn test_filter_bbox(bbox: [f64; 4], tests: Vec<(TileCoord3, bool)>) -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let operation = factory
-			.operation_from_vpl(&format!(
-				"from_debug format=pbf | filter_bbox bbox={bbox:?}"
-			))
+			.operation_from_vpl(&format!("from_debug format=pbf | filter_bbox bbox={bbox:?}"))
 			.await?;
 
 		for (coord, expected) in tests.iter() {
 			let result = operation.get_tile_data(coord).await?;
 			if *expected {
-				assert!(
-					result.is_some(),
-					"Expected tile data for {coord:?} in bbox {bbox:?}"
-				);
+				assert!(result.is_some(), "Expected tile data for {coord:?} in bbox {bbox:?}");
 			} else {
-				assert!(
-					result.is_none(),
-					"Expected no tile data for {coord:?} in bbox {bbox:?}"
-				);
+				assert!(result.is_none(), "Expected no tile data for {coord:?} in bbox {bbox:?}");
 			}
 		}
 

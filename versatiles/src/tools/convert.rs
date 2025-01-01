@@ -1,4 +1,5 @@
 use anyhow::{bail, Result};
+use versatiles::types::GeoBBox;
 use versatiles_container::{convert_tiles_container, get_reader, TilesConverterParameters};
 use versatiles_core::types::{TileBBoxPyramid, TileCompression};
 
@@ -58,10 +59,7 @@ pub struct Subcommand {
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
-	eprintln!(
-		"convert from {:?} to {:?}",
-		arguments.input_file, arguments.output_file
-	);
+	eprintln!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
 	let mut reader = get_reader(&arguments.input_file).await?;
 
@@ -108,7 +106,7 @@ fn get_bbox_pyramid(arguments: &Subcommand) -> Result<Option<TileBBoxPyramid>> {
 			bail!("bbox must contain exactly 4 numbers, but instead i'v got: {bbox:?}");
 		}
 
-		bbox_pyramid.intersect_geo_bbox(values.as_slice().try_into()?);
+		bbox_pyramid.intersect_geo_bbox(&GeoBBox::try_from(values)?);
 
 		if let Some(b) = arguments.bbox_border {
 			bbox_pyramid.add_border(b, b, b, b);

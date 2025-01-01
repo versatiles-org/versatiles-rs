@@ -8,7 +8,7 @@ use anyhow::{bail, ensure, Result};
 use versatiles_core::{types::*, utils::io::*};
 
 const HEADER_LENGTH: u64 = 66;
-const BBOX_SCALE: i32 = 10000000;
+const BBOX_SCALE: f64 = 10000000.0;
 
 /// A struct representing the header of a versatiles file.
 #[derive(Debug, PartialEq)]
@@ -36,7 +36,7 @@ impl FileHeader {
 		tile_format: &TileFormat,
 		compression: &TileCompression,
 		zoom_range: [u8; 2],
-		bbox: &[f64; 4],
+		bbox: &GeoBBox,
 	) -> Result<FileHeader> {
 		ensure!(
 			zoom_range[0] <= zoom_range[1],
@@ -44,26 +44,12 @@ impl FileHeader {
 			zoom_range[0],
 			zoom_range[1]
 		);
-		ensure!(bbox[0] >= -180.0, "bbox[0] ({}) >= -180", bbox[0]);
-		ensure!(bbox[1] >= -90.0, "bbox[1] ({}) >= -90", bbox[1]);
-		ensure!(bbox[2] <= 180.0, "bbox[2] ({}) <= 180", bbox[2]);
-		ensure!(bbox[3] <= 90.0, "bbox[3] ({}) <= 90", bbox[3]);
-		ensure!(
-			bbox[0] <= bbox[2],
-			"bbox[0] ({}) <= bbox[2] ({})",
-			bbox[0],
-			bbox[2]
-		);
-		ensure!(
-			bbox[1] <= bbox[3],
-			"bbox[1] ({}) <= bbox[3] ({})",
-			bbox[1],
-			bbox[3]
-		);
+
+		bbox.check()?;
 
 		Ok(FileHeader {
 			zoom_range,
-			bbox: bbox.map(|v| (v * BBOX_SCALE as f64) as i32),
+			bbox: bbox.as_array().map(|v| (v * BBOX_SCALE) as i32),
 			tile_format: *tile_format,
 			compression: *compression,
 			meta_range: ByteRange::empty(),
@@ -215,14 +201,8 @@ mod tests {
 	#[test]
 	#[allow(clippy::zero_prefixed_literal)]
 	fn conversion() {
-		let test = |tile_format: &TileFormat,
-		            compression: &TileCompression,
-		            a: u64,
-		            b: u64,
-		            c: u64,
-		            d: u64| {
-			let mut header1 =
-				FileHeader::new(tile_format, compression, [0, 0], &[0.0, 0.0, 0.0, 0.0]).unwrap();
+		let test = |tile_format: &TileFormat, compression: &TileCompression, a: u64, b: u64, c: u64, d: u64| {
+			let mut header1 = FileHeader::new(tile_format, compression, [0, 0], &GeoBBox(0.0, 0.0, 0.0, 0.0)).unwrap();
 			header1.meta_range = ByteRange::new(a, b);
 			header1.blocks_range = ByteRange::new(c, d);
 
@@ -250,14 +230,11 @@ mod tests {
 		let tf = TileFormat::PNG;
 		let comp = Gzip;
 		let zoom = [10, 14];
-		let bbox = [-180.0, -85.0511, 180.0, 85.0511];
+		let bbox = GeoBBox(-180.0, -85.0511, 180.0, 85.0511);
 		let header = FileHeader::new(&tf, &comp, zoom, &bbox).unwrap();
 
 		assert_eq!(header.zoom_range, zoom);
-		assert_eq!(
-			header.bbox,
-			[-1800000000, -850511000, 1800000000, 850511000]
-		);
+		assert_eq!(header.bbox, [-1800000000, -850511000, 1800000000, 850511000]);
 		assert_eq!(header.tile_format, tf);
 		assert_eq!(header.compression, comp);
 		assert_eq!(header.meta_range, ByteRange::empty());
@@ -270,7 +247,7 @@ mod tests {
 			&TileFormat::PBF,
 			&Gzip,
 			[3, 8],
-			&[-180.0, -85.051_13, 180.0, 85.051_13],
+			&GeoBBox(-180.0, -85.051_13, 180.0, 85.051_13),
 		)?;
 
 		let blob = header.to_blob()?;
@@ -292,10 +269,7 @@ mod tests {
 		let header2 = FileHeader::from_blob(&blob)?;
 
 		assert_eq!(header2.zoom_range, [3, 8]);
-		assert_eq!(
-			header2.bbox,
-			[-1800000000, -850511300, 1800000000, 850511300]
-		);
+		assert_eq!(header2.bbox, [-1800000000, -850511300, 1800000000, 850511300]);
 		assert_eq!(header2.tile_format, TileFormat::PBF);
 		assert_eq!(header2.compression, Gzip);
 		assert_eq!(header2.meta_range, ByteRange::empty());
@@ -311,7 +285,7 @@ mod tests {
 
 		let should_panic = |zoom: [u8; 2], bbox: [f64; 4]| {
 			assert!(catch_unwind(|| {
-				FileHeader::new(&tf, &comp, zoom, &bbox).unwrap();
+				FileHeader::new(&tf, &comp, zoom, &GeoBBox::from(&bbox)).unwrap();
 			})
 			.is_err())
 		};
@@ -331,7 +305,7 @@ mod tests {
 
 		let compression = Gzip;
 		let zoom_range = [0, 0];
-		let bbox = [0.0, 0.0, 0.0, 0.0];
+		let bbox = GeoBBox(0.0, 0.0, 0.0, 0.0);
 
 		let tile_formats = vec![BIN, PNG, JPG, WEBP, AVIF, SVG, PBF, GEOJSON, TOPOJSON, JSON];
 
@@ -349,7 +323,7 @@ mod tests {
 	fn all_compressions() {
 		let tile_format = TileFormat::PNG;
 		let zoom_range = [0, 0];
-		let bbox = [0.0, 0.0, 0.0, 0.0];
+		let bbox = GeoBBox(0.0, 0.0, 0.0, 0.0);
 
 		let compressions = vec![Uncompressed, Gzip, Brotli];
 
@@ -378,11 +352,10 @@ mod tests {
 
 	#[test]
 	fn unknown_tile_format() {
-		let mut invalid_blob =
-			FileHeader::new(&TileFormat::PNG, &Gzip, [0, 0], &[0.0, 0.0, 0.0, 0.0])
-				.unwrap()
-				.to_blob()
-				.unwrap();
+		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &Gzip, [0, 0], &GeoBBox(0.0, 0.0, 0.0, 0.0))
+			.unwrap()
+			.to_blob()
+			.unwrap();
 		invalid_blob.as_mut_slice()[14] = 0xFF; // Set an unknown tile format value
 
 		let result = catch_unwind(|| {
@@ -394,11 +367,10 @@ mod tests {
 
 	#[test]
 	fn unknown_compression() {
-		let mut invalid_blob =
-			FileHeader::new(&TileFormat::PNG, &Gzip, [0, 0], &[0.0, 0.0, 0.0, 0.0])
-				.unwrap()
-				.to_blob()
-				.unwrap();
+		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &Gzip, [0, 0], &GeoBBox(0.0, 0.0, 0.0, 0.0))
+			.unwrap()
+			.to_blob()
+			.unwrap();
 		invalid_blob.as_mut_slice()[15] = 0xFF; // Set an unknown compression value
 
 		let result = catch_unwind(|| {

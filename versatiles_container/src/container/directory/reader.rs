@@ -60,7 +60,7 @@ use versatiles_core::{types::*, utils::*};
 /// ```
 /// Where `<z>` is the zoom level, `<x>` and `<y>` are the tile coordinates, `<format>` is the tile format, and `<compression>` is the compression type (optional).
 pub struct DirectoryTilesReader {
-	meta: TileJSON,
+	tilejson: TileJSON,
 	dir: PathBuf,
 	tile_map: HashMap<TileCoord3, PathBuf>,
 	parameters: TilesReaderParameters,
@@ -117,8 +117,7 @@ impl DirectoryTilesReader {
 					let x = numeric2?;
 
 					let files = fs::read_dir(entry2.path())?.map(|f| f.unwrap());
-					let files = files
-						.sorted_unstable_by(|a, b| a.file_name().partial_cmp(&b.file_name()).unwrap());
+					let files = files.sorted_unstable_by(|a, b| a.file_name().partial_cmp(&b.file_name()).unwrap());
 
 					for entry3 in files {
 						// y level
@@ -163,22 +162,19 @@ impl DirectoryTilesReader {
 			} else {
 				match name1.as_str() {
 					"meta.json" | "tiles.json" | "metadata.json" => {
-						tilejson.update_from(Self::read(&entry1.path())?);
-						continue;
+						tilejson.merge(&TileJSON::try_from(&Self::read(&entry1.path())?)?)?;
 					}
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
-						tilejson.update_from(decompress(
+						tilejson.merge(&TileJSON::try_from(&decompress(
 							Self::read(&entry1.path())?,
 							&TileCompression::Gzip,
-						)?);
-						continue;
+						)?)?)?;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
-						tilejson.update_from(decompress(
+						tilejson.merge(&TileJSON::try_from(&decompress(
 							Self::read(&entry1.path())?,
 							&TileCompression::Brotli,
-						)?);
-						continue;
+						)?)?)?;
 					}
 					&_ => {}
 				};
@@ -192,10 +188,10 @@ impl DirectoryTilesReader {
 		let tile_format = container_form.context("tile format must be specified")?;
 		let tile_compression = container_comp.context("tile compression must be specified")?;
 
-		tilejson.update_from(bbox_pyramid);
+		tilejson.update_from_pyramid(&bbox_pyramid);
 
 		Ok(DirectoryTilesReader {
-			meta: tilejson,
+			tilejson,
 			dir: dir.to_path_buf(),
 			tile_map,
 			parameters: TilesReaderParameters::new(tile_format, tile_compression, bbox_pyramid),
@@ -218,8 +214,8 @@ impl TilesReaderTrait for DirectoryTilesReader {
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
-	fn get_meta(&self) -> &TileJSON {
-		&self.meta
+	fn get_tilejson(&self) -> &TileJSON {
+		&self.tilejson
 	}
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data {:?}", coord);
@@ -263,18 +259,12 @@ mod tests {
 
 		let reader = DirectoryTilesReader::open_path(&dir)?;
 
-		assert_eq!(reader.get_meta()?.unwrap().as_str(), "test meta data");
+		assert_eq!(reader.get_tilejson().as_string(), "test meta data");
 
-		let tile_data = reader
-			.get_tile_data(&TileCoord3::new(2, 3, 1)?)
-			.await?
-			.unwrap();
+		let tile_data = reader.get_tile_data(&TileCoord3::new(2, 3, 1)?).await?.unwrap();
 		assert_eq!(tile_data, Blob::from("test tile data"));
 
-		assert!(reader
-			.get_tile_data(&TileCoord3::new(2, 2, 1)?)
-			.await?
-			.is_none());
+		assert!(reader.get_tile_data(&TileCoord3::new(2, 2, 1)?).await?.is_none());
 
 		Ok(())
 	}
@@ -301,9 +291,7 @@ mod tests {
 		dir.child("1/2/3.unknown").write_str("unsupported format")?;
 
 		assert_eq!(
-			DirectoryTilesReader::open_path(dir.path())
-				.unwrap_err()
-				.to_string(),
+			DirectoryTilesReader::open_path(dir.path()).unwrap_err().to_string(),
 			"no tiles found",
 			"Should return error on unsupported file formats"
 		);
@@ -325,10 +313,7 @@ mod tests {
 		fs::write(dir.path().join("0/1/2.png"), "tile at 0/1/2").unwrap();
 
 		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
-		assert_eq!(
-			reader.get_meta().unwrap().unwrap(),
-			Blob::from("test meta data gzip")
-		);
+		assert_eq!(reader.get_tilejson().as_string(), "test meta data gzip");
 
 		Ok(())
 	}
@@ -356,9 +341,7 @@ mod tests {
 		fs::write(dir.path().join("1/2/3.txt"), "wrong format").unwrap();
 
 		assert_eq!(
-			&DirectoryTilesReader::open_path(&dir)
-				.unwrap_err()
-				.to_string(),
+			&DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
 			"no tiles found",
 			"Should error on incorrect tile format"
 		);
@@ -373,9 +356,7 @@ mod tests {
 		dir.child("1/2/4.jpg").write_str("test tile data")?;
 
 		assert_eq!(
-			DirectoryTilesReader::open_path(&dir)
-				.unwrap_err()
-				.to_string(),
+			DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
 			"found multiple tile formats PNG and JPG"
 		);
 
@@ -389,9 +370,7 @@ mod tests {
 		dir.child("1/2/4.pbf.br").write_str("test tile data")?;
 
 		assert_eq!(
-			DirectoryTilesReader::open_path(&dir)
-				.unwrap_err()
-				.to_string(),
+			DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
 			"found multiple tile compressions Uncompressed and Brotli"
 		);
 
@@ -413,20 +392,11 @@ mod tests {
 			"DirectoryTilesReader { name: \"*\", parameters: TilesReaderParameters { bbox_pyramid: [1: [2,3,2,3] (1)], tile_compression: Brotli, tile_format: PNG } }"
 		);
 
-		assert_eq!(
-			reader.get_meta()?.unwrap(),
-			Blob::from("{\"key\": \"value\"}")
-		);
+		assert_eq!(reader.get_tilejson().as_string(), "{\"key\": \"value\"}");
 
-		assert_eq!(
-			reader.get_parameters().tile_compression,
-			TileCompression::Brotli
-		);
+		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Brotli);
 		reader.override_compression(TileCompression::Gzip);
-		assert_eq!(
-			reader.get_parameters().tile_compression,
-			TileCompression::Gzip
-		);
+		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
 
 		Ok(())
 	}

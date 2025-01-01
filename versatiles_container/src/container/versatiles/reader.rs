@@ -56,16 +56,18 @@ use versatiles_core::{
 	utils::{
 		decompress,
 		io::{DataReader, DataReaderFile},
+		TileJSON,
 	},
 };
 
 /// `VersaTilesReader` is responsible for reading tile data from a `versatiles` container.
 pub struct VersaTilesReader {
-	meta: Option<Blob>,
-	reader: DataReader,
-	parameters: TilesReaderParameters,
 	block_index: BlockIndex,
+	header: FileHeader,
+	parameters: TilesReaderParameters,
+	reader: DataReader,
 	tile_index_cache: Mutex<LimitedCache<TileCoord3, Arc<TileIndex>>>,
+	tilejson: TileJSON,
 }
 
 #[allow(dead_code)]
@@ -97,14 +99,15 @@ impl VersaTilesReader {
 			.await
 			.context("Failed reading the header")?;
 
-		let meta = if header.meta_range.length > 0 {
+		let tilejson = if header.meta_range.length > 0 {
 			let blob = reader
 				.read_range(&header.meta_range)
 				.await
 				.context("Failed reading the meta data")?;
-			Some(decompress(blob, &header.compression).context("Failed decompressing the meta data")?)
+			let blob = decompress(blob, &header.compression).context("Failed decompressing the meta data")?;
+			TileJSON::try_from(&blob)?
 		} else {
-			None
+			TileJSON::default()
 		};
 
 		let block_index = BlockIndex::from_brotli_blob(
@@ -116,15 +119,15 @@ impl VersaTilesReader {
 		.context("Failed decompressing the block index")?;
 
 		let bbox_pyramid = block_index.get_bbox_pyramid();
-		let parameters =
-			TilesReaderParameters::new(header.tile_format, header.compression, bbox_pyramid);
+		let parameters = TilesReaderParameters::new(header.tile_format, header.compression, bbox_pyramid);
 
 		Ok(VersaTilesReader {
-			meta,
-			reader,
-			parameters,
 			block_index,
+			header,
+			parameters,
+			reader,
 			tile_index_cache: Mutex::new(LimitedCache::with_maximum_size(100_000_000)),
+			tilejson,
 		})
 	}
 
@@ -157,20 +160,12 @@ impl VersaTilesReader {
 
 	/// Retrieves the size of the index.
 	fn get_index_size(&self) -> u64 {
-		self
-			.block_index
-			.iter()
-			.map(|b| b.get_index_range().length)
-			.sum()
+		self.block_index.iter().map(|b| b.get_index_range().length).sum()
 	}
 
 	/// Retrieves the size of the tiles.
 	fn get_tiles_size(&self) -> u64 {
-		self
-			.block_index
-			.iter()
-			.map(|b| b.get_tiles_range().length)
-			.sum()
+		self.block_index.iter().map(|b| b.get_tiles_range().length).sum()
 	}
 }
 
@@ -185,8 +180,8 @@ impl TilesReaderTrait for VersaTilesReader {
 	}
 
 	/// Gets metadata.
-	fn get_meta(&self) -> Result<Option<Blob>> {
-		Ok(self.meta.clone())
+	fn get_tilejson(&self) -> &TileJSON {
+		&self.tilejson
 	}
 
 	/// Gets the parameters.
@@ -309,12 +304,7 @@ impl TilesReaderTrait for VersaTilesReader {
 				let mut tile_ranges: Vec<(TileCoord3, ByteRange)> = tile_index
 					.iter()
 					.enumerate()
-					.map(|(index, range)| {
-						(
-							tiles_bbox_block.get_coord3_by_index(index as u32).unwrap(),
-							*range,
-						)
-					})
+					.map(|(index, range)| (tiles_bbox_block.get_coord3_by_index(index as u32).unwrap(), *range))
 					.filter(|(coord, range)| tiles_bbox_used.contains3(coord) && (range.length > 0))
 					.collect();
 
@@ -334,9 +324,7 @@ impl TilesReaderTrait for VersaTilesReader {
 					let tile_start = entry.1.offset;
 					let tile_end = entry.1.offset + entry.1.length;
 
-					if (chunk_start + MAX_CHUNK_SIZE > tile_end)
-						&& (chunk_end + MAX_CHUNK_GAP > tile_start)
-					{
+					if (chunk_start + MAX_CHUNK_SIZE > tile_end) && (chunk_end + MAX_CHUNK_GAP > tile_start) {
 						// chunk size is still inside the limits
 						chunk.push(entry);
 					} else {
@@ -376,10 +364,7 @@ impl TilesReaderTrait for VersaTilesReader {
 
 								let blob = Blob::from(big_blob.get_range(tile_range));
 
-								assert!(
-									bbox.contains3(&coord),
-									"outer_bbox {bbox:?} does not contain {coord:?}"
-								);
+								assert!(bbox.contains3(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
 
 								(coord, blob)
 							})
@@ -401,12 +386,8 @@ impl TilesReaderTrait for VersaTilesReader {
 	// deep probe of container meta
 	#[cfg(feature = "cli")]
 	async fn probe_container(&mut self, print: &PrettyPrint) -> Result<()> {
-		print
-			.add_key_value("meta size", &self.meta.as_ref().map_or(0, |b| b.len()))
-			.await;
-		print
-			.add_key_value("block count", &self.block_index.len())
-			.await;
+		print.add_key_value("meta size", &self.header.meta_range.length).await;
+		print.add_key_value("block count", &self.block_index.len()).await;
 
 		print
 			.add_key_value("sum of block index sizes", &self.get_index_size())
@@ -496,7 +477,7 @@ impl Debug for VersaTilesReader {
 
 impl PartialEq for VersaTilesReader {
 	fn eq(&self, other: &Self) -> bool {
-		self.meta == other.meta
+		self.tilejson == other.tilejson
 			&& self.parameters == other.parameters
 			&& self.get_tiles_size() == other.get_tiles_size()
 	}
@@ -505,9 +486,7 @@ impl PartialEq for VersaTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::{
-		make_test_file, MockTilesReader, TilesWriterTrait, VersaTilesWriter, MOCK_BYTES_PBF,
-	};
+	use crate::container::{make_test_file, MockTilesReader, TilesWriterTrait, VersaTilesWriter, MOCK_BYTES_PBF};
 	use versatiles_core::{
 		assert_wildcard,
 		utils::{decompress_gzip, io::DataWriterBlob},
@@ -515,26 +494,19 @@ mod tests {
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let temp_file =
-			make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
+		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
 
 		let reader = VersaTilesReader::open_path(&temp_file).await?;
 
 		assert_eq!(format!("{:?}", reader), "VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "versatiles");
 		assert_wildcard!(reader.get_source_name(), "*.versatiles");
-		assert_eq!(reader.get_meta()?.unwrap().as_str(), "{\"type\":\"dummy\"}");
+		assert_eq!(reader.get_tilejson().as_string(), "{\"type\":\"dummy\"}");
 		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: PBF }");
-		assert_eq!(
-			reader.get_parameters().tile_compression,
-			TileCompression::Gzip
-		);
+		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
 
-		let tile = reader
-			.get_tile_data(&TileCoord3::new(15, 1, 4)?)
-			.await?
-			.unwrap();
+		let tile = reader.get_tile_data(&TileCoord3::new(15, 1, 4)?).await?.unwrap();
 		assert_eq!(decompress_gzip(&tile)?.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())
@@ -568,24 +540,19 @@ mod tests {
 	#[tokio::test]
 	#[cfg(feature = "cli")]
 	async fn probe() -> Result<()> {
-		let temp_file =
-			make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
+		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
 
 		let mut reader = VersaTilesReader::open_path(&temp_file).await?;
 
 		let mut printer = PrettyPrint::new();
-		reader
-			.probe_container(&printer.get_category("container").await)
-			.await?;
+		reader.probe_container(&printer.get_category("container").await).await?;
 		assert_eq!(
 			printer.as_string().await,
 			"container:\n   meta size: 16\n   block count: 5\n   sum of block index sizes: 70\n   sum of block tiles sizes: 385\n"
 		);
 
 		let mut printer = PrettyPrint::new();
-		reader
-			.probe_tiles(&printer.get_category("tiles").await)
-			.await?;
+		reader.probe_tiles(&printer.get_category("tiles").await).await?;
 		assert_eq!(
 			printer.as_string().await.get(0..73).unwrap(),
 			"tiles:\n   average tile size: 77\n   #1 biggest tile: Entry { size: 77, x: "

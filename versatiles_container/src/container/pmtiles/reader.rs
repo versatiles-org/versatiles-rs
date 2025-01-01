@@ -52,6 +52,7 @@ use versatiles_core::{
 	utils::{
 		decompress,
 		io::{DataReader, DataReaderFile},
+		TileJSON,
 	},
 };
 
@@ -63,7 +64,7 @@ pub struct PMTilesReader {
 	pub internal_compression: TileCompression,
 	pub leaves_bytes: Blob,
 	pub leaves_cache: Mutex<LimitedCache<ByteRange, Arc<Blob>>>,
-	pub meta: Blob,
+	pub tilejson: TileJSON,
 	pub parameters: TilesReaderParameters,
 	pub root_bytes_uncompressed: Arc<Blob>,
 }
@@ -91,28 +92,18 @@ impl PMTilesReader {
 	where
 		Self: Sized,
 	{
-		let header = HeaderV3::deserialize(
-			&data_reader
-				.read_range(&ByteRange::new(0, HeaderV3::len()))
-				.await?,
-		)?;
+		let header = HeaderV3::deserialize(&data_reader.read_range(&ByteRange::new(0, HeaderV3::len())).await?)?;
 
 		let internal_compression = header.internal_compression.as_value()?;
 
 		let meta = data_reader.read_range(&header.metadata).await?;
 		let meta = decompress(meta, &internal_compression)?;
+		let tilejson = TileJSON::try_from(&meta)?;
 
-		let root_bytes_uncompressed = decompress(
-			data_reader.read_range(&header.root_dir).await?,
-			&internal_compression,
-		)?;
+		let root_bytes_uncompressed = decompress(data_reader.read_range(&header.root_dir).await?, &internal_compression)?;
 		let leaves_bytes = data_reader.read_range(&header.leaf_dirs).await?;
 
-		let bbox_pyramid = calc_bbox_pyramid(
-			&root_bytes_uncompressed,
-			&leaves_bytes,
-			&internal_compression,
-		)?;
+		let bbox_pyramid = calc_bbox_pyramid(&root_bytes_uncompressed, &leaves_bytes, &internal_compression)?;
 
 		let parameters = TilesReaderParameters::new(
 			header.tile_type.as_value()?,
@@ -126,7 +117,7 @@ impl PMTilesReader {
 			internal_compression,
 			leaves_bytes,
 			leaves_cache: Mutex::new(LimitedCache::with_maximum_size(100_000_000)),
-			meta,
+			tilejson,
 			parameters,
 			root_bytes_uncompressed: Arc::new(root_bytes_uncompressed),
 		})
@@ -141,12 +132,7 @@ fn calc_bbox_pyramid(
 ) -> Result<TileBBoxPyramid> {
 	let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
-	parse_directories(
-		&mut bbox_pyramid,
-		root_bytes_uncompressed,
-		leaves_bytes,
-		compression,
-	)?;
+	parse_directories(&mut bbox_pyramid, root_bytes_uncompressed, leaves_bytes, compression)?;
 
 	fn parse_directories(
 		bbox_pyramid: &mut TileBBoxPyramid,
@@ -200,8 +186,8 @@ impl TilesReaderTrait for PMTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the metadata.
-	fn get_meta(&self) -> Result<Option<Blob>> {
-		Ok(Some(self.meta.clone()))
+	fn get_tilejson(&self) -> &TileJSON {
+		&self.tilejson
 	}
 
 	/// Returns the name of the PMTiles container.
@@ -237,11 +223,7 @@ impl TilesReaderTrait for PMTilesReader {
 					return Ok(Some(
 						self
 							.data_reader
-							.read_range(
-								&entry
-									.range
-									.get_shifted_forward(self.header.tile_data.offset),
-							)
+							.read_range(&entry.range.get_shifted_forward(self.header.tile_data.offset))
 							.await?,
 					));
 				} else {
@@ -264,7 +246,6 @@ impl TilesReaderTrait for PMTilesReader {
 	// deep probe of container meta
 	#[cfg(feature = "cli")]
 	async fn probe_container(&mut self, print: &PrettyPrint) -> Result<()> {
-		print.add_key_value("meta size", &self.meta.len()).await;
 		print.add_key_value("header", &self.header).await;
 
 		Ok(())
@@ -293,7 +274,7 @@ mod tests {
 		assert_eq!(format!("{:?}", reader.header), "HeaderV3 { root_dir: ByteRange[127,2271], metadata: ByteRange[2398,592], leaf_dirs: ByteRange[2990,0], tile_data: ByteRange[2990,25869006], addressed_tiles_count: 878, tile_entries_count: 878, tile_contents_count: 876, clustered: true, internal_compression: Gzip, tile_compression: Gzip, tile_type: MVT, min_zoom: 0, max_zoom: 14, min_lon_e7: 130828300, min_lat_e7: 523344600, max_lon_e7: 137622450, max_lat_e7: 526783000, center_zoom: 7, center_lon_e7: 134225380, center_lat_e7: 525063800 }");
 
 		assert_wildcard!(
-			reader.get_meta()?.unwrap().as_str(),
+			reader.get_tilejson().as_string(),
 			"{\"author\":\"OpenStreetMap contributors, Geofabrik GmbH\",*,\"version\":\"3.0\"}"
 		);
 
@@ -303,11 +284,7 @@ mod tests {
 		);
 
 		assert_eq!(
-			reader
-				.get_tile_data(&TileCoord3::new(0, 0, 0)?)
-				.await?
-				.unwrap()
-				.len(),
+			reader.get_tile_data(&TileCoord3::new(0, 0, 0)?).await?.unwrap().len(),
 			20
 		);
 
@@ -320,10 +297,7 @@ mod tests {
 			100391
 		);
 
-		assert!(reader
-			.get_tile_data(&TileCoord3::new(0, 0, 16)?)
-			.await?
-			.is_none());
+		assert!(reader.get_tile_data(&TileCoord3::new(0, 0, 16)?).await?.is_none());
 
 		Ok(())
 	}

@@ -82,7 +82,7 @@ impl MBTilesWriter {
 			let max_index = 2u32.pow(c.z as u32) - 1;
 			transaction.execute(
 				"INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?1, ?2, ?3, ?4)",
-				params![c.z, c.x, max_index-c.y, blob.as_slice()],
+				params![c.z, c.x, max_index - c.y, blob.as_slice()],
 			)?;
 		}
 		transaction.commit()?;
@@ -140,42 +140,26 @@ impl TilesWriterTrait for MBTilesWriter {
 		writer.set_metadata("type", "baselayer")?;
 		writer.set_metadata("version", "3.0")?;
 		let pyramid = &reader.get_parameters().bbox_pyramid;
-		let bbox = pyramid.get_geo_bbox();
+		let bbox = pyramid.get_geo_bbox().unwrap();
+		let center = pyramid.get_geo_center().unwrap();
 		let zoom_min = pyramid.get_zoom_min().unwrap();
 		let zoom_max = pyramid.get_zoom_max().unwrap();
-		writer.set_metadata(
-			"bounds",
-			&format!("{},{},{},{}", bbox[0], bbox[1], bbox[2], bbox[3]),
-		)?;
-		writer.set_metadata(
-			"center",
-			&format!(
-				"{},{},{}",
-				(bbox[0] + bbox[2]) / 2.0,
-				(bbox[1] + bbox[3]) / 2.0,
-				(zoom_min + 2).min(zoom_max)
-			),
-		)?;
+		writer.set_metadata("bounds", &format!("{},{},{},{}", bbox.0, bbox.1, bbox.2, bbox.3))?;
+		writer.set_metadata("center", &format!("{},{},{}", center.0, center.1, center.2))?;
 		writer.set_metadata("minzoom", &zoom_min.to_string())?;
 		writer.set_metadata("maxzoom", &zoom_max.to_string())?;
 
-		if let Some(meta) = reader.get_meta()? {
-			let meta = meta.as_str();
-			writer.set_metadata("json", meta)?;
+		let tilejson = reader.get_tilejson();
+		if let Some(vector_layers) = tilejson.as_object().get("vector_layers") {
+			writer.set_metadata(
+				"json",
+				&JsonObject::from(vec![("vector_layers", vector_layers)]).stringify(),
+			)?;
+		}
 
-			let tilejson = JsonObject::parse_str(meta)?;
-
-			for key in [
-				"name",
-				"author",
-				"type",
-				"description",
-				"version",
-				"license",
-			] {
-				if let Some(name) = tilejson.object_get_value(key)? {
-					writer.set_metadata(key, &name.as_string()?)?;
-				}
+		for key in ["name", "author", "type", "description", "version", "license"] {
+			if let Some(value) = tilejson.get_str(key) {
+				writer.set_metadata(key, value)?;
 			}
 		}
 
@@ -198,10 +182,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	}
 
 	/// Not implemented: Writes tiles and metadata to a generic data writer.
-	async fn write_to_writer(
-		_reader: &mut dyn TilesReaderTrait,
-		_writer: &mut dyn DataWriterTrait,
-	) -> Result<()> {
+	async fn write_to_writer(_reader: &mut dyn TilesReaderTrait, _writer: &mut dyn DataWriterTrait) -> Result<()> {
 		bail!("not implemented")
 	}
 }

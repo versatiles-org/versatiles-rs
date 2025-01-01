@@ -1,7 +1,7 @@
 //! This module defines the `TileBBox` struct, which represents a bounding box for tiles at a specific zoom level.
 //! It provides methods to create, manipulate, and query these bounding boxes.
 
-use super::{TileBBoxPyramid, TileCoord2, TileCoord3};
+use super::{GeoBBox, TileBBoxPyramid, TileCoord2, TileCoord3};
 use anyhow::{ensure, Result};
 use itertools::Itertools;
 use std::{
@@ -106,44 +106,17 @@ impl TileBBox {
 	/// # Arguments
 	///
 	/// * `level` - The zoom level of the bounding box.
-	/// * `geo_bbox` - A reference to an array of four `f64` values representing the geographical bounding box.
+	/// * `bbox` - A reference to an array of four `f64` values representing the geographical bounding box.
 	///
 	/// # Returns
 	///
 	/// A `Result` containing the new `TileBBox` or an error if the coordinates are invalid.
-	pub fn from_geo(level: u8, geo_bbox: &[f64; 4]) -> Result<TileBBox> {
+	pub fn from_geo(level: u8, bbox: &GeoBBox) -> Result<TileBBox> {
 		ensure!(level <= 31, "level ({level}) must be <= 31");
-		ensure!(
-			geo_bbox[0] >= -180.,
-			"x_min ({}) must be >= -180",
-			geo_bbox[0]
-		);
-		ensure!(
-			geo_bbox[1] >= -90.,
-			"y_min ({}) must be >= -90",
-			geo_bbox[1]
-		);
-		ensure!(
-			geo_bbox[2] <= 180.,
-			"x_max ({}) must be <= 180",
-			geo_bbox[2]
-		);
-		ensure!(geo_bbox[3] <= 90., "y_max ({}) must be <= 90", geo_bbox[3]);
-		ensure!(
-			geo_bbox[0] <= geo_bbox[2],
-			"x_min ({}) must be <= x_max ({})",
-			geo_bbox[0],
-			geo_bbox[2]
-		);
-		ensure!(
-			geo_bbox[1] <= geo_bbox[3],
-			"y_min ({}) must be <= y_max ({})",
-			geo_bbox[1],
-			geo_bbox[3]
-		);
+		bbox.check()?;
 
-		let p_min = TileCoord2::from_geo(geo_bbox[0], geo_bbox[3], level, false)?;
-		let p_max = TileCoord2::from_geo(geo_bbox[2], geo_bbox[1], level, true)?;
+		let p_min = TileCoord2::from_geo(bbox.0, bbox.3, level, false)?;
+		let p_max = TileCoord2::from_geo(bbox.2, bbox.1, level, true)?;
 
 		TileBBox::new(level, p_min.x, p_min.y, p_max.x, p_max.y)
 	}
@@ -289,10 +262,7 @@ impl TileBBox {
 		if self.is_empty() || bbox.is_empty() {
 			return false;
 		}
-		self.x_min <= bbox.x_max
-			|| self.y_min <= bbox.y_max
-			|| self.x_max >= bbox.x_min
-			|| self.y_max >= bbox.y_min
+		self.x_min <= bbox.x_max || self.y_min <= bbox.y_max || self.x_max >= bbox.x_min || self.y_max >= bbox.y_min
 	}
 
 	/// Adds a border to the bounding box.
@@ -354,14 +324,7 @@ impl TileBBox {
 				let x = coord.x * size;
 				let y = coord.y * size;
 
-				let mut bbox = TileBBox::new(
-					level,
-					x,
-					y,
-					(x + size - 1).min(max),
-					(y + size - 1).min(max),
-				)
-				.unwrap();
+				let mut bbox = TileBBox::new(level, x, y, (x + size - 1).min(max), (y + size - 1).min(max)).unwrap();
 				bbox.intersect_bbox(self);
 				bbox
 			})
@@ -406,10 +369,7 @@ impl TileBBox {
 			let row_chunk_count = (row_count as f64 / row_chunk_max_size as f64).ceil() as usize;
 			let row_chunk_size = row_count as f64 / row_chunk_count as f64;
 			for row in 0..=row_chunk_count {
-				row_pos.insert(
-					row,
-					(row_chunk_size * row as f64).round() as u32 + self.y_min,
-				)
+				row_pos.insert(row, (row_chunk_size * row as f64).round() as u32 + self.y_min)
 			}
 			row_count = row_chunk_count;
 
@@ -537,10 +497,7 @@ impl TileBBox {
 	///
 	/// `true` if the bounding box contains the coordinate, `false` otherwise.
 	pub fn contains2(&self, coord: &TileCoord2) -> bool {
-		(coord.x >= self.x_min)
-			&& (coord.x <= self.x_max)
-			&& (coord.y >= self.y_min)
-			&& (coord.y <= self.y_max)
+		(coord.x >= self.x_min) && (coord.x <= self.x_max) && (coord.y >= self.y_min) && (coord.y <= self.y_max)
 	}
 
 	/// Checks if the bounding box contains the specified tile coordinate at the same zoom level.
@@ -629,11 +586,7 @@ impl TileBBox {
 		ensure!(index < self.count_tiles() as u32, "index out of bounds");
 
 		let width = self.x_max + 1 - self.x_min;
-		TileCoord3::new(
-			index.rem(width) + self.x_min,
-			index.div(width) + self.y_min,
-			self.level,
-		)
+		TileCoord3::new(index.rem(width) + self.x_min, index.div(width) + self.y_min, self.level)
 	}
 
 	/// Converts the bounding box to geographical coordinates.
@@ -645,15 +598,11 @@ impl TileBBox {
 	/// # Returns
 	///
 	/// An array of four `f64` values representing the geographical bounding box.
-	pub fn as_geo_bbox(&self, z: u8) -> [f64; 4] {
-		let p_min = TileCoord3::new(self.x_min, self.y_max + 1, z)
-			.unwrap()
-			.as_geo();
-		let p_max = TileCoord3::new(self.x_max + 1, self.y_min, z)
-			.unwrap()
-			.as_geo();
+	pub fn as_geo_bbox(&self, z: u8) -> GeoBBox {
+		let p_min = TileCoord3::new(self.x_min, self.y_max + 1, z).unwrap().as_geo();
+		let p_max = TileCoord3::new(self.x_max + 1, self.y_min, z).unwrap().as_geo();
 
-		[p_min[0], p_min[1], p_max[0], p_max[1]]
+		GeoBBox(p_min[0], p_min[1], p_max[0], p_max[1])
 	}
 }
 
@@ -685,28 +634,28 @@ mod tests {
 
 	#[test]
 	fn from_geo() {
-		let bbox1 = TileBBox::from_geo(9, &[8.0653, 51.3563, 12.3528, 52.2564]).unwrap();
+		let bbox1 = TileBBox::from_geo(9, &GeoBBox(8.0653, 51.3563, 12.3528, 52.2564)).unwrap();
 		let bbox2 = TileBBox::new(9, 267, 168, 273, 170).unwrap();
 		assert_eq!(bbox1, bbox2);
 	}
 
 	#[test]
 	fn from_geo_is_not_empty() {
-		let bbox1 = TileBBox::from_geo(0, &[8.0, 51.0, 8.000001f64, 51.0]).unwrap();
+		let bbox1 = TileBBox::from_geo(0, &GeoBBox(8.0, 51.0, 8.000001f64, 51.0)).unwrap();
 		assert_eq!(bbox1.count_tiles(), 1);
 		assert!(!bbox1.is_empty());
 
-		let bbox2 = TileBBox::from_geo(14, &[-132.000001, -40.0, -132.0, -40.0]).unwrap();
+		let bbox2 = TileBBox::from_geo(14, &GeoBBox(-132.000001, -40.0, -132.0, -40.0)).unwrap();
 		assert_eq!(bbox2.count_tiles(), 1);
 		assert!(!bbox2.is_empty());
 	}
 
 	#[test]
 	fn quarter_planet() {
-		let geo_bbox2 = [0.0, -85.05112877980659f64, 180.0, 0.0];
-		let mut geo_bbox0 = geo_bbox2;
-		geo_bbox0[1] += 1e-10;
-		geo_bbox0[2] -= 1e-10;
+		let geo_bbox2 = GeoBBox(0.0, -85.05112877980659f64, 180.0, 0.0);
+		let mut geo_bbox0 = geo_bbox2.clone();
+		geo_bbox0.1 += 1e-10;
+		geo_bbox0.2 -= 1e-10;
 		for level in 1..32 {
 			let level_bbox0 = TileBBox::from_geo(level, &geo_bbox0).unwrap();
 			assert_eq!(level_bbox0.count_tiles(), 4u64.pow(level as u32 - 1));
@@ -717,10 +666,10 @@ mod tests {
 
 	#[test]
 	fn sa_pacific() {
-		let geo_bbox2 = [-180.0, -66.51326044311186f64, -90.0, 0.0];
-		let mut geo_bbox0 = geo_bbox2;
-		geo_bbox0[1] += 1e-10;
-		geo_bbox0[2] -= 1e-10;
+		let geo_bbox2 = GeoBBox(-180.0, -66.51326044311186f64, -90.0, 0.0);
+		let mut geo_bbox0 = geo_bbox2.clone();
+		geo_bbox0.1 += 1e-10;
+		geo_bbox0.2 -= 1e-10;
 
 		for level in 2..32 {
 			let level_bbox0 = TileBBox::from_geo(level, &geo_bbox0).unwrap();
@@ -857,32 +806,15 @@ mod tests {
 		fn test(size: u32, bbox: TileBBox, bboxes: &str) {
 			let bboxes_result: String = bbox
 				.iter_bbox_grid(size)
-				.map(|bbox| {
-					format!(
-						"{},{},{},{}",
-						bbox.x_min, bbox.y_min, bbox.x_max, bbox.y_max
-					)
-				})
+				.map(|bbox| format!("{},{},{},{}", bbox.x_min, bbox.y_min, bbox.x_max, bbox.y_max))
 				.collect::<Vec<String>>()
 				.join(" ");
 			assert_eq!(bboxes_result, bboxes);
 		}
 
-		test(
-			16,
-			b(10, 0, 0, 31, 31),
-			"0,0,15,15 16,0,31,15 0,16,15,31 16,16,31,31",
-		);
-		test(
-			16,
-			b(10, 5, 6, 25, 26),
-			"5,6,15,15 16,6,25,15 5,16,15,26 16,16,25,26",
-		);
-		test(
-			16,
-			b(10, 5, 6, 16, 16),
-			"5,6,15,15 16,6,16,15 5,16,15,16 16,16,16,16",
-		);
+		test(16, b(10, 0, 0, 31, 31), "0,0,15,15 16,0,31,15 0,16,15,31 16,16,31,31");
+		test(16, b(10, 5, 6, 25, 26), "5,6,15,15 16,6,25,15 5,16,15,26 16,16,25,26");
+		test(16, b(10, 5, 6, 16, 16), "5,6,15,15 16,6,16,15 5,16,15,16 16,16,16,16");
 		test(16, b(10, 5, 6, 16, 15), "5,6,15,15 16,6,16,15");
 		test(16, b(10, 6, 7, 6, 7), "6,7,6,7");
 		test(64, b(4, 6, 7, 6, 7), "6,7,6,7");
@@ -1042,30 +974,12 @@ mod tests {
 	#[test]
 	fn test_get_tile_index3() {
 		let bbox = TileBBox::new(8, 100, 100, 199, 199).unwrap();
-		assert_eq!(
-			bbox.get_tile_index3(&TileCoord3::new(100, 100, 8).unwrap()),
-			0
-		);
-		assert_eq!(
-			bbox.get_tile_index3(&TileCoord3::new(101, 100, 8).unwrap()),
-			1
-		);
-		assert_eq!(
-			bbox.get_tile_index3(&TileCoord3::new(199, 100, 8).unwrap()),
-			99
-		);
-		assert_eq!(
-			bbox.get_tile_index3(&TileCoord3::new(100, 101, 8).unwrap()),
-			100
-		);
-		assert_eq!(
-			bbox.get_tile_index3(&TileCoord3::new(100, 199, 8).unwrap()),
-			9900
-		);
-		assert_eq!(
-			bbox.get_tile_index3(&TileCoord3::new(199, 199, 8).unwrap()),
-			9999
-		);
+		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(100, 100, 8).unwrap()), 0);
+		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(101, 100, 8).unwrap()), 1);
+		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(199, 100, 8).unwrap()), 99);
+		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(100, 101, 8).unwrap()), 100);
+		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(100, 199, 8).unwrap()), 9900);
+		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(199, 199, 8).unwrap()), 9999);
 	}
 
 	#[test]
@@ -1081,33 +995,18 @@ mod tests {
 	#[test]
 	fn test_get_coord3_by_index() {
 		let bbox = TileBBox::new(4, 5, 10, 7, 12).unwrap();
-		assert_eq!(
-			bbox.get_coord3_by_index(0).unwrap(),
-			TileCoord3::new(5, 10, 4).unwrap()
-		);
-		assert_eq!(
-			bbox.get_coord3_by_index(1).unwrap(),
-			TileCoord3::new(6, 10, 4).unwrap()
-		);
-		assert_eq!(
-			bbox.get_coord3_by_index(2).unwrap(),
-			TileCoord3::new(7, 10, 4).unwrap()
-		);
-		assert_eq!(
-			bbox.get_coord3_by_index(3).unwrap(),
-			TileCoord3::new(5, 11, 4).unwrap()
-		);
-		assert_eq!(
-			bbox.get_coord3_by_index(8).unwrap(),
-			TileCoord3::new(7, 12, 4).unwrap()
-		);
+		assert_eq!(bbox.get_coord3_by_index(0).unwrap(), TileCoord3::new(5, 10, 4).unwrap());
+		assert_eq!(bbox.get_coord3_by_index(1).unwrap(), TileCoord3::new(6, 10, 4).unwrap());
+		assert_eq!(bbox.get_coord3_by_index(2).unwrap(), TileCoord3::new(7, 10, 4).unwrap());
+		assert_eq!(bbox.get_coord3_by_index(3).unwrap(), TileCoord3::new(5, 11, 4).unwrap());
+		assert_eq!(bbox.get_coord3_by_index(8).unwrap(), TileCoord3::new(7, 12, 4).unwrap());
 	}
 
 	#[test]
 	fn test_as_geo_bbox() {
 		let bbox = TileBBox::new(4, 5, 10, 7, 12).unwrap();
 		let geo_bbox = bbox.as_geo_bbox(4);
-		assert_eq!(geo_bbox.len(), 4);
+		assert_eq!(geo_bbox.as_string_list(), "-135.0,45.0,-112.5,33.75");
 	}
 
 	#[test]

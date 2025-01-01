@@ -20,18 +20,13 @@ struct Operation {
 }
 
 impl ReadOperationTrait for Operation {
-	fn build(
-		vpl_node: VPLNode,
-		factory: &PipelineFactory,
-	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
+	fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
 	where
 		Self: Sized + OperationTrait,
 	{
 		Box::pin(async move {
 			let args = Args::from_vpl_node(&vpl_node)?;
-			let reader = factory
-				.get_reader(&factory.resolve_filename(&args.filename))
-				.await?;
+			let reader = factory.get_reader(&factory.resolve_filename(&args.filename)).await?;
 			let parameters = reader.get_parameters().clone();
 
 			Ok(Box::new(Self { parameters, reader }) as Box<dyn OperationTrait>)
@@ -45,8 +40,8 @@ impl OperationTrait for Operation {
 		&self.parameters
 	}
 
-	fn get_meta(&self) -> &TileJSON {
-		self.reader.get_meta()
+	fn get_tilejson(&self) -> &TileJSON {
+		self.reader.get_tilejson()
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
@@ -71,11 +66,7 @@ impl OperationFactoryTrait for Factory {
 
 #[async_trait]
 impl ReadOperationFactoryTrait for Factory {
-	async fn build<'a>(
-		&self,
-		vpl_node: VPLNode,
-		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>> {
+	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn OperationTrait>> {
 		Operation::build(vpl_node, factory).await
 	}
 }
@@ -91,19 +82,14 @@ mod tests {
 			.operation_from_vpl("from_container filename=\"test.mbtiles\"")
 			.await?;
 
-		assert_eq!(
-			&operation.get_meta().unwrap().to_string(),
-			"{\"mock\":true}"
-		);
+		assert_eq!(&operation.get_tilejson().as_string(), "{\"mock\":true}");
 
 		let coord = TileCoord3 { x: 2, y: 3, z: 4 };
 		let blob = operation.get_tile_data(&coord).await?.unwrap();
 
 		assert!(blob.len() > 50);
 
-		let mut stream = operation
-			.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?)
-			.await;
+		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await;
 
 		let mut n = 0;
 		while let Some((coord, blob)) = stream.next().await {

@@ -22,7 +22,7 @@ struct Args {
 struct Operation {
 	parameters: TilesReaderParameters,
 	sources: Vec<Box<dyn OperationTrait>>,
-	meta: TileJSON,
+	tilejson: TileJSON,
 }
 
 impl ReadOperationTrait for Operation {
@@ -49,7 +49,7 @@ impl ReadOperationTrait for Operation {
 			let mut tile_compression = parameters.tile_compression;
 
 			for source in sources.iter() {
-				meta.merge(source.get_meta());
+				meta.merge(source.get_tilejson())?;
 
 				let parameters = source.get_parameters();
 				pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
@@ -65,7 +65,7 @@ impl ReadOperationTrait for Operation {
 			let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
 
 			Ok(Box::new(Self {
-				meta,
+				tilejson: meta,
 				parameters,
 				sources,
 			}) as Box<dyn OperationTrait>)
@@ -79,8 +79,8 @@ impl OperationTrait for Operation {
 		&self.parameters
 	}
 
-	fn get_meta(&self) -> &TileJSON {
-		&self.meta
+	fn get_tilejson(&self) -> &TileJSON {
+		&self.tilejson
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
@@ -123,12 +123,7 @@ impl OperationTrait for Operation {
 					.for_each_sync(|(coord, mut blob)| {
 						let index = bbox.get_tile_index3(&coord);
 						if tiles[index].is_none() {
-							blob = recompress(
-								blob,
-								&source.get_parameters().tile_compression,
-								output_compression,
-							)
-							.unwrap();
+							blob = recompress(blob, &source.get_parameters().tile_compression, output_compression).unwrap();
 							tiles[index] = Some((coord, blob));
 						}
 					})
@@ -154,11 +149,7 @@ impl OperationFactoryTrait for Factory {
 
 #[async_trait]
 impl ReadOperationFactoryTrait for Factory {
-	async fn build<'a>(
-		&self,
-		vpl_node: VPLNode,
-		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>> {
+	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn OperationTrait>> {
 		Operation::build(vpl_node, factory).await
 	}
 }
@@ -192,11 +183,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let error = |command: &'static str| async {
 			assert_eq!(
-				factory
-					.operation_from_vpl(command)
-					.await
-					.unwrap_err()
-					.to_string(),
+				factory.operation_from_vpl(command).await.unwrap_err().to_string(),
 				"must have at least two sources"
 			)
 		};
@@ -210,9 +197,7 @@ mod tests {
 	async fn test_operation_get_tile_data() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
-			.operation_from_vpl(
-				"from_overlayed [ from_container filename=1, from_container filename=2 ]",
-			)
+			.operation_from_vpl("from_overlayed [ from_container filename=1, from_container filename=2 ]")
 			.await?;
 
 		let coord = TileCoord3::new(1, 2, 3)?;

@@ -1,6 +1,6 @@
-use super::{bbox::GeoBBox, center::GeoCenter, value::TileJsonValues, vector_layer::VectorLayers};
+use super::{value::TileJsonValues, vector_layer::VectorLayers};
 use crate::{
-	types::Blob,
+	types::{Blob, GeoBBox, GeoCenter, TileBBoxPyramid},
 	utils::{parse_json_str, JsonObject, JsonValue},
 };
 use anyhow::{ensure, Result};
@@ -75,6 +75,69 @@ impl TileJSON {
 		obj
 	}
 
+	pub fn as_string(&self) -> String {
+		self.as_object().stringify()
+	}
+
+	pub fn as_blob(&self) -> Blob {
+		Blob::from(self.as_string())
+	}
+
+	pub fn update_from_pyramid(&mut self, pyramid: &TileBBoxPyramid) {
+		if let Some(bbox) = pyramid.get_geo_bbox() {
+			self.limit_bbox(bbox);
+		}
+
+		if let Some(z) = pyramid.get_zoom_min() {
+			self.limit_min_zoom(z);
+		}
+
+		if let Some(z) = pyramid.get_zoom_max() {
+			self.limit_min_zoom(z);
+		}
+	}
+
+	pub fn get_string(&self, key: &str) -> Option<String> {
+		self.values.get_string(key)
+	}
+
+	pub fn get_str(&self, key: &str) -> Option<&str> {
+		self.values.get_str(key)
+	}
+
+	pub fn set_byte(&mut self, key: &str, value: u8) -> Result<()> {
+		self.values.insert(key, &JsonValue::from(value))
+	}
+
+	pub fn set_list(&mut self, key: &str, value: Vec<String>) -> Result<()> {
+		self.values.insert(key, &JsonValue::from(value))
+	}
+
+	pub fn set_string(&mut self, key: &str, value: &str) -> Result<()> {
+		self.values.insert(key, &JsonValue::from(value))
+	}
+
+	pub fn set_vector_layers(&mut self, vector_layers: JsonValue) -> Result<()> {
+		self.vector_layers = VectorLayers::from_json_array(vector_layers.as_array()?)?;
+		Ok(())
+	}
+
+	pub fn limit_bbox(&mut self, bbox: GeoBBox) {
+		if let Some(ref mut b) = self.bounds {
+			b.intersect(&bbox);
+		} else {
+			self.bounds = Some(bbox);
+		}
+	}
+
+	pub fn limit_min_zoom(&mut self, z: u8) {
+		self.values.update_byte("minzoom", |mz| mz.map_or(z, |mz| mz.max(z)));
+	}
+
+	pub fn limit_max_zoom(&mut self, z: u8) {
+		self.values.update_byte("maxzoom", |mz| mz.map_or(z, |mz| mz.min(z)));
+	}
+
 	/// **Fixed merge method** that merges another `TileJSON` into this one.
 	///
 	/// - **Bounds:**  
@@ -105,17 +168,11 @@ impl TileJSON {
 		// 3. Merge minzoom & maxzoom from `values`
 		//    By spec, these are bytes (0..=30).
 		if let Some(omz) = other.values.get_byte("minzoom") {
-			let new_mz = self
-				.values
-				.get_byte("minzoom")
-				.map_or(omz, |mz| mz.min(omz));
+			let new_mz = self.values.get_byte("minzoom").map_or(omz, |mz| mz.min(omz));
 			self.values.insert("minzoom", &JsonValue::from(new_mz))?;
 		}
 		if let Some(omz) = other.values.get_byte("maxzoom") {
-			let new_mz = self
-				.values
-				.get_byte("maxzoom")
-				.map_or(omz, |mz| mz.max(omz));
+			let new_mz = self.values.get_byte("maxzoom").map_or(omz, |mz| mz.max(omz));
 			self.values.insert("maxzoom", &JsonValue::from(new_mz))?;
 		}
 
@@ -202,10 +259,7 @@ impl TileJSON {
 
 		// 3.17 version - optional
 		if let Some(v) = self.values.get_string("version") {
-			ensure!(
-				Regex::new(r"^\d+\.\d+\.\d+$")?.is_match(&v),
-				"Invalid version number"
-			);
+			ensure!(Regex::new(r"^\d+\.\d+\.\d+$")?.is_match(&v), "Invalid version number");
 		}
 
 		Ok(())

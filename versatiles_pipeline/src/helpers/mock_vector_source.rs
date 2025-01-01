@@ -73,7 +73,7 @@ impl TilesReaderTrait for MockVectorSource {
 		panic!("not possible")
 	}
 
-	fn get_meta(&self) -> &TileJSON {
+	fn get_tilejson(&self) -> &TileJSON {
 		&self.meta
 	}
 

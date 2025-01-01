@@ -50,10 +50,7 @@ impl TilesWriterTrait for PMTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if there are issues with writing data or internal processing.
-	async fn write_to_writer(
-		reader: &mut dyn TilesReaderTrait,
-		writer: &mut dyn DataWriterTrait,
-	) -> Result<()> {
+	async fn write_to_writer(reader: &mut dyn TilesReaderTrait, writer: &mut dyn DataWriterTrait) -> Result<()> {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
 
 		let parameters = reader.get_parameters().clone();
@@ -75,9 +72,9 @@ impl TilesWriterTrait for PMTilesWriter {
 
 		writer.set_position(16384)?;
 
-		let mut header = HeaderV3::from(&parameters);
+		let mut header = HeaderV3::from_parameters(&parameters);
 
-		let mut metadata = reader.get_meta()?.unwrap_or(Blob::new_empty());
+		let mut metadata: Blob = reader.get_tilejson().into();
 		metadata = compress(metadata, &INTERNAL_COMPRESSION)?;
 		header.metadata = writer.append(&metadata)?;
 
@@ -89,11 +86,7 @@ impl TilesWriterTrait for PMTilesWriter {
 				progress.inc(1);
 				let id = coord.get_tile_id().unwrap();
 				let range = writer.append(&blob).unwrap();
-				entries.push(EntryV3::new(
-					id,
-					range.get_shifted_backward(tile_data_start),
-					1,
-				));
+				entries.push(EntryV3::new(id, range.get_shifted_backward(tile_data_start), 1));
 			}
 
 			tile_count += bbox.count_tiles();

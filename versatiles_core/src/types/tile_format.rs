@@ -44,20 +44,51 @@ pub enum TileFormat {
 	WEBP,
 }
 
+impl TileFormat {
+	pub fn as_str(&self) -> &str {
+		use TileFormat::*;
+		match self {
+			AVIF => "avif",
+			BIN => "bin",
+			GEOJSON => "geojson",
+			JPG => "jpg",
+			JSON => "json",
+			PBF => "pbf",
+			PNG => "png",
+			SVG => "svg",
+			TOPOJSON => "topojson",
+			WEBP => "webp",
+		}
+	}
+	pub fn as_type_str(&self) -> &str {
+		use TileFormat::*;
+		match self {
+			AVIF | JPG | PNG | SVG | WEBP => "image",
+			BIN | JSON => "unknown",
+			GEOJSON | PBF | TOPOJSON => "vector",
+		}
+	}
+	pub fn as_mime_str(&self) -> &str {
+		use TileFormat::*;
+		match self {
+			// Various tile formats with their corresponding MIME types
+			BIN => "application/octet-stream",
+			PNG => "image/png",
+			JPG => "image/jpeg",
+			WEBP => "image/webp",
+			AVIF => "image/avif",
+			SVG => "image/svg+xml",
+			PBF => "application/x-protobuf",
+			GEOJSON => "application/geo+json",
+			TOPOJSON => "application/topo+json",
+			JSON => "application/json",
+		}
+	}
+}
+
 impl Display for TileFormat {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.write_str(match self {
-			TileFormat::AVIF => "avif",
-			TileFormat::BIN => "bin",
-			TileFormat::GEOJSON => "geojson",
-			TileFormat::JPG => "jpg",
-			TileFormat::JSON => "json",
-			TileFormat::PBF => "pbf",
-			TileFormat::PNG => "png",
-			TileFormat::SVG => "svg",
-			TileFormat::TOPOJSON => "topojson",
-			TileFormat::WEBP => "webp",
-		})
+		f.write_str(self.as_str())
 	}
 }
 
@@ -171,11 +202,7 @@ mod tests {
 		test(Some(TileFormat::PNG), "picture.png", "picture");
 		test(Some(TileFormat::SVG), "diagram.svg", "diagram");
 		test(Some(TileFormat::SVG), "vector.svg", "vector");
-		test(
-			Some(TileFormat::TOPOJSON),
-			"topography.topojson",
-			"topography",
-		);
+		test(Some(TileFormat::TOPOJSON), "topography.topojson", "topography");
 		test(Some(TileFormat::WEBP), "photo.webp", "photo");
 	}
 }

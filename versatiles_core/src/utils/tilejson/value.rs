@@ -14,18 +14,18 @@ impl TileJsonValues {
 	/// Returns an error if the provided `JsonValue` cannot be converted into a `TileJsonValue`.
 	pub fn insert(&mut self, key: &str, value: &JsonValue) -> Result<()> {
 		// Convert JsonValue into a typed TileJsonValue, and insert into the map.
-		self
-			.0
-			.insert(key.to_owned(), TileJsonValue::try_from(value)?);
+		self.0.insert(key.to_owned(), TileJsonValue::try_from(value)?);
 		Ok(())
 	}
 
 	/// Gets a cloned `String` value for a given key, if that key exists and is stored as a string.
+	pub fn get_str(&self, key: &str) -> Option<&str> {
+		self.0.get(key).and_then(|v| v.get_str())
+	}
+
+	/// Gets a cloned `String` value for a given key, if that key exists and is stored as a string.
 	pub fn get_string(&self, key: &str) -> Option<String> {
-		self
-			.0
-			.get(key)
-			.and_then(|v| v.get_str().map(|s| s.to_owned()))
+		self.0.get(key).and_then(|v| v.get_str().map(|s| s.to_owned()))
 	}
 
 	/// Gets a `Byte` value for a given key, if that key exists and is stored as a byte.
@@ -67,10 +67,17 @@ impl TileJsonValues {
 	///
 	/// The returned iterator yields `(String, JsonValue)` tuples.
 	pub fn iter_json_values(&self) -> impl Iterator<Item = (String, JsonValue)> + '_ {
-		self
-			.0
-			.iter()
-			.map(|(k, v)| (k.to_owned(), v.as_json_value()))
+		self.0.iter().map(|(k, v)| (k.to_owned(), v.as_json_value()))
+	}
+
+	pub fn update_byte<T>(&mut self, key: &str, update: T)
+	where
+		T: FnOnce(Option<u8>) -> u8,
+	{
+		self.0.insert(
+			key.to_owned(),
+			TileJsonValue::Byte(update(self.0.get(key).and_then(|v| v.get_byte()))),
+		);
 	}
 }
 

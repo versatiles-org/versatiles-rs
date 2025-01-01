@@ -39,13 +39,19 @@ pub enum TileCompression {
 	Brotli,
 }
 
-impl Display for TileCompression {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.write_str(match self {
+impl TileCompression {
+	pub fn as_str(&self) -> &str {
+		match self {
 			TileCompression::Uncompressed => "none",
 			TileCompression::Gzip => "gzip",
 			TileCompression::Brotli => "brotli",
-		})
+		}
+	}
+}
+
+impl Display for TileCompression {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str(self.as_str())
 	}
 }
 
@@ -152,27 +158,15 @@ mod tests {
 		test(TileCompression::Gzip, "file.txt.gz", "file.txt");
 		test(TileCompression::Brotli, "archive.tar.br", "archive.tar");
 		test(TileCompression::Uncompressed, "image.png", "image.png");
-		test(
-			TileCompression::Uncompressed,
-			"document.pdf",
-			"document.pdf",
-		);
-		test(
-			TileCompression::Uncompressed,
-			"noextensionfile",
-			"noextensionfile",
-		);
+		test(TileCompression::Uncompressed, "document.pdf", "document.pdf");
+		test(TileCompression::Uncompressed, "noextensionfile", "noextensionfile");
 	}
 
 	#[test]
 	fn test_parse_str() {
 		fn test(input: &str, expected: Result<TileCompression>) {
 			let result = TileCompression::parse_str(input);
-			assert_eq!(
-				result.is_ok(),
-				expected.is_ok(),
-				"Unexpected result for input: {input}"
-			);
+			assert_eq!(result.is_ok(), expected.is_ok(), "Unexpected result for input: {input}");
 			if let Ok(expected_value) = expected {
 				assert_eq!(
 					result.unwrap(),
