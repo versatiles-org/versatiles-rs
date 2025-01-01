@@ -20,11 +20,7 @@ impl<'a> TileStream<'a> {
 		Fut: Future<Output = TileStream<'a>> + Send + 'a,
 	{
 		TileStream {
-			stream: Box::pin(
-				stream::iter(iter)
-					.then(|s| async move { s.await.stream })
-					.flatten(),
-			),
+			stream: Box::pin(stream::iter(iter).then(|s| async move { s.await.stream }).flatten()),
 		}
 	}
 
@@ -85,10 +81,7 @@ impl<'a> TileStream<'a> {
 		}
 	}
 
-	pub fn from_coord_iter_parallel<F>(
-		iter: impl Iterator<Item = TileCoord3> + Send + 'a,
-		callback: F,
-	) -> Self
+	pub fn from_coord_iter_parallel<F>(iter: impl Iterator<Item = TileCoord3> + Send + 'a, callback: F) -> Self
 	where
 		F: Fn(TileCoord3) -> Option<Blob> + Send + Sync + 'static,
 	{
@@ -174,10 +167,7 @@ impl<'a> TileStream<'a> {
 		F: FnMut(TileCoord3) -> TileCoord3 + Send + 'a,
 	{
 		TileStream {
-			stream: self
-				.stream
-				.map(move |(coord, blob)| (callback(coord), blob))
-				.boxed(),
+			stream: self.stream.map(move |(coord, blob)| (callback(coord), blob)).boxed(),
 		}
 	}
 
@@ -210,10 +200,7 @@ mod tests {
 		let mut count = 0;
 		tiles_stream
 			.for_each_sync(|(coord, blob)| {
-				println!(
-					"Processing tile at coord: {:?}, with data: {:?}",
-					coord, blob
-				);
+				println!("Processing tile at coord: {:?}, with data: {:?}", coord, blob);
 				count += 1;
 			})
 			.await;

@@ -14,8 +14,7 @@ use versatiles_geometry::{GeoProperties, GeoValue};
 ///
 /// * `Result<Vec<GeoProperties>>` - A vector of `GeoProperties` or an error if the file could not be read.
 pub async fn read_csv_file(path: &Path) -> Result<Vec<GeoProperties>> {
-	let file = std::fs::File::open(path)
-		.with_context(|| format!("Failed to open file at path: {:?}", path))?;
+	let file = std::fs::File::open(path).with_context(|| format!("Failed to open file at path: {:?}", path))?;
 
 	let size = file.metadata()?.len();
 	let mut progress = get_progress_bar("read csv", size);
@@ -70,9 +69,8 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_read_csv_file() -> Result<()> {
-		let file_path = make_temp_csv(
-			"name,age,city\nJohn Doe,30,New York\nJane Smith,25,Los Angeles\nAlice Johnson,28,Chicago",
-		)?;
+		let file_path =
+			make_temp_csv("name,age,city\nJohn Doe,30,New York\nJane Smith,25,Los Angeles\nAlice Johnson,28,Chicago")?;
 		let data = read_csv_file(file_path.path()).await?;
 
 		assert_eq!(data.len(), 3);
@@ -105,8 +103,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_read_csv_file_missing_values() -> Result<()> {
-		let file_path =
-			make_temp_csv("name,age,city\nJohn Doe,,New York\n,25,Los Angeles\nAlice Johnson,28,")?;
+		let file_path = make_temp_csv("name,age,city\nJohn Doe,,New York\n,25,Los Angeles\nAlice Johnson,28,")?;
 
 		let data = read_csv_file(file_path.path()).await?;
 

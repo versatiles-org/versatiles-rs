@@ -21,9 +21,7 @@ pub fn create_image_rgb() -> DynamicImage {
 /// Returns a DynamicImage with 256x256 grayscale colors from black to white. Each pixel in the image
 /// is a Luma<u8> value.
 pub fn create_image_grey() -> DynamicImage {
-	DynamicImage::ImageLuma8(GrayImage::from_fn(256, 256, |x, _y| -> Luma<u8> {
-		Luma([x as u8])
-	}))
+	DynamicImage::ImageLuma8(GrayImage::from_fn(256, 256, |x, _y| -> Luma<u8> { Luma([x as u8]) }))
 }
 
 /// Generate a DynamicImage with grayscale alpha colors

@@ -160,11 +160,7 @@ mod tests {
 
 		assert_eq!(
 			check(iter),
-			vec![
-				vec!["name", "age"],
-				vec!["John Doe", "30"],
-				vec!["Jane Doe", "29"]
-			]
+			vec![vec!["name", "age"], vec!["John Doe", "30"], vec!["Jane Doe", "29"]]
 		);
 	}
 
@@ -175,11 +171,7 @@ mod tests {
 
 		assert_eq!(
 			check(iter),
-			vec![
-				vec!["name", "age"],
-				vec!["John, A. Doe", "30"],
-				vec!["Jane Doe", "29"]
-			]
+			vec![vec!["name", "age"], vec!["John, A. Doe", "30"], vec!["Jane Doe", "29"]]
 		);
 	}
 
@@ -205,11 +197,7 @@ mod tests {
 
 		assert_eq!(
 			check(iter),
-			vec![
-				vec!["name", "age"],
-				vec!["John Doe", "30"],
-				vec!["Jane Doe", "29"]
-			]
+			vec![vec!["name", "age"], vec!["John Doe", "30"], vec!["Jane Doe", "29"]]
 		);
 	}
 
@@ -220,11 +208,7 @@ mod tests {
 
 		assert_eq!(
 			check(iter),
-			vec![
-				vec!["name", "age"],
-				vec!["John Doe", "30"],
-				vec!["Jane Doe", "29"]
-			]
+			vec![vec!["name", "age"], vec!["John Doe", "30"], vec!["Jane Doe", "29"]]
 		);
 	}
 }

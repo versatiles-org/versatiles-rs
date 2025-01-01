@@ -15,9 +15,8 @@ pub fn create_debug_image(coord: &TileCoord3) -> DynamicImage {
 	let mut image1 = RgbImage::from_pixel(512, 512, Rgb::from([br, br, br]));
 
 	let font: &FontArc = &FONT;
-	let mut draw = |y: i32, c: Rgb<u8>, text: String| {
-		draw_text_mut(&mut image1, c, 220, y, PxScale::from(40f32), font, &text)
-	};
+	let mut draw =
+		|y: i32, c: Rgb<u8>, text: String| draw_text_mut(&mut image1, c, 220, y, PxScale::from(40f32), font, &text);
 
 	draw(195, Rgb([127, 30, 16]), format!("z: {}", coord.z));
 	draw(225, Rgb([0, 92, 45]), format!("x: {}", coord.x));

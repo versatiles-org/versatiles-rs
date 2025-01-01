@@ -42,15 +42,9 @@ impl VectorTile {
 		let mut writer = ValueWriterBlob::new_le();
 
 		for layer in self.layers.iter() {
+			writer.write_pbf_key(3, 2).context("Failed to write PBF key")?;
 			writer
-				.write_pbf_key(3, 2)
-				.context("Failed to write PBF key")?;
-			writer
-				.write_pbf_blob(
-					&layer
-						.to_blob()
-						.context("Failed to convert VectorTileLayer to blob")?,
-				)
+				.write_pbf_blob(&layer.to_blob().context("Failed to convert VectorTileLayer to blob")?)
 				.context("Failed to write PBF blob")?;
 		}
 
@@ -64,15 +58,11 @@ mod tests {
 	use std::env::current_dir;
 
 	async fn get_pbf() -> Result<Blob> {
-		DataReaderFile::open(
-			&current_dir()
-				.unwrap()
-				.join("../testdata/shortbread-tile.pbf"),
-		)
-		.context("Failed to open PBF file")?
-		.read_all()
-		.await
-		.context("Failed to read all data from PBF file")
+		DataReaderFile::open(&current_dir().unwrap().join("../testdata/shortbread-tile.pbf"))
+			.context("Failed to open PBF file")?
+			.read_all()
+			.await
+			.context("Failed to read all data from PBF file")
 	}
 
 	async fn get_tile() -> Result<VectorTile> {
@@ -81,14 +71,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn from_to_blob() -> Result<()> {
-		let tile1 = get_tile()
-			.await
-			.context("Failed to get initial VectorTile")?;
-		let blob2 = tile1
-			.to_blob()
-			.context("Failed to convert VectorTile to blob")?;
-		let tile2 =
-			VectorTile::from_blob(&blob2).context("Failed to convert blob back to VectorTile")?;
+		let tile1 = get_tile().await.context("Failed to get initial VectorTile")?;
+		let blob2 = tile1.to_blob().context("Failed to convert VectorTile to blob")?;
+		let tile2 = VectorTile::from_blob(&blob2).context("Failed to convert blob back to VectorTile")?;
 		assert_eq!(tile1, tile2);
 		Ok(())
 	}

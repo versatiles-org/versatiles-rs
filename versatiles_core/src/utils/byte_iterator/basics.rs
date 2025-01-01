@@ -6,11 +6,7 @@ pub fn parse_tag(iter: &mut ByteIterator, tag: &str) -> Result<()> {
 	for c in tag.bytes() {
 		match iter.expect_next_byte()? {
 			b if b == c => continue,
-			_ => {
-				return Err(
-					iter.format_error(&format!("unexpected character while parsing tag '{tag}'")),
-				)
-			}
+			_ => return Err(iter.format_error(&format!("unexpected character while parsing tag '{tag}'"))),
 		}
 	}
 	Ok(())
@@ -223,14 +219,8 @@ mod tests {
 		assert_eq!(parse(" \"he\\u0041llo\" ").unwrap(), "heAllo");
 
 		// Edge cases with various escapes
-		assert_eq!(
-			parse(" \"he\\b\\f\\n\\r\\tllo\" ").unwrap(),
-			"he\x08\x0C\n\r\tllo"
-		);
-		assert_eq!(
-			parse(" \"hello \\\"world\\\"\" ").unwrap(),
-			"hello \"world\""
-		);
+		assert_eq!(parse(" \"he\\b\\f\\n\\r\\tllo\" ").unwrap(), "he\x08\x0C\n\r\tllo");
+		assert_eq!(parse(" \"hello \\\"world\\\"\" ").unwrap(), "hello \"world\"");
 
 		// Invalid Unicode escape
 		assert!(parse(" \"he\\u004Gllo\" ").is_err()); // Invalid hex

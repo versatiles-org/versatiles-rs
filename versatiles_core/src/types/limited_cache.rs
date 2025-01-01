@@ -97,12 +97,7 @@ where
 		}
 
 		self.last_index += 1;
-		self
-			.cache
-			.entry(key)
-			.or_insert((value, self.last_index))
-			.0
-			.clone()
+		self.cache.entry(key).or_insert((value, self.last_index)).0.clone()
 	}
 
 	/// A private method to clean up the cache by removing least recently accessed items.
@@ -148,9 +143,7 @@ mod tests {
 
 	#[test]
 	fn test_add_and_get_items() {
-		let mut cache = LimitedCache::with_maximum_size(
-			10 * (std::mem::size_of::<i32>() + std::mem::size_of::<i32>()),
-		);
+		let mut cache = LimitedCache::with_maximum_size(10 * (std::mem::size_of::<i32>() + std::mem::size_of::<i32>()));
 		cache.add(1, 100);
 		cache.add(2, 200);
 
@@ -162,8 +155,7 @@ mod tests {
 	#[test]
 	fn test_capacity_and_cleanup() {
 		let test = |max: u64, result: &[u64]| {
-			let mut cache: LimitedCache<u64, u64> =
-				LimitedCache::with_maximum_size(10 * (std::mem::size_of::<u64>()));
+			let mut cache: LimitedCache<u64, u64> = LimitedCache::with_maximum_size(10 * (std::mem::size_of::<u64>()));
 			for i in 0..=max {
 				cache.add(i, i * 100);
 				cache.get(&i);

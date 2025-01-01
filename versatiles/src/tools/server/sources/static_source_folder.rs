@@ -120,10 +120,7 @@ mod tests {
 		assert_eq!(folder.get_name(), "../testdata");
 
 		// Test get_data function with a non-existent file
-		let result = folder.get_data(
-			&Url::new("recipes/Queijo.txt"),
-			&TargetCompression::from_none(),
-		);
+		let result = folder.get_data(&Url::new("recipes/Queijo.txt"), &TargetCompression::from_none());
 		assert!(result.is_none());
 
 		// Test get_data function with an existing uncompressed file

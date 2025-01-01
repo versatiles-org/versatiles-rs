@@ -88,11 +88,8 @@ impl DataReaderTrait for DataReaderHttp {
 	/// * A Result containing a Blob with the read data or an error.
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
 		let mut request = Request::new(Method::GET, self.url.clone());
-		let request_range: String =
-			format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
-		request
-			.headers_mut()
-			.append("range", request_range.parse()?);
+		let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
+		request.headers_mut().append("range", request_range.parse()?);
 
 		let response = self.client.execute(request).await?;
 

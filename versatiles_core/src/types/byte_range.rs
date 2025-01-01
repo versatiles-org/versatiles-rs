@@ -51,10 +51,7 @@ impl ByteRange {
 	///
 	/// An empty `ByteRange` instance.
 	pub fn empty() -> Self {
-		Self {
-			offset: 0,
-			length: 0,
-		}
+		Self { offset: 0, length: 0 }
 	}
 
 	/// Returns a new `ByteRange` that is shifted forward by the specified offset.

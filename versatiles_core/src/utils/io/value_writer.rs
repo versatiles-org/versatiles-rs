@@ -70,9 +70,7 @@ pub trait ValueWriter<E: ByteOrder> {
 
 	fn write_varint(&mut self, mut value: u64) -> Result<()> {
 		while value >= 0x80 {
-			self
-				.get_writer()
-				.write_all(&[((value as u8) & 0x7F) | 0x80])?;
+			self.get_writer().write_all(&[((value as u8) & 0x7F) | 0x80])?;
 			value >>= 7;
 		}
 		self.get_writer().write_all(&[value as u8])?;
@@ -157,9 +155,7 @@ pub trait ValueWriter<E: ByteOrder> {
 		self
 			.write_varint(text.len() as u64)
 			.context("Failed to write varint for string length")?;
-		self
-			.write_string(text)
-			.context("Failed to write PBF string")
+		self.write_string(text).context("Failed to write PBF string")
 	}
 }
 
@@ -284,17 +280,11 @@ mod tests {
 	#[test]
 	fn test_write_range() -> Result<()> {
 		let mut writer = MockValueWriter::new();
-		let range = ByteRange {
-			offset: 1,
-			length: 2,
-		};
+		let range = ByteRange { offset: 1, length: 2 };
 		writer.write_range(&range)?;
 		assert_eq!(
 			writer.into_inner(),
-			vec![
-				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00,
-				0x00, 0x00
-			]
+			vec![0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 		);
 		Ok(())
 	}
@@ -319,10 +309,7 @@ mod tests {
 	fn test_write_pbf_string() -> Result<()> {
 		let mut writer = MockValueWriter::new();
 		writer.write_pbf_string("hello")?;
-		assert_eq!(
-			writer.into_inner(),
-			vec![0x05, b'h', b'e', b'l', b'l', b'o']
-		);
+		assert_eq!(writer.into_inner(), vec![0x05, b'h', b'e', b'l', b'l', b'o']);
 		Ok(())
 	}
 

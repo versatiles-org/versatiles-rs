@@ -88,10 +88,7 @@ fn get_multipolygon(multilinestring: Coordinates2) -> MultiPolygonGeometry {
 		if math::area_ring(&ring) > 0.0 {
 			multipolygon.push(vec![ring])
 		} else {
-			multipolygon
-				.last_mut()
-				.expect("first ring is missing")
-				.push(ring)
+			multipolygon.last_mut().expect("first ring is missing").push(ring)
 		}
 	}
 

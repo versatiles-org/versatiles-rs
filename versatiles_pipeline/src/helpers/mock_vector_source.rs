@@ -1,10 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{
-	types::{
-		Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TilesReaderParameters,
-		TilesReaderTrait,
-	},
+	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TilesReaderParameters, TilesReaderTrait},
 	utils::TileJSON,
 };
 use versatiles_geometry::{
@@ -103,12 +100,7 @@ impl TilesReaderTrait for MockVectorSource {
 			}
 
 			// Add the layer to the layers vector
-			layers.push(VectorTileLayer::from_features(
-				name.clone(),
-				features,
-				4096,
-				1,
-			)?);
+			layers.push(VectorTileLayer::from_features(name.clone(), features, 4096, 1)?);
 		}
 
 		// Create a vector tile from the layers and convert it to a blob
@@ -117,10 +109,7 @@ impl TilesReaderTrait for MockVectorSource {
 }
 
 #[cfg(test)]
-pub fn arrange_tiles<T: ToString>(
-	tiles: Vec<(TileCoord3, Blob)>,
-	cb: impl Fn(TileCoord3, Blob) -> T,
-) -> Vec<String> {
+pub fn arrange_tiles<T: ToString>(tiles: Vec<(TileCoord3, Blob)>, cb: impl Fn(TileCoord3, Blob) -> T) -> Vec<String> {
 	use versatiles_core::types::TileBBox;
 
 	let mut bbox = TileBBox::new_empty(tiles.first().unwrap().0.z).unwrap();
@@ -135,8 +124,5 @@ pub fn arrange_tiles<T: ToString>(
 		let y = (coord.y - bbox.y_min) as usize;
 		result[y][x] = cb(coord, blob).to_string();
 	}
-	result
-		.into_iter()
-		.map(|r| r.join(" "))
-		.collect::<Vec<String>>()
+	result.into_iter().map(|r| r.join(" ")).collect::<Vec<String>>()
 }

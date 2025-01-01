@@ -1,8 +1,5 @@
 use anyhow::Result;
-use image::{
-	codecs::png, load_from_memory_with_format, DynamicImage, ExtendedColorType, ImageEncoder,
-	ImageFormat,
-};
+use image::{codecs::png, load_from_memory_with_format, DynamicImage, ExtendedColorType, ImageEncoder, ImageFormat};
 use versatiles_core::types::Blob;
 
 pub fn image2blob(image: &DynamicImage, best: bool) -> Result<Blob> {
@@ -27,18 +24,13 @@ pub fn image2blob(image: &DynamicImage, best: bool) -> Result<Blob> {
 }
 
 pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
-	Ok(load_from_memory_with_format(
-		blob.as_slice(),
-		ImageFormat::Png,
-	)?)
+	Ok(load_from_memory_with_format(blob.as_slice(), ImageFormat::Png)?)
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::helper::{
-		compare_images, create_image_grey, create_image_greya, create_image_rgb, create_image_rgba,
-	};
+	use crate::helper::{compare_images, create_image_grey, create_image_greya, create_image_rgb, create_image_rgba};
 
 	#[test]
 	fn png_best() -> Result<()> {

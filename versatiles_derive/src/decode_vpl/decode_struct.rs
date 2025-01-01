@@ -27,10 +27,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 	for field in fields {
 		let field_name = &field.ident;
 		let field_type = &field.ty;
-		let field_str = field_name
-			.as_ref()
-			.expect("could not get field_name")
-			.to_string();
+		let field_str = field_name.as_ref().expect("could not get field_name").to_string();
 		let field_type_str = quote!(#field_type).to_string().replace(' ', "");
 
 		let mut comment = field

@@ -34,23 +34,9 @@ impl VectorTileFeature {
 		while reader.has_remaining() {
 			match reader.read_pbf_key().context("Failed to read PBF key")? {
 				(1, 0) => f.id = Some(reader.read_varint().context("Failed to read feature ID")?),
-				(2, 2) => {
-					f.tag_ids = reader
-						.read_pbf_packed_uint32()
-						.context("Failed to read tag IDs")?
-				}
-				(3, 0) => {
-					f.geom_type = GeomType::from(
-						reader
-							.read_varint()
-							.context("Failed to read geometry type")?,
-					)
-				}
-				(4, 2) => {
-					f.geom_data = reader
-						.read_pbf_blob()
-						.context("Failed to read geometry data")?
-				}
+				(2, 2) => f.tag_ids = reader.read_pbf_packed_uint32().context("Failed to read tag IDs")?,
+				(3, 0) => f.geom_type = GeomType::from(reader.read_varint().context("Failed to read geometry type")?),
+				(4, 2) => f.geom_data = reader.read_pbf_blob().context("Failed to read geometry data")?,
 				(f, w) => bail!("Unexpected combination of field number ({f}) and wire type ({w})"),
 			}
 		}
@@ -65,9 +51,7 @@ impl VectorTileFeature {
 			writer
 				.write_pbf_key(1, 0)
 				.context("Failed to write PBF key for feature ID")?;
-			writer
-				.write_varint(id)
-				.context("Failed to write feature ID")?;
+			writer.write_varint(id).context("Failed to write feature ID")?;
 		}
 
 		if !self.tag_ids.is_empty() {
@@ -125,22 +109,15 @@ impl VectorTileFeature {
 								line = Vec::new();
 							}
 
-							x += reader
-								.read_svarint()
-								.context("Failed to read x coordinate")?;
-							y += reader
-								.read_svarint()
-								.context("Failed to read y coordinate")?;
+							x += reader.read_svarint().context("Failed to read x coordinate")?;
+							y += reader.read_svarint().context("Failed to read y coordinate")?;
 
 							line.push([x as f64, y as f64]);
 						}
 					}
 					7 => {
 						// ClosePath command
-						ensure!(
-							!line.is_empty(),
-							"ClosePath command found on an empty linestring"
-						);
+						ensure!(!line.is_empty(), "ClosePath command found on an empty linestring");
 						line.push(line[0]);
 					}
 					_ => bail!("Unknown command {}", command),
@@ -164,10 +141,7 @@ impl VectorTileFeature {
 					geometry
 						.into_iter()
 						.map(|mut line| {
-							ensure!(
-								line.len() == 1,
-								"(Multi)Point entries must have exactly one entry"
-							);
+							ensure!(line.len() == 1, "(Multi)Point entries must have exactly one entry");
 							Ok(line.pop().unwrap())
 						})
 						.collect::<Result<Coordinates1>>()?,
@@ -175,10 +149,7 @@ impl VectorTileFeature {
 			}
 
 			GeomType::MultiLineString => {
-				ensure!(
-					!geometry.is_empty(),
-					"MultiLineStrings must have at least one entry"
-				);
+				ensure!(!geometry.is_empty(), "MultiLineStrings must have at least one entry");
 				for line in &geometry {
 					ensure!(
 						line.len() >= 2,
@@ -189,10 +160,7 @@ impl VectorTileFeature {
 			}
 
 			GeomType::MultiPolygon => {
-				ensure!(
-					!geometry.is_empty(),
-					"Polygons must have at least one entry"
-				);
+				ensure!(!geometry.is_empty(), "Polygons must have at least one entry");
 				let mut current_polygon = Vec::new();
 				let mut polygons = Vec::new();
 
@@ -242,11 +210,7 @@ impl VectorTileFeature {
 	}
 
 	pub fn to_feature(&self, layer: &VectorTileLayer) -> Result<GeoFeature> {
-		let mut feature = GeoFeature::new(
-			self
-				.to_geometry()
-				.context("Failed to convert to geometry")?,
-		);
+		let mut feature = GeoFeature::new(self.to_geometry().context("Failed to convert to geometry")?);
 
 		if let Some(id) = self.id {
 			feature.set_id(GeoValue::from(id));
@@ -257,16 +221,8 @@ impl VectorTileFeature {
 		Ok(feature)
 	}
 
-	pub fn from_geometry(
-		id: Option<u64>,
-		tag_ids: Vec<u32>,
-		geometry: Geometry,
-	) -> Result<VectorTileFeature> {
-		fn write_point(
-			writer: &mut ValueWriterBlob<LE>,
-			point0: &mut (i64, i64),
-			point: PointGeometry,
-		) -> Result<()> {
+	pub fn from_geometry(id: Option<u64>, tag_ids: Vec<u32>, geometry: Geometry) -> Result<VectorTileFeature> {
+		fn write_point(writer: &mut ValueWriterBlob<LE>, point0: &mut (i64, i64), point: PointGeometry) -> Result<()> {
 			let x = point.0[0].round() as i64;
 			let y = point.0[1].round() as i64;
 			writer.write_svarint(x - point0.0)?;
@@ -353,10 +309,7 @@ impl VectorTileFeature {
 		let (geom_type, geom_data) = match geometry {
 			Point(g) => (GeomType::MultiPoint, write_points(g.into_multi())?),
 			MultiPoint(g) => (GeomType::MultiPoint, write_points(g)?),
-			LineString(g) => (
-				GeomType::MultiLineString,
-				write_line_strings(g.into_multi())?,
-			),
+			LineString(g) => (GeomType::MultiLineString, write_line_strings(g.into_multi())?),
 			MultiLineString(g) => (GeomType::MultiLineString, write_line_strings(g)?),
 			Polygon(g) => (GeomType::MultiPolygon, write_polygons(g.into_multi())?),
 			MultiPolygon(g) => (GeomType::MultiPolygon, write_polygons(g)?),
@@ -418,10 +371,7 @@ mod tests {
 
 	#[test]
 	fn multi_line_string_geometry_round_trip() -> Result<()> {
-		let geometry = Geometry::new_multi_line_string(vec![
-			vec![[0, 0], [1, 1], [2, 0]],
-			vec![[0, 2], [1, 1], [2, 2]],
-		]);
+		let geometry = Geometry::new_multi_line_string(vec![vec![[0, 0], [1, 1], [2, 0]], vec![[0, 2], [1, 1], [2, 2]]]);
 		round_trip_feature(geometry)
 	}
 

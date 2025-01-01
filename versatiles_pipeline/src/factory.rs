@@ -47,30 +47,24 @@ impl PipelineFactory {
 	}
 
 	pub fn new_dummy() -> Self {
-		let callback = Box::new(
-			|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
-				Box::pin(async {
-					let filename = filename;
-					Ok(Box::new(MockVectorSource::new(
-						&[("mock", &[&[("filename", &filename)]])],
-						None,
-					)) as Box<dyn TilesReaderTrait>)
-				})
-			},
-		);
+		let callback = Box::new(|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
+			Box::pin(async {
+				let filename = filename;
+				Ok(
+					Box::new(MockVectorSource::new(&[("mock", &[&[("filename", &filename)]])], None))
+						as Box<dyn TilesReaderTrait>,
+				)
+			})
+		});
 		PipelineFactory::default(Path::new(""), callback)
 	}
 
 	fn add_read_factory(&mut self, factory: Box<dyn ReadOperationFactoryTrait>) {
-		self
-			.read_ops
-			.insert(factory.get_tag_name().to_string(), factory);
+		self.read_ops.insert(factory.get_tag_name().to_string(), factory);
 	}
 
 	fn add_tran_factory(&mut self, factory: Box<dyn TransformOperationFactoryTrait>) {
-		self
-			.tran_ops
-			.insert(factory.get_tag_name().to_string(), factory);
+		self.tran_ops.insert(factory.get_tag_name().to_string(), factory);
 	}
 
 	pub async fn get_reader(&self, filename: &str) -> Result<Box<dyn TilesReaderTrait>> {

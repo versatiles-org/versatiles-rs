@@ -10,10 +10,7 @@ pub fn decode_vpl(input: TokenStream) -> TokenStream {
 
 	let expanded = match input.data.clone() {
 		Data::Struct(data_struct) => decode_struct(input, data_struct),
-		_ => panic!(
-			"VPLDecode can only be derived for structs, but: {:?}",
-			input.data
-		),
+		_ => panic!("VPLDecode can only be derived for structs, but: {:?}", input.data),
 	};
 
 	TokenStream::from(expanded)

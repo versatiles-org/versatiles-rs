@@ -195,17 +195,11 @@ mod tests {
 	#[test]
 	fn test_write_range() -> Result<()> {
 		let mut writer = ValueWriterBlob::<LittleEndian>::new();
-		let range = ByteRange {
-			offset: 1,
-			length: 2,
-		};
+		let range = ByteRange { offset: 1, length: 2 };
 		writer.write_range(&range)?;
 		assert_eq!(
 			writer.into_blob().into_vec(),
-			vec![
-				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00,
-				0x00, 0x00
-			]
+			vec![0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
 		);
 		Ok(())
 	}
@@ -230,10 +224,7 @@ mod tests {
 	fn test_write_pbf_string() -> Result<()> {
 		let mut writer = ValueWriterBlob::<LittleEndian>::new();
 		writer.write_pbf_string("hello")?;
-		assert_eq!(
-			writer.into_blob().into_vec(),
-			vec![0x05, b'h', b'e', b'l', b'l', b'o']
-		);
+		assert_eq!(writer.into_blob().into_vec(), vec![0x05, b'h', b'e', b'l', b'l', b'o']);
 		Ok(())
 	}
 

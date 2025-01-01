@@ -24,9 +24,7 @@ pub struct EntriesV3 {
 impl EntriesV3 {
 	/// Constructs a new, empty `EntriesV3`.
 	pub fn new() -> Self {
-		Self {
-			entries: Vec::new(),
-		}
+		Self { entries: Vec::new() }
 	}
 
 	/// Deserializes a `Blob` into an `EntriesV3` instance.
@@ -92,9 +90,7 @@ impl EntriesV3 {
 
 	/// Returns a slice view into the entries.
 	pub fn as_slice(&self) -> EntriesSliceV3 {
-		EntriesSliceV3 {
-			entries: &self.entries,
-		}
+		EntriesSliceV3 { entries: &self.entries }
 	}
 
 	/// Iterates over the entries.
@@ -127,8 +123,7 @@ impl EntriesV3 {
 			if self.entries[n as usize].run_length == 0 {
 				return Some(self.entries[n as usize]);
 			}
-			if tile_id - self.entries[n as usize].tile_id < self.entries[n as usize].run_length as u64
-			{
+			if tile_id - self.entries[n as usize].tile_id < self.entries[n as usize].run_length as u64 {
 				return Some(self.entries[n as usize]);
 			}
 		}
@@ -145,11 +140,7 @@ impl EntriesV3 {
 	///
 	/// # Errors
 	/// Returns an error if the entries cannot be serialized or compressed as specified.
-	pub fn as_directory(
-		&mut self,
-		target_root_len: u64,
-		compression: &TileCompression,
-	) -> Result<Directory> {
+	pub fn as_directory(&mut self, target_root_len: u64, compression: &TileCompression) -> Result<Directory> {
 		self.entries.sort_by_cached_key(|e| e.tile_id);
 		let entries: &EntriesSliceV3 = &self.as_slice();
 
@@ -302,9 +293,7 @@ impl EntriesSliceV3<'_> {
 
 		// Serialize Offsets
 		for i in 0..entries.len() {
-			let offset = if i > 0
-				&& entries[i].range.offset == entries[i - 1].range.offset + entries[i - 1].range.length
-			{
+			let offset = if i > 0 && entries[i].range.offset == entries[i - 1].range.offset + entries[i - 1].range.length {
 				0
 			} else {
 				entries[i].range.offset + 1 // add 1 to not conflict with 0
@@ -333,10 +322,7 @@ mod tests {
 	fn serialize_entries() -> Result<()> {
 		let entries = create_entries();
 		let serialized = entries.as_slice().serialize_entries()?;
-		assert_eq!(
-			serialized.as_hex(),
-			"03 01 01 01 00 01 00 64 64 64 65 00 00"
-		);
+		assert_eq!(serialized.as_hex(), "03 01 01 01 00 01 00 64 64 64 65 00 00");
 
 		let new_entries = EntriesV3::from_blob(&serialized)?;
 		assert_eq!(entries, new_entries);

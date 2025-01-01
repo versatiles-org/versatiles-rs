@@ -1,7 +1,6 @@
 use anyhow::Result;
 use image::{
-	codecs::jpeg::JpegEncoder, load_from_memory_with_format, DynamicImage, ExtendedColorType,
-	ImageEncoder, ImageFormat,
+	codecs::jpeg::JpegEncoder, load_from_memory_with_format, DynamicImage, ExtendedColorType, ImageEncoder, ImageFormat,
 };
 use versatiles_core::types::Blob;
 
@@ -20,10 +19,7 @@ pub fn image2blob(image: &DynamicImage) -> Result<Blob> {
 }
 
 pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
-	Ok(load_from_memory_with_format(
-		blob.as_slice(),
-		ImageFormat::Jpeg,
-	)?)
+	Ok(load_from_memory_with_format(blob.as_slice(), ImageFormat::Jpeg)?)
 }
 
 #[cfg(test)]

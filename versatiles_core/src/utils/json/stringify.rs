@@ -75,11 +75,7 @@ mod tests {
 	#[test]
 	fn test_as_string_unicode() -> Result<()> {
 		let json = parse_json_str("\"Unicode: 😊\"")?;
-		assert_eq!(
-			stringify(&json),
-			"\"Unicode: 😊\"",
-			"Unicode character test failed"
-		);
+		assert_eq!(stringify(&json), "\"Unicode: 😊\"", "Unicode character test failed");
 
 		let json = parse_json_str("\"Emoji and text 🌟✨\"")?;
 		assert_eq!(
@@ -120,9 +116,7 @@ mod tests {
 
 	#[test]
 	fn test_as_string_nested() -> Result<()> {
-		let json = parse_json_str(
-			"{\"nested\": {\"array\": [\"value\", {\"inner_key\": 3.14}], \"boolean\": true}}",
-		)?;
+		let json = parse_json_str("{\"nested\": {\"array\": [\"value\", {\"inner_key\": 3.14}], \"boolean\": true}}")?;
 		assert_eq!(
 			stringify(&json),
 			"{\"nested\":{\"array\":[\"value\",{\"inner_key\":3.14}],\"boolean\":true}}",

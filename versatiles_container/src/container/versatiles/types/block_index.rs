@@ -23,9 +23,7 @@ impl BlockIndex {
 	/// # Returns
 	/// A new empty `BlockIndex`.
 	pub fn new_empty() -> Self {
-		Self {
-			lookup: HashMap::new(),
-		}
+		Self { lookup: HashMap::new() }
 	}
 
 	/// Creates a `BlockIndex` from a binary blob.

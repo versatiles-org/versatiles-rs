@@ -43,9 +43,7 @@ impl From<Vec<VPLNode>> for VPLPipeline {
 
 impl From<VPLNode> for VPLPipeline {
 	fn from(node: VPLNode) -> Self {
-		VPLPipeline {
-			pipeline: vec![node],
-		}
+		VPLPipeline { pipeline: vec![node] }
 	}
 }
 

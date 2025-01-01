@@ -88,9 +88,7 @@ pub fn optimize_compression(
 
 	use CompressionGoal::*;
 
-	if target.compression_goal != UseBestCompression
-		&& target.compressions.contains(*input_compression)
-	{
+	if target.compression_goal != UseBestCompression && target.compressions.contains(*input_compression) {
 		return Ok((blob, *input_compression));
 	}
 
@@ -319,15 +317,13 @@ mod tests {
 		let snb = enum_set!(Uncompressed | Brotli);
 		let sngb = enum_set!(Uncompressed | Gzip | Brotli);
 
-		let test_many = |comp_in: TileCompression,
-		                 compression_goal: CompressionGoal,
-		                 comps_exp: [TileCompression; 4]|
-		 -> Result<()> {
-			test(comp_in, sn, compression_goal, comps_exp[0])?;
-			test(comp_in, sng, compression_goal, comps_exp[1])?;
-			test(comp_in, snb, compression_goal, comps_exp[2])?;
-			test(comp_in, sngb, compression_goal, comps_exp[3])
-		};
+		let test_many =
+			|comp_in: TileCompression, compression_goal: CompressionGoal, comps_exp: [TileCompression; 4]| -> Result<()> {
+				test(comp_in, sn, compression_goal, comps_exp[0])?;
+				test(comp_in, sng, compression_goal, comps_exp[1])?;
+				test(comp_in, snb, compression_goal, comps_exp[2])?;
+				test(comp_in, sngb, compression_goal, comps_exp[3])
+			};
 
 		use CompressionGoal::*;
 

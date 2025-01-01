@@ -102,10 +102,7 @@ mod tests {
 		assert_eq!(coord_to_tile_id(7, 7, 3)?, 63);
 
 		assert_eq!(coord_to_tile_id(0, 0, 31)?, 1537228672809129301);
-		assert_eq!(
-			coord_to_tile_id((1 << 31) - 1, (1 << 31) - 1, 31)?,
-			4611686018427387903
-		);
+		assert_eq!(coord_to_tile_id((1 << 31) - 1, (1 << 31) - 1, 31)?, 4611686018427387903);
 
 		Ok(())
 	}

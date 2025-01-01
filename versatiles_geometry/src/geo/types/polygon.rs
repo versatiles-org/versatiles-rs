@@ -54,13 +54,7 @@ mod tests {
 
 	#[test]
 	fn test_area() {
-		let polygon = PolygonGeometry::from(vec![
-			[0.0, 0.0],
-			[5.0, 0.0],
-			[5.0, 5.0],
-			[0.0, 5.0],
-			[0.0, 0.0],
-		]);
+		let polygon = PolygonGeometry::from(vec![[0.0, 0.0], [5.0, 0.0], [5.0, 5.0], [0.0, 5.0], [0.0, 0.0]]);
 		let area = polygon.area();
 		assert_eq!(area, 50.0);
 	}

@@ -43,10 +43,7 @@ impl VPLNode {
 
 	pub fn get_property_bool_req(&self, field: &str) -> Result<bool> {
 		Ok(self.get_property(field)?.map_or(false, |v| {
-			matches!(
-				v.trim().to_lowercase().as_str(),
-				"1" | "true" | "yes" | "ok"
-			)
+			matches!(v.trim().to_lowercase().as_str(), "1" | "true" | "yes" | "ok")
 		}))
 	}
 
@@ -99,13 +96,7 @@ impl VPLNode {
 	}
 
 	fn required<T>(&self, field: &str, result: Result<Option<T>>) -> Result<T> {
-		result?.ok_or_else(|| {
-			anyhow!(
-				"In operation '{}' the parameter '{}' is required.",
-				self.name,
-				field
-			)
-		})
+		result?.ok_or_else(|| anyhow!("In operation '{}' the parameter '{}' is required.", self.name, field))
 	}
 }
 
@@ -123,12 +114,7 @@ impl From<&str> for VPLNode {
 fn make_properties(input: Vec<(&str, Vec<&str>)>) -> HashMap<String, Vec<String>> {
 	input
 		.into_iter()
-		.map(|(k, v)| {
-			(
-				k.to_string(),
-				v.into_iter().map(|f| f.to_string()).collect(),
-			)
-		})
+		.map(|(k, v)| (k.to_string(), v.into_iter().map(|f| f.to_string()).collect()))
 		.collect()
 }
 
@@ -204,14 +190,8 @@ mod tests {
 			properties: make_property(vec![("key1", "value1"), ("key2", "value2")]),
 			sources: vec![],
 		};
-		assert_eq!(
-			node.get_property_vec("key1").unwrap(),
-			&vec!["value1".to_string()]
-		);
-		assert_eq!(
-			node.get_property_vec("key2").unwrap(),
-			&vec!["value2".to_string()]
-		);
+		assert_eq!(node.get_property_vec("key1").unwrap(), &vec!["value1".to_string()]);
+		assert_eq!(node.get_property_vec("key2").unwrap(), &vec!["value2".to_string()]);
 		assert!(node.get_property_vec("key3").is_none());
 		Ok(())
 	}
@@ -223,10 +203,7 @@ mod tests {
 			properties: make_property(vec![("key1", "value1")]),
 			sources: vec![],
 		};
-		assert_eq!(
-			node.get_property_string("key1")?.unwrap(),
-			"value1".to_string()
-		);
+		assert_eq!(node.get_property_string("key1")?.unwrap(), "value1".to_string());
 		assert!(node.get_property_string("key2")?.is_none());
 		Ok(())
 	}
@@ -287,10 +264,7 @@ mod tests {
 			properties: make_properties(vec![("key1", vec!["1", "2", "3", "4"])]),
 			sources: vec![],
 		};
-		assert_eq!(
-			node.get_property_number_array4::<i32>("key1")?.unwrap(),
-			[1, 2, 3, 4]
-		);
+		assert_eq!(node.get_property_number_array4::<i32>("key1")?.unwrap(), [1, 2, 3, 4]);
 		assert!(node.get_property_number_array4::<i32>("key2")?.is_none());
 		Ok(())
 	}
@@ -302,10 +276,7 @@ mod tests {
 			properties: make_properties(vec![("key1", vec!["1", "2", "3", "4"])]),
 			sources: vec![],
 		};
-		assert_eq!(
-			node.get_property_number_array4_req::<i32>("key1")?,
-			[1, 2, 3, 4]
-		);
+		assert_eq!(node.get_property_number_array4_req::<i32>("key1")?, [1, 2, 3, 4]);
 		assert!(node.get_property_number_array4_req::<i32>("key2").is_err());
 		Ok(())
 	}
@@ -331,10 +302,7 @@ mod tests {
 			let node = VPLNode::from_str(vpl).unwrap();
 
 			assert_eq!(node.name, "node");
-			assert_eq!(
-				node.properties.get("key1").unwrap(),
-				&vec!["value1".to_string()]
-			);
+			assert_eq!(node.properties.get("key1").unwrap(), &vec!["value1".to_string()]);
 			assert_eq!(
 				node.properties.get("key2").unwrap(),
 				&vec![String::from("1"), String::from("2"), String::from("3")]
@@ -357,10 +325,7 @@ mod tests {
 	fn test_debug_impl() {
 		let node = VPLNode {
 			name: "test_node".to_string(),
-			properties: make_properties(vec![
-				("key1", vec!["value1", "value2"]),
-				("key2", vec!["value3"]),
-			]),
+			properties: make_properties(vec![("key1", vec!["value1", "value2"]), ("key2", vec!["value3"])]),
 			sources: vec![VPLPipeline::default()],
 		};
 		let debug_str = format!("{:?}", node);
@@ -382,10 +347,7 @@ mod tests {
 	fn test_from_tuple_str_str() {
 		let node: VPLNode = ("test_node", ("key", "value")).into();
 		assert_eq!(node.name, "test_node");
-		assert_eq!(
-			node.properties.get("key").unwrap(),
-			&vec!["value".to_string()]
-		);
+		assert_eq!(node.properties.get("key").unwrap(), &vec!["value".to_string()]);
 		assert!(node.sources.is_empty());
 	}
 
@@ -393,14 +355,8 @@ mod tests {
 	fn test_from_tuple_str_vec_tuple_str_str() {
 		let node: VPLNode = ("test_node", vec![("key1", "value1"), ("key2", "value2")]).into();
 		assert_eq!(node.name, "test_node");
-		assert_eq!(
-			node.properties.get("key1").unwrap(),
-			&vec!["value1".to_string()]
-		);
-		assert_eq!(
-			node.properties.get("key2").unwrap(),
-			&vec!["value2".to_string()]
-		);
+		assert_eq!(node.properties.get("key1").unwrap(), &vec!["value1".to_string()]);
+		assert_eq!(node.properties.get("key2").unwrap(), &vec!["value2".to_string()]);
 		assert!(node.sources.is_empty());
 	}
 
@@ -414,14 +370,8 @@ mod tests {
 		)
 			.into();
 		assert_eq!(node.name, "test_node");
-		assert_eq!(
-			node.properties.get("key1").unwrap(),
-			&vec!["value1".to_string()]
-		);
-		assert_eq!(
-			node.properties.get("key2").unwrap(),
-			&vec!["value2".to_string()]
-		);
+		assert_eq!(node.properties.get("key1").unwrap(), &vec!["value1".to_string()]);
+		assert_eq!(node.properties.get("key2").unwrap(), &vec!["value2".to_string()]);
 		assert_eq!(node.sources, vec![pipeline]);
 	}
 
@@ -436,14 +386,8 @@ mod tests {
 		)
 			.into();
 		assert_eq!(node.name, "test_node");
-		assert_eq!(
-			node.properties.get("key1").unwrap(),
-			&vec!["value1".to_string()]
-		);
-		assert_eq!(
-			node.properties.get("key2").unwrap(),
-			&vec!["value2".to_string()]
-		);
+		assert_eq!(node.properties.get("key1").unwrap(), &vec!["value1".to_string()]);
+		assert_eq!(node.properties.get("key2").unwrap(), &vec!["value2".to_string()]);
 		assert_eq!(node.sources, vec![pipeline1, pipeline2]);
 	}
 }

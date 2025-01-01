@@ -1,6 +1,5 @@
 use crate::{
-	Coordinates0, Coordinates1, Coordinates2, Coordinates3, GeoCollection, GeoFeature,
-	GeoProperties, GeoValue, Geometry,
+	Coordinates0, Coordinates1, Coordinates2, Coordinates3, GeoCollection, GeoFeature, GeoProperties, GeoValue, Geometry,
 };
 use anyhow::{anyhow, bail, Result};
 use std::{io::Cursor, str};
@@ -80,11 +79,7 @@ fn parse_geojson_number(iter: &mut ByteIterator) -> Result<GeoValue> {
 	let number = parse_number_as_string(iter)?;
 
 	Ok(if number.contains('.') {
-		GeoValue::from(
-			number
-				.parse::<f64>()
-				.map_err(|_| iter.format_error("invalid double"))?,
-		)
+		GeoValue::from(number.parse::<f64>().map_err(|_| iter.format_error("invalid double"))?)
 	} else if number.contains('-') {
 		GeoValue::from(
 			number
@@ -223,9 +218,7 @@ fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordin
 							.map(|e| e.unwrap_v())
 							.collect::<Vec<f64>>()
 							.try_into()
-							.unwrap_or_else(|v: Vec<f64>| {
-								panic!("Expected a Vec of length {} but it was {}", 2, v.len())
-							}))
+							.unwrap_or_else(|v: Vec<f64>| panic!("Expected a Vec of length {} but it was {}", 2, v.len())))
 					}
 					C0(_) => C1(list.into_iter().map(|e| e.unwrap_c0()).collect()),
 					C1(_) => C2(list.into_iter().map(|e| e.unwrap_c1()).collect()),
@@ -268,10 +261,7 @@ mod tests {
 			assert_eq!(coords.0[0], 1.0);
 			assert_eq!(coords.0[1], 2.0);
 		}
-		assert_eq!(
-			feature.properties.get("p"),
-			Some(&GeoValue::String("v".to_string()))
-		);
+		assert_eq!(feature.properties.get("p"), Some(&GeoValue::String("v".to_string())));
 
 		Ok(())
 	}

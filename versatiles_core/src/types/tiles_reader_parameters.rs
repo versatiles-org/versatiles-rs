@@ -24,10 +24,7 @@ impl TilesReaderParameters {
 
 	#[cfg(test)]
 	#[allow(dead_code)]
-	pub fn new_full(
-		tile_format: TileFormat,
-		tile_compression: TileCompression,
-	) -> TilesReaderParameters {
+	pub fn new_full(tile_format: TileFormat, tile_compression: TileCompression) -> TilesReaderParameters {
 		TilesReaderParameters {
 			tile_format,
 			tile_compression,

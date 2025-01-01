@@ -7,11 +7,7 @@ use versatiles_container::{get_reader, TilesConvertReader, TilesConverterParamet
 use versatiles_core::types::{TileCompression, TilesReaderTrait};
 
 #[derive(clap::Args, Debug)]
-#[command(
-	arg_required_else_help = true,
-	disable_version_flag = true,
-	verbatim_doc_comment
-)]
+#[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]
 pub struct Subcommand {
 	/// One or more tile containers you want to serve.
 	/// Supported container formats are: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory
@@ -67,12 +63,7 @@ pub struct Subcommand {
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
-	let mut server: TileServer = TileServer::new(
-		&arguments.ip,
-		arguments.port,
-		!arguments.fast,
-		!arguments.disable_api,
-	);
+	let mut server: TileServer = TileServer::new(&arguments.ip, arguments.port, !arguments.fast, !arguments.disable_api);
 
 	let tile_patterns: Vec<Regex> = [
 		r"^\[(?P<id>[^\]]+?)\](?P<url>.*)$",
@@ -104,13 +95,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 
 		let url: &str = capture.name("url").unwrap().as_str();
 		let id: &str = match capture.name("id") {
-			None => url
-				.split(&['/', '\\'])
-				.last()
-				.unwrap()
-				.split('.')
-				.next()
-				.unwrap(),
+			None => url.split(&['/', '\\']).last().unwrap().split('.').next().unwrap(),
 			Some(m) => m.as_str(),
 		};
 

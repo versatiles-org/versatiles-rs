@@ -6,9 +6,7 @@ use std::io::BufRead;
 fn process_line(line: std::io::Result<String>, index: usize) -> Option<Result<JsonValue>> {
 	match line {
 		Ok(line) if line.trim().is_empty() => None, // Skip empty or whitespace-only lines
-		Ok(line) => {
-			Some(JsonValue::parse_str(&line).with_context(|| format!("error in line {}", index + 1)))
-		}
+		Ok(line) => Some(JsonValue::parse_str(&line).with_context(|| format!("error in line {}", index + 1))),
 		Err(e) => Some(Err(anyhow!("line {}: {}", index + 1, e))),
 	}
 }
@@ -38,10 +36,7 @@ mod tests {
 	use std::io::Cursor;
 
 	fn join_errors(e: &Error) -> String {
-		e.chain()
-			.map(|e| e.to_string())
-			.collect::<Vec<String>>()
-			.join("\n")
+		e.chain().map(|e| e.to_string()).collect::<Vec<String>>().join("\n")
 	}
 
 	fn json_from_str<T: AsRef<str>>(s: T) -> Result<JsonValue> {
@@ -69,18 +64,9 @@ mod tests {
 		let reader = Cursor::new(data.trim());
 		let mut iter = read_ndjson_iter(reader);
 
-		assert_eq!(
-			iter.next().unwrap()?,
-			json_from_str(r#"{"key1": "value1"}"#)?
-		);
-		assert_eq!(
-			iter.next().unwrap()?,
-			json_from_str(r#"{"key2": "value2"}"#)?
-		);
-		assert_eq!(
-			iter.next().unwrap()?,
-			json_from_str(r#"{"key3": "value3"}"#)?
-		);
+		assert_eq!(iter.next().unwrap()?, json_from_str(r#"{"key1": "value1"}"#)?);
+		assert_eq!(iter.next().unwrap()?, json_from_str(r#"{"key2": "value2"}"#)?);
+		assert_eq!(iter.next().unwrap()?, json_from_str(r#"{"key3": "value3"}"#)?);
 		assert!(iter.next().is_none());
 		Ok(())
 	}
@@ -97,18 +83,9 @@ mod tests {
 		let reader = Cursor::new(data.trim());
 		let mut iter = read_ndjson_iter(reader);
 
-		assert_eq!(
-			iter.next().unwrap()?,
-			json_from_str(r#"{"key1": "value1"}"#)?
-		);
-		assert_eq!(
-			iter.next().unwrap()?,
-			json_from_str(r#"{"key2": "value2"}"#)?
-		);
-		assert_eq!(
-			iter.next().unwrap()?,
-			json_from_str(r#"{"key3": "value3"}"#)?
-		);
+		assert_eq!(iter.next().unwrap()?, json_from_str(r#"{"key1": "value1"}"#)?);
+		assert_eq!(iter.next().unwrap()?, json_from_str(r#"{"key2": "value2"}"#)?);
+		assert_eq!(iter.next().unwrap()?, json_from_str(r#"{"key3": "value3"}"#)?);
 		assert!(iter.next().is_none());
 		Ok(())
 	}
@@ -120,18 +97,12 @@ mod tests {
 		let vec = read_ndjson_iter(reader).collect::<Vec<_>>();
 
 		assert_eq!(vec.len(), 3);
-		assert_eq!(
-			vec[0].as_ref().unwrap(),
-			&json_from_str(r#"{"key1": "value1"}"#)?
-		);
+		assert_eq!(vec[0].as_ref().unwrap(), &json_from_str(r#"{"key1": "value1"}"#)?);
 		assert_eq!(
 			join_errors(vec[1].as_ref().unwrap_err()),
 			"error in line 2\nwhile parsing JSON '{invalid json}'\nparsing object, expected '\"' or '}' at position 1: {"
 		);
-		assert_eq!(
-			vec[2].as_ref().unwrap(),
-			&json_from_str(r#"{"key2": "value2"}"#)?
-		);
+		assert_eq!(vec[2].as_ref().unwrap(), &json_from_str(r#"{"key2": "value2"}"#)?);
 		Ok(())
 	}
 
@@ -142,18 +113,12 @@ mod tests {
 		let vec = read_ndjson_iter(reader).collect::<Vec<_>>();
 
 		assert_eq!(vec.len(), 3);
-		assert_eq!(
-			vec[0].as_ref().unwrap(),
-			&json_from_str(r#"{"key1": "value1"}"#)?
-		);
+		assert_eq!(vec[0].as_ref().unwrap(), &json_from_str(r#"{"key1": "value1"}"#)?);
 		assert_eq!(
 			join_errors(vec[1].as_ref().unwrap_err()),
 			"error in line 2\nwhile parsing JSON 'not a json'\nunexpected character while parsing tag 'null' at position 2: no"
 		);
-		assert_eq!(
-			vec[2].as_ref().unwrap(),
-			&json_from_str(r#"{"key2": "value2"}"#)?
-		);
+		assert_eq!(vec[2].as_ref().unwrap(), &json_from_str(r#"{"key2": "value2"}"#)?);
 		Ok(())
 	}
 

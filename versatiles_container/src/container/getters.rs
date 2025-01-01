@@ -107,9 +107,7 @@ pub mod tests {
 	use anyhow::Result;
 	use assert_fs::{fixture::NamedTempFile, TempDir};
 	use std::time::Instant;
-	use versatiles_core::types::{
-		TileBBoxPyramid, TileCompression, TileFormat, TilesReaderParameters,
-	};
+	use versatiles_core::types::{TileBBoxPyramid, TileCompression, TileFormat, TilesReaderParameters};
 
 	/// Create a test file with given parameters.
 	pub async fn make_test_file(

@@ -9,11 +9,7 @@ pub trait OperationFactoryTrait: Send + Sync {
 
 #[async_trait]
 pub trait ReadOperationFactoryTrait: OperationFactoryTrait {
-	async fn build<'a>(
-		&self,
-		vpl_node: VPLNode,
-		factory: &'a PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>>;
+	async fn build<'a>(&self, vpl_node: VPLNode, factory: &'a PipelineFactory) -> Result<Box<dyn OperationTrait>>;
 }
 
 #[async_trait]

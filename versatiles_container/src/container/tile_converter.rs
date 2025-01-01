@@ -174,8 +174,7 @@ mod tests {
 			length: usize,
 			description: &str,
 		) -> Result<()> {
-			let data_converter =
-				TileConverter::new_tile_recompressor(src_comp, dst_comp, *force_recompress)?;
+			let data_converter = TileConverter::new_tile_recompressor(src_comp, dst_comp, *force_recompress)?;
 
 			ensure!(
 				data_converter.as_string() == description,
@@ -211,20 +210,12 @@ mod tests {
 					s = s.strip_prefix(',').unwrap_or(&s).to_string();
 					s = s.strip_suffix(',').unwrap_or(&s).to_string();
 
-					let length = if s.is_empty() {
-						0
-					} else {
-						s.split(',').count()
-					};
+					let length = if s.is_empty() { 0 } else { s.split(',').count() };
 					let message = format!("{c_in:?}->{c_out:?} {force}");
 
 					let result = test(c_in, c_out, force, length, &s);
 
-					assert!(
-						result.is_ok(),
-						"error for {message}: {}",
-						result.err().unwrap()
-					);
+					assert!(result.is_ok(), "error for {message}: {}", result.err().unwrap());
 				}
 			}
 		}

@@ -7,11 +7,7 @@ pub struct SourceResponse {
 }
 
 impl SourceResponse {
-	pub fn new_some(
-		blob: Blob,
-		compression: &TileCompression,
-		mime: &str,
-	) -> Option<SourceResponse> {
+	pub fn new_some(blob: Blob, compression: &TileCompression, mime: &str) -> Option<SourceResponse> {
 		Some(SourceResponse {
 			blob,
 			compression: compression.to_owned(),

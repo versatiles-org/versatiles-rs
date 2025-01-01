@@ -2,9 +2,7 @@ use super::super::utils::{guess_mime, Url};
 use super::{static_source::StaticSourceTrait, SourceResponse};
 use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
-use std::{
-	collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::File, io::Read, path::Path,
-};
+use std::{collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::File, io::Read, path::Path};
 use tar::{Archive, EntryType};
 use versatiles_core::{
 	types::{Blob, TileCompression},

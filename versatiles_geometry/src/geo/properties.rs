@@ -79,11 +79,7 @@ impl FromIterator<(String, GeoValue)> for GeoProperties {
 
 impl Debug for GeoProperties {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let fields = self
-			.properties
-			.clone()
-			.into_iter()
-			.collect::<Vec<(String, GeoValue)>>();
+		let fields = self.properties.clone().into_iter().collect::<Vec<(String, GeoValue)>>();
 
 		f.debug_map().entries(fields).finish()
 	}

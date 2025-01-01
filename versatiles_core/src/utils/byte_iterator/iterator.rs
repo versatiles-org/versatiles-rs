@@ -56,10 +56,7 @@ impl<'a> ByteIterator<'a> {
 			let (start_index, length) = if self.position < DEBUG_RING_BUFFER_SIZE {
 				(0, self.position - 1)
 			} else {
-				(
-					self.position % DEBUG_RING_BUFFER_SIZE,
-					DEBUG_RING_BUFFER_SIZE - 1,
-				)
+				(self.position % DEBUG_RING_BUFFER_SIZE, DEBUG_RING_BUFFER_SIZE - 1)
 			};
 
 			let debug_snapshot: Vec<u8> = self
@@ -122,9 +119,7 @@ impl<'a> ByteIterator<'a> {
 
 	#[inline]
 	pub fn expect_peeked_byte(&self) -> Result<u8> {
-		self
-			.peeked_byte
-			.ok_or_else(|| self.format_error("unexpected end"))
+		self.peeked_byte.ok_or_else(|| self.format_error("unexpected end"))
 	}
 
 	#[inline]

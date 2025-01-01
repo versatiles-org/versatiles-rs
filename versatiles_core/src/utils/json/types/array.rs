@@ -12,21 +12,13 @@ impl JsonArray {
 		format!("[{}]", items.join(","))
 	}
 	pub fn as_string_vec(&self) -> Result<Vec<String>> {
-		self
-			.0
-			.iter()
-			.map(JsonValue::as_string)
-			.collect::<Result<Vec<_>>>()
+		self.0.iter().map(JsonValue::as_string).collect::<Result<Vec<_>>>()
 	}
 	pub fn as_number_vec<T>(&self) -> Result<Vec<T>>
 	where
 		T: AsNumber<T>,
 	{
-		self
-			.0
-			.iter()
-			.map(JsonValue::as_number)
-			.collect::<Result<Vec<T>>>()
+		self.0.iter().map(JsonValue::as_number).collect::<Result<Vec<T>>>()
 	}
 	pub fn as_number_array<T, const N: usize>(&self) -> Result<[T; N]>
 	where
@@ -69,9 +61,7 @@ where
 	T: Clone,
 {
 	fn from(input: &Vec<T>) -> Self {
-		JsonArray(Vec::from_iter(
-			input.iter().map(|v| JsonValue::from(v.clone())),
-		))
+		JsonArray(Vec::from_iter(input.iter().map(|v| JsonValue::from(v.clone()))))
 	}
 }
 
@@ -81,9 +71,7 @@ where
 	T: Copy,
 {
 	fn from(input: &[T; N]) -> Self {
-		JsonArray(Vec::from_iter(
-			input.into_iter().map(|v| JsonValue::from(*v)),
-		))
+		JsonArray(Vec::from_iter(input.into_iter().map(|v| JsonValue::from(*v))))
 	}
 }
 
@@ -110,10 +98,7 @@ mod tests {
 
 		// Test with a non-string element
 		assert_eq!(
-			JsonArray::from(vec![1, 2])
-				.as_string_vec()
-				.unwrap_err()
-				.to_string(),
+			JsonArray::from(vec![1, 2]).as_string_vec().unwrap_err().to_string(),
 			"expected a string, found a number"
 		);
 

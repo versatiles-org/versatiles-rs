@@ -18,8 +18,5 @@ pub trait TilesWriterTrait: Send {
 	}
 
 	/// Write tile data from a reader to a writer.
-	async fn write_to_writer(
-		reader: &mut dyn TilesReaderTrait,
-		writer: &mut dyn DataWriterTrait,
-	) -> Result<()>;
+	async fn write_to_writer(reader: &mut dyn TilesReaderTrait, writer: &mut dyn DataWriterTrait) -> Result<()>;
 }

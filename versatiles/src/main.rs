@@ -143,26 +143,20 @@ mod tests {
 	#[test]
 	fn help() {
 		let err = run_command(vec!["versatiles"]).unwrap_err().to_string();
-		assert!(err.starts_with(
-			"A toolbox for converting, checking and serving map tiles in various formats."
-		));
+		assert!(err.starts_with("A toolbox for converting, checking and serving map tiles in various formats."));
 	}
 
 	/// Test for version
 	#[test]
 	fn version() {
-		let err = run_command(vec!["versatiles", "-V"])
-			.unwrap_err()
-			.to_string();
+		let err = run_command(vec!["versatiles", "-V"]).unwrap_err().to_string();
 		assert!(err.starts_with("versatiles "));
 	}
 
 	/// Test for subcommand 'convert'
 	#[test]
 	fn convert_subcommand() {
-		let output = run_command(vec!["versatiles", "convert"])
-			.unwrap_err()
-			.to_string();
+		let output = run_command(vec!["versatiles", "convert"]).unwrap_err().to_string();
 		assert!(
 			output.starts_with("Convert between different tile containers"),
 			"{output}"
@@ -172,9 +166,7 @@ mod tests {
 	/// Test for subcommand 'probe'
 	#[test]
 	fn probe_subcommand() {
-		let output = run_command(vec!["versatiles", "probe"])
-			.unwrap_err()
-			.to_string();
+		let output = run_command(vec!["versatiles", "probe"]).unwrap_err().to_string();
 		assert!(
 			output.starts_with("Show information about a tile container"),
 			"{output}"
@@ -184,9 +176,7 @@ mod tests {
 	/// Test for subcommand 'serve'
 	#[test]
 	fn serve_subcommand() {
-		let output = run_command(vec!["versatiles", "serve"])
-			.unwrap_err()
-			.to_string();
+		let output = run_command(vec!["versatiles", "serve"]).unwrap_err().to_string();
 		assert!(output.starts_with("Serve tiles via http"), "{output}");
 	}
 }

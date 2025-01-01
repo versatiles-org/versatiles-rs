@@ -69,10 +69,7 @@ fn parse_bare_identifier(input: &str) -> IResult<&str, String, VerboseError<&str
 }
 
 fn parse_quoted_string(input: &str) -> IResult<&str, String, VerboseError<&str>> {
-	context(
-		"quoted string",
-		delimited(char('\"'), parse_string, cut(char('\"'))),
-	)(input)
+	context("quoted string", delimited(char('\"'), parse_string, cut(char('\"'))))(input)
 }
 
 fn parse_array(input: &str) -> IResult<&str, Vec<String>, VerboseError<&str>> {
@@ -177,12 +174,8 @@ pub fn parse_vpl(input: &str) -> Result<VPLPipeline> {
 			);
 			Ok(pipeline)
 		}
-		Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => {
-			Err(anyhow::anyhow!("{}", convert_error(input, e)))
-		}
-		Err(e) => {
-			Err(anyhow::anyhow!("Error parsing VPL: {:?}", e)).context("Failed to parse VPL input")
-		}
+		Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(anyhow::anyhow!("{}", convert_error(input, e))),
+		Err(e) => Err(anyhow::anyhow!("Error parsing VPL: {:?}", e)).context("Failed to parse VPL input"),
 	}
 }
 
@@ -215,10 +208,7 @@ mod tests {
 	#[test]
 	fn test_parse_quoted_string() {
 		assert_eq!(parse_quoted_string("\"foo\""), Ok(("", "foo".to_string())));
-		assert_eq!(
-			parse_quoted_string("\"foo bar\""),
-			Ok(("", "foo bar".to_string()))
-		);
+		assert_eq!(parse_quoted_string("\"foo bar\""), Ok(("", "foo bar".to_string())));
 		assert_eq!(
 			parse_quoted_string("\"foo\\\"bar\\\"\""),
 			Ok(("", "foo\"bar\"".to_string()))
@@ -324,18 +314,9 @@ mod tests {
 	#[test]
 	fn test_parse_value() {
 		assert_eq!(parse_value("value1"), Ok(("", vec!["value1".to_string()])));
-		assert_eq!(
-			parse_value("\"value1\""),
-			Ok(("", vec!["value1".to_string()]))
-		);
-		assert_eq!(
-			parse_value("value 1"),
-			Ok((" 1", vec!["value".to_string()]))
-		);
-		assert_eq!(
-			parse_value("value\""),
-			Ok(("\"", vec!["value".to_string()]))
-		);
+		assert_eq!(parse_value("\"value1\""), Ok(("", vec!["value1".to_string()])));
+		assert_eq!(parse_value("value 1"), Ok((" 1", vec!["value".to_string()])));
+		assert_eq!(parse_value("value\""), Ok(("\"", vec!["value".to_string()])));
 		assert!(parse_value("\"value").is_err());
 	}
 
@@ -343,16 +324,11 @@ mod tests {
 	fn test_error_messages() {
 		lazy_static! {
 			static ref REG_MGS1: Regex = RegexBuilder::new(r##"\s+"##).build().unwrap();
-			static ref REG_MGS2: Regex = RegexBuilder::new(r##"\d+: at line \d+[,:]"##)
-				.build()
-				.unwrap();
+			static ref REG_MGS2: Regex = RegexBuilder::new(r##"\d+: at line \d+[,:]"##).build().unwrap();
 		}
 
 		fn run(vpl: &str, message: &str) {
-			let mut error = parse_vpl(vpl)
-				.unwrap_err()
-				.to_string()
-				.replace(['^', '\n'], " ");
+			let mut error = parse_vpl(vpl).unwrap_err().to_string().replace(['^', '\n'], " ");
 			error = error.replace(vpl, "");
 			error = REG_MGS1.replace_all(&error, " ").to_string();
 			error = REG_MGS2
@@ -370,7 +346,10 @@ mod tests {
 			"node child key=value ]",
 			"expected '=', found k; in property; in node; in pipeline",
 		);
-		run("node key=\"2.1", "expected '\"', got end of input; in quoted string; in value; in property; in node; in pipeline");
+		run(
+			"node key=\"2.1",
+			"expected '\"', got end of input; in quoted string; in value; in property; in node; in pipeline",
+		);
 		run(
 			"node [n key=2,1]",
 			"expected ']', found ,; in sources; in node; in pipeline",

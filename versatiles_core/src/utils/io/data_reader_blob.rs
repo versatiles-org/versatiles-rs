@@ -193,10 +193,7 @@ mod tests {
 		assert_eq!(data_reader.read_range(&ByteRange::new(0, 8)).await?, blob);
 
 		assert_eq!(
-			data_reader
-				.read_range(&ByteRange::new(0, 4))
-				.await?
-				.as_slice(),
+			data_reader.read_range(&ByteRange::new(0, 4)).await?.as_slice(),
 			&blob.as_slice()[0..4]
 		);
 

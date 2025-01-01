@@ -1,7 +1,6 @@
 use super::{JsonArray, JsonObject, JsonValue};
 use crate::utils::{
-	parse_array_entries, parse_number_as, parse_object_entries, parse_quoted_json_string, parse_tag,
-	ByteIterator,
+	parse_array_entries, parse_number_as, parse_object_entries, parse_quoted_json_string, parse_tag, ByteIterator,
 };
 use anyhow::{Context, Result};
 use std::{collections::BTreeMap, io::Cursor};
@@ -17,9 +16,7 @@ pub fn parse_json_iter(iter: &mut ByteIterator) -> Result<JsonValue> {
 		b'[' => parse_array_entries(iter, parse_json_iter).map(|i| JsonValue::Array(JsonArray(i))),
 		b'{' => parse_json_object(iter),
 		b'"' => parse_quoted_json_string(iter).map(JsonValue::String),
-		d if d.is_ascii_digit() || d == b'.' || d == b'-' => {
-			parse_number_as::<f64>(iter).map(JsonValue::Number)
-		}
+		d if d.is_ascii_digit() || d == b'.' || d == b'-' => parse_number_as::<f64>(iter).map(JsonValue::Number),
 		b't' => parse_tag(iter, "true").map(|_| JsonValue::Boolean(true)),
 		b'f' => parse_tag(iter, "false").map(|_| JsonValue::Boolean(false)),
 		b'n' => parse_tag(iter, "null").map(|_| JsonValue::Null),
@@ -59,17 +56,10 @@ mod tests {
 					"users",
 					v(vec![
 						("user1", v(vec![("city", "Nantes"), ("country", "France")])),
-						(
-							"user2",
-							v(vec![("city", "Bruxelles"), ("country", "Belgium")])
-						),
+						("user2", v(vec![("city", "Bruxelles"), ("country", "Belgium")])),
 						(
 							"user3",
-							v(vec![
-								("city", v("Paris")),
-								("country", v("France")),
-								("age", v(30))
-							])
+							v(vec![("city", v("Paris")), ("country", v("France")), ("age", v(30))])
 						)
 					])
 				),
@@ -93,10 +83,7 @@ mod tests {
 		let result = v(vec![(
 			"a",
 			v(vec![
-				v(vec![
-					("b", JsonValue::from(7)),
-					("c", JsonValue::from(true)),
-				]),
+				v(vec![("b", JsonValue::from(7)), ("c", JsonValue::from(true))]),
 				v(vec![
 					("d", JsonValue::from(false)),
 					("e", JsonValue::Null),
@@ -105,8 +92,7 @@ mod tests {
 			]),
 		)]);
 
-		let data =
-			r##"_{_"a"_:_[_{_"b"_:_7_,_"c"_:_true_}_,_{_"d"_:_false_,_"e"_:_null_,_"f"_:_"g"_}_]_}_"##;
+		let data = r##"_{_"a"_:_[_{_"b"_:_7_,_"c"_:_true_}_,_{_"d"_:_false_,_"e"_:_null_,_"f"_:_"g"_}_]_}_"##;
 
 		assert_eq!(parse_json_str(&data.replace('_', ""))?, result);
 		assert_eq!(parse_json_str(&data.replace('_', " "))?, result);

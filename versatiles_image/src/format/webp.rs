@@ -30,9 +30,7 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::helper::{
-		compare_images, create_image_grey, create_image_greya, create_image_rgb, create_image_rgba,
-	};
+	use crate::helper::{compare_images, create_image_grey, create_image_greya, create_image_rgb, create_image_rgba};
 
 	/// Test WebP encoding and decoding for grayscale, grayscale with alpha, RGB, and RGBA images
 	#[test]
