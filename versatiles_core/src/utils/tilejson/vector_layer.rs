@@ -185,7 +185,7 @@ impl VectorLayer {
 		// https://github.com/mapbox/tilejson-spec/tree/master/3.0.0#33-vector_layers
 
 		// 3.3.2 fields - required
-		for (key, _) in &self.fields {
+		for key in self.fields.keys() {
 			ensure!(!key.is_empty(), "Empty key in 'fields'");
 			ensure!(key.len() <= 255, "Key in 'fields' too long");
 			ensure!(

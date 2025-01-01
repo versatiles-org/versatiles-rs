@@ -653,7 +653,7 @@ mod tests {
 	#[test]
 	fn quarter_planet() {
 		let geo_bbox2 = GeoBBox(0.0, -85.05112877980659f64, 180.0, 0.0);
-		let mut geo_bbox0 = geo_bbox2.clone();
+		let mut geo_bbox0 = geo_bbox2;
 		geo_bbox0.1 += 1e-10;
 		geo_bbox0.2 -= 1e-10;
 		for level in 1..32 {
@@ -667,7 +667,7 @@ mod tests {
 	#[test]
 	fn sa_pacific() {
 		let geo_bbox2 = GeoBBox(-180.0, -66.51326044311186f64, -90.0, 0.0);
-		let mut geo_bbox0 = geo_bbox2.clone();
+		let mut geo_bbox0 = geo_bbox2;
 		geo_bbox0.1 += 1e-10;
 		geo_bbox0.2 -= 1e-10;
 

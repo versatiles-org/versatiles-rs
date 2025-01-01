@@ -349,7 +349,7 @@ mod tests {
 	#[test]
 	fn limit_by_geo_bbox() {
 		let mut pyramid = TileBBoxPyramid::new_full(8);
-		pyramid.intersect_geo_bbox(&&GeoBBox(8.0653f64, 51.3563f64, 12.3528f64, 52.2564f64));
+		pyramid.intersect_geo_bbox(&GeoBBox(8.0653f64, 51.3563f64, 12.3528f64, 52.2564f64));
 
 		assert_eq!(pyramid.get_level_bbox(0), &TileBBox::new(0, 0, 0, 0, 0).unwrap());
 		assert_eq!(pyramid.get_level_bbox(1), &TileBBox::new(1, 1, 0, 1, 0).unwrap());

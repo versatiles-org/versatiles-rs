@@ -14,6 +14,7 @@ use regex::Regex;
 /// - `values`: A flexible map of additional TileJSON key-value pairs.
 /// - `vector_layers`: A structured set of vector layer definitions.
 #[derive(Clone, Debug, PartialEq)]
+#[derive(Default)]
 pub struct TileJSON {
 	pub bounds: Option<GeoBBox>,
 	pub center: Option<GeoCenter>,
@@ -294,16 +295,6 @@ impl TileJSON {
 	}
 }
 
-impl Default for TileJSON {
-	fn default() -> Self {
-		TileJSON {
-			bounds: None,
-			center: None,
-			values: TileJsonValues::default(),
-			vector_layers: VectorLayers::default(),
-		}
-	}
-}
 
 impl TryFrom<&str> for TileJSON {
 	type Error = anyhow::Error;
@@ -335,20 +326,20 @@ impl TryFrom<&Blob> for TileJSON {
 	}
 }
 
-impl Into<String> for TileJSON {
-	fn into(self) -> String {
-		self.stringify()
+impl From<TileJSON> for String {
+	fn from(val: TileJSON) -> Self {
+		val.stringify()
 	}
 }
 
-impl Into<Blob> for TileJSON {
-	fn into(self) -> Blob {
-		Blob::from(self.stringify())
+impl From<TileJSON> for Blob {
+	fn from(val: TileJSON) -> Self {
+		Blob::from(val.stringify())
 	}
 }
 
-impl Into<Blob> for &TileJSON {
-	fn into(self) -> Blob {
-		Blob::from(self.stringify())
+impl From<&TileJSON> for Blob {
+	fn from(val: &TileJSON) -> Self {
+		Blob::from(val.stringify())
 	}
 }

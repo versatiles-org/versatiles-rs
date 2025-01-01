@@ -156,7 +156,7 @@ impl TryFrom<&JsonValue> for TileJsonValue {
 			JsonValue::String(s) => TileJsonValue::String(s.to_owned()),
 			JsonValue::Array(a) => TileJsonValue::List(a.as_string_vec()?),
 			JsonValue::Number(n) => {
-				ensure!(n >= &0.0 && n <= &255.0, "Number out of byte range: {}", n);
+				ensure!((&0.0..=&255.0).contains(&n), "Number out of byte range: {}", n);
 				TileJsonValue::Byte(*n as u8)
 			}
 			_ => bail!("Invalid value type"),
