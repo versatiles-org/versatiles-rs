@@ -18,6 +18,7 @@ struct Args {
 struct Operation {
 	parameters: TilesReaderParameters,
 	source: Box<dyn OperationTrait>,
+	tilejson: TileJSON,
 }
 
 impl Operation {
@@ -41,7 +42,14 @@ impl Operation {
 				parameters.bbox_pyramid.set_zoom_max(max);
 			}
 
-			Ok(Box::new(Self { parameters, source }) as Box<dyn OperationTrait>)
+			let mut tilejson = source.get_tilejson().clone();
+			tilejson.update_from_pyramid(&parameters.bbox_pyramid);
+
+			Ok(Box::new(Self {
+				parameters,
+				source,
+				tilejson,
+			}) as Box<dyn OperationTrait>)
 		})
 	}
 }
@@ -53,8 +61,7 @@ impl OperationTrait for Operation {
 	}
 
 	fn get_tilejson(&self) -> &TileJSON {
-		todo!("implement get_tilejson, check for zoom");
-		self.source.get_tilejson()
+		&self.tilejson
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {

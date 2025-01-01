@@ -8,7 +8,10 @@ use anyhow::{anyhow, ensure, Context, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use log::warn;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+	collections::{BTreeSet, HashMap},
+	sync::Arc,
+};
 use versatiles_core::{
 	types::*,
 	utils::{decompress, TileJSON},
@@ -20,16 +23,22 @@ use versatiles_geometry::{vector_tile::VectorTile, GeoProperties};
 struct Args {
 	/// Path to the data source file, e.g., `data_source_path="data.csv"`.
 	data_source_path: String,
-	/// ID field name in the vector tiles.
+
+	/// Name of the vector layer to update.
+	layer_name: String,
+
+	/// ID field name in the vector layer.
 	id_field_tiles: String,
+
 	/// ID field name in the data source.
 	id_field_data: String,
-	/// Name of the layer to update. If unspecified, all layers will be updated.
-	layer_name: Option<String>,
+
 	/// If set, old properties will be deleted before new ones are added.
 	replace_properties: bool,
+
 	/// If set, removes all features (in the layer) that do not match.
 	remove_non_matching: bool,
+
 	/// If set, includes the ID field in the updated properties.
 	include_id: bool,
 }
@@ -46,10 +55,10 @@ impl Runner {
 		blob = decompress(blob, &self.tile_compression)?;
 		let mut tile = VectorTile::from_blob(&blob).context("Failed to create VectorTile from Blob")?;
 
-		let layer_name = self.args.layer_name.as_ref();
+		let layer_name = &self.args.layer_name;
 
 		for layer in tile.layers.iter_mut() {
-			if layer_name.map_or(false, |layer_name| &layer.name != layer_name) {
+			if &layer.name != layer_name {
 				continue;
 			}
 
@@ -83,6 +92,7 @@ struct Operation {
 	runner: Arc<Runner>,
 	parameters: TilesReaderParameters,
 	source: Box<dyn OperationTrait>,
+	tilejson: TileJSON,
 }
 
 impl Operation {
@@ -124,6 +134,24 @@ impl Operation {
 			let mut parameters = source.get_parameters().clone();
 			ensure!(parameters.tile_format == TileFormat::PBF, "source must be vector tiles");
 
+			let mut tilejson = source.get_tilejson().clone();
+			if let Some(layer) = tilejson.vector_layers.0.get_mut(&args.layer_name) {
+				let mut all_keys = BTreeSet::<String>::new();
+				for prop in properties_map.values() {
+					for (k, _) in prop.iter() {
+						if !prop.0.contains_key(k) {
+							all_keys.insert(k.clone());
+						}
+					}
+				}
+				if args.replace_properties {
+					layer.fields.clear();
+				}
+				for key in all_keys {
+					layer.fields.insert(key, "automatically added field".to_string());
+				}
+			}
+
 			let runner = Arc::new(Runner {
 				args,
 				properties_map,
@@ -136,6 +164,7 @@ impl Operation {
 				runner,
 				parameters,
 				source,
+				tilejson,
 			}) as Box<dyn OperationTrait>)
 		})
 	}
@@ -155,8 +184,7 @@ impl OperationTrait for Operation {
 			.filter_map_blob_parallel(move |blob| runner.run(blob).unwrap())
 	}
 	fn get_tilejson(&self) -> &TileJSON {
-		todo!("implement get_tilejson, check for fields");
-		self.source.get_tilejson()
+		&self.tilejson
 	}
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		Ok(if let Some(blob) = self.source.get_tile_data(coord).await? {
@@ -220,7 +248,7 @@ mod tests {
 				data_source_path: "data.csv".to_string(),
 				id_field_tiles: "id".to_string(),
 				id_field_data: "id".to_string(),
-				layer_name: None,
+				layer_name: "test_layer".to_string(),
 				replace_properties: false,
 				remove_non_matching: false,
 				include_id: false,
