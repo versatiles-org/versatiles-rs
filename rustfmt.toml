@@ -1,4 +1,5 @@
-edition = "2021"
+edition = "2024"
 hard_tabs = true
+max_width = 120
 newline_style = "Unix"
 tab_spaces = 3
