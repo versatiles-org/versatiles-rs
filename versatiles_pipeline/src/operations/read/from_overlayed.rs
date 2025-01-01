@@ -6,7 +6,10 @@ use crate::{
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use futures::future::{join_all, BoxFuture};
-use versatiles_core::{types::*, utils::recompress};
+use versatiles_core::{
+	types::*,
+	utils::{recompress, TileJSON},
+};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Overlays multiple tile sources, using the tile from the first source that provides it.
@@ -19,7 +22,7 @@ struct Args {
 struct Operation {
 	parameters: TilesReaderParameters,
 	sources: Vec<Box<dyn OperationTrait>>,
-	meta: Option<Blob>,
+	meta: TileJSON,
 }
 
 impl ReadOperationTrait for Operation {
@@ -39,13 +42,15 @@ impl ReadOperationTrait for Operation {
 
 			ensure!(sources.len() > 1, "must have at least two sources");
 
-			let meta = sources.first().unwrap().get_meta();
+			let mut meta = TileJSON::default();
 			let parameters = sources.first().unwrap().get_parameters();
 			let mut pyramid = parameters.bbox_pyramid.clone();
 			let tile_format = parameters.tile_format;
 			let mut tile_compression = parameters.tile_compression;
 
 			for source in sources.iter() {
+				meta.merge(source.get_meta());
+
 				let parameters = source.get_parameters();
 				pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
 				ensure!(
@@ -74,8 +79,8 @@ impl OperationTrait for Operation {
 		&self.parameters
 	}
 
-	fn get_meta(&self) -> Option<Blob> {
-		self.meta.clone()
+	fn get_meta(&self) -> &TileJSON {
+		&self.meta
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {

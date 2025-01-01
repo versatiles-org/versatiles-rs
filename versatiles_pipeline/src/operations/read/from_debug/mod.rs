@@ -8,7 +8,7 @@ use futures::future::BoxFuture;
 use image::create_debug_image;
 use std::fmt::Debug;
 use vector::create_debug_vector_tile;
-use versatiles_core::types::*;
+use versatiles_core::{types::*, utils::TileJSON};
 use versatiles_image::helper::{image2blob, image2blob_fast};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -22,7 +22,7 @@ struct Args {
 
 #[derive(Debug)]
 pub struct Operation {
-	meta: Option<Blob>,
+	meta: TileJSON,
 	parameters: TilesReaderParameters,
 	fast_compression: bool,
 }
@@ -38,15 +38,15 @@ impl Operation {
 			TileBBoxPyramid::new_full(31),
 		);
 
-		let meta = Some(match tile_format {
-			TileFormat::PBF => Blob::from(format!(
+		let meta = match tile_format {
+			TileFormat::PBF => TileJSON::try_from(&format!(
 				"{{\"vector_layers\":[{}]}}",
 				["background", "debug_x", "debug_y", "debug_z"]
 					.map(|n| format!("{{\"id\":\"{n}\",\"minzoom\":0,\"maxzoom\":31}}"))
 					.join(",")
-			)),
-			_ => Blob::from("{}"),
-		});
+			))?,
+			_ => TileJSON::default(),
+		};
 
 		Ok(Box::new(Self {
 			meta,
@@ -97,8 +97,8 @@ impl OperationTrait for Operation {
 		&self.parameters
 	}
 
-	fn get_meta(&self) -> Option<Blob> {
-		self.meta.clone()
+	fn get_meta(&self) -> &TileJSON {
+		&self.meta
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {

@@ -103,7 +103,7 @@ impl TilesReaderTrait for PipelineReader {
 	}
 
 	/// Get the metadata, always uncompressed.
-	fn get_meta(&self) -> Result<Option<Blob>> {
+	fn get_meta(&self) -> Result<Option<&TileJSON>> {
 		Ok(self.operation.get_meta())
 	}
 

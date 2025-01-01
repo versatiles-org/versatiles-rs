@@ -3,7 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::fmt::Debug;
-use versatiles_core::types::*;
+use versatiles_core::{types::*, utils::TileJSON};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filter tiles by a geographic bounding box.
@@ -42,7 +42,8 @@ impl OperationTrait for Operation {
 		&self.parameters
 	}
 
-	fn get_meta(&self) -> Option<Blob> {
+	fn get_meta(&self) -> &TileJSON {
+		todo!("implement get_meta, check for bbox");
 		self.source.get_meta()
 	}
 

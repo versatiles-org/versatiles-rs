@@ -1,8 +1,11 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::types::{
-	Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TilesReaderParameters,
-	TilesReaderTrait,
+use versatiles_core::{
+	types::{
+		Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TilesReaderParameters,
+		TilesReaderTrait,
+	},
+	utils::TileJSON,
 };
 use versatiles_geometry::{
 	vector_tile::{VectorTile, VectorTileLayer},
@@ -14,6 +17,7 @@ pub struct MockVectorSource {
 	#[allow(clippy::type_complexity)]
 	data: Vec<(String, Vec<Vec<(String, String)>>)>,
 	parameters: TilesReaderParameters,
+	meta: TileJSON,
 }
 
 impl MockVectorSource {
@@ -43,7 +47,11 @@ impl MockVectorSource {
 			bbox.unwrap_or_else(|| TileBBoxPyramid::new_full(8)),
 		);
 
-		MockVectorSource { data, parameters }
+		MockVectorSource {
+			data,
+			parameters,
+			meta: TileJSON::default(),
+		}
 	}
 }
 
@@ -65,8 +73,8 @@ impl TilesReaderTrait for MockVectorSource {
 		panic!("not possible")
 	}
 
-	fn get_meta(&self) -> Result<Option<Blob>> {
-		Ok(Some(Blob::from(r##"{"mock":true}"##)))
+	fn get_meta(&self) -> &TileJSON {
+		&self.meta
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {

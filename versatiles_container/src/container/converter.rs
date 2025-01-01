@@ -160,7 +160,7 @@ impl TilesReaderTrait for TilesConvertReader {
 		self.reader.override_compression(tile_compression);
 	}
 
-	fn get_meta(&self) -> Result<Option<Blob>> {
+	fn get_meta(&self) -> Result<Option<&TileJSON>> {
 		self.reader.get_meta()
 	}
 

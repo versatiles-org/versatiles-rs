@@ -9,7 +9,10 @@ use async_trait::async_trait;
 use futures::future::BoxFuture;
 use log::warn;
 use std::{collections::HashMap, sync::Arc};
-use versatiles_core::{types::*, utils::decompress};
+use versatiles_core::{
+	types::*,
+	utils::{decompress, TileJSON},
+};
 use versatiles_geometry::{vector_tile::VectorTile, GeoProperties};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -85,7 +88,6 @@ struct Operation {
 	runner: Arc<Runner>,
 	parameters: TilesReaderParameters,
 	source: Box<dyn OperationTrait>,
-	meta: Option<Blob>,
 }
 
 impl Operation {
@@ -130,8 +132,6 @@ impl Operation {
 				"source must be vector tiles"
 			);
 
-			let meta = source.get_meta();
-
 			let runner = Arc::new(Runner {
 				args,
 				properties_map,
@@ -142,7 +142,6 @@ impl Operation {
 
 			Ok(Box::new(Self {
 				runner,
-				meta,
 				parameters,
 				source,
 			}) as Box<dyn OperationTrait>)
@@ -163,8 +162,9 @@ impl OperationTrait for Operation {
 			.await
 			.filter_map_blob_parallel(move |blob| runner.run(blob).unwrap())
 	}
-	fn get_meta(&self) -> Option<Blob> {
-		self.meta.clone()
+	fn get_meta(&self) -> &TileJSON {
+		todo!("implement get_meta, check for fields");
+		self.source.get_meta()
 	}
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		Ok(

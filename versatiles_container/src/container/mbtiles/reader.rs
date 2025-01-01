@@ -49,7 +49,7 @@ use r2d2_sqlite::SqliteConnectionManager;
 use std::path::Path;
 use versatiles_core::{
 	types::{TileCompression::*, TileFormat::*, *},
-	utils::{progress::get_progress_bar, JsonObject, JsonValue, TransformCoord},
+	utils::{progress::get_progress_bar, JsonObject, JsonValue, TileJSON, TransformCoord},
 };
 
 /// A struct that provides functionality to read tile data from an MBTiles SQLite database.
@@ -129,7 +129,7 @@ impl MBTilesReader {
 			self.name
 		));
 
-		let mut meta = JsonObject::from(vec![("tilejson", "3.0.0")]);
+		let mut meta = TileJSON::default();
 
 		for entry in entries {
 			let entry = entry?;
@@ -155,10 +155,13 @@ impl MBTilesReader {
 					}
 					_ => panic!("unknown file format: {}", value),
 				},
-				"json" => meta.object_assign(JsonObject::parse_str(value)?)?,
-				"attribution" | "author" | "description" | "license" | "name" | "type" | "version" => {
-					meta.object_set_key_value(key.to_owned(), JsonValue::from(value))?
-				}
+				"json" => meta.add(JsonObject::parse_str(value)?)?,
+				"attribution" => meta.attribution = Some(value.to_owned()),
+				"author" => meta.author = Some(value.to_owned()),
+				"license" => meta.license = Some(value.to_owned()),
+				"name" => meta.name = Some(value.to_owned()),
+				"type" => meta.type = Some(value.to_owned()),
+				"version" => meta.version = Some(value.to_owned()),
 				_ => {}
 			}
 		}
@@ -277,8 +280,8 @@ impl TilesReaderTrait for MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the metadata.
-	fn get_meta(&self) -> Result<Option<Blob>> {
-		Ok(self.meta_data.clone())
+	fn get_meta(&self) -> Result<Option<&TileJSON>> {
+		Ok(self.meta_data.as_ref())
 	}
 
 	/// Returns the parameters of the tiles reader.

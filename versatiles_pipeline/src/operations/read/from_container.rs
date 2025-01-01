@@ -3,7 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::fmt::Debug;
-use versatiles_core::types::*;
+use versatiles_core::{types::*, utils::TileJSON};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a tile container, such as a VersaTiles file.
@@ -17,7 +17,6 @@ struct Args {
 struct Operation {
 	parameters: TilesReaderParameters,
 	reader: Box<dyn TilesReaderTrait>,
-	meta: Option<Blob>,
 }
 
 impl ReadOperationTrait for Operation {
@@ -34,13 +33,8 @@ impl ReadOperationTrait for Operation {
 				.get_reader(&factory.resolve_filename(&args.filename))
 				.await?;
 			let parameters = reader.get_parameters().clone();
-			let meta = reader.get_meta()?;
 
-			Ok(Box::new(Self {
-				parameters,
-				meta,
-				reader,
-			}) as Box<dyn OperationTrait>)
+			Ok(Box::new(Self { parameters, reader }) as Box<dyn OperationTrait>)
 		})
 	}
 }
@@ -51,8 +45,8 @@ impl OperationTrait for Operation {
 		&self.parameters
 	}
 
-	fn get_meta(&self) -> Option<Blob> {
-		self.meta.clone()
+	fn get_meta(&self) -> &TileJSON {
+		self.reader.get_meta()
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {

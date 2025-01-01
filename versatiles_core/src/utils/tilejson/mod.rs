@@ -1,7 +1,7 @@
 mod bbox;
 mod center;
-mod tile_json;
+mod tilejson;
 mod value;
 mod vector_layer;
 
-pub use tile_json::*;
+pub use tilejson::*;

@@ -25,7 +25,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	fn override_compression(&mut self, tile_compression: TileCompression);
 
 	/// Get the metadata, always uncompressed.
-	fn get_meta(&self) -> Result<Option<&TileJSON>>;
+	fn get_meta(&self) -> &TileJSON;
 
 	/// Get tile data for the given coordinate, always compressed and formatted.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>>;
@@ -60,12 +60,8 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		cat.add_key_value("container", self.get_container_name())
 			.await;
 
-		let meta_option = self.get_meta()?;
-		if let Some(meta) = meta_option {
-			cat.add_key_value("meta", &meta.stringify()).await;
-		} else {
-			cat.add_key_value("meta", &meta_option).await;
-		}
+		cat.add_key_value("meta", &self.get_meta().stringify())
+			.await;
 
 		self
 			.probe_parameters(&mut print.get_category("parameters").await)

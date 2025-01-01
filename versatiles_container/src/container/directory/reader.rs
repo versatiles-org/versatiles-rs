@@ -51,7 +51,7 @@ use std::{
 	fs,
 	path::{Path, PathBuf},
 };
-use versatiles_core::{types::*, utils::decompress};
+use versatiles_core::{types::*, utils::*};
 
 /// A reader for tiles stored in a directory structure.
 /// The directory should be structured as follows:
@@ -60,7 +60,7 @@ use versatiles_core::{types::*, utils::decompress};
 /// ```
 /// Where `<z>` is the zoom level, `<x>` and `<y>` are the tile coordinates, `<format>` is the tile format, and `<compression>` is the compression type (optional).
 pub struct DirectoryTilesReader {
-	meta: Option<Blob>,
+	meta: TileJSON,
 	dir: PathBuf,
 	tile_map: HashMap<TileCoord3, PathBuf>,
 	parameters: TilesReaderParameters,
@@ -86,7 +86,7 @@ impl DirectoryTilesReader {
 		ensure!(dir.exists(), "path {dir:?} does not exist");
 		ensure!(dir.is_dir(), "path {dir:?} is not a directory");
 
-		let mut meta: Option<Blob> = None;
+		let mut tilejson = TileJSON::default();
 		let mut tile_map = HashMap::new();
 		let mut container_form: Option<TileFormat> = None;
 		let mut container_comp: Option<TileCompression> = None;
@@ -163,18 +163,18 @@ impl DirectoryTilesReader {
 			} else {
 				match name1.as_str() {
 					"meta.json" | "tiles.json" | "metadata.json" => {
-						meta = Some(Self::read(&entry1.path())?);
+						tilejson.update_from(Self::read(&entry1.path())?);
 						continue;
 					}
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
-						meta = Some(decompress(
+						tilejson.update_from(decompress(
 							Self::read(&entry1.path())?,
 							&TileCompression::Gzip,
 						)?);
 						continue;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
-						meta = Some(decompress(
+						tilejson.update_from(decompress(
 							Self::read(&entry1.path())?,
 							&TileCompression::Brotli,
 						)?);
@@ -192,8 +192,10 @@ impl DirectoryTilesReader {
 		let tile_format = container_form.context("tile format must be specified")?;
 		let tile_compression = container_comp.context("tile compression must be specified")?;
 
+		tilejson.update_from(bbox_pyramid);
+
 		Ok(DirectoryTilesReader {
-			meta,
+			meta: tilejson,
 			dir: dir.to_path_buf(),
 			tile_map,
 			parameters: TilesReaderParameters::new(tile_format, tile_compression, bbox_pyramid),
@@ -216,8 +218,8 @@ impl TilesReaderTrait for DirectoryTilesReader {
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
-	fn get_meta(&self) -> Result<Option<Blob>> {
-		Ok(self.meta.clone())
+	fn get_meta(&self) -> &TileJSON {
+		&self.meta
 	}
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data {:?}", coord);

@@ -105,7 +105,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 		let meta_data_option = reader.get_meta()?;
 
 		if let Some(meta_data) = meta_data_option {
-			let meta_data = compress(meta_data, tile_compression)?;
+			let meta_data = compress(meta_data.into(), tile_compression)?;
 			let filename = format!("tiles.json{extension_compression}");
 
 			Self::write(path.join(filename), meta_data)?;
