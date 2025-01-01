@@ -45,11 +45,11 @@ impl Debug for JsonArray {
 	}
 }
 
-impl<T> From<Vec<T>> for JsonValue
+impl<T> From<T> for JsonValue
 where
-	JsonValue: From<T>,
+	JsonArray: From<T>,
 {
-	fn from(input: Vec<T>) -> Self {
+	fn from(input: T) -> Self {
 		JsonValue::Array(JsonArray::from(input))
 	}
 }
@@ -60,6 +60,30 @@ where
 {
 	fn from(input: Vec<T>) -> Self {
 		JsonArray(Vec::from_iter(input.into_iter().map(JsonValue::from)))
+	}
+}
+
+impl<T> From<&Vec<T>> for JsonArray
+where
+	JsonValue: From<T>,
+	T: Clone,
+{
+	fn from(input: &Vec<T>) -> Self {
+		JsonArray(Vec::from_iter(
+			input.iter().map(|v| JsonValue::from(v.clone())),
+		))
+	}
+}
+
+impl<T, const N: usize> From<&[T; N]> for JsonArray
+where
+	JsonValue: From<T>,
+	T: Copy,
+{
+	fn from(input: &[T; N]) -> Self {
+		JsonArray(Vec::from_iter(
+			input.into_iter().map(|v| JsonValue::from(*v)),
+		))
 	}
 }
 

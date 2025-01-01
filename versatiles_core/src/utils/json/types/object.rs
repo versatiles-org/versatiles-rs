@@ -7,18 +7,11 @@ use std::{collections::BTreeMap, fmt::Debug};
 pub struct JsonObject(pub BTreeMap<String, JsonValue>);
 
 impl JsonObject {
-	pub fn object_assign(&mut self, object: JsonObject) -> Result<()> {
+	pub fn assign(&mut self, object: JsonObject) -> Result<()> {
 		for entry in object.0.into_iter() {
 			self.0.insert(entry.0, entry.1);
 		}
 		Ok(())
-	}
-	pub fn object_set_key_value(&mut self, key: String, value: JsonValue) -> Result<()> {
-		self.0.insert(key, value);
-		Ok(())
-	}
-	pub fn object_get_value(&self, key: &str) -> Result<Option<&JsonValue>> {
-		Ok(self.0.get(key))
 	}
 	pub fn get(&self, key: &str) -> Result<Option<&JsonValue>> {
 		Ok(self.0.get(key))
@@ -60,13 +53,11 @@ impl JsonObject {
 			.transpose()
 	}
 
-	pub fn set<T: Clone>(&mut self, key: &str, value: &T)
+	pub fn set<T: Clone>(&mut self, key: &str, value: T)
 	where
 		JsonValue: From<T>,
 	{
-		self
-			.0
-			.insert(key.to_owned(), JsonValue::from(value.clone()));
+		self.0.insert(key.to_owned(), JsonValue::from(value));
 	}
 
 	pub fn set_optional<T>(&mut self, key: &str, value: &Option<T>)
@@ -90,6 +81,10 @@ impl JsonObject {
 
 	pub fn parse_str(json: &str) -> Result<JsonObject> {
 		JsonValue::parse_str(json)?.to_object()
+	}
+
+	pub fn iter(&self) -> impl Iterator<Item = (&String, &JsonValue)> {
+		self.0.iter()
 	}
 }
 

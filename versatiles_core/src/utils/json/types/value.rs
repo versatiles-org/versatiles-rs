@@ -103,6 +103,12 @@ impl From<&str> for JsonValue {
 	}
 }
 
+impl From<&String> for JsonValue {
+	fn from(input: &String) -> Self {
+		JsonValue::String(input.to_string())
+	}
+}
+
 impl From<String> for JsonValue {
 	fn from(input: String) -> Self {
 		JsonValue::String(input)
