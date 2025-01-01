@@ -282,7 +282,7 @@ impl TileBBoxPyramid {
 	/// A four-element array of `f64` values representing the geographical bounding box.
 	pub fn get_geo_bbox(&self) -> Option<GeoBBox> {
 		let level = self.get_zoom_max()?;
-		Some(self.get_level_bbox(level).as_geo_bbox(level))
+		Some(self.get_level_bbox(level).as_geo_bbox())
 	}
 
 	pub fn get_geo_center(&self) -> Option<GeoCenter> {

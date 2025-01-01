@@ -255,11 +255,11 @@ mod tests {
 		let dir = TempDir::new()?;
 		dir.child(".DS_Store").write_str("")?;
 		dir.child("1/2/3.png").write_str("test tile data")?;
-		dir.child("meta.json").write_str("test meta data")?;
+		dir.child("meta.json").write_str(r#"{"type":"dummy"}"#)?;
 
 		let reader = DirectoryTilesReader::open_path(&dir)?;
 
-		assert_eq!(reader.get_tilejson().as_string(), "test meta data");
+		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[180,-89.99075251648904,360,-89.7860070747368],\"maxzoom\":1,\"minzoom\":1,\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}");
 
 		let tile_data = reader.get_tile_data(&TileCoord3::new(2, 3, 1)?).await?.unwrap();
 		assert_eq!(tile_data, Blob::from("test tile data"));
@@ -304,7 +304,7 @@ mod tests {
 		let dir = TempDir::new().unwrap();
 		fs::write(
 			dir.path().join("meta.json.gz"),
-			compress(Blob::from("test meta data gzip"), &TileCompression::Gzip)
+			compress(Blob::from(r#"{"type":"dummy data"}"#), &TileCompression::Gzip)
 				.unwrap()
 				.as_slice(),
 		)
@@ -313,7 +313,7 @@ mod tests {
 		fs::write(dir.path().join("0/1/2.png"), "tile at 0/1/2").unwrap();
 
 		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
-		assert_eq!(reader.get_tilejson().as_string(), "test meta data gzip");
+		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[180,-89.9999827308541,540,-89.99075251648904],\"maxzoom\":0,\"minzoom\":0,\"tilejson\":\"3.0.0\",\"type\":\"dummy data\"}");
 
 		Ok(())
 	}
@@ -323,7 +323,7 @@ mod tests {
 		let dir = TempDir::new().unwrap();
 		fs::create_dir_all(dir.path().join("0/1")).unwrap();
 		fs::write(dir.path().join("0/1/2.png"), "tile at 0/1/2").unwrap();
-		fs::write(dir.path().join("meta.json"), "global meta").unwrap();
+		fs::write(dir.path().join("meta.json"), r#"{"type":"dummy data"}"#).unwrap();
 
 		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
 		let coord = TileCoord3::new(1, 2, 0).unwrap();
@@ -392,7 +392,7 @@ mod tests {
 			"DirectoryTilesReader { name: \"*\", parameters: TilesReaderParameters { bbox_pyramid: [1: [2,3,2,3] (1)], tile_compression: Brotli, tile_format: PNG } }"
 		);
 
-		assert_eq!(reader.get_tilejson().as_string(), "{\"key\": \"value\"}");
+		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[180,-89.99075251648904,360,-89.7860070747368],\"key\":\"value\",\"maxzoom\":1,\"minzoom\":1,\"tilejson\":\"3.0.0\"}");
 
 		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Brotli);
 		reader.override_compression(TileCompression::Gzip);

@@ -1,5 +1,6 @@
 from_container filename="berlin.mbtiles" |
 vectortiles_update_properties
    data_source_path="cities.csv"
-   id_field_tiles="id"
-   id_field_data="city_id"
+   layer_name="place_labels"
+   id_field_tiles="name"
+   id_field_data="city_name"

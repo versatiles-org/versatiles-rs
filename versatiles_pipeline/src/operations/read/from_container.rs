@@ -82,7 +82,10 @@ mod tests {
 			.operation_from_vpl("from_container filename=\"test.mbtiles\"")
 			.await?;
 
-		assert_eq!(&operation.get_tilejson().as_string(), "{\"mock\":true}");
+		assert_eq!(
+			&operation.get_tilejson().as_string(),
+			"{\"tilejson\":\"3.0.0\",\"type\":\"mock vector source\"}"
+		);
 
 		let coord = TileCoord3 { x: 2, y: 3, z: 4 };
 		let blob = operation.get_tile_data(&coord).await?.unwrap();

@@ -1,12 +1,12 @@
 use super::VPLPipeline;
 use crate::vpl::parse_vpl;
 use anyhow::{anyhow, ensure, Result};
-use std::{collections::HashMap, fmt::Debug, str::FromStr};
+use std::{collections::BTreeMap, fmt::Debug, str::FromStr};
 
 #[derive(Clone, PartialEq)]
 pub struct VPLNode {
 	pub name: String,
-	pub properties: HashMap<String, Vec<String>>,
+	pub properties: BTreeMap<String, Vec<String>>,
 	pub sources: Vec<VPLPipeline>,
 }
 
@@ -104,21 +104,21 @@ impl From<&str> for VPLNode {
 	fn from(name: &str) -> Self {
 		VPLNode {
 			name: name.to_string(),
-			properties: HashMap::new(),
+			properties: BTreeMap::new(),
 			sources: vec![],
 		}
 	}
 }
 
 #[cfg(test)]
-fn make_properties(input: Vec<(&str, Vec<&str>)>) -> HashMap<String, Vec<String>> {
+fn make_properties(input: Vec<(&str, Vec<&str>)>) -> BTreeMap<String, Vec<String>> {
 	input
 		.into_iter()
 		.map(|(k, v)| (k.to_string(), v.into_iter().map(|f| f.to_string()).collect()))
 		.collect()
 }
 
-fn make_property(input: Vec<(&str, &str)>) -> HashMap<String, Vec<String>> {
+fn make_property(input: Vec<(&str, &str)>) -> BTreeMap<String, Vec<String>> {
 	input
 		.into_iter()
 		.map(|(k, v)| (k.to_string(), vec![v.to_string()]))

@@ -260,7 +260,7 @@ mod tests {
 				let result = result.unwrap();
 
 				if result.compression == N {
-					assert_eq!(result.blob.as_str(), "{\"type\":\"dummy\"}");
+					assert_eq!(result.blob.as_str(), "{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}");
 				}
 
 				assert_eq!(result.mime, "application/json");

@@ -35,18 +35,21 @@ impl Operation {
 			TileBBoxPyramid::new_full(31),
 		);
 
-		let meta = match tile_format {
-			TileFormat::PBF => TileJSON::try_from(&format!(
-				"{{\"vector_layers\":[{}]}}",
-				["background", "debug_x", "debug_y", "debug_z"]
-					.map(|n| format!("{{\"id\":\"{n}\",\"minzoom\":0,\"maxzoom\":31}}"))
-					.join(",")
-			))?,
-			_ => TileJSON::default(),
-		};
+		let mut tilejson = TileJSON::default();
+
+		if tile_format == TileFormat::PBF {
+			tilejson.merge(&TileJSON::try_from(
+				r#"{"vector_layers":[
+					{"id":"background","minzoom":0,"maxzoom":30},
+					{"id":"debug_x","minzoom":0,"maxzoom":30},
+					{"id":"debug_y","minzoom":0,"maxzoom":30},
+					{"id":"debug_z","minzoom":0,"maxzoom":30}
+				]}"#,
+			)?)?;
+		}
 
 		Ok(Box::new(Self {
-			tilejson: meta,
+			tilejson,
 			parameters,
 			fast_compression,
 		}) as Box<dyn OperationTrait>)
@@ -156,21 +159,21 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_build_tile_png() {
-		test("png", 5207, "{}").await.unwrap();
+		test("png", 5207, "{\"tilejson\":\"3.0.0\"}").await.unwrap();
 	}
 
 	#[tokio::test]
 	async fn test_build_tile_jpg() {
-		test("jpg", 11808, "{}").await.unwrap();
+		test("jpg", 11808, "{\"tilejson\":\"3.0.0\"}").await.unwrap();
 	}
 
 	#[tokio::test]
 	async fn test_build_tile_webp() {
-		test("webp", 2656, "{}").await.unwrap();
+		test("webp", 2656, "{\"tilejson\":\"3.0.0\"}").await.unwrap();
 	}
 
 	#[tokio::test]
 	async fn test_build_tile_vector() {
-		test("pbf", 1732, "{\"vector_layers\":[{\"id\":\"background\",\"minzoom\":0,\"maxzoom\":31},{\"id\":\"debug_x\",\"minzoom\":0,\"maxzoom\":31},{\"id\":\"debug_y\",\"minzoom\":0,\"maxzoom\":31},{\"id\":\"debug_z\",\"minzoom\":0,\"maxzoom\":31}]}").await.unwrap();
+		test("pbf", 1732, "{\"tilejson\":\"3.0.0\",\"vector_layers\":[{\"fields\":{},\"id\":\"background\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_x\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_y\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_z\",\"maxzoom\":30,\"minzoom\":0}]}").await.unwrap();
 	}
 }

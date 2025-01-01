@@ -213,7 +213,10 @@ pub mod tests {
 		assert_eq!(format!("{:?}", reader), "TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "tar");
 		assert!(reader.get_source_name().ends_with(temp_file.to_str().unwrap()));
-		assert_eq!(reader.get_tilejson().as_string(), "{\"type\":\"dummy\"}");
+		assert_eq!(
+			reader.get_tilejson().as_string(),
+			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
+		);
 		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: PBF }");
 		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);

@@ -221,7 +221,10 @@ mod tests {
 	#[tokio::test]
 	async fn test_get_meta() -> Result<()> {
 		let reader = TestReader::new_dummy();
-		assert_eq!(reader.get_tilejson().as_string(), "test metadata");
+		assert_eq!(
+			reader.get_tilejson().as_string(),
+			"{\"metadata\":\"test\",\"tilejson\":\"3.0.0\"}"
+		);
 		Ok(())
 	}
 

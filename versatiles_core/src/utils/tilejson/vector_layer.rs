@@ -34,21 +34,20 @@ impl VectorLayers {
 			let minzoom = object.get_number("minzoom")?;
 			let maxzoom = object.get_number("maxzoom")?;
 
-			// Required: "fields", which is an object
-			let fields_val = object.get("fields").ok_or(anyhow!("missing `fields`"))?.as_object()?;
-
 			// Convert each entry in "fields" to a (String, String) pair
-			let fields = fields_val
-				.iter()
-				.map(|(k, v)| v.as_string().map(|field_val| (k.clone(), field_val)))
-				.collect::<Result<Vec<(String, String)>>>()?;
+			let mut fields = BTreeMap::<String, String>::new();
+			if let Some(value) = object.get("fields") {
+				for (k, v) in value.as_object()?.iter() {
+					fields.insert(k.clone(), v.as_string()?);
+				}
+			}
 
 			// Build the [VectorLayer] and insert into the map
 			let layer = VectorLayer {
 				description,
 				minzoom,
 				maxzoom,
-				fields: fields.into_iter().collect(),
+				fields,
 			};
 			map.insert(id, layer);
 		}

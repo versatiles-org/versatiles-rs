@@ -160,7 +160,7 @@ mod tests {
 
 		let result = reader.get_tile_data(&TileCoord3::new(8800, 5377, 14)?).await?.unwrap();
 
-		assert_eq!(result.len(), 142038);
+		assert_eq!(result.len(), 141385);
 
 		Ok(())
 	}

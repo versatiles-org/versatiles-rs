@@ -3,7 +3,7 @@ use anyhow::{bail, ensure, Result};
 use std::collections::BTreeMap;
 
 /// A map storing string keys and their associated typed JSON values.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct TileJsonValues(BTreeMap<String, TileJsonValue>);
 
 impl TileJsonValues {
@@ -78,6 +78,15 @@ impl TileJsonValues {
 			key.to_owned(),
 			TileJsonValue::Byte(update(self.0.get(key).and_then(|v| v.get_byte()))),
 		);
+	}
+}
+
+impl Default for TileJsonValues {
+	fn default() -> Self {
+		TileJsonValues(BTreeMap::from([(
+			String::from("tilejson"),
+			TileJsonValue::String("3.0.0".to_owned()),
+		)]))
 	}
 }
 

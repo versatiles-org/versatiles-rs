@@ -124,7 +124,10 @@ mod tests {
 		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path).await?;
 
 		let reader = TarTilesReader::open_path(&temp_path)?;
-		assert_eq!(reader.get_tilejson().as_string(), "{\"type\":\"dummy\"}");
+		assert_eq!(
+			reader.get_tilejson().as_string(),
+			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
+		);
 
 		Ok(())
 	}

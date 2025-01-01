@@ -20,9 +20,7 @@
 //!     let mut reader = PMTilesReader::open_path(&path).await?;
 //!
 //!     // Get metadata
-//!     if let Some(meta) = reader.get_meta()? {
-//!         println!("Metadata: {:?}", meta);
-//!     }
+//!     println!("Metadata: {:?}", reader.get_tilejson());
 //!
 //!     // Get tile data for specific coordinates
 //!     let coord = TileCoord3::new(1, 1, 1)?;

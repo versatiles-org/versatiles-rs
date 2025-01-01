@@ -20,9 +20,9 @@
 //!     // Print container information
 //!     println!("Container Name: {}", reader.get_container_name());
 //!     println!("Container Parameters: {:?}", reader.get_parameters());
-//!     if let Some(meta) = reader.get_meta()? {
-//!         println!("Metadata: {meta:?}");
-//!     }
+//!
+//!     // Get metadata
+//!     println!("Metadata: {:?}", reader.get_tilejson());
 //!
 //!     // Fetch a specific tile
 //!     let coord = TileCoord3::new(15, 1, 4)?;
@@ -501,7 +501,10 @@ mod tests {
 		assert_eq!(format!("{:?}", reader), "VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: PBF } }");
 		assert_eq!(reader.get_container_name(), "versatiles");
 		assert_wildcard!(reader.get_source_name(), "*.versatiles");
-		assert_eq!(reader.get_tilejson().as_string(), "{\"type\":\"dummy\"}");
+		assert_eq!(
+			reader.get_tilejson().as_string(),
+			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
+		);
 		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: PBF }");
 		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
@@ -548,7 +551,7 @@ mod tests {
 		reader.probe_container(&printer.get_category("container").await).await?;
 		assert_eq!(
 			printer.as_string().await,
-			"container:\n   meta size: 16\n   block count: 5\n   sum of block index sizes: 70\n   sum of block tiles sizes: 385\n"
+			"container:\n   meta size: 58\n   block count: 5\n   sum of block index sizes: 70\n   sum of block tiles sizes: 385\n"
 		);
 
 		let mut printer = PrettyPrint::new();

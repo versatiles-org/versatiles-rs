@@ -1,6 +1,8 @@
 mod value;
 mod vector_layer;
 
+use std::fmt::Debug;
+
 use crate::{
 	types::{Blob, GeoBBox, GeoCenter, TileBBoxPyramid},
 	utils::{parse_json_str, JsonObject, JsonValue},
@@ -10,6 +12,8 @@ use regex::Regex;
 use value::TileJsonValues;
 use vector_layer::VectorLayers;
 
+use super::JsonArray;
+
 /// A struct representing a TileJSON object.
 ///
 /// Fields:
@@ -17,7 +21,7 @@ use vector_layer::VectorLayers;
 /// - `center`: An optional geographic center (`[lon, lat, zoom]`).
 /// - `values`: A flexible map of additional TileJSON key-value pairs.
 /// - `vector_layers`: A structured set of vector layer definitions.
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, PartialEq, Default)]
 pub struct TileJSON {
 	pub bounds: Option<GeoBBox>,
 	pub center: Option<GeoCenter>,
@@ -97,7 +101,7 @@ impl TileJSON {
 		}
 
 		if let Some(z) = pyramid.get_zoom_max() {
-			self.limit_min_zoom(z);
+			self.limit_max_zoom(z);
 		}
 	}
 
@@ -121,8 +125,8 @@ impl TileJSON {
 		self.values.insert(key, &JsonValue::from(value))
 	}
 
-	pub fn set_vector_layers(&mut self, vector_layers: JsonValue) -> Result<()> {
-		self.vector_layers = VectorLayers::from_json_array(vector_layers.as_array()?)?;
+	pub fn set_vector_layers(&mut self, vector_layers: &JsonArray) -> Result<()> {
+		self.vector_layers = VectorLayers::from_json_array(vector_layers).expect("when parsing `vector_layers`");
 		Ok(())
 	}
 
@@ -343,5 +347,11 @@ impl From<TileJSON> for Blob {
 impl From<&TileJSON> for Blob {
 	fn from(val: &TileJSON) -> Self {
 		Blob::from(val.stringify())
+	}
+}
+
+impl Debug for TileJSON {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "TileJSON({})", self.as_string())
 	}
 }

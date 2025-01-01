@@ -153,7 +153,10 @@ mod tests {
 			reader.get_parameters(),
 			&TilesReaderParameters::new(TileFormat::PNG, TileCompression::Uncompressed, bbox_pyramid)
 		);
-		assert_eq!(reader.get_tilejson().as_string(), "{\"type\":\"dummy\"}");
+		assert_eq!(
+			reader.get_tilejson().as_string(),
+			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
+		);
 		let blob = reader
 			.get_tile_data(&TileCoord3::new(0, 0, 0)?)
 			.await?

@@ -598,9 +598,13 @@ impl TileBBox {
 	/// # Returns
 	///
 	/// An array of four `f64` values representing the geographical bounding box.
-	pub fn as_geo_bbox(&self, z: u8) -> GeoBBox {
-		let p_min = TileCoord3::new(self.x_min, self.y_max + 1, z).unwrap().as_geo();
-		let p_max = TileCoord3::new(self.x_max + 1, self.y_min, z).unwrap().as_geo();
+	pub fn as_geo_bbox(&self) -> GeoBBox {
+		let p_min = TileCoord3::new(self.x_min, self.y_max + 1, self.level)
+			.unwrap()
+			.as_geo();
+		let p_max = TileCoord3::new(self.x_max + 1, self.y_min, self.level)
+			.unwrap()
+			.as_geo();
 
 		GeoBBox(p_min[0], p_min[1], p_max[0], p_max[1])
 	}
@@ -659,7 +663,7 @@ mod tests {
 		for level in 1..32 {
 			let level_bbox0 = TileBBox::from_geo(level, &geo_bbox0).unwrap();
 			assert_eq!(level_bbox0.count_tiles(), 4u64.pow(level as u32 - 1));
-			let geo_bbox1 = level_bbox0.as_geo_bbox(level);
+			let geo_bbox1 = level_bbox0.as_geo_bbox();
 			assert_eq!(geo_bbox1, geo_bbox2);
 		}
 	}
@@ -674,7 +678,7 @@ mod tests {
 		for level in 2..32 {
 			let level_bbox0 = TileBBox::from_geo(level, &geo_bbox0).unwrap();
 			assert_eq!(level_bbox0.count_tiles(), 4u64.pow(level as u32 - 2));
-			let geo_bbox1 = level_bbox0.as_geo_bbox(level);
+			let geo_bbox1 = level_bbox0.as_geo_bbox();
 			assert_eq!(geo_bbox1, geo_bbox2);
 		}
 	}
@@ -1005,8 +1009,11 @@ mod tests {
 	#[test]
 	fn test_as_geo_bbox() {
 		let bbox = TileBBox::new(4, 5, 10, 7, 12).unwrap();
-		let geo_bbox = bbox.as_geo_bbox(4);
-		assert_eq!(geo_bbox.as_string_list(), "-135.0,45.0,-112.5,33.75");
+		let geo_bbox = bbox.as_geo_bbox();
+		assert_eq!(
+			geo_bbox.as_string_list(),
+			"-67.5,-74.01954331150228,0,-40.97989806962013"
+		);
 	}
 
 	#[test]

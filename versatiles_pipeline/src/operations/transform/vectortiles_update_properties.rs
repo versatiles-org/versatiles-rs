@@ -269,7 +269,7 @@ mod tests {
 	#[test]
 	fn test_args_from_vpl_node() {
 		let vpl_node = VPLNode::from_str(
-			r##"vectortiles_update_properties data_source_path="data.csv" id_field_tiles="id" id_field_data="id" replace_properties="true" include_id="true""##,
+			r##"vectortiles_update_properties data_source_path="data.csv" id_field_tiles=id id_field_data=id layer_name=test_layer replace_properties=true include_id=true"##,
 		)
 		.unwrap();
 
@@ -307,9 +307,9 @@ mod tests {
 					),
 					&replace(parts[0], "id_field_tiles"),
 					&replace(parts[1], "id_field_data"),
-					&replace(parts[2], "layername"),
-					&replace(parts[3], "replace_properties"),
-					&replace(parts[4], "include_id"),
+					"layer_name=mock",
+					&replace(parts[2], "replace_properties"),
+					&replace(parts[3], "include_id"),
 				]
 				.join(" "),
 			)
@@ -327,7 +327,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_run_variation1() -> Result<()> {
 		assert_eq!(
-			run("x,data_id,,false,false").await?, 
+			run("x,data_id,false,false").await?, 
 			"{\"filename\": String(\"dummy\"), \"value\": String(\"test\"), \"x\": UInt(0), \"y\": UInt(0), \"z\": UInt(0)}"
 		);
 		Ok(())
@@ -336,7 +336,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_run_variation2() -> Result<()> {
 		assert_eq!(
-			run("x,data_id,,false,true").await?, 
+			run("x,data_id,false,true").await?, 
 			"{\"data_id\": UInt(0), \"filename\": String(\"dummy\"), \"value\": String(\"test\"), \"x\": UInt(0), \"y\": UInt(0), \"z\": UInt(0)}"
 		);
 		Ok(())
@@ -344,14 +344,14 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_run_variation3() -> Result<()> {
-		assert_eq!(run("x,data_id,,true,false").await?, "{\"value\": String(\"test\")}");
+		assert_eq!(run("x,data_id,true,false").await?, "{\"value\": String(\"test\")}");
 		Ok(())
 	}
 
 	#[tokio::test]
 	async fn test_run_variation4() -> Result<()> {
 		assert_eq!(
-			run("x,data_id,,true,true").await?,
+			run("x,data_id,true,true").await?,
 			"{\"data_id\": UInt(0), \"value\": String(\"test\")}"
 		);
 		Ok(())

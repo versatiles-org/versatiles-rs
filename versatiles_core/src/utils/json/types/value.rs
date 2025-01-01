@@ -49,28 +49,28 @@ impl JsonValue {
 		if let JsonValue::Array(array) = self {
 			Ok(array)
 		} else {
-			bail!("self must be a JSON array")
+			bail!("expected a JSON array")
 		}
 	}
 	pub fn to_array(self) -> Result<JsonArray> {
 		if let JsonValue::Array(array) = self {
 			Ok(array)
 		} else {
-			bail!("self must be a JSON array")
+			bail!("expected a JSON array")
 		}
 	}
 	pub fn as_object(&self) -> Result<&JsonObject> {
 		if let JsonValue::Object(object) = self {
 			Ok(object)
 		} else {
-			bail!("self must be a JSON object")
+			bail!("expected a JSON object")
 		}
 	}
 	pub fn to_object(self) -> Result<JsonObject> {
 		if let JsonValue::Object(object) = self {
 			Ok(object)
 		} else {
-			bail!("self must be a JSON object")
+			bail!("expected a JSON object")
 		}
 	}
 	pub fn as_string(&self) -> Result<String> {

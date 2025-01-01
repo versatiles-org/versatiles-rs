@@ -99,7 +99,6 @@ impl TileSource {
 		tilejson.set_string("type", parameters.tile_format.as_type_str())?;
 		tilejson.set_string("name", self.id.as_str())?;
 		tilejson.set_string("format", parameters.tile_format.as_str())?;
-		tilejson.set_string("compression", parameters.tile_compression.as_str())?;
 
 		let tiles_url = format!("{}{{z}}/{{x}}/{{y}}", self.prefix.as_string());
 		tilejson.set_list("tiles", vec![tiles_url])?;
@@ -132,7 +131,7 @@ mod tests {
 		let container = TileSource::from(reader.boxed(), "prefix")?;
 
 		assert_eq!(container.prefix.str, "/tiles/prefix/");
-		assert_eq!(container.build_tile_json().await?.as_str(), "{\"type\":\"dummy_container\",\"format\":\"png\",\"compression\":\"uncompressed\",\"zoom_min\":2,\"zoom_max\":3,\"bbox\":[-180,-79.17133464081944,45,66.51326044311185]}");
+		assert_eq!(container.build_tile_json().await?.as_str(), "{\"bounds\":[-180,-79.17133464081944,45,66.51326044311185],\"format\":\"png\",\"maxzoom\":3,\"minzoom\":2,\"name\":\"prefix\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"image\"}");
 
 		Ok(())
 	}
@@ -198,7 +197,7 @@ mod tests {
 			String::from_utf8(
 				check_response(c, "meta.json", Uncompressed, "application/json").await?
 			)?,
-			"{\"bounds\":[-180,-79.17133464081944,45,66.51326044311185],\"center\":[-67.5,-6.329037098853796,3],\"format\":\"image\",\"maxzoom\":3,\"minzoom\":2,\"name\":\"prefix\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
+			"{\"bounds\":[-180,-79.17133464081944,45,66.51326044311185],\"format\":\"png\",\"maxzoom\":3,\"minzoom\":2,\"name\":\"prefix\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"image\"}"
 		);
 
 		assert!(check_error_400(c, "x/0/0.png", Uncompressed).await?);

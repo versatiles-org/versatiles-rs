@@ -10,7 +10,7 @@ use nom::{
 	sequence::{delimited, pair, separated_pair, tuple},
 	IResult, Parser,
 };
-use std::{collections::HashMap, fmt::Debug};
+use std::{collections::BTreeMap, fmt::Debug};
 
 #[allow(dead_code)]
 fn debug<I: Clone + Debug, E: ContextError<I>, F, O: Debug>(
@@ -134,7 +134,7 @@ fn parse_node<'a>(input: &'a str) -> IResult<&'a str, VPLNode, VerboseError<&'a 
 		let (input, children) = parse_sources(input)?;
 		let (input, _) = multispace0(input)?;
 
-		let mut properties = HashMap::new();
+		let mut properties = BTreeMap::new();
 		for (key, mut values) in property_list {
 			properties
 				.entry(key)
@@ -294,8 +294,9 @@ mod tests {
 				"vectortiles_update_properties",
 				vec![
 					("data_source_path", "cities.csv"),
-					("id_field_tiles", "id"),
-					("id_field_data", "city_id"),
+					("id_field_data", "city_name"),
+					("id_field_tiles", "name"),
+					("layer_name", "place_labels"),
 				],
 			)),
 		]);

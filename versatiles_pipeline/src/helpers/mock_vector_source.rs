@@ -14,7 +14,7 @@ pub struct MockVectorSource {
 	#[allow(clippy::type_complexity)]
 	data: Vec<(String, Vec<Vec<(String, String)>>)>,
 	parameters: TilesReaderParameters,
-	meta: TileJSON,
+	tilejson: TileJSON,
 }
 
 impl MockVectorSource {
@@ -44,10 +44,13 @@ impl MockVectorSource {
 			bbox.unwrap_or_else(|| TileBBoxPyramid::new_full(8)),
 		);
 
+		let mut tilejson = TileJSON::default();
+		tilejson.set_string("type", "mock vector source").unwrap();
+
 		MockVectorSource {
 			data,
 			parameters,
-			meta: TileJSON::default(),
+			tilejson,
 		}
 	}
 }
@@ -71,7 +74,7 @@ impl TilesReaderTrait for MockVectorSource {
 	}
 
 	fn get_tilejson(&self) -> &TileJSON {
-		&self.meta
+		&self.tilejson
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
