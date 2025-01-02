@@ -11,7 +11,7 @@
 //!
 //! # Example
 //! ```rust
-//! # use versatiles::types::{TileJSON, Blob};
+//! # use versatiles_core::{types::*, utils::*};
 //! # async fn example() -> Result<(), anyhow::Error> {
 //! let json_text = r#"
 //!   {
@@ -115,7 +115,7 @@ impl TileJSON {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles::types::{TileJSON, JsonObject};
+	/// # use versatiles_core::{types::*, utils::*};
 	/// # let tj = TileJSON::default();
 	/// let json_obj = tj.as_object();
 	/// ```
@@ -214,7 +214,7 @@ impl TileJSON {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles::types::{TileJSON, GeoBBox};
+	/// # use versatiles_core::{types::*, utils::*};
 	/// let mut tj = TileJSON::default();
 	/// tj.limit_bbox(GeoBBox(-180.0, -90.0, 0.0, 10.0));
 	/// // If `tj.bounds` was None, now it's set; otherwise they are intersected.
@@ -231,7 +231,7 @@ impl TileJSON {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles::types::TileJSON;
+	/// # use versatiles_core::{types::*, utils::*};
 	/// # let mut tj = TileJSON::default();
 	/// tj.set_byte("minzoom", 3).unwrap();
 	/// tj.limit_min_zoom(5);
@@ -245,7 +245,7 @@ impl TileJSON {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles::types::TileJSON;
+	/// # use versatiles_core::{types::*, utils::*};
 	/// # let mut tj = TileJSON::default();
 	/// tj.set_byte("maxzoom", 15).unwrap();
 	/// tj.limit_max_zoom(10);
