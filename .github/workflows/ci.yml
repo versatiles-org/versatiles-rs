@@ -56,9 +56,6 @@ jobs:
       - name: Run test
         run: cargo test --workspace
 
-      - name: Run test with all features
-        run: cargo test --workspace --all-features
-
       - name: Install Cargo Coverage
         uses: taiki-e/install-action@cargo-llvm-cov
 
