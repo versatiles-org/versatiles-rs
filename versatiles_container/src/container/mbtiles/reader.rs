@@ -164,9 +164,6 @@ impl MBTilesReader {
 					let vector_layers = object
 						.get("vector_layers")
 						.with_context(|| anyhow!("expected 'vector_layers'"))?;
-					let vector_layers = vector_layers
-						.as_array()
-						.with_context(|| anyhow!("expected 'vector_layers' as array"))?;
 					self.tilejson.set_vector_layers(vector_layers)?;
 				}
 				_ => {}

@@ -55,7 +55,7 @@ impl TileBBoxPyramid {
 	/// * `geo_bbox` - A reference to an array of four `f64` values representing the geographical bounding box.
 	pub fn from_geo_bbox(zoom_level_min: u8, zoom_level_max: u8, bbox: &GeoBBox) -> TileBBoxPyramid {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		for z in zoom_level_min..zoom_level_max {
+		for z in zoom_level_min..=zoom_level_max {
 			pyramid.set_level_bbox(TileBBox::from_geo(z, bbox).unwrap());
 		}
 		pyramid
