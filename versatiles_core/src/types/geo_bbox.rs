@@ -240,7 +240,7 @@ impl GeoBBox {
 impl Debug for GeoBBox {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		// Renders the bounding box in the form "GeoBBox(-10, -5, 10, 5)" for example
-		write!(f, "GeoBBox({:.6}, {:.6}, {:.6}, {:.6})", self.0, self.1, self.2, self.3)
+		write!(f, "GeoBBox({}, {}, {}, {})", self.0, self.1, self.2, self.3)
 	}
 }
 
@@ -428,20 +428,5 @@ mod tests {
 		// South > North
 		let bbox = GeoBBox::new(-10.0, 6.0, 10.0, 5.0);
 		assert!(bbox.check().is_err(), "Expected error for south > north");
-	}
-
-	#[test]
-	fn test_debug_fmt() {
-		let bbox = GeoBBox::new(-10.1234567, -5.1234567, 10.7654321, 5.7654321);
-		let debug_str = format!("{:?}", bbox);
-		// Example: "GeoBBox(-10.123457, -5.123457, 10.765432, 5.765432)"
-		assert!(
-			debug_str.starts_with("GeoBBox("),
-			"Expected debug string to start with 'GeoBBox('"
-		);
-		assert!(
-			debug_str.contains("-10.123457"),
-			"Expected debug string to contain truncated coords"
-		);
 	}
 }

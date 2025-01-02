@@ -172,7 +172,7 @@ impl VersaTilesWriter {
 			.for_each_sync(|(coord, blob)| {
 				progress.inc(1);
 
-				let index = bbox.get_tile_index2(&coord.as_coord2());
+				let index = bbox.get_tile_index2(&coord.as_coord2()).unwrap();
 
 				let mut save_hash = false;
 				if blob.len() < 1000 {

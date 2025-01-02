@@ -13,8 +13,8 @@
 //!
 //! Example:
 //! ```text
-//! /tiles/1/2/3.png
-//! /tiles/1/2/4.jpg.br
+//! /tiles/3/2/1.png
+//! /tiles/4/2/1.jpg.br
 //! /tiles/meta.json
 //! ```
 //!
@@ -254,17 +254,17 @@ mod tests {
 	async fn tile_reader_new() -> Result<()> {
 		let dir = TempDir::new()?;
 		dir.child(".DS_Store").write_str("")?;
-		dir.child("1/2/3.png").write_str("test tile data")?;
+		dir.child("3/2/1.png").write_str("test tile data")?;
 		dir.child("meta.json").write_str(r#"{"type":"dummy"}"#)?;
 
 		let reader = DirectoryTilesReader::open_path(&dir)?;
 
-		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[180,-89.99075251648904,360,-89.7860070747368],\"maxzoom\":1,\"minzoom\":1,\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}");
+		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[-90,66.51326044311185,-45,79.17133464081945],\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}");
 
-		let tile_data = reader.get_tile_data(&TileCoord3::new(2, 3, 1)?).await?.unwrap();
+		let tile_data = reader.get_tile_data(&TileCoord3::new(2, 1, 3)?).await?.unwrap();
 		assert_eq!(tile_data, Blob::from("test tile data"));
 
-		assert!(reader.get_tile_data(&TileCoord3::new(2, 2, 1)?).await?.is_none());
+		assert!(reader.get_tile_data(&TileCoord3::new(2, 1, 2)?).await?.is_none());
 
 		Ok(())
 	}
@@ -288,7 +288,7 @@ mod tests {
 	#[tokio::test]
 	async fn open_path_with_unsupported_file_format() -> Result<()> {
 		let dir = TempDir::new()?;
-		dir.child("1/2/3.unknown").write_str("unsupported format")?;
+		dir.child("3/2/1.unknown").write_str("unsupported format")?;
 
 		assert_eq!(
 			DirectoryTilesReader::open_path(dir.path()).unwrap_err().to_string(),
@@ -309,11 +309,11 @@ mod tests {
 				.as_slice(),
 		)
 		.unwrap();
-		fs::create_dir_all(dir.path().join("0/1")).unwrap();
-		fs::write(dir.path().join("0/1/2.png"), "tile at 0/1/2").unwrap();
+		fs::create_dir_all(dir.path().join("2/1")).unwrap();
+		fs::write(dir.path().join("2/1/0.png"), "tile at 2/1/0").unwrap();
 
 		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
-		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[180,-89.9999827308541,540,-89.99075251648904],\"maxzoom\":0,\"minzoom\":0,\"tilejson\":\"3.0.0\",\"type\":\"dummy data\"}");
+		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[-90,66.51326044311185,0,85.05112877980659],\"maxzoom\":2,\"minzoom\":2,\"tilejson\":\"3.0.0\",\"type\":\"dummy data\"}");
 
 		Ok(())
 	}
@@ -321,15 +321,15 @@ mod tests {
 	#[tokio::test]
 	async fn complex_directory_structure() -> Result<()> {
 		let dir = TempDir::new().unwrap();
-		fs::create_dir_all(dir.path().join("0/1")).unwrap();
-		fs::write(dir.path().join("0/1/2.png"), "tile at 0/1/2").unwrap();
+		fs::create_dir_all(dir.path().join("3/2")).unwrap();
+		fs::write(dir.path().join("3/2/1.png"), "tile at 3/2/1").unwrap();
 		fs::write(dir.path().join("meta.json"), r#"{"type":"dummy data"}"#).unwrap();
 
 		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
-		let coord = TileCoord3::new(1, 2, 0).unwrap();
+		let coord = TileCoord3::new(2, 1, 3).unwrap();
 		let tile_data = reader.get_tile_data(&coord).await.unwrap().unwrap();
 
-		assert_eq!(tile_data, Blob::from("tile at 0/1/2"));
+		assert_eq!(tile_data, Blob::from("tile at 3/2/1"));
 
 		Ok(())
 	}
@@ -337,8 +337,8 @@ mod tests {
 	#[tokio::test]
 	async fn incorrect_format_and_compression_handling() -> Result<()> {
 		let dir = TempDir::new().unwrap();
-		fs::create_dir_all(dir.path().join("1/2")).unwrap();
-		fs::write(dir.path().join("1/2/3.txt"), "wrong format").unwrap();
+		fs::create_dir_all(dir.path().join("3/2")).unwrap();
+		fs::write(dir.path().join("3/2/1.txt"), "wrong format").unwrap();
 
 		assert_eq!(
 			&DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
@@ -352,12 +352,12 @@ mod tests {
 	#[tokio::test]
 	async fn error_different_tile_formats() -> Result<()> {
 		let dir = TempDir::new()?;
-		dir.child("1/2/3.png").write_str("test tile data")?;
-		dir.child("1/2/4.jpg").write_str("test tile data")?;
+		dir.child("3/2/1.png").write_str("test tile data")?;
+		dir.child("4/2/1.jpg").write_str("test tile data")?;
 
 		assert_eq!(
 			DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
-			"found multiple tile formats PNG and JPG"
+			"found multiple tile formats JPG and PNG"
 		);
 
 		Ok(())
@@ -366,12 +366,12 @@ mod tests {
 	#[tokio::test]
 	async fn error_different_tile_compressions() -> Result<()> {
 		let dir = TempDir::new()?;
-		dir.child("1/2/3.pbf").write_str("test tile data")?;
-		dir.child("1/2/4.pbf.br").write_str("test tile data")?;
+		dir.child("3/2/1.pbf").write_str("test tile data")?;
+		dir.child("4/2/1.pbf.br").write_str("test tile data")?;
 
 		assert_eq!(
 			DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
-			"found multiple tile compressions Uncompressed and Brotli"
+			"found multiple tile compressions Brotli and Uncompressed"
 		);
 
 		Ok(())
@@ -381,7 +381,7 @@ mod tests {
 	async fn test_minor_functions() -> Result<()> {
 		let dir = assert_fs::TempDir::new()?;
 		dir.child("meta.json").write_str("{\"key\": \"value\"}")?;
-		dir.child("1/2/3.png.br").write_str("tile data")?;
+		dir.child("3/2/1.png.br").write_str("tile data")?;
 
 		let mut reader = DirectoryTilesReader::open_path(dir.path())?;
 
@@ -389,10 +389,10 @@ mod tests {
 
 		assert_wildcard!(
 			format!("{reader:?}"), 
-			"DirectoryTilesReader { name: \"*\", parameters: TilesReaderParameters { bbox_pyramid: [1: [2,3,2,3] (1)], tile_compression: Brotli, tile_format: PNG } }"
+			"DirectoryTilesReader { name: \"*\", parameters: TilesReaderParameters { bbox_pyramid: [3: [2,1,2,1] (1)], tile_compression: Brotli, tile_format: PNG } }"
 		);
 
-		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[180,-89.99075251648904,360,-89.7860070747368],\"key\":\"value\",\"maxzoom\":1,\"minzoom\":1,\"tilejson\":\"3.0.0\"}");
+		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[-90,66.51326044311185,-45,79.17133464081945],\"key\":\"value\",\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\"}");
 
 		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Brotli);
 		reader.override_compression(TileCompression::Gzip);

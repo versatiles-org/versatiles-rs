@@ -110,7 +110,9 @@ impl OperationTrait for Operation {
 				let mut bbox_left = TileBBox::new_empty(bbox.level).unwrap();
 				for (index, t) in tiles.iter().enumerate() {
 					if t.is_none() {
-						bbox_left.include_coord2(&bbox.get_coord2_by_index(index as u32).unwrap())
+						bbox_left
+							.include_coord3(&bbox.get_coord3_by_index(index as u32).unwrap())
+							.unwrap();
 					}
 				}
 				if bbox_left.is_empty() {
@@ -121,7 +123,7 @@ impl OperationTrait for Operation {
 					.get_tile_stream(bbox_left)
 					.await
 					.for_each_sync(|(coord, mut blob)| {
-						let index = bbox.get_tile_index3(&coord);
+						let index = bbox.get_tile_index3(&coord).unwrap();
 						if tiles[index].is_none() {
 							blob = recompress(blob, &source.get_parameters().tile_compression, output_compression).unwrap();
 							tiles[index] = Some((coord, blob));

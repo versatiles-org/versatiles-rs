@@ -93,7 +93,9 @@ impl TileBBoxPyramid {
 	/// * `geo_bbox` - The geographical bounding box to intersect with.
 	pub fn intersect_geo_bbox(&mut self, geo_bbox: &GeoBBox) {
 		for (z, tile_bbox) in self.level_bbox.iter_mut().enumerate() {
-			tile_bbox.intersect_bbox(&TileBBox::from_geo(z as u8, geo_bbox).unwrap());
+			tile_bbox
+				.intersect_bbox(&TileBBox::from_geo(z as u8, geo_bbox).unwrap())
+				.unwrap();
 		}
 	}
 
@@ -113,7 +115,7 @@ impl TileBBoxPyramid {
 	pub fn intersect(&mut self, other_bbox_pyramid: &TileBBoxPyramid) {
 		for (level, bbox) in self.level_bbox.iter_mut().enumerate() {
 			let other_bbox = other_bbox_pyramid.get_level_bbox(level as u8);
-			bbox.intersect_bbox(other_bbox);
+			bbox.intersect_bbox(other_bbox).unwrap();
 		}
 	}
 
@@ -139,13 +141,13 @@ impl TileBBoxPyramid {
 	/// Includes a single tile coordinate in the pyramid, updating the bounding box
 	/// at the coordinate’s zoom level to ensure it now encompasses `(x, y)`.
 	pub fn include_coord(&mut self, coord: &TileCoord3) {
-		self.level_bbox[coord.z as usize].include_coord(coord.x, coord.y);
+		self.level_bbox[coord.z as usize].include_coord(coord.x, coord.y)
 	}
 
 	/// Includes another bounding box in the pyramid, merging it with the existing bounding box
 	/// at that bounding box’s zoom level.
 	pub fn include_bbox(&mut self, bbox: &TileBBox) {
-		self.level_bbox[bbox.level as usize].include_bbox(bbox);
+		self.level_bbox[bbox.level as usize].include_bbox(bbox).unwrap();
 	}
 
 	/// Includes all bounding boxes from another `TileBBoxPyramid` into this pyramid.
@@ -153,7 +155,7 @@ impl TileBBoxPyramid {
 	/// Each zoom level from `pyramid` is included into the corresponding level in `self`.
 	pub fn include_bbox_pyramid(&mut self, pyramid: &TileBBoxPyramid) {
 		for bbox in pyramid.iter_levels() {
-			self.level_bbox[bbox.level as usize].include_bbox(bbox);
+			self.level_bbox[bbox.level as usize].include_bbox(bbox).unwrap();
 		}
 	}
 
@@ -169,7 +171,7 @@ impl TileBBoxPyramid {
 	/// Checks if the pyramid overlaps the specified bounding box at the bounding box’s zoom level.
 	pub fn overlaps_bbox(&self, bbox: &TileBBox) -> bool {
 		if let Some(local_bbox) = self.level_bbox.get(bbox.level as usize) {
-			local_bbox.overlaps_bbox(bbox)
+			local_bbox.overlaps_bbox(bbox).unwrap_or(false)
 		} else {
 			false
 		}
@@ -327,6 +329,7 @@ impl PartialEq for TileBBoxPyramid {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use anyhow::Result;
 
 	#[test]
 	fn test_empty_pyramid() {
@@ -388,22 +391,24 @@ mod tests {
 	}
 
 	#[test]
-	fn test_include_coord2() {
+	fn test_include_coord2() -> Result<()> {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		pyramid.include_coord(&TileCoord3::new(1, 2, 3).unwrap());
-		pyramid.include_coord(&TileCoord3::new(4, 5, 3).unwrap());
-		pyramid.include_coord(&TileCoord3::new(6, 7, 8).unwrap());
+		pyramid.include_coord(&TileCoord3::new(1, 2, 3)?);
+		pyramid.include_coord(&TileCoord3::new(4, 5, 3)?);
+		pyramid.include_coord(&TileCoord3::new(6, 7, 8)?);
 
 		assert!(pyramid.get_level_bbox(0).is_empty());
 		assert!(pyramid.get_level_bbox(1).is_empty());
 		assert!(pyramid.get_level_bbox(2).is_empty());
-		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 1, 2, 4, 5).unwrap());
+		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 1, 2, 4, 5)?);
 		assert!(pyramid.get_level_bbox(4).is_empty());
 		assert!(pyramid.get_level_bbox(5).is_empty());
 		assert!(pyramid.get_level_bbox(6).is_empty());
 		assert!(pyramid.get_level_bbox(7).is_empty());
-		assert_eq!(pyramid.get_level_bbox(8), &TileBBox::new(8, 6, 7, 6, 7).unwrap());
+		assert_eq!(pyramid.get_level_bbox(8), &TileBBox::new(8, 6, 7, 6, 7)?);
 		assert!(pyramid.get_level_bbox(9).is_empty());
+
+		Ok(())
 	}
 
 	#[test]

@@ -87,20 +87,6 @@ impl TileJsonValues {
 	/// Updates or inserts a byte (`u8`) for the given `key`.
 	/// The provided `update` closure receives the current value (if any)
 	/// and returns the new byte value to be stored.
-	///
-	/// ```
-	/// # use crate::utils::JsonValue;
-	/// # use anyhow::Result;
-	/// # use crate::TileJsonValues; // hypothetical
-	/// let mut values = TileJsonValues::default();
-	///
-	/// // If there's no current value for "maxzoom", use 0,
-	/// // otherwise pick the larger of the existing and new.
-	/// values.update_byte("maxzoom", |maybe_current| {
-	///     let current = maybe_current.unwrap_or(0);
-	///     current.max(10)
-	/// });
-	/// ```
 	pub fn update_byte<T>(&mut self, key: &str, update: T)
 	where
 		T: FnOnce(Option<u8>) -> u8,

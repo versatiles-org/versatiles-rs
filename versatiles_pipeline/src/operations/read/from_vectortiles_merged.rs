@@ -121,7 +121,7 @@ impl OperationTrait for Operation {
 					.get_tile_stream(bbox.clone())
 					.await
 					.for_each_sync(|(coord, mut blob)| {
-						let index = bbox.get_tile_index3(&coord);
+						let index = bbox.get_tile_index3(&coord).unwrap();
 						blob = decompress(blob, &source.get_parameters().tile_compression).unwrap();
 						tiles[index].push(blob);
 					})
