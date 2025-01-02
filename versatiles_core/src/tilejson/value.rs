@@ -1,4 +1,4 @@
-use crate::utils::JsonValue;
+use crate::json::JsonValue;
 use anyhow::{bail, ensure, Result};
 use std::collections::BTreeMap;
 

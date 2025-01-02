@@ -5,7 +5,7 @@
 //! The `FileHeader` struct contains metadata about the file, including its tile format, compression, zoom range, bounding box, and byte ranges for metadata and blocks.
 
 use anyhow::{bail, ensure, Result};
-use versatiles_core::{types::*, utils::io::*};
+use versatiles_core::{io::*, types::*};
 
 const HEADER_LENGTH: u64 = 66;
 const BBOX_SCALE: f64 = 10000000.0;

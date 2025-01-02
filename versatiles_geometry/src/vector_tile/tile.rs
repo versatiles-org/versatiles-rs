@@ -2,7 +2,7 @@
 
 use super::layer::VectorTileLayer;
 use anyhow::{bail, Context, Result};
-use versatiles_core::{types::Blob, utils::io::*};
+use versatiles_core::{io::*, types::Blob};
 
 #[derive(Debug, Default, PartialEq)]
 pub struct VectorTile {

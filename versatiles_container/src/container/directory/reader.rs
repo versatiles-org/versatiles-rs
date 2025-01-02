@@ -51,7 +51,7 @@ use std::{
 	fs,
 	path::{Path, PathBuf},
 };
-use versatiles_core::{types::*, utils::*};
+use versatiles_core::{tilejson::TileJSON, types::*, utils::*};
 
 /// A reader for tiles stored in a directory structure.
 /// The directory should be structured as follows:

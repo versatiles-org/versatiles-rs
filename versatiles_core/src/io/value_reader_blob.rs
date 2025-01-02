@@ -11,7 +11,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::{utils::io::{ValueReader, ValueReaderBlob}, types::Blob};
+//! use versatiles::{io::{ValueReader, ValueReaderBlob}, types::Blob};
 //! use anyhow::Result;
 //!
 //! fn main() -> Result<()> {

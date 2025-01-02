@@ -6,7 +6,7 @@ use crate::{
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use futures::future::{join_all, BoxFuture};
-use versatiles_core::{types::*, utils::recompress};
+use versatiles_core::{tilejson::TileJSON, types::*, utils::recompress};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Overlays multiple tile sources, using the tile from the first source that provides it.

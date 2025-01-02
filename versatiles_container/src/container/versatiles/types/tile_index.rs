@@ -6,7 +6,7 @@
 
 use anyhow::{ensure, Result};
 use std::ops::Div;
-use versatiles_core::{types::*, utils::io::*, utils::*};
+use versatiles_core::{io::*, types::*, utils::*};
 
 const TILE_INDEX_LENGTH: u64 = 12;
 

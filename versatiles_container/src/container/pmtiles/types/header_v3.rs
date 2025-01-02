@@ -1,8 +1,8 @@
 use super::{PMTilesCompression, PMTilesType};
 use anyhow::{ensure, Result};
 use versatiles_core::{
+	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 	types::{Blob, ByteRange, TilesReaderParameters},
-	utils::io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 };
 
 #[derive(Debug, PartialEq)]

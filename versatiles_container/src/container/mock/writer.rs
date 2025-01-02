@@ -23,7 +23,7 @@
 use crate::container::TilesWriterTrait;
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{types::TilesReaderTrait, utils::io::DataWriterTrait};
+use versatiles_core::{io::DataWriterTrait, types::TilesReaderTrait};
 
 /// Mock implementation of a `TilesWriter`.
 pub struct MockTilesWriter {}

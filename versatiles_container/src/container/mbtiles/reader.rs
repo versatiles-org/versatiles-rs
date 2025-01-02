@@ -46,8 +46,11 @@ use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use std::path::Path;
 use versatiles_core::{
-	types::{TileCompression::*, TileFormat::*, *},
-	utils::{parse_json_str, progress::get_progress_bar, TransformCoord},
+	json::parse_json_str,
+	progress::get_progress_bar,
+	tilejson::TileJSON,
+	types::{TileBBoxPyramid, TileCompression::*, TileFormat::*, *},
+	utils::TransformCoord,
 };
 
 /// A struct that provides functionality to read tile data from an MBTiles SQLite database.

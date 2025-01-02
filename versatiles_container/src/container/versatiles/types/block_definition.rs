@@ -6,7 +6,7 @@
 
 use anyhow::{ensure, Result};
 use std::{fmt, ops::Div};
-use versatiles_core::{types::*, utils::io::*};
+use versatiles_core::{io::*, types::*};
 
 /// A struct representing a block of tiles within a larger tile set.
 #[derive(Clone, PartialEq, Eq)]

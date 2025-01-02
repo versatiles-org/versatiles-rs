@@ -7,7 +7,7 @@
 use super::BlockDefinition;
 use anyhow::{ensure, Result};
 use std::{collections::HashMap, ops::Div};
-use versatiles_core::{types::*, utils::io::*, utils::*};
+use versatiles_core::{io::*, types::*, utils::*};
 
 const BLOCK_INDEX_LENGTH: u64 = 33;
 

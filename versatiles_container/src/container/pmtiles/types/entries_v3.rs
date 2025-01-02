@@ -5,13 +5,7 @@ use std::{
 	io::Write,
 	slice::{Iter, SliceIndex},
 };
-use versatiles_core::{
-	types::{Blob, ByteRange, TileCompression},
-	utils::{
-		compress,
-		io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
-	},
-};
+use versatiles_core::{io::*, types::*, utils::compress};
 
 /// A collection of `EntryV3` that provides various utility functions
 /// for handling tile data entries, including serialization, deserialization,

@@ -7,7 +7,7 @@ use crate::{
 use anyhow::{anyhow, bail, Context, Result};
 use byteorder::LE;
 use std::mem::swap;
-use versatiles_core::{types::Blob, utils::io::*};
+use versatiles_core::{io::*, types::Blob};
 
 #[derive(Debug, Default, PartialEq)]
 pub struct VectorTileLayer {

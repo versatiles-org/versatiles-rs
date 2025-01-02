@@ -8,10 +8,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 use tar::{Builder, Header};
-use versatiles_core::{
-	types::TilesReaderTrait,
-	utils::{compress, io::DataWriterTrait, progress::get_progress_bar},
-};
+use versatiles_core::{io::DataWriterTrait, progress::get_progress_bar, types::TilesReaderTrait, utils::compress};
 
 /// A struct that provides functionality to write tile data to a tar archive.
 pub struct TarTilesWriter {}

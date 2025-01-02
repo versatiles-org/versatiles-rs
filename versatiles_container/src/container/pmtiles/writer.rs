@@ -32,10 +32,7 @@ use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
 use crate::container::TilesWriterTrait;
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{
-	types::*,
-	utils::{compress, io::DataWriterTrait, progress::get_progress_bar},
-};
+use versatiles_core::{io::DataWriterTrait, progress::get_progress_bar, types::*, utils::compress};
 
 /// A struct that provides functionality to write tile data to a PMTiles container.
 pub struct PMTilesWriter {}
@@ -124,7 +121,7 @@ mod tests {
 		mock::{MockTilesReader, MockTilesWriter},
 		pmtiles::PMTilesReader,
 	};
-	use versatiles_core::utils::io::*;
+	use versatiles_core::io::*;
 
 	#[tokio::test]
 	async fn read_write() -> Result<()> {

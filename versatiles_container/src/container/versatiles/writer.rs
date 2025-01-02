@@ -32,10 +32,7 @@ use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use log::{debug, trace};
 use std::collections::HashMap;
-use versatiles_core::{
-	types::*,
-	utils::{compress, io::DataWriterTrait, progress::*},
-};
+use versatiles_core::{io::DataWriterTrait, progress::*, types::*, utils::compress};
 
 /// A struct for writing tiles to a VersaTiles container.
 pub struct VersaTilesWriter {}

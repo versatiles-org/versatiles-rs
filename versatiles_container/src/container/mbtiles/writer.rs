@@ -34,10 +34,7 @@ use async_trait::async_trait;
 use r2d2::Pool;
 use r2d2_sqlite::{rusqlite::params, SqliteConnectionManager};
 use std::{fs::remove_file, path::Path};
-use versatiles_core::{
-	types::*,
-	utils::{io::DataWriterTrait, progress::get_progress_bar, JsonObject},
-};
+use versatiles_core::{io::DataWriterTrait, json::JsonObject, progress::get_progress_bar, types::*};
 
 /// A writer for creating and populating MBTiles databases.
 pub struct MBTilesWriter {

@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::{utils::io::{DataReaderFile, DataReaderTrait}, types::{Blob, ByteRange}};
+//! use versatiles::{io::{DataReaderFile, DataReaderTrait}, types::{Blob, ByteRange}};
 //! use anyhow::Result;
 //! use std::path::Path;
 //!

@@ -9,7 +9,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::{utils::io::{DataReaderHttp, DataReaderTrait}, types::{Blob, ByteRange}};
+//! use versatiles::{io::{DataReaderHttp, DataReaderTrait}, types::{Blob, ByteRange}};
 //! use anyhow::Result;
 //! use reqwest::Url;
 //!

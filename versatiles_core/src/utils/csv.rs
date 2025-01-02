@@ -1,4 +1,4 @@
-use super::ByteIterator;
+use crate::byte_iterator::ByteIterator;
 use anyhow::{bail, Error, Result};
 use std::io::BufRead;
 

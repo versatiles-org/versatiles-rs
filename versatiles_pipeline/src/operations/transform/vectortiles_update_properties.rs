@@ -12,7 +12,7 @@ use std::{
 	collections::{BTreeSet, HashMap},
 	sync::Arc,
 };
-use versatiles_core::{types::*, utils::decompress};
+use versatiles_core::{tilejson::TileJSON, types::*, utils::decompress};
 use versatiles_geometry::{vector_tile::VectorTile, GeoProperties};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]

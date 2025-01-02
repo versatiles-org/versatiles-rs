@@ -36,7 +36,7 @@
 use super::{tile_converter::TileConverter, write_to_filename};
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{types::*, utils::TransformCoord};
+use versatiles_core::{tilejson::TileJSON, types::*, utils::TransformCoord};
 
 /// Parameters for tile conversion.
 #[derive(Debug)]

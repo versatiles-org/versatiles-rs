@@ -11,7 +11,7 @@
 //!
 //! # Example
 //! ```rust
-//! # use versatiles_core::{types::*, utils::*};
+//! # use versatiles_core::tilejson::*;
 //! # async fn example() -> Result<(), anyhow::Error> {
 //! let json_text = r#"
 //!   {
@@ -34,10 +34,7 @@
 mod value;
 mod vector_layer;
 
-use crate::{
-	types::{Blob, GeoBBox, GeoCenter, TileBBoxPyramid},
-	utils::{parse_json_str, JsonObject, JsonValue},
-};
+use crate::{json::*, types::*};
 use anyhow::{anyhow, ensure, Result};
 use regex::Regex;
 use std::fmt::Debug;
@@ -115,7 +112,7 @@ impl TileJSON {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{types::*, utils::*};
+	/// # use versatiles_core::tilejson::*;
 	/// # let tj = TileJSON::default();
 	/// let json_obj = tj.as_object();
 	/// ```
@@ -214,7 +211,7 @@ impl TileJSON {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{types::*, utils::*};
+	/// # use versatiles_core::{tilejson::*, types::GeoBBox};
 	/// let mut tj = TileJSON::default();
 	/// tj.limit_bbox(GeoBBox(-180.0, -90.0, 0.0, 10.0));
 	/// // If `tj.bounds` was None, now it's set; otherwise they are intersected.
@@ -231,7 +228,7 @@ impl TileJSON {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{types::*, utils::*};
+	/// # use versatiles_core::tilejson::*;
 	/// # let mut tj = TileJSON::default();
 	/// tj.set_byte("minzoom", 3).unwrap();
 	/// tj.limit_min_zoom(5);
@@ -245,7 +242,7 @@ impl TileJSON {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{types::*, utils::*};
+	/// # use versatiles_core::tilejson::*;
 	/// # let mut tj = TileJSON::default();
 	/// tj.set_byte("maxzoom", 15).unwrap();
 	/// tj.limit_max_zoom(10);
@@ -483,8 +480,6 @@ impl Debug for TileJSON {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::TileBBoxPyramid;
-	use crate::utils::{JsonObject, JsonValue};
 
 	/// Creates a minimal valid TileJSON object in the form of `JsonObject`.
 	fn make_test_json_object() -> JsonObject {

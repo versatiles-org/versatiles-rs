@@ -1,7 +1,5 @@
-use super::{JsonArray, JsonObject, JsonValue};
-use crate::utils::{
-	parse_array_entries, parse_number_as, parse_object_entries, parse_quoted_json_string, parse_tag, ByteIterator,
-};
+use crate::byte_iterator::*;
+use crate::json::*;
 use anyhow::{Context, Result};
 use std::{collections::BTreeMap, io::Cursor};
 
@@ -36,7 +34,6 @@ fn parse_json_object(iter: &mut ByteIterator) -> Result<JsonValue> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::utils::JsonValue;
 
 	fn v<T>(input: T) -> JsonValue
 	where

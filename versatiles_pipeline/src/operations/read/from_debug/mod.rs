@@ -8,7 +8,7 @@ use futures::future::BoxFuture;
 use image::create_debug_image;
 use std::fmt::Debug;
 use vector::create_debug_vector_tile;
-use versatiles_core::types::*;
+use versatiles_core::{tilejson::TileJSON, types::*};
 use versatiles_image::helper::{image2blob, image2blob_fast};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]

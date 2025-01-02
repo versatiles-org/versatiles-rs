@@ -3,7 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::fmt::Debug;
-use versatiles_core::types::*;
+use versatiles_core::{tilejson::*, types::*};
 
 #[async_trait]
 pub trait OperationTrait: Debug + Send + Sync + Unpin {

@@ -3,7 +3,7 @@ use crate::{parse_geojson_feature, GeoCollection, GeoFeature};
 use anyhow::{anyhow, Error, Result};
 use futures::{future::ready, stream, Stream, StreamExt};
 use std::io::{BufRead, Cursor, Read};
-use versatiles_core::utils::ByteIterator;
+use versatiles_core::byte_iterator::ByteIterator;
 
 pub fn read_geojson(mut reader: impl Read) -> Result<GeoCollection> {
 	let mut buffer = String::new();

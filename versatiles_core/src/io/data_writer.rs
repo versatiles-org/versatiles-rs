@@ -9,7 +9,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::{utils::io::DataWriterTrait, types::{Blob, ByteRange}};
+//! use versatiles::{io::DataWriterTrait, types::{Blob, ByteRange}};
 //! use anyhow::Result;
 //!
 //! struct MockDataWriter {

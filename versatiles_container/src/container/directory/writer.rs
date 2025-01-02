@@ -52,8 +52,10 @@ use std::{
 	path::{Path, PathBuf},
 };
 use versatiles_core::{
+	io::DataWriterTrait,
+	progress::get_progress_bar,
 	types::{Blob, TilesReaderTrait},
-	utils::{compress, io::DataWriterTrait, progress::get_progress_bar},
+	utils::compress,
 };
 
 /// A struct that provides functionality to write tile data to a directory structure.

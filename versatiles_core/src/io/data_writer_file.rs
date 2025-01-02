@@ -9,7 +9,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::{utils::io::{DataWriterFile, DataWriterTrait}, types::{Blob, ByteRange}};
+//! use versatiles::{io::{DataWriterFile, DataWriterTrait}, types::{Blob, ByteRange}};
 //! use anyhow::Result;
 //! use std::path::Path;
 //!

@@ -26,8 +26,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::types::{TileBBox, TileJSON};
-use versatiles_core::{types::*, utils::compress};
+use versatiles_core::{tilejson::TileJSON, types::*, utils::compress};
 
 /// Enum representing different mock profiles for tile data.
 #[derive(Debug)]

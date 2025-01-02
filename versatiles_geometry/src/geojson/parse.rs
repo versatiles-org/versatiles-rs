@@ -1,9 +1,7 @@
-use crate::{
-	Coordinates0, Coordinates1, Coordinates2, Coordinates3, GeoCollection, GeoFeature, GeoProperties, GeoValue, Geometry,
-};
+use crate::*;
 use anyhow::{anyhow, bail, Result};
 use std::{io::Cursor, str};
-use versatiles_core::utils::*;
+use versatiles_core::{byte_iterator::*, json::*};
 
 pub fn parse_geojson(json: &str) -> Result<GeoCollection> {
 	let mut iter = ByteIterator::from_reader(Cursor::new(json), true);

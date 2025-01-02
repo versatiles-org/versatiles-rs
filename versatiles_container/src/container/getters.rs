@@ -28,7 +28,7 @@ use crate::container::*;
 use anyhow::{bail, Context, Result};
 use reqwest::Url;
 use std::env;
-use versatiles_core::{types::TilesReaderTrait, utils::io::*};
+use versatiles_core::{io::*, types::TilesReaderTrait};
 
 /// Get a reader for a given filename or URL.
 pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReaderTrait>> {

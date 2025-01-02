@@ -45,10 +45,7 @@ use futures::lock::Mutex;
 use std::{fmt::Debug, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
-use versatiles_core::{
-	types::*,
-	utils::{decompress, io::*},
-};
+use versatiles_core::{io::*, tilejson::TileJSON, types::*, utils::decompress};
 
 /// A struct that provides functionality to read tile data from a PMTiles container.
 #[derive(Debug)]

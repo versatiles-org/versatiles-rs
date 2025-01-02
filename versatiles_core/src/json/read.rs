@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use super::JsonValue;
 use anyhow::{anyhow, Context, Error, Result};
 use futures::{future::ready, stream, Stream, StreamExt};

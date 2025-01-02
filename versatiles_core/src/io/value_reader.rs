@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::utils::io::{ValueReader, ValueReaderSlice};
+//! use versatiles::io::{ValueReader, ValueReaderSlice};
 //! use anyhow::Result;
 //!
 //! fn main() -> Result<()> {

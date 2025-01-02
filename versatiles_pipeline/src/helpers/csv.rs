@@ -1,7 +1,6 @@
 use anyhow::{bail, Context, Result};
 use std::{io::BufReader, path::Path};
-use versatiles_core::utils::progress::get_progress_bar;
-use versatiles_core::utils::read_csv_iter;
+use versatiles_core::{progress::get_progress_bar, utils::read_csv_iter};
 use versatiles_geometry::{GeoProperties, GeoValue};
 
 /// Reads a CSV file from the given path and returns a vector of `GeoProperties`.
