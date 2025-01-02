@@ -1,9 +1,9 @@
 #[cfg(feature = "cli")]
 use super::ProbeDepth;
 use super::{Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters};
+use crate::types::TileJSON;
 #[cfg(feature = "cli")]
 use crate::utils::PrettyPrint;
-use crate::utils::TileJSON;
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;

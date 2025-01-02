@@ -47,11 +47,7 @@ use std::{fmt::Debug, path::Path, sync::Arc};
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
 	types::*,
-	utils::{
-		decompress,
-		io::{DataReader, DataReaderFile},
-		TileJSON,
-	},
+	utils::{decompress, io::*},
 };
 
 /// A struct that provides functionality to read tile data from a PMTiles container.

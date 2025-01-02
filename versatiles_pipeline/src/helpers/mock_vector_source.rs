@@ -1,9 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{
-	types::{Blob, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TilesReaderParameters, TilesReaderTrait},
-	utils::TileJSON,
-};
+use versatiles_core::types::*;
 use versatiles_geometry::{
 	vector_tile::{VectorTile, VectorTileLayer},
 	GeoFeature, Geometry,

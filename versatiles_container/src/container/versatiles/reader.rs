@@ -53,11 +53,7 @@ use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
 	types::*,
-	utils::{
-		decompress,
-		io::{DataReader, DataReaderFile},
-		TileJSON,
-	},
+	utils::{decompress, io::*},
 };
 
 /// `VersaTilesReader` is responsible for reading tile data from a `versatiles` container.

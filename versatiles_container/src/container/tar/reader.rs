@@ -6,7 +6,7 @@ use std::{collections::HashMap, fmt::Debug, io::Read, path::Path};
 use tar::{Archive, EntryType};
 use versatiles_core::{
 	types::*,
-	utils::{decompress, io::*, TileJSON},
+	utils::{decompress, io::*},
 };
 
 /// A struct that provides functionality to read tile data from a tar archive.

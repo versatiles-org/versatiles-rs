@@ -3,7 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::fmt::Debug;
-use versatiles_core::{types::*, utils::TileJSON};
+use versatiles_core::types::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filter tiles by a geographic bounding box.

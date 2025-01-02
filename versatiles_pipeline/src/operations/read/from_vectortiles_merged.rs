@@ -7,10 +7,7 @@ use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use futures::future::{join_all, BoxFuture};
 use std::collections::HashMap;
-use versatiles_core::{
-	types::*,
-	utils::{decompress, TileJSON},
-};
+use versatiles_core::{types::*, utils::decompress};
 use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
