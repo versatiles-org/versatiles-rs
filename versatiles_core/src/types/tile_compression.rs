@@ -32,7 +32,7 @@ use std::fmt::Display;
 
 /// Enum representing possible compression algorithms.
 #[cfg_attr(feature = "cli", derive(ValueEnum))]
-#[derive(Debug, EnumSetType, PartialOrd)]
+#[derive(Debug, EnumSetType, PartialOrd, Ord)]
 pub enum TileCompression {
 	Uncompressed,
 	Gzip,

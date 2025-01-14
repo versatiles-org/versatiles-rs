@@ -50,7 +50,7 @@ use std::fmt::{Display, Formatter};
 /// - `WEBP` - WEBP image format
 #[allow(clippy::upper_case_acronyms)]
 #[cfg_attr(feature = "cli", derive(ValueEnum))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TileFormat {
 	AVIF,
 	BIN,

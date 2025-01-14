@@ -139,19 +139,17 @@ impl DirectoryTilesReader {
 						if container_form.is_none() {
 							container_form = Some(file_form);
 						} else if container_form != Some(file_form) {
-							bail!(
-								"found multiple tile formats {:?} and {file_form:?}",
-								container_form.unwrap()
-							);
+							let mut list = [container_form.unwrap(), file_form];
+							list.sort();
+							bail!("found multiple tile formats: {list:?}");
 						}
 
 						if container_comp.is_none() {
 							container_comp = Some(file_comp);
 						} else if container_comp != Some(file_comp) {
-							bail!(
-								"found multiple tile compressions {:?} and {file_comp:?}",
-								container_comp.unwrap()
-							);
+							let mut list = [container_comp.unwrap(), file_comp];
+							list.sort();
+							bail!("found multiple tile compressions: {list:?}");
 						}
 
 						let coord3 = TileCoord3::new(x, y, z)?;
@@ -357,7 +355,7 @@ mod tests {
 
 		assert_eq!(
 			DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
-			"found multiple tile formats JPG and PNG"
+			"found multiple tile formats: [JPG, PNG]"
 		);
 
 		Ok(())
@@ -371,7 +369,7 @@ mod tests {
 
 		assert_eq!(
 			DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
-			"found multiple tile compressions Brotli and Uncompressed"
+			"found multiple tile compressions: [Uncompressed, Brotli]"
 		);
 
 		Ok(())
