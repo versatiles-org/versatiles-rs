@@ -18,7 +18,7 @@ async-trait.workspace = true
 brotli = { version = "7.0.0", default-features = false, features = ["std"] }
 byteorder = { workspace = true, features = [] }
 clap = { workspace = true, optional = true, features = ["std", "derive"] }
-colored = { version = "2.2.0", default-features = false, optional = true }
+colored = { version = "3.0.0", default-features = false, optional = true }
 enumset.workspace = true
 flate2 = { version = "1.0.35", default-features = false, features = ["default"] }
 futures.workspace = true
