@@ -124,7 +124,7 @@ impl TileServer {
 
 	fn add_tile_sources_to_app(&self, mut app: Router) -> Router {
 		for tile_source in self.tile_sources.iter() {
-			let route = tile_source.prefix.join_as_string("*path");
+			let route = tile_source.prefix.join_as_string("{*path}");
 
 			let tile_app = Router::new()
 				.route(&route, get(serve_tile))
