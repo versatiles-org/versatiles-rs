@@ -143,9 +143,9 @@ impl VersaTilesWriter {
 	}
 
 	/// Write a single block to the writer.
-	async fn write_block<'a>(
+	async fn write_block(
 		block: &BlockDefinition,
-		reader: &'a mut dyn TilesReaderTrait,
+		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
 		progress: &mut Box<dyn ProgressTrait>,
 	) -> Result<(ByteRange, ByteRange)> {
