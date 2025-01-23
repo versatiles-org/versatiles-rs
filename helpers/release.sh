@@ -24,4 +24,4 @@ if [ $? -ne 0 ]; then
 fi
 
 # publish to crates.io
-cargo release "$1" --execute --no-verify
+cargo release "$1" --execute --no-verify --sign-commit --workspace
