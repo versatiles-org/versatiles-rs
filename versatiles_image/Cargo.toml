@@ -20,5 +20,3 @@ webp = { version = "0.3.0", default-features = false, features = ["img"] }
 versatiles_core.workspace = true
 
 [dev-dependencies]
-
-versatiles.workspace = true

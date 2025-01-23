@@ -9,7 +9,7 @@
 //!
 //! ## Usage Example
 //! ```rust
-//! use versatiles::container::{MBTilesReader, PMTilesWriter, TilesWriterTrait};
+//! use versatiles_container::{MBTilesReader, PMTilesWriter, TilesWriterTrait};
 //! use std::path::Path;
 //!
 //! #[tokio::main]
@@ -29,7 +29,7 @@
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different tile formats, and verifying the integrity of the written data.
 
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
-use crate::container::TilesWriterTrait;
+use crate::TilesWriterTrait;
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{io::DataWriterTrait, progress::get_progress_bar, types::*, utils::compress};

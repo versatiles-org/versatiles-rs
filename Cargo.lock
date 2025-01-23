@@ -2781,7 +2781,6 @@ dependencies = [
  "reqwest",
  "tar",
  "tokio",
- "versatiles",
  "versatiles_core",
  "versatiles_pipeline",
  "wildmatch",
@@ -2833,7 +2832,6 @@ dependencies = [
  "num_cpus",
  "regex",
  "tokio",
- "versatiles",
  "versatiles_core",
 ]
 
@@ -2843,7 +2841,6 @@ version = "0.15.0"
 dependencies = [
  "anyhow",
  "image",
- "versatiles",
  "versatiles_core",
  "webp",
 ]
@@ -2864,7 +2861,6 @@ dependencies = [
  "nom",
  "regex",
  "tokio",
- "versatiles",
  "versatiles_core",
  "versatiles_derive",
  "versatiles_geometry",

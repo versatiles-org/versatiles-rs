@@ -9,7 +9,7 @@
 //! These mocks can be used to simulate tile writing operations in tests, allowing verification of code behavior under controlled conditions.
 //!
 //! ```rust
-//! use versatiles::container::{MockTilesReader, MockTilesReaderProfile, MockTilesWriter, TilesWriterTrait};
+//! use versatiles_container::{MockTilesReader, MockTilesReaderProfile, MockTilesWriter, TilesWriterTrait};
 //! use anyhow::Result;
 //!
 //! #[tokio::test]
@@ -20,7 +20,7 @@
 //! }
 //! ```
 
-use crate::container::TilesWriterTrait;
+use crate::TilesWriterTrait;
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{io::DataWriterTrait, types::TilesReaderTrait};
@@ -78,7 +78,7 @@ impl TilesWriterTrait for MockTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::{MockTilesReader, MockTilesReaderProfile};
+	use crate::{MockTilesReader, MockTilesReaderProfile};
 
 	#[tokio::test]
 	async fn convert_png() -> Result<()> {

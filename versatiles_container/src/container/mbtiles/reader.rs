@@ -9,8 +9,8 @@
 //!
 //! ## Usage Example
 //! ```rust
-//! use versatiles::container::MBTilesReader;
-//! use versatiles::types::{Blob, TileCoord3, TilesReaderTrait};
+//! use versatiles_container::MBTilesReader;
+//! use versatiles_core::types::{Blob, TileCoord3, TilesReaderTrait};
 //! use anyhow::Result;
 //! use std::path::Path;
 //!
@@ -407,7 +407,7 @@ struct RecordMetadata {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::container::MockTilesWriter;
+	use crate::MockTilesWriter;
 	use lazy_static::lazy_static;
 	use std::{env, path::PathBuf};
 

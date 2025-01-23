@@ -9,10 +9,8 @@
 //! These mocks can be used to simulate tile reading operations in tests, allowing verification of code behavior under controlled conditions.
 //!
 //! ```rust
-//! use versatiles::{
-//!     container::{MockTilesReader, MockTilesReaderProfile},
-//!     types::TilesReaderTrait
-//! };
+//! use versatiles_container::{MockTilesReader, MockTilesReaderProfile};
+//! use versatiles_core::types::TilesReaderTrait;
 //! use std::result::Result;
 //!
 //! #[tokio::test]
@@ -133,7 +131,7 @@ impl std::fmt::Debug for MockTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::MockTilesWriter;
+	use crate::MockTilesWriter;
 	use anyhow::Result;
 	use versatiles_core::utils::decompress;
 

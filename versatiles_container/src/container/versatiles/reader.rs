@@ -5,8 +5,8 @@
 //! This module provides the `VersaTilesReader` struct, which implements the `TilesReader` trait for reading tile data from a `versatiles` container. It supports reading metadata, tile data, and probing the container for debugging purposes.
 //!
 //! ```no_run
-//! use versatiles::container::VersaTilesReader;
-//! use versatiles::types::{TileCoord3, TileCompression, TileFormat, TileBBoxPyramid, TilesReaderTrait, TilesReaderParameters};
+//! use versatiles_container::VersaTilesReader;
+//! use versatiles_core::types::{TileCoord3, TileCompression, TileFormat, TileBBoxPyramid, TilesReaderTrait, TilesReaderParameters};
 //! use anyhow::Result;
 //! use futures::StreamExt;
 //! use std::path::Path;
@@ -480,7 +480,7 @@ impl PartialEq for VersaTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::{make_test_file, MockTilesReader, TilesWriterTrait, VersaTilesWriter, MOCK_BYTES_PBF};
+	use crate::{make_test_file, MockTilesReader, TilesWriterTrait, VersaTilesWriter, MOCK_BYTES_PBF};
 	use versatiles_core::{assert_wildcard, io::DataWriterBlob, utils::decompress_gzip};
 
 	#[tokio::test]

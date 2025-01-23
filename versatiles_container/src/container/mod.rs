@@ -28,9 +28,9 @@ pub use getters::{get_reader, write_to_filename};
 mod mbtiles;
 pub use mbtiles::*;
 
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 mod mock;
-#[cfg(feature = "test")]
+#[cfg(any(test, feature = "test"))]
 pub use mock::*;
 
 mod pmtiles;

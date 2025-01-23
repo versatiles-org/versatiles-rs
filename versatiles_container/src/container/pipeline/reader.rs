@@ -1,4 +1,4 @@
-use crate::container::get_reader;
+use crate::get_reader;
 use anyhow::{anyhow, Context, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
@@ -124,7 +124,7 @@ impl std::fmt::Debug for PipelineReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::MockTilesWriter;
+	use crate::MockTilesWriter;
 
 	pub const VPL: &str = include_str!("../../../../testdata/berlin.vpl");
 

@@ -9,8 +9,8 @@
 //!
 //! ## Usage Example
 //! ```rust
-//! use versatiles::container::PMTilesReader;
-//! use versatiles::types::{TileCoord3, TilesReaderTrait};
+//! use versatiles_container::PMTilesReader;
+//! use versatiles_core::types::{TileCoord3, TilesReaderTrait};
 //! use std::path::Path;
 //!
 //! #[tokio::main]

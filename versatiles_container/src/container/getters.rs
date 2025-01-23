@@ -3,8 +3,8 @@
 //! # Example Usage
 //!
 //! ```rust
-//! use versatiles::container::{get_reader, write_to_filename};
-//! use versatiles::types::{TileFormat, TilesReaderTrait};
+//! use versatiles_container::{get_reader, write_to_filename};
+//! use versatiles_core::types::{TileFormat, TilesReaderTrait};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -24,7 +24,7 @@
 //! }
 //! ```
 
-use crate::container::*;
+use crate::*;
 use anyhow::{bail, Context, Result};
 use reqwest::Url;
 use std::env;
@@ -103,7 +103,7 @@ fn get_extension(filename: &str) -> &str {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::container::{MockTilesReader, MockTilesWriter};
+	use crate::{MockTilesReader, MockTilesWriter};
 	use anyhow::Result;
 	use assert_fs::{fixture::NamedTempFile, TempDir};
 	use std::time::Instant;

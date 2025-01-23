@@ -25,7 +25,8 @@
 //!
 //! ## Usage
 //! ```no_run
-//! use versatiles::{container::DirectoryTilesReader, types::{TileCoord3, TilesReaderTrait}};
+//! use versatiles_container::DirectoryTilesReader;
+//! use versatiles_core::types::{TileCoord3, TilesReaderTrait};
 //! use std::path::Path;
 //! use tokio;
 //!

@@ -3,8 +3,8 @@
 //! # Example
 //!
 //! ```rust
-//! use versatiles::container::{MBTilesReader, TilesWriterTrait, VersaTilesWriter};
-//! use versatiles::types::{TileBBoxPyramid, TileCompression, TileFormat};
+//! use versatiles_container::{MBTilesReader, TilesWriterTrait, VersaTilesWriter};
+//! use versatiles_core::types::{TileBBoxPyramid, TileCompression, TileFormat};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -27,7 +27,7 @@
 //! ```
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
-use crate::container::TilesWriterTrait;
+use crate::TilesWriterTrait;
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use log::{debug, trace};

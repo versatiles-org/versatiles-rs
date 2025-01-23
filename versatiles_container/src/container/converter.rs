@@ -3,8 +3,8 @@
 //! # Example Usage
 //!
 //! ```rust
-//! use versatiles::container::{convert_tiles_container, MBTilesReader, TilesConverterParameters};
-//! use versatiles::types::{TileFormat, TileCompression, TileBBoxPyramid, TilesReaderTrait, TilesReaderParameters};
+//! use versatiles_container::{convert_tiles_container, MBTilesReader, TilesConverterParameters};
+//! use versatiles_core::types::{TileFormat, TileCompression, TileBBoxPyramid, TilesReaderTrait, TilesReaderParameters};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -220,7 +220,7 @@ impl TilesReaderTrait for TilesConvertReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::container::{MockTilesReader, VersaTilesReader};
+	use crate::{MockTilesReader, VersaTilesReader};
 	use assert_fs::NamedTempFile;
 	use versatiles_core::types::{
 		TileCompression::*,

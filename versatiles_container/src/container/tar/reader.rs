@@ -195,7 +195,7 @@ impl Debug for TarTilesReader {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::container::{make_test_file, MockTilesWriter, MOCK_BYTES_PBF};
+	use crate::{make_test_file, MockTilesWriter, MOCK_BYTES_PBF};
 	use versatiles_core::utils::decompress_gzip;
 	#[cfg(feature = "cli")]
 	use versatiles_core::utils::PrettyPrint;
