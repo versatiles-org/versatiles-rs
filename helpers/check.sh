@@ -21,7 +21,7 @@ echo "cargo clippy:"
 
 run_clippy() {
    cd "${PROJECT_DIR}$1"
-   echo "  - $1"
+   echo "  $1"
    result=$(cargo clippy --all-features --all-targets -- -D warnings 2>&1)
    if [ $? -ne 0 ]; then
       echo -e "$result\nERROR DURING: cargo clippy $1"
@@ -39,11 +39,26 @@ run_clippy /versatiles_image
 run_clippy /versatiles_pipeline
 cd $PROJECT_DIR
 
-echo "cargo test binary"
-result=$(cargo test --bins --all-features 2>&1)
-if [ $? -ne 0 ]; then
-   echo -e "$result\nERROR DURING: cargo test bin"
-   exit 1
-fi
+
+echo "cargo test:"
+
+run_test() {
+   cd "${PROJECT_DIR}$1"
+   echo "  $1"
+   result=$(cargo test --all-features 2>&1)
+   if [ $? -ne 0 ]; then
+      echo -e "$result\nERROR DURING: cargo test $1"
+      exit 1
+   fi
+}
+
+run_test /
+run_test /versatiles
+run_test /versatiles_container
+run_test /versatiles_core
+run_test /versatiles_derive
+run_test /versatiles_geometry
+run_test /versatiles_image
+run_test /versatiles_pipeline
 
 exit 0
