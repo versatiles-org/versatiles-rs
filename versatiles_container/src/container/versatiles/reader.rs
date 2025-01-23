@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 //! Module for reading `versatiles` tile containers.
 //!
 //! This module provides the `VersaTilesReader` struct, which implements the `TilesReader` trait for reading tile data from a `versatiles` container. It supports reading metadata, tile data, and probing the container for debugging purposes.
@@ -63,7 +65,6 @@ pub struct VersaTilesReader {
 	tilejson: TileJSON,
 }
 
-#[allow(dead_code)]
 impl VersaTilesReader {
 	/// Opens a `versatiles` container from a file path.
 	///

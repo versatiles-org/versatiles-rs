@@ -33,6 +33,7 @@ assert_fs.workspace = true
 wildmatch.workspace = true
 
 versatiles.workspace = true
+versatiles_core = { workspace = true, features = ["test"] }
 
 [features]
 default = []

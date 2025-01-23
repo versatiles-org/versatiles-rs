@@ -102,11 +102,6 @@ impl PrettyPrint {
 	pub async fn as_string(&self) -> String {
 		self.printer.as_string().await
 	}
-
-	#[allow(dead_code)]
-	pub async fn add_str(&self, text: String) {
-		self.printer.write(text).await;
-	}
 }
 
 impl Default for PrettyPrint {
@@ -160,14 +155,13 @@ mod tests {
 		printer.add_warning("test_warning_1").await;
 		let mut cat = printer.get_category("test_category_1").await;
 		cat.get_list("test_list_1").await.add_key_value("string_1", &4).await;
-		cat.add_str(String::from("string_2")).await;
 		cat.add_warning("test_warning_2").await;
 		printer.add_warning("test_warning_3").await;
 
 		let result = printer.as_string().await;
 		assert_eq!(
 			&result,
-			"test_warning_1\ntest_category_1:\n   test_list_1:\n      string_1: 4\nstring_2   test_warning_2\ntest_warning_3\n"
+			"test_warning_1\ntest_category_1:\n   test_list_1:\n      string_1: 4\n   test_warning_2\ntest_warning_3\n"
 		);
 	}
 
