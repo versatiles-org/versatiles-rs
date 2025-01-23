@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::{io::{DataWriterBlob, DataWriterTrait}, types::{Blob, ByteRange}};
+//! use versatiles_core::{io::{DataWriterBlob, DataWriterTrait}, types::{Blob, ByteRange}};
 //! use anyhow::Result;
 //!
 //! #[tokio::main]

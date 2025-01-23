@@ -28,7 +28,7 @@ impl GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::GeoBBox;
+	/// use versatiles_core::types::GeoBBox;
 	///
 	/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// assert_eq!(bbox.0, -10.0);
@@ -51,7 +51,7 @@ impl GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::GeoBBox;
+	/// use versatiles_core::types::GeoBBox;
 	/// use anyhow::Result;
 	///
 	/// fn example() -> Result<()> {
@@ -76,7 +76,7 @@ impl GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::GeoBBox;
+	/// use versatiles_core::types::GeoBBox;
 	///
 	/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// assert_eq!(bbox.as_vec(), vec![-10.0, -5.0, 10.0, 5.0]);
@@ -99,7 +99,7 @@ impl GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::GeoBBox;
+	/// use versatiles_core::types::GeoBBox;
 	///
 	/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// assert_eq!(bbox.as_string_json(), "[-10,-5,10,5]");
@@ -112,7 +112,7 @@ impl GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::GeoBBox;
+	/// use versatiles_core::types::GeoBBox;
 	///
 	/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// assert_eq!(bbox.as_string_list(), "-10,-5,10,5");
@@ -132,7 +132,7 @@ impl GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::GeoBBox;
+	/// use versatiles_core::types::GeoBBox;
 	///
 	/// let mut bbox1 = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// let bbox2 = GeoBBox::new(-12.0, -3.0, 8.0, 6.0);
@@ -167,7 +167,7 @@ impl GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::GeoBBox;
+	/// use versatiles_core::types::GeoBBox;
 	///
 	/// let mut bbox1 = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// let bbox2 = GeoBBox::new(-8.0, -4.0, 12.0, 4.0);
@@ -188,7 +188,7 @@ impl GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::GeoBBox;
+	/// use versatiles_core::types::GeoBBox;
 	///
 	/// let bbox1 = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// let bbox2 = GeoBBox::new(-8.0, -4.0, 12.0, 4.0);
@@ -217,7 +217,7 @@ impl GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::GeoBBox;
+	/// use versatiles_core::types::GeoBBox;
 	/// use anyhow::Result;
 	///
 	/// fn validate_bbox() -> Result<()> {
@@ -256,7 +256,7 @@ impl TryFrom<Vec<f64>> for GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::GeoBBox;
+	/// use versatiles_core::types::GeoBBox;
 	/// use anyhow::Result;
 	///
 	/// fn example() -> Result<()> {
@@ -280,7 +280,7 @@ impl From<&[f64; 4]> for GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::GeoBBox;
+	/// use versatiles_core::types::GeoBBox;
 	///
 	/// let arr = [-10.0, -5.0, 10.0, 5.0];
 	/// let bbox = GeoBBox::from(&arr);

@@ -9,7 +9,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::utils::progress::get_progress_bar;
+//! use versatiles_core::utils::progress::get_progress_bar;
 //!
 //! let mut progress = get_progress_bar("Processing", 100);
 //! progress.set_position(50);

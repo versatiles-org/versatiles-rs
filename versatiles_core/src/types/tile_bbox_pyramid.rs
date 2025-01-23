@@ -182,7 +182,7 @@ impl TileBBoxPyramid {
 	/// # Examples
 	///
 	/// ```
-	/// # use versatiles::types::TileBBoxPyramid;
+	/// # use versatiles_core::types::TileBBoxPyramid;
 	/// // Suppose `pyramid` is a filled pyramid...
 	/// // for bbox in pyramid.iter_levels() {
 	/// //     println!("Level {} has some tiles", bbox.level);

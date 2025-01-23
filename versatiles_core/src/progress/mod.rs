@@ -12,7 +12,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::progress::*;
+//! use versatiles_core::progress::*;
 //!
 //! let mut progress = get_progress_bar("Processing", 100);
 //! progress.set_position(50);

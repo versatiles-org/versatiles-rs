@@ -10,7 +10,7 @@
 //!
 //! ```rust
 //! // Importing all the necessary components
-//! use versatiles::io::*;
+//! use versatiles_core::io::*;
 //!
 //! fn main() {
 //!     // Now you can use all the imported modules and structs, such as `DataReaderBlob`, `DataWriterFile`, etc.

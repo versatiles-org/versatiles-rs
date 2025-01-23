@@ -11,7 +11,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::io::{ValueReader, ValueReaderFile};
+//! use versatiles_core::io::{ValueReader, ValueReaderFile};
 //! use anyhow::Result;
 //! use std::fs::File;
 //!

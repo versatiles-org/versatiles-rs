@@ -21,7 +21,7 @@ impl GeoCenter {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::GeoCenter;
+	/// use versatiles_core::types::GeoCenter;
 	/// use anyhow::Result;
 	///
 	/// fn example() -> Result<()> {
@@ -49,7 +49,7 @@ impl GeoCenter {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::GeoCenter;
+	/// use versatiles_core::types::GeoCenter;
 	///
 	/// let gc = GeoCenter(12.3, 45.6, 7);
 	/// let vec = gc.as_vec();
@@ -66,7 +66,7 @@ impl GeoCenter {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::GeoCenter;
+	/// use versatiles_core::types::GeoCenter;
 	///
 	/// let gc = GeoCenter(-75.5, 40.2, 3);
 	/// let arr = gc.as_array();
@@ -87,7 +87,7 @@ impl GeoCenter {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::GeoCenter;
+	/// use versatiles_core::types::GeoCenter;
 	/// use anyhow::Result;
 	///
 	/// fn validate_center() -> Result<()> {
@@ -127,7 +127,7 @@ impl TryFrom<Vec<f64>> for GeoCenter {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::GeoCenter;
+	/// use versatiles_core::types::GeoCenter;
 	/// use anyhow::Result;
 	///
 	/// fn example() -> Result<()> {

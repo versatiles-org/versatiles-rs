@@ -38,8 +38,6 @@ criterion = "0.5.1"
 tokio = { workspace = true, features = ["macros"] }
 wildmatch.workspace = true
 
-versatiles.workspace = true
-
 [features]
 default = ["cli"]
 cli = ["dep:clap", "dep:colored", "dep:indicatif"]

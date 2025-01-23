@@ -9,7 +9,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles::types::TileFormat;
+//! use versatiles_core::types::TileFormat;
 //!
 //! // Getting the file extension for a tile format
 //! let format = TileFormat::PNG;
@@ -69,7 +69,7 @@ impl TileFormat {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::TileFormat;
+	/// use versatiles_core::types::TileFormat;
 	/// let format = TileFormat::PNG;
 	/// assert_eq!(format.as_str(), "png");
 	/// ```
@@ -94,7 +94,7 @@ impl TileFormat {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::TileFormat;
+	/// use versatiles_core::types::TileFormat;
 	/// let format = TileFormat::GEOJSON;
 	/// assert_eq!(format.as_type_str(), "vector");
 	/// ```
@@ -112,7 +112,7 @@ impl TileFormat {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::TileFormat;
+	/// use versatiles_core::types::TileFormat;
 	/// let format = TileFormat::PNG;
 	/// assert_eq!(format.as_mime_str(), "image/png");
 	/// ```
@@ -135,7 +135,7 @@ impl TileFormat {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::TileFormat;
+	/// use versatiles_core::types::TileFormat;
 	/// let format = TileFormat::SVG;
 	/// assert_eq!(format.extension(), ".svg");
 	/// ```
@@ -167,7 +167,7 @@ impl TileFormat {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::TileFormat;
+	/// use versatiles_core::types::TileFormat;
 	///
 	/// let mut filename = String::from("picture.jpeg");
 	/// let format = TileFormat::from_filename(&mut filename);
@@ -216,7 +216,7 @@ impl TileFormat {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles::types::TileFormat;
+	/// use versatiles_core::types::TileFormat;
 	///
 	/// // Recognizes .jpeg as JPG.
 	/// let format = TileFormat::parse_str(".jpeg").unwrap();

@@ -48,7 +48,7 @@ impl<'a> TileStream<'a> {
 	/// # Examples
 	/// ```
 	/// use futures::{stream, StreamExt};
-	/// # use versatiles::types::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::types::{TileCoord3, Blob, TileStream};
 	///
 	/// let tile_data = stream::iter(vec![
 	///     (TileCoord3::new(0, 0, 0).unwrap(), Blob::from("tile0")),
@@ -66,7 +66,7 @@ impl<'a> TileStream<'a> {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles::types::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::types::{TileCoord3, Blob, TileStream};
 	/// let tile_data = vec![
 	///     (TileCoord3::new(0, 0, 0).unwrap(), Blob::from("tile0")),
 	///     (TileCoord3::new(1, 1, 1).unwrap(), Blob::from("tile1")),
@@ -96,7 +96,7 @@ impl<'a> TileStream<'a> {
 	/// # Examples
 	/// ```
 	/// # use std::sync::Arc;
-	/// # use versatiles::types::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::types::{TileCoord3, Blob, TileStream};
 	/// let coords = vec![TileCoord3::new(0,0,0).unwrap(), TileCoord3::new(1,1,1).unwrap()];
 	/// let closure = |coord: TileCoord3| {
 	///     // Data loading logic...
@@ -133,7 +133,7 @@ impl<'a> TileStream<'a> {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles::types::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::types::{TileCoord3, Blob, TileStream};
 	/// # use futures::Future;
 	/// # async fn example() {
 	/// let coords = vec![TileCoord3::new(0,0,0).unwrap(), TileCoord3::new(1,1,1).unwrap()];
@@ -172,7 +172,7 @@ impl<'a> TileStream<'a> {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles::types::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::types::{TileCoord3, Blob, TileStream};
 	/// # use futures::future;
 	/// #
 	/// async fn example(tile_streams: Vec<impl std::future::Future<Output=TileStream<'static>> + Send + 'static>) {
@@ -201,7 +201,7 @@ impl<'a> TileStream<'a> {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles::types::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::types::{TileCoord3, Blob, TileStream};
 	/// # async fn test() {
 	/// let stream = TileStream::from_vec(vec![
 	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
@@ -221,7 +221,7 @@ impl<'a> TileStream<'a> {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles::types::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::types::{TileCoord3, Blob, TileStream};
 	/// # async fn test() {
 	/// let mut stream = TileStream::from_vec(vec![
 	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
@@ -246,7 +246,7 @@ impl<'a> TileStream<'a> {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles::types::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::types::{TileCoord3, Blob, TileStream};
 	/// # use futures::Future;
 	/// # async fn test() {
 	/// let stream = TileStream::from_vec(vec![
@@ -273,7 +273,7 @@ impl<'a> TileStream<'a> {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles::types::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::types::{TileCoord3, Blob, TileStream};
 	/// # async fn test() {
 	/// let stream = TileStream::from_vec(vec![
 	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
@@ -304,7 +304,7 @@ impl<'a> TileStream<'a> {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles::types::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::types::{TileCoord3, Blob, TileStream};
 	/// # async fn test() {
 	/// let stream = TileStream::from_vec(vec![
 	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
@@ -349,7 +349,7 @@ impl<'a> TileStream<'a> {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles::types::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::types::{TileCoord3, Blob, TileStream};
 	/// # async fn test() {
 	/// let stream = TileStream::from_vec(vec![
 	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
@@ -388,7 +388,7 @@ impl<'a> TileStream<'a> {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles::types::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::types::{TileCoord3, Blob, TileStream};
 	/// # async fn test() {
 	/// let stream = TileStream::from_vec(vec![
 	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("keep")),
@@ -436,7 +436,7 @@ impl<'a> TileStream<'a> {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles::types::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::types::{TileCoord3, Blob, TileStream};
 	/// # async fn test() {
 	/// let stream = TileStream::from_vec(vec![
 	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
@@ -467,7 +467,7 @@ impl<'a> TileStream<'a> {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles::types::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::types::{TileCoord3, Blob, TileStream};
 	/// # async fn test() {
 	/// let stream = TileStream::from_vec(vec![
 	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),

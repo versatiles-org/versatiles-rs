@@ -5,7 +5,7 @@
 //! # Examples
 //!
 //! ```
-//! use versatiles::types::{TileCoord2, TileCoord3};
+//! use versatiles_core::types::{TileCoord2, TileCoord3};
 //!
 //! // Creating a new TileCoord2 instance
 //! let coord2 = TileCoord2::new(3, 4);
