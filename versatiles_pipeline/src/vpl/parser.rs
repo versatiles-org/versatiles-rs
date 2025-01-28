@@ -5,11 +5,12 @@ use nom::{
 	bytes::complete::{escaped_transform, tag, take_while, take_while1},
 	character::complete::{alphanumeric1, char, multispace0, multispace1, none_of, one_of},
 	combinator::{all_consuming, cut, opt, recognize, value},
-	error::{context, convert_error, ContextError, VerboseError},
+	error::{context, ContextError},
 	multi::{many1, separated_list0, separated_list1},
-	sequence::{delimited, pair, separated_pair, tuple},
+	sequence::{delimited, pair, separated_pair},
 	IResult, Parser,
 };
+use nom_language::error::{convert_error, VerboseError};
 use std::{collections::BTreeMap, fmt::Debug};
 
 #[allow(dead_code)]
@@ -18,7 +19,7 @@ fn debug<I: Clone + Debug, E: ContextError<I>, F, O: Debug>(
 	mut f: F,
 ) -> impl FnMut(I) -> IResult<I, O, E>
 where
-	F: Parser<I, O, E>,
+	F: Parser<I, Output = O, Error = E>,
 {
 	move |i: I| {
 		let result = f.parse(i.clone());
@@ -35,15 +36,16 @@ where
 
 fn parse_unquoted_value(input: &str) -> IResult<&str, String, VerboseError<&str>> {
 	context(
-		"unquoted value",
+		"parsing unquoted value",
 		recognize(many1(alt((alphanumeric1, recognize(one_of(".-_")))))),
-	)(input)
+	)
+	.parse(input)
 	.map(|(a, b)| (a, b.to_string()))
 }
 
 fn parse_string(input: &str) -> IResult<&str, String, VerboseError<&str>> {
 	context(
-		"string",
+		"parsing string",
 		escaped_transform(
 			none_of("\\\""),
 			'\\',
@@ -54,82 +56,92 @@ fn parse_string(input: &str) -> IResult<&str, String, VerboseError<&str>> {
 				value("\t", tag("t")),
 			)),
 		),
-	)(input)
+	)
+	.parse(input)
 }
 
 fn parse_bare_identifier(input: &str) -> IResult<&str, String, VerboseError<&str>> {
 	context(
-		"parse_bare_identifier",
+		"parsing bare_identifier",
 		recognize(pair(
 			take_while1(|c: char| c.is_ascii_alphabetic()),
 			take_while(|c: char| c.is_ascii_alphanumeric() || "_-".contains(c)),
 		)),
-	)(input)
+	)
+	.parse(input)
 	.map(|(a, b)| (a, b.to_string()))
 }
 
 fn parse_quoted_string(input: &str) -> IResult<&str, String, VerboseError<&str>> {
-	context("quoted string", delimited(char('\"'), parse_string, cut(char('\"'))))(input)
+	context(
+		"parsing quoted string",
+		delimited(char('\"'), parse_string, cut(char('\"'))),
+	)
+	.parse(input)
 }
 
 fn parse_array(input: &str) -> IResult<&str, Vec<String>, VerboseError<&str>> {
 	context(
-		"array",
+		"parsing array",
 		delimited(
-			tuple((char('['), multispace0)),
+			(char('['), multispace0),
 			separated_list0(
-				tuple((multispace0, char(','), multispace0)),
+				(multispace0, char(','), multispace0),
 				alt((parse_quoted_string, parse_unquoted_value)),
 			),
-			tuple((multispace0, char(']'))),
+			(multispace0, char(']')),
 		),
-	)(input)
+	)
+	.parse(input)
 }
 
 fn parse_value(input: &str) -> IResult<&str, Vec<String>, VerboseError<&str>> {
 	context(
-		"value",
+		"parsing value",
 		alt((
 			parse_quoted_string.map(|v| vec![v]),
 			parse_unquoted_value.map(|v| vec![v]),
 			parse_array,
 		)),
-	)(input)
+	)
+	.parse(input)
 }
 
 fn parse_identifier(input: &str) -> IResult<&str, String, VerboseError<&str>> {
-	context("node identifier", parse_bare_identifier)(input)
+	context("parsing node identifier", parse_bare_identifier).parse(input)
 }
 
 fn parse_property(input: &str) -> IResult<&str, (String, Vec<String>), VerboseError<&str>> {
 	context(
-		"property",
+		"parsing property",
 		separated_pair(
 			parse_identifier,
-			cut(tuple((multispace0, char('='), multispace0))),
+			cut((multispace0, char('='), multispace0)),
 			cut(parse_value),
 		),
-	)(input)
+	)
+	.parse(input)
 }
 
 fn parse_sources(input: &str) -> IResult<&str, Vec<VPLPipeline>, VerboseError<&str>> {
 	context(
-		"sources",
+		"parsing sources",
 		opt(delimited(
-			tuple((char('['), multispace0)),
+			(char('['), multispace0),
 			separated_list0(char(','), parse_pipeline),
-			tuple((multispace0, cut(char(']')))),
+			(multispace0, cut(char(']'))),
 		))
 		.map(|r| r.unwrap_or_default()),
-	)(input)
+	)
+	.parse(input)
 }
 
 fn parse_node<'a>(input: &'a str) -> IResult<&'a str, VPLNode, VerboseError<&'a str>> {
-	context("node", |input: &'a str| {
+	context("parsing node", |input: &'a str| {
 		let (input, _) = multispace0(input)?;
 		let (input, name) = parse_identifier(input)?;
 		let (input, _) = multispace0(input)?;
-		let (input, property_list) = separated_list0(multispace1, parse_property)(input)?;
+		let (input, property_list) = separated_list0(multispace1, parse_property).parse(input)?;
 		let (input, _) = multispace0(input)?;
 		let (input, children) = parse_sources(input)?;
 		let (input, _) = multispace0(input)?;
@@ -150,22 +162,24 @@ fn parse_node<'a>(input: &'a str) -> IResult<&'a str, VPLNode, VerboseError<&'a 
 				sources: children,
 			},
 		))
-	})(input)
+	})
+	.parse(input)
 }
 
 fn parse_pipeline(input: &str) -> IResult<&str, VPLPipeline, VerboseError<&str>> {
 	context(
-		"pipeline",
+		"parsing pipeline",
 		delimited(
 			multispace0,
 			separated_list1(char('|'), parse_node).map(VPLPipeline::new),
 			multispace0,
 		),
-	)(input)
+	)
+	.parse(input)
 }
 
 pub fn parse_vpl(input: &str) -> Result<VPLPipeline> {
-	let result = all_consuming(parse_pipeline)(input);
+	let result = all_consuming(parse_pipeline).parse(input);
 	match result {
 		Ok((leftover, pipeline)) => {
 			ensure!(
@@ -174,7 +188,7 @@ pub fn parse_vpl(input: &str) -> Result<VPLPipeline> {
 			);
 			Ok(pipeline)
 		}
-		Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(anyhow::anyhow!("{}", convert_error(input, e))),
+		Err(nom::Err::Error(e)) | Err(nom::Err::Failure(e)) => Err(anyhow::anyhow!(convert_error(input, e))),
 		Err(e) => Err(anyhow::anyhow!("Error parsing VPL: {:?}", e)).context("Failed to parse VPL input"),
 	}
 }
@@ -324,43 +338,42 @@ mod tests {
 	#[test]
 	fn test_error_messages() {
 		lazy_static! {
-			static ref REG_MGS1: Regex = RegexBuilder::new(r##"\s+"##).build().unwrap();
-			static ref REG_MGS2: Regex = RegexBuilder::new(r##"\d+: at line \d+[,:]"##).build().unwrap();
+			static ref REG_MGS1: Regex = RegexBuilder::new(r##"\n+$"##).build().unwrap();
+			static ref REG_MGS2: Regex = RegexBuilder::new(r##"\n+"##).build().unwrap();
 		}
 
 		fn run(vpl: &str, message: &str) {
-			let mut error = parse_vpl(vpl).unwrap_err().to_string().replace(['^', '\n'], " ");
-			error = error.replace(vpl, "");
-			error = REG_MGS1.replace_all(&error, " ").to_string();
-			error = REG_MGS2
-				.split(&error)
-				.skip(1)
-				.map(|l| l.trim().trim_end_matches(':'))
-				.collect::<Vec<_>>()
-				.join("; ");
-
-			assert_eq!(error.trim(), message, "for vpl: '{vpl}'");
+			let mut error = parse_vpl(vpl).unwrap_err().to_string();
+			error = REG_MGS1.replace_all(&error, "").to_string();
+			error = REG_MGS2.replace_all(&error, "\n").to_string();
+			assert_eq!(error, message, "for vpl: '{vpl}'");
 		}
 
-		run("node [ child key=value ] node", "in Eof");
+		run(
+			"node [ child key=value ] node",
+			"0: at line 1, in Eof:\nnode [ child key=value ] node\n                         ^",
+		);
 		run(
 			"node child key=value ]",
-			"expected '=', found k; in property; in node; in pipeline",
+			"0: at line 1:\nnode child key=value ]\n           ^\nexpected '=', found k\n1: at line 1, in parsing property:\nnode child key=value ]\n     ^\n2: at line 1, in parsing node:\nnode child key=value ]\n^\n3: at line 1, in parsing pipeline:\nnode child key=value ]\n^",
 		);
 		run(
 			"node key=\"2.1",
-			"expected '\"', got end of input; in quoted string; in value; in property; in node; in pipeline",
+			"0: at line 1:\nnode key=\"2.1\n             ^\nexpected '\"', got end of input\n1: at line 1, in parsing quoted string:\nnode key=\"2.1\n         ^\n2: at line 1, in parsing value:\nnode key=\"2.1\n         ^\n3: at line 1, in parsing property:\nnode key=\"2.1\n     ^\n4: at line 1, in parsing node:\nnode key=\"2.1\n^\n5: at line 1, in parsing pipeline:\nnode key=\"2.1\n^",
 		);
 		run(
 			"node [n key=2,1]",
-			"expected ']', found ,; in sources; in node; in pipeline",
+			"0: at line 1:\nnode [n key=2,1]\n             ^\nexpected ']', found ,\n1: at line 1, in parsing sources:\nnode [n key=2,1]\n     ^\n2: at line 1, in parsing node:\nnode [n key=2,1]\n^\n3: at line 1, in parsing pipeline:\nnode [n key=2,1]\n^",
 		);
-		run("node [n key=2]]", "in Eof");
-		run("node [ ] [ ]", "in Eof");
+		run(
+			"node [n key=2]]",
+			"0: at line 1, in Eof:\nnode [n key=2]]\n              ^",
+		);
+		run("node [ ] [ ]", "0: at line 1, in Eof:\nnode [ ] [ ]\n         ^");
 		run(
 			"node [ a; b ]",
-			"expected ']', found ;; in sources; in node; in pipeline",
+			"0: at line 1:\nnode [ a; b ]\n        ^\nexpected ']', found ;\n1: at line 1, in parsing sources:\nnode [ a; b ]\n     ^\n2: at line 1, in parsing node:\nnode [ a; b ]\n^\n3: at line 1, in parsing pipeline:\nnode [ a; b ]\n^",
 		);
-		run("node | | node", "in Eof");
+		run("node | | node", "0: at line 1, in Eof:\nnode | | node\n     ^");
 	}
 }
