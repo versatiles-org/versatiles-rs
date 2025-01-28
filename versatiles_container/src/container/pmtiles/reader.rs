@@ -89,7 +89,7 @@ impl PMTilesReader {
 
 		let meta = data_reader.read_range(&header.metadata).await?;
 		let meta = decompress(meta, &internal_compression)?;
-		let tilejson = TileJSON::try_from(&meta)?;
+		let tilejson = TileJSON::try_from_blob_or_default(&meta);
 
 		let root_bytes_uncompressed = decompress(data_reader.read_range(&header.root_dir).await?, &internal_compression)?;
 		let leaves_bytes = data_reader.read_range(&header.leaf_dirs).await?;

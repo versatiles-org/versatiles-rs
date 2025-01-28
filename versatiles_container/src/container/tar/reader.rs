@@ -96,21 +96,21 @@ impl TarTilesReader {
 			if path_vec.len() == 1 {
 				match path_vec[0] {
 					"meta.json" | "tiles.json" | "metadata.json" => {
-						tilejson.merge(&TileJSON::try_from(&read_to_end())?)?;
+						tilejson.merge(&TileJSON::try_from_blob_or_default(&read_to_end()))?;
 						continue;
 					}
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
-						tilejson.merge(&TileJSON::try_from(&decompress(
+						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
 							read_to_end(),
 							&TileCompression::Gzip,
-						)?)?)?;
+						)?))?;
 						continue;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
-						tilejson.merge(&TileJSON::try_from(&decompress(
+						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
 							read_to_end(),
 							&TileCompression::Brotli,
-						)?)?)?;
+						)?))?;
 						continue;
 					}
 					&_ => {}

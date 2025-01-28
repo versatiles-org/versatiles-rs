@@ -161,19 +161,19 @@ impl DirectoryTilesReader {
 			} else {
 				match name1.as_str() {
 					"meta.json" | "tiles.json" | "metadata.json" => {
-						tilejson.merge(&TileJSON::try_from(&Self::read(&entry1.path())?)?)?;
+						tilejson.merge(&TileJSON::try_from_blob_or_default(&Self::read(&entry1.path())?))?;
 					}
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
-						tilejson.merge(&TileJSON::try_from(&decompress(
+						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
 							Self::read(&entry1.path())?,
 							&TileCompression::Gzip,
-						)?)?)?;
+						)?))?;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
-						tilejson.merge(&TileJSON::try_from(&decompress(
+						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
 							Self::read(&entry1.path())?,
 							&TileCompression::Brotli,
-						)?)?)?;
+						)?))?;
 					}
 					&_ => {}
 				};

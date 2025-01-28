@@ -99,7 +99,7 @@ impl VersaTilesReader {
 				.await
 				.context("Failed reading the meta data")?;
 			let blob = decompress(blob, &header.compression).context("Failed decompressing the meta data")?;
-			TileJSON::try_from(&blob)?
+			TileJSON::try_from_blob_or_default(&blob)
 		} else {
 			TileJSON::default()
 		};

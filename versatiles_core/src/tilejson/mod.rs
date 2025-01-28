@@ -35,7 +35,7 @@ mod value;
 mod vector_layer;
 
 use crate::{json::*, types::*};
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{anyhow, ensure, Ok, Result};
 use regex::Regex;
 use std::fmt::Debug;
 use value::TileJsonValues;
@@ -412,6 +412,14 @@ impl TileJSON {
 	/// Converts this `TileJSON` to a JSON string (synonym for [`Self::as_string`]).
 	pub fn stringify(&self) -> String {
 		self.as_string()
+	}
+
+	pub fn try_from_blob_or_default(blob: &Blob) -> TileJSON {
+		TileJSON::try_from(blob.as_str()).unwrap_or_else(|e| {
+			eprintln!("Failed to parse TileJSON: {e}");
+			eprintln!("Use default TileJSON instead");
+			TileJSON::default()
+		})
 	}
 }
 
