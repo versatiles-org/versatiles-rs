@@ -235,7 +235,7 @@ impl VectorTileFeature {
 		fn write_points(points: MultiPointGeometry) -> Result<Blob> {
 			let mut writer = ValueWriterBlob::new_le();
 			let point0 = &mut (0i64, 0i64);
-			writer.write_varint((points.len() as u64) << 3 | 0x1)?;
+			writer.write_varint(((points.len() as u64) << 3) | 0x1)?;
 			for point in points.into_iter() {
 				write_point(&mut writer, point0, point)?
 			}
@@ -254,12 +254,12 @@ impl VectorTileFeature {
 				let (first, rest) = line_string.into_first_and_rest();
 
 				// Write the MoveTo command for the first point
-				writer.write_varint(1 << 3 | 0x1)?; // MoveTo command
+				writer.write_varint((1 << 3) | 0x1)?; // MoveTo command
 				write_point(&mut writer, point0, first)?;
 
 				// Write the LineTo command for the remaining points
 				if !rest.is_empty() {
-					writer.write_varint((rest.len() as u64) << 3 | 0x2)?; // LineTo command
+					writer.write_varint(((rest.len() as u64) << 3) | 0x2)?; // LineTo command
 					for point in rest.into_iter() {
 						write_point(&mut writer, point0, point)?;
 					}
@@ -283,12 +283,12 @@ impl VectorTileFeature {
 					rest.pop();
 
 					// Write the MoveTo command for the first point
-					writer.write_varint(1 << 3 | 0x1)?; // MoveTo command
+					writer.write_varint((1 << 3) | 0x1)?; // MoveTo command
 					write_point(&mut writer, point0, first)?;
 
 					// Write the LineTo command for the remaining points
 					if !rest.is_empty() {
-						writer.write_varint((rest.len() as u64) << 3 | 0x2)?; // LineTo command
+						writer.write_varint(((rest.len() as u64) << 3) | 0x2)?; // LineTo command
 						for point in rest.into_iter() {
 							write_point(&mut writer, point0, point)?;
 						}
