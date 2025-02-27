@@ -1,12 +1,11 @@
-
 [![Crates.io](https://img.shields.io/crates/v/versatiles?label=crates.io)](https://crates.io/crates/versatiles)
 [![Crates.io](https://img.shields.io/crates/d/versatiles?label=downloads)](https://crates.io/crates/versatiles)
 [![Code Coverage](https://codecov.io/gh/versatiles-org/versatiles-rs/branch/main/graph/badge.svg?token=IDHAI13M0K)](https://codecov.io/gh/versatiles-org/versatiles-rs)
 [![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/versatiles-org/versatiles-rs/ci.yml)](https://github.com/versatiles-org/versatiles-rs/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Matrix Chat](https://img.shields.io/matrix/versatiles:matrix.org?label=matrix)](https://matrix.to/#/#versatiles:matrix.org)
 
 **Table of contents:**
+
 - [Installation](#installation): [Linux](#linux), [MacOS](#macos), [NixOS](#nixos), [Docker](#docker), [using `cargo install`](#building-locally-using-cargo-install), [from source](#building-from-source)
 - [Usage](#usage): [convert tiles](#example-convert-tiles), [serve tiles](#example-serve-tiles)
 
@@ -19,6 +18,7 @@ VersaTiles is a Rust-based project designed for processing and serving tile data
 ## Linux
 
 Use the [installation script](https://github.com/versatiles-org/versatiles-rs/blob/main/helpers/install-unix.sh) to download the correct [precompiled binary](https://github.com/versatiles-org/versatiles-rs/releases/latest/) and copy it to `/usr/local/bin/`:
+
 ```shell
 curl -Ls "https://github.com/versatiles-org/versatiles-rs/raw/main/helpers/install-unix.sh" | bash
 ```
@@ -26,6 +26,7 @@ curl -Ls "https://github.com/versatiles-org/versatiles-rs/raw/main/helpers/insta
 ## MacOS
 
 Install VersaTiles using [Homebrew](https://github.com/versatiles-org/versatiles-documentation/blob/main/guides/install_versatiles.md#homebrew-for-macos):
+
 ```shell
 brew tap versatiles-org/versatiles
 brew install versatiles
@@ -55,10 +56,10 @@ pkgs.mkShell {
 
 Additional information can be found at [Nix search](https://search.nixos.org/packages?channel=unstable&from=0&size=50&sort=relevance&type=packages&query=versatiles).
 
-
 ## Docker
 
 Pull the prepared [Docker Images](https://github.com/versatiles-org/versatiles-docker) for easy deployment:
+
 ```shell
 docker pull versatiles-org/versatiles
 ```
@@ -66,6 +67,7 @@ docker pull versatiles-org/versatiles
 ## Building locally using `cargo install`
 
 You need [Rust](https://doc.rust-lang.org/cargo/getting-started/installation.html). Just run:
+
 ```shell
 cargo install versatiles
 ```
@@ -73,6 +75,7 @@ cargo install versatiles
 ## Building from source
 
 Ensure you have [Rust](https://doc.rust-lang.org/cargo/getting-started/installation.html) installed. Then, run:
+
 ```shell
 git clone https://github.com/versatiles-org/versatiles-rs.git
 cd versatiles-rs
@@ -83,6 +86,7 @@ cp ./target/release/versatiles /usr/local/bin/
 # Usage
 
 Running the `versatiles` command will list all available commands:
+
 ```
 Usage: versatiles [OPTIONS] <COMMAND>
 
@@ -96,6 +100,7 @@ Commands:
 ## Example: Convert Tiles
 
 Convert between different tile formats:
+
 ```shell
 versatiles convert --tile-format webp satellite_tiles.tar satellite_tiles.versatiles
 ```
@@ -103,6 +108,7 @@ versatiles convert --tile-format webp satellite_tiles.tar satellite_tiles.versat
 ## Example: Serve Tiles
 
 Serve tiles via HTTP:
+
 ```shell
 versatiles serve satellite_tiles.versatiles
 ```
