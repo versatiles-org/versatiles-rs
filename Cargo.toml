@@ -12,7 +12,11 @@ resolver = "2"
 
 [workspace.package]
 authors = ["Michael Kreil <versatiles@michael-kreil.de>"]
-categories = ["command-line-utilities", "science::geo", "web-programming::http-server"]
+categories = [
+	"command-line-utilities",
+	"science::geo",
+	"web-programming::http-server",
+]
 description = "A toolbox for converting, checking and serving map tiles in various formats."
 edition = "2021"
 homepage = "https://versatiles.org"
@@ -59,10 +63,10 @@ incremental = true
 
 [profile.release]
 opt-level = 3
-debug = true
+debug = false
 rpath = false
 lto = true
-debug-assertions = true
+debug-assertions = false
 codegen-units = 1
 panic = "unwind"
 incremental = false
@@ -74,13 +78,20 @@ ab_glyph = { version = "0.2.29", default-features = false }
 anyhow = { version = "1.0.96", default-features = false, features = ["std"] }
 assert_fs = { version = "1.1.2", default-features = false }
 async-trait = { version = "0.1.86", default-features = false }
-axum = { version = "0.8.1", default-features = false, features = ["http1", "http2", "tokio"] }
+axum = { version = "0.8.1", default-features = false, features = [
+	"http1",
+	"http2",
+	"tokio",
+] }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
 clap = { version = "4.5.31", features = ["derive"] }
 enumset = { version = "1.1.5", default-features = false }
 futures = { version = "0.3.31", features = ["default"] }
 hyper = { version = "1.6.0", default-features = false, features = ["http2"] }
-image = { version = "0.25.5", default-features = false, features = ["jpeg", "png"] }
+image = { version = "0.25.5", default-features = false, features = [
+	"jpeg",
+	"png",
+] }
 itertools = { version = "0.14.0", default-features = false }
 lazy_static = { version = "1.5.0", default-features = false }
 log = { version = "0.4.26", default-features = false }
