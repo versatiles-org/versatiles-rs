@@ -84,7 +84,7 @@ enum Commands {
 	Probe(tools::probe::Subcommand),
 
 	#[clap(alias = "server")]
-	/// Serve tiles via http
+	/// Serve tiles via HTTP
 	Serve(tools::serve::Subcommand),
 
 	/// Show detailed help
@@ -177,6 +177,6 @@ mod tests {
 	#[test]
 	fn serve_subcommand() {
 		let output = run_command(vec!["versatiles", "serve"]).unwrap_err().to_string();
-		assert!(output.starts_with("Serve tiles via http"), "{output}");
+		assert!(output.starts_with("Serve tiles via HTTP"), "{output}");
 	}
 }

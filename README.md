@@ -4,88 +4,104 @@
 [![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/versatiles-org/versatiles-rs/ci.yml)](https://github.com/versatiles-org/versatiles-rs/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**Table of contents:**
-
-- [Installation](#installation): [Linux](#linux), [MacOS](#macos), [NixOS](#nixos), [Docker](#docker), [using `cargo install`](#building-locally-using-cargo-install), [from source](#building-from-source)
-- [Usage](#usage): [convert tiles](#example-convert-tiles), [serve tiles](#example-serve-tiles)
-
 # VersaTiles
 
-VersaTiles is a Rust-based project designed for processing and serving tile data efficiently. It supports multiple tile formats and offers various functionalities for handling tile data.
+VersaTiles is a Rust-based tool for processing and serving tile data efficiently. It supports multiple tile formats and offers functionalities for seamless tile handling.
 
-# Installation
+---
 
-## Linux
+## Table of Contents
 
-Use the [installation script](https://github.com/versatiles-org/versatiles-rs/blob/main/helpers/install-unix.sh) to download the correct [precompiled binary](https://github.com/versatiles-org/versatiles-rs/releases/latest/) and copy it to `/usr/local/bin/`:
+- [Installation](#installation)
+  - [Linux](#linux)
+  - [MacOS](#macos)
+  - [NixOS](#nixos)
+  - [Docker](#docker)
+  - [Building with Cargo](#building-with-cargo)
+  - [Building from Source](#building-from-source)
+- [Usage](#usage)
+  - [Convert Tiles](#convert-tiles)
+  - [Serve Tiles](#serve-tiles)
+  - [VersaTiles Pipeline Language](#versatiles-pipeline-language)
+- [Repository Structure](#repository-structure)
+- [Using as a Library](#using-as-a-library)
+- [Additional Information](#additional-information)
+- [Contributing](#contributing)
+- [License](#license)
 
-```shell
+---
+
+## Installation
+
+### Linux
+
+Install VersaTiles using the provided [installation script](https://github.com/versatiles-org/versatiles-rs/blob/main/helpers/install-unix.sh) ( that downloads the correct [precompiled binary](https://github.com/versatiles-org/versatiles-rs/releases/latest/)):
+
+```sh
 curl -Ls "https://github.com/versatiles-org/versatiles-rs/raw/main/helpers/install-unix.sh" | bash
 ```
 
-## MacOS
+### MacOS
 
-Install VersaTiles using [Homebrew](https://github.com/versatiles-org/versatiles-documentation/blob/main/guides/install_versatiles.md#homebrew-for-macos):
+Install VersaTiles via [Homebrew](https://github.com/versatiles-org/versatiles-documentation/blob/main/guides/install_versatiles.md#homebrew-for-macos):
 
-```shell
+```sh
 brew tap versatiles-org/versatiles
 brew install versatiles
 ```
 
-## NixOS
+### NixOS
 
-VersaTiles is available via nixpkgs beginning with 24.05. An up to date version is part of nixpkgs-unstable.  
-For installation add following snippet into your [configuration.nix](https://nixos.org/manual/nixos/stable/#sec-configuration-file):
+VersaTiles is available via `nixpkgs` (starting from version 24.05). Add this snippet to `configuration.nix`:
 
-```shell
+```nix
 environment.systemPackages = with pkgs; [ versatiles ];
 ```
 
-You can also use versatiles via [shell environments](https://nixos.wiki/wiki/Development_environment_with_nix-shell):
+Alternatively, use it in a shell environment:
 
-```shell
+```nix
 { pkgs ? import <nixpkgs> {} }:
 
 pkgs.mkShell {
-  buildInputs = with pkgs; [
-    versatiles
-  ];
-
+  buildInputs = with pkgs; [ versatiles ];
 }
 ```
 
-Additional information can be found at [Nix search](https://search.nixos.org/packages?channel=unstable&from=0&size=50&sort=relevance&type=packages&query=versatiles).
+Find more details on [Nix search](https://search.nixos.org/packages?show=versatiles).
 
-## Docker
+### Docker
 
-Pull the prepared [Docker Images](https://github.com/versatiles-org/versatiles-docker) for easy deployment:
+Pull the latest [Docker image](https://github.com/versatiles-org/versatiles-docker) for easy deployment:
 
-```shell
+```sh
 docker pull versatiles-org/versatiles
 ```
 
-## Building locally using `cargo install`
+### Building with Cargo
 
-You need [Rust](https://doc.rust-lang.org/cargo/getting-started/installation.html). Just run:
+Ensure you have [Rust installed](https://doc.rust-lang.org/cargo/getting-started/installation.html), then run:
 
-```shell
+```sh
 cargo install versatiles
 ```
 
-## Building from source
+### Building from Source
 
-Ensure you have [Rust](https://doc.rust-lang.org/cargo/getting-started/installation.html) installed. Then, run:
+Clone the repository and build VersaTiles manually:
 
-```shell
+```sh
 git clone https://github.com/versatiles-org/versatiles-rs.git
 cd versatiles-rs
 cargo build --bin versatiles --release
 cp ./target/release/versatiles /usr/local/bin/
 ```
 
-# Usage
+---
 
-Running the `versatiles` command will list all available commands:
+## Usage
+
+Run `versatiles` to see available commands:
 
 ```
 Usage: versatiles [OPTIONS] <COMMAND>
@@ -93,52 +109,82 @@ Usage: versatiles [OPTIONS] <COMMAND>
 Commands:
   convert  Convert between different tile containers
   probe    Show information about a tile container
-  serve    Serve tiles via http
+  serve    Serve tiles via HTTP
   help     Show detailed help
 ```
 
-## Example: Convert Tiles
+### Convert Tiles
 
-Convert between different tile formats:
+Convert between different tile formats, e.g. from `*.tar` to `*.versatiles`:
 
-```shell
+```sh
 versatiles convert --tile-format webp satellite_tiles.tar satellite_tiles.versatiles
 ```
 
-## Example: Serve Tiles
+### Serve Tiles
 
-Serve tiles via HTTP:
+Serve tiles over HTTP:
 
-```shell
+```sh
 versatiles serve satellite_tiles.versatiles
 ```
 
-# Repository Structure
+### VersaTiles Pipeline Language
 
-## Code
+The VersaTiles Pipeline Language (VPL) allows you to define tile-processing pipelines. Operations include merging multiple tile sources, filtering, and modifying tile content.
 
-- **/versatiles/** - Main library and binary.
-- **/versatiles_container/** - Reading and writing tile containers like `*.versatiles`, `*.mbtiles`, `*.pmtiles`, etc.
-- **/versatiles_core/** - Core data types, utilities, and macros.
-- **/versatiles_derive/** - Handles derive macros.
-- **/versatiles_geometry/** - Manages geometry data, including OSM data, GeoJSON, vector tiles, etc.
-- **/versatiles_image/** - Handles image data (PNG, JPEG, WEBP) and image processing.
-- **/versatiles_pipeline/** - Manages "VersaTiles Pipelines" for fast tile processing.
+Example of combining multiple vector tile sources:
 
-## Helpers
+```text
+from_overlayed [
+   from_container filename="world.versatiles",
+   from_container filename="europe.versatiles" | filter_zoom min=5,
+   from_container filename="germany.versatiles"
+]
+```
 
-- **/docker/** - Contains a Dockerfile for building Linux binaries.
-- **/helpers/** - Shell scripts for checking, building, and releasing.
-- **/testdata/** - Files used during testing.
+More details can be found in [versatiles_pipeline/README.md](https://github.com/versatiles-org/versatiles-rs/blob/main/versatiles_pipeline/README.md).
 
-# Additional Information
+---
 
-For more details, guides, and advanced usage, please refer to the [official documentation](https://github.com/versatiles-org/versatiles-documentation).
+## Repository Structure
 
-# Development and Contribution
+### Code
 
-VersaTiles is under active development, and the documentation may not always be up to date. We appreciate your understanding and patience. If you encounter any issues or have questions, feel free to open an issue or contribute to our [code](https://github.com/versatiles-org/versatiles-rs) or [documentation](https://github.com/versatiles-org/versatiles-documentation).
+- **/versatiles/** - Main library and binary
+- **/versatiles_container/** - Handles tile containers (`*.versatiles`, `*.mbtiles`, `*.pmtiles`, etc.)
+- **/versatiles_core/** - Core data types and utilities
+- **/versatiles_derive/** - Derive macros for the library
+- **/versatiles_geometry/** - Handles geometric data (OSM, GeoJSON, vector tiles, etc.)
+- **/versatiles_image/** - Manages image data (PNG, JPEG, WEBP)
+- **/versatiles_pipeline/** - VersaTiles Pipeline for efficient tile processing
 
-# License
+### Helpers
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+- **/docker/** - Dockerfile for Linux builds
+- **/helpers/** - Scripts for checking, building, testing, and releasing
+- **/testdata/** - Test files for validation
+
+---
+
+## Using as a Library
+
+VersaTiles can be used as a command-line tool or integrated into Rust projects as a library. Check out [crates.io](https://crates.io/crates/versatiles) and [docs.rs](https://docs.rs/versatiles/latest/versatiles/) for more details.
+
+---
+
+## Additional Information
+
+For advanced usage, guides, and detailed documentation, visit the [official documentation](https://docs.versatiles.org/).
+
+---
+
+## Contributing
+
+VersaTiles is actively developed, and contributions are welcome! If you find bugs, need features, or want to contribute, please check the [GitHub repository](https://github.com/versatiles-org/versatiles-rs) and submit an issue or pull request.
+
+---
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

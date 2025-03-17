@@ -23,5 +23,8 @@ if [ $? -ne 0 ]; then
 	exit 1
 fi
 
+# build vpl docs
+./helpers/build_docs_vpl.sh
+
 # publish to crates.io
 cargo release "$1" --execute --no-verify --sign-commit --workspace

@@ -23,7 +23,7 @@ pub fn run(command: &Subcommand) -> Result<()> {
 	};
 
 	if command.raw {
-		eprintln!("{md}");
+		println!("{md}");
 	} else {
 		print_markdown(md)
 	}
