@@ -27,7 +27,7 @@ async-trait.workspace = true
 axum = { workspace = true, optional = true }
 clap = { workspace = true, optional = true }
 enumset = { workspace = true, optional = true }
-env_logger = { version = "0.11.6", default-features = false, optional = true }
+env_logger = { version = "0.11.7", default-features = false, optional = true }
 hyper = { workspace = true, optional = true }
 log = { workspace = true, optional = true }
 mime_guess = { version = "2.0.5", default-features = false, optional = true }
