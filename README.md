@@ -43,7 +43,7 @@ curl -Ls "https://github.com/versatiles-org/versatiles-rs/raw/main/helpers/insta
 
 ### MacOS
 
-Install VersaTiles via [Homebrew](https://github.com/versatiles-org/versatiles-documentation/blob/main/guides/install_versatiles.md#homebrew-for-macos):
+Install VersaTiles via [Homebrew](https://docs.versatiles.org/guides/install_versatiles#homebrew-for-macos):
 
 ```sh
 brew tap versatiles-org/versatiles
