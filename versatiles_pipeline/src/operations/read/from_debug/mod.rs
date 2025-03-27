@@ -164,7 +164,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_build_tile_jpg() {
-		test("jpg", 11808, "{\"tilejson\":\"3.0.0\"}").await.unwrap();
+		test("jpg", 11782, "{\"tilejson\":\"3.0.0\"}").await.unwrap();
 	}
 
 	#[tokio::test]
