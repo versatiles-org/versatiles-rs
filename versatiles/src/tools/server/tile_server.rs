@@ -239,6 +239,7 @@ impl TileServer {
 fn error_400() -> Response<Body> {
 	Response::builder()
 		.status(400)
+		.header(ACCESS_CONTROL_ALLOW_ORIGIN, "*")
 		.body(Body::from("Bad Request"))
 		.expect("should have build a body")
 }
@@ -246,6 +247,7 @@ fn error_400() -> Response<Body> {
 fn error_404() -> Response<Body> {
 	Response::builder()
 		.status(404)
+		.header(ACCESS_CONTROL_ALLOW_ORIGIN, "*")
 		.body(Body::from("Not Found"))
 		.expect("should have build a body")
 }
