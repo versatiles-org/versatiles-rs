@@ -102,7 +102,7 @@ regex = { version = "1.11.1", default-features = false, features = [
 	"unicode-perl",
 ] }
 reqwest = { version = "0.12.15", default-features = false }
-tokio = { version = "1.44.1", features = ["rt-multi-thread", "sync"] }
+tokio = { version = "1.44.2", features = ["rt-multi-thread", "sync"] }
 wildmatch = { version = "2.4.0", default-features = false }
 
 versatiles = { version = "0.15.4", path = "versatiles", default-features = false }
