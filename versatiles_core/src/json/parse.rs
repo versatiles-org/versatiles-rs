@@ -70,7 +70,7 @@ mod tests {
 		let data = r##"{"city":"Nantes","country","France"}"##;
 		let json = parse_json_str(data);
 		assert_eq!(
-			json.unwrap_err().chain().last().unwrap().to_string(),
+			json.unwrap_err().chain().next_back().unwrap().to_string(),
 			"expected ':' at position 27: tes\",\"country\","
 		);
 	}
@@ -152,7 +152,7 @@ mod tests {
 	fn test_invalid_json_missing_colon() {
 		let json = parse_json_str(r##"{"key" "value"}"##);
 		assert_eq!(
-			json.unwrap_err().chain().last().unwrap().to_string(),
+			json.unwrap_err().chain().next_back().unwrap().to_string(),
 			"expected ':' at position 8: {\"key\" \""
 		);
 	}
@@ -161,7 +161,7 @@ mod tests {
 	fn test_invalid_json_unclosed_brace() {
 		let json = parse_json_str(r##"{"key": "value""##);
 		assert_eq!(
-			json.unwrap_err().chain().last().unwrap().to_string(),
+			json.unwrap_err().chain().next_back().unwrap().to_string(),
 			"unexpected end at position 15: {\"key\": \"value\"<EOF>"
 		);
 	}
@@ -170,7 +170,7 @@ mod tests {
 	fn test_invalid_json_unclosed_bracket() {
 		let json = parse_json_str(r##"["key", "value""##);
 		assert_eq!(
-			json.unwrap_err().chain().last().unwrap().to_string(),
+			json.unwrap_err().chain().next_back().unwrap().to_string(),
 			"unexpected end at position 15: [\"key\", \"value\"<EOF>"
 		);
 	}
