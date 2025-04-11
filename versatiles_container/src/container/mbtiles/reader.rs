@@ -373,10 +373,7 @@ impl TilesReaderTrait for MBTilesReader {
 				},
 			)
 			.unwrap()
-			.filter_map(|r| match r {
-				Ok(ok) => Some(ok),
-				Err(_) => None,
-			})
+			.filter_map(|r| r.ok())
 			.collect();
 
 		trace!("got {} tiles", vec.len());

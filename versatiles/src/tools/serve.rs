@@ -95,7 +95,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 
 		let url: &str = capture.name("url").unwrap().as_str();
 		let id: &str = match capture.name("id") {
-			None => url.split(&['/', '\\']).last().unwrap().split('.').next().unwrap(),
+			None => url.split(&['/', '\\']).next_back().unwrap().split('.').next().unwrap(),
 			Some(m) => m.as_str(),
 		};
 
