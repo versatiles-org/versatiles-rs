@@ -121,7 +121,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 
 				let filename = format!(
 					"{}/{}/{}{}{}",
-					coord.z, coord.y, coord.x, extension_format, extension_compression
+					coord.z, coord.x, coord.y, extension_format, extension_compression
 				);
 
 				// Write blob to file

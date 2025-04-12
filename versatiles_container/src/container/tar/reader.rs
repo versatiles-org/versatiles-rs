@@ -53,7 +53,7 @@ impl TarTilesReader {
 
 			if path_vec.len() == 3 {
 				let z = path_vec[0].parse::<u8>()?;
-				let y = path_vec[1].parse::<u32>()?;
+				let x = path_vec[1].parse::<u32>()?;
 
 				let mut filename: String = String::from(path_vec[2]);
 				let this_compression = TileCompression::from_filename(&mut filename);
@@ -64,7 +64,7 @@ impl TarTilesReader {
 				}
 				let this_format = this_format.unwrap();
 
-				let x = filename.parse::<u32>()?;
+				let y = filename.parse::<u32>()?;
 
 				if tile_format.is_none() {
 					tile_format = Some(this_format);

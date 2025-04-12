@@ -52,7 +52,7 @@ impl TilesWriterTrait for TarTilesWriter {
 
 				let filename = format!(
 					"./{}/{}/{}{}{}",
-					coord.z, coord.y, coord.x, extension_format, extension_compression
+					coord.z, coord.x, coord.y, extension_format, extension_compression
 				);
 				let path = PathBuf::from(&filename);
 
