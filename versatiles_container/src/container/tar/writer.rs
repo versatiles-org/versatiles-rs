@@ -128,4 +128,104 @@ mod tests {
 
 		Ok(())
 	}
+
+	#[tokio::test]
+	async fn test_empty_tiles() -> Result<()> {
+		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+			bbox_pyramid: TileBBoxPyramid::new_empty(),
+			tile_compression: TileCompression::Uncompressed,
+			tile_format: TileFormat::JSON,
+		})?;
+
+		let temp_path = NamedTempFile::new("test_empty_tiles.tar")?;
+		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path).await?;
+
+		assert_eq!(
+			TarTilesReader::open_path(&temp_path).unwrap_err().to_string(),
+			"no tiles found in tar"
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_invalid_path() -> Result<()> {
+		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+			bbox_pyramid: TileBBoxPyramid::new_full(2),
+			tile_compression: TileCompression::Gzip,
+			tile_format: TileFormat::PBF,
+		})?;
+
+		let invalid_path = Path::new("/invalid/path/output.tar");
+		let result = TarTilesWriter::write_to_path(&mut mock_reader, invalid_path).await;
+
+		assert!(result.is_err());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_large_tile_set() -> Result<()> {
+		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+			bbox_pyramid: TileBBoxPyramid::new_full(7),
+			tile_compression: TileCompression::Uncompressed,
+			tile_format: TileFormat::PNG,
+		})?;
+
+		let temp_path = NamedTempFile::new("test_large_tiles.tar")?;
+		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path).await?;
+
+		let reader = TarTilesReader::open_path(&temp_path)?;
+		assert_eq!(reader.get_parameters().bbox_pyramid.count_tiles(), 21845);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_different_compressions() -> Result<()> {
+		let compressions = vec![
+			TileCompression::Uncompressed,
+			TileCompression::Gzip,
+			TileCompression::Brotli,
+		];
+
+		for compression in compressions {
+			let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+				bbox_pyramid: TileBBoxPyramid::new_full(2),
+				tile_compression: compression,
+				tile_format: TileFormat::PBF,
+			})?;
+
+			let temp_path = NamedTempFile::new(format!("test_compression_{:?}.tar", compression))?;
+			TarTilesWriter::write_to_path(&mut mock_reader, &temp_path).await?;
+
+			let reader = TarTilesReader::open_path(&temp_path)?;
+			assert_eq!(reader.get_parameters().tile_compression, compression);
+		}
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_correct_zxy_scheme() -> Result<()> {
+		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
+		bbox_pyramid.include_coord(&TileCoord3::new(1, 2, 3)?);
+		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+			bbox_pyramid,
+			tile_compression: TileCompression::Uncompressed,
+			tile_format: TileFormat::PNG,
+		})?;
+
+		let temp_path = NamedTempFile::new("test_zxy_scheme.tar")?;
+		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path).await?;
+
+		let mut filenames = tar::Archive::new(File::open(&temp_path)?)
+			.entries()?
+			.map(|entry| entry.unwrap().path().unwrap().to_str().unwrap().to_string())
+			.collect::<Vec<_>>();
+		filenames.sort();
+
+		assert_eq!(filenames, vec!["3/1/2.png", "tiles.json"]);
+
+		Ok(())
+	}
 }

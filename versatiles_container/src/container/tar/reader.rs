@@ -1,6 +1,6 @@
 //! Provides functionality for reading tile data from a tar archive.
 
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Result};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path};
 use tar::{Archive, EntryType};
@@ -120,10 +120,20 @@ impl TarTilesReader {
 			log::warn!("unknown file in tar: {path_tmp_string:?}");
 		}
 
+		if tile_map.is_empty() {
+			return Err(anyhow!("no tiles found in tar"));
+		}
+
+		let parameters = TilesReaderParameters::new(
+			tile_format.ok_or(anyhow!("unknown tile format, can't detect format"))?,
+			tile_compression.ok_or(anyhow!("unknown tile compression, can't detect compression"))?,
+			bbox_pyramid.clone(),
+		);
+
 		Ok(TarTilesReader {
 			tilejson,
 			name: path.to_str().unwrap().to_string(),
-			parameters: TilesReaderParameters::new(tile_format.unwrap(), tile_compression.unwrap(), bbox_pyramid),
+			parameters,
 			reader,
 			tile_map,
 		})
@@ -197,6 +207,7 @@ pub mod tests {
 	use super::*;
 	use crate::{make_test_file, MockTilesWriter, MOCK_BYTES_PBF};
 	use versatiles_core::utils::decompress_gzip;
+
 	#[cfg(feature = "cli")]
 	use versatiles_core::utils::PrettyPrint;
 
@@ -264,6 +275,46 @@ pub mod tests {
 			"tiles:\n   deep tiles probing is not implemented for this container format\n"
 		);
 
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn empty_tar_file() -> Result<()> {
+		let filename = assert_fs::NamedTempFile::new("empty_tar_file.tar")?;
+		let file = std::fs::File::create(&filename)?;
+		let mut a = tar::Builder::new(file);
+		a.finish()?;
+
+		assert_eq!(
+			TarTilesReader::open_path(&filename).unwrap_err().to_string(),
+			"no tiles found in tar"
+		);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn correct_zxy_scheme() -> Result<()> {
+		let filename = assert_fs::NamedTempFile::new("correct_zxy_scheme.tar")?;
+		let file = std::fs::File::create(&filename)?;
+		let mut a = tar::Builder::new(file);
+		let mut header = tar::Header::new_gnu();
+		header.set_size(6);
+		header.set_cksum();
+		a.append_data(&mut header, "3/1/2.bin", [3, 1, 4, 1, 5, 9].as_ref())?;
+		a.finish()?;
+
+		let reader = TarTilesReader::open_path(&filename)?;
+		assert_eq!(reader.get_parameters().tile_format, TileFormat::BIN);
+		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Uncompressed);
+		assert_eq!(reader.get_parameters().bbox_pyramid.count_tiles(), 1);
+		assert_eq!(
+			reader
+				.get_tile_data(&TileCoord3::new(1, 2, 3)?)
+				.await?
+				.unwrap()
+				.as_slice(),
+			[3, 1, 4, 1, 5, 9].as_ref()
+		);
 		Ok(())
 	}
 }
