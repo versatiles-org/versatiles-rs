@@ -33,7 +33,7 @@ log = { workspace = true, optional = true }
 mime_guess = { version = "2.0.5", default-features = false, optional = true }
 regex = { workspace = true, optional = true, features = ["unicode"] }
 tar = { version = "0.4.44", default-features = false, optional = true }
-termimad = { version = "0.31.2", optional = true }
+termimad = { version = "0.31.3", optional = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"], optional = true }
 
 versatiles_container = { workspace = true }
