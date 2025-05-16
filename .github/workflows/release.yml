@@ -3,8 +3,11 @@ name: Build and release binaries # The beginning is the path; the code must flow
 on:
   push:
     tags:
-      - 'v*' # Versions are but leaves on the eternal tree of code.
+      - "v*" # Versions are but leaves on the eternal tree of code.
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always # Colors, like life, are transient, yet they bring joy.
