@@ -118,7 +118,7 @@ Commands:
 Convert between different tile formats, e.g. from `*.tar` to `*.versatiles`:
 
 ```sh
-versatiles convert --tile-format webp satellite_tiles.tar satellite_tiles.versatiles
+versatiles convert satellite_tiles.tar satellite_tiles.versatiles
 ```
 
 ### Serve Tiles
