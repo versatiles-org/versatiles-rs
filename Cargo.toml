@@ -76,7 +76,7 @@ strip = true
 [workspace.dependencies]
 ab_glyph = { version = "0.2.29", default-features = false }
 anyhow = { version = "1.0.98", default-features = false, features = ["std"] }
-assert_fs = { version = "1.1.2", default-features = false }
+assert_fs = { version = "1.1.3", default-features = false }
 async-trait = { version = "0.1.88", default-features = false }
 axum = { version = "0.8.4", default-features = false, features = [
 	"http1",
@@ -84,8 +84,8 @@ axum = { version = "0.8.4", default-features = false, features = [
 	"tokio",
 ] }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
-clap = { version = "4.5.37", features = ["derive"] }
-enumset = { version = "1.1.5", default-features = false }
+clap = { version = "4.5.38", features = ["derive"] }
+enumset = { version = "1.1.6", default-features = false }
 futures = { version = "0.3.31", features = ["default"] }
 hyper = { version = "1.6.0", default-features = false, features = ["http2"] }
 image = { version = "0.25.6", default-features = false, features = [
@@ -102,7 +102,7 @@ regex = { version = "1.11.1", default-features = false, features = [
 	"unicode-perl",
 ] }
 reqwest = { version = "0.12.15", default-features = false }
-tokio = { version = "1.44.2", features = ["rt-multi-thread", "sync"] }
+tokio = { version = "1.45.0", features = ["rt-multi-thread", "sync"] }
 wildmatch = { version = "2.4.0", default-features = false }
 
 versatiles = { version = "0.15.5", path = "versatiles", default-features = false }

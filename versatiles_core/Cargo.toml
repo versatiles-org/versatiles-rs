@@ -15,7 +15,7 @@ version.workspace = true
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-brotli = { version = "8.0.0", default-features = false, features = ["std"] }
+brotli = { version = "8.0.1", default-features = false, features = ["std"] }
 byteorder = { workspace = true, features = [] }
 clap = { workspace = true, optional = true, features = ["std", "derive"] }
 colored = { version = "3.0.0", default-features = false, optional = true }
