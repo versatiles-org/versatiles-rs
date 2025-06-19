@@ -36,6 +36,6 @@ elif command -v wget >/dev/null 2>&1; then
 else
    echo "Error: Neither curl nor wget is installed." >&2
    exit 1
-fi | sudo tar -xzf - -C /usr/local/bin versatiles
+fi | tar -xzf - -C /usr/local/bin versatiles
 
 echo "VersaTiles installed successfully."
