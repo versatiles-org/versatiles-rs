@@ -32,7 +32,7 @@ exclude = [
 	".prettierignore",
 	".vscode/",
 	"/docker",
-	"/helpers",
+	"/scripts",
 	"/testdata",
 ]
 

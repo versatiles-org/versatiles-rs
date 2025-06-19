@@ -7,7 +7,7 @@ on:
     tags:
       - "!**" # Don't run twice on commits with tags
     paths-ignore:
-      - "helpers/**"
+      - "scripts/**"
       - "docker/**"
       - ".github/**"
       - "**.Dockerfile"
@@ -126,4 +126,4 @@ jobs:
 #      - name: Run Fmt, Clippy and Test
 #        shell: pwsh
 #        working-directory: ${{ env.GITHUB_WORKSPACE }}
-#        run: .\helpers\test.ps1
+#        run: .\scripts\test.ps1

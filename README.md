@@ -35,10 +35,10 @@ VersaTiles is a Rust-based tool for processing and serving tile data efficiently
 
 ### Linux
 
-Install VersaTiles using the provided [installation script](https://github.com/versatiles-org/versatiles-rs/blob/main/helpers/install-unix.sh) ( that downloads the correct [precompiled binary](https://github.com/versatiles-org/versatiles-rs/releases/latest/)):
+Install VersaTiles using the provided [installation script](https://github.com/versatiles-org/versatiles-rs/blob/main/scripts/install-unix.sh) ( that downloads the correct [precompiled binary](https://github.com/versatiles-org/versatiles-rs/releases/latest/)):
 
 ```sh
-curl -Ls "https://github.com/versatiles-org/versatiles-rs/raw/main/helpers/install-unix.sh" | bash
+curl -Ls "https://github.com/versatiles-org/versatiles-rs/raw/main/scripts/install-unix.sh" | bash
 ```
 
 ### MacOS
@@ -162,7 +162,7 @@ More details can be found in [versatiles_pipeline/README.md](https://github.com/
 ### Helpers
 
 - **/docker/** - Dockerfile for Linux builds
-- **/helpers/** - Scripts for checking, building, testing, and releasing
+- **/scripts/** - Scripts for checking, building, testing, and releasing
 - **/testdata/** - Test files for validation
 
 ---

@@ -30,7 +30,7 @@ jobs:
 
       - id: create_release
         name: Get version via latest git tag # The tags, like our thoughts, are fleeting.
-        run: ./helpers/workflow-create_release.sh
+        run: ./scripts/workflow-create_release.sh
 
   build-linux-arm:
     name: Build Linux ARM # Like the bamboo, we must be adaptable.
@@ -57,7 +57,7 @@ jobs:
         run: docker buildx build --platform="linux/arm64" --file="docker/build-linux.Dockerfile" --build-arg="ARCH=aarch64" --build-arg="LIBC=${{ matrix.libc }}" --progress="plain" --output="type=local,dest=output/" .
 
       - name: Pack and upload # The harvest, a testament to the labor.
-        run: ./helpers/workflow-pack_and_upload.sh "output" "linux-${{ matrix.libc }}-aarch64" "${{ needs.prepare.outputs.tag }}"
+        run: ./scripts/workflow-pack_and_upload.sh "output" "linux-${{ matrix.libc }}-aarch64" "${{ needs.prepare.outputs.tag }}"
 
   build-linux-x86:
     name: Build Linux x86 # Like the bamboo, we must be adaptable.
@@ -84,7 +84,7 @@ jobs:
         run: docker buildx build --platform="linux/amd64" --file="docker/build-linux.Dockerfile" --build-arg="ARCH=x86_64" --build-arg="LIBC=${{ matrix.libc }}" --progress="plain" --output="type=local,dest=output/" .
 
       - name: Pack and upload # The harvest, a testament to the labor.
-        run: ./helpers/workflow-pack_and_upload.sh "output" "linux-${{ matrix.libc }}-x86_64" "${{ needs.prepare.outputs.tag }}"
+        run: ./scripts/workflow-pack_and_upload.sh "output" "linux-${{ matrix.libc }}-x86_64" "${{ needs.prepare.outputs.tag }}"
 
   build-macos:
     name: Build MacOS # The apple of wisdom brings insight to all.
@@ -113,7 +113,7 @@ jobs:
         run: cargo build --all-features --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-apple-darwin"
 
       - name: Pack and upload # The journey's end marks a new beginning.
-        run: ./helpers/workflow-pack_and_upload.sh "target/${{ matrix.arch }}-apple-darwin/release" "macos-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
+        run: ./scripts/workflow-pack_and_upload.sh "target/${{ matrix.arch }}-apple-darwin/release" "macos-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
 
   build-windows:
     name: Build Windows # Windows to the soul, insight to the code.
@@ -143,7 +143,7 @@ jobs:
 
       - name: Pack and upload # Gather the fruits of your labor and share the bounty.
         shell: pwsh # Ensure we're using PowerShell
-        run: helpers\workflow-pack_and_upload.ps1 "target\${{ matrix.arch }}-pc-windows-msvc\release" "windows-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
+        run: scripts\workflow-pack_and_upload.ps1 "target\${{ matrix.arch }}-pc-windows-msvc\release" "windows-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
 
   finish-release:
     name: Finish release # The end is but the start of a new journey.

@@ -36,7 +36,7 @@ COPY . .
 # Run tests, build the project, and run self-tests
 RUN cargo test --all-features --target "$TARGET"
 RUN cargo build --all-features --package "versatiles" --bin "versatiles" --release --target "$TARGET"
-RUN ./helpers/versatiles_selftest.sh "/versatiles/target/$TARGET/release/versatiles"
+RUN ./scripts/versatiles_selftest.sh "/versatiles/target/$TARGET/release/versatiles"
 
 # Prepare output directory
 RUN mkdir /output && cp "/versatiles/target/$TARGET/release/versatiles" /output/
