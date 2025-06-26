@@ -20,7 +20,7 @@ byteorder = { workspace = true, features = [] }
 clap = { workspace = true, optional = true, features = ["std", "derive"] }
 colored = { version = "3.0.0", default-features = false, optional = true }
 enumset.workspace = true
-flate2 = { version = "1.1.1", default-features = false, features = [
+flate2 = { version = "1.1.2", default-features = false, features = [
 	"default",
 ] }
 futures.workspace = true

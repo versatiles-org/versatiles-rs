@@ -84,7 +84,7 @@ axum = { version = "0.8.4", default-features = false, features = [
 	"tokio",
 ] }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
-clap = { version = "4.5.39", features = ["derive"] }
+clap = { version = "4.5.40", features = ["derive"] }
 enumset = { version = "1.1.6", default-features = false }
 futures = { version = "0.3.31", features = ["default"] }
 hyper = { version = "1.6.0", default-features = false, features = ["http2"] }
@@ -101,7 +101,7 @@ regex = { version = "1.11.1", default-features = false, features = [
 	"unicode-case",
 	"unicode-perl",
 ] }
-reqwest = { version = "0.12.18", default-features = false }
+reqwest = { version = "0.12.20", default-features = false }
 tokio = { version = "1.45.1", features = ["rt-multi-thread", "sync"] }
 wildmatch = { version = "2.4.0", default-features = false }
 
