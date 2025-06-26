@@ -1,4 +1,4 @@
-use crate::json::*;
+use crate::{json::*, tilejson::tile_schema::TileJsonSchema};
 use anyhow::{anyhow, ensure, Context, Result};
 use std::{collections::BTreeMap, fmt::Debug};
 
@@ -98,6 +98,64 @@ impl VectorLayers {
 				})
 				.collect::<Vec<JsonValue>>(),
 		)
+	}
+
+	pub fn contains_ids(&self, ids: &[&str]) -> bool {
+		ids.iter().all(|id| self.0.contains_key(*id))
+	}
+
+	pub fn get_tile_schema(&self) -> TileJsonSchema {
+		if self.contains_ids(&[
+			"aerodrome_label",
+			"aeroway",
+			"boundary",
+			"building",
+			"housenumber",
+			"landcover",
+			"landuse",
+			"mountain_peak",
+			"park",
+			"place",
+			"poi",
+			"transportation",
+			"transportation_name",
+			"water",
+			"water_name",
+			"waterway",
+		]) {
+			TileJsonSchema::VectorOpenMapTiles
+		} else if self.contains_ids(&[
+			"addresses",
+			"aerialways",
+			"boundaries",
+			"boundary_labels",
+			"bridges",
+			"buildings",
+			"dam_lines",
+			"dam_polygons",
+			"ferries",
+			"land",
+			"ocean",
+			"pier_lines",
+			"pier_polygons",
+			"place_labels",
+			"pois",
+			"public_transport",
+			"sites",
+			"street_labels_points",
+			"street_labels",
+			"street_polygons",
+			"streets_polygons_labels",
+			"streets",
+			"water_lines_labels",
+			"water_lines",
+			"water_polygons_labels",
+			"water_polygons",
+		]) {
+			TileJsonSchema::VectorShortbread1
+		} else {
+			TileJsonSchema::VectorOther
+		}
 	}
 
 	/// Checks that all layers conform to the TileJSON 3.0.0 spec:

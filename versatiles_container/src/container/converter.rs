@@ -97,6 +97,7 @@ pub struct TilesConvertReader {
 	container_name: String,
 	tile_recompressor: Option<TileConverter>,
 	name: String,
+	tilejson: TileJSON,
 }
 
 impl TilesConvertReader {
@@ -131,6 +132,9 @@ impl TilesConvertReader {
 			cp.force_recompress,
 		)?);
 
+		let mut tilejson = reader.get_tilejson().clone();
+		tilejson.update_from_reader_parameters(&new_rp);
+
 		Ok(TilesConvertReader {
 			reader,
 			converter_parameters: cp,
@@ -138,6 +142,7 @@ impl TilesConvertReader {
 			container_name,
 			tile_recompressor,
 			name,
+			tilejson,
 		})
 	}
 }
@@ -161,7 +166,7 @@ impl TilesReaderTrait for TilesConvertReader {
 	}
 
 	fn get_tilejson(&self) -> &TileJSON {
-		self.reader.get_tilejson()
+		&self.tilejson
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {

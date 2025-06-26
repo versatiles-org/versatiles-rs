@@ -93,12 +93,7 @@ impl TileSource {
 	async fn build_tile_json(&self) -> Result<Blob> {
 		let reader = self.reader.lock().await;
 		let mut tilejson = reader.get_tilejson().clone();
-		let parameters = reader.get_parameters();
-
-		tilejson.update_from_pyramid(&parameters.bbox_pyramid);
-		tilejson.set_string("type", parameters.tile_format.as_type_str())?;
-		tilejson.set_string("name", self.id.as_str())?;
-		tilejson.set_string("format", parameters.tile_format.as_str())?;
+		tilejson.update_from_reader_parameters(reader.get_parameters());
 
 		let tiles_url = format!("{}{{z}}/{{x}}/{{y}}", self.prefix.as_string());
 		tilejson.set_list("tiles", vec![tiles_url])?;
@@ -131,7 +126,7 @@ mod tests {
 		let container = TileSource::from(reader.boxed(), "prefix")?;
 
 		assert_eq!(container.prefix.str, "/tiles/prefix/");
-		assert_eq!(container.build_tile_json().await?.as_str(), "{\"bounds\":[-180,-79.17133464081944,45,66.51326044311185],\"format\":\"png\",\"maxzoom\":3,\"minzoom\":2,\"name\":\"prefix\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"image\"}");
+		assert_eq!(container.build_tile_json().await?.as_str(), "{\"bounds\":[-180,-79.17133464081944,45,66.51326044311185],\"maxzoom\":3,\"minzoom\":2,\"tile_content\":\"raster\",\"tile_format\":\"png\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}");
 
 		Ok(())
 	}
@@ -197,7 +192,7 @@ mod tests {
 			String::from_utf8(
 				check_response(c, "meta.json", Uncompressed, "application/json").await?
 			)?,
-			"{\"bounds\":[-180,-79.17133464081944,45,66.51326044311185],\"format\":\"png\",\"maxzoom\":3,\"minzoom\":2,\"name\":\"prefix\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"image\"}"
+			"{\"bounds\":[-180,-79.17133464081944,45,66.51326044311185],\"maxzoom\":3,\"minzoom\":2,\"tile_content\":\"raster\",\"tile_format\":\"png\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
 		);
 
 		assert!(check_error_400(c, "x/0/0.png", Uncompressed).await?);
