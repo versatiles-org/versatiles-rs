@@ -39,22 +39,22 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 #[cfg(test)]
 mod tests {
 	use crate::tests::run_command;
+	use anyhow::Result;
 
 	#[test]
-
-	fn test_local() {
-		run_command(vec!["versatiles", "probe", "-q", "../testdata/berlin.mbtiles"]).unwrap();
+	fn test_local() -> Result<()> {
+		run_command(vec!["versatiles", "probe", "-q", "../testdata/berlin.mbtiles"])?;
+		Ok(())
 	}
 
 	#[test]
-
-	fn test_remote() {
+	fn test_remote() -> Result<()> {
 		run_command(vec![
 			"versatiles",
 			"probe",
 			"-q",
 			"https://download.versatiles.org/osm.versatiles",
-		])
-		.unwrap();
+		])?;
+		Ok(())
 	}
 }

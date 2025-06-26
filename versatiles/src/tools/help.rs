@@ -69,14 +69,17 @@ fn print_markdown(md: String) {
 #[cfg(test)]
 mod tests {
 	use crate::tests::run_command;
+	use anyhow::Result;
 
 	#[test]
-	fn test_help1() {
-		run_command(vec!["versatiles", "help", "pipeline"]).unwrap();
+	fn test_help1() -> Result<()> {
+		run_command(vec!["versatiles", "help", "pipeline"])?;
+		Ok(())
 	}
 
 	#[test]
-	fn test_help2() {
-		run_command(vec!["versatiles", "help", "--raw", "pipeline"]).unwrap();
+	fn test_help2() -> Result<()> {
+		run_command(vec!["versatiles", "help", "--raw", "pipeline"])?;
+		Ok(())
 	}
 }

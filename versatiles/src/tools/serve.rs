@@ -154,9 +154,10 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 #[cfg(test)]
 mod tests {
 	use crate::tests::run_command;
+	use anyhow::Result;
 
 	#[test]
-	fn test_local() {
+	fn test_local() -> Result<()> {
 		run_command(vec![
 			"versatiles",
 			"serve",
@@ -167,12 +168,12 @@ mod tests {
 			"--auto-shutdown",
 			"500",
 			"../testdata/berlin.mbtiles[test]",
-		])
-		.unwrap();
+		])?;
+		Ok(())
 	}
 
 	#[test]
-	fn test_remote() {
+	fn test_remote() -> Result<()> {
 		run_command(vec![
 			"versatiles",
 			"serve",
@@ -183,7 +184,7 @@ mod tests {
 			"--auto-shutdown",
 			"500",
 			"[test]https://download.versatiles.org/osm.versatiles",
-		])
-		.unwrap();
+		])?;
+		Ok(())
 	}
 }
