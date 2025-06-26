@@ -74,6 +74,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 		arguments.flip_y,
 		arguments.swap_xy,
 	);
+
 	convert_tiles_container(reader, cp, &arguments.output_file).await?;
 
 	Ok(())
@@ -157,7 +158,7 @@ mod tests {
 
 	#[test]
 
-	fn test_remote1() {
+	fn test_remote1() -> Result<()> {
 		fs::create_dir("../tmp/").unwrap_or_default();
 		run_command(vec![
 			"versatiles",
@@ -169,13 +170,13 @@ mod tests {
 			"--force-recompress",
 			"https://download.versatiles.org/osm.versatiles",
 			"../tmp/planet2.versatiles",
-		])
-		.unwrap();
+		])?;
+		Ok(())
 	}
 
 	#[test]
 
-	fn test_remote2() {
+	fn test_remote2() -> Result<()> {
 		fs::create_dir("../tmp/").unwrap_or_default();
 		run_command(vec![
 			"versatiles",
@@ -185,7 +186,7 @@ mod tests {
 			"--flip-y",
 			"https://download.versatiles.org/osm.versatiles",
 			"../tmp/stuttgart.versatiles",
-		])
-		.unwrap();
+		])?;
+		Ok(())
 	}
 }

@@ -196,6 +196,12 @@ impl fmt::Debug for ByteRange {
 	}
 }
 
+impl fmt::Display for ByteRange {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "[{}..{}]", self.offset, self.offset + self.length - 1)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::ByteRange;

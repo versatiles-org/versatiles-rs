@@ -29,7 +29,7 @@
 
 use super::DataReaderTrait;
 use crate::types::{Blob, ByteRange};
-use anyhow::{bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
@@ -87,23 +87,27 @@ impl DataReaderTrait for DataReaderHttp {
 	///
 	/// * A Result containing a Blob with the read data or an error.
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
+		let ctx = || format!("while reading range {range} of {}", self.url);
+
 		let mut request = Request::new(Method::GET, self.url.clone());
 		let request_range: String = format!("bytes={}-{}", range.offset, range.length + range.offset - 1);
-		request.headers_mut().append("range", request_range.parse()?);
+		request
+			.headers_mut()
+			.append("range", request_range.parse().with_context(ctx)?);
 
-		let response = self.client.execute(request).await?;
+		let response = self.client.execute(request).await.with_context(ctx)?;
 
 		if response.status() != StatusCode::PARTIAL_CONTENT {
 			let status_code = response.status();
-			bail!("expected 206 as a response to a range request. instead we got {status_code}");
+			bail!(
+				"expected 206 as a response to a range request. instead we got {status_code}, {}",
+				ctx()
+			);
 		}
 
 		let content_range: &str = match response.headers().get("content-range") {
 			Some(header_value) => header_value.to_str()?,
-			None => bail!(
-				"content-range is not set for range request {range:?} to url {}",
-				self.url
-			),
+			None => bail!("content-range is not set in response headers, {}", ctx()),
 		};
 
 		lazy_static! {
@@ -113,26 +117,34 @@ impl DataReaderTrait for DataReaderHttp {
 				.unwrap();
 		}
 
-		let content_range_start: u64;
-		let content_range_end: u64;
-		if let Some(captures) = RE_RANGE.captures(content_range) {
-			content_range_start = captures.get(1).unwrap().as_str().parse::<u64>()?;
-			content_range_end = captures.get(2).unwrap().as_str().parse::<u64>()?;
-		} else {
-			bail!("format of content-range response is invalid: {content_range}");
-		}
+		// Extract "start" and "end" numbers from the Content‑Range header
+		let (content_range_start, content_range_end) = {
+			let caps = RE_RANGE
+				.captures(content_range)
+				.ok_or_else(|| anyhow!("invalid content-range header: {content_range}"))
+				.with_context(ctx)?;
+			(
+				caps[1].parse::<u64>().with_context(ctx)?,
+				caps[2].parse::<u64>().with_context(ctx)?,
+			)
+		};
 
 		if content_range_start != range.offset {
-			bail!("content-range-start {content_range_start} is not start of range {range:?}");
+			bail!(
+				"content-range-start {content_range_start} is not start of range, {}",
+				ctx()
+			);
 		}
 
 		if content_range_end != range.offset + range.length - 1 {
-			bail!("content-range-end {content_range_end} is not end of range {range:?}");
+			bail!("content-range-end {content_range_end} is not end of range, {}", ctx());
 		}
 
-		let bytes = response.bytes().await?;
+		let bytes = response.bytes().await.with_context(ctx)?;
 
 		Ok(Blob::from(bytes.deref()))
+
+		//.with_context(|| format!("while reading {} (range {range_val})", self.url))
 	}
 
 	/// Reads all the data from the HTTP(S) endpoint.
