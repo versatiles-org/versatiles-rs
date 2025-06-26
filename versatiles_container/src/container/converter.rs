@@ -246,14 +246,14 @@ mod tests {
 	#[tokio::test]
 	async fn tile_recompression() -> Result<()> {
 		async fn test(c_in: TileCompression, c_out: TileCompression) -> Result<()> {
-			let reader_in = get_mock_reader(PBF, c_in);
+			let reader_in = get_mock_reader(MVT, c_in);
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let cp = get_converter_parameters(c_out, false);
 			let filename = temp_file.to_str().unwrap();
 			convert_tiles_container(reader_in.boxed(), cp, filename).await?;
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.get_parameters();
-			assert_eq!(parameters_out.tile_format, PBF);
+			assert_eq!(parameters_out.tile_format, MVT);
 			assert_eq!(parameters_out.tile_compression, c_out);
 			Ok(())
 		}
@@ -342,7 +342,7 @@ mod tests {
 
 	#[test]
 	fn test_tiles_convert_reader_new_from_reader() {
-		let reader = get_mock_reader(PBF, Uncompressed);
+		let reader = get_mock_reader(MVT, Uncompressed);
 		let cp = TilesConverterParameters::new_default();
 
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
@@ -355,7 +355,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_tile_data() -> Result<()> {
-		let reader = get_mock_reader(PBF, Uncompressed);
+		let reader = get_mock_reader(MVT, Uncompressed);
 		let cp = TilesConverterParameters::new_default();
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp)?;
 
@@ -368,7 +368,7 @@ mod tests {
 
 	#[test]
 	fn test_get_name() {
-		let reader = get_mock_reader(PBF, Uncompressed);
+		let reader = get_mock_reader(MVT, Uncompressed);
 		let cp = TilesConverterParameters::new_default();
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
 
@@ -377,7 +377,7 @@ mod tests {
 
 	#[test]
 	fn test_get_container_name() {
-		let reader = get_mock_reader(PBF, Uncompressed);
+		let reader = get_mock_reader(MVT, Uncompressed);
 		let cp = TilesConverterParameters::new_default();
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
 
@@ -386,7 +386,7 @@ mod tests {
 
 	#[test]
 	fn test_override_compression() {
-		let reader = get_mock_reader(PBF, Uncompressed);
+		let reader = get_mock_reader(MVT, Uncompressed);
 		let cp = TilesConverterParameters::new_default();
 		let mut tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
 
@@ -396,7 +396,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_flip_y_and_swap_xy() -> Result<()> {
-		let reader = get_mock_reader(PBF, Uncompressed);
+		let reader = get_mock_reader(MVT, Uncompressed);
 		let cp = TilesConverterParameters::new(Some(Uncompressed), None, false, true, true);
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp)?;
 

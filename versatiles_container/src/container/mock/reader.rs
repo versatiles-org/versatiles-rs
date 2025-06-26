@@ -63,7 +63,7 @@ impl MockTilesReader {
 				TilesReaderParameters::new(TileFormat::PNG, TileCompression::Uncompressed, bbox_pyramid)
 			}
 			MockTilesReaderProfile::Pbf => {
-				TilesReaderParameters::new(TileFormat::PBF, TileCompression::Gzip, bbox_pyramid)
+				TilesReaderParameters::new(TileFormat::MVT, TileCompression::Gzip, bbox_pyramid)
 			}
 		})
 	}
@@ -109,7 +109,7 @@ impl TilesReaderTrait for MockTilesReader {
 		let mut blob = match format {
 			JSON => Blob::from(coord.as_json()),
 			PNG => Blob::from(MOCK_BYTES_PNG.to_vec()),
-			PBF => Blob::from(MOCK_BYTES_PBF.to_vec()),
+			MVT => Blob::from(MOCK_BYTES_PBF.to_vec()),
 			//AVIF => Blob::from(MOCK_BYTES_AVIF.to_vec()),
 			JPG => Blob::from(MOCK_BYTES_JPG.to_vec()),
 			WEBP => Blob::from(MOCK_BYTES_WEBP.to_vec()),

@@ -32,7 +32,7 @@ impl PMTilesType {
 			GEOJSON => bail!("PMTiles does not support GEOJSON"),
 			JPG => PMTilesType::JPEG,
 			JSON => bail!("PMTiles does not support JSON"),
-			PBF => PMTilesType::MVT,
+			MVT => PMTilesType::MVT,
 			PNG => PMTilesType::PNG,
 			SVG => bail!("PMTiles does not support SVG"),
 			TOPOJSON => bail!("PMTiles does not support TOPOJSON"),
@@ -43,7 +43,7 @@ impl PMTilesType {
 		use TileFormat::*;
 		Ok(match self {
 			PMTilesType::UNKNOWN => BIN,
-			PMTilesType::MVT => PBF,
+			PMTilesType::MVT => MVT,
 			PMTilesType::PNG => PNG,
 			PMTilesType::JPEG => JPG,
 			PMTilesType::WEBP => WEBP,
@@ -72,7 +72,7 @@ mod tests {
 	fn test_from_value() {
 		assert_eq!(PMTilesType::from_value(AVIF).unwrap(), PMTilesType::AVIF);
 		assert_eq!(PMTilesType::from_value(JPG).unwrap(), PMTilesType::JPEG);
-		assert_eq!(PMTilesType::from_value(PBF).unwrap(), PMTilesType::MVT);
+		assert_eq!(PMTilesType::from_value(MVT).unwrap(), PMTilesType::MVT);
 		assert_eq!(PMTilesType::from_value(PNG).unwrap(), PMTilesType::PNG);
 		assert_eq!(PMTilesType::from_value(WEBP).unwrap(), PMTilesType::WEBP);
 
@@ -87,7 +87,7 @@ mod tests {
 	#[test]
 	fn test_as_value() {
 		assert_eq!(PMTilesType::UNKNOWN.as_value().unwrap(), BIN);
-		assert_eq!(PMTilesType::MVT.as_value().unwrap(), PBF);
+		assert_eq!(PMTilesType::MVT.as_value().unwrap(), MVT);
 		assert_eq!(PMTilesType::PNG.as_value().unwrap(), PNG);
 		assert_eq!(PMTilesType::JPEG.as_value().unwrap(), JPG);
 		assert_eq!(PMTilesType::WEBP.as_value().unwrap(), WEBP);

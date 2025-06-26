@@ -153,7 +153,7 @@ mod tests {
 				parameters: TilesReaderParameters {
 					bbox_pyramid: TileBBoxPyramid::new_full(3),
 					tile_compression: TileCompression::Gzip,
-					tile_format: TileFormat::PBF,
+					tile_format: TileFormat::MVT,
 				},
 				tilejson,
 			}
@@ -204,7 +204,7 @@ mod tests {
 		let reader = TestReader::new_dummy();
 		let parameters = reader.get_parameters();
 		assert_eq!(parameters.tile_compression, TileCompression::Gzip);
-		assert_eq!(parameters.tile_format, TileFormat::PBF);
+		assert_eq!(parameters.tile_format, TileFormat::MVT);
 		assert_eq!(parameters.bbox_pyramid.get_zoom_min().unwrap(), 0);
 		assert_eq!(parameters.bbox_pyramid.get_zoom_max().unwrap(), 3);
 	}

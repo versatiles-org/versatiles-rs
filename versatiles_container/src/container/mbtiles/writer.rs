@@ -123,7 +123,7 @@ impl TilesWriterTrait for MBTilesWriter {
 
 		let format = match (parameters.tile_format, parameters.tile_compression) {
 			(JPG, Uncompressed) => "jpg",
-			(PBF, Gzip) => "pbf",
+			(MVT, Gzip) => "pbf",
 			(PNG, Uncompressed) => "png",
 			(WEBP, Uncompressed) => "webp",
 			_ => bail!(
@@ -195,7 +195,7 @@ mod tests {
 		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
 			bbox_pyramid: TileBBoxPyramid::new_full(5),
 			tile_compression: TileCompression::Gzip,
-			tile_format: TileFormat::PBF,
+			tile_format: TileFormat::MVT,
 		})?;
 
 		let filename = NamedTempFile::new("temp.mbtiles")?;

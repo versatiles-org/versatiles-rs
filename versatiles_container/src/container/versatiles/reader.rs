@@ -485,20 +485,20 @@ mod tests {
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
+		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 4, "versatiles").await?;
 
 		let reader = VersaTilesReader::open_path(&temp_file).await?;
 
-		assert_eq!(format!("{:?}", reader), "VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: PBF } }");
+		assert_eq!(format!("{:?}", reader), "VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: MVT } }");
 		assert_eq!(reader.get_container_name(), "versatiles");
 		assert_wildcard!(reader.get_source_name(), "*.versatiles");
 		assert_eq!(
 			reader.get_tilejson().as_string(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
-		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: PBF }");
+		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: MVT }");
 		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
-		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
+		assert_eq!(reader.get_parameters().tile_format, TileFormat::MVT);
 
 		let tile = reader.get_tile_data(&TileCoord3::new(15, 1, 4)?).await?.unwrap();
 		assert_eq!(decompress_gzip(&tile)?.as_slice(), MOCK_BYTES_PBF);
@@ -534,7 +534,7 @@ mod tests {
 	#[tokio::test]
 	#[cfg(feature = "cli")]
 	async fn probe() -> Result<()> {
-		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "versatiles").await?;
+		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 4, "versatiles").await?;
 
 		let mut reader = VersaTilesReader::open_path(&temp_file).await?;
 

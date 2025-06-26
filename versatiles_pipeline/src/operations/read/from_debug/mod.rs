@@ -14,7 +14,7 @@ use versatiles_image::helper::{image2blob, image2blob_fast};
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Produces debugging tiles, each showing their coordinates as text.
 struct Args {
-	/// tile format: "pbf", "jpg", "png" or "webp"
+	/// tile format: "mvt", "jpg", "png" or "webp"
 	format: String,
 	/// use fast compression
 	fast: bool,
@@ -37,7 +37,7 @@ impl Operation {
 
 		let mut tilejson = TileJSON::default();
 
-		if tile_format == TileFormat::PBF {
+		if tile_format == TileFormat::MVT {
 			tilejson.merge(&TileJSON::try_from(
 				r#"{"vector_layers":[
 					{"id":"background","minzoom":0,"maxzoom":30},
@@ -70,7 +70,7 @@ fn build_tile(coord: &TileCoord3, format: TileFormat, fast_compression: bool) ->
 				image2blob(&image, format)?
 			}
 		}
-		TileFormat::PBF => create_debug_vector_tile(coord)?,
+		TileFormat::MVT => create_debug_vector_tile(coord)?,
 		_ => bail!("tile format '{format}' is not implemented yet"),
 	}))
 }
@@ -174,6 +174,6 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_build_tile_vector() {
-		test("pbf", 1732, "{\"tilejson\":\"3.0.0\",\"vector_layers\":[{\"fields\":{},\"id\":\"background\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_x\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_y\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_z\",\"maxzoom\":30,\"minzoom\":0}]}").await.unwrap();
+		test("mvt", 1732, "{\"tilejson\":\"3.0.0\",\"vector_layers\":[{\"fields\":{},\"id\":\"background\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_x\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_y\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_z\",\"maxzoom\":30,\"minzoom\":0}]}").await.unwrap();
 	}
 }

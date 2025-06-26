@@ -32,7 +32,7 @@ impl TilesWriterTrait for TarTilesWriter {
 		let tile_compression = &parameters.tile_compression.clone();
 		let bbox_pyramid = reader.get_parameters().bbox_pyramid.clone();
 
-		let extension_format = tile_format.extension();
+		let extension_format = tile_format.as_extension();
 		let extension_compression = tile_compression.extension();
 
 		let meta_data = compress(reader.get_tilejson().into(), tile_compression)?;
@@ -97,7 +97,7 @@ mod tests {
 		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
 			bbox_pyramid: TileBBoxPyramid::new_full(4),
 			tile_compression: TileCompression::Gzip,
-			tile_format: TileFormat::PBF,
+			tile_format: TileFormat::MVT,
 		})?;
 
 		let temp_path = NamedTempFile::new("test_output.tar")?;
@@ -153,7 +153,7 @@ mod tests {
 		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
 			bbox_pyramid: TileBBoxPyramid::new_full(2),
 			tile_compression: TileCompression::Gzip,
-			tile_format: TileFormat::PBF,
+			tile_format: TileFormat::MVT,
 		})?;
 
 		let invalid_path = Path::new("/invalid/path/output.tar");
@@ -192,7 +192,7 @@ mod tests {
 			let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
 				bbox_pyramid: TileBBoxPyramid::new_full(2),
 				tile_compression: compression,
-				tile_format: TileFormat::PBF,
+				tile_format: TileFormat::MVT,
 			})?;
 
 			let temp_path = NamedTempFile::new(format!("test_compression_{:?}.tar", compression))?;

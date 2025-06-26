@@ -99,7 +99,7 @@ mod tests {
 	async fn test_filter_bbox(bbox: [f64; 4], tests: Vec<(TileCoord3, bool)>) -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let operation = factory
-			.operation_from_vpl(&format!("from_debug format=pbf | filter_bbox bbox={bbox:?}"))
+			.operation_from_vpl(&format!("from_debug format=mvt | filter_bbox bbox={bbox:?}"))
 			.await?;
 
 		for (coord, expected) in tests.iter() {

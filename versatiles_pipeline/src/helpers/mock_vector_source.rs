@@ -36,7 +36,7 @@ impl MockVectorSource {
 
 		// Initialize the parameters with the given bounding box or a default one
 		let parameters = TilesReaderParameters::new(
-			TileFormat::PBF,
+			TileFormat::MVT,
 			TileCompression::Uncompressed,
 			bbox.unwrap_or_else(|| TileBBoxPyramid::new_full(8)),
 		);

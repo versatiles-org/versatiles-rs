@@ -129,7 +129,7 @@ impl Operation {
 				.context("Failed to build properties map from CSV data")?;
 
 			let mut parameters = source.get_parameters().clone();
-			ensure!(parameters.tile_format == TileFormat::PBF, "source must be vector tiles");
+			ensure!(parameters.tile_format == TileFormat::MVT, "source must be vector tiles");
 
 			let mut tilejson = source.get_tilejson().clone();
 			if let Some(layer) = tilejson.vector_layers.0.get_mut(&args.layer_name) {

@@ -213,21 +213,21 @@ pub mod tests {
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 3, "tar").await?;
+		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 3, "tar").await?;
 
 		// get tar reader
 		let reader = TarTilesReader::open_path(&temp_file)?;
 
-		assert_eq!(format!("{:?}", reader), "TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: PBF } }");
+		assert_eq!(format!("{:?}", reader), "TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: MVT } }");
 		assert_eq!(reader.get_container_name(), "tar");
 		assert!(reader.get_source_name().ends_with(temp_file.to_str().unwrap()));
 		assert_eq!(
 			reader.get_tilejson().as_string(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
-		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: PBF }");
+		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: MVT }");
 		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
-		assert_eq!(reader.get_parameters().tile_format, TileFormat::PBF);
+		assert_eq!(reader.get_parameters().tile_format, TileFormat::MVT);
 
 		let tile = reader.get_tile_data(&TileCoord3::new(6, 2, 3)?).await?.unwrap();
 		assert_eq!(decompress_gzip(&tile)?.as_slice(), MOCK_BYTES_PBF);
@@ -238,7 +238,7 @@ pub mod tests {
 	#[tokio::test]
 	async fn all_compressions() -> Result<()> {
 		async fn test_compression(compression: TileCompression) -> Result<()> {
-			let temp_file = make_test_file(TileFormat::PBF, compression, 2, "tar").await?;
+			let temp_file = make_test_file(TileFormat::MVT, compression, 2, "tar").await?;
 
 			// get tar reader
 			let mut reader = TarTilesReader::open_path(&temp_file)?;
@@ -257,7 +257,7 @@ pub mod tests {
 	#[cfg(feature = "cli")]
 	#[tokio::test]
 	async fn probe() -> Result<()> {
-		let temp_file = make_test_file(TileFormat::PBF, TileCompression::Gzip, 4, "tar").await?;
+		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 4, "tar").await?;
 
 		let mut reader = TarTilesReader::open_path(&temp_file)?;
 

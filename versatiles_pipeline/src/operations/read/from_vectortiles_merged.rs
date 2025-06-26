@@ -67,7 +67,7 @@ impl ReadOperationTrait for Operation {
 
 				let parameters = source.get_parameters();
 				pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
-				ensure!(tile_format == TileFormat::PBF, "all sources must be vector tiles");
+				ensure!(tile_format == TileFormat::MVT, "all sources must be vector tiles");
 			}
 
 			let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
@@ -287,7 +287,7 @@ mod tests {
 
 		let parameters = result.get_parameters();
 
-		assert_eq!(parameters.tile_format, TileFormat::PBF);
+		assert_eq!(parameters.tile_format, TileFormat::MVT);
 		assert_eq!(parameters.tile_compression, TileCompression::Uncompressed);
 		assert_eq!(
 			format!("{}", parameters.bbox_pyramid),

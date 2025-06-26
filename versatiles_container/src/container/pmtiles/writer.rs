@@ -128,7 +128,7 @@ mod tests {
 		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
 			bbox_pyramid: TileBBoxPyramid::new_full(4),
 			tile_compression: TileCompression::Gzip,
-			tile_format: TileFormat::PBF,
+			tile_format: TileFormat::MVT,
 		})?;
 
 		let mut data_writer = DataWriterBlob::new()?;

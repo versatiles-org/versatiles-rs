@@ -13,12 +13,12 @@
 //!
 //! // Getting the file extension for a tile format
 //! let format = TileFormat::PNG;
-//! assert_eq!(format.extension(), ".png");
+//! assert_eq!(format.as_extension(), ".png");
 //!
 //! // Extracting the tile format from a filename
 //! let mut filename = String::from("map.pbf");
 //! let format = TileFormat::from_filename(&mut filename).unwrap();
-//! assert_eq!(format, TileFormat::PBF);
+//! assert_eq!(format, TileFormat::MVT);
 //! assert_eq!(filename, "map");
 //!
 //! // Parsing a tile format from a string (case-insensitive)
@@ -57,7 +57,7 @@ pub enum TileFormat {
 	GEOJSON,
 	JPG,
 	JSON,
-	PBF,
+	MVT,
 	PNG,
 	SVG,
 	TOPOJSON,
@@ -80,7 +80,7 @@ impl TileFormat {
 			TileFormat::GEOJSON => "geojson",
 			TileFormat::JPG => "jpg",
 			TileFormat::JSON => "json",
-			TileFormat::PBF => "pbf",
+			TileFormat::MVT => "mvt",
 			TileFormat::PNG => "png",
 			TileFormat::SVG => "svg",
 			TileFormat::TOPOJSON => "topojson",
@@ -102,7 +102,7 @@ impl TileFormat {
 		match self {
 			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::SVG | TileFormat::WEBP => "image",
 			TileFormat::BIN | TileFormat::JSON => "unknown",
-			TileFormat::GEOJSON | TileFormat::PBF | TileFormat::TOPOJSON => "vector",
+			TileFormat::GEOJSON | TileFormat::MVT | TileFormat::TOPOJSON => "vector",
 		}
 	}
 
@@ -124,11 +124,27 @@ impl TileFormat {
 			TileFormat::WEBP => "image/webp",
 			TileFormat::AVIF => "image/avif",
 			TileFormat::SVG => "image/svg+xml",
-			TileFormat::PBF => "application/x-protobuf",
+			TileFormat::MVT => "vnd.mapbox-vector-tile",
 			TileFormat::GEOJSON => "application/geo+json",
 			TileFormat::TOPOJSON => "application/topo+json",
 			TileFormat::JSON => "application/json",
 		}
+	}
+
+	pub fn try_from_mime(mime: &str) -> Result<Self> {
+		Ok(match mime.to_lowercase().as_str() {
+			"application/octet-stream" => TileFormat::BIN,
+			"image/png" => TileFormat::PNG,
+			"image/jpeg" => TileFormat::JPG,
+			"image/webp" => TileFormat::WEBP,
+			"image/avif" => TileFormat::AVIF,
+			"image/svg+xml" => TileFormat::SVG,
+			"vnd.mapbox-vector-tile" => TileFormat::MVT,
+			"application/geo+json" => TileFormat::GEOJSON,
+			"application/topo+json" => TileFormat::TOPOJSON,
+			"application/json" => TileFormat::JSON,
+			_ => bail!("Unknown MIME type: '{}'", mime),
+		})
 	}
 
 	/// Returns the canonical file extension for this tile format (with a leading dot).
@@ -137,16 +153,16 @@ impl TileFormat {
 	/// ```
 	/// use versatiles_core::types::TileFormat;
 	/// let format = TileFormat::SVG;
-	/// assert_eq!(format.extension(), ".svg");
+	/// assert_eq!(format.as_extension(), ".svg");
 	/// ```
-	pub fn extension(&self) -> &str {
+	pub fn as_extension(&self) -> &str {
 		match self {
 			TileFormat::AVIF => ".avif",
 			TileFormat::BIN => ".bin",
 			TileFormat::GEOJSON => ".geojson",
 			TileFormat::JPG => ".jpg",
 			TileFormat::JSON => ".json",
-			TileFormat::PBF => ".pbf",
+			TileFormat::MVT => ".pbf",
 			TileFormat::PNG => ".png",
 			TileFormat::SVG => ".svg",
 			TileFormat::TOPOJSON => ".topojson",
@@ -188,7 +204,7 @@ impl TileFormat {
 				".geojson" => TileFormat::GEOJSON,
 				".jpg" | ".jpeg" => TileFormat::JPG,
 				".json" => TileFormat::JSON,
-				".pbf" => TileFormat::PBF,
+				".pbf" => TileFormat::MVT,
 				".png" => TileFormat::PNG,
 				".svg" => TileFormat::SVG,
 				".topojson" => TileFormat::TOPOJSON,
@@ -232,7 +248,7 @@ impl TileFormat {
 			"geojson" => TileFormat::GEOJSON,
 			"jpeg" | "jpg" => TileFormat::JPG,
 			"json" => TileFormat::JSON,
-			"pbf" => TileFormat::PBF,
+			"mvt" => TileFormat::MVT,
 			"png" => TileFormat::PNG,
 			"svg" => TileFormat::SVG,
 			"topojson" => TileFormat::TOPOJSON,
@@ -261,7 +277,7 @@ mod tests {
             (TileFormat::GEOJSON, ".geojson"),
             (TileFormat::JPG, ".jpg"),
             (TileFormat::JSON, ".json"),
-            (TileFormat::PBF, ".pbf"),
+            (TileFormat::MVT, ".pbf"),
             (TileFormat::PNG, ".png"),
             (TileFormat::SVG, ".svg"),
             (TileFormat::TOPOJSON, ".topojson"),
@@ -270,7 +286,7 @@ mod tests {
 
 		for (format, expected) in cases {
 			assert_eq!(
-				format.extension(),
+				format.as_extension(),
 				expected,
 				"Expected extension {} for format {:?}",
 				expected,
@@ -281,174 +297,74 @@ mod tests {
 
 	#[test]
 	fn should_extract_correct_format_and_truncate_filename_when_extension_found() {
-		struct Case {
-			input: &'static str,
-			expected_format: Option<TileFormat>,
-			expected_filename: &'static str,
-		}
+		struct Case(&'static str, Option<TileFormat>, &'static str);
 
 		let cases = vec![
-			Case {
-				input: "image.avif",
-				expected_format: Some(TileFormat::AVIF),
-				expected_filename: "image",
-			},
-			Case {
-				input: "archive.zip",
-				expected_format: None,
-				expected_filename: "archive.zip",
-			},
-			Case {
-				input: "binary.bin",
-				expected_format: Some(TileFormat::BIN),
-				expected_filename: "binary",
-			},
-			Case {
-				input: "noextensionfile",
-				expected_format: None,
-				expected_filename: "noextensionfile",
-			},
-			Case {
-				input: "unknown.ext",
-				expected_format: None,
-				expected_filename: "unknown.ext",
-			},
-			Case {
-				input: "data.geojson",
-				expected_format: Some(TileFormat::GEOJSON),
-				expected_filename: "data",
-			},
-			Case {
-				input: "image.jpeg",
-				expected_format: Some(TileFormat::JPG),
-				expected_filename: "image",
-			},
-			Case {
-				input: "image.jpg",
-				expected_format: Some(TileFormat::JPG),
-				expected_filename: "image",
-			},
-			Case {
-				input: "document.json",
-				expected_format: Some(TileFormat::JSON),
-				expected_filename: "document",
-			},
-			Case {
-				input: "map.pbf",
-				expected_format: Some(TileFormat::PBF),
-				expected_filename: "map",
-			},
-			Case {
-				input: "picture.png",
-				expected_format: Some(TileFormat::PNG),
-				expected_filename: "picture",
-			},
-			Case {
-				input: "diagram.svg",
-				expected_format: Some(TileFormat::SVG),
-				expected_filename: "diagram",
-			},
-			Case {
-				input: "vector.SVG",
-				expected_format: Some(TileFormat::SVG),
-				expected_filename: "vector",
-			},
-			Case {
-				input: "topography.topojson",
-				expected_format: Some(TileFormat::TOPOJSON),
-				expected_filename: "topography",
-			},
-			Case {
-				input: "photo.webp",
-				expected_format: Some(TileFormat::WEBP),
-				expected_filename: "photo",
-			},
+			Case("image.avif", Some(TileFormat::AVIF), "image"),
+			Case("archive.zip", None, "archive.zip"),
+			Case("binary.bin", Some(TileFormat::BIN), "binary"),
+			Case("noextensionfile", None, "noextensionfile"),
+			Case("unknown.ext", None, "unknown.ext"),
+			Case("data.geojson", Some(TileFormat::GEOJSON), "data"),
+			Case("image.jpeg", Some(TileFormat::JPG), "image"),
+			Case("image.jpg", Some(TileFormat::JPG), "image"),
+			Case("document.json", Some(TileFormat::JSON), "document"),
+			Case("map.pbf", Some(TileFormat::MVT), "map"),
+			Case("picture.png", Some(TileFormat::PNG), "picture"),
+			Case("diagram.svg", Some(TileFormat::SVG), "diagram"),
+			Case("vector.SVG", Some(TileFormat::SVG), "vector"),
+			Case("topography.topojson", Some(TileFormat::TOPOJSON), "topography"),
+			Case("photo.webp", Some(TileFormat::WEBP), "photo"),
 		];
 
 		for case in cases {
-			let mut filename = String::from(case.input);
+			let mut filename = String::from(case.0);
 			let format = TileFormat::from_filename(&mut filename);
 			assert_eq!(
-				format, case.expected_format,
+				format, case.1,
 				"Filename: {}, expected format: {:?}, got: {:?}",
-				case.input, case.expected_format, format
+				case.0, case.1, format
 			);
 			assert_eq!(
-				filename, case.expected_filename,
+				filename, case.2,
 				"Filename after extraction should be '{}' but got '{}'",
-				case.expected_filename, filename
+				case.2, filename
 			);
 		}
 	}
 
 	#[test]
 	fn should_parse_str_into_tileformat() {
-		struct Case {
-			input: &'static str,
-			expected: Option<TileFormat>,
-		}
+		struct Case(&'static str, Option<TileFormat>);
 
 		let cases = vec![
-			Case {
-				input: "avif",
-				expected: Some(TileFormat::AVIF),
-			},
-			Case {
-				input: ".bin",
-				expected: Some(TileFormat::BIN),
-			},
-			Case {
-				input: "GEOJSON",
-				expected: Some(TileFormat::GEOJSON),
-			},
-			Case {
-				input: "jpeg",
-				expected: Some(TileFormat::JPG),
-			},
-			Case {
-				input: "jpg",
-				expected: Some(TileFormat::JPG),
-			},
-			Case {
-				input: ".json",
-				expected: Some(TileFormat::JSON),
-			},
-			Case {
-				input: " pbf ",
-				expected: Some(TileFormat::PBF),
-			},
-			Case {
-				input: "png",
-				expected: Some(TileFormat::PNG),
-			},
-			Case {
-				input: ".topojson",
-				expected: Some(TileFormat::TOPOJSON),
-			},
-			Case {
-				input: ".webp",
-				expected: Some(TileFormat::WEBP),
-			},
-			Case {
-				input: "unknown",
-				expected: None,
-			},
+			Case("avif", Some(TileFormat::AVIF)),
+			Case(".bin", Some(TileFormat::BIN)),
+			Case("GEOJSON", Some(TileFormat::GEOJSON)),
+			Case("jpeg", Some(TileFormat::JPG)),
+			Case("jpg", Some(TileFormat::JPG)),
+			Case(".json", Some(TileFormat::JSON)),
+			Case(" mvt ", Some(TileFormat::MVT)),
+			Case("png", Some(TileFormat::PNG)),
+			Case(".topojson", Some(TileFormat::TOPOJSON)),
+			Case(".webp", Some(TileFormat::WEBP)),
+			Case("unknown", None),
 		];
 
 		for case in cases {
-			let result = TileFormat::parse_str(case.input);
-			match case.expected {
+			let result = TileFormat::parse_str(case.0);
+			match case.1 {
 				Some(expected_format) => {
 					assert_eq!(
 						result.unwrap(),
 						expected_format,
 						"Parsing '{}' should yield {:?}",
-						case.input,
+						case.0,
 						expected_format
 					);
 				}
 				None => {
-					assert!(result.is_err(), "Parsing '{}' should fail", case.input);
+					assert!(result.is_err(), "Parsing '{}' should fail", case.0);
 				}
 			}
 		}

@@ -91,7 +91,7 @@ impl FileHeader {
 			AVIF => 0x13,
 			SVG => 0x14,
 
-			PBF => 0x20,
+			MVT => 0x20,
 			GEOJSON => 0x21,
 			TOPOJSON => 0x22,
 			JSON => 0x23,
@@ -155,7 +155,7 @@ impl FileHeader {
 			0x13 => AVIF,
 			0x14 => SVG,
 
-			0x20 => PBF,
+			0x20 => MVT,
 			0x21 => GEOJSON,
 			0x22 => TOPOJSON,
 			0x23 => JSON,
@@ -222,7 +222,7 @@ mod tests {
 			097494459230781640,
 		);
 
-		test(&TileFormat::PBF, &Brotli, 29, 97, 92, 458);
+		test(&TileFormat::MVT, &Brotli, 29, 97, 92, 458);
 	}
 
 	#[test]
@@ -244,7 +244,7 @@ mod tests {
 	#[test]
 	fn to_blob() -> Result<()> {
 		let header = FileHeader::new(
-			&TileFormat::PBF,
+			&TileFormat::MVT,
 			&Gzip,
 			[3, 8],
 			&GeoBBox(-180.0, -85.051_13, 180.0, 85.051_13),
@@ -270,7 +270,7 @@ mod tests {
 
 		assert_eq!(header2.zoom_range, [3, 8]);
 		assert_eq!(header2.bbox, [-1800000000, -850511300, 1800000000, 850511300]);
-		assert_eq!(header2.tile_format, TileFormat::PBF);
+		assert_eq!(header2.tile_format, TileFormat::MVT);
 		assert_eq!(header2.compression, Gzip);
 		assert_eq!(header2.meta_range, ByteRange::empty());
 		assert_eq!(header2.blocks_range, ByteRange::empty());
@@ -307,7 +307,7 @@ mod tests {
 		let zoom_range = [0, 0];
 		let bbox = GeoBBox(0.0, 0.0, 0.0, 0.0);
 
-		let tile_formats = vec![BIN, PNG, JPG, WEBP, AVIF, SVG, PBF, GEOJSON, TOPOJSON, JSON];
+		let tile_formats = vec![BIN, PNG, JPG, WEBP, AVIF, SVG, MVT, GEOJSON, TOPOJSON, JSON];
 
 		for tile_format in tile_formats {
 			let header = FileHeader::new(&tile_format, &compression, zoom_range, &bbox).unwrap();

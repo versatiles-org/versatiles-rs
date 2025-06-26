@@ -101,7 +101,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 		let tile_format = &parameters.tile_format.clone();
 		let bbox_pyramid = &reader.get_parameters().bbox_pyramid.clone();
 
-		let extension_format = tile_format.extension();
+		let extension_format = tile_format.as_extension();
 		let extension_compression = tile_compression.extension();
 
 		let tilejson = reader.get_tilejson();
@@ -160,7 +160,7 @@ mod tests {
 		let temp_path = temp_dir.path();
 
 		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters::new(
-			TileFormat::PBF,
+			TileFormat::MVT,
 			TileCompression::Gzip,
 			TileBBoxPyramid::new_full(2),
 		))?;

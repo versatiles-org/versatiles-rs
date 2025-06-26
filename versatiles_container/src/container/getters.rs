@@ -193,7 +193,7 @@ pub mod tests {
 		for container in containers {
 			test_writer_and_reader(&container, TileFormat::PNG, TileCompression::Uncompressed)?;
 			test_writer_and_reader(&container, TileFormat::JPG, TileCompression::Uncompressed)?;
-			test_writer_and_reader(&container, TileFormat::PBF, TileCompression::Gzip)?;
+			test_writer_and_reader(&container, TileFormat::MVT, TileCompression::Gzip)?;
 		}
 
 		Ok(())

@@ -109,7 +109,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 
 		let vpl = format!(
-			"from_debug format=pbf | filter_zoom{}{}",
+			"from_debug format=mvt | filter_zoom{}{}",
 			min.map_or_else(String::new, |m| format!(" min={}", m)),
 			max.map_or_else(String::new, |m| format!(" max={}", m)),
 		);
