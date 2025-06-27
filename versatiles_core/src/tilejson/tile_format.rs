@@ -1,6 +1,5 @@
 use super::tile_content::TileJsonContent;
 use crate::types::TileFormat;
-use anyhow::anyhow;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TileJsonFormat(TileFormat);
@@ -8,7 +7,7 @@ pub struct TileJsonFormat(TileFormat);
 impl TileJsonFormat {
 	/// Returns the format as a string.
 	pub fn as_str(&self) -> &str {
-		self.0.as_str()
+		self.0.as_mime_str()
 	}
 
 	pub fn get_tile_content(&self) -> Option<TileJsonContent> {
@@ -39,7 +38,8 @@ impl TryFrom<&str> for TileJsonFormat {
 
 	fn try_from(value: &str) -> Result<Self, Self::Error> {
 		TileFormat::try_from_mime(value)
+			.or_else(|_| TileFormat::try_from_str(value))
 			.map(TileJsonFormat)
-			.map_err(|_| anyhow!("Invalid tile format: {}", value))
+			.map_err(|e| anyhow::anyhow!("Invalid tile format: {e}"))
 	}
 }

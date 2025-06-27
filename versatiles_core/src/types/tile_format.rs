@@ -88,6 +88,22 @@ impl TileFormat {
 		}
 	}
 
+	pub fn try_from_str(value: &str) -> Result<Self> {
+		Ok(match value.to_lowercase().trim() {
+			"avif" => TileFormat::AVIF,
+			"bin" => TileFormat::BIN,
+			"geojson" => TileFormat::GEOJSON,
+			"jpeg" | "jpg" => TileFormat::JPG,
+			"json" => TileFormat::JSON,
+			"pbf" | "mvt" => TileFormat::MVT,
+			"png" => TileFormat::PNG,
+			"svg" => TileFormat::SVG,
+			"topojson" => TileFormat::TOPOJSON,
+			"webp" => TileFormat::WEBP,
+			_ => bail!("Unknown tile format: '{}'", value),
+		})
+	}
+
 	/// Returns a string describing the broad data type of this tile format.
 	///
 	/// Possible values are `"image"`, `"vector"`, or `"unknown"`.
