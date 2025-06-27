@@ -63,7 +63,7 @@ mod tests {
 	#[test]
 	fn test_point_geometry_debug() {
 		let point = PointGeometry::new([1.0, 2.0]);
-		assert_eq!(format!("{:?}", point), "[1.0, 2.0]");
+		assert_eq!(format!("{point:?}"), "[1.0, 2.0]");
 	}
 
 	#[test]

@@ -328,7 +328,7 @@ mod tests {
 			properties: make_properties(vec![("key1", vec!["value1", "value2"]), ("key2", vec!["value3"])]),
 			sources: vec![VPLPipeline::default()],
 		};
-		let debug_str = format!("{:?}", node);
+		let debug_str = format!("{node:?}");
 		assert!(debug_str.contains("VPLNode"));
 		assert!(debug_str.contains("test_node"));
 		assert!(debug_str.contains("properties"));

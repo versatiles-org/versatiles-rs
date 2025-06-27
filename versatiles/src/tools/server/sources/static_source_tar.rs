@@ -104,7 +104,7 @@ impl TarFile {
 					name = name[1..].to_string();
 				}
 
-				log::trace!("Adding file from tar: {} ({:?})", name, compression);
+				log::trace!("Adding file from tar: {name} ({compression:?})");
 
 				let entry = lookup.entry(name);
 				let versions = entry.or_insert_with(|| FileEntry::new(mime.to_string()));
@@ -210,7 +210,7 @@ mod tests {
 		let tar_file = TarFile::from(&file).unwrap();
 
 		assert!(tar_file.get_name().ends_with("temp.tar"));
-		assert!(format!("{:?}", tar_file).starts_with("TarFile { name:"));
+		assert!(format!("{tar_file:?}").starts_with("TarFile { name:"));
 	}
 
 	#[test]

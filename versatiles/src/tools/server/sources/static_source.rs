@@ -94,9 +94,7 @@ mod tests {
 			let error = source.err().unwrap().to_string();
 			assert!(
 				error.ends_with(error_should),
-				"Error message '{}' must end with '{}'",
-				error,
-				error_should
+				"Error message '{error}' must end with '{error_should}'"
 			);
 		};
 

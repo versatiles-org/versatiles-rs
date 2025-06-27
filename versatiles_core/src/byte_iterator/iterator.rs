@@ -231,7 +231,7 @@ mod tests {
 		b.consume(); // s
 		let error = b.format_error("Testing error");
 
-		assert!(format!("{}", error).contains("Testing error at position"));
+		assert!(format!("{error}").contains("Testing error at position"));
 	}
 
 	#[test]

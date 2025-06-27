@@ -96,7 +96,7 @@ fn get_bbox_pyramid(arguments: &Subcommand) -> Result<Option<TileBBoxPyramid>> {
 	}
 
 	if let Some(bbox) = &arguments.bbox {
-		log::trace!("parsing bbox argument: {:?}", bbox);
+		log::trace!("parsing bbox argument: {bbox:?}");
 		let values: Vec<f64> = bbox
 			.split(&[' ', ',', ';'])
 			.filter(|s| !s.is_empty())

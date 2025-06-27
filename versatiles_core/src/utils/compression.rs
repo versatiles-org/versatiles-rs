@@ -267,9 +267,9 @@ pub fn recompress(
 		return Ok(blob);
 	}
 	let decompressed = decompress(blob, input_compression)
-		.with_context(|| format!("Failed to decompress using {:?}", input_compression))?;
+		.with_context(|| format!("Failed to decompress using {input_compression:?}"))?;
 	let recompressed = compress(decompressed, output_compression)
-		.with_context(|| format!("Failed to compress using {:?}", output_compression))?;
+		.with_context(|| format!("Failed to compress using {output_compression:?}"))?;
 	Ok(recompressed)
 }
 
@@ -520,8 +520,7 @@ mod tests {
 			let (result_blob, result_compression) = optimize_compression(input_blob, &input_compression, &target)?;
 			assert_eq!(
 				result_compression, expected_compression,
-				"Expected compression {:?}, but got {:?}",
-				expected_compression, result_compression
+				"Expected compression {expected_compression:?}, but got {result_compression:?}"
 			);
 			assert_eq!(
 				result_blob, expected_blob,

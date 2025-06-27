@@ -13,7 +13,7 @@ use versatiles_geometry::{GeoProperties, GeoValue};
 ///
 /// * `Result<Vec<GeoProperties>>` - A vector of `GeoProperties` or an error if the file could not be read.
 pub async fn read_csv_file(path: &Path) -> Result<Vec<GeoProperties>> {
-	let file = std::fs::File::open(path).with_context(|| format!("Failed to open file at path: {:?}", path))?;
+	let file = std::fs::File::open(path).with_context(|| format!("Failed to open file at path: {path:?}"))?;
 
 	let size = file.metadata()?.len();
 	let mut progress = get_progress_bar("read csv", size);
@@ -43,7 +43,7 @@ pub async fn read_csv_file(path: &Path) -> Result<Vec<GeoProperties>> {
 	progress.finish();
 
 	if !errors.is_empty() {
-		println!("{:?}", errors);
+		println!("{errors:?}");
 		bail!("found {} error(s) while reading csv", errors.len());
 	}
 

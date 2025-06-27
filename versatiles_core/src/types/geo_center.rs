@@ -225,7 +225,7 @@ mod tests {
 	#[test]
 	fn test_debug_format() {
 		let gc = GeoCenter(12.3456, -7.89, 9);
-		let debug_str = format!("{:?}", gc);
+		let debug_str = format!("{gc:?}");
 		assert_eq!(debug_str, "12.3456, -7.89 (9)");
 	}
 }

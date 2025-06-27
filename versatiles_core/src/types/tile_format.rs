@@ -304,9 +304,7 @@ mod tests {
 			assert_eq!(
 				format.as_extension(),
 				expected,
-				"Expected extension {} for format {:?}",
-				expected,
-				format
+				"Expected extension {expected} for format {format:?}"
 			);
 		}
 	}
@@ -390,11 +388,11 @@ mod tests {
 	fn should_provide_meaningful_strings_for_debug_and_display() {
 		let format = TileFormat::PNG;
 		assert!(
-			format!("{:?}", format).contains("PNG"),
+			format!("{format:?}").contains("PNG"),
 			"Debug output should contain the variant name"
 		);
 		assert_eq!(
-			format!("{}", format),
+			format!("{format}"),
 			"png",
 			"Display output should be the lowercase string form"
 		);

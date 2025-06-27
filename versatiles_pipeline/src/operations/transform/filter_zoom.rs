@@ -110,8 +110,8 @@ mod tests {
 
 		let vpl = format!(
 			"from_debug format=mvt | filter_zoom{}{}",
-			min.map_or_else(String::new, |m| format!(" min={}", m)),
-			max.map_or_else(String::new, |m| format!(" max={}", m)),
+			min.map_or_else(String::new, |m| format!(" min={m}")),
+			max.map_or_else(String::new, |m| format!(" max={m}")),
 		);
 
 		let operation = factory.operation_from_vpl(&vpl).await?;
@@ -122,16 +122,12 @@ mod tests {
 			if expected {
 				assert!(
 					result.is_some(),
-					"Expected tile data for {coord:?} with min={:?} max={:?}",
-					min,
-					max
+					"Expected tile data for {coord:?} with min={min:?} max={max:?}"
 				);
 			} else {
 				assert!(
 					result.is_none(),
-					"Expected no tile data for {coord:?} with min={:?} max={:?}",
-					min,
-					max
+					"Expected no tile data for {coord:?} with min={min:?} max={max:?}"
 				);
 			}
 		}

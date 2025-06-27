@@ -489,7 +489,7 @@ mod tests {
 
 		let reader = VersaTilesReader::open_path(&temp_file).await?;
 
-		assert_eq!(format!("{:?}", reader), "VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: MVT } }");
+		assert_eq!(format!("{reader:?}"), "VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: MVT } }");
 		assert_eq!(reader.get_container_name(), "versatiles");
 		assert_wildcard!(reader.get_source_name(), "*.versatiles");
 		assert_eq!(

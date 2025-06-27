@@ -306,7 +306,7 @@ mod tests {
 	#[test]
 	fn test_debug_format() {
 		let cache: LimitedCache<u8, u8> = LimitedCache::with_maximum_size(10);
-		let debug_str = format!("{:?}", cache);
+		let debug_str = format!("{cache:?}");
 		// Example: "LimitedCache { length: 0, max_length: 5, last_index: 0 }"
 		assert!(debug_str.contains("LimitedCache"));
 		assert!(debug_str.contains("length"));

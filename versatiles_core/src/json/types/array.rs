@@ -176,7 +176,7 @@ mod tests {
 	fn test_debug_impl() {
 		let array = JsonArray(vec![JsonValue::from("debug"), JsonValue::from(42.0)]);
 
-		assert_eq!(format!("{:?}", array), r#"[String("debug"), Number(42.0)]"#);
+		assert_eq!(format!("{array:?}"), r#"[String("debug"), Number(42.0)]"#);
 	}
 
 	#[test]

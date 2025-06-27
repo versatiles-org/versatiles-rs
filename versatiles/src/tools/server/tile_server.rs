@@ -46,7 +46,7 @@ impl TileServer {
 	}
 
 	pub fn add_tile_source(&mut self, id: &str, reader: Box<dyn TilesReaderTrait>) -> Result<()> {
-		log::info!("add source: id='{}', source={:?}", id, reader);
+		log::info!("add source: id='{id}', source={reader:?}");
 
 		let source = TileSource::from(reader, id)?;
 		let url_prefix = &source.prefix;
@@ -88,7 +88,7 @@ impl TileServer {
 		router = self.add_static_sources_to_app(router);
 
 		let addr = format!("{}:{}", self.ip, self.port);
-		eprintln!("server starts listening on {}", addr);
+		eprintln!("server starts listening on {addr}");
 
 		let listener = tokio::net::TcpListener::bind(addr).await?;
 		let (tx, rx) = tokio::sync::oneshot::channel::<()>();

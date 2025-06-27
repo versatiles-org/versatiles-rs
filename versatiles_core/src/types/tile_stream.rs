@@ -522,7 +522,7 @@ mod tests {
 
 		tile_stream
 			.for_each_sync(|(coord, blob)| {
-				println!("Synchronous processing: coord={:?}, blob={:?}", coord, blob);
+				println!("Synchronous processing: coord={coord:?}, blob={blob:?}");
 				count += 1;
 			})
 			.await;

@@ -36,7 +36,7 @@ impl TilesWriterTrait for TarTilesWriter {
 		let extension_compression = tile_compression.extension();
 
 		let meta_data = compress(reader.get_tilejson().into(), tile_compression)?;
-		let filename = format!("tiles.json{}", extension_compression);
+		let filename = format!("tiles.json{extension_compression}");
 		let mut header = Header::new_gnu();
 		header.set_size(meta_data.len() as u64);
 		header.set_mode(0o644);
@@ -195,7 +195,7 @@ mod tests {
 				tile_format: TileFormat::MVT,
 			})?;
 
-			let temp_path = NamedTempFile::new(format!("test_compression_{:?}.tar", compression))?;
+			let temp_path = NamedTempFile::new(format!("test_compression_{compression:?}.tar"))?;
 			TarTilesWriter::write_to_path(&mut mock_reader, &temp_path).await?;
 
 			let reader = TarTilesReader::open_path(&temp_path)?;

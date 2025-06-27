@@ -672,7 +672,7 @@ mod tests {
 	#[test]
 	fn should_debug_print_as_json() {
 		let tj = TileJSON::default();
-		let debug_str = format!("{:?}", tj);
+		let debug_str = format!("{tj:?}");
 		assert!(
 			debug_str.contains("TileJSON("),
 			"Debug string should contain 'TileJSON(' prefix"

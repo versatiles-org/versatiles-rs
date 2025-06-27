@@ -151,7 +151,7 @@ pub mod tests {
 			tile_format: TileFormat,
 			compression: TileCompression,
 		) -> Result<()> {
-			let _test_name = format!("{:?}, {:?}, {:?}", container, tile_format, compression);
+			let _test_name = format!("{container:?}, {tile_format:?}, {compression:?}");
 
 			let _start = Instant::now();
 

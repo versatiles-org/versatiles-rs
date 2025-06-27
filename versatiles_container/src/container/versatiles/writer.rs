@@ -150,7 +150,7 @@ impl VersaTilesWriter {
 		progress: &mut Box<dyn ProgressTrait>,
 	) -> Result<(ByteRange, ByteRange)> {
 		// Log the start of the block
-		debug!("start block {:?}", block);
+		debug!("start block {block:?}");
 
 		// Get the initial writer position
 		let offset0 = writer.get_position()?;
@@ -192,7 +192,7 @@ impl VersaTilesWriter {
 			.await;
 
 		// Finish the block and write the index
-		debug!("finish block and write index {:?}", block);
+		debug!("finish block and write index {block:?}");
 
 		// Get the final writer position
 		let offset1 = writer.get_position()?;

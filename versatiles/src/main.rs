@@ -134,7 +134,7 @@ mod tests {
 	/// Function for running command-line arguments in tests
 	pub fn run_command(arg_vec: Vec<&str>) -> Result<String> {
 		let cli = Cli::try_parse_from(arg_vec)?;
-		let msg = format!("{:?}", cli);
+		let msg = format!("{cli:?}");
 		run(cli)?;
 		Ok(msg)
 	}

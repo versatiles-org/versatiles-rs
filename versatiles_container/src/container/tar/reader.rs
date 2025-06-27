@@ -218,7 +218,7 @@ pub mod tests {
 		// get tar reader
 		let reader = TarTilesReader::open_path(&temp_file)?;
 
-		assert_eq!(format!("{:?}", reader), "TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: MVT } }");
+		assert_eq!(format!("{reader:?}"), "TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: MVT } }");
 		assert_eq!(reader.get_container_name(), "tar");
 		assert!(reader.get_source_name().ends_with(temp_file.to_str().unwrap()));
 		assert_eq!(

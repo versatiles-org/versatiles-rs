@@ -244,7 +244,7 @@ impl Blob {
 		self
 			.0
 			.iter()
-			.map(|byte| format!("{:02x}", byte))
+			.map(|byte| format!("{byte:02x}"))
 			.collect::<Vec<_>>()
 			.join(" ")
 	}
@@ -604,7 +604,7 @@ mod tests {
 	#[test]
 	fn test_debug_representation() {
 		let blob = Blob::from("Voisilmäpulla");
-		let debug_str = format!("{:?}", blob);
+		let debug_str = format!("{blob:?}");
 		// Example: "Blob(14): 56 6f 69 73 69 6c 6d c3 a4 70 75 6c 6c 61"
 		assert!(debug_str.starts_with("Blob(14):"));
 		assert!(debug_str.contains("56 6f 69 73 69 6c 6d"));
@@ -613,7 +613,7 @@ mod tests {
 	#[test]
 	fn test_display_representation() {
 		let blob = Blob::from("Förstår du svenska?");
-		let display_str = format!("{}", blob);
+		let display_str = format!("{blob}");
 		assert_eq!(display_str, "Förstår du svenska?");
 	}
 

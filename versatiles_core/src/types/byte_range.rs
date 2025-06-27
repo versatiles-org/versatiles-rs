@@ -273,7 +273,7 @@ mod tests {
 	#[test]
 	fn test_debug() {
 		let range = ByteRange::new(23, 42);
-		assert_eq!(format!("{:?}", range), "ByteRange[23,42]");
+		assert_eq!(format!("{range:?}"), "ByteRange[23,42]");
 	}
 
 	/// Illustrates potential issues if offset is subtracted beyond zero without checks.

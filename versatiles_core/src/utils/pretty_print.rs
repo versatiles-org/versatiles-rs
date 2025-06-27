@@ -124,19 +124,19 @@ impl Default for PrettyPrint {
 fn get_formatted_value<V: Debug + ?Sized>(value: &V) -> ColoredString {
 	let type_name = std::any::type_name::<V>();
 	if type_name.starts_with("versatiles_lib::shared::") {
-		return format!("{:?}", value).bright_blue();
+		return format!("{value:?}").bright_blue();
 	}
 	match type_name {
-		"f32" | "f64" => format!("{:?}", value).bright_cyan(),
+		"f32" | "f64" => format!("{value:?}").bright_cyan(),
 		"i128" | "i16" | "i32" | "i64" | "i8" | "isize" => format_integer(value).bright_cyan(),
 		"u128" | "u16" | "u32" | "u64" | "u8" | "usize" => format_integer(value).bright_cyan(),
-		"alloc::string::String" | "str" | "&str" => format!("{:?}", value).bright_magenta(),
-		_ => format!("{:?}", value).bright_green(),
+		"alloc::string::String" | "str" | "&str" => format!("{value:?}").bright_magenta(),
+		_ => format!("{value:?}").bright_green(),
 	}
 }
 
 fn format_integer<V: Debug + ?Sized>(value: &V) -> String {
-	let mut text = format!("{:?}", value);
+	let mut text = format!("{value:?}");
 	let mut formatted = String::from("");
 	while (text.len() > 3) && text.chars().nth_back(3).unwrap().is_numeric() {
 		let i = text.len() - 3;

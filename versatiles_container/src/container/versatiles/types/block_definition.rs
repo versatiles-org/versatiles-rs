@@ -238,7 +238,7 @@ mod tests {
 		assert_eq!(def.get_coord3(), &TileCoord3::new(1, 1, 12)?);
 		assert_eq!(def.get_global_bbox(), &TileBBox::new(12, 300, 400, 320, 450)?);
 		assert_eq!(
-			format!("{:?}", def),
+			format!("{def:?}"),
 			"BlockDefinition { x/y/z: TileCoord3(1, 1, 12), bbox: 8: [44,144,64,194] (1071), tiles_range: ByteRange[4,5], index_range: ByteRange[9,6] }"
 		);
 

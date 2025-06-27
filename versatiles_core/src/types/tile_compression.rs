@@ -192,7 +192,7 @@ mod tests {
 	fn test_display_trait() {
 		fn test(compression: TileCompression, expected_display: &str) {
 			assert_eq!(
-				format!("{}", compression),
+				format!("{compression}"),
 				expected_display,
 				"Display output does not match expected for {compression:?}"
 			);

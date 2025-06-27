@@ -112,7 +112,7 @@ mod tests {
 		// Create a new Folder instance
 		let folder = Folder::from(Path::new("../testdata")).unwrap();
 
-		let debug: String = format!("{:?}", folder);
+		let debug: String = format!("{folder:?}");
 		assert!(debug.starts_with("Folder { folder: \""));
 		assert!(debug.ends_with("testdata\", name: \"../testdata\" }"));
 
