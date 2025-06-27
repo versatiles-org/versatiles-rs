@@ -19,10 +19,7 @@
 
 use super::ProgressTrait;
 use indicatif::{ProgressBar as IndicatifProgressBar, ProgressStyle};
-use std::{
-	sync::{Arc, Mutex},
-	time::Duration,
-};
+use std::time::Duration;
 
 /// A struct that represents a progress bar.
 pub struct ProgressBar {
@@ -31,9 +28,11 @@ pub struct ProgressBar {
 
 impl ProgressTrait for ProgressBar {
 	fn new() -> Self {
-		ProgressBar {
-			bar: IndicatifProgressBar::new(0),
-		}
+		#[cfg(all(not(feature = "test"), feature = "cli"))]
+		let bar = IndicatifProgressBar::new(0);
+		#[cfg(any(feature = "test", not(feature = "cli")))]
+		let bar = IndicatifProgressBar::hidden();
+		ProgressBar { bar }
 	}
 
 	fn init(&mut self, message: &str, max_value: u64) {
@@ -43,7 +42,7 @@ impl ProgressTrait for ProgressBar {
 		p.set_message(message.to_string());
 		p.set_style(
 			ProgressStyle::default_bar()
-				.template("{msg}▕{wide_bar}▏{pos}/{len} ({percent}%) {per_sec} {eta_precise}")
+				.template("{msg}▕{wide_bar}▏{pos}/{len} ({percent:3}%) {per_sec:8} {eta:5}")
 				.unwrap()
 				.progress_chars("█▉▊▋▌▍▎▏  "),
 		);
@@ -73,12 +72,11 @@ impl ProgressTrait for ProgressBar {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::time::Duration;
 
 	#[test]
 	fn test_bar_new() {
 		let progress = ProgressBar::new();
-		assert_eq!(progress.bar.length().unwrap(), 0);
+		assert_eq!(progress.bar.length().unwrap_or(0), 0);
 		assert_eq!(progress.bar.position(), 0);
 	}
 
