@@ -10,6 +10,26 @@ impl JsonArray {
 		let items = self.0.iter().map(stringify).collect::<Vec<_>>();
 		format!("[{}]", items.join(","))
 	}
+
+	pub fn stringify_pretty_single_line(&self) -> String {
+		let items = self.0.iter().map(stringify_pretty_single_line).collect::<Vec<_>>();
+		format!("[ {} ]", items.join(", "))
+	}
+
+	pub fn stringify_pretty_multi_line(&self, max_width: usize, depth: usize) -> String {
+		let indent = "  ".repeat(depth);
+		let items = self
+			.0
+			.iter()
+			.map(|value| {
+				format!(
+					"{indent}  {}",
+					stringify_pretty_multi_line(value, max_width, depth + 1, depth * 2 + 2)
+				)
+			})
+			.collect::<Vec<_>>();
+		format!("[\n{}\n{}]", items.join(",\n"), indent)
+	}
 	pub fn as_string_vec(&self) -> Result<Vec<String>> {
 		self.0.iter().map(JsonValue::as_string).collect::<Result<Vec<_>>>()
 	}

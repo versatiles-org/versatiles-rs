@@ -151,6 +151,10 @@ impl TileJSON {
 		obj
 	}
 
+	pub fn as_json_value(&self) -> JsonValue {
+		JsonValue::Object(self.as_object())
+	}
+
 	// -------------------------------------------------------------------------
 	// Conversions
 	// -------------------------------------------------------------------------
@@ -163,6 +167,15 @@ impl TileJSON {
 	/// Returns a `Blob` containing the JSON string representation.
 	pub fn as_blob(&self) -> Blob {
 		Blob::from(self.as_string())
+	}
+
+	pub fn as_pretty_lines(&self, max_width: usize) -> Vec<String> {
+		self
+			.as_object()
+			.stringify_pretty_multi_line(max_width, 0)
+			.split('\n')
+			.map(String::from)
+			.collect()
 	}
 
 	// -------------------------------------------------------------------------

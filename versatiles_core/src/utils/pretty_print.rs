@@ -1,3 +1,4 @@
+use crate::json::{stringify_pretty_multi_line, JsonValue};
 use colored::*;
 use std::fmt::{Debug, Display};
 use std::io::Write;
@@ -18,7 +19,7 @@ impl PrettyPrinter {
 		use std::io::stderr;
 
 		Self {
-			indention: String::from("   "),
+			indention: String::from("  "),
 
 			#[cfg(not(any(test, feature = "test")))]
 			output: Arc::new(Mutex::new(Box::new(stderr()))),
@@ -85,6 +86,16 @@ impl PrettyPrint {
 
 	pub async fn add_key_value<K: Display + ?Sized, V: Debug + ?Sized>(&self, key: &K, value: &V) {
 		self.write_line(format!("{key}: {}", get_formatted_value(value))).await;
+	}
+
+	pub async fn add_key_json<K: Display + ?Sized>(&self, key: &K, value: &JsonValue) {
+		let key_string = format!("{key}: ");
+		self
+			.write_line(format!(
+				"{key_string}{}",
+				stringify_pretty_multi_line(value, 80, 1, key_string.len()).bright_green()
+			))
+			.await;
 	}
 
 	pub async fn add_value<V: Debug>(&self, value: &V) {
@@ -161,7 +172,7 @@ mod tests {
 		let result = printer.as_string().await;
 		assert_eq!(
 			&result,
-			"test_warning_1\ntest_category_1:\n   test_list_1:\n      string_1: 4\n   test_warning_2\ntest_warning_3\n"
+			"test_warning_1\ntest_category_1:\n  test_list_1:\n    string_1: 4\n  test_warning_2\ntest_warning_3\n"
 		);
 	}
 

@@ -542,14 +542,14 @@ mod tests {
 		reader.probe_container(&printer.get_category("container").await).await?;
 		assert_eq!(
 			printer.as_string().await,
-			"container:\n   meta size: 58\n   block count: 5\n   sum of block index sizes: 70\n   sum of block tiles sizes: 385\n"
+			"container:\n  meta size: 58\n  block count: 5\n  sum of block index sizes: 70\n  sum of block tiles sizes: 385\n"
 		);
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_tiles(&printer.get_category("tiles").await).await?;
 		assert_eq!(
 			printer.as_string().await.get(0..73).unwrap(),
-			"tiles:\n   average tile size: 77\n   #1 biggest tile: Entry { size: 77, x: "
+			"tiles:\n  average tile size: 77\n  #1 biggest tile: Entry { size: 77, x: 0,"
 		);
 
 		Ok(())

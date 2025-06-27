@@ -11,6 +11,34 @@ pub fn stringify(json: &JsonValue) -> String {
 	}
 }
 
+pub fn stringify_pretty_single_line(json: &JsonValue) -> String {
+	match json {
+		JsonValue::Array(arr) => arr.stringify_pretty_single_line(),
+		JsonValue::Object(obj) => obj.stringify_pretty_single_line(),
+		_ => stringify(json),
+	}
+}
+
+pub fn stringify_pretty_multi_line(json: &JsonValue, max_width: usize, depth: usize, indention: usize) -> String {
+	match json {
+		JsonValue::Array(arr) => {
+			let single_line = arr.stringify_pretty_single_line();
+			if single_line.len() + indention <= max_width {
+				return single_line;
+			}
+			arr.stringify_pretty_multi_line(max_width, depth)
+		}
+		JsonValue::Object(obj) => {
+			let single_line = obj.stringify_pretty_single_line();
+			if single_line.len() + indention <= max_width {
+				return single_line;
+			}
+			obj.stringify_pretty_multi_line(max_width, depth)
+		}
+		_ => stringify(json),
+	}
+}
+
 pub fn escape_json_string(input: &str) -> String {
 	input
 		.chars()

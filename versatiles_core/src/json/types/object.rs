@@ -72,6 +72,37 @@ impl JsonObject {
 		format!("{{{}}}", items.join(","))
 	}
 
+	pub fn stringify_pretty_single_line(&self) -> String {
+		let items = self
+			.0
+			.iter()
+			.map(|(key, value)| {
+				format!(
+					"\"{}\": {}",
+					escape_json_string(key),
+					stringify_pretty_single_line(value)
+				)
+			})
+			.collect::<Vec<_>>();
+		format!("{{ {} }}", items.join(", "))
+	}
+
+	pub fn stringify_pretty_multi_line(&self, max_width: usize, depth: usize) -> String {
+		let indent = "  ".repeat(depth);
+		let items = self
+			.0
+			.iter()
+			.map(|(key, value)| {
+				let key_string = format!("{}  \"{}\": ", indent, escape_json_string(key));
+				format!(
+					"{key_string}{}",
+					stringify_pretty_multi_line(value, max_width, depth + 1, key_string.len())
+				)
+			})
+			.collect::<Vec<_>>();
+		format!("{{\n{}\n{}}}", items.join(",\n"), indent)
+	}
+
 	pub fn parse_str(json: &str) -> Result<JsonObject> {
 		JsonValue::parse_str(json)?.to_object()
 	}

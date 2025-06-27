@@ -59,7 +59,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		cat.add_key_value("name", self.get_source_name()).await;
 		cat.add_key_value("container", self.get_container_name()).await;
 
-		cat.add_key_value("meta", &self.get_tilejson().stringify()).await;
+		cat.add_key_json("meta", &self.get_tilejson().as_json_value()).await;
 
 		self
 			.probe_parameters(&mut print.get_category("parameters").await)
