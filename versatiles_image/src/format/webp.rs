@@ -1,5 +1,6 @@
 use crate::Image;
 use anyhow::{anyhow, bail, Result};
+use image::codecs::webp::WebPEncoder;
 use std::vec;
 use versatiles_core::types::Blob;
 
@@ -27,16 +28,18 @@ pub fn image2blob_lossless(image: &Image) -> Result<Blob> {
 		bail!("webp lossless only supports 8-bit images");
 	}
 
-	let color = match image.channels {
-		3 => image_webp::ColorType::Rgb8,
-		4 => image_webp::ColorType::Rgba8,
-		_ => bail!("webp lossless only supports RGB or RGBA images"),
+	if (image.channels != 3) && (image.channels != 4) {
+		bail!("webp lossless only supports RGB or RGBA images");
 	};
 
 	let mut result: Vec<u8> = vec![];
-	let encoder = image_webp::WebPEncoder::new(&mut result);
-
-	encoder.encode(&image.data, image.width as u32, image.height as u32, color)?;
+	let encoder = WebPEncoder::new_lossless(&mut result);
+	encoder.encode(
+		&image.data,
+		image.width as u32,
+		image.height as u32,
+		image.get_extended_color_type()?,
+	)?;
 
 	Ok(Blob::from(result))
 }

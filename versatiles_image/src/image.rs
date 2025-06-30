@@ -1,3 +1,5 @@
+use std::vec;
+
 use anyhow::{anyhow, bail, ensure, Result};
 use image::{ColorType, DynamicImage, ExtendedColorType};
 
@@ -134,6 +136,43 @@ impl Image {
 			channels: if has_alpha { 4 } else { 3 },
 			value_type: PixelValueType::U8,
 		}
+	}
+
+	pub fn as_rgba(&self) -> Result<Image> {
+		ensure!(
+			self.value_type == PixelValueType::U8,
+			"Cannot convert image with pixel value type {} to RGBA",
+			self.value_type
+		);
+		ensure!(
+			self.channels >= 1 && self.channels <= 4,
+			"Cannot convert image with {} channels to RGBA",
+			self.channels
+		);
+
+		let data = match self.channels {
+			1 => self.data.iter().flat_map(|&v| vec![v, v, v, 255]).collect(),
+			2 => self
+				.data
+				.chunks_exact(2)
+				.flat_map(|chunk| vec![chunk[0], chunk[0], chunk[0], chunk[1]])
+				.collect(),
+			3 => self
+				.data
+				.chunks_exact(3)
+				.flat_map(|chunk| vec![chunk[0], chunk[1], chunk[2], 255])
+				.collect(),
+			4 => self.data.clone(),
+			_ => bail!("Cannot convert image with {} channels to RGBA", self.channels),
+		};
+
+		Ok(Image {
+			data,
+			width: self.width,
+			height: self.height,
+			channels: 4,
+			value_type: PixelValueType::U8,
+		})
 	}
 
 	pub fn get_extended_color_type(&self) -> Result<ExtendedColorType> {
