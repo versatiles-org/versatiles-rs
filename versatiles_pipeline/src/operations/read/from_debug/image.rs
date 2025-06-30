@@ -5,12 +5,13 @@ use imageproc::{
 };
 use lazy_static::lazy_static;
 use versatiles_core::types::TileCoord3;
+use versatiles_image::Image;
 
 lazy_static! {
 	static ref FONT: FontArc = FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap();
 }
 
-pub fn create_debug_image(coord: &TileCoord3) -> DynamicImage {
+pub fn create_debug_image(coord: &TileCoord3) -> Image {
 	let br = ((coord.x + coord.y) % 2) as u8 * 16 + 224;
 	let mut image1 = RgbImage::from_pixel(512, 512, Rgb::from([br, br, br]));
 
@@ -22,7 +23,7 @@ pub fn create_debug_image(coord: &TileCoord3) -> DynamicImage {
 	draw(225, Rgb([0, 92, 45]), format!("x: {}", coord.x));
 	draw(255, Rgb([30, 23, 98]), format!("y: {}", coord.y));
 
-	DynamicImage::ImageRgb8(image1)
+	DynamicImage::ImageRgb8(image1).try_into().unwrap()
 }
 
 #[cfg(test)]
@@ -34,7 +35,7 @@ mod tests {
 		let coord = TileCoord3 { x: 1, y: 2, z: 3 };
 		let image = create_debug_image(&coord);
 
-		assert_eq!(image.width(), 512);
-		assert_eq!(image.height(), 512);
+		assert_eq!(image.width, 512);
+		assert_eq!(image.height, 512);
 	}
 }

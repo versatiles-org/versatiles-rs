@@ -14,9 +14,14 @@ version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-image.workspace = true
-webp = { version = "0.3.0", default-features = false, features = ["img"] }
+image = { version = "0.25.6", default-features = false, features = [
+	"jpeg",
+	"png",
+] }
+image-webp = "0.2.3"
+webp = "0.3.0"
 
 versatiles_core.workspace = true
 
 [dev-dependencies]
+rstest.workspace = true

@@ -9,26 +9,23 @@ use image::create_debug_image;
 use std::fmt::Debug;
 use vector::create_debug_vector_tile;
 use versatiles_core::{tilejson::TileJSON, types::*};
-use versatiles_image::helper::{image2blob, image2blob_fast};
+use versatiles_image::helper::image2blob;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Produces debugging tiles, each showing their coordinates as text.
 struct Args {
 	/// tile format: "mvt", "jpg", "png" or "webp"
 	format: String,
-	/// use fast compression
-	fast: bool,
 }
 
 #[derive(Debug)]
 pub struct Operation {
 	tilejson: TileJSON,
 	parameters: TilesReaderParameters,
-	fast_compression: bool,
 }
 
 impl Operation {
-	pub fn from_parameters(tile_format: TileFormat, fast_compression: bool) -> Result<Box<dyn OperationTrait>> {
+	pub fn from_parameters(tile_format: TileFormat) -> Result<Box<dyn OperationTrait>> {
 		let parameters = TilesReaderParameters::new(
 			tile_format,
 			TileCompression::Uncompressed,
@@ -48,27 +45,19 @@ impl Operation {
 			)?)?;
 		}
 
-		Ok(Box::new(Self {
-			tilejson,
-			parameters,
-			fast_compression,
-		}) as Box<dyn OperationTrait>)
+		Ok(Box::new(Self { tilejson, parameters }) as Box<dyn OperationTrait>)
 	}
 	pub fn from_vpl_node(vpl_node: &VPLNode) -> Result<Box<dyn OperationTrait>> {
 		let args = Args::from_vpl_node(vpl_node)?;
-		Self::from_parameters(TileFormat::parse_str(&args.format)?, args.fast)
+		Self::from_parameters(TileFormat::parse_str(&args.format)?)
 	}
 }
 
-fn build_tile(coord: &TileCoord3, format: TileFormat, fast_compression: bool) -> Result<Option<Blob>> {
+fn build_tile(coord: &TileCoord3, format: TileFormat) -> Result<Option<Blob>> {
 	Ok(Some(match format {
 		TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => {
 			let image = create_debug_image(coord);
-			if fast_compression {
-				image2blob_fast(&image, format)?
-			} else {
-				image2blob(&image, format)?
-			}
+			image2blob(&image, format)?
 		}
 		TileFormat::MVT => create_debug_vector_tile(coord)?,
 		_ => bail!("tile format '{format}' is not implemented yet"),
@@ -95,16 +84,13 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		build_tile(coord, self.parameters.tile_format, self.fast_compression)
+		build_tile(coord, self.parameters.tile_format)
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> TileStream {
 		let format = self.parameters.tile_format;
-		let fast = self.fast_compression;
 
-		TileStream::from_coord_iter_parallel(bbox.into_iter_coords(), move |c| {
-			build_tile(&c, format, fast).ok().flatten()
-		})
+		TileStream::from_coord_iter_parallel(bbox.into_iter_coords(), move |c| build_tile(&c, format).ok().flatten())
 	}
 }
 
