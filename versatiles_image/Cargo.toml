@@ -16,7 +16,6 @@ version.workspace = true
 anyhow.workspace = true
 image = { version = "0.25.6", default-features = false, features = [
 	"avif",
-	"avif-native",
 	"jpeg",
 	"png",
 	"webp",

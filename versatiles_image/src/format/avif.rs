@@ -2,7 +2,7 @@ use crate::Image;
 use anyhow::{bail, Result};
 use image::{
 	codecs::avif::{AvifEncoder, ColorSpace},
-	load_from_memory_with_format, ImageEncoder, ImageFormat,
+	ImageEncoder,
 };
 use versatiles_core::types::Blob;
 
@@ -26,8 +26,8 @@ pub fn image2blob(image: &Image, quality: Option<u8>) -> Result<Blob> {
 	Ok(Blob::from(result))
 }
 
-pub fn blob2image(blob: &Blob) -> Result<Image> {
-	load_from_memory_with_format(blob.as_slice(), ImageFormat::Avif)?.try_into()
+pub fn blob2image(_blob: &Blob) -> Result<Image> {
+	bail!("AVIF decoding not implemented")
 }
 
 #[cfg(test)]
@@ -38,19 +38,12 @@ mod tests {
 
 	/* ---------- Success cases ---------- */
 	#[rstest]
-	#[case::grey( create_image_grey(),  0.88, vec![0.1, 0.1, 0.3, 0.0])]
-	#[case::greya(create_image_greya(), 0.65, vec![0.1, 0.1, 0.3, 0.1])]
-	#[case::rgb(  create_image_rgb(),   0.29, vec![0.2, 0.1, 0.1, 0.0])]
-	#[case::rgba( create_image_rgba(),  0.32, vec![0.2, 0.1, 0.2, 0.0])]
-	fn avif_ok(
-		#[case] img: Image,
-		#[case] expected_compression_percent: f64,
-		#[case] expected_diff: Vec<f64>,
-	) -> Result<()> {
+	#[case::grey(create_image_grey(), 0.88)]
+	#[case::greya(create_image_greya(), 0.65)]
+	#[case::rgb(create_image_rgb(), 0.29)]
+	#[case::rgba(create_image_rgba(), 0.32)]
+	fn avif_ok(#[case] img: Image, #[case] expected_compression_percent: f64) -> Result<()> {
 		let blob = image2blob(&img, None)?;
-		let decoded = blob2image(&blob)?;
-
-		assert_eq!(img.as_rgba()?.diff(decoded)?, expected_diff);
 
 		let compression_percent = ((10_000 * blob.len()) as f64 / img.data.len() as f64).round() / 100.0;
 		assert_eq!(compression_percent, expected_compression_percent);
