@@ -1,271 +1,104 @@
-use std::vec;
+use anyhow::{anyhow, ensure, Result};
+use image::{DynamicImage, EncodableLayout, ExtendedColorType, ImageBuffer, Luma, LumaA, Rgb, Rgba};
+use std::{ops::Div, vec};
 
-use anyhow::{anyhow, bail, ensure, Result};
-use image::{ColorType, DynamicImage, ExtendedColorType};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PixelValueType {
-	/// 8-bit
-	U8,
-	/// 16-bit
-	U16,
+pub trait EnhancedDynamicImageTrait {
+	fn from_fn_l8(width: u32, height: u32, f: fn(u32, u32) -> u8) -> DynamicImage;
+	fn from_fn_la8(width: u32, height: u32, f: fn(u32, u32) -> [u8; 2]) -> DynamicImage;
+	fn from_fn_rgb8(width: u32, height: u32, f: fn(u32, u32) -> [u8; 3]) -> DynamicImage;
+	fn from_fn_rgba8(width: u32, height: u32, f: fn(u32, u32) -> [u8; 4]) -> DynamicImage;
+	fn from_raw(width: u32, height: u32, data: Vec<u8>) -> Result<DynamicImage>;
+	fn pixels(&self) -> impl Iterator<Item = &[u8]>;
+	fn compare(&self, other: &DynamicImage) -> Result<()>;
+	fn diff(&self, other: &DynamicImage) -> Result<Vec<f64>>;
+	fn bits_per_value(&self) -> u8;
+	fn channel_count(&self) -> u8;
+	fn extended_color_type(&self) -> ExtendedColorType;
 }
 
-impl PixelValueType {
-	pub fn bytes_per_pixel(&self) -> u8 {
+impl EnhancedDynamicImageTrait for DynamicImage {
+	fn from_fn_l8(width: u32, height: u32, f: fn(u32, u32) -> u8) -> DynamicImage {
+		DynamicImage::ImageLuma8(ImageBuffer::from_fn(width, height, |x, y| Luma([f(x, y)])))
+	}
+	fn from_fn_la8(width: u32, height: u32, f: fn(u32, u32) -> [u8; 2]) -> DynamicImage {
+		DynamicImage::ImageLumaA8(ImageBuffer::from_fn(width, height, |x, y| LumaA(f(x, y))))
+	}
+	fn from_fn_rgb8(width: u32, height: u32, f: fn(u32, u32) -> [u8; 3]) -> DynamicImage {
+		DynamicImage::ImageRgb8(ImageBuffer::from_fn(width, height, |x, y| Rgb(f(x, y))))
+	}
+	fn from_fn_rgba8(width: u32, height: u32, f: fn(u32, u32) -> [u8; 4]) -> DynamicImage {
+		DynamicImage::ImageRgba8(ImageBuffer::from_fn(width, height, |x, y| Rgba(f(x, y))))
+	}
+
+	fn from_raw(width: u32, height: u32, data: Vec<u8>) -> Result<DynamicImage> {
+		ensure!(
+			data.len() == (width * height) as usize,
+			"Data length does not match expected size for L8 image"
+		);
+		Ok(DynamicImage::ImageLuma8(
+			ImageBuffer::from_vec(width, height, data)
+				.ok_or_else(|| anyhow!("Failed to create image buffer with provided data"))?,
+		))
+	}
+
+	fn pixels(&self) -> impl Iterator<Item = &[u8]> {
 		match self {
-			PixelValueType::U8 => 1,
-			PixelValueType::U16 => 2,
-		}
-	}
-}
-
-impl TryFrom<ExtendedColorType> for PixelValueType {
-	type Error = anyhow::Error;
-
-	fn try_from(value: ExtendedColorType) -> Result<Self> {
-		use ExtendedColorType::*;
-		use PixelValueType::*;
-		match value {
-			Rgb8 | Rgba8 | L8 | La8 => Ok(U8),
-			Rgb16 | Rgba16 | L16 | La16 => Ok(U16),
-			_ => bail!("Unsupported color type: {:?}", value),
-		}
-	}
-}
-
-impl TryFrom<ColorType> for PixelValueType {
-	type Error = anyhow::Error;
-
-	fn try_from(value: ColorType) -> Result<Self> {
-		use ColorType::*;
-		use PixelValueType::*;
-		match value {
-			Rgb8 | Rgba8 | L8 | La8 => Ok(U8),
-			Rgb16 | Rgba16 | L16 | La16 => Ok(U16),
-			_ => bail!("Unsupported color type: {:?}", value),
-		}
-	}
-}
-
-impl std::fmt::Display for PixelValueType {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		let name = match self {
-			PixelValueType::U8 => "U8",
-			PixelValueType::U16 => "U16",
-		};
-		write!(f, "{name}")
-	}
-}
-
-#[derive(Clone)]
-pub struct Image {
-	/// The image data in bytes.
-	pub data: Vec<u8>,
-	/// The width of the image in pixels.
-	pub width: usize,
-	/// The height of the image in pixels.
-	pub height: usize,
-	/// The number of channels in the image.
-	pub channels: u8,
-	/// The bit depth of the image.
-	pub value_type: PixelValueType,
-}
-
-impl Image {
-	pub fn new_empty(width: usize, height: usize, channels: u8, value_type: PixelValueType) -> Self {
-		let data = vec![0; width * height * channels as usize * value_type.bytes_per_pixel() as usize];
-		Self {
-			data,
-			width,
-			height,
-			channels,
-			value_type,
+			DynamicImage::ImageLuma8(img) => img.as_bytes().chunks_exact(1),
+			DynamicImage::ImageLumaA8(img) => img.as_bytes().chunks_exact(2),
+			DynamicImage::ImageRgb8(img) => img.as_bytes().chunks_exact(3),
+			DynamicImage::ImageRgba8(img) => img.as_bytes().chunks_exact(4),
+			_ => panic!("Unsupported image type for pixel iteration"),
 		}
 	}
 
-	pub fn new_grey8_from_fn(width: usize, height: usize, f: fn(usize, usize) -> u8) -> Self {
-		let mut image = Self::new_empty(width, height, 1, PixelValueType::U8);
-		for y in 0..height {
-			for x in 0..width {
-				let index = y * width + x;
-				image.data[index] = f(x, y);
-			}
-		}
-		image
-	}
-
-	pub fn new_greya8_from_fn(width: usize, height: usize, f: fn(usize, usize) -> [u8; 2]) -> Self {
-		let mut image = Self::new_empty(width, height, 2, PixelValueType::U8);
-		for y in 0..height {
-			for x in 0..width {
-				let index = (y * width + x) * 2;
-				image.data[index..index + 2].copy_from_slice(&f(x, y));
-			}
-		}
-		image
-	}
-
-	pub fn new_rgb8_from_fn(width: usize, height: usize, f: fn(usize, usize) -> [u8; 3]) -> Self {
-		let mut image = Self::new_empty(width, height, 3, PixelValueType::U8);
-		for y in 0..height {
-			for x in 0..width {
-				let index = (y * width + x) * 3;
-				image.data[index..index + 3].copy_from_slice(&f(x, y));
-			}
-		}
-		image
-	}
-
-	pub fn new_rgba8_from_fn(width: usize, height: usize, f: fn(usize, usize) -> [u8; 4]) -> Self {
-		let mut image = Self::new_empty(width, height, 4, PixelValueType::U8);
-		for y in 0..height {
-			for x in 0..width {
-				let index = (y * width + x) * 4;
-				image.data[index..index + 4].copy_from_slice(&f(x, y));
-			}
-		}
-		image
-	}
-
-	pub fn from_rgb(width: usize, height: usize, has_alpha: bool, data: Vec<u8>) -> Self {
-		Image {
-			data,
-			width,
-			height,
-			channels: if has_alpha { 4 } else { 3 },
-			value_type: PixelValueType::U8,
-		}
-	}
-
-	pub fn as_rgba(&self) -> Result<Image> {
+	fn compare(&self, other: &DynamicImage) -> Result<()> {
 		ensure!(
-			self.value_type == PixelValueType::U8,
-			"Cannot convert image with pixel value type {} to RGBA",
-			self.value_type
-		);
-		ensure!(
-			self.channels >= 1 && self.channels <= 4,
-			"Cannot convert image with {} channels to RGBA",
-			self.channels
-		);
-
-		let data = match self.channels {
-			1 => self.data.iter().flat_map(|&v| vec![v, v, v, 255]).collect(),
-			2 => self
-				.data
-				.chunks_exact(2)
-				.flat_map(|chunk| vec![chunk[0], chunk[0], chunk[0], chunk[1]])
-				.collect(),
-			3 => self
-				.data
-				.chunks_exact(3)
-				.flat_map(|chunk| vec![chunk[0], chunk[1], chunk[2], 255])
-				.collect(),
-			4 => self.data.clone(),
-			_ => bail!("Cannot convert image with {} channels to RGBA", self.channels),
-		};
-
-		Ok(Image {
-			data,
-			width: self.width,
-			height: self.height,
-			channels: 4,
-			value_type: PixelValueType::U8,
-		})
-	}
-
-	pub fn get_extended_color_type(&self) -> Result<ExtendedColorType> {
-		use ExtendedColorType::*;
-		use PixelValueType::*;
-		Ok(match (self.channels, &self.value_type) {
-			(1, &U16) => L16,
-			(1, &U8) => L8,
-			(2, &U16) => La16,
-			(2, &U8) => La8,
-			(3, &U16) => Rgb16,
-			(3, &U8) => Rgb8,
-			(4, &U16) => Rgba16,
-			(4, &U8) => Rgba8,
-			_ => bail!("Unsupported image format"),
-		})
-	}
-
-	pub fn diff(&self, image: Image) -> Result<Vec<f64>> {
-		ensure!(
-			self.width == image.width,
+			self.width() == other.width(),
 			"Image width mismatch: self has width {}, but the other image has width {}",
-			self.width,
-			image.width
+			self.width(),
+			other.width()
 		);
 		ensure!(
-			self.height == image.height,
+			self.height() == other.height(),
 			"Image height mismatch: self has height {}, but the other image has height {}",
-			self.height,
-			image.height
+			self.height(),
+			other.height()
 		);
 		ensure!(
-			self.value_type == image.value_type,
-			"Pixel value type mismatch: self has {}, but the other image has {}",
-			self.value_type,
-			image.value_type
+			self.color() == other.color(),
+			"Pixel value type mismatch: self has {:?}, but the other image has {:?}",
+			self.color(),
+			other.color()
 		);
-		ensure!(
-			self.channels == image.channels,
-			"Channel count mismatch: self has {} channels, but the other image has {} channels",
-			self.channels,
-			image.channels
-		);
+		Ok(())
+	}
 
-		let bytes1 = &self.data;
-		let bytes2 = &image.data;
-		ensure!(bytes1.len() == bytes2.len(), "'data lengths' are not equal");
+	fn diff(&self, other: &DynamicImage) -> Result<Vec<f64>> {
+		self.compare(other)?;
 
-		let channel_count = self.channels as usize;
-		let mut sqr_sum: Vec<i64> = vec![0; channel_count];
-		for i in 0..bytes1.len() {
-			sqr_sum[i % channel_count] += (bytes1[i] as i64 - bytes2[i] as i64).pow(2);
+		let channels = self.color().channel_count() as usize;
+		let mut sqr_sum = vec![0u64; channels];
+
+		for (p1, p2) in self.pixels().zip(other.pixels()) {
+			for i in 0..channels {
+				let d = p1[i] as i64 - p2[i] as i64;
+				sqr_sum[i] += (d * d) as u64;
+			}
 		}
 
-		let n = (self.width * self.height) as f64;
+		let n = (self.width() * self.height()) as f64;
 		Ok(sqr_sum.iter().map(|v| (10.0 * (*v as f64) / n).ceil() / 10.0).collect())
 	}
-}
 
-impl TryFrom<DynamicImage> for Image {
-	type Error = anyhow::Error;
-	fn try_from(image: DynamicImage) -> Result<Self> {
-		Ok(Self {
-			width: image.width() as usize,
-			height: image.height() as usize,
-			channels: image.color().channel_count(),
-			value_type: image.color().try_into()?,
-			data: image.into_bytes(),
-		})
+	fn bits_per_value(&self) -> u8 {
+		self.color().bits_per_pixel().div(self.color().channel_count() as u16) as u8
 	}
-}
 
-impl TryInto<DynamicImage> for Image {
-	type Error = anyhow::Error;
-	fn try_into(self) -> Result<DynamicImage> {
-		let color_type = self.get_extended_color_type()?;
-		use image::ImageBuffer;
-		use DynamicImage::*;
-		use ExtendedColorType::*;
-		let width = self.width as u32;
-		let height = self.height as u32;
-		Ok(match color_type {
-			Rgb8 => {
-				ImageRgb8(ImageBuffer::from_vec(width, height, self.data).ok_or(anyhow!("Failed to create Rgb8 image"))?)
-			}
-			Rgba8 => {
-				ImageRgba8(ImageBuffer::from_vec(width, height, self.data).ok_or(anyhow!("Failed to create Rgba8 image"))?)
-			}
-			L8 => ImageLuma8(ImageBuffer::from_vec(width, height, self.data).ok_or(anyhow!("Failed to create L8 image"))?),
-			La8 => {
-				ImageLumaA8(ImageBuffer::from_vec(width, height, self.data).ok_or(anyhow!("Failed to create La8 image"))?)
-			}
-			_ => bail!("Unsupported image format"),
-		})
+	fn extended_color_type(&self) -> ExtendedColorType {
+		self.color().into()
+	}
+
+	fn channel_count(&self) -> u8 {
+		self.color().channel_count()
 	}
 }
