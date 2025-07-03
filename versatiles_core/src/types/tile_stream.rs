@@ -1,13 +1,46 @@
-//! A module defining the `TileStream` struct, which provides asynchronous handling of a stream of tiles.
-//!
-//! Each tile is represented by a coordinate (`TileCoord3`) and its data (`Blob`). The `TileStream`
-//! offers methods for parallel processing, buffering, synchronization callbacks, and easy iteration.
-//!
-//! # Features
-//! - **Parallel Processing**: Transform or filter tile data in parallel using tokio tasks.
-//! - **Buffering**: Collect or process data in configurable batches.
-//! - **Synchronous and Asynchronous Callbacks**: Choose between sync and async processing steps.
-
+/// A module defining the `TileStream` struct, which provides asynchronous handling of a stream of tiles.
+///
+/// Each tile is represented by a coordinate (`TileCoord3`) and an associated value of **generic type `T`** (default: `Blob`). The `TileStream`
+/// offers methods for parallel processing, buffering, synchronization callbacks, and easy iteration.
+///
+/// # Features
+/// - **Parallel Processing**: Transform or filter tile data in parallel using tokio tasks.
+/// - **Buffering**: Collect or process data in configurable batches.
+/// - **Synchronous and Asynchronous Callbacks**: Choose between sync and async processing steps.
+///
+/// # Structs
+/// - `TileStream`: Encapsulates a stream of `(TileCoord3, T)` tuples, providing methods for transformation, iteration, and buffering.
+///
+/// # Methods
+/// ## Constructors
+/// - `new_empty`: Creates an empty `TileStream`.
+/// - `from_stream`: Constructs a `TileStream` from an existing `Stream`.
+/// - `from_vec`: Constructs a `TileStream` from a vector of `(TileCoord3, T)` items.
+/// - `from_coord_iter_parallel`: Creates a `TileStream` from an iterator of coordinates, processing them in parallel.
+/// - `from_coord_vec_async`: Creates a `TileStream` from a vector of coordinates, applying an async closure.
+///
+/// ## Stream Flattening
+/// - `from_stream_iter`: Flattens multiple `TileStream`s from an iterator of `Future`s into a single `TileStream`.
+///
+/// ## Collecting and Iteration
+/// - `collect`: Collects all items from the stream into a vector.
+/// - `next`: Retrieves the next item from the stream.
+/// - `for_each_async`: Applies an async callback to each item.
+/// - `for_each_sync`: Applies a sync callback to each item.
+/// - `for_each_buffered`: Buffers items in chunks and processes them.
+///
+/// ## Parallel Transformations
+/// - `map_blob_parallel`: Transforms the value of type `T` for each tile in parallel.
+/// - `filter_map_blob_parallel`: Filters and transforms the value of type `T` for each tile in parallel.
+///
+/// ## Coordinate Transformations
+/// - `map_coord`: Applies a synchronous coordinate transformation to each item.
+///
+/// ## Utility
+/// - `drain_and_count`: Drains the stream and returns the total count of items.
+///
+/// # Utility Functions
+/// - `unwrap_result`: Unwraps a `Result`, printing detailed error information and terminating the program on failure.
 use crate::types::{Blob, TileCoord3};
 use anyhow::Result;
 use futures::{
@@ -17,20 +50,24 @@ use futures::{
 };
 use std::{io::Write, pin::Pin, sync::Arc};
 
-/// A wrapper that encapsulates a stream of `(TileCoord3, Blob)` tuples.
+/// A stream of tiles represented by `(TileCoord3, T)` pairs.
 ///
-/// Each item in the stream represents a tile coordinate and its associated data.
-/// Methods are provided for parallel transformation, buffering, and iteration.
+/// # Type Parameters
+/// - `'a`: The lifetime of the stream.
+/// - `T`: The type of the tile data, defaulting to `Blob`.
 ///
-/// The `'a` lifetime parameter ensures that data from external iterators or references
-/// remains valid throughout the stream’s usage.
-pub struct TileStream<'a> {
-	/// The internal boxed stream, emitting `(TileCoord3, Blob)` pairs.
-	pub stream: BoxStream<'a, (TileCoord3, Blob)>,
+/// # Fields
+/// - `stream`: The internal boxed stream that emits `(TileCoord3, T)` pairs.
+pub struct TileStream<'a, T = Blob> {
+	/// The internal boxed stream, emitting `(TileCoord3, T)` pairs.
+	pub stream: BoxStream<'a, (TileCoord3, T)>,
 }
 
 #[allow(dead_code)]
-impl<'a> TileStream<'a> {
+impl<'a, T> TileStream<'a, T>
+where
+	T: Send + 'a,
+{
 	// -------------------------------------------------------------------------
 	// Constructors
 	// -------------------------------------------------------------------------
@@ -38,13 +75,13 @@ impl<'a> TileStream<'a> {
 	/// Creates a `TileStream` containing no items.
 	///
 	/// Useful for representing an empty data source.
-	pub fn new_empty() -> Self {
-		Self {
+	pub fn new_empty() -> TileStream<'a, T> {
+		TileStream {
 			stream: stream::empty().boxed(),
 		}
 	}
 
-	/// Creates a `TileStream` from an existing `Stream` of `(TileCoord3, Blob)`.
+	/// Creates a `TileStream` from an existing `Stream` of `(TileCoord3, T)`.
 	///
 	/// # Examples
 	/// ```
@@ -57,11 +94,11 @@ impl<'a> TileStream<'a> {
 	/// ]);
 	/// let my_stream = TileStream::from_stream(tile_data.boxed());
 	/// ```
-	pub fn from_stream(stream: Pin<Box<dyn Stream<Item = (TileCoord3, Blob)> + Send + 'a>>) -> Self {
+	pub fn from_stream(stream: Pin<Box<dyn Stream<Item = (TileCoord3, T)> + Send + 'a>>) -> Self {
 		TileStream { stream }
 	}
 
-	/// Constructs a `TileStream` from a static vector of `(TileCoord3, Blob)` items.
+	/// Constructs a `TileStream` from a vector of `(TileCoord3, T)` items.
 	///
 	/// The resulting stream will yield each item in `vec` in order.
 	///
@@ -74,7 +111,7 @@ impl<'a> TileStream<'a> {
 	/// ];
 	/// let tile_stream = TileStream::from_vec(tile_data);
 	/// ```
-	pub fn from_vec(vec: Vec<(TileCoord3, Blob)>) -> Self {
+	pub fn from_vec(vec: Vec<(TileCoord3, T)>) -> Self {
 		TileStream {
 			stream: stream::iter(vec).boxed(),
 		}
@@ -85,10 +122,10 @@ impl<'a> TileStream<'a> {
 	// -------------------------------------------------------------------------
 
 	/// Creates a `TileStream` by converting an iterator of `TileCoord3` into parallel tasks
-	/// that produce `(TileCoord3, Blob)` items asynchronously.
+	/// that produce `(TileCoord3, T)` items asynchronously.
 	///
 	/// Spawns one tokio task per coordinate (buffered by `num_cpus::get()`), calling `callback`
-	/// to produce the tile data. Returns only items where `callback(coord)` yields `Some(blob)`.
+	/// to produce the tile value. Returns only items where `callback(coord)` yields `Some(value)`.
 	///
 	/// # Arguments
 	/// * `iter` - An iterator of tile coordinates.
@@ -108,7 +145,8 @@ impl<'a> TileStream<'a> {
 	/// ```
 	pub fn from_coord_iter_parallel<F>(iter: impl Iterator<Item = TileCoord3> + Send + 'a, callback: F) -> Self
 	where
-		F: Fn(TileCoord3) -> Option<Blob> + Send + Sync + 'static,
+		F: Fn(TileCoord3) -> Option<T> + Send + Sync + 'static,
+		T: 'static,
 	{
 		let callback = Arc::new(callback);
 		let s = stream::iter(iter)
@@ -120,7 +158,7 @@ impl<'a> TileStream<'a> {
 			.buffer_unordered(num_cpus::get()) // concurrency
 			.filter_map(|result| async {
 				match result {
-					Ok((coord, Some(blob))) => Some((coord, blob)),
+					Ok((coord, Some(item))) => Some((coord, item)),
 					_ => None,
 				}
 			});
@@ -130,7 +168,7 @@ impl<'a> TileStream<'a> {
 	/// Creates a `TileStream` by filtering and mapping an async closure over a vector of tile coordinates.
 	///
 	/// The closure `callback` takes a coordinate and returns a `Future` that yields
-	/// an `Option<(TileCoord3, Blob)>`. Only `Some` items are emitted.
+	/// an `Option<(TileCoord3, T)>`. Only `Some` items are emitted.
 	///
 	/// # Examples
 	/// ```
@@ -154,7 +192,7 @@ impl<'a> TileStream<'a> {
 	pub fn from_coord_vec_async<F, Fut>(vec: Vec<TileCoord3>, callback: F) -> Self
 	where
 		F: FnMut(TileCoord3) -> Fut + Send + 'a,
-		Fut: Future<Output = Option<(TileCoord3, Blob)>> + Send + 'a,
+		Fut: Future<Output = Option<(TileCoord3, T)>> + Send + 'a,
 	{
 		let s = stream::iter(vec).filter_map(callback);
 		TileStream { stream: s.boxed() }
@@ -182,9 +220,11 @@ impl<'a> TileStream<'a> {
 	///     // `all_items` now contains items from all child streams
 	/// }
 	/// ```
-	pub async fn from_stream_iter<Fut>(iter: impl Iterator<Item = Fut> + Send + 'a) -> TileStream<'a>
+	pub async fn from_stream_iter<FutureStream>(
+		iter: impl Iterator<Item = FutureStream> + Send + 'a,
+	) -> TileStream<'a, T>
 	where
-		Fut: Future<Output = TileStream<'a>> + Send + 'a,
+		FutureStream: Future<Output = TileStream<'a, T>> + Send + 'a,
 	{
 		TileStream {
 			// Wait for each future -> flatten all streams
@@ -196,7 +236,7 @@ impl<'a> TileStream<'a> {
 	// Collecting and Iteration
 	// -------------------------------------------------------------------------
 
-	/// Collects all `(TileCoord3, Blob)` items from this stream into a vector.
+	/// Collects all `(TileCoord3, T)` items from this stream into a vector.
 	///
 	/// Consumes the stream.
 	///
@@ -212,11 +252,11 @@ impl<'a> TileStream<'a> {
 	/// assert_eq!(items.len(), 2);
 	/// # }
 	/// ```
-	pub async fn collect(self) -> Vec<(TileCoord3, Blob)> {
+	pub async fn collect(self) -> Vec<(TileCoord3, T)> {
 		self.stream.collect().await
 	}
 
-	/// Retrieves the next `(TileCoord3, Blob)` item from this stream, or `None` if the stream is empty.
+	/// Retrieves the next `(TileCoord3, T)` item from this stream, or `None` if the stream is empty.
 	///
 	/// The internal pointer advances by one item.
 	///
@@ -237,11 +277,11 @@ impl<'a> TileStream<'a> {
 	/// assert!(third.is_none());
 	/// # }
 	/// ```
-	pub async fn next(&mut self) -> Option<(TileCoord3, Blob)> {
+	pub async fn next(&mut self) -> Option<(TileCoord3, T)> {
 		self.stream.next().await
 	}
 
-	/// Applies an asynchronous callback `callback` to each `(TileCoord3, Blob)` item.
+	/// Applies an asynchronous callback `callback` to each `(TileCoord3, T)` item.
 	///
 	/// Consumes the stream. The provided closure returns a `Future<Output=()>`.
 	///
@@ -255,20 +295,20 @@ impl<'a> TileStream<'a> {
 	///     (TileCoord3::new(1,1,1).unwrap(), Blob::from("data1")),
 	/// ]);
 	///
-	/// stream.for_each_async(|(coord, blob)| async move {
-	///     println!("coord={:?}, blob={:?}", coord, blob);
+	/// stream.for_each_async(|(coord, value)| async move {
+	///     println!("coord={:?}, value={:?}", coord, value);
 	/// }).await;
 	/// # }
 	/// ```
 	pub async fn for_each_async<F, Fut>(self, callback: F)
 	where
-		F: FnMut((TileCoord3, Blob)) -> Fut,
+		F: FnMut((TileCoord3, T)) -> Fut,
 		Fut: Future<Output = ()>,
 	{
 		self.stream.for_each(callback).await;
 	}
 
-	/// Applies a synchronous callback `callback` to each `(TileCoord3, Blob)` item.
+	/// Applies a synchronous callback `callback` to each `(TileCoord3, T)` item.
 	///
 	/// Consumes the stream. The provided closure returns `()`.
 	///
@@ -281,14 +321,14 @@ impl<'a> TileStream<'a> {
 	///     (TileCoord3::new(1,1,1).unwrap(), Blob::from("data1")),
 	/// ]);
 	///
-	/// stream.for_each_sync(|(coord, blob)| {
-	///     println!("coord={:?}, blob={:?}", coord, blob);
+	/// stream.for_each_sync(|(coord, value)| {
+	///     println!("coord={:?}, value={:?}", coord, value);
 	/// }).await;
 	/// # }
 	/// ```
 	pub async fn for_each_sync<F>(self, mut callback: F)
 	where
-		F: FnMut((TileCoord3, Blob)),
+		F: FnMut((TileCoord3, T)),
 	{
 		self
 			.stream
@@ -301,7 +341,7 @@ impl<'a> TileStream<'a> {
 
 	/// Buffers items in chunks of size `buffer_size`, then calls `callback` with each full or final chunk.
 	///
-	/// Consumes the stream.
+	/// Consumes the stream. Items are emitted in `(TileCoord3, T)` form.
 	///
 	/// # Examples
 	/// ```
@@ -323,7 +363,7 @@ impl<'a> TileStream<'a> {
 	/// ```
 	pub async fn for_each_buffered<F>(mut self, buffer_size: usize, mut callback: F)
 	where
-		F: FnMut(Vec<(TileCoord3, Blob)>),
+		F: FnMut(Vec<(TileCoord3, T)>),
 	{
 		let mut buffer = Vec::with_capacity(buffer_size);
 		while let Some(item) = self.stream.next().await {
@@ -343,10 +383,10 @@ impl<'a> TileStream<'a> {
 	// Parallel Transformations
 	// -------------------------------------------------------------------------
 
-	/// Transforms the `Blob` portion of each tile in parallel using the provided closure `callback`.
+	/// Transforms the **value of type `T`** for each tile in parallel using the provided closure `callback`.
 	///
-	/// Spawns tokio tasks with concurrency of `num_cpus::get()`. Each item `(coord, blob)` is mapped
-	/// to `(coord, callback(blob))`.
+	/// Spawns tokio tasks with concurrency of `num_cpus::get()`. Each item `(coord, value)` is mapped
+	/// to `(coord, callback(value))`.
 	///
 	/// # Examples
 	/// ```
@@ -357,41 +397,42 @@ impl<'a> TileStream<'a> {
 	///     (TileCoord3::new(1,1,1).unwrap(), Blob::from("data1")),
 	/// ]);
 	///
-	/// let mapped = stream.map_blob_parallel(|blob| {
-	///     // Example transformation
-	///     Ok(Blob::from(format!("mapped {}", blob.as_str())))
+	/// let mapped = stream.map_item_parallel(|value| {
+	///     // Example transformation on the tile value
+	///     Ok(Blob::from(format!("mapped {}", value.as_str())))
 	/// });
 	///
 	/// let items = mapped.collect().await;
 	/// // items contain the transformed data.
 	/// # }
 	/// ```
-	pub fn map_blob_parallel<F>(self, callback: F) -> Self
+	pub fn map_item_parallel<F>(self, callback: F) -> Self
 	where
-		F: Fn(Blob) -> Result<Blob> + Send + Sync + 'static,
+		F: Fn(T) -> Result<T> + Send + Sync + 'static,
+		T: 'static,
 	{
 		let arc_cb = Arc::new(callback);
 		let s = self
 			.stream
-			.map(move |(coord, blob)| {
+			.map(move |(coord, item)| {
 				let cb = Arc::clone(&arc_cb);
-				tokio::spawn(async move { (coord, cb(blob)) })
+				tokio::spawn(async move { (coord, cb(item)) })
 			})
 			.buffer_unordered(num_cpus::get())
 			.map(|e| {
-				let (coord, blob) = e.unwrap();
+				let (coord, item) = e.unwrap();
 				(
 					coord,
-					unwrap_result(blob, || format!("Failed to process tile at {coord:?}")),
+					unwrap_result(item, || format!("Failed to process tile at {coord:?}")),
 				)
 			});
 		TileStream { stream: s.boxed() }
 	}
 
-	/// Filters and transforms the `Blob` portion of each tile in parallel, discarding items where `callback` returns `None`.
+	/// Filters and transforms the **value of type `T`** for each tile in parallel, discarding items where `callback` returns `None`.
 	///
-	/// Spawns tokio tasks with concurrency of `num_cpus::get()`. Each item `(coord, blob)` is mapped
-	/// to `(coord, callback(blob))`. If `callback` returns `None`, the item is dropped.
+	/// Spawns tokio tasks with concurrency of `num_cpus::get()`. Each item `(coord, value)` is mapped
+	/// to `(coord, callback(value))`. If `callback` returns `None`, the item is dropped.
 	///
 	/// # Examples
 	/// ```
@@ -402,11 +443,11 @@ impl<'a> TileStream<'a> {
 	///     (TileCoord3::new(1,1,1).unwrap(), Blob::from("discard")),
 	/// ]);
 	///
-	/// let filtered = stream.filter_map_blob_parallel(|blob| {
-	///     Ok(if blob.as_str() == "discard" {
+	/// let filtered = stream.filter_map_item_parallel(|value| {
+	///     Ok(if value.as_str() == "discard" {
 	///         None
 	///     } else {
-	///         Some(Blob::from(format!("was: {}", blob.as_str())))
+	///         Some(Blob::from(format!("was: {}", value.as_str())))
 	///     })
 	/// });
 	///
@@ -414,22 +455,23 @@ impl<'a> TileStream<'a> {
 	/// assert_eq!(items.len(), 1);
 	/// # }
 	/// ```
-	pub fn filter_map_blob_parallel<F>(self, callback: F) -> Self
+	pub fn filter_map_item_parallel<F>(self, callback: F) -> Self
 	where
-		F: Fn(Blob) -> Result<Option<Blob>> + Send + Sync + 'static,
+		F: Fn(T) -> Result<Option<T>> + Send + Sync + 'static,
+		T: 'static,
 	{
 		let arc_cb = Arc::new(callback);
 		let s = self
 			.stream
-			.map(move |(coord, blob)| {
+			.map(move |(coord, item)| {
 				let cb = Arc::clone(&arc_cb);
-				tokio::spawn(async move { (coord, cb(blob)) })
+				tokio::spawn(async move { (coord, cb(item)) })
 			})
 			.buffer_unordered(num_cpus::get())
 			.filter_map(|res| async move {
-				let (coord, maybe_blob) = res.unwrap();
-				let maybe_blob = unwrap_result(maybe_blob, || format!("Failed to process tile at {coord:?}"));
-				maybe_blob.map(|blob| (coord, blob))
+				let (coord, maybe_item) = res.unwrap();
+				let maybe_item = unwrap_result(maybe_item, || format!("Failed to process tile at {coord:?}"));
+				maybe_item.map(|item| (coord, item))
 			});
 		TileStream { stream: s.boxed() }
 	}
@@ -440,7 +482,7 @@ impl<'a> TileStream<'a> {
 
 	/// Applies a synchronous coordinate transformation to each `(TileCoord3, Blob)` item.
 	///
-	/// Maintains the same `Blob`, but transforms `coord` via `callback`.
+	/// Maintains the same value of type `T`, but transforms `coord` via `callback`.
 	///
 	/// # Examples
 	/// ```
@@ -463,7 +505,7 @@ impl<'a> TileStream<'a> {
 	where
 		F: FnMut(TileCoord3) -> TileCoord3 + Send + 'a,
 	{
-		let s = self.stream.map(move |(coord, blob)| (callback(coord), blob)).boxed();
+		let s = self.stream.map(move |(coord, item)| (callback(coord), item)).boxed();
 		TileStream { stream: s }
 	}
 
@@ -617,7 +659,7 @@ mod tests {
 			(TileCoord3::new(1, 1, 1).unwrap(), Blob::from("one")),
 		];
 
-		let transformed = TileStream::from_vec(tile_data).map_blob_parallel(|blob| {
+		let transformed = TileStream::from_vec(tile_data).map_item_parallel(|blob| {
 			// For demonstration, add a prefix
 			Ok(Blob::from(format!("mapped-{}", blob.as_str())))
 		});
@@ -636,7 +678,7 @@ mod tests {
 			(TileCoord3::new(2, 2, 2).unwrap(), Blob::from("keep2")),
 		];
 
-		let filtered = TileStream::from_vec(tile_data).filter_map_blob_parallel(|blob| {
+		let filtered = TileStream::from_vec(tile_data).filter_map_item_parallel(|blob| {
 			Ok(if blob.as_str().starts_with("discard") {
 				None
 			} else {
@@ -652,7 +694,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_construct_empty_stream() {
-		let empty = TileStream::new_empty();
+		let empty = TileStream::<Blob>::new_empty();
 		let collected = empty.collect().await;
 		assert!(collected.is_empty());
 	}
@@ -668,14 +710,14 @@ mod tests {
 		];
 
 		// Merge them
-		let merged = TileStream::from_stream_iter(substreams.into_iter()).await;
+		let merged = TileStream::<Blob>::from_stream_iter(substreams.into_iter()).await;
 		let items = merged.collect().await;
 		assert_eq!(items.len(), 2);
 	}
 
 	#[tokio::test]
 	async fn should_return_none_if_stream_is_empty() {
-		let mut empty = TileStream::new_empty();
+		let mut empty = TileStream::<Blob>::new_empty();
 		assert!(empty.next().await.is_none());
 	}
 

@@ -136,7 +136,7 @@ impl TileConverter {
 	/// Runs a stream through the pipeline of conversion functions
 	pub fn process_stream<'a>(&'a self, stream: TileStream<'a>) -> TileStream<'a> {
 		let me = Arc::new(self.clone());
-		stream.map_blob_parallel(move |blob| me.process_blob(blob))
+		stream.map_item_parallel(move |blob| me.process_blob(blob))
 	}
 }
 
