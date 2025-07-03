@@ -19,13 +19,16 @@ futures.workspace = true
 itertools = { workspace = true, features = ["use_alloc"] }
 log.workspace = true
 r2d2 = { version = "0.8.10", default-features = false }
-r2d2_sqlite = { version = "0.30.0", default-features = false, features = ["bundled"] }
+r2d2_sqlite = { version = "0.30.0", default-features = false, features = [
+	"bundled",
+] }
 reqwest = { workspace = true, features = ["rustls-tls"] }
 tar = { version = "0.4.44", default-features = false }
 tokio = { workspace = true, features = ["macros", "rt"] }
 
 versatiles_core = { workspace = true, default-features = false }
 versatiles_pipeline = { workspace = true }
+versatiles_image = { workspace = true }
 
 [dev-dependencies]
 lazy_static.workspace = true

@@ -31,6 +31,10 @@ pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	Ok(Blob::from(result))
 }
 
+pub fn image2blob_lossless(image: &DynamicImage) -> Result<Blob> {
+	image2blob(image, Some(100))
+}
+
 pub fn blob2image(_blob: &Blob) -> Result<DynamicImage> {
 	bail!("AVIF decoding not implemented")
 }

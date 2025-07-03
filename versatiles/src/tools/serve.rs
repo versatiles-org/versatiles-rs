@@ -106,9 +106,11 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 		}
 
 		if arguments.flip_y || arguments.swap_xy {
-			let mut cp = TilesConverterParameters::new_default();
-			cp.flip_y = arguments.flip_y;
-			cp.swap_xy = arguments.swap_xy;
+			let cp = TilesConverterParameters {
+				flip_y: arguments.flip_y,
+				swap_xy: arguments.swap_xy,
+				..Default::default()
+			};
 			reader = TilesConvertReader::new_from_reader(reader, cp)?.boxed();
 		}
 

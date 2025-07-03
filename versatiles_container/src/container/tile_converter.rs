@@ -1,193 +1,201 @@
-use anyhow::Result;
-use itertools::Itertools;
-use std::{
-	fmt::{self, Debug},
-	sync::Arc,
+use anyhow::{bail, Result};
+use std::{fmt::Debug, sync::Arc};
+use versatiles_core::{
+	types::*,
+	utils::{compress, decompress},
 };
-use versatiles_core::{types::*, utils::*};
-
-#[derive(Clone, Debug)]
-enum FnConv {
-	UnGzip,
-	UnBrotli,
-	Gzip,
-	Brotli,
-}
-
-impl fmt::Display for FnConv {
-	fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-		write!(f, "{self:?}")
-	}
-}
-
-/// A structure representing a function that converts a blob to another blob
-impl FnConv {
-	#[allow(unreachable_patterns)]
-	fn run(&self, blob: Blob) -> Result<Blob> {
-		match self {
-			FnConv::UnGzip => decompress_gzip(&blob),
-			FnConv::UnBrotli => decompress_brotli(&blob),
-			FnConv::Gzip => compress_gzip(&blob),
-			FnConv::Brotli => compress_brotli(&blob),
-		}
-	}
-}
 
 /// A structure representing a pipeline of conversions to be applied to a blob
 #[derive(Clone)]
 pub struct TileConverter {
-	pipeline: Arc<Vec<FnConv>>,
+	src_comp: TileCompression,
+	dst_comp: TileCompression,
+	force_recompress: bool,
+	src_form: TileFormat,
+	dst_form: TileFormat,
+	convert_format: bool,
+	recompress: bool,
 }
 
 #[allow(dead_code)]
 impl TileConverter {
-	/// Create a new empty `DataConverter`
-	pub fn new_empty() -> TileConverter {
+	pub fn new(
+		src_form: TileFormat,
+		src_comp: TileCompression,
+		dst_form: TileFormat,
+		dst_comp: TileCompression,
+		force_recompress: bool,
+	) -> TileConverter {
+		let convert_format = src_form != dst_form;
+		let recompress = force_recompress || (src_comp != dst_comp) || convert_format;
 		TileConverter {
-			pipeline: Arc::new(Vec::new()),
+			src_comp,
+			dst_comp,
+			force_recompress,
+			src_form,
+			dst_form,
+			convert_format,
+			recompress,
 		}
 	}
 
 	/// Return `true` if the `DataConverter` has an empty pipeline
 	pub fn is_empty(&self) -> bool {
-		self.pipeline.is_empty()
-	}
-
-	/// Create a new `DataConverter` for tile recompression from `src_form` and `src_comp` to `dst_form` and `dst_comp`
-	/// with optional forced recompression
-	#[allow(unused_variables)]
-	pub fn new_tile_recompressor(
-		src_comp: &TileCompression,
-		dst_comp: &TileCompression,
-		force_recompress: bool,
-	) -> Result<TileConverter> {
-		let mut converter = TileConverter::new_empty();
-
-		// Push the necessary conversion functions to the converter pipeline.
-		if force_recompress || (src_comp != dst_comp) {
-			use TileCompression::*;
-			match src_comp {
-				Uncompressed => {}
-				Gzip => converter.push(FnConv::UnGzip),
-				Brotli => converter.push(FnConv::UnBrotli),
-			}
-			match dst_comp {
-				Uncompressed => {}
-				Gzip => converter.push(FnConv::Gzip),
-				Brotli => converter.push(FnConv::Brotli),
-			}
-		};
-
-		Ok(converter)
+		!self.force_recompress && self.src_form == self.dst_form && self.src_comp == self.dst_comp
 	}
 
 	/// Constructs a new `DataConverter` instance that decompresses data using the specified compression algorithm.
 	/// The `src_comp` parameter specifies the compression algorithm to use: `Compression::Uncompressed`, `Compression::Gzip`, or `Compression::Brotli`.
-	pub fn new_decompressor(src_comp: &TileCompression) -> TileConverter {
-		use TileCompression::*;
-		let mut converter = TileConverter::new_empty();
-
-		match src_comp {
-			// If uncompressed, do nothing
-			Uncompressed => {}
-			// If gzip, add the gzip decompression function to the pipeline
-			Gzip => converter.push(FnConv::UnGzip),
-			// If brotli, add the brotli decompression function to the pipeline
-			Brotli => converter.push(FnConv::UnBrotli),
+	pub fn new_decompressor(src_comp: TileCompression) -> TileConverter {
+		TileConverter {
+			src_comp,
+			..Default::default()
 		}
-
-		converter
 	}
 
-	/// Adds a new conversion function to the pipeline.
-	fn push(&mut self, f: FnConv) {
-		Arc::get_mut(&mut self.pipeline).unwrap().push(f);
+	fn status(&self) -> Result<String> {
+		use TileCompression::*;
+
+		let mut parts = vec![];
+
+		if self.recompress && self.src_comp != Uncompressed {
+			parts.push(match self.src_comp {
+				Gzip => "ungzip",
+				Brotli => "unbrotli",
+				_ => bail!("source compression must be Uncompressed, Gzip or Brotli"),
+			});
+		};
+
+		if self.convert_format {
+			parts.push(match self.src_form {
+				TileFormat::AVIF => "from avif",
+				TileFormat::JPG => "from jpg",
+				TileFormat::PNG => "from png",
+				TileFormat::WEBP => "from webp",
+				_ => bail!("source format must be AVIF, JPG, PNG or WEBP"),
+			});
+
+			parts.push(match self.dst_form {
+				TileFormat::AVIF => "to avif",
+				TileFormat::JPG => "to jpg",
+				TileFormat::PNG => "to png",
+				TileFormat::WEBP => "to webp",
+				_ => bail!("destination format must be AVIF, JPG, PNG or WEBP"),
+			});
+		}
+
+		if self.recompress && self.dst_comp != Uncompressed {
+			parts.push(match self.dst_comp {
+				Gzip => "gzip",
+				Brotli => "brotli",
+				_ => bail!("destination compression must be Uncompressed, Gzip or Brotli"),
+			});
+		}
+
+		Ok(parts.join(" -> "))
 	}
 
 	/// Runs the data through the pipeline of conversion functions and returns the result.
 	pub fn process_blob(&self, mut blob: Blob) -> Result<Blob> {
-		for f in self.pipeline.iter() {
-			blob = f.run(blob)?;
+		if self.recompress {
+			blob = decompress(blob, &self.src_comp)?;
 		}
+
+		if self.convert_format {
+			use versatiles_image::{avif, jpeg, png, webp};
+			let image = match self.src_form {
+				TileFormat::AVIF => avif::blob2image(&blob)?,
+				TileFormat::JPG => jpeg::blob2image(&blob)?,
+				TileFormat::PNG => png::blob2image(&blob)?,
+				TileFormat::WEBP => webp::blob2image(&blob)?,
+				_ => bail!("Reading tile format '{}' is not implemented", self.src_form),
+			};
+
+			let lossless = self.src_form == TileFormat::PNG;
+
+			blob = match (self.dst_form, lossless) {
+				(TileFormat::AVIF, true) => avif::image2blob_lossless(&image)?,
+				(TileFormat::AVIF, false) => avif::image2blob(&image, None)?,
+				(TileFormat::JPG, _) => jpeg::image2blob(&image, None)?,
+				(TileFormat::PNG, _) => png::image2blob(&image)?,
+				(TileFormat::WEBP, true) => webp::image2blob_lossless(&image)?,
+				(TileFormat::WEBP, false) => webp::image2blob(&image, None)?,
+				_ => bail!("Writing tile format '{}' is not implemented", self.dst_form),
+			};
+		}
+
+		if self.recompress {
+			blob = compress(blob, &self.dst_comp)?;
+		}
+
 		Ok(blob)
 	}
 
 	/// Runs a stream through the pipeline of conversion functions
 	pub fn process_stream<'a>(&'a self, stream: TileStream<'a>) -> TileStream<'a> {
-		let pipeline = self.pipeline.clone();
-		stream.map_blob_parallel(move |mut blob| {
-			for f in pipeline.iter() {
-				blob = f.run(blob).unwrap();
-			}
-			blob
-		})
-	}
-
-	/// Returns a string describing the pipeline of conversion functions.
-	pub fn as_string(&self) -> String {
-		let names: Vec<String> = self.pipeline.iter().map(|f| f.to_string()).collect();
-		names.join(",").to_lowercase()
+		let me = Arc::new(self.clone());
+		stream.map_blob_parallel(move |blob| me.process_blob(blob).unwrap())
 	}
 }
 
-/// Implements the `PartialEq` trait for the `DataConverter` struct.
-/// This function returns true if the `description` method of both `DataConverter` instances returns the same value.
-impl PartialEq for TileConverter {
-	fn eq(&self, other: &Self) -> bool {
-		self.as_string() == other.as_string()
+impl Default for TileConverter {
+	/// Constructs a new `TileConverter` instance with an empty pipeline.
+	fn default() -> Self {
+		TileConverter::new(
+			TileFormat::BIN,
+			TileCompression::Uncompressed,
+			TileFormat::BIN,
+			TileCompression::Uncompressed,
+			false,
+		)
 	}
 }
 
-impl fmt::Debug for TileConverter {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_str(&self.pipeline.iter().map(|f| f.to_string()).join(", "))
+impl Debug for TileConverter {
+	/// Returns a string representation of the `TileConverter` instance.
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"TileConverter( {} )",
+			self.status().unwrap_or_else(|e| format!("ERROR: {e}"))
+		)
 	}
 }
-
-/// Implements the `Eq` trait for the `DataConverter` struct.
-/// This trait is used in conjunction with `PartialEq` to provide a total equality relation for `DataConverter` instances.
-impl Eq for TileConverter {}
 
 #[cfg(test)]
 mod tests {
+	use std::vec;
+
 	use super::*;
 	use anyhow::ensure;
 
 	#[test]
-	fn new_empty() {
-		let data_converter = TileConverter::new_empty();
-		assert_eq!(data_converter.pipeline.len(), 0);
-	}
-
-	#[test]
-	fn is_empty() {
-		let data_converter = TileConverter::new_empty();
-		assert!(data_converter.is_empty());
-	}
-
-	#[test]
-	fn new_tile_recompressor() {
+	fn new_tile_recompressor() -> Result<()> {
 		fn test(
-			src_comp: &TileCompression,
-			dst_comp: &TileCompression,
+			src_format: TileFormat,
+			src_comp: TileCompression,
+			dst_format: TileFormat,
+			dst_comp: TileCompression,
 			force_recompress: &bool,
 			length: usize,
 			description: &str,
 		) -> Result<()> {
-			let data_converter = TileConverter::new_tile_recompressor(src_comp, dst_comp, *force_recompress)?;
+			let data_converter = TileConverter::new(src_format, src_comp, dst_format, dst_comp, *force_recompress);
 
+			let status = data_converter.status()?;
 			ensure!(
-				data_converter.as_string() == description,
-				"description is \"{}\" but expected \"{}\"",
-				data_converter.as_string(),
-				description
+				status == description,
+				"status is \"{status}\" but expected \"{description}\"",
 			);
 
+			let steps = if status.is_empty() {
+				0
+			} else {
+				status.split(" -> ").count()
+			};
 			ensure!(
-				data_converter.pipeline.len() == length,
-				"length is \"{}\" but expected \"{}\"",
-				data_converter.pipeline.len(),
-				length
+				steps == length,
+				"number of steps is \"{steps}\" but expected \"{length}\""
 			);
 
 			Ok(())
@@ -195,45 +203,38 @@ mod tests {
 
 		use TileCompression::*;
 		let compressions = vec![Uncompressed, Gzip, Brotli];
+		let formats = vec![TileFormat::AVIF, TileFormat::JPG, TileFormat::PNG, TileFormat::WEBP];
 		let forcing = vec![false, true];
 
-		for c_in in &compressions {
-			for c_out in &compressions {
-				for force in &forcing {
-					let mut s = format!("{},{}", decomp(c_in), comp(c_out));
+		for f_in in &formats {
+			for c_in in &compressions {
+				for f_out in &formats {
+					for c_out in &compressions {
+						for force in &forcing {
+							let mut s = vec![];
+							if f_in != f_out {
+								s.push(format!("from {f_in}"));
+								s.push(format!("to {f_out}"));
+							}
 
-					if !force {
-						s = s.replace("ungzip,gzip", "");
-						s = s.replace("unbrotli,brotli", "");
+							if !s.is_empty() || c_in != c_out || *force {
+								if c_in != &Uncompressed {
+									s.insert(0, format!("un{c_in}"));
+								}
+								if c_out != &Uncompressed {
+									s.push(format!("{c_out}"));
+								}
+							}
+
+							let length = s.len();
+
+							test(*f_in, *c_in, *f_out, *c_out, force, length, &s.join(" -> "))?;
+						}
 					}
-					s = s.replace(",,", ",");
-					s = s.strip_prefix(',').unwrap_or(&s).to_string();
-					s = s.strip_suffix(',').unwrap_or(&s).to_string();
-
-					let length = if s.is_empty() { 0 } else { s.split(',').count() };
-					let message = format!("{c_in:?}->{c_out:?} {force}");
-
-					let result = test(c_in, c_out, force, length, &s);
-
-					assert!(result.is_ok(), "error for {message}: {}", result.err().unwrap());
 				}
 			}
 		}
 
-		fn decomp(compression: &TileCompression) -> &str {
-			match compression {
-				Uncompressed => "",
-				Gzip => "ungzip",
-				Brotli => "unbrotli",
-			}
-		}
-
-		fn comp(compression: &TileCompression) -> &str {
-			match compression {
-				Uncompressed => "",
-				Gzip => "gzip",
-				Brotli => "brotli",
-			}
-		}
+		Ok(())
 	}
 }

@@ -55,6 +55,10 @@ pub struct Subcommand {
 	/// flip input vertically
 	#[arg(long, display_order = 3)]
 	flip_y: bool,
+
+	/// set the output tile format
+	#[arg(long, value_name = "TILE_FORMAT", display_order = 3)]
+	tile_format: Option<versatiles_core::types::TileFormat>,
 }
 
 #[tokio::main]
@@ -67,15 +71,16 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 		reader.override_compression(arguments.override_input_compression.unwrap());
 	}
 
-	let cp = TilesConverterParameters::new(
-		arguments.compress,
-		get_bbox_pyramid(arguments)?,
-		arguments.force_recompress,
-		arguments.flip_y,
-		arguments.swap_xy,
-	);
+	let parameters = TilesConverterParameters {
+		bbox_pyramid: get_bbox_pyramid(arguments)?,
+		flip_y: arguments.flip_y,
+		force_recompress: arguments.force_recompress,
+		swap_xy: arguments.swap_xy,
+		tile_compression: arguments.compress,
+		tile_format: arguments.tile_format,
+	};
 
-	convert_tiles_container(reader, cp, &arguments.output_file).await?;
+	convert_tiles_container(reader, parameters, &arguments.output_file).await?;
 
 	Ok(())
 }
