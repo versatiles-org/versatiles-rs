@@ -113,6 +113,10 @@ impl PMTilesReader {
 			root_bytes_uncompressed: Arc::new(root_bytes_uncompressed),
 		})
 	}
+
+	pub fn get_tile_entries(&self) -> Result<EntriesV3> {
+		EntriesV3::from_blob(&self.root_bytes_uncompressed)
+	}
 }
 
 /// Calculates the bounding box pyramid from the provided data.
@@ -194,22 +198,31 @@ impl TilesReaderTrait for PMTilesReader {
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
+		// Log the requested tile coordinates for debugging purposes
 		log::trace!("get_tile_data {:?}", coord);
 
+		// Convert the tile coordinates into a unique tile ID
 		let tile_id: u64 = coord.get_tile_id()?;
+		// Start with the root directory bytes
 		let mut dir_bytes = self.root_bytes_uncompressed.clone();
 
+		// Iterate through the directory depth (up to 3 levels)
 		for _depth in 0..3 {
+			// Deserialize the directory entries from the current directory bytes
 			let entries = EntriesV3::from_blob(&dir_bytes)?;
+			// Find the entry corresponding to the requested tile ID
 			let entry = entries.find_tile(tile_id);
 
+			// If the entry is not found, return None
 			let entry = if let Some(entry) = entry {
 				entry
 			} else {
 				return Ok(None);
 			};
 
+			// Check if the entry has a valid range
 			if entry.range.length > 0 {
+				// If the entry represents a run of tiles, directly fetch the tile data
 				if entry.run_length > 0 {
 					return Ok(Some(
 						self
@@ -218,19 +231,24 @@ impl TilesReaderTrait for PMTilesReader {
 							.await?,
 					));
 				} else {
+					// Otherwise, fetch the directory bytes for the next level
 					let range = entry.range;
 					let mut cache = self.leaves_cache.lock().await;
+					// Use the cache to avoid redundant decompression and reading
 					dir_bytes = cache.get_or_set(&range, || {
 						let mut blob = self.leaves_bytes.read_range(&range)?;
+						// Decompress the directory bytes
 						blob = decompress(blob, &self.internal_compression)?;
 						Ok(Arc::new(blob))
 					})?;
 				}
 			} else {
+				// If the range is invalid, return None
 				return Ok(None);
 			}
 		}
 
+		// If the tile data is not found after traversing all levels, return an error
 		bail!("not found")
 	}
 

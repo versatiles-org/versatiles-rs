@@ -55,7 +55,7 @@ impl TilesWriterTrait for PMTilesWriter {
 
 		let mut blocks: Vec<TileBBox> = pyramid
 			.iter_levels()
-			.flat_map(|level_bbox| level_bbox.iter_bbox_grid(256))
+			.flat_map(|level_bbox| level_bbox.iter_bbox_grid(64))
 			.collect();
 		blocks.sort_by_cached_key(|b| b.get_tile_id().unwrap());
 
@@ -78,8 +78,9 @@ impl TilesWriterTrait for PMTilesWriter {
 		let tile_data_start = writer.get_position()?;
 
 		for bbox in blocks.iter() {
-			let mut stream = reader.get_bbox_tile_stream(bbox.clone()).await;
-			while let Some((coord, blob)) = stream.next().await {
+			let mut tiles = reader.get_bbox_tile_stream(*bbox).await.collect().await;
+			tiles.sort_by_key(|(coord, _)| coord.get_tile_id().unwrap());
+			for (coord, blob) in tiles {
 				progress.inc(1);
 				let id = coord.get_tile_id().unwrap();
 				let range = writer.append(&blob).unwrap();
@@ -138,6 +139,36 @@ mod tests {
 		let mut reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;
 		MockTilesWriter::write(&mut reader).await?;
 
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn tiles_written_in_order() -> Result<()> {
+		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
+		bbox_pyramid.include_bbox(&TileBBox::new(15, 4090, 4090, 5000, 5000)?);
+		bbox_pyramid.include_bbox(&TileBBox::new(14, 250, 250, 260, 260)?);
+
+		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+			bbox_pyramid,
+			tile_compression: TileCompression::Uncompressed,
+			tile_format: TileFormat::MVT,
+		})?;
+
+		let mut data_writer = DataWriterBlob::new()?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer).await?;
+
+		let data_reader = DataReaderBlob::from(data_writer);
+		let reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;
+
+		let entries = reader.get_tile_entries()?;
+		let mut tile_id = 0;
+		let mut offset = 0;
+		for entry in entries.iter() {
+			assert!(entry.tile_id > tile_id, "Tile IDs are not in order");
+			assert!(entry.range.offset >= offset, "Tile ranges are not in order");
+			tile_id = entry.tile_id;
+			offset = entry.range.offset + entry.range.length;
+		}
 		Ok(())
 	}
 }
