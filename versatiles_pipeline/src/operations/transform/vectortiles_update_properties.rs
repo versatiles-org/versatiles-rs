@@ -178,7 +178,7 @@ impl OperationTrait for Operation {
 			.source
 			.get_tile_stream(bbox)
 			.await
-			.filter_map_blob_parallel(move |blob| runner.run(blob).unwrap())
+			.filter_map_blob_parallel(move |blob| runner.run(blob))
 	}
 	fn get_tilejson(&self) -> &TileJSON {
 		&self.tilejson

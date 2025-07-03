@@ -9,12 +9,13 @@
 //! - **Synchronous and Asynchronous Callbacks**: Choose between sync and async processing steps.
 
 use crate::types::{Blob, TileCoord3};
+use anyhow::Result;
 use futures::{
 	future::ready,
 	stream::{self, BoxStream},
 	Future, Stream, StreamExt,
 };
-use std::{pin::Pin, sync::Arc};
+use std::{io::Write, pin::Pin, sync::Arc};
 
 /// A wrapper that encapsulates a stream of `(TileCoord3, Blob)` tuples.
 ///
@@ -358,7 +359,7 @@ impl<'a> TileStream<'a> {
 	///
 	/// let mapped = stream.map_blob_parallel(|blob| {
 	///     // Example transformation
-	///     Blob::from(format!("mapped {}", blob.as_str()))
+	///     Ok(Blob::from(format!("mapped {}", blob.as_str())))
 	/// });
 	///
 	/// let items = mapped.collect().await;
@@ -367,7 +368,7 @@ impl<'a> TileStream<'a> {
 	/// ```
 	pub fn map_blob_parallel<F>(self, callback: F) -> Self
 	where
-		F: Fn(Blob) -> Blob + Send + Sync + 'static,
+		F: Fn(Blob) -> Result<Blob> + Send + Sync + 'static,
 	{
 		let arc_cb = Arc::new(callback);
 		let s = self
@@ -377,7 +378,13 @@ impl<'a> TileStream<'a> {
 				tokio::spawn(async move { (coord, cb(blob)) })
 			})
 			.buffer_unordered(num_cpus::get())
-			.map(|e| e.expect("spawned task panicked"));
+			.map(|e| {
+				let (coord, blob) = e.unwrap();
+				(
+					coord,
+					unwrap_result(blob, || format!("Failed to process tile at {coord:?}")),
+				)
+			});
 		TileStream { stream: s.boxed() }
 	}
 
@@ -396,11 +403,11 @@ impl<'a> TileStream<'a> {
 	/// ]);
 	///
 	/// let filtered = stream.filter_map_blob_parallel(|blob| {
-	///     if blob.as_str() == "discard" {
+	///     Ok(if blob.as_str() == "discard" {
 	///         None
 	///     } else {
 	///         Some(Blob::from(format!("was: {}", blob.as_str())))
-	///     }
+	///     })
 	/// });
 	///
 	/// let items = filtered.collect().await;
@@ -409,7 +416,7 @@ impl<'a> TileStream<'a> {
 	/// ```
 	pub fn filter_map_blob_parallel<F>(self, callback: F) -> Self
 	where
-		F: Fn(Blob) -> Option<Blob> + Send + Sync + 'static,
+		F: Fn(Blob) -> Result<Option<Blob>> + Send + Sync + 'static,
 	{
 		let arc_cb = Arc::new(callback);
 		let s = self
@@ -420,7 +427,8 @@ impl<'a> TileStream<'a> {
 			})
 			.buffer_unordered(num_cpus::get())
 			.filter_map(|res| async move {
-				let (coord, maybe_blob) = res.expect("spawned task panicked");
+				let (coord, maybe_blob) = res.unwrap();
+				let maybe_blob = unwrap_result(maybe_blob, || format!("Failed to process tile at {coord:?}"));
 				maybe_blob.map(|blob| (coord, blob))
 			});
 		TileStream { stream: s.boxed() }
@@ -488,6 +496,28 @@ impl<'a> TileStream<'a> {
 			})
 			.await;
 		count
+	}
+}
+
+/// Unwraps a `Result`, printing a detailed error report and terminating the program on failure.
+///
+/// * Every layer of context is written on its own line.
+/// * If a layer exposes a `source` error, it is written on a separate indented line.
+/// * After reporting, the process exits with status 1.
+fn unwrap_result<T>(result: anyhow::Result<T>, context: impl FnOnce() -> String) -> T {
+	match result {
+		Ok(value) => value,
+		Err(mut err) => {
+			eprintln!("ERROR:");
+			err = err.context(context());
+			for (idx, cause) in err.chain().enumerate() {
+				eprintln!("  {idx}: {cause}");
+			}
+
+			// Make sure the message is flushed before aborting.
+			let _ = std::io::stderr().flush();
+			std::process::exit(1);
+		}
 	}
 }
 
@@ -589,7 +619,7 @@ mod tests {
 
 		let transformed = TileStream::from_vec(tile_data).map_blob_parallel(|blob| {
 			// For demonstration, add a prefix
-			Blob::from(format!("mapped-{}", blob.as_str()))
+			Ok(Blob::from(format!("mapped-{}", blob.as_str())))
 		});
 
 		let items = transformed.collect().await;
@@ -607,11 +637,11 @@ mod tests {
 		];
 
 		let filtered = TileStream::from_vec(tile_data).filter_map_blob_parallel(|blob| {
-			if blob.as_str().starts_with("discard") {
+			Ok(if blob.as_str().starts_with("discard") {
 				None
 			} else {
 				Some(Blob::from(format!("kept-{}", blob.as_str())))
-			}
+			})
 		});
 
 		let items = filtered.collect().await;

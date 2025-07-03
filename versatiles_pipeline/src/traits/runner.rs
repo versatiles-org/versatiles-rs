@@ -1,8 +1,6 @@
 use crate::{
 	core::{
-		types::{
-			Blob, TileBBox, TileCompression, TileCoord3, TileFormat, TileStream, TilesReaderParameters,
-		},
+		types::{Blob, TileBBox, TileCompression, TileCoord3, TileFormat, TileStream, TilesReaderParameters},
 		utils::decompress,
 	},
 	geometry::{vector_tile::VectorTile, GeoProperties},
@@ -98,10 +96,7 @@ impl<'a> Operation {
 				.context("Failed to build properties map from CSV data")?;
 
 			let parameters = source.get_parameters().clone();
-			ensure!(
-				parameters.tile_format == TileFormat::PBF,
-				"source must be vector tiles"
-			);
+			ensure!(parameters.tile_format == TileFormat::PBF, "source must be vector tiles");
 
 			let meta = source.get_meta();
 
@@ -132,19 +127,17 @@ impl OperationTrait for Operation {
 			.source
 			.get_bbox_tile_stream(bbox)
 			.await
-			.filter_map_blob_parallel(move |blob| runner.run(blob).unwrap())
+			.filter_map_blob_parallel(move |blob| runner.run(blob))
 	}
 	fn get_meta(&self) -> Option<Blob> {
 		self.meta.clone()
 	}
 	async fn get_tile_data(&mut self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		Ok(
-			if let Some(blob) = self.source.get_tile_data(coord).await? {
-				self.runner.run(blob)?
-			} else {
-				None
-			},
-		)
+		Ok(if let Some(blob) = self.source.get_tile_data(coord).await? {
+			self.runner.run(blob)?
+		} else {
+			None
+		})
 	}
 }
 
