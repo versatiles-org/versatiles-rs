@@ -35,6 +35,7 @@ use super::{tile_converter::TileConverter, write_to_filename};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{tilejson::TileJSON, types::*, utils::TransformCoord};
+use versatiles_derive::context;
 
 /// Parameters for tile conversion.
 #[derive(Debug)]
@@ -62,6 +63,7 @@ impl Default for TilesConverterParameters {
 }
 
 /// Converts tiles from a given reader and writes them to a file.
+#[context("Converting tiles from reader to file")]
 pub async fn convert_tiles_container(
 	reader: Box<dyn TilesReaderTrait>,
 	cp: TilesConverterParameters,
@@ -85,6 +87,7 @@ pub struct TilesConvertReader {
 
 impl TilesConvertReader {
 	/// Creates a new converter reader from an existing reader.
+	#[context("Creating converter reader from existing reader")]
 	pub fn new_from_reader(
 		reader: Box<dyn TilesReaderTrait>,
 		cp: TilesConverterParameters,

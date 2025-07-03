@@ -33,7 +33,7 @@ impl GeoProperties {
 	pub fn get(&self, key: &str) -> Option<&GeoValue> {
 		self.0.get(key)
 	}
-	pub fn iter(&self) -> btree_map::Iter<String, GeoValue> {
+	pub fn iter(&self) -> btree_map::Iter<'_, String, GeoValue> {
 		self.0.iter()
 	}
 }

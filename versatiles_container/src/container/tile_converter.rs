@@ -4,6 +4,7 @@ use versatiles_core::{
 	types::*,
 	utils::{compress, decompress},
 };
+use versatiles_derive::context;
 
 /// A structure representing a pipeline of conversions to be applied to a blob
 #[derive(Clone)]
@@ -96,6 +97,7 @@ impl TileConverter {
 	}
 
 	/// Runs the data through the pipeline of conversion functions and returns the result.
+	#[context("Processing tile")]
 	pub fn process_blob(&self, mut blob: Blob) -> Result<Blob> {
 		if self.recompress {
 			blob = decompress(blob, &self.src_comp)?;
@@ -108,7 +110,7 @@ impl TileConverter {
 				TileFormat::JPG => jpeg::blob2image(&blob)?,
 				TileFormat::PNG => png::blob2image(&blob)?,
 				TileFormat::WEBP => webp::blob2image(&blob)?,
-				_ => bail!("Reading tile format '{}' is not implemented", self.src_form),
+				_ => bail!("Reading images as '{}' is not implemented", self.src_form),
 			};
 
 			let lossless = self.src_form == TileFormat::PNG;
@@ -120,7 +122,7 @@ impl TileConverter {
 				(TileFormat::PNG, _) => png::image2blob(&image)?,
 				(TileFormat::WEBP, true) => webp::image2blob_lossless(&image)?,
 				(TileFormat::WEBP, false) => webp::image2blob(&image, None)?,
-				_ => bail!("Writing tile format '{}' is not implemented", self.dst_form),
+				_ => bail!("Saving images as '{}' is not implemented", self.dst_form),
 			};
 		}
 
