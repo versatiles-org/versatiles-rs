@@ -30,7 +30,7 @@ impl BlockDefinition {
 		let x = bbox.x_min.div(256u32);
 		let y = bbox.y_min.div(256u32);
 		let z = bbox.level;
-		let global_bbox: TileBBox = bbox.clone();
+		let global_bbox: TileBBox = *bbox;
 
 		let tiles_coverage = TileBBox::new(
 			z.min(8),

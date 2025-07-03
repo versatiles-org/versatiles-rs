@@ -27,7 +27,7 @@ use std::{
 /// - `x_min`, `y_min`: Minimum tile coordinates.
 /// - `x_max`, `y_max`: Maximum tile coordinates.
 /// - `max`: Largest valid coordinate at the given zoom level (`2^level - 1`).
-#[derive(Clone, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct TileBBox {
 	/// Zoom level of the bounding box.
 	pub level: u8,
@@ -403,7 +403,7 @@ impl TileBBox {
 		if !bbox.is_empty() {
 			if self.is_empty() {
 				// If current bounding box is empty, adopt the other bounding box
-				*self = bbox.clone();
+				*self = *bbox;
 			} else {
 				// Expand to include the other bounding box
 				self.x_min = self.x_min.min(bbox.x_min);
@@ -658,7 +658,7 @@ impl TileBBox {
 
 		let level = self.level;
 		let max = 2u32.pow(level as u32) - 1;
-		let mut meta_bbox = self.clone();
+		let mut meta_bbox = *self;
 		meta_bbox.scale_down(size);
 
 		let iter = meta_bbox
@@ -882,7 +882,7 @@ mod tests {
 		let bbox1 = TileBBox::new(4, 0, 11, 2, 13).unwrap();
 		let bbox2 = TileBBox::new(4, 1, 10, 3, 12).unwrap();
 
-		let mut bbox1_intersect = bbox1.clone();
+		let mut bbox1_intersect = bbox1;
 		bbox1_intersect.intersect_bbox(&bbox2).unwrap();
 		assert_eq!(bbox1_intersect, TileBBox::new(4, 1, 11, 2, 12).unwrap());
 

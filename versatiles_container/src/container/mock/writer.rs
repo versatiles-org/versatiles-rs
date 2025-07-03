@@ -48,7 +48,7 @@ impl MockTilesWriter {
 		let bbox_pyramid = reader.get_parameters().bbox_pyramid.clone();
 
 		for bbox in bbox_pyramid.iter_levels() {
-			let mut stream = reader.get_bbox_tile_stream(bbox.clone()).await;
+			let mut stream = reader.get_bbox_tile_stream(*bbox).await;
 			while stream.next().await.is_some() {}
 		}
 

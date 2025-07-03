@@ -434,7 +434,7 @@ mod tests {
 		let test = |level: u8| {
 			let mut pyramid = TileBBoxPyramid::new_empty();
 			let bbox = TileBBox::new_full(level).unwrap();
-			pyramid.set_level_bbox(bbox.clone());
+			pyramid.set_level_bbox(bbox);
 			assert_eq!(pyramid.get_level_bbox(level), &bbox);
 		};
 
@@ -551,7 +551,7 @@ mod tests {
 	fn test_set_level_bbox() {
 		let mut pyramid = TileBBoxPyramid::new_empty();
 		let custom_bbox = TileBBox::new_full(3).unwrap();
-		pyramid.set_level_bbox(custom_bbox.clone());
+		pyramid.set_level_bbox(custom_bbox);
 		assert_eq!(pyramid.get_level_bbox(3), &custom_bbox);
 	}
 

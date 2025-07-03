@@ -223,7 +223,7 @@ mod tests {
 			.await?;
 
 		let bbox = TileBBox::new_full(3)?;
-		let tiles = result.get_tile_stream(bbox.clone()).await.collect().await;
+		let tiles = result.get_tile_stream(bbox).await.collect().await;
 
 		assert_eq!(
 			arrange_tiles(tiles, |coord, blob| check_tile(&blob, &coord).unwrap()),

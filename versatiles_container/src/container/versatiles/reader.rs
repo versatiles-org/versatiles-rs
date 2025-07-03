@@ -261,12 +261,11 @@ impl TilesReaderTrait for VersaTilesReader {
 			}
 		}
 
-		let mut block_coords: TileBBox = bbox.clone();
+		let mut block_coords: TileBBox = bbox;
 		block_coords.scale_down(256);
 		let block_coords: Vec<TileCoord3> = block_coords.iter_coords().collect();
 
 		let stream = futures::stream::iter(block_coords).then(|block_coord: TileCoord3| {
-			let bbox = bbox.clone();
 			async move {
 				// Get the block using the block coordinate
 				let block_option = self.block_index.get_block(&block_coord);
@@ -283,7 +282,7 @@ impl TilesReaderTrait for VersaTilesReader {
 				trace!("tiles_bbox_block {tiles_bbox_block:?}");
 
 				// Get the bounding box of all tiles defined in this block
-				let mut tiles_bbox_used: TileBBox = bbox.clone();
+				let mut tiles_bbox_used: TileBBox = bbox;
 				tiles_bbox_used.intersect_bbox(tiles_bbox_block).unwrap();
 				trace!("tiles_bbox_used {tiles_bbox_used:?}");
 
@@ -344,7 +343,7 @@ impl TilesReaderTrait for VersaTilesReader {
 		TileStream::from_stream(
 			futures::stream::iter(chunks)
 				.then(move |chunk| {
-					let bbox = bbox.clone();
+					let bbox = bbox;
 					async move {
 						let big_blob = self.reader.read_range(&chunk.range).await.unwrap();
 
