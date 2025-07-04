@@ -102,3 +102,92 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 		self.color().channel_count()
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_from_fn_l8() {
+		let width = 4;
+		let height = 4;
+		let image = DynamicImage::from_fn_l8(width, height, |x, y| (x + y) as u8);
+		assert_eq!(image.width(), width);
+		assert_eq!(image.height(), height);
+		assert_eq!(image.color().channel_count(), 1);
+	}
+
+	#[test]
+	fn test_from_fn_rgb8() {
+		let width = 4;
+		let height = 4;
+		let image = DynamicImage::from_fn_rgb8(width, height, |x, y| [x as u8, y as u8, 0]);
+		assert_eq!(image.width(), width);
+		assert_eq!(image.height(), height);
+		assert_eq!(image.color().channel_count(), 3);
+	}
+
+	#[test]
+	fn test_from_raw_valid_data() {
+		let width = 4;
+		let height = 4;
+		let data = vec![0u8; (width * height) as usize];
+		let image = DynamicImage::from_raw(width, height, data).unwrap();
+		assert_eq!(image.width(), width);
+		assert_eq!(image.height(), height);
+	}
+
+	#[test]
+	fn test_from_raw_invalid_data() {
+		let width = 4;
+		let height = 4;
+		let data = vec![0u8; ((width * height) as usize) - 1];
+		let result = DynamicImage::from_raw(width, height, data);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_compare_same_images() {
+		let width = 4;
+		let height = 4;
+		let image1 = DynamicImage::from_fn_l8(width, height, |x, y| (x + y) as u8);
+		let image2 = DynamicImage::from_fn_l8(width, height, |x, y| (x + y) as u8);
+		assert!(image1.compare(&image2).is_ok());
+	}
+
+	#[test]
+	fn test_compare_different_images() {
+		let width = 4;
+		let height = 4;
+		let image1 = DynamicImage::from_fn_l8(width, height, |x, y| (x + y) as u8);
+		let image2 = DynamicImage::from_fn_l8(width + 1, height, |x, y| (x * y) as u8);
+		assert!(image1.compare(&image2).is_err());
+	}
+
+	#[test]
+	fn test_diff() {
+		let width = 4;
+		let height = 4;
+		let image1 = DynamicImage::from_fn_l8(width, height, |x, y| (x + y) as u8);
+		let image2 = DynamicImage::from_fn_l8(width, height, |x, y| (x + y + 1) as u8);
+		assert_eq!(image1.diff(&image2).unwrap(), vec![1.0; 1]);
+	}
+
+	#[test]
+	fn test_bits_per_value() {
+		let image = DynamicImage::from_fn_rgb8(4, 4, |x, y| [x as u8, y as u8, 0]);
+		assert_eq!(image.bits_per_value(), 8);
+	}
+
+	#[test]
+	fn test_channel_count() {
+		let image = DynamicImage::from_fn_rgba8(4, 4, |x, y| [x as u8, y as u8, 0, 255]);
+		assert_eq!(image.channel_count(), 4);
+	}
+
+	#[test]
+	fn test_extended_color_type() {
+		let image = DynamicImage::from_fn_l8(4, 4, |x, y| (x + y) as u8);
+		assert_eq!(image.extended_color_type(), ExtendedColorType::L8);
+	}
+}
