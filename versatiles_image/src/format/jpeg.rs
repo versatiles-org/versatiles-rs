@@ -31,13 +31,12 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::helper::{create_image_grey, create_image_greya, create_image_rgb, create_image_rgba};
 	use rstest::rstest;
 
 	/* ---------- Success cases ---------- */
 	#[rstest]
-	#[case::grey(create_image_grey(), 6.61, vec![0.0]           )]
-	#[case::rgb (create_image_rgb(),  4.65, vec![0.6, 0.3, 0.7] )]
+	#[case::grey(DynamicImage::new_test_grey(), 6.61, vec![0.0]           )]
+	#[case::rgb (DynamicImage::new_test_rgb(),  4.65, vec![0.6, 0.3, 0.7] )]
 	fn jpeg_ok(
 		#[case] img: DynamicImage,
 		#[case] expected_compression_percent: f64,
@@ -57,8 +56,8 @@ mod tests {
 
 	/* ---------- Error cases ---------- */
 	#[rstest]
-	#[case::greya(create_image_greya(), "jpeg only supports Grey or RGB images")]
-	#[case::rgba(create_image_rgba(), "jpeg only supports Grey or RGB images")]
+	#[case::greya(DynamicImage::new_test_greya(), "jpeg only supports Grey or RGB images")]
+	#[case::rgba(DynamicImage::new_test_rgba(), "jpeg only supports Grey or RGB images")]
 	fn jpeg_errors(#[case] img: DynamicImage, #[case] expected_msg: &str) {
 		assert_eq!(image2blob(&img, None).unwrap_err().to_string(), expected_msg);
 	}

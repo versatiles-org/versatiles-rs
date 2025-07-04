@@ -52,14 +52,13 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::helper::{create_image_grey, create_image_greya, create_image_rgb, create_image_rgba};
 	use rstest::rstest;
 
 	#[rstest]
-	#[case::rgb(          create_image_rgb(),  false, 0.96, vec![1.4, 0.8, 1.9]     )]
-	#[case::rgba(         create_image_rgba(), false, 0.76, vec![1.4, 0.8, 2.0, 0.0])]
-	#[case::lossless_rgb( create_image_rgb(),  true,  0.08, vec![0.0, 0.0, 0.0]     )]
-	#[case::lossless_rgba(create_image_rgba(), true,  0.07, vec![0.0, 0.0, 0.0, 0.0])]
+	#[case::rgb(          DynamicImage::new_test_rgb(),  false, 0.96, vec![1.4, 0.8, 1.9]     )]
+	#[case::rgba(         DynamicImage::new_test_rgba(), false, 0.76, vec![1.4, 0.8, 2.0, 0.0])]
+	#[case::lossless_rgb( DynamicImage::new_test_rgb(),  true,  0.08, vec![0.0, 0.0, 0.0]     )]
+	#[case::lossless_rgba(DynamicImage::new_test_rgba(), true,  0.07, vec![0.0, 0.0, 0.0, 0.0])]
 	fn webp_ok(
 		#[case] img: DynamicImage,
 		#[case] lossless: bool,
@@ -83,10 +82,18 @@ mod tests {
 	}
 
 	#[rstest]
-	#[case::grey(create_image_grey(), false, "webp only supports RGB or RGBA images")]
-	#[case::greya(create_image_greya(), false, "webp only supports RGB or RGBA images")]
-	#[case::lossless_grey(create_image_grey(), true, "webp lossless only supports RGB or RGBA images")]
-	#[case::lossless_greya(create_image_greya(), true, "webp lossless only supports RGB or RGBA images")]
+	#[case::grey(DynamicImage::new_test_grey(), false, "webp only supports RGB or RGBA images")]
+	#[case::greya(DynamicImage::new_test_greya(), false, "webp only supports RGB or RGBA images")]
+	#[case::lossless_grey(
+		DynamicImage::new_test_grey(),
+		true,
+		"webp lossless only supports RGB or RGBA images"
+	)]
+	#[case::lossless_greya(
+		DynamicImage::new_test_greya(),
+		true,
+		"webp lossless only supports RGB or RGBA images"
+	)]
 	fn webp_errors(#[case] img: DynamicImage, #[case] lossless: bool, #[case] expected_msg: &str) {
 		let res = if lossless {
 			image2blob_lossless(&img)

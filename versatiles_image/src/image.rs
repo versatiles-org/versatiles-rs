@@ -1,6 +1,8 @@
-use anyhow::{anyhow, ensure, Result};
-use image::{DynamicImage, EncodableLayout, ExtendedColorType, ImageBuffer, Luma, LumaA, Rgb, Rgba};
+use crate::{avif, jpeg, png, webp};
+use anyhow::{anyhow, bail, ensure, Result};
+use image::{imageops::overlay, DynamicImage, EncodableLayout, ExtendedColorType, ImageBuffer, Luma, LumaA, Rgb, Rgba};
 use std::{ops::Div, vec};
+use versatiles_core::types::{Blob, TileFormat};
 
 pub trait EnhancedDynamicImageTrait {
 	fn from_fn_l8(width: u32, height: u32, f: fn(u32, u32) -> u8) -> DynamicImage;
@@ -9,11 +11,22 @@ pub trait EnhancedDynamicImageTrait {
 	fn from_fn_rgba8(width: u32, height: u32, f: fn(u32, u32) -> [u8; 4]) -> DynamicImage;
 	fn from_raw(width: u32, height: u32, data: Vec<u8>) -> Result<DynamicImage>;
 	fn pixels(&self) -> impl Iterator<Item = &[u8]>;
-	fn compare(&self, other: &DynamicImage) -> Result<()>;
+
+	fn ensure_same_meta(&self, other: &DynamicImage) -> Result<()>;
+	fn ensure_same_size(&self, other: &DynamicImage) -> Result<()>;
+
 	fn diff(&self, other: &DynamicImage) -> Result<Vec<f64>>;
 	fn bits_per_value(&self) -> u8;
 	fn channel_count(&self) -> u8;
 	fn extended_color_type(&self) -> ExtendedColorType;
+	fn to_blob(&self, format: TileFormat) -> Result<Blob>;
+	fn from_blob(blob: &Blob, format: TileFormat) -> Result<DynamicImage>;
+	fn overlay(&mut self, other: &DynamicImage) -> Result<()>;
+
+	fn new_test_rgba() -> DynamicImage;
+	fn new_test_rgb() -> DynamicImage;
+	fn new_test_grey() -> DynamicImage;
+	fn new_test_greya() -> DynamicImage;
 }
 
 impl EnhancedDynamicImageTrait for DynamicImage {
@@ -41,6 +54,28 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 		))
 	}
 
+	fn to_blob(&self, format: TileFormat) -> Result<Blob> {
+		use TileFormat::*;
+		match format {
+			AVIF => avif::image2blob(self, None),
+			JPG => jpeg::image2blob(self, None),
+			PNG => png::image2blob(self),
+			WEBP => webp::image2blob(self, None),
+			_ => bail!("Unsupported image format for encoding: {:?}", format),
+		}
+	}
+
+	fn from_blob(blob: &Blob, format: TileFormat) -> Result<DynamicImage> {
+		use TileFormat::*;
+		match format {
+			AVIF => avif::blob2image(blob),
+			JPG => jpeg::blob2image(blob),
+			PNG => png::blob2image(blob),
+			WEBP => webp::blob2image(blob),
+			_ => bail!("Unsupported image format for decoding: {:?}", format),
+		}
+	}
+
 	fn pixels(&self) -> impl Iterator<Item = &[u8]> {
 		match self {
 			DynamicImage::ImageLuma8(img) => img.as_bytes().chunks_exact(1),
@@ -51,7 +86,7 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 		}
 	}
 
-	fn compare(&self, other: &DynamicImage) -> Result<()> {
+	fn ensure_same_size(&self, other: &DynamicImage) -> Result<()> {
 		ensure!(
 			self.width() == other.width(),
 			"Image width mismatch: self has width {}, but the other image has width {}",
@@ -64,6 +99,11 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 			self.height(),
 			other.height()
 		);
+		Ok(())
+	}
+
+	fn ensure_same_meta(&self, other: &DynamicImage) -> Result<()> {
+		self.ensure_same_size(other)?;
 		ensure!(
 			self.color() == other.color(),
 			"Pixel value type mismatch: self has {:?}, but the other image has {:?}",
@@ -74,7 +114,7 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 	}
 
 	fn diff(&self, other: &DynamicImage) -> Result<Vec<f64>> {
-		self.compare(other)?;
+		self.ensure_same_meta(other)?;
 
 		let channels = self.color().channel_count() as usize;
 		let mut sqr_sum = vec![0u64; channels];
@@ -100,6 +140,36 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 
 	fn channel_count(&self) -> u8 {
 		self.color().channel_count()
+	}
+
+	fn overlay(&mut self, other: &DynamicImage) -> Result<()> {
+		self.ensure_same_size(other)?;
+		overlay(self, other, 0, 0);
+		Ok(())
+	}
+
+	/// Generate a Image with RGBA colors
+	fn new_test_rgba() -> DynamicImage {
+		DynamicImage::from_fn_rgba8(256, 256, |x, y| [x as u8, (255 - x) as u8, y as u8, (255 - y) as u8])
+	}
+
+	/// Generate a Image with RGB colors
+	fn new_test_rgb() -> DynamicImage {
+		DynamicImage::from_fn_rgb8(256, 256, |x, y| [x as u8, (255 - x) as u8, y as u8])
+	}
+
+	/// Generate a Image with grayscale colors
+	/// Returns a Image with 256x256 grayscale colors from black to white. Each pixel in the image
+	/// is a Luma<u8> value.
+	fn new_test_grey() -> DynamicImage {
+		DynamicImage::from_fn_l8(256, 256, |x, _y| x as u8)
+	}
+
+	/// Generate a Image with grayscale alpha colors
+	/// Returns a Image with 256x256 grayscale alpha colors from black to white. Each pixel in the
+	/// image is a LumaA<u8> value, with the alpha value determined by the y coordinate.
+	fn new_test_greya() -> DynamicImage {
+		DynamicImage::from_fn_la8(256, 256, |x, y| [x as u8, y as u8])
 	}
 }
 
@@ -152,7 +222,7 @@ mod tests {
 		let height = 4;
 		let image1 = DynamicImage::from_fn_l8(width, height, |x, y| (x + y) as u8);
 		let image2 = DynamicImage::from_fn_l8(width, height, |x, y| (x + y) as u8);
-		assert!(image1.compare(&image2).is_ok());
+		assert!(image1.ensure_same_meta(&image2).is_ok());
 	}
 
 	#[test]
@@ -161,7 +231,7 @@ mod tests {
 		let height = 4;
 		let image1 = DynamicImage::from_fn_l8(width, height, |x, y| (x + y) as u8);
 		let image2 = DynamicImage::from_fn_l8(width + 1, height, |x, y| (x * y) as u8);
-		assert!(image1.compare(&image2).is_err());
+		assert!(image1.ensure_same_meta(&image2).is_err());
 	}
 
 	#[test]
@@ -189,5 +259,105 @@ mod tests {
 	fn test_extended_color_type() {
 		let image = DynamicImage::from_fn_l8(4, 4, |x, y| (x + y) as u8);
 		assert_eq!(image.extended_color_type(), ExtendedColorType::L8);
+	}
+
+	#[test]
+	fn test_create_image_rgba() {
+		let image = DynamicImage::new_test_rgba();
+		assert_eq!(image.width(), 256);
+		assert_eq!(image.height(), 256);
+		assert_eq!(image.color(), image::ColorType::Rgba8);
+	}
+
+	#[test]
+	fn test_create_image_rgb() {
+		let image = DynamicImage::new_test_rgb();
+		assert_eq!(image.width(), 256);
+		assert_eq!(image.height(), 256);
+		assert_eq!(image.color(), image::ColorType::Rgb8);
+	}
+
+	#[test]
+	fn test_create_image_grey() {
+		let image = DynamicImage::new_test_grey();
+		assert_eq!(image.width(), 256);
+		assert_eq!(image.height(), 256);
+		assert_eq!(image.color(), image::ColorType::L8);
+	}
+
+	#[test]
+	fn test_create_image_greya() {
+		let image = DynamicImage::new_test_greya();
+		assert_eq!(image.width(), 256);
+		assert_eq!(image.height(), 256);
+		assert_eq!(image.color(), image::ColorType::La8);
+	}
+
+	#[test]
+	fn test_image2blob_png() {
+		let image = DynamicImage::new_test_rgba();
+		let blob = image.to_blob(TileFormat::PNG).unwrap();
+		assert!(!blob.is_empty());
+	}
+
+	#[test]
+	fn test_blob2image_png() {
+		let image = DynamicImage::new_test_rgba();
+		let blob = image.to_blob(TileFormat::PNG).unwrap();
+		let decoded_image = DynamicImage::from_blob(&blob, TileFormat::PNG).unwrap();
+		assert_eq!(decoded_image.width(), image.width());
+		assert_eq!(decoded_image.height(), image.height());
+	}
+
+	#[test]
+	fn test_image2blob_jpg() {
+		let image = DynamicImage::new_test_rgb();
+		let blob = image.to_blob(TileFormat::JPG).unwrap();
+		assert!(!blob.is_empty());
+	}
+
+	#[test]
+	fn test_blob2image_jpg() {
+		let image = DynamicImage::new_test_rgb();
+		let blob = image.to_blob(TileFormat::JPG).unwrap();
+		let decoded_image = DynamicImage::from_blob(&blob, TileFormat::JPG).unwrap();
+		assert_eq!(decoded_image.width(), image.width());
+		assert_eq!(decoded_image.height(), image.height());
+	}
+
+	#[test]
+	fn test_image2blob_avif() {
+		let image = DynamicImage::new_test_rgba();
+		let blob = image.to_blob(TileFormat::AVIF).unwrap();
+		assert!(!blob.is_empty());
+	}
+
+	#[test]
+	fn test_blob2image_avif() {
+		let image = DynamicImage::new_test_rgba();
+		let blob = image.to_blob(TileFormat::AVIF).unwrap();
+
+		assert_eq!(
+			DynamicImage::from_blob(&blob, TileFormat::AVIF)
+				.unwrap_err()
+				.to_string(),
+			"AVIF decoding not implemented"
+		);
+	}
+
+	#[test]
+	fn test_image2blob_webp() {
+		let image = DynamicImage::new_test_rgba();
+		let blob = image.to_blob(TileFormat::WEBP).unwrap();
+		assert!(!blob.is_empty());
+	}
+
+	#[test]
+	fn test_blob2image_webp() {
+		let image = DynamicImage::new_test_rgba();
+		let blob = image.to_blob(TileFormat::WEBP).unwrap();
+		let decoded_image = DynamicImage::from_blob(&blob, TileFormat::WEBP).unwrap();
+		assert_eq!(decoded_image.width(), image.width());
+		assert_eq!(decoded_image.height(), image.height());
 	}
 }

@@ -31,15 +31,14 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::helper::{create_image_grey, create_image_greya, create_image_rgb, create_image_rgba};
 	use rstest::rstest;
 
 	/* ---------- Success cases ---------- */
 	#[rstest]
-	#[case::grey(create_image_grey(), 0.57)]
-	#[case::greya(create_image_greya(), 0.39)]
-	#[case::rgb(create_image_rgb(), 0.29)]
-	#[case::rgba(create_image_rgba(), 0.33)]
+	#[case::grey(DynamicImage::new_test_grey(), 0.57)]
+	#[case::greya(DynamicImage::new_test_greya(), 0.39)]
+	#[case::rgb(DynamicImage::new_test_rgb(), 0.29)]
+	#[case::rgba(DynamicImage::new_test_rgba(), 0.33)]
 	fn png_ok(#[case] img: DynamicImage, #[case] expected_compression_percent: f64) -> Result<()> {
 		let blob = image2blob(&img)?;
 		let decoded = blob2image(&blob)?;

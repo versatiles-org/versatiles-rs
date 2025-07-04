@@ -341,10 +341,10 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_merge_tiles_multiple_layers() -> Result<()> {
-		let blob1 = VectorTile::new(vec![VectorTileLayer::new_standard("layer1")]);
-		let blob2 = VectorTile::new(vec![VectorTileLayer::new_standard("layer2")]);
+		let vector_tile1 = VectorTile::new(vec![VectorTileLayer::new_standard("layer1")]);
+		let vector_tile2 = VectorTile::new(vec![VectorTileLayer::new_standard("layer2")]);
 
-		let merged_tile = merge_vector_tiles(vec![blob1, blob2])?;
+		let merged_tile = merge_vector_tiles(vec![vector_tile1, vector_tile2])?;
 
 		assert_eq!(merged_tile.layers.len(), 2);
 		assert!(merged_tile.layers.iter().any(|l| l.name == "layer1"));
