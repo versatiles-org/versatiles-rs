@@ -4,7 +4,7 @@ use super::layer::VectorTileLayer;
 use anyhow::{bail, Context, Result};
 use versatiles_core::{io::*, types::Blob};
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct VectorTile {
 	pub layers: Vec<VectorTileLayer>,
 }

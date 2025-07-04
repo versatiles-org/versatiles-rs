@@ -2,7 +2,7 @@ use crate::{GeoProperties, GeoValue};
 use anyhow::{anyhow, ensure, Context, Result};
 use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Div};
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct VTLPMap<T>
 where
 	T: Clone + Eq + Hash,
@@ -74,7 +74,7 @@ where
 	}
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct PropertyManager {
 	pub key: VTLPMap<String>,
 	pub val: VTLPMap<GeoValue>,

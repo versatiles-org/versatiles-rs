@@ -73,8 +73,8 @@ impl OperationTrait for Operation {}
 
 #[async_trait]
 impl FilterOperationTrait for Operation {
-	fn get_source(&self) -> &Box<dyn OperationTrait> {
-		&self.source
+	fn get_source(&self) -> &dyn OperationTrait {
+		self.source.as_ref()
 	}
 	fn filter_coord(&self, coord: &TileCoord3) -> bool {
 		// Check if the coordinate is within the bounding box defined in the parameters

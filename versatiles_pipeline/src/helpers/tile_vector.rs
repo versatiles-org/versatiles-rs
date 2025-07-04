@@ -20,7 +20,7 @@ pub fn unpack_vector_tile_stream(
 	_tile_format: TileFormat,
 	tile_compression: TileCompression,
 ) -> Result<TileStream<VectorTile>> {
-	Ok(tile_stream?.map_item_parallel(move |blob| Ok(VectorTile::from_blob(&decompress(blob, &tile_compression)?)?)))
+	Ok(tile_stream?.map_item_parallel(move |blob| VectorTile::from_blob(&decompress(blob, &tile_compression)?)))
 }
 
 pub fn pack_vector_tile(

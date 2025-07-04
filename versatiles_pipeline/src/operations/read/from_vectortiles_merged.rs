@@ -1,11 +1,14 @@
 use crate::{
+	helpers::{pack_vector_tile, pack_vector_tile_stream, unpack_vector_tile},
+	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
 	PipelineFactory,
 };
-use anyhow::{ensure, Result};
+use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
 use futures::future::{join_all, BoxFuture};
+use imageproc::image::DynamicImage;
 use std::collections::HashMap;
 use versatiles_core::{tilejson::TileJSON, types::*, utils::decompress};
 use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
@@ -24,10 +27,9 @@ struct Operation {
 	tilejson: TileJSON,
 }
 
-fn merge_tiles(blobs: Vec<Blob>) -> Result<Blob> {
+fn merge_vector_tiles(tiles: Vec<VectorTile>) -> Result<VectorTile> {
 	let mut layers = HashMap::<String, VectorTileLayer>::new();
-	for blob in blobs.into_iter() {
-		let tile = VectorTile::from_blob(&blob)?;
+	for tile in tiles.into_iter() {
 		for new_layer in tile.layers {
 			if let Some(layer) = layers.get_mut(&new_layer.name) {
 				layer.add_from_layer(new_layer)?;
@@ -36,7 +38,7 @@ fn merge_tiles(blobs: Vec<Blob>) -> Result<Blob> {
 			}
 		}
 	}
-	VectorTile::new(layers.into_values().collect()).to_blob()
+	Ok(VectorTile::new(layers.into_values().collect()))
 }
 
 impl ReadOperationTrait for Operation {
@@ -81,8 +83,10 @@ impl ReadOperationTrait for Operation {
 	}
 }
 
+impl OperationTrait for Operation {}
+
 #[async_trait]
-impl OperationTrait for Operation {
+impl OperationBasicsTrait for Operation {
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
@@ -90,56 +94,92 @@ impl OperationTrait for Operation {
 	fn get_tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
+}
 
+#[async_trait]
+impl OperationTilesTrait for Operation {
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		let mut blobs: Vec<Blob> = vec![];
-		for source in self.sources.iter() {
-			if let Some(mut blob) = source.get_tile_data(coord).await? {
-				blob = decompress(blob, &source.get_parameters().tile_compression)?;
-				blobs.push(blob);
-			}
-		}
-		if blobs.is_empty() {
-			return Ok(None);
-		} else {
-			return Ok(Some(merge_tiles(blobs)?));
-		}
+		pack_vector_tile(
+			self.get_vector_data(coord).await,
+			self.parameters.tile_format,
+			self.parameters.tile_compression,
+		)
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> TileStream {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+		pack_vector_tile_stream(
+			self.get_vector_stream(bbox).await,
+			self.parameters.tile_format,
+			self.parameters.tile_compression,
+		)
+	}
+
+	async fn get_image_data(&self, _coord: &TileCoord3) -> Result<Option<DynamicImage>> {
+		bail!("this operation does not support image data");
+	}
+
+	async fn get_image_stream(&self, _bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+		bail!("this operation does not support image data");
+	}
+
+	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
+		let mut vector_tiles: Vec<VectorTile> = vec![];
+		for source in self.sources.iter() {
+			let tile_format = source.get_parameters().tile_format;
+			let tile_compression = source.get_parameters().tile_compression;
+			let vector_tile = unpack_vector_tile(source.get_tile_data(coord).await, tile_format, tile_compression)?;
+			if let Some(vector_tile) = vector_tile {
+				vector_tiles.push(vector_tile);
+			}
+		}
+
+		Ok(if vector_tiles.is_empty() {
+			None
+		} else {
+			Some(merge_vector_tiles(vector_tiles)?)
+		})
+	}
+
+	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
-		TileStream::from_stream_iter(bboxes.into_iter().map(move |bbox| async move {
-			let mut tiles: Vec<Vec<Blob>> = Vec::new();
-			tiles.resize(bbox.count_tiles() as usize, vec![]);
+		Ok(
+			TileStream::from_stream_iter(bboxes.into_iter().map(move |bbox| async move {
+				let mut tiles: Vec<Vec<VectorTile>> = Vec::new();
+				tiles.resize(bbox.count_tiles() as usize, vec![]);
 
-			for source in self.sources.iter() {
-				source
-					.get_tile_stream(bbox)
-					.await
-					.for_each_sync(|(coord, mut blob)| {
-						let index = bbox.get_tile_index3(&coord).unwrap();
-						blob = decompress(blob, &source.get_parameters().tile_compression).unwrap();
-						tiles[index].push(blob);
-					})
-					.await;
-			}
+				for source in self.sources.iter() {
+					source
+						.get_tile_stream(bbox)
+						.await
+						.unwrap()
+						.for_each_sync(|(coord, mut blob)| {
+							let index = bbox.get_tile_index3(&coord).unwrap();
+							blob = decompress(blob, &source.get_parameters().tile_compression).unwrap();
+							tiles[index].push(VectorTile::from_blob(&blob).unwrap());
+						})
+						.await;
+				}
 
-			TileStream::from_vec(
-				tiles
-					.into_iter()
-					.enumerate()
-					.filter_map(|(i, v)| {
-						if v.is_empty() {
-							None
-						} else {
-							Some((bbox.get_coord3_by_index(i as u32).unwrap(), merge_tiles(v).unwrap()))
-						}
-					})
-					.collect(),
-			)
-		}))
-		.await
+				TileStream::from_vec(
+					tiles
+						.into_iter()
+						.enumerate()
+						.filter_map(|(i, v)| {
+							if v.is_empty() {
+								None
+							} else {
+								Some((
+									bbox.get_coord3_by_index(i as u32).unwrap(),
+									merge_vector_tiles(v).unwrap(),
+								))
+							}
+						})
+						.collect(),
+				)
+			}))
+			.await,
+		)
 	}
 }
 
@@ -235,7 +275,7 @@ mod tests {
 			.await?;
 
 		let bbox = TileBBox::new_full(3)?;
-		let tiles = result.get_tile_stream(bbox).await.collect().await;
+		let tiles = result.get_tile_stream(bbox).await?.collect().await;
 
 		assert_eq!(
 			arrange_tiles(tiles, |coord, blob| {
@@ -310,11 +350,10 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_merge_tiles_multiple_layers() -> Result<()> {
-		let blob1 = VectorTile::new(vec![VectorTileLayer::new_standard("layer1")]).to_blob()?;
-		let blob2 = VectorTile::new(vec![VectorTileLayer::new_standard("layer2")]).to_blob()?;
+		let blob1 = VectorTile::new(vec![VectorTileLayer::new_standard("layer1")]);
+		let blob2 = VectorTile::new(vec![VectorTileLayer::new_standard("layer2")]);
 
-		let merged_blob = merge_tiles(vec![blob1, blob2])?;
-		let merged_tile = VectorTile::from_blob(&merged_blob)?;
+		let merged_tile = merge_vector_tiles(vec![blob1, blob2])?;
 
 		assert_eq!(merged_tile.layers.len(), 2);
 		assert!(merged_tile.layers.iter().any(|l| l.name == "layer1"));

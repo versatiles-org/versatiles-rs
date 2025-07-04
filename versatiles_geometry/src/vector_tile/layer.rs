@@ -9,7 +9,7 @@ use byteorder::LE;
 use std::mem::swap;
 use versatiles_core::{io::*, types::Blob};
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct VectorTileLayer {
 	pub extent: u32,
 	pub features: Vec<VectorTileFeature>,

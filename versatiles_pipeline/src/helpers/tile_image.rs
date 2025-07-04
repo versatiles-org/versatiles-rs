@@ -21,7 +21,7 @@ pub fn unpack_image_tile_stream(
 	tile_format: TileFormat,
 	tile_compression: TileCompression,
 ) -> Result<TileStream<DynamicImage>> {
-	Ok(tile_stream?.map_item_parallel(move |blob| Ok(blob2image(&decompress(blob, &tile_compression)?, tile_format)?)))
+	Ok(tile_stream?.map_item_parallel(move |blob| blob2image(&decompress(blob, &tile_compression)?, tile_format)))
 }
 
 pub fn pack_image_tile(

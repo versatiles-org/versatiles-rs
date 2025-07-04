@@ -8,7 +8,7 @@ use versatiles_geometry::vector_tile::VectorTile;
 
 #[async_trait]
 pub trait FilterOperationTrait: OperationTrait {
-	fn get_source(&self) -> &Box<dyn OperationTrait>;
+	fn get_source(&self) -> &dyn OperationTrait;
 	fn filter_coord(&self, coord: &TileCoord3) -> bool;
 }
 
