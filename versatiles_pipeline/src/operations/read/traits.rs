@@ -1,6 +1,5 @@
-use crate::{traits::OperationTilesTrait, vpl::VPLNode, OperationTrait, PipelineFactory};
+use crate::{vpl::VPLNode, OperationTrait, PipelineFactory};
 use anyhow::Result;
-use async_trait::async_trait;
 use futures::future::BoxFuture;
 
 pub trait ReadOperationTrait: OperationTrait {

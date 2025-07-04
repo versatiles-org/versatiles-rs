@@ -74,12 +74,6 @@ pub trait OperationTrait: Debug + Send + Sync + Unpin {
 	}
 }
 
-pub trait ReadOperationTrait: OperationTrait {
-	fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
-	where
-		Self: Sized + OperationTrait;
-}
-
 pub trait VectorOperationTrait: OperationTrait {}
 
 #[async_trait]

@@ -1,9 +1,17 @@
-use crate::{traits::*, vpl::VPLNode, PipelineFactory};
+use crate::{
+	helpers::{unpack_image_tile, unpack_image_tile_stream, unpack_vector_tile, unpack_vector_tile_stream},
+	operations::read::traits::ReadOperationTrait,
+	traits::*,
+	vpl::VPLNode,
+	PipelineFactory,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
+use imageproc::image::DynamicImage;
 use std::fmt::Debug;
 use versatiles_core::{tilejson::TileJSON, types::*};
+use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a tile container, such as a VersaTiles file.
@@ -18,6 +26,8 @@ struct Operation {
 	parameters: TilesReaderParameters,
 	reader: Box<dyn TilesReaderTrait>,
 }
+
+impl OperationTrait for Operation {}
 
 impl ReadOperationTrait for Operation {
 	fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
@@ -35,7 +45,7 @@ impl ReadOperationTrait for Operation {
 }
 
 #[async_trait]
-impl OperationTrait for Operation {
+impl OperationBasicsTrait for Operation {
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
@@ -43,13 +53,48 @@ impl OperationTrait for Operation {
 	fn get_tilejson(&self) -> &TileJSON {
 		self.reader.get_tilejson()
 	}
+}
 
+#[async_trait]
+impl OperationTilesTrait for Operation {
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		self.reader.get_tile_data(coord).await
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> TileStream {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		self.reader.get_bbox_tile_stream(bbox).await
+	}
+
+	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
+		unpack_image_tile(
+			self.reader.get_tile_data(coord).await,
+			self.parameters.tile_format,
+			self.parameters.tile_compression,
+		)
+	}
+
+	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+		unpack_image_tile_stream(
+			self.reader.get_bbox_tile_stream(bbox).await,
+			self.parameters.tile_format,
+			self.parameters.tile_compression,
+		)
+	}
+
+	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
+		unpack_vector_tile(
+			self.reader.get_tile_data(coord).await,
+			self.parameters.tile_format,
+			self.parameters.tile_compression,
+		)
+	}
+
+	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
+		unpack_vector_tile_stream(
+			self.reader.get_bbox_tile_stream(bbox).await,
+			self.parameters.tile_format,
+			self.parameters.tile_compression,
+		)
 	}
 }
 
@@ -92,7 +137,7 @@ mod tests {
 
 		assert!(blob.len() > 50);
 
-		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await;
+		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await?;
 
 		let mut n = 0;
 		while let Some((coord, blob)) = stream.next().await {

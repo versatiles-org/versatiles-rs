@@ -1,7 +1,13 @@
 mod image;
 mod vector;
 
-use crate::{operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode, PipelineFactory};
+use crate::{
+	helpers::{pack_image_tile, pack_image_tile_stream, pack_vector_tile, pack_vector_tile_stream},
+	operations::read::traits::ReadOperationTrait,
+	traits::*,
+	vpl::VPLNode,
+	PipelineFactory,
+};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
@@ -9,9 +15,8 @@ use image::create_debug_image;
 use imageproc::image::DynamicImage;
 use std::fmt::Debug;
 use vector::create_debug_vector_tile;
-use versatiles_core::{tilejson::TileJSON, types::*, utils::compress};
+use versatiles_core::{tilejson::TileJSON, types::*};
 use versatiles_geometry::vector_tile::VectorTile;
-use versatiles_image::helper::image2blob;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Produces debugging tiles, each showing their coordinates as text.
@@ -88,15 +93,19 @@ impl OperationTilesTrait for Operation {
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		let mut blob = match self.parameters.tile_format {
-			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => {
-				image2blob(&self.get_image_data(coord).await?.unwrap(), self.parameters.tile_format)
-			}
-			TileFormat::MVT => self.get_vector_data(coord).await?.unwrap().to_blob(),
+		match self.parameters.tile_format {
+			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => pack_image_tile(
+				self.get_image_data(coord).await,
+				self.parameters.tile_format,
+				self.parameters.tile_compression,
+			),
+			TileFormat::MVT => pack_vector_tile(
+				self.get_vector_data(coord).await,
+				self.parameters.tile_format,
+				self.parameters.tile_compression,
+			),
 			_ => bail!("tile format '{}' is not implemented yet", self.parameters.tile_format),
-		}?;
-		blob = compress(blob, &self.parameters.tile_compression)?;
-		Ok(Some(blob))
+		}
 	}
 
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
@@ -122,17 +131,13 @@ impl OperationTilesTrait for Operation {
 		let tile_format = self.parameters.tile_format;
 		let tile_compression = self.parameters.tile_compression;
 
-		Ok(match tile_format {
-			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => self
-				.get_image_stream(bbox)
-				.await?
-				.map_item_parallel(move |image| compress(image2blob(&image, tile_format)?, &tile_compression)),
-			TileFormat::MVT => self
-				.get_vector_stream(bbox)
-				.await?
-				.map_item_parallel(move |vector_tile| compress(vector_tile.to_blob()?, &tile_compression)),
+		match tile_format {
+			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => {
+				pack_image_tile_stream(self.get_image_stream(bbox).await, tile_format, tile_compression)
+			}
+			TileFormat::MVT => pack_vector_tile_stream(self.get_vector_stream(bbox).await, tile_format, tile_compression),
 			_ => bail!("tile format '{}' is not implemented yet", tile_format),
-		})
+		}
 	}
 }
 
