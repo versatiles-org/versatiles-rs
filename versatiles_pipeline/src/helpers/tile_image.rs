@@ -56,22 +56,17 @@ mod tests {
 
 	#[test]
 	fn test_unpack_image_tile() {
-		let compressed_blob = compress(TEST_BLOB.clone(), &TileCompression::Uncompressed).unwrap();
-		let result = unpack_image_tile(
-			Ok(Some(compressed_blob)),
-			TileFormat::PNG,
-			TileCompression::Uncompressed,
-		)
-		.unwrap();
+		let compressed_blob = compress(TEST_BLOB.clone(), &TileCompression::Gzip).unwrap();
+		let result = unpack_image_tile(Ok(Some(compressed_blob)), TileFormat::PNG, TileCompression::Gzip).unwrap();
 		assert!(result.is_some());
 		result.unwrap().compare(&TEST_IMAGE).unwrap();
 	}
 
 	#[tokio::test]
 	async fn test_unpack_image_tile_stream() {
-		let compressed_blob = compress(TEST_BLOB.clone(), &TileCompression::Uncompressed).unwrap();
+		let compressed_blob = compress(TEST_BLOB.clone(), &TileCompression::Gzip).unwrap();
 		let tile_stream = TileStream::from_vec(vec![(TileCoord3::new(0, 0, 0).unwrap(), compressed_blob)]);
-		let result = unpack_image_tile_stream(Ok(tile_stream), TileFormat::PNG, TileCompression::Uncompressed).unwrap();
+		let result = unpack_image_tile_stream(Ok(tile_stream), TileFormat::PNG, TileCompression::Gzip).unwrap();
 		let images: Vec<_> = result.collect().await;
 		assert_eq!(images.len(), 1);
 		images[0].1.compare(&TEST_IMAGE).unwrap();
@@ -79,14 +74,9 @@ mod tests {
 
 	#[test]
 	fn test_pack_image_tile() {
-		let result = pack_image_tile(
-			Ok(Some(TEST_IMAGE.clone())),
-			TileFormat::PNG,
-			TileCompression::Uncompressed,
-		)
-		.unwrap();
+		let result = pack_image_tile(Ok(Some(TEST_IMAGE.clone())), TileFormat::PNG, TileCompression::Gzip).unwrap();
 		assert!(result.is_some());
-		let decompressed_blob = decompress(result.unwrap(), &TileCompression::Uncompressed).unwrap();
+		let decompressed_blob = decompress(result.unwrap(), &TileCompression::Gzip).unwrap();
 		let unpacked_image = blob2image(&decompressed_blob, TileFormat::PNG).unwrap();
 		unpacked_image.compare(&TEST_IMAGE).unwrap();
 	}
@@ -94,10 +84,10 @@ mod tests {
 	#[tokio::test]
 	async fn test_pack_image_tile_stream() {
 		let tile_stream = TileStream::from_vec(vec![(TileCoord3::new(0, 0, 0).unwrap(), TEST_IMAGE.clone())]);
-		let result = pack_image_tile_stream(Ok(tile_stream), TileFormat::PNG, TileCompression::Uncompressed).unwrap();
+		let result = pack_image_tile_stream(Ok(tile_stream), TileFormat::PNG, TileCompression::Gzip).unwrap();
 		let blobs: Vec<_> = result.collect().await;
 		assert_eq!(blobs.len(), 1);
-		let decompressed_blob = decompress(blobs[0].1.clone(), &TileCompression::Uncompressed).unwrap();
+		let decompressed_blob = decompress(blobs[0].1.clone(), &TileCompression::Gzip).unwrap();
 		let unpacked_image = blob2image(&decompressed_blob, TileFormat::PNG).unwrap();
 		unpacked_image.compare(&TEST_IMAGE).unwrap();
 	}
