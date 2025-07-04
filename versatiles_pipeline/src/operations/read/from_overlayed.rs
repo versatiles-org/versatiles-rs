@@ -1,4 +1,6 @@
 use crate::{
+	helpers::{unpack_image_tile, unpack_image_tile_stream, unpack_vector_tile, unpack_vector_tile_stream},
+	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
 	PipelineFactory,
@@ -6,7 +8,9 @@ use crate::{
 use anyhow::{ensure, Result};
 use async_trait::async_trait;
 use futures::future::{join_all, BoxFuture};
+use imageproc::image::DynamicImage;
 use versatiles_core::{tilejson::TileJSON, types::*, utils::recompress};
+use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Overlays multiple tile sources, using the tile from the first source that provides it.
@@ -20,6 +24,17 @@ struct Operation {
 	parameters: TilesReaderParameters,
 	sources: Vec<Box<dyn OperationTrait>>,
 	tilejson: TileJSON,
+}
+
+impl OperationTrait for Operation {}
+impl OperationBasicsTrait for Operation {
+	fn get_parameters(&self) -> &TilesReaderParameters {
+		&self.parameters
+	}
+
+	fn get_tilejson(&self) -> &TileJSON {
+		&self.tilejson
+	}
 }
 
 impl ReadOperationTrait for Operation {
@@ -71,15 +86,7 @@ impl ReadOperationTrait for Operation {
 }
 
 #[async_trait]
-impl OperationTrait for Operation {
-	fn get_parameters(&self) -> &TilesReaderParameters {
-		&self.parameters
-	}
-
-	fn get_tilejson(&self) -> &TileJSON {
-		&self.tilejson
-	}
-
+impl OperationTilesTrait for Operation {
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		for source in self.sources.iter() {
 			let result = source.get_tile_data(coord).await?;
@@ -95,43 +102,78 @@ impl OperationTrait for Operation {
 		return Ok(None);
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> TileStream {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		let output_compression = &self.parameters.tile_compression;
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
-		TileStream::from_stream_iter(bboxes.into_iter().map(move |bbox| async move {
-			let mut tiles: Vec<Option<(TileCoord3, Blob)>> = Vec::new();
-			tiles.resize(bbox.count_tiles() as usize, None);
+		Ok(
+			TileStream::from_stream_iter(bboxes.into_iter().map(move |bbox| async move {
+				let mut tiles: Vec<Option<(TileCoord3, Blob)>> = Vec::new();
+				tiles.resize(bbox.count_tiles() as usize, None);
 
-			for source in self.sources.iter() {
-				let mut bbox_left = TileBBox::new_empty(bbox.level).unwrap();
-				for (index, t) in tiles.iter().enumerate() {
-					if t.is_none() {
-						bbox_left
-							.include_coord3(&bbox.get_coord3_by_index(index as u32).unwrap())
-							.unwrap();
-					}
-				}
-				if bbox_left.is_empty() {
-					continue;
-				}
-
-				source
-					.get_tile_stream(bbox_left)
-					.await
-					.for_each_sync(|(coord, mut blob)| {
-						let index = bbox.get_tile_index3(&coord).unwrap();
-						if tiles[index].is_none() {
-							blob = recompress(blob, &source.get_parameters().tile_compression, output_compression).unwrap();
-							tiles[index] = Some((coord, blob));
+				for source in self.sources.iter() {
+					let mut bbox_left = TileBBox::new_empty(bbox.level).unwrap();
+					for (index, t) in tiles.iter().enumerate() {
+						if t.is_none() {
+							bbox_left
+								.include_coord3(&bbox.get_coord3_by_index(index as u32).unwrap())
+								.unwrap();
 						}
-					})
-					.await;
-			}
+					}
+					if bbox_left.is_empty() {
+						continue;
+					}
 
-			TileStream::from_vec(tiles.into_iter().flatten().collect())
-		}))
-		.await
+					source
+						.get_tile_stream(bbox_left)
+						.await
+						.unwrap()
+						.for_each_sync(|(coord, mut blob)| {
+							let index = bbox.get_tile_index3(&coord).unwrap();
+							if tiles[index].is_none() {
+								blob = recompress(blob, &source.get_parameters().tile_compression, output_compression).unwrap();
+								tiles[index] = Some((coord, blob));
+							}
+						})
+						.await;
+				}
+
+				TileStream::from_vec(tiles.into_iter().flatten().collect())
+			}))
+			.await,
+		)
+	}
+
+	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
+		unpack_image_tile(
+			self.get_tile_data(coord).await,
+			self.parameters.tile_format,
+			self.parameters.tile_compression,
+		)
+	}
+
+	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+		unpack_image_tile_stream(
+			self.get_tile_stream(bbox).await,
+			self.parameters.tile_format,
+			self.parameters.tile_compression,
+		)
+	}
+
+	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
+		unpack_vector_tile(
+			self.get_tile_data(coord).await,
+			self.parameters.tile_format,
+			self.parameters.tile_compression,
+		)
+	}
+
+	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
+		unpack_vector_tile_stream(
+			self.get_tile_stream(bbox).await,
+			self.parameters.tile_format,
+			self.parameters.tile_compression,
+		)
 	}
 }
 
@@ -223,7 +265,7 @@ mod tests {
 			.await?;
 
 		let bbox = TileBBox::new_full(3)?;
-		let tiles = result.get_tile_stream(bbox).await.collect().await;
+		let tiles = result.get_tile_stream(bbox).await?.collect().await;
 
 		assert_eq!(
 			arrange_tiles(tiles, |coord, blob| check_tile(&blob, &coord).unwrap()),
