@@ -1,19 +1,32 @@
-use crate::{traits::OperationTilesTrait, OperationTrait};
+use crate::OperationTrait;
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::ready;
 use imageproc::image::DynamicImage;
-use versatiles_core::types::{Blob, TileBBox, TileCoord3, TileStream};
+use versatiles_core::{
+	tilejson::TileJSON,
+	types::{Blob, TileBBox, TileCoord3, TileStream, TilesReaderParameters},
+};
 use versatiles_geometry::vector_tile::VectorTile;
 
 #[async_trait]
 pub trait FilterOperationTrait: OperationTrait {
+	fn get_prepared_parameters(&self) -> &TilesReaderParameters;
+	fn get_prepared_tilejson(&self) -> &TileJSON;
 	fn get_source(&self) -> &dyn OperationTrait;
 	fn filter_coord(&self, coord: &TileCoord3) -> bool;
 }
 
 #[async_trait]
-impl<T: FilterOperationTrait> OperationTilesTrait for T {
+impl<T: FilterOperationTrait> OperationTrait for T {
+	fn get_parameters(&self) -> &TilesReaderParameters {
+		self.get_prepared_parameters()
+	}
+
+	fn get_tilejson(&self) -> &TileJSON {
+		self.get_prepared_tilejson()
+	}
+
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		match self.filter_coord(coord) {
 			true => self.get_source().get_tile_data(coord).await,

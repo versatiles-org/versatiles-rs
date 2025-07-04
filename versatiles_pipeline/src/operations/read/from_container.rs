@@ -27,8 +27,6 @@ struct Operation {
 	reader: Box<dyn TilesReaderTrait>,
 }
 
-impl OperationTrait for Operation {}
-
 impl ReadOperationTrait for Operation {
 	fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
 	where
@@ -45,7 +43,7 @@ impl ReadOperationTrait for Operation {
 }
 
 #[async_trait]
-impl OperationBasicsTrait for Operation {
+impl OperationTrait for Operation {
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
@@ -53,10 +51,6 @@ impl OperationBasicsTrait for Operation {
 	fn get_tilejson(&self) -> &TileJSON {
 		self.reader.get_tilejson()
 	}
-}
-
-#[async_trait]
-impl OperationTilesTrait for Operation {
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		self.reader.get_tile_data(coord).await
 	}

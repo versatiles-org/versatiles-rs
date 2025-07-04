@@ -26,17 +26,6 @@ struct Operation {
 	tilejson: TileJSON,
 }
 
-impl OperationTrait for Operation {}
-impl OperationBasicsTrait for Operation {
-	fn get_parameters(&self) -> &TilesReaderParameters {
-		&self.parameters
-	}
-
-	fn get_tilejson(&self) -> &TileJSON {
-		&self.tilejson
-	}
-}
-
 impl ReadOperationTrait for Operation {
 	fn build(
 		vpl_node: VPLNode,
@@ -86,7 +75,14 @@ impl ReadOperationTrait for Operation {
 }
 
 #[async_trait]
-impl OperationTilesTrait for Operation {
+impl OperationTrait for Operation {
+	fn get_parameters(&self) -> &TilesReaderParameters {
+		&self.parameters
+	}
+
+	fn get_tilejson(&self) -> &TileJSON {
+		&self.tilejson
+	}
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		for source in self.sources.iter() {
 			let result = source.get_tile_data(coord).await?;

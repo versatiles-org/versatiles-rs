@@ -1,8 +1,6 @@
 use crate::{
 	helpers::{pack_vector_tile, pack_vector_tile_stream, read_csv_file, unpack_vector_tile},
-	traits::{
-		OperationBasicsTrait, OperationFactoryTrait, OperationTilesTrait, OperationTrait, TransformOperationFactoryTrait,
-	},
+	traits::{OperationFactoryTrait, OperationTrait, TransformOperationFactoryTrait},
 	vpl::VPLNode,
 	PipelineFactory,
 };
@@ -162,20 +160,16 @@ impl Operation {
 	}
 }
 
-impl OperationTrait for Operation {}
-
 #[async_trait]
-impl OperationBasicsTrait for Operation {
+impl OperationTrait for Operation {
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
+
 	fn get_tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
-}
 
-#[async_trait]
-impl OperationTilesTrait for Operation {
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		pack_vector_tile(
 			self.get_vector_data(coord).await,

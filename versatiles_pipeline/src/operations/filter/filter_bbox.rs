@@ -60,19 +60,14 @@ impl Operation {
 	}
 }
 
-impl OperationBasicsTrait for Operation {
-	fn get_parameters(&self) -> &TilesReaderParameters {
-		&self.parameters
-	}
-	fn get_tilejson(&self) -> &TileJSON {
-		&self.tilejson
-	}
-}
-
-impl OperationTrait for Operation {}
-
 #[async_trait]
 impl FilterOperationTrait for Operation {
+	fn get_prepared_parameters(&self) -> &TilesReaderParameters {
+		&self.parameters
+	}
+	fn get_prepared_tilejson(&self) -> &TileJSON {
+		&self.tilejson
+	}
 	fn get_source(&self) -> &dyn OperationTrait {
 		self.source.as_ref()
 	}
