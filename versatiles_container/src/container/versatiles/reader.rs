@@ -36,7 +36,7 @@
 //!
 //!     // Fetch tiles in a bounding box
 //!     let bbox = reader.get_parameters().bbox_pyramid.get_level_bbox(4).clone();
-//!     let mut stream = reader.get_bbox_tile_stream(bbox).await;
+//!     let mut stream = reader.get_bbox_tile_stream(bbox).await?;
 //!     while let Some((coord, tile_data)) = stream.next().await {
 //!         println!("Tile Coord: {coord:?}, Data: {tile_data:?}");
 //!     }

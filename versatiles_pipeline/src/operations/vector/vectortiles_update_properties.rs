@@ -1,12 +1,15 @@
 use crate::{
-	helpers::read_csv_file,
-	traits::{OperationFactoryTrait, OperationTrait, TransformOperationFactoryTrait},
+	helpers::{pack_vector_tile, pack_vector_tile_stream, read_csv_file, unpack_vector_tile},
+	traits::{
+		OperationBasicsTrait, OperationFactoryTrait, OperationTilesTrait, OperationTrait, TransformOperationFactoryTrait,
+	},
 	vpl::VPLNode,
 	PipelineFactory,
 };
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{anyhow, bail, ensure, Context, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
+use imageproc::image::DynamicImage;
 use log::warn;
 use std::{
 	collections::{BTreeSet, HashMap},
@@ -43,15 +46,11 @@ struct Args {
 #[derive(Debug)]
 struct Runner {
 	args: Args,
-	tile_compression: TileCompression,
 	properties_map: HashMap<String, GeoProperties>,
 }
 
 impl Runner {
-	fn run(&self, mut blob: Blob) -> Result<Option<Blob>> {
-		blob = decompress(blob, &self.tile_compression)?;
-		let mut tile = VectorTile::from_blob(&blob).context("Failed to create VectorTile from Blob")?;
-
+	pub fn run(&self, mut tile: VectorTile) -> Result<VectorTile> {
 		let layer_name = &self.args.layer_name;
 
 		for layer in tile.layers.iter_mut() {
@@ -80,7 +79,7 @@ impl Runner {
 			})?;
 		}
 
-		Ok(Some(tile.to_blob().context("Failed to convert VectorTile to Blob")?))
+		Ok(tile)
 	}
 }
 
@@ -149,11 +148,7 @@ impl Operation {
 				}
 			}
 
-			let runner = Arc::new(Runner {
-				args,
-				properties_map,
-				tile_compression: parameters.tile_compression,
-			});
+			let runner = Arc::new(Runner { args, properties_map });
 
 			parameters.tile_compression = TileCompression::Uncompressed;
 
@@ -167,28 +162,67 @@ impl Operation {
 	}
 }
 
+impl OperationTrait for Operation {}
+
 #[async_trait]
-impl OperationTrait for Operation {
+impl OperationBasicsTrait for Operation {
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
-	}
-	async fn get_tile_stream(&self, bbox: TileBBox) -> TileStream {
-		let runner = self.runner.clone();
-		self
-			.source
-			.get_tile_stream(bbox)
-			.await
-			.filter_map_item_parallel(move |blob| runner.run(blob))
 	}
 	fn get_tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
+}
+
+#[async_trait]
+impl OperationTilesTrait for Operation {
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		Ok(if let Some(blob) = self.source.get_tile_data(coord).await? {
-			self.runner.run(blob)?
+		pack_vector_tile(
+			self.get_vector_data(coord).await,
+			self.parameters.tile_format,
+			self.parameters.tile_compression,
+		)
+	}
+
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+		pack_vector_tile_stream(
+			self.get_vector_stream(bbox).await,
+			self.parameters.tile_format,
+			self.parameters.tile_compression,
+		)
+	}
+
+	async fn get_image_data(&self, _coord: &TileCoord3) -> Result<Option<DynamicImage>> {
+		bail!("this operation does not support image data");
+	}
+
+	async fn get_image_stream(&self, _bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+		bail!("this operation does not support image data");
+	}
+
+	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
+		if let Some(tile) = unpack_vector_tile(
+			self.source.get_tile_data(coord).await,
+			self.source.get_parameters().tile_format,
+			self.source.get_parameters().tile_compression,
+		)? {
+			self.runner.run(tile).map(Some)
 		} else {
-			None
-		})
+			return Ok(None);
+		}
+	}
+
+	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
+		let runner = self.runner.clone();
+		let tile_compression = self.source.get_parameters().tile_compression;
+		Ok(self
+			.source
+			.get_tile_stream(bbox)
+			.await?
+			.filter_map_item_parallel(move |blob| {
+				let tile = VectorTile::from_blob(&decompress(blob, &tile_compression).unwrap()).unwrap();
+				runner.run(tile).map(Some)
+			}))
 	}
 }
 
@@ -222,15 +256,14 @@ mod tests {
 	use std::{fs::File, io::Write};
 	use versatiles_geometry::{vector_tile::VectorTileLayer, GeoFeature, GeoProperties, GeoValue, Geometry};
 
-	fn create_sample_vector_tile_blob() -> Blob {
+	fn create_sample_vector_tile() -> VectorTile {
 		let mut feature = GeoFeature::new(Geometry::new_example());
 		feature.properties = GeoProperties::from(vec![
 			("id", GeoValue::from("feature_1")),
 			("property1", GeoValue::from("value1")),
 		]);
 		let layer = VectorTileLayer::from_features(String::from("test_layer"), vec![feature], 4096, 1).unwrap();
-		let tile = VectorTile::new(vec![layer]);
-		tile.to_blob().unwrap()
+		VectorTile::new(vec![layer])
 	}
 
 	#[tokio::test]
@@ -250,15 +283,13 @@ mod tests {
 				remove_non_matching: false,
 				include_id: false,
 			},
-			tile_compression: TileCompression::Uncompressed,
 			properties_map,
 		};
 
-		let blob = create_sample_vector_tile_blob();
-		let result_blob = runner.run(blob).unwrap().unwrap();
-		let tile = VectorTile::from_blob(&result_blob).unwrap();
+		let tile0 = create_sample_vector_tile();
+		let tile1 = runner.run(tile0).unwrap();
 
-		let properties = tile.layers[0].features[0].decode_properties(&tile.layers[0]).unwrap();
+		let properties = tile1.layers[0].features[0].decode_properties(&tile1.layers[0]).unwrap();
 
 		assert_eq!(properties.get("property2").unwrap(), &GeoValue::from("new_value"));
 	}

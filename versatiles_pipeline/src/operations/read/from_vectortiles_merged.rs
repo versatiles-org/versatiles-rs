@@ -125,9 +125,11 @@ impl OperationTilesTrait for Operation {
 	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
 		let mut vector_tiles: Vec<VectorTile> = vec![];
 		for source in self.sources.iter() {
-			let tile_format = source.get_parameters().tile_format;
-			let tile_compression = source.get_parameters().tile_compression;
-			let vector_tile = unpack_vector_tile(source.get_tile_data(coord).await, tile_format, tile_compression)?;
+			let vector_tile = unpack_vector_tile(
+				source.get_tile_data(coord).await,
+				source.get_parameters().tile_format,
+				source.get_parameters().tile_compression,
+			)?;
 			if let Some(vector_tile) = vector_tile {
 				vector_tiles.push(vector_tile);
 			}
