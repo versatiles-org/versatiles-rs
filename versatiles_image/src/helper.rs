@@ -48,3 +48,105 @@ pub fn blob2image(blob: &Blob, format: TileFormat) -> Result<DynamicImage> {
 		_ => bail!("Unsupported image format for decoding: {:?}", format),
 	}
 }
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_create_image_rgba() {
+		let image = create_image_rgba();
+		assert_eq!(image.width(), 256);
+		assert_eq!(image.height(), 256);
+		assert_eq!(image.color(), image::ColorType::Rgba8);
+	}
+
+	#[test]
+	fn test_create_image_rgb() {
+		let image = create_image_rgb();
+		assert_eq!(image.width(), 256);
+		assert_eq!(image.height(), 256);
+		assert_eq!(image.color(), image::ColorType::Rgb8);
+	}
+
+	#[test]
+	fn test_create_image_grey() {
+		let image = create_image_grey();
+		assert_eq!(image.width(), 256);
+		assert_eq!(image.height(), 256);
+		assert_eq!(image.color(), image::ColorType::L8);
+	}
+
+	#[test]
+	fn test_create_image_greya() {
+		let image = create_image_greya();
+		assert_eq!(image.width(), 256);
+		assert_eq!(image.height(), 256);
+		assert_eq!(image.color(), image::ColorType::La8);
+	}
+
+	#[test]
+	fn test_image2blob_png() {
+		let image = create_image_rgba();
+		let blob = image2blob(&image, TileFormat::PNG).expect("Failed to convert image to blob");
+		assert!(!blob.is_empty());
+	}
+
+	#[test]
+	fn test_blob2image_png() {
+		let image = create_image_rgba();
+		let blob = image2blob(&image, TileFormat::PNG).expect("Failed to convert image to blob");
+		let decoded_image = blob2image(&blob, TileFormat::PNG).expect("Failed to decode blob to image");
+		assert_eq!(decoded_image.width(), image.width());
+		assert_eq!(decoded_image.height(), image.height());
+	}
+
+	#[test]
+	fn test_image2blob_jpg() {
+		let image = create_image_rgb();
+		let blob = image2blob(&image, TileFormat::JPG).expect("Failed to convert image to blob");
+		assert!(!blob.is_empty());
+	}
+
+	#[test]
+	fn test_blob2image_jpg() {
+		let image = create_image_rgb();
+		let blob = image2blob(&image, TileFormat::JPG).expect("Failed to convert image to blob");
+		let decoded_image = blob2image(&blob, TileFormat::JPG).expect("Failed to decode blob to image");
+		assert_eq!(decoded_image.width(), image.width());
+		assert_eq!(decoded_image.height(), image.height());
+	}
+
+	#[test]
+	fn test_image2blob_avif() {
+		let image = create_image_rgba();
+		let blob = image2blob(&image, TileFormat::AVIF).expect("Failed to convert image to blob");
+		assert!(!blob.is_empty());
+	}
+
+	#[test]
+	fn test_blob2image_avif() {
+		let image = create_image_rgba();
+		let blob = image2blob(&image, TileFormat::AVIF).expect("Failed to convert image to blob");
+
+		assert_eq!(
+			blob2image(&blob, TileFormat::AVIF).unwrap_err().to_string(),
+			"AVIF decoding not implemented"
+		);
+	}
+
+	#[test]
+	fn test_image2blob_webp() {
+		let image = create_image_rgba();
+		let blob = image2blob(&image, TileFormat::WEBP).expect("Failed to convert image to blob");
+		assert!(!blob.is_empty());
+	}
+
+	#[test]
+	fn test_blob2image_webp() {
+		let image = create_image_rgba();
+		let blob = image2blob(&image, TileFormat::WEBP).expect("Failed to convert image to blob");
+		let decoded_image = blob2image(&blob, TileFormat::WEBP).expect("Failed to decode blob to image");
+		assert_eq!(decoded_image.width(), image.width());
+		assert_eq!(decoded_image.height(), image.height());
+	}
+}
