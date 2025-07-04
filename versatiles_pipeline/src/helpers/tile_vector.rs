@@ -40,3 +40,57 @@ pub fn pack_vector_tile_stream(
 ) -> Result<TileStream<Blob>> {
 	Ok(tile_stream?.map_item_parallel(move |vector_tile| compress(vector_tile.to_blob()?, &tile_compression)))
 }
+
+#[cfg(test)]
+mod tests {
+	use std::vec;
+
+	use super::*;
+	use lazy_static::lazy_static;
+	use versatiles_core::types::{TileCompression, TileCoord3, TileFormat};
+	use versatiles_geometry::vector_tile::VectorTileLayer;
+
+	lazy_static! {
+		static ref TEST_TILE: VectorTile = VectorTile::new(vec![VectorTileLayer::new("test_layer".to_string(), 8192, 3)]);
+		static ref TEST_BLOB: Blob = TEST_TILE.to_blob().unwrap();
+		static ref TEST_COMPRESSED_BLOB: Blob = compress(TEST_BLOB.clone(), &TileCompression::Gzip).unwrap();
+	}
+
+	#[test]
+	fn test_unpack_vector_tile() {
+		let result = unpack_vector_tile(
+			Ok(Some(TEST_COMPRESSED_BLOB.clone())),
+			TileFormat::MVT,
+			TileCompression::Gzip,
+		)
+		.unwrap()
+		.unwrap();
+		assert_eq!(result, TEST_TILE.clone());
+	}
+
+	#[tokio::test]
+	async fn test_unpack_vector_tile_stream() {
+		let tile_stream = TileStream::from_vec(vec![(TileCoord3::new(0, 0, 0).unwrap(), TEST_COMPRESSED_BLOB.clone())]);
+		let result = unpack_vector_tile_stream(Ok(tile_stream), TileFormat::MVT, TileCompression::Gzip).unwrap();
+		let vec = result.collect().await;
+		assert_eq!(vec.len(), 1);
+		assert_eq!(vec[0].1, TEST_TILE.clone());
+	}
+
+	#[test]
+	fn test_pack_vector_tile() {
+		let result = pack_vector_tile(Ok(Some(TEST_TILE.clone())), TileFormat::MVT, TileCompression::Gzip)
+			.unwrap()
+			.unwrap();
+		assert_eq!(result, TEST_COMPRESSED_BLOB.clone());
+	}
+
+	#[tokio::test]
+	async fn test_pack_vector_tile_stream() {
+		let tile_stream = TileStream::from_vec(vec![(TileCoord3::new(0, 0, 0).unwrap(), TEST_TILE.clone())]);
+		let result = pack_vector_tile_stream(Ok(tile_stream), TileFormat::MVT, TileCompression::Gzip).unwrap();
+		let vec = result.collect().await;
+		assert_eq!(vec.len(), 1);
+		assert_eq!(vec[0].1, TEST_COMPRESSED_BLOB.clone());
+	}
+}
