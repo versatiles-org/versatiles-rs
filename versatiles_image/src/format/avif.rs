@@ -59,4 +59,18 @@ mod tests {
 
 		Ok(())
 	}
+
+	#[rstest]
+	#[case::grey(create_image_grey())]
+	#[case::greya(create_image_greya())]
+	#[case::rgb(create_image_rgb())]
+	#[case::rgba(create_image_rgba())]
+	fn avif_lossless_ok(#[case] img: DynamicImage) -> Result<()> {
+		assert_eq!(
+			image2blob_lossless(&img).unwrap_err().to_string(),
+			"Lossless AVIF encoding is not supported, quality must be less than 100"
+		);
+
+		Ok(())
+	}
 }
