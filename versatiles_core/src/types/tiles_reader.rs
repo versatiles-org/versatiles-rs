@@ -31,10 +31,10 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>>;
 
 	/// Get a stream of tiles within the bounding box.
-	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
+	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		let mutex = Arc::new(Mutex::new(self));
 		let coords: Vec<TileCoord3> = bbox.iter_coords().collect();
-		TileStream::from_coord_vec_async(coords, move |coord| {
+		Ok(TileStream::from_coord_vec_async(coords, move |coord| {
 			let mutex = mutex.clone();
 			async move {
 				mutex
@@ -45,7 +45,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 					.map(|blob_option| blob_option.map(|blob| (coord, blob)))
 					.unwrap_or(None)
 			}
-		})
+		}))
 	}
 
 	/// probe container
@@ -241,7 +241,7 @@ mod tests {
 	async fn test_get_bbox_tile_stream() -> Result<()> {
 		let reader = TestReader::new_dummy();
 		let bbox = TileBBox::new(1, 0, 0, 1, 1)?;
-		let stream = reader.get_bbox_tile_stream(bbox).await;
+		let stream = reader.get_bbox_tile_stream(bbox).await?;
 
 		assert_eq!(stream.drain_and_count().await, 4); // Assuming 4 tiles in a 2x2 bbox
 		Ok(())

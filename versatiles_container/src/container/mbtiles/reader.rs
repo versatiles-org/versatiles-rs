@@ -334,11 +334,11 @@ impl TilesReaderTrait for MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue querying the database.
-	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
+	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		trace!("read tile stream from bbox {bbox:?}");
 
 		if bbox.is_empty() {
-			return TileStream::new_empty();
+			return Ok(TileStream::new_empty());
 		}
 
 		let max_index = bbox.max;
@@ -378,7 +378,7 @@ impl TilesReaderTrait for MBTilesReader {
 
 		trace!("got {} tiles", vec.len());
 
-		TileStream::from_vec(vec)
+		Ok(TileStream::from_vec(vec))
 	}
 
 	/// Returns the name of the MBTiles database.

@@ -106,7 +106,7 @@ impl TilesReaderTrait for PipelineReader {
 	}
 
 	/// Get a stream of tiles within the bounding box.
-	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> TileStream {
+	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		self.operation.get_tile_stream(bbox).await
 	}
 }
@@ -166,7 +166,7 @@ mod tests {
 	async fn test_tile_pipeline_reader_get_bbox_tile_stream() -> Result<()> {
 		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/")).await?;
 		let bbox = TileBBox::new(1, 0, 0, 1, 1)?;
-		let result_stream = reader.get_bbox_tile_stream(bbox).await;
+		let result_stream = reader.get_bbox_tile_stream(bbox).await?;
 		let result = result_stream.collect().await;
 
 		assert!(!result.is_empty());

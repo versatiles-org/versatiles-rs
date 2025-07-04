@@ -78,7 +78,7 @@ impl TilesWriterTrait for PMTilesWriter {
 		let tile_data_start = writer.get_position()?;
 
 		for bbox in blocks.iter() {
-			let mut tiles = reader.get_bbox_tile_stream(*bbox).await.collect().await;
+			let mut tiles = reader.get_bbox_tile_stream(*bbox).await?.collect().await;
 			tiles.sort_by_key(|(coord, _)| coord.get_tile_id().unwrap());
 			for (coord, blob) in tiles {
 				progress.inc(1);

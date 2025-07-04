@@ -1,5 +1,5 @@
-use crate::{jpeg, png, webp, EnhancedDynamicImageTrait};
-use anyhow::Result;
+use crate::{avif, jpeg, png, webp, EnhancedDynamicImageTrait};
+use anyhow::{bail, Result};
 use image::DynamicImage;
 use versatiles_core::types::{Blob, TileFormat};
 
@@ -30,15 +30,21 @@ pub fn create_image_greya() -> DynamicImage {
 pub fn image2blob(image: &DynamicImage, format: TileFormat) -> Result<Blob> {
 	use TileFormat::*;
 	match format {
-		AVIF => todo!(),
-		BIN => todo!(),
-		GEOJSON => todo!(),
+		AVIF => avif::image2blob(image, None),
 		JPG => jpeg::image2blob(image, None),
-		JSON => todo!(),
-		MVT => todo!(),
 		PNG => png::image2blob(image),
-		SVG => todo!(),
-		TOPOJSON => todo!(),
 		WEBP => webp::image2blob(image, None),
+		_ => bail!("Unsupported image format for encoding: {:?}", format),
+	}
+}
+
+pub fn blob2image(blob: &Blob, format: TileFormat) -> Result<DynamicImage> {
+	use TileFormat::*;
+	match format {
+		AVIF => avif::blob2image(blob),
+		JPG => jpeg::blob2image(blob),
+		PNG => png::blob2image(blob),
+		WEBP => webp::blob2image(blob),
+		_ => bail!("Unsupported image format for decoding: {:?}", format),
 	}
 }

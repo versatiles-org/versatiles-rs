@@ -1,14 +1,16 @@
 mod image;
 mod vector;
 
-use crate::{traits::*, vpl::VPLNode, PipelineFactory};
+use crate::{operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode, PipelineFactory};
 use anyhow::{bail, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use image::create_debug_image;
+use imageproc::image::DynamicImage;
 use std::fmt::Debug;
 use vector::create_debug_vector_tile;
-use versatiles_core::{tilejson::TileJSON, types::*};
+use versatiles_core::{tilejson::TileJSON, types::*, utils::compress};
+use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::helper::image2blob;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -53,16 +55,7 @@ impl Operation {
 	}
 }
 
-fn build_tile(coord: &TileCoord3, format: TileFormat) -> Result<Option<Blob>> {
-	Ok(Some(match format {
-		TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => {
-			let image = create_debug_image(coord);
-			image2blob(&image, format)?
-		}
-		TileFormat::MVT => create_debug_vector_tile(coord)?,
-		_ => bail!("tile format '{format}' is not implemented yet"),
-	}))
-}
+impl OperationTrait for Operation {}
 
 impl ReadOperationTrait for Operation {
 	fn build(vpl_node: VPLNode, _factory: &PipelineFactory) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
@@ -74,7 +67,7 @@ impl ReadOperationTrait for Operation {
 }
 
 #[async_trait]
-impl OperationTrait for Operation {
+impl OperationBasicsTrait for Operation {
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
@@ -82,15 +75,64 @@ impl OperationTrait for Operation {
 	fn get_tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
+}
 
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		build_tile(coord, self.parameters.tile_format)
+#[async_trait]
+impl OperationTilesTrait for Operation {
+	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
+		Ok(Some(create_debug_image(coord)))
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> TileStream {
-		let format = self.parameters.tile_format;
+	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
+		Ok(Some(create_debug_vector_tile(coord)?))
+	}
 
-		TileStream::from_coord_iter_parallel(bbox.into_iter_coords(), move |c| build_tile(&c, format).ok().flatten())
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
+		let mut blob = match self.parameters.tile_format {
+			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => {
+				image2blob(&self.get_image_data(coord).await?.unwrap(), self.parameters.tile_format)
+			}
+			TileFormat::MVT => self.get_vector_data(coord).await?.unwrap().to_blob(),
+			_ => bail!("tile format '{}' is not implemented yet", self.parameters.tile_format),
+		}?;
+		blob = compress(blob, &self.parameters.tile_compression)?;
+		Ok(Some(blob))
+	}
+
+	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+		match self.parameters.tile_format {
+			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => Ok(
+				TileStream::from_coord_iter_parallel(bbox.into_iter_coords(), move |c| Some(create_debug_image(&c))),
+			),
+			_ => bail!("tile format '{}' is not implemented yet", self.parameters.tile_format),
+		}
+	}
+
+	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
+		match self.parameters.tile_format {
+			TileFormat::MVT => Ok(TileStream::from_coord_iter_parallel(
+				bbox.into_iter_coords(),
+				move |c| create_debug_vector_tile(&c).ok(),
+			)),
+			_ => bail!("tile format '{}' is not implemented yet", self.parameters.tile_format),
+		}
+	}
+
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
+		let tile_format = self.parameters.tile_format;
+		let tile_compression = self.parameters.tile_compression;
+
+		Ok(match tile_format {
+			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => self
+				.get_image_stream(bbox)
+				.await?
+				.map_item_parallel(move |image| compress(image2blob(&image, tile_format)?, &tile_compression)),
+			TileFormat::MVT => self
+				.get_vector_stream(bbox)
+				.await?
+				.map_item_parallel(move |vector_tile| compress(vector_tile.to_blob()?, &tile_compression)),
+			_ => bail!("tile format '{}' is not implemented yet", tile_format),
+		})
 	}
 }
 
@@ -128,7 +170,7 @@ mod tests {
 		assert_eq!(blob.len(), len, "for '{format}'");
 		assert_eq!(operation.get_tilejson().as_string(), meta, "for '{format}'");
 
-		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await;
+		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await?;
 
 		let mut n = 0;
 		while let Some((coord, blob)) = stream.next().await {

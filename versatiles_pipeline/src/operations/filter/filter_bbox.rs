@@ -1,4 +1,4 @@
-use crate::{traits::*, vpl::VPLNode, PipelineFactory};
+use crate::{operations::filter::traits::FilterOperationTrait, traits::*, vpl::VPLNode, PipelineFactory};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
@@ -6,10 +6,14 @@ use std::fmt::Debug;
 use versatiles_core::{tilejson::TileJSON, types::*};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Filter tiles by a geographic bounding box.
+/// Filter tiles by bounding box and/or zoom levels.
 struct Args {
 	/// Bounding box: [min long, min lat, max long, max lat].
-	bbox: [f64; 4],
+	bbox: Option<[f64; 4]>,
+	/// minimal zoom level
+	min: Option<u8>,
+	/// maximal zoom level
+	max: Option<u8>,
 }
 
 #[derive(Debug)]
@@ -26,12 +30,23 @@ impl Operation {
 		_factory: &PipelineFactory,
 	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>, anyhow::Error>>
 	where
-		Self: Sized + OperationTrait,
+		Self: Sized + FilterOperationTrait,
 	{
 		Box::pin(async move {
 			let args = Args::from_vpl_node(&vpl_node)?;
 			let mut parameters = source.get_parameters().clone();
-			parameters.bbox_pyramid.intersect_geo_bbox(&GeoBBox::from(&args.bbox));
+
+			if let Some(min) = args.min {
+				parameters.bbox_pyramid.set_zoom_min(min);
+			}
+
+			if let Some(max) = args.max {
+				parameters.bbox_pyramid.set_zoom_max(max);
+			}
+
+			if let Some(bbox) = args.bbox {
+				parameters.bbox_pyramid.intersect_geo_bbox(&GeoBBox::from(&bbox));
+			}
 
 			let mut tilejson = source.get_tilejson().clone();
 			tilejson.update_from_pyramid(&parameters.bbox_pyramid);
@@ -45,27 +60,25 @@ impl Operation {
 	}
 }
 
-#[async_trait]
-impl OperationTrait for Operation {
+impl OperationBasicsTrait for Operation {
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
-
 	fn get_tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
+}
 
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		if self.parameters.bbox_pyramid.contains_coord(coord) {
-			self.source.get_tile_data(coord).await
-		} else {
-			Ok(None)
-		}
+impl OperationTrait for Operation {}
+
+#[async_trait]
+impl FilterOperationTrait for Operation {
+	fn get_source(&self) -> &Box<dyn OperationTrait> {
+		&self.source
 	}
-
-	async fn get_tile_stream(&self, mut bbox: TileBBox) -> TileStream {
-		bbox.intersect_pyramid(&self.parameters.bbox_pyramid).unwrap();
-		self.source.get_tile_stream(bbox).await
+	fn filter_coord(&self, coord: &TileCoord3) -> bool {
+		// Check if the coordinate is within the bounding box defined in the parameters
+		self.parameters.bbox_pyramid.contains_coord(coord)
 	}
 }
 

@@ -406,10 +406,11 @@ where
 	/// // items contain the transformed data.
 	/// # }
 	/// ```
-	pub fn map_item_parallel<F>(self, callback: F) -> Self
+	pub fn map_item_parallel<F, O>(self, callback: F) -> TileStream<'a, O>
 	where
-		F: Fn(T) -> Result<T> + Send + Sync + 'static,
+		F: Fn(T) -> Result<O> + Send + Sync + 'static,
 		T: 'static,
+		O: Send + Sync + 'static,
 	{
 		let arc_cb = Arc::new(callback);
 		let s = self
@@ -455,10 +456,11 @@ where
 	/// assert_eq!(items.len(), 1);
 	/// # }
 	/// ```
-	pub fn filter_map_item_parallel<F>(self, callback: F) -> Self
+	pub fn filter_map_item_parallel<F, O>(self, callback: F) -> TileStream<'a, O>
 	where
-		F: Fn(T) -> Result<Option<T>> + Send + Sync + 'static,
+		F: Fn(T) -> Result<Option<O>> + Send + Sync + 'static,
 		T: 'static,
+		O: Send + Sync + 'static,
 	{
 		let arc_cb = Arc::new(callback);
 		let s = self
@@ -506,6 +508,15 @@ where
 		F: FnMut(TileCoord3) -> TileCoord3 + Send + 'a,
 	{
 		let s = self.stream.map(move |(coord, item)| (callback(coord), item)).boxed();
+		TileStream { stream: s }
+	}
+
+	pub fn filter_coord<F, Fut>(self, mut callback: F) -> Self
+	where
+		F: FnMut(TileCoord3) -> Fut + Send + 'a,
+		Fut: Future<Output = bool> + Send + 'a,
+	{
+		let s = self.stream.filter(move |(coord, _item)| callback(*coord)).boxed();
 		TileStream { stream: s }
 	}
 
