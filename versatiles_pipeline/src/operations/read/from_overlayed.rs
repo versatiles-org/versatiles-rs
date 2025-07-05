@@ -212,7 +212,8 @@ mod tests {
 		assert_eq!(properties.get("y").unwrap(), &GeoValue::from(coord.y));
 		assert_eq!(properties.get("z").unwrap(), &GeoValue::from(coord.z));
 
-		Ok(properties.get("filename").unwrap().to_string())
+		let filename = properties.get("filename").unwrap().to_string();
+		Ok(filename[0..filename.len() - 4].to_string())
 	}
 
 	#[tokio::test]
@@ -227,14 +228,14 @@ mod tests {
 
 		error("from_overlayed").await;
 		error("from_overlayed [ ]").await;
-		error("from_overlayed [ from_container filename=1 ]").await;
+		error("from_overlayed [ from_container filename=1.pbf ]").await;
 	}
 
 	#[tokio::test]
 	async fn test_operation_get_tile_data() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
-			.operation_from_vpl("from_overlayed [ from_container filename=1, from_container filename=2 ]")
+			.operation_from_vpl("from_overlayed [ from_container filename=1.pbf, from_container filename=2.pbf ]")
 			.await?;
 
 		let coord = TileCoord3::new(1, 2, 3)?;
@@ -252,8 +253,8 @@ mod tests {
 			.operation_from_vpl(
 				&[
 					"from_overlayed [",
-					"   from_container filename=\"🟦\" | filter_bbox bbox=[-180,-20,20,85],",
-					"   from_container filename=\"🟨\" | filter_bbox bbox=[-20,-85,180,20]",
+					"   from_container filename=\"🟦.pbf\" | filter_bbox bbox=[-180,-20,20,85],",
+					"   from_container filename=\"🟨.pbf\" | filter_bbox bbox=[-20,-85,180,20]",
 					"]",
 				]
 				.join(""),

@@ -16,6 +16,7 @@ pub fn get_read_operation_factories() -> Vec<Box<dyn ReadOperationFactoryTrait>>
 		Box::new(read::from_container::Factory {}),
 		Box::new(read::from_debug::Factory {}),
 		Box::new(read::from_overlayed::Factory {}),
-		Box::new(read::from_vectortiles_merged::Factory {}),
+		Box::new(read::merge_imagetiles::Factory {}),
+		Box::new(read::merge_vectortiles::Factory {}),
 	]
 }

@@ -44,14 +44,26 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 	}
 
 	fn from_raw(width: u32, height: u32, data: Vec<u8>) -> Result<DynamicImage> {
-		ensure!(
-			data.len() == (width * height) as usize,
-			"Data length does not match expected size for L8 image"
-		);
-		Ok(DynamicImage::ImageLuma8(
-			ImageBuffer::from_vec(width, height, data)
-				.ok_or_else(|| anyhow!("Failed to create image buffer with provided data"))?,
-		))
+		let channel_count = data.len() / (width * height) as usize;
+		Ok(match channel_count {
+			1 => DynamicImage::ImageLuma8(
+				ImageBuffer::from_vec(width, height, data)
+					.ok_or_else(|| anyhow!("Failed to create Luma8 image buffer with provided data"))?,
+			),
+			2 => DynamicImage::ImageLumaA8(
+				ImageBuffer::from_vec(width, height, data)
+					.ok_or_else(|| anyhow!("Failed to create LumaA8 image buffer with provided data"))?,
+			),
+			3 => DynamicImage::ImageRgb8(
+				ImageBuffer::from_vec(width, height, data)
+					.ok_or_else(|| anyhow!("Failed to create RGB8 image buffer with provided data"))?,
+			),
+			4 => DynamicImage::ImageRgba8(
+				ImageBuffer::from_vec(width, height, data)
+					.ok_or_else(|| anyhow!("Failed to create RGBA8 image buffer with provided data"))?,
+			),
+			_ => bail!("Unsupported channel count: {}", channel_count),
+		})
 	}
 
 	fn to_blob(&self, format: TileFormat) -> Result<Blob> {

@@ -1,4 +1,5 @@
 mod csv;
+pub mod mock_image_source;
 pub mod mock_vector_source;
 mod tile_image;
 mod tile_vector;

@@ -321,7 +321,7 @@ mod tests {
 		let operation = factory
 			.operation_from_vpl(
 				&[
-					"from_container filename=dummy |",
+					"from_container filename=dummy.pbf |",
 					"vectortiles_update_properties",
 					&format!(
 						"data_source_path=\"{}\"",
@@ -350,7 +350,7 @@ mod tests {
 	async fn test_run_variation1() -> Result<()> {
 		assert_eq!(
 			run("x,data_id,false,false").await?, 
-			"{\"filename\": String(\"dummy\"), \"value\": String(\"test\"), \"x\": UInt(0), \"y\": UInt(0), \"z\": UInt(0)}"
+			"{\"filename\": String(\"dummy.pbf\"), \"value\": String(\"test\"), \"x\": UInt(0), \"y\": UInt(0), \"z\": UInt(0)}"
 		);
 		Ok(())
 	}
@@ -359,7 +359,7 @@ mod tests {
 	async fn test_run_variation2() -> Result<()> {
 		assert_eq!(
 			run("x,data_id,false,true").await?, 
-			"{\"data_id\": UInt(0), \"filename\": String(\"dummy\"), \"value\": String(\"test\"), \"x\": UInt(0), \"y\": UInt(0), \"z\": UInt(0)}"
+			"{\"data_id\": UInt(0), \"filename\": String(\"dummy.pbf\"), \"value\": String(\"test\"), \"x\": UInt(0), \"y\": UInt(0), \"z\": UInt(0)}"
 		);
 		Ok(())
 	}

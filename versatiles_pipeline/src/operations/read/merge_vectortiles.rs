@@ -181,7 +181,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"from_vectortiles_merged"
+		"merge_vectortiles"
 	}
 }
 
@@ -233,22 +233,22 @@ mod tests {
 			)
 		};
 
-		error("from_vectortiles_merged").await;
-		error("from_vectortiles_merged [ ]").await;
-		error("from_vectortiles_merged [ from_container filename=1 ]").await;
+		error("merge_vectortiles").await;
+		error("merge_vectortiles [ ]").await;
+		error("merge_vectortiles [ from_container filename=1.pbf ]").await;
 	}
 
 	#[tokio::test]
 	async fn test_operation_get_tile_data() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
-			.operation_from_vpl("from_vectortiles_merged [ from_container filename=1, from_container filename=2 ]")
+			.operation_from_vpl("merge_vectortiles [ from_container filename=1.pbf, from_container filename=2.pbf ]")
 			.await?;
 
 		let coord = TileCoord3::new(1, 2, 3)?;
 		let blob = result.get_tile_data(&coord).await?.unwrap();
 
-		assert_eq!(check_tile(&blob, &coord), "1,2");
+		assert_eq!(check_tile(&blob, &coord), "1.pbf,2.pbf");
 
 		Ok(())
 	}
@@ -258,9 +258,9 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
 			.operation_from_vpl(
-				r#"from_vectortiles_merged [
-					from_container filename="A" | filter_bbox bbox=[-180,-45,90,85],
-					from_container filename="B" | filter_bbox bbox=[-90,-85,180,45]
+				r#"merge_vectortiles [
+					from_container filename="A.pbf" | filter_bbox bbox=[-180,-45,90,85],
+					from_container filename="B.pbf" | filter_bbox bbox=[-90,-85,180,45]
 				]"#,
 			)
 			.await?;
@@ -271,9 +271,9 @@ mod tests {
 		assert_eq!(
 			arrange_tiles(tiles, |coord, blob| {
 				match check_tile(&blob, &coord).as_str() {
-					"A" => "🟦",
-					"B" => "🟨",
-					"A,B" => "🟩",
+					"A.pbf" => "🟦",
+					"B.pbf" => "🟨",
+					"A.pbf,B.pbf" => "🟩",
 					e => panic!("{}", e),
 				}
 			}),
@@ -299,7 +299,7 @@ mod tests {
 			Box::new(|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
 				Box::pin(async move {
 					let mut pyramide = TileBBoxPyramid::new_empty();
-					for c in filename.chars() {
+					for c in filename[0..filename.len() - 4].chars() {
 						pyramide.include_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?);
 					}
 					Ok(Box::new(MockVectorSource::new(
@@ -312,7 +312,7 @@ mod tests {
 
 		let result = factory
 			.operation_from_vpl(
-				r#"from_vectortiles_merged [ from_container filename="12", from_container filename="23" ]"#,
+				r#"merge_vectortiles [ from_container filename="12.pbf", from_container filename="23.pbf" ]"#,
 			)
 			.await?;
 

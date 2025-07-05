@@ -1,10 +1,10 @@
 use crate::{
-	helpers::mock_vector_source::MockVectorSource,
+	helpers::{mock_image_source::MockImageSource, mock_vector_source::MockVectorSource},
 	operations::{get_read_operation_factories, get_transform_operation_factories},
 	traits::{OperationTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
 	vpl::{parse_vpl, VPLNode, VPLPipeline},
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use futures::future::BoxFuture;
 use itertools::Itertools;
 use std::{
@@ -50,10 +50,15 @@ impl PipelineFactory {
 		let callback = Box::new(|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
 			Box::pin(async {
 				let filename = filename;
-				Ok(
-					Box::new(MockVectorSource::new(&[("mock", &[&[("filename", &filename)]])], None))
+				let extension = filename.split('.').next_back().unwrap().to_string();
+				Ok(match extension.as_str() {
+					"pbf" | "mvt" => Box::new(MockVectorSource::new(&[("mock", &[&[("filename", &filename)]])], None))
 						as Box<dyn TilesReaderTrait>,
-				)
+					"avif" | "png" | "jpg" | "jpeg" | "webp" => {
+						Box::new(MockImageSource::new(&filename, None).unwrap()) as Box<dyn TilesReaderTrait>
+					}
+					_ => bail!("unknown file extension '{}'", extension),
+				})
 			})
 		});
 		PipelineFactory::default(Path::new(""), callback)
