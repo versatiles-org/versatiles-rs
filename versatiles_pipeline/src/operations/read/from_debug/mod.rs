@@ -21,7 +21,7 @@ use versatiles_geometry::vector_tile::VectorTile;
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Produces debugging tiles, each showing their coordinates as text.
 struct Args {
-	/// tile format: "mvt", "jpg", "png" or "webp"
+	/// tile format: "mvt", "avif", "jpg", "png" or "webp"
 	format: String,
 }
 
@@ -51,6 +51,8 @@ impl Operation {
 				]}"#,
 			)?)?;
 		}
+
+		tilejson.update_from_reader_parameters(&parameters);
 
 		Ok(Box::new(Self { tilejson, parameters }) as Box<dyn OperationTrait>)
 	}
@@ -157,6 +159,7 @@ impl ReadOperationFactoryTrait for Factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	//use pretty_assertions::assert_eq;
 
 	async fn test(format: &str, len: u64, meta: &str) -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
@@ -187,21 +190,21 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_build_tile_png() {
-		test("png", 5207, "{\"tilejson\":\"3.0.0\"}").await.unwrap();
+		test("png", 5207, "{\"bounds\":[-180,-85.05112877980659,180,85.05112877980659],\"maxzoom\":31,\"minzoom\":0,\"tile_content\":\"raster\",\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\"}").await.unwrap();
 	}
 
 	#[tokio::test]
 	async fn test_build_tile_jpg() {
-		test("jpg", 11782, "{\"tilejson\":\"3.0.0\"}").await.unwrap();
+		test("jpg", 11782, "{\"bounds\":[-180,-85.05112877980659,180,85.05112877980659],\"maxzoom\":31,\"minzoom\":0,\"tile_content\":\"raster\",\"tile_format\":\"image/jpeg\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\"}").await.unwrap();
 	}
 
 	#[tokio::test]
 	async fn test_build_tile_webp() {
-		test("webp", 2656, "{\"tilejson\":\"3.0.0\"}").await.unwrap();
+		test("webp", 2656, "{\"bounds\":[-180,-85.05112877980659,180,85.05112877980659],\"maxzoom\":31,\"minzoom\":0,\"tile_content\":\"raster\",\"tile_format\":\"image/webp\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\"}").await.unwrap();
 	}
 
 	#[tokio::test]
 	async fn test_build_tile_vector() {
-		test("mvt", 1732, "{\"tilejson\":\"3.0.0\",\"vector_layers\":[{\"fields\":{},\"id\":\"background\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_x\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_y\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_z\",\"maxzoom\":30,\"minzoom\":0}]}").await.unwrap();
+		test("mvt", 1732, "{\"bounds\":[-180,-85.05112877980659,180,85.05112877980659],\"maxzoom\":31,\"minzoom\":0,\"tile_content\":\"vector\",\"tile_format\":\"vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tilejson\":\"3.0.0\",\"vector_layers\":[{\"fields\":{},\"id\":\"background\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_x\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_y\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_z\",\"maxzoom\":30,\"minzoom\":0}]}").await.unwrap();
 	}
 }

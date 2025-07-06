@@ -26,6 +26,7 @@
 //! assert_eq!(format, TileFormat::JPG);
 //! ```
 
+use super::TileType;
 use anyhow::{bail, Result};
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
@@ -271,6 +272,24 @@ impl TileFormat {
 			"webp" => TileFormat::WEBP,
 			_ => bail!("Unknown tile format: '{}'", value.trim()),
 		})
+	}
+
+	pub fn get_type(&self) -> TileType {
+		use TileFormat::*;
+		use TileType::*;
+		match self {
+			AVIF | PNG | JPG | WEBP => Raster,
+			MVT => Vector,
+			BIN | GEOJSON | JSON | SVG | TOPOJSON => Unknown,
+		}
+	}
+}
+
+impl TryFrom<&str> for TileFormat {
+	type Error = anyhow::Error;
+
+	fn try_from(value: &str) -> Result<Self> {
+		Self::try_from_str(value)
 	}
 }
 

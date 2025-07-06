@@ -17,6 +17,8 @@ use versatiles_geometry::vector_tile::VectorTile;
 struct Args {
 	/// All tile sources must have the same format.
 	sources: Vec<VPLPipeline>,
+	/// The tile format to use for the output tiles (default: format of the first source).
+	format: Option<TileFormat>,
 }
 
 #[derive(Debug)]
@@ -43,30 +45,31 @@ impl ReadOperationTrait for Operation {
 
 			ensure!(sources.len() > 1, "must have at least two sources");
 
-			let mut meta = TileJSON::default();
+			let mut tilejson = TileJSON::default();
 			let parameters = sources.first().unwrap().get_parameters();
-			let mut pyramid = parameters.bbox_pyramid.clone();
-			let tile_format = parameters.tile_format;
-			let mut tile_compression = parameters.tile_compression;
+			let tile_format = args.format.unwrap_or(parameters.tile_format);
+			let tile_compression = parameters.tile_compression;
+			let tile_type = tile_format.get_type();
+
+			let mut pyramid = TileBBoxPyramid::new_empty();
 
 			for source in sources.iter() {
-				meta.merge(source.get_tilejson())?;
+				tilejson.merge(source.get_tilejson())?;
 
 				let parameters = source.get_parameters();
 				pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
+
 				ensure!(
-					parameters.tile_format == tile_format,
-					"all sources must have the same tile format"
+					parameters.tile_format.get_type() == tile_type,
+					"all sources must have the same tile type (raster or vector)"
 				);
-				if parameters.tile_compression != tile_compression {
-					tile_compression = TileCompression::Uncompressed;
-				}
 			}
 
 			let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
+			tilejson.update_from_reader_parameters(&parameters);
 
 			Ok(Box::new(Self {
-				tilejson: meta,
+				tilejson,
 				parameters,
 				sources,
 			}) as Box<dyn OperationTrait>)

@@ -18,6 +18,8 @@ use versatiles_image::EnhancedDynamicImageTrait;
 struct Args {
 	/// All tile sources must provide vector tiles.
 	sources: Vec<VPLPipeline>,
+	/// The tile format to use for the output tiles (default: PNG).
+	format: Option<TileFormat>,
 }
 
 #[derive(Debug)]
@@ -58,28 +60,29 @@ impl ReadOperationTrait for Operation {
 
 			ensure!(sources.len() > 1, "must have at least two sources");
 
-			let mut meta = TileJSON::default();
-			let parameters = sources.first().unwrap().get_parameters();
-			let mut pyramid = parameters.bbox_pyramid.clone();
-			let tile_format = parameters.tile_format;
-			let tile_compression = TileCompression::Uncompressed;
+			let mut tilejson = TileJSON::default();
+			let first_parameters = sources.first().unwrap().get_parameters();
+			let tile_format = args.format.unwrap_or(TileFormat::PNG);
+			let tile_compression = first_parameters.tile_compression;
+			let mut pyramid = TileBBoxPyramid::new_empty();
 
 			for source in sources.iter() {
-				meta.merge(source.get_tilejson())?;
+				tilejson.merge(source.get_tilejson())?;
 
 				let parameters = source.get_parameters();
 				pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
 
-				match parameters.tile_format {
-					TileFormat::AVIF | TileFormat::PNG | TileFormat::JPG | TileFormat::WEBP => {}
-					_ => bail!("all sources must be image tiles"),
-				}
+				ensure!(
+					parameters.tile_format.get_type() == TileType::Raster,
+					"all sources must be raster tiles"
+				);
 			}
 
 			let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
+			tilejson.update_from_reader_parameters(&parameters);
 
 			Ok(Box::new(Self {
-				tilejson: meta,
+				tilejson,
 				parameters,
 				sources,
 			}) as Box<dyn OperationTrait>)

@@ -1,4 +1,4 @@
-use crate::{json::*, tilejson::tile_schema::TileJsonSchema};
+use crate::{json::*, types::TileSchema};
 use anyhow::{anyhow, ensure, Context, Result};
 use std::{collections::BTreeMap, fmt::Debug};
 
@@ -104,7 +104,7 @@ impl VectorLayers {
 		ids.iter().all(|id| self.0.contains_key(*id))
 	}
 
-	pub fn get_tile_schema(&self) -> TileJsonSchema {
+	pub fn get_tile_schema(&self) -> TileSchema {
 		if self.contains_ids(&[
 			"aerodrome_label",
 			"aeroway",
@@ -123,7 +123,7 @@ impl VectorLayers {
 			"water_name",
 			"waterway",
 		]) {
-			TileJsonSchema::VectorOpenMapTiles
+			TileSchema::VectorOpenMapTiles
 		} else if self.contains_ids(&[
 			"addresses",
 			"aerialways",
@@ -152,9 +152,9 @@ impl VectorLayers {
 			"water_polygons_labels",
 			"water_polygons",
 		]) {
-			TileJsonSchema::VectorShortbread1
+			TileSchema::VectorShortbread1
 		} else {
-			TileJsonSchema::VectorOther
+			TileSchema::VectorOther
 		}
 	}
 

@@ -33,8 +33,14 @@ pub use tile_coords::*;
 mod tile_format;
 pub use tile_format::*;
 
+mod tile_schema;
+pub use tile_schema::*;
+
 mod tile_stream;
 pub use tile_stream::*;
+
+mod tile_type;
+pub use tile_type::*;
 
 mod tiles_reader_parameters;
 pub use tiles_reader_parameters::*;

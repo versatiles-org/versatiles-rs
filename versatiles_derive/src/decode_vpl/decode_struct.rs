@@ -89,6 +89,10 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 					format!("* *`{field_str}`: [f64,f64,f64,f64] (optional)*{comment}"),
 					quote! { #field_name: node.get_property_number_array4::<f64>(#field_str)? },
 				),
+				"Option<TileFormat>" => (
+					format!("* *`{field_str}`: TileFormat (optional)*{comment}"),
+					quote! { #field_name: node.get_property_enum::<TileFormat>(#field_str)? },
+				),
 				_ => panic!("unknown type field: {field_type_str}"),
 			};
 			doc_fields.push(doc_field.trim().to_string());

@@ -92,6 +92,7 @@ itertools = { version = "0.14.0", default-features = false }
 lazy_static = { version = "1.5.0", default-features = false }
 log = { version = "0.4.27", default-features = false }
 num_cpus = { version = "1.17.0", default-features = false }
+pretty_assertions = "1.4.1"
 regex = { version = "1.11.1", default-features = false, features = [
 	"std",
 	"unicode-case",

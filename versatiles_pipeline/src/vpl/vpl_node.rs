@@ -33,6 +33,22 @@ impl VPLNode {
 		})
 	}
 
+	pub fn get_property_enum<'a, T>(&'a self, field: &str) -> Result<Option<T>>
+	where
+		T: TryFrom<&'a str>,
+		<T as TryFrom<&'a str>>::Error: std::fmt::Display + Send + Sync + 'static,
+	{
+		self.get_property(field)?.map_or(Ok(None), move |v| {
+			T::try_from(v).map(Some).map_err(|e| {
+				anyhow!(
+					"In operation '{}' the parameter '{field}' must be a valid enum value: {}",
+					self.name,
+					e
+				)
+			})
+		})
+	}
+
 	pub fn get_property_string(&self, field: &str) -> Result<Option<String>> {
 		Ok(self.get_property(field)?.map(|v| v.to_string()))
 	}

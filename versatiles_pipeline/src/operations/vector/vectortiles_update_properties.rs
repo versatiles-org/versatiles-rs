@@ -149,6 +149,7 @@ impl Operation {
 			let runner = Arc::new(Runner { args, properties_map });
 
 			parameters.tile_compression = TileCompression::Uncompressed;
+			tilejson.update_from_reader_parameters(&parameters);
 
 			Ok(Box::new(Self {
 				runner,
@@ -195,14 +196,15 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		if let Some(tile) = unpack_vector_tile(
+		let result = unpack_vector_tile(
 			self.source.get_tile_data(coord).await,
 			self.source.get_parameters().tile_format,
 			self.source.get_parameters().tile_compression,
-		)? {
+		)?;
+		if let Some(tile) = result {
 			self.runner.run(tile).map(Some)
 		} else {
-			return Ok(None);
+			Ok(None)
 		}
 	}
 

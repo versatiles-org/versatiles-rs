@@ -31,17 +31,10 @@
 //! # }
 //! ```
 
-mod tile_content;
-mod tile_format;
-mod tile_schema;
 mod value;
 mod vector_layer;
 
-use crate::{
-	json::*,
-	tilejson::{tile_content::TileJsonContent, tile_format::TileJsonFormat, tile_schema::TileJsonSchema},
-	types::*,
-};
+use crate::{json::*, types::*};
 use anyhow::{anyhow, ensure, Ok, Result};
 use regex::Regex;
 use std::fmt::Debug;
@@ -65,9 +58,9 @@ pub struct TileJSON {
 	pub values: TileJsonValues,
 	/// The collection of vector layers, if any.
 	pub vector_layers: VectorLayers,
-	pub tile_content: Option<TileJsonContent>,
-	pub tile_format: Option<TileJsonFormat>,
-	pub tile_schema: Option<TileJsonSchema>,
+	pub tile_content: Option<TileType>,
+	pub tile_format: Option<TileFormat>,
+	pub tile_schema: Option<TileSchema>,
 }
 
 impl TileJSON {
@@ -104,13 +97,13 @@ impl TileJSON {
 						VectorLayers::from_json(v).map_err(|e| anyhow!("Failed to parse 'vector_layers': {e}"))?;
 				}
 				"tile_content" => {
-					r.tile_content = Some(TileJsonContent::try_from(v.as_str()?)?);
+					r.tile_content = Some(TileType::try_from(v.as_str()?)?);
 				}
 				"tile_format" => {
-					r.tile_format = Some(TileJsonFormat::try_from(v.as_str()?)?);
+					r.tile_format = Some(TileFormat::try_from_mime(v.as_str()?)?);
 				}
 				"tile_schema" => {
-					r.tile_schema = Some(TileJsonSchema::try_from(v.as_str()?)?);
+					r.tile_schema = Some(TileSchema::try_from(v.as_str()?)?);
 				}
 				_ => {
 					// Everything else goes into `values`
@@ -146,7 +139,7 @@ impl TileJSON {
 		obj.set_optional("center", &self.center.map(|v| v.as_vec()));
 		obj.set_optional("vector_layers", &self.vector_layers.as_json_value_option());
 		obj.set_optional("tile_content", &self.tile_content.map(|v| v.to_string()));
-		obj.set_optional("tile_format", &self.tile_format.map(|v| v.to_string()));
+		obj.set_optional("tile_format", &self.tile_format.map(|v| v.as_mime_str().to_string()));
 		obj.set_optional("tile_schema", &self.tile_schema.map(|v| v.to_string()));
 		obj
 	}
@@ -336,25 +329,18 @@ impl TileJSON {
 	}
 
 	pub fn update_from_reader_parameters(&mut self, rp: &TilesReaderParameters) {
-		if let Some(bbox) = rp.bbox_pyramid.get_geo_bbox() {
-			self.limit_bbox(bbox);
-		}
-		if let Some(z) = rp.bbox_pyramid.get_zoom_min() {
-			self.limit_min_zoom(z);
-		}
-		if let Some(z) = rp.bbox_pyramid.get_zoom_max() {
-			self.limit_max_zoom(z);
-		}
+		self.update_from_pyramid(&rp.bbox_pyramid);
 
-		self.tile_format = Some(TileJsonFormat::from(rp.tile_format));
+		self.tile_format = Some(rp.tile_format);
 
-		self.tile_content = self.tile_format.and_then(|f| f.get_tile_content());
+		self.tile_content = self.tile_format.map(|f| f.get_type());
 
 		if let Some(tile_content) = self.tile_content {
-			if self.tile_schema.and_then(|s| s.get_tile_content()) != self.tile_content {
+			if self.tile_schema.map(|s| s.get_tile_content()) != self.tile_content {
 				self.tile_schema = Some(match tile_content {
-					TileJsonContent::Raster => TileJsonSchema::RasterRGB,
-					TileJsonContent::Vector => self.vector_layers.get_tile_schema(),
+					TileType::Raster => TileSchema::RasterRGB,
+					TileType::Vector => self.vector_layers.get_tile_schema(),
+					TileType::Unknown => TileSchema::Unknown,
 				});
 			}
 		}

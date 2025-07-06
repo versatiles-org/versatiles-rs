@@ -1,42 +1,46 @@
 use anyhow::bail;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TileJsonContent {
+pub enum TileType {
 	Raster,
 	Vector,
+	Unknown,
 }
 
-impl TileJsonContent {
-	/// Returns the content type as a string.
+impl TileType {
 	pub fn as_str(&self) -> &str {
+		use TileType::*;
 		match self {
-			TileJsonContent::Raster => "raster",
-			TileJsonContent::Vector => "vector",
+			Raster => "raster",
+			Vector => "vector",
+			Unknown => "unknown",
 		}
 	}
 
 	pub fn get_default_tile_schema(&self) -> Option<&'static str> {
-		use TileJsonContent::*;
+		use TileType::*;
 		match self {
 			Raster => Some("rgb"),
 			Vector => Some("other"),
+			Unknown => None,
 		}
 	}
 }
 
-impl std::fmt::Display for TileJsonContent {
+impl std::fmt::Display for TileType {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", self.as_str())
 	}
 }
 
-impl TryFrom<&str> for TileJsonContent {
+impl TryFrom<&str> for TileType {
 	type Error = anyhow::Error;
 
 	fn try_from(value: &str) -> Result<Self, Self::Error> {
 		match value {
-			"image" | "raster" => Ok(TileJsonContent::Raster),
-			"vector" => Ok(TileJsonContent::Vector),
+			"image" | "raster" => Ok(TileType::Raster),
+			"vector" => Ok(TileType::Vector),
+			"unknown" => Ok(TileType::Unknown),
 			_ => bail!("Invalid tile content type: {}", value),
 		}
 	}

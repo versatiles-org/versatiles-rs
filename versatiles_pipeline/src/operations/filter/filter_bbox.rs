@@ -49,7 +49,7 @@ impl Operation {
 			}
 
 			let mut tilejson = source.get_tilejson().clone();
-			tilejson.update_from_pyramid(&parameters.bbox_pyramid);
+			tilejson.update_from_reader_parameters(&parameters);
 
 			Ok(Box::new(Self {
 				parameters,
