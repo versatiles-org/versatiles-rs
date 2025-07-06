@@ -258,7 +258,7 @@ mod tests {
 
 		let reader = DirectoryTilesReader::open_path(&dir)?;
 
-		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[-90,66.51326044311185,-45,79.17133464081945],\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}");
+		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[-90,66.51326,-45,79.171335],\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}");
 
 		let tile_data = reader.get_tile_data(&TileCoord3::new(2, 1, 3)?).await?.unwrap();
 		assert_eq!(tile_data, Blob::from("test tile data"));
@@ -312,7 +312,7 @@ mod tests {
 		fs::write(dir.path().join("2/1/0.png"), "tile at 2/1/0").unwrap();
 
 		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
-		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[-90,66.51326044311185,0,85.05112877980659],\"maxzoom\":2,\"minzoom\":2,\"tilejson\":\"3.0.0\",\"type\":\"dummy data\"}");
+		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[-90,66.51326,0,85.051129],\"maxzoom\":2,\"minzoom\":2,\"tilejson\":\"3.0.0\",\"type\":\"dummy data\"}");
 
 		Ok(())
 	}
@@ -391,7 +391,7 @@ mod tests {
 			"DirectoryTilesReader { name: \"*\", parameters: TilesReaderParameters { bbox_pyramid: [3: [2,1,2,1] (1)], tile_compression: Brotli, tile_format: PNG } }"
 		);
 
-		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[-90,66.51326044311185,-45,79.17133464081945],\"key\":\"value\",\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\"}");
+		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[-90,66.51326,-45,79.171335],\"key\":\"value\",\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\"}");
 
 		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Brotli);
 		reader.override_compression(TileCompression::Gzip);

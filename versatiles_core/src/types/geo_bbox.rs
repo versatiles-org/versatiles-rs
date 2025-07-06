@@ -105,7 +105,7 @@ impl GeoBBox {
 	/// assert_eq!(bbox.as_string_json(), "[-10,-5,10,5]");
 	/// ```
 	pub fn as_string_json(&self) -> String {
-		format!("[{},{},{},{}]", self.0, self.1, self.2, self.3)
+		format!("[{}]", self.as_string_list())
 	}
 
 	/// Returns the bounding box as a string in the form `x_min, y_min, x_max, y_max`.

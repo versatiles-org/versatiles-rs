@@ -126,7 +126,7 @@ mod tests {
 		let container = TileSource::from(reader.boxed(), "prefix")?;
 
 		assert_eq!(container.prefix.str, "/tiles/prefix/");
-		assert_eq!(container.build_tile_json().await?.as_str(), "{\"bounds\":[-180,-79.17133464081944,45,66.51326044311185],\"maxzoom\":3,\"minzoom\":2,\"tile_content\":\"raster\",\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}");
+		assert_eq!(container.build_tile_json().await?.as_str(), "{\"bounds\":[-180,-79.171335,45,66.51326],\"maxzoom\":3,\"minzoom\":2,\"tile_content\":\"raster\",\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}");
 
 		Ok(())
 	}
@@ -192,7 +192,7 @@ mod tests {
 			String::from_utf8(
 				check_response(c, "meta.json", Uncompressed, "application/json").await?
 			)?,
-			"{\"bounds\":[-180,-79.17133464081944,45,66.51326044311185],\"maxzoom\":3,\"minzoom\":2,\"tile_content\":\"raster\",\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
+			"{\"bounds\":[-180,-79.171335,45,66.51326],\"maxzoom\":3,\"minzoom\":2,\"tile_content\":\"raster\",\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
 		);
 
 		assert!(check_error_400(c, "x/0/0.png", Uncompressed).await?);

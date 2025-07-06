@@ -134,9 +134,12 @@ impl TileJSON {
 			obj.set(&k, v);
 		}
 
+		let round = |x: &f64| (x * 1e6).round() / 1e6;
+		let round_vec = |x: &Vec<f64>| x.iter().map(round).collect::<Vec<_>>();
+
 		// Overwrite with known fields
-		obj.set_optional("bounds", &self.bounds.map(|v| v.as_vec()));
-		obj.set_optional("center", &self.center.map(|v| v.as_vec()));
+		obj.set_optional("bounds", &self.bounds.map(|v| round_vec(&v.as_vec())));
+		obj.set_optional("center", &self.center.map(|v| round_vec(&v.as_vec())));
 		obj.set_optional("vector_layers", &self.vector_layers.as_json_value_option());
 		obj.set_optional("tile_content", &self.tile_content.map(|v| v.to_string()));
 		obj.set_optional("tile_format", &self.tile_format.map(|v| v.as_mime_str().to_string()));
