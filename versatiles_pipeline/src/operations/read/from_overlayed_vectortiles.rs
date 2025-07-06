@@ -255,6 +255,22 @@ mod tests {
 
 		assert_eq!(check_tile(&blob, &coord), "1.pbf,2.pbf");
 
+		assert_eq!(
+			result.get_tilejson().as_pretty_lines(100),
+			[
+				"{",
+				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
+				"  \"maxzoom\": 8,",
+				"  \"minzoom\": 0,",
+				"  \"name\": \"mock vector source\",",
+				"  \"tile_content\": \"vector\",",
+				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
+				"  \"tile_schema\": \"other\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}"
+			]
+		);
+
 		Ok(())
 	}
 
@@ -264,8 +280,8 @@ mod tests {
 		let result = factory
 			.operation_from_vpl(
 				r#"merge_vectortiles [
-					from_container filename="A.pbf" | filter_bbox bbox=[-180,-45,90,85],
-					from_container filename="B.pbf" | filter_bbox bbox=[-90,-85,180,45]
+					from_container filename="A.pbf" | filter_bbox bbox=[-130,-20,20,70],
+					from_container filename="B.pbf" | filter_bbox bbox=[-20,-70,130,20]
 				]"#,
 			)
 			.await?;
@@ -283,14 +299,28 @@ mod tests {
 				}
 			}),
 			vec![
-				"🟦 🟦 🟦 🟦 🟦 🟦 ❌ ❌",
-				"🟦 🟦 🟦 🟦 🟦 🟦 ❌ ❌",
-				"🟦 🟦 🟩 🟩 🟩 🟩 🟨 🟨",
-				"🟦 🟦 🟩 🟩 🟩 🟩 🟨 🟨",
-				"🟦 🟦 🟩 🟩 🟩 🟩 🟨 🟨",
-				"🟦 🟦 🟩 🟩 🟩 🟩 🟨 🟨",
-				"❌ ❌ 🟨 🟨 🟨 🟨 🟨 🟨",
-				"❌ ❌ 🟨 🟨 🟨 🟨 🟨 🟨"
+				"🟦 🟦 🟦 🟦 ❌ ❌",
+				"🟦 🟦 🟦 🟦 ❌ ❌",
+				"🟦 🟦 🟩 🟩 🟨 🟨",
+				"🟦 🟦 🟩 🟩 🟨 🟨",
+				"❌ ❌ 🟨 🟨 🟨 🟨",
+				"❌ ❌ 🟨 🟨 🟨 🟨"
+			]
+		);
+
+		assert_eq!(
+			result.get_tilejson().as_pretty_lines(100),
+			[
+				"{",
+				"  \"bounds\": [ -130.78125, -70.140364, 130.78125, 70.140364 ],",
+				"  \"maxzoom\": 8,",
+				"  \"minzoom\": 0,",
+				"  \"name\": \"mock vector source\",",
+				"  \"tile_content\": \"vector\",",
+				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
+				"  \"tile_schema\": \"other\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}"
 			]
 		);
 
@@ -340,6 +370,22 @@ mod tests {
 				"level: {level}"
 			);
 		}
+
+		assert_eq!(
+			result.get_tilejson().as_pretty_lines(100),
+			[
+				"{",
+				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
+				"  \"maxzoom\": 3,",
+				"  \"minzoom\": 1,",
+				"  \"name\": \"mock vector source\",",
+				"  \"tile_content\": \"vector\",",
+				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
+				"  \"tile_schema\": \"other\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}"
+			]
+		);
 
 		Ok(())
 	}

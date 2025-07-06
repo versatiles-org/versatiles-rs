@@ -25,6 +25,7 @@ struct Args {
 struct Operation {
 	parameters: TilesReaderParameters,
 	reader: Box<dyn TilesReaderTrait>,
+	tilejson: TileJSON,
 }
 
 impl ReadOperationTrait for Operation {
@@ -36,8 +37,14 @@ impl ReadOperationTrait for Operation {
 			let args = Args::from_vpl_node(&vpl_node)?;
 			let reader = factory.get_reader(&factory.resolve_filename(&args.filename)).await?;
 			let parameters = reader.get_parameters().clone();
+			let mut tilejson = reader.get_tilejson().clone();
+			tilejson.update_from_reader_parameters(&parameters);
 
-			Ok(Box::new(Self { parameters, reader }) as Box<dyn OperationTrait>)
+			Ok(Box::new(Self {
+				tilejson,
+				parameters,
+				reader,
+			}) as Box<dyn OperationTrait>)
 		})
 	}
 }
@@ -49,7 +56,7 @@ impl OperationTrait for Operation {
 	}
 
 	fn get_tilejson(&self) -> &TileJSON {
-		self.reader.get_tilejson()
+		&self.tilejson
 	}
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		self.reader.get_tile_data(coord).await
@@ -115,15 +122,89 @@ mod tests {
 	use super::*;
 
 	#[tokio::test]
-	async fn test() -> Result<()> {
+	async fn test_vector() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let operation = factory
-			.operation_from_vpl("from_container filename=\"test.pbf\"")
+			.operation_from_vpl("from_container filename=\"test.mvt\"")
 			.await?;
 
 		assert_eq!(
-			&operation.get_tilejson().as_string(),
-			"{\"tilejson\":\"3.0.0\",\"type\":\"mock vector source\"}"
+			operation
+				.get_tilejson()
+				.as_pretty_lines(10)
+				.iter()
+				.map(|s| s.as_str())
+				.collect::<Vec<_>>(),
+			[
+				"{",
+				"  \"bounds\": [",
+				"    -180,",
+				"    -85.051129,",
+				"    180,",
+				"    85.051129",
+				"  ],",
+				"  \"maxzoom\": 8,",
+				"  \"minzoom\": 0,",
+				"  \"name\": \"mock vector source\",",
+				"  \"tile_content\": \"vector\",",
+				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
+				"  \"tile_schema\": \"other\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}"
+			]
+		);
+
+		let coord = TileCoord3 { x: 2, y: 3, z: 4 };
+		let blob = operation.get_tile_data(&coord).await?.unwrap();
+
+		assert!(blob.len() > 50);
+
+		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await?;
+
+		let mut n = 0;
+		while let Some((coord, blob)) = stream.next().await {
+			assert!(blob.len() > 50);
+			assert!(coord.x >= 1 && coord.x <= 2);
+			assert!(coord.y >= 1 && coord.y <= 3);
+			assert_eq!(coord.z, 3);
+			n += 1;
+		}
+		assert_eq!(n, 6);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_raster() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let operation = factory
+			.operation_from_vpl("from_container filename=\"abc.png\"")
+			.await?;
+
+		assert_eq!(
+			operation
+				.get_tilejson()
+				.as_pretty_lines(10)
+				.iter()
+				.map(|s| s.as_str())
+				.collect::<Vec<_>>(),
+			[
+				"{",
+				"  \"bounds\": [",
+				"    -180,",
+				"    -85.051129,",
+				"    180,",
+				"    85.051129",
+				"  ],",
+				"  \"maxzoom\": 8,",
+				"  \"minzoom\": 0,",
+				"  \"name\": \"mock raster source\",",
+				"  \"tile_content\": \"raster\",",
+				"  \"tile_format\": \"image/png\",",
+				"  \"tile_schema\": \"rgb\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}"
+			]
 		);
 
 		let coord = TileCoord3 { x: 2, y: 3, z: 4 };

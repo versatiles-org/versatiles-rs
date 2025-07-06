@@ -246,6 +246,22 @@ mod tests {
 
 		assert_eq!(check_tile(&blob, &coord)?, "1");
 
+		assert_eq!(
+			result.get_tilejson().as_pretty_lines(100),
+			[
+				"{",
+				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
+				"  \"maxzoom\": 8,",
+				"  \"minzoom\": 0,",
+				"  \"name\": \"mock vector source\",",
+				"  \"tile_content\": \"vector\",",
+				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
+				"  \"tile_schema\": \"other\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}"
+			]
+		);
+
 		Ok(())
 	}
 
@@ -256,8 +272,8 @@ mod tests {
 			.operation_from_vpl(
 				&[
 					"from_overlayed [",
-					"   from_container filename=\"🟦.pbf\" | filter_bbox bbox=[-180,-20,20,85],",
-					"   from_container filename=\"🟨.pbf\" | filter_bbox bbox=[-20,-85,180,20]",
+					"   from_container filename=\"🟦.pbf\" | filter_bbox bbox=[-130,-20,20,70],",
+					"   from_container filename=\"🟨.pbf\" | filter_bbox bbox=[-20,-70,130,20]",
 					"]",
 				]
 				.join(""),
@@ -270,14 +286,28 @@ mod tests {
 		assert_eq!(
 			arrange_tiles(tiles, |coord, blob| check_tile(&blob, &coord).unwrap()),
 			vec![
-				"🟦 🟦 🟦 🟦 🟦 ❌ ❌ ❌",
-				"🟦 🟦 🟦 🟦 🟦 ❌ ❌ ❌",
-				"🟦 🟦 🟦 🟦 🟦 ❌ ❌ ❌",
-				"🟦 🟦 🟦 🟦 🟦 🟨 🟨 🟨",
-				"🟦 🟦 🟦 🟦 🟦 🟨 🟨 🟨",
-				"❌ ❌ ❌ 🟨 🟨 🟨 🟨 🟨",
-				"❌ ❌ ❌ 🟨 🟨 🟨 🟨 🟨",
-				"❌ ❌ ❌ 🟨 🟨 🟨 🟨 🟨"
+				"🟦 🟦 🟦 🟦 ❌ ❌",
+				"🟦 🟦 🟦 🟦 ❌ ❌",
+				"🟦 🟦 🟦 🟦 🟨 🟨",
+				"🟦 🟦 🟦 🟦 🟨 🟨",
+				"❌ ❌ 🟨 🟨 🟨 🟨",
+				"❌ ❌ 🟨 🟨 🟨 🟨"
+			]
+		);
+
+		assert_eq!(
+			result.get_tilejson().as_pretty_lines(100),
+			[
+				"{",
+				"  \"bounds\": [ -130.78125, -70.140364, 130.78125, 70.140364 ],",
+				"  \"maxzoom\": 8,",
+				"  \"minzoom\": 0,",
+				"  \"name\": \"mock vector source\",",
+				"  \"tile_content\": \"vector\",",
+				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
+				"  \"tile_schema\": \"other\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}"
 			]
 		);
 

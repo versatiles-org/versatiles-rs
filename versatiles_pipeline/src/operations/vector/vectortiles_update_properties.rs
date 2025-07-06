@@ -249,6 +249,7 @@ impl TransformOperationFactoryTrait for Factory {
 mod tests {
 	use super::*;
 	use assert_fs::NamedTempFile;
+	use pretty_assertions::assert_eq;
 	use std::{fs::File, io::Write};
 	use versatiles_geometry::{vector_tile::VectorTileLayer, GeoFeature, GeoProperties, GeoValue, Geometry};
 
@@ -305,7 +306,7 @@ mod tests {
 		assert!(args.include_id);
 	}
 
-	async fn run(input: &str) -> Result<String> {
+	async fn run_test(input: &str) -> Result<String> {
 		let temp_file = NamedTempFile::new("test.csv")?;
 		let mut file = File::create(&temp_file)?;
 		writeln!(&mut file, "data_id,value\n0,test")?;
@@ -345,39 +346,92 @@ mod tests {
 		assert_eq!(tile.layers.len(), 1);
 		assert_eq!(tile.layers[0].features.len(), 1);
 		let properties = tile.layers[0].features[0].decode_properties(&tile.layers[0])?;
-		Ok(format!("{properties:?}"))
+		let mut vec = operation.get_tilejson().as_pretty_lines(100);
+		vec.insert(0, format!("{properties:?}"));
+		Ok(vec.join("\n"))
 	}
 
 	#[tokio::test]
-	async fn test_run_variation1() -> Result<()> {
+	async fn test_run_variation1() {
 		assert_eq!(
-			run("x,data_id,false,false").await?, 
-			"{\"filename\": String(\"dummy.pbf\"), \"value\": String(\"test\"), \"x\": UInt(0), \"y\": UInt(0), \"z\": UInt(0)}"
+			run_test("x,data_id,false,false").await.unwrap().split("\n").collect::<Vec<_>>(),
+			["{\"filename\": String(\"dummy.pbf\"), \"value\": String(\"test\"), \"x\": UInt(0), \"y\": UInt(0), \"z\": UInt(0)}", 
+			"{",
+			"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
+			"  \"maxzoom\": 8,",
+			"  \"minzoom\": 0,",
+			"  \"name\": \"mock vector source\",",
+			"  \"tile_content\": \"vector\",",
+			"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
+			"  \"tile_schema\": \"other\",",
+			"  \"tilejson\": \"3.0.0\"",
+			"}"]
 		);
-		Ok(())
 	}
 
 	#[tokio::test]
-	async fn test_run_variation2() -> Result<()> {
+	async fn test_run_variation2() {
 		assert_eq!(
-			run("x,data_id,false,true").await?, 
-			"{\"data_id\": UInt(0), \"filename\": String(\"dummy.pbf\"), \"value\": String(\"test\"), \"x\": UInt(0), \"y\": UInt(0), \"z\": UInt(0)}"
+			run_test("x,data_id,false,true").await.unwrap().split("\n").collect::<Vec<_>>(),
+			["{\"data_id\": UInt(0), \"filename\": String(\"dummy.pbf\"), \"value\": String(\"test\"), \"x\": UInt(0), \"y\": UInt(0), \"z\": UInt(0)}", 
+			"{",
+			"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
+			"  \"maxzoom\": 8,",
+			"  \"minzoom\": 0,",
+			"  \"name\": \"mock vector source\",",
+			"  \"tile_content\": \"vector\",",
+			"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
+			"  \"tile_schema\": \"other\",",
+			"  \"tilejson\": \"3.0.0\"",
+			"}"]
 		);
-		Ok(())
 	}
 
 	#[tokio::test]
-	async fn test_run_variation3() -> Result<()> {
-		assert_eq!(run("x,data_id,true,false").await?, "{\"value\": String(\"test\")}");
-		Ok(())
-	}
-
-	#[tokio::test]
-	async fn test_run_variation4() -> Result<()> {
+	async fn test_run_variation3() {
 		assert_eq!(
-			run("x,data_id,true,true").await?,
-			"{\"data_id\": UInt(0), \"value\": String(\"test\")}"
+			run_test("x,data_id,true,false")
+				.await
+				.unwrap()
+				.split("\n")
+				.collect::<Vec<_>>(),
+			[
+				"{\"value\": String(\"test\")}",
+				"{",
+				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
+				"  \"maxzoom\": 8,",
+				"  \"minzoom\": 0,",
+				"  \"name\": \"mock vector source\",",
+				"  \"tile_content\": \"vector\",",
+				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
+				"  \"tile_schema\": \"other\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}"
+			]
 		);
-		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_run_variation4() {
+		assert_eq!(
+			run_test("x,data_id,true,true")
+				.await
+				.unwrap()
+				.split("\n")
+				.collect::<Vec<_>>(),
+			[
+				"{\"data_id\": UInt(0), \"value\": String(\"test\")}",
+				"{",
+				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
+				"  \"maxzoom\": 8,",
+				"  \"minzoom\": 0,",
+				"  \"name\": \"mock vector source\",",
+				"  \"tile_content\": \"vector\",",
+				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
+				"  \"tile_schema\": \"other\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}"
+			]
+		);
 	}
 }

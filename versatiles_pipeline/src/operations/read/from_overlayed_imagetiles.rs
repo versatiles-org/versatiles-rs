@@ -238,6 +238,21 @@ mod tests {
 		let blob = result.get_tile_data(&coord).await?.unwrap();
 
 		assert_eq!(get_color(&blob), "A6B6");
+		assert_eq!(
+			result.get_tilejson().as_pretty_lines(100),
+			[
+				"{",
+				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
+				"  \"maxzoom\": 8,",
+				"  \"minzoom\": 0,",
+				"  \"name\": \"mock raster source\",",
+				"  \"tile_content\": \"raster\",",
+				"  \"tile_format\": \"image/png\",",
+				"  \"tile_schema\": \"rgb\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}"
+			]
+		);
 
 		Ok(())
 	}
@@ -248,8 +263,8 @@ mod tests {
 		let result = factory
 			.operation_from_vpl(
 				r#"merge_imagetiles [
-					from_container filename="00F7.png" | filter_bbox bbox=[-180,-45,90,85],
-					from_container filename="FF07.png" | filter_bbox bbox=[-90,-85,180,45]
+					from_container filename="00F7.png" | filter_bbox bbox=[-130,-20,20,70],
+					from_container filename="FF07.png" | filter_bbox bbox=[-20,-70,130,20]
 				]"#,
 			)
 			.await?;
@@ -268,14 +283,28 @@ mod tests {
 				.to_string()
 			}),
 			vec![
-				"🟦 🟦 🟦 🟦 🟦 🟦 ❌ ❌",
-				"🟦 🟦 🟦 🟦 🟦 🟦 ❌ ❌",
-				"🟦 🟦 🟩 🟩 🟩 🟩 🟨 🟨",
-				"🟦 🟦 🟩 🟩 🟩 🟩 🟨 🟨",
-				"🟦 🟦 🟩 🟩 🟩 🟩 🟨 🟨",
-				"🟦 🟦 🟩 🟩 🟩 🟩 🟨 🟨",
-				"❌ ❌ 🟨 🟨 🟨 🟨 🟨 🟨",
-				"❌ ❌ 🟨 🟨 🟨 🟨 🟨 🟨"
+				"🟦 🟦 🟦 🟦 ❌ ❌",
+				"🟦 🟦 🟦 🟦 ❌ ❌",
+				"🟦 🟦 🟩 🟩 🟨 🟨",
+				"🟦 🟦 🟩 🟩 🟨 🟨",
+				"❌ ❌ 🟨 🟨 🟨 🟨",
+				"❌ ❌ 🟨 🟨 🟨 🟨"
+			]
+		);
+
+		assert_eq!(
+			result.get_tilejson().as_pretty_lines(100),
+			[
+				"{",
+				"  \"bounds\": [ -130.78125, -70.140364, 130.78125, 70.140364 ],",
+				"  \"maxzoom\": 8,",
+				"  \"minzoom\": 0,",
+				"  \"name\": \"mock raster source\",",
+				"  \"tile_content\": \"raster\",",
+				"  \"tile_format\": \"image/png\",",
+				"  \"tile_schema\": \"rgb\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}"
 			]
 		);
 
@@ -322,6 +351,22 @@ mod tests {
 				"level: {level}"
 			);
 		}
+
+		assert_eq!(
+			result.get_tilejson().as_pretty_lines(100),
+			[
+				"{",
+				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
+				"  \"maxzoom\": 3,",
+				"  \"minzoom\": 1,",
+				"  \"name\": \"mock raster source\",",
+				"  \"tile_content\": \"raster\",",
+				"  \"tile_format\": \"image/png\",",
+				"  \"tile_schema\": \"rgb\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}"
+			]
+		);
 
 		Ok(())
 	}

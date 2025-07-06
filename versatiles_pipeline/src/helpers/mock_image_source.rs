@@ -1,4 +1,4 @@
-use anyhow::{bail, ensure, Result};
+use anyhow::{bail, ensure, Context, Result};
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use nom::Input;
@@ -30,10 +30,15 @@ impl MockImageSource {
 			_ => bail!("unknown file extension '{}'", parts[1]),
 		};
 
-		let pixel = parts[0]
+		let pixel: Result<Vec<u8>> = parts[0]
 			.iter_elements()
-			.map(|c| u8::from_str_radix(&c.to_string(), 16).unwrap() * 17)
-			.collect::<Vec<_>>();
+			.map(|c| {
+				u8::from_str_radix(&c.to_string(), 16)
+					.map(|v| v * 17)
+					.map_err(anyhow::Error::from)
+			})
+			.collect();
+		let pixel = pixel.with_context(|| format!("trying to parse filename '{}' as pixel value", parts[0]))?;
 		let raw = Vec::from_iter(std::iter::repeat_n(pixel, 16).flatten());
 
 		let image = DynamicImage::from_raw(4, 4, raw)?;
@@ -46,7 +51,8 @@ impl MockImageSource {
 		);
 
 		let mut tilejson = TileJSON::default();
-		tilejson.set_string("type", "mock vector source").unwrap();
+		tilejson.set_string("name", "mock raster source").unwrap();
+		tilejson.update_from_reader_parameters(&parameters);
 
 		Ok(MockImageSource {
 			image,
@@ -103,4 +109,76 @@ pub fn arrange_tiles(tiles: Vec<(TileCoord3, Blob)>, cb: impl Fn(Blob) -> String
 		result[y][x] = cb(blob);
 	}
 	result.into_iter().map(|r| r.join(" ")).collect::<Vec<String>>()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_mock_image_source_creation_valid_filename() {
+		assert!(MockImageSource::new("abcd.png", None).is_ok());
+	}
+
+	#[test]
+	fn test_mock_image_source_creation_invalid_filename_extension() {
+		assert!(MockImageSource::new("abcd.xyz", None).is_err());
+	}
+
+	#[test]
+	fn test_mock_image_source_creation_invalid_filename_length() {
+		assert!(MockImageSource::new("abcdef.png", None).is_err());
+	}
+
+	#[tokio::test]
+	async fn test_mock_image_source_get_tile_data() {
+		let source = MockImageSource::new(
+			"abcd.png",
+			Some(TileBBoxPyramid::from_geo_bbox(0, 8, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
+		)
+		.unwrap();
+		let tile_data = source
+			.get_tile_data(&TileCoord3::new(0, 255, 8).unwrap())
+			.await
+			.unwrap();
+		assert!(tile_data.is_some());
+
+		let tile_data = source.get_tile_data(&TileCoord3::new(0, 0, 8).unwrap()).await.unwrap();
+		assert!(tile_data.is_none());
+	}
+
+	#[tokio::test]
+	async fn test_mock_image_source_get_tilejson() {
+		let source = MockImageSource::new(
+			"abcd.png",
+			Some(TileBBoxPyramid::from_geo_bbox(3, 15, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
+		)
+		.unwrap();
+		assert_eq!(
+			source.get_tilejson().as_pretty_lines(100),
+			[
+				"{",
+				"  \"bounds\": [ -180, -85.051129, 0, 0 ],",
+				"  \"maxzoom\": 15,",
+				"  \"minzoom\": 3,",
+				"  \"name\": \"mock raster source\",",
+				"  \"tile_content\": \"raster\",",
+				"  \"tile_format\": \"image/png\",",
+				"  \"tile_schema\": \"rgb\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}"
+			]
+		);
+	}
+
+	#[test]
+	fn test_arrange_tiles() {
+		let tiles = vec![
+			(TileCoord3::new(0, 0, 1).unwrap(), Blob::from("a")),
+			(TileCoord3::new(1, 0, 1).unwrap(), Blob::from("b")),
+			(TileCoord3::new(0, 1, 1).unwrap(), Blob::from("c")),
+		];
+		let arranged = arrange_tiles(tiles, |blob| blob.as_str().to_string());
+		assert_eq!(arranged, ["a b", "c ❌"]);
+	}
 }

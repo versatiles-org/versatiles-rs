@@ -161,7 +161,7 @@ mod tests {
 	use super::*;
 	//use pretty_assertions::assert_eq;
 
-	async fn test(format: &str, len: u64, meta: &str) -> Result<()> {
+	async fn test(format: &str, len: u64, tilejson: &[&str]) -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let operation = factory
 			.operation_from_vpl(&format!("from_debug format={format}"))
@@ -171,7 +171,11 @@ mod tests {
 		let blob = operation.get_tile_data(&coord).await?.unwrap();
 
 		assert_eq!(blob.len(), len, "for '{format}'");
-		assert_eq!(operation.get_tilejson().as_string(), meta, "for '{format}'");
+		assert_eq!(
+			operation.get_tilejson().as_pretty_lines(100),
+			tilejson,
+			"for '{format}'"
+		);
 
 		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await?;
 
@@ -190,21 +194,91 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_build_tile_png() {
-		test("png", 5207, "{\"bounds\":[-180,-85.05112877980659,180,85.05112877980659],\"maxzoom\":31,\"minzoom\":0,\"tile_content\":\"raster\",\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\"}").await.unwrap();
+		test(
+			"png",
+			5207,
+			&[
+				"{",
+				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
+				"  \"maxzoom\": 31,",
+				"  \"minzoom\": 0,",
+				"  \"tile_content\": \"raster\",",
+				"  \"tile_format\": \"image/png\",",
+				"  \"tile_schema\": \"rgb\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}",
+			],
+		)
+		.await
+		.unwrap();
 	}
 
 	#[tokio::test]
 	async fn test_build_tile_jpg() {
-		test("jpg", 11782, "{\"bounds\":[-180,-85.05112877980659,180,85.05112877980659],\"maxzoom\":31,\"minzoom\":0,\"tile_content\":\"raster\",\"tile_format\":\"image/jpeg\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\"}").await.unwrap();
+		test(
+			"jpg",
+			11782,
+			&[
+				"{",
+				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
+				"  \"maxzoom\": 31,",
+				"  \"minzoom\": 0,",
+				"  \"tile_content\": \"raster\",",
+				"  \"tile_format\": \"image/jpeg\",",
+				"  \"tile_schema\": \"rgb\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}",
+			],
+		)
+		.await
+		.unwrap();
 	}
 
 	#[tokio::test]
 	async fn test_build_tile_webp() {
-		test("webp", 2656, "{\"bounds\":[-180,-85.05112877980659,180,85.05112877980659],\"maxzoom\":31,\"minzoom\":0,\"tile_content\":\"raster\",\"tile_format\":\"image/webp\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\"}").await.unwrap();
+		test(
+			"webp",
+			2656,
+			&[
+				"{",
+				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
+				"  \"maxzoom\": 31,",
+				"  \"minzoom\": 0,",
+				"  \"tile_content\": \"raster\",",
+				"  \"tile_format\": \"image/webp\",",
+				"  \"tile_schema\": \"rgb\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}",
+			],
+		)
+		.await
+		.unwrap();
 	}
 
 	#[tokio::test]
 	async fn test_build_tile_vector() {
-		test("mvt", 1732, "{\"bounds\":[-180,-85.05112877980659,180,85.05112877980659],\"maxzoom\":31,\"minzoom\":0,\"tile_content\":\"vector\",\"tile_format\":\"vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tilejson\":\"3.0.0\",\"vector_layers\":[{\"fields\":{},\"id\":\"background\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_x\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_y\",\"maxzoom\":30,\"minzoom\":0},{\"fields\":{},\"id\":\"debug_z\",\"maxzoom\":30,\"minzoom\":0}]}").await.unwrap();
+		test(
+			"mvt",
+			1732,
+			&[
+				"{",
+				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
+				"  \"maxzoom\": 31,",
+				"  \"minzoom\": 0,",
+				"  \"tile_content\": \"vector\",",
+				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
+				"  \"tile_schema\": \"other\",",
+				"  \"tilejson\": \"3.0.0\",",
+				"  \"vector_layers\": [",
+				"    { \"fields\": {  }, \"id\": \"background\", \"maxzoom\": 30, \"minzoom\": 0 },",
+				"    { \"fields\": {  }, \"id\": \"debug_x\", \"maxzoom\": 30, \"minzoom\": 0 },",
+				"    { \"fields\": {  }, \"id\": \"debug_y\", \"maxzoom\": 30, \"minzoom\": 0 },",
+				"    { \"fields\": {  }, \"id\": \"debug_z\", \"maxzoom\": 30, \"minzoom\": 0 }",
+				"  ]",
+				"}",
+			],
+		)
+		.await
+		.unwrap();
 	}
 }

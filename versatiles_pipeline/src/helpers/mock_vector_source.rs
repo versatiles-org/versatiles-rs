@@ -42,7 +42,8 @@ impl MockVectorSource {
 		);
 
 		let mut tilejson = TileJSON::default();
-		tilejson.set_string("type", "mock vector source").unwrap();
+		tilejson.set_string("name", "mock vector source").unwrap();
+		tilejson.update_from_reader_parameters(&parameters);
 
 		MockVectorSource {
 			data,
@@ -125,4 +126,69 @@ pub fn arrange_tiles<T: ToString>(tiles: Vec<(TileCoord3, Blob)>, cb: impl Fn(Ti
 		result[y][x] = cb(coord, blob).to_string();
 	}
 	result.into_iter().map(|r| r.join(" ")).collect::<Vec<String>>()
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[tokio::test]
+	async fn test_get_tile_data() {
+		let source = MockVectorSource::new(
+			&[("layer1", &[&[("key1", "value1"), ("key2", "value2")]])],
+			Some(TileBBoxPyramid::from_geo_bbox(0, 8, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
+		);
+
+		assert_eq!(source.get_source_name(), "MockVectorSource");
+		assert_eq!(source.get_container_name(), "MockVectorSource");
+		assert!(source
+			.get_parameters()
+			.bbox_pyramid
+			.contains_coord(&TileCoord3::new(0, 200, 8).unwrap()));
+
+		let coord = TileCoord3::new(0, 150, 8).unwrap();
+		let tile_data = source.get_tile_data(&coord).await.unwrap();
+
+		assert!(tile_data.is_some());
+
+		let coord = TileCoord3::new(100, 100, 8).unwrap();
+		let tile_data = source.get_tile_data(&coord).await.unwrap();
+
+		assert!(tile_data.is_none());
+	}
+
+	#[test]
+	fn test_arrange_tiles() {
+		let tiles = vec![
+			(TileCoord3::new(0, 0, 8).unwrap(), Blob::from("a")),
+			(TileCoord3::new(1, 0, 8).unwrap(), Blob::from("b")),
+			(TileCoord3::new(0, 1, 8).unwrap(), Blob::from("c")),
+		];
+
+		let arranged = arrange_tiles(tiles, |_coord, blob| blob.as_str().to_string());
+		assert_eq!(arranged, ["a b", "c ❌"]);
+	}
+
+	#[test]
+	fn test_mock_vector_source_get_tilejson() {
+		let source = MockVectorSource::new(
+			&[("layer1", &[&[("key1", "value1")]])],
+			Some(TileBBoxPyramid::from_geo_bbox(3, 15, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
+		);
+		assert_eq!(
+			source.get_tilejson().as_pretty_lines(100),
+			[
+				"{",
+				"  \"bounds\": [ -180, -85.051129, 0, 0 ],",
+				"  \"maxzoom\": 15,",
+				"  \"minzoom\": 3,",
+				"  \"name\": \"mock vector source\",",
+				"  \"tile_content\": \"vector\",",
+				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
+				"  \"tile_schema\": \"other\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}"
+			]
+		);
+	}
 }
