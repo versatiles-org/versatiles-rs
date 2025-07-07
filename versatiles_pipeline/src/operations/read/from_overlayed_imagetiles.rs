@@ -1,3 +1,14 @@
+//! # from_overlayed_imagetiles operation
+//!
+//! Combines *multiple* raster tile sources by **alpha‑blending** the tiles for
+//! each coordinate.  
+//!  
+//! * Sources are evaluated **in the order given** – later sources overlay
+//!   earlier ones.  
+//! * Every source **must** produce raster tiles in the *same* resolution.  
+//!
+//! This file contains both the [`Args`] struct used by the VPL parser and the
+//! [`Operation`] implementation that performs the blending.
 use crate::{
 	helpers::{pack_image_tile, pack_image_tile_stream},
 	operations::read::traits::ReadOperationTrait,
@@ -14,14 +25,19 @@ use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::EnhancedDynamicImageTrait;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Merges multiple vector tile sources. Each layer will contain all features from the same layer of all sources.
+/// Overlays multiple raster tile sources on top of each other.
 struct Args {
-	/// All tile sources must provide vector tiles.
+	/// All tile sources must provide raster tiles in the same resolution.
 	sources: Vec<VPLPipeline>,
+
 	/// The tile format to use for the output tiles (default: PNG).
 	format: Option<TileFormat>,
 }
 
+/// [`OperationTrait`] implementation that overlays raster tiles “on the fly.”
+///
+/// * Caches only metadata (`TileJSON`, `TilesReaderParameters`).  
+/// * Performs no disk I/O itself; all data come from the child pipelines.
 #[derive(Debug)]
 struct Operation {
 	parameters: TilesReaderParameters,
@@ -29,6 +45,9 @@ struct Operation {
 	tilejson: TileJSON,
 }
 
+/// Blend a list of equally‑sized tiles using *source‑over* compositing.
+///
+/// Returns `Ok(None)` when the input list is empty.
 fn overlay_image_tiles(tiles: Vec<DynamicImage>) -> Result<Option<DynamicImage>> {
 	let mut image = Option::<DynamicImage>::None;
 	for tile in tiles.into_iter() {
@@ -92,30 +111,37 @@ impl ReadOperationTrait for Operation {
 
 #[async_trait]
 impl OperationTrait for Operation {
+	/// Reader parameters (format, compression, pyramid) for the *blended* result.
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
+	/// Combined `TileJSON` derived from all sources.
 	fn get_tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
+	/// Convenience wrapper: returns a packed raster tile at `coord`.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		pack_image_tile(self.get_image_data(coord).await, &self.parameters)
 	}
 
+	/// Stream packed raster tiles intersecting `bbox`.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters)
 	}
 
+	/// Always errors – vector output is not supported.
 	async fn get_vector_data(&self, _coord: &TileCoord3) -> Result<Option<VectorTile>> {
 		bail!("this operation does not support vector data");
 	}
 
+	/// Always errors – vector output is not supported.
 	async fn get_vector_stream(&self, _bbox: TileBBox) -> Result<TileStream<VectorTile>> {
 		bail!("this operation does not support vector data");
 	}
 
+	/// Blend the raster tiles for a single coordinate across all sources.
 	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
 		let mut images: Vec<DynamicImage> = vec![];
 		for source in self.sources.iter() {
@@ -132,6 +158,7 @@ impl OperationTrait for Operation {
 		}
 	}
 
+	/// Stream blended raster tiles for every coordinate inside `bbox`.
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
@@ -180,7 +207,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"merge_imagetiles"
+		"from_overlayed_imagetiles"
 	}
 }
 
@@ -214,16 +241,18 @@ mod tests {
 			)
 		};
 
-		error("merge_imagetiles").await;
-		error("merge_imagetiles [ ]").await;
-		error("merge_imagetiles [ from_container filename=1.png ]").await;
+		error("from_overlayed_imagetiles").await;
+		error("from_overlayed_imagetiles [ ]").await;
+		error("from_overlayed_imagetiles [ from_container filename=1.png ]").await;
 	}
 
 	#[tokio::test]
 	async fn test_operation_get_tile_data() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
-			.operation_from_vpl("merge_imagetiles [ from_container filename=07.png, from_container filename=F7.png ]")
+			.operation_from_vpl(
+				"from_overlayed_imagetiles [ from_container filename=07.png, from_container filename=F7.png ]",
+			)
 			.await?;
 
 		let coord = TileCoord3::new(1, 2, 3)?;
@@ -254,7 +283,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
 			.operation_from_vpl(
-				r#"merge_imagetiles [
+				r#"from_overlayed_imagetiles [
 					from_container filename="00F7.png" | filter_bbox bbox=[-130,-20,20,70],
 					from_container filename="FF07.png" | filter_bbox bbox=[-20,-70,130,20]
 				]"#,
@@ -320,7 +349,7 @@ mod tests {
 
 		let result = factory
 			.operation_from_vpl(
-				r#"merge_imagetiles [ from_container filename="12.png", from_container filename="23.png" ]"#,
+				r#"from_overlayed_imagetiles [ from_container filename="12.png", from_container filename="23.png" ]"#,
 			)
 			.await?;
 

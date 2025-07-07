@@ -1,3 +1,19 @@
+//! # Debug tile generator
+//!
+//! This operation produces *synthetic* raster or vector tiles whose only
+//! purpose is to **visualise tile coordinates** during development—
+//! extremely useful when verifying bounding‑box logic or inspecting
+//! pyramids in a viewer.  
+//!  
+//! * For **raster** formats (`png`, `jpg`, `webp`, `avif`) each tile shows
+//!   its *x*, *y*, *z* as white text on a coloured background.  
+//! * For the **vector** format (`mvt`) the tile contains four simple layers
+//!   (`background`, `debug_x`, `debug_y`, `debug_z`) whose geometries encode
+//!   exactly the same coordinate information.
+//!
+//! Because the data are generated on‑the‑fly, no external storage is
+//! required and the entire pyramid is always “complete.”
+
 mod image;
 mod vector;
 
@@ -19,12 +35,14 @@ use versatiles_core::{tilejson::TileJSON, types::*};
 use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Produces debugging tiles, each showing their coordinates as text.
+/// Generates debug tiles that display their coordinates as text.
 struct Args {
-	/// tile format: "mvt", "avif", "jpg", "png" or "webp"
-	format: String,
+	/// Target tile format: one of `"mvt"` (default), `"avif"`, `"jpg"`, `"png"` or `"webp"`
+	format: Option<String>,
 }
 
+/// Implements [`OperationTrait`] by fabricating debug tiles entirely in
+/// memory.  No I/O other than the caller’s request/response is performed.
 #[derive(Debug)]
 pub struct Operation {
 	tilejson: TileJSON,
@@ -58,7 +76,13 @@ impl Operation {
 	}
 	pub fn from_vpl_node(vpl_node: &VPLNode) -> Result<Box<dyn OperationTrait>> {
 		let args = Args::from_vpl_node(vpl_node)?;
-		Self::from_parameters(TileFormat::parse_str(&args.format)?)
+		Self::from_parameters(
+			args
+				.format
+				.map(|f| TileFormat::parse_str(&f))
+				.transpose()?
+				.unwrap_or(TileFormat::MVT),
+		)
 	}
 }
 
@@ -73,22 +97,32 @@ impl ReadOperationTrait for Operation {
 
 #[async_trait]
 impl OperationTrait for Operation {
+	/// Return static reader parameters (compression *always* uncompressed).
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
+	/// Return a synthetic `TileJSON` that matches the chosen debug format.
 	fn get_tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
+	/// Generate and return a single **raster** debug tile.
+	///
+	/// Fails at compile time if the chosen `tile_format` is vector.
 	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
 		Ok(Some(create_debug_image(coord)))
 	}
 
+	/// Generate and return a single **vector** debug tile.
+	///
+	/// Only valid when `tile_format` is `"mvt"`.
 	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
 		Ok(Some(create_debug_vector_tile(coord)?))
 	}
 
+	/// Wrapper that encodes either image or vector output into a raw `Blob`
+	/// according to `tile_format`.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		match self.parameters.tile_format.get_type() {
 			TileType::Raster => pack_image_tile(self.get_image_data(coord).await, &self.parameters),
@@ -97,6 +131,7 @@ impl OperationTrait for Operation {
 		}
 	}
 
+	/// Stream raster debug tiles for every coordinate within `bbox`.
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		ensure!(
 			self.parameters.tile_format.get_type() == TileType::Raster,
@@ -109,6 +144,7 @@ impl OperationTrait for Operation {
 		))
 	}
 
+	/// Stream vector debug tiles for every coordinate within `bbox`.
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
 		ensure!(
 			self.parameters.tile_format.get_type() == TileType::Vector,
@@ -121,6 +157,8 @@ impl OperationTrait for Operation {
 		))
 	}
 
+	/// Produce a `Blob` stream by packing either raster or vector tiles,
+	/// depending on `tile_format`.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
 		match self.parameters.tile_format.get_type() {
 			TileType::Raster => pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters),

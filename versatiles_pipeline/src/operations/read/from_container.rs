@@ -1,3 +1,11 @@
+//! # From‑container read operation
+//!
+//! This module defines an [`Operation`] that streams tiles out of a **single
+//! tile container** (e.g. `*.versatiles`, MBTiles, PMTiles, TAR bundles).
+//! It adapts the container’s [`TilesReaderTrait`] interface to
+//! [`OperationTrait`] so that the rest of the pipeline can treat it like any
+//! other data source.
+
 use crate::{
 	helpers::{unpack_image_tile, unpack_image_tile_stream, unpack_vector_tile, unpack_vector_tile_stream},
 	operations::read::traits::ReadOperationTrait,
@@ -14,7 +22,7 @@ use versatiles_core::{tilejson::TileJSON, types::*};
 use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Reads a tile container, such as a VersaTiles file.
+/// Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*.tar` file.
 struct Args {
 	/// The filename of the tile container. This is relative to the path of the VPL file.
 	/// For example: `filename="world.versatiles"`.
@@ -22,6 +30,10 @@ struct Args {
 }
 
 #[derive(Debug)]
+/// Concrete [`OperationTrait`] that merely forwards every request to an
+/// underlying container [`TilesReaderTrait`].  A cached copy of the
+/// container’s [`TileJSON`] metadata is kept so downstream stages can query
+/// bounds and zoom levels without touching the reader again.
 struct Operation {
 	parameters: TilesReaderParameters,
 	reader: Box<dyn TilesReaderTrait>,
@@ -51,33 +63,46 @@ impl ReadOperationTrait for Operation {
 
 #[async_trait]
 impl OperationTrait for Operation {
+	/// Return the reader’s technical parameters (compression, tile size,
+	/// etc.) without performing any I/O.
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
+	/// Expose the container’s `TileJSON` so that consumers can inspect
+	/// bounds, zoom range and other dataset metadata.
 	fn get_tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
+	/// Retrieve the *raw* (potentially compressed) tile blob at the given
+	/// coordinate; returns `Ok(None)` when the tile is missing.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		self.reader.get_tile_data(coord).await
 	}
 
+	/// Stream raw tile blobs intersecting the bounding box by delegating to
+	/// `TilesReaderTrait::get_bbox_tile_stream`.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		self.reader.get_bbox_tile_stream(bbox).await
 	}
 
+	/// Convenience wrapper that decodes the raw blob into an in‑memory
+	/// raster image.
 	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
 		unpack_image_tile(self.reader.get_tile_data(coord).await, &self.parameters)
 	}
 
+	/// Stream decoded raster images for all tiles within the bounding box.
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		unpack_image_tile_stream(self.reader.get_bbox_tile_stream(bbox).await, &self.parameters)
 	}
 
+	/// Fetch and decode a single vector tile at the requested coordinate.
 	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
 		unpack_vector_tile(self.reader.get_tile_data(coord).await, &self.parameters)
 	}
 
+	/// Stream decoded vector tiles contained in the bounding box.
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
 		unpack_vector_tile_stream(self.reader.get_bbox_tile_stream(bbox).await, &self.parameters)
 	}

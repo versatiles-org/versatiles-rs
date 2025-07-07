@@ -1,3 +1,19 @@
+//! # from_merged_vectortiles operation
+//!
+//! Blends *multiple* **vector tile** sources by **concatenating layers** that
+//! share the same name.  
+//!  
+//! * Sources are evaluated **in order** – later sources append their features
+//!   after earlier ones within a layer.  
+//! * All sources must provide Mapbox Vector Tiles (`*.mvt`).  
+//! * The output is *always* a vector pyramid; raster data are not supported.
+//!
+//! The file contains:
+//! 1. [`Args`] – the VPL/CLI parameters,  
+//! 2. [`Operation`] – the runtime implementation,  
+//! 3. Unit tests that verify layer merging, tile‐JSON updates, and
+//!    pyramid handling.
+
 use crate::{
 	helpers::{pack_vector_tile, pack_vector_tile_stream},
 	operations::read::traits::ReadOperationTrait,
@@ -14,12 +30,17 @@ use versatiles_core::{tilejson::TileJSON, types::*};
 use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Merges multiple vector tile sources. Each layer will contain all features from the same layer of all sources.
+/// Merges multiple vector tile sources.
+/// Each resulting tile will contain all the features and properties from all the sources.
 struct Args {
 	/// All tile sources must provide vector tiles.
 	sources: Vec<VPLPipeline>,
 }
 
+/// [`OperationTrait`] implementation that merges vector tiles “on the fly.”
+///
+/// * Keeps only metadata in memory; actual tile data stream straight through.  
+/// * Performs no disk I/O itself – it relies entirely on the child pipelines.
 #[derive(Debug)]
 struct Operation {
 	parameters: TilesReaderParameters,
@@ -27,6 +48,10 @@ struct Operation {
 	tilejson: TileJSON,
 }
 
+/// Combine several `VectorTile`s by merging layers with identical names.
+///
+/// If multiple sources provide a layer called `"roads"`, all road features
+/// end up in the same output layer; layers unique to a source are copied as‐is.
 fn merge_vector_tiles(tiles: Vec<VectorTile>) -> Result<VectorTile> {
 	let mut layers = HashMap::<String, VectorTileLayer>::new();
 	for tile in tiles.into_iter() {
@@ -90,30 +115,37 @@ impl ReadOperationTrait for Operation {
 
 #[async_trait]
 impl OperationTrait for Operation {
+	/// Reader parameters (format, compression, pyramid) for the merged result.
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
+	/// `TileJSON` after combining metadata from every source.
 	fn get_tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
+	/// Convenience wrapper: returns a packed vector tile at `coord`.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		pack_vector_tile(self.get_vector_data(coord).await, &self.parameters)
 	}
 
+	/// Stream packed vector tiles intersecting `bbox`.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		pack_vector_tile_stream(self.get_vector_stream(bbox).await, &self.parameters)
 	}
 
+	/// Always errors – raster output is not supported.
 	async fn get_image_data(&self, _coord: &TileCoord3) -> Result<Option<DynamicImage>> {
 		bail!("this operation does not support image data");
 	}
 
+	/// Always errors – raster output is not supported.
 	async fn get_image_stream(&self, _bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		bail!("this operation does not support image data");
 	}
 
+	/// Merge vector tiles from all sources for a single coordinate.
 	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
 		let mut vector_tiles: Vec<VectorTile> = vec![];
 		for source in self.sources.iter() {
@@ -130,6 +162,7 @@ impl OperationTrait for Operation {
 		})
 	}
 
+	/// Stream merged vector tiles for every coordinate in `bbox`.
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
@@ -178,7 +211,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"merge_vectortiles"
+		"from_merged_vectortiles"
 	}
 }
 
@@ -230,16 +263,16 @@ mod tests {
 			)
 		};
 
-		error("merge_vectortiles").await;
-		error("merge_vectortiles [ ]").await;
-		error("merge_vectortiles [ from_container filename=1.pbf ]").await;
+		error("from_merged_vectortiles").await;
+		error("from_merged_vectortiles [ ]").await;
+		error("from_merged_vectortiles [ from_container filename=1.pbf ]").await;
 	}
 
 	#[tokio::test]
 	async fn test_operation_get_tile_data() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
-			.operation_from_vpl("merge_vectortiles [ from_container filename=1.pbf, from_container filename=2.pbf ]")
+			.operation_from_vpl("from_merged_vectortiles [ from_container filename=1.pbf, from_container filename=2.pbf ]")
 			.await?;
 
 		let coord = TileCoord3::new(1, 2, 3)?;
@@ -271,7 +304,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
 			.operation_from_vpl(
-				r#"merge_vectortiles [
+				r#"from_merged_vectortiles [
 					from_container filename="A.pbf" | filter_bbox bbox=[-130,-20,20,70],
 					from_container filename="B.pbf" | filter_bbox bbox=[-20,-70,130,20]
 				]"#,
@@ -339,7 +372,7 @@ mod tests {
 
 		let result = factory
 			.operation_from_vpl(
-				r#"merge_vectortiles [ from_container filename="12.pbf", from_container filename="23.pbf" ]"#,
+				r#"from_merged_vectortiles [ from_container filename="12.pbf", from_container filename="23.pbf" ]"#,
 			)
 			.await?;
 

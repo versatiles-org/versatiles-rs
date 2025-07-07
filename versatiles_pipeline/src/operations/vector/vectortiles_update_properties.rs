@@ -43,7 +43,10 @@ struct Args {
 
 #[derive(Debug)]
 struct Runner {
+	/// Parsed CLI / VPL arguments (layer name, key fields, flags …).
 	args: Args,
+	/// Lookup table keyed by **feature‑ID** (`id_field_data`) holding the
+	/// new attribute sets parsed from the CSV.
 	properties_map: HashMap<String, GeoProperties>,
 }
 
@@ -51,13 +54,19 @@ impl Runner {
 	pub fn run(&self, mut tile: VectorTile) -> Result<VectorTile> {
 		let layer_name = &self.args.layer_name;
 
+		// Iterate over all layers in the tile and *only* touch the requested one.
+		// Other layers pass through unchanged.
 		for layer in tile.layers.iter_mut() {
 			if &layer.name != layer_name {
 				continue;
 			}
 
 			layer.filter_map_properties(|mut prop| {
+				// For every feature grab its identifier; if absent, log a warning
+				// and keep the feature unchanged.
 				if let Some(id) = prop.get(&self.args.id_field_tiles) {
+					// Look up the ID in our CSV‑derived map.  When found, merge or replace
+					// the properties according to the flags.
 					if let Some(new_prop) = self.properties_map.get(&id.to_string()) {
 						if self.args.replace_properties {
 							prop = new_prop.clone();
@@ -65,6 +74,7 @@ impl Runner {
 							prop.update(new_prop);
 						}
 					} else {
+						// Optionally drop features that failed the lookup.
 						if self.args.remove_non_matching {
 							return None;
 						}
@@ -83,9 +93,13 @@ impl Runner {
 
 #[derive(Debug)]
 struct Operation {
+	/// Shared transformer that patches every vector tile.
 	runner: Arc<Runner>,
+	/// Output reader parameters (same as source but uncompressed).
 	parameters: TilesReaderParameters,
+	/// Upstream operation that delivers the *original* tiles.
 	source: Box<dyn OperationTrait>,
+	/// TileJSON after adding any new attribute keys discovered in the CSV.
 	tilejson: TileJSON,
 }
 
@@ -100,10 +114,13 @@ impl Operation {
 	{
 		Box::pin(async move {
 			let args = Args::from_vpl_node(&vpl_node)?;
+			// Parse the VPL node into strongly‑typed arguments.
 			let data = read_csv_file(&factory.resolve_path(&args.data_source_path))
 				.await
 				.with_context(|| format!("Failed to read CSV file from '{}'", args.data_source_path))?;
 
+			// Convert each CSV row into a GeoProperties map.
+			// Transform Vec<GeoProperties> into HashMap keyed by the data‑ID column.
 			let properties_map = data
 				.into_iter()
 				.map(|mut properties| {
@@ -228,6 +245,7 @@ impl TransformOperationFactoryTrait for Factory {
 	}
 }
 
+// ───────────────────────── TESTS ─────────────────────────
 #[cfg(test)]
 mod tests {
 	use super::*;

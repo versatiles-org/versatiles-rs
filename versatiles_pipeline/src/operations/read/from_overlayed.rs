@@ -1,3 +1,20 @@
+//! # from_overlayed operation
+//!
+//! Selects the **first** non‑empty tile from a chain of sources that all
+//! share the *same* tile type (raster *or* vector).  Think of it as a
+//! “transparent overlay”: the moment a source can deliver a tile for the
+//! requested coordinate, downstream sources are ignored for that tile.
+//!
+//! * Sources are evaluated in the **order** provided in the VPL list.  
+//! * No blending occurs – it is a *winner‑takes‑first* strategy.  
+//! * All sources must expose an identical tile type and compression; only
+//!   their spatial coverage may differ.
+//!
+//! The file provides:
+//! 1. [`Args`] – CLI / VPL configuration,  
+//! 2. [`Operation`] – the runtime implementation,  
+//! 3. Tests that verify error handling and overlay semantics.
+
 use crate::{
 	operations::read::traits::ReadOperationTrait,
 	traits::*,
@@ -16,11 +33,15 @@ use versatiles_geometry::vector_tile::VectorTile;
 struct Args {
 	/// All tile sources must have the same format.
 	sources: Vec<VPLPipeline>,
-	/// The tile format to use for the output tiles (default: format of the first source).
-	format: Option<TileFormat>,
 }
 
 #[derive(Debug)]
+/// Implements [`OperationTrait`] by performing *short‑circuit* look‑ups
+/// across multiple sources.
+///
+/// The struct keeps only metadata (`TileJSON`, `TilesReaderParameters`) in
+/// memory; actual tile data are streamed directly from the first source that
+/// contains them.
 struct Operation {
 	parameters: TilesReaderParameters,
 	sources: Vec<Box<dyn OperationTrait>>,
@@ -46,9 +67,8 @@ impl ReadOperationTrait for Operation {
 
 			let mut tilejson = TileJSON::default();
 			let parameters = sources.first().unwrap().get_parameters();
-			let tile_format = args.format.unwrap_or(parameters.tile_format);
+			let tile_format = parameters.tile_format;
 			let tile_compression = parameters.tile_compression;
-			let tile_type = tile_format.get_type();
 
 			let mut pyramid = TileBBoxPyramid::new_empty();
 
@@ -59,8 +79,8 @@ impl ReadOperationTrait for Operation {
 				pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
 
 				ensure!(
-					parameters.tile_format.get_type() == tile_type,
-					"all sources must have the same tile type (raster or vector)"
+					parameters.tile_format == tile_format,
+					"all sources must have the same tile format"
 				);
 			}
 
@@ -77,7 +97,18 @@ impl ReadOperationTrait for Operation {
 }
 
 impl Operation {
-	/// Consolidates the duplicated logic of the three `*_stream` methods.
+	/// Internal helper that collapses the common logic of
+	/// `get_tile_stream`, `get_image_stream`, and `get_vector_stream`.
+	///
+	/// For each sub‑bbox it:
+	/// 1. Allocates a slot for every coordinate,  
+	/// 2. Iterates through the sources in priority order,  
+	/// 3. Fills empty slots with whichever source provides the tile first,  
+	/// 4. Optionally post‑processes each tile (`map_fn`),  
+	/// 5. Emits a complete, gap‑free `TileStream`.
+	///
+	/// The generic parameters allow us to reuse the routine for both raster
+	/// and vector content while avoiding code duplication.
 	async fn gather_stream<'a, T, FetchStream, MapFn>(
 		&'a self,
 		bbox: TileBBox,
@@ -136,14 +167,17 @@ impl Operation {
 
 #[async_trait]
 impl OperationTrait for Operation {
+	/// Reader parameters (format, compression, pyramid) for the overlay result.
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
+	/// Combined `TileJSON` after merging metadata from all sources.
 	fn get_tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
+	/// Fetch a *packed* tile for `coord`, recompressing if necessary.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		for source in self.sources.iter() {
 			if let Some(mut blob) = source.get_tile_data(coord).await? {
@@ -158,6 +192,7 @@ impl OperationTrait for Operation {
 		return Ok(None);
 	}
 
+	/// Stream packed tiles intersecting `bbox` using the overlay strategy.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		// We need the desired output compression inside the closure, so copy it.
 		let output_compression = self.parameters.tile_compression;
@@ -170,6 +205,7 @@ impl OperationTrait for Operation {
 			.await
 	}
 
+	/// Retrieve a single raster tile, stopping at the first source that has it.
 	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
 		for source in self.sources.iter() {
 			let tile = source.get_image_data(coord).await?;
@@ -180,6 +216,7 @@ impl OperationTrait for Operation {
 		return Ok(None);
 	}
 
+	/// Stream raster tiles for every coordinate in `bbox` via overlay.
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		self
 			.gather_stream(
@@ -190,6 +227,7 @@ impl OperationTrait for Operation {
 			.await
 	}
 
+	/// Retrieve a single vector tile, stopping at the first source that has it.
 	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
 		for source in self.sources.iter() {
 			let tile = source.get_vector_data(coord).await?;
@@ -200,6 +238,7 @@ impl OperationTrait for Operation {
 		return Ok(None);
 	}
 
+	/// Stream vector tiles for every coordinate in `bbox` via overlay.
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
 		self
 			.gather_stream(

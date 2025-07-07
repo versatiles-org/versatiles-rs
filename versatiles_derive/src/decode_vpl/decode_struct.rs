@@ -12,7 +12,9 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 		.iter()
 		.filter_map(extract_comment)
 		.collect::<Vec<String>>()
-		.join("\n");
+		.join("\n")
+		.trim()
+		.to_string();
 
 	let fields = if let Fields::Named(fields_named) = data_struct.fields {
 		fields_named.named
@@ -46,7 +48,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 			if field_type_str != "Vec<VPLPipeline>" {
 				panic!("type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'")
 			}
-			doc_sources = Some(format!("### Sources:\n{comment}\n"));
+			doc_sources = Some(format!("### Sources:\n{comment}"));
 			parser_fields.push(quote! { sources: node.sources.clone() });
 		} else {
 			if !comment.is_empty() {
@@ -100,13 +102,19 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 		}
 	}
 
-	let doc_children = doc_sources.unwrap_or_default();
-
 	let doc_fields = if doc_fields.is_empty() {
 		String::from("")
 	} else {
 		format!("### Parameters:\n{}", doc_fields.join("\n"))
 	};
+
+	let doc = vec![doc_struct, doc_sources.unwrap_or_default(), doc_fields]
+		.into_iter()
+		.filter(|s| !s.is_empty())
+		.collect::<Vec<String>>()
+		.join("\n")
+		.trim()
+		.to_string();
 
 	quote! {
 		impl #name {
@@ -117,11 +125,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 			}
 
 			pub fn get_docs() -> String {
-				vec![
-					&format!("{}\n", #doc_struct),
-					#doc_fields,
-					#doc_children,
-				].join("").trim().to_string()
+				#doc.to_string()
 			}
 		}
 	}
