@@ -19,10 +19,12 @@ pub trait FilterOperationTrait: OperationTrait {
 
 #[async_trait]
 impl<T: FilterOperationTrait> OperationTrait for T {
+	#[inline(always)]
 	fn get_parameters(&self) -> &TilesReaderParameters {
 		self.get_prepared_parameters()
 	}
 
+	#[inline(always)]
 	fn get_tilejson(&self) -> &TileJSON {
 		self.get_prepared_tilejson()
 	}

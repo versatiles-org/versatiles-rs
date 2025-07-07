@@ -1,5 +1,5 @@
 use crate::{
-	helpers::{pack_vector_tile, pack_vector_tile_stream, read_csv_file, unpack_vector_tile},
+	helpers::{pack_vector_tile, pack_vector_tile_stream, read_csv_file},
 	traits::{OperationFactoryTrait, OperationTrait, TransformOperationFactoryTrait},
 	vpl::VPLNode,
 	PipelineFactory,
@@ -13,7 +13,7 @@ use std::{
 	collections::{BTreeSet, HashMap},
 	sync::Arc,
 };
-use versatiles_core::{tilejson::TileJSON, types::*, utils::decompress};
+use versatiles_core::{tilejson::TileJSON, types::*};
 use versatiles_geometry::{vector_tile::VectorTile, GeoProperties};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -188,12 +188,7 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		let result = unpack_vector_tile(
-			self.source.get_tile_data(coord).await,
-			self.source.get_parameters().tile_format,
-			self.source.get_parameters().tile_compression,
-		)?;
-		if let Some(tile) = result {
+		if let Some(tile) = self.source.get_vector_data(coord).await? {
 			self.runner.run(tile).map(Some)
 		} else {
 			Ok(None)
@@ -202,15 +197,11 @@ impl OperationTrait for Operation {
 
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
 		let runner = self.runner.clone();
-		let tile_compression = self.source.get_parameters().tile_compression;
 		Ok(self
 			.source
-			.get_tile_stream(bbox)
+			.get_vector_stream(bbox)
 			.await?
-			.filter_map_item_parallel(move |blob| {
-				let tile = VectorTile::from_blob(&decompress(blob, &tile_compression).unwrap()).unwrap();
-				runner.run(tile).map(Some)
-			}))
+			.filter_map_item_parallel(move |tile| runner.run(tile).map(Some)))
 	}
 }
 

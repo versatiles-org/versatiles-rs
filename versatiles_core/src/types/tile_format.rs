@@ -51,9 +51,10 @@ use std::fmt::{Display, Formatter};
 /// - `WEBP` - WEBP image format
 #[allow(clippy::upper_case_acronyms)]
 #[cfg_attr(feature = "cli", derive(ValueEnum))]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 pub enum TileFormat {
 	AVIF,
+	#[default]
 	BIN,
 	GEOJSON,
 	JPG,
@@ -296,12 +297,6 @@ impl TryFrom<&str> for TileFormat {
 impl Display for TileFormat {
 	fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
 		f.write_str(self.as_str())
-	}
-}
-
-impl Default for TileFormat {
-	fn default() -> Self {
-		TileFormat::BIN
 	}
 }
 

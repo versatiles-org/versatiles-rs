@@ -8,7 +8,7 @@ use crate::{
 	vpl::VPLNode,
 	PipelineFactory,
 };
-use anyhow::{bail, Result};
+use anyhow::{bail, ensure, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use image::create_debug_image;
@@ -98,22 +98,27 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		match self.parameters.tile_format {
-			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => Ok(
-				TileStream::from_coord_iter_parallel(bbox.into_iter_coords(), move |c| Some(create_debug_image(&c))),
-			),
-			_ => bail!("tile format '{}' is not implemented yet", self.parameters.tile_format),
-		}
+		ensure!(
+			self.parameters.tile_format.get_type() == TileType::Raster,
+			"tile format '{}' is not supported. expected raster",
+			self.parameters.tile_format
+		);
+		Ok(TileStream::from_coord_iter_parallel(
+			bbox.into_iter_coords(),
+			move |c| Some(create_debug_image(&c)),
+		))
 	}
 
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		match self.parameters.tile_format {
-			TileFormat::MVT => Ok(TileStream::from_coord_iter_parallel(
-				bbox.into_iter_coords(),
-				move |c| create_debug_vector_tile(&c).ok(),
-			)),
-			_ => bail!("tile format '{}' is not implemented yet", self.parameters.tile_format),
-		}
+		ensure!(
+			self.parameters.tile_format.get_type() == TileType::Vector,
+			"tile format '{}' is not supported. expected vector",
+			self.parameters.tile_format
+		);
+		Ok(TileStream::from_coord_iter_parallel(
+			bbox.into_iter_coords(),
+			move |c| create_debug_vector_tile(&c).ok(),
+		))
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {

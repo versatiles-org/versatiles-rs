@@ -32,8 +32,9 @@ use std::fmt::Display;
 
 /// Enum representing possible compression algorithms.
 #[cfg_attr(feature = "cli", derive(ValueEnum))]
-#[derive(Debug, EnumSetType, PartialOrd, Ord)]
+#[derive(Debug, Default, EnumSetType, PartialOrd, Ord)]
 pub enum TileCompression {
+	#[default]
 	Uncompressed,
 	Gzip,
 	Brotli,
@@ -118,12 +119,6 @@ impl TileCompression {
 			"raw" => TileCompression::Uncompressed,
 			_ => bail!("Unknown tile compression. Expected brotli, gzip or none"),
 		})
-	}
-}
-
-impl Default for TileCompression {
-	fn default() -> Self {
-		TileCompression::Uncompressed
 	}
 }
 
