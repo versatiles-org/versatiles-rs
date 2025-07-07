@@ -67,35 +67,19 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		unpack_image_tile(
-			self.reader.get_tile_data(coord).await,
-			self.parameters.tile_format,
-			self.parameters.tile_compression,
-		)
+		unpack_image_tile(self.reader.get_tile_data(coord).await, &self.parameters)
 	}
 
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		unpack_image_tile_stream(
-			self.reader.get_bbox_tile_stream(bbox).await,
-			self.parameters.tile_format,
-			self.parameters.tile_compression,
-		)
+		unpack_image_tile_stream(self.reader.get_bbox_tile_stream(bbox).await, &self.parameters)
 	}
 
 	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		unpack_vector_tile(
-			self.reader.get_tile_data(coord).await,
-			self.parameters.tile_format,
-			self.parameters.tile_compression,
-		)
+		unpack_vector_tile(self.reader.get_tile_data(coord).await, &self.parameters)
 	}
 
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		unpack_vector_tile_stream(
-			self.reader.get_bbox_tile_stream(bbox).await,
-			self.parameters.tile_format,
-			self.parameters.tile_compression,
-		)
+		unpack_vector_tile_stream(self.reader.get_bbox_tile_stream(bbox).await, &self.parameters)
 	}
 }
 

@@ -101,19 +101,11 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		pack_image_tile(
-			self.get_image_data(coord).await,
-			self.parameters.tile_format,
-			self.parameters.tile_compression,
-		)
+		pack_image_tile(self.get_image_data(coord).await, &self.parameters)
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
-		pack_image_tile_stream(
-			self.get_image_stream(bbox).await,
-			self.parameters.tile_format,
-			self.parameters.tile_compression,
-		)
+		pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters)
 	}
 
 	async fn get_vector_data(&self, _coord: &TileCoord3) -> Result<Option<VectorTile>> {

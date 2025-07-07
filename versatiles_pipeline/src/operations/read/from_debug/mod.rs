@@ -90,18 +90,10 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		match self.parameters.tile_format {
-			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => pack_image_tile(
-				self.get_image_data(coord).await,
-				self.parameters.tile_format,
-				self.parameters.tile_compression,
-			),
-			TileFormat::MVT => pack_vector_tile(
-				self.get_vector_data(coord).await,
-				self.parameters.tile_format,
-				self.parameters.tile_compression,
-			),
-			_ => bail!("tile format '{}' is not implemented yet", self.parameters.tile_format),
+		match self.parameters.tile_format.get_type() {
+			TileType::Raster => pack_image_tile(self.get_image_data(coord).await, &self.parameters),
+			TileType::Vector => pack_vector_tile(self.get_vector_data(coord).await, &self.parameters),
+			_ => bail!("tile format '{}' is not supported", self.parameters.tile_format),
 		}
 	}
 
@@ -125,15 +117,10 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
-		let tile_format = self.parameters.tile_format;
-		let tile_compression = self.parameters.tile_compression;
-
-		match tile_format {
-			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::WEBP => {
-				pack_image_tile_stream(self.get_image_stream(bbox).await, tile_format, tile_compression)
-			}
-			TileFormat::MVT => pack_vector_tile_stream(self.get_vector_stream(bbox).await, tile_format, tile_compression),
-			_ => bail!("tile format '{}' is not implemented yet", tile_format),
+		match self.parameters.tile_format.get_type() {
+			TileType::Raster => pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters),
+			TileType::Vector => pack_vector_tile_stream(self.get_vector_stream(bbox).await, &self.parameters),
+			_ => bail!("tile format '{}' is not supported.", self.parameters.tile_format),
 		}
 	}
 }
