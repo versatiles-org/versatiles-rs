@@ -1,5 +1,4 @@
 use crate::{
-	helpers::{unpack_image_tile, unpack_image_tile_stream, unpack_vector_tile, unpack_vector_tile_stream},
 	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
@@ -77,6 +76,64 @@ impl ReadOperationTrait for Operation {
 	}
 }
 
+impl Operation {
+	/// Consolidates the duplicated logic of the three `*_stream` methods.
+	async fn gather_stream<'a, T, FetchStream, MapFn>(
+		&'a self,
+		bbox: TileBBox,
+		mut fetch_stream: FetchStream,
+		mut map_fn: MapFn,
+	) -> Result<TileStream<'a, T>>
+	where
+		T: Clone + Send + 'static,
+		// Fetch a stream for the remaining bbox from one source.
+		FetchStream: FnMut(&'a Box<dyn OperationTrait>, TileBBox) -> BoxFuture<'a, Result<TileStream<'a, T>>>
+			+ Clone
+			+ Copy
+			+ Send
+			+ 'a,
+		// Optional post‑processing of each tile (e.g. recompression).
+		MapFn: FnMut(T, &Box<dyn OperationTrait>) -> Result<T> + Copy + Send + 'a,
+	{
+		// Divide the requested bbox into manageable chunks.
+		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
+
+		Ok(
+			TileStream::from_stream_iter(sub_bboxes.into_iter().map(move |bbox| async move {
+				let mut tiles: Vec<Option<(TileCoord3, T)>> = vec![None; bbox.count_tiles() as usize];
+
+				for source in self.sources.iter() {
+					let mut bbox_left = TileBBox::new_empty(bbox.level).unwrap();
+					for (idx, slot) in tiles.iter().enumerate() {
+						if slot.is_none() {
+							bbox_left
+								.include_coord3(&bbox.get_coord3_by_index(idx as u32).unwrap())
+								.unwrap();
+						}
+					}
+					if bbox_left.is_empty() {
+						continue;
+					}
+
+					let stream = fetch_stream(source, bbox_left).await.unwrap();
+					stream
+						.for_each_sync(|(coord, item)| {
+							let idx = bbox.get_tile_index3(&coord).unwrap();
+							if tiles[idx].is_none() {
+								let item = map_fn(item, source).unwrap();
+								tiles[idx] = Some((coord, item));
+							}
+						})
+						.await;
+				}
+
+				TileStream::from_vec(tiles.into_iter().flatten().collect())
+			}))
+			.await,
+		)
+	}
+}
+
 #[async_trait]
 impl OperationTrait for Operation {
 	fn get_parameters(&self) -> &TilesReaderParameters {
@@ -86,10 +143,10 @@ impl OperationTrait for Operation {
 	fn get_tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
+
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		for source in self.sources.iter() {
-			let result = source.get_tile_data(coord).await?;
-			if let Some(mut blob) = result {
+			if let Some(mut blob) = source.get_tile_data(coord).await? {
 				blob = recompress(
 					blob,
 					&source.get_parameters().tile_compression,
@@ -102,61 +159,55 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
-		let output_compression = &self.parameters.tile_compression;
-		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
-
-		Ok(
-			TileStream::from_stream_iter(bboxes.into_iter().map(move |bbox| async move {
-				let mut tiles: Vec<Option<(TileCoord3, Blob)>> = Vec::new();
-				tiles.resize(bbox.count_tiles() as usize, None);
-
-				for source in self.sources.iter() {
-					let mut bbox_left = TileBBox::new_empty(bbox.level).unwrap();
-					for (index, t) in tiles.iter().enumerate() {
-						if t.is_none() {
-							bbox_left
-								.include_coord3(&bbox.get_coord3_by_index(index as u32).unwrap())
-								.unwrap();
-						}
-					}
-					if bbox_left.is_empty() {
-						continue;
-					}
-
-					source
-						.get_tile_stream(bbox_left)
-						.await
-						.unwrap()
-						.for_each_sync(|(coord, mut blob)| {
-							let index = bbox.get_tile_index3(&coord).unwrap();
-							if tiles[index].is_none() {
-								blob = recompress(blob, &source.get_parameters().tile_compression, output_compression).unwrap();
-								tiles[index] = Some((coord, blob));
-							}
-						})
-						.await;
-				}
-
-				TileStream::from_vec(tiles.into_iter().flatten().collect())
-			}))
-			.await,
-		)
+		// We need the desired output compression inside the closure, so copy it.
+		let output_compression = self.parameters.tile_compression;
+		self
+			.gather_stream(
+				bbox,
+				|src, b| Box::pin(async move { src.get_tile_stream(b).await }),
+				move |blob: Blob, src| recompress(blob, &src.get_parameters().tile_compression, &output_compression),
+			)
+			.await
 	}
 
 	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		unpack_image_tile(self.get_tile_data(coord).await, &self.parameters)
+		for source in self.sources.iter() {
+			let tile = source.get_image_data(coord).await?;
+			if tile.is_some() {
+				return Ok(tile);
+			}
+		}
+		return Ok(None);
 	}
 
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		unpack_image_tile_stream(self.get_tile_stream(bbox).await, &self.parameters)
+		self
+			.gather_stream(
+				bbox,
+				|src, b| Box::pin(async move { src.get_image_stream(b).await }),
+				|img, _| Ok(img),
+			)
+			.await
 	}
 
 	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		unpack_vector_tile(self.get_tile_data(coord).await, &self.parameters)
+		for source in self.sources.iter() {
+			let tile = source.get_vector_data(coord).await?;
+			if tile.is_some() {
+				return Ok(tile);
+			}
+		}
+		return Ok(None);
 	}
 
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		unpack_vector_tile_stream(self.get_tile_stream(bbox).await, &self.parameters)
+		self
+			.gather_stream(
+				bbox,
+				|src, b| Box::pin(async move { src.get_vector_stream(b).await }),
+				|tile, _| Ok(tile),
+			)
+			.await
 	}
 }
 
