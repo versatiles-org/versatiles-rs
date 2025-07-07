@@ -299,6 +299,12 @@ impl Display for TileFormat {
 	}
 }
 
+impl Default for TileFormat {
+	fn default() -> Self {
+		TileFormat::BIN
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

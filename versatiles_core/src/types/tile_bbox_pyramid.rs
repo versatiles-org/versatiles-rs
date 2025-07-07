@@ -326,6 +326,13 @@ impl PartialEq for TileBBoxPyramid {
 	}
 }
 
+impl Default for TileBBoxPyramid {
+	/// Creates a new `TileBBoxPyramid` with all levels empty.
+	fn default() -> Self {
+		Self::new_empty()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

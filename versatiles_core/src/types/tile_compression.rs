@@ -121,6 +121,12 @@ impl TileCompression {
 	}
 }
 
+impl Default for TileCompression {
+	fn default() -> Self {
+		TileCompression::Uncompressed
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
