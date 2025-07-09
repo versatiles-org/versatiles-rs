@@ -1,9 +1,11 @@
-use crate::{operations::filter::traits::FilterOperationTrait, traits::*, vpl::VPLNode, PipelineFactory};
+use crate::{traits::*, vpl::VPLNode, PipelineFactory};
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::future::BoxFuture;
+use futures::future::{ready, BoxFuture};
+use imageproc::image::DynamicImage;
 use std::fmt::Debug;
 use versatiles_core::{tilejson::TileJSON, types::*};
+use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filter tiles by bounding box and/or zoom levels.
@@ -30,7 +32,7 @@ impl Operation {
 		_factory: &PipelineFactory,
 	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>, anyhow::Error>>
 	where
-		Self: Sized + FilterOperationTrait,
+		Self: Sized + OperationTrait,
 	{
 		Box::pin(async move {
 			let args = Args::from_vpl_node(&vpl_node)?;
@@ -58,22 +60,69 @@ impl Operation {
 			}) as Box<dyn OperationTrait>)
 		})
 	}
-}
 
-#[async_trait]
-impl FilterOperationTrait for Operation {
-	fn get_prepared_parameters(&self) -> &TilesReaderParameters {
-		&self.parameters
-	}
-	fn get_prepared_tilejson(&self) -> &TileJSON {
-		&self.tilejson
-	}
-	fn get_source(&self) -> &dyn OperationTrait {
-		self.source.as_ref()
-	}
 	fn filter_coord(&self, coord: &TileCoord3) -> bool {
 		// Check if the coordinate is within the bounding box defined in the parameters
 		self.parameters.bbox_pyramid.contains_coord(coord)
+	}
+}
+
+#[async_trait]
+impl OperationTrait for Operation {
+	fn get_parameters(&self) -> &TilesReaderParameters {
+		&self.parameters
+	}
+
+	fn get_tilejson(&self) -> &TileJSON {
+		&self.tilejson
+	}
+
+	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
+		match self.filter_coord(coord) {
+			true => self.source.get_tile_data(coord).await,
+			false => Ok(None),
+		}
+	}
+
+	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Blob>> {
+		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
+		Ok(self
+			.source
+			.get_tile_stream(bbox)
+			.await?
+			.filter_coord(|coord| ready(self.filter_coord(&coord))))
+	}
+
+	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
+		match self.filter_coord(coord) {
+			true => self.source.get_image_data(coord).await,
+			false => Ok(None),
+		}
+	}
+
+	async fn get_image_stream(&self, mut bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
+		Ok(self
+			.source
+			.get_image_stream(bbox)
+			.await?
+			.filter_coord(|coord| ready(self.filter_coord(&coord))))
+	}
+
+	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
+		match self.filter_coord(coord) {
+			true => self.source.get_vector_data(coord).await,
+			false => Ok(None),
+		}
+	}
+
+	async fn get_vector_stream(&self, mut bbox: TileBBox) -> Result<TileStream<VectorTile>> {
+		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
+		Ok(self
+			.source
+			.get_vector_stream(bbox)
+			.await?
+			.filter_coord(|coord| ready(self.filter_coord(&coord))))
 	}
 }
 
