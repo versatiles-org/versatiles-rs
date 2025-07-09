@@ -430,13 +430,12 @@ impl TileBBox {
 	/// * `Ok(())` if intersection is successful.
 	/// * `Err(anyhow::Error)` if the zoom levels do not match or other validations fail.
 	pub fn intersect_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
-		if self.level != bbox.level {
-			return Err(anyhow::anyhow!(
-				"Cannot intersect TileBBox with level={} with TileBBox with level={}",
-				bbox.level,
-				self.level
-			));
-		}
+		ensure!(
+			self.level == bbox.level,
+			"Cannot intersect TileBBox at zoom level {} with TileBBox at zoom level {}",
+			bbox.level,
+			self.level
+		);
 
 		if !self.is_empty() && !bbox.is_empty() {
 			self.x_min = self.x_min.max(bbox.x_min);
@@ -459,14 +458,8 @@ impl TileBBox {
 	/// # Arguments
 	///
 	/// * `pyramid` - Reference to the `TileBBoxPyramid`.
-	///
-	/// # Returns
-	///
-	/// * `Ok(())` if intersection is successful.
-	/// * `Err(anyhow::Error)` if any validation fails.
-	pub fn intersect_pyramid(&mut self, pyramid: &TileBBoxPyramid) -> Result<()> {
-		let pyramid_bbox = pyramid.get_level_bbox(self.level);
-		self.intersect_bbox(pyramid_bbox)
+	pub fn intersect_pyramid(&mut self, pyramid: &TileBBoxPyramid) {
+		self.intersect_bbox(pyramid.get_level_bbox(self.level)).unwrap()
 	}
 
 	/// Determines if this bounding box overlaps with another bounding box.
