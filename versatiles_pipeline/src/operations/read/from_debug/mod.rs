@@ -54,7 +54,7 @@ impl Operation {
 		let parameters = TilesReaderParameters::new(
 			tile_format,
 			TileCompression::Uncompressed,
-			TileBBoxPyramid::new_full(31),
+			TileBBoxPyramid::new_full(30),
 		);
 
 		let mut tilejson = TileJSON::default();
@@ -63,9 +63,9 @@ impl Operation {
 			tilejson.merge(&TileJSON::try_from(
 				r#"{"vector_layers":[
 					{"id":"background","minzoom":0,"maxzoom":30},
-					{"id":"debug_x","minzoom":0,"maxzoom":30},
-					{"id":"debug_y","minzoom":0,"maxzoom":30},
-					{"id":"debug_z","minzoom":0,"maxzoom":30}
+					{"id":"debug_x","minzoom":0,"maxzoom":30,"fields":{"char":"which character","index":"index of char","position":"x value"}},
+					{"id":"debug_y","minzoom":0,"maxzoom":30,"fields":{"char":"which character","index":"index of char","position":"x value"}},
+					{"id":"debug_z","minzoom":0,"maxzoom":30,"fields":{"char":"which character","index":"index of char","position":"x value"}}
 				]}"#,
 			)?)?;
 		}
@@ -230,7 +230,7 @@ mod tests {
 			&[
 				"{",
 				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
-				"  \"maxzoom\": 31,",
+				"  \"maxzoom\": 30,",
 				"  \"minzoom\": 0,",
 				"  \"tile_content\": \"raster\",",
 				"  \"tile_format\": \"image/png\",",
@@ -251,7 +251,7 @@ mod tests {
 			&[
 				"{",
 				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
-				"  \"maxzoom\": 31,",
+				"  \"maxzoom\": 30,",
 				"  \"minzoom\": 0,",
 				"  \"tile_content\": \"raster\",",
 				"  \"tile_format\": \"image/jpeg\",",
@@ -272,7 +272,7 @@ mod tests {
 			&[
 				"{",
 				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
-				"  \"maxzoom\": 31,",
+				"  \"maxzoom\": 30,",
 				"  \"minzoom\": 0,",
 				"  \"tile_content\": \"raster\",",
 				"  \"tile_format\": \"image/webp\",",
@@ -289,24 +289,39 @@ mod tests {
 	async fn test_build_tile_vector() {
 		test(
 			"mvt",
-			1732,
+			1996,
 			&[
-				"{",
+				"{", 
 				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
-				"  \"maxzoom\": 31,",
-				"  \"minzoom\": 0,",
-				"  \"tile_content\": \"vector\",",
-				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
-				"  \"tile_schema\": \"other\",",
-				"  \"tilejson\": \"3.0.0\",",
-				"  \"vector_layers\": [",
-				"    { \"fields\": {  }, \"id\": \"background\", \"maxzoom\": 30, \"minzoom\": 0 },",
-				"    { \"fields\": {  }, \"id\": \"debug_x\", \"maxzoom\": 30, \"minzoom\": 0 },",
-				"    { \"fields\": {  }, \"id\": \"debug_y\", \"maxzoom\": 30, \"minzoom\": 0 },",
-				"    { \"fields\": {  }, \"id\": \"debug_z\", \"maxzoom\": 30, \"minzoom\": 0 }",
-				"  ]",
-				"}",
-			],
+				 "  \"maxzoom\": 30,",
+				  "  \"minzoom\": 0,", 
+				  "  \"tile_content\": \"vector\",", 
+				  "  \"tile_format\": \"vnd.mapbox-vector-tile\",", 
+				  "  \"tile_schema\": \"other\",", 
+				  "  \"tilejson\": \"3.0.0\",",
+				   "  \"vector_layers\": [",
+					 "    { \"fields\": {  }, \"id\": \"background\", \"maxzoom\": 30, \"minzoom\": 0 },", 
+					 "    {", 
+					 "      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
+					  "      \"id\": \"debug_x\",", 
+					  "      \"maxzoom\": 30,", 
+					  "      \"minzoom\": 0", 
+					  "    },", 
+					  "    {", 
+					  "      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },", 
+					  "      \"id\": \"debug_y\",", 
+					  "      \"maxzoom\": 30,", 
+					  "      \"minzoom\": 0", 
+					  "    },", 
+					  "    {", 
+					  "      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },", 
+					  "      \"id\": \"debug_z\",", 
+					  "      \"maxzoom\": 30,", 
+					  "      \"minzoom\": 0", 
+					  "    }", 
+					  "  ]", 
+					  "}"
+					  ],
 		)
 		.await
 		.unwrap();

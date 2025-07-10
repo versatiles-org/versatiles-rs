@@ -6,7 +6,7 @@ use versatiles_core::types::TileCoord3;
 use versatiles_geometry::{
 	math,
 	vector_tile::{VectorTile, VectorTileLayer},
-	Coordinates1, Coordinates2, Coordinates3, GeoFeature, Geometry, MultiPolygonGeometry,
+	Coordinates1, Coordinates2, Coordinates3, GeoFeature, GeoValue, Geometry, MultiPolygonGeometry,
 };
 
 lazy_static! {
@@ -52,10 +52,16 @@ fn draw_text(name: &str, y: f32, text: String) -> VectorTileLayer {
 		GeoFeature::new(Geometry::MultiPolygon(multipolygon))
 	};
 
-	for c in text.chars() {
+	for (i, c) in text.chars().enumerate() {
 		let glyph_id = font.glyph_id(c);
 		if let Some(outline) = font.outline(glyph_id) {
-			features.push(get_char_as_feature(outline, &position));
+			let mut feature = get_char_as_feature(outline, &position);
+			feature
+				.properties
+				.insert(String::from("char"), GeoValue::from(c.to_string()));
+			feature.properties.insert(String::from("x"), GeoValue::from(position.x));
+			feature.properties.insert(String::from("index"), GeoValue::from(i));
+			features.push(feature);
 		}
 		position.x += scale * font.h_advance_unscaled(glyph_id);
 	}
