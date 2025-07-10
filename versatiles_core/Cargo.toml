@@ -22,7 +22,7 @@ colored = { version = "3.0.0", default-features = false, optional = true }
 enumset.workspace = true
 flate2 = { version = "1.1.2", default-features = false, features = ["default"] }
 futures.workspace = true
-indicatif = { version = "0.17.11", features = ["unicode-width"] }
+indicatif = { version = "0.18.0", features = ["unicode-width"] }
 itertools.workspace = true
 lazy_static = { workspace = true }
 num_cpus.workspace = true
