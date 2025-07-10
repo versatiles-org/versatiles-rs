@@ -54,6 +54,10 @@ impl VectorTile {
 	pub fn find_layer(&self, name: &str) -> Option<&VectorTileLayer> {
 		self.layers.iter().find(|layer| layer.name == name)
 	}
+
+	pub fn find_layer_mut(&mut self, name: &str) -> Option<&mut VectorTileLayer> {
+		self.layers.iter_mut().find(|layer| layer.name == name)
+	}
 }
 
 #[cfg(test)]

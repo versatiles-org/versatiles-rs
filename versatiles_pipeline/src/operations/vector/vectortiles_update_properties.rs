@@ -103,36 +103,36 @@ impl RunnerTrait for Runner {
 
 		// Iterate over all layers in the tile and *only* touch the requested one.
 		// Other layers pass through unchanged.
-		for layer in tile.layers.iter_mut() {
-			if &layer.name != layer_name {
-				continue;
-			}
+		let layer = tile.find_layer_mut(layer_name);
+		if layer.is_none() {
+			return Ok(tile);
+		}
 
-			layer.filter_map_properties(|mut prop| {
-				// For every feature grab its identifier; if absent, log a warning
-				// and keep the feature unchanged.
-				if let Some(id) = prop.get(&self.args.id_field_tiles) {
-					// Look up the ID in our CSV‑derived map.  When found, merge or replace
-					// the properties according to the flags.
-					if let Some(new_prop) = self.properties_map.get(&id.to_string()) {
-						if self.args.replace_properties.unwrap_or(false) {
-							prop = new_prop.clone();
-						} else {
-							prop.update(new_prop);
-						}
+		layer.unwrap().filter_map_properties(|mut prop| {
+			// For every feature grab its identifier; if absent, log a warning
+			// and keep the feature unchanged.
+			if let Some(id) = prop.get(&self.args.id_field_tiles) {
+				// Look up the ID in our CSV‑derived map.  When found, merge or replace
+				// the properties according to the flags.
+
+				if let Some(new_prop) = self.properties_map.get(&id.to_string()) {
+					if self.args.replace_properties.unwrap_or(false) {
+						prop = new_prop.clone();
 					} else {
-						// Optionally drop features that failed the lookup.
-						if self.args.remove_non_matching.unwrap_or(false) {
-							return None;
-						}
-						warn!("id \"{id}\" not found in data source");
+						prop.update(new_prop);
 					}
 				} else {
-					warn!("id field \"{}\" not found", &self.args.id_field_tiles);
+					// Optionally drop features that failed the lookup.
+					if self.args.remove_non_matching.unwrap_or(false) {
+						return None;
+					}
+					warn!("id \"{id}\" not found in data source");
 				}
-				Some(prop)
-			})?;
-		}
+			} else {
+				warn!("id field \"{}\" not found", &self.args.id_field_tiles);
+			}
+			Some(prop)
+		})?;
 
 		Ok(tile)
 	}
@@ -262,7 +262,7 @@ mod tests {
 	use super::*;
 	use assert_fs::NamedTempFile;
 	use pretty_assertions::assert_eq;
-	use std::{fs::File, io::Write};
+	use std::{fs::File, io::Write, vec};
 	use versatiles_geometry::{GeoFeature, GeoProperties, GeoValue, Geometry, vector_tile::VectorTileLayer};
 
 	fn create_sample_vector_tile() -> VectorTile {
@@ -320,7 +320,7 @@ mod tests {
 		assert_eq!(args.remove_non_matching, None);
 	}
 
-	async fn run_test(replace_properties: bool, include_id: bool) -> Result<String> {
+	async fn run_test(replace_properties: bool, include_id: bool) -> Result<Vec<String>> {
 		let temp_file = NamedTempFile::new("test.csv")?;
 		let mut file = File::create(&temp_file)?;
 		writeln!(&mut file, "data_id,value\n1,test")?;
@@ -353,19 +353,15 @@ mod tests {
 
 		assert_eq!(tile.layers.len(), 4);
 		let layer = tile.find_layer("debug_y").unwrap();
-		assert_eq!(layer.features.len(), 5);
-		let properties = layer.features[0].decode_properties(&layer)?;
-		let mut vec = operation.get_tilejson().as_pretty_lines(100);
-		vec.insert(0, format!("{properties:?}"));
-		Ok(vec.join("\n"))
-	}
 
-	#[tokio::test]
-	async fn test_run_normal() {
+		assert_eq!(layer.features.len(), 5);
+		let properties = layer.features[1].decode_properties(layer)?;
+
+		let vec = operation.get_tilejson().as_pretty_lines(100);
+		let (intro, vec) = vec.split_at(17);
 		assert_eq!(
-			run_test(false, false).await.unwrap().split("\n").collect::<Vec<_>>(),
+			intro,
 			[
-				"{\"char\": String(\"y\"), \"index\": UInt(0), \"x\": Float(100.0)}",
 				"{",
 				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
 				"  \"maxzoom\": 30,",
@@ -382,13 +378,13 @@ mod tests {
 				"      \"maxzoom\": 30,",
 				"      \"minzoom\": 0",
 				"    },",
-				"    {",
-				"      \"fields\": {",
-				"        \"char\": \"which character\",",
-				"        \"index\": \"index of char\",",
-				"        \"position\": \"x value\",",
-				"        \"value\": \"automatically added field\"",
-				"      },",
+				"    {"
+			]
+		);
+		let (vec, outro) = vec.split_at(vec.len() - 12);
+		assert_eq!(
+			outro,
+			[
 				"      \"id\": \"debug_y\",",
 				"      \"maxzoom\": 30,",
 				"      \"minzoom\": 0",
@@ -401,6 +397,26 @@ mod tests {
 				"    }",
 				"  ]",
 				"}"
+			]
+		);
+
+		let mut vec = vec.to_vec();
+		vec.insert(0, format!("{properties:?}"));
+		Ok(vec)
+	}
+
+	#[tokio::test]
+	async fn test_run_normal() {
+		assert_eq!(
+			run_test(false, false).await.unwrap(),
+			[
+				"{\"char\": String(\":\"), \"index\": UInt(1), \"value\": String(\"test\"), \"x\": Float(132.7017)}",
+				"      \"fields\": {",
+				"        \"char\": \"which character\",",
+				"        \"index\": \"index of char\",",
+				"        \"position\": \"x value\",",
+				"        \"value\": \"automatically added field\"",
+				"      },",
 			]
 		);
 	}
@@ -408,26 +424,9 @@ mod tests {
 	#[tokio::test]
 	async fn test_run_add_index() {
 		assert_eq!(
-			run_test(false, true).await.unwrap().split("\n").collect::<Vec<_>>(),
+			run_test(false, true).await.unwrap(),
 			[
-				"{\"char\": String(\"y\"), \"index\": UInt(0), \"x\": Float(100.0)}",
-				"{",
-				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
-				"  \"maxzoom\": 30,",
-				"  \"minzoom\": 0,",
-				"  \"tile_content\": \"vector\",",
-				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
-				"  \"tile_schema\": \"other\",",
-				"  \"tilejson\": \"3.0.0\",",
-				"  \"vector_layers\": [",
-				"    { \"fields\": {  }, \"id\": \"background\", \"maxzoom\": 30, \"minzoom\": 0 },",
-				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
-				"      \"id\": \"debug_x\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    },",
-				"    {",
+				"{\"char\": String(\":\"), \"data_id\": UInt(1), \"index\": UInt(1), \"value\": String(\"test\"), \"x\": Float(132.7017)}",
 				"      \"fields\": {",
 				"        \"char\": \"which character\",",
 				"        \"data_id\": \"automatically added field\",",
@@ -435,18 +434,6 @@ mod tests {
 				"        \"position\": \"x value\",",
 				"        \"value\": \"automatically added field\"",
 				"      },",
-				"      \"id\": \"debug_y\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    },",
-				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
-				"      \"id\": \"debug_z\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    }",
-				"  ]",
-				"}"
 			]
 		);
 	}
@@ -454,39 +441,10 @@ mod tests {
 	#[tokio::test]
 	async fn test_run_replace() {
 		assert_eq!(
-			run_test(true, false).await.unwrap().split("\n").collect::<Vec<_>>(),
+			run_test(true, false).await.unwrap(),
 			[
-				"{\"char\": String(\"y\"), \"index\": UInt(0), \"x\": Float(100.0)}",
-				"{",
-				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
-				"  \"maxzoom\": 30,",
-				"  \"minzoom\": 0,",
-				"  \"tile_content\": \"vector\",",
-				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
-				"  \"tile_schema\": \"other\",",
-				"  \"tilejson\": \"3.0.0\",",
-				"  \"vector_layers\": [",
-				"    { \"fields\": {  }, \"id\": \"background\", \"maxzoom\": 30, \"minzoom\": 0 },",
-				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
-				"      \"id\": \"debug_x\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    },",
-				"    {",
+				"{\"value\": String(\"test\")}",
 				"      \"fields\": { \"value\": \"automatically added field\" },",
-				"      \"id\": \"debug_y\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    },",
-				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
-				"      \"id\": \"debug_z\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    }",
-				"  ]",
-				"}"
 			]
 		);
 	}
@@ -494,39 +452,10 @@ mod tests {
 	#[tokio::test]
 	async fn test_run_replace_and_include_index() {
 		assert_eq!(
-			run_test(true, true).await.unwrap().split("\n").collect::<Vec<_>>(),
+			run_test(true, true).await.unwrap(),
 			[
-				"{\"char\": String(\"y\"), \"index\": UInt(0), \"x\": Float(100.0)}",
-				"{",
-				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
-				"  \"maxzoom\": 30,",
-				"  \"minzoom\": 0,",
-				"  \"tile_content\": \"vector\",",
-				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
-				"  \"tile_schema\": \"other\",",
-				"  \"tilejson\": \"3.0.0\",",
-				"  \"vector_layers\": [",
-				"    { \"fields\": {  }, \"id\": \"background\", \"maxzoom\": 30, \"minzoom\": 0 },",
-				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
-				"      \"id\": \"debug_x\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    },",
-				"    {",
+				"{\"data_id\": UInt(1), \"value\": String(\"test\")}",
 				"      \"fields\": { \"data_id\": \"automatically added field\", \"value\": \"automatically added field\" },",
-				"      \"id\": \"debug_y\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    },",
-				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
-				"      \"id\": \"debug_z\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    }",
-				"  ]",
-				"}"
 			]
 		);
 	}

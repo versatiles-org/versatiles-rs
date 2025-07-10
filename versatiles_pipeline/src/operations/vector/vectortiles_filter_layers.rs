@@ -179,10 +179,10 @@ mod tests {
 	fn create_layer(suffix: &str) -> VectorTileLayer {
 		let mut feature = GeoFeature::new(Geometry::new_example());
 		feature.properties = GeoProperties::from(vec![
-			("id", GeoValue::from(format!("feature_{}", suffix))),
-			("property", GeoValue::from(format!("value_{}", suffix))),
+			("id", GeoValue::from(format!("feature_{suffix}"))),
+			("property", GeoValue::from(format!("value_{suffix}"))),
 		]);
-		VectorTileLayer::from_features(format!("test_layer{}", suffix), vec![feature], 4096, 1).unwrap()
+		VectorTileLayer::from_features(format!("test_layer{suffix}"), vec![feature], 4096, 1).unwrap()
 	}
 
 	fn extract_suffix(layer: &VectorTileLayer) -> Result<String> {
@@ -247,7 +247,9 @@ mod tests {
 		let tile = VectorTile::from_blob(&blob)?;
 		let layer_names = tile.layers.iter().map(|layer| layer.name.clone()).collect::<Vec<_>>();
 
-		Ok((layer_names.join(","), operation.get_tilejson().as_pretty_lines(100)))
+		let tilejson = operation.get_tilejson().as_pretty_lines(100);
+
+		Ok((layer_names.join(","), tilejson))
 	}
 
 	#[tokio::test]

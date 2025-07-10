@@ -125,6 +125,7 @@ impl std::fmt::Debug for PipelineReader {
 mod tests {
 	use super::*;
 	use crate::MockTilesWriter;
+	use versatiles_core::utils::decompress;
 
 	pub const VPL: &str = include_str!("../../../../testdata/berlin.vpl");
 
@@ -155,7 +156,10 @@ mod tests {
 		let result = reader.get_tile_data(&TileCoord3::new(0, 0, 14)?).await;
 		assert_eq!(result?, None);
 
-		let result = reader.get_tile_data(&TileCoord3::new(8800, 5377, 14)?).await?.unwrap();
+		let result = decompress(
+			reader.get_tile_data(&TileCoord3::new(8800, 5377, 14)?).await?.unwrap(),
+			&reader.get_parameters().tile_compression,
+		)?;
 
 		assert_eq!(result.len(), 141385);
 
