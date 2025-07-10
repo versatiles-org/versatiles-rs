@@ -72,6 +72,12 @@ impl From<u32> for GeoValue {
 	}
 }
 
+impl From<usize> for GeoValue {
+	fn from(value: usize) -> Self {
+		GeoValue::UInt(value as u64)
+	}
+}
+
 impl From<i64> for GeoValue {
 	fn from(value: i64) -> Self {
 		GeoValue::Int(value)

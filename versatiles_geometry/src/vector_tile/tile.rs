@@ -50,6 +50,10 @@ impl VectorTile {
 
 		Ok(writer.into_blob())
 	}
+
+	pub fn find_layer(&self, name: &str) -> Option<&VectorTileLayer> {
+		self.layers.iter().find(|layer| layer.name == name)
+	}
 }
 
 #[cfg(test)]

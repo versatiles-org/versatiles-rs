@@ -8,6 +8,7 @@ pub fn get_transform_operation_factories() -> Vec<Box<dyn TransformOperationFact
 	vec![
 		Box::new(filter::filter_bbox::Factory {}),
 		Box::new(vector::vectortiles_update_properties::Factory {}),
+		Box::new(vector::vectortiles_filter_layers::Factory {}),
 	]
 }
 

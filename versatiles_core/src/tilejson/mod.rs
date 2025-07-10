@@ -32,7 +32,7 @@
 //! ```
 
 mod value;
-mod vector_layer;
+pub mod vector_layer;
 
 use crate::{json::*, types::*};
 use anyhow::{anyhow, ensure, Ok, Result};

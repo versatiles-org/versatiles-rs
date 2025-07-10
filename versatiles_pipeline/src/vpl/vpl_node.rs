@@ -58,9 +58,13 @@ impl VPLNode {
 	}
 
 	pub fn get_property_bool_req(&self, field: &str) -> Result<bool> {
+		self.required(field, self.get_property_bool(field))
+	}
+
+	pub fn get_property_bool(&self, field: &str) -> Result<Option<bool>> {
 		Ok(self
 			.get_property(field)?
-			.is_some_and(|v| matches!(v.trim().to_lowercase().as_str(), "1" | "true" | "yes" | "ok")))
+			.map(|v| matches!(v.trim().to_lowercase().as_str(), "1" | "true" | "yes" | "ok")))
 	}
 
 	pub fn get_property_number<T>(&self, field: &str) -> Result<Option<T>>

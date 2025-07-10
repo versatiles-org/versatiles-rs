@@ -205,6 +205,15 @@ impl VectorLayers {
 	}
 }
 
+impl FromIterator<(String, VectorLayer)> for VectorLayers {
+	/// Constructs a [`VectorLayers`] from an iterator of tuples `(String, VectorLayer)`.
+	///
+	/// This is useful for creating a `VectorLayers` instance from a collection of layers.
+	fn from_iter<I: IntoIterator<Item = (String, VectorLayer)>>(iter: I) -> Self {
+		VectorLayers(iter.into_iter().collect())
+	}
+}
+
 /// Represents a single layer entry within "vector_layers" in the TileJSON spec.
 ///
 /// Each layer has:
