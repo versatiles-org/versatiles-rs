@@ -1,14 +1,12 @@
 use crate::{
 	PipelineFactory,
-	helpers::{pack_vector_tile, pack_vector_tile_stream, read_csv_file},
-	operations::vector::traits::RunnerTrait,
+	helpers::read_csv_file,
+	operations::vector::traits::{RunnerTrait, TransformOp},
 	traits::{OperationFactoryTrait, OperationTrait, TransformOperationFactoryTrait},
 	vpl::VPLNode,
 };
-use anyhow::{Context, Result, anyhow, bail, ensure};
+use anyhow::{Context, Result, anyhow, ensure};
 use async_trait::async_trait;
-use futures::future::BoxFuture;
-use imageproc::image::DynamicImage;
 use log::warn;
 use std::{
 	collections::{HashMap, HashSet},
@@ -138,101 +136,6 @@ impl RunnerTrait for Runner {
 	}
 }
 
-#[derive(Debug)]
-struct Operation {
-	/// Shared transformer that patches every vector tile.
-	runner: Arc<Runner>,
-	/// Output reader parameters (same as source but uncompressed).
-	parameters: TilesReaderParameters,
-	/// Upstream operation that delivers the *original* tiles.
-	source: Box<dyn OperationTrait>,
-	/// TileJSON after adding any new attribute keys discovered in the CSV.
-	tilejson: TileJSON,
-}
-
-impl Operation {
-	fn build(
-		vpl_node: VPLNode,
-		source: Box<dyn OperationTrait>,
-		factory: &PipelineFactory,
-	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>, anyhow::Error>>
-	where
-		Self: Sized + OperationTrait,
-	{
-		Box::pin(async move {
-			let args = Args::from_vpl_node(&vpl_node)?;
-
-			// Parse the VPL node into strongly‑typed arguments.
-			let data = read_csv_file(&factory.resolve_path(&args.data_source_path))
-				.await
-				.with_context(|| format!("Failed to read CSV file from '{}'", args.data_source_path))?;
-
-			let parameters = source.get_parameters().clone();
-			ensure!(
-				parameters.tile_format.get_type() == TileType::Vector,
-				"source must be vector tiles"
-			);
-
-			let runner = Arc::new(Runner::from_args(args, data)?);
-
-			let mut tilejson = source.get_tilejson().clone();
-			runner.update_tilejson(&mut tilejson);
-			tilejson.update_from_reader_parameters(&parameters);
-
-			Ok(Box::new(Self {
-				runner,
-				parameters,
-				source,
-				tilejson,
-			}) as Box<dyn OperationTrait>)
-		})
-	}
-}
-
-#[async_trait]
-impl OperationTrait for Operation {
-	fn get_parameters(&self) -> &TilesReaderParameters {
-		&self.parameters
-	}
-
-	fn get_tilejson(&self) -> &TileJSON {
-		&self.tilejson
-	}
-
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		pack_vector_tile(self.get_vector_data(coord).await, &self.parameters)
-	}
-
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
-		pack_vector_tile_stream(self.get_vector_stream(bbox).await, &self.parameters)
-	}
-
-	async fn get_image_data(&self, _coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		bail!("this operation does not support image data");
-	}
-
-	async fn get_image_stream(&self, _bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		bail!("this operation does not support image data");
-	}
-
-	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		if let Some(tile) = self.source.get_vector_data(coord).await? {
-			self.runner.run(tile).map(Some)
-		} else {
-			Ok(None)
-		}
-	}
-
-	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		let runner = self.runner.clone();
-		Ok(self
-			.source
-			.get_vector_stream(bbox)
-			.await?
-			.filter_map_item_parallel(move |tile| runner.run(tile).map(Some)))
-	}
-}
-
 pub struct Factory {}
 
 impl OperationFactoryTrait for Factory {
@@ -252,7 +155,36 @@ impl TransformOperationFactoryTrait for Factory {
 		source: Box<dyn OperationTrait>,
 		factory: &'a PipelineFactory,
 	) -> Result<Box<dyn OperationTrait>> {
-		Operation::build(vpl_node, source, factory).await
+		let args = Args::from_vpl_node(&vpl_node)?;
+
+		// Load the CSV file referenced in the VPL.
+		let data = read_csv_file(&factory.resolve_path(&args.data_source_path))
+			.await
+			.with_context(|| format!("Failed to read CSV file from '{}'", args.data_source_path))?;
+
+		// Ensure the upstream produces vector tiles.
+		let mut params = source.get_parameters().clone();
+		ensure!(
+			params.tile_format.get_type() == TileType::Vector,
+			"source must be vector tiles"
+		);
+		// The transform mutates data, so keep it uncompressed.
+		params.tile_compression = TileCompression::Uncompressed;
+
+		// Build the runner from the parsed args + CSV rows.
+		let runner = Arc::new(Runner::from_args(args, data)?);
+
+		// Update TileJSON using the runner.
+		let mut tilejson = source.get_tilejson().clone();
+		runner.update_tilejson(&mut tilejson);
+		tilejson.update_from_reader_parameters(&params);
+
+		Ok(Box::new(TransformOp::<Runner> {
+			runner,
+			source,
+			params,
+			tilejson,
+		}) as Box<dyn OperationTrait>)
 	}
 }
 

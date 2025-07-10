@@ -1,16 +1,13 @@
 use crate::{
 	PipelineFactory,
-	helpers::{pack_vector_tile, pack_vector_tile_stream},
-	operations::vector::traits::RunnerTrait,
+	operations::vector::traits::{RunnerTrait, TransformOp},
 	traits::{OperationFactoryTrait, OperationTrait, TransformOperationFactoryTrait},
 	vpl::VPLNode,
 };
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use futures::future::BoxFuture;
-use imageproc::image::DynamicImage;
 use std::{collections::HashSet, sync::Arc};
-use versatiles_core::{tilejson::TileJSON, types::*};
+use versatiles_core::{tilejson::TileJSON, types::TileType};
 use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -56,96 +53,6 @@ impl RunnerTrait for Runner {
 	}
 }
 
-#[derive(Debug)]
-struct Operation {
-	/// Shared transformer that patches every vector tile.
-	runner: Arc<Runner>,
-	/// Output reader parameters (same as source but uncompressed).
-	parameters: TilesReaderParameters,
-	/// Upstream operation that delivers the *original* tiles.
-	source: Box<dyn OperationTrait>,
-	/// TileJSON after adding any new attribute keys discovered in the CSV.
-	tilejson: TileJSON,
-}
-
-impl Operation {
-	fn build(
-		vpl_node: VPLNode,
-		source: Box<dyn OperationTrait>,
-		_factory: &PipelineFactory,
-	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>, anyhow::Error>>
-	where
-		Self: Sized + OperationTrait,
-	{
-		Box::pin(async move {
-			let args = Args::from_vpl_node(&vpl_node)?;
-
-			let parameters = source.get_parameters().clone();
-			ensure!(
-				parameters.tile_format.get_type() == TileType::Vector,
-				"source must be vector tiles"
-			);
-
-			let runner = Arc::new(Runner::from_args(&args));
-
-			let mut tilejson = source.get_tilejson().clone();
-			runner.update_tilejson(&mut tilejson);
-			tilejson.update_from_reader_parameters(&parameters);
-
-			Ok(Box::new(Self {
-				runner,
-				parameters,
-				source,
-				tilejson,
-			}) as Box<dyn OperationTrait>)
-		})
-	}
-}
-
-#[async_trait]
-impl OperationTrait for Operation {
-	fn get_parameters(&self) -> &TilesReaderParameters {
-		&self.parameters
-	}
-
-	fn get_tilejson(&self) -> &TileJSON {
-		&self.tilejson
-	}
-
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		pack_vector_tile(self.get_vector_data(coord).await, &self.parameters)
-	}
-
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
-		pack_vector_tile_stream(self.get_vector_stream(bbox).await, &self.parameters)
-	}
-
-	async fn get_image_data(&self, _coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		bail!("this operation does not support image data");
-	}
-
-	async fn get_image_stream(&self, _bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		bail!("this operation does not support image data");
-	}
-
-	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		Ok(if let Some(tile) = self.source.get_vector_data(coord).await? {
-			Some(self.runner.run(tile)?)
-		} else {
-			None
-		})
-	}
-
-	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		let runner = self.runner.clone();
-		Ok(self
-			.source
-			.get_vector_stream(bbox)
-			.await?
-			.filter_map_item_parallel(move |tile| runner.run(tile).map(Some)))
-	}
-}
-
 pub struct Factory {}
 
 impl OperationFactoryTrait for Factory {
@@ -163,9 +70,28 @@ impl TransformOperationFactoryTrait for Factory {
 		&self,
 		vpl_node: VPLNode,
 		source: Box<dyn OperationTrait>,
-		factory: &'a PipelineFactory,
+		_factory: &'a PipelineFactory,
 	) -> Result<Box<dyn OperationTrait>> {
-		Operation::build(vpl_node, source, factory).await
+		let args = Args::from_vpl_node(&vpl_node)?;
+
+		let parameters = source.get_parameters().clone();
+		ensure!(
+			parameters.tile_format.get_type() == TileType::Vector,
+			"source must be vector tiles"
+		);
+
+		let runner = Arc::new(Runner::from_args(&args));
+
+		let mut tilejson = source.get_tilejson().clone();
+		runner.update_tilejson(&mut tilejson);
+		tilejson.update_from_reader_parameters(&parameters);
+
+		Ok(Box::new(TransformOp::<Runner> {
+			runner,
+			source,
+			params: parameters,
+			tilejson,
+		}) as Box<dyn OperationTrait>)
 	}
 }
 
@@ -174,38 +100,35 @@ impl TransformOperationFactoryTrait for Factory {
 mod tests {
 	use super::*;
 	use pretty_assertions::assert_eq;
+	use versatiles_core::types::TileCoord3;
 	use versatiles_geometry::{GeoFeature, GeoProperties, GeoValue, Geometry, vector_tile::VectorTileLayer};
-
-	fn create_layer(suffix: &str) -> VectorTileLayer {
-		let mut feature = GeoFeature::new(Geometry::new_example());
-		feature.properties = GeoProperties::from(vec![
-			("id", GeoValue::from(format!("feature_{suffix}"))),
-			("property", GeoValue::from(format!("value_{suffix}"))),
-		]);
-		VectorTileLayer::from_features(format!("test_layer{suffix}"), vec![feature], 4096, 1).unwrap()
-	}
-
-	fn extract_suffix(layer: &VectorTileLayer) -> Result<String> {
-		let suffix = layer
-			.name
-			.strip_prefix("test_layer")
-			.map(|s| s.to_string())
-			.ok_or_else(|| anyhow::anyhow!("Layer name does not start with 'test_layer': {}", layer.name))?;
-		Ok(suffix)
-	}
-
-	fn create_sample_vector_tile() -> VectorTile {
-		VectorTile::new(vec![create_layer("1"), create_layer("2")])
-	}
 
 	#[tokio::test]
 	async fn test_runner_run() {
+		fn create_layer(suffix: &str) -> VectorTileLayer {
+			let mut feature = GeoFeature::new(Geometry::new_example());
+			feature.properties = GeoProperties::from(vec![
+				("id", GeoValue::from(format!("feature_{suffix}"))),
+				("property", GeoValue::from(format!("value_{suffix}"))),
+			]);
+			VectorTileLayer::from_features(format!("test_layer{suffix}"), vec![feature], 4096, 1).unwrap()
+		}
+
+		fn extract_suffix(layer: &VectorTileLayer) -> Result<String> {
+			let suffix = layer
+				.name
+				.strip_prefix("test_layer")
+				.map(|s| s.to_string())
+				.ok_or_else(|| anyhow::anyhow!("Layer name does not start with 'test_layer': {}", layer.name))?;
+			Ok(suffix)
+		}
+
 		let runner = Runner::from_args(&Args {
 			filter: "test_layer1".to_string(),
 			invert: None,
 		});
 
-		let tile0 = create_sample_vector_tile();
+		let tile0 = VectorTile::new(vec![create_layer("1"), create_layer("2")]);
 		let tile1 = runner.run(tile0).unwrap();
 
 		assert_eq!(tile1.layers.len(), 1);
