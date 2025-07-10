@@ -18,13 +18,13 @@ mod image;
 mod vector;
 
 use crate::{
+	PipelineFactory,
 	helpers::{pack_image_tile, pack_image_tile_stream, pack_vector_tile, pack_vector_tile_stream},
 	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::VPLNode,
-	PipelineFactory,
 };
-use anyhow::{bail, ensure, Result};
+use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use image::create_debug_image;
@@ -291,37 +291,37 @@ mod tests {
 			"mvt",
 			1996,
 			&[
-				"{", 
+				"{",
 				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
-				 "  \"maxzoom\": 30,",
-				  "  \"minzoom\": 0,", 
-				  "  \"tile_content\": \"vector\",", 
-				  "  \"tile_format\": \"vnd.mapbox-vector-tile\",", 
-				  "  \"tile_schema\": \"other\",", 
-				  "  \"tilejson\": \"3.0.0\",",
-				   "  \"vector_layers\": [",
-					 "    { \"fields\": {  }, \"id\": \"background\", \"maxzoom\": 30, \"minzoom\": 0 },", 
-					 "    {", 
-					 "      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
-					  "      \"id\": \"debug_x\",", 
-					  "      \"maxzoom\": 30,", 
-					  "      \"minzoom\": 0", 
-					  "    },", 
-					  "    {", 
-					  "      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },", 
-					  "      \"id\": \"debug_y\",", 
-					  "      \"maxzoom\": 30,", 
-					  "      \"minzoom\": 0", 
-					  "    },", 
-					  "    {", 
-					  "      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },", 
-					  "      \"id\": \"debug_z\",", 
-					  "      \"maxzoom\": 30,", 
-					  "      \"minzoom\": 0", 
-					  "    }", 
-					  "  ]", 
-					  "}"
-					  ],
+				"  \"maxzoom\": 30,",
+				"  \"minzoom\": 0,",
+				"  \"tile_content\": \"vector\",",
+				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
+				"  \"tile_schema\": \"other\",",
+				"  \"tilejson\": \"3.0.0\",",
+				"  \"vector_layers\": [",
+				"    { \"fields\": {  }, \"id\": \"background\", \"maxzoom\": 30, \"minzoom\": 0 },",
+				"    {",
+				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
+				"      \"id\": \"debug_x\",",
+				"      \"maxzoom\": 30,",
+				"      \"minzoom\": 0",
+				"    },",
+				"    {",
+				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
+				"      \"id\": \"debug_y\",",
+				"      \"maxzoom\": 30,",
+				"      \"minzoom\": 0",
+				"    },",
+				"    {",
+				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
+				"      \"id\": \"debug_z\",",
+				"      \"maxzoom\": 30,",
+				"      \"minzoom\": 0",
+				"    }",
+				"  ]",
+				"}",
+			],
 		)
 		.await
 		.unwrap();

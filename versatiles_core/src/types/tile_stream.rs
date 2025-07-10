@@ -44,9 +44,9 @@
 use crate::types::{Blob, TileCoord3};
 use anyhow::Result;
 use futures::{
+	Future, Stream, StreamExt,
 	future::ready,
 	stream::{self, BoxStream},
-	Future, Stream, StreamExt,
 };
 use std::{io::Write, pin::Pin, sync::Arc};
 

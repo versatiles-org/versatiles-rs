@@ -2,7 +2,7 @@
 
 use super::{geometry_type::GeomType, layer::VectorTileLayer};
 use crate::{geo::*, math::area_ring};
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{Context, Result, bail, ensure};
 use byteorder::LE;
 use log::trace;
 use versatiles_core::{io::*, types::Blob};

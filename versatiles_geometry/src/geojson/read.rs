@@ -1,7 +1,7 @@
 use super::parse_geojson;
-use crate::{parse_geojson_feature, GeoCollection, GeoFeature};
-use anyhow::{anyhow, Error, Result};
-use futures::{future::ready, stream, Stream, StreamExt};
+use crate::{GeoCollection, GeoFeature, parse_geojson_feature};
+use anyhow::{Error, Result, anyhow};
+use futures::{Stream, StreamExt, future::ready, stream};
 use std::io::{BufRead, Cursor, Read};
 use versatiles_core::byte_iterator::ByteIterator;
 

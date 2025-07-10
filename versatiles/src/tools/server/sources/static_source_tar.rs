@@ -1,12 +1,12 @@
-use super::super::utils::{guess_mime, Url};
-use super::{static_source::StaticSourceTrait, SourceResponse};
-use anyhow::{bail, ensure, Result};
+use super::super::utils::{Url, guess_mime};
+use super::{SourceResponse, static_source::StaticSourceTrait};
+use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use std::{collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::File, io::Read, path::Path};
 use tar::{Archive, EntryType};
 use versatiles_core::{
 	types::{Blob, TileCompression},
-	utils::{decompress_brotli, decompress_gzip, TargetCompression},
+	utils::{TargetCompression, decompress_brotli, decompress_gzip},
 };
 
 #[derive(Debug)]
@@ -184,7 +184,7 @@ mod tests {
 	use super::*;
 	use assert_fs::NamedTempFile;
 	use versatiles_container::{
-		convert_tiles_container, MockTilesReader, MockTilesReaderProfile, TilesConverterParameters,
+		MockTilesReader, MockTilesReaderProfile, TilesConverterParameters, convert_tiles_container,
 	};
 	use versatiles_core::types::TilesReaderTrait;
 
@@ -264,7 +264,10 @@ mod tests {
 				let result = result.unwrap();
 
 				if result.compression == N {
-					assert_eq!(result.blob.as_str(), "{\"bounds\":[-180,-79.171335,45,66.51326],\"maxzoom\":3,\"minzoom\":2,\"tile_content\":\"vector\",\"tile_format\":\"vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}");
+					assert_eq!(
+						result.blob.as_str(),
+						"{\"bounds\":[-180,-79.171335,45,66.51326],\"maxzoom\":3,\"minzoom\":2,\"tile_content\":\"vector\",\"tile_format\":\"vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
+					);
 				}
 
 				assert_eq!(result.mime, "application/json");

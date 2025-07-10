@@ -1,4 +1,4 @@
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
+use criterion::{BatchSize, Criterion, criterion_group, criterion_main};
 use std::{hint::black_box, io::Cursor};
 use versatiles_core::utils::read_csv_iter;
 

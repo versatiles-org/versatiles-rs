@@ -1,6 +1,6 @@
 use crate::json::*;
 use crate::types::Blob;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum JsonValue {

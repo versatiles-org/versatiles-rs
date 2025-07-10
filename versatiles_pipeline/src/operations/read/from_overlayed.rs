@@ -16,14 +16,14 @@
 //! 3. Tests that verify error handling and overlay semantics.
 
 use crate::{
+	PipelineFactory,
 	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
-	PipelineFactory,
 };
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use futures::future::{join_all, BoxFuture};
+use futures::future::{BoxFuture, join_all};
 use imageproc::image::DynamicImage;
 use versatiles_core::{tilejson::TileJSON, types::*, utils::recompress};
 use versatiles_geometry::vector_tile::VectorTile;
@@ -273,7 +273,7 @@ mod tests {
 	use crate::helpers::mock_vector_source::arrange_tiles;
 
 	pub fn check_tile(blob: &Blob, coord: &TileCoord3) -> Result<String> {
-		use versatiles_geometry::{vector_tile::VectorTile, GeoValue};
+		use versatiles_geometry::{GeoValue, vector_tile::VectorTile};
 
 		let tile = VectorTile::from_blob(blob)?;
 		assert_eq!(tile.layers.len(), 1);

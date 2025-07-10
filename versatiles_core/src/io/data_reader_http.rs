@@ -29,7 +29,7 @@
 
 use super::DataReaderTrait;
 use crate::types::{Blob, ByteRange};
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};

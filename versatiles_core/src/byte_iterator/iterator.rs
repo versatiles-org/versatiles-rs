@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result, anyhow};
 use std::io::Read;
 
 const DEBUG_RING_BUFFER_SIZE: usize = 16;

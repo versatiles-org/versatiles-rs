@@ -8,7 +8,7 @@
 //! This is particularly useful in mapping applications where tile management is essential.
 
 use super::{GeoBBox, TileBBoxPyramid, TileCoord2, TileCoord3};
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use itertools::Itertools;
 use std::{
 	fmt,

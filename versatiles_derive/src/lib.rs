@@ -5,7 +5,7 @@ use crate::args::Args;
 use decode_vpl::decode_struct;
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span};
-use quote::{quote, ToTokens};
+use quote::{ToTokens, quote};
 use syn::parse_macro_input;
 
 #[proc_macro_derive(VPLDecode)]

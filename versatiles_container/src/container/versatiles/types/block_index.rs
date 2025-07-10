@@ -5,7 +5,7 @@
 //! The `BlockIndex` struct contains metadata about the blocks, including their coordinates and bounding boxes, and provides methods to manipulate and query this data.
 
 use super::BlockDefinition;
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use std::{collections::HashMap, ops::Div};
 use versatiles_core::{io::*, types::*, utils::*};
 

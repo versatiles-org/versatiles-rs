@@ -34,7 +34,7 @@
 
 use super::DataWriterTrait;
 use crate::types::{Blob, ByteRange};
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::{
 	fs::File,

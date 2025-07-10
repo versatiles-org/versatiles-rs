@@ -2,24 +2,24 @@ use super::{
 	sources::{SourceResponse, StaticSource, TileSource},
 	utils::Url,
 };
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use axum::{
+	Router,
 	body::Body,
 	extract::State,
 	http::{
-		header::{ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE},
 		HeaderMap, Uri,
+		header::{ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE},
 	},
 	response::Response,
 	routing::get,
-	Router,
 };
 use hyper::header::{ACCESS_CONTROL_ALLOW_ORIGIN, VARY};
 use std::path::Path;
 use tokio::sync::oneshot::Sender;
 use versatiles_core::{
 	types::{Blob, TileCompression, TilesReaderTrait},
-	utils::{optimize_compression, TargetCompression},
+	utils::{TargetCompression, optimize_compression},
 };
 
 pub struct TileServer {
@@ -319,8 +319,8 @@ fn get_encoding(headers: HeaderMap) -> TargetCompression {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
-	use enumset::{enum_set, EnumSet};
+	use axum::http::{HeaderMap, header::ACCEPT_ENCODING};
+	use enumset::{EnumSet, enum_set};
 	use versatiles_container::{MockTilesReader, MockTilesReaderProfile};
 	use versatiles_core::types::TileCompression::*;
 

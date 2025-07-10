@@ -127,7 +127,7 @@ fn run(cli: Cli) -> Result<()> {
 /// Unit tests for the command-line interface
 #[cfg(test)]
 mod tests {
-	use crate::{run, Cli};
+	use crate::{Cli, run};
 	use anyhow::Result;
 	use clap::Parser;
 

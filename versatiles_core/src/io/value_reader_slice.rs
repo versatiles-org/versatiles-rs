@@ -32,7 +32,7 @@
 #![allow(dead_code)]
 
 use super::{SeekRead, ValueReader};
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use std::{io::Cursor, marker::PhantomData};
 

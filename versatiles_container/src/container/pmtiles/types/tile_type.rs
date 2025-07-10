@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use versatiles_core::types::TileFormat;
 
 #[allow(clippy::upper_case_acronyms)]

@@ -29,10 +29,10 @@
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying the database structure.
 
 use crate::TilesWriterTrait;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use async_trait::async_trait;
 use r2d2::Pool;
-use r2d2_sqlite::{rusqlite::params, SqliteConnectionManager};
+use r2d2_sqlite::{SqliteConnectionManager, rusqlite::params};
 use std::{fs::remove_file, path::Path};
 use versatiles_core::{io::DataWriterTrait, json::JsonObject, progress::get_progress_bar, types::*};
 

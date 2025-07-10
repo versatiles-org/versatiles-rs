@@ -1,4 +1,4 @@
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use std::fmt::Debug;
 
 /// A geographic bounding box, represented by four `f64` values:

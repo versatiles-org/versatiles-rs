@@ -1,16 +1,16 @@
 use super::{VPLNode, VPLPipeline};
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result, ensure};
 use nom::{
+	IResult, Parser,
 	branch::alt,
 	bytes::complete::{escaped_transform, tag, take_while, take_while1},
 	character::complete::{alphanumeric1, char, multispace0, multispace1, none_of, one_of},
 	combinator::{all_consuming, cut, opt, recognize, value},
-	error::{context, ContextError},
+	error::{ContextError, context},
 	multi::{many1, separated_list0, separated_list1},
 	sequence::{delimited, pair, separated_pair},
-	IResult, Parser,
 };
-use nom_language::error::{convert_error, VerboseError};
+use nom_language::error::{VerboseError, convert_error};
 use std::{collections::BTreeMap, fmt::Debug};
 
 #[allow(dead_code)]

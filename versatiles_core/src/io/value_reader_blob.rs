@@ -35,7 +35,7 @@
 
 use super::{SeekRead, ValueReader, ValueReaderSlice};
 use crate::types::Blob;
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use std::{io::Cursor, marker::PhantomData};
 

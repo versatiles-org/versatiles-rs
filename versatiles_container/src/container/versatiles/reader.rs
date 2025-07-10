@@ -479,7 +479,7 @@ impl PartialEq for VersaTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{make_test_file, MockTilesReader, TilesWriterTrait, VersaTilesWriter, MOCK_BYTES_PBF};
+	use crate::{MOCK_BYTES_PBF, MockTilesReader, TilesWriterTrait, VersaTilesWriter, make_test_file};
 	use versatiles_core::{assert_wildcard, io::DataWriterBlob, utils::decompress_gzip};
 
 	#[tokio::test]
@@ -488,14 +488,20 @@ mod tests {
 
 		let reader = VersaTilesReader::open_path(&temp_file).await?;
 
-		assert_eq!(format!("{reader:?}"), "VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: MVT } }");
+		assert_eq!(
+			format!("{reader:?}"),
+			"VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: MVT } }"
+		);
 		assert_eq!(reader.get_container_name(), "versatiles");
 		assert_wildcard!(reader.get_source_name(), "*.versatiles");
 		assert_eq!(
 			reader.get_tilejson().as_string(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
-		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: MVT }");
+		assert_eq!(
+			format!("{:?}", reader.get_parameters()),
+			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: MVT }"
+		);
 		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.get_parameters().tile_format, TileFormat::MVT);
 

@@ -2,8 +2,8 @@ use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{tilejson::TileJSON, types::*};
 use versatiles_geometry::{
-	vector_tile::{VectorTile, VectorTileLayer},
 	GeoFeature, Geometry,
+	vector_tile::{VectorTile, VectorTileLayer},
 };
 
 #[derive(Debug)]
@@ -141,10 +141,12 @@ mod tests {
 
 		assert_eq!(source.get_source_name(), "MockVectorSource");
 		assert_eq!(source.get_container_name(), "MockVectorSource");
-		assert!(source
-			.get_parameters()
-			.bbox_pyramid
-			.contains_coord(&TileCoord3::new(0, 200, 8).unwrap()));
+		assert!(
+			source
+				.get_parameters()
+				.bbox_pyramid
+				.contains_coord(&TileCoord3::new(0, 200, 8).unwrap())
+		);
 
 		let coord = TileCoord3::new(0, 150, 8).unwrap();
 		let tile_data = source.get_tile_data(&coord).await.unwrap();

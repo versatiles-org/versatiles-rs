@@ -1,7 +1,7 @@
-use crate::{traits::*, vpl::VPLNode, PipelineFactory};
+use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::future::{ready, BoxFuture};
+use futures::future::{BoxFuture, ready};
 use imageproc::image::DynamicImage;
 use std::fmt::Debug;
 use versatiles_core::{tilejson::TileJSON, types::*};

@@ -1,5 +1,5 @@
 use crate::{json::*, types::TileSchema};
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{Context, Result, anyhow, ensure};
 use std::{collections::BTreeMap, fmt::Debug};
 
 /// A collection of [`VectorLayer`]s keyed by their `id` string.

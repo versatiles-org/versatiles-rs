@@ -35,7 +35,7 @@ mod value;
 pub mod vector_layer;
 
 use crate::{json::*, types::*};
-use anyhow::{anyhow, ensure, Ok, Result};
+use anyhow::{Ok, Result, anyhow, ensure};
 use regex::Regex;
 use std::fmt::Debug;
 use value::TileJsonValues;

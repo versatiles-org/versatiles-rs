@@ -23,8 +23,8 @@
 #![allow(dead_code)]
 
 use crate::types::{Blob, TileCompression};
-use anyhow::{bail, Context, Result};
-use brotli::{enc::BrotliEncoderParams, BrotliCompress, BrotliDecompress};
+use anyhow::{Context, Result, bail};
+use brotli::{BrotliCompress, BrotliDecompress, enc::BrotliEncoderParams};
 use enumset::EnumSet;
 use flate2::bufread::{GzDecoder, GzEncoder};
 use std::{

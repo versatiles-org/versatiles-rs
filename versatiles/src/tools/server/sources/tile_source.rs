@@ -1,5 +1,5 @@
 use super::{super::utils::Url, SourceResponse};
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 use versatiles_core::{
@@ -126,7 +126,10 @@ mod tests {
 		let container = TileSource::from(reader.boxed(), "prefix")?;
 
 		assert_eq!(container.prefix.str, "/tiles/prefix/");
-		assert_eq!(container.build_tile_json().await?.as_str(), "{\"bounds\":[-180,-79.171335,45,66.51326],\"maxzoom\":3,\"minzoom\":2,\"tile_content\":\"raster\",\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}");
+		assert_eq!(
+			container.build_tile_json().await?.as_str(),
+			"{\"bounds\":[-180,-79.171335,45,66.51326],\"maxzoom\":3,\"minzoom\":2,\"tile_content\":\"raster\",\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
+		);
 
 		Ok(())
 	}
@@ -136,7 +139,10 @@ mod tests {
 	fn debug() -> Result<()> {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
 		let container = TileSource::from(reader.boxed(), "prefix")?;
-		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [2: [0,1,2,3] (9), 3: [0,2,4,6] (25)], tile_compression: Uncompressed, tile_format: PNG } } }, tile_mime: \"image/png\", compression: Uncompressed }");
+		assert_eq!(
+			format!("{container:?}"),
+			"TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [2: [0,1,2,3] (9), 3: [0,2,4,6] (25)], tile_compression: Uncompressed, tile_format: PNG } } }, tile_mime: \"image/png\", compression: Uncompressed }"
+		);
 		Ok(())
 	}
 
@@ -189,9 +195,7 @@ mod tests {
 		);
 
 		assert_eq!(
-			String::from_utf8(
-				check_response(c, "meta.json", Uncompressed, "application/json").await?
-			)?,
+			String::from_utf8(check_response(c, "meta.json", Uncompressed, "application/json").await?)?,
 			"{\"bounds\":[-180,-79.171335,45,66.51326],\"maxzoom\":3,\"minzoom\":2,\"tile_content\":\"raster\",\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
 		);
 

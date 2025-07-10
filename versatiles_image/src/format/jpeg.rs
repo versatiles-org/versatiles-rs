@@ -1,6 +1,6 @@
 use crate::EnhancedDynamicImageTrait;
-use anyhow::{anyhow, bail, Result};
-use image::{codecs::jpeg::JpegEncoder, load_from_memory_with_format, DynamicImage, ImageEncoder, ImageFormat};
+use anyhow::{Result, anyhow, bail};
+use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::jpeg::JpegEncoder, load_from_memory_with_format};
 use versatiles_core::types::Blob;
 
 pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {

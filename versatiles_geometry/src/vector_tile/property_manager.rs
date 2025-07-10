@@ -1,5 +1,5 @@
 use crate::{GeoProperties, GeoValue};
-use anyhow::{anyhow, ensure, Context, Result};
+use anyhow::{Context, Result, anyhow, ensure};
 use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Div};
 
 #[derive(Clone, PartialEq)]

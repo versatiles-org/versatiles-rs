@@ -2,8 +2,8 @@ use super::server::{TileServer, Url};
 use anyhow::Result;
 use regex::Regex;
 use std::path::Path;
-use tokio::time::{sleep, Duration};
-use versatiles_container::{get_reader, TilesConvertReader, TilesConverterParameters};
+use tokio::time::{Duration, sleep};
+use versatiles_container::{TilesConvertReader, TilesConverterParameters, get_reader};
 use versatiles_core::types::{TileCompression, TilesReaderTrait};
 
 #[derive(clap::Args, Debug)]

@@ -1,11 +1,11 @@
 use crate::{
+	PipelineFactory,
 	helpers::{pack_vector_tile, pack_vector_tile_stream, read_csv_file},
 	operations::vector::traits::RunnerTrait,
 	traits::{OperationFactoryTrait, OperationTrait, TransformOperationFactoryTrait},
 	vpl::VPLNode,
-	PipelineFactory,
 };
-use anyhow::{anyhow, bail, ensure, Context, Result};
+use anyhow::{Context, Result, anyhow, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::DynamicImage;
@@ -15,7 +15,7 @@ use std::{
 	sync::Arc,
 };
 use versatiles_core::{tilejson::TileJSON, types::*};
-use versatiles_geometry::{vector_tile::VectorTile, GeoProperties};
+use versatiles_geometry::{GeoProperties, vector_tile::VectorTile};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Updates properties of vector tile features using data from an external source (e.g., CSV file). Matches features based on an ID field.
@@ -263,7 +263,7 @@ mod tests {
 	use assert_fs::NamedTempFile;
 	use pretty_assertions::assert_eq;
 	use std::{fs::File, io::Write};
-	use versatiles_geometry::{vector_tile::VectorTileLayer, GeoFeature, GeoProperties, GeoValue, Geometry};
+	use versatiles_geometry::{GeoFeature, GeoProperties, GeoValue, Geometry, vector_tile::VectorTileLayer};
 
 	fn create_sample_vector_tile() -> VectorTile {
 		let mut feature = GeoFeature::new(Geometry::new_example());
@@ -363,11 +363,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_run_normal() {
 		assert_eq!(
-			run_test( false, false)
-				.await
-				.unwrap()
-				.split("\n")
-				.collect::<Vec<_>>(),
+			run_test(false, false).await.unwrap().split("\n").collect::<Vec<_>>(),
 			[
 				"{\"char\": String(\"y\"), \"index\": UInt(0), \"x\": Float(100.0)}",
 				"{",
@@ -388,8 +384,8 @@ mod tests {
 				"    },",
 				"    {",
 				"      \"fields\": {",
-    			"        \"char\": \"which character\",",
-    			"        \"index\": \"index of char\",",
+				"        \"char\": \"which character\",",
+				"        \"index\": \"index of char\",",
 				"        \"position\": \"x value\",",
 				"        \"value\": \"automatically added field\"",
 				"      },",
@@ -412,11 +408,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_run_add_index() {
 		assert_eq!(
-			run_test( false, true)
-				.await
-				.unwrap()
-				.split("\n")
-				.collect::<Vec<_>>(),
+			run_test(false, true).await.unwrap().split("\n").collect::<Vec<_>>(),
 			[
 				"{\"char\": String(\"y\"), \"index\": UInt(0), \"x\": Float(100.0)}",
 				"{",
@@ -436,13 +428,13 @@ mod tests {
 				"      \"minzoom\": 0",
 				"    },",
 				"    {",
-    "      \"fields\": {",
-    "        \"char\": \"which character\",",
-    "        \"data_id\": \"automatically added field\",",
-    "        \"index\": \"index of char\",",
-    "        \"position\": \"x value\",",
-    "        \"value\": \"automatically added field\"",
-    "      },",
+				"      \"fields\": {",
+				"        \"char\": \"which character\",",
+				"        \"data_id\": \"automatically added field\",",
+				"        \"index\": \"index of char\",",
+				"        \"position\": \"x value\",",
+				"        \"value\": \"automatically added field\"",
+				"      },",
 				"      \"id\": \"debug_y\",",
 				"      \"maxzoom\": 30,",
 				"      \"minzoom\": 0",
@@ -462,11 +454,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_run_replace() {
 		assert_eq!(
-			run_test( true, false)
-				.await
-				.unwrap()
-				.split("\n")
-				.collect::<Vec<_>>(),
+			run_test(true, false).await.unwrap().split("\n").collect::<Vec<_>>(),
 			[
 				"{\"char\": String(\"y\"), \"index\": UInt(0), \"x\": Float(100.0)}",
 				"{",
@@ -506,11 +494,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_run_replace_and_include_index() {
 		assert_eq!(
-			run_test( true, true)
-				.await
-				.unwrap()
-				.split("\n")
-				.collect::<Vec<_>>(),
+			run_test(true, true).await.unwrap().split("\n").collect::<Vec<_>>(),
 			[
 				"{\"char\": String(\"y\"), \"index\": UInt(0), \"x\": Float(100.0)}",
 				"{",

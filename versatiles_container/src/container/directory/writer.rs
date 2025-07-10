@@ -45,7 +45,7 @@
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying directory structure.
 
 use crate::TilesWriterTrait;
-use anyhow::{bail, ensure, Result};
+use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use std::{
 	fs,
@@ -150,7 +150,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{MockTilesReader, MOCK_BYTES_PBF};
+	use crate::{MOCK_BYTES_PBF, MockTilesReader};
 	use versatiles_core::{types::*, utils::decompress_gzip};
 
 	/// Tests the functionality of writing tile data to a directory from a mock reader.

@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::geo::GeoValue;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use byteorder::LE;
 use versatiles_core::{io::*, types::Blob};
 

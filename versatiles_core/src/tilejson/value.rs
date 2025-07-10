@@ -1,5 +1,5 @@
 use crate::json::JsonValue;
-use anyhow::{bail, ensure, Result};
+use anyhow::{Result, bail, ensure};
 use std::collections::BTreeMap;
 
 /// A map storing string keys and their associated typed JSON values.

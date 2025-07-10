@@ -28,7 +28,7 @@
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 use crate::TilesWriterTrait;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use log::{debug, trace};
 use std::collections::HashMap;

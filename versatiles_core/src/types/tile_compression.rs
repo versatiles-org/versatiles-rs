@@ -24,7 +24,7 @@
 //! assert_eq!(filename, "file.txt");
 //! ```
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
 use enumset::EnumSetType;

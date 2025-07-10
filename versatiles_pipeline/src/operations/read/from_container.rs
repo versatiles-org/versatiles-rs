@@ -7,11 +7,11 @@
 //! other data source.
 
 use crate::{
+	PipelineFactory,
 	helpers::{unpack_image_tile, unpack_image_tile_stream, unpack_vector_tile, unpack_vector_tile_stream},
 	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::VPLNode,
-	PipelineFactory,
 };
 use anyhow::Result;
 use async_trait::async_trait;

@@ -10,15 +10,15 @@
 //! This file contains both the [`Args`] struct used by the VPL parser and the
 //! [`Operation`] implementation that performs the blending.
 use crate::{
+	PipelineFactory,
 	helpers::{pack_image_tile, pack_image_tile_stream},
 	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
-	PipelineFactory,
 };
-use anyhow::{bail, ensure, Result};
+use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
-use futures::future::{join_all, BoxFuture};
+use futures::future::{BoxFuture, join_all};
 use imageproc::image::DynamicImage;
 use versatiles_core::{tilejson::TileJSON, types::*};
 use versatiles_geometry::vector_tile::VectorTile;
@@ -220,7 +220,7 @@ impl ReadOperationFactoryTrait for Factory {
 
 #[cfg(test)]
 mod tests {
-	use crate::helpers::mock_image_source::{arrange_tiles, MockImageSource};
+	use crate::helpers::mock_image_source::{MockImageSource, arrange_tiles};
 
 	use super::*;
 	use std::{ops::BitXor, path::Path};

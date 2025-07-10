@@ -1,6 +1,6 @@
 use crate::EnhancedDynamicImageTrait;
-use anyhow::{anyhow, bail, Result};
-use image::{codecs::webp::WebPEncoder, load_from_memory_with_format, DynamicImage, ImageFormat};
+use anyhow::{Result, anyhow, bail};
+use image::{DynamicImage, ImageFormat, codecs::webp::WebPEncoder, load_from_memory_with_format};
 use std::vec;
 use versatiles_core::types::Blob;
 

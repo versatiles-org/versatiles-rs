@@ -1,4 +1,4 @@
-use crate::json::{stringify_pretty_multi_line, JsonValue};
+use crate::json::{JsonValue, stringify_pretty_multi_line};
 use colored::*;
 use std::fmt::{Debug, Display};
 use std::io::Write;
@@ -143,11 +143,7 @@ fn format_integer<V: Debug + ?Sized>(value: &V) -> String {
 		formatted = String::from("_") + &text[i..] + &formatted;
 		text = String::from(&text[..i]);
 	}
-	if formatted.is_empty() {
-		text
-	} else {
-		text + &formatted
-	}
+	if formatted.is_empty() { text } else { text + &formatted }
 }
 
 #[cfg(test)]

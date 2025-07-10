@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 use super::JsonValue;
-use anyhow::{anyhow, Context, Error, Result};
-use futures::{future::ready, stream, Stream, StreamExt};
+use anyhow::{Context, Error, Result, anyhow};
+use futures::{Stream, StreamExt, future::ready, stream};
 use std::io::BufRead;
 
 fn process_line(line: std::io::Result<String>, index: usize) -> Option<Result<JsonValue>> {

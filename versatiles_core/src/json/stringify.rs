@@ -171,10 +171,10 @@ mod tests {
             "#,
 		)?;
 		assert_eq!(
-            stringify(&json),
-            "{\"array\":[1,\"two\",true],\"boolean\":false,\"null_value\":null,\"number\":123.45,\"object\":{\"key\":\"value\",\"nested_array\":[3,4,5]},\"string\":\"value\"}",
-            "Complex object test failed"
-        );
+			stringify(&json),
+			"{\"array\":[1,\"two\",true],\"boolean\":false,\"null_value\":null,\"number\":123.45,\"object\":{\"key\":\"value\",\"nested_array\":[3,4,5]},\"string\":\"value\"}",
+			"Complex object test failed"
+		);
 		Ok(())
 	}
 }

@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::{fmt::Debug, sync::Arc};
 use versatiles_core::{
 	types::*,

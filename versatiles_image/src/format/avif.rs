@@ -1,8 +1,8 @@
 use crate::EnhancedDynamicImageTrait;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use image::{
-	codecs::avif::{AvifEncoder, ColorSpace},
 	DynamicImage, ImageEncoder,
+	codecs::avif::{AvifEncoder, ColorSpace},
 };
 use versatiles_core::types::Blob;
 

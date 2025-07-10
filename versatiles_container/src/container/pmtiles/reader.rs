@@ -38,8 +38,8 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of reading metadata, handling different file formats, and verifying tile data.
 
-use super::types::{tile_id_to_coord, EntriesV3, HeaderV3, TileId};
-use anyhow::{bail, Result};
+use super::types::{EntriesV3, HeaderV3, TileId, tile_id_to_coord};
+use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::{fmt::Debug, path::Path, sync::Arc};
@@ -280,7 +280,10 @@ mod tests {
 
 		assert_wildcard!(reader.get_source_name(), "*testdata?berlin.pmtiles");
 
-		assert_eq!(format!("{:?}", reader.header), "HeaderV3 { root_dir: ByteRange[127,2271], metadata: ByteRange[2398,592], leaf_dirs: ByteRange[2990,0], tile_data: ByteRange[2990,25869006], addressed_tiles_count: 878, tile_entries_count: 878, tile_contents_count: 876, clustered: true, internal_compression: Gzip, tile_compression: Gzip, tile_type: MVT, min_zoom: 0, max_zoom: 14, min_lon_e7: 130828300, min_lat_e7: 523344600, max_lon_e7: 137622450, max_lat_e7: 526783000, center_zoom: 7, center_lon_e7: 134225380, center_lat_e7: 525063800 }");
+		assert_eq!(
+			format!("{:?}", reader.header),
+			"HeaderV3 { root_dir: ByteRange[127,2271], metadata: ByteRange[2398,592], leaf_dirs: ByteRange[2990,0], tile_data: ByteRange[2990,25869006], addressed_tiles_count: 878, tile_entries_count: 878, tile_contents_count: 876, clustered: true, internal_compression: Gzip, tile_compression: Gzip, tile_type: MVT, min_zoom: 0, max_zoom: 14, min_lon_e7: 130828300, min_lat_e7: 523344600, max_lon_e7: 137622450, max_lat_e7: 526783000, center_zoom: 7, center_lon_e7: 134225380, center_lat_e7: 525063800 }"
+		);
 
 		assert_wildcard!(
 			reader.get_tilejson().as_string(),
@@ -288,7 +291,7 @@ mod tests {
 		);
 
 		assert_wildcard!(
-			format!("{:?}", reader.get_parameters()), 
+			format!("{:?}", reader.get_parameters()),
 			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [1,0,1,0] (1), 2: [2,1,2,1] (1), 3: [4,2,4,2] (1), 4: [8,5,8,5] (1), 5: [17,10,17,10] (1), 6: [34,20,34,21] (2), 7: [68,41,68,42] (2), 8: [137,83,137,84] (2), 9: [274,167,275,168] (4), 10: [549,335,551,336] (6), 11: [1098,670,1102,673] (20), 12: [2196,1340,2204,1346] (63), 13: [4393,2680,4409,2693] (238), 14: [8787,5361,8818,5387] (864)], tile_compression: Gzip, tile_format: MVT }"
 		);
 

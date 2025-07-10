@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use super::layer::VectorTileLayer;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use versatiles_core::{io::*, types::Blob};
 
 #[derive(Clone, Debug, Default, PartialEq)]

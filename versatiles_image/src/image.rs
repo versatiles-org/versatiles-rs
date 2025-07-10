@@ -1,6 +1,6 @@
 use crate::{avif, jpeg, png, webp};
-use anyhow::{anyhow, bail, ensure, Result};
-use image::{imageops::overlay, DynamicImage, EncodableLayout, ExtendedColorType, ImageBuffer, Luma, LumaA, Rgb, Rgba};
+use anyhow::{Result, anyhow, bail, ensure};
+use image::{DynamicImage, EncodableLayout, ExtendedColorType, ImageBuffer, Luma, LumaA, Rgb, Rgba, imageops::overlay};
 use std::{ops::Div, vec};
 use versatiles_core::types::{Blob, TileFormat};
 

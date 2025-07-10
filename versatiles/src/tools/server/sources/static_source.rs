@@ -1,5 +1,5 @@
-use super::{super::utils::Url, static_source_folder::Folder, static_source_tar::TarFile, SourceResponse};
-use anyhow::{ensure, Result};
+use super::{super::utils::Url, SourceResponse, static_source_folder::Folder, static_source_tar::TarFile};
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::{fmt::Debug, path::Path, sync::Arc};
 use versatiles_core::utils::TargetCompression;

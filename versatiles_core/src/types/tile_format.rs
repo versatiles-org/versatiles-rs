@@ -27,7 +27,7 @@
 //! ```
 
 use super::TileType;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
 use std::fmt::{Display, Formatter};

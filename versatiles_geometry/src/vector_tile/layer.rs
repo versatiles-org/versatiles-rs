@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
 use crate::{
-	vector_tile::{feature::VectorTileFeature, property_manager::PropertyManager, value::GeoValuePBF},
 	GeoFeature, GeoProperties, GeoValue,
+	vector_tile::{feature::VectorTileFeature, property_manager::PropertyManager, value::GeoValuePBF},
 };
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use byteorder::LE;
 use std::mem::swap;
 use versatiles_core::{io::*, types::Blob};

@@ -1,7 +1,7 @@
 //! Provides functionality for writing tile data to a tar archive.
 
 use crate::TilesWriterTrait;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use async_trait::async_trait;
 use std::{
 	fs::File,

@@ -1,5 +1,5 @@
-use super::{parse_vpl, VPLNode};
-use anyhow::{ensure, Result};
+use super::{VPLNode, parse_vpl};
+use anyhow::{Result, ensure};
 use std::fmt::Debug;
 
 #[derive(Clone, Default, PartialEq)]

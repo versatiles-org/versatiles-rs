@@ -1,6 +1,6 @@
 use super::VPLPipeline;
 use crate::vpl::parse_vpl;
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{Result, anyhow, ensure};
 use std::{collections::BTreeMap, fmt::Debug, str::FromStr};
 
 #[derive(Clone, PartialEq)]

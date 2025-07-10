@@ -4,7 +4,7 @@
 //!
 //! The `FileHeader` struct contains metadata about the file, including its tile format, compression, zoom range, bounding box, and byte ranges for metadata and blocks.
 
-use anyhow::{bail, ensure, Result};
+use anyhow::{Result, bail, ensure};
 use versatiles_core::{io::*, types::*};
 
 const HEADER_LENGTH: u64 = 66;
@@ -195,8 +195,8 @@ impl FileHeader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::panic::catch_unwind;
 	use TileCompression::*;
+	use std::panic::catch_unwind;
 
 	#[test]
 	#[allow(clippy::zero_prefixed_literal)]
@@ -284,10 +284,12 @@ mod tests {
 		let comp = Gzip;
 
 		let should_panic = |zoom: [u8; 2], bbox: [f64; 4]| {
-			assert!(catch_unwind(|| {
-				FileHeader::new(&tf, &comp, zoom, &GeoBBox::from(&bbox)).unwrap();
-			})
-			.is_err())
+			assert!(
+				catch_unwind(|| {
+					FileHeader::new(&tf, &comp, zoom, &GeoBBox::from(&bbox)).unwrap();
+				})
+				.is_err()
+			)
 		};
 
 		should_panic([14, 10], [0.0, 0.0, 0.0, 0.0]);

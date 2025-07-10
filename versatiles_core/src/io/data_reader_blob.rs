@@ -35,7 +35,7 @@
 
 use super::{DataReaderTrait, DataWriterBlob};
 use crate::types::{Blob, ByteRange};
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::io::{Cursor, Read};
 

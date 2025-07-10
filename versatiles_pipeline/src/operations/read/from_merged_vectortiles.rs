@@ -15,15 +15,15 @@
 //!    pyramid handling.
 
 use crate::{
+	PipelineFactory,
 	helpers::{pack_vector_tile, pack_vector_tile_stream},
 	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
-	PipelineFactory,
 };
-use anyhow::{bail, ensure, Result};
+use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
-use futures::future::{join_all, BoxFuture};
+use futures::future::{BoxFuture, join_all};
 use imageproc::image::DynamicImage;
 use std::collections::HashMap;
 use versatiles_core::{tilejson::TileJSON, types::*};
@@ -225,7 +225,7 @@ impl ReadOperationFactoryTrait for Factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::helpers::mock_vector_source::{arrange_tiles, MockVectorSource};
+	use crate::helpers::mock_vector_source::{MockVectorSource, arrange_tiles};
 	use itertools::Itertools;
 	use std::{ops::BitXor, path::Path};
 

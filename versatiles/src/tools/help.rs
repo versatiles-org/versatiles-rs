@@ -33,8 +33,8 @@ pub fn run(command: &Subcommand) -> Result<()> {
 
 fn print_markdown(md: String) {
 	use termimad::{
-		crossterm::style::{Attribute, Color},
 		Area, MadSkin,
+		crossterm::style::{Attribute, Color},
 	};
 
 	let mut skin = MadSkin::default();

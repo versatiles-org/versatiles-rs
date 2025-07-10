@@ -1,11 +1,11 @@
 use crate::{
+	PipelineFactory,
 	helpers::{pack_vector_tile, pack_vector_tile_stream},
 	operations::vector::traits::RunnerTrait,
 	traits::{OperationFactoryTrait, OperationTrait, TransformOperationFactoryTrait},
 	vpl::VPLNode,
-	PipelineFactory,
 };
-use anyhow::{bail, ensure, Result};
+use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::DynamicImage;
@@ -174,7 +174,7 @@ impl TransformOperationFactoryTrait for Factory {
 mod tests {
 	use super::*;
 	use pretty_assertions::assert_eq;
-	use versatiles_geometry::{vector_tile::VectorTileLayer, GeoFeature, GeoProperties, GeoValue, Geometry};
+	use versatiles_geometry::{GeoFeature, GeoProperties, GeoValue, Geometry, vector_tile::VectorTileLayer};
 
 	fn create_layer(suffix: &str) -> VectorTileLayer {
 		let mut feature = GeoFeature::new(Geometry::new_example());

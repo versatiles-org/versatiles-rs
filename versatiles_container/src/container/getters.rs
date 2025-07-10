@@ -25,7 +25,7 @@
 //! ```
 
 use crate::*;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use reqwest::Url;
 use std::env;
 use versatiles_core::{io::*, types::TilesReaderTrait};
@@ -105,7 +105,7 @@ pub mod tests {
 	use super::*;
 	use crate::{MockTilesReader, MockTilesWriter};
 	use anyhow::Result;
-	use assert_fs::{fixture::NamedTempFile, TempDir};
+	use assert_fs::{TempDir, fixture::NamedTempFile};
 	use std::time::Instant;
 	use versatiles_core::types::{TileBBoxPyramid, TileCompression, TileFormat, TilesReaderParameters};
 

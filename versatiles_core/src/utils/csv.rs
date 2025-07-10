@@ -1,5 +1,5 @@
 use crate::byte_iterator::ByteIterator;
-use anyhow::{bail, Error, Result};
+use anyhow::{Error, Result, bail};
 use std::io::BufRead;
 
 fn parse_quoted_csv_string(iter: &mut ByteIterator) -> Result<String> {

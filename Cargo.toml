@@ -18,7 +18,7 @@ categories = [
 	"web-programming::http-server",
 ]
 description = "A toolbox for converting, checking and serving map tiles in various formats."
-edition = "2021"
+edition = "2024"
 homepage = "https://versatiles.org"
 keywords = ["versatiles", "mbtiles", "tiles", "map"]
 license = "MIT"

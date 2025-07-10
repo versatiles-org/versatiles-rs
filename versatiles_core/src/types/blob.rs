@@ -26,7 +26,7 @@
 //! ```
 
 use super::ByteRange;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::fmt::Debug;
 use std::ops::Range;
 

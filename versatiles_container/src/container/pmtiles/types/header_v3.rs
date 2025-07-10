@@ -1,5 +1,5 @@
 use super::{PMTilesCompression, PMTilesType};
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use versatiles_core::{
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 	types::{Blob, ByteRange, TilesReaderParameters},

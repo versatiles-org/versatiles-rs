@@ -219,7 +219,7 @@ impl<K, V> Debug for LimitedCache<K, V> {
 #[cfg(test)]
 mod tests {
 	use super::LimitedCache;
-	use anyhow::{anyhow, Result};
+	use anyhow::{Result, anyhow};
 	use std::mem::size_of;
 
 	/// Ensures that creation with a given `maximum_size` sets the derived max_length appropriately.

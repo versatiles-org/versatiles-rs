@@ -39,7 +39,7 @@
 
 use super::{SeekRead, ValueReader, ValueReaderBlob};
 use crate::types::Blob;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use std::{
 	fs::File,
@@ -146,7 +146,7 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderFile<E> {
 
 #[cfg(test)]
 mod tests {
-	use assert_fs::{fixture::FileWriteBin, NamedTempFile};
+	use assert_fs::{NamedTempFile, fixture::FileWriteBin};
 
 	use super::*;
 

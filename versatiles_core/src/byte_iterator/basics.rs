@@ -1,5 +1,5 @@
 use super::iterator::ByteIterator;
-use anyhow::{bail, Error, Result};
+use anyhow::{Error, Result, bail};
 use std::str::FromStr;
 
 pub fn parse_tag(iter: &mut ByteIterator, tag: &str) -> Result<()> {

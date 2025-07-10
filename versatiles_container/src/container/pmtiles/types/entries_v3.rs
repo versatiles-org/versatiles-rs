@@ -1,5 +1,5 @@
 use super::{Directory, EntryV3};
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::{
 	cmp::Ordering,
 	io::Write,

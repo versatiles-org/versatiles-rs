@@ -22,7 +22,7 @@
 //! let geo = coord3.as_geo();
 //! ```
 
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use std::{
 	f64::consts::PI as PI32,
 	fmt::{self, Debug},

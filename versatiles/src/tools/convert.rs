@@ -1,6 +1,6 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use versatiles::types::GeoBBox;
-use versatiles_container::{convert_tiles_container, get_reader, TilesConverterParameters};
+use versatiles_container::{TilesConverterParameters, convert_tiles_container, get_reader};
 use versatiles_core::types::{TileBBoxPyramid, TileCompression};
 
 #[derive(clap::Args, Debug)]

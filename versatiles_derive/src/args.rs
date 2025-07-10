@@ -1,8 +1,8 @@
 extern crate proc_macro;
 
 use proc_macro2::TokenStream as TokenStream2;
-use syn::parse::{self, Parse, ParseStream};
 use syn::Token;
+use syn::parse::{self, Parse, ParseStream};
 
 pub struct Args(pub Option<Token![move]>, pub TokenStream2);
 impl Parse for Args {

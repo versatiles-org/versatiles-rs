@@ -2,9 +2,9 @@ use crate::{
 	helpers::{mock_image_source::MockImageSource, mock_vector_source::MockVectorSource},
 	operations::{get_read_operation_factories, get_transform_operation_factories},
 	traits::{OperationTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
-	vpl::{parse_vpl, VPLNode, VPLPipeline},
+	vpl::{VPLNode, VPLPipeline, parse_vpl},
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use futures::future::BoxFuture;
 use itertools::Itertools;
 use std::{

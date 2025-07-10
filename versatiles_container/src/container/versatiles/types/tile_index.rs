@@ -4,7 +4,7 @@
 //!
 //! The `TileIndex` struct is used to manage the byte ranges of tiles within a versatiles file. It provides methods to create, manipulate, and convert the index to and from binary blobs.
 
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use std::ops::Div;
 use versatiles_core::{io::*, types::*, utils::*};
 

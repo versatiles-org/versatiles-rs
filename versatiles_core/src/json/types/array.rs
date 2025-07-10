@@ -1,5 +1,5 @@
 use crate::json::*;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use std::fmt::Debug;
 
 #[derive(Clone, Default, PartialEq)]
