@@ -23,6 +23,7 @@ lazy_static.workspace = true
 log.workspace = true
 nom = { version = "8.0.0" }
 nom-language = { version = "0.1.0" }
+regex.workspace = true
 
 versatiles_core.workspace = true
 versatiles_derive.workspace = true
