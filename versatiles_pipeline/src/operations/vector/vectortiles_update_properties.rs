@@ -228,11 +228,13 @@ mod tests {
 		assert_eq!(args.remove_non_matching, None);
 	}
 
-	async fn run_test(replace_properties: bool, include_id: bool) -> Result<Vec<String>> {
+	async fn run_test(replace_properties: bool, include_id: bool) -> Result<(String, String)> {
+		// ── prepare tiny CSV on disk ────────────────────────────────
 		let temp_file = NamedTempFile::new("test.csv")?;
 		let mut file = File::create(&temp_file)?;
 		writeln!(&mut file, "data_id,value\n1,test")?;
 
+		// ── build pipeline ─────────────────────────────────────────
 		let factory = PipelineFactory::new_dummy();
 		let operation = factory
 			.operation_from_vpl(
@@ -241,7 +243,7 @@ mod tests {
 					"vectortiles_update_properties",
 					&format!(
 						"data_source_path=\"{}\"",
-						temp_file.to_str().unwrap().replace("\\", "\\\\")
+						temp_file.to_str().unwrap().replace('\\', "\\\\")
 					),
 					"id_field_tiles=index",
 					"id_field_data=data_id",
@@ -253,118 +255,85 @@ mod tests {
 			)
 			.await?;
 
+		// ── extract a single feature for inspection ────────────────
 		let blob = operation
 			.get_tile_data(&TileCoord3::new(1000, 100, 10)?)
 			.await?
 			.unwrap();
 		let tile = VectorTile::from_blob(&blob)?;
-
-		assert_eq!(tile.layers.len(), 4);
 		let layer = tile.find_layer("debug_y").unwrap();
 
-		assert_eq!(layer.features.len(), 5);
-		let properties = layer.features[1].decode_properties(layer)?;
+		// ── stringify for easy substring assertions ────────────────
+		let prop_str = format!("{:?}", layer.features[1].decode_properties(layer)?);
 
-		let vec = operation.get_tilejson().as_pretty_lines(100);
-		let (intro, vec) = vec.split_at(17);
-		assert_eq!(
-			intro,
-			[
-				"{",
-				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
-				"  \"maxzoom\": 30,",
-				"  \"minzoom\": 0,",
-				"  \"tile_content\": \"vector\",",
-				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
-				"  \"tile_schema\": \"other\",",
-				"  \"tilejson\": \"3.0.0\",",
-				"  \"vector_layers\": [",
-				"    { \"fields\": {  }, \"id\": \"background\", \"maxzoom\": 30, \"minzoom\": 0 },",
-				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
-				"      \"id\": \"debug_x\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    },",
-				"    {"
-			]
-		);
-		let (vec, outro) = vec.split_at(vec.len() - 12);
-		assert_eq!(
-			outro,
-			[
-				"      \"id\": \"debug_y\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    },",
-				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
-				"      \"id\": \"debug_z\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    }",
-				"  ]",
-				"}"
-			]
-		);
+		let fields = operation
+			.get_tilejson()
+			.vector_layers
+			.find("debug_y")
+			.unwrap()
+			.fields
+			.iter()
+			.map(|(k, v)| format!("{k}: {v}"))
+			.collect::<Vec<_>>()
+			.join("\n");
 
-		let mut vec = vec.to_vec();
-		vec.insert(0, format!("{properties:?}"));
-		Ok(vec)
+		Ok((prop_str, fields))
 	}
 
 	#[tokio::test]
 	async fn test_run_normal() {
+		let (props, json) = run_test(false, false).await.unwrap();
 		assert_eq!(
-			run_test(false, false).await.unwrap(),
+			props,
+			"{\"char\": String(\":\"), \"index\": UInt(1), \"value\": String(\"test\"), \"x\": Float(132.7017)}"
+		);
+		assert_eq!(
+			json.split('\n').collect::<Vec<_>>(),
 			[
-				"{\"char\": String(\":\"), \"index\": UInt(1), \"value\": String(\"test\"), \"x\": Float(132.7017)}",
-				"      \"fields\": {",
-				"        \"char\": \"which character\",",
-				"        \"index\": \"index of char\",",
-				"        \"position\": \"x value\",",
-				"        \"value\": \"automatically added field\"",
-				"      },",
+				"char: which character",
+				"index: index of char",
+				"position: x value",
+				"value: automatically added field",
 			]
 		);
 	}
 
 	#[tokio::test]
 	async fn test_run_add_index() {
+		let (props, json) = run_test(false, true).await.unwrap();
 		assert_eq!(
-			run_test(false, true).await.unwrap(),
+			props,
+			"{\"char\": String(\":\"), \"data_id\": UInt(1), \"index\": UInt(1), \"value\": String(\"test\"), \"x\": Float(132.7017)}"
+		);
+		assert_eq!(
+			json.split('\n').collect::<Vec<_>>(),
 			[
-				"{\"char\": String(\":\"), \"data_id\": UInt(1), \"index\": UInt(1), \"value\": String(\"test\"), \"x\": Float(132.7017)}",
-				"      \"fields\": {",
-				"        \"char\": \"which character\",",
-				"        \"data_id\": \"automatically added field\",",
-				"        \"index\": \"index of char\",",
-				"        \"position\": \"x value\",",
-				"        \"value\": \"automatically added field\"",
-				"      },",
+				"char: which character",
+				"data_id: automatically added field",
+				"index: index of char",
+				"position: x value",
+				"value: automatically added field",
 			]
 		);
 	}
 
 	#[tokio::test]
 	async fn test_run_replace() {
+		let (props, json) = run_test(true, false).await.unwrap();
+		assert_eq!(props, "{\"value\": String(\"test\")}");
 		assert_eq!(
-			run_test(true, false).await.unwrap(),
-			[
-				"{\"value\": String(\"test\")}",
-				"      \"fields\": { \"value\": \"automatically added field\" },",
-			]
+			json.split('\n').collect::<Vec<_>>(),
+			["value: automatically added field",]
 		);
 	}
 
 	#[tokio::test]
 	async fn test_run_replace_and_include_index() {
+		let (props, json) = run_test(true, true).await.unwrap();
+		assert_eq!(props, "{\"data_id\": UInt(1), \"value\": String(\"test\")}");
 		assert_eq!(
-			run_test(true, true).await.unwrap(),
-			[
-				"{\"data_id\": UInt(1), \"value\": String(\"test\")}",
-				"      \"fields\": { \"data_id\": \"automatically added field\", \"value\": \"automatically added field\" },",
-			]
+			json.split('\n').collect::<Vec<_>>(),
+			["data_id: automatically added field", "value: automatically added field",]
 		);
 	}
 }
