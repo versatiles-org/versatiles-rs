@@ -1,13 +1,13 @@
 use crate::{
 	PipelineFactory,
-	operations::vector::traits::{RunnerTrait, TransformOp},
+	operations::vector::traits::{RunnerTrait, build_transform},
 	traits::{OperationFactoryTrait, OperationTrait, TransformOperationFactoryTrait},
 	vpl::VPLNode,
 };
-use anyhow::{Result, ensure};
+use anyhow::Result;
 use async_trait::async_trait;
-use std::{collections::HashSet, sync::Arc};
-use versatiles_core::{tilejson::TileJSON, types::TileType};
+use std::collections::HashSet;
+use versatiles_core::tilejson::TileJSON;
 use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -27,7 +27,7 @@ struct Runner {
 }
 
 impl Runner {
-	pub fn from_args(args: &Args) -> Self {
+	pub fn from_args(args: Args) -> Self {
 		let layer_set: HashSet<String> = args.filter.split(',').map(|s| s.trim().to_string()).collect();
 
 		Self {
@@ -74,24 +74,7 @@ impl TransformOperationFactoryTrait for Factory {
 	) -> Result<Box<dyn OperationTrait>> {
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		let parameters = source.get_parameters().clone();
-		ensure!(
-			parameters.tile_format.get_type() == TileType::Vector,
-			"source must be vector tiles"
-		);
-
-		let runner = Arc::new(Runner::from_args(&args));
-
-		let mut tilejson = source.get_tilejson().clone();
-		runner.update_tilejson(&mut tilejson);
-		tilejson.update_from_reader_parameters(&parameters);
-
-		Ok(Box::new(TransformOp::<Runner> {
-			runner,
-			source,
-			params: parameters,
-			tilejson,
-		}) as Box<dyn OperationTrait>)
+		build_transform::<Runner>(source, Runner::from_args(args)).await
 	}
 }
 
@@ -123,7 +106,7 @@ mod tests {
 			Ok(suffix)
 		}
 
-		let runner = Runner::from_args(&Args {
+		let runner = Runner::from_args(Args {
 			filter: "test_layer1".to_string(),
 			invert: None,
 		});

@@ -1,18 +1,15 @@
 use crate::{
 	PipelineFactory,
 	helpers::read_csv_file,
-	operations::vector::traits::{RunnerTrait, TransformOp},
+	operations::vector::traits::{RunnerTrait, build_transform},
 	traits::{OperationFactoryTrait, OperationTrait, TransformOperationFactoryTrait},
 	vpl::VPLNode,
 };
-use anyhow::{Context, Result, anyhow, ensure};
+use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use log::warn;
-use std::{
-	collections::{HashMap, HashSet},
-	sync::Arc,
-};
-use versatiles_core::{tilejson::TileJSON, types::*};
+use std::collections::{HashMap, HashSet};
+use versatiles_core::tilejson::TileJSON;
 use versatiles_geometry::{GeoProperties, vector_tile::VectorTile};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -162,29 +159,7 @@ impl TransformOperationFactoryTrait for Factory {
 			.await
 			.with_context(|| format!("Failed to read CSV file from '{}'", args.data_source_path))?;
 
-		// Ensure the upstream produces vector tiles.
-		let mut params = source.get_parameters().clone();
-		ensure!(
-			params.tile_format.get_type() == TileType::Vector,
-			"source must be vector tiles"
-		);
-		// The transform mutates data, so keep it uncompressed.
-		params.tile_compression = TileCompression::Uncompressed;
-
-		// Build the runner from the parsed args + CSV rows.
-		let runner = Arc::new(Runner::from_args(args, data)?);
-
-		// Update TileJSON using the runner.
-		let mut tilejson = source.get_tilejson().clone();
-		runner.update_tilejson(&mut tilejson);
-		tilejson.update_from_reader_parameters(&params);
-
-		Ok(Box::new(TransformOp::<Runner> {
-			runner,
-			source,
-			params,
-			tilejson,
-		}) as Box<dyn OperationTrait>)
+		build_transform::<Runner>(source, Runner::from_args(args, data)?).await
 	}
 }
 
@@ -195,6 +170,7 @@ mod tests {
 	use assert_fs::NamedTempFile;
 	use pretty_assertions::assert_eq;
 	use std::{fs::File, io::Write, vec};
+	use versatiles_core::types::TileCoord3;
 	use versatiles_geometry::{GeoFeature, GeoProperties, GeoValue, Geometry, vector_tile::VectorTileLayer};
 
 	fn create_sample_vector_tile() -> VectorTile {
