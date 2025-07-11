@@ -8,16 +8,29 @@ pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 		bail!("jpeg only supports 8-bit images");
 	}
 
-	if image.channel_count() != 1 && image.channel_count() != 3 {
-		bail!("jpeg only supports Grey or RGB images");
-	}
+	// Will hold a converted copy *if* we need one.
+	let mut _temp: Option<DynamicImage> = None;
+
+	// `img` is the reference we pass to the encoder.
+	let img: &DynamicImage = match image.channel_count() {
+		1 | 3 => image, // already Grey or RGB → keep original borrow
+		2 => {
+			_temp = Some(DynamicImage::ImageLuma8(image.to_luma8()));
+			_temp.as_ref().unwrap()
+		}
+		4 => {
+			_temp = Some(DynamicImage::ImageRgb8(image.to_rgb8()));
+			_temp.as_ref().unwrap()
+		}
+		_ => bail!("jpeg only supports Grey or RGB images"),
+	};
 
 	let mut buffer: Vec<u8> = Vec::new();
 	JpegEncoder::new_with_quality(&mut buffer, quality.unwrap_or(95)).write_image(
-		image.as_bytes(),
-		image.width(),
-		image.height(),
-		image.extended_color_type(),
+		img.as_bytes(),
+		img.width(),
+		img.height(),
+		img.extended_color_type(),
 	)?;
 
 	Ok(Blob::from(buffer))
