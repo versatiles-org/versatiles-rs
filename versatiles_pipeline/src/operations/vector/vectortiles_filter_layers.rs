@@ -11,7 +11,7 @@ use versatiles_core::tilejson::TileJSON;
 use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Updates properties of vector tile features using data from an external source (e.g., CSV file). Matches features based on an ID field.
+/// Filters vector tile layers based on a comma-separated list of layer names.
 struct Args {
 	/// Comma‑separated list of layer names that should be removed from the tiles, e.g.: filter="pois,ocean".
 	filter: String,
