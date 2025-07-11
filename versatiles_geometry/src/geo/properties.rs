@@ -36,6 +36,12 @@ impl GeoProperties {
 	pub fn iter(&self) -> btree_map::Iter<'_, String, GeoValue> {
 		self.0.iter()
 	}
+	pub fn retain<F>(&mut self, f: F)
+	where
+		F: Fn(&String, &GeoValue) -> bool,
+	{
+		self.0.retain(|k, v| f(k, v));
+	}
 }
 
 impl IntoIterator for GeoProperties {

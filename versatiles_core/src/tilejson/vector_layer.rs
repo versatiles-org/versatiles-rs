@@ -214,6 +214,14 @@ impl VectorLayers {
 	pub fn find(&self, id: &str) -> Option<&VectorLayer> {
 		self.0.get(id)
 	}
+
+	pub fn iter_mut(&mut self) -> std::collections::btree_map::IterMut<'_, String, VectorLayer> {
+		self.0.iter_mut()
+	}
+
+	pub fn iter(&self) -> std::collections::btree_map::Iter<'_, String, VectorLayer> {
+		self.0.iter()
+	}
 }
 
 impl FromIterator<(String, VectorLayer)> for VectorLayers {
