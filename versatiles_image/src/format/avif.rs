@@ -17,7 +17,7 @@ pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	}
 
 	let mut result: Vec<u8> = vec![];
-	let encoder = AvifEncoder::new_with_speed_quality(&mut result, 4, quality)
+	let encoder = AvifEncoder::new_with_speed_quality(&mut result, 10, quality)
 		.with_colorspace(ColorSpace::Srgb)
 		.with_num_threads(Some(1));
 
