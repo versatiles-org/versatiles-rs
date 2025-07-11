@@ -33,6 +33,10 @@ impl VPLNode {
 		})
 	}
 
+	pub fn get_property_names(&self) -> Vec<String> {
+		self.properties.keys().cloned().collect()
+	}
+
 	pub fn get_property_enum<'a, T>(&'a self, field: &str) -> Result<Option<T>>
 	where
 		T: TryFrom<&'a str>,

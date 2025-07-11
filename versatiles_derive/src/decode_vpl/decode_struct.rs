@@ -25,6 +25,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 	let mut parser_fields: Vec<TokenStream> = Vec::new();
 	let mut doc_fields: Vec<String> = Vec::new();
 	let mut doc_sources: Option<String> = None;
+	let mut field_names: Vec<String> = Vec::new();
 
 	for field in fields {
 		let field_name = &field.ident;
@@ -32,6 +33,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 		let field_str = field_name.as_ref().expect("could not get field_name").to_string();
 		let field_type_str = quote!(#field_type).to_string().replace(' ', "");
 
+		field_names.push(field_str.clone());
 		let mut comment = field
 			.attrs
 			.iter()
@@ -123,6 +125,15 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 	quote! {
 		impl #name {
 			pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {
+				// scan node.get_property_names to ensure, that all properties are also defined in field_names
+				let argument_names: Vec<String> = vec![#(#field_names.to_string()),*];
+				let property_names = node.get_property_names();
+				for property_name in property_names {
+					if !argument_names.contains(&property_name) {
+						anyhow::bail!("Unknown argument \"{}\" in \"{}\"", property_name, node.name);
+					}
+				}
+
 				Ok(Self {
 					#(#parser_fields),*
 				})

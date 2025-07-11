@@ -269,6 +269,20 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn test_unknown_argument() {
+		assert_eq!(
+			PipelineFactory::new_dummy()
+				.operation_from_vpl(
+					"from_merged_vectortiles color=red [ from_container filename=1.pbf, from_container filename=2.pbf ]"
+				)
+				.await
+				.unwrap_err()
+				.to_string(),
+			"Unknown argument \"color\" in \"from_merged_vectortiles\""
+		);
+	}
+
+	#[tokio::test]
 	async fn test_operation_get_tile_data() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
