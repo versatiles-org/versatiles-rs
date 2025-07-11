@@ -292,8 +292,8 @@ mod tests {
 			[
 				"char: which character",
 				"index: index of char",
-				"position: x value",
 				"value: automatically added field",
+				"x: position",
 			]
 		);
 	}
@@ -311,8 +311,8 @@ mod tests {
 				"char: which character",
 				"data_id: automatically added field",
 				"index: index of char",
-				"position: x value",
 				"value: automatically added field",
+				"x: position",
 			]
 		);
 	}

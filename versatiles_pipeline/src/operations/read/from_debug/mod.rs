@@ -63,9 +63,9 @@ impl Operation {
 			tilejson.merge(&TileJSON::try_from(
 				r#"{"vector_layers":[
 					{"id":"background","minzoom":0,"maxzoom":30},
-					{"id":"debug_x","minzoom":0,"maxzoom":30,"fields":{"char":"which character","index":"index of char","position":"x value"}},
-					{"id":"debug_y","minzoom":0,"maxzoom":30,"fields":{"char":"which character","index":"index of char","position":"x value"}},
-					{"id":"debug_z","minzoom":0,"maxzoom":30,"fields":{"char":"which character","index":"index of char","position":"x value"}}
+					{"id":"debug_x","minzoom":0,"maxzoom":30,"fields":{"char":"which character","index":"index of char","x":"position"}},
+					{"id":"debug_y","minzoom":0,"maxzoom":30,"fields":{"char":"which character","index":"index of char","x":"position"}},
+					{"id":"debug_z","minzoom":0,"maxzoom":30,"fields":{"char":"which character","index":"index of char","x":"position"}}
 				]}"#,
 			)?)?;
 		}
@@ -302,19 +302,19 @@ mod tests {
 				"  \"vector_layers\": [",
 				"    { \"fields\": {  }, \"id\": \"background\", \"maxzoom\": 30, \"minzoom\": 0 },",
 				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
+				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"x\": \"position\" },",
 				"      \"id\": \"debug_x\",",
 				"      \"maxzoom\": 30,",
 				"      \"minzoom\": 0",
 				"    },",
 				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
+				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"x\": \"position\" },",
 				"      \"id\": \"debug_y\",",
 				"      \"maxzoom\": 30,",
 				"      \"minzoom\": 0",
 				"    },",
 				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
+				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"x\": \"position\" },",
 				"      \"id\": \"debug_z\",",
 				"      \"maxzoom\": 30,",
 				"      \"minzoom\": 0",
