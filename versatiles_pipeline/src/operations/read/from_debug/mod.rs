@@ -59,7 +59,7 @@ impl Operation {
 
 		let mut tilejson = TileJSON::default();
 
-		if tile_format == TileFormat::MVT {
+		if tile_format.get_type() == TileType::Vector {
 			tilejson.merge(&TileJSON::try_from(
 				r#"{"vector_layers":[
 					{"id":"background","minzoom":0,"maxzoom":30},
@@ -223,17 +223,17 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_build_tile_png() {
+	async fn test_build_tile_avif() {
 		test(
-			"png",
-			5207,
+			"avif",
+			8528,
 			&[
 				"{",
 				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
 				"  \"maxzoom\": 30,",
 				"  \"minzoom\": 0,",
 				"  \"tile_content\": \"raster\",",
-				"  \"tile_format\": \"image/png\",",
+				"  \"tile_format\": \"image/avif\",",
 				"  \"tile_schema\": \"rgb\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}",
@@ -247,7 +247,7 @@ mod tests {
 	async fn test_build_tile_jpg() {
 		test(
 			"jpg",
-			11782,
+			11862,
 			&[
 				"{",
 				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
@@ -265,10 +265,31 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn test_build_tile_png() {
+		test(
+			"png",
+			6388,
+			&[
+				"{",
+				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
+				"  \"maxzoom\": 30,",
+				"  \"minzoom\": 0,",
+				"  \"tile_content\": \"raster\",",
+				"  \"tile_format\": \"image/png\",",
+				"  \"tile_schema\": \"rgb\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}",
+			],
+		)
+		.await
+		.unwrap();
+	}
+
+	#[tokio::test]
 	async fn test_build_tile_webp() {
 		test(
 			"webp",
-			2656,
+			3756,
 			&[
 				"{",
 				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
