@@ -203,6 +203,17 @@ impl VectorLayers {
 		}
 		Ok(())
 	}
+
+	/// Returns a vector of all layer ids in this collection.
+	pub fn layer_ids(&self) -> Vec<String> {
+		self.0.keys().cloned().collect()
+	}
+
+	/// Finds a layer by its id.
+	/// Returns `None` if the layer does not exist.
+	pub fn find(&self, id: &str) -> Option<&VectorLayer> {
+		self.0.get(id)
+	}
 }
 
 impl FromIterator<(String, VectorLayer)> for VectorLayers {

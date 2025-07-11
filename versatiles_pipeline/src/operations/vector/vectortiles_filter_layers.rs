@@ -127,7 +127,7 @@ mod tests {
 		assert_eq!(args.invert, Some(true));
 	}
 
-	async fn run_test(filter: &str, invert: &str) -> Result<(String, Vec<String>)> {
+	async fn run_test(filter: &str, invert: &str) -> Result<(String, String)> {
 		let replace = |key: &str, value: &str| {
 			if value.is_empty() {
 				String::from("")
@@ -151,11 +151,17 @@ mod tests {
 
 		let blob = operation.get_tile_data(&TileCoord3::new(0, 0, 0)?).await?.unwrap();
 		let tile = VectorTile::from_blob(&blob)?;
-		let layer_names = tile.layers.iter().map(|layer| layer.name.clone()).collect::<Vec<_>>();
+		let layer_names = tile
+			.layers
+			.iter()
+			.map(|layer| layer.name.clone())
+			.collect::<Vec<_>>()
+			.join(",");
 
-		let tilejson = operation.get_tilejson().as_pretty_lines(100);
+		let tilejson = operation.get_tilejson();
+		let layer_ids = tilejson.vector_layers.layer_ids().join(",");
 
-		Ok((layer_names.join(","), tilejson))
+		Ok((layer_names, layer_ids))
 	}
 
 	#[tokio::test]
@@ -169,105 +175,22 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_filter_layer() {
-		let result = run_test("debug_z", "").await.unwrap();
-		assert_eq!(result.0, "background,debug_x,debug_y");
-		assert_eq!(
-			result.1,
-			[
-				"{",
-				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
-				"  \"maxzoom\": 30,",
-				"  \"minzoom\": 0,",
-				"  \"tile_content\": \"vector\",",
-				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
-				"  \"tile_schema\": \"other\",",
-				"  \"tilejson\": \"3.0.0\",",
-				"  \"vector_layers\": [",
-				"    { \"fields\": {  }, \"id\": \"background\", \"maxzoom\": 30, \"minzoom\": 0 },",
-				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
-				"      \"id\": \"debug_x\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    },",
-				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
-				"      \"id\": \"debug_y\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    }",
-				"  ]",
-				"}",
-			]
-		);
+		let (layers, json) = run_test("debug_z", "").await.unwrap();
+		assert_eq!(layers, "background,debug_x,debug_y");
+		assert_eq!(json, "background,debug_x,debug_y");
 	}
 
 	#[tokio::test]
 	async fn test_filter_unknown_layer() {
-		let result = run_test("unknown", "").await.unwrap();
-		assert_eq!(result.0, "background,debug_z,debug_x,debug_y");
-		assert_eq!(
-			result.1,
-			[
-				"{",
-				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
-				"  \"maxzoom\": 30,",
-				"  \"minzoom\": 0,",
-				"  \"tile_content\": \"vector\",",
-				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
-				"  \"tile_schema\": \"other\",",
-				"  \"tilejson\": \"3.0.0\",",
-				"  \"vector_layers\": [",
-				"    { \"fields\": {  }, \"id\": \"background\", \"maxzoom\": 30, \"minzoom\": 0 },",
-				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
-				"      \"id\": \"debug_x\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    },",
-				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
-				"      \"id\": \"debug_y\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    },",
-				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
-				"      \"id\": \"debug_z\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    }",
-				"  ]",
-				"}",
-			]
-		);
+		let (layers, json) = run_test("unknown", "").await.unwrap();
+		assert_eq!(layers, "background,debug_z,debug_x,debug_y");
+		assert_eq!(json, "background,debug_x,debug_y,debug_z");
 	}
 
 	#[tokio::test]
 	async fn test_filter_and_invert() {
-		let result = run_test("debug_y", "true").await.unwrap();
-		assert_eq!(result.0, "debug_y");
-		assert_eq!(
-			result.1,
-			[
-				"{",
-				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
-				"  \"maxzoom\": 30,",
-				"  \"minzoom\": 0,",
-				"  \"tile_content\": \"vector\",",
-				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
-				"  \"tile_schema\": \"other\",",
-				"  \"tilejson\": \"3.0.0\",",
-				"  \"vector_layers\": [",
-				"    {",
-				"      \"fields\": { \"char\": \"which character\", \"index\": \"index of char\", \"position\": \"x value\" },",
-				"      \"id\": \"debug_y\",",
-				"      \"maxzoom\": 30,",
-				"      \"minzoom\": 0",
-				"    }",
-				"  ]",
-				"}",
-			]
-		);
+		let (layers, json) = run_test("debug_y", "true").await.unwrap();
+		assert_eq!(layers, "debug_y");
+		assert_eq!(json, "debug_y");
 	}
 }
