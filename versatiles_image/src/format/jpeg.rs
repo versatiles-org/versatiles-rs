@@ -48,15 +48,26 @@ mod tests {
 
 	/* ---------- Success cases ---------- */
 	#[rstest]
-	#[case::grey(DynamicImage::new_test_grey(), 6.61, vec![0.0]           )]
-	#[case::rgb (DynamicImage::new_test_rgb(),  4.65, vec![0.6, 0.3, 0.7] )]
+	#[case::grey( DynamicImage::new_test_grey(),  6.61, vec![0.0]           )]
+	#[case::greya(DynamicImage::new_test_greya(), 3.30, vec![0.0, 21717.5]  )]
+	#[case::rgb(  DynamicImage::new_test_rgb(),   4.65, vec![0.6, 0.3, 0.7] )]
+	#[case::rgba( DynamicImage::new_test_rgba(),  3.49, vec![0.6, 0.3, 0.7, 21717.5] )]
 	fn jpeg_ok(
 		#[case] img: DynamicImage,
 		#[case] expected_compression_percent: f64,
 		#[case] expected_diff: Vec<f64>,
 	) -> Result<()> {
 		let blob = image2blob(&img, None)?;
-		let decoded = blob2image(&blob)?;
+		let mut decoded = blob2image(&blob)?;
+		match img {
+			DynamicImage::ImageLumaA8(_) => {
+				decoded = DynamicImage::ImageLumaA8(decoded.to_luma_alpha8());
+			}
+			DynamicImage::ImageRgba8(_) => {
+				decoded = DynamicImage::ImageRgba8(decoded.to_rgba8());
+			}
+			_ => {}
+		}
 		assert_eq!(img.diff(&decoded)?, expected_diff);
 
 		assert_eq!(
@@ -65,13 +76,5 @@ mod tests {
 		);
 
 		Ok(())
-	}
-
-	/* ---------- Error cases ---------- */
-	#[rstest]
-	#[case::greya(DynamicImage::new_test_greya(), "jpeg only supports Grey or RGB images")]
-	#[case::rgba(DynamicImage::new_test_rgba(), "jpeg only supports Grey or RGB images")]
-	fn jpeg_errors(#[case] img: DynamicImage, #[case] expected_msg: &str) {
-		assert_eq!(image2blob(&img, None).unwrap_err().to_string(), expected_msg);
 	}
 }
