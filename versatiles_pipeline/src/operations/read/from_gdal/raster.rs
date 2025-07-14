@@ -16,7 +16,9 @@ use crate::{
 use anyhow::{Context, Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use gdal::{Dataset, DriverManager, raster::reproject, spatial_ref::SpatialRef, vector::Geometry};
+use gdal::{
+	Dataset, DriverManager, config::set_config_option, raster::reproject, spatial_ref::SpatialRef, vector::Geometry,
+};
 use imageproc::image::DynamicImage;
 use log::warn;
 use std::{fmt::Debug, path::PathBuf, vec};
@@ -112,6 +114,8 @@ impl ReadOperationTrait for Operation {
 		Self: Sized + OperationTrait,
 	{
 		Box::pin(async move {
+			set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
+
 			let args = Args::from_vpl_node(&vpl_node).context("Failed to parse arguments from VPL node")?;
 			let filename = factory.resolve_path(&args.filename);
 			let dataset =
