@@ -229,7 +229,7 @@ impl TilesReaderTrait for VersaTilesReader {
 	}
 
 	/// Gets a stream of tile data for a given bounding box.
-	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 

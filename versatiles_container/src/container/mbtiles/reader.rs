@@ -334,7 +334,7 @@ impl TilesReaderTrait for MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue querying the database.
-	async fn get_bbox_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		trace!("read tile stream from bbox {bbox:?}");
 
 		if bbox.is_empty() {

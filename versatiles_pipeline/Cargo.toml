@@ -17,6 +17,7 @@ ab_glyph.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 futures.workspace = true
+gdal = { version = "0.18.0", features = ["bindgen"], optional = true }
 imageproc = { version = "0.25.0", default-features = false }
 itertools = { workspace = true, features = ["use_alloc"] }
 lazy_static.workspace = true
@@ -36,3 +37,8 @@ lazy_static.workspace = true
 pretty_assertions.workspace = true
 regex.workspace = true
 tokio = { workspace = true, features = ["macros"] }
+
+
+[features]
+default = []
+gdal = ["dep:gdal"]

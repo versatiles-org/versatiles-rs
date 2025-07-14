@@ -163,7 +163,7 @@ impl TilesWriterTrait for MBTilesWriter {
 		let mut progress = get_progress_bar("converting tiles", pyramid.count_tiles());
 
 		for bbox in pyramid.iter_levels() {
-			let stream = reader.get_bbox_tile_stream(*bbox).await?;
+			let stream = reader.get_tile_stream(*bbox).await?;
 
 			stream
 				.for_each_buffered(2000, |v| {

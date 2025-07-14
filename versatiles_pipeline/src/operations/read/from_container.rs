@@ -83,7 +83,7 @@ impl OperationTrait for Operation {
 	/// Stream raw tile blobs intersecting the bounding box by delegating to
 	/// `TilesReaderTrait::get_bbox_tile_stream`.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
-		self.reader.get_bbox_tile_stream(bbox).await
+		self.reader.get_tile_stream(bbox).await
 	}
 
 	/// Convenience wrapper that decodes the raw blob into an in‑memory
@@ -94,7 +94,7 @@ impl OperationTrait for Operation {
 
 	/// Stream decoded raster images for all tiles within the bounding box.
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		unpack_image_tile_stream(self.reader.get_bbox_tile_stream(bbox).await, &self.parameters)
+		unpack_image_tile_stream(self.reader.get_tile_stream(bbox).await, &self.parameters)
 	}
 
 	/// Fetch and decode a single vector tile at the requested coordinate.
@@ -104,7 +104,7 @@ impl OperationTrait for Operation {
 
 	/// Stream decoded vector tiles contained in the bounding box.
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		unpack_vector_tile_stream(self.reader.get_bbox_tile_stream(bbox).await, &self.parameters)
+		unpack_vector_tile_stream(self.reader.get_tile_stream(bbox).await, &self.parameters)
 	}
 }
 
