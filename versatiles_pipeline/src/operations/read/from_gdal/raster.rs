@@ -121,17 +121,18 @@ fn dataset_bbox(dataset: &Dataset) -> Result<GeoBBox> {
 		.context("GDAL dataset must have a spatial reference (SRS) defined")?;
 
 	let mut bbox = Geometry::bbox(
-		gt[0],
 		gt[3],
-		gt[0] + gt[1] * width as f64,
+		gt[0],
 		gt[3] + gt[5] * height as f64,
+		gt[0] + gt[1] * width as f64,
 	)?;
 	bbox.set_spatial_ref(spatial_ref.clone());
-
 	bbox
 		.transform_to_inplace(&SpatialRef::from_epsg(4326)?)
 		.context("Failed to transform bounding box to EPSG:4326")?;
+
 	let bbox = bbox.envelope();
+
 	let mut bbox = GeoBBox(bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY);
 	bbox.limit_to_mercator();
 	Ok(bbox)
