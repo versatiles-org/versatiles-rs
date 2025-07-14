@@ -1,6 +1,9 @@
 use anyhow::{Result, ensure};
 use std::fmt::Debug;
 
+static MAX_MERCATOR_LAT: f64 = 85.05112877980659;
+static MAX_MERCATOR_LNG: f64 = 180.0;
+
 /// A geographic bounding box, represented by four `f64` values:
 /// `[west, south, east, north]` (sometimes referred to as `[min_x, min_y, max_x, max_y]`).
 ///
@@ -70,6 +73,14 @@ impl GeoBBox {
 			Some(vec) => Ok(Some(GeoBBox::try_from(vec)?)),
 			None => Ok(None),
 		}
+	}
+
+	pub fn limit_to_mercator(&mut self) {
+		// Limit the bounding box to the Mercator bounds
+		self.0 = self.0.max(-MAX_MERCATOR_LNG).min(MAX_MERCATOR_LNG); // west
+		self.1 = self.1.max(-MAX_MERCATOR_LAT).min(MAX_MERCATOR_LAT); // south
+		self.2 = self.2.max(-MAX_MERCATOR_LNG).min(MAX_MERCATOR_LNG); // east
+		self.3 = self.3.max(-MAX_MERCATOR_LAT).min(MAX_MERCATOR_LAT); // north
 	}
 
 	/// Returns the bounding box as a `Vec<f64>` in the form `[west, south, east, north]`.

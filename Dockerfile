@@ -22,8 +22,8 @@ COPY . .
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry \
 	--mount=type=cache,target=/app/target \
-	cargo build --release --features gdal && \
-	cp /app/target/release/versatiles / && \
+	cargo build --features gdal && \
+	cp /app/target/debug/versatiles / && \
 	strip /versatiles
 
 ###############################
@@ -33,7 +33,12 @@ FROM ghcr.io/osgeo/gdal:ubuntu-full-3.10.3 AS runtime
 
 WORKDIR /data
 
+# Install tini to handle signals (so Ctrl‑C exits immediately)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends tini && \
+    rm -rf /var/lib/apt/lists/*
+
 # Copy the statically linked binary from the builder
 COPY --from=builder /versatiles /usr/local/bin/versatiles
 
-ENTRYPOINT ["versatiles"]
+ENTRYPOINT ["/usr/bin/tini","--","/usr/local/bin/versatiles"]

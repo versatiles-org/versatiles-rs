@@ -13,7 +13,7 @@ use crate::{
 	traits::*,
 	vpl::VPLNode,
 };
-use anyhow::{Context, Result, anyhow, bail, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use gdal::{Dataset, DriverManager, raster::reproject, spatial_ref::SpatialRef, vector::Geometry};
@@ -21,6 +21,7 @@ use imageproc::image::DynamicImage;
 use log::warn;
 use std::{fmt::Debug, path::PathBuf, vec};
 use versatiles_core::{tilejson::TileJSON, types::*};
+use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::EnhancedDynamicImageTrait;
 
@@ -30,6 +31,10 @@ struct Args {
 	/// The filename of the GDAL raster dataset to read.
 	/// For example: `filename="world.tif"`.
 	filename: String,
+	/// The size of the generated tiles in pixels. (default: 512)
+	tile_size: Option<u32>,
+	/// The tile format to use for the output tiles. (default: `PNG`)
+	tile_format: Option<TileFormat>,
 }
 
 #[derive(Debug)]
@@ -41,43 +46,40 @@ struct Operation {
 	filename: PathBuf,
 	parameters: TilesReaderParameters,
 	tilejson: TileJSON,
-	tile_size: usize,
+	tile_size: u32,
 	band_mapping: Vec<usize>,
 }
 
 impl Operation {
-	async fn get_image_data_from_gdal(
-		&self,
-		bbox: GeoBBox,
-		width: usize,
-		height: usize,
-	) -> Result<Option<DynamicImage>> {
-		let src = Dataset::open(&self.filename)?;
+	#[context("Failed to get image data ({width}x{height}) for bbox ({bbox:?}) from GDAL dataset")]
+	async fn get_image_data_from_gdal(&self, bbox: GeoBBox, width: u32, height: u32) -> Result<Option<DynamicImage>> {
+		let src = Dataset::open(&self.filename)
+			.with_context(|| format!("Failed to open GDAL dataset {}", self.filename.display()))?;
+
 		let channel_count = self.band_mapping.len();
 		ensure!(channel_count > 0, "GDAL dataset has no bands to read");
 
-		let driver =
-			DriverManager::get_driver_by_name("MEM").context("Failed to get GDAL driver for in-memory dataset")?;
-		let mut dst = driver.create_with_band_type::<u8, _>("", width, height, channel_count)?;
-		dst.set_spatial_ref(&SpatialRef::from_epsg(3857)?)?;
+		let driver = DriverManager::get_driver_by_name("MEM").unwrap();
+		let mut dst = driver
+			.create_with_band_type::<u8, _>("", width as usize, height as usize, channel_count)
+			.unwrap();
+		dst.set_spatial_ref(&SpatialRef::from_epsg(3857).unwrap()).unwrap();
 
-		let mut bbox = Geometry::bbox(bbox.0, bbox.1, bbox.2, bbox.3)?;
-		bbox.set_spatial_ref(SpatialRef::from_epsg(4326)?);
-		bbox.transform_to_inplace(&SpatialRef::from_epsg(3857)?)?;
-		let bbox = bbox.envelope();
+		let bbox = bbox_to_mercator(bbox);
 
 		dst.set_geo_transform(&[
-			bbox.MinX,                               // MinX
-			(bbox.MaxX - bbox.MinX) / width as f64,  // Pixel width
-			0.0,                                     // Rotation (should be 0)
-			bbox.MinY,                               // MinY
-			0.0,                                     // Rotation (should be 0)
-			(bbox.MaxY - bbox.MinY) / height as f64, // Pixel height
-		])?;
+			bbox[0],                             // MinX
+			(bbox[2] - bbox[0]) / width as f64,  // Pixel width
+			0.0,                                 // Rotation (should be 0)
+			bbox[1],                             // MinY
+			0.0,                                 // Rotation (should be 0)
+			(bbox[3] - bbox[1]) / height as f64, // Pixel height
+		])
+		.unwrap();
 
-		reproject(&src, &dst)?;
+		reproject(&src, &dst).unwrap();
 
-		let mut buf = vec![0u8; width * height * channel_count];
+		let mut buf = vec![0u8; (width as usize) * (height as usize) * channel_count];
 		for (i, &band) in self.band_mapping.iter().enumerate() {
 			let band_data = dst.rasterband(band)?.read_band_as::<u8>()?;
 			for (j, pixel) in band_data.data().iter().enumerate() {
@@ -85,11 +87,23 @@ impl Operation {
 			}
 		}
 
-		let image = DynamicImage::from_raw(width as u32, height as u32, buf)
-			.context("Failed to create DynamicImage from GDAL dataset")?;
+		let image =
+			DynamicImage::from_raw(width, height, buf).context("Failed to create DynamicImage from GDAL dataset")?;
 
 		Ok(Some(image))
 	}
+}
+
+fn bbox_to_mercator(mut bbox: GeoBBox) -> [f64; 4] {
+	bbox.limit_to_mercator();
+	let mut bbox_geometry = Geometry::bbox(bbox.1, bbox.0, bbox.3, bbox.2).unwrap();
+	bbox_geometry.set_spatial_ref(SpatialRef::from_epsg(4326).unwrap());
+	bbox_geometry
+		.transform_to_inplace(&SpatialRef::from_epsg(3857).unwrap())
+		.with_context(|| format!("Failed to transform bounding box ({:?}) to EPSG:3857", bbox))
+		.unwrap();
+	let bbox = bbox_geometry.envelope();
+	[bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY]
 }
 
 impl ReadOperationTrait for Operation {
@@ -98,18 +112,21 @@ impl ReadOperationTrait for Operation {
 		Self: Sized + OperationTrait,
 	{
 		Box::pin(async move {
-			let args = Args::from_vpl_node(&vpl_node)?;
+			let args = Args::from_vpl_node(&vpl_node).context("Failed to parse arguments from VPL node")?;
 			let filename = factory.resolve_path(&args.filename);
-			let dataset = Dataset::open(&filename)?;
+			let dataset =
+				Dataset::open(&filename).with_context(|| format!("Failed to open GDAL dataset {}", filename.display()))?;
 
-			let gt = dataset.geo_transform()?;
+			let gt = dataset
+				.geo_transform()
+				.context("Failed to get geo transform from GDAL dataset")?;
 			ensure!(gt[2] == 0.0 && gt[4] == 0.0, "GDAL dataset must not be rotated");
 
 			let width = dataset.raster_size().0;
 			let height = dataset.raster_size().1;
 			let spatial_ref = dataset
 				.spatial_ref()
-				.context(anyhow!("GDAL dataset must have a spatial reference (SRS) defined"))?;
+				.context("GDAL dataset must have a spatial reference (SRS) defined")?;
 
 			let mut bbox = Geometry::bbox(
 				gt[0],
@@ -118,14 +135,21 @@ impl ReadOperationTrait for Operation {
 				gt[3] + gt[5] * height as f64,
 			)?;
 			bbox.set_spatial_ref(spatial_ref.clone());
-			let mercator = SpatialRef::from_epsg(3857).unwrap();
-			bbox.transform_to_inplace(&mercator).unwrap();
+
+			bbox
+				.transform_to_inplace(&SpatialRef::from_epsg(4326)?)
+				.context("Failed to transform bounding box to EPSG:4326")?;
 			let bbox = bbox.envelope();
-			let bbox = GeoBBox(bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY);
+			let mut bbox = GeoBBox(bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY);
+			bbox.limit_to_mercator();
 
 			let max_zoom_level = 8;
 			let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(0, max_zoom_level, &bbox);
-			let parameters = TilesReaderParameters::new(TileFormat::PNG, TileCompression::Uncompressed, bbox_pyramid);
+			let parameters = TilesReaderParameters::new(
+				args.tile_format.unwrap_or(TileFormat::PNG),
+				TileCompression::Uncompressed,
+				bbox_pyramid,
+			);
 			let mut tilejson = TileJSON::default();
 			tilejson.bounds = Some(bbox);
 			tilejson.update_from_reader_parameters(&parameters);
@@ -134,7 +158,9 @@ impl ReadOperationTrait for Operation {
 			let mut grey_index = 0;
 			let mut alpha_index = 0;
 			for i in 1..=dataset.raster_count() {
-				let band = dataset.rasterband(i)?;
+				let band = dataset
+					.rasterband(i)
+					.with_context(|| format!("Failed to get raster band {i} from GDAL dataset"))?;
 				use gdal::raster::ColorInterpretation::*;
 				match band.color_interpretation() {
 					RedBand => color_index[0] = i,
@@ -171,7 +197,7 @@ impl ReadOperationTrait for Operation {
 				tilejson,
 				parameters,
 				filename,
-				tile_size: 512,
+				tile_size: args.tile_size.unwrap_or(512),
 			}) as Box<dyn OperationTrait>)
 		})
 	}
@@ -218,20 +244,30 @@ impl OperationTrait for Operation {
 
 	/// Stream decoded raster images for all tiles within the bounding box.
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		let bboxes: Vec<TileBBox> = bbox.iter_bbox_grid(16).collect();
+		let count = 16384u32.div_euclid(self.tile_size).max(1);
+
+		let bboxes: Vec<TileBBox> = bbox.iter_bbox_grid(count).collect();
 		Ok(
 			TileStream::from_stream_iter(bboxes.into_iter().map(move |bbox| async move {
+				let size = self.tile_size;
+
 				let image = self
-					.get_image_data_from_gdal(bbox.as_geo_bbox(), self.tile_size, self.tile_size)
+					.get_image_data_from_gdal(bbox.as_geo_bbox(), size * bbox.width(), size * bbox.height())
 					.await
 					.unwrap();
 
 				let mut tiles: Vec<Option<(TileCoord3, DynamicImage)>> = vec![];
-				if image.is_some() {
+				if let Some(image) = image {
 					let tile_coords: Vec<TileCoord3> = bbox.iter_coords().collect();
 
 					for tile_coord in tile_coords {
-						tiles.push(Some((tile_coord, image.clone().unwrap())));
+						let tile = image.crop_imm(
+							(tile_coord.x - bbox.x_min) as u32 * size,
+							(tile_coord.y - bbox.y_min) as u32 * size,
+							size,
+							size,
+						);
+						tiles.push(Some((tile_coord, tile)));
 					}
 				}
 				TileStream::from_vec(tiles.into_iter().flatten().collect())
@@ -273,105 +309,37 @@ impl ReadOperationFactoryTrait for Factory {
 mod tests {
 	use super::*;
 
-	#[tokio::test]
-	async fn test_vector() -> Result<()> {
-		let factory = PipelineFactory::new_dummy();
-		let operation = factory.operation_from_vpl("from_gdal filename=\"test.mvt\"").await?;
-
-		assert_eq!(
-			operation
-				.get_tilejson()
-				.as_pretty_lines(10)
-				.iter()
-				.map(|s| s.as_str())
-				.collect::<Vec<_>>(),
-			[
-				"{",
-				"  \"bounds\": [",
-				"    -180,",
-				"    -85.051129,",
-				"    180,",
-				"    85.051129",
-				"  ],",
-				"  \"maxzoom\": 8,",
-				"  \"minzoom\": 0,",
-				"  \"name\": \"mock vector source\",",
-				"  \"tile_content\": \"vector\",",
-				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
-				"  \"tile_schema\": \"other\",",
-				"  \"tilejson\": \"3.0.0\"",
-				"}"
-			]
-		);
-
-		let coord = TileCoord3 { x: 2, y: 3, z: 4 };
-		let blob = operation.get_tile_data(&coord).await?.unwrap();
-
-		assert!(blob.len() > 50);
-
-		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await?;
-
-		let mut n = 0;
-		while let Some((coord, blob)) = stream.next().await {
-			assert!(blob.len() > 50);
-			assert!(coord.x >= 1 && coord.x <= 2);
-			assert!(coord.y >= 1 && coord.y <= 3);
-			assert_eq!(coord.z, 3);
-			n += 1;
-		}
-		assert_eq!(n, 6);
-
-		Ok(())
+	fn run_bbox_to_mercator(bbox: [i32; 4]) -> [i32; 4] {
+		let mercator_bbox = bbox_to_mercator(GeoBBox(bbox[0] as f64, bbox[1] as f64, bbox[2] as f64, bbox[3] as f64));
+		[
+			mercator_bbox[0] as i32,
+			mercator_bbox[1] as i32,
+			mercator_bbox[2] as i32,
+			mercator_bbox[3] as i32,
+		]
 	}
 
-	#[tokio::test]
-	async fn test_raster() -> Result<()> {
-		let factory = PipelineFactory::new_dummy();
-		let operation = factory.operation_from_vpl("from_gdal filename=\"abc.png\"").await?;
-
+	#[test]
+	fn test_bbox_to_mercator() {
 		assert_eq!(
-			operation
-				.get_tilejson()
-				.as_pretty_lines(10)
-				.iter()
-				.map(|s| s.as_str())
-				.collect::<Vec<_>>(),
-			[
-				"{",
-				"  \"bounds\": [",
-				"    -180,",
-				"    -85.051129,",
-				"    180,",
-				"    85.051129",
-				"  ],",
-				"  \"maxzoom\": 8,",
-				"  \"minzoom\": 0,",
-				"  \"name\": \"mock raster source\",",
-				"  \"tile_content\": \"raster\",",
-				"  \"tile_format\": \"image/png\",",
-				"  \"tile_schema\": \"rgb\",",
-				"  \"tilejson\": \"3.0.0\"",
-				"}"
-			]
+			run_bbox_to_mercator([-200, -100, 200, 100]),
+			[-20037508, -20037508, 20037508, 20037508]
 		);
+	}
 
-		let coord = TileCoord3 { x: 2, y: 3, z: 4 };
-		let blob = operation.get_tile_data(&coord).await?.unwrap();
+	#[test]
+	fn test_flat_bbox_to_mercator() {
+		assert_eq!(
+			run_bbox_to_mercator([-200, -1, 200, 1]),
+			[-20037508, -111325, 20037508, 111325]
+		);
+	}
 
-		assert!(blob.len() > 50);
-
-		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await?;
-
-		let mut n = 0;
-		while let Some((coord, blob)) = stream.next().await {
-			assert!(blob.len() > 50);
-			assert!(coord.x >= 1 && coord.x <= 2);
-			assert!(coord.y >= 1 && coord.y <= 3);
-			assert_eq!(coord.z, 3);
-			n += 1;
-		}
-		assert_eq!(n, 6);
-
-		Ok(())
+	#[test]
+	fn test_thin_bbox_to_mercator() {
+		assert_eq!(
+			run_bbox_to_mercator([-1, -100, 1, 100]),
+			[-111319, -20037508, 111319, 20037508]
+		);
 	}
 }

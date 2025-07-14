@@ -42,3 +42,4 @@ tokio = { workspace = true, features = ["macros"] }
 [features]
 default = []
 gdal = ["dep:gdal"]
+bindgen = ["gdal/bindgen"]
