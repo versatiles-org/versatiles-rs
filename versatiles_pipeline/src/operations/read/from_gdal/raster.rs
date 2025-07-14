@@ -68,14 +68,13 @@ impl Operation {
 		dst.set_spatial_ref(&SpatialRef::from_epsg(3857).unwrap()).unwrap();
 
 		let bbox = bbox_to_mercator(bbox);
-
 		dst.set_geo_transform(&[
 			bbox[0],                             // MinX
 			(bbox[2] - bbox[0]) / width as f64,  // Pixel width
 			0.0,                                 // Rotation (should be 0)
-			bbox[1],                             // MinY
+			bbox[3],                             // MinY
 			0.0,                                 // Rotation (should be 0)
-			(bbox[3] - bbox[1]) / height as f64, // Pixel height
+			(bbox[1] - bbox[3]) / height as f64, // Pixel height
 		])
 		.unwrap();
 
@@ -331,37 +330,97 @@ impl ReadOperationFactoryTrait for Factory {
 mod tests {
 	use super::*;
 
-	fn run_bbox_to_mercator(bbox: [i32; 4]) -> [i32; 4] {
-		let mercator_bbox = bbox_to_mercator(GeoBBox(bbox[0] as f64, bbox[1] as f64, bbox[2] as f64, bbox[3] as f64));
-		[
-			mercator_bbox[0] as i32,
-			mercator_bbox[1] as i32,
-			mercator_bbox[2] as i32,
-			mercator_bbox[3] as i32,
-		]
-	}
-
 	#[test]
 	fn test_bbox_to_mercator() {
+		fn run_bbox_to_mercator(bbox: [i32; 4]) -> [i32; 4] {
+			let mercator_bbox = bbox_to_mercator(GeoBBox(bbox[0] as f64, bbox[1] as f64, bbox[2] as f64, bbox[3] as f64));
+			[
+				mercator_bbox[0] as i32,
+				mercator_bbox[1] as i32,
+				mercator_bbox[2] as i32,
+				mercator_bbox[3] as i32,
+			]
+		}
 		assert_eq!(
 			run_bbox_to_mercator([-200, -100, 200, 100]),
 			[-20037508, -20037508, 20037508, 20037508]
 		);
-	}
 
-	#[test]
-	fn test_flat_bbox_to_mercator() {
 		assert_eq!(
 			run_bbox_to_mercator([-200, -1, 200, 1]),
 			[-20037508, -111325, 20037508, 111325]
 		);
-	}
 
-	#[test]
-	fn test_thin_bbox_to_mercator() {
 		assert_eq!(
 			run_bbox_to_mercator([-1, -100, 1, 100]),
 			[-111319, -20037508, 111319, 20037508]
 		);
+	}
+
+	/// End‑to‑end test that renders a **7×7 pixel crop** from the synthetic
+	/// `gradient.tif` dataset at various zoom/x/y coordinates.
+	/// The `gradient.tif` dataset is a simple 256x256 gradient image
+	/// where the red channel contains the x‑coordinate,
+	/// the green channel contains the y‑coordinate, and the blue channel is zero.
+	/// This verifies:
+	/// * GDAL read‑path through `get_image_data_from_gdal`,
+	/// * band mapping order (R,G,B),
+	/// * correct Mercator reprojection and pixel alignment.
+	#[tokio::test]
+	async fn test_operation_get_tile_data() -> Result<()> {
+		async fn gradient_test(z: u8, x: u32, y: u32) -> [Vec<u8>; 2] {
+			// Build a `Operation` that points at `testdata/gradient.tif`.
+			// We keep it in‑memory (no factory) and map bands 1‑2‑3 → RGB.
+			let coord = TileCoord3::new(x, y, z).unwrap();
+
+			let operation = Operation {
+				filename: PathBuf::from("../testdata/gradient.tif"),
+				parameters: TilesReaderParameters::new(
+					TileFormat::PNG,
+					TileCompression::Uncompressed,
+					TileBBoxPyramid::new_full(2),
+				),
+				tilejson: TileJSON::default(),
+				tile_size: 512,
+				band_mapping: vec![1, 2, 3],
+			};
+
+			// Extract a 7×7 tile and gather the RGB bytes.
+			let image = operation
+				.get_image_data_from_gdal(coord.as_geo_bbox(), 7, 7)
+				.await
+				.unwrap()
+				.unwrap();
+
+			// Return:
+			//   [
+			//     row‑3‑of‑red‑channel (x coordinate),
+			//     column‑3‑of‑green‑channel (y coordinate)
+			//   ]
+			let pixels = image.pixels().collect::<Vec<_>>();
+			[
+				(0..7).map(|i| pixels[i + 21][0]).collect(),
+				(0..7).map(|i| pixels[i * 7 + 3][1]).collect(),
+			]
+		}
+
+		// ─── zoom‑0 full‑world tile should be a uniform gradient ───
+		assert_eq!(
+			gradient_test(0, 0, 0).await,
+			[[21, 54, 91, 128, 164, 201, 234], [16, 27, 63, 127, 192, 228, 239]]
+		);
+
+		// ─── zoom‑1: four quadrants of the gradient ───
+		let row0 = [10, 27, 45, 64, 82, 100, 118];
+		let row1 = [137, 155, 173, 192, 210, 228, 245];
+		let col0 = [10, 14, 21, 33, 51, 76, 109];
+		let col1 = [146, 179, 204, 222, 234, 241, 245];
+
+		assert_eq!(gradient_test(1, 0, 0).await, [row0, col0]);
+		assert_eq!(gradient_test(1, 1, 0).await, [row1, col0]);
+		assert_eq!(gradient_test(1, 0, 1).await, [row0, col1]);
+		assert_eq!(gradient_test(1, 1, 1).await, [row1, col1]);
+
+		Ok(())
 	}
 }
