@@ -17,7 +17,7 @@ ab_glyph.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 futures.workspace = true
-gdal = { version = "0.18.0", features = ["bindgen"], optional = true }
+gdal = { version = "0.18.0", optional = true }
 imageproc = { version = "0.25.0", default-features = false }
 itertools = { workspace = true, features = ["use_alloc"] }
 lazy_static.workspace = true
