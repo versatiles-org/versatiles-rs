@@ -108,6 +108,77 @@ fn bbox_to_mercator(mut bbox: GeoBBox) -> [f64; 4] {
 	[bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY]
 }
 
+fn dataset_bbox(dataset: &Dataset) -> Result<GeoBBox> {
+	let gt = dataset
+		.geo_transform()
+		.context("Failed to get geo transform from GDAL dataset")?;
+
+	ensure!(gt[2] == 0.0 && gt[4] == 0.0, "GDAL dataset must not be rotated");
+
+	let width = dataset.raster_size().0;
+	let height = dataset.raster_size().1;
+	let spatial_ref = dataset
+		.spatial_ref()
+		.context("GDAL dataset must have a spatial reference (SRS) defined")?;
+
+	let mut bbox = Geometry::bbox(
+		gt[0],
+		gt[3],
+		gt[0] + gt[1] * width as f64,
+		gt[3] + gt[5] * height as f64,
+	)?;
+	bbox.set_spatial_ref(spatial_ref.clone());
+
+	bbox
+		.transform_to_inplace(&SpatialRef::from_epsg(4326)?)
+		.context("Failed to transform bounding box to EPSG:4326")?;
+	let bbox = bbox.envelope();
+	let mut bbox = GeoBBox(bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY);
+	bbox.limit_to_mercator();
+	Ok(bbox)
+}
+
+fn dataset_bandmapping(dataset: &Dataset) -> Result<Vec<usize>> {
+	let mut color_index = vec![0, 0, 0];
+	let mut grey_index = 0;
+	let mut alpha_index = 0;
+	for i in 1..=dataset.raster_count() {
+		let band = dataset
+			.rasterband(i)
+			.with_context(|| format!("Failed to get raster band {i} from GDAL dataset"))?;
+		use gdal::raster::ColorInterpretation::*;
+		match band.color_interpretation() {
+			RedBand => color_index[0] = i,
+			GreenBand => color_index[1] = i,
+			BlueBand => color_index[2] = i,
+			AlphaBand => alpha_index = i,
+			GrayIndex => grey_index = i,
+			_ => warn!(
+				"GDAL band {i} has unsupported color interpretation: {:?}",
+				band.color_interpretation()
+			),
+		}
+	}
+
+	let mut band_mapping = vec![];
+	if color_index.iter().all(|&i| i > 0) {
+		if grey_index > 0 {
+			bail!("GDAL dataset has both color and grey bands, which is not supported");
+		}
+		band_mapping.push(color_index[0]);
+		band_mapping.push(color_index[1]);
+		band_mapping.push(color_index[2]);
+	} else if grey_index > 0 {
+		band_mapping.push(grey_index);
+	} else {
+		bail!("GDAL dataset has no color or grey bands, cannot read image data");
+	}
+	if alpha_index > 0 {
+		band_mapping.push(alpha_index);
+	}
+	Ok(band_mapping)
+}
+
 impl ReadOperationTrait for Operation {
 	fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
 	where
@@ -119,33 +190,9 @@ impl ReadOperationTrait for Operation {
 			let args = Args::from_vpl_node(&vpl_node).context("Failed to parse arguments from VPL node")?;
 			let filename = factory.resolve_path(&args.filename);
 			let dataset =
-				Dataset::open(&filename).with_context(|| format!("Failed to open GDAL dataset {}", filename.display()))?;
+				Dataset::open(&filename).with_context(|| format!("Failed to open GDAL dataset {:?}", filename))?;
 
-			let gt = dataset
-				.geo_transform()
-				.context("Failed to get geo transform from GDAL dataset")?;
-			ensure!(gt[2] == 0.0 && gt[4] == 0.0, "GDAL dataset must not be rotated");
-
-			let width = dataset.raster_size().0;
-			let height = dataset.raster_size().1;
-			let spatial_ref = dataset
-				.spatial_ref()
-				.context("GDAL dataset must have a spatial reference (SRS) defined")?;
-
-			let mut bbox = Geometry::bbox(
-				gt[0],
-				gt[3],
-				gt[0] + gt[1] * width as f64,
-				gt[3] + gt[5] * height as f64,
-			)?;
-			bbox.set_spatial_ref(spatial_ref.clone());
-
-			bbox
-				.transform_to_inplace(&SpatialRef::from_epsg(4326)?)
-				.context("Failed to transform bounding box to EPSG:4326")?;
-			let bbox = bbox.envelope();
-			let mut bbox = GeoBBox(bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY);
-			bbox.limit_to_mercator();
+			let bbox = dataset_bbox(&dataset)?;
 
 			let max_zoom_level = 8;
 			let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(0, max_zoom_level, &bbox);
@@ -158,43 +205,14 @@ impl ReadOperationTrait for Operation {
 			tilejson.bounds = Some(bbox);
 			tilejson.update_from_reader_parameters(&parameters);
 
-			let mut color_index = vec![0, 0, 0];
-			let mut grey_index = 0;
-			let mut alpha_index = 0;
-			for i in 1..=dataset.raster_count() {
-				let band = dataset
-					.rasterband(i)
-					.with_context(|| format!("Failed to get raster band {i} from GDAL dataset"))?;
-				use gdal::raster::ColorInterpretation::*;
-				match band.color_interpretation() {
-					RedBand => color_index[0] = i,
-					GreenBand => color_index[1] = i,
-					BlueBand => color_index[2] = i,
-					AlphaBand => alpha_index = i,
-					GrayIndex => grey_index = i,
-					_ => warn!(
-						"GDAL band {i} has unsupported color interpretation: {:?}",
-						band.color_interpretation()
-					),
-				}
-			}
+			let band_mapping = dataset_bandmapping(&dataset)
+				.with_context(|| format!("Failed to get band mapping from GDAL dataset {:?}", filename))?;
 
-			let mut band_mapping = vec![];
-			if color_index.iter().all(|&i| i > 0) {
-				if grey_index > 0 {
-					bail!("GDAL dataset has both color and grey bands, which is not supported");
-				}
-				band_mapping.push(color_index[0]);
-				band_mapping.push(color_index[1]);
-				band_mapping.push(color_index[2]);
-			} else if grey_index > 0 {
-				band_mapping.push(grey_index);
-			} else {
-				bail!("GDAL dataset has no color or grey bands, cannot read image data");
-			}
-			if alpha_index > 0 {
-				band_mapping.push(alpha_index);
-			}
+			ensure!(
+				!band_mapping.is_empty(),
+				"GDAL dataset {} has no bands to read",
+				filename.display()
+			);
 
 			Ok(Box::new(Self {
 				band_mapping,
