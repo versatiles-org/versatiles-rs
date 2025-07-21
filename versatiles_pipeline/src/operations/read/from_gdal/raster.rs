@@ -13,19 +13,14 @@ use crate::{
 	traits::*,
 	vpl::VPLNode,
 };
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use gdal::{
-	Dataset, DriverManager, config::set_config_option, raster::reproject, spatial_ref::SpatialRef, vector::Geometry,
-};
 use imageproc::image::DynamicImage;
-use log::warn;
-use std::{fmt::Debug, path::PathBuf, vec};
+use std::{fmt::Debug, vec};
 use versatiles_core::{tilejson::TileJSON, types::*};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
-use versatiles_image::EnhancedDynamicImageTrait;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a GDAL raster dataset and exposes it as a tile source.
@@ -45,138 +40,17 @@ struct Args {
 /// container’s [`TileJSON`] metadata is kept so downstream stages can query
 /// bounds and zoom levels without touching the reader again.
 struct Operation {
-	filename: PathBuf,
+	dataset: super::dataset::Dataset,
 	parameters: TilesReaderParameters,
 	tilejson: TileJSON,
 	tile_size: u32,
-	band_mapping: Vec<usize>,
 }
 
 impl Operation {
 	#[context("Failed to get image data ({width}x{height}) for bbox ({bbox:?}) from GDAL dataset")]
 	async fn get_image_data_from_gdal(&self, bbox: GeoBBox, width: u32, height: u32) -> Result<Option<DynamicImage>> {
-		let src = Dataset::open(&self.filename)
-			.with_context(|| format!("Failed to open GDAL dataset {}", self.filename.display()))?;
-
-		let channel_count = self.band_mapping.len();
-		ensure!(channel_count > 0, "GDAL dataset has no bands to read");
-
-		let driver = DriverManager::get_driver_by_name("MEM").unwrap();
-		let mut dst = driver
-			.create_with_band_type::<u8, _>("", width as usize, height as usize, channel_count)
-			.unwrap();
-		dst.set_spatial_ref(&SpatialRef::from_epsg(3857).unwrap()).unwrap();
-
-		let bbox = bbox_to_mercator(bbox);
-		dst.set_geo_transform(&[
-			bbox[0],                             // MinX
-			(bbox[2] - bbox[0]) / width as f64,  // Pixel width
-			0.0,                                 // Rotation (should be 0)
-			bbox[3],                             // MinY
-			0.0,                                 // Rotation (should be 0)
-			(bbox[1] - bbox[3]) / height as f64, // Pixel height
-		])
-		.unwrap();
-
-		reproject(&src, &dst).unwrap();
-
-		let mut buf = vec![0u8; (width as usize) * (height as usize) * channel_count];
-		for (i, &band) in self.band_mapping.iter().enumerate() {
-			let band_data = dst.rasterband(band)?.read_band_as::<u8>()?;
-			for (j, pixel) in band_data.data().iter().enumerate() {
-				buf[j * channel_count + i] = *pixel;
-			}
-		}
-
-		let image =
-			DynamicImage::from_raw(width, height, buf).context("Failed to create DynamicImage from GDAL dataset")?;
-
-		Ok(Some(image))
+		self.dataset.get_image(bbox, width, height).await
 	}
-}
-
-fn bbox_to_mercator(mut bbox: GeoBBox) -> [f64; 4] {
-	bbox.limit_to_mercator();
-	let mut bbox_geometry = Geometry::bbox(bbox.1, bbox.0, bbox.3, bbox.2).unwrap();
-	bbox_geometry.set_spatial_ref(SpatialRef::from_epsg(4326).unwrap());
-	bbox_geometry
-		.transform_to_inplace(&SpatialRef::from_epsg(3857).unwrap())
-		.with_context(|| format!("Failed to transform bounding box ({:?}) to EPSG:3857", bbox))
-		.unwrap();
-	let bbox = bbox_geometry.envelope();
-	[bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY]
-}
-
-fn dataset_bbox(dataset: &Dataset) -> Result<GeoBBox> {
-	let gt = dataset
-		.geo_transform()
-		.context("Failed to get geo transform from GDAL dataset")?;
-
-	ensure!(gt[2] == 0.0 && gt[4] == 0.0, "GDAL dataset must not be rotated");
-
-	let width = dataset.raster_size().0;
-	let height = dataset.raster_size().1;
-	let spatial_ref = dataset
-		.spatial_ref()
-		.context("GDAL dataset must have a spatial reference (SRS) defined")?;
-
-	let mut bbox = Geometry::bbox(
-		gt[3],
-		gt[0],
-		gt[3] + gt[5] * height as f64,
-		gt[0] + gt[1] * width as f64,
-	)?;
-	bbox.set_spatial_ref(spatial_ref.clone());
-	bbox
-		.transform_to_inplace(&SpatialRef::from_epsg(4326)?)
-		.context("Failed to transform bounding box to EPSG:4326")?;
-
-	let bbox = bbox.envelope();
-
-	let mut bbox = GeoBBox(bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY);
-	bbox.limit_to_mercator();
-	Ok(bbox)
-}
-
-fn dataset_bandmapping(dataset: &Dataset) -> Result<Vec<usize>> {
-	let mut color_index = vec![0, 0, 0];
-	let mut grey_index = 0;
-	let mut alpha_index = 0;
-	for i in 1..=dataset.raster_count() {
-		let band = dataset
-			.rasterband(i)
-			.with_context(|| format!("Failed to get raster band {i} from GDAL dataset"))?;
-		use gdal::raster::ColorInterpretation::*;
-		match band.color_interpretation() {
-			RedBand => color_index[0] = i,
-			GreenBand => color_index[1] = i,
-			BlueBand => color_index[2] = i,
-			AlphaBand => alpha_index = i,
-			GrayIndex => grey_index = i,
-			_ => warn!(
-				"GDAL band {i} has unsupported color interpretation: {:?}",
-				band.color_interpretation()
-			),
-		}
-	}
-
-	let mut band_mapping = vec![];
-	if color_index.iter().all(|&i| i > 0) {
-		if grey_index > 0 {
-			bail!("GDAL dataset has both color and grey bands, which is not supported");
-		}
-		band_mapping.push(color_index[0]);
-		band_mapping.push(color_index[1]);
-		band_mapping.push(color_index[2]);
-	} else if grey_index > 0 {
-		band_mapping.push(grey_index);
-	} else {
-		bail!("GDAL dataset has no color or grey bands, cannot read image data");
-	}
-	if alpha_index > 0 {
-		band_mapping.push(alpha_index);
-	}
-	Ok(band_mapping)
 }
 
 impl ReadOperationTrait for Operation {
@@ -185,40 +59,26 @@ impl ReadOperationTrait for Operation {
 		Self: Sized + OperationTrait,
 	{
 		Box::pin(async move {
-			set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
-
 			let args = Args::from_vpl_node(&vpl_node).context("Failed to parse arguments from VPL node")?;
 			let filename = factory.resolve_path(&args.filename);
-			let dataset =
-				Dataset::open(&filename).with_context(|| format!("Failed to open GDAL dataset {:?}", filename))?;
-
-			let bbox = dataset_bbox(&dataset)?;
+			let dataset = super::dataset::Dataset::new(filename).await?;
+			let bbox = &dataset.bbox;
 
 			let max_zoom_level = 8;
-			let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(0, max_zoom_level, &bbox);
+			let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(0, max_zoom_level, bbox);
 			let parameters = TilesReaderParameters::new(
 				args.tile_format.unwrap_or(TileFormat::PNG),
 				TileCompression::Uncompressed,
 				bbox_pyramid,
 			);
 			let mut tilejson = TileJSON::default();
-			tilejson.bounds = Some(bbox);
+			tilejson.bounds = Some(bbox.clone());
 			tilejson.update_from_reader_parameters(&parameters);
 
-			let band_mapping = dataset_bandmapping(&dataset)
-				.with_context(|| format!("Failed to get band mapping from GDAL dataset {:?}", filename))?;
-
-			ensure!(
-				!band_mapping.is_empty(),
-				"GDAL dataset {} has no bands to read",
-				filename.display()
-			);
-
 			Ok(Box::new(Self {
-				band_mapping,
 				tilejson,
 				parameters,
-				filename,
+				dataset,
 				tile_size: args.tile_size.unwrap_or(512),
 			}) as Box<dyn OperationTrait>)
 		})
@@ -256,12 +116,6 @@ impl OperationTrait for Operation {
 		self
 			.get_image_data_from_gdal(coord.as_geo_bbox(), self.tile_size, self.tile_size)
 			.await
-			.with_context(|| {
-				format!(
-					"Failed to decode image tile at {coord:?} from GDAL dataset {}",
-					self.filename.display()
-				)
-			})
 	}
 
 	/// Stream decoded raster images for all tiles within the bounding box.
@@ -329,34 +183,11 @@ impl ReadOperationFactoryTrait for Factory {
 
 #[cfg(test)]
 mod tests {
+	use std::path::PathBuf;
+
+	use versatiles_image::EnhancedDynamicImageTrait;
+
 	use super::*;
-
-	#[test]
-	fn test_bbox_to_mercator() {
-		fn run_bbox_to_mercator(bbox: [i32; 4]) -> [i32; 4] {
-			let mercator_bbox = bbox_to_mercator(GeoBBox(bbox[0] as f64, bbox[1] as f64, bbox[2] as f64, bbox[3] as f64));
-			[
-				mercator_bbox[0] as i32,
-				mercator_bbox[1] as i32,
-				mercator_bbox[2] as i32,
-				mercator_bbox[3] as i32,
-			]
-		}
-		assert_eq!(
-			run_bbox_to_mercator([-200, -100, 200, 100]),
-			[-20037508, -20037508, 20037508, 20037508]
-		);
-
-		assert_eq!(
-			run_bbox_to_mercator([-200, -1, 200, 1]),
-			[-20037508, -111325, 20037508, 111325]
-		);
-
-		assert_eq!(
-			run_bbox_to_mercator([-1, -100, 1, 100]),
-			[-111319, -20037508, 111319, 20037508]
-		);
-	}
 
 	/// End‑to‑end test that renders a **7×7 pixel crop** from the synthetic
 	/// `gradient.tif` dataset at various zoom/x/y coordinates.
@@ -375,7 +206,9 @@ mod tests {
 			let coord = TileCoord3::new(x, y, z).unwrap();
 
 			let operation = Operation {
-				filename: PathBuf::from("../testdata/gradient.tif"),
+				dataset: super::super::dataset::Dataset::new(PathBuf::from("../testdata/gradient.tif"))
+					.await
+					.unwrap(),
 				parameters: TilesReaderParameters::new(
 					TileFormat::PNG,
 					TileCompression::Uncompressed,
@@ -383,7 +216,6 @@ mod tests {
 				),
 				tilejson: TileJSON::default(),
 				tile_size: 512,
-				band_mapping: vec![1, 2, 3],
 			};
 
 			// Extract a 7×7 tile and gather the RGB bytes.
