@@ -169,17 +169,17 @@ unsafe impl Sync for VersaTilesReader {}
 #[async_trait]
 impl TilesReaderTrait for VersaTilesReader {
 	/// Gets the container name.
-	fn get_container_name(&self) -> &str {
+	fn container_name(&self) -> &str {
 		"versatiles"
 	}
 
 	/// Gets metadata.
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
 	/// Gets the parameters.
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
@@ -372,7 +372,7 @@ impl TilesReaderTrait for VersaTilesReader {
 	}
 
 	// Get the name of the reader
-	fn get_source_name(&self) -> &str {
+	fn source_name(&self) -> &str {
 		self.reader.get_name()
 	}
 
@@ -463,7 +463,7 @@ impl TilesReaderTrait for VersaTilesReader {
 impl Debug for VersaTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("VersaTilesReader")
-			.field("parameters", &self.get_parameters())
+			.field("parameters", &self.parameters())
 			.finish()
 	}
 }
@@ -492,18 +492,18 @@ mod tests {
 			format!("{reader:?}"),
 			"VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: MVT } }"
 		);
-		assert_eq!(reader.get_container_name(), "versatiles");
-		assert_wildcard!(reader.get_source_name(), "*.versatiles");
+		assert_eq!(reader.container_name(), "versatiles");
+		assert_wildcard!(reader.source_name(), "*.versatiles");
 		assert_eq!(
-			reader.get_tilejson().as_string(),
+			reader.tilejson().as_string(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 		assert_eq!(
-			format!("{:?}", reader.get_parameters()),
+			format!("{:?}", reader.parameters()),
 			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: MVT }"
 		);
-		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
-		assert_eq!(reader.get_parameters().tile_format, TileFormat::MVT);
+		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
+		assert_eq!(reader.parameters().tile_format, TileFormat::MVT);
 
 		let tile = reader.get_tile_data(&TileCoord3::new(15, 1, 4)?).await?.unwrap();
 		assert_eq!(decompress_gzip(&tile)?.as_slice(), MOCK_BYTES_PBF);

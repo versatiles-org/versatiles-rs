@@ -55,15 +55,15 @@ impl MockVectorSource {
 
 #[async_trait]
 impl TilesReaderTrait for MockVectorSource {
-	fn get_source_name(&self) -> &str {
+	fn source_name(&self) -> &str {
 		"MockVectorSource"
 	}
 
-	fn get_container_name(&self) -> &str {
+	fn container_name(&self) -> &str {
 		"MockVectorSource"
 	}
 
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
@@ -71,7 +71,7 @@ impl TilesReaderTrait for MockVectorSource {
 		panic!("not possible")
 	}
 
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
@@ -139,11 +139,11 @@ mod tests {
 			Some(TileBBoxPyramid::from_geo_bbox(0, 8, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
 		);
 
-		assert_eq!(source.get_source_name(), "MockVectorSource");
-		assert_eq!(source.get_container_name(), "MockVectorSource");
+		assert_eq!(source.source_name(), "MockVectorSource");
+		assert_eq!(source.container_name(), "MockVectorSource");
 		assert!(
 			source
-				.get_parameters()
+				.parameters()
 				.bbox_pyramid
 				.contains_coord(&TileCoord3::new(0, 200, 8).unwrap())
 		);
@@ -178,7 +178,7 @@ mod tests {
 			Some(TileBBoxPyramid::from_geo_bbox(3, 15, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
 		);
 		assert_eq!(
-			source.get_tilejson().as_pretty_lines(100),
+			source.tilejson().as_pretty_lines(100),
 			[
 				"{",
 				"  \"bounds\": [ -180, -85.051129, 0, 0 ],",

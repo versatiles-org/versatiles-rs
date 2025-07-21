@@ -64,15 +64,15 @@ impl MockImageSource {
 
 #[async_trait]
 impl TilesReaderTrait for MockImageSource {
-	fn get_source_name(&self) -> &str {
+	fn source_name(&self) -> &str {
 		"MockImageSource"
 	}
 
-	fn get_container_name(&self) -> &str {
+	fn container_name(&self) -> &str {
 		"MockImageSource"
 	}
 
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
@@ -80,7 +80,7 @@ impl TilesReaderTrait for MockImageSource {
 		panic!("not possible")
 	}
 
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
@@ -155,7 +155,7 @@ mod tests {
 		)
 		.unwrap();
 		assert_eq!(
-			source.get_tilejson().as_pretty_lines(100),
+			source.tilejson().as_pretty_lines(100),
 			[
 				"{",
 				"  \"bounds\": [ -180, -85.051129, 0, 0 ],",

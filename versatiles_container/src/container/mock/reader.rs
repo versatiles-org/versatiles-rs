@@ -78,15 +78,15 @@ impl MockTilesReader {
 
 #[async_trait]
 impl TilesReaderTrait for MockTilesReader {
-	fn get_container_name(&self) -> &str {
+	fn container_name(&self) -> &str {
 		"dummy_container"
 	}
 
-	fn get_source_name(&self) -> &str {
+	fn source_name(&self) -> &str {
 		"dummy_name"
 	}
 
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
@@ -94,7 +94,7 @@ impl TilesReaderTrait for MockTilesReader {
 		self.parameters.tile_compression = tile_compression;
 	}
 
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
@@ -123,7 +123,7 @@ impl TilesReaderTrait for MockTilesReader {
 impl std::fmt::Debug for MockTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("MockTilesReader")
-			.field("parameters", &self.get_parameters())
+			.field("parameters", &self.parameters())
 			.finish()
 	}
 }
@@ -138,19 +138,19 @@ mod tests {
 	#[tokio::test]
 	async fn reader() -> Result<()> {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
-		assert_eq!(reader.get_container_name(), "dummy_container");
-		assert_eq!(reader.get_source_name(), "dummy_name");
+		assert_eq!(reader.container_name(), "dummy_container");
+		assert_eq!(reader.source_name(), "dummy_name");
 
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 		bbox_pyramid.set_level_bbox(TileBBox::new(2, 0, 1, 2, 3)?);
 		bbox_pyramid.set_level_bbox(TileBBox::new(3, 0, 2, 4, 6)?);
 
 		assert_eq!(
-			reader.get_parameters(),
+			reader.parameters(),
 			&TilesReaderParameters::new(TileFormat::PNG, TileCompression::Uncompressed, bbox_pyramid)
 		);
 		assert_eq!(
-			reader.get_tilejson().as_string(),
+			reader.tilejson().as_string(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 		let blob = reader
@@ -168,7 +168,7 @@ mod tests {
 			let coord = TileCoord3::new(23, 45, 6).unwrap();
 			let reader = MockTilesReader::new_mock_profile(profile).unwrap();
 			let tile_compressed = reader.get_tile_data(&coord).await.unwrap().unwrap();
-			let tile_uncompressed = decompress(tile_compressed, &reader.get_parameters().tile_compression).unwrap();
+			let tile_uncompressed = decompress(tile_compressed, &reader.parameters().tile_compression).unwrap();
 			assert_eq!(tile_uncompressed, blob);
 		};
 

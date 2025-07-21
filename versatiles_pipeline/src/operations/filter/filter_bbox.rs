@@ -36,7 +36,7 @@ impl Operation {
 	{
 		Box::pin(async move {
 			let args = Args::from_vpl_node(&vpl_node)?;
-			let mut parameters = source.get_parameters().clone();
+			let mut parameters = source.parameters().clone();
 
 			if let Some(min) = args.min {
 				parameters.bbox_pyramid.set_zoom_min(min);
@@ -50,7 +50,7 @@ impl Operation {
 				parameters.bbox_pyramid.intersect_geo_bbox(&GeoBBox::from(&bbox));
 			}
 
-			let mut tilejson = source.get_tilejson().clone();
+			let mut tilejson = source.tilejson().clone();
 			tilejson.update_from_reader_parameters(&parameters);
 
 			Ok(Box::new(Self {
@@ -69,11 +69,11 @@ impl Operation {
 
 #[async_trait]
 impl OperationTrait for Operation {
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 

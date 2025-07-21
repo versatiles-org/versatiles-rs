@@ -204,16 +204,16 @@ impl DirectoryTilesReader {
 
 #[async_trait]
 impl TilesReaderTrait for DirectoryTilesReader {
-	fn get_container_name(&self) -> &str {
+	fn container_name(&self) -> &str {
 		"directory"
 	}
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
@@ -225,7 +225,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 			Ok(None)
 		}
 	}
-	fn get_source_name(&self) -> &str {
+	fn source_name(&self) -> &str {
 		self.dir.to_str().unwrap()
 	}
 }
@@ -233,8 +233,8 @@ impl TilesReaderTrait for DirectoryTilesReader {
 impl Debug for DirectoryTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("DirectoryTilesReader")
-			.field("name", &self.get_source_name())
-			.field("parameters", &self.get_parameters())
+			.field("name", &self.source_name())
+			.field("parameters", &self.parameters())
 			.finish()
 	}
 }
@@ -259,7 +259,7 @@ mod tests {
 		let reader = DirectoryTilesReader::open_path(&dir)?;
 
 		assert_eq!(
-			reader.get_tilejson().as_string(),
+			reader.tilejson().as_string(),
 			"{\"bounds\":[-90,66.51326,-45,79.171335],\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 
@@ -316,7 +316,7 @@ mod tests {
 
 		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
 		assert_eq!(
-			reader.get_tilejson().as_string(),
+			reader.tilejson().as_string(),
 			"{\"bounds\":[-90,66.51326,0,85.051129],\"maxzoom\":2,\"minzoom\":2,\"tilejson\":\"3.0.0\",\"type\":\"dummy data\"}"
 		);
 
@@ -390,7 +390,7 @@ mod tests {
 
 		let mut reader = DirectoryTilesReader::open_path(dir.path())?;
 
-		assert_eq!(reader.get_container_name(), "directory");
+		assert_eq!(reader.container_name(), "directory");
 
 		assert_wildcard!(
 			format!("{reader:?}"),
@@ -398,13 +398,13 @@ mod tests {
 		);
 
 		assert_eq!(
-			reader.get_tilejson().as_string(),
+			reader.tilejson().as_string(),
 			"{\"bounds\":[-90,66.51326,-45,79.171335],\"key\":\"value\",\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\"}"
 		);
 
-		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Brotli);
+		assert_eq!(reader.parameters().tile_compression, TileCompression::Brotli);
 		reader.override_compression(TileCompression::Gzip);
-		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
+		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
 
 		Ok(())
 	}

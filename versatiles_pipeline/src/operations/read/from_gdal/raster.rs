@@ -89,13 +89,13 @@ impl ReadOperationTrait for Operation {
 impl OperationTrait for Operation {
 	/// Return the reader’s technical parameters (compression, tile size,
 	/// etc.) without performing any I/O.
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
 	/// Expose the container’s `TileJSON` so that consumers can inspect
 	/// bounds, zoom range and other dataset metadata.
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 	/// Retrieve the *raw* (potentially compressed) tile blob at the given

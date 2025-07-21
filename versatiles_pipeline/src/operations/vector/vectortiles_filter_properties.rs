@@ -187,7 +187,7 @@ mod tests {
 
 		Ok((
 			extract_tile_properties(&VectorTile::from_blob(&blob)?).join(";"),
-			extract_json_properties(operation.get_tilejson()).join(";"),
+			extract_json_properties(operation.tilejson()).join(";"),
 		))
 	}
 

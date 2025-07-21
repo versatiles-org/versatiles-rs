@@ -13,19 +13,19 @@ use std::{fmt::Debug, sync::Arc};
 #[async_trait]
 pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	/// Get the name of the reader source, e.g., the filename.
-	fn get_source_name(&self) -> &str;
+	fn source_name(&self) -> &str;
 
 	/// Get the container name, e.g., versatiles, mbtiles, etc.
-	fn get_container_name(&self) -> &str;
+	fn container_name(&self) -> &str;
 
 	/// Get the reader parameters.
-	fn get_parameters(&self) -> &TilesReaderParameters;
+	fn parameters(&self) -> &TilesReaderParameters;
 
 	/// Override the tile compression.
 	fn override_compression(&mut self, tile_compression: TileCompression);
 
 	/// Get the metadata, always uncompressed.
-	fn get_tilejson(&self) -> &TileJSON;
+	fn tilejson(&self) -> &TileJSON;
 
 	/// Get tile data for the given coordinate, always compressed and formatted.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>>;
@@ -56,10 +56,10 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		let mut print = PrettyPrint::new();
 
 		let cat = print.get_category("meta_data").await;
-		cat.add_key_value("name", self.get_source_name()).await;
-		cat.add_key_value("container", self.get_container_name()).await;
+		cat.add_key_value("name", self.source_name()).await;
+		cat.add_key_value("container", self.container_name()).await;
 
-		cat.add_key_json("meta", &self.get_tilejson().as_json_value()).await;
+		cat.add_key_json("meta", &self.tilejson().as_json_value()).await;
 
 		self
 			.probe_parameters(&mut print.get_category("parameters").await)
@@ -84,7 +84,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 	#[cfg(feature = "cli")]
 	async fn probe_parameters(&mut self, print: &mut PrettyPrint) -> Result<()> {
-		let parameters = self.get_parameters();
+		let parameters = self.parameters();
 		let p = print.get_list("bbox_pyramid").await;
 		for level in parameters.bbox_pyramid.iter_levels() {
 			p.add_value(level).await
@@ -162,15 +162,15 @@ mod tests {
 
 	#[async_trait]
 	impl TilesReaderTrait for TestReader {
-		fn get_source_name(&self) -> &str {
+		fn source_name(&self) -> &str {
 			"dummy"
 		}
 
-		fn get_container_name(&self) -> &str {
+		fn container_name(&self) -> &str {
 			"test container name"
 		}
 
-		fn get_parameters(&self) -> &TilesReaderParameters {
+		fn parameters(&self) -> &TilesReaderParameters {
 			&self.parameters
 		}
 
@@ -178,7 +178,7 @@ mod tests {
 			self.parameters.tile_compression = tile_compression;
 		}
 
-		fn get_tilejson(&self) -> &TileJSON {
+		fn tilejson(&self) -> &TileJSON {
 			&self.tilejson
 		}
 
@@ -190,19 +190,19 @@ mod tests {
 	#[tokio::test]
 	async fn test_get_name() {
 		let reader = TestReader::new_dummy();
-		assert_eq!(reader.get_source_name(), "dummy");
+		assert_eq!(reader.source_name(), "dummy");
 	}
 
 	#[tokio::test]
 	async fn test_get_container_name() {
 		let reader = TestReader::new_dummy();
-		assert_eq!(reader.get_container_name(), "test container name");
+		assert_eq!(reader.container_name(), "test container name");
 	}
 
 	#[tokio::test]
 	async fn test_get_parameters() {
 		let reader = TestReader::new_dummy();
-		let parameters = reader.get_parameters();
+		let parameters = reader.parameters();
 		assert_eq!(parameters.tile_compression, TileCompression::Gzip);
 		assert_eq!(parameters.tile_format, TileFormat::MVT);
 		assert_eq!(parameters.bbox_pyramid.get_zoom_min().unwrap(), 0);
@@ -212,17 +212,17 @@ mod tests {
 	#[tokio::test]
 	async fn test_override_compression() {
 		let mut reader = TestReader::new_dummy();
-		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
+		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
 
 		reader.override_compression(TileCompression::Brotli);
-		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Brotli);
+		assert_eq!(reader.parameters().tile_compression, TileCompression::Brotli);
 	}
 
 	#[tokio::test]
 	async fn test_get_meta() -> Result<()> {
 		let reader = TestReader::new_dummy();
 		assert_eq!(
-			reader.get_tilejson().as_string(),
+			reader.tilejson().as_string(),
 			"{\"metadata\":\"test\",\"tilejson\":\"3.0.0\"}"
 		);
 		Ok(())

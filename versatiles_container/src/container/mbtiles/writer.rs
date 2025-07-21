@@ -119,7 +119,7 @@ impl TilesWriterTrait for MBTilesWriter {
 
 		let mut writer = MBTilesWriter::new(path)?;
 
-		let parameters = reader.get_parameters().clone();
+		let parameters = reader.parameters().clone();
 
 		let format = match (parameters.tile_format, parameters.tile_compression) {
 			(JPG, Uncompressed) => "jpg",
@@ -136,7 +136,7 @@ impl TilesWriterTrait for MBTilesWriter {
 		writer.set_metadata("format", format)?;
 		writer.set_metadata("type", "baselayer")?;
 		writer.set_metadata("version", "3.0")?;
-		let pyramid = &reader.get_parameters().bbox_pyramid;
+		let pyramid = &reader.parameters().bbox_pyramid;
 		let bbox = pyramid.get_geo_bbox().unwrap();
 		let center = pyramid.get_geo_center().unwrap();
 		let zoom_min = pyramid.get_zoom_min().unwrap();
@@ -146,7 +146,7 @@ impl TilesWriterTrait for MBTilesWriter {
 		writer.set_metadata("minzoom", &zoom_min.to_string())?;
 		writer.set_metadata("maxzoom", &zoom_max.to_string())?;
 
-		let tilejson = reader.get_tilejson();
+		let tilejson = reader.tilejson();
 		if let Some(vector_layers) = tilejson.as_object().get("vector_layers") {
 			writer.set_metadata(
 				"json",

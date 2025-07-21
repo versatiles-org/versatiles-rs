@@ -20,7 +20,7 @@ pub struct TileSource {
 impl TileSource {
 	// Constructor function for creating a TileSource instance
 	pub fn from(reader: Box<dyn TilesReaderTrait>, id: &str) -> Result<TileSource> {
-		let parameters = reader.get_parameters();
+		let parameters = reader.parameters();
 		let tile_mime = parameters.tile_format.as_mime_str().to_string();
 		let compression = parameters.tile_compression;
 
@@ -35,7 +35,7 @@ impl TileSource {
 
 	pub async fn get_source_name(&self) -> String {
 		let reader = self.reader.lock().await;
-		reader.get_source_name().to_owned()
+		reader.source_name().to_owned()
 	}
 
 	// Retrieve the tile data as an HTTP response
@@ -92,8 +92,8 @@ impl TileSource {
 
 	async fn build_tile_json(&self) -> Result<Blob> {
 		let reader = self.reader.lock().await;
-		let mut tilejson = reader.get_tilejson().clone();
-		tilejson.update_from_reader_parameters(reader.get_parameters());
+		let mut tilejson = reader.tilejson().clone();
+		tilejson.update_from_reader_parameters(reader.parameters());
 
 		let tiles_url = format!("{}{{z}}/{{x}}/{{y}}", self.prefix.as_string());
 		tilejson.set_list("tiles", vec![tiles_url])?;

@@ -158,7 +158,7 @@ mod tests {
 			.collect::<Vec<_>>()
 			.join(",");
 
-		let tilejson = operation.get_tilejson();
+		let tilejson = operation.tilejson();
 		let layer_ids = tilejson.vector_layers.layer_ids().join(",");
 
 		Ok((layer_names, layer_ids))

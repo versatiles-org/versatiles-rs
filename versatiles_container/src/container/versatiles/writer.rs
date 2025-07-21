@@ -42,11 +42,11 @@ impl TilesWriterTrait for VersaTilesWriter {
 	/// Convert tiles from the TilesReader and write them to the writer.
 	async fn write_to_writer(reader: &mut dyn TilesReaderTrait, writer: &mut dyn DataWriterTrait) -> Result<()> {
 		// Finalize the configuration
-		let parameters = reader.get_parameters();
+		let parameters = reader.parameters();
 		trace!("convert_from - reader.parameters: {parameters:?}");
 
 		// Get the bounding box pyramid
-		let bbox_pyramid = reader.get_parameters().bbox_pyramid.clone();
+		let bbox_pyramid = reader.parameters().bbox_pyramid.clone();
 		trace!("convert_from - bbox_pyramid: {bbox_pyramid:#}");
 
 		// Create the file header
@@ -82,15 +82,15 @@ impl TilesWriterTrait for VersaTilesWriter {
 impl VersaTilesWriter {
 	/// Write metadata to the writer.
 	async fn write_meta(reader: &dyn TilesReaderTrait, writer: &mut dyn DataWriterTrait) -> Result<ByteRange> {
-		let meta: Blob = reader.get_tilejson().into();
-		let compressed = compress(meta, &reader.get_parameters().tile_compression)?;
+		let meta: Blob = reader.tilejson().into();
+		let compressed = compress(meta, &reader.parameters().tile_compression)?;
 
 		writer.append(&compressed)
 	}
 
 	/// Write blocks to the writer.
 	async fn write_blocks(reader: &mut dyn TilesReaderTrait, writer: &mut dyn DataWriterTrait) -> Result<ByteRange> {
-		let pyramid = reader.get_parameters().bbox_pyramid.clone();
+		let pyramid = reader.parameters().bbox_pyramid.clone();
 
 		if pyramid.is_empty() {
 			return Ok(ByteRange::empty());

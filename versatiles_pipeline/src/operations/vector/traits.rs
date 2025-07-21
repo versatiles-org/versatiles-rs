@@ -29,10 +29,10 @@ pub struct TransformOp<R: RunnerTrait> {
 #[async_trait]
 impl<R: RunnerTrait> OperationTrait for TransformOp<R> {
 	/* --- metadata --- */
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.params
 	}
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
@@ -76,7 +76,7 @@ where
 	R: RunnerTrait,
 {
 	// ── common steps ───────────────────────────────────────────────
-	let mut params = source.get_parameters().clone();
+	let mut params = source.parameters().clone();
 	ensure!(
 		params.tile_format.get_type() == TileType::Vector,
 		"source must be vector tiles"
@@ -87,7 +87,7 @@ where
 	let runner = Arc::new(runner);
 
 	// ── tile-json patching (always the same) ───────────────────────
-	let mut tilejson = source.get_tilejson().clone();
+	let mut tilejson = source.tilejson().clone();
 	runner.update_tilejson(&mut tilejson);
 	tilejson.update_from_reader_parameters(&params);
 

@@ -267,7 +267,7 @@ mod tests {
 		let prop_str = format!("{:?}", layer.features[1].decode_properties(layer)?);
 
 		let fields = operation
-			.get_tilejson()
+			.tilejson()
 			.vector_layers
 			.find("debug_y")
 			.unwrap()

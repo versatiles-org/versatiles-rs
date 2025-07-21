@@ -27,15 +27,15 @@ impl TilesWriterTrait for TarTilesWriter {
 		let file = File::create(path)?;
 		let mut builder = Builder::new(file);
 
-		let parameters = reader.get_parameters();
+		let parameters = reader.parameters();
 		let tile_format = &parameters.tile_format.clone();
 		let tile_compression = &parameters.tile_compression.clone();
-		let bbox_pyramid = reader.get_parameters().bbox_pyramid.clone();
+		let bbox_pyramid = reader.parameters().bbox_pyramid.clone();
 
 		let extension_format = tile_format.as_extension();
 		let extension_compression = tile_compression.extension();
 
-		let meta_data = compress(reader.get_tilejson().into(), tile_compression)?;
+		let meta_data = compress(reader.tilejson().into(), tile_compression)?;
 		let filename = format!("tiles.json{extension_compression}");
 		let mut header = Header::new_gnu();
 		header.set_size(meta_data.len() as u64);
@@ -122,7 +122,7 @@ mod tests {
 
 		let reader = TarTilesReader::open_path(&temp_path)?;
 		assert_eq!(
-			reader.get_tilejson().as_string(),
+			reader.tilejson().as_string(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 
@@ -175,7 +175,7 @@ mod tests {
 		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path).await?;
 
 		let reader = TarTilesReader::open_path(&temp_path)?;
-		assert_eq!(reader.get_parameters().bbox_pyramid.count_tiles(), 21845);
+		assert_eq!(reader.parameters().bbox_pyramid.count_tiles(), 21845);
 
 		Ok(())
 	}
@@ -199,7 +199,7 @@ mod tests {
 			TarTilesWriter::write_to_path(&mut mock_reader, &temp_path).await?;
 
 			let reader = TarTilesReader::open_path(&temp_path)?;
-			assert_eq!(reader.get_parameters().tile_compression, compression);
+			assert_eq!(reader.parameters().tile_compression, compression);
 		}
 
 		Ok(())

@@ -48,8 +48,8 @@ impl ReadOperationTrait for Operation {
 		Box::pin(async move {
 			let args = Args::from_vpl_node(&vpl_node)?;
 			let reader = factory.get_reader(&factory.resolve_filename(&args.filename)).await?;
-			let parameters = reader.get_parameters().clone();
-			let mut tilejson = reader.get_tilejson().clone();
+			let parameters = reader.parameters().clone();
+			let mut tilejson = reader.tilejson().clone();
 			tilejson.update_from_reader_parameters(&parameters);
 
 			Ok(Box::new(Self {
@@ -65,13 +65,13 @@ impl ReadOperationTrait for Operation {
 impl OperationTrait for Operation {
 	/// Return the reader’s technical parameters (compression, tile size,
 	/// etc.) without performing any I/O.
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
 	/// Expose the container’s `TileJSON` so that consumers can inspect
 	/// bounds, zoom range and other dataset metadata.
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 	/// Retrieve the *raw* (potentially compressed) tile blob at the given
@@ -139,7 +139,7 @@ mod tests {
 
 		assert_eq!(
 			operation
-				.get_tilejson()
+				.tilejson()
 				.as_pretty_lines(10)
 				.iter()
 				.map(|s| s.as_str())
@@ -192,7 +192,7 @@ mod tests {
 
 		assert_eq!(
 			operation
-				.get_tilejson()
+				.tilejson()
 				.as_pretty_lines(10)
 				.iter()
 				.map(|s| s.as_str())

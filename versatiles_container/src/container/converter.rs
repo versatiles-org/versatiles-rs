@@ -92,10 +92,10 @@ impl TilesConvertReader {
 		reader: Box<dyn TilesReaderTrait>,
 		cp: TilesConverterParameters,
 	) -> Result<TilesConvertReader> {
-		let container_name = format!("converter({})", reader.get_container_name());
-		let name = format!("converter({})", reader.get_source_name());
+		let container_name = format!("converter({})", reader.container_name());
+		let name = format!("converter({})", reader.source_name());
 
-		let rp: TilesReaderParameters = reader.get_parameters().to_owned();
+		let rp: TilesReaderParameters = reader.parameters().to_owned();
 		let mut new_rp: TilesReaderParameters = rp.clone();
 
 		if cp.flip_y {
@@ -120,7 +120,7 @@ impl TilesConvertReader {
 			cp.force_recompress,
 		));
 
-		let mut tilejson = reader.get_tilejson().clone();
+		let mut tilejson = reader.tilejson().clone();
 		tilejson.update_from_reader_parameters(&new_rp);
 
 		Ok(TilesConvertReader {
@@ -137,15 +137,15 @@ impl TilesConvertReader {
 
 #[async_trait]
 impl TilesReaderTrait for TilesConvertReader {
-	fn get_source_name(&self) -> &str {
+	fn source_name(&self) -> &str {
 		&self.name
 	}
 
-	fn get_container_name(&self) -> &str {
+	fn container_name(&self) -> &str {
 		&self.container_name
 	}
 
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.reader_parameters
 	}
 
@@ -153,7 +153,7 @@ impl TilesReaderTrait for TilesConvertReader {
 		self.reader.override_compression(tile_compression);
 	}
 
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
@@ -245,7 +245,7 @@ mod tests {
 			let filename = temp_file.to_str().unwrap();
 			convert_tiles_container(reader_in.boxed(), cp, filename).await?;
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
-			let parameters_out = reader_out.get_parameters();
+			let parameters_out = reader_out.parameters();
 			assert_eq!(parameters_out.tile_format, MVT);
 			assert_eq!(parameters_out.tile_compression, c_out);
 			Ok(())
@@ -293,7 +293,7 @@ mod tests {
 			convert_tiles_container(reader.boxed(), cp, filename).await?;
 
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
-			let parameters_out = reader_out.get_parameters();
+			let parameters_out = reader_out.parameters();
 			assert_eq!(parameters_out.bbox_pyramid, pyramid_out);
 
 			let bbox = pyramid_out.get_level_bbox(3);
@@ -354,7 +354,7 @@ mod tests {
 
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
 
-		assert_eq!(tcr.reader.get_container_name(), "dummy_container");
+		assert_eq!(tcr.reader.container_name(), "dummy_container");
 		assert_eq!(tcr.converter_parameters.tile_compression, None);
 		assert_eq!(tcr.name, "converter(dummy_name)");
 		assert_eq!(tcr.container_name, "converter(dummy_container)");
@@ -379,7 +379,7 @@ mod tests {
 		let cp = TilesConverterParameters::default();
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
 
-		assert_eq!(tcr.get_source_name(), "converter(dummy_name)");
+		assert_eq!(tcr.source_name(), "converter(dummy_name)");
 	}
 
 	#[test]
@@ -388,7 +388,7 @@ mod tests {
 		let cp = TilesConverterParameters::default();
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
 
-		assert_eq!(tcr.get_container_name(), "converter(dummy_container)");
+		assert_eq!(tcr.container_name(), "converter(dummy_container)");
 	}
 
 	#[test]
@@ -398,7 +398,7 @@ mod tests {
 		let mut tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
 
 		tcr.override_compression(Gzip);
-		assert_eq!(tcr.reader.get_parameters().tile_compression, Gzip);
+		assert_eq!(tcr.reader.parameters().tile_compression, Gzip);
 	}
 
 	#[tokio::test]

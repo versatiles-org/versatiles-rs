@@ -66,16 +66,16 @@ impl ReadOperationTrait for Operation {
 			ensure!(sources.len() > 1, "must have at least two sources");
 
 			let mut tilejson = TileJSON::default();
-			let parameters = sources.first().unwrap().get_parameters();
+			let parameters = sources.first().unwrap().parameters();
 			let tile_format = parameters.tile_format;
 			let tile_compression = parameters.tile_compression;
 
 			let mut pyramid = TileBBoxPyramid::new_empty();
 
 			for source in sources.iter() {
-				tilejson.merge(source.get_tilejson())?;
+				tilejson.merge(source.tilejson())?;
 
-				let parameters = source.get_parameters();
+				let parameters = source.parameters();
 				pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
 
 				ensure!(
@@ -168,12 +168,12 @@ impl Operation {
 #[async_trait]
 impl OperationTrait for Operation {
 	/// Reader parameters (format, compression, pyramid) for the overlay result.
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
 	/// Combined `TileJSON` after merging metadata from all sources.
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
@@ -183,7 +183,7 @@ impl OperationTrait for Operation {
 			if let Some(mut blob) = source.get_tile_data(coord).await? {
 				blob = recompress(
 					blob,
-					&source.get_parameters().tile_compression,
+					&source.parameters().tile_compression,
 					&self.parameters.tile_compression,
 				)?;
 				return Ok(Some(blob));
@@ -200,7 +200,7 @@ impl OperationTrait for Operation {
 			.gather_stream(
 				bbox,
 				|src, b| Box::pin(async move { src.get_tile_stream(b).await }),
-				move |blob: Blob, src| recompress(blob, &src.get_parameters().tile_compression, &output_compression),
+				move |blob: Blob, src| recompress(blob, &src.parameters().tile_compression, &output_compression),
 			)
 			.await
 	}
@@ -321,7 +321,7 @@ mod tests {
 		assert_eq!(check_tile(&blob, &coord)?, "1");
 
 		assert_eq!(
-			result.get_tilejson().as_pretty_lines(100),
+			result.tilejson().as_pretty_lines(100),
 			[
 				"{",
 				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
@@ -370,7 +370,7 @@ mod tests {
 		);
 
 		assert_eq!(
-			result.get_tilejson().as_pretty_lines(100),
+			result.tilejson().as_pretty_lines(100),
 			[
 				"{",
 				"  \"bounds\": [ -130.78125, -70.140364, 130.78125, 70.140364 ],",

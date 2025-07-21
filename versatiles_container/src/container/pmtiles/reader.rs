@@ -160,12 +160,12 @@ fn calc_bbox_pyramid(
 #[async_trait]
 impl TilesReaderTrait for PMTilesReader {
 	/// Returns the container name.
-	fn get_container_name(&self) -> &str {
+	fn container_name(&self) -> &str {
 		"pmtiles"
 	}
 
 	/// Returns the parameters of the tiles reader.
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
@@ -181,12 +181,12 @@ impl TilesReaderTrait for PMTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the metadata.
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
 	/// Returns the name of the PMTiles container.
-	fn get_source_name(&self) -> &str {
+	fn source_name(&self) -> &str {
 		self.data_reader.get_name()
 	}
 
@@ -276,9 +276,9 @@ mod tests {
 	async fn reader() -> Result<()> {
 		let reader = PMTilesReader::open_path(&PATH).await?;
 
-		assert_eq!(reader.get_container_name(), "pmtiles");
+		assert_eq!(reader.container_name(), "pmtiles");
 
-		assert_wildcard!(reader.get_source_name(), "*testdata?berlin.pmtiles");
+		assert_wildcard!(reader.source_name(), "*testdata?berlin.pmtiles");
 
 		assert_eq!(
 			format!("{:?}", reader.header),
@@ -286,12 +286,12 @@ mod tests {
 		);
 
 		assert_wildcard!(
-			reader.get_tilejson().as_string(),
+			reader.tilejson().as_string(),
 			"{\"author\":\"OpenStreetMap contributors, Geofabrik GmbH\",*,\"version\":\"3.0\"}"
 		);
 
 		assert_wildcard!(
-			format!("{:?}", reader.get_parameters()),
+			format!("{:?}", reader.parameters()),
 			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [1,0,1,0] (1), 2: [2,1,2,1] (1), 3: [4,2,4,2] (1), 4: [8,5,8,5] (1), 5: [17,10,17,10] (1), 6: [34,20,34,21] (2), 7: [68,41,68,42] (2), 8: [137,83,137,84] (2), 9: [274,167,275,168] (4), 10: [549,335,551,336] (6), 11: [1098,670,1102,673] (20), 12: [2196,1340,2204,1346] (63), 13: [4393,2680,4409,2693] (238), 14: [8787,5361,8818,5387] (864)], tile_compression: Gzip, tile_format: MVT }"
 		);
 

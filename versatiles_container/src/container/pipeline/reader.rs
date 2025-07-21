@@ -62,7 +62,7 @@ impl<'a> PipelineReader {
 			});
 			let factory = PipelineFactory::default(dir, callback);
 			let operation: Box<dyn OperationTrait> = factory.operation_from_vpl(vpl).await?;
-			let parameters = operation.get_parameters().clone();
+			let parameters = operation.parameters().clone();
 
 			Ok(PipelineReader {
 				name: name.to_string(),
@@ -76,17 +76,17 @@ impl<'a> PipelineReader {
 #[async_trait]
 impl TilesReaderTrait for PipelineReader {
 	/// Get the name of the reader source, e.g., the filename.
-	fn get_source_name(&self) -> &str {
+	fn source_name(&self) -> &str {
 		&self.name
 	}
 
 	/// Get the container name, e.g., versatiles, mbtiles, etc.
-	fn get_container_name(&self) -> &str {
+	fn container_name(&self) -> &str {
 		"pipeline"
 	}
 
 	/// Get the reader parameters.
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
@@ -96,8 +96,8 @@ impl TilesReaderTrait for PipelineReader {
 	}
 
 	/// Get the metadata, always uncompressed.
-	fn get_tilejson(&self) -> &TileJSON {
-		self.operation.get_tilejson()
+	fn tilejson(&self) -> &TileJSON {
+		self.operation.tilejson()
 	}
 
 	/// Get tile data for the given coordinate, always compressed and formatted.
@@ -158,7 +158,7 @@ mod tests {
 
 		let result = decompress(
 			reader.get_tile_data(&TileCoord3::new(8800, 5377, 14)?).await?.unwrap(),
-			&reader.get_parameters().tile_compression,
+			&reader.parameters().tile_compression,
 		)?;
 
 		assert_eq!(result.len(), 141385);

@@ -98,12 +98,12 @@ impl ReadOperationTrait for Operation {
 #[async_trait]
 impl OperationTrait for Operation {
 	/// Return static reader parameters (compression *always* uncompressed).
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
 	/// Return a synthetic `TileJSON` that matches the chosen debug format.
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
@@ -201,11 +201,7 @@ mod tests {
 		let blob = operation.get_tile_data(&coord).await?.unwrap();
 
 		assert_eq!(blob.len(), len, "for '{format}'");
-		assert_eq!(
-			operation.get_tilejson().as_pretty_lines(100),
-			tilejson,
-			"for '{format}'"
-		);
+		assert_eq!(operation.tilejson().as_pretty_lines(100), tilejson, "for '{format}'");
 
 		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await?;
 

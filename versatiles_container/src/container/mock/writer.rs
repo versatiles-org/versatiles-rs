@@ -41,11 +41,11 @@ impl MockTilesWriter {
 	///
 	/// A `Result` indicating the success or failure of the operation.
 	pub async fn write(reader: &mut dyn TilesReaderTrait) -> Result<()> {
-		let _temp = reader.get_container_name();
-		let _temp = reader.get_source_name();
-		let _temp = reader.get_tilejson();
+		let _temp = reader.container_name();
+		let _temp = reader.source_name();
+		let _temp = reader.tilejson();
 
-		let bbox_pyramid = reader.get_parameters().bbox_pyramid.clone();
+		let bbox_pyramid = reader.parameters().bbox_pyramid.clone();
 
 		for bbox in bbox_pyramid.iter_levels() {
 			let mut stream = reader.get_tile_stream(*bbox).await?;

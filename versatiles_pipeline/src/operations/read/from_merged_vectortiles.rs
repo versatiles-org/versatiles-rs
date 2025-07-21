@@ -84,15 +84,15 @@ impl ReadOperationTrait for Operation {
 			ensure!(sources.len() > 1, "must have at least two sources");
 
 			let mut tilejson = TileJSON::default();
-			let first_parameters = sources.first().unwrap().get_parameters();
+			let first_parameters = sources.first().unwrap().parameters();
 			let tile_format = first_parameters.tile_format;
 			let tile_compression = first_parameters.tile_compression;
 			let mut pyramid = TileBBoxPyramid::new_empty();
 
 			for source in sources.iter() {
-				tilejson.merge(source.get_tilejson())?;
+				tilejson.merge(source.tilejson())?;
 
-				let parameters = source.get_parameters();
+				let parameters = source.parameters();
 				pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
 
 				ensure!(
@@ -116,12 +116,12 @@ impl ReadOperationTrait for Operation {
 #[async_trait]
 impl OperationTrait for Operation {
 	/// Reader parameters (format, compression, pyramid) for the merged result.
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
 	/// `TileJSON` after combining metadata from every source.
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
@@ -295,7 +295,7 @@ mod tests {
 		assert_eq!(check_tile(&blob, &coord), "1.pbf,2.pbf");
 
 		assert_eq!(
-			result.get_tilejson().as_pretty_lines(100),
+			result.tilejson().as_pretty_lines(100),
 			[
 				"{",
 				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
@@ -348,7 +348,7 @@ mod tests {
 		);
 
 		assert_eq!(
-			result.get_tilejson().as_pretty_lines(100),
+			result.tilejson().as_pretty_lines(100),
 			[
 				"{",
 				"  \"bounds\": [ -130.78125, -70.140364, 130.78125, 70.140364 ],",
@@ -390,7 +390,7 @@ mod tests {
 			)
 			.await?;
 
-		let parameters = result.get_parameters();
+		let parameters = result.parameters();
 
 		assert_eq!(parameters.tile_format, TileFormat::MVT);
 		assert_eq!(parameters.tile_compression, TileCompression::Uncompressed);
@@ -411,7 +411,7 @@ mod tests {
 		}
 
 		assert_eq!(
-			result.get_tilejson().as_pretty_lines(100),
+			result.tilejson().as_pretty_lines(100),
 			[
 				"{",
 				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",

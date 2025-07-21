@@ -7,8 +7,8 @@ use versatiles_geometry::vector_tile::VectorTile;
 
 #[async_trait]
 pub trait OperationTrait: Debug + Send + Sync + Unpin {
-	fn get_parameters(&self) -> &TilesReaderParameters;
-	fn get_tilejson(&self) -> &TileJSON;
+	fn parameters(&self) -> &TilesReaderParameters;
+	fn tilejson(&self) -> &TileJSON;
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>>;
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>>;
 	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>>;

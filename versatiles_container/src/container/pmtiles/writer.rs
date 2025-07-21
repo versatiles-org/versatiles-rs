@@ -50,7 +50,7 @@ impl TilesWriterTrait for PMTilesWriter {
 	async fn write_to_writer(reader: &mut dyn TilesReaderTrait, writer: &mut dyn DataWriterTrait) -> Result<()> {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
 
-		let parameters = reader.get_parameters().clone();
+		let parameters = reader.parameters().clone();
 		let pyramid = &parameters.bbox_pyramid;
 
 		let mut blocks: Vec<TileBBox> = pyramid
@@ -71,7 +71,7 @@ impl TilesWriterTrait for PMTilesWriter {
 
 		let mut header = HeaderV3::from_parameters(&parameters);
 
-		let mut metadata: Blob = reader.get_tilejson().into();
+		let mut metadata: Blob = reader.tilejson().into();
 		metadata = compress(metadata, &INTERNAL_COMPRESSION)?;
 		header.metadata = writer.append(&metadata)?;
 

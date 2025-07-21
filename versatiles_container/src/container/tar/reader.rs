@@ -143,12 +143,12 @@ impl TarTilesReader {
 #[async_trait]
 impl TilesReaderTrait for TarTilesReader {
 	/// Returns the container name.
-	fn get_container_name(&self) -> &str {
+	fn container_name(&self) -> &str {
 		"tar"
 	}
 
 	/// Returns the parameters of the tiles reader.
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
@@ -164,7 +164,7 @@ impl TilesReaderTrait for TarTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the metadata.
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
@@ -189,7 +189,7 @@ impl TilesReaderTrait for TarTilesReader {
 	}
 
 	/// Returns the name of the tar archive.
-	fn get_source_name(&self) -> &str {
+	fn source_name(&self) -> &str {
 		&self.name
 	}
 }
@@ -197,7 +197,7 @@ impl TilesReaderTrait for TarTilesReader {
 impl Debug for TarTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TarTilesReader")
-			.field("parameters", &self.get_parameters())
+			.field("parameters", &self.parameters())
 			.finish()
 	}
 }
@@ -222,18 +222,18 @@ pub mod tests {
 			format!("{reader:?}"),
 			"TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: MVT } }"
 		);
-		assert_eq!(reader.get_container_name(), "tar");
-		assert!(reader.get_source_name().ends_with(temp_file.to_str().unwrap()));
+		assert_eq!(reader.container_name(), "tar");
+		assert!(reader.source_name().ends_with(temp_file.to_str().unwrap()));
 		assert_eq!(
-			reader.get_tilejson().as_string(),
+			reader.tilejson().as_string(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 		assert_eq!(
-			format!("{:?}", reader.get_parameters()),
+			format!("{:?}", reader.parameters()),
 			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: MVT }"
 		);
-		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
-		assert_eq!(reader.get_parameters().tile_format, TileFormat::MVT);
+		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
+		assert_eq!(reader.parameters().tile_format, TileFormat::MVT);
 
 		let tile = reader.get_tile_data(&TileCoord3::new(6, 2, 3)?).await?.unwrap();
 		assert_eq!(decompress_gzip(&tile)?.as_slice(), MOCK_BYTES_PBF);
@@ -310,9 +310,9 @@ pub mod tests {
 		a.finish()?;
 
 		let reader = TarTilesReader::open_path(&filename)?;
-		assert_eq!(reader.get_parameters().tile_format, TileFormat::BIN);
-		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Uncompressed);
-		assert_eq!(reader.get_parameters().bbox_pyramid.count_tiles(), 1);
+		assert_eq!(reader.parameters().tile_format, TileFormat::BIN);
+		assert_eq!(reader.parameters().tile_compression, TileCompression::Uncompressed);
+		assert_eq!(reader.parameters().bbox_pyramid.count_tiles(), 1);
 		assert_eq!(
 			reader
 				.get_tile_data(&TileCoord3::new(1, 2, 3)?)

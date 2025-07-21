@@ -96,15 +96,15 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 
 		log::trace!("convert_from");
 
-		let parameters = reader.get_parameters();
+		let parameters = reader.parameters();
 		let tile_compression = &parameters.tile_compression.clone();
 		let tile_format = &parameters.tile_format.clone();
-		let bbox_pyramid = &reader.get_parameters().bbox_pyramid.clone();
+		let bbox_pyramid = &reader.parameters().bbox_pyramid.clone();
 
 		let extension_format = tile_format.as_extension();
 		let extension_compression = tile_compression.extension();
 
-		let tilejson = reader.get_tilejson();
+		let tilejson = reader.tilejson();
 		let meta_data = compress(tilejson.into(), tile_compression)?;
 		let filename = format!("tiles.json{extension_compression}");
 		Self::write(path.join(filename), meta_data)?;
