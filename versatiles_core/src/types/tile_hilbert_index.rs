@@ -149,4 +149,79 @@ mod tests {
 		}
 		Ok(())
 	}
+
+	#[test]
+	fn test_tile_id_to_coord_edge_cases() -> Result<()> {
+		// Test the smallest possible index
+		let coord = index_to_coord(0)?;
+		assert_eq!(coord_to_index(coord.x, coord.y, coord.z)?, 0);
+
+		// Test the largest possible index for zoom level 31
+		let max_index = coord_to_index((1 << 31) - 1, (1 << 31) - 1, 31)?;
+		let coord = index_to_coord(max_index)?;
+		assert_eq!(coord_to_index(coord.x, coord.y, coord.z)?, max_index);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_tile_id_to_coord_invalid_index() {
+		// Test an index that exceeds the 64-bit limit
+		assert_eq!(
+			index_to_coord(u64::MAX).unwrap_err().to_string(),
+			"tile zoom exceeds 64-bit limit"
+		);
+	}
+
+	#[test]
+	fn test_hilbert_index_trait_tile_bbox() -> Result<()> {
+		let bbox = TileBBox::new(3, 5, 3, 5, 3)?;
+		let index = bbox.get_hilbert_index()?;
+		let reconstructed_bbox = TileBBox::from_hilbert_index(index)?;
+		assert_eq!(bbox, reconstructed_bbox);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_hilbert_index_trait_tile_coord3() -> Result<()> {
+		let coord = TileCoord3::new(5, 3, 3)?;
+		let index = coord.get_hilbert_index()?;
+		let reconstructed_coord = TileCoord3::from_hilbert_index(index)?;
+		assert_eq!(coord, reconstructed_coord);
+
+		Ok(())
+	}
+
+	#[test]
+	fn test_tile_id_to_coord_random() -> Result<()> {
+		fn pseudo_random(r: &mut f64) -> f64 {
+			*r = ((*r * 2000.0 + 0.2).sin() + 1.1) * 1000.0 % 1.0;
+			*r
+		}
+
+		let mut r = 0.1;
+
+		for z in 0..31 {
+			let n = 1 << z;
+			let x = (pseudo_random(&mut r) * n as f64) as u32;
+			let y = (pseudo_random(&mut r) * n as f64) as u32;
+
+			let coord = index_to_coord(coord_to_index(x, y, z)?)?;
+			assert_eq!(coord.x, x);
+			assert_eq!(coord.y, y);
+			assert_eq!(coord.z, z);
+
+			let coord = index_to_coord(coord_to_index(0, 0, z)?)?;
+			assert_eq!(coord.x, 0);
+			assert_eq!(coord.y, 0);
+			assert_eq!(coord.z, z);
+
+			let coord = index_to_coord(coord_to_index(n - 1, n - 1, z)?)?;
+			assert_eq!(coord.x, n - 1);
+			assert_eq!(coord.y, n - 1);
+			assert_eq!(coord.z, z);
+		}
+		Ok(())
+	}
 }
