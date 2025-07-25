@@ -98,6 +98,7 @@ impl OperationTrait for Operation {
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
+
 	/// Retrieve the *raw* (potentially compressed) tile blob at the given
 	/// coordinate; returns `Ok(None)` when the tile is missing.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {

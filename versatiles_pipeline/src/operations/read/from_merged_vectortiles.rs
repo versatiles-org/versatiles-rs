@@ -125,6 +125,14 @@ impl OperationTrait for Operation {
 		&self.tilejson
 	}
 
+	fn traversal_orders(&self) -> TraversalOrderSet {
+		self
+			.sources
+			.iter()
+			.map(|source| source.traversal_orders())
+			.fold(TraversalOrderSet::new_all(), |acc, set| acc & set)
+	}
+
 	/// Convenience wrapper: returns a packed vector tile at `coord`.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		pack_vector_tile(self.get_vector_data(coord).await, &self.parameters)

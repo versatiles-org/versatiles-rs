@@ -9,6 +9,9 @@ use versatiles_geometry::vector_tile::VectorTile;
 pub trait OperationTrait: Debug + Send + Sync + Unpin {
 	fn parameters(&self) -> &TilesReaderParameters;
 	fn tilejson(&self) -> &TileJSON;
+	fn traversal_orders(&self) -> TraversalOrderSet {
+		TraversalOrderSet::new_all()
+	}
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>>;
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>>;
 	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>>;

@@ -74,6 +74,11 @@ impl OperationTrait for Operation {
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
+
+	fn traversal_orders(&self) -> TraversalOrderSet {
+		self.reader.traversal_orders()
+	}
+
 	/// Retrieve the *raw* (potentially compressed) tile blob at the given
 	/// coordinate; returns `Ok(None)` when the tile is missing.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {

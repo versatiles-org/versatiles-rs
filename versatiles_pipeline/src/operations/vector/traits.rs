@@ -8,7 +8,9 @@ use imageproc::image::DynamicImage;
 use std::sync::Arc;
 use versatiles_core::{
 	tilejson::TileJSON,
-	types::{Blob, TileBBox, TileCompression, TileCoord3, TileStream, TileType, TilesReaderParameters},
+	types::{
+		Blob, TileBBox, TileCompression, TileCoord3, TileStream, TileType, TilesReaderParameters, TraversalOrderSet,
+	},
 };
 use versatiles_geometry::vector_tile::VectorTile;
 
@@ -34,6 +36,10 @@ impl<R: RunnerTrait> OperationTrait for TransformOp<R> {
 	}
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
+	}
+
+	fn traversal_orders(&self) -> TraversalOrderSet {
+		self.source.traversal_orders()
 	}
 
 	/* --- raster requests are invalid for vector transforms --- */

@@ -77,6 +77,10 @@ impl OperationTrait for Operation {
 		&self.tilejson
 	}
 
+	fn traversal_orders(&self) -> TraversalOrderSet {
+		self.source.traversal_orders()
+	}
+
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		match self.filter_coord(coord) {
 			true => self.source.get_tile_data(coord).await,
