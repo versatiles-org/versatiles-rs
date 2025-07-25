@@ -38,9 +38,9 @@ jobs:
 
       - name: Install GDAL
         run: |
-          add-apt-repository ppa:ubuntugis/ubuntugis-unstable
-          apt-get update
-          apt-get install -y gdal-bin libgdal-dev
+          sudo add-apt-repository ppa:ubuntugis/ubuntugis-unstable
+          sudo apt-get update
+          sudo apt-get install -y gdal-bin libgdal-dev
           export CPLUS_INCLUDE_PATH=/usr/include/gdal
           export C_INCLUDE_PATH=/usr/include/gdal
           pip install GDAL
