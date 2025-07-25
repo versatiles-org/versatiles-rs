@@ -1,7 +1,7 @@
 //! This module defines the `TileBBoxPyramid` struct, which represents a pyramid of tile bounding boxes
 //! across multiple zoom levels. It provides methods to create, manipulate, and query these bounding boxes.
 
-use super::{GeoBBox, GeoCenter, TileBBox, TileCoord3};
+use super::{GeoBBox, GeoCenter, HilbertIndex, TileBBox, TileCoord3, TraversalOrder};
 use std::array::from_fn;
 use std::fmt;
 

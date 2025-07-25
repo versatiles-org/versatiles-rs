@@ -28,7 +28,7 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different tile formats, and verifying the integrity of the written data.
 
-use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
+use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression};
 use crate::TilesWriterTrait;
 use anyhow::Result;
 use async_trait::async_trait;
@@ -51,13 +51,10 @@ impl TilesWriterTrait for PMTilesWriter {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
 
 		let parameters = reader.parameters().clone();
-		let pyramid = &parameters.bbox_pyramid;
 
-		let mut blocks: Vec<TileBBox> = pyramid
-			.iter_levels()
-			.flat_map(|level_bbox| level_bbox.iter_bbox_grid(64))
+		let blocks: Vec<TileBBox> = reader
+			.iter_bboxes_in_prefered_order(&[TraversalOrder::PMTiles64])?
 			.collect();
-		blocks.sort_by_cached_key(|b| b.get_tile_id().unwrap());
 
 		let mut progress = get_progress_bar(
 			"converting tiles",
@@ -79,11 +76,11 @@ impl TilesWriterTrait for PMTilesWriter {
 
 		for bbox in blocks.iter() {
 			let mut tiles = reader.get_tile_stream(*bbox).await?.collect().await;
-			tiles.sort_by_key(|(coord, _)| coord.get_tile_id().unwrap());
+			tiles.sort_by_key(|(coord, _)| coord.get_hilbert_index().unwrap());
 			for (coord, blob) in tiles {
 				progress.inc(1);
-				let id = coord.get_tile_id().unwrap();
-				let range = writer.append(&blob).unwrap();
+				let id = coord.get_hilbert_index()?;
+				let range = writer.append(&blob)?;
 				entries.push(EntryV3::new(id, range.get_shifted_backward(tile_data_start), 1));
 			}
 

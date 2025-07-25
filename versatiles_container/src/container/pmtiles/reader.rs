@@ -38,7 +38,7 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of reading metadata, handling different file formats, and verifying tile data.
 
-use super::types::{EntriesV3, HeaderV3, TileId, tile_id_to_coord};
+use super::types::{EntriesV3, HeaderV3};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -140,7 +140,7 @@ fn calc_bbox_pyramid(
 			if entry.range.length > 0 {
 				if entry.run_length > 0 {
 					for i in 0..entry.run_length as u64 {
-						let coord = tile_id_to_coord(i + entry.tile_id)?;
+						let coord = TileCoord3::from_hilbert_index(i + entry.tile_id)?;
 						bbox_pyramid.include_coord(&coord);
 					}
 				} else {
@@ -202,7 +202,7 @@ impl TilesReaderTrait for PMTilesReader {
 		log::trace!("get_tile_data {:?}", coord);
 
 		// Convert the tile coordinates into a unique tile ID
-		let tile_id: u64 = coord.get_tile_id()?;
+		let tile_id: u64 = coord.get_hilbert_index()?;
 		// Start with the root directory bytes
 		let mut dir_bytes = self.root_bytes_uncompressed.clone();
 

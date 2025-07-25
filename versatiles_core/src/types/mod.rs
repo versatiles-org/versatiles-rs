@@ -33,6 +33,9 @@ pub use tile_coords::*;
 mod tile_format;
 pub use tile_format::*;
 
+mod tile_hilbert_index;
+pub use tile_hilbert_index::*;
+
 mod tile_schema;
 pub use tile_schema::*;
 

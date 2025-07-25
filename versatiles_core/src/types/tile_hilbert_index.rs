@@ -1,23 +1,33 @@
+use super::{TileBBox, TileCoord3};
 use anyhow::{Result, bail};
-use versatiles_core::types::{TileBBox, TileCoord3};
 
-pub trait TileId {
-	fn get_tile_id(&self) -> Result<u64>;
+pub trait HilbertIndex {
+	fn get_hilbert_index(&self) -> Result<u64>;
+	fn from_hilbert_index(index: u64) -> Result<Self>
+	where
+		Self: Sized;
 }
 
-impl TileId for TileBBox {
-	fn get_tile_id(&self) -> Result<u64> {
-		coord_to_tile_id(self.x_min, self.y_min, self.level)
+impl HilbertIndex for TileBBox {
+	fn get_hilbert_index(&self) -> Result<u64> {
+		coord_to_index(self.x_min, self.y_min, self.level)
+	}
+	fn from_hilbert_index(index: u64) -> Result<Self> {
+		let coord = index_to_coord(index)?;
+		TileBBox::new(coord.z, coord.x, coord.y, coord.x, coord.y)
 	}
 }
 
-impl TileId for TileCoord3 {
-	fn get_tile_id(&self) -> Result<u64> {
-		coord_to_tile_id(self.x, self.y, self.z)
+impl HilbertIndex for TileCoord3 {
+	fn get_hilbert_index(&self) -> Result<u64> {
+		coord_to_index(self.x, self.y, self.z)
+	}
+	fn from_hilbert_index(index: u64) -> Result<Self> {
+		index_to_coord(index)
 	}
 }
 
-fn coord_to_tile_id(x: u32, y: u32, z: u8) -> Result<u64> {
+fn coord_to_index(x: u32, y: u32, z: u8) -> Result<u64> {
 	if z >= 32 {
 		bail!("tile zoom exceeds 64-bit limit");
 	}
@@ -57,13 +67,13 @@ fn rotate(s: i64, tx: &mut i64, ty: &mut i64, rx: u8, ry: u8) {
 	}
 }
 
-pub fn tile_id_to_coord(tileid: u64) -> Result<TileCoord3> {
+fn index_to_coord(index: u64) -> Result<TileCoord3> {
 	let mut acc = 0;
 	for t_z in 0..32 {
 		let num_tiles = (1 << t_z) * (1 << t_z);
-		if acc + num_tiles > tileid {
+		if acc + num_tiles > index {
 			let n = 1 << t_z;
-			let mut t = tileid - acc;
+			let mut t = index - acc;
 			let mut tx: i64 = 0;
 			let mut ty: i64 = 0;
 
@@ -95,14 +105,14 @@ mod tests {
 
 	#[test]
 	fn test_coord_to_tile_id_basic_inputs() -> Result<()> {
-		assert_eq!(coord_to_tile_id(1, 1, 1)?, 3);
-		assert_eq!(coord_to_tile_id(0, 0, 0)?, 0);
-		assert_eq!(coord_to_tile_id(2, 2, 2)?, 13);
-		assert_eq!(coord_to_tile_id(5, 3, 3)?, 73);
-		assert_eq!(coord_to_tile_id(7, 7, 3)?, 63);
+		assert_eq!(coord_to_index(1, 1, 1)?, 3);
+		assert_eq!(coord_to_index(0, 0, 0)?, 0);
+		assert_eq!(coord_to_index(2, 2, 2)?, 13);
+		assert_eq!(coord_to_index(5, 3, 3)?, 73);
+		assert_eq!(coord_to_index(7, 7, 3)?, 63);
 
-		assert_eq!(coord_to_tile_id(0, 0, 31)?, 1537228672809129301);
-		assert_eq!(coord_to_tile_id((1 << 31) - 1, (1 << 31) - 1, 31)?, 4611686018427387903);
+		assert_eq!(coord_to_index(0, 0, 31)?, 1537228672809129301);
+		assert_eq!(coord_to_index((1 << 31) - 1, (1 << 31) - 1, 31)?, 4611686018427387903);
 
 		Ok(())
 	}
@@ -110,7 +120,7 @@ mod tests {
 	#[test]
 	fn test_coord_to_tile_id_invalid_zoom() {
 		assert_eq!(
-			coord_to_tile_id(1, 1, 32).unwrap_err().to_string(),
+			coord_to_index(1, 1, 32).unwrap_err().to_string(),
 			"tile zoom exceeds 64-bit limit"
 		);
 	}
@@ -118,7 +128,7 @@ mod tests {
 	#[test]
 	fn test_coord_to_tile_id_out_of_bounds() {
 		assert_eq!(
-			coord_to_tile_id(1, 0, 0).unwrap_err().to_string(),
+			coord_to_index(1, 0, 0).unwrap_err().to_string(),
 			"tile x/y outside zoom level bounds"
 		);
 	}
@@ -128,8 +138,8 @@ mod tests {
 		let mut f = 0f64;
 		loop {
 			let id0 = f as u64;
-			let coord = tile_id_to_coord(id0).unwrap();
-			let id1 = coord_to_tile_id(coord.x, coord.y, coord.z)?;
+			let coord = index_to_coord(id0).unwrap();
+			let id1 = coord_to_index(coord.x, coord.y, coord.z)?;
 			assert_eq!(id0, id1);
 
 			if coord.z > 30 {
