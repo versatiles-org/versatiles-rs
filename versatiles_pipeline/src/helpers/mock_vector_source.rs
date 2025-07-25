@@ -172,7 +172,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_mock_vector_source_get_tilejson() {
+	fn test_mock_vector_source_tilejson() {
 		let source = MockVectorSource::new(
 			&[("layer1", &[&[("key1", "value1")]])],
 			Some(TileBBoxPyramid::from_geo_bbox(3, 15, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),

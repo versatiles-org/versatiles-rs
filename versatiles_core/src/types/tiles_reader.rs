@@ -216,13 +216,13 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_get_container_name() {
+	async fn test_container_name() {
 		let reader = TestReader::new_dummy();
 		assert_eq!(reader.container_name(), "test container name");
 	}
 
 	#[tokio::test]
-	async fn test_get_parameters() {
+	async fn test_parameters() {
 		let reader = TestReader::new_dummy();
 		let parameters = reader.parameters();
 		assert_eq!(parameters.tile_compression, TileCompression::Gzip);
@@ -260,7 +260,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_get_bbox_tile_stream() -> Result<()> {
+	async fn test_get_tile_stream() -> Result<()> {
 		let reader = TestReader::new_dummy();
 		let bbox = TileBBox::new(1, 0, 0, 1, 1)?;
 		let stream = reader.get_tile_stream(bbox).await?;

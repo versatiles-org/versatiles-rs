@@ -86,7 +86,7 @@ impl OperationTrait for Operation {
 	}
 
 	/// Stream raw tile blobs intersecting the bounding box by delegating to
-	/// `TilesReaderTrait::get_bbox_tile_stream`.
+	/// `TilesReaderTrait::get_tile_stream`.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		self.reader.get_tile_stream(bbox).await
 	}

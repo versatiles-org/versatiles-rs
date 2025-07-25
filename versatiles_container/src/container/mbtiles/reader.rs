@@ -21,7 +21,7 @@
 //!     let mut reader = MBTilesReader::open_path(&path)?;
 //!
 //!     // Get metadata
-//!     println!("Metadata: {:?}", reader.get_tilejson());
+//!     println!("Metadata: {:?}", reader.tilejson());
 //!
 //!     // Get tile data for specific coordinates
 //!     let coord = TileCoord3::new(1, 1, 1)?;

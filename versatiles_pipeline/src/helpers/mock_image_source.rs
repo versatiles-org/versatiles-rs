@@ -148,7 +148,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_mock_image_source_get_tilejson() {
+	async fn test_mock_image_source_tilejson() {
 		let source = MockImageSource::new(
 			"abcd.png",
 			Some(TileBBoxPyramid::from_geo_bbox(3, 15, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),

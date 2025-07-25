@@ -20,11 +20,11 @@
 //!     let mut reader = VersaTilesReader::open_path(&path).await?;
 //!
 //!     // Print container information
-//!     println!("Container Name: {}", reader.get_container_name());
-//!     println!("Container Parameters: {:?}", reader.get_parameters());
+//!     println!("Container Name: {}", reader.container_name());
+//!     println!("Container Parameters: {:?}", reader.parameters());
 //!
 //!     // Get metadata
-//!     println!("Metadata: {:?}", reader.get_tilejson());
+//!     println!("Metadata: {:?}", reader.tilejson());
 //!
 //!     // Fetch a specific tile
 //!     let coord = TileCoord3::new(15, 1, 4)?;
@@ -35,8 +35,8 @@
 //!     }
 //!
 //!     // Fetch tiles in a bounding box
-//!     let bbox = reader.get_parameters().bbox_pyramid.get_level_bbox(4).clone();
-//!     let mut stream = reader.get_bbox_tile_stream(bbox).await?;
+//!     let bbox = reader.parameters().bbox_pyramid.get_level_bbox(4).clone();
+//!     let mut stream = reader.get_tile_stream(bbox).await?;
 //!     while let Some((coord, tile_data)) = stream.next().await {
 //!         println!("Tile Coord: {coord:?}, Data: {tile_data:?}");
 //!     }

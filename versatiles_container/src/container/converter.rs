@@ -383,7 +383,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_get_container_name() {
+	fn test_container_name() {
 		let reader = get_mock_reader(MVT, Uncompressed);
 		let cp = TilesConverterParameters::default();
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
