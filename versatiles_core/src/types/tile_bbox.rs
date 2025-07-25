@@ -645,13 +645,11 @@ impl TileBBox {
 	///
 	/// An iterator yielding `TileBBox` instances representing the grid.
 	pub fn iter_bbox_grid(&self, size: u32) -> Box<dyn Iterator<Item = TileBBox> + '_> {
-		if size == 0 {
-			return Box::new(std::iter::empty());
-		}
+		assert!(size != 0, "size must be greater than 0");
 
 		let level = self.level;
 		let max = 2u32.pow(level as u32) - 1;
-		let mut meta_bbox = *self;
+		let mut meta_bbox = self.clone();
 		meta_bbox.scale_down(size);
 
 		let iter = meta_bbox
@@ -764,6 +762,13 @@ impl TileBBox {
 		let x = index.rem(width) + self.x_min;
 		let y = index.div(width) + self.y_min;
 		TileCoord3::new(x, y, self.level)
+	}
+
+	pub fn as_string(&self) -> String {
+		format!(
+			"{}:[{},{},{},{}]",
+			self.level, self.x_min, self.y_min, self.x_max, self.y_max
+		)
 	}
 }
 
