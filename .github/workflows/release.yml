@@ -106,11 +106,11 @@ jobs:
       - name: Run Tests # Test the waters before setting sail.
         if: matrix.arch == 'x86_64'
         run: |
-          cargo test --all-features --bins
-          cargo test --all-features --lib
+          cargo test --bins
+          cargo test --lib
 
       - name: Build Binary # Construct your future from the bricks of the present.
-        run: cargo build --all-features --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-apple-darwin"
+        run: cargo build --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-apple-darwin"
 
       - name: Pack and upload # The journey's end marks a new beginning.
         run: ./scripts/workflow-pack_and_upload.sh "target/${{ matrix.arch }}-apple-darwin/release" "macos-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
@@ -135,11 +135,11 @@ jobs:
       - name: Run Tests # Testing is the bridge between expectation and reality.
         if: matrix.arch == 'x86_64'
         run: |
-          cargo test --all-features --bins
-          cargo test --all-features --lib
+          cargo test --bins
+          cargo test --lib
 
       - name: Build binary # From the forges of thought springs the blade of action.
-        run: cargo build --all-features --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-pc-windows-msvc"
+        run: cargo build --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-pc-windows-msvc"
 
       - name: Pack and upload # Gather the fruits of your labor and share the bounty.
         shell: pwsh # Ensure we're using PowerShell
