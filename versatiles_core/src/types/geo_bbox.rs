@@ -106,30 +106,30 @@ impl GeoBBox {
 		}
 	}
 
-    /// Clamps the bounding box *in‑place* to the latitude/longitude limits of the
-    /// Web Mercator projection.
-    ///
-    /// Any coordinate outside the valid Mercator span  
-    /// (`‒85.05112877980659° ≤ lat ≤ 85.05112877980659°`,  
-    /// `‒180° ≤ lon ≤ 180°`) is replaced by the nearest boundary value.
-    ///
-    /// # Examples
-    /// ```
-    /// use versatiles_core::types::GeoBBox;
-    ///
-    /// let mut bbox = GeoBBox::new(-200.0, -100.0, 200.0, 100.0);
-    /// bbox.limit_to_mercator();
-    /// assert_eq!(
-    ///     bbox.as_tuple(),
-    ///     (-180.0, -85.05112877980659, 180.0, 85.05112877980659)
-    /// );
-    /// ```
-    pub fn limit_to_mercator(&mut self) {
-        self.0 = self.0.max(-MAX_MERCATOR_LNG).min(MAX_MERCATOR_LNG); // west
-        self.1 = self.1.max(-MAX_MERCATOR_LAT).min(MAX_MERCATOR_LAT); // south
-        self.2 = self.2.max(-MAX_MERCATOR_LNG).min(MAX_MERCATOR_LNG); // east
-        self.3 = self.3.max(-MAX_MERCATOR_LAT).min(MAX_MERCATOR_LAT); // north
-    }
+	/// Clamps the bounding box *in‑place* to the latitude/longitude limits of the
+	/// Web Mercator projection.
+	///
+	/// Any coordinate outside the valid Mercator span  
+	/// (`‒85.05112877980659° ≤ lat ≤ 85.05112877980659°`,  
+	/// `‒180° ≤ lon ≤ 180°`) is replaced by the nearest boundary value.
+	///
+	/// # Examples
+	/// ```
+	/// use versatiles_core::types::GeoBBox;
+	///
+	/// let mut bbox = GeoBBox::new(-200.0, -100.0, 200.0, 100.0);
+	/// bbox.limit_to_mercator();
+	/// assert_eq!(
+	///     bbox.as_tuple(),
+	///     (-180.0, -85.05112877980659, 180.0, 85.05112877980659)
+	/// );
+	/// ```
+	pub fn limit_to_mercator(&mut self) {
+		self.0 = self.0.max(-MAX_MERCATOR_LNG).min(MAX_MERCATOR_LNG); // west
+		self.1 = self.1.max(-MAX_MERCATOR_LAT).min(MAX_MERCATOR_LAT); // south
+		self.2 = self.2.max(-MAX_MERCATOR_LNG).min(MAX_MERCATOR_LNG); // east
+		self.3 = self.3.max(-MAX_MERCATOR_LAT).min(MAX_MERCATOR_LAT); // north
+	}
 
 	/// Returns the bounding box as a `Vec<f64>` in the form `[west, south, east, north]`.
 	///
@@ -144,19 +144,19 @@ impl GeoBBox {
 		vec![self.0, self.1, self.2, self.3]
 	}
 
-    /// Returns the bounding box as a fixed‑size array `[f64; 4]` in the order
-    /// `[west, south, east, north]`.
-    ///
-    /// # Examples
-    /// ```
-    /// use versatiles_core::types::GeoBBox;
-    ///
-    /// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
-    /// assert_eq!(bbox.as_array(), [-10.0, -5.0, 10.0, 5.0]);
-    /// ```
-    pub fn as_array(&self) -> [f64; 4] {
-        [self.0, self.1, self.2, self.3]
-    }
+	/// Returns the bounding box as a fixed‑size array `[f64; 4]` in the order
+	/// `[west, south, east, north]`.
+	///
+	/// # Examples
+	/// ```
+	/// use versatiles_core::types::GeoBBox;
+	///
+	/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
+	/// assert_eq!(bbox.as_array(), [-10.0, -5.0, 10.0, 5.0]);
+	/// ```
+	pub fn as_array(&self) -> [f64; 4] {
+		[self.0, self.1, self.2, self.3]
+	}
 
 	/// Returns the bounding box as a tuple `(x_min, y_min, x_max, y_max)`.
 	pub fn as_tuple(&self) -> (f64, f64, f64, f64) {
