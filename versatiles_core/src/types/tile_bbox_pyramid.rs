@@ -192,6 +192,114 @@ impl TileBBoxPyramid {
 		self.level_bbox.iter().filter(|bbox| !bbox.is_empty())
 	}
 
+	/// Returns an iterator over every tile bounding box contained in the pyramid
+	/// in a *deterministic* order defined by `traversal_order`.
+	///
+	/// While [`Self::iter_levels`] yields at most **one** box per zoom level,
+	/// this method can subdivide large boxes into fixed‑size chunks so that tiles
+	/// are streamed in an order that is spatially coherent and friendly to tile
+	/// archives such as PMTiles.
+	///
+	/// # Arguments
+	/// * `traversal_order` – Strategy that controls the output order:
+	///   * **`TopDown`**       – all boxes at z = 0 first, then z = 1, …  
+	///   * **`BottomUp`**      – highest zoom first, descending to z = 0.  
+	///   * **`DepthFirst256`** – quadtree post‑order using 256 × 256‑tile chunks.  
+	///   * **`DepthFirst16`**  – quadtree post‑order using 16 × 16‑tile chunks.  
+	///   * **`PMTiles64`**     – Hilbert‑curve order of 64 × 64‑tile chunks
+	///                           (matching PMTiles v3’s canonical layout).
+	///
+	/// # Returns
+	/// A boxed iterator that yields **owned** [`TileBBox`] values.  
+	/// Each returned bounding box is non‑empty and resides within `self`.
+	///
+	/// # Implementation notes
+	/// The function clones internal bboxes into a `Vec` so that it can be
+	/// freely re‑ordered without mutating `self`.  For Hilbert sorting it
+	/// delegates to [`TileBBox::get_hilbert_index`].
+	///
+	/// # Examples
+	/// ```
+	/// use versatiles_core::types::{TileBBoxPyramid, TraversalOrder};
+	///
+	/// let pyramid = TileBBoxPyramid::new_full(3);
+	/// let first = pyramid
+	///     .iter_bboxes(TraversalOrder::TopDown)
+	///     .next()
+	///     .unwrap();
+	/// assert_eq!(first.level, 0); // z=0 tiles come first in TopDown order
+	/// ```
+	pub fn iter_bboxes(&self, traversal_order: TraversalOrder) -> Box<dyn Iterator<Item = TileBBox> + '_ + Send> {
+		let mut bboxes: Vec<TileBBox> = self
+			.level_bbox
+			.iter()
+			.filter(|b| !b.is_empty())
+			.map(|b| b.clone())
+			.collect();
+
+		fn depth_first(bboxes: Vec<TileBBox>, size: u32) -> Vec<TileBBox> {
+			/// Build a depth‑first post‑order sort key for a chunk at (x_chunk, y_chunk).
+			///
+			/// The algorithm converts `(x_chunk, y_chunk)` to a quadtree path from the
+			/// root down to that chunk and then appends the sentinel digit **4**.
+			/// Children therefore have a key beginning with the same prefix but ending
+			/// with “…, child_digit, 4”, while the parent ends with “…, 4”.
+			/// In lexicographic order the children (`0‥3`) all come **before**
+			/// their parent (`4`), which yields the desired “children before parent”
+			/// post‑order traversal.
+			fn build_key(depth: u8, x: u32, y: u32) -> Vec<u8> {
+				let mut k = Vec::with_capacity(depth as usize + 1);
+				// Traverse from the root (most‑significant bit) towards the leaves.
+				for i in (0..depth).rev() {
+					let bit_x = (x >> i) & 1;
+					let bit_y = (y >> i) & 1;
+					k.push((bit_x | (bit_y << 1)) as u8); // quadrant digit 0‥3
+				}
+				k.push(4); // sentinel – guarantees parent after its (up‑to‑4) children
+				k
+			}
+
+			// ---------------------------------------------------------------------
+			// 1.  Flatten all incoming bboxes into fixed‑size chunks of `chunk_size`.
+			// ---------------------------------------------------------------------
+			let mut items: Vec<(Vec<u8>, TileBBox)> = bboxes
+				.into_iter()
+				.flat_map(|b| b.iter_bbox_grid(size).collect::<Vec<_>>())
+				.map(|b| (build_key(b.level, b.x_min / size, b.y_min / size), b))
+				.collect();
+
+			// ---------------------------------------------------------------------
+			// 2.  Single `sort_unstable_by` to obtain the post‑order traversal.
+			// ---------------------------------------------------------------------
+			items.sort_unstable_by(|a, b| a.0.cmp(&b.0));
+
+			// ---------------------------------------------------------------------
+			// 3.  Strip the keys and return the ordered bounding boxes.
+			// ---------------------------------------------------------------------
+			items.into_iter().map(|(_, bbox)| bbox).collect()
+		}
+
+		fn hilbert(bboxes: Vec<TileBBox>, size: u32) -> Vec<TileBBox> {
+			let mut bboxes: Vec<TileBBox> = bboxes
+				.iter()
+				.flat_map(|level_bbox| level_bbox.iter_bbox_grid(size))
+				.collect();
+			bboxes.sort_by_cached_key(|b| b.get_hilbert_index().unwrap());
+			bboxes
+		}
+
+		use TraversalOrder::*;
+		match traversal_order {
+			TopDown => bboxes.sort_by(|a, b| a.level.cmp(&b.level)),
+			BottomUp => bboxes.sort_by(|a, b| b.level.cmp(&a.level)),
+			DepthFirst256 => bboxes = depth_first(bboxes, 256),
+			DepthFirst16 => bboxes = depth_first(bboxes, 16),
+			PMTiles64 => bboxes = hilbert(bboxes, 64),
+		};
+
+		Box::new(bboxes.into_iter())
+	}
+
 	/// Finds the minimum zoom level that contains any tiles.
 	///
 	/// Returns `None` if **all** levels are empty.
@@ -624,6 +732,83 @@ mod tests {
 		let p = TileBBoxPyramid::new_full(2);
 		let levels: Vec<u8> = p.iter_levels().map(|tb| tb.level).collect();
 		assert_eq!(levels, vec![0, 1, 2]);
+	}
+
+	#[test]
+	fn test_iter_bboxes() {
+		fn test(traversal_order: TraversalOrder, bbox: [i16; 4], min_level: u8, max_level: u8) -> Vec<String> {
+			let pyramid = TileBBoxPyramid::from_geo_bbox(min_level, max_level, &GeoBBox::from(&bbox));
+			pyramid.iter_bboxes(traversal_order).map(|b| b.as_string()).collect()
+		}
+
+		assert_eq!(
+			test(TraversalOrder::TopDown, [-180, -90, 180, 90], 0, 5),
+			[
+				"0:[0,0,0,0]",
+				"1:[0,0,1,1]",
+				"2:[0,0,3,3]",
+				"3:[0,0,7,7]",
+				"4:[0,0,15,15]",
+				"5:[0,0,31,31]"
+			]
+		);
+		assert_eq!(
+			test(TraversalOrder::BottomUp, [-180, -90, 180, 90], 0, 5),
+			[
+				"5:[0,0,31,31]",
+				"4:[0,0,15,15]",
+				"3:[0,0,7,7]",
+				"2:[0,0,3,3]",
+				"1:[0,0,1,1]",
+				"0:[0,0,0,0]"
+			]
+		);
+		assert_eq!(
+			test(TraversalOrder::DepthFirst16, [-170, -60, 160, 70], 4, 6),
+			[
+				"6:[1,14,15,15]",
+				"6:[16,14,31,15]",
+				"6:[1,16,15,31]",
+				"6:[16,16,31,31]",
+				"5:[0,7,15,15]",
+				"6:[32,14,47,15]",
+				"6:[48,14,60,15]",
+				"6:[32,16,47,31]",
+				"6:[48,16,60,31]",
+				"5:[16,7,30,15]",
+				"6:[1,32,15,45]",
+				"6:[16,32,31,45]",
+				"5:[0,16,15,22]",
+				"6:[32,32,47,45]",
+				"6:[48,32,60,45]",
+				"5:[16,16,30,22]",
+				"4:[0,3,15,11]",
+			]
+		);
+		assert_eq!(
+			test(TraversalOrder::DepthFirst256, [-170, -60, 160, 70], 6, 10),
+			[
+				"10:[28,229,255,255]",
+				"10:[256,229,511,255]",
+				"10:[28,256,255,511]",
+				"10:[256,256,511,511]",
+				"9:[14,114,255,255]",
+				"10:[512,229,767,255]",
+				"10:[768,229,967,255]",
+				"10:[512,256,767,511]",
+				"10:[768,256,967,511]",
+				"9:[256,114,483,255]",
+				"10:[28,512,255,726]",
+				"10:[256,512,511,726]",
+				"9:[14,256,255,363]",
+				"10:[512,512,767,726]",
+				"10:[768,512,967,726]",
+				"9:[256,256,483,363]",
+				"8:[7,57,241,181]",
+				"7:[3,28,120,90]",
+				"6:[1,14,60,45]"
+			]
+		);
 	}
 
 	#[test]
