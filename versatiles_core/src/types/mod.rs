@@ -50,3 +50,6 @@ pub use tiles_reader_parameters::*;
 
 mod tiles_reader;
 pub use tiles_reader::*;
+
+mod traversal_order;
+pub use traversal_order::*;
