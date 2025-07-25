@@ -1,9 +1,12 @@
 #[cfg(feature = "cli")]
 use super::ProbeDepth;
 use super::{Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters};
-use crate::tilejson::TileJSON;
 #[cfg(feature = "cli")]
 use crate::utils::PrettyPrint;
+use crate::{
+	tilejson::TileJSON,
+	types::{TraversalOrder, TraversalOrderSet},
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -26,6 +29,25 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 	/// Get the metadata, always uncompressed.
 	fn tilejson(&self) -> &TileJSON;
+
+	fn traversal_orders(&self) -> TraversalOrderSet {
+		TraversalOrderSet::new_all()
+	}
+
+	fn iter_bboxes(&self) -> Result<Box<dyn Iterator<Item = TileBBox> + '_ + Send>> {
+		self.iter_bboxes_in_order(self.traversal_orders().get_best()?)
+	}
+
+	fn iter_bboxes_in_order(&self, order: TraversalOrder) -> Result<Box<dyn Iterator<Item = TileBBox> + '_ + Send>> {
+		Ok(Box::new(self.parameters().bbox_pyramid.iter_bboxes(order)))
+	}
+
+	fn iter_bboxes_in_prefered_order(
+		&self,
+		orders: &[TraversalOrder],
+	) -> Result<Box<dyn Iterator<Item = TileBBox> + '_ + Send>> {
+		self.iter_bboxes_in_order(self.traversal_orders().get_best_of(orders)?)
+	}
 
 	/// Get tile data for the given coordinate, always compressed and formatted.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>>;

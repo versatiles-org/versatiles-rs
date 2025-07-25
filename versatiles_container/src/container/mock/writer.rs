@@ -45,10 +45,8 @@ impl MockTilesWriter {
 		let _temp = reader.source_name();
 		let _temp = reader.tilejson();
 
-		let bbox_pyramid = reader.parameters().bbox_pyramid.clone();
-
-		for bbox in bbox_pyramid.iter_levels() {
-			let mut stream = reader.get_tile_stream(*bbox).await?;
+		for bbox in reader.iter_bboxes()? {
+			let mut stream = reader.get_tile_stream(bbox).await?;
 			while stream.next().await.is_some() {}
 		}
 

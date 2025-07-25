@@ -97,12 +97,14 @@ impl VersaTilesWriter {
 		}
 
 		// Initialize blocks and populate them
-		let blocks: Vec<BlockDefinition> = pyramid
-			.iter_levels()
+		use TraversalOrder::*;
+		let blocks: Vec<BlockDefinition> = reader
+			.iter_bboxes_in_prefered_order(&[TopDown, BottomUp])?
 			.flat_map(|level_bbox| {
 				level_bbox
 					.iter_bbox_grid(256)
 					.map(|bbox_block| BlockDefinition::new(&bbox_block))
+					.collect::<Vec<_>>()
 			})
 			.collect();
 
