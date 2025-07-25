@@ -74,7 +74,7 @@ overflow-checks = false
 strip = true
 
 [workspace.dependencies]
-ab_glyph = { version = "0.2.30", default-features = false }
+ab_glyph = { version = "0.2.31", default-features = false }
 anyhow = { version = "1.0.98", default-features = false, features = ["std"] }
 assert_fs = "1.1.3"
 async-trait = { version = "0.1.88", default-features = false }
