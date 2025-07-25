@@ -21,17 +21,16 @@ impl Dataset {
 		set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
 
 		let dataset =
-			gdal::Dataset::open(&filename).with_context(|| format!("Failed to open GDAL dataset {:?}", filename))?;
+			gdal::Dataset::open(&filename).with_context(|| format!("Failed to open GDAL dataset {filename:?}"))?;
 
 		let bbox = dataset_bbox(&dataset)?;
 
 		let band_mapping = dataset_bandmapping(&dataset)
-			.with_context(|| format!("Failed to get band mapping from GDAL dataset {:?}", filename))?;
+			.with_context(|| format!("Failed to get band mapping from GDAL dataset {filename:?}"))?;
 
 		ensure!(
 			!band_mapping.is_empty(),
-			"GDAL dataset {} has no bands to read",
-			filename.display()
+			"GDAL dataset {filename:?} has no bands to read",
 		);
 
 		Ok(Self {
@@ -81,7 +80,7 @@ impl Dataset {
 }
 
 fn dataset_bandmapping(dataset: &gdal::Dataset) -> Result<Vec<usize>> {
-	let mut color_index = vec![0, 0, 0];
+	let mut color_index = [0, 0, 0];
 	let mut grey_index = 0;
 	let mut alpha_index = 0;
 	for i in 1..=dataset.raster_count() {
@@ -158,7 +157,7 @@ fn bbox_to_mercator(mut bbox: GeoBBox) -> [f64; 4] {
 	bbox_geometry.set_spatial_ref(SpatialRef::from_epsg(4326).unwrap());
 	bbox_geometry
 		.transform_to_inplace(&SpatialRef::from_epsg(3857).unwrap())
-		.with_context(|| format!("Failed to transform bounding box ({:?}) to EPSG:3857", bbox))
+		.with_context(|| format!("Failed to transform bounding box ({bbox:?}) to EPSG:3857"))
 		.unwrap();
 	let bbox = bbox_geometry.envelope();
 	[bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY]

@@ -206,8 +206,7 @@ impl TileBBoxPyramid {
 	///   * **`BottomUp`**      – highest zoom first, descending to z = 0.  
 	///   * **`DepthFirst256`** – quadtree post‑order using 256 × 256‑tile chunks.  
 	///   * **`DepthFirst16`**  – quadtree post‑order using 16 × 16‑tile chunks.  
-	///   * **`PMTiles64`**     – Hilbert‑curve order of 64 × 64‑tile chunks
-	///                           (matching PMTiles v3’s canonical layout).
+	///   * **`PMTiles64`**     – Hilbert‑curve order of 64 × 64‑tile chunks (matching PMTiles v3’s canonical layout).
 	///
 	/// # Returns
 	/// A boxed iterator that yields **owned** [`TileBBox`] values.  
@@ -230,12 +229,7 @@ impl TileBBoxPyramid {
 	/// assert_eq!(first.level, 0); // z=0 tiles come first in TopDown order
 	/// ```
 	pub fn iter_bboxes(&self, traversal_order: TraversalOrder) -> Box<dyn Iterator<Item = TileBBox> + '_ + Send> {
-		let mut bboxes: Vec<TileBBox> = self
-			.level_bbox
-			.iter()
-			.filter(|b| !b.is_empty())
-			.map(|b| b.clone())
-			.collect();
+		let mut bboxes: Vec<TileBBox> = self.level_bbox.iter().filter(|b| !b.is_empty()).copied().collect();
 
 		fn depth_first(bboxes: Vec<TileBBox>, size: u32) -> Vec<TileBBox> {
 			/// Build a depth‑first post‑order sort key for a chunk at (x_chunk, y_chunk).

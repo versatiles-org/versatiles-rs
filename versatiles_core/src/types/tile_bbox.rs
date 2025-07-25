@@ -649,7 +649,7 @@ impl TileBBox {
 
 		let level = self.level;
 		let max = 2u32.pow(level as u32) - 1;
-		let mut meta_bbox = self.clone();
+		let mut meta_bbox = *self;
 		meta_bbox.scale_down(size);
 
 		let iter = meta_bbox

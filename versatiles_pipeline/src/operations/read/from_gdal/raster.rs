@@ -71,8 +71,10 @@ impl ReadOperationTrait for Operation {
 				TileCompression::Uncompressed,
 				bbox_pyramid,
 			);
-			let mut tilejson = TileJSON::default();
-			tilejson.bounds = Some(bbox.clone());
+			let mut tilejson = TileJSON {
+				bounds: Some(*bbox),
+				..Default::default()
+			};
 			tilejson.update_from_reader_parameters(&parameters);
 
 			Ok(Box::new(Self {
@@ -139,8 +141,8 @@ impl OperationTrait for Operation {
 
 					for tile_coord in tile_coords {
 						let tile = image.crop_imm(
-							(tile_coord.x - bbox.x_min) as u32 * size,
-							(tile_coord.y - bbox.y_min) as u32 * size,
+							(tile_coord.x - bbox.x_min) * size,
+							(tile_coord.y - bbox.y_min) * size,
 							size,
 							size,
 						);

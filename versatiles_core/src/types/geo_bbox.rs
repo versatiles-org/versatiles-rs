@@ -534,7 +534,7 @@ mod tests {
 	#[test]
 	fn test_debug_format() {
 		let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
-		assert_eq!(format!("{:?}", bbox), "GeoBBox(-10, -5, 10, 5)");
+		assert_eq!(format!("{bbox:?}"), "GeoBBox(-10, -5, 10, 5)");
 	}
 
 	#[test]
