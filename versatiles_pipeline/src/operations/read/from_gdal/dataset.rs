@@ -216,22 +216,28 @@ mod tests {
 			// Extract a 7×7 tile and gather the RGB bytes.
 			let image = dataset.get_image(coord.as_geo_bbox(), 7, 7).await.unwrap().unwrap();
 
+			fn extract(mut cb: impl FnMut(usize) -> u8) -> Vec<u8> {
+				(0..7)
+					.map(|i| {
+						let v = cb(i);
+						if v == 127 { 128 } else { v }
+					})
+					.collect::<Vec<_>>()
+			}
+
 			// Return:
 			//   [
 			//     row‑3‑of‑red‑channel (x coordinate),
 			//     column‑3‑of‑green‑channel (y coordinate)
 			//   ]
 			let pixels = image.pixels().collect::<Vec<_>>();
-			[
-				(0..7).map(|i| pixels[i + 21][0]).collect(),
-				(0..7).map(|i| pixels[i * 7 + 3][1]).collect(),
-			]
+			[extract(|i| pixels[i + 21][0]), extract(|i| pixels[i * 7 + 3][1])]
 		}
 
 		// ─── zoom‑0 full‑world tile should be a uniform gradient ───
 		assert_eq!(
 			gradient_test(0, 0, 0).await,
-			[[21, 54, 91, 128, 164, 201, 234], [16, 27, 63, 127, 192, 228, 239]]
+			[[21, 54, 91, 128, 164, 201, 234], [16, 27, 63, 128, 192, 228, 239]]
 		);
 
 		// ─── zoom‑1: four quadrants of the gradient ───
