@@ -1,8 +1,42 @@
 use super::{TileBBox, TileCoord3};
 use anyhow::{Result, bail};
 
+/// Converts between 2‑D tile space and its position along a **Hilbert
+/// space‑filling curve**.
+///
+/// A Hilbert curve maps the tile grid at a given zoom level to a single
+/// 64‑bit integer while largely preserving spatial locality.  
+/// This is valuable for compact storage and range queries on tiled data.
+///
+/// The trait is implemented for:
+/// * [`TileBBox`] – uses the south‑west corner of the bounding box.
+/// * [`TileCoord3`] – a single `(z, x, y)` tile coordinate.
+///
+/// Implementors must guarantee that  
+/// `Self::from_hilbert_index(idx)?.get_hilbert_index()? == idx`.
+///
+/// # Errors
+/// Propagates conversion errors if the zoom level exceeds 31 or the
+/// coordinates lie outside `[0, 2ᶻ − 1]`.
+///
+/// # Examples
+/// ```
+/// use versatiles_core::types::{TileCoord3, HilbertIndex};
+///
+/// let coord = TileCoord3::new(5, 3, 3)?;
+/// let idx = coord.get_hilbert_index()?;
+/// assert_eq!(TileCoord3::from_hilbert_index(idx)?, coord);
+/// # Ok::<(), anyhow::Error>(())
+/// ```
 pub trait HilbertIndex {
+	/// Returns the 64‑bit Hilbert index corresponding to `self`.
 	fn get_hilbert_index(&self) -> Result<u64>;
+	/// Reconstructs an instance from a 64‑bit Hilbert index produced by
+	/// [`HilbertIndex::get_hilbert_index`].
+	///
+	/// # Errors
+	/// Fails when `index` cannot be mapped to valid tile coordinates
+	/// (e.g. if it would imply a zoom level ≥ 32).
 	fn from_hilbert_index(index: u64) -> Result<Self>
 	where
 		Self: Sized;
@@ -27,6 +61,23 @@ impl HilbertIndex for TileCoord3 {
 	}
 }
 
+/// Encodes a Web‑Mercator tile coordinate `(x, y, z)` into its position
+/// along the 64‑bit Hilbert space‑filling curve used by this crate.
+///
+/// * `x`, `y` – tile coordinates in the inclusive range `0..2ᶻ − 1`.
+/// * `z` – zoom level (`0‒31`).  
+///
+/// Lower zoom levels occupy the lower portion of the 64‑bit range so that
+/// indices remain strictly increasing with zoom.
+///
+/// # Errors
+/// * **`"tile zoom exceeds 64-bit limit"`** – `z ≥ 32`
+/// * **`"tile x/y outside zoom level bounds"`** – any coordinate ≥ `2ᶻ`
+///
+/// # Implementation notes
+/// The function is a direct port of the canonical Hilbert algorithm that
+/// traverses the curve iteratively while keeping an accumulator for the
+/// number of tiles contained in all previous zoom levels.
 fn coord_to_index(x: u32, y: u32, z: u8) -> Result<u64> {
 	if z >= 32 {
 		bail!("tile zoom exceeds 64-bit limit");
@@ -57,6 +108,14 @@ fn coord_to_index(x: u32, y: u32, z: u8) -> Result<u64> {
 	Ok((acc + d) as u64)
 }
 
+#[doc(hidden)]
+/// In‑place rotation/reflection helper for the Hilbert algorithm.
+///
+/// Given the quadrant bits `rx`/`ry`, it mutates the partial tile
+/// coordinate `(tx, ty)` within a square of size `s × s` to follow the
+/// Hilbert orientation rules described in Hamilton (1996).
+///
+/// Not part of the public API; exposed only for unit tests.
 fn rotate(s: i64, tx: &mut i64, ty: &mut i64, rx: u8, ry: u8) {
 	if ry == 0 {
 		if rx == 1 {
@@ -67,6 +126,16 @@ fn rotate(s: i64, tx: &mut i64, ty: &mut i64, rx: u8, ry: u8) {
 	}
 }
 
+/// Decodes a 64‑bit Hilbert index back into its `(x, y, z)` tile
+/// coordinate.
+///
+/// This is the inverse of [`coord_to_index`]. The algorithm incrementally
+/// subtracts the tile counts of successive zoom levels until it finds the
+/// level that contains the given index.
+///
+/// # Errors
+/// Returns **`"tile zoom exceeds 64-bit limit"`** when the index would
+/// require a zoom level ≥ 32.
 fn index_to_coord(index: u64) -> Result<TileCoord3> {
 	let mut acc = 0;
 	for t_z in 0..32 {
