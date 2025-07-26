@@ -211,4 +211,50 @@ mod tests {
 			vec![vec!["name", "age"], vec!["John Doe", "30"], vec!["Jane Doe", "29"]]
 		);
 	}
+
+	#[test]
+	fn test_read_csv_iter_basic() -> Result<()> {
+		let data = "name,age\nJohn,30\nJane,25";
+		let iter = read_csv_iter(Cursor::new(data), b',')?;
+		let results: Vec<_> = iter.collect();
+		assert_eq!(results.len(), 3);
+		let (fields1, line1, _) = results[0].as_ref().unwrap();
+		assert_eq!(fields1, &vec!["name".to_string(), "age".to_string()]);
+		assert_eq!(*line1, 1);
+		let (fields2, line2, _) = results[1].as_ref().unwrap();
+		assert_eq!(fields2, &vec!["John".to_string(), "30".to_string()]);
+		assert_eq!(*line2, 2);
+		Ok(())
+	}
+
+	#[test]
+	fn test_read_csv_iter_with_quotes() -> Result<()> {
+		let data = "\"a,a\",b\nc,\"d,d\"";
+		let mut iter = read_csv_iter(Cursor::new(data), b',')?;
+		let (fields1, _, _) = iter.next().unwrap().unwrap();
+		assert_eq!(fields1, vec!["a,a".to_string(), "b".to_string()]);
+		let (fields2, _, _) = iter.next().unwrap().unwrap();
+		assert_eq!(fields2, vec!["c".to_string(), "d,d".to_string()]);
+		Ok(())
+	}
+
+	#[test]
+	fn test_read_csv_iter_inconsistent_fields() {
+		let data = "a,b\nc,d,e\n";
+		let mut iter = read_csv_iter(Cursor::new(data), b',').unwrap();
+		// First line OK
+		assert!(iter.next().unwrap().is_ok());
+		// Second line has inconsistent field count
+		let err = iter.next().unwrap().unwrap_err();
+		assert!(err.to_string().contains("different number of fields"));
+	}
+
+	#[test]
+	fn test_read_csv_iter_empty_input() -> Result<()> {
+		let data = "";
+		let iter = read_csv_iter(Cursor::new(data), b',')?;
+		let results: Vec<_> = iter.collect();
+		assert!(results.is_empty());
+		Ok(())
+	}
 }
