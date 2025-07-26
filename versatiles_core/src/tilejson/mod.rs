@@ -667,4 +667,199 @@ mod tests {
 			"Debug string should contain 'TileJSON(' prefix"
 		);
 	}
+
+	#[test]
+	fn should_roundtrip_via_object() -> Result<()> {
+		let obj = make_test_json_object();
+		let tj1 = TileJSON::from_object(&obj)?;
+		let obj2 = tj1.as_object();
+		let tj2 = TileJSON::from_object(&obj2)?;
+		assert_eq!(tj1, tj2, "TileJSON should survive object → struct → object round-trip");
+		Ok(())
+	}
+
+	#[test]
+	fn should_roundtrip_via_string_and_blob() -> Result<()> {
+		let obj = make_test_json_object();
+		let tj1 = TileJSON::from_object(&obj)?;
+		let json_str = tj1.as_string();
+		let tj2 = TileJSON::try_from(json_str.as_str())?;
+		assert_eq!(tj1, tj2, "Stringify + parse should round-trip");
+
+		let blob = tj1.as_blob();
+		let tj3 = TileJSON::try_from(&blob)?;
+		assert_eq!(tj1, tj3, "Blob conversion should also round-trip");
+		Ok(())
+	}
+
+	#[test]
+	fn should_return_pretty_lines() -> Result<()> {
+		let obj = make_test_json_object();
+		let tj = TileJSON::from_object(&obj)?;
+		let lines = tj.as_pretty_lines(40);
+		assert!(
+			lines.len() > 1,
+			"Pretty print should produce multiple lines at small max_width"
+		);
+		Ok(())
+	}
+
+	#[test]
+	fn should_try_from_blob_or_default_return_default_on_invalid_json() {
+		let blob = Blob::from("{ invalid json");
+		let tj = TileJSON::try_from_blob_or_default(&blob);
+		assert_eq!(tj, TileJSON::default(), "Invalid blob should fall back to default");
+	}
+
+	#[test]
+	fn should_set_and_get_string_and_str() -> Result<()> {
+		let mut tj = TileJSON::default();
+		tj.set_string("key", "value")?;
+		assert_eq!(tj.get_string("key"), Some("value".to_string()));
+		assert_eq!(tj.get_str("key"), Some("value"));
+		Ok(())
+	}
+
+	#[test]
+	fn should_set_and_get_byte() -> Result<()> {
+		let mut tj = TileJSON::default();
+		tj.set_byte("byte_key", 42)?;
+		assert_eq!(tj.values.get_byte("byte_key"), Some(42));
+		Ok(())
+	}
+
+	#[test]
+	fn should_limit_min_and_max_zoom_correctly() {
+		let mut tj = TileJSON::default();
+		tj.limit_min_zoom(3);
+		assert_eq!(tj.values.get_byte("minzoom"), Some(3));
+		// Lower minzoom should not decrease the value
+		tj.limit_min_zoom(1);
+		assert_eq!(tj.values.get_byte("minzoom"), Some(3));
+
+		let mut tj2 = TileJSON::default();
+		tj2.limit_max_zoom(10);
+		assert_eq!(tj2.values.get_byte("maxzoom"), Some(10));
+		// Higher maxzoom should not increase the value
+		tj2.limit_max_zoom(20);
+		assert_eq!(tj2.values.get_byte("maxzoom"), Some(10));
+	}
+
+	#[test]
+	fn should_merge_bounds_center_and_additional_values() -> Result<()> {
+		let mut tj1 = TileJSON::default();
+		tj1.bounds = Some(GeoBBox(0.0, 0.0, 5.0, 5.0));
+		tj1.center = Some(GeoCenter(1.0, 1.0, 2));
+		tj1.set_string("foo", "bar")?;
+
+		let mut tj2 = TileJSON::default();
+		tj2.bounds = Some(GeoBBox(-5.0, -5.0, 3.0, 3.0));
+		tj2.center = Some(GeoCenter(2.0, 2.0, 4));
+		tj2.set_string("baz", "qux")?;
+
+		tj1.merge(&tj2)?;
+
+		// Bounds should be the union of both
+		assert_eq!(tj1.bounds, Some(GeoBBox(-5.0, -5.0, 5.0, 5.0)));
+		// Center should be overwritten by the other
+		assert_eq!(tj1.center, Some(GeoCenter(2.0, 2.0, 4)));
+		// Original value should remain, and new value should be inserted
+		assert_eq!(tj1.values.get_string("foo"), Some("bar".to_string()));
+		assert_eq!(tj1.values.get_string("baz"), Some("qux".to_string()));
+		Ok(())
+	}
+
+	#[test]
+	fn should_return_none_for_missing_getters() {
+		let tj = TileJSON::default();
+		assert_eq!(tj.get_string("missing"), None);
+		assert_eq!(tj.get_str("missing"), None);
+	}
+
+	#[test]
+	fn should_set_and_retrieve_list() -> Result<()> {
+		let mut tj = TileJSON::default();
+		let list = vec!["a".to_string(), "b".to_string()];
+		tj.set_list("list_key", list.clone())?;
+		// Inspect via as_json_value
+		let obj = tj.as_json_value().to_object()?;
+		let arr = obj.get("list_key").unwrap().as_array()?;
+		assert_eq!(arr.as_string_vec()?, list);
+		Ok(())
+	}
+
+	#[test]
+	fn should_set_vector_layers_from_json() -> Result<()> {
+		let mut tj = TileJSON::default();
+
+		// Build a single layer JSON
+		let mut layer_obj = JsonObject::default();
+		layer_obj.set("id", JsonValue::from("layer1"));
+		layer_obj.set("fields", JsonValue::new_object());
+		let json = JsonValue::from(vec![JsonValue::Object(layer_obj.clone())]);
+		tj.set_vector_layers(&json)?;
+
+		// Verify via as_object
+		let obj = tj.as_object();
+		let arr = obj.get("vector_layers").unwrap().as_array()?;
+		assert_eq!(arr.as_vec(), &vec![JsonValue::Object(layer_obj)]);
+		Ok(())
+	}
+
+	#[test]
+	fn should_return_json_value_as_object() {
+		let tj = TileJSON::default();
+		let json_value = tj.as_json_value();
+		if let JsonValue::Object(obj) = json_value {
+			assert_eq!(obj, tj.as_object());
+		} else {
+			panic!("Expected JsonValue::Object");
+		}
+	}
+
+	#[test]
+	fn should_stringify_same_as_as_string() {
+		let tj = TileJSON::default();
+		assert_eq!(tj.stringify(), tj.as_string());
+	}
+
+	#[test]
+	fn should_parse_from_string_reference() -> Result<()> {
+		let json_str = r#"{"tilejson":"3.0.0","bounds":[-180,-90,180,90],"center":[0.0,0.0,3.0]}"#.to_string();
+		let tj = TileJSON::try_from(&json_str)?;
+		assert_eq!(tj.values.get_string("tilejson"), Some("3.0.0".to_string()));
+		Ok(())
+	}
+
+	#[test]
+	fn should_convert_into_string_and_blob() {
+		let tj = TileJSON::default();
+		let s: String = tj.clone().into();
+		assert_eq!(s, tj.as_string());
+		let blob: Blob = tj.clone().into();
+		assert_eq!(blob.as_str(), tj.as_string());
+		let blob_ref: Blob = (&tj).into();
+		assert_eq!(blob_ref.as_str(), tj.as_string());
+	}
+
+	#[test]
+	fn should_update_from_reader_parameters_including_format_and_schema() -> Result<()> {
+		let mut tj = TileJSON::default();
+		// Prepare reader parameters
+		let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(1, 4, &GeoBBox(-180.0, -90.0, 180.0, 90.0));
+		let rp = TilesReaderParameters {
+			bbox_pyramid,
+			tile_format: TileFormat::PNG,
+			..Default::default()
+		};
+		tj.update_from_reader_parameters(&rp);
+		// Bounds and zooms
+		assert_eq!(tj.values.get_byte("minzoom"), Some(1));
+		assert_eq!(tj.values.get_byte("maxzoom"), Some(4));
+		// Format, content, and schema
+		assert_eq!(tj.tile_format, Some(TileFormat::PNG));
+		assert_eq!(tj.tile_content, Some(TileType::Raster));
+		assert_eq!(tj.tile_schema, Some(TileSchema::RasterRGB));
+		Ok(())
+	}
 }
