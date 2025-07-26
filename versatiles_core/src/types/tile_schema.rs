@@ -65,3 +65,67 @@ impl TryFrom<&str> for TileSchema {
 		})
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	#[test]
+	fn test_as_str() {
+		use TileSchema::*;
+
+		for (schema, text) in [
+			(RasterRGB, "rgb"),
+			(RasterRGBA, "rgba"),
+			(RasterDEMMapbox, "dem/mapbox"),
+			(RasterDEMTerrarium, "dem/terrarium"),
+			(RasterDEMVersatiles, "dem/versatiles"),
+			(VectorOpenMapTiles, "openmaptiles"),
+			(VectorShortbread1, "shortbread@1.0"),
+			(VectorOther, "other"),
+			(Unknown, "unknown"),
+		] {
+			assert_eq!(schema.as_str(), text);
+			assert_eq!(format!("{}", schema), text);
+		}
+	}
+
+	#[test]
+	fn test_get_tile_content() {
+		use TileSchema::*;
+		use TileType::*;
+
+		for (schema, tile_type) in [
+			(RasterRGB, Raster),
+			(RasterRGBA, Raster),
+			(RasterDEMMapbox, Raster),
+			(RasterDEMTerrarium, Raster),
+			(RasterDEMVersatiles, Raster),
+			(VectorOpenMapTiles, Vector),
+			(VectorShortbread1, Vector),
+			(VectorOther, Vector),
+			(TileSchema::Unknown, TileType::Unknown),
+		] {
+			assert_eq!(schema.get_tile_content(), tile_type);
+		}
+	}
+
+	#[test]
+	fn test_try_from() {
+		use TileSchema::*;
+
+		for (text, schema) in [
+			("rgb", RasterRGB),
+			("rgba", RasterRGBA),
+			("dem/mapbox", RasterDEMMapbox),
+			("dem/terrarium", RasterDEMTerrarium),
+			("dem/versatiles", RasterDEMVersatiles),
+			("openmaptiles", VectorOpenMapTiles),
+			("shortbread@1.0", VectorShortbread1),
+			("other", VectorOther),
+		] {
+			assert_eq!(TileSchema::try_from(text).unwrap(), schema);
+		}
+
+		assert!(TileSchema::try_from("invalid").is_err());
+	}
+}
