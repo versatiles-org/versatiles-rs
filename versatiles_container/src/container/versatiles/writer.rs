@@ -99,7 +99,7 @@ impl VersaTilesWriter {
 		// Initialize blocks and populate them
 		use TraversalOrder::*;
 		let blocks: Vec<BlockDefinition> = reader
-			.iter_bboxes_in_prefered_order(&[TopDown, BottomUp])?
+			.iter_bboxes_in_preferred_order(&[TopDown, BottomUp])?
 			.flat_map(|level_bbox| {
 				level_bbox
 					.iter_bbox_grid(256)

@@ -42,7 +42,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		Ok(Box::new(self.parameters().bbox_pyramid.iter_bboxes(order)))
 	}
 
-	fn iter_bboxes_in_prefered_order(
+	fn iter_bboxes_in_preferred_order(
 		&self,
 		orders: &[TraversalOrder],
 	) -> Result<Box<dyn Iterator<Item = TileBBox> + '_ + Send>> {
@@ -158,8 +158,12 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 #[cfg(test)]
 mod tests {
+	#[cfg(feature = "cli")]
+	use super::ProbeDepth;
 	use super::*;
-	use crate::types::{TileBBoxPyramid, TileFormat};
+	use crate::types::{TileBBoxPyramid, TileFormat, TraversalOrder, TraversalOrderSet};
+	#[cfg(feature = "cli")]
+	use crate::utils::PrettyPrint;
 
 	#[derive(Debug)]
 	struct TestReader {
@@ -282,5 +286,74 @@ mod tests {
 				.await?;
 		}
 		Ok(())
+	}
+
+	#[cfg(feature = "cli")]
+	#[tokio::test]
+	async fn test_probe_parameters() -> Result<()> {
+		let mut reader = TestReader::new_dummy();
+		let mut print = PrettyPrint::new();
+		reader.probe_parameters(&mut print).await?;
+		Ok(())
+	}
+
+	#[cfg(feature = "cli")]
+	#[tokio::test]
+	async fn test_probe_container() -> Result<()> {
+		let mut reader = TestReader::new_dummy();
+		let print = PrettyPrint::new();
+		reader.probe_container(&print).await?;
+		Ok(())
+	}
+
+	#[cfg(feature = "cli")]
+	#[tokio::test]
+	async fn test_probe_tiles() -> Result<()> {
+		let mut reader = TestReader::new_dummy();
+		let print = PrettyPrint::new();
+		reader.probe_tiles(&print).await?;
+		Ok(())
+	}
+
+	#[cfg(feature = "cli")]
+	#[tokio::test]
+	async fn test_probe_all_levels() -> Result<()> {
+		let mut reader = TestReader::new_dummy();
+		reader.probe(ProbeDepth::Container).await?;
+		reader.probe(ProbeDepth::Tiles).await?;
+		reader.probe(ProbeDepth::TileContents).await?;
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_traversal_orders_default() {
+		let reader = TestReader::new_dummy();
+		let default_orders = reader.traversal_orders();
+		assert_eq!(default_orders, TraversalOrderSet::new_all());
+	}
+
+	#[tokio::test]
+	async fn test_iter_bboxes_non_empty() {
+		let reader = TestReader::new_dummy();
+		let mut bboxes = reader.iter_bboxes().unwrap();
+		assert_eq!(bboxes.next().unwrap().as_string(), "0:[0,0,0,0]");
+	}
+
+	#[tokio::test]
+	async fn test_iter_bboxes_in_preferred_order() {
+		let reader = TestReader::new_dummy();
+		// Use a single preferred order
+		let order = TraversalOrder::BottomUp;
+		let mut bboxes = reader.iter_bboxes_in_preferred_order(&[order]).unwrap();
+		assert_eq!(bboxes.next().unwrap().as_string(), "3:[0,0,7,7]");
+	}
+
+	#[tokio::test]
+	async fn test_boxed_trait_object() {
+		let reader = TestReader::new_dummy();
+		let boxed = reader.boxed();
+		// Should forward trait methods
+		assert_eq!(boxed.source_name(), "dummy");
+		assert_eq!(boxed.container_name(), "test container name");
 	}
 }

@@ -53,7 +53,7 @@ impl TilesWriterTrait for PMTilesWriter {
 		let parameters = reader.parameters().clone();
 
 		let blocks: Vec<TileBBox> = reader
-			.iter_bboxes_in_prefered_order(&[TraversalOrder::PMTiles64])?
+			.iter_bboxes_in_preferred_order(&[TraversalOrder::PMTiles64])?
 			.collect();
 
 		let mut progress = get_progress_bar(

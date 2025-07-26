@@ -29,6 +29,7 @@ pub enum TraversalOrder {
 /// the “best” one that is supported by the current data sink or source.
 /// It supports the usual boolean algebra via the `&` (intersection) and
 /// `|` (union) operators and defaults to **all** variants enabled.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TraversalOrderSet {
 	set: EnumSet<TraversalOrder>,
 }
