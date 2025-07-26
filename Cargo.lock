@@ -3437,6 +3437,7 @@ dependencies = [
 name = "versatiles_derive"
 version = "0.15.6"
 dependencies = [
+ "pretty_assertions",
  "prettyplease",
  "proc-macro2",
  "quote",

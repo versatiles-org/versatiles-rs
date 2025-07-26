@@ -28,17 +28,15 @@ mod tests {
 	#[test]
 	fn test_debug() {
 		use CompressionGoal::*;
-		assert_eq!(format!("{:?}", UseFastCompression), "Use Fast Compression");
-		assert_eq!(format!("{:?}", UseBestCompression), "Use Best Compression");
-		assert_eq!(format!("{:?}", IsIncompressible), "Is Incompressible");
+		assert_eq!(format!("{UseFastCompression:?}"), "Use Fast Compression");
+		assert_eq!(format!("{UseBestCompression:?}"), "Use Best Compression");
+		assert_eq!(format!("{IsIncompressible:?}"), "Is Incompressible");
 	}
 
 	#[test]
 	fn test_clone_copy_and_eq() {
 		let a = CompressionGoal::UseBestCompression;
 		let b = a;
-		let c = a.clone();
 		assert_eq!(a, b);
-		assert_eq!(a, c);
 	}
 }

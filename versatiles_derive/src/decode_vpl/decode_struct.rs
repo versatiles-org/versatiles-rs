@@ -58,47 +58,47 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 			}
 			let (doc_field, parser_field) = match field_type_str.as_str() {
 				"String" => (
-					format!("* **`{field_str}`: String (required)**{comment}"),
+					format!("- **`{field_str}`: String (required)**{comment}"),
 					quote! { #field_name: node.get_property_string_req(#field_str)? },
 				),
 				"bool" => (
-					format!("* *`{field_str}`: Boolean (optional, default: false)*{comment}"),
+					format!("- **`{field_str}`: Boolean (required)**{comment}"),
 					quote! { #field_name: node.get_property_bool_req(#field_str)? },
 				),
 				"u8" => (
-					format!("* *`{field_str}`: u8 *{comment}"),
+					format!("- **`{field_str}`: u8 (required)**{comment}"),
 					quote! { #field_name: node.get_property_number_req::<u8>(#field_str)? },
 				),
 				"[f64;4]" => (
-					format!("* **`{field_str}`: [f64,f64,f64,f64] (required)**{comment}"),
+					format!("- **`{field_str}`: [f64,f64,f64,f64] (required)**{comment}"),
 					quote! { #field_name: node.get_property_number_array4_req::<f64>(#field_str)? },
 				),
 				"Option<bool>" => (
-					format!("* *`{field_str}`: bool (optional)*{comment}"),
+					format!("- *`{field_str}`: bool (optional)*{comment}"),
 					quote! { #field_name: node.get_property_bool(#field_str)? },
 				),
 				"Option<String>" => (
-					format!("* *`{field_str}`: String (optional)*{comment}"),
+					format!("- *`{field_str}`: String (optional)*{comment}"),
 					quote! { #field_name: node.get_property_string(#field_str)? },
 				),
 				"Option<f32>" => (
-					format!("* *`{field_str}`: f32 (optional)*{comment}"),
+					format!("- *`{field_str}`: f32 (optional)*{comment}"),
 					quote! { #field_name: node.get_property_number::<f32>(#field_str)? },
 				),
 				"Option<u8>" => (
-					format!("* *`{field_str}`: u8 (optional)*{comment}"),
+					format!("- *`{field_str}`: u8 (optional)*{comment}"),
 					quote! { #field_name: node.get_property_number::<u8>(#field_str)? },
 				),
 				"Option<u32>" => (
-					format!("* *`{field_str}`: u32 (optional)*{comment}"),
+					format!("- *`{field_str}`: u32 (optional)*{comment}"),
 					quote! { #field_name: node.get_property_number::<u32>(#field_str)? },
 				),
 				"Option<[f64;4]>" => (
-					format!("* *`{field_str}`: [f64,f64,f64,f64] (optional)*{comment}"),
+					format!("- *`{field_str}`: [f64,f64,f64,f64] (optional)*{comment}"),
 					quote! { #field_name: node.get_property_number_array4::<f64>(#field_str)? },
 				),
 				"Option<TileFormat>" => (
-					format!("* *`{field_str}`: TileFormat (optional)*{comment}"),
+					format!("- *`{field_str}`: TileFormat (optional)*{comment}"),
 					quote! { #field_name: node.get_property_enum::<TileFormat>(#field_str)? },
 				),
 				_ => panic!("unknown type field: {field_type_str}"),
@@ -149,6 +149,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 #[cfg(test)]
 mod tests {
 	use super::decode_struct;
+	use pretty_assertions::assert_eq;
 	use syn::{DeriveInput, parse_quote};
 
 	fn pretty_tokens(ts: proc_macro2::TokenStream) -> Vec<String> {
@@ -192,7 +193,7 @@ mod tests {
 				"        })",
 				"    }",
 				"    pub fn get_docs() -> String {",
-				"        \"Struct documentation\\n### Parameters:\\n* **`field1`: String (required)** - Field documentation\"",
+				"        \"Struct documentation\\n### Parameters:\\n- **`field1`: String (required)** - Field documentation\"",
 				"            .to_string()",
 				"    }",
 				"}",
@@ -205,68 +206,140 @@ mod tests {
 	fn test_decode_struct_all_field_types() {
 		use syn::parse_quote;
 		// Struct covering all supported field types
-		let input: DeriveInput = parse_quote!(
-			struct AllTypes {
-				a_string: String,
-				b_bool: bool,
-				c_u8: u8,
-				d_array4: [f64; 4],
-				e_opt_bool: Option<bool>,
-				f_opt_string: Option<String>,
-				g_opt_f32: Option<f32>,
-				h_opt_u8: Option<u8>,
-				i_opt_u32: Option<u32>,
-				j_opt_array4: Option<[f64; 4]>,
-				k_opt_format: Option<TileFormat>,
-			}
-		);
-		let data_struct = match &input.data {
-			syn::Data::Struct(ds) => ds.clone(),
-			_ => panic!("Expected struct data"),
-		};
-		let ts = decode_struct(input.clone(), data_struct);
+		let cases: Vec<(DeriveInput, &str, &str)> = vec![
+			(
+				parse_quote!(
+					struct T {
+						v: String,
+					}
+				),
+				"get_property_string_req",
+				"**`v`: String (required)**",
+			),
+			(
+				parse_quote!(
+					struct T {
+						v: bool,
+					}
+				),
+				"get_property_bool_req",
+				"**`v`: Boolean (required)**",
+			),
+			(
+				parse_quote!(
+					struct T {
+						v: u8,
+					}
+				),
+				"get_property_number_req::<u8>",
+				"**`v`: u8 (required)**",
+			),
+			(
+				parse_quote!(
+					struct T {
+						v: [f64; 4],
+					}
+				),
+				"get_property_number_array4_req::<f64>",
+				"**`v`: [f64,f64,f64,f64] (required)**",
+			),
+			(
+				parse_quote!(
+					struct T {
+						v: Option<bool>,
+					}
+				),
+				"get_property_bool",
+				"*`v`: bool (optional)*",
+			),
+			(
+				parse_quote!(
+					struct T {
+						v: Option<String>,
+					}
+				),
+				"get_property_string",
+				"*`v`: String (optional)*",
+			),
+			(
+				parse_quote!(
+					struct T {
+						v: Option<f32>,
+					}
+				),
+				"get_property_number::<f32>",
+				"*`v`: f32 (optional)*",
+			),
+			(
+				parse_quote!(
+					struct T {
+						v: Option<u8>,
+					}
+				),
+				"get_property_number::<u8>",
+				"*`v`: u8 (optional)*",
+			),
+			(
+				parse_quote!(
+					struct T {
+						v: Option<u32>,
+					}
+				),
+				"get_property_number::<u32>",
+				"*`v`: u32 (optional)*",
+			),
+			(
+				parse_quote!(
+					struct T {
+						v: Option<[f64; 4]>,
+					}
+				),
+				"get_property_number_array4::<f64>",
+				"*`v`: [f64,f64,f64,f64] (optional)*",
+			),
+			(
+				parse_quote!(
+					struct T {
+						v: Option<TileFormat>,
+					}
+				),
+				"get_property_enum::<TileFormat>",
+				"*`v`: TileFormat (optional)*",
+			),
+		];
 
-		assert_eq!(
-			pretty_tokens(ts),
-			[
-				"impl AllTypes {",
-				"    pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {",
-				"        let argument_names: Vec<String> = vec![",
-				"            \"a_string\".to_string(), \"b_bool\".to_string(), \"c_u8\".to_string(), \"d_array4\"",
-				"            .to_string(), \"e_opt_bool\".to_string(), \"f_opt_string\".to_string(),",
-				"            \"g_opt_f32\".to_string(), \"h_opt_u8\".to_string(), \"i_opt_u32\".to_string(),",
-				"            \"j_opt_array4\".to_string(), \"k_opt_format\".to_string()",
-				"        ];",
-				"        let property_names = node.get_property_names();",
-				"        for property_name in property_names {",
-				"            if !argument_names.contains(&property_name) {",
-				"                anyhow::bail!(",
-				"                    \"Unknown argument \\\"{}\\\" in \\\"{}\\\"\", property_name, node.name",
-				"                );",
-				"            }",
-				"        }",
-				"        Ok(Self {",
-				"            a_string: node.get_property_string_req(\"a_string\")?,",
-				"            b_bool: node.get_property_bool_req(\"b_bool\")?,",
-				"            c_u8: node.get_property_number_req::<u8>(\"c_u8\")?,",
-				"            d_array4: node.get_property_number_array4_req::<f64>(\"d_array4\")?,",
-				"            e_opt_bool: node.get_property_bool(\"e_opt_bool\")?,",
-				"            f_opt_string: node.get_property_string(\"f_opt_string\")?,",
-				"            g_opt_f32: node.get_property_number::<f32>(\"g_opt_f32\")?,",
-				"            h_opt_u8: node.get_property_number::<u8>(\"h_opt_u8\")?,",
-				"            i_opt_u32: node.get_property_number::<u32>(\"i_opt_u32\")?,",
-				"            j_opt_array4: node.get_property_number_array4::<f64>(\"j_opt_array4\")?,",
-				"            k_opt_format: node.get_property_enum::<TileFormat>(\"k_opt_format\")?,",
-				"        })",
-				"    }",
-				"    pub fn get_docs() -> String {",
-				"        \"### Parameters:\\n* **`a_string`: String (required)**\\n* *`b_bool`: Boolean (optional, default: false)*\\n* *`c_u8`: u8 *\\n* **`d_array4`: [f64,f64,f64,f64] (required)**\\n* *`e_opt_bool`: bool (optional)*\\n* *`f_opt_string`: String (optional)*\\n* *`g_opt_f32`: f32 (optional)*\\n* *`h_opt_u8`: u8 (optional)*\\n* *`i_opt_u32`: u32 (optional)*\\n* *`j_opt_array4`: [f64,f64,f64,f64] (optional)*\\n* *`k_opt_format`: TileFormat (optional)*\"",
-				"            .to_string()",
-				"    }",
-				"}",
-				""
-			]
-		);
+		for (input, getter, comment) in cases {
+			let data_struct = match &input.data {
+				syn::Data::Struct(ds) => ds.clone(),
+				_ => panic!("Expected struct data"),
+			};
+			let ts = decode_struct(input.clone(), data_struct);
+			assert_eq!(
+				pretty_tokens(ts),
+				[
+					"impl T {",
+					"    pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {",
+					"        let argument_names: Vec<String> = vec![\"v\".to_string()];",
+					"        let property_names = node.get_property_names();",
+					"        for property_name in property_names {",
+					"            if !argument_names.contains(&property_name) {",
+					"                anyhow::bail!(",
+					"                    \"Unknown argument \\\"{}\\\" in \\\"{}\\\"\", property_name, node.name",
+					"                );",
+					"            }",
+					"        }",
+					"        Ok(Self {",
+					&format!("            v: node.{getter}(\"v\")?,"),
+					"        })",
+					"    }",
+					"    pub fn get_docs() -> String {",
+					&format!("        \"### Parameters:\\n- {comment}\".to_string()"),
+					"    }",
+					"}",
+					""
+				]
+			)
+		}
 	}
 
 	#[test]

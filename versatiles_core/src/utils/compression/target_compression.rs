@@ -151,7 +151,7 @@ mod tests {
 	#[test]
 	fn test_debug_format() {
 		let tc = TargetCompression::from(TileCompression::Gzip);
-		let s = format!("{:?}", tc);
+		let s = format!("{tc:?}");
 		assert!(s.starts_with("TargetCompression"));
 		assert!(s.contains("Gzip"));
 		assert!(s.contains("Use Best Compression"));
