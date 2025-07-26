@@ -1,21 +1,41 @@
+//! JSON array type and utilities for serializing, deserializing, and converting to Rust types.
 use crate::json::*;
 use anyhow::{Result, anyhow};
 use std::fmt::Debug;
 
 #[derive(Clone, Default, PartialEq)]
+/// A JSON array, backed by a `Vec<JsonValue>`.
+///
+/// Provides methods for stringifying the array in compact or pretty formats,
+/// and converting elements to Rust types (e.g., strings, numbers).
 pub struct JsonArray(pub Vec<JsonValue>);
 
 impl JsonArray {
+	/// Serialize the JSON array to a compact string without extra whitespace.
+	///
+	/// # Examples
+	///
+	/// ```rust
+	/// use versatiles_core::json::{JsonArray, JsonValue};
+	/// let arr = JsonArray(vec![JsonValue::from(1), JsonValue::from(2)]);
+	/// assert_eq!(arr.stringify(), "[1,2]");
+	/// ```
 	pub fn stringify(&self) -> String {
 		let items = self.0.iter().map(stringify).collect::<Vec<_>>();
 		format!("[{}]", items.join(","))
 	}
 
+	/// Serialize the array to a single-line, pretty-printed string with spaces.
+	///
+	/// E.g., `[ 1, 2, 3 ]`.
 	pub fn stringify_pretty_single_line(&self) -> String {
 		let items = self.0.iter().map(stringify_pretty_single_line).collect::<Vec<_>>();
 		format!("[ {} ]", items.join(", "))
 	}
 
+	/// Serialize the array to a multi-line, pretty-printed string.
+	///
+	/// `max_width` controls when to break lines, and `depth` sets the indentation level.
 	pub fn stringify_pretty_multi_line(&self, max_width: usize, depth: usize) -> String {
 		let indent = "  ".repeat(depth);
 		let items = self
@@ -31,10 +51,12 @@ impl JsonArray {
 		format!("[\n{}\n{}]", items.join(",\n"), indent)
 	}
 
+	/// Convert all elements to Rust `String`s, returning an error if any element is not a string.
 	pub fn as_string_vec(&self) -> Result<Vec<String>> {
 		self.0.iter().map(JsonValue::as_string).collect::<Result<Vec<_>>>()
 	}
 
+	/// Convert all elements to numbers of type `T`, returning an error if any element is not numeric.
 	pub fn as_number_vec<T>(&self) -> Result<Vec<T>>
 	where
 		T: AsNumber<T>,
@@ -42,10 +64,12 @@ impl JsonArray {
 		self.0.iter().map(JsonValue::as_number).collect::<Result<Vec<T>>>()
 	}
 
+	/// Get a reference to the underlying `Vec<JsonValue>`.
 	pub fn as_vec(&self) -> &Vec<JsonValue> {
 		&self.0
 	}
 
+	/// Convert elements to a fixed-size array of numbers, returning an error on mismatch or non-numeric elements.
 	pub fn as_number_array<T, const N: usize>(&self) -> Result<[T; N]>
 	where
 		T: AsNumber<T>,
@@ -195,63 +219,46 @@ mod tests {
 
 	#[test]
 	fn test_stringify_pretty_single_line() {
-	    let array = JsonArray(vec![
-	        JsonValue::from("hello"),
-	        JsonValue::from(42.0),
-	    ]);
-	    assert_eq!(array.stringify_pretty_single_line(), "[ \"hello\", 42 ]");
+		let array = JsonArray(vec![JsonValue::from("hello"), JsonValue::from(42.0)]);
+		assert_eq!(array.stringify_pretty_single_line(), "[ \"hello\", 42 ]");
 	}
 
 	#[test]
 	fn test_stringify_pretty_multi_line() {
-	    let array = JsonArray(vec![
-	        JsonValue::from("a"),
-	        JsonValue::from("b"),
-	    ]);
-	    let expected = "[\n  \"a\",\n  \"b\"\n]";
-	    assert_eq!(array.stringify_pretty_multi_line(80, 0), expected);
+		let array = JsonArray(vec![JsonValue::from("a"), JsonValue::from("b")]);
+		let expected = "[\n  \"a\",\n  \"b\"\n]";
+		assert_eq!(array.stringify_pretty_multi_line(80, 0), expected);
 	}
 
 	#[test]
 	fn test_as_vec() {
-	    let array = JsonArray(vec![JsonValue::from(true)]);
-	    // as_vec should return a reference to the internal vector
-	    assert_eq!(array.as_vec(), &array.0);
+		let array = JsonArray(vec![JsonValue::from(true)]);
+		// as_vec should return a reference to the internal vector
+		assert_eq!(array.as_vec(), &array.0);
 	}
 
 	#[test]
 	fn test_from_ref_vec() {
-	    let v = vec![1, 2, 3];
-	    let arr = JsonArray::from(&v);
-	    assert_eq!(arr.0, vec![
-	        JsonValue::from(1),
-	        JsonValue::from(2),
-	        JsonValue::from(3),
-	    ]);
+		let v = vec![1, 2, 3];
+		let arr = JsonArray::from(&v);
+		assert_eq!(arr.0, vec![JsonValue::from(1), JsonValue::from(2), JsonValue::from(3),]);
 	}
 
 	#[test]
 	fn test_from_array_ref() {
-	    let slice = [4, 5, 6];
-	    let arr = JsonArray::from(&slice);
-	    assert_eq!(arr.0, vec![
-	        JsonValue::from(4),
-	        JsonValue::from(5),
-	        JsonValue::from(6),
-	    ]);
+		let slice = [4, 5, 6];
+		let arr = JsonArray::from(&slice);
+		assert_eq!(arr.0, vec![JsonValue::from(4), JsonValue::from(5), JsonValue::from(6),]);
 	}
 
 	#[test]
 	fn test_json_value_from_vec() {
-	    let jv: JsonValue = vec!["x", "y"].into();
-	    match jv {
-	        JsonValue::Array(ja) => {
-	            assert_eq!(ja.0, vec![
-	                JsonValue::from("x"),
-	                JsonValue::from("y"),
-	            ]);
-	        }
-	        _ => panic!("Expected JsonValue::Array variant"),
-	    }
+		let jv: JsonValue = vec!["x", "y"].into();
+		match jv {
+			JsonValue::Array(ja) => {
+				assert_eq!(ja.0, vec![JsonValue::from("x"), JsonValue::from("y"),]);
+			}
+			_ => panic!("Expected JsonValue::Array variant"),
+		}
 	}
 }

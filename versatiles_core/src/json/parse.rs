@@ -1,13 +1,24 @@
+//! JSON parsing utilities for converting text or byte iterators into `JsonValue`.
 use crate::byte_iterator::*;
 use crate::json::*;
 use anyhow::{Context, Result};
 use std::{collections::BTreeMap, io::Cursor};
 
+/// Parse a JSON string into a `JsonValue`.
+///
+/// # Errors
+/// Returns an error if the JSON is invalid, with context indicating the input string.
 pub fn parse_json_str(json: &str) -> Result<JsonValue> {
 	let mut iter = ByteIterator::from_reader(Cursor::new(json), true);
 	parse_json_iter(&mut iter).with_context(|| format!("while parsing JSON '{json}'"))
 }
 
+/// Parse JSON data from a `ByteIterator` into a `JsonValue`.
+///
+/// Consumes leading whitespace and dispatches to the appropriate parser based on the next character.
+///
+/// # Errors
+/// Returns an error if an unexpected character is encountered or parsing fails.
 pub fn parse_json_iter(iter: &mut ByteIterator) -> Result<JsonValue> {
 	iter.skip_whitespace();
 	match iter.expect_peeked_byte()? {
@@ -22,6 +33,12 @@ pub fn parse_json_iter(iter: &mut ByteIterator) -> Result<JsonValue> {
 	}
 }
 
+/// Parse a JSON object from a `ByteIterator`, constructing a `JsonValue::Object`.
+///
+/// Reads key-value pairs into a `BTreeMap`, preserving insertion order.
+///
+/// # Errors
+/// Returns an error if object syntax is invalid.
 fn parse_json_object(iter: &mut ByteIterator) -> Result<JsonValue> {
 	let mut list: Vec<(String, JsonValue)> = Vec::new();
 	parse_object_entries(iter, |key, iter2| {

@@ -1,7 +1,12 @@
+//! JSON value enum representing any valid JSON data and utilities for parsing, serializing, and converting.
+
 use crate::json::*;
 use crate::types::Blob;
 use anyhow::{Result, bail};
 
+/// Represents any JSON data: arrays, objects, numbers, strings, booleans, and null.
+///
+/// Provides methods for parsing, serialization, and type conversion.
 #[derive(Clone, Debug, PartialEq)]
 pub enum JsonValue {
 	Array(JsonArray),
@@ -13,14 +18,23 @@ pub enum JsonValue {
 }
 
 impl JsonValue {
+	/// Parse a JSON string into a `JsonValue`.
+	///
+	/// # Errors
+	/// Returns an error if the JSON is invalid.
 	pub fn parse_str(json: &str) -> Result<JsonValue> {
 		parse_json_str(json)
 	}
 
+	/// Parse a `Blob` containing JSON text into a `JsonValue`.
+	///
+	/// # Errors
+	/// Returns an error if the JSON is invalid.
 	pub fn parse_blob(blob: &Blob) -> Result<JsonValue> {
 		parse_json_str(blob.as_str())
 	}
 
+	/// Return the JSON type as a lowercase string (`"array"`, `"object"`, etc.).
 	pub fn type_as_str(&self) -> &str {
 		use JsonValue::*;
 		match self {
@@ -33,18 +47,25 @@ impl JsonValue {
 		}
 	}
 
+	/// Serialize the `JsonValue` to a compact JSON string without unnecessary whitespace.
 	pub fn stringify(&self) -> String {
 		stringify(self)
 	}
 
+	/// Create a new empty JSON array value.
 	pub fn new_array() -> JsonValue {
 		JsonValue::Array(JsonArray::default())
 	}
 
+	/// Create a new empty JSON object value.
 	pub fn new_object() -> JsonValue {
 		JsonValue::Object(JsonObject::default())
 	}
 
+	/// Borrow the `JsonArray` if this value is an array.
+	///
+	/// # Errors
+	/// Returns an error if not an array.
 	pub fn as_array(&self) -> Result<&JsonArray> {
 		if let JsonValue::Array(array) = self {
 			Ok(array)
@@ -53,6 +74,10 @@ impl JsonValue {
 		}
 	}
 
+	/// Consume the `JsonValue` and extract the `JsonArray` if it is an array.
+	///
+	/// # Errors
+	/// Returns an error if not an array.
 	pub fn to_array(self) -> Result<JsonArray> {
 		if let JsonValue::Array(array) = self {
 			Ok(array)
@@ -61,6 +86,10 @@ impl JsonValue {
 		}
 	}
 
+	/// Borrow the `JsonObject` if this value is an object.
+	///
+	/// # Errors
+	/// Returns an error if not an object.
 	pub fn as_object(&self) -> Result<&JsonObject> {
 		if let JsonValue::Object(object) = self {
 			Ok(object)
@@ -69,6 +98,10 @@ impl JsonValue {
 		}
 	}
 
+	/// Consume the `JsonValue` and extract the `JsonObject` if it is an object.
+	///
+	/// # Errors
+	/// Returns an error if not an object.
 	pub fn to_object(self) -> Result<JsonObject> {
 		if let JsonValue::Object(object) = self {
 			Ok(object)
@@ -77,6 +110,10 @@ impl JsonValue {
 		}
 	}
 
+	/// Return the string value as `String`, cloning if necessary.
+	///
+	/// # Errors
+	/// Returns an error if the value is not a JSON string.
 	pub fn as_string(&self) -> Result<String> {
 		match self {
 			JsonValue::String(text) => Ok(text.to_owned()),
@@ -84,6 +121,10 @@ impl JsonValue {
 		}
 	}
 
+	/// Return a string slice if this value is a JSON string.
+	///
+	/// # Errors
+	/// Returns an error if the value is not a JSON string.
 	pub fn as_str(&self) -> Result<&str> {
 		match self {
 			JsonValue::String(text) => Ok(text),
@@ -91,6 +132,10 @@ impl JsonValue {
 		}
 	}
 
+	/// Convert the JSON number (f64) into a Rust numeric type `T` using `AsNumber`.
+	///
+	/// # Errors
+	/// Returns an error if the value is not a JSON number.
 	pub fn as_number<T>(&self) -> Result<T>
 	where
 		T: AsNumber<T>,

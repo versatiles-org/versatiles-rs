@@ -1,11 +1,16 @@
+//! JSON object type and utilities for serializing, deserializing, and converting JSON to Rust types.
 use crate::json::*;
 use anyhow::Result;
 use std::{collections::BTreeMap, fmt::Debug};
 
+/// A JSON object backed by a `BTreeMap<String, JsonValue>`.
+///
+/// Provides methods to assign, get, set, and serialize JSON object data.
 #[derive(Clone, Default, PartialEq)]
 pub struct JsonObject(pub BTreeMap<String, JsonValue>);
 
 impl JsonObject {
+	/// Merge entries from another `JsonObject` into this one, overwriting existing keys.
 	pub fn assign(&mut self, object: JsonObject) -> Result<()> {
 		for entry in object.0.into_iter() {
 			self.0.insert(entry.0, entry.1);
@@ -13,14 +18,17 @@ impl JsonObject {
 		Ok(())
 	}
 
+	/// Get a reference to the raw `JsonValue` for the specified key, if present.
 	pub fn get(&self, key: &str) -> Option<&JsonValue> {
 		self.0.get(key)
 	}
 
+	/// Retrieve a string value for the specified key, returning `None` if missing or not a string.
 	pub fn get_string(&self, key: &str) -> Result<Option<String>> {
 		self.get(key).map(JsonValue::as_string).transpose()
 	}
 
+	/// Retrieve a numeric value of type `T` for the specified key, returning `None` if missing or not numeric.
 	pub fn get_number<T>(&self, key: &str) -> Result<Option<T>>
 	where
 		T: AsNumber<T>,
@@ -28,14 +36,17 @@ impl JsonObject {
 		self.get(key).map(JsonValue::as_number).transpose()
 	}
 
+	/// Retrieve a `JsonArray` reference for the specified key, if present and an array.
 	pub fn get_array(&self, key: &str) -> Result<Option<&JsonArray>> {
 		self.get(key).map(JsonValue::as_array).transpose()
 	}
 
+	/// Retrieve a `Vec<String>` from the array at the specified key, if present and all elements are strings.
 	pub fn get_string_vec(&self, key: &str) -> Result<Option<Vec<String>>> {
 		self.get_array(key)?.map(|array| array.as_string_vec()).transpose()
 	}
 
+	/// Retrieve a `Vec<T>` from the array at the specified key, if present and all elements are numeric.
 	pub fn get_number_vec<T>(&self, key: &str) -> Result<Option<Vec<T>>>
 	where
 		T: AsNumber<T>,
@@ -43,6 +54,7 @@ impl JsonObject {
 		self.get_array(key)?.map(|array| array.as_number_vec::<T>()).transpose()
 	}
 
+	/// Retrieve a fixed-size array `[T; N]` from the array at the specified key, if present and all elements are numeric.
 	pub fn get_number_array<T, const N: usize>(&self, key: &str) -> Result<Option<[T; N]>>
 	where
 		T: AsNumber<T>,
@@ -53,6 +65,7 @@ impl JsonObject {
 			.transpose()
 	}
 
+	/// Set the specified key to the given value, converting it into a `JsonValue`.
 	pub fn set<T: Clone>(&mut self, key: &str, value: T)
 	where
 		JsonValue: From<T>,
@@ -60,6 +73,7 @@ impl JsonObject {
 		self.0.insert(key.to_owned(), JsonValue::from(value));
 	}
 
+	/// Set the specified key only if the provided `Option` is `Some`, converting it into a `JsonValue`.
 	pub fn set_optional<T>(&mut self, key: &str, value: &Option<T>)
 	where
 		JsonValue: From<T>,
@@ -70,6 +84,7 @@ impl JsonObject {
 		}
 	}
 
+	/// Serialize this `JsonObject` into a compact JSON string without extra whitespace.
 	pub fn stringify(&self) -> String {
 		let items = self
 			.0
@@ -79,6 +94,7 @@ impl JsonObject {
 		format!("{{{}}}", items.join(","))
 	}
 
+	/// Serialize this `JsonObject` into a single-line, pretty-printed JSON string with spaces.
 	pub fn stringify_pretty_single_line(&self) -> String {
 		let items = self
 			.0
@@ -94,6 +110,9 @@ impl JsonObject {
 		format!("{{ {} }}", items.join(", "))
 	}
 
+	/// Serialize this `JsonObject` into a multi-line, pretty-printed JSON string with indentation.
+	///
+	/// `max_width` controls when to wrap lines, and `depth` sets the base indentation level.
 	pub fn stringify_pretty_multi_line(&self, max_width: usize, depth: usize) -> String {
 		let indent = "  ".repeat(depth);
 		let items = self
@@ -110,10 +129,12 @@ impl JsonObject {
 		format!("{{\n{}\n{}}}", items.join(",\n"), indent)
 	}
 
+	/// Parse a JSON string into a `JsonObject`, returning an error on invalid JSON or non-object root.
 	pub fn parse_str(json: &str) -> Result<JsonObject> {
 		JsonValue::parse_str(json)?.to_object()
 	}
 
+	/// Return an iterator over key-value pairs in this `JsonObject` in insertion order.
 	pub fn iter(&self) -> impl Iterator<Item = (&String, &JsonValue)> {
 		self.0.iter()
 	}
@@ -125,6 +146,7 @@ impl Debug for JsonObject {
 	}
 }
 
+/// Convert a `Vec<(&str, T)>` into a `JsonValue::Object` by converting into a `JsonObject`.
 impl<T> From<Vec<(&str, T)>> for JsonValue
 where
 	JsonValue: From<T>,
@@ -134,6 +156,7 @@ where
 	}
 }
 
+/// Convert a `Vec<(&str, T)>` into a `JsonObject`, consuming the vector of key-value pairs.
 impl<T> From<Vec<(&str, T)>> for JsonObject
 where
 	JsonValue: From<T>,
@@ -309,10 +332,9 @@ mod tests {
 	#[test]
 	fn test_debug_fmt() {
 		let obj = JsonObject::from(vec![("k", 1)]);
-		let debug_str = format!("{:?}", obj);
 		let expected_map: std::collections::BTreeMap<_, _> =
 			vec![("k".to_string(), JsonValue::from(1))].into_iter().collect();
-		assert_eq!(debug_str, format!("{:?}", expected_map));
+		assert_eq!(format!("{obj:?}"), format!("{expected_map:?}"));
 	}
 
 	#[test]

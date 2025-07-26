@@ -1,24 +1,38 @@
+//! JSON number conversions for `JsonValue` and numeric types.
+//!
+//! This module provides `From` implementations to create `JsonValue::Number` from various
+//! Rust numeric types, and the `AsNumber` trait to convert `JsonValue::Number` back to Rust types.
+
 use super::JsonValue;
 
+/// Create a JSON number value from a 64-bit floating point.
 impl From<f64> for JsonValue {
 	fn from(input: f64) -> Self {
 		JsonValue::Number(input)
 	}
 }
 
+/// Create a JSON number value from an 8-bit unsigned integer.
 impl From<u8> for JsonValue {
 	fn from(input: u8) -> Self {
 		JsonValue::Number(input as f64)
 	}
 }
 
+/// Create a JSON number value from a 32-bit signed integer.
 impl From<i32> for JsonValue {
 	fn from(input: i32) -> Self {
 		JsonValue::Number(input as f64)
 	}
 }
 
+/// Trait for converting a JSON numeric value (f64) into a Rust numeric type.
+///
+/// The `convert` method truncates or casts the floating-point value as needed.
 pub trait AsNumber<T> {
+	/// Convert the given f64 JSON number into the target type.
+	///
+	/// May truncate or cast the floating-point value.
 	fn convert(value: f64) -> T;
 }
 
