@@ -747,14 +747,18 @@ mod tests {
 
 	#[test]
 	fn should_merge_bounds_center_and_additional_values() -> Result<()> {
-		let mut tj1 = TileJSON::default();
-		tj1.bounds = Some(GeoBBox(0.0, 0.0, 5.0, 5.0));
-		tj1.center = Some(GeoCenter(1.0, 1.0, 2));
+		let mut tj1 = TileJSON {
+			bounds: Some(GeoBBox(0.0, 0.0, 5.0, 5.0)),
+			center: Some(GeoCenter(1.0, 1.0, 2)),
+			..Default::default()
+		};
 		tj1.set_string("foo", "bar")?;
 
-		let mut tj2 = TileJSON::default();
-		tj2.bounds = Some(GeoBBox(-5.0, -5.0, 3.0, 3.0));
-		tj2.center = Some(GeoCenter(2.0, 2.0, 4));
+		let mut tj2 = TileJSON {
+			bounds: Some(GeoBBox(-5.0, -5.0, 3.0, 3.0)),
+			center: Some(GeoCenter(2.0, 2.0, 4)),
+			..Default::default()
+		};
 		tj2.set_string("baz", "qux")?;
 
 		tj1.merge(&tj2)?;
