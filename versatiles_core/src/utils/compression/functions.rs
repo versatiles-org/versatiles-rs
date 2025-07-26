@@ -19,137 +19,14 @@
 //! assert_eq!(data, decompressed);
 //! # Ok::<(), anyhow::Error>(())
 //! ```
-
-#![allow(dead_code)]
-
+use super::{
+	compression_goal::CompressionGoal,
+	method_brotli::{compress_brotli, decompress_brotli},
+	method_gzip::{compress_gzip, decompress_gzip},
+	target_compression::TargetCompression,
+};
 use crate::types::{Blob, TileCompression};
 use anyhow::{Context, Result, bail};
-use brotli::{BrotliCompress, BrotliDecompress, enc::BrotliEncoderParams};
-use enumset::EnumSet;
-use flate2::bufread::{GzDecoder, GzEncoder};
-use std::{
-	fmt::{self, Debug},
-	io::{Cursor, Read},
-};
-
-/// Represents the target compression settings.
-#[derive(PartialEq)]
-pub struct TargetCompression {
-	/// Set of allowed compression algorithms.
-	compressions: EnumSet<TileCompression>,
-	/// Desired compression goal.
-	compression_goal: CompressionGoal,
-}
-
-/// Defines the desired compression objective.
-#[derive(Clone, Copy, PartialEq)]
-pub enum CompressionGoal {
-	/// Prioritize speed over compression ratio.
-	UseFastCompression,
-	/// Prioritize compression ratio over speed.
-	UseBestCompression,
-	/// Treat data as incompressible.
-	IsIncompressible,
-}
-
-impl Debug for CompressionGoal {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match self {
-			Self::UseFastCompression => write!(f, "Use Fast Compression"),
-			Self::UseBestCompression => write!(f, "Use Best Compression"),
-			Self::IsIncompressible => write!(f, "Is Incompressible"),
-		}
-	}
-}
-
-impl TargetCompression {
-	/// Creates a new `TargetCompression` with a set of allowed compressions.
-	///
-	/// By default, the compression goal is set to `UseBestCompression`.
-	///
-	/// # Arguments
-	///
-	/// * `compressions` - A set of allowed compression algorithms.
-	///
-	/// # Returns
-	///
-	/// * `TargetCompression` instance.
-	pub fn from_set(compressions: EnumSet<TileCompression>) -> Self {
-		TargetCompression {
-			compressions,
-			compression_goal: CompressionGoal::UseBestCompression,
-		}
-	}
-
-	/// Creates a new `TargetCompression` allowing only the specified compression.
-	///
-	/// The compression goal is set to `UseBestCompression`.
-	///
-	/// # Arguments
-	///
-	/// * `compression` - A single compression algorithm to allow.
-	///
-	/// # Returns
-	///
-	/// * `TargetCompression` instance.
-	pub fn from(compression: TileCompression) -> Self {
-		Self::from_set(EnumSet::only(compression))
-	}
-
-	/// Creates a new `TargetCompression` allowing no compression.
-	///
-	/// The compression goal is set to `UseBestCompression`, but since no compression is allowed,
-	/// data will remain uncompressed.
-	///
-	/// # Returns
-	///
-	/// * `TargetCompression` instance.
-	pub fn from_none() -> Self {
-		Self::from(TileCompression::Uncompressed)
-	}
-
-	/// Sets the compression goal to prioritize speed.
-	pub fn set_fast_compression(&mut self) {
-		self.compression_goal = CompressionGoal::UseFastCompression;
-	}
-
-	/// Sets the compression goal to treat data as incompressible.
-	pub fn set_incompressible(&mut self) {
-		self.compression_goal = CompressionGoal::IsIncompressible;
-	}
-
-	/// Checks if a specific compression algorithm is allowed.
-	///
-	/// # Arguments
-	///
-	/// * `compression` - The compression algorithm to check.
-	///
-	/// # Returns
-	///
-	/// * `true` if the compression is allowed.
-	/// * `false` otherwise.
-	pub fn contains(&self, compression: TileCompression) -> bool {
-		self.compressions.contains(compression)
-	}
-
-	/// Adds a compression algorithm to the allowed set.
-	///
-	/// # Arguments
-	///
-	/// * `compression` - The compression algorithm to add.
-	pub fn insert(&mut self, compression: TileCompression) {
-		self.compressions.insert(compression);
-	}
-}
-
-impl Debug for TargetCompression {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("TargetCompression")
-			.field("allowed_compressions", &self.compressions)
-			.field("compression_goal", &self.compression_goal)
-			.finish()
-	}
-}
 
 /// Optimizes the compression of a data blob based on the target compression settings.
 ///
@@ -319,177 +196,11 @@ pub fn decompress(blob: Blob, compression: &TileCompression) -> Result<Blob> {
 	}
 }
 
-/// Compresses data using Gzip.
-///
-/// # Arguments
-///
-/// * `blob` - The data blob to compress.
-///
-/// # Returns
-///
-/// * `Ok(Blob)` containing the Gzip-compressed data.
-/// * `Err(anyhow::Error)` if compression fails.
-///
-/// # Errors
-///
-/// * If the Gzip compression process fails.
-pub fn compress_gzip(blob: &Blob) -> Result<Blob> {
-	let mut encoder = GzEncoder::new(blob.as_slice(), flate2::Compression::best());
-	let mut compressed_data = Vec::new();
-	encoder
-		.read_to_end(&mut compressed_data)
-		.context("Failed to compress data using Gzip")?;
-	Ok(Blob::from(compressed_data))
-}
-
-/// Decompresses data that was compressed using Gzip.
-///
-/// # Arguments
-///
-/// * `blob` - The Gzip-compressed data blob.
-///
-/// # Returns
-///
-/// * `Ok(Blob)` containing the decompressed data.
-/// * `Err(anyhow::Error)` if decompression fails.
-///
-/// # Errors
-///
-/// * If the Gzip decompression process fails.
-pub fn decompress_gzip(blob: &Blob) -> Result<Blob> {
-	let mut decoder = GzDecoder::new(blob.as_slice());
-	let mut decompressed_data = Vec::new();
-	decoder
-		.read_to_end(&mut decompressed_data)
-		.context("Failed to decompress data using Gzip")?;
-	Ok(Blob::from(decompressed_data))
-}
-
-/// Compresses data using Brotli.
-///
-/// # Arguments
-///
-/// * `blob` - The data blob to compress.
-///
-/// # Returns
-///
-/// * `Ok(Blob)` containing the Brotli-compressed data.
-/// * `Err(anyhow::Error)` if compression fails.
-///
-/// # Errors
-///
-/// * If the Brotli compression process fails.
-pub fn compress_brotli(blob: &Blob) -> Result<Blob> {
-	let params = BrotliEncoderParams {
-		quality: 10, // Highest quality
-		lgwin: 19,   // Window size
-		size_hint: blob.len() as usize,
-		..Default::default()
-	};
-	let mut input = Cursor::new(blob.as_slice());
-	let mut output = Vec::new();
-	BrotliCompress(&mut input, &mut output, &params).context("Failed to compress data using Brotli")?;
-	Ok(Blob::from(output))
-}
-
-/// Compresses data using Brotli with faster settings.
-///
-/// This variant uses lower quality settings for faster compression at the expense of compression ratio.
-///
-/// # Arguments
-///
-/// * `blob` - The data blob to compress.
-///
-/// # Returns
-///
-/// * `Ok(Blob)` containing the Brotli-compressed data.
-/// * `Err(anyhow::Error)` if compression fails.
-///
-/// # Errors
-///
-/// * If the Brotli compression process fails.
-pub fn compress_brotli_fast(blob: &Blob) -> Result<Blob> {
-	let params = BrotliEncoderParams {
-		quality: 3, // Lower quality for faster compression
-		lgwin: 16,  // Smaller window size
-		size_hint: blob.len() as usize,
-		..Default::default()
-	};
-	let mut input = Cursor::new(blob.as_slice());
-	let mut output = Vec::new();
-	BrotliCompress(&mut input, &mut output, &params).context("Failed to compress data using Brotli (fast)")?;
-	Ok(Blob::from(output))
-}
-
-/// Decompresses data that was compressed using Brotli.
-///
-/// # Arguments
-///
-/// * `blob` - The Brotli-compressed data blob.
-///
-/// # Returns
-///
-/// * `Ok(Blob)` containing the decompressed data.
-/// * `Err(anyhow::Error)` if decompression fails.
-///
-/// # Errors
-///
-/// * If the Brotli decompression process fails.
-pub fn decompress_brotli(blob: &Blob) -> Result<Blob> {
-	let mut cursor = Cursor::new(blob.as_slice());
-	let mut decompressed_data = Vec::new();
-	BrotliDecompress(&mut cursor, &mut decompressed_data).context("Failed to decompress data using Brotli")?;
-	Ok(Blob::from(decompressed_data))
-}
-
 #[cfg(test)]
 mod tests {
+	use super::super::tests::generate_test_data;
 	use super::*;
-	use enumset::enum_set;
-
-	/// Generates deterministic pseudo-random binary data of a specified size.
-	///
-	/// # Arguments
-	///
-	/// * `size` - The size of the data to generate.
-	///
-	/// # Returns
-	///
-	/// * `Blob` containing the generated data.
-	fn generate_test_data(size: usize) -> Blob {
-		let mut data = Vec::with_capacity(size);
-		for i in 0..size {
-			data.push((((i as f64 + 1.0).cos() * 1_000_000.0) as u8).wrapping_add(i as u8));
-		}
-		Blob::from(data)
-	}
-
-	#[test]
-	fn should_compress_and_decompress_brotli_correctly() -> Result<()> {
-		let data = generate_test_data(10_000);
-		let compressed = compress_brotli(&data)?;
-		let decompressed = decompress_brotli(&compressed)?;
-		assert_eq!(data, decompressed, "Brotli compression and decompression failed");
-		Ok(())
-	}
-
-	#[test]
-	fn should_compress_and_decompress_brotli_fast_correctly() -> Result<()> {
-		let data = generate_test_data(10_000);
-		let compressed = compress_brotli_fast(&data)?;
-		let decompressed = decompress_brotli(&compressed)?;
-		assert_eq!(data, decompressed, "Fast Brotli compression and decompression failed");
-		Ok(())
-	}
-
-	#[test]
-	fn should_compress_and_decompress_gzip_correctly() -> Result<()> {
-		let data = generate_test_data(100_000);
-		let compressed = compress_gzip(&data)?;
-		let decompressed = decompress_gzip(&compressed)?;
-		assert_eq!(data, decompressed, "Gzip compression and decompression failed");
-		Ok(())
-	}
+	use enumset::{EnumSet, enum_set};
 
 	#[test]
 	/// Tests the `optimize_compression` function across various compression scenarios.
@@ -644,6 +355,54 @@ mod tests {
 			recompressed, original_data,
 			"Recompressing Uncompressed to Uncompressed should not alter data"
 		);
+		Ok(())
+	}
+
+	#[test]
+	fn test_generic_compress_dispatch() -> Result<()> {
+		let data = generate_test_data(1024);
+		// Uncompressed should return original data
+		let result = compress(data.clone(), &TileCompression::Uncompressed)?;
+		assert_eq!(result, data);
+		// Gzip should match compress_gzip
+		let gzip = compress(data.clone(), &TileCompression::Gzip)?;
+		assert_eq!(gzip, compress_gzip(&data)?);
+		// Brotli should match compress_brotli
+		let brotli = compress(data.clone(), &TileCompression::Brotli)?;
+		assert_eq!(brotli, compress_brotli(&data)?);
+		Ok(())
+	}
+
+	#[test]
+	fn test_generic_decompress_dispatch() -> Result<()> {
+		let data = generate_test_data(512);
+		let gzip = compress_gzip(&data)?;
+		let brotli = compress_brotli(&data)?;
+		// Uncompressed decompress returns original
+		let res_u = decompress(data.clone(), &TileCompression::Uncompressed)?;
+		assert_eq!(res_u, data);
+		// Gzip decompress matches decompress_gzip
+		let res_g = decompress(gzip.clone(), &TileCompression::Gzip)?;
+		assert_eq!(res_g, decompress_gzip(&gzip)?);
+		// Brotli decompress matches decompress_brotli
+		let res_b = decompress(brotli.clone(), &TileCompression::Brotli)?;
+		assert_eq!(res_b, decompress_brotli(&brotli)?);
+		Ok(())
+	}
+
+	#[test]
+	fn test_optimize_compression_decompress_when_only_uncompressed_allowed() -> Result<()> {
+		let original = generate_test_data(256);
+		let gzip_blob = compress_gzip(&original)?;
+		let target = TargetCompression::from_none(); // only Uncompressed allowed
+		let (out_blob, out_comp) = optimize_compression(gzip_blob.clone(), &TileCompression::Gzip, &target)?;
+		assert_eq!(out_comp, TileCompression::Uncompressed);
+		assert_eq!(out_blob, original);
+		// Brotli case
+		let brotli_blob = compress_brotli(&original)?;
+		let (out_blob2, out_comp2) = optimize_compression(brotli_blob.clone(), &TileCompression::Brotli, &target)?;
+		assert_eq!(out_comp2, TileCompression::Uncompressed);
+		assert_eq!(out_blob2, original);
 		Ok(())
 	}
 }
