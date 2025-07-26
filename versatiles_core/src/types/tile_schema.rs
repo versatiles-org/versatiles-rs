@@ -1,6 +1,31 @@
 use super::TileType;
 use anyhow::bail;
 
+/// Known tile schema identifiers.
+///
+/// A *tile schema* describes how the pixel or vector payload inside a tile
+/// is organised and encoded.  Versatiles distinguishes between several
+/// raster and vector schemas and falls back to [`Unknown`] if the textual
+/// identifier is not recognised.
+///
+/// ## Raster schemas
+/// * **`RasterRGB`** – 3‑band RGB, 8‑bit each.
+/// * **`RasterRGBA`** – 4‑band RGBA, 8‑bit each including alpha.
+/// * **`RasterDEMMapbox`** – Signed 16‑bit DEM following the *Mapbox*
+///   elevation specification.
+/// * **`RasterDEMTerrarium`** – Unsigned 16‑bit DEM in the *Terrarium*
+///   layout used by GDAL.
+/// * **`RasterDEMVersatiles`** – Signed 16‑bit DEM in Versatiles’ own
+///   layout.
+///
+/// ## Vector schemas
+/// * **`VectorOpenMapTiles`** – Tiles conform to the *OpenMapTiles* MVT
+///   schema.
+/// * **`VectorShortbread1`** – *Shortbread* schema version 1.0.
+/// * **`VectorOther`** – Any other vector schema not listed above.
+///
+/// ## Unknown
+/// * **`Unknown`** – Used when the schema string cannot be parsed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TileSchema {
 	RasterRGB,
@@ -15,7 +40,17 @@ pub enum TileSchema {
 }
 
 impl TileSchema {
-	/// Returns the schema as a string.
+	/// Returns the canonical, lower‑case textual identifier of the schema.
+	///
+	/// The string is suitable for use in URLs, CLI arguments and metadata
+	/// files.  The mapping is *loss‑less*: every return value can be parsed
+	/// back via `TileSchema::try_from`.
+	///
+	/// # Examples
+	/// ```
+	/// use versatiles_core::types::TileSchema;
+	/// assert_eq!(TileSchema::RasterRGB.as_str(), "rgb");
+	/// ```
 	pub fn as_str(&self) -> &str {
 		use TileSchema::*;
 		match self {
@@ -31,6 +66,17 @@ impl TileSchema {
 		}
 	}
 
+	/// Classifies the schema into a broader [`TileType`].
+	///
+	/// This convenience helper hides the verbose `match` over individual
+	/// schemas and lets callers branch on simple content classes (*Raster*,
+	/// *Vector* or *Unknown*).
+	///
+	/// # Examples
+	/// ```
+	/// use versatiles_core::types::{TileSchema, TileType};
+	/// assert_eq!(TileSchema::RasterRGBA.get_tile_content(), TileType::Raster);
+	/// ```
 	pub fn get_tile_content(&self) -> TileType {
 		use TileSchema::*;
 		match self {
