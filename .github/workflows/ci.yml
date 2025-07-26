@@ -97,15 +97,12 @@ jobs:
         run: cd versatiles_pipeline; cargo test --all-features --all-targets
 
       - name: Install Cargo Coverage
-        if: github.ref == 'refs/heads/main'
         uses: taiki-e/install-action@cargo-llvm-cov
 
       - name: Cargo Coverage
-        if: github.ref == 'refs/heads/main'
         run: cargo llvm-cov test --workspace --all-features --tests --lcov --output-path ./lcov.info
 
       - name: Upload Coverage
-        if: github.ref == 'refs/heads/main'
         uses: codecov/codecov-action@v5
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
