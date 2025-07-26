@@ -321,11 +321,7 @@ mod tests {
         ];
 
 		for (format, expected) in cases {
-			assert_eq!(
-				format.as_extension(),
-				expected,
-				"Expected extension {expected} for format {format:?}"
-			);
+			assert_eq!(format.as_extension(), expected);
 		}
 	}
 
@@ -354,16 +350,8 @@ mod tests {
 		for case in cases {
 			let mut filename = String::from(case.0);
 			let format = TileFormat::from_filename(&mut filename);
-			assert_eq!(
-				format, case.1,
-				"Filename: {}, expected format: {:?}, got: {:?}",
-				case.0, case.1, format
-			);
-			assert_eq!(
-				filename, case.2,
-				"Filename after extraction should be '{}' but got '{}'",
-				case.2, filename
-			);
+			assert_eq!(format, case.1);
+			assert_eq!(filename, case.2);
 		}
 	}
 
@@ -389,16 +377,10 @@ mod tests {
 			let result = TileFormat::parse_str(case.0);
 			match case.1 {
 				Some(expected_format) => {
-					assert_eq!(
-						result.unwrap(),
-						expected_format,
-						"Parsing '{}' should yield {:?}",
-						case.0,
-						expected_format
-					);
+					assert_eq!(result.unwrap(), expected_format);
 				}
 				None => {
-					assert!(result.is_err(), "Parsing '{}' should fail", case.0);
+					assert!(result.is_err());
 				}
 			}
 		}
@@ -407,14 +389,62 @@ mod tests {
 	#[test]
 	fn should_provide_meaningful_strings_for_debug_and_display() {
 		let format = TileFormat::PNG;
-		assert!(
-			format!("{format:?}").contains("PNG"),
-			"Debug output should contain the variant name"
-		);
-		assert_eq!(
-			format!("{format}"),
-			"png",
-			"Display output should be the lowercase string form"
-		);
+		assert!(format!("{format:?}").contains("PNG"));
+		assert_eq!(format!("{format}"), "png");
+	}
+
+	#[test]
+	fn should_return_lowercase_string_for_as_str() {
+		#![allow(clippy::enum_variant_names)]
+		#[rustfmt::skip]
+        let cases = vec![
+            (TileFormat::AVIF, "avif"),
+            (TileFormat::BIN, "bin"),
+            (TileFormat::GEOJSON, "geojson"),
+            (TileFormat::JPG, "jpg"),
+            (TileFormat::JSON, "json"),
+            (TileFormat::MVT, "mvt"),
+            (TileFormat::PNG, "png"),
+            (TileFormat::SVG, "svg"),
+            (TileFormat::TOPOJSON, "topojson"),
+            (TileFormat::WEBP, "webp"),
+        ];
+		for (format, expected) in cases {
+			assert_eq!(format.as_str(), expected);
+		}
+	}
+
+	#[test]
+	fn should_return_correct_type_str() {
+		assert_eq!(TileFormat::PNG.as_type_str(), "image");
+		assert_eq!(TileFormat::MVT.as_type_str(), "vector");
+		assert_eq!(TileFormat::BIN.as_type_str(), "unknown");
+	}
+
+	#[test]
+	fn should_return_correct_mime_str() {
+		assert_eq!(TileFormat::PNG.as_mime_str(), "image/png");
+		assert_eq!(TileFormat::JPG.as_mime_str(), "image/jpeg");
+		assert_eq!(TileFormat::GEOJSON.as_mime_str(), "application/geo+json");
+	}
+
+	#[test]
+	fn should_try_from_str_parse_valid_and_error_invalid() {
+		assert_eq!(TileFormat::try_from_str("png").unwrap(), TileFormat::PNG);
+		assert!(TileFormat::try_from_str("invalid").is_err());
+	}
+
+	#[test]
+	fn should_try_from_mime_parse_valid_and_error_invalid() {
+		assert_eq!(TileFormat::try_from_mime("image/webp").unwrap(), TileFormat::WEBP);
+		assert!(TileFormat::try_from_mime("application/x-unknown").is_err());
+	}
+
+	#[test]
+	fn should_get_type_return_expected() {
+		use super::TileType::*;
+		assert_eq!(TileFormat::PNG.get_type(), Raster);
+		assert_eq!(TileFormat::MVT.get_type(), Vector);
+		assert_eq!(TileFormat::BIN.get_type(), Unknown);
 	}
 }
