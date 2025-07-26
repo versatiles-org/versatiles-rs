@@ -2,6 +2,7 @@ use crate::types::Blob;
 use anyhow::{Context, Result};
 use brotli::{BrotliCompress, BrotliDecompress, enc::BrotliEncoderParams};
 use std::io::Cursor;
+use versatiles_derive::context;
 
 /// Compresses data using Brotli.
 ///
@@ -17,6 +18,7 @@ use std::io::Cursor;
 /// # Errors
 ///
 /// * If the Brotli compression process fails.
+#[context("Compressing data using Brotli with highest quality settings")]
 pub fn compress_brotli(blob: &Blob) -> Result<Blob> {
 	let params = BrotliEncoderParams {
 		quality: 10, // Highest quality
@@ -46,6 +48,7 @@ pub fn compress_brotli(blob: &Blob) -> Result<Blob> {
 /// # Errors
 ///
 /// * If the Brotli compression process fails.
+#[context("Compressing data using Brotli with fast compression settings")]
 pub fn compress_brotli_fast(blob: &Blob) -> Result<Blob> {
 	let params = BrotliEncoderParams {
 		quality: 3, // Lower quality for faster compression
@@ -73,6 +76,7 @@ pub fn compress_brotli_fast(blob: &Blob) -> Result<Blob> {
 /// # Errors
 ///
 /// * If the Brotli decompression process fails.
+#[context("Decompressing data using Brotli")]
 pub fn decompress_brotli(blob: &Blob) -> Result<Blob> {
 	let mut cursor = Cursor::new(blob.as_slice());
 	let mut decompressed_data = Vec::new();

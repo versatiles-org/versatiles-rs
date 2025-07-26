@@ -26,7 +26,8 @@ use super::{
 	target_compression::TargetCompression,
 };
 use crate::types::{Blob, TileCompression};
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
+use versatiles_derive::context;
 
 /// Optimizes the compression of a data blob based on the target compression settings.
 ///
@@ -50,6 +51,7 @@ use anyhow::{Context, Result, bail};
 /// * If no compression algorithms are allowed in the target.
 /// * If 'Uncompressed' is not included in the allowed compressions.
 /// * If decompression or compression operations fail.
+#[context("Optimizing compression for blob with input compression: {input_compression:?} and target: {target:?}")]
 pub fn optimize_compression(
 	blob: Blob,
 	input_compression: &TileCompression,
@@ -87,8 +89,8 @@ pub fn optimize_compression(
 		}
 		TileCompression::Gzip => {
 			if target.compression_goal != IsIncompressible && target.compressions.contains(TileCompression::Brotli) {
-				let decompressed = decompress_gzip(&blob).context("Failed to decompress Gzip blob")?;
-				let compressed_brotli = compress_brotli(&decompressed).context("Failed to compress Brotli blob")?;
+				let decompressed = decompress_gzip(&blob)?;
+				let compressed_brotli = compress_brotli(&decompressed)?;
 				return Ok((compressed_brotli, TileCompression::Brotli));
 			}
 
@@ -97,17 +99,17 @@ pub fn optimize_compression(
 			}
 
 			// Fallback to Uncompressed if Gzip is not allowed
-			let decompressed = decompress_gzip(&blob).context("Failed to decompress Gzip blob")?;
+			let decompressed = decompress_gzip(&blob)?;
 			Ok((decompressed, TileCompression::Uncompressed))
 		}
 		TileCompression::Brotli => {
 			if target.compressions.contains(TileCompression::Brotli) {
 				return Ok((blob, TileCompression::Brotli));
 			}
-			let decompressed = decompress_brotli(&blob).context("Failed to decompress Brotli blob")?;
+			let decompressed = decompress_brotli(&blob)?;
 
 			if target.compression_goal != IsIncompressible && target.compressions.contains(TileCompression::Gzip) {
-				let compressed_gzip = compress_gzip(&decompressed).context("Failed to compress Gzip blob")?;
+				let compressed_gzip = compress_gzip(&decompressed)?;
 				return Ok((compressed_gzip, TileCompression::Gzip));
 			}
 
@@ -135,6 +137,7 @@ pub fn optimize_compression(
 /// # Errors
 ///
 /// * If decompression or compression operations fail.
+#[context("Recompressing blob from {input_compression:?} to {output_compression:?}")]
 pub fn recompress(
 	blob: Blob,
 	input_compression: &TileCompression,
@@ -143,10 +146,8 @@ pub fn recompress(
 	if input_compression == output_compression {
 		return Ok(blob);
 	}
-	let decompressed = decompress(blob, input_compression)
-		.with_context(|| format!("Failed to decompress using {input_compression:?}"))?;
-	let recompressed = compress(decompressed, output_compression)
-		.with_context(|| format!("Failed to compress using {output_compression:?}"))?;
+	let decompressed = decompress(blob, input_compression)?;
+	let recompressed = compress(decompressed, output_compression)?;
 	Ok(recompressed)
 }
 
@@ -165,6 +166,7 @@ pub fn recompress(
 /// # Errors
 ///
 /// * If the specified compression algorithm is unsupported.
+#[context("Compressing blob with algorithm: {compression:?}")]
 pub fn compress(blob: Blob, compression: &TileCompression) -> Result<Blob> {
 	match compression {
 		TileCompression::Uncompressed => Ok(blob),
@@ -188,6 +190,7 @@ pub fn compress(blob: Blob, compression: &TileCompression) -> Result<Blob> {
 /// # Errors
 ///
 /// * If the specified compression algorithm is unsupported.
+#[context("Decompressing blob with algorithm: {compression:?}")]
 pub fn decompress(blob: Blob, compression: &TileCompression) -> Result<Blob> {
 	match compression {
 		TileCompression::Uncompressed => Ok(blob),
@@ -229,14 +232,8 @@ mod tests {
 				TileCompression::Brotli => brotli_blob.clone(),
 			};
 			let (result_blob, result_compression) = optimize_compression(input_blob, &input_compression, &target)?;
-			assert_eq!(
-				result_compression, expected_compression,
-				"Expected compression {expected_compression:?}, but got {result_compression:?}"
-			);
-			assert_eq!(
-				result_blob, expected_blob,
-				"Expected blob data does not match the result blob"
-			);
+			assert_eq!(result_compression, expected_compression);
+			assert_eq!(result_blob, expected_blob);
 			Ok(())
 		};
 
@@ -279,19 +276,16 @@ mod tests {
 		// Recompress Gzip to Brotli
 		let recompressed = recompress(gzip_data.clone(), &TileCompression::Gzip, &TileCompression::Brotli)?;
 		let decompressed = decompress_brotli(&recompressed)?;
-		assert_eq!(original_data, decompressed, "Recompression from Gzip to Brotli failed");
+		assert_eq!(original_data, decompressed);
 
 		// Recompress Brotli to Gzip
 		let recompressed = recompress(brotli_data.clone(), &TileCompression::Brotli, &TileCompression::Gzip)?;
 		let decompressed = decompress_gzip(&recompressed)?;
-		assert_eq!(original_data, decompressed, "Recompression from Brotli to Gzip failed");
+		assert_eq!(original_data, decompressed);
 
 		// Recompress Gzip to Gzip (no change)
 		let recompressed = recompress(gzip_data.clone(), &TileCompression::Gzip, &TileCompression::Gzip)?;
-		assert_eq!(
-			recompressed, gzip_data,
-			"Recompression from Gzip to Gzip should not alter data"
-		);
+		assert_eq!(recompressed, gzip_data);
 
 		// Recompress Uncompressed to Gzip
 		let recompressed = recompress(
@@ -300,10 +294,7 @@ mod tests {
 			&TileCompression::Gzip,
 		)?;
 		let decompressed = decompress_gzip(&recompressed)?;
-		assert_eq!(
-			original_data, decompressed,
-			"Recompression from Uncompressed to Gzip failed"
-		);
+		assert_eq!(original_data, decompressed);
 
 		Ok(())
 	}
@@ -329,7 +320,7 @@ mod tests {
 			compression_goal: CompressionGoal::UseBestCompression,
 		};
 		let result = optimize_compression(data, &TileCompression::Uncompressed, &target);
-		assert!(result.is_err(), "Expected error when no compressions are allowed");
+		assert!(result.is_err());
 	}
 
 	#[test]
@@ -340,7 +331,7 @@ mod tests {
 			compression_goal: CompressionGoal::UseBestCompression,
 		};
 		let result = optimize_compression(data, &TileCompression::Uncompressed, &target);
-		assert!(result.is_err(), "Expected error when 'Uncompressed' is not allowed");
+		assert!(result.is_err());
 	}
 
 	#[test]
@@ -351,10 +342,7 @@ mod tests {
 			&TileCompression::Uncompressed,
 			&TileCompression::Uncompressed,
 		)?;
-		assert_eq!(
-			recompressed, original_data,
-			"Recompressing Uncompressed to Uncompressed should not alter data"
-		);
+		assert_eq!(recompressed, original_data);
 		Ok(())
 	}
 

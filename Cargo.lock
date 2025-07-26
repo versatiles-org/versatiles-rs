@@ -3429,6 +3429,7 @@ dependencies = [
  "regex",
  "reqwest",
  "tokio",
+ "versatiles_derive",
  "wildmatch",
 ]
 

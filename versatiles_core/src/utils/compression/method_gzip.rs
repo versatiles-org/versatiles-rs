@@ -2,6 +2,7 @@ use crate::types::Blob;
 use anyhow::{Context, Result};
 use flate2::bufread::{GzDecoder, GzEncoder};
 use std::io::Read;
+use versatiles_derive::context;
 
 /// Compresses data using Gzip.
 ///
@@ -17,6 +18,7 @@ use std::io::Read;
 /// # Errors
 ///
 /// * If the Gzip compression process fails.
+#[context("Compressing blob with algorithm: Gzip")]
 pub fn compress_gzip(blob: &Blob) -> Result<Blob> {
 	let mut encoder = GzEncoder::new(blob.as_slice(), flate2::Compression::best());
 	let mut compressed_data = Vec::new();
@@ -40,6 +42,7 @@ pub fn compress_gzip(blob: &Blob) -> Result<Blob> {
 /// # Errors
 ///
 /// * If the Gzip decompression process fails.
+#[context("Decompressing data using Gzip")]
 pub fn decompress_gzip(blob: &Blob) -> Result<Blob> {
 	let mut decoder = GzDecoder::new(blob.as_slice());
 	let mut decompressed_data = Vec::new();

@@ -30,6 +30,8 @@ regex = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls"] }
 tokio.workspace = true
 
+versatiles_derive.workspace = true
+
 [dev-dependencies]
 assert_fs.workspace = true
 criterion = "0.7.0"

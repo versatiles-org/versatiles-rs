@@ -100,3 +100,60 @@ impl Debug for TargetCompression {
 			.finish()
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::types::TileCompression;
+	use enumset::EnumSet;
+
+	#[test]
+	fn test_from_set_default_goal() {
+		let set = EnumSet::only(TileCompression::Gzip);
+		let tc = TargetCompression::from_set(set);
+		assert!(tc.contains(TileCompression::Gzip));
+		assert_eq!(tc.compression_goal, CompressionGoal::UseBestCompression);
+	}
+
+	#[test]
+	fn test_from_single_and_contains() {
+		let tc = TargetCompression::from(TileCompression::Brotli);
+		assert!(tc.contains(TileCompression::Brotli));
+		assert!(!tc.contains(TileCompression::Gzip));
+		assert_eq!(tc.compression_goal, CompressionGoal::UseBestCompression);
+	}
+
+	#[test]
+	fn test_from_none() {
+		let tc = TargetCompression::from_none();
+		assert!(tc.contains(TileCompression::Uncompressed));
+		assert_eq!(tc.compressions.len(), 1);
+		assert_eq!(tc.compression_goal, CompressionGoal::UseBestCompression);
+	}
+
+	#[test]
+	fn test_set_fast_and_incompressible() {
+		let mut tc = TargetCompression::from_none();
+		tc.set_fast_compression();
+		assert_eq!(tc.compression_goal, CompressionGoal::UseFastCompression);
+		tc.set_incompressible();
+		assert_eq!(tc.compression_goal, CompressionGoal::IsIncompressible);
+	}
+
+	#[test]
+	fn test_insert() {
+		let mut tc = TargetCompression::from_none();
+		assert!(!tc.contains(TileCompression::Gzip));
+		tc.insert(TileCompression::Gzip);
+		assert!(tc.contains(TileCompression::Gzip));
+	}
+
+	#[test]
+	fn test_debug_format() {
+		let tc = TargetCompression::from(TileCompression::Gzip);
+		let s = format!("{:?}", tc);
+		assert!(s.starts_with("TargetCompression"));
+		assert!(s.contains("Gzip"));
+		assert!(s.contains("Use Best Compression"));
+	}
+}
