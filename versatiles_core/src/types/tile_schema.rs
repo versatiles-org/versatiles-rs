@@ -131,7 +131,7 @@ mod tests {
 			(Unknown, "unknown"),
 		] {
 			assert_eq!(schema.as_str(), text);
-			assert_eq!(format!("{}", schema), text);
+			assert_eq!(format!("{schema}"), text);
 		}
 	}
 

@@ -638,7 +638,7 @@ mod tests {
 			})
 			.await;
 
-		assert_eq!(count, 2, "Expected to process exactly 2 tiles");
+		assert_eq!(count, 2);
 	}
 
 	#[tokio::test]
@@ -783,5 +783,54 @@ mod tests {
 		assert_eq!(collected.len(), 2);
 		assert_eq!(collected[0].1.as_str(), "async0");
 		assert_eq!(collected[1].1.as_str(), "async1");
+	}
+
+	#[tokio::test]
+	async fn should_filter_by_coord() {
+		let stream = TileStream::from_vec(vec![
+			(TileCoord3::new(0, 0, 0).unwrap(), Blob::from("z0")),
+			(TileCoord3::new(1, 1, 1).unwrap(), Blob::from("z1")),
+		]);
+
+		let filtered = stream.filter_coord(|coord| async move { coord.z == 0 });
+		let items = filtered.collect().await;
+
+		assert_eq!(items.len(), 1);
+		assert_eq!(items[0].0.z, 0);
+		assert_eq!(items[0].1.as_str(), "z0");
+	}
+
+	#[tokio::test]
+	async fn should_create_from_coord_iter_parallel() {
+		let coords = vec![TileCoord3::new(0, 0, 0).unwrap(), TileCoord3::new(1, 1, 1).unwrap()];
+
+		let stream =
+			TileStream::from_coord_iter_parallel(coords.into_iter(), |coord| Some(Blob::from(format!("v{}", coord.z))));
+
+		let mut items = stream.collect().await;
+		// Sort for deterministic assertion on unordered parallel output
+		items.sort_by_key(|(coord, _)| coord.z);
+
+		assert_eq!(items.len(), 2);
+		assert_eq!(items[0].1.as_str(), "v0");
+		assert_eq!(items[1].1.as_str(), "v1");
+	}
+
+	#[tokio::test]
+	async fn should_create_from_coord_vec_async() {
+		let coords = vec![TileCoord3::new(0, 0, 0).unwrap(), TileCoord3::new(1, 1, 1).unwrap()];
+
+		let stream = TileStream::from_coord_vec_async(coords, |coord| async move {
+			if coord.z == 0 {
+				Some((coord, Blob::from("keep")))
+			} else {
+				None
+			}
+		});
+
+		let items = stream.collect().await;
+		assert_eq!(items.len(), 1);
+		assert_eq!(items[0].0.z, 0);
+		assert_eq!(items[0].1.as_str(), "keep");
 	}
 }
