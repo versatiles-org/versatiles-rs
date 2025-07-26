@@ -1,13 +1,28 @@
+/// Represents the type of a tile, which can be either `Raster`, `Vector`, or `Unknown`.
 use anyhow::bail;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TileType {
+	/// Represents raster tile type.
 	Raster,
+	/// Represents vector tile type.
 	Vector,
+	/// Represents an unknown tile type.
 	Unknown,
 }
 
 impl TileType {
+	/// Returns the string representation of the tile type.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::types::tile_type::TileType;
+	///
+	/// assert_eq!(TileType::Raster.as_str(), "raster");
+	/// assert_eq!(TileType::Vector.as_str(), "vector");
+	/// assert_eq!(TileType::Unknown.as_str(), "unknown");
+	/// ```
 	pub fn as_str(&self) -> &str {
 		use TileType::*;
 		match self {
@@ -17,6 +32,17 @@ impl TileType {
 		}
 	}
 
+	/// Returns the default tile schema associated with the tile type.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::types::tile_type::TileType;
+	///
+	/// assert_eq!(TileType::Raster.get_default_tile_schema(), Some("rgb"));
+	/// assert_eq!(TileType::Vector.get_default_tile_schema(), Some("other"));
+	/// assert_eq!(TileType::Unknown.get_default_tile_schema(), None);
+	/// ```
 	pub fn get_default_tile_schema(&self) -> Option<&'static str> {
 		use TileType::*;
 		match self {
@@ -28,6 +54,17 @@ impl TileType {
 }
 
 impl std::fmt::Display for TileType {
+	/// Formats the tile type as a string for display purposes.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::types::tile_type::TileType;
+	///
+	/// assert_eq!(format!("{}", TileType::Raster), "raster");
+	/// assert_eq!(format!("{}", TileType::Vector), "vector");
+	/// assert_eq!(format!("{}", TileType::Unknown), "unknown");
+	/// ```
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", self.as_str())
 	}
@@ -36,6 +73,30 @@ impl std::fmt::Display for TileType {
 impl TryFrom<&str> for TileType {
 	type Error = anyhow::Error;
 
+	/// Attempts to convert a string into a `TileType`.
+	///
+	/// # Arguments
+	///
+	/// * `value` - A string slice representing the tile type.
+	///
+	/// # Returns
+	///
+	/// * `Ok(TileType)` if the string matches a valid tile type.
+	/// * `Err(anyhow::Error)` if the string does not match any valid tile type.
+	///
+	/// # Examples
+	///
+	/// ```
+	/// use versatiles_core::types::tile_type::TileType;
+	/// use std::convert::TryFrom;
+	///
+	/// assert_eq!(TileType::try_from("raster").unwrap(), TileType::Raster);
+	/// assert_eq!(TileType::try_from("image").unwrap(), TileType::Raster);
+	/// assert_eq!(TileType::try_from("vector").unwrap(), TileType::Vector);
+	/// assert_eq!(TileType::try_from("unknown").unwrap(), TileType::Unknown);
+	/// assert!(TileType::try_from("invalid").is_err());
+	/// assert!(TileType::try_from("").is_err());
+	/// ```
 	fn try_from(value: &str) -> Result<Self, Self::Error> {
 		match value {
 			"image" | "raster" => Ok(TileType::Raster),
