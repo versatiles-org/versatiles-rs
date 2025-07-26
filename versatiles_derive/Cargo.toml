@@ -19,3 +19,6 @@ proc-macro = true
 proc-macro2 = { version = "1.0.95", features = ["proc-macro"] }
 quote = { version = "1.0.40", features = ["proc-macro"] }
 syn = { version = "2.0.104", features = ["full", "extra-traits"] }
+
+[dev-dependencies]
+prettyplease = "0.2.36"

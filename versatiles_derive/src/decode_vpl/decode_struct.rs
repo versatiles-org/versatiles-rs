@@ -145,3 +145,148 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::decode_struct;
+	use syn::{DeriveInput, parse_quote};
+
+	fn pretty_tokens(ts: proc_macro2::TokenStream) -> Vec<String> {
+		prettyplease::unparse(&syn::parse_file(&ts.to_string()).unwrap())
+			.split("\n")
+			.map(|s| s.to_string())
+			.collect()
+	}
+
+	#[test]
+	fn test_decode_struct_simple() {
+		// Simple struct with one String field
+		let input: DeriveInput = parse_quote!(
+			/// Struct documentation
+			struct Test {
+				#[doc = "Field documentation"]
+				field1: String,
+			}
+		);
+		let data_struct = match &input.data {
+			syn::Data::Struct(ds) => ds.clone(),
+			_ => panic!("Expected struct data"),
+		};
+		let ts = decode_struct(input.clone(), data_struct);
+		assert_eq!(
+			pretty_tokens(ts),
+			[
+				"impl Test {",
+				"    pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {",
+				"        let argument_names: Vec<String> = vec![\"field1\".to_string()];",
+				"        let property_names = node.get_property_names();",
+				"        for property_name in property_names {",
+				"            if !argument_names.contains(&property_name) {",
+				"                anyhow::bail!(",
+				"                    \"Unknown argument \\\"{}\\\" in \\\"{}\\\"\", property_name, node.name",
+				"                );",
+				"            }",
+				"        }",
+				"        Ok(Self {",
+				"            field1: node.get_property_string_req(\"field1\")?,",
+				"        })",
+				"    }",
+				"    pub fn get_docs() -> String {",
+				"        \"Struct documentation\\n### Parameters:\\n* **`field1`: String (required)** - Field documentation\"",
+				"            .to_string()",
+				"    }",
+				"}",
+				""
+			]
+		);
+	}
+
+	#[test]
+	fn test_decode_struct_all_field_types() {
+		use syn::parse_quote;
+		// Struct covering all supported field types
+		let input: DeriveInput = parse_quote!(
+			struct AllTypes {
+				a_string: String,
+				b_bool: bool,
+				c_u8: u8,
+				d_array4: [f64; 4],
+				e_opt_bool: Option<bool>,
+				f_opt_string: Option<String>,
+				g_opt_f32: Option<f32>,
+				h_opt_u8: Option<u8>,
+				i_opt_u32: Option<u32>,
+				j_opt_array4: Option<[f64; 4]>,
+				k_opt_format: Option<TileFormat>,
+			}
+		);
+		let data_struct = match &input.data {
+			syn::Data::Struct(ds) => ds.clone(),
+			_ => panic!("Expected struct data"),
+		};
+		let ts = decode_struct(input.clone(), data_struct);
+
+		assert_eq!(
+			pretty_tokens(ts),
+			[
+				"impl AllTypes {",
+				"    pub fn from_vpl_node(node: &VPLNode) -> Result<Self> {",
+				"        let argument_names: Vec<String> = vec![",
+				"            \"a_string\".to_string(), \"b_bool\".to_string(), \"c_u8\".to_string(), \"d_array4\"",
+				"            .to_string(), \"e_opt_bool\".to_string(), \"f_opt_string\".to_string(),",
+				"            \"g_opt_f32\".to_string(), \"h_opt_u8\".to_string(), \"i_opt_u32\".to_string(),",
+				"            \"j_opt_array4\".to_string(), \"k_opt_format\".to_string()",
+				"        ];",
+				"        let property_names = node.get_property_names();",
+				"        for property_name in property_names {",
+				"            if !argument_names.contains(&property_name) {",
+				"                anyhow::bail!(",
+				"                    \"Unknown argument \\\"{}\\\" in \\\"{}\\\"\", property_name, node.name",
+				"                );",
+				"            }",
+				"        }",
+				"        Ok(Self {",
+				"            a_string: node.get_property_string_req(\"a_string\")?,",
+				"            b_bool: node.get_property_bool_req(\"b_bool\")?,",
+				"            c_u8: node.get_property_number_req::<u8>(\"c_u8\")?,",
+				"            d_array4: node.get_property_number_array4_req::<f64>(\"d_array4\")?,",
+				"            e_opt_bool: node.get_property_bool(\"e_opt_bool\")?,",
+				"            f_opt_string: node.get_property_string(\"f_opt_string\")?,",
+				"            g_opt_f32: node.get_property_number::<f32>(\"g_opt_f32\")?,",
+				"            h_opt_u8: node.get_property_number::<u8>(\"h_opt_u8\")?,",
+				"            i_opt_u32: node.get_property_number::<u32>(\"i_opt_u32\")?,",
+				"            j_opt_array4: node.get_property_number_array4::<f64>(\"j_opt_array4\")?,",
+				"            k_opt_format: node.get_property_enum::<TileFormat>(\"k_opt_format\")?,",
+				"        })",
+				"    }",
+				"    pub fn get_docs() -> String {",
+				"        \"### Parameters:\\n* **`a_string`: String (required)**\\n* *`b_bool`: Boolean (optional, default: false)*\\n* *`c_u8`: u8 *\\n* **`d_array4`: [f64,f64,f64,f64] (required)**\\n* *`e_opt_bool`: bool (optional)*\\n* *`f_opt_string`: String (optional)*\\n* *`g_opt_f32`: f32 (optional)*\\n* *`h_opt_u8`: u8 (optional)*\\n* *`i_opt_u32`: u32 (optional)*\\n* *`j_opt_array4`: [f64,f64,f64,f64] (optional)*\\n* *`k_opt_format`: TileFormat (optional)*\"",
+				"            .to_string()",
+				"    }",
+				"}",
+				""
+			]
+		);
+	}
+
+	#[test]
+	fn test_decode_struct_with_sources() {
+		// Struct with sources field
+		let input: DeriveInput = parse_quote!(
+			/// Top-level doc
+			struct Pipeline {
+				#[doc = "List of sources"]
+				sources: Vec<VPLPipeline>,
+			}
+		);
+		let data_struct = match &input.data {
+			syn::Data::Struct(ds) => ds.clone(),
+			_ => panic!("Expected struct data"),
+		};
+		let ts = decode_struct(input.clone(), data_struct);
+		let code = ts.to_string();
+		// Ensure get_docs includes Sources section
+		assert!(code.contains("### Sources:"));
+		assert!(code.contains("List of sources"));
+	}
+}
