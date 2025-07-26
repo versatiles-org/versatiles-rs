@@ -1,3 +1,8 @@
+//! Utilities for reading and probing tile data from various container formats.
+//!
+//! This module defines the `TilesReaderTrait` with methods for traversing,
+//! retrieving, and probing tile metadata, parameters, container info, and contents.
+
 #[cfg(feature = "cli")]
 use super::ProbeDepth;
 use super::{Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters};
@@ -12,36 +17,43 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::{fmt::Debug, sync::Arc};
 
-/// Trait defining the behavior of a tile reader.
+/// Trait defining behavior for reading tiles from a container.
+///
+/// Implementors provide tile metadata, traversal orders, bounding boxes,
+/// data retrieval, and CLI probing methods.
 #[async_trait]
 pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
-	/// Get the name of the reader source, e.g., the filename.
+	/// Return the source identifier (e.g., filename or URI).
 	fn source_name(&self) -> &str;
 
-	/// Get the container name, e.g., versatiles, mbtiles, etc.
+	/// Return the container type name (e.g., "mbtiles", "versatiles").
 	fn container_name(&self) -> &str;
 
-	/// Get the reader parameters.
+	/// Access the reader parameters, including bounding box pyramid and formats.
 	fn parameters(&self) -> &TilesReaderParameters;
 
-	/// Override the tile compression.
+	/// Override the default tile compression for subsequent reads.
 	fn override_compression(&mut self, tile_compression: TileCompression);
 
-	/// Get the metadata, always uncompressed.
+	/// Retrieve the TileJSON metadata for this tile set.
 	fn tilejson(&self) -> &TileJSON;
 
+	/// Return the set of supported traversal orders (default: all orders).
 	fn traversal_orders(&self) -> TraversalOrderSet {
 		TraversalOrderSet::new_all()
 	}
 
+	/// Get an iterator over bounding boxes using the best traversal order.
 	fn iter_bboxes(&self) -> Result<Box<dyn Iterator<Item = TileBBox> + '_ + Send>> {
 		self.iter_bboxes_in_order(self.traversal_orders().get_best()?)
 	}
 
+	/// Get an iterator over bounding boxes in the specified traversal order.
 	fn iter_bboxes_in_order(&self, order: TraversalOrder) -> Result<Box<dyn Iterator<Item = TileBBox> + '_ + Send>> {
 		Ok(Box::new(self.parameters().bbox_pyramid.iter_bboxes(order)))
 	}
 
+	/// Choose the best of the given orders and iterate bounding boxes accordingly.
 	fn iter_bboxes_in_preferred_order(
 		&self,
 		orders: &[TraversalOrder],
@@ -49,10 +61,10 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		self.iter_bboxes_in_order(self.traversal_orders().get_best_of(orders)?)
 	}
 
-	/// Get tile data for the given coordinate, always compressed and formatted.
+	/// Asynchronously fetch the raw tile data for the given tile coordinate.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>>;
 
-	/// Get a stream of tiles within the bounding box.
+	/// Asynchronously stream all tiles within the given bounding box.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		let mutex = Arc::new(Mutex::new(self));
 		let coords: Vec<TileCoord3> = bbox.iter_coords().collect();
@@ -70,7 +82,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		}))
 	}
 
-	/// probe container
+	/// Perform a hierarchical CLI probe of metadata, parameters, container, tiles, and contents.
 	#[cfg(feature = "cli")]
 	async fn probe(&mut self, level: ProbeDepth) -> Result<()> {
 		use ProbeDepth::*;
@@ -104,6 +116,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
+	/// Probe and print reader parameters (bbox levels, formats, compression).
 	#[cfg(feature = "cli")]
 	async fn probe_parameters(&mut self, print: &mut PrettyPrint) -> Result<()> {
 		let parameters = self.parameters();
@@ -121,7 +134,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
-	/// deep probe container
+	/// Probe and print container-specific metadata or warnings.
 	#[cfg(feature = "cli")]
 	async fn probe_container(&mut self, print: &PrettyPrint) -> Result<()> {
 		print
@@ -130,7 +143,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
-	/// deep probe container tiles
+	/// Probe and print tile-specific metadata or warnings.
 	#[cfg(feature = "cli")]
 	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
 		print
@@ -139,7 +152,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
-	/// deep probe container tile contents
+	/// Probe and print contents of sample tiles or warnings if unimplemented.
 	#[cfg(feature = "cli")]
 	async fn probe_tile_contents(&mut self, print: &PrettyPrint) -> Result<()> {
 		print
@@ -148,6 +161,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		Ok(())
 	}
 
+	/// Convert the reader into a boxed trait object for dynamic dispatch.
 	fn boxed(self) -> Box<dyn TilesReaderTrait>
 	where
 		Self: Sized + 'static,
