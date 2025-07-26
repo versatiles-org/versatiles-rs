@@ -45,3 +45,43 @@ impl TryFrom<&str> for TileType {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_as_str() {
+		assert_eq!(TileType::Raster.as_str(), "raster");
+		assert_eq!(TileType::Vector.as_str(), "vector");
+		assert_eq!(TileType::Unknown.as_str(), "unknown");
+	}
+
+	#[test]
+	fn test_get_default_tile_schema() {
+		assert_eq!(TileType::Raster.get_default_tile_schema(), Some("rgb"));
+		assert_eq!(TileType::Vector.get_default_tile_schema(), Some("other"));
+		assert_eq!(TileType::Unknown.get_default_tile_schema(), None);
+	}
+
+	#[test]
+	fn test_display() {
+		assert_eq!(format!("{}", TileType::Raster), "raster");
+		assert_eq!(format!("{}", TileType::Vector), "vector");
+		assert_eq!(format!("{}", TileType::Unknown), "unknown");
+	}
+
+	#[test]
+	fn test_try_from_str_valid() {
+		assert_eq!(TileType::try_from("raster").unwrap(), TileType::Raster);
+		assert_eq!(TileType::try_from("image").unwrap(), TileType::Raster);
+		assert_eq!(TileType::try_from("vector").unwrap(), TileType::Vector);
+		assert_eq!(TileType::try_from("unknown").unwrap(), TileType::Unknown);
+	}
+
+	#[test]
+	fn test_try_from_str_invalid() {
+		assert!(TileType::try_from("invalid").is_err());
+		assert!(TileType::try_from("").is_err());
+	}
+}
