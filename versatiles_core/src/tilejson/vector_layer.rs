@@ -567,4 +567,162 @@ mod tests {
 		let empty_layers = VectorLayers::default();
 		assert!(empty_layers.as_json_value_option().is_none());
 	}
+
+	#[test]
+	fn test_contains_ids_and_layer_ids_find_iter() -> Result<()> {
+		// Prepare two layers under different keys
+		let layer1 = VectorLayer {
+			fields: BTreeMap::new(),
+			description: None,
+			minzoom: None,
+			maxzoom: None,
+		};
+		let layer2 = VectorLayer {
+			fields: BTreeMap::new(),
+			description: Some("desc".to_string()),
+			minzoom: Some(1),
+			maxzoom: Some(2),
+		};
+		let mut map = BTreeMap::new();
+		map.insert("b".to_string(), layer2.clone());
+		map.insert("a".to_string(), layer1.clone());
+		let vl = VectorLayers(map);
+		// contains_ids
+		assert!(vl.contains_ids(&["a"]));
+		assert!(vl.contains_ids(&["a", "b"]));
+		assert!(!vl.contains_ids(&["c"]));
+		// layer_ids (should be sorted by key)
+		assert_eq!(vl.layer_ids(), vec!["a".to_string(), "b".to_string()]);
+		// find
+		assert_eq!(vl.find("a"), Some(&layer1));
+		assert!(vl.find("c").is_none());
+		// iter order
+		let keys: Vec<String> = vl.iter().map(|(k, _)| k.clone()).collect();
+		assert_eq!(keys, vec!["a".to_string(), "b".to_string()]);
+		Ok(())
+	}
+
+	#[test]
+	fn test_get_tile_schema_empty() {
+		use TileSchema::*;
+		let empty = VectorLayers(BTreeMap::new());
+		assert_eq!(empty.get_tile_schema(), VectorOther);
+	}
+
+	#[test]
+	fn test_get_tile_schema_openmaptiles() {
+		use TileSchema::*;
+		let known_open = [
+			"aerodrome_label",
+			"aeroway",
+			"boundary",
+			"building",
+			"housenumber",
+			"landcover",
+			"landuse",
+			"mountain_peak",
+			"park",
+			"place",
+			"poi",
+			"transportation",
+			"transportation_name",
+			"water",
+			"water_name",
+			"waterway",
+		];
+		let mut map = BTreeMap::new();
+		for id in known_open {
+			map.insert(
+				id.to_string(),
+				VectorLayer {
+					fields: BTreeMap::new(),
+					description: None,
+					minzoom: None,
+					maxzoom: None,
+				},
+			);
+		}
+		let vl = VectorLayers(map);
+		assert_eq!(vl.get_tile_schema(), VectorOpenMapTiles);
+	}
+
+	#[test]
+	fn test_get_tile_schema_shortbread1() {
+		use TileSchema::*;
+		let known_sb = [
+			"addresses",
+			"aerialways",
+			"boundaries",
+			"boundary_labels",
+			"bridges",
+			"buildings",
+			"dam_lines",
+			"dam_polygons",
+			"ferries",
+			"land",
+			"ocean",
+			"pier_lines",
+			"pier_polygons",
+			"place_labels",
+			"pois",
+			"public_transport",
+			"sites",
+			"street_labels_points",
+			"street_labels",
+			"street_polygons",
+			"streets_polygons_labels",
+			"streets",
+			"water_lines_labels",
+			"water_lines",
+			"water_polygons_labels",
+			"water_polygons",
+		];
+		let mut map = BTreeMap::new();
+		for id in known_sb {
+			map.insert(
+				id.to_string(),
+				VectorLayer {
+					fields: BTreeMap::new(),
+					description: None,
+					minzoom: None,
+					maxzoom: None,
+				},
+			);
+		}
+		let vl = VectorLayers(map);
+		assert_eq!(vl.get_tile_schema(), VectorShortbread1);
+	}
+
+	#[test]
+	fn test_vector_layer_as_json_object_and_check() -> Result<()> {
+		let layer = VectorLayer {
+			fields: BTreeMap::from([("key".to_string(), "String".to_string())]),
+			description: Some("desc".to_string()),
+			minzoom: Some(5),
+			maxzoom: Some(10),
+		};
+		let obj = layer.as_json_object();
+		// Check object entries
+		assert_eq!(obj.get_string("description")?.unwrap(), "desc");
+		assert_eq!(obj.get_number::<u8>("minzoom")?.unwrap(), 5);
+		assert_eq!(obj.get_number::<u8>("maxzoom")?.unwrap(), 10);
+		let fields = obj.get("fields").unwrap().as_object()?;
+		assert_eq!(fields.get_string("key")?.unwrap(), "String");
+		// check valid layer
+		layer.check()?;
+		// check invalid minzoom > maxzoom
+		let bad = VectorLayer {
+			fields: BTreeMap::new(),
+			description: None,
+			minzoom: Some(3),
+			maxzoom: Some(2),
+		};
+		assert!(
+			bad.check()
+				.unwrap_err()
+				.to_string()
+				.contains("minzoom must be <= maxzoom")
+		);
+		Ok(())
+	}
 }
