@@ -511,6 +511,34 @@ where
 		TileStream { stream: s }
 	}
 
+	/// Filters the stream by **tile coordinate** using an *asynchronous* predicate.
+	///
+	/// The provided closure receives each `TileCoord3` and returns a `Future<bool>`.
+	/// If the future resolves to `true`, the item is kept; otherwise it is dropped.
+	///
+	/// This is analogous to [`StreamExt::filter`] but operates on the coordinate
+	/// only, leaving the associated value of type `T` untouched.
+	///
+	/// # Arguments
+	/// * `callback` – async predicate `Fn(TileCoord3) -> Future<Output = bool>`.
+	///
+	/// # Examples
+	/// ```
+	/// # use versatiles_core::types::{TileCoord3, Blob, TileStream};
+	/// # async fn demo() {
+	/// let stream = TileStream::from_vec(vec![
+	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
+	///     (TileCoord3::new(5,5,5).unwrap(), Blob::from("data1")),
+	/// ]);
+	///
+	/// // Keep only tiles at zoom level 0.
+	/// let filtered = stream.filter_coord(|coord| async move { coord.z == 0 });
+	/// let items = filtered.collect().await;
+	///
+	/// assert_eq!(items.len(), 1);
+	/// assert_eq!(items[0].0.z, 0);
+	/// # }
+	/// ```
 	pub fn filter_coord<F, Fut>(self, mut callback: F) -> Self
 	where
 		F: FnMut(TileCoord3) -> Fut + Send + 'a,
