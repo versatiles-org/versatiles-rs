@@ -449,8 +449,7 @@ impl TileJSON {
 			!self.vector_layers.0.is_empty(),
 			"Vector tilesets must have 'vector_layers'"
 		);
-		self.vector_layers.check()?;
-		Ok(())
+		self.vector_layers.check()
 	}
 
 	// -------------------------------------------------------------------------
@@ -662,10 +661,7 @@ mod tests {
 	fn should_debug_print_as_json() {
 		let tj = TileJSON::default();
 		let debug_str = format!("{tj:?}");
-		assert!(
-			debug_str.contains("TileJSON("),
-			"Debug string should contain 'TileJSON(' prefix"
-		);
+		assert!(debug_str.contains("TileJSON("));
 	}
 
 	#[test]
@@ -674,7 +670,7 @@ mod tests {
 		let tj1 = TileJSON::from_object(&obj)?;
 		let obj2 = tj1.as_object();
 		let tj2 = TileJSON::from_object(&obj2)?;
-		assert_eq!(tj1, tj2, "TileJSON should survive object → struct → object round-trip");
+		assert_eq!(tj1, tj2);
 		Ok(())
 	}
 
@@ -684,11 +680,11 @@ mod tests {
 		let tj1 = TileJSON::from_object(&obj)?;
 		let json_str = tj1.as_string();
 		let tj2 = TileJSON::try_from(json_str.as_str())?;
-		assert_eq!(tj1, tj2, "Stringify + parse should round-trip");
+		assert_eq!(tj1, tj2);
 
 		let blob = tj1.as_blob();
 		let tj3 = TileJSON::try_from(&blob)?;
-		assert_eq!(tj1, tj3, "Blob conversion should also round-trip");
+		assert_eq!(tj1, tj3);
 		Ok(())
 	}
 
@@ -697,10 +693,7 @@ mod tests {
 		let obj = make_test_json_object();
 		let tj = TileJSON::from_object(&obj)?;
 		let lines = tj.as_pretty_lines(40);
-		assert!(
-			lines.len() > 1,
-			"Pretty print should produce multiple lines at small max_width"
-		);
+		assert!(lines.len() > 1);
 		Ok(())
 	}
 
@@ -708,7 +701,7 @@ mod tests {
 	fn should_try_from_blob_or_default_return_default_on_invalid_json() {
 		let blob = Blob::from("{ invalid json");
 		let tj = TileJSON::try_from_blob_or_default(&blob);
-		assert_eq!(tj, TileJSON::default(), "Invalid blob should fall back to default");
+		assert_eq!(tj, TileJSON::default());
 	}
 
 	#[test]
@@ -814,11 +807,8 @@ mod tests {
 	fn should_return_json_value_as_object() {
 		let tj = TileJSON::default();
 		let json_value = tj.as_json_value();
-		if let JsonValue::Object(obj) = json_value {
-			assert_eq!(obj, tj.as_object());
-		} else {
-			panic!("Expected JsonValue::Object");
-		}
+		let obj = json_value.to_object().unwrap();
+		assert_eq!(obj, tj.as_object());
 	}
 
 	#[test]
