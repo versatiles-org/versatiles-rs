@@ -16,6 +16,7 @@ impl JsonValue {
 	pub fn parse_str(json: &str) -> Result<JsonValue> {
 		parse_json_str(json)
 	}
+
 	pub fn parse_blob(blob: &Blob) -> Result<JsonValue> {
 		parse_json_str(blob.as_str())
 	}
@@ -31,6 +32,7 @@ impl JsonValue {
 			String(_) => "string",
 		}
 	}
+
 	pub fn stringify(&self) -> String {
 		stringify(self)
 	}
@@ -38,6 +40,7 @@ impl JsonValue {
 	pub fn new_array() -> JsonValue {
 		JsonValue::Array(JsonArray::default())
 	}
+
 	pub fn new_object() -> JsonValue {
 		JsonValue::Object(JsonObject::default())
 	}
@@ -49,6 +52,7 @@ impl JsonValue {
 			bail!("expected a JSON array")
 		}
 	}
+
 	pub fn to_array(self) -> Result<JsonArray> {
 		if let JsonValue::Array(array) = self {
 			Ok(array)
@@ -56,6 +60,7 @@ impl JsonValue {
 			bail!("expected a JSON array")
 		}
 	}
+
 	pub fn as_object(&self) -> Result<&JsonObject> {
 		if let JsonValue::Object(object) = self {
 			Ok(object)
@@ -63,6 +68,7 @@ impl JsonValue {
 			bail!("expected a JSON object")
 		}
 	}
+
 	pub fn to_object(self) -> Result<JsonObject> {
 		if let JsonValue::Object(object) = self {
 			Ok(object)
@@ -70,18 +76,21 @@ impl JsonValue {
 			bail!("expected a JSON object")
 		}
 	}
+
 	pub fn as_string(&self) -> Result<String> {
 		match self {
 			JsonValue::String(text) => Ok(text.to_owned()),
 			_ => bail!("expected a string, found a {}", self.type_as_str()),
 		}
 	}
+
 	pub fn as_str(&self) -> Result<&str> {
 		match self {
 			JsonValue::String(text) => Ok(text),
 			_ => bail!("expected a string, found a {}", self.type_as_str()),
 		}
 	}
+
 	pub fn as_number<T>(&self) -> Result<T>
 	where
 		T: AsNumber<T>,

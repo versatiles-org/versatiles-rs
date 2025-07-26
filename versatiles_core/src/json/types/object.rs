@@ -12,30 +12,37 @@ impl JsonObject {
 		}
 		Ok(())
 	}
+
 	pub fn get(&self, key: &str) -> Option<&JsonValue> {
 		self.0.get(key)
 	}
+
 	pub fn get_string(&self, key: &str) -> Result<Option<String>> {
 		self.get(key).map(JsonValue::as_string).transpose()
 	}
+
 	pub fn get_number<T>(&self, key: &str) -> Result<Option<T>>
 	where
 		T: AsNumber<T>,
 	{
 		self.get(key).map(JsonValue::as_number).transpose()
 	}
+
 	pub fn get_array(&self, key: &str) -> Result<Option<&JsonArray>> {
 		self.get(key).map(JsonValue::as_array).transpose()
 	}
+
 	pub fn get_string_vec(&self, key: &str) -> Result<Option<Vec<String>>> {
 		self.get_array(key)?.map(|array| array.as_string_vec()).transpose()
 	}
+
 	pub fn get_number_vec<T>(&self, key: &str) -> Result<Option<Vec<T>>>
 	where
 		T: AsNumber<T>,
 	{
 		self.get_array(key)?.map(|array| array.as_number_vec::<T>()).transpose()
 	}
+
 	pub fn get_number_array<T, const N: usize>(&self, key: &str) -> Result<Option<[T; N]>>
 	where
 		T: AsNumber<T>,
@@ -274,5 +281,60 @@ mod tests {
 		]);
 
 		assert_eq!(parsed, expected);
+	}
+
+	#[test]
+	fn test_stringify_pretty_single_line() {
+		let obj = JsonObject::from(vec![("key1", JsonValue::from("value1")), ("key2", JsonValue::from(2))]);
+		let s = obj.stringify_pretty_single_line();
+		assert_eq!(s, "{ \"key1\": \"value1\", \"key2\": 2 }");
+	}
+
+	#[test]
+	fn test_stringify_pretty_multi_line() {
+		let obj = JsonObject::from(vec![("a", JsonValue::from(1)), ("b", JsonValue::from(2))]);
+		let s = obj.stringify_pretty_multi_line(80, 0);
+		let expected = "{\n  \"a\": 1,\n  \"b\": 2\n}";
+		assert_eq!(s, expected);
+	}
+
+	#[test]
+	fn test_iter_and_order() {
+		let obj = JsonObject::from(vec![("x", "y"), ("z", "w")]);
+		let pairs: Vec<(&String, &JsonValue)> = obj.iter().collect();
+		let keys: Vec<&String> = pairs.iter().map(|(k, _)| *k).collect();
+		assert_eq!(keys, vec![&"x".to_string(), &"z".to_string()]);
+	}
+
+	#[test]
+	fn test_debug_fmt() {
+		let obj = JsonObject::from(vec![("k", 1)]);
+		let debug_str = format!("{:?}", obj);
+		let expected_map: std::collections::BTreeMap<_, _> =
+			vec![("k".to_string(), JsonValue::from(1))].into_iter().collect();
+		assert_eq!(debug_str, format!("{:?}", expected_map));
+	}
+
+	#[test]
+	fn test_from_vec_for_jsonvalue() {
+		let input = vec![("foo", 3), ("bar", 4)];
+		let jv: JsonValue = input.clone().into();
+		if let JsonValue::Object(obj) = jv {
+			assert_eq!(obj.get_number::<i32>("foo").unwrap(), Some(3));
+			assert_eq!(obj.get_number::<i32>("bar").unwrap(), Some(4));
+		} else {
+			panic!("Expected JsonValue::Object variant");
+		}
+	}
+
+	#[test]
+	fn test_get_missing_variants() {
+		let obj = JsonObject::default();
+		assert_eq!(obj.get_array("missing").unwrap(), None);
+		assert_eq!(obj.get_string_vec("missing").unwrap(), None);
+		let num_vec: Option<Vec<i32>> = obj.get_number_vec("missing").unwrap();
+		assert_eq!(num_vec, None);
+		let num_arr: Option<[u8; 2]> = obj.get_number_array("missing").unwrap();
+		assert_eq!(num_arr, None);
 	}
 }

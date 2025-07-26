@@ -34,7 +34,9 @@ pub fn read_ndjson_stream(reader: impl BufRead) -> impl Stream<Item = Result<Jso
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use futures::StreamExt;
 	use std::io::Cursor;
+	use tokio;
 
 	fn join_errors(e: &Error) -> String {
 		e.chain().map(|e| e.to_string()).collect::<Vec<String>>().join("\n")
@@ -130,5 +132,32 @@ mod tests {
 		let mut iter = read_ndjson_iter(reader);
 
 		assert!(iter.next().is_none());
+	}
+	#[tokio::test]
+	async fn test_read_stream_single_line() -> Result<()> {
+		let data = r#"{"key": "value"}"#;
+		let reader = Cursor::new(data);
+		let stream = read_ndjson_stream(reader);
+		let results: Vec<_> = stream.collect().await;
+		assert_eq!(results.len(), 1);
+		assert_eq!(results[0].as_ref().unwrap(), &json_from_str(data)?);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_read_stream_mixed_valid_invalid() -> Result<()> {
+		let data = "{\"key1\": \"value1\"}\nnot json\n{\"key2\": \"value2\"}\n";
+		let reader = Cursor::new(data);
+		let results: Vec<_> = read_ndjson_stream(reader).collect().await;
+		assert_eq!(results.len(), 3);
+		// First valid
+		assert_eq!(results[0].as_ref().unwrap(), &json_from_str(r#"{"key1": "value1"}"#)?);
+		// Second invalid error message contains line information
+		let err = results[1].as_ref().unwrap_err();
+		let msg = join_errors(err);
+		assert!(msg.contains("error in line 2"));
+		// Third valid
+		assert_eq!(results[2].as_ref().unwrap(), &json_from_str(r#"{"key2": "value2"}"#)?);
+		Ok(())
 	}
 }

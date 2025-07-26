@@ -177,4 +177,47 @@ mod tests {
 		);
 		Ok(())
 	}
+
+	#[test]
+	fn test_escape_json_string_control() {
+		let input = "Control:\x01\x02";
+		let escaped = super::escape_json_string(input);
+		assert_eq!(escaped, "Control:\\u0001\\u0002");
+	}
+
+	#[test]
+	fn test_stringify_pretty_single_line_primitives() -> Result<()> {
+		let json = parse_json_str("123")?;
+		assert_eq!(super::stringify_pretty_single_line(&json), "123");
+		let json = parse_json_str("\"abc\"")?;
+		assert_eq!(super::stringify_pretty_single_line(&json), "\"abc\"");
+		Ok(())
+	}
+
+	#[test]
+	fn test_pretty_single_line_array() -> Result<()> {
+		let json = parse_json_str("[1,2,3]")?;
+		assert_eq!(super::stringify_pretty_single_line(&json), "[ 1, 2, 3 ]");
+		Ok(())
+	}
+
+	#[test]
+	fn test_stringify_pretty_multi_line_array() -> Result<()> {
+		// Force multi-line by using a small max_width
+		let json = parse_json_str("[\"alpha\",\"beta\",\"gamma\"]")?;
+		let result = super::stringify_pretty_multi_line(&json, 5, 0, 0);
+		let expected = "[\n  \"alpha\",\n  \"beta\",\n  \"gamma\"\n]";
+		assert_eq!(result, expected);
+		Ok(())
+	}
+
+	#[test]
+	fn test_stringify_pretty_multi_line_object() -> Result<()> {
+		// Force multi-line by using a small max_width
+		let json = parse_json_str("{\"a\":1,\"bb\":2}")?;
+		let result = super::stringify_pretty_multi_line(&json, 5, 0, 0);
+		let expected = "{\n  \"a\": 1,\n  \"bb\": 2\n}";
+		assert_eq!(result, expected);
+		Ok(())
+	}
 }

@@ -164,4 +164,22 @@ mod tests {
 		let value = u32::convert(123456789.999_f64);
 		assert_eq!(value, 123456789_u32);
 	}
+
+	#[test]
+	fn test_as_number_u64() {
+		let value = u64::convert(123456789012345.0_f64);
+		assert_eq!(value, 123456789012345_u64);
+	}
+
+	#[test]
+	fn test_as_number_i16() {
+		let value = i16::convert(-32768.0_f64);
+		assert_eq!(value, -32768_i16);
+	}
+
+	#[test]
+	fn test_as_number_i64() {
+		let value = i64::convert(-1234567890123.0_f64);
+		assert_eq!(value, -1234567890123_i64);
+	}
 }

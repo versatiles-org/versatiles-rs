@@ -30,15 +30,22 @@ impl JsonArray {
 			.collect::<Vec<_>>();
 		format!("[\n{}\n{}]", items.join(",\n"), indent)
 	}
+
 	pub fn as_string_vec(&self) -> Result<Vec<String>> {
 		self.0.iter().map(JsonValue::as_string).collect::<Result<Vec<_>>>()
 	}
+
 	pub fn as_number_vec<T>(&self) -> Result<Vec<T>>
 	where
 		T: AsNumber<T>,
 	{
 		self.0.iter().map(JsonValue::as_number).collect::<Result<Vec<T>>>()
 	}
+
+	pub fn as_vec(&self) -> &Vec<JsonValue> {
+		&self.0
+	}
+
 	pub fn as_number_array<T, const N: usize>(&self) -> Result<[T; N]>
 	where
 		T: AsNumber<T>,
@@ -184,5 +191,67 @@ mod tests {
 		let json_array = JsonArray::from(vec![1, 2, 3]);
 		assert_eq!(json_array.0.len(), 3);
 		assert_eq!(json_array.0[0], JsonValue::from(1));
+	}
+
+	#[test]
+	fn test_stringify_pretty_single_line() {
+	    let array = JsonArray(vec![
+	        JsonValue::from("hello"),
+	        JsonValue::from(42.0),
+	    ]);
+	    assert_eq!(array.stringify_pretty_single_line(), "[ \"hello\", 42 ]");
+	}
+
+	#[test]
+	fn test_stringify_pretty_multi_line() {
+	    let array = JsonArray(vec![
+	        JsonValue::from("a"),
+	        JsonValue::from("b"),
+	    ]);
+	    let expected = "[\n  \"a\",\n  \"b\"\n]";
+	    assert_eq!(array.stringify_pretty_multi_line(80, 0), expected);
+	}
+
+	#[test]
+	fn test_as_vec() {
+	    let array = JsonArray(vec![JsonValue::from(true)]);
+	    // as_vec should return a reference to the internal vector
+	    assert_eq!(array.as_vec(), &array.0);
+	}
+
+	#[test]
+	fn test_from_ref_vec() {
+	    let v = vec![1, 2, 3];
+	    let arr = JsonArray::from(&v);
+	    assert_eq!(arr.0, vec![
+	        JsonValue::from(1),
+	        JsonValue::from(2),
+	        JsonValue::from(3),
+	    ]);
+	}
+
+	#[test]
+	fn test_from_array_ref() {
+	    let slice = [4, 5, 6];
+	    let arr = JsonArray::from(&slice);
+	    assert_eq!(arr.0, vec![
+	        JsonValue::from(4),
+	        JsonValue::from(5),
+	        JsonValue::from(6),
+	    ]);
+	}
+
+	#[test]
+	fn test_json_value_from_vec() {
+	    let jv: JsonValue = vec!["x", "y"].into();
+	    match jv {
+	        JsonValue::Array(ja) => {
+	            assert_eq!(ja.0, vec![
+	                JsonValue::from("x"),
+	                JsonValue::from("y"),
+	            ]);
+	        }
+	        _ => panic!("Expected JsonValue::Array variant"),
+	    }
 	}
 }
