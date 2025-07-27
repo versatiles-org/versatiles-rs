@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")/.."
 
-docker build -t versatiles-gdal docker/gdal-debian
+docker build -t versatiles-gdal --target runner --file docker/gdal-debian.Dockerfile .
 
 # docker run -it --rm -p 8080:8080 --volume .:/data versatiles-gdal serve -s frontend-dev.br.tar world.vpl
 
