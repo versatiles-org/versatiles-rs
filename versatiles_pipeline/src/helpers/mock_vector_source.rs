@@ -114,7 +114,7 @@ impl TilesReaderTrait for MockVectorSource {
 }
 
 #[cfg(test)]
-pub fn arrange_tiles<T: ToString>(tiles: Vec<(TileCoord3, Blob)>, cb: impl Fn(TileCoord3, Blob) -> T) -> Vec<String> {
+pub fn arrange_tiles<T: ToString, I>(tiles: Vec<(TileCoord3, I)>, cb: impl Fn(TileCoord3, I) -> T) -> Vec<String> {
 	use versatiles_core::types::TileBBox;
 
 	let mut bbox = TileBBox::new_empty(tiles.first().unwrap().0.z).unwrap();
@@ -124,10 +124,10 @@ pub fn arrange_tiles<T: ToString>(tiles: Vec<(TileCoord3, Blob)>, cb: impl Fn(Ti
 		.map(|_| (0..bbox.width()).map(|_| String::from("❌")).collect())
 		.collect();
 
-	for (coord, blob) in tiles.into_iter() {
+	for (coord, item) in tiles.into_iter() {
 		let x = (coord.x - bbox.x_min) as usize;
 		let y = (coord.y - bbox.y_min) as usize;
-		result[y][x] = cb(coord, blob).to_string();
+		result[y][x] = cb(coord, item).to_string();
 	}
 	result.into_iter().map(|r| r.join(" ")).collect::<Vec<String>>()
 }
