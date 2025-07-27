@@ -228,7 +228,7 @@ impl ReadOperationFactoryTrait for Factory {
 
 #[cfg(test)]
 mod tests {
-	use crate::helpers::mock_image_source::{MockImageSource, arrange_tiles};
+	use crate::helpers::{mock_image_source::MockImageSource, mock_vector_source::arrange_tiles};
 
 	use super::*;
 	use std::{ops::BitXor, path::Path};

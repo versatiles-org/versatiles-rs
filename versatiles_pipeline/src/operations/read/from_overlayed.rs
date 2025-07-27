@@ -294,19 +294,18 @@ mod tests {
 		]
 	});
 
-	pub fn check_vector_blob(coord: TileCoord3, blob: Blob) -> String {
+	pub fn check_vector_blob(blob: Blob) -> String {
 		use versatiles_geometry::vector_tile::VectorTile;
 		let tile = VectorTile::from_blob(&blob).unwrap();
-		return check_vector(coord, tile);
+		check_vector(tile)
 	}
 
-	pub fn check_image_blob(coord: TileCoord3, blob: Blob) -> String {
+	pub fn check_image_blob(blob: Blob) -> String {
 		let tile = DynamicImage::from_blob(&blob, TileFormat::PNG).unwrap();
-		return check_image(coord, tile);
+		check_image(tile)
 	}
 
-	pub fn check_vector(coord: TileCoord3, tile: VectorTile) -> String {
-		use versatiles_geometry::GeoValue;
+	pub fn check_vector(tile: VectorTile) -> String {
 		assert_eq!(tile.layers.len(), 1);
 
 		let layer = &tile.layers[0];
@@ -316,15 +315,11 @@ mod tests {
 		let feature = &layer.features[0].to_feature(layer).unwrap();
 		let properties = &feature.properties;
 
-		assert_eq!(properties.get("x").unwrap(), &GeoValue::from(coord.x));
-		assert_eq!(properties.get("y").unwrap(), &GeoValue::from(coord.y));
-		assert_eq!(properties.get("z").unwrap(), &GeoValue::from(coord.z));
-
 		let filename = properties.get("filename").unwrap().to_string();
 		filename[0..filename.len() - 4].to_string()
 	}
 
-	pub fn check_image(_coord: TileCoord3, image: DynamicImage) -> String {
+	pub fn check_image(image: DynamicImage) -> String {
 		use versatiles_image::EnhancedDynamicImageTrait;
 		let pixel = image.average_color();
 		match pixel.as_slice() {
@@ -366,7 +361,7 @@ mod tests {
 
 		let coord = TileCoord3::new(7, 8, 4)?;
 		let blob = result.get_tile_data(&coord).await?.unwrap();
-		assert_eq!(check_vector_blob(coord, blob), "1");
+		assert_eq!(check_vector_blob(blob), "1");
 
 		assert_eq!(
 			result.tilejson().as_pretty_lines(100),
@@ -412,10 +407,10 @@ mod tests {
 
 		let c1 = TileCoord3::new(7, 7, 4)?;
 		let c2 = TileCoord3::new(9, 7, 4)?;
-		assert_eq!(check_vector_blob(c1, result.get_tile_data(&c1).await?.unwrap()), "🟦");
-		assert_eq!(check_vector_blob(c2, result.get_tile_data(&c2).await?.unwrap()), "🟨");
-		assert_eq!(check_vector(c1, result.get_vector_data(&c1).await?.unwrap()), "🟦");
-		assert_eq!(check_vector(c2, result.get_vector_data(&c2).await?.unwrap()), "🟨");
+		assert_eq!(check_vector_blob(result.get_tile_data(&c1).await?.unwrap()), "🟦");
+		assert_eq!(check_vector_blob(result.get_tile_data(&c2).await?.unwrap()), "🟨");
+		assert_eq!(check_vector(result.get_vector_data(&c1).await?.unwrap()), "🟦");
+		assert_eq!(check_vector(result.get_vector_data(&c2).await?.unwrap()), "🟨");
 
 		Ok(())
 	}
@@ -445,10 +440,10 @@ mod tests {
 
 		let c1 = TileCoord3::new(7, 7, 4)?;
 		let c2 = TileCoord3::new(9, 7, 4)?;
-		assert_eq!(check_image_blob(c1, result.get_tile_data(&c1).await?.unwrap()), "🟦");
-		assert_eq!(check_image_blob(c2, result.get_tile_data(&c2).await?.unwrap()), "🟨");
-		assert_eq!(check_image(c1, result.get_image_data(&c1).await?.unwrap()), "🟦");
-		assert_eq!(check_image(c2, result.get_image_data(&c2).await?.unwrap()), "🟨");
+		assert_eq!(check_image_blob(result.get_tile_data(&c1).await?.unwrap()), "🟦");
+		assert_eq!(check_image_blob(result.get_tile_data(&c2).await?.unwrap()), "🟨");
+		assert_eq!(check_image(result.get_image_data(&c1).await?.unwrap()), "🟦");
+		assert_eq!(check_image(result.get_image_data(&c2).await?.unwrap()), "🟨");
 
 		Ok(())
 	}

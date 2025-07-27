@@ -191,7 +191,7 @@ mod tests {
 		// Parameters should have at least one bbox level
 		assert!(reader.parameters().bbox_pyramid.iter_levels().next().is_some());
 		// Debug formatting should include struct name and source
-		let debug = format!("{:?}", reader);
+		let debug = format!("{reader:?}");
 		assert!(debug.contains("PipelineReader"));
 		assert!(debug.contains("from str"));
 		Ok(())

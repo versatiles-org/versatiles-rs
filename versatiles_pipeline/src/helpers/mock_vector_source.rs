@@ -114,7 +114,7 @@ impl TilesReaderTrait for MockVectorSource {
 }
 
 #[cfg(test)]
-pub fn arrange_tiles<T: ToString, I>(tiles: Vec<(TileCoord3, I)>, cb: impl Fn(TileCoord3, I) -> T) -> Vec<String> {
+pub fn arrange_tiles<T: ToString, I>(tiles: Vec<(TileCoord3, I)>, cb: impl Fn(I) -> T) -> Vec<String> {
 	use versatiles_core::types::TileBBox;
 
 	let mut bbox = TileBBox::new_empty(tiles.first().unwrap().0.z).unwrap();
@@ -127,7 +127,7 @@ pub fn arrange_tiles<T: ToString, I>(tiles: Vec<(TileCoord3, I)>, cb: impl Fn(Ti
 	for (coord, item) in tiles.into_iter() {
 		let x = (coord.x - bbox.x_min) as usize;
 		let y = (coord.y - bbox.y_min) as usize;
-		result[y][x] = cb(coord, item).to_string();
+		result[y][x] = cb(item).to_string();
 	}
 	result.into_iter().map(|r| r.join(" ")).collect::<Vec<String>>()
 }
@@ -171,7 +171,7 @@ mod tests {
 			(TileCoord3::new(0, 1, 8).unwrap(), Blob::from("c")),
 		];
 
-		let arranged = arrange_tiles(tiles, |_coord, blob| blob.as_str().to_string());
+		let arranged = arrange_tiles(tiles, |blob| blob.as_str().to_string());
 		assert_eq!(arranged, ["a b", "c ❌"]);
 	}
 

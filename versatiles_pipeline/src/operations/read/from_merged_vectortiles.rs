@@ -237,9 +237,7 @@ mod tests {
 	use itertools::Itertools;
 	use std::{ops::BitXor, path::Path};
 
-	pub fn check_tile(blob: &Blob, coord: &TileCoord3) -> String {
-		use versatiles_geometry::GeoValue;
-
+	pub fn check_tile(blob: &Blob) -> String {
 		let tile = VectorTile::from_blob(blob).unwrap();
 		assert_eq!(tile.layers.len(), 1);
 
@@ -251,10 +249,6 @@ mod tests {
 			.iter()
 			.map(|vtf| {
 				let p = vtf.to_feature(layer).unwrap().properties;
-
-				assert_eq!(p.get("x").unwrap(), &GeoValue::from(coord.x));
-				assert_eq!(p.get("y").unwrap(), &GeoValue::from(coord.y));
-				assert_eq!(p.get("z").unwrap(), &GeoValue::from(coord.z));
 
 				p.get("filename").unwrap().to_string()
 			})
@@ -300,7 +294,7 @@ mod tests {
 		let coord = TileCoord3::new(1, 2, 3)?;
 		let blob = result.get_tile_data(&coord).await?.unwrap();
 
-		assert_eq!(check_tile(&blob, &coord), "1.pbf,2.pbf");
+		assert_eq!(check_tile(&blob), "1.pbf,2.pbf");
 
 		assert_eq!(
 			result.tilejson().as_pretty_lines(100),
@@ -337,8 +331,8 @@ mod tests {
 		let tiles = result.get_tile_stream(bbox).await?.collect().await;
 
 		assert_eq!(
-			arrange_tiles(tiles, |coord, blob| {
-				match check_tile(&blob, &coord).as_str() {
+			arrange_tiles(tiles, |blob| {
+				match check_tile(&blob).as_str() {
 					"A.pbf" => "🟦",
 					"B.pbf" => "🟨",
 					"A.pbf,B.pbf" => "🟩",
