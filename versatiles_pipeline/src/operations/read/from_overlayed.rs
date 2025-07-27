@@ -277,20 +277,43 @@ impl ReadOperationFactoryTrait for Factory {
 }
 #[cfg(test)]
 mod tests {
+	use versatiles_image::EnhancedDynamicImageTrait;
+
 	use super::*;
 	use crate::helpers::mock_vector_source::arrange_tiles;
+	use std::sync::LazyLock;
 
-	pub fn check_tile(blob: &Blob, coord: &TileCoord3) -> Result<String> {
-		use versatiles_geometry::{GeoValue, vector_tile::VectorTile};
+	static RESULT_PATTERN: LazyLock<Vec<String>> = LazyLock::new(|| {
+		vec![
+			"🟦 🟦 🟦 🟦 ❌ ❌".to_string(),
+			"🟦 🟦 🟦 🟦 ❌ ❌".to_string(),
+			"🟦 🟦 🟦 🟦 🟨 🟨".to_string(),
+			"🟦 🟦 🟦 🟦 🟨 🟨".to_string(),
+			"❌ ❌ 🟨 🟨 🟨 🟨".to_string(),
+			"❌ ❌ 🟨 🟨 🟨 🟨".to_string(),
+		]
+	});
 
-		let tile = VectorTile::from_blob(blob)?;
+	pub fn check_vector_blob(coord: TileCoord3, blob: Blob) -> String {
+		use versatiles_geometry::vector_tile::VectorTile;
+		let tile = VectorTile::from_blob(&blob).unwrap();
+		return check_vector(coord, tile);
+	}
+
+	pub fn check_image_blob(coord: TileCoord3, blob: Blob) -> String {
+		let tile = DynamicImage::from_blob(&blob, TileFormat::PNG).unwrap();
+		return check_image(coord, tile);
+	}
+
+	pub fn check_vector(coord: TileCoord3, tile: VectorTile) -> String {
+		use versatiles_geometry::GeoValue;
 		assert_eq!(tile.layers.len(), 1);
 
 		let layer = &tile.layers[0];
 		assert_eq!(layer.name, "mock");
 		assert_eq!(layer.features.len(), 1);
 
-		let feature = &layer.features[0].to_feature(layer)?;
+		let feature = &layer.features[0].to_feature(layer).unwrap();
 		let properties = &feature.properties;
 
 		assert_eq!(properties.get("x").unwrap(), &GeoValue::from(coord.x));
@@ -298,7 +321,17 @@ mod tests {
 		assert_eq!(properties.get("z").unwrap(), &GeoValue::from(coord.z));
 
 		let filename = properties.get("filename").unwrap().to_string();
-		Ok(filename[0..filename.len() - 4].to_string())
+		filename[0..filename.len() - 4].to_string()
+	}
+
+	pub fn check_image(_coord: TileCoord3, image: DynamicImage) -> String {
+		use versatiles_image::EnhancedDynamicImageTrait;
+		let pixel = image.average_color();
+		match pixel.as_slice() {
+			[0, 0, 255] => "🟦".to_string(),
+			[255, 255, 0] => "🟨".to_string(),
+			_ => panic!("Unexpected pixel color: {pixel:?}"),
+		}
 	}
 
 	#[tokio::test]
@@ -317,22 +350,29 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_operation_get_tile_data() -> Result<()> {
+	async fn test_tilejson() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
-			.operation_from_vpl("from_overlayed [ from_container filename=1.pbf, from_container filename=2.pbf ]")
+			.operation_from_vpl(
+				&[
+					"from_overlayed [",
+					"   from_container filename=\"1.pbf\" | filter_bbox bbox=[-11,-12,3,4],",
+					"   from_container filename=\"2.pbf\" | filter_bbox bbox=[-5,-6,7,8]",
+					"]",
+				]
+				.join(""),
+			)
 			.await?;
 
-		let coord = TileCoord3::new(1, 2, 3)?;
+		let coord = TileCoord3::new(7, 8, 4)?;
 		let blob = result.get_tile_data(&coord).await?.unwrap();
-
-		assert_eq!(check_tile(&blob, &coord)?, "1");
+		assert_eq!(check_vector_blob(coord, blob), "1");
 
 		assert_eq!(
 			result.tilejson().as_pretty_lines(100),
 			[
 				"{",
-				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
+				"  \"bounds\": [ -11.25, -12.554564, 7.03125, 8.407168 ],",
 				"  \"maxzoom\": 8,",
 				"  \"minzoom\": 0,",
 				"  \"name\": \"mock vector source\",",
@@ -348,7 +388,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_operation_get_tile_stream() -> Result<()> {
+	async fn test_operation_vector() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
 			.operation_from_vpl(
@@ -363,35 +403,52 @@ mod tests {
 			.await?;
 
 		let bbox = TileBBox::new_full(3)?;
+
 		let tiles = result.get_tile_stream(bbox).await?.collect().await;
+		assert_eq!(arrange_tiles(tiles, check_vector_blob), *RESULT_PATTERN);
 
-		assert_eq!(
-			arrange_tiles(tiles, |coord, blob| check_tile(&blob, &coord).unwrap()),
-			vec![
-				"🟦 🟦 🟦 🟦 ❌ ❌",
-				"🟦 🟦 🟦 🟦 ❌ ❌",
-				"🟦 🟦 🟦 🟦 🟨 🟨",
-				"🟦 🟦 🟦 🟦 🟨 🟨",
-				"❌ ❌ 🟨 🟨 🟨 🟨",
-				"❌ ❌ 🟨 🟨 🟨 🟨"
-			]
-		);
+		let tiles = result.get_vector_stream(bbox).await?.collect().await;
+		assert_eq!(arrange_tiles(tiles, check_vector), *RESULT_PATTERN);
 
-		assert_eq!(
-			result.tilejson().as_pretty_lines(100),
-			[
-				"{",
-				"  \"bounds\": [ -130.78125, -70.140364, 130.78125, 70.140364 ],",
-				"  \"maxzoom\": 8,",
-				"  \"minzoom\": 0,",
-				"  \"name\": \"mock vector source\",",
-				"  \"tile_content\": \"vector\",",
-				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
-				"  \"tile_schema\": \"other\",",
-				"  \"tilejson\": \"3.0.0\"",
-				"}"
-			]
-		);
+		let c1 = TileCoord3::new(7, 7, 4)?;
+		let c2 = TileCoord3::new(9, 7, 4)?;
+		assert_eq!(check_vector_blob(c1, result.get_tile_data(&c1).await?.unwrap()), "🟦");
+		assert_eq!(check_vector_blob(c2, result.get_tile_data(&c2).await?.unwrap()), "🟨");
+		assert_eq!(check_vector(c1, result.get_vector_data(&c1).await?.unwrap()), "🟦");
+		assert_eq!(check_vector(c2, result.get_vector_data(&c2).await?.unwrap()), "🟨");
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_operation_image() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let result = factory
+			.operation_from_vpl(
+				&[
+					"from_overlayed [",
+					"   from_container filename=\"00f.png\" | filter_bbox bbox=[-130,-20,20,70],",
+					"   from_container filename=\"ff0.png\" | filter_bbox bbox=[-20,-70,130,20]",
+					"]",
+				]
+				.join(""),
+			)
+			.await?;
+
+		let bbox = TileBBox::new_full(3)?;
+
+		let tiles = result.get_tile_stream(bbox).await?.collect().await;
+		assert_eq!(arrange_tiles(tiles, check_image_blob), *RESULT_PATTERN);
+
+		let tiles = result.get_image_stream(bbox).await?.collect().await;
+		assert_eq!(arrange_tiles(tiles, check_image), *RESULT_PATTERN);
+
+		let c1 = TileCoord3::new(7, 7, 4)?;
+		let c2 = TileCoord3::new(9, 7, 4)?;
+		assert_eq!(check_image_blob(c1, result.get_tile_data(&c1).await?.unwrap()), "🟦");
+		assert_eq!(check_image_blob(c2, result.get_tile_data(&c2).await?.unwrap()), "🟨");
+		assert_eq!(check_image(c1, result.get_image_data(&c1).await?.unwrap()), "🟦");
+		assert_eq!(check_image(c2, result.get_image_data(&c2).await?.unwrap()), "🟨");
 
 		Ok(())
 	}
