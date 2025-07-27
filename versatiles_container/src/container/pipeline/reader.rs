@@ -181,4 +181,27 @@ mod tests {
 
 		Ok(())
 	}
+
+	#[tokio::test]
+	async fn test_pipeline_reader_trait_and_debug() -> Result<()> {
+		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/")).await?;
+		// Trait methods
+		assert_eq!(reader.source_name(), "from str");
+		assert_eq!(reader.container_name(), "pipeline");
+		// Parameters should have at least one bbox level
+		assert!(reader.parameters().bbox_pyramid.iter_levels().next().is_some());
+		// Debug formatting should include struct name and source
+		let debug = format!("{:?}", reader);
+		assert!(debug.contains("PipelineReader"));
+		assert!(debug.contains("from str"));
+		Ok(())
+	}
+
+	#[tokio::test]
+	#[should_panic(expected = "you can't override the compression of pipeline")]
+	async fn test_override_compression_panic() {
+		let mut reader = PipelineReader::open_str(VPL, Path::new("../testdata/")).await.unwrap();
+		// override_compression should panic
+		reader.override_compression(TileCompression::Uncompressed);
+	}
 }
