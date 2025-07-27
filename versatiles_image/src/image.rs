@@ -22,6 +22,7 @@ pub trait EnhancedDynamicImageTrait {
 	fn to_blob(&self, format: TileFormat) -> Result<Blob>;
 	fn from_blob(blob: &Blob, format: TileFormat) -> Result<DynamicImage>;
 	fn overlay(&mut self, other: &DynamicImage) -> Result<()>;
+	fn average_color(&self) -> Vec<u8>;
 
 	fn new_test_rgba() -> DynamicImage;
 	fn new_test_rgb() -> DynamicImage;
@@ -96,6 +97,11 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 			DynamicImage::ImageRgba8(img) => img.as_bytes().chunks_exact(4),
 			_ => panic!("Unsupported image type for pixel iteration"),
 		}
+	}
+
+	fn average_color(&self) -> Vec<u8> {
+		let img = self.resize_exact(1, 1, image::imageops::FilterType::Triangle);
+		img.pixels().next().unwrap().to_vec()
 	}
 
 	fn ensure_same_size(&self, other: &DynamicImage) -> Result<()> {
