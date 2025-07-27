@@ -95,6 +95,10 @@ impl TilesReaderTrait for PipelineReader {
 		panic!("you can't override the compression of pipeline")
 	}
 
+	fn traversal_orders(&self) -> TraversalOrderSet {
+		self.operation.traversal_orders()
+	}
+
 	/// Get the metadata, always uncompressed.
 	fn tilejson(&self) -> &TileJSON {
 		self.operation.tilejson()

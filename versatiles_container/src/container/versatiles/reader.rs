@@ -187,6 +187,10 @@ impl TilesReaderTrait for VersaTilesReader {
 		self.parameters.tile_compression = tile_compression;
 	}
 
+	fn traversal_orders(&self) -> TraversalOrderSet {
+		TraversalOrderSet::new_all()
+	}
+
 	/// Gets tile data for a given coordinate.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		// Calculate block coordinate

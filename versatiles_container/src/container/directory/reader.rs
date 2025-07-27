@@ -207,15 +207,23 @@ impl TilesReaderTrait for DirectoryTilesReader {
 	fn container_name(&self) -> &str {
 		"directory"
 	}
+
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
+
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
+
+	fn traversal_orders(&self) -> TraversalOrderSet {
+		TraversalOrderSet::new_all()
+	}
+
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
+
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data {:?}", coord);
 

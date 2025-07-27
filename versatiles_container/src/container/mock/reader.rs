@@ -94,6 +94,10 @@ impl TilesReaderTrait for MockTilesReader {
 		self.parameters.tile_compression = tile_compression;
 	}
 
+	fn traversal_orders(&self) -> TraversalOrderSet {
+		TraversalOrderSet::new_all()
+	}
+
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}

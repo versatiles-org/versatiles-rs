@@ -76,6 +76,10 @@ impl TilesReaderTrait for MockImageSource {
 		&self.parameters
 	}
 
+	fn traversal_orders(&self) -> TraversalOrderSet {
+		TraversalOrderSet::new_all()
+	}
+
 	fn override_compression(&mut self, _tile_compression: TileCompression) {
 		panic!("not possible")
 	}

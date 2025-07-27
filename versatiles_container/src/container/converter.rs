@@ -145,6 +145,10 @@ impl TilesReaderTrait for TilesConvertReader {
 		&self.container_name
 	}
 
+	fn traversal_orders(&self) -> TraversalOrderSet {
+		self.reader.traversal_orders()
+	}
+
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.reader_parameters
 	}

@@ -160,6 +160,10 @@ impl TilesReaderTrait for TarTilesReader {
 		self.parameters.tile_compression = tile_compression;
 	}
 
+	fn traversal_orders(&self) -> TraversalOrderSet {
+		TraversalOrderSet::new_all()
+	}
+
 	/// Returns the metadata as a `Blob`.
 	///
 	/// # Errors

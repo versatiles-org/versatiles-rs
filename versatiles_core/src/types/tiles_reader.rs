@@ -39,9 +39,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	fn tilejson(&self) -> &TileJSON;
 
 	/// Return the set of supported traversal orders (default: all orders).
-	fn traversal_orders(&self) -> TraversalOrderSet {
-		TraversalOrderSet::new_all()
-	}
+	fn traversal_orders(&self) -> TraversalOrderSet;
 
 	/// Get an iterator over bounding boxes using the best traversal order.
 	fn iter_bboxes(&self) -> Result<Box<dyn Iterator<Item = TileBBox> + '_ + Send>> {
@@ -212,6 +210,10 @@ mod tests {
 
 		fn parameters(&self) -> &TilesReaderParameters {
 			&self.parameters
+		}
+
+		fn traversal_orders(&self) -> TraversalOrderSet {
+			TraversalOrderSet::new_all()
 		}
 
 		fn override_compression(&mut self, tile_compression: TileCompression) {

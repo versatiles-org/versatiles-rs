@@ -71,6 +71,10 @@ impl TilesReaderTrait for MockVectorSource {
 		panic!("not possible")
 	}
 
+	fn traversal_orders(&self) -> TraversalOrderSet {
+		TraversalOrderSet::new_all()
+	}
+
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}

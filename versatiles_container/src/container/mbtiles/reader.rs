@@ -303,6 +303,10 @@ impl TilesReaderTrait for MBTilesReader {
 		self.parameters.tile_compression = tile_compression;
 	}
 
+	fn traversal_orders(&self) -> TraversalOrderSet {
+		TraversalOrderSet::new_all()
+	}
+
 	/// Returns the tile data for the specified coordinates as a `Blob`.
 	///
 	/// # Arguments
