@@ -26,12 +26,11 @@
 //! }
 //! ```
 
-use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
-use crate::TilesWriterTrait;
+use super::types::{BlockDefinition, BlockIndex, FileHeader};
+use crate::{TilesWriterTrait, container::versatiles::types::BlockWriter};
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use log::{debug, trace};
-use std::collections::HashMap;
 use versatiles_core::{io::DataWriterTrait, progress::*, types::*, utils::compress};
 
 /// A struct for writing tiles to a VersaTiles container.
@@ -146,60 +145,34 @@ impl VersaTilesWriter {
 
 	/// Write a single block to the writer.
 	async fn write_block(
-		block: &BlockDefinition,
+		block_definition: &BlockDefinition,
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
 		progress: &mut Box<dyn ProgressTrait>,
 	) -> Result<(ByteRange, ByteRange)> {
 		// Log the start of the block
-		debug!("start block {block:?}");
+		debug!("start block {block_definition:?}");
 
-		// Get the initial writer position
-		let offset0 = writer.get_position()?;
-
-		// Prepare the necessary data structures
-		let bbox = &block.get_global_bbox().clone();
-
-		let mut tile_index = TileIndex::new_empty(bbox.count_tiles() as usize);
-		let mut tile_hash_lookup: HashMap<Vec<u8>, ByteRange> = HashMap::new();
+		// Create a new BlockWriter for the block
+		let mut block = BlockWriter::new(block_definition, writer);
 
 		// Get the tile stream
-		let tile_stream: TileStream = reader.get_tile_stream(*bbox).await?;
+		let tile_stream: TileStream = reader.get_tile_stream(block.bbox).await?;
 
 		// Iterate through the blobs and process them
 		tile_stream
 			.for_each_sync(|(coord, blob)| {
 				progress.inc(1);
 
-				let index = bbox.get_tile_index2(&coord.as_coord2()).unwrap();
-
-				let mut save_hash = false;
-				if blob.len() < 1000 {
-					if let Some(range) = tile_hash_lookup.get(blob.as_slice()) {
-						tile_index.set(index, *range);
-						return;
-					}
-					save_hash = true;
-				}
-
-				let mut range = writer.append(&blob).unwrap();
-				range.shift_backward(offset0);
-
-				tile_index.set(index, range);
-
-				if save_hash {
-					tile_hash_lookup.insert(blob.into_vec(), range);
-				}
+				block.write_tile(coord, blob).unwrap_or_else(|e| {
+					debug!("Error writing tile {coord:?}: {e}");
+				});
 			})
 			.await;
 
-		// Finish the block and write the index
-		debug!("finish block and write index {block:?}");
+		// Finish the block
+		debug!("finish block {block_definition:?}");
 
-		// Get the final writer position
-		let offset1 = writer.get_position()?;
-		let index_range = writer.append(&tile_index.as_brotli_blob()?)?;
-
-		Ok((ByteRange::new(offset0, offset1 - offset0), index_range))
+		block.finalize()
 	}
 }
