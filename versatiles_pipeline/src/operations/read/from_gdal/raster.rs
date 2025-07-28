@@ -186,21 +186,25 @@ impl ReadOperationFactoryTrait for Factory {
 
 #[cfg(test)]
 mod tests {
+	use super::*;
 	use std::path::PathBuf;
-
 	use versatiles_image::EnhancedDynamicImageTrait;
 
-	use super::*;
+	async fn get_operation(tile_size: u32) -> Operation {
+		Operation {
+			dataset: super::super::dataset::Dataset::new(PathBuf::from("../testdata/gradient.tif"))
+				.await
+				.unwrap(),
+			parameters: TilesReaderParameters::new(
+				TileFormat::PNG,
+				TileCompression::Uncompressed,
+				TileBBoxPyramid::new_full(4),
+			),
+			tilejson: TileJSON::default(),
+			tile_size,
+		}
+	}
 
-	/// End‑to‑end test that renders a **7×7 pixel crop** from the synthetic
-	/// `gradient.tif` dataset at various zoom/x/y coordinates.
-	/// The `gradient.tif` dataset is a simple 256x256 gradient image
-	/// where the red channel contains the x‑coordinate,
-	/// the green channel contains the y‑coordinate, and the blue channel is zero.
-	/// This verifies:
-	/// * GDAL read‑path through `get_image_data_from_gdal`,
-	/// * band mapping order (R,G,B),
-	/// * correct Mercator reprojection and pixel alignment.
 	#[tokio::test]
 	async fn test_operation_get_tile_data() -> Result<()> {
 		async fn gradient_test(z: u8, x: u32, y: u32) -> [Vec<u8>; 2] {
@@ -208,18 +212,14 @@ mod tests {
 			// We keep it in‑memory (no factory) and map bands 1‑2‑3 → RGB.
 			let coord = TileCoord3::new(x, y, z).unwrap();
 
-			let operation = Operation {
-				dataset: super::super::dataset::Dataset::new(PathBuf::from("../testdata/gradient.tif"))
-					.await
-					.unwrap(),
-				parameters: TilesReaderParameters::new(
-					TileFormat::PNG,
-					TileCompression::Uncompressed,
-					TileBBoxPyramid::new_full(2),
-				),
-				tilejson: TileJSON::default(),
-				tile_size: 512,
-			};
+			let operation = get_operation(512).await;
+
+			let blob = operation.get_tile_data(&coord).await.unwrap().unwrap();
+			assert!(
+				blob
+					.as_slice()
+					.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A])
+			);
 
 			// Extract a 7×7 tile and gather the RGB bytes.
 			let image = operation
@@ -263,6 +263,42 @@ mod tests {
 		assert_eq!(gradient_test(1, 0, 1).await, [row0, col1]);
 		assert_eq!(gradient_test(1, 1, 1).await, [row1, col1]);
 
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_get_image_stream_returns_images() -> Result<()> {
+		let operation = get_operation(16).await;
+		let mut stream = operation.get_image_stream(TileBBox::new_full(1)?).await?;
+		let mut count = 0;
+		while let Some((coord_out, image)) = stream.next().await {
+			assert_eq!(image.width(), 16);
+			assert_eq!(image.height(), 16);
+			let color_is = image.average_color();
+			let color_should = match (coord_out.x, coord_out.y) {
+				(0, 0) => [64, 43, 0],
+				(1, 0) => [192, 43, 0],
+				(0, 1) => [64, 212, 0],
+				(1, 1) => [192, 212, 0],
+				_ => panic!("Unexpected tile coordinate: {coord_out:?}"),
+			};
+			assert_eq!(
+				color_is, color_should,
+				"Tile at {coord_out:?} has unexpected average color: {color_is:?} (should be {color_should:?})",
+			);
+			count += 1;
+		}
+		assert_eq!(count, 4);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_vector_methods_error() -> Result<()> {
+		let operation = get_operation(512).await;
+		// get_vector_data should error
+		assert!(operation.get_vector_data(&TileCoord3::new(0, 0, 0)?).await.is_err());
+		// get_vector_stream should error
+		assert!(operation.get_vector_stream(TileBBox::new_full(4)?).await.is_err());
 		Ok(())
 	}
 }
