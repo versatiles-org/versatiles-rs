@@ -12,6 +12,7 @@ pub struct MockVectorSource {
 	data: Vec<(String, Vec<Vec<(String, String)>>)>,
 	parameters: TilesReaderParameters,
 	tilejson: TileJSON,
+	traversal_orders: TraversalOrderSet,
 }
 
 impl MockVectorSource {
@@ -49,7 +50,13 @@ impl MockVectorSource {
 			data,
 			parameters,
 			tilejson,
+			traversal_orders: TraversalOrderSet::new_all(),
 		}
+	}
+
+	#[allow(dead_code)]
+	pub fn set_traversal_orders(&mut self, orders: TraversalOrderSet) {
+		self.traversal_orders = orders;
 	}
 }
 
@@ -72,7 +79,7 @@ impl TilesReaderTrait for MockVectorSource {
 	}
 
 	fn traversal_orders(&self) -> TraversalOrderSet {
-		TraversalOrderSet::new_all()
+		self.traversal_orders.clone()
 	}
 
 	fn tilejson(&self) -> &TileJSON {

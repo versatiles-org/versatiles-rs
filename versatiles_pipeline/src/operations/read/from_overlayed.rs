@@ -277,11 +277,10 @@ impl ReadOperationFactoryTrait for Factory {
 }
 #[cfg(test)]
 mod tests {
-	use versatiles_image::EnhancedDynamicImageTrait;
-
 	use super::*;
-	use crate::helpers::mock_vector_source::arrange_tiles;
+	use crate::helpers::mock_vector_source::{MockVectorSource, arrange_tiles};
 	use std::sync::LazyLock;
+	use versatiles_image::EnhancedDynamicImageTrait;
 
 	static RESULT_PATTERN: LazyLock<Vec<String>> = LazyLock::new(|| {
 		vec![
@@ -446,5 +445,28 @@ mod tests {
 		assert_eq!(check_image(result.get_image_data(&c2).await?.unwrap()), "🟨");
 
 		Ok(())
+	}
+
+	#[test]
+	fn test_traversal_orders_overlay() {
+		use crate::operations::read::from_container::operation_from_reader;
+		use versatiles_core::types::TraversalOrder::*;
+
+		let mut src1 = MockVectorSource::new(&[], Some(TileBBoxPyramid::new_full(8)));
+		let mut src2 = MockVectorSource::new(&[], Some(TileBBoxPyramid::new_full(8)));
+
+		src1.set_traversal_orders(TraversalOrderSet::new(vec![BottomUp, DepthFirst16]));
+		src2.set_traversal_orders(TraversalOrderSet::new(vec![BottomUp, DepthFirst256]));
+
+		let op = Operation {
+			parameters: TilesReaderParameters::default(),
+			sources: vec![
+				operation_from_reader(Box::new(src1)),
+				operation_from_reader(Box::new(src2)),
+			],
+			tilejson: TileJSON::default(),
+		};
+
+		assert_eq!(op.traversal_orders(), TraversalOrderSet::new(vec![BottomUp]));
 	}
 }

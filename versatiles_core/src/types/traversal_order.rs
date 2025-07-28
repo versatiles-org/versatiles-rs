@@ -45,6 +45,12 @@ impl TraversalOrderSet {
 		TraversalOrderSet { set: EnumSet::all() }
 	}
 
+	pub fn new(orders: Vec<TraversalOrder>) -> Self {
+		TraversalOrderSet {
+			set: orders.into_iter().collect(),
+		}
+	}
+
 	/// Returns the first order in the built‑in preference list that is
 	/// contained in this set.
 	///

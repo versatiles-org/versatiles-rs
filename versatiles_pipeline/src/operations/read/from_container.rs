@@ -132,6 +132,19 @@ impl ReadOperationFactoryTrait for Factory {
 }
 
 #[cfg(test)]
+pub fn operation_from_reader(reader: Box<dyn TilesReaderTrait>) -> Box<dyn OperationTrait> {
+	let parameters = reader.parameters().clone();
+	let mut tilejson = reader.tilejson().clone();
+	tilejson.update_from_reader_parameters(&parameters);
+
+	Box::new(Operation {
+		parameters,
+		reader,
+		tilejson,
+	}) as Box<dyn OperationTrait>
+}
+
+#[cfg(test)]
 mod tests {
 	use super::*;
 
