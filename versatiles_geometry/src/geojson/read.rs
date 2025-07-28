@@ -58,7 +58,7 @@ mod tests {
 	#[test]
 	fn test_read_ndgeojson_iter_with_empty_lines() {
 		let json = r#"{"type":"Feature","geometry":{"type":"Point","coordinates":[1,1]},"properties":{}}"#;
-		let input = format!("{}\n\n{}", json, json);
+		let input = format!("{json}\n\n{json}");
 		let iter = read_ndgeojson_iter(BufReader::new(Cursor::new(input)));
 		let results: Vec<_> = iter.collect();
 		assert_eq!(results.len(), 2);
@@ -71,7 +71,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_read_ndgeojson_stream() {
 		let json = r#"{"type":"Feature","geometry":{"type":"Point","coordinates":[2,2]},"properties":{}}"#;
-		let input = format!("{}\n{}", json, json);
+		let input = format!("{json}\n{json}");
 		let mut stream = read_ndgeojson_stream(BufReader::new(Cursor::new(input)));
 		let mut count = 0;
 		while let Some(res) = stream.next().await {

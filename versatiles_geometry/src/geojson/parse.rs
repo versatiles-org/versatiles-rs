@@ -458,17 +458,17 @@ mod tests {
 		let cases = vec![
 			("123", GeoValue::UInt(123)),
 			("-456", GeoValue::Int(-456)),
-			("3.14", GeoValue::from(3.14_f64)),
+			("47.11", GeoValue::from(47.11_f64)),
 		];
 		for (input, expected) in cases {
 			let mut iter = ByteIterator::from_reader(Cursor::new(input), true);
 			let result = parse_geojson_number(&mut iter)?;
-			assert_eq!(result, expected, "input: {}", input);
+			assert_eq!(result, expected, "input: {input}");
 		}
 		// Error cases
 		for input in &["1.2.3", "abc"] {
 			let mut iter = ByteIterator::from_reader(Cursor::new(input), true);
-			assert!(parse_geojson_number(&mut iter).is_err(), "{} should error", input);
+			assert!(parse_geojson_number(&mut iter).is_err(), "{input} should error");
 		}
 		Ok(())
 	}
