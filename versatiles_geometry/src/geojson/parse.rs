@@ -285,9 +285,7 @@ mod tests {
             "features": [
                 {
                     "type": "Feature",
-                    "properties": {
-                        "prop0": "value0"
-                    }
+                    "properties": { "prop0": "value0" }
                 }
             ]
         }
@@ -320,13 +318,8 @@ mod tests {
             "features": [
                 {
                     "type": "Feature",
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": [102.0, 0.5]
-                    },
-                    "properties": {
-                        "prop0": "value0"
-                    }
+                    "geometry": { "type": "Point", "coordinates": [102.0, 0.5] },
+                    "properties": { "prop0": "value0" }
                 },
             ]
         "#; // Note the trailing comma and unclosed brace
@@ -344,13 +337,8 @@ mod tests {
                 {
                     "type": "Feature",
                     "id": "feature1",
-                    "geometry": {
-                        "type": "Point",
-                        "coordinates": [102.0, 0.5]
-                    },
-                    "properties": {
-                        "prop0": "value0"
-                    }
+                    "geometry": { "type": "Point", "coordinates": [102.0, 0.5] },
+                    "properties": { "prop0": "value0" }
                 }
             ]
         }
@@ -362,6 +350,126 @@ mod tests {
 		let feature = &collection.features[0];
 		assert_eq!(feature.id, Some(GeoValue::String("feature1".to_string())));
 
+		Ok(())
+	}
+
+	#[test]
+	fn test_parse_geojson_numeric_id() -> Result<()> {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","id":123,
+			"geometry":{"type":"Point","coordinates":[1,2]},"properties":{}
+		}]}"#;
+		let collection = parse_geojson(json)?;
+		assert_eq!(collection.features[0].id, Some(GeoValue::UInt(123)));
+		Ok(())
+	}
+
+	#[test]
+	fn test_parse_geojson_boolean_null_properties() -> Result<()> {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"Point","coordinates":[0,0]},"properties":{"b":true,"n":null}
+		}]}"#;
+		let collection = parse_geojson(json)?;
+		let props = &collection.features[0].properties;
+		assert_eq!(props.get("b"), Some(&GeoValue::Bool(true)));
+		assert_eq!(props.get("n"), Some(&GeoValue::Null));
+		Ok(())
+	}
+
+	#[test]
+	fn test_parse_geojson_line_string() -> Result<()> {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"LineString","coordinates":[[0,0],[1,1]]},"properties":{}
+		}]}"#;
+		let collection = parse_geojson(json)?;
+		assert_eq!(collection.features[0].geometry.get_type_name(), "LineString");
+		Ok(())
+	}
+
+	#[test]
+	fn test_parse_geojson_polygon() -> Result<()> {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,1],[0,0]]]},"properties":{}
+		}]}"#;
+		let collection = parse_geojson(json)?;
+		assert_eq!(collection.features[0].geometry.get_type_name(), "Polygon");
+		Ok(())
+	}
+
+	#[test]
+	fn test_parse_geojson_multipoint() -> Result<()> {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"MultiPoint","coordinates":[[1,2],[3,4]]},"properties":{}
+		}]}"#;
+		let collection = parse_geojson(json)?;
+		assert_eq!(collection.features[0].geometry.get_type_name(), "MultiPoint");
+		Ok(())
+	}
+
+	#[test]
+	fn test_parse_geojson_multilinestring() -> Result<()> {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"MultiLineString","coordinates":[[[0,0],[1,1]],[[2,2],[3,3]]]},"properties":{}
+		}]}"#;
+		let collection = parse_geojson(json)?;
+		assert_eq!(collection.features[0].geometry.get_type_name(), "MultiLineString");
+		Ok(())
+	}
+
+	#[test]
+	fn test_parse_geojson_multipolygon() -> Result<()> {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[0,0],[1,0],[1,1],[0,1],[0,0]]]]},"properties":{}
+		}]}"#;
+		let collection = parse_geojson(json)?;
+		assert_eq!(collection.features[0].geometry.get_type_name(), "MultiPolygon");
+		Ok(())
+	}
+
+	#[test]
+	fn test_parse_geojson_unknown_geometry_type_feature() {
+		let json = r#"{
+		"type":"FeatureCollection",
+		"features":[{
+			"type":"Feature","geometry":{"type":"Unknown","coordinates":[0,0]},"properties":{}
+		}]}"#;
+		let result = parse_geojson(json);
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_parse_geojson_number_variants() -> Result<()> {
+		use std::io::Cursor;
+		use versatiles_core::byte_iterator::ByteIterator;
+		let cases = vec![
+			("123", GeoValue::UInt(123)),
+			("-456", GeoValue::Int(-456)),
+			("3.14", GeoValue::from(3.14_f64)),
+		];
+		for (input, expected) in cases {
+			let mut iter = ByteIterator::from_reader(Cursor::new(input), true);
+			let result = parse_geojson_number(&mut iter)?;
+			assert_eq!(result, expected, "input: {}", input);
+		}
+		// Error cases
+		for input in &["1.2.3", "abc"] {
+			let mut iter = ByteIterator::from_reader(Cursor::new(input), true);
+			assert!(parse_geojson_number(&mut iter).is_err(), "{} should error", input);
+		}
 		Ok(())
 	}
 }
