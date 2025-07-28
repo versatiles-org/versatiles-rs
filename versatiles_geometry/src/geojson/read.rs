@@ -39,3 +39,46 @@ pub fn read_ndgeojson_stream(reader: impl BufRead) -> impl Stream<Item = Result<
 			})
 		})
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use futures::StreamExt;
+	use std::io::{BufReader, Cursor};
+
+	#[test]
+	fn test_read_geojson_basic() -> Result<()> {
+		let json = r#"{"type":"FeatureCollection","features":[{"type":"Feature","geometry":{"type":"Point","coordinates":[0,0]},"properties":{}}]}"#;
+		let collection = read_geojson(Cursor::new(json))?;
+		assert_eq!(collection.features.len(), 1);
+		assert_eq!(collection.features[0].geometry.get_type_name(), "Point");
+		Ok(())
+	}
+
+	#[test]
+	fn test_read_ndgeojson_iter_with_empty_lines() {
+		let json = r#"{"type":"Feature","geometry":{"type":"Point","coordinates":[1,1]},"properties":{}}"#;
+		let input = format!("{}\n\n{}", json, json);
+		let iter = read_ndgeojson_iter(BufReader::new(Cursor::new(input)));
+		let results: Vec<_> = iter.collect();
+		assert_eq!(results.len(), 2);
+		for res in results {
+			let feature = res.unwrap();
+			assert_eq!(feature.geometry.get_type_name(), "Point");
+		}
+	}
+
+	#[tokio::test]
+	async fn test_read_ndgeojson_stream() {
+		let json = r#"{"type":"Feature","geometry":{"type":"Point","coordinates":[2,2]},"properties":{}}"#;
+		let input = format!("{}\n{}", json, json);
+		let mut stream = read_ndgeojson_stream(BufReader::new(Cursor::new(input)));
+		let mut count = 0;
+		while let Some(res) = stream.next().await {
+			let feature = res.unwrap();
+			assert_eq!(feature.geometry.get_type_name(), "Point");
+			count += 1;
+		}
+		assert_eq!(count, 2);
+	}
+}
