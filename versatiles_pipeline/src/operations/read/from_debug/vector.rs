@@ -196,4 +196,54 @@ mod tests {
 		assert_eq!(vt.layers[2].features.len(), 6);
 		assert_eq!(vt.layers[3].features.len(), 6);
 	}
+
+	#[test]
+	fn test_draw_quad_straight_line() {
+		use ab_glyph::Point;
+		let p0 = Point { x: 0.0, y: 0.0 };
+		let c0 = Point { x: 0.5, y: 0.5 };
+		let p1 = Point { x: 1.0, y: 1.0 };
+		let pts = draw_quad(p0, c0, p1);
+		assert_eq!(pts.len(), 2, "Expected no subdivision for straight line");
+		assert_eq!(pts[0], p0);
+		assert_eq!(pts[1], p1);
+	}
+
+	#[test]
+	fn test_draw_quad_curve() {
+		use ab_glyph::Point;
+		let p0 = Point { x: 0.0, y: 0.0 };
+		let c0 = Point { x: 0.0, y: 1.0 };
+		let p1 = Point { x: 1.0, y: 1.0 };
+		let pts = draw_quad(p0, c0, p1);
+		assert!(pts.len() > 2, "Expected subdivision for curved quad");
+		assert_eq!(pts.first().cloned(), Some(p0));
+		assert_eq!(pts.last().cloned(), Some(p1));
+	}
+
+	#[test]
+	fn test_draw_cubic_straight_line() {
+		use ab_glyph::Point;
+		let p0 = Point { x: 0.0, y: 0.0 };
+		let c0 = Point { x: 0.333, y: 0.333 };
+		let c1 = Point { x: 0.666, y: 0.666 };
+		let p1 = Point { x: 1.0, y: 1.0 };
+		let pts = draw_cubic(p0, c0, c1, p1);
+		assert_eq!(pts.len(), 2, "Expected no subdivision for straight cubic");
+		assert_eq!(pts[0], p0);
+		assert_eq!(pts[1], p1);
+	}
+
+	#[test]
+	fn test_draw_cubic_curve() {
+		use ab_glyph::Point;
+		let p0 = Point { x: 0.0, y: 0.0 };
+		let c0 = Point { x: 0.0, y: 1.0 };
+		let c1 = Point { x: 1.0, y: 0.0 };
+		let p1 = Point { x: 1.0, y: 1.0 };
+		let pts = draw_cubic(p0, c0, c1, p1);
+		assert!(pts.len() > 2, "Expected subdivision for curved cubic");
+		assert_eq!(pts.first().cloned(), Some(p0));
+		assert_eq!(pts.last().cloned(), Some(p1));
+	}
 }
