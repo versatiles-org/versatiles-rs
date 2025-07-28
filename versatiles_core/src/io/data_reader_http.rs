@@ -106,8 +106,8 @@ impl DataReaderTrait for DataReaderHttp {
 		}
 
 		let content_range: &str = match response.headers().get("content-range") {
-			Some(header_value) => header_value.to_str()?,
-			None => bail!("content-range is not set in response headers, {}", ctx()),
+			Some(header_value) => header_value.to_str().with_context(ctx)?,
+			None => bail!("content-range header is not set in response headers, {}", ctx()),
 		};
 
 		lazy_static! {
@@ -153,7 +153,14 @@ impl DataReaderTrait for DataReaderHttp {
 	///
 	/// * A Result containing a Blob with all the data or an error.
 	async fn read_all(&self) -> Result<Blob> {
-		bail!("not implemented yet")
+		let ctx = || format!("while reading all data from {}", self.url);
+		let response = self.client.get(self.url.clone()).send().await.with_context(ctx)?;
+		if !response.status().is_success() {
+			let status = response.status();
+			bail!("expected successful response, got {status}, {}", ctx());
+		}
+		let bytes = response.bytes().await.with_context(ctx)?;
+		Ok(Blob::from(bytes.deref()))
 	}
 
 	/// Gets the name of the data source.

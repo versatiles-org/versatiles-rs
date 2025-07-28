@@ -29,7 +29,7 @@
 
 use super::DataReaderTrait;
 use crate::types::{Blob, ByteRange};
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result, ensure};
 use async_trait::async_trait;
 use std::{
 	fs::File,
@@ -85,9 +85,19 @@ impl DataReaderTrait for DataReaderFile {
 	/// * A Result containing a Blob with the read data or an error.
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
 		let mut buffer = vec![0; range.length as usize];
-		let mut file = self.file.try_clone()?;
-		file.seek(SeekFrom::Start(range.offset))?;
-		file.read_exact(&mut buffer)?;
+		let mut file = self
+			.file
+			.try_clone()
+			.with_context(|| format!("failed to clone file '{}'", self.name))?;
+		file
+			.seek(SeekFrom::Start(range.offset))
+			.with_context(|| format!("failed to seek to offset {} in file '{}',", range.offset, self.name))?;
+		file.read_exact(&mut buffer).with_context(|| {
+			format!(
+				"failed to read {} bytes at offset {} in file '{}'",
+				range.length, range.offset, self.name
+			)
+		})?;
 		Ok(Blob::from(buffer))
 	}
 
@@ -98,9 +108,16 @@ impl DataReaderTrait for DataReaderFile {
 	/// * A Result containing a Blob with all the data or an error.
 	async fn read_all(&self) -> Result<Blob> {
 		let mut buffer = vec![0; self.size as usize];
-		let mut file = self.file.try_clone()?;
-		file.seek(SeekFrom::Start(0))?;
-		file.read_exact(&mut buffer)?;
+		let mut file = self
+			.file
+			.try_clone()
+			.with_context(|| format!("failed to clone file '{}'", self.name))?;
+		file
+			.seek(SeekFrom::Start(0))
+			.with_context(|| format!("failed to seek to start of file '{}'", self.name))?;
+		file
+			.read_exact(&mut buffer)
+			.with_context(|| format!("failed to read all {} bytes from file '{}'", self.size, self.name))?;
 		Ok(Blob::from(buffer))
 	}
 
