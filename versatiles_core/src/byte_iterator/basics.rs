@@ -247,6 +247,7 @@ mod tests {
 		assert_eq!(parse("-123")?, "-123");
 		assert_eq!(parse("0.456")?, "0.456");
 		assert_eq!(parse("-0.456")?, "-0.456");
+		assert_eq!(parse("3e4")?, "3e4");
 		assert_eq!(parse("123e10")?, "123e10");
 		assert_eq!(parse("123E-10")?, "123E-10");
 		assert_eq!(parse("-123.45E+6")?, "-123.45E+6");
