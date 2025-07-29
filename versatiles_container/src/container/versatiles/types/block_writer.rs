@@ -5,6 +5,7 @@ use versatiles_core::{
 	io::DataWriterTrait,
 	types::{Blob, ByteRange, TileBBox, TileCoord3},
 };
+use versatiles_derive::context;
 
 pub struct BlockWriter<'a> {
 	pub bbox: TileBBox,
@@ -30,7 +31,8 @@ impl<'a> BlockWriter<'a> {
 		}
 	}
 
-	/// Write a single block to the writer.
+	/// Write a single tile to the writer.
+	#[context("writing tile at {coord:?}")]
 	pub fn write_tile(&mut self, coord: TileCoord3, blob: Blob) -> Result<()> {
 		let index = self.bbox.get_tile_index2(&coord.as_coord2())?;
 
@@ -55,6 +57,7 @@ impl<'a> BlockWriter<'a> {
 		Ok(())
 	}
 
+	#[context("finalizing block writer")]
 	pub fn finalize(self) -> Result<(ByteRange, ByteRange)> {
 		// Get the final writer position
 		let offset1 = self.writer.get_position()?;

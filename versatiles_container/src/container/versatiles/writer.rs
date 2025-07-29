@@ -97,7 +97,7 @@ impl VersaTilesWriter {
 
 		// Initialize blocks and populate them
 		use TraversalOrder::*;
-		let blocks: Vec<BlockDefinition> = reader
+		let block_defs: Vec<BlockDefinition> = reader
 			.iter_bboxes_in_preferred_order(&[TopDown, BottomUp, DepthFirst256])?
 			.flat_map(|level_bbox| {
 				level_bbox
@@ -110,7 +110,7 @@ impl VersaTilesWriter {
 		// Initialize progress bar
 		let mut progress = get_progress_bar(
 			"converting tiles",
-			blocks.iter().map(|block| block.count_tiles()).sum::<u64>(),
+			block_defs.iter().map(|block| block.count_tiles()).sum::<u64>(),
 		);
 
 		// Create the block index
@@ -118,8 +118,26 @@ impl VersaTilesWriter {
 		let mut tiles_count = 0;
 
 		// Iterate through blocks and write them
-		for mut block in blocks.into_iter() {
-			let (tiles_range, index_range) = Self::write_block(&block, reader, writer, &mut progress).await?;
+		for mut block in block_defs.into_iter() {
+			// Log the start of the block
+			debug!("start block {block:?}");
+
+			// Create a new BlockWriter for the block
+			let mut block_writer = BlockWriter::new(&block, writer);
+
+			reader
+				.get_tile_stream(block_writer.bbox)
+				.await?
+				.for_each_sync(|(coord, blob)| {
+					progress.inc(1);
+					block_writer.write_tile(coord, blob).unwrap();
+				})
+				.await;
+
+			// Finish the block
+			debug!("finish block {block:?}");
+
+			let (tiles_range, index_range) = block_writer.finalize()?;
 
 			if tiles_range.length + index_range.length == 0 {
 				// Block is empty, continue with the next block
@@ -141,38 +159,5 @@ impl VersaTilesWriter {
 		let range = writer.append(&block_index.as_brotli_blob()?)?;
 
 		Ok(range)
-	}
-
-	/// Write a single block to the writer.
-	async fn write_block(
-		block_definition: &BlockDefinition,
-		reader: &mut dyn TilesReaderTrait,
-		writer: &mut dyn DataWriterTrait,
-		progress: &mut Box<dyn ProgressTrait>,
-	) -> Result<(ByteRange, ByteRange)> {
-		// Log the start of the block
-		debug!("start block {block_definition:?}");
-
-		// Create a new BlockWriter for the block
-		let mut block = BlockWriter::new(block_definition, writer);
-
-		// Get the tile stream
-		let tile_stream: TileStream = reader.get_tile_stream(block.bbox).await?;
-
-		// Iterate through the blobs and process them
-		tile_stream
-			.for_each_sync(|(coord, blob)| {
-				progress.inc(1);
-
-				block.write_tile(coord, blob).unwrap_or_else(|e| {
-					debug!("Error writing tile {coord:?}: {e}");
-				});
-			})
-			.await;
-
-		// Finish the block
-		debug!("finish block {block_definition:?}");
-
-		block.finalize()
 	}
 }
