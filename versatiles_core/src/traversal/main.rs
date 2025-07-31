@@ -1,3 +1,8 @@
+//! Utilities for constructing and applying tile traversal strategies.
+//!
+//! Defines the `Traversal` type, which combines a traversal order and block size range,
+//! and provides methods to generate ordered tile bounding boxes from a pyramid.
+
 use crate::{
 	TileBBox, TileBBoxPyramid,
 	traversal::{TraversalOrder, TraversalSize},
@@ -5,12 +10,26 @@ use crate::{
 use anyhow::Result;
 
 #[derive(Debug, Clone, PartialEq)]
+/// Represents a traversal strategy for iterating over tile bounding boxes.
+///
+/// A `Traversal` combines a `TraversalOrder` (ordering of blocks)
+/// and a `TraversalSize` (range of block sizes) to generate
+/// an ordered sequence of `TileBBox` instances from a `TileBBoxPyramid`.
 pub struct Traversal {
 	order: TraversalOrder,
 	size: TraversalSize,
 }
 
 impl Traversal {
+	/// Create a new `Traversal` with the given block ordering and size range.
+	///
+	/// # Parameters
+	/// - `order`: the `TraversalOrder` (e.g., depth-first, Hilbert).
+	/// - `min_size`: minimum block size in tiles (power of two).
+	/// - `max_size`: maximum block size in tiles (power of two).
+	///
+	/// # Errors
+	/// Returns an error if size parameters are invalid (not powers of two or out of range).
 	pub fn new(order: TraversalOrder, min_size: u32, max_size: u32) -> Result<Traversal> {
 		Ok(Traversal {
 			order,
@@ -18,6 +37,9 @@ impl Traversal {
 		})
 	}
 
+	/// Create a `Traversal` with any order and the specified size range.
+	///
+	/// Uses `TraversalOrder::AnyOrder` with the same size validation as `new`.
 	pub fn new_any_size(min_size: u32, max_size: u32) -> Result<Traversal> {
 		Ok(Traversal {
 			order: TraversalOrder::AnyOrder,
@@ -25,34 +47,52 @@ impl Traversal {
 		})
 	}
 
+	/// Create a `Traversal` with any order and the default size range (1 to 2^31).
 	pub const fn new_any() -> Self {
-		const {
-			Traversal {
-				order: TraversalOrder::AnyOrder,
-				size: TraversalSize::new_default(),
-			}
+		Traversal {
+			order: TraversalOrder::AnyOrder,
+			size: TraversalSize::new_default(),
 		}
 	}
 
+	/// Return the maximum block size in tiles for this `Traversal`.
+	///
+	/// # Errors
+	/// Returns an error if the size range is invalid.
 	pub fn get_max_size(&self) -> Result<u32> {
 		self.size.get_max_size()
 	}
 
+	/// Access the `TraversalOrder` (block ordering strategy).
 	pub fn order(&self) -> &TraversalOrder {
 		&self.order
 	}
 
+	/// Modify this `Traversal` to be the intersection with another.
+	///
+	/// Combines size and order; errors if the order or sizes cannot intersect.
 	pub fn intersect(&mut self, other: &Traversal) -> Result<()> {
 		self.size.intersect(&other.size)?;
 		self.order.intersect(&other.order)
 	}
 
+	/// Return a new `Traversal` that is the intersection of this and another, without modifying either.
 	pub fn get_intersected(&self, other: &Traversal) -> Result<Traversal> {
 		let mut result = self.clone();
 		result.intersect(other)?;
 		Ok(result)
 	}
 
+	/// Traverse the tile pyramid, returning all `TileBBox` in traversal order.
+	///
+	/// Generates bounding boxes at each level, groups them by block size,
+	/// applies the traversal order, and returns a flat vector.
+	///
+	/// # Parameters
+	/// - `pyramid`: the `TileBBoxPyramid` defining the tile grid per zoom level.
+	///
+	/// # Errors
+	/// Returns an error if size computation or ordering fails.
 	pub fn traverse_pyramid(&self, pyramid: &TileBBoxPyramid) -> Result<Vec<TileBBox>> {
 		let size = self.get_max_size()?;
 		let mut bboxes: Vec<TileBBox> = pyramid.level_bbox.iter().flat_map(|b| b.iter_bbox_grid(size)).collect();
@@ -211,5 +251,52 @@ mod tests {
 				}
 			}
 		}
+	}
+
+	#[test]
+	fn test_new_and_getters() {
+		// Test successful creation and getters
+		let traversal = Traversal::new(TraversalOrder::DepthFirst, 1, 8).unwrap();
+		assert_eq!(traversal.order(), &TraversalOrder::DepthFirst);
+		assert_eq!(traversal.get_max_size().unwrap(), 8);
+	}
+
+	#[test]
+	fn test_new_any_size() {
+		let traversal = Traversal::new_any_size(2, 4).unwrap();
+		assert_eq!(traversal.order(), &TraversalOrder::AnyOrder);
+		assert_eq!(traversal.get_max_size().unwrap(), 4);
+	}
+
+	#[test]
+	fn test_new_any_and_default() {
+		let any = Traversal::new_any();
+		let def: Traversal = Default::default();
+		assert_eq!(any, def);
+		assert_eq!(any.order(), &TraversalOrder::AnyOrder);
+		// default size covers full range
+		assert_eq!(any.get_max_size().unwrap(), 1 << 31);
+	}
+
+	#[test]
+	fn test_invalid_size_errors() {
+		// zero or min > max should error
+		assert!(Traversal::new(TraversalOrder::AnyOrder, 0, 1).is_err());
+		assert!(Traversal::new(TraversalOrder::AnyOrder, 4, 2).is_err());
+	}
+
+	#[test]
+	fn test_intersect_and_get_intersected() {
+		let mut t1 = Traversal::new(TraversalOrder::AnyOrder, 1, 16).unwrap();
+		let t2 = Traversal::new(TraversalOrder::DepthFirst, 2, 8).unwrap();
+		// in-place intersect
+		t1.intersect(&t2).unwrap();
+		assert_eq!(t1.order(), &TraversalOrder::DepthFirst);
+		assert_eq!(t1.get_max_size().unwrap(), 8);
+		// get_intersected returns a new instance and does not modify original
+		let t3 = Traversal::new(TraversalOrder::PMTiles, 4, 64).unwrap();
+		let got = t3.get_intersected(&Traversal::new_any_size(2, 16).unwrap()).unwrap();
+		assert_eq!(got.order(), &TraversalOrder::PMTiles);
+		assert_eq!(got.get_max_size().unwrap(), 16);
 	}
 }
