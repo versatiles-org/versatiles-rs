@@ -146,7 +146,7 @@ mod tests {
 		let data = Blob::from(vec![10, 20, 30]);
 		// Append data
 		let range = writer.append(&data)?;
-		assert_eq!(range.to_string(), "[0..2]");
+		assert_eq!(range.to_string(), "[0..=2]");
 		// Position should now equal length
 		assert_eq!(writer.get_position()?, 3);
 
@@ -173,7 +173,7 @@ mod tests {
 		// Now append more data
 		let extra = Blob::from(vec![5, 6]);
 		let range2 = writer.append(&extra)?;
-		assert_eq!(range2.to_string(), "[0..1]");
+		assert_eq!(range2.to_string(), "[0..=1]");
 
 		drop(writer);
 
