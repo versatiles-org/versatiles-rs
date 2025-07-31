@@ -125,7 +125,7 @@ mod tests {
 		let ts2 = TraversalSize::new(4, 32)?;
 		ts1.intersect(&ts2)?;
 		assert_eq!(ts1.get_max_size()?, 16);
-		assert_eq!(format!("{:?}", ts1), "TraversalSize (4 .. 16)");
+		assert_eq!(format!("{ts1:?}"), "TraversalSize (4 .. 16)");
 		Ok(())
 	}
 
@@ -145,7 +145,7 @@ mod tests {
 	fn test_default_and_debug() -> Result<()> {
 		let ts = TraversalSize::default();
 		assert_eq!(ts.get_max_size()?, 1 << 31);
-		let s = format!("{:?}", ts);
+		let s = format!("{ts:?}");
 		assert!(s.contains("TraversalSize (1 .."));
 		Ok(())
 	}
@@ -176,7 +176,7 @@ mod tests {
 		let ts2 = TraversalSize::new(2, 32)?;
 		ts1.intersect(&ts2)?;
 		assert_eq!(ts1.get_max_size()?, 32);
-		assert_eq!(format!("{:?}", ts1), "TraversalSize (8 .. 32)");
+		assert_eq!(format!("{ts1:?}"), "TraversalSize (8 .. 32)");
 		Ok(())
 	}
 }
