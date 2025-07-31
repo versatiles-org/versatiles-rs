@@ -1506,6 +1506,50 @@ mod tests {
 	}
 
 	#[test]
+	fn test_scaled_down_returns_new_bbox_and_preserves_original() -> Result<()> {
+		// Original bbox
+		let original = TileBBox::new(5, 10, 15, 20, 25)?;
+		// scaled_down should return a new bbox without modifying the original
+		let scaled = original.scaled_down(4);
+		// Coordinates divided by 4: 10/4=2,15/4=3,20/4=5,25/4=6
+		assert_eq!(scaled, TileBBox::new(5, 2, 3, 5, 6)?);
+		// Original remains unchanged
+		assert_eq!(original, TileBBox::new(5, 10, 15, 20, 25)?);
+		// Scaling by 1 should produce identical bbox
+		let same = original.scaled_down(1);
+		assert_eq!(same, original);
+		Ok(())
+	}
+
+	#[test]
+	fn test_scale_down() {
+		fn test(min0: u32, max0: u32, min1: u32, max1: u32) {
+			fn t(min: u32, max: u32) -> TileBBox {
+				TileBBox::new(8, min, min, max, max).unwrap()
+			}
+			let mut bbox0 = t(min0, max0);
+			let bbox1 = t(min1, max1);
+			assert_eq!(
+				bbox0.scaled_down(4),
+				bbox1,
+				"scaled_down(4) of {bbox0:?} should return {bbox1:?}"
+			);
+			bbox0.scale_down(4);
+			assert_eq!(bbox0, bbox1, "scale_down(4) of {bbox0:?} should result in {bbox1:?}");
+		}
+
+		test(0, 11, 0, 2);
+		test(1, 12, 0, 3);
+		test(2, 13, 0, 3);
+		test(3, 14, 0, 3);
+		test(4, 15, 1, 3);
+		test(5, 16, 1, 4);
+		test(6, 17, 1, 4);
+		test(7, 18, 1, 4);
+		test(8, 19, 2, 4);
+	}
+
+	#[test]
 	fn should_shift_bbox_correctly() -> Result<()> {
 		let mut bbox = TileBBox::new(6, 5, 10, 15, 20)?;
 		bbox.shift_by(3, 4);
