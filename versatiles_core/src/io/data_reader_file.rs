@@ -219,4 +219,38 @@ mod tests {
 
 		Ok(())
 	}
+
+	// Test the synchronous `Read` implementation
+	#[test]
+	fn read_sync_and_read_trait() -> Result<()> {
+		let temp_file = NamedTempFile::new("testfile_sync.txt")?;
+		// Write data to the file
+		{
+			let mut f = File::create(temp_file.path())?;
+			f.write_all(b"Sync read test")?;
+		}
+
+		let mut reader = DataReaderFile::open(temp_file.path()).unwrap();
+		let mut buf = Vec::new();
+		// Box<DataReaderFile> implements Read
+		reader.read_to_end(&mut buf)?;
+		assert_eq!(buf, b"Sync read test");
+		Ok(())
+	}
+
+	// Test the `read_all` async method
+	#[tokio::test]
+	async fn test_read_all_method() -> Result<()> {
+		let temp_file = NamedTempFile::new("testfile_all.txt")?;
+		// Write data to the file
+		{
+			let mut f = File::create(temp_file.path())?;
+			f.write_all(b"Async read all test")?;
+		}
+
+		let reader = DataReaderFile::open(temp_file.path())?;
+		let blob = reader.read_all().await?;
+		assert_eq!(blob.as_slice(), b"Async read all test");
+		Ok(())
+	}
 }
