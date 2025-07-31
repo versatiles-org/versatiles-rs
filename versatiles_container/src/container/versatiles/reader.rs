@@ -410,7 +410,7 @@ impl TilesReaderTrait for VersaTilesReader {
 		let mut tile_count: u64 = 0;
 
 		let block_index = self.block_index.clone();
-		let mut progress = get_progress_bar("scanning blocks", block_index.len() as u64);
+		let progress = get_progress_bar("scanning blocks", block_index.len() as u64);
 
 		for block in block_index.iter() {
 			let tile_index = self.get_block_tile_index(block).await?;

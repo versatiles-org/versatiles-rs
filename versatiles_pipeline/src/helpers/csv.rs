@@ -16,7 +16,7 @@ pub async fn read_csv_file(path: &Path) -> Result<Vec<GeoProperties>> {
 	let file = std::fs::File::open(path).with_context(|| format!("Failed to open file at path: {path:?}"))?;
 
 	let size = file.metadata()?.len();
-	let mut progress = get_progress_bar("read csv", size);
+	let progress = get_progress_bar("read csv", size);
 
 	let reader = BufReader::new(file);
 

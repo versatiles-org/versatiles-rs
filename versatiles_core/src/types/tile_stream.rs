@@ -548,6 +548,22 @@ where
 		TileStream { stream: s }
 	}
 
+	/// Runs a callback for every item, e.g. for progress tracking.
+	pub fn inspect<F>(self, mut callback: F) -> Self
+	where
+		F: FnMut() + Send + 'a,
+	{
+		TileStream {
+			stream: self
+				.stream
+				.map(move |item| {
+					callback();
+					item
+				})
+				.boxed(),
+		}
+	}
+
 	// -------------------------------------------------------------------------
 	// Utility
 	// -------------------------------------------------------------------------

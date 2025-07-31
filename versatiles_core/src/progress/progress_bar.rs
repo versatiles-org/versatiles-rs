@@ -11,36 +11,35 @@
 //! ```rust
 //! use versatiles_core::progress::get_progress_bar;
 //!
-//! let mut progress = get_progress_bar("Processing", 100);
+//! let progress = get_progress_bar("Processing", 100);
 //! progress.set_position(50);
 //! progress.inc(10);
 //! progress.finish();
 //! ```
 
-use super::ProgressTrait;
 use indicatif::{ProgressBar as IndicatifProgressBar, ProgressStyle};
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
-/// A struct that represents a progress bar.
+/// A terminal progress bar handle, cloneable and thread-safe via indicatif.
+#[derive(Clone)]
 pub struct ProgressBar {
-	bar: IndicatifProgressBar,
+	bar: Arc<IndicatifProgressBar>,
 }
 
-impl ProgressTrait for ProgressBar {
-	fn new() -> Self {
+impl ProgressBar {
+	pub fn new() -> Self {
 		#[cfg(all(not(feature = "test"), feature = "cli"))]
 		let bar = IndicatifProgressBar::new(0);
 		#[cfg(any(feature = "test", not(feature = "cli")))]
 		let bar = IndicatifProgressBar::hidden();
-		ProgressBar { bar }
+		ProgressBar { bar: Arc::new(bar) }
 	}
 
-	fn init(&mut self, message: &str, max_value: u64) {
-		let p = &mut self.bar;
-		p.set_length(max_value);
-		p.enable_steady_tick(Duration::from_millis(250));
-		p.set_message(message.to_string());
-		p.set_style(
+	pub fn init(&self, message: &str, max_value: u64) {
+		self.bar.set_length(max_value);
+		self.bar.enable_steady_tick(Duration::from_millis(250));
+		self.bar.set_message(message.to_string());
+		self.bar.set_style(
 			ProgressStyle::default_bar()
 				.template("{msg}▕{wide_bar}▏{pos}/{len} ({percent:3}%) {per_sec:8} {eta:5}")
 				.unwrap()
@@ -48,24 +47,30 @@ impl ProgressTrait for ProgressBar {
 		);
 	}
 
-	fn set_position(&mut self, value: u64) {
+	pub fn set_position(&self, value: u64) {
 		self.bar.set_position(value);
 	}
 
-	fn set_max_value(&mut self, value: u64) {
+	pub fn set_max_value(&self, value: u64) {
 		self.bar.set_length(value);
 	}
 
-	fn inc(&mut self, value: u64) {
+	pub fn inc(&self, value: u64) {
 		self.bar.inc(value);
 	}
 
-	fn finish(&mut self) {
+	pub fn finish(&self) {
 		self.bar.finish();
 	}
 
-	fn remove(&mut self) {
+	pub fn remove(&self) {
 		self.bar.finish_and_clear();
+	}
+}
+
+impl Default for ProgressBar {
+	fn default() -> Self {
+		Self::new()
 	}
 }
 
@@ -82,7 +87,7 @@ mod tests {
 
 	#[test]
 	fn test_bar_init() {
-		let mut progress = ProgressBar::new();
+		let progress = ProgressBar::new();
 		progress.init("Test", 100);
 		assert_eq!(progress.bar.length().unwrap(), 100);
 		assert_eq!(progress.bar.message(), "Test");
@@ -90,7 +95,7 @@ mod tests {
 
 	#[test]
 	fn test_bar_set_position() {
-		let mut progress = ProgressBar::new();
+		let progress = ProgressBar::new();
 		progress.init("Test", 100);
 		progress.set_position(50);
 		assert_eq!(progress.bar.position(), 50);
@@ -98,7 +103,7 @@ mod tests {
 
 	#[test]
 	fn test_bar_inc() {
-		let mut progress = ProgressBar::new();
+		let progress = ProgressBar::new();
 		progress.init("Test", 100);
 		progress.set_position(10);
 		progress.inc(20);
@@ -107,7 +112,7 @@ mod tests {
 
 	#[test]
 	fn test_bar_finish() {
-		let mut progress = ProgressBar::new();
+		let progress = ProgressBar::new();
 		progress.init("Test", 100);
 		progress.set_position(50);
 		progress.finish();
@@ -116,7 +121,7 @@ mod tests {
 
 	#[test]
 	fn test_bar_remove() {
-		let mut progress = ProgressBar::new();
+		let progress = ProgressBar::new();
 		progress.init("Test", 100);
 		progress.remove();
 		assert_eq!(progress.bar.position(), 100);
