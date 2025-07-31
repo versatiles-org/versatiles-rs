@@ -31,9 +31,10 @@ impl TransformCoord for TileCoord3 {
 impl TransformCoord for TileBBox {
 	fn flip_y(&mut self) {
 		if !self.is_empty() {
-			assert!(self.max >= self.y_max);
-			self.y_min = self.max - self.y_min;
-			self.y_max = self.max - self.y_max;
+			let max = (1u32 << self.level) - 1;
+			assert!(max >= self.y_max);
+			self.y_min = max - self.y_min;
+			self.y_max = max - self.y_max;
 			swap(&mut self.y_min, &mut self.y_max);
 		}
 	}

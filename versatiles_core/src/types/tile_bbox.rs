@@ -39,8 +39,6 @@ pub struct TileBBox {
 	pub x_max: u32,
 	/// Maximum y-coordinate.
 	pub y_max: u32,
-	/// Maximum valid coordinate based on zoom level.
-	pub max: u32,
 }
 
 #[allow(dead_code)]
@@ -72,7 +70,7 @@ impl TileBBox {
 	pub fn new(level: u8, x_min: u32, y_min: u32, x_max: u32, y_max: u32) -> Result<TileBBox> {
 		ensure!(level <= 31, "level ({level}) must be <= 31");
 
-		let max = 2u32.pow(level as u32) - 1;
+		let max = (1u32 << level) - 1;
 
 		ensure!(x_max <= max, "x_max ({x_max}) must be <= max ({max})");
 		ensure!(y_max <= max, "y_max ({y_max}) must be <= max ({max})");
@@ -81,7 +79,6 @@ impl TileBBox {
 
 		let bbox = TileBBox {
 			level,
-			max,
 			x_min,
 			y_min,
 			x_max,
@@ -124,7 +121,6 @@ impl TileBBox {
 		let max = 2u32.pow(level as u32) - 1;
 		Ok(TileBBox {
 			level,
-			max,
 			x_min: max + 1,
 			y_min: max + 1,
 			x_max: 0,
@@ -225,7 +221,8 @@ impl TileBBox {
 	/// This method is primarily used for testing purposes.
 	#[cfg(test)]
 	pub fn is_full(&self) -> bool {
-		!self.is_empty() && self.x_min == 0 && self.y_min == 0 && self.x_max == self.max && self.y_max == self.max
+		let max = (1u32 << self.level) - 1;
+		!self.is_empty() && self.x_min == 0 && self.y_min == 0 && self.x_max == max && self.y_max == max
 	}
 
 	// -------------------------------------------------------------------------
@@ -289,10 +286,11 @@ impl TileBBox {
 	/// This method is primarily used for testing purposes.
 	#[cfg(test)]
 	pub fn set_full(&mut self) {
+		let max = (1u32 << self.level) - 1;
 		self.x_min = 0;
 		self.y_min = 0;
-		self.x_max = self.max;
-		self.y_max = self.max;
+		self.x_max = max;
+		self.y_max = max;
 	}
 
 	/// Includes a specific tile coordinate (`x`, `y`) within the bounding box.
@@ -317,10 +315,11 @@ impl TileBBox {
 			self.y_max = y;
 		} else {
 			// Expand bounding box to include the new coordinate
+			let max = (1u32 << self.level) - 1;
 			self.x_min = self.x_min.min(x);
 			self.y_min = self.y_min.min(y);
-			self.x_max = self.x_max.max(x).min(self.max);
-			self.y_max = self.y_max.max(y).min(self.max);
+			self.x_max = self.x_max.max(x).min(max);
+			self.y_max = self.y_max.max(y).min(max);
 		}
 	}
 
@@ -368,10 +367,11 @@ impl TileBBox {
 	/// * `Err(anyhow::Error)` if the resulting bounding box is invalid.
 	pub fn add_border(&mut self, x_min: u32, y_min: u32, x_max: u32, y_max: u32) {
 		if !self.is_empty() {
+			let max = (1u32 << self.level) - 1;
 			self.x_min = self.x_min.saturating_sub(x_min);
 			self.y_min = self.y_min.saturating_sub(y_min);
-			self.x_max = (self.x_max + x_max).min(self.max);
-			self.y_max = (self.y_max + y_max).min(self.max);
+			self.x_max = (self.x_max + x_max).min(max);
+			self.y_max = (self.y_max + y_max).min(max);
 		}
 	}
 
@@ -406,10 +406,11 @@ impl TileBBox {
 				*self = *bbox;
 			} else {
 				// Expand to include the other bounding box
+				let max = (1u32 << self.level) - 1;
 				self.x_min = self.x_min.min(bbox.x_min);
 				self.y_min = self.y_min.min(bbox.y_min);
-				self.x_max = self.x_max.max(bbox.x_max).min(self.max);
-				self.y_max = self.y_max.max(bbox.y_max).min(self.max);
+				self.x_max = self.x_max.max(bbox.x_max).min(max);
+				self.y_max = self.y_max.max(bbox.y_max).min(max);
 			}
 		}
 
@@ -602,7 +603,6 @@ impl TileBBox {
 
 		TileBBox {
 			level: self.level,
-			max: self.max / scale,
 			x_min: self.x_min / scale,
 			y_min: self.y_min / scale,
 			x_max: self.x_max / scale,
@@ -992,19 +992,12 @@ mod tests {
 	}
 
 	#[test]
-	fn test_get_max() {
-		let bbox = TileBBox::new(4, 1, 1, 3, 3).unwrap();
-		assert_eq!(bbox.max, 15);
-	}
-
-	#[test]
 	fn test_new_empty() {
 		let bbox = TileBBox::new_empty(4).unwrap();
 		assert_eq!(
 			bbox,
 			TileBBox {
 				level: 4,
-				max: 15,
 				x_min: 16,
 				y_min: 16,
 				x_max: 0,
@@ -1144,7 +1137,6 @@ mod tests {
 		assert_eq!(bbox.y_min, 10);
 		assert_eq!(bbox.x_max, 15);
 		assert_eq!(bbox.y_max, 20);
-		assert_eq!(bbox.max, 63);
 	}
 
 	#[test]
