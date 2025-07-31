@@ -1,8 +1,19 @@
+//! Utilities for coordinate transformations on tile coordinates and bounding boxes.
+//!
+//! Provides the `TransformCoord` trait and implementations to flip and swap
+//! axes for `TileCoord3`, `TileBBox`, and `TileBBoxPyramid`.
+
 use crate::{TileBBox, TileBBoxPyramid, TileCoord3};
 use std::mem::swap;
 
+/// Trait for in-place coordinate transformations on tiles and bounding boxes.
+///
+/// Implementors can flip the y-axis or swap x/y coordinates.
 pub trait TransformCoord {
+	/// Flip along the vertical (y) axis. For coordinates, inverts y based on zoom level;
+	/// for bounding boxes and pyramids, flips y-min/y-max accordingly.
 	fn flip_y(&mut self);
+	/// Swap the x and y axes in-place.
 	fn swap_xy(&mut self);
 }
 
@@ -78,5 +89,28 @@ mod tests {
 		assert_eq!(test(3, 0, 0, 1, 1), TileBBox::new(3, 0, 6, 1, 7).unwrap());
 		assert_eq!(test(9, 10, 0, 10, 511), TileBBox::new(9, 10, 0, 10, 511).unwrap());
 		assert_eq!(test(9, 0, 10, 511, 10), TileBBox::new(9, 0, 501, 511, 501).unwrap());
+	}
+
+	#[test]
+	fn bbox_swap_xy_transform() {
+		let mut bbox = TileBBox::new(4, 1, 2, 3, 4).unwrap();
+		bbox.swap_xy();
+		assert_eq!(bbox, TileBBox::new(4, 2, 1, 4, 3).unwrap());
+	}
+
+	#[test]
+	fn pyramid_swap_xy_transform() {
+		let mut pyramid = TileBBoxPyramid::new_empty();
+		pyramid.include_bbox(&TileBBox::new(4, 0, 1, 2, 3).unwrap());
+		pyramid.swap_xy();
+		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 1, 0, 3, 2).unwrap());
+	}
+
+	#[test]
+	fn pyramid_flip_y_transform() {
+		let mut pyramid = TileBBoxPyramid::new_empty();
+		pyramid.include_bbox(&TileBBox::new(4, 0, 1, 2, 3).unwrap());
+		pyramid.flip_y();
+		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 0, 12, 2, 14).unwrap());
 	}
 }
