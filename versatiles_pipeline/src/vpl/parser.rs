@@ -305,7 +305,7 @@ mod tests {
 		let expected = VPLPipeline::from(vec![
 			VPLNode::from(("from_container", ("filename", "berlin.mbtiles"))),
 			VPLNode::from((
-				"vectortiles_update_properties",
+				"vector_update_properties",
 				vec![
 					("data_source_path", "cities.csv"),
 					("id_field_data", "city_name"),

@@ -140,7 +140,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"vectortiles_update_properties"
+		"vector_update_properties"
 	}
 }
 
@@ -214,7 +214,7 @@ mod tests {
 	#[test]
 	fn test_args_from_vpl_node() {
 		let vpl_node = VPLNode::from_str(
-			r##"vectortiles_update_properties data_source_path="data.csv" id_field_tiles=id id_field_data=id layer_name=test_layer replace_properties=true include_id=true"##,
+			r##"vector_update_properties data_source_path="data.csv" id_field_tiles=id id_field_data=id layer_name=test_layer replace_properties=true include_id=true"##,
 		)
 		.unwrap();
 
@@ -240,7 +240,7 @@ mod tests {
 			.operation_from_vpl(
 				&[
 					"from_debug |",
-					"vectortiles_update_properties",
+					"vector_update_properties",
 					&format!(
 						"data_source_path=\"{}\"",
 						temp_file.to_str().unwrap().replace('\\', "\\\\")

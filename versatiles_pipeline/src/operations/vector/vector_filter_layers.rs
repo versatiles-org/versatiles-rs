@@ -60,7 +60,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"vectortiles_filter_layers"
+		"vector_filter_layers"
 	}
 }
 
@@ -120,7 +120,7 @@ mod tests {
 
 	#[test]
 	fn test_args_from_vpl_node() {
-		let vpl_node = VPLNode::from_str(r##"vectortiles_filter_layers filter="temp,tomp" invert=true"##).unwrap();
+		let vpl_node = VPLNode::from_str(r##"vector_filter_layers filter="temp,tomp" invert=true"##).unwrap();
 
 		let args = Args::from_vpl_node(&vpl_node).unwrap();
 		assert_eq!(args.filter, "temp,tomp");
@@ -141,7 +141,7 @@ mod tests {
 			.operation_from_vpl(
 				&[
 					"from_debug |",
-					"vectortiles_filter_layers",
+					"vector_filter_layers",
 					&replace("filter", filter),
 					&replace("invert", invert),
 				]
@@ -169,7 +169,7 @@ mod tests {
 		let result = run_test("", "").await;
 		assert_eq!(
 			result.unwrap_err().to_string(),
-			"In operation 'vectortiles_filter_layers' the parameter 'filter' is required."
+			"In operation 'vector_filter_layers' the parameter 'filter' is required."
 		);
 	}
 
