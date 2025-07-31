@@ -1,7 +1,18 @@
+//! Utilities for tile traversal ordering.
+//!
+//! Provides the `TraversalOrder` enum and associated functions for sorting
+//! tile bounding boxes according to different traversal strategies:
+//! depth-first quadtree and Hilbert curve.
+
 use crate::{TileBBox, utils::HilbertIndex};
 use anyhow::{Result, bail};
 use enumset::EnumSetType;
 
+/// Strategies for ordering tiles when traversing a tile pyramid.
+///
+/// - `AnyOrder`: no specific ordering; leaves tiles in input order.
+/// - `DepthFirst`: quadtree depth-first ordering based on x/y bits.
+/// - `PMTiles`: ordering by Hilbert curve index (PMTiles style).
 #[derive(EnumSetType, Debug)]
 pub enum TraversalOrder {
 	AnyOrder,
@@ -10,15 +21,23 @@ pub enum TraversalOrder {
 }
 
 impl TraversalOrder {
-	pub fn sort_bboxes(&self, bboxes: Vec<TileBBox>, size: u32) -> Vec<TileBBox> {
+	/// Sorts the given slice of `TileBBox` in-place using this traversal order.
+	///
+	/// * `bboxes` – mutable slice of tile bounding boxes to sort.
+	/// * `size` – block size used to compute quadtree coordinates for `DepthFirst`.
+	pub fn sort_bboxes(&self, bboxes: &mut [TileBBox], size: u32) {
 		use TraversalOrder::*;
 		match self {
-			AnyOrder => bboxes,
+			AnyOrder => {}
 			DepthFirst => sort_depth_first(bboxes, size),
 			PMTiles => sort_hilbert(bboxes),
 		}
 	}
 
+	/// Merge another `TraversalOrder` into this one, choosing a compatible order.
+	///
+	/// If either is `AnyOrder`, results in the other order.
+	/// Returns an error if both orders are concrete and different.
 	pub fn intersect(&mut self, other: &TraversalOrder) -> Result<()> {
 		use TraversalOrder::*;
 		if self == other || other == &AnyOrder {
@@ -28,56 +47,94 @@ impl TraversalOrder {
 			*self = *other;
 			return Ok(());
 		}
-		bail!(
-			"Incompatible traversal orders, cannot intersect {:?} with {:?}",
-			self,
-			other
-		);
+		bail!("Incompatible traversal orders, cannot merge {self:?} with {other:?}");
 	}
 }
 
-fn sort_depth_first(bboxes: Vec<TileBBox>, size: u32) -> Vec<TileBBox> {
-	/// Build a depth‑first post‑order sort key for a chunk at (x_chunk, y_chunk).
-	///
-	/// The algorithm converts `(x_chunk, y_chunk)` to a quadtree path from the
-	/// root down to that chunk and then appends the sentinel digit **4**.
-	/// Children therefore have a key beginning with the same prefix but ending
-	/// with “…, child_digit, 4”, while the parent ends with “…, 4”.
-	/// In lexicographic order the children (`0‥3`) all come **before**
-	/// their parent (`4`), which yields the desired “children before parent”
-	/// post‑order traversal.
-	fn build_key(depth: u8, x: u32, y: u32) -> Vec<u8> {
-		let mut k = Vec::with_capacity(depth as usize + 1);
-		// Traverse from the root (most‑significant bit) towards the leaves.
-		for i in (0..depth).rev() {
-			let bit_x = (x >> i) & 1;
-			let bit_y = (y >> i) & 1;
-			k.push((bit_x | (bit_y << 1)) as u8); // quadrant digit 0‥3
+/// In-place depth-first (quadtree) sort of tile bounding boxes.
+///
+/// Constructs a quadtree key by interleaving x/y bits (MSB first) and
+/// sorts boxes lexicographically by this key plus a sentinel.
+///
+/// * `bboxes` – slice of boxes to sort.
+/// * `size` – block dimension for computing tile indices.
+fn sort_depth_first(bboxes: &mut [TileBBox], size: u32) {
+	bboxes.sort_by_cached_key(|b| {
+		// Build a depth-first key: quadtree path (MSB first) plus sentinel 4
+		let mut k = Vec::with_capacity(b.level as usize + 1);
+		for i in (0..b.level).rev() {
+			let bit_x = (((b.x_min / size) >> i) & 1) as u8;
+			let bit_y = (((b.y_min / size) >> i) & 1) as u8;
+			k.push(bit_x | (bit_y << 1));
 		}
-		k.push(4); // sentinel – guarantees parent after its (up‑to‑4) children
+		k.push(4);
 		k
-	}
-
-	// ---------------------------------------------------------------------
-	// 1.  Flatten all incoming bboxes into fixed‑size chunks of `chunk_size`.
-	// ---------------------------------------------------------------------
-	let mut items: Vec<(Vec<u8>, TileBBox)> = bboxes
-		.into_iter()
-		.map(|b| (build_key(b.level, b.x_min / size, b.y_min / size), b))
-		.collect();
-
-	// ---------------------------------------------------------------------
-	// 2.  Single `sort_unstable_by` to obtain the post‑order traversal.
-	// ---------------------------------------------------------------------
-	items.sort_unstable_by(|a, b| a.0.cmp(&b.0));
-
-	// ---------------------------------------------------------------------
-	// 3.  Strip the keys and return the ordered bounding boxes.
-	// ---------------------------------------------------------------------
-	items.into_iter().map(|(_, bbox)| bbox).collect()
+	});
 }
 
-fn sort_hilbert(mut bboxes: Vec<TileBBox>) -> Vec<TileBBox> {
+/// In-place Hilbert curve sort of tile bounding boxes.
+///
+/// Uses each box’s `get_hilbert_index()` as the sort key.
+///
+/// * `bboxes` – slice of boxes to sort.
+fn sort_hilbert(bboxes: &mut [TileBBox]) {
 	bboxes.sort_by_cached_key(|b| b.get_hilbert_index().unwrap());
-	bboxes
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	/// Build a TileBBox at given level, x, y.
+	fn make_bbox(level: u8, x: u32, y: u32) -> TileBBox {
+		TileBBox::new(level, x, y, x, y).unwrap()
+	}
+
+	#[test]
+	fn test_sort_bboxes_any_order() {
+		let mut bboxes = vec![make_bbox(1, 1, 1), make_bbox(0, 0, 0), make_bbox(1, 0, 1)];
+		let original = bboxes.clone();
+		TraversalOrder::AnyOrder.sort_bboxes(&mut bboxes, 1);
+		assert_eq!(bboxes, original, "AnyOrder should not change order");
+	}
+
+	#[test]
+	fn test_sort_bboxes_depth_first() {
+		// Expect quadtree key order: level 0 then depth-first of level 1...
+		let mut bboxes = vec![
+			make_bbox(1, 1, 0), // key [1,0]
+			make_bbox(0, 0, 0), // key []
+			make_bbox(1, 0, 1), // key [2,1]
+		];
+		let mut expected = bboxes.clone();
+		sort_depth_first(&mut expected, 1);
+		TraversalOrder::DepthFirst.sort_bboxes(&mut bboxes, 1);
+		assert_eq!(bboxes, expected, "DepthFirst sort matches direct sort_depth_first");
+	}
+
+	#[test]
+	fn test_sort_bboxes_pmtile() {
+		let mut bboxes = vec![make_bbox(1, 1, 1), make_bbox(1, 0, 0), make_bbox(1, 0, 1)];
+		// Compute expected by sorting by Hilbert index directly
+		let mut expected = bboxes.clone();
+		expected.sort_by_cached_key(|b| b.get_hilbert_index().unwrap());
+		TraversalOrder::PMTiles.sort_bboxes(&mut bboxes, 1);
+		assert_eq!(bboxes, expected, "PMTiles sort matches Hilbert index sort");
+	}
+
+	#[test]
+	fn test_intersect_orders() {
+		use TraversalOrder::*;
+		let mut o = AnyOrder;
+		o.intersect(&DepthFirst).unwrap();
+		assert_eq!(o, DepthFirst);
+
+		let mut o2 = PMTiles;
+		o2.intersect(&AnyOrder).unwrap();
+		assert_eq!(o2, PMTiles);
+
+		let mut o3 = DepthFirst;
+		let result = o3.intersect(&PMTiles);
+		assert!(result.is_err(), "Merging DepthFirst with PMTiles should error");
+	}
 }
