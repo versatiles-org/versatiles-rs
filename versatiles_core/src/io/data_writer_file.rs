@@ -124,3 +124,65 @@ impl DataWriterTrait for DataWriterFile {
 		Ok(())
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::Blob;
+	use anyhow::Result;
+	use assert_fs::NamedTempFile;
+	use std::fs::File;
+	use std::io::Read;
+
+	#[test]
+	fn test_append_and_get_position() -> Result<()> {
+		// Create a temporary file
+		let temp = NamedTempFile::new("test1")?;
+		let path = temp.path();
+		// Ensure absolute path
+		assert!(path.is_absolute());
+
+		let mut writer = DataWriterFile::from_path(path)?;
+		let data = Blob::from(vec![10, 20, 30]);
+		// Append data
+		let range = writer.append(&data)?;
+		assert_eq!(range.to_string(), "[0..2]");
+		// Position should now equal length
+		assert_eq!(writer.get_position()?, 3);
+
+		// Read back file contents
+		let mut file = File::open(path)?;
+		let mut buf = Vec::new();
+		file.read_to_end(&mut buf)?;
+		assert_eq!(buf, data.as_slice());
+		Ok(())
+	}
+
+	#[test]
+	fn test_write_start_and_append() -> Result<()> {
+		let temp = NamedTempFile::new("test2")?;
+		let path = temp.path();
+		let mut writer = DataWriterFile::from_path(path)?;
+
+		// Write start should write data at position 0
+		let start = Blob::from(vec![1, 2, 3, 4]);
+		writer.write_start(&start)?;
+		// After write_start, position unchanged (0)
+		assert_eq!(writer.get_position()?, 0);
+
+		// Now append more data
+		let extra = Blob::from(vec![5, 6]);
+		let range2 = writer.append(&extra)?;
+		assert_eq!(range2.to_string(), "[0..1]");
+
+		drop(writer);
+
+		// Read back file contents
+		let mut file = File::open(path)?;
+		let mut buf = Vec::new();
+		file.read_to_end(&mut buf)?;
+		// File should contain extra data because append writes at offset 0 after write_start
+		assert_eq!(buf, &[5, 6, 3, 4]);
+		Ok(())
+	}
+}
