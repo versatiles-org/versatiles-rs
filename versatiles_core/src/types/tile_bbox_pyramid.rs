@@ -2,8 +2,6 @@
 //! across multiple zoom levels. It provides methods to create, manipulate, and query these bounding boxes.
 
 use super::{GeoBBox, GeoCenter, TileBBox, TileCoord3};
-use crate::{Traversal, TraversalOrder, utils::HilbertIndex};
-use anyhow::Result;
 use std::array::from_fn;
 use std::fmt;
 
@@ -194,109 +192,6 @@ impl TileBBoxPyramid {
 		self.level_bbox.iter().filter(|bbox| !bbox.is_empty())
 	}
 
-	/// Returns an iterator over every tile bounding box contained in the pyramid
-	/// in a *deterministic* order defined by `traversal_order`.
-	///
-	/// While [`Self::iter_levels`] yields at most **one** box per zoom level,
-	/// this method can subdivide large boxes into fixed‑size chunks so that tiles
-	/// are streamed in an order that is spatially coherent and friendly to tile
-	/// archives such as PMTiles.
-	///
-	/// # Arguments
-	/// * `traversal_order` – Strategy that controls the output order:
-	///   * **`TopDown`**       – all boxes at z = 0 first, then z = 1, …  
-	///   * **`BottomUp`**      – highest zoom first, descending to z = 0.  
-	///   * **`DepthFirst256`** – quadtree post‑order using 256 × 256‑tile chunks.  
-	///   * **`DepthFirst16`**  – quadtree post‑order using 16 × 16‑tile chunks.  
-	///   * **`PMTiles64`**     – Hilbert‑curve order of 64 × 64‑tile chunks (matching PMTiles v3’s canonical layout).
-	///
-	/// # Returns
-	/// A boxed iterator that yields **owned** [`TileBBox`] values.  
-	/// Each returned bounding box is non‑empty and resides within `self`.
-	///
-	/// # Implementation notes
-	/// The function clones internal bboxes into a `Vec` so that it can be
-	/// freely re‑ordered without mutating `self`.  For Hilbert sorting it
-	/// delegates to [`TileBBox::get_hilbert_index`].
-	///
-	/// # Examples
-	/// ```
-	/// use versatiles_core::{TileBBoxPyramid, Traversal};
-	///
-	/// let pyramid = TileBBoxPyramid::new_full(3);
-	/// let first = pyramid
-	///     .iter_bboxes(Traversal::new_any())
-	///     .unwrap()
-	///     .next()
-	///     .unwrap();
-	/// assert_eq!(first.level, 3); // z=3 tiles come first in BottomUp order
-	/// ```
-	pub fn iter_bboxes(&self, traversal: Traversal) -> Result<Box<dyn Iterator<Item = TileBBox> + '_ + Send>> {
-		let mut bboxes: Vec<TileBBox> = self.level_bbox.iter().filter(|b| !b.is_empty()).copied().collect();
-
-		fn depth_first(bboxes: Vec<TileBBox>, size: u32) -> Vec<TileBBox> {
-			/// Build a depth‑first post‑order sort key for a chunk at (x_chunk, y_chunk).
-			///
-			/// The algorithm converts `(x_chunk, y_chunk)` to a quadtree path from the
-			/// root down to that chunk and then appends the sentinel digit **4**.
-			/// Children therefore have a key beginning with the same prefix but ending
-			/// with “…, child_digit, 4”, while the parent ends with “…, 4”.
-			/// In lexicographic order the children (`0‥3`) all come **before**
-			/// their parent (`4`), which yields the desired “children before parent”
-			/// post‑order traversal.
-			fn build_key(depth: u8, x: u32, y: u32) -> Vec<u8> {
-				let mut k = Vec::with_capacity(depth as usize + 1);
-				// Traverse from the root (most‑significant bit) towards the leaves.
-				for i in (0..depth).rev() {
-					let bit_x = (x >> i) & 1;
-					let bit_y = (y >> i) & 1;
-					k.push((bit_x | (bit_y << 1)) as u8); // quadrant digit 0‥3
-				}
-				k.push(4); // sentinel – guarantees parent after its (up‑to‑4) children
-				k
-			}
-
-			// ---------------------------------------------------------------------
-			// 1.  Flatten all incoming bboxes into fixed‑size chunks of `chunk_size`.
-			// ---------------------------------------------------------------------
-			let mut items: Vec<(Vec<u8>, TileBBox)> = bboxes
-				.into_iter()
-				.flat_map(|b| b.iter_bbox_grid(size).collect::<Vec<_>>())
-				.map(|b| (build_key(b.level, b.x_min / size, b.y_min / size), b))
-				.collect();
-
-			// ---------------------------------------------------------------------
-			// 2.  Single `sort_unstable_by` to obtain the post‑order traversal.
-			// ---------------------------------------------------------------------
-			items.sort_unstable_by(|a, b| a.0.cmp(&b.0));
-
-			// ---------------------------------------------------------------------
-			// 3.  Strip the keys and return the ordered bounding boxes.
-			// ---------------------------------------------------------------------
-			items.into_iter().map(|(_, bbox)| bbox).collect()
-		}
-
-		fn hilbert(bboxes: Vec<TileBBox>, size: u32) -> Vec<TileBBox> {
-			let mut bboxes: Vec<TileBBox> = bboxes
-				.iter()
-				.flat_map(|level_bbox| level_bbox.iter_bbox_grid(size))
-				.collect();
-			bboxes.sort_by_cached_key(|b| b.get_hilbert_index().unwrap());
-			bboxes
-		}
-
-		let size = traversal.get_max_size()?;
-
-		use TraversalOrder::*;
-		match traversal.order() {
-			AnyOrder => bboxes.sort_by(|a, b| b.level.cmp(&a.level)),
-			DepthFirst => bboxes = depth_first(bboxes, size),
-			PMTiles => bboxes = hilbert(bboxes, size),
-		};
-
-		Ok(Box::new(bboxes.into_iter()))
-	}
-
 	/// Finds the minimum zoom level that contains any tiles.
 	///
 	/// Returns `None` if **all** levels are empty.
@@ -441,6 +336,7 @@ impl Default for TileBBoxPyramid {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use anyhow::Result;
 
 	#[test]
 	fn test_empty_pyramid() {
