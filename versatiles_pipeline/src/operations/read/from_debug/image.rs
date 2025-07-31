@@ -4,7 +4,7 @@ use imageproc::{
 	image::{DynamicImage, Rgba, RgbaImage},
 };
 use lazy_static::lazy_static;
-use versatiles_core::types::TileCoord3;
+use versatiles_core::TileCoord3;
 
 lazy_static! {
 	static ref FONT: FontArc = FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap();

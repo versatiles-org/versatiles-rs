@@ -5,7 +5,7 @@ use crate::{geo::*, math::area_ring};
 use anyhow::{Context, Result, bail, ensure};
 use byteorder::LE;
 use log::trace;
-use versatiles_core::{io::*, types::Blob};
+use versatiles_core::{Blob, io::*};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct VectorTileFeature {

@@ -2,7 +2,7 @@ use crate::{avif, jpeg, png, webp};
 use anyhow::{Result, anyhow, bail, ensure};
 use image::{DynamicImage, EncodableLayout, ExtendedColorType, ImageBuffer, Luma, LumaA, Rgb, Rgba, imageops::overlay};
 use std::{ops::Div, vec};
-use versatiles_core::types::{Blob, TileFormat};
+use versatiles_core::{Blob, TileFormat};
 
 pub trait EnhancedDynamicImageTrait {
 	fn from_fn_l8(width: u32, height: u32, f: fn(u32, u32) -> u8) -> DynamicImage;

@@ -9,7 +9,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::{io::DataWriterTrait, types::{Blob, ByteRange}};
+//! use versatiles_core::{io::DataWriterTrait, Blob, ByteRange};
 //! use anyhow::Result;
 //!
 //! struct MockDataWriter {
@@ -56,7 +56,7 @@
 //! }
 //! ```
 
-use crate::types::{Blob, ByteRange};
+use crate::{Blob, ByteRange};
 use anyhow::Result;
 
 /// A trait for writing data to various destinations.
@@ -66,7 +66,7 @@ use anyhow::Result;
 /// - `write_start`: Writes data from the start of the writer.
 /// - `get_position`: Gets the current write position.
 /// - `set_position`: Sets the write position.
-pub trait DataWriterTrait: Send {
+pub trait DataWriterTrait: Send + Sync {
 	/// Appends data to the writer.
 	///
 	/// # Arguments

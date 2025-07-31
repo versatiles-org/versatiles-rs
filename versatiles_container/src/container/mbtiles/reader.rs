@@ -10,7 +10,7 @@
 //! ## Usage Example
 //! ```rust
 //! use versatiles_container::MBTilesReader;
-//! use versatiles_core::types::{Blob, TileCoord3, TilesReaderTrait};
+//! use versatiles_core::{Blob, TileCoord3, TilesReaderTrait};
 //! use anyhow::Result;
 //! use std::path::Path;
 //!
@@ -46,11 +46,8 @@ use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use std::path::Path;
 use versatiles_core::{
-	json::parse_json_str,
-	progress::get_progress_bar,
-	tilejson::TileJSON,
-	types::{TileBBoxPyramid, TileCompression::*, TileFormat::*, *},
-	utils::TransformCoord,
+	TileCompression::*, TileFormat::*, json::parse_json_str, progress::get_progress_bar, tilejson::TileJSON,
+	utils::TransformCoord, *,
 };
 
 /// A struct that provides functionality to read tile data from an MBTiles SQLite database.
@@ -301,10 +298,6 @@ impl TilesReaderTrait for MBTilesReader {
 	/// * `tile_compression` - The new tile compression method.
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
-	}
-
-	fn traversal_orders(&self) -> TraversalOrderSet {
-		TraversalOrderSet::new_all()
 	}
 
 	/// Returns the tile data for the specified coordinates as a `Blob`.

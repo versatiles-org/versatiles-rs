@@ -102,7 +102,7 @@ impl<E: ByteOrder> ValueWriter<E> for ValueWriterFile<E> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::{Blob, ByteRange};
+	use crate::{Blob, ByteRange};
 	use assert_fs::NamedTempFile;
 	use std::fs::File;
 	use std::io::{Read, SeekFrom};

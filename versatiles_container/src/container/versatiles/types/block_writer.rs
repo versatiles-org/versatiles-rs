@@ -1,10 +1,7 @@
 use super::{BlockDefinition, TileIndex};
 use anyhow::Result;
 use std::collections::HashMap;
-use versatiles_core::{
-	io::DataWriterTrait,
-	types::{Blob, ByteRange, TileBBox, TileCoord3},
-};
+use versatiles_core::{Blob, ByteRange, TileBBox, TileCoord3, io::DataWriterTrait};
 use versatiles_derive::context;
 
 pub struct BlockWriter<'a> {

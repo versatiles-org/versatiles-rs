@@ -48,7 +48,7 @@ impl TileSchema {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::TileSchema;
+	/// use versatiles_core::TileSchema;
 	/// assert_eq!(TileSchema::RasterRGB.as_str(), "rgb");
 	/// ```
 	pub fn as_str(&self) -> &str {
@@ -74,7 +74,7 @@ impl TileSchema {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::{TileSchema, TileType};
+	/// use versatiles_core::{TileSchema, TileType};
 	/// assert_eq!(TileSchema::RasterRGBA.get_tile_content(), TileType::Raster);
 	/// ```
 	pub fn get_tile_content(&self) -> TileType {

@@ -3,7 +3,7 @@ use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::path::Path;
-use versatiles_core::{io::DataReader, tilejson::TileJSON, types::*};
+use versatiles_core::{io::DataReader, tilejson::TileJSON, *};
 use versatiles_pipeline::{OperationTrait, PipelineFactory};
 
 /// The `PipelineReader` struct is responsible for managing the tile reading process,
@@ -95,8 +95,8 @@ impl TilesReaderTrait for PipelineReader {
 		panic!("you can't override the compression of pipeline")
 	}
 
-	fn traversal_orders(&self) -> TraversalOrderSet {
-		self.operation.traversal_orders()
+	fn traversal(&self) -> &Traversal {
+		self.operation.traversal()
 	}
 
 	/// Get the metadata, always uncompressed.

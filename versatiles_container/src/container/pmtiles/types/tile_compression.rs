@@ -1,5 +1,5 @@
 use anyhow::{Result, bail};
-use versatiles_core::types::TileCompression::{self, *};
+use versatiles_core::TileCompression::{self, *};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum PMTilesCompression {

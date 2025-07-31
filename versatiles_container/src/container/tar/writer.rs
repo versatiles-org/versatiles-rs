@@ -3,12 +3,14 @@
 use crate::TilesWriterTrait;
 use anyhow::{Result, bail};
 use async_trait::async_trait;
+use futures::lock::Mutex;
 use std::{
 	fs::File,
 	path::{Path, PathBuf},
+	sync::Arc,
 };
 use tar::{Builder, Header};
-use versatiles_core::{io::DataWriterTrait, progress::get_progress_bar, types::TilesReaderTrait, utils::compress};
+use versatiles_core::{TilesReaderTrait, Traversal, io::DataWriterTrait, utils::compress};
 
 /// A struct that provides functionality to write tile data to a tar archive.
 pub struct TarTilesWriter {}
@@ -30,7 +32,6 @@ impl TilesWriterTrait for TarTilesWriter {
 		let parameters = reader.parameters();
 		let tile_format = &parameters.tile_format.clone();
 		let tile_compression = &parameters.tile_compression.clone();
-		let bbox_pyramid = reader.parameters().bbox_pyramid.clone();
 
 		let extension_format = tile_format.as_extension();
 		let extension_compression = tile_compression.extension();
@@ -42,32 +43,37 @@ impl TilesWriterTrait for TarTilesWriter {
 		header.set_mode(0o644);
 		builder.append_data(&mut header, Path::new(&filename), meta_data.as_slice())?;
 
-		let mut progress = get_progress_bar("converting tiles", bbox_pyramid.count_tiles());
+		let builder_mutex = Arc::new(Mutex::new(builder));
 
-		for bbox in reader.iter_bboxes()? {
-			let mut stream = reader.get_tile_stream(bbox).await?;
+		reader
+			.traverse_all_tiles(
+				&Traversal::new_any(),
+				Box::new(|_bbox, mut stream| {
+					let builder_mutex = Arc::clone(&builder_mutex);
+					Box::pin(async move {
+						let mut builder = builder_mutex.lock().await;
+						while let Some((coord, blob)) = stream.next().await {
+							let filename = format!(
+								"./{}/{}/{}{}{}",
+								coord.z, coord.x, coord.y, extension_format, extension_compression
+							);
+							let path = PathBuf::from(&filename);
 
-			while let Some((coord, blob)) = stream.next().await {
-				progress.inc(1);
+							// Build header
+							let mut header = Header::new_gnu();
+							header.set_size(blob.len());
+							header.set_mode(0o644);
 
-				let filename = format!(
-					"./{}/{}/{}{}{}",
-					coord.z, coord.x, coord.y, extension_format, extension_compression
-				);
-				let path = PathBuf::from(&filename);
+							// Write blob to file
+							builder.append_data(&mut header, path, blob.as_slice())?;
+						}
+						Ok(())
+					})
+				}),
+			)
+			.await?;
 
-				// Build header
-				let mut header = Header::new_gnu();
-				header.set_size(blob.len());
-				header.set_mode(0o644);
-
-				// Write blob to file
-				builder.append_data(&mut header, path, blob.as_slice())?;
-			}
-		}
-
-		progress.finish();
-		builder.finish()?;
+		builder_mutex.lock().await.finish()?;
 
 		Ok(())
 	}
@@ -90,7 +96,7 @@ mod tests {
 	use super::*;
 	use crate::{MockTilesReader, MockTilesWriter, TarTilesReader};
 	use assert_fs::NamedTempFile;
-	use versatiles_core::types::*;
+	use versatiles_core::*;
 
 	#[tokio::test]
 	async fn read_write() -> Result<()> {

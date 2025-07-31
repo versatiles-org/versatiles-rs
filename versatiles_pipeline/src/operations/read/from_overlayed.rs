@@ -25,7 +25,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::future::{BoxFuture, join_all};
 use imageproc::image::DynamicImage;
-use versatiles_core::{tilejson::TileJSON, types::*, utils::recompress};
+use versatiles_core::{tilejson::TileJSON, utils::recompress, *};
 use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -46,6 +46,7 @@ struct Operation {
 	parameters: TilesReaderParameters,
 	sources: Vec<Box<dyn OperationTrait>>,
 	tilejson: TileJSON,
+	traversal: Traversal,
 }
 
 impl ReadOperationTrait for Operation {
@@ -63,40 +64,48 @@ impl ReadOperationTrait for Operation {
 				.into_iter()
 				.collect::<Result<Vec<_>>>()?;
 
-			ensure!(sources.len() > 1, "must have at least two sources");
-
-			let mut tilejson = TileJSON::default();
-			let parameters = sources.first().unwrap().parameters();
-			let tile_format = parameters.tile_format;
-			let tile_compression = parameters.tile_compression;
-
-			let mut pyramid = TileBBoxPyramid::new_empty();
-
-			for source in sources.iter() {
-				tilejson.merge(source.tilejson())?;
-
-				let parameters = source.parameters();
-				pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
-
-				ensure!(
-					parameters.tile_format == tile_format,
-					"all sources must have the same tile format"
-				);
-			}
-
-			let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
-			tilejson.update_from_reader_parameters(&parameters);
-
-			Ok(Box::new(Self {
-				tilejson,
-				parameters,
-				sources,
-			}) as Box<dyn OperationTrait>)
+			Ok(Box::new(Operation::new(sources)?) as Box<dyn OperationTrait>)
 		})
 	}
 }
 
 impl Operation {
+	fn new(sources: Vec<Box<dyn OperationTrait>>) -> Result<Operation> {
+		ensure!(sources.len() > 1, "must have at least two sources");
+
+		let mut tilejson = TileJSON::default();
+		let parameters = sources.first().unwrap().parameters();
+		let tile_format = parameters.tile_format;
+		let tile_compression = parameters.tile_compression;
+
+		let mut pyramid = TileBBoxPyramid::new_empty();
+		let mut traversal = Traversal::default();
+
+		for source in sources.iter() {
+			tilejson.merge(source.tilejson())?;
+
+			traversal.intersect(source.traversal())?;
+
+			let parameters = source.parameters();
+			pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
+
+			ensure!(
+				parameters.tile_format == tile_format,
+				"all sources must have the same tile format"
+			);
+		}
+
+		let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
+		tilejson.update_from_reader_parameters(&parameters);
+
+		Ok(Self {
+			tilejson,
+			parameters,
+			sources,
+			traversal,
+		})
+	}
+
 	/// Internal helper that collapses the common logic of
 	/// `get_tile_stream`, `get_image_stream`, and `get_vector_stream`.
 	///
@@ -177,12 +186,8 @@ impl OperationTrait for Operation {
 		&self.tilejson
 	}
 
-	fn traversal_orders(&self) -> TraversalOrderSet {
-		self
-			.sources
-			.iter()
-			.map(|source| source.traversal_orders())
-			.fold(TraversalOrderSet::new_all(), |acc, set| acc & set)
+	fn traversal(&self) -> &Traversal {
+		&self.traversal
 	}
 
 	/// Fetch a *packed* tile for `coord`, recompressing if necessary.
@@ -280,6 +285,7 @@ mod tests {
 	use super::*;
 	use crate::helpers::mock_vector_source::{MockVectorSource, arrange_tiles};
 	use std::sync::LazyLock;
+	use versatiles_core::TraversalOrder;
 	use versatiles_image::EnhancedDynamicImageTrait;
 
 	static RESULT_PATTERN: LazyLock<Vec<String>> = LazyLock::new(|| {
@@ -450,23 +456,19 @@ mod tests {
 	#[test]
 	fn test_traversal_orders_overlay() {
 		use crate::operations::read::from_container::operation_from_reader;
-		use versatiles_core::types::TraversalOrder::*;
 
 		let mut src1 = MockVectorSource::new(&[], Some(TileBBoxPyramid::new_full(8)));
 		let mut src2 = MockVectorSource::new(&[], Some(TileBBoxPyramid::new_full(8)));
 
-		src1.set_traversal_orders(TraversalOrderSet::new(vec![BottomUp, DepthFirst16]));
-		src2.set_traversal_orders(TraversalOrderSet::new(vec![BottomUp, DepthFirst256]));
+		src1.set_traversal(Traversal::new_any_size(1, 16).unwrap());
+		src2.set_traversal(Traversal::new(TraversalOrder::PMTiles, 4, 256).unwrap());
 
-		let op = Operation {
-			parameters: TilesReaderParameters::default(),
-			sources: vec![
-				operation_from_reader(Box::new(src1)),
-				operation_from_reader(Box::new(src2)),
-			],
-			tilejson: TileJSON::default(),
-		};
+		let op = Operation::new(vec![
+			operation_from_reader(Box::new(src1)),
+			operation_from_reader(Box::new(src2)),
+		])
+		.unwrap();
 
-		assert_eq!(op.traversal_orders(), TraversalOrderSet::new(vec![BottomUp]));
+		assert_eq!(op.traversal(), &Traversal::new(TraversalOrder::PMTiles, 4, 16).unwrap());
 	}
 }

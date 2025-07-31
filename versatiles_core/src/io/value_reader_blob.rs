@@ -11,7 +11,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::{io::{ValueReader, ValueReaderBlob}, types::Blob};
+//! use versatiles_core::{io::{ValueReader, ValueReaderBlob}, Blob};
 //! use anyhow::Result;
 //!
 //! fn main() -> Result<()> {
@@ -34,7 +34,7 @@
 #![allow(dead_code)]
 
 use super::{SeekRead, ValueReader, ValueReaderSlice};
-use crate::types::Blob;
+use crate::Blob;
 use anyhow::{Result, anyhow, bail};
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use std::{io::Cursor, marker::PhantomData};

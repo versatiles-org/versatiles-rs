@@ -7,7 +7,7 @@
 use super::BlockDefinition;
 use anyhow::{Result, ensure};
 use std::{collections::HashMap, ops::Div};
-use versatiles_core::{io::*, types::*, utils::*};
+use versatiles_core::{io::*, utils::*, *};
 
 const BLOCK_INDEX_LENGTH: u64 = 33;
 
@@ -140,7 +140,7 @@ impl BlockIndex {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use versatiles_core::types::TileBBox;
+	use versatiles_core::TileBBox;
 
 	#[test]
 	fn conversion() -> Result<()> {

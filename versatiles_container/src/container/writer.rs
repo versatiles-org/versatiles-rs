@@ -7,7 +7,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use std::path::Path;
-use versatiles_core::{io::*, types::TilesReaderTrait};
+use versatiles_core::{TilesReaderTrait, io::*};
 
 /// Trait defining the behavior of a tile writer.
 #[async_trait]

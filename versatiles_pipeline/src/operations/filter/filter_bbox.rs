@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use futures::future::{BoxFuture, ready};
 use imageproc::image::DynamicImage;
 use std::fmt::Debug;
-use versatiles_core::{tilejson::TileJSON, types::*};
+use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -77,8 +77,8 @@ impl OperationTrait for Operation {
 		&self.tilejson
 	}
 
-	fn traversal_orders(&self) -> TraversalOrderSet {
-		self.source.traversal_orders()
+	fn traversal(&self) -> &Traversal {
+		self.source.traversal()
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use versatiles_container::get_reader;
-use versatiles_core::types::ProbeDepth;
+use versatiles_core::ProbeDepth;
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]

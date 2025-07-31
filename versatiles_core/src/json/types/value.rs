@@ -1,7 +1,7 @@
 //! JSON value enum representing any valid JSON data and utilities for parsing, serializing, and converting.
 
+use crate::Blob;
 use crate::json::*;
-use crate::types::Blob;
 use anyhow::{Result, bail};
 
 /// Represents any JSON data: arrays, objects, numbers, strings, booleans, and null.
@@ -181,7 +181,7 @@ impl From<&JsonValue> for JsonValue {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::Blob;
+	use crate::Blob;
 
 	#[test]
 	fn test_from_str() {

@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::{io::{DataReaderFile, DataReaderTrait}, types::{Blob, ByteRange}};
+//! use versatiles_core::{io::{DataReaderFile, DataReaderTrait}, Blob, ByteRange};
 //! use anyhow::Result;
 //! use std::path::Path;
 //!
@@ -28,7 +28,7 @@
 //! ```
 
 use super::DataReaderTrait;
-use crate::types::{Blob, ByteRange};
+use crate::{Blob, ByteRange};
 use anyhow::{Context, Result, ensure};
 use async_trait::async_trait;
 use std::{

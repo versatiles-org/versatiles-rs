@@ -18,7 +18,7 @@ use hyper::header::{ACCESS_CONTROL_ALLOW_ORIGIN, VARY};
 use std::path::Path;
 use tokio::sync::oneshot::Sender;
 use versatiles_core::{
-	types::{Blob, TileCompression, TilesReaderTrait},
+	Blob, TileCompression, TilesReaderTrait,
 	utils::{TargetCompression, optimize_compression},
 };
 
@@ -322,7 +322,7 @@ mod tests {
 	use axum::http::{HeaderMap, header::ACCEPT_ENCODING};
 	use enumset::{EnumSet, enum_set};
 	use versatiles_container::{MockTilesReader, MockTilesReaderProfile};
-	use versatiles_core::types::TileCompression::*;
+	use versatiles_core::TileCompression::*;
 
 	const IP: &str = "127.0.0.1";
 

@@ -11,7 +11,7 @@
 //!
 //! ```no_run
 //! use versatiles_container::{TarTilesReader, TarTilesWriter, TilesWriterTrait};
-//! use versatiles_core::types::{TileCoord3, TilesReaderTrait};
+//! use versatiles_core::{TileCoord3, TilesReaderTrait};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!

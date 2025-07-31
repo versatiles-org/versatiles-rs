@@ -4,7 +4,7 @@
 //!
 //! ```rust
 //! use versatiles_container::{get_reader, write_to_filename};
-//! use versatiles_core::types::{TileFormat, TilesReaderTrait};
+//! use versatiles_core::{TileFormat, TilesReaderTrait};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -28,7 +28,7 @@ use crate::*;
 use anyhow::{Context, Result, bail};
 use reqwest::Url;
 use std::env;
-use versatiles_core::{io::*, types::TilesReaderTrait};
+use versatiles_core::{io::*, *};
 
 /// Get a reader for a given filename or URL.
 pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReaderTrait>> {
@@ -107,7 +107,7 @@ pub mod tests {
 	use anyhow::Result;
 	use assert_fs::{TempDir, fixture::NamedTempFile};
 	use std::time::Instant;
-	use versatiles_core::types::{TileBBoxPyramid, TileCompression, TileFormat, TilesReaderParameters};
+	use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat, TilesReaderParameters};
 
 	/// Create a test file with given parameters.
 	pub async fn make_test_file(

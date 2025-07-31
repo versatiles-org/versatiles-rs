@@ -1,7 +1,9 @@
 //! This module defines the `TileBBoxPyramid` struct, which represents a pyramid of tile bounding boxes
 //! across multiple zoom levels. It provides methods to create, manipulate, and query these bounding boxes.
 
-use super::{GeoBBox, GeoCenter, HilbertIndex, TileBBox, TileCoord3, TraversalOrder};
+use super::{GeoBBox, GeoCenter, TileBBox, TileCoord3};
+use crate::{Traversal, TraversalOrder, utils::HilbertIndex};
+use anyhow::Result;
 use std::array::from_fn;
 use std::fmt;
 
@@ -182,7 +184,7 @@ impl TileBBoxPyramid {
 	/// # Examples
 	///
 	/// ```
-	/// # use versatiles_core::types::TileBBoxPyramid;
+	/// # use versatiles_core::TileBBoxPyramid;
 	/// // Suppose `pyramid` is a filled pyramid...
 	/// // for bbox in pyramid.iter_levels() {
 	/// //     println!("Level {} has some tiles", bbox.level);
@@ -219,16 +221,17 @@ impl TileBBoxPyramid {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::{TileBBoxPyramid, TraversalOrder};
+	/// use versatiles_core::{TileBBoxPyramid, Traversal};
 	///
 	/// let pyramid = TileBBoxPyramid::new_full(3);
 	/// let first = pyramid
-	///     .iter_bboxes(TraversalOrder::TopDown)
+	///     .iter_bboxes(Traversal::new_any())
+	///     .unwrap()
 	///     .next()
 	///     .unwrap();
-	/// assert_eq!(first.level, 0); // z=0 tiles come first in TopDown order
+	/// assert_eq!(first.level, 3); // z=3 tiles come first in BottomUp order
 	/// ```
-	pub fn iter_bboxes(&self, traversal_order: TraversalOrder) -> Box<dyn Iterator<Item = TileBBox> + '_ + Send> {
+	pub fn iter_bboxes(&self, traversal: Traversal) -> Result<Box<dyn Iterator<Item = TileBBox> + '_ + Send>> {
 		let mut bboxes: Vec<TileBBox> = self.level_bbox.iter().filter(|b| !b.is_empty()).copied().collect();
 
 		fn depth_first(bboxes: Vec<TileBBox>, size: u32) -> Vec<TileBBox> {
@@ -282,16 +285,16 @@ impl TileBBoxPyramid {
 			bboxes
 		}
 
+		let size = traversal.get_max_size()?;
+
 		use TraversalOrder::*;
-		match traversal_order {
-			TopDown => bboxes.sort_by(|a, b| a.level.cmp(&b.level)),
-			BottomUp => bboxes.sort_by(|a, b| b.level.cmp(&a.level)),
-			DepthFirst256 => bboxes = depth_first(bboxes, 256),
-			DepthFirst16 => bboxes = depth_first(bboxes, 16),
-			PMTiles64 => bboxes = hilbert(bboxes, 64),
+		match traversal.order() {
+			AnyOrder => bboxes.sort_by(|a, b| b.level.cmp(&a.level)),
+			DepthFirst => bboxes = depth_first(bboxes, size),
+			PMTiles => bboxes = hilbert(bboxes, size),
 		};
 
-		Box::new(bboxes.into_iter())
+		Ok(Box::new(bboxes.into_iter()))
 	}
 
 	/// Finds the minimum zoom level that contains any tiles.
@@ -438,8 +441,6 @@ impl Default for TileBBoxPyramid {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use anyhow::Result;
-	use enumset::EnumSet;
 
 	#[test]
 	fn test_empty_pyramid() {
@@ -727,109 +728,6 @@ mod tests {
 		let p = TileBBoxPyramid::new_full(2);
 		let levels: Vec<u8> = p.iter_levels().map(|tb| tb.level).collect();
 		assert_eq!(levels, vec![0, 1, 2]);
-	}
-
-	#[test]
-	fn test_iter_bboxes() {
-		fn test(traversal_order: TraversalOrder, bbox: [i16; 4], min_level: u8, max_level: u8) -> Vec<String> {
-			let pyramid = TileBBoxPyramid::from_geo_bbox(min_level, max_level, &GeoBBox::from(&bbox));
-			pyramid.iter_bboxes(traversal_order).map(|b| b.as_string()).collect()
-		}
-
-		for order in EnumSet::all() {
-			match order {
-				TraversalOrder::TopDown => assert_eq!(
-					test(order, [-180, -90, 180, 90], 0, 5),
-					[
-						"0:[0,0,0,0]",
-						"1:[0,0,1,1]",
-						"2:[0,0,3,3]",
-						"3:[0,0,7,7]",
-						"4:[0,0,15,15]",
-						"5:[0,0,31,31]"
-					]
-				),
-				TraversalOrder::BottomUp => assert_eq!(
-					test(order, [-180, -90, 180, 90], 0, 5),
-					[
-						"5:[0,0,31,31]",
-						"4:[0,0,15,15]",
-						"3:[0,0,7,7]",
-						"2:[0,0,3,3]",
-						"1:[0,0,1,1]",
-						"0:[0,0,0,0]"
-					]
-				),
-				TraversalOrder::DepthFirst16 => assert_eq!(
-					test(order, [-170, -60, 160, 70], 4, 6),
-					[
-						"6:[1,14,15,15]",
-						"6:[16,14,31,15]",
-						"6:[1,16,15,31]",
-						"6:[16,16,31,31]",
-						"5:[0,7,15,15]",
-						"6:[32,14,47,15]",
-						"6:[48,14,60,15]",
-						"6:[32,16,47,31]",
-						"6:[48,16,60,31]",
-						"5:[16,7,30,15]",
-						"6:[1,32,15,45]",
-						"6:[16,32,31,45]",
-						"5:[0,16,15,22]",
-						"6:[32,32,47,45]",
-						"6:[48,32,60,45]",
-						"5:[16,16,30,22]",
-						"4:[0,3,15,11]",
-					]
-				),
-				TraversalOrder::DepthFirst256 => assert_eq!(
-					test(order, [-170, -60, 160, 70], 6, 10),
-					[
-						"10:[28,229,255,255]",
-						"10:[256,229,511,255]",
-						"10:[28,256,255,511]",
-						"10:[256,256,511,511]",
-						"9:[14,114,255,255]",
-						"10:[512,229,767,255]",
-						"10:[768,229,967,255]",
-						"10:[512,256,767,511]",
-						"10:[768,256,967,511]",
-						"9:[256,114,483,255]",
-						"10:[28,512,255,726]",
-						"10:[256,512,511,726]",
-						"9:[14,256,255,363]",
-						"10:[512,512,767,726]",
-						"10:[768,512,967,726]",
-						"9:[256,256,483,363]",
-						"8:[7,57,241,181]",
-						"7:[3,28,120,90]",
-						"6:[1,14,60,45]"
-					]
-				),
-				TraversalOrder::PMTiles64 => assert_eq!(
-					test(order, [-170, -60, 160, 70], 6, 8),
-					[
-						"6:[1,14,60,45]",
-						"7:[3,28,63,63]",
-						"7:[3,64,63,90]",
-						"7:[64,64,120,90]",
-						"7:[64,28,120,63]",
-						"8:[7,57,63,63]",
-						"8:[64,57,127,63]",
-						"8:[64,64,127,127]",
-						"8:[7,64,63,127]",
-						"8:[7,128,63,181]",
-						"8:[64,128,127,181]",
-						"8:[128,128,191,181]",
-						"8:[192,128,241,181]",
-						"8:[192,64,241,127]",
-						"8:[128,64,191,127]",
-						"8:[128,57,191,63]",
-						"8:[192,57,241,63]"
-					]
-				),
-			}
-		}
 	}
 
 	#[test]

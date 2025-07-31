@@ -49,10 +49,7 @@ mod tests {
 	use super::*;
 	use async_trait::async_trait;
 	use std::{fs::File, io::Write, path::PathBuf};
-	use versatiles_core::{
-		types::{Blob, TileCompression},
-		utils::compress,
-	};
+	use versatiles_core::{Blob, TileCompression, utils::compress};
 
 	#[derive(Debug)]
 	struct MockStaticSource;

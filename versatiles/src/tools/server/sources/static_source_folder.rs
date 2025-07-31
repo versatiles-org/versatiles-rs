@@ -7,10 +7,7 @@ use std::{
 	io::{BufReader, Read},
 	path::{Path, PathBuf},
 };
-use versatiles_core::{
-	types::{Blob, TileCompression},
-	utils::TargetCompression,
-};
+use versatiles_core::{Blob, TileCompression, utils::TargetCompression};
 
 use crate::tools::server::{Url, utils::guess_mime};
 

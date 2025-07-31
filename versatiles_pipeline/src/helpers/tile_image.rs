@@ -1,8 +1,8 @@
 use anyhow::Result;
 use imageproc::image::DynamicImage;
 use versatiles_core::{
-	types::{Blob, TileStream, TilesReaderParameters},
 	utils::{compress, decompress},
+	*,
 };
 use versatiles_image::EnhancedDynamicImageTrait;
 
@@ -47,7 +47,7 @@ pub fn pack_image_tile_stream<'a>(
 mod tests {
 	use super::*;
 	use lazy_static::lazy_static;
-	use versatiles_core::types::{
+	use versatiles_core::{
 		TileCompression::{self, Gzip},
 		TileCoord3,
 		TileFormat::{self, PNG},

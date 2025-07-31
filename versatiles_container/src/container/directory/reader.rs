@@ -26,7 +26,7 @@
 //! ## Usage
 //! ```no_run
 //! use versatiles_container::DirectoryTilesReader;
-//! use versatiles_core::types::{TileCoord3, TilesReaderTrait};
+//! use versatiles_core::{TileCoord3, TilesReaderTrait};
 //! use std::path::Path;
 //! use tokio;
 //!
@@ -52,7 +52,7 @@ use std::{
 	fs,
 	path::{Path, PathBuf},
 };
-use versatiles_core::{tilejson::TileJSON, types::*, utils::*};
+use versatiles_core::{tilejson::TileJSON, utils::*, *};
 
 /// A reader for tiles stored in a directory structure.
 /// The directory should be structured as follows:
@@ -214,10 +214,6 @@ impl TilesReaderTrait for DirectoryTilesReader {
 
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
-	}
-
-	fn traversal_orders(&self) -> TraversalOrderSet {
-		TraversalOrderSet::new_all()
 	}
 
 	fn tilejson(&self) -> &TileJSON {

@@ -17,7 +17,7 @@ impl TileType {
 	/// # Examples
 	///
 	/// ```
-	/// use versatiles_core::types::TileType;
+	/// use versatiles_core::TileType;
 	///
 	/// assert_eq!(TileType::Raster.as_str(), "raster");
 	/// assert_eq!(TileType::Vector.as_str(), "vector");
@@ -37,7 +37,7 @@ impl TileType {
 	/// # Examples
 	///
 	/// ```
-	/// use versatiles_core::types::TileType;
+	/// use versatiles_core::TileType;
 	///
 	/// assert_eq!(TileType::Raster.get_default_tile_schema(), Some("rgb"));
 	/// assert_eq!(TileType::Vector.get_default_tile_schema(), Some("other"));
@@ -59,7 +59,7 @@ impl std::fmt::Display for TileType {
 	/// # Examples
 	///
 	/// ```
-	/// use versatiles_core::types::TileType;
+	/// use versatiles_core::TileType;
 	///
 	/// assert_eq!(format!("{}", TileType::Raster), "raster");
 	/// assert_eq!(format!("{}", TileType::Vector), "vector");
@@ -87,7 +87,7 @@ impl TryFrom<&str> for TileType {
 	/// # Examples
 	///
 	/// ```
-	/// use versatiles_core::types::TileType;
+	/// use versatiles_core::TileType;
 	/// use std::convert::TryFrom;
 	///
 	/// assert_eq!(TileType::try_from("raster").unwrap(), TileType::Raster);

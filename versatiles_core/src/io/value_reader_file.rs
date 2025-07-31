@@ -38,7 +38,7 @@
 #![allow(dead_code)]
 
 use super::{SeekRead, ValueReader, ValueReaderBlob};
-use crate::types::Blob;
+use crate::Blob;
 use anyhow::{Result, bail};
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use std::{

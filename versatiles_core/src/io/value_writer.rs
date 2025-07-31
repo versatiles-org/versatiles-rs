@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::{io::ValueWriter, types::{Blob, ByteRange}};
+//! use versatiles_core::{io::ValueWriter, Blob, ByteRange};
 //! use anyhow::Result;
 //! use byteorder::LittleEndian;
 //! use std::io::Cursor;
@@ -53,7 +53,7 @@
 //! ```
 
 use super::ValueWriterBlob;
-use crate::types::{Blob, ByteRange};
+use crate::{Blob, ByteRange};
 use anyhow::{Context, Result};
 use byteorder::{ByteOrder, WriteBytesExt};
 use std::io::Write;

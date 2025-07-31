@@ -2,15 +2,16 @@ use anyhow::Result;
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use std::fmt::Debug;
-use versatiles_core::{tilejson::*, types::*};
+use versatiles_core::{Blob, TileBBox, TileCoord3, TileStream, TilesReaderParameters, Traversal, tilejson::*};
 use versatiles_geometry::vector_tile::VectorTile;
 
 #[async_trait]
 pub trait OperationTrait: Debug + Send + Sync + Unpin {
 	fn parameters(&self) -> &TilesReaderParameters;
 	fn tilejson(&self) -> &TileJSON;
-	fn traversal_orders(&self) -> TraversalOrderSet {
-		TraversalOrderSet::new_all()
+	fn traversal(&self) -> &Traversal {
+		static DEFAULT_TRAVERSAL: Traversal = Traversal::new_any();
+		&DEFAULT_TRAVERSAL
 	}
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>>;
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>>;

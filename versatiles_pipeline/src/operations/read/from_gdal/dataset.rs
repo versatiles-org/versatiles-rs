@@ -3,7 +3,7 @@ use gdal::{DriverManager, config::set_config_option, raster::reproject, spatial_
 use imageproc::image::DynamicImage;
 use log::warn;
 use std::path::PathBuf;
-use versatiles_core::types::GeoBBox;
+use versatiles_core::GeoBBox;
 use versatiles_derive::context;
 use versatiles_image::EnhancedDynamicImageTrait;
 
@@ -166,7 +166,7 @@ fn bbox_to_mercator(mut bbox: GeoBBox) -> [f64; 4] {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use versatiles_core::types::TileCoord3;
+	use versatiles_core::TileCoord3;
 
 	#[test]
 	fn test_bbox_to_mercator() {

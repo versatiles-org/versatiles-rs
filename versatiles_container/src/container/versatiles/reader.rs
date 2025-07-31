@@ -6,7 +6,7 @@
 //!
 //! ```no_run
 //! use versatiles_container::VersaTilesReader;
-//! use versatiles_core::types::{TileCoord3, TileCompression, TileFormat, TileBBoxPyramid, TilesReaderTrait, TilesReaderParameters};
+//! use versatiles_core::{TileCoord3, TileCompression, TileFormat, TileBBoxPyramid, TilesReaderTrait, TilesReaderParameters};
 //! use anyhow::Result;
 //! use futures::StreamExt;
 //! use std::path::Path;
@@ -53,7 +53,7 @@ use log::trace;
 use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
-use versatiles_core::{io::*, tilejson::TileJSON, types::*, utils::decompress};
+use versatiles_core::{io::*, tilejson::TileJSON, utils::decompress, *};
 
 /// `VersaTilesReader` is responsible for reading tile data from a `versatiles` container.
 pub struct VersaTilesReader {
@@ -187,10 +187,6 @@ impl TilesReaderTrait for VersaTilesReader {
 		self.parameters.tile_compression = tile_compression;
 	}
 
-	fn traversal_orders(&self) -> TraversalOrderSet {
-		TraversalOrderSet::new_all()
-	}
-
 	/// Gets tile data for a given coordinate.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		// Calculate block coordinate
@@ -265,9 +261,7 @@ impl TilesReaderTrait for VersaTilesReader {
 			}
 		}
 
-		let mut block_coords: TileBBox = bbox;
-		block_coords.scale_down(256);
-		let block_coords: Vec<TileCoord3> = block_coords.iter_coords().collect();
+		let block_coords: Vec<TileCoord3> = bbox.scaled_down(256).iter_coords().collect();
 
 		let stream = futures::stream::iter(block_coords).then(|block_coord: TileCoord3| {
 			async move {

@@ -4,7 +4,7 @@
 //!
 //! ```rust
 //! use versatiles_container::{convert_tiles_container, MBTilesReader, TilesConverterParameters};
-//! use versatiles_core::types::{TileFormat, TileCompression, TileBBoxPyramid, TilesReaderTrait, TilesReaderParameters};
+//! use versatiles_core::{TileFormat, TileCompression, TileBBoxPyramid, TilesReaderTrait, TilesReaderParameters};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -34,7 +34,10 @@
 use super::{tile_converter::TileConverter, write_to_filename};
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{tilejson::TileJSON, types::*, utils::TransformCoord};
+use versatiles_core::{
+	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TileStream, TilesReaderParameters,
+	TilesReaderTrait, Traversal, tilejson::TileJSON, utils::TransformCoord,
+};
 use versatiles_derive::context;
 
 /// Parameters for tile conversion.
@@ -145,8 +148,8 @@ impl TilesReaderTrait for TilesConvertReader {
 		&self.container_name
 	}
 
-	fn traversal_orders(&self) -> TraversalOrderSet {
-		self.reader.traversal_orders()
+	fn traversal(&self) -> &Traversal {
+		self.reader.traversal()
 	}
 
 	fn parameters(&self) -> &TilesReaderParameters {
@@ -218,7 +221,7 @@ mod tests {
 	use super::*;
 	use crate::{MockTilesReader, VersaTilesReader};
 	use assert_fs::NamedTempFile;
-	use versatiles_core::types::{
+	use versatiles_core::{
 		TileCompression::*,
 		TileFormat::{self, *},
 	};

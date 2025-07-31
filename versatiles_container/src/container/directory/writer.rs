@@ -51,12 +51,7 @@ use std::{
 	fs,
 	path::{Path, PathBuf},
 };
-use versatiles_core::{
-	io::DataWriterTrait,
-	progress::get_progress_bar,
-	types::{Blob, TilesReaderTrait},
-	utils::compress,
-};
+use versatiles_core::{io::DataWriterTrait, utils::compress, *};
 
 /// A struct that provides functionality to write tile data to a directory structure.
 pub struct DirectoryTilesWriter {}
@@ -99,7 +94,6 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 		let parameters = reader.parameters();
 		let tile_compression = &parameters.tile_compression.clone();
 		let tile_format = &parameters.tile_format.clone();
-		let bbox_pyramid = &reader.parameters().bbox_pyramid.clone();
 
 		let extension_format = tile_format.as_extension();
 		let extension_compression = tile_compression.extension();
@@ -109,27 +103,27 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 		let filename = format!("tiles.json{extension_compression}");
 		Self::write(path.join(filename), meta_data)?;
 
-		let mut progress = get_progress_bar("converting tiles", bbox_pyramid.count_tiles());
+		reader
+			.traverse_all_tiles(
+				&Traversal::new_any(),
+				Box::new(|_bbox, mut stream| {
+					Box::pin(async move {
+						while let Some(entry) = stream.next().await {
+							let (coord, blob) = entry;
 
-		for bbox in reader.iter_bboxes()? {
-			let mut stream = reader.get_tile_stream(bbox).await?;
+							let filename = format!(
+								"{}/{}/{}{}{}",
+								coord.z, coord.x, coord.y, extension_format, extension_compression
+							);
 
-			while let Some(entry) = stream.next().await {
-				let (coord, blob) = entry;
-
-				progress.inc(1);
-
-				let filename = format!(
-					"{}/{}/{}{}{}",
-					coord.z, coord.x, coord.y, extension_format, extension_compression
-				);
-
-				// Write blob to file
-				Self::write(path.join(filename), blob)?;
-			}
-		}
-
-		progress.finish();
+							// Write blob to file
+							Self::write(path.join(filename), blob)?;
+						}
+						Ok(())
+					})
+				}),
+			)
+			.await?;
 
 		Ok(())
 	}
@@ -151,7 +145,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 mod tests {
 	use super::*;
 	use crate::{MOCK_BYTES_PBF, MockTilesReader};
-	use versatiles_core::{types::*, utils::decompress_gzip};
+	use versatiles_core::utils::decompress_gzip;
 
 	/// Tests the functionality of writing tile data to a directory from a mock reader.
 	#[tokio::test]

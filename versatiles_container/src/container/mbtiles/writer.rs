@@ -31,10 +31,11 @@
 use crate::TilesWriterTrait;
 use anyhow::{Result, bail};
 use async_trait::async_trait;
+use futures::lock::Mutex;
 use r2d2::Pool;
 use r2d2_sqlite::{SqliteConnectionManager, rusqlite::params};
-use std::{fs::remove_file, path::Path};
-use versatiles_core::{io::DataWriterTrait, json::JsonObject, progress::get_progress_bar, types::*};
+use std::{fs::remove_file, path::Path, sync::Arc};
+use versatiles_core::{io::DataWriterTrait, json::JsonObject, *};
 
 /// A writer for creating and populating MBTiles databases.
 pub struct MBTilesWriter {
@@ -117,7 +118,7 @@ impl TilesWriterTrait for MBTilesWriter {
 		use TileCompression::*;
 		use TileFormat::*;
 
-		let mut writer = MBTilesWriter::new(path)?;
+		let writer = MBTilesWriter::new(path)?;
 
 		let parameters = reader.parameters().clone();
 
@@ -160,20 +161,25 @@ impl TilesWriterTrait for MBTilesWriter {
 			}
 		}
 
-		let mut progress = get_progress_bar("converting tiles", pyramid.count_tiles());
+		let writer_mutex = Arc::new(Mutex::new(writer));
 
-		for bbox in reader.iter_bboxes()? {
-			let stream = reader.get_tile_stream(bbox).await?;
-
-			stream
-				.for_each_buffered(2000, |v| {
-					writer.add_tiles(&v).unwrap();
-					progress.inc(v.len() as u64)
-				})
-				.await;
-		}
-
-		progress.finish();
+		reader
+			.traverse_all_tiles(
+				&Traversal::new_any(),
+				Box::new(|_bbox, stream| {
+					let writer_mutex = Arc::clone(&writer_mutex);
+					Box::pin(async move {
+						let mut writer = writer_mutex.lock().await;
+						stream
+							.for_each_buffered(2000, |v| {
+								writer.add_tiles(&v).unwrap();
+							})
+							.await;
+						Ok(())
+					})
+				}),
+			)
+			.await?;
 
 		Ok(())
 	}

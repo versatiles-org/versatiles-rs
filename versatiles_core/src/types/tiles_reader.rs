@@ -8,13 +8,10 @@ use super::ProbeDepth;
 use super::{Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters};
 #[cfg(feature = "cli")]
 use crate::utils::PrettyPrint;
-use crate::{
-	tilejson::TileJSON,
-	types::{TraversalOrder, TraversalOrderSet},
-};
+use crate::{progress::get_progress_bar, tilejson::TileJSON, traversal::Traversal};
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::lock::Mutex;
+use futures::{future::BoxFuture, lock::Mutex};
 use std::{fmt::Debug, sync::Arc};
 
 /// Trait defining behavior for reading tiles from a container.
@@ -38,25 +35,38 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	/// Retrieve the TileJSON metadata for this tile set.
 	fn tilejson(&self) -> &TileJSON;
 
-	/// Return the set of supported traversal orders (default: all orders).
-	fn traversal_orders(&self) -> TraversalOrderSet;
-
-	/// Get an iterator over bounding boxes using the best traversal order.
-	fn iter_bboxes(&self) -> Result<Box<dyn Iterator<Item = TileBBox> + '_ + Send>> {
-		self.iter_bboxes_in_order(self.traversal_orders().get_best()?)
+	/// Return the supported traversal order.
+	fn traversal(&self) -> &Traversal {
+		static DEFAULT_TRAVERSAL: Traversal = Traversal::new_any();
+		&DEFAULT_TRAVERSAL
 	}
 
-	/// Get an iterator over bounding boxes in the specified traversal order.
-	fn iter_bboxes_in_order(&self, order: TraversalOrder) -> Result<Box<dyn Iterator<Item = TileBBox> + '_ + Send>> {
-		Ok(Box::new(self.parameters().bbox_pyramid.iter_bboxes(order)))
-	}
-
-	/// Choose the best of the given orders and iterate bounding boxes accordingly.
-	fn iter_bboxes_in_preferred_order(
-		&self,
-		orders: &[TraversalOrder],
-	) -> Result<Box<dyn Iterator<Item = TileBBox> + '_ + Send>> {
-		self.iter_bboxes_in_order(self.traversal_orders().get_best_of(orders)?)
+	/// Traverse all tiles in the given traversal order, invoking `callback` for each bbox and its tile stream.
+	/// Runs sequentially; awaits each callback before moving to the next.
+	async fn traverse_all_tiles<'a>(
+		&'a self,
+		accepted_order: &Traversal,
+		mut callback: Box<dyn 'a + Send + FnMut(TileBBox, TileStream<'a>) -> BoxFuture<'a, Result<()>>>,
+	) -> Result<()> {
+		let accepted_order = accepted_order.clone();
+		let traversal = self.traversal().get_intersected(&accepted_order);
+		if let Ok(traversal) = traversal {
+			let bboxes = traversal.traverse_pyramid(&self.parameters().bbox_pyramid)?;
+			let n = bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
+			let mut i = 0;
+			let mut progress = get_progress_bar("converting tiles", n);
+			for bbox in bboxes {
+				let stream = self.get_tile_stream(bbox).await?;
+				progress.inc(1);
+				callback(bbox, stream).await?;
+				i += bbox.count_tiles();
+				progress.set_position(i);
+			}
+			progress.finish();
+			Ok(())
+		} else {
+			Err(anyhow::anyhow!("No valid traversal found"))
+		}
 	}
 
 	/// Asynchronously fetch the raw tile data for the given tile coordinate.
@@ -173,9 +183,9 @@ mod tests {
 	#[cfg(feature = "cli")]
 	use super::ProbeDepth;
 	use super::*;
-	use crate::types::{TileBBoxPyramid, TileFormat, TraversalOrder, TraversalOrderSet};
 	#[cfg(feature = "cli")]
 	use crate::utils::PrettyPrint;
+	use crate::{TileBBoxPyramid, TileFormat};
 
 	#[derive(Debug)]
 	struct TestReader {
@@ -210,10 +220,6 @@ mod tests {
 
 		fn parameters(&self) -> &TilesReaderParameters {
 			&self.parameters
-		}
-
-		fn traversal_orders(&self) -> TraversalOrderSet {
-			TraversalOrderSet::new_all()
 		}
 
 		fn override_compression(&mut self, tile_compression: TileCompression) {
@@ -339,29 +345,6 @@ mod tests {
 		reader.probe(ProbeDepth::Tiles).await?;
 		reader.probe(ProbeDepth::TileContents).await?;
 		Ok(())
-	}
-
-	#[tokio::test]
-	async fn test_traversal_orders_default() {
-		let reader = TestReader::new_dummy();
-		let default_orders = reader.traversal_orders();
-		assert_eq!(default_orders, TraversalOrderSet::new_all());
-	}
-
-	#[tokio::test]
-	async fn test_iter_bboxes_non_empty() {
-		let reader = TestReader::new_dummy();
-		let mut bboxes = reader.iter_bboxes().unwrap();
-		assert_eq!(bboxes.next().unwrap().as_string(), "0:[0,0,0,0]");
-	}
-
-	#[tokio::test]
-	async fn test_iter_bboxes_in_preferred_order() {
-		let reader = TestReader::new_dummy();
-		// Use a single preferred order
-		let order = TraversalOrder::BottomUp;
-		let mut bboxes = reader.iter_bboxes_in_preferred_order(&[order]).unwrap();
-		assert_eq!(bboxes.next().unwrap().as_string(), "3:[0,0,7,7]");
 	}
 
 	#[tokio::test]

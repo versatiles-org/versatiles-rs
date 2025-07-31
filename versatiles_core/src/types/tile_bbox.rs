@@ -587,14 +587,27 @@ impl TileBBox {
 	///
 	/// Panics if `scale` is zero.
 	pub fn scale_down(&mut self, scale: u32) {
-		if scale == 0 {
-			panic!("scale must be greater than 0");
-		}
+		assert!(scale > 0, "scale must be greater than 0");
+		assert!(scale.is_power_of_two(), "scale must be a power of two");
 
 		self.x_min /= scale;
 		self.y_min /= scale;
 		self.x_max /= scale;
 		self.y_max /= scale;
+	}
+
+	pub fn scaled_down(&self, scale: u32) -> TileBBox {
+		assert!(scale > 0, "scale must be greater than 0");
+		assert!(scale.is_power_of_two(), "scale must be a power of two");
+
+		TileBBox {
+			level: self.level,
+			max: self.max / scale,
+			x_min: self.x_min / scale,
+			y_min: self.y_min / scale,
+			x_max: self.x_max / scale,
+			y_max: self.y_max / scale,
+		}
 	}
 
 	// -------------------------------------------------------------------------
@@ -1494,7 +1507,7 @@ mod tests {
 		assert_eq!(bbox, TileBBox::new(4, 2, 2, 3, 3)?);
 
 		// Scaling down by a factor larger than the coordinates
-		bbox.scale_down(5);
+		bbox.scale_down(4);
 		assert_eq!(bbox, TileBBox::new(4, 0, 0, 0, 0)?);
 
 		Ok(())

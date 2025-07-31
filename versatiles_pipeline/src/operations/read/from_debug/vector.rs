@@ -2,7 +2,7 @@ use ab_glyph::{Font, FontArc, Outline, OutlineCurve::*, Point};
 use anyhow::Result;
 use lazy_static::lazy_static;
 use std::{f64::consts::PI, ops::Div, vec};
-use versatiles_core::types::TileCoord3;
+use versatiles_core::TileCoord3;
 use versatiles_geometry::{
 	Coordinates1, Coordinates2, Coordinates3, GeoFeature, GeoValue, Geometry, MultiPolygonGeometry, math,
 	vector_tile::{VectorTile, VectorTileLayer},

@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::types::Blob;
+//! use versatiles_core::Blob;
 //!
 //! // Creating a new Blob from a vector of bytes
 //! let vec = vec![0, 1, 2, 3, 4, 5, 6, 7];
@@ -35,7 +35,7 @@ use std::ops::Range;
 /// # Examples
 ///
 /// ```rust
-/// use versatiles_core::types::Blob;
+/// use versatiles_core::Blob;
 ///
 /// // Create a Blob from a string
 /// let blob = Blob::from("Hello, world!");
@@ -57,7 +57,7 @@ impl Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let empty_blob = Blob::new_empty();
 	/// assert_eq!(empty_blob.len(), 0);
@@ -80,7 +80,7 @@ impl Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let blob = Blob::new_sized(5);
 	/// assert_eq!(blob.len(), 5);
@@ -107,7 +107,7 @@ impl Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let blob = Blob::from(&[10, 20, 30, 40, 50]);
 	/// let slice = blob.get_range(1..4);
@@ -130,7 +130,7 @@ impl Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// # use versatiles_core::types::{Blob, ByteRange};
+	/// # use versatiles_core::{Blob, ByteRange};
 	/// # use anyhow::Result;
 	/// #
 	/// fn example() -> Result<()> {
@@ -153,7 +153,7 @@ impl Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let blob = Blob::from("hello");
 	/// assert_eq!(blob.as_slice(), b"hello");
@@ -167,7 +167,7 @@ impl Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let mut blob = Blob::from("abc");
 	/// let slice = blob.as_mut_slice();
@@ -183,7 +183,7 @@ impl Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let blob = Blob::from(&[1, 2, 3]);
 	/// let vec = blob.into_vec();
@@ -202,7 +202,7 @@ impl Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let blob = Blob::from("Xylofön");
 	/// assert_eq!(blob.as_str(), "Xylofön");
@@ -220,7 +220,7 @@ impl Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let blob = Blob::from("Hello");
 	/// let s = blob.into_string();
@@ -235,7 +235,7 @@ impl Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let blob = Blob::from(&[0xDE, 0xAD, 0xBE, 0xEF]);
 	/// assert_eq!(blob.as_hex(), "de ad be ef");
@@ -254,7 +254,7 @@ impl Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let blob = Blob::from("Hello");
 	/// assert_eq!(blob.len(), 5);
@@ -268,7 +268,7 @@ impl Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let blob = Blob::new_empty();
 	/// assert!(blob.is_empty());
@@ -285,7 +285,7 @@ impl From<Vec<u8>> for Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let blob = Blob::from(vec![1, 2, 3]);
 	/// assert_eq!(blob.len(), 3);
@@ -301,7 +301,7 @@ impl From<&Vec<u8>> for Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let vec = vec![4, 5, 6];
 	/// let blob = Blob::from(&vec);
@@ -318,7 +318,7 @@ impl From<&[u8]> for Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let vec = vec![0, 1, 2];
 	/// let blob = Blob::from(vec.as_slice());
@@ -335,7 +335,7 @@ impl<const N: usize> From<&[u8; N]> for Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let blob = Blob::from(&[0, 1, 2]);
 	/// assert_eq!(blob.len(), 3);
@@ -351,7 +351,7 @@ impl From<&str> for Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let blob = Blob::from("Hello, world!");
 	/// assert_eq!(blob.len(), 13);
@@ -367,7 +367,7 @@ impl From<&String> for Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let s = String::from("Example");
 	/// let blob = Blob::from(&s);
@@ -384,7 +384,7 @@ impl From<String> for Blob {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::Blob;
+	/// use versatiles_core::Blob;
 	///
 	/// let s = String::from("Data");
 	/// let blob = Blob::from(s);

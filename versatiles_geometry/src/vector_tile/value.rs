@@ -3,7 +3,7 @@
 use crate::geo::GeoValue;
 use anyhow::{Context, Result, anyhow, bail};
 use byteorder::LE;
-use versatiles_core::{io::*, types::Blob};
+use versatiles_core::{Blob, io::*};
 
 pub trait GeoValuePBF<'a> {
 	fn read(reader: &mut dyn ValueReader<'a, LE>) -> Result<GeoValue>;

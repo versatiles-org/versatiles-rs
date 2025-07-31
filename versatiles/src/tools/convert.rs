@@ -1,7 +1,6 @@
 use anyhow::{Result, bail};
-use versatiles::types::GeoBBox;
 use versatiles_container::{TilesConverterParameters, convert_tiles_container, get_reader};
-use versatiles_core::types::{TileBBoxPyramid, TileCompression};
+use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCompression};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -58,7 +57,7 @@ pub struct Subcommand {
 
 	/// set the output tile format
 	#[arg(long, value_name = "TILE_FORMAT", display_order = 3)]
-	tile_format: Option<versatiles_core::types::TileFormat>,
+	tile_format: Option<versatiles_core::TileFormat>,
 }
 
 #[tokio::main]

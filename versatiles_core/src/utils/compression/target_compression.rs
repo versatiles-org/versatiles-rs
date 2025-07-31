@@ -1,5 +1,5 @@
 use super::compression_goal::CompressionGoal;
-use crate::types::TileCompression;
+use crate::TileCompression;
 use enumset::EnumSet;
 use std::fmt::{self, Debug};
 
@@ -104,7 +104,7 @@ impl Debug for TargetCompression {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::TileCompression;
+	use crate::TileCompression;
 	use enumset::EnumSet;
 
 	#[test]

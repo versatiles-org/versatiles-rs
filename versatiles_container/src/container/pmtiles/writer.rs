@@ -28,11 +28,18 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different tile formats, and verifying the integrity of the written data.
 
+use std::sync::Arc;
+
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression};
 use crate::TilesWriterTrait;
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{io::DataWriterTrait, progress::get_progress_bar, types::*, utils::compress};
+use futures::lock::Mutex;
+use versatiles_core::{
+	io::DataWriterTrait,
+	utils::{HilbertIndex, compress},
+	*,
+};
 
 /// A struct that provides functionality to write tile data to a PMTiles container.
 pub struct PMTilesWriter {}
@@ -52,17 +59,7 @@ impl TilesWriterTrait for PMTilesWriter {
 
 		let parameters = reader.parameters().clone();
 
-		let blocks: Vec<TileBBox> = reader
-			.iter_bboxes_in_preferred_order(&[TraversalOrder::PMTiles64])?
-			.collect();
-
-		let mut progress = get_progress_bar(
-			"converting tiles",
-			blocks.iter().map(|block| block.count_tiles()).sum::<u64>(),
-		);
-		let mut tile_count = 0;
-
-		let mut entries = EntriesV3::new();
+		let entries = EntriesV3::new();
 
 		writer.set_position(16384)?;
 
@@ -74,20 +71,33 @@ impl TilesWriterTrait for PMTilesWriter {
 
 		let tile_data_start = writer.get_position()?;
 
-		for bbox in blocks.iter() {
-			let mut tiles = reader.get_tile_stream(*bbox).await?.collect().await;
-			tiles.sort_by_key(|(coord, _)| coord.get_hilbert_index().unwrap());
-			for (coord, blob) in tiles {
-				progress.inc(1);
-				let id = coord.get_hilbert_index()?;
-				let range = writer.append(&blob)?;
-				entries.push(EntryV3::new(id, range.get_shifted_backward(tile_data_start), 1));
-			}
+		let writer_mutex = Arc::new(Mutex::new(writer));
+		let entries_mutex = Arc::new(Mutex::new(entries));
 
-			tile_count += bbox.count_tiles();
-			progress.set_position(tile_count);
-		}
-		progress.finish();
+		reader
+			.traverse_all_tiles(
+				&Traversal::new(TraversalOrder::PMTiles, 1, 64)?,
+				Box::new(|_bbox, stream| {
+					let writer_mutex = Arc::clone(&writer_mutex);
+					let entries_mutex = Arc::clone(&entries_mutex);
+					Box::pin(async move {
+						let mut writer = writer_mutex.lock().await;
+						let mut entries = entries_mutex.lock().await;
+						let mut tiles = stream.collect().await;
+						tiles.sort_by_key(|(coord, _)| coord.get_hilbert_index().unwrap());
+						for (coord, blob) in tiles {
+							let id = coord.get_hilbert_index()?;
+							let range = writer.append(&blob)?;
+							entries.push(EntryV3::new(id, range.get_shifted_backward(tile_data_start), 1));
+						}
+						Ok(())
+					})
+				}),
+			)
+			.await?;
+
+		let mut entries = entries_mutex.lock().await;
+		let mut writer = writer_mutex.lock().await;
 
 		let tile_data_end = writer.get_position()?;
 

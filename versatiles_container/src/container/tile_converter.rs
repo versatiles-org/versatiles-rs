@@ -1,8 +1,8 @@
 use anyhow::{Result, bail};
 use std::{fmt::Debug, sync::Arc};
 use versatiles_core::{
-	types::*,
 	utils::{compress, decompress},
+	*,
 };
 use versatiles_derive::context;
 

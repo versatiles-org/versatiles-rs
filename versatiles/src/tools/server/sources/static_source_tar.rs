@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use std::{collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::File, io::Read, path::Path};
 use tar::{Archive, EntryType};
 use versatiles_core::{
-	types::{Blob, TileCompression},
+	Blob, TileCompression,
 	utils::{TargetCompression, decompress_brotli, decompress_gzip},
 };
 
@@ -186,7 +186,7 @@ mod tests {
 	use versatiles_container::{
 		MockTilesReader, MockTilesReaderProfile, TilesConverterParameters, convert_tiles_container,
 	};
-	use versatiles_core::types::TilesReaderTrait;
+	use versatiles_core::TilesReaderTrait;
 
 	pub async fn make_test_tar(compression: TileCompression) -> NamedTempFile {
 		// get dummy reader

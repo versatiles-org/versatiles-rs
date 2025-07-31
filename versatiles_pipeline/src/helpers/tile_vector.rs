@@ -1,7 +1,7 @@
 use anyhow::Result;
 use versatiles_core::{
-	types::{Blob, TileStream, TilesReaderParameters},
 	utils::{compress, decompress},
+	{Blob, TileStream, TilesReaderParameters},
 };
 use versatiles_geometry::vector_tile::VectorTile;
 
@@ -42,7 +42,7 @@ mod tests {
 
 	use super::*;
 	use lazy_static::lazy_static;
-	use versatiles_core::types::{
+	use versatiles_core::{
 		TileCompression::{self, Gzip},
 		TileCoord3,
 		TileFormat::{self, MVT},

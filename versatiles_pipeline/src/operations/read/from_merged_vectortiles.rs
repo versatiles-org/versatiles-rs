@@ -26,7 +26,7 @@ use async_trait::async_trait;
 use futures::future::{BoxFuture, join_all};
 use imageproc::image::DynamicImage;
 use std::collections::HashMap;
-use versatiles_core::{tilejson::TileJSON, types::*};
+use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -46,6 +46,7 @@ struct Operation {
 	parameters: TilesReaderParameters,
 	sources: Vec<Box<dyn OperationTrait>>,
 	tilejson: TileJSON,
+	traversal: Traversal,
 }
 
 /// Combine several `VectorTile`s by merging layers with identical names.
@@ -88,9 +89,12 @@ impl ReadOperationTrait for Operation {
 			let tile_format = first_parameters.tile_format;
 			let tile_compression = first_parameters.tile_compression;
 			let mut pyramid = TileBBoxPyramid::new_empty();
+			let mut traversal = Traversal::new_any();
 
 			for source in sources.iter() {
 				tilejson.merge(source.tilejson())?;
+
+				traversal.intersect(source.traversal())?;
 
 				let parameters = source.parameters();
 				pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
@@ -108,6 +112,7 @@ impl ReadOperationTrait for Operation {
 				tilejson,
 				parameters,
 				sources,
+				traversal,
 			}) as Box<dyn OperationTrait>)
 		})
 	}
@@ -125,12 +130,8 @@ impl OperationTrait for Operation {
 		&self.tilejson
 	}
 
-	fn traversal_orders(&self) -> TraversalOrderSet {
-		self
-			.sources
-			.iter()
-			.map(|source| source.traversal_orders())
-			.fold(TraversalOrderSet::new_all(), |acc, set| acc & set)
+	fn traversal(&self) -> &Traversal {
+		&self.traversal
 	}
 
 	/// Convenience wrapper: returns a packed vector tile at `coord`.

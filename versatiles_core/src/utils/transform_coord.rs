@@ -1,4 +1,4 @@
-use crate::types::{TileBBox, TileBBoxPyramid, TileCoord3};
+use crate::{TileBBox, TileBBoxPyramid, TileCoord3};
 use std::mem::swap;
 
 pub trait TransformCoord {

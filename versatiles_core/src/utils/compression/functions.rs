@@ -11,7 +11,7 @@
 //!
 //! ## Usage
 //! ```rust
-//! use versatiles_core::{utils::*, types::*};
+//! use versatiles_core::{utils::*, *};
 //!
 //! let data = Blob::from(vec![1, 2, 3, 4, 5]);
 //! let compressed = compress_gzip(&data)?;
@@ -25,7 +25,7 @@ use super::{
 	method_gzip::{compress_gzip, decompress_gzip},
 	target_compression::TargetCompression,
 };
-use crate::types::{Blob, TileCompression};
+use crate::{Blob, TileCompression};
 use anyhow::{Result, bail};
 use versatiles_derive::context;
 

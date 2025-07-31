@@ -1,7 +1,7 @@
 use crate::EnhancedDynamicImageTrait;
 use anyhow::{Result, anyhow, bail};
 use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::jpeg::JpegEncoder, load_from_memory_with_format};
-use versatiles_core::types::Blob;
+use versatiles_core::Blob;
 
 pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {

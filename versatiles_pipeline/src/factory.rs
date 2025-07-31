@@ -11,7 +11,7 @@ use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
 };
-use versatiles_core::types::TilesReaderTrait;
+use versatiles_core::TilesReaderTrait;
 
 type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesReaderTrait>>>>;
 

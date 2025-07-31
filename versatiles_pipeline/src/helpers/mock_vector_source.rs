@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{tilejson::TileJSON, types::*};
+use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_geometry::{
 	GeoFeature, Geometry,
 	vector_tile::{VectorTile, VectorTileLayer},
@@ -12,7 +12,7 @@ pub struct MockVectorSource {
 	data: Vec<(String, Vec<Vec<(String, String)>>)>,
 	parameters: TilesReaderParameters,
 	tilejson: TileJSON,
-	traversal_orders: TraversalOrderSet,
+	traversal: Traversal,
 }
 
 impl MockVectorSource {
@@ -50,13 +50,13 @@ impl MockVectorSource {
 			data,
 			parameters,
 			tilejson,
-			traversal_orders: TraversalOrderSet::new_all(),
+			traversal: Traversal::default(),
 		}
 	}
 
 	#[allow(dead_code)]
-	pub fn set_traversal_orders(&mut self, orders: TraversalOrderSet) {
-		self.traversal_orders = orders;
+	pub fn set_traversal(&mut self, traversal: Traversal) {
+		self.traversal = traversal;
 	}
 }
 
@@ -78,8 +78,8 @@ impl TilesReaderTrait for MockVectorSource {
 		panic!("not possible")
 	}
 
-	fn traversal_orders(&self) -> TraversalOrderSet {
-		self.traversal_orders.clone()
+	fn traversal(&self) -> &Traversal {
+		&self.traversal
 	}
 
 	fn tilejson(&self) -> &TileJSON {
@@ -122,7 +122,7 @@ impl TilesReaderTrait for MockVectorSource {
 
 #[cfg(test)]
 pub fn arrange_tiles<T: ToString, I>(tiles: Vec<(TileCoord3, I)>, cb: impl Fn(I) -> T) -> Vec<String> {
-	use versatiles_core::types::TileBBox;
+	use versatiles_core::TileBBox;
 
 	let mut bbox = TileBBox::new_empty(tiles.first().unwrap().0.z).unwrap();
 	tiles.iter().for_each(|t| bbox.include_coord(t.0.x, t.0.y));
@@ -142,6 +142,7 @@ pub fn arrange_tiles<T: ToString, I>(tiles: Vec<(TileCoord3, I)>, cb: impl Fn(I)
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use versatiles_core::GeoBBox;
 
 	#[tokio::test]
 	async fn test_get_tile_data() {

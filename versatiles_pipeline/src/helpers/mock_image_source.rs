@@ -2,7 +2,7 @@ use anyhow::{Context, Result, bail, ensure};
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use nom::Input;
-use versatiles_core::{tilejson::TileJSON, types::*};
+use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_derive::context;
 use versatiles_image::EnhancedDynamicImageTrait;
 
@@ -76,10 +76,6 @@ impl TilesReaderTrait for MockImageSource {
 		&self.parameters
 	}
 
-	fn traversal_orders(&self) -> TraversalOrderSet {
-		TraversalOrderSet::new_all()
-	}
-
 	fn override_compression(&mut self, _tile_compression: TileCompression) {
 		panic!("not possible")
 	}
@@ -100,6 +96,7 @@ impl TilesReaderTrait for MockImageSource {
 mod tests {
 	use super::*;
 	use crate::helpers::mock_vector_source::arrange_tiles;
+	use versatiles_core::GeoBBox;
 
 	#[test]
 	fn test_mock_image_source_creation_valid_filename() {

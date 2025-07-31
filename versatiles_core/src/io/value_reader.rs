@@ -28,7 +28,7 @@
 //! }
 //! ```
 
-use crate::types::{Blob, ByteRange};
+use crate::{Blob, ByteRange};
 use anyhow::{Context, Result, bail};
 use byteorder::{ByteOrder, ReadBytesExt};
 use std::io::{Read, Seek};

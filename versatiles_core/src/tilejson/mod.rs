@@ -34,7 +34,9 @@
 mod value;
 pub mod vector_layer;
 
-use crate::{json::*, types::*};
+use crate::{
+	Blob, GeoBBox, GeoCenter, TileBBoxPyramid, TileFormat, TileSchema, TileType, TilesReaderParameters, json::*,
+};
 use anyhow::{Ok, Result, anyhow, ensure};
 use regex::Regex;
 use std::fmt::Debug;
@@ -241,7 +243,7 @@ impl TileJSON {
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{tilejson::*, types::GeoBBox};
+	/// # use versatiles_core::{tilejson::*, GeoBBox};
 	/// let mut tj = TileJSON::default();
 	/// tj.limit_bbox(GeoBBox(-180.0, -90.0, 0.0, 10.0));
 	/// // If `tj.bounds` was None, now it's set; otherwise they are intersected.

@@ -10,7 +10,7 @@
 //! ## Usage Example
 //! ```rust
 //! use versatiles_container::PMTilesReader;
-//! use versatiles_core::types::{TileCoord3, TilesReaderTrait};
+//! use versatiles_core::{TileCoord3, TilesReaderTrait};
 //! use std::path::Path;
 //!
 //! #[tokio::main]
@@ -45,7 +45,12 @@ use futures::lock::Mutex;
 use std::{fmt::Debug, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
-use versatiles_core::{io::*, tilejson::TileJSON, types::*, utils::decompress};
+use versatiles_core::{
+	io::*,
+	tilejson::TileJSON,
+	utils::{HilbertIndex, decompress},
+	*,
+};
 
 /// A struct that provides functionality to read tile data from a PMTiles container.
 #[derive(Debug)]
@@ -175,10 +180,6 @@ impl TilesReaderTrait for PMTilesReader {
 	/// * `tile_compression` - The new tile compression method.
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
-	}
-
-	fn traversal_orders(&self) -> TraversalOrderSet {
-		TraversalOrderSet::new_all()
 	}
 
 	/// Returns the metadata as a `Blob`.

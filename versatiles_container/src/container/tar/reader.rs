@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path};
 use tar::{Archive, EntryType};
-use versatiles_core::{io::*, tilejson::TileJSON, types::*, utils::decompress};
+use versatiles_core::{io::*, tilejson::TileJSON, utils::decompress, *};
 
 /// A struct that provides functionality to read tile data from a tar archive.
 pub struct TarTilesReader {
@@ -158,10 +158,6 @@ impl TilesReaderTrait for TarTilesReader {
 	/// * `tile_compression` - The new tile compression method.
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
-	}
-
-	fn traversal_orders(&self) -> TraversalOrderSet {
-		TraversalOrderSet::new_all()
 	}
 
 	/// Returns the metadata as a `Blob`.

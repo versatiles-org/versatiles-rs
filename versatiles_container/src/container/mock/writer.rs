@@ -23,7 +23,7 @@
 use crate::TilesWriterTrait;
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{io::DataWriterTrait, types::TilesReaderTrait};
+use versatiles_core::{TilesReaderTrait, Traversal, io::DataWriterTrait};
 
 /// Mock implementation of a `TilesWriter`.
 pub struct MockTilesWriter {}
@@ -45,12 +45,17 @@ impl MockTilesWriter {
 		let _temp = reader.source_name();
 		let _temp = reader.tilejson();
 
-		for bbox in reader.iter_bboxes()? {
-			let mut stream = reader.get_tile_stream(bbox).await?;
-			while stream.next().await.is_some() {}
-		}
-
-		Ok(())
+		reader
+			.traverse_all_tiles(
+				&Traversal::new_any(),
+				Box::new(|_bbox, mut stream| {
+					Box::pin(async move {
+						while stream.next().await.is_some() {}
+						Ok(())
+					})
+				}),
+			)
+			.await
 	}
 }
 

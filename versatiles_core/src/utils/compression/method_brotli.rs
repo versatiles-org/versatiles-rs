@@ -1,4 +1,4 @@
-use crate::types::Blob;
+use crate::Blob;
 use anyhow::{Context, Result};
 use brotli::{BrotliCompress, BrotliDecompress, enc::BrotliEncoderParams};
 use std::io::Cursor;

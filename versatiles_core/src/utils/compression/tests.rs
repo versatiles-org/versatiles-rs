@@ -1,4 +1,4 @@
-use crate::types::Blob;
+use crate::Blob;
 
 /// Generates deterministic pseudo-random binary data of a specified size.
 ///

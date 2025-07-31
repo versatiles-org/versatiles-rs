@@ -31,7 +31,7 @@ use image::create_debug_image;
 use imageproc::image::DynamicImage;
 use std::fmt::Debug;
 use vector::create_debug_vector_tile;
-use versatiles_core::{tilejson::TileJSON, types::*};
+use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]

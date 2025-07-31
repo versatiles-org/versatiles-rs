@@ -1,4 +1,4 @@
-use super::{TileBBox, TileCoord3};
+use crate::{TileBBox, TileCoord3};
 use anyhow::{Result, bail};
 
 /// Converts between 2‑D tile space and its position along a **Hilbert
@@ -21,7 +21,7 @@ use anyhow::{Result, bail};
 ///
 /// # Examples
 /// ```
-/// use versatiles_core::types::{TileCoord3, HilbertIndex};
+/// use versatiles_core::{TileCoord3, utils::HilbertIndex};
 ///
 /// let coord = TileCoord3::new(5, 3, 3)?;
 /// let idx = coord.get_hilbert_index()?;

@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::{io::{DataReaderBlob, DataReaderTrait}, types::{Blob, ByteRange}};
+//! use versatiles_core::{io::{DataReaderBlob, DataReaderTrait}, Blob, ByteRange};
 //! use anyhow::Result;
 //!
 //! #[tokio::main]
@@ -34,7 +34,7 @@
 #![allow(dead_code)]
 
 use super::{DataReaderTrait, DataWriterBlob};
-use crate::types::{Blob, ByteRange};
+use crate::{Blob, ByteRange};
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::io::{Cursor, Read};

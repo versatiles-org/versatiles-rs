@@ -18,7 +18,7 @@ use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::DynamicImage;
 use std::{fmt::Debug, vec};
-use versatiles_core::{tilejson::TileJSON, types::*};
+use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 

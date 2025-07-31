@@ -1,4 +1,4 @@
-use crate::types::Blob;
+use crate::Blob;
 use anyhow::{Context, Result};
 use flate2::bufread::{GzDecoder, GzEncoder};
 use std::io::Read;

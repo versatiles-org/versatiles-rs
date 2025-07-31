@@ -6,5 +6,8 @@ pub mod json;
 pub mod macros;
 pub mod progress;
 pub mod tilejson;
+mod traversal;
+pub use traversal::*;
 pub mod types;
+pub use types::*;
 pub mod utils;

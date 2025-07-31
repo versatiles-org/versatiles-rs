@@ -9,7 +9,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::{io::{DataReaderHttp, DataReaderTrait}, types::{Blob, ByteRange}};
+//! use versatiles_core::{io::{DataReaderHttp, DataReaderTrait}, Blob, ByteRange};
 //! use anyhow::Result;
 //! use reqwest::Url;
 //!
@@ -28,7 +28,7 @@
 //! ```
 
 use super::DataReaderTrait;
-use crate::types::{Blob, ByteRange};
+use crate::{Blob, ByteRange};
 use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
 use lazy_static::lazy_static;

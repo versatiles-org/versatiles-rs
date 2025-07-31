@@ -10,7 +10,7 @@
 //!
 //! ```rust
 //! use versatiles_container::{MockTilesReader, MockTilesReaderProfile};
-//! use versatiles_core::types::TilesReaderTrait;
+//! use versatiles_core::TilesReaderTrait;
 //! use std::result::Result;
 //!
 //! #[tokio::test]
@@ -24,7 +24,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{tilejson::TileJSON, types::*, utils::compress};
+use versatiles_core::{tilejson::TileJSON, utils::compress, *};
 
 /// Enum representing different mock profiles for tile data.
 #[derive(Debug)]
@@ -92,10 +92,6 @@ impl TilesReaderTrait for MockTilesReader {
 
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
-	}
-
-	fn traversal_orders(&self) -> TraversalOrderSet {
-		TraversalOrderSet::new_all()
 	}
 
 	fn tilejson(&self) -> &TileJSON {

@@ -4,7 +4,7 @@
 //!
 //! ```rust
 //! use versatiles_container::{MBTilesReader, TilesWriterTrait, VersaTilesWriter};
-//! use versatiles_core::types::{TileBBoxPyramid, TileCompression, TileFormat};
+//! use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -26,12 +26,15 @@
 //! }
 //! ```
 
+use std::sync::Arc;
+
 use super::types::{BlockDefinition, BlockIndex, FileHeader};
 use crate::{TilesWriterTrait, container::versatiles::types::BlockWriter};
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
+use futures::lock::Mutex;
 use log::{debug, trace};
-use versatiles_core::{io::DataWriterTrait, progress::*, types::*, utils::compress};
+use versatiles_core::{io::DataWriterTrait, utils::compress, *};
 
 /// A struct for writing tiles to a VersaTiles container.
 pub struct VersaTilesWriter {}
@@ -95,68 +98,58 @@ impl VersaTilesWriter {
 			return Ok(ByteRange::empty());
 		}
 
-		// Initialize blocks and populate them
-		use TraversalOrder::*;
-		let block_defs: Vec<BlockDefinition> = reader
-			.iter_bboxes_in_preferred_order(&[TopDown, BottomUp, DepthFirst256])?
-			.flat_map(|level_bbox| {
-				level_bbox
-					.iter_bbox_grid(256)
-					.map(|bbox_block| BlockDefinition::new(&bbox_block))
-					.collect::<Vec<_>>()
-			})
-			.collect();
-
-		// Initialize progress bar
-		let mut progress = get_progress_bar(
-			"converting tiles",
-			block_defs.iter().map(|block| block.count_tiles()).sum::<u64>(),
-		);
-
 		// Create the block index
-		let mut block_index = BlockIndex::new_empty();
-		let mut tiles_count = 0;
+		let block_index_mutex = Arc::new(Mutex::new(BlockIndex::new_empty()));
+		let writer_mutex = Arc::new(Mutex::new(writer));
 
-		// Iterate through blocks and write them
-		for mut block in block_defs.into_iter() {
-			// Log the start of the block
-			debug!("start block {block:?}");
+		// Initialize blocks and populate them
+		reader
+			.traverse_all_tiles(
+				&Traversal::new_any_size(256, 256)?,
+				Box::new(|bbox, stream| {
+					let writer_mutex = Arc::clone(&writer_mutex);
+					let block_index_mutex = Arc::clone(&block_index_mutex);
 
-			// Create a new BlockWriter for the block
-			let mut block_writer = BlockWriter::new(&block, writer);
+					Box::pin(async move {
+						// Log the start of the block
+						let mut block = BlockDefinition::new(&bbox);
+						debug!("start block {block:?}");
 
-			reader
-				.get_tile_stream(block_writer.bbox)
-				.await?
-				.for_each_sync(|(coord, blob)| {
-					progress.inc(1);
-					block_writer.write_tile(coord, blob).unwrap();
-				})
-				.await;
+						// Create a new BlockWriter for the block
+						let mut writer = writer_mutex.lock().await;
+						let mut block_writer = BlockWriter::new(&block, &mut **writer);
+						stream
+							.for_each_sync(|(coord, blob)| {
+								block_writer.write_tile(coord, blob).unwrap();
+							})
+							.await;
 
-			// Finish the block
-			debug!("finish block {block:?}");
+						// Finish the block
+						debug!("finish block {block:?}");
 
-			let (tiles_range, index_range) = block_writer.finalize()?;
+						let (tiles_range, index_range) = block_writer.finalize()?;
 
-			if tiles_range.length + index_range.length == 0 {
-				// Block is empty, continue with the next block
-				continue;
-			}
+						if tiles_range.length + index_range.length == 0 {
+							// Block is empty, continue with the next block
+							return Ok(());
+						}
 
-			tiles_count += block.count_tiles();
-			progress.set_position(tiles_count);
+						// Update the block with the tile and index range and add it to the block index
+						block.set_tiles_range(tiles_range);
+						block.set_index_range(index_range);
+						block_index_mutex.lock().await.add_block(block);
 
-			// Update the block with the tile and index range and add it to the block index
-			block.set_tiles_range(tiles_range);
-			block.set_index_range(index_range);
-			block_index.add_block(block);
-		}
+						Ok(())
+					})
+				}),
+			)
+			.await?;
 
-		// Finish updating progress and write the block index
-		progress.finish();
-
-		let range = writer.append(&block_index.as_brotli_blob()?)?;
+		// write the block index
+		let range = writer_mutex
+			.lock()
+			.await
+			.append(&block_index_mutex.lock().await.as_brotli_blob()?)?;
 
 		Ok(range)
 	}

@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::types::ByteRange;
+//! use versatiles_core::ByteRange;
 //!
 //! let range = ByteRange::new(23, 42);
 //! assert_eq!(range.offset, 23);
@@ -46,7 +46,7 @@ impl ByteRange {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::ByteRange;
+	/// use versatiles_core::ByteRange;
 	///
 	/// let range = ByteRange::new(10, 5);
 	/// assert_eq!(range.offset, 10);
@@ -61,7 +61,7 @@ impl ByteRange {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::ByteRange;
+	/// use versatiles_core::ByteRange;
 	///
 	/// let empty = ByteRange::empty();
 	/// assert_eq!(empty.offset, 0);
@@ -82,7 +82,7 @@ impl ByteRange {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::ByteRange;
+	/// use versatiles_core::ByteRange;
 	///
 	/// let r1 = ByteRange::new(10, 5);
 	/// let r2 = r1.get_shifted_forward(7);
@@ -110,7 +110,7 @@ impl ByteRange {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::ByteRange;
+	/// use versatiles_core::ByteRange;
 	///
 	/// let r1 = ByteRange::new(10, 5);
 	/// let r2 = r1.get_shifted_backward(3);
@@ -133,7 +133,7 @@ impl ByteRange {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::ByteRange;
+	/// use versatiles_core::ByteRange;
 	///
 	/// let mut range = ByteRange::new(10, 5);
 	/// range.shift_forward(3);
@@ -156,7 +156,7 @@ impl ByteRange {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::ByteRange;
+	/// use versatiles_core::ByteRange;
 	///
 	/// let mut range = ByteRange::new(10, 5);
 	/// range.shift_backward(5);
@@ -175,7 +175,7 @@ impl ByteRange {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::ByteRange;
+	/// use versatiles_core::ByteRange;
 	///
 	/// let range = ByteRange::new(23, 42);
 	/// let usize_range = range.as_range_usize();

@@ -170,7 +170,7 @@ mod tests {
 	use assert_fs::NamedTempFile;
 	use pretty_assertions::assert_eq;
 	use std::{fs::File, io::Write, vec};
-	use versatiles_core::types::TileCoord3;
+	use versatiles_core::TileCoord3;
 	use versatiles_geometry::{GeoFeature, GeoProperties, GeoValue, Geometry, vector_tile::VectorTileLayer};
 
 	fn create_sample_vector_tile() -> VectorTile {

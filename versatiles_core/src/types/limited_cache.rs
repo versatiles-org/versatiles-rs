@@ -20,7 +20,7 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash, mem::size_of, ops::Div};
 /// # Examples
 ///
 /// ```rust
-/// use versatiles_core::types::LimitedCache;
+/// use versatiles_core::LimitedCache;
 ///
 /// // Create a cache with a maximum byte size of 1,000,000.
 /// // The actual number of elements that can be stored depends on
@@ -62,7 +62,7 @@ where
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::LimitedCache;
+	/// use versatiles_core::LimitedCache;
 	///
 	/// let cache: LimitedCache<u64, i32> = LimitedCache::with_maximum_size(1024);
 	/// ```
@@ -93,7 +93,7 @@ where
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::LimitedCache;
+	/// use versatiles_core::LimitedCache;
 	///
 	/// let mut cache = LimitedCache::with_maximum_size(1_000);
 	/// cache.add("foo", 42);
@@ -120,7 +120,7 @@ where
 	/// # Examples
 	///
 	/// ```rust
-	/// # use versatiles_core::types::LimitedCache;
+	/// # use versatiles_core::LimitedCache;
 	/// # use anyhow::{anyhow, Result};
 	/// fn expensive_operation() -> Result<u64> {
 	///     Ok(999)
@@ -161,7 +161,7 @@ where
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::LimitedCache;
+	/// use versatiles_core::LimitedCache;
 	///
 	/// let mut cache = LimitedCache::with_maximum_size(1_000);
 	/// let inserted = cache.add("foo", 123);

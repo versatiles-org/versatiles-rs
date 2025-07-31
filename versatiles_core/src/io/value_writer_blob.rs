@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::{io::{ValueWriter, ValueWriterBlob}, types::Blob};
+//! use versatiles_core::{io::{ValueWriter, ValueWriterBlob}, Blob};
 //! use anyhow::Result;
 //!
 //! fn main() -> Result<()> {
@@ -27,7 +27,7 @@
 #![allow(dead_code)]
 
 use super::ValueWriter;
-use crate::types::Blob;
+use crate::Blob;
 use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use std::io::{Cursor, Write};
@@ -103,7 +103,7 @@ impl<E: ByteOrder> Default for ValueWriterBlob<E> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::ByteRange;
+	use crate::ByteRange;
 
 	#[test]
 	fn test_write_varint() -> Result<()> {
