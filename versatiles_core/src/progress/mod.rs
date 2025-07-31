@@ -40,3 +40,31 @@ pub fn get_progress_bar(message: &str, max_value: u64) -> Box<dyn ProgressTrait>
 
 mod traits;
 pub use traits::ProgressTrait;
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn test_progress_trait_methods() {
+		// Create a progress bar and call its methods to ensure no panics
+		let mut progress = get_progress_bar("TestTask", 100);
+		// Init should reinitialize
+		progress.init("Subtask", 50);
+		// Set to a valid position
+		progress.set_position(25);
+		// Increment by a value
+		progress.inc(10);
+		// Finish the progress
+		progress.finish();
+	}
+
+	#[test]
+	fn test_progress_overflow_and_finish() {
+		let mut progress = get_progress_bar("OverflowTest", 5);
+		// Set beyond max and inc beyond bounds; should not panic
+		progress.set_position(10);
+		progress.inc(3);
+		progress.finish();
+	}
+}
