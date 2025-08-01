@@ -29,6 +29,8 @@ use std::{
 	ops::{Add, Sub},
 };
 
+use crate::TileBBox;
+
 use super::GeoBBox;
 
 #[derive(Eq, PartialEq, Clone, Hash)]
@@ -150,6 +152,14 @@ impl TileCoord3 {
 		let size = 2u64.pow(self.z as u32);
 		let offset = (size * size - 1) / 3;
 		offset + size * self.y as u64 + self.x as u64
+	}
+
+	pub fn get_scaled_down(&self, factor: u32) -> TileCoord3 {
+		TileCoord3::new(self.x / factor, self.y / factor, self.z).unwrap()
+	}
+
+	pub fn as_tile_bbox(&self, tile_size: u32) -> Result<TileBBox> {
+		TileBBox::new(self.z, self.x, self.y, self.x + tile_size - 1, self.y + tile_size - 1)
 	}
 }
 

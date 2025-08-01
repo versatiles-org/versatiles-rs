@@ -221,8 +221,12 @@ impl TileBBox {
 	/// This method is primarily used for testing purposes.
 	#[cfg(test)]
 	pub fn is_full(&self) -> bool {
-		let max = (1u32 << self.level) - 1;
+		let max = self.max_index();
 		!self.is_empty() && self.x_min == 0 && self.y_min == 0 && self.x_max == max && self.y_max == max
+	}
+
+	pub fn max_index(&self) -> u32 {
+		(1u32 << self.level) - 1
 	}
 
 	// -------------------------------------------------------------------------
@@ -286,7 +290,7 @@ impl TileBBox {
 	/// This method is primarily used for testing purposes.
 	#[cfg(test)]
 	pub fn set_full(&mut self) {
-		let max = (1u32 << self.level) - 1;
+		let max = self.max_index();
 		self.x_min = 0;
 		self.y_min = 0;
 		self.x_max = max;
@@ -315,7 +319,7 @@ impl TileBBox {
 			self.y_max = y;
 		} else {
 			// Expand bounding box to include the new coordinate
-			let max = (1u32 << self.level) - 1;
+			let max = self.max_index();
 			self.x_min = self.x_min.min(x);
 			self.y_min = self.y_min.min(y);
 			self.x_max = self.x_max.max(x).min(max);
@@ -367,7 +371,7 @@ impl TileBBox {
 	/// * `Err(anyhow::Error)` if the resulting bounding box is invalid.
 	pub fn add_border(&mut self, x_min: u32, y_min: u32, x_max: u32, y_max: u32) {
 		if !self.is_empty() {
-			let max = (1u32 << self.level) - 1;
+			let max = self.max_index();
 			self.x_min = self.x_min.saturating_sub(x_min);
 			self.y_min = self.y_min.saturating_sub(y_min);
 			self.x_max = (self.x_max + x_max).min(max);
@@ -406,7 +410,7 @@ impl TileBBox {
 				*self = *bbox;
 			} else {
 				// Expand to include the other bounding box
-				let max = (1u32 << self.level) - 1;
+				let max = self.max_index();
 				self.x_min = self.x_min.min(bbox.x_min);
 				self.y_min = self.y_min.min(bbox.y_min);
 				self.x_max = self.x_max.max(bbox.x_max).min(max);
@@ -597,7 +601,7 @@ impl TileBBox {
 		self.y_max /= scale;
 	}
 
-	pub fn scaled_down(&self, scale: u32) -> TileBBox {
+	pub fn get_scaled_down(&self, scale: u32) -> TileBBox {
 		assert!(scale > 0, "scale must be greater than 0");
 		assert!(scale.is_power_of_two(), "scale must be a power of two");
 
@@ -607,6 +611,18 @@ impl TileBBox {
 			y_min: self.y_min / scale,
 			x_max: self.x_max / scale,
 			y_max: self.y_max / scale,
+		}
+	}
+
+	pub fn get_next_level(&self) -> TileBBox {
+		assert!(self.level < 31, "level must be less than 31");
+
+		TileBBox {
+			level: self.level + 1,
+			x_min: self.x_min * 2,
+			y_min: self.y_min * 2,
+			x_max: self.x_max * 2,
+			y_max: self.y_max * 2,
 		}
 	}
 
@@ -1510,13 +1526,13 @@ mod tests {
 		// Original bbox
 		let original = TileBBox::new(5, 10, 15, 20, 25)?;
 		// scaled_down should return a new bbox without modifying the original
-		let scaled = original.scaled_down(4);
+		let scaled = original.get_scaled_down(4);
 		// Coordinates divided by 4: 10/4=2,15/4=3,20/4=5,25/4=6
 		assert_eq!(scaled, TileBBox::new(5, 2, 3, 5, 6)?);
 		// Original remains unchanged
 		assert_eq!(original, TileBBox::new(5, 10, 15, 20, 25)?);
 		// Scaling by 1 should produce identical bbox
-		let same = original.scaled_down(1);
+		let same = original.get_scaled_down(1);
 		assert_eq!(same, original);
 		Ok(())
 	}
@@ -1530,7 +1546,7 @@ mod tests {
 			let mut bbox0 = t(min0, max0);
 			let bbox1 = t(min1, max1);
 			assert_eq!(
-				bbox0.scaled_down(4),
+				bbox0.get_scaled_down(4),
 				bbox1,
 				"scaled_down(4) of {bbox0:?} should return {bbox1:?}"
 			);

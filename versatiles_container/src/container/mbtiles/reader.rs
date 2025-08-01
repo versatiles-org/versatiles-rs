@@ -338,7 +338,7 @@ impl TilesReaderTrait for MBTilesReader {
 			return Ok(TileStream::new_empty());
 		}
 
-		let max_index = bbox.max;
+		let max_index = bbox.max_index();
 
 		trace!("corrected bbox {bbox:?}");
 
