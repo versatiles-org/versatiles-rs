@@ -102,7 +102,7 @@ impl TilesReaderTrait for MockVectorSource {
 				let mut feature = GeoFeature::new(Geometry::new_point([1, 2]));
 				feature.set_property("x".to_string(), coord.x);
 				feature.set_property("y".to_string(), coord.y);
-				feature.set_property("z".to_string(), coord.z);
+				feature.set_property("z".to_string(), coord.level);
 
 				for (key, value) in properties {
 					feature.set_property(key.to_string(), value);
@@ -124,7 +124,7 @@ impl TilesReaderTrait for MockVectorSource {
 pub fn arrange_tiles<T: ToString, I>(tiles: Vec<(TileCoord3, I)>, cb: impl Fn(I) -> T) -> Vec<String> {
 	use versatiles_core::TileBBox;
 
-	let mut bbox = TileBBox::new_empty(tiles.first().unwrap().0.z).unwrap();
+	let mut bbox = TileBBox::new_empty(tiles.first().unwrap().0.level).unwrap();
 	tiles.iter().for_each(|t| bbox.include_coord(t.0.x, t.0.y));
 
 	let mut result: Vec<Vec<String>> = (0..bbox.height())

@@ -190,7 +190,7 @@ impl TilesReaderTrait for VersaTilesReader {
 	/// Gets tile data for a given coordinate.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		// Calculate block coordinate
-		let block_coord = TileCoord3::new(coord.x.shr(8), coord.y.shr(8), coord.z)?;
+		let block_coord = TileCoord3::new(coord.x.shr(8), coord.y.shr(8), coord.level)?;
 
 		// Get the block using the block coordinate
 		let block = self.block_index.get_block(&block_coord);
@@ -268,7 +268,7 @@ impl TilesReaderTrait for VersaTilesReader {
 				// Get the block using the block coordinate
 				let block_option = self.block_index.get_block(&block_coord);
 				if block_option.is_none() {
-					panic!("block <{block_coord:#?}> does not exist");
+					return Vec::new();
 				}
 
 				// Get the block
@@ -431,7 +431,7 @@ impl TilesReaderTrait for VersaTilesReader {
 					size,
 					x: coord.x,
 					y: coord.y,
-					z: coord.z,
+					z: coord.level,
 				});
 				biggest_tiles.sort_by(|a, b| b.size.cmp(&a.size));
 				while biggest_tiles.len() > 10 {

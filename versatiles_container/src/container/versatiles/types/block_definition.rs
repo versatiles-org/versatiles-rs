@@ -122,7 +122,7 @@ impl BlockDefinition {
 	/// Returns an error if the conversion fails.
 	pub fn as_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_be();
-		writer.write_u8(self.offset.z)?;
+		writer.write_u8(self.offset.level)?;
 		writer.write_u32(self.offset.x)?;
 		writer.write_u32(self.offset.y)?;
 
@@ -182,7 +182,7 @@ impl BlockDefinition {
 	/// The zoom level of the block.
 	#[allow(dead_code)]
 	pub fn get_z(&self) -> u8 {
-		self.offset.z
+		self.offset.level
 	}
 
 	/// Returns the coordinate of the block.
@@ -199,7 +199,7 @@ impl BlockDefinition {
 		let y_offset = self.offset.y * 256;
 		format!(
 			"[{},[{},{}],[{},{}]]",
-			self.offset.z,
+			self.offset.level,
 			self.tiles_coverage.x_min + x_offset,
 			self.tiles_coverage.y_min + y_offset,
 			self.tiles_coverage.x_max + x_offset,

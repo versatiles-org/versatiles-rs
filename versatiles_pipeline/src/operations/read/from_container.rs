@@ -181,7 +181,7 @@ mod tests {
 			]
 		);
 
-		let coord = TileCoord3 { x: 2, y: 3, z: 4 };
+		let coord = TileCoord3 { x: 2, y: 3, level: 4 };
 		let blob = operation.get_tile_data(&coord).await?.unwrap();
 
 		assert!(blob.len() > 50);
@@ -193,7 +193,7 @@ mod tests {
 			assert!(blob.len() > 50);
 			assert!(coord.x >= 1 && coord.x <= 2);
 			assert!(coord.y >= 1 && coord.y <= 3);
-			assert_eq!(coord.z, 3);
+			assert_eq!(coord.level, 3);
 			n += 1;
 		}
 		assert_eq!(n, 6);
@@ -234,7 +234,7 @@ mod tests {
 			]
 		);
 
-		let coord = TileCoord3 { x: 2, y: 3, z: 4 };
+		let coord = TileCoord3 { x: 2, y: 3, level: 4 };
 		let blob = operation.get_tile_data(&coord).await?.unwrap();
 
 		assert!(blob.len() > 50);
@@ -246,7 +246,7 @@ mod tests {
 			assert!(blob.len() > 50);
 			assert!(coord.x >= 1 && coord.x <= 2);
 			assert!(coord.y >= 1 && coord.y <= 3);
-			assert_eq!(coord.z, 3);
+			assert_eq!(coord.level, 3);
 			n += 1;
 		}
 		assert_eq!(n, 6);

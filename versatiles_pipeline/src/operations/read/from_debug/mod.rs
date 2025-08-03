@@ -197,7 +197,7 @@ mod tests {
 			.operation_from_vpl(&format!("from_debug format={format}"))
 			.await?;
 
-		let coord = TileCoord3 { x: 1, y: 2, z: 3 };
+		let coord = TileCoord3 { x: 1, y: 2, level: 3 };
 		let blob = operation.get_tile_data(&coord).await?.unwrap();
 
 		assert_eq!(blob.len(), len, "for '{format}'");
@@ -210,7 +210,7 @@ mod tests {
 			assert!(!blob.is_empty(), "for '{format}'");
 			assert!(coord.x >= 1 && coord.x <= 2, "for '{format}'");
 			assert!(coord.y >= 1 && coord.y <= 3, "for '{format}'");
-			assert_eq!(coord.z, 3, "for '{format}'");
+			assert_eq!(coord.level, 3, "for '{format}'");
 			n += 1;
 		}
 		assert_eq!(n, 6, "for '{format}'");

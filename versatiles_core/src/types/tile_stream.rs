@@ -661,14 +661,14 @@ mod tests {
 	async fn should_map_coord_properly() {
 		let original = TileStream::from_vec(vec![(TileCoord3::new(1, 2, 3).unwrap(), Blob::from("data"))]);
 
-		let mapped = original.map_coord(|coord| TileCoord3::new(coord.x * 2, coord.y * 2, coord.z + 1).unwrap());
+		let mapped = original.map_coord(|coord| TileCoord3::new(coord.x * 2, coord.y * 2, coord.level + 1).unwrap());
 
 		let items = mapped.collect().await;
 		assert_eq!(items.len(), 1);
 		let (coord, blob) = &items[0];
 		assert_eq!(coord.x, 2);
 		assert_eq!(coord.y, 4);
-		assert_eq!(coord.z, 4);
+		assert_eq!(coord.level, 4);
 		assert_eq!(blob.as_str(), "data");
 	}
 
@@ -808,11 +808,11 @@ mod tests {
 			(TileCoord3::new(1, 1, 1).unwrap(), Blob::from("z1")),
 		]);
 
-		let filtered = stream.filter_coord(|coord| async move { coord.z == 0 });
+		let filtered = stream.filter_coord(|coord| async move { coord.level == 0 });
 		let items = filtered.collect().await;
 
 		assert_eq!(items.len(), 1);
-		assert_eq!(items[0].0.z, 0);
+		assert_eq!(items[0].0.level, 0);
 		assert_eq!(items[0].1.as_str(), "z0");
 	}
 
@@ -820,12 +820,13 @@ mod tests {
 	async fn should_create_from_coord_iter_parallel() {
 		let coords = vec![TileCoord3::new(0, 0, 0).unwrap(), TileCoord3::new(1, 1, 1).unwrap()];
 
-		let stream =
-			TileStream::from_coord_iter_parallel(coords.into_iter(), |coord| Some(Blob::from(format!("v{}", coord.z))));
+		let stream = TileStream::from_coord_iter_parallel(coords.into_iter(), |coord| {
+			Some(Blob::from(format!("v{}", coord.level)))
+		});
 
 		let mut items = stream.collect().await;
 		// Sort for deterministic assertion on unordered parallel output
-		items.sort_by_key(|(coord, _)| coord.z);
+		items.sort_by_key(|(coord, _)| coord.level);
 
 		assert_eq!(items.len(), 2);
 		assert_eq!(items[0].1.as_str(), "v0");
@@ -837,7 +838,7 @@ mod tests {
 		let coords = vec![TileCoord3::new(0, 0, 0).unwrap(), TileCoord3::new(1, 1, 1).unwrap()];
 
 		let stream = TileStream::from_coord_vec_async(coords, |coord| async move {
-			if coord.z == 0 {
+			if coord.level == 0 {
 				Some((coord, Blob::from("keep")))
 			} else {
 				None
@@ -846,7 +847,7 @@ mod tests {
 
 		let items = stream.collect().await;
 		assert_eq!(items.len(), 1);
-		assert_eq!(items[0].0.z, 0);
+		assert_eq!(items[0].0.level, 0);
 		assert_eq!(items[0].1.as_str(), "keep");
 	}
 }

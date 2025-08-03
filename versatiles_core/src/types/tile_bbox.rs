@@ -258,7 +258,7 @@ impl TileBBox {
 	/// * `true` if the coordinate is within the bounding box and at the same zoom level.
 	/// * `false` otherwise.
 	pub fn contains3(&self, coord: &TileCoord3) -> bool {
-		coord.z == self.level
+		coord.level == self.level
 			&& coord.x >= self.x_min
 			&& coord.x <= self.x_max
 			&& coord.y >= self.y_min
@@ -341,10 +341,10 @@ impl TileBBox {
 	/// * `Ok(())` if inclusion is successful.
 	/// * `Err(anyhow::Error)` if the zoom levels do not match or other validations fail.
 	pub fn include_coord3(&mut self, coord: &TileCoord3) -> Result<()> {
-		if coord.z != self.level {
+		if coord.level != self.level {
 			return Err(anyhow::anyhow!(
 				"Cannot include TileCoord3 with z={} into TileBBox at z={}",
-				coord.z,
+				coord.level,
 				self.level
 			));
 		}

@@ -18,7 +18,7 @@ pub fn create_debug_image(coord: &TileCoord3) -> DynamicImage {
 	let mut draw =
 		|y: i32, c: Rgba<u8>, text: String| draw_text_mut(&mut image1, c, 220, y, PxScale::from(40f32), font, &text);
 
-	draw(195, Rgba([127, 30, 16, 255]), format!("z: {}", coord.z));
+	draw(195, Rgba([127, 30, 16, 255]), format!("z: {}", coord.level));
 	draw(225, Rgba([0, 92, 45, 255]), format!("x: {}", coord.x));
 	draw(255, Rgba([30, 23, 98, 255]), format!("y: {}", coord.y));
 
@@ -31,7 +31,7 @@ mod tests {
 
 	#[test]
 	fn test_create_debug_image() {
-		let coord = TileCoord3 { x: 1, y: 2, z: 3 };
+		let coord = TileCoord3 { x: 1, y: 2, level: 3 };
 		let image = create_debug_image(&coord);
 
 		assert_eq!(image.width(), 512);

@@ -55,7 +55,7 @@ impl TilesWriterTrait for TarTilesWriter {
 						while let Some((coord, blob)) = stream.next().await {
 							let filename = format!(
 								"./{}/{}/{}{}{}",
-								coord.z, coord.x, coord.y, extension_format, extension_compression
+								coord.level, coord.x, coord.y, extension_format, extension_compression
 							);
 							let path = PathBuf::from(&filename);
 

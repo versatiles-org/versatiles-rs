@@ -77,10 +77,10 @@ impl MBTilesWriter {
 		let mut conn = self.pool.get()?;
 		let transaction = conn.transaction()?;
 		for (c, blob) in tiles {
-			let max_index = 2u32.pow(c.z as u32) - 1;
+			let max_index = 2u32.pow(c.level as u32) - 1;
 			transaction.execute(
 				"INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?1, ?2, ?3, ?4)",
-				params![c.z, c.x, max_index - c.y, blob.as_slice()],
+				params![c.level, c.x, max_index - c.y, blob.as_slice()],
 			)?;
 		}
 		transaction.commit()?;

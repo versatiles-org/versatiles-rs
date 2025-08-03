@@ -48,13 +48,13 @@ impl HilbertIndex for TileBBox {
 	}
 	fn from_hilbert_index(index: u64) -> Result<Self> {
 		let coord = index_to_coord(index)?;
-		TileBBox::new(coord.z, coord.x, coord.y, coord.x, coord.y)
+		TileBBox::new(coord.level, coord.x, coord.y, coord.x, coord.y)
 	}
 }
 
 impl HilbertIndex for TileCoord3 {
 	fn get_hilbert_index(&self) -> Result<u64> {
-		coord_to_index(self.x, self.y, self.z)
+		coord_to_index(self.x, self.y, self.level)
 	}
 	fn from_hilbert_index(index: u64) -> Result<Self> {
 		index_to_coord(index)
@@ -208,10 +208,10 @@ mod tests {
 		loop {
 			let id0 = f as u64;
 			let coord = index_to_coord(id0).unwrap();
-			let id1 = coord_to_index(coord.x, coord.y, coord.z)?;
+			let id1 = coord_to_index(coord.x, coord.y, coord.level)?;
 			assert_eq!(id0, id1);
 
-			if coord.z > 30 {
+			if coord.level > 30 {
 				break;
 			}
 			f = f * 1.1 + 1.0;
@@ -223,12 +223,12 @@ mod tests {
 	fn test_tile_id_to_coord_edge_cases() -> Result<()> {
 		// Test the smallest possible index
 		let coord = index_to_coord(0)?;
-		assert_eq!(coord_to_index(coord.x, coord.y, coord.z)?, 0);
+		assert_eq!(coord_to_index(coord.x, coord.y, coord.level)?, 0);
 
 		// Test the largest possible index for zoom level 31
 		let max_index = coord_to_index((1 << 31) - 1, (1 << 31) - 1, 31)?;
 		let coord = index_to_coord(max_index)?;
-		assert_eq!(coord_to_index(coord.x, coord.y, coord.z)?, max_index);
+		assert_eq!(coord_to_index(coord.x, coord.y, coord.level)?, max_index);
 
 		Ok(())
 	}
@@ -279,17 +279,17 @@ mod tests {
 			let coord = index_to_coord(coord_to_index(x, y, z)?)?;
 			assert_eq!(coord.x, x);
 			assert_eq!(coord.y, y);
-			assert_eq!(coord.z, z);
+			assert_eq!(coord.level, z);
 
 			let coord = index_to_coord(coord_to_index(0, 0, z)?)?;
 			assert_eq!(coord.x, 0);
 			assert_eq!(coord.y, 0);
-			assert_eq!(coord.z, z);
+			assert_eq!(coord.level, z);
 
 			let coord = index_to_coord(coord_to_index(n - 1, n - 1, z)?)?;
 			assert_eq!(coord.x, n - 1);
 			assert_eq!(coord.y, n - 1);
-			assert_eq!(coord.z, z);
+			assert_eq!(coord.level, z);
 		}
 		Ok(())
 	}

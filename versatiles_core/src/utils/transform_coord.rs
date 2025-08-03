@@ -19,7 +19,7 @@ pub trait TransformCoord {
 
 impl TransformCoord for TileCoord3 {
 	fn flip_y(&mut self) {
-		let max_index = 2u32.pow(self.z as u32) - 1;
+		let max_index = 2u32.pow(self.level as u32) - 1;
 		assert!(max_index >= self.y, "error for {self:?}");
 		self.y = max_index - self.y;
 	}

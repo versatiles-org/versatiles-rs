@@ -15,7 +15,7 @@ lazy_static! {
 pub fn create_debug_vector_tile(coord: &TileCoord3) -> Result<VectorTile> {
 	Ok(VectorTile::new(vec![
 		get_background_layer()?,
-		draw_text("debug_z", 140.0, format!("z:{}", coord.z)),
+		draw_text("debug_z", 140.0, format!("z:{}", coord.level)),
 		draw_text("debug_x", 190.0, format!("x:{}", coord.x)),
 		draw_text("debug_y", 240.0, format!("y:{}", coord.y)),
 	]))

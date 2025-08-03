@@ -314,8 +314,8 @@ impl TilesReaderTrait for MBTilesReader {
 		let mut stmt =
 			conn.prepare("SELECT tile_data FROM tiles WHERE tile_column = ? AND tile_row = ? AND zoom_level = ?")?;
 
-		let max_index = 2u32.pow(coord.z as u32) - 1;
-		if let Ok(vec) = stmt.query_row([coord.x, max_index - coord.y, coord.z as u32], |row| {
+		let max_index = 2u32.pow(coord.level as u32) - 1;
+		if let Ok(vec) = stmt.query_row([coord.x, max_index - coord.y, coord.level as u32], |row| {
 			row.get::<_, Vec<u8>>(0)
 		}) {
 			Ok(Some(Blob::from(vec)))

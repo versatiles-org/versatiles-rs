@@ -179,9 +179,9 @@ mod tests {
 	async fn test_filter_bbox_inside() {
 		let bbox = [-180.0, -85.0, 180.0, 85.0];
 		let tests = vec![
-			(TileCoord3 { x: 1, y: 1, z: 1 }, true),
-			(TileCoord3 { x: 2, y: 2, z: 2 }, true),
-			(TileCoord3 { x: 3, y: 3, z: 3 }, true),
+			(TileCoord3 { x: 1, y: 1, level: 1 }, true),
+			(TileCoord3 { x: 2, y: 2, level: 2 }, true),
+			(TileCoord3 { x: 3, y: 3, level: 3 }, true),
 		];
 		test_filter_bbox(bbox, tests).await.unwrap();
 	}
@@ -190,10 +190,10 @@ mod tests {
 	async fn test_filter_bbox_outside() {
 		let bbox = [0.0, 0.0, 20.0, 20.0];
 		let tests = vec![
-			(TileCoord3 { x: 7, y: 7, z: 4 }, false),
-			(TileCoord3 { x: 7, y: 8, z: 4 }, false),
-			(TileCoord3 { x: 8, y: 7, z: 4 }, true),
-			(TileCoord3 { x: 8, y: 8, z: 4 }, false),
+			(TileCoord3 { x: 7, y: 7, level: 4 }, false),
+			(TileCoord3 { x: 7, y: 8, level: 4 }, false),
+			(TileCoord3 { x: 8, y: 7, level: 4 }, true),
+			(TileCoord3 { x: 8, y: 8, level: 4 }, false),
 		];
 		test_filter_bbox(bbox, tests).await.unwrap();
 	}

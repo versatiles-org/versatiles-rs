@@ -141,7 +141,7 @@ impl TileBBoxPyramid {
 	/// Includes a single tile coordinate in the pyramid, updating the bounding box
 	/// at the coordinate’s zoom level to ensure it now encompasses `(x, y)`.
 	pub fn include_coord(&mut self, coord: &TileCoord3) {
-		self.level_bbox[coord.z as usize].include_coord(coord.x, coord.y)
+		self.level_bbox[coord.level as usize].include_coord(coord.x, coord.y)
 	}
 
 	/// Includes another bounding box in the pyramid, merging it with the existing bounding box
@@ -161,7 +161,7 @@ impl TileBBoxPyramid {
 
 	/// Checks if the pyramid contains the given `(x, y, z)` tile coordinate.
 	pub fn contains_coord(&self, coord: &TileCoord3) -> bool {
-		if let Some(bbox) = self.level_bbox.get(coord.z as usize) {
+		if let Some(bbox) = self.level_bbox.get(coord.level as usize) {
 			bbox.contains3(coord)
 		} else {
 			false

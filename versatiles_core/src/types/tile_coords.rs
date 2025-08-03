@@ -102,18 +102,18 @@ impl PartialOrd for TileCoord2 {
 pub struct TileCoord3 {
 	pub x: u32,
 	pub y: u32,
-	pub z: u8,
+	pub level: u8,
 }
 
 #[allow(dead_code)]
 impl TileCoord3 {
 	pub fn new(x: u32, y: u32, z: u8) -> Result<TileCoord3> {
 		ensure!(z <= 31, "z ({z}) must be <= 31");
-		Ok(TileCoord3 { x, y, z })
+		Ok(TileCoord3 { x, y, level: z })
 	}
 
 	pub fn as_geo(&self) -> [f64; 2] {
-		let zoom: f64 = 2.0f64.powi(self.z as i32);
+		let zoom: f64 = 2.0f64.powi(self.level as i32);
 
 		[
 			((self.x as f64) / zoom - 0.5) * 360.0,
@@ -122,7 +122,7 @@ impl TileCoord3 {
 	}
 
 	pub fn as_geo_bbox(&self) -> GeoBBox {
-		let zoom: f64 = 2.0f64.powi(self.z as i32);
+		let zoom: f64 = 2.0f64.powi(self.level as i32);
 
 		GeoBBox(
 			((self.x as f64) / zoom - 0.5) * 360.0,
@@ -137,37 +137,43 @@ impl TileCoord3 {
 	}
 
 	pub fn as_json(&self) -> String {
-		format!("{{x:{},y:{},z:{}}}", self.x, self.y, self.z)
+		format!("{{x:{},y:{},z:{}}}", self.x, self.y, self.level)
 	}
 
 	pub fn is_valid(&self) -> bool {
-		if self.z > 30 {
+		if self.level > 30 {
 			return false;
 		};
-		let max = 2u32.pow(self.z as u32);
+		let max = 2u32.pow(self.level as u32);
 		(self.x < max) && (self.y < max)
 	}
 
 	pub fn get_sort_index(&self) -> u64 {
-		let size = 2u64.pow(self.z as u32);
+		let size = 2u64.pow(self.level as u32);
 		let offset = (size * size - 1) / 3;
 		offset + size * self.y as u64 + self.x as u64
 	}
 
 	pub fn get_scaled_down(&self, factor: u32) -> TileCoord3 {
-		TileCoord3::new(self.x / factor, self.y / factor, self.z).unwrap()
+		TileCoord3::new(self.x / factor, self.y / factor, self.level).unwrap()
 	}
 
 	pub fn as_tile_bbox(&self, tile_size: u32) -> Result<TileBBox> {
-		TileBBox::new(self.z, self.x, self.y, self.x + tile_size - 1, self.y + tile_size - 1)
+		TileBBox::new(
+			self.level,
+			self.x,
+			self.y,
+			self.x + tile_size - 1,
+			self.y + tile_size - 1,
+		)
 	}
 
 	pub fn as_level(&self, level: u8) -> TileCoord3 {
-		if level > self.z {
-			let scale = 2u32.pow((level - self.z) as u32);
+		if level > self.level {
+			let scale = 2u32.pow((level - self.level) as u32);
 			TileCoord3::new(self.x * scale, self.y * scale, level).unwrap()
-		} else if level < self.z {
-			let scale = 2u32.pow((self.z - level) as u32);
+		} else if level < self.level {
+			let scale = 2u32.pow((self.level - level) as u32);
 			TileCoord3::new(self.x / scale, self.y / scale, level).unwrap()
 		} else {
 			self.clone() // no change, same level
@@ -177,13 +183,13 @@ impl TileCoord3 {
 
 impl Debug for TileCoord3 {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_fmt(format_args!("TileCoord3({}, {}, {})", &self.x, &self.y, &self.z))
+		f.write_fmt(format_args!("TileCoord3({}, [{}, {}])", &self.level, &self.x, &self.y))
 	}
 }
 
 impl PartialOrd for TileCoord3 {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-		match self.z.partial_cmp(&other.z) {
+		match self.level.partial_cmp(&other.level) {
 			Some(core::cmp::Ordering::Equal) => {}
 			ord => return ord,
 		}
@@ -272,7 +278,7 @@ mod tests {
 		let coord = TileCoord3::new(3, 4, 5).unwrap();
 		assert_eq!(coord.x, 3);
 		assert_eq!(coord.y, 4);
-		assert_eq!(coord.z, 5);
+		assert_eq!(coord.level, 5);
 	}
 
 	#[test]
