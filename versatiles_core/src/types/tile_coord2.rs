@@ -29,6 +29,9 @@ use std::{
 	ops::{Add, Sub},
 };
 
+/// A two-dimensional tile coordinate identifying a tile by its x,y indices.
+///
+/// `TileCoord2` is used for web-mercator tile grids at a given zoom level.
 #[derive(Eq, PartialEq, Clone, Hash)]
 pub struct TileCoord2 {
 	pub x: u32,
@@ -37,10 +40,19 @@ pub struct TileCoord2 {
 
 #[allow(dead_code)]
 impl TileCoord2 {
+	/// Create a new `TileCoord2` with the given x and y indices.
 	pub fn new(x: u32, y: u32) -> TileCoord2 {
 		TileCoord2 { x, y }
 	}
 
+	/// Convert geographic longitude/latitude (in degrees) to tile coordinates at zoom `z`.
+	///
+	/// - `x`, `y`: geographic coords in degrees (longitude in [-180,180], latitude in [-90,90]).
+	/// - `z`: zoom level (0..=31).
+	/// - `round_up`: true to bias tile index downward on rounding errors.
+	///
+	/// # Errors
+	/// Returns an error if `z` > 31 or coordinates are out of valid ranges.
 	pub fn from_geo(x: f64, y: f64, z: u8, round_up: bool) -> Result<TileCoord2> {
 		ensure!(z <= 31, "z {z} must be <= 31");
 		ensure!(x >= -180., "x must be >= -180");
@@ -67,23 +79,31 @@ impl TileCoord2 {
 		})
 	}
 
+	/// Subtract another `TileCoord2` from this one, modifying in place.
+	///
+	/// Decrements `self.x` and `self.y` by the corresponding values in `c`.
 	pub fn subtract(&mut self, c: &TileCoord2) {
 		self.x -= c.x;
 		self.y -= c.y;
 	}
 
+	/// Scale this tile coordinate by an integer factor in place.
+	///
+	/// Multiplies both `x` and `y` by `s`.
 	pub fn scale_by(&mut self, s: u32) {
 		self.x *= s;
 		self.y *= s;
 	}
 }
 
+/// Custom `Debug` output for tile coordinates in the form `TileCoord2([x, y])`.
 impl fmt::Debug for TileCoord2 {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_fmt(format_args!("TileCoord2([{}, {}])", &self.x, &self.y))
 	}
 }
 
+/// Implements row-major ordering of tile coords: first by `y`, then by `x`.
 impl PartialOrd for TileCoord2 {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
 		match self.y.partial_cmp(&other.y) {

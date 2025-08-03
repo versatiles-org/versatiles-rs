@@ -1,3 +1,6 @@
+//! Utilities for three-dimensional tile coordinates (x, y, z) in a Web Mercator pyramid.
+//!
+//! Defines `TileCoord3` with methods for coordinate conversion, validation, and transformation.
 //! This module defines the `TileCoord2` and `TileCoord3` structures, representing tile coordinates
 //! in two and three dimensions, respectively. It includes methods for creating and manipulating
 //! tile coordinates, converting them to geographic coordinates, and various utility functions.
@@ -29,6 +32,9 @@ use std::{
 	fmt::{self, Debug},
 };
 
+/// A 3D tile coordinate in a Web Mercator tile pyramid, with zoom level, x, and y indices.
+///
+/// Provides methods for geographic conversion, validation, indexing, and level transformations.
 #[derive(Eq, PartialEq, Clone, Hash, Copy)]
 pub struct TileCoord3 {
 	pub x: u32,
@@ -38,11 +44,16 @@ pub struct TileCoord3 {
 
 #[allow(dead_code)]
 impl TileCoord3 {
+	/// Create a new `TileCoord3` at the given zoom `level` and tile indices `x`, `y`.
+	///
+	/// # Errors
+	/// Returns an error if `level` > 31.
 	pub fn new(level: u8, x: u32, y: u32) -> Result<TileCoord3> {
 		ensure!(level <= 31, "level ({level}) must be <= 31");
 		Ok(TileCoord3 { x, y, level })
 	}
 
+	/// Convert this tile coordinate to geographic longitude/latitude in degrees.
 	pub fn as_geo(&self) -> [f64; 2] {
 		let zoom: f64 = 2.0f64.powi(self.level as i32);
 
@@ -52,6 +63,7 @@ impl TileCoord3 {
 		]
 	}
 
+	/// Return the geographic bounding box of this tile as `[west, south, east, north]`.
 	pub fn as_geo_bbox(&self) -> GeoBBox {
 		let zoom: f64 = 2.0f64.powi(self.level as i32);
 
@@ -63,14 +75,17 @@ impl TileCoord3 {
 		)
 	}
 
+	/// Discard the zoom level, returning the 2D tile coordinate (x, y).
 	pub fn as_coord2(&self) -> TileCoord2 {
 		TileCoord2 { x: self.x, y: self.y }
 	}
 
+	/// Serialize this coordinate to a compact JSON-like string `{x:…,y:…,z:…}`.
 	pub fn as_json(&self) -> String {
 		format!("{{x:{},y:{},z:{}}}", self.x, self.y, self.level)
 	}
 
+	/// Check whether `x` and `y` are within valid ranges for this zoom level.
 	pub fn is_valid(&self) -> bool {
 		if self.level > 30 {
 			return false;
@@ -79,12 +94,14 @@ impl TileCoord3 {
 		(self.x < max) && (self.y < max)
 	}
 
+	/// Compute a linear sort index combining zoom and x/y for total ordering.
 	pub fn get_sort_index(&self) -> u64 {
 		let size = 2u64.pow(self.level as u32);
 		let offset = (size * size - 1) / 3;
 		offset + size * self.y as u64 + self.x as u64
 	}
 
+	/// Scale down the x/y indices by integer `factor`, keeping the same zoom level.
 	pub fn get_scaled_down(&self, factor: u32) -> TileCoord3 {
 		TileCoord3 {
 			level: self.level,
@@ -93,6 +110,10 @@ impl TileCoord3 {
 		}
 	}
 
+	/// Convert this tile coordinate and `tile_size` to a `TileBBox` covering the tile's grid.
+	///
+	/// # Errors
+	/// Returns an error if bounding coordinates overflow.
 	pub fn as_tile_bbox(&self, tile_size: u32) -> Result<TileBBox> {
 		TileBBox::new(
 			self.level,
@@ -103,6 +124,9 @@ impl TileCoord3 {
 		)
 	}
 
+	/// Change this coordinate to a new zoom `level`, scaling x/y accordingly.
+	///
+	/// If `level` > current, x/y are multiplied; if lower, x/y are divided.
 	pub fn as_level(&self, level: u8) -> TileCoord3 {
 		if level > self.level {
 			let scale = 2u32.pow((level - self.level) as u32);
@@ -124,12 +148,14 @@ impl TileCoord3 {
 	}
 }
 
+/// Custom `Debug` format as `TileCoord3(z, [x, y])` for readability.
 impl Debug for TileCoord3 {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.write_fmt(format_args!("TileCoord3({}, [{}, {}])", &self.level, &self.x, &self.y))
 	}
 }
 
+/// Lexicographic ordering: first by zoom `level`, then `y`, then `x`.
 impl PartialOrd for TileCoord3 {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
 		match self.level.partial_cmp(&other.level) {
