@@ -161,6 +161,18 @@ impl TileCoord3 {
 	pub fn as_tile_bbox(&self, tile_size: u32) -> Result<TileBBox> {
 		TileBBox::new(self.z, self.x, self.y, self.x + tile_size - 1, self.y + tile_size - 1)
 	}
+
+	pub fn as_level(&self, level: u8) -> TileCoord3 {
+		if level > self.z {
+			let scale = 2u32.pow((level - self.z) as u32);
+			TileCoord3::new(self.x * scale, self.y * scale, level).unwrap()
+		} else if level < self.z {
+			let scale = 2u32.pow((self.z - level) as u32);
+			TileCoord3::new(self.x / scale, self.y / scale, level).unwrap()
+		} else {
+			self.clone() // no change, same level
+		}
+	}
 }
 
 impl Debug for TileCoord3 {
