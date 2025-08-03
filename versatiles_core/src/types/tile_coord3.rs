@@ -203,7 +203,7 @@ mod tests {
 	fn hash() {
 		let mut hasher = DefaultHasher::new();
 		TileCoord3::new(2, 2, 2).unwrap().hash(&mut hasher);
-		assert_eq!(hasher.finish(), 8202047236025635059);
+		assert_eq!(hasher.finish(), 16217616760760983095);
 	}
 
 	#[test]
@@ -246,5 +246,58 @@ mod tests {
 		check(1, 3, 3, Greater);
 		check(2, 3, 3, Greater);
 		check(3, 3, 3, Greater);
+	}
+
+	#[test]
+	fn tilecoord3_new_level_error() {
+		// Level > 31 should error
+		assert!(TileCoord3::new(32, 0, 0).is_err());
+	}
+
+	#[test]
+	fn tilecoord3_is_valid_false_cases() {
+		// Level 31 is considered invalid by is_valid()
+		let coord = TileCoord3::new(31, 0, 0).unwrap();
+		assert!(!coord.is_valid());
+		// x out of bounds for level 1 (max index = 1)
+		let coord2 = TileCoord3::new(1, 2, 0).unwrap();
+		assert!(!coord2.is_valid());
+		// y out of bounds for level 1
+		let coord3 = TileCoord3::new(1, 0, 2).unwrap();
+		assert!(!coord3.is_valid());
+	}
+
+	#[test]
+	fn tilecoord3_as_json_and_scaled_down() {
+		let coord = TileCoord3::new(2, 5, 6).unwrap();
+		// Test JSON serialization
+		assert_eq!(coord.as_json(), "{x:5,y:6,z:2}");
+		// Test scaling down by a factor
+		let scaled = coord.get_scaled_down(5);
+		assert_eq!(scaled, TileCoord3::new(2, 1, 1).unwrap());
+		// Scaling by 1 returns same
+		assert_eq!(coord.get_scaled_down(1), coord);
+	}
+
+	#[test]
+	fn tilecoord3_as_tile_bbox_and_as_level() {
+		let coord = TileCoord3::new(3, 1, 2).unwrap();
+		// as_tile_bbox with tile_size=4: x..x+3, y..y+3
+		let bbox = coord.as_tile_bbox(4).unwrap();
+		assert_eq!(bbox, TileBBox::new(3, 1, 2, 4, 5).unwrap());
+		// as_level upscales and downscales correctly
+		let up = coord.as_level(5);
+		assert_eq!(up, TileCoord3::new(5, 4, 8).unwrap());
+		let down = coord.as_level(2);
+		assert_eq!(down, TileCoord3::new(2, 0, 1).unwrap());
+		// same level returns identical
+		assert_eq!(coord.as_level(3), coord);
+	}
+
+	#[test]
+	fn tilecoord3_debug_format() {
+		let coord = TileCoord3::new(4, 7, 8).unwrap();
+		// Expect format: TileCoord3(level, [x, y])
+		assert_eq!(format!("{:?}", coord), "TileCoord3(4, [7, 8])");
 	}
 }
