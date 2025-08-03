@@ -7,6 +7,7 @@
 use anyhow::{Result, ensure};
 use std::{fmt, ops::Div};
 use versatiles_core::{io::*, *};
+use versatiles_derive::context;
 
 /// A struct representing a block of tiles within a larger tile set.
 #[derive(Clone, PartialEq, Eq)]
@@ -57,6 +58,7 @@ impl BlockDefinition {
 	///
 	/// # Errors
 	/// Returns an error if the binary data cannot be parsed correctly.
+	#[context("Failed to create BlockDefinition from blob")]
 	pub fn from_blob(blob: &Blob) -> Result<Self> {
 		let mut reader = ValueReaderSlice::new_be(blob.as_slice());
 
@@ -120,6 +122,7 @@ impl BlockDefinition {
 	///
 	/// # Errors
 	/// Returns an error if the conversion fails.
+	#[context("Failed to create BlockDefinition from blob")]
 	pub fn as_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_be();
 		writer.write_u8(self.offset.level)?;

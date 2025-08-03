@@ -35,6 +35,7 @@ use async_trait::async_trait;
 use futures::lock::Mutex;
 use log::{debug, trace};
 use versatiles_core::{io::DataWriterTrait, utils::compress, *};
+use versatiles_derive::context;
 
 /// A struct for writing tiles to a VersaTiles container.
 pub struct VersaTilesWriter {}
@@ -83,6 +84,7 @@ impl TilesWriterTrait for VersaTilesWriter {
 
 impl VersaTilesWriter {
 	/// Write metadata to the writer.
+	#[context("Failed to write metadata")]
 	async fn write_meta(reader: &dyn TilesReaderTrait, writer: &mut dyn DataWriterTrait) -> Result<ByteRange> {
 		let meta: Blob = reader.tilejson().into();
 		let compressed = compress(meta, &reader.parameters().tile_compression)?;
@@ -91,6 +93,7 @@ impl VersaTilesWriter {
 	}
 
 	/// Write blocks to the writer.
+	#[context("Failed to write blocks")]
 	async fn write_blocks(reader: &mut dyn TilesReaderTrait, writer: &mut dyn DataWriterTrait) -> Result<ByteRange> {
 		let pyramid = reader.parameters().bbox_pyramid.clone();
 

@@ -54,6 +54,7 @@ use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{io::*, tilejson::TileJSON, utils::decompress, *};
+use versatiles_derive::context;
 
 /// `VersaTilesReader` is responsible for reading tile data from a `versatiles` container.
 pub struct VersaTilesReader {
@@ -88,6 +89,7 @@ impl VersaTilesReader {
 	/// # Errors
 	///
 	/// Returns an error if the reader cannot be initialized.
+	#[context("Failed to open versatiles reader")]
 	pub async fn open_reader(mut reader: DataReader) -> Result<VersaTilesReader> {
 		let header = FileHeader::from_reader(&mut reader)
 			.await
@@ -134,6 +136,7 @@ impl VersaTilesReader {
 	/// # Errors
 	///
 	/// Returns an error if the tile index cannot be retrieved.
+	#[context("Failed to get tile index for block {block:?}")]
 	async fn get_block_tile_index(&self, block: &BlockDefinition) -> Result<Arc<TileIndex>> {
 		let block_coord = block.get_coord3();
 

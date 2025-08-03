@@ -8,6 +8,7 @@ use super::BlockDefinition;
 use anyhow::{Result, ensure};
 use std::{collections::HashMap, ops::Div};
 use versatiles_core::{io::*, utils::*, *};
+use versatiles_derive::context;
 
 const BLOCK_INDEX_LENGTH: u64 = 33;
 
@@ -33,6 +34,7 @@ impl BlockIndex {
 	///
 	/// # Errors
 	/// Returns an error if the binary data cannot be parsed correctly.
+	#[context("Failed to create BlockIndex from blob")]
 	pub fn from_blob(buf: Blob) -> Result<Self> {
 		let count = buf.len().div(BLOCK_INDEX_LENGTH);
 		ensure!(
@@ -57,6 +59,7 @@ impl BlockIndex {
 	///
 	/// # Errors
 	/// Returns an error if the binary data cannot be decompressed or parsed correctly.
+	#[context("Failed to create BlockIndex from Brotli blob")]
 	pub fn from_brotli_blob(buf: Blob) -> Result<Self> {
 		Self::from_blob(decompress_brotli(&buf)?)
 	}
@@ -89,6 +92,7 @@ impl BlockIndex {
 	///
 	/// # Errors
 	/// Returns an error if the conversion fails.
+	#[context("Failed to create BlockIndex from blob")]
 	pub fn as_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_be();
 		for (_coord, block) in self.lookup.iter() {
@@ -105,6 +109,7 @@ impl BlockIndex {
 	///
 	/// # Errors
 	/// Returns an error if the conversion fails.
+	#[context("Failed to create BlockIndex from Brotli blob")]
 	pub fn as_brotli_blob(&self) -> Result<Blob> {
 		compress_brotli_fast(&self.as_blob()?)
 	}

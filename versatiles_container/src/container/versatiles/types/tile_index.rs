@@ -7,6 +7,7 @@
 use anyhow::{Result, ensure};
 use std::ops::Div;
 use versatiles_core::{io::*, utils::*, *};
+use versatiles_derive::context;
 
 const TILE_INDEX_LENGTH: u64 = 12;
 
@@ -35,6 +36,7 @@ impl TileIndex {
 	///
 	/// # Errors
 	/// Returns an error if the binary data cannot be parsed correctly.
+	#[context("Failed to create TileIndex from blob")]
 	pub fn from_blob(blob: Blob) -> Result<Self> {
 		let count = blob.len().div(TILE_INDEX_LENGTH);
 		ensure!(
@@ -59,6 +61,7 @@ impl TileIndex {
 	///
 	/// # Errors
 	/// Returns an error if the compressed binary data cannot be decompressed or parsed correctly.
+	#[context("Failed to create TileIndex from Brotli blob")]
 	pub fn from_brotli_blob(buf: Blob) -> Result<Self> {
 		Self::from_blob(decompress_brotli(&buf)?)
 	}
@@ -76,6 +79,7 @@ impl TileIndex {
 	///
 	/// # Errors
 	/// Returns an error if the conversion fails.
+	#[context("Failed to create TileIndex from blob")]
 	pub fn as_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_be();
 		for range in &self.index {
@@ -90,6 +94,7 @@ impl TileIndex {
 	///
 	/// # Errors
 	/// Returns an error if the compression or conversion fails.
+	#[context("Failed to create TileIndex from Brotli blob")]
 	pub fn as_brotli_blob(&self) -> Result<Blob> {
 		compress_brotli_fast(&self.as_blob()?)
 	}
