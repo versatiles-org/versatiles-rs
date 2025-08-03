@@ -24,6 +24,8 @@ pub trait EnhancedDynamicImageTrait {
 	fn overlay(&mut self, other: &DynamicImage) -> Result<()>;
 	fn average_color(&self) -> Vec<u8>;
 	fn get_scaled_down(&self, factor: u32) -> DynamicImage;
+	fn into_optional(self) -> Option<DynamicImage>;
+	fn is_empty(&self) -> bool;
 
 	fn new_test_rgba() -> DynamicImage;
 	fn new_test_rgb() -> DynamicImage;
@@ -195,6 +197,22 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 	/// image is a LumaA<u8> value, with the alpha value determined by the y coordinate.
 	fn new_test_greya() -> DynamicImage {
 		DynamicImage::from_fn_la8(256, 256, |x, y| [x as u8, y as u8])
+	}
+
+	fn is_empty(&self) -> bool {
+		if !self.color().has_alpha() {
+			return false;
+		}
+		let alpha_channel = (self.color().channel_count() - 1) as usize;
+		return !self.pixels().any(|p| p[alpha_channel] != 0);
+	}
+
+	fn into_optional(self) -> Option<DynamicImage> {
+		if self.is_empty() {
+			return None;
+		} else {
+			return Some(self);
+		}
 	}
 }
 
