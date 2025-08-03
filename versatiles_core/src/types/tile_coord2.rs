@@ -80,7 +80,7 @@ impl TileCoord2 {
 
 impl fmt::Debug for TileCoord2 {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_fmt(format_args!("TileCoord2({}, {})", &self.x, &self.y))
+		f.write_fmt(format_args!("TileCoord2([{}, {}])", &self.x, &self.y))
 	}
 }
 
@@ -174,5 +174,37 @@ mod tests {
 		check(1, 3, Greater);
 		check(2, 3, Greater);
 		check(3, 3, Greater);
+	}
+
+	#[test]
+	fn from_geo_error_conditions() {
+		// Invalid zoom (must be <=31)
+		assert!(TileCoord2::from_geo(0.0, 0.0, 32, false).is_err());
+		// Longitude out of bounds
+		assert!(TileCoord2::from_geo(-180.1, 0.0, 1, false).is_err());
+		assert!(TileCoord2::from_geo(180.1, 0.0, 1, false).is_err());
+		// Latitude out of bounds
+		assert!(TileCoord2::from_geo(0.0, -90.1, 1, false).is_err());
+		assert!(TileCoord2::from_geo(0.0, 90.1, 1, false).is_err());
+	}
+
+	#[test]
+	fn from_geo_boundary_values() {
+		// Test extreme valid coordinates map to edge tiles
+		let z = 3;
+		let max = (1 << z) - 1;
+		// Lower-left corner
+		let ll = TileCoord2::from_geo(-180.0, -85.05113, z, false).unwrap();
+		assert_eq!(ll, TileCoord2::new(0, max));
+		// Upper-right corner
+		let ur = TileCoord2::from_geo(180.0, 85.05113, z, false).unwrap();
+		assert_eq!(ur, TileCoord2::new(max, 0));
+	}
+
+	#[test]
+	fn debug_format() {
+		let c = TileCoord2::new(3, 4);
+		// Debug should format as TileCoord2([x, y])
+		assert_eq!(format!("{:?}", c), "TileCoord2([3, 4])");
 	}
 }
