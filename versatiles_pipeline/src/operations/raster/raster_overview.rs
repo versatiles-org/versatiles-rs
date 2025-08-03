@@ -31,10 +31,10 @@ struct Operation {
 	base_level: u8,
 	tile_size: u32,
 	traversal: Traversal,
-	cache: Arc<Mutex<HashMap<TileCoord3, Option<DynamicImage>>>>,
+	cache: Arc<Mutex<HashMap<TileCoord3, Vec<(TileCoord3, DynamicImage)>>>>,
 }
 
-static MAX_BLOCK_TILE_SIZE: u32 = 64;
+static BLOCK_TILE_COUNT: u32 = 64;
 
 impl Operation {
 	fn build(
@@ -70,43 +70,101 @@ impl Operation {
 				tilejson,
 				base_level,
 				tile_size: args.tile_size.unwrap_or(512),
-				traversal: Traversal::new(TraversalOrder::DepthFirst, MAX_BLOCK_TILE_SIZE, MAX_BLOCK_TILE_SIZE)?,
+				traversal: Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?,
 			}) as Box<dyn OperationTrait>)
 		})
 	}
-	async fn add_image_to_cache(&self, coord: &TileCoord3, optional_image: &Option<DynamicImage>) {
-		if let Some(image) = optional_image {
-			let image = image.get_scaled_down(2);
-			let mut cache = self.cache.lock().await;
-			cache.insert(*coord, Some(image));
+
+	async fn add_images_to_cache(&self, key: TileCoord3, images: &[(TileCoord3, DynamicImage)]) {
+		println!("add_images_to_cache ({key:?}, images.len={})", images.len());
+		let images = images
+			.iter()
+			.map(|(coord, image)| (*coord, image.get_scaled_down(2)))
+			.filter(|(_, image)| !image.is_empty())
+			.collect::<Vec<_>>();
+		let mut cache = self.cache.lock().await;
+		cache.insert(key, images);
+	}
+
+	async fn get_images_from_cache(&self, key: &TileCoord3) -> Vec<(TileCoord3, DynamicImage)> {
+		println!("get_images_from_cache ({key:?})");
+		let mut cache = self.cache.lock().await;
+		let result = cache.remove(key);
+		if let Some(images) = result {
+			return images;
 		} else {
-			let mut cache = self.cache.lock().await;
-			cache.insert(*coord, None);
+			let max_value = 2u32.pow(key.z as u32) - 1;
+			println!("get_images_from_cache: no images found for {key:?}, max_value={max_value}");
+			let bbox = TileBBox::new(
+				key.z,
+				(key.x * BLOCK_TILE_COUNT).min(max_value),
+				(key.y * BLOCK_TILE_COUNT).min(max_value),
+				(key.x * BLOCK_TILE_COUNT + BLOCK_TILE_COUNT - 1).min(max_value),
+				(key.y * BLOCK_TILE_COUNT + BLOCK_TILE_COUNT - 1).min(max_value),
+			)
+			.unwrap();
+			return self
+				.build_images_from_source(&bbox, self.base_level, self.tile_size / 2)
+				.await;
 		}
 	}
-	async fn add_stream_to_cache(&self, images: &[(TileCoord3, DynamicImage)]) {
-		let mut cache = self.cache.lock().await;
-		for (coord, image) in images {
-			let image = image.get_scaled_down(2);
-			cache.insert(*coord, Some(image));
-		}
-	}
-	async fn get_image_from_cache(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		let cache = self.cache.lock().await;
-		if let Some(image) = cache.get(coord) {
-			return Ok(image.clone());
-		}
-		bail!("Not found")
-	}
-	async fn get_stream_from_cache(&self, bbox: &TileBBox) -> Vec<(TileCoord3, DynamicImage)> {
-		let mut cache = self.cache.lock().await;
-		let mut result = Vec::new();
-		for coord in bbox.iter_coords() {
-			if let Some(Some(image)) = cache.remove(&coord) {
-				result.push((coord, image));
-			}
-		}
-		result
+
+	async fn build_images_from_source(
+		&self,
+		bbox0: &TileBBox,
+		level1: u8,
+		target_size: u32,
+	) -> Vec<(TileCoord3, DynamicImage)> {
+		println!("build_images_from_source ({bbox0:?}, level1={level1}, target_size={target_size})");
+
+		let level0 = bbox0.level;
+		assert!(level0 <= level1);
+		assert!(level1 < 32);
+
+		assert!(target_size > 0);
+		assert!(target_size.is_power_of_two());
+
+		let source_bbox = bbox0.as_level(level1);
+
+		let scale_factor = 2u32.pow(level1 as u32 - level0 as u32);
+		assert!(scale_factor > 0);
+		assert!(scale_factor <= target_size);
+		let image_scale_factor = scale_factor * self.tile_size / target_size;
+		assert!(image_scale_factor > 0);
+		assert!(image_scale_factor <= self.tile_size);
+
+		let result0 = Arc::new(Mutex::new(HashMap::<TileCoord3, DynamicImage>::new()));
+
+		self
+			.source
+			.get_image_stream(source_bbox)
+			.await
+			.unwrap()
+			.for_each_async(|(coord1, image1)| {
+				assert_eq!(image1.width(), self.tile_size);
+				assert_eq!(image1.height(), self.tile_size);
+
+				let result0 = result0.clone();
+				async move {
+					let coord0 = coord1.as_level(level0);
+					let image1 = image1.get_scaled_down(image_scale_factor);
+					let mut db = result0.lock().await;
+					let image0 = db
+						.entry(coord0)
+						.or_insert_with(|| DynamicImage::new_rgba8(target_size, target_size));
+					image0
+						.copy_from(
+							&image1,
+							coord1.x * target_size / scale_factor - coord0.x * target_size,
+							coord1.y * target_size / scale_factor - coord0.y * target_size,
+						)
+						.unwrap();
+				}
+			})
+			.await;
+
+		let db = Arc::try_unwrap(result0).unwrap().into_inner();
+		db.into_iter().filter(|(_, image)| !image.is_empty()).collect()
 	}
 }
 
@@ -125,6 +183,8 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
+		Ok(None)
+		/*
 		if coord.z > self.base_level {
 			return self.source.get_image_data(coord).await;
 		}
@@ -150,55 +210,56 @@ impl OperationTrait for Operation {
 			if let Some(sub_image) = optional_sub_image {
 				tile.copy_from(
 					&sub_image,
-					(coord2.x - coord.x * 2) * self.tile_size,
-					(coord2.y - coord.y * 2) * self.tile_size,
+					(coord2.x - coord.x * 2) * self.tile_size / 2,
+					(coord2.y - coord.y * 2) * self.tile_size / 2,
 				)?;
 			}
 		}
 		let optional_tile = Some(tile);
 		self.add_image_to_cache(coord, &optional_tile).await;
 		return Ok(optional_tile);
+		*/
 	}
 
-	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		if bbox.level > self.base_level {
-			return self.source.get_image_stream(bbox).await;
+	async fn get_image_stream(&self, bbox_0: TileBBox) -> Result<TileStream<DynamicImage>> {
+		println!("get_image_stream({bbox_0:?})");
+
+		if bbox_0.level >= self.base_level {
+			return self.source.get_image_stream(bbox_0).await;
 		}
 
-		if bbox.level == self.base_level {
-			let images = self.source.get_image_stream(bbox).await.unwrap().collect().await;
-			self.add_stream_to_cache(images.as_slice()).await;
-			return Ok(TileStream::from_vec(images));
+		assert!(bbox_0.width() <= BLOCK_TILE_COUNT);
+		assert!(bbox_0.height() <= BLOCK_TILE_COUNT);
+
+		let key = bbox_0.get_scaled_down(BLOCK_TILE_COUNT);
+		assert_eq!(key.get_dimensions(), (1, 1));
+
+		let mut result = HashMap::<TileCoord3, DynamicImage>::new();
+		for (x1, y1) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+			let mut key1 = bbox_0
+				.get_scaled_down(BLOCK_TILE_COUNT)
+				.as_level_increased()
+				.get_corner_min();
+			key1.x += x1 as u32;
+			key1.y += y1 as u32;
+			let images1 = self.get_images_from_cache(&key1).await;
+			for (coord1, image1) in images1 {
+				let coord0 = coord1.as_level(bbox_0.level);
+				result
+					.entry(coord0)
+					.or_insert_with(|| DynamicImage::new_rgba8(self.tile_size, self.tile_size))
+					.copy_from(
+						&image1,
+						(coord1.x - coord0.x * 2) * self.tile_size / 2,
+						(coord1.y - coord0.y * 2) * self.tile_size / 2,
+					)?;
+			}
 		}
+		let images0 = result.into_iter().collect::<Vec<_>>();
 
-		let w = bbox.width();
-		let h = bbox.height();
-		assert!(w <= MAX_BLOCK_TILE_SIZE && h <= MAX_BLOCK_TILE_SIZE);
+		self.add_images_to_cache(key.get_corner_min(), images0.as_slice()).await;
 
-		let mut super_tile = DynamicImage::new_rgba8(self.tile_size * w, self.tile_size * h);
-		let images = self.get_stream_from_cache(&bbox.get_next_level()).await;
-		for (coord2, sub_image) in images {
-			super_tile.copy_from(
-				&sub_image,
-				(coord2.x - bbox.x_min * 2) * self.tile_size / 2,
-				(coord2.y - bbox.y_min * 2) * self.tile_size / 2,
-			)?;
-		}
-
-		let mut result = Vec::new();
-		for coord in bbox.into_iter_coords() {
-			let tile = super_tile.crop(
-				(coord.x - bbox.x_min) * self.tile_size,
-				(coord.y - bbox.y_min) * self.tile_size,
-				self.tile_size,
-				self.tile_size,
-			);
-			result.push((coord, tile));
-		}
-
-		self.add_stream_to_cache(result.as_slice()).await;
-
-		return Ok(TileStream::from_vec(result));
+		return Ok(TileStream::from_vec(images0));
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
@@ -212,9 +273,8 @@ impl OperationTrait for Operation {
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
 		if bbox.level >= self.base_level {
 			return self.source.get_tile_stream(bbox).await;
-		} else {
-			return pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters);
 		}
+		pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters)
 	}
 
 	async fn get_vector_data(&self, _coord: &TileCoord3) -> Result<Option<VectorTile>> {
