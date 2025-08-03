@@ -24,6 +24,7 @@ pub trait EnhancedDynamicImageTrait {
 	fn overlay(&mut self, other: &DynamicImage) -> Result<()>;
 	fn average_color(&self) -> Vec<u8>;
 	fn get_scaled_down(&self, factor: u32) -> DynamicImage;
+	fn into_scaled_down(self, factor: u32) -> DynamicImage;
 	fn into_optional(self) -> Option<DynamicImage>;
 	fn is_empty(&self) -> bool;
 
@@ -103,9 +104,18 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 	}
 
 	fn get_scaled_down(&self, factor: u32) -> DynamicImage {
+		assert!(factor > 0, "Scaling factor must be greater than zero");
 		let new_width = self.width() / factor;
 		let new_height = self.height() / factor;
 		self.resize_exact(new_width, new_height, image::imageops::FilterType::Triangle)
+	}
+
+	fn into_scaled_down(self, factor: u32) -> DynamicImage {
+		if factor == 1 {
+			self
+		} else {
+			self.get_scaled_down(factor)
+		}
 	}
 
 	fn average_color(&self) -> Vec<u8> {
