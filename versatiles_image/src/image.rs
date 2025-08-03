@@ -218,11 +218,7 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 	}
 
 	fn into_optional(self) -> Option<DynamicImage> {
-		if self.is_empty() {
-			return None;
-		} else {
-			return Some(self);
-		}
+		if self.is_empty() { None } else { Some(self) }
 	}
 }
 

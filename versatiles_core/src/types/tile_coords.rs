@@ -176,7 +176,7 @@ impl TileCoord3 {
 			let scale = 2u32.pow((self.level - level) as u32);
 			TileCoord3::new(self.x / scale, self.y / scale, level).unwrap()
 		} else {
-			self.clone() // no change, same level
+			*self // no change, same level
 		}
 	}
 }

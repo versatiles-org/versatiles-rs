@@ -24,6 +24,8 @@ struct Args {
 	tile_size: Option<u32>,
 }
 
+type Tiles = Vec<(TileCoord3, DynamicImage)>;
+
 #[derive(Debug)]
 struct Operation {
 	parameters: TilesReaderParameters,
@@ -32,7 +34,7 @@ struct Operation {
 	base_level: u8,
 	tile_size: u32,
 	traversal: Traversal,
-	cache: Arc<Mutex<HashMap<TileCoord3, Vec<(TileCoord3, DynamicImage)>>>>,
+	cache: Arc<Mutex<HashMap<TileCoord3, Tiles>>>,
 }
 
 static BLOCK_TILE_COUNT: u32 = 32;
@@ -87,7 +89,7 @@ impl Operation {
 	}
 
 	#[context("Failed to get images from cache for key {key:?}")]
-	async fn get_images_from_cache(&self, key: &TileCoord3) -> Result<Vec<(TileCoord3, DynamicImage)>> {
+	async fn get_images_from_cache(&self, key: &TileCoord3) -> Result<Tiles> {
 		let mut cache = self.cache.lock().await;
 		let result = cache.remove(key);
 		if let Some(images) = result {
@@ -108,11 +110,7 @@ impl Operation {
 	}
 
 	#[context("Failed to build images from source for bbox {bbox_res:?} and image size {image_size_res}")]
-	async fn build_images_from_source(
-		&self,
-		bbox_res: &TileBBox,
-		image_size_res: u32,
-	) -> Result<Vec<(TileCoord3, DynamicImage)>> {
+	async fn build_images_from_source(&self, bbox_res: &TileBBox, image_size_res: u32) -> Result<Tiles> {
 		let level_res = bbox_res.level;
 		let level_src = self.base_level;
 		assert!(level_res <= level_src);

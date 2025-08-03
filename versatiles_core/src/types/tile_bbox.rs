@@ -617,8 +617,8 @@ impl TileBBox {
 	pub fn level_increase(&mut self) {
 		assert!(self.level < 31, "level must be less than 31");
 		self.level += 1;
-		self.x_min = self.x_min * 2;
-		self.y_min = self.y_min * 2;
+		self.x_min *= 2;
+		self.y_min *= 2;
 		self.x_max = self.x_max * 2 + 1;
 		self.y_max = self.y_max * 2 + 1;
 	}
@@ -633,13 +633,13 @@ impl TileBBox {
 	}
 
 	pub fn as_level_increased(&self) -> TileBBox {
-		let mut c = self.clone();
+		let mut c = *self;
 		c.level_increase();
 		c
 	}
 
 	pub fn as_level_decreased(&self) -> TileBBox {
-		let mut c = self.clone();
+		let mut c = *self;
 		c.level_decrease();
 		c
 	}
