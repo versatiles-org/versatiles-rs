@@ -11,6 +11,7 @@ use imageproc::image::{DynamicImage, GenericImage};
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 use versatiles_core::{tilejson::TileJSON, *};
+use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::EnhancedDynamicImageTrait;
 
@@ -34,7 +35,7 @@ struct Operation {
 	cache: Arc<Mutex<HashMap<TileCoord3, Vec<(TileCoord3, DynamicImage)>>>>,
 }
 
-static BLOCK_TILE_COUNT: u32 = 64;
+static BLOCK_TILE_COUNT: u32 = 32;
 
 impl Operation {
 	fn build(
@@ -76,7 +77,6 @@ impl Operation {
 	}
 
 	async fn add_images_to_cache(&self, key: TileCoord3, images: &[(TileCoord3, DynamicImage)]) {
-		println!("add_images_to_cache ({key:?}, images.len={})", images.len());
 		let images = images
 			.iter()
 			.map(|(coord, image)| (*coord, image.get_scaled_down(2)))
@@ -86,85 +86,98 @@ impl Operation {
 		cache.insert(key, images);
 	}
 
-	async fn get_images_from_cache(&self, key: &TileCoord3) -> Vec<(TileCoord3, DynamicImage)> {
-		println!("get_images_from_cache ({key:?})");
+	#[context("Failed to get images from cache for key {key:?}")]
+	async fn get_images_from_cache(&self, key: &TileCoord3) -> Result<Vec<(TileCoord3, DynamicImage)>> {
 		let mut cache = self.cache.lock().await;
 		let result = cache.remove(key);
 		if let Some(images) = result {
-			return images;
+			return Ok(images);
 		} else {
-			let max_value = 2u32.pow(key.z as u32) - 1;
-			println!("get_images_from_cache: no images found for {key:?}, max_value={max_value}");
+			let max_value = 2u32.pow(key.level as u32) - 1;
+
 			let bbox = TileBBox::new(
-				key.z,
+				key.level,
 				(key.x * BLOCK_TILE_COUNT).min(max_value),
 				(key.y * BLOCK_TILE_COUNT).min(max_value),
 				(key.x * BLOCK_TILE_COUNT + BLOCK_TILE_COUNT - 1).min(max_value),
 				(key.y * BLOCK_TILE_COUNT + BLOCK_TILE_COUNT - 1).min(max_value),
 			)
 			.unwrap();
-			return self
-				.build_images_from_source(&bbox, self.base_level, self.tile_size / 2)
-				.await;
+			return self.build_images_from_source(&bbox, self.tile_size / 2).await;
 		}
 	}
 
+	#[context("Failed to build images from source for bbox {bbox_res:?} and image size {image_size_res}")]
 	async fn build_images_from_source(
 		&self,
-		bbox0: &TileBBox,
-		level1: u8,
-		target_size: u32,
-	) -> Vec<(TileCoord3, DynamicImage)> {
-		println!("build_images_from_source ({bbox0:?}, level1={level1}, target_size={target_size})");
+		bbox_res: &TileBBox,
+		image_size_res: u32,
+	) -> Result<Vec<(TileCoord3, DynamicImage)>> {
+		let level_res = bbox_res.level;
+		let level_src = self.base_level;
+		assert!(level_res <= level_src);
 
-		let level0 = bbox0.level;
-		assert!(level0 <= level1);
-		assert!(level1 < 32);
+		assert!(image_size_res > 0);
+		assert!(image_size_res.is_power_of_two());
 
-		assert!(target_size > 0);
-		assert!(target_size.is_power_of_two());
+		let bbox_src = bbox_res.as_level(level_src);
 
-		let source_bbox = bbox0.as_level(level1);
+		let map_res = Arc::new(Mutex::new(HashMap::<TileCoord3, DynamicImage>::new()));
 
-		let scale_factor = 2u32.pow(level1 as u32 - level0 as u32);
+		let stream = self.source.get_image_stream(bbox_src).await?;
+
+		let scale_factor = 2u32.pow(level_src as u32 - level_res as u32);
 		assert!(scale_factor > 0);
-		assert!(scale_factor <= target_size);
-		let image_scale_factor = scale_factor * self.tile_size / target_size;
-		assert!(image_scale_factor > 0);
-		assert!(image_scale_factor <= self.tile_size);
 
-		let result0 = Arc::new(Mutex::new(HashMap::<TileCoord3, DynamicImage>::new()));
+		let (image_size_tmp, image_size_src) = if scale_factor < image_size_res {
+			(image_size_res, image_size_res / scale_factor)
+		} else {
+			(scale_factor, 1)
+		};
 
-		self
-			.source
-			.get_image_stream(source_bbox)
-			.await
-			.unwrap()
-			.for_each_async(|(coord1, image1)| {
-				assert_eq!(image1.width(), self.tile_size);
-				assert_eq!(image1.height(), self.tile_size);
+		let scale_src_tmp = self.tile_size / image_size_src;
+		assert!(scale_src_tmp > 0);
+		assert!(scale_src_tmp <= self.tile_size);
 
-				let result0 = result0.clone();
+		let scale_tmp_res = image_size_tmp / image_size_res;
+		assert!(scale_tmp_res > 0);
+		assert!(scale_tmp_res <= self.tile_size);
+
+		stream
+			.for_each_async(|(coord_src, image_src)| {
+				assert_eq!(image_src.width(), self.tile_size);
+				assert_eq!(image_src.height(), self.tile_size);
+
+				let map = map_res.clone();
 				async move {
-					let coord0 = coord1.as_level(level0);
-					let image1 = image1.get_scaled_down(image_scale_factor);
-					let mut db = result0.lock().await;
+					let coord_res = coord_src.as_level(level_res);
+					let image_src = image_src.into_scaled_down(scale_src_tmp);
+					let mut db = map.lock().await;
 					let image0 = db
-						.entry(coord0)
-						.or_insert_with(|| DynamicImage::new_rgba8(target_size, target_size));
+						.entry(coord_res)
+						.or_insert_with(|| DynamicImage::new_rgba8(image_size_tmp, image_size_tmp));
 					image0
 						.copy_from(
-							&image1,
-							coord1.x * target_size / scale_factor - coord0.x * target_size,
-							coord1.y * target_size / scale_factor - coord0.y * target_size,
+							&image_src,
+							coord_src.x * image_size_src - coord_res.x * image_size_tmp,
+							coord_src.y * image_size_src - coord_res.y * image_size_tmp,
 						)
 						.unwrap();
 				}
 			})
 			.await;
 
-		let db = Arc::try_unwrap(result0).unwrap().into_inner();
-		db.into_iter().filter(|(_, image)| !image.is_empty()).collect()
+		let db = Arc::try_unwrap(map_res)
+			.map_err(|_| anyhow::anyhow!("Failed to unwrap Arc"))?
+			.into_inner();
+		Ok(db
+			.into_iter()
+			.map(|(coord, image_tmp)| {
+				let image_res = image_tmp.into_scaled_down(scale_tmp_res);
+				(coord, image_res)
+			})
+			.filter(|(_, image)| !image.is_empty())
+			.collect())
 	}
 }
 
@@ -183,47 +196,18 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		Ok(None)
-		/*
-		if coord.z > self.base_level {
+		if coord.level >= self.base_level {
 			return self.source.get_image_data(coord).await;
 		}
 
-		if coord.z == self.base_level {
-			let image = self.source.get_image_data(coord).await.unwrap();
-			self.add_image_to_cache(coord, &image).await;
-			return Ok(image);
-		}
-
-		let mut tile = DynamicImage::new_rgba8(self.tile_size, self.tile_size);
-		let bbox = coord.as_tile_bbox(1)?.get_next_level();
-		for coord2 in bbox.into_iter_coords() {
-			let optional_sub_image = if let Ok(sub_image) = self.get_image_from_cache(&coord2).await {
-				sub_image
-			} else {
-				self
-					.source
-					.get_image_data(&coord2)
-					.await?
-					.map(|image| image.get_scaled_down(2))
-			};
-			if let Some(sub_image) = optional_sub_image {
-				tile.copy_from(
-					&sub_image,
-					(coord2.x - coord.x * 2) * self.tile_size / 2,
-					(coord2.y - coord.y * 2) * self.tile_size / 2,
-				)?;
-			}
-		}
-		let optional_tile = Some(tile);
-		self.add_image_to_cache(coord, &optional_tile).await;
-		return Ok(optional_tile);
-		*/
+		let stream = self
+			.build_images_from_source(&coord.as_tile_bbox(1)?, self.tile_size)
+			.await?;
+		let mut tiles = stream.to_vec();
+		Ok(tiles.pop().map(|(_, image)| image))
 	}
 
 	async fn get_image_stream(&self, bbox_0: TileBBox) -> Result<TileStream<DynamicImage>> {
-		println!("get_image_stream({bbox_0:?})");
-
 		if bbox_0.level >= self.base_level {
 			return self.source.get_image_stream(bbox_0).await;
 		}
@@ -242,7 +226,7 @@ impl OperationTrait for Operation {
 				.get_corner_min();
 			key1.x += x1 as u32;
 			key1.y += y1 as u32;
-			let images1 = self.get_images_from_cache(&key1).await;
+			let images1 = self.get_images_from_cache(&key1).await?;
 			for (coord1, image1) in images1 {
 				let coord0 = coord1.as_level(bbox_0.level);
 				result
@@ -263,7 +247,7 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		if coord.z >= self.base_level {
+		if coord.level >= self.base_level {
 			return self.source.get_tile_data(coord).await;
 		} else {
 			return pack_image_tile(self.get_image_data(coord).await, &self.parameters);
