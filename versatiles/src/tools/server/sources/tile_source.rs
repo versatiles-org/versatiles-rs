@@ -41,18 +41,18 @@ impl TileSource {
 
 		if parts.len() >= 3 {
 			// Parse the tile coordinates
-			let z = parts[0].parse::<u8>();
+			let level = parts[0].parse::<u8>();
 			let x = parts[1].parse::<u32>();
 			let y: String = parts[2].chars().take_while(|c| c.is_numeric()).collect();
 			let y = y.parse::<u32>();
 
 			// Check for parsing errors
-			ensure!(z.is_ok(), "value for z is not a number");
+			ensure!(level.is_ok(), "value for z is not a number");
 			ensure!(x.is_ok(), "value for x is not a number");
 			ensure!(y.is_ok(), "value for y is not a number");
 
 			// Create a TileCoord3 instance
-			let coord = TileCoord3::new(x?, y?, z?)?;
+			let coord = TileCoord3::new(level?, x?, y?)?;
 
 			log::debug!("get tile, prefix: {}, coord: {}", self.prefix, coord.as_json());
 

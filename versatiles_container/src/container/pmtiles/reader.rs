@@ -307,14 +307,14 @@ mod tests {
 
 		assert_eq!(
 			reader
-				.get_tile_data(&TileCoord3::new(8800, 5370, 14)?)
+				.get_tile_data(&TileCoord3::new(14, 8800, 5370)?)
 				.await?
 				.unwrap()
 				.len(),
 			100391
 		);
 
-		assert!(reader.get_tile_data(&TileCoord3::new(0, 0, 16)?).await?.is_none());
+		assert!(reader.get_tile_data(&TileCoord3::new(16, 0, 0)?).await?.is_none());
 
 		Ok(())
 	}

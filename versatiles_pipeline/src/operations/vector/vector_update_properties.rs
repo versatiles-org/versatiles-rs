@@ -257,7 +257,7 @@ mod tests {
 
 		// ── extract a single feature for inspection ────────────────
 		let blob = operation
-			.get_tile_data(&TileCoord3::new(1000, 100, 10)?)
+			.get_tile_data(&TileCoord3::new(10, 1000, 100)?)
 			.await?
 			.unwrap();
 		let tile = VectorTile::from_blob(&blob)?;

@@ -292,7 +292,7 @@ mod tests {
 			.operation_from_vpl("from_merged_vectortiles [ from_container filename=1.pbf, from_container filename=2.pbf ]")
 			.await?;
 
-		let coord = TileCoord3::new(1, 2, 3)?;
+		let coord = TileCoord3::new(3, 1, 2)?;
 		let blob = result.get_tile_data(&coord).await?.unwrap();
 
 		assert_eq!(check_tile(&blob), "1.pbf,2.pbf");
@@ -405,7 +405,7 @@ mod tests {
 		for level in 0..=4 {
 			assert!(
 				result
-					.get_tile_data(&TileCoord3::new(0, 0, level)?)
+					.get_tile_data(&TileCoord3::new(level, 0, 0)?)
 					.await?
 					.is_some()
 					.bitxor(!(1..=3).contains(&level)),

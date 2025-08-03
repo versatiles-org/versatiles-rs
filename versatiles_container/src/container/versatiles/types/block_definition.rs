@@ -30,11 +30,11 @@ impl BlockDefinition {
 	pub fn new(bbox: &TileBBox) -> Self {
 		let x = bbox.x_min.div(256u32);
 		let y = bbox.y_min.div(256u32);
-		let z = bbox.level;
+		let level = bbox.level;
 		let global_bbox: TileBBox = *bbox;
 
 		let tiles_coverage = TileBBox::new(
-			z.min(8),
+			level.min(8),
 			bbox.x_min - x * 256,
 			bbox.y_min - y * 256,
 			bbox.x_max - x * 256,
@@ -43,7 +43,7 @@ impl BlockDefinition {
 		.unwrap();
 
 		Self {
-			offset: TileCoord3::new(x, y, z).unwrap(),
+			offset: TileCoord3::new(level, x, y).unwrap(),
 			global_bbox,
 			tiles_coverage,
 			tiles_range: ByteRange::empty(),
@@ -62,7 +62,7 @@ impl BlockDefinition {
 	pub fn from_blob(blob: &Blob) -> Result<Self> {
 		let mut reader = ValueReaderSlice::new_be(blob.as_slice());
 
-		let z = reader.read_u8()?;
+		let level = reader.read_u8()?;
 		let x = reader.read_u32()?;
 		let y = reader.read_u32()?;
 
@@ -71,7 +71,7 @@ impl BlockDefinition {
 		let x_max = reader.read_u8()? as u32;
 		let y_max = reader.read_u8()? as u32;
 
-		let tiles_bbox = TileBBox::new(z.min(8), x_min, y_min, x_max, y_max)?;
+		let tiles_bbox = TileBBox::new(level.min(8), x_min, y_min, x_max, y_max)?;
 
 		let offset = reader.read_u64()?;
 		let tiles_length = reader.read_u64()?;
@@ -80,10 +80,16 @@ impl BlockDefinition {
 		let tiles_range = ByteRange::new(offset, tiles_length);
 		let index_range = ByteRange::new(offset + tiles_length, index_length);
 
-		let global_bbox = TileBBox::new(z, x_min + x * 256, y_min + y * 256, x_max + x * 256, y_max + y * 256)?;
+		let global_bbox = TileBBox::new(
+			level,
+			x_min + x * 256,
+			y_min + y * 256,
+			x_max + x * 256,
+			y_max + y * 256,
+		)?;
 
 		Ok(Self {
-			offset: TileCoord3::new(x, y, z)?,
+			offset: TileCoord3::new(level, x, y)?,
 			global_bbox,
 			tiles_coverage: tiles_bbox,
 			tiles_range,
@@ -238,11 +244,11 @@ mod tests {
 		assert_eq!(def.get_sort_index(), 5596502);
 		assert_eq!(def.as_str(), "[12,[300,400],[320,450]]");
 		assert_eq!(def.get_z(), 12);
-		assert_eq!(def.get_coord3(), &TileCoord3::new(1, 1, 12)?);
+		assert_eq!(def.get_coord3(), &TileCoord3::new(12, 1, 1)?);
 		assert_eq!(def.get_global_bbox(), &TileBBox::new(12, 300, 400, 320, 450)?);
 		assert_eq!(
 			format!("{def:?}"),
-			"BlockDefinition { x/y/z: TileCoord3(1, 1, 12), bbox: 8: [44,144,64,194] (1071), tiles_range: ByteRange[4,5], index_range: ByteRange[9,6] }"
+			"BlockDefinition { x/y/z: TileCoord3(12, [1, 1]), bbox: 8: [44,144,64,194] (1071), tiles_range: ByteRange[4,5], index_range: ByteRange[9,6] }"
 		);
 
 		let def2 = BlockDefinition::from_blob(&def.as_blob()?)?;

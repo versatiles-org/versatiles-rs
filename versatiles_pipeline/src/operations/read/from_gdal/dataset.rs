@@ -206,10 +206,10 @@ mod tests {
 	/// * correct Mercator reprojection and pixel alignment.
 	#[tokio::test]
 	async fn test_dataset_get_image() -> Result<()> {
-		async fn gradient_test(z: u8, x: u32, y: u32) -> [Vec<u8>; 2] {
+		async fn gradient_test(level: u8, x: u32, y: u32) -> [Vec<u8>; 2] {
 			// Build a `Operation` that points at `testdata/gradient.tif`.
 			// We keep it in‑memory (no factory) and map bands 1‑2‑3 → RGB.
-			let coord = TileCoord3::new(x, y, z).unwrap();
+			let coord = TileCoord3::new(level, x, y).unwrap();
 
 			let dataset = Dataset::new(PathBuf::from("../testdata/gradient.tif")).await.unwrap();
 

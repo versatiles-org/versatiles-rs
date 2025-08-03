@@ -52,7 +52,7 @@ impl TarTilesReader {
 			let path_vec: Vec<&str> = path_tmp_string.split('/').collect();
 
 			if path_vec.len() == 3 {
-				let z = path_vec[0].parse::<u8>()?;
+				let level = path_vec[0].parse::<u8>()?;
 				let x = path_vec[1].parse::<u32>()?;
 
 				let mut filename: String = String::from(path_vec[2]);
@@ -81,7 +81,7 @@ impl TarTilesReader {
 				let offset = entry.raw_file_position();
 				let length = entry.size();
 
-				let coord3 = TileCoord3::new(x, y, z)?;
+				let coord3 = TileCoord3::new(level, x, y)?;
 				bbox_pyramid.include_coord(&coord3);
 				tile_map.insert(coord3, ByteRange { offset, length });
 				continue;
@@ -235,7 +235,7 @@ pub mod tests {
 		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.parameters().tile_format, TileFormat::MVT);
 
-		let tile = reader.get_tile_data(&TileCoord3::new(6, 2, 3)?).await?.unwrap();
+		let tile = reader.get_tile_data(&TileCoord3::new(3, 6, 2)?).await?.unwrap();
 		assert_eq!(decompress_gzip(&tile)?.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())
@@ -315,7 +315,7 @@ pub mod tests {
 		assert_eq!(reader.parameters().bbox_pyramid.count_tiles(), 1);
 		assert_eq!(
 			reader
-				.get_tile_data(&TileCoord3::new(1, 2, 3)?)
+				.get_tile_data(&TileCoord3::new(3, 1, 2)?)
 				.await?
 				.unwrap()
 				.as_slice(),

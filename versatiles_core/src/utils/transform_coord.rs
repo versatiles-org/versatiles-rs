@@ -65,16 +65,16 @@ mod tests {
 
 	#[test]
 	fn tilecoord3_flip_y() {
-		let mut c = TileCoord3::new(1, 2, 3).unwrap();
+		let mut c = TileCoord3::new(3, 1, 2).unwrap();
 		c.flip_y();
-		assert_eq!(c, TileCoord3::new(1, 5, 3).unwrap());
+		assert_eq!(c, TileCoord3::new(3, 1, 5).unwrap());
 	}
 
 	#[test]
 	fn tilecoord3_swap_xy() {
-		let mut coord = TileCoord3::new(3, 4, 5).unwrap();
+		let mut coord = TileCoord3::new(5, 3, 4).unwrap();
 		coord.swap_xy();
-		assert_eq!(coord, TileCoord3::new(4, 3, 5).unwrap());
+		assert_eq!(coord, TileCoord3::new(5, 4, 3).unwrap());
 	}
 
 	#[test]

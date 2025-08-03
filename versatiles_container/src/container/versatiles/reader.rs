@@ -193,7 +193,7 @@ impl TilesReaderTrait for VersaTilesReader {
 	/// Gets tile data for a given coordinate.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
 		// Calculate block coordinate
-		let block_coord = TileCoord3::new(coord.x.shr(8), coord.y.shr(8), coord.level)?;
+		let block_coord = TileCoord3::new(coord.level, coord.x.shr(8), coord.y.shr(8))?;
 
 		// Get the block using the block coordinate
 		let block = self.block_index.get_block(&block_coord);
@@ -506,7 +506,7 @@ mod tests {
 		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.parameters().tile_format, TileFormat::MVT);
 
-		let tile = reader.get_tile_data(&TileCoord3::new(15, 1, 4)?).await?.unwrap();
+		let tile = reader.get_tile_data(&TileCoord3::new(4, 15, 1)?).await?.unwrap();
 		assert_eq!(decompress_gzip(&tile)?.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())

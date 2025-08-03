@@ -177,7 +177,7 @@ where
 	/// # async fn example() {
 	/// let coords = vec![TileCoord3::new(0,0,0).unwrap(), TileCoord3::new(1,1,1).unwrap()];
 	/// let closure = |coord: TileCoord3| async move {
-	///     if coord.z == 0 {
+	///     if coord.level == 0 {
 	///         Some((coord, Blob::from("data")))
 	///     } else {
 	///         None
@@ -496,11 +496,11 @@ where
 	/// ]);
 	///
 	/// let mapped_coords = stream.map_coord(|coord| {
-	///     TileCoord3::new(coord.x, coord.y, coord.z + 1).unwrap()
+	///     TileCoord3::new(coord.level + 1, coord.x, coord.y).unwrap()
 	/// });
 	///
 	/// let items = mapped_coords.collect().await;
-	/// // The tile data remains the same, but each coordinate has its z incremented.
+	/// // The tile data remains the same, but each coordinate has its level incremented.
 	/// # }
 	/// ```
 	pub fn map_coord<F>(self, mut callback: F) -> Self
@@ -532,11 +532,11 @@ where
 	/// ]);
 	///
 	/// // Keep only tiles at zoom level 0.
-	/// let filtered = stream.filter_coord(|coord| async move { coord.z == 0 });
+	/// let filtered = stream.filter_coord(|coord| async move { coord.level == 0 });
 	/// let items = filtered.collect().await;
 	///
 	/// assert_eq!(items.len(), 1);
-	/// assert_eq!(items[0].0.z, 0);
+	/// assert_eq!(items[0].0.level, 0);
 	/// # }
 	/// ```
 	pub fn filter_coord<F, Fut>(self, mut callback: F) -> Self
@@ -659,9 +659,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_map_coord_properly() {
-		let original = TileStream::from_vec(vec![(TileCoord3::new(1, 2, 3).unwrap(), Blob::from("data"))]);
+		let original = TileStream::from_vec(vec![(TileCoord3::new(3, 1, 2).unwrap(), Blob::from("data"))]);
 
-		let mapped = original.map_coord(|coord| TileCoord3::new(coord.x * 2, coord.y * 2, coord.level + 1).unwrap());
+		let mapped = original.map_coord(|coord| TileCoord3::new(coord.level + 1, coord.x * 2, coord.y * 2).unwrap());
 
 		let items = mapped.collect().await;
 		assert_eq!(items.len(), 1);

@@ -177,7 +177,7 @@ mod tests {
 
 	#[test]
 	fn test_create_debug_vector_tile() {
-		let coord = TileCoord3::new(1, 2, 3).unwrap();
+		let coord = TileCoord3::new(3, 1, 2).unwrap();
 		let vt = create_debug_vector_tile(&coord).unwrap();
 		assert_eq!(vt.layers.len(), 4);
 		assert_eq!(vt.layers[0].features.len(), 1);
@@ -188,7 +188,7 @@ mod tests {
 
 	#[test]
 	fn test_create_debug_vector_tile_different_coord() {
-		let coord = TileCoord3::new(6789, 2345, 10).unwrap();
+		let coord = TileCoord3::new(10, 6789, 2345).unwrap();
 		let vt = create_debug_vector_tile(&coord).unwrap();
 		assert_eq!(vt.layers.len(), 4);
 		assert_eq!(vt.layers[0].features.len(), 1);

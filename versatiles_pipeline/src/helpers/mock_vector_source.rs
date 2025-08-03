@@ -157,15 +157,15 @@ mod tests {
 			source
 				.parameters()
 				.bbox_pyramid
-				.contains_coord(&TileCoord3::new(0, 200, 8).unwrap())
+				.contains_coord(&TileCoord3::new(8, 0, 200).unwrap())
 		);
 
-		let coord = TileCoord3::new(0, 150, 8).unwrap();
+		let coord = TileCoord3::new(8, 0, 150).unwrap();
 		let tile_data = source.get_tile_data(&coord).await.unwrap();
 
 		assert!(tile_data.is_some());
 
-		let coord = TileCoord3::new(100, 100, 8).unwrap();
+		let coord = TileCoord3::new(8, 100, 100).unwrap();
 		let tile_data = source.get_tile_data(&coord).await.unwrap();
 
 		assert!(tile_data.is_none());
@@ -174,9 +174,9 @@ mod tests {
 	#[test]
 	fn test_arrange_tiles() {
 		let tiles = vec![
-			(TileCoord3::new(0, 0, 8).unwrap(), Blob::from("a")),
-			(TileCoord3::new(1, 0, 8).unwrap(), Blob::from("b")),
-			(TileCoord3::new(0, 1, 8).unwrap(), Blob::from("c")),
+			(TileCoord3::new(8, 0, 0).unwrap(), Blob::from("a")),
+			(TileCoord3::new(8, 1, 0).unwrap(), Blob::from("b")),
+			(TileCoord3::new(8, 0, 1).unwrap(), Blob::from("c")),
 		];
 
 		let arranged = arrange_tiles(tiles, |blob| blob.as_str().to_string());

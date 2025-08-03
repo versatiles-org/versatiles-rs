@@ -364,7 +364,7 @@ mod tests {
 			)
 			.await?;
 
-		let coord = TileCoord3::new(7, 8, 4)?;
+		let coord = TileCoord3::new(4, 7, 8)?;
 		let blob = result.get_tile_data(&coord).await?.unwrap();
 		assert_eq!(check_vector_blob(blob), "1");
 
@@ -410,8 +410,8 @@ mod tests {
 		let tiles = result.get_vector_stream(bbox).await?.collect().await;
 		assert_eq!(arrange_tiles(tiles, check_vector), *RESULT_PATTERN);
 
-		let c1 = TileCoord3::new(7, 7, 4)?;
-		let c2 = TileCoord3::new(9, 7, 4)?;
+		let c1 = TileCoord3::new(4, 7, 7)?;
+		let c2 = TileCoord3::new(4, 9, 7)?;
 		assert_eq!(check_vector_blob(result.get_tile_data(&c1).await?.unwrap()), "🟦");
 		assert_eq!(check_vector_blob(result.get_tile_data(&c2).await?.unwrap()), "🟨");
 		assert_eq!(check_vector(result.get_vector_data(&c1).await?.unwrap()), "🟦");
@@ -443,8 +443,8 @@ mod tests {
 		let tiles = result.get_image_stream(bbox).await?.collect().await;
 		assert_eq!(arrange_tiles(tiles, check_image), *RESULT_PATTERN);
 
-		let c1 = TileCoord3::new(7, 7, 4)?;
-		let c2 = TileCoord3::new(9, 7, 4)?;
+		let c1 = TileCoord3::new(4, 7, 7)?;
+		let c2 = TileCoord3::new(4, 9, 7)?;
 		assert_eq!(check_image_blob(result.get_tile_data(&c1).await?.unwrap()), "🟦");
 		assert_eq!(check_image_blob(result.get_tile_data(&c2).await?.unwrap()), "🟨");
 		assert_eq!(check_image(result.get_image_data(&c1).await?.unwrap()), "🟦");

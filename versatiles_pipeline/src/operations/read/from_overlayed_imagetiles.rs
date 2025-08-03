@@ -264,7 +264,7 @@ mod tests {
 			)
 			.await?;
 
-		let coord = TileCoord3::new(1, 2, 3)?;
+		let coord = TileCoord3::new(3, 1, 2)?;
 		let blob = result.get_tile_data(&coord).await?.unwrap();
 
 		assert_eq!(get_color(&blob), "A6B6");
@@ -374,7 +374,7 @@ mod tests {
 		for level in 0..=4 {
 			assert!(
 				result
-					.get_tile_data(&TileCoord3::new(0, 0, level)?)
+					.get_tile_data(&TileCoord3::new(level, 0, 0)?)
 					.await?
 					.is_some()
 					.bitxor(!(1..=3).contains(&level)),

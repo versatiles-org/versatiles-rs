@@ -14,9 +14,9 @@
 //!
 //! // Creating a new TileCoord3 instance
 //! let coord3 = TileCoord3::new(5, 6, 7).unwrap();
-//! assert_eq!(coord3.x, 5);
-//! assert_eq!(coord3.y, 6);
-//! assert_eq!(coord3.z, 7);
+//! assert_eq!(coord3.level, 5);
+//! assert_eq!(coord3.x, 6);
+//! assert_eq!(coord3.y, 7);
 //!
 //! // Converting TileCoord3 to geographic coordinates
 //! let geo = coord3.as_geo();
@@ -107,9 +107,9 @@ pub struct TileCoord3 {
 
 #[allow(dead_code)]
 impl TileCoord3 {
-	pub fn new(x: u32, y: u32, z: u8) -> Result<TileCoord3> {
-		ensure!(z <= 31, "z ({z}) must be <= 31");
-		Ok(TileCoord3 { x, y, level: z })
+	pub fn new(level: u8, x: u32, y: u32) -> Result<TileCoord3> {
+		ensure!(level <= 31, "level ({level}) must be <= 31");
+		Ok(TileCoord3 { x, y, level })
 	}
 
 	pub fn as_geo(&self) -> [f64; 2] {
@@ -155,7 +155,11 @@ impl TileCoord3 {
 	}
 
 	pub fn get_scaled_down(&self, factor: u32) -> TileCoord3 {
-		TileCoord3::new(self.x / factor, self.y / factor, self.level).unwrap()
+		TileCoord3 {
+			level: self.level,
+			x: self.x / factor,
+			y: self.y / factor,
+		}
 	}
 
 	pub fn as_tile_bbox(&self, tile_size: u32) -> Result<TileBBox> {
@@ -171,10 +175,18 @@ impl TileCoord3 {
 	pub fn as_level(&self, level: u8) -> TileCoord3 {
 		if level > self.level {
 			let scale = 2u32.pow((level - self.level) as u32);
-			TileCoord3::new(self.x * scale, self.y * scale, level).unwrap()
+			TileCoord3 {
+				x: self.x * scale,
+				y: self.y * scale,
+				level,
+			}
 		} else if level < self.level {
 			let scale = 2u32.pow((self.level - level) as u32);
-			TileCoord3::new(self.x / scale, self.y / scale, level).unwrap()
+			TileCoord3 {
+				x: self.x / scale,
+				y: self.y / scale,
+				level,
+			}
 		} else {
 			*self // no change, same level
 		}
@@ -227,8 +239,8 @@ mod tests {
 	fn debug() {
 		assert_eq!(format!("{:?}", TileCoord2::new(1, 2)), "TileCoord2(1, 2)");
 		assert_eq!(
-			format!("{:?}", TileCoord3::new(1, 2, 3).unwrap()),
-			"TileCoord3(1, 2, 3)"
+			format!("{:?}", TileCoord3::new(3, 1, 2).unwrap()),
+			"TileCoord3(3, [1, 2])"
 		);
 	}
 
@@ -275,7 +287,7 @@ mod tests {
 
 	#[test]
 	fn tilecoord3_new_and_getters() {
-		let coord = TileCoord3::new(3, 4, 5).unwrap();
+		let coord = TileCoord3::new(5, 3, 4).unwrap();
 		assert_eq!(coord.x, 3);
 		assert_eq!(coord.y, 4);
 		assert_eq!(coord.level, 5);
@@ -283,7 +295,7 @@ mod tests {
 
 	#[test]
 	fn tilecoord3_as_geo() {
-		let coord = TileCoord3::new(3, 4, 5).unwrap();
+		let coord = TileCoord3::new(5, 3, 4).unwrap();
 		assert_eq!(coord.as_geo(), [-146.25, 79.17133464081945]);
 		assert_eq!(
 			coord.as_geo_bbox().as_array(),
@@ -293,20 +305,20 @@ mod tests {
 
 	#[test]
 	fn tilecoord3_as_coord2() {
-		let coord = TileCoord3::new(3, 4, 5).unwrap();
+		let coord = TileCoord3::new(5, 3, 4).unwrap();
 		let coord2 = coord.as_coord2();
 		assert_eq!(coord2, TileCoord2::new(3, 4));
 	}
 
 	#[test]
 	fn tilecoord3_is_valid() {
-		let coord = TileCoord3::new(3, 4, 5).unwrap();
+		let coord = TileCoord3::new(5, 3, 4).unwrap();
 		assert!(coord.is_valid());
 	}
 
 	#[test]
 	fn tilecoord3_get_sort_index() {
-		let coord = TileCoord3::new(3, 4, 5).unwrap();
+		let coord = TileCoord3::new(5, 3, 4).unwrap();
 		assert_eq!(coord.get_sort_index(), 472);
 	}
 
@@ -345,9 +357,9 @@ mod tests {
 		use std::cmp::Ordering;
 		use std::cmp::Ordering::*;
 
-		let check = |x: u32, y: u32, z: u8, order: Ordering| {
+		let check = |x: u32, y: u32, level: u8, order: Ordering| {
 			let c1 = TileCoord3::new(2, 2, 2).unwrap();
-			let c2 = TileCoord3::new(x, y, z).unwrap();
+			let c2 = TileCoord3::new(level, x, y).unwrap();
 			assert_eq!(c2.partial_cmp(&c1), Some(order));
 		};
 

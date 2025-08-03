@@ -157,11 +157,11 @@ mod tests {
 	async fn test_tile_pipeline_reader_get_tile_data() -> Result<()> {
 		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/")).await?;
 
-		let result = reader.get_tile_data(&TileCoord3::new(0, 0, 14)?).await;
+		let result = reader.get_tile_data(&TileCoord3::new(14, 0, 0)?).await;
 		assert_eq!(result?, None);
 
 		let result = decompress(
-			reader.get_tile_data(&TileCoord3::new(8800, 5377, 14)?).await?.unwrap(),
+			reader.get_tile_data(&TileCoord3::new(14, 8800, 5377)?).await?.unwrap(),
 			&reader.parameters().tile_compression,
 		)?;
 

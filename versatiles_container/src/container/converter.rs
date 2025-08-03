@@ -419,7 +419,7 @@ mod tests {
 		};
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp)?;
 
-		let mut coord = TileCoord3::new(1, 2, 3)?;
+		let mut coord = TileCoord3::new(3, 1, 2)?;
 		let data = tcr.get_tile_data(&coord).await?;
 		assert!(data.is_some());
 

@@ -121,12 +121,12 @@ mod tests {
 		)
 		.unwrap();
 		let tile_data = source
-			.get_tile_data(&TileCoord3::new(0, 255, 8).unwrap())
+			.get_tile_data(&TileCoord3::new(8, 0, 255).unwrap())
 			.await
 			.unwrap();
 		assert!(tile_data.is_some());
 
-		let tile_data = source.get_tile_data(&TileCoord3::new(0, 0, 8).unwrap()).await.unwrap();
+		let tile_data = source.get_tile_data(&TileCoord3::new(8, 0, 0).unwrap()).await.unwrap();
 		assert!(tile_data.is_none());
 	}
 
@@ -157,9 +157,9 @@ mod tests {
 	#[test]
 	fn test_arrange_tiles() {
 		let tiles = vec![
-			(TileCoord3::new(0, 0, 1).unwrap(), Blob::from("a")),
-			(TileCoord3::new(1, 0, 1).unwrap(), Blob::from("b")),
-			(TileCoord3::new(0, 1, 1).unwrap(), Blob::from("c")),
+			(TileCoord3::new(1, 0, 0).unwrap(), Blob::from("a")),
+			(TileCoord3::new(1, 1, 0).unwrap(), Blob::from("b")),
+			(TileCoord3::new(1, 0, 1).unwrap(), Blob::from("c")),
 		];
 		let arranged = arrange_tiles(tiles, |blob| blob.as_str().to_string());
 		assert_eq!(arranged, ["a b", "c ❌"]);

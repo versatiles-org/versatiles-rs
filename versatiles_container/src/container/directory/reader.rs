@@ -33,7 +33,7 @@
 //! #[tokio::main]
 //! async fn main() {
 //!     let mut reader = DirectoryTilesReader::open_path(Path::new("/path/to/tiles")).unwrap();
-//!     let tile_data = reader.get_tile_data(&TileCoord3::new(1, 2, 3).unwrap()).await.unwrap();
+//!     let tile_data = reader.get_tile_data(&TileCoord3::new(3, 1, 2).unwrap()).await.unwrap();
 //! }
 //! ```
 //!
@@ -102,7 +102,7 @@ impl DirectoryTilesReader {
 			let name1 = entry1.file_name().into_string().unwrap();
 			let numeric1 = name1.parse::<u8>();
 			if numeric1.is_ok() {
-				let z = numeric1?;
+				let level = numeric1?;
 
 				for result2 in fs::read_dir(entry1.path())? {
 					// x level
@@ -153,7 +153,7 @@ impl DirectoryTilesReader {
 							bail!("found multiple tile compressions: {list:?}");
 						}
 
-						let coord3 = TileCoord3::new(x, y, z)?;
+						let coord3 = TileCoord3::new(level, x, y)?;
 						bbox_pyramid.include_coord(&coord3);
 						tile_map.insert(coord3, entry3.path());
 					}
@@ -267,10 +267,10 @@ mod tests {
 			"{\"bounds\":[-90,66.51326,-45,79.171335],\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 
-		let tile_data = reader.get_tile_data(&TileCoord3::new(2, 1, 3)?).await?.unwrap();
+		let tile_data = reader.get_tile_data(&TileCoord3::new(3, 2, 1)?).await?.unwrap();
 		assert_eq!(tile_data, Blob::from("test tile data"));
 
-		assert!(reader.get_tile_data(&TileCoord3::new(2, 1, 2)?).await?.is_none());
+		assert!(reader.get_tile_data(&TileCoord3::new(2, 2, 1)?).await?.is_none());
 
 		Ok(())
 	}
@@ -335,7 +335,7 @@ mod tests {
 		fs::write(dir.path().join("meta.json"), r#"{"type":"dummy data"}"#).unwrap();
 
 		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
-		let coord = TileCoord3::new(2, 1, 3).unwrap();
+		let coord = TileCoord3::new(3, 2, 1).unwrap();
 		let tile_data = reader.get_tile_data(&coord).await.unwrap().unwrap();
 
 		assert_eq!(tile_data, Blob::from("tile at 3/2/1"));

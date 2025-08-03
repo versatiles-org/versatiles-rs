@@ -359,12 +359,10 @@ impl TilesReaderTrait for MBTilesReader {
 					bbox.level as u32,
 				],
 				move |row| {
-					let coord = TileCoord3::new(
-						row.get::<_, u32>(0)?,
-						max_index - row.get::<_, u32>(1)?,
-						row.get::<_, u8>(2)?,
-					)
-					.unwrap();
+					let x = row.get::<_, u32>(0)?;
+					let y = max_index - row.get::<_, u32>(1)?;
+					let level = row.get::<_, u8>(2)?;
+					let coord = TileCoord3::new(level, x, y).unwrap();
 					let blob = Blob::from(row.get::<_, Vec<u8>>(3)?);
 					Ok((coord, blob))
 				},
@@ -431,7 +429,7 @@ pub mod tests {
 		assert_eq!(reader.parameters().tile_compression, Gzip);
 		assert_eq!(reader.parameters().tile_format, MVT);
 
-		let tile = reader.get_tile_data(&TileCoord3::new(8803, 5376, 14)?).await?.unwrap();
+		let tile = reader.get_tile_data(&TileCoord3::new(14, 8803, 5376)?).await?.unwrap();
 		assert_eq!(tile.len(), 172969);
 		assert_eq!(tile.get_range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
 		assert_eq!(

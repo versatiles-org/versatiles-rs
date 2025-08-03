@@ -165,7 +165,7 @@ mod tests {
 	#[tokio::test]
 	async fn get_tile_data() {
 		let test = |profile, blob| async move {
-			let coord = TileCoord3::new(23, 45, 6).unwrap();
+			let coord = TileCoord3::new(6, 23, 45).unwrap();
 			let reader = MockTilesReader::new_mock_profile(profile).unwrap();
 			let tile_compressed = reader.get_tile_data(&coord).await.unwrap().unwrap();
 			let tile_uncompressed = decompress(tile_compressed, &reader.parameters().tile_compression).unwrap();

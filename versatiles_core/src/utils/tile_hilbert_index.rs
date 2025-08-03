@@ -161,7 +161,7 @@ fn index_to_coord(index: u64) -> Result<TileCoord3> {
 				s *= 2;
 			}
 
-			return TileCoord3::new(tx as u32, ty as u32, t_z);
+			return TileCoord3::new(t_z, tx as u32, ty as u32);
 		}
 		acc += num_tiles;
 	}
