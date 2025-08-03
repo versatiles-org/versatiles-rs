@@ -614,16 +614,70 @@ impl TileBBox {
 		}
 	}
 
-	pub fn get_next_level(&self) -> TileBBox {
+	pub fn level_increase(&mut self) {
 		assert!(self.level < 31, "level must be less than 31");
+		self.level += 1;
+		self.x_min = self.x_min * 2;
+		self.y_min = self.y_min * 2;
+		self.x_max = self.x_max * 2 + 1;
+		self.y_max = self.y_max * 2 + 1;
+	}
 
-		TileBBox {
-			level: self.level + 1,
-			x_min: self.x_min * 2,
-			y_min: self.y_min * 2,
-			x_max: self.x_max * 2,
-			y_max: self.y_max * 2,
+	pub fn level_decrease(&mut self) {
+		assert!(self.level > 0, "level must be greater than 0");
+		self.level -= 1;
+		self.x_min /= 2;
+		self.y_min /= 2;
+		self.x_max /= 2;
+		self.y_max /= 2;
+	}
+
+	pub fn as_level_increased(&self) -> TileBBox {
+		let mut c = self.clone();
+		c.level_increase();
+		c
+	}
+
+	pub fn as_level_decreased(&self) -> TileBBox {
+		let mut c = self.clone();
+		c.level_decrease();
+		c
+	}
+
+	pub fn as_level(&self, level: u8) -> TileBBox {
+		assert!(level <= 31, "level ({level}) must be <= 31");
+
+		if level > self.level {
+			let scale = 2u32.pow((level - self.level) as u32);
+			TileBBox {
+				level,
+				x_min: self.x_min * scale,
+				y_min: self.y_min * scale,
+				x_max: (self.x_max + 1) * scale - 1,
+				y_max: (self.y_max + 1) * scale - 1,
+			}
+		} else {
+			let scale = 2u32.pow((self.level - level) as u32);
+			TileBBox {
+				level,
+				x_min: self.x_min / scale,
+				y_min: self.y_min / scale,
+				x_max: self.x_max / scale,
+				y_max: self.y_max / scale,
+			}
 		}
+	}
+
+	pub fn get_corner_min(&self) -> TileCoord3 {
+		TileCoord3::new(self.x_min, self.y_min, self.level).unwrap()
+	}
+
+	pub fn get_corner_max(&self) -> TileCoord3 {
+		TileCoord3::new(self.x_max, self.y_max, self.level).unwrap()
+	}
+
+	pub fn get_dimensions(&self) -> (u32, u32) {
+		(self.width(), self.height())
 	}
 
 	// -------------------------------------------------------------------------
