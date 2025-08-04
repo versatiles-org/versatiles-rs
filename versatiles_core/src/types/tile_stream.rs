@@ -308,6 +308,14 @@ where
 		self.stream.for_each(callback).await;
 	}
 
+	pub async fn for_each_async_parallel<F, Fut>(self, callback: F)
+	where
+		F: FnMut((TileCoord3, T)) -> Fut,
+		Fut: Future<Output = ()>,
+	{
+		self.stream.for_each_concurrent(num_cpus::get(), callback).await;
+	}
+
 	/// Applies a synchronous callback `callback` to each `(TileCoord3, T)` item.
 	///
 	/// Consumes the stream. The provided closure returns `()`.

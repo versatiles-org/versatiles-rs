@@ -142,7 +142,7 @@ impl Operation {
 		assert!(scale_tmp_res <= self.tile_size);
 
 		stream
-			.for_each_async(|(coord_src, image_src)| {
+			.for_each_async_parallel(|(coord_src, image_src)| {
 				assert_eq!(image_src.width(), self.tile_size);
 				assert_eq!(image_src.height(), self.tile_size);
 
@@ -198,10 +198,9 @@ impl OperationTrait for Operation {
 			return self.source.get_image_data(coord).await;
 		}
 
-		let stream = self
+		let mut tiles = self
 			.build_images_from_source(&coord.as_tile_bbox(1)?, self.tile_size)
 			.await?;
-		let mut tiles = stream.to_vec();
 		Ok(tiles.pop().map(|(_, image)| image))
 	}
 
