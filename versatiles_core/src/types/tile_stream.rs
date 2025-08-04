@@ -425,7 +425,7 @@ where
 			.stream
 			.map(move |(coord, item)| {
 				let cb = Arc::clone(&arc_cb);
-				tokio::spawn(async move { (coord, cb(item)) })
+				tokio::task::spawn_blocking(move || (coord, cb(item)))
 			})
 			.buffer_unordered(num_cpus::get())
 			.map(|e| {
@@ -722,15 +722,56 @@ mod tests {
 			(TileCoord3::new(1, 1, 1).unwrap(), Blob::from("one")),
 		];
 
-		let transformed = TileStream::from_vec(tile_data).map_item_parallel(|blob| {
-			// For demonstration, add a prefix
-			Ok(Blob::from(format!("mapped-{}", blob.as_str())))
+		// Apply parallel mapping
+		let transformed = TileStream::from_vec(tile_data.clone())
+			.map_item_parallel(|blob| Ok(Blob::from(format!("mapped-{}", blob.as_str()))));
+
+		// Collect results
+		let mut items = transformed.collect().await;
+		assert_eq!(items.len(), 2, "Expected two items after mapping");
+
+		// Sort by coordinate level to allow for unordered execution
+		items.sort_by_key(|(coord, _)| coord.level);
+
+		// Verify that coordinates are preserved and blobs correctly mapped
+		assert_eq!(items[0].0, TileCoord3::new(0, 0, 0).unwrap());
+		assert_eq!(items[0].1.as_str(), "mapped-zero");
+		assert_eq!(items[1].0, TileCoord3::new(1, 1, 1).unwrap());
+		assert_eq!(items[1].1.as_str(), "mapped-one");
+	}
+
+	#[tokio::test]
+	async fn test_map_item_parallel_parallelism() -> Result<()> {
+		use std::time::{Duration, Instant};
+		// Prepare a small number of items
+		let n = 4;
+		let sleep_ms = 100;
+		let tile_data: Vec<_> = (0..n)
+			.map(|i| (TileCoord3::new(0, 0, i as u32).unwrap(), Blob::from("data")))
+			.collect();
+
+		let start = Instant::now();
+		// Apply parallel mapping with a blocking sleep to simulate work
+		let stream = TileStream::from_vec(tile_data).map_item_parallel(move |blob| {
+			std::thread::sleep(Duration::from_millis(sleep_ms));
+			Ok(blob)
 		});
 
-		let items = transformed.collect().await;
-		assert_eq!(items.len(), 2);
-		assert_eq!(items[0].1.as_str(), "mapped-zero");
-		assert_eq!(items[1].1.as_str(), "mapped-one");
+		let items: Vec<_> = stream.collect().await;
+		let elapsed = start.elapsed();
+
+		// All items should be processed
+		assert_eq!(items.len(), n, "Expected {} items, got {}", n, items.len());
+		// If processing were sequential, it'd take ~n * sleep_ms ms.
+		// In parallel it should be significantly less (under 2 * sleep_ms).
+		let threshold = Duration::from_millis((sleep_ms * 2) as u64);
+		assert!(
+			elapsed < threshold,
+			"Expected parallel execution (<{:?}), but took {:?}",
+			threshold,
+			elapsed
+		);
+		Ok(())
 	}
 
 	#[tokio::test]
