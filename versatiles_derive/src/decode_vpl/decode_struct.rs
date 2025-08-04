@@ -130,7 +130,12 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 				let property_names = node.get_property_names();
 				for property_name in property_names {
 					if !argument_names.contains(&property_name) {
-						anyhow::bail!("Unknown argument \"{}\" in \"{}\"", property_name, node.name);
+						anyhow::bail!(
+							"The '{}' operation does not support the argument '{}'.\nOnly the following arguments are supported:\n'{}'",
+							node.name,
+							property_name,
+							argument_names.join("', '")
+						);
 					}
 				}
 
