@@ -28,7 +28,7 @@ pub trait EnhancedDynamicImageTrait {
 	fn into_scaled_down(self, factor: u32) -> DynamicImage;
 	fn into_optional(self) -> Option<DynamicImage>;
 	fn is_empty(&self) -> bool;
-	fn get_flattened(self, color: Rgb<u8>) -> DynamicImage;
+	fn get_flattened(self, color: Rgb<u8>) -> Result<DynamicImage>;
 
 	fn new_test_rgba() -> DynamicImage;
 	fn new_test_rgb() -> DynamicImage;
@@ -187,13 +187,13 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 		Ok(())
 	}
 
-	fn get_flattened(self, color: Rgb<u8>) -> DynamicImage {
+	fn get_flattened(self, color: Rgb<u8>) -> Result<DynamicImage> {
 		match self {
-			DynamicImage::ImageLuma8(img) => DynamicImage::ImageLuma8(img),
-			DynamicImage::ImageRgb8(img) => DynamicImage::ImageRgb8(img),
+			DynamicImage::ImageLuma8(img) => Ok(DynamicImage::ImageLuma8(img)),
+			DynamicImage::ImageRgb8(img) => Ok(DynamicImage::ImageRgb8(img)),
 			DynamicImage::ImageRgba8(img) => {
 				let c = [color[0] as u16, color[1] as u16, color[2] as u16];
-				DynamicImage::from(map_colors(&img, |p| {
+				Ok(DynamicImage::from(map_colors(&img, |p| {
 					if p[3] == 255 {
 						Rgb([p[0], p[1], p[2]])
 					} else {
@@ -205,9 +205,9 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 							(((p[2] as u16 * a) + c[2] * b + 127) / 255) as u8,
 						])
 					}
-				}))
+				})))
 			}
-			_ => panic!("Unsupported image type for flattening"),
+			_ => bail!("Unsupported image type {:?} for flattening", self.color()),
 		}
 	}
 
