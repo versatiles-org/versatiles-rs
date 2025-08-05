@@ -79,10 +79,10 @@ impl Operation {
 	}
 
 	#[context("Failed to build overviews from {} source tiles by reducing level by {level_reduce}", tiles.len())]
-	async fn build_overviews<'a>(
+	async fn build_overviews(
 		&self,
 		level_reduce: u8,
-		tiles: &'a [(TileCoord3, DynamicImage)],
+		tiles: &[(TileCoord3, DynamicImage)],
 	) -> Result<Vec<(TileCoord3, DynamicImage)>> {
 		let scale_factor = 2u32.pow(level_reduce as u32);
 
@@ -113,7 +113,10 @@ impl Operation {
 		}
 
 		let map = unsafe {
-			std::mem::transmute::<_, HashMap<TileCoord3, Vec<(&'static TileCoord3, &'static DynamicImage)>>>(map)
+			std::mem::transmute::<
+				HashMap<TileCoord3, Vec<(&TileCoord3, &DynamicImage)>>,
+				HashMap<TileCoord3, Vec<(&'static TileCoord3, &'static DynamicImage)>>,
+			>(map)
 		};
 
 		let results = map
@@ -143,13 +146,7 @@ impl Operation {
 
 		let results = results
 			.into_iter()
-			.filter_map(|(coord, image_option)| {
-				if let Some(image) = image_option {
-					Some((coord, image))
-				} else {
-					None
-				}
-			})
+			.filter_map(|(coord, image_option)| image_option.map(|image| (coord, image)))
 			.collect::<Vec<_>>();
 
 		Ok(results)
