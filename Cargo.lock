@@ -3464,6 +3464,7 @@ version = "0.15.6"
 dependencies = [
  "anyhow",
  "image",
+ "imageproc",
  "rstest",
  "versatiles_core",
  "webp",

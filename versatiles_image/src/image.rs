@@ -1,6 +1,7 @@
 use crate::{avif, jpeg, png, webp};
 use anyhow::{Result, anyhow, bail, ensure};
 use image::{DynamicImage, EncodableLayout, ExtendedColorType, ImageBuffer, Luma, LumaA, Rgb, Rgba, imageops::overlay};
+use imageproc::map::map_colors;
 use std::{ops::Div, vec};
 use versatiles_core::{Blob, TileFormat};
 
@@ -27,6 +28,7 @@ pub trait EnhancedDynamicImageTrait {
 	fn into_scaled_down(self, factor: u32) -> DynamicImage;
 	fn into_optional(self) -> Option<DynamicImage>;
 	fn is_empty(&self) -> bool;
+	fn get_flattened(self, color: Rgb<u8>) -> DynamicImage;
 
 	fn new_test_rgba() -> DynamicImage;
 	fn new_test_rgb() -> DynamicImage;
@@ -183,6 +185,30 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 		self.ensure_same_size(other)?;
 		overlay(self, other, 0, 0);
 		Ok(())
+	}
+
+	fn get_flattened(self, color: Rgb<u8>) -> DynamicImage {
+		match self {
+			DynamicImage::ImageLuma8(img) => DynamicImage::ImageLuma8(img),
+			DynamicImage::ImageRgb8(img) => DynamicImage::ImageRgb8(img),
+			DynamicImage::ImageRgba8(img) => {
+				let c = [color[0] as u16, color[1] as u16, color[2] as u16];
+				DynamicImage::from(map_colors(&img, |p| {
+					if p[3] == 255 {
+						Rgb([p[0], p[1], p[2]])
+					} else {
+						let a = (p[3]) as u16;
+						let b = (255 - p[3]) as u16;
+						Rgb([
+							(((p[0] as u16 * a) + c[0] * b + 127) / 255) as u8,
+							(((p[1] as u16 * a) + c[1] * b + 127) / 255) as u8,
+							(((p[2] as u16 * a) + c[2] * b + 127) / 255) as u8,
+						])
+					}
+				}))
+			}
+			_ => panic!("Unsupported image type for flattening"),
+		}
 	}
 
 	/// Generate a Image with RGBA colors
