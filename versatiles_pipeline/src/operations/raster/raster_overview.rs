@@ -9,7 +9,7 @@ use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::{DynamicImage, GenericImage};
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
-use tokio::sync::Mutex;
+use tokio::{sync::Mutex, task::JoinSet};
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
@@ -78,14 +78,127 @@ impl Operation {
 		})
 	}
 
-	async fn add_images_to_cache(&self, key: TileCoord3, images: &[(TileCoord3, DynamicImage)]) {
-		let images = images
-			.iter()
-			.map(|(coord, image)| (*coord, image.get_scaled_down(2)))
-			.filter(|(_, image)| !image.is_empty())
+	#[context("Failed to build overviews from {} source tiles by reducing level by {level_reduce}", tiles.len())]
+	async fn build_overviews<'a>(
+		&self,
+		level_reduce: u8,
+		tiles: &'a [(TileCoord3, DynamicImage)],
+	) -> Result<Vec<(TileCoord3, DynamicImage)>> {
+		let scale_factor = 2u32.pow(level_reduce as u32);
+
+		let (image_size_tmp, image_size_src) = if scale_factor <= self.tile_size {
+			(self.tile_size, self.tile_size / scale_factor)
+		} else {
+			(scale_factor, 1)
+		};
+
+		let scale_src_tmp = self.tile_size / image_size_src;
+		assert!(scale_src_tmp > 0);
+		assert!(scale_src_tmp <= self.tile_size);
+
+		let scale_tmp_res = image_size_tmp / self.tile_size;
+		assert!(scale_tmp_res > 0);
+		assert!(scale_tmp_res <= self.tile_size);
+
+		// Sort tiles by their destination coordinates
+		let mut map = HashMap::<TileCoord3, Vec<(&TileCoord3, &DynamicImage)>>::new();
+		for (coord_src, image_src) in tiles {
+			ensure!(image_src.width() == self.tile_size);
+			ensure!(image_src.height() == self.tile_size);
+
+			ensure!(coord_src.level >= level_reduce);
+			let coord_dst = coord_src.as_level(coord_src.level - level_reduce);
+
+			map.entry(coord_dst).or_default().push((coord_src, image_src));
+		}
+
+		let map = unsafe {
+			std::mem::transmute::<_, HashMap<TileCoord3, Vec<(&'static TileCoord3, &'static DynamicImage)>>>(map)
+		};
+
+		let results = map
+			.into_iter()
+			.map(|(coord_dst, sub_entries)| async move {
+				ensure!(sub_entries.len() <= (scale_factor * scale_factor) as usize);
+				let mut image_tmp = DynamicImage::new_rgba8(image_size_tmp, image_size_tmp);
+				for (coord_src, image_src) in sub_entries {
+					let image_src = image_src.get_scaled_down(scale_src_tmp);
+					image_tmp.copy_from(
+						&image_src,
+						(coord_src.x % scale_factor) * image_size_src,
+						(coord_src.y % scale_factor) * image_size_src,
+					)?;
+				}
+				let image_res = image_tmp.into_scaled_down(scale_tmp_res);
+				Ok((coord_dst, image_res.into_optional()))
+			})
+			.collect::<JoinSet<_>>()
+			.join_all()
+			.await;
+
+		let results = results
+			.into_iter()
+			.collect::<Result<Vec<_>>>()
+			.map_err(|e| e.context("Failed to build overviews from source tiles"))?;
+
+		let results = results
+			.into_iter()
+			.filter_map(|(coord, image_option)| {
+				if let Some(image) = image_option {
+					Some((coord, image))
+				} else {
+					None
+				}
+			})
 			.collect::<Vec<_>>();
-		let mut cache = self.cache.lock().await;
-		cache.insert(key, images);
+
+		Ok(results)
+	}
+
+	#[context("Failed to build images from source for bbox {bbox_dst:?}")]
+	async fn build_images_from_source(&self, bbox_dst: &TileBBox) -> Result<Vec<(TileCoord3, DynamicImage)>> {
+		ensure!(bbox_dst.x_min / BLOCK_TILE_COUNT == bbox_dst.x_max / BLOCK_TILE_COUNT);
+		ensure!(bbox_dst.y_min / BLOCK_TILE_COUNT == bbox_dst.y_max / BLOCK_TILE_COUNT);
+
+		let level_src = self.base_level;
+		let level_dst = bbox_dst.level;
+		assert!(level_dst <= level_src);
+
+		let bbox_src = bbox_dst.as_level(level_src);
+		ensure!(bbox_src.count_tiles() <= BLOCK_TILE_COUNT as u64 * BLOCK_TILE_COUNT as u64);
+
+		let tiles1 = self.source.get_image_stream(bbox_src).await?.to_vec().await;
+		let tiles0 = self.build_overviews(level_src - level_dst, &tiles1).await?;
+
+		Ok(tiles0)
+	}
+
+	#[context("Failed to convert TileBBox {bbox:?} to cache key")]
+	fn bbox_to_cache_key(bbox: &TileBBox) -> Result<TileCoord3> {
+		let scale = BLOCK_TILE_COUNT / 2;
+		ensure!(
+			bbox.x_min / scale == bbox.x_max / scale,
+			"TileBBox is wider than {scale}",
+		);
+		ensure!(
+			bbox.y_min / scale == bbox.y_max / scale,
+			"TileBBox is taller than {scale}",
+		);
+
+		TileCoord3::new(bbox.level, bbox.x_min / scale, bbox.y_min / scale)
+	}
+
+	#[context("Failed to convert cache key {key:?} to TileBBox")]
+	fn cache_key_to_bbox(key: &TileCoord3) -> Result<TileBBox> {
+		let max = 2u32.pow(key.level as u32) - 1;
+		let scale = BLOCK_TILE_COUNT / 2;
+		TileBBox::new(
+			key.level,
+			(key.x * scale).min(max),
+			(key.y * scale).min(max),
+			((key.x + 1) * scale - 1).min(max),
+			((key.y + 1) * scale - 1).min(max),
+		)
 	}
 
 	#[context("Failed to get images from cache for key {key:?}")]
@@ -95,79 +208,9 @@ impl Operation {
 		if let Some(images) = result {
 			return Ok(images);
 		} else {
-			let max_value = 2u32.pow(key.level as u32) - 1;
-
-			let bbox = TileBBox::new(
-				key.level,
-				(key.x * BLOCK_TILE_COUNT).min(max_value),
-				(key.y * BLOCK_TILE_COUNT).min(max_value),
-				(key.x * BLOCK_TILE_COUNT + BLOCK_TILE_COUNT - 1).min(max_value),
-				(key.y * BLOCK_TILE_COUNT + BLOCK_TILE_COUNT - 1).min(max_value),
-			)
-			.unwrap();
-			return self.build_images_from_source(&bbox, self.tile_size / 2).await;
+			let bbox = Self::cache_key_to_bbox(key)?;
+			return self.build_images_from_source(&bbox).await;
 		}
-	}
-
-	#[context("Failed to build images from source for bbox {bbox_res:?} and image size {image_size_res}")]
-	async fn build_images_from_source(&self, bbox_res: &TileBBox, image_size_res: u32) -> Result<Tiles> {
-		let level_res = bbox_res.level;
-		let level_src = self.base_level;
-		assert!(level_res <= level_src);
-
-		assert!(image_size_res > 0);
-		assert!(image_size_res.is_power_of_two());
-
-		let bbox_src = bbox_res.as_level(level_src);
-
-		let stream = self.source.get_image_stream(bbox_src).await?;
-
-		let tiles = stream.to_vec().await;
-		let mut map = HashMap::<TileCoord3, Vec<(TileCoord3, DynamicImage)>>::new();
-		for (coord_src, image_src) in tiles {
-			ensure!(image_src.width() == self.tile_size);
-			ensure!(image_src.height() == self.tile_size);
-			let coord_res = coord_src.as_level(level_res);
-			map.entry(coord_res).or_default().push((coord_src, image_src));
-		}
-		let chunks = map.into_iter().collect::<Vec<_>>();
-		let stream = TileStream::from_vec(chunks);
-
-		let scale_factor = 2u32.pow(level_src as u32 - level_res as u32);
-		assert!(scale_factor > 0);
-
-		let (image_size_tmp, image_size_src) = if scale_factor < image_size_res {
-			(image_size_res, image_size_res / scale_factor)
-		} else {
-			(scale_factor, 1)
-		};
-
-		let scale_src_tmp = self.tile_size / image_size_src;
-		assert!(scale_src_tmp > 0);
-		assert!(scale_src_tmp <= self.tile_size);
-
-		let scale_tmp_res = image_size_tmp / image_size_res;
-		assert!(scale_tmp_res > 0);
-		assert!(scale_tmp_res <= self.tile_size);
-
-		Ok(stream
-			.filter_map_item_parallel(move |sub_entries| {
-				let mut image_tmp = DynamicImage::new_rgba8(image_size_tmp, image_size_tmp);
-				for (coord_src, image_src) in sub_entries {
-					let image_src = image_src.into_scaled_down(scale_src_tmp);
-					image_tmp
-						.copy_from(
-							&image_src,
-							(coord_src.x % scale_tmp_res) * image_size_src,
-							(coord_src.y % scale_tmp_res) * image_size_src,
-						)
-						.unwrap();
-				}
-				let image_res = image_tmp.into_scaled_down(scale_tmp_res);
-				Ok(image_res.into_optional())
-			})
-			.to_vec()
-			.await)
 	}
 }
 
@@ -190,47 +233,34 @@ impl OperationTrait for Operation {
 			return self.source.get_image_data(coord).await;
 		}
 
-		let mut tiles = self
-			.build_images_from_source(&coord.as_tile_bbox(1)?, self.tile_size)
-			.await?;
+		let mut tiles = self.build_images_from_source(&coord.as_tile_bbox(1)?).await?;
 		Ok(tiles.pop().map(|(_, image)| image))
 	}
 
-	async fn get_image_stream(&self, bbox_0: TileBBox) -> Result<TileStream<DynamicImage>> {
-		if bbox_0.level >= self.base_level {
-			return self.source.get_image_stream(bbox_0).await;
+	async fn get_image_stream(&self, bbox0: TileBBox) -> Result<TileStream<DynamicImage>> {
+		if bbox0.level >= self.base_level {
+			return self.source.get_image_stream(bbox0).await;
 		}
 
-		assert!(bbox_0.width() <= BLOCK_TILE_COUNT);
-		assert!(bbox_0.height() <= BLOCK_TILE_COUNT);
+		assert!(bbox0.width() <= BLOCK_TILE_COUNT);
+		assert!(bbox0.height() <= BLOCK_TILE_COUNT);
 
-		let key = bbox_0.get_scaled_down(BLOCK_TILE_COUNT);
-		assert_eq!(key.get_dimensions(), (1, 1));
+		let mut images0: Vec<(TileCoord3, DynamicImage)> = vec![];
 
-		let mut result = HashMap::<TileCoord3, DynamicImage>::new();
-		for (x1, y1) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
-			let mut key1 = bbox_0
-				.get_scaled_down(BLOCK_TILE_COUNT)
-				.as_level_increased()
-				.get_corner_min();
-			key1.x += x1 as u32;
-			key1.y += y1 as u32;
+		let bboxes1 = bbox0.iter_bbox_grid(BLOCK_TILE_COUNT / 2).collect::<Vec<_>>();
+
+		for bbox1 in bboxes1 {
+			let key1 = Self::bbox_to_cache_key(&bbox1)?;
 			let images1 = self.get_images_from_cache(&key1).await?;
-			for (coord1, image1) in images1 {
-				let coord0 = coord1.as_level(bbox_0.level);
-				result
-					.entry(coord0)
-					.or_insert_with(|| DynamicImage::new_rgba8(self.tile_size, self.tile_size))
-					.copy_from(
-						&image1,
-						(coord1.x - coord0.x * 2) * self.tile_size / 2,
-						(coord1.y - coord0.y * 2) * self.tile_size / 2,
-					)?;
-			}
+			images0.extend(images1);
 		}
-		let images0 = result.into_iter().collect::<Vec<_>>();
 
-		self.add_images_to_cache(key.get_corner_min(), images0.as_slice()).await;
+		// Add the images to the cache
+		if bbox0.level > 0 {
+			let tiles = self.build_overviews(1, images0.as_slice()).await?;
+			let key0 = Self::bbox_to_cache_key(&bbox0.as_level_decreased())?;
+			self.cache.lock().await.insert(key0, tiles);
+		}
 
 		return Ok(TileStream::from_vec(images0));
 	}
