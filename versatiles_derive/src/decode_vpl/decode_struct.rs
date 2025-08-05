@@ -59,51 +59,51 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 			let (doc_field, parser_field) = match field_type_str.as_str() {
 				"String" => (
 					format!("- **`{field_str}`: String (required)**{comment}"),
-					quote! { #field_name: node.get_property_string_req(#field_str)? },
+					quote! { #field_name: node.get_property_string_required(#field_str)? },
 				),
 				"bool" => (
 					format!("- **`{field_str}`: Boolean (required)**{comment}"),
-					quote! { #field_name: node.get_property_bool_req(#field_str)? },
+					quote! { #field_name: node.get_property_bool_required(#field_str)? },
 				),
 				"u8" => (
 					format!("- **`{field_str}`: u8 (required)**{comment}"),
-					quote! { #field_name: node.get_property_number_req::<u8>(#field_str)? },
+					quote! { #field_name: node.get_property_number_required::<u8>(#field_str)? },
 				),
 				"[f64;4]" => (
 					format!("- **`{field_str}`: [f64,f64,f64,f64] (required)**{comment}"),
-					quote! { #field_name: node.get_property_number_array_req::<f64>(#field_str)? },
+					quote! { #field_name: node.get_property_number_array_required::<f64>(#field_str)? },
 				),
 				"Option<bool>" => (
 					format!("- *`{field_str}`: bool (optional)*{comment}"),
-					quote! { #field_name: node.get_property_bool(#field_str)? },
+					quote! { #field_name: node.get_property_bool_option(#field_str)? },
 				),
 				"Option<String>" => (
 					format!("- *`{field_str}`: String (optional)*{comment}"),
-					quote! { #field_name: node.get_property_string(#field_str)? },
+					quote! { #field_name: node.get_property_string_option(#field_str)? },
 				),
 				"Option<f32>" => (
 					format!("- *`{field_str}`: f32 (optional)*{comment}"),
-					quote! { #field_name: node.get_property_number::<f32>(#field_str)? },
+					quote! { #field_name: node.get_property_number_option::<f32>(#field_str)? },
 				),
 				"Option<u8>" => (
 					format!("- *`{field_str}`: u8 (optional)*{comment}"),
-					quote! { #field_name: node.get_property_number::<u8>(#field_str)? },
+					quote! { #field_name: node.get_property_number_option::<u8>(#field_str)? },
 				),
 				"Option<u32>" => (
 					format!("- *`{field_str}`: u32 (optional)*{comment}"),
-					quote! { #field_name: node.get_property_number::<u32>(#field_str)? },
+					quote! { #field_name: node.get_property_number_option::<u32>(#field_str)? },
 				),
 				"Option<[f64;4]>" => (
 					format!("- *`{field_str}`: [f64,f64,f64,f64] (optional)*{comment}"),
-					quote! { #field_name: node.get_property_number_array::<f64, 4>(#field_str)? },
+					quote! { #field_name: node.get_property_number_array_option::<f64, 4>(#field_str)? },
 				),
 				"Option<[u8;3]>" => (
 					format!("- *`{field_str}`: [u8,u8,u8] (optional)*{comment}"),
-					quote! { #field_name: node.get_property_number_array::<u8, 3>(#field_str)? },
+					quote! { #field_name: node.get_property_number_array_option::<u8, 3>(#field_str)? },
 				),
 				"Option<TileFormat>" => (
 					format!("- *`{field_str}`: TileFormat (optional)*{comment}"),
-					quote! { #field_name: node.get_property_enum::<TileFormat>(#field_str)? },
+					quote! { #field_name: node.get_property_enum_option::<TileFormat>(#field_str)? },
 				),
 				_ => panic!("unknown type field: {field_type_str}"),
 			};
