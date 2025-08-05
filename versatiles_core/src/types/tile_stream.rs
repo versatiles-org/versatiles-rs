@@ -628,9 +628,9 @@ fn unwrap_result<T>(result: anyhow::Result<T>, context: impl FnOnce() -> String)
 
 #[cfg(test)]
 mod tests {
-	use tokio::sync::Mutex;
-
 	use super::*;
+	use std::sync::atomic::{AtomicUsize, Ordering};
+	use tokio::sync::Mutex;
 
 	#[tokio::test]
 	async fn should_collect_all_items_from_vec() {
@@ -963,5 +963,131 @@ mod tests {
 		assert_eq!(items.len(), 1);
 		assert_eq!(items[0].0.level, 0);
 		assert_eq!(items[0].1.as_str(), "keep");
+	}
+
+	#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+	async fn test_map_item_parallel_parallelism2() {
+		let stream = TileStream::from_vec(
+			(1..=6)
+				.map(|i| (TileCoord3::new(12, i, 0).unwrap(), i))
+				.collect::<Vec<_>>(),
+		);
+		let counter = Arc::new(AtomicUsize::new(0));
+		let max_parallel = Arc::new(AtomicUsize::new(0));
+		let current_parallel = Arc::new(AtomicUsize::new(0));
+
+		let counter_clone = counter.clone();
+		let max_parallel_clone = max_parallel.clone();
+		let current_parallel_clone = current_parallel.clone();
+
+		let stream = stream.map_item_parallel(move |item| {
+			let counter = counter_clone.clone();
+			let max_parallel = max_parallel_clone.clone();
+			let current_parallel = current_parallel_clone.clone();
+
+			let prev = current_parallel.fetch_add(1, Ordering::SeqCst);
+			loop {
+				let max = max_parallel.load(Ordering::SeqCst);
+				if prev + 1 > max {
+					max_parallel.store(prev + 1, Ordering::SeqCst);
+				} else {
+					break;
+				}
+			}
+			std::thread::sleep(std::time::Duration::from_millis(10));
+			current_parallel.fetch_sub(1, Ordering::SeqCst);
+			counter.fetch_add(1, Ordering::SeqCst);
+			Ok(item)
+		});
+
+		let results: Vec<_> = stream.collect().await;
+		assert_eq!(results.len(), 6);
+		assert_eq!(counter.load(Ordering::SeqCst), 6);
+		assert!(max_parallel.load(Ordering::SeqCst) > 1);
+	}
+
+	#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+	async fn test_filter_map_item_parallel_parallelism2() {
+		let stream = TileStream::from_vec(
+			vec![Some(1), None, Some(3), None, Some(5), None]
+				.into_iter()
+				.enumerate()
+				.map(|(i, v)| (TileCoord3::new(12, i as u32, 0).unwrap(), v))
+				.collect::<Vec<_>>(),
+		);
+		let counter = Arc::new(AtomicUsize::new(0));
+		let max_parallel = Arc::new(AtomicUsize::new(0));
+		let current_parallel = Arc::new(AtomicUsize::new(0));
+
+		let counter_clone = counter.clone();
+		let max_parallel_clone = max_parallel.clone();
+		let current_parallel_clone = current_parallel.clone();
+
+		let stream = stream.filter_map_item_parallel(move |item| {
+			let counter = counter_clone.clone();
+			let max_parallel = max_parallel_clone.clone();
+			let current_parallel = current_parallel_clone.clone();
+
+			let prev = current_parallel.fetch_add(1, Ordering::SeqCst);
+			loop {
+				let max = max_parallel.load(Ordering::SeqCst);
+				if prev + 1 > max {
+					max_parallel.store(prev + 1, Ordering::SeqCst);
+				} else {
+					break;
+				}
+			}
+			std::thread::sleep(std::time::Duration::from_millis(10));
+			current_parallel.fetch_sub(1, Ordering::SeqCst);
+			counter.fetch_add(1, Ordering::SeqCst);
+			Ok(item)
+		});
+
+		let results: Vec<_> = stream.collect().await;
+		assert_eq!(results.len(), 3);
+		assert_eq!(counter.load(Ordering::SeqCst), 6);
+		assert!(max_parallel.load(Ordering::SeqCst) > 1);
+	}
+
+	#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+	async fn test_for_each_async_parallel_parallelism2() {
+		let stream = TileStream::from_vec(
+			(1..=6)
+				.map(|i| (TileCoord3::new(12, i, 0).unwrap(), i))
+				.collect::<Vec<_>>(),
+		);
+		let counter = Arc::new(AtomicUsize::new(0));
+		let max_parallel = Arc::new(AtomicUsize::new(0));
+		let current_parallel = Arc::new(AtomicUsize::new(0));
+
+		let counter_clone = counter.clone();
+		let max_parallel_clone = max_parallel.clone();
+		let current_parallel_clone = current_parallel.clone();
+
+		stream
+			.for_each_async_parallel(move |_item| {
+				let counter = counter_clone.clone();
+				let max_parallel = max_parallel_clone.clone();
+				let current_parallel = current_parallel_clone.clone();
+
+				async move {
+					let prev = current_parallel.fetch_add(1, Ordering::SeqCst);
+					loop {
+						let max = max_parallel.load(Ordering::SeqCst);
+						if prev + 1 > max {
+							max_parallel.store(prev + 1, Ordering::SeqCst);
+						} else {
+							break;
+						}
+					}
+					tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+					current_parallel.fetch_sub(1, Ordering::SeqCst);
+					counter.fetch_add(1, Ordering::SeqCst);
+				}
+			})
+			.await;
+
+		assert_eq!(counter.load(Ordering::SeqCst), 6);
+		assert!(max_parallel.load(Ordering::SeqCst) > 1);
 	}
 }
