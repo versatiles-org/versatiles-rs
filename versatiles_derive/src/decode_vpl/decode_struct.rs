@@ -71,7 +71,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 				),
 				"[f64;4]" => (
 					format!("- **`{field_str}`: [f64,f64,f64,f64] (required)**{comment}"),
-					quote! { #field_name: node.get_property_number_array4_req::<f64>(#field_str)? },
+					quote! { #field_name: node.get_property_number_array_req::<f64>(#field_str)? },
 				),
 				"Option<bool>" => (
 					format!("- *`{field_str}`: bool (optional)*{comment}"),
@@ -95,7 +95,11 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 				),
 				"Option<[f64;4]>" => (
 					format!("- *`{field_str}`: [f64,f64,f64,f64] (optional)*{comment}"),
-					quote! { #field_name: node.get_property_number_array4::<f64>(#field_str)? },
+					quote! { #field_name: node.get_property_number_array::<f64, 4>(#field_str)? },
+				),
+				"Option<[u8;3]>" => (
+					format!("- *`{field_str}`: [u8,u8,u8] (optional)*{comment}"),
+					quote! { #field_name: node.get_property_number_array::<u8, 3>(#field_str)? },
 				),
 				"Option<TileFormat>" => (
 					format!("- *`{field_str}`: TileFormat (optional)*{comment}"),
@@ -245,7 +249,7 @@ mod tests {
 						v: [f64; 4],
 					}
 				),
-				"get_property_number_array4_req::<f64>",
+				"get_property_number_array_req::<f64>",
 				"**`v`: [f64,f64,f64,f64] (required)**",
 			),
 			(
@@ -299,7 +303,7 @@ mod tests {
 						v: Option<[f64; 4]>,
 					}
 				),
-				"get_property_number_array4::<f64>",
+				"get_property_number_array::<f64>",
 				"*`v`: [f64,f64,f64,f64] (optional)*",
 			),
 			(

@@ -89,34 +89,35 @@ impl VPLNode {
 		self.required(field, self.get_property_number::<T>(field))
 	}
 
-	pub fn get_property_number_array4<T>(&self, field: &str) -> Result<Option<[T; 4]>>
+	pub fn get_property_number_array<T, const N: usize>(&self, field: &str) -> Result<Option<[T; N]>>
 	where
-		T: FromStr,
+		T: FromStr + Debug,
 		<T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
 	{
 		Ok(if let Some(vec) = self.get_property_vec(field) {
 			ensure!(
-				vec.len() == 4,
-				"In operation '{}' the parameter '{field}' must be an array of 4 numbers.",
+				vec.len() == N,
+				"In operation '{}' the parameter '{field}' must be an array of {N} numbers.",
 				self.name
 			);
-			Some([
-				vec[0].parse::<T>()?,
-				vec[1].parse::<T>()?,
-				vec[2].parse::<T>()?,
-				vec[3].parse::<T>()?,
-			])
+			Some(
+				vec.iter()
+					.map(|s| s.parse::<T>().map_err(|e| anyhow!("{e}")))
+					.collect::<Result<Vec<_>>>()?
+					.try_into()
+					.unwrap(),
+			)
 		} else {
 			None
 		})
 	}
 
-	pub fn get_property_number_array4_req<T>(&self, field: &str) -> Result<[T; 4]>
+	pub fn get_property_number_array_req<T, const N: usize>(&self, field: &str) -> Result<[T; N]>
 	where
-		T: FromStr,
+		T: FromStr + Debug,
 		<T as FromStr>::Err: std::error::Error + Send + Sync + 'static,
 	{
-		self.required(field, self.get_property_number_array4(field))
+		self.required(field, self.get_property_number_array::<T, N>(field))
 	}
 
 	fn required<T>(&self, field: &str, result: Result<Option<T>>) -> Result<T> {
@@ -288,8 +289,8 @@ mod tests {
 			properties: make_properties(vec![("key1", vec!["1", "2", "3", "4"])]),
 			sources: vec![],
 		};
-		assert_eq!(node.get_property_number_array4::<i32>("key1")?.unwrap(), [1, 2, 3, 4]);
-		assert!(node.get_property_number_array4::<i32>("key2")?.is_none());
+		assert_eq!(node.get_property_number_array::<i32, 4>("key1")?.unwrap(), [1, 2, 3, 4]);
+		assert!(node.get_property_number_array::<i32, 4>("key2")?.is_none());
 		Ok(())
 	}
 
@@ -300,8 +301,8 @@ mod tests {
 			properties: make_properties(vec![("key1", vec!["1", "2", "3", "4"])]),
 			sources: vec![],
 		};
-		assert_eq!(node.get_property_number_array4_req::<i32>("key1")?, [1, 2, 3, 4]);
-		assert!(node.get_property_number_array4_req::<i32>("key2").is_err());
+		assert_eq!(node.get_property_number_array_req::<i32, 4>("key1")?, [1, 2, 3, 4]);
+		assert!(node.get_property_number_array_req::<i32, 4>("key2").is_err());
 		Ok(())
 	}
 
