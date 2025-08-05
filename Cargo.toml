@@ -100,7 +100,7 @@ regex = { version = "1.11.1", default-features = false, features = [
 ] }
 reqwest = { version = "0.12.22", default-features = false }
 rstest = { version = "0.26.1", default-features = false }
-tokio = { version = "1.47.0", features = ["rt-multi-thread", "sync"] }
+tokio = { version = "1.47.1", features = ["rt-multi-thread", "sync"] }
 wildmatch = { version = "2.4.0", default-features = false }
 
 versatiles = { version = "0.15.6", path = "versatiles", default-features = false }
