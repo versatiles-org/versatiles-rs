@@ -404,10 +404,10 @@ mod tests {
 
 		let bbox = TileBBox::new_full(3)?;
 
-		let tiles = result.get_tile_stream(bbox).await?.collect().await;
+		let tiles = result.get_tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(arrange_tiles(tiles, check_vector_blob), *RESULT_PATTERN);
 
-		let tiles = result.get_vector_stream(bbox).await?.collect().await;
+		let tiles = result.get_vector_stream(bbox).await?.to_vec().await;
 		assert_eq!(arrange_tiles(tiles, check_vector), *RESULT_PATTERN);
 
 		let c1 = TileCoord3::new(4, 7, 7)?;
@@ -437,10 +437,10 @@ mod tests {
 
 		let bbox = TileBBox::new_full(3)?;
 
-		let tiles = result.get_tile_stream(bbox).await?.collect().await;
+		let tiles = result.get_tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(arrange_tiles(tiles, check_image_blob), *RESULT_PATTERN);
 
-		let tiles = result.get_image_stream(bbox).await?.collect().await;
+		let tiles = result.get_image_stream(bbox).await?.to_vec().await;
 		assert_eq!(arrange_tiles(tiles, check_image), *RESULT_PATTERN);
 
 		let c1 = TileCoord3::new(4, 7, 7)?;

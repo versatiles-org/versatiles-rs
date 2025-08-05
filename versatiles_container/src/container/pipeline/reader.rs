@@ -175,7 +175,7 @@ mod tests {
 		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/")).await?;
 		let bbox = TileBBox::new(1, 0, 0, 1, 1)?;
 		let result_stream = reader.get_tile_stream(bbox).await?;
-		let result = result_stream.collect().await;
+		let result = result_stream.to_vec().await;
 
 		assert!(!result.is_empty());
 

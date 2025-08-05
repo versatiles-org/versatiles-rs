@@ -252,7 +252,7 @@ where
 	/// assert_eq!(items.len(), 2);
 	/// # }
 	/// ```
-	pub async fn collect(self) -> Vec<(TileCoord3, T)> {
+	pub async fn to_vec(self) -> Vec<(TileCoord3, T)> {
 		self.stream.collect().await
 	}
 
@@ -640,7 +640,7 @@ mod tests {
 		];
 
 		let tile_stream = TileStream::from_vec(tile_data.clone());
-		let collected = tile_stream.collect().await;
+		let collected = tile_stream.to_vec().await;
 
 		assert_eq!(collected, tile_data);
 	}
@@ -671,7 +671,7 @@ mod tests {
 
 		let mapped = original.map_coord(|coord| TileCoord3::new(coord.level + 1, coord.x * 2, coord.y * 2).unwrap());
 
-		let items = mapped.collect().await;
+		let items = mapped.to_vec().await;
 		assert_eq!(items.len(), 1);
 		let (coord, blob) = &items[0];
 		assert_eq!(coord.x, 2);
@@ -727,7 +727,7 @@ mod tests {
 			.map_item_parallel(|blob| Ok(Blob::from(format!("mapped-{}", blob.as_str()))));
 
 		// Collect results
-		let mut items = transformed.collect().await;
+		let mut items = transformed.to_vec().await;
 		assert_eq!(items.len(), 2, "Expected two items after mapping");
 
 		// Sort by coordinate level to allow for unordered execution
@@ -757,7 +757,7 @@ mod tests {
 			Ok(blob)
 		});
 
-		let items: Vec<_> = stream.collect().await;
+		let items: Vec<_> = stream.to_vec().await;
 		let elapsed = start.elapsed();
 
 		// All items should be processed
@@ -792,7 +792,7 @@ mod tests {
 			Ok(Some(Blob::from("data")))
 		});
 
-		let items: Vec<_> = stream.collect().await;
+		let items: Vec<_> = stream.to_vec().await;
 		let elapsed = start.elapsed();
 
 		// All items should be processed
@@ -855,7 +855,7 @@ mod tests {
 			})
 		});
 
-		let items = filtered.collect().await;
+		let items = filtered.to_vec().await;
 		assert_eq!(items.len(), 2);
 		assert_eq!(items[0].1.as_str(), "kept-keep0");
 		assert_eq!(items[1].1.as_str(), "kept-keep2");
@@ -864,7 +864,7 @@ mod tests {
 	#[tokio::test]
 	async fn should_construct_empty_stream() {
 		let empty = TileStream::<Blob>::new_empty();
-		let collected = empty.collect().await;
+		let collected = empty.to_vec().await;
 		assert!(collected.is_empty());
 	}
 
@@ -880,7 +880,7 @@ mod tests {
 
 		// Merge them
 		let merged = TileStream::<Blob>::from_stream_iter(substreams.into_iter()).await;
-		let items = merged.collect().await;
+		let items = merged.to_vec().await;
 		assert_eq!(items.len(), 2);
 	}
 
@@ -923,7 +923,7 @@ mod tests {
 		]);
 
 		let filtered = stream.filter_coord(|coord| async move { coord.level == 0 });
-		let items = filtered.collect().await;
+		let items = filtered.to_vec().await;
 
 		assert_eq!(items.len(), 1);
 		assert_eq!(items[0].0.level, 0);
@@ -938,7 +938,7 @@ mod tests {
 			Some(Blob::from(format!("v{}", coord.level)))
 		});
 
-		let mut items = stream.collect().await;
+		let mut items = stream.to_vec().await;
 		// Sort for deterministic assertion on unordered parallel output
 		items.sort_by_key(|(coord, _)| coord.level);
 
@@ -959,7 +959,7 @@ mod tests {
 			}
 		});
 
-		let items = stream.collect().await;
+		let items = stream.to_vec().await;
 		assert_eq!(items.len(), 1);
 		assert_eq!(items[0].0.level, 0);
 		assert_eq!(items[0].1.as_str(), "keep");
@@ -1000,7 +1000,7 @@ mod tests {
 			Ok(item)
 		});
 
-		let results: Vec<_> = stream.collect().await;
+		let results: Vec<_> = stream.to_vec().await;
 		assert_eq!(results.len(), 6);
 		assert_eq!(counter.load(Ordering::SeqCst), 6);
 		assert!(max_parallel.load(Ordering::SeqCst) > 1);
@@ -1043,7 +1043,7 @@ mod tests {
 			Ok(item)
 		});
 
-		let results: Vec<_> = stream.collect().await;
+		let results: Vec<_> = stream.to_vec().await;
 		assert_eq!(results.len(), 3);
 		assert_eq!(counter.load(Ordering::SeqCst), 6);
 		assert!(max_parallel.load(Ordering::SeqCst) > 1);

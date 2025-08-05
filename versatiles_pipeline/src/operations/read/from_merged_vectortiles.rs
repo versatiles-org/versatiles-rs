@@ -329,7 +329,7 @@ mod tests {
 			.await?;
 
 		let bbox = TileBBox::new_full(3)?;
-		let tiles = result.get_tile_stream(bbox).await?.collect().await;
+		let tiles = result.get_tile_stream(bbox).await?.to_vec().await;
 
 		assert_eq!(
 			arrange_tiles(tiles, |blob| {

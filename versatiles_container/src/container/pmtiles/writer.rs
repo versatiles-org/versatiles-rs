@@ -83,7 +83,7 @@ impl TilesWriterTrait for PMTilesWriter {
 					Box::pin(async move {
 						let mut writer = writer_mutex.lock().await;
 						let mut entries = entries_mutex.lock().await;
-						let mut tiles = stream.collect().await;
+						let mut tiles = stream.to_vec().await;
 						tiles.sort_by_key(|(coord, _)| coord.get_hilbert_index().unwrap());
 						for (coord, blob) in tiles {
 							let id = coord.get_hilbert_index()?;

@@ -79,7 +79,7 @@ mod tests {
 		let compressed_blob = compress(TEST_BLOB.clone(), &Gzip).unwrap();
 		let tile_stream = TileStream::from_vec(vec![(TileCoord3::new(0, 0, 0).unwrap(), compressed_blob)]);
 		let result = unpack_image_tile_stream(Ok(tile_stream), &parameters(PNG, Gzip)).unwrap();
-		let images: Vec<_> = result.collect().await;
+		let images: Vec<_> = result.to_vec().await;
 		assert_eq!(images.len(), 1);
 		images[0].1.ensure_same_meta(&TEST_IMAGE).unwrap();
 	}
@@ -97,7 +97,7 @@ mod tests {
 	async fn test_pack_image_tile_stream() {
 		let tile_stream = TileStream::from_vec(vec![(TileCoord3::new(0, 0, 0).unwrap(), TEST_IMAGE.clone())]);
 		let result = pack_image_tile_stream(Ok(tile_stream), &parameters(PNG, Gzip)).unwrap();
-		let blobs: Vec<_> = result.collect().await;
+		let blobs: Vec<_> = result.to_vec().await;
 		assert_eq!(blobs.len(), 1);
 		let decompressed_blob = decompress(blobs[0].1.clone(), &Gzip).unwrap();
 		let unpacked_image = DynamicImage::from_blob(&decompressed_blob, PNG).unwrap();
