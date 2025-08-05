@@ -4,7 +4,7 @@ use crate::{
 	traits::*,
 	vpl::VPLNode,
 };
-use anyhow::{Result, bail};
+use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::{DynamicImage, GenericImage};
@@ -120,9 +120,18 @@ impl Operation {
 
 		let bbox_src = bbox_res.as_level(level_src);
 
-		let map_res = Arc::new(Mutex::new(HashMap::<TileCoord3, DynamicImage>::new()));
-
 		let stream = self.source.get_image_stream(bbox_src).await?;
+
+		let tiles = stream.to_vec().await;
+		let mut map = HashMap::<TileCoord3, Vec<(TileCoord3, DynamicImage)>>::new();
+		for (coord_src, image_src) in tiles {
+			ensure!(image_src.width() == self.tile_size);
+			ensure!(image_src.height() == self.tile_size);
+			let coord_res = coord_src.as_level(level_res);
+			map.entry(coord_res).or_default().push((coord_src, image_src));
+		}
+		let chunks = map.into_iter().collect::<Vec<_>>();
+		let stream = TileStream::from_vec(chunks);
 
 		let scale_factor = 2u32.pow(level_src as u32 - level_res as u32);
 		assert!(scale_factor > 0);
@@ -141,41 +150,24 @@ impl Operation {
 		assert!(scale_tmp_res > 0);
 		assert!(scale_tmp_res <= self.tile_size);
 
-		stream
-			.for_each_async_parallel(|(coord_src, image_src)| {
-				assert_eq!(image_src.width(), self.tile_size);
-				assert_eq!(image_src.height(), self.tile_size);
-
-				let map = map_res.clone();
-				async move {
-					let coord_res = coord_src.as_level(level_res);
+		Ok(stream
+			.filter_map_item_parallel(move |sub_entries| {
+				let mut image_tmp = DynamicImage::new_rgba8(image_size_tmp, image_size_tmp);
+				for (coord_src, image_src) in sub_entries {
 					let image_src = image_src.into_scaled_down(scale_src_tmp);
-					let mut db = map.lock().await;
-					let image0 = db
-						.entry(coord_res)
-						.or_insert_with(|| DynamicImage::new_rgba8(image_size_tmp, image_size_tmp));
-					image0
+					image_tmp
 						.copy_from(
 							&image_src,
-							coord_src.x * image_size_src - coord_res.x * image_size_tmp,
-							coord_src.y * image_size_src - coord_res.y * image_size_tmp,
+							(coord_src.x % scale_tmp_res) * image_size_src,
+							(coord_src.y % scale_tmp_res) * image_size_src,
 						)
 						.unwrap();
 				}
-			})
-			.await;
-
-		let db = Arc::try_unwrap(map_res)
-			.map_err(|_| anyhow::anyhow!("Failed to unwrap Arc"))?
-			.into_inner();
-		Ok(db
-			.into_iter()
-			.map(|(coord, image_tmp)| {
 				let image_res = image_tmp.into_scaled_down(scale_tmp_res);
-				(coord, image_res)
+				Ok(image_res.into_optional())
 			})
-			.filter(|(_, image)| !image.is_empty())
-			.collect())
+			.to_vec()
+			.await)
 	}
 }
 
