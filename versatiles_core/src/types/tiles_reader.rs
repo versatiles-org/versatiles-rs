@@ -37,8 +37,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 	/// Return the supported traversal order.
 	fn traversal(&self) -> &Traversal {
-		static DEFAULT_TRAVERSAL: Traversal = Traversal::new_any();
-		&DEFAULT_TRAVERSAL
+		&Traversal::ANY
 	}
 
 	/// Traverse all tiles in the given traversal order, invoking `callback` for each bbox and its tile stream.

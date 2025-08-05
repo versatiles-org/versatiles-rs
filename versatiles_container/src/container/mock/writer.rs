@@ -47,7 +47,7 @@ impl MockTilesWriter {
 
 		reader
 			.traverse_all_tiles(
-				&Traversal::new_any(),
+				&Traversal::ANY,
 				Box::new(|_bbox, mut stream| {
 					Box::pin(async move {
 						while stream.next().await.is_some() {}

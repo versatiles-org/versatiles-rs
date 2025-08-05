@@ -47,7 +47,7 @@ impl TilesWriterTrait for TarTilesWriter {
 
 		reader
 			.traverse_all_tiles(
-				&Traversal::new_any(),
+				&Traversal::ANY,
 				Box::new(|_bbox, mut stream| {
 					let builder_mutex = Arc::clone(&builder_mutex);
 					Box::pin(async move {

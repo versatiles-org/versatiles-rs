@@ -99,11 +99,13 @@ impl Traversal {
 		self.order.sort_bboxes(&mut bboxes, size);
 		Ok(bboxes)
 	}
+
+	pub const ANY: Self = Self::new_any();
 }
 
 impl Default for Traversal {
 	fn default() -> Self {
-		Traversal::new_any()
+		Traversal::ANY
 	}
 }
 

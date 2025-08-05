@@ -10,8 +10,7 @@ pub trait OperationTrait: Debug + Send + Sync + Unpin {
 	fn parameters(&self) -> &TilesReaderParameters;
 	fn tilejson(&self) -> &TileJSON;
 	fn traversal(&self) -> &Traversal {
-		static DEFAULT_TRAVERSAL: Traversal = Traversal::new_any();
-		&DEFAULT_TRAVERSAL
+		&Traversal::ANY
 	}
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>>;
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>>;

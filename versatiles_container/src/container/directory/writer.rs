@@ -105,7 +105,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 
 		reader
 			.traverse_all_tiles(
-				&Traversal::new_any(),
+				&Traversal::ANY,
 				Box::new(|_bbox, mut stream| {
 					Box::pin(async move {
 						while let Some(entry) = stream.next().await {

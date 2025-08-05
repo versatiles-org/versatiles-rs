@@ -165,7 +165,7 @@ impl TilesWriterTrait for MBTilesWriter {
 
 		reader
 			.traverse_all_tiles(
-				&Traversal::new_any(),
+				&Traversal::ANY,
 				Box::new(|_bbox, stream| {
 					let writer_mutex = Arc::clone(&writer_mutex);
 					Box::pin(async move {
