@@ -193,12 +193,13 @@ mod tests {
 				"        for property_name in property_names {",
 				"            if !argument_names.contains(&property_name) {",
 				"                anyhow::bail!(",
-				"                    \"Unknown argument \\\"{}\\\" in \\\"{}\\\"\", property_name, node.name",
+				"                    \"The '{}' operation does not support the argument '{}'.\\nOnly the following arguments are supported:\\n'{}'\",",
+				"                    node.name, property_name, argument_names.join(\"', '\")",
 				"                );",
 				"            }",
 				"        }",
 				"        Ok(Self {",
-				"            field1: node.get_property_string_req(\"field1\")?,",
+				"            field1: node.get_property_string_required(\"field1\")?,",
 				"        })",
 				"    }",
 				"    pub fn get_docs() -> String {",
@@ -222,7 +223,7 @@ mod tests {
 						v: String,
 					}
 				),
-				"get_property_string_req",
+				"get_property_string_required",
 				"**`v`: String (required)**",
 			),
 			(
@@ -231,7 +232,7 @@ mod tests {
 						v: bool,
 					}
 				),
-				"get_property_bool_req",
+				"get_property_bool_required",
 				"**`v`: Boolean (required)**",
 			),
 			(
@@ -240,7 +241,7 @@ mod tests {
 						v: u8,
 					}
 				),
-				"get_property_number_req::<u8>",
+				"get_property_number_required::<u8>",
 				"**`v`: u8 (required)**",
 			),
 			(
@@ -249,7 +250,7 @@ mod tests {
 						v: [f64; 4],
 					}
 				),
-				"get_property_number_array_req::<f64>",
+				"get_property_number_array_required::<f64>",
 				"**`v`: [f64,f64,f64,f64] (required)**",
 			),
 			(
@@ -258,7 +259,7 @@ mod tests {
 						v: Option<bool>,
 					}
 				),
-				"get_property_bool",
+				"get_property_bool_option",
 				"*`v`: bool (optional)*",
 			),
 			(
@@ -267,7 +268,7 @@ mod tests {
 						v: Option<String>,
 					}
 				),
-				"get_property_string",
+				"get_property_string_option",
 				"*`v`: String (optional)*",
 			),
 			(
@@ -276,7 +277,7 @@ mod tests {
 						v: Option<f32>,
 					}
 				),
-				"get_property_number::<f32>",
+				"get_property_number_option::<f32>",
 				"*`v`: f32 (optional)*",
 			),
 			(
@@ -285,7 +286,7 @@ mod tests {
 						v: Option<u8>,
 					}
 				),
-				"get_property_number::<u8>",
+				"get_property_number_option::<u8>",
 				"*`v`: u8 (optional)*",
 			),
 			(
@@ -294,7 +295,7 @@ mod tests {
 						v: Option<u32>,
 					}
 				),
-				"get_property_number::<u32>",
+				"get_property_number_option::<u32>",
 				"*`v`: u32 (optional)*",
 			),
 			(
@@ -303,7 +304,7 @@ mod tests {
 						v: Option<[f64; 4]>,
 					}
 				),
-				"get_property_number_array::<f64>",
+				"get_property_number_array_option::<f64, 4>",
 				"*`v`: [f64,f64,f64,f64] (optional)*",
 			),
 			(
@@ -312,7 +313,7 @@ mod tests {
 						v: Option<TileFormat>,
 					}
 				),
-				"get_property_enum::<TileFormat>",
+				"get_property_enum_option::<TileFormat>",
 				"*`v`: TileFormat (optional)*",
 			),
 		];
@@ -333,7 +334,8 @@ mod tests {
 					"        for property_name in property_names {",
 					"            if !argument_names.contains(&property_name) {",
 					"                anyhow::bail!(",
-					"                    \"Unknown argument \\\"{}\\\" in \\\"{}\\\"\", property_name, node.name",
+					"                    \"The '{}' operation does not support the argument '{}'.\\nOnly the following arguments are supported:\\n'{}'\",",
+					"                    node.name, property_name, argument_names.join(\"', '\")",
 					"                );",
 					"            }",
 					"        }",

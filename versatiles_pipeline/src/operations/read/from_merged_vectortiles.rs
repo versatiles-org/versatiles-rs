@@ -281,7 +281,7 @@ mod tests {
 				.await
 				.unwrap_err()
 				.to_string(),
-			"Unknown argument \"color\" in \"from_merged_vectortiles\""
+			"The 'from_merged_vectortiles' operation does not support the argument 'color'.\nOnly the following arguments are supported:\n'sources'"
 		);
 	}
 

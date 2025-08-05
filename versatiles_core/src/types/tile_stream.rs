@@ -185,7 +185,7 @@ where
 	/// };
 	///
 	/// let tile_stream = TileStream::from_coord_vec_async(coords, closure);
-	/// let items = tile_stream.collect().await;
+	/// let items = tile_stream.to_vec().await;
 	/// assert_eq!(items.len(), 1);
 	/// # }
 	/// ```
@@ -216,7 +216,7 @@ where
 	/// #
 	/// async fn example(tile_streams: Vec<impl std::future::Future<Output=TileStream<'static>> + Send + 'static>) {
 	///     let merged = TileStream::from_stream_iter(tile_streams.into_iter()).await;
-	///     let all_items = merged.collect().await;
+	///     let all_items = merged.to_vec().await;
 	///     // `all_items` now contains items from all child streams
 	/// }
 	/// ```
@@ -248,7 +248,7 @@ where
 	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
 	///     (TileCoord3::new(1,1,1).unwrap(), Blob::from("data1")),
 	/// ]);
-	/// let items = stream.collect().await;
+	/// let items = stream.to_vec().await;
 	/// assert_eq!(items.len(), 2);
 	/// # }
 	/// ```
@@ -410,7 +410,7 @@ where
 	///     Ok(Blob::from(format!("mapped {}", value.as_str())))
 	/// });
 	///
-	/// let items = mapped.collect().await;
+	/// let items = mapped.to_vec().await;
 	/// // items contain the transformed data.
 	/// # }
 	/// ```
@@ -460,7 +460,7 @@ where
 	///     })
 	/// });
 	///
-	/// let items = filtered.collect().await;
+	/// let items = filtered.to_vec().await;
 	/// assert_eq!(items.len(), 1);
 	/// # }
 	/// ```
@@ -507,7 +507,7 @@ where
 	///     TileCoord3::new(coord.level + 1, coord.x, coord.y).unwrap()
 	/// });
 	///
-	/// let items = mapped_coords.collect().await;
+	/// let items = mapped_coords.to_vec().await;
 	/// // The tile data remains the same, but each coordinate has its level incremented.
 	/// # }
 	/// ```
@@ -541,7 +541,7 @@ where
 	///
 	/// // Keep only tiles at zoom level 0.
 	/// let filtered = stream.filter_coord(|coord| async move { coord.level == 0 });
-	/// let items = filtered.collect().await;
+	/// let items = filtered.to_vec().await;
 	///
 	/// assert_eq!(items.len(), 1);
 	/// assert_eq!(items[0].0.level, 0);

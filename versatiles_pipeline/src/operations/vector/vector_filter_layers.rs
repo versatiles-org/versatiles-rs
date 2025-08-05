@@ -169,7 +169,7 @@ mod tests {
 		let result = run_test("", "").await;
 		assert_eq!(
 			result.unwrap_err().to_string(),
-			"In operation 'vector_filter_layers' the parameter 'filter' is required."
+			"Failed to get required property string 'filter' from VPL node 'vector_filter_layers'"
 		);
 	}
 
