@@ -225,6 +225,6 @@ mod tests {
 	fn debug_format() {
 		let c = TileCoord2::new(3, 4);
 		// Debug should format as TileCoord2([x, y])
-		assert_eq!(format!("{:?}", c), "TileCoord2([3, 4])");
+		assert_eq!(format!("{c:?}"), "TileCoord2([3, 4])");
 	}
 }

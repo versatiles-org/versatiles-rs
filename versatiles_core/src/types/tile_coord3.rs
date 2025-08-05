@@ -324,6 +324,6 @@ mod tests {
 	fn tilecoord3_debug_format() {
 		let coord = TileCoord3::new(4, 7, 8).unwrap();
 		// Expect format: TileCoord3(level, [x, y])
-		assert_eq!(format!("{:?}", coord), "TileCoord3(4, [7, 8])");
+		assert_eq!(format!("{coord:?}"), "TileCoord3(4, [7, 8])");
 	}
 }
