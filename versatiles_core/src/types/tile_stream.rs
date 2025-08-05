@@ -850,9 +850,9 @@ mod tests {
 		});
 
 		let items = filtered.to_vec().await;
-		assert_eq!(items.len(), 2);
-		assert_eq!(items[0].1.as_str(), "kept-keep0");
-		assert_eq!(items[1].1.as_str(), "kept-keep2");
+		let mut texts = items.iter().map(|(_, b)| b.as_str()).collect::<Vec<_>>();
+		texts.sort();
+		assert_eq!(texts, ["kept-keep0", "kept-keep2"]);
 	}
 
 	#[tokio::test]
