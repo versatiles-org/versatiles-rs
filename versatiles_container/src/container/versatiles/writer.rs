@@ -95,9 +95,7 @@ impl VersaTilesWriter {
 	/// Write blocks to the writer.
 	#[context("Failed to write blocks")]
 	async fn write_blocks(reader: &mut dyn TilesReaderTrait, writer: &mut dyn DataWriterTrait) -> Result<ByteRange> {
-		let pyramid = reader.parameters().bbox_pyramid.clone();
-
-		if pyramid.is_empty() {
+		if reader.parameters().bbox_pyramid.is_empty() {
 			return Ok(ByteRange::empty());
 		}
 

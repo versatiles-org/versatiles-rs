@@ -26,21 +26,21 @@ pub fn context(args: TokenStream, input: TokenStream) -> TokenStream {
 	let mut input = parse_macro_input!(input as syn::ItemFn);
 
 	let body = &input.block;
-	let return_ty = &input.sig.output;
+	let return_type = &input.sig.output;
 	let err = Ident::new("err", Span::mixed_site());
 
 	let new_body = if input.sig.asyncness.is_some() {
-		let return_ty = match return_ty {
+		let return_type = match return_type {
 			syn::ReturnType::Default => {
 				return syn::Error::new_spanned(input, "function should return Result")
 					.to_compile_error()
 					.into();
 			}
-			syn::ReturnType::Type(_, return_ty) => return_ty,
+			syn::ReturnType::Type(_, return_type) => return_type,
 		};
 		let result = Ident::new("result", Span::mixed_site());
 		quote! {
-			let #result: #return_ty = async #move_token { #body }.await;
+			let #result: #return_type = async #move_token { #body }.await;
 			#result.map_err(|#err| #err.context(format!(#format_args)).into())
 		}
 	} else {
@@ -49,7 +49,7 @@ pub fn context(args: TokenStream, input: TokenStream) -> TokenStream {
 			// Moving a non-`Copy` value into the closure tells borrowck to always treat the closure
 			// as a `FnOnce`, preventing some borrowing errors.
 			let #force_fn_once = ::core::iter::empty::<()>();
-			(#move_token || #return_ty {
+			(#move_token || #return_type {
 				::core::mem::drop(#force_fn_once);
 				#body
 			})().map_err(|#err| #err.context(format!(#format_args)).into())
