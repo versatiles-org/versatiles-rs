@@ -5,10 +5,12 @@
 
 #[cfg(feature = "cli")]
 use super::ProbeDepth;
-use super::{Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters};
 #[cfg(feature = "cli")]
 use crate::utils::PrettyPrint;
-use crate::{progress::get_progress_bar, tilejson::TileJSON, traversal::Traversal};
+use crate::{
+	Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters, Traversal,
+	progress::get_progress_bar, tilejson::TileJSON,
+};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, lock::Mutex};
@@ -44,34 +46,60 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	/// Runs sequentially; awaits each callback before moving to the next.
 	async fn traverse_all_tiles<'a>(
 		&'a self,
-		accepted_order: &Traversal,
+		traversal_write: &Traversal,
 		mut callback: Box<dyn 'a + Send + FnMut(TileBBox, TileStream<'a>) -> BoxFuture<'a, Result<()>>>,
 	) -> Result<()> {
-		match self.traversal().get_intersected(accepted_order) {
-			Ok(traversal) => {
-				let bboxes = traversal.traverse_pyramid(&self.parameters().bbox_pyramid)?;
-				let n = bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
-				let mut i = 0;
-				let progress = get_progress_bar("converting tiles", n);
-				for bbox in bboxes {
-					let mut stream = self.get_tile_stream(bbox).await?;
-					let p = progress.clone();
-					stream = stream.inspect(move || p.inc(1));
-					callback(bbox, stream).await?;
-					i += bbox.count_tiles();
-					progress.set_position(i);
-				}
-				progress.finish();
-				Ok(())
+		let traversal_read = self.traversal();
+
+		let mut process_standard = async move |bboxes: Vec<TileBBox>| -> Result<()> {
+			let n = bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
+			let mut i = 0;
+			let progress = get_progress_bar("converting tiles", n);
+			for bbox in bboxes {
+				let mut stream = self.get_tile_stream(bbox).await?;
+				let p = progress.clone();
+				stream = stream.inspect(move || p.inc(1));
+				callback(bbox, stream).await?;
+				i += bbox.count_tiles();
+				progress.set_position(i);
 			}
-			Err(err) => Err(
-				err.context(format!(
-					"Writer needs {accepted_order:?}, but Reader only supports {:?}",
-					self.traversal()
-				))
-				.context("No suitable traversal order found."),
-			),
+			progress.finish();
+			Ok(())
+		};
+
+		async move {
+			let err = match traversal_read.get_intersected(traversal_write) {
+				Ok(traversal) => {
+					let bboxes = traversal.traverse_pyramid(&self.parameters().bbox_pyramid)?;
+					return process_standard(bboxes).await;
+				}
+				Err(e) => e,
+			};
+
+			/*
+			let traversal_order = traversal_read.order.get_intersected(&traversal_write.order)?;
+
+			let (traversal_read_size, traversal_write_size) =
+				if let Ok(size) = traversal_read.size.get_intersected(&traversal_write.size) {
+					(size.max_size()?, size.max_size()?)
+				} else if traversal_read.max_size()? < traversal_write.min_size()? {
+					(traversal_read.max_size()?, traversal_write.min_size()?)
+				} else {
+					Err(err.context("Could not find a way to translate traversals."))?
+				};
+
+			let bboxes_read = Traversal::new(traversal_read.order, traversal_read_size, traversal_read_size)?
+				.traverse_pyramid(&self.parameters().bbox_pyramid)?;
+			*/
+			Err(err.context("Could not find a way to translate traversals."))?
 		}
+		.await
+		.map_err(|err| {
+			err.context(format!(
+				"Writer needs {traversal_write:?}, but Reader only supports {traversal_read:?}",
+			))
+			.context("No suitable traversal found.")
+		})
 	}
 
 	/// Asynchronously fetch the raw tile data for the given tile coordinate.
