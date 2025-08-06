@@ -77,6 +77,12 @@ impl TraversalSize {
 		self.max = max;
 		Ok(())
 	}
+
+	pub fn get_intersected(&self, other: &TraversalSize) -> Result<TraversalSize> {
+		let mut result = self.clone();
+		result.intersect(other)?;
+		Ok(result)
+	}
 }
 
 impl Default for TraversalSize {

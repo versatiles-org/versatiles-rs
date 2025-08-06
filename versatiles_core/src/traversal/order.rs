@@ -49,6 +49,12 @@ impl TraversalOrder {
 		}
 		bail!("Incompatible traversal orders, cannot merge {self:?} with {other:?}");
 	}
+
+	pub fn get_intersected(&self, other: &TraversalOrder) -> Result<TraversalOrder> {
+		let mut result = self.clone();
+		result.intersect(other)?;
+		Ok(result)
+	}
 }
 
 impl std::fmt::Debug for TraversalOrder {
