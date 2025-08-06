@@ -209,6 +209,20 @@ impl Operation {
 			return self.build_images_from_source(&bbox).await;
 		}
 	}
+
+	#[context("Failed to add {} images to cache for bbox {bbox:?}", images.len())]
+	async fn add_images_to_cache(&self, bbox: &TileBBox, images: &[(TileCoord3, DynamicImage)]) -> Result<()> {
+		if bbox.level > 0 {
+			let tiles = self.build_overviews(1, images).await?;
+			let key0 = Self::bbox_to_cache_key(&bbox.as_level_decreased())?;
+			let mut cache = self.cache.lock().await;
+			cache.insert(key0, tiles);
+			if cache.len() > 30 {
+				todo!("Cache size limit reached. Implement cache eviction strategy.");
+			}
+		}
+		Ok(())
+	}
 }
 
 #[async_trait]
@@ -252,12 +266,7 @@ impl OperationTrait for Operation {
 			images0.extend(images1);
 		}
 
-		// Add the images to the cache
-		if bbox0.level > 0 {
-			let tiles = self.build_overviews(1, images0.as_slice()).await?;
-			let key0 = Self::bbox_to_cache_key(&bbox0.as_level_decreased())?;
-			self.cache.lock().await.insert(key0, tiles);
-		}
+		self.add_images_to_cache(&bbox0, &images0).await?;
 
 		return Ok(TileStream::from_vec(images0));
 	}
