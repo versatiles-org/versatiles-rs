@@ -9,7 +9,7 @@ use crate::{
 };
 use anyhow::Result;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Clone, PartialEq)]
 /// Represents a traversal strategy for iterating over tile bounding boxes.
 ///
 /// A `Traversal` combines a `TraversalOrder` (ordering of blocks)
@@ -60,7 +60,7 @@ impl Traversal {
 	/// # Errors
 	/// Returns an error if the size range is invalid.
 	pub fn get_max_size(&self) -> Result<u32> {
-		self.size.get_max_size()
+		self.size.max_size()
 	}
 
 	/// Access the `TraversalOrder` (block ordering strategy).
@@ -72,8 +72,9 @@ impl Traversal {
 	///
 	/// Combines size and order; errors if the order or sizes cannot intersect.
 	pub fn intersect(&mut self, other: &Traversal) -> Result<()> {
+		self.order.intersect(&other.order)?;
 		self.size.intersect(&other.size)?;
-		self.order.intersect(&other.order)
+		Ok(())
 	}
 
 	/// Return a new `Traversal` that is the intersection of this and another, without modifying either.
@@ -106,6 +107,30 @@ impl Traversal {
 impl Default for Traversal {
 	fn default() -> Self {
 		Traversal::ANY
+	}
+}
+
+impl std::fmt::Debug for Traversal {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		if self.size.is_empty() {
+			write!(f, "Traversal({:?}, but no suitable block size)", self.order)
+		} else {
+			write!(
+				f,
+				"Traversal({:?}, min-size: {}, max-size: {})",
+				self.order,
+				self
+					.size
+					.min_size()
+					.map(|s| s.to_string())
+					.unwrap_or_else(|e| e.to_string()),
+				self
+					.size
+					.max_size()
+					.map(|s| s.to_string())
+					.unwrap_or_else(|e| e.to_string())
+			)
+		}
 	}
 }
 
@@ -277,7 +302,7 @@ mod tests {
 		assert_eq!(any, def);
 		assert_eq!(any.order(), &TraversalOrder::AnyOrder);
 		// default size covers full range
-		assert_eq!(any.get_max_size().unwrap(), 1 << 31);
+		assert_eq!(any.get_max_size().unwrap(), 1 << 20);
 	}
 
 	#[test]

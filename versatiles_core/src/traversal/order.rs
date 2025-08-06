@@ -13,7 +13,7 @@ use enumset::EnumSetType;
 /// - `AnyOrder`: no specific ordering; leaves tiles in input order.
 /// - `DepthFirst`: quadtree depth-first ordering based on x/y bits.
 /// - `PMTiles`: ordering by Hilbert curve index (PMTiles style).
-#[derive(EnumSetType, Debug)]
+#[derive(EnumSetType)]
 pub enum TraversalOrder {
 	AnyOrder,
 	DepthFirst,
@@ -48,6 +48,18 @@ impl TraversalOrder {
 			return Ok(());
 		}
 		bail!("Incompatible traversal orders, cannot merge {self:?} with {other:?}");
+	}
+}
+
+impl std::fmt::Debug for TraversalOrder {
+	/// Format the traversal order as a string.
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		let name = match self {
+			TraversalOrder::AnyOrder => "AnyOrder",
+			TraversalOrder::DepthFirst => "DepthFirst",
+			TraversalOrder::PMTiles => "PMTiles",
+		};
+		write!(f, "{name}")
 	}
 }
 
