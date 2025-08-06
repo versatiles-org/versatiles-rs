@@ -9,7 +9,7 @@ use super::{Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReader
 #[cfg(feature = "cli")]
 use crate::utils::PrettyPrint;
 use crate::{progress::get_progress_bar, tilejson::TileJSON, traversal::Traversal};
-use anyhow::{Result, bail};
+use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, lock::Mutex};
 use std::{fmt::Debug, sync::Arc};
@@ -47,23 +47,30 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		accepted_order: &Traversal,
 		mut callback: Box<dyn 'a + Send + FnMut(TileBBox, TileStream<'a>) -> BoxFuture<'a, Result<()>>>,
 	) -> Result<()> {
-		if let Ok(traversal) = self.traversal().get_intersected(accepted_order) {
-			let bboxes = traversal.traverse_pyramid(&self.parameters().bbox_pyramid)?;
-			let n = bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
-			let mut i = 0;
-			let progress = get_progress_bar("converting tiles", n);
-			for bbox in bboxes {
-				let mut stream = self.get_tile_stream(bbox).await?;
-				let p = progress.clone();
-				stream = stream.inspect(move || p.inc(1));
-				callback(bbox, stream).await?;
-				i += bbox.count_tiles();
-				progress.set_position(i);
+		match self.traversal().get_intersected(accepted_order) {
+			Ok(traversal) => {
+				let bboxes = traversal.traverse_pyramid(&self.parameters().bbox_pyramid)?;
+				let n = bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
+				let mut i = 0;
+				let progress = get_progress_bar("converting tiles", n);
+				for bbox in bboxes {
+					let mut stream = self.get_tile_stream(bbox).await?;
+					let p = progress.clone();
+					stream = stream.inspect(move || p.inc(1));
+					callback(bbox, stream).await?;
+					i += bbox.count_tiles();
+					progress.set_position(i);
+				}
+				progress.finish();
+				Ok(())
 			}
-			progress.finish();
-			Ok(())
-		} else {
-			bail!("No valid traversal found")
+			Err(err) => Err(
+				err.context(format!(
+					"Writer needs {accepted_order:?}, but Reader only supports {:?}",
+					self.traversal()
+				))
+				.context("No suitable traversal order found."),
+			),
 		}
 	}
 
