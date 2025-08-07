@@ -8,6 +8,11 @@ pub fn compress(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 		bail!("jpeg only supports 8-bit images");
 	}
 
+	let quality = quality.unwrap_or(95);
+	if quality >= 100 {
+		bail!("jpeg does not support lossless compression, use a quality < 100");
+	}
+
 	// Will hold a converted copy *if* we need one.
 	let mut _temp: Option<DynamicImage> = None;
 
@@ -26,7 +31,7 @@ pub fn compress(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	};
 
 	let mut buffer: Vec<u8> = Vec::new();
-	JpegEncoder::new_with_quality(&mut buffer, quality.unwrap_or(95)).write_image(
+	JpegEncoder::new_with_quality(&mut buffer, quality).write_image(
 		img.as_bytes(),
 		img.width(),
 		img.height(),
