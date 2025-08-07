@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")/.."
 
+# Load GDAL environment variables
+source scripts/gdal-build-env.sh
+
 PROJECT_DIR=$(pwd)
+
+set +e
 
 echo "cargo check"
 result=$(cargo check --workspace --all-features --all-targets 2>&1)
@@ -61,4 +66,4 @@ run_test /versatiles_geometry
 run_test /versatiles_image
 run_test /versatiles_pipeline
 
-exit 0
+return 0
