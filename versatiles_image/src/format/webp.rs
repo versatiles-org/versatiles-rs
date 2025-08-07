@@ -4,7 +4,7 @@ use image::{DynamicImage, ImageFormat, codecs::webp::WebPEncoder, load_from_memo
 use std::vec;
 use versatiles_core::Blob;
 
-pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
+pub fn compress(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("webp only supports 8-bit images");
 	}
@@ -13,35 +13,35 @@ pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 		bail!("webp only supports RGB or RGBA images");
 	};
 
-	let encoder = webp::Encoder::from_image(image).map_err(|e| anyhow!("{e}"))?;
+	let quality = quality.unwrap_or(95);
 
-	Ok(Blob::from(
-		encoder
-			.encode_simple(false, quality.unwrap_or(95) as f32)
-			.map_err(|e| anyhow!("{e:?}"))?
-			.to_vec(),
-	))
+	if quality >= 100 {
+		let mut result: Vec<u8> = vec![];
+		let encoder = WebPEncoder::new_lossless(&mut result);
+		encoder.encode(
+			image.as_bytes(),
+			image.width(),
+			image.height(),
+			image.extended_color_type(),
+		)?;
+		Ok(Blob::from(result))
+	} else {
+		let encoder = webp::Encoder::from_image(image).map_err(|e| anyhow!("{e}"))?;
+		Ok(Blob::from(
+			encoder
+				.encode_simple(false, quality as f32)
+				.map_err(|e| anyhow!("{e:?}"))?
+				.to_vec(),
+		))
+	}
+}
+
+pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
+	compress(image, quality)
 }
 
 pub fn image2blob_lossless(image: &DynamicImage) -> Result<Blob> {
-	if image.bits_per_value() != 8 {
-		bail!("webp lossless only supports 8-bit images");
-	}
-
-	if (image.channel_count() != 3) && (image.channel_count() != 4) {
-		bail!("webp lossless only supports RGB or RGBA images");
-	};
-
-	let mut result: Vec<u8> = vec![];
-	let encoder = WebPEncoder::new_lossless(&mut result);
-	encoder.encode(
-		image.as_bytes(),
-		image.width(),
-		image.height(),
-		image.extended_color_type(),
-	)?;
-
-	Ok(Blob::from(result))
+	compress(image, Some(100))
 }
 
 pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
@@ -84,16 +84,8 @@ mod tests {
 	#[rstest]
 	#[case::grey(DynamicImage::new_test_grey(), false, "webp only supports RGB or RGBA images")]
 	#[case::greya(DynamicImage::new_test_greya(), false, "webp only supports RGB or RGBA images")]
-	#[case::lossless_grey(
-		DynamicImage::new_test_grey(),
-		true,
-		"webp lossless only supports RGB or RGBA images"
-	)]
-	#[case::lossless_greya(
-		DynamicImage::new_test_greya(),
-		true,
-		"webp lossless only supports RGB or RGBA images"
-	)]
+	#[case::lossless_grey(DynamicImage::new_test_grey(), true, "webp only supports RGB or RGBA images")]
+	#[case::lossless_greya(DynamicImage::new_test_greya(), true, "webp only supports RGB or RGBA images")]
 	fn webp_errors(#[case] img: DynamicImage, #[case] lossless: bool, #[case] expected_msg: &str) {
 		let res = if lossless {
 			image2blob_lossless(&img)

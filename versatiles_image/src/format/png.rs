@@ -3,7 +3,7 @@ use anyhow::{Result, anyhow, bail};
 use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::png, load_from_memory_with_format};
 use versatiles_core::Blob;
 
-pub fn image2blob(image: &DynamicImage) -> Result<Blob> {
+pub fn compress(image: &DynamicImage, speed: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("png only supports 8-bit images");
 	}
@@ -12,8 +12,20 @@ pub fn image2blob(image: &DynamicImage) -> Result<Blob> {
 		bail!("png only supports Grey, GreyA, RGB or RGBA");
 	}
 
+	let speed = speed.unwrap_or(10).clamp(0, 100);
+
+	use png::{CompressionType, FilterType};
+	let (compression_type, filter_type) = match speed {
+		0..20 => (CompressionType::Best, FilterType::Adaptive),
+		20..40 => (CompressionType::Default, FilterType::Adaptive),
+		40..60 => (CompressionType::Default, FilterType::Paeth),
+		60..80 => (CompressionType::Default, FilterType::Avg),
+		80..90 => (CompressionType::Fast, FilterType::Avg),
+		_ => (CompressionType::Fast, FilterType::NoFilter),
+	};
+
 	let mut buffer: Vec<u8> = Vec::new();
-	png::PngEncoder::new_with_quality(&mut buffer, png::CompressionType::Best, png::FilterType::Adaptive).write_image(
+	png::PngEncoder::new_with_quality(&mut buffer, compression_type, filter_type).write_image(
 		image.as_bytes(),
 		image.width(),
 		image.height(),
@@ -21,6 +33,10 @@ pub fn image2blob(image: &DynamicImage) -> Result<Blob> {
 	)?;
 
 	Ok(Blob::from(buffer))
+}
+
+pub fn image2blob(image: &DynamicImage) -> Result<Blob> {
+	compress(image, None)
 }
 
 pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {

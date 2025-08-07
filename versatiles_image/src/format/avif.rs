@@ -6,7 +6,7 @@ use image::{
 };
 use versatiles_core::Blob;
 
-pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
+pub fn compress(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("avif only supports 8-bit images");
 	}
@@ -16,8 +16,12 @@ pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 		bail!("Lossless AVIF encoding is not supported, quality must be less than 100");
 	}
 
+	let speed = speed
+		.map(|s| (s as f32 / 100.0 * 9.0 + 1.0).round().clamp(1.0, 10.0) as u8)
+		.unwrap_or(10);
+
 	let mut result: Vec<u8> = vec![];
-	let encoder = AvifEncoder::new_with_speed_quality(&mut result, 10, quality)
+	let encoder = AvifEncoder::new_with_speed_quality(&mut result, speed, quality)
 		.with_colorspace(ColorSpace::Srgb)
 		.with_num_threads(Some(1));
 
@@ -31,8 +35,12 @@ pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	Ok(Blob::from(result))
 }
 
+pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
+	compress(image, quality, None)
+}
+
 pub fn image2blob_lossless(image: &DynamicImage) -> Result<Blob> {
-	image2blob(image, Some(100))
+	compress(image, Some(100), None)
 }
 
 pub fn blob2image(_blob: &Blob) -> Result<DynamicImage> {
