@@ -66,4 +66,4 @@ run_test /versatiles_geometry
 run_test /versatiles_image
 run_test /versatiles_pipeline
 
-return 0
+exit 0

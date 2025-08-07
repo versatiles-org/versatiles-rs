@@ -45,7 +45,7 @@ use crate::{Blob, TileCoord3};
 use anyhow::Result;
 use futures::{
 	Future, Stream, StreamExt,
-	future::ready,
+	future::{BoxFuture, ready},
 	stream::{self, BoxStream},
 };
 use std::{io::Write, pin::Pin, sync::Arc};
@@ -165,6 +165,15 @@ where
 		TileStream { stream: s.boxed() }
 	}
 
+	pub fn from_coord_iter<F>(iter: impl Iterator<Item = TileCoord3> + Send + 'a, callback: F) -> Self
+	where
+		F: Fn(TileCoord3) -> Option<T> + Send + Sync + 'static,
+		T: 'static,
+	{
+		let s = stream::iter(iter.filter_map(move |coord| callback(coord).map(|item| (coord, item)))).boxed();
+		TileStream { stream: s.boxed() }
+	}
+
 	/// Creates a `TileStream` by filtering and mapping an async closure over a vector of tile coordinates.
 	///
 	/// The closure `callback` takes a coordinate and returns a `Future` that yields
@@ -215,14 +224,12 @@ where
 	/// # use futures::future;
 	/// #
 	/// async fn example(tile_streams: Vec<impl std::future::Future<Output=TileStream<'static>> + Send + 'static>) {
-	///     let merged = TileStream::from_stream_iter(tile_streams.into_iter()).await;
+	///     let merged = TileStream::from_stream_iter(tile_streams.into_iter());
 	///     let all_items = merged.to_vec().await;
 	///     // `all_items` now contains items from all child streams
 	/// }
 	/// ```
-	pub async fn from_stream_iter<FutureStream>(
-		iter: impl Iterator<Item = FutureStream> + Send + 'a,
-	) -> TileStream<'a, T>
+	pub fn from_stream_iter<FutureStream>(iter: impl Iterator<Item = FutureStream> + Send + 'a) -> TileStream<'a, T>
 	where
 		FutureStream: Future<Output = TileStream<'a, T>> + Send + 'a,
 	{
@@ -231,19 +238,14 @@ where
 		}
 	}
 
-	pub async fn from_stream_iter_parallel<FutureStream>(
-		iter: impl Iterator<Item = FutureStream> + Send + 'a,
-	) -> TileStream<'a, T>
-	where
-		FutureStream: Future<Output = TileStream<'a, T>> + Send + 'a,
-	{
+	pub fn from_async_vec_iter_parallel(
+		iter: impl Iterator<Item = BoxFuture<'a, Vec<(TileCoord3, T)>>> + Send + 'a,
+	) -> TileStream<'a, T> {
 		TileStream {
-			stream: Box::pin(
-				stream::iter(iter)
-					.map(|s| async move { s.await.stream })
-					.buffer_unordered(num_cpus::get())
-					.flatten(),
-			),
+			stream: stream::iter(iter)
+				.buffer_unordered(num_cpus::get())
+				.flat_map(stream::iter)
+				.boxed(),
 		}
 	}
 
@@ -888,7 +890,7 @@ mod tests {
 		];
 
 		// Merge them
-		let merged = TileStream::<Blob>::from_stream_iter(substreams.into_iter()).await;
+		let merged = TileStream::<Blob>::from_stream_iter(substreams.into_iter());
 		let items = merged.to_vec().await;
 		assert_eq!(items.len(), 2);
 	}

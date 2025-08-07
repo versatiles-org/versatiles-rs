@@ -9,13 +9,13 @@
 use crate::{
 	PipelineFactory,
 	helpers::{pack_image_tile, pack_image_tile_stream},
-	operations::read::traits::ReadOperationTrait,
+	operations::read::{from_gdal::dataset::GdalDataset, traits::ReadOperationTrait},
 	traits::*,
 	vpl::VPLNode,
 };
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
-use futures::future::BoxFuture;
+use futures::{FutureExt, future::BoxFuture};
 use imageproc::image::DynamicImage;
 use std::{fmt::Debug, vec};
 use versatiles_core::{tilejson::TileJSON, *};
@@ -45,7 +45,7 @@ struct Args {
 /// container’s [`TileJSON`] metadata is kept so downstream stages can query
 /// bounds and zoom levels without touching the reader again.
 struct Operation {
-	dataset: super::dataset::Dataset,
+	dataset: GdalDataset,
 	parameters: TilesReaderParameters,
 	tilejson: TileJSON,
 	tile_size: u32,
@@ -66,8 +66,8 @@ impl ReadOperationTrait for Operation {
 		Box::pin(async move {
 			let args = Args::from_vpl_node(&vpl_node).context("Failed to parse arguments from VPL node")?;
 			let filename = factory.resolve_path(&args.filename);
-			let dataset = super::dataset::Dataset::new(filename).await?;
-			let bbox = &dataset.bbox;
+			let dataset = GdalDataset::new(filename).await?;
+			let bbox = dataset.bbox();
 
 			let bbox_pyramid =
 				TileBBoxPyramid::from_geo_bbox(args.min_zoom.unwrap_or(0), args.max_zoom.unwrap_or(8), bbox);
@@ -132,29 +132,37 @@ impl OperationTrait for Operation {
 		let count = 16384u32.div_euclid(self.tile_size).max(1);
 
 		let bboxes: Vec<TileBBox> = bbox.iter_bbox_grid(count).collect();
-		Ok(
-			TileStream::from_stream_iter_parallel(bboxes.into_iter().map(move |bbox| async move {
-				let size = self.tile_size;
-
+		let jobs = bboxes.into_iter().map(move |bbox| {
+			let size = self.tile_size;
+			async move {
+				// Fetch the image data for the bounding box.
+				// If the image is not available, return an empty vector.
 				let image = self
 					.get_image_data_from_gdal(bbox.as_geo_bbox(), size * bbox.width(), size * bbox.height())
 					.await
 					.unwrap();
 
-				if image.is_none() {
-					return TileStream::new_empty();
-				}
-
-				let image = image.unwrap();
-				let coords = bbox.iter_coords().collect::<Vec<_>>();
-				TileStream::from_coord_iter_parallel(coords.into_iter(), move |coord| {
-					image
-						.crop_imm((coord.x - bbox.x_min) * size, (coord.y - bbox.y_min) * size, size, size)
-						.into_optional()
+				tokio::task::spawn_blocking(move || -> Vec<(TileCoord3, DynamicImage)> {
+					if image.is_none() {
+						return vec![];
+					}
+					let image = image.unwrap();
+					bbox
+						.iter_coords()
+						.filter_map(|coord| {
+							image
+								.crop_imm((coord.x - bbox.x_min) * size, (coord.y - bbox.y_min) * size, size, size)
+								.into_optional()
+								.map(|image| (coord, image))
+						})
+						.collect::<Vec<(TileCoord3, DynamicImage)>>()
 				})
-			}))
-			.await,
-		)
+				.await
+				.expect("spawn_blocking task panicked")
+			}
+			.boxed()
+		});
+		Ok(TileStream::from_async_vec_iter_parallel(jobs))
 	}
 
 	/// Fetch and decode a single vector tile at the requested coordinate.
@@ -194,7 +202,7 @@ mod tests {
 
 	async fn get_operation(tile_size: u32) -> Operation {
 		Operation {
-			dataset: super::super::dataset::Dataset::new(PathBuf::from("../testdata/gradient.tif"))
+			dataset: GdalDataset::new(PathBuf::from("../testdata/gradient.tif"))
 				.await
 				.unwrap(),
 			parameters: TilesReaderParameters::new(

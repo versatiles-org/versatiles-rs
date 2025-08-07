@@ -118,7 +118,7 @@ impl Operation {
 	///
 	/// The generic parameters allow us to reuse the routine for both raster
 	/// and vector content while avoiding code duplication.
-	async fn gather_stream<'a, T, FetchStream, MapFn>(
+	fn gather_stream<'a, T, FetchStream, MapFn>(
 		&'a self,
 		bbox: TileBBox,
 		mut fetch_stream: FetchStream,
@@ -138,8 +138,8 @@ impl Operation {
 		// Divide the requested bbox into manageable chunks.
 		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
-		Ok(
-			TileStream::from_stream_iter(sub_bboxes.into_iter().map(move |bbox| async move {
+		Ok(TileStream::from_stream_iter(sub_bboxes.into_iter().map(
+			move |bbox| async move {
 				let mut tiles: Vec<Option<(TileCoord3, T)>> = vec![None; bbox.count_tiles() as usize];
 
 				for source in self.sources.iter() {
@@ -168,9 +168,8 @@ impl Operation {
 				}
 
 				TileStream::from_vec(tiles.into_iter().flatten().collect())
-			}))
-			.await,
-		)
+			},
+		)))
 	}
 }
 
@@ -209,13 +208,11 @@ impl OperationTrait for Operation {
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		// We need the desired output compression inside the closure, so copy it.
 		let output_compression = self.parameters.tile_compression;
-		self
-			.gather_stream(
-				bbox,
-				|src, b| Box::pin(async move { src.get_tile_stream(b).await }),
-				move |blob: Blob, src| recompress(blob, &src.parameters().tile_compression, &output_compression),
-			)
-			.await
+		self.gather_stream(
+			bbox,
+			|src, b| Box::pin(async move { src.get_tile_stream(b).await }),
+			move |blob: Blob, src| recompress(blob, &src.parameters().tile_compression, &output_compression),
+		)
 	}
 
 	/// Retrieve a single raster tile, stopping at the first source that has it.
@@ -231,13 +228,11 @@ impl OperationTrait for Operation {
 
 	/// Stream raster tiles for every coordinate in `bbox` via overlay.
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		self
-			.gather_stream(
-				bbox,
-				|src, b| Box::pin(async move { src.get_image_stream(b).await }),
-				|img, _| Ok(img),
-			)
-			.await
+		self.gather_stream(
+			bbox,
+			|src, b| Box::pin(async move { src.get_image_stream(b).await }),
+			|img, _| Ok(img),
+		)
 	}
 
 	/// Retrieve a single vector tile, stopping at the first source that has it.
@@ -253,13 +248,11 @@ impl OperationTrait for Operation {
 
 	/// Stream vector tiles for every coordinate in `bbox` via overlay.
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		self
-			.gather_stream(
-				bbox,
-				|src, b| Box::pin(async move { src.get_vector_stream(b).await }),
-				|tile, _| Ok(tile),
-			)
-			.await
+		self.gather_stream(
+			bbox,
+			|src, b| Box::pin(async move { src.get_vector_stream(b).await }),
+			|tile, _| Ok(tile),
+		)
 	}
 }
 
