@@ -21,6 +21,7 @@ use std::{fmt::Debug, vec};
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
+use versatiles_image::EnhancedDynamicImageTrait;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a GDAL raster dataset and exposes it as a tile source.
@@ -140,21 +141,17 @@ impl OperationTrait for Operation {
 					.await
 					.unwrap();
 
-				let mut tiles: Vec<Option<(TileCoord3, DynamicImage)>> = vec![];
-				if let Some(image) = image {
-					let tile_coords: Vec<TileCoord3> = bbox.iter_coords().collect();
-
-					for tile_coord in tile_coords {
-						let tile = image.crop_imm(
-							(tile_coord.x - bbox.x_min) * size,
-							(tile_coord.y - bbox.y_min) * size,
-							size,
-							size,
-						);
-						tiles.push(Some((tile_coord, tile)));
-					}
+				if image.is_none() {
+					return TileStream::new_empty();
 				}
-				TileStream::from_vec(tiles.into_iter().flatten().collect())
+
+				let image = image.unwrap();
+				let coords = bbox.iter_coords().collect::<Vec<_>>();
+				TileStream::from_coord_iter_parallel(coords.into_iter(), move |coord| {
+					image
+						.crop_imm((coord.x - bbox.x_min) * size, (coord.y - bbox.y_min) * size, size, size)
+						.into_optional()
+				})
 			}))
 			.await,
 		)
