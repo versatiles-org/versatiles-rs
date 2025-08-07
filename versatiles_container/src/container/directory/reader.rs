@@ -366,7 +366,7 @@ mod tests {
 
 		assert_eq!(
 			DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
-			"found multiple tile formats: [JPG, PNG]"
+			"found multiple tile formats: JPG, PNG"
 		);
 
 		Ok(())
@@ -380,7 +380,7 @@ mod tests {
 
 		assert_eq!(
 			DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
-			"found multiple tile compressions: [Uncompressed, Brotli]"
+			"found multiple tile compressions: Brotli, Uncompressed"
 		);
 
 		Ok(())
