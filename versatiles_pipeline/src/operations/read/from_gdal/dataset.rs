@@ -1,27 +1,24 @@
 use anyhow::{Context, Result, bail, ensure};
-use gdal::{DriverManager, config::set_config_option, raster::reproject, spatial_ref::SpatialRef, vector::Geometry};
+use gdal::{Dataset, DriverManager, raster::reproject, spatial_ref::SpatialRef, vector::Geometry};
 use imageproc::image::DynamicImage;
 use log::warn;
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
 use versatiles_image::EnhancedDynamicImageTrait;
 
-#[derive(Debug)]
-pub struct Dataset {
-	dataset: gdal::Dataset,
-	pub bbox: GeoBBox,
-	band_mapping: Vec<usize>,
+#[derive(Debug, Clone)]
+pub struct GdalDataset {
+	filename: Arc<PathBuf>,
+	bbox: GeoBBox,
+	band_mapping: Arc<Vec<usize>>,
 }
 
-unsafe impl Sync for Dataset {}
+unsafe impl Sync for GdalDataset {}
 
-impl Dataset {
-	pub async fn new(filename: PathBuf) -> Result<Dataset> {
-		set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
-
-		let dataset =
-			gdal::Dataset::open(&filename).with_context(|| format!("Failed to open GDAL dataset {filename:?}"))?;
+impl GdalDataset {
+	pub async fn new(filename: PathBuf) -> Result<GdalDataset> {
+		let dataset = Dataset::open(&filename).with_context(|| format!("Failed to open GDAL dataset {filename:?}"))?;
 
 		let bbox = dataset_bbox(&dataset)?;
 
@@ -34,48 +31,64 @@ impl Dataset {
 		);
 
 		Ok(Self {
-			band_mapping,
-			dataset,
+			band_mapping: Arc::new(band_mapping),
+			filename: Arc::new(filename),
 			bbox,
 		})
 	}
 
 	#[context("Failed to get image data ({width}x{height}) for bbox ({bbox:?}) from GDAL dataset")]
 	pub async fn get_image(&self, bbox: GeoBBox, width: u32, height: u32) -> Result<Option<DynamicImage>> {
+		ensure!(width > 0 && height > 0, "Width and height must be greater than zero");
+
 		let channel_count = self.band_mapping.len();
 		ensure!(channel_count > 0, "GDAL dataset has no bands to read");
 
-		let driver = DriverManager::get_driver_by_name("MEM").unwrap();
-		let mut dst = driver
-			.create_with_band_type::<u8, _>("", width as usize, height as usize, channel_count)
+		let filename = self.filename.clone();
+		let band_mapping = self.band_mapping.clone();
+
+		let image = tokio::task::spawn_blocking(move || {
+			let driver = DriverManager::get_driver_by_name("MEM").unwrap();
+			let mut dst = driver
+				.create_with_band_type::<u8, _>("", width as usize, height as usize, channel_count)
+				.unwrap();
+			dst.set_spatial_ref(&SpatialRef::from_epsg(3857).unwrap()).unwrap();
+
+			let bbox = bbox_to_mercator(bbox);
+			dst.set_geo_transform(&[
+				bbox[0],                             // MinX
+				(bbox[2] - bbox[0]) / width as f64,  // Pixel width
+				0.0,                                 // Rotation (should be 0)
+				bbox[3],                             // MinY
+				0.0,                                 // Rotation (should be 0)
+				(bbox[1] - bbox[3]) / height as f64, // Pixel height
+			])
 			.unwrap();
-		dst.set_spatial_ref(&SpatialRef::from_epsg(3857).unwrap()).unwrap();
 
-		let bbox = bbox_to_mercator(bbox);
-		dst.set_geo_transform(&[
-			bbox[0],                             // MinX
-			(bbox[2] - bbox[0]) / width as f64,  // Pixel width
-			0.0,                                 // Rotation (should be 0)
-			bbox[3],                             // MinY
-			0.0,                                 // Rotation (should be 0)
-			(bbox[1] - bbox[3]) / height as f64, // Pixel height
-		])
-		.unwrap();
+			let dataset =
+				Dataset::open(filename.as_ref()).with_context(|| format!("Failed to open GDAL dataset {filename:?}"))?;
+			reproject(&dataset, &dst).unwrap();
 
-		reproject(&self.dataset, &dst).unwrap();
-
-		let mut buf = vec![0u8; (width as usize) * (height as usize) * channel_count];
-		for (i, &band) in self.band_mapping.iter().enumerate() {
-			let band_data = dst.rasterband(band)?.read_band_as::<u8>()?;
-			for (j, pixel) in band_data.data().iter().enumerate() {
-				buf[j * channel_count + i] = *pixel;
+			let mut buf = vec![0u8; (width as usize) * (height as usize) * channel_count];
+			for (i, &band) in band_mapping.iter().enumerate() {
+				let band_data = dst.rasterband(band)?.read_band_as::<u8>()?;
+				for (j, pixel) in band_data.data().iter().enumerate() {
+					buf[j * channel_count + i] = *pixel;
+				}
 			}
-		}
 
-		let image =
-			DynamicImage::from_raw(width, height, buf).context("Failed to create DynamicImage from GDAL dataset")?;
+			let image =
+				DynamicImage::from_raw(width, height, buf).context("Failed to create DynamicImage from GDAL dataset")?;
+
+			Ok::<DynamicImage, anyhow::Error>(image)
+		})
+		.await??;
 
 		Ok(Some(image))
+	}
+
+	pub fn bbox(&self) -> &GeoBBox {
+		&self.bbox
 	}
 }
 
@@ -211,7 +224,9 @@ mod tests {
 			// We keep it in‑memory (no factory) and map bands 1‑2‑3 → RGB.
 			let coord = TileCoord3::new(level, x, y).unwrap();
 
-			let dataset = Dataset::new(PathBuf::from("../testdata/gradient.tif")).await.unwrap();
+			let dataset = GdalDataset::new(PathBuf::from("../testdata/gradient.tif"))
+				.await
+				.unwrap();
 
 			// Extract a 7×7 tile and gather the RGB bytes.
 			let image = dataset.get_image(coord.as_geo_bbox(), 7, 7).await.unwrap().unwrap();
