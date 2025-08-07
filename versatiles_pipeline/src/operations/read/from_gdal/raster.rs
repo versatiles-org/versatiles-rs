@@ -32,6 +32,10 @@ struct Args {
 	tile_size: Option<u32>,
 	/// The tile format to use for the output tiles. (default: `PNG`)
 	tile_format: Option<TileFormat>,
+	/// The maximum zoom level to generate tiles for. (default: 8)
+	max_zoom: Option<u8>,
+	/// The minimum zoom level to generate tiles for. (default: 0)
+	min_zoom: Option<u8>,
 }
 
 #[derive(Debug)]
@@ -64,8 +68,9 @@ impl ReadOperationTrait for Operation {
 			let dataset = super::dataset::Dataset::new(filename).await?;
 			let bbox = &dataset.bbox;
 
-			let max_zoom_level = 8;
-			let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(0, max_zoom_level, bbox);
+			let bbox_pyramid =
+				TileBBoxPyramid::from_geo_bbox(args.min_zoom.unwrap_or(0), args.max_zoom.unwrap_or(8), bbox);
+
 			let parameters = TilesReaderParameters::new(
 				args.tile_format.unwrap_or(TileFormat::PNG),
 				TileCompression::Uncompressed,
