@@ -40,10 +40,9 @@ jobs:
         run: |
           sudo add-apt-repository ppa:ubuntugis/ubuntugis-unstable
           sudo apt-get update
-          sudo apt-get install -y gdal-bin libgdal-dev
+          sudo apt-get install -y libgdal-dev
           export CPLUS_INCLUDE_PATH=/usr/include/gdal
           export C_INCLUDE_PATH=/usr/include/gdal
-          pip install GDAL
           ./scripts/gdal-build-env.sh
 
       - name: Init Cache
