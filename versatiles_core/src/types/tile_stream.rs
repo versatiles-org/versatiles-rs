@@ -227,8 +227,23 @@ where
 		FutureStream: Future<Output = TileStream<'a, T>> + Send + 'a,
 	{
 		TileStream {
-			// Wait for each future -> flatten all streams
 			stream: Box::pin(stream::iter(iter).then(|s| async move { s.await.stream }).flatten()),
+		}
+	}
+
+	pub async fn from_stream_iter_parallel<FutureStream>(
+		iter: impl Iterator<Item = FutureStream> + Send + 'a,
+	) -> TileStream<'a, T>
+	where
+		FutureStream: Future<Output = TileStream<'a, T>> + Send + 'a,
+	{
+		TileStream {
+			stream: Box::pin(
+				stream::iter(iter)
+					.map(|s| async move { s.await.stream })
+					.buffer_unordered(num_cpus::get())
+					.flatten(),
+			),
 		}
 	}
 

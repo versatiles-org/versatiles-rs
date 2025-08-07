@@ -132,7 +132,7 @@ impl OperationTrait for Operation {
 
 		let bboxes: Vec<TileBBox> = bbox.iter_bbox_grid(count).collect();
 		Ok(
-			TileStream::from_stream_iter(bboxes.into_iter().map(move |bbox| async move {
+			TileStream::from_stream_iter_parallel(bboxes.into_iter().map(move |bbox| async move {
 				let size = self.tile_size;
 
 				let image = self
