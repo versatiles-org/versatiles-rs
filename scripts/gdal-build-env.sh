@@ -15,11 +15,9 @@
 # GDAL_LIB_DIR, GDAL_VERSION).  On macOS an extra rpath is added so the
 # dynamic loader can find libgdal.dylib at run‑time.
 
-set -euo pipefail
+kernel_name="$(uname -s)"
 
-OS="$(uname -s)"
-
-case "$OS" in
+case "$kernel_name" in
   Darwin)
     # ---------- macOS (Conda) -------------------------------------------------
     if [[ -z "${CONDA_PREFIX:-}" ]]; then
@@ -44,7 +42,7 @@ case "$OS" in
     ;;
 
   *)
-    echo "Unsupported operating system: $OS" >&2
+    echo "Unsupported operating system: $kernel_name" >&2
     exit 1
     ;;
 esac
@@ -53,5 +51,4 @@ esac
 export GDAL_VERSION="$(gdal-config --version)"
 
 echo "Configured GDAL ${GDAL_VERSION} (home: ${GDAL_HOME})"
-# Uncomment the next line to build immediately.
-# cargo build --features bindgen
+unset kernel_name  # keep the user environment clean
