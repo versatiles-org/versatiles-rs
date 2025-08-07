@@ -52,12 +52,11 @@ struct Operation {
 fn overlay_image_tiles(tiles: Vec<DynamicImage>) -> Result<Option<DynamicImage>> {
 	let mut image = Option::<DynamicImage>::None;
 	for tile in tiles.into_iter() {
-		image = Some(if image.is_none() {
-			tile
-		} else {
-			let mut image = image.unwrap();
+		image = Some(if let Some(mut image) = image {
 			image.overlay(&tile)?;
 			image
+		} else {
+			tile
 		});
 	}
 	Ok(image)

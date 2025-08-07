@@ -91,11 +91,11 @@ impl<'a> ByteIterator<'a> {
 	#[inline]
 	pub fn advance(&mut self) {
 		self.peeked_byte = self.next_byte();
-		if self.is_debug_enabled {
-			if let Some(byte) = self.peeked_byte {
-				let index = self.position % DEBUG_RING_BUFFER_SIZE;
-				self.debug_buffer[index] = byte;
-			}
+		if self.is_debug_enabled
+			&& let Some(byte) = self.peeked_byte
+		{
+			let index = self.position % DEBUG_RING_BUFFER_SIZE;
+			self.debug_buffer[index] = byte;
 		}
 		self.position += 1;
 	}

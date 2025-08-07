@@ -145,16 +145,16 @@ impl StaticSourceTrait for TarFile {
 
 		let file_entry = self.lookup.get(&url.str[1..])?.to_owned();
 
-		if accept.contains(Brotli) {
-			if let Some(blob) = &file_entry.br {
-				return SourceResponse::new_some(blob.to_owned(), &Brotli, &file_entry.mime);
-			}
+		if accept.contains(Brotli)
+			&& let Some(blob) = &file_entry.br
+		{
+			return SourceResponse::new_some(blob.to_owned(), &Brotli, &file_entry.mime);
 		}
 
-		if accept.contains(Gzip) {
-			if let Some(blob) = &file_entry.gz {
-				return SourceResponse::new_some(blob.to_owned(), &Gzip, &file_entry.mime);
-			}
+		if accept.contains(Gzip)
+			&& let Some(blob) = &file_entry.gz
+		{
+			return SourceResponse::new_some(blob.to_owned(), &Gzip, &file_entry.mime);
 		}
 
 		if let Some(blob) = &file_entry.un {

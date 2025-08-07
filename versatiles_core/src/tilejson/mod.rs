@@ -340,14 +340,14 @@ impl TileJSON {
 
 		self.tile_content = self.tile_format.map(|f| f.get_type());
 
-		if let Some(tile_content) = self.tile_content {
-			if self.tile_schema.map(|s| s.get_tile_content()) != self.tile_content {
-				self.tile_schema = Some(match tile_content {
-					TileType::Raster => TileSchema::RasterRGB,
-					TileType::Vector => self.vector_layers.get_tile_schema(),
-					TileType::Unknown => TileSchema::Unknown,
-				});
-			}
+		if let Some(tile_content) = self.tile_content
+			&& self.tile_schema.map(|s| s.get_tile_content()) != self.tile_content
+		{
+			self.tile_schema = Some(match tile_content {
+				TileType::Raster => TileSchema::RasterRGB,
+				TileType::Vector => self.vector_layers.get_tile_schema(),
+				TileType::Unknown => TileSchema::Unknown,
+			});
 		}
 	}
 

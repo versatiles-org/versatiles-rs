@@ -46,10 +46,10 @@ impl TileJsonValues {
 	/// Checks if the given `key` is either absent or references a list (`Vec<String>`).
 	/// Returns an error if it is present but not a list.
 	pub fn check_optional_list(&self, key: &str) -> Result<()> {
-		if let Some(value) = self.0.get(key) {
-			if !value.is_list() {
-				bail!("Item '{key}' is a '{}' and not a 'List'", value.get_type());
-			}
+		if let Some(value) = self.0.get(key)
+			&& !value.is_list()
+		{
+			bail!("Item '{key}' is a '{}' and not a 'List'", value.get_type());
 		}
 		Ok(())
 	}
@@ -57,10 +57,10 @@ impl TileJsonValues {
 	/// Checks if the given `key` is either absent or references a string.
 	/// Returns an error if it is present but not a string.
 	pub fn check_optional_string(&self, key: &str) -> Result<()> {
-		if let Some(value) = self.0.get(key) {
-			if !value.is_string() {
-				bail!("Item '{key}' is '{}' and not a 'String'", value.get_type());
-			}
+		if let Some(value) = self.0.get(key)
+			&& !value.is_string()
+		{
+			bail!("Item '{key}' is '{}' and not a 'String'", value.get_type());
 		}
 		Ok(())
 	}
@@ -68,10 +68,10 @@ impl TileJsonValues {
 	/// Checks if the given `key` is either absent or references a byte (`u8`).
 	/// Returns an error if it is present but not a byte.
 	pub fn check_optional_byte(&self, key: &str) -> Result<()> {
-		if let Some(value) = self.0.get(key) {
-			if !value.is_byte() {
-				bail!("Item '{key}' is '{}' and not a 'Byte'", value.get_type());
-			}
+		if let Some(value) = self.0.get(key)
+			&& !value.is_byte()
+		{
+			bail!("Item '{key}' is '{}' and not a 'Byte'", value.get_type());
 		}
 		Ok(())
 	}

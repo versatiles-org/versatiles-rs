@@ -174,10 +174,10 @@ impl TilesReaderTrait for TilesConvertReader {
 		}
 		let mut blob = self.reader.get_tile_data(&coord).await?;
 
-		if let Some(tile_recompressor) = &self.tile_recompressor {
-			if let Some(b) = blob {
-				blob = Some(tile_recompressor.process_blob(b)?);
-			}
+		if let Some(tile_recompressor) = &self.tile_recompressor
+			&& let Some(b) = blob
+		{
+			blob = Some(tile_recompressor.process_blob(b)?);
 		}
 
 		Ok(blob)
