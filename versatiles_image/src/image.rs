@@ -28,6 +28,7 @@ pub trait EnhancedDynamicImageTrait {
 	fn into_scaled_down(self, factor: u32) -> DynamicImage;
 	fn into_optional(self) -> Option<DynamicImage>;
 	fn is_empty(&self) -> bool;
+	fn is_opaque(&self) -> bool;
 	fn get_flattened(self, color: Rgb<u8>) -> Result<DynamicImage>;
 
 	fn new_test_rgba() -> DynamicImage;
@@ -241,6 +242,14 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 		}
 		let alpha_channel = (self.color().channel_count() - 1) as usize;
 		return !self.pixels().any(|p| p[alpha_channel] != 0);
+	}
+
+	fn is_opaque(&self) -> bool {
+		if !self.color().has_alpha() {
+			return true;
+		}
+		let alpha_channel = (self.color().channel_count() - 1) as usize;
+		return self.pixels().all(|p| p[alpha_channel] == 255);
 	}
 
 	fn into_optional(self) -> Option<DynamicImage> {
