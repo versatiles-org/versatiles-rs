@@ -234,7 +234,12 @@ where
 		FutureStream: Future<Output = TileStream<'a, T>> + Send + 'a,
 	{
 		TileStream {
-			stream: Box::pin(stream::iter(iter).then(|s| async move { s.await.stream }).flatten()),
+			stream: Box::pin(
+				stream::iter(iter)
+					.buffer_unordered(num_cpus::get())
+					.map(|s| s.stream)
+					.flatten(),
+			),
 		}
 	}
 
