@@ -13,9 +13,9 @@ struct Args {
 	/// Bounding box: [min long, min lat, max long, max lat].
 	bbox: Option<[f64; 4]>,
 	/// minimal zoom level
-	min: Option<u8>,
+	level_min: Option<u8>,
 	/// maximal zoom level
-	max: Option<u8>,
+	level_max: Option<u8>,
 }
 
 #[derive(Debug)]
@@ -38,12 +38,12 @@ impl Operation {
 			let args = Args::from_vpl_node(&vpl_node)?;
 			let mut parameters = source.parameters().clone();
 
-			if let Some(min) = args.min {
-				parameters.bbox_pyramid.set_zoom_min(min);
+			if let Some(level_min) = args.level_min {
+				parameters.bbox_pyramid.set_zoom_min(level_min);
 			}
 
-			if let Some(max) = args.max {
-				parameters.bbox_pyramid.set_zoom_max(max);
+			if let Some(level_max) = args.level_max {
+				parameters.bbox_pyramid.set_zoom_max(level_max);
 			}
 
 			if let Some(bbox) = args.bbox {
