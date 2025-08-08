@@ -182,9 +182,9 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 		self.color().channel_count()
 	}
 
-	fn overlay(&mut self, other: &DynamicImage) -> Result<()> {
-		self.ensure_same_size(other)?;
-		overlay(self, other, 0, 0);
+	fn overlay(&mut self, top: &DynamicImage) -> Result<()> {
+		self.ensure_same_size(top)?;
+		overlay(self, top, 0, 0);
 		Ok(())
 	}
 

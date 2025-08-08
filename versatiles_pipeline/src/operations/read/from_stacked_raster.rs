@@ -28,6 +28,7 @@ use versatiles_image::EnhancedDynamicImageTrait;
 /// Overlays multiple raster tile sources on top of each other.
 struct Args {
 	/// All tile sources must provide raster tiles in the same resolution.
+	/// The first source overlays the others.
 	sources: Vec<VPLPipeline>,
 
 	/// The tile format to use for the output tiles (default: PNG).
@@ -47,17 +48,19 @@ struct Operation {
 }
 
 /// Blend a list of equally‑sized tiles using *source‑over* compositing.
+/// First tile is in the front
 ///
 /// Returns `Ok(None)` when the input list is empty.
 fn overlay_image_tiles(tiles: Vec<DynamicImage>) -> Result<Option<DynamicImage>> {
 	let mut image = Option::<DynamicImage>::None;
-	for tile in tiles.into_iter() {
-		image = Some(if let Some(mut image) = image {
-			image.overlay(&tile)?;
-			image
-		} else {
-			tile
-		});
+	for mut image_bg in tiles.into_iter() {
+		if let Some(image_fg) = image {
+			image_bg.overlay(&image_fg)?;
+		};
+		image = Some(image_bg);
+		if image.as_ref().unwrap().is_opaque() {
+			break;
+		}
 	}
 	Ok(image)
 }
@@ -181,27 +184,26 @@ impl OperationTrait for Operation {
 						.await
 						.unwrap()
 						.for_each_sync(|(coord, tile)| {
-							images[bbox.get_tile_index3(&coord).unwrap()].push(tile);
+							if !tile.is_empty() {
+								images[bbox.get_tile_index3(&coord).unwrap()].push(tile);
+							}
 						})
 						.await;
 				}
 
-				TileStream::from_vec(
-					images
-						.into_iter()
-						.enumerate()
-						.filter_map(|(i, v)| {
-							if v.is_empty() {
-								None
-							} else {
-								Some((
-									bbox.get_coord3_by_index(i as u32).unwrap(),
-									overlay_image_tiles(v).unwrap().unwrap(),
-								))
-							}
-						})
-						.collect(),
-				)
+				let images = images
+					.into_iter()
+					.enumerate()
+					.filter_map(|(i, v)| {
+						if v.is_empty() {
+							None
+						} else {
+							Some((bbox.get_coord3_by_index(i as u32).unwrap(), v))
+						}
+					})
+					.collect::<Vec<_>>();
+
+				TileStream::from_vec(images).filter_map_item_parallel(overlay_image_tiles)
 			},
 		)))
 	}
@@ -263,7 +265,7 @@ mod tests {
 		let coord = TileCoord3::new(3, 1, 2)?;
 		let blob = result.get_tile_data(&coord).await?.unwrap();
 
-		assert_eq!(get_color(&blob), "A6B6");
+		assert_eq!(get_color(&blob), "58B6");
 		assert_eq!(
 			result.tilejson().as_pretty_lines(100),
 			[
@@ -303,7 +305,7 @@ mod tests {
 				match get_color(&blob).as_str() {
 					"0000FF77" => "🟦",
 					"FFFF0077" => "🟨",
-					"A6A658B6" => "🟩",
+					"5858A6B6" => "🟩",
 					e => panic!("{}", e),
 				}
 				.to_string()
