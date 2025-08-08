@@ -153,7 +153,7 @@ where
 			.map(move |coord| {
 				let c = Arc::clone(&callback);
 				// Spawn a task for each coordinate
-				tokio::spawn(async move { (coord, c(coord)) })
+				tokio::task::spawn_blocking(move || (coord, c(coord)))
 			})
 			.buffer_unordered(num_cpus::get()) // concurrency
 			.filter_map(|result| async {
