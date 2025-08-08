@@ -258,11 +258,19 @@ impl OperationTrait for Operation {
 
 		let mut images0: Vec<(TileCoord3, DynamicImage)> = vec![];
 
-		let bboxes1 = bbox0.iter_bbox_grid(BLOCK_TILE_COUNT / 2).collect::<Vec<_>>();
+		let tasks = bbox0
+			.iter_bbox_grid(BLOCK_TILE_COUNT / 2)
+			.map(move |bbox1| async move {
+				let key1 = Self::bbox_to_cache_key(&bbox1)?;
+				let images1 = self.get_images_from_cache(&key1).await?;
+				Ok::<_, anyhow::Error>(images1)
+			})
+			.collect::<Vec<_>>();
 
-		for bbox1 in bboxes1 {
-			let key1 = Self::bbox_to_cache_key(&bbox1)?;
-			let images1 = self.get_images_from_cache(&key1).await?;
+		let results = futures::future::join_all(tasks).await;
+
+		for result in results {
+			let images1 = result?;
 			images0.extend(images1);
 		}
 
