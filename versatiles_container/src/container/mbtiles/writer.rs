@@ -171,7 +171,7 @@ impl TilesWriterTrait for MBTilesWriter {
 					Box::pin(async move {
 						let mut writer = writer_mutex.lock().await;
 						stream
-							.for_each_buffered(2000, |v| {
+							.for_each_buffered(4096, |v| {
 								writer.add_tiles(&v).unwrap();
 							})
 							.await;
