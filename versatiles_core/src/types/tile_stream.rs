@@ -16,11 +16,11 @@
 /// - `new_empty`: Creates an empty `TileStream`.
 /// - `from_stream`: Constructs a `TileStream` from an existing `Stream`.
 /// - `from_vec`: Constructs a `TileStream` from a vector of `(TileCoord3, T)` items.
-/// - `from_coord_iter_parallel`: Creates a `TileStream` from an iterator of coordinates, processing them in parallel.
+/// - `from_iter_coord_parallel`: Creates a `TileStream` from an iterator of coordinates, processing them in parallel.
 /// - `from_coord_vec_async`: Creates a `TileStream` from a vector of coordinates, applying an async closure.
 ///
 /// ## Stream Flattening
-/// - `from_stream_iter`: Flattens multiple `TileStream`s from an iterator of `Future`s into a single `TileStream`.
+/// - `from_iter_stream`: Flattens multiple `TileStream`s from an iterator of `Future`s into a single `TileStream`.
 ///
 /// ## Collecting and Iteration
 /// - `collect`: Collects all items from the stream into a vector.
@@ -45,7 +45,7 @@ use crate::{Blob, TileCoord3};
 use anyhow::Result;
 use futures::{
 	Future, Stream, StreamExt,
-	future::{BoxFuture, ready},
+	future::ready,
 	stream::{self, BoxStream},
 };
 use std::{io::Write, pin::Pin, sync::Arc};
@@ -141,9 +141,9 @@ where
 	///     Some(Blob::from(format!("data for {:?}", coord)))
 	/// };
 	///
-	/// let tile_stream = TileStream::from_coord_iter_parallel(coords.into_iter(), closure);
+	/// let tile_stream = TileStream::from_iter_coord_parallel(coords.into_iter(), closure);
 	/// ```
-	pub fn from_coord_iter_parallel<F>(iter: impl Iterator<Item = TileCoord3> + Send + 'a, callback: F) -> Self
+	pub fn from_iter_coord_parallel<F>(iter: impl Iterator<Item = TileCoord3> + Send + 'a, callback: F) -> Self
 	where
 		F: Fn(TileCoord3) -> Option<T> + Send + Sync + 'static,
 		T: 'static,
@@ -165,7 +165,7 @@ where
 		TileStream { stream: s.boxed() }
 	}
 
-	pub fn from_coord_iter<F>(iter: impl Iterator<Item = TileCoord3> + Send + 'a, callback: F) -> Self
+	pub fn from_iter_coord<F>(iter: impl Iterator<Item = TileCoord3> + Send + 'a, callback: F) -> Self
 	where
 		F: Fn(TileCoord3) -> Option<T> + Send + Sync + 'static,
 		T: 'static,
@@ -224,12 +224,12 @@ where
 	/// # use futures::future;
 	/// #
 	/// async fn example(tile_streams: Vec<impl std::future::Future<Output=TileStream<'static>> + Send + 'static>) {
-	///     let merged = TileStream::from_stream_iter(tile_streams.into_iter());
+	///     let merged = TileStream::from_iter_stream(tile_streams.into_iter());
 	///     let all_items = merged.to_vec().await;
 	///     // `all_items` now contains items from all child streams
 	/// }
 	/// ```
-	pub fn from_stream_iter<FutureStream>(iter: impl Iterator<Item = FutureStream> + Send + 'a) -> TileStream<'a, T>
+	pub fn from_iter_stream<FutureStream>(iter: impl Iterator<Item = FutureStream> + Send + 'a) -> TileStream<'a, T>
 	where
 		FutureStream: Future<Output = TileStream<'a, T>> + Send + 'a,
 	{
@@ -240,17 +240,6 @@ where
 					.map(|s| s.stream)
 					.flatten(),
 			),
-		}
-	}
-
-	pub fn from_async_vec_iter_parallel(
-		iter: impl Iterator<Item = BoxFuture<'a, Vec<(TileCoord3, T)>>> + Send + 'a,
-	) -> TileStream<'a, T> {
-		TileStream {
-			stream: stream::iter(iter)
-				.buffer_unordered(num_cpus::get())
-				.flat_map(stream::iter)
-				.boxed(),
 		}
 	}
 
@@ -885,7 +874,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn should_construct_from_stream_iter() {
+	async fn should_construct_from_iter_stream() {
 		// Create multiple sub-streams
 		let substreams = vec![
 			Box::pin(async { TileStream::from_vec(vec![(TileCoord3::new(0, 0, 0).unwrap(), Blob::from("sub0-0"))]) })
@@ -895,7 +884,7 @@ mod tests {
 		];
 
 		// Merge them
-		let merged = TileStream::<Blob>::from_stream_iter(substreams.into_iter());
+		let merged = TileStream::<Blob>::from_iter_stream(substreams.into_iter());
 		let items = merged.to_vec().await;
 		assert_eq!(items.len(), 2);
 	}
@@ -947,10 +936,10 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn should_create_from_coord_iter_parallel() {
+	async fn should_create_from_iter_coord_parallel() {
 		let coords = vec![TileCoord3::new(0, 0, 0).unwrap(), TileCoord3::new(1, 1, 1).unwrap()];
 
-		let stream = TileStream::from_coord_iter_parallel(coords.into_iter(), |coord| {
+		let stream = TileStream::from_iter_coord_parallel(coords.into_iter(), |coord| {
 			Some(Blob::from(format!("v{}", coord.level)))
 		});
 

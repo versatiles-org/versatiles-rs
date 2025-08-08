@@ -1,5 +1,7 @@
 use anyhow::{Context, Result, bail, ensure};
-use gdal::{Dataset, DriverManager, raster::reproject, spatial_ref::SpatialRef, vector::Geometry};
+use gdal::{
+	Dataset, DriverManager, config::set_config_option, raster::reproject, spatial_ref::SpatialRef, vector::Geometry,
+};
 use imageproc::image::DynamicImage;
 use log::warn;
 use std::{path::PathBuf, sync::Arc};
@@ -18,6 +20,8 @@ unsafe impl Sync for GdalDataset {}
 
 impl GdalDataset {
 	pub async fn new(filename: PathBuf) -> Result<GdalDataset> {
+		set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
+
 		let dataset = Dataset::open(&filename).with_context(|| format!("Failed to open GDAL dataset {filename:?}"))?;
 
 		let bbox = dataset_bbox(&dataset)?;

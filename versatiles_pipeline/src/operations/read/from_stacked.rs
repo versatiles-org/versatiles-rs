@@ -138,7 +138,7 @@ impl Operation {
 		// Divide the requested bbox into manageable chunks.
 		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
-		Ok(TileStream::from_stream_iter(sub_bboxes.into_iter().map(
+		Ok(TileStream::from_iter_stream(sub_bboxes.into_iter().map(
 			move |bbox| async move {
 				let mut tiles: Vec<Option<(TileCoord3, T)>> = vec![None; bbox.count_tiles() as usize];
 

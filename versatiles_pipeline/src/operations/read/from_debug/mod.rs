@@ -138,7 +138,7 @@ impl OperationTrait for Operation {
 			"tile format '{}' is not supported. expected raster",
 			self.parameters.tile_format
 		);
-		Ok(TileStream::from_coord_iter_parallel(
+		Ok(TileStream::from_iter_coord_parallel(
 			bbox.into_iter_coords(),
 			move |c| Some(create_debug_image(&c)),
 		))
@@ -151,7 +151,7 @@ impl OperationTrait for Operation {
 			"tile format '{}' is not supported. expected vector",
 			self.parameters.tile_format
 		);
-		Ok(TileStream::from_coord_iter_parallel(
+		Ok(TileStream::from_iter_coord_parallel(
 			bbox.into_iter_coords(),
 			move |c| create_debug_vector_tile(&c).ok(),
 		))

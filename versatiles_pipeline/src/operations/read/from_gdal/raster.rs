@@ -142,27 +142,31 @@ impl OperationTrait for Operation {
 					.await
 					.unwrap();
 
-				tokio::task::spawn_blocking(move || -> Vec<(TileCoord3, DynamicImage)> {
-					if image.is_none() {
-						return vec![];
-					}
-					let image = image.unwrap();
+				if image.is_none() {
+					return TileStream::new_empty();
+				}
+
+				let image = image.unwrap();
+
+				let vec = tokio::task::spawn_blocking(move || {
 					bbox
 						.iter_coords()
 						.filter_map(|coord| {
 							image
 								.crop_imm((coord.x - bbox.x_min) * size, (coord.y - bbox.y_min) * size, size, size)
 								.into_optional()
-								.map(|image| (coord, image))
+								.map(|img| (coord, img))
 						})
-						.collect::<Vec<(TileCoord3, DynamicImage)>>()
+						.collect::<Vec<_>>()
 				})
 				.await
-				.expect("spawn_blocking task panicked")
+				.unwrap();
+
+				TileStream::from_vec(vec)
 			}
 			.boxed()
 		});
-		Ok(TileStream::from_async_vec_iter_parallel(jobs))
+		Ok(TileStream::from_iter_stream(jobs))
 	}
 
 	/// Fetch and decode a single vector tile at the requested coordinate.
