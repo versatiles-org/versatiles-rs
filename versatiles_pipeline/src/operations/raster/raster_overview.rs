@@ -15,6 +15,9 @@ use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::EnhancedDynamicImageTrait;
 
+static BLOCK_TILE_COUNT: u32 = 32;
+type Tiles = Vec<(TileCoord3, DynamicImage)>;
+
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filter tiles by bounding box and/or zoom levels.
 struct Args {
@@ -23,8 +26,6 @@ struct Args {
 	/// Size of the tiles in pixels. Defaults to 512.
 	tile_size: Option<u32>,
 }
-
-type Tiles = Vec<(TileCoord3, DynamicImage)>;
 
 #[derive(Debug)]
 struct Operation {
@@ -36,8 +37,6 @@ struct Operation {
 	traversal: Traversal,
 	cache: Arc<Mutex<HashMap<TileCoord3, Tiles>>>,
 }
-
-static BLOCK_TILE_COUNT: u32 = 32;
 
 impl Operation {
 	fn build(
