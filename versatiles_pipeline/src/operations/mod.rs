@@ -21,9 +21,9 @@ pub fn get_read_operation_factories() -> Vec<Box<dyn ReadOperationFactoryTrait>>
 	vec![
 		Box::new(read::from_container::Factory {}),
 		Box::new(read::from_debug::Factory {}),
-		Box::new(read::from_overlayed::Factory {}),
-		Box::new(read::from_overlayed_imagetiles::Factory {}),
-		Box::new(read::from_merged_vectortiles::Factory {}),
+		Box::new(read::from_stacked::Factory {}),
+		Box::new(read::from_stacked_raster::Factory {}),
+		Box::new(read::from_merged_vector::Factory {}),
 		#[cfg(feature = "gdal")]
 		Box::new(read::from_gdal::raster::Factory {}),
 	]

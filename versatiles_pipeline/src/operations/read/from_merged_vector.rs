@@ -1,4 +1,4 @@
-//! # from_merged_vectortiles operation
+//! # from_merged_vector operation
 //!
 //! Blends *multiple* **vector tile** sources by **concatenating layers** that
 //! share the same name.  
@@ -219,7 +219,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"from_merged_vectortiles"
+		"from_merged_vector"
 	}
 }
 
@@ -265,9 +265,9 @@ mod tests {
 			)
 		};
 
-		error("from_merged_vectortiles").await;
-		error("from_merged_vectortiles [ ]").await;
-		error("from_merged_vectortiles [ from_container filename=1.pbf ]").await;
+		error("from_merged_vector").await;
+		error("from_merged_vector [ ]").await;
+		error("from_merged_vector [ from_container filename=1.pbf ]").await;
 	}
 
 	#[tokio::test]
@@ -275,12 +275,12 @@ mod tests {
 		assert_eq!(
 			PipelineFactory::new_dummy()
 				.operation_from_vpl(
-					"from_merged_vectortiles color=red [ from_container filename=1.pbf, from_container filename=2.pbf ]"
+					"from_merged_vector color=red [ from_container filename=1.pbf, from_container filename=2.pbf ]"
 				)
 				.await
 				.unwrap_err()
 				.to_string(),
-			"The 'from_merged_vectortiles' operation does not support the argument 'color'.\nOnly the following arguments are supported:\n'sources'"
+			"The 'from_merged_vector' operation does not support the argument 'color'.\nOnly the following arguments are supported:\n'sources'"
 		);
 	}
 
@@ -288,7 +288,7 @@ mod tests {
 	async fn test_operation_get_tile_data() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
-			.operation_from_vpl("from_merged_vectortiles [ from_container filename=1.pbf, from_container filename=2.pbf ]")
+			.operation_from_vpl("from_merged_vector [ from_container filename=1.pbf, from_container filename=2.pbf ]")
 			.await?;
 
 		let coord = TileCoord3::new(3, 1, 2)?;
@@ -320,7 +320,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
 			.operation_from_vpl(
-				r#"from_merged_vectortiles [
+				r#"from_merged_vector [
 					from_container filename="A.pbf" | filter_bbox bbox=[-130,-20,20,70],
 					from_container filename="B.pbf" | filter_bbox bbox=[-20,-70,130,20]
 				]"#,
@@ -388,7 +388,7 @@ mod tests {
 
 		let result = factory
 			.operation_from_vpl(
-				r#"from_merged_vectortiles [ from_container filename="12.pbf", from_container filename="23.pbf" ]"#,
+				r#"from_merged_vector [ from_container filename="12.pbf", from_container filename="23.pbf" ]"#,
 			)
 			.await?;
 

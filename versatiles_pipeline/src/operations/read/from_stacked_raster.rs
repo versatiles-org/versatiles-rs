@@ -1,4 +1,4 @@
-//! # from_overlayed_imagetiles operation
+//! # from_stacked_raster operation
 //!
 //! Combines *multiple* raster tile sources by **alpha‑blending** the tiles for
 //! each coordinate.  
@@ -214,7 +214,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"from_overlayed_imagetiles"
+		"from_stacked_raster"
 	}
 }
 
@@ -248,18 +248,16 @@ mod tests {
 			)
 		};
 
-		error("from_overlayed_imagetiles").await;
-		error("from_overlayed_imagetiles [ ]").await;
-		error("from_overlayed_imagetiles [ from_container filename=1.png ]").await;
+		error("from_stacked_raster").await;
+		error("from_stacked_raster [ ]").await;
+		error("from_stacked_raster [ from_container filename=1.png ]").await;
 	}
 
 	#[tokio::test]
 	async fn test_operation_get_tile_data() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
-			.operation_from_vpl(
-				"from_overlayed_imagetiles [ from_container filename=07.png, from_container filename=F7.png ]",
-			)
+			.operation_from_vpl("from_stacked_raster [ from_container filename=07.png, from_container filename=F7.png ]")
 			.await?;
 
 		let coord = TileCoord3::new(3, 1, 2)?;
@@ -290,7 +288,7 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
 			.operation_from_vpl(
-				r#"from_overlayed_imagetiles [
+				r#"from_stacked_raster [
 					from_container filename="00F7.png" | filter_bbox bbox=[-130,-20,20,70],
 					from_container filename="FF07.png" | filter_bbox bbox=[-20,-70,130,20]
 				]"#,
@@ -356,7 +354,7 @@ mod tests {
 
 		let result = factory
 			.operation_from_vpl(
-				r#"from_overlayed_imagetiles [ from_container filename="12.png", from_container filename="23.png" ]"#,
+				r#"from_stacked_raster [ from_container filename="12.png", from_container filename="23.png" ]"#,
 			)
 			.await?;
 

@@ -1,4 +1,4 @@
-//! # from_overlayed operation
+//! # from_stacked operation
 //!
 //! Selects the **first** non‑empty tile from a chain of sources that all
 //! share the *same* tile type (raster *or* vector).  Think of it as a
@@ -263,7 +263,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"from_overlayed"
+		"from_stacked"
 	}
 }
 
@@ -337,9 +337,9 @@ mod tests {
 			)
 		};
 
-		error("from_overlayed").await;
-		error("from_overlayed [ ]").await;
-		error("from_overlayed [ from_container filename=1.pbf ]").await;
+		error("from_stacked").await;
+		error("from_stacked [ ]").await;
+		error("from_stacked [ from_container filename=1.pbf ]").await;
 	}
 
 	#[tokio::test]
@@ -348,7 +348,7 @@ mod tests {
 		let result = factory
 			.operation_from_vpl(
 				&[
-					"from_overlayed [",
+					"from_stacked [",
 					"   from_container filename=\"1.pbf\" | filter_bbox bbox=[-11,-12,3,4],",
 					"   from_container filename=\"2.pbf\" | filter_bbox bbox=[-5,-6,7,8]",
 					"]",
@@ -386,7 +386,7 @@ mod tests {
 		let result = factory
 			.operation_from_vpl(
 				&[
-					"from_overlayed [",
+					"from_stacked [",
 					"   from_container filename=\"🟦.pbf\" | filter_bbox bbox=[-130,-20,20,70],",
 					"   from_container filename=\"🟨.pbf\" | filter_bbox bbox=[-20,-70,130,20]",
 					"]",
@@ -419,7 +419,7 @@ mod tests {
 		let result = factory
 			.operation_from_vpl(
 				&[
-					"from_overlayed [",
+					"from_stacked [",
 					"   from_container filename=\"00f.png\" | filter_bbox bbox=[-130,-20,20,70],",
 					"   from_container filename=\"ff0.png\" | filter_bbox bbox=[-20,-70,130,20]",
 					"]",
