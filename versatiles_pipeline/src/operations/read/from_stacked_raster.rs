@@ -178,10 +178,11 @@ impl OperationTrait for Operation {
 				let mut images: Vec<Vec<DynamicImage>> = Vec::new();
 				images.resize(bbox.count_tiles() as usize, vec![]);
 
-				for source in self.sources.iter() {
-					source
-						.get_image_stream(bbox)
-						.await
+				let streams = self.sources.iter().map(|source| source.get_image_stream(bbox));
+				let results = futures::future::join_all(streams).await;
+
+				for result in results {
+					result
 						.unwrap()
 						.for_each_sync(|(coord, tile)| {
 							if !tile.is_empty() {
