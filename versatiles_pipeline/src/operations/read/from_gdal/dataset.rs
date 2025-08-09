@@ -4,40 +4,43 @@ use gdal::{
 };
 use imageproc::image::DynamicImage;
 use log::warn;
-use std::{path::PathBuf, sync::Arc};
+use std::{
+	path::{Path, PathBuf},
+	sync::Arc,
+};
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
 use versatiles_image::EnhancedDynamicImageTrait;
+
+/// Web‑Mercator world circumference in meters (2πR, where R = 6,378,137 m).
+/// Used to compute the ground resolution at zoom 0 for a given tile size.
+const EARTH_CIRCUMFERENCE: f64 = 2.0 * std::f64::consts::PI * 6_378_137.0;
 
 #[derive(Debug, Clone)]
 pub struct GdalDataset {
 	filename: Arc<PathBuf>,
 	bbox: GeoBBox,
 	band_mapping: Arc<Vec<usize>>,
+	pixel_size: f64,
 }
 
 unsafe impl Sync for GdalDataset {}
 
 impl GdalDataset {
-	pub async fn new(filename: PathBuf) -> Result<GdalDataset> {
+	#[context("Failed to create GDAL dataset from file {:?}", filename)]
+	pub async fn new(filename: &Path) -> Result<GdalDataset> {
 		set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
 
-		let dataset = Dataset::open(&filename).with_context(|| format!("Failed to open GDAL dataset {filename:?}"))?;
-
+		let dataset = Dataset::open(filename)?;
 		let bbox = dataset_bbox(&dataset)?;
-
-		let band_mapping = dataset_bandmapping(&dataset)
-			.with_context(|| format!("Failed to get band mapping from GDAL dataset {filename:?}"))?;
-
-		ensure!(
-			!band_mapping.is_empty(),
-			"GDAL dataset {filename:?} has no bands to read",
-		);
+		let band_mapping = dataset_bandmapping(&dataset)?;
+		let pixel_size = dataset_pixel_size(&dataset)?;
 
 		Ok(Self {
 			band_mapping: Arc::new(band_mapping),
-			filename: Arc::new(filename),
+			filename: Arc::new(filename.to_path_buf()),
 			bbox,
+			pixel_size,
 		})
 	}
 
@@ -94,8 +97,51 @@ impl GdalDataset {
 	pub fn bbox(&self) -> &GeoBBox {
 		&self.bbox
 	}
+
+	/// Compute the **maximum** Web‑Mercator zoom level supported by this dataset’s
+	/// native ground resolution.
+	///
+	/// ## How it’s computed
+	/// 1. `dataset_pixel_size()` (called during construction) estimates the dataset’s
+	///    native resolution at the image center, **in EPSG:3857 meters per pixel**.
+	/// 2. For a given `tile_size` (e.g. 256 or 512), the ground resolution at zoom 0 is
+	///    `initial_res = (2π · 6_378_137) / tile_size`.
+	/// 3. The maximum zoom is:
+	///
+	///    ```text
+	///    z_max = ceil( log2( initial_res / pixel_size_m ) )
+	///    ```
+	///
+	///    This returns the smallest integer zoom whose nominal tile resolution is
+	///    **not finer** than the dataset’s native resolution. (gdal2tiles uses a
+	///    slightly different guard; if you prefer the exact historical behavior,
+	///    use `floor` instead of `ceil`.)
+	///
+	/// The result is clamped to the range `[0, 31]`.
+	///
+	/// ## Parameters
+	/// * `tile_size` – Tile edge length in pixels (usually 256 or 512). Must be > 0.
+	///
+	/// ## Returns
+	/// * A `u8` max zoom suitable for Web‑Mercator tiling.
+	///
+	/// ## Pan‑projection note
+	/// The dataset can be in any source SRS; its pixel size was measured after
+	/// transforming to EPSG:3857, so the returned zoom level is always in the
+	/// Web‑Mercator pyramid.
+	#[context("Failed to compute max zoom level for tile size {tile_size}")]
+	pub fn level_max(&self, tile_size: u32) -> Result<u8> {
+		ensure!(tile_size > 0, "tile_size must be > 0");
+
+		// Initial resolution (meters per pixel at zoom 0)
+		let initial_res = EARTH_CIRCUMFERENCE / (tile_size as f64);
+		let zf = (initial_res / self.pixel_size).log2().ceil();
+		let z = if zf.is_finite() { zf as i32 } else { 0 };
+		Ok(z.clamp(0, 31) as u8)
+	}
 }
 
+#[context("Failed to compute band mapping for GDAL dataset")]
 fn dataset_bandmapping(dataset: &gdal::Dataset) -> Result<Vec<usize>> {
 	let mut color_index = [0, 0, 0];
 	let mut grey_index = 0;
@@ -131,12 +177,14 @@ fn dataset_bandmapping(dataset: &gdal::Dataset) -> Result<Vec<usize>> {
 	} else {
 		bail!("GDAL dataset has no color or grey bands, cannot read image data");
 	}
+
 	if alpha_index > 0 {
 		band_mapping.push(alpha_index);
 	}
 	Ok(band_mapping)
 }
 
+#[context("Failed to compute bounding box for GDAL dataset")]
 fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
 	let gt = dataset
 		.geo_transform()
@@ -166,6 +214,52 @@ fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
 	let mut bbox = GeoBBox(bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY);
 	bbox.limit_to_mercator();
 	Ok(bbox)
+}
+
+/// Estimate the dataset’s native pixel size **in meters/pixel (EPSG:3857)**.
+///
+/// Implementation details:
+/// * Requires an unrotated GeoTransform.
+/// * Samples the center pixel and its right/down neighbors, transforms those
+///   three points to 3857, and takes the max of the two neighbor distances.
+/// * Returns a strictly positive finite value or an error.
+#[context("Failed to compute pixel size for GDAL dataset")]
+fn dataset_pixel_size(dataset: &gdal::Dataset) -> Result<f64> {
+	let gt = dataset
+		.geo_transform()
+		.context("Failed to get geo transform from GDAL dataset")?;
+
+	// We assume no rotation (consistent with `dataset_bbox`).
+	ensure!(gt[2] == 0.0 && gt[4] == 0.0, "GDAL dataset must not be rotated");
+
+	let srs = dataset
+		.spatial_ref()
+		.context("GDAL dataset must have a spatial reference (SRS) defined")?;
+
+	let (width, height) = dataset.raster_size();
+	let cx = (width as f64) / 2.0;
+	let cy = (height as f64) / 2.0;
+
+	// Helper to map pixel (col,row) to georeferenced coordinates
+	let px_to_geo = |col: f64, row: f64| -> Result<(f64, f64)> {
+		let x = gt[0] + col * gt[1] + row * gt[2];
+		let y = gt[3] + col * gt[4] + row * gt[5];
+		let mut p = Geometry::bbox(x, y, x, y)?;
+		p.set_spatial_ref(srs.clone());
+		p.transform_to_inplace(&SpatialRef::from_epsg(3857)?)?;
+		let e = p.envelope();
+		Ok((e.MinX, e.MinY))
+	};
+
+	let (mx0, my0) = px_to_geo(cx, cy)?;
+	let (mx1, my1) = px_to_geo(cx + 1.0, cy)?;
+	let (mx2, my2) = px_to_geo(cx, cy + 1.0)?;
+
+	let dist_x = ((mx1 - mx0).powi(2) + (my1 - my0).powi(2)).sqrt();
+	let dist_y = ((mx2 - mx0).powi(2) + (my2 - my0).powi(2)).sqrt();
+	let d = dist_x.max(dist_y);
+	ensure!(d.is_finite() && d > 0.0, "Invalid pixel size in meters computed");
+	Ok(d)
 }
 
 fn bbox_to_mercator(mut bbox: GeoBBox) -> [f64; 4] {
@@ -228,7 +322,7 @@ mod tests {
 			// We keep it in‑memory (no factory) and map bands 1‑2‑3 → RGB.
 			let coord = TileCoord3::new(level, x, y).unwrap();
 
-			let dataset = GdalDataset::new(PathBuf::from("../testdata/gradient.tif"))
+			let dataset = GdalDataset::new(&PathBuf::from("../testdata/gradient.tif"))
 				.await
 				.unwrap();
 

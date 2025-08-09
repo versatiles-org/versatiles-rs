@@ -33,7 +33,8 @@ struct Args {
 	tile_size: Option<u32>,
 	/// The tile format to use for the output tiles. (default: `PNG`)
 	tile_format: Option<TileFormat>,
-	/// The maximum zoom level to generate tiles for. (default: 8)
+	/// The maximum zoom level to generate tiles for.
+	/// (default: the maximum zoom level based on the dataset's native resolution)
 	level_max: Option<u8>,
 	/// The minimum zoom level to generate tiles for. (default: 0)
 	level_min: Option<u8>,
@@ -66,11 +67,15 @@ impl ReadOperationTrait for Operation {
 		Box::pin(async move {
 			let args = Args::from_vpl_node(&vpl_node).context("Failed to parse arguments from VPL node")?;
 			let filename = factory.resolve_path(&args.filename);
-			let dataset = GdalDataset::new(filename).await?;
+			let dataset = GdalDataset::new(&filename).await?;
 			let bbox = dataset.bbox();
+			let tile_size = args.tile_size.unwrap_or(512);
 
-			let bbox_pyramid =
-				TileBBoxPyramid::from_geo_bbox(args.level_min.unwrap_or(0), args.level_max.unwrap_or(8), bbox);
+			let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(
+				args.level_min.unwrap_or(0),
+				args.level_max.unwrap_or(dataset.level_max(tile_size)?),
+				bbox,
+			);
 
 			let parameters = TilesReaderParameters::new(
 				args.tile_format.unwrap_or(TileFormat::PNG),
@@ -87,7 +92,7 @@ impl ReadOperationTrait for Operation {
 				tilejson,
 				parameters,
 				dataset,
-				tile_size: args.tile_size.unwrap_or(512),
+				tile_size,
 			}) as Box<dyn OperationTrait>)
 		})
 	}
@@ -206,7 +211,7 @@ mod tests {
 
 	async fn get_operation(tile_size: u32) -> Operation {
 		Operation {
-			dataset: GdalDataset::new(PathBuf::from("../testdata/gradient.tif"))
+			dataset: GdalDataset::new(&PathBuf::from("../testdata/gradient.tif"))
 				.await
 				.unwrap(),
 			parameters: TilesReaderParameters::new(
