@@ -1,4 +1,4 @@
-mod filter;
+mod general;
 mod raster;
 mod read;
 mod vector;
@@ -7,7 +7,7 @@ use crate::traits::{ReadOperationFactoryTrait, TransformOperationFactoryTrait};
 
 pub fn get_transform_operation_factories() -> Vec<Box<dyn TransformOperationFactoryTrait>> {
 	vec![
-		Box::new(filter::filter_bbox::Factory {}),
+		Box::new(general::filter::Factory {}),
 		Box::new(raster::raster_flatten::Factory {}),
 		Box::new(raster::raster_format::Factory {}),
 		Box::new(raster::raster_overview::Factory {}),

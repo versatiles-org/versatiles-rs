@@ -137,7 +137,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"filter_bbox"
+		"filter"
 	}
 }
 
@@ -157,10 +157,10 @@ impl TransformOperationFactoryTrait for Factory {
 mod tests {
 	use super::*;
 
-	async fn test_filter_bbox(bbox: [f64; 4], tests: Vec<(TileCoord3, bool)>) -> Result<()> {
+	async fn test_filter(bbox: [f64; 4], tests: Vec<(TileCoord3, bool)>) -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let operation = factory
-			.operation_from_vpl(&format!("from_debug format=mvt | filter_bbox bbox={bbox:?}"))
+			.operation_from_vpl(&format!("from_debug format=mvt | filter bbox={bbox:?}"))
 			.await?;
 
 		for (coord, expected) in tests.iter() {
@@ -176,18 +176,18 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_filter_bbox_inside() {
+	async fn test_filter_inside() {
 		let bbox = [-180.0, -85.0, 180.0, 85.0];
 		let tests = vec![
 			(TileCoord3 { x: 1, y: 1, level: 1 }, true),
 			(TileCoord3 { x: 2, y: 2, level: 2 }, true),
 			(TileCoord3 { x: 3, y: 3, level: 3 }, true),
 		];
-		test_filter_bbox(bbox, tests).await.unwrap();
+		test_filter(bbox, tests).await.unwrap();
 	}
 
 	#[tokio::test]
-	async fn test_filter_bbox_outside() {
+	async fn test_filter_outside() {
 		let bbox = [0.0, 0.0, 20.0, 20.0];
 		let tests = vec![
 			(TileCoord3 { x: 7, y: 7, level: 4 }, false),
@@ -195,6 +195,6 @@ mod tests {
 			(TileCoord3 { x: 8, y: 7, level: 4 }, true),
 			(TileCoord3 { x: 8, y: 8, level: 4 }, false),
 		];
-		test_filter_bbox(bbox, tests).await.unwrap();
+		test_filter(bbox, tests).await.unwrap();
 	}
 }
