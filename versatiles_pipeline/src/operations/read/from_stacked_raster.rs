@@ -275,9 +275,9 @@ mod tests {
 				"  \"maxzoom\": 8,",
 				"  \"minzoom\": 0,",
 				"  \"name\": \"mock raster source\",",
-				"  \"tile_content\": \"raster\",",
 				"  \"tile_format\": \"image/png\",",
 				"  \"tile_schema\": \"rgb\",",
+				"  \"tile_type\": \"raster\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}"
 			]
@@ -292,8 +292,8 @@ mod tests {
 		let result = factory
 			.operation_from_vpl(
 				r#"from_stacked_raster [
-					from_container filename="00F7.png" | filter_bbox bbox=[-130,-20,20,70],
-					from_container filename="FF07.png" | filter_bbox bbox=[-20,-70,130,20]
+					from_container filename="00F7.png" | filter bbox=[-130,-20,20,70],
+					from_container filename="FF07.png" | filter bbox=[-20,-70,130,20]
 				]"#,
 			)
 			.await?;
@@ -329,9 +329,9 @@ mod tests {
 				"  \"maxzoom\": 8,",
 				"  \"minzoom\": 0,",
 				"  \"name\": \"mock raster source\",",
-				"  \"tile_content\": \"raster\",",
 				"  \"tile_format\": \"image/png\",",
 				"  \"tile_schema\": \"rgb\",",
+				"  \"tile_type\": \"raster\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}"
 			]
@@ -389,9 +389,9 @@ mod tests {
 				"  \"maxzoom\": 3,",
 				"  \"minzoom\": 1,",
 				"  \"name\": \"mock raster source\",",
-				"  \"tile_content\": \"raster\",",
 				"  \"tile_format\": \"image/png\",",
 				"  \"tile_schema\": \"rgb\",",
+				"  \"tile_type\": \"raster\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}"
 			]

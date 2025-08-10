@@ -1,5 +1,6 @@
 use super::TileType;
 use anyhow::bail;
+use enumset::{EnumSet, EnumSetType};
 
 /// Known tile schema identifiers.
 ///
@@ -26,7 +27,7 @@ use anyhow::bail;
 ///
 /// ## Unknown
 /// * **`Unknown`** – Used when the schema string cannot be parsed.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Debug, EnumSetType)]
 pub enum TileSchema {
 	RasterRGB,
 	RasterRGBA,
@@ -75,9 +76,9 @@ impl TileSchema {
 	/// # Examples
 	/// ```
 	/// use versatiles_core::{TileSchema, TileType};
-	/// assert_eq!(TileSchema::RasterRGBA.get_tile_content(), TileType::Raster);
+	/// assert_eq!(TileSchema::RasterRGBA.get_tile_type(), TileType::Raster);
 	/// ```
-	pub fn get_tile_content(&self) -> TileType {
+	pub fn get_tile_type(&self) -> TileType {
 		use TileSchema::*;
 		match self {
 			RasterRGB | RasterRGBA | RasterDEMMapbox | RasterDEMTerrarium | RasterDEMVersatiles => TileType::Raster,
@@ -107,7 +108,14 @@ impl TryFrom<&str> for TileSchema {
 			"openmaptiles" => VectorOpenMapTiles,
 			"shortbread@1.0" => VectorShortbread1,
 			"other" => VectorOther,
-			_ => bail!("Invalid tile schema: {}", value),
+			_ => bail!(
+				"Invalid tile schema: {value}. Only supported schemas are: {}",
+				EnumSet::<TileSchema>::all()
+					.iter()
+					.map(|s| s.as_str().to_string())
+					.collect::<Vec<_>>()
+					.join(", ")
+			),
 		})
 	}
 }
@@ -136,7 +144,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_get_tile_content() {
+	fn test_get_tile_type() {
 		use TileSchema::*;
 		use TileType::*;
 
@@ -151,7 +159,7 @@ mod tests {
 			(VectorOther, Vector),
 			(TileSchema::Unknown, TileType::Unknown),
 		] {
-			assert_eq!(schema.get_tile_content(), tile_type);
+			assert_eq!(schema.get_tile_type(), tile_type);
 		}
 	}
 

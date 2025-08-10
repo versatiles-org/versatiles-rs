@@ -304,9 +304,9 @@ mod tests {
 				"  \"maxzoom\": 8,",
 				"  \"minzoom\": 0,",
 				"  \"name\": \"mock vector source\",",
-				"  \"tile_content\": \"vector\",",
 				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
 				"  \"tile_schema\": \"other\",",
+				"  \"tile_type\": \"vector\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}"
 			]
@@ -321,8 +321,8 @@ mod tests {
 		let result = factory
 			.operation_from_vpl(
 				r#"from_merged_vector [
-					from_container filename="A.pbf" | filter_bbox bbox=[-130,-20,20,70],
-					from_container filename="B.pbf" | filter_bbox bbox=[-20,-70,130,20]
+					from_container filename="A.pbf" | filter bbox=[-130,-20,20,70],
+					from_container filename="B.pbf" | filter bbox=[-20,-70,130,20]
 				]"#,
 			)
 			.await?;
@@ -357,9 +357,9 @@ mod tests {
 				"  \"maxzoom\": 8,",
 				"  \"minzoom\": 0,",
 				"  \"name\": \"mock vector source\",",
-				"  \"tile_content\": \"vector\",",
 				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
 				"  \"tile_schema\": \"other\",",
+				"  \"tile_type\": \"vector\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}"
 			]
@@ -420,9 +420,9 @@ mod tests {
 				"  \"maxzoom\": 3,",
 				"  \"minzoom\": 1,",
 				"  \"name\": \"mock vector source\",",
-				"  \"tile_content\": \"vector\",",
 				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
 				"  \"tile_schema\": \"other\",",
+				"  \"tile_type\": \"vector\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}"
 			]

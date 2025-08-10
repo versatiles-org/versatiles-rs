@@ -145,9 +145,9 @@ mod tests {
 				"  \"maxzoom\": 15,",
 				"  \"minzoom\": 3,",
 				"  \"name\": \"mock raster source\",",
-				"  \"tile_content\": \"raster\",",
 				"  \"tile_format\": \"image/png\",",
 				"  \"tile_schema\": \"rgb\",",
+				"  \"tile_type\": \"raster\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}"
 			]

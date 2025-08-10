@@ -173,9 +173,9 @@ mod tests {
 				"  \"maxzoom\": 8,",
 				"  \"minzoom\": 0,",
 				"  \"name\": \"mock vector source\",",
-				"  \"tile_content\": \"vector\",",
 				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
 				"  \"tile_schema\": \"other\",",
+				"  \"tile_type\": \"vector\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}"
 			]
@@ -226,9 +226,9 @@ mod tests {
 				"  \"maxzoom\": 8,",
 				"  \"minzoom\": 0,",
 				"  \"name\": \"mock raster source\",",
-				"  \"tile_content\": \"raster\",",
 				"  \"tile_format\": \"image/png\",",
 				"  \"tile_schema\": \"rgb\",",
+				"  \"tile_type\": \"raster\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}"
 			]

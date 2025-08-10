@@ -349,8 +349,8 @@ mod tests {
 			.operation_from_vpl(
 				&[
 					"from_stacked [",
-					"   from_container filename=\"1.pbf\" | filter_bbox bbox=[-11,-12,3,4],",
-					"   from_container filename=\"2.pbf\" | filter_bbox bbox=[-5,-6,7,8]",
+					"   from_container filename=\"1.pbf\" | filter bbox=[-11,-12,3,4],",
+					"   from_container filename=\"2.pbf\" | filter bbox=[-5,-6,7,8]",
 					"]",
 				]
 				.join(""),
@@ -369,9 +369,9 @@ mod tests {
 				"  \"maxzoom\": 8,",
 				"  \"minzoom\": 0,",
 				"  \"name\": \"mock vector source\",",
-				"  \"tile_content\": \"vector\",",
 				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
 				"  \"tile_schema\": \"other\",",
+				"  \"tile_type\": \"vector\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}"
 			]
@@ -387,8 +387,8 @@ mod tests {
 			.operation_from_vpl(
 				&[
 					"from_stacked [",
-					"   from_container filename=\"🟦.pbf\" | filter_bbox bbox=[-130,-20,20,70],",
-					"   from_container filename=\"🟨.pbf\" | filter_bbox bbox=[-20,-70,130,20]",
+					"   from_container filename=\"🟦.pbf\" | filter bbox=[-130,-20,20,70],",
+					"   from_container filename=\"🟨.pbf\" | filter bbox=[-20,-70,130,20]",
 					"]",
 				]
 				.join(""),
@@ -420,8 +420,8 @@ mod tests {
 			.operation_from_vpl(
 				&[
 					"from_stacked [",
-					"   from_container filename=\"00f.png\" | filter_bbox bbox=[-130,-20,20,70],",
-					"   from_container filename=\"ff0.png\" | filter_bbox bbox=[-20,-70,130,20]",
+					"   from_container filename=\"00f.png\" | filter bbox=[-130,-20,20,70],",
+					"   from_container filename=\"ff0.png\" | filter bbox=[-20,-70,130,20]",
 					"]",
 				]
 				.join(""),

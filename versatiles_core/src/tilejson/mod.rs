@@ -60,7 +60,7 @@ pub struct TileJSON {
 	pub values: TileJsonValues,
 	/// The collection of vector layers, if any.
 	pub vector_layers: VectorLayers,
-	pub tile_content: Option<TileType>,
+	pub tile_type: Option<TileType>,
 	pub tile_format: Option<TileFormat>,
 	pub tile_schema: Option<TileSchema>,
 }
@@ -98,8 +98,8 @@ impl TileJSON {
 					r.vector_layers =
 						VectorLayers::from_json(v).map_err(|e| anyhow!("Failed to parse 'vector_layers': {e}"))?;
 				}
-				"tile_content" => {
-					r.tile_content = Some(TileType::try_from(v.as_str()?)?);
+				"tile_type" => {
+					r.tile_type = Some(TileType::try_from(v.as_str()?)?);
 				}
 				"tile_format" => {
 					r.tile_format = Some(TileFormat::try_from_mime(v.as_str()?)?);
@@ -143,7 +143,7 @@ impl TileJSON {
 		obj.set_optional("bounds", &self.bounds.map(|v| round_vec(&v.as_vec())));
 		obj.set_optional("center", &self.center.map(|v| round_vec(&v.as_vec())));
 		obj.set_optional("vector_layers", &self.vector_layers.as_json_value_option());
-		obj.set_optional("tile_content", &self.tile_content.map(|v| v.to_string()));
+		obj.set_optional("tile_type", &self.tile_type.map(|v| v.to_string()));
 		obj.set_optional("tile_format", &self.tile_format.map(|v| v.as_mime_str().to_string()));
 		obj.set_optional("tile_schema", &self.tile_schema.map(|v| v.to_string()));
 		obj
@@ -338,12 +338,12 @@ impl TileJSON {
 
 		self.tile_format = Some(rp.tile_format);
 
-		self.tile_content = self.tile_format.map(|f| f.get_type());
+		self.tile_type = self.tile_format.map(|f| f.get_type());
 
-		if let Some(tile_content) = self.tile_content
-			&& self.tile_schema.map(|s| s.get_tile_content()) != self.tile_content
+		if let Some(tile_type) = self.tile_type
+			&& self.tile_schema.map(|s| s.get_tile_type()) != self.tile_type
 		{
-			self.tile_schema = Some(match tile_content {
+			self.tile_schema = Some(match tile_type {
 				TileType::Raster => TileSchema::RasterRGB,
 				TileType::Vector => self.vector_layers.get_tile_schema(),
 				TileType::Unknown => TileSchema::Unknown,
@@ -854,7 +854,7 @@ mod tests {
 		assert_eq!(tj.values.get_byte("maxzoom"), Some(4));
 		// Format, content, and schema
 		assert_eq!(tj.tile_format, Some(TileFormat::PNG));
-		assert_eq!(tj.tile_content, Some(TileType::Raster));
+		assert_eq!(tj.tile_type, Some(TileType::Raster));
 		assert_eq!(tj.tile_schema, Some(TileSchema::RasterRGB));
 		Ok(())
 	}

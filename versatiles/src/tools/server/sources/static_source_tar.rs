@@ -266,7 +266,7 @@ mod tests {
 				if result.compression == N {
 					assert_eq!(
 						result.blob.as_str(),
-						"{\"bounds\":[-180,-79.171335,45,66.51326],\"maxzoom\":3,\"minzoom\":2,\"tile_content\":\"vector\",\"tile_format\":\"vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
+						"{\"bounds\":[-180,-79.171335,45,66.51326],\"maxzoom\":3,\"minzoom\":2,\"tile_format\":\"vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tile_type\":\"vector\",\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 					);
 				}
 

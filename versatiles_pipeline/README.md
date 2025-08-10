@@ -63,7 +63,7 @@ All tile sources must provide vector tiles.
 ---
 # TRANSFORM operations
 
-## filter_bbox
+## filter
 Filter tiles by a geographic bounding box.
 ### Parameters:
 * **`bbox`: [f64,f64,f64,f64] (required)** - Bounding box: [min long, min lat, max long, max lat].

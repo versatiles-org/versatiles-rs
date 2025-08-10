@@ -197,9 +197,9 @@ mod tests {
 				"  \"maxzoom\": 15,",
 				"  \"minzoom\": 3,",
 				"  \"name\": \"mock vector source\",",
-				"  \"tile_content\": \"vector\",",
 				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
 				"  \"tile_schema\": \"other\",",
+				"  \"tile_type\": \"vector\",",
 				"  \"tilejson\": \"3.0.0\"",
 				"}"
 			]
