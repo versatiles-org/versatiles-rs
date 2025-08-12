@@ -191,7 +191,7 @@ mod tests {
 	use super::*;
 	use std::io::Cursor;
 
-	fn get_reader(s: &str) -> ByteIterator {
+	fn get_reader(s: &str) -> ByteIterator<'_> {
 		ByteIterator::from_reader(Cursor::new(s), true)
 	}
 

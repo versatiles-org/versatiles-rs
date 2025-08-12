@@ -137,20 +137,24 @@ impl DirectoryTilesReader {
 						}
 						let y = numeric3?;
 
-						if container_form.is_none() {
-							container_form = Some(file_form);
-						} else if container_form != Some(file_form) {
-							let mut list = [container_form.unwrap(), file_form];
-							list.sort();
-							bail!("found multiple tile formats: {list:?}");
+						match container_form {
+							None => container_form = Some(file_form),
+							Some(existing_form) if existing_form != file_form => {
+								let mut list = [existing_form, file_form];
+								list.sort();
+								bail!("found multiple tile formats: {list:?}");
+							}
+							_ => {}
 						}
 
-						if container_comp.is_none() {
-							container_comp = Some(file_comp);
-						} else if container_comp != Some(file_comp) {
-							let mut list = [container_comp.unwrap(), file_comp];
-							list.sort();
-							bail!("found multiple tile compressions: {list:?}");
+						match container_comp {
+							None => container_comp = Some(file_comp),
+							Some(existing_comp) if existing_comp != file_comp => {
+								let mut list = [existing_comp, file_comp];
+								list.sort();
+								bail!("found multiple tile compressions: {list:?}");
+							}
+							_ => {}
 						}
 
 						let coord3 = TileCoord3::new(x, y, z)?;

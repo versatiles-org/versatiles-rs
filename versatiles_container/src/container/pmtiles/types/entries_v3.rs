@@ -83,12 +83,12 @@ impl EntriesV3 {
 	}
 
 	/// Returns a slice view into the entries.
-	pub fn as_slice(&self) -> EntriesSliceV3 {
+	pub fn as_slice(&self) -> EntriesSliceV3<'_> {
 		EntriesSliceV3 { entries: &self.entries }
 	}
 
 	/// Iterates over the entries.
-	pub fn iter(&self) -> Iter<EntryV3> {
+	pub fn iter(&self) -> Iter<'_, EntryV3> {
 		self.entries.iter()
 	}
 
@@ -236,7 +236,7 @@ impl EntriesSliceV3<'_> {
 	///
 	/// # Arguments
 	/// * `range` - The range within the current slice to create a sub-slice from.
-	pub fn slice<T>(&self, range: T) -> EntriesSliceV3
+	pub fn slice<T>(&self, range: T) -> EntriesSliceV3<'_>
 	where
 		T: SliceIndex<[EntryV3], Output = [EntryV3]>,
 	{
