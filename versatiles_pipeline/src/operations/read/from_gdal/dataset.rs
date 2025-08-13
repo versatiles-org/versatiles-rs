@@ -4,7 +4,7 @@ use gdal::{
 	vector::Geometry,
 };
 use imageproc::image::DynamicImage;
-use log::{Level, debug, log, trace, warn};
+use log::{debug, trace, warn};
 use std::{
 	path::{Path, PathBuf},
 	sync::Arc,
@@ -51,7 +51,7 @@ impl GdalDataset {
 
 		debug!("Dataset bbox (EPSG:4326): {:?}", bbox);
 		debug!("Band mapping ({} entries): {:?}", band_mapping.len(), band_mapping);
-		log!(Level::Trace, "GdalDataset::new finished for {:?}", filename);
+		trace!("GdalDataset::new finished for {:?}", filename);
 
 		Ok(Self {
 			band_mapping: Arc::new(band_mapping),
