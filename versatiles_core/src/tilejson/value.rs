@@ -87,12 +87,25 @@ impl TileJsonValues {
 	/// Updates or inserts a byte (`u8`) for the given `key`.
 	/// The provided `update` closure receives the current value (if any)
 	/// and returns the new byte value to be stored.
-	pub fn update_byte<T>(&mut self, key: &str, update: T)
+	pub fn update_byte<F>(&mut self, key: &str, update: F)
 	where
-		T: FnOnce(Option<u8>) -> u8,
+		F: FnOnce(Option<u8>) -> u8,
 	{
 		let new_val = update(self.0.get(key).and_then(|v| v.get_byte()));
 		self.0.insert(key.to_owned(), TileJsonValue::Byte(new_val));
+	}
+
+	pub fn set<T>(&mut self, key: &str, value: T)
+	where
+		TileJsonValue: From<T>,
+	{
+		self.0.insert(key.to_owned(), TileJsonValue::from(value));
+	}
+}
+
+impl From<u8> for TileJsonValue {
+	fn from(value: u8) -> Self {
+		TileJsonValue::Byte(value)
 	}
 }
 

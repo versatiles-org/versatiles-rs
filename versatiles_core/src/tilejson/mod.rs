@@ -190,10 +190,10 @@ impl TileJSON {
 			self.limit_bbox(bbox);
 		}
 		if let Some(z) = pyramid.get_zoom_min() {
-			self.limit_min_zoom(z);
+			self.set_min_zoom(z);
 		}
 		if let Some(z) = pyramid.get_zoom_max() {
-			self.limit_max_zoom(z);
+			self.set_max_zoom(z);
 		}
 	}
 
@@ -262,12 +262,11 @@ impl TileJSON {
 	/// ```
 	/// # use versatiles_core::tilejson::*;
 	/// # let mut tj = TileJSON::default();
-	/// tj.set_byte("minzoom", 3).unwrap();
-	/// tj.limit_min_zoom(5);
+	/// tj.set_min_zoom(5);
 	/// // minzoom is now 5
 	/// ```
-	pub fn limit_min_zoom(&mut self, z: u8) {
-		self.values.update_byte("minzoom", |mz| mz.map_or(z, |mz| mz.max(z)));
+	pub fn set_min_zoom(&mut self, z: u8) {
+		self.values.set("minzoom", z);
 	}
 
 	/// Lowers the `maxzoom` value to `z` if the current `maxzoom` is higher or absent.
@@ -276,12 +275,11 @@ impl TileJSON {
 	/// ```
 	/// # use versatiles_core::tilejson::*;
 	/// # let mut tj = TileJSON::default();
-	/// tj.set_byte("maxzoom", 15).unwrap();
-	/// tj.limit_max_zoom(10);
+	/// tj.set_max_zoom(10);
 	/// // maxzoom is now 10
 	/// ```
-	pub fn limit_max_zoom(&mut self, z: u8) {
-		self.values.update_byte("maxzoom", |mz| mz.map_or(z, |mz| mz.min(z)));
+	pub fn set_max_zoom(&mut self, z: u8) {
+		self.values.set("maxzoom", z);
 	}
 
 	// -------------------------------------------------------------------------
@@ -724,20 +722,20 @@ mod tests {
 	}
 
 	#[test]
-	fn should_limit_min_and_max_zoom_correctly() {
+	fn should_set_min_and_max_zoom_correctly() {
 		let mut tj = TileJSON::default();
-		tj.limit_min_zoom(3);
+		tj.set_min_zoom(3);
 		assert_eq!(tj.values.get_byte("minzoom"), Some(3));
 		// Lower minzoom should not decrease the value
-		tj.limit_min_zoom(1);
-		assert_eq!(tj.values.get_byte("minzoom"), Some(3));
+		tj.set_min_zoom(1);
+		assert_eq!(tj.values.get_byte("minzoom"), Some(1));
 
 		let mut tj2 = TileJSON::default();
-		tj2.limit_max_zoom(10);
+		tj2.set_max_zoom(10);
 		assert_eq!(tj2.values.get_byte("maxzoom"), Some(10));
 		// Higher maxzoom should not increase the value
-		tj2.limit_max_zoom(20);
-		assert_eq!(tj2.values.get_byte("maxzoom"), Some(10));
+		tj2.set_max_zoom(20);
+		assert_eq!(tj2.values.get_byte("maxzoom"), Some(20));
 	}
 
 	#[test]
