@@ -444,4 +444,51 @@ mod tests {
 		assert_eq!(decoded_image.width(), image.width());
 		assert_eq!(decoded_image.height(), image.height());
 	}
+
+	#[test]
+	fn test_rgba8_variants_empty_and_opaque() {
+		fn test(cb: fn(u32, u32) -> [u8; 4], expected_empty: bool, expected_opaque: bool) {
+			let img = DynamicImage::from_fn_rgba8(9, 9, cb);
+			assert_eq!(img.is_empty(), expected_empty);
+			assert_eq!(img.is_opaque(), expected_opaque);
+			let img = img.into_optional();
+			assert_eq!(img.is_none(), expected_empty);
+			assert_eq!(img.is_some(), !expected_empty);
+		}
+		test(|_x, _y| [0, 0, 0, 0], true, false);
+		test(|x, y| [0, 0, 0, if x == 4 && y == 4 { 1 } else { 0 }], false, false);
+		test(|_x, _y| [0, 0, 0, 255], false, true);
+		test(|x, y| [0, 0, 0, if x == 4 && y == 4 { 254 } else { 255 }], false, false);
+	}
+
+	#[test]
+	fn test_la8_variants_empty_and_opaque() {
+		fn test(cb: fn(u32, u32) -> [u8; 2], expected_empty: bool, expected_opaque: bool) {
+			let img = DynamicImage::from_fn_la8(9, 9, cb);
+			assert_eq!(img.is_empty(), expected_empty);
+			assert_eq!(img.is_opaque(), expected_opaque);
+			let img = img.into_optional();
+			assert_eq!(img.is_none(), expected_empty);
+			assert_eq!(img.is_some(), !expected_empty);
+		}
+		test(|_x, _y| [0, 0], true, false);
+		test(|x, y| [0, if x == 4 && y == 4 { 1 } else { 0 }], false, false);
+		test(|_x, _y| [0, 255], false, true);
+		test(|x, y| [0, if x == 4 && y == 4 { 254 } else { 255 }], false, false);
+	}
+
+	#[test]
+	fn test_variants_empty_and_opaque() {
+		fn test(img: DynamicImage, expected_empty: bool, expected_opaque: bool) {
+			assert_eq!(img.is_empty(), expected_empty);
+			assert_eq!(img.is_opaque(), expected_opaque);
+			let img = img.into_optional();
+			assert_eq!(img.is_none(), expected_empty);
+			assert_eq!(img.is_some(), !expected_empty);
+		}
+		test(DynamicImage::new_test_grey(), false, true);
+		test(DynamicImage::new_test_greya(), false, false);
+		test(DynamicImage::new_test_rgb(), false, true);
+		test(DynamicImage::new_test_rgba(), false, false);
+	}
 }
