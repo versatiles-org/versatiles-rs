@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, bail, ensure};
 use gdal::{
-	Dataset, DriverManager, config::set_config_option, raster::reproject, spatial_ref::SpatialRef, vector::Geometry,
+	Dataset, DriverManager, GeoTransform, config::set_config_option, raster::reproject, spatial_ref::SpatialRef,
+	vector::Geometry,
 };
 use imageproc::image::DynamicImage;
 use log::{debug, trace, warn};
@@ -48,39 +49,41 @@ impl GdalDataset {
 	pub async fn get_image(&self, bbox: GeoBBox, width: u32, height: u32) -> Result<Option<DynamicImage>> {
 		ensure!(width > 0 && height > 0, "Width and height must be greater than zero");
 
-		let channel_count = self.band_mapping.len();
-		ensure!(channel_count > 0, "GDAL dataset has no bands to read");
+		let src_mapping_len = self.band_mapping.len();
+		ensure!(src_mapping_len > 0, "GDAL dataset has no bands to read");
 
 		let filename = self.filename.clone();
 		let band_mapping = self.band_mapping.clone();
 
 		let image = tokio::task::spawn_blocking(move || {
-			let driver = DriverManager::get_driver_by_name("MEM").unwrap();
-			let mut dst = driver
-				.create_with_band_type::<u8, _>("", width as usize, height as usize, channel_count)
-				.unwrap();
-			dst.set_spatial_ref(&SpatialRef::from_epsg(3857).unwrap()).unwrap();
+			let driver = DriverManager::get_driver_by_name("MEM")?;
 
-			let bbox = bbox_to_mercator(bbox);
-			dst.set_geo_transform(&[
-				bbox[0],                             // MinX
-				(bbox[2] - bbox[0]) / width as f64,  // Pixel width
-				0.0,                                 // Rotation (should be 0)
-				bbox[3],                             // MinY
-				0.0,                                 // Rotation (should be 0)
-				(bbox[1] - bbox[3]) / height as f64, // Pixel height
-			])
-			.unwrap();
+			// Create destination dataset in EPSG:3857 for the requested bbox
+			let mut dst = driver.create_with_band_type::<u8, _>("", width as usize, height as usize, src_mapping_len)?;
+			dst.set_spatial_ref(&SpatialRef::from_epsg(3857)?)?;
 
-			let dataset =
+			let bbox_merc = bbox_to_mercator(&bbox)?;
+			let geo_transform: GeoTransform = [
+				bbox_merc[0],                                  // MinX
+				(bbox_merc[2] - bbox_merc[0]) / width as f64,  // Pixel width
+				0.0,                                           // Rotation (should be 0)
+				bbox_merc[3],                                  // MaxY
+				0.0,                                           // Rotation (should be 0)
+				(bbox_merc[1] - bbox_merc[3]) / height as f64, // Pixel height (negative)
+			];
+			dst.set_geo_transform(&geo_transform)?;
+
+			// Open source and reproject into destination
+			let src =
 				Dataset::open(filename.as_ref()).with_context(|| format!("Failed to open GDAL dataset {filename:?}"))?;
-			reproject(&dataset, &dst).unwrap();
 
-			let mut buf = vec![0u8; (width as usize) * (height as usize) * channel_count];
+			reproject(&src, &dst)?;
+
+			let mut buf = vec![0u8; (width as usize) * (height as usize) * src_mapping_len];
 			for (i, &band) in band_mapping.iter().enumerate() {
 				let band_data = dst.rasterband(band)?.read_band_as::<u8>()?;
 				for (j, pixel) in band_data.data().iter().enumerate() {
-					buf[j * channel_count + i] = *pixel;
+					buf[j * src_mapping_len + i] = *pixel;
 				}
 			}
 
@@ -275,27 +278,28 @@ fn dataset_pixel_size(dataset: &gdal::Dataset) -> Result<f64> {
 	Ok(d)
 }
 
-fn bbox_to_mercator(mut bbox: GeoBBox) -> [f64; 4] {
+fn bbox_to_mercator(bbox: &GeoBBox) -> Result<[f64; 4]> {
+	let mut bbox = *bbox;
 	bbox.limit_to_mercator();
-	let mut bbox_geometry = Geometry::bbox(bbox.1, bbox.0, bbox.3, bbox.2).unwrap();
-	bbox_geometry.set_spatial_ref(SpatialRef::from_epsg(4326).unwrap());
+	let mut bbox_geometry = Geometry::bbox(bbox.1, bbox.0, bbox.3, bbox.2)?;
+	bbox_geometry.set_spatial_ref(SpatialRef::from_epsg(4326)?);
 	bbox_geometry
-		.transform_to_inplace(&SpatialRef::from_epsg(3857).unwrap())
-		.with_context(|| format!("Failed to transform bounding box ({bbox:?}) to EPSG:3857"))
-		.unwrap();
+		.transform_to_inplace(&SpatialRef::from_epsg(3857)?)
+		.with_context(|| format!("Failed to transform bounding box ({bbox:?}) to EPSG:3857"))?;
 	let bbox = bbox_geometry.envelope();
-	[bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY]
+	Ok([bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY])
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use anyhow::anyhow;
 	use versatiles_core::TileCoord3;
 
 	#[test]
 	fn test_bbox_to_mercator() {
 		fn run_bbox_to_mercator(bbox: [i32; 4]) -> [i32; 4] {
-			let mercator_bbox = bbox_to_mercator(GeoBBox(bbox[0] as f64, bbox[1] as f64, bbox[2] as f64, bbox[3] as f64));
+			let mercator_bbox = bbox_to_mercator(&GeoBBox::from(&bbox)).unwrap();
 			[
 				mercator_bbox[0] as i32,
 				mercator_bbox[1] as i32,
@@ -330,17 +334,18 @@ mod tests {
 	/// * correct Mercator reprojection and pixel alignment.
 	#[tokio::test]
 	async fn test_dataset_get_image() -> Result<()> {
-		async fn gradient_test(level: u8, x: u32, y: u32) -> [Vec<u8>; 2] {
+		async fn gradient_test(level: u8, x: u32, y: u32) -> Result<[Vec<u8>; 2]> {
 			// Build a `Operation` that points at `testdata/gradient.tif`.
 			// We keep it in‑memory (no factory) and map bands 1‑2‑3 → RGB.
-			let coord = TileCoord3::new(level, x, y).unwrap();
+			let coord = TileCoord3::new(level, x, y)?;
 
-			let dataset = GdalDataset::new(&PathBuf::from("../testdata/gradient.tif"))
-				.await
-				.unwrap();
+			let dataset = GdalDataset::new(&PathBuf::from("../testdata/gradient.tif")).await?;
 
 			// Extract a 7×7 tile and gather the RGB bytes.
-			let image = dataset.get_image(coord.as_geo_bbox(), 7, 7).await.unwrap().unwrap();
+			let image = dataset
+				.get_image(coord.as_geo_bbox(), 7, 7)
+				.await?
+				.ok_or(anyhow!("get_image failed"))?;
 
 			fn extract(mut cb: impl FnMut(usize) -> u8) -> Vec<u8> {
 				(0..7)
@@ -357,12 +362,12 @@ mod tests {
 			//     column‑3‑of‑green‑channel (y coordinate)
 			//   ]
 			let pixels = image.pixels().collect::<Vec<_>>();
-			[extract(|i| pixels[i + 21][0]), extract(|i| pixels[i * 7 + 3][1])]
+			Ok([extract(|i| pixels[i + 21][0]), extract(|i| pixels[i * 7 + 3][1])])
 		}
 
 		// ─── zoom‑0 full‑world tile should be a uniform gradient ───
 		assert_eq!(
-			gradient_test(0, 0, 0).await,
+			gradient_test(0, 0, 0).await?,
 			[[21, 54, 91, 128, 164, 201, 234], [16, 27, 63, 128, 192, 228, 239]]
 		);
 
@@ -372,10 +377,10 @@ mod tests {
 		let col0 = [10, 14, 21, 33, 51, 76, 109];
 		let col1 = [146, 179, 204, 222, 234, 241, 245];
 
-		assert_eq!(gradient_test(1, 0, 0).await, [row0, col0]);
-		assert_eq!(gradient_test(1, 1, 0).await, [row1, col0]);
-		assert_eq!(gradient_test(1, 0, 1).await, [row0, col1]);
-		assert_eq!(gradient_test(1, 1, 1).await, [row1, col1]);
+		assert_eq!(gradient_test(1, 0, 0).await?, [row0, col0]);
+		assert_eq!(gradient_test(1, 1, 0).await?, [row1, col0]);
+		assert_eq!(gradient_test(1, 0, 1).await?, [row0, col1]);
+		assert_eq!(gradient_test(1, 1, 1).await?, [row1, col1]);
 
 		Ok(())
 	}
