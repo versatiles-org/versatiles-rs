@@ -4,7 +4,7 @@ use gdal::{
 	vector::Geometry,
 };
 use imageproc::image::DynamicImage;
-use log::{debug, trace, warn};
+use log::{Level, debug, log, trace, warn};
 use std::{
 	path::{Path, PathBuf},
 	sync::Arc,
@@ -30,12 +30,28 @@ unsafe impl Sync for GdalDataset {}
 impl GdalDataset {
 	#[context("Failed to create GDAL dataset from file {:?}", filename)]
 	pub async fn new(filename: &Path) -> Result<GdalDataset> {
+		debug!("Opening GDAL dataset from file: {:?}", filename);
+
 		set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
+		trace!("GDAL_NUM_THREADS set to ALL_CPUS");
 
 		let dataset = Dataset::open(filename)?;
+		trace!(
+			"Opened GDAL dataset {:?} ({}x{}, bands={})",
+			filename,
+			dataset.raster_size().0,
+			dataset.raster_size().1,
+			dataset.raster_count()
+		);
+
 		let bbox = dataset_bbox(&dataset)?;
 		let band_mapping = dataset_bandmapping(&dataset)?;
 		let pixel_size = dataset_pixel_size(&dataset)?;
+		debug!("Dataset pixel_size (m/px): {:.6}", pixel_size);
+
+		debug!("Dataset bbox (EPSG:4326): {:?}", bbox);
+		debug!("Band mapping ({} entries): {:?}", band_mapping.len(), band_mapping);
+		log!(Level::Trace, "GdalDataset::new finished for {:?}", filename);
 
 		Ok(Self {
 			band_mapping: Arc::new(band_mapping),
@@ -48,15 +64,19 @@ impl GdalDataset {
 	#[context("Failed to get image data ({width}x{height}) for bbox ({bbox:?}) from GDAL dataset")]
 	pub async fn get_image(&self, bbox: GeoBBox, width: u32, height: u32) -> Result<Option<DynamicImage>> {
 		ensure!(width > 0 && height > 0, "Width and height must be greater than zero");
+		trace!("get_image bbox={:?} size={}x{}", bbox, width, height);
 
 		let src_mapping_len = self.band_mapping.len();
 		ensure!(src_mapping_len > 0, "GDAL dataset has no bands to read");
+		trace!("Using band mapping of length {}", src_mapping_len);
 
 		let filename = self.filename.clone();
 		let band_mapping = self.band_mapping.clone();
 
 		let image = tokio::task::spawn_blocking(move || {
+			trace!("spawn_blocking(get_image) started for size={}x{}", width, height);
 			let driver = DriverManager::get_driver_by_name("MEM")?;
+			trace!("MEM driver acquired");
 
 			// Create destination dataset in EPSG:3857 for the requested bbox
 			let mut dst = driver.create_with_band_type::<u8, _>("", width as usize, height as usize, src_mapping_len)?;
@@ -72,13 +92,16 @@ impl GdalDataset {
 				(bbox_merc[1] - bbox_merc[3]) / height as f64, // Pixel height (negative)
 			];
 			dst.set_geo_transform(&geo_transform)?;
+			trace!("Prepared GeoTransform for destination: {:?}", geo_transform);
 
 			// Open source and reproject into destination
 			let src =
 				Dataset::open(filename.as_ref()).with_context(|| format!("Failed to open GDAL dataset {filename:?}"))?;
 
 			reproject(&src, &dst)?;
+			trace!("Reprojection complete");
 
+			trace!("Reading {} bands with mapping {:?}", src_mapping_len, band_mapping);
 			let mut buf = vec![0u8; (width as usize) * (height as usize) * src_mapping_len];
 			for (i, &band) in band_mapping.iter().enumerate() {
 				let band_data = dst.rasterband(band)?.read_band_as::<u8>()?;
@@ -86,6 +109,7 @@ impl GdalDataset {
 					buf[j * src_mapping_len + i] = *pixel;
 				}
 			}
+			trace!("Filled image buffer ({} bytes)", buf.len());
 
 			let image =
 				DynamicImage::from_raw(width, height, buf).context("Failed to create DynamicImage from GDAL dataset")?;
@@ -94,6 +118,7 @@ impl GdalDataset {
 		})
 		.await??;
 
+		debug!("get_image completed: {}x{} for bbox={:?}", width, height, bbox);
 		Ok(Some(image))
 	}
 
@@ -135,17 +160,24 @@ impl GdalDataset {
 	#[context("Failed to compute max zoom level for tile size {tile_size}")]
 	pub fn level_max(&self, tile_size: u32) -> Result<u8> {
 		ensure!(tile_size > 0, "tile_size must be > 0");
+		trace!(
+			"level_max(tile_size={}) with pixel_size={:.6}",
+			tile_size, self.pixel_size
+		);
 
 		// Initial resolution (meters per pixel at zoom 0)
 		let initial_res = EARTH_CIRCUMFERENCE / (tile_size as f64);
 		let zf = (initial_res / self.pixel_size).log2().ceil();
+		trace!("initial_res={:.6}, zf(raw)={:.6}", initial_res, zf);
 		let z = if zf.is_finite() { zf as i32 } else { 0 };
+		debug!("Computed max level: {}", z.clamp(0, 31));
 		Ok(z.clamp(0, 31) as u8)
 	}
 }
 
 #[context("Failed to compute band mapping for GDAL dataset")]
 fn dataset_bandmapping(dataset: &gdal::Dataset) -> Result<Vec<usize>> {
+	trace!("Computing band mapping (raster_count={})", dataset.raster_count());
 	let mut color_index = [0, 0, 0];
 	let mut grey_index = 0;
 	let mut alpha_index = 0;
@@ -184,11 +216,13 @@ fn dataset_bandmapping(dataset: &gdal::Dataset) -> Result<Vec<usize>> {
 	if alpha_index > 0 {
 		band_mapping.push(alpha_index);
 	}
+	debug!("Band mapping result: {:?}", band_mapping);
 	Ok(band_mapping)
 }
 
 #[context("Failed to compute bounding box for GDAL dataset")]
 fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
+	trace!("Computing dataset_bbox()");
 	let gt = dataset
 		.geo_transform()
 		.context("Failed to get geo transform from GDAL dataset")?;
@@ -241,6 +275,7 @@ fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
 /// * Returns a strictly positive finite value or an error.
 #[context("Failed to compute pixel size for GDAL dataset")]
 fn dataset_pixel_size(dataset: &gdal::Dataset) -> Result<f64> {
+	trace!("Computing dataset_pixel_size()");
 	let gt = dataset
 		.geo_transform()
 		.context("Failed to get geo transform from GDAL dataset")?;
@@ -270,15 +305,21 @@ fn dataset_pixel_size(dataset: &gdal::Dataset) -> Result<f64> {
 	let (mx0, my0) = px_to_geo(cx, cy)?;
 	let (mx1, my1) = px_to_geo(cx + 1.0, cy)?;
 	let (mx2, my2) = px_to_geo(cx, cy + 1.0)?;
+	trace!(
+		"Mercator sample points: (mx0,my0)=({:.3},{:.3}), (mx1,my1)=({:.3},{:.3}), (mx2,my2)=({:.3},{:.3})",
+		mx0, my0, mx1, my1, mx2, my2
+	);
 
 	let dist_x = ((mx1 - mx0).powi(2) + (my1 - my0).powi(2)).sqrt();
 	let dist_y = ((mx2 - mx0).powi(2) + (my2 - my0).powi(2)).sqrt();
 	let d = dist_x.max(dist_y);
+	debug!("pixel_size candidates: dx={:.6}, dy={:.6} → d={:.6}", dist_x, dist_y, d);
 	ensure!(d.is_finite() && d > 0.0, "Invalid pixel size in meters computed");
 	Ok(d)
 }
 
 fn bbox_to_mercator(bbox: &GeoBBox) -> Result<[f64; 4]> {
+	trace!("bbox_to_mercator input={:?}", bbox);
 	let mut bbox = *bbox;
 	bbox.limit_to_mercator();
 	let mut bbox_geometry = Geometry::bbox(bbox.1, bbox.0, bbox.3, bbox.2)?;
@@ -287,7 +328,9 @@ fn bbox_to_mercator(bbox: &GeoBBox) -> Result<[f64; 4]> {
 		.transform_to_inplace(&SpatialRef::from_epsg(3857)?)
 		.with_context(|| format!("Failed to transform bounding box ({bbox:?}) to EPSG:3857"))?;
 	let bbox = bbox_geometry.envelope();
-	Ok([bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY])
+	let out = [bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY];
+	trace!("bbox_to_mercator output={:?}", out);
+	Ok(out)
 }
 
 #[cfg(test)]
