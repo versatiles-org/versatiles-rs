@@ -87,6 +87,7 @@ impl ReadOperationTrait for Operation {
 				..Default::default()
 			};
 			tilejson.update_from_reader_parameters(&parameters);
+			tilejson.tile_schema = Some(TileSchema::RasterRGBA);
 
 			Ok(Box::new(Self {
 				tilejson,
