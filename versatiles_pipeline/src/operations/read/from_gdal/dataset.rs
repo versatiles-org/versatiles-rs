@@ -219,7 +219,10 @@ fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
 
 	let bbox = bbox.envelope();
 
-	let mut bbox = GeoBBox(bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY);
+	trace!("bounding box projected: {:?}", bbox);
+
+	// Coordinates seem to be flipped in OGREnvelope
+	let mut bbox = GeoBBox::new(bbox.MinY, bbox.MinX, bbox.MaxY, bbox.MaxX);
 	bbox.limit_to_mercator();
 
 	debug!("bounding box: {:?}", bbox);
