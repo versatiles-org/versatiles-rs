@@ -3,7 +3,7 @@ use gdal::{
 	Dataset, DriverManager, config::set_config_option, raster::reproject, spatial_ref::SpatialRef, vector::Geometry,
 };
 use imageproc::image::DynamicImage;
-use log::warn;
+use log::{debug, trace, warn};
 use std::{
 	path::{Path, PathBuf},
 	sync::Arc,
@@ -190,6 +190,8 @@ fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
 		.geo_transform()
 		.context("Failed to get geo transform from GDAL dataset")?;
 
+	trace!("geo transform: {:?}", gt);
+
 	ensure!(gt[2] == 0.0 && gt[4] == 0.0, "GDAL dataset must not be rotated");
 
 	let width = dataset.raster_size().0;
@@ -198,12 +200,18 @@ fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
 		.spatial_ref()
 		.context("GDAL dataset must have a spatial reference (SRS) defined")?;
 
+	trace!("size: {}x{}", width, height);
+	trace!("spatial reference: {:?}", &spatial_ref.to_pretty_wkt());
+
 	let mut bbox = Geometry::bbox(
-		gt[3],
 		gt[0],
-		gt[3] + gt[5] * height as f64,
+		gt[3],
 		gt[0] + gt[1] * width as f64,
+		gt[3] + gt[5] * height as f64,
 	)?;
+
+	trace!("bounding box native: {:?}", bbox);
+
 	bbox.set_spatial_ref(spatial_ref.clone());
 	bbox
 		.transform_to_inplace(&SpatialRef::from_epsg(4326)?)
@@ -213,6 +221,8 @@ fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
 
 	let mut bbox = GeoBBox(bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY);
 	bbox.limit_to_mercator();
+
+	debug!("bounding box: {:?}", bbox);
 	Ok(bbox)
 }
 
