@@ -1,5 +1,6 @@
 use crate::{avif, jpeg, png, webp};
 use anyhow::{Result, anyhow, bail, ensure};
+use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 use image::{DynamicImage, EncodableLayout, ExtendedColorType, ImageBuffer, Luma, LumaA, Rgb, Rgba, imageops::overlay};
 use imageproc::map::map_colors;
 use std::{ops::Div, vec};
@@ -108,9 +109,17 @@ impl EnhancedDynamicImageTrait for DynamicImage {
 
 	fn get_scaled_down(&self, factor: u32) -> DynamicImage {
 		assert!(factor > 0, "Scaling factor must be greater than zero");
-		let new_width = self.width() / factor;
-		let new_height = self.height() / factor;
-		self.resize_exact(new_width, new_height, image::imageops::FilterType::Triangle)
+
+		let mut dst_image = DynamicImage::new(self.width() / factor, self.height() / factor, self.color());
+		Resizer::new()
+			.resize(
+				self,
+				&mut dst_image,
+				&ResizeOptions::default().resize_alg(ResizeAlg::Convolution(FilterType::Box)),
+			)
+			.unwrap();
+
+		dst_image
 	}
 
 	fn into_scaled_down(self, factor: u32) -> DynamicImage {

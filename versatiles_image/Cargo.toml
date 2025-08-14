@@ -14,15 +14,15 @@ version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+fast_image_resize = { version = "5.2.1", features = ["image"] }
 image = { version = "0.25.6", default-features = false, features = [
 	"avif",
 	"jpeg",
 	"png",
 	"webp",
 ] }
-imageproc = { version = "0.25.0", default-features = false}
+imageproc = { version = "0.25.0", default-features = false }
 webp = "0.3.0"
-
 versatiles_core.workspace = true
 
 [dev-dependencies]
