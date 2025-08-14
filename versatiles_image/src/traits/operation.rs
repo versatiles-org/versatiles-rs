@@ -5,11 +5,12 @@ use image::{DynamicImage, Rgb, imageops::overlay};
 use imageproc::map::map_colors;
 
 pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
+	fn average_color(&self) -> Vec<u8>;
+	fn get_flattened(self, color: Rgb<u8>) -> Result<DynamicImage>;
 	fn get_scaled_down(&self, factor: u32) -> DynamicImage;
 	fn into_scaled_down(self, factor: u32) -> DynamicImage;
-	fn average_color(&self) -> Vec<u8>;
 	fn overlay(&mut self, top: &DynamicImage) -> Result<()>;
-	fn get_flattened(self, color: Rgb<u8>) -> Result<DynamicImage>;
+	fn get_extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> DynamicImage;
 }
 
 impl DynamicImageTraitOperation for DynamicImage
@@ -67,6 +68,15 @@ where
 		} else {
 			self.get_scaled_down(factor)
 		}
+	}
+
+	fn get_extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> DynamicImage {
+		let mut dst_image = DynamicImage::new(width_dst, height_dst, self.color());
+		Resizer::new()
+			.resize(self, &mut dst_image, &ResizeOptions::default().crop(x, y, w, h))
+			.unwrap();
+
+		dst_image
 	}
 
 	fn average_color(&self) -> Vec<u8> {
