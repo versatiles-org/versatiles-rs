@@ -37,11 +37,11 @@ impl ProgressBar {
 
 	pub fn init(&self, message: &str, max_value: u64) {
 		self.bar.set_length(max_value);
-		self.bar.enable_steady_tick(Duration::from_millis(250));
+		self.bar.enable_steady_tick(Duration::from_millis(1000));
 		self.bar.set_message(message.to_string());
 		self.bar.set_style(
 			ProgressStyle::default_bar()
-				.template("{msg}▕{wide_bar}▏{pos}/{len} ({percent:3}%) {per_sec:8} {eta:5}")
+				.template("{msg}▕{wide_bar}▏{pos}/{len} ({percent:>3}%) {per_sec:>5} {eta:>5}")
 				.unwrap()
 				.progress_chars("█▉▊▋▌▍▎▏  "),
 		);
