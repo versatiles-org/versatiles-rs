@@ -32,7 +32,7 @@ struct Operation {
 	parameters: TilesReaderParameters,
 	source: Box<dyn OperationTrait>,
 	tilejson: TileJSON,
-	base_level: u8,
+	level_base: u8,
 	tile_size: u32,
 	traversal: Traversal,
 	cache: Arc<Mutex<HashMap<TileCoord3, Tiles>>>,
@@ -57,8 +57,7 @@ impl Operation {
 
 			let mut level_bbox = *parameters.bbox_pyramid.get_level_bbox(base_level);
 			while level_bbox.level > 0 {
-				level_bbox.scale_down(2);
-				level_bbox.level -= 1;
+				level_bbox.level_decrease();
 				parameters.bbox_pyramid.set_level_bbox(level_bbox);
 			}
 
@@ -70,7 +69,7 @@ impl Operation {
 				parameters,
 				source,
 				tilejson,
-				base_level,
+				level_base: base_level,
 				tile_size: args.tile_size.unwrap_or(512),
 				traversal: Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?,
 			}) as Box<dyn OperationTrait>)
@@ -156,7 +155,7 @@ impl Operation {
 		ensure!(bbox_dst.x_min / BLOCK_TILE_COUNT == bbox_dst.x_max / BLOCK_TILE_COUNT);
 		ensure!(bbox_dst.y_min / BLOCK_TILE_COUNT == bbox_dst.y_max / BLOCK_TILE_COUNT);
 
-		let level_src = self.base_level;
+		let level_src = self.level_base;
 		let level_dst = bbox_dst.level;
 		assert!(level_dst <= level_src);
 
@@ -239,7 +238,7 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		if coord.level >= self.base_level {
+		if coord.level >= self.level_base {
 			return self.source.get_image_data(coord).await;
 		}
 
@@ -248,7 +247,7 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_image_stream(&self, bbox0: TileBBox) -> Result<TileStream<DynamicImage>> {
-		if bbox0.level >= self.base_level {
+		if bbox0.level >= self.level_base {
 			return self.source.get_image_stream(bbox0).await;
 		}
 
@@ -279,7 +278,7 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		if coord.level >= self.base_level {
+		if coord.level >= self.level_base {
 			return self.source.get_tile_data(coord).await;
 		} else {
 			return pack_image_tile(self.get_image_data(coord).await, &self.parameters);
@@ -287,7 +286,7 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
-		if bbox.level >= self.base_level {
+		if bbox.level >= self.level_base {
 			return self.source.get_tile_stream(bbox).await;
 		}
 		pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters)
