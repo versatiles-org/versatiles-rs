@@ -38,7 +38,7 @@ struct Args {
 	/// The maximum zoom level to generate tiles for.
 	/// (default: the maximum zoom level based on the dataset's native resolution)
 	level_max: Option<u8>,
-	/// The minimum zoom level to generate tiles for. (default: 0)
+	/// The minimum zoom level to generate tiles for. (default: level_max)
 	level_min: Option<u8>,
 }
 
@@ -85,8 +85,8 @@ impl ReadOperationTrait for Operation {
 			let bbox = dataset.bbox();
 			let tile_size = args.tile_size.unwrap_or(512);
 
-			let level_min = args.level_min.unwrap_or(0);
 			let level_max = args.level_max.unwrap_or(dataset.level_max(tile_size)?);
+			let level_min = args.level_min.unwrap_or(level_max);
 			trace!(
 				"Building bbox pyramid: level_min={}, level_max={}, tile_size={}",
 				level_min, level_max, tile_size
