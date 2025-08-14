@@ -26,6 +26,7 @@ use versatiles_image::EnhancedDynamicImageTrait;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a GDAL raster dataset and exposes it as a tile source.
+/// Hint: When using "gdalbuildvrt" to create a virtual raster, don't forget to set `-addalpha` option to include alpha channel.
 struct Args {
 	/// The filename of the GDAL raster dataset to read.
 	/// For example: `filename="world.tif"`.
