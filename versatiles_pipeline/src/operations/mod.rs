@@ -11,10 +11,11 @@ pub fn get_transform_operation_factories() -> Vec<Box<dyn TransformOperationFact
 		Box::new(general::update_metadata::Factory {}),
 		Box::new(raster::raster_flatten::Factory {}),
 		Box::new(raster::raster_format::Factory {}),
+		Box::new(raster::raster_overscale::Factory {}),
 		Box::new(raster::raster_overview::Factory {}),
-		Box::new(vector::vector_update_properties::Factory {}),
 		Box::new(vector::vector_filter_layers::Factory {}),
 		Box::new(vector::vector_filter_properties::Factory {}),
+		Box::new(vector::vector_update_properties::Factory {}),
 	]
 }
 
