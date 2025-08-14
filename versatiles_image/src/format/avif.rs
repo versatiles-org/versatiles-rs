@@ -1,4 +1,4 @@
-use crate::EnhancedDynamicImageTrait;
+use crate::traits::*;
 use anyhow::{Result, bail};
 use image::{
 	DynamicImage, ImageEncoder,

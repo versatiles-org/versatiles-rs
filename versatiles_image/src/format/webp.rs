@@ -1,4 +1,4 @@
-use crate::EnhancedDynamicImageTrait;
+use crate::traits::*;
 use anyhow::{Result, anyhow, bail};
 use image::{DynamicImage, ImageFormat, codecs::webp::WebPEncoder, load_from_memory_with_format};
 use std::vec;

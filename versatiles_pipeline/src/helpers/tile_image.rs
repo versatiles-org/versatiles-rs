@@ -4,7 +4,7 @@ use versatiles_core::{
 	utils::{compress, decompress},
 	*,
 };
-use versatiles_image::EnhancedDynamicImageTrait;
+use versatiles_image::traits::*;
 
 pub fn unpack_image_tile(
 	blob: Result<Option<Blob>>,

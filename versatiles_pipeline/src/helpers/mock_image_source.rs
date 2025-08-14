@@ -4,7 +4,7 @@ use imageproc::image::DynamicImage;
 use nom::Input;
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_derive::context;
-use versatiles_image::EnhancedDynamicImageTrait;
+use versatiles_image::traits::*;
 
 #[derive(Debug)]
 pub struct MockImageSource {

@@ -11,7 +11,7 @@ use std::{
 };
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
-use versatiles_image::EnhancedDynamicImageTrait;
+use versatiles_image::traits::*;
 
 /// Web‑Mercator world circumference in meters (2πR, where R = 6,378,137 m).
 /// Used to compute the ground resolution at zoom 0 for a given tile size.
@@ -357,7 +357,7 @@ mod tests {
 			//     row‑3‑of‑red‑channel (x coordinate),
 			//     column‑3‑of‑green‑channel (y coordinate)
 			//   ]
-			let pixels = image.pixels().collect::<Vec<_>>();
+			let pixels = image.iter_pixels().collect::<Vec<_>>();
 			Ok([extract(|i| pixels[i + 21][0]), extract(|i| pixels[i * 7 + 3][1])])
 		}
 

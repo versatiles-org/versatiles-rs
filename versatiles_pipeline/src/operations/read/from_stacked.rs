@@ -279,7 +279,7 @@ mod tests {
 	use crate::helpers::mock_vector_source::{MockVectorSource, arrange_tiles};
 	use std::sync::LazyLock;
 	use versatiles_core::TraversalOrder;
-	use versatiles_image::EnhancedDynamicImageTrait;
+	use versatiles_image::traits::*;
 
 	static RESULT_PATTERN: LazyLock<Vec<String>> = LazyLock::new(|| {
 		vec![
@@ -318,7 +318,7 @@ mod tests {
 	}
 
 	pub fn check_image(image: DynamicImage) -> String {
-		use versatiles_image::EnhancedDynamicImageTrait;
+		use versatiles_image::traits::*;
 		let pixel = image.average_color();
 		match pixel.as_slice() {
 			[0, 0, 255] => "🟦".to_string(),

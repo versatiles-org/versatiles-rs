@@ -1,5 +1,5 @@
-mod format;
-mod image;
+pub mod format;
+pub mod traits;
 
 pub use format::*;
-pub use image::*;
+pub use traits::*;

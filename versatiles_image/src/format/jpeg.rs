@@ -1,4 +1,4 @@
-use crate::EnhancedDynamicImageTrait;
+use crate::traits::*;
 use anyhow::{Result, anyhow, bail};
 use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::jpeg::JpegEncoder, load_from_memory_with_format};
 use versatiles_core::Blob;

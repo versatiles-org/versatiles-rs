@@ -13,7 +13,7 @@ use tokio::{sync::Mutex, task::JoinSet};
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
-use versatiles_image::EnhancedDynamicImageTrait;
+use versatiles_image::traits::*;
 
 static BLOCK_TILE_COUNT: u32 = 32;
 type Tiles = Vec<(TileCoord3, DynamicImage)>;

@@ -22,7 +22,7 @@ use futures::future::{BoxFuture, join_all};
 use imageproc::image::DynamicImage;
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_geometry::vector_tile::VectorTile;
-use versatiles_image::EnhancedDynamicImageTrait;
+use versatiles_image::traits::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Overlays multiple raster tile sources on top of each other.
@@ -230,14 +230,13 @@ impl ReadOperationFactoryTrait for Factory {
 
 #[cfg(test)]
 mod tests {
-	use crate::helpers::{mock_image_source::MockImageSource, mock_vector_source::arrange_tiles};
-
 	use super::*;
+	use crate::helpers::{mock_image_source::MockImageSource, mock_vector_source::arrange_tiles};
 	use std::{ops::BitXor, path::Path};
 
 	pub fn get_color(blob: &Blob) -> String {
 		let image = DynamicImage::from_blob(blob, TileFormat::PNG).unwrap();
-		let pixel = image.pixels().next().unwrap();
+		let pixel = image.iter_pixels().next().unwrap();
 		pixel.iter().map(|v| format!("{v:02X}")).collect::<Vec<_>>().join("")
 	}
 

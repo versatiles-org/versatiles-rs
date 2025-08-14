@@ -22,7 +22,7 @@ use std::{fmt::Debug, vec};
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
-use versatiles_image::EnhancedDynamicImageTrait;
+use versatiles_image::traits::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a GDAL raster dataset and exposes it as a tile source.
@@ -234,7 +234,6 @@ impl ReadOperationFactoryTrait for Factory {
 mod tests {
 	use super::*;
 	use std::path::PathBuf;
-	use versatiles_image::EnhancedDynamicImageTrait;
 
 	async fn get_operation(tile_size: u32) -> Operation {
 		Operation {
@@ -288,7 +287,7 @@ mod tests {
 			//     row‑3‑of‑red‑channel (x coordinate),
 			//     column‑3‑of‑green‑channel (y coordinate)
 			//   ]
-			let pixels = image.pixels().collect::<Vec<_>>();
+			let pixels = image.iter_pixels().collect::<Vec<_>>();
 			[extract(|i| pixels[i + 21][0]), extract(|i| pixels[i * 7 + 3][1])]
 		}
 

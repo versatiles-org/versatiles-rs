@@ -1,0 +1,76 @@
+use super::info::DynamicImageTraitInfo;
+use anyhow::{Result, bail};
+use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
+use image::{DynamicImage, Rgb, imageops::overlay};
+use imageproc::map::map_colors;
+
+pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
+	fn get_scaled_down(&self, factor: u32) -> DynamicImage;
+	fn into_scaled_down(self, factor: u32) -> DynamicImage;
+	fn average_color(&self) -> Vec<u8>;
+	fn overlay(&mut self, top: &DynamicImage) -> Result<()>;
+	fn get_flattened(self, color: Rgb<u8>) -> Result<DynamicImage>;
+}
+
+impl DynamicImageTraitOperation for DynamicImage
+where
+	DynamicImage: DynamicImageTraitInfo,
+{
+	fn overlay(&mut self, top: &DynamicImage) -> Result<()> {
+		self.ensure_same_size(top)?;
+		overlay(self, top, 0, 0);
+		Ok(())
+	}
+
+	fn get_flattened(self, color: Rgb<u8>) -> Result<DynamicImage> {
+		match self {
+			DynamicImage::ImageLuma8(img) => Ok(DynamicImage::ImageLuma8(img)),
+			DynamicImage::ImageRgb8(img) => Ok(DynamicImage::ImageRgb8(img)),
+			DynamicImage::ImageRgba8(img) => {
+				let c = [color[0] as u16, color[1] as u16, color[2] as u16];
+				Ok(DynamicImage::from(map_colors(&img, |p| {
+					if p[3] == 255 {
+						Rgb([p[0], p[1], p[2]])
+					} else {
+						let a = (p[3]) as u16;
+						let b = (255 - p[3]) as u16;
+						Rgb([
+							(((p[0] as u16 * a) + c[0] * b + 127) / 255) as u8,
+							(((p[1] as u16 * a) + c[1] * b + 127) / 255) as u8,
+							(((p[2] as u16 * a) + c[2] * b + 127) / 255) as u8,
+						])
+					}
+				})))
+			}
+			_ => bail!("Unsupported image type {:?} for flattening", self.color()),
+		}
+	}
+
+	fn get_scaled_down(&self, factor: u32) -> DynamicImage {
+		assert!(factor > 0, "Scaling factor must be greater than zero");
+
+		let mut dst_image = DynamicImage::new(self.width() / factor, self.height() / factor, self.color());
+		Resizer::new()
+			.resize(
+				self,
+				&mut dst_image,
+				&ResizeOptions::default().resize_alg(ResizeAlg::Convolution(FilterType::Box)),
+			)
+			.unwrap();
+
+		dst_image
+	}
+
+	fn into_scaled_down(self, factor: u32) -> DynamicImage {
+		if factor == 1 {
+			self
+		} else {
+			self.get_scaled_down(factor)
+		}
+	}
+
+	fn average_color(&self) -> Vec<u8> {
+		let img = self.resize_exact(1, 1, image::imageops::FilterType::Triangle);
+		img.into_bytes()
+	}
+}

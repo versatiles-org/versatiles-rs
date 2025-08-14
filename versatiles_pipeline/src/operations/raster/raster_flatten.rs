@@ -11,7 +11,7 @@ use imageproc::image::{DynamicImage, Rgb};
 use std::fmt::Debug;
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_geometry::vector_tile::VectorTile;
-use versatiles_image::EnhancedDynamicImageTrait;
+use versatiles_image::traits::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Flattens (translucent) raster tiles onto a background
