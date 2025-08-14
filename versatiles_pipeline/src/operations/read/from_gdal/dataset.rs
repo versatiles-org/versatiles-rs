@@ -1,10 +1,10 @@
-use anyhow::{Context, Result, bail, ensure};
+use crate::operations::read::from_gdal::bandmapping::BandMapping;
+use anyhow::{Context, Result, ensure};
 use gdal::{
-	Dataset, DriverManager, GeoTransform, config::set_config_option, raster::reproject, spatial_ref::SpatialRef,
-	vector::Geometry,
+	Dataset, GeoTransform, config::set_config_option, raster::reproject, spatial_ref::SpatialRef, vector::Geometry,
 };
 use imageproc::image::DynamicImage;
-use log::{debug, trace, warn};
+use log::{debug, trace};
 use std::{
 	path::{Path, PathBuf},
 	sync::Arc,
@@ -21,7 +21,7 @@ const EARTH_CIRCUMFERENCE: f64 = 2.0 * std::f64::consts::PI * 6_378_137.0;
 pub struct GdalDataset {
 	filename: Arc<PathBuf>,
 	bbox: GeoBBox,
-	band_mapping: Arc<Vec<usize>>,
+	band_mapping: Arc<BandMapping>,
 	pixel_size: f64,
 }
 
@@ -45,12 +45,12 @@ impl GdalDataset {
 		);
 
 		let bbox = dataset_bbox(&dataset)?;
-		let band_mapping = dataset_bandmapping(&dataset)?;
+		let band_mapping = BandMapping::try_from(&dataset)?;
 		let pixel_size = dataset_pixel_size(&dataset)?;
 		debug!("Dataset pixel_size (m/px): {:.6}", pixel_size);
 
 		debug!("Dataset bbox (EPSG:4326): {:?}", bbox);
-		debug!("Band mapping ({} entries): {:?}", band_mapping.len(), band_mapping);
+		debug!("Band mapping: {band_mapping:?}");
 		trace!("GdalDataset::new finished for {:?}", filename);
 
 		Ok(Self {
@@ -66,21 +66,12 @@ impl GdalDataset {
 		ensure!(width > 0 && height > 0, "Width and height must be greater than zero");
 		trace!("get_image bbox={:?} size={}x{}", bbox, width, height);
 
-		let src_mapping_len = self.band_mapping.len();
-		ensure!(src_mapping_len > 0, "GDAL dataset has no bands to read");
-		trace!("Using band mapping of length {}", src_mapping_len);
-
 		let filename = self.filename.clone();
 		let band_mapping = self.band_mapping.clone();
+		let band_mapping_len = band_mapping.len();
 
 		let image = tokio::task::spawn_blocking(move || {
-			trace!("spawn_blocking(get_image) started for size={}x{}", width, height);
-			let driver = DriverManager::get_driver_by_name("MEM")?;
-			trace!("MEM driver acquired");
-
-			// Create destination dataset in EPSG:3857 for the requested bbox
-			let mut dst = driver.create_with_band_type::<u8, _>("", width as usize, height as usize, src_mapping_len)?;
-			dst.set_spatial_ref(&SpatialRef::from_epsg(3857)?)?;
+			let mut dst = band_mapping.create_mem_dataset(width, height)?;
 
 			let bbox_merc = bbox_to_mercator(&bbox)?;
 			let geo_transform: GeoTransform = [
@@ -101,12 +92,19 @@ impl GdalDataset {
 			reproject(&src, &dst)?;
 			trace!("Reprojection complete");
 
-			trace!("Reading {} bands with mapping {:?}", src_mapping_len, band_mapping);
-			let mut buf = vec![0u8; (width as usize) * (height as usize) * src_mapping_len];
-			for (i, &band) in band_mapping.iter().enumerate() {
-				let band_data = dst.rasterband(band)?.read_band_as::<u8>()?;
-				for (j, pixel) in band_data.data().iter().enumerate() {
-					buf[j * src_mapping_len + i] = *pixel;
+			trace!("Reading bands");
+			let mut buf = vec![0u8; (width as usize) * (height as usize) * band_mapping_len];
+			for (i, band_index) in band_mapping.iter() {
+				let band = dst.rasterband(band_index)?.read_band_as::<u8>()?;
+				let band_data = band.data();
+				ensure!(
+					band_data.len() == (width as usize) * (height as usize),
+					"Band {band_index} data length mismatch: expected {} but got {}",
+					width * height,
+					band_data.len()
+				);
+				for (j, &pixel) in band_data.iter().enumerate() {
+					buf[j * band_mapping_len + i] = pixel;
 				}
 			}
 			trace!("Filled image buffer ({} bytes)", buf.len());
@@ -173,51 +171,6 @@ impl GdalDataset {
 		debug!("Computed max level: {}", z.clamp(0, 31));
 		Ok(z.clamp(0, 31) as u8)
 	}
-}
-
-#[context("Failed to compute band mapping for GDAL dataset")]
-fn dataset_bandmapping(dataset: &gdal::Dataset) -> Result<Vec<usize>> {
-	trace!("Computing band mapping (raster_count={})", dataset.raster_count());
-	let mut color_index = [0, 0, 0];
-	let mut grey_index = 0;
-	let mut alpha_index = 0;
-	for i in 1..=dataset.raster_count() {
-		let band = dataset
-			.rasterband(i)
-			.with_context(|| format!("Failed to get raster band {i} from GDAL dataset"))?;
-		use gdal::raster::ColorInterpretation::*;
-		match band.color_interpretation() {
-			RedBand => color_index[0] = i,
-			GreenBand => color_index[1] = i,
-			BlueBand => color_index[2] = i,
-			AlphaBand => alpha_index = i,
-			GrayIndex => grey_index = i,
-			_ => warn!(
-				"GDAL band {i} has unsupported color interpretation: {:?}",
-				band.color_interpretation()
-			),
-		}
-	}
-
-	let mut band_mapping = vec![];
-	if color_index.iter().all(|&i| i > 0) {
-		if grey_index > 0 {
-			bail!("GDAL dataset has both color and grey bands, which is not supported");
-		}
-		band_mapping.push(color_index[0]);
-		band_mapping.push(color_index[1]);
-		band_mapping.push(color_index[2]);
-	} else if grey_index > 0 {
-		band_mapping.push(grey_index);
-	} else {
-		bail!("GDAL dataset has no color or grey bands, cannot read image data");
-	}
-
-	if alpha_index > 0 {
-		band_mapping.push(alpha_index);
-	}
-	debug!("Band mapping result: {:?}", band_mapping);
-	Ok(band_mapping)
 }
 
 #[context("Failed to compute bounding box for GDAL dataset")]

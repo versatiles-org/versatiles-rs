@@ -191,6 +191,8 @@ impl OperationTrait for Operation {
 				.await
 				.unwrap();
 
+				debug!("Returning {} tiles for bbox {:?}", vec.len(), bbox);
+
 				TileStream::from_vec(vec)
 			}
 			.boxed()
