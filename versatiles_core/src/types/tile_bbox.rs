@@ -847,6 +847,19 @@ impl TileBBox {
 		TileCoord3::new(self.level, x, y)
 	}
 
+	pub fn round(&mut self, block_size: u32) {
+		self.x_min = (self.x_min / block_size) * block_size;
+		self.y_min = (self.y_min / block_size) * block_size;
+		self.x_max = (self.x_max + 1).div_ceil(block_size) * block_size - 1;
+		self.y_max = (self.y_max + 1).div_ceil(block_size) * block_size - 1;
+	}
+
+	pub fn get_rounded(&self, block_size: u32) -> TileBBox {
+		let mut bbox = *self;
+		bbox.round(block_size);
+		bbox
+	}
+
 	pub fn as_string(&self) -> String {
 		format!(
 			"{}:[{},{},{},{}]",
@@ -1697,6 +1710,48 @@ mod tests {
 		let grids: Vec<TileBBox> = bbox.iter_bbox_grid(4).collect();
 		let expected_grids = vec![TileBBox::new(4, 5, 10, 5, 10).unwrap()];
 		assert_eq!(grids, expected_grids);
+		Ok(())
+	}
+
+	#[test]
+	fn test_round_shifting() -> Result<()> {
+		fn test(inp: [u32; 4], exp: [u32; 4]) {
+			let bbox_exp = TileBBox::new(8, exp[0], exp[1], exp[2], exp[3]).unwrap();
+			let mut bbox_inp = TileBBox::new(8, inp[0], inp[1], inp[2], inp[3]).unwrap();
+			assert_eq!(bbox_inp.get_rounded(4), bbox_exp);
+			bbox_inp.round(4);
+			assert_eq!(bbox_inp, bbox_exp);
+		}
+		test([1, 2, 16, 17], [0, 0, 19, 19]);
+		test([2, 3, 17, 18], [0, 0, 19, 19]);
+		test([3, 4, 18, 19], [0, 4, 19, 19]);
+		test([4, 5, 19, 20], [4, 4, 19, 23]);
+		test([5, 6, 20, 21], [4, 4, 23, 23]);
+		test([6, 7, 21, 22], [4, 4, 23, 23]);
+		test([7, 8, 22, 23], [4, 8, 23, 23]);
+		test([8, 9, 23, 24], [8, 8, 23, 27]);
+		Ok(())
+	}
+
+	#[test]
+	fn test_round_scaling() -> Result<()> {
+		fn test(scale: u32, exp: [u32; 4]) {
+			let bbox_exp = TileBBox::new(12, exp[0], exp[1], exp[2], exp[3]).unwrap();
+			let mut bbox_inp = TileBBox::new(12, 12, 34, 56, 78).unwrap();
+			assert_eq!(bbox_inp.get_rounded(scale), bbox_exp);
+			bbox_inp.round(scale);
+			assert_eq!(bbox_inp, bbox_exp);
+		}
+		test(1, [12, 34, 56, 78]);
+		test(2, [12, 34, 57, 79]);
+		test(3, [12, 33, 56, 80]);
+		test(4, [12, 32, 59, 79]);
+		test(5, [10, 30, 59, 79]);
+		test(6, [12, 30, 59, 83]);
+		test(7, [7, 28, 62, 83]);
+		test(10, [10, 30, 59, 79]);
+		test(100, [0, 0, 99, 99]);
+		test(1024, [0, 0, 1023, 1023]);
 		Ok(())
 	}
 }
