@@ -80,7 +80,7 @@ impl ReadOperationTrait for Operation {
 				.into_iter()
 				.collect::<Result<Vec<_>>>()?;
 
-			ensure!(sources.len() > 1, "must have at least two sources");
+			ensure!(sources.len() > 0, "must have at least one source");
 
 			let mut tilejson = TileJSON::default();
 			let first_parameters = sources.first().unwrap().parameters();
@@ -246,13 +246,12 @@ mod tests {
 		let error = |command: &'static str| async {
 			assert_eq!(
 				factory.operation_from_vpl(command).await.unwrap_err().to_string(),
-				"must have at least two sources"
+				"must have at least one source"
 			)
 		};
 
 		error("from_stacked_raster").await;
 		error("from_stacked_raster [ ]").await;
-		error("from_stacked_raster [ from_container filename=1.png ]").await;
 	}
 
 	#[tokio::test]
