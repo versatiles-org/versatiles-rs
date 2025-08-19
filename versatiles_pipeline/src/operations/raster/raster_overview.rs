@@ -119,7 +119,7 @@ impl Operation {
 	#[context("Failed to add images to cache from container {container:?}")]
 	async fn add_images_to_cache(&self, container: &TileBBoxContainer<Option<DynamicImage>>) -> Result<()> {
 		let bbox = container.bbox();
-		if bbox.level == 0 || bbox.level >= self.level_base {
+		if bbox.level == 0 || bbox.level > self.level_base {
 			return Ok(());
 		};
 
