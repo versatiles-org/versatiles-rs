@@ -3,7 +3,10 @@
 //! Defines the `Traversal` type, which combines a traversal order and block size range,
 //! and provides methods to generate ordered tile bounding boxes from a pyramid.
 
-use crate::{TileBBox, TileBBoxPyramid, TraversalOrder, TraversalSize};
+use crate::{
+	TileBBox, TileBBoxPyramid, TraversalOrder, TraversalSize,
+	traversal::processing::{TraversalTranslationStep, translate_traversals},
+};
 use anyhow::Result;
 
 #[derive(Clone, PartialEq)]
@@ -104,6 +107,10 @@ impl Traversal {
 		let mut bboxes: Vec<TileBBox> = pyramid.level_bbox.iter().flat_map(|b| b.iter_bbox_grid(size)).collect();
 		self.order.sort_bboxes(&mut bboxes, size);
 		Ok(bboxes)
+	}
+
+	pub fn get_traversal_steps(&self, other: &Self, pyramid: &TileBBoxPyramid) -> Result<Vec<TraversalTranslationStep>> {
+		translate_traversals(pyramid, self, other)
 	}
 
 	pub const ANY: Self = Self::new_any();

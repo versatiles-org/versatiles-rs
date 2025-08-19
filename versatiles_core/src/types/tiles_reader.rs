@@ -8,13 +8,13 @@ use super::ProbeDepth;
 #[cfg(feature = "cli")]
 use crate::utils::PrettyPrint;
 use crate::{
-	Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters, Traversal,
-	progress::get_progress_bar, tilejson::TileJSON,
+	Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters, Traversal, TraversalTranslationStep,
+	progress::get_progress_bar, tilejson::TileJSON, translate_traversals,
 };
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, lock::Mutex};
-use std::{fmt::Debug, sync::Arc};
+use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 /// Trait defining behavior for reading tiles from a container.
 ///
@@ -49,57 +49,59 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		traversal_write: &Traversal,
 		mut callback: Box<dyn 'a + Send + FnMut(TileBBox, TileStream<'a>) -> BoxFuture<'a, Result<()>>>,
 	) -> Result<()> {
-		let traversal_read = self.traversal();
+		let traversal_steps = translate_traversals(&self.parameters().bbox_pyramid, self.traversal(), traversal_write)?;
 
-		let mut process_standard = async move |bboxes: Vec<TileBBox>| -> Result<()> {
-			let n = bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
-			let mut i = 0;
-			let progress = get_progress_bar("converting tiles", n);
-			for bbox in bboxes {
-				let mut stream = self.get_tile_stream(bbox).await?;
-				let p = progress.clone();
-				stream = stream.inspect(move || p.inc(1));
-				callback(bbox, stream).await?;
-				i += bbox.count_tiles();
-				progress.set_position(i);
-			}
-			progress.finish();
-			Ok(())
-		};
+		use TraversalTranslationStep::*;
 
-		async move {
-			let err = match traversal_read.get_intersected(traversal_write) {
-				Ok(traversal) => {
-					let bboxes = traversal.traverse_pyramid(&self.parameters().bbox_pyramid)?;
-					return process_standard(bboxes).await;
+		let mut n_read = 0;
+		for step in traversal_steps.iter() {
+			match step {
+				Push(bbox, _) => {
+					n_read += bbox.count_tiles();
 				}
-				Err(e) => e,
-			};
-
-			/*
-			let traversal_order = traversal_read.order.get_intersected(&traversal_write.order)?;
-
-			let (traversal_read_size, traversal_write_size) =
-				if let Ok(size) = traversal_read.size.get_intersected(&traversal_write.size) {
-					(size.max_size()?, size.max_size()?)
-				} else if traversal_read.max_size()? < traversal_write.min_size()? {
-					(traversal_read.max_size()?, traversal_write.min_size()?)
-				} else {
-					Err(err.context("Could not find a way to translate traversals."))?
-				};
-
-			let bboxes_read = Traversal::new(traversal_read.order, traversal_read_size, traversal_read_size)?
-				.traverse_pyramid(&self.parameters().bbox_pyramid)?;
-			*/
-			Err(err.context("Could not find a way to translate traversals."))?
+				Pop(_, _) => {}
+				Stream(bbox) => {
+					n_read += bbox.count_tiles();
+				}
+			}
 		}
-		.await
-		.map_err(|err| {
-			err.context(format!(
-				"Writer needs {traversal_write:?}, but Reader only supports {traversal_read:?}",
-			))
-			.context("No suitable traversal found.")
-		})
+		let progress = get_progress_bar("converting tiles", n_read);
+
+		let mut i_read = 0;
+
+		let mut cache = HashMap::<usize, Vec<(TileCoord3, Blob)>>::new();
+		for step in traversal_steps {
+			match step {
+				Push(bbox, index) => {
+					println!("Cache {bbox:?} at index {index}");
+					let p = progress.clone();
+					let vec = self
+						.get_tile_stream(bbox)
+						.await?
+						.inspect(move || p.inc(1))
+						.to_vec()
+						.await;
+					cache.entry(index).or_default().extend(vec);
+					i_read += bbox.count_tiles();
+				}
+				Pop(index, bbox) => {
+					println!("Uncache {bbox:?} at index {index}");
+					let vec = cache.remove(&index).unwrap();
+					let stream = TileStream::from_vec(vec);
+					callback(bbox, stream).await?;
+				}
+				Stream(bbox) => {
+					println!("Stream {bbox:?}");
+					let p = progress.clone();
+					let stream = self.get_tile_stream(bbox).await?.inspect(move || p.inc(1));
+					callback(bbox, stream).await?;
+
+					i_read += bbox.count_tiles();
+				}
+			}
+			progress.set_position(i_read);
+		}
+		Ok(())
 	}
 
 	/// Asynchronously fetch the raw tile data for the given tile coordinate.

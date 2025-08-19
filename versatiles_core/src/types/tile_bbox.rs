@@ -27,7 +27,7 @@ use std::{
 /// - `x_min`, `y_min`: Minimum tile coordinates.
 /// - `x_max`, `y_max`: Maximum tile coordinates.
 /// - `max`: Largest valid coordinate at the given zoom level (`2^level - 1`).
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub struct TileBBox {
 	/// Zoom level of the bounding box.
 	pub level: u8,
