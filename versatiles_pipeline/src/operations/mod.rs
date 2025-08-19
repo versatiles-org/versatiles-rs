@@ -8,7 +8,7 @@ use crate::traits::{ReadOperationFactoryTrait, TransformOperationFactoryTrait};
 pub fn get_transform_operation_factories() -> Vec<Box<dyn TransformOperationFactoryTrait>> {
 	vec![
 		Box::new(general::filter::Factory {}),
-		Box::new(general::update_metadata::Factory {}),
+		Box::new(general::meta_update::Factory {}),
 		Box::new(raster::raster_flatten::Factory {}),
 		Box::new(raster::raster_format::Factory {}),
 		Box::new(raster::raster_overscale::Factory {}),

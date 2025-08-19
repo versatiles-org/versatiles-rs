@@ -80,24 +80,12 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		self.source.get_tile_data(coord).await
-	}
-
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
 		self.source.get_tile_stream(bbox).await
 	}
 
-	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		self.source.get_image_data(coord).await
-	}
-
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		self.source.get_image_stream(bbox).await
-	}
-
-	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		self.source.get_vector_data(coord).await
 	}
 
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
@@ -112,7 +100,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"update_metadata"
+		"meta_update"
 	}
 }
 
