@@ -1,5 +1,5 @@
 use crate::{PipelineFactory, helpers::pack_image_tile_stream, traits::*, vpl::VPLNode};
-use anyhow::{Result, bail};
+use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::{DynamicImage, GenericImage};
@@ -45,6 +45,8 @@ impl Operation {
 	{
 		Box::pin(async move {
 			let args = Args::from_vpl_node(&vpl_node)?;
+			ensure!(source.traversal().is_any());
+
 			let mut parameters = source.parameters().clone();
 
 			let level_base = args
@@ -78,13 +80,22 @@ impl Operation {
 		})
 	}
 
+	#[context("Failed to build half image from source for coord {coord_dst:?}")]
 	async fn build_half_image_from_source(&self, coord_dst: &TileCoord3) -> Result<Option<DynamicImage>> {
 		let half_size = self.tile_size / 2;
 
 		let level_src = self.level_base;
 		let level_dst = coord_dst.level;
-		assert!(level_dst <= level_src);
+		ensure!(level_dst <= level_src, "Invalid level");
+
 		let scale = 1 << (level_src - level_dst + 1);
+		ensure!(scale >= 1, "Scale < 1");
+		ensure!(scale < self.tile_size, "Scale >= tile size");
+
+		let scaled_size = self.tile_size / scale;
+		ensure!(scaled_size > 0, "Scaled size is zero");
+
+		let count = 1 << (level_src - level_dst);
 
 		let bbox_src = coord_dst.as_tile_bbox(1)?.as_level(level_src);
 		let mut image_dst = DynamicImage::new_rgba8(half_size, half_size);
@@ -96,8 +107,8 @@ impl Operation {
 			}
 
 			let image_src = image.get_scaled_down(scale);
-			let x = (coord.x % 2) * half_size;
-			let y = (coord.y % 2) * half_size;
+			let x = (coord.x % count) * scaled_size;
+			let y = (coord.y % count) * scaled_size;
 
 			image_dst.copy_from(&image_src, x, y)?;
 		}
@@ -134,9 +145,11 @@ impl Operation {
 		Ok(())
 	}
 
+	#[context("Failed to build images from cache for bbox {bbox0:?}")]
 	async fn build_images_from_cache(&self, bbox0: TileBBox) -> Result<TileBBoxContainer<Option<DynamicImage>>> {
-		assert_eq!(bbox0.width(), BLOCK_TILE_COUNT);
-		assert_eq!(bbox0.height(), BLOCK_TILE_COUNT);
+		ensure!(bbox0.level < self.level_base);
+		ensure!(bbox0.width() <= BLOCK_TILE_COUNT);
+		ensure!(bbox0.height() <= BLOCK_TILE_COUNT);
 
 		let bbox1 = bbox0.as_level(bbox0.level + 1);
 
@@ -148,25 +161,28 @@ impl Operation {
 
 		// get images from cache
 		let mut cache = self.cache.lock().await;
-		for coord in bbox1.iter_coords() {
-			if let Some(entry) = cache.remove(&coord) {
-				if let Some(image) = entry {
-					assert_eq!(image.width(), half_size);
-					assert_eq!(image.height(), half_size);
-					map.get_mut(&coord)?.push((coord, image));
+		for coord1 in bbox1.iter_coords() {
+			if let Some(entry) = cache.remove(&coord1) {
+				if let Some(image1) = entry {
+					assert_eq!(image1.width(), half_size);
+					assert_eq!(image1.height(), half_size);
+
+					let coord0 = coord1.as_level(bbox0.level);
+					map.get_mut(&coord0)?.push((coord1, image1));
 				}
 			} else {
-				misses.push(coord);
+				misses.push(coord1);
 			}
 		}
 		drop(cache);
 
 		// get images from source
-		for coord in misses {
-			if let Some(image) = self.build_half_image_from_source(&coord).await? {
-				assert_eq!(image.width(), half_size);
-				assert_eq!(image.height(), half_size);
-				map.get_mut(&coord)?.push((coord, image));
+		for coord1 in misses {
+			if let Some(image1) = self.build_half_image_from_source(&coord1).await? {
+				assert_eq!(image1.width(), half_size);
+				assert_eq!(image1.height(), half_size);
+				let coord0 = coord1.as_level(bbox0.level);
+				map.get_mut(&coord0)?.push((coord1, image1));
 			}
 		}
 
@@ -236,7 +252,7 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
-		if bbox.level >= self.level_base {
+		if bbox.level > self.level_base {
 			return self.source.get_tile_stream(bbox).await;
 		}
 		pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters)
