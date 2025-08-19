@@ -70,6 +70,26 @@ impl<I: Clone + Default> TileBBoxContainer<I> {
 			.enumerate()
 			.map(move |(i, item)| (self.bbox.get_coord3_by_index(i as u64).unwrap(), item))
 	}
+
+	pub fn into_decreased_level(self) -> TileBBoxContainer<Vec<(TileCoord3, I)>> {
+		let bbox1 = self.bbox.as_level_decreased();
+		self.vec.into_iter().enumerate().fold(
+			TileBBoxContainer::<Vec<(TileCoord3, I)>>::new_default(bbox1),
+			|mut container1, (i, item)| {
+				let coord0 = self.bbox.get_coord3_by_index(i as u64).unwrap();
+				let coord1 = coord0.as_level(self.bbox.level - 1);
+				container1.get_mut(&coord1).unwrap().push((coord0, item));
+				container1
+			},
+		)
+	}
+
+	pub fn map<O>(self, f: impl FnMut(I) -> O) -> TileBBoxContainer<O> {
+		TileBBoxContainer {
+			bbox: self.bbox.clone(),
+			vec: self.vec.into_iter().map(f).collect(),
+		}
+	}
 }
 
 impl<I: Debug> Debug for TileBBoxContainer<I> {
