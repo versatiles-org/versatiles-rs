@@ -19,7 +19,7 @@ mod vector;
 
 use crate::{
 	PipelineFactory,
-	helpers::{pack_image_tile, pack_image_tile_stream, pack_vector_tile, pack_vector_tile_stream},
+	helpers::{pack_image_tile_stream, pack_vector_tile_stream},
 	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::VPLNode,
@@ -107,30 +107,6 @@ impl OperationTrait for Operation {
 		&self.tilejson
 	}
 
-	/// Generate and return a single **raster** debug tile.
-	///
-	/// Fails at compile time if the chosen `tile_format` is vector.
-	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		Ok(Some(create_debug_image(coord)))
-	}
-
-	/// Generate and return a single **vector** debug tile.
-	///
-	/// Only valid when `tile_format` is `"mvt"`.
-	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		Ok(Some(create_debug_vector_tile(coord)?))
-	}
-
-	/// Wrapper that encodes either image or vector output into a raw `Blob`
-	/// according to `tile_format`.
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		match self.parameters.tile_format.get_type() {
-			TileType::Raster => pack_image_tile(self.get_image_data(coord).await, &self.parameters),
-			TileType::Vector => pack_vector_tile(self.get_vector_data(coord).await, &self.parameters),
-			_ => bail!("tile format '{}' is not supported", self.parameters.tile_format),
-		}
-	}
-
 	/// Stream raster debug tiles for every coordinate within `bbox`.
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		ensure!(
@@ -198,7 +174,13 @@ mod tests {
 			.await?;
 
 		let coord = TileCoord3 { x: 1, y: 2, level: 3 };
-		let blob = operation.get_tile_data(&coord).await?.unwrap();
+		let blob = operation
+			.get_tile_stream(coord.as_tile_bbox(1)?)
+			.await?
+			.next()
+			.await
+			.unwrap()
+			.1;
 
 		assert_eq!(blob.len(), len, "for '{format}'");
 		assert_eq!(operation.tilejson().as_pretty_lines(100), tilejson, "for '{format}'");

@@ -216,7 +216,7 @@ impl TilesReaderTrait for VersaTilesReader {
 		}
 
 		// Get the tile ID
-		let tile_id = bbox.get_tile_index2(&tile_coord).unwrap();
+		let tile_id = bbox.get_tile_index2(&tile_coord).unwrap() as usize;
 
 		// Retrieve the tile index from cache or read from the reader
 		let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await?;
@@ -298,7 +298,7 @@ impl TilesReaderTrait for VersaTilesReader {
 				let mut tile_ranges: Vec<(TileCoord3, ByteRange)> = tile_index
 					.iter()
 					.enumerate()
-					.map(|(index, range)| (tiles_bbox_block.get_coord3_by_index(index as u32).unwrap(), *range))
+					.map(|(index, range)| (tiles_bbox_block.get_coord3_by_index(index as u64).unwrap(), *range))
 					.filter(|(coord, range)| tiles_bbox_used.contains3(coord) && (range.length > 0))
 					.collect();
 
@@ -428,7 +428,7 @@ impl TilesReaderTrait for VersaTilesReader {
 				}
 
 				let bbox = block.get_global_bbox();
-				let coord = bbox.get_coord3_by_index(index as u32)?;
+				let coord = bbox.get_coord3_by_index(index as u64)?;
 
 				biggest_tiles.push(Entry {
 					size,

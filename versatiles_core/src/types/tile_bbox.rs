@@ -766,20 +766,17 @@ impl TileBBox {
 	///
 	/// * `Ok(usize)` representing the index if the coordinate is within the bounding box.
 	/// * `Err(anyhow::Error)` if the coordinate is outside the bounding box.
-	pub fn get_tile_index2(&self, coord: &TileCoord2) -> Result<usize> {
-		if !self.contains2(coord) {
-			return Err(anyhow::anyhow!(
-				"Coordinate {:?} is not within the bounding box {:?}",
-				coord,
-				self
-			));
-		}
+	pub fn get_tile_index2(&self, coord: &TileCoord2) -> Result<u64> {
+		ensure!(
+			self.contains2(coord),
+			"Coordinate {coord:?} is not within the bounding box {self:?}"
+		);
 
-		let x = coord.x - self.x_min;
-		let y = coord.y - self.y_min;
-		let index = y * (self.x_max + 1 - self.x_min) + x;
+		let x = (coord.x - self.x_min) as u64;
+		let y = (coord.y - self.y_min) as u64;
+		let index = y * (self.x_max + 1 - self.x_min) as u64 + x;
 
-		Ok(index as usize)
+		Ok(index)
 	}
 
 	/// Retrieves the 0-based index of a `TileCoord3` within the bounding box.
@@ -792,20 +789,17 @@ impl TileBBox {
 	///
 	/// * `Ok(usize)` representing the index if the coordinate is within the bounding box.
 	/// * `Err(anyhow::Error)` if the coordinate is outside the bounding box or zoom levels do not match.
-	pub fn get_tile_index3(&self, coord: &TileCoord3) -> Result<usize> {
-		if !self.contains3(coord) {
-			return Err(anyhow::anyhow!(
-				"Coordinate {:?} is not within the bounding box {:?}",
-				coord,
-				self
-			));
-		}
+	pub fn get_tile_index3(&self, coord: &TileCoord3) -> Result<u64> {
+		ensure!(
+			self.contains3(coord),
+			"Coordinate {coord:?} is not within the bounding box {self:?}",
+		);
 
-		let x = coord.x - self.x_min;
-		let y = coord.y - self.y_min;
-		let index = y * (self.x_max + 1 - self.x_min) + x;
+		let x = (coord.x - self.x_min) as u64;
+		let y = (coord.y - self.y_min) as u64;
+		let index = y * (self.x_max as u64 + 1 - self.x_min as u64) + x;
 
-		Ok(index as usize)
+		Ok(index)
 	}
 
 	/// Retrieves the `TileCoord2` at a specific index within the bounding box.
@@ -818,13 +812,13 @@ impl TileBBox {
 	///
 	/// * `Ok(TileCoord2)` if the index is within bounds.
 	/// * `Err(anyhow::Error)` if the index is out of bounds.
-	pub fn get_coord2_by_index(&self, index: u32) -> Result<TileCoord2> {
-		ensure!(index < self.count_tiles() as u32, "index out of bounds");
+	pub fn get_coord2_by_index(&self, index: u64) -> Result<TileCoord2> {
+		ensure!(index < self.count_tiles(), "index out of bounds");
 
-		let width = self.width();
+		let width = self.width() as u64;
 		Ok(TileCoord2::new(
-			index.rem(width) + self.x_min,
-			index.div(width) + self.y_min,
+			index.rem(width) as u32 + self.x_min,
+			index.div(width) as u32 + self.y_min,
 		))
 	}
 
@@ -838,12 +832,12 @@ impl TileBBox {
 	///
 	/// * `Ok(TileCoord3)` if the index is within bounds.
 	/// * `Err(anyhow::Error)` if the index is out of bounds.
-	pub fn get_coord3_by_index(&self, index: u32) -> Result<TileCoord3> {
-		ensure!(index < self.count_tiles() as u32, "index {index} out of bounds");
+	pub fn get_coord3_by_index(&self, index: u64) -> Result<TileCoord3> {
+		ensure!(index < self.count_tiles(), "index {index} out of bounds");
 
-		let width = self.width();
-		let x = index.rem(width) + self.x_min;
-		let y = index.div(width) + self.y_min;
+		let width = self.width() as u64;
+		let x = index.rem(width) as u32 + self.x_min;
+		let y = index.div(width) as u32 + self.y_min;
 		TileCoord3::new(self.level, x, y)
 	}
 

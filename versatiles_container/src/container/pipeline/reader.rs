@@ -1,5 +1,5 @@
 use crate::get_reader;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::path::Path;
@@ -106,7 +106,20 @@ impl TilesReaderTrait for PipelineReader {
 
 	/// Get tile data for the given coordinate, always compressed and formatted.
 	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		self.operation.get_tile_data(coord).await
+		let mut vec = self
+			.operation
+			.get_tile_stream(coord.as_tile_bbox(1)?)
+			.await?
+			.to_vec()
+			.await;
+
+		ensure!(vec.len() <= 1, "PipelineReader should return at most one tile");
+
+		if let Some((_, b)) = vec.pop() {
+			Ok(Some(b))
+		} else {
+			Ok(None)
+		}
 	}
 
 	/// Get a stream of tiles within the bounding box.

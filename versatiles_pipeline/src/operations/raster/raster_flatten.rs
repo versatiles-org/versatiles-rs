@@ -1,9 +1,4 @@
-use crate::{
-	PipelineFactory,
-	helpers::{pack_image_tile, pack_image_tile_stream},
-	traits::*,
-	vpl::VPLNode,
-};
+use crate::{PipelineFactory, helpers::pack_image_tile_stream, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
@@ -60,14 +55,6 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		Ok(if let Some(image) = self.source.get_image_data(coord).await? {
-			Some(image.get_flattened(self.color)?)
-		} else {
-			None
-		})
-	}
-
 	async fn get_image_stream(&self, bbox_0: TileBBox) -> Result<TileStream<DynamicImage>> {
 		let color = self.color;
 		Ok(self
@@ -77,16 +64,9 @@ impl OperationTrait for Operation {
 			.map_item_parallel(move |image| image.get_flattened(color)))
 	}
 
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		return pack_image_tile(self.get_image_data(coord).await, self.source.parameters());
-	}
-
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
+		// todo: don't decompress and recompress tiles that are already flattened
 		pack_image_tile_stream(self.get_image_stream(bbox).await, self.source.parameters())
-	}
-
-	async fn get_vector_data(&self, _coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		bail!("Vector tiles are not supported in raster_flatten operations.");
 	}
 
 	async fn get_vector_stream(&self, _bbox: TileBBox) -> Result<TileStream<VectorTile>> {

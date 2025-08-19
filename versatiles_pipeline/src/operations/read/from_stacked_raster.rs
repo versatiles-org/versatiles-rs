@@ -11,7 +11,7 @@
 //! [`Operation`] implementation that performs the blending.
 use crate::{
 	PipelineFactory,
-	helpers::{pack_image_tile, pack_image_tile_stream},
+	helpers::pack_image_tile_stream,
 	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
@@ -80,7 +80,7 @@ impl ReadOperationTrait for Operation {
 				.into_iter()
 				.collect::<Result<Vec<_>>>()?;
 
-			ensure!(sources.len() > 0, "must have at least one source");
+			ensure!(!sources.is_empty(), "must have at least one source");
 
 			let mut tilejson = TileJSON::default();
 			let first_parameters = sources.first().unwrap().parameters();
@@ -132,41 +132,14 @@ impl OperationTrait for Operation {
 		&self.traversal
 	}
 
-	/// Convenience wrapper: returns a packed raster tile at `coord`.
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		pack_image_tile(self.get_image_data(coord).await, &self.parameters)
-	}
-
 	/// Stream packed raster tiles intersecting `bbox`.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters)
 	}
 
 	/// Always errors – vector output is not supported.
-	async fn get_vector_data(&self, _coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		bail!("this operation does not support vector data");
-	}
-
-	/// Always errors – vector output is not supported.
 	async fn get_vector_stream(&self, _bbox: TileBBox) -> Result<TileStream<VectorTile>> {
 		bail!("this operation does not support vector data");
-	}
-
-	/// Blend the raster tiles for a single coordinate across all sources.
-	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		let mut images: Vec<DynamicImage> = vec![];
-		for source in self.sources.iter() {
-			let image = source.get_image_data(coord).await?;
-			if let Some(image) = image {
-				images.push(image);
-			}
-		}
-
-		if images.is_empty() {
-			Ok(None)
-		} else {
-			overlay_image_tiles(images)
-		}
 	}
 
 	/// Stream blended raster tiles for every coordinate inside `bbox`.
@@ -175,8 +148,7 @@ impl OperationTrait for Operation {
 
 		Ok(TileStream::from_iter_stream(bboxes.into_iter().map(
 			move |bbox| async move {
-				let mut images: Vec<Vec<DynamicImage>> = Vec::new();
-				images.resize(bbox.count_tiles() as usize, vec![]);
+				let mut images = TileBBoxContainer::<Vec<DynamicImage>>::new_default(bbox);
 
 				let streams = self.sources.iter().map(|source| source.get_image_stream(bbox));
 				let results = futures::future::join_all(streams).await;
@@ -186,7 +158,7 @@ impl OperationTrait for Operation {
 						.unwrap()
 						.for_each_sync(|(coord, tile)| {
 							if !tile.is_empty() {
-								images[bbox.get_tile_index3(&coord).unwrap()].push(tile);
+								images.get_mut(&coord).unwrap().push(tile);
 							}
 						})
 						.await;
@@ -194,14 +166,7 @@ impl OperationTrait for Operation {
 
 				let images = images
 					.into_iter()
-					.enumerate()
-					.filter_map(|(i, v)| {
-						if v.is_empty() {
-							None
-						} else {
-							Some((bbox.get_coord3_by_index(i as u32).unwrap(), v))
-						}
-					})
+					.filter_map(|(c, v)| if v.is_empty() { None } else { Some((c, v)) })
 					.collect::<Vec<_>>();
 
 				TileStream::from_vec(images).filter_map_item_parallel(overlay_image_tiles)
@@ -232,7 +197,7 @@ impl ReadOperationFactoryTrait for Factory {
 mod tests {
 	use super::*;
 	use crate::helpers::{mock_image_source::MockImageSource, mock_vector_source::arrange_tiles};
-	use std::{ops::BitXor, path::Path};
+	use std::path::Path;
 
 	pub fn get_color(blob: &Blob) -> String {
 		let image = DynamicImage::from_blob(blob, TileFormat::PNG).unwrap();
@@ -255,16 +220,12 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_operation_get_tile_data() -> Result<()> {
+	async fn test_tilejson() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
 			.operation_from_vpl("from_stacked_raster [ from_container filename=07.png, from_container filename=F7.png ]")
 			.await?;
 
-		let coord = TileCoord3::new(3, 1, 2)?;
-		let blob = result.get_tile_data(&coord).await?.unwrap();
-
-		assert_eq!(get_color(&blob), "58B6");
 		assert_eq!(
 			result.tilejson().as_pretty_lines(100),
 			[
@@ -367,17 +328,6 @@ mod tests {
 			format!("{}", parameters.bbox_pyramid),
 			"[1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)]"
 		);
-
-		for level in 0..=4 {
-			assert!(
-				result
-					.get_tile_data(&TileCoord3::new(level, 0, 0)?)
-					.await?
-					.is_some()
-					.bitxor(!(1..=3).contains(&level)),
-				"level: {level}"
-			);
-		}
 
 		assert_eq!(
 			result.tilejson().as_pretty_lines(100),

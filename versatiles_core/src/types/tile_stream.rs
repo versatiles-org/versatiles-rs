@@ -63,7 +63,6 @@ pub struct TileStream<'a, T = Blob> {
 	pub stream: BoxStream<'a, (TileCoord3, T)>,
 }
 
-#[allow(dead_code)]
 impl<'a, T> TileStream<'a, T>
 where
 	T: Send + 'a,
@@ -151,9 +150,9 @@ where
 		let callback = Arc::new(callback);
 		let s = stream::iter(iter)
 			.map(move |coord| {
-				let c = Arc::clone(&callback);
+				let cb = Arc::clone(&callback);
 				// Spawn a task for each coordinate
-				tokio::task::spawn_blocking(move || (coord, c(coord)))
+				tokio::task::spawn_blocking(move || (coord, cb(coord)))
 			})
 			.buffer_unordered(num_cpus::get()) // concurrency
 			.filter_map(|result| async {
@@ -170,8 +169,9 @@ where
 		F: Fn(TileCoord3) -> Option<T> + Send + Sync + 'static,
 		T: 'static,
 	{
-		let s = stream::iter(iter.filter_map(move |coord| callback(coord).map(|item| (coord, item)))).boxed();
-		TileStream { stream: s.boxed() }
+		TileStream {
+			stream: stream::iter(iter.filter_map(move |coord| callback(coord).map(|item| (coord, item)))).boxed(),
+		}
 	}
 
 	/// Creates a `TileStream` by filtering and mapping an async closure over a vector of tile coordinates.
@@ -446,6 +446,27 @@ where
 					unwrap_result(item, || format!("Failed to process tile at {coord:?}")),
 				)
 			});
+		TileStream { stream: s.boxed() }
+	}
+
+	pub fn flat_map_parallel<F, O>(self, callback: F) -> TileStream<'a, O>
+	where
+		F: Fn(TileCoord3, T) -> Result<TileStream<'a, O>> + Send + Sync + 'static,
+		T: 'static,
+		O: 'static,
+	{
+		let arc_cb = Arc::new(callback);
+		let s = self
+			.stream
+			.map(move |(coord, item)| {
+				let cb = Arc::clone(&arc_cb);
+				tokio::task::spawn_blocking(move || {
+					let s = unwrap_result(cb(coord, item), || format!("Failed to process tile at {coord:?}"));
+					unsafe { std::mem::transmute::<_, TileStream<O>>(s) }
+				})
+			})
+			.buffer_unordered(num_cpus::get())
+			.flat_map_unordered(None, |e| e.unwrap().stream);
 		TileStream { stream: s.boxed() }
 	}
 

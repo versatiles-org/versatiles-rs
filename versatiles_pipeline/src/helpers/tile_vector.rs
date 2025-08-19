@@ -5,6 +5,7 @@ use versatiles_core::{
 };
 use versatiles_geometry::vector_tile::VectorTile;
 
+#[allow(dead_code)]
 pub fn unpack_vector_tile(
 	blob: Result<Option<Blob>>,
 	parameters: &TilesReaderParameters,
@@ -22,6 +23,7 @@ pub fn unpack_vector_tile_stream<'a>(
 	Ok(stream?.map_item_parallel(move |blob| VectorTile::from_blob(&decompress(blob, &tile_compression)?)))
 }
 
+#[allow(dead_code)]
 pub fn pack_vector_tile(tile: Result<Option<VectorTile>>, parameters: &TilesReaderParameters) -> Result<Option<Blob>> {
 	tile?
 		.map(|vector_tile| compress(vector_tile.to_blob()?, &parameters.tile_compression))

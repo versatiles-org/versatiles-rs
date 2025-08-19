@@ -128,31 +128,10 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	async fn get_image_data(&self, _coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		bail!(
-			"Operation 'raster_format' must be the last operation in a pipeline and cannot be used as an image source."
-		);
-	}
-
 	async fn get_image_stream(&self, _bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		bail!(
 			"Operation 'raster_format' must be the last operation in a pipeline and cannot be used as an image source."
 		);
-	}
-
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		Ok(if let Some(image) = self.source.get_image_data(coord).await? {
-			use RasterTileFormat::*;
-			use versatiles_image::{avif, jpeg, png, webp};
-			Some(match self.format {
-				Avif => avif::compress(&image, self.quality, self.speed)?,
-				Jpeg => jpeg::compress(&image, self.quality)?,
-				Png => png::compress(&image, self.speed)?,
-				Webp => webp::compress(&image, self.quality)?,
-			})
-		} else {
-			None
-		})
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
@@ -169,10 +148,6 @@ impl OperationTrait for Operation {
 			Png => stream.map_item_parallel(move |image| png::compress(&image, speed)),
 			Webp => stream.map_item_parallel(move |image| webp::compress(&image, quality)),
 		})
-	}
-
-	async fn get_vector_data(&self, _coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		bail!("Vector tiles are not supported in raster_format operations.");
 	}
 
 	async fn get_vector_stream(&self, _bbox: TileBBox) -> Result<TileStream<VectorTile>> {

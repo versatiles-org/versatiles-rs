@@ -6,6 +6,7 @@ use versatiles_core::{
 };
 use versatiles_image::traits::*;
 
+#[allow(dead_code)]
 pub fn unpack_image_tile(
 	blob: Result<Option<Blob>>,
 	parameters: &TilesReaderParameters,
@@ -25,6 +26,7 @@ pub fn unpack_image_tile_stream<'a>(
 		.map_item_parallel(move |blob| DynamicImage::from_blob(&decompress(blob, &tile_compression)?, tile_format)))
 }
 
+#[allow(dead_code)]
 pub fn pack_image_tile(
 	image: Result<Option<DynamicImage>>,
 	parameters: &TilesReaderParameters,

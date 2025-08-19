@@ -16,7 +16,7 @@
 
 use crate::{
 	PipelineFactory,
-	helpers::{pack_vector_tile, pack_vector_tile_stream},
+	helpers::pack_vector_tile_stream,
 	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
@@ -134,41 +134,14 @@ impl OperationTrait for Operation {
 		&self.traversal
 	}
 
-	/// Convenience wrapper: returns a packed vector tile at `coord`.
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		pack_vector_tile(self.get_vector_data(coord).await, &self.parameters)
-	}
-
 	/// Stream packed vector tiles intersecting `bbox`.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		pack_vector_tile_stream(self.get_vector_stream(bbox).await, &self.parameters)
 	}
 
 	/// Always errors – raster output is not supported.
-	async fn get_image_data(&self, _coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		bail!("this operation does not support image data");
-	}
-
-	/// Always errors – raster output is not supported.
 	async fn get_image_stream(&self, _bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		bail!("this operation does not support image data");
-	}
-
-	/// Merge vector tiles from all sources for a single coordinate.
-	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		let mut vector_tiles: Vec<VectorTile> = vec![];
-		for source in self.sources.iter() {
-			let vector_tile = source.get_vector_data(coord).await?;
-			if let Some(vector_tile) = vector_tile {
-				vector_tiles.push(vector_tile);
-			}
-		}
-
-		Ok(if vector_tiles.is_empty() {
-			None
-		} else {
-			Some(merge_vector_tiles(vector_tiles)?)
-		})
 	}
 
 	/// Stream merged vector tiles for every coordinate in `bbox`.
@@ -177,8 +150,7 @@ impl OperationTrait for Operation {
 
 		Ok(TileStream::from_iter_stream(bboxes.into_iter().map(
 			move |bbox| async move {
-				let mut tiles: Vec<Vec<VectorTile>> = Vec::new();
-				tiles.resize(bbox.count_tiles() as usize, vec![]);
+				let mut tiles = TileBBoxContainer::<Vec<VectorTile>>::new_default(bbox);
 
 				for source in self.sources.iter() {
 					source
@@ -186,7 +158,7 @@ impl OperationTrait for Operation {
 						.await
 						.unwrap()
 						.for_each_sync(|(coord, tile)| {
-							tiles[bbox.get_tile_index3(&coord).unwrap()].push(tile);
+							tiles.get_mut(&coord).unwrap().push(tile);
 						})
 						.await;
 				}
@@ -194,15 +166,11 @@ impl OperationTrait for Operation {
 				TileStream::from_vec(
 					tiles
 						.into_iter()
-						.enumerate()
-						.filter_map(|(i, v)| {
+						.filter_map(|(c, v)| {
 							if v.is_empty() {
 								None
 							} else {
-								Some((
-									bbox.get_coord3_by_index(i as u32).unwrap(),
-									merge_vector_tiles(v).unwrap(),
-								))
+								Some((c, merge_vector_tiles(v).unwrap()))
 							}
 						})
 						.collect(),
@@ -235,7 +203,7 @@ mod tests {
 	use super::*;
 	use crate::helpers::mock_vector_source::{MockVectorSource, arrange_tiles};
 	use itertools::Itertools;
-	use std::{ops::BitXor, path::Path};
+	use std::path::Path;
 
 	pub fn check_tile(blob: &Blob) -> String {
 		let tile = VectorTile::from_blob(blob).unwrap();
@@ -285,16 +253,11 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_operation_get_tile_data() -> Result<()> {
+	async fn test_tilejson() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let result = factory
 			.operation_from_vpl("from_merged_vector [ from_container filename=1.pbf, from_container filename=2.pbf ]")
 			.await?;
-
-		let coord = TileCoord3::new(3, 1, 2)?;
-		let blob = result.get_tile_data(&coord).await?.unwrap();
-
-		assert_eq!(check_tile(&blob), "1.pbf,2.pbf");
 
 		assert_eq!(
 			result.tilejson().as_pretty_lines(100),
@@ -400,17 +363,6 @@ mod tests {
 			format!("{}", parameters.bbox_pyramid),
 			"[1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)]"
 		);
-
-		for level in 0..=4 {
-			assert!(
-				result
-					.get_tile_data(&TileCoord3::new(level, 0, 0)?)
-					.await?
-					.is_some()
-					.bitxor(!(1..=3).contains(&level)),
-				"level: {level}"
-			);
-		}
 
 		assert_eq!(
 			result.tilejson().as_pretty_lines(100),

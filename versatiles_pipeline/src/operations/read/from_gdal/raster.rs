@@ -8,7 +8,7 @@
 
 use crate::{
 	PipelineFactory,
-	helpers::{pack_image_tile, pack_image_tile_stream},
+	helpers::pack_image_tile_stream,
 	operations::read::{from_gdal::dataset::GdalDataset, traits::ReadOperationTrait},
 	traits::*,
 	vpl::VPLNode,
@@ -135,26 +135,10 @@ impl OperationTrait for Operation {
 		&self.tilejson
 	}
 
-	/// Retrieve the *raw* (potentially compressed) tile blob at the given
-	/// coordinate; returns `Ok(None)` when the tile is missing.
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		trace!("get_tile_data: coord={:?}", coord);
-		pack_image_tile(self.get_image_data(coord).await, &self.parameters)
-	}
-
 	/// Stream raw tile blobs intersecting the bounding box by delegating to
 	/// `TilesReaderTrait::get_tile_stream`.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters)
-	}
-
-	/// Convenience wrapper that decodes the raw blob into an in‑memory
-	/// raster image.
-	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		trace!("get_image_data: coord={:?}", coord);
-		self
-			.get_image_data_from_gdal(coord.as_geo_bbox(), self.tile_size, self.tile_size)
-			.await
 	}
 
 	/// Stream decoded raster images for all tiles within the bounding box.
@@ -199,11 +183,6 @@ impl OperationTrait for Operation {
 			.boxed()
 		});
 		Ok(TileStream::from_iter_stream(jobs))
-	}
-
-	/// Fetch and decode a single vector tile at the requested coordinate.
-	async fn get_vector_data(&self, _coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		bail!("Vector tiles are not supported in operation `from_gdal_raster`")
 	}
 
 	/// Stream decoded vector tiles contained in the bounding box.
@@ -258,13 +237,6 @@ mod tests {
 			let coord = TileCoord3::new(level, x, y).unwrap();
 
 			let operation = get_operation(512).await;
-
-			let blob = operation.get_tile_data(&coord).await.unwrap().unwrap();
-			assert!(
-				blob
-					.as_slice()
-					.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A])
-			);
 
 			// Extract a 7×7 tile and gather the RGB bytes.
 			let image = operation
@@ -340,8 +312,6 @@ mod tests {
 	#[tokio::test]
 	async fn test_vector_methods_error() -> Result<()> {
 		let operation = get_operation(512).await;
-		// get_vector_data should error
-		assert!(operation.get_vector_data(&TileCoord3::new(0, 0, 0)?).await.is_err());
 		// get_vector_stream should error
 		assert!(operation.get_vector_stream(TileBBox::new_full(4)?).await.is_err());
 		Ok(())

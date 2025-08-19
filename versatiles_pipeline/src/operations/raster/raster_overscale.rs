@@ -1,9 +1,4 @@
-use crate::{
-	PipelineFactory,
-	helpers::{pack_image_tile, pack_image_tile_stream},
-	traits::*,
-	vpl::VPLNode,
-};
+use crate::{PipelineFactory, helpers::pack_image_tile_stream, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
@@ -11,7 +6,7 @@ use imageproc::image::DynamicImage;
 use std::fmt::Debug;
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_geometry::vector_tile::VectorTile;
-use versatiles_image::{DynamicImageTraitInfo, DynamicImageTraitOperation};
+use versatiles_image::traits::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filter tiles by bounding box and/or zoom levels.
@@ -86,43 +81,40 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		if coord.level <= self.level_base {
-			return self.source.get_image_data(coord).await;
+	async fn get_image_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<DynamicImage>> {
+		if bbox_dst.level >= self.level_base {
+			return self.source.get_image_stream(bbox_dst).await;
 		}
 
-		let coord1 = coord.as_level(self.level_base);
-		let image1 = self.source.get_image_data(&coord1).await?;
-		if image1.is_none() {
-			return Ok(None);
-		}
-		let image1 = image1.unwrap();
-
-		let tile_size = self.tile_size as f64;
-		let scale = (1 << (coord.level - self.level_base)) as f64;
-		let s = tile_size / scale;
-		let x0 = coord.x as f64 * s - (coord1.x as f64 * tile_size);
-		let y0 = coord.y as f64 * s - (coord1.y as f64 * tile_size);
-
-		let image = image1.get_extract(x0, y0, s, s, self.tile_size, self.tile_size);
-
-		Ok(image.into_optional())
-	}
-
-	async fn get_image_stream(&self, bbox0: TileBBox) -> Result<TileStream<DynamicImage>> {
-		if bbox0.level >= self.level_base {
-			return self.source.get_image_stream(bbox0).await;
+		if !self.parameters.bbox_pyramid.overlaps_bbox(&bbox_dst) {
+			return Ok(TileStream::new_empty());
 		}
 
-		todo!()
-	}
+		let level_dst = bbox_dst.level;
 
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		if coord.level >= self.level_base {
-			return self.source.get_tile_data(coord).await;
-		} else {
-			return pack_image_tile(self.get_image_data(coord).await, &self.parameters);
-		}
+		let bbox_base = bbox_dst.as_level(self.level_base);
+		let stream_base = self.source.get_image_stream(bbox_base).await?;
+
+		let tile_size = self.tile_size;
+		let tile_size_f64 = tile_size as f64;
+		let scale = (1 << (bbox_dst.level - self.level_base)) as f64;
+		let s = tile_size_f64 / scale;
+
+		Ok(stream_base.flat_map_parallel(move |coord_base, image_base| {
+			let mut bbox = coord_base.as_tile_bbox(1).unwrap().as_level(level_dst);
+			bbox.intersect_bbox(&bbox_dst).unwrap();
+
+			Ok(TileStream::from_iter_coord_parallel(
+				bbox.into_iter_coords(),
+				move |coord| {
+					let x0 = coord.x as f64 * s - (coord_base.x as f64 * tile_size_f64);
+					let y0 = coord.y as f64 * s - (coord_base.y as f64 * tile_size_f64);
+
+					let image = image_base.get_extract(x0, y0, s, s, tile_size, tile_size);
+					image.into_optional()
+				},
+			))
+		}))
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
@@ -130,10 +122,6 @@ impl OperationTrait for Operation {
 			return self.source.get_tile_stream(bbox).await;
 		}
 		pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters)
-	}
-
-	async fn get_vector_data(&self, _coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		bail!("Vector tiles are not supported in raster_overscale operations.");
 	}
 
 	async fn get_vector_stream(&self, _bbox: TileBBox) -> Result<TileStream<VectorTile>> {

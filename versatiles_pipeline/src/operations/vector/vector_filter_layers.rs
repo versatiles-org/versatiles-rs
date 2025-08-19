@@ -83,7 +83,7 @@ impl TransformOperationFactoryTrait for Factory {
 mod tests {
 	use super::*;
 	use pretty_assertions::assert_eq;
-	use versatiles_core::TileCoord3;
+	use versatiles_core::TileBBox;
 	use versatiles_geometry::{GeoFeature, GeoProperties, GeoValue, Geometry, vector_tile::VectorTileLayer};
 
 	#[tokio::test]
@@ -149,7 +149,8 @@ mod tests {
 			)
 			.await?;
 
-		let blob = operation.get_tile_data(&TileCoord3::new(0, 0, 0)?).await?.unwrap();
+		let mut stream = operation.get_tile_stream(TileBBox::new_full(0)?).await?;
+		let blob = stream.next().await.unwrap().1;
 		let tile = VectorTile::from_blob(&blob)?;
 		let layer_names = tile
 			.layers

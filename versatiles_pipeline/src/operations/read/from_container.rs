@@ -8,7 +8,7 @@
 
 use crate::{
 	PipelineFactory,
-	helpers::{unpack_image_tile, unpack_image_tile_stream, unpack_vector_tile, unpack_vector_tile_stream},
+	helpers::{unpack_image_tile_stream, unpack_vector_tile_stream},
 	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::VPLNode,
@@ -79,32 +79,15 @@ impl OperationTrait for Operation {
 		self.reader.traversal()
 	}
 
-	/// Retrieve the *raw* (potentially compressed) tile blob at the given
-	/// coordinate; returns `Ok(None)` when the tile is missing.
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		self.reader.get_tile_data(coord).await
-	}
-
 	/// Stream raw tile blobs intersecting the bounding box by delegating to
 	/// `TilesReaderTrait::get_tile_stream`.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		self.reader.get_tile_stream(bbox).await
 	}
 
-	/// Convenience wrapper that decodes the raw blob into an in‑memory
-	/// raster image.
-	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		unpack_image_tile(self.reader.get_tile_data(coord).await, &self.parameters)
-	}
-
 	/// Stream decoded raster images for all tiles within the bounding box.
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		unpack_image_tile_stream(self.reader.get_tile_stream(bbox).await, &self.parameters)
-	}
-
-	/// Fetch and decode a single vector tile at the requested coordinate.
-	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		unpack_vector_tile(self.reader.get_tile_data(coord).await, &self.parameters)
 	}
 
 	/// Stream decoded vector tiles contained in the bounding box.
@@ -181,11 +164,6 @@ mod tests {
 			]
 		);
 
-		let coord = TileCoord3 { x: 2, y: 3, level: 4 };
-		let blob = operation.get_tile_data(&coord).await?.unwrap();
-
-		assert!(blob.len() > 50);
-
 		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await?;
 
 		let mut n = 0;
@@ -233,11 +211,6 @@ mod tests {
 				"}"
 			]
 		);
-
-		let coord = TileCoord3 { x: 2, y: 3, level: 4 };
-		let blob = operation.get_tile_data(&coord).await?.unwrap();
-
-		assert!(blob.len() > 50);
 
 		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await?;
 

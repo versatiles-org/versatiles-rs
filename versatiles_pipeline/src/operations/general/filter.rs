@@ -81,13 +81,6 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		match self.filter_coord(coord) {
-			true => self.source.get_tile_data(coord).await,
-			false => Ok(None),
-		}
-	}
-
 	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Blob>> {
 		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
 		Ok(self
@@ -97,13 +90,6 @@ impl OperationTrait for Operation {
 			.filter_coord(|coord| ready(self.filter_coord(&coord))))
 	}
 
-	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		match self.filter_coord(coord) {
-			true => self.source.get_image_data(coord).await,
-			false => Ok(None),
-		}
-	}
-
 	async fn get_image_stream(&self, mut bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
 		Ok(self
@@ -111,13 +97,6 @@ impl OperationTrait for Operation {
 			.get_image_stream(bbox)
 			.await?
 			.filter_coord(|coord| ready(self.filter_coord(&coord))))
-	}
-
-	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		match self.filter_coord(coord) {
-			true => self.source.get_vector_data(coord).await,
-			false => Ok(None),
-		}
 	}
 
 	async fn get_vector_stream(&self, mut bbox: TileBBox) -> Result<TileStream<VectorTile>> {
@@ -164,11 +143,16 @@ mod tests {
 			.await?;
 
 		for (coord, expected) in tests.iter() {
-			let result = operation.get_tile_data(coord).await?;
+			let count = operation
+				.get_tile_stream(coord.as_tile_bbox(1)?)
+				.await?
+				.to_vec()
+				.await
+				.len();
 			if *expected {
-				assert!(result.is_some(), "Expected tile data for {coord:?} in bbox {bbox:?}");
+				assert_eq!(count, 1, "Expected tile data for {coord:?} in bbox {bbox:?}");
 			} else {
-				assert!(result.is_none(), "Expected no tile data for {coord:?} in bbox {bbox:?}");
+				assert_eq!(count, 0, "Expected no tile data for {coord:?} in bbox {bbox:?}");
 			}
 		}
 

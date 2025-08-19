@@ -256,10 +256,10 @@ mod tests {
 			.await?;
 
 		// ── extract a single feature for inspection ────────────────
-		let blob = operation
-			.get_tile_data(&TileCoord3::new(10, 1000, 100)?)
-			.await?
-			.unwrap();
+		let mut stream = operation
+			.get_tile_stream(TileCoord3::new(10, 1000, 100)?.as_tile_bbox(1)?)
+			.await?;
+		let blob = stream.next().await.unwrap().1;
 		let tile = VectorTile::from_blob(&blob)?;
 		let layer = tile.find_layer("debug_y").unwrap();
 

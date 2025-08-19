@@ -140,15 +140,13 @@ impl Operation {
 
 		Ok(TileStream::from_iter_stream(sub_bboxes.into_iter().map(
 			move |bbox| async move {
-				let mut tiles: Vec<Option<(TileCoord3, T)>> = vec![None; bbox.count_tiles() as usize];
+				let mut tiles = TileBBoxContainer::<Option<T>>::new_default(bbox);
 
 				for source in self.sources.iter() {
 					let mut bbox_left = TileBBox::new_empty(bbox.level).unwrap();
-					for (idx, slot) in tiles.iter().enumerate() {
+					for (coord, slot) in tiles.iter() {
 						if slot.is_none() {
-							bbox_left
-								.include_coord3(&bbox.get_coord3_by_index(idx as u32).unwrap())
-								.unwrap();
+							bbox_left.include_coord3(&coord).unwrap();
 						}
 					}
 					if bbox_left.is_empty() {
@@ -158,16 +156,19 @@ impl Operation {
 					let stream = fetch_stream(source, bbox_left).await.unwrap();
 					stream
 						.for_each_sync(|(coord, item)| {
-							let idx = bbox.get_tile_index3(&coord).unwrap();
-							if tiles[idx].is_none() {
+							let entry = tiles.get_mut(&coord).unwrap();
+							if entry.is_none() {
 								let item = map_fn(item, source).unwrap();
-								tiles[idx] = Some((coord, item));
+								*entry = Some(item);
 							}
 						})
 						.await;
 				}
-
-				TileStream::from_vec(tiles.into_iter().flatten().collect())
+				let vec = tiles
+					.into_iter()
+					.flat_map(|(coord, item)| item.map(|tile| (coord, tile)))
+					.collect::<Vec<_>>();
+				TileStream::from_vec(vec)
 			},
 		)))
 	}
@@ -189,21 +190,6 @@ impl OperationTrait for Operation {
 		&self.traversal
 	}
 
-	/// Fetch a *packed* tile for `coord`, recompressing if necessary.
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		for source in self.sources.iter() {
-			if let Some(mut blob) = source.get_tile_data(coord).await? {
-				blob = recompress(
-					blob,
-					&source.parameters().tile_compression,
-					&self.parameters.tile_compression,
-				)?;
-				return Ok(Some(blob));
-			}
-		}
-		return Ok(None);
-	}
-
 	/// Stream packed tiles intersecting `bbox` using the overlay strategy.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		// We need the desired output compression inside the closure, so copy it.
@@ -215,17 +201,6 @@ impl OperationTrait for Operation {
 		)
 	}
 
-	/// Retrieve a single raster tile, stopping at the first source that has it.
-	async fn get_image_data(&self, coord: &TileCoord3) -> Result<Option<DynamicImage>> {
-		for source in self.sources.iter() {
-			let tile = source.get_image_data(coord).await?;
-			if tile.is_some() {
-				return Ok(tile);
-			}
-		}
-		return Ok(None);
-	}
-
 	/// Stream raster tiles for every coordinate in `bbox` via overlay.
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		self.gather_stream(
@@ -233,17 +208,6 @@ impl OperationTrait for Operation {
 			|src, b| Box::pin(async move { src.get_image_stream(b).await }),
 			|img, _| Ok(img),
 		)
-	}
-
-	/// Retrieve a single vector tile, stopping at the first source that has it.
-	async fn get_vector_data(&self, coord: &TileCoord3) -> Result<Option<VectorTile>> {
-		for source in self.sources.iter() {
-			let tile = source.get_vector_data(coord).await?;
-			if tile.is_some() {
-				return Ok(tile);
-			}
-		}
-		return Ok(None);
 	}
 
 	/// Stream vector tiles for every coordinate in `bbox` via overlay.
@@ -357,10 +321,6 @@ mod tests {
 			)
 			.await?;
 
-		let coord = TileCoord3::new(4, 7, 8)?;
-		let blob = result.get_tile_data(&coord).await?.unwrap();
-		assert_eq!(check_vector_blob(blob), "1");
-
 		assert_eq!(
 			result.tilejson().as_pretty_lines(100),
 			[
@@ -403,13 +363,6 @@ mod tests {
 		let tiles = result.get_vector_stream(bbox).await?.to_vec().await;
 		assert_eq!(arrange_tiles(tiles, check_vector), *RESULT_PATTERN);
 
-		let c1 = TileCoord3::new(4, 7, 7)?;
-		let c2 = TileCoord3::new(4, 9, 7)?;
-		assert_eq!(check_vector_blob(result.get_tile_data(&c1).await?.unwrap()), "🟦");
-		assert_eq!(check_vector_blob(result.get_tile_data(&c2).await?.unwrap()), "🟨");
-		assert_eq!(check_vector(result.get_vector_data(&c1).await?.unwrap()), "🟦");
-		assert_eq!(check_vector(result.get_vector_data(&c2).await?.unwrap()), "🟨");
-
 		Ok(())
 	}
 
@@ -435,13 +388,6 @@ mod tests {
 
 		let tiles = result.get_image_stream(bbox).await?.to_vec().await;
 		assert_eq!(arrange_tiles(tiles, check_image), *RESULT_PATTERN);
-
-		let c1 = TileCoord3::new(4, 7, 7)?;
-		let c2 = TileCoord3::new(4, 9, 7)?;
-		assert_eq!(check_image_blob(result.get_tile_data(&c1).await?.unwrap()), "🟦");
-		assert_eq!(check_image_blob(result.get_tile_data(&c2).await?.unwrap()), "🟨");
-		assert_eq!(check_image(result.get_image_data(&c1).await?.unwrap()), "🟦");
-		assert_eq!(check_image(result.get_image_data(&c2).await?.unwrap()), "🟨");
 
 		Ok(())
 	}
