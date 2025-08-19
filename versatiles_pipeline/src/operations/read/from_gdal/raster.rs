@@ -142,8 +142,10 @@ impl OperationTrait for Operation {
 	}
 
 	/// Stream decoded raster images for all tiles within the bounding box.
-	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+	async fn get_image_stream(&self, mut bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		let count = 8192u32.div_euclid(self.tile_size).max(1);
+
+		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
 
 		let bboxes: Vec<TileBBox> = bbox.iter_bbox_grid(count).collect();
 		let jobs = bboxes.into_iter().map(move |bbox| {
