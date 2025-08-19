@@ -125,18 +125,22 @@ impl Operation {
 
 		let full_size = self.tile_size;
 
-		let images: Vec<(TileCoord3, Option<DynamicImage>)> = container
-			.iter()
-			.map(|(coord, item)| {
-				if let Some(image) = item {
-					assert_eq!(image.width(), full_size);
-					assert_eq!(image.height(), full_size);
-					(coord, Some(image.get_scaled_down(2)))
-				} else {
-					(coord, None)
-				}
-			})
-			.collect();
+		let images: Vec<(TileCoord3, Option<DynamicImage>)> =
+			futures::future::join_all(container.iter().map(|(coord, item)| {
+				let item = item.clone();
+				tokio::task::spawn_blocking(move || {
+					if let Some(image) = item {
+						assert_eq!(image.width(), full_size);
+						assert_eq!(image.height(), full_size);
+						(coord, Some(image.get_scaled_down(2)))
+					} else {
+						(coord, None)
+					}
+				})
+			}))
+			.await
+			.into_iter()
+			.collect::<Result<Vec<_>, _>>()?;
 
 		let mut cache = self.cache.lock().await;
 		for (coord, item) in images {
@@ -176,7 +180,7 @@ impl Operation {
 		}
 		drop(cache);
 
-		// get images from source
+		// get missing images from source
 		for coord1 in misses {
 			if let Some(image1) = self.build_half_image_from_source(&coord1).await? {
 				assert_eq!(image1.width(), half_size);
