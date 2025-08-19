@@ -25,6 +25,7 @@ futures.workspace = true
 indicatif = { version = "0.18.0", features = ["unicode-width"] }
 itertools.workspace = true
 lazy_static = { workspace = true }
+log.workspace = true
 num_cpus.workspace = true
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls"] }

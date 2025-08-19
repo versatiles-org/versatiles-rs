@@ -14,6 +14,7 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, lock::Mutex};
+use log::trace;
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 /// Trait defining behavior for reading tiles from a container.
@@ -73,7 +74,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		for step in traversal_steps {
 			match step {
 				Push(bbox, index) => {
-					println!("Cache {bbox:?} at index {index}");
+					trace!("Cache {bbox:?} at index {index}");
 					let p = progress.clone();
 					let vec = self
 						.get_tile_stream(bbox)
@@ -85,13 +86,13 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 					i_read += bbox.count_tiles();
 				}
 				Pop(index, bbox) => {
-					println!("Uncache {bbox:?} at index {index}");
+					trace!("Uncache {bbox:?} at index {index}");
 					let vec = cache.remove(&index).unwrap();
 					let stream = TileStream::from_vec(vec);
 					callback(bbox, stream).await?;
 				}
 				Stream(bbox) => {
-					println!("Stream {bbox:?}");
+					trace!("Stream {bbox:?}");
 					let p = progress.clone();
 					let stream = self.get_tile_stream(bbox).await?.inspect(move || p.inc(1));
 					callback(bbox, stream).await?;
