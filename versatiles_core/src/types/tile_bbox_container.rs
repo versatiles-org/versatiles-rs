@@ -21,6 +21,10 @@ impl<I: Clone + Default> TileBBoxContainer<I> {
 		Self::new_prefilled_with(bbox, I::default())
 	}
 
+	pub fn len(&self) -> usize {
+		self.vec.len()
+	}
+
 	pub async fn from_stream<E: Clone>(
 		bbox: TileBBox,
 		mut stream: TileStream<'_, E>,
