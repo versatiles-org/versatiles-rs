@@ -113,6 +113,10 @@ impl Traversal {
 		translate_traversals(pyramid, self, other)
 	}
 
+	pub fn is_any(&self) -> bool {
+		self.order == TraversalOrder::AnyOrder
+	}
+
 	pub const ANY: Self = Self::new_any();
 }
 
