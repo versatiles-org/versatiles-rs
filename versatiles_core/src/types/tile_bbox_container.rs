@@ -34,7 +34,7 @@ impl<I: Clone + Default> TileBBoxContainer<I> {
 		mut stream: TileStream<'_, E>,
 	) -> Result<TileBBoxContainer<Option<E>>> {
 		let mut container = TileBBoxContainer::<Option<E>>::new_prefilled_with(bbox, None);
-		while let Some((coord, item)) = stream.stream.next().await {
+		while let Some((coord, item)) = stream.inner.next().await {
 			container.set(coord, Some(item))?;
 		}
 		Ok(container)

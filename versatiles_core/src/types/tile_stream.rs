@@ -60,7 +60,7 @@ use std::{io::Write, pin::Pin, sync::Arc};
 /// - `stream`: The internal boxed stream that emits `(TileCoord3, T)` pairs.
 pub struct TileStream<'a, T = Blob> {
 	/// The internal boxed stream, emitting `(TileCoord3, T)` pairs.
-	pub stream: BoxStream<'a, (TileCoord3, T)>,
+	pub inner: BoxStream<'a, (TileCoord3, T)>,
 }
 
 impl<'a, T> TileStream<'a, T>
@@ -76,7 +76,7 @@ where
 	/// Useful for representing an empty data source.
 	pub fn new_empty() -> TileStream<'a, T> {
 		TileStream {
-			stream: stream::empty().boxed(),
+			inner: stream::empty().boxed(),
 		}
 	}
 
@@ -94,7 +94,7 @@ where
 	/// let my_stream = TileStream::from_stream(tile_data.boxed());
 	/// ```
 	pub fn from_stream(stream: Pin<Box<dyn Stream<Item = (TileCoord3, T)> + Send + 'a>>) -> Self {
-		TileStream { stream }
+		TileStream { inner: stream }
 	}
 
 	/// Constructs a `TileStream` from a vector of `(TileCoord3, T)` items.
@@ -112,7 +112,7 @@ where
 	/// ```
 	pub fn from_vec(vec: Vec<(TileCoord3, T)>) -> Self {
 		TileStream {
-			stream: stream::iter(vec).boxed(),
+			inner: stream::iter(vec).boxed(),
 		}
 	}
 
@@ -161,7 +161,7 @@ where
 					_ => None,
 				}
 			});
-		TileStream { stream: s.boxed() }
+		TileStream { inner: s.boxed() }
 	}
 
 	pub fn from_iter_coord<F>(iter: impl Iterator<Item = TileCoord3> + Send + 'a, callback: F) -> Self
@@ -170,7 +170,7 @@ where
 		T: 'static,
 	{
 		TileStream {
-			stream: stream::iter(iter.filter_map(move |coord| callback(coord).map(|item| (coord, item)))).boxed(),
+			inner: stream::iter(iter.filter_map(move |coord| callback(coord).map(|item| (coord, item)))).boxed(),
 		}
 	}
 
@@ -204,7 +204,7 @@ where
 		Fut: Future<Output = Option<(TileCoord3, T)>> + Send + 'a,
 	{
 		let s = stream::iter(vec).filter_map(callback);
-		TileStream { stream: s.boxed() }
+		TileStream { inner: s.boxed() }
 	}
 
 	// -------------------------------------------------------------------------
@@ -234,10 +234,10 @@ where
 		FutureStream: Future<Output = TileStream<'a, T>> + Send + 'a,
 	{
 		TileStream {
-			stream: Box::pin(
+			inner: Box::pin(
 				stream::iter(iter)
 					.buffer_unordered(num_cpus::get())
-					.map(|s| s.stream)
+					.map(|s| s.inner)
 					.flatten(),
 			),
 		}
@@ -264,7 +264,7 @@ where
 	/// # }
 	/// ```
 	pub async fn to_vec(self) -> Vec<(TileCoord3, T)> {
-		self.stream.collect().await
+		self.inner.collect().await
 	}
 
 	/// Retrieves the next `(TileCoord3, T)` item from this stream, or `None` if the stream is empty.
@@ -289,7 +289,7 @@ where
 	/// # }
 	/// ```
 	pub async fn next(&mut self) -> Option<(TileCoord3, T)> {
-		self.stream.next().await
+		self.inner.next().await
 	}
 
 	/// Applies an asynchronous callback `callback` to each `(TileCoord3, T)` item.
@@ -316,7 +316,7 @@ where
 		F: FnMut((TileCoord3, T)) -> Fut,
 		Fut: Future<Output = ()>,
 	{
-		self.stream.for_each(callback).await;
+		self.inner.for_each(callback).await;
 	}
 
 	pub async fn for_each_async_parallel<F, Fut>(self, callback: F)
@@ -324,7 +324,7 @@ where
 		F: FnMut((TileCoord3, T)) -> Fut,
 		Fut: Future<Output = ()>,
 	{
-		self.stream.for_each_concurrent(num_cpus::get(), callback).await;
+		self.inner.for_each_concurrent(num_cpus::get(), callback).await;
 	}
 
 	/// Applies a synchronous callback `callback` to each `(TileCoord3, T)` item.
@@ -350,7 +350,7 @@ where
 		F: FnMut((TileCoord3, T)),
 	{
 		self
-			.stream
+			.inner
 			.for_each(|item| {
 				callback(item);
 				ready(())
@@ -385,7 +385,7 @@ where
 		F: FnMut(Vec<(TileCoord3, T)>),
 	{
 		let mut buffer = Vec::with_capacity(buffer_size);
-		while let Some(item) = self.stream.next().await {
+		while let Some(item) = self.inner.next().await {
 			buffer.push(item);
 
 			if buffer.len() >= buffer_size {
@@ -433,7 +433,7 @@ where
 	{
 		let arc_cb = Arc::new(callback);
 		let s = self
-			.stream
+			.inner
 			.map(move |(coord, item)| {
 				let cb = Arc::clone(&arc_cb);
 				tokio::task::spawn_blocking(move || (coord, cb(item)))
@@ -446,7 +446,7 @@ where
 					unwrap_result(item, || format!("Failed to process tile at {coord:?}")),
 				)
 			});
-		TileStream { stream: s.boxed() }
+		TileStream { inner: s.boxed() }
 	}
 
 	pub fn flat_map_parallel<F, O>(self, callback: F) -> TileStream<'a, O>
@@ -457,7 +457,7 @@ where
 	{
 		let arc_cb = Arc::new(callback);
 		let s = self
-			.stream
+			.inner
 			.map(move |(coord, item)| {
 				let cb = Arc::clone(&arc_cb);
 				tokio::task::spawn_blocking(move || {
@@ -466,8 +466,8 @@ where
 				})
 			})
 			.buffer_unordered(num_cpus::get())
-			.flat_map_unordered(None, |e| e.unwrap().stream);
-		TileStream { stream: s.boxed() }
+			.flat_map_unordered(None, |e| e.unwrap().inner);
+		TileStream { inner: s.boxed() }
 	}
 
 	/// Filters and transforms the **value of type `T`** for each tile in parallel, discarding items where `callback` returns `None`.
@@ -504,7 +504,7 @@ where
 	{
 		let arc_cb = Arc::new(callback);
 		let s = self
-			.stream
+			.inner
 			.map(move |(coord, item)| {
 				let cb = Arc::clone(&arc_cb);
 				tokio::task::spawn_blocking(move || (coord, cb(item)))
@@ -515,7 +515,7 @@ where
 				let maybe_item = unwrap_result(maybe_item, || format!("Failed to process tile at {coord:?}"));
 				maybe_item.map(|item| (coord, item))
 			});
-		TileStream { stream: s.boxed() }
+		TileStream { inner: s.boxed() }
 	}
 
 	// -------------------------------------------------------------------------
@@ -547,8 +547,8 @@ where
 	where
 		F: FnMut(TileCoord3) -> TileCoord3 + Send + 'a,
 	{
-		let s = self.stream.map(move |(coord, item)| (callback(coord), item)).boxed();
-		TileStream { stream: s }
+		let s = self.inner.map(move |(coord, item)| (callback(coord), item)).boxed();
+		TileStream { inner: s }
 	}
 
 	/// Filters the stream by **tile coordinate** using an *asynchronous* predicate.
@@ -584,8 +584,8 @@ where
 		F: FnMut(TileCoord3) -> Fut + Send + 'a,
 		Fut: Future<Output = bool> + Send + 'a,
 	{
-		let s = self.stream.filter(move |(coord, _item)| callback(*coord)).boxed();
-		TileStream { stream: s }
+		let s = self.inner.filter(move |(coord, _item)| callback(*coord)).boxed();
+		TileStream { inner: s }
 	}
 
 	/// Runs a callback for every item, e.g. for progress tracking.
@@ -594,8 +594,8 @@ where
 		F: FnMut() + Send + 'a,
 	{
 		TileStream {
-			stream: self
-				.stream
+			inner: self
+				.inner
 				.map(move |item| {
 					callback();
 					item
@@ -626,7 +626,7 @@ where
 	pub async fn drain_and_count(self) -> u64 {
 		let mut count = 0u64;
 		self
-			.stream
+			.inner
 			.for_each(|_| {
 				count += 1;
 				ready(())
