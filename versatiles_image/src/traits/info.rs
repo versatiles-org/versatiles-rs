@@ -9,6 +9,7 @@ pub trait DynamicImageTraitInfo: DynamicImageTraitConvert {
 	fn ensure_same_meta(&self, other: &DynamicImage) -> Result<()>;
 	fn ensure_same_size(&self, other: &DynamicImage) -> Result<()>;
 	fn extended_color_type(&self) -> ExtendedColorType;
+	fn has_alpha(&self) -> bool;
 	fn into_optional(self) -> Option<DynamicImage>;
 	fn is_empty(&self) -> bool;
 	fn is_opaque(&self) -> bool;
@@ -18,31 +19,12 @@ impl DynamicImageTraitInfo for DynamicImage
 where
 	DynamicImage: DynamicImageTraitConvert,
 {
-	fn ensure_same_size(&self, other: &DynamicImage) -> Result<()> {
-		ensure!(
-			self.width() == other.width(),
-			"Image width mismatch: self has width {}, but the other image has width {}",
-			self.width(),
-			other.width()
-		);
-		ensure!(
-			self.height() == other.height(),
-			"Image height mismatch: self has height {}, but the other image has height {}",
-			self.height(),
-			other.height()
-		);
-		Ok(())
+	fn bits_per_value(&self) -> u8 {
+		(self.color().bits_per_pixel() / self.color().channel_count() as u16) as u8
 	}
 
-	fn ensure_same_meta(&self, other: &DynamicImage) -> Result<()> {
-		self.ensure_same_size(other)?;
-		ensure!(
-			self.color() == other.color(),
-			"Pixel value type mismatch: self has {:?}, but the other image has {:?}",
-			self.color(),
-			other.color()
-		);
-		Ok(())
+	fn channel_count(&self) -> u8 {
+		self.color().channel_count()
 	}
 
 	fn diff(&self, other: &DynamicImage) -> Result<Vec<f64>> {
@@ -62,16 +44,43 @@ where
 		Ok(sqr_sum.iter().map(|v| (10.0 * (*v as f64) / n).ceil() / 10.0).collect())
 	}
 
-	fn bits_per_value(&self) -> u8 {
-		(self.color().bits_per_pixel() / self.color().channel_count() as u16) as u8
+	fn ensure_same_meta(&self, other: &DynamicImage) -> Result<()> {
+		self.ensure_same_size(other)?;
+		ensure!(
+			self.color() == other.color(),
+			"Pixel value type mismatch: self has {:?}, but the other image has {:?}",
+			self.color(),
+			other.color()
+		);
+		Ok(())
+	}
+
+	fn ensure_same_size(&self, other: &DynamicImage) -> Result<()> {
+		ensure!(
+			self.width() == other.width(),
+			"Image width mismatch: self has width {}, but the other image has width {}",
+			self.width(),
+			other.width()
+		);
+		ensure!(
+			self.height() == other.height(),
+			"Image height mismatch: self has height {}, but the other image has height {}",
+			self.height(),
+			other.height()
+		);
+		Ok(())
 	}
 
 	fn extended_color_type(&self) -> ExtendedColorType {
 		self.color().into()
 	}
 
-	fn channel_count(&self) -> u8 {
-		self.color().channel_count()
+	fn has_alpha(&self) -> bool {
+		self.color().has_alpha()
+	}
+
+	fn into_optional(self) -> Option<DynamicImage> {
+		if self.is_empty() { None } else { Some(self) }
 	}
 
 	fn is_empty(&self) -> bool {
@@ -88,9 +97,5 @@ where
 		}
 		let alpha_channel = (self.color().channel_count() - 1) as usize;
 		return self.iter_pixels().all(|p| p[alpha_channel] == 255);
-	}
-
-	fn into_optional(self) -> Option<DynamicImage> {
-		if self.is_empty() { None } else { Some(self) }
 	}
 }
