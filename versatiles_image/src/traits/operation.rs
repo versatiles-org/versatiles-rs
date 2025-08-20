@@ -6,10 +6,12 @@ use imageproc::map::map_colors;
 
 pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
 	fn average_color(&self) -> Vec<u8>;
-	fn get_extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> DynamicImage;
-	fn get_flattened(self, color: Rgb<u8>) -> Result<DynamicImage>;
-	fn get_scaled_down(&self, factor: u32) -> DynamicImage;
-	fn into_scaled_down(self, factor: u32) -> DynamicImage;
+	fn get_extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> Result<DynamicImage>;
+	fn get_scaled_down(&self, factor: u32) -> Result<DynamicImage>;
+	fn into_flattened(self, color: Rgb<u8>) -> Result<DynamicImage>;
+	fn into_removed_alpha(self) -> Result<DynamicImage>;
+	fn into_removed_alpha_if_opaque(self) -> Result<DynamicImage>;
+	fn into_scaled_down(self, factor: u32) -> Result<DynamicImage>;
 	fn make_opaque(&mut self) -> Result<()>;
 	fn overlay(&mut self, top: &DynamicImage) -> Result<()>;
 }
@@ -23,19 +25,30 @@ where
 		img.into_bytes()
 	}
 
-	fn get_extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> DynamicImage {
+	fn get_extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> Result<DynamicImage> {
 		let mut dst_image = DynamicImage::new(width_dst, height_dst, self.color());
-		Resizer::new()
-			.resize(self, &mut dst_image, &ResizeOptions::default().crop(x, y, w, h))
-			.unwrap();
-
-		dst_image
+		Resizer::new().resize(self, &mut dst_image, &ResizeOptions::default().crop(x, y, w, h))?;
+		Ok(dst_image)
 	}
 
-	fn get_flattened(self, color: Rgb<u8>) -> Result<DynamicImage> {
+	fn get_scaled_down(&self, factor: u32) -> Result<DynamicImage> {
+		assert!(factor > 0, "Scaling factor must be greater than zero");
+
+		let mut dst_image = DynamicImage::new(self.width() / factor, self.height() / factor, self.color());
+		Resizer::new().resize(
+			self,
+			&mut dst_image,
+			&ResizeOptions::default().resize_alg(ResizeAlg::Convolution(FilterType::Box)),
+		)?;
+
+		Ok(dst_image)
+	}
+
+	fn into_flattened(self, color: Rgb<u8>) -> Result<DynamicImage> {
+		if !self.has_alpha() {
+			return Ok(self);
+		}
 		match self {
-			DynamicImage::ImageLuma8(img) => Ok(DynamicImage::ImageLuma8(img)),
-			DynamicImage::ImageRgb8(img) => Ok(DynamicImage::ImageRgb8(img)),
 			DynamicImage::ImageRgba8(img) => {
 				let c = [color[0] as u16, color[1] as u16, color[2] as u16];
 				Ok(DynamicImage::from(map_colors(&img, |p| {
@@ -56,24 +69,26 @@ where
 		}
 	}
 
-	fn get_scaled_down(&self, factor: u32) -> DynamicImage {
-		assert!(factor > 0, "Scaling factor must be greater than zero");
-
-		let mut dst_image = DynamicImage::new(self.width() / factor, self.height() / factor, self.color());
-		Resizer::new()
-			.resize(
-				self,
-				&mut dst_image,
-				&ResizeOptions::default().resize_alg(ResizeAlg::Convolution(FilterType::Box)),
-			)
-			.unwrap();
-
-		dst_image
+	fn into_removed_alpha(self) -> Result<DynamicImage> {
+		Ok(match self {
+			DynamicImage::ImageRgba8(_) => DynamicImage::from(self.into_rgb8()),
+			DynamicImage::ImageLumaA8(_) => DynamicImage::from(self.into_luma8()),
+			DynamicImage::ImageRgb8(_) | DynamicImage::ImageLuma8(_) => self,
+			_ => bail!("Unsupported image type for removing alpha: {:?}", self.color()),
+		})
 	}
 
-	fn into_scaled_down(self, factor: u32) -> DynamicImage {
+	fn into_removed_alpha_if_opaque(self) -> Result<DynamicImage> {
+		if self.has_alpha() && self.is_opaque() {
+			self.into_removed_alpha()
+		} else {
+			Ok(self)
+		}
+	}
+
+	fn into_scaled_down(self, factor: u32) -> Result<DynamicImage> {
 		if factor == 1 {
-			self
+			Ok(self)
 		} else {
 			self.get_scaled_down(factor)
 		}
@@ -86,14 +101,13 @@ where
 					p[3] = 255;
 				}
 			}
-			DynamicImage::ImageRgb8(_) => {}
-			DynamicImage::ImageLuma8(_) => {}
 			DynamicImage::ImageLumaA8(ref mut img) => {
 				for p in img.pixels_mut() {
 					p[1] = 255;
 				}
 			}
-			_ => bail!("Unsupported image type"),
+			DynamicImage::ImageRgb8(_) | DynamicImage::ImageLuma8(_) => {}
+			_ => bail!("Unsupported image type for removing alpha: {:?}", self.color()),
 		}
 		Ok(())
 	}

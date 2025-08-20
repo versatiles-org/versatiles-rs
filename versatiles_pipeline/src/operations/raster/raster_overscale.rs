@@ -110,7 +110,7 @@ impl OperationTrait for Operation {
 					let x0 = coord.x as f64 * s - (coord_base.x as f64 * tile_size_f64);
 					let y0 = coord.y as f64 * s - (coord_base.y as f64 * tile_size_f64);
 
-					let image = image_base.get_extract(x0, y0, s, s, tile_size, tile_size);
+					let image = image_base.get_extract(x0, y0, s, s, tile_size, tile_size).unwrap();
 					image.into_optional()
 				},
 			))

@@ -61,7 +61,7 @@ impl OperationTrait for Operation {
 			.source
 			.get_image_stream(bbox_0)
 			.await?
-			.map_item_parallel(move |image| image.get_flattened(color)))
+			.map_item_parallel(move |image| image.into_flattened(color)))
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {

@@ -106,7 +106,7 @@ impl Operation {
 				ensure!(image.width() == tile_size, "Invalid image width");
 				ensure!(image.height() == tile_size, "Invalid image height");
 
-				Ok(image.into_optional().map(|img| img.into_scaled_down(scale)))
+				image.into_optional().map(|img| img.into_scaled_down(scale)).transpose()
 			})
 			.to_vec()
 			.await;
@@ -128,7 +128,7 @@ impl Operation {
 			image_tmp.copy_from(&image, (coord.x % count) * step, (coord.y % count) * step)?;
 		}
 
-		let image_dst = image_tmp.into_scaled_down(temp_size / target_size);
+		let image_dst = image_tmp.into_scaled_down(temp_size / target_size)?;
 
 		Ok(image_dst.into_optional())
 	}
@@ -149,7 +149,7 @@ impl Operation {
 					if let Some(image) = item {
 						assert_eq!(image.width(), full_size);
 						assert_eq!(image.height(), full_size);
-						(coord, Some(image.get_scaled_down(2)))
+						(coord, Some(image.get_scaled_down(2).unwrap()))
 					} else {
 						(coord, None)
 					}
