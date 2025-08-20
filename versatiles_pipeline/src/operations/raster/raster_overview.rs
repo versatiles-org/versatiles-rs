@@ -81,37 +81,54 @@ impl Operation {
 	}
 
 	#[context("Failed to build half image from source for coord {coord_dst:?}")]
-	async fn build_half_image_from_source(&self, coord_dst: &TileCoord3) -> Result<Option<DynamicImage>> {
-		let half_size = self.tile_size / 2;
-
+	async fn build_image_from_source(&self, coord_dst: &TileCoord3, target_size: u32) -> Result<Option<DynamicImage>> {
 		let level_src = self.level_base;
 		let level_dst = coord_dst.level;
 		ensure!(level_dst <= level_src, "Invalid level");
 
-		let scale = 1 << (level_src - level_dst + 1);
-		ensure!(scale >= 1, "Scale < 1");
-		ensure!(scale < self.tile_size, "Scale >= tile size");
-
-		let scaled_size = self.tile_size / scale;
-		ensure!(scaled_size > 0, "Scaled size is zero");
-
 		let count = 1 << (level_src - level_dst);
 
+		let (temp_size, step) = if count <= target_size {
+			(target_size, target_size / count)
+		} else {
+			(count, 1)
+		};
+		let scale = self.tile_size / step;
+
 		let bbox_src = coord_dst.as_tile_bbox(1)?.as_level(level_src);
-		let mut image_dst = DynamicImage::new_rgba8(half_size, half_size);
 
-		let mut stream_src = self.source.get_image_stream(bbox_src).await?;
-		while let Some((coord, image)) = stream_src.next().await {
-			if coord.level != level_src {
-				continue;
-			}
+		let tile_size = self.tile_size;
+		let vec = self
+			.source
+			.get_image_stream(bbox_src)
+			.await?
+			.filter_map_item_parallel(move |image| {
+				ensure!(image.width() == tile_size, "Invalid image width");
+				ensure!(image.height() == tile_size, "Invalid image height");
 
-			let image_src = image.get_scaled_down(scale);
-			let x = (coord.x % count) * scaled_size;
-			let y = (coord.y % count) * scaled_size;
+				Ok(image.into_optional().map(|img| img.into_scaled_down(scale)))
+			})
+			.to_vec()
+			.await;
 
-			image_dst.copy_from(&image_src, x, y)?;
+		if vec.is_empty() {
+			return Ok(None);
 		}
+
+		ensure!(
+			vec.len() <= (count * count) as usize,
+			"Too many images ({}) for the target size ({})",
+			vec.len(),
+			count * count
+		);
+
+		let mut image_tmp = DynamicImage::new_rgba8(temp_size, temp_size);
+		for (coord, image) in vec {
+			ensure!(coord.level == level_src, "Invalid level");
+			image_tmp.copy_from(&image, (coord.x % count) * step, (coord.y % count) * step)?;
+		}
+
+		let image_dst = image_tmp.into_scaled_down(temp_size / target_size);
 
 		Ok(image_dst.into_optional())
 	}
@@ -182,7 +199,7 @@ impl Operation {
 
 		// get missing images from source
 		for coord1 in misses {
-			if let Some(image1) = self.build_half_image_from_source(&coord1).await? {
+			if let Some(image1) = self.build_image_from_source(&coord1, half_size).await? {
 				assert_eq!(image1.width(), half_size);
 				assert_eq!(image1.height(), half_size);
 				let coord0 = coord1.as_level(bbox0.level);
@@ -190,9 +207,9 @@ impl Operation {
 			}
 		}
 
-		TileBBoxContainer::<Option<DynamicImage>>::from_iter(
-			bbox0,
-			map.into_iter().flat_map(|(coord0, sub_entries)| {
+		let vec: Vec<(TileCoord3, DynamicImage)> = map
+			.into_iter()
+			.flat_map(|(coord0, sub_entries)| {
 				if sub_entries.is_empty() {
 					return None;
 				}
@@ -205,8 +222,10 @@ impl Operation {
 				}
 
 				image_tmp.into_optional().map(|image| (coord0, image))
-			}),
-		)
+			})
+			.collect();
+
+		TileBBoxContainer::<Option<DynamicImage>>::from_iter(bbox0, vec.into_iter())
 	}
 }
 
@@ -229,9 +248,10 @@ impl OperationTrait for Operation {
 			return self.source.get_image_stream(bbox).await;
 		}
 
-		let bbox0 = bbox.get_rounded(BLOCK_TILE_COUNT);
+		let mut bbox0 = bbox.get_rounded(BLOCK_TILE_COUNT);
 		assert_eq!(bbox0.width(), BLOCK_TILE_COUNT);
 		assert_eq!(bbox0.height(), BLOCK_TILE_COUNT);
+		bbox0.intersect_pyramid(&self.parameters.bbox_pyramid);
 
 		let container: TileBBoxContainer<Option<DynamicImage>> = if bbox.level == self.level_base {
 			TileBBoxContainer::<Option<DynamicImage>>::from_stream(bbox, self.source.get_image_stream(bbox).await?).await?
