@@ -12,7 +12,7 @@ pub enum TraversalTranslationStep {
 }
 
 #[context("Could not find a way to translate traversals from {traversal_read:?} to {traversal_write:?}")]
-pub fn translate_traversals<'a>(
+pub fn translate_traversals(
 	pyramid: &TileBBoxPyramid,
 	traversal_read: &Traversal,
 	traversal_write: &Traversal,
@@ -21,11 +21,12 @@ pub fn translate_traversals<'a>(
 		return Ok(traversal
 			.traverse_pyramid(pyramid)?
 			.into_iter()
-			.map(|bbox| TraversalTranslationStep::Stream(bbox))
+			.map(TraversalTranslationStep::Stream)
 			.collect::<Vec<_>>());
 	};
 
 	if let Ok(order) = traversal_read.order.get_intersected(&traversal_write.order) {
+		#[allow(clippy::collapsible_if)]
 		if traversal_read.size.max_size()? < traversal_write.size.min_size()? {
 			let read_size = traversal_read.size.max_size()?;
 			let write_size = traversal_write.size.min_size()?;

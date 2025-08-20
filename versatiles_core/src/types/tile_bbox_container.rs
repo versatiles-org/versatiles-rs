@@ -25,6 +25,10 @@ impl<I: Clone + Default> TileBBoxContainer<I> {
 		self.vec.len()
 	}
 
+	pub fn is_empty(&self) -> bool {
+		self.vec.is_empty()
+	}
+
 	pub async fn from_stream<E: Clone>(
 		bbox: TileBBox,
 		mut stream: TileStream<'_, E>,
@@ -90,7 +94,7 @@ impl<I: Clone + Default> TileBBoxContainer<I> {
 
 	pub fn map<O>(self, f: impl FnMut(I) -> O) -> TileBBoxContainer<O> {
 		TileBBoxContainer {
-			bbox: self.bbox.clone(),
+			bbox: self.bbox,
 			vec: self.vec.into_iter().map(f).collect(),
 		}
 	}
