@@ -5,12 +5,13 @@ use image::{DynamicImage, Rgb, imageops::overlay};
 use imageproc::map::map_colors;
 
 pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
+	fn as_no_alpha(&self) -> Result<DynamicImage>;
 	fn average_color(&self) -> Vec<u8>;
 	fn get_extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> Result<DynamicImage>;
 	fn get_scaled_down(&self, factor: u32) -> Result<DynamicImage>;
 	fn into_flattened(self, color: Rgb<u8>) -> Result<DynamicImage>;
-	fn into_removed_alpha(self) -> Result<DynamicImage>;
-	fn into_removed_alpha_if_opaque(self) -> Result<DynamicImage>;
+	fn into_no_alpha(self) -> Result<DynamicImage>;
+	fn into_no_alpha_if_opaque(self) -> Result<DynamicImage>;
 	fn into_scaled_down(self, factor: u32) -> Result<DynamicImage>;
 	fn make_opaque(&mut self) -> Result<()>;
 	fn overlay(&mut self, top: &DynamicImage) -> Result<()>;
@@ -69,7 +70,16 @@ where
 		}
 	}
 
-	fn into_removed_alpha(self) -> Result<DynamicImage> {
+	fn as_no_alpha(&self) -> Result<DynamicImage> {
+		Ok(match self {
+			DynamicImage::ImageRgba8(_) => DynamicImage::from(self.to_rgb8()),
+			DynamicImage::ImageLumaA8(_) => DynamicImage::from(self.to_luma8()),
+			DynamicImage::ImageRgb8(_) | DynamicImage::ImageLuma8(_) => self.clone(),
+			_ => bail!("Unsupported image type for removing alpha: {:?}", self.color()),
+		})
+	}
+
+	fn into_no_alpha(self) -> Result<DynamicImage> {
 		Ok(match self {
 			DynamicImage::ImageRgba8(_) => DynamicImage::from(self.into_rgb8()),
 			DynamicImage::ImageLumaA8(_) => DynamicImage::from(self.into_luma8()),
@@ -78,9 +88,9 @@ where
 		})
 	}
 
-	fn into_removed_alpha_if_opaque(self) -> Result<DynamicImage> {
+	fn into_no_alpha_if_opaque(self) -> Result<DynamicImage> {
 		if self.has_alpha() && self.is_opaque() {
-			self.into_removed_alpha()
+			self.into_no_alpha()
 		} else {
 			Ok(self)
 		}

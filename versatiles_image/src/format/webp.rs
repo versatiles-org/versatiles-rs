@@ -13,20 +13,29 @@ pub fn compress(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 		bail!("webp only supports RGB or RGBA images");
 	};
 
+	let mut image_ref = image;
+	#[allow(unused_assignments)]
+	let mut optional_image: Option<DynamicImage> = None;
+	if image.has_alpha() && image.is_opaque() {
+		let i = image.as_no_alpha()?;
+		optional_image = Some(i);
+		image_ref = optional_image.as_ref().unwrap();
+	}
+
 	let quality = quality.unwrap_or(95);
 
 	if quality >= 100 {
 		let mut result: Vec<u8> = vec![];
 		let encoder = WebPEncoder::new_lossless(&mut result);
 		encoder.encode(
-			image.as_bytes(),
-			image.width(),
-			image.height(),
-			image.extended_color_type(),
+			image_ref.as_bytes(),
+			image_ref.width(),
+			image_ref.height(),
+			image_ref.extended_color_type(),
 		)?;
 		Ok(Blob::from(result))
 	} else {
-		let encoder = webp::Encoder::from_image(image).map_err(|e| anyhow!("{e}"))?;
+		let encoder = webp::Encoder::from_image(image_ref).map_err(|e| anyhow!("{e}"))?;
 		Ok(Blob::from(
 			encoder
 				.encode_simple(false, quality as f32)
@@ -93,5 +102,17 @@ mod tests {
 			image2blob(&img, None)
 		};
 		assert_eq!(res.unwrap_err().to_string(), expected_msg);
+	}
+
+	#[rstest]
+	//#[case::greya(DynamicImage::new_test_greya())]
+	#[case::rgba(DynamicImage::new_test_rgba())]
+	#[test]
+	fn opaque_is_saved_without_alpha(#[case] mut img: DynamicImage) -> Result<()> {
+		assert!(img.has_alpha());
+		img.make_opaque()?;
+		assert!(!blob2image(&compress(&img, Some(80))?)?.has_alpha());
+		assert!(!blob2image(&compress(&img, Some(100))?)?.has_alpha());
+		Ok(())
 	}
 }

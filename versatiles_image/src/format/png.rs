@@ -24,12 +24,21 @@ pub fn compress(image: &DynamicImage, speed: Option<u8>) -> Result<Blob> {
 		_ => (CompressionType::Fast, FilterType::NoFilter),
 	};
 
+	let mut image_ref = image;
+	#[allow(unused_assignments)]
+	let mut optional_image: Option<DynamicImage> = None;
+	if image.has_alpha() && image.is_opaque() {
+		let i = image.as_no_alpha()?;
+		optional_image = Some(i);
+		image_ref = optional_image.as_ref().unwrap();
+	}
+
 	let mut buffer: Vec<u8> = Vec::new();
 	png::PngEncoder::new_with_quality(&mut buffer, compression_type, filter_type).write_image(
-		image.as_bytes(),
-		image.width(),
-		image.height(),
-		image.extended_color_type(),
+		image_ref.as_bytes(),
+		image_ref.width(),
+		image_ref.height(),
+		image_ref.extended_color_type(),
 	)?;
 
 	Ok(Blob::from(buffer))
@@ -64,6 +73,18 @@ mod tests {
 		let compression_percent = ((10_000 * blob.len()) as f64 / img.as_bytes().len() as f64).round() / 100.0;
 		assert_eq!(compression_percent, expected_compression_percent);
 
+		Ok(())
+	}
+
+	#[rstest]
+	#[case::greya(DynamicImage::new_test_greya())]
+	#[case::rgba(DynamicImage::new_test_rgba())]
+	#[test]
+	fn opaque_is_saved_without_alpha(#[case] mut img: DynamicImage) -> Result<()> {
+		assert!(img.has_alpha());
+		img.make_opaque()?;
+		assert!(!blob2image(&compress(&img, Some(80))?)?.has_alpha());
+		assert!(!blob2image(&compress(&img, Some(100))?)?.has_alpha());
 		Ok(())
 	}
 }

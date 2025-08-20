@@ -80,4 +80,16 @@ mod tests {
 
 		Ok(())
 	}
+
+	//#[rstest]
+	//#[case::greya(DynamicImage::new_test_greya())]
+	//#[case::rgba(DynamicImage::new_test_rgba())]
+	//#[test]
+	//fn opaque_is_saved_without_alpha(#[case] mut img: DynamicImage) -> Result<()> {
+	//	assert!(img.has_alpha());
+	//	img.make_opaque()?;
+	//	assert!(!blob2image(&compress(&img, Some(80), None)?)?.has_alpha());
+	//	assert!(!blob2image(&compress(&img, Some(100), None)?)?.has_alpha());
+	//	Ok(())
+	//}
 }
