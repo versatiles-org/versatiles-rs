@@ -47,8 +47,7 @@ Reads a tile container, such as a VersaTiles file.
 ## from_debug
 Produces debugging tiles, each showing their coordinates as text.
 ### Parameters:
-* **`format`: String (required)** - tile format: "pbf", "jpg", "png" or "webp"
-* *`fast`: Boolean (optional, default: false)* - use fast compression
+* **`format`: String (required)** - tile format: "mvt", "jpg", "png" or "webp"
 
 ## from_overlayed
 Overlays multiple tile sources, using the tile from the first source that provides it.
