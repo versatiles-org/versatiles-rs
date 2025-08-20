@@ -6,21 +6,30 @@ use imageproc::map::map_colors;
 
 pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
 	fn average_color(&self) -> Vec<u8>;
+	fn get_extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> DynamicImage;
 	fn get_flattened(self, color: Rgb<u8>) -> Result<DynamicImage>;
 	fn get_scaled_down(&self, factor: u32) -> DynamicImage;
 	fn into_scaled_down(self, factor: u32) -> DynamicImage;
+	fn make_opaque(&mut self) -> Result<()>;
 	fn overlay(&mut self, top: &DynamicImage) -> Result<()>;
-	fn get_extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> DynamicImage;
 }
 
 impl DynamicImageTraitOperation for DynamicImage
 where
 	DynamicImage: DynamicImageTraitInfo,
 {
-	fn overlay(&mut self, top: &DynamicImage) -> Result<()> {
-		self.ensure_same_size(top)?;
-		overlay(self, top, 0, 0);
-		Ok(())
+	fn average_color(&self) -> Vec<u8> {
+		let img = self.resize_exact(1, 1, image::imageops::FilterType::Triangle);
+		img.into_bytes()
+	}
+
+	fn get_extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> DynamicImage {
+		let mut dst_image = DynamicImage::new(width_dst, height_dst, self.color());
+		Resizer::new()
+			.resize(self, &mut dst_image, &ResizeOptions::default().crop(x, y, w, h))
+			.unwrap();
+
+		dst_image
 	}
 
 	fn get_flattened(self, color: Rgb<u8>) -> Result<DynamicImage> {
@@ -70,17 +79,28 @@ where
 		}
 	}
 
-	fn get_extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> DynamicImage {
-		let mut dst_image = DynamicImage::new(width_dst, height_dst, self.color());
-		Resizer::new()
-			.resize(self, &mut dst_image, &ResizeOptions::default().crop(x, y, w, h))
-			.unwrap();
-
-		dst_image
+	fn make_opaque(&mut self) -> Result<()> {
+		match *self {
+			DynamicImage::ImageRgba8(ref mut img) => {
+				for p in img.pixels_mut() {
+					p[3] = 255;
+				}
+			}
+			DynamicImage::ImageRgb8(_) => {}
+			DynamicImage::ImageLuma8(_) => {}
+			DynamicImage::ImageLumaA8(ref mut img) => {
+				for p in img.pixels_mut() {
+					p[1] = 255;
+				}
+			}
+			_ => bail!("Unsupported image type"),
+		}
+		Ok(())
 	}
 
-	fn average_color(&self) -> Vec<u8> {
-		let img = self.resize_exact(1, 1, image::imageops::FilterType::Triangle);
-		img.into_bytes()
+	fn overlay(&mut self, top: &DynamicImage) -> Result<()> {
+		self.ensure_same_size(top)?;
+		overlay(self, top, 0, 0);
+		Ok(())
 	}
 }
