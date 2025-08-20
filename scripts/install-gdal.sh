@@ -63,11 +63,12 @@ install_deps_mac() {
   # Core build + common optional libraries
   brew update
   brew install \
-    cmake pkg-config \
+    cmake pkg-config llvm \
     proj geos sqlite libtiff libjpeg libpng \
     webp openjpeg \
     zstd xz expat \
     curl json-c \
+    apache-arrow \
     postgresql@16 || true
   # Ensure pkg-config and CMake can find Homebrew libs
   export PKG_CONFIG_PATH="${HOMEBREW_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
@@ -85,6 +86,9 @@ install_deps_apt() {
     libzstd-dev liblzma-dev zlib1g-dev \
     libexpat1-dev \
     libjson-c-dev \
+    libarrow-dev \
+    libarrow-dataset-dev \
+    libparquet-dev \
     libcurl4-openssl-dev \
     libpq-dev \
     ca-certificates
@@ -142,6 +146,8 @@ CMAKE_ARGS=(
   -DCMAKE_INSTALL_PREFIX="${PREFIX}"
   -DGDAL_USE_INTERNAL_LIBS=OFF
   -DGDAL_USE_JSONC=ON
+  -DGDAL_USE_ARROW=ON
+  -DGDAL_USE_PARQUET=ON
 )
 
 # Help CMake find brew-installed libraries on macOS
@@ -180,12 +186,60 @@ if [[ "$INSTALL_TEST" == "1" ]]; then
   if command -v gdalinfo >/dev/null 2>&1; then
     if [[ "$PLATFORM" == "mac" ]]; then
       export DYLD_LIBRARY_PATH="${PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
+      # Ensure data dirs are set for CRS lookups
+      export PROJ_DATA="${HOMEBREW_PREFIX}/share/proj"
+      unset PROJ_LIB
+      export GDAL_DATA="${PREFIX}/share/gdal"
+    else
+      # Ensure data dirs are set for CRS lookups
+      export PROJ_DATA="/usr/share/proj"
+      unset PROJ_LIB
+      export GDAL_DATA="${PREFIX}/share/gdal"
     fi
     gdalinfo --version || true
+    command -v projinfo >/dev/null 2>&1 && projinfo EPSG:4326 || true
+    command -v gdalsrsinfo >/dev/null 2>&1 && gdalsrsinfo EPSG:4326 >/dev/null 2>&1 || warn "EPSG lookup failed; check PROJ_DATA (${PROJ_DATA}) and GDAL_DATA (${GDAL_DATA})."
   else
     warn "gdalinfo not found in PATH. You may need to add ${PREFIX}/bin to your PATH."
     warn "Example: export PATH=${PREFIX}/bin:\$PATH"
   fi
 fi
 
-say "GDAL ${GDAL_TAG} installed to ${PREFIX}. Done."
+say "GDAL ${GDAL_TAG} installed to ${PREFIX}. Done."#!/usr/bin/env bash
+# Set up environment variables for GDAL build and runtime.
+
+OS="$(uname -s)"
+
+case "$OS" in
+  Darwin)
+    # macOS: set PROJ and GDAL data dirs, unset PROJ_LIB
+    PROJ_PREFIX="$(brew --prefix proj)"
+    GDAL_HOME="$(brew --prefix gdal 2>/dev/null || echo "${PROJ_PREFIX}")"
+    export PROJ_DATA="${PROJ_PREFIX}/share/proj"
+    export GDAL_DATA="${GDAL_HOME}/share/gdal"
+    unset PROJ_LIB
+
+    # Unset Conda-related env vars that might interfere, include PROJ_DATA
+    for var in LDFLAGS LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH PROJ_DATA; do
+      unset "$var"
+    done
+    ;;
+
+  Linux)
+    # Linux: set PROJ and GDAL data dirs, unset PROJ_LIB
+    PROJ_PREFIX="$(pkg-config --variable=prefix proj 2>/dev/null || echo /usr)"
+    export PROJ_DATA="${PROJ_PREFIX}/share/proj"
+    export GDAL_DATA="${GDAL_HOME}/share/gdal"
+    unset PROJ_LIB
+
+    # Other Linux environment setup can go here
+    ;;
+
+  *)
+    echo "Unsupported OS: $OS"
+    exit 1
+    ;;
+esac
+
+echo "Configured GDAL environment for $OS."
+echo "Data dirs: PROJ_DATA=${PROJ_DATA:-unset}; GDAL_DATA=${GDAL_DATA:-unset}"
