@@ -79,28 +79,32 @@ impl HilbertIndex for TileCoord3 {
 /// traverses the curve iteratively while keeping an accumulator for the
 /// number of tiles contained in all previous zoom levels.
 fn coord_to_index(x: u32, y: u32, z: u8) -> Result<u64> {
+	let x = x as i64;
+	let y = y as i64;
+	let z = z as i64;
+
 	if z >= 32 {
 		bail!("tile zoom exceeds 64-bit limit");
 	}
 
-	let n = 1u32 << z;
+	let n = 1i64 << z;
 	if x >= n || y >= n {
 		bail!("tile x/y outside zoom level bounds");
 	}
 
-	let mut acc: i64 = 0;
-	for t_z in 0..(z as i64) {
+	let mut acc = 0i64;
+	for t_z in 0..z {
 		acc += 1i64 << (t_z * 2)
 	}
 
-	let mut tx: i64 = x as i64;
-	let mut ty: i64 = y as i64;
-	let mut d: i64 = 0;
-	let mut s: i64 = n as i64 / 2;
+	let mut tx = x;
+	let mut ty = y;
+	let mut d = 0i64;
+	let mut s = n / 2;
 	while s > 0 {
-		let rx: u8 = if (tx & s) > 0 { 1 } else { 0 };
-		let ry: u8 = if (ty & s) > 0 { 1 } else { 0 };
-		d += s * s * ((3 * rx) ^ ry) as i64;
+		let rx = if (tx & s) > 0 { 1 } else { 0 };
+		let ry = if (ty & s) > 0 { 1 } else { 0 };
+		d += s * s * ((3 * rx) ^ ry);
 		rotate(s, &mut tx, &mut ty, rx, ry);
 		s /= 2;
 	}
@@ -116,7 +120,8 @@ fn coord_to_index(x: u32, y: u32, z: u8) -> Result<u64> {
 /// Hilbert orientation rules described in Hamilton (1996).
 ///
 /// Not part of the public API; exposed only for unit tests.
-fn rotate(s: i64, tx: &mut i64, ty: &mut i64, rx: u8, ry: u8) {
+#[inline(always)]
+fn rotate(s: i64, tx: &mut i64, ty: &mut i64, rx: i64, ry: i64) {
 	if ry == 0 {
 		if rx == 1 {
 			*tx = s - 1 - *tx;
@@ -137,19 +142,20 @@ fn rotate(s: i64, tx: &mut i64, ty: &mut i64, rx: u8, ry: u8) {
 /// Returns **`"tile zoom exceeds 64-bit limit"`** when the index would
 /// require a zoom level ≥ 32.
 fn index_to_coord(index: u64) -> Result<TileCoord3> {
+	let index = index as i64;
 	let mut acc = 0;
 	for t_z in 0..32 {
 		let num_tiles = (1 << t_z) * (1 << t_z);
 		if acc + num_tiles > index {
 			let n = 1 << t_z;
 			let mut t = index - acc;
-			let mut tx: i64 = 0;
-			let mut ty: i64 = 0;
+			let mut tx = 0i64;
+			let mut ty = 0i64;
 
-			let mut s: i64 = 1;
+			let mut s = 1i64;
 			while s < n {
-				let rx = ((t / 2) & 1) as u8;
-				let ry = ((t ^ (rx as u64)) & 1) as u8;
+				let rx = (t / 2) & 1;
+				let ry = (t ^ rx) & 1;
 				rotate(s, &mut tx, &mut ty, rx, ry);
 				if rx == 1 {
 					tx += s;
