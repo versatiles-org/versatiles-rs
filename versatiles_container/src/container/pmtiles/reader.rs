@@ -61,10 +61,11 @@ pub struct PMTilesReader {
 	pub header: HeaderV3,
 	pub internal_compression: TileCompression,
 	pub leaves_bytes: Blob,
-	pub leaves_cache: Mutex<LimitedCache<ByteRange, Arc<Blob>>>,
+	pub leaves_cache: Mutex<LimitedCache<ByteRange, Arc<EntriesV3>>>,
 	pub tilejson: TileJSON,
 	pub parameters: TilesReaderParameters,
-	pub root_bytes_uncompressed: Arc<Blob>,
+	pub root_bytes_uncompressed: Blob,
+	pub root_entries: Arc<EntriesV3>,
 }
 
 impl PMTilesReader {
@@ -125,6 +126,8 @@ impl PMTilesReader {
 		);
 		trace!("Reader parameters: {:?}", parameters);
 
+		let root_entries = Arc::new(EntriesV3::from_blob(&root_bytes_uncompressed)?);
+
 		Ok(PMTilesReader {
 			data_reader,
 			header,
@@ -133,7 +136,8 @@ impl PMTilesReader {
 			leaves_cache: Mutex::new(LimitedCache::with_maximum_size(100_000_000)),
 			tilejson,
 			parameters,
-			root_bytes_uncompressed: Arc::new(root_bytes_uncompressed),
+			root_bytes_uncompressed,
+			root_entries,
 		})
 	}
 
@@ -253,13 +257,11 @@ impl TilesReaderTrait for PMTilesReader {
 
 		// Convert the tile coordinates into a unique tile ID
 		let tile_id: u64 = coord.get_hilbert_index()?;
-		// Start with the root directory bytes
-		let mut dir_bytes = self.root_bytes_uncompressed.clone();
+		// Start with the root directory entries
+		let mut entries = self.root_entries.clone();
 
 		// Iterate through the directory depth (up to 3 levels)
 		for _depth in 0..3 {
-			// Deserialize the directory entries from the current directory bytes
-			let entries = EntriesV3::from_blob(&dir_bytes)?;
 			// Find the entry corresponding to the requested tile ID
 			let entry = entries.find_tile(tile_id);
 
@@ -285,11 +287,12 @@ impl TilesReaderTrait for PMTilesReader {
 					let range = entry.range;
 					let mut cache = self.leaves_cache.lock().await;
 					// Use the cache to avoid redundant decompression and reading
-					dir_bytes = cache.get_or_set(&range, || {
+					entries = cache.get_or_set(&range, || {
 						let mut blob = self.leaves_bytes.read_range(&range)?;
 						// Decompress the directory bytes
 						blob = decompress(blob, &self.internal_compression)?;
-						Ok(Arc::new(blob))
+						let entries = EntriesV3::from_blob(&blob)?;
+						Ok(Arc::new(entries))
 					})?;
 				}
 			} else {

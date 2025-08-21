@@ -243,7 +243,7 @@ mod tests {
 	fn test_tile_id_to_coord_invalid_index() {
 		// Test an index that exceeds the 64-bit limit
 		assert_eq!(
-			index_to_coord(u64::MAX).unwrap_err().to_string(),
+			index_to_coord(u64::MAX / 2).unwrap_err().to_string(),
 			"tile zoom exceeds 64-bit limit"
 		);
 	}

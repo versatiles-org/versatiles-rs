@@ -1,5 +1,5 @@
 use anyhow::{Result, bail};
-use std::{fmt::Debug, sync::Arc};
+use std::fmt::Debug;
 use versatiles_core::{
 	utils::{compress, decompress},
 	*,
@@ -135,7 +135,7 @@ impl TileConverter {
 
 	/// Runs a stream through the pipeline of conversion functions
 	pub fn process_stream<'a>(&'a self, stream: TileStream<'a>) -> TileStream<'a> {
-		let me = Arc::new(self.clone());
+		let me = self.clone();
 		stream.map_item_parallel(move |blob| me.process_blob(blob))
 	}
 }

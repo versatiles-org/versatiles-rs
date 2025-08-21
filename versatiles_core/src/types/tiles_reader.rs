@@ -14,6 +14,7 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, lock::Mutex};
+#[allow(unused_imports)]
 use log::{debug, trace};
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
