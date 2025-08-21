@@ -22,13 +22,20 @@ case "$kernel_name" in
       # Ensure runtime can find libgdal without extra setup
       export RUSTFLAGS='-C link-args=-Wl,-rpath,'"$GDAL_PREFIX"'/lib'
       export RUSTDOCFLAGS="$RUSTFLAGS"
+
+      # Set data directories for CRS lookup and ensure runtime loader finds GDAL
+      PROJ_PREFIX="$(pkg-config --variable=prefix proj 2>/dev/null || /opt/homebrew/bin/brew --prefix 2>/dev/null || echo /opt/homebrew)"
+      export PROJ_DATA="${PROJ_PREFIX}/share/proj"
+      export GDAL_DATA="${GDAL_HOME}/share/gdal"
+      unset PROJ_LIB
+      export DYLD_LIBRARY_PATH="${GDAL_LIB_DIR}:${DYLD_LIBRARY_PATH:-}"
     else
       echo "gdal-config not found. Please install GDAL (e.g., via Homebrew) before running this script." >&2
       exit 1
     fi
 
     # If a Conda environment is active, prevent it from hijacking the link step.
-    for var in LDFLAGS LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH; do
+    for var in LDFLAGS LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH PROJ_DATA PROJ_LIB; do
       eval val=\"\${$var-}\"
       case "$val" in
         *"${CONDA_PREFIX:-/does/not/exist}"*|*/opt/anaconda3/*)
@@ -46,6 +53,11 @@ case "$kernel_name" in
     export GDAL_LIB_DIR="$GDAL_PREFIX/lib"
     export GDAL_CONFIG="$(command -v gdal-config)"
     export PKG_CONFIG_PATH="$GDAL_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+    PROJ_PREFIX="$(pkg-config --variable=prefix proj 2>/dev/null || echo /usr)"
+    export PROJ_DATA="${PROJ_PREFIX}/share/proj"
+    export GDAL_DATA="${GDAL_HOME}/share/gdal"
+    unset PROJ_LIB
+    export LD_LIBRARY_PATH="${GDAL_LIB_DIR}:${LD_LIBRARY_PATH:-}"
     # No special RUSTFLAGS needed; the dynamic linker already searches /usr/lib.
     ;;
 
@@ -59,4 +71,10 @@ esac
 export GDAL_VERSION="$(gdal-config --version)"
 
 echo "Configured GDAL ${GDAL_VERSION} (home: ${GDAL_HOME}; gdal-config: ${GDAL_CONFIG})"
+echo "Data dirs: PROJ_DATA=${PROJ_DATA:-unset}; GDAL_DATA=${GDAL_DATA:-unset}"
+case "$kernel_name" in
+  Darwin) echo "Runtime: DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH:-unset}" ;;
+  Linux)  echo "Runtime: LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-unset}" ;;
+  *) : ;;
+esac
 unset kernel_name  # keep the user environment clean
