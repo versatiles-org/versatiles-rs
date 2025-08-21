@@ -48,6 +48,7 @@ use std::{fmt::Debug, path::Path, sync::Arc};
 use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
 	io::*,
+	progress::get_progress_bar,
 	tilejson::TileJSON,
 	utils::{HilbertIndex, decompress},
 	*,
@@ -149,31 +150,58 @@ fn calc_bbox_pyramid(
 ) -> Result<TileBBoxPyramid> {
 	let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
-	parse_directories(&mut bbox_pyramid, root_bytes_uncompressed, leaves_bytes, compression)?;
+	parse_directories(
+		&mut bbox_pyramid,
+		root_bytes_uncompressed,
+		leaves_bytes,
+		compression,
+		true,
+	)?;
 
 	fn parse_directories(
 		bbox_pyramid: &mut TileBBoxPyramid,
 		dir: &Blob,
 		leaves_bytes: &Blob,
 		compression: &TileCompression,
-	) -> Result<()> {
+		root: bool,
+	) -> Result<u64> {
+		info!("Parsing directories");
 		let entries = EntriesV3::from_blob(dir)?;
+		let entries = entries.iter().collect::<Vec<_>>();
+		let progress = if root {
+			Some(get_progress_bar("Parsing PMTiles directories", entries.len() as u64))
+		} else {
+			None
+		};
+
+		let mut total_entries = 0;
 		for entry in entries.iter() {
+			if let Some(progress) = &progress {
+				progress.inc(1);
+			}
+
 			if entry.range.length > 0 {
 				if entry.run_length > 0 {
 					for i in 0..entry.run_length as u64 {
 						let coord = TileCoord3::from_hilbert_index(i + entry.tile_id)?;
 						bbox_pyramid.include_coord(&coord);
 					}
+					total_entries += entry.run_length as u64;
 				} else {
 					let range = entry.range;
 					let mut blob = leaves_bytes.read_range(&range)?;
 					blob = decompress(blob, compression)?;
-					parse_directories(bbox_pyramid, &blob, leaves_bytes, compression)?;
+					total_entries += parse_directories(bbox_pyramid, &blob, leaves_bytes, compression, false)?;
 				}
 			}
 		}
-		Ok(())
+
+		if let Some(progress) = progress {
+			progress.finish();
+			info!("Found {} PMTiles entries", total_entries);
+		}
+
+		Ok(total_entries)
 	}
 
 	Ok(bbox_pyramid)
