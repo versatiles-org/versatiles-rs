@@ -42,6 +42,7 @@ use super::types::{EntriesV3, HeaderV3};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
+use log::{info, trace};
 use std::{fmt::Debug, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
@@ -88,24 +89,40 @@ impl PMTilesReader {
 	where
 		Self: Sized,
 	{
+		trace!("Opening PMTilesReader");
+
 		let header = HeaderV3::deserialize(&data_reader.read_range(&ByteRange::new(0, HeaderV3::len())).await?)?;
+		trace!("Header: {:?}", header);
 
 		let internal_compression = header.internal_compression.as_value()?;
+		trace!("Internal compression: {:?}", internal_compression);
 
 		let meta = data_reader.read_range(&header.metadata).await?;
 		let meta = decompress(meta, &internal_compression)?;
 		let tilejson = TileJSON::try_from_blob_or_default(&meta);
+		trace!("TileJSON: {:?}", tilejson);
 
-		let root_bytes_uncompressed = decompress(data_reader.read_range(&header.root_dir).await?, &internal_compression)?;
+		let root_bytes = data_reader.read_range(&header.root_dir).await?;
+		trace!("Root directory bytes length: {}", root_bytes.len());
+
+		let root_bytes_uncompressed = decompress(root_bytes, &internal_compression)?;
+		trace!(
+			"Root directory bytes uncompressed length: {}",
+			root_bytes_uncompressed.len()
+		);
+
 		let leaves_bytes = data_reader.read_range(&header.leaf_dirs).await?;
+		trace!("Leaf directories bytes length: {}", leaves_bytes.len());
 
 		let bbox_pyramid = calc_bbox_pyramid(&root_bytes_uncompressed, &leaves_bytes, &internal_compression)?;
+		trace!("Bounding box pyramid: {:?}", bbox_pyramid);
 
 		let parameters = TilesReaderParameters::new(
 			header.tile_type.as_value()?,
 			header.tile_compression.as_value()?,
 			bbox_pyramid,
 		);
+		trace!("Reader parameters: {:?}", parameters);
 
 		Ok(PMTilesReader {
 			data_reader,

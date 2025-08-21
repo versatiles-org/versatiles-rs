@@ -14,7 +14,7 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{future::BoxFuture, lock::Mutex};
-use log::trace;
+use log::{debug, trace};
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 
 /// Trait defining behavior for reading tiles from a container.
@@ -144,14 +144,25 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 			.await?;
 
 		if matches!(level, Container | Tiles | TileContents) {
+			debug!("probing container {:?} at depth {:?}", self.container_name(), level);
 			self.probe_container(&print.get_category("container").await).await?;
 		}
 
 		if matches!(level, Tiles | TileContents) {
+			debug!(
+				"probing tiles {:?} at depth {:?}",
+				self.tilejson().as_json_value(),
+				level
+			);
 			self.probe_tiles(&print.get_category("tiles").await).await?;
 		}
 
 		if matches!(level, TileContents) {
+			debug!(
+				"probing tile contents {:?} at depth {:?}",
+				self.tilejson().as_json_value(),
+				level
+			);
 			self
 				.probe_tile_contents(&print.get_category("tile contents").await)
 				.await?;
