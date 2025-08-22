@@ -2,70 +2,93 @@ use std::fmt::Debug;
 
 use anyhow::{Context, Result, bail, ensure};
 use gdal::{DriverManager, raster::ColorInterpretation, spatial_ref::SpatialRef};
-use log::{debug, trace, warn};
+use log::{debug, trace};
 use versatiles_derive::context;
+
+pub struct BandMappingItem {
+	pub band_index: usize,
+	pub channel_index: usize,
+}
 
 pub struct BandMapping {
 	map: Vec<usize>,
-	alpha: Option<usize>,
 }
 
 impl BandMapping {
 	#[context("Failed to create band mapping from GDAL dataset")]
 	pub fn try_from(dataset: &gdal::Dataset) -> Result<Self> {
 		trace!("Computing band mapping (raster_count={})", dataset.raster_count());
-		let mut color_index = [0, 0, 0];
-		let mut grey_index = 0;
-		let mut alpha: Option<usize> = None;
+		// gray, red, green, blue, alpha
+		let mut colors: [Option<usize>; 5] = [None, None, None, None, None];
 
 		for i in 1..=dataset.raster_count() {
+			let mut set_channel = |channel: usize| -> Result<()> {
+				ensure!(
+					colors[channel].is_none(),
+					"GDAL dataset band {i} (numbered from 1) should be used for channel {channel} (numbered from 0), but it is already in use by band {}",
+					colors[channel].unwrap()
+				);
+				colors[channel] = Some(i);
+				Ok(())
+			};
+
 			let band = dataset
 				.rasterband(i)
 				.with_context(|| format!("Failed to get raster band {i} from GDAL dataset"))?;
 			use gdal::raster::ColorInterpretation::*;
 			match band.color_interpretation() {
-				RedBand => color_index[0] = i,
-				GreenBand => color_index[1] = i,
-				BlueBand => color_index[2] = i,
-				AlphaBand => alpha = Some(i),
-				GrayIndex => grey_index = i,
-				_ => warn!(
+				GrayIndex => set_channel(0)?,
+				RedBand => set_channel(1)?,
+				GreenBand => set_channel(2)?,
+				BlueBand => set_channel(3)?,
+				AlphaBand => set_channel(4)?,
+				Undefined => set_channel(i)?,
+				_ => bail!(
 					"GDAL band {i} has unsupported color interpretation: {:?}",
 					band.color_interpretation()
 				),
 			}
 		}
 
-		let mut map = vec![];
-		if color_index.iter().all(|&i| i > 0) {
-			if grey_index > 0 {
-				bail!("GDAL dataset has both color and grey bands, which is not supported");
+		let map: Vec<usize> = match colors {
+			[None, Some(red), Some(green), Some(blue), Some(alpha)] => {
+				debug!("Found RGBA bands: red={red}, green={green}, blue={blue}, alpha={alpha}");
+				vec![red, green, blue, alpha]
 			}
-			map.push(color_index[0]);
-			map.push(color_index[1]);
-			map.push(color_index[2]);
-		} else if grey_index > 0 {
-			map.push(grey_index);
-		} else {
-			bail!("GDAL dataset has no color or grey bands, cannot read image data");
-		}
+			[None, Some(red), Some(green), Some(blue), None] => {
+				debug!("Found RGB  band: red={red}, green={green}, blue={blue}");
+				vec![red, green, blue]
+			}
+			[Some(gray), None, None, None, Some(alpha)] => {
+				debug!("Found gray + alpha band: gray={gray}, alpha={alpha}");
+				vec![gray, alpha]
+			}
+			[Some(gray), None, None, None, None] => {
+				debug!("Found gray band: gray={gray}");
+				vec![gray]
+			}
+			_ => {
+				bail!("The found bands ({colors:?}) cannot be interpreted  as (grey, red, green, blue, alpha)");
+			}
+		};
+		debug!("Band mapping result: {map:?}");
 
-		if let Some(alpha_index) = alpha {
-			map.push(alpha_index);
-		}
-		debug!("Band mapping result: {:?}", map);
-
-		ensure!(!map.is_empty(), "Band mapping is empty, cannot read image data");
-
-		Ok(BandMapping { map, alpha })
+		Ok(BandMapping { map })
 	}
 
 	pub fn len(&self) -> usize {
 		self.map.len()
 	}
 
-	pub fn iter(&self) -> impl Iterator<Item = (usize, usize)> + '_ {
-		self.map.iter().cloned().enumerate()
+	pub fn iter(&self) -> impl Iterator<Item = BandMappingItem> + '_ {
+		self
+			.map
+			.iter()
+			.enumerate()
+			.map(|(channel_index, &band_index)| BandMappingItem {
+				band_index,
+				channel_index,
+			})
 	}
 
 	pub fn create_mem_dataset(&self, width: u32, height: u32) -> Result<gdal::Dataset> {
@@ -77,12 +100,26 @@ impl BandMapping {
 			.context("Failed to create in-memory dataset")?;
 		dst.set_spatial_ref(&SpatialRef::from_epsg(3857)?)?;
 
-		if let Some(alpha) = self.alpha {
-			trace!("Setting alpha band for destination dataset");
-			dst.rasterband(alpha)?
-				.set_color_interpretation(ColorInterpretation::AlphaBand)?;
-		} else {
-			trace!("No alpha band in band mapping, skipping alpha setup");
+		use ColorInterpretation::*;
+
+		match self.len() {
+			1 => dst.rasterband(1)?.set_color_interpretation(GrayIndex)?,
+			2 => {
+				dst.rasterband(1)?.set_color_interpretation(GrayIndex)?;
+				dst.rasterband(2)?.set_color_interpretation(AlphaBand)?;
+			}
+			3 => {
+				dst.rasterband(1)?.set_color_interpretation(RedBand)?;
+				dst.rasterband(2)?.set_color_interpretation(GreenBand)?;
+				dst.rasterband(3)?.set_color_interpretation(BlueBand)?;
+			}
+			4 => {
+				dst.rasterband(1)?.set_color_interpretation(RedBand)?;
+				dst.rasterband(2)?.set_color_interpretation(GreenBand)?;
+				dst.rasterband(3)?.set_color_interpretation(BlueBand)?;
+				dst.rasterband(4)?.set_color_interpretation(AlphaBand)?;
+			}
+			_ => bail!("Unsupported number of bands in band mapping: {}", self.len()),
 		}
 
 		Ok(dst)
@@ -91,6 +128,6 @@ impl BandMapping {
 
 impl Debug for BandMapping {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "BandMapping {{ map: {:?}, alpha: {:?} }}", self.map, self.alpha)
+		write!(f, "BandMapping {{ map: {:?} }}", self.map)
 	}
 }

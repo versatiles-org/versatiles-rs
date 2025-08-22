@@ -1,4 +1,4 @@
-use crate::operations::read::from_gdal::bandmapping::BandMapping;
+use crate::operations::read::from_gdal::bandmapping::{BandMapping, BandMappingItem};
 use anyhow::{Context, Result, ensure};
 use gdal::{
 	Dataset, GeoTransform, config::set_config_option, raster::reproject, spatial_ref::SpatialRef, vector::Geometry,
@@ -68,7 +68,7 @@ impl GdalDataset {
 
 		let filename = self.filename.clone();
 		let band_mapping = self.band_mapping.clone();
-		let band_mapping_len = band_mapping.len();
+		let channel_count = band_mapping.len();
 
 		let image = tokio::task::spawn_blocking(move || {
 			let mut dst = band_mapping.create_mem_dataset(width, height)?;
@@ -93,8 +93,12 @@ impl GdalDataset {
 			trace!("Reprojection complete");
 
 			trace!("Reading bands");
-			let mut buf = vec![0u8; (width as usize) * (height as usize) * band_mapping_len];
-			for (i, band_index) in band_mapping.iter() {
+			let mut buf = vec![0u8; (width as usize) * (height as usize) * channel_count];
+			for BandMappingItem {
+				channel_index,
+				band_index,
+			} in band_mapping.iter()
+			{
 				let band = dst.rasterband(band_index)?.read_band_as::<u8>()?;
 				let band_data = band.data();
 				ensure!(
@@ -104,7 +108,7 @@ impl GdalDataset {
 					band_data.len()
 				);
 				for (j, &pixel) in band_data.iter().enumerate() {
-					buf[j * band_mapping_len + i] = pixel;
+					buf[j * channel_count + channel_index] = pixel;
 				}
 			}
 			trace!("Filled image buffer ({} bytes)", buf.len());
