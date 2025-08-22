@@ -5,10 +5,8 @@ use gdal::{
 };
 use imageproc::image::DynamicImage;
 use log::{debug, trace};
-use std::{
-	path::{Path, PathBuf},
-	sync::Arc,
-};
+use std::{path::Path, sync::Arc};
+use tokio::sync::Mutex;
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -19,7 +17,7 @@ const EARTH_CIRCUMFERENCE: f64 = 2.0 * std::f64::consts::PI * 6_378_137.0;
 
 #[derive(Debug, Clone)]
 pub struct GdalDataset {
-	filename: Arc<PathBuf>,
+	dataset: Arc<Mutex<Dataset>>,
 	bbox: GeoBBox,
 	band_mapping: Arc<BandMapping>,
 	pixel_size: f64,
@@ -55,7 +53,7 @@ impl GdalDataset {
 
 		Ok(Self {
 			band_mapping: Arc::new(band_mapping),
-			filename: Arc::new(filename.to_path_buf()),
+			dataset: Arc::new(Mutex::new(dataset)),
 			bbox,
 			pixel_size,
 		})
@@ -66,11 +64,11 @@ impl GdalDataset {
 		ensure!(width > 0 && height > 0, "Width and height must be greater than zero");
 		trace!("get_image bbox={:?} size={}x{}", bbox, width, height);
 
-		let filename = self.filename.clone();
+		let src_mutex = self.dataset.clone();
 		let band_mapping = self.band_mapping.clone();
 		let channel_count = band_mapping.len();
 
-		let image = tokio::task::spawn_blocking(move || {
+		let image = tokio::task::spawn(async move {
 			let mut dst = band_mapping.create_mem_dataset(width, height)?;
 
 			let bbox_merc = bbox_to_mercator(&bbox)?;
@@ -85,10 +83,7 @@ impl GdalDataset {
 			dst.set_geo_transform(&geo_transform)?;
 			trace!("Prepared GeoTransform for destination: {:?}", geo_transform);
 
-			// Open source and reproject into destination
-			let src =
-				Dataset::open(filename.as_ref()).with_context(|| format!("Failed to open GDAL dataset {filename:?}"))?;
-
+			let src = src_mutex.lock().await;
 			reproject(&src, &dst)?;
 			trace!("Reprojection complete");
 
@@ -294,6 +289,7 @@ fn bbox_to_mercator(bbox: &GeoBBox) -> Result<[f64; 4]> {
 mod tests {
 	use super::*;
 	use anyhow::anyhow;
+	use std::path::PathBuf;
 	use versatiles_core::TileCoord3;
 
 	#[test]
