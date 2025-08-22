@@ -4,12 +4,16 @@ use imageproc::image::DynamicImage;
 use nom::Input;
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_derive::context;
+use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::traits::*;
+
+use crate::OperationTrait;
 
 #[derive(Debug)]
 pub struct MockImageSource {
 	#[allow(clippy::type_complexity)]
 	image: DynamicImage,
+	blob: Blob,
 	parameters: TilesReaderParameters,
 	tilejson: TileJSON,
 }
@@ -54,8 +58,11 @@ impl MockImageSource {
 		tilejson.set_string("name", "mock raster source").unwrap();
 		tilejson.update_from_reader_parameters(&parameters);
 
+		let blob = image.to_blob(tile_format)?;
+
 		Ok(MockImageSource {
 			image,
+			blob,
 			parameters,
 			tilejson,
 		})
@@ -88,7 +95,39 @@ impl TilesReaderTrait for MockImageSource {
 		if !self.parameters.bbox_pyramid.contains_coord(coord) {
 			return Ok(None);
 		}
-		Ok(Some(self.image.to_blob(self.parameters.tile_format)?))
+		Ok(Some(self.blob.clone()))
+	}
+}
+
+#[async_trait]
+impl OperationTrait for MockImageSource {
+	fn parameters(&self) -> &TilesReaderParameters {
+		&self.parameters
+	}
+
+	fn tilejson(&self) -> &TileJSON {
+		&self.tilejson
+	}
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
+		let blob = self.blob.clone();
+		let mut bbox = bbox.clone();
+		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
+		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {
+			Some(blob.clone())
+		}))
+	}
+
+	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+		let image = self.image.clone();
+		let mut bbox = bbox.clone();
+		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
+		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {
+			Some(image.clone())
+		}))
+	}
+
+	async fn get_vector_stream(&self, _bbox: TileBBox) -> Result<TileStream<VectorTile>> {
+		bail!("Vector tiles are not supported in MockImageSource operations.");
 	}
 }
 
@@ -138,7 +177,7 @@ mod tests {
 		)
 		.unwrap();
 		assert_eq!(
-			source.tilejson().as_pretty_lines(100),
+			OperationTrait::tilejson(&source).as_pretty_lines(100),
 			[
 				"{",
 				"  \"bounds\": [ -180, -85.051129, 0, 0 ],",
