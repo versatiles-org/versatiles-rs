@@ -37,6 +37,7 @@ assert_fs.workspace = true
 lazy_static.workspace = true
 pretty_assertions.workspace = true
 regex.workspace = true
+rstest.workspace = true
 tokio = { workspace = true, features = ["macros"] }
 
 
