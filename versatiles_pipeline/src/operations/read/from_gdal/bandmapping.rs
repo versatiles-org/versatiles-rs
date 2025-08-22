@@ -168,15 +168,18 @@ mod tests {
 		use ColorInterpretation::*;
 		text
 			.split(',')
-			.filter_map(|s| match s.trim() {
-				"Grey" => Some(GrayIndex),
-				"R" | "Red" => Some(RedBand),
-				"G" | "Green" => Some(GreenBand),
-				"B" | "Blue" => Some(BlueBand),
-				"A" | "Alpha" => Some(AlphaBand),
-				"U" | "Undefined" => Some(Undefined),
-				"Palette" => Some(PaletteIndex),
-				_ => None,
+			.filter_map(|s| {
+				let t = s.trim().to_ascii_lowercase();
+				Some(match t.as_str() {
+					"grey" | "gray" => GrayIndex,
+					"r" | "red" => RedBand,
+					"g" | "green" => GreenBand,
+					"b" | "blue" => BlueBand,
+					"a" | "alpha" => AlphaBand,
+					"u" | "undefined" => Undefined,
+					"palette" | "pal" => PaletteIndex,
+					_ => return None,
+				})
 			})
 			.collect()
 	}
@@ -189,9 +192,7 @@ mod tests {
 	#[case("R,G,B,A", "R,G,B,A", &[1,2,3,4])]
 	#[case("A,R,G,B", "R,G,B,A", &[2,3,4,1])]
 	fn bandmapping_ok_cases(#[case] colors_in: &str, #[case] colors_out: &str, #[case] mapping: &[usize]) -> Result<()> {
-		let cis = parse_color_interpretations(colors_in);
-
-		let ds = mem_dataset_with_bands(cis)?;
+		let ds = mem_dataset_with_bands(parse_color_interpretations(colors_in))?;
 		let bm = BandMapping::try_from(&ds)?;
 		assert_eq!(bm.len(), mapping.len());
 
@@ -232,14 +233,13 @@ mod tests {
 		"GDAL dataset band 3 uses the same channel (green) as band 2"
 	)]
 	fn bandmapping_error_cases(#[case] colors_in: &str, #[case] msg1: &str, #[case] msg2: &str) -> Result<()> {
-		let cis = parse_color_interpretations(colors_in);
-		let ds = mem_dataset_with_bands(cis)?;
+		let ds = mem_dataset_with_bands(parse_color_interpretations(colors_in))?;
 		let err = BandMapping::try_from(&ds)
 			.unwrap_err()
 			.chain()
 			.rev()
-			.enumerate()
-			.filter_map(|(index, err)| if index > 1 { None } else { Some(err.to_string()) })
+			.take(2)
+			.map(|e| e.to_string())
 			.collect::<Vec<_>>();
 		assert_eq!(err, [msg2, msg1]);
 		Ok(())
