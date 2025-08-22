@@ -108,18 +108,16 @@ impl OperationTrait for MockImageSource {
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
+	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Blob>> {
 		let blob = self.blob.clone();
-		let mut bbox = bbox.clone();
 		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {
 			Some(blob.clone())
 		}))
 	}
 
-	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+	async fn get_image_stream(&self, mut bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		let image = self.image.clone();
-		let mut bbox = bbox.clone();
 		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {
 			Some(image.clone())
