@@ -10,10 +10,13 @@ pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
 	fn get_extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> Result<DynamicImage>;
 	fn get_scaled_down(&self, factor: u32) -> Result<DynamicImage>;
 	fn into_flattened(self, color: Rgb<u8>) -> Result<DynamicImage>;
-	fn into_no_alpha(self) -> Result<DynamicImage>;
 	fn into_no_alpha_if_opaque(self) -> Result<DynamicImage>;
+	fn into_no_alpha(self) -> Result<DynamicImage>;
 	fn into_scaled_down(self, factor: u32) -> Result<DynamicImage>;
 	fn make_opaque(&mut self) -> Result<()>;
+	fn mut_color_values<F>(&mut self, f: F)
+	where
+		F: Fn(u8) -> u8;
 	fn overlay(&mut self, top: &DynamicImage) -> Result<()>;
 }
 
@@ -21,6 +24,15 @@ impl DynamicImageTraitOperation for DynamicImage
 where
 	DynamicImage: DynamicImageTraitInfo,
 {
+	fn as_no_alpha(&self) -> Result<DynamicImage> {
+		Ok(match self {
+			DynamicImage::ImageRgba8(_) => DynamicImage::from(self.to_rgb8()),
+			DynamicImage::ImageLumaA8(_) => DynamicImage::from(self.to_luma8()),
+			DynamicImage::ImageRgb8(_) | DynamicImage::ImageLuma8(_) => self.clone(),
+			_ => bail!("Unsupported image type for removing alpha: {:?}", self.color()),
+		})
+	}
+
 	fn average_color(&self) -> Vec<u8> {
 		let img = self.resize_exact(1, 1, image::imageops::FilterType::Triangle);
 		img.into_bytes()
@@ -70,15 +82,6 @@ where
 		}
 	}
 
-	fn as_no_alpha(&self) -> Result<DynamicImage> {
-		Ok(match self {
-			DynamicImage::ImageRgba8(_) => DynamicImage::from(self.to_rgb8()),
-			DynamicImage::ImageLumaA8(_) => DynamicImage::from(self.to_luma8()),
-			DynamicImage::ImageRgb8(_) | DynamicImage::ImageLuma8(_) => self.clone(),
-			_ => bail!("Unsupported image type for removing alpha: {:?}", self.color()),
-		})
-	}
-
 	fn into_no_alpha(self) -> Result<DynamicImage> {
 		Ok(match self {
 			DynamicImage::ImageRgba8(_) => DynamicImage::from(self.into_rgb8()),
@@ -120,6 +123,39 @@ where
 			_ => bail!("Unsupported image type for removing alpha: {:?}", self.color()),
 		}
 		Ok(())
+	}
+
+	fn mut_color_values<F>(&mut self, f: F)
+	where
+		F: Fn(u8) -> u8,
+	{
+		match self {
+			DynamicImage::ImageLuma8(img) => {
+				for p in img.pixels_mut() {
+					p[0] = f(p[0]);
+				}
+			}
+			DynamicImage::ImageLumaA8(img) => {
+				for p in img.pixels_mut() {
+					p[0] = f(p[0]);
+				}
+			}
+			DynamicImage::ImageRgb8(img) => {
+				for p in img.pixels_mut() {
+					p[0] = f(p[0]);
+					p[1] = f(p[1]);
+					p[2] = f(p[2]);
+				}
+			}
+			DynamicImage::ImageRgba8(img) => {
+				for p in img.pixels_mut() {
+					p[0] = f(p[0]);
+					p[1] = f(p[1]);
+					p[2] = f(p[2]);
+				}
+			}
+			_ => panic!("Unsupported image type for mutating color values: {:?}", self.color()),
+		}
 	}
 
 	fn overlay(&mut self, top: &DynamicImage) -> Result<()> {

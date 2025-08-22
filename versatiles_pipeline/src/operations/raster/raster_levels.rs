@@ -2,7 +2,7 @@ use crate::{PipelineFactory, helpers::pack_image_tile_stream, traits::*, vpl::VP
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use imageproc::image::{DynamicImage, Rgb};
+use imageproc::image::DynamicImage;
 use std::fmt::Debug;
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_geometry::vector_tile::VectorTile;
@@ -11,14 +11,20 @@ use versatiles_image::traits::*;
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Flattens (translucent) raster tiles onto a background
 struct Args {
-	/// background color to use for the flattened tiles, in RGB format. Defaults to white.
-	color: Option<[u8; 3]>,
+	/// Brightness adjustment for the flattened tiles. Defaults to 0.0 (no change).
+	brightness: Option<f32>,
+	/// Contrast adjustment for the flattened tiles. Defaults to 1.0 (no change).
+	contrast: Option<f32>,
+	/// Gamma adjustment for the flattened tiles. Defaults to 1.0 (no change).
+	gamma: Option<f32>,
 }
 
 #[derive(Debug)]
 struct Operation {
 	source: Box<dyn OperationTrait>,
-	color: Rgb<u8>,
+	brightness: f32,
+	contrast: f32,
+	gamma: f32,
 }
 
 impl Operation {
@@ -34,7 +40,9 @@ impl Operation {
 			let args = Args::from_vpl_node(&vpl_node)?;
 
 			Ok(Box::new(Self {
-				color: Rgb(args.color.unwrap_or([255, 255, 255])),
+				brightness: args.brightness.unwrap_or(0.0),
+				contrast: args.contrast.unwrap_or(1.0),
+				gamma: args.gamma.unwrap_or(1.0),
 				source,
 			}) as Box<dyn OperationTrait>)
 		})
@@ -56,21 +64,28 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		let color = self.color;
+		let contrast = self.contrast / 255.0;
+		let brightness = self.brightness / 255.0;
+		let gamma = self.gamma;
 		Ok(self
 			.source
 			.get_image_stream(bbox)
 			.await?
-			.map_item_parallel(move |image| image.into_flattened(color)))
+			.map_item_parallel(move |mut image| {
+				image.mut_color_values(|v| {
+					let v = ((v as f32 - 127.5) * contrast + 0.5 + brightness).powf(gamma) * 255.0;
+					v.clamp(0.0, 255.0) as u8
+				});
+				Ok(image)
+			}))
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
-		// todo: don't decompress and recompress tiles that are already flattened
 		pack_image_tile_stream(self.get_image_stream(bbox).await, self.source.parameters())
 	}
 
 	async fn get_vector_stream(&self, _bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		bail!("Vector tiles are not supported in raster_flatten operations.");
+		bail!("Vector tiles are not supported in raster_levels operations.");
 	}
 }
 
@@ -81,7 +96,7 @@ impl OperationFactoryTrait for Factory {
 		Args::get_docs()
 	}
 	fn get_tag_name(&self) -> &str {
-		"raster_flatten"
+		"raster_levels"
 	}
 }
 
