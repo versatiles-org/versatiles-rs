@@ -23,7 +23,11 @@ use crate::{
 };
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
-use futures::future::{BoxFuture, join_all};
+use futures::{
+	StreamExt,
+	future::{BoxFuture, join_all},
+	stream,
+};
 use imageproc::image::DynamicImage;
 use std::collections::HashMap;
 use versatiles_core::{tilejson::TileJSON, *};
@@ -148,8 +152,8 @@ impl OperationTrait for Operation {
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
-		Ok(TileStream::from_iter_stream(
-			bboxes.into_iter().map(move |bbox| async move {
+		Ok(TileStream::from_streams(
+			stream::iter(bboxes).map(move |bbox| async move {
 				let mut tiles = TileBBoxContainer::<Vec<VectorTile>>::new_default(bbox);
 
 				for source in self.sources.iter() {

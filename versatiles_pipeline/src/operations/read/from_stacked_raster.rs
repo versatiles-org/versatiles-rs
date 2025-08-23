@@ -18,7 +18,11 @@ use crate::{
 };
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
-use futures::future::{BoxFuture, join_all};
+use futures::{
+	StreamExt,
+	future::{BoxFuture, join_all},
+	stream,
+};
 use imageproc::image::DynamicImage;
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_geometry::vector_tile::VectorTile;
@@ -146,8 +150,8 @@ impl OperationTrait for Operation {
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
-		Ok(TileStream::from_iter_stream(
-			bboxes.into_iter().map(move |bbox| async move {
+		Ok(TileStream::from_streams(
+			stream::iter(bboxes).map(move |bbox| async move {
 				let mut images = TileBBoxContainer::<Vec<DynamicImage>>::new_default(bbox);
 
 				let streams = self.sources.iter().map(|source| source.get_image_stream(bbox));

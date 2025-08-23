@@ -23,7 +23,11 @@ use crate::{
 };
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use futures::future::{BoxFuture, join_all};
+use futures::{
+	StreamExt,
+	future::{BoxFuture, join_all},
+	stream,
+};
 use imageproc::image::DynamicImage;
 use versatiles_core::{tilejson::TileJSON, utils::recompress, *};
 use versatiles_geometry::vector_tile::VectorTile;
@@ -138,8 +142,8 @@ impl Operation {
 		// Divide the requested bbox into manageable chunks.
 		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
-		Ok(TileStream::from_iter_stream(
-			sub_bboxes.into_iter().map(move |bbox| async move {
+		Ok(TileStream::from_streams(
+			stream::iter(sub_bboxes).map(move |bbox| async move {
 				let mut tiles = TileBBoxContainer::<Option<T>>::new_default(bbox);
 
 				for source in self.sources.iter() {
