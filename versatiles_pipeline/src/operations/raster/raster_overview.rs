@@ -3,6 +3,7 @@ use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::{DynamicImage, GenericImage};
+use log::trace;
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 use versatiles_core::{tilejson::TileJSON, *};
@@ -163,6 +164,7 @@ impl Operation {
 		for (coord, item) in images {
 			cache.insert(coord, item);
 		}
+		trace!("add_images_to_cache: cache size: {}", cache.len());
 		Ok(())
 	}
 
@@ -195,6 +197,7 @@ impl Operation {
 				misses.push(coord1);
 			}
 		}
+		trace!("build_images_from_cache: cache size: {}", cache.len());
 		drop(cache);
 
 		// get missing images from source

@@ -100,6 +100,7 @@ impl GdalDataset {
 			let ds = Arc::new(Mutex::new(ds));
 			let mut list = self.datasets.lock().await;
 			list.push(ds);
+			trace!("Growing GDAL dataset pool to {}", list.len());
 		}
 	}
 
