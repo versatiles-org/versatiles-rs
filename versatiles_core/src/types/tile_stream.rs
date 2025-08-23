@@ -222,7 +222,7 @@ where
 	/// # Examples
 	/// ```
 	/// # use versatiles_core::{TileCoord3, Blob, TileStream};
-	/// # use futures::future;
+	/// # use futures::{future, stream};
 	/// #
 	/// async fn example(tile_streams: Vec<impl std::future::Future<Output=TileStream<'static>> + Send + 'static>) {
 	///     let merged = TileStream::from_streams(stream::iter(tile_streams), 1);

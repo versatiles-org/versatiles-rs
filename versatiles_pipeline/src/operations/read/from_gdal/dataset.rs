@@ -111,7 +111,7 @@ impl GdalDataset {
 		let channel_count = band_mapping.len();
 
 		let image = tokio::task::spawn_blocking(move || -> Result<Option<DynamicImage>> {
-			let src: &Dataset = &*guard; // guard moved into this closure; holds the dataset for the duration
+			let src: &Dataset = &guard; // guard moved into this closure; holds the dataset for the duration
 
 			trace!("spawn_blocking(get_image) started for size={}x{}", width, height);
 			let mut dst = band_mapping.create_mem_dataset(width, height)?;
