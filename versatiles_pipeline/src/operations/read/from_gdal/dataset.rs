@@ -70,7 +70,7 @@ impl GdalDataset {
 		const MAX_DATASETS: usize = 16;
 		loop {
 			// Try to lock any existing handle atomically
-			if let Some(guard) = {
+			if let Some(mut guard) = {
 				let list = self.datasets.lock().await;
 				// Clone each Arc and attempt try_lock_owned; return the first that succeeds
 				let mut found: Option<OwnedMutexGuard<Dataset>> = None;
@@ -82,6 +82,7 @@ impl GdalDataset {
 				}
 				found
 			} {
+				guard.flush_cache().unwrap();
 				return guard;
 			}
 
