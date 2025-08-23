@@ -148,7 +148,6 @@ impl OperationTrait for Operation {
 		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
 
 		let bboxes: Vec<TileBBox> = bbox.iter_bbox_grid(count).collect();
-		println!("bboxes {}", bboxes.len());
 		let size = self.tile_size;
 
 		use futures::stream::{self, StreamExt};
