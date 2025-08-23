@@ -256,7 +256,7 @@ impl OperationTrait for Operation {
 		let container: TileBBoxContainer<Option<DynamicImage>> = if bbox.level == self.level_base {
 			TileBBoxContainer::<Option<DynamicImage>>::from_stream(bbox, self.source.get_image_stream(bbox).await?).await?
 		} else {
-			self.build_images_from_cache(bbox).await?
+			self.build_images_from_cache(bbox0).await?
 		};
 
 		self.add_images_to_cache(&container).await?;
