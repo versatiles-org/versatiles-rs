@@ -63,9 +63,10 @@ install_deps_mac() {
   # Core build + common optional libraries
   brew update
   brew install \
-    cmake pkg-config llvm \
+    cmake pkg-config llvm ccache \
     proj geos sqlite libtiff libjpeg libpng \
     webp openjpeg \
+    giflib \
     zstd xz expat \
     curl json-c \
     apache-arrow \
@@ -79,10 +80,11 @@ install_deps_apt() {
   say "Installing build dependencies via apt… (may prompt for sudo)"
   sudo apt-get update
   sudo apt-get install -y --no-install-recommends \
-    build-essential cmake pkg-config git \
+    build-essential cmake pkg-config git ccache \
     libproj-dev libgeos-dev libsqlite3-dev \
     libtiff-dev libjpeg-dev libpng-dev \
     libwebp-dev libopenjp2-7-dev \
+    libgif-dev \
     libzstd-dev liblzma-dev zlib1g-dev \
     libexpat1-dev \
     libjson-c-dev \
@@ -143,16 +145,24 @@ cd "$BUILD_DIR"
 # On macOS, prefer Homebrew prefix for install and dependency discovery.
 CMAKE_ARGS=(
   -DCMAKE_BUILD_TYPE=Release
+  -DCMAKE_C_COMPILER_LAUNCHER=ccache
+  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
   -DCMAKE_INSTALL_PREFIX="${PREFIX}"
+  -DGDAL_USE_ARROW=OFF
+  -DGDAL_USE_GEOTIFF_INTERNAL=ON
+  -DGDAL_USE_GEOTIFF=ON
   -DGDAL_USE_INTERNAL_LIBS=OFF
   -DGDAL_USE_JSONC=ON
-  -DGDAL_USE_ARROW=ON
-  -DGDAL_USE_PARQUET=ON
+  -DGDAL_USE_PARQUET=OFF
+  -DGDAL_USE_TIFF_INTERNAL=ON
+  -DGDAL_USE_TIFF=ON
+  -DGDAL_USE_WEBP=ON
 )
 
 # Help CMake find brew-installed libraries on macOS
 if [[ "$PLATFORM" == "mac" ]]; then
   CMAKE_ARGS+=(
+    "-DCMAKE_DISABLE_FIND_PACKAGE_Arrow=ON"
     "-DCMAKE_PREFIX_PATH=${HOMEBREW_PREFIX}"
     "-DCMAKE_MACOSX_RPATH=ON"
     "-DCMAKE_INSTALL_RPATH=${PREFIX}/lib"
@@ -205,7 +215,9 @@ if [[ "$INSTALL_TEST" == "1" ]]; then
   fi
 fi
 
-say "GDAL ${GDAL_TAG} installed to ${PREFIX}. Done."#!/usr/bin/env bash
+say "GDAL ${GDAL_TAG} installed to ${PREFIX}. Done."
+
+#!/usr/bin/env bash
 # Set up environment variables for GDAL build and runtime.
 
 OS="$(uname -s)"
@@ -219,8 +231,13 @@ case "$OS" in
     export GDAL_DATA="${GDAL_HOME}/share/gdal"
     unset PROJ_LIB
 
-    # Unset Conda-related env vars that might interfere, include PROJ_DATA
-    for var in LDFLAGS LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH PROJ_DATA; do
+    # Sanity check: ensure proj.db exists where we point PROJ_DATA
+    if [[ ! -f "${PROJ_DATA}/proj.db" ]]; then
+      echo "[warn] PROJ_DATA=${PROJ_DATA} does not contain proj.db; 'projinfo EPSG:4326' will likely fail." >&2
+    fi
+
+    # Unset Conda-related env vars that might interfere, include PROJ_DATA and DYLD_FALLBACK_LIBRARY_PATH
+    for var in LDFLAGS LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH PROJ_DATA PROJ_LIB DYLD_FALLBACK_LIBRARY_PATH; do
       unset "$var"
     done
     ;;
@@ -243,3 +260,7 @@ esac
 
 echo "Configured GDAL environment for $OS."
 echo "Data dirs: PROJ_DATA=${PROJ_DATA:-unset}; GDAL_DATA=${GDAL_DATA:-unset}"
+
+# Quick live checks (non-fatal)
+command -v projinfo >/dev/null 2>&1 && projinfo EPSG:4326 >/dev/null 2>&1 || echo "[warn] projinfo EPSG:4326 failed; check PROJ_DATA=${PROJ_DATA}"
+command -v gdalsrsinfo >/dev/null 2>&1 && gdalsrsinfo EPSG:4326 >/dev/null 2>&1 || echo "[warn] gdalsrsinfo EPSG:4326 failed; check GDAL_DATA=${GDAL_DATA}"
