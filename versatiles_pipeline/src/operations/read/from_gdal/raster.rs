@@ -15,7 +15,7 @@ use crate::{
 };
 use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
-use futures::{FutureExt, future::BoxFuture};
+use futures::future::BoxFuture;
 use imageproc::image::DynamicImage;
 use log::{debug, trace};
 use std::{fmt::Debug, vec};
@@ -148,43 +148,43 @@ impl OperationTrait for Operation {
 		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
 
 		let bboxes: Vec<TileBBox> = bbox.iter_bbox_grid(count).collect();
-		let jobs = bboxes.into_iter().map(move |bbox| {
-			let size = self.tile_size;
+		println!("bboxes {}", bboxes.len());
+		let size = self.tile_size;
+
+		use futures::stream::{self, StreamExt};
+		let streams = stream::iter(bboxes).map(move |bbox| {
+			let size = size;
 			async move {
-				// Fetch the image data for the bounding box.
-				// If the image is not available, return an empty vector.
 				let image = self
 					.get_image_data_from_gdal(bbox.as_geo_bbox(), size * bbox.width(), size * bbox.height())
 					.await
 					.unwrap();
 
-				if image.is_none() {
-					return TileStream::new_empty();
+				if let Some(image) = image {
+					// Crop into tiles on a blocking thread
+					let vec = tokio::task::spawn_blocking(move || {
+						bbox
+							.iter_coords()
+							.filter_map(|coord| {
+								image
+									.crop_imm((coord.x - bbox.x_min) * size, (coord.y - bbox.y_min) * size, size, size)
+									.into_optional()
+									.map(|img| (coord, img))
+							})
+							.collect::<Vec<_>>()
+					})
+					.await
+					.unwrap();
+
+					debug!("Returning {} tiles for bbox {:?}", vec.len(), bbox);
+					TileStream::from_vec(vec)
+				} else {
+					TileStream::new_empty()
 				}
-
-				let image = image.unwrap();
-
-				let vec = tokio::task::spawn_blocking(move || {
-					bbox
-						.iter_coords()
-						.filter_map(|coord| {
-							image
-								.crop_imm((coord.x - bbox.x_min) * size, (coord.y - bbox.y_min) * size, size, size)
-								.into_optional()
-								.map(|img| (coord, img))
-						})
-						.collect::<Vec<_>>()
-				})
-				.await
-				.unwrap();
-
-				debug!("Returning {} tiles for bbox {:?}", vec.len(), bbox);
-
-				TileStream::from_vec(vec)
 			}
-			.boxed()
 		});
-		Ok(TileStream::from_iter_stream(jobs, 4))
+
+		Ok(TileStream::from_streams(streams, 4))
 	}
 
 	/// Stream decoded vector tiles contained in the bounding box.

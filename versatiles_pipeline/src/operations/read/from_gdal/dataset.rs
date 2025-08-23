@@ -5,8 +5,11 @@ use gdal::{
 };
 use imageproc::image::DynamicImage;
 use log::{debug, trace};
-use std::{path::Path, sync::Arc};
-use tokio::sync::Mutex;
+use std::{
+	path::{Path, PathBuf},
+	sync::Arc,
+};
+use tokio::sync::{Mutex, OwnedMutexGuard};
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -17,7 +20,8 @@ const EARTH_CIRCUMFERENCE: f64 = 2.0 * std::f64::consts::PI * 6_378_137.0;
 
 #[derive(Debug, Clone)]
 pub struct GdalDataset {
-	dataset: Arc<Mutex<Dataset>>,
+	filename: PathBuf,
+	datasets: Arc<Mutex<Vec<Arc<Mutex<Dataset>>>>>,
 	bbox: GeoBBox,
 	band_mapping: Arc<BandMapping>,
 	pixel_size: f64,
@@ -52,42 +56,79 @@ impl GdalDataset {
 		trace!("GdalDataset::new finished for {:?}", filename);
 
 		Ok(Self {
+			filename: filename.to_path_buf(),
 			band_mapping: Arc::new(band_mapping),
-			dataset: Arc::new(Mutex::new(dataset)),
+			datasets: Arc::new(Mutex::new(vec![Arc::new(Mutex::new(dataset))])),
 			bbox,
 			pixel_size,
 		})
 	}
 
-	#[context("Failed to get image data ({width}x{height}) for bbox ({bbox:?}) from GDAL dataset")]
-	pub async fn get_image(&self, bbox: GeoBBox, width: u32, height: u32) -> Result<Option<DynamicImage>> {
-		ensure!(width > 0 && height > 0, "Width and height must be greater than zero");
-		trace!("get_image bbox={:?} size={}x{}", bbox, width, height);
+	/// Acquire a dataset guard from the pool. Uses `try_lock_owned` so selection and locking
+	/// is atomic, avoiding two tasks choosing the same handle and serializing.
+	async fn acquire_dataset(&self) -> OwnedMutexGuard<Dataset> {
+		const MAX_DATASETS: usize = 16;
+		loop {
+			// Try to lock any existing handle atomically
+			if let Some(guard) = {
+				let list = self.datasets.lock().await;
+				// Clone each Arc and attempt try_lock_owned; return the first that succeeds
+				let mut found: Option<OwnedMutexGuard<Dataset>> = None;
+				for ds in list.iter() {
+					if let Ok(g) = ds.clone().try_lock_owned() {
+						found = Some(g);
+						break;
+					}
+				}
+				found
+			} {
+				return guard;
+			}
 
-		let src_mutex = self.dataset.clone();
+			// If we are at capacity, yield and retry
+			let at_capacity = {
+				let list = self.datasets.lock().await;
+				list.len() >= MAX_DATASETS
+			};
+			if at_capacity {
+				tokio::task::yield_now().await;
+				continue;
+			}
+
+			// Grow the pool without holding the vec lock
+			let ds = Dataset::open(&self.filename).expect("failed to open GDAL dataset");
+			let ds = Arc::new(Mutex::new(ds));
+			let mut list = self.datasets.lock().await;
+			list.push(ds);
+		}
+	}
+
+	pub async fn get_image(&self, bbox: GeoBBox, width: u32, height: u32) -> Result<Option<DynamicImage>> {
+		let guard = self.acquire_dataset().await; // OwnedMutexGuard<Dataset>
+
+		let bbox_arr = bbox_to_mercator(&bbox)?;
 		let band_mapping = self.band_mapping.clone();
 		let channel_count = band_mapping.len();
 
-		let image = tokio::task::spawn(async move {
-			let mut dst = band_mapping.create_mem_dataset(width, height)?;
+		let image = tokio::task::spawn_blocking(move || -> Result<Option<DynamicImage>> {
+			let src: &Dataset = &*guard; // guard moved into this closure; holds the dataset for the duration
 
-			let bbox_merc = bbox_to_mercator(&bbox)?;
+			trace!("spawn_blocking(get_image) started for size={}x{}", width, height);
+			let mut dst = band_mapping.create_mem_dataset(width, height)?;
 			let geo_transform: GeoTransform = [
-				bbox_merc[0],                                  // MinX
-				(bbox_merc[2] - bbox_merc[0]) / width as f64,  // Pixel width
-				0.0,                                           // Rotation (should be 0)
-				bbox_merc[3],                                  // MaxY
-				0.0,                                           // Rotation (should be 0)
-				(bbox_merc[1] - bbox_merc[3]) / height as f64, // Pixel height (negative)
+				bbox_arr[0],
+				(bbox_arr[2] - bbox_arr[0]) / width as f64,
+				0.0,
+				bbox_arr[3],
+				0.0,
+				(bbox_arr[1] - bbox_arr[3]) / height as f64,
 			];
 			dst.set_geo_transform(&geo_transform)?;
 			trace!("Prepared GeoTransform for destination: {:?}", geo_transform);
 
-			let src = src_mutex.lock().await;
-			reproject(&src, &dst)?;
+			reproject(src, &dst)?;
 			trace!("Reprojection complete");
 
-			trace!("Reading bands");
 			let mut buf = vec![0u8; (width as usize) * (height as usize) * channel_count];
 			for BandMappingItem {
 				channel_index,
@@ -95,28 +136,26 @@ impl GdalDataset {
 			} in band_mapping.iter()
 			{
 				let band = dst.rasterband(band_index)?.read_band_as::<u8>()?;
-				let band_data = band.data();
+				let data = band.data();
 				ensure!(
-					band_data.len() == (width as usize) * (height as usize),
-					"Band {band_index} data length mismatch: expected {} but got {}",
+					data.len() == (width as usize) * (height as usize),
+					"Band {} data length mismatch: expected {} but got {}",
+					band_index,
 					width * height,
-					band_data.len()
+					data.len()
 				);
-				for (j, &pixel) in band_data.iter().enumerate() {
-					buf[j * channel_count + channel_index] = pixel;
+				for (i, &px) in data.iter().enumerate() {
+					buf[i * channel_count + channel_index] = px;
 				}
 			}
 			trace!("Filled image buffer ({} bytes)", buf.len());
-
-			let image =
+			let img =
 				DynamicImage::from_raw(width, height, buf).context("Failed to create DynamicImage from GDAL dataset")?;
-
-			Ok::<DynamicImage, anyhow::Error>(image)
+			Ok(Some(img))
 		})
 		.await??;
 
-		debug!("get_image completed: {}x{} for bbox={:?}", width, height, bbox);
-		Ok(Some(image))
+		Ok(image)
 	}
 
 	pub fn bbox(&self) -> &GeoBBox {
