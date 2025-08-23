@@ -217,6 +217,7 @@ where
 	///
 	/// # Arguments
 	/// * `iter` - An iterator of futures that yield `TileStream`s.
+	/// * `cores_per_task` - The number of CPU cores to allocate for each task.
 	///
 	/// # Examples
 	/// ```
@@ -224,19 +225,22 @@ where
 	/// # use futures::future;
 	/// #
 	/// async fn example(tile_streams: Vec<impl std::future::Future<Output=TileStream<'static>> + Send + 'static>) {
-	///     let merged = TileStream::from_iter_stream(tile_streams.into_iter());
+	///     let merged = TileStream::from_iter_stream(tile_streams.into_iter(), 1);
 	///     let all_items = merged.to_vec().await;
 	///     // `all_items` now contains items from all child streams
 	/// }
 	/// ```
-	pub fn from_iter_stream<FutureStream>(iter: impl Iterator<Item = FutureStream> + Send + 'a) -> TileStream<'a, T>
+	pub fn from_iter_stream<FutureStream>(
+		iter: impl Iterator<Item = FutureStream> + Send + 'a,
+		cores_per_task: usize,
+	) -> TileStream<'a, T>
 	where
 		FutureStream: Future<Output = TileStream<'a, T>> + Send + 'a,
 	{
 		TileStream {
 			inner: Box::pin(
 				stream::iter(iter)
-					.buffer_unordered(num_cpus::get())
+					.buffer_unordered(num_cpus::get() / cores_per_task)
 					.map(|s| s.inner)
 					.flatten(),
 			),
@@ -905,7 +909,7 @@ mod tests {
 		];
 
 		// Merge them
-		let merged = TileStream::<Blob>::from_iter_stream(substreams.into_iter());
+		let merged = TileStream::<Blob>::from_iter_stream(substreams.into_iter(), 1);
 		let items = merged.to_vec().await;
 		assert_eq!(items.len(), 2);
 	}

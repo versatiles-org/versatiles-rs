@@ -146,8 +146,8 @@ impl OperationTrait for Operation {
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
-		Ok(TileStream::from_iter_stream(bboxes.into_iter().map(
-			move |bbox| async move {
+		Ok(TileStream::from_iter_stream(
+			bboxes.into_iter().map(move |bbox| async move {
 				let mut images = TileBBoxContainer::<Vec<DynamicImage>>::new_default(bbox);
 
 				let streams = self.sources.iter().map(|source| source.get_image_stream(bbox));
@@ -170,8 +170,9 @@ impl OperationTrait for Operation {
 					.collect::<Vec<_>>();
 
 				TileStream::from_vec(images).filter_map_item_parallel(overlay_image_tiles)
-			},
-		)))
+			}),
+			1,
+		))
 	}
 }
 

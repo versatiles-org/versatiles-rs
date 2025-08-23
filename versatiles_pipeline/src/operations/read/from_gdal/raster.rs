@@ -184,7 +184,7 @@ impl OperationTrait for Operation {
 			}
 			.boxed()
 		});
-		Ok(TileStream::from_iter_stream(jobs))
+		Ok(TileStream::from_iter_stream(jobs, 4))
 	}
 
 	/// Stream decoded vector tiles contained in the bounding box.
