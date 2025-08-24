@@ -81,6 +81,8 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 
 	convert_tiles_container(reader, parameters, &arguments.output_file).await?;
 
+	eprintln!("finished converting tiles");
+
 	Ok(())
 }
 
