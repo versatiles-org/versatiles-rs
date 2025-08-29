@@ -20,7 +20,7 @@ image = { version = "0.25.6", default-features = false, features = [
 	"png",
 	"webp",
 ] }
-webp = "0.3.0"
+webp = "0.3.1"
 
 versatiles_core.workspace = true
 
