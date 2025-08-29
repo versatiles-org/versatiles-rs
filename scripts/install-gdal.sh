@@ -19,8 +19,6 @@ say()  { printf "\033[1;34m[+] %s\033[0m\n" "$*"; }
 warn() { printf "\033[1;33m[!] %s\033[0m\n" "$*"; }
 die()  { printf "\033[1;31m[x] %s\033[0m\n" "$*" >&2; exit 1; }
 
-need_cmd() { command -v "$1" >/dev/null 2>&1 || die "Missing required tool: $1"; }
-
 OS="$(uname -s)"
 case "$OS" in
   Darwin) PLATFORM=mac ;;
@@ -28,22 +26,18 @@ case "$OS" in
   *)      die "Unsupported OS: $OS" ;;
 esac
 
+command -v "git" >/dev/null 2>&1 || die "Missing required tool: git";
+
 # Detect package manager & set defaults
 if [[ "$PLATFORM" == "mac" ]]; then
   if ! command -v brew >/dev/null 2>&1; then
     die "Homebrew is required but not found. Install from https://brew.sh/ then re-run."
   fi
-  need_cmd git
-  need_cmd cmake
-  need_cmd make
   HOMEBREW_PREFIX="$(brew --prefix)"
   : "${PREFIX:=${HOMEBREW_PREFIX}}"
   # Default jobs: number of hardware threads
   : "${JOBS:=$(sysctl -n hw.ncpu)}"
 elif [[ "$PLATFORM" == "linux" ]]; then
-  need_cmd git
-  need_cmd cmake || true # we’ll install it if missing
-  need_cmd make  || true
   # Pick apt for Debian/Ubuntu
   if command -v apt-get >/dev/null 2>&1; then
     PKG=apt
@@ -63,7 +57,7 @@ install_deps_mac() {
   # Core build + common optional libraries
   brew update
   brew install \
-    cmake pkg-config llvm ccache \
+    cmake make pkg-config llvm ccache \
     proj geos sqlite libtiff libjpeg libpng \
     webp openjpeg \
     giflib \
@@ -80,19 +74,17 @@ install_deps_apt() {
   say "Installing build dependencies via apt… (may prompt for sudo)"
   sudo apt-get update
   sudo apt-get install -y --no-install-recommends \
-    build-essential cmake pkg-config git ccache \
+    build-essential cmake make pkg-config git ccache \
     libproj-dev libgeos-dev libsqlite3-dev \
-    libtiff-dev libjpeg-dev libpng-dev \
+    libgeotiff-dev libtiff-dev libjpeg-dev libpng-dev \
     libwebp-dev libopenjp2-7-dev \
     libgif-dev \
     libzstd-dev liblzma-dev zlib1g-dev \
     libexpat1-dev \
     libjson-c-dev \
-    libarrow-dev \
-    libarrow-dataset-dev \
-    libparquet-dev \
     libcurl4-openssl-dev \
     libpq-dev \
+    proj-bin \
     ca-certificates
 }
 
@@ -151,9 +143,10 @@ CMAKE_ARGS=(
   -DGDAL_USE_ARROW=OFF
   -DGDAL_USE_GEOTIFF_INTERNAL=ON
   -DGDAL_USE_GEOTIFF=ON
-  -DGDAL_USE_INTERNAL_LIBS=OFF
+  -DGDAL_USE_INTERNAL_LIBS=WHEN_NO_EXTERNAL
   -DGDAL_USE_JSONC=ON
   -DGDAL_USE_PARQUET=OFF
+  -DGDAL_USE_SFCGAL=OFF
   -DGDAL_USE_TIFF_INTERNAL=ON
   -DGDAL_USE_TIFF=ON
   -DGDAL_USE_WEBP=ON
@@ -198,14 +191,12 @@ if [[ "$INSTALL_TEST" == "1" ]]; then
       export DYLD_LIBRARY_PATH="${PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
       # Ensure data dirs are set for CRS lookups
       export PROJ_DATA="${HOMEBREW_PREFIX}/share/proj"
-      unset PROJ_LIB
-      export GDAL_DATA="${PREFIX}/share/gdal"
     else
       # Ensure data dirs are set for CRS lookups
       export PROJ_DATA="/usr/share/proj"
-      unset PROJ_LIB
-      export GDAL_DATA="${PREFIX}/share/gdal"
     fi
+    unset PROJ_LIB
+    export GDAL_DATA="${PREFIX}/share/gdal"
     gdalinfo --version || true
     command -v projinfo >/dev/null 2>&1 && projinfo EPSG:4326 || true
     command -v gdalsrsinfo >/dev/null 2>&1 && gdalsrsinfo EPSG:4326 >/dev/null 2>&1 || warn "EPSG lookup failed; check PROJ_DATA (${PROJ_DATA}) and GDAL_DATA (${GDAL_DATA})."
@@ -244,6 +235,7 @@ case "$OS" in
 
   Linux)
     # Linux: set PROJ and GDAL data dirs, unset PROJ_LIB
+    GDAL_HOME="${GDAL_HOME:-$(gdal-config --prefix 2>/dev/null || echo /usr/local)}"
     PROJ_PREFIX="$(pkg-config --variable=prefix proj 2>/dev/null || echo /usr)"
     export PROJ_DATA="${PROJ_PREFIX}/share/proj"
     export GDAL_DATA="${GDAL_HOME}/share/gdal"
