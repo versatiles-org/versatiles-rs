@@ -13,10 +13,11 @@ use crate::{
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::{future::BoxFuture, lock::Mutex};
+use futures::{StreamExt, future::BoxFuture};
 #[allow(unused_imports)]
 use log::{debug, trace};
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use tokio::sync::Mutex;
 
 /// Trait defining behavior for reading tiles from a container.
 ///
@@ -58,8 +59,8 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		let mut n_read = 0;
 		for step in traversal_steps.iter() {
 			match step {
-				Push(bbox, _) => {
-					n_read += bbox.count_tiles();
+				Push(bboxes, _) => {
+					n_read += bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
 				}
 				Pop(_, _) => {}
 				Stream(bbox) => {
@@ -71,24 +72,36 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 		let mut i_read = 0;
 
-		let mut cache = HashMap::<usize, Vec<(TileCoord3, Blob)>>::new();
+		let cache = Arc::new(Mutex::new(HashMap::<usize, Vec<(TileCoord3, Blob)>>::new()));
 		for step in traversal_steps {
 			match step {
-				Push(bbox, index) => {
-					trace!("Cache {bbox:?} at index {index}");
-					let p = progress.clone();
-					let vec = self
-						.get_tile_stream(bbox)
-						.await?
-						.inspect(move || p.inc(1))
-						.to_vec()
-						.await;
-					cache.entry(index).or_default().extend(vec);
-					i_read += bbox.count_tiles();
+				Push(bboxes, index) => {
+					trace!("Cache {bboxes:?} at index {index}");
+					futures::stream::iter(bboxes.clone())
+						.map(|bbox| {
+							let p = progress.clone();
+							let c = cache.clone();
+							async move {
+								let vec = self
+									.get_tile_stream(bbox)
+									.await?
+									.inspect(move || p.inc(1))
+									.to_vec()
+									.await;
+								c.lock().await.entry(index).or_default().extend(vec);
+								Ok::<_, anyhow::Error>(())
+							}
+						})
+						.buffer_unordered(num_cpus::get() / 4)
+						.collect::<Vec<_>>()
+						.await
+						.into_iter()
+						.collect::<Result<Vec<_>>>()?;
+					i_read += bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
 				}
 				Pop(index, bbox) => {
 					trace!("Uncache {bbox:?} at index {index}");
-					let vec = cache.remove(&index).unwrap();
+					let vec = cache.lock().await.remove(&index).unwrap();
 					let stream = TileStream::from_vec(vec);
 					callback(bbox, stream).await?;
 				}

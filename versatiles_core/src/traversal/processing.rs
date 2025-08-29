@@ -1,12 +1,12 @@
 use std::{collections::HashMap, vec};
 
-use crate::{TileBBox, TileBBoxPyramid, Traversal};
-use anyhow::{Result, anyhow, bail};
+use crate::{TileBBox, TileBBoxPyramid, Traversal, TraversalOrder};
+use anyhow::{Result, bail};
 use versatiles_derive::context;
 
 #[derive(Debug, Clone)]
 pub enum TraversalTranslationStep {
-	Push(TileBBox, usize),
+	Push(Vec<TileBBox>, usize),
 	Pop(usize, TileBBox),
 	Stream(TileBBox),
 }
@@ -25,45 +25,42 @@ pub fn translate_traversals(
 			.collect::<Vec<_>>());
 	};
 
-	if let Ok(order) = traversal_read.order.get_intersected(&traversal_write.order) {
+	if traversal_write.order() == &TraversalOrder::AnyOrder {
 		#[allow(clippy::collapsible_if)]
-		if traversal_read.size.max_size()? < traversal_write.size.min_size()? {
-			let read_size = traversal_read.size.max_size()?;
+		if traversal_read.size.max_size()? <= traversal_write.size.min_size()? {
 			let write_size = traversal_write.size.min_size()?;
-			let read_bboxes = Traversal::new(order, read_size, read_size)?.traverse_pyramid(pyramid)?;
-			let write_bboxes = Traversal::new(order, write_size, write_size)?.traverse_pyramid(pyramid)?;
+			let read_bboxes = traversal_read.traverse_pyramid(pyramid)?;
 
 			use TraversalTranslationStep::*;
 
-			let mut map = HashMap::<TileBBox, usize>::new();
-
+			let mut map_write = HashMap::<TileBBox, (usize, TileBBox)>::new();
 			let mut steps: Vec<TraversalTranslationStep> = vec![];
 			for bbox_read in read_bboxes {
-				let bbox_map = bbox_read.get_rounded(write_size);
-				let n = map.len();
-				let index = map.entry(bbox_map).or_insert(n);
-
-				steps.push(Push(bbox_read, *index));
+				let bbox_write = bbox_read.get_rounded(write_size);
+				let n = map_write.len();
+				let index = map_write.entry(bbox_write).or_insert((n, bbox_write)).0;
+				if let Some(Push(bboxes, i)) = steps.last_mut() {
+					if *i == index {
+						bboxes.push(bbox_read);
+						continue;
+					}
+				}
+				steps.push(Push(vec![bbox_read], index));
 			}
 
-			for bbox_write in write_bboxes {
-				let bbox_map = bbox_write.get_rounded(write_size);
-				let index = map
-					.get(&bbox_map)
-					.ok_or_else(|| anyhow!("Could not find mapping for {bbox_map:?}"))?;
-
+			for (index, bbox_write) in map_write.into_values() {
 				let last_pos = steps
 					.iter()
 					.rposition(|step| {
 						if let TraversalTranslationStep::Push(_, i) = step {
-							*i == *index
+							*i == index
 						} else {
 							false
 						}
 					})
 					.unwrap();
 
-				steps.insert(last_pos + 1, Pop(*index, bbox_write));
+				steps.insert(last_pos + 1, Pop(index, bbox_write));
 			}
 
 			return Ok(steps);
