@@ -1,14 +1,13 @@
-use std::{collections::HashMap, vec};
-
 use crate::{TileBBox, TileBBoxPyramid, Traversal, TraversalOrder};
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
+use std::{collections::HashMap, vec};
 use versatiles_derive::context;
 
 #[derive(Debug, Clone)]
 pub enum TraversalTranslationStep {
 	Push(Vec<TileBBox>, usize),
 	Pop(usize, TileBBox),
-	Stream(TileBBox),
+	Stream(Vec<TileBBox>, TileBBox),
 }
 
 #[context("Could not find a way to translate traversals from {traversal_read:?} to {traversal_write:?}")]
@@ -21,7 +20,7 @@ pub fn translate_traversals(
 		return Ok(traversal
 			.traverse_pyramid(pyramid)?
 			.into_iter()
-			.map(TraversalTranslationStep::Stream)
+			.map(|b| TraversalTranslationStep::Stream(vec![b], b))
 			.collect::<Vec<_>>());
 	};
 
@@ -39,33 +38,200 @@ pub fn translate_traversals(
 				let bbox_write = bbox_read.get_rounded(write_size);
 				let n = map_write.len();
 				let index = map_write.entry(bbox_write).or_insert((n, bbox_write)).0;
-				if let Some(Push(bboxes, i)) = steps.last_mut() {
-					if *i == index {
-						bboxes.push(bbox_read);
-						continue;
-					}
-				}
 				steps.push(Push(vec![bbox_read], index));
 			}
 
 			for (index, bbox_write) in map_write.into_values() {
-				let last_pos = steps
-					.iter()
-					.rposition(|step| {
-						if let TraversalTranslationStep::Push(_, i) = step {
-							*i == index
-						} else {
-							false
-						}
-					})
-					.unwrap();
-
-				steps.insert(last_pos + 1, Pop(index, bbox_write));
+				steps.push(Pop(index, bbox_write));
 			}
-
+			simplify_steps(&mut steps)?;
 			return Ok(steps);
 		}
 	}
 
 	bail!("Could not find a way to translate traversals.")
+}
+
+fn simplify_steps(steps: &mut Vec<TraversalTranslationStep>) -> Result<()> {
+	use TraversalTranslationStep::*;
+
+	// ----- Step 1: Merge neighbouring Pushes with the same index -----
+	*steps = {
+		let mut result: Vec<TraversalTranslationStep> = Vec::with_capacity(steps.len());
+		for step in steps.drain(..) {
+			match (&mut result.last_mut(), &step) {
+				(Some(Push(prev_v, prev_idx)), Push(v, idx)) if prev_idx == idx => {
+					prev_v.extend(v.iter().cloned());
+				}
+				_ => result.push(step),
+			}
+		}
+		result
+	};
+
+	// ----- Step 2: Move each Pop right after the last Push with the same index -----
+	*steps = {
+		let mut result: Vec<TraversalTranslationStep> = Vec::with_capacity(steps.len());
+
+		for step in steps.drain(..) {
+			match step {
+				Push(bboxes, idx) => {
+					result.push(Push(bboxes, idx));
+				}
+				Pop(idx, bbox) => {
+					let pos = result
+						.iter()
+						.rposition(|s| matches!(s, Push(_, i) if *i == idx))
+						.ok_or(anyhow!("Could not find Push for index {idx}"))?;
+					result.insert(pos + 1, Pop(idx, bbox));
+				}
+				Stream(bboxes, bbox) => {
+					result.push(Stream(bboxes, bbox));
+				}
+			}
+		}
+		result
+	};
+
+	// ----- Step 3: Replace a single neighbouring Push + Pop (same index) with Stream -----
+	*steps = {
+		let mut result: Vec<TraversalTranslationStep> = Vec::with_capacity(steps.len());
+		let mut count: HashMap<usize, u32> = HashMap::new();
+		for step in steps.drain(..) {
+			match step {
+				Push(bboxes, idx) => {
+					*count.entry(idx).or_insert(0) += 1;
+					result.push(Push(bboxes, idx));
+				}
+				Pop(idx, bbox) => {
+					let last_entry_option: Option<TraversalTranslationStep> = result.last().cloned();
+					if let Some(last_entry) = last_entry_option
+						&& let Push(bboxes, last_idx) = last_entry
+						&& last_idx == idx
+						&& count.get(&idx) == Some(&1)
+					{
+						result.pop();
+						result.push(Stream(bboxes.clone(), bbox));
+						continue;
+					}
+					result.push(Pop(idx, bbox));
+				}
+				Stream(bboxes, bbox) => {
+					result.push(Stream(bboxes, bbox));
+				}
+			}
+		}
+		result
+	};
+
+	// ---- Step 4: Renumber indices ----
+	let mut index_map: HashMap<usize, usize> = HashMap::new();
+	for step in steps.iter_mut() {
+		match step {
+			Push(_, old_idx) | Pop(old_idx, _) => {
+				let n = index_map.len();
+				let new_idx = index_map.entry(*old_idx).or_insert(n);
+				*old_idx = *new_idx;
+			}
+			Stream(_, _) => {}
+		}
+	}
+
+	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use crate::GeoBBox;
+	use TraversalOrder::*;
+
+	fn test(
+		order_read: TraversalOrder,
+		size_read_min: u32,
+		size_read_max: u32,
+		order_write: TraversalOrder,
+		size_write_min: u32,
+		size_write_max: u32,
+	) -> Vec<String> {
+		let pyramid = TileBBoxPyramid::from_geo_bbox(13, 15, &GeoBBox::from(&[12, 13, 14, 15]));
+		let read = Traversal::new(order_read, size_read_min, size_read_max).unwrap();
+		let write = Traversal::new(order_write, size_write_min, size_write_max).unwrap();
+		let steps = translate_traversals(&pyramid, &read, &write).unwrap();
+		steps
+			.iter()
+			.map(|s| {
+				use TraversalTranslationStep::*;
+				fn f(bbox: &TileBBox) -> String {
+					format!(
+						"[{}: {},{} {}x{}]",
+						bbox.level,
+						bbox.x_min,
+						bbox.y_min,
+						bbox.width(),
+						bbox.height()
+					)
+				}
+				fn fs(bbox: &[TileBBox]) -> String {
+					bbox.iter().map(f).collect::<Vec<_>>().join(", ")
+				}
+				match s {
+					Push(bboxes, i) => {
+						format!("Push: {}; {i}", fs(bboxes))
+					}
+					Pop(i, bbox) => {
+						format!("Pop: {i}; {}", f(bbox))
+					}
+					Stream(bboxes, bbox) => {
+						if bboxes.len() == 1 && bboxes[0] == *bbox {
+							format!("Stream: {}", f(bbox))
+						} else {
+							format!("Stream: {}; {}", fs(bboxes), f(bbox))
+						}
+					}
+				}
+			})
+			.collect()
+	}
+
+	#[test]
+	fn translate_any2any() {
+		assert_eq!(
+			test(AnyOrder, 1, 256, AnyOrder, 1, 256),
+			&[
+				"Stream: [13: 4369,3750 46x48]",
+				"Stream: [14: 8738,7501 92x95]",
+				"Stream: [15: 17476,15002 183x102]",
+				"Stream: [15: 17476,15104 183x87]"
+			]
+		);
+	}
+
+	#[test]
+	fn translate_depthfirst2any() {
+		assert_eq!(
+			test(DepthFirst, 1, 256, AnyOrder, 1, 256),
+			&[
+				"Stream: [15: 17476,15002 183x102]",
+				"Stream: [15: 17476,15104 183x87]",
+				"Stream: [14: 8738,7501 92x95]",
+				"Stream: [13: 4369,3750 46x48]"
+			]
+		);
+	}
+
+	#[test]
+	fn translate_depthfirst2any_smaller() {
+		assert_eq!(
+			test(DepthFirst, 1, 128, AnyOrder, 256, 256),
+			&[
+				"Stream: [15: 17476,15002 60x102], [15: 17536,15002 123x102]; [15: 17408,14848 256x256]",
+				"Push: [14: 8738,7501 92x51]; 0",
+				"Stream: [15: 17476,15104 60x87], [15: 17536,15104 123x87]; [15: 17408,15104 256x256]",
+				"Push: [14: 8738,7552 92x44]; 0",
+				"Pop: 0; [14: 8704,7424 256x256]",
+				"Stream: [13: 4369,3750 46x48]; [13: 4352,3584 256x256]"
+			]
+		);
+	}
 }

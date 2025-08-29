@@ -63,8 +63,8 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 					n_read += bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
 				}
 				Pop(_, _) => {}
-				Stream(bbox) => {
-					n_read += bbox.count_tiles();
+				Stream(bboxes, _) => {
+					n_read += bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
 				}
 			}
 		}
@@ -105,13 +105,15 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 					let stream = TileStream::from_vec(vec);
 					callback(bbox, stream).await?;
 				}
-				Stream(bbox) => {
+				Stream(bboxes, bbox) => {
 					trace!("Stream {bbox:?}");
-					let p = progress.clone();
-					let stream = self.get_tile_stream(bbox).await?.inspect(move || p.inc(1));
-					callback(bbox, stream).await?;
-
-					i_read += bbox.count_tiles();
+					let p0 = progress.clone();
+					let streams = futures::stream::iter(bboxes.clone()).map(move |bbox| {
+						let p1 = p0.clone();
+						async move { self.get_tile_stream(bbox).await.unwrap().inspect(move || p1.inc(1)) }
+					});
+					callback(bbox, TileStream::from_streams(streams, num_cpus::get() / 4)).await?;
+					i_read += bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
 				}
 			}
 			progress.set_position(i_read);
