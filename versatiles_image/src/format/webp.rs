@@ -64,8 +64,8 @@ mod tests {
 	use rstest::rstest;
 
 	#[rstest]
-	#[case::rgb(          DynamicImage::new_test_rgb(),  false, 0.96, vec![1.4, 0.8, 1.9]     )]
-	#[case::rgba(         DynamicImage::new_test_rgba(), false, 0.76, vec![1.4, 0.8, 2.0, 0.0])]
+	#[case::rgb(          DynamicImage::new_test_rgb(),  false, 0.96, vec![0.9, 0.5, 1.5]     )]
+	#[case::rgba(         DynamicImage::new_test_rgba(), false, 0.76, vec![0.9, 0.5, 1.6, 0.0])]
 	#[case::lossless_rgb( DynamicImage::new_test_rgb(),  true,  0.08, vec![0.0, 0.0, 0.0]     )]
 	#[case::lossless_rgba(DynamicImage::new_test_rgba(), true,  0.07, vec![0.0, 0.0, 0.0, 0.0])]
 	fn webp_ok(
