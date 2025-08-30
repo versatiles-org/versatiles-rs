@@ -1,6 +1,6 @@
 /// A module defining the `TileStream` struct, which provides asynchronous handling of a stream of tiles.
 ///
-/// Each tile is represented by a coordinate (`TileCoord3`) and an associated value of **generic type `T`** (default: `Blob`). The `TileStream`
+/// Each tile is represented by a coordinate (`TileCoord`) and an associated value of **generic type `T`** (default: `Blob`). The `TileStream`
 /// offers methods for parallel processing, buffering, synchronization callbacks, and easy iteration.
 ///
 /// # Features
@@ -9,13 +9,13 @@
 /// - **Synchronous and Asynchronous Callbacks**: Choose between sync and async processing steps.
 ///
 /// # Structs
-/// - `TileStream`: Encapsulates a stream of `(TileCoord3, T)` tuples, providing methods for transformation, iteration, and buffering.
+/// - `TileStream`: Encapsulates a stream of `(TileCoord, T)` tuples, providing methods for transformation, iteration, and buffering.
 ///
 /// # Methods
 /// ## Constructors
 /// - `new_empty`: Creates an empty `TileStream`.
 /// - `from_stream`: Constructs a `TileStream` from an existing `Stream`.
-/// - `from_vec`: Constructs a `TileStream` from a vector of `(TileCoord3, T)` items.
+/// - `from_vec`: Constructs a `TileStream` from a vector of `(TileCoord, T)` items.
 /// - `from_iter_coord_parallel`: Creates a `TileStream` from an iterator of coordinates, processing them in parallel.
 /// - `from_coord_vec_async`: Creates a `TileStream` from a vector of coordinates, applying an async closure.
 ///
@@ -41,7 +41,7 @@
 ///
 /// # Utility Functions
 /// - `unwrap_result`: Unwraps a `Result`, printing detailed error information and terminating the program on failure.
-use crate::{Blob, TileCoord3};
+use crate::{Blob, TileCoord};
 use anyhow::Result;
 use futures::{
 	Future, Stream, StreamExt,
@@ -50,17 +50,17 @@ use futures::{
 };
 use std::{io::Write, pin::Pin, sync::Arc};
 
-/// A stream of tiles represented by `(TileCoord3, T)` pairs.
+/// A stream of tiles represented by `(TileCoord, T)` pairs.
 ///
 /// # Type Parameters
 /// - `'a`: The lifetime of the stream.
 /// - `T`: The type of the tile data, defaulting to `Blob`.
 ///
 /// # Fields
-/// - `stream`: The internal boxed stream that emits `(TileCoord3, T)` pairs.
+/// - `stream`: The internal boxed stream that emits `(TileCoord, T)` pairs.
 pub struct TileStream<'a, T = Blob> {
-	/// The internal boxed stream, emitting `(TileCoord3, T)` pairs.
-	pub inner: BoxStream<'a, (TileCoord3, T)>,
+	/// The internal boxed stream, emitting `(TileCoord, T)` pairs.
+	pub inner: BoxStream<'a, (TileCoord, T)>,
 }
 
 impl<'a, T> TileStream<'a, T>
@@ -80,37 +80,37 @@ where
 		}
 	}
 
-	/// Creates a `TileStream` from an existing `Stream` of `(TileCoord3, T)`.
+	/// Creates a `TileStream` from an existing `Stream` of `(TileCoord, T)`.
 	///
 	/// # Examples
 	/// ```
 	/// use futures::{stream, StreamExt};
-	/// # use versatiles_core::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	///
 	/// let tile_data = stream::iter(vec![
-	///     (TileCoord3::new(0, 0, 0).unwrap(), Blob::from("tile0")),
-	///     (TileCoord3::new(1, 1, 1).unwrap(), Blob::from("tile1")),
+	///     (TileCoord::new(0, 0, 0).unwrap(), Blob::from("tile0")),
+	///     (TileCoord::new(1, 1, 1).unwrap(), Blob::from("tile1")),
 	/// ]);
 	/// let my_stream = TileStream::from_stream(tile_data.boxed());
 	/// ```
-	pub fn from_stream(stream: Pin<Box<dyn Stream<Item = (TileCoord3, T)> + Send + 'a>>) -> Self {
+	pub fn from_stream(stream: Pin<Box<dyn Stream<Item = (TileCoord, T)> + Send + 'a>>) -> Self {
 		TileStream { inner: stream }
 	}
 
-	/// Constructs a `TileStream` from a vector of `(TileCoord3, T)` items.
+	/// Constructs a `TileStream` from a vector of `(TileCoord, T)` items.
 	///
 	/// The resulting stream will yield each item in `vec` in order.
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	/// let tile_data = vec![
-	///     (TileCoord3::new(0, 0, 0).unwrap(), Blob::from("tile0")),
-	///     (TileCoord3::new(1, 1, 1).unwrap(), Blob::from("tile1")),
+	///     (TileCoord::new(0, 0, 0).unwrap(), Blob::from("tile0")),
+	///     (TileCoord::new(1, 1, 1).unwrap(), Blob::from("tile1")),
 	/// ];
 	/// let tile_stream = TileStream::from_vec(tile_data);
 	/// ```
-	pub fn from_vec(vec: Vec<(TileCoord3, T)>) -> Self {
+	pub fn from_vec(vec: Vec<(TileCoord, T)>) -> Self {
 		TileStream {
 			inner: stream::iter(vec).boxed(),
 		}
@@ -120,8 +120,8 @@ where
 	// Stream Creation from Iterators
 	// -------------------------------------------------------------------------
 
-	/// Creates a `TileStream` by converting an iterator of `TileCoord3` into parallel tasks
-	/// that produce `(TileCoord3, T)` items asynchronously.
+	/// Creates a `TileStream` by converting an iterator of `TileCoord` into parallel tasks
+	/// that produce `(TileCoord, T)` items asynchronously.
 	///
 	/// Spawns one tokio task per coordinate (buffered by `num_cpus::get()`), calling `callback`
 	/// to produce the tile value. Returns only items where `callback(coord)` yields `Some(value)`.
@@ -133,18 +133,18 @@ where
 	/// # Examples
 	/// ```
 	/// # use std::sync::Arc;
-	/// # use versatiles_core::{TileCoord3, Blob, TileStream};
-	/// let coords = vec![TileCoord3::new(0,0,0).unwrap(), TileCoord3::new(1,1,1).unwrap()];
-	/// let closure = |coord: TileCoord3| {
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
+	/// let coords = vec![TileCoord::new(0,0,0).unwrap(), TileCoord::new(1,1,1).unwrap()];
+	/// let closure = |coord: TileCoord| {
 	///     // Data loading logic...
 	///     Some(Blob::from(format!("data for {:?}", coord)))
 	/// };
 	///
 	/// let tile_stream = TileStream::from_iter_coord_parallel(coords.into_iter(), closure);
 	/// ```
-	pub fn from_iter_coord_parallel<F>(iter: impl Iterator<Item = TileCoord3> + Send + 'a, callback: F) -> Self
+	pub fn from_iter_coord_parallel<F>(iter: impl Iterator<Item = TileCoord> + Send + 'a, callback: F) -> Self
 	where
-		F: Fn(TileCoord3) -> Option<T> + Send + Sync + 'static,
+		F: Fn(TileCoord) -> Option<T> + Send + Sync + 'static,
 		T: 'static,
 	{
 		let callback = Arc::new(callback);
@@ -164,9 +164,9 @@ where
 		TileStream { inner: s.boxed() }
 	}
 
-	pub fn from_iter_coord<F>(iter: impl Iterator<Item = TileCoord3> + Send + 'a, callback: F) -> Self
+	pub fn from_iter_coord<F>(iter: impl Iterator<Item = TileCoord> + Send + 'a, callback: F) -> Self
 	where
-		F: Fn(TileCoord3) -> Option<T> + Send + Sync + 'static,
+		F: Fn(TileCoord) -> Option<T> + Send + Sync + 'static,
 		T: 'static,
 	{
 		TileStream {
@@ -177,15 +177,15 @@ where
 	/// Creates a `TileStream` by filtering and mapping an async closure over a vector of tile coordinates.
 	///
 	/// The closure `callback` takes a coordinate and returns a `Future` that yields
-	/// an `Option<(TileCoord3, T)>`. Only `Some` items are emitted.
+	/// an `Option<(TileCoord, T)>`. Only `Some` items are emitted.
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	/// # use futures::Future;
 	/// # async fn example() {
-	/// let coords = vec![TileCoord3::new(0,0,0).unwrap(), TileCoord3::new(1,1,1).unwrap()];
-	/// let closure = |coord: TileCoord3| async move {
+	/// let coords = vec![TileCoord::new(0,0,0).unwrap(), TileCoord::new(1,1,1).unwrap()];
+	/// let closure = |coord: TileCoord| async move {
 	///     if coord.level == 0 {
 	///         Some((coord, Blob::from("data")))
 	///     } else {
@@ -198,10 +198,10 @@ where
 	/// assert_eq!(items.len(), 1);
 	/// # }
 	/// ```
-	pub fn from_coord_vec_async<F, Fut>(vec: Vec<TileCoord3>, callback: F) -> Self
+	pub fn from_coord_vec_async<F, Fut>(vec: Vec<TileCoord>, callback: F) -> Self
 	where
-		F: FnMut(TileCoord3) -> Fut + Send + 'a,
-		Fut: Future<Output = Option<(TileCoord3, T)>> + Send + 'a,
+		F: FnMut(TileCoord) -> Fut + Send + 'a,
+		Fut: Future<Output = Option<(TileCoord, T)>> + Send + 'a,
 	{
 		let s = stream::iter(vec).filter_map(callback);
 		TileStream { inner: s.boxed() }
@@ -221,7 +221,7 @@ where
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	/// # use futures::{future, stream};
 	/// #
 	/// async fn example(tile_streams: Vec<impl std::future::Future<Output=TileStream<'static>> + Send + 'static>) {
@@ -253,37 +253,37 @@ where
 	// Collecting and Iteration
 	// -------------------------------------------------------------------------
 
-	/// Collects all `(TileCoord3, T)` items from this stream into a vector.
+	/// Collects all `(TileCoord, T)` items from this stream into a vector.
 	///
 	/// Consumes the stream.
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	/// # async fn test() {
 	/// let stream = TileStream::from_vec(vec![
-	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
-	///     (TileCoord3::new(1,1,1).unwrap(), Blob::from("data1")),
+	///     (TileCoord::new(0,0,0).unwrap(), Blob::from("data0")),
+	///     (TileCoord::new(1,1,1).unwrap(), Blob::from("data1")),
 	/// ]);
 	/// let items = stream.to_vec().await;
 	/// assert_eq!(items.len(), 2);
 	/// # }
 	/// ```
-	pub async fn to_vec(self) -> Vec<(TileCoord3, T)> {
+	pub async fn to_vec(self) -> Vec<(TileCoord, T)> {
 		self.inner.collect().await
 	}
 
-	/// Retrieves the next `(TileCoord3, T)` item from this stream, or `None` if the stream is empty.
+	/// Retrieves the next `(TileCoord, T)` item from this stream, or `None` if the stream is empty.
 	///
 	/// The internal pointer advances by one item.
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	/// # async fn test() {
 	/// let mut stream = TileStream::from_vec(vec![
-	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
-	///     (TileCoord3::new(1,1,1).unwrap(), Blob::from("data1")),
+	///     (TileCoord::new(0,0,0).unwrap(), Blob::from("data0")),
+	///     (TileCoord::new(1,1,1).unwrap(), Blob::from("data1")),
 	/// ]);
 	///
 	/// let first = stream.next().await;
@@ -294,22 +294,22 @@ where
 	/// assert!(third.is_none());
 	/// # }
 	/// ```
-	pub async fn next(&mut self) -> Option<(TileCoord3, T)> {
+	pub async fn next(&mut self) -> Option<(TileCoord, T)> {
 		self.inner.next().await
 	}
 
-	/// Applies an asynchronous callback `callback` to each `(TileCoord3, T)` item.
+	/// Applies an asynchronous callback `callback` to each `(TileCoord, T)` item.
 	///
 	/// Consumes the stream. The provided closure returns a `Future<Output=()>`.
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	/// # use futures::Future;
 	/// # async fn test() {
 	/// let stream = TileStream::from_vec(vec![
-	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
-	///     (TileCoord3::new(1,1,1).unwrap(), Blob::from("data1")),
+	///     (TileCoord::new(0,0,0).unwrap(), Blob::from("data0")),
+	///     (TileCoord::new(1,1,1).unwrap(), Blob::from("data1")),
 	/// ]);
 	///
 	/// stream.for_each_async(|(coord, value)| async move {
@@ -319,7 +319,7 @@ where
 	/// ```
 	pub async fn for_each_async<F, Fut>(self, callback: F)
 	where
-		F: FnMut((TileCoord3, T)) -> Fut,
+		F: FnMut((TileCoord, T)) -> Fut,
 		Fut: Future<Output = ()>,
 	{
 		self.inner.for_each(callback).await;
@@ -327,23 +327,23 @@ where
 
 	pub async fn for_each_async_parallel<F, Fut>(self, callback: F)
 	where
-		F: FnMut((TileCoord3, T)) -> Fut,
+		F: FnMut((TileCoord, T)) -> Fut,
 		Fut: Future<Output = ()>,
 	{
 		self.inner.for_each_concurrent(num_cpus::get(), callback).await;
 	}
 
-	/// Applies a synchronous callback `callback` to each `(TileCoord3, T)` item.
+	/// Applies a synchronous callback `callback` to each `(TileCoord, T)` item.
 	///
 	/// Consumes the stream. The provided closure returns `()`.
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	/// # async fn test() {
 	/// let stream = TileStream::from_vec(vec![
-	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
-	///     (TileCoord3::new(1,1,1).unwrap(), Blob::from("data1")),
+	///     (TileCoord::new(0,0,0).unwrap(), Blob::from("data0")),
+	///     (TileCoord::new(1,1,1).unwrap(), Blob::from("data1")),
 	/// ]);
 	///
 	/// stream.for_each_sync(|(coord, value)| {
@@ -353,7 +353,7 @@ where
 	/// ```
 	pub async fn for_each_sync<F>(self, mut callback: F)
 	where
-		F: FnMut((TileCoord3, T)),
+		F: FnMut((TileCoord, T)),
 	{
 		self
 			.inner
@@ -366,16 +366,16 @@ where
 
 	/// Buffers items in chunks of size `buffer_size`, then calls `callback` with each full or final chunk.
 	///
-	/// Consumes the stream. Items are emitted in `(TileCoord3, T)` form.
+	/// Consumes the stream. Items are emitted in `(TileCoord, T)` form.
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	/// # async fn test() {
 	/// let stream = TileStream::from_vec(vec![
-	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
-	///     (TileCoord3::new(1,1,1).unwrap(), Blob::from("data1")),
-	///     (TileCoord3::new(2,2,2).unwrap(), Blob::from("data2")),
+	///     (TileCoord::new(0,0,0).unwrap(), Blob::from("data0")),
+	///     (TileCoord::new(1,1,1).unwrap(), Blob::from("data1")),
+	///     (TileCoord::new(2,2,2).unwrap(), Blob::from("data2")),
 	/// ]);
 	///
 	/// stream.for_each_buffered(2, |chunk| {
@@ -388,7 +388,7 @@ where
 	/// ```
 	pub async fn for_each_buffered<F>(mut self, buffer_size: usize, mut callback: F)
 	where
-		F: FnMut(Vec<(TileCoord3, T)>),
+		F: FnMut(Vec<(TileCoord, T)>),
 	{
 		let mut buffer = Vec::with_capacity(buffer_size);
 		while let Some(item) = self.inner.next().await {
@@ -415,11 +415,11 @@ where
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	/// # async fn test() {
 	/// let stream = TileStream::from_vec(vec![
-	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
-	///     (TileCoord3::new(1,1,1).unwrap(), Blob::from("data1")),
+	///     (TileCoord::new(0,0,0).unwrap(), Blob::from("data0")),
+	///     (TileCoord::new(1,1,1).unwrap(), Blob::from("data1")),
 	/// ]);
 	///
 	/// let mapped = stream.map_item_parallel(|value| {
@@ -457,7 +457,7 @@ where
 
 	pub fn flat_map_parallel<F, O>(self, callback: F) -> TileStream<'a, O>
 	where
-		F: Fn(TileCoord3, T) -> Result<TileStream<'a, O>> + Send + Sync + 'static,
+		F: Fn(TileCoord, T) -> Result<TileStream<'a, O>> + Send + Sync + 'static,
 		T: 'static,
 		O: 'static,
 	{
@@ -483,11 +483,11 @@ where
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	/// # async fn test() {
 	/// let stream = TileStream::from_vec(vec![
-	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("keep")),
-	///     (TileCoord3::new(1,1,1).unwrap(), Blob::from("discard")),
+	///     (TileCoord::new(0,0,0).unwrap(), Blob::from("keep")),
+	///     (TileCoord::new(1,1,1).unwrap(), Blob::from("discard")),
 	/// ]);
 	///
 	/// let filtered = stream.filter_map_item_parallel(|value| {
@@ -528,21 +528,21 @@ where
 	// Coordinate Transformations
 	// -------------------------------------------------------------------------
 
-	/// Applies a synchronous coordinate transformation to each `(TileCoord3, Blob)` item.
+	/// Applies a synchronous coordinate transformation to each `(TileCoord, Blob)` item.
 	///
 	/// Maintains the same value of type `T`, but transforms `coord` via `callback`.
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	/// # async fn test() {
 	/// let stream = TileStream::from_vec(vec![
-	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
-	///     (TileCoord3::new(1,1,1).unwrap(), Blob::from("data1")),
+	///     (TileCoord::new(0,0,0).unwrap(), Blob::from("data0")),
+	///     (TileCoord::new(1,1,1).unwrap(), Blob::from("data1")),
 	/// ]);
 	///
 	/// let mapped_coords = stream.map_coord(|coord| {
-	///     TileCoord3::new(coord.level + 1, coord.x, coord.y).unwrap()
+	///     TileCoord::new(coord.level + 1, coord.x, coord.y).unwrap()
 	/// });
 	///
 	/// let items = mapped_coords.to_vec().await;
@@ -551,7 +551,7 @@ where
 	/// ```
 	pub fn map_coord<F>(self, mut callback: F) -> Self
 	where
-		F: FnMut(TileCoord3) -> TileCoord3 + Send + 'a,
+		F: FnMut(TileCoord) -> TileCoord + Send + 'a,
 	{
 		let s = self.inner.map(move |(coord, item)| (callback(coord), item)).boxed();
 		TileStream { inner: s }
@@ -559,22 +559,22 @@ where
 
 	/// Filters the stream by **tile coordinate** using an *asynchronous* predicate.
 	///
-	/// The provided closure receives each `TileCoord3` and returns a `Future<bool>`.
+	/// The provided closure receives each `TileCoord` and returns a `Future<bool>`.
 	/// If the future resolves to `true`, the item is kept; otherwise it is dropped.
 	///
 	/// This is analogous to [`StreamExt::filter`] but operates on the coordinate
 	/// only, leaving the associated value of type `T` untouched.
 	///
 	/// # Arguments
-	/// * `callback` – async predicate `Fn(TileCoord3) -> Future<Output = bool>`.
+	/// * `callback` – async predicate `Fn(TileCoord) -> Future<Output = bool>`.
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	/// # async fn demo() {
 	/// let stream = TileStream::from_vec(vec![
-	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
-	///     (TileCoord3::new(5,5,5).unwrap(), Blob::from("data1")),
+	///     (TileCoord::new(0,0,0).unwrap(), Blob::from("data0")),
+	///     (TileCoord::new(5,5,5).unwrap(), Blob::from("data1")),
 	/// ]);
 	///
 	/// // Keep only tiles at zoom level 0.
@@ -587,7 +587,7 @@ where
 	/// ```
 	pub fn filter_coord<F, Fut>(self, mut callback: F) -> Self
 	where
-		F: FnMut(TileCoord3) -> Fut + Send + 'a,
+		F: FnMut(TileCoord) -> Fut + Send + 'a,
 		Fut: Future<Output = bool> + Send + 'a,
 	{
 		let s = self.inner.filter(move |(coord, _item)| callback(*coord)).boxed();
@@ -618,11 +618,11 @@ where
 	///
 	/// # Examples
 	/// ```
-	/// # use versatiles_core::{TileCoord3, Blob, TileStream};
+	/// # use versatiles_core::{TileCoord, Blob, TileStream};
 	/// # async fn test() {
 	/// let stream = TileStream::from_vec(vec![
-	///     (TileCoord3::new(0,0,0).unwrap(), Blob::from("data0")),
-	///     (TileCoord3::new(1,1,1).unwrap(), Blob::from("data1")),
+	///     (TileCoord::new(0,0,0).unwrap(), Blob::from("data0")),
+	///     (TileCoord::new(1,1,1).unwrap(), Blob::from("data1")),
 	/// ]);
 	///
 	/// let count = stream.drain_and_count().await;
@@ -673,8 +673,8 @@ mod tests {
 	#[tokio::test]
 	async fn should_collect_all_items_from_vec() {
 		let tile_data = vec![
-			(TileCoord3::new(0, 0, 0).unwrap(), Blob::from("tile0")),
-			(TileCoord3::new(1, 1, 1).unwrap(), Blob::from("tile1")),
+			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("tile0")),
+			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("tile1")),
 		];
 
 		let tile_stream = TileStream::from_vec(tile_data.clone());
@@ -686,8 +686,8 @@ mod tests {
 	#[tokio::test]
 	async fn should_iterate_sync_over_items() {
 		let tile_data = vec![
-			(TileCoord3::new(0, 0, 0).unwrap(), Blob::from("tile0")),
-			(TileCoord3::new(1, 1, 1).unwrap(), Blob::from("tile1")),
+			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("tile0")),
+			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("tile1")),
 		];
 
 		let tile_stream = TileStream::from_vec(tile_data);
@@ -705,9 +705,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_map_coord_properly() {
-		let original = TileStream::from_vec(vec![(TileCoord3::new(3, 1, 2).unwrap(), Blob::from("data"))]);
+		let original = TileStream::from_vec(vec![(TileCoord::new(3, 1, 2).unwrap(), Blob::from("data"))]);
 
-		let mapped = original.map_coord(|coord| TileCoord3::new(coord.level + 1, coord.x * 2, coord.y * 2).unwrap());
+		let mapped = original.map_coord(|coord| TileCoord::new(coord.level + 1, coord.x * 2, coord.y * 2).unwrap());
 
 		let items = mapped.to_vec().await;
 		assert_eq!(items.len(), 1);
@@ -721,9 +721,9 @@ mod tests {
 	#[tokio::test]
 	async fn should_count_items_with_drain_and_count() {
 		let tile_data = vec![
-			(TileCoord3::new(0, 0, 0).unwrap(), Blob::from("tile0")),
-			(TileCoord3::new(1, 1, 1).unwrap(), Blob::from("tile1")),
-			(TileCoord3::new(2, 2, 2).unwrap(), Blob::from("tile2")),
+			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("tile0")),
+			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("tile1")),
+			(TileCoord::new(2, 2, 2).unwrap(), Blob::from("tile2")),
 		];
 
 		let tile_stream = TileStream::from_vec(tile_data);
@@ -734,9 +734,9 @@ mod tests {
 	#[tokio::test]
 	async fn should_run_for_each_buffered_in_chunks() {
 		let tile_data = vec![
-			(TileCoord3::new(0, 0, 0).unwrap(), Blob::from("tile0")),
-			(TileCoord3::new(1, 1, 1).unwrap(), Blob::from("tile1")),
-			(TileCoord3::new(2, 2, 2).unwrap(), Blob::from("tile2")),
+			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("tile0")),
+			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("tile1")),
+			(TileCoord::new(2, 2, 2).unwrap(), Blob::from("tile2")),
 		];
 
 		let tile_stream = TileStream::from_vec(tile_data);
@@ -756,8 +756,8 @@ mod tests {
 	#[tokio::test]
 	async fn should_do_parallel_blob_mapping() {
 		let tile_data = vec![
-			(TileCoord3::new(0, 0, 0).unwrap(), Blob::from("zero")),
-			(TileCoord3::new(1, 1, 1).unwrap(), Blob::from("one")),
+			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("zero")),
+			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("one")),
 		];
 
 		// Apply parallel mapping
@@ -772,9 +772,9 @@ mod tests {
 		items.sort_by_key(|(coord, _)| coord.level);
 
 		// Verify that coordinates are preserved and blobs correctly mapped
-		assert_eq!(items[0].0, TileCoord3::new(0, 0, 0).unwrap());
+		assert_eq!(items[0].0, TileCoord::new(0, 0, 0).unwrap());
 		assert_eq!(items[0].1.as_str(), "mapped-zero");
-		assert_eq!(items[1].0, TileCoord3::new(1, 1, 1).unwrap());
+		assert_eq!(items[1].0, TileCoord::new(1, 1, 1).unwrap());
 		assert_eq!(items[1].1.as_str(), "mapped-one");
 	}
 
@@ -785,7 +785,7 @@ mod tests {
 		let n = 4;
 		let sleep_ms = 100;
 		let tile_data: Vec<_> = (0..n)
-			.map(|i| (TileCoord3::new(0, 0, i as u32).unwrap(), Blob::from("data")))
+			.map(|i| (TileCoord::new(0, 0, i as u32).unwrap(), Blob::from("data")))
 			.collect();
 
 		let start = Instant::now();
@@ -818,7 +818,7 @@ mod tests {
 		let n = 4;
 		let sleep_ms = 100;
 		let tile_data: Vec<_> = (0..n)
-			.map(|i| (TileCoord3::new(0, 0, i as u32).unwrap(), Blob::from("data")))
+			.map(|i| (TileCoord::new(0, 0, i as u32).unwrap(), Blob::from("data")))
 			.collect();
 
 		let start = Instant::now();
@@ -850,7 +850,7 @@ mod tests {
 		let n = 4;
 		let sleep_ms = 100;
 		let tile_data: Vec<_> = (0..n)
-			.map(|i| (TileCoord3::new(0, 0, i as u32).unwrap(), Blob::from("data")))
+			.map(|i| (TileCoord::new(0, 0, i as u32).unwrap(), Blob::from("data")))
 			.collect();
 
 		let start = Instant::now();
@@ -874,9 +874,9 @@ mod tests {
 	#[tokio::test]
 	async fn should_parallel_filter_map_blob_correctly() {
 		let tile_data = vec![
-			(TileCoord3::new(0, 0, 0).unwrap(), Blob::from("keep0")),
-			(TileCoord3::new(1, 1, 1).unwrap(), Blob::from("discard1")),
-			(TileCoord3::new(2, 2, 2).unwrap(), Blob::from("keep2")),
+			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("keep0")),
+			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("discard1")),
+			(TileCoord::new(2, 2, 2).unwrap(), Blob::from("keep2")),
 		];
 
 		let filtered = TileStream::from_vec(tile_data).filter_map_item_parallel(|blob| {
@@ -904,9 +904,9 @@ mod tests {
 	async fn should_construct_from_iter_stream() {
 		// Create multiple sub-streams
 		let substreams = vec![
-			Box::pin(async { TileStream::from_vec(vec![(TileCoord3::new(0, 0, 0).unwrap(), Blob::from("sub0-0"))]) })
+			Box::pin(async { TileStream::from_vec(vec![(TileCoord::new(0, 0, 0).unwrap(), Blob::from("sub0-0"))]) })
 				as Pin<Box<dyn Future<Output = TileStream<'static>> + Send>>,
-			Box::pin(async { TileStream::from_vec(vec![(TileCoord3::new(1, 1, 1).unwrap(), Blob::from("sub1-1"))]) })
+			Box::pin(async { TileStream::from_vec(vec![(TileCoord::new(1, 1, 1).unwrap(), Blob::from("sub1-1"))]) })
 				as Pin<Box<dyn Future<Output = TileStream<'static>> + Send>>,
 		];
 
@@ -925,8 +925,8 @@ mod tests {
 	#[tokio::test]
 	async fn should_process_async_for_each() {
 		let tile_data = vec![
-			(TileCoord3::new(0, 0, 0).unwrap(), Blob::from("async0")),
-			(TileCoord3::new(1, 1, 1).unwrap(), Blob::from("async1")),
+			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("async0")),
+			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("async1")),
 		];
 
 		let s = TileStream::from_vec(tile_data);
@@ -950,8 +950,8 @@ mod tests {
 	#[tokio::test]
 	async fn should_filter_by_coord() {
 		let stream = TileStream::from_vec(vec![
-			(TileCoord3::new(0, 0, 0).unwrap(), Blob::from("z0")),
-			(TileCoord3::new(1, 1, 1).unwrap(), Blob::from("z1")),
+			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("z0")),
+			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("z1")),
 		]);
 
 		let filtered = stream.filter_coord(|coord| async move { coord.level == 0 });
@@ -964,7 +964,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_create_from_iter_coord_parallel() {
-		let coords = vec![TileCoord3::new(0, 0, 0).unwrap(), TileCoord3::new(1, 1, 1).unwrap()];
+		let coords = vec![TileCoord::new(0, 0, 0).unwrap(), TileCoord::new(1, 1, 1).unwrap()];
 
 		let stream = TileStream::from_iter_coord_parallel(coords.into_iter(), |coord| {
 			Some(Blob::from(format!("v{}", coord.level)))
@@ -981,7 +981,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_create_from_coord_vec_async() {
-		let coords = vec![TileCoord3::new(0, 0, 0).unwrap(), TileCoord3::new(1, 1, 1).unwrap()];
+		let coords = vec![TileCoord::new(0, 0, 0).unwrap(), TileCoord::new(1, 1, 1).unwrap()];
 
 		let stream = TileStream::from_coord_vec_async(coords, |coord| async move {
 			if coord.level == 0 {
@@ -1001,7 +1001,7 @@ mod tests {
 	async fn test_map_item_parallel_parallelism2() {
 		let stream = TileStream::from_vec(
 			(1..=6)
-				.map(|i| (TileCoord3::new(12, i, 0).unwrap(), i))
+				.map(|i| (TileCoord::new(12, i, 0).unwrap(), i))
 				.collect::<Vec<_>>(),
 		);
 		let counter = Arc::new(AtomicUsize::new(0));
@@ -1044,7 +1044,7 @@ mod tests {
 			vec![Some(1), None, Some(3), None, Some(5), None]
 				.into_iter()
 				.enumerate()
-				.map(|(i, v)| (TileCoord3::new(12, i as u32, 0).unwrap(), v))
+				.map(|(i, v)| (TileCoord::new(12, i as u32, 0).unwrap(), v))
 				.collect::<Vec<_>>(),
 		);
 		let counter = Arc::new(AtomicUsize::new(0));
@@ -1085,7 +1085,7 @@ mod tests {
 	async fn test_for_each_async_parallel_parallelism2() {
 		let stream = TileStream::from_vec(
 			(1..=6)
-				.map(|i| (TileCoord3::new(12, i, 0).unwrap(), i))
+				.map(|i| (TileCoord::new(12, i, 0).unwrap(), i))
 				.collect::<Vec<_>>(),
 		);
 		let counter = Arc::new(AtomicUsize::new(0));
@@ -1127,9 +1127,9 @@ mod tests {
 	async fn should_merge_streams_with_large_cores_per_task() {
 		// cores_per_task larger than CPU count should still work (limit clamped to 1)
 		let substreams = vec![
-			Box::pin(async { TileStream::from_vec(vec![(TileCoord3::new(0, 0, 0).unwrap(), Blob::from("a"))]) })
+			Box::pin(async { TileStream::from_vec(vec![(TileCoord::new(0, 0, 0).unwrap(), Blob::from("a"))]) })
 				as Pin<Box<dyn Future<Output = TileStream<'static>> + Send>>,
-			Box::pin(async { TileStream::from_vec(vec![(TileCoord3::new(1, 1, 1).unwrap(), Blob::from("b"))]) })
+			Box::pin(async { TileStream::from_vec(vec![(TileCoord::new(1, 1, 1).unwrap(), Blob::from("b"))]) })
 				as Pin<Box<dyn Future<Output = TileStream<'static>> + Send>>,
 		];
 		let merged = TileStream::<Blob>::from_streams(stream::iter(substreams), usize::MAX);
@@ -1141,9 +1141,9 @@ mod tests {
 	async fn should_merge_streams_with_zero_cores_per_task() {
 		// cores_per_task==0 falls back to per_task=1 and limit>=1
 		let substreams = vec![
-			Box::pin(async { TileStream::from_vec(vec![(TileCoord3::new(2, 2, 2).unwrap(), Blob::from("x"))]) })
+			Box::pin(async { TileStream::from_vec(vec![(TileCoord::new(2, 2, 2).unwrap(), Blob::from("x"))]) })
 				as Pin<Box<dyn Future<Output = TileStream<'static>> + Send>>,
-			Box::pin(async { TileStream::from_vec(vec![(TileCoord3::new(3, 3, 3).unwrap(), Blob::from("y"))]) })
+			Box::pin(async { TileStream::from_vec(vec![(TileCoord::new(3, 3, 3).unwrap(), Blob::from("y"))]) })
 				as Pin<Box<dyn Future<Output = TileStream<'static>> + Send>>,
 		];
 		let merged = TileStream::<Blob>::from_streams(stream::iter(substreams), 0);

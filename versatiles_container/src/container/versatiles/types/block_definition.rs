@@ -12,7 +12,7 @@ use versatiles_derive::context;
 /// A struct representing a block of tiles within a larger tile set.
 #[derive(Clone, PartialEq, Eq)]
 pub struct BlockDefinition {
-	offset: TileCoord3,       // block offset, for level 14 it's between [0,0] and [63,63]
+	offset: TileCoord,        // block offset, for level 14 it's between [0,0] and [63,63]
 	global_bbox: TileBBox,    // tile coverage, is usually [0,0,255,255]
 	tiles_coverage: TileBBox, // tile coverage, is usually [0,0,255,255]
 	tiles_range: ByteRange,
@@ -43,7 +43,7 @@ impl BlockDefinition {
 		.unwrap();
 
 		Self {
-			offset: TileCoord3::new(level, x, y).unwrap(),
+			offset: TileCoord::new(level, x, y).unwrap(),
 			global_bbox,
 			tiles_coverage,
 			tiles_range: ByteRange::empty(),
@@ -89,7 +89,7 @@ impl BlockDefinition {
 		)?;
 
 		Ok(Self {
-			offset: TileCoord3::new(level, x, y)?,
+			offset: TileCoord::new(level, x, y)?,
 			global_bbox,
 			tiles_coverage: tiles_bbox,
 			tiles_range,
@@ -198,7 +198,7 @@ impl BlockDefinition {
 	///
 	/// # Returns
 	/// A reference to the coordinate of the block.
-	pub fn get_coord3(&self) -> &TileCoord3 {
+	pub fn get_coord(&self) -> &TileCoord {
 		&self.offset
 	}
 
@@ -244,11 +244,11 @@ mod tests {
 		assert_eq!(def.get_sort_index(), 5596502);
 		assert_eq!(def.as_str(), "[12,[300,400],[320,450]]");
 		assert_eq!(def.get_z(), 12);
-		assert_eq!(def.get_coord3(), &TileCoord3::new(12, 1, 1)?);
+		assert_eq!(def.get_coord(), &TileCoord::new(12, 1, 1)?);
 		assert_eq!(def.get_global_bbox(), &TileBBox::new(12, 300, 400, 320, 450)?);
 		assert_eq!(
 			format!("{def:?}"),
-			"BlockDefinition { x/y/z: TileCoord3(12, [1, 1]), bbox: 8: [44,144,64,194] (1071), tiles_range: ByteRange[4,5], index_range: ByteRange[9,6] }"
+			"BlockDefinition { x/y/z: TileCoord(12, [1, 1]), bbox: 8: [44,144,64,194] (1071), tiles_range: ByteRange[4,5], index_range: ByteRange[9,6] }"
 		);
 
 		let def2 = BlockDefinition::from_blob(&def.as_blob()?)?;

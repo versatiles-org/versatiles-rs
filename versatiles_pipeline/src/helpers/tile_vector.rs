@@ -46,7 +46,7 @@ mod tests {
 	use lazy_static::lazy_static;
 	use versatiles_core::{
 		TileCompression::{self, Gzip},
-		TileCoord3,
+		TileCoord,
 		TileFormat::{self, MVT},
 	};
 	use versatiles_geometry::vector_tile::VectorTileLayer;
@@ -75,7 +75,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_unpack_vector_tile_stream() {
-		let tile_stream = TileStream::from_vec(vec![(TileCoord3::new(0, 0, 0).unwrap(), TEST_COMPRESSED_BLOB.clone())]);
+		let tile_stream = TileStream::from_vec(vec![(TileCoord::new(0, 0, 0).unwrap(), TEST_COMPRESSED_BLOB.clone())]);
 		let result = unpack_vector_tile_stream(Ok(tile_stream), &parameters(MVT, Gzip)).unwrap();
 		let vec = result.to_vec().await;
 		assert_eq!(vec.len(), 1);
@@ -92,7 +92,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_pack_vector_tile_stream() {
-		let tile_stream = TileStream::from_vec(vec![(TileCoord3::new(0, 0, 0).unwrap(), TEST_TILE.clone())]);
+		let tile_stream = TileStream::from_vec(vec![(TileCoord::new(0, 0, 0).unwrap(), TEST_TILE.clone())]);
 		let result = pack_vector_tile_stream(Ok(tile_stream), &parameters(MVT, Gzip)).unwrap();
 		let vec = result.to_vec().await;
 		assert_eq!(vec.len(), 1);

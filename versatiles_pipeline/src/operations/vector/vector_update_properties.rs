@@ -170,7 +170,7 @@ mod tests {
 	use assert_fs::NamedTempFile;
 	use pretty_assertions::assert_eq;
 	use std::{fs::File, io::Write, vec};
-	use versatiles_core::TileCoord3;
+	use versatiles_core::TileCoord;
 	use versatiles_geometry::{GeoFeature, GeoProperties, GeoValue, Geometry, vector_tile::VectorTileLayer};
 
 	fn create_sample_vector_tile() -> VectorTile {
@@ -257,7 +257,7 @@ mod tests {
 
 		// ── extract a single feature for inspection ────────────────
 		let mut stream = operation
-			.get_tile_stream(TileCoord3::new(10, 1000, 100)?.as_tile_bbox(1)?)
+			.get_tile_stream(TileCoord::new(10, 1000, 100)?.as_tile_bbox(1)?)
 			.await?;
 		let blob = stream.next().await.unwrap().1;
 		let tile = VectorTile::from_blob(&blob)?;

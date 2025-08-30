@@ -1,7 +1,7 @@
 //! This module defines the `TileBBoxPyramid` struct, which represents a pyramid of tile bounding boxes
 //! across multiple zoom levels. It provides methods to create, manipulate, and query these bounding boxes.
 
-use crate::{GeoBBox, GeoCenter, TileBBox, TileCoord3};
+use crate::{GeoBBox, GeoCenter, TileBBox, TileCoord};
 use std::array::from_fn;
 use std::fmt;
 
@@ -140,8 +140,8 @@ impl TileBBoxPyramid {
 
 	/// Includes a single tile coordinate in the pyramid, updating the bounding box
 	/// at the coordinate’s zoom level to ensure it now encompasses `(x, y)`.
-	pub fn include_coord(&mut self, coord: &TileCoord3) {
-		self.level_bbox[coord.level as usize].include_coord(coord.x, coord.y)
+	pub fn include_coord(&mut self, coord: &TileCoord) {
+		self.level_bbox[coord.level as usize].include(coord.x, coord.y)
 	}
 
 	/// Includes another bounding box in the pyramid, merging it with the existing bounding box
@@ -160,9 +160,9 @@ impl TileBBoxPyramid {
 	}
 
 	/// Checks if the pyramid contains the given `(x, y, z)` tile coordinate.
-	pub fn contains_coord(&self, coord: &TileCoord3) -> bool {
+	pub fn contains_coord(&self, coord: &TileCoord) -> bool {
 		if let Some(bbox) = self.level_bbox.get(coord.level as usize) {
-			bbox.contains3(coord)
+			bbox.contains(coord)
 		} else {
 			false
 		}
@@ -400,9 +400,9 @@ mod tests {
 	#[test]
 	fn test_include_coord2() -> Result<()> {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		pyramid.include_coord(&TileCoord3::new(3, 1, 2)?);
-		pyramid.include_coord(&TileCoord3::new(3, 4, 5)?);
-		pyramid.include_coord(&TileCoord3::new(8, 6, 7)?);
+		pyramid.include_coord(&TileCoord::new(3, 1, 2)?);
+		pyramid.include_coord(&TileCoord::new(3, 4, 5)?);
+		pyramid.include_coord(&TileCoord::new(8, 6, 7)?);
 
 		assert!(pyramid.get_level_bbox(0).is_empty());
 		assert!(pyramid.get_level_bbox(1).is_empty());
@@ -565,7 +565,7 @@ mod tests {
 	#[test]
 	fn test_include_coord1() {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		let coord = TileCoord3::new(15, 5, 10).unwrap();
+		let coord = TileCoord::new(15, 5, 10).unwrap();
 		pyramid.include_coord(&coord);
 		assert!(!pyramid.get_level_bbox(15).is_empty());
 	}
@@ -597,13 +597,13 @@ mod tests {
 	fn test_contains_coord() {
 		let mut p = TileBBoxPyramid::new_empty();
 		p.include_bbox(&TileBBox::new(10, 100, 200, 300, 400).unwrap());
-		assert!(!p.contains_coord(&TileCoord3::new(10, 99, 200).unwrap()));
-		assert!(!p.contains_coord(&TileCoord3::new(10, 100, 199).unwrap()));
-		assert!(p.contains_coord(&TileCoord3::new(10, 100, 200).unwrap()));
-		assert!(p.contains_coord(&TileCoord3::new(10, 300, 400).unwrap()));
-		assert!(!p.contains_coord(&TileCoord3::new(10, 301, 400).unwrap()));
-		assert!(!p.contains_coord(&TileCoord3::new(10, 300, 401).unwrap()));
-		assert!(!p.contains_coord(&TileCoord3::new(11, 300, 400).unwrap()));
+		assert!(!p.contains_coord(&TileCoord::new(10, 99, 200).unwrap()));
+		assert!(!p.contains_coord(&TileCoord::new(10, 100, 199).unwrap()));
+		assert!(p.contains_coord(&TileCoord::new(10, 100, 200).unwrap()));
+		assert!(p.contains_coord(&TileCoord::new(10, 300, 400).unwrap()));
+		assert!(!p.contains_coord(&TileCoord::new(10, 301, 400).unwrap()));
+		assert!(!p.contains_coord(&TileCoord::new(10, 300, 401).unwrap()));
+		assert!(!p.contains_coord(&TileCoord::new(11, 300, 400).unwrap()));
 	}
 
 	#[test]

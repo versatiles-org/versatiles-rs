@@ -1,4 +1,4 @@
-use crate::{TileBBox, TileCoord3};
+use crate::{TileBBox, TileCoord};
 use anyhow::{Result, bail};
 
 /// Converts between 2‑D tile space and its position along a **Hilbert
@@ -10,7 +10,7 @@ use anyhow::{Result, bail};
 ///
 /// The trait is implemented for:
 /// * [`TileBBox`] – uses the south‑west corner of the bounding box.
-/// * [`TileCoord3`] – a single `(z, x, y)` tile coordinate.
+/// * [`TileCoord`] – a single `(z, x, y)` tile coordinate.
 ///
 /// Implementors must guarantee that  
 /// `Self::from_hilbert_index(idx)?.get_hilbert_index()? == idx`.
@@ -21,11 +21,11 @@ use anyhow::{Result, bail};
 ///
 /// # Examples
 /// ```
-/// use versatiles_core::{TileCoord3, utils::HilbertIndex};
+/// use versatiles_core::{TileCoord, utils::HilbertIndex};
 ///
-/// let coord = TileCoord3::new(5, 3, 3)?;
+/// let coord = TileCoord::new(5, 3, 3)?;
 /// let idx = coord.get_hilbert_index()?;
-/// assert_eq!(TileCoord3::from_hilbert_index(idx)?, coord);
+/// assert_eq!(TileCoord::from_hilbert_index(idx)?, coord);
 /// # Ok::<(), anyhow::Error>(())
 /// ```
 pub trait HilbertIndex {
@@ -52,7 +52,7 @@ impl HilbertIndex for TileBBox {
 	}
 }
 
-impl HilbertIndex for TileCoord3 {
+impl HilbertIndex for TileCoord {
 	fn get_hilbert_index(&self) -> Result<u64> {
 		coord_to_index(self.x, self.y, self.level)
 	}
@@ -141,7 +141,7 @@ fn rotate(s: i64, tx: &mut i64, ty: &mut i64, rx: i64, ry: i64) {
 /// # Errors
 /// Returns **`"tile zoom exceeds 64-bit limit"`** when the index would
 /// require a zoom level ≥ 32.
-fn index_to_coord(index: u64) -> Result<TileCoord3> {
+fn index_to_coord(index: u64) -> Result<TileCoord> {
 	let index = index as i64;
 	let mut acc = 0;
 	for t_z in 0..32 {
@@ -167,7 +167,7 @@ fn index_to_coord(index: u64) -> Result<TileCoord3> {
 				s *= 2;
 			}
 
-			return TileCoord3::new(t_z, tx as u32, ty as u32);
+			return TileCoord::new(t_z, tx as u32, ty as u32);
 		}
 		acc += num_tiles;
 	}
@@ -259,10 +259,10 @@ mod tests {
 	}
 
 	#[test]
-	fn test_hilbert_index_trait_tile_coord3() -> Result<()> {
-		let coord = TileCoord3::new(5, 3, 3)?;
+	fn test_hilbert_index_trait_tile_coord() -> Result<()> {
+		let coord = TileCoord::new(5, 3, 3)?;
 		let index = coord.get_hilbert_index()?;
-		let reconstructed_coord = TileCoord3::from_hilbert_index(index)?;
+		let reconstructed_coord = TileCoord::from_hilbert_index(index)?;
 		assert_eq!(coord, reconstructed_coord);
 
 		Ok(())

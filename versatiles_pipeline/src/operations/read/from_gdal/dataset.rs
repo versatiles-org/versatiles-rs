@@ -331,7 +331,7 @@ mod tests {
 	use super::*;
 	use anyhow::anyhow;
 	use std::path::PathBuf;
-	use versatiles_core::TileCoord3;
+	use versatiles_core::TileCoord;
 
 	#[test]
 	fn test_bbox_to_mercator() {
@@ -374,7 +374,7 @@ mod tests {
 		async fn gradient_test(level: u8, x: u32, y: u32) -> Result<[Vec<u8>; 2]> {
 			// Build a `Operation` that points at `testdata/gradient.tif`.
 			// We keep it in‑memory (no factory) and map bands 1‑2‑3 → RGB.
-			let coord = TileCoord3::new(level, x, y)?;
+			let coord = TileCoord::new(level, x, y)?;
 
 			let dataset = GdalDataset::new(&PathBuf::from("../testdata/gradient.tif")).await?;
 

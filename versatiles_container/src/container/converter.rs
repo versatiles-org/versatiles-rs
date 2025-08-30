@@ -35,7 +35,7 @@ use super::{tile_converter::TileConverter, write_to_filename};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{
-	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord3, TileFormat, TileStream, TilesReaderParameters,
+	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileStream, TilesReaderParameters,
 	TilesReaderTrait, Traversal, tilejson::TileJSON, utils::TransformCoord,
 };
 use versatiles_derive::context;
@@ -164,7 +164,7 @@ impl TilesReaderTrait for TilesConvertReader {
 		&self.tilejson
 	}
 
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		let mut coord = *coord;
 		if self.converter_parameters.flip_y {
 			coord.flip_y();
@@ -373,7 +373,7 @@ mod tests {
 		let cp = TilesConverterParameters::default();
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp)?;
 
-		let coord = TileCoord3::new(0, 0, 0)?;
+		let coord = TileCoord::new(0, 0, 0)?;
 		let data = tcr.get_tile_data(&coord).await?;
 		assert!(data.is_some());
 
@@ -419,7 +419,7 @@ mod tests {
 		};
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp)?;
 
-		let mut coord = TileCoord3::new(3, 1, 2)?;
+		let mut coord = TileCoord::new(3, 1, 2)?;
 		let data = tcr.get_tile_data(&coord).await?;
 		assert!(data.is_some());
 

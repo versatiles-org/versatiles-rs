@@ -150,7 +150,7 @@ impl Operation {
 					let mut bbox_left = TileBBox::new_empty(bbox.level).unwrap();
 					for (coord, slot) in tiles.iter() {
 						if slot.is_none() {
-							bbox_left.include_coord3(&coord).unwrap();
+							bbox_left.include_coord(&coord).unwrap();
 						}
 					}
 					if bbox_left.is_empty() {

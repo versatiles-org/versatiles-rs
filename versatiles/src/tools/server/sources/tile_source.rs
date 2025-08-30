@@ -2,7 +2,7 @@ use super::{super::utils::Url, SourceResponse};
 use anyhow::{Result, ensure};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
-use versatiles_core::{Blob, TileCompression, TileCoord3, TilesReaderTrait, utils::TargetCompression};
+use versatiles_core::{Blob, TileCompression, TileCoord, TilesReaderTrait, utils::TargetCompression};
 
 // TileSource struct definition
 #[derive(Clone)]
@@ -51,8 +51,8 @@ impl TileSource {
 			ensure!(x.is_ok(), "value for x is not a number");
 			ensure!(y.is_ok(), "value for y is not a number");
 
-			// Create a TileCoord3 instance
-			let coord = TileCoord3::new(level?, x?, y?)?;
+			// Create a TileCoord instance
+			let coord = TileCoord::new(level?, x?, y?)?;
 
 			log::debug!("get tile, prefix: {}, coord: {}", self.prefix, coord.as_json());
 

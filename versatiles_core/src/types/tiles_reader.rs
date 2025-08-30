@@ -8,7 +8,7 @@ use super::ProbeDepth;
 #[cfg(feature = "cli")]
 use crate::utils::PrettyPrint;
 use crate::{
-	Blob, TileBBox, TileCompression, TileCoord3, TileStream, TilesReaderParameters, Traversal, TraversalTranslationStep,
+	Blob, TileBBox, TileCompression, TileCoord, TileStream, TilesReaderParameters, Traversal, TraversalTranslationStep,
 	progress::get_progress_bar, tilejson::TileJSON, translate_traversals,
 };
 use anyhow::Result;
@@ -72,7 +72,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 		let mut i_read = 0;
 
-		let cache = Arc::new(Mutex::new(HashMap::<usize, Vec<(TileCoord3, Blob)>>::new()));
+		let cache = Arc::new(Mutex::new(HashMap::<usize, Vec<(TileCoord, Blob)>>::new()));
 		for step in traversal_steps {
 			match step {
 				Push(bboxes, index) => {
@@ -122,12 +122,12 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	}
 
 	/// Asynchronously fetch the raw tile data for the given tile coordinate.
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>>;
+	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>>;
 
 	/// Asynchronously stream all tiles within the given bounding box.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		let mutex = Arc::new(Mutex::new(self));
-		let coords: Vec<TileCoord3> = bbox.iter_coords().collect();
+		let coords: Vec<TileCoord> = bbox.iter_coords().collect();
 		Ok(TileStream::from_coord_vec_async(coords, move |coord| {
 			let mutex = mutex.clone();
 			async move {
@@ -293,7 +293,7 @@ mod tests {
 			&self.tilejson
 		}
 
-		async fn get_tile_data(&self, _coord: &TileCoord3) -> Result<Option<Blob>> {
+		async fn get_tile_data(&self, _coord: &TileCoord) -> Result<Option<Blob>> {
 			Ok(Some(Blob::from("test tile data")))
 		}
 	}
@@ -342,7 +342,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_get_tile_data() -> Result<()> {
 		let reader = TestReader::new_dummy();
-		let coord = TileCoord3::new(0, 0, 0)?;
+		let coord = TileCoord::new(0, 0, 0)?;
 		let tile_data = reader.get_tile_data(&coord).await?;
 		assert_eq!(tile_data, Some(Blob::from("test tile data")));
 		Ok(())

@@ -10,7 +10,7 @@
 //! ## Usage Example
 //! ```rust
 //! use versatiles_container::PMTilesReader;
-//! use versatiles_core::{TileCoord3, TilesReaderTrait};
+//! use versatiles_core::{TileCoord, TilesReaderTrait};
 //! use std::path::Path;
 //!
 //! #[tokio::main]
@@ -23,7 +23,7 @@
 //!     println!("Metadata: {:?}", reader.tilejson());
 //!
 //!     // Get tile data for specific coordinates
-//!     let coord = TileCoord3::new(1, 1, 1)?;
+//!     let coord = TileCoord::new(1, 1, 1)?;
 //!     if let Some(tile_data) = reader.get_tile_data(&coord).await? {
 //!         println!("Tile data: {:?}", tile_data);
 //!     }
@@ -187,7 +187,7 @@ fn calc_bbox_pyramid(
 			if entry.range.length > 0 {
 				if entry.run_length > 0 {
 					for i in 0..entry.run_length as u64 {
-						let coord = TileCoord3::from_hilbert_index(i + entry.tile_id)?;
+						let coord = TileCoord::from_hilbert_index(i + entry.tile_id)?;
 						bbox_pyramid.include_coord(&coord);
 					}
 					total_entries += entry.run_length as u64;
@@ -251,7 +251,7 @@ impl TilesReaderTrait for PMTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		// Log the requested tile coordinates for debugging purposes
 		log::trace!("get_tile_data {:?}", coord);
 
@@ -349,20 +349,20 @@ mod tests {
 		);
 
 		assert_eq!(
-			reader.get_tile_data(&TileCoord3::new(0, 0, 0)?).await?.unwrap().len(),
+			reader.get_tile_data(&TileCoord::new(0, 0, 0)?).await?.unwrap().len(),
 			20
 		);
 
 		assert_eq!(
 			reader
-				.get_tile_data(&TileCoord3::new(14, 8800, 5370)?)
+				.get_tile_data(&TileCoord::new(14, 8800, 5370)?)
 				.await?
 				.unwrap()
 				.len(),
 			100391
 		);
 
-		assert!(reader.get_tile_data(&TileCoord3::new(16, 0, 0)?).await?.is_none());
+		assert!(reader.get_tile_data(&TileCoord::new(16, 0, 0)?).await?.is_none());
 
 		Ok(())
 	}

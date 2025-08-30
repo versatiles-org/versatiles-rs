@@ -6,7 +6,7 @@
 //!
 //! ```no_run
 //! use versatiles_container::VersaTilesReader;
-//! use versatiles_core::{TileCoord3, TileCompression, TileFormat, TileBBoxPyramid, TilesReaderTrait, TilesReaderParameters};
+//! use versatiles_core::{TileCoord, TileCompression, TileFormat, TileBBoxPyramid, TilesReaderTrait, TilesReaderParameters};
 //! use anyhow::Result;
 //! use futures::StreamExt;
 //! use std::path::Path;
@@ -27,7 +27,7 @@
 //!     println!("Metadata: {:?}", reader.tilejson());
 //!
 //!     // Fetch a specific tile
-//!     let coord = TileCoord3::new(15, 1, 4)?;
+//!     let coord = TileCoord::new(15, 1, 4)?;
 //!     if let Some(tile_data) = reader.get_tile_data(&coord).await? {
 //!         println!("Tile Data: {tile_data:?}");
 //!     } else {
@@ -62,7 +62,7 @@ pub struct VersaTilesReader {
 	header: FileHeader,
 	parameters: TilesReaderParameters,
 	reader: DataReader,
-	tile_index_cache: Mutex<LimitedCache<TileCoord3, Arc<TileIndex>>>,
+	tile_index_cache: Mutex<LimitedCache<TileCoord, Arc<TileIndex>>>,
 	tilejson: TileJSON,
 }
 
@@ -138,7 +138,7 @@ impl VersaTilesReader {
 	/// Returns an error if the tile index cannot be retrieved.
 	#[context("Failed to get tile index for block {block:?}")]
 	async fn get_block_tile_index(&self, block: &BlockDefinition) -> Result<Arc<TileIndex>> {
-		let block_coord = block.get_coord3();
+		let block_coord = block.get_coord();
 
 		let mut cache = self.tile_index_cache.lock().await;
 
@@ -191,9 +191,9 @@ impl TilesReaderTrait for VersaTilesReader {
 	}
 
 	/// Gets tile data for a given coordinate.
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		// Calculate block coordinate
-		let block_coord = TileCoord3::new(coord.level, coord.x.shr(8), coord.y.shr(8))?;
+		let block_coord = TileCoord::new(coord.level, coord.x.shr(8), coord.y.shr(8))?;
 
 		// Get the block using the block coordinate
 		let block = self.block_index.get_block(&block_coord);
@@ -207,13 +207,13 @@ impl TilesReaderTrait for VersaTilesReader {
 		let bbox = block.get_global_bbox();
 
 		// Check if the tile is within the block definition
-		if !bbox.contains3(&coord) {
+		if !bbox.contains(coord) {
 			trace!("tile {coord:?} outside block definition");
 			return Ok(None);
 		}
 
 		// Get the tile ID
-		let tile_id = bbox.get_tile_index3(&coord).unwrap() as usize;
+		let tile_id = bbox.get_tile_index(coord).unwrap() as usize;
 
 		// Retrieve the tile index from cache or read from the reader
 		let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await?;
@@ -235,7 +235,7 @@ impl TilesReaderTrait for VersaTilesReader {
 
 		#[derive(Debug)]
 		struct Chunk {
-			tiles: Vec<(TileCoord3, ByteRange)>,
+			tiles: Vec<(TileCoord, ByteRange)>,
 			range: ByteRange,
 		}
 
@@ -246,7 +246,7 @@ impl TilesReaderTrait for VersaTilesReader {
 					range: ByteRange::new(start, 0),
 				}
 			}
-			fn push(&mut self, entry: (TileCoord3, ByteRange)) {
+			fn push(&mut self, entry: (TileCoord, ByteRange)) {
 				self.tiles.push(entry);
 				if entry.1.offset < self.range.offset {
 					panic!()
@@ -261,9 +261,9 @@ impl TilesReaderTrait for VersaTilesReader {
 			}
 		}
 
-		let block_coords: Vec<TileCoord3> = bbox.get_scaled_down(256).iter_coords().collect();
+		let block_coords: Vec<TileCoord> = bbox.get_scaled_down(256).iter_coords().collect();
 
-		let stream = futures::stream::iter(block_coords).then(|block_coord: TileCoord3| {
+		let stream = futures::stream::iter(block_coords).then(|block_coord: TileCoord| {
 			async move {
 				// Get the block using the block coordinate
 				let block_option = self.block_index.get_block(&block_coord);
@@ -292,11 +292,11 @@ impl TilesReaderTrait for VersaTilesReader {
 				trace!("tile_index {tile_index:?}");
 
 				// let tile_range: &ByteRange = tile_index.get(tile_id);
-				let mut tile_ranges: Vec<(TileCoord3, ByteRange)> = tile_index
+				let mut tile_ranges: Vec<(TileCoord, ByteRange)> = tile_index
 					.iter()
 					.enumerate()
-					.map(|(index, range)| (tiles_bbox_block.get_coord3_by_index(index as u64).unwrap(), *range))
-					.filter(|(coord, range)| tiles_bbox_used.contains3(coord) && (range.length > 0))
+					.map(|(index, range)| (tiles_bbox_block.get_coord_by_index(index as u64).unwrap(), *range))
+					.filter(|(coord, range)| tiles_bbox_used.contains(coord) && (range.length > 0))
 					.collect();
 
 				if tile_ranges.is_empty() {
@@ -345,7 +345,7 @@ impl TilesReaderTrait for VersaTilesReader {
 					async move {
 						let big_blob = self.reader.read_range(&chunk.range).await.unwrap();
 
-						let entries: Vec<(TileCoord3, Blob)> = chunk
+						let entries: Vec<(TileCoord, Blob)> = chunk
 							.tiles
 							.into_iter()
 							.map(|(coord, range)| {
@@ -355,7 +355,7 @@ impl TilesReaderTrait for VersaTilesReader {
 
 								let blob = Blob::from(big_blob.get_range(tile_range));
 
-								assert!(bbox.contains3(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
+								assert!(bbox.contains(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
 
 								(coord, blob)
 							})
@@ -425,7 +425,7 @@ impl TilesReaderTrait for VersaTilesReader {
 				}
 
 				let bbox = block.get_global_bbox();
-				let coord = bbox.get_coord3_by_index(index as u64)?;
+				let coord = bbox.get_coord_by_index(index as u64)?;
 
 				biggest_tiles.push(Entry {
 					size,
@@ -503,7 +503,7 @@ mod tests {
 		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.parameters().tile_format, TileFormat::MVT);
 
-		let tile = reader.get_tile_data(&TileCoord3::new(4, 15, 1)?).await?.unwrap();
+		let tile = reader.get_tile_data(&TileCoord::new(4, 15, 1)?).await?.unwrap();
 		assert_eq!(decompress_gzip(&tile)?.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())

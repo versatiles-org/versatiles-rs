@@ -91,7 +91,7 @@ impl TilesReaderTrait for MockImageSource {
 		&self.tilejson
 	}
 
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		if !self.parameters.bbox_pyramid.contains_coord(coord) {
 			return Ok(None);
 		}
@@ -157,13 +157,10 @@ mod tests {
 			Some(TileBBoxPyramid::from_geo_bbox(0, 8, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
 		)
 		.unwrap();
-		let tile_data = source
-			.get_tile_data(&TileCoord3::new(8, 0, 255).unwrap())
-			.await
-			.unwrap();
+		let tile_data = source.get_tile_data(&TileCoord::new(8, 0, 255).unwrap()).await.unwrap();
 		assert!(tile_data.is_some());
 
-		let tile_data = source.get_tile_data(&TileCoord3::new(8, 0, 0).unwrap()).await.unwrap();
+		let tile_data = source.get_tile_data(&TileCoord::new(8, 0, 0).unwrap()).await.unwrap();
 		assert!(tile_data.is_none());
 	}
 
@@ -194,9 +191,9 @@ mod tests {
 	#[test]
 	fn test_arrange_tiles() {
 		let tiles = vec![
-			(TileCoord3::new(1, 0, 0).unwrap(), Blob::from("a")),
-			(TileCoord3::new(1, 1, 0).unwrap(), Blob::from("b")),
-			(TileCoord3::new(1, 0, 1).unwrap(), Blob::from("c")),
+			(TileCoord::new(1, 0, 0).unwrap(), Blob::from("a")),
+			(TileCoord::new(1, 1, 0).unwrap(), Blob::from("b")),
+			(TileCoord::new(1, 0, 1).unwrap(), Blob::from("c")),
 		];
 		let arranged = arrange_tiles(tiles, |blob| blob.as_str().to_string());
 		assert_eq!(arranged, ["a b", "c ❌"]);

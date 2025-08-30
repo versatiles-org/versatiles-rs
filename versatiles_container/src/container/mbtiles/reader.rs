@@ -10,7 +10,7 @@
 //! ## Usage Example
 //! ```rust
 //! use versatiles_container::MBTilesReader;
-//! use versatiles_core::{Blob, TileCoord3, TilesReaderTrait};
+//! use versatiles_core::{Blob, TileCoord, TilesReaderTrait};
 //! use anyhow::Result;
 //! use std::path::Path;
 //!
@@ -24,7 +24,7 @@
 //!     println!("Metadata: {:?}", reader.tilejson());
 //!
 //!     // Get tile data for specific coordinates
-//!     let coord = TileCoord3::new(1, 1, 1)?;
+//!     let coord = TileCoord::new(1, 1, 1)?;
 //!     if let Some(tile_data) = reader.get_tile_data(&coord).await? {
 //!         println!("Tile data: {:?}", tile_data);
 //!     }
@@ -307,7 +307,7 @@ impl TilesReaderTrait for MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		trace!("read tile from coord {coord:?}");
 
 		let conn = self.pool.get()?;
@@ -349,7 +349,7 @@ impl TilesReaderTrait for MBTilesReader {
 			 )
 			 .unwrap();
 
-		let vec: Vec<(TileCoord3, Blob)> = stmt
+		let vec: Vec<(TileCoord, Blob)> = stmt
 			.query_map(
 				[
 					bbox.x_min,
@@ -362,7 +362,7 @@ impl TilesReaderTrait for MBTilesReader {
 					let x = row.get::<_, u32>(0)?;
 					let y = max_index - row.get::<_, u32>(1)?;
 					let level = row.get::<_, u8>(2)?;
-					let coord = TileCoord3::new(level, x, y).unwrap();
+					let coord = TileCoord::new(level, x, y).unwrap();
 					let blob = Blob::from(row.get::<_, Vec<u8>>(3)?);
 					Ok((coord, blob))
 				},
@@ -429,7 +429,7 @@ pub mod tests {
 		assert_eq!(reader.parameters().tile_compression, Gzip);
 		assert_eq!(reader.parameters().tile_format, MVT);
 
-		let tile = reader.get_tile_data(&TileCoord3::new(14, 8803, 5376)?).await?.unwrap();
+		let tile = reader.get_tile_data(&TileCoord::new(14, 8803, 5376)?).await?.unwrap();
 		assert_eq!(tile.len(), 172969);
 		assert_eq!(tile.get_range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
 		assert_eq!(

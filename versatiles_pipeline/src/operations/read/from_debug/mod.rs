@@ -173,7 +173,7 @@ mod tests {
 			.operation_from_vpl(&format!("from_debug format={format}"))
 			.await?;
 
-		let coord = TileCoord3 { x: 1, y: 2, level: 3 };
+		let coord = TileCoord { x: 1, y: 2, level: 3 };
 		let blob = operation
 			.get_tile_stream(coord.as_tile_bbox(1)?)
 			.await?

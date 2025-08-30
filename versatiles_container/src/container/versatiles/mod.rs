@@ -8,7 +8,7 @@
 //!
 //! ```rust
 //! use versatiles_container::{MBTilesReader, TilesWriterTrait, VersaTilesReader, VersaTilesWriter};
-//! use versatiles_core::{TileCoord3, TilesReaderTrait};
+//! use versatiles_core::{TileCoord, TilesReaderTrait};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -29,7 +29,7 @@
 //!     let mut reader = VersaTilesReader::open_path(&path_versatiles).await?;
 //!
 //!     // Get tile data
-//!     if let Some(tile) = reader.get_tile_data(&TileCoord3::new(12, 2200, 1345)?).await? {
+//!     if let Some(tile) = reader.get_tile_data(&TileCoord::new(12, 2200, 1345)?).await? {
 //!         println!("Tile data: {tile:?}");
 //!     } else {
 //!         println!("No tile data found");

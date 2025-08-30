@@ -1,9 +1,9 @@
 //! Utilities for coordinate transformations on tile coordinates and bounding boxes.
 //!
 //! Provides the `TransformCoord` trait and implementations to flip and swap
-//! axes for `TileCoord3`, `TileBBox`, and `TileBBoxPyramid`.
+//! axes for `TileCoord`, `TileBBox`, and `TileBBoxPyramid`.
 
-use crate::{TileBBox, TileBBoxPyramid, TileCoord3};
+use crate::{TileBBox, TileBBoxPyramid, TileCoord};
 use std::mem::swap;
 
 /// Trait for in-place coordinate transformations on tiles and bounding boxes.
@@ -17,7 +17,7 @@ pub trait TransformCoord {
 	fn swap_xy(&mut self);
 }
 
-impl TransformCoord for TileCoord3 {
+impl TransformCoord for TileCoord {
 	fn flip_y(&mut self) {
 		let max_index = 2u32.pow(self.level as u32) - 1;
 		assert!(max_index >= self.y, "error for {self:?}");
@@ -64,17 +64,17 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn tilecoord3_flip_y() {
-		let mut c = TileCoord3::new(3, 1, 2).unwrap();
+	fn tilecoord_flip_y() {
+		let mut c = TileCoord::new(3, 1, 2).unwrap();
 		c.flip_y();
-		assert_eq!(c, TileCoord3::new(3, 1, 5).unwrap());
+		assert_eq!(c, TileCoord::new(3, 1, 5).unwrap());
 	}
 
 	#[test]
-	fn tilecoord3_swap_xy() {
-		let mut coord = TileCoord3::new(5, 3, 4).unwrap();
+	fn tilecoord_swap_xy() {
+		let mut coord = TileCoord::new(5, 3, 4).unwrap();
 		coord.swap_xy();
-		assert_eq!(coord, TileCoord3::new(5, 4, 3).unwrap());
+		assert_eq!(coord, TileCoord::new(5, 4, 3).unwrap());
 	}
 
 	#[test]

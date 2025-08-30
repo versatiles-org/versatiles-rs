@@ -1,7 +1,7 @@
 use super::{BlockDefinition, TileIndex};
 use anyhow::Result;
 use std::collections::HashMap;
-use versatiles_core::{Blob, ByteRange, TileBBox, TileCoord3, io::DataWriterTrait};
+use versatiles_core::{Blob, ByteRange, TileBBox, TileCoord, io::DataWriterTrait};
 use versatiles_derive::context;
 
 pub struct BlockWriter<'a> {
@@ -30,8 +30,8 @@ impl<'a> BlockWriter<'a> {
 
 	/// Write a single tile to the writer.
 	#[context("writing tile at {coord:?}")]
-	pub fn write_tile(&mut self, coord: TileCoord3, blob: Blob) -> Result<()> {
-		let index = self.bbox.get_tile_index3(&coord)? as usize;
+	pub fn write_tile(&mut self, coord: TileCoord, blob: Blob) -> Result<()> {
+		let index = self.bbox.get_tile_index(&coord)? as usize;
 
 		let mut save_hash = false;
 		if blob.len() < 1000 {

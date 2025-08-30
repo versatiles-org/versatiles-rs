@@ -235,7 +235,7 @@ mod tests {
 		async fn gradient_test(level: u8, x: u32, y: u32) -> [Vec<u8>; 2] {
 			// Build a `Operation` that points at `testdata/gradient.tif`.
 			// We keep it in‑memory (no factory) and map bands 1‑2‑3 → RGB.
-			let coord = TileCoord3::new(level, x, y).unwrap();
+			let coord = TileCoord::new(level, x, y).unwrap();
 
 			let operation = get_operation(512).await;
 

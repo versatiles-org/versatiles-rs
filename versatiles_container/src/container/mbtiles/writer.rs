@@ -73,7 +73,7 @@ impl MBTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the transaction fails.
-	fn add_tiles(&mut self, tiles: &Vec<(TileCoord3, Blob)>) -> Result<()> {
+	fn add_tiles(&mut self, tiles: &Vec<(TileCoord, Blob)>) -> Result<()> {
 		let mut conn = self.pool.get()?;
 		let transaction = conn.transaction()?;
 		for (c, blob) in tiles {

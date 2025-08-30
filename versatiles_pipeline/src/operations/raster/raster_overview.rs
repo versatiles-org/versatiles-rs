@@ -30,7 +30,7 @@ struct Operation {
 	level_base: u8,
 	tile_size: u32,
 	traversal: Traversal,
-	cache: Arc<Mutex<HashMap<TileCoord3, Option<DynamicImage>>>>,
+	cache: Arc<Mutex<HashMap<TileCoord, Option<DynamicImage>>>>,
 	#[allow(dead_code)]
 	max_cache_size: usize,
 }
@@ -82,7 +82,7 @@ impl Operation {
 	}
 
 	#[context("Failed to build half image from source for coord {coord_dst:?}")]
-	async fn build_image_from_source(&self, coord_dst: &TileCoord3, target_size: u32) -> Result<Option<DynamicImage>> {
+	async fn build_image_from_source(&self, coord_dst: &TileCoord, target_size: u32) -> Result<Option<DynamicImage>> {
 		let level_src = self.level_base;
 		let level_dst = coord_dst.level;
 		ensure!(level_dst <= level_src, "Invalid level");
@@ -143,7 +143,7 @@ impl Operation {
 
 		let full_size = self.tile_size;
 
-		let images: Vec<(TileCoord3, Option<DynamicImage>)> =
+		let images: Vec<(TileCoord, Option<DynamicImage>)> =
 			futures::future::join_all(container.iter().map(|(coord, item)| {
 				let item = item.clone();
 				tokio::task::spawn_blocking(move || {
@@ -176,7 +176,7 @@ impl Operation {
 
 		let bbox1 = bbox0.as_level(bbox0.level + 1);
 
-		let mut map: TileBBoxContainer<Vec<(TileCoord3, DynamicImage)>> = TileBBoxContainer::new_default(bbox0);
+		let mut map: TileBBoxContainer<Vec<(TileCoord, DynamicImage)>> = TileBBoxContainer::new_default(bbox0);
 		let mut misses = vec![];
 
 		let full_size = self.tile_size;
@@ -210,7 +210,7 @@ impl Operation {
 			}
 		}
 
-		let vec: Vec<(TileCoord3, DynamicImage)> = map
+		let vec: Vec<(TileCoord, DynamicImage)> = map
 			.into_iter()
 			.flat_map(|(coord0, sub_entries)| {
 				if sub_entries.is_empty() {
@@ -268,7 +268,7 @@ impl OperationTrait for Operation {
 			.into_iter()
 			.filter_map(move |(c, o)| {
 				if let Some(image) = o {
-					if bbox.contains3(&c) { Some((c, image)) } else { None }
+					if bbox.contains(&c) { Some((c, image)) } else { None }
 				} else {
 					None
 				}

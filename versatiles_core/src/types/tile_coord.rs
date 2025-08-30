@@ -1,28 +1,23 @@
 //! Utilities for three-dimensional tile coordinates (x, y, z) in a Web Mercator pyramid.
 //!
-//! Defines `TileCoord3` with methods for coordinate conversion, validation, and transformation.
-//! This module defines the `TileCoord2` and `TileCoord3` structures, representing tile coordinates
-//! in two and three dimensions, respectively. It includes methods for creating and manipulating
+//! Defines `TileCoord` with methods for coordinate conversion, validation, and transformation.
+//! This module defines the `TileCoord` structures, representing tile coordinates
+//! in two dimensions, respectively. It includes methods for creating and manipulating
 //! tile coordinates, converting them to geographic coordinates, and various utility functions.
 //!
 //! # Examples
 //!
 //! ```
-//! use versatiles_core::{TileCoord2, TileCoord3};
+//! use versatiles_core::TileCoord;
 //!
-//! // Creating a new TileCoord2 instance
-//! let coord2 = TileCoord2::new(3, 4);
-//! assert_eq!(coord2.x, 3);
-//! assert_eq!(coord2.y, 4);
+//! // Creating a new TileCoord instance
+//! let coord = TileCoord::new(5, 6, 7).unwrap();
+//! assert_eq!(coord.level, 5);
+//! assert_eq!(coord.x, 6);
+//! assert_eq!(coord.y, 7);
 //!
-//! // Creating a new TileCoord3 instance
-//! let coord3 = TileCoord3::new(5, 6, 7).unwrap();
-//! assert_eq!(coord3.level, 5);
-//! assert_eq!(coord3.x, 6);
-//! assert_eq!(coord3.y, 7);
-//!
-//! // Converting TileCoord3 to geographic coordinates
-//! let geo = coord3.as_geo();
+//! // Converting TileCoord to geographic coordinates
+//! let geo = coord.as_geo();
 //! ```
 
 use crate::{GeoBBox, TileBBox};
@@ -36,24 +31,24 @@ use std::{
 ///
 /// Provides methods for geographic conversion, validation, indexing, and level transformations.
 #[derive(Eq, PartialEq, Clone, Hash, Copy)]
-pub struct TileCoord3 {
+pub struct TileCoord {
 	pub x: u32,
 	pub y: u32,
 	pub level: u8,
 }
 
 #[allow(dead_code)]
-impl TileCoord3 {
-	/// Create a new `TileCoord3` at the given zoom `level` and tile indices `x`, `y`.
+impl TileCoord {
+	/// Create a new `TileCoord` at the given zoom `level` and tile indices `x`, `y`.
 	///
 	/// # Errors
 	/// Returns an error if `level` > 31.
-	pub fn new(level: u8, x: u32, y: u32) -> Result<TileCoord3> {
+	pub fn new(level: u8, x: u32, y: u32) -> Result<TileCoord> {
 		ensure!(level <= 31, "level ({level}) must be <= 31");
-		Ok(TileCoord3 { x, y, level })
+		Ok(TileCoord { x, y, level })
 	}
 
-	pub fn from_geo(x: f64, y: f64, z: u8) -> Result<TileCoord3> {
+	pub fn from_geo(x: f64, y: f64, z: u8) -> Result<TileCoord> {
 		ensure!(z <= 31, "z {z} must be <= 31");
 		ensure!(x >= -180., "x must be >= -180");
 		ensure!(x <= 180., "x must be <= 180");
@@ -64,7 +59,7 @@ impl TileCoord3 {
 		let x = zoom * (x / 360.0 + 0.5);
 		let y = zoom * (0.5 - 0.5 * (y * PI32 / 360.0 + PI32 / 4.0).tan().ln() / PI32);
 
-		Ok(TileCoord3 {
+		Ok(TileCoord {
 			x: x.min(zoom - 1.0).max(0.0).floor() as u32,
 			y: y.min(zoom - 1.0).max(0.0).floor() as u32,
 			level: z,
@@ -108,8 +103,8 @@ impl TileCoord3 {
 	}
 
 	/// Scale down the x/y indices by integer `factor`, keeping the same zoom level.
-	pub fn get_scaled_down(&self, factor: u32) -> TileCoord3 {
-		TileCoord3 {
+	pub fn get_scaled_down(&self, factor: u32) -> TileCoord {
+		TileCoord {
 			level: self.level,
 			x: self.x / factor,
 			y: self.y / factor,
@@ -133,17 +128,17 @@ impl TileCoord3 {
 	/// Change this coordinate to a new zoom `level`, scaling x/y accordingly.
 	///
 	/// If `level` > current, x/y are multiplied; if lower, x/y are divided.
-	pub fn as_level(&self, level: u8) -> TileCoord3 {
+	pub fn as_level(&self, level: u8) -> TileCoord {
 		if level > self.level {
 			let scale = 2u32.pow((level - self.level) as u32);
-			TileCoord3 {
+			TileCoord {
 				x: self.x * scale,
 				y: self.y * scale,
 				level,
 			}
 		} else if level < self.level {
 			let scale = 2u32.pow((self.level - level) as u32);
-			TileCoord3 {
+			TileCoord {
 				x: self.x / scale,
 				y: self.y / scale,
 				level,
@@ -154,15 +149,15 @@ impl TileCoord3 {
 	}
 }
 
-/// Custom `Debug` format as `TileCoord3(z, [x, y])` for readability.
-impl Debug for TileCoord3 {
+/// Custom `Debug` format as `TileCoord(z, [x, y])` for readability.
+impl Debug for TileCoord {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.write_fmt(format_args!("TileCoord3({}, [{}, {}])", &self.level, &self.x, &self.y))
+		f.write_fmt(format_args!("TileCoord({}, [{}, {}])", &self.level, &self.x, &self.y))
 	}
 }
 
 /// Lexicographic ordering: first by zoom `level`, then `y`, then `x`.
-impl PartialOrd for TileCoord3 {
+impl PartialOrd for TileCoord {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
 		match self.level.partial_cmp(&other.level) {
 			Some(core::cmp::Ordering::Equal) => {}
@@ -185,60 +180,60 @@ mod tests {
 	};
 
 	#[test]
-	fn partial_eq3() {
-		let c = TileCoord3::new(2, 2, 2).unwrap();
+	fn partial_eq() {
+		let c = TileCoord::new(2, 2, 2).unwrap();
 		assert!(c.eq(&c));
 		assert!(c.eq(&c.clone()));
-		assert!(c.ne(&TileCoord3::new(1, 2, 2).unwrap()));
-		assert!(c.ne(&TileCoord3::new(2, 1, 2).unwrap()));
-		assert!(c.ne(&TileCoord3::new(2, 2, 1).unwrap()));
+		assert!(c.ne(&TileCoord::new(1, 2, 2).unwrap()));
+		assert!(c.ne(&TileCoord::new(2, 1, 2).unwrap()));
+		assert!(c.ne(&TileCoord::new(2, 2, 1).unwrap()));
 	}
 
 	#[test]
-	fn tilecoord3_new_and_getters() {
-		let coord = TileCoord3::new(5, 3, 4).unwrap();
+	fn tilecoord_new_and_getters() {
+		let coord = TileCoord::new(5, 3, 4).unwrap();
 		assert_eq!(coord.x, 3);
 		assert_eq!(coord.y, 4);
 		assert_eq!(coord.level, 5);
 	}
 
 	#[test]
-	fn tilecoord3_as_geo() {
-		let coord = TileCoord3::new(5, 3, 4).unwrap();
+	fn tilecoord_as_geo() {
+		let coord = TileCoord::new(5, 3, 4).unwrap();
 		assert_eq!(coord.as_geo(), [-146.25, 79.17133464081945]);
 		assert_eq!(
 			coord.as_geo_bbox().as_array(),
-			[-146.25, 79.17133464081945, -135.0, 76.84081641443098]
+			[-146.25, 76.84081641443098, -135.0, 79.17133464081945]
 		);
 	}
 
 	#[test]
-	fn tilecoord3_is_valid() {
-		let coord = TileCoord3::new(5, 3, 4).unwrap();
+	fn tilecoord_is_valid() {
+		let coord = TileCoord::new(5, 3, 4).unwrap();
 		assert!(coord.is_valid());
 	}
 
 	#[test]
-	fn tilecoord3_get_sort_index() {
-		let coord = TileCoord3::new(5, 3, 4).unwrap();
+	fn tilecoord_get_sort_index() {
+		let coord = TileCoord::new(5, 3, 4).unwrap();
 		assert_eq!(coord.get_sort_index(), 472);
 	}
 
 	#[test]
 	fn hash() {
 		let mut hasher = DefaultHasher::new();
-		TileCoord3::new(2, 2, 2).unwrap().hash(&mut hasher);
+		TileCoord::new(2, 2, 2).unwrap().hash(&mut hasher);
 		assert_eq!(hasher.finish(), 16217616760760983095);
 	}
 
 	#[test]
-	fn partial_cmp3() {
+	fn partial_cmp() {
 		use std::cmp::Ordering;
 		use std::cmp::Ordering::*;
 
 		let check = |x: u32, y: u32, level: u8, order: Ordering| {
-			let c1 = TileCoord3::new(2, 2, 2).unwrap();
-			let c2 = TileCoord3::new(level, x, y).unwrap();
+			let c1 = TileCoord::new(2, 2, 2).unwrap();
+			let c2 = TileCoord::new(level, x, y).unwrap();
 			assert_eq!(c2.partial_cmp(&c1), Some(order));
 		};
 
@@ -274,55 +269,55 @@ mod tests {
 	}
 
 	#[test]
-	fn tilecoord3_new_level_error() {
+	fn tilecoord_new_level_error() {
 		// Level > 31 should error
-		assert!(TileCoord3::new(32, 0, 0).is_err());
+		assert!(TileCoord::new(32, 0, 0).is_err());
 	}
 
 	#[test]
-	fn tilecoord3_is_valid_false_cases() {
+	fn tilecoord_is_valid_false_cases() {
 		// Level 31 is considered invalid by is_valid()
-		let coord = TileCoord3::new(31, 0, 0).unwrap();
+		let coord = TileCoord::new(31, 0, 0).unwrap();
 		assert!(!coord.is_valid());
 		// x out of bounds for level 1 (max index = 1)
-		let coord2 = TileCoord3::new(1, 2, 0).unwrap();
+		let coord2 = TileCoord::new(1, 2, 0).unwrap();
 		assert!(!coord2.is_valid());
 		// y out of bounds for level 1
-		let coord3 = TileCoord3::new(1, 0, 2).unwrap();
-		assert!(!coord3.is_valid());
+		let coord = TileCoord::new(1, 0, 2).unwrap();
+		assert!(!coord.is_valid());
 	}
 
 	#[test]
-	fn tilecoord3_as_json_and_scaled_down() {
-		let coord = TileCoord3::new(2, 5, 6).unwrap();
+	fn tilecoord_as_json_and_scaled_down() {
+		let coord = TileCoord::new(2, 5, 6).unwrap();
 		// Test JSON serialization
 		assert_eq!(coord.as_json(), "{x:5,y:6,z:2}");
 		// Test scaling down by a factor
 		let scaled = coord.get_scaled_down(5);
-		assert_eq!(scaled, TileCoord3::new(2, 1, 1).unwrap());
+		assert_eq!(scaled, TileCoord::new(2, 1, 1).unwrap());
 		// Scaling by 1 returns same
 		assert_eq!(coord.get_scaled_down(1), coord);
 	}
 
 	#[test]
-	fn tilecoord3_as_tile_bbox_and_as_level() {
-		let coord = TileCoord3::new(3, 1, 2).unwrap();
+	fn tilecoord_as_tile_bbox_and_as_level() {
+		let coord = TileCoord::new(3, 1, 2).unwrap();
 		// as_tile_bbox with tile_size=4: x..x+3, y..y+3
 		let bbox = coord.as_tile_bbox(4).unwrap();
 		assert_eq!(bbox, TileBBox::new(3, 1, 2, 4, 5).unwrap());
 		// as_level upscales and downscales correctly
 		let up = coord.as_level(5);
-		assert_eq!(up, TileCoord3::new(5, 4, 8).unwrap());
+		assert_eq!(up, TileCoord::new(5, 4, 8).unwrap());
 		let down = coord.as_level(2);
-		assert_eq!(down, TileCoord3::new(2, 0, 1).unwrap());
+		assert_eq!(down, TileCoord::new(2, 0, 1).unwrap());
 		// same level returns identical
 		assert_eq!(coord.as_level(3), coord);
 	}
 
 	#[test]
-	fn tilecoord3_debug_format() {
-		let coord = TileCoord3::new(4, 7, 8).unwrap();
-		// Expect format: TileCoord3(level, [x, y])
-		assert_eq!(format!("{coord:?}"), "TileCoord3(4, [7, 8])");
+	fn tilecoord_debug_format() {
+		let coord = TileCoord::new(4, 7, 8).unwrap();
+		// Expect format: TileCoord(level, [x, y])
+		assert_eq!(format!("{coord:?}"), "TileCoord(4, [7, 8])");
 	}
 }

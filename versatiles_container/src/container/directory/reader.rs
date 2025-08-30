@@ -26,14 +26,14 @@
 //! ## Usage
 //! ```no_run
 //! use versatiles_container::DirectoryTilesReader;
-//! use versatiles_core::{TileCoord3, TilesReaderTrait};
+//! use versatiles_core::{TileCoord, TilesReaderTrait};
 //! use std::path::Path;
 //! use tokio;
 //!
 //! #[tokio::main]
 //! async fn main() {
 //!     let mut reader = DirectoryTilesReader::open_path(Path::new("/path/to/tiles")).unwrap();
-//!     let tile_data = reader.get_tile_data(&TileCoord3::new(3, 1, 2).unwrap()).await.unwrap();
+//!     let tile_data = reader.get_tile_data(&TileCoord::new(3, 1, 2).unwrap()).await.unwrap();
 //! }
 //! ```
 //!
@@ -63,7 +63,7 @@ use versatiles_core::{tilejson::TileJSON, utils::*, *};
 pub struct DirectoryTilesReader {
 	tilejson: TileJSON,
 	dir: PathBuf,
-	tile_map: HashMap<TileCoord3, PathBuf>,
+	tile_map: HashMap<TileCoord, PathBuf>,
 	parameters: TilesReaderParameters,
 }
 
@@ -157,9 +157,9 @@ impl DirectoryTilesReader {
 							container_comp = Some(file_comp);
 						}
 
-						let coord3 = TileCoord3::new(level, x, y)?;
-						bbox_pyramid.include_coord(&coord3);
-						tile_map.insert(coord3, entry3.path());
+						let coord = TileCoord::new(level, x, y)?;
+						bbox_pyramid.include_coord(&coord);
+						tile_map.insert(coord, entry3.path());
 					}
 				}
 			} else {
@@ -224,7 +224,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 		&self.tilejson
 	}
 
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data {:?}", coord);
 
 		if let Some(path) = self.tile_map.get(coord) {
@@ -271,10 +271,10 @@ mod tests {
 			"{\"bounds\":[-90,66.51326,-45,79.171335],\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 
-		let tile_data = reader.get_tile_data(&TileCoord3::new(3, 2, 1)?).await?.unwrap();
+		let tile_data = reader.get_tile_data(&TileCoord::new(3, 2, 1)?).await?.unwrap();
 		assert_eq!(tile_data, Blob::from("test tile data"));
 
-		assert!(reader.get_tile_data(&TileCoord3::new(2, 2, 1)?).await?.is_none());
+		assert!(reader.get_tile_data(&TileCoord::new(2, 2, 1)?).await?.is_none());
 
 		Ok(())
 	}
@@ -339,7 +339,7 @@ mod tests {
 		fs::write(dir.path().join("meta.json"), r#"{"type":"dummy data"}"#).unwrap();
 
 		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
-		let coord = TileCoord3::new(3, 2, 1).unwrap();
+		let coord = TileCoord::new(3, 2, 1).unwrap();
 		let tile_data = reader.get_tile_data(&coord).await.unwrap().unwrap();
 
 		assert_eq!(tile_data, Blob::from("tile at 3/2/1"));

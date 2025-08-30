@@ -86,7 +86,7 @@ impl TilesReaderTrait for MockVectorSource {
 		&self.tilejson
 	}
 
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		if !self.parameters.bbox_pyramid.contains_coord(coord) {
 			return Ok(None);
 		}
@@ -121,11 +121,11 @@ impl TilesReaderTrait for MockVectorSource {
 }
 
 #[cfg(test)]
-pub fn arrange_tiles<T: ToString, I>(tiles: Vec<(TileCoord3, I)>, cb: impl Fn(I) -> T) -> Vec<String> {
+pub fn arrange_tiles<T: ToString, I>(tiles: Vec<(TileCoord, I)>, cb: impl Fn(I) -> T) -> Vec<String> {
 	use versatiles_core::TileBBox;
 
 	let mut bbox = TileBBox::new_empty(tiles.first().unwrap().0.level).unwrap();
-	tiles.iter().for_each(|t| bbox.include_coord(t.0.x, t.0.y));
+	tiles.iter().for_each(|t| bbox.include(t.0.x, t.0.y));
 
 	let mut result: Vec<Vec<String>> = (0..bbox.height())
 		.map(|_| (0..bbox.width()).map(|_| String::from("❌")).collect())
@@ -157,15 +157,15 @@ mod tests {
 			source
 				.parameters()
 				.bbox_pyramid
-				.contains_coord(&TileCoord3::new(8, 0, 200).unwrap())
+				.contains_coord(&TileCoord::new(8, 0, 200).unwrap())
 		);
 
-		let coord = TileCoord3::new(8, 0, 150).unwrap();
+		let coord = TileCoord::new(8, 0, 150).unwrap();
 		let tile_data = source.get_tile_data(&coord).await.unwrap();
 
 		assert!(tile_data.is_some());
 
-		let coord = TileCoord3::new(8, 100, 100).unwrap();
+		let coord = TileCoord::new(8, 100, 100).unwrap();
 		let tile_data = source.get_tile_data(&coord).await.unwrap();
 
 		assert!(tile_data.is_none());
@@ -174,9 +174,9 @@ mod tests {
 	#[test]
 	fn test_arrange_tiles() {
 		let tiles = vec![
-			(TileCoord3::new(8, 0, 0).unwrap(), Blob::from("a")),
-			(TileCoord3::new(8, 1, 0).unwrap(), Blob::from("b")),
-			(TileCoord3::new(8, 0, 1).unwrap(), Blob::from("c")),
+			(TileCoord::new(8, 0, 0).unwrap(), Blob::from("a")),
+			(TileCoord::new(8, 1, 0).unwrap(), Blob::from("b")),
+			(TileCoord::new(8, 0, 1).unwrap(), Blob::from("c")),
 		];
 
 		let arranged = arrange_tiles(tiles, |blob| blob.as_str().to_string());

@@ -16,7 +16,7 @@
 //! #[tokio::test]
 //! async fn test_mock_reader() -> Result<()> {
 //!     let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
-//!     let tile_data = reader.get_tile_data(&TileCoord3::new(0, 0, 0)?).await?;
+//!     let tile_data = reader.get_tile_data(&TileCoord::new(0, 0, 0)?).await?;
 //!     assert!(tile_data.is_some());
 //!     Ok(())
 //! }
@@ -98,7 +98,7 @@ impl TilesReaderTrait for MockTilesReader {
 		&self.tilejson
 	}
 
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		use TileFormat::*;
 
 		if !coord.is_valid() {
@@ -154,7 +154,7 @@ mod tests {
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 		let blob = reader
-			.get_tile_data(&TileCoord3::new(0, 0, 0)?)
+			.get_tile_data(&TileCoord::new(0, 0, 0)?)
 			.await?
 			.unwrap()
 			.into_vec();
@@ -165,7 +165,7 @@ mod tests {
 	#[tokio::test]
 	async fn get_tile_data() {
 		let test = |profile, blob| async move {
-			let coord = TileCoord3::new(6, 23, 45).unwrap();
+			let coord = TileCoord::new(6, 23, 45).unwrap();
 			let reader = MockTilesReader::new_mock_profile(profile).unwrap();
 			let tile_compressed = reader.get_tile_data(&coord).await.unwrap().unwrap();
 			let tile_uncompressed = decompress(tile_compressed, &reader.parameters().tile_compression).unwrap();

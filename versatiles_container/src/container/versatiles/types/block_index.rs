@@ -15,7 +15,7 @@ const BLOCK_INDEX_LENGTH: u64 = 33;
 /// A struct representing an index of blocks within a tile set.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlockIndex {
-	lookup: HashMap<TileCoord3, BlockDefinition>,
+	lookup: HashMap<TileCoord, BlockDefinition>,
 }
 
 impl BlockIndex {
@@ -82,7 +82,7 @@ impl BlockIndex {
 	/// # Arguments
 	/// * `block` - The block to add.
 	pub fn add_block(&mut self, block: BlockDefinition) {
-		self.lookup.insert(*block.get_coord3(), block);
+		self.lookup.insert(*block.get_coord(), block);
 	}
 
 	/// Converts the `BlockIndex` to a binary blob.
@@ -121,7 +121,7 @@ impl BlockIndex {
 	///
 	/// # Returns
 	/// An option containing a reference to the block if found, or `None` if not found.
-	pub fn get_block(&self, coord: &TileCoord3) -> Option<&BlockDefinition> {
+	pub fn get_block(&self, coord: &TileCoord) -> Option<&BlockDefinition> {
 		self.lookup.get(coord)
 	}
 

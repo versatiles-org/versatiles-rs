@@ -2,7 +2,7 @@ use ab_glyph::{Font, FontArc, Outline, OutlineCurve::*, Point};
 use anyhow::Result;
 use lazy_static::lazy_static;
 use std::{f64::consts::PI, ops::Div, vec};
-use versatiles_core::TileCoord3;
+use versatiles_core::TileCoord;
 use versatiles_geometry::{
 	Coordinates1, Coordinates2, Coordinates3, GeoFeature, GeoValue, Geometry, MultiPolygonGeometry, math,
 	vector_tile::{VectorTile, VectorTileLayer},
@@ -12,7 +12,7 @@ lazy_static! {
 	static ref FONT: FontArc = FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap();
 }
 
-pub fn create_debug_vector_tile(coord: &TileCoord3) -> Result<VectorTile> {
+pub fn create_debug_vector_tile(coord: &TileCoord) -> Result<VectorTile> {
 	Ok(VectorTile::new(vec![
 		get_background_layer()?,
 		draw_text("debug_z", 140.0, format!("z:{}", coord.level)),
@@ -177,7 +177,7 @@ mod tests {
 
 	#[test]
 	fn test_create_debug_vector_tile() {
-		let coord = TileCoord3::new(3, 1, 2).unwrap();
+		let coord = TileCoord::new(3, 1, 2).unwrap();
 		let vt = create_debug_vector_tile(&coord).unwrap();
 		assert_eq!(vt.layers.len(), 4);
 		assert_eq!(vt.layers[0].features.len(), 1);
@@ -188,7 +188,7 @@ mod tests {
 
 	#[test]
 	fn test_create_debug_vector_tile_different_coord() {
-		let coord = TileCoord3::new(10, 6789, 2345).unwrap();
+		let coord = TileCoord::new(10, 6789, 2345).unwrap();
 		let vt = create_debug_vector_tile(&coord).unwrap();
 		assert_eq!(vt.layers.len(), 4);
 		assert_eq!(vt.layers[0].features.len(), 1);

@@ -7,7 +7,7 @@
 //! It supports operations such as inclusion, intersection, scaling, and iteration over tile coordinates.
 //! This is particularly useful in mapping applications where tile management is essential.
 
-use super::{GeoBBox, TileBBoxPyramid, TileCoord3};
+use super::{GeoBBox, TileBBoxPyramid, TileCoord};
 use anyhow::{Result, ensure};
 use itertools::Itertools;
 use std::{
@@ -151,8 +151,8 @@ impl TileBBox {
 		bbox.check()?; // Validate GeoBBox
 
 		// Convert geographical coordinates to tile coordinates
-		let p_min = TileCoord3::from_geo(bbox.0 + 1e-6, bbox.3 + 1e-6, level)?;
-		let p_max = TileCoord3::from_geo(bbox.2 - 1e-6, bbox.1 - 1e-6, level)?;
+		let p_min = TileCoord::from_geo(bbox.0 + 1e-10, bbox.3 - 1e-10, level)?;
+		let p_max = TileCoord::from_geo(bbox.2 - 1e-10, bbox.1 + 1e-10, level)?;
 
 		Self::new(level, p_min.x, p_min.y, p_max.x, p_max.y)
 	}
@@ -229,7 +229,7 @@ impl TileBBox {
 		(1u32 << self.level) - 1
 	}
 
-	/// Checks if the bounding box contains a specific tile coordinate (`TileCoord3`) at the same zoom level.
+	/// Checks if the bounding box contains a specific tile coordinate (`TileCoord`) at the same zoom level.
 	///
 	/// # Arguments
 	///
@@ -239,7 +239,7 @@ impl TileBBox {
 	///
 	/// * `true` if the coordinate is within the bounding box and at the same zoom level.
 	/// * `false` otherwise.
-	pub fn contains3(&self, coord: &TileCoord3) -> bool {
+	pub fn contains(&self, coord: &TileCoord) -> bool {
 		coord.level == self.level
 			&& coord.x >= self.x_min
 			&& coord.x <= self.x_max
@@ -292,7 +292,7 @@ impl TileBBox {
 	/// # Panics
 	///
 	/// Panics if the resulting bounding box is invalid.
-	pub fn include_coord(&mut self, x: u32, y: u32) {
+	pub fn include(&mut self, x: u32, y: u32) {
 		if self.is_empty() {
 			// Initialize bounding box to the provided coordinate
 			self.x_min = x;
@@ -309,7 +309,7 @@ impl TileBBox {
 		}
 	}
 
-	/// Includes a tile coordinate (`TileCoord3`) within the bounding box.
+	/// Includes a tile coordinate (`TileCoord`) within the bounding box.
 	///
 	/// Expands the bounding box to encompass the given coordinate. The zoom level of the coordinate
 	/// must match the bounding box's zoom level.
@@ -322,15 +322,15 @@ impl TileBBox {
 	///
 	/// * `Ok(())` if inclusion is successful.
 	/// * `Err(anyhow::Error)` if the zoom levels do not match or other validations fail.
-	pub fn include_coord3(&mut self, coord: &TileCoord3) -> Result<()> {
+	pub fn include_coord(&mut self, coord: &TileCoord) -> Result<()> {
 		if coord.level != self.level {
 			return Err(anyhow::anyhow!(
-				"Cannot include TileCoord3 with z={} into TileBBox at z={}",
+				"Cannot include TileCoord with z={} into TileBBox at z={}",
 				coord.level,
 				self.level
 			));
 		}
-		self.include_coord(coord.x, coord.y);
+		self.include(coord.x, coord.y);
 		Ok(())
 	}
 
@@ -491,14 +491,10 @@ impl TileBBox {
 	///
 	/// * `GeoBBox` representing the geographical area covered by this bounding box.
 	pub fn as_geo_bbox(&self) -> GeoBBox {
-		// Top-left in geospatial terms is (x_min, y_max + 1)
-		let p_min = TileCoord3::new(self.level, self.x_min, self.y_max + 1)
-			.unwrap()
-			.as_geo();
-		// Bottom-right in geospatial terms is (x_max + 1, y_min)
-		let p_max = TileCoord3::new(self.level, self.x_max + 1, self.y_min)
-			.unwrap()
-			.as_geo();
+		// Bottom-left in geospatial terms is (x_min, y_max + 1)
+		let p_min = TileCoord::new(self.level, self.x_min, self.y_max + 1).unwrap().as_geo();
+		// Top-right in geospatial terms is (x_max + 1, y_min)
+		let p_max = TileCoord::new(self.level, self.x_max + 1, self.y_min).unwrap().as_geo();
 
 		GeoBBox(p_min[0], p_min[1], p_max[0], p_max[1])
 	}
@@ -631,12 +627,12 @@ impl TileBBox {
 		}
 	}
 
-	pub fn get_corner_min(&self) -> TileCoord3 {
-		TileCoord3::new(self.level, self.x_min, self.y_min).unwrap()
+	pub fn get_corner_min(&self) -> TileCoord {
+		TileCoord::new(self.level, self.x_min, self.y_min).unwrap()
 	}
 
-	pub fn get_corner_max(&self) -> TileCoord3 {
-		TileCoord3::new(self.level, self.x_max, self.y_max).unwrap()
+	pub fn get_corner_max(&self) -> TileCoord {
+		TileCoord::new(self.level, self.x_max, self.y_max).unwrap()
 	}
 
 	pub fn get_dimensions(&self) -> (u32, u32) {
@@ -653,13 +649,13 @@ impl TileBBox {
 	///
 	/// # Returns
 	///
-	/// An iterator yielding `TileCoord3` instances.
-	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord3> + '_ {
+	/// An iterator yielding `TileCoord` instances.
+	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord> + '_ {
 		let y_range = self.y_min..=self.y_max;
 		let x_range = self.x_min..=self.x_max;
 		y_range
 			.cartesian_product(x_range)
-			.map(|(y, x)| TileCoord3::new(self.level, x, y).unwrap())
+			.map(|(y, x)| TileCoord::new(self.level, x, y).unwrap())
 	}
 
 	/// Consumes the bounding box and returns an iterator over all tile coordinates within it.
@@ -668,13 +664,13 @@ impl TileBBox {
 	///
 	/// # Returns
 	///
-	/// An iterator yielding `TileCoord3` instances.
-	pub fn into_iter_coords(self) -> impl Iterator<Item = TileCoord3> {
+	/// An iterator yielding `TileCoord` instances.
+	pub fn into_iter_coords(self) -> impl Iterator<Item = TileCoord> {
 		let y_range = self.y_min..=self.y_max;
 		let x_range = self.x_min..=self.x_max;
 		y_range
 			.cartesian_product(x_range)
-			.map(move |(y, x)| TileCoord3::new(self.level, x, y).unwrap())
+			.map(move |(y, x)| TileCoord::new(self.level, x, y).unwrap())
 	}
 
 	/// Splits the bounding box into a grid of smaller bounding boxes of a specified size.
@@ -715,7 +711,7 @@ impl TileBBox {
 		Box::new(iter)
 	}
 
-	/// Retrieves the 0-based index of a `TileCoord3` within the bounding box.
+	/// Retrieves the 0-based index of a `TileCoord` within the bounding box.
 	///
 	/// # Arguments
 	///
@@ -725,9 +721,9 @@ impl TileBBox {
 	///
 	/// * `Ok(usize)` representing the index if the coordinate is within the bounding box.
 	/// * `Err(anyhow::Error)` if the coordinate is outside the bounding box or zoom levels do not match.
-	pub fn get_tile_index3(&self, coord: &TileCoord3) -> Result<u64> {
+	pub fn get_tile_index(&self, coord: &TileCoord) -> Result<u64> {
 		ensure!(
-			self.contains3(coord),
+			self.contains(coord),
 			"Coordinate {coord:?} is not within the bounding box {self:?}",
 		);
 
@@ -738,7 +734,7 @@ impl TileBBox {
 		Ok(index)
 	}
 
-	/// Retrieves the `TileCoord3` at a specific index within the bounding box.
+	/// Retrieves the `TileCoord` at a specific index within the bounding box.
 	///
 	/// # Arguments
 	///
@@ -746,15 +742,15 @@ impl TileBBox {
 	///
 	/// # Returns
 	///
-	/// * `Ok(TileCoord3)` if the index is within bounds.
+	/// * `Ok(TileCoord)` if the index is within bounds.
 	/// * `Err(anyhow::Error)` if the index is out of bounds.
-	pub fn get_coord3_by_index(&self, index: u64) -> Result<TileCoord3> {
+	pub fn get_coord_by_index(&self, index: u64) -> Result<TileCoord> {
 		ensure!(index < self.count_tiles(), "index {index} out of bounds");
 
 		let width = self.width() as u64;
 		let x = index.rem(width) as u32 + self.x_min;
 		let y = index.div(width) as u32 + self.y_min;
-		TileCoord3::new(self.level, x, y)
+		TileCoord::new(self.level, x, y)
 	}
 
 	pub fn round(&mut self, block_size: u32) {
@@ -835,30 +831,21 @@ mod tests {
 
 	#[test]
 	fn quarter_planet() {
-		let geo_bbox2 = GeoBBox(0.0, -85.05112877980659f64, 180.0, 0.0);
-		let mut geo_bbox0 = geo_bbox2;
-		geo_bbox0.1 += 1e-10;
-		geo_bbox0.2 -= 1e-10;
+		let geo_bbox = GeoBBox(0.0, -85.05112877980659f64, 180.0, 0.0);
 		for level in 1..32 {
-			let level_bbox0 = TileBBox::from_geo(level, &geo_bbox0).unwrap();
-			assert_eq!(level_bbox0.count_tiles(), 4u64.pow(level as u32 - 1));
-			let geo_bbox1 = level_bbox0.as_geo_bbox();
-			assert_eq!(geo_bbox1, geo_bbox2);
+			let bbox = TileBBox::from_geo(level, &geo_bbox).unwrap();
+			assert_eq!(bbox.count_tiles(), 4u64.pow(level as u32 - 1));
+			assert_eq!(bbox.as_geo_bbox(), geo_bbox);
 		}
 	}
 
 	#[test]
 	fn sa_pacific() {
-		let geo_bbox2 = GeoBBox(-180.0, -66.51326044311186f64, -90.0, 0.0);
-		let mut geo_bbox0 = geo_bbox2;
-		geo_bbox0.1 += 1e-10;
-		geo_bbox0.2 -= 1e-10;
-
+		let geo_bbox = GeoBBox(-180.0, -66.51326044311186f64, -90.0, 0.0);
 		for level in 2..32 {
-			let level_bbox0 = TileBBox::from_geo(level, &geo_bbox0).unwrap();
-			assert_eq!(level_bbox0.count_tiles(), 4u64.pow(level as u32 - 2));
-			let geo_bbox1 = level_bbox0.as_geo_bbox();
-			assert_eq!(geo_bbox1, geo_bbox2);
+			let bbox = TileBBox::from_geo(level, &geo_bbox).unwrap();
+			assert_eq!(bbox.count_tiles(), 4u64.pow(level as u32 - 2));
+			assert_eq!(bbox.as_geo_bbox(), geo_bbox);
 		}
 	}
 
@@ -886,7 +873,7 @@ mod tests {
 	#[test]
 	fn include_tile() {
 		let mut bbox = TileBBox::new(4, 0, 1, 2, 3).unwrap();
-		bbox.include_coord(4, 5);
+		bbox.include(4, 5);
 		assert_eq!(bbox, TileBBox::new(4, 0, 1, 4, 5).unwrap());
 	}
 
@@ -908,12 +895,12 @@ mod tests {
 	#[test]
 	fn iter_coords() {
 		let bbox = TileBBox::new(16, 1, 5, 2, 6).unwrap();
-		let vec: Vec<TileCoord3> = bbox.iter_coords().collect();
+		let vec: Vec<TileCoord> = bbox.iter_coords().collect();
 		assert_eq!(vec.len(), 4);
-		assert_eq!(vec[0], TileCoord3::new(16, 1, 5).unwrap());
-		assert_eq!(vec[1], TileCoord3::new(16, 2, 5).unwrap());
-		assert_eq!(vec[2], TileCoord3::new(16, 1, 6).unwrap());
-		assert_eq!(vec[3], TileCoord3::new(16, 2, 6).unwrap());
+		assert_eq!(vec[0], TileCoord::new(16, 1, 5).unwrap());
+		assert_eq!(vec[1], TileCoord::new(16, 2, 5).unwrap());
+		assert_eq!(vec[2], TileCoord::new(16, 1, 6).unwrap());
+		assert_eq!(vec[3], TileCoord::new(16, 2, 6).unwrap());
 	}
 
 	#[test]
@@ -1011,7 +998,7 @@ mod tests {
 	#[test]
 	fn test_include_tile() {
 		let mut bbox = TileBBox::new(6, 5, 10, 20, 30).unwrap();
-		bbox.include_coord(25, 35);
+		bbox.include(25, 35);
 		assert_eq!(bbox, TileBBox::new(6, 5, 10, 25, 35).unwrap());
 	}
 
@@ -1042,25 +1029,15 @@ mod tests {
 	}
 
 	#[test]
-	fn test_get_tile_index3() -> Result<()> {
+	fn test_get_tile_index() -> Result<()> {
 		let bbox = TileBBox::new(8, 100, 100, 199, 199).unwrap();
-		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(8, 100, 100)?)?, 0);
-		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(8, 101, 100)?)?, 1);
-		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(8, 199, 100)?)?, 99);
-		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(8, 100, 101)?)?, 100);
-		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(8, 100, 199)?)?, 9900);
-		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(8, 199, 199)?)?, 9999);
+		assert_eq!(bbox.get_tile_index(&TileCoord::new(8, 100, 100)?)?, 0);
+		assert_eq!(bbox.get_tile_index(&TileCoord::new(8, 101, 100)?)?, 1);
+		assert_eq!(bbox.get_tile_index(&TileCoord::new(8, 199, 100)?)?, 99);
+		assert_eq!(bbox.get_tile_index(&TileCoord::new(8, 100, 101)?)?, 100);
+		assert_eq!(bbox.get_tile_index(&TileCoord::new(8, 100, 199)?)?, 9900);
+		assert_eq!(bbox.get_tile_index(&TileCoord::new(8, 199, 199)?)?, 9999);
 		Ok(())
-	}
-
-	#[test]
-	fn test_get_coord3_by_index() {
-		let bbox = TileBBox::new(4, 5, 10, 7, 12).unwrap();
-		assert_eq!(bbox.get_coord3_by_index(0).unwrap(), TileCoord3::new(4, 5, 10).unwrap());
-		assert_eq!(bbox.get_coord3_by_index(1).unwrap(), TileCoord3::new(4, 6, 10).unwrap());
-		assert_eq!(bbox.get_coord3_by_index(2).unwrap(), TileCoord3::new(4, 7, 10).unwrap());
-		assert_eq!(bbox.get_coord3_by_index(3).unwrap(), TileCoord3::new(4, 5, 11).unwrap());
-		assert_eq!(bbox.get_coord3_by_index(8).unwrap(), TileCoord3::new(4, 7, 12).unwrap());
 	}
 
 	#[test]
@@ -1074,11 +1051,11 @@ mod tests {
 	}
 
 	#[test]
-	fn test_contains3() {
+	fn test_contains() {
 		let bbox = TileBBox::new(4, 5, 10, 7, 12).unwrap();
-		assert!(bbox.contains3(&TileCoord3::new(4, 6, 11).unwrap()));
-		assert!(!bbox.contains3(&TileCoord3::new(4, 4, 9).unwrap()));
-		assert!(!bbox.contains3(&TileCoord3::new(5, 6, 11).unwrap()));
+		assert!(bbox.contains(&TileCoord::new(4, 6, 11).unwrap()));
+		assert!(!bbox.contains(&TileCoord::new(4, 4, 9).unwrap()));
+		assert!(!bbox.contains(&TileCoord::new(5, 6, 11).unwrap()));
 	}
 
 	#[test]
@@ -1160,34 +1137,34 @@ mod tests {
 	}
 
 	#[test]
-	fn test_include_coord() -> Result<()> {
+	fn test_include() -> Result<()> {
 		let mut bbox = TileBBox::new_empty(6)?;
-		bbox.include_coord(5, 10);
+		bbox.include(5, 10);
 		assert_eq!(bbox, TileBBox::new(6, 5, 10, 5, 10).unwrap());
 
-		bbox.include_coord(15, 20);
+		bbox.include(15, 20);
 		assert_eq!(bbox, TileBBox::new(6, 5, 10, 15, 20).unwrap());
 
-		bbox.include_coord(10, 15);
+		bbox.include(10, 15);
 		assert_eq!(bbox, TileBBox::new(6, 5, 10, 15, 20).unwrap());
 
 		Ok(())
 	}
 
 	#[test]
-	fn test_include_coord3() -> Result<()> {
+	fn test_include_coord() -> Result<()> {
 		let mut bbox = TileBBox::new_empty(6)?;
-		let coord = TileCoord3::new(6, 5, 10).unwrap();
-		bbox.include_coord3(&coord)?;
+		let coord = TileCoord::new(6, 5, 10).unwrap();
+		bbox.include_coord(&coord)?;
 		assert_eq!(bbox, TileBBox::new(6, 5, 10, 5, 10).unwrap());
 
-		let coord = TileCoord3::new(6, 15, 20).unwrap();
-		bbox.include_coord3(&coord)?;
+		let coord = TileCoord::new(6, 15, 20).unwrap();
+		bbox.include_coord(&coord)?;
 		assert_eq!(bbox, TileBBox::new(6, 5, 10, 15, 20).unwrap());
 
 		// Attempt to include a coordinate with a different zoom level
-		let coord_invalid = TileCoord3::new(5, 10, 15).unwrap();
-		let result = bbox.include_coord3(&coord_invalid);
+		let coord_invalid = TileCoord::new(5, 10, 15).unwrap();
+		let result = bbox.include_coord(&coord_invalid);
 		assert!(result.is_err());
 
 		Ok(())
@@ -1279,40 +1256,40 @@ mod tests {
 	}
 
 	#[test]
-	fn should_get_correct_tile_index3() -> Result<()> {
+	fn should_get_correct_tile_index() -> Result<()> {
 		let bbox = TileBBox::new(4, 5, 10, 7, 12)?;
 
-		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(4, 5, 10).unwrap()).unwrap(), 0);
-		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(4, 6, 10).unwrap()).unwrap(), 1);
-		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(4, 7, 10).unwrap()).unwrap(), 2);
-		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(4, 5, 11).unwrap()).unwrap(), 3);
-		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(4, 7, 12).unwrap()).unwrap(), 8);
+		assert_eq!(bbox.get_tile_index(&TileCoord::new(4, 5, 10).unwrap()).unwrap(), 0);
+		assert_eq!(bbox.get_tile_index(&TileCoord::new(4, 6, 10).unwrap()).unwrap(), 1);
+		assert_eq!(bbox.get_tile_index(&TileCoord::new(4, 7, 10).unwrap()).unwrap(), 2);
+		assert_eq!(bbox.get_tile_index(&TileCoord::new(4, 5, 11).unwrap()).unwrap(), 3);
+		assert_eq!(bbox.get_tile_index(&TileCoord::new(4, 7, 12).unwrap()).unwrap(), 8);
 
 		// Attempt to get index of a coordinate outside the bounding box
-		let coord_outside = TileCoord3::new(4, 4, 9).unwrap();
-		let result = bbox.get_tile_index3(&coord_outside);
+		let coord_outside = TileCoord::new(4, 4, 9).unwrap();
+		let result = bbox.get_tile_index(&coord_outside);
 		assert!(result.is_err());
 
 		// Attempt to get index with mismatched zoom level
-		let coord_diff_level = TileCoord3::new(5, 5, 10).unwrap();
-		let result = bbox.get_tile_index3(&coord_diff_level);
+		let coord_diff_level = TileCoord::new(5, 5, 10).unwrap();
+		let result = bbox.get_tile_index(&coord_diff_level);
 		assert!(result.is_err());
 
 		Ok(())
 	}
 
 	#[test]
-	fn should_get_coord3_by_index_correctly() -> Result<()> {
+	fn should_get_coord_by_index_correctly() -> Result<()> {
 		let bbox = TileBBox::new(4, 5, 10, 7, 12)?;
 
-		assert_eq!(bbox.get_coord3_by_index(0).unwrap(), TileCoord3::new(4, 5, 10).unwrap());
-		assert_eq!(bbox.get_coord3_by_index(1).unwrap(), TileCoord3::new(4, 6, 10).unwrap());
-		assert_eq!(bbox.get_coord3_by_index(2).unwrap(), TileCoord3::new(4, 7, 10).unwrap());
-		assert_eq!(bbox.get_coord3_by_index(3).unwrap(), TileCoord3::new(4, 5, 11).unwrap());
-		assert_eq!(bbox.get_coord3_by_index(8).unwrap(), TileCoord3::new(4, 7, 12).unwrap());
+		assert_eq!(bbox.get_coord_by_index(0).unwrap(), TileCoord::new(4, 5, 10).unwrap());
+		assert_eq!(bbox.get_coord_by_index(1).unwrap(), TileCoord::new(4, 6, 10).unwrap());
+		assert_eq!(bbox.get_coord_by_index(2).unwrap(), TileCoord::new(4, 7, 10).unwrap());
+		assert_eq!(bbox.get_coord_by_index(3).unwrap(), TileCoord::new(4, 5, 11).unwrap());
+		assert_eq!(bbox.get_coord_by_index(8).unwrap(), TileCoord::new(4, 7, 12).unwrap());
 
 		// Attempt to get coordinate with out-of-bounds index
-		let result = bbox.get_coord3_by_index(9);
+		let result = bbox.get_coord_by_index(9);
 		assert!(result.is_err());
 
 		Ok(())
@@ -1323,7 +1300,7 @@ mod tests {
 		let bbox = TileBBox::new(4, 5, 10, 7, 12)?;
 		let geo_bbox = bbox.as_geo_bbox();
 
-		// Assuming TileCoord3::as_geo() converts tile coordinates to geographical coordinates correctly,
+		// Assuming TileCoord::as_geo() converts tile coordinates to geographical coordinates correctly,
 		// the following is an example expected output. Adjust based on actual implementation.
 		// For demonstration, let's assume:
 		// - Tile (5, 10, 4) maps to longitude -67.5 and latitude 74.01954331
@@ -1337,13 +1314,13 @@ mod tests {
 	#[test]
 	fn should_determine_contains3_correctly() -> Result<()> {
 		let bbox = TileBBox::new(4, 5, 10, 7, 12)?;
-		let valid_coord = TileCoord3::new(4, 6, 11).unwrap();
-		let invalid_coord_zoom = TileCoord3::new(5, 6, 11).unwrap();
-		let invalid_coord_outside = TileCoord3::new(4, 4, 9).unwrap();
+		let valid_coord = TileCoord::new(4, 6, 11).unwrap();
+		let invalid_coord_zoom = TileCoord::new(5, 6, 11).unwrap();
+		let invalid_coord_outside = TileCoord::new(4, 4, 9).unwrap();
 
-		assert!(bbox.contains3(&valid_coord));
-		assert!(!bbox.contains3(&invalid_coord_zoom));
-		assert!(!bbox.contains3(&invalid_coord_outside));
+		assert!(bbox.contains(&valid_coord));
+		assert!(!bbox.contains(&invalid_coord_zoom));
+		assert!(!bbox.contains(&invalid_coord_outside));
 
 		Ok(())
 	}
@@ -1351,12 +1328,12 @@ mod tests {
 	#[test]
 	fn should_iterate_over_coords_correctly() -> Result<()> {
 		let bbox = TileBBox::new(4, 5, 10, 6, 11)?;
-		let coords: Vec<TileCoord3> = bbox.iter_coords().collect();
+		let coords: Vec<TileCoord> = bbox.iter_coords().collect();
 		let expected_coords = vec![
-			TileCoord3::new(4, 5, 10).unwrap(),
-			TileCoord3::new(4, 6, 10).unwrap(),
-			TileCoord3::new(4, 5, 11).unwrap(),
-			TileCoord3::new(4, 6, 11).unwrap(),
+			TileCoord::new(4, 5, 10).unwrap(),
+			TileCoord::new(4, 6, 10).unwrap(),
+			TileCoord::new(4, 5, 11).unwrap(),
+			TileCoord::new(4, 6, 11).unwrap(),
 		];
 		assert_eq!(coords, expected_coords);
 
@@ -1366,12 +1343,12 @@ mod tests {
 	#[test]
 	fn should_iterate_over_coords_correctly_when_consumed() -> Result<()> {
 		let bbox = TileBBox::new(4, 5, 10, 6, 11)?;
-		let coords: Vec<TileCoord3> = bbox.into_iter_coords().collect();
+		let coords: Vec<TileCoord> = bbox.into_iter_coords().collect();
 		let expected_coords = vec![
-			TileCoord3::new(4, 5, 10).unwrap(),
-			TileCoord3::new(4, 6, 10).unwrap(),
-			TileCoord3::new(4, 5, 11).unwrap(),
-			TileCoord3::new(4, 6, 11).unwrap(),
+			TileCoord::new(4, 5, 10).unwrap(),
+			TileCoord::new(4, 6, 10).unwrap(),
+			TileCoord::new(4, 5, 11).unwrap(),
+			TileCoord::new(4, 6, 11).unwrap(),
 		];
 		assert_eq!(coords, expected_coords);
 
