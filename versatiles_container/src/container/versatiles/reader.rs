@@ -206,17 +206,14 @@ impl TilesReaderTrait for VersaTilesReader {
 		// Get the block and its bounding box
 		let bbox = block.get_global_bbox();
 
-		// Calculate tile coordinates within the block
-		let tile_coord: TileCoord2 = coord.as_coord2();
-
 		// Check if the tile is within the block definition
-		if !bbox.contains2(&tile_coord) {
+		if !bbox.contains3(&coord) {
 			trace!("tile {coord:?} outside block definition");
 			return Ok(None);
 		}
 
 		// Get the tile ID
-		let tile_id = bbox.get_tile_index2(&tile_coord).unwrap() as usize;
+		let tile_id = bbox.get_tile_index3(&coord).unwrap() as usize;
 
 		// Retrieve the tile index from cache or read from the reader
 		let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await?;

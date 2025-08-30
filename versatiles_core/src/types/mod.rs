@@ -30,9 +30,6 @@ pub use tile_bbox_pyramid::*;
 mod tile_compression;
 pub use tile_compression::*;
 
-mod tile_coord2;
-pub use tile_coord2::*;
-
 mod tile_coord3;
 pub use tile_coord3::*;
 

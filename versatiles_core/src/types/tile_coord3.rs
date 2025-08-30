@@ -25,7 +25,7 @@
 //! let geo = coord3.as_geo();
 //! ```
 
-use crate::{GeoBBox, TileBBox, TileCoord2};
+use crate::{GeoBBox, TileBBox};
 use anyhow::{Result, ensure};
 use std::{
 	f64::consts::PI as PI32,
@@ -53,6 +53,24 @@ impl TileCoord3 {
 		Ok(TileCoord3 { x, y, level })
 	}
 
+	pub fn from_geo(x: f64, y: f64, z: u8) -> Result<TileCoord3> {
+		ensure!(z <= 31, "z {z} must be <= 31");
+		ensure!(x >= -180., "x must be >= -180");
+		ensure!(x <= 180., "x must be <= 180");
+		ensure!(y >= -90., "y must be >= -90");
+		ensure!(y <= 90., "y must be <= 90");
+
+		let zoom: f64 = 2.0f64.powi(z as i32);
+		let x = zoom * (x / 360.0 + 0.5);
+		let y = zoom * (0.5 - 0.5 * (y * PI32 / 360.0 + PI32 / 4.0).tan().ln() / PI32);
+
+		Ok(TileCoord3 {
+			x: x.min(zoom - 1.0).max(0.0).floor() as u32,
+			y: y.min(zoom - 1.0).max(0.0).floor() as u32,
+			level: z,
+		})
+	}
+
 	/// Convert this tile coordinate to geographic longitude/latitude in degrees.
 	pub fn as_geo(&self) -> [f64; 2] {
 		let zoom: f64 = 2.0f64.powi(self.level as i32);
@@ -65,19 +83,7 @@ impl TileCoord3 {
 
 	/// Return the geographic bounding box of this tile as `[west, south, east, north]`.
 	pub fn as_geo_bbox(&self) -> GeoBBox {
-		let zoom: f64 = 2.0f64.powi(self.level as i32);
-
-		GeoBBox(
-			((self.x as f64) / zoom - 0.5) * 360.0,
-			((PI32 * (1.0 - 2.0 * (self.y as f64) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
-			(((self.x + 1) as f64) / zoom - 0.5) * 360.0,
-			((PI32 * (1.0 - 2.0 * ((self.y + 1) as f64) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
-		)
-	}
-
-	/// Discard the zoom level, returning the 2D tile coordinate (x, y).
-	pub fn as_coord2(&self) -> TileCoord2 {
-		TileCoord2 { x: self.x, y: self.y }
+		self.as_tile_bbox(1).unwrap().as_geo_bbox()
 	}
 
 	/// Serialize this coordinate to a compact JSON-like string `{x:…,y:…,z:…}`.
@@ -204,13 +210,6 @@ mod tests {
 			coord.as_geo_bbox().as_array(),
 			[-146.25, 79.17133464081945, -135.0, 76.84081641443098]
 		);
-	}
-
-	#[test]
-	fn tilecoord3_as_coord2() {
-		let coord = TileCoord3::new(5, 3, 4).unwrap();
-		let coord2 = coord.as_coord2();
-		assert_eq!(coord2, TileCoord2::new(3, 4));
 	}
 
 	#[test]

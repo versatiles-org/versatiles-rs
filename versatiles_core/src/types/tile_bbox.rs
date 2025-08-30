@@ -7,7 +7,7 @@
 //! It supports operations such as inclusion, intersection, scaling, and iteration over tile coordinates.
 //! This is particularly useful in mapping applications where tile management is essential.
 
-use super::{GeoBBox, TileBBoxPyramid, TileCoord2, TileCoord3};
+use super::{GeoBBox, TileBBoxPyramid, TileCoord3};
 use anyhow::{Result, ensure};
 use itertools::Itertools;
 use std::{
@@ -151,8 +151,8 @@ impl TileBBox {
 		bbox.check()?; // Validate GeoBBox
 
 		// Convert geographical coordinates to tile coordinates
-		let p_min = TileCoord2::from_geo(bbox.0, bbox.3, level, false)?;
-		let p_max = TileCoord2::from_geo(bbox.2, bbox.1, level, true)?;
+		let p_min = TileCoord3::from_geo(bbox.0 + 1e-6, bbox.3 + 1e-6, level)?;
+		let p_max = TileCoord3::from_geo(bbox.2 - 1e-6, bbox.1 - 1e-6, level)?;
 
 		Self::new(level, p_min.x, p_min.y, p_max.x, p_max.y)
 	}
@@ -227,24 +227,6 @@ impl TileBBox {
 
 	pub fn max_index(&self) -> u32 {
 		(1u32 << self.level) - 1
-	}
-
-	// -------------------------------------------------------------------------
-	// Containment Checks
-	// -------------------------------------------------------------------------
-
-	/// Checks if the bounding box contains a specific tile coordinate (`TileCoord2`).
-	///
-	/// # Arguments
-	///
-	/// * `coord` - Reference to the tile coordinate to check.
-	///
-	/// # Returns
-	///
-	/// * `true` if the coordinate is within the bounding box.
-	/// * `false` otherwise.
-	pub fn contains2(&self, coord: &TileCoord2) -> bool {
-		coord.x >= self.x_min && coord.x <= self.x_max && coord.y >= self.y_min && coord.y <= self.y_max
 	}
 
 	/// Checks if the bounding box contains a specific tile coordinate (`TileCoord3`) at the same zoom level.
@@ -541,25 +523,6 @@ impl TileBBox {
 		self.y_max = self.y_max.saturating_add(y);
 	}
 
-	/// Subtracts a tile coordinate (`TileCoord2`) from the bounding box, saturating at 0.
-	///
-	/// This effectively moves the bounding box left/up by the specified amounts.
-	///
-	/// # Arguments
-	///
-	/// * `c` - Reference to the tile coordinate containing the amounts to subtract.
-	///
-	/// # Returns
-	///
-	/// * `Ok(())` if the subtraction is successful.
-	/// * `Err(anyhow::Error)` if the resulting bounding box is invalid.
-	pub fn subtract_coord2(&mut self, c: &TileCoord2) {
-		self.x_min = self.x_min.saturating_sub(c.x);
-		self.y_min = self.y_min.saturating_sub(c.y);
-		self.x_max = self.x_max.saturating_sub(c.x);
-		self.y_max = self.y_max.saturating_sub(c.y);
-	}
-
 	/// Subtracts specified amounts from the bounding box, saturating at 0.
 	///
 	/// This effectively moves the bounding box left/up by `x` and `y` respectively.
@@ -752,33 +715,6 @@ impl TileBBox {
 		Box::new(iter)
 	}
 
-	// -------------------------------------------------------------------------
-	// Utility Methods
-	// -------------------------------------------------------------------------
-
-	/// Retrieves the 0-based index of a `TileCoord2` within the bounding box.
-	///
-	/// # Arguments
-	///
-	/// * `coord` - Reference to the tile coordinate.
-	///
-	/// # Returns
-	///
-	/// * `Ok(usize)` representing the index if the coordinate is within the bounding box.
-	/// * `Err(anyhow::Error)` if the coordinate is outside the bounding box.
-	pub fn get_tile_index2(&self, coord: &TileCoord2) -> Result<u64> {
-		ensure!(
-			self.contains2(coord),
-			"Coordinate {coord:?} is not within the bounding box {self:?}"
-		);
-
-		let x = (coord.x - self.x_min) as u64;
-		let y = (coord.y - self.y_min) as u64;
-		let index = y * (self.x_max + 1 - self.x_min) as u64 + x;
-
-		Ok(index)
-	}
-
 	/// Retrieves the 0-based index of a `TileCoord3` within the bounding box.
 	///
 	/// # Arguments
@@ -800,26 +736,6 @@ impl TileBBox {
 		let index = y * (self.x_max as u64 + 1 - self.x_min as u64) + x;
 
 		Ok(index)
-	}
-
-	/// Retrieves the `TileCoord2` at a specific index within the bounding box.
-	///
-	/// # Arguments
-	///
-	/// * `index` - 0-based index of the tile coordinate.
-	///
-	/// # Returns
-	///
-	/// * `Ok(TileCoord2)` if the index is within bounds.
-	/// * `Err(anyhow::Error)` if the index is out of bounds.
-	pub fn get_coord2_by_index(&self, index: u64) -> Result<TileCoord2> {
-		ensure!(index < self.count_tiles(), "index out of bounds");
-
-		let width = self.width() as u64;
-		Ok(TileCoord2::new(
-			index.rem(width) as u32 + self.x_min,
-			index.div(width) as u32 + self.y_min,
-		))
 	}
 
 	/// Retrieves the `TileCoord3` at a specific index within the bounding box.
@@ -944,18 +860,6 @@ mod tests {
 			let geo_bbox1 = level_bbox0.as_geo_bbox();
 			assert_eq!(geo_bbox1, geo_bbox2);
 		}
-	}
-
-	#[test]
-	fn get_tile_index() -> Result<()> {
-		let bbox = TileBBox::new(8, 100, 100, 199, 199).unwrap();
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(100, 100))?, 0);
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(101, 100))?, 1);
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(199, 100))?, 99);
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(100, 101))?, 100);
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(100, 199))?, 9900);
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(199, 199))?, 9999);
-		Ok(())
 	}
 
 	#[test]
@@ -1138,18 +1042,6 @@ mod tests {
 	}
 
 	#[test]
-	fn test_get_tile_index2() -> Result<()> {
-		let bbox = TileBBox::new(8, 100, 100, 199, 199).unwrap();
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(100, 100))?, 0);
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(101, 100))?, 1);
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(199, 100))?, 99);
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(100, 101))?, 100);
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(100, 199))?, 9900);
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(199, 199))?, 9999);
-		Ok(())
-	}
-
-	#[test]
 	fn test_get_tile_index3() -> Result<()> {
 		let bbox = TileBBox::new(8, 100, 100, 199, 199).unwrap();
 		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(8, 100, 100)?)?, 0);
@@ -1159,16 +1051,6 @@ mod tests {
 		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(8, 100, 199)?)?, 9900);
 		assert_eq!(bbox.get_tile_index3(&TileCoord3::new(8, 199, 199)?)?, 9999);
 		Ok(())
-	}
-
-	#[test]
-	fn test_get_coord2_by_index() {
-		let bbox = TileBBox::new(4, 5, 10, 7, 12).unwrap();
-		assert_eq!(bbox.get_coord2_by_index(0).unwrap(), TileCoord2::new(5, 10));
-		assert_eq!(bbox.get_coord2_by_index(1).unwrap(), TileCoord2::new(6, 10));
-		assert_eq!(bbox.get_coord2_by_index(2).unwrap(), TileCoord2::new(7, 10));
-		assert_eq!(bbox.get_coord2_by_index(3).unwrap(), TileCoord2::new(5, 11));
-		assert_eq!(bbox.get_coord2_by_index(8).unwrap(), TileCoord2::new(7, 12));
 	}
 
 	#[test]
@@ -1189,13 +1071,6 @@ mod tests {
 			geo_bbox.as_string_list(),
 			"-67.5,-74.01954331150228,0,-40.97989806962013"
 		);
-	}
-
-	#[test]
-	fn test_contains2() {
-		let bbox = TileBBox::new(4, 5, 10, 7, 12).unwrap();
-		assert!(bbox.contains2(&TileCoord2::new(6, 11)));
-		assert!(!bbox.contains2(&TileCoord2::new(4, 9)));
 	}
 
 	#[test]
@@ -1404,23 +1279,6 @@ mod tests {
 	}
 
 	#[test]
-	fn should_get_correct_tile_index2() -> Result<()> {
-		let bbox = TileBBox::new(4, 5, 10, 7, 12)?;
-
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(5, 10)).unwrap(), 0);
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(6, 10)).unwrap(), 1);
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(7, 10)).unwrap(), 2);
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(5, 11)).unwrap(), 3);
-		assert_eq!(bbox.get_tile_index2(&TileCoord2::new(6, 12)).unwrap(), 7);
-
-		// Attempt to get index of a coordinate outside the bounding box
-		let result = bbox.get_tile_index2(&TileCoord2::new(4, 9));
-		assert!(result.is_err());
-
-		Ok(())
-	}
-
-	#[test]
 	fn should_get_correct_tile_index3() -> Result<()> {
 		let bbox = TileBBox::new(4, 5, 10, 7, 12)?;
 
@@ -1438,23 +1296,6 @@ mod tests {
 		// Attempt to get index with mismatched zoom level
 		let coord_diff_level = TileCoord3::new(5, 5, 10).unwrap();
 		let result = bbox.get_tile_index3(&coord_diff_level);
-		assert!(result.is_err());
-
-		Ok(())
-	}
-
-	#[test]
-	fn should_get_coord2_by_index_correctly() -> Result<()> {
-		let bbox = TileBBox::new(4, 5, 10, 7, 12)?;
-
-		assert_eq!(bbox.get_coord2_by_index(0).unwrap(), TileCoord2::new(5, 10));
-		assert_eq!(bbox.get_coord2_by_index(1).unwrap(), TileCoord2::new(6, 10));
-		assert_eq!(bbox.get_coord2_by_index(2).unwrap(), TileCoord2::new(7, 10));
-		assert_eq!(bbox.get_coord2_by_index(3).unwrap(), TileCoord2::new(5, 11));
-		assert_eq!(bbox.get_coord2_by_index(8).unwrap(), TileCoord2::new(7, 12));
-
-		// Attempt to get coordinate with out-of-bounds index
-		let result = bbox.get_coord2_by_index(9);
 		assert!(result.is_err());
 
 		Ok(())
@@ -1489,19 +1330,6 @@ mod tests {
 		// - Tile (7, 12, 4) maps to longitude 0.0 and latitude 40.97989807
 		let expected_geo_bbox = GeoBBox(-67.5, -74.01954331150228, 0.0, -40.97989806962013);
 		assert_eq!(geo_bbox, expected_geo_bbox);
-
-		Ok(())
-	}
-
-	#[test]
-	fn should_determine_contains2_correctly() -> Result<()> {
-		let bbox = TileBBox::new(4, 5, 10, 7, 12)?;
-
-		assert!(bbox.contains2(&TileCoord2::new(5, 10)));
-		assert!(bbox.contains2(&TileCoord2::new(6, 11)));
-		assert!(bbox.contains2(&TileCoord2::new(7, 12)));
-		assert!(!bbox.contains2(&TileCoord2::new(4, 9)));
-		assert!(!bbox.contains2(&TileCoord2::new(8, 13)));
 
 		Ok(())
 	}
@@ -1636,20 +1464,6 @@ mod tests {
 		let mut bbox = TileBBox::new(6, 14, 14, 15, 15)?;
 		bbox.shift_by(2, 2);
 		assert_eq!(bbox, TileBBox::new(6, 16, 16, 17, 17)?);
-
-		Ok(())
-	}
-
-	#[test]
-	fn should_subtract_coord2_correctly() -> Result<()> {
-		let mut bbox = TileBBox::new(6, 5, 10, 15, 20)?;
-		let coord = TileCoord2::new(3, 5);
-		bbox.subtract_coord2(&coord);
-		assert_eq!(bbox, TileBBox::new(6, 2, 5, 12, 15)?);
-
-		// Subtracting more than current coordinates should saturate at 0
-		bbox.subtract_coord2(&TileCoord2::new(5, 10));
-		assert_eq!(bbox, TileBBox::new(6, 0, 0, 7, 5)?);
 
 		Ok(())
 	}
