@@ -22,7 +22,8 @@ image = { version = "0.25.6", default-features = false, features = [
 	"webp",
 ] }
 imageproc = { version = "0.25.0", default-features = false }
-webp = "0.3.0"
+webp = "0.3.1"
+
 versatiles_core.workspace = true
 
 [dev-dependencies]
