@@ -14,7 +14,7 @@ version.workspace = true
 
 [dependencies]
 anyhow.workspace = true
-fast_image_resize = { version = "5.2.1", features = ["image"] }
+fast_image_resize = { version = "5.2.2", features = ["image"] }
 image = { version = "0.25.6", default-features = false, features = [
 	"avif",
 	"jpeg",
