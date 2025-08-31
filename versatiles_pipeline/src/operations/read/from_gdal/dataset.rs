@@ -1,15 +1,15 @@
-use crate::operations::read::from_gdal::bandmapping::{BandMapping, BandMappingItem};
+use crate::operations::read::from_gdal::{BandMapping, BandMappingItem, Instance};
 use anyhow::{Context, Result, ensure};
 use gdal::{
 	Dataset, GeoTransform, config::set_config_option, raster::reproject, spatial_ref::SpatialRef, vector::Geometry,
 };
 use imageproc::image::DynamicImage;
-use log::{debug, trace};
+use log::{debug, trace, warn};
 use std::{
 	path::{Path, PathBuf},
 	sync::Arc,
 };
-use tokio::sync::{Mutex, OwnedMutexGuard};
+use tokio::sync::Mutex;
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -21,17 +21,18 @@ const EARTH_CIRCUMFERENCE: f64 = 2.0 * std::f64::consts::PI * 6_378_137.0;
 #[derive(Debug, Clone)]
 pub struct GdalDataset {
 	filename: PathBuf,
-	datasets: Arc<Mutex<Vec<Arc<Mutex<Dataset>>>>>,
+	instances: Arc<Mutex<Vec<Arc<Instance>>>>,
 	bbox: GeoBBox,
 	band_mapping: Arc<BandMapping>,
 	pixel_size: f64,
+	reuse_gdal: bool,
 }
 
 unsafe impl Sync for GdalDataset {}
 
 impl GdalDataset {
 	#[context("Failed to create GDAL dataset from file {:?}", filename)]
-	pub async fn new(filename: &Path) -> Result<GdalDataset> {
+	pub async fn new(filename: &Path, reuse_gdal: bool) -> Result<GdalDataset> {
 		debug!("Opening GDAL dataset from file: {:?}", filename);
 
 		set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
@@ -56,65 +57,47 @@ impl GdalDataset {
 		trace!("GdalDataset::new finished for {:?}", filename);
 
 		Ok(Self {
-			filename: filename.to_path_buf(),
 			band_mapping: Arc::new(band_mapping),
-			datasets: Arc::new(Mutex::new(vec![Arc::new(Mutex::new(dataset))])),
 			bbox,
+			filename: filename.to_path_buf(),
+			instances: Arc::new(Mutex::new(vec![Arc::new(Instance::new(dataset))])),
 			pixel_size,
+			reuse_gdal,
 		})
 	}
 
 	/// Acquire a dataset guard from the pool. Uses `try_lock_owned` so selection and locking
 	/// is atomic, avoiding two tasks choosing the same handle and serializing.
-	async fn acquire_dataset(&self) -> OwnedMutexGuard<Dataset> {
-		const MAX_DATASETS: usize = 16;
-		loop {
-			// Try to lock any existing handle atomically
-			if let Some(mut guard) = {
-				let list = self.datasets.lock().await;
-				// Clone each Arc and attempt try_lock_owned; return the first that succeeds
-				let mut found: Option<OwnedMutexGuard<Dataset>> = None;
-				for ds in list.iter() {
-					if let Ok(g) = ds.clone().try_lock_owned() {
-						found = Some(g);
-						break;
-					}
-				}
-				found
-			} {
-				guard.flush_cache().unwrap();
-				return guard;
-			}
-
-			// If we are at capacity, yield and retry
-			let at_capacity = {
-				let list = self.datasets.lock().await;
-				list.len() >= MAX_DATASETS
-			};
-			if at_capacity {
-				tokio::task::yield_now().await;
-				continue;
-			}
-
-			// Grow the pool without holding the vec lock
+	async fn get_instance(&self) -> Arc<Instance> {
+		if !self.reuse_gdal {
 			let ds = Dataset::open(&self.filename).expect("failed to open GDAL dataset");
-			let ds = Arc::new(Mutex::new(ds));
-			let mut list = self.datasets.lock().await;
-			list.push(ds);
-			trace!("Growing GDAL dataset pool to {}", list.len());
+			return Arc::new(Instance::new(ds));
+		}
+		const MAX_DATASETS: usize = 16;
+		let mut instances = self.instances.lock().await;
+		let instance_option: Option<Arc<Instance>> = instances.iter().find(|i| i.is_free()).cloned();
+		if let Some(instance) = instance_option {
+			instance.lock();
+			instance
+		} else {
+			let ds = Dataset::open(&self.filename).expect("failed to open GDAL dataset");
+			let instance = Arc::new(Instance::new(ds));
+			instances.push(instance.clone());
+			if instances.len() > MAX_DATASETS {
+				warn!("managing {} GDAL instances in pool", instances.len());
+			}
+			instance
 		}
 	}
 
 	pub async fn get_image(&self, bbox: GeoBBox, width: u32, height: u32) -> Result<Option<DynamicImage>> {
-		let guard = self.acquire_dataset().await; // OwnedMutexGuard<Dataset>
+		let instance = self.get_instance().await;
 
 		let bbox_arr = bbox_to_mercator(&bbox)?;
 		let band_mapping = self.band_mapping.clone();
 		let channel_count = band_mapping.len();
 
 		let image = tokio::task::spawn_blocking(move || -> Result<Option<DynamicImage>> {
-			let src: &Dataset = &guard; // guard moved into this closure; holds the dataset for the duration
-
 			trace!("spawn_blocking(get_image) started for size={}x{}", width, height);
 			let mut dst = band_mapping.create_mem_dataset(width, height)?;
 			let geo_transform: GeoTransform = [
@@ -128,6 +111,7 @@ impl GdalDataset {
 			dst.set_geo_transform(&geo_transform)?;
 			trace!("Prepared GeoTransform for destination: {:?}", geo_transform);
 
+			let src: &Dataset = instance.dataset();
 			reproject(src, &dst)?;
 			trace!("Reprojection complete");
 
@@ -376,7 +360,7 @@ mod tests {
 			// We keep it in‑memory (no factory) and map bands 1‑2‑3 → RGB.
 			let coord = TileCoord::new(level, x, y)?;
 
-			let dataset = GdalDataset::new(&PathBuf::from("../testdata/gradient.tif")).await?;
+			let dataset = GdalDataset::new(&PathBuf::from("../testdata/gradient.tif"), true).await?;
 
 			// Extract a 7×7 tile and gather the RGB bytes.
 			let image = dataset

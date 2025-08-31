@@ -9,7 +9,7 @@
 use crate::{
 	PipelineFactory,
 	helpers::pack_image_tile_stream,
-	operations::read::{from_gdal::dataset::GdalDataset, traits::ReadOperationTrait},
+	operations::read::{from_gdal::GdalDataset, traits::ReadOperationTrait},
 	traits::*,
 	vpl::VPLNode,
 };
@@ -40,6 +40,9 @@ struct Args {
 	level_max: Option<u8>,
 	/// The minimum zoom level to generate tiles for. (default: level_max)
 	level_min: Option<u8>,
+	/// Whether to reuse existing GDAL dataset instances. (default: true)
+	/// Set to false if you have problems like memory leaks in GDAL.
+	reuse_gdal: Option<bool>, // default: true
 }
 
 #[derive(Debug)]
@@ -81,7 +84,7 @@ impl ReadOperationTrait for Operation {
 			);
 			let filename = factory.resolve_path(&args.filename);
 			trace!("Resolved filename: {:?}", filename);
-			let dataset = GdalDataset::new(&filename).await?;
+			let dataset = GdalDataset::new(&filename, args.reuse_gdal.unwrap_or(true)).await?;
 			let bbox = dataset.bbox();
 			let tile_size = args.tile_size.unwrap_or(512);
 
@@ -217,7 +220,7 @@ mod tests {
 
 	async fn get_operation(tile_size: u32) -> Operation {
 		Operation {
-			dataset: GdalDataset::new(&PathBuf::from("../testdata/gradient.tif"))
+			dataset: GdalDataset::new(&PathBuf::from("../testdata/gradient.tif"), true)
 				.await
 				.unwrap(),
 			parameters: TilesReaderParameters::new(
