@@ -3,7 +3,7 @@ use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::{DynamicImage, GenericImage};
-use log::trace;
+use log::{info, trace, warn};
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 use versatiles_core::{tilejson::TileJSON, *};
@@ -164,7 +164,21 @@ impl Operation {
 		for (coord, item) in images {
 			cache.insert(coord, item);
 		}
-		trace!("add_images_to_cache: cache size: {}", cache.len());
+
+		if cache.len() <= self.max_cache_size {
+			info!(
+				"raster_overview: cache length={}, cache size={}",
+				cache.len(),
+				size_of_val(&cache)
+			);
+		} else {
+			warn!(
+				"raster_overview: cache length={}, cache size={}",
+				cache.len(),
+				size_of_val(&cache)
+			);
+		}
+
 		Ok(())
 	}
 

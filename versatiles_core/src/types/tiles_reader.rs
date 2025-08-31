@@ -14,6 +14,7 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{StreamExt, future::BoxFuture};
+use log::info;
 #[allow(unused_imports)]
 use log::{debug, trace};
 use std::{collections::HashMap, fmt::Debug, sync::Arc};
@@ -88,7 +89,11 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 									.inspect(move || p.inc(1))
 									.to_vec()
 									.await;
-								c.lock().await.entry(index).or_default().extend(vec);
+
+								let mut cache = c.lock().await;
+								cache.entry(index).or_default().extend(vec);
+								info!("traversal cache: {}", size_of_val(&cache));
+
 								Ok::<_, anyhow::Error>(())
 							}
 						})
