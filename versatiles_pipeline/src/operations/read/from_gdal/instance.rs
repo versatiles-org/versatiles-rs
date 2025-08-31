@@ -3,8 +3,9 @@ use std::cell::UnsafeCell;
 
 #[derive(Debug)]
 pub struct Instance {
-	dataset: Dataset,
+	dataset: UnsafeCell<Dataset>,
 	locked: UnsafeCell<bool>,
+	age: UnsafeCell<u32>,
 }
 
 unsafe impl Sync for Instance {}
@@ -12,69 +13,83 @@ unsafe impl Sync for Instance {}
 impl Instance {
 	pub fn new(dataset: Dataset) -> Self {
 		Self {
-			dataset,
+			dataset: UnsafeCell::new(dataset),
 			locked: UnsafeCell::new(false),
+			age: UnsafeCell::new(0),
 		}
 	}
-	pub fn lock(&self) {
+	pub fn try_lock(&self) -> bool {
 		unsafe {
-			*self.locked.get() = true;
+			if !*self.locked.get() {
+				*self.locked.get() = true;
+				*self.age.get() += 1;
+				return true;
+			}
 		}
+		false
 	}
-	pub fn is_free(&self) -> bool {
-		unsafe { !*self.locked.get() }
+	pub fn age(&self) -> u32 {
+		unsafe { *self.age.get() }
 	}
-	pub fn dataset(&self) -> &Dataset {
-		&self.dataset
-	}
-}
-
-impl Drop for Instance {
-	fn drop(&mut self) {
-		self.dataset.flush_cache().unwrap();
+	pub fn free(&self) {
 		unsafe {
+			self.dataset.get().as_mut().unwrap().flush_cache().unwrap();
 			*self.locked.get() = false;
 		}
 	}
-}
-
-/*
-/// Acquire a dataset guard from the pool. Uses `try_lock_owned` so selection and locking
-/// is atomic, avoiding two tasks choosing the same handle and serializing.
-async fn acquire_dataset(&self) -> Arc<Dataset> {
-	const MAX_DATASETS: usize = 16;
-	loop {
-		// Try to lock any existing handle atomically
-		if let Some(mut guard) = {
-			let list = self.instances.lock().await;
-			// Clone each Arc and attempt try_lock_owned; return the first that succeeds
-			let mut found: Option<OwnedMutexGuard<Dataset>> = None;
-			for ds in list.iter() {
-				if let Ok(g) = ds.clone().try_lock_owned() {
-					found = Some(g);
-					break;
-				}
-			}
-			found
-		} {
-			guard.flush_cache().unwrap();
-			return guard;
-		}
-
-		// If we are at capacity, yield and retry
-		let gdal_count = self.instances.lock().await.len();
-		if gdal_count > MAX_DATASETS {
-			warn!("managing {gdal_count} GDAL instances in pool");
-		};
-
-		// Grow the pool without holding the vec lock
-		let ds = Dataset::open(&self.filename).expect("failed to open GDAL dataset");
-		let ds = Arc::new(Mutex::new(ds));
-		let mut list = self.instances.lock().await;
-		list.push(ds);
-		trace!("Growing GDAL dataset pool to {}", list.len());
-		src.flush_cache()?;
+	pub fn dataset(&self) -> &Dataset {
+		unsafe { &*self.dataset.get() }
 	}
 }
 
-*/
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use gdal::DriverManager;
+
+	fn mem_dataset(w: usize, h: usize, bands: usize) -> Dataset {
+		let driver = DriverManager::get_driver_by_name("MEM").expect("MEM driver");
+		driver
+			.create_with_band_type::<u8, _>("", w, h, bands)
+			.expect("create mem dataset")
+	}
+
+	#[test]
+	fn try_lock_free_cycle() {
+		let ds = mem_dataset(2, 2, 1);
+		let inst = Instance::new(ds);
+
+		// First lock should succeed
+		assert!(inst.try_lock());
+		// Second lock should fail while locked
+		assert!(!inst.try_lock());
+
+		// Free should unlock and flush without panicking
+		inst.free();
+		// Now lock should succeed again
+		assert!(inst.try_lock());
+	}
+
+	#[test]
+	fn age_increments_monotonically() {
+		let ds = mem_dataset(1, 1, 1);
+		let inst = Instance::new(ds);
+		assert_eq!(inst.age(), 0);
+		assert!(inst.try_lock());
+		assert_eq!(inst.age(), 1);
+		assert!(!inst.try_lock());
+		inst.free();
+		assert!(inst.try_lock());
+		assert_eq!(inst.age(), 2);
+	}
+
+	#[test]
+	fn dataset_access_returns_same_dataset() {
+		let ds = mem_dataset(4, 3, 2);
+		let inst = Instance::new(ds);
+		let dref = inst.dataset();
+		let (w, h) = dref.raster_size();
+		assert_eq!((w as isize, h as isize), (4, 3));
+		assert_eq!(dref.raster_count(), 2);
+	}
+}

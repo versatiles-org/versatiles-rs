@@ -42,7 +42,7 @@ struct Args {
 	level_min: Option<u8>,
 	/// Whether to reuse existing GDAL dataset instances. (default: true)
 	/// Set to false if you have problems like memory leaks in GDAL.
-	reuse_gdal: Option<bool>, // default: true
+	max_reuse_gdal: Option<u32>, // default: true
 }
 
 #[derive(Debug)]
@@ -84,7 +84,7 @@ impl ReadOperationTrait for Operation {
 			);
 			let filename = factory.resolve_path(&args.filename);
 			trace!("Resolved filename: {:?}", filename);
-			let dataset = GdalDataset::new(&filename, args.reuse_gdal.unwrap_or(true)).await?;
+			let dataset = GdalDataset::new(&filename, args.max_reuse_gdal.unwrap_or(u32::MAX)).await?;
 			let bbox = dataset.bbox();
 			let tile_size = args.tile_size.unwrap_or(512);
 
@@ -220,7 +220,7 @@ mod tests {
 
 	async fn get_operation(tile_size: u32) -> Operation {
 		Operation {
-			dataset: GdalDataset::new(&PathBuf::from("../testdata/gradient.tif"), true)
+			dataset: GdalDataset::new(&PathBuf::from("../testdata/gradient.tif"), 65535)
 				.await
 				.unwrap(),
 			parameters: TilesReaderParameters::new(
