@@ -166,17 +166,9 @@ impl Operation {
 		}
 
 		if cache.len() <= self.max_cache_size {
-			info!(
-				"raster_overview: cache length={}, cache size={}",
-				cache.len(),
-				size_of_val(&cache)
-			);
+			info!("raster_overview: cache length={}", cache.len());
 		} else {
-			warn!(
-				"raster_overview: cache length={}, cache size={}",
-				cache.len(),
-				size_of_val(&cache)
-			);
+			warn!("raster_overview: cache length={}", cache.len());
 		}
 
 		Ok(())
