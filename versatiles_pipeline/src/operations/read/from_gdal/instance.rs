@@ -1,44 +1,26 @@
 use gdal::Dataset;
-use std::cell::UnsafeCell;
 
 #[derive(Debug)]
 pub struct Instance {
-	dataset: UnsafeCell<Dataset>,
-	locked: UnsafeCell<bool>,
-	age: UnsafeCell<u32>,
+	dataset: Dataset,
+	age: u32,
 }
 
 unsafe impl Sync for Instance {}
 
 impl Instance {
 	pub fn new(dataset: Dataset) -> Self {
-		Self {
-			dataset: UnsafeCell::new(dataset),
-			locked: UnsafeCell::new(false),
-			age: UnsafeCell::new(0),
-		}
-	}
-	pub fn try_lock(&self) -> bool {
-		unsafe {
-			if !*self.locked.get() {
-				*self.locked.get() = true;
-				*self.age.get() += 1;
-				return true;
-			}
-		}
-		false
+		Self { dataset, age: 0 }
 	}
 	pub fn age(&self) -> u32 {
-		unsafe { *self.age.get() }
+		self.age
 	}
-	pub fn free(&self) {
-		unsafe {
-			self.dataset.get().as_mut().unwrap().flush_cache().unwrap();
-			*self.locked.get() = false;
-		}
+	pub fn cleanup(&mut self) {
+		self.age = self.age.wrapping_add(1);
+		self.dataset.flush_cache().unwrap();
 	}
 	pub fn dataset(&self) -> &Dataset {
-		unsafe { &*self.dataset.get() }
+		&self.dataset
 	}
 }
 
@@ -55,31 +37,13 @@ mod tests {
 	}
 
 	#[test]
-	fn try_lock_free_cycle() {
-		let ds = mem_dataset(2, 2, 1);
-		let inst = Instance::new(ds);
-
-		// First lock should succeed
-		assert!(inst.try_lock());
-		// Second lock should fail while locked
-		assert!(!inst.try_lock());
-
-		// Free should unlock and flush without panicking
-		inst.free();
-		// Now lock should succeed again
-		assert!(inst.try_lock());
-	}
-
-	#[test]
 	fn age_increments_monotonically() {
 		let ds = mem_dataset(1, 1, 1);
-		let inst = Instance::new(ds);
+		let mut inst = Instance::new(ds);
 		assert_eq!(inst.age(), 0);
-		assert!(inst.try_lock());
+		inst.cleanup();
 		assert_eq!(inst.age(), 1);
-		assert!(!inst.try_lock());
-		inst.free();
-		assert!(inst.try_lock());
+		inst.cleanup();
 		assert_eq!(inst.age(), 2);
 	}
 
