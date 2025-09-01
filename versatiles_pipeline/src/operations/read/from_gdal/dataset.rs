@@ -38,7 +38,7 @@ impl GdalDataset {
 		set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
 		trace!("GDAL_NUM_THREADS set to ALL_CPUS");
 
-		let dataset = Dataset::open(filename)?;
+		let mut dataset = Dataset::open(filename)?;
 		trace!(
 			"Opened GDAL dataset {:?} ({}x{}, bands={})",
 			filename,
@@ -56,6 +56,8 @@ impl GdalDataset {
 		debug!("Band mapping: {band_mapping:?}");
 		trace!("GdalDataset::new finished for {:?}", filename);
 
+		dataset.flush_cache()?;
+
 		Ok(Self {
 			band_mapping: Arc::new(band_mapping),
 			bbox,
@@ -68,12 +70,12 @@ impl GdalDataset {
 
 	/// Acquire a dataset guard from the pool. Uses `try_lock_owned` so selection and locking
 	/// is atomic, avoiding two tasks choosing the same handle and serializing.
-	async fn get_dataset(&self) -> Arc<Instance> {
+	async fn get_instance(&self) -> Arc<Instance> {
 		const MAX_DATASETS: usize = 16;
 		let mut instances = self.instances.lock().await;
 		let instance_option: Option<Arc<Instance>> = instances.iter().find(|i| i.try_lock()).cloned();
 		if let Some(instance) = instance_option {
-			if instance.age() < self.max_reuse_gdal {
+			if instance.age() < self.max_reuse_gdal + 1 {
 				return instance;
 			}
 			instances.retain(|i| !Arc::ptr_eq(i, &instance));
@@ -92,7 +94,7 @@ impl GdalDataset {
 		let bbox_arr = bbox_to_mercator(&bbox)?;
 		let band_mapping = self.band_mapping.clone();
 		let channel_count = band_mapping.len();
-		let instance: Arc<Instance> = self.get_dataset().await;
+		let instance: Arc<Instance> = self.get_instance().await;
 
 		let image = tokio::task::spawn_blocking(move || -> Result<Option<DynamicImage>> {
 			trace!("spawn_blocking(get_image) started for size={}x{}", width, height);
@@ -408,19 +410,19 @@ mod tests {
 		let dataset = GdalDataset::new(&PathBuf::from("../testdata/gradient.tif"), 3).await?;
 
 		// First two acquisitions should reuse the same Instance (age() returns 1 then 2 < 3)
-		let i1 = dataset.get_dataset().await;
+		let i1 = dataset.get_instance().await;
 		i1.free();
-		let i2 = dataset.get_dataset().await;
+		let i2 = dataset.get_instance().await;
 		i1.free();
 		assert!(Arc::ptr_eq(&i1, &i2),);
 
 		// Third acquisition should rotate (age() becomes 3, not < 3) → new Instance
-		let i3 = dataset.get_dataset().await;
+		let i3 = dataset.get_instance().await;
 		i1.free();
 		assert!(!Arc::ptr_eq(&i1, &i3),);
 
 		// Fourth acquisition should reuse the new instance again (age() = 2 < 3)
-		let i4 = dataset.get_dataset().await;
+		let i4 = dataset.get_instance().await;
 		i1.free();
 		assert!(Arc::ptr_eq(&i3, &i4),);
 		Ok(())
@@ -429,9 +431,9 @@ mod tests {
 	#[tokio::test]
 	async fn test_max_reuse_gdal_zero_always_rotates() -> Result<()> {
 		let dataset = GdalDataset::new(&PathBuf::from("../testdata/gradient.tif"), 0).await?;
-		let a = dataset.get_dataset().await;
+		let a = dataset.get_instance().await;
 		a.free();
-		let b = dataset.get_dataset().await;
+		let b = dataset.get_instance().await;
 		b.free();
 		assert!(
 			!Arc::ptr_eq(&a, &b),
@@ -443,11 +445,11 @@ mod tests {
 	#[tokio::test]
 	async fn test_max_reuse_gdal_large_always_reuses() -> Result<()> {
 		let dataset = GdalDataset::new(&PathBuf::from("../testdata/gradient.tif"), u32::MAX).await?;
-		let first = dataset.get_dataset().await;
+		let first = dataset.get_instance().await;
 		assert_eq!(first.age(), 1);
 		first.free();
 		for age in 2..12 {
-			let next = dataset.get_dataset().await;
+			let next = dataset.get_instance().await;
 			assert!(
 				Arc::ptr_eq(&first, &next),
 				"expected persistent reuse with very large max_reuse_gdal"
