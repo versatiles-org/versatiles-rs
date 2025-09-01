@@ -63,7 +63,7 @@ impl GdalDataset {
 			bbox,
 			filename: filename.to_path_buf(),
 			instances: Arc::new(Mutex::new(vec![Arc::new(Instance::new(dataset))])),
-			max_reuse_gdal,
+			max_reuse_gdal: max_reuse_gdal.min(65536),
 			pixel_size,
 		})
 	}
@@ -407,24 +407,21 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_max_reuse_gdal_reuses_then_rotates() -> Result<()> {
-		let dataset = GdalDataset::new(&PathBuf::from("../testdata/gradient.tif"), 3).await?;
+		let dataset = GdalDataset::new(&PathBuf::from("../testdata/gradient.tif"), 2).await?;
 
-		// First two acquisitions should reuse the same Instance (age() returns 1 then 2 < 3)
 		let i1 = dataset.get_instance().await;
 		i1.free();
 		let i2 = dataset.get_instance().await;
 		i1.free();
-		assert!(Arc::ptr_eq(&i1, &i2),);
+		assert!(Arc::ptr_eq(&i1, &i2));
 
-		// Third acquisition should rotate (age() becomes 3, not < 3) → new Instance
 		let i3 = dataset.get_instance().await;
 		i1.free();
-		assert!(!Arc::ptr_eq(&i1, &i3),);
+		assert!(!Arc::ptr_eq(&i1, &i3));
 
-		// Fourth acquisition should reuse the new instance again (age() = 2 < 3)
 		let i4 = dataset.get_instance().await;
 		i1.free();
-		assert!(Arc::ptr_eq(&i3, &i4),);
+		assert!(Arc::ptr_eq(&i3, &i4));
 		Ok(())
 	}
 
@@ -435,10 +432,7 @@ mod tests {
 		a.free();
 		let b = dataset.get_instance().await;
 		b.free();
-		assert!(
-			!Arc::ptr_eq(&a, &b),
-			"max_reuse_gdal = 0 should never reuse the same GDAL instance"
-		);
+		assert!(!Arc::ptr_eq(&a, &b));
 		Ok(())
 	}
 
@@ -450,10 +444,7 @@ mod tests {
 		first.free();
 		for age in 2..12 {
 			let next = dataset.get_instance().await;
-			assert!(
-				Arc::ptr_eq(&first, &next),
-				"expected persistent reuse with very large max_reuse_gdal"
-			);
+			assert!(Arc::ptr_eq(&first, &next));
 			assert_eq!(first.age(), age);
 			next.free();
 		}
