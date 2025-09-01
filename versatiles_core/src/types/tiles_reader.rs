@@ -92,7 +92,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 								let mut cache = c.lock().await;
 								cache.entry(index).or_default().extend(vec);
-								info!("traversal cache: {}", size_of_val(&cache));
+								info!("traversal cache: {}", cache.len());
 
 								Ok::<_, anyhow::Error>(())
 							}
