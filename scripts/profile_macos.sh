@@ -10,4 +10,4 @@ cd "$(dirname "$0")/.."
 
 source scripts/gdal-build-env.sh
 #cargo instruments -t "CPU Profiler" --bin versatiles --features gdal,bindgen --release -- convert ../../temp/paris.vpl ../../temp/paris.versatiles
-cargo instruments -t "Allocations" --bin versatiles --features gdal,bindgen --release --time-limit 60000 -- convert ../../temp/paris.vpl ../../temp/paris.versatiles
+cargo instruments -t "Allocations" --bin versatiles --features gdal,bindgen --time-limit 300000 -- convert ../../temp/paris.vpl ../../temp/paris.versatiles
