@@ -69,3 +69,5 @@ cli = [
 	"versatiles_container/cli",
 	"versatiles_core/cli",
 ]
+gdal = []
+bindgen = []
