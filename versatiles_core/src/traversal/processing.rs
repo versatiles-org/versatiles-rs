@@ -1,6 +1,9 @@
 use crate::{TileBBox, TileBBoxPyramid, Traversal, TraversalOrder};
-use anyhow::{Result, anyhow, bail};
-use std::{collections::HashMap, vec};
+use anyhow::{Result, anyhow, bail, ensure};
+use std::{
+	collections::{HashMap, HashSet},
+	vec,
+};
 use versatiles_derive::context;
 
 #[derive(Debug, Clone)]
@@ -44,7 +47,17 @@ pub fn translate_traversals(
 			for (index, bbox_write) in map_write.into_values() {
 				steps.push(Pop(index, bbox_write));
 			}
+
 			simplify_steps(&mut steps)?;
+			verify_steps(
+				&steps,
+				*traversal_read.order(),
+				traversal_read.size.max_size()?,
+				*traversal_write.order(),
+				write_size,
+				pyramid,
+			)?;
+
 			return Ok(steps);
 		}
 	}
@@ -135,6 +148,115 @@ fn simplify_steps(steps: &mut Vec<TraversalTranslationStep>) -> Result<()> {
 			}
 			Stream(_, _) => {}
 		}
+	}
+
+	Ok(())
+}
+
+fn verify_steps(
+	steps: &[TraversalTranslationStep],
+	read_order: TraversalOrder,
+	read_size: u32,
+	write_order: TraversalOrder,
+	write_size: u32,
+	pyramid: &TileBBoxPyramid,
+) -> Result<()> {
+	use TraversalTranslationStep::*;
+
+	// Check order of Pushes and Pops
+	{
+		let mut pushes = HashMap::<usize, Vec<TileBBox>>::new();
+		let mut pops = HashSet::<usize>::new();
+		for step in steps {
+			match step {
+				Push(bboxes, idx) => {
+					ensure!(!pops.contains(idx), "Push follows Pop {idx}");
+					pushes.entry(*idx).or_default().extend(bboxes);
+				}
+				Pop(idx, bbox) => {
+					ensure!(pushes.contains_key(idx), "Pop without Push {idx}");
+					ensure!(!pops.contains(idx), "Double Pop {idx}");
+					for push_bbox in pushes.get(idx).unwrap() {
+						ensure!(!push_bbox.is_empty(), "Pushed BBox {push_bbox:?} is empty");
+						ensure!(
+							bbox.includes_bbox(push_bbox)?,
+							"Pushed BBox {push_bbox:?} not contained in Pop {bbox:?}"
+						);
+					}
+					pops.insert(*idx);
+				}
+				_ => {}
+			}
+		}
+		for idx in pushes.keys() {
+			ensure!(pops.contains(idx), "Push without Pop {idx}");
+		}
+	}
+
+	fn check_order(step_bboxes: &[TileBBox], order: TraversalOrder, size: u32, pyramid: &TileBBoxPyramid) -> Result<()> {
+		let mut lookup = HashMap::<(u8, u32, u32), bool>::new();
+
+		// verify sizes
+		for bbox in step_bboxes {
+			ensure!(bbox.width() <= size);
+			ensure!(bbox.height() <= size);
+
+			let scaled = bbox.get_scaled_down(size);
+			ensure!(scaled.width() == 1);
+			ensure!(scaled.height() == 1);
+
+			let key = (scaled.level, scaled.x_min, scaled.y_min);
+			ensure!(!lookup.contains_key(&key), "Duplicate read of bbox {bbox:?}");
+			lookup.insert(key, false);
+		}
+
+		// verify order
+		order.verify_order(step_bboxes, size);
+
+		let read_bboxes = Traversal::new(order, size, size)?.traverse_pyramid(pyramid)?;
+		for bbox in &read_bboxes {
+			let scaled = bbox.get_scaled_down(size);
+			ensure!(scaled.width() == 1);
+			ensure!(scaled.height() == 1);
+
+			let key = (scaled.level, scaled.x_min, scaled.y_min);
+			ensure!(lookup.contains_key(&key), "Missing read of bbox {bbox:?}");
+			ensure!(!lookup.get(&key).unwrap(), "Duplicate (2) read of bbox {bbox:?}");
+			lookup.insert(key, true);
+		}
+
+		for (key, value) in lookup {
+			ensure!(value, "Missing (2) read of bbox key {key:?}");
+		}
+
+		Ok(())
+	}
+
+	// Check Read operations
+	{
+		// get all read bboxes
+		let step_bboxes = steps
+			.iter()
+			.flat_map(|s| match s {
+				Push(bboxes, _) | Stream(bboxes, _) => bboxes.clone(),
+				Pop(_, _) => vec![],
+			})
+			.collect::<Vec<_>>();
+		check_order(&step_bboxes, read_order, read_size, pyramid)?;
+	}
+
+	// Check Write Operations
+	{
+		// get all written bboxes
+		let step_bboxes = steps
+			.iter()
+			.filter_map(|s| match s {
+				Pop(_, bbox) | Stream(_, bbox) => Some(*bbox),
+				Push(_, _) => None,
+			})
+			.collect::<Vec<_>>();
+
+		check_order(&step_bboxes, write_order, write_size, pyramid)?;
 	}
 
 	Ok(())

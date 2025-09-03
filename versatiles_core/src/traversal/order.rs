@@ -34,6 +34,17 @@ impl TraversalOrder {
 		}
 	}
 
+	pub fn verify_order(&self, bboxes: &[TileBBox], size: u32) -> bool {
+		use TraversalOrder::*;
+		let mut clone = bboxes.to_vec();
+		match self {
+			AnyOrder => return true,
+			DepthFirst => sort_depth_first(&mut clone, size),
+			PMTiles => sort_hilbert(&mut clone),
+		};
+		clone == bboxes
+	}
+
 	/// Merge another `TraversalOrder` into this one, choosing a compatible order.
 	///
 	/// If either is `AnyOrder`, results in the other order.

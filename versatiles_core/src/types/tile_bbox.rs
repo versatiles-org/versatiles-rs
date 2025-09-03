@@ -41,7 +41,6 @@ pub struct TileBBox {
 	pub y_max: u32,
 }
 
-#[allow(dead_code)]
 impl TileBBox {
 	// -------------------------------------------------------------------------
 	// Constructors
@@ -359,6 +358,21 @@ impl TileBBox {
 			self.x_max = (self.x_max + x_max).min(max);
 			self.y_max = (self.y_max + y_max).min(max);
 		}
+	}
+
+	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
+		ensure!(
+			self.level == bbox.level,
+			"Cannot compare TileBBox with level={} with TileBBox with level={}",
+			bbox.level,
+			self.level
+		);
+
+		if self.is_empty() || bbox.is_empty() {
+			return Ok(false);
+		}
+
+		Ok(self.x_min <= bbox.x_min && self.x_max >= bbox.x_max && self.y_min <= bbox.y_min && self.y_max >= bbox.y_max)
 	}
 
 	// -------------------------------------------------------------------------
