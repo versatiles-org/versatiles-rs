@@ -37,7 +37,7 @@ impl ProgressBar {
 
 	pub fn init(&self, message: &str, max_value: u64) {
 		self.bar.set_length(max_value);
-		self.bar.enable_steady_tick(Duration::from_millis(1000));
+		self.bar.enable_steady_tick(Duration::from_millis(10000));
 		self.bar.set_message(message.to_string());
 		self.bar.set_style(
 			ProgressStyle::default_bar()
