@@ -20,12 +20,16 @@ struct Inner {
 	pos: u64,
 	start: Instant,
 	finished: bool,
+	last_draw: Instant,
 }
 
 impl Inner {
-	// --- Helpers ---
+	fn redraw(&mut self) {
+		if self.last_draw.elapsed() < Duration::from_secs(1) && !self.finished {
+			return;
+		}
+		self.last_draw = Instant::now();
 
-	fn redraw(&self) {
 		let len = self.len.max(1); // avoid div by zero
 		let pos = self.pos.min(len);
 		let msg = &self.message;
@@ -71,6 +75,7 @@ impl Default for Inner {
 			pos: 0,
 			start: Instant::now(),
 			finished: false,
+			last_draw: Instant::now(),
 		}
 	}
 }
@@ -99,6 +104,7 @@ impl ProgressBar {
 				pos: 0,
 				start: Instant::now(),
 				finished: false,
+				last_draw: Instant::now(),
 			})),
 		};
 		progress.inner.try_lock().unwrap().redraw();
