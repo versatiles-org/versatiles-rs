@@ -28,6 +28,7 @@ log.workspace = true
 num_cpus.workspace = true
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls"] }
+terminal_size = "0.4.3"
 tokio.workspace = true
 
 versatiles_derive.workspace = true

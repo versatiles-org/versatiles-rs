@@ -9,7 +9,6 @@
 //! - ETA
 
 use std::cmp::min;
-use std::env;
 use std::fmt::Write as _;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
@@ -159,10 +158,8 @@ impl ProgressBar {
 
 // Determine terminal width (rough heuristic: prefer $COLUMNS; fallback 80)
 fn terminal_width() -> usize {
-	if let Ok(cols) = env::var("COLUMNS")
-		&& let Ok(v) = cols.parse::<usize>()
-	{
-		return v.max(10);
+	if let Some((width, _)) = terminal_size::terminal_size() {
+		return width.0.max(10) as usize;
 	}
 	80
 }
