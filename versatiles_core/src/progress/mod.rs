@@ -35,9 +35,7 @@ use crate::progress::progress_bar::ProgressBar;
 ///
 /// A boxed implementation of `ProgressTrait`.
 pub fn get_progress_bar(message: &str, max_value: u64) -> ProgressBar {
-	let progress = ProgressBar::new();
-	progress.init(message, max_value);
-	progress
+	ProgressBar::new(message, max_value)
 }
 
 #[cfg(test)]
@@ -48,8 +46,6 @@ mod tests {
 	fn test_progress_trait_methods() {
 		// Create a progress bar and call its methods to ensure no panics
 		let progress = get_progress_bar("TestTask", 100);
-		// Init should reinitialize
-		progress.init("Subtask", 50);
 		// Set to a valid position
 		progress.set_position(25);
 		// Increment by a value
