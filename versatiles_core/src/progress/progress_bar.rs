@@ -174,7 +174,7 @@ fn available_bar_width(msg: &str, pos: u64, len: u64, per_sec: f64, eta_secs: f6
 	let eta_str = format_eta(Duration::from_secs_f64(eta_secs));
 
 	// Static glyphs around the bar occupy 2 chars (▕ and ▏) plus spaces and fixed text
-	let right = format!("▏{}/{} ({:>3}%) {:>5} {:>5}", pos, len, percent, per_sec_str, eta_str);
+	let right = format!("▏{}/{} ({:>3}%) {:>5} {:>7}", pos, len, percent, per_sec_str, eta_str);
 	let total_width = terminal_width();
 	let taken = msg.chars().count() + right.chars().count();
 	let min_bar = 10usize; // ensure a usable minimum width
@@ -264,6 +264,7 @@ fn format_eta(d: Duration) -> String {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use rstest::rstest;
 
 	#[test]
 	fn test_bar_new() {
@@ -313,5 +314,46 @@ mod tests {
 		progress.remove();
 		let inner = progress.inner.lock().unwrap();
 		assert_eq!(inner.pos, 100);
+	}
+
+	#[rstest]
+	#[case(0.0, "0/s")]
+	#[case(1.0, "1/s")]
+	#[case(999.0, "999/s")]
+	#[case(1000.0, "1.0k/s")]
+	#[case(1234.0, "1.2k/s")]
+	#[case(999_900.0, "999.9k/s")]
+	#[case(1_000_000.0, "1.0M/s")]
+	#[case(f64::INFINITY, "--/s")]
+	#[case(f64::NAN, "--/s")]
+	fn test_format_rate(#[case] input: f64, #[case] expected: &str) {
+		assert_eq!(format_rate(input), expected);
+	}
+
+	#[rstest]
+	#[case(0.0, "0")]
+	#[case(1.0, "1")]
+	#[case(999.4, "999")]
+	#[case(1_000.0, "1.0k")]
+	#[case(12_345.0, "12.3k")]
+	#[case(1_000_000.0, "1.0M")]
+	#[case(1_500_000_000.0, "1.5G")]
+	#[case(-1_500.0, "-1.5k")]
+	fn test_human_number(#[case] input: f64, #[case] expected: &str) {
+		assert_eq!(human_number(input), expected);
+	}
+
+	#[rstest]
+	#[case(45, "45s")]
+	#[case(59, "59s")]
+	#[case(60, "01:00")]
+	#[case(65, "01:05")]
+	#[case(3_599, "59:59")]
+	#[case(3_600, "1:00:00")]
+	#[case(11_142, "3:05:42")]
+	#[case(86_400, "1d00h")]
+	#[case(189_300, "2d04h")]
+	fn test_format_eta(#[case] secs: u64, #[case] expected: &str) {
+		assert_eq!(format_eta(Duration::from_secs(secs)), expected);
 	}
 }

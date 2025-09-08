@@ -3401,6 +3401,7 @@ dependencies = [
  "num_cpus",
  "regex",
  "reqwest",
+ "rstest",
  "terminal_size",
  "tokio",
  "versatiles_derive",
