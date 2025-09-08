@@ -241,13 +241,23 @@ fn human_number(v: f64) -> String {
 
 fn format_eta(d: Duration) -> String {
 	let total = d.as_secs();
-	let h = total / 3600;
-	let m = (total % 3600) / 60;
-	let s = total % 60;
-	if h > 0 {
-		format!("{:02}:{:02}:{:02}", h, m, s)
+	let days = total / 86_400; // 24*3600
+	let hours = (total % 86_400) / 3_600;
+	let minutes = (total % 3_600) / 60;
+	let seconds = total % 60;
+
+	if total < 60 {
+		// Seconds only: e.g. "45s"
+		format!("{}s", seconds)
+	} else if total < 3_600 {
+		// Minutes:Seconds: e.g. "12:34"
+		format!("{:02}:{:02}", minutes, seconds)
+	} else if total < 86_400 {
+		// Hours:Minutes:Seconds: e.g. "3:05:42"
+		format!("{}:{:02}:{:02}", hours, minutes, seconds)
 	} else {
-		format!("{:02}:{:02}", m, s)
+		// Days and hours: e.g. "2d03h"
+		format!("{}d{:02}h", days, hours)
 	}
 }
 
