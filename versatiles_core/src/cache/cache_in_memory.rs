@@ -32,15 +32,15 @@ where
 	V: CacheValue,
 {
 	fn contains_key(&self, key: &K) -> bool {
-		self.data.contains_key(key.as_cache_key())
+		self.data.contains_key(&key.to_cache_key())
 	}
 
 	fn get_clone(&self, key: &K) -> Result<Option<Vec<V>>> {
-		Ok(self.data.get(key.as_cache_key()).cloned())
+		Ok(self.data.get(&key.to_cache_key()).cloned())
 	}
 
 	fn remove(&mut self, key: &K) -> Result<Option<Vec<V>>> {
-		Ok(self.data.remove(key.as_cache_key()))
+		Ok(self.data.remove(&key.to_cache_key()))
 	}
 
 	fn insert(&mut self, key: &K, values: Vec<V>) -> Result<()> {
@@ -49,11 +49,7 @@ where
 	}
 
 	fn append(&mut self, key: &K, values: Vec<V>) -> Result<()> {
-		self
-			.data
-			.entry(key.as_cache_key().to_string())
-			.or_default()
-			.extend(values);
+		self.data.entry(key.to_cache_key()).or_default().extend(values);
 		Ok(())
 	}
 

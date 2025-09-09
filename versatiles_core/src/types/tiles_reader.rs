@@ -9,15 +9,14 @@ use super::ProbeDepth;
 use crate::utils::PrettyPrint;
 use crate::{
 	Blob, TileBBox, TileCompression, TileCoord, TileStream, TilesReaderParameters, Traversal, TraversalTranslationStep,
-	progress::get_progress_bar, tilejson::TileJSON, translate_traversals,
+	cache::CacheMap, config::CacheKind, progress::get_progress_bar, tilejson::TileJSON, translate_traversals,
 };
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{StreamExt, future::BoxFuture};
-use log::info;
 #[allow(unused_imports)]
-use log::{debug, trace};
-use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use log::{debug, info, trace};
+use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 
 /// Trait defining behavior for reading tiles from a container.
@@ -73,7 +72,8 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 		let mut i_read = 0;
 
-		let cache = Arc::new(Mutex::new(HashMap::<usize, Vec<(TileCoord, Blob)>>::new()));
+		let kind = CacheKind::InMemory;
+		let cache = Arc::new(Mutex::new(CacheMap::<usize, (TileCoord, Blob)>::new(&kind)));
 		for step in traversal_steps {
 			match step {
 				Push(bboxes, index) => {
@@ -91,8 +91,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 									.await;
 
 								let mut cache = c.lock().await;
-								cache.entry(index).or_default().extend(vec);
-								info!("traversal cache: {}", cache.len());
+								cache.append(&index, vec)?;
 
 								Ok::<_, anyhow::Error>(())
 							}
@@ -106,7 +105,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 				}
 				Pop(index, bbox) => {
 					trace!("Uncache {bbox:?} at index {index}");
-					let vec = cache.lock().await.remove(&index).unwrap();
+					let vec = cache.lock().await.remove(&index)?.unwrap();
 					let stream = TileStream::from_vec(vec);
 					callback(bbox, stream).await?;
 				}

@@ -1,21 +1,20 @@
 pub trait CacheKey {
-	fn as_cache_key(&self) -> &str;
 	fn to_cache_key(&self) -> String;
 }
 
 impl CacheKey for String {
-	fn as_cache_key(&self) -> &str {
-		self
-	}
 	fn to_cache_key(&self) -> String {
 		self.clone()
 	}
 }
 
 impl CacheKey for &str {
-	fn as_cache_key(&self) -> &str {
-		self
+	fn to_cache_key(&self) -> String {
+		self.to_string()
 	}
+}
+
+impl CacheKey for usize {
 	fn to_cache_key(&self) -> String {
 		self.to_string()
 	}
@@ -27,7 +26,6 @@ mod tests {
 
 	fn roundtrip<K: CacheKey>(k: K, hash: &str) {
 		assert_eq!(k.to_cache_key(), hash);
-		assert_eq!(k.as_cache_key(), hash);
 		assert_eq!(k.to_cache_key(), hash);
 	}
 

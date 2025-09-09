@@ -2,7 +2,7 @@ use super::traits::{Cache, CacheKey, CacheValue};
 use anyhow::Result;
 use std::{
 	fs::{File, OpenOptions, create_dir_all, remove_dir_all, remove_file, write},
-	io::{Read, Write},
+	io::{Cursor, Read, Write},
 	marker::PhantomData,
 	path::{Path, PathBuf},
 };
@@ -50,28 +50,22 @@ where
 		p
 	}
 
-	fn buffer_to_value(buf: &[u8]) -> Vec<V> {
-		let mut result = Vec::new();
-		let mut pos = 0;
-		while pos < buf.len() {
-			let length = u32::from_le_bytes(buf[pos..pos + 4].try_into().unwrap()) as usize;
-			pos += 4;
-			let value = V::from_cache_buffer(&buf[pos..pos + length]);
-			pos += length;
-			result.push(value);
+	fn buffer_to_values(buf: &[u8]) -> Result<Vec<V>> {
+		let mut reader = Cursor::new(buf);
+		let mut vec = Vec::new();
+		while reader.position() < buf.len() as u64 {
+			let value = V::read_from_cache(&mut reader)?;
+			vec.push(value);
 		}
-		result
+		Ok(vec)
 	}
 
-	fn values_to_buffer(values: Vec<V>) -> Vec<u8> {
+	fn values_to_buffer(values: Vec<V>) -> Result<Vec<u8>> {
 		let mut buf = Vec::new();
 		for value in values {
-			let value_buf = value.to_cache_buffer();
-			let length = value_buf.len() as u32;
-			buf.extend(&length.to_le_bytes());
-			buf.extend(value_buf);
+			value.write_to_cache(&mut buf)?;
 		}
-		buf
+		Ok(buf)
 	}
 
 	fn read_file(&self, entry_path: &Path) -> Result<Option<Vec<V>>> {
@@ -79,7 +73,7 @@ where
 			let mut file = File::open(entry_path)?;
 			let mut data = Vec::new();
 			file.read_to_end(&mut data)?;
-			Ok(Some(Self::buffer_to_value(&data)))
+			Ok(Some(Self::buffer_to_values(&data)?))
 		} else {
 			Ok(None)
 		}
@@ -110,13 +104,13 @@ where
 
 	fn insert(&mut self, key: &K, values: Vec<V>) -> Result<()> {
 		let entry_path = self.get_entry_path(key);
-		write(entry_path, Self::values_to_buffer(values))?;
+		write(entry_path, Self::values_to_buffer(values)?)?;
 		Ok(())
 	}
 
 	fn append(&mut self, key: &K, values: Vec<V>) -> Result<()> {
 		let entry_path = self.get_entry_path(key);
-		let buffer = Self::values_to_buffer(values);
+		let buffer = Self::values_to_buffer(values)?;
 		if entry_path.exists() {
 			OpenOptions::new().append(true).open(entry_path)?.write_all(&buffer)?;
 		} else {
@@ -133,7 +127,6 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::fs;
 	use tempfile::TempDir;
 
 	fn new_cache() -> (TempDir, OnDiskCache<String, String>) {
@@ -220,25 +213,5 @@ mod tests {
 		cache.append(&k, v(&["v1"])).unwrap();
 		assert!(cache.contains_key(&k));
 		assert_eq!(cache.get_clone(&k).unwrap(), Some(v(&["v1"])));
-	}
-
-	#[test]
-	fn values_are_length_prefixed_on_disk() {
-		let (tmp, mut cache) = new_cache();
-		let k = "lp".to_string();
-		cache.insert(&k, v(&["ab", "xyz"])).unwrap();
-		let p = cache.get_entry_path(&k);
-		let raw = fs::read(&p).unwrap();
-		// Expect 4-byte LE lengths: 2, then 3, followed by payloads
-		assert_eq!(&raw[0..4], (2u32).to_le_bytes().as_ref());
-		assert_eq!(&raw[4..6], b"ab");
-		assert_eq!(&raw[6..10], (3u32).to_le_bytes().as_ref());
-		assert_eq!(&raw[10..13], b"xyz");
-
-		// sanity: buffer_to_value decodes the same
-		let decoded: Vec<String> = OnDiskCache::<String, String>::buffer_to_value(&raw);
-		assert_eq!(decoded, v(&["ab", "xyz"]));
-		// keep tmp alive
-		assert!(tmp.path().exists());
 	}
 }
