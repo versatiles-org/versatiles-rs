@@ -33,8 +33,20 @@ where
 	}
 
 	fn get_entry_path(&self, key: &K) -> PathBuf {
+		// ensure the name is a valid file name by replacing all non unix path characters with '%' followed by the hexadecimal
+		let name = key
+			.to_cache_key()
+			.bytes()
+			.map(|b| {
+				if (b as char).is_ascii_alphanumeric() || b == b'.' || b == b'_' || b == b'-' || b == b',' {
+					(b as char).to_string()
+				} else {
+					format!("%{:02x}", b)
+				}
+			})
+			.collect::<String>();
 		let mut p = self.path.clone();
-		p.push(format!("{}.tmp", key.to_cache_key()));
+		p.push(format!("{}.tmp", name));
 		p
 	}
 
@@ -98,7 +110,6 @@ where
 
 	fn insert(&mut self, key: &K, values: Vec<V>) -> Result<()> {
 		let entry_path = self.get_entry_path(key);
-		create_dir_all(entry_path.parent().unwrap())?;
 		write(entry_path, Self::values_to_buffer(values))?;
 		Ok(())
 	}
@@ -109,7 +120,6 @@ where
 		if entry_path.exists() {
 			OpenOptions::new().append(true).open(entry_path)?.write_all(&buffer)?;
 		} else {
-			create_dir_all(entry_path.parent().unwrap())?;
 			write(entry_path, buffer)?;
 		}
 		Ok(())
