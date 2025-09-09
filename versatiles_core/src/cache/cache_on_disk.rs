@@ -129,3 +129,116 @@ where
 		remove_dir_all(&self.path).ok();
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use std::fs;
+	use tempfile::TempDir;
+
+	fn new_cache() -> (TempDir, OnDiskCache<String, String>) {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let cache_path = dir.path().join("cache");
+		let cache = OnDiskCache::<String, String>::new(cache_path);
+		(dir, cache)
+	}
+
+	fn v(s: &[&str]) -> Vec<String> {
+		s.iter().map(|b| b.to_string()).collect()
+	}
+
+	#[test]
+	fn get_entry_path_encodes_non_alnum() {
+		let (_tmp, cache) = new_cache();
+		// simple alnum stays unchanged
+		let p1 = cache.get_entry_path(&"abc-_.,".to_string());
+		assert_eq!(p1.file_name().unwrap().to_str().unwrap(), "abc-_.,.tmp");
+		// slash and space are encoded
+		let p2 = cache.get_entry_path(&"a/b c".to_string());
+		assert_eq!(p2.file_name().unwrap().to_str().unwrap(), "a%2fb%20c.tmp");
+		// unicode bytes are percent-encoded (ä = 0xC3 0xA4)
+		let p3 = cache.get_entry_path(&"ä".to_string());
+		assert_eq!(p3.file_name().unwrap().to_str().unwrap(), "%c3%a4.tmp");
+	}
+
+	#[test]
+	fn insert_get_append_remove_flow_strings() {
+		let (tmp, mut cache) = new_cache();
+		let k = "key:1".to_string();
+		// initially
+		assert!(!cache.contains_key(&k));
+		assert!(cache.get_clone(&k).unwrap().is_none());
+
+		// insert
+		cache.insert(&k, v(&["a", "b"])).unwrap();
+		assert!(cache.contains_key(&k));
+		assert_eq!(cache.get_clone(&k).unwrap(), Some(v(&["a", "b"])));
+		// file exists on disk
+		let entry = cache.get_entry_path(&k);
+		assert!(entry.exists());
+
+		// append keeps order
+		cache.append(&k, v(&["c", "d"])).unwrap();
+		assert_eq!(cache.get_clone(&k).unwrap(), Some(v(&["a", "b", "c", "d"])));
+
+		// remove returns previous values and deletes file
+		let prev = cache.remove(&k).unwrap();
+		assert_eq!(prev, Some(v(&["a", "b", "c", "d"])));
+		assert!(!cache.contains_key(&k));
+		assert!(!entry.exists());
+
+		// clean_up removes the whole cache directory
+		let cache_dir = cache.path.clone();
+		cache.clean_up();
+		assert!(!cache_dir.exists());
+		// tempdir itself still exists
+		assert!(tmp.path().exists());
+	}
+
+	#[test]
+	fn binary_values_roundtrip_and_append() {
+		let dir = tempfile::tempdir().expect("tempdir");
+		let cache_path = dir.path().join("cache");
+		let mut cache = OnDiskCache::<String, Vec<u8>>::new(cache_path);
+		let k = "blob".to_string();
+
+		// write binary chunks (including non-UTF8)
+		cache.insert(&k, vec![vec![0, 255], vec![1, 2, 3]]).unwrap();
+		assert_eq!(cache.get_clone(&k).unwrap(), Some(vec![vec![0, 255], vec![1, 2, 3]]));
+		cache.append(&k, vec![vec![9, 9]]).unwrap();
+		assert_eq!(
+			cache.get_clone(&k).unwrap(),
+			Some(vec![vec![0, 255], vec![1, 2, 3], vec![9, 9]])
+		);
+	}
+
+	#[test]
+	fn append_creates_file_if_missing() {
+		let (_tmp, mut cache) = new_cache();
+		let k = "new-key".to_string();
+		assert!(!cache.contains_key(&k));
+		cache.append(&k, v(&["v1"])).unwrap();
+		assert!(cache.contains_key(&k));
+		assert_eq!(cache.get_clone(&k).unwrap(), Some(v(&["v1"])));
+	}
+
+	#[test]
+	fn values_are_length_prefixed_on_disk() {
+		let (tmp, mut cache) = new_cache();
+		let k = "lp".to_string();
+		cache.insert(&k, v(&["ab", "xyz"])).unwrap();
+		let p = cache.get_entry_path(&k);
+		let raw = fs::read(&p).unwrap();
+		// Expect 4-byte LE lengths: 2, then 3, followed by payloads
+		assert_eq!(&raw[0..4], (2u32).to_le_bytes().as_ref());
+		assert_eq!(&raw[4..6], b"ab");
+		assert_eq!(&raw[6..10], (3u32).to_le_bytes().as_ref());
+		assert_eq!(&raw[10..13], b"xyz");
+
+		// sanity: buffer_to_value decodes the same
+		let decoded: Vec<String> = OnDiskCache::<String, String>::buffer_to_value(&raw);
+		assert_eq!(decoded, v(&["ab", "xyz"]));
+		// keep tmp alive
+		assert!(tmp.path().exists());
+	}
+}

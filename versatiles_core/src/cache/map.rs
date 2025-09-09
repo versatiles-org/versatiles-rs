@@ -88,3 +88,71 @@ where
 		self.clean_up();
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use rstest::rstest;
+	use tempfile::TempDir;
+
+	fn get_cache_kind(name: &str) -> CacheKind {
+		match name {
+			"mem" => CacheKind::InMemory,
+			"disk" => CacheKind::Disk(TempDir::new().unwrap().path().to_path_buf()),
+			_ => panic!("unknown cache kind"),
+		}
+	}
+
+	fn v(s: &str) -> Vec<String> {
+		s.split(',').map(|b| b.trim().to_string()).collect()
+	}
+
+	#[rstest]
+	#[case::mem("mem")]
+	#[case::disk("disk")]
+	fn test_cache_kind(#[case] case: &str) -> Result<()> {
+		let kind = get_cache_kind(case);
+		let mut cache = CacheMap::<String, String>::new(&kind);
+
+		let k1 = "k:1".to_string();
+		let k2 = "k:2".to_string();
+
+		// Initially empty
+		assert!(!cache.contains_key(&k1));
+		assert_eq!(cache.get_clone(&k1)?, None);
+		assert_eq!(cache.remove(&k1)?, None);
+
+		// Insert a vector of values
+		cache.insert(&k1, v("a,b"))?;
+		assert!(cache.contains_key(&k1));
+		assert_eq!(cache.get_clone(&k1)?, Some(v("a,b")));
+
+		// Append preserves order
+		cache.append(&k1, v("c"))?;
+		assert!(cache.contains_key(&k1));
+		assert_eq!(cache.get_clone(&k1)?, Some(v("a,b,c")));
+
+		// Second key remains independent
+		assert!(!cache.contains_key(&k2));
+		cache.insert(&k2, v("x"))?;
+		assert_eq!(cache.get_clone(&k2)?, Some(v("x")));
+
+		// Append preserves order
+		cache.append(&k2, v("y,z"))?;
+		assert!(cache.contains_key(&k2));
+		assert_eq!(cache.get_clone(&k2)?, Some(v("x,y,z")));
+
+		// Remove returns previous value and clears the key
+		let removed = cache.remove(&k1)?;
+		assert_eq!(removed, Some(v("a,b,c")));
+		assert!(!cache.contains_key(&k1));
+		assert_eq!(cache.get_clone(&k1)?, None);
+
+		// Clean up should remove all
+		cache.clean_up();
+		assert!(!cache.contains_key(&k1));
+		assert!(!cache.contains_key(&k2));
+
+		Ok(())
+	}
+}

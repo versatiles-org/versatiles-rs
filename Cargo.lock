@@ -3402,6 +3402,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rstest",
+ "tempfile",
  "terminal_size",
  "tokio",
  "versatiles_derive",
