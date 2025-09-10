@@ -1,9 +1,9 @@
 mod bandmapping;
 mod dataset;
 mod instance;
-mod raster;
+mod operation;
 
 use bandmapping::*;
 use dataset::*;
 use instance::*;
-pub use raster::*;
+pub use operation::*;
