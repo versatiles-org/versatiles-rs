@@ -1,6 +1,8 @@
 use crate::{Blob, TileCoord};
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, bail};
 use byteorder::{LittleEndian as LE, ReadBytesExt, WriteBytesExt};
+#[cfg(feature = "image")]
+use image::{DynamicImage, ImageBuffer};
 use std::io::{Cursor, Read};
 
 pub trait CacheValue: Clone {
@@ -108,6 +110,75 @@ impl CacheValue for Blob {
 		let mut bytes = vec![0u8; length];
 		reader.read_exact(&mut bytes)?;
 		Ok(Blob::from(bytes))
+	}
+}
+
+impl<V: CacheValue> CacheValue for Option<V> {
+	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+		match self {
+			Some(value) => {
+				writer.write_u8(1)?; // Indicate presence
+				value.write_to_cache(writer)
+			}
+			None => {
+				writer.write_u8(0)?; // Indicate absence
+				Ok(())
+			}
+		}
+	}
+
+	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+		let flag = reader.read_u8()?;
+		if flag == 1 {
+			let value = V::read_from_cache(reader)?;
+			Ok(Some(value))
+		} else if flag == 0 {
+			Ok(None)
+		} else {
+			bail!("Invalid flag value: {}", flag)
+		}
+	}
+}
+
+#[cfg(feature = "image")]
+impl CacheValue for DynamicImage {
+	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+		let width = self.width();
+		let height = self.height();
+		writer.write_u32::<LE>(width)?;
+		writer.write_u32::<LE>(height)?;
+		let data = self.as_bytes();
+		writer.write_u32::<LE>(data.len() as u32)?;
+		writer.extend_from_slice(data);
+		Ok(())
+	}
+
+	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+		let width = reader.read_u32::<LE>()?;
+		let height = reader.read_u32::<LE>()?;
+		let data_length = reader.read_u32::<LE>()? as usize;
+		let mut data = vec![0u8; data_length];
+		reader.read_exact(&mut data)?;
+		let channel_count = data.len() / (width * height) as usize;
+		Ok(match channel_count {
+			1 => DynamicImage::ImageLuma8(
+				ImageBuffer::from_vec(width, height, data)
+					.ok_or_else(|| anyhow!("Failed to create Luma8 image buffer with provided data"))?,
+			),
+			2 => DynamicImage::ImageLumaA8(
+				ImageBuffer::from_vec(width, height, data)
+					.ok_or_else(|| anyhow!("Failed to create LumaA8 image buffer with provided data"))?,
+			),
+			3 => DynamicImage::ImageRgb8(
+				ImageBuffer::from_vec(width, height, data)
+					.ok_or_else(|| anyhow!("Failed to create RGB8 image buffer with provided data"))?,
+			),
+			4 => DynamicImage::ImageRgba8(
+				ImageBuffer::from_vec(width, height, data)
+					.ok_or_else(|| anyhow!("Failed to create RGBA8 image buffer with provided data"))?,
+			),
+			_ => bail!("Unsupported channel count: {}", channel_count),
+		})
 	}
 }
 
