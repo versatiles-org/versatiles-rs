@@ -40,9 +40,9 @@ struct Args {
 	level_max: Option<u8>,
 	/// The minimum zoom level to generate tiles for. (default: level_max)
 	level_min: Option<u8>,
-	/// Whether to reuse existing GDAL dataset instances. (default: true)
-	/// Set to false if you have problems like memory leaks in GDAL.
-	max_reuse_gdal: Option<u32>, // default: true
+	/// How often to reuse an GDAL instances. (default: 100)
+	/// Set to a lower value if you have problems like memory leaks in GDAL.
+	max_reuse_gdal: Option<u32>,
 }
 
 #[derive(Debug)]
@@ -84,7 +84,7 @@ impl ReadOperationTrait for Operation {
 			);
 			let filename = factory.resolve_path(&args.filename);
 			trace!("Resolved filename: {:?}", filename);
-			let dataset = GdalDataset::new(&filename, args.max_reuse_gdal.unwrap_or(u32::MAX)).await?;
+			let dataset = GdalDataset::new(&filename, args.max_reuse_gdal.unwrap_or(100)).await?;
 			let bbox = dataset.bbox();
 			let tile_size = args.tile_size.unwrap_or(512);
 
