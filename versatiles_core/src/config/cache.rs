@@ -13,3 +13,16 @@ impl CacheKind {
 		Self::InMemory
 	}
 }
+
+impl Default for CacheKind {
+	fn default() -> Self {
+		#[cfg(feature = "cache_disk")]
+		{
+			Self::new_disk()
+		}
+		#[cfg(not(feature = "cache_disk"))]
+		{
+			Self::new_memory()
+		}
+	}
+}

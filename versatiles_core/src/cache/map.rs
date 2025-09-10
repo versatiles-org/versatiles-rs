@@ -68,6 +68,12 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 	}
 }
 
+impl<K: CacheKey, V: CacheValue> Default for CacheMap<K, V> {
+	fn default() -> Self {
+		Self::new(&CacheKind::default())
+	}
+}
+
 impl<K: CacheKey, V: CacheValue> Drop for CacheMap<K, V> {
 	fn drop(&mut self) {
 		self.clean_up();

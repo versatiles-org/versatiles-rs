@@ -5,7 +5,7 @@ use futures::future::BoxFuture;
 use imageproc::image::{DynamicImage, GenericImage};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
-use versatiles_core::{cache::CacheMap, config::CacheKind, tilejson::TileJSON, *};
+use versatiles_core::{cache::CacheMap, tilejson::TileJSON, *};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::traits::*;
@@ -62,7 +62,7 @@ impl Operation {
 			tilejson.update_from_reader_parameters(&parameters);
 
 			let tile_size = args.tile_size.unwrap_or(512);
-			let cache = Arc::new(Mutex::new(CacheMap::new(&CacheKind::new_disk())));
+			let cache = Arc::new(Mutex::new(CacheMap::default()));
 			let traversal = Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?;
 
 			Ok(Box::new(Self {

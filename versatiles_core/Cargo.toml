@@ -48,6 +48,7 @@ default = ["cli"]
 cli = ["dep:clap", "dep:colored"]
 test = []
 image = ["dep:image"]
+cache_disk = []
 
 [[bench]]
 name = "byte_iterator"

@@ -9,14 +9,14 @@ use super::ProbeDepth;
 use crate::utils::PrettyPrint;
 use crate::{
 	Blob, TileBBox, TileCompression, TileCoord, TileStream, TilesReaderParameters, Traversal, TraversalTranslationStep,
-	cache::CacheMap, config::CacheKind, progress::get_progress_bar, tilejson::TileJSON, translate_traversals,
+	cache::CacheMap, progress::get_progress_bar, tilejson::TileJSON, translate_traversals,
 };
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::{StreamExt, future::BoxFuture};
+use futures::{StreamExt, future::BoxFuture, stream};
 #[allow(unused_imports)]
 use log::{debug, info, trace};
-use std::{fmt::Debug, sync::Arc};
+use std::{default::Default, fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 
 /// Trait defining behavior for reading tiles from a container.
@@ -72,13 +72,12 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 		let mut i_read = 0;
 
-		let kind = CacheKind::InMemory;
-		let cache = Arc::new(Mutex::new(CacheMap::<usize, (TileCoord, Blob)>::new(&kind)));
+		let cache = Arc::new(Mutex::new(CacheMap::<usize, (TileCoord, Blob)>::default()));
 		for step in traversal_steps {
 			match step {
 				Push(bboxes, index) => {
 					trace!("Cache {bboxes:?} at index {index}");
-					futures::stream::iter(bboxes.clone())
+					stream::iter(bboxes.clone())
 						.map(|bbox| {
 							let p = progress.clone();
 							let c = cache.clone();
@@ -112,7 +111,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 				Stream(bboxes, bbox) => {
 					trace!("Stream {bbox:?}");
 					let p0 = progress.clone();
-					let streams = futures::stream::iter(bboxes.clone()).map(move |bbox| {
+					let streams = stream::iter(bboxes.clone()).map(move |bbox| {
 						let p1 = p0.clone();
 						async move { self.get_tile_stream(bbox).await.unwrap().inspect(move || p1.inc(1)) }
 					});
