@@ -1,4 +1,4 @@
-use crate::operations::read::from_gdal::{BandMapping, BandMappingItem, Instance};
+use super::{BandMapping, BandMappingItem, Instance};
 use anyhow::{Context, Result, ensure};
 use gdal::{
 	Dataset, GeoTransform, config::set_config_option, raster::reproject, spatial_ref::SpatialRef, vector::Geometry,

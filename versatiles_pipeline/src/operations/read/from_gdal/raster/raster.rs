@@ -6,11 +6,9 @@
 //! [`OperationTrait`] so that the rest of the pipeline can treat it like any
 //! other data source.
 
+use super::GdalDataset;
 use crate::{
-	PipelineFactory,
-	helpers::pack_image_tile_stream,
-	operations::read::{from_gdal::GdalDataset, traits::ReadOperationTrait},
-	traits::*,
+	PipelineFactory, helpers::pack_image_tile_stream, operations::read::traits::ReadOperationTrait, traits::*,
 	vpl::VPLNode,
 };
 use anyhow::{Context, Result, bail};
