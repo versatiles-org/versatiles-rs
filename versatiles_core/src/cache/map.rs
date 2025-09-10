@@ -7,22 +7,15 @@ use crate::{
 	config::CacheKind,
 };
 use anyhow::Result;
+use std::fmt::Debug;
 use uuid::Uuid;
 
-pub enum CacheMap<K, V>
-where
-	K: CacheKey,
-	V: CacheValue,
-{
+pub enum CacheMap<K: CacheKey, V: CacheValue> {
 	Memory(InMemoryCache<K, V>),
 	Disk(OnDiskCache<K, V>),
 }
 
-impl<K, V> CacheMap<K, V>
-where
-	K: CacheKey,
-	V: CacheValue,
-{
+impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 	pub fn new(kind: &CacheKind) -> Self {
 		match kind {
 			CacheKind::InMemory => Self::Memory(InMemoryCache::new()),
@@ -75,13 +68,18 @@ where
 	}
 }
 
-impl<K, V> Drop for CacheMap<K, V>
-where
-	K: CacheKey,
-	V: CacheValue,
-{
+impl<K: CacheKey, V: CacheValue> Drop for CacheMap<K, V> {
 	fn drop(&mut self) {
 		self.clean_up();
+	}
+}
+
+impl<K: CacheKey, V: CacheValue> Debug for CacheMap<K, V> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Memory(cache) => write!(f, "CacheMap::Memory({:?})", cache),
+			Self::Disk(cache) => write!(f, "CacheMap::Disk({:?})", cache),
+		}
 	}
 }
 

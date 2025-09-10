@@ -1,23 +1,15 @@
 use anyhow::Result;
 
 use super::traits::{Cache, CacheKey, CacheValue};
-use std::{collections::HashMap, marker::PhantomData};
+use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
 
-pub struct InMemoryCache<K, V>
-where
-	K: CacheKey,
-	V: CacheValue,
-{
+pub struct InMemoryCache<K: CacheKey, V: CacheValue> {
 	data: HashMap<String, Vec<V>>,
 	_marker_k: PhantomData<K>,
 }
 
 #[allow(clippy::new_without_default)]
-impl<K, V> InMemoryCache<K, V>
-where
-	K: CacheKey,
-	V: CacheValue,
-{
+impl<K: CacheKey, V: CacheValue> InMemoryCache<K, V> {
 	pub fn new() -> Self {
 		Self {
 			data: HashMap::new(),
@@ -26,11 +18,7 @@ where
 	}
 }
 
-impl<K, V> Cache<K, V> for InMemoryCache<K, V>
-where
-	K: CacheKey,
-	V: CacheValue,
-{
+impl<K: CacheKey, V: CacheValue> Cache<K, V> for InMemoryCache<K, V> {
 	fn contains_key(&self, key: &K) -> bool {
 		self.data.contains_key(&key.to_cache_key())
 	}
@@ -55,6 +43,14 @@ where
 
 	fn clean_up(&mut self) {
 		self.data.clear();
+	}
+}
+
+impl<K: CacheKey, V: CacheValue> Debug for InMemoryCache<K, V> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_map()
+			.entries(self.data.iter().map(|(k, v)| (k, v.len())))
+			.finish()
 	}
 }
 

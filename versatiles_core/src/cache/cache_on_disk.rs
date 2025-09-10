@@ -1,28 +1,21 @@
 use super::traits::{Cache, CacheKey, CacheValue};
 use anyhow::Result;
 use std::{
+	fmt::Debug,
 	fs::{File, OpenOptions, create_dir_all, remove_dir_all, remove_file, write},
 	io::{Cursor, Read, Write},
 	marker::PhantomData,
 	path::{Path, PathBuf},
 };
 
-pub struct OnDiskCache<K, V>
-where
-	K: CacheKey,
-	V: CacheValue,
-{
+pub struct OnDiskCache<K: CacheKey, V: CacheValue> {
 	path: PathBuf, // path to cache directory
 	_marker_k: PhantomData<K>,
 	_marker_v: PhantomData<V>,
 }
 
 #[allow(clippy::new_without_default)]
-impl<K, V> OnDiskCache<K, V>
-where
-	K: CacheKey,
-	V: CacheValue,
-{
+impl<K: CacheKey, V: CacheValue> OnDiskCache<K, V> {
 	pub fn new(path: PathBuf) -> Self {
 		create_dir_all(&path).ok();
 		Self {
@@ -80,11 +73,7 @@ where
 	}
 }
 
-impl<K, V> Cache<K, V> for OnDiskCache<K, V>
-where
-	K: CacheKey,
-	V: CacheValue,
-{
+impl<K: CacheKey, V: CacheValue> Cache<K, V> for OnDiskCache<K, V> {
 	fn contains_key(&self, key: &K) -> bool {
 		self.get_entry_path(key).exists()
 	}
@@ -121,6 +110,12 @@ where
 
 	fn clean_up(&mut self) {
 		remove_dir_all(&self.path).ok();
+	}
+}
+
+impl<K: CacheKey, V: CacheValue> Debug for OnDiskCache<K, V> {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("OnDiskCache").field("path", &self.path).finish()
 	}
 }
 
