@@ -9,7 +9,7 @@ pub struct Config {
 impl Default for Config {
 	fn default() -> Self {
 		Self {
-			cache: CacheKind::default(),
+			cache: CacheKind::new_memory(),
 		}
 	}
 }
