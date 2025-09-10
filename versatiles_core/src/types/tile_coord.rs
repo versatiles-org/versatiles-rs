@@ -147,6 +147,16 @@ impl TileCoord {
 			*self // no change, same level
 		}
 	}
+
+	pub fn floor(&mut self, size: u32) {
+		self.x = (self.x / size) * size;
+		self.y = (self.y / size) * size;
+	}
+
+	pub fn ceil(&mut self, size: u32) {
+		self.x = (self.x / size + 1) * size - 1;
+		self.y = (self.y / size + 1) * size - 1;
+	}
 }
 
 /// Custom `Debug` format as `TileCoord(z, [x, y])` for readability.
