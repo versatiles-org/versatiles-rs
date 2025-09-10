@@ -3,10 +3,9 @@ use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::{DynamicImage, GenericImage};
-use log::{info, trace, warn};
-use std::{collections::HashMap, fmt::Debug, sync::Arc};
+use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
-use versatiles_core::{tilejson::TileJSON, *};
+use versatiles_core::{cache::CacheMap, config::CacheKind, tilejson::TileJSON, *};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::traits::*;
@@ -30,9 +29,8 @@ struct Operation {
 	level_base: u8,
 	tile_size: u32,
 	traversal: Traversal,
-	cache: Arc<Mutex<HashMap<TileCoord, Option<DynamicImage>>>>,
-	#[allow(dead_code)]
-	max_cache_size: usize,
+	#[allow(clippy::type_complexity)]
+	cache: Arc<Mutex<CacheMap<TileCoord, (TileCoord, Option<DynamicImage>)>>>,
 }
 
 impl Operation {
@@ -64,8 +62,7 @@ impl Operation {
 			tilejson.update_from_reader_parameters(&parameters);
 
 			let tile_size = args.tile_size.unwrap_or(512);
-			let max_cache_size = (1usize << 30) / ((tile_size as usize / 2).pow(2) * 4);
-			let cache = Arc::new(Mutex::new(HashMap::new()));
+			let cache = Arc::new(Mutex::new(CacheMap::new(&CacheKind::new_disk())));
 			let traversal = Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?;
 
 			Ok(Box::new(Self {
@@ -74,13 +71,13 @@ impl Operation {
 				source,
 				tilejson,
 				level_base,
-				max_cache_size,
 				tile_size,
 				traversal,
 			}) as Box<dyn OperationTrait>)
 		})
 	}
 
+	/*
 	#[context("Failed to build half image from source for coord {coord_dst:?}")]
 	async fn build_image_from_source(&self, coord_dst: &TileCoord, target_size: u32) -> Result<Option<DynamicImage>> {
 		let level_src = self.level_base;
@@ -133,6 +130,7 @@ impl Operation {
 
 		Ok(image_dst.into_optional())
 	}
+	*/
 
 	#[context("Failed to add images to cache from container {container:?}")]
 	async fn add_images_to_cache(&self, container: &TileBBoxContainer<Option<DynamicImage>>) -> Result<()> {
@@ -140,6 +138,10 @@ impl Operation {
 		if bbox.level == 0 || bbox.level > self.level_base {
 			return Ok(());
 		};
+
+		if bbox.width() > BLOCK_TILE_COUNT || bbox.height() > BLOCK_TILE_COUNT {
+			bail!("Container bbox is too large: {:?}", bbox);
+		}
 
 		let full_size = self.tile_size;
 
@@ -160,16 +162,10 @@ impl Operation {
 			.into_iter()
 			.collect::<Result<Vec<_>, _>>()?;
 
+		let mut coord = bbox.get_corner_min();
+		coord.floor(BLOCK_TILE_COUNT);
 		let mut cache = self.cache.lock().await;
-		for (coord, item) in images {
-			cache.insert(coord, item);
-		}
-
-		if cache.len() <= self.max_cache_size {
-			info!("raster_overview: cache length={}", cache.len());
-		} else {
-			warn!("raster_overview: cache length={}", cache.len());
-		}
+		cache.insert(&coord, images)?;
 
 		Ok(())
 	}
@@ -179,42 +175,33 @@ impl Operation {
 		ensure!(bbox0.level < self.level_base);
 		ensure!(bbox0.width() <= BLOCK_TILE_COUNT);
 		ensure!(bbox0.height() <= BLOCK_TILE_COUNT);
-
-		let bbox1 = bbox0.as_level(bbox0.level + 1);
+		let mut corner0 = bbox0.get_corner_min();
+		corner0.floor(BLOCK_TILE_COUNT);
 
 		let mut map: TileBBoxContainer<Vec<(TileCoord, DynamicImage)>> = TileBBoxContainer::new_default(bbox0);
-		let mut misses = vec![];
 
 		let full_size = self.tile_size;
 		let half_size = self.tile_size / 2;
 
 		// get images from cache
 		let mut cache = self.cache.lock().await;
-		for coord1 in bbox1.iter_coords() {
-			if let Some(entry) = cache.remove(&coord1) {
-				if let Some(image1) = entry {
-					assert_eq!(image1.width(), half_size);
-					assert_eq!(image1.height(), half_size);
-
-					let coord0 = coord1.as_level(bbox0.level);
-					map.get_mut(&coord0)?.push((coord1, image1));
+		for (xi, yi) in &[(0, 0), (0, 1), (1, 0), (1, 1)] {
+			let corner1 = TileCoord::new(
+				corner0.level + 1,
+				corner0.x * 2 + xi * BLOCK_TILE_COUNT,
+				corner0.y * 2 + yi * BLOCK_TILE_COUNT,
+			)?;
+			if let Some(images1) = cache.remove(&corner1)? {
+				for (coord1, image1) in images1 {
+					if let Some(image1) = image1 {
+						assert_eq!(image1.width(), half_size);
+						assert_eq!(image1.height(), half_size);
+						map.get_mut(&coord1)?.push((coord1, image1));
+					}
 				}
-			} else {
-				misses.push(coord1);
 			}
 		}
-		trace!("build_images_from_cache: cache size: {}", cache.len());
 		drop(cache);
-
-		// get missing images from source
-		for coord1 in misses {
-			if let Some(image1) = self.build_image_from_source(&coord1, half_size).await? {
-				assert_eq!(image1.width(), half_size);
-				assert_eq!(image1.height(), half_size);
-				let coord0 = coord1.as_level(bbox0.level);
-				map.get_mut(&coord0)?.push((coord1, image1));
-			}
-		}
 
 		let vec: Vec<(TileCoord, DynamicImage)> = map
 			.into_iter()
