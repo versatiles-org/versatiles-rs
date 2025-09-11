@@ -3,6 +3,7 @@ use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::{DynamicImage, GenericImage};
+use log::debug;
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 use versatiles_core::{cache::CacheMap, tilejson::TileJSON, *};
@@ -134,6 +135,8 @@ impl Operation {
 
 	#[context("Failed to add images to cache from container {container:?}")]
 	async fn add_images_to_cache(&self, container: &TileBBoxContainer<Option<DynamicImage>>) -> Result<()> {
+		debug!("add_images_to_cache: {:?}", container.bbox());
+
 		let bbox = container.bbox();
 		if bbox.level == 0 || bbox.level > self.level_base {
 			return Ok(());
@@ -172,6 +175,8 @@ impl Operation {
 
 	#[context("Failed to build images from cache for bbox {bbox:?}")]
 	async fn build_images_from_cache(&self, bbox: TileBBox) -> Result<TileBBoxContainer<Option<DynamicImage>>> {
+		debug!("build_images_from_cache: {:?}", bbox);
+
 		ensure!(bbox.level < self.level_base, "Invalid level");
 		ensure!(bbox.width() <= BLOCK_TILE_COUNT, "Invalid width");
 		ensure!(bbox.height() <= BLOCK_TILE_COUNT, "Invalid height");
@@ -242,6 +247,8 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+		debug!("get_image_stream: {:?}", bbox);
+
 		if bbox.level > self.level_base {
 			return self.source.get_image_stream(bbox).await;
 		}
@@ -274,6 +281,7 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
+		debug!("get_tile_stream: {:?}", bbox);
 		if bbox.level > self.level_base {
 			return self.source.get_tile_stream(bbox).await;
 		}
