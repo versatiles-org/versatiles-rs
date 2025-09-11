@@ -3,6 +3,7 @@ use std::fmt::Debug;
 use crate::{TileBBox, TileCoord, TileStream};
 use anyhow::Result;
 use futures::StreamExt;
+use versatiles_derive::context;
 
 pub struct TileBBoxContainer<I> {
 	bbox: TileBBox,
@@ -55,17 +56,20 @@ impl<I: Clone + Default> TileBBoxContainer<I> {
 		&self.bbox
 	}
 
+	#[context("Failed to insert into TileBBoxContainer at coord: {:?}", coord)]
 	pub fn insert(&mut self, coord: TileCoord, item: I) -> Result<()> {
 		let index = self.bbox.get_tile_index(&coord)?;
 		self.vec[index as usize] = item;
 		Ok(())
 	}
 
+	#[context("Failed to get from TileBBoxContainer at coord: {:?}", coord)]
 	pub fn get(&self, coord: &TileCoord) -> Result<&I> {
 		let index = self.bbox.get_tile_index(coord)?;
 		Ok(&self.vec[index as usize])
 	}
 
+	#[context("Failed to get mutably from TileBBoxContainer at coord: {:?}", coord)]
 	pub fn get_mut(&mut self, coord: &TileCoord) -> Result<&mut I> {
 		let index = self.bbox.get_tile_index(coord)?;
 		Ok(&mut self.vec[index as usize])

@@ -9,6 +9,7 @@ use crate::{
 use anyhow::Result;
 use std::fmt::Debug;
 use uuid::Uuid;
+use versatiles_derive::context;
 
 pub enum CacheMap<K: CacheKey, V: CacheValue> {
 	Memory(InMemoryCache<K, V>),
@@ -32,6 +33,7 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 		}
 	}
 
+	#[context("Failed to get clone from cache for key: {:?}", key)]
 	pub fn get_clone(&self, key: &K) -> Result<Option<Vec<V>>> {
 		match self {
 			Self::Memory(cache) => cache.get_clone(key),
@@ -39,6 +41,7 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 		}
 	}
 
+	#[context("Failed to remove from cache for key: {:?}", key)]
 	pub fn remove(&mut self, key: &K) -> Result<Option<Vec<V>>> {
 		match self {
 			Self::Memory(cache) => cache.remove(key),
@@ -46,6 +49,7 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 		}
 	}
 
+	#[context("Failed to insert into cache for key: {:?}", key)]
 	pub fn insert(&mut self, key: &K, value: Vec<V>) -> Result<()> {
 		match self {
 			Self::Memory(cache) => cache.insert(key, value),
@@ -53,6 +57,7 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 		}
 	}
 
+	#[context("Failed to append into cache for key: {:?}", key)]
 	pub fn append(&mut self, key: &K, value: Vec<V>) -> Result<()> {
 		match self {
 			Self::Memory(cache) => cache.append(key, value),
