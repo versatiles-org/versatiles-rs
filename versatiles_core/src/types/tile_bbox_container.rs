@@ -35,7 +35,7 @@ impl<I: Clone + Default> TileBBoxContainer<I> {
 	) -> Result<TileBBoxContainer<Option<E>>> {
 		let mut container = TileBBoxContainer::<Option<E>>::new_prefilled_with(bbox, None);
 		while let Some((coord, item)) = stream.inner.next().await {
-			container.set(coord, Some(item))?;
+			container.insert(coord, Some(item))?;
 		}
 		Ok(container)
 	}
@@ -46,7 +46,7 @@ impl<I: Clone + Default> TileBBoxContainer<I> {
 	) -> Result<TileBBoxContainer<Option<E>>> {
 		let mut container = TileBBoxContainer::<Option<E>>::new_prefilled_with(bbox, None);
 		for (coord, item) in iter {
-			container.set(coord, Some(item))?;
+			container.insert(coord, Some(item))?;
 		}
 		Ok(container)
 	}
@@ -55,7 +55,7 @@ impl<I: Clone + Default> TileBBoxContainer<I> {
 		&self.bbox
 	}
 
-	pub fn set(&mut self, coord: TileCoord, item: I) -> Result<()> {
+	pub fn insert(&mut self, coord: TileCoord, item: I) -> Result<()> {
 		let index = self.bbox.get_tile_index(&coord)?;
 		self.vec[index as usize] = item;
 		Ok(())
