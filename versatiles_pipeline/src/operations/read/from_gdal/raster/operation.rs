@@ -144,7 +144,7 @@ impl OperationTrait for Operation {
 
 	/// Stream decoded raster images for all tiles within the bounding box.
 	async fn get_image_stream(&self, mut bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		let count = 8192u32.div_euclid(self.tile_size).max(1);
+		let count = 4096u32.div_euclid(self.tile_size).max(1);
 
 		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
 
