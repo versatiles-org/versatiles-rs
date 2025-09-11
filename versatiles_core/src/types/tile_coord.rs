@@ -173,6 +173,14 @@ impl TileCoord {
 	pub fn swap_xy(&mut self) {
 		std::mem::swap(&mut self.x, &mut self.y);
 	}
+	pub fn as_level_decreased(&self) -> Result<TileCoord> {
+		ensure!(self.level > 0, "cannot decrease level below 0");
+		Ok(TileCoord {
+			x: self.x / 2,
+			y: self.y / 2,
+			level: self.level - 1,
+		})
+	}
 }
 
 /// Custom `Debug` format as `TileCoord(z, [x, y])` for readability.
