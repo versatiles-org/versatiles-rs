@@ -180,7 +180,7 @@ impl Operation {
 		assert_eq!(bbox0.width(), BLOCK_TILE_COUNT);
 		assert_eq!(bbox0.height(), BLOCK_TILE_COUNT);
 
-		let mut map: TileBBoxContainer<Vec<(TileCoord, DynamicImage)>> = TileBBoxContainer::new_default(bbox0);
+		let mut map: TileBBoxContainer<Vec<(TileCoord, DynamicImage)>> = TileBBoxContainer::new_default(bbox);
 
 		let full_size = self.tile_size;
 		let half_size = self.tile_size / 2;
@@ -195,7 +195,10 @@ impl Operation {
 					if let Some(image1) = image1 {
 						assert_eq!(image1.width(), half_size);
 						assert_eq!(image1.height(), half_size);
-						map.get_mut(&coord1)?.push((coord1, image1));
+						let coord0 = coord1.as_level_decreased()?;
+						if bbox.contains(&coord0) {
+							map.get_mut(&coord0)?.push((coord1, image1));
+						}
 					}
 				}
 			}
@@ -220,7 +223,7 @@ impl Operation {
 			})
 			.collect();
 
-		TileBBoxContainer::<Option<DynamicImage>>::from_iter(bbox0, vec.into_iter())
+		TileBBoxContainer::<Option<DynamicImage>>::from_iter(bbox, vec.into_iter())
 	}
 }
 
@@ -358,7 +361,7 @@ mod tests {
 
 		// Cache key should be the floored corner of the container bbox at level 6
 		let mut cache = op.cache.lock().await;
-		let key = TileCoord::new(6, 0, 0)?; // floor(0,0) by 32 is (0,0)
+		let key = TileCoord::new(6, 0, 0)?;
 		assert!(cache.contains_key(&key));
 
 		let stored = cache.remove(&key)?.expect("value stored");
@@ -380,20 +383,18 @@ mod tests {
 		let op = make_operation(2, 6);
 
 		// Prepare cache content by adding a full 32x32 block at level 6
-		let bbox_lvl6 = TileBBox::from_boundaries(6, 0, 0, 31, 31)?;
+		let bbox_lvl6 = TileBBox::new(6, 0, 0, 32, 32)?;
 		let mut cont6 = TileBBoxContainer::new_default(bbox_lvl6);
 		for y in 0..bbox_lvl6.height() {
 			for x in 0..bbox_lvl6.width() {
 				let c = TileCoord::new(6, x, y)?;
-				let r = (x % 2) as u8 * 200;
-				let g = (y % 2) as u8 * 200;
-				cont6.insert(c, Some(solid_rgba(2, r, g, 0, 255)))?;
+				cont6.insert(c, Some(solid_rgba(2, x as u8, y as u8, 0, 255)))?;
 			}
 		}
 		op.add_images_to_cache(&cont6).await?;
 
 		// Now request composed images at level 5 for a tiny bbox (2x2 tiles)
-		let bbox_lvl5 = TileBBox::from_boundaries(5, 0, 0, 1, 1)?;
+		let bbox_lvl5 = TileBBox::new(5, 0, 0, 2, 2)?;
 		let result = op.build_images_from_cache(bbox_lvl5).await?;
 		let items: Vec<_> = result.into_iter().collect();
 		// We expect at least one composed tile present (others may be missing if cache quadrants absent)
@@ -406,14 +407,12 @@ mod tests {
 			assert_eq!(img.width(), 2);
 			assert_eq!(img.height(), 2);
 			// Check pixel colors to verify correct quadrant composition
-			let px00 = img.get_pixel(0, 0).0; // from (0,0) at level 6
-			let px01 = img.get_pixel(0, 1).0; // from (0,1) at level 6
-			let px10 = img.get_pixel(1, 0).0; // from (1,0) at level 6
-			let px11 = img.get_pixel(1, 1).0; // from (1,1) at level 6
-			assert_eq!(px00, [0, 0, 0, 255]); // (0,0)
-			assert_eq!(px01, [0, 200, 0, 255]); // (0,1)
-			assert_eq!(px10, [200, 0, 0, 255]); // (1,0)
-			assert_eq!(px11, [200, 200, 0, 255]); // (1,1)
+			let r0 = coord.x as u8 * 2;
+			let g0 = coord.y as u8 * 2;
+			assert_eq!(img.get_pixel(0, 0).0, [r0, g0, 0, 255]);
+			assert_eq!(img.get_pixel(0, 1).0, [r0, g0 + 1, 0, 255]);
+			assert_eq!(img.get_pixel(1, 0).0, [r0 + 1, g0, 0, 255]);
+			assert_eq!(img.get_pixel(1, 1).0, [r0 + 1, g0 + 1, 0, 255]);
 		}
 
 		Ok(())
