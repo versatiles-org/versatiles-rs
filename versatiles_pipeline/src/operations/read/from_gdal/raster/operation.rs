@@ -144,7 +144,7 @@ impl OperationTrait for Operation {
 
 	/// Stream decoded raster images for all tiles within the bounding box.
 	async fn get_image_stream(&self, mut bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		let count = 4096u32.div_euclid(self.tile_size).max(1);
+		let count = 8192u32.div_euclid(self.tile_size).max(1);
 
 		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
 
@@ -155,11 +155,13 @@ impl OperationTrait for Operation {
 		let streams = stream::iter(bboxes).map(move |bbox| {
 			let size = size;
 			async move {
+				println!("Fetching image for bbox {:?}", bbox);
 				let image = self
 					.get_image_data_from_gdal(bbox.as_geo_bbox(), size * bbox.width(), size * bbox.height())
 					.await
 					.unwrap();
 
+				println!("Splitting image for bbox {:?}", bbox);
 				if let Some(image) = image {
 					// Crop into tiles on a blocking thread
 					let vec = tokio::task::spawn_blocking(move || {
@@ -180,6 +182,8 @@ impl OperationTrait for Operation {
 					})
 					.await
 					.unwrap();
+
+					println!("Done splitting image for bbox {:?}", bbox);
 
 					debug!("Returning {} tiles for bbox {:?}", vec.len(), bbox);
 					TileStream::from_vec(vec)
