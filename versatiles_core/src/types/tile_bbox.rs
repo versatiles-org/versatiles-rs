@@ -958,13 +958,19 @@ impl fmt::Debug for TileBBox {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use rstest::rstest;
 
-	#[test]
-	fn count_tiles() {
-		assert_eq!(TileBBox::from_boundaries(4, 5, 12, 5, 12).unwrap().count_tiles(), 1);
-		assert_eq!(TileBBox::from_boundaries(4, 5, 12, 7, 15).unwrap().count_tiles(), 12);
-		assert_eq!(TileBBox::from_boundaries(4, 5, 12, 5, 15).unwrap().count_tiles(), 4);
-		assert_eq!(TileBBox::from_boundaries(4, 5, 15, 7, 15).unwrap().count_tiles(), 3);
+	#[rstest]
+	#[case((4, 5, 12, 5, 12), 1)]
+	#[case((4, 5, 12, 7, 15), 12)]
+	#[case((4, 5, 12, 5, 15), 4)]
+	#[case((4, 5, 15, 7, 15), 3)]
+	fn count_tiles_cases(#[case] args: (u8, u32, u32, u32, u32), #[case] expected: u64) {
+		let (l, x0, y0, x1, y1) = args;
+		assert_eq!(
+			TileBBox::from_boundaries(l, x0, y0, x1, y1).unwrap().count_tiles(),
+			expected
+		);
 	}
 
 	#[test]
@@ -1059,27 +1065,21 @@ mod tests {
 		assert_eq!(vec[3], TileCoord::new(16, 2, 6).unwrap());
 	}
 
-	#[test]
-	fn iter_bbox_grid() {
-		fn b(level: u8, x_min: u32, y_min: u32, x_max: u32, y_max: u32) -> TileBBox {
-			TileBBox::from_boundaries(level, x_min, y_min, x_max, y_max).unwrap()
-		}
-		fn test(size: u32, bbox: TileBBox, bboxes: &str) {
-			let bboxes_result: String = bbox
-				.iter_bbox_grid(size)
-				.map(|bbox| format!("{},{},{},{}", bbox.x_min, bbox.y_min, bbox.x_max(), bbox.y_max()))
-				.collect::<Vec<String>>()
-				.join(" ");
-			assert_eq!(bboxes_result, bboxes);
-		}
-
-		test(16, b(10, 0, 0, 31, 31), "0,0,15,15 16,0,31,15 0,16,15,31 16,16,31,31");
-		test(16, b(10, 5, 6, 25, 26), "5,6,15,15 16,6,25,15 5,16,15,26 16,16,25,26");
-		test(16, b(10, 5, 6, 16, 16), "5,6,15,15 16,6,16,15 5,16,15,16 16,16,16,16");
-		test(16, b(10, 5, 6, 16, 15), "5,6,15,15 16,6,16,15");
-		test(16, b(10, 6, 7, 6, 7), "6,7,6,7");
-		test(64, b(4, 6, 7, 6, 7), "6,7,6,7");
-		test(16, TileBBox::new_empty(10).unwrap(), "");
+	#[rstest]
+	#[case(16, (10, 0, 0, 31, 31), "0,0,15,15 16,0,31,15 0,16,15,31 16,16,31,31")]
+	#[case(16, (10, 5, 6, 25, 26), "5,6,15,15 16,6,25,15 5,16,15,26 16,16,25,26")]
+	#[case(16, (10, 5, 6, 16, 16), "5,6,15,15 16,6,16,15 5,16,15,16 16,16,16,16")]
+	#[case(16, (10, 5, 6, 16, 15), "5,6,15,15 16,6,16,15")]
+	#[case(16, (10, 6, 7, 6, 7), "6,7,6,7")]
+	#[case(64, (4, 6, 7, 6, 7), "6,7,6,7")]
+	fn iter_bbox_grid_cases(#[case] size: u32, #[case] def: (u8, u32, u32, u32, u32), #[case] expected: &str) {
+		let bbox = TileBBox::from_boundaries(def.0, def.1, def.2, def.3, def.4).unwrap();
+		let result: String = bbox
+			.iter_bbox_grid(size)
+			.map(|bbox| format!("{},{},{},{}", bbox.x_min, bbox.y_min, bbox.x_max(), bbox.y_max()))
+			.collect::<Vec<String>>()
+			.join(" ");
+		assert_eq!(result, expected);
 	}
 
 	#[test]
@@ -1184,16 +1184,23 @@ mod tests {
 		assert!(!bbox1.overlaps_bbox(&bbox3).unwrap());
 	}
 
-	#[test]
-	fn test_get_tile_index() -> Result<()> {
-		let bbox = TileBBox::from_boundaries(8, 100, 100, 199, 199).unwrap();
-		assert_eq!(bbox.get_tile_index(&TileCoord::new(8, 100, 100)?)?, 0);
-		assert_eq!(bbox.get_tile_index(&TileCoord::new(8, 101, 100)?)?, 1);
-		assert_eq!(bbox.get_tile_index(&TileCoord::new(8, 199, 100)?)?, 99);
-		assert_eq!(bbox.get_tile_index(&TileCoord::new(8, 100, 101)?)?, 100);
-		assert_eq!(bbox.get_tile_index(&TileCoord::new(8, 100, 199)?)?, 9900);
-		assert_eq!(bbox.get_tile_index(&TileCoord::new(8, 199, 199)?)?, 9999);
-		Ok(())
+	#[rstest]
+	#[case((8, 100, 100, 199, 199), (8, 100, 100), 0)]
+	#[case((8, 100, 100, 199, 199), (8, 101, 100), 1)]
+	#[case((8, 100, 100, 199, 199), (8, 199, 100), 99)]
+	#[case((8, 100, 100, 199, 199), (8, 100, 101), 100)]
+	#[case((8, 100, 100, 199, 199), (8, 100, 199), 9900)]
+	#[case((8, 100, 100, 199, 199), (8, 199, 199), 9999)]
+	fn get_tile_index_cases(
+		#[case] bbox: (u8, u32, u32, u32, u32),
+		#[case] coord: (u8, u32, u32),
+		#[case] expected: u64,
+	) {
+		let (l, x0, y0, x1, y1) = bbox;
+		let bbox = TileBBox::from_boundaries(l, x0, y0, x1, y1).unwrap();
+		let (cl, cx, cy) = coord;
+		let tc = TileCoord::new(cl, cx, cy).unwrap();
+		assert_eq!(bbox.get_tile_index(&tc).unwrap(), expected);
 	}
 
 	#[test]
@@ -1434,21 +1441,25 @@ mod tests {
 		Ok(())
 	}
 
+	#[rstest]
+	#[case(0, (4, 5, 10))]
+	#[case(1, (4, 6, 10))]
+	#[case(2, (4, 7, 10))]
+	#[case(3, (4, 5, 11))]
+	#[case(8, (4, 7, 12))]
+	fn get_coord_by_index_cases(#[case] index: u64, #[case] coord: (u8, u32, u32)) {
+		let bbox = TileBBox::from_boundaries(4, 5, 10, 7, 12).unwrap();
+		let (l, x, y) = coord;
+		assert_eq!(
+			bbox.get_coord_by_index(index).unwrap(),
+			TileCoord::new(l, x, y).unwrap()
+		);
+	}
+
 	#[test]
-	fn should_get_coord_by_index_correctly() -> Result<()> {
-		let bbox = TileBBox::from_boundaries(4, 5, 10, 7, 12)?;
-
-		assert_eq!(bbox.get_coord_by_index(0).unwrap(), TileCoord::new(4, 5, 10).unwrap());
-		assert_eq!(bbox.get_coord_by_index(1).unwrap(), TileCoord::new(4, 6, 10).unwrap());
-		assert_eq!(bbox.get_coord_by_index(2).unwrap(), TileCoord::new(4, 7, 10).unwrap());
-		assert_eq!(bbox.get_coord_by_index(3).unwrap(), TileCoord::new(4, 5, 11).unwrap());
-		assert_eq!(bbox.get_coord_by_index(8).unwrap(), TileCoord::new(4, 7, 12).unwrap());
-
-		// Attempt to get coordinate with out-of-bounds index
-		let result = bbox.get_coord_by_index(9);
-		assert!(result.is_err());
-
-		Ok(())
+	fn get_coord_by_index_out_of_bounds() {
+		let bbox = TileBBox::from_boundaries(4, 5, 10, 7, 12).unwrap();
+		assert!(bbox.get_coord_by_index(9).is_err());
 	}
 
 	#[test]
@@ -1559,29 +1570,27 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn test_scale_down() {
-		fn test(min0: u32, max0: u32, min1: u32, max1: u32) {
-			let mut bbox0 = TileBBox::from_boundaries(8, min0, min0, max0, max0).unwrap();
-			let bbox1 = TileBBox::from_boundaries(8, min1, min1, max1, max1).unwrap();
-			assert_eq!(
-				bbox0.get_scaled_down(4),
-				bbox1,
-				"scaled_down(4) of {bbox0:?} should return {bbox1:?}"
-			);
-			bbox0.scale_down(4);
-			assert_eq!(bbox0, bbox1, "scale_down(4) of {bbox0:?} should result in {bbox1:?}");
-		}
-
-		test(0, 11, 0, 2);
-		test(1, 12, 0, 3);
-		test(2, 13, 0, 3);
-		test(3, 14, 0, 3);
-		test(4, 15, 1, 3);
-		test(5, 16, 1, 4);
-		test(6, 17, 1, 4);
-		test(7, 18, 1, 4);
-		test(8, 19, 2, 4);
+	#[rstest]
+	#[case((0, 11, 0, 2))]
+	#[case((1, 12, 0, 3))]
+	#[case((2, 13, 0, 3))]
+	#[case((3, 14, 0, 3))]
+	#[case((4, 15, 1, 3))]
+	#[case((5, 16, 1, 4))]
+	#[case((6, 17, 1, 4))]
+	#[case((7, 18, 1, 4))]
+	#[case((8, 19, 2, 4))]
+	fn test_scale_down_cases(#[case] args: (u32, u32, u32, u32)) {
+		let (min0, max0, min1, max1) = args;
+		let mut bbox0 = TileBBox::from_boundaries(8, min0, min0, max0, max0).unwrap();
+		let bbox1 = TileBBox::from_boundaries(8, min1, min1, max1, max1).unwrap();
+		assert_eq!(
+			bbox0.get_scaled_down(4),
+			bbox1,
+			"scaled_down(4) of {bbox0:?} should return {bbox1:?}"
+		);
+		bbox0.scale_down(4);
+		assert_eq!(bbox0, bbox1, "scale_down(4) of {bbox0:?} should result in {bbox1:?}");
 	}
 
 	#[test]
@@ -1646,67 +1655,53 @@ mod tests {
 		Ok(())
 	}
 
-	#[test]
-	fn test_round_shifting() -> Result<()> {
-		fn test(inp: [u32; 4], exp: [u32; 4]) {
-			let bbox_exp = TileBBox::from_boundaries(8, exp[0], exp[1], exp[2], exp[3]).unwrap();
-			let mut bbox_inp = TileBBox::from_boundaries(8, inp[0], inp[1], inp[2], inp[3]).unwrap();
-			assert_eq!(bbox_inp.get_rounded(4), bbox_exp);
-			bbox_inp.round(4);
-			assert_eq!(bbox_inp, bbox_exp);
-		}
-		test([1, 2, 16, 17], [0, 0, 19, 19]);
-		test([2, 3, 17, 18], [0, 0, 19, 19]);
-		test([3, 4, 18, 19], [0, 4, 19, 19]);
-		test([4, 5, 19, 20], [4, 4, 19, 23]);
-		test([5, 6, 20, 21], [4, 4, 23, 23]);
-		test([6, 7, 21, 22], [4, 4, 23, 23]);
-		test([7, 8, 22, 23], [4, 8, 23, 23]);
-		test([8, 9, 23, 24], [8, 8, 23, 27]);
-		Ok(())
+	#[rstest]
+	#[case([1, 2, 16, 17], [0, 0, 19, 19])]
+	#[case([2, 3, 17, 18], [0, 0, 19, 19])]
+	#[case([3, 4, 18, 19], [0, 4, 19, 19])]
+	#[case([4, 5, 19, 20], [4, 4, 19, 23])]
+	#[case([5, 6, 20, 21], [4, 4, 23, 23])]
+	#[case([6, 7, 21, 22], [4, 4, 23, 23])]
+	#[case([7, 8, 22, 23], [4, 8, 23, 23])]
+	#[case([8, 9, 23, 24], [8, 8, 23, 27])]
+	fn test_round_shifting_cases(#[case] inp: [u32; 4], #[case] exp: [u32; 4]) {
+		let bbox_exp = TileBBox::from_boundaries(8, exp[0], exp[1], exp[2], exp[3]).unwrap();
+		let mut bbox_inp = TileBBox::from_boundaries(8, inp[0], inp[1], inp[2], inp[3]).unwrap();
+		assert_eq!(bbox_inp.get_rounded(4), bbox_exp);
+		bbox_inp.round(4);
+		assert_eq!(bbox_inp, bbox_exp);
 	}
 
-	#[test]
-	fn test_round_scaling() -> Result<()> {
-		fn test(scale: u32, exp: [u32; 4]) {
-			let bbox_exp = TileBBox::from_boundaries(12, exp[0], exp[1], exp[2], exp[3]).unwrap();
-			let mut bbox_inp = TileBBox::from_boundaries(12, 12, 34, 56, 78).unwrap();
-			assert_eq!(bbox_inp.get_rounded(scale), bbox_exp);
-			bbox_inp.round(scale);
-			assert_eq!(bbox_inp, bbox_exp);
-		}
-		test(1, [12, 34, 56, 78]);
-		test(2, [12, 34, 57, 79]);
-		test(3, [12, 33, 56, 80]);
-		test(4, [12, 32, 59, 79]);
-		test(5, [10, 30, 59, 79]);
-		test(6, [12, 30, 59, 83]);
-		test(7, [7, 28, 62, 83]);
-		test(10, [10, 30, 59, 79]);
-		test(100, [0, 0, 99, 99]);
-		test(1024, [0, 0, 1023, 1023]);
-		Ok(())
+	#[rstest]
+	#[case(1, [12, 34, 56, 78])]
+	#[case(2, [12, 34, 57, 79])]
+	#[case(3, [12, 33, 56, 80])]
+	#[case(4, [12, 32, 59, 79])]
+	#[case(5, [10, 30, 59, 79])]
+	#[case(6, [12, 30, 59, 83])]
+	#[case(7, [7, 28, 62, 83])]
+	#[case(10, [10, 30, 59, 79])]
+	#[case(100, [0, 0, 99, 99])]
+	#[case(1024, [0, 0, 1023, 1023])]
+	fn test_round_scaling_cases(#[case] scale: u32, #[case] exp: [u32; 4]) {
+		let bbox_exp = TileBBox::from_boundaries(12, exp[0], exp[1], exp[2], exp[3]).unwrap();
+		let mut bbox_inp = TileBBox::from_boundaries(12, 12, 34, 56, 78).unwrap();
+		assert_eq!(bbox_inp.get_rounded(scale), bbox_exp);
+		bbox_inp.round(scale);
+		assert_eq!(bbox_inp, bbox_exp);
 	}
 
-	#[test]
-	fn bbox_flip_y() {
-		let test = |l, x0, y0, x1, y1| -> TileBBox {
-			let mut t = TileBBox::from_boundaries(l, x0, y0, x1, y1).unwrap();
-			t.flip_y();
-			t
-		};
+	#[rstest]
+	#[case((1, 0, 0, 1, 1), (1, 0, 0, 1, 1))]
+	#[case((2, 0, 0, 1, 1), (2, 0, 2, 1, 3))]
+	#[case((3, 0, 0, 1, 1), (3, 0, 6, 1, 7))]
+	#[case((9, 10, 0, 10, 511), (9, 10, 0, 10, 511))]
+	#[case((9, 0, 10, 511, 10), (9, 0, 501, 511, 501))]
+	fn bbox_flip_y(#[case] a: (u8, u32, u32, u32, u32), #[case] b: (u8, u32, u32, u32, u32)) {
+		let mut t = TileBBox::from_boundaries(a.0, a.1, a.2, a.3, a.4).unwrap();
+		t.flip_y();
 
-		assert_eq!(test(1, 0, 0, 1, 1), TileBBox::from_boundaries(1, 0, 0, 1, 1).unwrap());
-		assert_eq!(test(2, 0, 0, 1, 1), TileBBox::from_boundaries(2, 0, 2, 1, 3).unwrap());
-		assert_eq!(test(3, 0, 0, 1, 1), TileBBox::from_boundaries(3, 0, 6, 1, 7).unwrap());
-		assert_eq!(
-			test(9, 10, 0, 10, 511),
-			TileBBox::from_boundaries(9, 10, 0, 10, 511).unwrap()
-		);
-		assert_eq!(
-			test(9, 0, 10, 511, 10),
-			TileBBox::from_boundaries(9, 0, 501, 511, 501).unwrap()
-		);
+		assert_eq!(t, TileBBox::from_boundaries(b.0, b.1, b.2, b.3, b.4).unwrap());
 	}
 
 	#[test]
