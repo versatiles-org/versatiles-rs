@@ -395,43 +395,21 @@ mod tests {
 	fn test_limit_by_geo_bbox() {
 		let mut pyramid = TileBBoxPyramid::new_full(8);
 		pyramid.intersect_geo_bbox(&GeoBBox(8.0653f64, 51.3563f64, 12.3528f64, 52.2564f64));
-
+		let level_bboxes = pyramid.iter_levels().map(|b| b.as_string()).collect::<Vec<_>>();
 		assert_eq!(
-			pyramid.get_level_bbox(0),
-			&TileBBox::from_boundaries(0, 0, 0, 0, 0).unwrap()
-		);
-		assert_eq!(
-			pyramid.get_level_bbox(1),
-			&TileBBox::from_boundaries(1, 1, 0, 1, 0).unwrap()
-		);
-		assert_eq!(
-			pyramid.get_level_bbox(2),
-			&TileBBox::from_boundaries(2, 2, 1, 2, 1).unwrap()
-		);
-		assert_eq!(
-			pyramid.get_level_bbox(3),
-			&TileBBox::from_boundaries(3, 4, 2, 4, 2).unwrap()
-		);
-		assert_eq!(
-			pyramid.get_level_bbox(4),
-			&TileBBox::from_boundaries(4, 8, 5, 8, 5).unwrap()
-		);
-		assert_eq!(
-			pyramid.get_level_bbox(5),
-			&TileBBox::from_boundaries(5, 16, 10, 17, 10).unwrap()
-		);
-		assert_eq!(
-			pyramid.get_level_bbox(6),
-			&TileBBox::from_boundaries(6, 33, 21, 34, 21).unwrap()
-		);
-		assert_eq!(
-			pyramid.get_level_bbox(7),
-			&TileBBox::from_boundaries(7, 66, 42, 68, 42).unwrap()
-		);
-		assert_eq!(
-			pyramid.get_level_bbox(8),
-			&TileBBox::from_boundaries(8, 133, 84, 136, 85).unwrap()
-		);
+			level_bboxes,
+			[
+				"0:[0,0,0,0]",
+				"1:[1,0,1,0]",
+				"2:[2,1,2,1]",
+				"3:[4,2,4,2]",
+				"4:[8,5,8,5]",
+				"5:[16,10,17,10]",
+				"6:[33,21,34,21]",
+				"7:[66,42,68,42]",
+				"8:[133,84,136,85]"
+			]
+		)
 	}
 
 	#[test]
@@ -440,17 +418,8 @@ mod tests {
 		pyramid.include_coord(&TileCoord::new(3, 1, 2)?);
 		pyramid.include_coord(&TileCoord::new(3, 4, 5)?);
 		pyramid.include_coord(&TileCoord::new(8, 6, 7)?);
-
-		assert!(pyramid.get_level_bbox(0).is_empty());
-		assert!(pyramid.get_level_bbox(1).is_empty());
-		assert!(pyramid.get_level_bbox(2).is_empty());
-		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::from_boundaries(3, 1, 2, 4, 5)?);
-		assert!(pyramid.get_level_bbox(4).is_empty());
-		assert!(pyramid.get_level_bbox(5).is_empty());
-		assert!(pyramid.get_level_bbox(6).is_empty());
-		assert!(pyramid.get_level_bbox(7).is_empty());
-		assert_eq!(pyramid.get_level_bbox(8), &TileBBox::from_boundaries(8, 6, 7, 6, 7)?);
-		assert!(pyramid.get_level_bbox(9).is_empty());
+		let level_bboxes = pyramid.iter_levels().map(|b| b.as_string()).collect::<Vec<_>>();
+		assert_eq!(level_bboxes, ["3:[1,2,4,5]", "8:[6,7,6,7]"]);
 
 		Ok(())
 	}
@@ -461,19 +430,8 @@ mod tests {
 		pyramid.include_bbox(&TileBBox::from_boundaries(4, 1, 2, 3, 4).unwrap());
 		pyramid.include_bbox(&TileBBox::from_boundaries(4, 5, 6, 7, 8).unwrap());
 
-		assert!(pyramid.get_level_bbox(0).is_empty());
-		assert!(pyramid.get_level_bbox(1).is_empty());
-		assert!(pyramid.get_level_bbox(2).is_empty());
-		assert!(pyramid.get_level_bbox(3).is_empty());
-		assert_eq!(
-			pyramid.get_level_bbox(4),
-			&TileBBox::from_boundaries(4, 1, 2, 7, 8).unwrap()
-		);
-		assert!(pyramid.get_level_bbox(5).is_empty());
-		assert!(pyramid.get_level_bbox(6).is_empty());
-		assert!(pyramid.get_level_bbox(7).is_empty());
-		assert!(pyramid.get_level_bbox(8).is_empty());
-		assert!(pyramid.get_level_bbox(9).is_empty());
+		let level_bboxes = pyramid.iter_levels().map(|b| b.as_string()).collect::<Vec<_>>();
+		assert_eq!(level_bboxes, ["4:[1,2,7,8]"]);
 	}
 
 	#[test]
@@ -515,54 +473,29 @@ mod tests {
 		pyramid.intersect_geo_bbox(&GeoBBox(-9., -5., 5., 10.));
 		pyramid.add_border(1, 2, 3, 4);
 
-		// Check that each level's bounding box has been adjusted correctly.
+		let level_bboxes = pyramid.iter_levels().map(|b| b.as_string()).collect::<Vec<_>>();
 		assert_eq!(
-			pyramid.get_level_bbox(0),
-			&TileBBox::from_boundaries(0, 0, 0, 0, 0).unwrap()
-		);
-		assert_eq!(
-			pyramid.get_level_bbox(1),
-			&TileBBox::from_boundaries(1, 0, 0, 1, 1).unwrap()
-		);
-		assert_eq!(
-			pyramid.get_level_bbox(2),
-			&TileBBox::from_boundaries(2, 0, 0, 3, 3).unwrap()
-		);
-		assert_eq!(
-			pyramid.get_level_bbox(3),
-			&TileBBox::from_boundaries(3, 2, 1, 7, 7).unwrap()
-		);
-		assert_eq!(
-			pyramid.get_level_bbox(4),
-			&TileBBox::from_boundaries(4, 6, 5, 11, 12).unwrap()
-		);
-		assert_eq!(
-			pyramid.get_level_bbox(5),
-			&TileBBox::from_boundaries(5, 14, 13, 19, 20).unwrap()
-		);
-		assert_eq!(
-			pyramid.get_level_bbox(6),
-			&TileBBox::from_boundaries(6, 29, 28, 35, 36).unwrap()
-		);
-		assert_eq!(
-			pyramid.get_level_bbox(7),
-			&TileBBox::from_boundaries(7, 59, 58, 68, 69).unwrap()
-		);
-		assert_eq!(
-			pyramid.get_level_bbox(8),
-			&TileBBox::from_boundaries(8, 120, 118, 134, 135).unwrap()
-		);
+			level_bboxes,
+			[
+				"0:[0,0,0,0]",
+				"1:[0,0,1,1]",
+				"2:[0,0,3,3]",
+				"3:[2,1,7,7]",
+				"4:[6,5,11,12]",
+				"5:[14,13,19,20]",
+				"6:[29,28,35,36]",
+				"7:[59,58,68,69]",
+				"8:[120,118,134,135]"
+			]
+		)
 	}
 
 	#[test]
 	fn test_from_geo_bbox() {
 		let bbox = GeoBBox(-10.0, -5.0, 10.0, 5.0);
 		let pyramid = TileBBoxPyramid::from_geo_bbox(1, 3, &bbox);
-		assert!(pyramid.get_level_bbox(0).is_empty());
-		assert!(!pyramid.get_level_bbox(1).is_empty());
-		assert!(!pyramid.get_level_bbox(2).is_empty());
-		assert!(!pyramid.get_level_bbox(3).is_empty());
-		assert!(pyramid.get_level_bbox(4).is_empty());
+		let level_bboxes = pyramid.iter_levels().map(|b| b.as_string()).collect::<Vec<_>>();
+		assert_eq!(level_bboxes, ["1:[0,0,1,1]", "2:[1,1,2,2]", "3:[3,3,4,4]"])
 	}
 
 	#[test]
