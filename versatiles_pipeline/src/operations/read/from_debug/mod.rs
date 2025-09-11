@@ -185,7 +185,9 @@ mod tests {
 		assert_eq!(blob.len(), len, "for '{format}'");
 		assert_eq!(operation.tilejson().as_pretty_lines(100), tilejson, "for '{format}'");
 
-		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await?;
+		let mut stream = operation
+			.get_tile_stream(TileBBox::from_boundaries(3, 1, 1, 2, 3)?)
+			.await?;
 
 		let mut n = 0;
 		while let Some((coord, blob)) = stream.next().await {

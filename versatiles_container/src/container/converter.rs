@@ -36,7 +36,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{
 	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileStream, TilesReaderParameters,
-	TilesReaderTrait, Traversal, tilejson::TileJSON, utils::TransformCoord,
+	TilesReaderTrait, Traversal, tilejson::TileJSON,
 };
 use versatiles_derive::context;
 
@@ -318,7 +318,7 @@ mod tests {
 
 		fn new_bbox(b: [u32; 4]) -> TileBBoxPyramid {
 			let mut pyramid = TileBBoxPyramid::new_empty();
-			pyramid.include_bbox(&TileBBox::new(3, b[0], b[1], b[2], b[3]).unwrap());
+			pyramid.include_bbox(&TileBBox::from_boundaries(3, b[0], b[1], b[2], b[3]).unwrap());
 			pyramid
 		}
 

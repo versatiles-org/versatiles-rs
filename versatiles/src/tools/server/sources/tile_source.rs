@@ -138,7 +138,7 @@ mod tests {
 		let container = TileSource::from(reader.boxed(), "prefix")?;
 		assert_eq!(
 			format!("{container:?}"),
-			"TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [2: [0,1,2,3] (9), 3: [0,2,4,6] (25)], tile_compression: Uncompressed, tile_format: PNG } } }, tile_mime: \"image/png\", compression: Uncompressed }"
+			"TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [2: [0,1,2,3] (3x3), 3: [0,2,4,6] (5x5)], tile_compression: Uncompressed, tile_format: PNG } } }, tile_mime: \"image/png\", compression: Uncompressed }"
 		);
 		Ok(())
 	}

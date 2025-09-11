@@ -164,7 +164,9 @@ mod tests {
 			]
 		);
 
-		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await?;
+		let mut stream = operation
+			.get_tile_stream(TileBBox::from_boundaries(3, 1, 1, 2, 3)?)
+			.await?;
 
 		let mut n = 0;
 		while let Some((coord, blob)) = stream.next().await {
@@ -212,7 +214,9 @@ mod tests {
 			]
 		);
 
-		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await?;
+		let mut stream = operation
+			.get_tile_stream(TileBBox::from_boundaries(3, 1, 1, 2, 3)?)
+			.await?;
 
 		let mut n = 0;
 		while let Some((coord, blob)) = stream.next().await {

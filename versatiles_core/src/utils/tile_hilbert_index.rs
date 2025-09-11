@@ -44,11 +44,11 @@ pub trait HilbertIndex {
 
 impl HilbertIndex for TileBBox {
 	fn get_hilbert_index(&self) -> Result<u64> {
-		coord_to_index(self.x_min, self.y_min, self.level)
+		coord_to_index(self.x_min(), self.y_min(), self.level)
 	}
 	fn from_hilbert_index(index: u64) -> Result<Self> {
 		let coord = index_to_coord(index)?;
-		TileBBox::new(coord.level, coord.x, coord.y, coord.x, coord.y)
+		TileBBox::from_boundaries(coord.level, coord.x, coord.y, coord.x, coord.y)
 	}
 }
 
@@ -250,7 +250,7 @@ mod tests {
 
 	#[test]
 	fn test_hilbert_index_trait_tile_bbox() -> Result<()> {
-		let bbox = TileBBox::new(3, 5, 3, 5, 3)?;
+		let bbox = TileBBox::from_boundaries(3, 5, 3, 5, 3)?;
 		let index = bbox.get_hilbert_index()?;
 		let reconstructed_bbox = TileBBox::from_hilbert_index(index)?;
 		assert_eq!(bbox, reconstructed_bbox);

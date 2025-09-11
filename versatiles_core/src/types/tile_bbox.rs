@@ -32,19 +32,40 @@ pub struct TileBBox {
 	/// Zoom level of the bounding box.
 	pub level: u8,
 	/// Minimum x-coordinate.
-	pub x_min: u32,
+	x_min: u32,
 	/// Minimum y-coordinate.
-	pub y_min: u32,
-	/// Maximum x-coordinate.
-	pub x_max: u32,
-	/// Maximum y-coordinate.
-	pub y_max: u32,
+	y_min: u32,
+	/// Width of the bounding box.
+	width: u32,
+	/// Height of the bounding box.
+	height: u32,
 }
 
 impl TileBBox {
 	// -------------------------------------------------------------------------
 	// Constructors
 	// -------------------------------------------------------------------------
+
+	pub fn new(level: u8, x_min: u32, y_min: u32, width: u32, height: u32) -> Result<TileBBox> {
+		ensure!(level <= 31, "level ({level}) must be <= 31");
+
+		let max = (1u32 << level) - 1;
+
+		ensure!(x_min <= max, "x_min ({x_min}) must be <= max ({max})");
+		ensure!(y_min <= max, "y_min ({y_min}) must be <= max ({max})");
+		let x_max = x_min + width - 1;
+		ensure!(x_max <= max, "x_max ({x_max}) must be <= max ({max})");
+		let y_max = y_min + height - 1;
+		ensure!(y_max <= max, "y_max ({y_max}) must be <= max ({max})");
+
+		Ok(TileBBox {
+			level,
+			x_min,
+			y_min,
+			width,
+			height,
+		})
+	}
 
 	/// Creates a new `TileBBox` with specified coordinates and zoom level.
 	///
@@ -66,25 +87,23 @@ impl TileBBox {
 	/// - If `level` > 31.
 	/// - If any coordinate exceeds the maximum allowed by the zoom level.
 	/// - If `x_min > x_max` or `y_min > y_max`.
-	pub fn new(level: u8, x_min: u32, y_min: u32, x_max: u32, y_max: u32) -> Result<TileBBox> {
+	pub fn from_boundaries(level: u8, x_min: u32, y_min: u32, x_max: u32, y_max: u32) -> Result<TileBBox> {
 		ensure!(level <= 31, "level ({level}) must be <= 31");
 
 		let max = (1u32 << level) - 1;
 
-		ensure!(x_max <= max, "x_max ({x_max}) must be <= max ({max})");
-		ensure!(y_max <= max, "y_max ({y_max}) must be <= max ({max})");
 		ensure!(x_min <= x_max, "x_min ({x_min}) must be <= x_max ({x_max})");
 		ensure!(y_min <= y_max, "y_min ({y_min}) must be <= y_max ({y_max})");
+		ensure!(x_max <= max, "x_max ({x_max}) must be <= max ({max})");
+		ensure!(y_max <= max, "y_max ({y_max}) must be <= max ({max})");
 
-		let bbox = TileBBox {
+		Ok(TileBBox {
 			level,
 			x_min,
 			y_min,
-			x_max,
-			y_max,
-		};
-
-		Ok(bbox)
+			width: x_max - x_min + 1,
+			height: y_max - y_min + 1,
+		})
 	}
 
 	/// Creates a `TileBBox` covering the entire range of tiles at the specified zoom level.
@@ -99,7 +118,7 @@ impl TileBBox {
 	/// * `Err(anyhow::Error)` if the zoom level is invalid.
 	pub fn new_full(level: u8) -> Result<TileBBox> {
 		ensure!(level <= 31, "level ({level}) must be <= 31");
-		let max = 2u32.pow(level as u32) - 1;
+		let max = 1u32 << level;
 		Self::new(level, 0, 0, max, max)
 	}
 
@@ -117,13 +136,12 @@ impl TileBBox {
 	/// * `Err(anyhow::Error)` if the zoom level is invalid.
 	pub fn new_empty(level: u8) -> Result<TileBBox> {
 		ensure!(level <= 31, "level ({level}) must be <= 31");
-		let max = 2u32.pow(level as u32) - 1;
 		Ok(TileBBox {
 			level,
-			x_min: max + 1,
-			y_min: max + 1,
-			x_max: 0,
-			y_max: 0,
+			x_min: 0,
+			y_min: 0,
+			width: 0,
+			height: 0,
 		})
 	}
 
@@ -153,7 +171,7 @@ impl TileBBox {
 		let p_min = TileCoord::from_geo(bbox.0 + 1e-10, bbox.3 - 1e-10, level)?;
 		let p_max = TileCoord::from_geo(bbox.2 - 1e-10, bbox.1 + 1e-10, level)?;
 
-		Self::new(level, p_min.x, p_min.y, p_max.x, p_max.y)
+		Self::from_boundaries(level, p_min.x, p_min.y, p_max.x, p_max.y)
 	}
 
 	// -------------------------------------------------------------------------
@@ -167,7 +185,7 @@ impl TileBBox {
 	/// * `true` if `x_max < x_min` or `y_max < y_min`.
 	/// * `false` otherwise.
 	pub fn is_empty(&self) -> bool {
-		(self.x_max < self.x_min) || (self.y_max < self.y_min)
+		self.width == 0 || self.height == 0
 	}
 
 	/// Calculates the width (in tiles) of the bounding box.
@@ -177,11 +195,7 @@ impl TileBBox {
 	/// * Width as `u32`.
 	/// * `0` if the bounding box is empty.
 	pub fn width(&self) -> u32 {
-		if self.x_max < self.x_min {
-			0
-		} else {
-			self.x_max - self.x_min + 1
-		}
+		self.width
 	}
 
 	/// Calculates the height (in tiles) of the bounding box.
@@ -191,10 +205,68 @@ impl TileBBox {
 	/// * Height as `u32`.
 	/// * `0` if the bounding box is empty.
 	pub fn height(&self) -> u32 {
-		if self.y_max < self.y_min {
-			0
+		self.height
+	}
+
+	/// Sets the width (in tiles) of the bounding box.
+	pub fn set_width(&mut self, width: u32) {
+		self.width = width.min(self.max_count() - self.x_min);
+	}
+
+	/// Sets the height (in tiles) of the bounding box.
+	pub fn set_height(&mut self, height: u32) {
+		self.height = height.min(self.max_count() - self.y_min);
+	}
+
+	/// Returns the minimum x-coordinate of the bounding box.
+	pub fn x_min(&self) -> u32 {
+		self.x_min
+	}
+
+	/// Returns the minimum y-coordinate of the bounding box.
+	pub fn y_min(&self) -> u32 {
+		self.y_min
+	}
+
+	/// Sets the minimum x-coordinate, while keeping the maximum x-coordinate consistent.
+	pub fn set_x_min(&mut self, x_min: u32) {
+		let x_max = self.x_max();
+		self.x_min = x_min;
+		self.set_x_max(x_max);
+	}
+
+	/// Sets the minimum y-coordinate, while keeping the maximum y-coordinate consistent.
+	pub fn set_y_min(&mut self, y_min: u32) {
+		let y_max = self.y_max();
+		self.y_min = y_min;
+		self.set_y_max(y_max);
+	}
+
+	/// Returns the maximum x-coordinate of the bounding box.
+	pub fn x_max(&self) -> u32 {
+		(self.x_min + self.width).saturating_sub(1)
+	}
+
+	/// Returns the maximum y-coordinate of the bounding box.
+	pub fn y_max(&self) -> u32 {
+		(self.y_min + self.height).saturating_sub(1)
+	}
+
+	/// Sets the maximum x-coordinate, while keeping the minimum x-coordinate consistent.
+	pub fn set_x_max(&mut self, x_max: u32) {
+		if x_max >= self.x_min {
+			self.width = x_max.min(self.max_count() - 1) - self.x_min + 1;
 		} else {
-			self.y_max - self.y_min + 1
+			self.width = 0;
+		}
+	}
+
+	/// Sets the maximum y-coordinate, while keeping the minimum y-coordinate consistent.
+	pub fn set_y_max(&mut self, y_max: u32) {
+		if y_max >= self.y_min {
+			self.height = y_max.min(self.max_count() - 1) - self.y_min + 1;
+		} else {
+			self.height = 0;
 		}
 	}
 
@@ -205,7 +277,7 @@ impl TileBBox {
 	/// * Number of tiles as `u64`.
 	/// * `0` if the bounding box is empty.
 	pub fn count_tiles(&self) -> u64 {
-		(self.width() as u64) * (self.height() as u64)
+		(self.width as u64) * (self.height as u64)
 	}
 
 	/// Determines if the bounding box covers the entire range of tiles at its zoom level.
@@ -220,12 +292,12 @@ impl TileBBox {
 	/// This method is primarily used for testing purposes.
 	#[cfg(test)]
 	pub fn is_full(&self) -> bool {
-		let max = self.max_index();
-		!self.is_empty() && self.x_min == 0 && self.y_min == 0 && self.x_max == max && self.y_max == max
+		let max = self.max_count();
+		self.x_min == 0 && self.y_min == 0 && self.width == max && self.height == max
 	}
 
-	pub fn max_index(&self) -> u32 {
-		(1u32 << self.level) - 1
+	fn max_count(&self) -> u32 {
+		1u32 << self.level
 	}
 
 	/// Checks if the bounding box contains a specific tile coordinate (`TileCoord`) at the same zoom level.
@@ -241,9 +313,9 @@ impl TileBBox {
 	pub fn contains(&self, coord: &TileCoord) -> bool {
 		coord.level == self.level
 			&& coord.x >= self.x_min
-			&& coord.x <= self.x_max
+			&& coord.x < self.x_min + self.width
 			&& coord.y >= self.y_min
-			&& coord.y <= self.y_max
+			&& coord.y < self.y_min + self.height
 	}
 
 	// -------------------------------------------------------------------------
@@ -254,10 +326,8 @@ impl TileBBox {
 	///
 	/// After calling this method, `is_empty()` will return `true`.
 	pub fn set_empty(&mut self) {
-		self.x_min = 1;
-		self.y_min = 1;
-		self.x_max = 0;
-		self.y_max = 0;
+		self.width = 0;
+		self.height = 0;
 	}
 
 	/// Sets the bounding box to a full state, covering the entire tile range at its zoom level.
@@ -271,11 +341,11 @@ impl TileBBox {
 	/// This method is primarily used for testing purposes.
 	#[cfg(test)]
 	pub fn set_full(&mut self) {
-		let max = self.max_index();
+		let max = self.max_count();
 		self.x_min = 0;
 		self.y_min = 0;
-		self.x_max = max;
-		self.y_max = max;
+		self.width = max;
+		self.height = max;
 	}
 
 	/// Includes a specific tile coordinate (`x`, `y`) within the bounding box.
@@ -296,15 +366,20 @@ impl TileBBox {
 			// Initialize bounding box to the provided coordinate
 			self.x_min = x;
 			self.y_min = y;
-			self.x_max = x;
-			self.y_max = y;
+			self.width = 1;
+			self.height = 1;
 		} else {
 			// Expand bounding box to include the new coordinate
-			let max = self.max_index();
-			self.x_min = self.x_min.min(x);
-			self.y_min = self.y_min.min(y);
-			self.x_max = self.x_max.max(x).min(max);
-			self.y_max = self.y_max.max(y).min(max);
+			if x < self.x_min {
+				self.set_x_min(x);
+			} else if x > self.x_max() {
+				self.set_x_max(x);
+			}
+			if y < self.y_min {
+				self.set_y_min(y);
+			} else if y > self.y_max() {
+				self.set_y_max(y);
+			}
 		}
 	}
 
@@ -352,11 +427,12 @@ impl TileBBox {
 	/// * `Err(anyhow::Error)` if the resulting bounding box is invalid.
 	pub fn add_border(&mut self, x_min: u32, y_min: u32, x_max: u32, y_max: u32) {
 		if !self.is_empty() {
-			let max = self.max_index();
+			let x_max = self.x_max().saturating_add(x_max);
+			let y_max = self.y_max().saturating_add(y_max);
 			self.x_min = self.x_min.saturating_sub(x_min);
 			self.y_min = self.y_min.saturating_sub(y_min);
-			self.x_max = (self.x_max + x_max).min(max);
-			self.y_max = (self.y_max + y_max).min(max);
+			self.set_x_max(x_max);
+			self.set_y_max(y_max);
 		}
 	}
 
@@ -372,7 +448,10 @@ impl TileBBox {
 			return Ok(false);
 		}
 
-		Ok(self.x_min <= bbox.x_min && self.x_max >= bbox.x_max && self.y_min <= bbox.y_min && self.y_max >= bbox.y_max)
+		Ok(self.x_min <= bbox.x_min
+			&& self.x_max() >= bbox.x_max()
+			&& self.y_min <= bbox.y_min
+			&& self.y_max() >= bbox.y_max())
 	}
 
 	// -------------------------------------------------------------------------
@@ -392,26 +471,28 @@ impl TileBBox {
 	/// * `Ok(())` if inclusion is successful.
 	/// * `Err(anyhow::Error)` if the zoom levels do not match or other validations fail.
 	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
-		if self.level != bbox.level {
-			return Err(anyhow::anyhow!(
-				"Cannot include TileBBox with level={} into TileBBox with level={}",
-				bbox.level,
-				self.level
-			));
+		ensure!(
+			self.level == bbox.level,
+			"Cannot include TileBBox with level={} into TileBBox with level={}",
+			bbox.level,
+			self.level
+		);
+
+		if bbox.is_empty() {
+			return Ok(()); // Nothing to include
 		}
 
-		if !bbox.is_empty() {
-			if self.is_empty() {
-				// If current bounding box is empty, adopt the other bounding box
-				*self = *bbox;
-			} else {
-				// Expand to include the other bounding box
-				let max = self.max_index();
-				self.x_min = self.x_min.min(bbox.x_min);
-				self.y_min = self.y_min.min(bbox.y_min);
-				self.x_max = self.x_max.max(bbox.x_max).min(max);
-				self.y_max = self.y_max.max(bbox.y_max).min(max);
-			}
+		if self.is_empty() {
+			// If current bounding box is empty, adopt the other bounding box
+			*self = *bbox;
+		} else {
+			// Expand bounding box to include the other bounding box
+			let x_max = self.x_max().max(bbox.x_max());
+			let y_max = self.y_max().max(bbox.y_max());
+			self.x_min = self.x_min.min(bbox.x_min);
+			self.y_min = self.y_min.min(bbox.y_min);
+			self.set_x_max(x_max);
+			self.set_y_max(y_max);
 		}
 
 		Ok(())
@@ -438,15 +519,17 @@ impl TileBBox {
 			self.level
 		);
 
-		if !self.is_empty() && !bbox.is_empty() {
-			self.x_min = self.x_min.max(bbox.x_min);
-			self.y_min = self.y_min.max(bbox.y_min);
-			self.x_max = self.x_max.min(bbox.x_max);
-			self.y_max = self.y_max.min(bbox.y_max);
-		} else {
-			// If either bounding box is empty, the intersection is empty
+		if self.is_empty() || bbox.is_empty() {
 			self.set_empty();
+			return Ok(());
 		}
+
+		let x_max = self.x_max().min(bbox.x_max());
+		let y_max = self.y_max().min(bbox.y_max());
+		self.x_min = self.x_min.max(bbox.x_min);
+		self.y_min = self.y_min.max(bbox.y_min);
+		self.set_x_max(x_max);
+		self.set_y_max(y_max);
 
 		Ok(())
 	}
@@ -492,7 +575,10 @@ impl TileBBox {
 			return Ok(false);
 		}
 
-		Ok(self.x_min <= bbox.x_max && self.x_max >= bbox.x_min && self.y_min <= bbox.y_max && self.y_max >= bbox.y_min)
+		Ok(self.x_min <= bbox.x_max()
+			&& self.x_max() >= bbox.x_min
+			&& self.y_min <= bbox.y_max()
+			&& self.y_max() >= bbox.y_min)
 	}
 
 	// -------------------------------------------------------------------------
@@ -506,17 +592,18 @@ impl TileBBox {
 	/// * `GeoBBox` representing the geographical area covered by this bounding box.
 	pub fn as_geo_bbox(&self) -> GeoBBox {
 		// Bottom-left in geospatial terms is (x_min, y_max + 1)
-		let p_min = TileCoord::new(self.level, self.x_min, self.y_max + 1).unwrap().as_geo();
+		let p_min = TileCoord::new(self.level, self.x_min, self.y_max() + 1)
+			.unwrap()
+			.as_geo();
 		// Top-right in geospatial terms is (x_max + 1, y_min)
-		let p_max = TileCoord::new(self.level, self.x_max + 1, self.y_min).unwrap().as_geo();
+		let p_max = TileCoord::new(self.level, self.x_max() + 1, self.y_min)
+			.unwrap()
+			.as_geo();
 
 		GeoBBox(p_min[0], p_min[1], p_max[0], p_max[1])
 	}
 
 	/// Shifts the bounding box by specified amounts in the x and y directions.
-	///
-	/// Adds `x` to both `x_min` and `x_max`, and `y` to both `y_min` and `y_max`.
-	///
 	/// # Arguments
 	///
 	/// * `x` - Amount to shift in the x-direction.
@@ -526,31 +613,23 @@ impl TileBBox {
 	///
 	/// * `Ok(())` if the shift is successful.
 	/// * `Err(anyhow::Error)` if the resulting bounding box is invalid.
-	pub fn shift_by(&mut self, x: u32, y: u32) {
-		self.x_min = self.x_min.saturating_add(x);
-		self.y_min = self.y_min.saturating_add(y);
-		self.x_max = self.x_max.saturating_add(x);
-		self.y_max = self.y_max.saturating_add(y);
+	pub fn shift_by(&mut self, x: i64, y: i64) {
+		self.shift_to(
+			(self.x_min as i64 + x).max(0) as u32,
+			(self.y_min as i64 + y).max(0) as u32,
+		);
 	}
 
-	/// Subtracts specified amounts from the bounding box, saturating at 0.
-	///
-	/// This effectively moves the bounding box left/up by `x` and `y` respectively.
-	///
-	/// # Arguments
-	///
-	/// * `x` - Amount to subtract from the x-coordinates.
-	/// * `y` - Amount to subtract from the y-coordinates.
-	///
-	/// # Returns
-	///
-	/// * `Ok(())` if the subtraction is successful.
-	/// * `Err(anyhow::Error)` if the resulting bounding box is invalid.
-	pub fn subtract(&mut self, x: u32, y: u32) {
-		self.x_min = self.x_min.saturating_sub(x);
-		self.y_min = self.y_min.saturating_sub(y);
-		self.x_max = self.x_max.saturating_sub(x);
-		self.y_max = self.y_max.saturating_sub(y);
+	pub fn shift_to(&mut self, x_min: u32, y_min: u32) {
+		self.x_min = x_min;
+		self.y_min = y_min;
+		let max = self.max_count() - 1;
+		if self.x_max() > max {
+			self.set_x_max(max);
+		}
+		if self.y_max() > max {
+			self.set_y_max(max);
+		}
 	}
 
 	/// Scales down the bounding box by a specified factor.
@@ -568,23 +647,26 @@ impl TileBBox {
 		assert!(scale > 0, "scale must be greater than 0");
 		assert!(scale.is_power_of_two(), "scale must be a power of two");
 
+		let x_max = self.x_max() / scale;
+		let y_max = self.y_max() / scale;
 		self.x_min /= scale;
 		self.y_min /= scale;
-		self.x_max /= scale;
-		self.y_max /= scale;
+		self.set_x_max(x_max);
+		self.set_y_max(y_max);
 	}
 
 	pub fn get_scaled_down(&self, scale: u32) -> TileBBox {
 		assert!(scale > 0, "scale must be greater than 0");
 		assert!(scale.is_power_of_two(), "scale must be a power of two");
 
-		TileBBox {
-			level: self.level,
-			x_min: self.x_min / scale,
-			y_min: self.y_min / scale,
-			x_max: self.x_max / scale,
-			y_max: self.y_max / scale,
-		}
+		TileBBox::from_boundaries(
+			self.level,
+			self.x_min() / scale,
+			self.y_min() / scale,
+			self.x_max() / scale,
+			self.y_max() / scale,
+		)
+		.unwrap()
 	}
 
 	pub fn level_increase(&mut self) {
@@ -592,8 +674,8 @@ impl TileBBox {
 		self.level += 1;
 		self.x_min *= 2;
 		self.y_min *= 2;
-		self.x_max = self.x_max * 2 + 1;
-		self.y_max = self.y_max * 2 + 1;
+		self.width *= 2;
+		self.height *= 2;
 	}
 
 	pub fn level_decrease(&mut self) {
@@ -601,8 +683,8 @@ impl TileBBox {
 		self.level -= 1;
 		self.x_min /= 2;
 		self.y_min /= 2;
-		self.x_max /= 2;
-		self.y_max /= 2;
+		self.width /= 2;
+		self.height /= 2;
 	}
 
 	pub fn as_level_increased(&self) -> TileBBox {
@@ -626,17 +708,21 @@ impl TileBBox {
 				level,
 				x_min: self.x_min * scale,
 				y_min: self.y_min * scale,
-				x_max: (self.x_max + 1) * scale - 1,
-				y_max: (self.y_max + 1) * scale - 1,
+				width: self.width * scale,
+				height: self.height * scale,
 			}
 		} else {
 			let scale = 2u32.pow((self.level - level) as u32);
+			let x_min = self.x_min / scale;
+			let y_min = self.y_min / scale;
+			let x_max = self.x_max() / scale;
+			let y_max = self.y_max() / scale;
 			TileBBox {
 				level,
-				x_min: self.x_min / scale,
-				y_min: self.y_min / scale,
-				x_max: self.x_max / scale,
-				y_max: self.y_max / scale,
+				x_min,
+				y_min,
+				width: x_max - x_min + 1,
+				height: y_max - y_min + 1,
 			}
 		}
 	}
@@ -646,11 +732,43 @@ impl TileBBox {
 	}
 
 	pub fn get_corner_max(&self) -> TileCoord {
-		TileCoord::new(self.level, self.x_max, self.y_max).unwrap()
+		TileCoord::new(self.level, self.x_max(), self.y_max()).unwrap()
 	}
 
 	pub fn get_dimensions(&self) -> (u32, u32) {
 		(self.width(), self.height())
+	}
+
+	pub fn get_quadrant(&self, quadrant: u8) -> Result<TileBBox> {
+		if self.is_empty() {
+			return Ok(*self);
+		}
+
+		ensure!(quadrant < 4, "quadrant must be in 0..3");
+		ensure!(!self.is_empty(), "cannot get quadrant of an empty TileBBox");
+		ensure!(
+			self.width() % 2 == 0,
+			"cannot get quadrant of a TileBBox with odd width"
+		);
+		ensure!(
+			self.height() % 2 == 0,
+			"cannot get quadrant of a TileBBox with odd height"
+		);
+
+		let x = self.x_min;
+		let y = self.y_min;
+		let w = self.width() / 2;
+		let h = self.height() / 2;
+
+		let bbox = match quadrant {
+			0 => TileBBox::new(self.level, x, y, w, h)?,         // Top-left
+			1 => TileBBox::new(self.level, x + w, y, w, h)?,     // Top-right
+			2 => TileBBox::new(self.level, x, y + h, w, h)?,     // Bottom-left
+			3 => TileBBox::new(self.level, x + w, y + h, w, h)?, // Bottom-right
+			_ => unreachable!(),
+		};
+
+		Ok(bbox)
 	}
 
 	// -------------------------------------------------------------------------
@@ -665,8 +783,8 @@ impl TileBBox {
 	///
 	/// An iterator yielding `TileCoord` instances.
 	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord> + '_ {
-		let y_range = self.y_min..=self.y_max;
-		let x_range = self.x_min..=self.x_max;
+		let y_range = self.y_min..=self.y_max();
+		let x_range = self.x_min..=self.x_max();
 		y_range
 			.cartesian_product(x_range)
 			.map(|(y, x)| TileCoord::new(self.level, x, y).unwrap())
@@ -680,8 +798,8 @@ impl TileBBox {
 	///
 	/// An iterator yielding `TileCoord` instances.
 	pub fn into_iter_coords(self) -> impl Iterator<Item = TileCoord> {
-		let y_range = self.y_min..=self.y_max;
-		let x_range = self.x_min..=self.x_max;
+		let y_range = self.y_min..=self.y_max();
+		let x_range = self.x_min..=self.x_max();
 		y_range
 			.cartesian_product(x_range)
 			.map(move |(y, x)| TileCoord::new(self.level, x, y).unwrap())
@@ -704,7 +822,7 @@ impl TileBBox {
 		assert!(size != 0, "size must be greater than 0");
 
 		let level = self.level;
-		let max = 2u32.pow(level as u32) - 1;
+		let max = (1u32 << level) - 1;
 		let mut meta_bbox = *self;
 		meta_bbox.scale_down(size);
 
@@ -714,7 +832,8 @@ impl TileBBox {
 				let x = coord.x * size;
 				let y = coord.y * size;
 
-				let mut bbox = TileBBox::new(level, x, y, (x + size - 1).min(max), (y + size - 1).min(max)).unwrap();
+				let mut bbox =
+					TileBBox::from_boundaries(level, x, y, (x + size - 1).min(max), (y + size - 1).min(max)).unwrap();
 				bbox.intersect_bbox(self).unwrap();
 				bbox
 			})
@@ -743,7 +862,7 @@ impl TileBBox {
 
 		let x = (coord.x - self.x_min) as u64;
 		let y = (coord.y - self.y_min) as u64;
-		let index = y * (self.x_max as u64 + 1 - self.x_min as u64) + x;
+		let index = y * (self.width as u64) + x;
 
 		Ok(index)
 	}
@@ -768,10 +887,12 @@ impl TileBBox {
 	}
 
 	pub fn round(&mut self, block_size: u32) {
+		let x_max = (self.x_max() + 1).div_ceil(block_size) * block_size - 1;
+		let y_max = (self.y_max() + 1).div_ceil(block_size) * block_size - 1;
 		self.x_min = (self.x_min / block_size) * block_size;
 		self.y_min = (self.y_min / block_size) * block_size;
-		self.x_max = (self.x_max + 1).div_ceil(block_size) * block_size - 1;
-		self.y_max = (self.y_max + 1).div_ceil(block_size) * block_size - 1;
+		self.set_x_max(x_max);
+		self.set_y_max(y_max);
 	}
 
 	pub fn get_rounded(&self, block_size: u32) -> TileBBox {
@@ -780,11 +901,31 @@ impl TileBBox {
 		bbox
 	}
 
+	pub fn max_value(&self) -> u32 {
+		(1u32 << self.level) - 1
+	}
+
 	pub fn as_string(&self) -> String {
 		format!(
 			"{}:[{},{},{},{}]",
-			self.level, self.x_min, self.y_min, self.x_max, self.y_max
+			self.level,
+			self.x_min,
+			self.y_min,
+			self.x_max(),
+			self.y_max()
 		)
+	}
+
+	pub fn flip_y(&mut self) {
+		if !self.is_empty() {
+			self.shift_to(self.x_min(), self.max_value() - self.y_max());
+		}
+	}
+	pub fn swap_xy(&mut self) {
+		if !self.is_empty() {
+			std::mem::swap(&mut self.x_min, &mut self.y_min);
+			std::mem::swap(&mut self.width, &mut self.height);
+		}
 	}
 }
 
@@ -798,13 +939,14 @@ impl fmt::Debug for TileBBox {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(
 			f,
-			"{}: [{},{},{},{}] ({})",
+			"{}: [{},{},{},{}] ({}x{})",
 			self.level,
 			self.x_min,
 			self.y_min,
-			self.x_max,
-			self.y_max,
-			self.count_tiles()
+			self.x_max(),
+			self.y_max(),
+			self.width(),
+			self.height()
 		)
 	}
 }
@@ -819,16 +961,16 @@ mod tests {
 
 	#[test]
 	fn count_tiles() {
-		assert_eq!(TileBBox::new(4, 5, 12, 5, 12).unwrap().count_tiles(), 1);
-		assert_eq!(TileBBox::new(4, 5, 12, 7, 15).unwrap().count_tiles(), 12);
-		assert_eq!(TileBBox::new(4, 5, 12, 5, 15).unwrap().count_tiles(), 4);
-		assert_eq!(TileBBox::new(4, 5, 15, 7, 15).unwrap().count_tiles(), 3);
+		assert_eq!(TileBBox::from_boundaries(4, 5, 12, 5, 12).unwrap().count_tiles(), 1);
+		assert_eq!(TileBBox::from_boundaries(4, 5, 12, 7, 15).unwrap().count_tiles(), 12);
+		assert_eq!(TileBBox::from_boundaries(4, 5, 12, 5, 15).unwrap().count_tiles(), 4);
+		assert_eq!(TileBBox::from_boundaries(4, 5, 15, 7, 15).unwrap().count_tiles(), 3);
 	}
 
 	#[test]
 	fn from_geo() {
 		let bbox1 = TileBBox::from_geo(9, &GeoBBox(8.0653, 51.3563, 12.3528, 52.2564)).unwrap();
-		let bbox2 = TileBBox::new(9, 267, 168, 273, 170).unwrap();
+		let bbox2 = TileBBox::from_boundaries(9, 267, 168, 273, 170).unwrap();
 		assert_eq!(bbox1, bbox2);
 	}
 
@@ -872,23 +1014,23 @@ mod tests {
 		  | #-|-#
 		  #---#
 		*/
-		let bbox1 = TileBBox::new(4, 0, 11, 2, 13).unwrap();
-		let bbox2 = TileBBox::new(4, 1, 10, 3, 12).unwrap();
+		let bbox1 = TileBBox::from_boundaries(4, 0, 11, 2, 13).unwrap();
+		let bbox2 = TileBBox::from_boundaries(4, 1, 10, 3, 12).unwrap();
 
 		let mut bbox1_intersect = bbox1;
 		bbox1_intersect.intersect_bbox(&bbox2).unwrap();
-		assert_eq!(bbox1_intersect, TileBBox::new(4, 1, 11, 2, 12).unwrap());
+		assert_eq!(bbox1_intersect, TileBBox::from_boundaries(4, 1, 11, 2, 12).unwrap());
 
 		let mut bbox1_union = bbox1;
 		bbox1_union.include_bbox(&bbox2).unwrap();
-		assert_eq!(bbox1_union, TileBBox::new(4, 0, 10, 3, 13).unwrap());
+		assert_eq!(bbox1_union, TileBBox::from_boundaries(4, 0, 10, 3, 13).unwrap());
 	}
 
 	#[test]
 	fn include_tile() {
-		let mut bbox = TileBBox::new(4, 0, 1, 2, 3).unwrap();
+		let mut bbox = TileBBox::from_boundaries(4, 0, 1, 2, 3).unwrap();
 		bbox.include(4, 5);
-		assert_eq!(bbox, TileBBox::new(4, 0, 1, 4, 5).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(4, 0, 1, 4, 5).unwrap());
 	}
 
 	#[test]
@@ -908,7 +1050,7 @@ mod tests {
 
 	#[test]
 	fn iter_coords() {
-		let bbox = TileBBox::new(16, 1, 5, 2, 6).unwrap();
+		let bbox = TileBBox::from_boundaries(16, 1, 5, 2, 6).unwrap();
 		let vec: Vec<TileCoord> = bbox.iter_coords().collect();
 		assert_eq!(vec.len(), 4);
 		assert_eq!(vec[0], TileCoord::new(16, 1, 5).unwrap());
@@ -920,12 +1062,12 @@ mod tests {
 	#[test]
 	fn iter_bbox_grid() {
 		fn b(level: u8, x_min: u32, y_min: u32, x_max: u32, y_max: u32) -> TileBBox {
-			TileBBox::new(level, x_min, y_min, x_max, y_max).unwrap()
+			TileBBox::from_boundaries(level, x_min, y_min, x_max, y_max).unwrap()
 		}
 		fn test(size: u32, bbox: TileBBox, bboxes: &str) {
 			let bboxes_result: String = bbox
 				.iter_bbox_grid(size)
-				.map(|bbox| format!("{},{},{},{}", bbox.x_min, bbox.y_min, bbox.x_max, bbox.y_max))
+				.map(|bbox| format!("{},{},{},{}", bbox.x_min, bbox.y_min, bbox.x_max(), bbox.y_max()))
 				.collect::<Vec<String>>()
 				.join(" ");
 			assert_eq!(bboxes_result, bboxes);
@@ -942,23 +1084,23 @@ mod tests {
 
 	#[test]
 	fn add_border() {
-		let mut bbox = TileBBox::new(8, 5, 10, 20, 30).unwrap();
+		let mut bbox = TileBBox::from_boundaries(8, 5, 10, 20, 30).unwrap();
 
 		// Border of (1, 1, 1, 1) should increase the size of the bbox by 1 in all directions
 		bbox.add_border(1, 1, 1, 1);
-		assert_eq!(bbox, TileBBox::new(8, 4, 9, 21, 31).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(8, 4, 9, 21, 31).unwrap());
 
 		// Border of (2, 3, 4, 5) should further increase the size of the bbox
 		bbox.add_border(2, 3, 4, 5);
-		assert_eq!(bbox, TileBBox::new(8, 2, 6, 25, 36).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(8, 2, 6, 25, 36).unwrap());
 
 		// Border of (0, 0, 0, 0) should not change the size of the bbox
 		bbox.add_border(0, 0, 0, 0);
-		assert_eq!(bbox, TileBBox::new(8, 2, 6, 25, 36).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(8, 2, 6, 25, 36).unwrap());
 
 		// Large border should saturate at max=255 for level=8
 		bbox.add_border(999, 999, 999, 999);
-		assert_eq!(bbox, TileBBox::new(8, 0, 0, 255, 255).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(8, 0, 0, 255, 255).unwrap());
 
 		// If bbox is empty, add_border should have no effect
 		let mut empty_bbox = TileBBox::new_empty(8).unwrap();
@@ -968,9 +1110,9 @@ mod tests {
 
 	#[test]
 	fn test_shift_by() {
-		let mut bbox = TileBBox::new(4, 1, 2, 3, 4).unwrap();
+		let mut bbox = TileBBox::from_boundaries(4, 1, 2, 3, 4).unwrap();
 		bbox.shift_by(1, 1);
-		assert_eq!(bbox, TileBBox::new(4, 2, 3, 4, 5).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(4, 2, 3, 4, 5).unwrap());
 	}
 
 	#[test]
@@ -980,10 +1122,10 @@ mod tests {
 			bbox,
 			TileBBox {
 				level: 4,
-				x_min: 16,
-				y_min: 16,
-				x_max: 0,
-				y_max: 0,
+				x_min: 0,
+				y_min: 0,
+				width: 0,
+				height: 0,
 			}
 		);
 		assert!(bbox.is_empty());
@@ -991,7 +1133,7 @@ mod tests {
 
 	#[test]
 	fn test_set_empty() {
-		let mut bbox = TileBBox::new(4, 0, 0, 15, 15).unwrap();
+		let mut bbox = TileBBox::from_boundaries(4, 0, 0, 15, 15).unwrap();
 		bbox.set_empty();
 		assert!(bbox.is_empty());
 	}
@@ -1006,45 +1148,45 @@ mod tests {
 	#[test]
 	fn test_is_full() {
 		let bbox = TileBBox::new_full(4).unwrap();
-		assert!(bbox.is_full());
+		assert!(bbox.is_full(), "Expected bbox ({:?}) to be full", bbox);
 	}
 
 	#[test]
 	fn test_include_tile() {
-		let mut bbox = TileBBox::new(6, 5, 10, 20, 30).unwrap();
+		let mut bbox = TileBBox::from_boundaries(6, 5, 10, 20, 30).unwrap();
 		bbox.include(25, 35);
-		assert_eq!(bbox, TileBBox::new(6, 5, 10, 25, 35).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(6, 5, 10, 25, 35).unwrap());
 	}
 
 	#[test]
 	fn test_include_bbox() {
-		let mut bbox1 = TileBBox::new(4, 0, 11, 2, 13).unwrap();
-		let bbox2 = TileBBox::new(4, 1, 10, 3, 12).unwrap();
+		let mut bbox1 = TileBBox::from_boundaries(4, 0, 11, 2, 13).unwrap();
+		let bbox2 = TileBBox::from_boundaries(4, 1, 10, 3, 12).unwrap();
 		bbox1.include_bbox(&bbox2).unwrap();
-		assert_eq!(bbox1, TileBBox::new(4, 0, 10, 3, 13).unwrap());
+		assert_eq!(bbox1, TileBBox::from_boundaries(4, 0, 10, 3, 13).unwrap());
 	}
 
 	#[test]
 	fn test_intersect_bbox() {
-		let mut bbox1 = TileBBox::new(4, 0, 11, 2, 13).unwrap();
-		let bbox2 = TileBBox::new(4, 1, 10, 3, 12).unwrap();
+		let mut bbox1 = TileBBox::from_boundaries(4, 0, 11, 2, 13).unwrap();
+		let bbox2 = TileBBox::from_boundaries(4, 1, 10, 3, 12).unwrap();
 		bbox1.intersect_bbox(&bbox2).unwrap();
-		assert_eq!(bbox1, TileBBox::new(4, 1, 11, 2, 12).unwrap());
+		assert_eq!(bbox1, TileBBox::from_boundaries(4, 1, 11, 2, 12).unwrap());
 	}
 
 	#[test]
 	fn test_overlaps_bbox() {
-		let bbox1 = TileBBox::new(4, 0, 11, 2, 13).unwrap();
-		let bbox2 = TileBBox::new(4, 1, 10, 3, 12).unwrap();
+		let bbox1 = TileBBox::from_boundaries(4, 0, 11, 2, 13).unwrap();
+		let bbox2 = TileBBox::from_boundaries(4, 1, 10, 3, 12).unwrap();
 		assert!(bbox1.overlaps_bbox(&bbox2).unwrap());
 
-		let bbox3 = TileBBox::new(4, 8, 8, 9, 9).unwrap();
+		let bbox3 = TileBBox::from_boundaries(4, 8, 8, 9, 9).unwrap();
 		assert!(!bbox1.overlaps_bbox(&bbox3).unwrap());
 	}
 
 	#[test]
 	fn test_get_tile_index() -> Result<()> {
-		let bbox = TileBBox::new(8, 100, 100, 199, 199).unwrap();
+		let bbox = TileBBox::from_boundaries(8, 100, 100, 199, 199).unwrap();
 		assert_eq!(bbox.get_tile_index(&TileCoord::new(8, 100, 100)?)?, 0);
 		assert_eq!(bbox.get_tile_index(&TileCoord::new(8, 101, 100)?)?, 1);
 		assert_eq!(bbox.get_tile_index(&TileCoord::new(8, 199, 100)?)?, 99);
@@ -1056,7 +1198,7 @@ mod tests {
 
 	#[test]
 	fn test_as_geo_bbox() {
-		let bbox = TileBBox::new(4, 5, 10, 7, 12).unwrap();
+		let bbox = TileBBox::from_boundaries(4, 5, 10, 7, 12).unwrap();
 		let geo_bbox = bbox.as_geo_bbox();
 		assert_eq!(
 			geo_bbox.as_string_list(),
@@ -1066,7 +1208,7 @@ mod tests {
 
 	#[test]
 	fn test_contains() {
-		let bbox = TileBBox::new(4, 5, 10, 7, 12).unwrap();
+		let bbox = TileBBox::from_boundaries(4, 5, 10, 7, 12).unwrap();
 		assert!(bbox.contains(&TileCoord::new(4, 6, 11).unwrap()));
 		assert!(!bbox.contains(&TileCoord::new(4, 4, 9).unwrap()));
 		assert!(!bbox.contains(&TileCoord::new(5, 6, 11).unwrap()));
@@ -1074,36 +1216,36 @@ mod tests {
 
 	#[test]
 	fn test_new_valid_bbox() {
-		let bbox = TileBBox::new(6, 5, 10, 15, 20).unwrap();
+		let bbox = TileBBox::from_boundaries(6, 5, 10, 15, 20).unwrap();
 		assert_eq!(bbox.level, 6);
 		assert_eq!(bbox.x_min, 5);
 		assert_eq!(bbox.y_min, 10);
-		assert_eq!(bbox.x_max, 15);
-		assert_eq!(bbox.y_max, 20);
+		assert_eq!(bbox.x_max(), 15);
+		assert_eq!(bbox.y_max(), 20);
 	}
 
 	#[test]
 	fn test_new_invalid_level() {
-		let result = TileBBox::new(32, 0, 0, 1, 1);
+		let result = TileBBox::from_boundaries(32, 0, 0, 1, 1);
 		assert!(result.is_err());
 	}
 
 	#[test]
 	fn test_new_invalid_coordinates() {
-		let result = TileBBox::new(4, 10, 10, 5, 15);
+		let result = TileBBox::from_boundaries(4, 10, 10, 5, 15);
 		assert!(result.is_err());
 
-		let result = TileBBox::new(4, 5, 15, 7, 10);
+		let result = TileBBox::from_boundaries(4, 5, 15, 7, 10);
 		assert!(result.is_err());
 
-		let result = TileBBox::new(4, 0, 0, 16, 15); // x_max exceeds max for level 4
+		let result = TileBBox::from_boundaries(4, 0, 0, 16, 15); // x_max exceeds max for level 4
 		assert!(result.is_err());
 	}
 
 	#[test]
 	fn test_new_full() {
 		let bbox = TileBBox::new_full(4).unwrap();
-		assert_eq!(bbox, TileBBox::new(4, 0, 0, 15, 15).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(4, 0, 0, 15, 15).unwrap());
 		assert!(bbox.is_full());
 	}
 
@@ -1111,7 +1253,7 @@ mod tests {
 	fn test_from_geo_valid() {
 		let geo_bbox = GeoBBox(-180.0, -85.05112878, 180.0, 85.05112878);
 		let bbox = TileBBox::from_geo(2, &geo_bbox).unwrap();
-		assert_eq!(bbox, TileBBox::new(2, 0, 0, 3, 3).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(2, 0, 0, 3, 3).unwrap());
 	}
 
 	#[test]
@@ -1126,13 +1268,13 @@ mod tests {
 		let empty_bbox = TileBBox::new_empty(4).unwrap();
 		assert!(empty_bbox.is_empty());
 
-		let non_empty_bbox = TileBBox::new(6, 5, 10, 15, 20).unwrap();
+		let non_empty_bbox = TileBBox::from_boundaries(6, 5, 10, 15, 20).unwrap();
 		assert!(!non_empty_bbox.is_empty());
 	}
 
 	#[test]
 	fn test_width_height() {
-		let bbox = TileBBox::new(6, 5, 10, 15, 20).unwrap();
+		let bbox = TileBBox::from_boundaries(6, 5, 10, 15, 20).unwrap();
 		assert_eq!(bbox.width(), 11);
 		assert_eq!(bbox.height(), 11);
 
@@ -1143,7 +1285,7 @@ mod tests {
 
 	#[test]
 	fn test_count_tiles() {
-		let bbox = TileBBox::new(6, 5, 10, 15, 20).unwrap();
+		let bbox = TileBBox::from_boundaries(6, 5, 10, 15, 20).unwrap();
 		assert_eq!(bbox.count_tiles(), 121);
 
 		let empty_bbox = TileBBox::new_empty(4).unwrap();
@@ -1154,13 +1296,13 @@ mod tests {
 	fn test_include() -> Result<()> {
 		let mut bbox = TileBBox::new_empty(6)?;
 		bbox.include(5, 10);
-		assert_eq!(bbox, TileBBox::new(6, 5, 10, 5, 10).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(6, 5, 10, 5, 10).unwrap());
 
 		bbox.include(15, 20);
-		assert_eq!(bbox, TileBBox::new(6, 5, 10, 15, 20).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(6, 5, 10, 15, 20).unwrap());
 
 		bbox.include(10, 15);
-		assert_eq!(bbox, TileBBox::new(6, 5, 10, 15, 20).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(6, 5, 10, 15, 20).unwrap());
 
 		Ok(())
 	}
@@ -1170,11 +1312,11 @@ mod tests {
 		let mut bbox = TileBBox::new_empty(6)?;
 		let coord = TileCoord::new(6, 5, 10).unwrap();
 		bbox.include_coord(&coord)?;
-		assert_eq!(bbox, TileBBox::new(6, 5, 10, 5, 10).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(6, 5, 10, 5, 10).unwrap());
 
 		let coord = TileCoord::new(6, 15, 20).unwrap();
 		bbox.include_coord(&coord)?;
-		assert_eq!(bbox, TileBBox::new(6, 5, 10, 15, 20).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(6, 5, 10, 15, 20).unwrap());
 
 		// Attempt to include a coordinate with a different zoom level
 		let coord_invalid = TileCoord::new(5, 10, 15).unwrap();
@@ -1186,15 +1328,15 @@ mod tests {
 
 	#[test]
 	fn test_add_border() -> Result<()> {
-		let mut bbox = TileBBox::new(6, 5, 10, 15, 20)?;
+		let mut bbox = TileBBox::from_boundaries(6, 5, 10, 15, 20)?;
 
 		// Add a border within bounds
 		bbox.add_border(2, 3, 2, 3);
-		assert_eq!(bbox, TileBBox::new(6, 3, 7, 17, 23).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(6, 3, 7, 17, 23).unwrap());
 
 		// Add a border that exceeds bounds, should clamp to max
 		bbox.add_border(10, 10, 10, 10);
-		assert_eq!(bbox, TileBBox::new(6, 0, 0, 27, 33).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(6, 0, 0, 27, 33).unwrap());
 
 		// Add border to an empty bounding box, should have no effect
 		let mut empty_bbox = TileBBox::new_empty(6)?;
@@ -1203,26 +1345,26 @@ mod tests {
 
 		// Attempt to add a border with zero values
 		bbox.add_border(0, 0, 0, 0);
-		assert_eq!(bbox, TileBBox::new(6, 0, 0, 27, 33).unwrap());
+		assert_eq!(bbox, TileBBox::from_boundaries(6, 0, 0, 27, 33).unwrap());
 
 		Ok(())
 	}
 
 	#[test]
 	fn should_include_bbox_correctly_with_valid_and_empty_bboxes() -> Result<()> {
-		let mut bbox1 = TileBBox::new(6, 5, 10, 15, 20)?;
-		let bbox2 = TileBBox::new(6, 10, 15, 20, 25)?;
+		let mut bbox1 = TileBBox::from_boundaries(6, 5, 10, 15, 20)?;
+		let bbox2 = TileBBox::from_boundaries(6, 10, 15, 20, 25)?;
 
 		bbox1.include_bbox(&bbox2)?;
-		assert_eq!(bbox1, TileBBox::new(6, 5, 10, 20, 25).unwrap());
+		assert_eq!(bbox1, TileBBox::from_boundaries(6, 5, 10, 20, 25).unwrap());
 
 		// Including an empty bounding box should have no effect
 		let empty_bbox = TileBBox::new_empty(6)?;
 		bbox1.include_bbox(&empty_bbox)?;
-		assert_eq!(bbox1, TileBBox::new(6, 5, 10, 20, 25).unwrap());
+		assert_eq!(bbox1, TileBBox::from_boundaries(6, 5, 10, 20, 25).unwrap());
 
 		// Attempting to include a bounding box with different zoom level
-		let bbox_diff_level = TileBBox::new(5, 5, 10, 20, 25)?;
+		let bbox_diff_level = TileBBox::from_boundaries(5, 5, 10, 20, 25)?;
 		let result = bbox1.include_bbox(&bbox_diff_level);
 		assert!(result.is_err());
 
@@ -1231,19 +1373,19 @@ mod tests {
 
 	#[test]
 	fn should_intersect_bboxes_correctly_and_handle_empty_and_different_levels() -> Result<()> {
-		let mut bbox1 = TileBBox::new(6, 5, 10, 15, 20)?;
-		let bbox2 = TileBBox::new(6, 10, 15, 20, 25)?;
+		let mut bbox1 = TileBBox::from_boundaries(6, 5, 10, 15, 20)?;
+		let bbox2 = TileBBox::from_boundaries(6, 10, 15, 20, 25)?;
 
 		bbox1.intersect_bbox(&bbox2)?;
-		assert_eq!(bbox1, TileBBox::new(6, 10, 15, 15, 20).unwrap());
+		assert_eq!(bbox1, TileBBox::from_boundaries(6, 10, 15, 15, 20).unwrap());
 
 		// Intersect with a non-overlapping bounding box
-		let bbox3 = TileBBox::new(6, 16, 21, 20, 25)?;
+		let bbox3 = TileBBox::from_boundaries(6, 16, 21, 20, 25)?;
 		bbox1.intersect_bbox(&bbox3)?;
 		assert!(bbox1.is_empty());
 
 		// Attempting to intersect with a bounding box of different zoom level
-		let bbox_diff_level = TileBBox::new(5, 10, 15, 15, 20)?;
+		let bbox_diff_level = TileBBox::from_boundaries(5, 10, 15, 15, 20)?;
 		let result = bbox1.intersect_bbox(&bbox_diff_level);
 		assert!(result.is_err());
 
@@ -1252,10 +1394,10 @@ mod tests {
 
 	#[test]
 	fn should_correctly_determine_bbox_overlap() -> Result<()> {
-		let bbox1 = TileBBox::new(6, 5, 10, 15, 20)?;
-		let bbox2 = TileBBox::new(6, 10, 15, 20, 25)?;
-		let bbox3 = TileBBox::new(6, 16, 21, 20, 25)?;
-		let bbox4 = TileBBox::new(5, 10, 15, 15, 20)?;
+		let bbox1 = TileBBox::from_boundaries(6, 5, 10, 15, 20)?;
+		let bbox2 = TileBBox::from_boundaries(6, 10, 15, 20, 25)?;
+		let bbox3 = TileBBox::from_boundaries(6, 16, 21, 20, 25)?;
+		let bbox4 = TileBBox::from_boundaries(5, 10, 15, 15, 20)?;
 
 		assert!(bbox1.overlaps_bbox(&bbox2)?);
 		assert!(!bbox1.overlaps_bbox(&bbox3)?);
@@ -1271,7 +1413,7 @@ mod tests {
 
 	#[test]
 	fn should_get_correct_tile_index() -> Result<()> {
-		let bbox = TileBBox::new(4, 5, 10, 7, 12)?;
+		let bbox = TileBBox::from_boundaries(4, 5, 10, 7, 12)?;
 
 		assert_eq!(bbox.get_tile_index(&TileCoord::new(4, 5, 10).unwrap()).unwrap(), 0);
 		assert_eq!(bbox.get_tile_index(&TileCoord::new(4, 6, 10).unwrap()).unwrap(), 1);
@@ -1294,7 +1436,7 @@ mod tests {
 
 	#[test]
 	fn should_get_coord_by_index_correctly() -> Result<()> {
-		let bbox = TileBBox::new(4, 5, 10, 7, 12)?;
+		let bbox = TileBBox::from_boundaries(4, 5, 10, 7, 12)?;
 
 		assert_eq!(bbox.get_coord_by_index(0).unwrap(), TileCoord::new(4, 5, 10).unwrap());
 		assert_eq!(bbox.get_coord_by_index(1).unwrap(), TileCoord::new(4, 6, 10).unwrap());
@@ -1311,7 +1453,7 @@ mod tests {
 
 	#[test]
 	fn should_convert_to_geo_bbox_correctly() -> Result<()> {
-		let bbox = TileBBox::new(4, 5, 10, 7, 12)?;
+		let bbox = TileBBox::from_boundaries(4, 5, 10, 7, 12)?;
 		let geo_bbox = bbox.as_geo_bbox();
 
 		// Assuming TileCoord::as_geo() converts tile coordinates to geographical coordinates correctly,
@@ -1327,7 +1469,7 @@ mod tests {
 
 	#[test]
 	fn should_determine_contains3_correctly() -> Result<()> {
-		let bbox = TileBBox::new(4, 5, 10, 7, 12)?;
+		let bbox = TileBBox::from_boundaries(4, 5, 10, 7, 12)?;
 		let valid_coord = TileCoord::new(4, 6, 11).unwrap();
 		let invalid_coord_zoom = TileCoord::new(5, 6, 11).unwrap();
 		let invalid_coord_outside = TileCoord::new(4, 4, 9).unwrap();
@@ -1341,7 +1483,7 @@ mod tests {
 
 	#[test]
 	fn should_iterate_over_coords_correctly() -> Result<()> {
-		let bbox = TileBBox::new(4, 5, 10, 6, 11)?;
+		let bbox = TileBBox::from_boundaries(4, 5, 10, 6, 11)?;
 		let coords: Vec<TileCoord> = bbox.iter_coords().collect();
 		let expected_coords = vec![
 			TileCoord::new(4, 5, 10).unwrap(),
@@ -1356,7 +1498,7 @@ mod tests {
 
 	#[test]
 	fn should_iterate_over_coords_correctly_when_consumed() -> Result<()> {
-		let bbox = TileBBox::new(4, 5, 10, 6, 11)?;
+		let bbox = TileBBox::from_boundaries(4, 5, 10, 6, 11)?;
 		let coords: Vec<TileCoord> = bbox.into_iter_coords().collect();
 		let expected_coords = vec![
 			TileCoord::new(4, 5, 10).unwrap(),
@@ -1371,16 +1513,16 @@ mod tests {
 
 	#[test]
 	fn should_split_bbox_into_correct_grid() -> Result<()> {
-		let bbox = TileBBox::new(4, 0, 0, 7, 7)?;
+		let bbox = TileBBox::from_boundaries(4, 0, 0, 7, 7)?;
 
 		let grid_size = 4;
 		let grids: Vec<TileBBox> = bbox.iter_bbox_grid(grid_size).collect();
 
 		let expected_grids = vec![
-			TileBBox::new(4, 0, 0, 3, 3)?,
-			TileBBox::new(4, 4, 0, 7, 3)?,
-			TileBBox::new(4, 0, 4, 3, 7)?,
-			TileBBox::new(4, 4, 4, 7, 7)?,
+			TileBBox::from_boundaries(4, 0, 0, 3, 3)?,
+			TileBBox::from_boundaries(4, 4, 0, 7, 3)?,
+			TileBBox::from_boundaries(4, 0, 4, 3, 7)?,
+			TileBBox::from_boundaries(4, 4, 4, 7, 7)?,
 		];
 
 		assert_eq!(grids, expected_grids);
@@ -1390,13 +1532,13 @@ mod tests {
 
 	#[test]
 	fn should_scale_down_correctly() -> Result<()> {
-		let mut bbox = TileBBox::new(4, 4, 4, 7, 7)?;
+		let mut bbox = TileBBox::from_boundaries(4, 4, 4, 7, 7)?;
 		bbox.scale_down(2);
-		assert_eq!(bbox, TileBBox::new(4, 2, 2, 3, 3)?);
+		assert_eq!(bbox, TileBBox::from_boundaries(4, 2, 2, 3, 3)?);
 
 		// Scaling down by a factor larger than the coordinates
 		bbox.scale_down(4);
-		assert_eq!(bbox, TileBBox::new(4, 0, 0, 0, 0)?);
+		assert_eq!(bbox, TileBBox::from_boundaries(4, 0, 0, 0, 0)?);
 
 		Ok(())
 	}
@@ -1404,13 +1546,13 @@ mod tests {
 	#[test]
 	fn test_scaled_down_returns_new_bbox_and_preserves_original() -> Result<()> {
 		// Original bbox
-		let original = TileBBox::new(5, 10, 15, 20, 25)?;
+		let original = TileBBox::from_boundaries(5, 10, 15, 20, 25)?;
 		// scaled_down should return a new bbox without modifying the original
 		let scaled = original.get_scaled_down(4);
 		// Coordinates divided by 4: 10/4=2,15/4=3,20/4=5,25/4=6
-		assert_eq!(scaled, TileBBox::new(5, 2, 3, 5, 6)?);
+		assert_eq!(scaled, TileBBox::from_boundaries(5, 2, 3, 5, 6)?);
 		// Original remains unchanged
-		assert_eq!(original, TileBBox::new(5, 10, 15, 20, 25)?);
+		assert_eq!(original, TileBBox::from_boundaries(5, 10, 15, 20, 25)?);
 		// Scaling by 1 should produce identical bbox
 		let same = original.get_scaled_down(1);
 		assert_eq!(same, original);
@@ -1420,11 +1562,8 @@ mod tests {
 	#[test]
 	fn test_scale_down() {
 		fn test(min0: u32, max0: u32, min1: u32, max1: u32) {
-			fn t(min: u32, max: u32) -> TileBBox {
-				TileBBox::new(8, min, min, max, max).unwrap()
-			}
-			let mut bbox0 = t(min0, max0);
-			let bbox1 = t(min1, max1);
+			let mut bbox0 = TileBBox::from_boundaries(8, min0, min0, max0, max0).unwrap();
+			let bbox1 = TileBBox::from_boundaries(8, min1, min1, max1, max1).unwrap();
 			assert_eq!(
 				bbox0.get_scaled_down(4),
 				bbox1,
@@ -1447,37 +1586,32 @@ mod tests {
 
 	#[test]
 	fn should_shift_bbox_correctly() -> Result<()> {
-		let mut bbox = TileBBox::new(6, 5, 10, 15, 20)?;
+		let mut bbox = TileBBox::new(6, 5, 10, 10, 10)?;
 		bbox.shift_by(3, 4);
-		assert_eq!(bbox, TileBBox::new(6, 8, 14, 18, 24)?);
+		assert_eq!(bbox, TileBBox::new(6, 8, 14, 10, 10)?);
 
 		// Shifting beyond max should not cause overflow due to saturating_add
-		let mut bbox = TileBBox::new(6, 14, 14, 15, 15)?;
+		let mut bbox = TileBBox::new(6, 14, 14, 10, 10)?;
 		bbox.shift_by(2, 2);
-		assert_eq!(bbox, TileBBox::new(6, 16, 16, 17, 17)?);
+		assert_eq!(bbox, TileBBox::new(6, 16, 16, 10, 10)?);
 
-		Ok(())
-	}
-
-	#[test]
-	fn should_subtract_u32_correctly() -> Result<()> {
-		let mut bbox = TileBBox::new(6, 5, 10, 15, 20)?;
-		bbox.subtract(3, 5);
-		assert_eq!(bbox, TileBBox::new(6, 2, 5, 12, 15)?);
+		let mut bbox = TileBBox::new(6, 5, 10, 10, 10)?;
+		bbox.shift_by(-3, -5);
+		assert_eq!(bbox, TileBBox::new(6, 2, 5, 10, 10)?);
 
 		// Subtracting more than current coordinates should saturate at 0
-		bbox.subtract(5, 10);
-		assert_eq!(bbox, TileBBox::new(6, 0, 0, 7, 5)?);
+		bbox.shift_by(-5, -10);
+		assert_eq!(bbox, TileBBox::new(6, 0, 0, 10, 10)?);
 
 		Ok(())
 	}
 
 	#[test]
 	fn should_handle_bbox_overlap_edge_cases() -> Result<()> {
-		let bbox1 = TileBBox::new(4, 0, 0, 5, 5)?;
-		let bbox2 = TileBBox::new(4, 5, 5, 10, 10)?;
-		let bbox3 = TileBBox::new(4, 6, 6, 10, 10)?;
-		let bbox4 = TileBBox::new(4, 0, 0, 5, 5)?;
+		let bbox1 = TileBBox::from_boundaries(4, 0, 0, 5, 5)?;
+		let bbox2 = TileBBox::from_boundaries(4, 5, 5, 10, 10)?;
+		let bbox3 = TileBBox::from_boundaries(4, 6, 6, 10, 10)?;
+		let bbox4 = TileBBox::from_boundaries(4, 0, 0, 5, 5)?;
 
 		// Overlapping at the edge
 		assert!(bbox1.overlaps_bbox(&bbox2)?);
@@ -1505,9 +1639,9 @@ mod tests {
 
 	#[test]
 	fn should_handle_single_tile_in_grid_iteration() -> Result<()> {
-		let bbox = TileBBox::new(4, 5, 10, 5, 10)?;
+		let bbox = TileBBox::from_boundaries(4, 5, 10, 5, 10)?;
 		let grids: Vec<TileBBox> = bbox.iter_bbox_grid(4).collect();
-		let expected_grids = vec![TileBBox::new(4, 5, 10, 5, 10).unwrap()];
+		let expected_grids = vec![TileBBox::from_boundaries(4, 5, 10, 5, 10).unwrap()];
 		assert_eq!(grids, expected_grids);
 		Ok(())
 	}
@@ -1515,8 +1649,8 @@ mod tests {
 	#[test]
 	fn test_round_shifting() -> Result<()> {
 		fn test(inp: [u32; 4], exp: [u32; 4]) {
-			let bbox_exp = TileBBox::new(8, exp[0], exp[1], exp[2], exp[3]).unwrap();
-			let mut bbox_inp = TileBBox::new(8, inp[0], inp[1], inp[2], inp[3]).unwrap();
+			let bbox_exp = TileBBox::from_boundaries(8, exp[0], exp[1], exp[2], exp[3]).unwrap();
+			let mut bbox_inp = TileBBox::from_boundaries(8, inp[0], inp[1], inp[2], inp[3]).unwrap();
 			assert_eq!(bbox_inp.get_rounded(4), bbox_exp);
 			bbox_inp.round(4);
 			assert_eq!(bbox_inp, bbox_exp);
@@ -1535,8 +1669,8 @@ mod tests {
 	#[test]
 	fn test_round_scaling() -> Result<()> {
 		fn test(scale: u32, exp: [u32; 4]) {
-			let bbox_exp = TileBBox::new(12, exp[0], exp[1], exp[2], exp[3]).unwrap();
-			let mut bbox_inp = TileBBox::new(12, 12, 34, 56, 78).unwrap();
+			let bbox_exp = TileBBox::from_boundaries(12, exp[0], exp[1], exp[2], exp[3]).unwrap();
+			let mut bbox_inp = TileBBox::from_boundaries(12, 12, 34, 56, 78).unwrap();
 			assert_eq!(bbox_inp.get_rounded(scale), bbox_exp);
 			bbox_inp.round(scale);
 			assert_eq!(bbox_inp, bbox_exp);
@@ -1552,5 +1686,33 @@ mod tests {
 		test(100, [0, 0, 99, 99]);
 		test(1024, [0, 0, 1023, 1023]);
 		Ok(())
+	}
+
+	#[test]
+	fn bbox_flip_y() {
+		let test = |l, x0, y0, x1, y1| -> TileBBox {
+			let mut t = TileBBox::from_boundaries(l, x0, y0, x1, y1).unwrap();
+			t.flip_y();
+			t
+		};
+
+		assert_eq!(test(1, 0, 0, 1, 1), TileBBox::from_boundaries(1, 0, 0, 1, 1).unwrap());
+		assert_eq!(test(2, 0, 0, 1, 1), TileBBox::from_boundaries(2, 0, 2, 1, 3).unwrap());
+		assert_eq!(test(3, 0, 0, 1, 1), TileBBox::from_boundaries(3, 0, 6, 1, 7).unwrap());
+		assert_eq!(
+			test(9, 10, 0, 10, 511),
+			TileBBox::from_boundaries(9, 10, 0, 10, 511).unwrap()
+		);
+		assert_eq!(
+			test(9, 0, 10, 511, 10),
+			TileBBox::from_boundaries(9, 0, 501, 511, 501).unwrap()
+		);
+	}
+
+	#[test]
+	fn bbox_swap_xy_transform() {
+		let mut bbox = TileBBox::from_boundaries(4, 1, 2, 3, 4).unwrap();
+		bbox.swap_xy();
+		assert_eq!(bbox, TileBBox::from_boundaries(4, 2, 1, 4, 3).unwrap());
 	}
 }

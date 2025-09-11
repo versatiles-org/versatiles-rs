@@ -46,8 +46,7 @@ use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use std::path::Path;
 use versatiles_core::{
-	TileCompression::*, TileFormat::*, json::parse_json_str, progress::get_progress_bar, tilejson::TileJSON,
-	utils::TransformCoord, *,
+	TileCompression::*, TileFormat::*, json::parse_json_str, progress::get_progress_bar, tilejson::TileJSON, types::*,
 };
 
 /// A struct that provides functionality to read tile data from an MBTiles SQLite database.
@@ -253,7 +252,7 @@ impl MBTilesReader {
 
 			let max_value = 2i32.pow(z as u32) - 1;
 
-			bbox_pyramid.set_level_bbox(TileBBox::new(
+			bbox_pyramid.set_level_bbox(TileBBox::from_boundaries(
 				z as u8,
 				x0.clamp(0, max_value) as u32,
 				y0.clamp(0, max_value) as u32,
@@ -331,14 +330,14 @@ impl TilesReaderTrait for MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue querying the database.
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream> {
 		trace!("read tile stream from bbox {bbox:?}");
 
 		if bbox.is_empty() {
 			return Ok(TileStream::new_empty());
 		}
 
-		let max_index = bbox.max_index();
+		bbox.flip_y();
 
 		trace!("corrected bbox {bbox:?}");
 
@@ -352,17 +351,18 @@ impl TilesReaderTrait for MBTilesReader {
 		let vec: Vec<(TileCoord, Blob)> = stmt
 			.query_map(
 				[
-					bbox.x_min,
-					bbox.x_max,
-					max_index - bbox.y_max,
-					max_index - bbox.y_min,
+					bbox.x_min(),
+					bbox.x_max(),
+					bbox.y_min(),
+					bbox.y_max(),
 					bbox.level as u32,
 				],
 				move |row| {
 					let x = row.get::<_, u32>(0)?;
-					let y = max_index - row.get::<_, u32>(1)?;
+					let y = row.get::<_, u32>(1)?;
 					let level = row.get::<_, u8>(2)?;
-					let coord = TileCoord::new(level, x, y).unwrap();
+					let mut coord = TileCoord::new(level, x, y).unwrap();
+					coord.flip_y();
 					let blob = Blob::from(row.get::<_, Vec<u8>>(3)?);
 					Ok((coord, blob))
 				},

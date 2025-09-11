@@ -27,28 +27,31 @@ impl BlockDefinition {
 	///
 	/// # Returns
 	/// A new `BlockDefinition` instance.
-	pub fn new(bbox: &TileBBox) -> Self {
-		let x = bbox.x_min.div(256u32);
-		let y = bbox.y_min.div(256u32);
+	pub fn new(bbox: &TileBBox) -> Result<Self> {
+		ensure!(!bbox.is_empty(), "bbox must not be empty");
+		ensure!(bbox.width() <= 256, "bbox width must be <= 256");
+		ensure!(bbox.height() <= 256, "bbox height must be <= 256");
+
+		let x_min = bbox.x_min().div(256) * 256;
+		let y_min = bbox.y_min().div(256) * 256;
 		let level = bbox.level;
 		let global_bbox: TileBBox = *bbox;
 
 		let tiles_coverage = TileBBox::new(
 			level.min(8),
-			bbox.x_min - x * 256,
-			bbox.y_min - y * 256,
-			bbox.x_max - x * 256,
-			bbox.y_max - y * 256,
-		)
-		.unwrap();
+			bbox.x_min() - x_min,
+			bbox.y_min() - y_min,
+			bbox.width(),
+			bbox.height(),
+		)?;
 
-		Self {
-			offset: TileCoord::new(level, x, y).unwrap(),
+		Ok(Self {
+			offset: TileCoord::new(level, x_min, y_min).unwrap(),
 			global_bbox,
 			tiles_coverage,
 			tiles_range: ByteRange::empty(),
 			index_range: ByteRange::empty(),
-		}
+		})
 	}
 
 	/// Creates a `BlockDefinition` from a binary blob.
@@ -71,7 +74,7 @@ impl BlockDefinition {
 		let x_max = reader.read_u8()? as u32;
 		let y_max = reader.read_u8()? as u32;
 
-		let tiles_bbox = TileBBox::new(level.min(8), x_min, y_min, x_max, y_max)?;
+		let tiles_bbox = TileBBox::from_boundaries(level.min(8), x_min, y_min, x_max, y_max)?;
 
 		let offset = reader.read_u64()?;
 		let tiles_length = reader.read_u64()?;
@@ -80,7 +83,7 @@ impl BlockDefinition {
 		let tiles_range = ByteRange::new(offset, tiles_length);
 		let index_range = ByteRange::new(offset + tiles_length, index_length);
 
-		let global_bbox = TileBBox::new(
+		let global_bbox = TileBBox::from_boundaries(
 			level,
 			x_min + x * 256,
 			y_min + y * 256,
@@ -135,10 +138,10 @@ impl BlockDefinition {
 		writer.write_u32(self.offset.x)?;
 		writer.write_u32(self.offset.y)?;
 
-		writer.write_u8(self.tiles_coverage.x_min as u8)?;
-		writer.write_u8(self.tiles_coverage.y_min as u8)?;
-		writer.write_u8(self.tiles_coverage.x_max as u8)?;
-		writer.write_u8(self.tiles_coverage.y_max as u8)?;
+		writer.write_u8(self.tiles_coverage.x_min() as u8)?;
+		writer.write_u8(self.tiles_coverage.y_min() as u8)?;
+		writer.write_u8(self.tiles_coverage.x_max() as u8)?;
+		writer.write_u8(self.tiles_coverage.y_max() as u8)?;
 
 		ensure!(
 			self.tiles_range.offset + self.tiles_range.length == self.index_range.offset,
@@ -209,10 +212,10 @@ impl BlockDefinition {
 		format!(
 			"[{},[{},{}],[{},{}]]",
 			self.offset.level,
-			self.tiles_coverage.x_min + x_offset,
-			self.tiles_coverage.y_min + y_offset,
-			self.tiles_coverage.x_max + x_offset,
-			self.tiles_coverage.y_max + y_offset
+			self.tiles_coverage.x_min() + x_offset,
+			self.tiles_coverage.y_min() + y_offset,
+			self.tiles_coverage.x_max() + x_offset,
+			self.tiles_coverage.y_max() + y_offset
 		)
 	}
 }
@@ -234,7 +237,7 @@ mod tests {
 
 	#[test]
 	fn multitest() -> Result<()> {
-		let mut def = BlockDefinition::new(&TileBBox::new(12, 300, 400, 320, 450)?);
+		let mut def = BlockDefinition::new(&TileBBox::from_boundaries(12, 300, 400, 320, 450)?)?;
 		def.tiles_range = ByteRange::new(4, 5);
 		def.index_range = ByteRange::new(9, 6);
 
@@ -245,7 +248,10 @@ mod tests {
 		assert_eq!(def.as_str(), "[12,[300,400],[320,450]]");
 		assert_eq!(def.get_z(), 12);
 		assert_eq!(def.get_coord(), &TileCoord::new(12, 1, 1)?);
-		assert_eq!(def.get_global_bbox(), &TileBBox::new(12, 300, 400, 320, 450)?);
+		assert_eq!(
+			def.get_global_bbox(),
+			&TileBBox::from_boundaries(12, 300, 400, 320, 450)?
+		);
 		assert_eq!(
 			format!("{def:?}"),
 			"BlockDefinition { x/y/z: TileCoord(12, [1, 1]), bbox: 8: [44,144,64,194] (1071), tiles_range: ByteRange[4,5], index_range: ByteRange[9,6] }"
@@ -259,8 +265,8 @@ mod tests {
 
 	#[test]
 	fn test_set_tiles_range() -> Result<()> {
-		let bbox = TileBBox::new(14, 0, 0, 255, 255)?;
-		let mut def = BlockDefinition::new(&bbox);
+		let bbox = TileBBox::from_boundaries(14, 0, 0, 255, 255)?;
+		let mut def = BlockDefinition::new(&bbox)?;
 		let range = ByteRange::new(10, 20);
 
 		def.set_tiles_range(range);
@@ -271,8 +277,8 @@ mod tests {
 
 	#[test]
 	fn test_set_index_range() -> Result<()> {
-		let bbox = TileBBox::new(14, 0, 0, 255, 255)?;
-		let mut def = BlockDefinition::new(&bbox);
+		let bbox = TileBBox::from_boundaries(14, 0, 0, 255, 255)?;
+		let mut def = BlockDefinition::new(&bbox)?;
 		let range = ByteRange::new(10, 20);
 
 		def.set_index_range(range);

@@ -288,6 +288,16 @@ impl TileBBoxPyramid {
 		let center_lat = (bbox.1 + bbox.3) / 2.0;
 		Some(GeoCenter(center_lon, center_lat, zoom))
 	}
+	pub fn swap_xy(&mut self) {
+		self.level_bbox.iter_mut().for_each(|b| {
+			b.swap_xy();
+		});
+	}
+	pub fn flip_y(&mut self) {
+		self.level_bbox.iter_mut().for_each(|b| {
+			b.flip_y();
+		});
+	}
 }
 
 impl fmt::Debug for TileBBoxPyramid {
@@ -386,15 +396,42 @@ mod tests {
 		let mut pyramid = TileBBoxPyramid::new_full(8);
 		pyramid.intersect_geo_bbox(&GeoBBox(8.0653f64, 51.3563f64, 12.3528f64, 52.2564f64));
 
-		assert_eq!(pyramid.get_level_bbox(0), &TileBBox::new(0, 0, 0, 0, 0).unwrap());
-		assert_eq!(pyramid.get_level_bbox(1), &TileBBox::new(1, 1, 0, 1, 0).unwrap());
-		assert_eq!(pyramid.get_level_bbox(2), &TileBBox::new(2, 2, 1, 2, 1).unwrap());
-		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 4, 2, 4, 2).unwrap());
-		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 8, 5, 8, 5).unwrap());
-		assert_eq!(pyramid.get_level_bbox(5), &TileBBox::new(5, 16, 10, 17, 10).unwrap());
-		assert_eq!(pyramid.get_level_bbox(6), &TileBBox::new(6, 33, 21, 34, 21).unwrap());
-		assert_eq!(pyramid.get_level_bbox(7), &TileBBox::new(7, 66, 42, 68, 42).unwrap());
-		assert_eq!(pyramid.get_level_bbox(8), &TileBBox::new(8, 133, 84, 136, 85).unwrap());
+		assert_eq!(
+			pyramid.get_level_bbox(0),
+			&TileBBox::from_boundaries(0, 0, 0, 0, 0).unwrap()
+		);
+		assert_eq!(
+			pyramid.get_level_bbox(1),
+			&TileBBox::from_boundaries(1, 1, 0, 1, 0).unwrap()
+		);
+		assert_eq!(
+			pyramid.get_level_bbox(2),
+			&TileBBox::from_boundaries(2, 2, 1, 2, 1).unwrap()
+		);
+		assert_eq!(
+			pyramid.get_level_bbox(3),
+			&TileBBox::from_boundaries(3, 4, 2, 4, 2).unwrap()
+		);
+		assert_eq!(
+			pyramid.get_level_bbox(4),
+			&TileBBox::from_boundaries(4, 8, 5, 8, 5).unwrap()
+		);
+		assert_eq!(
+			pyramid.get_level_bbox(5),
+			&TileBBox::from_boundaries(5, 16, 10, 17, 10).unwrap()
+		);
+		assert_eq!(
+			pyramid.get_level_bbox(6),
+			&TileBBox::from_boundaries(6, 33, 21, 34, 21).unwrap()
+		);
+		assert_eq!(
+			pyramid.get_level_bbox(7),
+			&TileBBox::from_boundaries(7, 66, 42, 68, 42).unwrap()
+		);
+		assert_eq!(
+			pyramid.get_level_bbox(8),
+			&TileBBox::from_boundaries(8, 133, 84, 136, 85).unwrap()
+		);
 	}
 
 	#[test]
@@ -407,12 +444,12 @@ mod tests {
 		assert!(pyramid.get_level_bbox(0).is_empty());
 		assert!(pyramid.get_level_bbox(1).is_empty());
 		assert!(pyramid.get_level_bbox(2).is_empty());
-		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 1, 2, 4, 5)?);
+		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::from_boundaries(3, 1, 2, 4, 5)?);
 		assert!(pyramid.get_level_bbox(4).is_empty());
 		assert!(pyramid.get_level_bbox(5).is_empty());
 		assert!(pyramid.get_level_bbox(6).is_empty());
 		assert!(pyramid.get_level_bbox(7).is_empty());
-		assert_eq!(pyramid.get_level_bbox(8), &TileBBox::new(8, 6, 7, 6, 7)?);
+		assert_eq!(pyramid.get_level_bbox(8), &TileBBox::from_boundaries(8, 6, 7, 6, 7)?);
 		assert!(pyramid.get_level_bbox(9).is_empty());
 
 		Ok(())
@@ -421,14 +458,17 @@ mod tests {
 	#[test]
 	fn test_include_bbox2() {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		pyramid.include_bbox(&TileBBox::new(4, 1, 2, 3, 4).unwrap());
-		pyramid.include_bbox(&TileBBox::new(4, 5, 6, 7, 8).unwrap());
+		pyramid.include_bbox(&TileBBox::from_boundaries(4, 1, 2, 3, 4).unwrap());
+		pyramid.include_bbox(&TileBBox::from_boundaries(4, 5, 6, 7, 8).unwrap());
 
 		assert!(pyramid.get_level_bbox(0).is_empty());
 		assert!(pyramid.get_level_bbox(1).is_empty());
 		assert!(pyramid.get_level_bbox(2).is_empty());
 		assert!(pyramid.get_level_bbox(3).is_empty());
-		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 1, 2, 7, 8).unwrap());
+		assert_eq!(
+			pyramid.get_level_bbox(4),
+			&TileBBox::from_boundaries(4, 1, 2, 7, 8).unwrap()
+		);
 		assert!(pyramid.get_level_bbox(5).is_empty());
 		assert!(pyramid.get_level_bbox(6).is_empty());
 		assert!(pyramid.get_level_bbox(7).is_empty());
@@ -476,17 +516,41 @@ mod tests {
 		pyramid.add_border(1, 2, 3, 4);
 
 		// Check that each level's bounding box has been adjusted correctly.
-		assert_eq!(pyramid.get_level_bbox(0), &TileBBox::new(0, 0, 0, 0, 0).unwrap());
-		assert_eq!(pyramid.get_level_bbox(1), &TileBBox::new(1, 0, 0, 1, 1).unwrap());
-		assert_eq!(pyramid.get_level_bbox(2), &TileBBox::new(2, 0, 0, 3, 3).unwrap());
-		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 2, 1, 7, 7).unwrap());
-		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 6, 5, 11, 12).unwrap());
-		assert_eq!(pyramid.get_level_bbox(5), &TileBBox::new(5, 14, 13, 19, 20).unwrap());
-		assert_eq!(pyramid.get_level_bbox(6), &TileBBox::new(6, 29, 28, 35, 36).unwrap());
-		assert_eq!(pyramid.get_level_bbox(7), &TileBBox::new(7, 59, 58, 68, 69).unwrap());
+		assert_eq!(
+			pyramid.get_level_bbox(0),
+			&TileBBox::from_boundaries(0, 0, 0, 0, 0).unwrap()
+		);
+		assert_eq!(
+			pyramid.get_level_bbox(1),
+			&TileBBox::from_boundaries(1, 0, 0, 1, 1).unwrap()
+		);
+		assert_eq!(
+			pyramid.get_level_bbox(2),
+			&TileBBox::from_boundaries(2, 0, 0, 3, 3).unwrap()
+		);
+		assert_eq!(
+			pyramid.get_level_bbox(3),
+			&TileBBox::from_boundaries(3, 2, 1, 7, 7).unwrap()
+		);
+		assert_eq!(
+			pyramid.get_level_bbox(4),
+			&TileBBox::from_boundaries(4, 6, 5, 11, 12).unwrap()
+		);
+		assert_eq!(
+			pyramid.get_level_bbox(5),
+			&TileBBox::from_boundaries(5, 14, 13, 19, 20).unwrap()
+		);
+		assert_eq!(
+			pyramid.get_level_bbox(6),
+			&TileBBox::from_boundaries(6, 29, 28, 35, 36).unwrap()
+		);
+		assert_eq!(
+			pyramid.get_level_bbox(7),
+			&TileBBox::from_boundaries(7, 59, 58, 68, 69).unwrap()
+		);
 		assert_eq!(
 			pyramid.get_level_bbox(8),
-			&TileBBox::new(8, 120, 118, 134, 135).unwrap()
+			&TileBBox::from_boundaries(8, 120, 118, 134, 135).unwrap()
 		);
 	}
 
@@ -573,7 +637,7 @@ mod tests {
 	#[test]
 	fn test_include_bbox1() {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		let tb = TileBBox::new(6, 10, 10, 12, 12).unwrap();
+		let tb = TileBBox::from_boundaries(6, 10, 10, 12, 12).unwrap();
 		pyramid.include_bbox(&tb);
 		assert!(!pyramid.get_level_bbox(6).is_empty());
 		// No other level should be affected
@@ -596,7 +660,7 @@ mod tests {
 	#[test]
 	fn test_contains_coord() {
 		let mut p = TileBBoxPyramid::new_empty();
-		p.include_bbox(&TileBBox::new(10, 100, 200, 300, 400).unwrap());
+		p.include_bbox(&TileBBox::from_boundaries(10, 100, 200, 300, 400).unwrap());
 		assert!(!p.contains_coord(&TileCoord::new(10, 99, 200).unwrap()));
 		assert!(!p.contains_coord(&TileCoord::new(10, 100, 199).unwrap()));
 		assert!(p.contains_coord(&TileCoord::new(10, 100, 200).unwrap()));
@@ -609,14 +673,14 @@ mod tests {
 	#[test]
 	fn test_overlaps_bbox() {
 		let mut p = TileBBoxPyramid::new_empty();
-		p.include_bbox(&TileBBox::new(10, 100, 200, 300, 400).unwrap());
-		assert!(!p.overlaps_bbox(&TileBBox::new(10, 0, 0, 99, 200).unwrap()));
-		assert!(!p.overlaps_bbox(&TileBBox::new(10, 0, 0, 100, 199).unwrap()));
-		assert!(p.overlaps_bbox(&TileBBox::new(10, 0, 0, 100, 200).unwrap()));
-		assert!(p.overlaps_bbox(&TileBBox::new(10, 300, 400, 500, 600).unwrap()));
-		assert!(!p.overlaps_bbox(&TileBBox::new(10, 300, 401, 500, 600).unwrap()));
-		assert!(!p.overlaps_bbox(&TileBBox::new(10, 301, 400, 500, 600).unwrap()));
-		assert!(!p.overlaps_bbox(&TileBBox::new(11, 300, 400, 500, 600).unwrap()));
+		p.include_bbox(&TileBBox::from_boundaries(10, 100, 200, 300, 400).unwrap());
+		assert!(!p.overlaps_bbox(&TileBBox::from_boundaries(10, 0, 0, 99, 200).unwrap()));
+		assert!(!p.overlaps_bbox(&TileBBox::from_boundaries(10, 0, 0, 100, 199).unwrap()));
+		assert!(p.overlaps_bbox(&TileBBox::from_boundaries(10, 0, 0, 100, 200).unwrap()));
+		assert!(p.overlaps_bbox(&TileBBox::from_boundaries(10, 300, 400, 500, 600).unwrap()));
+		assert!(!p.overlaps_bbox(&TileBBox::from_boundaries(10, 300, 401, 500, 600).unwrap()));
+		assert!(!p.overlaps_bbox(&TileBBox::from_boundaries(10, 301, 400, 500, 600).unwrap()));
+		assert!(!p.overlaps_bbox(&TileBBox::from_boundaries(11, 300, 400, 500, 600).unwrap()));
 	}
 
 	#[test]
@@ -680,5 +744,27 @@ mod tests {
 		// The center then should be around (0, 0, some zoom)
 		let maybe_center = p.get_geo_center();
 		assert!(maybe_center.is_some());
+	}
+
+	#[test]
+	fn pyramid_swap_xy_transform() {
+		let mut pyramid = TileBBoxPyramid::new_empty();
+		pyramid.include_bbox(&TileBBox::from_boundaries(4, 0, 1, 2, 3).unwrap());
+		pyramid.swap_xy();
+		assert_eq!(
+			pyramid.get_level_bbox(4),
+			&TileBBox::from_boundaries(4, 1, 0, 3, 2).unwrap()
+		);
+	}
+
+	#[test]
+	fn pyramid_flip_y_transform() {
+		let mut pyramid = TileBBoxPyramid::new_empty();
+		pyramid.include_bbox(&TileBBox::from_boundaries(4, 0, 1, 2, 3).unwrap());
+		pyramid.flip_y();
+		assert_eq!(
+			pyramid.get_level_bbox(4),
+			&TileBBox::from_boundaries(4, 0, 12, 2, 14).unwrap()
+		);
 	}
 }

@@ -113,7 +113,7 @@ impl VersaTilesWriter {
 
 					Box::pin(async move {
 						// Log the start of the block
-						let mut block = BlockDefinition::new(&bbox);
+						let mut block = BlockDefinition::new(&bbox).unwrap();
 						debug!("start block {block:?}");
 
 						// Create a new BlockWriter for the block

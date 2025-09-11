@@ -167,7 +167,12 @@ impl OperationTrait for Operation {
 							.iter_coords()
 							.filter_map(|coord| {
 								image
-									.crop_imm((coord.x - bbox.x_min) * size, (coord.y - bbox.y_min) * size, size, size)
+									.crop_imm(
+										(coord.x - bbox.x_min()) * size,
+										(coord.y - bbox.y_min()) * size,
+										size,
+										size,
+									)
 									.into_optional()
 									.map(|img| (coord, img))
 							})

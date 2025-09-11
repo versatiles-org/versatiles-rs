@@ -170,13 +170,15 @@ impl Operation {
 		Ok(())
 	}
 
-	#[context("Failed to build images from cache for bbox {bbox0:?}")]
-	async fn build_images_from_cache(&self, bbox0: TileBBox) -> Result<TileBBoxContainer<Option<DynamicImage>>> {
-		ensure!(bbox0.level < self.level_base);
-		ensure!(bbox0.width() <= BLOCK_TILE_COUNT);
-		ensure!(bbox0.height() <= BLOCK_TILE_COUNT);
-		let mut corner0 = bbox0.get_corner_min();
-		corner0.floor(BLOCK_TILE_COUNT);
+	#[context("Failed to build images from cache for bbox {bbox:?}")]
+	async fn build_images_from_cache(&self, bbox: TileBBox) -> Result<TileBBoxContainer<Option<DynamicImage>>> {
+		ensure!(bbox.level < self.level_base, "Invalid level");
+		ensure!(bbox.width() <= BLOCK_TILE_COUNT, "Invalid width");
+		ensure!(bbox.height() <= BLOCK_TILE_COUNT, "Invalid height");
+
+		let bbox0 = bbox.get_rounded(BLOCK_TILE_COUNT);
+		assert_eq!(bbox0.width(), BLOCK_TILE_COUNT);
+		assert_eq!(bbox0.height(), BLOCK_TILE_COUNT);
 
 		let mut map: TileBBoxContainer<Vec<(TileCoord, DynamicImage)>> = TileBBoxContainer::new_default(bbox0);
 
@@ -185,13 +187,10 @@ impl Operation {
 
 		// get images from cache
 		let mut cache = self.cache.lock().await;
-		for (xi, yi) in &[(0, 0), (0, 1), (1, 0), (1, 1)] {
-			let corner1 = TileCoord::new(
-				corner0.level + 1,
-				corner0.x * 2 + xi * BLOCK_TILE_COUNT,
-				corner0.y * 2 + yi * BLOCK_TILE_COUNT,
-			)?;
-			if let Some(images1) = cache.remove(&corner1)? {
+		for q in &[0, 1, 2, 3] {
+			let bbox1 = bbox0.as_level_increased().get_quadrant(*q)?;
+
+			if let Some(images1) = cache.remove(&bbox1.get_corner_min())? {
 				for (coord1, image1) in images1 {
 					if let Some(image1) = image1 {
 						assert_eq!(image1.width(), half_size);
@@ -307,4 +306,116 @@ impl TransformOperationFactoryTrait for Factory {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+	use super::*;
+	use crate::helpers::mock_image_source::MockImageSource;
+	use imageproc::image::GenericImageView;
+
+	fn make_operation(tile_size: u32, level_base: u8) -> Operation {
+		let parameters = TilesReaderParameters::new(
+			TileFormat::PNG,
+			TileCompression::Uncompressed,
+			TileBBoxPyramid::new_full(level_base),
+		);
+
+		let pyramid = TileBBoxPyramid::from_geo_bbox(level_base, level_base, &GeoBBox(2.224, 48.815, 2.47, 48.903));
+		Operation {
+			parameters,
+			source: Box::new(MockImageSource::new("F00.png", Some(pyramid), tile_size).unwrap()),
+			tilejson: TileJSON::default(),
+			level_base,
+			tile_size,
+			traversal: Traversal::new_any_size(1, 1).unwrap(),
+			cache: Arc::new(Mutex::new(CacheMap::default())),
+		}
+	}
+
+	fn solid_rgba(size: u32, r: u8, g: u8, b: u8, a: u8) -> DynamicImage {
+		let color = imageproc::image::Rgba([r, g, b, a]);
+		let mut img = DynamicImage::new_rgba8(size, size);
+		for y in 0..size {
+			for x in 0..size {
+				img.put_pixel(x, y, color);
+			}
+		}
+		img
+	}
+
+	#[tokio::test]
+	async fn add_images_to_cache_inserts_half_tiles_under_floored_key() -> Result<()> {
+		let op = make_operation(2, 6); // tiny tiles to keep work light
+		let bbox = TileBBox::from_boundaries(6, 0, 0, 31, 31)?; // 32x32 block at base level
+		let mut container = TileBBoxContainer::new_default(bbox);
+		// Populate with simple solid tiles (only a tiny subset to keep it cheap)
+		for y in 0..bbox.height() {
+			for x in 0..bbox.width() {
+				let c = TileCoord::new(6, bbox.x_min() + x, bbox.y_min() + y)?;
+				container.insert(c, Some(solid_rgba(2, x as u8, y as u8, 32, 255)))?;
+			}
+		}
+
+		op.add_images_to_cache(&container).await?;
+
+		// Cache key should be the floored corner of the container bbox at level 6
+		let mut cache = op.cache.lock().await;
+		let key = TileCoord::new(6, 0, 0)?; // floor(0,0) by 32 is (0,0)
+		assert!(cache.contains_key(&key));
+
+		let stored = cache.remove(&key)?.expect("value stored");
+		// Stored entries are (coord, Option<img>) with half-size images (1x1 at tile_size=2)
+		assert!(!stored.is_empty());
+
+		for (coord, img_opt) in &stored {
+			assert_eq!(coord.level, 6);
+			assert!(img_opt.is_some());
+			assert_eq!(img_opt.as_ref().unwrap().width(), 1);
+			assert_eq!(img_opt.as_ref().unwrap().height(), 1);
+		}
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn build_images_from_cache_composes_quadrants() -> Result<()> {
+		let op = make_operation(2, 6);
+
+		// Prepare cache content by adding a full 32x32 block at level 6
+		let bbox_lvl6 = TileBBox::from_boundaries(6, 0, 0, 31, 31)?;
+		let mut cont6 = TileBBoxContainer::new_default(bbox_lvl6);
+		for y in 0..bbox_lvl6.height() {
+			for x in 0..bbox_lvl6.width() {
+				let c = TileCoord::new(6, x, y)?;
+				let r = (x % 2) as u8 * 200;
+				let g = (y % 2) as u8 * 200;
+				cont6.insert(c, Some(solid_rgba(2, r, g, 0, 255)))?;
+			}
+		}
+		op.add_images_to_cache(&cont6).await?;
+
+		// Now request composed images at level 5 for a tiny bbox (2x2 tiles)
+		let bbox_lvl5 = TileBBox::from_boundaries(5, 0, 0, 1, 1)?;
+		let result = op.build_images_from_cache(bbox_lvl5).await?;
+		let items: Vec<_> = result.into_iter().collect();
+		// We expect at least one composed tile present (others may be missing if cache quadrants absent)
+		assert!(!items.is_empty());
+
+		for (coord, img_opt) in &items {
+			assert_eq!(coord.level, 5);
+			assert!(img_opt.is_some());
+			let img = img_opt.as_ref().unwrap();
+			assert_eq!(img.width(), 2);
+			assert_eq!(img.height(), 2);
+			// Check pixel colors to verify correct quadrant composition
+			let px00 = img.get_pixel(0, 0).0; // from (0,0) at level 6
+			let px01 = img.get_pixel(0, 1).0; // from (0,1) at level 6
+			let px10 = img.get_pixel(1, 0).0; // from (1,0) at level 6
+			let px11 = img.get_pixel(1, 1).0; // from (1,1) at level 6
+			assert_eq!(px00, [0, 0, 0, 255]); // (0,0)
+			assert_eq!(px01, [0, 200, 0, 255]); // (0,1)
+			assert_eq!(px10, [200, 0, 0, 255]); // (1,0)
+			assert_eq!(px11, [200, 200, 0, 255]); // (1,1)
+		}
+
+		Ok(())
+	}
+}

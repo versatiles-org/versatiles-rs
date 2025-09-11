@@ -92,8 +92,8 @@ fn sort_depth_first(bboxes: &mut [TileBBox], size: u32) {
 		// Build a depth-first key: quadtree path (MSB first) plus sentinel 4
 		let mut k = Vec::with_capacity(b.level as usize + 1);
 		for i in (0..b.level).rev() {
-			let bit_x = (((b.x_min / size) >> i) & 1) as u8;
-			let bit_y = (((b.y_min / size) >> i) & 1) as u8;
+			let bit_x = (((b.x_min() / size) >> i) & 1) as u8;
+			let bit_y = (((b.y_min() / size) >> i) & 1) as u8;
 			k.push(bit_x | (bit_y << 1));
 		}
 		k.push(4);
@@ -116,7 +116,7 @@ mod tests {
 
 	/// Build a TileBBox at given level, x, y.
 	fn make_bbox(level: u8, x: u32, y: u32) -> TileBBox {
-		TileBBox::new(level, x, y, x, y).unwrap()
+		TileBBox::from_boundaries(level, x, y, x, y).unwrap()
 	}
 
 	#[test]
