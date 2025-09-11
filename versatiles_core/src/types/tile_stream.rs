@@ -225,23 +225,17 @@ where
 	/// # use futures::{future, stream};
 	/// #
 	/// async fn example(tile_streams: Vec<impl std::future::Future<Output=TileStream<'static>> + Send + 'static>) {
-	///     let merged = TileStream::from_streams(stream::iter(tile_streams), 1);
+	///     let merged = TileStream::from_streams(stream::iter(tile_streams));
 	///     let all_items = merged.to_vec().await;
 	///     // `all_items` now contains items from all child streams
 	/// }
 	/// ```
-	pub fn from_streams<FutureStream>(
-		streams: impl Stream<Item = FutureStream> + Send + 'a,
-		cores_per_task: usize,
-	) -> TileStream<'a, T>
+	pub fn from_streams<FutureStream>(streams: impl Stream<Item = FutureStream> + Send + 'a) -> TileStream<'a, T>
 	where
 		FutureStream: Future<Output = TileStream<'a, T>> + Send + 'a,
 	{
-		// Prevent division by zero and ensure at least 1 in-flight task.
-		let limit = num_cpus::get().saturating_div(cores_per_task.max(1)).min(1);
-
 		TileStream {
-			inner: Box::pin(streams.buffer_unordered(limit).map(|s| s.inner).flatten()),
+			inner: Box::pin(streams.buffer_unordered(num_cpus::get()).map(|s| s.inner).flatten()),
 		}
 	}
 
@@ -907,7 +901,7 @@ mod tests {
 		];
 
 		// Merge them
-		let merged = TileStream::<Blob>::from_streams(stream::iter(substreams), 1);
+		let merged = TileStream::<Blob>::from_streams(stream::iter(substreams));
 		let items = merged.to_vec().await;
 		assert_eq!(items.len(), 2);
 	}
@@ -1128,21 +1122,7 @@ mod tests {
 			Box::pin(async { TileStream::from_vec(vec![(TileCoord::new(1, 1, 1).unwrap(), Blob::from("b"))]) })
 				as Pin<Box<dyn Future<Output = TileStream<'static>> + Send>>,
 		];
-		let merged = TileStream::<Blob>::from_streams(stream::iter(substreams), usize::MAX);
-		let items = merged.to_vec().await;
-		assert_eq!(items.len(), 2);
-	}
-
-	#[tokio::test]
-	async fn should_merge_streams_with_zero_cores_per_task() {
-		// cores_per_task==0 falls back to per_task=1 and limit>=1
-		let substreams = vec![
-			Box::pin(async { TileStream::from_vec(vec![(TileCoord::new(2, 2, 2).unwrap(), Blob::from("x"))]) })
-				as Pin<Box<dyn Future<Output = TileStream<'static>> + Send>>,
-			Box::pin(async { TileStream::from_vec(vec![(TileCoord::new(3, 3, 3).unwrap(), Blob::from("y"))]) })
-				as Pin<Box<dyn Future<Output = TileStream<'static>> + Send>>,
-		];
-		let merged = TileStream::<Blob>::from_streams(stream::iter(substreams), 0);
+		let merged = TileStream::<Blob>::from_streams(stream::iter(substreams));
 		let items = merged.to_vec().await;
 		assert_eq!(items.len(), 2);
 	}

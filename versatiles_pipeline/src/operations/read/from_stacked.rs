@@ -142,8 +142,8 @@ impl Operation {
 		// Divide the requested bbox into manageable chunks.
 		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
-		Ok(TileStream::from_streams(
-			stream::iter(sub_bboxes).map(move |bbox| async move {
+		Ok(TileStream::from_streams(stream::iter(sub_bboxes).map(
+			move |bbox| async move {
 				let mut tiles = TileBBoxContainer::<Option<T>>::new_default(bbox);
 
 				for source in self.sources.iter() {
@@ -173,9 +173,8 @@ impl Operation {
 					.flat_map(|(coord, item)| item.map(|tile| (coord, tile)))
 					.collect::<Vec<_>>();
 				TileStream::from_vec(vec)
-			}),
-			1,
-		))
+			},
+		)))
 	}
 }
 

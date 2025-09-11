@@ -152,8 +152,8 @@ impl OperationTrait for Operation {
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
-		Ok(TileStream::from_streams(
-			stream::iter(bboxes).map(move |bbox| async move {
+		Ok(TileStream::from_streams(stream::iter(bboxes).map(
+			move |bbox| async move {
 				let mut tiles = TileBBoxContainer::<Vec<VectorTile>>::new_default(bbox);
 
 				for source in self.sources.iter() {
@@ -179,9 +179,8 @@ impl OperationTrait for Operation {
 						})
 						.collect(),
 				)
-			}),
-			1,
-		))
+			},
+		)))
 	}
 }
 

@@ -115,7 +115,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 						let p1 = p0.clone();
 						async move { self.get_tile_stream(bbox).await.unwrap().inspect(move || p1.inc(1)) }
 					});
-					callback(bbox, TileStream::from_streams(streams, num_cpus::get() / 4)).await?;
+					callback(bbox, TileStream::from_streams(streams)).await?;
 					i_read += bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
 				}
 			}

@@ -193,7 +193,7 @@ impl OperationTrait for Operation {
 			}
 		});
 
-		Ok(TileStream::from_streams(streams, 4))
+		Ok(TileStream::from_streams(streams))
 	}
 
 	/// Stream decoded vector tiles contained in the bounding box.
