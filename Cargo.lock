@@ -3460,6 +3460,7 @@ dependencies = [
  "async-trait",
  "futures",
  "gdal",
+ "gdal-sys",
  "imageproc",
  "itertools 0.14.0",
  "lazy_static",

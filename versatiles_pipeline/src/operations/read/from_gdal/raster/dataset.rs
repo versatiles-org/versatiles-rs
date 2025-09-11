@@ -1,13 +1,13 @@
 use super::{BandMapping, BandMappingItem, Instance};
-use anyhow::{Context, Result, ensure};
-use gdal::{
-	Dataset, GeoTransform, config::set_config_option, raster::reproject, spatial_ref::SpatialRef, vector::Geometry,
-};
+use anyhow::{Context, Result, bail, ensure};
+use gdal::{Dataset, GeoTransform, config::set_config_option, spatial_ref::SpatialRef, vector::Geometry};
+use gdal_sys::{CPLErr, CPLGetLastErrorMsg, GDALReprojectImage, GDALResampleAlg};
 use imageproc::image::DynamicImage;
 use log::{debug, trace};
 use std::{
 	collections::LinkedList,
 	path::{Path, PathBuf},
+	ptr::{null, null_mut},
 	sync::Arc,
 };
 use tokio::sync::Mutex;
@@ -109,7 +109,24 @@ impl GdalDataset {
 			dst.set_geo_transform(&geo_transform)?;
 			trace!("Prepared GeoTransform for destination: {:?}", geo_transform);
 
-			reproject(instance.dataset(), &dst)?;
+			unsafe {
+				let rv = GDALReprojectImage(
+					instance.dataset().c_dataset(),
+					null(),
+					dst.c_dataset(),
+					null(),
+					GDALResampleAlg::GRA_Bilinear,
+					0.0,
+					0.0,
+					None,
+					null_mut(),
+					null_mut(),
+				);
+				if rv != CPLErr::CE_None {
+					bail!(format!("{:?}", CPLGetLastErrorMsg()));
+				}
+			}
+
 			trace!("Reprojection complete");
 			Ok((instance, dst))
 		})
