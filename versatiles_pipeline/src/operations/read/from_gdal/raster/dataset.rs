@@ -336,45 +336,27 @@ fn bbox_to_mercator(bbox: &GeoBBox) -> Result<[f64; 4]> {
 mod tests {
 	use super::*;
 	use anyhow::anyhow;
+	use rstest::rstest;
 	use std::path::PathBuf;
 	use versatiles_core::TileCoord;
 
-	#[test]
-	fn test_bbox_to_mercator() {
-		fn run_bbox_to_mercator(bbox: [i32; 4]) -> [i32; 4] {
-			let mercator_bbox = bbox_to_mercator(&GeoBBox::from(&bbox)).unwrap();
+	#[rstest]
+	#[case([-200, -100, 200, 100], [-20037508, -20037508, 20037508, 20037508])]
+	#[case([-200, -1, 200, 1], [-20037508, -111325, 20037508, 111325])]
+	#[case([-1, -100, 1, 100], [-111319, -20037508, 111319, 20037508])]
+	fn test_bbox_to_mercator(#[case] input: [i32; 4], #[case] expected: [i32; 4]) {
+		let mercator_bbox = bbox_to_mercator(&GeoBBox::from(&input)).unwrap();
+		assert_eq!(
 			[
 				mercator_bbox[0] as i32,
 				mercator_bbox[1] as i32,
 				mercator_bbox[2] as i32,
 				mercator_bbox[3] as i32,
-			]
-		}
-		assert_eq!(
-			run_bbox_to_mercator([-200, -100, 200, 100]),
-			[-20037508, -20037508, 20037508, 20037508]
-		);
-
-		assert_eq!(
-			run_bbox_to_mercator([-200, -1, 200, 1]),
-			[-20037508, -111325, 20037508, 111325]
-		);
-
-		assert_eq!(
-			run_bbox_to_mercator([-1, -100, 1, 100]),
-			[-111319, -20037508, 111319, 20037508]
+			],
+			expected
 		);
 	}
 
-	/// End‑to‑end test that renders a **7×7 pixel crop** from the synthetic
-	/// `gradient.tif` dataset at various zoom/x/y coordinates.
-	/// The `gradient.tif` dataset is a simple 256x256 gradient image
-	/// where the red channel contains the x‑coordinate,
-	/// the green channel contains the y‑coordinate, and the blue channel is zero.
-	/// This verifies:
-	/// * GDAL read‑path through `get_image_data_from_gdal`,
-	/// * band mapping order (R,G,B),
-	/// * correct Mercator reprojection and pixel alignment.
 	#[tokio::test]
 	async fn test_dataset_get_image() -> Result<()> {
 		async fn gradient_test(level: u8, x: u32, y: u32) -> Result<[Vec<u8>; 2]> {
