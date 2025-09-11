@@ -1,7 +1,7 @@
 use super::{BandMapping, BandMappingItem, Instance};
 use anyhow::{Context, Result, bail, ensure};
 use gdal::{Dataset, GeoTransform, config::set_config_option, spatial_ref::SpatialRef, vector::Geometry};
-use gdal_sys::{CPLErr, CPLGetLastErrorMsg, GDALReprojectImage, GDALResampleAlg};
+use gdal_sys::{CPLErr, CPLGetLastErrorMsg, GDALReprojectImage, GDALResampleAlg, OGRwkbGeometryType};
 use imageproc::image::DynamicImage;
 use log::{debug, trace};
 use std::{
@@ -286,35 +286,51 @@ fn dataset_pixel_size(dataset: &gdal::Dataset) -> Result<f64> {
 		.spatial_ref()
 		.context("GDAL dataset must have a spatial reference (SRS) defined")?;
 
-	let (width, height) = dataset.raster_size();
-	let cx = (width as f64) / 2.0;
-	let cy = (height as f64) / 2.0;
-
 	// Helper to map pixel (col,row) to georeferenced coordinates
-	let px_to_geo = |col: f64, row: f64| -> Result<(f64, f64)> {
-		let x = gt[0] + col * gt[1] + row * gt[2];
-		let y = gt[3] + col * gt[4] + row * gt[5];
-		let mut p = Geometry::bbox(x, y, x, y)?;
-		p.set_spatial_ref(srs.clone());
-		p.transform_to_inplace(&SpatialRef::from_epsg(3857)?)?;
-		let e = p.envelope();
-		Ok((e.MinX, e.MinY))
+	let pixel_to_size = |col: f64, row: f64| -> Result<f64> {
+		let point =
+			|x: f64, y: f64| -> (f64, f64, f64) { (gt[0] + x * gt[1] + y * gt[2], gt[3] + x * gt[4] + y * gt[5], 0.0) };
+
+		let mut geom = Geometry::empty(OGRwkbGeometryType::wkbLineString)?;
+		geom.add_point(point(col, row));
+		geom.add_point(point(col + 1.0, row));
+		geom.add_point(point(col, row + 1.0));
+		geom.set_spatial_ref(srs.clone());
+		geom.transform_to_inplace(&SpatialRef::from_epsg(3857)?)?;
+
+		let mut p = vec![];
+		geom.get_points(&mut p);
+
+		let p0 = &p[0];
+		let px = &p[1];
+		let py = &p[2];
+		let ax = (px.0 - p0.0).powi(2) + (px.1 - p0.1).powi(2);
+		let ay = (py.0 - p0.0).powi(2) + (py.1 - p0.1).powi(2);
+
+		Ok(ax.min(ay).sqrt())
 	};
 
-	let (mx0, my0) = px_to_geo(cx, cy)?;
-	let (mx1, my1) = px_to_geo(cx + 1.0, cy)?;
-	let (mx2, my2) = px_to_geo(cx, cy + 1.0)?;
-	trace!(
-		"Mercator sample points: (mx0,my0)=({:.3},{:.3}), (mx1,my1)=({:.3},{:.3}), (mx2,my2)=({:.3},{:.3})",
-		mx0, my0, mx1, my1, mx2, my2
-	);
+	let (width, height) = dataset.raster_size();
+	let mut size_min = f64::MAX;
+	for y in [0.1, 0.5, 0.9] {
+		for x in [0.1, 0.5, 0.9] {
+			let px = (width as f64) * x;
+			let py = (height as f64) * y;
+			if let Ok(size) = pixel_to_size(px, py)
+				&& size > 0.0
+				&& size < size_min
+			{
+				size_min = size;
+			}
+		}
+	}
 
-	let dist_x = ((mx1 - mx0).powi(2) + (my1 - my0).powi(2)).sqrt();
-	let dist_y = ((mx2 - mx0).powi(2) + (my2 - my0).powi(2)).sqrt();
-	let d = dist_x.max(dist_y);
-	debug!("pixel_size candidates: dx={:.6}, dy={:.6} → d={:.6}", dist_x, dist_y, d);
-	ensure!(d.is_finite() && d > 0.0, "Invalid pixel size in meters computed");
-	Ok(d)
+	debug!("pixel_size: {:.6}", size_min);
+	ensure!(
+		size_min.is_finite() && size_min > 0.0,
+		"Invalid pixel size in meters computed"
+	);
+	Ok(size_min)
 }
 
 fn bbox_to_mercator(bbox: &GeoBBox) -> Result<[f64; 4]> {
