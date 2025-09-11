@@ -1,8 +1,6 @@
-use std::fmt::Debug;
-
 use crate::{TileBBox, TileCoord, TileStream};
 use anyhow::Result;
-use futures::StreamExt;
+use std::fmt::Debug;
 use versatiles_derive::context;
 
 pub struct TileBBoxContainer<I> {
@@ -30,17 +28,20 @@ impl<I: Clone + Default> TileBBoxContainer<I> {
 		self.vec.is_empty()
 	}
 
-	pub async fn from_stream<E: Clone>(
+	#[context("Failed to create TileBBoxContainer from stream")]
+	pub async fn from_stream<E: Clone + Send>(
 		bbox: TileBBox,
-		mut stream: TileStream<'_, E>,
+		stream: TileStream<'_, E>,
 	) -> Result<TileBBoxContainer<Option<E>>> {
-		let mut container = TileBBoxContainer::<Option<E>>::new_prefilled_with(bbox, None);
-		while let Some((coord, item)) = stream.inner.next().await {
+		let mut container = TileBBoxContainer::<Option<E>>::new_default(bbox);
+		let vec = stream.to_vec().await;
+		for (coord, item) in vec {
 			container.insert(coord, Some(item))?;
 		}
 		Ok(container)
 	}
 
+	#[context("Failed to create TileBBoxContainer from iterator")]
 	pub fn from_iter<E: Clone>(
 		bbox: TileBBox,
 		iter: impl Iterator<Item = (TileCoord, E)>,
