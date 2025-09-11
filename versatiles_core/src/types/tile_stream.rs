@@ -238,11 +238,7 @@ where
 		FutureStream: Future<Output = TileStream<'a, T>> + Send + 'a,
 	{
 		// Prevent division by zero and ensure at least 1 in-flight task.
-		let per_task = cores_per_task.max(1);
-		let mut limit = num_cpus::get().saturating_div(per_task);
-		if limit == 0 {
-			limit = 1;
-		}
+		let limit = num_cpus::get().saturating_div(cores_per_task.max(1)).min(1);
 
 		TileStream {
 			inner: Box::pin(streams.buffer_unordered(limit).map(|s| s.inner).flatten()),
