@@ -488,7 +488,7 @@ mod tests {
 
 		assert_eq!(
 			format!("{reader:?}"),
-			"VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: MVT } }"
+			"VersaTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT } }"
 		);
 		assert_eq!(reader.container_name(), "versatiles");
 		assert_wildcard!(reader.source_name(), "*.versatiles");
@@ -498,7 +498,7 @@ mod tests {
 		);
 		assert_eq!(
 			format!("{:?}", reader.parameters()),
-			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64), 4: [0,0,15,15] (256)], tile_compression: Gzip, tile_format: MVT }"
+			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8), 4: [0,0,15,15] (16x16)], tile_compression: Gzip, tile_format: MVT }"
 		);
 		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.parameters().tile_format, TileFormat::MVT);

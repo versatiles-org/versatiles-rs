@@ -32,15 +32,15 @@ impl BlockDefinition {
 		ensure!(bbox.width() <= 256, "bbox width must be <= 256");
 		ensure!(bbox.height() <= 256, "bbox height must be <= 256");
 
-		let x_min = bbox.x_min().div(256) * 256;
-		let y_min = bbox.y_min().div(256) * 256;
+		let x_min = bbox.x_min().div(256);
+		let y_min = bbox.y_min().div(256);
 		let level = bbox.level;
 		let global_bbox: TileBBox = *bbox;
 
 		let tiles_coverage = TileBBox::new(
 			level.min(8),
-			bbox.x_min() - x_min,
-			bbox.y_min() - y_min,
+			bbox.x_min() - x_min * 256,
+			bbox.y_min() - y_min * 256,
 			bbox.width(),
 			bbox.height(),
 		)?;
@@ -254,7 +254,7 @@ mod tests {
 		);
 		assert_eq!(
 			format!("{def:?}"),
-			"BlockDefinition { x/y/z: TileCoord(12, [1, 1]), bbox: 8: [44,144,64,194] (1071), tiles_range: ByteRange[4,5], index_range: ByteRange[9,6] }"
+			"BlockDefinition { x/y/z: TileCoord(12, [1, 1]), bbox: 8: [44,144,64,194] (21x51), tiles_range: ByteRange[4,5], index_range: ByteRange[9,6] }"
 		);
 
 		let def2 = BlockDefinition::from_blob(&def.as_blob()?)?;

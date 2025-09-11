@@ -402,7 +402,7 @@ mod tests {
 
 		assert_wildcard!(
 			format!("{reader:?}"),
-			"DirectoryTilesReader { name: \"*\", parameters: TilesReaderParameters { bbox_pyramid: [3: [2,1,2,1] (1)], tile_compression: Brotli, tile_format: PNG } }"
+			"DirectoryTilesReader { name: \"*\", parameters: TilesReaderParameters { bbox_pyramid: [3: [2,1,2,1] (1x1)], tile_compression: Brotli, tile_format: PNG } }"
 		);
 
 		assert_eq!(

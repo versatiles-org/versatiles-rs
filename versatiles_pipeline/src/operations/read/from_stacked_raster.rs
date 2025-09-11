@@ -331,7 +331,7 @@ mod tests {
 		assert_eq!(parameters.tile_compression, TileCompression::Uncompressed);
 		assert_eq!(
 			format!("{}", parameters.bbox_pyramid),
-			"[1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)]"
+			"[1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)]"
 		);
 
 		assert_eq!(

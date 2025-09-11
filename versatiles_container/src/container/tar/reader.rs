@@ -220,7 +220,7 @@ pub mod tests {
 
 		assert_eq!(
 			format!("{reader:?}"),
-			"TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: MVT } }"
+			"TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)], tile_compression: Gzip, tile_format: MVT } }"
 		);
 		assert_eq!(reader.container_name(), "tar");
 		assert!(reader.source_name().ends_with(temp_file.to_str().unwrap()));
@@ -230,7 +230,7 @@ pub mod tests {
 		);
 		assert_eq!(
 			format!("{:?}", reader.parameters()),
-			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: MVT }"
+			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)], tile_compression: Gzip, tile_format: MVT }"
 		);
 		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.parameters().tile_format, TileFormat::MVT);
