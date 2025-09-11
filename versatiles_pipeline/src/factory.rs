@@ -55,7 +55,7 @@ impl PipelineFactory {
 					"pbf" | "mvt" => Box::new(MockVectorSource::new(&[("mock", &[&[("filename", &filename)]])], None))
 						as Box<dyn TilesReaderTrait>,
 					"avif" | "png" | "jpg" | "jpeg" | "webp" => {
-						Box::new(MockImageSource::new(&filename, None).unwrap()) as Box<dyn TilesReaderTrait>
+						Box::new(MockImageSource::new(&filename, None, 4).unwrap()) as Box<dyn TilesReaderTrait>
 					}
 					_ => bail!("unknown file extension '{}'", extension),
 				})

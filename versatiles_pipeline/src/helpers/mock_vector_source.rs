@@ -17,7 +17,7 @@ pub struct MockVectorSource {
 
 impl MockVectorSource {
 	#[allow(clippy::type_complexity)]
-	pub fn new(layers: &[(&str, &[&[(&str, &str)]])], bbox: Option<TileBBoxPyramid>) -> Self {
+	pub fn new(layers: &[(&str, &[&[(&str, &str)]])], pyramid: Option<TileBBoxPyramid>) -> Self {
 		// Convert the layers input into the required data structure
 		let data: Vec<(String, Vec<Vec<(String, String)>>)> = layers
 			.iter()
@@ -39,7 +39,7 @@ impl MockVectorSource {
 		let parameters = TilesReaderParameters::new(
 			TileFormat::MVT,
 			TileCompression::Uncompressed,
-			bbox.unwrap_or_else(|| TileBBoxPyramid::new_full(8)),
+			pyramid.unwrap_or_else(|| TileBBoxPyramid::new_full(8)),
 		);
 
 		let mut tilejson = TileJSON::default();

@@ -1,3 +1,4 @@
+use crate::OperationTrait;
 use anyhow::{Context, Result, bail, ensure};
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
@@ -6,8 +7,6 @@ use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::traits::*;
-
-use crate::OperationTrait;
 
 #[derive(Debug)]
 pub struct MockImageSource {
@@ -21,7 +20,7 @@ pub struct MockImageSource {
 impl MockImageSource {
 	#[allow(clippy::type_complexity)]
 	#[context("Creating MockImageSource for {filename}")]
-	pub fn new(filename: &str, bbox: Option<TileBBoxPyramid>) -> Result<Self> {
+	pub fn new(filename: &str, pyramid: Option<TileBBoxPyramid>, tile_size: u32) -> Result<Self> {
 		let parts = filename.split('.').collect::<Vec<_>>();
 		ensure!(parts.len() == 2, "filename must have an extension");
 		ensure!(parts[0].len() <= 4, "filename must be at most 4 characters long");
@@ -43,15 +42,15 @@ impl MockImageSource {
 			})
 			.collect();
 		let pixel = pixel.with_context(|| format!("trying to parse filename '{}' as pixel value", parts[0]))?;
-		let raw = Vec::from_iter(std::iter::repeat_n(pixel, 16).flatten());
+		let raw = Vec::from_iter(std::iter::repeat_n(pixel, (tile_size * tile_size) as usize).flatten());
 
-		let image = DynamicImage::from_raw(4, 4, raw)?;
+		let image = DynamicImage::from_raw(tile_size, tile_size, raw)?;
 
 		// Initialize the parameters with the given bounding box or a default one
 		let parameters = TilesReaderParameters::new(
 			tile_format,
 			TileCompression::Uncompressed,
-			bbox.unwrap_or_else(|| TileBBoxPyramid::new_full(8)),
+			pyramid.unwrap_or_else(|| TileBBoxPyramid::new_full(8)),
 		);
 
 		let mut tilejson = TileJSON::default();
@@ -137,17 +136,17 @@ mod tests {
 
 	#[test]
 	fn test_mock_image_source_creation_valid_filename() {
-		assert!(MockImageSource::new("abcd.png", None).is_ok());
+		assert!(MockImageSource::new("abcd.png", None, 4).is_ok());
 	}
 
 	#[test]
 	fn test_mock_image_source_creation_invalid_filename_extension() {
-		assert!(MockImageSource::new("abcd.xyz", None).is_err());
+		assert!(MockImageSource::new("abcd.xyz", None, 4).is_err());
 	}
 
 	#[test]
 	fn test_mock_image_source_creation_invalid_filename_length() {
-		assert!(MockImageSource::new("abcdef.png", None).is_err());
+		assert!(MockImageSource::new("abcdef.png", None, 4).is_err());
 	}
 
 	#[tokio::test]
@@ -155,6 +154,7 @@ mod tests {
 		let source = MockImageSource::new(
 			"abcd.png",
 			Some(TileBBoxPyramid::from_geo_bbox(0, 8, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
+			4,
 		)
 		.unwrap();
 		let tile_data = source.get_tile_data(&TileCoord::new(8, 0, 255).unwrap()).await.unwrap();
@@ -169,6 +169,7 @@ mod tests {
 		let source = MockImageSource::new(
 			"abcd.png",
 			Some(TileBBoxPyramid::from_geo_bbox(3, 15, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
+			4,
 		)
 		.unwrap();
 		assert_eq!(
