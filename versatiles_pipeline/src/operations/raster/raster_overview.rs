@@ -3,7 +3,7 @@ use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::{DynamicImage, GenericImage};
-use log::debug;
+use log::{debug, trace};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 use versatiles_core::{cache::CacheMap, tilejson::TileJSON, *};
@@ -259,13 +259,17 @@ impl OperationTrait for Operation {
 		bbox0.intersect_pyramid(&self.parameters.bbox_pyramid);
 
 		let container: TileBBoxContainer<Option<DynamicImage>> = if bbox.level == self.level_base {
+			trace!("Fetching images from source for bbox {:?}", bbox);
 			TileBBoxContainer::<Option<DynamicImage>>::from_stream(bbox, self.source.get_image_stream(bbox).await?).await?
 		} else {
+			trace!("Building images from cache for bbox {:?}", bbox);
 			self.build_images_from_cache(bbox0).await?
 		};
 
+		trace!("Adding images to cache for bbox {:?}", container.bbox());
 		self.add_images_to_cache(&container).await?;
 
+		trace!("Composing final stream for bbox {:?}", bbox);
 		let vec = container
 			.into_iter()
 			.filter_map(move |(c, o)| {
