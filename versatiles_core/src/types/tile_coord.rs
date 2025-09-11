@@ -200,7 +200,9 @@ impl PartialOrd for TileCoord {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use rstest::rstest;
 	use std::{
+		cmp::Ordering::{self, *},
 		collections::hash_map::DefaultHasher,
 		hash::{Hash, Hasher},
 	};
@@ -252,46 +254,38 @@ mod tests {
 		assert_eq!(hasher.finish(), 16217616760760983095);
 	}
 
-	#[test]
-	fn partial_cmp() {
-		use std::cmp::Ordering;
-		use std::cmp::Ordering::*;
-
-		let check = |x: u32, y: u32, level: u8, order: Ordering| {
-			let c1 = TileCoord::new(2, 2, 2).unwrap();
-			let c2 = TileCoord::new(level, x, y).unwrap();
-			assert_eq!(c2.partial_cmp(&c1), Some(order));
-		};
-
-		check(1, 1, 1, Less);
-		check(2, 1, 1, Less);
-		check(3, 1, 1, Less);
-		check(1, 2, 1, Less);
-		check(2, 2, 1, Less);
-		check(3, 2, 1, Less);
-		check(1, 3, 1, Less);
-		check(2, 3, 1, Less);
-		check(3, 3, 1, Less);
-
-		check(1, 1, 2, Less);
-		check(2, 1, 2, Less);
-		check(3, 1, 2, Less);
-		check(1, 2, 2, Less);
-		check(2, 2, 2, Equal);
-		check(3, 2, 2, Greater);
-		check(1, 3, 2, Greater);
-		check(2, 3, 2, Greater);
-		check(3, 3, 2, Greater);
-
-		check(1, 1, 3, Greater);
-		check(2, 1, 3, Greater);
-		check(3, 1, 3, Greater);
-		check(1, 2, 3, Greater);
-		check(2, 2, 3, Greater);
-		check(3, 2, 3, Greater);
-		check(1, 3, 3, Greater);
-		check(2, 3, 3, Greater);
-		check(3, 3, 3, Greater);
+	#[rstest]
+	#[case(1, 1, 1, Less)]
+	#[case(2, 1, 1, Less)]
+	#[case(3, 1, 1, Less)]
+	#[case(1, 2, 1, Less)]
+	#[case(2, 2, 1, Less)]
+	#[case(3, 2, 1, Less)]
+	#[case(1, 3, 1, Less)]
+	#[case(2, 3, 1, Less)]
+	#[case(3, 3, 1, Less)]
+	#[case(1, 1, 2, Less)]
+	#[case(2, 1, 2, Less)]
+	#[case(3, 1, 2, Less)]
+	#[case(1, 2, 2, Less)]
+	#[case(2, 2, 2, Equal)]
+	#[case(3, 2, 2, Greater)]
+	#[case(1, 3, 2, Greater)]
+	#[case(2, 3, 2, Greater)]
+	#[case(3, 3, 2, Greater)]
+	#[case(1, 1, 3, Greater)]
+	#[case(2, 1, 3, Greater)]
+	#[case(3, 1, 3, Greater)]
+	#[case(1, 2, 3, Greater)]
+	#[case(2, 2, 3, Greater)]
+	#[case(3, 2, 3, Greater)]
+	#[case(1, 3, 3, Greater)]
+	#[case(2, 3, 3, Greater)]
+	#[case(3, 3, 3, Greater)]
+	fn partial_cmp_cases(#[case] x: u32, #[case] y: u32, #[case] level: u8, #[case] expected: Ordering) {
+		let c1 = TileCoord::new(2, 2, 2).unwrap();
+		let c2 = TileCoord::new(level, x, y).unwrap();
+		assert_eq!(c2.partial_cmp(&c1), Some(expected));
 	}
 
 	#[test]
