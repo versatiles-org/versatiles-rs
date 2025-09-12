@@ -30,6 +30,10 @@ num_cpus.workspace = true
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls"] }
 terminal_size = "0.4.3"
+time = { version = "0.3.43", default-features = false, features = [
+	"formatting",
+	"local-offset",
+] }
 tokio.workspace = true
 uuid = { version = "1.18.1", features = ["v4"] }
 
@@ -48,7 +52,6 @@ default = ["cli"]
 cli = ["dep:clap", "dep:colored"]
 test = []
 image = ["dep:image"]
-cache_disk = []
 
 [[bench]]
 name = "byte_iterator"
