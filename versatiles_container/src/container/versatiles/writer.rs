@@ -4,7 +4,7 @@
 //!
 //! ```rust
 //! use versatiles_container::{MBTilesReader, TilesWriterTrait, VersaTilesWriter};
-//! use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat};
+//! use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat, config::Config};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -18,7 +18,7 @@
 //!     let path_out = std::env::current_dir()?.join("../testdata/temp5.versatiles");
 //!
 //!     // Write the tiles to the .versatiles file
-//!     VersaTilesWriter::write_to_path(&mut reader, &path_out).await?;
+//!     VersaTilesWriter::write_to_path(&mut reader, &path_out, Config::default_arc()).await?;
 //!
 //!     println!("Tiles have been successfully written to {path_out:?}");
 //!
@@ -34,7 +34,7 @@ use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use log::{debug, trace};
-use versatiles_core::{io::DataWriterTrait, utils::compress, *};
+use versatiles_core::{Traversal, config::Config, io::DataWriterTrait, types::*, utils::compress};
 use versatiles_derive::context;
 
 /// A struct for writing tiles to a VersaTiles container.
@@ -43,7 +43,11 @@ pub struct VersaTilesWriter {}
 #[async_trait]
 impl TilesWriterTrait for VersaTilesWriter {
 	/// Convert tiles from the TilesReader and write them to the writer.
-	async fn write_to_writer(reader: &mut dyn TilesReaderTrait, writer: &mut dyn DataWriterTrait) -> Result<()> {
+	async fn write_to_writer(
+		reader: &mut dyn TilesReaderTrait,
+		writer: &mut dyn DataWriterTrait,
+		config: Arc<Config>,
+	) -> Result<()> {
 		// Finalize the configuration
 		let parameters = reader.parameters();
 		trace!("convert_from - reader.parameters: {parameters:?}");
@@ -72,7 +76,7 @@ impl TilesWriterTrait for VersaTilesWriter {
 		header.meta_range = Self::write_meta(reader, writer).await?;
 
 		trace!("write blocks");
-		header.blocks_range = Self::write_blocks(reader, writer).await?;
+		header.blocks_range = Self::write_blocks(reader, writer, config).await?;
 
 		trace!("update header");
 		let blob: Blob = header.to_blob()?;
@@ -94,7 +98,11 @@ impl VersaTilesWriter {
 
 	/// Write blocks to the writer.
 	#[context("Failed to write blocks")]
-	async fn write_blocks(reader: &mut dyn TilesReaderTrait, writer: &mut dyn DataWriterTrait) -> Result<ByteRange> {
+	async fn write_blocks(
+		reader: &mut dyn TilesReaderTrait,
+		writer: &mut dyn DataWriterTrait,
+		config: Arc<Config>,
+	) -> Result<ByteRange> {
 		if reader.parameters().bbox_pyramid.is_empty() {
 			return Ok(ByteRange::empty());
 		}
@@ -143,6 +151,7 @@ impl VersaTilesWriter {
 						Ok(())
 					})
 				}),
+				config,
 			)
 			.await?;
 

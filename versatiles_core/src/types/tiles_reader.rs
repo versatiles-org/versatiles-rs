@@ -9,14 +9,14 @@ use super::ProbeDepth;
 use crate::utils::PrettyPrint;
 use crate::{
 	Blob, TileBBox, TileCompression, TileCoord, TileStream, TilesReaderParameters, Traversal, TraversalTranslationStep,
-	cache::CacheMap, progress::get_progress_bar, tilejson::TileJSON, translate_traversals,
+	cache::CacheMap, config::Config, progress::get_progress_bar, tilejson::TileJSON, translate_traversals,
 };
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{StreamExt, future::BoxFuture, stream};
 #[allow(unused_imports)]
 use log::{debug, info, trace};
-use std::{default::Default, fmt::Debug, sync::Arc};
+use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 
 /// Trait defining behavior for reading tiles from a container.
@@ -51,6 +51,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		&'a self,
 		traversal_write: &Traversal,
 		mut callback: Box<dyn 'a + Send + FnMut(TileBBox, TileStream<'a>) -> BoxFuture<'a, Result<()>>>,
+		config: Arc<Config>,
 	) -> Result<()> {
 		let traversal_steps = translate_traversals(&self.parameters().bbox_pyramid, self.traversal(), traversal_write)?;
 
@@ -72,7 +73,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 		let mut i_read = 0;
 
-		let cache = Arc::new(Mutex::new(CacheMap::<usize, (TileCoord, Blob)>::default()));
+		let cache = Arc::new(Mutex::new(CacheMap::<usize, (TileCoord, Blob)>::new(config)));
 		for step in traversal_steps {
 			match step {
 				Push(bboxes, index) => {

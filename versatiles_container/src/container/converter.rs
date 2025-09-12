@@ -4,7 +4,7 @@
 //!
 //! ```rust
 //! use versatiles_container::{convert_tiles_container, MBTilesReader, TilesConverterParameters};
-//! use versatiles_core::{TileFormat, TileCompression, TileBBoxPyramid, TilesReaderTrait, TilesReaderParameters};
+//! use versatiles_core::{TileFormat, TileCompression, TileBBoxPyramid, TilesReaderTrait, TilesReaderParameters, config::Config};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -24,19 +24,21 @@
 //!     };
 //!
 //!     // Convert the tiles container
-//!     convert_tiles_container(Box::new(reader), converter_params, &path_versatiles.to_str().unwrap()).await?;
+//!     convert_tiles_container(Box::new(reader), converter_params, &path_versatiles.to_str().unwrap(), Config::default_arc()).await?;
 //!
 //!     println!("Tiles have been successfully converted and saved to {path_versatiles:?}");
 //!     Ok(())
 //! }
 //! ```
 
+use std::sync::Arc;
+
 use super::{tile_converter::TileConverter, write_to_filename};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{
 	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileStream, TilesReaderParameters,
-	TilesReaderTrait, Traversal, tilejson::TileJSON,
+	TilesReaderTrait, Traversal, config::Config, tilejson::TileJSON,
 };
 use versatiles_derive::context;
 
@@ -71,9 +73,10 @@ pub async fn convert_tiles_container(
 	reader: Box<dyn TilesReaderTrait>,
 	cp: TilesConverterParameters,
 	filename: &str,
+	config: Arc<Config>,
 ) -> Result<()> {
 	let mut converter = TilesConvertReader::new_from_reader(reader, cp)?;
-	write_to_filename(&mut converter, filename).await
+	write_to_filename(&mut converter, filename, config).await
 }
 
 /// A reader that converts tiles from one format to another.
@@ -250,7 +253,7 @@ mod tests {
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let cp = get_converter_parameters(c_out, false);
 			let filename = temp_file.to_str().unwrap();
-			convert_tiles_container(reader_in.boxed(), cp, filename).await?;
+			convert_tiles_container(reader_in.boxed(), cp, filename, Config::default_arc()).await?;
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.parameters();
 			assert_eq!(parameters_out.tile_format, MVT);
@@ -297,7 +300,7 @@ mod tests {
 				flip_y,
 				swap_xy,
 			};
-			convert_tiles_container(reader.boxed(), cp, filename).await?;
+			convert_tiles_container(reader.boxed(), cp, filename, Config::default_arc()).await?;
 
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.parameters();

@@ -10,6 +10,7 @@
 //! ## Usage Example
 //! ```rust
 //! use versatiles_container::{MBTilesReader, PMTilesWriter, TilesWriterTrait};
+//! use versatiles_core::config::Config;
 //! use std::path::Path;
 //!
 //! #[tokio::main]
@@ -18,7 +19,7 @@
 //!     let mut reader = MBTilesReader::open_path(&path).unwrap();
 //!
 //!     let temp_path = std::env::temp_dir().join("temp.pmtiles");
-//!     PMTilesWriter::write_to_path(&mut reader, &temp_path).await.unwrap();
+//!     PMTilesWriter::write_to_path(&mut reader, &temp_path, Config::default_arc()).await.unwrap();
 //! }
 //! ```
 //!
@@ -36,9 +37,11 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use versatiles_core::{
+	config::Config,
 	io::DataWriterTrait,
+	traversal::*,
+	types::*,
 	utils::{HilbertIndex, compress},
-	*,
 };
 
 /// A struct that provides functionality to write tile data to a PMTiles container.
@@ -54,7 +57,11 @@ impl TilesWriterTrait for PMTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if there are issues with writing data or internal processing.
-	async fn write_to_writer(reader: &mut dyn TilesReaderTrait, writer: &mut dyn DataWriterTrait) -> Result<()> {
+	async fn write_to_writer(
+		reader: &mut dyn TilesReaderTrait,
+		writer: &mut dyn DataWriterTrait,
+		config: Arc<Config>,
+	) -> Result<()> {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
 
 		let parameters = reader.parameters().clone();
@@ -93,6 +100,7 @@ impl TilesWriterTrait for PMTilesWriter {
 						Ok(())
 					})
 				}),
+				config,
 			)
 			.await?;
 
@@ -140,7 +148,7 @@ mod tests {
 		})?;
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer).await?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, Config::default_arc()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let mut reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;
@@ -162,7 +170,7 @@ mod tests {
 		})?;
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer).await?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, Config::default_arc()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;

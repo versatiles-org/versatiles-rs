@@ -11,7 +11,7 @@
 //!
 //! ```no_run
 //! use versatiles_container::{TarTilesReader, TarTilesWriter, TilesWriterTrait};
-//! use versatiles_core::{TileCoord, TilesReaderTrait};
+//! use versatiles_core::{TileCoord, TilesReaderTrait, config::Config};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -28,7 +28,7 @@
 //!
 //!     // Writing to a tar archive
 //!     let output_path = Path::new("path/to/output.tar");
-//!     let mut writer = TarTilesWriter::write_to_path(&mut reader, output_path).await?;
+//!     let mut writer = TarTilesWriter::write_to_path(&mut reader, output_path, Config::default_arc()).await?;
 //!
 //!     Ok(())
 //! }

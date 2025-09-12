@@ -4,20 +4,20 @@
 //!
 //! ```rust
 //! use versatiles_container::{get_reader, write_to_filename};
-//! use versatiles_core::{TileFormat, TilesReaderTrait};
+//! use versatiles_core::{TileFormat, TilesReaderTrait, config::Config};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     // Define the input filename (local file or URL)
-//!     let mut reader = get_reader("../testdata/berlin.mbtiles").await?;
+//!     let mut reader = get_reader("../testdata/berlin.mbtiles", Config::default_arc()).await?;
 //!
 //!     // Define the output filename
 //!     let output_filename = "../testdata/temp3.versatiles";
 //!
 //!     // Write the tiles to the output file
-//!     write_to_filename(&mut *reader, output_filename).await?;
+//!     write_to_filename(&mut *reader, output_filename, Config::default_arc()).await?;
 //!
 //!     println!("Tiles have been successfully converted and saved to {output_filename}");
 //!     Ok(())
@@ -27,11 +27,11 @@
 use crate::*;
 use anyhow::{Context, Result, bail};
 use reqwest::Url;
-use std::env;
-use versatiles_core::{io::*, *};
+use std::{env, sync::Arc};
+use versatiles_core::{config::Config, io::*, *};
 
 /// Get a reader for a given filename or URL.
-pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReaderTrait>> {
+pub async fn get_reader(filename: &str, config: Arc<Config>) -> Result<Box<dyn TilesReaderTrait>> {
 	let extension = get_extension(filename);
 
 	if let Ok(reader) = parse_as_url(filename) {
@@ -59,7 +59,7 @@ pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReaderTrait>> {
 		"pmtiles" => Ok(PMTilesReader::open_path(&path).await?.boxed()),
 		"tar" => Ok(TarTilesReader::open_path(&path)?.boxed()),
 		"versatiles" => Ok(VersaTilesReader::open_path(&path).await?.boxed()),
-		"vpl" => Ok(PipelineReader::open_path(&path).await?.boxed()),
+		"vpl" => Ok(PipelineReader::open_path(&path, config).await?.boxed()),
 		_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
 	}
 }
@@ -74,19 +74,19 @@ fn parse_as_url(filename: &str) -> Result<DataReader> {
 }
 
 /// Write tiles from a reader to a file.
-pub async fn write_to_filename(reader: &mut dyn TilesReaderTrait, filename: &str) -> Result<()> {
+pub async fn write_to_filename(reader: &mut dyn TilesReaderTrait, filename: &str, config: Arc<Config>) -> Result<()> {
 	let path = env::current_dir()?.join(filename);
 
 	if path.is_dir() {
-		return DirectoryTilesWriter::write_to_path(reader, &path).await;
+		return DirectoryTilesWriter::write_to_path(reader, &path, config).await;
 	}
 
 	let extension = get_extension(filename);
 	match extension {
-		"mbtiles" => MBTilesWriter::write_to_path(reader, &path).await,
-		"pmtiles" => PMTilesWriter::write_to_path(reader, &path).await,
-		"tar" => TarTilesWriter::write_to_path(reader, &path).await,
-		"versatiles" => VersaTilesWriter::write_to_path(reader, &path).await,
+		"mbtiles" => MBTilesWriter::write_to_path(reader, &path, config).await,
+		"pmtiles" => PMTilesWriter::write_to_path(reader, &path, config).await,
+		"tar" => TarTilesWriter::write_to_path(reader, &path, config).await,
+		"versatiles" => VersaTilesWriter::write_to_path(reader, &path, config).await,
 		_ => bail!("Error when writing: file extension '{extension:?}' unknown"),
 	}
 }
@@ -130,7 +130,7 @@ pub mod tests {
 			_ => panic!("make_test_file: extension {extension} not found"),
 		}?;
 
-		write_to_filename(&mut reader, container_file.to_str().unwrap()).await?;
+		write_to_filename(&mut reader, container_file.to_str().unwrap(), Config::default_arc()).await?;
 
 		Ok(container_file)
 	}
@@ -179,10 +179,10 @@ pub mod tests {
 				TempType::File(t) => t.to_str().unwrap(),
 			};
 
-			write_to_filename(&mut reader1, filename).await?;
+			write_to_filename(&mut reader1, filename, Config::default_arc()).await?;
 
 			// get test container reader
-			let mut reader2 = get_reader(filename).await?;
+			let mut reader2 = get_reader(filename, Config::default_arc()).await?;
 			MockTilesWriter::write(reader2.as_mut()).await?;
 
 			Ok(())

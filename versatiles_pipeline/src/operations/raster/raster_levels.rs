@@ -115,7 +115,7 @@ impl TransformOperationFactoryTrait for Factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::helpers::mock_image_source::MockImageSource;
+	use crate::helpers::dummy_image_source::DummyImageSource;
 	use rstest::rstest;
 
 	#[rstest]
@@ -141,7 +141,7 @@ mod tests {
 		#[case] color_out: &[u8],
 	) -> Result<()> {
 		let op = Operation {
-			source: Box::new(MockImageSource::new(&format!("{color_in}.png"), None, 4).unwrap()),
+			source: Box::new(DummyImageSource::new(&format!("{color_in}.png"), None, 4).unwrap()),
 			brightness: parameters[0],
 			contrast: parameters[1],
 			gamma: parameters[2],

@@ -200,8 +200,7 @@ impl ReadOperationFactoryTrait for Factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::helpers::{mock_image_source::MockImageSource, mock_vector_source::arrange_tiles};
-	use std::path::Path;
+	use crate::helpers::{dummy_image_source::DummyImageSource, dummy_vector_source::arrange_tiles};
 
 	pub fn get_color(blob: &Blob) -> String {
 		let image = DynamicImage::from_blob(blob, TileFormat::PNG).unwrap();
@@ -237,7 +236,7 @@ mod tests {
 				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
 				"  \"maxzoom\": 8,",
 				"  \"minzoom\": 0,",
-				"  \"name\": \"mock raster source\",",
+				"  \"name\": \"dummy raster source\",",
 				"  \"tile_format\": \"image/png\",",
 				"  \"tile_schema\": \"rgb\",",
 				"  \"tile_type\": \"raster\",",
@@ -291,7 +290,7 @@ mod tests {
 				"  \"bounds\": [ -130.78125, -70.140364, 130.78125, 70.140364 ],",
 				"  \"maxzoom\": 8,",
 				"  \"minzoom\": 0,",
-				"  \"name\": \"mock raster source\",",
+				"  \"name\": \"dummy raster source\",",
 				"  \"tile_format\": \"image/png\",",
 				"  \"tile_schema\": \"rgb\",",
 				"  \"tile_type\": \"raster\",",
@@ -305,18 +304,17 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_operation_parameters() -> Result<()> {
-		let factory = PipelineFactory::default(
-			Path::new(""),
-			Box::new(|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
+		let factory = PipelineFactory::new_dummy_reader(Box::new(
+			|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
 				Box::pin(async move {
 					let mut pyramide = TileBBoxPyramid::new_empty();
 					for c in filename[0..filename.len() - 4].chars() {
 						pyramide.include_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?);
 					}
-					Ok(Box::new(MockImageSource::new(&filename, Some(pyramide), 4).unwrap()) as Box<dyn TilesReaderTrait>)
+					Ok(Box::new(DummyImageSource::new(&filename, Some(pyramide), 4).unwrap()) as Box<dyn TilesReaderTrait>)
 				})
-			}),
-		);
+			},
+		));
 
 		let result = factory
 			.operation_from_vpl(
@@ -340,7 +338,7 @@ mod tests {
 				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
 				"  \"maxzoom\": 3,",
 				"  \"minzoom\": 1,",
-				"  \"name\": \"mock raster source\",",
+				"  \"name\": \"dummy raster source\",",
 				"  \"tile_format\": \"image/png\",",
 				"  \"tile_schema\": \"rgb\",",
 				"  \"tile_type\": \"raster\",",

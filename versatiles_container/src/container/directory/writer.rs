@@ -26,6 +26,7 @@
 //! ## Usage
 //! ```rust
 //! use versatiles_container::{DirectoryTilesWriter, MBTilesReader, TilesWriterTrait};
+//! use versatiles_core::config::Config;
 //! use std::path::Path;
 //!
 //! #[tokio::main]
@@ -34,7 +35,7 @@
 //!     let mut reader = MBTilesReader::open_path(&path).unwrap();
 //!
 //!     let temp_path = std::env::temp_dir().join("temp_tiles");
-//!     DirectoryTilesWriter::write_to_path(&mut reader, &temp_path).await.unwrap();
+//!     DirectoryTilesWriter::write_to_path(&mut reader, &temp_path, Config::default_arc()).await.unwrap();
 //! }
 //! ```
 //!
@@ -50,8 +51,9 @@ use async_trait::async_trait;
 use std::{
 	fs,
 	path::{Path, PathBuf},
+	sync::Arc,
 };
-use versatiles_core::{io::DataWriterTrait, utils::compress, *};
+use versatiles_core::{config::Config, io::DataWriterTrait, utils::compress, *};
 
 /// A struct that provides functionality to write tile data to a directory structure.
 pub struct DirectoryTilesWriter {}
@@ -86,7 +88,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the path is not absolute, if there are issues with file I/O, or if compression fails.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: Arc<Config>) -> Result<()> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
 		log::trace!("convert_from");
@@ -122,6 +124,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 						Ok(())
 					})
 				}),
+				config,
 			)
 			.await?;
 
@@ -136,7 +139,11 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	///
 	/// # Errors
 	/// This function always returns an error as it is not implemented.
-	async fn write_to_writer(_reader: &mut dyn TilesReaderTrait, _writer: &mut dyn DataWriterTrait) -> Result<()> {
+	async fn write_to_writer(
+		_reader: &mut dyn TilesReaderTrait,
+		_writer: &mut dyn DataWriterTrait,
+		_config: Arc<Config>,
+	) -> Result<()> {
 		bail!("not implemented")
 	}
 }
@@ -159,7 +166,7 @@ mod tests {
 			TileBBoxPyramid::new_full(2),
 		))?;
 
-		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path).await?;
+		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path, Config::default_arc()).await?;
 
 		let load = |filename| {
 			let path = temp_path.join(filename);

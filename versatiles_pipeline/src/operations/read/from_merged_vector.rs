@@ -205,16 +205,15 @@ impl ReadOperationFactoryTrait for Factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::helpers::mock_vector_source::{MockVectorSource, arrange_tiles};
+	use crate::helpers::dummy_vector_source::{DummyVectorSource, arrange_tiles};
 	use itertools::Itertools;
-	use std::path::Path;
 
 	pub fn check_tile(blob: &Blob) -> String {
 		let tile = VectorTile::from_blob(blob).unwrap();
 		assert_eq!(tile.layers.len(), 1);
 
 		let layer = &tile.layers[0];
-		assert_eq!(layer.name, "mock");
+		assert_eq!(layer.name, "dummy");
 
 		layer
 			.features
@@ -270,7 +269,7 @@ mod tests {
 				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
 				"  \"maxzoom\": 8,",
 				"  \"minzoom\": 0,",
-				"  \"name\": \"mock vector source\",",
+				"  \"name\": \"dummy vector source\",",
 				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
 				"  \"tile_schema\": \"other\",",
 				"  \"tile_type\": \"vector\",",
@@ -323,7 +322,7 @@ mod tests {
 				"  \"bounds\": [ -130.78125, -70.140364, 130.78125, 70.140364 ],",
 				"  \"maxzoom\": 8,",
 				"  \"minzoom\": 0,",
-				"  \"name\": \"mock vector source\",",
+				"  \"name\": \"dummy vector source\",",
 				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
 				"  \"tile_schema\": \"other\",",
 				"  \"tile_type\": \"vector\",",
@@ -337,21 +336,20 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_operation_parameters() -> Result<()> {
-		let factory = PipelineFactory::default(
-			Path::new(""),
-			Box::new(|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
+		let factory = PipelineFactory::new_dummy_reader(Box::new(
+			|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
 				Box::pin(async move {
 					let mut pyramide = TileBBoxPyramid::new_empty();
 					for c in filename[0..filename.len() - 4].chars() {
 						pyramide.include_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?);
 					}
-					Ok(Box::new(MockVectorSource::new(
-						&[("mock", &[&[("filename", &filename)]])],
+					Ok(Box::new(DummyVectorSource::new(
+						&[("dummy", &[&[("filename", &filename)]])],
 						Some(pyramide),
 					)) as Box<dyn TilesReaderTrait>)
 				})
-			}),
-		);
+			},
+		));
 
 		let result = factory
 			.operation_from_vpl(
@@ -375,7 +373,7 @@ mod tests {
 				"  \"bounds\": [ -180, -85.051129, 180, 85.051129 ],",
 				"  \"maxzoom\": 3,",
 				"  \"minzoom\": 1,",
-				"  \"name\": \"mock vector source\",",
+				"  \"name\": \"dummy vector source\",",
 				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
 				"  \"tile_schema\": \"other\",",
 				"  \"tile_type\": \"vector\",",

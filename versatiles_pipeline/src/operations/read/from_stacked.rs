@@ -244,7 +244,7 @@ impl ReadOperationFactoryTrait for Factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::helpers::mock_vector_source::{MockVectorSource, arrange_tiles};
+	use crate::helpers::dummy_vector_source::{DummyVectorSource, arrange_tiles};
 	use std::sync::LazyLock;
 	use versatiles_core::TraversalOrder;
 	use versatiles_image::traits::*;
@@ -275,7 +275,7 @@ mod tests {
 		assert_eq!(tile.layers.len(), 1);
 
 		let layer = &tile.layers[0];
-		assert_eq!(layer.name, "mock");
+		assert_eq!(layer.name, "dummy");
 		assert_eq!(layer.features.len(), 1);
 
 		let feature = &layer.features[0].to_feature(layer).unwrap();
@@ -332,7 +332,7 @@ mod tests {
 				"  \"bounds\": [ -11.25, -12.554564, 7.03125, 8.407168 ],",
 				"  \"maxzoom\": 8,",
 				"  \"minzoom\": 0,",
-				"  \"name\": \"mock vector source\",",
+				"  \"name\": \"dummy vector source\",",
 				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
 				"  \"tile_schema\": \"other\",",
 				"  \"tile_type\": \"vector\",",
@@ -400,8 +400,8 @@ mod tests {
 	fn test_traversal_orders_overlay() {
 		use crate::operations::read::from_container::operation_from_reader;
 
-		let mut src1 = MockVectorSource::new(&[], Some(TileBBoxPyramid::new_full(8)));
-		let mut src2 = MockVectorSource::new(&[], Some(TileBBoxPyramid::new_full(8)));
+		let mut src1 = DummyVectorSource::new(&[], Some(TileBBoxPyramid::new_full(8)));
+		let mut src2 = DummyVectorSource::new(&[], Some(TileBBoxPyramid::new_full(8)));
 
 		src1.set_traversal(Traversal::new_any_size(1, 16).unwrap());
 		src2.set_traversal(Traversal::new(TraversalOrder::PMTiles, 4, 256).unwrap());

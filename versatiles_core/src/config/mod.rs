@@ -1,15 +1,22 @@
-pub use crate::config::cache::CacheKind;
-mod cache;
+pub use crate::config::cache_type::CacheType;
+use std::sync::Arc;
+mod cache_type;
 
+#[derive(Clone, Debug)]
 pub struct Config {
-	pub cache: CacheKind,
+	pub cache_type: CacheType,
 }
 
-#[allow(clippy::derivable_impls)]
+impl Config {
+	pub fn default_arc() -> Arc<Self> {
+		Arc::new(Self::default())
+	}
+}
+
 impl Default for Config {
 	fn default() -> Self {
 		Self {
-			cache: CacheKind::new_memory(),
+			cache_type: CacheType::new_memory(),
 		}
 	}
 }

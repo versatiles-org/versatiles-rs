@@ -1,7 +1,7 @@
 use anyhow::Result;
 use log::debug;
 use versatiles_container::get_reader;
-use versatiles_core::ProbeDepth;
+use versatiles_core::{ProbeDepth, config::Config};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -24,7 +24,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	eprintln!("probe {:?}", arguments.filename);
 
 	debug!("open {:?}", arguments.filename);
-	let mut reader = get_reader(&arguments.filename).await?;
+	let mut reader = get_reader(&arguments.filename, Config::default_arc()).await?;
 
 	let level = match arguments.deep {
 		0 => ProbeDepth::Shallow,

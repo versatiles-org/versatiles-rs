@@ -8,7 +8,7 @@
 //!
 //! ```rust
 //! use versatiles_container::{MBTilesReader, TilesWriterTrait, VersaTilesReader, VersaTilesWriter};
-//! use versatiles_core::{TileCoord, TilesReaderTrait};
+//! use versatiles_core::{TileCoord, TilesReaderTrait, config::Config};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -21,7 +21,7 @@
 //!     let mut reader = MBTilesReader::open_path(&path_mbtiles)?;
 //!
 //!     // Write the tiles to the .versatiles file
-//!     VersaTilesWriter::write_to_path(&mut reader, &path_versatiles).await?;
+//!     VersaTilesWriter::write_to_path(&mut reader, &path_versatiles, Config::default_arc()).await?;
 //!
 //!     println!("Tiles have been successfully written to {path_versatiles:?}");
 //!

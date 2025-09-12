@@ -9,7 +9,7 @@ use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::traits::*;
 
 #[derive(Debug)]
-pub struct MockImageSource {
+pub struct DummyImageSource {
 	#[allow(clippy::type_complexity)]
 	image: DynamicImage,
 	blob: Blob,
@@ -17,9 +17,9 @@ pub struct MockImageSource {
 	tilejson: TileJSON,
 }
 
-impl MockImageSource {
+impl DummyImageSource {
 	#[allow(clippy::type_complexity)]
-	#[context("Creating MockImageSource for {filename}")]
+	#[context("Creating DummyImageSource for {filename}")]
 	pub fn new(filename: &str, pyramid: Option<TileBBoxPyramid>, tile_size: u32) -> Result<Self> {
 		let parts = filename.split('.').collect::<Vec<_>>();
 		ensure!(parts.len() == 2, "filename must have an extension");
@@ -54,12 +54,12 @@ impl MockImageSource {
 		);
 
 		let mut tilejson = TileJSON::default();
-		tilejson.set_string("name", "mock raster source").unwrap();
+		tilejson.set_string("name", "dummy raster source").unwrap();
 		tilejson.update_from_reader_parameters(&parameters);
 
 		let blob = image.to_blob(tile_format)?;
 
-		Ok(MockImageSource {
+		Ok(DummyImageSource {
 			image,
 			blob,
 			parameters,
@@ -69,13 +69,13 @@ impl MockImageSource {
 }
 
 #[async_trait]
-impl TilesReaderTrait for MockImageSource {
+impl TilesReaderTrait for DummyImageSource {
 	fn source_name(&self) -> &str {
-		"MockImageSource"
+		"DummyImageSource"
 	}
 
 	fn container_name(&self) -> &str {
-		"MockImageSource"
+		"DummyImageSource"
 	}
 
 	fn parameters(&self) -> &TilesReaderParameters {
@@ -99,7 +99,7 @@ impl TilesReaderTrait for MockImageSource {
 }
 
 #[async_trait]
-impl OperationTrait for MockImageSource {
+impl OperationTrait for DummyImageSource {
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
@@ -124,34 +124,34 @@ impl OperationTrait for MockImageSource {
 	}
 
 	async fn get_vector_stream(&self, _bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		bail!("Vector tiles are not supported in MockImageSource operations.");
+		bail!("Vector tiles are not supported in DummyImageSource operations.");
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::helpers::mock_vector_source::arrange_tiles;
+	use crate::helpers::dummy_vector_source::arrange_tiles;
 	use versatiles_core::GeoBBox;
 
 	#[test]
-	fn test_mock_image_source_creation_valid_filename() {
-		assert!(MockImageSource::new("abcd.png", None, 4).is_ok());
+	fn test_dummy_image_source_creation_valid_filename() {
+		assert!(DummyImageSource::new("abcd.png", None, 4).is_ok());
 	}
 
 	#[test]
-	fn test_mock_image_source_creation_invalid_filename_extension() {
-		assert!(MockImageSource::new("abcd.xyz", None, 4).is_err());
+	fn test_dummy_image_source_creation_invalid_filename_extension() {
+		assert!(DummyImageSource::new("abcd.xyz", None, 4).is_err());
 	}
 
 	#[test]
-	fn test_mock_image_source_creation_invalid_filename_length() {
-		assert!(MockImageSource::new("abcdef.png", None, 4).is_err());
+	fn test_dummy_image_source_creation_invalid_filename_length() {
+		assert!(DummyImageSource::new("abcdef.png", None, 4).is_err());
 	}
 
 	#[tokio::test]
-	async fn test_mock_image_source_get_tile_data() {
-		let source = MockImageSource::new(
+	async fn test_dummy_image_source_get_tile_data() {
+		let source = DummyImageSource::new(
 			"abcd.png",
 			Some(TileBBoxPyramid::from_geo_bbox(0, 8, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
 			4,
@@ -165,8 +165,8 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_mock_image_source_tilejson() {
-		let source = MockImageSource::new(
+	async fn test_dummy_image_source_tilejson() {
+		let source = DummyImageSource::new(
 			"abcd.png",
 			Some(TileBBoxPyramid::from_geo_bbox(3, 15, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
 			4,
@@ -179,7 +179,7 @@ mod tests {
 				"  \"bounds\": [ -180, -85.051129, 0, 0 ],",
 				"  \"maxzoom\": 15,",
 				"  \"minzoom\": 3,",
-				"  \"name\": \"mock raster source\",",
+				"  \"name\": \"dummy raster source\",",
 				"  \"tile_format\": \"image/png\",",
 				"  \"tile_schema\": \"rgb\",",
 				"  \"tile_type\": \"raster\",",

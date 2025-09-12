@@ -4,26 +4,21 @@ use uuid::Uuid;
 lazy_static::lazy_static! {
 	pub static ref DEFAULT_CACHE_DIR: PathBuf = std::env::var("VERSATILES_CACHE_DIR")
 		.map(PathBuf::from)
-		.unwrap_or_else(|_| std::env::temp_dir().into()).join(random_path());
+		.unwrap_or_else(|_| std::env::temp_dir()).join(random_path());
 }
 
-pub enum CacheKind {
+#[derive(Clone, Debug)]
+pub enum CacheType {
 	InMemory,
 	Disk(PathBuf), // path to cache directory
 }
 
-impl CacheKind {
+impl CacheType {
 	pub fn new_disk() -> Self {
 		Self::Disk(DEFAULT_CACHE_DIR.to_path_buf())
 	}
 	pub fn new_memory() -> Self {
 		Self::InMemory
-	}
-}
-
-impl Default for CacheKind {
-	fn default() -> Self {
-		Self::new_memory()
 	}
 }
 
@@ -35,7 +30,7 @@ fn random_path() -> String {
 		.unwrap();
 	let mut rand = Uuid::new_v4().to_string();
 	rand = rand.split_off(rand.len().saturating_sub(4));
-	return format!("versatiles_{time}_{rand}",);
+	format!("versatiles_{time}_{rand}")
 }
 
 #[cfg(test)]

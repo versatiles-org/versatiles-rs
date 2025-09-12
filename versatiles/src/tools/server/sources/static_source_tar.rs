@@ -186,7 +186,7 @@ mod tests {
 	use versatiles_container::{
 		MockTilesReader, MockTilesReaderProfile, TilesConverterParameters, convert_tiles_container,
 	};
-	use versatiles_core::TilesReaderTrait;
+	use versatiles_core::{TilesReaderTrait, config::Config};
 
 	pub async fn make_test_tar(compression: TileCompression) -> NamedTempFile {
 		// get dummy reader
@@ -200,9 +200,14 @@ mod tests {
 			..Default::default()
 		};
 
-		convert_tiles_container(reader.boxed(), parameters, container_file.to_str().unwrap())
-			.await
-			.unwrap();
+		convert_tiles_container(
+			reader.boxed(),
+			parameters,
+			container_file.to_str().unwrap(),
+			Config::default_arc(),
+		)
+		.await
+		.unwrap();
 
 		container_file
 	}

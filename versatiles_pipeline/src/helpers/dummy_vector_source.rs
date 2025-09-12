@@ -7,7 +7,7 @@ use versatiles_geometry::{
 };
 
 #[derive(Debug)]
-pub struct MockVectorSource {
+pub struct DummyVectorSource {
 	#[allow(clippy::type_complexity)]
 	data: Vec<(String, Vec<Vec<(String, String)>>)>,
 	parameters: TilesReaderParameters,
@@ -15,7 +15,7 @@ pub struct MockVectorSource {
 	traversal: Traversal,
 }
 
-impl MockVectorSource {
+impl DummyVectorSource {
 	#[allow(clippy::type_complexity)]
 	pub fn new(layers: &[(&str, &[&[(&str, &str)]])], pyramid: Option<TileBBoxPyramid>) -> Self {
 		// Convert the layers input into the required data structure
@@ -43,10 +43,10 @@ impl MockVectorSource {
 		);
 
 		let mut tilejson = TileJSON::default();
-		tilejson.set_string("name", "mock vector source").unwrap();
+		tilejson.set_string("name", "dummy vector source").unwrap();
 		tilejson.update_from_reader_parameters(&parameters);
 
-		MockVectorSource {
+		DummyVectorSource {
 			data,
 			parameters,
 			tilejson,
@@ -61,13 +61,13 @@ impl MockVectorSource {
 }
 
 #[async_trait]
-impl TilesReaderTrait for MockVectorSource {
+impl TilesReaderTrait for DummyVectorSource {
 	fn source_name(&self) -> &str {
-		"MockVectorSource"
+		"DummyVectorSource"
 	}
 
 	fn container_name(&self) -> &str {
-		"MockVectorSource"
+		"DummyVectorSource"
 	}
 
 	fn parameters(&self) -> &TilesReaderParameters {
@@ -146,13 +146,13 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_get_tile_data() {
-		let source = MockVectorSource::new(
+		let source = DummyVectorSource::new(
 			&[("layer1", &[&[("key1", "value1"), ("key2", "value2")]])],
 			Some(TileBBoxPyramid::from_geo_bbox(0, 8, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
 		);
 
-		assert_eq!(source.source_name(), "MockVectorSource");
-		assert_eq!(source.container_name(), "MockVectorSource");
+		assert_eq!(source.source_name(), "DummyVectorSource");
+		assert_eq!(source.container_name(), "DummyVectorSource");
 		assert!(
 			source
 				.parameters()
@@ -184,8 +184,8 @@ mod tests {
 	}
 
 	#[test]
-	fn test_mock_vector_source_tilejson() {
-		let source = MockVectorSource::new(
+	fn test_dummy_vector_source_tilejson() {
+		let source = DummyVectorSource::new(
 			&[("layer1", &[&[("key1", "value1")]])],
 			Some(TileBBoxPyramid::from_geo_bbox(3, 15, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
 		);
@@ -196,7 +196,7 @@ mod tests {
 				"  \"bounds\": [ -180, -85.051129, 0, 0 ],",
 				"  \"maxzoom\": 15,",
 				"  \"minzoom\": 3,",
-				"  \"name\": \"mock vector source\",",
+				"  \"name\": \"dummy vector source\",",
 				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
 				"  \"tile_schema\": \"other\",",
 				"  \"tile_type\": \"vector\",",

@@ -10,6 +10,7 @@
 //! ## Usage
 //! ```rust
 //! use versatiles_container::{MBTilesWriter, PMTilesReader, TilesWriterTrait};
+//! use versatiles_core::config::Config;
 //! use std::path::Path;
 //!
 //! #[tokio::main]
@@ -18,7 +19,7 @@
 //!     let mut reader = PMTilesReader::open_path(&path).await.unwrap();
 //!
 //!     let temp_path = std::env::temp_dir().join("temp.mbtiles");
-//!     MBTilesWriter::write_to_path(&mut reader, &temp_path).await.unwrap();
+//!     MBTilesWriter::write_to_path(&mut reader, &temp_path, Config::default_arc()).await.unwrap();
 //! }
 //! ```
 //!
@@ -35,7 +36,7 @@ use futures::lock::Mutex;
 use r2d2::Pool;
 use r2d2_sqlite::{SqliteConnectionManager, rusqlite::params};
 use std::{fs::remove_file, path::Path, sync::Arc};
-use versatiles_core::{io::DataWriterTrait, json::JsonObject, *};
+use versatiles_core::{config::Config, io::DataWriterTrait, json::JsonObject, *};
 
 /// A writer for creating and populating MBTiles databases.
 pub struct MBTilesWriter {
@@ -114,7 +115,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the file format or compression is not supported, or if there are issues with writing to the SQLite database.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: Arc<Config>) -> Result<()> {
 		use TileCompression::*;
 		use TileFormat::*;
 
@@ -178,6 +179,7 @@ impl TilesWriterTrait for MBTilesWriter {
 						Ok(())
 					})
 				}),
+				config,
 			)
 			.await?;
 
@@ -185,7 +187,11 @@ impl TilesWriterTrait for MBTilesWriter {
 	}
 
 	/// Not implemented: Writes tiles and metadata to a generic data writer.
-	async fn write_to_writer(_reader: &mut dyn TilesReaderTrait, _writer: &mut dyn DataWriterTrait) -> Result<()> {
+	async fn write_to_writer(
+		_reader: &mut dyn TilesReaderTrait,
+		_writer: &mut dyn DataWriterTrait,
+		_config: Arc<Config>,
+	) -> Result<()> {
 		bail!("not implemented")
 	}
 }
@@ -205,7 +211,7 @@ mod tests {
 		})?;
 
 		let filename = NamedTempFile::new("temp.mbtiles")?;
-		MBTilesWriter::write_to_path(&mut mock_reader, &filename).await?;
+		MBTilesWriter::write_to_path(&mut mock_reader, &filename, Config::default_arc()).await?;
 
 		let mut reader = MBTilesReader::open_path(&filename)?;
 

@@ -20,10 +20,12 @@
 //! }
 //! ```
 
+use std::sync::Arc;
+
 use crate::TilesWriterTrait;
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{TilesReaderTrait, Traversal, io::DataWriterTrait};
+use versatiles_core::{TilesReaderTrait, Traversal, config::Config, io::DataWriterTrait};
 
 /// Mock implementation of a `TilesWriter`.
 pub struct MockTilesWriter {}
@@ -54,6 +56,7 @@ impl MockTilesWriter {
 						Ok(())
 					})
 				}),
+				Config::default_arc(),
 			)
 			.await
 	}
@@ -73,7 +76,11 @@ impl TilesWriterTrait for MockTilesWriter {
 	/// # Returns
 	///
 	/// A `Result` indicating the success or failure of the operation.
-	async fn write_to_writer(reader: &mut dyn TilesReaderTrait, _writer: &mut dyn DataWriterTrait) -> Result<()> {
+	async fn write_to_writer(
+		reader: &mut dyn TilesReaderTrait,
+		_writer: &mut dyn DataWriterTrait,
+		_config: Arc<Config>,
+	) -> Result<()> {
 		MockTilesWriter::write(reader).await
 	}
 }

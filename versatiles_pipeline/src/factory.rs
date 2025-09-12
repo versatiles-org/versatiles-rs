@@ -1,17 +1,18 @@
+use crate::helpers::{dummy_image_source::DummyImageSource, dummy_vector_source::DummyVectorSource};
 use crate::{
-	helpers::{mock_image_source::MockImageSource, mock_vector_source::MockVectorSource},
 	operations::{get_read_operation_factories, get_transform_operation_factories},
 	traits::{OperationTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
 	vpl::{VPLNode, VPLPipeline, parse_vpl},
 };
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow};
 use futures::future::BoxFuture;
 use itertools::Itertools;
 use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
+	sync::Arc,
 };
-use versatiles_core::TilesReaderTrait;
+use versatiles_core::{TilesReaderTrait, config::Config};
 
 type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesReaderTrait>>>>;
 
@@ -20,20 +21,22 @@ pub struct PipelineFactory {
 	tran_ops: HashMap<String, Box<dyn TransformOperationFactoryTrait>>,
 	dir: PathBuf,
 	create_reader: Callback,
+	config: Arc<Config>,
 }
 
 impl PipelineFactory {
-	pub fn new(dir: &Path, create_reader: Callback) -> Self {
+	pub fn new_empty(dir: &Path, create_reader: Callback, config: Arc<Config>) -> Self {
 		PipelineFactory {
 			read_ops: HashMap::new(),
 			tran_ops: HashMap::new(),
 			dir: dir.to_path_buf(),
 			create_reader,
+			config,
 		}
 	}
 
-	pub fn default(dir: &Path, create_reader: Callback) -> Self {
-		let mut factory = PipelineFactory::new(dir, create_reader);
+	pub fn new_default(dir: &Path, create_reader: Callback, config: Arc<Config>) -> Self {
+		let mut factory = PipelineFactory::new_empty(dir, create_reader, config);
 
 		for f in get_read_operation_factories() {
 			factory.add_read_factory(f)
@@ -47,21 +50,28 @@ impl PipelineFactory {
 	}
 
 	pub fn new_dummy() -> Self {
-		let callback = Box::new(|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
-			Box::pin(async {
-				let filename = filename;
-				let extension = filename.split('.').next_back().unwrap().to_string();
-				Ok(match extension.as_str() {
-					"pbf" | "mvt" => Box::new(MockVectorSource::new(&[("mock", &[&[("filename", &filename)]])], None))
-						as Box<dyn TilesReaderTrait>,
-					"avif" | "png" | "jpg" | "jpeg" | "webp" => {
-						Box::new(MockImageSource::new(&filename, None, 4).unwrap()) as Box<dyn TilesReaderTrait>
-					}
-					_ => bail!("unknown file extension '{}'", extension),
+		PipelineFactory::new_dummy_reader(Box::new(
+			|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
+				Box::pin(async {
+					let filename = filename;
+					let extension = filename.split('.').next_back().unwrap().to_string();
+					Ok(match extension.as_str() {
+						"pbf" | "mvt" => Box::new(DummyVectorSource::new(
+							&[("dummy", &[&[("filename", &filename)]])],
+							None,
+						)) as Box<dyn TilesReaderTrait>,
+						"avif" | "png" | "jpg" | "jpeg" | "webp" => {
+							Box::new(DummyImageSource::new(&filename, None, 4).unwrap()) as Box<dyn TilesReaderTrait>
+						}
+						_ => panic!("unknown file extension '{}'", extension),
+					})
 				})
-			})
-		});
-		PipelineFactory::default(Path::new(""), callback)
+			},
+		))
+	}
+
+	pub fn new_dummy_reader(create_reader: Callback) -> Self {
+		PipelineFactory::new_default(Path::new(""), create_reader, Config::default_arc())
 	}
 
 	fn add_read_factory(&mut self, factory: Box<dyn ReadOperationFactoryTrait>) {
@@ -142,6 +152,10 @@ impl PipelineFactory {
 				.join(""),
 		]
 		.join("\n")
+	}
+
+	pub fn get_config(&self) -> Arc<Config> {
+		self.config.clone()
 	}
 }
 

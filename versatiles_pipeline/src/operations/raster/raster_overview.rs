@@ -38,7 +38,7 @@ impl Operation {
 	fn build(
 		vpl_node: VPLNode,
 		source: Box<dyn OperationTrait>,
-		_factory: &PipelineFactory,
+		factory: &PipelineFactory,
 	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>, anyhow::Error>>
 	where
 		Self: Sized + OperationTrait,
@@ -63,7 +63,7 @@ impl Operation {
 			tilejson.update_from_reader_parameters(&parameters);
 
 			let tile_size = args.tile_size.unwrap_or(512);
-			let cache = Arc::new(Mutex::new(CacheMap::default()));
+			let cache = Arc::new(Mutex::new(CacheMap::new(factory.get_config())));
 			let traversal = Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?;
 
 			Ok(Box::new(Self {
@@ -323,8 +323,9 @@ impl TransformOperationFactoryTrait for Factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::helpers::mock_image_source::MockImageSource;
+	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::GenericImageView;
+	use versatiles_core::config::Config;
 
 	fn make_operation(tile_size: u32, level_base: u8) -> Operation {
 		let parameters = TilesReaderParameters::new(
@@ -336,12 +337,12 @@ mod tests {
 		let pyramid = TileBBoxPyramid::from_geo_bbox(level_base, level_base, &GeoBBox(2.224, 48.815, 2.47, 48.903));
 		Operation {
 			parameters,
-			source: Box::new(MockImageSource::new("F00.png", Some(pyramid), tile_size).unwrap()),
+			source: Box::new(DummyImageSource::new("F00.png", Some(pyramid), tile_size).unwrap()),
 			tilejson: TileJSON::default(),
 			level_base,
 			tile_size,
 			traversal: Traversal::new_any_size(1, 1).unwrap(),
-			cache: Arc::new(Mutex::new(CacheMap::default())),
+			cache: Arc::new(Mutex::new(CacheMap::new(Config::default_arc()))),
 		}
 	}
 
