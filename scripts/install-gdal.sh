@@ -58,7 +58,7 @@ install_deps_mac() {
   brew update
   brew install \
     cmake make pkg-config llvm ccache \
-    proj geos sqlite libtiff libjpeg libpng \
+    proj geos sqlite libtiff libjpeg libpng jpeg-xl \
     webp openjpeg \
     giflib \
     zstd xz expat \
@@ -76,7 +76,7 @@ install_deps_apt() {
   sudo apt-get install -y --no-install-recommends \
     build-essential cmake make pkg-config git ccache \
     libproj-dev libgeos-dev libsqlite3-dev \
-    libgeotiff-dev libtiff-dev libjpeg-dev libpng-dev \
+    libgeotiff-dev libtiff-dev libjpeg-dev libpng-dev libjxl-dev \
     libwebp-dev libopenjp2-7-dev \
     libgif-dev \
     libzstd-dev liblzma-dev zlib1g-dev \
@@ -145,6 +145,7 @@ CMAKE_ARGS=(
   -DGDAL_USE_GEOTIFF=ON
   -DGDAL_USE_INTERNAL_LIBS=WHEN_NO_EXTERNAL
   -DGDAL_USE_JSONC=ON
+  -DGDAL_USE_JXL=ON
   -DGDAL_USE_PARQUET=OFF
   -DGDAL_USE_SFCGAL=OFF
   -DGDAL_USE_TIFF_INTERNAL=ON
