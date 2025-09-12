@@ -43,7 +43,7 @@ versatiles_derive.workspace = true
 assert_fs.workspace = true
 criterion = "0.7.0"
 rstest.workspace = true
-tempfile = "3.21.0"
+tempfile = "3.22.0"
 tokio = { workspace = true, features = ["macros"] }
 wildmatch.workspace = true
 
