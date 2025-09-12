@@ -100,6 +100,7 @@ fi
 
 # Prepare source directory
 say "Setting up source directory at ${SRC_DIR}…"
+rm -rf "$SRC_DIR"
 mkdir -p "$SRC_DIR"
 cd "$SRC_DIR"
 
