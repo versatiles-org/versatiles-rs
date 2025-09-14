@@ -9,13 +9,13 @@ use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::traits::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Flattens (translucent) raster tiles onto a background
+/// Adjust brightness, contrast and gamma of raster tiles.
 struct Args {
-	/// Brightness adjustment for the flattened tiles. Defaults to 0.0 (no change).
+	/// Brightness adjustment. Defaults to 0.0 (no change).
 	brightness: Option<f32>,
-	/// Contrast adjustment for the flattened tiles. Defaults to 1.0 (no change).
+	/// Contrast adjustment. Defaults to 1.0 (no change).
 	contrast: Option<f32>,
-	/// Gamma adjustment for the flattened tiles. Defaults to 1.0 (no change).
+	/// Gamma adjustment. Defaults to 1.0 (no change).
 	gamma: Option<f32>,
 }
 
