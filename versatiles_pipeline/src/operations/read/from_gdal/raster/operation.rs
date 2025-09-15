@@ -155,13 +155,11 @@ impl OperationTrait for Operation {
 		let streams = stream::iter(bboxes).map(move |bbox| {
 			let size = size;
 			async move {
-				println!("Fetching image for bbox {:?}", bbox);
 				let image = self
 					.get_image_data_from_gdal(bbox.as_geo_bbox(), size * bbox.width(), size * bbox.height())
 					.await
 					.unwrap();
 
-				println!("Splitting image for bbox {:?}", bbox);
 				if let Some(image) = image {
 					// Crop into tiles on a blocking thread
 					let vec = tokio::task::spawn_blocking(move || {
@@ -182,8 +180,6 @@ impl OperationTrait for Operation {
 					})
 					.await
 					.unwrap();
-
-					println!("Done splitting image for bbox {:?}", bbox);
 
 					debug!("Returning {} tiles for bbox {:?}", vec.len(), bbox);
 					TileStream::from_vec(vec)
