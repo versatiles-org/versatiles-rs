@@ -284,10 +284,10 @@ impl OperationTrait for Operation {
 		Ok(TileStream::from_vec(vec))
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
+	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
 		debug!("get_tile_stream: {:?}", bbox);
 		if bbox.level > self.level_base {
-			return self.source.get_tile_stream(bbox).await;
+			return self.source.get_blob_stream(bbox).await;
 		}
 		pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters)
 	}

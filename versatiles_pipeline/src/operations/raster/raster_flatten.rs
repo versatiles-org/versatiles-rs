@@ -64,7 +64,7 @@ impl OperationTrait for Operation {
 			.map_item_parallel(move |image| image.into_flattened(color)))
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
+	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
 		// todo: don't decompress and recompress tiles that are already flattened
 		pack_image_tile_stream(self.get_image_stream(bbox).await, self.source.parameters())
 	}

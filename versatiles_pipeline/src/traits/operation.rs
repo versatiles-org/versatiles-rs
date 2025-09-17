@@ -12,7 +12,7 @@ pub trait OperationTrait: Debug + Send + Sync + Unpin {
 	fn traversal(&self) -> &Traversal {
 		&Traversal::ANY
 	}
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>>;
+	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>>;
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>>;
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>>;
 }

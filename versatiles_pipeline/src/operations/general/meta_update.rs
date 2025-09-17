@@ -80,8 +80,8 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
-		self.source.get_tile_stream(bbox).await
+	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
+		self.source.get_blob_stream(bbox).await
 	}
 
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {

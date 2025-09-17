@@ -81,11 +81,11 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Blob>> {
+	async fn get_blob_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Blob>> {
 		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
 		Ok(self
 			.source
-			.get_tile_stream(bbox)
+			.get_blob_stream(bbox)
 			.await?
 			.filter_coord(|coord| ready(self.filter_coord(&coord))))
 	}
@@ -144,7 +144,7 @@ mod tests {
 
 		for (coord, expected) in tests.iter() {
 			let count = operation
-				.get_tile_stream(coord.as_tile_bbox(1)?)
+				.get_blob_stream(coord.as_tile_bbox(1)?)
 				.await?
 				.to_vec()
 				.await

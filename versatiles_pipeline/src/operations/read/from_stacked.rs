@@ -195,12 +195,12 @@ impl OperationTrait for Operation {
 	}
 
 	/// Stream packed tiles intersecting `bbox` using the overlay strategy.
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		// We need the desired output compression inside the closure, so copy it.
 		let output_compression = self.parameters.tile_compression;
 		self.gather_stream(
 			bbox,
-			|src, b| Box::pin(async move { src.get_tile_stream(b).await }),
+			|src, b| Box::pin(async move { src.get_blob_stream(b).await }),
 			move |blob: Blob, src| recompress(blob, &src.parameters().tile_compression, &output_compression),
 		)
 	}
@@ -361,7 +361,7 @@ mod tests {
 
 		let bbox = TileBBox::new_full(3)?;
 
-		let tiles = result.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles = result.get_blob_stream(bbox).await?.to_vec().await;
 		assert_eq!(arrange_tiles(tiles, check_vector_blob), *RESULT_PATTERN);
 
 		let tiles = result.get_vector_stream(bbox).await?.to_vec().await;
@@ -387,7 +387,7 @@ mod tests {
 
 		let bbox = TileBBox::new_full(3)?;
 
-		let tiles = result.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles = result.get_blob_stream(bbox).await?.to_vec().await;
 		assert_eq!(arrange_tiles(tiles, check_image_blob), *RESULT_PATTERN);
 
 		let tiles = result.get_image_stream(bbox).await?.to_vec().await;

@@ -135,7 +135,7 @@ impl OperationTrait for Operation {
 
 	/// Produce a `Blob` stream by packing either raster or vector tiles,
 	/// depending on `tile_format`.
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
+	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
 		match self.parameters.tile_format.get_type() {
 			TileType::Raster => pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters),
 			TileType::Vector => pack_vector_tile_stream(self.get_vector_stream(bbox).await, &self.parameters),
@@ -175,7 +175,7 @@ mod tests {
 
 		let coord = TileCoord { x: 1, y: 2, level: 3 };
 		let blob = operation
-			.get_tile_stream(coord.as_tile_bbox(1)?)
+			.get_blob_stream(coord.as_tile_bbox(1)?)
 			.await?
 			.next()
 			.await
@@ -186,7 +186,7 @@ mod tests {
 		assert_eq!(operation.tilejson().as_pretty_lines(100), tilejson, "for '{format}'");
 
 		let mut stream = operation
-			.get_tile_stream(TileBBox::from_boundaries(3, 1, 1, 2, 3)?)
+			.get_blob_stream(TileBBox::from_boundaries(3, 1, 1, 2, 3)?)
 			.await?;
 
 		let mut n = 0;

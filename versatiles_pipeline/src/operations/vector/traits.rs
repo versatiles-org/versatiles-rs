@@ -51,7 +51,7 @@ impl<R: RunnerTrait> OperationTrait for TransformOp<R> {
 			.filter_map_item_parallel(move |tile| runner.run(tile).map(Some)))
 	}
 
-	async fn get_tile_stream(&self, b: TileBBox) -> Result<TileStream> {
+	async fn get_blob_stream(&self, b: TileBBox) -> Result<TileStream> {
 		pack_vector_tile_stream(self.get_vector_stream(b).await, &self.params)
 	}
 }

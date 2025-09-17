@@ -176,7 +176,7 @@ impl OperationTrait for Operation {
 	}
 
 	/// Stream packed raster tiles intersecting `bbox`.
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters)
 	}
 
@@ -287,7 +287,7 @@ mod tests {
 			.await?;
 
 		let bbox = TileBBox::new_full(3)?;
-		let tiles = result.get_tile_stream(bbox).await?.to_vec().await;
+		let tiles = result.get_blob_stream(bbox).await?.to_vec().await;
 
 		assert_eq!(
 			arrange_tiles(tiles, |blob| {

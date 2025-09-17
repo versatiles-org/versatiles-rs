@@ -80,7 +80,7 @@ impl OperationTrait for Operation {
 			}))
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
+	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
 		pack_image_tile_stream(self.get_image_stream(bbox).await, self.source.parameters())
 	}
 

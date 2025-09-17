@@ -107,7 +107,7 @@ impl OperationTrait for DummyImageSource {
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
-	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Blob>> {
+	async fn get_blob_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Blob>> {
 		let blob = self.blob.clone();
 		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {

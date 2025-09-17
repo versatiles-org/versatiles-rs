@@ -81,7 +81,7 @@ impl OperationTrait for Operation {
 
 	/// Stream raw tile blobs intersecting the bounding box by delegating to
 	/// `TilesReaderTrait::get_tile_stream`.
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		self.reader.get_tile_stream(bbox).await
 	}
 
@@ -165,7 +165,7 @@ mod tests {
 		);
 
 		let mut stream = operation
-			.get_tile_stream(TileBBox::from_boundaries(3, 1, 1, 2, 3)?)
+			.get_blob_stream(TileBBox::from_boundaries(3, 1, 1, 2, 3)?)
 			.await?;
 
 		let mut n = 0;
@@ -215,7 +215,7 @@ mod tests {
 		);
 
 		let mut stream = operation
-			.get_tile_stream(TileBBox::from_boundaries(3, 1, 1, 2, 3)?)
+			.get_blob_stream(TileBBox::from_boundaries(3, 1, 1, 2, 3)?)
 			.await?;
 
 		let mut n = 0;

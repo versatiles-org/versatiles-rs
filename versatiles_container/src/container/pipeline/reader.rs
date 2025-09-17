@@ -118,7 +118,7 @@ impl TilesReaderTrait for PipelineReader {
 	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		let mut vec = self
 			.operation
-			.get_tile_stream(coord.as_tile_bbox(1)?)
+			.get_blob_stream(coord.as_tile_bbox(1)?)
 			.await?
 			.to_vec()
 			.await;
@@ -134,7 +134,7 @@ impl TilesReaderTrait for PipelineReader {
 
 	/// Get a stream of tiles within the bounding box.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
-		self.operation.get_tile_stream(bbox).await
+		self.operation.get_blob_stream(bbox).await
 	}
 }
 

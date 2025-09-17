@@ -134,7 +134,7 @@ impl OperationTrait for Operation {
 		);
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
+	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
 		use RasterTileFormat::*;
 		use versatiles_image::{avif, jpeg, png, webp};
 

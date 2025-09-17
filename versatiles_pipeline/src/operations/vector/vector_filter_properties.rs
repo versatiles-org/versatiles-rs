@@ -183,7 +183,7 @@ mod tests {
 			)
 			.await?;
 
-		let mut stream = operation.get_tile_stream(TileBBox::new_full(0)?).await?;
+		let mut stream = operation.get_blob_stream(TileBBox::new_full(0)?).await?;
 		let blob = stream.next().await.unwrap().1;
 
 		Ok((

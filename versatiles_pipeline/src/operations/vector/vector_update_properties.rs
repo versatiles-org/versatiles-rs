@@ -257,7 +257,7 @@ mod tests {
 
 		// ── extract a single feature for inspection ────────────────
 		let mut stream = operation
-			.get_tile_stream(TileCoord::new(10, 1000, 100)?.as_tile_bbox(1)?)
+			.get_blob_stream(TileCoord::new(10, 1000, 100)?.as_tile_bbox(1)?)
 			.await?;
 		let blob = stream.next().await.unwrap().1;
 		let tile = VectorTile::from_blob(&blob)?;
