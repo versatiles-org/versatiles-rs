@@ -9,6 +9,8 @@
 //!
 //! This file contains both the [`Args`] struct used by the VPL parser and the
 //! [`Operation`] implementation that performs the blending.
+use std::vec;
+
 use crate::{
 	PipelineFactory,
 	helpers::pack_image_tile_stream,
@@ -55,9 +57,14 @@ struct Operation {
 /// First tile is in the front
 ///
 /// Returns `Ok(None)` when the input list is empty.
-fn overlay_image_tiles(tiles: Vec<DynamicImage>) -> Result<Option<DynamicImage>> {
+fn stack_images(tiles: Vec<(DynamicImage, usize)>) -> Result<Option<(DynamicImage, Option<usize>)>> {
 	let mut image = Option::<DynamicImage>::None;
-	for mut image_bg in tiles.into_iter() {
+	let mut indexes = vec![];
+	for (mut image_bg, index) in tiles.into_iter() {
+		if image_bg.is_empty() {
+			continue;
+		}
+		indexes.push(index);
 		if let Some(image_fg) = image {
 			image_bg.overlay(&image_fg)?;
 		};
@@ -66,7 +73,39 @@ fn overlay_image_tiles(tiles: Vec<DynamicImage>) -> Result<Option<DynamicImage>>
 			break;
 		}
 	}
-	Ok(image)
+
+	let index = if indexes.len() == 1 { Some(indexes[0]) } else { None };
+	Ok(image.map(|img| (img, index)))
+}
+
+async fn get_stacked_tiles(
+	sources: &[Box<dyn OperationTrait>],
+	bbox: TileBBox,
+) -> Result<Vec<(TileCoord, DynamicImage, Option<usize>)>> {
+	let mut images = TileBBoxContainer::<Vec<(DynamicImage, usize)>>::new_default(bbox);
+
+	let streams = sources.iter().map(|source| source.get_image_stream(bbox));
+	let results = futures::future::join_all(streams).await;
+
+	for (index, result) in results.into_iter().enumerate() {
+		let result = result?;
+		result
+			.for_each_sync(|(coord, tile)| {
+				if !tile.is_empty() {
+					images.get_mut(&coord).unwrap().push((tile, index));
+				}
+			})
+			.await;
+	}
+
+	images
+		.into_iter()
+		.filter_map(|(c, v)| match stack_images(v) {
+			Ok(Some((img, index))) => Some(Ok((c, img, index))),
+			Ok(None) => None,
+			Err(err) => Some(Err(err)),
+		})
+		.collect::<Result<Vec<_>>>()
 }
 
 impl ReadOperationTrait for Operation {
@@ -149,31 +188,18 @@ impl OperationTrait for Operation {
 	/// Stream blended raster tiles for every coordinate inside `bbox`.
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
+		let sources = &self.sources;
 
 		Ok(TileStream::from_streams(stream::iter(bboxes).map(
 			move |bbox| async move {
-				let mut images = TileBBoxContainer::<Vec<DynamicImage>>::new_default(bbox);
-
-				let streams = self.sources.iter().map(|source| source.get_image_stream(bbox));
-				let results = futures::future::join_all(streams).await;
-
-				for result in results {
-					result
+				TileStream::from_vec(
+					get_stacked_tiles(sources, bbox)
+						.await
 						.unwrap()
-						.for_each_sync(|(coord, tile)| {
-							if !tile.is_empty() {
-								images.get_mut(&coord).unwrap().push(tile);
-							}
-						})
-						.await;
-				}
-
-				let images = images
-					.into_iter()
-					.filter_map(|(c, v)| if v.is_empty() { None } else { Some((c, v)) })
-					.collect::<Vec<_>>();
-
-				TileStream::from_vec(images).filter_map_item_parallel(overlay_image_tiles)
+						.into_iter()
+						.map(|(c, img, _)| (c, img))
+						.collect(),
+				)
 			},
 		)))
 	}
@@ -355,7 +381,7 @@ mod tests {
 		let image1 = DynamicImage::new_test_rgb();
 		let image2 = DynamicImage::new_test_rgba();
 
-		let _merged_tile = overlay_image_tiles(vec![image1, image2])?.unwrap();
+		let _merged_tile = stack_images(vec![(image1, 0), (image2, 1)])?.unwrap();
 
 		Ok(())
 	}
