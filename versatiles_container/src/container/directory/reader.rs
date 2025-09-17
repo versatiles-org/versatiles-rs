@@ -224,7 +224,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 		&self.tilejson
 	}
 
-	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data {:?}", coord);
 
 		if let Some(path) = self.tile_map.get(coord) {
@@ -271,10 +271,10 @@ mod tests {
 			"{\"bounds\":[-90,66.51326,-45,79.171335],\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 
-		let tile_data = reader.get_tile_data(&TileCoord::new(3, 2, 1)?).await?.unwrap();
+		let tile_data = reader.get_tile_blob(&TileCoord::new(3, 2, 1)?).await?.unwrap();
 		assert_eq!(tile_data, Blob::from("test tile data"));
 
-		assert!(reader.get_tile_data(&TileCoord::new(2, 2, 1)?).await?.is_none());
+		assert!(reader.get_tile_blob(&TileCoord::new(2, 2, 1)?).await?.is_none());
 
 		Ok(())
 	}
@@ -340,7 +340,7 @@ mod tests {
 
 		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
 		let coord = TileCoord::new(3, 2, 1).unwrap();
-		let tile_data = reader.get_tile_data(&coord).await.unwrap().unwrap();
+		let tile_data = reader.get_tile_blob(&coord).await.unwrap().unwrap();
 
 		assert_eq!(tile_data, Blob::from("tile at 3/2/1"));
 

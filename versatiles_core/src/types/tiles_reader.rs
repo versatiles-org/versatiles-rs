@@ -126,7 +126,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	}
 
 	/// Asynchronously fetch the raw tile data for the given tile coordinate.
-	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>>;
+	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>>;
 
 	/// Asynchronously stream all tiles within the given bounding box.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
@@ -138,7 +138,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 				mutex
 					.lock()
 					.await
-					.get_tile_data(&coord)
+					.get_tile_blob(&coord)
 					.await
 					.map(|blob_option| blob_option.map(|blob| (coord, blob)))
 					.unwrap_or(None)
@@ -297,7 +297,7 @@ mod tests {
 			&self.tilejson
 		}
 
-		async fn get_tile_data(&self, _coord: &TileCoord) -> Result<Option<Blob>> {
+		async fn get_tile_blob(&self, _coord: &TileCoord) -> Result<Option<Blob>> {
 			Ok(Some(Blob::from("test tile data")))
 		}
 	}
@@ -347,7 +347,7 @@ mod tests {
 	async fn test_get_tile_data() -> Result<()> {
 		let reader = TestReader::new_dummy();
 		let coord = TileCoord::new(0, 0, 0)?;
-		let tile_data = reader.get_tile_data(&coord).await?;
+		let tile_data = reader.get_tile_blob(&coord).await?;
 		assert_eq!(tile_data, Some(Blob::from("test tile data")));
 		Ok(())
 	}

@@ -115,7 +115,7 @@ impl TilesReaderTrait for PipelineReader {
 	}
 
 	/// Get tile data for the given coordinate, always compressed and formatted.
-	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		let mut vec = self
 			.operation
 			.get_blob_stream(coord.as_tile_bbox(1)?)
@@ -180,11 +180,11 @@ mod tests {
 	async fn test_tile_pipeline_reader_get_tile_data() -> Result<()> {
 		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), Config::default_arc()).await?;
 
-		let result = reader.get_tile_data(&TileCoord::new(14, 0, 0)?).await;
+		let result = reader.get_tile_blob(&TileCoord::new(14, 0, 0)?).await;
 		assert_eq!(result?, None);
 
 		let result = decompress(
-			reader.get_tile_data(&TileCoord::new(14, 8800, 5377)?).await?.unwrap(),
+			reader.get_tile_blob(&TileCoord::new(14, 8800, 5377)?).await?.unwrap(),
 			&reader.parameters().tile_compression,
 		)?;
 

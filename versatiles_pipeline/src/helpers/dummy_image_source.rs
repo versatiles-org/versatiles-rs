@@ -90,7 +90,7 @@ impl TilesReaderTrait for DummyImageSource {
 		&self.tilejson
 	}
 
-	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		if !self.parameters.bbox_pyramid.contains_coord(coord) {
 			return Ok(None);
 		}
@@ -157,10 +157,10 @@ mod tests {
 			4,
 		)
 		.unwrap();
-		let tile_data = source.get_tile_data(&TileCoord::new(8, 0, 255).unwrap()).await.unwrap();
+		let tile_data = source.get_tile_blob(&TileCoord::new(8, 0, 255).unwrap()).await.unwrap();
 		assert!(tile_data.is_some());
 
-		let tile_data = source.get_tile_data(&TileCoord::new(8, 0, 0).unwrap()).await.unwrap();
+		let tile_data = source.get_tile_blob(&TileCoord::new(8, 0, 0).unwrap()).await.unwrap();
 		assert!(tile_data.is_none());
 	}
 

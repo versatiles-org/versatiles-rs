@@ -58,7 +58,7 @@ impl TileSource {
 
 			// Get tile data
 			let reader = self.reader.lock().await;
-			let tile = reader.get_tile_data(&coord).await;
+			let tile = reader.get_tile_blob(&coord).await;
 			drop(reader);
 
 			// If tile data is not found, return a not found response

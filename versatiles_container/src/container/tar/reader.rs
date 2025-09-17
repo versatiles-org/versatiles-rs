@@ -175,7 +175,7 @@ impl TilesReaderTrait for TarTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
-	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		log::trace!("get_tile_data {:?}", coord);
 
 		let range = self.tile_map.get(coord);
@@ -235,7 +235,7 @@ pub mod tests {
 		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.parameters().tile_format, TileFormat::MVT);
 
-		let tile = reader.get_tile_data(&TileCoord::new(3, 6, 2)?).await?.unwrap();
+		let tile = reader.get_tile_blob(&TileCoord::new(3, 6, 2)?).await?.unwrap();
 		assert_eq!(decompress_gzip(&tile)?.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())
@@ -315,7 +315,7 @@ pub mod tests {
 		assert_eq!(reader.parameters().bbox_pyramid.count_tiles(), 1);
 		assert_eq!(
 			reader
-				.get_tile_data(&TileCoord::new(3, 1, 2)?)
+				.get_tile_blob(&TileCoord::new(3, 1, 2)?)
 				.await?
 				.unwrap()
 				.as_slice(),

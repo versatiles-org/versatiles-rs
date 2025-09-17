@@ -86,7 +86,7 @@ impl TilesReaderTrait for DummyVectorSource {
 		&self.tilejson
 	}
 
-	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		if !self.parameters.bbox_pyramid.contains_coord(coord) {
 			return Ok(None);
 		}
@@ -161,12 +161,12 @@ mod tests {
 		);
 
 		let coord = TileCoord::new(8, 0, 150).unwrap();
-		let tile_data = source.get_tile_data(&coord).await.unwrap();
+		let tile_data = source.get_tile_blob(&coord).await.unwrap();
 
 		assert!(tile_data.is_some());
 
 		let coord = TileCoord::new(8, 100, 100).unwrap();
-		let tile_data = source.get_tile_data(&coord).await.unwrap();
+		let tile_data = source.get_tile_blob(&coord).await.unwrap();
 
 		assert!(tile_data.is_none());
 	}

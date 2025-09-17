@@ -251,7 +251,7 @@ impl TilesReaderTrait for PMTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
-	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		// Log the requested tile coordinates for debugging purposes
 		log::trace!("get_tile_data {:?}", coord);
 
@@ -349,20 +349,20 @@ mod tests {
 		);
 
 		assert_eq!(
-			reader.get_tile_data(&TileCoord::new(0, 0, 0)?).await?.unwrap().len(),
+			reader.get_tile_blob(&TileCoord::new(0, 0, 0)?).await?.unwrap().len(),
 			20
 		);
 
 		assert_eq!(
 			reader
-				.get_tile_data(&TileCoord::new(14, 8800, 5370)?)
+				.get_tile_blob(&TileCoord::new(14, 8800, 5370)?)
 				.await?
 				.unwrap()
 				.len(),
 			100391
 		);
 
-		assert!(reader.get_tile_data(&TileCoord::new(16, 0, 0)?).await?.is_none());
+		assert!(reader.get_tile_blob(&TileCoord::new(16, 0, 0)?).await?.is_none());
 
 		Ok(())
 	}

@@ -167,7 +167,7 @@ impl TilesReaderTrait for TilesConvertReader {
 		&self.tilejson
 	}
 
-	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		let mut coord = *coord;
 		if self.converter_parameters.flip_y {
 			coord.flip_y();
@@ -175,7 +175,7 @@ impl TilesReaderTrait for TilesConvertReader {
 		if self.converter_parameters.swap_xy {
 			coord.swap_xy();
 		}
-		let mut blob = self.reader.get_tile_data(&coord).await?;
+		let mut blob = self.reader.get_tile_blob(&coord).await?;
 
 		if let Some(tile_recompressor) = &self.tile_recompressor
 			&& let Some(b) = blob
@@ -309,7 +309,7 @@ mod tests {
 			let bbox = pyramid_out.get_level_bbox(3);
 			let mut tiles: Vec<String> = Vec::new();
 			for coord in bbox.iter_coords() {
-				let mut text = reader_out.get_tile_data(&coord).await?.unwrap().to_string();
+				let mut text = reader_out.get_tile_blob(&coord).await?.unwrap().to_string();
 				text = text.replace("{x:", "").replace(",y:", "").replace(",z:3}", "");
 				tiles.push(text);
 			}
@@ -377,7 +377,7 @@ mod tests {
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp)?;
 
 		let coord = TileCoord::new(0, 0, 0)?;
-		let data = tcr.get_tile_data(&coord).await?;
+		let data = tcr.get_tile_blob(&coord).await?;
 		assert!(data.is_some());
 
 		Ok(())
@@ -423,12 +423,12 @@ mod tests {
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp)?;
 
 		let mut coord = TileCoord::new(3, 1, 2)?;
-		let data = tcr.get_tile_data(&coord).await?;
+		let data = tcr.get_tile_blob(&coord).await?;
 		assert!(data.is_some());
 
 		coord.flip_y();
 		coord.swap_xy();
-		let data_flipped = tcr.get_tile_data(&coord).await?;
+		let data_flipped = tcr.get_tile_blob(&coord).await?;
 		assert_eq!(data, data_flipped);
 
 		Ok(())

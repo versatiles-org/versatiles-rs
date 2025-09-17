@@ -98,7 +98,7 @@ impl TilesReaderTrait for MockTilesReader {
 		&self.tilejson
 	}
 
-	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		use TileFormat::*;
 
 		if !coord.is_valid() {
@@ -154,7 +154,7 @@ mod tests {
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 		let blob = reader
-			.get_tile_data(&TileCoord::new(0, 0, 0)?)
+			.get_tile_blob(&TileCoord::new(0, 0, 0)?)
 			.await?
 			.unwrap()
 			.into_vec();
@@ -167,7 +167,7 @@ mod tests {
 		let test = |profile, blob| async move {
 			let coord = TileCoord::new(6, 23, 45).unwrap();
 			let reader = MockTilesReader::new_mock_profile(profile).unwrap();
-			let tile_compressed = reader.get_tile_data(&coord).await.unwrap().unwrap();
+			let tile_compressed = reader.get_tile_blob(&coord).await.unwrap().unwrap();
 			let tile_uncompressed = decompress(tile_compressed, &reader.parameters().tile_compression).unwrap();
 			assert_eq!(tile_uncompressed, blob);
 		};

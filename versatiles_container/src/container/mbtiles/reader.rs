@@ -306,7 +306,7 @@ impl TilesReaderTrait for MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
-	async fn get_tile_data(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		trace!("read tile from coord {coord:?}");
 
 		let conn = self.pool.get()?;
@@ -429,7 +429,7 @@ pub mod tests {
 		assert_eq!(reader.parameters().tile_compression, Gzip);
 		assert_eq!(reader.parameters().tile_format, MVT);
 
-		let tile = reader.get_tile_data(&TileCoord::new(14, 8803, 5376)?).await?.unwrap();
+		let tile = reader.get_tile_blob(&TileCoord::new(14, 8803, 5376)?).await?.unwrap();
 		assert_eq!(tile.len(), 172969);
 		assert_eq!(tile.get_range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
 		assert_eq!(
