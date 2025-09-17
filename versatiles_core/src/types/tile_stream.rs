@@ -48,7 +48,7 @@ use futures::{
 	future::ready,
 	stream::{self, BoxStream},
 };
-use std::{io::Write, pin::Pin, sync::Arc};
+use std::{collections::HashMap, io::Write, pin::Pin, sync::Arc};
 
 /// A stream of tiles represented by `(TileCoord, T)` pairs.
 ///
@@ -260,6 +260,13 @@ where
 	/// # }
 	/// ```
 	pub async fn to_vec(self) -> Vec<(TileCoord, T)> {
+		self.inner.collect().await
+	}
+
+	pub async fn to_map(self) -> HashMap<TileCoord, T>
+	where
+		T: Eq,
+	{
 		self.inner.collect().await
 	}
 

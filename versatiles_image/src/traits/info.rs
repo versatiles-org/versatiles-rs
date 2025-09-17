@@ -88,7 +88,7 @@ where
 			return false;
 		}
 		let alpha_channel = (self.color().channel_count() - 1) as usize;
-		return !self.iter_pixels().any(|p| p[alpha_channel] != 0);
+		return self.iter_pixels().all(|p| p[alpha_channel] == 0);
 	}
 
 	fn is_opaque(&self) -> bool {

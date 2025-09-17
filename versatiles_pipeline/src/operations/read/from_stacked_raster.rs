@@ -26,7 +26,11 @@ use futures::{
 	stream,
 };
 use imageproc::image::DynamicImage;
-use versatiles_core::{tilejson::TileJSON, *};
+use versatiles_core::{
+	tilejson::TileJSON,
+	utils::{compress, decompress},
+	*,
+};
 use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::traits::*;
 
@@ -37,8 +41,14 @@ struct Args {
 	/// The first source overlays the others.
 	sources: Vec<VPLPipeline>,
 
-	/// The tile format to use for the output tiles (default: PNG).
+	/// The tile format to use for the output tiles.
+	/// Default: format of the first source.
 	format: Option<TileFormat>,
+
+	/// Try to avoid unnecessary image recompression: If the blended result is identical to one of
+	/// the input tiles, the operation will reuse that tile’s original binary data instead of
+	/// recompressing it. This prevents unnecessary compression artifacts.
+	minimize_recompression: Option<bool>,
 }
 
 /// [`OperationTrait`] implementation that overlays raster tiles “on the fly.”
@@ -51,16 +61,18 @@ struct Operation {
 	sources: Vec<Box<dyn OperationTrait>>,
 	tilejson: TileJSON,
 	traversal: Traversal,
+	minimize_recompression: bool,
 }
 
 /// Blend a list of equally‑sized tiles using *source‑over* compositing.
 /// First tile is in the front
 ///
 /// Returns `Ok(None)` when the input list is empty.
-fn stack_images(tiles: Vec<(DynamicImage, usize)>) -> Result<Option<(DynamicImage, Option<usize>)>> {
+fn stack_images<T>(images: Vec<(DynamicImage, T)>) -> Result<Option<(DynamicImage, Option<T>)>> {
 	let mut image = Option::<DynamicImage>::None;
 	let mut indexes = vec![];
-	for (mut image_bg, index) in tiles.into_iter() {
+
+	for (mut image_bg, index) in images.into_iter() {
 		if image_bg.is_empty() {
 			continue;
 		}
@@ -74,25 +86,25 @@ fn stack_images(tiles: Vec<(DynamicImage, usize)>) -> Result<Option<(DynamicImag
 		}
 	}
 
-	let index = if indexes.len() == 1 { Some(indexes[0]) } else { None };
+	let index = if indexes.len() == 1 { indexes.pop() } else { None };
 	Ok(image.map(|img| (img, index)))
 }
 
-async fn get_stacked_tiles(
+async fn get_stacked_images(
 	sources: &[Box<dyn OperationTrait>],
 	bbox: TileBBox,
-) -> Result<Vec<(TileCoord, DynamicImage, Option<usize>)>> {
-	let mut images = TileBBoxContainer::<Vec<(DynamicImage, usize)>>::new_default(bbox);
+) -> Result<Vec<(TileCoord, DynamicImage)>> {
+	let mut images = TileBBoxContainer::<Vec<(DynamicImage, u8)>>::new_default(bbox);
 
 	let streams = sources.iter().map(|source| source.get_image_stream(bbox));
 	let results = futures::future::join_all(streams).await;
 
-	for (index, result) in results.into_iter().enumerate() {
+	for result in results.into_iter() {
 		let result = result?;
 		result
 			.for_each_sync(|(coord, tile)| {
 				if !tile.is_empty() {
-					images.get_mut(&coord).unwrap().push((tile, index));
+					images.get_mut(&coord).unwrap().push((tile, 0));
 				}
 			})
 			.await;
@@ -101,7 +113,51 @@ async fn get_stacked_tiles(
 	images
 		.into_iter()
 		.filter_map(|(c, v)| match stack_images(v) {
-			Ok(Some((img, index))) => Some(Ok((c, img, index))),
+			Ok(Some((img, _))) => Some(Ok((c, img))),
+			Ok(None) => None,
+			Err(err) => Some(Err(err)),
+		})
+		.collect::<Result<Vec<_>>>()
+}
+
+async fn get_stacked_blobs(
+	sources: &[Box<dyn OperationTrait>],
+	bbox: TileBBox,
+	tile_format: TileFormat,
+	tile_compression: TileCompression,
+) -> Result<Vec<(TileCoord, Blob)>> {
+	let mut images = TileBBoxContainer::<Vec<(DynamicImage, Blob)>>::new_default(bbox);
+
+	let streams = sources.iter().map(|source| async move {
+		let stream = source.get_blob_stream(bbox).await.unwrap();
+		let tile_format = source.parameters().tile_format;
+		let tile_compression = source.parameters().tile_compression;
+		stream.map_item_parallel(move |blob| {
+			let blob = decompress(blob, &tile_compression)?;
+			let image = DynamicImage::from_blob(&blob, tile_format).unwrap();
+			Ok((image, blob))
+		})
+	});
+	let results = futures::future::join_all(streams).await;
+
+	for result in results.into_iter() {
+		result
+			.for_each_sync(|(coord, (image, blob))| {
+				if !image.is_empty() {
+					images.get_mut(&coord).unwrap().push((image, blob));
+				}
+			})
+			.await;
+	}
+
+	images
+		.into_iter()
+		.filter_map(|(c, v)| match stack_images(v) {
+			Ok(Some((_, Some(blob)))) => Some(Ok((c, compress(blob, &tile_compression).unwrap()))),
+			Ok(Some((img, None))) => Some(Ok((
+				c,
+				compress(img.to_blob(tile_format).unwrap(), &tile_compression).unwrap(),
+			))),
 			Ok(None) => None,
 			Err(err) => Some(Err(err)),
 		})
@@ -126,9 +182,16 @@ impl ReadOperationTrait for Operation {
 			ensure!(!sources.is_empty(), "must have at least one source");
 
 			let mut tilejson = TileJSON::default();
+
+			let minimize_recompression = args.minimize_recompression.unwrap_or(false);
 			let first_parameters = sources.first().unwrap().parameters();
-			let tile_format = args.format.unwrap_or(TileFormat::PNG);
+			let tile_format = args.format.unwrap_or(first_parameters.tile_format);
+			ensure!(
+				tile_format.get_type() == TileType::Raster,
+				"output format must be a raster format"
+			);
 			let tile_compression = first_parameters.tile_compression;
+
 			let mut pyramid = TileBBoxPyramid::new_empty();
 			let mut traversal = Traversal::new_any();
 
@@ -154,6 +217,7 @@ impl ReadOperationTrait for Operation {
 				parameters,
 				sources,
 				traversal,
+				minimize_recompression,
 			}) as Box<dyn OperationTrait>)
 		})
 	}
@@ -177,7 +241,24 @@ impl OperationTrait for Operation {
 
 	/// Stream packed raster tiles intersecting `bbox`.
 	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream> {
-		pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters)
+		if self.minimize_recompression {
+			let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
+			let sources = &self.sources;
+			let tile_format = self.parameters.tile_format;
+			let tile_compression = self.parameters.tile_compression;
+
+			Ok(TileStream::from_streams(stream::iter(bboxes).map(
+				move |bbox| async move {
+					TileStream::from_vec(
+						get_stacked_blobs(sources, bbox, tile_format, tile_compression)
+							.await
+							.unwrap(),
+					)
+				},
+			)))
+		} else {
+			pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters)
+		}
 	}
 
 	/// Always errors – vector output is not supported.
@@ -191,16 +272,7 @@ impl OperationTrait for Operation {
 		let sources = &self.sources;
 
 		Ok(TileStream::from_streams(stream::iter(bboxes).map(
-			move |bbox| async move {
-				TileStream::from_vec(
-					get_stacked_tiles(sources, bbox)
-						.await
-						.unwrap()
-						.into_iter()
-						.map(|(c, img, _)| (c, img))
-						.collect(),
-				)
-			},
+			move |bbox| async move { TileStream::from_vec(get_stacked_images(sources, bbox).await.unwrap()) },
 		)))
 	}
 }
@@ -227,6 +299,7 @@ impl ReadOperationFactoryTrait for Factory {
 mod tests {
 	use super::*;
 	use crate::helpers::{dummy_image_source::DummyImageSource, dummy_vector_source::arrange_tiles};
+	use imageproc::image::GenericImage;
 
 	pub fn get_color(blob: &Blob) -> String {
 		let image = DynamicImage::from_blob(blob, TileFormat::PNG).unwrap();
@@ -384,5 +457,105 @@ mod tests {
 		let _merged_tile = stack_images(vec![(image1, 0), (image2, 1)])?.unwrap();
 
 		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_minimize_recompression_reuses_original_blob_single_source() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		// Build the stacked op with a single source and minimize_recompression=true
+		let stacked = factory
+			.operation_from_vpl("from_stacked_raster minimize_recompression=true [ from_container filename=00F7.png ]")
+			.await?;
+		// Build the plain source to compare raw tiles
+		let plain = factory.operation_from_vpl("from_container filename=00F7.png").await?;
+
+		let bbox = TileBBox::new_full(3)?;
+		let stacked_tiles = stacked.get_blob_stream(bbox).await?.to_vec().await;
+		let plain_tiles = plain.get_blob_stream(bbox).await?.to_vec().await;
+
+		// Convert to maps for easy lookup
+		use std::collections::HashMap;
+		let map_stacked: HashMap<_, _> = stacked_tiles.into_iter().collect();
+		let map_plain: HashMap<_, _> = plain_tiles.into_iter().collect();
+
+		// For every key present in the plain source, the stacked version must be byte-identical
+		for (coord, blob_plain) in map_plain.iter() {
+			if let Some(blob_stacked) = map_stacked.get(coord) {
+				assert_eq!(
+					blob_stacked.as_slice(),
+					blob_plain.as_slice(),
+					"expected minimize_recompression to reuse original bytes for {coord:?}"
+				);
+			}
+		}
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_minimize_recompression_reencodes_on_blend() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		// Two sources overlapping; minimize_recompression should NOT reuse original bytes when pixels change
+		let stacked = factory
+            .operation_from_vpl(
+                "from_stacked_raster minimize_recompression=true [ from_container filename=00F7.png, from_container filename=FF07.png ]",
+            )
+            .await?;
+		let src1 = factory.operation_from_vpl("from_container filename=00F7.png").await?;
+		let src2 = factory.operation_from_vpl("from_container filename=FF07.png").await?;
+
+		let bbox = TileBBox::new_full(3)?;
+		let coord = TileCoord::new(3, 2, 2)?; // a tile that lies in the overlap area in our dummy dataset
+
+		let stacked_blob = stacked.get_blob_stream(bbox).await?.to_map().await.remove(&coord);
+		let blob1 = src1.get_blob_stream(bbox).await?.to_map().await.remove(&coord);
+		let blob2 = src2.get_blob_stream(bbox).await?.to_map().await.remove(&coord);
+
+		if let Some(b_stacked) = stacked_blob {
+			// If both sources produced a tile here, blended output must differ from each single-source blob
+			if let (Some(b1), Some(b2)) = (blob1, blob2) {
+				assert_ne!(b_stacked.as_slice(), b1.as_slice());
+				assert_ne!(b_stacked.as_slice(), b2.as_slice());
+			}
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn stack_images_empty_returns_none() {
+		let out: Option<(DynamicImage, Option<u8>)> = stack_images::<u8>(Vec::new()).unwrap();
+		assert!(out.is_none());
+	}
+
+	#[test]
+	fn stack_images_single_returns_image_and_index() {
+		let img = DynamicImage::new_rgb8(2, 2);
+		let out = stack_images(vec![(img, 7u8)]).unwrap();
+		assert!(out.is_some());
+		let (res, idx) = out.unwrap();
+		assert_eq!(res.width(), 2);
+		assert_eq!(res.height(), 2);
+		assert_eq!(idx, Some(7));
+	}
+
+	#[test]
+	fn stack_images_opaque_first_short_circuits() {
+		// First tile: fully opaque red 2x2
+		let mut a = DynamicImage::new_rgba8(2, 2);
+		for y in 0..2 {
+			for x in 0..2 {
+				a.put_pixel(x, y, imageproc::image::Rgba([255, 0, 0, 255]));
+			}
+		}
+		// Second tile: green; would change pixels if blended, but should be ignored due to early break
+		let mut b = DynamicImage::new_rgba8(2, 2);
+		for y in 0..2 {
+			for x in 0..2 {
+				b.put_pixel(x, y, imageproc::image::Rgba([0, 255, 0, 255]));
+			}
+		}
+
+		let (res, idx) = stack_images(vec![(a.clone(), 1u8), (b, 2u8)]).unwrap().unwrap();
+		assert_eq!(idx, Some(1u8));
+		assert_eq!(res, a);
 	}
 }
