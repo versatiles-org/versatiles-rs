@@ -25,7 +25,7 @@
 //!
 //!     // Get tile data for specific coordinates
 //!     let coord = TileCoord::new(1, 1, 1)?;
-//!     if let Some(tile_data) = reader.get_tile_data(&coord).await? {
+//!     if let Some(tile_data) = reader.get_tile_blob(&coord).await? {
 //!         println!("Tile data: {:?}", tile_data);
 //!     }
 //!

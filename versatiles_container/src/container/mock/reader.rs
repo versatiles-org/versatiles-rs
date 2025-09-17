@@ -16,7 +16,7 @@
 //! #[tokio::test]
 //! async fn test_mock_reader() -> Result<()> {
 //!     let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
-//!     let tile_data = reader.get_tile_data(&TileCoord::new(0, 0, 0)?).await?;
+//!     let tile_data = reader.get_tile_blob(&TileCoord::new(0, 0, 0)?).await?;
 //!     assert!(tile_data.is_some());
 //!     Ok(())
 //! }
@@ -163,7 +163,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn get_tile_data() {
+	async fn get_tile_blob() {
 		let test = |profile, blob| async move {
 			let coord = TileCoord::new(6, 23, 45).unwrap();
 			let reader = MockTilesReader::new_mock_profile(profile).unwrap();

@@ -371,7 +371,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_get_tile_data() -> Result<()> {
+	async fn test_get_tile_blob() -> Result<()> {
 		let reader = get_mock_reader(MVT, Uncompressed);
 		let cp = TilesConverterParameters::default();
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp)?;

@@ -24,7 +24,7 @@
 //!
 //!     // Get tile data for specific coordinates
 //!     let coord = TileCoord::new(1, 1, 1)?;
-//!     if let Some(tile_data) = reader.get_tile_data(&coord).await? {
+//!     if let Some(tile_data) = reader.get_tile_blob(&coord).await? {
 //!         println!("Tile data: {:?}", tile_data);
 //!     }
 //!
@@ -253,7 +253,7 @@ impl TilesReaderTrait for PMTilesReader {
 	/// Returns an error if there is an issue retrieving the tile data.
 	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		// Log the requested tile coordinates for debugging purposes
-		log::trace!("get_tile_data {:?}", coord);
+		log::trace!("get_tile_blob {:?}", coord);
 
 		// Convert the tile coordinates into a unique tile ID
 		let tile_id: u64 = coord.get_hilbert_index()?;

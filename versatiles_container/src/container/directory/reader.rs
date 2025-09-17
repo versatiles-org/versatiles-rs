@@ -33,7 +33,7 @@
 //! #[tokio::main]
 //! async fn main() {
 //!     let mut reader = DirectoryTilesReader::open_path(Path::new("/path/to/tiles")).unwrap();
-//!     let tile_data = reader.get_tile_data(&TileCoord::new(3, 1, 2).unwrap()).await.unwrap();
+//!     let tile_data = reader.get_tile_blob(&TileCoord::new(3, 1, 2).unwrap()).await.unwrap();
 //! }
 //! ```
 //!
@@ -225,7 +225,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 	}
 
 	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
-		log::trace!("get_tile_data {:?}", coord);
+		log::trace!("get_tile_blob {:?}", coord);
 
 		if let Some(path) = self.tile_map.get(coord) {
 			Self::read(path).map(Some)

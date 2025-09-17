@@ -237,7 +237,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_operation_get_tile_data() -> Result<()> {
+	async fn test_operation_get_tile_blob() -> Result<()> {
 		async fn gradient_test(level: u8, x: u32, y: u32) -> [Vec<u8>; 2] {
 			// Build a `Operation` that points at `testdata/gradient.tif`.
 			// We keep it in‑memory (no factory) and map bands 1‑2‑3 → RGB.

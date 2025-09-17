@@ -177,7 +177,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_tile_pipeline_reader_get_tile_data() -> Result<()> {
+	async fn test_tile_pipeline_reader_get_tile_blob() -> Result<()> {
 		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), Config::default_arc()).await?;
 
 		let result = reader.get_tile_blob(&TileCoord::new(14, 0, 0)?).await;

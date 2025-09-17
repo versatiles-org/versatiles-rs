@@ -145,7 +145,7 @@ mod tests {
 	use versatiles_core::GeoBBox;
 
 	#[tokio::test]
-	async fn test_get_tile_data() {
+	async fn test_get_tile_blob() {
 		let source = DummyVectorSource::new(
 			&[("layer1", &[&[("key1", "value1"), ("key2", "value2")]])],
 			Some(TileBBoxPyramid::from_geo_bbox(0, 8, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),

@@ -28,7 +28,7 @@
 //!
 //!     // Fetch a specific tile
 //!     let coord = TileCoord::new(15, 1, 4)?;
-//!     if let Some(tile_data) = reader.get_tile_data(&coord).await? {
+//!     if let Some(tile_data) = reader.get_tile_blob(&coord).await? {
 //!         println!("Tile Data: {tile_data:?}");
 //!     } else {
 //!         println!("Tile not found");

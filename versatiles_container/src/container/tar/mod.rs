@@ -21,7 +21,7 @@
 //!     let tar_path = Path::new("path/to/your/tarfile.tar");
 //!     let mut reader = TarTilesReader::open_path(tar_path)?;
 //!     let tile_coord = TileCoord::new(1, 2, 3)?;
-//!     let tile_data = reader.get_tile_data(&tile_coord).await?;
+//!     let tile_data = reader.get_tile_blob(&tile_coord).await?;
 //!     if let Some(data) = tile_data {
 //!         println!("Tile data: {:?}", data);
 //!     }

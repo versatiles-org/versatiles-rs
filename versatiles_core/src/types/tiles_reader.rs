@@ -344,7 +344,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_get_tile_data() -> Result<()> {
+	async fn test_get_tile_blob() -> Result<()> {
 		let reader = TestReader::new_dummy();
 		let coord = TileCoord::new(0, 0, 0)?;
 		let tile_data = reader.get_tile_blob(&coord).await?;

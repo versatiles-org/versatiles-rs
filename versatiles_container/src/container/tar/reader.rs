@@ -176,7 +176,7 @@ impl TilesReaderTrait for TarTilesReader {
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
 	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
-		log::trace!("get_tile_data {:?}", coord);
+		log::trace!("get_tile_blob {:?}", coord);
 
 		let range = self.tile_map.get(coord);
 

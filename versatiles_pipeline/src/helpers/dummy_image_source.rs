@@ -150,7 +150,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_dummy_image_source_get_tile_data() {
+	async fn test_dummy_image_source_get_tile_blob() {
 		let source = DummyImageSource::new(
 			"abcd.png",
 			Some(TileBBoxPyramid::from_geo_bbox(0, 8, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
