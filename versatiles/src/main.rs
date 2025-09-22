@@ -89,6 +89,10 @@ enum Commands {
 
 	/// Show detailed help
 	Help(tools::help::Subcommand),
+
+	#[clap(hide = true)]
+	/// Internal command for development
+	Dev(tools::dev::Subcommand),
 }
 
 /// Main function for running the command-line interface
@@ -121,6 +125,7 @@ fn run(cli: Cli) -> Result<()> {
 		Commands::Help(arguments) => tools::help::run(arguments),
 		Commands::Probe(arguments) => tools::probe::run(arguments),
 		Commands::Serve(arguments) => tools::serve::run(arguments),
+		Commands::Dev(arguments) => tools::dev::run(arguments),
 	}
 }
 
