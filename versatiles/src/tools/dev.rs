@@ -57,7 +57,7 @@ pub async fn run(command: &Subcommand) -> Result<()> {
 			let progress = get_progress_bar("Scanning tile sizes", (width_original * width_original) as u64);
 			let stream = reader.get_tile_stream(bbox).await?;
 			let vec = stream
-				.map_item_parallel(|tile| Ok(tile.len() as u64))
+				.map_item_parallel(|tile| Ok(tile.len()))
 				.inspect(|| progress.inc(1))
 				.to_vec()
 				.await;
@@ -77,7 +77,7 @@ pub async fn run(command: &Subcommand) -> Result<()> {
 			let n = (scale * scale) as f64;
 			let buffer = result
 				.into_iter()
-				.map(|v| ((v as f64 / n).max(1.0).log2() - 10.0).max(0.0).min(255.0) as u8)
+				.map(|v| ((v as f64 / n).max(1.0).log2() - 10.0).clamp(0.0, 255.0) as u8)
 				.collect::<Vec<u8>>();
 
 			let image =
