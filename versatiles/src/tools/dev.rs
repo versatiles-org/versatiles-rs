@@ -2,7 +2,7 @@ use anyhow::{Result, bail};
 use log::info;
 use versatiles::{TileBBox, config::Config, progress::get_progress_bar, utils::decompress};
 use versatiles_container::get_reader;
-use versatiles_image::{DynamicImage, DynamicImageTraitConvert, avif};
+use versatiles_image::{DynamicImage, DynamicImageTraitConvert, png};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_help_flag = true, disable_version_flag = true)]
@@ -23,7 +23,7 @@ struct MeasureTileSizes {
 	#[arg(value_name = "INPUT_FILE")]
 	input: String,
 
-	/// Output image file (should end in .avif)
+	/// Output image file (should end in .png)
 	#[arg(value_name = "OUTPUT_FILE")]
 	output: String,
 
@@ -52,8 +52,8 @@ pub async fn run(command: &Subcommand) -> Result<()> {
 				"Measuring tile sizes in {input_file} at zoom level {level}, generating an {width_scaled}x{width_scaled} image and saving it to {output_file}"
 			);
 
-			if !output_file.ends_with(".avif") {
-				bail!("Only AVIF output is supported for now");
+			if !output_file.ends_with(".png") {
+				bail!("Only PNG output is supported for now");
 			}
 
 			let reader = get_reader(input_file, config).await?;
@@ -89,7 +89,7 @@ pub async fn run(command: &Subcommand) -> Result<()> {
 			let image =
 				<DynamicImage as DynamicImageTraitConvert>::from_raw(width_scaled as u32, width_scaled as u32, buffer)?;
 
-			let blob = avif::compress(&image, Some(99), Some(0))?;
+			let blob = png::compress(&image, Some(0))?;
 			blob.save_to_file(output_file)?;
 
 			info!("Done, saved to {output_file}");
