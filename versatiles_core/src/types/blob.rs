@@ -29,6 +29,7 @@ use super::ByteRange;
 use anyhow::{Result, bail};
 use std::fmt::Debug;
 use std::ops::Range;
+use std::path::Path;
 
 /// A simple wrapper around [`Vec<u8>`] that provides additional methods for working with byte data.
 ///
@@ -277,7 +278,7 @@ impl Blob {
 		self.0.is_empty()
 	}
 
-	pub fn save_to_file(&self, path: &str) -> Result<()> {
+	pub fn save_to_file(&self, path: &Path) -> Result<()> {
 		std::fs::write(path, &self.0)?;
 		Ok(())
 	}

@@ -1,8 +1,9 @@
-use anyhow::{Result, bail};
+use anyhow::{Result, anyhow, bail};
 use log::info;
-use versatiles::{TileBBox, config::Config, progress::get_progress_bar, utils::decompress};
+use std::path::PathBuf;
+use versatiles::{TileBBox, TileFormat, config::Config, progress::get_progress_bar, utils::decompress};
 use versatiles_container::get_reader;
-use versatiles_image::{DynamicImage, DynamicImageTraitConvert, png};
+use versatiles_image::{DynamicImage, DynamicImageTraitConvert, encode};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_help_flag = true, disable_version_flag = true)]
@@ -21,11 +22,11 @@ enum DevCommands {
 struct MeasureTileSizes {
 	/// Input file
 	#[arg(value_name = "INPUT_FILE")]
-	input: String,
+	input: PathBuf,
 
 	/// Output image file (should end in .png)
 	#[arg(value_name = "OUTPUT_FILE")]
-	output: String,
+	output: PathBuf,
 
 	/// Zoom level to analyze
 	#[arg(default_value = "14")]
@@ -49,14 +50,21 @@ pub async fn run(command: &Subcommand) -> Result<()> {
 			let width_scaled = width_original / scale;
 
 			info!(
-				"Measuring tile sizes in {input_file} at zoom level {level}, generating an {width_scaled}x{width_scaled} image and saving it to {output_file}"
+				"Measuring tile sizes in {input_file:?} at zoom level {level}, generating an {width_scaled}x{width_scaled} image and saving it to {output_file:?}"
 			);
 
 			if !output_file.ends_with(".png") {
 				bail!("Only PNG output is supported for now");
 			}
 
-			let reader = get_reader(input_file, config).await?;
+			let reader = get_reader(
+				input_file
+					.as_os_str()
+					.to_str()
+					.ok_or(anyhow!("Invalid input file path"))?,
+				config,
+			)
+			.await?;
 			let bbox = TileBBox::new_full(level)?;
 			let stream = reader.get_tile_stream(bbox).await?;
 
@@ -89,10 +97,11 @@ pub async fn run(command: &Subcommand) -> Result<()> {
 			let image =
 				<DynamicImage as DynamicImageTraitConvert>::from_raw(width_scaled as u32, width_scaled as u32, buffer)?;
 
-			let blob = png::encode(&image, Some(0))?;
+			let format = TileFormat::try_from_path(output_file)?;
+			let blob = encode(&image, format, Some(100), Some(0))?;
 			blob.save_to_file(output_file)?;
 
-			info!("Done, saved to {output_file}");
+			info!("Done, saved to {output_file:?}");
 		}
 	};
 

@@ -30,7 +30,10 @@ use super::TileType;
 use anyhow::{Result, bail};
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
-use std::fmt::{Display, Formatter};
+use std::{
+	fmt::{Display, Formatter},
+	path::Path,
+};
 
 /// Enum representing supported tile formats.
 ///
@@ -104,6 +107,10 @@ impl TileFormat {
 			"webp" => TileFormat::WEBP,
 			_ => bail!("Unknown tile format: '{}'", value),
 		})
+	}
+
+	pub fn try_from_path(path: &Path) -> Result<Self> {
+		Self::try_from_str(path.extension().and_then(|s| s.to_str()).unwrap_or_default())
 	}
 
 	/// Returns a string describing the broad data type of this tile format.
