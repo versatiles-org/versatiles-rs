@@ -1,6 +1,6 @@
 use anyhow::{Result, bail};
 use log::info;
-use versatiles::{TileBBox, config::Config, progress::get_progress_bar};
+use versatiles::{TileBBox, config::Config, progress::get_progress_bar, utils::decompress};
 use versatiles_container::get_reader;
 use versatiles_image::{DynamicImage, DynamicImageTraitConvert, avif};
 
@@ -61,8 +61,9 @@ pub async fn run(command: &Subcommand) -> Result<()> {
 			let stream = reader.get_tile_stream(bbox).await?;
 
 			let progress = get_progress_bar("Scanning tile sizes", (width_original * width_original) as u64);
+			let compression = reader.parameters().tile_compression;
 			let vec = stream
-				.map_item_parallel(|tile| Ok(tile.len()))
+				.map_item_parallel(move |tile| decompress(tile, &compression).map(|t| t.len()))
 				.inspect(|| progress.inc(1))
 				.to_vec()
 				.await;
