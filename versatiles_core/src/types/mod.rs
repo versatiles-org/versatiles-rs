@@ -21,8 +21,8 @@ pub use probe_depth::*;
 mod tile_bbox;
 pub use tile_bbox::*;
 
-mod tile_bbox_container;
-pub use tile_bbox_container::*;
+mod tile_bbox_map;
+pub use tile_bbox_map::*;
 
 mod tile_bbox_pyramid;
 pub use tile_bbox_pyramid::*;

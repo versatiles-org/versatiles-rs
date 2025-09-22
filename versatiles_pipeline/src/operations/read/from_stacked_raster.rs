@@ -94,7 +94,7 @@ async fn get_stacked_images(
 	sources: &[Box<dyn OperationTrait>],
 	bbox: TileBBox,
 ) -> Result<Vec<(TileCoord, DynamicImage)>> {
-	let mut images = TileBBoxContainer::<Vec<(DynamicImage, u8)>>::new_default(bbox);
+	let mut images = TileBBoxMap::<Vec<(DynamicImage, u8)>>::new_default(bbox);
 
 	let streams = sources.iter().map(|source| source.get_image_stream(bbox));
 	let results = futures::future::join_all(streams).await;
@@ -126,7 +126,7 @@ async fn get_stacked_blobs(
 	tile_format: TileFormat,
 	tile_compression: TileCompression,
 ) -> Result<Vec<(TileCoord, Blob)>> {
-	let mut images = TileBBoxContainer::<Vec<(DynamicImage, Blob)>>::new_default(bbox);
+	let mut images = TileBBoxMap::<Vec<(DynamicImage, Blob)>>::new_default(bbox);
 
 	let streams = sources.iter().map(|source| async move {
 		let stream = source.get_blob_stream(bbox).await.unwrap();

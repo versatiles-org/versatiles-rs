@@ -144,7 +144,7 @@ impl Operation {
 
 		Ok(TileStream::from_streams(stream::iter(sub_bboxes).map(
 			move |bbox| async move {
-				let mut tiles = TileBBoxContainer::<Option<T>>::new_default(bbox);
+				let mut tiles = TileBBoxMap::<Option<T>>::new_default(bbox);
 
 				for source in self.sources.iter() {
 					let mut bbox_left = TileBBox::new_empty(bbox.level).unwrap();

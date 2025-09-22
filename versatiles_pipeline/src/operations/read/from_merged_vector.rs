@@ -154,7 +154,7 @@ impl OperationTrait for Operation {
 
 		Ok(TileStream::from_streams(stream::iter(bboxes).map(
 			move |bbox| async move {
-				let mut tiles = TileBBoxContainer::<Vec<VectorTile>>::new_default(bbox);
+				let mut tiles = TileBBoxMap::<Vec<VectorTile>>::new_default(bbox);
 
 				for source in self.sources.iter() {
 					source

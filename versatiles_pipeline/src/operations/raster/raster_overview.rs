@@ -134,7 +134,7 @@ impl Operation {
 	*/
 
 	#[context("Failed to add images to cache from container {container:?}")]
-	async fn add_images_to_cache(&self, container: &TileBBoxContainer<Option<DynamicImage>>) -> Result<()> {
+	async fn add_images_to_cache(&self, container: &TileBBoxMap<Option<DynamicImage>>) -> Result<()> {
 		debug!("add_images_to_cache: {:?}", container.bbox());
 
 		let bbox = container.bbox();
@@ -174,7 +174,7 @@ impl Operation {
 	}
 
 	#[context("Failed to build images from cache for bbox {bbox:?}")]
-	async fn build_images_from_cache(&self, bbox: TileBBox) -> Result<TileBBoxContainer<Option<DynamicImage>>> {
+	async fn build_images_from_cache(&self, bbox: TileBBox) -> Result<TileBBoxMap<Option<DynamicImage>>> {
 		debug!("build_images_from_cache: {:?}", bbox);
 
 		ensure!(bbox.level < self.level_base, "Invalid level");
@@ -185,7 +185,7 @@ impl Operation {
 		assert_eq!(bbox0.width(), BLOCK_TILE_COUNT);
 		assert_eq!(bbox0.height(), BLOCK_TILE_COUNT);
 
-		let mut map: TileBBoxContainer<Vec<(TileCoord, DynamicImage)>> = TileBBoxContainer::new_default(bbox);
+		let mut map: TileBBoxMap<Vec<(TileCoord, DynamicImage)>> = TileBBoxMap::new_default(bbox);
 
 		let full_size = self.tile_size;
 		let half_size = self.tile_size / 2;
@@ -228,7 +228,7 @@ impl Operation {
 			})
 			.collect();
 
-		TileBBoxContainer::<Option<DynamicImage>>::from_iter(bbox, vec.into_iter())
+		TileBBoxMap::<Option<DynamicImage>>::from_iter(bbox, vec.into_iter())
 	}
 }
 
@@ -258,9 +258,9 @@ impl OperationTrait for Operation {
 		assert_eq!(bbox0.height(), BLOCK_TILE_COUNT);
 		bbox0.intersect_pyramid(&self.parameters.bbox_pyramid);
 
-		let container: TileBBoxContainer<Option<DynamicImage>> = if bbox.level == self.level_base {
+		let container: TileBBoxMap<Option<DynamicImage>> = if bbox.level == self.level_base {
 			trace!("Fetching images from source for bbox {:?}", bbox);
-			TileBBoxContainer::<Option<DynamicImage>>::from_stream(bbox, self.source.get_image_stream(bbox).await?).await?
+			TileBBoxMap::<Option<DynamicImage>>::from_stream(bbox, self.source.get_image_stream(bbox).await?).await?
 		} else {
 			trace!("Building images from cache for bbox {:?}", bbox);
 			self.build_images_from_cache(bbox0).await?
@@ -361,7 +361,7 @@ mod tests {
 	async fn add_images_to_cache_inserts_half_tiles_under_floored_key() -> Result<()> {
 		let op = make_operation(2, 6); // tiny tiles to keep work light
 		let bbox = TileBBox::from_boundaries(6, 0, 0, 31, 31)?; // 32x32 block at base level
-		let mut container = TileBBoxContainer::new_default(bbox);
+		let mut container = TileBBoxMap::new_default(bbox);
 		// Populate with simple solid tiles (only a tiny subset to keep it cheap)
 		for y in 0..bbox.height() {
 			for x in 0..bbox.width() {
@@ -397,7 +397,7 @@ mod tests {
 
 		// Prepare cache content by adding a full 32x32 block at level 6
 		let bbox_lvl6 = TileBBox::new(6, 0, 0, 32, 32)?;
-		let mut cont6 = TileBBoxContainer::new_default(bbox_lvl6);
+		let mut cont6 = TileBBoxMap::new_default(bbox_lvl6);
 		for y in 0..bbox_lvl6.height() {
 			for x in 0..bbox_lvl6.width() {
 				let c = TileCoord::new(6, x, y)?;
