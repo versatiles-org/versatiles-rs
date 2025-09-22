@@ -103,11 +103,10 @@ fn main() -> Result<()> {
 	let verbosity = cli.verbose as i16 - cli.quiet as i16;
 	let log_level = match verbosity {
 		i16::MIN..=-1 => LevelFilter::Off,
-		0 => LevelFilter::Error,
-		1 => LevelFilter::Warn,
-		2 => LevelFilter::Info,
-		3 => LevelFilter::Debug,
-		4..=i16::MAX => LevelFilter::Trace,
+		0 => LevelFilter::Warn,
+		1 => LevelFilter::Info,
+		2 => LevelFilter::Debug,
+		3..=i16::MAX => LevelFilter::Trace,
 	};
 
 	env_logger::Builder::new()
