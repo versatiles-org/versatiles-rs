@@ -276,6 +276,11 @@ impl Blob {
 	pub fn is_empty(&self) -> bool {
 		self.0.is_empty()
 	}
+
+	pub fn save_to_file(&self, path: &str) -> Result<()> {
+		std::fs::write(path, &self.0)?;
+		Ok(())
+	}
 }
 
 // Conversion implementations
