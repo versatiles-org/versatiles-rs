@@ -17,17 +17,22 @@ enum DevCommands {
 }
 
 #[derive(clap::Args, Debug)]
+#[command(arg_required_else_help = true, disable_help_flag = true, disable_version_flag = true)]
 struct MeasureTileSizes {
-	#[arg(help = "Input file", value_name = "INPUT_FILE")]
+	/// Input file
+	#[arg(value_name = "INPUT_FILE")]
 	input: String,
 
-	#[arg(help = "Output image file", value_name = "OUTPUT_FILE")]
+	/// Output image file (should end in .avif)
+	#[arg(value_name = "OUTPUT_FILE")]
 	output: String,
 
-	#[arg(help = "Zoom level to analyze", value_name = "int", default_value = "14")]
+	/// Zoom level to analyze
+	#[arg(default_value = "14")]
 	level: u8,
 
-	#[arg(help = "Scale factor", value_name = "int", default_value = "4")]
+	/// Scale down factor
+	#[arg(default_value = "4")]
 	scale: usize,
 }
 
@@ -53,9 +58,9 @@ pub async fn run(command: &Subcommand) -> Result<()> {
 
 			let reader = get_reader(input_file, config).await?;
 			let bbox = TileBBox::new_full(level)?;
+			let stream = reader.get_tile_stream(bbox).await?;
 
 			let progress = get_progress_bar("Scanning tile sizes", (width_original * width_original) as u64);
-			let stream = reader.get_tile_stream(bbox).await?;
 			let vec = stream
 				.map_item_parallel(|tile| Ok(tile.len()))
 				.inspect(|| progress.inc(1))
