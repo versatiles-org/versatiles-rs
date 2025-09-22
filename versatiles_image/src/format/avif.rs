@@ -6,7 +6,7 @@ use image::{
 };
 use versatiles_core::Blob;
 
-pub fn compress(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) -> Result<Blob> {
+pub fn encode(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("avif only supports 8-bit images");
 	}
@@ -36,11 +36,11 @@ pub fn compress(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) ->
 }
 
 pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
-	compress(image, quality, None)
+	encode(image, quality, None)
 }
 
 pub fn image2blob_lossless(image: &DynamicImage) -> Result<Blob> {
-	compress(image, Some(100), None)
+	encode(image, Some(100), None)
 }
 
 pub fn blob2image(_blob: &Blob) -> Result<DynamicImage> {

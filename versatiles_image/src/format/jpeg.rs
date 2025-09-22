@@ -3,7 +3,7 @@ use anyhow::{Result, anyhow, bail};
 use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::jpeg::JpegEncoder, load_from_memory_with_format};
 use versatiles_core::Blob;
 
-pub fn compress(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
+pub fn encode(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("jpeg only supports 8-bit images");
 	}
@@ -42,7 +42,7 @@ pub fn compress(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 }
 
 pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
-	compress(image, quality)
+	encode(image, quality)
 }
 
 pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {

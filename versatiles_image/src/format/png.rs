@@ -3,7 +3,7 @@ use anyhow::{Result, anyhow, bail};
 use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::png, load_from_memory_with_format};
 use versatiles_core::Blob;
 
-pub fn compress(image: &DynamicImage, speed: Option<u8>) -> Result<Blob> {
+pub fn encode(image: &DynamicImage, speed: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("png only supports 8-bit images");
 	}
@@ -45,7 +45,7 @@ pub fn compress(image: &DynamicImage, speed: Option<u8>) -> Result<Blob> {
 }
 
 pub fn image2blob(image: &DynamicImage) -> Result<Blob> {
-	compress(image, None)
+	encode(image, None)
 }
 
 pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
@@ -83,8 +83,8 @@ mod tests {
 	fn opaque_is_saved_without_alpha(#[case] mut img: DynamicImage) -> Result<()> {
 		assert!(img.has_alpha());
 		img.make_opaque()?;
-		assert!(!blob2image(&compress(&img, Some(80))?)?.has_alpha());
-		assert!(!blob2image(&compress(&img, Some(100))?)?.has_alpha());
+		assert!(!blob2image(&encode(&img, Some(80))?)?.has_alpha());
+		assert!(!blob2image(&encode(&img, Some(100))?)?.has_alpha());
 		Ok(())
 	}
 }

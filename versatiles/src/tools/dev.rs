@@ -89,7 +89,7 @@ pub async fn run(command: &Subcommand) -> Result<()> {
 			let image =
 				<DynamicImage as DynamicImageTraitConvert>::from_raw(width_scaled as u32, width_scaled as u32, buffer)?;
 
-			let blob = png::compress(&image, Some(0))?;
+			let blob = png::encode(&image, Some(0))?;
 			blob.save_to_file(output_file)?;
 
 			info!("Done, saved to {output_file}");

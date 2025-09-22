@@ -143,10 +143,10 @@ impl OperationTrait for Operation {
 		let stream = self.source.get_image_stream(bbox).await?;
 
 		Ok(match self.format {
-			Avif => stream.map_item_parallel(move |image| avif::compress(&image, quality, speed)),
-			Jpeg => stream.map_item_parallel(move |image| jpeg::compress(&image, quality)),
-			Png => stream.map_item_parallel(move |image| png::compress(&image, speed)),
-			Webp => stream.map_item_parallel(move |image| webp::compress(&image, quality)),
+			Avif => stream.map_item_parallel(move |image| avif::encode(&image, quality, speed)),
+			Jpeg => stream.map_item_parallel(move |image| jpeg::encode(&image, quality)),
+			Png => stream.map_item_parallel(move |image| png::encode(&image, speed)),
+			Webp => stream.map_item_parallel(move |image| webp::encode(&image, quality)),
 		})
 	}
 

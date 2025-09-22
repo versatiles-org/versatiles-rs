@@ -4,7 +4,7 @@ use image::{DynamicImage, ImageFormat, codecs::webp::WebPEncoder, load_from_memo
 use std::vec;
 use versatiles_core::Blob;
 
-pub fn compress(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
+pub fn encode(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("webp only supports 8-bit images");
 	}
@@ -46,11 +46,11 @@ pub fn compress(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 }
 
 pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
-	compress(image, quality)
+	encode(image, quality)
 }
 
 pub fn image2blob_lossless(image: &DynamicImage) -> Result<Blob> {
-	compress(image, Some(100))
+	encode(image, Some(100))
 }
 
 pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
@@ -111,8 +111,8 @@ mod tests {
 	fn opaque_is_saved_without_alpha(#[case] mut img: DynamicImage) -> Result<()> {
 		assert!(img.has_alpha());
 		img.make_opaque()?;
-		assert!(!blob2image(&compress(&img, Some(80))?)?.has_alpha());
-		assert!(!blob2image(&compress(&img, Some(100))?)?.has_alpha());
+		assert!(!blob2image(&encode(&img, Some(80))?)?.has_alpha());
+		assert!(!blob2image(&encode(&img, Some(100))?)?.has_alpha());
 		Ok(())
 	}
 }
