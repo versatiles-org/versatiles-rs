@@ -668,6 +668,40 @@ mod tests {
 	use tokio::sync::Mutex;
 
 	#[tokio::test]
+	async fn should_flat_map_parallel_and_flatten_results() -> Result<()> {
+		// Base stream with two coords
+		let base = TileStream::from_vec(vec![
+			(TileCoord::new(1, 0, 0)?, 10u32),
+			(TileCoord::new(1, 1, 0)?, 20u32),
+		]);
+
+		// Each item expands to a sub-stream with two entries
+		let flat = base.flat_map_parallel(|coord, val| {
+			let out = vec![
+				(coord, format!("a:{val}")),
+				(TileCoord::new(coord.level, coord.x, coord.y + 1)?, format!("b:{val}")),
+			];
+			Ok(TileStream::from_vec(out))
+		});
+
+		let mut items = flat.to_vec().await;
+		// Sort for deterministic assertions
+		items.sort_by_key(|(c, b)| (c.x, c.y, b.as_str().to_string()));
+
+		assert_eq!(
+			items,
+			[
+				(TileCoord::new(1, 0, 0)?, "a:10".into()),
+				(TileCoord::new(1, 0, 1)?, "b:10".into()),
+				(TileCoord::new(1, 1, 0)?, "a:20".into()),
+				(TileCoord::new(1, 1, 1)?, "b:20".into()),
+			]
+		);
+
+		Ok(())
+	}
+
+	#[tokio::test]
 	async fn should_collect_all_items_from_vec() {
 		let tile_data = vec![
 			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("tile0")),
@@ -685,19 +719,22 @@ mod tests {
 		let tile_data = vec![
 			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("tile0")),
 			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("tile1")),
+			(TileCoord::new(2, 2, 2).unwrap(), Blob::from("tile2")),
 		];
 
 		let tile_stream = TileStream::from_vec(tile_data);
-		let mut count = 0u64;
 
+		let mut result = vec![];
 		tile_stream
 			.for_each_sync(|(coord, blob)| {
-				println!("Synchronous processing: coord={coord:?}, blob={blob:?}");
-				count += 1;
+				result.push(format!("{}, {}", coord.as_json(), blob.as_str()));
 			})
 			.await;
 
-		assert_eq!(count, 2);
+		assert_eq!(
+			result,
+			["{x:0,y:0,z:0}, tile0", "{x:1,y:1,z:1}, tile1", "{x:2,y:2,z:2}, tile2"]
+		);
 	}
 
 	#[tokio::test]
@@ -800,10 +837,7 @@ mod tests {
 		// If processing were sequential, it'd take ~n * sleep_ms ms.
 		// In parallel it should be significantly less (under 2 * sleep_ms).
 		let threshold = Duration::from_millis(sleep_ms * 2);
-		assert!(
-			elapsed < threshold,
-			"Expected parallel execution (<{threshold:?}), but took {elapsed:?}"
-		);
+		assert!(elapsed < threshold);
 		Ok(())
 	}
 
@@ -832,10 +866,7 @@ mod tests {
 		assert_eq!(items.len(), n, "Expected {} items, got {}", n, items.len());
 		// Sequential would be ~n * sleep_ms ms; in parallel should be under 2 * sleep_ms
 		let threshold = Duration::from_millis(sleep_ms * 2);
-		assert!(
-			elapsed < threshold,
-			"Expected parallel execution (<{threshold:?}), but took {elapsed:?}"
-		);
+		assert!(elapsed < threshold);
 		Ok(())
 	}
 
@@ -861,10 +892,7 @@ mod tests {
 
 		// Sequential would be ~n * sleep_ms ms; in parallel should be under 2 * sleep_ms
 		let threshold = Duration::from_millis(sleep_ms * 2);
-		assert!(
-			elapsed < threshold,
-			"Expected parallel execution (<{threshold:?}), but took {elapsed:?}"
-		);
+		assert!(elapsed < threshold);
 		Ok(())
 	}
 
