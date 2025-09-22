@@ -1710,4 +1710,130 @@ mod tests {
 		bbox.swap_xy();
 		assert_eq!(bbox, TileBBox::from_boundaries(4, 2, 1, 4, 3).unwrap());
 	}
+
+	#[test]
+	fn set_width_height_clamp_to_bounds() {
+		// level 4 → max coordinate = 15
+		let mut bbox = TileBBox::new(4, 10, 10, 3, 3).unwrap(); // covers x=10..12, y=10..12
+		bbox.set_width(10); // would exceed max → clamp to 10..15 → width = 6
+		bbox.set_height(10);
+		assert_eq!(bbox.x_min(), 10);
+		assert_eq!(bbox.y_min(), 10);
+		assert_eq!(bbox.x_max(), 15);
+		assert_eq!(bbox.y_max(), 15);
+	}
+
+	#[test]
+	fn set_min_max_keep_consistency() {
+		let mut bbox = TileBBox::from_boundaries(5, 8, 9, 12, 13).unwrap(); // width=5, height=5
+		// Move min right/up; max should remain the same
+		bbox.set_x_min(10);
+		bbox.set_y_min(11);
+		assert_eq!(bbox.x_min(), 10);
+		assert_eq!(bbox.y_min(), 11);
+		assert_eq!(bbox.x_max(), 12);
+		assert_eq!(bbox.y_max(), 13);
+		// Move max left/down; min should remain the same
+		bbox.set_x_max(11);
+		bbox.set_y_max(12);
+		assert_eq!(bbox.x_min(), 10);
+		assert_eq!(bbox.y_min(), 11);
+		assert_eq!(bbox.x_max(), 11);
+		assert_eq!(bbox.y_max(), 12);
+		// Setting max less than min should empty the dimension
+		bbox.set_x_max(9);
+		bbox.set_y_max(10);
+		assert_eq!(bbox.width(), 0);
+		assert_eq!(bbox.height(), 0);
+	}
+
+	#[test]
+	fn shift_to_clamps_to_edge() {
+		let mut bbox = TileBBox::from_boundaries(3, 4, 4, 6, 6).unwrap(); // level 3 → max=7
+		// x_max would be 9 without clamping; expect clamp to 7 and maintain width
+		bbox.shift_to(6, 6);
+		assert_eq!(bbox.x_min(), 6);
+		assert_eq!(bbox.y_min(), 6);
+		assert_eq!(bbox.x_max(), 7);
+		assert_eq!(bbox.y_max(), 7);
+	}
+
+	#[test]
+	fn level_increase_decrease_roundtrip() {
+		let original = TileBBox::from_boundaries(4, 5, 6, 7, 8).unwrap();
+		let inc = original.as_level_increased();
+		assert_eq!(inc.level, 5);
+		assert_eq!(inc.x_min(), 10);
+		assert_eq!(inc.y_min(), 12);
+		assert_eq!(inc.x_max(), 15);
+		assert_eq!(inc.y_max(), 17);
+		let dec = inc.as_level_decreased();
+		assert_eq!(dec, original);
+	}
+
+	#[rstest]
+	#[case(4, 5, 6, 7, 8, 3, 3)]
+	#[case(8, 0, 0, 0, 0, 1, 1)]
+	fn corners_and_dimensions(
+		#[case] level: u8,
+		#[case] x0: u32,
+		#[case] y0: u32,
+		#[case] x1: u32,
+		#[case] y1: u32,
+		#[case] width: u32,
+		#[case] height: u32,
+	) {
+		let bbox = TileBBox::from_boundaries(level, x0, y0, x1, y1).unwrap();
+		assert_eq!(bbox.get_corner_min(), TileCoord::new(level, x0, y0).unwrap());
+		assert_eq!(bbox.get_corner_max(), TileCoord::new(level, x1, y1).unwrap());
+		assert_eq!(bbox.get_dimensions(), (width, height));
+	}
+
+	#[rstest]
+	#[case(4, 0, 1, 1, 1)]
+	#[case(5, 1, 2, 3, 3)]
+	#[case(6, 3, 5, 6, 7)]
+	#[case(7, 6, 10, 13, 15)]
+	#[case(8, 12, 20, 27, 31)]
+	fn as_level_up_and_down(#[case] level: u8, #[case] x0: u32, #[case] y0: u32, #[case] x1: u32, #[case] y1: u32) {
+		let bbox = TileBBox::from_boundaries(6, 3, 5, 6, 7).unwrap();
+		let up = bbox.as_level(level);
+		assert_eq!(up.level, level);
+		assert_eq!(up.x_min(), x0);
+		assert_eq!(up.y_min(), y0);
+		assert_eq!(up.x_max(), x1);
+		assert_eq!(up.y_max(), y1);
+	}
+
+	#[test]
+	fn get_quadrant_happy_path() -> Result<()> {
+		let bbox = TileBBox::from_boundaries(4, 8, 12, 11, 15).unwrap(); // 4x4 → even
+		assert_eq!(bbox.get_quadrant(0)?, TileBBox::from_boundaries(4, 8, 12, 9, 13)?);
+		assert_eq!(bbox.get_quadrant(1)?, TileBBox::from_boundaries(4, 10, 12, 11, 13)?);
+		assert_eq!(bbox.get_quadrant(2)?, TileBBox::from_boundaries(4, 8, 14, 9, 15)?);
+		assert_eq!(bbox.get_quadrant(3)?, TileBBox::from_boundaries(4, 10, 14, 11, 15)?);
+		Ok(())
+	}
+
+	#[test]
+	fn get_quadrant_errors() {
+		// Empty bbox → Ok(empty)
+		let empty = TileBBox::new_empty(4).unwrap();
+		assert!(empty.get_quadrant(0).unwrap().is_empty());
+		// Odd width/height → error
+		let odd_w = TileBBox::from_boundaries(4, 0, 0, 2, 3).unwrap(); // width=3
+		assert!(odd_w.get_quadrant(0).is_err());
+		let odd_h = TileBBox::from_boundaries(4, 0, 0, 3, 2).unwrap(); // height=3
+		assert!(odd_h.get_quadrant(0).is_err());
+		// Invalid quadrant index
+		let even = TileBBox::from_boundaries(4, 0, 0, 3, 3).unwrap();
+		assert!(even.get_quadrant(4).is_err());
+	}
+
+	#[test]
+	fn max_value_and_string() {
+		let bbox = TileBBox::from_boundaries(5, 1, 2, 3, 4).unwrap();
+		assert_eq!(bbox.max_value(), (1u32 << 5) - 1);
+		assert_eq!(bbox.as_string(), "5:[1,2,3,4]");
+	}
 }
