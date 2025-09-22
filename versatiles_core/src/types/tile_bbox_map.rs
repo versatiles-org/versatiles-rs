@@ -1,14 +1,34 @@
+//! A dense, level-aware container for values laid out on a rectangular tile grid.
+//!
+//! `TileBBoxMap<I>` stores exactly one value per tile inside a [`TileBBox`],
+//! keeping items in a compact `Vec` in **row-major** order (x fastest, then y).
+//! It provides O(1) indexed access via [`TileCoord`] and utility methods to
+//! transform or regroup values across levels.
+
 use crate::{TileBBox, TileCoord, TileStream};
 use anyhow::Result;
 use std::fmt::Debug;
 use versatiles_derive::context;
 
+/// A dense map of tiles inside a bounding box.
+///
+/// Values are stored in a flat `Vec` and addressed by [`TileCoord`]. The
+/// container remembers its source [`TileBBox`] to translate coordinates into
+/// indices. This keeps memory compact and lookups very fast.
+///
+/// The generic `I` is the per-tile value. Use [`Option<I>`] to represent
+/// missing values and the convenience constructors [`from_iter`] / [`from_stream`]
+/// (provided on `TileBBoxMap<Option<I>>`).
 pub struct TileBBoxMap<I> {
 	bbox: TileBBox,
 	vec: Vec<I>,
 }
 
 impl<I> TileBBoxMap<I> {
+	/// Create a new container for `bbox` with every slot initialized to `item`.
+	///
+	/// The vector is allocated to `bbox.count_tiles()` and filled by cloning
+	/// `item`.
 	pub fn new_prefilled_with(bbox: TileBBox, item: I) -> Self
 	where
 		I: Clone,
@@ -19,6 +39,7 @@ impl<I> TileBBoxMap<I> {
 		Self { bbox, vec }
 	}
 
+	/// Create a new container with all slots initialized using `Default`.
 	pub fn new_default(bbox: TileBBox) -> Self
 	where
 		I: Clone + Default,
@@ -26,18 +47,26 @@ impl<I> TileBBoxMap<I> {
 		Self::new_prefilled_with(bbox, I::default())
 	}
 
+	/// Total number of tiles (slots) in the container.
 	pub fn len(&self) -> usize {
 		self.vec.len()
 	}
 
+	/// Whether the container has zero slots. Note: this is equivalent to
+	/// `bbox.count_tiles() == 0`.
 	pub fn is_empty(&self) -> bool {
 		self.vec.is_empty()
 	}
 
+	/// The bounding box that defines the grid covered by this container.
 	pub fn bbox(&self) -> &TileBBox {
 		&self.bbox
 	}
 
+	/// Insert/replace the value at `coord`.
+	///
+	/// # Errors
+	/// Returns an error if `coord` is **outside** of this container's bbox.
 	#[context("Failed to insert into TileBBoxMap at coord: {:?}", coord)]
 	pub fn insert(&mut self, coord: TileCoord, item: I) -> Result<()> {
 		let index = self.bbox.get_tile_index(&coord)?;
@@ -45,18 +74,29 @@ impl<I> TileBBoxMap<I> {
 		Ok(())
 	}
 
+	/// Get a reference to the value at `coord`.
+	///
+	/// # Errors
+	/// Returns an error if `coord` is outside the bbox.
 	#[context("Failed to get from TileBBoxMap at coord: {:?}", coord)]
 	pub fn get(&self, coord: &TileCoord) -> Result<&I> {
 		let index = self.bbox.get_tile_index(coord)?;
 		Ok(&self.vec[index as usize])
 	}
 
+	/// Get a mutable reference to the value at `coord`.
+	///
+	/// # Errors
+	/// Returns an error if `coord` is outside the bbox.
 	#[context("Failed to get mutably from TileBBoxMap at coord: {:?}", coord)]
 	pub fn get_mut(&mut self, coord: &TileCoord) -> Result<&mut I> {
 		let index = self.bbox.get_tile_index(coord)?;
 		Ok(&mut self.vec[index as usize])
 	}
 
+	/// Iterate over `(coord, &value)` pairs in **row-major** order.
+	///
+	/// Coordinates are yielded with `x` increasing fastest, then `y`.
 	pub fn iter(&self) -> impl Iterator<Item = (TileCoord, &I)> {
 		self
 			.vec
@@ -65,6 +105,11 @@ impl<I> TileBBoxMap<I> {
 			.map(move |(i, item)| (self.bbox.get_coord_by_index(i as u64).unwrap(), item))
 	}
 
+	/// Group tiles by their parent tile one level above.
+	///
+	/// Returns a new container at `level-1` where each slot holds the
+	/// `(child_coord, value)` pairs that map to that parent tile. Useful for
+	/// downscaling or overview generation.
 	pub fn into_decreased_level(self) -> TileBBoxMap<Vec<(TileCoord, I)>>
 	where
 		I: Clone,
@@ -81,6 +126,7 @@ impl<I> TileBBoxMap<I> {
 		)
 	}
 
+	/// Transform all stored values with `f`, keeping the same bbox and order.
 	pub fn map<O: Clone>(self, f: impl FnMut(I) -> O) -> TileBBoxMap<O> {
 		TileBBoxMap {
 			bbox: self.bbox,
@@ -89,7 +135,13 @@ impl<I> TileBBoxMap<I> {
 	}
 }
 
+/// Constructors for `TileBBoxMap<Option<I>>` that populate the map from
+/// iterators or streams of present values.
 impl<I> TileBBoxMap<Option<I>> {
+	/// Build a container from a [`TileStream`], placing each item at its coord
+	/// and leaving other slots as `None`.
+	///
+	/// Collects the stream eagerly.
 	#[context("Failed to create TileBBoxMap from stream")]
 	pub async fn from_stream(bbox: TileBBox, stream: TileStream<'_, I>) -> Result<Self>
 	where
@@ -103,6 +155,9 @@ impl<I> TileBBoxMap<Option<I>> {
 		Ok(container)
 	}
 
+	/// Build a container from an iterator of `(coord, item)` pairs.
+	///
+	/// Other slots are initialized to `None`.
 	#[context("Failed to create TileBBoxMap from iterator")]
 	pub fn from_iter(bbox: TileBBox, iter: impl IntoIterator<Item = (TileCoord, I)>) -> Result<Self>
 	where
@@ -116,12 +171,14 @@ impl<I> TileBBoxMap<Option<I>> {
 	}
 }
 
+/// Debug prints only the bbox to keep logs compact.
 impl<I: Debug> Debug for TileBBoxMap<I> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TileBBoxMap").field("bbox", &self.bbox).finish()
 	}
 }
 
+/// Move out all values, yielding `(coord, value)` in row-major order.
 impl<I> std::iter::IntoIterator for TileBBoxMap<I> {
 	type Item = (TileCoord, I);
 	type IntoIter =
@@ -134,6 +191,7 @@ impl<I> std::iter::IntoIterator for TileBBoxMap<I> {
 	}
 }
 
+/// Clone by cloning the underlying value vector. The bbox is `Copy`.
 impl<I: Clone> Clone for TileBBoxMap<I> {
 	fn clone(&self) -> Self {
 		TileBBoxMap {
