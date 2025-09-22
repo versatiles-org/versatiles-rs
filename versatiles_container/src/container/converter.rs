@@ -24,7 +24,7 @@
 //!     };
 //!
 //!     // Convert the tiles container
-//!     convert_tiles_container(Box::new(reader), converter_params, &path_versatiles.to_str().unwrap(), Config::default_arc()).await?;
+//!     convert_tiles_container(Box::new(reader), converter_params, &path_versatiles.to_str().unwrap(), Config::default().arc()).await?;
 //!
 //!     println!("Tiles have been successfully converted and saved to {path_versatiles:?}");
 //!     Ok(())
@@ -253,7 +253,7 @@ mod tests {
 			let temp_file = NamedTempFile::new("test.versatiles")?;
 			let cp = get_converter_parameters(c_out, false);
 			let filename = temp_file.to_str().unwrap();
-			convert_tiles_container(reader_in.boxed(), cp, filename, Config::default_arc()).await?;
+			convert_tiles_container(reader_in.boxed(), cp, filename, Config::default().arc()).await?;
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.parameters();
 			assert_eq!(parameters_out.tile_format, MVT);
@@ -300,7 +300,7 @@ mod tests {
 				flip_y,
 				swap_xy,
 			};
-			convert_tiles_container(reader.boxed(), cp, filename, Config::default_arc()).await?;
+			convert_tiles_container(reader.boxed(), cp, filename, Config::default().arc()).await?;
 
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.parameters();

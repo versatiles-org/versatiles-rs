@@ -56,7 +56,7 @@ impl MockTilesWriter {
 						Ok(())
 					})
 				}),
-				Config::default_arc(),
+				Config::default().arc(),
 			)
 			.await
 	}

@@ -18,7 +18,7 @@
 //!     let path_out = std::env::current_dir()?.join("../testdata/temp5.versatiles");
 //!
 //!     // Write the tiles to the .versatiles file
-//!     VersaTilesWriter::write_to_path(&mut reader, &path_out, Config::default_arc()).await?;
+//!     VersaTilesWriter::write_to_path(&mut reader, &path_out, Config::default().arc()).await?;
 //!
 //!     println!("Tiles have been successfully written to {path_out:?}");
 //!

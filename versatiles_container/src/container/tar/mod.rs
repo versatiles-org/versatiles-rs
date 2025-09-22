@@ -28,7 +28,7 @@
 //!
 //!     // Writing to a tar archive
 //!     let output_path = Path::new("path/to/output.tar");
-//!     let mut writer = TarTilesWriter::write_to_path(&mut reader, output_path, Config::default_arc()).await?;
+//!     let mut writer = TarTilesWriter::write_to_path(&mut reader, output_path, Config::default().arc()).await?;
 //!
 //!     Ok(())
 //! }

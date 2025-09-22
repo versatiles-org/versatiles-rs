@@ -19,7 +19,7 @@
 //!     let mut reader = MBTilesReader::open_path(&path).unwrap();
 //!
 //!     let temp_path = std::env::temp_dir().join("temp.pmtiles");
-//!     PMTilesWriter::write_to_path(&mut reader, &temp_path, Config::default_arc()).await.unwrap();
+//!     PMTilesWriter::write_to_path(&mut reader, &temp_path, Config::default().arc()).await.unwrap();
 //! }
 //! ```
 //!
@@ -148,7 +148,7 @@ mod tests {
 		})?;
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, Config::default_arc()).await?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, Config::default().arc()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let mut reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;
@@ -170,7 +170,7 @@ mod tests {
 		})?;
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, Config::default_arc()).await?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, Config::default().arc()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;

@@ -19,7 +19,7 @@
 //!     let mut reader = PMTilesReader::open_path(&path).await.unwrap();
 //!
 //!     let temp_path = std::env::temp_dir().join("temp.mbtiles");
-//!     MBTilesWriter::write_to_path(&mut reader, &temp_path, Config::default_arc()).await.unwrap();
+//!     MBTilesWriter::write_to_path(&mut reader, &temp_path, Config::default().arc()).await.unwrap();
 //! }
 //! ```
 //!
@@ -211,7 +211,7 @@ mod tests {
 		})?;
 
 		let filename = NamedTempFile::new("temp.mbtiles")?;
-		MBTilesWriter::write_to_path(&mut mock_reader, &filename, Config::default_arc()).await?;
+		MBTilesWriter::write_to_path(&mut mock_reader, &filename, Config::default().arc()).await?;
 
 		let mut reader = MBTilesReader::open_path(&filename)?;
 

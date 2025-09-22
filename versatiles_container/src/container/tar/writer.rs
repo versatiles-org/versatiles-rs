@@ -112,7 +112,7 @@ mod tests {
 		})?;
 
 		let temp_path = NamedTempFile::new("test_output.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default_arc()).await?;
+		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default().arc()).await?;
 
 		let mut reader = TarTilesReader::open_path(&temp_path)?;
 		MockTilesWriter::write(&mut reader).await?;
@@ -129,7 +129,7 @@ mod tests {
 		})?;
 
 		let temp_path = NamedTempFile::new("test_meta_output.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default_arc()).await?;
+		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default().arc()).await?;
 
 		let reader = TarTilesReader::open_path(&temp_path)?;
 		assert_eq!(
@@ -149,7 +149,7 @@ mod tests {
 		})?;
 
 		let temp_path = NamedTempFile::new("test_empty_tiles.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default_arc()).await?;
+		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default().arc()).await?;
 
 		assert_eq!(
 			TarTilesReader::open_path(&temp_path).unwrap_err().to_string(),
@@ -168,7 +168,7 @@ mod tests {
 		})?;
 
 		let invalid_path = Path::new("/invalid/path/output.tar");
-		let result = TarTilesWriter::write_to_path(&mut mock_reader, invalid_path, Config::default_arc()).await;
+		let result = TarTilesWriter::write_to_path(&mut mock_reader, invalid_path, Config::default().arc()).await;
 
 		assert!(result.is_err());
 		Ok(())
@@ -183,7 +183,7 @@ mod tests {
 		})?;
 
 		let temp_path = NamedTempFile::new("test_large_tiles.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default_arc()).await?;
+		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default().arc()).await?;
 
 		let reader = TarTilesReader::open_path(&temp_path)?;
 		assert_eq!(reader.parameters().bbox_pyramid.count_tiles(), 21845);
@@ -207,7 +207,7 @@ mod tests {
 			})?;
 
 			let temp_path = NamedTempFile::new(format!("test_compression_{compression:?}.tar"))?;
-			TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default_arc()).await?;
+			TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default().arc()).await?;
 
 			let reader = TarTilesReader::open_path(&temp_path)?;
 			assert_eq!(reader.parameters().tile_compression, compression);
@@ -227,7 +227,7 @@ mod tests {
 		})?;
 
 		let temp_path = NamedTempFile::new("test_zxy_scheme.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default_arc()).await?;
+		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default().arc()).await?;
 
 		let mut filenames = tar::Archive::new(File::open(&temp_path)?)
 			.entries()?

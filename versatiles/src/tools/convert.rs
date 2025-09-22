@@ -64,7 +64,7 @@ pub struct Subcommand {
 pub async fn run(arguments: &Subcommand) -> Result<()> {
 	eprintln!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
-	let config = Config::default_arc();
+	let config = Config::default().arc();
 
 	let mut reader = get_reader(&arguments.input_file, config.clone()).await?;
 

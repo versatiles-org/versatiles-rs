@@ -158,7 +158,7 @@ mod tests {
 
 	#[tokio::test(flavor = "multi_thread", worker_threads = 16)]
 	async fn open_vpl_str() -> Result<()> {
-		let mut reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), Config::default_arc()).await?;
+		let mut reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), Config::default().arc()).await?;
 		MockTilesWriter::write(&mut reader).await?;
 
 		Ok(())
@@ -167,7 +167,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_tile_pipeline_reader_open_path() -> Result<()> {
 		let path = Path::new("../testdata/pipeline.vpl");
-		let result = PipelineReader::open_path(path, Config::default_arc()).await;
+		let result = PipelineReader::open_path(path, Config::default().arc()).await;
 		assert_eq!(
 			result.unwrap_err().to_string(),
 			"Failed to open \"../testdata/pipeline.vpl\""
@@ -178,7 +178,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_pipeline_reader_get_tile_blob() -> Result<()> {
-		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), Config::default_arc()).await?;
+		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), Config::default().arc()).await?;
 
 		let result = reader.get_tile_blob(&TileCoord::new(14, 0, 0)?).await;
 		assert_eq!(result?, None);
@@ -195,7 +195,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_tile_pipeline_reader_get_tile_stream() -> Result<()> {
-		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), Config::default_arc()).await?;
+		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), Config::default().arc()).await?;
 		let bbox = TileBBox::from_boundaries(1, 0, 0, 1, 1)?;
 		let result_stream = reader.get_tile_stream(bbox).await?;
 		let result = result_stream.to_vec().await;
@@ -207,7 +207,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_pipeline_reader_trait_and_debug() -> Result<()> {
-		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), Config::default_arc()).await?;
+		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), Config::default().arc()).await?;
 		// Trait methods
 		assert_eq!(reader.source_name(), "from str");
 		assert_eq!(reader.container_name(), "pipeline");
@@ -223,7 +223,7 @@ mod tests {
 	#[tokio::test]
 	#[should_panic(expected = "you can't override the compression of pipeline")]
 	async fn test_override_compression_panic() {
-		let mut reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), Config::default_arc())
+		let mut reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), Config::default().arc())
 			.await
 			.unwrap();
 		// override_compression should panic

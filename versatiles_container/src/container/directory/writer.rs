@@ -35,7 +35,7 @@
 //!     let mut reader = MBTilesReader::open_path(&path).unwrap();
 //!
 //!     let temp_path = std::env::temp_dir().join("temp_tiles");
-//!     DirectoryTilesWriter::write_to_path(&mut reader, &temp_path, Config::default_arc()).await.unwrap();
+//!     DirectoryTilesWriter::write_to_path(&mut reader, &temp_path, Config::default().arc()).await.unwrap();
 //! }
 //! ```
 //!
@@ -166,7 +166,7 @@ mod tests {
 			TileBBoxPyramid::new_full(2),
 		))?;
 
-		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path, Config::default_arc()).await?;
+		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path, Config::default().arc()).await?;
 
 		let load = |filename| {
 			let path = temp_path.join(filename);

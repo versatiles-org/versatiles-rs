@@ -21,7 +21,7 @@
 //!     let mut reader = MBTilesReader::open_path(&path_mbtiles)?;
 //!
 //!     // Write the tiles to the .versatiles file
-//!     VersaTilesWriter::write_to_path(&mut reader, &path_versatiles, Config::default_arc()).await?;
+//!     VersaTilesWriter::write_to_path(&mut reader, &path_versatiles, Config::default().arc()).await?;
 //!
 //!     println!("Tiles have been successfully written to {path_versatiles:?}");
 //!

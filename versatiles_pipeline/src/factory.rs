@@ -71,7 +71,7 @@ impl PipelineFactory {
 	}
 
 	pub fn new_dummy_reader(create_reader: Callback) -> Self {
-		PipelineFactory::new_default(Path::new(""), create_reader, Config::default_arc())
+		PipelineFactory::new_default(Path::new(""), create_reader, Config::default().arc())
 	}
 
 	fn add_read_factory(&mut self, factory: Box<dyn ReadOperationFactoryTrait>) {

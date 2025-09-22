@@ -11,13 +11,13 @@
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     // Define the input filename (local file or URL)
-//!     let mut reader = get_reader("../testdata/berlin.mbtiles", Config::default_arc()).await?;
+//!     let mut reader = get_reader("../testdata/berlin.mbtiles", Config::default().arc()).await?;
 //!
 //!     // Define the output filename
 //!     let output_filename = "../testdata/temp3.versatiles";
 //!
 //!     // Write the tiles to the output file
-//!     write_to_filename(&mut *reader, output_filename, Config::default_arc()).await?;
+//!     write_to_filename(&mut *reader, output_filename, Config::default().arc()).await?;
 //!
 //!     println!("Tiles have been successfully converted and saved to {output_filename}");
 //!     Ok(())
@@ -130,7 +130,7 @@ pub mod tests {
 			_ => panic!("make_test_file: extension {extension} not found"),
 		}?;
 
-		write_to_filename(&mut reader, container_file.to_str().unwrap(), Config::default_arc()).await?;
+		write_to_filename(&mut reader, container_file.to_str().unwrap(), Config::default().arc()).await?;
 
 		Ok(container_file)
 	}
@@ -179,10 +179,10 @@ pub mod tests {
 				TempType::File(t) => t.to_str().unwrap(),
 			};
 
-			write_to_filename(&mut reader1, filename, Config::default_arc()).await?;
+			write_to_filename(&mut reader1, filename, Config::default().arc()).await?;
 
 			// get test container reader
-			let mut reader2 = get_reader(filename, Config::default_arc()).await?;
+			let mut reader2 = get_reader(filename, Config::default().arc()).await?;
 			MockTilesWriter::write(reader2.as_mut()).await?;
 
 			Ok(())

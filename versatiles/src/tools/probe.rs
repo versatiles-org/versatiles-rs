@@ -24,7 +24,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	eprintln!("probe {:?}", arguments.filename);
 
 	debug!("open {:?}", arguments.filename);
-	let mut reader = get_reader(&arguments.filename, Config::default_arc()).await?;
+	let mut reader = get_reader(&arguments.filename, Config::default().arc()).await?;
 
 	let level = match arguments.deep {
 		0 => ProbeDepth::Shallow,

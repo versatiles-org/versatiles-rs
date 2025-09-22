@@ -342,7 +342,7 @@ mod tests {
 			level_base,
 			tile_size,
 			traversal: Traversal::new_any_size(1, 1).unwrap(),
-			cache: Arc::new(Mutex::new(CacheMap::new(Config::default_arc()))),
+			cache: Arc::new(Mutex::new(CacheMap::new(Config::default().arc()))),
 		}
 	}
 

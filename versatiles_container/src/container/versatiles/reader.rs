@@ -518,13 +518,13 @@ mod tests {
 		))?;
 
 		let mut data_writer1 = DataWriterBlob::new()?;
-		VersaTilesWriter::write_to_writer(&mut reader1, &mut data_writer1, Config::default_arc()).await?;
+		VersaTilesWriter::write_to_writer(&mut reader1, &mut data_writer1, Config::default().arc()).await?;
 
 		let data_reader1 = data_writer1.to_reader();
 		let mut reader2 = VersaTilesReader::open_reader(Box::new(data_reader1)).await?;
 
 		let mut data_writer2 = DataWriterBlob::new()?;
-		VersaTilesWriter::write_to_writer(&mut reader2, &mut data_writer2, Config::default_arc()).await?;
+		VersaTilesWriter::write_to_writer(&mut reader2, &mut data_writer2, Config::default().arc()).await?;
 
 		let data_reader2 = data_writer2.to_reader();
 		let reader3 = VersaTilesReader::open_reader(Box::new(data_reader2)).await?;

@@ -99,7 +99,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 			Some(m) => m.as_str(),
 		};
 
-		let mut reader = get_reader(url, Config::default_arc()).await?;
+		let mut reader = get_reader(url, Config::default().arc()).await?;
 
 		if arguments.override_input_compression.is_some() {
 			reader.override_compression(arguments.override_input_compression.unwrap())

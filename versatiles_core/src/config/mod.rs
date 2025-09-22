@@ -8,8 +8,8 @@ pub struct Config {
 }
 
 impl Config {
-	pub fn default_arc() -> Arc<Self> {
-		Arc::new(Self::default())
+	pub fn arc(self) -> Arc<Self> {
+		Arc::new(self)
 	}
 }
 

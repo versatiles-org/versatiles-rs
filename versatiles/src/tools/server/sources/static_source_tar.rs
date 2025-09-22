@@ -204,7 +204,7 @@ mod tests {
 			reader.boxed(),
 			parameters,
 			container_file.to_str().unwrap(),
-			Config::default_arc(),
+			Config::default().arc(),
 		)
 		.await
 		.unwrap();
