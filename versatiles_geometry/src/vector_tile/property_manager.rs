@@ -154,7 +154,7 @@ impl PropertyManager {
 	}
 
 	pub fn decode_tag_ids(&self, tag_ids: &[u32]) -> Result<GeoProperties> {
-		ensure!(tag_ids.len() % 2 == 0, "Tag IDs must be even");
+		ensure!(tag_ids.len().is_multiple_of(2), "Tag IDs must be even");
 		let mut properties = GeoProperties::new();
 
 		for i in 0..tag_ids.len().div(2) {

@@ -747,11 +747,11 @@ impl TileBBox {
 		ensure!(quadrant < 4, "quadrant must be in 0..3");
 		ensure!(!self.is_empty(), "cannot get quadrant of an empty TileBBox");
 		ensure!(
-			self.width() % 2 == 0,
+			self.width().is_multiple_of(2),
 			"cannot get quadrant of a TileBBox with odd width"
 		);
 		ensure!(
-			self.height() % 2 == 0,
+			self.height().is_multiple_of(2),
 			"cannot get quadrant of a TileBBox with odd height"
 		);
 

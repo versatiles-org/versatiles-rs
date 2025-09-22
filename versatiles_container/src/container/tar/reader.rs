@@ -1,6 +1,6 @@
 //! Provides functionality for reading tile data from a tar archive.
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path};
 use tar::{Archive, EntryType};
@@ -66,16 +66,22 @@ impl TarTilesReader {
 
 				let y = filename.parse::<u32>()?;
 
-				if tile_format.is_none() {
+				if let Some(f) = &tile_format {
+					ensure!(
+						f == &this_format,
+						"mixed tile formats in tar, found both {f:?} and {this_format:?}"
+					);
+				} else {
 					tile_format = Some(this_format);
-				} else if tile_format.as_ref().unwrap() != &this_format {
-					bail!("unknown filename {path_tmp_string:?}, can't detect format");
 				}
 
-				if tile_compression.is_none() {
+				if let Some(c) = &tile_compression {
+					ensure!(
+						c == &this_compression,
+						"mixed tile compressions in tar, found both {c:?} and {this_compression:?}"
+					);
+				} else {
 					tile_compression = Some(this_compression);
-				} else if tile_compression.as_ref().unwrap() != &this_compression {
-					bail!("unknown filename {path_tmp_string:?}, can't detect compression");
 				}
 
 				let offset = entry.raw_file_position();
