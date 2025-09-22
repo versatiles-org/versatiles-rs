@@ -8,15 +8,21 @@ pub struct TileBBoxMap<I> {
 	vec: Vec<I>,
 }
 
-impl<I: Clone + Default> TileBBoxMap<I> {
-	pub fn new_prefilled_with(bbox: TileBBox, item: I) -> Self {
+impl<I> TileBBoxMap<I> {
+	pub fn new_prefilled_with(bbox: TileBBox, item: I) -> Self
+	where
+		I: Clone,
+	{
 		let n = bbox.count_tiles() as usize;
 		let mut vec = Vec::with_capacity(n);
 		vec.resize(n, item);
 		Self { bbox, vec }
 	}
 
-	pub fn new_default(bbox: TileBBox) -> Self {
+	pub fn new_default(bbox: TileBBox) -> Self
+	where
+		I: Clone + Default,
+	{
 		Self::new_prefilled_with(bbox, I::default())
 	}
 
@@ -26,31 +32,6 @@ impl<I: Clone + Default> TileBBoxMap<I> {
 
 	pub fn is_empty(&self) -> bool {
 		self.vec.is_empty()
-	}
-
-	#[context("Failed to create TileBBoxMap from stream")]
-	pub async fn from_stream<E: Clone + Send>(
-		bbox: TileBBox,
-		stream: TileStream<'_, E>,
-	) -> Result<TileBBoxMap<Option<E>>> {
-		let mut container = TileBBoxMap::<Option<E>>::new_default(bbox);
-		let vec = stream.to_vec().await;
-		for (coord, item) in vec {
-			container.insert(coord, Some(item))?;
-		}
-		Ok(container)
-	}
-
-	#[context("Failed to create TileBBoxMap from iterator")]
-	pub fn from_iter<E: Clone>(
-		bbox: TileBBox,
-		iter: impl Iterator<Item = (TileCoord, E)>,
-	) -> Result<TileBBoxMap<Option<E>>> {
-		let mut container = TileBBoxMap::<Option<E>>::new_prefilled_with(bbox, None);
-		for (coord, item) in iter {
-			container.insert(coord, Some(item))?;
-		}
-		Ok(container)
 	}
 
 	pub fn bbox(&self) -> &TileBBox {
@@ -84,7 +65,10 @@ impl<I: Clone + Default> TileBBoxMap<I> {
 			.map(move |(i, item)| (self.bbox.get_coord_by_index(i as u64).unwrap(), item))
 	}
 
-	pub fn into_decreased_level(self) -> TileBBoxMap<Vec<(TileCoord, I)>> {
+	pub fn into_decreased_level(self) -> TileBBoxMap<Vec<(TileCoord, I)>>
+	where
+		I: Clone,
+	{
 		let bbox1 = self.bbox.as_level_decreased();
 		self.vec.into_iter().enumerate().fold(
 			TileBBoxMap::<Vec<(TileCoord, I)>>::new_default(bbox1),
@@ -97,11 +81,38 @@ impl<I: Clone + Default> TileBBoxMap<I> {
 		)
 	}
 
-	pub fn map<O>(self, f: impl FnMut(I) -> O) -> TileBBoxMap<O> {
+	pub fn map<O: Clone>(self, f: impl FnMut(I) -> O) -> TileBBoxMap<O> {
 		TileBBoxMap {
 			bbox: self.bbox,
 			vec: self.vec.into_iter().map(f).collect(),
 		}
+	}
+}
+
+impl<I> TileBBoxMap<Option<I>> {
+	#[context("Failed to create TileBBoxMap from stream")]
+	pub async fn from_stream(bbox: TileBBox, stream: TileStream<'_, I>) -> Result<Self>
+	where
+		I: Clone + Send,
+	{
+		let mut container = TileBBoxMap::<Option<I>>::new_default(bbox);
+		let vec = stream.to_vec().await;
+		for (coord, item) in vec {
+			container.insert(coord, Some(item))?;
+		}
+		Ok(container)
+	}
+
+	#[context("Failed to create TileBBoxMap from iterator")]
+	pub fn from_iter(bbox: TileBBox, iter: impl IntoIterator<Item = (TileCoord, I)>) -> Result<Self>
+	where
+		I: Clone,
+	{
+		let mut container = TileBBoxMap::<Option<I>>::new_prefilled_with(bbox, None);
+		for (coord, item) in iter.into_iter() {
+			container.insert(coord, Some(item))?;
+		}
+		Ok(container)
 	}
 }
 
@@ -111,7 +122,7 @@ impl<I: Debug> Debug for TileBBoxMap<I> {
 	}
 }
 
-impl<I: Clone> std::iter::IntoIterator for TileBBoxMap<I> {
+impl<I> std::iter::IntoIterator for TileBBoxMap<I> {
 	type Item = (TileCoord, I);
 	type IntoIter =
 		std::iter::Map<std::iter::Enumerate<std::vec::IntoIter<I>>, Box<dyn Fn((usize, I)) -> (TileCoord, I) + Send>>;
@@ -120,5 +131,14 @@ impl<I: Clone> std::iter::IntoIterator for TileBBoxMap<I> {
 		let bbox = self.bbox;
 		let f = Box::new(move |(i, item)| (bbox.get_coord_by_index(i as u64).unwrap(), item));
 		self.vec.into_iter().enumerate().map(f)
+	}
+}
+
+impl<I: Clone> Clone for TileBBoxMap<I> {
+	fn clone(&self) -> Self {
+		TileBBoxMap {
+			bbox: self.bbox,
+			vec: self.vec.clone(),
+		}
 	}
 }
