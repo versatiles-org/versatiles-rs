@@ -21,7 +21,7 @@ struct Args {
 	speed: Option<u8>,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RasterTileFormat {
 	Avif,
 	Jpeg,
@@ -206,4 +206,70 @@ impl TransformOperationFactoryTrait for Factory {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+	use super::*;
+	use rstest::rstest;
+
+	#[rstest]
+	#[case("80 -> 80,80,80,80,80,80,80,80,80,80,80,80,80,80,80,80")]
+	#[case("80,70 -> 80,70,70,70,70,70,70,70,70,70,70,70,70,70,70,70")]
+	#[case("10:30 -> ,,,,,,,,,,30,30,30,30,30,30")]
+	#[case("80,70,14:50,15:20 -> 80,70,70,70,70,70,70,70,70,70,70,70,70,70,50,20")]
+	#[case(" -> ,,,,,,,,,,,,,,,")]
+	#[case(", , -> ,,,,,,,,,,,,,,,")]
+	#[case(" ,80 , ,  -> ,80,80,80,80,80,80,80,80,80,80,80,80,80,80,80")]
+	fn parse_quality_cases(#[case] case: &str) -> Result<()> {
+		let (input_str, expected_str) = case.split_once(" -> ").unwrap();
+		let result = super::parse_quality(Some(input_str.to_string()))?;
+		assert_eq!(result.len(), 32);
+		let result_str = result[0..16]
+			.iter()
+			.map(|x| x.map(|v| v.to_string()).unwrap_or(String::new()))
+			.collect::<Vec<String>>()
+			.join(",");
+
+		assert_eq!(result_str, expected_str);
+		Ok(())
+	}
+
+	#[rstest]
+	#[case("32:10", "Zoom level must be between 0 and 31")] // invalid zoom
+	#[case("5:101", "Quality value must be between 0 and 100")] // invalid quality
+	fn parse_quality_errors(#[case] input: &str, #[case] needle: &str) {
+		let err = super::parse_quality(Some(input.to_string())).unwrap_err();
+		let msg = format!("{}", err);
+		assert!(msg.contains(needle), "error '{msg}' should contain '{needle}'");
+	}
+
+	#[rstest]
+	#[case("foo")]
+	#[case("a:b")]
+	#[case("5:x")]
+	fn parse_quality_non_numeric_errors(#[case] input: &str) {
+		assert!(super::parse_quality(Some(input.to_string())).is_err());
+	}
+
+	#[rstest]
+	#[case("avif", RasterTileFormat::Avif)]
+	#[case("jpg", RasterTileFormat::Jpeg)]
+	#[case("jpeg", RasterTileFormat::Jpeg)]
+	#[case("png", RasterTileFormat::Png)]
+	#[case("webp", RasterTileFormat::Webp)]
+	fn raster_tile_format_from_str_ok(#[case] s: &str, #[case] expected: RasterTileFormat) {
+		assert_eq!(RasterTileFormat::from_str(s).unwrap(), expected);
+	}
+
+	#[test]
+	fn raster_tile_format_from_str_err() {
+		assert!(RasterTileFormat::from_str("tiff").is_err());
+	}
+
+	#[rstest]
+	#[case(TileFormat::AVIF, RasterTileFormat::Avif)]
+	#[case(TileFormat::JPG, RasterTileFormat::Jpeg)]
+	#[case(TileFormat::PNG, RasterTileFormat::Png)]
+	#[case(TileFormat::WEBP, RasterTileFormat::Webp)]
+	fn raster_tile_format_try_from_tileformat(#[case] input: TileFormat, #[case] expected: RasterTileFormat) {
+		assert_eq!(RasterTileFormat::try_from(&input).unwrap(), expected);
+	}
+}
