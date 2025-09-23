@@ -1,5 +1,5 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
-use anyhow::{Result, bail};
+use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::DynamicImage;
@@ -14,7 +14,9 @@ struct Args {
 	/// If not specified, the source format will be used.
 	format: Option<String>,
 	/// Quality level for the tile compression (only AVIF, JPG or WEBP), between 0 (worst) and 100 (lossless).
-	quality: Option<u8>,
+	/// To allow different quality levels for different zoom levels, this can also be a comma-separated list like this:
+	/// "80,70,14:50,15:20", where the first value is the default quality, and the other values specify the quality for the specified zoom level (and higher).
+	quality: Option<String>,
 	/// Compression speed (only AVIF), between 0 (slowest) and 100 (fastest).
 	speed: Option<u8>,
 }
@@ -72,7 +74,7 @@ struct Operation {
 	source: Box<dyn OperationTrait>,
 	tilejson: TileJSON,
 	format: RasterTileFormat,
-	quality: Option<u8>,
+	quality: [Option<u8>; 32],
 	speed: Option<u8>,
 }
 
@@ -104,7 +106,7 @@ impl Operation {
 
 			Ok(Box::new(Self {
 				format,
-				quality: args.quality,
+				quality: parse_quality(args.quality)?,
 				speed: args.speed,
 				parameters,
 				source,
@@ -112,6 +114,31 @@ impl Operation {
 			}) as Box<dyn OperationTrait>)
 		})
 	}
+}
+
+fn parse_quality(quality: Option<String>) -> Result<[Option<u8>; 32]> {
+	let mut result: [Option<u8>; 32] = [None; 32];
+	if let Some(text) = quality {
+		let mut zoom: i32 = -1;
+		for part in text.split(',') {
+			let mut part = part.trim();
+			zoom += 1;
+			if part.is_empty() {
+				continue;
+			}
+			if let Some(idx) = part.find(':') {
+				zoom = part[0..idx].trim().parse()?;
+				ensure!(zoom <= 31, "Zoom level must be between 0 and 31");
+				part = &part[(idx + 1)..];
+			}
+			let quality_val: u8 = part.trim().parse()?;
+			ensure!(quality_val <= 100, "Quality value must be between 0 and 100");
+			for z in zoom..32 {
+				result[z as usize] = Some(quality_val);
+			}
+		}
+	}
+	Ok(result)
 }
 
 #[async_trait]
@@ -138,7 +165,7 @@ impl OperationTrait for Operation {
 		use RasterTileFormat::*;
 		use versatiles_image::{avif, jpeg, png, webp};
 
-		let quality = self.quality;
+		let quality = self.quality[bbox.level as usize];
 		let speed = self.speed;
 		let stream = self.source.get_image_stream(bbox).await?;
 
