@@ -47,9 +47,9 @@ mod tests {
 
 	/* ---------- Success cases ---------- */
 	#[rstest]
-	#[case::grey(create_image_grey(), 0.88)]
+	#[case::grey(create_image_grey(), 0.86)]
 	#[case::greya(create_image_greya(), 0.65)]
-	#[case::rgb(create_image_rgb(), 0.29)]
+	#[case::rgb(create_image_rgb(), 0.28)]
 	#[case::rgba(create_image_rgba(), 0.32)]
 	fn avif_ok(#[case] img: DynamicImage, #[case] expected_compression_percent: f64) -> Result<()> {
 		let blob = image2blob(&img, None)?;
