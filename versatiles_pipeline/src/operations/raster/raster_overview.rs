@@ -177,13 +177,15 @@ impl Operation {
 	async fn build_images_from_cache(&self, bbox: TileBBox) -> Result<TileBBoxMap<Option<DynamicImage>>> {
 		debug!("build_images_from_cache: {:?}", bbox);
 
-		ensure!(bbox.level < self.level_base, "Invalid level");
-		ensure!(bbox.width() <= BLOCK_TILE_COUNT, "Invalid width");
-		ensure!(bbox.height() <= BLOCK_TILE_COUNT, "Invalid height");
+		let size = bbox.max_count().min(BLOCK_TILE_COUNT);
 
-		let bbox0 = bbox.rounded(BLOCK_TILE_COUNT);
-		assert_eq!(bbox0.width(), BLOCK_TILE_COUNT);
-		assert_eq!(bbox0.height(), BLOCK_TILE_COUNT);
+		ensure!(bbox.level < self.level_base, "Invalid level");
+		ensure!(bbox.width() <= size, "Invalid width");
+		ensure!(bbox.height() <= size, "Invalid height");
+
+		let bbox0 = bbox.rounded(size);
+		assert_eq!(bbox0.width(), size);
+		assert_eq!(bbox0.height(), size);
 
 		let mut map: TileBBoxMap<Vec<(TileCoord, DynamicImage)>> = TileBBoxMap::new_default(bbox);
 
