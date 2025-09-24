@@ -656,35 +656,38 @@ impl TileBBox {
 	}
 
 	pub fn get_scaled_down(&self, scale: u32) -> TileBBox {
-		assert!(scale > 0, "scale must be greater than 0");
-		assert!(scale.is_power_of_two(), "scale must be a power of two");
+		let mut bbox = self.clone();
+		bbox.scale_down(scale);
+		bbox
+	}
 
-		TileBBox::from_boundaries(
-			self.level,
-			self.x_min() / scale,
-			self.y_min() / scale,
-			self.x_max() / scale,
-			self.y_max() / scale,
-		)
-		.unwrap()
+	pub fn scale_up(&mut self, scale: u32) {
+		assert!(scale > 0, "scale must be greater than 0");
+
+		let x_max = (self.x_max() + 1) * scale - 1;
+		let y_max = (self.y_max() + 1) * scale - 1;
+		self.x_min *= scale;
+		self.y_min *= scale;
+		self.set_x_max(x_max);
+		self.set_y_max(y_max);
+	}
+
+	pub fn get_scaled_up(&self, scale: u32) -> TileBBox {
+		let mut bbox = self.clone();
+		bbox.scale_up(scale);
+		bbox
 	}
 
 	pub fn level_increase(&mut self) {
 		assert!(self.level < 31, "level must be less than 31");
 		self.level += 1;
-		self.x_min *= 2;
-		self.y_min *= 2;
-		self.width *= 2;
-		self.height *= 2;
+		self.scale_up(2);
 	}
 
 	pub fn level_decrease(&mut self) {
 		assert!(self.level > 0, "level must be greater than 0");
 		self.level -= 1;
-		self.x_min /= 2;
-		self.y_min /= 2;
-		self.width /= 2;
-		self.height /= 2;
+		self.scale_down(2);
 	}
 
 	pub fn as_level_increased(&self) -> TileBBox {
@@ -702,29 +705,15 @@ impl TileBBox {
 	pub fn as_level(&self, level: u8) -> TileBBox {
 		assert!(level <= 31, "level ({level}) must be <= 31");
 
-		if level > self.level {
+		let mut bbox = if level > self.level {
 			let scale = 2u32.pow((level - self.level) as u32);
-			TileBBox {
-				level,
-				x_min: self.x_min * scale,
-				y_min: self.y_min * scale,
-				width: self.width * scale,
-				height: self.height * scale,
-			}
+			self.get_scaled_up(scale)
 		} else {
 			let scale = 2u32.pow((self.level - level) as u32);
-			let x_min = self.x_min / scale;
-			let y_min = self.y_min / scale;
-			let x_max = self.x_max() / scale;
-			let y_max = self.y_max() / scale;
-			TileBBox {
-				level,
-				x_min,
-				y_min,
-				width: x_max - x_min + 1,
-				height: y_max - y_min + 1,
-			}
-		}
+			self.get_scaled_down(scale)
+		};
+		bbox.level = level;
+		bbox
 	}
 
 	pub fn get_corner_min(&self) -> TileCoord {
@@ -1758,6 +1747,36 @@ mod tests {
 		assert_eq!(bbox.y_max(), 7);
 	}
 
+	#[rstest]
+	#[case(4, 6, 2, 3)]
+	#[case(5, 6, 2, 3)]
+	#[case(4, 7, 2, 3)]
+	#[case(5, 7, 2, 3)]
+	fn level_decrease(#[case] min_in: u32, #[case] max_in: u32, #[case] min_out: u32, #[case] max_out: u32) {
+		let mut bbox = TileBBox::from_boundaries(10, min_in, min_in, max_in, max_in).unwrap();
+		bbox.level_decrease();
+		assert_eq!(bbox.level, 9);
+		assert_eq!(bbox.x_min(), min_out);
+		assert_eq!(bbox.y_min(), min_out);
+		assert_eq!(bbox.x_max(), max_out);
+		assert_eq!(bbox.y_max(), max_out);
+	}
+
+	#[rstest]
+	#[case(4, 6, 8, 13)]
+	#[case(5, 6, 10, 13)]
+	#[case(4, 7, 8, 15)]
+	#[case(5, 7, 10, 15)]
+	fn level_increase(#[case] min_in: u32, #[case] max_in: u32, #[case] min_out: u32, #[case] max_out: u32) {
+		let mut bbox = TileBBox::from_boundaries(10, min_in, min_in, max_in, max_in).unwrap();
+		bbox.level_increase();
+		assert_eq!(bbox.level, 11);
+		assert_eq!(bbox.x_min(), min_out);
+		assert_eq!(bbox.y_min(), min_out);
+		assert_eq!(bbox.x_max(), max_out);
+		assert_eq!(bbox.y_max(), max_out);
+	}
+
 	#[test]
 	fn level_increase_decrease_roundtrip() {
 		let original = TileBBox::from_boundaries(4, 5, 6, 7, 8).unwrap();
@@ -1795,14 +1814,13 @@ mod tests {
 	#[case(6, 3, 5, 6, 7)]
 	#[case(7, 6, 10, 13, 15)]
 	#[case(8, 12, 20, 27, 31)]
-	fn as_level_up_and_down(#[case] level: u8, #[case] x0: u32, #[case] y0: u32, #[case] x1: u32, #[case] y1: u32) {
+	fn as_level_up_and_down(#[case] level: u32, #[case] x0: u32, #[case] y0: u32, #[case] x1: u32, #[case] y1: u32) {
 		let bbox = TileBBox::from_boundaries(6, 3, 5, 6, 7).unwrap();
-		let up = bbox.as_level(level);
-		assert_eq!(up.level, level);
-		assert_eq!(up.x_min(), x0);
-		assert_eq!(up.y_min(), y0);
-		assert_eq!(up.x_max(), x1);
-		assert_eq!(up.y_max(), y1);
+		let up = bbox.as_level(level as u8);
+		assert_eq!(
+			[up.level as u32, up.x_min(), up.y_min(), up.x_max(), up.y_max()],
+			[level, x0, y0, x1, y1]
+		);
 	}
 
 	#[test]
