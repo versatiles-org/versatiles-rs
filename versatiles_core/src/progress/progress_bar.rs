@@ -81,7 +81,6 @@ impl Default for Inner {
 }
 
 /// A terminal progress bar handle, cloneable and thread-safe.
-#[derive(Clone)]
 pub struct ProgressBar {
 	inner: Arc<Mutex<Inner>>,
 }
@@ -90,6 +89,14 @@ impl Default for ProgressBar {
 	fn default() -> Self {
 		ProgressBar {
 			inner: Arc::new(Mutex::new(Inner::default())),
+		}
+	}
+}
+
+impl Clone for ProgressBar {
+	fn clone(&self) -> Self {
+		ProgressBar {
+			inner: self.inner.clone(),
 		}
 	}
 }
