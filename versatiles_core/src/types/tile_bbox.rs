@@ -436,7 +436,7 @@ impl TileBBox {
 		}
 	}
 
-	pub fn contains_bbox(&self, bbox: &TileBBox) -> Result<bool> {
+	pub fn try_contains_bbox(&self, bbox: &TileBBox) -> Result<bool> {
 		ensure!(
 			self.level == bbox.level,
 			"Cannot compare TileBBox with level={} with TileBBox with level={}",
@@ -511,7 +511,7 @@ impl TileBBox {
 	///
 	/// * `Ok(())` if intersection is successful.
 	/// * `Err(anyhow::Error)` if the zoom levels do not match or other validations fail.
-	pub fn intersect_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
+	pub fn intersect_with(&mut self, bbox: &TileBBox) -> Result<()> {
 		ensure!(
 			self.level == bbox.level,
 			"Cannot intersect TileBBox at zoom level {} with TileBBox at zoom level {}",
@@ -542,8 +542,8 @@ impl TileBBox {
 	/// # Arguments
 	///
 	/// * `pyramid` - Reference to the `TileBBoxPyramid`.
-	pub fn intersect_pyramid(&mut self, pyramid: &TileBBoxPyramid) {
-		self.intersect_bbox(pyramid.get_level_bbox(self.level)).unwrap()
+	pub fn intersect_with_pyramid(&mut self, pyramid: &TileBBoxPyramid) {
+		self.intersect_with(pyramid.get_level_bbox(self.level)).unwrap()
 	}
 
 	/// Determines if this bounding box overlaps with another bounding box.
@@ -823,7 +823,7 @@ impl TileBBox {
 
 				let mut bbox =
 					TileBBox::from_min_max(level, x, y, (x + size - 1).min(max), (y + size - 1).min(max)).unwrap();
-				bbox.intersect_bbox(self).unwrap();
+				bbox.intersect_with(self).unwrap();
 				bbox
 			})
 			.filter(|bbox| !bbox.is_empty())
@@ -1013,7 +1013,7 @@ mod tests {
 		let bbox2 = TileBBox::from_min_max(4, 1, 10, 3, 12).unwrap();
 
 		let mut bbox1_intersect = bbox1;
-		bbox1_intersect.intersect_bbox(&bbox2).unwrap();
+		bbox1_intersect.intersect_with(&bbox2).unwrap();
 		assert_eq!(bbox1_intersect, TileBBox::from_min_max(4, 1, 11, 2, 12).unwrap());
 
 		let mut bbox1_union = bbox1;
@@ -1159,7 +1159,7 @@ mod tests {
 	fn test_intersect_bbox() {
 		let mut bbox1 = TileBBox::from_min_max(4, 0, 11, 2, 13).unwrap();
 		let bbox2 = TileBBox::from_min_max(4, 1, 10, 3, 12).unwrap();
-		bbox1.intersect_bbox(&bbox2).unwrap();
+		bbox1.intersect_with(&bbox2).unwrap();
 		assert_eq!(bbox1, TileBBox::from_min_max(4, 1, 11, 2, 12).unwrap());
 	}
 
@@ -1372,17 +1372,17 @@ mod tests {
 		let mut bbox1 = TileBBox::from_min_max(6, 5, 10, 15, 20)?;
 		let bbox2 = TileBBox::from_min_max(6, 10, 15, 20, 25)?;
 
-		bbox1.intersect_bbox(&bbox2)?;
+		bbox1.intersect_with(&bbox2)?;
 		assert_eq!(bbox1, TileBBox::from_min_max(6, 10, 15, 15, 20).unwrap());
 
 		// Intersect with a non-overlapping bounding box
 		let bbox3 = TileBBox::from_min_max(6, 16, 21, 20, 25)?;
-		bbox1.intersect_bbox(&bbox3)?;
+		bbox1.intersect_with(&bbox3)?;
 		assert!(bbox1.is_empty());
 
 		// Attempting to intersect with a bounding box of different zoom level
 		let bbox_diff_level = TileBBox::from_min_max(5, 10, 15, 15, 20)?;
-		let result = bbox1.intersect_bbox(&bbox_diff_level);
+		let result = bbox1.intersect_with(&bbox_diff_level);
 		assert!(result.is_err());
 
 		Ok(())

@@ -281,7 +281,7 @@ impl TilesReaderTrait for VersaTilesReader {
 
 				// Get the bounding box of all tiles defined in this block
 				let mut tiles_bbox_used: TileBBox = bbox;
-				tiles_bbox_used.intersect_bbox(tiles_bbox_block).unwrap();
+				tiles_bbox_used.intersect_with(tiles_bbox_block).unwrap();
 				trace!("tiles_bbox_used {tiles_bbox_used:?}");
 
 				assert_eq!(bbox.level, tiles_bbox_block.level);

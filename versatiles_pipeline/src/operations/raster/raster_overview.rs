@@ -256,7 +256,7 @@ impl OperationTrait for Operation {
 		let mut bbox0 = bbox.rounded(BLOCK_TILE_COUNT);
 		assert_eq!(bbox0.width(), BLOCK_TILE_COUNT);
 		assert_eq!(bbox0.height(), BLOCK_TILE_COUNT);
-		bbox0.intersect_pyramid(&self.parameters.bbox_pyramid);
+		bbox0.intersect_with_pyramid(&self.parameters.bbox_pyramid);
 
 		let container: TileBBoxMap<Option<DynamicImage>> = if bbox.level == self.level_base {
 			trace!("Fetching images from source for bbox {:?}", bbox);

@@ -82,7 +82,7 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_blob_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Blob>> {
-		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
+		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
 		Ok(self
 			.source
 			.get_blob_stream(bbox)
@@ -91,7 +91,7 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_image_stream(&self, mut bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
+		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
 		Ok(self
 			.source
 			.get_image_stream(bbox)
@@ -100,7 +100,7 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_vector_stream(&self, mut bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
+		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
 		Ok(self
 			.source
 			.get_vector_stream(bbox)

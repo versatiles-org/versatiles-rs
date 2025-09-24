@@ -94,7 +94,7 @@ impl TileBBoxPyramid {
 	pub fn intersect_geo_bbox(&mut self, geo_bbox: &GeoBBox) {
 		for (z, tile_bbox) in self.level_bbox.iter_mut().enumerate() {
 			tile_bbox
-				.intersect_bbox(&TileBBox::from_geo(z as u8, geo_bbox).unwrap())
+				.intersect_with(&TileBBox::from_geo(z as u8, geo_bbox).unwrap())
 				.unwrap();
 		}
 	}
@@ -115,7 +115,7 @@ impl TileBBoxPyramid {
 	pub fn intersect(&mut self, other_bbox_pyramid: &TileBBoxPyramid) {
 		for (level, bbox) in self.level_bbox.iter_mut().enumerate() {
 			let other_bbox = other_bbox_pyramid.get_level_bbox(level as u8);
-			bbox.intersect_bbox(other_bbox).unwrap();
+			bbox.intersect_with(other_bbox).unwrap();
 		}
 	}
 

@@ -109,7 +109,7 @@ impl OperationTrait for DummyImageSource {
 	}
 	async fn get_blob_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Blob>> {
 		let blob = self.blob.clone();
-		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
+		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {
 			Some(blob.clone())
 		}))
@@ -117,7 +117,7 @@ impl OperationTrait for DummyImageSource {
 
 	async fn get_image_stream(&self, mut bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
 		let image = self.image.clone();
-		bbox.intersect_pyramid(&self.parameters.bbox_pyramid);
+		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {
 			Some(image.clone())
 		}))

@@ -106,7 +106,7 @@ impl OperationTrait for Operation {
 
 		Ok(stream_base.flat_map_parallel(move |coord_base, image_base| {
 			let mut bbox = coord_base.as_tile_bbox(1).unwrap().at_level(level_dst);
-			bbox.intersect_bbox(&bbox_dst).unwrap();
+			bbox.intersect_with(&bbox_dst).unwrap();
 
 			Ok(TileStream::from_iter_coord_parallel(
 				bbox.into_iter_coords(),
