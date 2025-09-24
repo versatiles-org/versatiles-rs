@@ -884,7 +884,7 @@ impl TileBBox {
 		self.set_y_max(y_max);
 	}
 
-	pub fn get_rounded(&self, block_size: u32) -> TileBBox {
+	pub fn rounded(&self, block_size: u32) -> TileBBox {
 		let mut bbox = *self;
 		bbox.round(block_size);
 		bbox
@@ -1656,7 +1656,7 @@ mod tests {
 	fn test_round_shifting_cases(#[case] inp: [u32; 4], #[case] exp: [u32; 4]) {
 		let bbox_exp = TileBBox::from_min_max(8, exp[0], exp[1], exp[2], exp[3]).unwrap();
 		let mut bbox_inp = TileBBox::from_min_max(8, inp[0], inp[1], inp[2], inp[3]).unwrap();
-		assert_eq!(bbox_inp.get_rounded(4), bbox_exp);
+		assert_eq!(bbox_inp.rounded(4), bbox_exp);
 		bbox_inp.round(4);
 		assert_eq!(bbox_inp, bbox_exp);
 	}
@@ -1675,7 +1675,7 @@ mod tests {
 	fn test_round_scaling_cases(#[case] scale: u32, #[case] exp: [u32; 4]) {
 		let bbox_exp = TileBBox::from_min_max(12, exp[0], exp[1], exp[2], exp[3]).unwrap();
 		let mut bbox_inp = TileBBox::from_min_max(12, 12, 34, 56, 78).unwrap();
-		assert_eq!(bbox_inp.get_rounded(scale), bbox_exp);
+		assert_eq!(bbox_inp.rounded(scale), bbox_exp);
 		bbox_inp.round(scale);
 		assert_eq!(bbox_inp, bbox_exp);
 	}

@@ -38,7 +38,7 @@ pub fn translate_traversals(
 			let mut map_write = HashMap::<TileBBox, (usize, TileBBox)>::new();
 			let mut steps: Vec<TraversalTranslationStep> = vec![];
 			for bbox_read in read_bboxes {
-				let bbox_write = bbox_read.get_rounded(write_size);
+				let bbox_write = bbox_read.rounded(write_size);
 				let n = map_write.len();
 				let index = map_write.entry(bbox_write).or_insert((n, bbox_write)).0;
 				steps.push(Push(vec![bbox_read], index));

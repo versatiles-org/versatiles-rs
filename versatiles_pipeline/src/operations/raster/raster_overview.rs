@@ -181,7 +181,7 @@ impl Operation {
 		ensure!(bbox.width() <= BLOCK_TILE_COUNT, "Invalid width");
 		ensure!(bbox.height() <= BLOCK_TILE_COUNT, "Invalid height");
 
-		let bbox0 = bbox.get_rounded(BLOCK_TILE_COUNT);
+		let bbox0 = bbox.rounded(BLOCK_TILE_COUNT);
 		assert_eq!(bbox0.width(), BLOCK_TILE_COUNT);
 		assert_eq!(bbox0.height(), BLOCK_TILE_COUNT);
 
@@ -253,7 +253,7 @@ impl OperationTrait for Operation {
 			return self.source.get_image_stream(bbox).await;
 		}
 
-		let mut bbox0 = bbox.get_rounded(BLOCK_TILE_COUNT);
+		let mut bbox0 = bbox.rounded(BLOCK_TILE_COUNT);
 		assert_eq!(bbox0.width(), BLOCK_TILE_COUNT);
 		assert_eq!(bbox0.height(), BLOCK_TILE_COUNT);
 		bbox0.intersect_pyramid(&self.parameters.bbox_pyramid);
