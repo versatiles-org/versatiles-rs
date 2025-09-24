@@ -201,7 +201,7 @@ fn verify_steps(
 			ensure!(bbox.width() <= size);
 			ensure!(bbox.height() <= size);
 
-			let scaled = bbox.get_scaled_down(size);
+			let scaled = bbox.scaled_down(size);
 			ensure!(scaled.width() == 1);
 			ensure!(scaled.height() == 1);
 
@@ -215,7 +215,7 @@ fn verify_steps(
 
 		let read_bboxes = Traversal::new(order, size, size)?.traverse_pyramid(pyramid)?;
 		for bbox in &read_bboxes {
-			let scaled = bbox.get_scaled_down(size);
+			let scaled = bbox.scaled_down(size);
 			ensure!(scaled.width() == 1);
 			ensure!(scaled.height() == 1);
 

@@ -261,7 +261,7 @@ impl TilesReaderTrait for VersaTilesReader {
 			}
 		}
 
-		let block_coords: Vec<TileCoord> = bbox.get_scaled_down(256).iter_coords().collect();
+		let block_coords: Vec<TileCoord> = bbox.scaled_down(256).iter_coords().collect();
 
 		let stream = futures::stream::iter(block_coords).then(|block_coord: TileCoord| {
 			async move {

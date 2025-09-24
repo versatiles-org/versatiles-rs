@@ -655,7 +655,7 @@ impl TileBBox {
 		self.set_y_max(y_max);
 	}
 
-	pub fn get_scaled_down(&self, scale: u32) -> TileBBox {
+	pub fn scaled_down(&self, scale: u32) -> TileBBox {
 		let mut bbox = self.clone();
 		bbox.scale_down(scale);
 		bbox
@@ -672,7 +672,7 @@ impl TileBBox {
 		self.set_y_max(y_max);
 	}
 
-	pub fn get_scaled_up(&self, scale: u32) -> TileBBox {
+	pub fn scaled_up(&self, scale: u32) -> TileBBox {
 		let mut bbox = self.clone();
 		bbox.scale_up(scale);
 		bbox
@@ -707,10 +707,10 @@ impl TileBBox {
 
 		let mut bbox = if level > self.level {
 			let scale = 2u32.pow((level - self.level) as u32);
-			self.get_scaled_up(scale)
+			self.scaled_up(scale)
 		} else {
 			let scale = 2u32.pow((self.level - level) as u32);
-			self.get_scaled_down(scale)
+			self.scaled_down(scale)
 		};
 		bbox.level = level;
 		bbox
@@ -1548,13 +1548,13 @@ mod tests {
 		// Original bbox
 		let original = TileBBox::from_min_max(5, 10, 15, 20, 25)?;
 		// scaled_down should return a new bbox without modifying the original
-		let scaled = original.get_scaled_down(4);
+		let scaled = original.scaled_down(4);
 		// Coordinates divided by 4: 10/4=2,15/4=3,20/4=5,25/4=6
 		assert_eq!(scaled, TileBBox::from_min_max(5, 2, 3, 5, 6)?);
 		// Original remains unchanged
 		assert_eq!(original, TileBBox::from_min_max(5, 10, 15, 20, 25)?);
 		// Scaling by 1 should produce identical bbox
-		let same = original.get_scaled_down(1);
+		let same = original.scaled_down(1);
 		assert_eq!(same, original);
 		Ok(())
 	}
@@ -1574,7 +1574,7 @@ mod tests {
 		let mut bbox0 = TileBBox::from_min_max(8, min0, min0, max0, max0).unwrap();
 		let bbox1 = TileBBox::from_min_max(8, min1, min1, max1, max1).unwrap();
 		assert_eq!(
-			bbox0.get_scaled_down(4),
+			bbox0.scaled_down(4),
 			bbox1,
 			"scaled_down(4) of {bbox0:?} should return {bbox1:?}"
 		);
