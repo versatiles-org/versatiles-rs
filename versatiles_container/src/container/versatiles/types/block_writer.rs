@@ -31,7 +31,7 @@ impl<'a> BlockWriter<'a> {
 	/// Write a single tile to the writer.
 	#[context("writing tile at {coord:?}")]
 	pub fn write_tile(&mut self, coord: TileCoord, blob: Blob) -> Result<()> {
-		let index = self.bbox.get_tile_index(&coord)? as usize;
+		let index = self.bbox.index_of(&coord)? as usize;
 
 		let mut save_hash = false;
 		if blob.len() < 1000 {

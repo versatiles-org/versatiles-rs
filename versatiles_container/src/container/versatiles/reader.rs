@@ -213,7 +213,7 @@ impl TilesReaderTrait for VersaTilesReader {
 		}
 
 		// Get the tile ID
-		let tile_id = bbox.get_tile_index(coord).unwrap() as usize;
+		let tile_id = bbox.index_of(coord).unwrap() as usize;
 
 		// Retrieve the tile index from cache or read from the reader
 		let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await?;

@@ -69,7 +69,7 @@ impl<I> TileBBoxMap<I> {
 	/// Returns an error if `coord` is **outside** of this container's bbox.
 	#[context("Failed to insert into TileBBoxMap at coord: {:?}", coord)]
 	pub fn insert(&mut self, coord: TileCoord, item: I) -> Result<()> {
-		let index = self.bbox.get_tile_index(&coord)?;
+		let index = self.bbox.index_of(&coord)?;
 		self.vec[index as usize] = item;
 		Ok(())
 	}
@@ -80,7 +80,7 @@ impl<I> TileBBoxMap<I> {
 	/// Returns an error if `coord` is outside the bbox.
 	#[context("Failed to get from TileBBoxMap at coord: {:?}", coord)]
 	pub fn get(&self, coord: &TileCoord) -> Result<&I> {
-		let index = self.bbox.get_tile_index(coord)?;
+		let index = self.bbox.index_of(coord)?;
 		Ok(&self.vec[index as usize])
 	}
 
@@ -90,7 +90,7 @@ impl<I> TileBBoxMap<I> {
 	/// Returns an error if `coord` is outside the bbox.
 	#[context("Failed to get mutably from TileBBoxMap at coord: {:?}", coord)]
 	pub fn get_mut(&mut self, coord: &TileCoord) -> Result<&mut I> {
-		let index = self.bbox.get_tile_index(coord)?;
+		let index = self.bbox.index_of(coord)?;
 		Ok(&mut self.vec[index as usize])
 	}
 

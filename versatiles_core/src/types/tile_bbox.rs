@@ -843,7 +843,7 @@ impl TileBBox {
 	///
 	/// * `Ok(usize)` representing the index if the coordinate is within the bounding box.
 	/// * `Err(anyhow::Error)` if the coordinate is outside the bounding box or zoom levels do not match.
-	pub fn get_tile_index(&self, coord: &TileCoord) -> Result<u64> {
+	pub fn index_of(&self, coord: &TileCoord) -> Result<u64> {
 		ensure!(
 			self.contains(coord),
 			"Coordinate {coord:?} is not within the bounding box {self:?}",
@@ -1189,7 +1189,7 @@ mod tests {
 		let bbox = TileBBox::from_min_max(l, x0, y0, x1, y1).unwrap();
 		let (cl, cx, cy) = coord;
 		let tc = TileCoord::new(cl, cx, cy).unwrap();
-		assert_eq!(bbox.get_tile_index(&tc).unwrap(), expected);
+		assert_eq!(bbox.index_of(&tc).unwrap(), expected);
 	}
 
 	#[test]
@@ -1411,20 +1411,20 @@ mod tests {
 	fn should_get_correct_tile_index() -> Result<()> {
 		let bbox = TileBBox::from_min_max(4, 5, 10, 7, 12)?;
 
-		assert_eq!(bbox.get_tile_index(&TileCoord::new(4, 5, 10).unwrap()).unwrap(), 0);
-		assert_eq!(bbox.get_tile_index(&TileCoord::new(4, 6, 10).unwrap()).unwrap(), 1);
-		assert_eq!(bbox.get_tile_index(&TileCoord::new(4, 7, 10).unwrap()).unwrap(), 2);
-		assert_eq!(bbox.get_tile_index(&TileCoord::new(4, 5, 11).unwrap()).unwrap(), 3);
-		assert_eq!(bbox.get_tile_index(&TileCoord::new(4, 7, 12).unwrap()).unwrap(), 8);
+		assert_eq!(bbox.index_of(&TileCoord::new(4, 5, 10).unwrap()).unwrap(), 0);
+		assert_eq!(bbox.index_of(&TileCoord::new(4, 6, 10).unwrap()).unwrap(), 1);
+		assert_eq!(bbox.index_of(&TileCoord::new(4, 7, 10).unwrap()).unwrap(), 2);
+		assert_eq!(bbox.index_of(&TileCoord::new(4, 5, 11).unwrap()).unwrap(), 3);
+		assert_eq!(bbox.index_of(&TileCoord::new(4, 7, 12).unwrap()).unwrap(), 8);
 
 		// Attempt to get index of a coordinate outside the bounding box
 		let coord_outside = TileCoord::new(4, 4, 9).unwrap();
-		let result = bbox.get_tile_index(&coord_outside);
+		let result = bbox.index_of(&coord_outside);
 		assert!(result.is_err());
 
 		// Attempt to get index with mismatched zoom level
 		let coord_diff_level = TileCoord::new(5, 5, 10).unwrap();
-		let result = bbox.get_tile_index(&coord_diff_level);
+		let result = bbox.index_of(&coord_diff_level);
 		assert!(result.is_err());
 
 		Ok(())
