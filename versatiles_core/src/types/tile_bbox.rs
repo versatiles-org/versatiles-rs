@@ -724,7 +724,7 @@ impl TileBBox {
 		TileCoord::new(self.level, self.x_max(), self.y_max()).unwrap()
 	}
 
-	pub fn get_dimensions(&self) -> (u32, u32) {
+	pub fn dimensions(&self) -> (u32, u32) {
 		(self.width(), self.height())
 	}
 
@@ -1805,7 +1805,7 @@ mod tests {
 		let bbox = TileBBox::from_min_max(level, x0, y0, x1, y1).unwrap();
 		assert_eq!(bbox.min_corner(), TileCoord::new(level, x0, y0).unwrap());
 		assert_eq!(bbox.max_corner(), TileCoord::new(level, x1, y1).unwrap());
-		assert_eq!(bbox.get_dimensions(), (width, height));
+		assert_eq!(bbox.dimensions(), (width, height));
 	}
 
 	#[rstest]
