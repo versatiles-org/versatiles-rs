@@ -206,7 +206,7 @@ mod tests {
 	use super::*;
 
 	fn bb(l: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> TileBBox {
-		TileBBox::from_boundaries(l, x0, y0, x1, y1).unwrap()
+		TileBBox::from_min_max(l, x0, y0, x1, y1).unwrap()
 	}
 	fn c(l: u8, x: u32, y: u32) -> TileCoord {
 		TileCoord::new(l, x, y).unwrap()

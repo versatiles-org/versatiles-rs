@@ -52,8 +52,8 @@ impl MockTilesReader {
 	/// Creates a new mock tiles reader with the specified profile.
 	pub fn new_mock_profile(profile: MockTilesReaderProfile) -> Result<MockTilesReader> {
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
-		bbox_pyramid.set_level_bbox(TileBBox::from_boundaries(2, 0, 1, 2, 3)?);
-		bbox_pyramid.set_level_bbox(TileBBox::from_boundaries(3, 0, 2, 4, 6)?);
+		bbox_pyramid.set_level_bbox(TileBBox::from_min_max(2, 0, 1, 2, 3)?);
+		bbox_pyramid.set_level_bbox(TileBBox::from_min_max(3, 0, 2, 4, 6)?);
 
 		MockTilesReader::new_mock(match profile {
 			MockTilesReaderProfile::Json => {
@@ -142,8 +142,8 @@ mod tests {
 		assert_eq!(reader.source_name(), "dummy_name");
 
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
-		bbox_pyramid.set_level_bbox(TileBBox::from_boundaries(2, 0, 1, 2, 3)?);
-		bbox_pyramid.set_level_bbox(TileBBox::from_boundaries(3, 0, 2, 4, 6)?);
+		bbox_pyramid.set_level_bbox(TileBBox::from_min_max(2, 0, 1, 2, 3)?);
+		bbox_pyramid.set_level_bbox(TileBBox::from_min_max(3, 0, 2, 4, 6)?);
 
 		assert_eq!(
 			reader.parameters(),

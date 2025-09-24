@@ -360,7 +360,7 @@ mod tests {
 	#[tokio::test]
 	async fn add_images_to_cache_inserts_half_tiles_under_floored_key() -> Result<()> {
 		let op = make_operation(2, 6); // tiny tiles to keep work light
-		let bbox = TileBBox::from_boundaries(6, 0, 0, 31, 31)?; // 32x32 block at base level
+		let bbox = TileBBox::from_min_max(6, 0, 0, 31, 31)?; // 32x32 block at base level
 		let mut container = TileBBoxMap::new_default(bbox);
 		// Populate with simple solid tiles (only a tiny subset to keep it cheap)
 		for y in 0..bbox.height() {

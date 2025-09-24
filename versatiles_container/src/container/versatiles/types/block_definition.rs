@@ -74,7 +74,7 @@ impl BlockDefinition {
 		let x_max = reader.read_u8()? as u32;
 		let y_max = reader.read_u8()? as u32;
 
-		let tiles_bbox = TileBBox::from_boundaries(level.min(8), x_min, y_min, x_max, y_max)?;
+		let tiles_bbox = TileBBox::from_min_max(level.min(8), x_min, y_min, x_max, y_max)?;
 
 		let offset = reader.read_u64()?;
 		let tiles_length = reader.read_u64()?;
@@ -83,7 +83,7 @@ impl BlockDefinition {
 		let tiles_range = ByteRange::new(offset, tiles_length);
 		let index_range = ByteRange::new(offset + tiles_length, index_length);
 
-		let global_bbox = TileBBox::from_boundaries(
+		let global_bbox = TileBBox::from_min_max(
 			level,
 			x_min + x * 256,
 			y_min + y * 256,
@@ -237,7 +237,7 @@ mod tests {
 
 	#[test]
 	fn multitest() -> Result<()> {
-		let mut def = BlockDefinition::new(&TileBBox::from_boundaries(12, 300, 400, 320, 450)?)?;
+		let mut def = BlockDefinition::new(&TileBBox::from_min_max(12, 300, 400, 320, 450)?)?;
 		def.tiles_range = ByteRange::new(4, 5);
 		def.index_range = ByteRange::new(9, 6);
 
@@ -248,10 +248,7 @@ mod tests {
 		assert_eq!(def.as_str(), "[12,[300,400],[320,450]]");
 		assert_eq!(def.get_z(), 12);
 		assert_eq!(def.get_coord(), &TileCoord::new(12, 1, 1)?);
-		assert_eq!(
-			def.get_global_bbox(),
-			&TileBBox::from_boundaries(12, 300, 400, 320, 450)?
-		);
+		assert_eq!(def.get_global_bbox(), &TileBBox::from_min_max(12, 300, 400, 320, 450)?);
 		assert_eq!(
 			format!("{def:?}"),
 			"BlockDefinition { x/y/z: TileCoord(12, [1, 1]), bbox: 8: [44,144,64,194] (21x51), tiles_range: ByteRange[4,5], index_range: ByteRange[9,6] }"
@@ -265,7 +262,7 @@ mod tests {
 
 	#[test]
 	fn test_set_tiles_range() -> Result<()> {
-		let bbox = TileBBox::from_boundaries(14, 0, 0, 255, 255)?;
+		let bbox = TileBBox::from_min_max(14, 0, 0, 255, 255)?;
 		let mut def = BlockDefinition::new(&bbox)?;
 		let range = ByteRange::new(10, 20);
 
@@ -277,7 +274,7 @@ mod tests {
 
 	#[test]
 	fn test_set_index_range() -> Result<()> {
-		let bbox = TileBBox::from_boundaries(14, 0, 0, 255, 255)?;
+		let bbox = TileBBox::from_min_max(14, 0, 0, 255, 255)?;
 		let mut def = BlockDefinition::new(&bbox)?;
 		let range = ByteRange::new(10, 20);
 

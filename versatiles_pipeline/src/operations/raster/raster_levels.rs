@@ -147,7 +147,7 @@ mod tests {
 			gamma: parameters[2],
 		};
 		let images = op
-			.get_image_stream(TileBBox::from_boundaries(8, 56, 56, 56, 56)?)
+			.get_image_stream(TileBBox::from_min_max(8, 56, 56, 56, 56)?)
 			.await?
 			.to_vec()
 			.await;

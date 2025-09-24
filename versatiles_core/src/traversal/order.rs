@@ -116,7 +116,7 @@ mod tests {
 
 	/// Build a TileBBox at given level, x, y.
 	fn make_bbox(level: u8, x: u32, y: u32) -> TileBBox {
-		TileBBox::from_boundaries(level, x, y, x, y).unwrap()
+		TileBBox::from_min_max(level, x, y, x, y).unwrap()
 	}
 
 	#[test]

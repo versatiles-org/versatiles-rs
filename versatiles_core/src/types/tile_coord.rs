@@ -116,7 +116,7 @@ impl TileCoord {
 	/// # Errors
 	/// Returns an error if bounding coordinates overflow.
 	pub fn as_tile_bbox(&self, tile_size: u32) -> Result<TileBBox> {
-		TileBBox::from_boundaries(
+		TileBBox::from_min_max(
 			self.level,
 			self.x,
 			self.y,
@@ -332,7 +332,7 @@ mod tests {
 		let coord = TileCoord::new(3, 1, 2).unwrap();
 		// as_tile_bbox with tile_size=4: x..x+3, y..y+3
 		let bbox = coord.as_tile_bbox(4).unwrap();
-		assert_eq!(bbox, TileBBox::from_boundaries(3, 1, 2, 4, 5).unwrap());
+		assert_eq!(bbox, TileBBox::from_min_max(3, 1, 2, 4, 5).unwrap());
 		// as_level upscales and downscales correctly
 		let up = coord.as_level(5);
 		assert_eq!(up, TileCoord::new(5, 4, 8).unwrap());

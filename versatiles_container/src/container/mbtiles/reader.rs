@@ -252,7 +252,7 @@ impl MBTilesReader {
 
 			let max_value = 2i32.pow(z as u32) - 1;
 
-			bbox_pyramid.set_level_bbox(TileBBox::from_boundaries(
+			bbox_pyramid.set_level_bbox(TileBBox::from_min_max(
 				z as u8,
 				x0.clamp(0, max_value) as u32,
 				y0.clamp(0, max_value) as u32,
