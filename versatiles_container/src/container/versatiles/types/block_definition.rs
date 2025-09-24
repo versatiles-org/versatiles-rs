@@ -37,7 +37,7 @@ impl BlockDefinition {
 		let level = bbox.level;
 		let global_bbox: TileBBox = *bbox;
 
-		let tiles_coverage = TileBBox::new(
+		let tiles_coverage = TileBBox::from_min_wh(
 			level.min(8),
 			bbox.x_min() - x_min * 256,
 			bbox.y_min() - y_min * 256,

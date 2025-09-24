@@ -396,7 +396,7 @@ mod tests {
 		let op = make_operation(2, 6);
 
 		// Prepare cache content by adding a full 32x32 block at level 6
-		let bbox_lvl6 = TileBBox::new(6, 0, 0, 32, 32)?;
+		let bbox_lvl6 = TileBBox::from_min_wh(6, 0, 0, 32, 32)?;
 		let mut cont6 = TileBBoxMap::new_default(bbox_lvl6);
 		for y in 0..bbox_lvl6.height() {
 			for x in 0..bbox_lvl6.width() {
@@ -407,7 +407,7 @@ mod tests {
 		op.add_images_to_cache(&cont6).await?;
 
 		// Now request composed images at level 5 for a tiny bbox (2x2 tiles)
-		let bbox_lvl5 = TileBBox::new(5, 0, 0, 2, 2)?;
+		let bbox_lvl5 = TileBBox::from_min_wh(5, 0, 0, 2, 2)?;
 		let result = op.build_images_from_cache(bbox_lvl5).await?;
 		let items: Vec<_> = result.into_iter().collect();
 		// We expect at least one composed tile present (others may be missing if cache quadrants absent)

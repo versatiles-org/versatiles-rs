@@ -46,7 +46,7 @@ impl TileBBox {
 	// Constructors
 	// -------------------------------------------------------------------------
 
-	pub fn new(level: u8, x_min: u32, y_min: u32, width: u32, height: u32) -> Result<TileBBox> {
+	pub fn from_min_wh(level: u8, x_min: u32, y_min: u32, width: u32, height: u32) -> Result<TileBBox> {
 		ensure!(level <= 31, "level ({level}) must be <= 31");
 
 		let max = (1u32 << level) - 1;
@@ -119,7 +119,7 @@ impl TileBBox {
 	pub fn new_full(level: u8) -> Result<TileBBox> {
 		ensure!(level <= 31, "level ({level}) must be <= 31");
 		let max = 1u32 << level;
-		Self::new(level, 0, 0, max, max)
+		Self::from_min_wh(level, 0, 0, max, max)
 	}
 
 	/// Creates an empty `TileBBox` at the specified zoom level.
@@ -750,10 +750,10 @@ impl TileBBox {
 		let h = self.height() / 2;
 
 		let bbox = match quadrant {
-			0 => TileBBox::new(self.level, x, y, w, h)?,         // Top-left
-			1 => TileBBox::new(self.level, x + w, y, w, h)?,     // Top-right
-			2 => TileBBox::new(self.level, x, y + h, w, h)?,     // Bottom-left
-			3 => TileBBox::new(self.level, x + w, y + h, w, h)?, // Bottom-right
+			0 => TileBBox::from_min_wh(self.level, x, y, w, h)?,     // Top-left
+			1 => TileBBox::from_min_wh(self.level, x + w, y, w, h)?, // Top-right
+			2 => TileBBox::from_min_wh(self.level, x, y + h, w, h)?, // Bottom-left
+			3 => TileBBox::from_min_wh(self.level, x + w, y + h, w, h)?, // Bottom-right
 			_ => unreachable!(),
 		};
 
@@ -1584,22 +1584,22 @@ mod tests {
 
 	#[test]
 	fn should_shift_bbox_correctly() -> Result<()> {
-		let mut bbox = TileBBox::new(6, 5, 10, 10, 10)?;
+		let mut bbox = TileBBox::from_min_wh(6, 5, 10, 10, 10)?;
 		bbox.shift_by(3, 4);
-		assert_eq!(bbox, TileBBox::new(6, 8, 14, 10, 10)?);
+		assert_eq!(bbox, TileBBox::from_min_wh(6, 8, 14, 10, 10)?);
 
 		// Shifting beyond max should not cause overflow due to saturating_add
-		let mut bbox = TileBBox::new(6, 14, 14, 10, 10)?;
+		let mut bbox = TileBBox::from_min_wh(6, 14, 14, 10, 10)?;
 		bbox.shift_by(2, 2);
-		assert_eq!(bbox, TileBBox::new(6, 16, 16, 10, 10)?);
+		assert_eq!(bbox, TileBBox::from_min_wh(6, 16, 16, 10, 10)?);
 
-		let mut bbox = TileBBox::new(6, 5, 10, 10, 10)?;
+		let mut bbox = TileBBox::from_min_wh(6, 5, 10, 10, 10)?;
 		bbox.shift_by(-3, -5);
-		assert_eq!(bbox, TileBBox::new(6, 2, 5, 10, 10)?);
+		assert_eq!(bbox, TileBBox::from_min_wh(6, 2, 5, 10, 10)?);
 
 		// Subtracting more than current coordinates should saturate at 0
 		bbox.shift_by(-5, -10);
-		assert_eq!(bbox, TileBBox::new(6, 0, 0, 10, 10)?);
+		assert_eq!(bbox, TileBBox::from_min_wh(6, 0, 0, 10, 10)?);
 
 		Ok(())
 	}
@@ -1703,7 +1703,7 @@ mod tests {
 	#[test]
 	fn set_width_height_clamp_to_bounds() {
 		// level 4 → max coordinate = 15
-		let mut bbox = TileBBox::new(4, 10, 10, 3, 3).unwrap(); // covers x=10..12, y=10..12
+		let mut bbox = TileBBox::from_min_wh(4, 10, 10, 3, 3).unwrap(); // covers x=10..12, y=10..12
 		bbox.set_width(10); // would exceed max → clamp to 10..15 → width = 6
 		bbox.set_height(10);
 		assert_eq!(bbox.x_min(), 10);
