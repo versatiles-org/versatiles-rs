@@ -156,7 +156,7 @@ impl OperationTrait for Operation {
 			let size = size;
 			async move {
 				let image = self
-					.get_image_data_from_gdal(bbox.as_geo_bbox(), size * bbox.width(), size * bbox.height())
+					.get_image_data_from_gdal(bbox.to_geo_bbox(), size * bbox.width(), size * bbox.height())
 					.await
 					.unwrap();
 

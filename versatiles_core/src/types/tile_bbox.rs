@@ -425,7 +425,7 @@ impl TileBBox {
 	///
 	/// * `Ok(())` if the border is added successfully.
 	/// * `Err(anyhow::Error)` if the resulting bounding box is invalid.
-	pub fn add_border(&mut self, x_min: u32, y_min: u32, x_max: u32, y_max: u32) {
+	pub fn expand_by(&mut self, x_min: u32, y_min: u32, x_max: u32, y_max: u32) {
 		if !self.is_empty() {
 			let x_max = self.x_max().saturating_add(x_max);
 			let y_max = self.y_max().saturating_add(y_max);
@@ -590,7 +590,7 @@ impl TileBBox {
 	/// # Returns
 	///
 	/// * `GeoBBox` representing the geographical area covered by this bounding box.
-	pub fn as_geo_bbox(&self) -> GeoBBox {
+	pub fn to_geo_bbox(&self) -> GeoBBox {
 		// Bottom-left in geospatial terms is (x_min, y_max + 1)
 		let p_min = TileCoord::new(self.level, self.x_min, self.y_max() + 1)
 			.unwrap()
@@ -890,7 +890,7 @@ impl TileBBox {
 		bbox
 	}
 
-	pub fn max_value(&self) -> u32 {
+	pub fn max_coord_at_level(&self) -> u32 {
 		(1u32 << self.level) - 1
 	}
 
@@ -907,7 +907,7 @@ impl TileBBox {
 
 	pub fn flip_y(&mut self) {
 		if !self.is_empty() {
-			self.shift_to(self.x_min(), self.max_value() - self.y_max());
+			self.shift_to(self.x_min(), self.max_coord_at_level() - self.y_max());
 		}
 	}
 	pub fn swap_xy(&mut self) {
@@ -986,7 +986,7 @@ mod tests {
 		for level in 1..32 {
 			let bbox = TileBBox::from_geo(level, &geo_bbox).unwrap();
 			assert_eq!(bbox.count_tiles(), 4u64.pow(level as u32 - 1));
-			assert_eq!(bbox.as_geo_bbox(), geo_bbox);
+			assert_eq!(bbox.to_geo_bbox(), geo_bbox);
 		}
 	}
 
@@ -996,7 +996,7 @@ mod tests {
 		for level in 2..32 {
 			let bbox = TileBBox::from_geo(level, &geo_bbox).unwrap();
 			assert_eq!(bbox.count_tiles(), 4u64.pow(level as u32 - 2));
-			assert_eq!(bbox.as_geo_bbox(), geo_bbox);
+			assert_eq!(bbox.to_geo_bbox(), geo_bbox);
 		}
 	}
 
@@ -1076,24 +1076,24 @@ mod tests {
 		let mut bbox = TileBBox::from_min_max(8, 5, 10, 20, 30).unwrap();
 
 		// Border of (1, 1, 1, 1) should increase the size of the bbox by 1 in all directions
-		bbox.add_border(1, 1, 1, 1);
+		bbox.expand_by(1, 1, 1, 1);
 		assert_eq!(bbox, TileBBox::from_min_max(8, 4, 9, 21, 31).unwrap());
 
 		// Border of (2, 3, 4, 5) should further increase the size of the bbox
-		bbox.add_border(2, 3, 4, 5);
+		bbox.expand_by(2, 3, 4, 5);
 		assert_eq!(bbox, TileBBox::from_min_max(8, 2, 6, 25, 36).unwrap());
 
 		// Border of (0, 0, 0, 0) should not change the size of the bbox
-		bbox.add_border(0, 0, 0, 0);
+		bbox.expand_by(0, 0, 0, 0);
 		assert_eq!(bbox, TileBBox::from_min_max(8, 2, 6, 25, 36).unwrap());
 
 		// Large border should saturate at max=255 for level=8
-		bbox.add_border(999, 999, 999, 999);
+		bbox.expand_by(999, 999, 999, 999);
 		assert_eq!(bbox, TileBBox::from_min_max(8, 0, 0, 255, 255).unwrap());
 
 		// If bbox is empty, add_border should have no effect
 		let mut empty_bbox = TileBBox::new_empty(8).unwrap();
-		empty_bbox.add_border(1, 2, 3, 4);
+		empty_bbox.expand_by(1, 2, 3, 4);
 		assert_eq!(empty_bbox, TileBBox::new_empty(8).unwrap());
 	}
 
@@ -1195,7 +1195,7 @@ mod tests {
 	#[test]
 	fn test_as_geo_bbox() {
 		let bbox = TileBBox::from_min_max(4, 5, 10, 7, 12).unwrap();
-		let geo_bbox = bbox.as_geo_bbox();
+		let geo_bbox = bbox.to_geo_bbox();
 		assert_eq!(
 			geo_bbox.as_string_list(),
 			"-67.5,-74.01954331150228,0,-40.97989806962013"
@@ -1327,20 +1327,20 @@ mod tests {
 		let mut bbox = TileBBox::from_min_max(6, 5, 10, 15, 20)?;
 
 		// Add a border within bounds
-		bbox.add_border(2, 3, 2, 3);
+		bbox.expand_by(2, 3, 2, 3);
 		assert_eq!(bbox, TileBBox::from_min_max(6, 3, 7, 17, 23).unwrap());
 
 		// Add a border that exceeds bounds, should clamp to max
-		bbox.add_border(10, 10, 10, 10);
+		bbox.expand_by(10, 10, 10, 10);
 		assert_eq!(bbox, TileBBox::from_min_max(6, 0, 0, 27, 33).unwrap());
 
 		// Add border to an empty bounding box, should have no effect
 		let mut empty_bbox = TileBBox::new_empty(6)?;
-		empty_bbox.add_border(1, 1, 1, 1);
+		empty_bbox.expand_by(1, 1, 1, 1);
 		assert!(empty_bbox.is_empty());
 
 		// Attempt to add a border with zero values
-		bbox.add_border(0, 0, 0, 0);
+		bbox.expand_by(0, 0, 0, 0);
 		assert_eq!(bbox, TileBBox::from_min_max(6, 0, 0, 27, 33).unwrap());
 
 		Ok(())
@@ -1451,7 +1451,7 @@ mod tests {
 	#[test]
 	fn should_convert_to_geo_bbox_correctly() -> Result<()> {
 		let bbox = TileBBox::from_min_max(4, 5, 10, 7, 12)?;
-		let geo_bbox = bbox.as_geo_bbox();
+		let geo_bbox = bbox.to_geo_bbox();
 
 		// Assuming TileCoord::as_geo() converts tile coordinates to geographical coordinates correctly,
 		// the following is an example expected output. Adjust based on actual implementation.
@@ -1848,7 +1848,7 @@ mod tests {
 	#[test]
 	fn max_value_and_string() {
 		let bbox = TileBBox::from_min_max(5, 1, 2, 3, 4).unwrap();
-		assert_eq!(bbox.max_value(), (1u32 << 5) - 1);
+		assert_eq!(bbox.max_coord_at_level(), (1u32 << 5) - 1);
 		assert_eq!(bbox.as_string(), "5:[1,2,3,4]");
 	}
 }

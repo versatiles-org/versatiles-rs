@@ -78,7 +78,7 @@ impl TileCoord {
 
 	/// Return the geographic bounding box of this tile as `[west, south, east, north]`.
 	pub fn as_geo_bbox(&self) -> GeoBBox {
-		self.as_tile_bbox(1).unwrap().as_geo_bbox()
+		self.as_tile_bbox(1).unwrap().to_geo_bbox()
 	}
 
 	/// Serialize this coordinate to a compact JSON-like string `{x:…,y:…,z:…}`.

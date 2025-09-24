@@ -105,7 +105,7 @@ impl TileBBoxPyramid {
 	/// If a bounding box is already empty, adding a border does nothing.
 	pub fn add_border(&mut self, x_min: u32, y_min: u32, x_max: u32, y_max: u32) {
 		for bbox in self.level_bbox.iter_mut() {
-			bbox.add_border(x_min, y_min, x_max, y_max);
+			bbox.expand_by(x_min, y_min, x_max, y_max);
 		}
 	}
 
@@ -274,7 +274,7 @@ impl TileBBoxPyramid {
 	/// Returns `None` if the pyramid is empty.
 	pub fn get_geo_bbox(&self) -> Option<GeoBBox> {
 		let max_zoom = self.get_zoom_max()?;
-		Some(self.get_level_bbox(max_zoom).as_geo_bbox())
+		Some(self.get_level_bbox(max_zoom).to_geo_bbox())
 	}
 
 	/// Calculates a geographic center based on the bounding box at a middle zoom level.
