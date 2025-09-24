@@ -296,7 +296,7 @@ impl TileBBox {
 		self.x_min == 0 && self.y_min == 0 && self.width == max && self.height == max
 	}
 
-	fn max_count(&self) -> u32 {
+	pub fn max_count(&self) -> u32 {
 		1u32 << self.level
 	}
 
@@ -890,13 +890,13 @@ impl TileBBox {
 		bbox
 	}
 
-	pub fn max_coord_at_level(&self) -> u32 {
+	pub fn max_coord(&self) -> u32 {
 		(1u32 << self.level) - 1
 	}
 
 	pub fn flip_y(&mut self) {
 		if !self.is_empty() {
-			self.shift_to(self.x_min(), self.max_coord_at_level() - self.y_max());
+			self.shift_to(self.x_min(), self.max_coord() - self.y_max());
 		}
 	}
 	pub fn swap_xy(&mut self) {
@@ -1853,7 +1853,7 @@ mod tests {
 	#[test]
 	fn max_value_and_string() {
 		let bbox = TileBBox::from_min_max(5, 1, 2, 3, 4).unwrap();
-		assert_eq!(bbox.max_coord_at_level(), (1u32 << 5) - 1);
+		assert_eq!(bbox.max_coord(), (1u32 << 5) - 1);
 		assert_eq!(bbox.to_string(), "5:[1,2,3,4]");
 	}
 }
