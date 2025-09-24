@@ -253,9 +253,10 @@ impl OperationTrait for Operation {
 			return self.source.get_image_stream(bbox).await;
 		}
 
-		let mut bbox0 = bbox.rounded(BLOCK_TILE_COUNT);
-		assert_eq!(bbox0.width(), BLOCK_TILE_COUNT);
-		assert_eq!(bbox0.height(), BLOCK_TILE_COUNT);
+		let size = bbox.max_count().min(BLOCK_TILE_COUNT);
+		let mut bbox0 = bbox.rounded(size);
+		assert_eq!(bbox0.width(), size);
+		assert_eq!(bbox0.height(), size);
 		bbox0.intersect_with_pyramid(&self.parameters.bbox_pyramid);
 
 		let container: TileBBoxMap<Option<DynamicImage>> = if bbox.level == self.level_base {
