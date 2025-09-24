@@ -114,7 +114,7 @@ impl<I> TileBBoxMap<I> {
 	where
 		I: Clone,
 	{
-		let bbox1 = self.bbox.as_level_decreased();
+		let bbox1 = self.bbox.leveled_down();
 		self.vec.into_iter().enumerate().fold(
 			TileBBoxMap::<Vec<(TileCoord, I)>>::new_default(bbox1),
 			|mut container1, (i, item)| {

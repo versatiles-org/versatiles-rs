@@ -55,7 +55,7 @@ impl Operation {
 
 			let mut level_bbox = *parameters.bbox_pyramid.get_level_bbox(level_base);
 			while level_bbox.level > 0 {
-				level_bbox.level_decrease();
+				level_bbox.level_down();
 				parameters.bbox_pyramid.set_level_bbox(level_bbox);
 			}
 
@@ -193,7 +193,7 @@ impl Operation {
 		// get images from cache
 		let mut cache = self.cache.lock().await;
 		for q in &[0, 1, 2, 3] {
-			let bbox1 = bbox0.as_level_increased().get_quadrant(*q)?;
+			let bbox1 = bbox0.leveled_up().get_quadrant(*q)?;
 
 			if let Some(images1) = cache.remove(&bbox1.min_corner())? {
 				for (coord1, image1) in images1 {

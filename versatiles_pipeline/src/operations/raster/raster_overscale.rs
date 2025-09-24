@@ -50,7 +50,7 @@ impl Operation {
 
 			let mut level_bbox = *parameters.bbox_pyramid.get_level_bbox(level_base);
 			while level_bbox.level <= level_max {
-				level_bbox.level_increase();
+				level_bbox.level_up();
 				parameters.bbox_pyramid.set_level_bbox(level_bbox);
 			}
 
@@ -96,7 +96,7 @@ impl OperationTrait for Operation {
 
 		let level_dst = bbox_dst.level;
 
-		let bbox_base = bbox_dst.as_level(self.level_base);
+		let bbox_base = bbox_dst.at_level(self.level_base);
 		let stream_base = self.source.get_image_stream(bbox_base).await?;
 
 		let tile_size = self.tile_size;
@@ -105,7 +105,7 @@ impl OperationTrait for Operation {
 		let s = tile_size_f64 / scale;
 
 		Ok(stream_base.flat_map_parallel(move |coord_base, image_base| {
-			let mut bbox = coord_base.as_tile_bbox(1).unwrap().as_level(level_dst);
+			let mut bbox = coord_base.as_tile_bbox(1).unwrap().at_level(level_dst);
 			bbox.intersect_bbox(&bbox_dst).unwrap();
 
 			Ok(TileStream::from_iter_coord_parallel(

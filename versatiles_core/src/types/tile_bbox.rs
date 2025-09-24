@@ -678,31 +678,31 @@ impl TileBBox {
 		bbox
 	}
 
-	pub fn level_increase(&mut self) {
+	pub fn level_up(&mut self) {
 		assert!(self.level < 31, "level must be less than 31");
 		self.level += 1;
 		self.scale_up(2);
 	}
 
-	pub fn level_decrease(&mut self) {
+	pub fn level_down(&mut self) {
 		assert!(self.level > 0, "level must be greater than 0");
 		self.level -= 1;
 		self.scale_down(2);
 	}
 
-	pub fn as_level_increased(&self) -> TileBBox {
+	pub fn leveled_up(&self) -> TileBBox {
 		let mut c = *self;
-		c.level_increase();
+		c.level_up();
 		c
 	}
 
-	pub fn as_level_decreased(&self) -> TileBBox {
+	pub fn leveled_down(&self) -> TileBBox {
 		let mut c = *self;
-		c.level_decrease();
+		c.level_down();
 		c
 	}
 
-	pub fn as_level(&self, level: u8) -> TileBBox {
+	pub fn at_level(&self, level: u8) -> TileBBox {
 		assert!(level <= 31, "level ({level}) must be <= 31");
 
 		let mut bbox = if level > self.level {
@@ -1751,7 +1751,7 @@ mod tests {
 	#[case(5, 7, 2, 3)]
 	fn level_decrease(#[case] min_in: u32, #[case] max_in: u32, #[case] min_out: u32, #[case] max_out: u32) {
 		let mut bbox = TileBBox::from_min_max(10, min_in, min_in, max_in, max_in).unwrap();
-		bbox.level_decrease();
+		bbox.level_down();
 		assert_eq!(bbox.level, 9);
 		assert_eq!(bbox.x_min(), min_out);
 		assert_eq!(bbox.y_min(), min_out);
@@ -1766,7 +1766,7 @@ mod tests {
 	#[case(5, 7, 10, 15)]
 	fn level_increase(#[case] min_in: u32, #[case] max_in: u32, #[case] min_out: u32, #[case] max_out: u32) {
 		let mut bbox = TileBBox::from_min_max(10, min_in, min_in, max_in, max_in).unwrap();
-		bbox.level_increase();
+		bbox.level_up();
 		assert_eq!(bbox.level, 11);
 		assert_eq!(bbox.x_min(), min_out);
 		assert_eq!(bbox.y_min(), min_out);
@@ -1777,13 +1777,13 @@ mod tests {
 	#[test]
 	fn level_increase_decrease_roundtrip() {
 		let original = TileBBox::from_min_max(4, 5, 6, 7, 8).unwrap();
-		let inc = original.as_level_increased();
+		let inc = original.leveled_up();
 		assert_eq!(inc.level, 5);
 		assert_eq!(inc.x_min(), 10);
 		assert_eq!(inc.y_min(), 12);
 		assert_eq!(inc.x_max(), 15);
 		assert_eq!(inc.y_max(), 17);
-		let dec = inc.as_level_decreased();
+		let dec = inc.leveled_down();
 		assert_eq!(dec, original);
 	}
 
@@ -1813,7 +1813,7 @@ mod tests {
 	#[case(8, 12, 20, 27, 31)]
 	fn as_level_up_and_down(#[case] level: u32, #[case] x0: u32, #[case] y0: u32, #[case] x1: u32, #[case] y1: u32) {
 		let bbox = TileBBox::from_min_max(6, 3, 5, 6, 7).unwrap();
-		let up = bbox.as_level(level as u8);
+		let up = bbox.at_level(level as u8);
 		assert_eq!(
 			[up.level as u32, up.x_min(), up.y_min(), up.x_max(), up.y_max()],
 			[level, x0, y0, x1, y1]
