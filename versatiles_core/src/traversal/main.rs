@@ -168,7 +168,7 @@ mod tests {
 				.traverse_pyramid(&pyramid)
 				.unwrap()
 				.iter()
-				.map(|b| b.as_string())
+				.map(|b| b.to_string())
 				.collect()
 		}
 

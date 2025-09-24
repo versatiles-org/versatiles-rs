@@ -395,7 +395,7 @@ mod tests {
 	fn test_limit_by_geo_bbox() {
 		let mut pyramid = TileBBoxPyramid::new_full(8);
 		pyramid.intersect_geo_bbox(&GeoBBox(8.0653f64, 51.3563f64, 12.3528f64, 52.2564f64));
-		let level_bboxes = pyramid.iter_levels().map(|b| b.as_string()).collect::<Vec<_>>();
+		let level_bboxes = pyramid.iter_levels().map(|b| b.to_string()).collect::<Vec<_>>();
 		assert_eq!(
 			level_bboxes,
 			[
@@ -418,7 +418,7 @@ mod tests {
 		pyramid.include_coord(&TileCoord::new(3, 1, 2)?);
 		pyramid.include_coord(&TileCoord::new(3, 4, 5)?);
 		pyramid.include_coord(&TileCoord::new(8, 6, 7)?);
-		let level_bboxes = pyramid.iter_levels().map(|b| b.as_string()).collect::<Vec<_>>();
+		let level_bboxes = pyramid.iter_levels().map(|b| b.to_string()).collect::<Vec<_>>();
 		assert_eq!(level_bboxes, ["3:[1,2,4,5]", "8:[6,7,6,7]"]);
 
 		Ok(())
@@ -430,7 +430,7 @@ mod tests {
 		pyramid.include_bbox(&TileBBox::from_min_max(4, 1, 2, 3, 4).unwrap());
 		pyramid.include_bbox(&TileBBox::from_min_max(4, 5, 6, 7, 8).unwrap());
 
-		let level_bboxes = pyramid.iter_levels().map(|b| b.as_string()).collect::<Vec<_>>();
+		let level_bboxes = pyramid.iter_levels().map(|b| b.to_string()).collect::<Vec<_>>();
 		assert_eq!(level_bboxes, ["4:[1,2,7,8]"]);
 	}
 
@@ -473,7 +473,7 @@ mod tests {
 		pyramid.intersect_geo_bbox(&GeoBBox(-9., -5., 5., 10.));
 		pyramid.add_border(1, 2, 3, 4);
 
-		let level_bboxes = pyramid.iter_levels().map(|b| b.as_string()).collect::<Vec<_>>();
+		let level_bboxes = pyramid.iter_levels().map(|b| b.to_string()).collect::<Vec<_>>();
 		assert_eq!(
 			level_bboxes,
 			[
@@ -494,7 +494,7 @@ mod tests {
 	fn test_from_geo_bbox() {
 		let bbox = GeoBBox(-10.0, -5.0, 10.0, 5.0);
 		let pyramid = TileBBoxPyramid::from_geo_bbox(1, 3, &bbox);
-		let level_bboxes = pyramid.iter_levels().map(|b| b.as_string()).collect::<Vec<_>>();
+		let level_bboxes = pyramid.iter_levels().map(|b| b.to_string()).collect::<Vec<_>>();
 		assert_eq!(level_bboxes, ["1:[0,0,1,1]", "2:[1,1,2,2]", "3:[3,3,4,4]"])
 	}
 

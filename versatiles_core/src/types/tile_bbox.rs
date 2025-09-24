@@ -894,7 +894,7 @@ impl TileBBox {
 		(1u32 << self.level) - 1
 	}
 
-	pub fn as_string(&self) -> String {
+	pub fn to_string(&self) -> String {
 		format!(
 			"{}:[{},{},{},{}]",
 			self.level,
@@ -937,6 +937,14 @@ impl fmt::Debug for TileBBox {
 			self.width(),
 			self.height()
 		)
+	}
+}
+
+impl fmt::Display for TileBBox {
+	/// Formats the bounding box as:
+	/// `level: [x_min,y_min,x_max,y_max]`
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}", self.to_string())
 	}
 }
 
@@ -1849,6 +1857,6 @@ mod tests {
 	fn max_value_and_string() {
 		let bbox = TileBBox::from_min_max(5, 1, 2, 3, 4).unwrap();
 		assert_eq!(bbox.max_coord_at_level(), (1u32 << 5) - 1);
-		assert_eq!(bbox.as_string(), "5:[1,2,3,4]");
+		assert_eq!(bbox.to_string(), "5:[1,2,3,4]");
 	}
 }
