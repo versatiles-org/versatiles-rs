@@ -165,7 +165,7 @@ impl Operation {
 			.into_iter()
 			.collect::<Result<Vec<_>, _>>()?;
 
-		let mut coord = bbox.get_corner_min();
+		let mut coord = bbox.min_corner();
 		coord.floor(BLOCK_TILE_COUNT);
 		let mut cache = self.cache.lock().await;
 		cache.insert(&coord, images)?;
@@ -195,7 +195,7 @@ impl Operation {
 		for q in &[0, 1, 2, 3] {
 			let bbox1 = bbox0.as_level_increased().get_quadrant(*q)?;
 
-			if let Some(images1) = cache.remove(&bbox1.get_corner_min())? {
+			if let Some(images1) = cache.remove(&bbox1.min_corner())? {
 				for (coord1, image1) in images1 {
 					if let Some(image1) = image1 {
 						assert_eq!(image1.width(), half_size);
