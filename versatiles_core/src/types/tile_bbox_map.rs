@@ -102,7 +102,7 @@ impl<I> TileBBoxMap<I> {
 			.vec
 			.iter()
 			.enumerate()
-			.map(move |(i, item)| (self.bbox.get_coord_by_index(i as u64).unwrap(), item))
+			.map(move |(i, item)| (self.bbox.coord_at_index(i as u64).unwrap(), item))
 	}
 
 	/// Group tiles by their parent tile one level above.
@@ -118,7 +118,7 @@ impl<I> TileBBoxMap<I> {
 		self.vec.into_iter().enumerate().fold(
 			TileBBoxMap::<Vec<(TileCoord, I)>>::new_default(bbox1),
 			|mut container1, (i, item)| {
-				let coord0 = self.bbox.get_coord_by_index(i as u64).unwrap();
+				let coord0 = self.bbox.coord_at_index(i as u64).unwrap();
 				let coord1 = coord0.as_level(self.bbox.level - 1);
 				container1.get_mut(&coord1).unwrap().push((coord0, item));
 				container1
@@ -186,7 +186,7 @@ impl<I> std::iter::IntoIterator for TileBBoxMap<I> {
 
 	fn into_iter(self) -> Self::IntoIter {
 		let bbox = self.bbox;
-		let f = Box::new(move |(i, item)| (bbox.get_coord_by_index(i as u64).unwrap(), item));
+		let f = Box::new(move |(i, item)| (bbox.coord_at_index(i as u64).unwrap(), item));
 		self.vec.into_iter().enumerate().map(f)
 	}
 }

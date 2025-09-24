@@ -295,7 +295,7 @@ impl TilesReaderTrait for VersaTilesReader {
 				let mut tile_ranges: Vec<(TileCoord, ByteRange)> = tile_index
 					.iter()
 					.enumerate()
-					.map(|(index, range)| (tiles_bbox_block.get_coord_by_index(index as u64).unwrap(), *range))
+					.map(|(index, range)| (tiles_bbox_block.coord_at_index(index as u64).unwrap(), *range))
 					.filter(|(coord, range)| tiles_bbox_used.contains(coord) && (range.length > 0))
 					.collect();
 
@@ -425,7 +425,7 @@ impl TilesReaderTrait for VersaTilesReader {
 				}
 
 				let bbox = block.get_global_bbox();
-				let coord = bbox.get_coord_by_index(index as u64)?;
+				let coord = bbox.coord_at_index(index as u64)?;
 
 				biggest_tiles.push(Entry {
 					size,

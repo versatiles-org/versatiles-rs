@@ -866,7 +866,7 @@ impl TileBBox {
 	///
 	/// * `Ok(TileCoord)` if the index is within bounds.
 	/// * `Err(anyhow::Error)` if the index is out of bounds.
-	pub fn get_coord_by_index(&self, index: u64) -> Result<TileCoord> {
+	pub fn coord_at_index(&self, index: u64) -> Result<TileCoord> {
 		ensure!(index < self.count_tiles(), "index {index} out of bounds");
 
 		let width = self.width() as u64;
@@ -1439,16 +1439,13 @@ mod tests {
 	fn get_coord_by_index_cases(#[case] index: u64, #[case] coord: (u8, u32, u32)) {
 		let bbox = TileBBox::from_min_max(4, 5, 10, 7, 12).unwrap();
 		let (l, x, y) = coord;
-		assert_eq!(
-			bbox.get_coord_by_index(index).unwrap(),
-			TileCoord::new(l, x, y).unwrap()
-		);
+		assert_eq!(bbox.coord_at_index(index).unwrap(), TileCoord::new(l, x, y).unwrap());
 	}
 
 	#[test]
 	fn get_coord_by_index_out_of_bounds() {
 		let bbox = TileBBox::from_min_max(4, 5, 10, 7, 12).unwrap();
-		assert!(bbox.get_coord_by_index(9).is_err());
+		assert!(bbox.coord_at_index(9).is_err());
 	}
 
 	#[test]
