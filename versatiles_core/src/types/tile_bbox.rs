@@ -436,7 +436,7 @@ impl TileBBox {
 		}
 	}
 
-	pub fn includes_bbox(&self, bbox: &TileBBox) -> Result<bool> {
+	pub fn contains_bbox(&self, bbox: &TileBBox) -> Result<bool> {
 		ensure!(
 			self.level == bbox.level,
 			"Cannot compare TileBBox with level={} with TileBBox with level={}",
