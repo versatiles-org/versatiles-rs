@@ -656,7 +656,7 @@ impl TileBBox {
 	}
 
 	pub fn scaled_down(&self, scale: u32) -> TileBBox {
-		let mut bbox = self.clone();
+		let mut bbox = *self;
 		bbox.scale_down(scale);
 		bbox
 	}
@@ -673,7 +673,7 @@ impl TileBBox {
 	}
 
 	pub fn scaled_up(&self, scale: u32) -> TileBBox {
-		let mut bbox = self.clone();
+		let mut bbox = *self;
 		bbox.scale_up(scale);
 		bbox
 	}
@@ -894,17 +894,6 @@ impl TileBBox {
 		(1u32 << self.level) - 1
 	}
 
-	pub fn to_string(&self) -> String {
-		format!(
-			"{}:[{},{},{},{}]",
-			self.level,
-			self.x_min,
-			self.y_min,
-			self.x_max(),
-			self.y_max()
-		)
-	}
-
 	pub fn flip_y(&mut self) {
 		if !self.is_empty() {
 			self.shift_to(self.x_min(), self.max_coord_at_level() - self.y_max());
@@ -944,7 +933,15 @@ impl fmt::Display for TileBBox {
 	/// Formats the bounding box as:
 	/// `level: [x_min,y_min,x_max,y_max]`
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{}", self.to_string())
+		write!(
+			f,
+			"{}:[{},{},{},{}]",
+			self.level,
+			self.x_min,
+			self.y_min,
+			self.x_max(),
+			self.y_max()
+		)
 	}
 }
 
