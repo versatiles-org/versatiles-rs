@@ -57,14 +57,30 @@ install_deps_mac() {
   # Core build + common optional libraries
   brew update
   brew install \
-    cmake make pkg-config llvm ccache \
-    proj geos sqlite libtiff libjpeg libpng jpeg-xl \
-    webp openjpeg \
-    giflib \
-    zstd xz expat \
-    curl json-c \
     apache-arrow \
-    postgresql@16 || true
+    ccache \
+    cmake \
+    curl \
+    expat \
+    geos \
+    giflib \
+    jpeg-xl \
+    json-c \
+    libjpeg \
+    libpng \
+    libtiff \
+    llvm \
+    make \
+    muparser \
+    openjpeg \
+    pkg-config \
+    postgresql@16 \
+    proj \
+    sqlite \
+    webp \
+    xz \
+    zstd \
+    || true
   # Ensure pkg-config and CMake can find Homebrew libs
   export PKG_CONFIG_PATH="${HOMEBREW_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
   export CMAKE_PREFIX_PATH="${HOMEBREW_PREFIX}:${CMAKE_PREFIX_PATH:-}"
@@ -74,18 +90,34 @@ install_deps_apt() {
   say "Installing build dependencies via apt… (may prompt for sudo)"
   sudo apt-get update
   sudo apt-get install -y --no-install-recommends \
-    build-essential cmake make pkg-config git ccache \
-    libproj-dev libgeos-dev libsqlite3-dev \
-    libgeotiff-dev libtiff-dev libjpeg-dev libpng-dev libjxl-dev \
-    libwebp-dev libopenjp2-7-dev \
-    libgif-dev \
-    libzstd-dev liblzma-dev zlib1g-dev \
-    libexpat1-dev \
-    libjson-c-dev \
+    build-essential \
+    ca-certificates \
+    ccache \
+    cmake \
+    git \
     libcurl4-openssl-dev \
+    libexpat1-dev \
+    libgeos-dev \
+    libgeotiff-dev \
+    libgif-dev \
+    libjpeg-dev \
+    libjson-c-dev \
+    libjxl-dev \
+    liblzma-dev \
+    libmuparser-dev \
+    libopenjp2-7-dev \
+    libpng-dev \
     libpq-dev \
+    libproj-dev \
+    libsqlite3-dev \
+    libtiff-dev \
+    libwebp-dev \
+    libzstd-dev \
+    make \
+    pkg-config \
     proj-bin \
-    ca-certificates
+    zlib1g-dev \
+    || true
 }
 
 if [[ "$SKIP_DEPS" != "1" ]]; then
