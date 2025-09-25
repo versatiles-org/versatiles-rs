@@ -290,7 +290,7 @@ impl TilesReaderTrait for VersaTilesReader {
 
 				// Get the tile index of this block
 				let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await.unwrap();
-				log::trace!("tile_index {tile_index:?}");
+				log::trace!("tile_index.len() {}", tile_index.len());
 
 				// let tile_range: &ByteRange = tile_index.get(tile_id);
 				let mut tile_ranges: Vec<(TileCoord, ByteRange)> = tile_index
