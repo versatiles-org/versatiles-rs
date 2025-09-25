@@ -162,7 +162,7 @@ impl TileServer {
 					log::warn!("send 400 for tile request: {path}. Reason: {err}");
 					error_400()
 				} else {
-					log::warn!("send 404 for tile request: {path}");
+					log::info!("send 404 for tile request: {path}");
 					error_404()
 				}
 			}
@@ -203,7 +203,7 @@ impl TileServer {
 				}
 			}
 
-			log::warn!("send 404 to static request: {url}");
+			log::info!("send 404 to static request: {url}");
 			error_404()
 		}
 	}
