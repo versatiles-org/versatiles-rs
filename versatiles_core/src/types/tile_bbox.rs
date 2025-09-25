@@ -705,14 +705,16 @@ impl TileBBox {
 	pub fn at_level(&self, level: u8) -> TileBBox {
 		assert!(level <= 31, "level ({level}) must be <= 31");
 
-		let mut bbox = if level > self.level {
+		let mut bbox = *self;
+		if level > self.level {
 			let scale = 2u32.pow((level - self.level) as u32);
-			self.scaled_up(scale)
+			bbox.level = level;
+			bbox.scale_up(scale)
 		} else {
 			let scale = 2u32.pow((self.level - level) as u32);
-			self.scaled_down(scale)
+			bbox.scale_down(scale);
+			bbox.level = level;
 		};
-		bbox.level = level;
 		bbox
 	}
 
@@ -1811,13 +1813,17 @@ mod tests {
 	}
 
 	#[rstest]
-	#[case(4, 0, 1, 1, 1)]
-	#[case(5, 1, 2, 3, 3)]
-	#[case(6, 3, 5, 6, 7)]
-	#[case(7, 6, 10, 13, 15)]
-	#[case(8, 12, 20, 27, 31)]
+	#[case(0, 0, 0, 0, 0)]
+	#[case(4, 0, 7, 8, 15)]
+	#[case(5, 0, 15, 16, 31)]
+	#[case(6, 0, 31, 32, 63)]
+	#[case(7, 0, 62, 65, 127)]
+	#[case(8, 0, 124, 131, 255)]
+	#[case(10, 0, 496, 527, 1023)]
+	#[case(20, 0, 507904, 540671, 1048575)]
+	#[case(30, 0, 520093696, 553648127, 1073741823)]
 	fn as_level_up_and_down(#[case] level: u32, #[case] x0: u32, #[case] y0: u32, #[case] x1: u32, #[case] y1: u32) {
-		let bbox = TileBBox::from_min_max(6, 3, 5, 6, 7).unwrap();
+		let bbox = TileBBox::from_min_max(6, 0, 31, 32, 63).unwrap();
 		let up = bbox.at_level(level as u8);
 		assert_eq!(
 			[up.level as u32, up.x_min(), up.y_min(), up.x_max(), up.y_max()],
