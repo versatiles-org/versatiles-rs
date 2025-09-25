@@ -3,7 +3,6 @@ use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::{DynamicImage, GenericImage};
-use log::{debug, trace};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 use versatiles_core::{cache::CacheMap, tilejson::TileJSON, *};
@@ -78,64 +77,9 @@ impl Operation {
 		})
 	}
 
-	/*
-	#[context("Failed to build half image from source for coord {coord_dst:?}")]
-	async fn build_image_from_source(&self, coord_dst: &TileCoord, target_size: u32) -> Result<Option<DynamicImage>> {
-		let level_src = self.level_base;
-		let level_dst = coord_dst.level;
-		ensure!(level_dst <= level_src, "Invalid level");
-
-		let count = 1 << (level_src - level_dst);
-
-		let (temp_size, step) = if count <= target_size {
-			(target_size, target_size / count)
-		} else {
-			(count, 1)
-		};
-		let scale = self.tile_size / step;
-
-		let bbox_src = coord_dst.as_tile_bbox(1)?.as_level(level_src);
-
-		let tile_size = self.tile_size;
-		let vec = self
-			.source
-			.get_image_stream(bbox_src)
-			.await?
-			.filter_map_item_parallel(move |image| {
-				ensure!(image.width() == tile_size, "Invalid image width");
-				ensure!(image.height() == tile_size, "Invalid image height");
-
-				image.into_optional().map(|img| img.into_scaled_down(scale)).transpose()
-			})
-			.to_vec()
-			.await;
-
-		if vec.is_empty() {
-			return Ok(None);
-		}
-
-		ensure!(
-			vec.len() <= (count * count) as usize,
-			"Too many images ({}) for the target size ({})",
-			vec.len(),
-			count * count
-		);
-
-		let mut image_tmp = DynamicImage::new_rgba8(temp_size, temp_size);
-		for (coord, image) in vec {
-			ensure!(coord.level == level_src, "Invalid level");
-			image_tmp.copy_from(&image, (coord.x % count) * step, (coord.y % count) * step)?;
-		}
-
-		let image_dst = image_tmp.into_scaled_down(temp_size / target_size)?;
-
-		Ok(image_dst.into_optional())
-	}
-	*/
-
 	#[context("Failed to add images to cache from container {container:?}")]
 	async fn add_images_to_cache(&self, container: &TileBBoxMap<Option<DynamicImage>>) -> Result<()> {
-		debug!("add_images_to_cache: {:?}", container.bbox());
+		log::trace!("add_images_to_cache: {:?}", container.bbox());
 
 		let bbox = container.bbox();
 		if bbox.level == 0 || bbox.level > self.level_base {
@@ -175,7 +119,7 @@ impl Operation {
 
 	#[context("Failed to build images from cache for bbox {bbox:?}")]
 	async fn build_images_from_cache(&self, bbox: TileBBox) -> Result<TileBBoxMap<Option<DynamicImage>>> {
-		debug!("build_images_from_cache: {:?}", bbox);
+		log::trace!("build_images_from_cache: {:?}", bbox);
 
 		let size = bbox.max_count().min(BLOCK_TILE_COUNT);
 
@@ -249,7 +193,7 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		debug!("get_image_stream: {:?}", bbox);
+		log::debug!("get_image_stream {:?}", bbox);
 
 		if bbox.level > self.level_base {
 			return self.source.get_image_stream(bbox).await;
@@ -262,17 +206,17 @@ impl OperationTrait for Operation {
 		bbox0.intersect_with_pyramid(&self.parameters.bbox_pyramid);
 
 		let container: TileBBoxMap<Option<DynamicImage>> = if bbox.level == self.level_base {
-			trace!("Fetching images from source for bbox {:?}", bbox);
+			log::trace!("Fetching images from source for bbox {:?}", bbox);
 			TileBBoxMap::<Option<DynamicImage>>::from_stream(bbox, self.source.get_image_stream(bbox).await?).await?
 		} else {
-			trace!("Building images from cache for bbox {:?}", bbox);
+			log::trace!("Building images from cache for bbox {:?}", bbox);
 			self.build_images_from_cache(bbox0).await?
 		};
 
-		trace!("Adding images to cache for bbox {:?}", container.bbox());
+		log::trace!("Adding images to cache for bbox {:?}", container.bbox());
 		self.add_images_to_cache(&container).await?;
 
-		trace!("Composing final stream for bbox {:?}", bbox);
+		log::trace!("Composing final stream for bbox {:?}", bbox);
 		let vec = container
 			.into_iter()
 			.filter_map(move |(c, o)| {
@@ -288,7 +232,8 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
-		debug!("get_tile_stream: {:?}", bbox);
+		log::debug!("get_blob_stream {:?}", bbox);
+
 		if bbox.level > self.level_base {
 			return self.source.get_blob_stream(bbox).await;
 		}

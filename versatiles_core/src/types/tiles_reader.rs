@@ -14,8 +14,6 @@ use crate::{
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{StreamExt, future::BoxFuture, stream};
-#[allow(unused_imports)]
-use log::{debug, info, trace};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 
@@ -77,7 +75,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		for step in traversal_steps {
 			match step {
 				Push(bboxes, index) => {
-					trace!("Cache {bboxes:?} at index {index}");
+					log::trace!("Cache {bboxes:?} at index {index}");
 					stream::iter(bboxes.clone())
 						.map(|bbox| {
 							let p = progress.clone();
@@ -104,13 +102,13 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 					i_read += bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
 				}
 				Pop(index, bbox) => {
-					trace!("Uncache {bbox:?} at index {index}");
+					log::trace!("Uncache {bbox:?} at index {index}");
 					let vec = cache.lock().await.remove(&index)?.unwrap();
 					let stream = TileStream::from_vec(vec);
 					callback(bbox, stream).await?;
 				}
 				Stream(bboxes, bbox) => {
-					trace!("Stream {bbox:?}");
+					log::trace!("Stream {bbox:?}");
 					let p0 = progress.clone();
 					let streams = stream::iter(bboxes.clone()).map(move |bbox| {
 						let p1 = p0.clone();
@@ -164,12 +162,12 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 			.await?;
 
 		if matches!(level, Container | Tiles | TileContents) {
-			debug!("probing container {:?} at depth {:?}", self.container_name(), level);
+			log::debug!("probing container {:?} at depth {:?}", self.container_name(), level);
 			self.probe_container(&print.get_category("container").await).await?;
 		}
 
 		if matches!(level, Tiles | TileContents) {
-			debug!(
+			log::debug!(
 				"probing tiles {:?} at depth {:?}",
 				self.tilejson().as_json_value(),
 				level
@@ -178,7 +176,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		}
 
 		if matches!(level, TileContents) {
-			debug!(
+			log::debug!(
 				"probing tile contents {:?} at depth {:?}",
 				self.tilejson().as_json_value(),
 				level

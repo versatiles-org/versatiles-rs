@@ -7,7 +7,6 @@ use crate::{
 };
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
-use log::warn;
 use std::collections::{HashMap, HashSet};
 use versatiles_core::tilejson::TileJSON;
 use versatiles_geometry::{GeoProperties, vector_tile::VectorTile};
@@ -121,10 +120,10 @@ impl RunnerTrait for Runner {
 					if self.args.remove_non_matching.unwrap_or(false) {
 						return None;
 					}
-					warn!("id \"{id}\" not found in data source");
+					log::warn!("id \"{id}\" not found in data source");
 				}
 			} else {
-				warn!("id field \"{}\" not found", &self.args.id_field_tiles);
+				log::warn!("id field \"{}\" not found", &self.args.id_field_tiles);
 			}
 			Some(prop)
 		})?;

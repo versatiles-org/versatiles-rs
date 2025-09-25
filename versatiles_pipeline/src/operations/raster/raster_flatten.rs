@@ -56,6 +56,8 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+		log::debug!("get_image_stream {:?}", bbox);
+
 		let color = self.color;
 		Ok(self
 			.source
@@ -65,6 +67,8 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
+		log::debug!("get_blob_stream {:?}", bbox);
+
 		// todo: don't decompress and recompress tiles that are already flattened
 		pack_image_tile_stream(self.get_image_stream(bbox).await, self.source.parameters())
 	}

@@ -4,7 +4,6 @@ use super::{geometry_type::GeomType, layer::VectorTileLayer};
 use crate::{geo::*, math::area_ring};
 use anyhow::{Context, Result, bail, ensure};
 use byteorder::LE;
-use log::trace;
 use versatiles_core::{Blob, io::*};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -187,12 +186,12 @@ impl VectorTileFeature {
 					} else if area < -1e-14 {
 						// Inner ring
 						if current_polygon.is_empty() {
-							trace!("An outer ring must precede inner rings");
+							log::trace!("An outer ring must precede inner rings");
 						} else {
 							current_polygon.push(ring);
 						}
 					} else {
-						trace!("Error: Ring with zero area")
+						log::trace!("Error: Ring with zero area")
 					}
 				}
 

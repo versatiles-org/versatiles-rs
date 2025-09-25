@@ -3,7 +3,6 @@ use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::DynamicImage;
-use log::debug;
 use std::fmt::Debug;
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_geometry::vector_tile::VectorTile;
@@ -83,14 +82,15 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_image_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<DynamicImage>> {
-		debug!("raster_overscale get_image_stream {:?}", bbox_dst);
+		log::debug!("get_image_stream {:?}", bbox_dst);
+
 		if !self.parameters.bbox_pyramid.overlaps_bbox(&bbox_dst) {
-			debug!("raster_overscale get_image_stream outside bbox_pyramid");
+			log::trace!("get_image_stream outside bbox_pyramid");
 			return Ok(TileStream::new_empty());
 		}
 
 		if bbox_dst.level <= self.level_base {
-			debug!("raster_overscale get_image_stream level <= level_base");
+			log::trace!("get_image_stream level <= level_base");
 			return self.source.get_image_stream(bbox_dst).await;
 		}
 
@@ -122,6 +122,8 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
+		log::debug!("get_blob_stream {:?}", bbox);
+
 		if bbox.level >= self.level_base {
 			return self.source.get_blob_stream(bbox).await;
 		}

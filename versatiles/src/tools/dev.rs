@@ -1,5 +1,4 @@
 use anyhow::{Result, anyhow, bail};
-use log::info;
 use std::path::PathBuf;
 use versatiles::{TileBBox, TileFormat, config::Config, progress::get_progress_bar, utils::decompress};
 use versatiles_container::get_reader;
@@ -49,7 +48,7 @@ pub async fn run(command: &Subcommand) -> Result<()> {
 			let width_original = 1 << level;
 			let width_scaled = width_original / scale;
 
-			info!(
+			log::info!(
 				"Measuring tile sizes in {input_file:?} at zoom level {level}, generating an {width_scaled}x{width_scaled} image and saving it to {output_file:?}"
 			);
 
@@ -77,7 +76,7 @@ pub async fn run(command: &Subcommand) -> Result<()> {
 				.await;
 			progress.finish();
 
-			info!("Saving image");
+			log::info!("Saving image");
 			let mut result: Vec<u64> = vec![0; width_scaled * width_scaled];
 			for (coord, size) in vec.iter() {
 				let x = coord.x as usize / scale;
@@ -101,7 +100,7 @@ pub async fn run(command: &Subcommand) -> Result<()> {
 			let blob = encode(&image, format, Some(100), Some(0))?;
 			blob.save_to_file(output_file)?;
 
-			info!("Done, saved to {output_file:?}");
+			log::info!("Done, saved to {output_file:?}");
 		}
 	};
 

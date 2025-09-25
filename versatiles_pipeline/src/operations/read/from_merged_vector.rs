@@ -140,6 +140,7 @@ impl OperationTrait for Operation {
 
 	/// Stream packed vector tiles intersecting `bbox`.
 	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+		log::debug!("get_blob_stream {:?}", bbox);
 		pack_vector_tile_stream(self.get_vector_stream(bbox).await, &self.parameters)
 	}
 
@@ -150,6 +151,7 @@ impl OperationTrait for Operation {
 
 	/// Stream merged vector tiles for every coordinate in `bbox`.
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
+		log::debug!("get_vector_stream {:?}", bbox);
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
 		Ok(TileStream::from_streams(stream::iter(bboxes).map(

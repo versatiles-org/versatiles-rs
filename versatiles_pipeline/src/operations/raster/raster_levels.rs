@@ -64,6 +64,8 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+		log::debug!("get_image_stream {:?}", bbox);
+
 		let contrast = self.contrast / 255.0;
 		let brightness = self.brightness / 255.0;
 		let gamma = self.gamma;
@@ -81,6 +83,8 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
+		log::debug!("get_blob_stream {:?}", bbox);
+
 		pack_image_tile_stream(self.get_image_stream(bbox).await, self.source.parameters())
 	}
 

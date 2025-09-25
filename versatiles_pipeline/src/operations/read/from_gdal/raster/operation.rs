@@ -15,7 +15,6 @@ use anyhow::{Context, Result, bail};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::DynamicImage;
-use log::{debug, trace};
 use std::{fmt::Debug, vec};
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_derive::context;
@@ -58,12 +57,12 @@ struct Operation {
 impl Operation {
 	#[context("Failed to get image data ({width}x{height}) for bbox ({bbox:?}) from GDAL dataset")]
 	async fn get_image_data_from_gdal(&self, bbox: GeoBBox, width: u32, height: u32) -> Result<Option<DynamicImage>> {
-		trace!("get_image_data_from_gdal: bbox={:?}, size={}x{}", bbox, width, height);
+		log::debug!("get_image_data_from_gdal: bbox={:?}, size={}x{}", bbox, width, height);
 		let res = self.dataset.get_image(bbox, width, height).await;
 		match &res {
-			Ok(Some(_)) => debug!("get_image_data_from_gdal: image available for bbox={:?}", bbox),
-			Ok(None) => trace!("get_image_data_from_gdal: no image for bbox={:?}", bbox),
-			Err(e) => debug!("get_image_data_from_gdal error for bbox={:?}: {}", bbox, e),
+			Ok(Some(_)) => log::trace!("get_image_data_from_gdal: image available for bbox={:?}", bbox),
+			Ok(None) => log::trace!("get_image_data_from_gdal: no image for bbox={:?}", bbox),
+			Err(e) => log::trace!("get_image_data_from_gdal error for bbox={:?}: {}", bbox, e),
 		}
 		res
 	}
@@ -76,21 +75,27 @@ impl ReadOperationTrait for Operation {
 	{
 		Box::pin(async move {
 			let args = Args::from_vpl_node(&vpl_node).context("Failed to parse arguments from VPL node")?;
-			debug!(
+			log::trace!(
 				"from_gdal_raster::build args: filename={:?}, tile_size={:?}, tile_format={:?}, level_min={:?}, level_max={:?}",
-				args.filename, args.tile_size, args.tile_format, args.level_min, args.level_max
+				args.filename,
+				args.tile_size,
+				args.tile_format,
+				args.level_min,
+				args.level_max
 			);
 			let filename = factory.resolve_path(&args.filename);
-			trace!("Resolved filename: {:?}", filename);
+			log::trace!("Resolved filename: {:?}", filename);
 			let dataset = GdalDataset::new(&filename, args.max_reuse_gdal.unwrap_or(100)).await?;
 			let bbox = dataset.bbox();
 			let tile_size = args.tile_size.unwrap_or(512);
 
 			let level_max = args.level_max.unwrap_or(dataset.level_max(tile_size)?);
 			let level_min = args.level_min.unwrap_or(level_max);
-			trace!(
+			log::trace!(
 				"Building bbox pyramid: level_min={}, level_max={}, tile_size={}",
-				level_min, level_max, tile_size
+				level_min,
+				level_max,
+				tile_size
 			);
 			let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(level_min, level_max, bbox);
 
@@ -99,9 +104,10 @@ impl ReadOperationTrait for Operation {
 				TileCompression::Uncompressed,
 				bbox_pyramid,
 			);
-			debug!(
+			log::trace!(
 				"Parameters: format={:?}, compression={:?}",
-				parameters.tile_format, parameters.tile_compression
+				parameters.tile_format,
+				parameters.tile_compression
 			);
 			let mut tilejson = TileJSON {
 				bounds: Some(*bbox),
@@ -109,8 +115,8 @@ impl ReadOperationTrait for Operation {
 			};
 			tilejson.update_from_reader_parameters(&parameters);
 			tilejson.tile_schema = Some(TileSchema::RasterRGBA);
-			debug!("TileJSON bounds set to {:?}", tilejson.bounds);
-			trace!("from_gdal_raster::Operation built successfully");
+			log::trace!("TileJSON bounds set to {:?}", tilejson.bounds);
+			log::trace!("from_gdal_raster::Operation built successfully");
 
 			Ok(Box::new(Self {
 				tilejson,
@@ -139,11 +145,15 @@ impl OperationTrait for Operation {
 	/// Stream raw tile blobs intersecting the bounding box by delegating to
 	/// `TilesReaderTrait::get_tile_stream`.
 	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+		log::debug!("get_blob_stream {:?}", bbox);
+
 		pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters)
 	}
 
 	/// Stream decoded raster images for all tiles within the bounding box.
 	async fn get_image_stream(&self, mut bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+		log::debug!("get_image_stream {:?}", bbox);
+
 		let count = 8192u32.div_euclid(self.tile_size).max(1);
 
 		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
@@ -181,7 +191,7 @@ impl OperationTrait for Operation {
 					.await
 					.unwrap();
 
-					debug!("Returning {} tiles for bbox {:?}", vec.len(), bbox);
+					log::trace!("Returning {} tiles for bbox {:?}", vec.len(), bbox);
 					TileStream::from_vec(vec)
 				} else {
 					TileStream::new_empty()

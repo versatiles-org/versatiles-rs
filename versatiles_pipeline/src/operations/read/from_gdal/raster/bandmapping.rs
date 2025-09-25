@@ -1,6 +1,5 @@
 use anyhow::{Context, Result, bail, ensure};
 use gdal::{DriverManager, raster::ColorInterpretation, spatial_ref::SpatialRef};
-use log::{debug, trace};
 use std::fmt::Debug;
 use versatiles_derive::context;
 
@@ -16,7 +15,7 @@ pub struct BandMapping {
 impl BandMapping {
 	#[context("Failed to create band mapping from GDAL dataset")]
 	pub fn try_from(dataset: &gdal::Dataset) -> Result<Self> {
-		trace!("Computing band mapping (raster_count={})", dataset.raster_count());
+		log::trace!("Computing band mapping (raster_count={})", dataset.raster_count());
 
 		let bands: Vec<(usize, ColorInterpretation)> = (1..=dataset.raster_count())
 			.map(|i| {
@@ -68,26 +67,26 @@ impl BandMapping {
 
 		let map: Vec<usize> = match channels {
 			[None, Some(red), Some(green), Some(blue), Some(alpha)] => {
-				debug!("Found RGBA bands: red={red}, green={green}, blue={blue}, alpha={alpha}");
+				log::trace!("Found RGBA bands: red={red}, green={green}, blue={blue}, alpha={alpha}");
 				vec![red, green, blue, alpha]
 			}
 			[None, Some(red), Some(green), Some(blue), None] => {
-				debug!("Found RGB  band: red={red}, green={green}, blue={blue}");
+				log::trace!("Found RGB  band: red={red}, green={green}, blue={blue}");
 				vec![red, green, blue]
 			}
 			[Some(gray), None, None, None, Some(alpha)] => {
-				debug!("Found gray + alpha band: gray={gray}, alpha={alpha}");
+				log::trace!("Found gray + alpha band: gray={gray}, alpha={alpha}");
 				vec![gray, alpha]
 			}
 			[Some(gray), None, None, None, None] => {
-				debug!("Found gray band: gray={gray}");
+				log::trace!("Found gray band: gray={gray}");
 				vec![gray]
 			}
 			_ => {
 				bail!("The found bands ({band_string}) cannot be interpreted as grey/RGB (+alpha)",);
 			}
 		};
-		debug!("Band mapping result: {map:?}");
+		log::trace!("Band mapping result: {map:?}");
 
 		Ok(BandMapping { map })
 	}

@@ -41,7 +41,6 @@
 
 use anyhow::{Context, Result, anyhow, ensure};
 use async_trait::async_trait;
-use log::trace;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use std::path::Path;
@@ -66,7 +65,7 @@ impl MBTilesReader {
 	/// # Errors
 	/// Returns an error if the file does not exist, if the path is not absolute, or if there is an error loading from SQLite.
 	pub fn open_path(path: &Path) -> Result<MBTilesReader> {
-		trace!("open {path:?}");
+		log::debug!("open {path:?}");
 
 		ensure!(path.exists(), "file {path:?} does not exist");
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
@@ -82,7 +81,7 @@ impl MBTilesReader {
 	/// # Errors
 	/// Returns an error if there is an issue connecting to the database or loading metadata.
 	fn load_from_sqlite(path: &Path) -> Result<MBTilesReader> {
-		trace!("load_from_sqlite {path:?}");
+		log::debug!("load_from_sqlite {path:?}");
 
 		let manager = SqliteConnectionManager::file(path);
 		let pool = Pool::builder().max_size(10).build(manager)?;
@@ -105,7 +104,7 @@ impl MBTilesReader {
 	/// # Errors
 	/// Returns an error if the tile format or compression is not specified or if there is an issue querying the database.
 	fn load_meta_data(&mut self) -> Result<()> {
-		trace!("load_meta_data");
+		log::debug!("load_meta_data");
 
 		let pyramid = self.get_bbox_pyramid()?;
 		let conn = self.pool.get()?;
@@ -192,7 +191,7 @@ impl MBTilesReader {
 			format!("SELECT {sql_value} FROM tiles WHERE {sql_where}")
 		};
 
-		trace!("SQL: {sql}");
+		log::trace!("SQL: {sql}");
 
 		let conn = self.pool.get()?;
 		let mut stmt = conn.prepare(&sql)?;
@@ -204,7 +203,7 @@ impl MBTilesReader {
 	/// # Errors
 	/// Returns an error if there is an issue querying the database.
 	fn get_bbox_pyramid(&self) -> Result<TileBBoxPyramid> {
-		trace!("get_bbox_pyramid");
+		log::debug!("get_bbox_pyramid");
 
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
@@ -307,7 +306,7 @@ impl TilesReaderTrait for MBTilesReader {
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
 	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
-		trace!("read tile from coord {coord:?}");
+		log::trace!("read tile from coord {coord:?}");
 
 		let conn = self.pool.get()?;
 		let mut stmt =
@@ -331,7 +330,7 @@ impl TilesReaderTrait for MBTilesReader {
 	/// # Errors
 	/// Returns an error if there is an issue querying the database.
 	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream> {
-		trace!("read tile stream from bbox {bbox:?}");
+		log::debug!("get_tile_stream {:?}", bbox);
 
 		if bbox.is_empty() {
 			return Ok(TileStream::new_empty());
@@ -339,7 +338,7 @@ impl TilesReaderTrait for MBTilesReader {
 
 		bbox.flip_y();
 
-		trace!("corrected bbox {bbox:?}");
+		log::trace!("corrected bbox {bbox:?}");
 
 		let conn = self.pool.get().unwrap();
 		let mut stmt = conn
@@ -371,7 +370,7 @@ impl TilesReaderTrait for MBTilesReader {
 			.filter_map(|r| r.ok())
 			.collect();
 
-		trace!("got {} tiles", vec.len());
+		log::trace!("got {} tiles", vec.len());
 
 		Ok(TileStream::from_vec(vec))
 	}

@@ -241,6 +241,8 @@ impl OperationTrait for Operation {
 
 	/// Stream packed raster tiles intersecting `bbox`.
 	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+		log::debug!("get_blob_stream {:?}", bbox);
+
 		if self.minimize_recompression {
 			let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 			let sources = &self.sources;
@@ -268,6 +270,8 @@ impl OperationTrait for Operation {
 
 	/// Stream blended raster tiles for every coordinate inside `bbox`.
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+		log::debug!("get_image_stream {:?}", bbox);
+
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 		let sources = &self.sources;
 

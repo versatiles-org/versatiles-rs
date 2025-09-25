@@ -33,7 +33,6 @@ use crate::{TilesWriterTrait, container::versatiles::types::BlockWriter};
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use log::{debug, trace};
 use versatiles_core::{Traversal, config::Config, io::DataWriterTrait, types::*, utils::compress};
 use versatiles_derive::context;
 
@@ -50,11 +49,11 @@ impl TilesWriterTrait for VersaTilesWriter {
 	) -> Result<()> {
 		// Finalize the configuration
 		let parameters = reader.parameters();
-		trace!("convert_from - reader.parameters: {parameters:?}");
+		log::trace!("convert_from - reader.parameters: {parameters:?}");
 
 		// Get the bounding box pyramid
 		let bbox_pyramid = reader.parameters().bbox_pyramid.clone();
-		trace!("convert_from - bbox_pyramid: {bbox_pyramid:#}");
+		log::trace!("convert_from - bbox_pyramid: {bbox_pyramid:#}");
 
 		// Create the file header
 		let mut header = FileHeader::new(
@@ -69,16 +68,16 @@ impl TilesWriterTrait for VersaTilesWriter {
 
 		// Convert the header to a blob and write it
 		let blob: Blob = header.to_blob()?;
-		trace!("write header");
+		log::trace!("write header");
 		writer.append(&blob)?;
 
-		trace!("write meta");
+		log::trace!("write meta");
 		header.meta_range = Self::write_meta(reader, writer).await?;
 
-		trace!("write blocks");
+		log::trace!("write blocks");
 		header.blocks_range = Self::write_blocks(reader, writer, config).await?;
 
-		trace!("update header");
+		log::trace!("update header");
 		let blob: Blob = header.to_blob()?;
 		writer.write_start(&blob)?;
 
@@ -122,7 +121,7 @@ impl VersaTilesWriter {
 					Box::pin(async move {
 						// Log the start of the block
 						let mut block = BlockDefinition::new(&bbox).unwrap();
-						debug!("start block {block:?}");
+						log::trace!("start block {block:?}");
 
 						// Create a new BlockWriter for the block
 						let mut writer = writer_mutex.lock().await;
@@ -134,7 +133,7 @@ impl VersaTilesWriter {
 							.await;
 
 						// Finish the block
-						debug!("finish block {block:?}");
+						log::trace!("finish block {block:?}");
 
 						let (tiles_range, index_range) = block_writer.finalize()?;
 

@@ -196,6 +196,7 @@ impl OperationTrait for Operation {
 
 	/// Stream packed tiles intersecting `bbox` using the overlay strategy.
 	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+		log::debug!("get_blob_stream {:?}", bbox);
 		// We need the desired output compression inside the closure, so copy it.
 		let output_compression = self.parameters.tile_compression;
 		self.gather_stream(
@@ -207,6 +208,7 @@ impl OperationTrait for Operation {
 
 	/// Stream raster tiles for every coordinate in `bbox` via overlay.
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+		log::debug!("get_image_stream {:?}", bbox);
 		self.gather_stream(
 			bbox,
 			|src, b| Box::pin(async move { src.get_image_stream(b).await }),
@@ -216,6 +218,7 @@ impl OperationTrait for Operation {
 
 	/// Stream vector tiles for every coordinate in `bbox` via overlay.
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
+		log::debug!("get_vector_stream {:?}", bbox);
 		self.gather_stream(
 			bbox,
 			|src, b| Box::pin(async move { src.get_vector_stream(b).await }),

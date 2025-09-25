@@ -49,7 +49,6 @@ use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::{lock::Mutex, stream::StreamExt};
-use log::trace;
 use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
@@ -208,7 +207,7 @@ impl TilesReaderTrait for VersaTilesReader {
 
 		// Check if the tile is within the block definition
 		if !bbox.contains(coord) {
-			trace!("tile {coord:?} outside block definition");
+			log::trace!("tile {coord:?} outside block definition");
 			return Ok(None);
 		}
 
@@ -230,6 +229,8 @@ impl TilesReaderTrait for VersaTilesReader {
 
 	/// Gets a stream of tile data for a given bounding box.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+		log::debug!("get_tile_stream {:?}", bbox);
+
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
 
@@ -273,23 +274,23 @@ impl TilesReaderTrait for VersaTilesReader {
 
 				// Get the block
 				let block: BlockDefinition = block_option.unwrap().to_owned();
-				trace!("block {block:?}");
+				log::trace!("block {block:?}");
 
 				// Get the bounding box of all tiles defined in this block
 				let tiles_bbox_block = block.get_global_bbox();
-				trace!("tiles_bbox_block {tiles_bbox_block:?}");
+				log::trace!("tiles_bbox_block {tiles_bbox_block:?}");
 
 				// Get the bounding box of all tiles defined in this block
 				let mut tiles_bbox_used: TileBBox = bbox;
 				tiles_bbox_used.intersect_with(tiles_bbox_block).unwrap();
-				trace!("tiles_bbox_used {tiles_bbox_used:?}");
+				log::trace!("tiles_bbox_used {tiles_bbox_used:?}");
 
 				assert_eq!(bbox.level, tiles_bbox_block.level);
 				assert_eq!(bbox.level, tiles_bbox_used.level);
 
 				// Get the tile index of this block
 				let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await.unwrap();
-				trace!("tile_index {tile_index:?}");
+				log::trace!("tile_index {tile_index:?}");
 
 				// let tile_range: &ByteRange = tile_index.get(tile_id);
 				let mut tile_ranges: Vec<(TileCoord, ByteRange)> = tile_index

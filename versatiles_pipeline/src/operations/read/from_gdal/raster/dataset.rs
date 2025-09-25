@@ -3,7 +3,6 @@ use anyhow::{Context, Result, bail, ensure};
 use gdal::{Dataset, GeoTransform, config::set_config_option, spatial_ref::SpatialRef, vector::Geometry};
 use gdal_sys::{CPLErr, CPLGetLastErrorMsg, GDALReprojectImage, GDALResampleAlg, OGRwkbGeometryType};
 use imageproc::image::DynamicImage;
-use log::{debug, trace};
 use std::{
 	collections::LinkedList,
 	path::{Path, PathBuf},
@@ -34,13 +33,13 @@ unsafe impl Sync for GdalDataset {}
 impl GdalDataset {
 	#[context("Failed to create GDAL dataset from file {:?}", filename)]
 	pub async fn new(filename: &Path, max_reuse_gdal: u32) -> Result<GdalDataset> {
-		debug!("Opening GDAL dataset from file: {:?}", filename);
+		log::debug!("Opening GDAL dataset from file: {:?}", filename);
 
 		set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
-		trace!("GDAL_NUM_THREADS set to ALL_CPUS");
+		log::trace!("GDAL_NUM_THREADS set to ALL_CPUS");
 
 		let mut dataset = Dataset::open(filename)?;
-		trace!(
+		log::trace!(
 			"Opened GDAL dataset {:?} ({}x{}, bands={})",
 			filename,
 			dataset.raster_size().0,
@@ -51,11 +50,11 @@ impl GdalDataset {
 		let bbox = dataset_bbox(&dataset)?;
 		let band_mapping = BandMapping::try_from(&dataset)?;
 		let pixel_size = dataset_pixel_size(&dataset)?;
-		debug!("Dataset pixel_size (m/px): {:.6}", pixel_size);
+		log::trace!("Dataset pixel_size (m/px): {:.6}", pixel_size);
 
-		debug!("Dataset bbox (EPSG:4326): {:?}", bbox);
-		debug!("Band mapping: {band_mapping:?}");
-		trace!("GdalDataset::new finished for {:?}", filename);
+		log::trace!("Dataset bbox (EPSG:4326): {:?}", bbox);
+		log::trace!("Band mapping: {band_mapping:?}");
+		log::trace!("GdalDataset::new finished for {:?}", filename);
 
 		dataset.flush_cache()?;
 		let mut list = LinkedList::new();
@@ -96,7 +95,7 @@ impl GdalDataset {
 		let instance: Instance = self.get_instance().await;
 
 		let (instance, dst) = tokio::task::spawn_blocking(move || -> Result<(Instance, Dataset)> {
-			trace!("spawn_blocking(get_image) started for size={}x{}", width, height);
+			log::trace!("spawn_blocking(get_image) started for size={}x{}", width, height);
 			let mut dst = band_mapping.create_mem_dataset(width, height)?;
 			let geo_transform: GeoTransform = [
 				bbox_arr[0],
@@ -107,7 +106,7 @@ impl GdalDataset {
 				(bbox_arr[1] - bbox_arr[3]) / height as f64,
 			];
 			dst.set_geo_transform(&geo_transform)?;
-			trace!("Prepared GeoTransform for destination: {:?}", geo_transform);
+			log::trace!("Prepared GeoTransform for destination: {:?}", geo_transform);
 
 			unsafe {
 				let rv = GDALReprojectImage(
@@ -127,7 +126,7 @@ impl GdalDataset {
 				}
 			}
 
-			trace!("Reprojection complete");
+			log::trace!("Reprojection complete");
 			Ok((instance, dst))
 		})
 		.await??;
@@ -156,7 +155,7 @@ impl GdalDataset {
 					buf[i * channel_count + channel_index] = px;
 				}
 			}
-			trace!("Filled image buffer ({} bytes)", buf.len());
+			log::trace!("Filled image buffer ({} bytes)", buf.len());
 			let img =
 				DynamicImage::from_raw(width, height, buf).context("Failed to create DynamicImage from GDAL dataset")?;
 			Ok(Some(img))
@@ -204,29 +203,30 @@ impl GdalDataset {
 	#[context("Failed to compute max zoom level for tile size {tile_size}")]
 	pub fn level_max(&self, tile_size: u32) -> Result<u8> {
 		ensure!(tile_size > 0, "tile_size must be > 0");
-		trace!(
+		log::trace!(
 			"level_max(tile_size={}) with pixel_size={:.6}",
-			tile_size, self.pixel_size
+			tile_size,
+			self.pixel_size
 		);
 
 		// Initial resolution (meters per pixel at zoom 0)
 		let initial_res = EARTH_CIRCUMFERENCE / (tile_size as f64);
 		let zf = (initial_res / self.pixel_size).log2().ceil();
-		trace!("initial_res={:.6}, zf(raw)={:.6}", initial_res, zf);
+		log::trace!("initial_res={:.6}, zf(raw)={:.6}", initial_res, zf);
 		let z = if zf.is_finite() { zf as i32 } else { 0 };
-		debug!("Computed max level: {}", z.clamp(0, 31));
+		log::trace!("Computed max level: {}", z.clamp(0, 31));
 		Ok(z.clamp(0, 31) as u8)
 	}
 }
 
 #[context("Failed to compute bounding box for GDAL dataset")]
 fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
-	trace!("Computing dataset_bbox()");
+	log::trace!("Computing dataset_bbox()");
 	let gt = dataset
 		.geo_transform()
 		.context("Failed to get geo transform from GDAL dataset")?;
 
-	trace!("geo transform: {:?}", gt);
+	log::trace!("geo transform: {:?}", gt);
 
 	ensure!(gt[2] == 0.0 && gt[4] == 0.0, "GDAL dataset must not be rotated");
 
@@ -236,8 +236,8 @@ fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
 		.spatial_ref()
 		.context("GDAL dataset must have a spatial reference (SRS) defined")?;
 
-	trace!("size: {}x{}", width, height);
-	trace!("spatial reference: {:?}", &spatial_ref.to_pretty_wkt());
+	log::trace!("size: {}x{}", width, height);
+	log::trace!("spatial reference: {:?}", &spatial_ref.to_pretty_wkt());
 
 	let mut bbox = Geometry::bbox(
 		gt[0],
@@ -246,7 +246,7 @@ fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
 		gt[3] + gt[5] * height as f64,
 	)?;
 
-	trace!("bounding box native: {:?}", bbox);
+	log::trace!("bounding box native: {:?}", bbox);
 
 	bbox.set_spatial_ref(spatial_ref.clone());
 	bbox
@@ -255,13 +255,13 @@ fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
 
 	let bbox = bbox.envelope();
 
-	trace!("bounding box projected: {:?}", bbox);
+	log::trace!("bounding box projected: {:?}", bbox);
 
 	// Coordinates seem to be flipped in OGREnvelope
 	let mut bbox = GeoBBox::new(bbox.MinY, bbox.MinX, bbox.MaxY, bbox.MaxX);
 	bbox.limit_to_mercator();
 
-	debug!("bounding box: {:?}", bbox);
+	log::trace!("bounding box: {:?}", bbox);
 	Ok(bbox)
 }
 
@@ -274,7 +274,7 @@ fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
 /// * Returns a strictly positive finite value or an error.
 #[context("Failed to compute pixel size for GDAL dataset")]
 fn dataset_pixel_size(dataset: &gdal::Dataset) -> Result<f64> {
-	trace!("Computing dataset_pixel_size()");
+	log::trace!("Computing dataset_pixel_size()");
 	let gt = dataset
 		.geo_transform()
 		.context("Failed to get geo transform from GDAL dataset")?;
@@ -325,7 +325,7 @@ fn dataset_pixel_size(dataset: &gdal::Dataset) -> Result<f64> {
 		}
 	}
 
-	debug!("pixel_size: {:.6}", size_min);
+	log::trace!("pixel_size: {:.6}", size_min);
 	ensure!(
 		size_min.is_finite() && size_min > 0.0,
 		"Invalid pixel size in meters computed"
@@ -334,7 +334,7 @@ fn dataset_pixel_size(dataset: &gdal::Dataset) -> Result<f64> {
 }
 
 fn bbox_to_mercator(bbox: &GeoBBox) -> Result<[f64; 4]> {
-	trace!("bbox_to_mercator input={:?}", bbox);
+	log::trace!("bbox_to_mercator input={:?}", bbox);
 	let mut bbox = *bbox;
 	bbox.limit_to_mercator();
 	let mut bbox_geometry = Geometry::bbox(bbox.1, bbox.0, bbox.3, bbox.2)?;
@@ -344,7 +344,7 @@ fn bbox_to_mercator(bbox: &GeoBBox) -> Result<[f64; 4]> {
 		.with_context(|| format!("Failed to transform bounding box ({bbox:?}) to EPSG:3857"))?;
 	let bbox = bbox_geometry.envelope();
 	let out = [bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY];
-	trace!("bbox_to_mercator output={:?}", out);
+	log::trace!("bbox_to_mercator output={:?}", out);
 	Ok(out)
 }
 

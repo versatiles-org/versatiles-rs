@@ -81,14 +81,17 @@ impl OperationTrait for Operation {
 	}
 
 	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
+		log::debug!("get_blob_stream {:?}", bbox);
 		self.source.get_blob_stream(bbox).await
 	}
 
 	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+		log::debug!("get_image_stream {:?}", bbox);
 		self.source.get_image_stream(bbox).await
 	}
 
 	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
+		log::debug!("get_vector_stream {:?}", bbox);
 		self.source.get_vector_stream(bbox).await
 	}
 }
