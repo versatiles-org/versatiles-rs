@@ -7,18 +7,14 @@
 //! other data source.
 
 use super::GdalDataset;
-use crate::{
-	PipelineFactory, helpers::pack_image_tile_stream, operations::read::traits::ReadOperationTrait, traits::*,
-	vpl::VPLNode,
-};
-use anyhow::{Context, Result, bail};
+use crate::{PipelineFactory, helpers::Tile, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
+use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::DynamicImage;
 use std::{fmt::Debug, vec};
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_derive::context;
-use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::traits::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -142,17 +138,9 @@ impl OperationTrait for Operation {
 		&self.tilejson
 	}
 
-	/// Stream raw tile blobs intersecting the bounding box by delegating to
-	/// `TilesReaderTrait::get_tile_stream`.
-	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream> {
-		log::debug!("get_blob_stream {:?}", bbox);
-
-		pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters)
-	}
-
 	/// Stream decoded raster images for all tiles within the bounding box.
-	async fn get_image_stream(&self, mut bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		log::debug!("get_image_stream {:?}", bbox);
+	async fn get_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_stream {:?}", bbox);
 
 		let count = 8192u32.div_euclid(self.tile_size).max(1);
 
@@ -171,6 +159,8 @@ impl OperationTrait for Operation {
 					.unwrap();
 
 				if let Some(image) = image {
+					let tile_format = self.parameters.tile_format;
+					let tile_compression = self.parameters.tile_compression;
 					// Crop into tiles on a blocking thread
 					let vec = tokio::task::spawn_blocking(move || {
 						bbox
@@ -184,7 +174,7 @@ impl OperationTrait for Operation {
 										size,
 									)
 									.into_optional()
-									.map(|img| (coord, img))
+									.map(|img| (coord, Tile::from_image(img, tile_format, tile_compression)))
 							})
 							.collect::<Vec<_>>()
 					})
@@ -200,11 +190,6 @@ impl OperationTrait for Operation {
 		});
 
 		Ok(TileStream::from_streams(streams))
-	}
-
-	/// Stream decoded vector tiles contained in the bounding box.
-	async fn get_vector_stream(&self, _bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		bail!("Vector tiles are not supported in operation `from_gdal_raster`")
 	}
 }
 
@@ -303,9 +288,10 @@ mod tests {
 	#[tokio::test]
 	async fn test_get_image_stream_returns_images() -> Result<()> {
 		let operation = get_operation(16).await;
-		let mut stream = operation.get_image_stream(TileBBox::new_full(1)?).await?;
+		let mut stream = operation.get_stream(TileBBox::new_full(1)?).await?;
 		let mut count = 0;
-		while let Some((coord_out, image)) = stream.next().await {
+		while let Some((coord_out, tile)) = stream.next().await {
+			let image = tile.into_image()?;
 			assert_eq!(image.width(), 16);
 			assert_eq!(image.height(), 16);
 			let color_is = image.average_color();
@@ -323,14 +309,6 @@ mod tests {
 			count += 1;
 		}
 		assert_eq!(count, 4);
-		Ok(())
-	}
-
-	#[tokio::test]
-	async fn test_vector_methods_error() -> Result<()> {
-		let operation = get_operation(512).await;
-		// get_vector_stream should error
-		assert!(operation.get_vector_stream(TileBBox::new_full(4)?).await.is_err());
 		Ok(())
 	}
 }

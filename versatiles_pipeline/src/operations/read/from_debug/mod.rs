@@ -17,22 +17,14 @@
 mod image;
 mod vector;
 
-use crate::{
-	PipelineFactory,
-	helpers::{pack_image_tile_stream, pack_vector_tile_stream},
-	operations::read::traits::ReadOperationTrait,
-	traits::*,
-	vpl::VPLNode,
-};
-use anyhow::{Result, bail, ensure};
+use crate::{PipelineFactory, helpers::Tile, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
+use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use image::create_debug_image;
-use imageproc::image::DynamicImage;
 use std::fmt::Debug;
 use vector::create_debug_vector_tile;
 use versatiles_core::{tilejson::TileJSON, *};
-use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Generates debug tiles that display their coordinates as text.
@@ -107,38 +99,25 @@ impl OperationTrait for Operation {
 		&self.tilejson
 	}
 
-	/// Stream raster debug tiles for every coordinate within `bbox`.
-	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		ensure!(
-			self.parameters.tile_format.get_type() == TileType::Raster,
-			"tile format '{}' is not supported. expected raster",
-			self.parameters.tile_format
-		);
-		Ok(TileStream::from_iter_coord_parallel(
-			bbox.into_iter_coords(),
-			move |c| Some(create_debug_image(&c)),
-		))
-	}
-
-	/// Stream vector debug tiles for every coordinate within `bbox`.
-	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		ensure!(
-			self.parameters.tile_format.get_type() == TileType::Vector,
-			"tile format '{}' is not supported. expected vector",
-			self.parameters.tile_format
-		);
-		Ok(TileStream::from_iter_coord_parallel(
-			bbox.into_iter_coords(),
-			move |c| create_debug_vector_tile(&c).ok(),
-		))
-	}
-
-	/// Produce a `Blob` stream by packing either raster or vector tiles,
-	/// depending on `tile_format`.
-	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
+	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_stream {:?}", bbox);
+		let format = self.parameters.tile_format;
+		let compression = self.parameters.tile_compression;
 		match self.parameters.tile_format.get_type() {
-			TileType::Raster => pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters),
-			TileType::Vector => pack_vector_tile_stream(self.get_vector_stream(bbox).await, &self.parameters),
+			TileType::Raster => Ok(TileStream::from_iter_coord_parallel(
+				bbox.into_iter_coords(),
+				move |c| Some(Tile::from_image(create_debug_image(&c), format, compression)),
+			)),
+			TileType::Vector => Ok(TileStream::from_iter_coord_parallel(
+				bbox.into_iter_coords(),
+				move |c| {
+					Some(Tile::from_vector(
+						create_debug_vector_tile(&c).unwrap(),
+						format,
+						compression,
+					))
+				},
+			)),
 			_ => bail!("tile format '{}' is not supported.", self.parameters.tile_format),
 		}
 	}
@@ -174,24 +153,22 @@ mod tests {
 			.await?;
 
 		let coord = TileCoord { x: 1, y: 2, level: 3 };
-		let blob = operation
-			.get_blob_stream(coord.as_tile_bbox(1)?)
+		let tile = operation
+			.get_stream(coord.as_tile_bbox(1)?)
 			.await?
 			.next()
 			.await
 			.unwrap()
 			.1;
 
-		assert_eq!(blob.len(), len, "for '{format}'");
+		assert_eq!(tile.into_blob()?.len(), len, "for '{format}'");
 		assert_eq!(operation.tilejson().as_pretty_lines(100), tilejson, "for '{format}'");
 
-		let mut stream = operation
-			.get_blob_stream(TileBBox::from_min_max(3, 1, 1, 2, 3)?)
-			.await?;
+		let mut stream = operation.get_stream(TileBBox::from_min_max(3, 1, 1, 2, 3)?).await?;
 
 		let mut n = 0;
-		while let Some((coord, blob)) = stream.next().await {
-			assert!(!blob.is_empty(), "for '{format}'");
+		while let Some((coord, tile)) = stream.next().await {
+			assert!(!tile.into_blob()?.is_empty(), "for '{format}'");
 			assert!(coord.x >= 1 && coord.x <= 2, "for '{format}'");
 			assert!(coord.y >= 1 && coord.y <= 3, "for '{format}'");
 			assert_eq!(coord.level, 3, "for '{format}'");

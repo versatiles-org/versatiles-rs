@@ -1,11 +1,10 @@
-use crate::{PipelineFactory, helpers::pack_image_tile_stream, traits::*, vpl::VPLNode};
-use anyhow::{Result, bail};
+use crate::{PipelineFactory, helpers::Tile, traits::*, vpl::VPLNode};
+use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use imageproc::image::{DynamicImage, Rgb};
+use imageproc::image::Rgb;
 use std::fmt::Debug;
 use versatiles_core::{tilejson::TileJSON, *};
-use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::traits::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -55,26 +54,15 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		log::debug!("get_image_stream {:?}", bbox);
+	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_stream {:?}", bbox);
 
 		let color = self.color;
 		Ok(self
 			.source
-			.get_image_stream(bbox)
+			.get_stream(bbox)
 			.await?
-			.map_item_parallel(move |image| image.into_flattened(color)))
-	}
-
-	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
-		log::debug!("get_blob_stream {:?}", bbox);
-
-		// todo: don't decompress and recompress tiles that are already flattened
-		pack_image_tile_stream(self.get_image_stream(bbox).await, self.source.parameters())
-	}
-
-	async fn get_vector_stream(&self, _bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		bail!("Vector tiles are not supported in raster_flatten operations.");
+			.map_item_parallel(move |t| t.map_image(|i| i.into_flattened(color))))
 	}
 }
 

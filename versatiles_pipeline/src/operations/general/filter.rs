@@ -1,11 +1,9 @@
-use crate::{PipelineFactory, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, helpers::Tile, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::{BoxFuture, ready};
-use imageproc::image::DynamicImage;
 use std::fmt::Debug;
 use versatiles_core::{tilejson::TileJSON, *};
-use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filter tiles by bounding box and/or zoom levels.
@@ -81,32 +79,12 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	async fn get_blob_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Blob>> {
-		log::debug!("get_blob_stream {:?}", bbox);
+	async fn get_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_stream {:?}", bbox);
 		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
 		Ok(self
 			.source
-			.get_blob_stream(bbox)
-			.await?
-			.filter_coord(|coord| ready(self.filter_coord(&coord))))
-	}
-
-	async fn get_image_stream(&self, mut bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		log::debug!("get_image_stream {:?}", bbox);
-		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
-		Ok(self
-			.source
-			.get_image_stream(bbox)
-			.await?
-			.filter_coord(|coord| ready(self.filter_coord(&coord))))
-	}
-
-	async fn get_vector_stream(&self, mut bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		log::debug!("get_vector_stream {:?}", bbox);
-		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
-		Ok(self
-			.source
-			.get_vector_stream(bbox)
+			.get_stream(bbox)
 			.await?
 			.filter_coord(|coord| ready(self.filter_coord(&coord))))
 	}
@@ -146,12 +124,7 @@ mod tests {
 			.await?;
 
 		for (coord, expected) in tests.iter() {
-			let count = operation
-				.get_blob_stream(coord.as_tile_bbox(1)?)
-				.await?
-				.to_vec()
-				.await
-				.len();
+			let count = operation.get_stream(coord.as_tile_bbox(1)?).await?.to_vec().await.len();
 			if *expected {
 				assert_eq!(count, 1, "Expected tile data for {coord:?} in bbox {bbox:?}");
 			} else {

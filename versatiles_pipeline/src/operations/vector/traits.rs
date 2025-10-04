@@ -1,18 +1,17 @@
-use crate::{helpers::pack_vector_tile_stream, traits::OperationTrait};
-use anyhow::{Result, bail, ensure};
+use crate::{helpers::Tile, traits::OperationTrait};
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use imageproc::image::DynamicImage;
 use std::sync::Arc;
 use versatiles_core::{
 	Traversal,
 	tilejson::TileJSON,
-	{TileBBox, TileCompression, TileStream, TileType, TilesReaderParameters},
+	{TileBBox, TileStream, TileType, TilesReaderParameters},
 };
 use versatiles_geometry::vector_tile::VectorTile;
 
 pub trait RunnerTrait: std::fmt::Debug + Send + Sync + 'static {
 	fn update_tilejson(&self, tilejson: &mut TileJSON);
-	fn run(&self, tile: VectorTile) -> Result<VectorTile>;
+	fn run(&self, tile: VectorTile) -> Result<Option<VectorTile>>;
 }
 
 /// Generic “transform” operation that delegates all real work to a `Runner`.
@@ -38,21 +37,13 @@ impl<R: RunnerTrait> OperationTrait for TransformOp<R> {
 		self.source.traversal()
 	}
 
-	async fn get_image_stream(&self, _: TileBBox) -> Result<TileStream<DynamicImage>> {
-		bail!("vector transform cannot return raster data");
-	}
-
-	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
+	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		let runner = self.runner.clone();
 		Ok(self
 			.source
-			.get_vector_stream(bbox)
+			.get_stream(bbox)
 			.await?
-			.filter_map_item_parallel(move |tile| runner.run(tile).map(Some)))
-	}
-
-	async fn get_blob_stream(&self, b: TileBBox) -> Result<TileStream> {
-		pack_vector_tile_stream(self.get_vector_stream(b).await, &self.params)
+			.filter_map_item_parallel(move |tile| tile.filter_map_vector(|vector| runner.run(vector))))
 	}
 }
 
@@ -62,12 +53,11 @@ where
 	R: RunnerTrait,
 {
 	// ── common steps ───────────────────────────────────────────────
-	let mut params = source.parameters().clone();
+	let params = source.parameters().clone();
 	ensure!(
 		params.tile_format.get_type() == TileType::Vector,
 		"source must be vector tiles"
 	);
-	params.tile_compression = TileCompression::Uncompressed;
 
 	// ── runner creation delegated to the caller ────────────────────
 	let runner = Arc::new(runner);

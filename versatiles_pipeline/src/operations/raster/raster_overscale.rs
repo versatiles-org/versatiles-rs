@@ -1,11 +1,9 @@
-use crate::{PipelineFactory, helpers::pack_image_tile_stream, traits::*, vpl::VPLNode};
-use anyhow::{Result, bail};
+use crate::{PipelineFactory, helpers::Tile, traits::*, vpl::VPLNode};
+use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use imageproc::image::DynamicImage;
 use std::fmt::Debug;
 use versatiles_core::{tilejson::TileJSON, *};
-use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::traits::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -82,32 +80,36 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	async fn get_image_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<DynamicImage>> {
-		log::debug!("get_image_stream {:?}", bbox_dst);
+	async fn get_stream(&self, bbox_dst: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_stream {:?}", bbox_dst);
 
 		if !self.parameters.bbox_pyramid.overlaps_bbox(&bbox_dst) {
-			log::trace!("get_image_stream outside bbox_pyramid");
+			log::trace!("get_stream outside bbox_pyramid");
 			return Ok(TileStream::new_empty());
 		}
 
 		if bbox_dst.level <= self.level_base {
-			log::trace!("get_image_stream level <= level_base");
-			return self.source.get_image_stream(bbox_dst).await;
+			log::trace!("get_stream level <= level_base");
+			return self.source.get_stream(bbox_dst).await;
 		}
 
 		let level_dst = bbox_dst.level;
 
 		let bbox_base = bbox_dst.at_level(self.level_base);
-		let stream_base = self.source.get_image_stream(bbox_base).await?;
+		let stream_base = self.source.get_stream(bbox_base).await?;
 
 		let tile_size = self.tile_size;
 		let tile_size_f64 = tile_size as f64;
 		let scale = (1 << (bbox_dst.level - self.level_base)) as f64;
 		let s = tile_size_f64 / scale;
+		let format = self.source.parameters().tile_format;
+		let compression = self.source.parameters().tile_compression;
 
-		Ok(stream_base.flat_map_parallel(move |coord_base, image_base| {
-			let mut bbox = coord_base.as_tile_bbox(1).unwrap().at_level(level_dst);
-			bbox.intersect_with(&bbox_dst).unwrap();
+		Ok(stream_base.flat_map_parallel(move |coord_base, tile_src| {
+			let mut bbox = coord_base.as_tile_bbox(1)?.at_level(level_dst);
+			bbox.intersect_with(&bbox_dst)?;
+
+			let image_src = tile_src.into_image()?;
 
 			Ok(TileStream::from_iter_coord_parallel(
 				bbox.into_iter_coords(),
@@ -115,24 +117,14 @@ impl OperationTrait for Operation {
 					let x0 = coord.x as f64 * s - (coord_base.x as f64 * tile_size_f64);
 					let y0 = coord.y as f64 * s - (coord_base.y as f64 * tile_size_f64);
 
-					let image = image_base.get_extract(x0, y0, s, s, tile_size, tile_size).unwrap();
-					image.into_optional()
+					let image_dst = image_src.get_extract(x0, y0, s, s, tile_size, tile_size).unwrap();
+
+					image_dst
+						.into_optional()
+						.map(|image_dst| Tile::from_image(image_dst, format, compression))
 				},
 			))
 		}))
-	}
-
-	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
-		log::debug!("get_blob_stream {:?}", bbox);
-
-		if bbox.level <= self.level_base {
-			return self.source.get_blob_stream(bbox).await;
-		}
-		pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters)
-	}
-
-	async fn get_vector_stream(&self, _bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		bail!("Vector tiles are not supported in raster_overscale operations.");
 	}
 }
 

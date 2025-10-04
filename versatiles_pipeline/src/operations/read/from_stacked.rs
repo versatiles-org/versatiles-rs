@@ -17,6 +17,7 @@
 
 use crate::{
 	PipelineFactory,
+	helpers::Tile,
 	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
@@ -28,9 +29,7 @@ use futures::{
 	future::{BoxFuture, join_all},
 	stream,
 };
-use imageproc::image::DynamicImage;
-use versatiles_core::{tilejson::TileJSON, utils::recompress, *};
-use versatiles_geometry::vector_tile::VectorTile;
+use versatiles_core::{tilejson::TileJSON, *};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Overlays multiple tile sources, using the tile from the first source that provides it.
@@ -109,73 +108,6 @@ impl Operation {
 			traversal,
 		})
 	}
-
-	/// Internal helper that collapses the common logic of
-	/// `get_tile_stream`, `get_image_stream`, and `get_vector_stream`.
-	///
-	/// For each sub‑bbox it:
-	/// 1. Allocates a slot for every coordinate,  
-	/// 2. Iterates through the sources in priority order,  
-	/// 3. Fills empty slots with whichever source provides the tile first,  
-	/// 4. Optionally post‑processes each tile (`map_fn`),  
-	/// 5. Emits a complete, gap‑free `TileStream`.
-	///
-	/// The generic parameters allow us to reuse the routine for both raster
-	/// and vector content while avoiding code duplication.
-	fn gather_stream<'a, T, FetchStream, MapFn>(
-		&'a self,
-		bbox: TileBBox,
-		mut fetch_stream: FetchStream,
-		mut map_fn: MapFn,
-	) -> Result<TileStream<'a, T>>
-	where
-		T: Clone + Send + 'static,
-		// Fetch a stream for the remaining bbox from one source.
-		FetchStream: FnMut(&'a Box<dyn OperationTrait>, TileBBox) -> BoxFuture<'a, Result<TileStream<'a, T>>>
-			+ Clone
-			+ Copy
-			+ Send
-			+ 'a,
-		// Optional post‑processing of each tile (e.g. recompression).
-		MapFn: FnMut(T, &Box<dyn OperationTrait>) -> Result<T> + Copy + Send + 'a,
-	{
-		// Divide the requested bbox into manageable chunks.
-		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
-
-		Ok(TileStream::from_streams(stream::iter(sub_bboxes).map(
-			move |bbox| async move {
-				let mut tiles = TileBBoxMap::<Option<T>>::new_default(bbox);
-
-				for source in self.sources.iter() {
-					let mut bbox_left = TileBBox::new_empty(bbox.level).unwrap();
-					for (coord, slot) in tiles.iter() {
-						if slot.is_none() {
-							bbox_left.include_coord(&coord).unwrap();
-						}
-					}
-					if bbox_left.is_empty() {
-						continue;
-					}
-
-					let stream = fetch_stream(source, bbox_left).await.unwrap();
-					stream
-						.for_each_sync(|(coord, item)| {
-							let entry = tiles.get_mut(&coord).unwrap();
-							if entry.is_none() {
-								let item = map_fn(item, source).unwrap();
-								*entry = Some(item);
-							}
-						})
-						.await;
-				}
-				let vec = tiles
-					.into_iter()
-					.flat_map(|(coord, item)| item.map(|tile| (coord, tile)))
-					.collect::<Vec<_>>();
-				TileStream::from_vec(vec)
-			},
-		)))
-	}
 }
 
 #[async_trait]
@@ -195,35 +127,48 @@ impl OperationTrait for Operation {
 	}
 
 	/// Stream packed tiles intersecting `bbox` using the overlay strategy.
-	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream> {
-		log::debug!("get_blob_stream {:?}", bbox);
+	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_stream {:?}", bbox);
 		// We need the desired output compression inside the closure, so copy it.
-		let output_compression = self.parameters.tile_compression;
-		self.gather_stream(
-			bbox,
-			|src, b| Box::pin(async move { src.get_blob_stream(b).await }),
-			move |blob: Blob, src| recompress(blob, &src.parameters().tile_compression, &output_compression),
-		)
-	}
+		let format = self.parameters.tile_format;
+		let compression = self.parameters.tile_compression;
 
-	/// Stream raster tiles for every coordinate in `bbox` via overlay.
-	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		log::debug!("get_image_stream {:?}", bbox);
-		self.gather_stream(
-			bbox,
-			|src, b| Box::pin(async move { src.get_image_stream(b).await }),
-			|img, _| Ok(img),
-		)
-	}
+		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
-	/// Stream vector tiles for every coordinate in `bbox` via overlay.
-	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		log::debug!("get_vector_stream {:?}", bbox);
-		self.gather_stream(
-			bbox,
-			|src, b| Box::pin(async move { src.get_vector_stream(b).await }),
-			|tile, _| Ok(tile),
-		)
+		Ok(TileStream::from_streams(stream::iter(sub_bboxes).map(
+			move |bbox| async move {
+				let mut tiles = TileBBoxMap::<Option<Tile>>::new_default(bbox);
+
+				for source in self.sources.iter() {
+					let mut bbox_left = TileBBox::new_empty(bbox.level).unwrap();
+					for (coord, slot) in tiles.iter() {
+						if slot.is_none() {
+							bbox_left.include_coord(&coord).unwrap();
+						}
+					}
+					if bbox_left.is_empty() {
+						continue;
+					}
+
+					let stream = source.get_stream(bbox_left).await.unwrap();
+					stream
+						.for_each_sync(|(coord, mut tile)| {
+							let entry = tiles.get_mut(&coord).unwrap();
+							if entry.is_none() {
+								tile.change_format(format).unwrap();
+								tile.change_compression(compression).unwrap();
+								*entry = Some(tile);
+							}
+						})
+						.await;
+				}
+				let vec = tiles
+					.into_iter()
+					.flat_map(|(coord, item)| item.map(|tile| (coord, tile)))
+					.collect::<Vec<_>>();
+				TileStream::from_vec(vec)
+			},
+		)))
 	}
 }
 
@@ -247,10 +192,9 @@ impl ReadOperationFactoryTrait for Factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::helpers::dummy_vector_source::{DummyVectorSource, arrange_tiles};
+	use crate::helpers::{arrange_tiles, dummy_vector_source::DummyVectorSource};
 	use std::sync::LazyLock;
 	use versatiles_core::TraversalOrder;
-	use versatiles_image::traits::*;
 
 	static RESULT_PATTERN: LazyLock<Vec<String>> = LazyLock::new(|| {
 		vec![
@@ -263,18 +207,8 @@ mod tests {
 		]
 	});
 
-	pub fn check_vector_blob(blob: Blob) -> String {
-		use versatiles_geometry::vector_tile::VectorTile;
-		let tile = VectorTile::from_blob(&blob).unwrap();
-		check_vector(tile)
-	}
-
-	pub fn check_image_blob(blob: Blob) -> String {
-		let tile = DynamicImage::from_blob(&blob, TileFormat::PNG).unwrap();
-		check_image(tile)
-	}
-
-	pub fn check_vector(tile: VectorTile) -> String {
+	pub fn check_vector(tile: Tile) -> String {
+		let tile = tile.into_vector().unwrap();
 		assert_eq!(tile.layers.len(), 1);
 
 		let layer = &tile.layers[0];
@@ -288,8 +222,9 @@ mod tests {
 		filename[0..filename.len() - 4].to_string()
 	}
 
-	pub fn check_image(image: DynamicImage) -> String {
+	pub fn check_image(tile: Tile) -> String {
 		use versatiles_image::traits::*;
+		let image = tile.into_image().unwrap();
 		let pixel = image.average_color();
 		match pixel.as_slice() {
 			[0, 0, 255] => "🟦".to_string(),
@@ -364,10 +299,7 @@ mod tests {
 
 		let bbox = TileBBox::new_full(3)?;
 
-		let tiles = result.get_blob_stream(bbox).await?.to_vec().await;
-		assert_eq!(arrange_tiles(tiles, check_vector_blob), *RESULT_PATTERN);
-
-		let tiles = result.get_vector_stream(bbox).await?.to_vec().await;
+		let tiles = result.get_stream(bbox).await?.to_vec().await;
 		assert_eq!(arrange_tiles(tiles, check_vector), *RESULT_PATTERN);
 
 		Ok(())
@@ -390,10 +322,7 @@ mod tests {
 
 		let bbox = TileBBox::new_full(3)?;
 
-		let tiles = result.get_blob_stream(bbox).await?.to_vec().await;
-		assert_eq!(arrange_tiles(tiles, check_image_blob), *RESULT_PATTERN);
-
-		let tiles = result.get_image_stream(bbox).await?.to_vec().await;
+		let tiles = result.get_stream(bbox).await?.to_vec().await;
 		assert_eq!(arrange_tiles(tiles, check_image), *RESULT_PATTERN);
 
 		Ok(())

@@ -16,19 +16,18 @@
 
 use crate::{
 	PipelineFactory,
-	helpers::pack_vector_tile_stream,
+	helpers::Tile,
 	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
 };
-use anyhow::{Result, bail, ensure};
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use futures::{
 	StreamExt,
 	future::{BoxFuture, join_all},
 	stream,
 };
-use imageproc::image::DynamicImage;
 use std::collections::HashMap;
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
@@ -138,20 +137,9 @@ impl OperationTrait for Operation {
 		&self.traversal
 	}
 
-	/// Stream packed vector tiles intersecting `bbox`.
-	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream> {
-		log::debug!("get_blob_stream {:?}", bbox);
-		pack_vector_tile_stream(self.get_vector_stream(bbox).await, &self.parameters)
-	}
-
-	/// Always errors – raster output is not supported.
-	async fn get_image_stream(&self, _bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		bail!("this operation does not support image data");
-	}
-
 	/// Stream merged vector tiles for every coordinate in `bbox`.
-	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		log::debug!("get_vector_stream {:?}", bbox);
+	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_stream {:?}", bbox);
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
 		Ok(TileStream::from_streams(stream::iter(bboxes).map(
@@ -160,23 +148,29 @@ impl OperationTrait for Operation {
 
 				for source in self.sources.iter() {
 					source
-						.get_vector_stream(bbox)
+						.get_stream(bbox)
 						.await
 						.unwrap()
 						.for_each_sync(|(coord, tile)| {
-							tiles.get_mut(&coord).unwrap().push(tile);
+							tiles.get_mut(&coord).unwrap().push(tile.into_vector().unwrap());
 						})
 						.await;
 				}
 
+				let format = self.parameters.tile_format;
+				let compression = self.parameters.tile_compression;
+
 				TileStream::from_vec(
 					tiles
 						.into_iter()
-						.filter_map(|(c, v)| {
-							if v.is_empty() {
+						.filter_map(|(coord, vec_tiles)| {
+							if vec_tiles.is_empty() {
 								None
 							} else {
-								Some((c, merge_vector_tiles(v).unwrap()))
+								Some((
+									coord,
+									Tile::from_vector(merge_vector_tiles(vec_tiles).unwrap(), format, compression),
+								))
 							}
 						})
 						.collect(),
@@ -207,7 +201,7 @@ impl ReadOperationFactoryTrait for Factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::helpers::dummy_vector_source::{DummyVectorSource, arrange_tiles};
+	use crate::helpers::{arrange_tiles, dummy_vector_source::DummyVectorSource};
 	use itertools::Itertools;
 
 	pub fn check_tile(blob: &Blob) -> String {
@@ -296,11 +290,11 @@ mod tests {
 			.await?;
 
 		let bbox = TileBBox::new_full(3)?;
-		let tiles = result.get_blob_stream(bbox).await?.to_vec().await;
+		let tiles = result.get_stream(bbox).await?.to_vec().await;
 
 		assert_eq!(
-			arrange_tiles(tiles, |blob| {
-				match check_tile(&blob).as_str() {
+			arrange_tiles(tiles, |tile| {
+				match check_tile(&tile.into_blob().unwrap()).as_str() {
 					"A.pbf" => "🟦",
 					"B.pbf" => "🟨",
 					"A.pbf,B.pbf" => "🟩",

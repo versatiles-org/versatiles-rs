@@ -263,10 +263,7 @@ where
 		self.inner.collect().await
 	}
 
-	pub async fn to_map(self) -> HashMap<TileCoord, T>
-	where
-		T: Eq,
-	{
+	pub async fn to_map(self) -> HashMap<TileCoord, T> {
 		self.inner.collect().await
 	}
 

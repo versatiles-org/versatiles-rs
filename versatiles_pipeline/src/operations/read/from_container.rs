@@ -6,20 +6,12 @@
 //! [`OperationTrait`] so that the rest of the pipeline can treat it like any
 //! other data source.
 
-use crate::{
-	PipelineFactory,
-	helpers::{unpack_image_tile_stream, unpack_vector_tile_stream},
-	operations::read::traits::ReadOperationTrait,
-	traits::*,
-	vpl::VPLNode,
-};
+use crate::{PipelineFactory, helpers::Tile, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use imageproc::image::DynamicImage;
 use std::fmt::Debug;
 use versatiles_core::{tilejson::TileJSON, *};
-use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*.tar` file.
@@ -81,21 +73,15 @@ impl OperationTrait for Operation {
 
 	/// Stream raw tile blobs intersecting the bounding box by delegating to
 	/// `TilesReaderTrait::get_tile_stream`.
-	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream> {
-		log::debug!("get_blob_stream {:?}", bbox);
-		self.reader.get_tile_stream(bbox).await
-	}
-
-	/// Stream decoded raster images for all tiles within the bounding box.
-	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		log::debug!("get_image_stream {:?}", bbox);
-		unpack_image_tile_stream(self.reader.get_tile_stream(bbox).await, &self.parameters)
-	}
-
-	/// Stream decoded vector tiles contained in the bounding box.
-	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		log::debug!("get_vector_stream {:?}", bbox);
-		unpack_vector_tile_stream(self.reader.get_tile_stream(bbox).await, &self.parameters)
+	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("getstream {:?}", bbox);
+		let format = self.parameters.tile_format;
+		let compression = self.parameters.tile_compression;
+		Ok(self
+			.reader
+			.get_tile_stream(bbox)
+			.await?
+			.map_item_parallel(move |blob| Ok(Tile::from_blob(blob, format, compression))))
 	}
 }
 
@@ -167,13 +153,11 @@ mod tests {
 			]
 		);
 
-		let mut stream = operation
-			.get_blob_stream(TileBBox::from_min_max(3, 1, 1, 2, 3)?)
-			.await?;
+		let mut stream = operation.get_stream(TileBBox::from_min_max(3, 1, 1, 2, 3)?).await?;
 
 		let mut n = 0;
-		while let Some((coord, blob)) = stream.next().await {
-			assert!(blob.len() > 50);
+		while let Some((coord, tile)) = stream.next().await {
+			assert!(tile.into_blob()?.len() > 50);
 			assert!(coord.x >= 1 && coord.x <= 2);
 			assert!(coord.y >= 1 && coord.y <= 3);
 			assert_eq!(coord.level, 3);
@@ -217,13 +201,11 @@ mod tests {
 			]
 		);
 
-		let mut stream = operation
-			.get_blob_stream(TileBBox::from_min_max(3, 1, 1, 2, 3)?)
-			.await?;
+		let mut stream = operation.get_stream(TileBBox::from_min_max(3, 1, 1, 2, 3)?).await?;
 
 		let mut n = 0;
-		while let Some((coord, blob)) = stream.next().await {
-			assert!(blob.len() > 50);
+		while let Some((coord, tile)) = stream.next().await {
+			assert!(tile.into_blob()?.len() > 50);
 			assert!(coord.x >= 1 && coord.x <= 2);
 			assert!(coord.y >= 1 && coord.y <= 3);
 			assert_eq!(coord.level, 3);

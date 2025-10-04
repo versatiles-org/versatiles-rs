@@ -1,4 +1,4 @@
-use crate::{PipelineFactory, helpers::pack_image_tile_stream, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, helpers::Tile, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
@@ -7,7 +7,6 @@ use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 use versatiles_core::{cache::CacheMap, tilejson::TileJSON, *};
 use versatiles_derive::context;
-use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::traits::*;
 
 static BLOCK_TILE_COUNT: u32 = 32;
@@ -192,11 +191,11 @@ impl OperationTrait for Operation {
 		&self.traversal
 	}
 
-	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		log::debug!("get_image_stream {:?}", bbox);
+	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_stream {:?}", bbox);
 
 		if bbox.level > self.level_base {
-			return self.source.get_image_stream(bbox).await;
+			return self.source.get_stream(bbox).await;
 		}
 
 		let size = bbox.max_count().min(BLOCK_TILE_COUNT);
@@ -207,7 +206,15 @@ impl OperationTrait for Operation {
 
 		let container: TileBBoxMap<Option<DynamicImage>> = if bbox.level == self.level_base {
 			log::trace!("Fetching images from source for bbox {:?}", bbox);
-			TileBBoxMap::<Option<DynamicImage>>::from_stream(bbox, self.source.get_image_stream(bbox).await?).await?
+			TileBBoxMap::<Option<DynamicImage>>::from_stream(
+				bbox,
+				self
+					.source
+					.get_stream(bbox)
+					.await?
+					.map_item_parallel(|tile| tile.into_image()),
+			)
+			.await?
 		} else {
 			log::trace!("Building images from cache for bbox {:?}", bbox);
 			self.build_images_from_cache(bbox0).await?
@@ -216,12 +223,19 @@ impl OperationTrait for Operation {
 		log::trace!("Adding images to cache for bbox {:?}", container.bbox());
 		self.add_images_to_cache(&container).await?;
 
+		let format = self.source.parameters().tile_format;
+		let compression = self.source.parameters().tile_compression;
+
 		log::trace!("Composing final stream for bbox {:?}", bbox);
 		let vec = container
 			.into_iter()
 			.filter_map(move |(c, o)| {
 				if let Some(image) = o {
-					if bbox.contains(&c) { Some((c, image)) } else { None }
+					if bbox.contains(&c) {
+						Some((c, Tile::from_image(image, format, compression)))
+					} else {
+						None
+					}
 				} else {
 					None
 				}
@@ -229,19 +243,6 @@ impl OperationTrait for Operation {
 			.collect();
 
 		Ok(TileStream::from_vec(vec))
-	}
-
-	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
-		log::debug!("get_blob_stream {:?}", bbox);
-
-		if bbox.level > self.level_base {
-			return self.source.get_blob_stream(bbox).await;
-		}
-		pack_image_tile_stream(self.get_image_stream(bbox).await, &self.parameters)
-	}
-
-	async fn get_vector_stream(&self, _bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		bail!("Vector tiles are not supported in raster_overview operations.");
 	}
 }
 

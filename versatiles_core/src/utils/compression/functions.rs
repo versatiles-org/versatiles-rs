@@ -199,6 +199,15 @@ pub fn decompress(blob: Blob, compression: &TileCompression) -> Result<Blob> {
 	}
 }
 
+#[context("Decompressing blob ref with algorithm: {compression:?}")]
+pub fn decompress_ref(blob: &Blob, compression: &TileCompression) -> Result<Blob> {
+	match compression {
+		TileCompression::Uncompressed => Ok(blob.clone()),
+		TileCompression::Gzip => decompress_gzip(blob),
+		TileCompression::Brotli => decompress_brotli(blob),
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::super::tests::generate_test_data;

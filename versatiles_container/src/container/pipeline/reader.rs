@@ -118,8 +118,9 @@ impl TilesReaderTrait for PipelineReader {
 	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		let mut vec = self
 			.operation
-			.get_blob_stream(coord.as_tile_bbox(1)?)
+			.get_stream(coord.as_tile_bbox(1)?)
 			.await?
+			.map_item_parallel(|t| t.into_blob())
 			.to_vec()
 			.await;
 
@@ -135,7 +136,11 @@ impl TilesReaderTrait for PipelineReader {
 	/// Get a stream of tiles within the bounding box.
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
 		log::debug!("get_tile_stream {:?}", bbox);
-		self.operation.get_blob_stream(bbox).await
+		Ok(self
+			.operation
+			.get_stream(bbox)
+			.await?
+			.map_item_parallel(|t| t.into_blob()))
 	}
 }
 

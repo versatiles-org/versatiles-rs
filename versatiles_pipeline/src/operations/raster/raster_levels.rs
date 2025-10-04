@@ -1,11 +1,9 @@
-use crate::{PipelineFactory, helpers::pack_image_tile_stream, traits::*, vpl::VPLNode};
-use anyhow::{Result, bail};
+use crate::{PipelineFactory, helpers::Tile, traits::*, vpl::VPLNode};
+use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use imageproc::image::DynamicImage;
 use std::fmt::Debug;
 use versatiles_core::{tilejson::TileJSON, *};
-use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::traits::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -63,33 +61,21 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		log::debug!("get_image_stream {:?}", bbox);
+	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_stream {:?}", bbox);
 
 		let contrast = self.contrast / 255.0;
 		let brightness = self.brightness / 255.0;
 		let gamma = self.gamma;
-		Ok(self
-			.source
-			.get_image_stream(bbox)
-			.await?
-			.map_item_parallel(move |mut image| {
+		Ok(self.source.get_stream(bbox).await?.map_item_parallel(move |tile| {
+			tile.map_image(|mut image| {
 				image.mut_color_values(|v| {
 					let v = ((v as f32 - 127.5) * contrast + 0.5 + brightness).powf(gamma) * 255.0;
 					v.round().clamp(0.0, 255.0) as u8
 				});
 				Ok(image)
-			}))
-	}
-
-	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
-		log::debug!("get_blob_stream {:?}", bbox);
-
-		pack_image_tile_stream(self.get_image_stream(bbox).await, self.source.parameters())
-	}
-
-	async fn get_vector_stream(&self, _bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		bail!("Vector tiles are not supported in raster_levels operations.");
+			})
+		}))
 	}
 }
 
@@ -150,13 +136,13 @@ mod tests {
 			contrast: parameters[1],
 			gamma: parameters[2],
 		};
-		let images = op
-			.get_image_stream(TileBBox::from_min_max(8, 56, 56, 56, 56)?)
+		let mut tiles = op
+			.get_stream(TileBBox::from_min_max(8, 56, 56, 56, 56)?)
 			.await?
 			.to_vec()
 			.await;
-		assert_eq!(images.len(), 1);
-		assert_eq!(images[0].1.average_color(), color_out);
+		assert_eq!(tiles.len(), 1);
+		assert_eq!(tiles[0].1.image()?.average_color(), color_out);
 		Ok(())
 	}
 }

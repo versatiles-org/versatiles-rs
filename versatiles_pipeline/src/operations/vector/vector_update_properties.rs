@@ -92,14 +92,14 @@ impl RunnerTrait for Runner {
 			}
 		}
 	}
-	fn run(&self, mut tile: VectorTile) -> Result<VectorTile> {
+	fn run(&self, mut tile: VectorTile) -> Result<Option<VectorTile>> {
 		let layer_name = &self.args.layer_name;
 
 		// Iterate over all layers in the tile and *only* touch the requested one.
 		// Other layers pass through unchanged.
 		let layer = tile.find_layer_mut(layer_name);
 		if layer.is_none() {
-			return Ok(tile);
+			return Ok(Some(tile));
 		}
 
 		layer.unwrap().filter_map_properties(|mut prop| {
@@ -128,7 +128,7 @@ impl RunnerTrait for Runner {
 			Some(prop)
 		})?;
 
-		Ok(tile)
+		Ok(Some(tile))
 	}
 }
 
@@ -203,7 +203,7 @@ mod tests {
 		};
 
 		let tile0 = create_sample_vector_tile();
-		let tile1 = runner.run(tile0).unwrap();
+		let tile1 = runner.run(tile0).unwrap().unwrap();
 
 		let properties = tile1.layers[0].features[0].decode_properties(&tile1.layers[0]).unwrap();
 
@@ -256,10 +256,9 @@ mod tests {
 
 		// ── extract a single feature for inspection ────────────────
 		let mut stream = operation
-			.get_blob_stream(TileCoord::new(10, 1000, 100)?.as_tile_bbox(1)?)
+			.get_stream(TileCoord::new(10, 1000, 100)?.as_tile_bbox(1)?)
 			.await?;
-		let blob = stream.next().await.unwrap().1;
-		let tile = VectorTile::from_blob(&blob)?;
+		let tile = stream.next().await.unwrap().1.into_vector()?;
 		let layer = tile.find_layer("debug_y").unwrap();
 
 		// ── stringify for easy substring assertions ────────────────

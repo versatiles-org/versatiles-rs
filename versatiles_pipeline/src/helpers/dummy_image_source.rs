@@ -1,11 +1,10 @@
-use crate::OperationTrait;
+use crate::{OperationTrait, helpers::Tile};
 use anyhow::{Context, Result, bail, ensure};
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use nom::Input;
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_derive::context;
-use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::traits::*;
 
 #[derive(Debug)]
@@ -107,31 +106,21 @@ impl OperationTrait for DummyImageSource {
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
-	async fn get_blob_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Blob>> {
-		let blob = self.blob.clone();
-		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
-		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {
-			Some(blob.clone())
-		}))
-	}
-
-	async fn get_image_stream(&self, mut bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
+	async fn get_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_stream {:?}", bbox);
 		let image = self.image.clone();
+		let format = self.parameters.tile_format;
+		let compression = self.parameters.tile_compression;
 		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {
-			Some(image.clone())
+			Some(Tile::from_image(image.clone(), format, compression))
 		}))
-	}
-
-	async fn get_vector_stream(&self, _bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		bail!("Vector tiles are not supported in DummyImageSource operations.");
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::helpers::dummy_vector_source::arrange_tiles;
 	use versatiles_core::GeoBBox;
 
 	#[test]
@@ -187,16 +176,5 @@ mod tests {
 				"}"
 			]
 		);
-	}
-
-	#[test]
-	fn test_arrange_tiles() {
-		let tiles = vec![
-			(TileCoord::new(1, 0, 0).unwrap(), Blob::from("a")),
-			(TileCoord::new(1, 1, 0).unwrap(), Blob::from("b")),
-			(TileCoord::new(1, 0, 1).unwrap(), Blob::from("c")),
-		];
-		let arranged = arrange_tiles(tiles, |blob| blob.as_str().to_string());
-		assert_eq!(arranged, ["a b", "c ❌"]);
 	}
 }

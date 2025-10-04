@@ -1,11 +1,9 @@
-use crate::{PipelineFactory, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, helpers::Tile, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use imageproc::image::DynamicImage;
 use std::{fmt::Debug, str};
 use versatiles_core::{tilejson::TileJSON, *};
-use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filter tiles by bounding box and/or zoom levels.
@@ -155,31 +153,18 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	async fn get_image_stream(&self, _bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		bail!(
-			"Operation 'raster_format' must be the last operation in a pipeline and cannot be used as an image source."
-		);
-	}
-
-	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
-		log::debug!("get_blob_stream {:?}", bbox);
-		use RasterTileFormat::*;
-		use versatiles_image::{avif, jpeg, png, webp};
+	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_stream {:?}", bbox);
 
 		let quality = self.quality[bbox.level as usize];
 		let speed = self.speed;
-		let stream = self.source.get_image_stream(bbox).await?;
+		let stream = self.source.get_stream(bbox).await?;
+		let format = Some(self.format.into());
 
-		Ok(match self.format {
-			Avif => stream.map_item_parallel(move |image| avif::encode(&image, quality, speed)),
-			Jpeg => stream.map_item_parallel(move |image| jpeg::encode(&image, quality)),
-			Png => stream.map_item_parallel(move |image| png::encode(&image, speed)),
-			Webp => stream.map_item_parallel(move |image| webp::encode(&image, quality)),
-		})
-	}
-
-	async fn get_vector_stream(&self, _bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		bail!("Vector tiles are not supported in raster_format operations.");
+		Ok(stream.map_item_parallel(move |mut tile| {
+			tile.encode_raster(format, Some(TileCompression::Uncompressed), quality, speed)?;
+			Ok(tile)
+		}))
 	}
 }
 

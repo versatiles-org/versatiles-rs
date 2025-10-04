@@ -1,9 +1,11 @@
+#[cfg(test)]
+mod arrange_tiles;
 mod csv;
 pub mod dummy_image_source;
 pub mod dummy_vector_source;
-mod tile_image;
-mod tile_vector;
+mod tile;
 
+#[cfg(test)]
+pub use arrange_tiles::*;
 pub use csv::*;
-pub use tile_image::*;
-pub use tile_vector::*;
+pub use tile::*;

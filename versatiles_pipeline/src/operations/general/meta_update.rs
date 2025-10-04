@@ -1,11 +1,9 @@
-use crate::{PipelineFactory, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, helpers::Tile, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use imageproc::image::DynamicImage;
 use std::fmt::Debug;
 use versatiles_core::{tilejson::TileJSON, *};
-use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Update metadata, see also https://github.com/mapbox/tilejson-spec/tree/master/3.0.0
@@ -80,19 +78,9 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
-	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>> {
-		log::debug!("get_blob_stream {:?}", bbox);
-		self.source.get_blob_stream(bbox).await
-	}
-
-	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>> {
-		log::debug!("get_image_stream {:?}", bbox);
-		self.source.get_image_stream(bbox).await
-	}
-
-	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>> {
-		log::debug!("get_vector_stream {:?}", bbox);
-		self.source.get_vector_stream(bbox).await
+	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("get_stream {:?}", bbox);
+		self.source.get_stream(bbox).await
 	}
 }
 

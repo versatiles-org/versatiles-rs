@@ -38,12 +38,12 @@ impl Runner {
 }
 
 impl RunnerTrait for Runner {
-	fn run(&self, mut tile: VectorTile) -> Result<VectorTile> {
+	fn run(&self, mut tile: VectorTile) -> Result<Option<VectorTile>> {
 		tile
 			.layers
 			.retain(|layer| self.layer_set.contains(&layer.name) == self.invert);
 
-		Ok(tile)
+		Ok(Some(tile))
 	}
 	fn update_tilejson(&self, tilejson: &mut TileJSON) {
 		tilejson
@@ -112,7 +112,7 @@ mod tests {
 		});
 
 		let tile0 = VectorTile::new(vec![create_layer("1"), create_layer("2")]);
-		let tile1 = runner.run(tile0).unwrap();
+		let tile1 = runner.run(tile0).unwrap().unwrap();
 
 		assert_eq!(tile1.layers.len(), 1);
 		assert_eq!(extract_suffix(&tile1.layers[0]).unwrap(), "2");
@@ -149,9 +149,8 @@ mod tests {
 			)
 			.await?;
 
-		let mut stream = operation.get_blob_stream(TileBBox::new_full(0)?).await?;
-		let blob = stream.next().await.unwrap().1;
-		let tile = VectorTile::from_blob(&blob)?;
+		let mut stream = operation.get_stream(TileBBox::new_full(0)?).await?;
+		let tile = stream.next().await.unwrap().1.into_vector()?;
 		let layer_names = tile
 			.layers
 			.iter()

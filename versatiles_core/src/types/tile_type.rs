@@ -32,6 +32,14 @@ impl TileType {
 		}
 	}
 
+	pub fn is_raster(&self) -> bool {
+		*self == TileType::Raster
+	}
+
+	pub fn is_vector(&self) -> bool {
+		*self == TileType::Vector
+	}
+
 	/// Returns the default tile schema associated with the tile type.
 	///
 	/// # Examples

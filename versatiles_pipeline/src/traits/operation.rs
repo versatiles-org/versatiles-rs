@@ -1,9 +1,9 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use imageproc::image::DynamicImage;
 use std::fmt::Debug;
-use versatiles_core::{Blob, TileBBox, TileStream, TilesReaderParameters, Traversal, tilejson::*};
-use versatiles_geometry::vector_tile::VectorTile;
+use versatiles_core::{TileBBox, TileStream, TilesReaderParameters, Traversal, tilejson::*};
+
+use crate::helpers::Tile;
 
 #[async_trait]
 pub trait OperationTrait: Debug + Send + Sync + Unpin {
@@ -12,7 +12,5 @@ pub trait OperationTrait: Debug + Send + Sync + Unpin {
 	fn traversal(&self) -> &Traversal {
 		&Traversal::ANY
 	}
-	async fn get_blob_stream(&self, bbox: TileBBox) -> Result<TileStream<Blob>>;
-	async fn get_image_stream(&self, bbox: TileBBox) -> Result<TileStream<DynamicImage>>;
-	async fn get_vector_stream(&self, bbox: TileBBox) -> Result<TileStream<VectorTile>>;
+	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>>;
 }

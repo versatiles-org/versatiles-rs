@@ -41,7 +41,7 @@ impl Runner {
 }
 
 impl RunnerTrait for Runner {
-	fn run(&self, mut tile: VectorTile) -> Result<VectorTile> {
+	fn run(&self, mut tile: VectorTile) -> Result<Option<VectorTile>> {
 		tile.layers.iter_mut().for_each(|layer| {
 			let name = layer.name.clone();
 			layer
@@ -52,7 +52,7 @@ impl RunnerTrait for Runner {
 				.unwrap();
 		});
 
-		Ok(tile)
+		Ok(Some(tile))
 	}
 	fn update_tilejson(&self, tilejson: &mut TileJSON) {
 		tilejson.vector_layers.iter_mut().for_each(|(name, layer)| {
@@ -148,7 +148,7 @@ mod tests {
 		.unwrap();
 
 		let tile0 = VectorTile::new(vec![create_layer("1"), create_layer("2")]);
-		let tile1 = runner.run(tile0).unwrap();
+		let tile1 = runner.run(tile0).unwrap().unwrap();
 
 		assert_eq!(
 			extract_tile_properties(&tile1),
@@ -183,11 +183,11 @@ mod tests {
 			)
 			.await?;
 
-		let mut stream = operation.get_blob_stream(TileBBox::new_full(0)?).await?;
-		let blob = stream.next().await.unwrap().1;
+		let mut stream = operation.get_stream(TileBBox::new_full(0)?).await?;
+		let tile = stream.next().await.unwrap().1.into_vector()?;
 
 		Ok((
-			extract_tile_properties(&VectorTile::from_blob(&blob)?).join(";"),
+			extract_tile_properties(&tile).join(";"),
 			extract_json_properties(operation.tilejson()).join(";"),
 		))
 	}

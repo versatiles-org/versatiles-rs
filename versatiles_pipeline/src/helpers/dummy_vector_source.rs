@@ -121,25 +121,6 @@ impl TilesReaderTrait for DummyVectorSource {
 }
 
 #[cfg(test)]
-pub fn arrange_tiles<T: ToString, I>(tiles: Vec<(TileCoord, I)>, cb: impl Fn(I) -> T) -> Vec<String> {
-	use versatiles_core::TileBBox;
-
-	let mut bbox = TileBBox::new_empty(tiles.first().unwrap().0.level).unwrap();
-	tiles.iter().for_each(|t| bbox.include(t.0.x, t.0.y));
-
-	let mut result: Vec<Vec<String>> = (0..bbox.height())
-		.map(|_| (0..bbox.width()).map(|_| String::from("❌")).collect())
-		.collect();
-
-	for (coord, item) in tiles.into_iter() {
-		let x = (coord.x - bbox.x_min()) as usize;
-		let y = (coord.y - bbox.y_min()) as usize;
-		result[y][x] = cb(item).to_string();
-	}
-	result.into_iter().map(|r| r.join(" ")).collect::<Vec<String>>()
-}
-
-#[cfg(test)]
 mod tests {
 	use super::*;
 	use versatiles_core::GeoBBox;
@@ -169,18 +150,6 @@ mod tests {
 		let tile_data = source.get_tile_blob(&coord).await.unwrap();
 
 		assert!(tile_data.is_none());
-	}
-
-	#[test]
-	fn test_arrange_tiles() {
-		let tiles = vec![
-			(TileCoord::new(8, 0, 0).unwrap(), Blob::from("a")),
-			(TileCoord::new(8, 1, 0).unwrap(), Blob::from("b")),
-			(TileCoord::new(8, 0, 1).unwrap(), Blob::from("c")),
-		];
-
-		let arranged = arrange_tiles(tiles, |blob| blob.as_str().to_string());
-		assert_eq!(arranged, ["a b", "c ❌"]);
 	}
 
 	#[test]
