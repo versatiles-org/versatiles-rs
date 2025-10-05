@@ -49,7 +49,7 @@ impl Operation {
 
 			let level_base = args
 				.level
-				.unwrap_or_else(|| source.parameters().bbox_pyramid.get_zoom_max().unwrap());
+				.unwrap_or_else(|| source.parameters().bbox_pyramid.get_level_max().unwrap());
 
 			let mut level_bbox = *parameters.bbox_pyramid.get_level_bbox(level_base);
 			while level_bbox.level > 0 {

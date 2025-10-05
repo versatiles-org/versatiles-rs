@@ -37,11 +37,11 @@ impl Operation {
 			let mut parameters = source.parameters().clone();
 
 			if let Some(level_min) = args.level_min {
-				parameters.bbox_pyramid.set_zoom_min(level_min);
+				parameters.bbox_pyramid.set_level_min(level_min);
 			}
 
 			if let Some(level_max) = args.level_max {
-				parameters.bbox_pyramid.set_zoom_max(level_max);
+				parameters.bbox_pyramid.set_level_max(level_max);
 			}
 
 			if let Some(bbox) = args.bbox {

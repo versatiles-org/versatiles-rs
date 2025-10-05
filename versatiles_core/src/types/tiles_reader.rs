@@ -318,8 +318,8 @@ mod tests {
 		let parameters = reader.parameters();
 		assert_eq!(parameters.tile_compression, TileCompression::Gzip);
 		assert_eq!(parameters.tile_format, TileFormat::MVT);
-		assert_eq!(parameters.bbox_pyramid.get_zoom_min().unwrap(), 0);
-		assert_eq!(parameters.bbox_pyramid.get_zoom_max().unwrap(), 3);
+		assert_eq!(parameters.bbox_pyramid.get_level_min().unwrap(), 0);
+		assert_eq!(parameters.bbox_pyramid.get_level_max().unwrap(), 3);
 	}
 
 	#[tokio::test]

@@ -141,8 +141,8 @@ impl TilesWriterTrait for MBTilesWriter {
 		let pyramid = &reader.parameters().bbox_pyramid;
 		let bbox = pyramid.get_geo_bbox().unwrap();
 		let center = pyramid.get_geo_center().unwrap();
-		let zoom_min = pyramid.get_zoom_min().unwrap();
-		let zoom_max = pyramid.get_zoom_max().unwrap();
+		let zoom_min = pyramid.get_level_min().unwrap();
+		let zoom_max = pyramid.get_level_max().unwrap();
 		writer.set_metadata("bounds", &format!("{},{},{},{}", bbox.0, bbox.1, bbox.2, bbox.3))?;
 		writer.set_metadata("center", &format!("{},{},{}", center.0, center.1, center.2))?;
 		writer.set_metadata("minzoom", &zoom_min.to_string())?;

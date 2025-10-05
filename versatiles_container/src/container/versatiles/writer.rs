@@ -60,8 +60,8 @@ impl TilesWriterTrait for VersaTilesWriter {
 			&parameters.tile_format,
 			&parameters.tile_compression,
 			[
-				bbox_pyramid.get_zoom_min().ok_or(anyhow!("invalid minzoom"))?,
-				bbox_pyramid.get_zoom_max().ok_or(anyhow!("invalid maxzoom"))?,
+				bbox_pyramid.get_level_min().ok_or(anyhow!("invalid minzoom"))?,
+				bbox_pyramid.get_level_max().ok_or(anyhow!("invalid maxzoom"))?,
 			],
 			&bbox_pyramid.get_geo_bbox().ok_or(anyhow!("invalid geo bounding box"))?,
 		)?;

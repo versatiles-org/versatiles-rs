@@ -136,9 +136,9 @@ The VersaTiles Pipeline Language (VPL) allows you to define tile-processing pipe
 Example of combining multiple vector tile sources:
 
 ```text
-from_overlayed [
+from_merged_vector [
    from_container filename="world.versatiles",
-   from_container filename="europe.versatiles" | filter_zoom min=5,
+   from_container filename="europe.versatiles" | filter level_min=5,
    from_container filename="germany.versatiles"
 ]
 ```

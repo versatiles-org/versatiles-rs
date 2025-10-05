@@ -195,7 +195,7 @@ impl TileBBoxPyramid {
 	/// Finds the minimum zoom level that contains any tiles.
 	///
 	/// Returns `None` if **all** levels are empty.
-	pub fn get_zoom_min(&self) -> Option<u8> {
+	pub fn get_level_min(&self) -> Option<u8> {
 		self
 			.level_bbox
 			.iter()
@@ -206,7 +206,7 @@ impl TileBBoxPyramid {
 	/// Finds the maximum zoom level that contains any tiles.
 	///
 	/// Returns `None` if **all** levels are empty.
-	pub fn get_zoom_max(&self) -> Option<u8> {
+	pub fn get_level_max(&self) -> Option<u8> {
 		self
 			.level_bbox
 			.iter()
@@ -219,7 +219,7 @@ impl TileBBoxPyramid {
 	///
 	/// This scans from the highest zoom level downward, returning the first that meets
 	/// a threshold of `> 10` tiles. Returns `None` if none meet that threshold.
-	pub fn get_good_zoom(&self) -> Option<u8> {
+	pub fn get_good_level(&self) -> Option<u8> {
 		self
 			.level_bbox
 			.iter()
@@ -229,7 +229,7 @@ impl TileBBoxPyramid {
 	}
 
 	/// Clears bounding boxes for all levels < `zoom_level_min`.
-	pub fn set_zoom_min(&mut self, zoom_level_min: u8) {
+	pub fn set_level_min(&mut self, zoom_level_min: u8) {
 		for (index, bbox) in self.level_bbox.iter_mut().enumerate() {
 			if (index as u8) < zoom_level_min {
 				bbox.set_empty();
@@ -238,7 +238,7 @@ impl TileBBoxPyramid {
 	}
 
 	/// Clears bounding boxes for all levels > `zoom_level_max`.
-	pub fn set_zoom_max(&mut self, zoom_level_max: u8) {
+	pub fn set_level_max(&mut self, zoom_level_max: u8) {
 		for (index, bbox) in self.level_bbox.iter_mut().enumerate() {
 			if (index as u8) > zoom_level_max {
 				bbox.set_empty();
@@ -273,7 +273,7 @@ impl TileBBoxPyramid {
 	///
 	/// Returns `None` if the pyramid is empty.
 	pub fn get_geo_bbox(&self) -> Option<GeoBBox> {
-		let max_zoom = self.get_zoom_max()?;
+		let max_zoom = self.get_level_max()?;
 		Some(self.get_level_bbox(max_zoom).to_geo_bbox())
 	}
 
@@ -283,7 +283,7 @@ impl TileBBoxPyramid {
 	/// Returns `None` if the pyramid is empty or if the bounding box is invalid.
 	pub fn get_geo_center(&self) -> Option<GeoCenter> {
 		let bbox = self.get_geo_bbox()?;
-		let zoom = (self.get_zoom_min()? + 2).min(self.get_zoom_max()?);
+		let zoom = (self.get_level_min()? + 2).min(self.get_level_max()?);
 		let center_lon = (bbox.0 + bbox.2) / 2.0;
 		let center_lat = (bbox.1 + bbox.3) / 2.0;
 		Some(GeoCenter(center_lon, center_lat, zoom))
@@ -355,8 +355,8 @@ mod tests {
 			pyramid.is_empty(),
 			"Expected new_empty to create an entirely empty pyramid."
 		);
-		assert_eq!(pyramid.get_zoom_min(), None);
-		assert_eq!(pyramid.get_zoom_max(), None);
+		assert_eq!(pyramid.get_level_min(), None);
+		assert_eq!(pyramid.get_level_max(), None);
 		assert_eq!(pyramid.count_tiles(), 0);
 	}
 
@@ -453,9 +453,9 @@ mod tests {
 	fn test_zoom_min_max2() {
 		let test = |z0: u8, z1: u8| {
 			let mut pyramid = TileBBoxPyramid::new_full(z1);
-			pyramid.set_zoom_min(z0);
-			assert_eq!(pyramid.get_zoom_min().unwrap(), z0);
-			assert_eq!(pyramid.get_zoom_max().unwrap(), z1);
+			pyramid.set_level_min(z0);
+			assert_eq!(pyramid.get_level_min().unwrap(), z0);
+			assert_eq!(pyramid.get_level_max().unwrap(), z1);
 		};
 
 		test(0, 1);
@@ -626,19 +626,19 @@ mod tests {
 	#[test]
 	fn test_zoom_min_max1() {
 		let p = TileBBoxPyramid::new_full(3);
-		assert_eq!(p.get_zoom_min(), Some(0));
-		assert_eq!(p.get_zoom_max(), Some(3));
+		assert_eq!(p.get_level_min(), Some(0));
+		assert_eq!(p.get_level_max(), Some(3));
 
 		let empty_p = TileBBoxPyramid::new_empty();
-		assert_eq!(empty_p.get_zoom_min(), None);
-		assert_eq!(empty_p.get_zoom_max(), None);
+		assert_eq!(empty_p.get_level_min(), None);
+		assert_eq!(empty_p.get_level_max(), None);
 	}
 
 	#[test]
 	fn test_get_good_zoom() {
 		let p = TileBBoxPyramid::new_full(5);
 		// Usually, full coverage at level 5 implies many tiles, so we'd find a "good" zoom near 5.
-		let good_zoom = p.get_good_zoom().unwrap();
+		let good_zoom = p.get_good_level().unwrap();
 		// We can't say exactly which level (tile logic is in TileBBox), but typically it'd be 4 or 5
 		assert!(good_zoom <= 5);
 	}
@@ -647,14 +647,14 @@ mod tests {
 	fn test_set_zoom_min_max() {
 		let mut p = TileBBoxPyramid::new_full(5);
 		// We remove coverage below level 2
-		p.set_zoom_min(2);
-		assert_eq!(p.get_zoom_min(), Some(2));
-		assert_eq!(p.get_zoom_max(), Some(5));
+		p.set_level_min(2);
+		assert_eq!(p.get_level_min(), Some(2));
+		assert_eq!(p.get_level_max(), Some(5));
 
 		// Then remove coverage above level 4
-		p.set_zoom_max(4);
-		assert_eq!(p.get_zoom_min(), Some(2));
-		assert_eq!(p.get_zoom_max(), Some(4));
+		p.set_level_max(4);
+		assert_eq!(p.get_level_min(), Some(2));
+		assert_eq!(p.get_level_max(), Some(4));
 	}
 
 	#[test]

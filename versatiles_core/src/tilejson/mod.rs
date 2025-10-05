@@ -189,10 +189,10 @@ impl TileJSON {
 		if let Some(bbox) = pyramid.get_geo_bbox() {
 			self.limit_bbox(bbox);
 		}
-		if let Some(z) = pyramid.get_zoom_min() {
+		if let Some(z) = pyramid.get_level_min() {
 			self.set_min_zoom(z);
 		}
-		if let Some(z) = pyramid.get_zoom_max() {
+		if let Some(z) = pyramid.get_level_max() {
 			self.set_max_zoom(z);
 		}
 	}

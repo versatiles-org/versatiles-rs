@@ -41,7 +41,7 @@ impl Operation {
 
 			let level_base = args
 				.level_base
-				.unwrap_or(source.parameters().bbox_pyramid.get_zoom_max().unwrap());
+				.unwrap_or(source.parameters().bbox_pyramid.get_level_max().unwrap());
 			log::trace!("level_base {}", level_base);
 
 			let level_max = args.level_max.unwrap_or(30).clamp(level_base, 30);
