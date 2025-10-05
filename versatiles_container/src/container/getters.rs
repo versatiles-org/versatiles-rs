@@ -29,8 +29,10 @@ use anyhow::{Context, Result, bail};
 use reqwest::Url;
 use std::{env, sync::Arc};
 use versatiles_core::{config::Config, io::*, *};
+use versatiles_derive::context;
 
 /// Get a reader for a given filename or URL.
+#[context("Failed to get reader for '{filename}'")]
 pub async fn get_reader(filename: &str, config: Arc<Config>) -> Result<Box<dyn TilesReaderTrait>> {
 	let extension = get_extension(filename);
 

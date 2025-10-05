@@ -75,6 +75,7 @@ impl VersaTilesReader {
 	/// # Errors
 	///
 	/// Returns an error if the file cannot be opened or read.
+	#[context("Failed to open versatiles file at '{path:?}'")]
 	pub async fn open_path(path: &Path) -> Result<VersaTilesReader> {
 		VersaTilesReader::open_reader(DataReaderFile::open(path)?).await
 	}
