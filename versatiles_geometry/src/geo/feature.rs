@@ -138,4 +138,29 @@ mod tests {
 		assert_eq!(j.get_string("type").unwrap(), Some("Feature".into()));
 		assert!(j.get_object("geometry").unwrap().is_some());
 	}
+
+	#[test]
+	fn feature_example_contains_expected_values() {
+		let f = GeoFeature::new_example();
+		assert_eq!(
+			f.to_json()
+				.stringify_pretty_multi_line(100, 0)
+				.split('\n')
+				.collect::<Vec<_>>(),
+			[
+				"{",
+				"  \"geometry\": {",
+				"    \"coordinates\": [",
+				"      [[[0, 0], [5, 0], [2.5, 4], [0, 0]], [[2, 1], [2.5, 2], [3, 1], [2, 1]]],",
+				"      [[[6, 0], [9, 0], [9, 4], [6, 4], [6, 0]], [[7, 1], [7, 3], [8, 3], [8, 1], [7, 1]]]",
+				"    ],",
+				"    \"type\": \"MultiPolygon\"",
+				"  },",
+				"  \"id\": 13,",
+				"  \"properties\": { \"is_nice\": true, \"name\": \"Nice\", \"population\": 348085 },",
+				"  \"type\": \"Feature\"",
+				"}"
+			]
+		);
+	}
 }
