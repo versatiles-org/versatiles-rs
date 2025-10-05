@@ -78,7 +78,7 @@ impl JsonValue {
 	///
 	/// # Errors
 	/// Returns an error if not an array.
-	pub fn to_array(self) -> Result<JsonArray> {
+	pub fn into_array(self) -> Result<JsonArray> {
 		if let JsonValue::Array(array) = self {
 			Ok(array)
 		} else {
@@ -102,7 +102,7 @@ impl JsonValue {
 	///
 	/// # Errors
 	/// Returns an error if not an object.
-	pub fn to_object(self) -> Result<JsonObject> {
+	pub fn into_object(self) -> Result<JsonObject> {
 		if let JsonValue::Object(object) = self {
 			Ok(object)
 		} else {
@@ -136,12 +136,9 @@ impl JsonValue {
 	///
 	/// # Errors
 	/// Returns an error if the value is not a JSON number.
-	pub fn as_number<T>(&self) -> Result<T>
-	where
-		T: AsNumber<T>,
-	{
+	pub fn as_number(&self) -> Result<f64> {
 		if let JsonValue::Number(val) = self {
-			Ok(<T as AsNumber<T>>::convert(*val))
+			Ok(*val)
 		} else {
 			bail!("expected a number, found a {}", self.type_as_str())
 		}
@@ -297,11 +294,11 @@ mod tests {
 		let value = JsonValue::Array(JsonArray(vec![]));
 
 		assert!(value.as_array().is_ok());
-		assert!(value.to_array().is_ok());
+		assert!(value.into_array().is_ok());
 
 		let non_array = JsonValue::String("not an array".to_string());
 		assert!(non_array.as_array().is_err());
-		assert!(non_array.to_array().is_err());
+		assert!(non_array.into_array().is_err());
 	}
 
 	#[test]
@@ -309,11 +306,11 @@ mod tests {
 		let value = JsonValue::Object(JsonObject::default());
 
 		assert!(value.as_object().is_ok());
-		assert!(value.to_object().is_ok());
+		assert!(value.into_object().is_ok());
 
 		let non_object = JsonValue::String("not an object".to_string());
 		assert!(non_object.as_object().is_err());
-		assert!(non_object.to_object().is_err());
+		assert!(non_object.into_object().is_err());
 	}
 
 	#[test]
@@ -332,11 +329,10 @@ mod tests {
 	fn test_as_number() {
 		let value = JsonValue::Number(42.0);
 
-		assert_eq!(value.as_number::<f64>().unwrap(), 42.0);
-		assert_eq!(value.as_number::<i32>().unwrap(), 42);
+		assert_eq!(value.as_number().unwrap(), 42.0);
 
 		let non_number = JsonValue::String("not a number".to_string());
-		assert!(non_number.as_number::<f64>().is_err());
+		assert!(non_number.as_number().is_err());
 	}
 
 	#[test]

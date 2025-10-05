@@ -57,11 +57,8 @@ impl JsonArray {
 	}
 
 	/// Convert all elements to numbers of type `T`, returning an error if any element is not numeric.
-	pub fn as_number_vec<T>(&self) -> Result<Vec<T>>
-	where
-		T: AsNumber<T>,
-	{
-		self.0.iter().map(JsonValue::as_number).collect::<Result<Vec<T>>>()
+	pub fn as_number_vec(&self) -> Result<Vec<f64>> {
+		self.0.iter().map(JsonValue::as_number).collect()
 	}
 
 	/// Get a reference to the underlying `Vec<JsonValue>`.
@@ -70,14 +67,11 @@ impl JsonArray {
 	}
 
 	/// Convert elements to a fixed-size array of numbers, returning an error on mismatch or non-numeric elements.
-	pub fn as_number_array<T, const N: usize>(&self) -> Result<[T; N]>
-	where
-		T: AsNumber<T>,
-	{
+	pub fn as_number_array<const N: usize>(&self) -> Result<[f64; N]> {
 		self
-			.as_number_vec::<T>()?
+			.as_number_vec()?
 			.try_into()
-			.map_err(|e: Vec<T>| anyhow!("vector length mismatch {} != {}", e.len(), N))
+			.map_err(|e: Vec<f64>| anyhow!("vector length mismatch {} != {}", e.len(), N))
 	}
 }
 
@@ -150,16 +144,11 @@ mod tests {
 	fn test_as_number_vec() -> Result<()> {
 		let array = JsonArray::from(vec![1.2, 3.4, 5.6]);
 
-		assert_eq!(array.as_number_vec::<f64>()?, vec![1.2, 3.4, 5.6]);
-		assert_eq!(array.as_number_vec::<u8>()?, vec![1, 3, 5]);
-		assert_eq!(array.as_number_vec::<i32>()?, vec![1, 3, 5]);
+		assert_eq!(array.as_number_vec()?, vec![1.2, 3.4, 5.6]);
 
 		// Test with a non-number element
 		assert_eq!(
-			JsonArray::from(vec!["a"])
-				.as_number_vec::<f64>()
-				.unwrap_err()
-				.to_string(),
+			JsonArray::from(vec!["a"]).as_number_vec().unwrap_err().to_string(),
 			"expected a number, found a string"
 		);
 
@@ -169,27 +158,7 @@ mod tests {
 	#[test]
 	fn test_as_number_array() -> Result<()> {
 		let array = JsonArray::from(vec![1.2, 3.4, 5.6]);
-
-		let number_array: [f64; 3] = array.as_number_array()?;
-		assert_eq!(number_array, [1.2, 3.4, 5.6]);
-
-		let number_array: [u8; 3] = array.as_number_array()?;
-		assert_eq!(number_array, [1, 3, 5]);
-
-		// Test with incorrect length
-		assert_eq!(
-			array.as_number_array::<f64, 2>().unwrap_err().to_string(),
-			"vector length mismatch 3 != 2"
-		);
-
-		// Test with a non-number element
-		assert_eq!(
-			JsonArray::from(vec!["a"])
-				.as_number_array::<f64, 1>()
-				.unwrap_err()
-				.to_string(),
-			"expected a number, found a string"
-		);
+		assert_eq!(array.as_number_array()?, [1.2, 3.4, 5.6]);
 
 		Ok(())
 	}

@@ -1,3 +1,5 @@
+#![allow(unused_imports)]
+
 mod array;
 mod number;
 mod object;

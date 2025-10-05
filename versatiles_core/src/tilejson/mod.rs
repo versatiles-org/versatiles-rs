@@ -482,7 +482,7 @@ impl TryFrom<&str> for TileJSON {
 	/// # Errors
 	/// Returns an error if the JSON is invalid or doesn't map to a valid `TileJSON`.
 	fn try_from(text: &str) -> Result<TileJSON> {
-		let object = parse_json_str(text)?.to_object()?;
+		let object = parse_json_str(text)?.into_object()?;
 		TileJSON::from_object(&object)
 	}
 }
@@ -779,7 +779,7 @@ mod tests {
 		let list = vec!["a".to_string(), "b".to_string()];
 		tj.set_list("list_key", list.clone())?;
 		// Inspect via as_json_value
-		let obj = tj.as_json_value().to_object()?;
+		let obj = tj.as_json_value().into_object()?;
 		let arr = obj.get("list_key").unwrap().as_array()?;
 		assert_eq!(arr.as_string_vec()?, list);
 		Ok(())
@@ -807,7 +807,7 @@ mod tests {
 	fn should_return_json_value_as_object() {
 		let tj = TileJSON::default();
 		let json_value = tj.as_json_value();
-		let obj = json_value.to_object().unwrap();
+		let obj = json_value.into_object().unwrap();
 		assert_eq!(obj, tj.as_object());
 	}
 

@@ -33,11 +33,12 @@ impl JsonObject {
 		self.get(key).map(JsonValue::as_string).transpose()
 	}
 
+	pub fn get_object(&self, key: &str) -> Result<Option<&JsonObject>> {
+		self.get(key).map(JsonValue::as_object).transpose()
+	}
+
 	/// Retrieve a numeric value of type `T` for the specified key, returning `None` if missing or not numeric.
-	pub fn get_number<T>(&self, key: &str) -> Result<Option<T>>
-	where
-		T: AsNumber<T>,
-	{
+	pub fn get_number(&self, key: &str) -> Result<Option<f64>> {
 		self.get(key).map(JsonValue::as_number).transpose()
 	}
 
@@ -52,21 +53,15 @@ impl JsonObject {
 	}
 
 	/// Retrieve a `Vec<T>` from the array at the specified key, if present and all elements are numeric.
-	pub fn get_number_vec<T>(&self, key: &str) -> Result<Option<Vec<T>>>
-	where
-		T: AsNumber<T>,
-	{
-		self.get_array(key)?.map(|array| array.as_number_vec::<T>()).transpose()
+	pub fn get_number_vec(&self, key: &str) -> Result<Option<Vec<f64>>> {
+		self.get_array(key)?.map(|array| array.as_number_vec()).transpose()
 	}
 
 	/// Retrieve a fixed-size array `[T; N]` from the array at the specified key, if present and all elements are numeric.
-	pub fn get_number_array<T, const N: usize>(&self, key: &str) -> Result<Option<[T; N]>>
-	where
-		T: AsNumber<T>,
-	{
+	pub fn get_number_array<const N: usize>(&self, key: &str) -> Result<Option<[f64; N]>> {
 		self
 			.get_array(key)?
-			.map(|array| array.as_number_array::<T, N>())
+			.map(|array| array.as_number_array::<N>())
 			.transpose()
 	}
 
@@ -136,7 +131,7 @@ impl JsonObject {
 
 	/// Parse a JSON string into a `JsonObject`, returning an error on invalid JSON or non-object root.
 	pub fn parse_str(json: &str) -> Result<JsonObject> {
-		JsonValue::parse_str(json)?.to_object()
+		JsonValue::parse_str(json)?.into_object()
 	}
 
 	/// Return an iterator over key-value pairs in this `JsonObject` in insertion order.
@@ -223,11 +218,10 @@ mod tests {
 	#[test]
 	fn test_get_number() {
 		let obj = JsonObject::from(vec![("key", 42)]);
-		let value: Option<u8> = obj.get_number("key").unwrap();
+		let value = obj.get_number("key").unwrap();
+		assert_eq!(value, Some(42.0));
 
-		assert_eq!(value, Some(42));
-
-		let missing: Option<u8> = obj.get_number("missing").unwrap();
+		let missing = obj.get_number("missing").unwrap();
 		assert_eq!(missing, None);
 	}
 
@@ -253,9 +247,7 @@ mod tests {
 	fn test_get_number_vec() {
 		let array = JsonArray::from(vec![1, 2, 3]);
 		let obj = JsonObject::from(vec![("key", JsonValue::Array(array))]);
-
-		let value: Option<Vec<u8>> = obj.get_number_vec("key").unwrap();
-		assert_eq!(value, Some(vec![1, 2, 3]));
+		assert_eq!(obj.get_number_vec("key").unwrap(), Some(vec![1.0, 2.0, 3.0]));
 	}
 
 	#[test]
@@ -263,8 +255,8 @@ mod tests {
 		let array = JsonArray::from(vec![1, 2, 3]);
 		let obj = JsonObject::from(vec![("key", JsonValue::Array(array))]);
 
-		let value: Option<[u8; 3]> = obj.get_number_array("key").unwrap();
-		assert_eq!(value, Some([1, 2, 3]));
+		let value = obj.get_number_array("key").unwrap();
+		assert_eq!(value, Some([1.0, 2.0, 3.0]));
 	}
 
 	#[test]
@@ -347,8 +339,8 @@ mod tests {
 		let input = vec![("foo", 3), ("bar", 4)];
 		let jv: JsonValue = input.clone().into();
 		if let JsonValue::Object(obj) = jv {
-			assert_eq!(obj.get_number::<i32>("foo").unwrap(), Some(3));
-			assert_eq!(obj.get_number::<i32>("bar").unwrap(), Some(4));
+			assert_eq!(obj.get_number("foo").unwrap(), Some(3.0));
+			assert_eq!(obj.get_number("bar").unwrap(), Some(4.0));
 		} else {
 			panic!("Expected JsonValue::Object variant");
 		}
@@ -359,9 +351,7 @@ mod tests {
 		let obj = JsonObject::default();
 		assert_eq!(obj.get_array("missing").unwrap(), None);
 		assert_eq!(obj.get_string_vec("missing").unwrap(), None);
-		let num_vec: Option<Vec<i32>> = obj.get_number_vec("missing").unwrap();
-		assert_eq!(num_vec, None);
-		let num_arr: Option<[u8; 2]> = obj.get_number_array("missing").unwrap();
-		assert_eq!(num_arr, None);
+		assert_eq!(obj.get_number_vec("missing").unwrap(), None);
+		assert_eq!(obj.get_number_array::<3>("missing").unwrap(), None);
 	}
 }

@@ -42,8 +42,8 @@ impl VectorLayers {
 
 			// Optional: "description", "minzoom", "maxzoom"
 			let description = object.get_string("description")?;
-			let minzoom = object.get_number("minzoom")?;
-			let maxzoom = object.get_number("maxzoom")?;
+			let minzoom = object.get_number("minzoom")?.map(|v| v as u8);
+			let maxzoom = object.get_number("maxzoom")?.map(|v| v as u8);
 
 			// Required: "fields" object
 			let mut fields = BTreeMap::<String, String>::new();
@@ -704,8 +704,8 @@ mod tests {
 		let obj = layer.as_json_object();
 		// Check object entries
 		assert_eq!(obj.get_string("description")?.unwrap(), "desc");
-		assert_eq!(obj.get_number::<u8>("minzoom")?.unwrap(), 5);
-		assert_eq!(obj.get_number::<u8>("maxzoom")?.unwrap(), 10);
+		assert_eq!(obj.get_number("minzoom")?.unwrap(), 5.0);
+		assert_eq!(obj.get_number("maxzoom")?.unwrap(), 10.0);
 		let fields = obj.get("fields").unwrap().as_object()?;
 		assert_eq!(fields.get_string("key")?.unwrap(), "String");
 		// check valid layer
