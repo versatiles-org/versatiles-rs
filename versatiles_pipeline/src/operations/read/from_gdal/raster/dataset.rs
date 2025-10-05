@@ -384,7 +384,7 @@ mod tests {
 
 			// Extract a 7×7 tile and gather the RGB bytes.
 			let image = dataset
-				.get_image(coord.as_geo_bbox(), 7, 7)
+				.get_image(coord.to_geo_bbox(), 7, 7)
 				.await?
 				.ok_or(anyhow!("get_image failed"))?;
 

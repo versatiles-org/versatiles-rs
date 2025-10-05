@@ -1,32 +1,40 @@
 use super::*;
+use anyhow::{Result, ensure};
 use std::fmt::Debug;
 
 #[derive(Clone, PartialEq)]
-pub struct LineStringGeometry(pub Coordinates1);
+pub struct LineStringGeometry(pub Vec<Coordinates>);
 
-impl LineStringGeometry {
-	pub fn new(c: Vec<[f64; 2]>) -> Self {
-		Self(c)
-	}
-}
-
-impl SingleGeometryTrait<MultiLineStringGeometry> for LineStringGeometry {
+impl GeometryTrait for LineStringGeometry {
 	fn area(&self) -> f64 {
 		0.0
 	}
 
-	fn into_multi(self) -> MultiLineStringGeometry {
-		MultiLineStringGeometry(vec![self.0])
+	fn verify(&self) -> Result<()> {
+		ensure!(self.0.len() >= 2, "LineString must have at least two points");
+		Ok(())
 	}
 }
 
-impl VectorGeometryTrait<PointGeometry> for LineStringGeometry {
-	fn into_iter(self) -> impl Iterator<Item = PointGeometry> {
-		self.0.into_iter().map(PointGeometry)
+impl CompositeGeometryTrait<Coordinates> for LineStringGeometry {
+	fn new() -> Self {
+		Self(Vec::new())
+	}
+	fn as_vec(&self) -> &Vec<Coordinates> {
+		&self.0
+	}
+	fn as_mut_vec(&mut self) -> &mut Vec<Coordinates> {
+		&mut self.0
 	}
 
-	fn len(&self) -> usize {
-		self.0.len()
+	fn into_inner(self) -> Vec<Coordinates> {
+		self.0
+	}
+}
+
+impl SingleGeometryTrait<MultiLineStringGeometry> for LineStringGeometry {
+	fn into_multi(self) -> MultiLineStringGeometry {
+		MultiLineStringGeometry(vec![self])
 	}
 }
 
@@ -36,8 +44,4 @@ impl Debug for LineStringGeometry {
 	}
 }
 
-impl<T: Convertible> From<Vec<[T; 2]>> for LineStringGeometry {
-	fn from(value: Vec<[T; 2]>) -> Self {
-		Self(T::convert_coordinates1(value))
-	}
-}
+crate::impl_from_array!(LineStringGeometry, Coordinates);

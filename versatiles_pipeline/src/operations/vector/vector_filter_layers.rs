@@ -84,7 +84,7 @@ mod tests {
 	use super::*;
 	use pretty_assertions::assert_eq;
 	use versatiles_core::TileBBox;
-	use versatiles_geometry::{GeoFeature, GeoProperties, GeoValue, Geometry, vector_tile::VectorTileLayer};
+	use versatiles_geometry::{geo::*, vector_tile::VectorTileLayer};
 
 	#[tokio::test]
 	async fn test_runner_run() {

@@ -1,5 +1,5 @@
 use super::parse_geojson;
-use crate::{GeoCollection, GeoFeature, parse_geojson_feature};
+use crate::{geo::*, geojson::*};
 use anyhow::{Error, Result, anyhow};
 use futures::{Stream, StreamExt, future::ready, stream};
 use std::io::{BufRead, Cursor, Read};

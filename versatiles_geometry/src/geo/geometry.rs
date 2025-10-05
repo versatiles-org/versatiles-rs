@@ -1,6 +1,5 @@
-#![allow(dead_code)]
-
 use super::*;
+use anyhow::Result;
 use std::fmt::Debug;
 
 #[derive(Clone, PartialEq)]
@@ -14,22 +13,40 @@ pub enum Geometry {
 }
 
 impl Geometry {
-	pub fn new_point<T: Convertible>(value: [T; 2]) -> Self {
+	pub fn new_point<T>(value: T) -> Self
+	where
+		PointGeometry: From<T>,
+	{
 		Self::Point(PointGeometry::from(value))
 	}
-	pub fn new_line_string<T: Convertible>(value: Vec<[T; 2]>) -> Self {
+	pub fn new_line_string<T>(value: T) -> Self
+	where
+		LineStringGeometry: From<T>,
+	{
 		Self::LineString(LineStringGeometry::from(value))
 	}
-	pub fn new_polygon<T: Convertible>(value: Vec<Vec<[T; 2]>>) -> Self {
+	pub fn new_polygon<T>(value: T) -> Self
+	where
+		PolygonGeometry: From<T>,
+	{
 		Self::Polygon(PolygonGeometry::from(value))
 	}
-	pub fn new_multi_point<T: Convertible>(value: Vec<[T; 2]>) -> Self {
+	pub fn new_multi_point<T>(value: T) -> Self
+	where
+		MultiPointGeometry: From<T>,
+	{
 		Self::MultiPoint(MultiPointGeometry::from(value))
 	}
-	pub fn new_multi_line_string<T: Convertible>(value: Vec<Vec<[T; 2]>>) -> Self {
+	pub fn new_multi_line_string<T>(value: T) -> Self
+	where
+		MultiLineStringGeometry: From<T>,
+	{
 		Self::MultiLineString(MultiLineStringGeometry::from(value))
 	}
-	pub fn new_multi_polygon<T: Convertible>(value: Vec<Vec<Vec<[T; 2]>>>) -> Self {
+	pub fn new_multi_polygon<T>(value: T) -> Self
+	where
+		MultiPolygonGeometry: From<T>,
+	{
 		Self::MultiPolygon(MultiPolygonGeometry::from(value))
 	}
 
@@ -65,6 +82,25 @@ impl Geometry {
 				vec![[7.0, 1.0], [7.0, 3.0], [8.0, 3.0], [8.0, 1.0], [7.0, 1.0]],
 			],
 		])
+	}
+
+	pub fn verify(&self) -> Result<()> {
+		match self {
+			Geometry::Point(g) => g.verify(),
+			Geometry::LineString(g) => g.verify(),
+			Geometry::Polygon(g) => g.verify(),
+			Geometry::MultiPoint(g) => g.verify(),
+			Geometry::MultiLineString(g) => g.verify(),
+			Geometry::MultiPolygon(g) => g.verify(),
+		}
+	}
+}
+
+impl From<geo::MultiPolygon<f64>> for Geometry {
+	fn from(geometry: geo::MultiPolygon<f64>) -> Self {
+		Self::MultiPolygon(MultiPolygonGeometry(
+			geometry.into_iter().map(PolygonGeometry::from).collect::<Vec<_>>(),
+		))
 	}
 }
 

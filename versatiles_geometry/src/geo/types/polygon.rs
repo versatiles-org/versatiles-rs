@@ -1,33 +1,52 @@
 use super::*;
-use crate::math;
-use std::fmt::Debug;
+use anyhow::{Result, ensure};
+use std::{fmt::Debug, vec};
 
 #[derive(Clone, PartialEq)]
-pub struct PolygonGeometry(pub Coordinates2);
+pub struct PolygonGeometry(pub Vec<RingGeometry>);
 
-impl PolygonGeometry {
-	pub fn new(c: Vec<Vec<[f64; 2]>>) -> Self {
-		Self(c)
+impl GeometryTrait for PolygonGeometry {
+	fn area(&self) -> f64 {
+		let mut outer = true;
+		let mut sum = 0.0;
+		for ring in &self.0 {
+			if outer {
+				sum = ring.area();
+				outer = false;
+			} else {
+				sum -= ring.area();
+			}
+		}
+		sum
+	}
+
+	fn verify(&self) -> Result<()> {
+		ensure!(!self.0.is_empty(), "Polygon must have at least one ring");
+		for ring in &self.0 {
+			ring.verify()?;
+		}
+		Ok(())
 	}
 }
 
 impl SingleGeometryTrait<MultiPolygonGeometry> for PolygonGeometry {
-	fn area(&self) -> f64 {
-		math::area_polygon(&self.0)
-	}
-
 	fn into_multi(self) -> MultiPolygonGeometry {
-		MultiPolygonGeometry(vec![self.0])
+		MultiPolygonGeometry(vec![self])
 	}
 }
 
-impl VectorGeometryTrait<RingGeometry> for PolygonGeometry {
-	fn into_iter(self) -> impl Iterator<Item = RingGeometry> {
-		self.0.into_iter().map(RingGeometry)
+impl CompositeGeometryTrait<RingGeometry> for PolygonGeometry {
+	fn new() -> Self {
+		Self(Vec::new())
 	}
-
-	fn len(&self) -> usize {
-		self.0.len()
+	fn as_vec(&self) -> &Vec<RingGeometry> {
+		&self.0
+	}
+	fn as_mut_vec(&mut self) -> &mut Vec<RingGeometry> {
+		&mut self.0
+	}
+	fn into_inner(self) -> Vec<RingGeometry> {
+		self.0
 	}
 }
 
@@ -37,14 +56,17 @@ impl Debug for PolygonGeometry {
 	}
 }
 
-impl<T: Convertible> From<Vec<Vec<[T; 2]>>> for PolygonGeometry {
-	fn from(value: Vec<Vec<[T; 2]>>) -> Self {
-		Self(T::convert_coordinates2(value))
-	}
-}
-impl<T: Convertible> From<Vec<[T; 2]>> for PolygonGeometry {
-	fn from(value: Vec<[T; 2]>) -> Self {
-		Self(vec![T::convert_coordinates1(value)])
+crate::impl_from_array!(PolygonGeometry, RingGeometry);
+
+impl From<geo::Polygon<f64>> for PolygonGeometry {
+	fn from(geometry: geo::Polygon<f64>) -> Self {
+		let (exterior, interiors) = geometry.into_inner();
+		let mut rings = Vec::with_capacity(interiors.len() + 1);
+		rings.push(RingGeometry::from(exterior));
+		for interior in interiors {
+			rings.push(RingGeometry::from(interior));
+		}
+		PolygonGeometry(rings)
 	}
 }
 
@@ -54,7 +76,7 @@ mod tests {
 
 	#[test]
 	fn test_area() {
-		let polygon = PolygonGeometry::from(vec![[0.0, 0.0], [5.0, 0.0], [5.0, 5.0], [0.0, 5.0], [0.0, 0.0]]);
+		let polygon = PolygonGeometry::from(&[[[0, 0], [5, 0], [5, 5], [0, 5], [0, 0]]]);
 		let area = polygon.area();
 		assert_eq!(area, 50.0);
 	}

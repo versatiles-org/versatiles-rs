@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use std::{f64::consts::PI, ops::Div, vec};
 use versatiles_core::TileCoord;
 use versatiles_geometry::{
-	Coordinates1, Coordinates2, Coordinates3, GeoFeature, GeoValue, Geometry, MultiPolygonGeometry, math,
+	geo::*,
 	vector_tile::{VectorTile, VectorTileLayer},
 };
 
@@ -31,22 +31,27 @@ fn draw_text(name: &str, y: f32, text: String) -> VectorTileLayer {
 	let mut position = Point { x: 100.0, y };
 
 	let get_char_as_feature = |outline: Outline, position: &Point| {
-		let mut multilinestring = Coordinates2::new();
+		let mut mls = MultiLineStringGeometry::new();
 		for curve in outline.curves {
 			let points = match curve {
 				Line(p0, p1) => vec![p0, p1],
 				Quad(p0, c0, p1) => draw_quad(p0, c0, p1),
 				Cubic(p0, c0, c1, p1) => draw_cubic(p0, c0, c1, p1),
 			};
-			multilinestring.push(Vec::from_iter(points.iter().map(|p| {
-				[
-					8.0 * (p.x * scale + position.x) as f64,
-					8.0 * ((height - p.y) * scale + position.y) as f64,
-				]
-			})));
+			mls.push(LineStringGeometry::from(
+				points
+					.iter()
+					.map(|p| {
+						[
+							8.0 * (p.x * scale + position.x) as f64,
+							8.0 * ((height - p.y) * scale + position.y) as f64,
+						]
+					})
+					.collect::<Vec<_>>(),
+			));
 		}
 
-		let multipolygon = get_multipolygon(multilinestring);
+		let multipolygon = get_multipolygon(mls);
 
 		GeoFeature::new(Geometry::MultiPolygon(multipolygon))
 	};
@@ -68,41 +73,43 @@ fn draw_text(name: &str, y: f32, text: String) -> VectorTileLayer {
 	VectorTileLayer::from_features(String::from(name), features, 4096, 1).unwrap()
 }
 
-fn get_multipolygon(multilinestring: Coordinates2) -> MultiPolygonGeometry {
-	fn get_ring(mut iter: impl Iterator<Item = Coordinates1>) -> Option<Coordinates1> {
-		let mut ring = iter.next()?;
-		let p0 = *ring.first().unwrap();
-		while ring.last().unwrap() != &p0 {
-			let line = iter.next().unwrap();
+fn get_multipolygon(mls: MultiLineStringGeometry) -> MultiPolygonGeometry {
+	fn get_ring(mut iter: impl Iterator<Item = LineStringGeometry>) -> Option<RingGeometry> {
+		let mut points = iter.next()?.into_inner();
+		let p0 = points.first()?.clone();
+
+		while points.last()? != &p0 {
+			let line = iter.next()?;
 			for point in line.into_iter().skip(1) {
-				ring.push(point);
+				points.push(point);
 			}
 		}
-		Some(ring)
+
+		Some(RingGeometry(points))
 	}
 
-	let mut multipolygon = Coordinates3::new();
-	let mut iter = multilinestring.into_iter();
+	let mut multipolygon = MultiPolygonGeometry::new();
+	let mut iter = mls.into_iter();
 
 	while let Some(ring) = get_ring(&mut iter) {
 		if ring.len() == 2 {
 			continue;
 		}
-		if math::area_ring(&ring) > 0.0 {
-			multipolygon.push(vec![ring])
+		if ring.area() > 0.0 {
+			multipolygon.push(PolygonGeometry::from(vec![ring]))
 		} else {
 			multipolygon.last_mut().expect("first ring is missing").push(ring)
 		}
 	}
 
-	MultiPolygonGeometry::new(multipolygon)
+	multipolygon
 }
 
 fn get_background_layer() -> Result<VectorTileLayer> {
-	let mut circle: Coordinates1 = vec![];
+	let mut circle = LineStringGeometry::new();
 	for i in 0..=100 {
 		let a = PI * i as f64 / 50.0;
-		circle.push([(a.cos() + 1.0) * 2047.5, (a.sin() + 1.0) * 2047.5])
+		circle.push(Coordinates::new((a.cos() + 1.0) * 2047.5, (a.sin() + 1.0) * 2047.5));
 	}
 
 	let feature = GeoFeature::new(Geometry::new_line_string(circle));

@@ -1,4 +1,4 @@
-use crate::*;
+use crate::geo::*;
 use anyhow::{Result, anyhow, bail};
 use std::{io::Cursor, str};
 use versatiles_core::{byte_iterator::*, json::*};
@@ -150,41 +150,41 @@ fn parse_geojson_geometry(iter: &mut ByteIterator) -> Result<Geometry> {
 
 enum TemporaryCoordinates {
 	V(f64),
-	C0(Coordinates0),
-	C1(Coordinates1),
-	C2(Coordinates2),
-	C3(Coordinates3),
+	C0([f64; 2]),
+	C1(Vec<[f64; 2]>),
+	C2(Vec<Vec<[f64; 2]>>),
+	C3(Vec<Vec<Vec<[f64; 2]>>>),
 }
 
 impl TemporaryCoordinates {
 	pub fn unwrap_v(self) -> f64 {
 		match self {
 			TemporaryCoordinates::V(v) => v,
-			_ => panic!("not a value"),
+			_ => panic!("coordinate is not a single value"),
 		}
 	}
-	pub fn unwrap_c0(self) -> Coordinates0 {
+	pub fn unwrap_c0(self) -> [f64; 2] {
 		match self {
 			TemporaryCoordinates::C0(v) => v,
-			_ => panic!("not coordinates0"),
+			_ => panic!("coordinates are not a point"),
 		}
 	}
-	pub fn unwrap_c1(self) -> Coordinates1 {
+	pub fn unwrap_c1(self) -> Vec<[f64; 2]> {
 		match self {
 			TemporaryCoordinates::C1(v) => v,
-			_ => panic!("not coordinates1"),
+			_ => panic!("coordinates are not an array of points"),
 		}
 	}
-	pub fn unwrap_c2(self) -> Coordinates2 {
+	pub fn unwrap_c2(self) -> Vec<Vec<[f64; 2]>> {
 		match self {
 			TemporaryCoordinates::C2(v) => v,
-			_ => panic!("not coordinates2"),
+			_ => panic!("coordinates are not an array of an array of points"),
 		}
 	}
-	pub fn unwrap_c3(self) -> Coordinates3 {
+	pub fn unwrap_c3(self) -> Vec<Vec<Vec<[f64; 2]>>> {
 		match self {
 			TemporaryCoordinates::C3(v) => v,
-			_ => panic!("not coordinates3"),
+			_ => panic!("coordinates are not an array of an array of an array of points"),
 		}
 	}
 }
@@ -256,8 +256,8 @@ mod tests {
 		let feature = &collection.features[0];
 		assert_eq!(feature.geometry.get_type_name(), "Point");
 		if let Geometry::Point(coords) = &feature.geometry {
-			assert_eq!(coords.0[0], 1.0);
-			assert_eq!(coords.0[1], 2.0);
+			assert_eq!(coords.x(), 1.0);
+			assert_eq!(coords.y(), 2.0);
 		}
 		assert_eq!(feature.properties.get("p"), Some(&GeoValue::String("v".to_string())));
 

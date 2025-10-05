@@ -94,7 +94,7 @@ mod tests {
 	use super::*;
 	use pretty_assertions::assert_eq;
 	use versatiles_core::TileBBox;
-	use versatiles_geometry::{GeoFeature, GeoProperties, GeoValue, Geometry, vector_tile::VectorTileLayer};
+	use versatiles_geometry::{geo::*, vector_tile::VectorTileLayer};
 
 	fn extract_tile_properties(tile: &VectorTile) -> Vec<String> {
 		let mut properties: Vec<String> = tile

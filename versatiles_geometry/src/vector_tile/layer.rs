@@ -1,7 +1,7 @@
 #![allow(dead_code)]
 
 use crate::{
-	GeoFeature, GeoProperties, GeoValue,
+	geo::*,
 	vector_tile::{feature::VectorTileFeature, property_manager::PropertyManager, value::GeoValuePBF},
 };
 use anyhow::{Context, Result, anyhow, bail};

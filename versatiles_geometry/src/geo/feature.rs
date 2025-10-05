@@ -1,8 +1,7 @@
 #![allow(dead_code)]
 
-use std::fmt::Debug;
-
 use super::*;
+use std::fmt::Debug;
 
 #[derive(Clone, Debug)]
 pub struct GeoFeature {
@@ -46,5 +45,11 @@ impl GeoFeature {
 				("is_nice", GeoValue::from(true)),
 			]),
 		}
+	}
+}
+
+impl From<geo::MultiPolygon<f64>> for GeoFeature {
+	fn from(geometry: geo::MultiPolygon<f64>) -> Self {
+		Self::new(Geometry::from(geometry))
 	}
 }

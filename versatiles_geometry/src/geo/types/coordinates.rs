@@ -1,60 +1,54 @@
-pub type Coordinates0 = [f64; 2];
+use std::fmt::Debug;
 
-pub type Coordinates1 = Vec<Coordinates0>;
+#[derive(Clone, PartialEq)]
+pub struct Coordinates([f64; 2]);
 
-pub type Coordinates2 = Vec<Coordinates1>;
+impl Coordinates {
+	pub fn new(x: f64, y: f64) -> Self {
+		Self([x, y])
+	}
 
-pub type Coordinates3 = Vec<Coordinates2>;
+	pub fn x(&self) -> f64 {
+		self.0[0]
+	}
 
-pub trait Convertible
+	pub fn y(&self) -> f64 {
+		self.0[1]
+	}
+}
+
+impl<'a, T> From<&'a [T; 2]> for Coordinates
 where
-	Self: Copy,
+	T: Copy + Into<f64>,
 {
-	fn convert_coordinates0(value: [Self; 2]) -> Coordinates0
-	where
-		Self: Sized;
-	fn convert_coordinates1(value: Vec<[Self; 2]>) -> Coordinates1
-	where
-		Self: Sized;
-	fn convert_coordinates2(value: Vec<Vec<[Self; 2]>>) -> Coordinates2
-	where
-		Self: Sized;
-	fn convert_coordinates3(value: Vec<Vec<Vec<[Self; 2]>>>) -> Coordinates3
-	where
-		Self: Sized;
+	fn from(value: &'a [T; 2]) -> Self {
+		Coordinates([value[0].into(), value[1].into()])
+	}
 }
 
-macro_rules! impl_from_array {
-	($($t:ty),*) => {$(
-		impl Convertible for $t {
-			fn convert_coordinates0(value: [$t; 2]) -> Coordinates0 {
-				[value[0] as f64, value[1] as f64]
-			}
-			fn convert_coordinates1(value: Vec<[$t; 2]>) -> Coordinates1 {
-				Vec::from_iter(value.into_iter().map(<$t>::convert_coordinates0))
-			}
-			fn convert_coordinates2(value: Vec<Vec<[$t; 2]>>) -> Coordinates2 {
-				Vec::from_iter(value.into_iter().map(<$t>::convert_coordinates1))
-			}
-			fn convert_coordinates3(value: Vec<Vec<Vec<[$t; 2]>>>) -> Coordinates3 {
-				Vec::from_iter(value.into_iter().map(<$t>::convert_coordinates2))
-			}
-		}
-	)*}
+impl From<[f64; 2]> for Coordinates {
+	fn from(value: [f64; 2]) -> Self {
+		Coordinates(value)
+	}
 }
-impl_from_array!(i8, u8, i16, u16, i32, u32, i64, u64, f32);
 
-impl Convertible for f64 {
-	fn convert_coordinates0(value: [f64; 2]) -> Coordinates0 {
-		value
+impl<T> From<Coordinates> for [T; 2]
+where
+	T: From<f64>,
+{
+	fn from(value: Coordinates) -> Self {
+		[T::from(value.0[0]), T::from(value.0[1])]
 	}
-	fn convert_coordinates1(value: Vec<[f64; 2]>) -> Coordinates1 {
-		value
+}
+
+impl From<geo::Coord> for Coordinates {
+	fn from(value: geo::Coord) -> Self {
+		Coordinates([value.x, value.y])
 	}
-	fn convert_coordinates2(value: Vec<Vec<[f64; 2]>>) -> Coordinates2 {
-		value
-	}
-	fn convert_coordinates3(value: Vec<Vec<Vec<[f64; 2]>>>) -> Coordinates3 {
-		value
+}
+
+impl Debug for Coordinates {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		self.0.fmt(f)
 	}
 }

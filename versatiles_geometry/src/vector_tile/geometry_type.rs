@@ -41,6 +41,8 @@ impl From<&Geometry> for GeomType {
 
 #[cfg(test)]
 mod tests {
+	use std::vec;
+
 	use super::*;
 
 	#[test]
@@ -62,9 +64,9 @@ mod tests {
 
 	#[test]
 	fn test_from_geometry() {
-		let multi_point = Geometry::new_multi_point(vec![[1, 2], [3, 4]]);
-		let multi_line_string = Geometry::new_multi_line_string(vec![vec![[1, 2], [3, 4]], vec![[5, 6], [7, 8]]]);
-		let multi_polygon = Geometry::new_multi_polygon(vec![
+		let multi_point = Geometry::new_multi_point(&[[1, 2], [3, 4]]);
+		let multi_line_string = Geometry::new_multi_line_string(&[vec![[1, 2], [3, 4]], vec![[5, 6], [7, 8]]]);
+		let multi_polygon = Geometry::new_multi_polygon(&vec![
 			vec![vec![[0, 0], [10, 0], [5, 8], [0, 0]]],
 			vec![vec![[12, 0], [18, 0], [18, 8], [12, 8], [12, 0]]],
 		]);

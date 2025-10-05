@@ -77,7 +77,7 @@ impl TileCoord {
 	}
 
 	/// Return the geographic bounding box of this tile as `[west, south, east, north]`.
-	pub fn as_geo_bbox(&self) -> GeoBBox {
+	pub fn to_geo_bbox(&self) -> GeoBBox {
 		self.as_tile_bbox(1).unwrap().to_geo_bbox()
 	}
 
@@ -238,7 +238,7 @@ mod tests {
 		let coord = TileCoord::new(5, 3, 4).unwrap();
 		assert_eq!(coord.as_geo(), [-146.25, 79.17133464081945]);
 		assert_eq!(
-			coord.as_geo_bbox().as_array(),
+			coord.to_geo_bbox().as_array(),
 			[-146.25, 76.84081641443098, -135.0, 79.17133464081945]
 		);
 	}

@@ -9,7 +9,7 @@ use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
 use versatiles_core::tilejson::TileJSON;
-use versatiles_geometry::{GeoProperties, vector_tile::VectorTile};
+use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Updates properties of vector tile features using data from an external source (e.g., CSV file). Matches features based on an ID field.
@@ -170,7 +170,10 @@ mod tests {
 	use pretty_assertions::assert_eq;
 	use std::{fs::File, io::Write, vec};
 	use versatiles_core::TileCoord;
-	use versatiles_geometry::{GeoFeature, GeoProperties, GeoValue, Geometry, vector_tile::VectorTileLayer};
+	use versatiles_geometry::{
+		geo::{GeoFeature, GeoProperties, GeoValue, Geometry},
+		vector_tile::VectorTileLayer,
+	};
 
 	fn create_sample_vector_tile() -> VectorTile {
 		let mut feature = GeoFeature::new(Geometry::new_example());

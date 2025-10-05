@@ -242,7 +242,7 @@ mod tests {
 
 			// Extract a 7×7 tile and gather the RGB bytes.
 			let image = operation
-				.get_image_data_from_gdal(coord.as_geo_bbox(), 7, 7)
+				.get_image_data_from_gdal(coord.to_geo_bbox(), 7, 7)
 				.await
 				.unwrap()
 				.unwrap();

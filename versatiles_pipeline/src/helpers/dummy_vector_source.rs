@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{tilejson::TileJSON, *};
 use versatiles_geometry::{
-	GeoFeature, Geometry,
+	geo::{GeoFeature, Geometry},
 	vector_tile::{VectorTile, VectorTileLayer},
 };
 
@@ -99,7 +99,7 @@ impl TilesReaderTrait for DummyVectorSource {
 
 			// Create features for the current layer
 			for properties in features_def {
-				let mut feature = GeoFeature::new(Geometry::new_point([1, 2]));
+				let mut feature = GeoFeature::new(Geometry::new_point(&[1, 2]));
 				feature.set_property("x".to_string(), coord.x);
 				feature.set_property("y".to_string(), coord.y);
 				feature.set_property("z".to_string(), coord.level);
