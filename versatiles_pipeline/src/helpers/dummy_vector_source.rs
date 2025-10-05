@@ -162,7 +162,7 @@ mod tests {
 			source.tilejson().as_pretty_lines(100),
 			[
 				"{",
-				"  \"bounds\": [ -180, -85.051129, 0, 0 ],",
+				"  \"bounds\": [-180, -85.051129, 0, 0],",
 				"  \"maxzoom\": 15,",
 				"  \"minzoom\": 3,",
 				"  \"name\": \"dummy vector source\",",

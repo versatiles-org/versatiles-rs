@@ -213,7 +213,7 @@ mod tests {
 	#[test]
 	fn test_pretty_single_line_array() -> Result<()> {
 		let json = parse_json_str("[1,2,3]")?;
-		assert_eq!(super::stringify_pretty_single_line(&json), "[ 1, 2, 3 ]");
+		assert_eq!(super::stringify_pretty_single_line(&json), "[1, 2, 3]");
 		Ok(())
 	}
 

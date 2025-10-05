@@ -30,7 +30,7 @@ impl JsonArray {
 	/// E.g., `[ 1, 2, 3 ]`.
 	pub fn stringify_pretty_single_line(&self) -> String {
 		let items = self.0.iter().map(stringify_pretty_single_line).collect::<Vec<_>>();
-		format!("[ {} ]", items.join(", "))
+		format!("[{}]", items.join(", "))
 	}
 
 	/// Serialize the array to a multi-line, pretty-printed string.
@@ -180,7 +180,7 @@ mod tests {
 	#[test]
 	fn test_stringify_pretty_single_line() {
 		let array = JsonArray(vec![JsonValue::from("hello"), JsonValue::from(42.0)]);
-		assert_eq!(array.stringify_pretty_single_line(), "[ \"hello\", 42 ]");
+		assert_eq!(array.stringify_pretty_single_line(), "[\"hello\", 42]");
 	}
 
 	#[test]
