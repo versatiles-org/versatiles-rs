@@ -55,21 +55,27 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 		use TraversalTranslationStep::*;
 
-		let mut n_read = 0;
+		let mut tn_read = 0;
+		let mut tn_write = 0;
+
 		for step in traversal_steps.iter() {
 			match step {
-				Push(bboxes, _) => {
-					n_read += bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
+				Push(bboxes_in, _) => {
+					tn_read += bboxes_in.iter().map(|b| b.count_tiles()).sum::<u64>();
 				}
-				Pop(_, _) => {}
-				Stream(bboxes, _) => {
-					n_read += bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
+				Pop(_, bbox_out) => {
+					tn_write += bbox_out.count_tiles();
+				}
+				Stream(bboxes_in, bbox_out) => {
+					tn_read += bboxes_in.iter().map(|b| b.count_tiles()).sum::<u64>();
+					tn_write += bbox_out.count_tiles();
 				}
 			}
 		}
-		let progress = get_progress_bar("converting tiles", n_read);
+		let progress = get_progress_bar("converting tiles", (tn_read + tn_write) / 2);
 
-		let mut i_read = 0;
+		let mut ti_read = 0;
+		let mut ti_write = 0;
 
 		let cache = Arc::new(Mutex::new(CacheMap::<usize, (TileCoord, Blob)>::new(config)));
 		for step in traversal_steps {
@@ -78,13 +84,13 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 					log::trace!("Cache {bboxes:?} at index {index}");
 					stream::iter(bboxes.clone())
 						.map(|bbox| {
-							let p = progress.clone();
+							let progress = progress.clone();
 							let c = cache.clone();
 							async move {
 								let vec = self
 									.get_tile_stream(bbox)
 									.await?
-									.inspect(move || p.inc(1))
+									.inspect(move || progress.inc(1))
 									.to_vec()
 									.await;
 
@@ -99,27 +105,38 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 						.await
 						.into_iter()
 						.collect::<Result<Vec<_>>>()?;
-					i_read += bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
+					ti_read += bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
 				}
 				Pop(index, bbox) => {
 					log::trace!("Uncache {bbox:?} at index {index}");
 					let vec = cache.lock().await.remove(&index)?.unwrap();
-					let stream = TileStream::from_vec(vec);
+					let progress = progress.clone();
+					let stream = TileStream::from_vec(vec).inspect(move || progress.inc(1));
 					callback(bbox, stream).await?;
+					ti_write += bbox.count_tiles();
 				}
 				Stream(bboxes, bbox) => {
 					log::trace!("Stream {bbox:?}");
-					let p0 = progress.clone();
+					let progress = progress.clone();
 					let streams = stream::iter(bboxes.clone()).map(move |bbox| {
-						let p1 = p0.clone();
-						async move { self.get_tile_stream(bbox).await.unwrap().inspect(move || p1.inc(1)) }
+						let progress = progress.clone();
+						async move {
+							self
+								.get_tile_stream(bbox)
+								.await
+								.unwrap()
+								.inspect(move || progress.inc(2))
+						}
 					});
 					callback(bbox, TileStream::from_streams(streams)).await?;
-					i_read += bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
+					ti_read += bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
+					ti_write += bbox.count_tiles();
 				}
 			}
-			progress.set_position(i_read);
+			progress.set_position((ti_read + ti_write) / 2);
 		}
+
+		progress.finish();
 		Ok(())
 	}
 
