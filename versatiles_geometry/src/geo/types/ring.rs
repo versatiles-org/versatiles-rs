@@ -1,6 +1,7 @@
 use super::*;
 use anyhow::{Result, ensure};
 use std::fmt::Debug;
+use versatiles_core::json::JsonValue;
 
 #[derive(Clone, PartialEq)]
 pub struct RingGeometry(pub Vec<Coordinates>);
@@ -20,6 +21,10 @@ impl GeometryTrait for RingGeometry {
 		ensure!(self.0.len() >= 4, "Ring must have at least 4 points");
 		ensure!(self.0.first() == self.0.last(), "Ring must be closed");
 		Ok(())
+	}
+
+	fn to_coord_json(&self) -> JsonValue {
+		JsonValue::from(self.0.iter().map(|c| c.to_json()).collect::<Vec<_>>())
 	}
 }
 

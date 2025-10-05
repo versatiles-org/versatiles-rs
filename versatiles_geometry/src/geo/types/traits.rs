@@ -1,9 +1,11 @@
 use anyhow::Result;
 use std::fmt::Debug;
+use versatiles_core::json::JsonValue;
 
 pub trait GeometryTrait: Debug + Clone {
 	fn area(&self) -> f64;
 	fn verify(&self) -> Result<()>;
+	fn to_coord_json(&self) -> JsonValue;
 }
 
 pub trait SingleGeometryTrait<Multi>: Debug + Clone {

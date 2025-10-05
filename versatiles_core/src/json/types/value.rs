@@ -178,6 +178,21 @@ impl From<&JsonValue> for JsonValue {
 	}
 }
 
+impl<I> From<I> for JsonValue
+where
+	JsonArray: From<I>,
+{
+	fn from(input: I) -> Self {
+		JsonValue::Array(input.into())
+	}
+}
+
+impl From<JsonObject> for JsonValue {
+	fn from(input: JsonObject) -> Self {
+		JsonValue::Object(input)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;

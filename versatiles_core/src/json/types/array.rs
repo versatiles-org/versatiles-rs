@@ -87,15 +87,6 @@ impl Debug for JsonArray {
 	}
 }
 
-impl<T> From<T> for JsonValue
-where
-	JsonArray: From<T>,
-{
-	fn from(input: T) -> Self {
-		JsonValue::Array(JsonArray::from(input))
-	}
-}
-
 impl<T> From<Vec<T>> for JsonArray
 where
 	JsonValue: From<T>,
@@ -249,16 +240,5 @@ mod tests {
 		let slice = [4, 5, 6];
 		let arr = JsonArray::from(&slice);
 		assert_eq!(arr.0, vec![JsonValue::from(4), JsonValue::from(5), JsonValue::from(6),]);
-	}
-
-	#[test]
-	fn test_json_value_from_vec() {
-		let jv: JsonValue = vec!["x", "y"].into();
-		match jv {
-			JsonValue::Array(ja) => {
-				assert_eq!(ja.0, vec![JsonValue::from("x"), JsonValue::from("y"),]);
-			}
-			_ => panic!("Expected JsonValue::Array variant"),
-		}
 	}
 }

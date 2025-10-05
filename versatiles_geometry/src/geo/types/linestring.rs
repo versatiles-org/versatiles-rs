@@ -1,6 +1,7 @@
 use super::*;
 use anyhow::{Result, ensure};
 use std::fmt::Debug;
+use versatiles_core::json::JsonValue;
 
 #[derive(Clone, PartialEq)]
 pub struct LineStringGeometry(pub Vec<Coordinates>);
@@ -13,6 +14,10 @@ impl GeometryTrait for LineStringGeometry {
 	fn verify(&self) -> Result<()> {
 		ensure!(self.0.len() >= 2, "LineString must have at least two points");
 		Ok(())
+	}
+
+	fn to_coord_json(&self) -> JsonValue {
+		JsonValue::from(self.0.iter().map(|c| c.to_json()).collect::<Vec<_>>())
 	}
 }
 

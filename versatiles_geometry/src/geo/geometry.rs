@@ -1,6 +1,7 @@
 use super::*;
 use anyhow::Result;
 use std::fmt::Debug;
+use versatiles_core::json::{JsonObject, JsonValue};
 
 #[derive(Clone, PartialEq)]
 pub enum Geometry {
@@ -93,6 +94,21 @@ impl Geometry {
 			Geometry::MultiLineString(g) => g.verify(),
 			Geometry::MultiPolygon(g) => g.verify(),
 		}
+	}
+
+	pub fn to_json(&self) -> JsonObject {
+		let mut obj = JsonObject::new();
+		let (type_name, coordinates) = match self {
+			Geometry::Point(g) => ("Point", g.to_coord_json()),
+			Geometry::LineString(g) => ("LineString", g.to_coord_json()),
+			Geometry::Polygon(g) => ("Polygon", g.to_coord_json()),
+			Geometry::MultiPoint(g) => ("MultiPoint", g.to_coord_json()),
+			Geometry::MultiLineString(g) => ("MultiLineString", g.to_coord_json()),
+			Geometry::MultiPolygon(g) => ("MultiPolygon", g.to_coord_json()),
+		};
+		obj.set("type", JsonValue::from(type_name));
+		obj.set("coordinates", coordinates);
+		obj
 	}
 }
 

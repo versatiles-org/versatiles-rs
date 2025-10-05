@@ -6,6 +6,7 @@ use std::{
 	fmt::{Debug, Display},
 	hash::Hash,
 };
+use versatiles_core::json::JsonValue;
 
 #[derive(Clone, PartialEq)]
 pub enum GeoValue {
@@ -206,6 +207,18 @@ impl GeoValue {
 			GeoValue::Int(v) => Ok(*v as u64),
 			GeoValue::UInt(v) => Ok(*v),
 			_ => bail!("value is not an integer"),
+		}
+	}
+
+	pub fn to_json(&self) -> JsonValue {
+		match self {
+			GeoValue::Bool(v) => JsonValue::from(*v),
+			GeoValue::Double(v) => JsonValue::from(*v),
+			GeoValue::Float(v) => JsonValue::from(*v as f64),
+			GeoValue::Int(v) => JsonValue::from(*v as f64),
+			GeoValue::Null => JsonValue::Null,
+			GeoValue::String(v) => JsonValue::from(v.clone()),
+			GeoValue::UInt(v) => JsonValue::from(*v as f64),
 		}
 	}
 }

@@ -1,6 +1,7 @@
 use super::*;
 use std::fmt::Debug;
 use traits::SingleGeometryTrait;
+use versatiles_core::json::JsonValue;
 
 #[derive(Clone, PartialEq)]
 pub struct PointGeometry(pub Coordinates);
@@ -27,6 +28,10 @@ impl GeometryTrait for PointGeometry {
 
 	fn verify(&self) -> anyhow::Result<()> {
 		Ok(())
+	}
+
+	fn to_coord_json(&self) -> JsonValue {
+		self.0.to_json()
 	}
 }
 

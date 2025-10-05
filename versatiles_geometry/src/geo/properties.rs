@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use versatiles_core::json::JsonObject;
+
 use super::GeoValue;
 use std::{
 	collections::{BTreeMap, btree_map},
@@ -41,6 +43,13 @@ impl GeoProperties {
 		F: Fn(&String, &GeoValue) -> bool,
 	{
 		self.0.retain(|k, v| f(k, v));
+	}
+	pub fn to_json(&self) -> JsonObject {
+		let mut obj = JsonObject::new();
+		for (k, v) in &self.0 {
+			obj.set(k, v.to_json());
+		}
+		obj
 	}
 }
 

@@ -2,6 +2,7 @@
 
 use super::*;
 use std::fmt::Debug;
+use versatiles_core::json::{JsonObject, JsonValue};
 
 #[derive(Clone, Debug)]
 pub struct GeoFeature {
@@ -32,6 +33,17 @@ impl GeoFeature {
 		GeoValue: From<T>,
 	{
 		self.properties.insert(key, GeoValue::from(value));
+	}
+
+	pub fn to_json(&self) -> JsonObject {
+		let mut json = JsonObject::new();
+		json.set("type", JsonValue::from("Feature"));
+		if let Some(id) = &self.id {
+			json.set("id", id.to_json());
+		}
+		json.set("geometry", self.geometry.to_json());
+		json.set("properties", self.properties.to_json());
+		json
 	}
 
 	#[cfg(test)]

@@ -1,6 +1,7 @@
 use super::*;
 use anyhow::{Result, ensure};
 use std::{fmt::Debug, vec};
+use versatiles_core::json::JsonValue;
 
 #[derive(Clone, PartialEq)]
 pub struct PolygonGeometry(pub Vec<RingGeometry>);
@@ -26,6 +27,10 @@ impl GeometryTrait for PolygonGeometry {
 			ring.verify()?;
 		}
 		Ok(())
+	}
+
+	fn to_coord_json(&self) -> JsonValue {
+		JsonValue::from(self.0.iter().map(|c| c.to_coord_json()).collect::<Vec<_>>())
 	}
 }
 

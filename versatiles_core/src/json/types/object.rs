@@ -10,6 +10,11 @@ use std::{collections::BTreeMap, fmt::Debug};
 pub struct JsonObject(pub BTreeMap<String, JsonValue>);
 
 impl JsonObject {
+	/// Create a new, empty `JsonObject`.
+	pub fn new() -> Self {
+		Self(BTreeMap::new())
+	}
+
 	/// Merge entries from another `JsonObject` into this one, overwriting existing keys.
 	pub fn assign(&mut self, object: JsonObject) -> Result<()> {
 		for entry in object.0.into_iter() {

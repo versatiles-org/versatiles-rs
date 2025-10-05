@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+use versatiles_core::json::JsonValue;
+
 #[derive(Clone, PartialEq)]
 pub struct Coordinates([f64; 2]);
 
@@ -14,6 +16,10 @@ impl Coordinates {
 
 	pub fn y(&self) -> f64 {
 		self.0[1]
+	}
+
+	pub fn to_json(&self) -> JsonValue {
+		JsonValue::from(&self.0)
 	}
 }
 

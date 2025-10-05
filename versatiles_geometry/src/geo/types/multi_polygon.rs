@@ -1,6 +1,7 @@
 use super::*;
 use anyhow::Result;
 use std::fmt::Debug;
+use versatiles_core::json::JsonValue;
 
 #[derive(Clone, PartialEq)]
 pub struct MultiPolygonGeometry(pub Vec<PolygonGeometry>);
@@ -15,6 +16,10 @@ impl GeometryTrait for MultiPolygonGeometry {
 			line.verify()?;
 		}
 		Ok(())
+	}
+
+	fn to_coord_json(&self) -> JsonValue {
+		JsonValue::from(self.0.iter().map(|c| c.to_coord_json()).collect::<Vec<_>>())
 	}
 }
 
