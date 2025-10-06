@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use std::path::PathBuf;
 use versatiles::{TileBBox, config::Config, progress::get_progress_bar};
 use versatiles_container::get_reader;
@@ -15,6 +15,7 @@ pub struct ExportOutline {
 	output: PathBuf,
 
 	/// Zoom level to analyze, defaults to the highest zoom level in the file
+	#[arg(long)]
 	level: Option<u8>,
 }
 
@@ -40,7 +41,7 @@ pub async fn run(args: &ExportOutline) -> Result<()> {
 		"Measuring the outline of the tiles in {input_file:?} at zoom level {level} and saving it to {output_file:?}"
 	);
 
-	if !output_file.ends_with(".geojson") {
+	if output_file.extension() != Some(std::ffi::OsStr::new("geojson")) {
 		bail!("Only GeoJSON output is supported for now");
 	}
 
@@ -53,6 +54,14 @@ pub async fn run(args: &ExportOutline) -> Result<()> {
 		outline.add_coord(entry.0);
 		progress.inc(1);
 	}
+
+	let json = outline.to_json_string();
+	let mut file = std::fs::File::create(output_file)
+		.with_context(|| format!("Failed to create output file \"{}\"", output_file.display()))?;
+
+	std::io::Write::write_all(&mut file, json.as_bytes())
+		.with_context(|| format!("Failed to write to output file \"{}\"", output_file.display()))?;
+
 	progress.finish();
 
 	log::info!("Done, saved to {output_file:?}");
