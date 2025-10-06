@@ -13,7 +13,7 @@ repository.workspace = true
 version.workspace = true
 
 [dependencies]
-ab_glyph = { version = "0.2.31", default-features = false }
+ab_glyph = { version = "0.2.32", default-features = false }
 anyhow.workspace = true
 async-trait.workspace = true
 futures.workspace = true

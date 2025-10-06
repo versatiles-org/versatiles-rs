@@ -92,7 +92,7 @@ lazy_static = { version = "1.5.0", default-features = false }
 log = { version = "0.4.28", default-features = false }
 num_cpus = { version = "1.17.0", default-features = false }
 pretty_assertions = "1.4.1"
-regex = { version = "1.11.2", default-features = false, features = [
+regex = { version = "1.11.3", default-features = false, features = [
 	"std",
 	"unicode-case",
 	"unicode-perl",
