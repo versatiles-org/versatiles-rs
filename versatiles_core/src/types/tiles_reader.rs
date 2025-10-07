@@ -161,6 +161,24 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		}))
 	}
 
+	/// Asynchronously stream the sizes of all tiles within the given bounding box.
+	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<u64>> {
+		let mutex = Arc::new(Mutex::new(self));
+		let coords: Vec<TileCoord> = bbox.iter_coords().collect();
+		Ok(TileStream::from_coord_vec_async(coords, move |coord| {
+			let mutex = mutex.clone();
+			async move {
+				mutex
+					.lock()
+					.await
+					.get_tile_blob(&coord)
+					.await
+					.map(|blob_option| blob_option.map(|blob| (coord, blob.len())))
+					.unwrap_or(None)
+			}
+		}))
+	}
+
 	/// Perform a hierarchical CLI probe of metadata, parameters, container, tiles, and contents.
 	#[cfg(feature = "cli")]
 	async fn probe(&mut self, level: ProbeDepth) -> Result<()> {
