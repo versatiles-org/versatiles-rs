@@ -164,104 +164,10 @@ impl VersaTilesReader {
 	fn get_tiles_size(&self) -> u64 {
 		self.block_index.iter().map(|b| b.get_tiles_range().length).sum()
 	}
-}
 
-unsafe impl Send for VersaTilesReader {}
-unsafe impl Sync for VersaTilesReader {}
-
-#[async_trait]
-impl TilesReaderTrait for VersaTilesReader {
-	/// Gets the container name.
-	fn container_name(&self) -> &str {
-		"versatiles"
-	}
-
-	/// Gets metadata.
-	fn tilejson(&self) -> &TileJSON {
-		&self.tilejson
-	}
-
-	/// Gets the parameters.
-	fn parameters(&self) -> &TilesReaderParameters {
-		&self.parameters
-	}
-
-	fn override_compression(&mut self, tile_compression: TileCompression) {
-		self.parameters.tile_compression = tile_compression;
-	}
-
-	/// Gets tile data for a given coordinate.
-	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
-		// Calculate block coordinate
-		let block_coord = TileCoord::new(coord.level, coord.x.shr(8), coord.y.shr(8))?;
-
-		// Get the block using the block coordinate
-		let block = self.block_index.get_block(&block_coord);
-
-		if block.is_none() {
-			return Ok(None);
-		}
-		let block = block.unwrap().clone();
-
-		// Get the block and its bounding box
-		let bbox = block.get_global_bbox();
-
-		// Check if the tile is within the block definition
-		if !bbox.contains(coord) {
-			log::trace!("tile {coord:?} outside block definition");
-			return Ok(None);
-		}
-
-		// Get the tile ID
-		let tile_id = bbox.index_of(coord).unwrap() as usize;
-
-		// Retrieve the tile index from cache or read from the reader
-		let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await?;
-		let tile_range: ByteRange = *tile_index.get(tile_id);
-
-		//  None if the tile range has zero length
-		if tile_range.length == 0 {
-			return Ok(None);
-		}
-
-		// Read the tile data from the reader
-		Ok(Some(self.reader.read_range(&tile_range).await?))
-	}
-
-	/// Gets a stream of tile data for a given bounding box.
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
-		log::debug!("get_tile_stream {:?}", bbox);
-
+	async fn get_chunks(&self, bbox: TileBBox) -> Vec<Chunk> {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
-
-		#[derive(Debug)]
-		struct Chunk {
-			tiles: Vec<(TileCoord, ByteRange)>,
-			range: ByteRange,
-		}
-
-		impl Chunk {
-			fn new(start: u64) -> Self {
-				Self {
-					tiles: Vec::new(),
-					range: ByteRange::new(start, 0),
-				}
-			}
-			fn push(&mut self, entry: (TileCoord, ByteRange)) {
-				self.tiles.push(entry);
-				if entry.1.offset < self.range.offset {
-					panic!()
-				};
-				self.range.length = self
-					.range
-					.length
-					.max(entry.1.offset + entry.1.length - self.range.offset)
-			}
-			fn len(&self) -> usize {
-				self.tiles.len()
-			}
-		}
 
 		let block_coords: Vec<TileCoord> = bbox.scaled_down(256).iter_coords().collect();
 
@@ -339,7 +245,104 @@ impl TilesReaderTrait for VersaTilesReader {
 		let chunks: Vec<Vec<Chunk>> = stream.collect().await;
 
 		let chunks: Vec<Chunk> = chunks.into_iter().flatten().collect();
+		chunks
+	}
+}
 
+unsafe impl Send for VersaTilesReader {}
+unsafe impl Sync for VersaTilesReader {}
+
+#[derive(Debug)]
+struct Chunk {
+	tiles: Vec<(TileCoord, ByteRange)>,
+	range: ByteRange,
+}
+
+impl Chunk {
+	fn new(start: u64) -> Self {
+		Self {
+			tiles: Vec::new(),
+			range: ByteRange::new(start, 0),
+		}
+	}
+	fn push(&mut self, entry: (TileCoord, ByteRange)) {
+		self.tiles.push(entry);
+		if entry.1.offset < self.range.offset {
+			panic!()
+		};
+		self.range.length = self
+			.range
+			.length
+			.max(entry.1.offset + entry.1.length - self.range.offset)
+	}
+	fn len(&self) -> usize {
+		self.tiles.len()
+	}
+}
+
+#[async_trait]
+impl TilesReaderTrait for VersaTilesReader {
+	/// Gets the container name.
+	fn container_name(&self) -> &str {
+		"versatiles"
+	}
+
+	/// Gets metadata.
+	fn tilejson(&self) -> &TileJSON {
+		&self.tilejson
+	}
+
+	/// Gets the parameters.
+	fn parameters(&self) -> &TilesReaderParameters {
+		&self.parameters
+	}
+
+	fn override_compression(&mut self, tile_compression: TileCompression) {
+		self.parameters.tile_compression = tile_compression;
+	}
+
+	/// Gets tile data for a given coordinate.
+	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+		// Calculate block coordinate
+		let block_coord = TileCoord::new(coord.level, coord.x.shr(8), coord.y.shr(8))?;
+
+		// Get the block using the block coordinate
+		let block = self.block_index.get_block(&block_coord);
+
+		if block.is_none() {
+			return Ok(None);
+		}
+		let block = block.unwrap().clone();
+
+		// Get the block and its bounding box
+		let bbox = block.get_global_bbox();
+
+		// Check if the tile is within the block definition
+		if !bbox.contains(coord) {
+			log::trace!("tile {coord:?} outside block definition");
+			return Ok(None);
+		}
+
+		// Get the tile ID
+		let tile_id = bbox.index_of(coord).unwrap() as usize;
+
+		// Retrieve the tile index from cache or read from the reader
+		let tile_index: Arc<TileIndex> = self.get_block_tile_index(&block).await?;
+		let tile_range: ByteRange = *tile_index.get(tile_id);
+
+		//  None if the tile range has zero length
+		if tile_range.length == 0 {
+			return Ok(None);
+		}
+
+		// Read the tile data from the reader
+		Ok(Some(self.reader.read_range(&tile_range).await?))
+	}
+
+	/// Gets a stream of tile data for a given bounding box.
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+		log::debug!("get_tile_stream {:?}", bbox);
+		let chunks = self.get_chunks(bbox).await;
 		Ok(TileStream::from_stream(
 			futures::stream::iter(chunks)
 				.then(move |chunk| {
@@ -360,6 +363,39 @@ impl TilesReaderTrait for VersaTilesReader {
 								assert!(bbox.contains(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
 
 								(coord, blob)
+							})
+							.collect();
+
+						futures::stream::iter(entries)
+					}
+				})
+				.flatten()
+				.boxed(),
+		))
+	}
+
+	/// Gets a stream of tile data for a given bounding box.
+	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<u64>> {
+		log::debug!("get_tile_size_stream {:?}", bbox);
+		let chunks = self.get_chunks(bbox).await;
+		Ok(TileStream::from_stream(
+			futures::stream::iter(chunks)
+				.then(move |chunk| {
+					let bbox = bbox;
+					async move {
+						let entries: Vec<(TileCoord, u64)> = chunk
+							.tiles
+							.into_iter()
+							.map(|(coord, range)| {
+								assert!(bbox.contains(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
+
+								let start = range.offset - chunk.range.offset;
+								let end = start + range.length;
+								let tile_range = (start as usize)..(end as usize);
+
+								let size = tile_range.len() as u64;
+
+								(coord, size)
 							})
 							.collect();
 
