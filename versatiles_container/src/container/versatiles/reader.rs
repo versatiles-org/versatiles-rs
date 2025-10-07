@@ -516,13 +516,19 @@ impl PartialEq for VersaTilesReader {
 mod tests {
 	use super::*;
 	use crate::{MOCK_BYTES_PBF, MockTilesReader, TilesWriterTrait, VersaTilesWriter, make_test_file};
+	use assert_fs::NamedTempFile;
 	use versatiles_core::{assert_wildcard, config::Config, io::DataWriterBlob, utils::decompress_gzip};
+
+	// Helper to quickly create a test reader and bbox
+	async fn mk_reader() -> Result<(NamedTempFile, VersaTilesReader)> {
+		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 4, "versatiles").await?;
+		let reader = VersaTilesReader::open_path(&temp_file).await?;
+		Ok((temp_file, reader))
+	}
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
-		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 4, "versatiles").await?;
-
-		let reader = VersaTilesReader::open_path(&temp_file).await?;
+		let (_, reader) = mk_reader().await?;
 
 		assert_eq!(
 			format!("{reader:?}"),
@@ -555,6 +561,94 @@ mod tests {
 	}
 
 	#[tokio::test]
+	async fn tile_stream_matches_individual_blob_reads() -> Result<()> {
+		let (_, reader) = mk_reader().await?;
+		let bbox = TileBBox::new_full(4)?;
+		let stream = reader.get_tile_stream(bbox).await?;
+		let mut all: Vec<(TileCoord, Blob)> = stream.to_vec().await;
+		all.sort_by_key(|(c, _)| (c.y, c.x));
+		assert_eq!(all.len(), bbox.count_tiles() as usize);
+
+		// Spot check a few coordinates (corners + center)
+		let probes = [
+			TileCoord::new(4, 0, 0)?,
+			TileCoord::new(4, 15, 0)?,
+			TileCoord::new(4, 0, 15)?,
+			TileCoord::new(4, 15, 15)?,
+			TileCoord::new(4, 7, 8)?,
+		];
+		for coord in probes {
+			let from_stream = all
+				.iter()
+				.find(|(c, _)| *c == coord)
+				.map(|(_, b)| b.clone())
+				.expect("present in stream");
+			let from_single = reader.get_tile_blob(&coord).await?.expect("present via single read");
+			assert_eq!(
+				from_stream.as_slice(),
+				from_single.as_slice(),
+				"blob mismatch at {coord:?}"
+			);
+		}
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn get_tile_blob_out_of_range_is_none() -> Result<()> {
+		let (_, reader) = mk_reader().await?;
+		// x beyond the level-4 max (15)
+		assert!(reader.get_tile_blob(&TileCoord::new(4, 16, 0)?).await?.is_none());
+		// level beyond available
+		assert!(reader.get_tile_blob(&TileCoord::new(5, 0, 0)?).await?.is_none());
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn tile_size_stream_has_same_coords_and_expected_sizes() -> Result<()> {
+		let (_, reader) = mk_reader().await?;
+		let bbox = TileBBox::from_min_max(4, 14, 14, 15, 15)?; // 2x2 region
+		let sizes: Vec<(TileCoord, u64)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
+		let tiles: Vec<(TileCoord, Blob)> = reader.get_tile_stream(bbox).await?.to_vec().await;
+		assert_eq!(sizes.len(), tiles.len());
+		// Build maps by coord and compare
+		use std::collections::HashMap;
+		let map_sizes: HashMap<_, _> = sizes.into_iter().collect();
+		let map_tiles: HashMap<_, _> = tiles.into_iter().collect();
+		for (coord, blob) in map_tiles {
+			let sz = *map_sizes.get(&coord).expect("size present");
+			assert_eq!(sz, blob.len());
+		}
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn single_tile_bbox_streams() -> Result<()> {
+		let (_, reader) = mk_reader().await?;
+		let one = TileBBox::from_min_max(4, 15, 1, 15, 1)?;
+		let blobs = reader.get_tile_stream(one).await?.to_vec().await;
+		let sizes = reader.get_tile_size_stream(one).await?.to_vec().await;
+		assert_eq!(blobs.len(), 1);
+		assert_eq!(sizes.len(), 1);
+		assert_eq!(blobs[0].0, sizes[0].0);
+		assert_eq!(blobs[0].1.len() as u64, sizes[0].1);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn override_compression_updates_parameters() -> Result<()> {
+		let (_, mut reader) = mk_reader().await?;
+		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
+		reader.override_compression(TileCompression::Uncompressed);
+		assert_eq!(reader.parameters().tile_compression, TileCompression::Uncompressed);
+		// Reading still works and returns identical bytes
+		let coord = TileCoord::new(4, 15, 1)?;
+		let a = reader.get_tile_blob(&coord).await?.unwrap();
+		let b = reader.get_tile_blob(&coord).await?.unwrap();
+		assert_eq!(a.as_slice(), b.as_slice());
+		Ok(())
+	}
+
+	#[tokio::test]
 	async fn read_your_own_dog_food() -> Result<()> {
 		let mut reader1 = MockTilesReader::new_mock(TilesReaderParameters::new(
 			TileFormat::JSON,
@@ -582,9 +676,7 @@ mod tests {
 	#[tokio::test]
 	#[cfg(feature = "cli")]
 	async fn probe() -> Result<()> {
-		let temp_file = make_test_file(TileFormat::MVT, TileCompression::Gzip, 4, "versatiles").await?;
-
-		let mut reader = VersaTilesReader::open_path(&temp_file).await?;
+		let (_, mut reader) = mk_reader().await?;
 
 		let mut printer = PrettyPrint::new();
 		reader.probe_container(&printer.get_category("container").await).await?;
