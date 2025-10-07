@@ -544,6 +544,13 @@ mod tests {
 		let tile = reader.get_tile_blob(&TileCoord::new(4, 15, 1)?).await?.unwrap();
 		assert_eq!(decompress_gzip(&tile)?.as_slice(), MOCK_BYTES_PBF);
 
+		let sizes = reader.get_tile_size_stream(TileBBox::new_full(4)?).await?;
+		let sizes: Vec<(TileCoord, u64)> = sizes.to_vec().await;
+		assert_eq!(sizes.len(), 256);
+		for (_, size) in sizes {
+			assert_eq!(size, 77);
+		}
+
 		Ok(())
 	}
 
