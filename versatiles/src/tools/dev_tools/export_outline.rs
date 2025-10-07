@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, anyhow, bail};
 use std::path::PathBuf;
-use versatiles::{TileBBox, config::Config, progress::get_progress_bar};
+use versatiles::{config::Config, progress::get_progress_bar};
 use versatiles_container::get_reader;
 
 #[derive(clap::Args, Debug)]
@@ -33,9 +33,8 @@ pub async fn run(args: &ExportOutline) -> Result<()> {
 	)
 	.await?;
 
-	let level = args
-		.level
-		.unwrap_or_else(|| reader.parameters().bbox_pyramid.get_level_max().unwrap());
+	let bbox_pyramid = reader.parameters().bbox_pyramid.clone();
+	let level = args.level.unwrap_or_else(|| bbox_pyramid.get_level_max().unwrap());
 
 	log::info!(
 		"Measuring the outline of the tiles in {input_file:?} at zoom level {level} and saving it to {output_file:?}"
@@ -45,7 +44,7 @@ pub async fn run(args: &ExportOutline) -> Result<()> {
 		bail!("Only GeoJSON output is supported for now");
 	}
 
-	let bbox = TileBBox::new_full(level)?;
+	let bbox = *bbox_pyramid.get_level_bbox(level);
 	let mut stream = reader.get_tile_stream(bbox).await?;
 
 	let progress = get_progress_bar("Scanning tile sizes", bbox.count_tiles());
