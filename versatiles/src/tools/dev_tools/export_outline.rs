@@ -45,7 +45,7 @@ pub async fn run(args: &ExportOutline) -> Result<()> {
 	}
 
 	let bbox = *bbox_pyramid.get_level_bbox(level);
-	let mut stream = reader.get_tile_stream(bbox).await?;
+	let mut stream = reader.get_tile_size_stream(bbox).await?;
 
 	let progress = get_progress_bar("Scanning tile sizes", bbox.count_tiles());
 	let mut outline = versatiles_geometry::tile_outline::TileOutline::new();
