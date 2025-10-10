@@ -220,7 +220,7 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn test_vplnode_get_property() -> () {
+	fn test_vplnode_get_property() {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_property(vec![("key1", "value1"), ("key2", "value2")]),
@@ -232,7 +232,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_vplnode_get_property_string() -> () {
+	fn test_vplnode_get_property_string() {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_property(vec![("key1", "value1")]),
@@ -246,7 +246,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_vplnode_get_property_string_req() -> () {
+	fn test_vplnode_get_property_string_req() {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_property(vec![("key1", "value1")]),
@@ -257,7 +257,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_vplnode_get_property_bool_req() -> () {
+	fn test_vplnode_get_property_bool_req() {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_property(vec![("key1", "true"), ("key2", "0")]),
@@ -268,7 +268,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_vplnode_get_property_number() -> () {
+	fn test_vplnode_get_property_number() {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_property(vec![("key1", "42"), ("key2", "invalid")]),
@@ -280,7 +280,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_vplnode_get_property_number_req() -> () {
+	fn test_vplnode_get_property_number_req() {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_property(vec![("key1", "42")]),
@@ -291,7 +291,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_vplnode_get_property_number_array4() -> () {
+	fn test_vplnode_get_property_number_array4() {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_properties(vec![("key1", vec!["1", "2", "3", "4"])]),
@@ -313,7 +313,7 @@ mod tests {
 	}
 
 	#[test]
-	fn test_vplnode_get_property_number_array4_req() -> () {
+	fn test_vplnode_get_property_number_array4_req() {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_properties(vec![("key1", vec!["1", "2", "3", "4"])]),
