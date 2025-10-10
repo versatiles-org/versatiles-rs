@@ -47,7 +47,7 @@ jobs:
         shell: bash
         run: |
           source ./scripts/install-gdal.sh
-          install_deps
+          sudo install_deps
 
       - name: Restore GDAL toolchain cache
         id: restore-gdal-cache
@@ -59,7 +59,7 @@ jobs:
       - name: Build/Install GDAL (on cache miss)
         if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
         run: |
-          sudo ./scripts/install-gdal.sh
+          ./scripts/install-gdal.sh
 
       - name: Show GDAL version (cached or built)
         run: ./.toolchain/gdal/bin/gdal-config --version
