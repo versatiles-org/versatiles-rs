@@ -34,20 +34,18 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Resolve GDAL version
+      - name: Show env
+        run: printenv
+
+      - name: Install build dependencies (detect GDAL version)
         id: gdal-version
         shell: bash
         run: |
           source ./scripts/install-gdal.sh
           detect_platform
           resolve_gdal_version
-          echo "GDAL_VERSION=$GDAL_VERSION" >> "$GITHUB_ENV"
-
-      - name: Install build dependencies (script)
-        shell: bash
-        run: |
-          source ./scripts/install-gdal.sh
           install_deps
+          echo "GDAL_VERSION=$GDAL_VERSION" >> "$GITHUB_ENV"
 
       - name: Restore GDAL toolchain cache
         id: restore-gdal-cache
