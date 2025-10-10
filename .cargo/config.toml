@@ -1,7 +1,17 @@
 [env]
-# Use the project-local GDAL toolchain
 DYLD_LIBRARY_PATH = { value = ".toolchain/gdal/lib", relative = true }
 GDAL_CONFIG = { value = ".toolchain/gdal/bin/gdal-config", relative = true }
 GDAL_DATA = { value = ".toolchain/gdal/share/gdal", relative = true }
 LD_LIBRARY_PATH = { value = ".toolchain/gdal/lib", relative = true }
 PKG_CONFIG_PATH = { value = ".toolchain/gdal/lib/pkgconfig:/opt/homebrew/lib/pkgconfig", relative = true }
+PROJ_DATA = { value = "/usr/share/proj" }
+
+[target.'cfg(target_os = "linux")']
+rustflags = [
+  "-C", "link-args=-Wl,-rpath,$ORIGIN/../../../.toolchain/gdal/lib",
+]
+
+[target.'cfg(target_os = "macos")']
+rustflags = [
+  "-C", "link-args=-Wl,-rpath,@loader_path/../../../.toolchain/gdal/lib",
+]
