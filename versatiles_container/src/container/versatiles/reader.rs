@@ -630,7 +630,7 @@ mod tests {
 		assert_eq!(blobs.len(), 1);
 		assert_eq!(sizes.len(), 1);
 		assert_eq!(blobs[0].0, sizes[0].0);
-		assert_eq!(blobs[0].1.len() as u64, sizes[0].1);
+		assert_eq!(blobs[0].1.len(), sizes[0].1);
 		Ok(())
 	}
 
