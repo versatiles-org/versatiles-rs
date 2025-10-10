@@ -1,6 +1,7 @@
 [env]
 # Use the project-local GDAL toolchain
-GDAL_CONFIG = { value = ".toolchain/gdal/bin/gdal-config", relative = true }
-PKG_CONFIG_PATH = { value = ".toolchain/gdal/lib/pkgconfig:/opt/homebrew/lib/pkgconfig", relative = true }
-GDAL_DATA = { value = ".toolchain/gdal/share/gdal", relative = true }
 DYLD_LIBRARY_PATH = { value = ".toolchain/gdal/lib", relative = true }
+GDAL_CONFIG = { value = ".toolchain/gdal/bin/gdal-config", relative = true }
+GDAL_DATA = { value = ".toolchain/gdal/share/gdal", relative = true }
+LD_LIBRARY_PATH = { value = ".toolchain/gdal/lib", relative = true }
+PKG_CONFIG_PATH = { value = ".toolchain/gdal/lib/pkgconfig:/opt/homebrew/lib/pkgconfig", relative = true }
