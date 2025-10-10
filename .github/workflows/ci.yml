@@ -34,11 +34,37 @@ jobs:
         with:
           components: rustfmt, clippy
 
-      - name: Install GDAL
+      - name: Resolve GDAL version
+        id: gdal-version
+        shell: bash
         run: |
-          sudo add-apt-repository ppa:ubuntugis/ubuntugis-unstable
+          source ./scripts/install-gdal.sh
+          detect_platform
+          resolve_gdal_version
+          echo "GDAL_VERSION=$GDAL_VERSION" >> "$GITHUB_ENV"
+
+      - name: Cache GDAL toolchain (.toolchain/gdal)
+        id: cache-gdal
+        uses: actions/cache@v4
+        with:
+          path: .toolchain/gdal
+          key: ${{ runner.os }}-gdal-${{ env.GDAL_VERSION }}-${{ hashFiles('scripts/install-gdal.sh') }}
+          restore-keys: |
+            ${{ runner.os }}-gdal-
+
+      - name: Set up APT sources for geospatial
+        if: steps.cache-gdal.outputs.cache-hit != 'true'
+        run: |
+          sudo add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
           sudo apt-get update
+
+      - name: Build/Install GDAL (on cache miss)
+        if: steps.cache-gdal.outputs.cache-hit != 'true'
+        run: |
           ./scripts/install-gdal.sh
+
+      - name: Show GDAL version (cached or built)
+        run: ./.toolchain/gdal/bin/gdal-config --version
 
       - name: Init Cache
         uses: actions/cache@v4
