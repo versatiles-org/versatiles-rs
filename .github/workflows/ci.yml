@@ -47,7 +47,7 @@ jobs:
         shell: bash
         run: |
           source ./scripts/install-gdal.sh
-          sudo install_deps
+          install_deps
 
       - name: Restore GDAL toolchain cache
         id: restore-gdal-cache

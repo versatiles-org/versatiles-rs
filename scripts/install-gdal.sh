@@ -126,8 +126,8 @@ install_deps_mac() {
 # ----- dependency installation (apt) -----------------------------------------
 install_deps_apt() {
   info "Installing build dependencies via apt…"
-  apt-get update
-  apt-get install -y --no-install-recommends \
+  sudo apt-get update
+  sudo apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
     ccache \
