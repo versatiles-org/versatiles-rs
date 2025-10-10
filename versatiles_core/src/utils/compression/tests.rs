@@ -13,7 +13,8 @@ use crate::Blob;
 pub fn generate_test_data(size: usize) -> Blob {
 	let mut data = Vec::with_capacity(size);
 	for i in 0..size {
-		data.push((((i as f64 + 1.0).cos() * 1_000_000.0) as u8).wrapping_add(u8::try_from(i).unwrap()));
+		let v = (i as f64 + 1.0).sin() * 1_000_000.0 + i as f64;
+		data.push((v % 256.0) as u8);
 	}
 	Blob::from(data)
 }
