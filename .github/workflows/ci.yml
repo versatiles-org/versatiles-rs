@@ -59,6 +59,17 @@ jobs:
       - name: Show GDAL version (cached or built)
         run: ./.toolchain/gdal/bin/gdal-config --version
 
+      - name: Export GDAL env for cargo steps
+        shell: bash
+        run: |
+          GDAL_PREFIX="${{ github.workspace }}/.toolchain/gdal"
+          echo "GDAL_PREFIX=${GDAL_PREFIX}" >> "$GITHUB_ENV"
+          echo "GDAL_CONFIG=${GDAL_PREFIX}/bin/gdal-config" >> "$GITHUB_ENV"
+          echo "GDAL_DATA=${GDAL_PREFIX}/share/gdal" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=${GDAL_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH}" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${GDAL_PREFIX}/lib:${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
+          echo "PROJ_DATA=/usr/share/proj" >> "$GITHUB_ENV"
+
       - name: Save GDAL toolchain cache
         if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@v4
