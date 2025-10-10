@@ -11,31 +11,45 @@ PROJECT_DIR=$(pwd)
 
 kernel_name="$(uname -s)"
 
-export GDAL_PREFIX="$PROJECT_DIR/.toolchain/gdal"
-export GDAL_HOME="$GDAL_PREFIX"
-export GDAL_CONFIG=${GDAL_PREFIX}/bin/gdal-config
-export GDAL_INCLUDE_DIR="$GDAL_PREFIX/include"
-export GDAL_DATA="${GDAL_HOME}/share/gdal"
-export GDAL_LIB_DIR="$GDAL_PREFIX/lib"
+path_prepend_unique() {
+  # POSIX/zsh-compatible (no indirect ${!var})
+  var="$1"; dir="$2"
+  eval "cur=\${$var:-}"
+  case ":$cur:" in
+    *":$dir:"*) return;; # already present
+    *)
+      if [ -n "$cur" ]; then
+        eval "export $var=\"$dir:$cur\""
+      else
+        eval "export $var=\"$dir\""
+      fi
+      ;;
+  esac
+}
 
-LD_LIBRARY_PATH=${GDAL_PREFIX}/lib:${LD_LIBRARY_PATH}
-PROJ_DATA=/usr/share/proj
-export PKG_CONFIG_PATH="$GDAL_PREFIX/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+export GDAL_PREFIX="${PROJECT_DIR}/.toolchain/gdal"
+export GDAL_HOME="${GDAL_PREFIX}"
+export GDAL_CONFIG="${GDAL_PREFIX}/bin/gdal-config"
+export GDAL_INCLUDE_DIR="${GDAL_PREFIX}/include"
+export GDAL_DATA="${GDAL_HOME}/share/gdal"
+export GDAL_LIB_DIR="${GDAL_PREFIX}/lib"
+
+path_prepend_unique PKG_CONFIG_PATH "${GDAL_PREFIX}/lib/pkgconfig"
+export PKG_CONFIG_PATH
 
 case "$kernel_name" in
   Darwin)
-    # Prefer the GDAL that gdal-config points to (Homebrew or custom build).
     if command -v gdal-config >/dev/null 2>&1; then
-     
       # Ensure runtime can find libgdal without extra setup
-      export RUSTFLAGS='-C link-args=-Wl,-rpath,'"$GDAL_PREFIX"'/lib'
+      export RUSTFLAGS='-C link-args=-Wl,-rpath,'"${GDAL_PREFIX}"'/lib'
       export RUSTDOCFLAGS="$RUSTFLAGS"
 
       # Set data directories for CRS lookup and ensure runtime loader finds GDAL
-      PROJ_PREFIX="$(pkg-config --variable=prefix proj 2>/dev/null || /opt/homebrew/bin/brew --prefix 2>/dev/null || echo /opt/homebrew)"
+      export PROJ_PREFIX="$(pkg-config --variable=prefix proj 2>/dev/null || /opt/homebrew/bin/brew --prefix 2>/dev/null || echo /opt/homebrew)"
       
       unset PROJ_LIB
-      export DYLD_LIBRARY_PATH="${GDAL_LIB_DIR}:${DYLD_LIBRARY_PATH:-}"
+      path_prepend_unique DYLD_LIBRARY_PATH "${GDAL_LIB_DIR}"
+      export DYLD_LIBRARY_PATH
     else
       echo "gdal-config not found. Please install GDAL (e.g., via Homebrew) before running this script." >&2
       exit 1
@@ -54,9 +68,10 @@ case "$kernel_name" in
 
   Linux)
     # ---------- Debian/Ubuntu (APT) ------------------------------------------
-    PROJ_PREFIX="$(pkg-config --variable=prefix proj 2>/dev/null || echo /usr)"
+    export PROJ_PREFIX="$(pkg-config --variable=prefix proj 2>/dev/null || echo /usr)"
+    path_prepend_unique LD_LIBRARY_PATH "${GDAL_LIB_DIR}"
+    export LD_LIBRARY_PATH
     unset PROJ_LIB
-    export LD_LIBRARY_PATH="${GDAL_LIB_DIR}:${LD_LIBRARY_PATH:-}"
     ;;
 
   *)
@@ -68,13 +83,19 @@ esac
 export PROJ_DATA="${PROJ_PREFIX}/share/proj"
 
 # GDAL version is useful for selecting the matching gdal-sys feature.
-export GDAL_VERSION="$(gdal-config --version)"
+export GDAL_VERSION="$($GDAL_CONFIG --version 2>/dev/null || echo unknown)"
 
-echo "Configured GDAL ${GDAL_VERSION} (home: ${GDAL_HOME}; gdal-config: ${GDAL_CONFIG})"
-echo "Data dirs: PROJ_DATA=${PROJ_DATA:-unset}; GDAL_DATA=${GDAL_DATA:-unset}"
+echo "Configured:"
+echo "  GDAL_VERSION:      ${GDAL_VERSION:-unset}"
+echo "  GDAL_HOME:         ${GDAL_HOME:-unset}"
+echo "  GDAL_CONFIG:       ${GDAL_CONFIG:-unset}"
+echo "  PROJ_DATA:         ${PROJ_DATA:-unset}"
+echo "  GDAL_DATA:         ${GDAL_DATA:-unset}"
+
 case "$kernel_name" in
-  Darwin) echo "Runtime: DYLD_LIBRARY_PATH=${DYLD_LIBRARY_PATH:-unset}" ;;
-  Linux)  echo "Runtime: LD_LIBRARY_PATH=${LD_LIBRARY_PATH:-unset}" ;;
+  Darwin) echo "  DYLD_LIBRARY_PATH: ${DYLD_LIBRARY_PATH:-unset}" ;;
+  Linux)  echo "  LD_LIBRARY_PATH:   ${LD_LIBRARY_PATH:-unset}" ;;
   *) : ;;
 esac
+
 unset kernel_name  # keep the user environment clean
