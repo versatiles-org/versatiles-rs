@@ -1,5 +1,6 @@
 .*.sh
 .DS_Store
+.toolchain
 *.code-workspace
 *.info
 *.json

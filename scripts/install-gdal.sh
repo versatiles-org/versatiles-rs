@@ -1,60 +1,75 @@
 #!/usr/bin/env bash
-# Build & install the latest GDAL release (from tags) on macOS (Homebrew) or Debian/Ubuntu.
+# shellcheck shell=bash
+# -----------------------------------------------------------------------------
+# Build & install the latest stable GDAL release from source for THIS PROJECT.
+# - Installs into: <repo>/.toolchain/gdal
+# - Uses Homebrew (macOS) or APT (Debian/Ubuntu) for dependencies
+# - Keeps runtime/env logic consistent and self-tested
+#
 # Usage:
-#   PREFIX=/custom/prefix JOBS=8 bash install-gdal.sh
-#   SKIP_DEPS=1 bash install-gdal.sh      # if you’ve already installed deps
-#   GDAL_TAG=v3.9.1 bash install-gdal.sh  # build a specific tag instead of auto-latest
+#   bash scripts/install-gdal.sh [--jobs N] [--skip-deps] [--src-dir DIR] [--no-test]
+# -----------------------------------------------------------------------------
 set -euo pipefail
 
-### --- Configurable env vars ---
-: "${PREFIX:=}"            # Default decided per-OS (Homebrew prefix on macOS, /usr/local on Linux)
-: "${JOBS:=}"              # Default: auto-detect
-: "${SKIP_DEPS:=0}"        # 1 to skip dependency installation
-: "${GDAL_TAG:=}"          # e.g., v3.9.1 ; if empty we auto-pick the newest tag by creation date
-: "${SRC_DIR:=/tmp/gdal-src}"  # where to clone/build
-: "${INSTALL_TEST:=1}"     # run `gdalinfo --version` after installation
-### -----------------------------
+# ===== User-tunable config (via env or flags) =================================
+: "${JOBS:=}"                 # Parallel build jobs (auto if empty)
+: "${SKIP_DEPS:=0}"           # 1 = do not install deps
+: "${SRC_DIR:=/tmp/gdal-src}" # Working dir for downloading/building
+: "${INSTALL_TEST:=1}"        # 1 = run post-install sanity checks
+# =============================================================================
 
-say()  { printf "\033[1;34m[+] %s\033[0m\n" "$*"; }
+# ----- tiny logger helpers ----------------------------------------------------
+info() { printf "\033[1;36m==> %s\033[0m\n" "$*"; }
+ok()   { printf "\033[1;32m[+] %s\033[0m\n" "$*"; }
 warn() { printf "\033[1;33m[!] %s\033[0m\n" "$*"; }
 die()  { printf "\033[1;31m[x] %s\033[0m\n" "$*" >&2; exit 1; }
+need() { command -v "$1" >/dev/null 2>&1 || die "Missing required tool: $1"; }
 
-OS="$(uname -s)"
-case "$OS" in
-  Darwin) PLATFORM=mac ;;
-  Linux)  PLATFORM=linux ;;
-  *)      die "Unsupported OS: $OS" ;;
-esac
+# ----- usage / arg parsing ----------------------------------------------------
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [options]
 
-command -v "git" >/dev/null 2>&1 || die "Missing required tool: git";
+Options:
+  --jobs N         Parallel build jobs (default: auto)
+  --skip-deps      Skip dependency installation
+  --src-dir DIR    Working directory for sources (default: /tmp/gdal-src)
+  --no-test        Skip post-install checks
+  -h, --help       Show this help
+EOF
+}
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --jobs) JOBS="$2"; shift 2;;
+    --skip-deps) SKIP_DEPS=1; shift;;
+    --src-dir) SRC_DIR="$2"; shift 2;;
+    --no-test) INSTALL_TEST=0; shift;;
+    -h|--help) usage; exit 0;;
+    *) die "Unknown argument: $1 (see --help)";;
+  esac
+done
 
-# Detect package manager & set defaults
-if [[ "$PLATFORM" == "mac" ]]; then
-  if ! command -v brew >/dev/null 2>&1; then
-    die "Homebrew is required but not found. Install from https://brew.sh/ then re-run."
-  fi
-  HOMEBREW_PREFIX="$(brew --prefix)"
-  : "${PREFIX:=${HOMEBREW_PREFIX}}"
-  # Default jobs: number of hardware threads
-  : "${JOBS:=$(sysctl -n hw.ncpu)}"
-elif [[ "$PLATFORM" == "linux" ]]; then
-  # Pick apt for Debian/Ubuntu
-  if command -v apt-get >/dev/null 2>&1; then
-    PKG=apt
-  else
-    die "Only Debian/Ubuntu (APT) is supported on Linux in this script."
-  fi
-  : "${PREFIX:=/usr/local}"
-  : "${JOBS:=$(nproc)}"
-fi
+# ----- platform detection -----------------------------------------------------
+detect_platform() {
+  case "$(uname -s)" in
+    Darwin) PLATFORM=mac ;;
+    Linux)  PLATFORM=linux ;;
+    *)      die "Unsupported OS: $(uname -s)" ;;
+  esac
+}
 
-say "Platform: $PLATFORM"
-say "Install prefix: $PREFIX"
-say "Parallel jobs: ${JOBS}"
+# ----- repo root & fixed install prefix --------------------------------------
+resolve_repo_root_and_prefix() {
+  REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
+  [[ -n "$REPO_ROOT" ]] || die "Run this inside a git repo; we install into .toolchain/gdal"
+  PREFIX="$REPO_ROOT/.toolchain/gdal"
+}
 
+# ----- dependency installation (mac) -----------------------------------------
 install_deps_mac() {
-  say "Installing build dependencies via Homebrew…"
-  # Core build + common optional libraries
+  info "Installing build dependencies via Homebrew…"
+  need brew
+  HOMEBREW_PREFIX="$(brew --prefix)"
   brew update
   brew install \
     apache-arrow \
@@ -81,19 +96,21 @@ install_deps_mac() {
     xz \
     zstd \
     || true
-  # Ensure pkg-config and CMake can find Homebrew libs
-  export PKG_CONFIG_PATH="${HOMEBREW_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
+  # Build-time discovery for CMake/pkg-config
   export CMAKE_PREFIX_PATH="${HOMEBREW_PREFIX}:${CMAKE_PREFIX_PATH:-}"
+  export PKG_CONFIG_PATH="${HOMEBREW_PREFIX}/lib/pkgconfig:${PKG_CONFIG_PATH:-}"
 }
 
+# ----- dependency installation (apt) -----------------------------------------
 install_deps_apt() {
-  say "Installing build dependencies via apt… (may prompt for sudo)"
+  info "Installing build dependencies via apt…"
   sudo apt-get update
   sudo apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
     ccache \
     cmake \
+    curl \
     git \
     libcurl4-openssl-dev \
     libexpat1-dev \
@@ -120,173 +137,193 @@ install_deps_apt() {
     || true
 }
 
-if [[ "$SKIP_DEPS" != "1" ]]; then
+# ----- build-time env (common) ------------------------------------------------
+set_build_env() {
+  # Derive sensible defaults once
+  if [[ -z "${JOBS}" ]]; then
+    if [[ "$PLATFORM" == "mac" ]]; then
+      JOBS=$(sysctl -n hw.ncpu)
+    else
+      JOBS=$(nproc)
+    fi
+  fi
+  ok "Parallel jobs: ${JOBS}"
+}
+
+# ----- runtime env (for tests) ------------------------------------------------
+set_runtime_env() {
+  # Make sure test binaries can find libs & data directories
   if [[ "$PLATFORM" == "mac" ]]; then
-    install_deps_mac
+    local brew_proj_prefix
+    brew_proj_prefix="$(brew --prefix proj 2>/dev/null || brew --prefix 2>/dev/null || echo /opt/homebrew)"
+    export DYLD_LIBRARY_PATH="${PREFIX}/lib:${brew_proj_prefix%/proj}/lib:${DYLD_LIBRARY_PATH:-}"
+    export PROJ_DATA="${brew_proj_prefix}/share/proj"
   else
-    install_deps_apt
+    export LD_LIBRARY_PATH="${PREFIX}/lib:${LD_LIBRARY_PATH:-}"
+    export PROJ_DATA="/usr/share/proj"
   fi
-else
-  warn "Skipping dependency installation as requested (SKIP_DEPS=1)."
-fi
+  unset PROJ_LIB
+  export GDAL_DATA="${PREFIX}/share/gdal"
+}
 
-# Prepare source directory
-say "Setting up source directory at ${SRC_DIR}…"
-rm -rf "$SRC_DIR"
-mkdir -p "$SRC_DIR"
-cd "$SRC_DIR"
+# ----- source dir prep --------------------------------------------------------
+prepare_source_dir() {
+  info "Preparing source directory: ${SRC_DIR}"
+  rm -rf "$SRC_DIR" && mkdir -p "$SRC_DIR"
+}
 
-# Clone or update GDAL
-if [[ -d gdal/.git ]]; then
-  say "Updating existing GDAL repo…"
-  cd gdal
-  git fetch --tags --prune
-else
-  say "Cloning GDAL repository…"
-  git clone https://github.com/OSGeo/gdal.git
-  cd gdal
-fi
+# ----- resolve latest GDAL version -------------------------------------------
+resolve_gdal_version() {
+  info "Resolving latest GDAL version via ls-remote…"
+  GDAL_VERSION="$((git ls-remote --tags --refs https://github.com/OSGeo/gdal.git \
+    | awk -F/ '/refs\/tags\/v[0-9]+\.[0-9]+\.[0-9]+$/ {print $NF}' \
+    | sort -V | tail -n1) | sed 's/^v//')"
+  [[ -n "$GDAL_VERSION" ]] || die "Could not determine the latest GDAL version"
+  ok "Building GDAL version: ${GDAL_VERSION}"
+}
 
-# Resolve tag to build
-if [[ -z "$GDAL_TAG" ]]; then
-  say "Selecting the newest GDAL tag by creation date…"
-  # Pick the newest tag (works on both GNU/BSD sort environments)
-  LATEST_TAG="$(git for-each-ref --sort=-creatordate --format='%(refname:short)' refs/tags | head -n1)"
-  if [[ -z "$LATEST_TAG" ]]; then
-    die "Could not determine latest tag. Repo might not have tags?"
+# ----- fetch source tarball ---------------------------------------------------
+fetch_source_tarball() {
+  local tar="gdal-${GDAL_VERSION}.tar.gz"
+  local url="https://github.com/OSGeo/gdal/archive/refs/tags/v${GDAL_VERSION}.tar.gz"
+  cd "$SRC_DIR"
+  if [[ ! -f "$tar" ]]; then
+    info "Downloading $tar …"
+    curl -fsSL -o "$tar.tmp" "$url" || die "curl failed to fetch $url"
+    mv "$tar.tmp" "$tar"
   fi
-  GDAL_TAG="$LATEST_TAG"
-fi
-say "Building GDAL tag: $GDAL_TAG"
-git checkout -q "$GDAL_TAG"
+  if [[ ! -d "gdal-${GDAL_VERSION}" ]]; then
+    info "Extracting $tar …"
+    tar xzf "$tar"
+  fi
+  cd "gdal-${GDAL_VERSION}"
+}
 
-# Build
-say "Configuring with CMake…"
-BUILD_DIR="$PWD/build"
-rm -rf "$BUILD_DIR"
-mkdir -p "$BUILD_DIR"
-cd "$BUILD_DIR"
+# ----- configure build (assemble CMake args) ---------------------------------
+configure_build() {
+  info "Configuring CMake …"
+  BUILD_DIR="$PWD/build"
+  rm -rf "$BUILD_DIR" && mkdir -p "$BUILD_DIR"
 
-# On macOS, prefer Homebrew prefix for install and dependency discovery.
-CMAKE_ARGS=(
-  -DCMAKE_BUILD_TYPE=Release
-  -DCMAKE_C_COMPILER_LAUNCHER=ccache
-  -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
-  -DCMAKE_INSTALL_PREFIX="${PREFIX}"
-  -DGDAL_USE_ARROW=OFF
-  -DGDAL_USE_GEOTIFF_INTERNAL=ON
-  -DGDAL_USE_GEOTIFF=ON
-  -DGDAL_USE_INTERNAL_LIBS=WHEN_NO_EXTERNAL
-  -DGDAL_USE_JSONC=ON
-  -DGDAL_USE_JXL=ON
-  -DGDAL_USE_PARQUET=OFF
-  -DGDAL_USE_SFCGAL=OFF
-  -DGDAL_USE_TIFF_INTERNAL=ON
-  -DGDAL_USE_TIFF=ON
-  -DGDAL_USE_WEBP=ON
-)
-
-# Help CMake find brew-installed libraries on macOS
-if [[ "$PLATFORM" == "mac" ]]; then
-  CMAKE_ARGS+=(
-    "-DCMAKE_DISABLE_FIND_PACKAGE_Arrow=ON"
-    "-DCMAKE_PREFIX_PATH=${HOMEBREW_PREFIX}"
-    "-DCMAKE_MACOSX_RPATH=ON"
-    "-DCMAKE_INSTALL_RPATH=${PREFIX}/lib"
-    "-DCMAKE_BUILD_RPATH=${PREFIX}/lib"
-    "-DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON"
+  CMAKE_ARGS=(
+    -DCMAKE_BUILD_TYPE=Release
+    -DCMAKE_C_COMPILER_LAUNCHER=ccache
+    -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+    -DCMAKE_INSTALL_PREFIX="${PREFIX}"
+    # Keep TIFF internal (with WebP/JXL enabled via external deps)
+    -DGDAL_USE_TIFF_INTERNAL=ON
+    -DGDAL_USE_TIFF=ON
+    -DGDAL_USE_WEBP=ON
+    -DGDAL_USE_JXL=ON
+    # Common toggles we don’t need (trim build time/size)
+    -DGDAL_USE_ARROW=OFF
+    -DGDAL_USE_PARQUET=OFF
+    -DGDAL_USE_POPPLER=OFF
+    -DGDAL_USE_SFCGAL=OFF
+    -DGDAL_USE_GEOTIFF_INTERNAL=ON
+    -DGDAL_USE_GEOTIFF=ON
+    -DGDAL_USE_JSONC=ON
+    -DGDAL_USE_INTERNAL_LIBS=WHEN_NO_EXTERNAL
   )
-fi
 
-cmake .. "${CMAKE_ARGS[@]}"
+  if [[ "$PLATFORM" == "mac" ]]; then
+    local brew_prefix
+    brew_prefix="$(brew --prefix)"
+    CMAKE_ARGS+=(
+      -DCMAKE_PREFIX_PATH="${brew_prefix}"
+      -DCMAKE_MACOSX_RPATH=ON
+      -DCMAKE_INSTALL_RPATH="${PREFIX}/lib"
+      -DCMAKE_BUILD_RPATH="${PREFIX}/lib"
+      -DCMAKE_INSTALL_RPATH_USE_LINK_PATH=ON
+      -DCMAKE_DISABLE_FIND_PACKAGE_Arrow=ON
+    )
+  fi
 
-say "Compiling…"
-cmake --build . -- -j"${JOBS}"
+  cmake -S . -B "$BUILD_DIR" "${CMAKE_ARGS[@]}"
+}
 
-say "Installing (may prompt for sudo if PREFIX not writable)…"
-if [[ -w "$PREFIX" ]]; then
-  cmake --install .
-else
-  sudo cmake --install .
-fi
+# ----- build & install --------------------------------------------------------
+build_and_install() {
+  info "Building …"
+  cmake --build "$BUILD_DIR" -- -j"${JOBS}"
 
-# Linux: refresh linker cache if we installed into a standard lib dir
-if [[ "$PLATFORM" == "linux" ]]; then
-  if [[ -d "/etc/ld.so.conf.d" ]]; then
+  info "Installing (no sudo if prefix writable) …"
+  mkdir -p "$PREFIX" || true
+  if [[ -w "$PREFIX" ]]; then
+    cmake --install "$BUILD_DIR"
+  else
+    sudo cmake --install "$BUILD_DIR"
+  fi
+
+  # Linux only: refresh linker cache if relevant
+  if [[ "$PLATFORM" == "linux" && -d /etc/ld.so.conf.d ]]; then
     sudo ldconfig || true
   fi
-fi
+}
 
-# Post-install check
-if [[ "$INSTALL_TEST" == "1" ]]; then
-  say "Testing installation: gdalinfo --version"
-  if command -v gdalinfo >/dev/null 2>&1; then
-    if [[ "$PLATFORM" == "mac" ]]; then
-      export DYLD_LIBRARY_PATH="${PREFIX}/lib:${DYLD_LIBRARY_PATH:-}"
-      # Ensure data dirs are set for CRS lookups
-      export PROJ_DATA="${HOMEBREW_PREFIX}/share/proj"
-    else
-      # Ensure data dirs are set for CRS lookups
-      export PROJ_DATA="/usr/share/proj"
-    fi
-    unset PROJ_LIB
-    export GDAL_DATA="${PREFIX}/share/gdal"
-    gdalinfo --version || true
-    command -v projinfo >/dev/null 2>&1 && projinfo EPSG:4326 || true
-    command -v gdalsrsinfo >/dev/null 2>&1 && gdalsrsinfo EPSG:4326 >/dev/null 2>&1 || warn "EPSG lookup failed; check PROJ_DATA (${PROJ_DATA}) and GDAL_DATA (${GDAL_DATA})."
-  else
-    warn "gdalinfo not found in PATH. You may need to add ${PREFIX}/bin to your PATH."
-    warn "Example: export PATH=${PREFIX}/bin:\$PATH"
+# ----- post-install checks ----------------------------------------------------
+post_install_checks() {
+  [[ "$INSTALL_TEST" == "1" ]] || { warn "Skipping post-install tests (--no-test)"; return; }
+  info "Running post-install sanity checks …"
+
+  # Prefer the just-installed tools
+  local gdalinfo_bin="${PREFIX}/bin/gdalinfo"
+  local gdalsrsinfo_bin="${PREFIX}/bin/gdalsrsinfo"
+  local projinfo_bin
+  projinfo_bin="$(command -v projinfo || true)"
+  [[ -x "$gdalinfo_bin" ]] || gdalinfo_bin="$(command -v gdalinfo || true)"
+  [[ -x "$gdalsrsinfo_bin" ]] || gdalsrsinfo_bin="$(command -v gdalsrsinfo || true)"
+
+  if [[ -z "$gdalinfo_bin" ]]; then
+    warn "gdalinfo not found. Add ${PREFIX}/bin to PATH."
+    return
   fi
-fi
 
-say "GDAL ${GDAL_TAG} installed to ${PREFIX}. Done."
+  set_runtime_env
+  ok   "Using gdalinfo: $gdalinfo_bin"
+  [[ -n "$gdalsrsinfo_bin" ]] && ok "Using gdalsrsinfo: $gdalsrsinfo_bin" || warn "gdalsrsinfo not found"
+  [[ -n "$projinfo_bin"    ]] && ok "Using projinfo: $projinfo_bin"       || warn "projinfo not found"
 
-#!/usr/bin/env bash
-# Set up environment variables for GDAL build and runtime.
+  "$gdalinfo_bin" --version || true
 
-OS="$(uname -s)"
+  # Data directory diagnostics
+  if [[ -d "${PROJ_DATA}" ]]; then
+    ok "PROJ_DATA=${PROJ_DATA}"
+    [[ -f "${PROJ_DATA}/proj.db" ]] && ok "proj.db OK" || warn "proj.db missing under PROJ_DATA"
+  else
+    warn "PROJ_DATA directory missing: ${PROJ_DATA}"
+  fi
 
-case "$OS" in
-  Darwin)
-    # macOS: set PROJ and GDAL data dirs, unset PROJ_LIB
-    PROJ_PREFIX="$(brew --prefix proj)"
-    GDAL_HOME="$(brew --prefix gdal 2>/dev/null || echo "${PROJ_PREFIX}")"
-    export PROJ_DATA="${PROJ_PREFIX}/share/proj"
-    export GDAL_DATA="${GDAL_HOME}/share/gdal"
-    unset PROJ_LIB
+  # EPSG lookups (non-fatal)
+  if [[ -n "$projinfo_bin" ]]; then
+    "$projinfo_bin" EPSG:4326 >/dev/null 2>&1 || warn "projinfo EPSG:4326 failed"
+  fi
+  if [[ -n "$gdalsrsinfo_bin" ]]; then
+    "$gdalsrsinfo_bin" EPSG:4326 >/dev/null 2>&1 || warn "gdalsrsinfo EPSG:4326 failed"
+  fi
+}
 
-    # Sanity check: ensure proj.db exists where we point PROJ_DATA
-    if [[ ! -f "${PROJ_DATA}/proj.db" ]]; then
-      echo "[warn] PROJ_DATA=${PROJ_DATA} does not contain proj.db; 'projinfo EPSG:4326' will likely fail." >&2
-    fi
+# ===== main flow ==============================================================
+main() {
+  need git; need curl; need cmake
+  detect_platform
+  resolve_repo_root_and_prefix
+  [[ "$PLATFORM" == "mac" ]] || [[ "$PLATFORM" == "linux" ]] || die "Unsupported platform"
 
-    # Unset Conda-related env vars that might interfere, include PROJ_DATA and DYLD_FALLBACK_LIBRARY_PATH
-    for var in LDFLAGS LIBRARY_PATH CPATH C_INCLUDE_PATH CPLUS_INCLUDE_PATH PROJ_DATA PROJ_LIB DYLD_FALLBACK_LIBRARY_PATH; do
-      unset "$var"
-    done
-    ;;
+  if [[ "$SKIP_DEPS" != "1" ]]; then
+    if [[ "$PLATFORM" == "mac" ]]; then install_deps_mac; else install_deps_apt; fi
+  else
+    warn "Skipping dependency installation (--skip-deps)"
+  fi
 
-  Linux)
-    # Linux: set PROJ and GDAL data dirs, unset PROJ_LIB
-    GDAL_HOME="${GDAL_HOME:-$(gdal-config --prefix 2>/dev/null || echo /usr/local)}"
-    PROJ_PREFIX="$(pkg-config --variable=prefix proj 2>/dev/null || echo /usr)"
-    export PROJ_DATA="${PROJ_PREFIX}/share/proj"
-    export GDAL_DATA="${GDAL_HOME}/share/gdal"
-    unset PROJ_LIB
+  set_build_env
+  prepare_source_dir
+  resolve_gdal_version
+  fetch_source_tarball
+  configure_build
+  build_and_install
+  post_install_checks
+  ok "GDAL ${GDAL_VERSION} installed to ${PREFIX}"
+}
 
-    # Other Linux environment setup can go here
-    ;;
-
-  *)
-    echo "Unsupported OS: $OS"
-    exit 1
-    ;;
-esac
-
-echo "Configured GDAL environment for $OS."
-echo "Data dirs: PROJ_DATA=${PROJ_DATA:-unset}; GDAL_DATA=${GDAL_DATA:-unset}"
-
-# Quick live checks (non-fatal)
-command -v projinfo >/dev/null 2>&1 && projinfo EPSG:4326 >/dev/null 2>&1 || echo "[warn] projinfo EPSG:4326 failed; check PROJ_DATA=${PROJ_DATA}"
-command -v gdalsrsinfo >/dev/null 2>&1 && gdalsrsinfo EPSG:4326 >/dev/null 2>&1 || echo "[warn] gdalsrsinfo EPSG:4326 failed; check GDAL_DATA=${GDAL_DATA}"
+main "$@"
