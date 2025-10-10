@@ -49,8 +49,6 @@ jobs:
         with:
           path: .toolchain/gdal
           key: ${{ runner.os }}-gdal-${{ env.GDAL_VERSION }}-${{ hashFiles('scripts/install-gdal.sh') }}
-          restore-keys: |
-            ${{ runner.os }}-gdal-
 
       - name: Build/Install GDAL (on cache miss)
         if: steps.cache-gdal.outputs.cache-hit != 'true'
