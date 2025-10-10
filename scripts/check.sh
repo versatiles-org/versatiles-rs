@@ -35,13 +35,6 @@ run_clippy() {
 }
 
 run_clippy /
-run_clippy /versatiles
-run_clippy /versatiles_container
-run_clippy /versatiles_core
-run_clippy /versatiles_derive
-run_clippy /versatiles_geometry
-run_clippy /versatiles_image
-run_clippy /versatiles_pipeline
 cd $PROJECT_DIR
 
 

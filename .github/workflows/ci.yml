@@ -85,20 +85,6 @@ jobs:
 
       - name: Run clippy /
         run: cargo clippy --workspace --all-features --all-targets -- -D warnings
-      - name: Run clippy /versatiles
-        run: cd versatiles; cargo clippy --workspace --all-features --all-targets -- -D warnings
-      - name: Run clippy /versatiles_container
-        run: cd versatiles_container; cargo clippy --workspace --all-features --all-targets -- -D warnings
-      - name: Run clippy /versatiles_core
-        run: cd versatiles_core; cargo clippy --workspace --all-features --all-targets -- -D warnings
-      - name: Run clippy /versatiles_derive
-        run: cd versatiles_derive; cargo clippy --workspace --all-features --all-targets -- -D warnings
-      - name: Run clippy /versatiles_geometry
-        run: cd versatiles_geometry; cargo clippy --workspace --all-features --all-targets -- -D warnings
-      - name: Run clippy /versatiles_image
-        run: cd versatiles_image; cargo clippy --workspace --all-features --all-targets -- -D warnings
-      - name: Run clippy /versatiles_pipeline
-        run: cd versatiles_pipeline; cargo clippy --workspace --all-features --all-targets -- -D warnings
 
       - name: Run test /
         run: cargo test --workspace --all-features --all-targets
