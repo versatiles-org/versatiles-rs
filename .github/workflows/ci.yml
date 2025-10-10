@@ -52,12 +52,6 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gdal-
 
-      - name: Set up APT sources for geospatial
-        if: steps.cache-gdal.outputs.cache-hit != 'true'
-        run: |
-          sudo add-apt-repository -y ppa:ubuntugis/ubuntugis-unstable
-          sudo apt-get update
-
       - name: Build/Install GDAL (on cache miss)
         if: steps.cache-gdal.outputs.cache-hit != 'true'
         run: |
