@@ -10,7 +10,7 @@ pub struct TilesReaderParameters {
 
 impl TilesReaderParameters {
 	/// Create a new `TilesReaderParameters`.
-	#[must_use] 
+	#[must_use]
 	pub fn new(
 		tile_format: TileFormat,
 		tile_compression: TileCompression,
@@ -25,7 +25,7 @@ impl TilesReaderParameters {
 
 	#[cfg(test)]
 	#[allow(dead_code)]
-	#[must_use] 
+	#[must_use]
 	pub fn new_full(tile_format: TileFormat, tile_compression: TileCompression) -> TilesReaderParameters {
 		TilesReaderParameters {
 			tile_format,

@@ -2,7 +2,10 @@
 
 use super::layer::VectorTileLayer;
 use anyhow::{Context, Result, bail};
-use versatiles_core::{Blob, io::{ValueReaderSlice, ValueReader, ValueWriterBlob, ValueWriter}};
+use versatiles_core::{
+	Blob,
+	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct VectorTile {
@@ -10,7 +13,7 @@ pub struct VectorTile {
 }
 
 impl VectorTile {
-	#[must_use] 
+	#[must_use]
 	pub fn new(layers: Vec<VectorTileLayer>) -> VectorTile {
 		VectorTile { layers }
 	}
@@ -52,7 +55,7 @@ impl VectorTile {
 		Ok(writer.into_blob())
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn find_layer(&self, name: &str) -> Option<&VectorTileLayer> {
 		self.layers.iter().find(|layer| layer.name == name)
 	}
@@ -66,6 +69,7 @@ impl VectorTile {
 mod tests {
 	use super::*;
 	use std::env::current_dir;
+	use versatiles_core::io::{DataReaderFile, DataReaderTrait};
 
 	async fn get_pbf() -> Result<Blob> {
 		DataReaderFile::open(&current_dir().unwrap().join("../testdata/shortbread-tile.pbf"))

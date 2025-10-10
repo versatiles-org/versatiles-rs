@@ -44,10 +44,10 @@ fn parse_simple_csv_string(iter: &mut ByteIterator, separator: u8) -> Result<Str
 fn read_csv_fields<'a>(
 	reader: impl BufRead + Send + 'a,
 	separator: u8,
-) -> Result<impl Iterator<Item = Result<(Vec<String>, usize)>> + 'a> {
+) -> impl Iterator<Item = Result<(Vec<String>, usize)>> {
 	let mut iter = ByteIterator::from_reader(reader, true);
 
-	let lines = std::iter::from_fn(move || -> Option<Result<(Vec<String>, usize)>> {
+	std::iter::from_fn(move || -> Option<Result<(Vec<String>, usize)>> {
 		iter.peek()?;
 
 		let mut fields = Vec::new();
@@ -67,7 +67,7 @@ fn read_csv_fields<'a>(
 			fields.push(value);
 			loop {
 				match iter.consume() {
-					Some(b'\r') => continue,
+					Some(b'\r') => {}
 					Some(b'\n') => {
 						if (fields.len() == 1) && (fields.first().unwrap().is_empty()) {
 							fields.clear();
@@ -86,16 +86,14 @@ fn read_csv_fields<'a>(
 				}
 			}
 		}
-	});
-
-	Ok(lines)
+	})
 }
 
 pub fn read_csv_iter<'a>(
 	reader: impl BufRead + Send + 'a,
 	separator: u8,
 ) -> Result<impl Iterator<Item = Result<(Vec<String>, usize, usize)>> + 'a> {
-	let iter = read_csv_fields(reader, separator)?;
+	let iter = read_csv_fields(reader, separator);
 	let mut line_pos = 0usize;
 	let mut option_len: Option<usize> = None;
 
@@ -156,7 +154,7 @@ mod tests {
 	#[test]
 	fn test_read_csv_fields_basic() {
 		let mut reader = Cursor::new("name,age\nJohn Doe,30\r\nJane Doe,29");
-		let iter = read_csv_fields(&mut reader, b',').unwrap();
+		let iter = read_csv_fields(&mut reader, b',');
 
 		assert_eq!(
 			check(iter),
@@ -167,7 +165,7 @@ mod tests {
 	#[test]
 	fn test_read_csv_fields_with_quotes() {
 		let mut reader = Cursor::new("name,age\n\"John, A. Doe\",30\r\n\"Jane Doe\",29");
-		let iter = read_csv_fields(&mut reader, b',').unwrap();
+		let iter = read_csv_fields(&mut reader, b',');
 
 		assert_eq!(
 			check(iter),
@@ -178,7 +176,7 @@ mod tests {
 	#[test]
 	fn test_read_csv_fields_with_escaped_quotes() {
 		let mut reader = Cursor::new("name,age\n\"John \"\"The Man\"\" Doe\",30\n\"Jane Doe\",29");
-		let iter = read_csv_fields(&mut reader, b',').unwrap();
+		let iter = read_csv_fields(&mut reader, b',');
 
 		assert_eq!(
 			check(iter),
@@ -193,7 +191,7 @@ mod tests {
 	#[test]
 	fn test_read_csv_fields_empty_lines() {
 		let mut reader = Cursor::new("name,age\n\nJohn Doe,30\n\nJane Doe,29\n\n");
-		let iter = read_csv_fields(&mut reader, b',').unwrap();
+		let iter = read_csv_fields(&mut reader, b',');
 
 		assert_eq!(
 			check(iter),
@@ -204,7 +202,7 @@ mod tests {
 	#[test]
 	fn test_read_csv_fields_different_separator() {
 		let mut reader = Cursor::new("name|age\nJohn Doe|30\nJane Doe|29");
-		let iter = read_csv_fields(&mut reader, b'|').unwrap();
+		let iter = read_csv_fields(&mut reader, b'|');
 
 		assert_eq!(
 			check(iter),

@@ -18,7 +18,7 @@ impl Default for GeoProperties {
 }
 
 impl GeoProperties {
-	#[must_use] 
+	#[must_use]
 	pub fn new() -> GeoProperties {
 		GeoProperties(BTreeMap::new())
 	}
@@ -36,15 +36,15 @@ impl GeoProperties {
 	pub fn clear(&mut self) {
 		self.0.clear();
 	}
-	#[must_use] 
+	#[must_use]
 	pub fn len(&self) -> usize {
 		self.0.len()
 	}
-	#[must_use] 
+	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.0.is_empty()
 	}
-	#[must_use] 
+	#[must_use]
 	pub fn get(&self, key: &str) -> Option<&GeoValue> {
 		self.0.get(key)
 	}
@@ -57,7 +57,7 @@ impl GeoProperties {
 	{
 		self.0.retain(|k, v| f(k, v));
 	}
-	#[must_use] 
+	#[must_use]
 	pub fn to_json(&self) -> JsonObject {
 		let mut obj = JsonObject::new();
 		for (k, v) in &self.0 {

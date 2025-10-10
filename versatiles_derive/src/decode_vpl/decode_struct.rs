@@ -45,7 +45,10 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 
 		if field_str == "sources" {
 			assert!(doc_sources.is_none(), "'sources' are already defined: {doc_sources:?}");
-			assert!((field_type_str == "Vec<VPLPipeline>"), "type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'");
+			assert!(
+				(field_type_str == "Vec<VPLPipeline>"),
+				"type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'"
+			);
 			doc_sources = Some(format!("### Sources:\n{comment}"));
 			parser_fields.push(quote! { sources: node.sources.clone() });
 		} else {

@@ -6,7 +6,7 @@ use super::JsonValue;
 /// Serialize a `JsonValue` to a compact JSON string without extra whitespace.
 ///
 /// Supports all JSON types: string, number, boolean, null, array, and object.
-#[must_use] 
+#[must_use]
 pub fn stringify(json: &JsonValue) -> String {
 	match json {
 		JsonValue::String(s) => format!("\"{}\"", escape_json_string(s)),
@@ -21,7 +21,7 @@ pub fn stringify(json: &JsonValue) -> String {
 /// Serialize a `JsonValue` to a single-line, pretty-printed JSON string with spaces.
 ///
 /// Arrays and objects are formatted as `[ 1, 2 ]` or `{ "key": 1 }`; others use compact representation.
-#[must_use] 
+#[must_use]
 pub fn stringify_pretty_single_line(json: &JsonValue) -> String {
 	match json {
 		JsonValue::Array(arr) => arr.stringify_pretty_single_line(),
@@ -34,7 +34,7 @@ pub fn stringify_pretty_single_line(json: &JsonValue) -> String {
 ///
 /// `max_width` controls when to wrap to multiple lines, `depth` controls indentation, and `indention` is the current line length.
 /// Arrays and objects break across lines if they exceed `max_width`, others use compact representation.
-#[must_use] 
+#[must_use]
 pub fn stringify_pretty_multi_line(json: &JsonValue, max_width: usize, depth: usize, indention: usize) -> String {
 	match json {
 		JsonValue::Array(arr) => {
@@ -58,7 +58,7 @@ pub fn stringify_pretty_multi_line(json: &JsonValue, max_width: usize, depth: us
 /// Escape special characters in a string for valid JSON output.
 ///
 /// Handles quotes, backslashes, control characters (e.g., newline, tab), and other control codepoints.
-#[must_use] 
+#[must_use]
 pub fn escape_json_string(input: &str) -> String {
 	input
 		.chars()

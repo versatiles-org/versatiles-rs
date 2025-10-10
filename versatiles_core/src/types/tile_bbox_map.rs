@@ -40,7 +40,7 @@ impl<I> TileBBoxMap<I> {
 	}
 
 	/// Create a new container with all slots initialized using `Default`.
-	#[must_use] 
+	#[must_use]
 	pub fn new_default(bbox: TileBBox) -> Self
 	where
 		I: Clone + Default,
@@ -49,20 +49,20 @@ impl<I> TileBBoxMap<I> {
 	}
 
 	/// Total number of tiles (slots) in the container.
-	#[must_use] 
+	#[must_use]
 	pub fn len(&self) -> usize {
 		self.vec.len()
 	}
 
 	/// Whether the container has zero slots. Note: this is equivalent to
 	/// `bbox.count_tiles() == 0`.
-	#[must_use] 
+	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.vec.is_empty()
 	}
 
 	/// The bounding box that defines the grid covered by this container.
-	#[must_use] 
+	#[must_use]
 	pub fn bbox(&self) -> &TileBBox {
 		&self.bbox
 	}
@@ -114,7 +114,7 @@ impl<I> TileBBoxMap<I> {
 	/// Returns a new container at `level-1` where each slot holds the
 	/// `(child_coord, value)` pairs that map to that parent tile. Useful for
 	/// downscaling or overview generation.
-	#[must_use] 
+	#[must_use]
 	pub fn into_decreased_level(self) -> TileBBoxMap<Vec<(TileCoord, I)>>
 	where
 		I: Clone,

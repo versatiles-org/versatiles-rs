@@ -1,4 +1,4 @@
-use super::{Coordinates, GeometryTrait, CompositeGeometryTrait, SingleGeometryTrait, MultiLineStringGeometry};
+use super::{CompositeGeometryTrait, Coordinates, GeometryTrait, MultiLineStringGeometry, SingleGeometryTrait};
 use anyhow::{Result, ensure};
 use std::fmt::Debug;
 use versatiles_core::json::JsonValue;
@@ -17,7 +17,13 @@ impl GeometryTrait for LineStringGeometry {
 	}
 
 	fn to_coord_json(&self) -> JsonValue {
-		JsonValue::from(self.0.iter().map(super::coordinates::Coordinates::to_json).collect::<Vec<_>>())
+		JsonValue::from(
+			self
+				.0
+				.iter()
+				.map(super::coordinates::Coordinates::to_json)
+				.collect::<Vec<_>>(),
+		)
 	}
 }
 

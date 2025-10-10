@@ -35,7 +35,7 @@ impl JsonValue {
 	}
 
 	/// Return the JSON type as a lowercase string (`"array"`, `"object"`, etc.).
-	#[must_use] 
+	#[must_use]
 	pub fn type_as_str(&self) -> &str {
 		use JsonValue::*;
 		match self {
@@ -49,19 +49,19 @@ impl JsonValue {
 	}
 
 	/// Serialize the `JsonValue` to a compact JSON string without unnecessary whitespace.
-	#[must_use] 
+	#[must_use]
 	pub fn stringify(&self) -> String {
 		stringify(self)
 	}
 
 	/// Create a new empty JSON array value.
-	#[must_use] 
+	#[must_use]
 	pub fn new_array() -> JsonValue {
 		JsonValue::Array(JsonArray::default())
 	}
 
 	/// Create a new empty JSON object value.
-	#[must_use] 
+	#[must_use]
 	pub fn new_object() -> JsonValue {
 		JsonValue::Object(JsonObject::default())
 	}

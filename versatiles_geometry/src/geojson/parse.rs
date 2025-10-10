@@ -1,7 +1,13 @@
-use crate::geo::{GeoCollection, CompositeGeometryTrait, GeoFeature, GeoValue, Geometry, GeoProperties};
+use crate::geo::{GeoCollection, GeoFeature, GeoProperties, GeoValue, Geometry};
 use anyhow::{Result, anyhow, bail};
 use std::{io::Cursor, str};
-use versatiles_core::{byte_iterator::{ByteIterator, parse_object_entries, parse_quoted_json_string, parse_array_entries, parse_number_as, parse_number_as_string, parse_tag}, json::parse_json_iter};
+use versatiles_core::{
+	byte_iterator::{
+		ByteIterator, parse_array_entries, parse_number_as, parse_number_as_string, parse_object_entries,
+		parse_quoted_json_string, parse_tag,
+	},
+	json::parse_json_iter,
+};
 
 pub fn parse_geojson(json: &str) -> Result<GeoCollection> {
 	let mut iter = ByteIterator::from_reader(Cursor::new(json), true);
@@ -191,7 +197,7 @@ impl TemporaryCoordinates {
 
 fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordinates> {
 	fn recursive(iter: &mut ByteIterator) -> Result<TemporaryCoordinates> {
-		use TemporaryCoordinates::{V, C0, C1, C2, C3};
+		use TemporaryCoordinates::{C0, C1, C2, C3, V};
 
 		iter.skip_whitespace();
 		match iter.expect_peeked_byte()? {

@@ -52,7 +52,7 @@ impl TileSchema {
 	/// use versatiles_core::TileSchema;
 	/// assert_eq!(TileSchema::RasterRGB.as_str(), "rgb");
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn as_str(&self) -> &str {
 		use TileSchema::*;
 		match self {
@@ -79,7 +79,7 @@ impl TileSchema {
 	/// use versatiles_core::{TileSchema, TileType};
 	/// assert_eq!(TileSchema::RasterRGBA.get_tile_type(), TileType::Raster);
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn get_tile_type(&self) -> TileType {
 		use TileSchema::*;
 		match self {

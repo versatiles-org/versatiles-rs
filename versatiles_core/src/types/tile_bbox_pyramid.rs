@@ -39,7 +39,7 @@ impl TileBBoxPyramid {
 	/// # Panics
 	///
 	/// May panic if `max_zoom_level` exceeds `MAX_ZOOM_LEVEL - 1`.
-	#[must_use] 
+	#[must_use]
 	pub fn new_full(max_zoom_level: u8) -> TileBBoxPyramid {
 		// Create an array of tile bounding boxes via `from_fn`.
 		// If index <= max_zoom_level, create a full bounding box;
@@ -60,7 +60,7 @@ impl TileBBoxPyramid {
 	/// # Returns
 	///
 	/// A `TileBBoxPyramid` where each level is an empty bounding box.
-	#[must_use] 
+	#[must_use]
 	pub fn new_empty() -> TileBBoxPyramid {
 		TileBBoxPyramid {
 			level_bbox: from_fn(|z| TileBBox::new_empty(z as u8).unwrap()),
@@ -80,7 +80,7 @@ impl TileBBoxPyramid {
 	///
 	/// A new `TileBBoxPyramid` populated with bounding boxes derived from `bbox`.
 	/// Levels outside the given range remain empty.
-	#[must_use] 
+	#[must_use]
 	pub fn from_geo_bbox(zoom_level_min: u8, zoom_level_max: u8, bbox: &GeoBBox) -> TileBBoxPyramid {
 		let mut pyramid = TileBBoxPyramid::new_empty();
 		for z in zoom_level_min..=zoom_level_max {
@@ -127,7 +127,7 @@ impl TileBBoxPyramid {
 	/// # Panics
 	///
 	/// Panics if `level` >= `MAX_ZOOM_LEVEL`.
-	#[must_use] 
+	#[must_use]
 	pub fn get_level_bbox(&self, level: u8) -> &TileBBox {
 		&self.level_bbox[level as usize]
 	}
@@ -164,7 +164,7 @@ impl TileBBoxPyramid {
 	}
 
 	/// Checks if the pyramid contains the given `(x, y, z)` tile coordinate.
-	#[must_use] 
+	#[must_use]
 	pub fn contains_coord(&self, coord: &TileCoord) -> bool {
 		if let Some(bbox) = self.level_bbox.get(coord.level as usize) {
 			bbox.contains(coord)
@@ -174,7 +174,7 @@ impl TileBBoxPyramid {
 	}
 
 	/// Checks if the pyramid overlaps the specified bounding box at the bounding box’s zoom level.
-	#[must_use] 
+	#[must_use]
 	pub fn overlaps_bbox(&self, bbox: &TileBBox) -> bool {
 		if let Some(local_bbox) = self.level_bbox.get(bbox.level as usize) {
 			local_bbox.overlaps_bbox(bbox).unwrap_or(false)
@@ -201,7 +201,7 @@ impl TileBBoxPyramid {
 	/// Finds the minimum zoom level that contains any tiles.
 	///
 	/// Returns `None` if **all** levels are empty.
-	#[must_use] 
+	#[must_use]
 	pub fn get_level_min(&self) -> Option<u8> {
 		self
 			.level_bbox
@@ -213,7 +213,7 @@ impl TileBBoxPyramid {
 	/// Finds the maximum zoom level that contains any tiles.
 	///
 	/// Returns `None` if **all** levels are empty.
-	#[must_use] 
+	#[must_use]
 	pub fn get_level_max(&self) -> Option<u8> {
 		self
 			.level_bbox
@@ -227,7 +227,7 @@ impl TileBBoxPyramid {
 	///
 	/// This scans from the highest zoom level downward, returning the first that meets
 	/// a threshold of `> 10` tiles. Returns `None` if none meet that threshold.
-	#[must_use] 
+	#[must_use]
 	pub fn get_good_level(&self) -> Option<u8> {
 		self
 			.level_bbox
@@ -256,13 +256,17 @@ impl TileBBoxPyramid {
 	}
 
 	/// Counts the total number of tiles across all non-empty bounding boxes in this pyramid.
-	#[must_use] 
+	#[must_use]
 	pub fn count_tiles(&self) -> u64 {
-		self.level_bbox.iter().map(super::tile_bbox::TileBBox::count_tiles).sum()
+		self
+			.level_bbox
+			.iter()
+			.map(super::tile_bbox::TileBBox::count_tiles)
+			.sum()
 	}
 
 	/// Checks if **all** bounding boxes in this pyramid are empty.
-	#[must_use] 
+	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.level_bbox.iter().all(super::tile_bbox::TileBBox::is_empty)
 	}
@@ -270,7 +274,7 @@ impl TileBBoxPyramid {
 	/// Checks if this pyramid is “full” up to the specified zoom level, meaning
 	/// each relevant bounding box is flagged as full coverage.
 	#[cfg(test)]
-	#[must_use] 
+	#[must_use]
 	pub fn is_full(&self, max_zoom_level: u8) -> bool {
 		self.level_bbox.iter().all(|bbox| {
 			if bbox.level <= max_zoom_level {
@@ -284,7 +288,7 @@ impl TileBBoxPyramid {
 	/// Determines a geographical bounding box from the highest zoom level that contains tiles.
 	///
 	/// Returns `None` if the pyramid is empty.
-	#[must_use] 
+	#[must_use]
 	pub fn get_geo_bbox(&self) -> Option<GeoBBox> {
 		let max_zoom = self.get_level_max()?;
 		Some(self.get_level_bbox(max_zoom).to_geo_bbox())
@@ -294,7 +298,7 @@ impl TileBBoxPyramid {
 	///
 	/// This tries to pick a zoom that is “2 levels above the min,” but not exceeding the max.
 	/// Returns `None` if the pyramid is empty or if the bounding box is invalid.
-	#[must_use] 
+	#[must_use]
 	pub fn get_geo_center(&self) -> Option<GeoCenter> {
 		let bbox = self.get_geo_bbox()?;
 		let zoom = (self.get_level_min()? + 2).min(self.get_level_max()?);
@@ -409,7 +413,10 @@ mod tests {
 	fn test_limit_by_geo_bbox() {
 		let mut pyramid = TileBBoxPyramid::new_full(8);
 		pyramid.intersect_geo_bbox(&GeoBBox(8.0653f64, 51.3563f64, 12.3528f64, 52.2564f64));
-		let level_bboxes = pyramid.iter_levels().map(std::string::ToString::to_string).collect::<Vec<_>>();
+		let level_bboxes = pyramid
+			.iter_levels()
+			.map(std::string::ToString::to_string)
+			.collect::<Vec<_>>();
 		assert_eq!(
 			level_bboxes,
 			[
@@ -432,7 +439,10 @@ mod tests {
 		pyramid.include_coord(&TileCoord::new(3, 1, 2)?);
 		pyramid.include_coord(&TileCoord::new(3, 4, 5)?);
 		pyramid.include_coord(&TileCoord::new(8, 6, 7)?);
-		let level_bboxes = pyramid.iter_levels().map(std::string::ToString::to_string).collect::<Vec<_>>();
+		let level_bboxes = pyramid
+			.iter_levels()
+			.map(std::string::ToString::to_string)
+			.collect::<Vec<_>>();
 		assert_eq!(level_bboxes, ["3:[1,2,4,5]", "8:[6,7,6,7]"]);
 
 		Ok(())
@@ -444,7 +454,10 @@ mod tests {
 		pyramid.include_bbox(&TileBBox::from_min_max(4, 1, 2, 3, 4).unwrap());
 		pyramid.include_bbox(&TileBBox::from_min_max(4, 5, 6, 7, 8).unwrap());
 
-		let level_bboxes = pyramid.iter_levels().map(std::string::ToString::to_string).collect::<Vec<_>>();
+		let level_bboxes = pyramid
+			.iter_levels()
+			.map(std::string::ToString::to_string)
+			.collect::<Vec<_>>();
 		assert_eq!(level_bboxes, ["4:[1,2,7,8]"]);
 	}
 
@@ -487,7 +500,10 @@ mod tests {
 		pyramid.intersect_geo_bbox(&GeoBBox(-9., -5., 5., 10.));
 		pyramid.add_border(1, 2, 3, 4);
 
-		let level_bboxes = pyramid.iter_levels().map(std::string::ToString::to_string).collect::<Vec<_>>();
+		let level_bboxes = pyramid
+			.iter_levels()
+			.map(std::string::ToString::to_string)
+			.collect::<Vec<_>>();
 		assert_eq!(
 			level_bboxes,
 			[
@@ -508,7 +524,10 @@ mod tests {
 	fn test_from_geo_bbox() {
 		let bbox = GeoBBox(-10.0, -5.0, 10.0, 5.0);
 		let pyramid = TileBBoxPyramid::from_geo_bbox(1, 3, &bbox);
-		let level_bboxes = pyramid.iter_levels().map(std::string::ToString::to_string).collect::<Vec<_>>();
+		let level_bboxes = pyramid
+			.iter_levels()
+			.map(std::string::ToString::to_string)
+			.collect::<Vec<_>>();
 		assert_eq!(level_bboxes, ["1:[0,0,1,1]", "2:[1,1,2,2]", "3:[3,3,4,4]"]);
 	}
 

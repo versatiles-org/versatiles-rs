@@ -48,7 +48,7 @@ impl Traversal {
 	}
 
 	/// Create a `Traversal` with any order and the default size range (1 to 2^31).
-	#[must_use] 
+	#[must_use]
 	pub const fn new_any() -> Self {
 		Traversal {
 			order: TraversalOrder::AnyOrder,
@@ -73,7 +73,7 @@ impl Traversal {
 	}
 
 	/// Access the `TraversalOrder` (block ordering strategy).
-	#[must_use] 
+	#[must_use]
 	pub fn order(&self) -> &TraversalOrder {
 		&self.order
 	}
@@ -115,7 +115,7 @@ impl Traversal {
 		translate_traversals(pyramid, self, other)
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn is_any(&self) -> bool {
 		self.order == TraversalOrder::AnyOrder
 	}
@@ -138,12 +138,8 @@ impl std::fmt::Debug for Traversal {
 				f,
 				"Traversal({:?}, min-size: {}, max-size: {})",
 				self.order,
-				self
-					.size
-					.min_size().map_or_else(|e| e.to_string(), |s| s.to_string()),
-				self
-					.size
-					.max_size().map_or_else(|e| e.to_string(), |s| s.to_string())
+				self.size.min_size().map_or_else(|e| e.to_string(), |s| s.to_string()),
+				self.size.max_size().map_or_else(|e| e.to_string(), |s| s.to_string())
 			)
 		}
 	}

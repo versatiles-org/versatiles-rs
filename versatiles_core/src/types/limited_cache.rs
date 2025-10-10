@@ -66,12 +66,15 @@ where
 	///
 	/// let cache: LimitedCache<u64, i32> = LimitedCache::with_maximum_size(1024);
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn with_maximum_size(maximum_size: usize) -> Self {
 		// Compute how many (K, V) pairs can fit into `maximum_size`.
 		let per_element_size = size_of::<K>() + size_of::<V>();
 		let max_length = maximum_size.div(per_element_size);
-		assert!(!(max_length < 1), "size ({maximum_size} bytes) is too small to store a single element of size {per_element_size} bytes");
+		assert!(
+			max_length > 0,
+			"size ({maximum_size} bytes) is too small to store a single element of size {per_element_size} bytes"
+		);
 
 		Self {
 			cache: HashMap::new(),

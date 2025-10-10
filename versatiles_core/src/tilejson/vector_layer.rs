@@ -70,7 +70,7 @@ impl VectorLayers {
 	///
 	/// Returns `None` if the collection is empty, or `Some(JsonValue::Array(...))`
 	/// otherwise.
-	#[must_use] 
+	#[must_use]
 	pub fn as_json_value_option(&self) -> Option<JsonValue> {
 		if self.0.is_empty() {
 			None
@@ -85,7 +85,7 @@ impl VectorLayers {
 	/// Each object contains:
 	/// - `"id"` (string),
 	/// - `"fields"`, `"description"`, `"minzoom"`, `"maxzoom"` if present in the layer
-	#[must_use] 
+	#[must_use]
 	pub fn as_json_value(&self) -> JsonValue {
 		JsonValue::from(
 			self
@@ -102,12 +102,12 @@ impl VectorLayers {
 		)
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn contains_ids(&self, ids: &[&str]) -> bool {
 		ids.iter().all(|id| self.0.contains_key(*id))
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn get_tile_schema(&self) -> TileSchema {
 		if self.contains_ids(&[
 			"aerodrome_label",
@@ -209,14 +209,14 @@ impl VectorLayers {
 	}
 
 	/// Returns a vector of all layer ids in this collection.
-	#[must_use] 
+	#[must_use]
 	pub fn layer_ids(&self) -> Vec<String> {
 		self.0.keys().cloned().collect()
 	}
 
 	/// Finds a layer by its id.
 	/// Returns `None` if the layer does not exist.
-	#[must_use] 
+	#[must_use]
 	pub fn find(&self, id: &str) -> Option<&VectorLayer> {
 		self.0.get(id)
 	}
@@ -261,7 +261,7 @@ impl VectorLayer {
 	/// - `"description"` (string, if present)
 	/// - `"minzoom"` (number, if present)
 	/// - `"maxzoom"` (number, if present)
-	#[must_use] 
+	#[must_use]
 	pub fn as_json_object(&self) -> JsonObject {
 		let mut obj = JsonObject::default();
 

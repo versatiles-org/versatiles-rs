@@ -54,7 +54,7 @@ pub struct PrettyPrint {
 }
 
 impl PrettyPrint {
-	#[must_use] 
+	#[must_use]
 	pub fn new() -> Self {
 		Self {
 			prefix: String::new(),

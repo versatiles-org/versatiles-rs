@@ -51,7 +51,7 @@ impl<'a> ByteIterator<'a> {
 		Some(byte)
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn format_error(&self, msg: &str) -> Error {
 		if self.is_debug_enabled {
 			let (start_index, length) = if self.position < DEBUG_RING_BUFFER_SIZE {
@@ -80,13 +80,13 @@ impl<'a> ByteIterator<'a> {
 	}
 
 	#[inline]
-	#[must_use] 
+	#[must_use]
 	pub fn position(&self) -> usize {
 		self.position
 	}
 
 	#[inline]
-	#[must_use] 
+	#[must_use]
 	pub fn peek(&self) -> Option<u8> {
 		self.peeked_byte
 	}

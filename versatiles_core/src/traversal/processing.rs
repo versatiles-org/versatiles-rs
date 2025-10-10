@@ -211,7 +211,9 @@ fn verify_steps(
 		}
 
 		// verify order
-		order.verify_order(step_bboxes, size);
+		if !order.verify_order(step_bboxes, size) {
+			bail!("Steps are not in {order:?} order");
+		}
 
 		let read_bboxes = Traversal::new(order, size, size)?.traverse_pyramid(pyramid)?;
 		for bbox in &read_bboxes {

@@ -53,6 +53,7 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::traits::DynamicImageTraitTest;
 	use rstest::rstest;
 
 	/* ---------- Success cases ---------- */

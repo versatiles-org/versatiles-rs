@@ -1,7 +1,7 @@
 use anyhow::{Result, ensure};
 use std::fmt::Debug;
 
-static MAX_MERCATOR_LAT: f64 = 85.05112877980659;
+static MAX_MERCATOR_LAT: f64 = 85.051_128_779_806_59;
 static MAX_MERCATOR_LNG: f64 = 180.0;
 
 /// A geographical bounding box (`GeoBBox`) represents a rectangular area on a map
@@ -70,7 +70,7 @@ impl GeoBBox {
 	/// assert_eq!(bbox.2, 10.0);
 	/// assert_eq!(bbox.3, 5.0);
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn new(x_min: f64, y_min: f64, x_max: f64, y_max: f64) -> GeoBBox {
 		GeoBBox(x_min, y_min, x_max, y_max)
 	}
@@ -141,7 +141,7 @@ impl GeoBBox {
 	/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// assert_eq!(bbox.as_vec(), vec![-10.0, -5.0, 10.0, 5.0]);
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn as_vec(&self) -> Vec<f64> {
 		vec![self.0, self.1, self.2, self.3]
 	}
@@ -156,13 +156,13 @@ impl GeoBBox {
 	/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// assert_eq!(bbox.as_array(), [-10.0, -5.0, 10.0, 5.0]);
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn as_array(&self) -> [f64; 4] {
 		[self.0, self.1, self.2, self.3]
 	}
 
 	/// Returns the bounding box as a tuple `(x_min, y_min, x_max, y_max)`.
-	#[must_use] 
+	#[must_use]
 	pub fn as_tuple(&self) -> (f64, f64, f64, f64) {
 		(self.0, self.1, self.2, self.3)
 	}
@@ -176,7 +176,7 @@ impl GeoBBox {
 	/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// assert_eq!(bbox.as_string_json(), "[-10,-5,10,5]");
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn as_string_json(&self) -> String {
 		format!("[{}]", self.as_string_list())
 	}
@@ -190,7 +190,7 @@ impl GeoBBox {
 	/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// assert_eq!(bbox.as_string_list(), "-10,-5,10,5");
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn as_string_list(&self) -> String {
 		format!("{},{},{},{}", self.0, self.1, self.2, self.3)
 	}
@@ -225,7 +225,7 @@ impl GeoBBox {
 	/// to include the area covered by `other`.
 	///
 	/// This is the non-mutating version of [`extend`](Self::extend).
-	#[must_use] 
+	#[must_use]
 	pub fn extended(mut self, other: &GeoBBox) -> GeoBBox {
 		self.extend(other);
 		self
@@ -272,7 +272,7 @@ impl GeoBBox {
 	/// // original remains unchanged
 	/// assert_eq!(bbox1.as_tuple(), (-10.0, -5.0, 10.0, 5.0));
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn intersected(mut self, other: &GeoBBox) -> GeoBBox {
 		self.intersect(other);
 		self

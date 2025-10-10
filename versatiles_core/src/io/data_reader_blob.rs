@@ -47,13 +47,13 @@ pub struct DataReaderBlob {
 
 impl DataReaderBlob {
 	/// Returns the length of the data in the reader.
-	#[must_use] 
+	#[must_use]
 	pub fn len(&self) -> usize {
 		self.blob.get_ref().len()
 	}
 
 	/// Checks if the reader is empty.
-	#[must_use] 
+	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.blob.get_ref().len() == 0
 	}

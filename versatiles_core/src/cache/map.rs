@@ -17,7 +17,7 @@ pub enum CacheMap<K: CacheKey, V: CacheValue> {
 }
 
 impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
-	#[must_use] 
+	#[must_use]
 	pub fn new(config: Arc<Config>) -> Self {
 		match &config.cache_type {
 			CacheType::InMemory => Self::Memory(InMemoryCache::new()),

@@ -41,7 +41,7 @@ pub enum TileCompression {
 }
 
 impl TileCompression {
-	#[must_use] 
+	#[must_use]
 	pub fn as_str(&self) -> &str {
 		match self {
 			TileCompression::Uncompressed => "none",
@@ -69,7 +69,7 @@ impl TileCompression {
 	/// assert_eq!(TileCompression::Gzip.extension(), ".gz");
 	/// assert_eq!(TileCompression::Brotli.extension(), ".br");
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn extension(&self) -> &str {
 		match self {
 			TileCompression::Uncompressed => "",

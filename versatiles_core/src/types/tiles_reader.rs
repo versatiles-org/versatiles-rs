@@ -61,13 +61,13 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		for step in &traversal_steps {
 			match step {
 				Push(bboxes_in, _) => {
-					tn_read += bboxes_in.iter().map(super::super::tile_bbox::TileBBox::count_tiles).sum::<u64>();
+					tn_read += bboxes_in.iter().map(TileBBox::count_tiles).sum::<u64>();
 				}
 				Pop(_, bbox_out) => {
 					tn_write += bbox_out.count_tiles();
 				}
 				Stream(bboxes_in, bbox_out) => {
-					tn_read += bboxes_in.iter().map(super::super::tile_bbox::TileBBox::count_tiles).sum::<u64>();
+					tn_read += bboxes_in.iter().map(TileBBox::count_tiles).sum::<u64>();
 					tn_write += bbox_out.count_tiles();
 				}
 			}
@@ -105,7 +105,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 						.await
 						.into_iter()
 						.collect::<Result<Vec<_>>>()?;
-					ti_read += bboxes.iter().map(super::super::tile_bbox::TileBBox::count_tiles).sum::<u64>();
+					ti_read += bboxes.iter().map(TileBBox::count_tiles).sum::<u64>();
 				}
 				Pop(index, bbox) => {
 					log::trace!("Uncache {bbox:?} at index {index}");
@@ -129,7 +129,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 						}
 					});
 					callback(bbox, TileStream::from_streams(streams)).await?;
-					ti_read += bboxes.iter().map(super::super::tile_bbox::TileBBox::count_tiles).sum::<u64>();
+					ti_read += bboxes.iter().map(TileBBox::count_tiles).sum::<u64>();
 					ti_write += bbox.count_tiles();
 				}
 			}

@@ -1,13 +1,16 @@
 #![allow(dead_code)]
 
 use crate::{
-	geo::{CompositeGeometryTrait, GeoValue, GeoFeature, GeoProperties},
+	geo::{GeoFeature, GeoProperties, GeoValue},
 	vector_tile::{feature::VectorTileFeature, property_manager::PropertyManager, value::GeoValuePBF},
 };
 use anyhow::{Context, Result, anyhow, bail};
 use byteorder::LE;
 use std::mem::swap;
-use versatiles_core::{Blob, io::{ValueReader, ValueWriterBlob, ValueWriter}};
+use versatiles_core::{
+	Blob,
+	io::{ValueReader, ValueWriter, ValueWriterBlob},
+};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct VectorTileLayer {
@@ -19,7 +22,7 @@ pub struct VectorTileLayer {
 }
 
 impl VectorTileLayer {
-	#[must_use] 
+	#[must_use]
 	pub fn new(name: String, extent: u32, version: u32) -> VectorTileLayer {
 		VectorTileLayer {
 			extent,
@@ -30,7 +33,7 @@ impl VectorTileLayer {
 		}
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn new_standard(name: &str) -> VectorTileLayer {
 		VectorTileLayer::new(name.to_string(), 4096, 1)
 	}
@@ -271,6 +274,7 @@ impl VectorTileLayer {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use versatiles_core::io::ValueReaderSlice;
 
 	#[test]
 	fn test_read_vector_tile_layer() -> Result<()> {

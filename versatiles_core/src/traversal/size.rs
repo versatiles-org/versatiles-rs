@@ -32,7 +32,7 @@ impl TraversalSize {
 	}
 
 	/// Return a default `TraversalSize` covering the full range of valid sizes (1 to 2^31).
-	#[must_use] 
+	#[must_use]
 	pub const fn new_default() -> Self {
 		TraversalSize { min: 0, max: 20 }
 	}
@@ -43,7 +43,7 @@ impl TraversalSize {
 	}
 
 	/// Check whether the size range is empty (min > max).
-	#[must_use] 
+	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.min > self.max
 	}
@@ -121,7 +121,11 @@ mod tests {
 	use anyhow::Result;
 
 	fn extract_error_lines<T: std::fmt::Debug>(result: anyhow::Result<T>) -> Vec<String> {
-		result.unwrap_err().chain().map(std::string::ToString::to_string).collect::<Vec<_>>()
+		result
+			.unwrap_err()
+			.chain()
+			.map(std::string::ToString::to_string)
+			.collect::<Vec<_>>()
 	}
 
 	#[test]

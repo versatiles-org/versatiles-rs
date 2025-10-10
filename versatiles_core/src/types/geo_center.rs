@@ -55,7 +55,7 @@ impl GeoCenter {
 	/// let vec = gc.as_vec();
 	/// assert_eq!(vec, vec![12.3, 45.6, 7.0]);
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn as_vec(&self) -> Vec<f64> {
 		vec![self.0, self.1, f64::from(self.2)]
 	}
@@ -73,7 +73,7 @@ impl GeoCenter {
 	/// let arr = gc.as_array();
 	/// assert_eq!(arr, [-75.5, 40.2, 3.0]);
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn as_array(&self) -> [f64; 3] {
 		[self.0, self.1, f64::from(self.2)]
 	}

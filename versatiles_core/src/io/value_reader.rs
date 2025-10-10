@@ -255,13 +255,13 @@ mod tests {
 	#[test]
 	fn test_read_u32() {
 		let mut reader = ValueReaderSlice::new_le(&[0xFF, 0xFF, 0xFF, 0xFF]); // 4294967295 in u32
-		assert_eq!(reader.read_u32().unwrap(), 4294967295);
+		assert_eq!(reader.read_u32().unwrap(), 4_294_967_295);
 	}
 
 	#[test]
 	fn test_read_u64() {
 		let mut reader = ValueReaderSlice::new_le(&[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]); // 18446744073709551615 in u64
-		assert_eq!(reader.read_u64().unwrap(), 18446744073709551615);
+		assert_eq!(reader.read_u64().unwrap(), 18_446_744_073_709_551_615);
 	}
 
 	#[test]

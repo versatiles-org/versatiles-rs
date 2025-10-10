@@ -78,7 +78,7 @@ impl TileFormat {
 	/// let format = TileFormat::PNG;
 	/// assert_eq!(format.as_str(), "png");
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn as_str(&self) -> &str {
 		match self {
 			TileFormat::AVIF => "avif",
@@ -124,7 +124,7 @@ impl TileFormat {
 	/// let format = TileFormat::GEOJSON;
 	/// assert_eq!(format.as_type_str(), "vector");
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn as_type_str(&self) -> &str {
 		match self {
 			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::SVG | TileFormat::WEBP => "image",
@@ -143,7 +143,7 @@ impl TileFormat {
 	/// let format = TileFormat::PNG;
 	/// assert_eq!(format.as_mime_str(), "image/png");
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn as_mime_str(&self) -> &str {
 		match self {
 			TileFormat::BIN => "application/octet-stream",
@@ -183,7 +183,7 @@ impl TileFormat {
 	/// let format = TileFormat::SVG;
 	/// assert_eq!(format.as_extension(), ".svg");
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn as_extension(&self) -> &str {
 		match self {
 			TileFormat::AVIF => ".avif",
@@ -286,7 +286,7 @@ impl TileFormat {
 		})
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn get_type(&self) -> TileType {
 		use TileFormat::*;
 		use TileType::*;

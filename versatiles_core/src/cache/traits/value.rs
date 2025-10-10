@@ -116,12 +116,12 @@ impl CacheValue for Blob {
 impl<V: CacheValue> CacheValue for Option<V> {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
 		if let Some(value) = self {
-  				writer.write_u8(1)?; // Indicate presence
-  				value.write_to_cache(writer)
-  			} else {
-  				writer.write_u8(0)?; // Indicate absence
-  				Ok(())
-  			}
+			writer.write_u8(1)?; // Indicate presence
+			value.write_to_cache(writer)
+		} else {
+			writer.write_u8(0)?; // Indicate absence
+			Ok(())
+		}
 	}
 
 	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {

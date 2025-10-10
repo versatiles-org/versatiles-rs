@@ -1,4 +1,4 @@
-use super::{PolygonGeometry, GeometryTrait, CompositeGeometryTrait};
+use super::{CompositeGeometryTrait, GeometryTrait, PolygonGeometry};
 use anyhow::Result;
 use std::fmt::Debug;
 use versatiles_core::json::JsonValue;
@@ -19,7 +19,13 @@ impl GeometryTrait for MultiPolygonGeometry {
 	}
 
 	fn to_coord_json(&self) -> JsonValue {
-		JsonValue::from(self.0.iter().map(super::traits::GeometryTrait::to_coord_json).collect::<Vec<_>>())
+		JsonValue::from(
+			self
+				.0
+				.iter()
+				.map(super::traits::GeometryTrait::to_coord_json)
+				.collect::<Vec<_>>(),
+		)
 	}
 }
 

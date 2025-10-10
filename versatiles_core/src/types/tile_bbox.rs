@@ -184,7 +184,7 @@ impl TileBBox {
 	///
 	/// * `true` if `x_max < x_min` or `y_max < y_min`.
 	/// * `false` otherwise.
-	#[must_use] 
+	#[must_use]
 	pub fn is_empty(&self) -> bool {
 		self.width == 0 || self.height == 0
 	}
@@ -195,7 +195,7 @@ impl TileBBox {
 	///
 	/// * Width as `u32`.
 	/// * `0` if the bounding box is empty.
-	#[must_use] 
+	#[must_use]
 	pub fn width(&self) -> u32 {
 		self.width
 	}
@@ -206,7 +206,7 @@ impl TileBBox {
 	///
 	/// * Height as `u32`.
 	/// * `0` if the bounding box is empty.
-	#[must_use] 
+	#[must_use]
 	pub fn height(&self) -> u32 {
 		self.height
 	}
@@ -222,13 +222,13 @@ impl TileBBox {
 	}
 
 	/// Returns the minimum x-coordinate of the bounding box.
-	#[must_use] 
+	#[must_use]
 	pub fn x_min(&self) -> u32 {
 		self.x_min
 	}
 
 	/// Returns the minimum y-coordinate of the bounding box.
-	#[must_use] 
+	#[must_use]
 	pub fn y_min(&self) -> u32 {
 		self.y_min
 	}
@@ -248,13 +248,13 @@ impl TileBBox {
 	}
 
 	/// Returns the maximum x-coordinate of the bounding box.
-	#[must_use] 
+	#[must_use]
 	pub fn x_max(&self) -> u32 {
 		(self.x_min + self.width).saturating_sub(1)
 	}
 
 	/// Returns the maximum y-coordinate of the bounding box.
-	#[must_use] 
+	#[must_use]
 	pub fn y_max(&self) -> u32 {
 		(self.y_min + self.height).saturating_sub(1)
 	}
@@ -283,7 +283,7 @@ impl TileBBox {
 	///
 	/// * Number of tiles as `u64`.
 	/// * `0` if the bounding box is empty.
-	#[must_use] 
+	#[must_use]
 	pub fn count_tiles(&self) -> u64 {
 		u64::from(self.width) * u64::from(self.height)
 	}
@@ -299,13 +299,13 @@ impl TileBBox {
 	///
 	/// This method is primarily used for testing purposes.
 	#[cfg(test)]
-	#[must_use] 
+	#[must_use]
 	pub fn is_full(&self) -> bool {
 		let max = self.max_count();
 		self.x_min == 0 && self.y_min == 0 && self.width == max && self.height == max
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn max_count(&self) -> u32 {
 		1u32 << self.level
 	}
@@ -320,7 +320,7 @@ impl TileBBox {
 	///
 	/// * `true` if the coordinate is within the bounding box and at the same zoom level.
 	/// * `false` otherwise.
-	#[must_use] 
+	#[must_use]
 	pub fn contains(&self, coord: &TileCoord) -> bool {
 		coord.level == self.level
 			&& coord.x >= self.x_min
@@ -601,7 +601,7 @@ impl TileBBox {
 	/// # Returns
 	///
 	/// * `GeoBBox` representing the geographical area covered by this bounding box.
-	#[must_use] 
+	#[must_use]
 	pub fn to_geo_bbox(&self) -> GeoBBox {
 		// Bottom-left in geospatial terms is (x_min, y_max + 1)
 		let p_min = TileCoord::new(self.level, self.x_min, self.y_max() + 1)
@@ -667,7 +667,7 @@ impl TileBBox {
 		self.set_y_max(y_max);
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn scaled_down(&self, scale: u32) -> TileBBox {
 		let mut bbox = *self;
 		bbox.scale_down(scale);
@@ -685,7 +685,7 @@ impl TileBBox {
 		self.set_y_max(y_max);
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn scaled_up(&self, scale: u32) -> TileBBox {
 		let mut bbox = *self;
 		bbox.scale_up(scale);
@@ -704,21 +704,21 @@ impl TileBBox {
 		self.scale_down(2);
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn leveled_up(&self) -> TileBBox {
 		let mut c = *self;
 		c.level_up();
 		c
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn leveled_down(&self) -> TileBBox {
 		let mut c = *self;
 		c.level_down();
 		c
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn at_level(&self, level: u8) -> TileBBox {
 		assert!(level <= 31, "level ({level}) must be <= 31");
 
@@ -735,17 +735,17 @@ impl TileBBox {
 		bbox
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn min_corner(&self) -> TileCoord {
 		TileCoord::new(self.level, self.x_min, self.y_min).unwrap()
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn max_corner(&self) -> TileCoord {
 		TileCoord::new(self.level, self.x_max(), self.y_max()).unwrap()
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn dimensions(&self) -> (u32, u32) {
 		(self.width(), self.height())
 	}
@@ -829,7 +829,7 @@ impl TileBBox {
 	/// # Returns
 	///
 	/// An iterator yielding `TileBBox` instances representing the grid.
-	#[must_use] 
+	#[must_use]
 	pub fn iter_bbox_grid(&self, size: u32) -> Box<dyn Iterator<Item = TileBBox> + '_> {
 		assert!(size != 0, "size must be greater than 0");
 
@@ -907,14 +907,14 @@ impl TileBBox {
 		self.set_y_max(y_max);
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn rounded(&self, block_size: u32) -> TileBBox {
 		let mut bbox = *self;
 		bbox.round(block_size);
 		bbox
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn max_coord(&self) -> u32 {
 		(1u32 << self.level) - 1
 	}

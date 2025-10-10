@@ -129,7 +129,7 @@ impl TileJSON {
 	/// # let tj = TileJSON::default();
 	/// let json_obj = tj.as_object();
 	/// ```
-	#[must_use] 
+	#[must_use]
 	pub fn as_object(&self) -> JsonObject {
 		let mut obj = JsonObject::default();
 		// Copy all `values` first
@@ -150,7 +150,7 @@ impl TileJSON {
 		obj
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn as_json_value(&self) -> JsonValue {
 		JsonValue::Object(self.as_object())
 	}
@@ -160,13 +160,13 @@ impl TileJSON {
 	// -------------------------------------------------------------------------
 
 	/// Returns a JSON string (pretty-printed) representing this `TileJSON`.
-	#[must_use] 
+	#[must_use]
 	pub fn as_string(&self) -> String {
 		self.as_object().stringify()
 	}
 
 	/// Returns a `Blob` containing the JSON string representation.
-	#[must_use] 
+	#[must_use]
 	pub fn as_blob(&self) -> Blob {
 		Blob::from(self.as_string())
 	}
@@ -206,13 +206,13 @@ impl TileJSON {
 	// -------------------------------------------------------------------------
 
 	/// Retrieves a `String` value from `self.values` by `key`, if present and a string.
-	#[must_use] 
+	#[must_use]
 	pub fn get_string(&self, key: &str) -> Option<String> {
 		self.values.get_string(key)
 	}
 
 	/// Retrieves a string slice from `self.values` by `key`, if present and a string.
-	#[must_use] 
+	#[must_use]
 	pub fn get_str(&self, key: &str) -> Option<&str> {
 		self.values.get_str(key)
 	}
@@ -463,12 +463,12 @@ impl TileJSON {
 	// -------------------------------------------------------------------------
 
 	/// Converts this `TileJSON` to a JSON string (synonym for [`Self::as_string`]).
-	#[must_use] 
+	#[must_use]
 	pub fn stringify(&self) -> String {
 		self.as_string()
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn try_from_blob_or_default(blob: &Blob) -> TileJSON {
 		TileJSON::try_from(blob.as_str()).unwrap_or_else(|e| {
 			eprintln!("Failed to parse TileJSON: {e}");

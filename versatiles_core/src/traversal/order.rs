@@ -34,7 +34,7 @@ impl TraversalOrder {
 		}
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn verify_order(&self, bboxes: &[TileBBox], size: u32) -> bool {
 		use TraversalOrder::*;
 		let mut clone = bboxes.to_vec();

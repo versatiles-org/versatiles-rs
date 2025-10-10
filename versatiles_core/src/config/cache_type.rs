@@ -12,11 +12,11 @@ pub enum CacheType {
 }
 
 impl CacheType {
-	#[must_use] 
+	#[must_use]
 	pub fn new_disk() -> Self {
 		Self::Disk(DEFAULT_CACHE_DIR.to_path_buf())
 	}
-	#[must_use] 
+	#[must_use]
 	pub fn new_memory() -> Self {
 		Self::InMemory
 	}

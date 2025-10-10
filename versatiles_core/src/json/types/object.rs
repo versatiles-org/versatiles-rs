@@ -11,7 +11,7 @@ pub struct JsonObject(pub BTreeMap<String, JsonValue>);
 
 impl JsonObject {
 	/// Create a new, empty `JsonObject`.
-	#[must_use] 
+	#[must_use]
 	pub fn new() -> Self {
 		Self(BTreeMap::new())
 	}
@@ -25,7 +25,7 @@ impl JsonObject {
 	}
 
 	/// Get a reference to the raw `JsonValue` for the specified key, if present.
-	#[must_use] 
+	#[must_use]
 	pub fn get(&self, key: &str) -> Option<&JsonValue> {
 		self.0.get(key)
 	}
@@ -51,12 +51,18 @@ impl JsonObject {
 
 	/// Retrieve a `Vec<String>` from the array at the specified key, if present and all elements are strings.
 	pub fn get_string_vec(&self, key: &str) -> Result<Option<Vec<String>>> {
-		self.get_array(key)?.map(super::array::JsonArray::as_string_vec).transpose()
+		self
+			.get_array(key)?
+			.map(super::array::JsonArray::as_string_vec)
+			.transpose()
 	}
 
 	/// Retrieve a `Vec<T>` from the array at the specified key, if present and all elements are numeric.
 	pub fn get_number_vec(&self, key: &str) -> Result<Option<Vec<f64>>> {
-		self.get_array(key)?.map(super::array::JsonArray::as_number_vec).transpose()
+		self
+			.get_array(key)?
+			.map(super::array::JsonArray::as_number_vec)
+			.transpose()
 	}
 
 	/// Retrieve a fixed-size array `[T; N]` from the array at the specified key, if present and all elements are numeric.
@@ -87,7 +93,7 @@ impl JsonObject {
 	}
 
 	/// Serialize this `JsonObject` into a compact JSON string without extra whitespace.
-	#[must_use] 
+	#[must_use]
 	pub fn stringify(&self) -> String {
 		let items = self
 			.0
@@ -98,7 +104,7 @@ impl JsonObject {
 	}
 
 	/// Serialize this `JsonObject` into a single-line, pretty-printed JSON string with spaces.
-	#[must_use] 
+	#[must_use]
 	pub fn stringify_pretty_single_line(&self) -> String {
 		let items = self
 			.0
@@ -117,7 +123,7 @@ impl JsonObject {
 	/// Serialize this `JsonObject` into a multi-line, pretty-printed JSON string with indentation.
 	///
 	/// `max_width` controls when to wrap lines, and `depth` sets the base indentation level.
-	#[must_use] 
+	#[must_use]
 	pub fn stringify_pretty_multi_line(&self, max_width: usize, depth: usize) -> String {
 		let indent = "  ".repeat(depth);
 		let items = self

@@ -5,7 +5,7 @@ use std::str::FromStr;
 pub fn parse_tag(iter: &mut ByteIterator, tag: &str) -> Result<()> {
 	for c in tag.bytes() {
 		match iter.expect_next_byte()? {
-			b if b == c => continue,
+			b if b == c => {}
 			_ => return Err(iter.format_error(&format!("unexpected character while parsing tag '{tag}'"))),
 		}
 	}

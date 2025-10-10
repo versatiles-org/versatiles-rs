@@ -34,7 +34,7 @@ use async_trait::async_trait;
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
 use reqwest::{Client, Method, Request, StatusCode, Url};
-use std::{ops::Deref, str, time::Duration};
+use std::{str, time::Duration};
 
 /// A struct that provides reading capabilities from an HTTP(S) endpoint.
 #[derive(Debug)]

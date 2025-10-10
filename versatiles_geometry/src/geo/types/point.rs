@@ -1,4 +1,4 @@
-use super::{traits, Coordinates, GeometryTrait, MultiPointGeometry};
+use super::{Coordinates, GeometryTrait, MultiPointGeometry, traits};
 use std::fmt::Debug;
 use traits::SingleGeometryTrait;
 use versatiles_core::json::JsonValue;
@@ -7,19 +7,19 @@ use versatiles_core::json::JsonValue;
 pub struct PointGeometry(pub Coordinates);
 
 impl PointGeometry {
-	#[must_use] 
+	#[must_use]
 	pub fn new(c: Coordinates) -> Self {
 		Self(c)
 	}
-	#[must_use] 
+	#[must_use]
 	pub fn x(&self) -> f64 {
 		self.0.x()
 	}
-	#[must_use] 
+	#[must_use]
 	pub fn y(&self) -> f64 {
 		self.0.y()
 	}
-	#[must_use] 
+	#[must_use]
 	pub fn as_coord(&self) -> &Coordinates {
 		&self.0
 	}

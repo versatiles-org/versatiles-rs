@@ -16,8 +16,9 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) -> R
 		bail!("Lossless AVIF encoding is not supported, quality must be less than 100");
 	}
 
-	let speed = speed
-		.map_or(10, |s| (f32::from(s) / 100.0 * 9.0 + 1.0).round().clamp(1.0, 10.0) as u8);
+	let speed = speed.map_or(10, |s| {
+		(f32::from(s) / 100.0 * 9.0 + 1.0).round().clamp(1.0, 10.0) as u8
+	});
 
 	let mut result: Vec<u8> = vec![];
 	let encoder = AvifEncoder::new_with_speed_quality(&mut result, speed, quality)
@@ -49,6 +50,7 @@ pub fn blob2image(_blob: &Blob) -> Result<DynamicImage> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::traits::DynamicImageTraitTest;
 	use rstest::rstest;
 
 	/* ---------- Success cases ---------- */

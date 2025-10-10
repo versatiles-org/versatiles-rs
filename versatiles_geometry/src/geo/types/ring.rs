@@ -1,4 +1,4 @@
-use super::{Coordinates, GeometryTrait, CompositeGeometryTrait};
+use super::{CompositeGeometryTrait, Coordinates, GeometryTrait};
 use anyhow::{Result, ensure};
 use std::fmt::Debug;
 use versatiles_core::json::JsonValue;
@@ -24,7 +24,13 @@ impl GeometryTrait for RingGeometry {
 	}
 
 	fn to_coord_json(&self) -> JsonValue {
-		JsonValue::from(self.0.iter().map(super::coordinates::Coordinates::to_json).collect::<Vec<_>>())
+		JsonValue::from(
+			self
+				.0
+				.iter()
+				.map(super::coordinates::Coordinates::to_json)
+				.collect::<Vec<_>>(),
+		)
 	}
 }
 

@@ -1,4 +1,4 @@
-use crate::geo::{CompositeGeometryTrait, GeoValue, GeoProperties};
+use crate::geo::{GeoProperties, GeoValue};
 use anyhow::{Context, Result, anyhow, ensure};
 use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Div};
 

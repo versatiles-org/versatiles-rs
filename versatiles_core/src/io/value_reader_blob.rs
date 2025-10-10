@@ -56,7 +56,7 @@ impl<E: ByteOrder> ValueReaderBlob<E> {
 	/// # Returns
 	///
 	/// * A new `ValueReaderBlob` instance.
-	#[must_use] 
+	#[must_use]
 	pub fn new(blob: Blob) -> ValueReaderBlob<E> {
 		ValueReaderBlob {
 			_phantom: PhantomData,
@@ -76,7 +76,7 @@ impl ValueReaderBlob<LittleEndian> {
 	/// # Returns
 	///
 	/// * A new `ValueReaderBlob` instance with little-endian byte order.
-	#[must_use] 
+	#[must_use]
 	pub fn new_le(blob: Blob) -> ValueReaderBlob<LittleEndian> {
 		ValueReaderBlob::new(blob)
 	}
@@ -92,7 +92,7 @@ impl ValueReaderBlob<BigEndian> {
 	/// # Returns
 	///
 	/// * A new `ValueReaderBlob` instance with big-endian byte order.
-	#[must_use] 
+	#[must_use]
 	pub fn new_be(blob: Blob) -> ValueReaderBlob<BigEndian> {
 		ValueReaderBlob::new(blob)
 	}
@@ -152,15 +152,14 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn test_len() -> Result<()> {
+	fn test_len() {
 		let reader = ValueReaderBlob::new_le(Blob::from(vec![0x80; 42]));
 		assert_eq!(reader.len(), 42);
-		Ok(())
 	}
 
 	#[test]
 	fn test_read_varint() -> Result<()> {
-		let buf = vec![0b10101100, 0b00000010]; // Represents the varint for 300
+		let buf = vec![0b1010_1100, 0b0000_0010]; // Represents the varint for 300
 		let mut reader = ValueReaderBlob::new_le(Blob::from(buf));
 
 		let varint = reader.read_varint()?;
@@ -169,13 +168,12 @@ mod tests {
 	}
 
 	#[test]
-	fn test_read_varint_too_long() -> Result<()> {
+	fn test_read_varint_too_long() {
 		let buf = vec![0x80; 10]; // More than 9 bytes with the MSB set to 1
 		let mut reader = ValueReaderBlob::new_le(Blob::from(buf));
 
 		let result = reader.read_varint();
 		assert!(result.is_err());
-		Ok(())
 	}
 
 	#[test]

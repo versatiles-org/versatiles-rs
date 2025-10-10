@@ -1,10 +1,16 @@
 #![allow(dead_code)]
 
 use super::{geometry_type::GeomType, layer::VectorTileLayer};
-use crate::geo::{CompositeGeometryTrait, Geometry, Coordinates, GeometryTrait, RingGeometry, GeoProperties, GeoFeature, GeoValue, MultiPointGeometry, MultiLineStringGeometry, MultiPolygonGeometry, SingleGeometryTrait};
+use crate::geo::{
+	CompositeGeometryTrait, Coordinates, GeoFeature, GeoProperties, GeoValue, Geometry, GeometryTrait,
+	MultiLineStringGeometry, MultiPointGeometry, MultiPolygonGeometry, RingGeometry, SingleGeometryTrait,
+};
 use anyhow::{Context, Result, bail, ensure};
 use byteorder::LE;
-use versatiles_core::{Blob, io::{ValueReader, ValueWriterBlob, ValueWriter, ValueReaderSlice}};
+use versatiles_core::{
+	Blob,
+	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct VectorTileFeature {
@@ -293,7 +299,7 @@ impl VectorTileFeature {
 		fn m<T>(g: &[T]) -> Vec<&T> {
 			g.iter().collect()
 		}
-		use crate::geo::Geometry::{Point, MultiPoint, LineString, MultiLineString, Polygon, MultiPolygon};
+		use crate::geo::Geometry::{LineString, MultiLineString, MultiPoint, MultiPolygon, Point, Polygon};
 		let (geom_type, geom_data) = match geometry {
 			Point(g) => (GeomType::MultiPoint, write_points(g.into_multi())?),
 			MultiPoint(g) => (GeomType::MultiPoint, write_points(g)?),

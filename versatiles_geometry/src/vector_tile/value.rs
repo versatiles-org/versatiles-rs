@@ -3,7 +3,10 @@
 use crate::geo::GeoValue;
 use anyhow::{Context, Result, anyhow, bail};
 use byteorder::LE;
-use versatiles_core::{Blob, io::{ValueReader, ValueWriterBlob, ValueWriter}};
+use versatiles_core::{
+	Blob,
+	io::{ValueReader, ValueWriter, ValueWriterBlob},
+};
 
 pub trait GeoValuePBF<'a> {
 	fn read(reader: &mut dyn ValueReader<'a, LE>) -> Result<GeoValue>;
@@ -14,7 +17,7 @@ impl<'a> GeoValuePBF<'a> for GeoValue {
 	fn read(reader: &mut dyn ValueReader<'a, LE>) -> Result<GeoValue> {
 		// source: https://protobuf.dev/programming-guides/encoding/
 
-		use GeoValue::{String, Float, Double, Int, UInt, Bool};
+		use GeoValue::{Bool, Double, Float, Int, String, UInt};
 		let mut value: Option<GeoValue> = None;
 
 		while reader.has_remaining() {
@@ -92,6 +95,7 @@ impl<'a> GeoValuePBF<'a> for GeoValue {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use versatiles_core::io::ValueReaderSlice;
 
 	#[test]
 	fn test_read_string() -> Result<()> {

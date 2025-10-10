@@ -1,4 +1,7 @@
-use super::{PointGeometry, LineStringGeometry, PolygonGeometry, MultiPointGeometry, MultiLineStringGeometry, MultiPolygonGeometry, SingleGeometryTrait, GeometryTrait, CompositeGeometryTrait};
+use super::{
+	GeometryTrait, LineStringGeometry, MultiLineStringGeometry, MultiPointGeometry, MultiPolygonGeometry, PointGeometry,
+	PolygonGeometry, SingleGeometryTrait,
+};
 use anyhow::Result;
 use std::fmt::Debug;
 use versatiles_core::json::{JsonObject, JsonValue};
@@ -51,7 +54,7 @@ impl Geometry {
 		Self::MultiPolygon(MultiPolygonGeometry::from(value))
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn get_type_name(&self) -> &str {
 		match self {
 			Geometry::Point(_) => "Point",
@@ -62,7 +65,7 @@ impl Geometry {
 			Geometry::MultiPolygon(_) => "MultiPolygon",
 		}
 	}
-	#[must_use] 
+	#[must_use]
 	pub fn into_multi(self) -> Self {
 		match self {
 			Geometry::Point(g) => Geometry::MultiPoint(g.into_multi()),
@@ -74,7 +77,7 @@ impl Geometry {
 		}
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn new_example() -> Self {
 		Self::new_multi_polygon(vec![
 			vec![
@@ -99,7 +102,7 @@ impl Geometry {
 		}
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn to_json(&self) -> JsonObject {
 		let mut obj = JsonObject::new();
 		let (type_name, coordinates) = match self {

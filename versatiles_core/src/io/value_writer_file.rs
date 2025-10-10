@@ -51,7 +51,7 @@ impl<E: ByteOrder> ValueWriterFile<E> {
 	/// # Returns
 	///
 	/// * A new `ValueWriterFile` instance.
-	#[must_use] 
+	#[must_use]
 	pub fn new(file: File) -> ValueWriterFile<E> {
 		ValueWriterFile {
 			_phantom: PhantomData,
@@ -70,7 +70,7 @@ impl ValueWriterFile<LittleEndian> {
 	/// # Returns
 	///
 	/// * A new `ValueWriterFile` instance with little-endian byte order.
-	#[must_use] 
+	#[must_use]
 	pub fn new_le(file: File) -> ValueWriterFile<LittleEndian> {
 		ValueWriterFile::new(file)
 	}
@@ -86,7 +86,7 @@ impl ValueWriterFile<BigEndian> {
 	/// # Returns
 	///
 	/// * A new `ValueWriterFile` instance with big-endian byte order.
-	#[must_use] 
+	#[must_use]
 	pub fn new_be(file: File) -> ValueWriterFile<BigEndian> {
 		ValueWriterFile::new(file)
 	}

@@ -134,7 +134,7 @@ impl PartialOrd for GeoValue {
 
 impl Ord for GeoValue {
 	fn cmp(&self, other: &Self) -> Ordering {
-		use GeoValue::{String, Float, Double, Int, UInt, Bool};
+		use GeoValue::{Bool, Double, Float, Int, String, UInt};
 		match (self, other) {
 			(String(a), String(b)) => a.cmp(b),
 			(Float(a), Float(b)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
@@ -177,7 +177,7 @@ impl GeoValue {
 		}
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn parse_str(value: &str) -> Self {
 		lazy_static! {
 			static ref REG_DOUBLE: Regex = RegexBuilder::new(r"^\-?\d*\.\d+$").build().unwrap();
@@ -211,7 +211,7 @@ impl GeoValue {
 		}
 	}
 
-	#[must_use] 
+	#[must_use]
 	pub fn to_json(&self) -> JsonValue {
 		match self {
 			GeoValue::Bool(v) => JsonValue::from(*v),
