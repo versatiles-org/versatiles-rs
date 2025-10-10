@@ -43,20 +43,28 @@ jobs:
           resolve_gdal_version
           echo "GDAL_VERSION=$GDAL_VERSION" >> "$GITHUB_ENV"
 
-      - name: Cache GDAL toolchain (.toolchain/gdal)
-        id: cache-gdal
-        uses: actions/cache@v4
+
+      - name: Restore GDAL toolchain cache
+        id: restore-gdal-cache
+        uses: actions/cache/restore@v4
         with:
           path: .toolchain/gdal
           key: ${{ runner.os }}-gdal-${{ env.GDAL_VERSION }}-${{ hashFiles('scripts/install-gdal.sh') }}
 
       - name: Build/Install GDAL (on cache miss)
-        if: steps.cache-gdal.outputs.cache-hit != 'true'
+        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
         run: |
           sudo ./scripts/install-gdal.sh
 
       - name: Show GDAL version (cached or built)
         run: ./.toolchain/gdal/bin/gdal-config --version
+
+      - name: Save GDAL toolchain cache
+        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .toolchain/gdal
+          key: ${{ steps.restore-gdal-cache.outputs.cache-primary-key }}
 
       - name: Init Cache
         uses: actions/cache@v4
