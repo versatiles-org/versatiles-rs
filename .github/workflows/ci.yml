@@ -43,6 +43,11 @@ jobs:
           resolve_gdal_version
           echo "GDAL_VERSION=$GDAL_VERSION" >> "$GITHUB_ENV"
 
+      - name: Install build dependencies (script)
+        shell: bash
+        run: |
+          source ./scripts/install-gdal.sh
+          install_deps
 
       - name: Restore GDAL toolchain cache
         id: restore-gdal-cache

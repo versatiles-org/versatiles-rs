@@ -159,6 +159,16 @@ install_deps_apt() {
     || true
 }
 
+# ----- dependency installation (wrapper) -------------------------------------
+install_deps() {
+  detect_platform
+  if [[ "$PLATFORM" == "mac" ]]; then
+    install_deps_mac
+  else
+    install_deps_apt
+  fi
+}
+
 # ----- build-time env (common) ------------------------------------------------
 set_build_env() {
   # Derive sensible defaults once
@@ -339,7 +349,7 @@ main() {
   [[ "$PLATFORM" == "mac" ]] || [[ "$PLATFORM" == "linux" ]] || die "Unsupported platform"
 
   if [[ "$SKIP_DEPS" != "1" ]]; then
-    if [[ "$PLATFORM" == "mac" ]]; then install_deps_mac; else install_deps_apt; fi
+    install_deps
   else
     warn "Skipping dependency installation (--skip-deps)"
   fi
