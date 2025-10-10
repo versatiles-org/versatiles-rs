@@ -25,11 +25,10 @@ fi
 echo "cargo clippy:"
 
 run_clippy() {
-   cd "${PROJECT_DIR}$1"
-   echo "  $1"
-   result=$(cargo clippy --all-features --all-targets -- -D warnings 2>&1)
+   cd "${PROJECT_DIR}"
+   result=$(cargo clippy --workspace --all-features --all-targets -- -D warnings 2>&1)
    if [ $? -ne 0 ]; then
-      echo -e "$result\nERROR DURING: cargo clippy $1"
+      echo -e "$result\nERROR DURING: cargo clippy"
       exit 1
    fi
 }
