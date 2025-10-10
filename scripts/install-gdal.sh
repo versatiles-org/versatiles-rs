@@ -210,6 +210,11 @@ configure_build() {
     -DCMAKE_C_COMPILER_LAUNCHER=ccache
     -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
     -DCMAKE_INSTALL_PREFIX="${PREFIX}"
+    -DBUILD_TESTING=OFF
+    # Disable Python SWIG bindings
+    -DGDAL_ENABLE_SWIG=OFF
+    -DGDAL_ENABLE_PYTHON=OFF
+    -DGDAL_ENABLE_JAVA=OFF
     # Keep TIFF internal (with WebP/JXL enabled via external deps)
     -DGDAL_USE_TIFF_INTERNAL=ON
     -DGDAL_USE_TIFF=ON
