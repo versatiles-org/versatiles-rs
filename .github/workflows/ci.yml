@@ -55,7 +55,7 @@ jobs:
       - name: Build/Install GDAL (on cache miss)
         if: steps.cache-gdal.outputs.cache-hit != 'true'
         run: |
-          ./scripts/install-gdal.sh
+          sudo ./scripts/install-gdal.sh
 
       - name: Show GDAL version (cached or built)
         run: ./.toolchain/gdal/bin/gdal-config --version
