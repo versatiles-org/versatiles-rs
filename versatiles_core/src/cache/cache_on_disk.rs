@@ -34,12 +34,12 @@ impl<K: CacheKey, V: CacheValue> OnDiskCache<K, V> {
 				if (b as char).is_ascii_alphanumeric() || b == b'.' || b == b'_' || b == b'-' || b == b',' {
 					(b as char).to_string()
 				} else {
-					format!("%{:02x}", b)
+					format!("%{b:02x}")
 				}
 			})
 			.collect::<String>();
 		let mut p = self.path.clone();
-		p.push(format!("{}.tmp", name));
+		p.push(format!("{name}.tmp"));
 		p
 	}
 
@@ -132,7 +132,7 @@ mod tests {
 	}
 
 	fn v(s: &[&str]) -> Vec<String> {
-		s.iter().map(|b| b.to_string()).collect()
+		s.iter().map(|b| (*b).to_string()).collect()
 	}
 
 	#[test]

@@ -34,6 +34,7 @@ use crate::progress::progress_bar::ProgressBar;
 /// # Returns
 ///
 /// A boxed implementation of `ProgressTrait`.
+#[must_use] 
 pub fn get_progress_bar(message: &str, max_value: u64) -> ProgressBar {
 	ProgressBar::new(message, max_value)
 }

@@ -184,6 +184,7 @@ impl TileBBox {
 	///
 	/// * `true` if `x_max < x_min` or `y_max < y_min`.
 	/// * `false` otherwise.
+	#[must_use] 
 	pub fn is_empty(&self) -> bool {
 		self.width == 0 || self.height == 0
 	}
@@ -194,6 +195,7 @@ impl TileBBox {
 	///
 	/// * Width as `u32`.
 	/// * `0` if the bounding box is empty.
+	#[must_use] 
 	pub fn width(&self) -> u32 {
 		self.width
 	}
@@ -204,6 +206,7 @@ impl TileBBox {
 	///
 	/// * Height as `u32`.
 	/// * `0` if the bounding box is empty.
+	#[must_use] 
 	pub fn height(&self) -> u32 {
 		self.height
 	}
@@ -219,11 +222,13 @@ impl TileBBox {
 	}
 
 	/// Returns the minimum x-coordinate of the bounding box.
+	#[must_use] 
 	pub fn x_min(&self) -> u32 {
 		self.x_min
 	}
 
 	/// Returns the minimum y-coordinate of the bounding box.
+	#[must_use] 
 	pub fn y_min(&self) -> u32 {
 		self.y_min
 	}
@@ -243,11 +248,13 @@ impl TileBBox {
 	}
 
 	/// Returns the maximum x-coordinate of the bounding box.
+	#[must_use] 
 	pub fn x_max(&self) -> u32 {
 		(self.x_min + self.width).saturating_sub(1)
 	}
 
 	/// Returns the maximum y-coordinate of the bounding box.
+	#[must_use] 
 	pub fn y_max(&self) -> u32 {
 		(self.y_min + self.height).saturating_sub(1)
 	}
@@ -276,8 +283,9 @@ impl TileBBox {
 	///
 	/// * Number of tiles as `u64`.
 	/// * `0` if the bounding box is empty.
+	#[must_use] 
 	pub fn count_tiles(&self) -> u64 {
-		(self.width as u64) * (self.height as u64)
+		u64::from(self.width) * u64::from(self.height)
 	}
 
 	/// Determines if the bounding box covers the entire range of tiles at its zoom level.
@@ -291,11 +299,13 @@ impl TileBBox {
 	///
 	/// This method is primarily used for testing purposes.
 	#[cfg(test)]
+	#[must_use] 
 	pub fn is_full(&self) -> bool {
 		let max = self.max_count();
 		self.x_min == 0 && self.y_min == 0 && self.width == max && self.height == max
 	}
 
+	#[must_use] 
 	pub fn max_count(&self) -> u32 {
 		1u32 << self.level
 	}
@@ -310,6 +320,7 @@ impl TileBBox {
 	///
 	/// * `true` if the coordinate is within the bounding box and at the same zoom level.
 	/// * `false` otherwise.
+	#[must_use] 
 	pub fn contains(&self, coord: &TileCoord) -> bool {
 		coord.level == self.level
 			&& coord.x >= self.x_min
@@ -543,7 +554,7 @@ impl TileBBox {
 	///
 	/// * `pyramid` - Reference to the `TileBBoxPyramid`.
 	pub fn intersect_with_pyramid(&mut self, pyramid: &TileBBoxPyramid) {
-		self.intersect_with(pyramid.get_level_bbox(self.level)).unwrap()
+		self.intersect_with(pyramid.get_level_bbox(self.level)).unwrap();
 	}
 
 	/// Determines if this bounding box overlaps with another bounding box.
@@ -590,6 +601,7 @@ impl TileBBox {
 	/// # Returns
 	///
 	/// * `GeoBBox` representing the geographical area covered by this bounding box.
+	#[must_use] 
 	pub fn to_geo_bbox(&self) -> GeoBBox {
 		// Bottom-left in geospatial terms is (x_min, y_max + 1)
 		let p_min = TileCoord::new(self.level, self.x_min, self.y_max() + 1)
@@ -615,8 +627,8 @@ impl TileBBox {
 	/// * `Err(anyhow::Error)` if the resulting bounding box is invalid.
 	pub fn shift_by(&mut self, x: i64, y: i64) {
 		self.shift_to(
-			(self.x_min as i64 + x).max(0) as u32,
-			(self.y_min as i64 + y).max(0) as u32,
+			(i64::from(self.x_min) + x).max(0) as u32,
+			(i64::from(self.y_min) + y).max(0) as u32,
 		);
 	}
 
@@ -655,6 +667,7 @@ impl TileBBox {
 		self.set_y_max(y_max);
 	}
 
+	#[must_use] 
 	pub fn scaled_down(&self, scale: u32) -> TileBBox {
 		let mut bbox = *self;
 		bbox.scale_down(scale);
@@ -672,6 +685,7 @@ impl TileBBox {
 		self.set_y_max(y_max);
 	}
 
+	#[must_use] 
 	pub fn scaled_up(&self, scale: u32) -> TileBBox {
 		let mut bbox = *self;
 		bbox.scale_up(scale);
@@ -690,42 +704,48 @@ impl TileBBox {
 		self.scale_down(2);
 	}
 
+	#[must_use] 
 	pub fn leveled_up(&self) -> TileBBox {
 		let mut c = *self;
 		c.level_up();
 		c
 	}
 
+	#[must_use] 
 	pub fn leveled_down(&self) -> TileBBox {
 		let mut c = *self;
 		c.level_down();
 		c
 	}
 
+	#[must_use] 
 	pub fn at_level(&self, level: u8) -> TileBBox {
 		assert!(level <= 31, "level ({level}) must be <= 31");
 
 		let mut bbox = *self;
 		if level > self.level {
-			let scale = 2u32.pow((level - self.level) as u32);
+			let scale = 2u32.pow(u32::from(level - self.level));
 			bbox.level = level;
-			bbox.scale_up(scale)
+			bbox.scale_up(scale);
 		} else {
-			let scale = 2u32.pow((self.level - level) as u32);
+			let scale = 2u32.pow(u32::from(self.level - level));
 			bbox.scale_down(scale);
 			bbox.level = level;
-		};
+		}
 		bbox
 	}
 
+	#[must_use] 
 	pub fn min_corner(&self) -> TileCoord {
 		TileCoord::new(self.level, self.x_min, self.y_min).unwrap()
 	}
 
+	#[must_use] 
 	pub fn max_corner(&self) -> TileCoord {
 		TileCoord::new(self.level, self.x_max(), self.y_max()).unwrap()
 	}
 
+	#[must_use] 
 	pub fn dimensions(&self) -> (u32, u32) {
 		(self.width(), self.height())
 	}
@@ -809,6 +829,7 @@ impl TileBBox {
 	/// # Returns
 	///
 	/// An iterator yielding `TileBBox` instances representing the grid.
+	#[must_use] 
 	pub fn iter_bbox_grid(&self, size: u32) -> Box<dyn Iterator<Item = TileBBox> + '_> {
 		assert!(size != 0, "size must be greater than 0");
 
@@ -851,9 +872,9 @@ impl TileBBox {
 			"Coordinate {coord:?} is not within the bounding box {self:?}",
 		);
 
-		let x = (coord.x - self.x_min) as u64;
-		let y = (coord.y - self.y_min) as u64;
-		let index = y * (self.width as u64) + x;
+		let x = u64::from(coord.x - self.x_min);
+		let y = u64::from(coord.y - self.y_min);
+		let index = y * u64::from(self.width) + x;
 
 		Ok(index)
 	}
@@ -871,7 +892,7 @@ impl TileBBox {
 	pub fn coord_at_index(&self, index: u64) -> Result<TileCoord> {
 		ensure!(index < self.count_tiles(), "index {index} out of bounds");
 
-		let width = self.width() as u64;
+		let width = u64::from(self.width());
 		let x = index.rem(width) as u32 + self.x_min;
 		let y = index.div(width) as u32 + self.y_min;
 		TileCoord::new(self.level, x, y)
@@ -886,12 +907,14 @@ impl TileBBox {
 		self.set_y_max(y_max);
 	}
 
+	#[must_use] 
 	pub fn rounded(&self, block_size: u32) -> TileBBox {
 		let mut bbox = *self;
 		bbox.round(block_size);
 		bbox
 	}
 
+	#[must_use] 
 	pub fn max_coord(&self) -> u32 {
 		(1u32 << self.level) - 1
 	}
@@ -992,7 +1015,7 @@ mod tests {
 		let geo_bbox = GeoBBox(0.0, -85.05112877980659f64, 180.0, 0.0);
 		for level in 1..32 {
 			let bbox = TileBBox::from_geo(level, &geo_bbox).unwrap();
-			assert_eq!(bbox.count_tiles(), 4u64.pow(level as u32 - 1));
+			assert_eq!(bbox.count_tiles(), 4u64.pow(u32::from(level) - 1));
 			assert_eq!(bbox.to_geo_bbox(), geo_bbox);
 		}
 	}
@@ -1002,7 +1025,7 @@ mod tests {
 		let geo_bbox = GeoBBox(-180.0, -66.51326044311186f64, -90.0, 0.0);
 		for level in 2..32 {
 			let bbox = TileBBox::from_geo(level, &geo_bbox).unwrap();
-			assert_eq!(bbox.count_tiles(), 4u64.pow(level as u32 - 2));
+			assert_eq!(bbox.count_tiles(), 4u64.pow(u32::from(level) - 2));
 			assert_eq!(bbox.to_geo_bbox(), geo_bbox);
 		}
 	}
@@ -1144,7 +1167,7 @@ mod tests {
 	#[test]
 	fn test_is_full() {
 		let bbox = TileBBox::new_full(4).unwrap();
-		assert!(bbox.is_full(), "Expected bbox ({:?}) to be full", bbox);
+		assert!(bbox.is_full(), "Expected bbox ({bbox:?}) to be full");
 	}
 
 	#[test]
@@ -1826,7 +1849,7 @@ mod tests {
 		let bbox = TileBBox::from_min_max(6, 0, 31, 32, 63).unwrap();
 		let up = bbox.at_level(level as u8);
 		assert_eq!(
-			[up.level as u32, up.x_min(), up.y_min(), up.x_max(), up.y_max()],
+			[u32::from(up.level), up.x_min(), up.y_min(), up.x_max(), up.y_max()],
 			[level, x0, y0, x1, y1]
 		);
 	}

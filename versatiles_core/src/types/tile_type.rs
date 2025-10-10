@@ -23,6 +23,7 @@ impl TileType {
 	/// assert_eq!(TileType::Vector.as_str(), "vector");
 	/// assert_eq!(TileType::Unknown.as_str(), "unknown");
 	/// ```
+	#[must_use] 
 	pub fn as_str(&self) -> &str {
 		use TileType::*;
 		match self {
@@ -32,10 +33,12 @@ impl TileType {
 		}
 	}
 
+	#[must_use] 
 	pub fn is_raster(&self) -> bool {
 		*self == TileType::Raster
 	}
 
+	#[must_use] 
 	pub fn is_vector(&self) -> bool {
 		*self == TileType::Vector
 	}
@@ -51,6 +54,7 @@ impl TileType {
 	/// assert_eq!(TileType::Vector.get_default_tile_schema(), Some("other"));
 	/// assert_eq!(TileType::Unknown.get_default_tile_schema(), None);
 	/// ```
+	#[must_use] 
 	pub fn get_default_tile_schema(&self) -> Option<&'static str> {
 		use TileType::*;
 		match self {
@@ -110,7 +114,7 @@ impl TryFrom<&str> for TileType {
 			"image" | "raster" => Ok(TileType::Raster),
 			"vector" => Ok(TileType::Vector),
 			"unknown" => Ok(TileType::Unknown),
-			_ => bail!("Invalid tile content type: {}", value),
+			_ => bail!("Invalid tile content type: {value}"),
 		}
 	}
 }

@@ -128,7 +128,7 @@ pub trait ValueWriter<E: ByteOrder> {
 
 	fn write_pbf_key(&mut self, field_number: u32, wire_type: u8) -> Result<()> {
 		self
-			.write_varint(((field_number as u64) << 3) | (wire_type as u64))
+			.write_varint((u64::from(field_number) << 3) | u64::from(wire_type))
 			.context("Failed to write PBF key")
 	}
 
@@ -136,7 +136,7 @@ pub trait ValueWriter<E: ByteOrder> {
 		let mut writer = ValueWriterBlob::new_le();
 		for &value in data {
 			writer
-				.write_varint(value as u64)
+				.write_varint(u64::from(value))
 				.context("Failed to write varint for packed uint32")?;
 		}
 		self

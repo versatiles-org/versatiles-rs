@@ -55,13 +55,12 @@ impl Inner {
 		let mut line = String::new();
 		let _ = write!(
 			&mut line,
-			"{}▕{}▏{}/{} ({:>3}%) {:>5} {:>5}",
-			msg, bar_str, pos, len, percent, per_sec_str, eta_str
+			"{msg}▕{bar_str}▏{pos}/{len} ({percent:>3}%) {per_sec_str:>5} {eta_str:>5}"
 		);
 
 		// Render to stderr with carriage return and clear line
 		let mut stderr = io::stderr();
-		let _ = write!(stderr, "\r\x1b[2K{}", line);
+		let _ = write!(stderr, "\r\x1b[2K{line}");
 		let _ = stderr.flush();
 		let _ = bar_width; // keep for symmetry and potential future use
 	}
@@ -187,7 +186,7 @@ fn available_bar_width(msg: &str, pos: u64, len: u64, per_sec: f64, eta_secs: f6
 	let eta_str = format_eta(Duration::from_secs_f64(eta_secs));
 
 	// Static glyphs around the bar occupy 2 chars (▕ and ▏) plus spaces and fixed text
-	let right = format!("▏{}/{} ({:>3}%) {:>5} {:>7}", pos, len, percent, per_sec_str, eta_str);
+	let right = format!("▏{pos}/{len} ({percent:>3}%) {per_sec_str:>5} {eta_str:>7}");
 	let total_width = terminal_width();
 	let taken = msg.chars().count() + right.chars().count();
 	let min_bar = 10usize; // ensure a usable minimum width
@@ -248,7 +247,7 @@ fn human_number(v: f64) -> String {
 	} else if abs >= 1_000.0 {
 		format!("{:.1}k", v / 1_000.0)
 	} else {
-		format!("{:.0}", v)
+		format!("{v:.0}")
 	}
 }
 
@@ -261,16 +260,16 @@ fn format_eta(d: Duration) -> String {
 
 	if total < 60 {
 		// Seconds only: e.g. "45s"
-		format!("{}s", seconds)
+		format!("{seconds}s")
 	} else if total < 3_600 {
 		// Minutes:Seconds: e.g. "12:34"
-		format!("{:02}:{:02}", minutes, seconds)
+		format!("{minutes:02}:{seconds:02}")
 	} else if total < 86_400 {
 		// Hours:Minutes:Seconds: e.g. "3:05:42"
-		format!("{}:{:02}:{:02}", hours, minutes, seconds)
+		format!("{hours}:{minutes:02}:{seconds:02}")
 	} else {
 		// Days and hours: e.g. "2d03h"
-		format!("{}d{:02}h", days, hours)
+		format!("{days}d{hours:02}h")
 	}
 }
 

@@ -44,13 +44,13 @@ use std::{
 /// # Variants
 /// - `AVIF` - AVIF image format
 /// - `BIN` - Raw binary data
-/// - `GEOJSON` - GeoJSON vector data
+/// - `GEOJSON` - `GeoJSON` vector data
 /// - `JPG` - JPEG image format (including `.jpeg`)
 /// - `JSON` - Generic JSON data
 /// - `PBF` - Mapbox Vector Tile in Protocol Buffer format
 /// - `PNG` - PNG image format
 /// - `SVG` - SVG image format
-/// - `TOPOJSON` - TopoJSON vector data
+/// - `TOPOJSON` - `TopoJSON` vector data
 /// - `WEBP` - WEBP image format
 #[allow(clippy::upper_case_acronyms)]
 #[cfg_attr(feature = "cli", derive(ValueEnum))]
@@ -78,6 +78,7 @@ impl TileFormat {
 	/// let format = TileFormat::PNG;
 	/// assert_eq!(format.as_str(), "png");
 	/// ```
+	#[must_use] 
 	pub fn as_str(&self) -> &str {
 		match self {
 			TileFormat::AVIF => "avif",
@@ -105,7 +106,7 @@ impl TileFormat {
 			"svg" => TileFormat::SVG,
 			"topojson" => TileFormat::TOPOJSON,
 			"webp" => TileFormat::WEBP,
-			_ => bail!("Unknown tile format: '{}'", value),
+			_ => bail!("Unknown tile format: '{value}'"),
 		})
 	}
 
@@ -123,6 +124,7 @@ impl TileFormat {
 	/// let format = TileFormat::GEOJSON;
 	/// assert_eq!(format.as_type_str(), "vector");
 	/// ```
+	#[must_use] 
 	pub fn as_type_str(&self) -> &str {
 		match self {
 			TileFormat::AVIF | TileFormat::JPG | TileFormat::PNG | TileFormat::SVG | TileFormat::WEBP => "image",
@@ -141,6 +143,7 @@ impl TileFormat {
 	/// let format = TileFormat::PNG;
 	/// assert_eq!(format.as_mime_str(), "image/png");
 	/// ```
+	#[must_use] 
 	pub fn as_mime_str(&self) -> &str {
 		match self {
 			TileFormat::BIN => "application/octet-stream",
@@ -168,7 +171,7 @@ impl TileFormat {
 			"application/geo+json" => TileFormat::GEOJSON,
 			"application/topo+json" => TileFormat::TOPOJSON,
 			"application/json" => TileFormat::JSON,
-			_ => bail!("Unknown MIME type: '{}'", mime),
+			_ => bail!("Unknown MIME type: '{mime}'"),
 		})
 	}
 
@@ -180,6 +183,7 @@ impl TileFormat {
 	/// let format = TileFormat::SVG;
 	/// assert_eq!(format.as_extension(), ".svg");
 	/// ```
+	#[must_use] 
 	pub fn as_extension(&self) -> &str {
 		match self {
 			TileFormat::AVIF => ".avif",
@@ -203,7 +207,7 @@ impl TileFormat {
 	///
 	/// # Arguments
 	///
-	/// * `filename` - A mutable `String` representing a filename.  
+	/// * `filename` - A mutable `String` representing a filename.\
 	///   If an extension is matched, the filename is truncated (the extension removed).
 	///
 	/// # Examples
@@ -282,6 +286,7 @@ impl TileFormat {
 		})
 	}
 
+	#[must_use] 
 	pub fn get_type(&self) -> TileType {
 		use TileFormat::*;
 		use TileType::*;

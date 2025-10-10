@@ -12,7 +12,7 @@ use enumset::EnumSetType;
 ///
 /// - `AnyOrder`: no specific ordering; leaves tiles in input order.
 /// - `DepthFirst`: quadtree depth-first ordering based on x/y bits.
-/// - `PMTiles`: ordering by Hilbert curve index (PMTiles style).
+/// - `PMTiles`: ordering by Hilbert curve index (`PMTiles` style).
 #[derive(EnumSetType)]
 pub enum TraversalOrder {
 	AnyOrder,
@@ -34,6 +34,7 @@ impl TraversalOrder {
 		}
 	}
 
+	#[must_use] 
 	pub fn verify_order(&self, bboxes: &[TileBBox], size: u32) -> bool {
 		use TraversalOrder::*;
 		let mut clone = bboxes.to_vec();
@@ -41,7 +42,7 @@ impl TraversalOrder {
 			AnyOrder => return true,
 			DepthFirst => sort_depth_first(&mut clone, size),
 			PMTiles => sort_hilbert(&mut clone),
-		};
+		}
 		clone == bboxes
 	}
 
@@ -114,7 +115,7 @@ fn sort_hilbert(bboxes: &mut [TileBBox]) {
 mod tests {
 	use super::*;
 
-	/// Build a TileBBox at given level, x, y.
+	/// Build a `TileBBox` at given level, x, y.
 	fn make_bbox(level: u8, x: u32, y: u32) -> TileBBox {
 		TileBBox::from_min_max(level, x, y, x, y).unwrap()
 	}

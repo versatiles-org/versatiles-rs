@@ -90,7 +90,7 @@ mod tests {
 	use tokio;
 
 	fn join_errors(e: &Error) -> String {
-		e.chain().map(|e| e.to_string()).collect::<Vec<String>>().join("\n")
+		e.chain().map(std::string::ToString::to_string).collect::<Vec<String>>().join("\n")
 	}
 
 	fn json_from_str<T: AsRef<str>>(s: T) -> Result<JsonValue> {

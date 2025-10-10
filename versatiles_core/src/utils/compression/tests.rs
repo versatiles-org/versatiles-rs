@@ -9,6 +9,7 @@ use crate::Blob;
 /// # Returns
 ///
 /// * `Blob` containing the generated data.
+#[must_use] 
 pub fn generate_test_data(size: usize) -> Blob {
 	let mut data = Vec::with_capacity(size);
 	for i in 0..size {

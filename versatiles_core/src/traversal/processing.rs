@@ -25,7 +25,7 @@ pub fn translate_traversals(
 			.into_iter()
 			.map(|b| TraversalTranslationStep::Stream(vec![b], b))
 			.collect::<Vec<_>>());
-	};
+	}
 
 	if traversal_write.order() == &TraversalOrder::AnyOrder {
 		#[allow(clippy::collapsible_if)]
@@ -74,7 +74,7 @@ fn simplify_steps(steps: &mut Vec<TraversalTranslationStep>) -> Result<()> {
 		for step in steps.drain(..) {
 			match (&mut result.last_mut(), &step) {
 				(Some(Push(prev_v, prev_idx)), Push(v, idx)) if prev_idx == idx => {
-					prev_v.extend(v.iter().cloned());
+					prev_v.extend(v.iter().copied());
 				}
 				_ => result.push(step),
 			}

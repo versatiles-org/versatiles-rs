@@ -94,7 +94,7 @@ impl CacheValue for TileCoord {
 		let level = reader.read_u8()?;
 		let x = reader.read_u32::<LE>()?;
 		let y = reader.read_u32::<LE>()?;
-		Ok(TileCoord { level, x, y })
+		Ok(TileCoord { x, y, level })
 	}
 }
 
@@ -115,16 +115,13 @@ impl CacheValue for Blob {
 
 impl<V: CacheValue> CacheValue for Option<V> {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
-		match self {
-			Some(value) => {
-				writer.write_u8(1)?; // Indicate presence
-				value.write_to_cache(writer)
-			}
-			None => {
-				writer.write_u8(0)?; // Indicate absence
-				Ok(())
-			}
-		}
+		if let Some(value) = self {
+  				writer.write_u8(1)?; // Indicate presence
+  				value.write_to_cache(writer)
+  			} else {
+  				writer.write_u8(0)?; // Indicate absence
+  				Ok(())
+  			}
 	}
 
 	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
@@ -135,7 +132,7 @@ impl<V: CacheValue> CacheValue for Option<V> {
 		} else if flag == 0 {
 			Ok(None)
 		} else {
-			bail!("Invalid flag value: {}", flag)
+			bail!("Invalid flag value: {flag}")
 		}
 	}
 }
@@ -177,7 +174,7 @@ impl CacheValue for DynamicImage {
 				ImageBuffer::from_vec(width, height, data)
 					.ok_or_else(|| anyhow!("Failed to create RGBA8 image buffer with provided data"))?,
 			),
-			_ => bail!("Unsupported channel count: {}", channel_count),
+			_ => bail!("Unsupported channel count: {channel_count}"),
 		})
 	}
 }

@@ -40,6 +40,7 @@ impl<I> TileBBoxMap<I> {
 	}
 
 	/// Create a new container with all slots initialized using `Default`.
+	#[must_use] 
 	pub fn new_default(bbox: TileBBox) -> Self
 	where
 		I: Clone + Default,
@@ -48,17 +49,20 @@ impl<I> TileBBoxMap<I> {
 	}
 
 	/// Total number of tiles (slots) in the container.
+	#[must_use] 
 	pub fn len(&self) -> usize {
 		self.vec.len()
 	}
 
 	/// Whether the container has zero slots. Note: this is equivalent to
 	/// `bbox.count_tiles() == 0`.
+	#[must_use] 
 	pub fn is_empty(&self) -> bool {
 		self.vec.is_empty()
 	}
 
 	/// The bounding box that defines the grid covered by this container.
+	#[must_use] 
 	pub fn bbox(&self) -> &TileBBox {
 		&self.bbox
 	}
@@ -110,6 +114,7 @@ impl<I> TileBBoxMap<I> {
 	/// Returns a new container at `level-1` where each slot holds the
 	/// `(child_coord, value)` pairs that map to that parent tile. Useful for
 	/// downscaling or overview generation.
+	#[must_use] 
 	pub fn into_decreased_level(self) -> TileBBoxMap<Vec<(TileCoord, I)>>
 	where
 		I: Clone,
@@ -164,7 +169,7 @@ impl<I> TileBBoxMap<Option<I>> {
 		I: Clone,
 	{
 		let mut container = TileBBoxMap::<Option<I>>::new_prefilled_with(bbox, None);
-		for (coord, item) in iter.into_iter() {
+		for (coord, item) in iter {
 			container.insert(coord, Some(item))?;
 		}
 		Ok(container)
@@ -302,7 +307,7 @@ mod tests {
 	fn map_transforms_inner_items() {
 		let bbox = bb(3, 0, 0, 1, 1);
 		let m = TileBBoxMap::<u8>::new_prefilled_with(bbox, 5);
-		let mapped = m.map(|v| v as u16 * 2);
+		let mapped = m.map(|v| u16::from(v) * 2);
 		for (_, v) in mapped.iter() {
 			assert_eq!(*v, 10);
 		}

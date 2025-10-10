@@ -15,14 +15,14 @@ impl From<f64> for JsonValue {
 /// Create a JSON number value from an 8-bit unsigned integer.
 impl From<u8> for JsonValue {
 	fn from(input: u8) -> Self {
-		JsonValue::Number(input as f64)
+		JsonValue::Number(f64::from(input))
 	}
 }
 
 /// Create a JSON number value from a 32-bit signed integer.
 impl From<i32> for JsonValue {
 	fn from(input: i32) -> Self {
-		JsonValue::Number(input as f64)
+		JsonValue::Number(f64::from(input))
 	}
 }
 

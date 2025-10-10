@@ -36,6 +36,7 @@ impl JsonArray {
 	/// Serialize the array to a multi-line, pretty-printed string.
 	///
 	/// `max_width` controls when to break lines, and `depth` sets the indentation level.
+	#[must_use] 
 	pub fn stringify_pretty_multi_line(&self, max_width: usize, depth: usize) -> String {
 		let indent = "  ".repeat(depth);
 		let items = self
@@ -62,6 +63,7 @@ impl JsonArray {
 	}
 
 	/// Get a reference to the underlying `Vec<JsonValue>`.
+	#[must_use] 
 	pub fn as_vec(&self) -> &Vec<JsonValue> {
 		&self.0
 	}

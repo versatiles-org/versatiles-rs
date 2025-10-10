@@ -32,7 +32,7 @@ fn parse_simple_csv_string(iter: &mut ByteIterator, separator: u8) -> Result<Str
 	loop {
 		match iter.peek() {
 			Some(s) if s == separator => return String::from_utf8(bytes).map_err(Error::from),
-			Some(b'\r') | Some(b'\n') | None => return String::from_utf8(bytes).map_err(Error::from),
+			Some(b'\r' | b'\n') | None => return String::from_utf8(bytes).map_err(Error::from),
 			Some(c) => {
 				bytes.push(c);
 				iter.advance();

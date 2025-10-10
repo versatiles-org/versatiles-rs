@@ -73,7 +73,7 @@ pub trait DataReaderTrait: Debug + Send + Sync {
 	///
 	/// # Arguments
 	///
-	/// * `range` - A ByteRange struct specifying the offset and length of the range to read.
+	/// * `range` - A `ByteRange` struct specifying the offset and length of the range to read.
 	///
 	/// # Returns
 	///

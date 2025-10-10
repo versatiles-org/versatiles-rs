@@ -2,9 +2,7 @@ use std::path::PathBuf;
 use uuid::Uuid;
 
 lazy_static::lazy_static! {
-	pub static ref DEFAULT_CACHE_DIR: PathBuf = std::env::var("VERSATILES_CACHE_DIR")
-		.map(PathBuf::from)
-		.unwrap_or_else(|_| std::env::temp_dir()).join(random_path());
+	pub static ref DEFAULT_CACHE_DIR: PathBuf = std::env::var("VERSATILES_CACHE_DIR").map_or_else(|_| std::env::temp_dir(), PathBuf::from).join(random_path());
 }
 
 #[derive(Clone, Debug)]
@@ -14,9 +12,11 @@ pub enum CacheType {
 }
 
 impl CacheType {
+	#[must_use] 
 	pub fn new_disk() -> Self {
 		Self::Disk(DEFAULT_CACHE_DIR.to_path_buf())
 	}
+	#[must_use] 
 	pub fn new_memory() -> Self {
 		Self::InMemory
 	}
@@ -43,8 +43,7 @@ mod tests {
 		let path = random_path();
 		assert!(
 			WildMatch::new("versatiles_????????_??????_????").matches(&path),
-			"random_path format is incorrect: {}",
-			path
+			"random_path format is incorrect: {path}"
 		);
 	}
 

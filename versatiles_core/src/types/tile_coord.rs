@@ -55,7 +55,7 @@ impl TileCoord {
 		ensure!(y >= -90., "y must be >= -90");
 		ensure!(y <= 90., "y must be <= 90");
 
-		let zoom: f64 = 2.0f64.powi(z as i32);
+		let zoom: f64 = 2.0f64.powi(i32::from(z));
 		let x = zoom * (x / 360.0 + 0.5);
 		let y = zoom * (0.5 - 0.5 * (y * PI32 / 360.0 + PI32 / 4.0).tan().ln() / PI32);
 
@@ -67,42 +67,48 @@ impl TileCoord {
 	}
 
 	/// Convert this tile coordinate to geographic longitude/latitude in degrees.
+	#[must_use] 
 	pub fn as_geo(&self) -> [f64; 2] {
-		let zoom: f64 = 2.0f64.powi(self.level as i32);
+		let zoom: f64 = 2.0f64.powi(i32::from(self.level));
 
 		[
-			((self.x as f64) / zoom - 0.5) * 360.0,
-			((PI32 * (1.0 - 2.0 * (self.y as f64) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
+			(f64::from(self.x) / zoom - 0.5) * 360.0,
+			((PI32 * (1.0 - 2.0 * f64::from(self.y) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
 		]
 	}
 
 	/// Return the geographic bounding box of this tile as `[west, south, east, north]`.
+	#[must_use] 
 	pub fn to_geo_bbox(&self) -> GeoBBox {
 		self.as_tile_bbox(1).unwrap().to_geo_bbox()
 	}
 
 	/// Serialize this coordinate to a compact JSON-like string `{x:…,y:…,z:…}`.
+	#[must_use] 
 	pub fn as_json(&self) -> String {
 		format!("{{x:{},y:{},z:{}}}", self.x, self.y, self.level)
 	}
 
 	/// Check whether `x` and `y` are within valid ranges for this zoom level.
+	#[must_use] 
 	pub fn is_valid(&self) -> bool {
 		if self.level > 30 {
 			return false;
-		};
-		let max = 2u32.pow(self.level as u32);
+		}
+		let max = 2u32.pow(u32::from(self.level));
 		(self.x < max) && (self.y < max)
 	}
 
 	/// Compute a linear sort index combining zoom and x/y for total ordering.
+	#[must_use] 
 	pub fn get_sort_index(&self) -> u64 {
-		let size = 2u64.pow(self.level as u32);
+		let size = 2u64.pow(u32::from(self.level));
 		let offset = (size * size - 1) / 3;
-		offset + size * self.y as u64 + self.x as u64
+		offset + size * u64::from(self.y) + u64::from(self.x)
 	}
 
 	/// Scale down the x/y indices by integer `factor`, keeping the same zoom level.
+	#[must_use] 
 	pub fn get_scaled_down(&self, factor: u32) -> TileCoord {
 		TileCoord {
 			level: self.level,
@@ -128,16 +134,17 @@ impl TileCoord {
 	/// Change this coordinate to a new zoom `level`, scaling x/y accordingly.
 	///
 	/// If `level` > current, x/y are multiplied; if lower, x/y are divided.
+	#[must_use] 
 	pub fn as_level(&self, level: u8) -> TileCoord {
 		if level > self.level {
-			let scale = 2u32.pow((level - self.level) as u32);
+			let scale = 2u32.pow(u32::from(level - self.level));
 			TileCoord {
 				x: self.x * scale,
 				y: self.y * scale,
 				level,
 			}
 		} else if level < self.level {
-			let scale = 2u32.pow((self.level - level) as u32);
+			let scale = 2u32.pow(u32::from(self.level - level));
 			TileCoord {
 				x: self.x / scale,
 				y: self.y / scale,
@@ -159,11 +166,12 @@ impl TileCoord {
 	}
 
 	pub fn shift_by(&mut self, dx: i64, dy: i64) {
-		let max_value = 2i64.pow(self.level as u32) - 1;
-		self.x = (self.x as i64 + dx).max(0).min(max_value) as u32;
-		self.y = (self.y as i64 + dy).max(0).min(max_value) as u32;
+		let max_value = 2i64.pow(u32::from(self.level)) - 1;
+		self.x = (i64::from(self.x) + dx).max(0).min(max_value) as u32;
+		self.y = (i64::from(self.y) + dy).max(0).min(max_value) as u32;
 	}
 
+	#[must_use] 
 	pub fn max_value(&self) -> u32 {
 		(1u32 << self.level) - 1
 	}

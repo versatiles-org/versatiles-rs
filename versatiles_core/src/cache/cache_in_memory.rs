@@ -59,7 +59,7 @@ mod tests {
 	use super::*;
 
 	fn v(s: &[&str]) -> Vec<String> {
-		s.iter().map(|b| b.to_string()).collect()
+		s.iter().map(|b| (*b).to_string()).collect()
 	}
 
 	#[test]

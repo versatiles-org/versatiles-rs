@@ -1,13 +1,13 @@
-//! This module defines the `TileJSON` struct, representing a TileJSON object and its fields.
+//! This module defines the `TileJSON` struct, representing a `TileJSON` object and its fields.
 //!
-//! A TileJSON can contain:
+//! A `TileJSON` can contain:
 //! - An optional geographic bounding box, `[west, south, east, north]`.
 //! - An optional geographic center, `[longitude, latitude, zoom_level]`.
-//! - Additional TileJSON key-value pairs in [`TileJsonValues`].
+//! - Additional `TileJSON` key-value pairs in [`TileJsonValues`].
 //! - A collection of vector layers defined in [`VectorLayers`].
 //!
 //! Methods are provided to parse from JSON, merge with other `TileJSON` objects,
-//! and validate according to the TileJSON 3.0.0 specification.
+//! and validate according to the `TileJSON` 3.0.0 specification.
 //!
 //! # Example
 //! ```rust
@@ -43,12 +43,12 @@ use std::fmt::Debug;
 use value::TileJsonValues;
 use vector_layer::VectorLayers;
 
-/// A struct representing a TileJSON object.
+/// A struct representing a `TileJSON` object.
 ///
 /// # Fields
 /// - `bounds`: An optional geographic bounding box (`[west, south, east, north]`).
 /// - `center`: An optional geographic center (`[lon, lat, zoom]`).
-/// - `values`: A flexible map of additional TileJSON key-value pairs.
+/// - `values`: A flexible map of additional `TileJSON` key-value pairs.
 /// - `vector_layers`: A structured set of vector layer definitions.
 #[derive(Clone, PartialEq, Default)]
 pub struct TileJSON {
@@ -129,6 +129,7 @@ impl TileJSON {
 	/// # let tj = TileJSON::default();
 	/// let json_obj = tj.as_object();
 	/// ```
+	#[must_use] 
 	pub fn as_object(&self) -> JsonObject {
 		let mut obj = JsonObject::default();
 		// Copy all `values` first
@@ -149,6 +150,7 @@ impl TileJSON {
 		obj
 	}
 
+	#[must_use] 
 	pub fn as_json_value(&self) -> JsonValue {
 		JsonValue::Object(self.as_object())
 	}
@@ -158,11 +160,13 @@ impl TileJSON {
 	// -------------------------------------------------------------------------
 
 	/// Returns a JSON string (pretty-printed) representing this `TileJSON`.
+	#[must_use] 
 	pub fn as_string(&self) -> String {
 		self.as_object().stringify()
 	}
 
 	/// Returns a `Blob` containing the JSON string representation.
+	#[must_use] 
 	pub fn as_blob(&self) -> Blob {
 		Blob::from(self.as_string())
 	}
@@ -202,11 +206,13 @@ impl TileJSON {
 	// -------------------------------------------------------------------------
 
 	/// Retrieves a `String` value from `self.values` by `key`, if present and a string.
+	#[must_use] 
 	pub fn get_string(&self, key: &str) -> Option<String> {
 		self.values.get_string(key)
 	}
 
 	/// Retrieves a string slice from `self.values` by `key`, if present and a string.
+	#[must_use] 
 	pub fn get_str(&self, key: &str) -> Option<&str> {
 		self.values.get_str(key)
 	}
@@ -353,7 +359,7 @@ impl TileJSON {
 	// Validation
 	// -------------------------------------------------------------------------
 
-	/// Validates basic fields according to the TileJSON 3.0.0 specification.
+	/// Validates basic fields according to the `TileJSON` 3.0.0 specification.
 	///
 	/// Checks:
 	/// - `"tilejson"` pattern `^[123]\.[012]\.[01]$`
@@ -457,10 +463,12 @@ impl TileJSON {
 	// -------------------------------------------------------------------------
 
 	/// Converts this `TileJSON` to a JSON string (synonym for [`Self::as_string`]).
+	#[must_use] 
 	pub fn stringify(&self) -> String {
 		self.as_string()
 	}
 
+	#[must_use] 
 	pub fn try_from_blob_or_default(blob: &Blob) -> TileJSON {
 		TileJSON::try_from(blob.as_str()).unwrap_or_else(|e| {
 			eprintln!("Failed to parse TileJSON: {e}");
@@ -536,7 +544,7 @@ impl Debug for TileJSON {
 mod tests {
 	use super::*;
 
-	/// Creates a minimal valid TileJSON object in the form of `JsonObject`.
+	/// Creates a minimal valid `TileJSON` object in the form of `JsonObject`.
 	fn make_test_json_object() -> JsonObject {
 		let mut obj = JsonObject::default();
 		// "tilejson" is required by the spec

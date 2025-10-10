@@ -68,7 +68,7 @@ where
 					if p[3] == 255 {
 						Rgb([p[0], p[1], p[2]])
 					} else {
-						let a = u16::from((p[3]));
+						let a = u16::from(p[3]);
 						let b = u16::from(255 - p[3]);
 						Rgb([
 							(((u16::from(p[0]) * a) + c[0] * b + 127) / 255) as u8,

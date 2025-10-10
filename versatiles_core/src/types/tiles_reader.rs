@@ -35,7 +35,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	/// Override the default tile compression for subsequent reads.
 	fn override_compression(&mut self, tile_compression: TileCompression);
 
-	/// Retrieve the TileJSON metadata for this tile set.
+	/// Retrieve the `TileJSON` metadata for this tile set.
 	fn tilejson(&self) -> &TileJSON;
 
 	/// Return the supported traversal order.
@@ -58,21 +58,21 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		let mut tn_read = 0;
 		let mut tn_write = 0;
 
-		for step in traversal_steps.iter() {
+		for step in &traversal_steps {
 			match step {
 				Push(bboxes_in, _) => {
-					tn_read += bboxes_in.iter().map(|b| b.count_tiles()).sum::<u64>();
+					tn_read += bboxes_in.iter().map(super::super::tile_bbox::TileBBox::count_tiles).sum::<u64>();
 				}
 				Pop(_, bbox_out) => {
 					tn_write += bbox_out.count_tiles();
 				}
 				Stream(bboxes_in, bbox_out) => {
-					tn_read += bboxes_in.iter().map(|b| b.count_tiles()).sum::<u64>();
+					tn_read += bboxes_in.iter().map(super::super::tile_bbox::TileBBox::count_tiles).sum::<u64>();
 					tn_write += bbox_out.count_tiles();
 				}
 			}
 		}
-		let progress = get_progress_bar("converting tiles", (tn_read + tn_write) / 2);
+		let progress = get_progress_bar("converting tiles", u64::midpoint(tn_read, tn_write));
 
 		let mut ti_read = 0;
 		let mut ti_write = 0;
@@ -105,7 +105,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 						.await
 						.into_iter()
 						.collect::<Result<Vec<_>>>()?;
-					ti_read += bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
+					ti_read += bboxes.iter().map(super::super::tile_bbox::TileBBox::count_tiles).sum::<u64>();
 				}
 				Pop(index, bbox) => {
 					log::trace!("Uncache {bbox:?} at index {index}");
@@ -129,11 +129,11 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 						}
 					});
 					callback(bbox, TileStream::from_streams(streams)).await?;
-					ti_read += bboxes.iter().map(|b| b.count_tiles()).sum::<u64>();
+					ti_read += bboxes.iter().map(super::super::tile_bbox::TileBBox::count_tiles).sum::<u64>();
 					ti_write += bbox.count_tiles();
 				}
 			}
-			progress.set_position((ti_read + ti_write) / 2);
+			progress.set_position(u64::midpoint(ti_read, ti_write));
 		}
 
 		progress.finish();
@@ -230,7 +230,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		let parameters = self.parameters();
 		let p = print.get_list("bbox_pyramid").await;
 		for level in parameters.bbox_pyramid.iter_levels() {
-			p.add_value(level).await
+			p.add_value(level).await;
 		}
 		print
 			.add_key_value("bbox", &format!("{:?}", parameters.bbox_pyramid.get_geo_bbox()))
@@ -310,11 +310,11 @@ mod tests {
 
 	#[async_trait]
 	impl TilesReaderTrait for TestReader {
-		fn source_name(&self) -> &str {
+		fn source_name(&self) -> &'static str {
 			"dummy"
 		}
 
-		fn container_name(&self) -> &str {
+		fn container_name(&self) -> &'static str {
 			"test container name"
 		}
 

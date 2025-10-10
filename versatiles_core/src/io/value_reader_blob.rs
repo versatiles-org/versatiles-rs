@@ -56,6 +56,7 @@ impl<E: ByteOrder> ValueReaderBlob<E> {
 	/// # Returns
 	///
 	/// * A new `ValueReaderBlob` instance.
+	#[must_use] 
 	pub fn new(blob: Blob) -> ValueReaderBlob<E> {
 		ValueReaderBlob {
 			_phantom: PhantomData,
@@ -75,6 +76,7 @@ impl ValueReaderBlob<LittleEndian> {
 	/// # Returns
 	///
 	/// * A new `ValueReaderBlob` instance with little-endian byte order.
+	#[must_use] 
 	pub fn new_le(blob: Blob) -> ValueReaderBlob<LittleEndian> {
 		ValueReaderBlob::new(blob)
 	}
@@ -90,6 +92,7 @@ impl ValueReaderBlob<BigEndian> {
 	/// # Returns
 	///
 	/// * A new `ValueReaderBlob` instance with big-endian byte order.
+	#[must_use] 
 	pub fn new_be(blob: Blob) -> ValueReaderBlob<BigEndian> {
 		ValueReaderBlob::new(blob)
 	}

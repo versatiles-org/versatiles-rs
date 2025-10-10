@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 /// A map storing string keys and their associated typed JSON values.
 ///
 /// By default, this map includes the key `"tilejson"` with a default value of
-/// `"3.0.0"`, mirroring a typical TileJSON requirement.
+/// `"3.0.0"`, mirroring a typical `TileJSON` requirement.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TileJsonValues(BTreeMap<String, TileJsonValue>);
 
@@ -40,7 +40,7 @@ impl TileJsonValues {
 
 	/// Returns a `u8` if this key exists as a byte variant, otherwise returns `None`.
 	pub fn get_byte(&self, key: &str) -> Option<u8> {
-		self.0.get(key).and_then(|v| v.get_byte())
+		self.0.get(key).and_then(TileJsonValue::get_byte)
 	}
 
 	/// Checks if the given `key` is either absent or references a list (`Vec<String>`).
@@ -91,7 +91,7 @@ impl TileJsonValues {
 	where
 		F: FnOnce(Option<u8>) -> u8,
 	{
-		let new_val = update(self.0.get(key).and_then(|v| v.get_byte()));
+		let new_val = update(self.0.get(key).and_then(TileJsonValue::get_byte));
 		self.0.insert(key.to_owned(), TileJsonValue::Byte(new_val));
 	}
 
@@ -196,7 +196,7 @@ impl TryFrom<&JsonValue> for TileJsonValue {
 			JsonValue::String(s) => Ok(TileJsonValue::String(s.to_owned())),
 			JsonValue::Array(a) => Ok(TileJsonValue::List(a.as_string_vec()?)),
 			JsonValue::Number(n) => {
-				ensure!((0.0..=255.0).contains(n), "Number out of byte range: {}", n);
+				ensure!((0.0..=255.0).contains(n), "Number out of byte range: {n}");
 				Ok(TileJsonValue::Byte(*n as u8))
 			}
 			_ => bail!("Invalid value type: only string, array, or byte allowed"),

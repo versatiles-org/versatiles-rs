@@ -24,6 +24,7 @@ impl TargetCompression {
 	/// # Returns
 	///
 	/// * `TargetCompression` instance.
+	#[must_use] 
 	pub fn from_set(compressions: EnumSet<TileCompression>) -> Self {
 		TargetCompression {
 			compressions,
@@ -42,6 +43,7 @@ impl TargetCompression {
 	/// # Returns
 	///
 	/// * `TargetCompression` instance.
+	#[must_use] 
 	pub fn from(compression: TileCompression) -> Self {
 		Self::from_set(EnumSet::only(compression))
 	}
@@ -54,6 +56,7 @@ impl TargetCompression {
 	/// # Returns
 	///
 	/// * `TargetCompression` instance.
+	#[must_use] 
 	pub fn from_none() -> Self {
 		Self::from(TileCompression::Uncompressed)
 	}
@@ -78,6 +81,7 @@ impl TargetCompression {
 	///
 	/// * `true` if the compression is allowed.
 	/// * `false` otherwise.
+	#[must_use] 
 	pub fn contains(&self, compression: TileCompression) -> bool {
 		self.compressions.contains(compression)
 	}

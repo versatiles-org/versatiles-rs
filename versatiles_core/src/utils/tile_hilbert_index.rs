@@ -5,14 +5,14 @@ use anyhow::{Result, bail};
 /// space‑filling curve**.
 ///
 /// A Hilbert curve maps the tile grid at a given zoom level to a single
-/// 64‑bit integer while largely preserving spatial locality.  
+/// 64‑bit integer while largely preserving spatial locality.\
 /// This is valuable for compact storage and range queries on tiled data.
 ///
 /// The trait is implemented for:
 /// * [`TileBBox`] – uses the south‑west corner of the bounding box.
 /// * [`TileCoord`] – a single `(z, x, y)` tile coordinate.
 ///
-/// Implementors must guarantee that  
+/// Implementors must guarantee that\
 /// `Self::from_hilbert_index(idx)?.get_hilbert_index()? == idx`.
 ///
 /// # Errors
@@ -79,9 +79,9 @@ impl HilbertIndex for TileCoord {
 /// traverses the curve iteratively while keeping an accumulator for the
 /// number of tiles contained in all previous zoom levels.
 fn coord_to_index(x: u32, y: u32, z: u8) -> Result<u64> {
-	let x = x as i64;
-	let y = y as i64;
-	let z = z as i64;
+	let x = i64::from(x);
+	let y = i64::from(y);
+	let z = i64::from(z);
 
 	if z >= 32 {
 		bail!("tile zoom exceeds 64-bit limit");
@@ -94,7 +94,7 @@ fn coord_to_index(x: u32, y: u32, z: u8) -> Result<u64> {
 
 	let mut acc = 0i64;
 	for t_z in 0..z {
-		acc += 1i64 << (t_z * 2)
+		acc += 1i64 << (t_z * 2);
 	}
 
 	let mut tx = x;
@@ -102,8 +102,8 @@ fn coord_to_index(x: u32, y: u32, z: u8) -> Result<u64> {
 	let mut d = 0i64;
 	let mut s = n / 2;
 	while s > 0 {
-		let rx = if (tx & s) > 0 { 1 } else { 0 };
-		let ry = if (ty & s) > 0 { 1 } else { 0 };
+		let rx = i64::from((tx & s) > 0);
+		let ry = i64::from((ty & s) > 0);
 		d += s * s * ((3 * rx) ^ ry);
 		rotate(s, &mut tx, &mut ty, rx, ry);
 		s /= 2;
@@ -167,7 +167,7 @@ fn index_to_coord(index: u64) -> Result<TileCoord> {
 				s *= 2;
 			}
 
-			return TileCoord::new(t_z, tx as u32, ty as u32);
+			return TileCoord::new(t_z, u32::try_from(tx)?, u32::try_from(ty)?);
 		}
 		acc += num_tiles;
 	}
@@ -279,8 +279,8 @@ mod tests {
 
 		for z in 0..31 {
 			let n = 1 << z;
-			let x = (pseudo_random(&mut r) * n as f64) as u32;
-			let y = (pseudo_random(&mut r) * n as f64) as u32;
+			let x = (pseudo_random(&mut r) * f64::from(n)) as u32;
+			let y = (pseudo_random(&mut r) * f64::from(n)) as u32;
 
 			let coord = index_to_coord(coord_to_index(x, y, z)?)?;
 			assert_eq!(coord.x, x);

@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, fmt::Debug};
 
 /// A collection of [`VectorLayer`]s keyed by their `id` string.
 ///
-/// Corresponds to the "vector_layers" array in the TileJSON specification:
+/// Corresponds to the "`vector_layers`" array in the `TileJSON` specification:
 /// <https://github.com/mapbox/tilejson-spec/tree/master/3.0.0#33-vector_layers>
 #[derive(Clone, Default, Debug, PartialEq)]
 pub struct VectorLayers(pub BTreeMap<String, VectorLayer>);
@@ -55,8 +55,8 @@ impl VectorLayers {
 
 			// Build the [`VectorLayer`] and insert into the map
 			let layer = VectorLayer {
-				description,
 				fields,
+				description,
 				minzoom,
 				maxzoom,
 			};
@@ -70,6 +70,7 @@ impl VectorLayers {
 	///
 	/// Returns `None` if the collection is empty, or `Some(JsonValue::Array(...))`
 	/// otherwise.
+	#[must_use] 
 	pub fn as_json_value_option(&self) -> Option<JsonValue> {
 		if self.0.is_empty() {
 			None
@@ -84,6 +85,7 @@ impl VectorLayers {
 	/// Each object contains:
 	/// - `"id"` (string),
 	/// - `"fields"`, `"description"`, `"minzoom"`, `"maxzoom"` if present in the layer
+	#[must_use] 
 	pub fn as_json_value(&self) -> JsonValue {
 		JsonValue::from(
 			self
@@ -100,10 +102,12 @@ impl VectorLayers {
 		)
 	}
 
+	#[must_use] 
 	pub fn contains_ids(&self, ids: &[&str]) -> bool {
 		ids.iter().all(|id| self.0.contains_key(*id))
 	}
 
+	#[must_use] 
 	pub fn get_tile_schema(&self) -> TileSchema {
 		if self.contains_ids(&[
 			"aerodrome_label",
@@ -158,7 +162,7 @@ impl VectorLayers {
 		}
 	}
 
-	/// Checks that all layers conform to the TileJSON 3.0.0 spec:
+	/// Checks that all layers conform to the `TileJSON` 3.0.0 spec:
 	///
 	/// - `id` is non-empty, <= 255 chars, alphanumeric.
 	/// - The layer itself passes [`VectorLayer::check`].
@@ -205,12 +209,14 @@ impl VectorLayers {
 	}
 
 	/// Returns a vector of all layer ids in this collection.
+	#[must_use] 
 	pub fn layer_ids(&self) -> Vec<String> {
 		self.0.keys().cloned().collect()
 	}
 
 	/// Finds a layer by its id.
 	/// Returns `None` if the layer does not exist.
+	#[must_use] 
 	pub fn find(&self, id: &str) -> Option<&VectorLayer> {
 		self.0.get(id)
 	}
@@ -233,7 +239,7 @@ impl FromIterator<(String, VectorLayer)> for VectorLayers {
 	}
 }
 
-/// Represents a single layer entry within "vector_layers" in the TileJSON spec.
+/// Represents a single layer entry within "`vector_layers`" in the `TileJSON` spec.
 ///
 /// Each layer has:
 /// - `fields`: A mapping from field names -> field types (both `String`).
@@ -255,6 +261,7 @@ impl VectorLayer {
 	/// - `"description"` (string, if present)
 	/// - `"minzoom"` (number, if present)
 	/// - `"maxzoom"` (number, if present)
+	#[must_use] 
 	pub fn as_json_object(&self) -> JsonObject {
 		let mut obj = JsonObject::default();
 
@@ -283,7 +290,7 @@ impl VectorLayer {
 		obj
 	}
 
-	/// Validates the layer according to the TileJSON 3.0.0 spec:
+	/// Validates the layer according to the `TileJSON` 3.0.0 spec:
 	///
 	/// - 3.3.2 fields: required; each key is non-empty, <= 255 chars, alphanumeric
 	/// - 3.3.3 description: optional

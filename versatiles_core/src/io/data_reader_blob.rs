@@ -47,11 +47,13 @@ pub struct DataReaderBlob {
 
 impl DataReaderBlob {
 	/// Returns the length of the data in the reader.
+	#[must_use] 
 	pub fn len(&self) -> usize {
 		self.blob.get_ref().len()
 	}
 
 	/// Checks if the reader is empty.
+	#[must_use] 
 	pub fn is_empty(&self) -> bool {
 		self.blob.get_ref().len() == 0
 	}
@@ -63,7 +65,7 @@ impl DataReaderTrait for DataReaderBlob {
 	///
 	/// # Arguments
 	///
-	/// * `range` - A ByteRange struct specifying the offset and length of the range to read.
+	/// * `range` - A `ByteRange` struct specifying the offset and length of the range to read.
 	///
 	/// # Returns
 	///
@@ -94,7 +96,7 @@ impl DataReaderTrait for DataReaderBlob {
 	/// # Returns
 	///
 	/// * A string slice representing the name of the data source.
-	fn get_name(&self) -> &str {
+	fn get_name(&self) -> &'static str {
 		"memory"
 	}
 }
@@ -115,37 +117,37 @@ impl Read for DataReaderBlob {
 }
 
 impl From<Box<DataWriterBlob>> for DataReaderBlob {
-	/// Creates a DataReaderBlob from a boxed DataWriterBlob.
+	/// Creates a `DataReaderBlob` from a boxed `DataWriterBlob`.
 	///
 	/// # Arguments
 	///
-	/// * `value` - A boxed DataWriterBlob.
+	/// * `value` - A boxed `DataWriterBlob`.
 	///
 	/// # Returns
 	///
-	/// * A new DataReaderBlob.
+	/// * A new `DataReaderBlob`.
 	fn from(value: Box<DataWriterBlob>) -> Self {
 		DataReaderBlob::from(value.into_blob())
 	}
 }
 
 impl From<DataWriterBlob> for DataReaderBlob {
-	/// Creates a DataReaderBlob from a DataWriterBlob.
+	/// Creates a `DataReaderBlob` from a `DataWriterBlob`.
 	///
 	/// # Arguments
 	///
-	/// * `value` - A DataWriterBlob.
+	/// * `value` - A `DataWriterBlob`.
 	///
 	/// # Returns
 	///
-	/// * A new DataReaderBlob.
+	/// * A new `DataReaderBlob`.
 	fn from(value: DataWriterBlob) -> Self {
 		DataReaderBlob::from(value.into_blob())
 	}
 }
 
 impl From<Blob> for DataReaderBlob {
-	/// Creates a DataReaderBlob from a Blob.
+	/// Creates a `DataReaderBlob` from a Blob.
 	///
 	/// # Arguments
 	///
@@ -153,7 +155,7 @@ impl From<Blob> for DataReaderBlob {
 	///
 	/// # Returns
 	///
-	/// * A new DataReaderBlob.
+	/// * A new `DataReaderBlob`.
 	fn from(value: Blob) -> Self {
 		DataReaderBlob {
 			blob: Cursor::new(value.into_vec()),
@@ -162,7 +164,7 @@ impl From<Blob> for DataReaderBlob {
 }
 
 impl From<Vec<u8>> for DataReaderBlob {
-	/// Creates a DataReaderBlob from a vector of bytes.
+	/// Creates a `DataReaderBlob` from a vector of bytes.
 	///
 	/// # Arguments
 	///
@@ -170,7 +172,7 @@ impl From<Vec<u8>> for DataReaderBlob {
 	///
 	/// # Returns
 	///
-	/// * A new DataReaderBlob.
+	/// * A new `DataReaderBlob`.
 	fn from(value: Vec<u8>) -> Self {
 		DataReaderBlob {
 			blob: Cursor::new(value),

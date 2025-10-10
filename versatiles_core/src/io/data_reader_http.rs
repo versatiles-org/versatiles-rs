@@ -81,7 +81,7 @@ impl DataReaderTrait for DataReaderHttp {
 	///
 	/// # Arguments
 	///
-	/// * `range` - A ByteRange struct specifying the offset and length of the range to read.
+	/// * `range` - A `ByteRange` struct specifying the offset and length of the range to read.
 	///
 	/// # Returns
 	///
@@ -142,7 +142,7 @@ impl DataReaderTrait for DataReaderHttp {
 
 		let bytes = response.bytes().await.with_context(ctx)?;
 
-		Ok(Blob::from(bytes.deref()))
+		Ok(Blob::from(&*bytes))
 
 		//.with_context(|| format!("while reading {} (range {range_val})", self.url))
 	}
@@ -160,7 +160,7 @@ impl DataReaderTrait for DataReaderHttp {
 			bail!("expected successful response, got {status}, {}", ctx());
 		}
 		let bytes = response.bytes().await.with_context(ctx)?;
-		Ok(Blob::from(bytes.deref()))
+		Ok(Blob::from(&*bytes))
 	}
 
 	/// Gets the name of the data source.
@@ -220,7 +220,7 @@ mod tests {
 			"format 3",
 		)
 		.await
-		.unwrap()
+		.unwrap();
 	}
 
 	#[tokio::test]

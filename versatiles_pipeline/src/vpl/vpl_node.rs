@@ -220,7 +220,7 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn test_vplnode_get_property() -> Result<()> {
+	fn test_vplnode_get_property() -> () {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_property(vec![("key1", "value1"), ("key2", "value2")]),
@@ -229,95 +229,101 @@ mod tests {
 		assert_eq!(node.get_property_vec("key1").unwrap(), &vec!["value1".to_string()]);
 		assert_eq!(node.get_property_vec("key2").unwrap(), &vec!["value2".to_string()]);
 		assert!(node.get_property_vec("key3").is_none());
-		Ok(())
 	}
 
 	#[test]
-	fn test_vplnode_get_property_string() -> Result<()> {
+	fn test_vplnode_get_property_string() -> () {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_property(vec![("key1", "value1")]),
 			sources: vec![],
 		};
-		assert_eq!(node.get_property_string_option("key1")?.unwrap(), "value1".to_string());
-		assert!(node.get_property_string_option("key2")?.is_none());
-		Ok(())
+		assert_eq!(
+			node.get_property_string_option("key1").unwrap().unwrap(),
+			"value1".to_string()
+		);
+		assert!(node.get_property_string_option("key2").unwrap().is_none());
 	}
 
 	#[test]
-	fn test_vplnode_get_property_string_req() -> Result<()> {
+	fn test_vplnode_get_property_string_req() -> () {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_property(vec![("key1", "value1")]),
 			sources: vec![],
 		};
-		assert_eq!(node.get_property_string_required("key1")?, "value1".to_string());
+		assert_eq!(node.get_property_string_required("key1").unwrap(), "value1".to_string());
 		assert!(node.get_property_string_required("key2").is_err());
-		Ok(())
 	}
 
 	#[test]
-	fn test_vplnode_get_property_bool_req() -> Result<()> {
+	fn test_vplnode_get_property_bool_req() -> () {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_property(vec![("key1", "true"), ("key2", "0")]),
 			sources: vec![],
 		};
-		assert!(node.get_property_bool_required("key1")?);
-		assert!(!node.get_property_bool_required("key2")?);
-		Ok(())
+		assert!(node.get_property_bool_required("key1").unwrap());
+		assert!(!node.get_property_bool_required("key2").unwrap());
 	}
 
 	#[test]
-	fn test_vplnode_get_property_number() -> Result<()> {
+	fn test_vplnode_get_property_number() -> () {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_property(vec![("key1", "42"), ("key2", "invalid")]),
 			sources: vec![],
 		};
-		assert_eq!(node.get_property_number_option::<i32>("key1")?.unwrap(), 42);
+		assert_eq!(node.get_property_number_option::<i32>("key1").unwrap().unwrap(), 42);
 		assert!(node.get_property_number_option::<i32>("key2").is_err());
-		assert!(node.get_property_number_option::<i32>("key3")?.is_none());
-		Ok(())
+		assert!(node.get_property_number_option::<i32>("key3").unwrap().is_none());
 	}
 
 	#[test]
-	fn test_vplnode_get_property_number_req() -> Result<()> {
+	fn test_vplnode_get_property_number_req() -> () {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_property(vec![("key1", "42")]),
 			sources: vec![],
 		};
-		assert_eq!(node.get_property_number_required::<i32>("key1")?, 42);
+		assert_eq!(node.get_property_number_required::<i32>("key1").unwrap(), 42);
 		assert!(node.get_property_number_required::<i32>("key2").is_err());
-		Ok(())
 	}
 
 	#[test]
-	fn test_vplnode_get_property_number_array4() -> Result<()> {
+	fn test_vplnode_get_property_number_array4() -> () {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_properties(vec![("key1", vec!["1", "2", "3", "4"])]),
 			sources: vec![],
 		};
 		assert_eq!(
-			node.get_property_number_array_option::<i32, 4>("key1")?.unwrap(),
+			node
+				.get_property_number_array_option::<i32, 4>("key1")
+				.unwrap()
+				.unwrap(),
 			[1, 2, 3, 4]
 		);
-		assert!(node.get_property_number_array_option::<i32, 4>("key2")?.is_none());
-		Ok(())
+		assert!(
+			node
+				.get_property_number_array_option::<i32, 4>("key2")
+				.unwrap()
+				.is_none()
+		);
 	}
 
 	#[test]
-	fn test_vplnode_get_property_number_array4_req() -> Result<()> {
+	fn test_vplnode_get_property_number_array4_req() -> () {
 		let node = VPLNode {
 			name: "node".to_string(),
 			properties: make_properties(vec![("key1", vec!["1", "2", "3", "4"])]),
 			sources: vec![],
 		};
-		assert_eq!(node.get_property_number_array_required::<i32, 4>("key1")?, [1, 2, 3, 4]);
-		assert!(node.get_property_number_array_required::<i32, 4>("key2").is_err());
-		Ok(())
+		assert_eq!(
+			node.get_property_number_array_required::<i32, 4>("key1").unwrap(),
+			[1, 2, 3, 4]
+		);
+		assert!(node.get_property_number_array_required::<i32, 4>("key2").is_err())
 	}
 
 	#[test]

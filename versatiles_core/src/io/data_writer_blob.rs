@@ -61,6 +61,7 @@ impl DataWriterBlob {
 	/// # Returns
 	///
 	/// * A byte slice of the data.
+	#[must_use] 
 	pub fn as_slice(&self) -> &[u8] {
 		self.writer.get_ref().as_slice()
 	}
@@ -70,6 +71,7 @@ impl DataWriterBlob {
 	/// # Returns
 	///
 	/// * A `Blob` containing the data.
+	#[must_use] 
 	pub fn into_blob(self) -> Blob {
 		Blob::from(self.writer.into_inner())
 	}
@@ -79,6 +81,7 @@ impl DataWriterBlob {
 	/// # Returns
 	///
 	/// * A `DataReaderBlob` instance.
+	#[must_use] 
 	pub fn into_reader(self) -> DataReaderBlob {
 		DataReaderBlob::from(self)
 	}
@@ -88,6 +91,7 @@ impl DataWriterBlob {
 	/// # Returns
 	///
 	/// * A `DataReaderBlob` instance.
+	#[must_use] 
 	pub fn to_reader(&self) -> DataReaderBlob {
 		DataReaderBlob::from(self.writer.get_ref().clone())
 	}
@@ -97,6 +101,7 @@ impl DataWriterBlob {
 	/// # Returns
 	///
 	/// * The length of the data in bytes.
+	#[must_use] 
 	pub fn len(&self) -> usize {
 		self.writer.get_ref().len()
 	}
@@ -106,6 +111,7 @@ impl DataWriterBlob {
 	/// # Returns
 	///
 	/// * `true` if the writer is empty, `false` otherwise.
+	#[must_use] 
 	pub fn is_empty(&self) -> bool {
 		self.writer.get_ref().len() == 0
 	}

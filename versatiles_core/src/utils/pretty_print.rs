@@ -54,9 +54,10 @@ pub struct PrettyPrint {
 }
 
 impl PrettyPrint {
+	#[must_use] 
 	pub fn new() -> Self {
 		Self {
-			prefix: String::from(""),
+			prefix: String::new(),
 			suffix: String::from("\n"),
 			printer: Arc::new(PrettyPrinter::new()),
 		}
@@ -137,7 +138,7 @@ fn get_formatted_value<V: Debug + ?Sized>(value: &V) -> ColoredString {
 
 fn format_integer<V: Debug + ?Sized>(value: &V) -> String {
 	let mut text = format!("{value:?}");
-	let mut formatted = String::from("");
+	let mut formatted = String::new();
 	while (text.len() > 3) && text.chars().nth_back(3).unwrap().is_numeric() {
 		let i = text.len() - 3;
 		formatted = String::from("_") + &text[i..] + &formatted;

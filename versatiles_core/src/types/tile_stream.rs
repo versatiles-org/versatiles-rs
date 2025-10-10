@@ -74,6 +74,7 @@ where
 	/// Creates a `TileStream` containing no items.
 	///
 	/// Useful for representing an empty data source.
+	#[must_use] 
 	pub fn new_empty() -> TileStream<'a, T> {
 		TileStream {
 			inner: stream::empty().boxed(),
@@ -93,6 +94,7 @@ where
 	/// ]);
 	/// let my_stream = TileStream::from_stream(tile_data.boxed());
 	/// ```
+	#[must_use] 
 	pub fn from_stream(stream: Pin<Box<dyn Stream<Item = (TileCoord, T)> + Send + 'a>>) -> Self {
 		TileStream { inner: stream }
 	}
@@ -110,6 +112,7 @@ where
 	/// ];
 	/// let tile_stream = TileStream::from_vec(tile_data);
 	/// ```
+	#[must_use] 
 	pub fn from_vec(vec: Vec<(TileCoord, T)>) -> Self {
 		TileStream {
 			inner: stream::iter(vec).boxed(),
@@ -911,7 +914,7 @@ mod tests {
 
 		let items = filtered.to_vec().await;
 		let mut texts = items.iter().map(|(_, b)| b.as_str()).collect::<Vec<_>>();
-		texts.sort();
+		texts.sort_unstable();
 		assert_eq!(texts, ["kept-keep0", "kept-keep2"]);
 	}
 

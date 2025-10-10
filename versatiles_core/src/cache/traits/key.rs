@@ -13,7 +13,7 @@ impl CacheKey for String {
 
 impl CacheKey for &str {
 	fn to_cache_key(&self) -> String {
-		self.to_string()
+		(*self).to_string()
 	}
 }
 
@@ -86,6 +86,6 @@ mod tests {
 	#[case(27, 9, 11, "27,000000009,000000011")]
 	#[case(30, 9, 11, "30,0000000009,0000000011")]
 	fn works_with_tilecoord(#[case] level: u8, #[case] x: u32, #[case] y: u32, #[case] expected: &str) {
-		assert_eq!(TileCoord { level, x, y }.to_cache_key(), expected);
+		assert_eq!(TileCoord { x, y, level }.to_cache_key(), expected);
 	}
 }

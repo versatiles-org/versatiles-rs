@@ -62,7 +62,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 		let mut shift = 0;
 		loop {
 			let byte = self.get_reader().read_u8()?;
-			value |= ((byte as u64) & 0x7F) << shift;
+			value |= (u64::from(byte) & 0x7F) << shift;
 			if byte & 0x80 == 0 {
 				break;
 			}

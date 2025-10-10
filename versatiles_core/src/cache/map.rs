@@ -17,6 +17,7 @@ pub enum CacheMap<K: CacheKey, V: CacheValue> {
 }
 
 impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
+	#[must_use] 
 	pub fn new(config: Arc<Config>) -> Self {
 		match &config.cache_type {
 			CacheType::InMemory => Self::Memory(InMemoryCache::new()),
@@ -82,8 +83,8 @@ impl<K: CacheKey, V: CacheValue> Drop for CacheMap<K, V> {
 impl<K: CacheKey, V: CacheValue> Debug for CacheMap<K, V> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			Self::Memory(cache) => write!(f, "CacheMap::Memory({:?})", cache),
-			Self::Disk(cache) => write!(f, "CacheMap::Disk({:?})", cache),
+			Self::Memory(cache) => write!(f, "CacheMap::Memory({cache:?})"),
+			Self::Disk(cache) => write!(f, "CacheMap::Disk({cache:?})"),
 		}
 	}
 }

@@ -53,6 +53,7 @@ impl<'a, E: ByteOrder> ValueReaderSlice<'a, E> {
 	/// # Returns
 	///
 	/// * A new `ValueReaderSlice` instance.
+	#[must_use] 
 	pub fn new(slice: &'a [u8]) -> ValueReaderSlice<'a, E> {
 		ValueReaderSlice {
 			_phantom: PhantomData,
@@ -72,6 +73,7 @@ impl<'a> ValueReaderSlice<'a, LittleEndian> {
 	/// # Returns
 	///
 	/// * A new `ValueReaderSlice` instance with little-endian byte order.
+	#[must_use] 
 	pub fn new_le(slice: &'a [u8]) -> ValueReaderSlice<'a, LittleEndian> {
 		ValueReaderSlice::new(slice)
 	}
@@ -87,6 +89,7 @@ impl<'a> ValueReaderSlice<'a, BigEndian> {
 	/// # Returns
 	///
 	/// * A new `ValueReaderSlice` instance with big-endian byte order.
+	#[must_use] 
 	pub fn new_be(slice: &'a [u8]) -> ValueReaderSlice<'a, BigEndian> {
 		ValueReaderSlice::new(slice)
 	}

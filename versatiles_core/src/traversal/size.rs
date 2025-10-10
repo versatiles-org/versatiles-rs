@@ -8,7 +8,7 @@ use versatiles_derive::context;
 
 /// Represents allowed sizes of a block of tiles
 /// The size is represented as log2(size).
-/// For example, TraversalSize { max: 6 } represents block of sizes up to 64 tiles.
+/// For example, `TraversalSize` { max: 6 } represents block of sizes up to 64 tiles.
 #[derive(Clone, PartialEq)]
 pub struct TraversalSize {
 	min: u8,
@@ -32,6 +32,7 @@ impl TraversalSize {
 	}
 
 	/// Return a default `TraversalSize` covering the full range of valid sizes (1 to 2^31).
+	#[must_use] 
 	pub const fn new_default() -> Self {
 		TraversalSize { min: 0, max: 20 }
 	}
@@ -42,6 +43,7 @@ impl TraversalSize {
 	}
 
 	/// Check whether the size range is empty (min > max).
+	#[must_use] 
 	pub fn is_empty(&self) -> bool {
 		self.min > self.max
 	}
@@ -108,7 +110,7 @@ impl std::fmt::Debug for TraversalSize {
 fn size_to_bits(size: u32) -> Result<u8> {
 	ensure!(size > 0, "Size must be greater than zero");
 	ensure!(size.is_power_of_two(), "Size must be a power of two, but is {size}");
-	let bits = (size as f64).log2().floor() as u8;
+	let bits = f64::from(size).log2().floor() as u8;
 	ensure!(bits < 32, "Size {size} is too large");
 	Ok(bits)
 }
@@ -119,7 +121,7 @@ mod tests {
 	use anyhow::Result;
 
 	fn extract_error_lines<T: std::fmt::Debug>(result: anyhow::Result<T>) -> Vec<String> {
-		result.unwrap_err().chain().map(|e| e.to_string()).collect::<Vec<_>>()
+		result.unwrap_err().chain().map(std::string::ToString::to_string).collect::<Vec<_>>()
 	}
 
 	#[test]

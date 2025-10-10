@@ -64,6 +64,7 @@ impl Blob {
 	/// assert_eq!(empty_blob.len(), 0);
 	/// assert!(empty_blob.is_empty());
 	/// ```
+	#[must_use] 
 	pub fn new_empty() -> Blob {
 		Blob(Vec::new())
 	}
@@ -87,6 +88,7 @@ impl Blob {
 	/// assert_eq!(blob.len(), 5);
 	/// assert_eq!(blob.as_slice(), &[0, 0, 0, 0, 0]);
 	/// ```
+	#[must_use] 
 	pub fn new_sized(length: usize) -> Blob {
 		Blob(vec![0u8; length])
 	}
@@ -114,6 +116,7 @@ impl Blob {
 	/// let slice = blob.get_range(1..4);
 	/// assert_eq!(slice, &[20, 30, 40]);
 	/// ```
+	#[must_use] 
 	pub fn get_range(&self, range: Range<usize>) -> &[u8] {
 		&self.0[range]
 	}
@@ -159,6 +162,7 @@ impl Blob {
 	/// let blob = Blob::from("hello");
 	/// assert_eq!(blob.as_slice(), b"hello");
 	/// ```
+	#[must_use] 
 	pub fn as_slice(&self) -> &[u8] {
 		self.0.as_ref()
 	}
@@ -190,6 +194,7 @@ impl Blob {
 	/// let vec = blob.into_vec();
 	/// assert_eq!(vec, vec![1, 2, 3]);
 	/// ```
+	#[must_use] 
 	pub fn into_vec(self) -> Vec<u8> {
 		self.0
 	}
@@ -208,6 +213,7 @@ impl Blob {
 	/// let blob = Blob::from("Xylofön");
 	/// assert_eq!(blob.as_str(), "Xylofön");
 	/// ```
+	#[must_use] 
 	pub fn as_str(&self) -> &str {
 		std::str::from_utf8(&self.0).expect("Blob content was not valid UTF-8")
 	}
@@ -227,6 +233,7 @@ impl Blob {
 	/// let s = blob.into_string();
 	/// assert_eq!(s, "Hello");
 	/// ```
+	#[must_use] 
 	pub fn into_string(self) -> String {
 		String::from_utf8(self.0).expect("Blob content was not valid UTF-8")
 	}
@@ -241,6 +248,7 @@ impl Blob {
 	/// let blob = Blob::from(&[0xDE, 0xAD, 0xBE, 0xEF]);
 	/// assert_eq!(blob.as_hex(), "de ad be ef");
 	/// ```
+	#[must_use] 
 	pub fn as_hex(&self) -> String {
 		self
 			.0
@@ -260,6 +268,7 @@ impl Blob {
 	/// let blob = Blob::from("Hello");
 	/// assert_eq!(blob.len(), 5);
 	/// ```
+	#[must_use] 
 	pub fn len(&self) -> u64 {
 		self.0.len() as u64
 	}
@@ -274,6 +283,7 @@ impl Blob {
 	/// let blob = Blob::new_empty();
 	/// assert!(blob.is_empty());
 	/// ```
+	#[must_use] 
 	pub fn is_empty(&self) -> bool {
 		self.0.is_empty()
 	}
@@ -511,7 +521,7 @@ mod tests {
 	#[test]
 	fn empty() {
 		// Create an empty string
-		let text = String::from("");
+		let text = String::new();
 
 		// Assert that a Blob can be created from the empty string and correctly identified as empty
 		assert!(Blob::from(&text).is_empty());

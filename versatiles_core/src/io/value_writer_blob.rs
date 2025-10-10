@@ -45,6 +45,7 @@ impl<E: ByteOrder> ValueWriterBlob<E> {
 	/// # Returns
 	///
 	/// * A new `ValueWriterBlob` instance.
+	#[must_use] 
 	pub fn new() -> ValueWriterBlob<E> {
 		ValueWriterBlob {
 			_phantom: PhantomData,
@@ -57,6 +58,7 @@ impl<E: ByteOrder> ValueWriterBlob<E> {
 	/// # Returns
 	///
 	/// * A `Blob` containing the written data.
+	#[must_use] 
 	pub fn into_blob(self) -> Blob {
 		Blob::from(self.cursor.into_inner())
 	}
@@ -68,6 +70,7 @@ impl ValueWriterBlob<LittleEndian> {
 	/// # Returns
 	///
 	/// * A new `ValueWriterBlob` instance with little-endian byte order.
+	#[must_use] 
 	pub fn new_le() -> ValueWriterBlob<LittleEndian> {
 		ValueWriterBlob::new()
 	}
@@ -79,6 +82,7 @@ impl ValueWriterBlob<BigEndian> {
 	/// # Returns
 	///
 	/// * A new `ValueWriterBlob` instance with big-endian byte order.
+	#[must_use] 
 	pub fn new_be() -> ValueWriterBlob<BigEndian> {
 		ValueWriterBlob::new()
 	}

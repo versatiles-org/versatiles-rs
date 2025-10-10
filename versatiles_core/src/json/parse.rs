@@ -26,9 +26,9 @@ pub fn parse_json_iter(iter: &mut ByteIterator) -> Result<JsonValue> {
 		b'{' => parse_json_object(iter),
 		b'"' => parse_quoted_json_string(iter).map(JsonValue::String),
 		d if d.is_ascii_digit() || d == b'.' || d == b'-' => parse_number_as::<f64>(iter).map(JsonValue::Number),
-		b't' => parse_tag(iter, "true").map(|_| JsonValue::Boolean(true)),
-		b'f' => parse_tag(iter, "false").map(|_| JsonValue::Boolean(false)),
-		b'n' => parse_tag(iter, "null").map(|_| JsonValue::Null),
+		b't' => parse_tag(iter, "true").map(|()| JsonValue::Boolean(true)),
+		b'f' => parse_tag(iter, "false").map(|()| JsonValue::Boolean(false)),
+		b'n' => parse_tag(iter, "null").map(|()| JsonValue::Null),
 		c => Err(iter.format_error(&format!("unexpected character '{}'", c as char))),
 	}
 }
@@ -61,7 +61,7 @@ mod tests {
 
 	#[test]
 	fn simple() {
-		let data = r##"{"users":{"user1":{"city":"Nantes","country":"France"},"user2":{"city":"Bruxelles","country":"Belgium"},"user3":{"city":"Paris","country":"France","age":30}},"countries":["France","Belgium"]}"##;
+		let data = r#"{"users":{"user1":{"city":"Nantes","country":"France"},"user2":{"city":"Bruxelles","country":"Belgium"},"user3":{"city":"Paris","country":"France","age":30}},"countries":["France","Belgium"]}"#;
 		let json = parse_json_str(data).unwrap();
 		assert_eq!(
 			json,
@@ -84,7 +84,7 @@ mod tests {
 
 	#[test]
 	fn error() {
-		let data = r##"{"city":"Nantes","country","France"}"##;
+		let data = r#"{"city":"Nantes","country","France"}"#;
 		let json = parse_json_str(data);
 		assert_eq!(
 			json.unwrap_err().chain().next_back().unwrap().to_string(),
@@ -106,7 +106,7 @@ mod tests {
 			]),
 		)]);
 
-		let data = r##"_{_"a"_:_[_{_"b"_:_7_,_"c"_:_true_}_,_{_"d"_:_false_,_"e"_:_null_,_"f"_:_"g"_}_]_}_"##;
+		let data = r#"_{_"a"_:_[_{_"b"_:_7_,_"c"_:_true_}_,_{_"d"_:_false_,_"e"_:_null_,_"f"_:_"g"_}_]_}_"#;
 
 		assert_eq!(parse_json_str(&data.replace('_', ""))?, result);
 		assert_eq!(parse_json_str(&data.replace('_', " "))?, result);
@@ -137,37 +137,37 @@ mod tests {
 
 	#[test]
 	fn test_nested_object() {
-		let json = parse_json_str(r##"{"a": {"b": {"c": "d"}}}"##).unwrap();
+		let json = parse_json_str(r#"{"a": {"b": {"c": "d"}}}"#).unwrap();
 		assert_eq!(json, v(vec![("a", v(vec![("b", v(vec![("c", v("d"))]))]))]));
 	}
 
 	#[test]
 	fn test_null_value() {
-		let json = parse_json_str(r##"{"key": null}"##).unwrap();
+		let json = parse_json_str(r#"{"key": null}"#).unwrap();
 		assert_eq!(json, v(vec![("key", JsonValue::Null)]));
 	}
 
 	#[test]
 	fn test_boolean_value() {
-		let json = parse_json_str(r##"{"key1": true, "key2": false}"##).unwrap();
+		let json = parse_json_str(r#"{"key1": true, "key2": false}"#).unwrap();
 		assert_eq!(json, v(vec![("key1", v(true)), ("key2", v(false))]));
 	}
 
 	#[test]
 	fn test_number_value() {
-		let json = parse_json_str(r##"{"integer": 42, "float": 23.42}"##).unwrap();
+		let json = parse_json_str(r#"{"integer": 42, "float": 23.42}"#).unwrap();
 		assert_eq!(json, v(vec![("integer", v(42.0)), ("float", v(23.42))]));
 	}
 
 	#[test]
 	fn test_string_value() {
-		let json = parse_json_str(r##"{"key": "value"}"##).unwrap();
+		let json = parse_json_str(r#"{"key": "value"}"#).unwrap();
 		assert_eq!(json, v(vec![("key", v("value"))]));
 	}
 
 	#[test]
 	fn test_invalid_json_missing_colon() {
-		let json = parse_json_str(r##"{"key" "value"}"##);
+		let json = parse_json_str(r#"{"key" "value"}"#);
 		assert_eq!(
 			json.unwrap_err().chain().next_back().unwrap().to_string(),
 			"expected ':' at position 8: {\"key\" \""
@@ -176,7 +176,7 @@ mod tests {
 
 	#[test]
 	fn test_invalid_json_unclosed_brace() {
-		let json = parse_json_str(r##"{"key": "value""##);
+		let json = parse_json_str(r#"{"key": "value""#);
 		assert_eq!(
 			json.unwrap_err().chain().next_back().unwrap().to_string(),
 			"unexpected end at position 15: {\"key\": \"value\"<EOF>"
@@ -185,7 +185,7 @@ mod tests {
 
 	#[test]
 	fn test_invalid_json_unclosed_bracket() {
-		let json = parse_json_str(r##"["key", "value""##);
+		let json = parse_json_str(r#"["key", "value""#);
 		assert_eq!(
 			json.unwrap_err().chain().next_back().unwrap().to_string(),
 			"unexpected end at position 15: [\"key\", \"value\"<EOF>"
