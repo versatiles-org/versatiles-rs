@@ -104,20 +104,20 @@ jobs:
 
       - name: Run test /
         run: cargo test --workspace --all-features --all-targets
-      - name: Run test /versatiles
-        run: cd versatiles; cargo test --all-features --all-targets
-      - name: Run test /versatiles_container
-        run: cd versatiles_container; cargo test --all-features --all-targets
-      - name: Run test /versatiles_core
-        run: cd versatiles_core; cargo test --all-features --all-targets
-      - name: Run test /versatiles_derive
-        run: cd versatiles_derive; cargo test --all-features --all-targets
-      - name: Run test /versatiles_geometry
-        run: cd versatiles_geometry; cargo test --all-features --all-targets
-      - name: Run test /versatiles_image
-        run: cd versatiles_image; cargo test --all-features --all-targets
-      - name: Run test /versatiles_pipeline
-        run: cd versatiles_pipeline; cargo test --all-features --all-targets
+#      - name: Run test /versatiles
+#        run: cd versatiles; cargo test --all-features --all-targets
+#      - name: Run test /versatiles_container
+#        run: cd versatiles_container; cargo test --all-features --all-targets
+#      - name: Run test /versatiles_core
+#        run: cd versatiles_core; cargo test --all-features --all-targets
+#      - name: Run test /versatiles_derive
+#        run: cd versatiles_derive; cargo test --all-features --all-targets
+#      - name: Run test /versatiles_geometry
+#        run: cd versatiles_geometry; cargo test --all-features --all-targets
+#      - name: Run test /versatiles_image
+#        run: cd versatiles_image; cargo test --all-features --all-targets
+#      - name: Run test /versatiles_pipeline
+#        run: cd versatiles_pipeline; cargo test --all-features --all-targets
 
       - name: Install Cargo Coverage
         uses: taiki-e/install-action@cargo-llvm-cov

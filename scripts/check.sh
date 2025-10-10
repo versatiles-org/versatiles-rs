@@ -50,12 +50,12 @@ run_test() {
 }
 
 run_test /
-run_test /versatiles
-run_test /versatiles_container
-run_test /versatiles_core
-run_test /versatiles_derive
-run_test /versatiles_geometry
-run_test /versatiles_image
-run_test /versatiles_pipeline
+# run_test /versatiles
+# run_test /versatiles_container
+# run_test /versatiles_core
+# run_test /versatiles_derive
+# run_test /versatiles_geometry
+# run_test /versatiles_image
+# run_test /versatiles_pipeline
 
 exit 0
