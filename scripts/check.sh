@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")/.."
+PROJECT_DIR=$(pwd)
 
 # Load GDAL environment variables
 source scripts/gdal-build-env.sh
 
-PROJECT_DIR=$(pwd)
 
 set +e
 
@@ -22,40 +22,28 @@ if [ $? -ne 0 ]; then
    exit 1
 fi
 
-echo "cargo clippy:"
-
-run_clippy() {
-   cd "${PROJECT_DIR}"
-   result=$(cargo clippy --workspace --all-features --all-targets -- -D warnings 2>&1)
-   if [ $? -ne 0 ]; then
-      echo -e "$result\nERROR DURING: cargo clippy"
-      exit 1
-   fi
-}
-
-run_clippy /
+echo "cargo clippy"
 cd $PROJECT_DIR
+result=$(cargo clippy --workspace --all-features --all-targets -- -D warnings 2>&1)
+if [ $? -ne 0 ]; then
+   echo -e "$result\nERROR DURING: cargo clippy"
+   exit 1
+fi
 
+echo "cargo test"
+cd $PROJECT_DIR
+result=$(cargo test 2>&1)
+if [ $? -ne 0 ]; then
+   echo -e "$result\nERROR DURING: cargo test"
+   exit 1
+fi
 
-echo "cargo test:"
-
-run_test() {
-   cd "${PROJECT_DIR}$1"
-   echo "  $1"
-   result=$(cargo test --all-features 2>&1)
-   if [ $? -ne 0 ]; then
-      echo -e "$result\nERROR DURING: cargo test $1"
-      exit 1
-   fi
-}
-
-run_test /
-# run_test /versatiles
-# run_test /versatiles_container
-# run_test /versatiles_core
-# run_test /versatiles_derive
-# run_test /versatiles_geometry
-# run_test /versatiles_image
-# run_test /versatiles_pipeline
+echo "cargo test all features"
+cd $PROJECT_DIR
+result=$(cargo test --all-features 2>&1)
+if [ $? -ne 0 ]; then
+   echo -e "$result\nERROR DURING: cargo test all features"
+   exit 1
+fi
 
 exit 0
