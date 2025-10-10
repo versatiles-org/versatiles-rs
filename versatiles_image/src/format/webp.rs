@@ -1,4 +1,4 @@
-use crate::traits::*;
+use crate::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 use anyhow::{Result, anyhow, bail};
 use image::{DynamicImage, ImageFormat, codecs::webp::WebPEncoder, load_from_memory_with_format};
 use std::vec;
@@ -11,7 +11,7 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 
 	if (image.channel_count() != 3) && (image.channel_count() != 4) {
 		bail!("webp only supports RGB or RGBA images");
-	};
+	}
 
 	let mut image_ref = image;
 	#[allow(unused_assignments)]
@@ -38,7 +38,7 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 		let encoder = webp::Encoder::from_image(image_ref).map_err(|e| anyhow!("{e}"))?;
 		Ok(Blob::from(
 			encoder
-				.encode_simple(false, quality as f32)
+				.encode_simple(false, f32::from(quality))
 				.map_err(|e| anyhow!("{e:?}"))?
 				.to_vec(),
 		))

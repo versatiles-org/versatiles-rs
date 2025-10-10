@@ -8,6 +8,7 @@ pub struct TileOutline {
 }
 
 impl TileOutline {
+	#[must_use] 
 	pub fn new() -> Self {
 		Self { polygons: Vec::new() }
 	}
@@ -37,10 +38,12 @@ impl TileOutline {
 		self.add_geo_bbox(&coord.to_geo_bbox());
 	}
 
+	#[must_use] 
 	pub fn to_multi_polygon(&self) -> MultiPolygon<f64> {
 		unary_union(&self.polygons)
 	}
 
+	#[must_use] 
 	pub fn to_json_string(&self) -> String {
 		let multi_polygon = self.to_multi_polygon();
 		let obj = GeoFeature::from(multi_polygon).to_json();

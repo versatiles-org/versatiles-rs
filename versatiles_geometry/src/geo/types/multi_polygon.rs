@@ -1,4 +1,4 @@
-use super::*;
+use super::{PolygonGeometry, GeometryTrait, CompositeGeometryTrait};
 use anyhow::Result;
 use std::fmt::Debug;
 use versatiles_core::json::JsonValue;
@@ -8,7 +8,7 @@ pub struct MultiPolygonGeometry(pub Vec<PolygonGeometry>);
 
 impl GeometryTrait for MultiPolygonGeometry {
 	fn area(&self) -> f64 {
-		self.0.iter().map(|p| p.area()).sum()
+		self.0.iter().map(super::traits::GeometryTrait::area).sum()
 	}
 
 	fn verify(&self) -> Result<()> {
@@ -19,7 +19,7 @@ impl GeometryTrait for MultiPolygonGeometry {
 	}
 
 	fn to_coord_json(&self) -> JsonValue {
-		JsonValue::from(self.0.iter().map(|c| c.to_coord_json()).collect::<Vec<_>>())
+		JsonValue::from(self.0.iter().map(super::traits::GeometryTrait::to_coord_json).collect::<Vec<_>>())
 	}
 }
 

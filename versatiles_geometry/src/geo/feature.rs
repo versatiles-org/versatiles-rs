@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use super::*;
+use super::{GeoValue, Geometry, GeoProperties, CompositeGeometryTrait};
 use std::fmt::Debug;
 use versatiles_core::json::{JsonObject, JsonValue};
 
@@ -12,6 +12,7 @@ pub struct GeoFeature {
 }
 
 impl GeoFeature {
+	#[must_use] 
 	pub fn new(geometry: Geometry) -> Self {
 		Self {
 			id: None,
@@ -35,6 +36,7 @@ impl GeoFeature {
 		self.properties.insert(key, GeoValue::from(value));
 	}
 
+	#[must_use] 
 	pub fn to_json(&self) -> JsonObject {
 		let mut json = JsonObject::new();
 		json.set("type", JsonValue::from("Feature"));

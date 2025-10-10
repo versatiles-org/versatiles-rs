@@ -63,17 +63,17 @@ where
 		}
 		match self {
 			DynamicImage::ImageRgba8(img) => {
-				let c = [color[0] as u16, color[1] as u16, color[2] as u16];
+				let c = [u16::from(color[0]), u16::from(color[1]), u16::from(color[2])];
 				Ok(DynamicImage::from(map_colors(&img, |p| {
 					if p[3] == 255 {
 						Rgb([p[0], p[1], p[2]])
 					} else {
-						let a = (p[3]) as u16;
-						let b = (255 - p[3]) as u16;
+						let a = u16::from((p[3]));
+						let b = u16::from(255 - p[3]);
 						Rgb([
-							(((p[0] as u16 * a) + c[0] * b + 127) / 255) as u8,
-							(((p[1] as u16 * a) + c[1] * b + 127) / 255) as u8,
-							(((p[2] as u16 * a) + c[2] * b + 127) / 255) as u8,
+							(((u16::from(p[0]) * a) + c[0] * b + 127) / 255) as u8,
+							(((u16::from(p[1]) * a) + c[1] * b + 127) / 255) as u8,
+							(((u16::from(p[2]) * a) + c[2] * b + 127) / 255) as u8,
 						])
 					}
 				})))

@@ -246,13 +246,13 @@ mod tests {
 			let file = make_test_tar(compression_tar).await;
 			let mut tar_file = TarFile::from(&file)?;
 
-			test2(&mut tar_file, &compression_tar, N).await?;
-			test2(&mut tar_file, &compression_tar, G).await?;
-			test2(&mut tar_file, &compression_tar, B).await?;
+			test2(&mut tar_file, &compression_tar, N)?;
+			test2(&mut tar_file, &compression_tar, G)?;
+			test2(&mut tar_file, &compression_tar, B)?;
 
 			return Ok(());
 
-			async fn test2(
+			fn test2(
 				tar_file: &mut TarFile,
 				compression_tar: &TileCompression,
 				compression_accept: TileCompression,

@@ -27,7 +27,7 @@ fn benchmark_read_csv_iter(c: &mut Criterion) {
 				}
 			},
 			BatchSize::NumIterations(1),
-		)
+		);
 	});
 }
 

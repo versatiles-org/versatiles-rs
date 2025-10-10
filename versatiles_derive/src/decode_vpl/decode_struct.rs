@@ -44,12 +44,8 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 			.to_string();
 
 		if field_str == "sources" {
-			if doc_sources.is_some() {
-				panic!("'sources' are already defined: {doc_sources:?}")
-			}
-			if field_type_str != "Vec<VPLPipeline>" {
-				panic!("type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'")
-			}
+			assert!(doc_sources.is_none(), "'sources' are already defined: {doc_sources:?}");
+			assert!((field_type_str == "Vec<VPLPipeline>"), "type of 'sources' must be 'Vec<VPLPipeline>', but is '{field_type_str}'");
 			doc_sources = Some(format!("### Sources:\n{comment}"));
 			parser_fields.push(quote! { sources: node.sources.clone() });
 		} else {
@@ -117,7 +113,7 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 	}
 
 	let doc_fields = if doc_fields.is_empty() {
-		String::from("")
+		String::new()
 	} else {
 		format!("### Parameters:\n{}", doc_fields.join("\n"))
 	};
@@ -167,8 +163,8 @@ mod tests {
 
 	fn pretty_tokens(ts: proc_macro2::TokenStream) -> Vec<String> {
 		prettyplease::unparse(&syn::parse_file(&ts.to_string()).unwrap())
-			.split("\n")
-			.map(|s| s.to_string())
+			.split('\n')
+			.map(std::string::ToString::to_string)
 			.collect()
 	}
 
@@ -353,7 +349,7 @@ mod tests {
 					"}",
 					""
 				]
-			)
+			);
 		}
 	}
 

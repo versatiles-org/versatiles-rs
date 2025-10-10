@@ -1,4 +1,4 @@
-use crate::geo::*;
+use crate::geo::{CompositeGeometryTrait, GeoValue, GeoProperties};
 use anyhow::{Context, Result, anyhow, ensure};
 use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Div};
 
@@ -61,7 +61,7 @@ where
 	T: Clone + Debug + Eq + Hash + From<String>,
 {
 	fn from(value: &[&str]) -> Self {
-		VTLPMap::new(value.iter().map(|v| T::from(v.to_string())).collect())
+		VTLPMap::new(value.iter().map(|v| T::from((*v).to_string())).collect())
 	}
 }
 
@@ -145,7 +145,7 @@ impl PropertyManager {
 	pub fn encode_tag_ids(&mut self, properties: GeoProperties) -> Vec<u32> {
 		let mut tag_ids: Vec<u32> = Vec::new();
 
-		for (key, val) in properties.into_iter() {
+		for (key, val) in properties {
 			tag_ids.push(self.key.add(key));
 			tag_ids.push(self.val.add(val));
 		}

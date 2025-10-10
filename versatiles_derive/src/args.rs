@@ -49,6 +49,6 @@ mod tests {
 	#[test]
 	fn test_parse_invalid_missing_comma() {
 		let err = parse_str::<Args>("move foo").unwrap_err();
-		assert!(err.to_string().contains(","));
+		assert!(err.to_string().contains(','));
 	}
 }

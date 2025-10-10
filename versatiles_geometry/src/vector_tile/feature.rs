@@ -1,10 +1,10 @@
 #![allow(dead_code)]
 
 use super::{geometry_type::GeomType, layer::VectorTileLayer};
-use crate::geo::*;
+use crate::geo::{CompositeGeometryTrait, Geometry, Coordinates, GeometryTrait, RingGeometry, GeoProperties, GeoFeature, GeoValue, MultiPointGeometry, MultiLineStringGeometry, MultiPolygonGeometry, SingleGeometryTrait};
 use anyhow::{Context, Result, bail, ensure};
 use byteorder::LE;
-use versatiles_core::{Blob, io::*};
+use versatiles_core::{Blob, io::{ValueReader, ValueWriterBlob, ValueWriter, ValueReaderSlice}};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct VectorTileFeature {
@@ -119,7 +119,7 @@ impl VectorTileFeature {
 						ensure!(!line.is_empty(), "ClosePath command found on an empty linestring");
 						line.push(line[0].clone());
 					}
-					_ => bail!("Unknown command {}", command),
+					_ => bail!("Unknown command {command}"),
 				}
 			}
 
@@ -180,7 +180,7 @@ impl VectorTileFeature {
 							current_polygon.push(ring);
 						}
 					} else {
-						log::trace!("Error: Ring with zero area")
+						log::trace!("Error: Ring with zero area");
 					}
 				}
 
@@ -225,7 +225,7 @@ impl VectorTileFeature {
 			let point0 = &mut (0i64, 0i64);
 			writer.write_varint(((points.len() as u64) << 3) | 0x1)?;
 			for point in points.into_iter() {
-				write_coord(&mut writer, point0, point.as_coord())?
+				write_coord(&mut writer, point0, point.as_coord())?;
 			}
 			Ok(writer.into_blob())
 		}
@@ -293,7 +293,7 @@ impl VectorTileFeature {
 		fn m<T>(g: &[T]) -> Vec<&T> {
 			g.iter().collect()
 		}
-		use crate::geo::Geometry::*;
+		use crate::geo::Geometry::{Point, MultiPoint, LineString, MultiLineString, Polygon, MultiPolygon};
 		let (geom_type, geom_data) = match geometry {
 			Point(g) => (GeomType::MultiPoint, write_points(g.into_multi())?),
 			MultiPoint(g) => (GeomType::MultiPoint, write_points(g)?),
@@ -304,8 +304,8 @@ impl VectorTileFeature {
 		};
 
 		Ok(VectorTileFeature {
-			tag_ids,
 			id,
+			tag_ids,
 			geom_type,
 			geom_data,
 		})

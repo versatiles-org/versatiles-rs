@@ -20,7 +20,7 @@ where
 	DynamicImage: DynamicImageTraitConvert,
 {
 	fn bits_per_value(&self) -> u8 {
-		(self.color().bits_per_pixel() / self.color().channel_count() as u16) as u8
+		(self.color().bits_per_pixel() / u16::from(self.color().channel_count())) as u8
 	}
 
 	fn channel_count(&self) -> u8 {
@@ -35,12 +35,12 @@ where
 
 		for (p1, p2) in self.iter_pixels().zip(other.iter_pixels()) {
 			for i in 0..channels {
-				let d = p1[i] as i64 - p2[i] as i64;
+				let d = i64::from(p1[i]) - i64::from(p2[i]);
 				sqr_sum[i] += (d * d) as u64;
 			}
 		}
 
-		let n = (self.width() * self.height()) as f64;
+		let n = f64::from(self.width() * self.height());
 		Ok(sqr_sum.iter().map(|v| (10.0 * (*v as f64) / n).ceil() / 10.0).collect())
 	}
 

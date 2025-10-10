@@ -1,7 +1,7 @@
-use crate::geo::*;
+use crate::geo::{GeoCollection, CompositeGeometryTrait, GeoFeature, GeoValue, Geometry, GeoProperties};
 use anyhow::{Result, anyhow, bail};
 use std::{io::Cursor, str};
-use versatiles_core::{byte_iterator::*, json::*};
+use versatiles_core::{byte_iterator::{ByteIterator, parse_object_entries, parse_quoted_json_string, parse_array_entries, parse_number_as, parse_number_as_string, parse_tag}, json::parse_json_iter};
 
 pub fn parse_geojson(json: &str) -> Result<GeoCollection> {
 	let mut iter = ByteIterator::from_reader(Cursor::new(json), true);
@@ -17,7 +17,7 @@ pub fn parse_geojson_collection(iter: &mut ByteIterator) -> Result<GeoCollection
 			"type" => object_type = Some(parse_quoted_json_string(iter2)?),
 			"features" => features = parse_array_entries(iter2, parse_geojson_feature)?,
 			_ => _ = parse_json_iter(iter2)?,
-		};
+		}
 		Ok(())
 	})?;
 
@@ -48,7 +48,7 @@ pub fn parse_geojson_feature(iter: &mut ByteIterator) -> Result<GeoFeature> {
 			"geometry" => geometry = Some(parse_geojson_geometry(iter2)?),
 			"properties" => properties = Some(parse_geojson_properties(iter2)?),
 			_ => _ = parse_json_iter(iter2)?,
-		};
+		}
 		Ok(())
 	})?;
 
@@ -98,9 +98,9 @@ fn parse_geojson_value(iter: &mut ByteIterator) -> Result<GeoValue> {
 	match iter.expect_peeked_byte()? {
 		b'"' => parse_quoted_json_string(iter).map(GeoValue::from),
 		d if d.is_ascii_digit() || d == b'.' || d == b'-' => parse_geojson_number(iter),
-		b't' => parse_tag(iter, "true").map(|_| GeoValue::Bool(true)),
-		b'f' => parse_tag(iter, "false").map(|_| GeoValue::Bool(false)),
-		b'n' => parse_tag(iter, "null").map(|_| GeoValue::Null),
+		b't' => parse_tag(iter, "true").map(|()| GeoValue::Bool(true)),
+		b'f' => parse_tag(iter, "false").map(|()| GeoValue::Bool(false)),
+		b'n' => parse_tag(iter, "null").map(|()| GeoValue::Null),
 		c => Err(iter.format_error(&format!(
 			"expected a string or number, but got character '{}'",
 			c as char
@@ -128,7 +128,7 @@ fn parse_geojson_geometry(iter: &mut ByteIterator) -> Result<Geometry> {
 			"type" => geometry_type = Some(parse_quoted_json_string(iter2)?),
 			"coordinates" => coordinates = Some(parse_geojson_coordinates(iter2)?),
 			_ => _ = parse_json_iter(iter2)?,
-		};
+		}
 		Ok(())
 	})?;
 
@@ -191,7 +191,7 @@ impl TemporaryCoordinates {
 
 fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordinates> {
 	fn recursive(iter: &mut ByteIterator) -> Result<TemporaryCoordinates> {
-		use TemporaryCoordinates::*;
+		use TemporaryCoordinates::{V, C0, C1, C2, C3};
 
 		iter.skip_whitespace();
 		match iter.expect_peeked_byte()? {
@@ -204,23 +204,23 @@ fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordin
 
 				if list.is_empty() {
 					bail!("empty arrays are not allowed in coordinates")
-				};
+				}
 
 				let list = match list.first().unwrap() {
 					V(_) => {
 						if list.len() != 2 {
 							bail!("points in coordinates must have exactly two values")
-						};
+						}
 						C0(list
 							.into_iter()
-							.map(|e| e.unwrap_v())
+							.map(TemporaryCoordinates::unwrap_v)
 							.collect::<Vec<f64>>()
 							.try_into()
 							.unwrap_or_else(|v: Vec<f64>| panic!("Expected a Vec of length {} but it was {}", 2, v.len())))
 					}
-					C0(_) => C1(list.into_iter().map(|e| e.unwrap_c0()).collect()),
-					C1(_) => C2(list.into_iter().map(|e| e.unwrap_c1()).collect()),
-					C2(_) => C3(list.into_iter().map(|e| e.unwrap_c2()).collect()),
+					C0(_) => C1(list.into_iter().map(TemporaryCoordinates::unwrap_c0).collect()),
+					C1(_) => C2(list.into_iter().map(TemporaryCoordinates::unwrap_c1).collect()),
+					C2(_) => C3(list.into_iter().map(TemporaryCoordinates::unwrap_c2).collect()),
 					C3(_) => bail!("coordinates are nested too deep"),
 				};
 

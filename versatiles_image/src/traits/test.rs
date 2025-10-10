@@ -31,7 +31,7 @@ where
 
 	/// Generate a Image with grayscale alpha colors
 	/// Returns a Image with 256x256 grayscale alpha colors from black to white. Each pixel in the
-	/// image is a LumaA<u8> value, with the alpha value determined by the y coordinate.
+	/// image is a `LumaA`<u8> value, with the alpha value determined by the y coordinate.
 	fn new_test_greya() -> DynamicImage {
 		DynamicImage::from_fn_la8(256, 256, |x, y| [x as u8, y as u8])
 	}

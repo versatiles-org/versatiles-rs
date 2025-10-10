@@ -6,18 +6,22 @@ use versatiles_core::json::JsonValue;
 pub struct Coordinates([f64; 2]);
 
 impl Coordinates {
+	#[must_use] 
 	pub fn new(x: f64, y: f64) -> Self {
 		Self([x, y])
 	}
 
+	#[must_use] 
 	pub fn x(&self) -> f64 {
 		self.0[0]
 	}
 
+	#[must_use] 
 	pub fn y(&self) -> f64 {
 		self.0[1]
 	}
 
+	#[must_use] 
 	pub fn to_json(&self) -> JsonValue {
 		JsonValue::from(&self.0)
 	}

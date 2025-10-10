@@ -47,29 +47,29 @@ impl DynamicImageTraitConvert for DynamicImage {
 				ImageBuffer::from_vec(width, height, data)
 					.ok_or_else(|| anyhow!("Failed to create RGBA8 image buffer with provided data"))?,
 			),
-			_ => bail!("Unsupported channel count: {}", channel_count),
+			_ => bail!("Unsupported channel count: {channel_count}"),
 		})
 	}
 
 	fn to_blob(&self, format: TileFormat) -> Result<Blob> {
-		use TileFormat::*;
+		use TileFormat::{AVIF, JPG, PNG, WEBP};
 		match format {
 			AVIF => avif::image2blob(self, None),
 			JPG => jpeg::image2blob(self, None),
 			PNG => png::image2blob(self),
 			WEBP => webp::image2blob(self, None),
-			_ => bail!("Unsupported image format for encoding: {:?}", format),
+			_ => bail!("Unsupported image format for encoding: {format:?}"),
 		}
 	}
 
 	fn from_blob(blob: &Blob, format: TileFormat) -> Result<DynamicImage> {
-		use TileFormat::*;
+		use TileFormat::{AVIF, JPG, PNG, WEBP};
 		match format {
 			AVIF => avif::blob2image(blob),
 			JPG => jpeg::blob2image(blob),
 			PNG => png::blob2image(blob),
 			WEBP => webp::blob2image(blob),
-			_ => bail!("Unsupported image format for decoding: {:?}", format),
+			_ => bail!("Unsupported image format for decoding: {format:?}"),
 		}
 	}
 

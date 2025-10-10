@@ -3,7 +3,7 @@
 use crate::geo::GeoValue;
 use anyhow::{Context, Result, anyhow, bail};
 use byteorder::LE;
-use versatiles_core::{Blob, io::*};
+use versatiles_core::{Blob, io::{ValueReader, ValueWriterBlob, ValueWriter}};
 
 pub trait GeoValuePBF<'a> {
 	fn read(reader: &mut dyn ValueReader<'a, LE>) -> Result<GeoValue>;
@@ -14,7 +14,7 @@ impl<'a> GeoValuePBF<'a> for GeoValue {
 	fn read(reader: &mut dyn ValueReader<'a, LE>) -> Result<GeoValue> {
 		// source: https://protobuf.dev/programming-guides/encoding/
 
-		use GeoValue::*;
+		use GeoValue::{String, Float, Double, Int, UInt, Bool};
 		let mut value: Option<GeoValue> = None;
 
 		while reader.has_remaining() {
@@ -33,7 +33,7 @@ impl<'a> GeoValuePBF<'a> for GeoValue {
 				(6, 0) => Int(reader.read_svarint().context("Failed to read svarint value")?),
 				(7, 0) => Bool(reader.read_varint().context("Failed to read varint for bool value")? != 0),
 				(f, w) => bail!("Unexpected combination of field number ({f}) and wire type ({w})"),
-			})
+			});
 		}
 		value
 			.ok_or_else(|| anyhow!("No value found"))
@@ -80,7 +80,7 @@ impl<'a> GeoValuePBF<'a> for GeoValue {
 					.write_pbf_key(7, 0)
 					.context("Failed to write PBF key for bool value")?;
 				writer
-					.write_varint(if *b { 1 } else { 0 })
+					.write_varint(u64::from(*b))
 					.context("Failed to write bool value")?;
 			}
 		}

@@ -29,7 +29,7 @@ impl From<u64> for GeomType {
 
 impl From<&Geometry> for GeomType {
 	fn from(geometry: &Geometry) -> Self {
-		use Geometry::*;
+		use Geometry::{MultiPoint, MultiLineString, MultiPolygon};
 		match geometry {
 			MultiPoint(_) => GeomType::MultiPoint,
 			MultiLineString(_) => GeomType::MultiLineString,
