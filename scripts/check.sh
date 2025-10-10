@@ -5,7 +5,6 @@ PROJECT_DIR=$(pwd)
 # Load GDAL environment variables
 source scripts/gdal-build-env.sh
 
-
 set +e
 
 echo "cargo check"
