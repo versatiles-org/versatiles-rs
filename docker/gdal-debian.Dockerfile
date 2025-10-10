@@ -1,14 +1,8 @@
-# syntax=docker/dockerfile:1
+FROM debian
+ENV DEBIAN_FRONTEND=noninteractive
+COPY . .
+RUN apt update -y
+# RUN apt install -y git curl build-essential cmake
+RUN ./scripts/install-gdal.sh
+RUN apt clean && rm -rf /var/lib/apt/lists/*
 
-FROM debian:testing-slim AS builder
-
-RUN apt-get update
-RUN apt-get install -y gdal-bin libgdal-dev
-
-FROM debian:testing-slim AS runner
-
-USER root
-
-COPY --from=builder  /build/usr/share/gdal/ /usr/share/gdal/
-
-CMD ["/bin/bash", "-l"]

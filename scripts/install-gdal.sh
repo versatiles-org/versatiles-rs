@@ -58,24 +58,46 @@ detect_platform() {
   esac
 }
 
-# ----- repo root & fixed install prefix --------------------------------------
-resolve_repo_root_and_prefix() {
-  REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
-  [[ -n "$REPO_ROOT" ]] || die "Run this inside a git repo; we install into .toolchain/gdal"
-  PREFIX="$REPO_ROOT/.toolchain/gdal"
+# ----- project root & fixed install prefix --------------------------------------
+resolve_project_root_and_prefix() {
+  local script_dir root cand i
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+  # Typical layout is <root>/scripts/install-gdal.sh, so try parent first
+  cand="$(cd "${script_dir}/.." && pwd)"
+
+  # Walk up to 5 levels looking for markers
+  root=""
+  for ((i=0; i<5; i++)); do
+    if [[ -f "${cand}/Cargo.lock" ]]; then
+      root="${cand}"
+      break
+    fi
+    # stop if we reached filesystem root
+    [[ "${cand}" == "/" ]] && break
+    cand="$(cd "${cand}/.." && pwd)"
+  done
+
+  if [[ -z "${root}" ]]; then
+    # Fallback: assume parent of script_dir is the repo root
+    root="$(cd "${script_dir}/.." && pwd)"
+    warn "No project markers found (Cargo.lock). Falling back to: ${root}"
+  fi
+
+  REPO_ROOT="${root}"
+  PREFIX="${REPO_ROOT}/.toolchain/gdal"
 }
 
 # ----- dependency installation (mac) -----------------------------------------
 install_deps_mac() {
   info "Installing build dependencies via Homebrew…"
-  need brew
+  need git brew curl
   HOMEBREW_PREFIX="$(brew --prefix)"
   brew update
   brew install \
     apache-arrow \
     ccache \
     cmake \
-    curl \
     expat \
     geos \
     giflib \
@@ -104,8 +126,8 @@ install_deps_mac() {
 # ----- dependency installation (apt) -----------------------------------------
 install_deps_apt() {
   info "Installing build dependencies via apt…"
-  sudo apt-get update
-  sudo apt-get install -y --no-install-recommends \
+  apt-get update
+  apt-get install -y --no-install-recommends \
     build-essential \
     ca-certificates \
     ccache \
@@ -215,6 +237,8 @@ configure_build() {
     -DGDAL_ENABLE_SWIG=OFF
     -DGDAL_ENABLE_PYTHON=OFF
     -DGDAL_ENABLE_JAVA=OFF
+    -DBUILD_PYTHON_BINDINGS=OFF
+    -DBUILD_JAVA_BINDINGS=OFF
     # Keep TIFF internal (with WebP/JXL enabled via external deps)
     -DGDAL_USE_TIFF_INTERNAL=ON
     -DGDAL_USE_TIFF=ON
@@ -310,9 +334,8 @@ post_install_checks() {
 
 # ===== main flow ==============================================================
 main() {
-  need git; need curl; need cmake
   detect_platform
-  resolve_repo_root_and_prefix
+  resolve_project_root_and_prefix
   [[ "$PLATFORM" == "mac" ]] || [[ "$PLATFORM" == "linux" ]] || die "Unsupported platform"
 
   if [[ "$SKIP_DEPS" != "1" ]]; then
