@@ -7,9 +7,7 @@ on:
     tags:
       - "!**" # Don't run twice on commits with tags
     paths-ignore:
-      - "scripts/**"
       - "docker/**"
-      - ".github/**"
       - "**.Dockerfile"
       - "**.md"
   pull_request:
@@ -50,7 +48,6 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            .toolchain/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
