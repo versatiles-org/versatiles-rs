@@ -73,6 +73,21 @@ jobs:
           echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
           echo "PROJ_DATA=${PROJ_DATA}" >> "$GITHUB_ENV"
 
+      - name: Export libclang env for bindgen
+        shell: bash
+        run: |
+          # Prefer llvm-config if present to find the right libclang .so dir
+          if command -v llvm-config >/dev/null 2>&1; then
+            echo "LIBCLANG_PATH=$(llvm-config --libdir)" >> "$GITHUB_ENV"
+          else
+            # Fallback to common Ubuntu locations
+            for d in /usr/lib/llvm-*/lib; do
+              if [ -d "$d" ]; then echo "LIBCLANG_PATH=$d" >> "$GITHUB_ENV"; break; fi
+            done
+          fi
+          # Ensure bindgen sees GDAL headers even if pkg-config flags are missed
+          echo "BINDGEN_EXTRA_CLANG_ARGS=-I${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
+
       - name: Show env
         run: printenv
 
