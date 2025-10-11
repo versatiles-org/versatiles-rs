@@ -17,14 +17,14 @@ fi
 cargo check
 
 # check cargo
-./scripts/test.sh
+./scripts/test-unix.sh
 if [ $? -ne 0 ]; then
 	echo "❗️ Check failed!"
 	exit 1
 fi
 
 # build vpl docs
-./scripts/build_docs_vpl.sh
+./scripts/build-docs-vpl.sh
 
 # publish to crates.io
 cargo release "$1" --execute --no-verify --sign-commit --workspace

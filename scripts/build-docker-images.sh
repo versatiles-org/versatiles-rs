@@ -28,7 +28,7 @@ function docker_build_release()  {
 	fi
 
 	echo -e "\e[32m  - test\e[0m"
-	docker run --platform="${platf}" "${linux}-versatiles" sh versatiles_selftest.sh
+	docker run --platform="${platf}" "${linux}-versatiles" sh selftest-versatiles.sh
 
 	if [ "$?" != "0" ]; then
 		echo -e "\e[31;1mERROR!\e[0m"

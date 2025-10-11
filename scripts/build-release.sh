@@ -2,6 +2,6 @@
 cd "$(dirname "$0")/.."
 
 # Load GDAL environment variables
-source scripts/gdal-build-env.sh
+source scripts/env-gdal.sh
 
-cargo build -F gdal,bindgen
+cargo build -F gdal,bindgen --release

@@ -3,7 +3,7 @@ cd "$(dirname "$0")/.."
 PROJECT_DIR=$(pwd)
 
 # Load GDAL environment variables
-source scripts/gdal-build-env.sh
+source scripts/env-gdal.sh
 
 set +e
 
