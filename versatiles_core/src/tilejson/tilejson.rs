@@ -33,7 +33,8 @@
 
 use super::{TileJsonValues, VectorLayers};
 use crate::{
-	Blob, GeoBBox, GeoCenter, TileBBoxPyramid, TileFormat, TileSchema, TileType, TilesReaderParameters, json::*,
+	Blob, GeoBBox, GeoCenter, TileBBoxPyramid, TileFormat, TileSchema, TileSize, TileType, TilesReaderParameters,
+	json::*,
 };
 use anyhow::{Ok, Result, anyhow, ensure};
 use regex::Regex;
@@ -59,6 +60,7 @@ pub struct TileJSON {
 	pub tile_type: Option<TileType>,
 	pub tile_format: Option<TileFormat>,
 	pub tile_schema: Option<TileSchema>,
+	pub tile_size: Option<TileSize>,
 }
 
 impl TileJSON {
@@ -103,6 +105,9 @@ impl TileJSON {
 				"tile_schema" => {
 					r.tile_schema = Some(TileSchema::try_from(v.as_str()?)?);
 				}
+				"tile_size" => {
+					r.tile_size = Some(TileSize::new(v.as_number()? as u16)?);
+				}
 				_ => {
 					// Everything else goes into `values`
 					r.values.insert(k, v)?;
@@ -143,6 +148,7 @@ impl TileJSON {
 		obj.set_optional("tile_type", &self.tile_type.map(|v| v.to_string()));
 		obj.set_optional("tile_format", &self.tile_format.map(|v| v.as_mime_str().to_string()));
 		obj.set_optional("tile_schema", &self.tile_schema.map(|v| v.to_string()));
+		obj.set_optional("tile_size", &self.tile_size.map(|v| v.size()));
 		obj
 	}
 

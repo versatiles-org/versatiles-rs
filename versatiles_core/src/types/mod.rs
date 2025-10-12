@@ -39,6 +39,9 @@ pub use tile_format::*;
 mod tile_schema;
 pub use tile_schema::*;
 
+mod tile_size;
+pub use tile_size::*;
+
 mod tile_stream;
 pub use tile_stream::*;
 
