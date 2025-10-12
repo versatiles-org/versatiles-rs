@@ -3,9 +3,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::sync::Arc;
 use versatiles_core::{
-	Traversal,
-	tilejson::TileJSON,
-	{TileBBox, TileStream, TileType, TilesReaderParameters},
+	TileJSON, Traversal, {TileBBox, TileStream, TileType, TilesReaderParameters},
 };
 use versatiles_geometry::vector_tile::VectorTile;
 

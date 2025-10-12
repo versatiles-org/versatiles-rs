@@ -52,7 +52,7 @@ use futures::{lock::Mutex, stream::StreamExt};
 use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};
 #[cfg(feature = "cli")]
 use versatiles_core::utils::PrettyPrint;
-use versatiles_core::{io::*, tilejson::TileJSON, utils::decompress, *};
+use versatiles_core::{io::*, utils::decompress, *};
 use versatiles_derive::context;
 
 /// `VersaTilesReader` is responsible for reading tile data from a `versatiles` container.

@@ -7,7 +7,7 @@ use crate::{
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use regex::Regex;
-use versatiles_core::tilejson::TileJSON;
+use versatiles_core::TileJSON;
 use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]

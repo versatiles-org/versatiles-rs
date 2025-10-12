@@ -3,7 +3,7 @@ use anyhow::{Context, Result, bail, ensure};
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use nom::Input;
-use versatiles_core::{tilejson::TileJSON, *};
+use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
 

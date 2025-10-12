@@ -3,7 +3,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::fmt::Debug;
-use versatiles_core::{tilejson::TileJSON, *};
+use versatiles_core::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Update metadata, see also https://github.com/mapbox/tilejson-spec/tree/master/3.0.0

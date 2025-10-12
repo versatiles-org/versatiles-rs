@@ -13,7 +13,7 @@ use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::DynamicImage;
 use std::{fmt::Debug, vec};
-use versatiles_core::{tilejson::TileJSON, *};
+use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
 

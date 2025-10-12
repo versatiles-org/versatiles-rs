@@ -3,7 +3,7 @@ use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::{fmt::Debug, str};
-use versatiles_core::{tilejson::TileJSON, *};
+use versatiles_core::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filter tiles by bounding box and/or zoom levels.

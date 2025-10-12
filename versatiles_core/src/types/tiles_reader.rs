@@ -8,8 +8,8 @@ use super::ProbeDepth;
 #[cfg(feature = "cli")]
 use crate::utils::PrettyPrint;
 use crate::{
-	Blob, TileBBox, TileCompression, TileCoord, TileStream, TilesReaderParameters, Traversal, TraversalTranslationStep,
-	cache::CacheMap, config::Config, progress::get_progress_bar, tilejson::TileJSON, translate_traversals,
+	Blob, TileBBox, TileCompression, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal,
+	TraversalTranslationStep, cache::CacheMap, config::Config, progress::get_progress_bar, translate_traversals,
 };
 use anyhow::Result;
 use async_trait::async_trait;

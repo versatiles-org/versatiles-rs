@@ -3,7 +3,7 @@ use anyhow::{Context, Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::{path::Path, sync::Arc};
-use versatiles_core::{config::Config, io::DataReader, tilejson::TileJSON, *};
+use versatiles_core::{config::Config, io::DataReader, *};
 use versatiles_pipeline::{OperationTrait, PipelineFactory};
 
 /// The `PipelineReader` struct is responsible for managing the tile reading process,

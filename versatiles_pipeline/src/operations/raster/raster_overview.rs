@@ -5,7 +5,7 @@ use futures::future::BoxFuture;
 use imageproc::image::{DynamicImage, GenericImage};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
-use versatiles_core::{cache::CacheMap, tilejson::TileJSON, *};
+use versatiles_core::{cache::CacheMap, *};
 use versatiles_derive::context;
 use versatiles_image::traits::*;
 

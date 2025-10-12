@@ -37,8 +37,8 @@ use super::{tile_converter::TileConverter, write_to_filename};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{
-	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileStream, TilesReaderParameters,
-	TilesReaderTrait, Traversal, config::Config, tilejson::TileJSON,
+	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream,
+	TilesReaderParameters, TilesReaderTrait, Traversal, config::Config,
 };
 use versatiles_derive::context;
 

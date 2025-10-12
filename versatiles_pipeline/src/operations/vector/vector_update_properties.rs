@@ -8,7 +8,7 @@ use crate::{
 use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
-use versatiles_core::tilejson::TileJSON;
+use versatiles_core::TileJSON;
 use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]

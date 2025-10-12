@@ -25,7 +25,7 @@ use futures::{
 	future::{BoxFuture, join_all},
 	stream,
 };
-use versatiles_core::{tilejson::TileJSON, *};
+use versatiles_core::*;
 use versatiles_image::traits::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]

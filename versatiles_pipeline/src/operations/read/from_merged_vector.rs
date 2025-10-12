@@ -29,7 +29,7 @@ use futures::{
 	stream,
 };
 use std::collections::HashMap;
-use versatiles_core::{tilejson::TileJSON, *};
+use versatiles_core::*;
 use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]

@@ -36,6 +36,9 @@ pub use tile_coord::*;
 mod tile_format;
 pub use tile_format::*;
 
+mod tilejson;
+pub use tilejson::*;
+
 mod tile_schema;
 pub use tile_schema::*;
 

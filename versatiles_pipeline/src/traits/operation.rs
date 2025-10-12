@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
-use versatiles_core::{TileBBox, TileStream, TilesReaderParameters, Traversal, tilejson::*};
+use versatiles_core::{TileBBox, TileJSON, TileStream, TilesReaderParameters, Traversal};
 
 use crate::helpers::Tile;
 

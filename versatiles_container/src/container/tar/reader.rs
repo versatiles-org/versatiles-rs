@@ -4,7 +4,7 @@ use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path};
 use tar::{Archive, EntryType};
-use versatiles_core::{io::*, tilejson::TileJSON, utils::decompress, *};
+use versatiles_core::{io::*, utils::decompress, *};
 
 /// A struct that provides functionality to read tile data from a tar archive.
 pub struct TarTilesReader {

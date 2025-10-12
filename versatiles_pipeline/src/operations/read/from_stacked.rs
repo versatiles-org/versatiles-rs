@@ -29,7 +29,7 @@ use futures::{
 	future::{BoxFuture, join_all},
 	stream,
 };
-use versatiles_core::{tilejson::TileJSON, *};
+use versatiles_core::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Overlays multiple tile sources, using the tile from the first source that provides it.

@@ -48,7 +48,6 @@ use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{
 	io::*,
 	progress::get_progress_bar,
-	tilejson::TileJSON,
 	utils::{HilbertIndex, decompress},
 	*,
 };

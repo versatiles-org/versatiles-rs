@@ -24,7 +24,7 @@ use futures::future::BoxFuture;
 use image::create_debug_image;
 use std::fmt::Debug;
 use vector::create_debug_vector_tile;
-use versatiles_core::{tilejson::TileJSON, *};
+use versatiles_core::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Generates debug tiles that display their coordinates as text.

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{tilejson::TileJSON, *};
+use versatiles_core::*;
 use versatiles_geometry::{
 	geo::{GeoFeature, Geometry},
 	vector_tile::{VectorTile, VectorTileLayer},
