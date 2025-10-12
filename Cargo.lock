@@ -5,9 +5,7 @@ version = 4
 [[package]]
 name = "ab_glyph"
 version = "0.2.32"
-version = "0.2.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01c0457472c38ea5bd1c3b5ada5e368271cb550be7a4ca4a0b4634e9913f6cc2"
 checksum = "01c0457472c38ea5bd1c3b5ada5e368271cb550be7a4ca4a0b4634e9913f6cc2"
 dependencies = [
  "ab_glyph_rasterizer",
@@ -235,9 +233,7 @@ dependencies = [
 [[package]]
 name = "axum"
 version = "0.8.6"
-version = "0.8.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a18ed336352031311f4e0b4dd2ff392d4fbb370777c9d18d7fc9d7359f73871"
 checksum = "8a18ed336352031311f4e0b4dd2ff392d4fbb370777c9d18d7fc9d7359f73871"
 dependencies = [
  "axum-core",
@@ -255,7 +251,6 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "serde_core",
- "serde_core",
  "sync_wrapper",
  "tokio",
  "tower",
@@ -266,9 +261,7 @@ dependencies = [
 [[package]]
 name = "axum-core"
 version = "0.5.5"
-version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59446ce19cd142f8833f856eb31f3eb097812d1479ab224f54d72428ca21ea22"
 checksum = "59446ce19cd142f8833f856eb31f3eb097812d1479ab224f54d72428ca21ea22"
 dependencies = [
  "bytes",
@@ -2512,15 +2505,12 @@ dependencies = [
  "socket2",
  "tracing",
  "windows-sys 0.60.2",
- "windows-sys 0.60.2",
 ]
 
 [[package]]
 name = "quote"
 version = "1.0.41"
-version = "1.0.41"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ce25767e7b499d1b604768e7cde645d14cc8584231ea6b295e9c9eb22c02e1d1"
 checksum = "ce25767e7b499d1b604768e7cde645d14cc8584231ea6b295e9c9eb22c02e1d1"
 dependencies = [
  "proc-macro2",
