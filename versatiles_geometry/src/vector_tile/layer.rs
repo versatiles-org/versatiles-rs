@@ -1,15 +1,18 @@
 #![allow(dead_code)]
 
 use crate::{
+	geo::{GeoFeature, GeoProperties, GeoValue},
 	vector_tile::{feature::VectorTileFeature, property_manager::PropertyManager, value::GeoValuePBF},
-	GeoFeature, GeoProperties, GeoValue,
 };
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use byteorder::LE;
 use std::mem::swap;
-use versatiles_core::{io::*, types::Blob};
+use versatiles_core::{
+	Blob,
+	io::{ValueReader, ValueWriter, ValueWriterBlob},
+};
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct VectorTileLayer {
 	pub extent: u32,
 	pub features: Vec<VectorTileFeature>,
@@ -19,6 +22,7 @@ pub struct VectorTileLayer {
 }
 
 impl VectorTileLayer {
+	#[must_use]
 	pub fn new(name: String, extent: u32, version: u32) -> VectorTileLayer {
 		VectorTileLayer {
 			extent,
@@ -29,6 +33,7 @@ impl VectorTileLayer {
 		}
 	}
 
+	#[must_use]
 	pub fn new_standard(name: &str) -> VectorTileLayer {
 		VectorTileLayer::new(name.to_string(), 4096, 1)
 	}
@@ -93,7 +98,7 @@ impl VectorTileLayer {
 			.write_pbf_string(&self.name)
 			.context("Failed to write layer name")?;
 
-		for feature in self.features.iter() {
+		for feature in &self.features {
 			writer
 				.write_pbf_key(2, 2)
 				.context("Failed to write PBF key for feature")?;
@@ -123,7 +128,7 @@ impl VectorTileLayer {
 				.write_pbf_key(5, 0)
 				.context("Failed to write PBF key for extent")?;
 			writer
-				.write_varint(self.extent as u64)
+				.write_varint(u64::from(self.extent))
 				.context("Failed to write extent")?;
 		}
 
@@ -132,7 +137,7 @@ impl VectorTileLayer {
 				.write_pbf_key(15, 0)
 				.context("Failed to write PBF key for version")?;
 			writer
-				.write_varint(self.version as u64)
+				.write_varint(u64::from(self.version))
 				.context("Failed to write version")?;
 		}
 
@@ -269,6 +274,7 @@ impl VectorTileLayer {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use versatiles_core::io::ValueReaderSlice;
 
 	#[test]
 	fn test_read_vector_tile_layer() -> Result<()> {

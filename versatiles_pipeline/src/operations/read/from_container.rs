@@ -1,12 +1,20 @@
-use crate::{traits::*, vpl::VPLNode, PipelineFactory};
+//! # From‑container read operation
+//!
+//! This module defines an [`Operation`] that streams tiles out of a **single
+//! tile container** (e.g. `*.versatiles`, MBTiles, PMTiles, TAR bundles).
+//! It adapts the container’s [`TilesReaderTrait`] interface to
+//! [`OperationTrait`] so that the rest of the pipeline can treat it like any
+//! other data source.
+
+use crate::{PipelineFactory, helpers::Tile, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::fmt::Debug;
-use versatiles_core::{tilejson::TileJSON, types::*};
+use versatiles_core::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
-/// Reads a tile container, such as a VersaTiles file.
+/// Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*.tar` file.
 struct Args {
 	/// The filename of the tile container. This is relative to the path of the VPL file.
 	/// For example: `filename="world.versatiles"`.
@@ -14,9 +22,14 @@ struct Args {
 }
 
 #[derive(Debug)]
+/// Concrete [`OperationTrait`] that merely forwards every request to an
+/// underlying container [`TilesReaderTrait`].  A cached copy of the
+/// container’s [`TileJSON`] metadata is kept so downstream stages can query
+/// bounds and zoom levels without touching the reader again.
 struct Operation {
 	parameters: TilesReaderParameters,
 	reader: Box<dyn TilesReaderTrait>,
+	tilejson: TileJSON,
 }
 
 impl ReadOperationTrait for Operation {
@@ -27,29 +40,48 @@ impl ReadOperationTrait for Operation {
 		Box::pin(async move {
 			let args = Args::from_vpl_node(&vpl_node)?;
 			let reader = factory.get_reader(&factory.resolve_filename(&args.filename)).await?;
-			let parameters = reader.get_parameters().clone();
+			let parameters = reader.parameters().clone();
+			let mut tilejson = reader.tilejson().clone();
+			tilejson.update_from_reader_parameters(&parameters);
 
-			Ok(Box::new(Self { parameters, reader }) as Box<dyn OperationTrait>)
+			Ok(Box::new(Self {
+				tilejson,
+				parameters,
+				reader,
+			}) as Box<dyn OperationTrait>)
 		})
 	}
 }
 
 #[async_trait]
 impl OperationTrait for Operation {
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	/// Return the reader’s technical parameters (compression, tile size,
+	/// etc.) without performing any I/O.
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
-	fn get_tilejson(&self) -> &TileJSON {
-		self.reader.get_tilejson()
+	/// Expose the container’s `TileJSON` so that consumers can inspect
+	/// bounds, zoom range and other dataset metadata.
+	fn tilejson(&self) -> &TileJSON {
+		&self.tilejson
 	}
 
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		self.reader.get_tile_data(coord).await
+	fn traversal(&self) -> &Traversal {
+		self.reader.traversal()
 	}
 
-	async fn get_tile_stream(&self, bbox: TileBBox) -> TileStream {
-		self.reader.get_bbox_tile_stream(bbox).await
+	/// Stream raw tile blobs intersecting the bounding box by delegating to
+	/// `TilesReaderTrait::get_tile_stream`.
+	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
+		log::debug!("getstream {:?}", bbox);
+		let format = self.parameters.tile_format;
+		let compression = self.parameters.tile_compression;
+		Ok(self
+			.reader
+			.get_tile_stream(bbox)
+			.await?
+			.map_item_parallel(move |blob| Ok(Tile::from_blob(blob, format, compression))))
 	}
 }
 
@@ -72,34 +104,111 @@ impl ReadOperationFactoryTrait for Factory {
 }
 
 #[cfg(test)]
+pub fn operation_from_reader(reader: Box<dyn TilesReaderTrait>) -> Box<dyn OperationTrait> {
+	let parameters = reader.parameters().clone();
+	let mut tilejson = reader.tilejson().clone();
+	tilejson.update_from_reader_parameters(&parameters);
+
+	Box::new(Operation {
+		parameters,
+		reader,
+		tilejson,
+	}) as Box<dyn OperationTrait>
+}
+
+#[cfg(test)]
 mod tests {
 	use super::*;
 
 	#[tokio::test]
-	async fn test() -> Result<()> {
+	async fn test_vector() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let operation = factory
-			.operation_from_vpl("from_container filename=\"test.mbtiles\"")
+			.operation_from_vpl("from_container filename=\"test.mvt\"")
 			.await?;
 
 		assert_eq!(
-			&operation.get_tilejson().as_string(),
-			"{\"tilejson\":\"3.0.0\",\"type\":\"mock vector source\"}"
+			operation
+				.tilejson()
+				.as_pretty_lines(10)
+				.iter()
+				.map(|s| s.as_str())
+				.collect::<Vec<_>>(),
+			[
+				"{",
+				"  \"bounds\": [",
+				"    -180,",
+				"    -85.051129,",
+				"    180,",
+				"    85.051129",
+				"  ],",
+				"  \"maxzoom\": 8,",
+				"  \"minzoom\": 0,",
+				"  \"name\": \"dummy vector source\",",
+				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
+				"  \"tile_schema\": \"other\",",
+				"  \"tile_type\": \"vector\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}"
+			]
 		);
 
-		let coord = TileCoord3 { x: 2, y: 3, z: 4 };
-		let blob = operation.get_tile_data(&coord).await?.unwrap();
-
-		assert!(blob.len() > 50);
-
-		let mut stream = operation.get_tile_stream(TileBBox::new(3, 1, 1, 2, 3)?).await;
+		let mut stream = operation.get_stream(TileBBox::from_min_max(3, 1, 1, 2, 3)?).await?;
 
 		let mut n = 0;
-		while let Some((coord, blob)) = stream.next().await {
-			assert!(blob.len() > 50);
+		while let Some((coord, tile)) = stream.next().await {
+			assert!(tile.into_blob()?.len() > 50);
 			assert!(coord.x >= 1 && coord.x <= 2);
 			assert!(coord.y >= 1 && coord.y <= 3);
-			assert_eq!(coord.z, 3);
+			assert_eq!(coord.level, 3);
+			n += 1;
+		}
+		assert_eq!(n, 6);
+
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_raster() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let operation = factory
+			.operation_from_vpl("from_container filename=\"abc.png\"")
+			.await?;
+
+		assert_eq!(
+			operation
+				.tilejson()
+				.as_pretty_lines(10)
+				.iter()
+				.map(|s| s.as_str())
+				.collect::<Vec<_>>(),
+			[
+				"{",
+				"  \"bounds\": [",
+				"    -180,",
+				"    -85.051129,",
+				"    180,",
+				"    85.051129",
+				"  ],",
+				"  \"maxzoom\": 8,",
+				"  \"minzoom\": 0,",
+				"  \"name\": \"dummy raster source\",",
+				"  \"tile_format\": \"image/png\",",
+				"  \"tile_schema\": \"rgb\",",
+				"  \"tile_type\": \"raster\",",
+				"  \"tilejson\": \"3.0.0\"",
+				"}"
+			]
+		);
+
+		let mut stream = operation.get_stream(TileBBox::from_min_max(3, 1, 1, 2, 3)?).await?;
+
+		let mut n = 0;
+		while let Some((coord, tile)) = stream.next().await {
+			assert!(tile.into_blob()?.len() > 50);
+			assert!(coord.x >= 1 && coord.x <= 2);
+			assert!(coord.y >= 1 && coord.y <= 3);
+			assert_eq!(coord.level, 3);
 			n += 1;
 		}
 		assert_eq!(n, 6);

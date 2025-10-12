@@ -10,13 +10,13 @@
 //!
 //! ```rust
 //! use versatiles_container::{MockTilesReader, MockTilesReaderProfile};
-//! use versatiles_core::types::TilesReaderTrait;
+//! use versatiles_core::TilesReaderTrait;
 //! use std::result::Result;
 //!
 //! #[tokio::test]
 //! async fn test_mock_reader() -> Result<()> {
 //!     let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
-//!     let tile_data = reader.get_tile_data(&TileCoord3::new(0, 0, 0)?).await?;
+//!     let tile_data = reader.get_tile_blob(&TileCoord::new(0, 0, 0)?).await?;
 //!     assert!(tile_data.is_some());
 //!     Ok(())
 //! }
@@ -24,7 +24,7 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{tilejson::TileJSON, types::*, utils::compress};
+use versatiles_core::{utils::compress, *};
 
 /// Enum representing different mock profiles for tile data.
 #[derive(Debug)]
@@ -52,8 +52,8 @@ impl MockTilesReader {
 	/// Creates a new mock tiles reader with the specified profile.
 	pub fn new_mock_profile(profile: MockTilesReaderProfile) -> Result<MockTilesReader> {
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
-		bbox_pyramid.set_level_bbox(TileBBox::new(2, 0, 1, 2, 3)?);
-		bbox_pyramid.set_level_bbox(TileBBox::new(3, 0, 2, 4, 6)?);
+		bbox_pyramid.set_level_bbox(TileBBox::from_min_max(2, 0, 1, 2, 3)?);
+		bbox_pyramid.set_level_bbox(TileBBox::from_min_max(3, 0, 2, 4, 6)?);
 
 		MockTilesReader::new_mock(match profile {
 			MockTilesReaderProfile::Json => {
@@ -78,15 +78,15 @@ impl MockTilesReader {
 
 #[async_trait]
 impl TilesReaderTrait for MockTilesReader {
-	fn get_container_name(&self) -> &str {
+	fn container_name(&self) -> &str {
 		"dummy_container"
 	}
 
-	fn get_source_name(&self) -> &str {
+	fn source_name(&self) -> &str {
 		"dummy_name"
 	}
 
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
@@ -94,11 +94,11 @@ impl TilesReaderTrait for MockTilesReader {
 		self.parameters.tile_compression = tile_compression;
 	}
 
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
+	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
 		use TileFormat::*;
 
 		if !coord.is_valid() {
@@ -123,7 +123,7 @@ impl TilesReaderTrait for MockTilesReader {
 impl std::fmt::Debug for MockTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("MockTilesReader")
-			.field("parameters", &self.get_parameters())
+			.field("parameters", &self.parameters())
 			.finish()
 	}
 }
@@ -138,23 +138,23 @@ mod tests {
 	#[tokio::test]
 	async fn reader() -> Result<()> {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
-		assert_eq!(reader.get_container_name(), "dummy_container");
-		assert_eq!(reader.get_source_name(), "dummy_name");
+		assert_eq!(reader.container_name(), "dummy_container");
+		assert_eq!(reader.source_name(), "dummy_name");
 
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
-		bbox_pyramid.set_level_bbox(TileBBox::new(2, 0, 1, 2, 3)?);
-		bbox_pyramid.set_level_bbox(TileBBox::new(3, 0, 2, 4, 6)?);
+		bbox_pyramid.set_level_bbox(TileBBox::from_min_max(2, 0, 1, 2, 3)?);
+		bbox_pyramid.set_level_bbox(TileBBox::from_min_max(3, 0, 2, 4, 6)?);
 
 		assert_eq!(
-			reader.get_parameters(),
+			reader.parameters(),
 			&TilesReaderParameters::new(TileFormat::PNG, TileCompression::Uncompressed, bbox_pyramid)
 		);
 		assert_eq!(
-			reader.get_tilejson().as_string(),
+			reader.tilejson().as_string(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 		let blob = reader
-			.get_tile_data(&TileCoord3::new(0, 0, 0)?)
+			.get_tile_blob(&TileCoord::new(0, 0, 0)?)
 			.await?
 			.unwrap()
 			.into_vec();
@@ -163,12 +163,12 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn get_tile_data() {
+	async fn get_tile_blob() {
 		let test = |profile, blob| async move {
-			let coord = TileCoord3::new(23, 45, 6).unwrap();
+			let coord = TileCoord::new(6, 23, 45).unwrap();
 			let reader = MockTilesReader::new_mock_profile(profile).unwrap();
-			let tile_compressed = reader.get_tile_data(&coord).await.unwrap().unwrap();
-			let tile_uncompressed = decompress(tile_compressed, &reader.get_parameters().tile_compression).unwrap();
+			let tile_compressed = reader.get_tile_blob(&coord).await.unwrap().unwrap();
+			let tile_uncompressed = decompress(tile_compressed, &reader.parameters().tile_compression).unwrap();
 			assert_eq!(tile_uncompressed, blob);
 		};
 

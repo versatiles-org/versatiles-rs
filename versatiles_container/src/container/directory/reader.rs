@@ -26,14 +26,14 @@
 //! ## Usage
 //! ```no_run
 //! use versatiles_container::DirectoryTilesReader;
-//! use versatiles_core::types::{TileCoord3, TilesReaderTrait};
+//! use versatiles_core::{TileCoord, TilesReaderTrait};
 //! use std::path::Path;
 //! use tokio;
 //!
 //! #[tokio::main]
 //! async fn main() {
 //!     let mut reader = DirectoryTilesReader::open_path(Path::new("/path/to/tiles")).unwrap();
-//!     let tile_data = reader.get_tile_data(&TileCoord3::new(1, 2, 3).unwrap()).await.unwrap();
+//!     let tile_data = reader.get_tile_blob(&TileCoord::new(3, 1, 2).unwrap()).await.unwrap();
 //! }
 //! ```
 //!
@@ -43,7 +43,7 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of opening paths, reading metadata, handling different file formats, and edge cases.
 
-use anyhow::{bail, ensure, Context, Result};
+use anyhow::{Context, Result, bail, ensure};
 use async_trait::async_trait;
 use itertools::Itertools;
 use std::{
@@ -52,7 +52,7 @@ use std::{
 	fs,
 	path::{Path, PathBuf},
 };
-use versatiles_core::{tilejson::TileJSON, types::*, utils::*};
+use versatiles_core::{utils::*, *};
 
 /// A reader for tiles stored in a directory structure.
 /// The directory should be structured as follows:
@@ -63,7 +63,7 @@ use versatiles_core::{tilejson::TileJSON, types::*, utils::*};
 pub struct DirectoryTilesReader {
 	tilejson: TileJSON,
 	dir: PathBuf,
-	tile_map: HashMap<TileCoord3, PathBuf>,
+	tile_map: HashMap<TileCoord, PathBuf>,
 	parameters: TilesReaderParameters,
 }
 
@@ -102,7 +102,7 @@ impl DirectoryTilesReader {
 			let name1 = entry1.file_name().into_string().unwrap();
 			let numeric1 = name1.parse::<u8>();
 			if numeric1.is_ok() {
-				let z = numeric1?;
+				let level = numeric1?;
 
 				for result2 in fs::read_dir(entry1.path())? {
 					// x level
@@ -137,29 +137,29 @@ impl DirectoryTilesReader {
 						}
 						let y = numeric3?;
 
-						match container_form {
-							None => container_form = Some(file_form),
-							Some(existing_form) if existing_form != file_form => {
-								let mut list = [existing_form, file_form];
-								list.sort();
-								bail!("found multiple tile formats: {list:?}");
+						if let Some(form) = container_form {
+							if form != file_form {
+								let mut r = [form, file_form];
+								r.sort();
+								bail!("found multiple tile formats: {:?}", r);
 							}
-							_ => {}
+						} else {
+							container_form = Some(file_form);
 						}
 
-						match container_comp {
-							None => container_comp = Some(file_comp),
-							Some(existing_comp) if existing_comp != file_comp => {
-								let mut list = [existing_comp, file_comp];
-								list.sort();
-								bail!("found multiple tile compressions: {list:?}");
+						if let Some(comp) = container_comp {
+							if comp != file_comp {
+								let mut r = [comp, file_comp];
+								r.sort();
+								bail!("found multiple tile compressions: {:?}", r);
 							}
-							_ => {}
+						} else {
+							container_comp = Some(file_comp);
 						}
 
-						let coord3 = TileCoord3::new(x, y, z)?;
-						bbox_pyramid.include_coord(&coord3);
-						tile_map.insert(coord3, entry3.path());
+						let coord = TileCoord::new(level, x, y)?;
+						bbox_pyramid.include_coord(&coord);
+						tile_map.insert(coord, entry3.path());
 					}
 				}
 			} else {
@@ -208,20 +208,24 @@ impl DirectoryTilesReader {
 
 #[async_trait]
 impl TilesReaderTrait for DirectoryTilesReader {
-	fn get_container_name(&self) -> &str {
+	fn container_name(&self) -> &str {
 		"directory"
 	}
-	fn get_parameters(&self) -> &TilesReaderParameters {
+
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
+
 	fn override_compression(&mut self, tile_compression: TileCompression) {
 		self.parameters.tile_compression = tile_compression;
 	}
-	fn get_tilejson(&self) -> &TileJSON {
+
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		log::trace!("get_tile_data {:?}", coord);
+
+	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+		log::trace!("get_tile_blob {:?}", coord);
 
 		if let Some(path) = self.tile_map.get(coord) {
 			Self::read(path).map(Some)
@@ -229,7 +233,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 			Ok(None)
 		}
 	}
-	fn get_source_name(&self) -> &str {
+	fn source_name(&self) -> &str {
 		self.dir.to_str().unwrap()
 	}
 }
@@ -237,8 +241,8 @@ impl TilesReaderTrait for DirectoryTilesReader {
 impl Debug for DirectoryTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("DirectoryTilesReader")
-			.field("name", &self.get_source_name())
-			.field("parameters", &self.get_parameters())
+			.field("name", &self.source_name())
+			.field("parameters", &self.parameters())
 			.finish()
 	}
 }
@@ -247,8 +251,8 @@ impl Debug for DirectoryTilesReader {
 mod tests {
 	use super::*;
 	use assert_fs::{
-		fixture::{FileWriteStr, PathChild},
 		TempDir,
+		fixture::{FileWriteStr, PathChild},
 	};
 	use std::fs::{self};
 	use versatiles_core::{assert_wildcard, utils::compress};
@@ -262,12 +266,15 @@ mod tests {
 
 		let reader = DirectoryTilesReader::open_path(&dir)?;
 
-		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[-90,66.51326044311185,-45,79.17133464081945],\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}");
+		assert_eq!(
+			reader.tilejson().as_string(),
+			"{\"bounds\":[-90,66.51326,-45,79.171335],\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
+		);
 
-		let tile_data = reader.get_tile_data(&TileCoord3::new(2, 1, 3)?).await?.unwrap();
+		let tile_data = reader.get_tile_blob(&TileCoord::new(3, 2, 1)?).await?.unwrap();
 		assert_eq!(tile_data, Blob::from("test tile data"));
 
-		assert!(reader.get_tile_data(&TileCoord3::new(2, 1, 2)?).await?.is_none());
+		assert!(reader.get_tile_blob(&TileCoord::new(2, 2, 1)?).await?.is_none());
 
 		Ok(())
 	}
@@ -316,7 +323,10 @@ mod tests {
 		fs::write(dir.path().join("2/1/0.png"), "tile at 2/1/0").unwrap();
 
 		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
-		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[-90,66.51326044311185,0,85.05112877980659],\"maxzoom\":2,\"minzoom\":2,\"tilejson\":\"3.0.0\",\"type\":\"dummy data\"}");
+		assert_eq!(
+			reader.tilejson().as_string(),
+			"{\"bounds\":[-90,66.51326,0,85.051129],\"maxzoom\":2,\"minzoom\":2,\"tilejson\":\"3.0.0\",\"type\":\"dummy data\"}"
+		);
 
 		Ok(())
 	}
@@ -329,8 +339,8 @@ mod tests {
 		fs::write(dir.path().join("meta.json"), r#"{"type":"dummy data"}"#).unwrap();
 
 		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
-		let coord = TileCoord3::new(2, 1, 3).unwrap();
-		let tile_data = reader.get_tile_data(&coord).await.unwrap().unwrap();
+		let coord = TileCoord::new(3, 2, 1).unwrap();
+		let tile_data = reader.get_tile_blob(&coord).await.unwrap().unwrap();
 
 		assert_eq!(tile_data, Blob::from("tile at 3/2/1"));
 
@@ -388,18 +398,21 @@ mod tests {
 
 		let mut reader = DirectoryTilesReader::open_path(dir.path())?;
 
-		assert_eq!(reader.get_container_name(), "directory");
+		assert_eq!(reader.container_name(), "directory");
 
 		assert_wildcard!(
-			format!("{reader:?}"), 
-			"DirectoryTilesReader { name: \"*\", parameters: TilesReaderParameters { bbox_pyramid: [3: [2,1,2,1] (1)], tile_compression: Brotli, tile_format: PNG } }"
+			format!("{reader:?}"),
+			"DirectoryTilesReader { name: \"*\", parameters: TilesReaderParameters { bbox_pyramid: [3: [2,1,2,1] (1x1)], tile_compression: Brotli, tile_format: PNG } }"
 		);
 
-		assert_eq!(reader.get_tilejson().as_string(), "{\"bounds\":[-90,66.51326044311185,-45,79.17133464081945],\"key\":\"value\",\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\"}");
+		assert_eq!(
+			reader.tilejson().as_string(),
+			"{\"bounds\":[-90,66.51326,-45,79.171335],\"key\":\"value\",\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\"}"
+		);
 
-		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Brotli);
+		assert_eq!(reader.parameters().tile_compression, TileCompression::Brotli);
 		reader.override_compression(TileCompression::Gzip);
-		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
+		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
 
 		Ok(())
 	}

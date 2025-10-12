@@ -1,8 +1,5 @@
-mod geo;
+pub mod geo;
 pub mod geojson;
-pub mod math;
 pub mod osm;
+pub mod tile_outline;
 pub mod vector_tile;
-
-pub use geo::*;
-pub use geojson::*;

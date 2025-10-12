@@ -54,7 +54,7 @@ Overlays multiple tile sources, using the tile from the first source that provid
 ### Sources:
 All tile sources must have the same format.
 
-## from_vectortiles_merged
+## from_vector_merged
 Merges multiple vector tile sources. Each layer will contain all features from the same layer of all sources.
 ### Sources:
 All tile sources must provide vector tiles.
@@ -62,7 +62,7 @@ All tile sources must provide vector tiles.
 ---
 # TRANSFORM operations
 
-## filter_bbox
+## filter
 Filter tiles by a geographic bounding box.
 ### Parameters:
 * **`bbox`: [f64,f64,f64,f64] (required)** - Bounding box: [min long, min lat, max long, max lat].
@@ -73,7 +73,7 @@ Filter tiles by zoom level.
 * *`min`: u8 (optional)* - minimal zoom level
 * *`max`: u8 (optional)* - maximal zoom level
 
-## vectortiles_update_properties
+## vector_update_properties
 Updates properties of vector tile features using data from an external source (e.g., CSV file). Matches features based on an ID field.
 ### Parameters:
 * **`data_source_path`: String (required)** - Path to the data source file, e.g., `data_source_path="data.csv"`.

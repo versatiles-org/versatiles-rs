@@ -11,7 +11,7 @@
 //! # Examples
 //!
 //! ```
-//! use versatiles_core::types::TileCompression;
+//! use versatiles_core::TileCompression;
 //!
 //! // Getting file extensions for compression types
 //! assert_eq!(TileCompression::Uncompressed.extension(), "");
@@ -24,7 +24,7 @@
 //! assert_eq!(filename, "file.txt");
 //! ```
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
 use enumset::EnumSetType;
@@ -32,14 +32,16 @@ use std::fmt::Display;
 
 /// Enum representing possible compression algorithms.
 #[cfg_attr(feature = "cli", derive(ValueEnum))]
-#[derive(Debug, EnumSetType, PartialOrd, Ord)]
+#[derive(Debug, Default, EnumSetType, PartialOrd, Ord)]
 pub enum TileCompression {
+	#[default]
 	Uncompressed,
 	Gzip,
 	Brotli,
 }
 
 impl TileCompression {
+	#[must_use]
 	pub fn as_str(&self) -> &str {
 		match self {
 			TileCompression::Uncompressed => "none",
@@ -61,12 +63,13 @@ impl TileCompression {
 	/// # Examples
 	///
 	/// ```
-	/// use versatiles_core::types::TileCompression;
+	/// use versatiles_core::TileCompression;
 	///
 	/// assert_eq!(TileCompression::Uncompressed.extension(), "");
 	/// assert_eq!(TileCompression::Gzip.extension(), ".gz");
 	/// assert_eq!(TileCompression::Brotli.extension(), ".br");
 	/// ```
+	#[must_use]
 	pub fn extension(&self) -> &str {
 		match self {
 			TileCompression::Uncompressed => "",
@@ -86,7 +89,7 @@ impl TileCompression {
 	/// # Examples
 	///
 	/// ```
-	/// use versatiles_core::types::TileCompression;
+	/// use versatiles_core::TileCompression;
 	///
 	/// let mut filename = String::from("file.txt.gz");
 	/// assert_eq!(TileCompression::from_filename(&mut filename), TileCompression::Gzip);

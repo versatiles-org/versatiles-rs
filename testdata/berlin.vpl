@@ -1,5 +1,5 @@
 from_container filename="berlin.mbtiles" |
-vectortiles_update_properties
+vector_update_properties
    data_source_path="cities.csv"
    layer_name="place_labels"
    id_field_tiles="name"

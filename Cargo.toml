@@ -18,7 +18,7 @@ categories = [
 	"web-programming::http-server",
 ]
 description = "A toolbox for converting, checking and serving map tiles in various formats."
-edition = "2021"
+edition = "2024"
 homepage = "https://versatiles.org"
 keywords = ["versatiles", "mbtiles", "tiles", "map"]
 license = "MIT"
@@ -74,25 +74,25 @@ overflow-checks = false
 strip = true
 
 [workspace.dependencies]
-ab_glyph = { version = "0.2.32", default-features = false }
 anyhow = { version = "1.0.100", default-features = false, features = ["std"] }
 assert_fs = "1.1.3"
 async-trait = { version = "0.1.89", default-features = false }
-axum = { version = "0.8.6", default-features = false, features = [
-	"http1",
-	"http2",
-	"tokio",
-] }
 byteorder = { version = "1.5.0", default-features = false, features = ["std"] }
 clap = { version = "4.5.48", features = ["derive"] }
 enumset = { version = "1.1.10", default-features = false }
 futures = { version = "0.3.31", features = ["default"] }
-hyper = { version = "1.7.0", default-features = false, features = ["http2"] }
+image = { version = "0.25.8", default-features = false, features = [
+	"avif",
+	"jpeg",
+	"png",
+	"webp",
+] }
 itertools = { version = "0.14.0", default-features = false }
 lazy_static = { version = "1.5.0", default-features = false }
 log = { version = "0.4.28", default-features = false }
 num_cpus = { version = "1.17.0", default-features = false }
-regex = { version = "1.11.3", default-features = false, features = [
+pretty_assertions = "1.4.1"
+regex = { version = "1.12.1", default-features = false, features = [
 	"std",
 	"unicode-case",
 	"unicode-perl",
@@ -104,7 +104,9 @@ wildmatch = { version = "2.5.0", default-features = false }
 
 versatiles = { version = "0.15.7", path = "versatiles", default-features = false }
 versatiles_container = { version = "0.15.7", path = "versatiles_container", default-features = false }
-versatiles_core = { version = "0.15.7", path = "versatiles_core", default-features = false }
+versatiles_core = { version = "0.15.7", path = "versatiles_core", default-features = false, features = [
+	"image",
+] }
 versatiles_derive = { version = "0.15.7", path = "versatiles_derive", default-features = false }
 versatiles_geometry = { version = "0.15.7", path = "versatiles_geometry", default-features = false }
 versatiles_image = { version = "0.15.7", path = "versatiles_image", default-features = false }

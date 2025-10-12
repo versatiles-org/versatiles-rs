@@ -4,8 +4,9 @@
 //!
 //! The `FileHeader` struct contains metadata about the file, including its tile format, compression, zoom range, bounding box, and byte ranges for metadata and blocks.
 
-use anyhow::{bail, ensure, Result};
-use versatiles_core::{io::*, types::*};
+use anyhow::{Result, bail, ensure};
+use versatiles_core::{io::*, *};
+use versatiles_derive::context;
 
 const HEADER_LENGTH: u64 = 66;
 const BBOX_SCALE: f64 = 10000000.0;
@@ -32,6 +33,7 @@ impl FileHeader {
 	///
 	/// # Errors
 	/// Returns an error if the zoom range or bounding box is invalid.
+	#[context("Failed to create FileHeader")]
 	pub fn new(
 		tile_format: &TileFormat,
 		compression: &TileCompression,
@@ -64,6 +66,7 @@ impl FileHeader {
 	///
 	/// # Errors
 	/// Returns an error if the header cannot be read or parsed correctly.
+	#[context("Failed to read FileHeader from reader")]
 	pub async fn from_reader(reader: &mut DataReader) -> Result<FileHeader> {
 		let range = ByteRange::new(0, HEADER_LENGTH);
 		let blob = reader.read_range(&range).await?;
@@ -74,6 +77,7 @@ impl FileHeader {
 	///
 	/// # Errors
 	/// Returns an error if the conversion fails.
+	#[context("Failed to create FileHeader from blob")]
 	pub fn to_blob(&self) -> Result<Blob> {
 		use TileCompression::*;
 		use TileFormat::*;
@@ -132,6 +136,7 @@ impl FileHeader {
 	///
 	/// # Errors
 	/// Returns an error if the binary data cannot be parsed correctly.
+	#[context("Failed to create FileHeader from blob")]
 	fn from_blob(blob: &Blob) -> Result<FileHeader> {
 		use TileCompression::*;
 		use TileFormat::*;
@@ -195,8 +200,8 @@ impl FileHeader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::panic::catch_unwind;
 	use TileCompression::*;
+	use std::panic::catch_unwind;
 
 	#[test]
 	#[allow(clippy::zero_prefixed_literal)]
@@ -284,10 +289,12 @@ mod tests {
 		let comp = Gzip;
 
 		let should_panic = |zoom: [u8; 2], bbox: [f64; 4]| {
-			assert!(catch_unwind(|| {
-				FileHeader::new(&tf, &comp, zoom, &GeoBBox::from(&bbox)).unwrap();
-			})
-			.is_err())
+			assert!(
+				catch_unwind(|| {
+					FileHeader::new(&tf, &comp, zoom, &GeoBBox::from(&bbox)).unwrap();
+				})
+				.is_err()
+			)
 		};
 
 		should_panic([14, 10], [0.0, 0.0, 0.0, 0.0]);

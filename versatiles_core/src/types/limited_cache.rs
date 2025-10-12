@@ -20,7 +20,7 @@ use std::{collections::HashMap, fmt::Debug, hash::Hash, mem::size_of, ops::Div};
 /// # Examples
 ///
 /// ```rust
-/// use versatiles_core::types::LimitedCache;
+/// use versatiles_core::LimitedCache;
 ///
 /// // Create a cache with a maximum byte size of 1,000,000.
 /// // The actual number of elements that can be stored depends on
@@ -62,17 +62,19 @@ where
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::LimitedCache;
+	/// use versatiles_core::LimitedCache;
 	///
 	/// let cache: LimitedCache<u64, i32> = LimitedCache::with_maximum_size(1024);
 	/// ```
+	#[must_use]
 	pub fn with_maximum_size(maximum_size: usize) -> Self {
 		// Compute how many (K, V) pairs can fit into `maximum_size`.
 		let per_element_size = size_of::<K>() + size_of::<V>();
 		let max_length = maximum_size.div(per_element_size);
-		if max_length < 1 {
-			panic!("size ({maximum_size} bytes) is too small to store a single element of size {per_element_size} bytes");
-		}
+		assert!(
+			max_length > 0,
+			"size ({maximum_size} bytes) is too small to store a single element of size {per_element_size} bytes"
+		);
 
 		Self {
 			cache: HashMap::new(),
@@ -93,7 +95,7 @@ where
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::LimitedCache;
+	/// use versatiles_core::LimitedCache;
 	///
 	/// let mut cache = LimitedCache::with_maximum_size(1_000);
 	/// cache.add("foo", 42);
@@ -120,7 +122,7 @@ where
 	/// # Examples
 	///
 	/// ```rust
-	/// # use versatiles_core::types::LimitedCache;
+	/// # use versatiles_core::LimitedCache;
 	/// # use anyhow::{anyhow, Result};
 	/// fn expensive_operation() -> Result<u64> {
 	///     Ok(999)
@@ -161,7 +163,7 @@ where
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::LimitedCache;
+	/// use versatiles_core::LimitedCache;
 	///
 	/// let mut cache = LimitedCache::with_maximum_size(1_000);
 	/// let inserted = cache.add("foo", 123);
@@ -219,10 +221,10 @@ impl<K, V> Debug for LimitedCache<K, V> {
 #[cfg(test)]
 mod tests {
 	use super::LimitedCache;
-	use anyhow::{anyhow, Result};
+	use anyhow::{Result, anyhow};
 	use std::mem::size_of;
 
-	/// Ensures that creation with a given `maximum_size` sets the derived max_length appropriately.
+	/// Ensures that creation with a given `maximum_size` sets the derived `max_length` appropriately.
 	#[test]
 	fn test_cache_initialization() {
 		// Each (u64, i32) pair consumes size_of::<u64>() + size_of::<i32>() bytes.
@@ -276,7 +278,7 @@ mod tests {
 			}
 			let mut list: Vec<u64> = Vec::new();
 			for i in 0..=9 {
-				list.push(if cache.get(&i).is_some() { 1 } else { 0 });
+				list.push(u64::from(cache.get(&i).is_some()));
 			}
 			assert_eq!(list.as_slice(), result, "error for test index {max}");
 		};

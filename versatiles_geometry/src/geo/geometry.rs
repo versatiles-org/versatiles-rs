@@ -1,7 +1,10 @@
-#![allow(dead_code)]
-
-use super::*;
+use super::{
+	GeometryTrait, LineStringGeometry, MultiLineStringGeometry, MultiPointGeometry, MultiPolygonGeometry, PointGeometry,
+	PolygonGeometry, SingleGeometryTrait,
+};
+use anyhow::Result;
 use std::fmt::Debug;
+use versatiles_core::json::{JsonObject, JsonValue};
 
 #[derive(Clone, PartialEq)]
 pub enum Geometry {
@@ -14,25 +17,44 @@ pub enum Geometry {
 }
 
 impl Geometry {
-	pub fn new_point<T: Convertible>(value: [T; 2]) -> Self {
+	pub fn new_point<T>(value: T) -> Self
+	where
+		PointGeometry: From<T>,
+	{
 		Self::Point(PointGeometry::from(value))
 	}
-	pub fn new_line_string<T: Convertible>(value: Vec<[T; 2]>) -> Self {
+	pub fn new_line_string<T>(value: T) -> Self
+	where
+		LineStringGeometry: From<T>,
+	{
 		Self::LineString(LineStringGeometry::from(value))
 	}
-	pub fn new_polygon<T: Convertible>(value: Vec<Vec<[T; 2]>>) -> Self {
+	pub fn new_polygon<T>(value: T) -> Self
+	where
+		PolygonGeometry: From<T>,
+	{
 		Self::Polygon(PolygonGeometry::from(value))
 	}
-	pub fn new_multi_point<T: Convertible>(value: Vec<[T; 2]>) -> Self {
+	pub fn new_multi_point<T>(value: T) -> Self
+	where
+		MultiPointGeometry: From<T>,
+	{
 		Self::MultiPoint(MultiPointGeometry::from(value))
 	}
-	pub fn new_multi_line_string<T: Convertible>(value: Vec<Vec<[T; 2]>>) -> Self {
+	pub fn new_multi_line_string<T>(value: T) -> Self
+	where
+		MultiLineStringGeometry: From<T>,
+	{
 		Self::MultiLineString(MultiLineStringGeometry::from(value))
 	}
-	pub fn new_multi_polygon<T: Convertible>(value: Vec<Vec<Vec<[T; 2]>>>) -> Self {
+	pub fn new_multi_polygon<T>(value: T) -> Self
+	where
+		MultiPolygonGeometry: From<T>,
+	{
 		Self::MultiPolygon(MultiPolygonGeometry::from(value))
 	}
 
+	#[must_use]
 	pub fn get_type_name(&self) -> &str {
 		match self {
 			Geometry::Point(_) => "Point",
@@ -43,6 +65,7 @@ impl Geometry {
 			Geometry::MultiPolygon(_) => "MultiPolygon",
 		}
 	}
+	#[must_use]
 	pub fn into_multi(self) -> Self {
 		match self {
 			Geometry::Point(g) => Geometry::MultiPoint(g.into_multi()),
@@ -54,6 +77,7 @@ impl Geometry {
 		}
 	}
 
+	#[must_use]
 	pub fn new_example() -> Self {
 		Self::new_multi_polygon(vec![
 			vec![
@@ -65,6 +89,41 @@ impl Geometry {
 				vec![[7.0, 1.0], [7.0, 3.0], [8.0, 3.0], [8.0, 1.0], [7.0, 1.0]],
 			],
 		])
+	}
+
+	pub fn verify(&self) -> Result<()> {
+		match self {
+			Geometry::Point(g) => g.verify(),
+			Geometry::LineString(g) => g.verify(),
+			Geometry::Polygon(g) => g.verify(),
+			Geometry::MultiPoint(g) => g.verify(),
+			Geometry::MultiLineString(g) => g.verify(),
+			Geometry::MultiPolygon(g) => g.verify(),
+		}
+	}
+
+	#[must_use]
+	pub fn to_json(&self) -> JsonObject {
+		let mut obj = JsonObject::new();
+		let (type_name, coordinates) = match self {
+			Geometry::Point(g) => ("Point", g.to_coord_json()),
+			Geometry::LineString(g) => ("LineString", g.to_coord_json()),
+			Geometry::Polygon(g) => ("Polygon", g.to_coord_json()),
+			Geometry::MultiPoint(g) => ("MultiPoint", g.to_coord_json()),
+			Geometry::MultiLineString(g) => ("MultiLineString", g.to_coord_json()),
+			Geometry::MultiPolygon(g) => ("MultiPolygon", g.to_coord_json()),
+		};
+		obj.set("type", JsonValue::from(type_name));
+		obj.set("coordinates", coordinates);
+		obj
+	}
+}
+
+impl From<geo::MultiPolygon<f64>> for Geometry {
+	fn from(geometry: geo::MultiPolygon<f64>) -> Self {
+		Self::MultiPolygon(MultiPolygonGeometry(
+			geometry.into_iter().map(PolygonGeometry::from).collect::<Vec<_>>(),
+		))
 	}
 }
 

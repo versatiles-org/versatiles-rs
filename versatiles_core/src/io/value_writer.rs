@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::{io::ValueWriter, types::{Blob, ByteRange}};
+//! use versatiles_core::{io::ValueWriter, Blob, ByteRange};
 //! use anyhow::Result;
 //! use byteorder::LittleEndian;
 //! use std::io::Cursor;
@@ -53,7 +53,7 @@
 //! ```
 
 use super::ValueWriterBlob;
-use crate::types::{Blob, ByteRange};
+use crate::{Blob, ByteRange};
 use anyhow::{Context, Result};
 use byteorder::{ByteOrder, WriteBytesExt};
 use std::io::Write;
@@ -128,7 +128,7 @@ pub trait ValueWriter<E: ByteOrder> {
 
 	fn write_pbf_key(&mut self, field_number: u32, wire_type: u8) -> Result<()> {
 		self
-			.write_varint(((field_number as u64) << 3) | (wire_type as u64))
+			.write_varint((u64::from(field_number) << 3) | u64::from(wire_type))
 			.context("Failed to write PBF key")
 	}
 
@@ -136,7 +136,7 @@ pub trait ValueWriter<E: ByteOrder> {
 		let mut writer = ValueWriterBlob::new_le();
 		for &value in data {
 			writer
-				.write_varint(value as u64)
+				.write_varint(u64::from(value))
 				.context("Failed to write varint for packed uint32")?;
 		}
 		self
@@ -284,7 +284,9 @@ mod tests {
 		writer.write_range(&range)?;
 		assert_eq!(
 			writer.into_inner(),
-			vec![0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+			vec![
+				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+			]
 		);
 		Ok(())
 	}

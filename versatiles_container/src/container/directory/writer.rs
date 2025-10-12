@@ -26,6 +26,7 @@
 //! ## Usage
 //! ```rust
 //! use versatiles_container::{DirectoryTilesWriter, MBTilesReader, TilesWriterTrait};
+//! use versatiles_core::config::Config;
 //! use std::path::Path;
 //!
 //! #[tokio::main]
@@ -34,7 +35,7 @@
 //!     let mut reader = MBTilesReader::open_path(&path).unwrap();
 //!
 //!     let temp_path = std::env::temp_dir().join("temp_tiles");
-//!     DirectoryTilesWriter::write_to_path(&mut reader, &temp_path).await.unwrap();
+//!     DirectoryTilesWriter::write_to_path(&mut reader, &temp_path, Config::default().arc()).await.unwrap();
 //! }
 //! ```
 //!
@@ -45,18 +46,14 @@
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying directory structure.
 
 use crate::TilesWriterTrait;
-use anyhow::{bail, ensure, Result};
+use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use std::{
 	fs,
 	path::{Path, PathBuf},
+	sync::Arc,
 };
-use versatiles_core::{
-	io::DataWriterTrait,
-	progress::get_progress_bar,
-	types::{Blob, TilesReaderTrait},
-	utils::compress,
-};
+use versatiles_core::{config::Config, io::DataWriterTrait, utils::compress, *};
 
 /// A struct that provides functionality to write tile data to a directory structure.
 pub struct DirectoryTilesWriter {}
@@ -91,45 +88,45 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the path is not absolute, if there are issues with file I/O, or if compression fails.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: Arc<Config>) -> Result<()> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
 		log::trace!("convert_from");
 
-		let parameters = reader.get_parameters();
+		let parameters = reader.parameters();
 		let tile_compression = &parameters.tile_compression.clone();
 		let tile_format = &parameters.tile_format.clone();
-		let bbox_pyramid = &reader.get_parameters().bbox_pyramid.clone();
 
 		let extension_format = tile_format.as_extension();
 		let extension_compression = tile_compression.extension();
 
-		let tilejson = reader.get_tilejson();
+		let tilejson = reader.tilejson();
 		let meta_data = compress(tilejson.into(), tile_compression)?;
 		let filename = format!("tiles.json{extension_compression}");
 		Self::write(path.join(filename), meta_data)?;
 
-		let mut progress = get_progress_bar("converting tiles", bbox_pyramid.count_tiles());
+		reader
+			.traverse_all_tiles(
+				&Traversal::ANY,
+				Box::new(|_bbox, mut stream| {
+					Box::pin(async move {
+						while let Some(entry) = stream.next().await {
+							let (coord, blob) = entry;
 
-		for bbox in bbox_pyramid.iter_levels() {
-			let mut stream = reader.get_bbox_tile_stream(bbox.clone()).await;
+							let filename = format!(
+								"{}/{}/{}{}{}",
+								coord.level, coord.x, coord.y, extension_format, extension_compression
+							);
 
-			while let Some(entry) = stream.next().await {
-				let (coord, blob) = entry;
-
-				progress.inc(1);
-
-				let filename = format!(
-					"{}/{}/{}{}{}",
-					coord.z, coord.x, coord.y, extension_format, extension_compression
-				);
-
-				// Write blob to file
-				Self::write(path.join(filename), blob)?;
-			}
-		}
-
-		progress.finish();
+							// Write blob to file
+							Self::write(path.join(filename), blob)?;
+						}
+						Ok(())
+					})
+				}),
+				config,
+			)
+			.await?;
 
 		Ok(())
 	}
@@ -142,7 +139,11 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	///
 	/// # Errors
 	/// This function always returns an error as it is not implemented.
-	async fn write_to_writer(_reader: &mut dyn TilesReaderTrait, _writer: &mut dyn DataWriterTrait) -> Result<()> {
+	async fn write_to_writer(
+		_reader: &mut dyn TilesReaderTrait,
+		_writer: &mut dyn DataWriterTrait,
+		_config: Arc<Config>,
+	) -> Result<()> {
 		bail!("not implemented")
 	}
 }
@@ -150,8 +151,8 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{MockTilesReader, MOCK_BYTES_PBF};
-	use versatiles_core::{types::*, utils::decompress_gzip};
+	use crate::{MOCK_BYTES_PBF, MockTilesReader};
+	use versatiles_core::utils::decompress_gzip;
 
 	/// Tests the functionality of writing tile data to a directory from a mock reader.
 	#[tokio::test]
@@ -165,7 +166,7 @@ mod tests {
 			TileBBoxPyramid::new_full(2),
 		))?;
 
-		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path).await?;
+		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path, Config::default().arc()).await?;
 
 		let load = |filename| {
 			let path = temp_path.join(filename);

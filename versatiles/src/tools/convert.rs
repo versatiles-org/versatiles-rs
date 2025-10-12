@@ -1,7 +1,6 @@
-use anyhow::{bail, Result};
-use versatiles::types::GeoBBox;
-use versatiles_container::{convert_tiles_container, get_reader, TilesConverterParameters};
-use versatiles_core::types::{TileBBoxPyramid, TileCompression};
+use anyhow::{Result, bail};
+use versatiles_container::{TilesConverterParameters, convert_tiles_container, get_reader};
+use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCompression, config::Config};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -58,14 +57,16 @@ pub struct Subcommand {
 
 	/// set the output tile format
 	#[arg(long, value_name = "TILE_FORMAT", display_order = 3)]
-	tile_format: Option<versatiles_core::types::TileFormat>,
+	tile_format: Option<versatiles_core::TileFormat>,
 }
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
 	eprintln!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
-	let mut reader = get_reader(&arguments.input_file).await?;
+	let config = Config::default().arc();
+
+	let mut reader = get_reader(&arguments.input_file, config.clone()).await?;
 
 	if arguments.override_input_compression.is_some() {
 		reader.override_compression(arguments.override_input_compression.unwrap());
@@ -80,7 +81,9 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 		tile_format: arguments.tile_format,
 	};
 
-	convert_tiles_container(reader, parameters, &arguments.output_file).await?;
+	convert_tiles_container(reader, parameters, &arguments.output_file, config).await?;
+
+	eprintln!("finished converting tiles");
 
 	Ok(())
 }
@@ -92,12 +95,12 @@ fn get_bbox_pyramid(arguments: &Subcommand) -> Result<Option<TileBBoxPyramid>> {
 
 	let mut bbox_pyramid = TileBBoxPyramid::new_full(32);
 
-	if let Some(min_zoom) = arguments.min_zoom {
-		bbox_pyramid.set_zoom_min(min_zoom)
+	if let Some(level_min) = arguments.min_zoom {
+		bbox_pyramid.set_level_min(level_min)
 	}
 
-	if let Some(max_zoom) = arguments.max_zoom {
-		bbox_pyramid.set_zoom_max(max_zoom)
+	if let Some(level_max) = arguments.max_zoom {
+		bbox_pyramid.set_level_max(level_max)
 	}
 
 	if let Some(bbox) = &arguments.bbox {

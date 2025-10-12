@@ -1,11 +1,8 @@
 use super::{super::utils::Url, SourceResponse};
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
-use versatiles_core::{
-	types::{Blob, TileCompression, TileCoord3, TilesReaderTrait},
-	utils::TargetCompression,
-};
+use versatiles_core::{Blob, TileCompression, TileCoord, TilesReaderTrait, utils::TargetCompression};
 
 // TileSource struct definition
 #[derive(Clone)]
@@ -20,7 +17,7 @@ pub struct TileSource {
 impl TileSource {
 	// Constructor function for creating a TileSource instance
 	pub fn from(reader: Box<dyn TilesReaderTrait>, id: &str) -> Result<TileSource> {
-		let parameters = reader.get_parameters();
+		let parameters = reader.parameters();
 		let tile_mime = parameters.tile_format.as_mime_str().to_string();
 		let compression = parameters.tile_compression;
 
@@ -35,7 +32,7 @@ impl TileSource {
 
 	pub async fn get_source_name(&self) -> String {
 		let reader = self.reader.lock().await;
-		reader.get_source_name().to_owned()
+		reader.source_name().to_owned()
 	}
 
 	// Retrieve the tile data as an HTTP response
@@ -44,24 +41,24 @@ impl TileSource {
 
 		if parts.len() >= 3 {
 			// Parse the tile coordinates
-			let z = parts[0].parse::<u8>();
+			let level = parts[0].parse::<u8>();
 			let x = parts[1].parse::<u32>();
 			let y: String = parts[2].chars().take_while(|c| c.is_numeric()).collect();
 			let y = y.parse::<u32>();
 
 			// Check for parsing errors
-			ensure!(z.is_ok(), "value for z is not a number");
+			ensure!(level.is_ok(), "value for z is not a number");
 			ensure!(x.is_ok(), "value for x is not a number");
 			ensure!(y.is_ok(), "value for y is not a number");
 
-			// Create a TileCoord3 instance
-			let coord = TileCoord3::new(x?, y?, z?)?;
+			// Create a TileCoord instance
+			let coord = TileCoord::new(level?, x?, y?)?;
 
 			log::debug!("get tile, prefix: {}, coord: {}", self.prefix, coord.as_json());
 
 			// Get tile data
 			let reader = self.reader.lock().await;
-			let tile = reader.get_tile_data(&coord).await;
+			let tile = reader.get_tile_blob(&coord).await;
 			drop(reader);
 
 			// If tile data is not found, return a not found response
@@ -92,8 +89,8 @@ impl TileSource {
 
 	async fn build_tile_json(&self) -> Result<Blob> {
 		let reader = self.reader.lock().await;
-		let mut tilejson = reader.get_tilejson().clone();
-		tilejson.update_from_reader_parameters(reader.get_parameters());
+		let mut tilejson = reader.tilejson().clone();
+		tilejson.update_from_reader_parameters(reader.parameters());
 
 		let tiles_url = format!("{}{{z}}/{{x}}/{{y}}", self.prefix.as_string());
 		tilejson.set_list("tiles", vec![tiles_url])?;
@@ -126,7 +123,10 @@ mod tests {
 		let container = TileSource::from(reader.boxed(), "prefix")?;
 
 		assert_eq!(container.prefix.str, "/tiles/prefix/");
-		assert_eq!(container.build_tile_json().await?.as_str(), "{\"bounds\":[-180,-79.17133464081944,45,66.51326044311185],\"maxzoom\":3,\"minzoom\":2,\"tile_content\":\"raster\",\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}");
+		assert_eq!(
+			container.build_tile_json().await?.as_str(),
+			"{\"bounds\":[-180,-79.171335,45,66.51326],\"maxzoom\":3,\"minzoom\":2,\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tile_type\":\"raster\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
+		);
 
 		Ok(())
 	}
@@ -136,7 +136,10 @@ mod tests {
 	fn debug() -> Result<()> {
 		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?;
 		let container = TileSource::from(reader.boxed(), "prefix")?;
-		assert_eq!(format!("{container:?}"), "TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [2: [0,1,2,3] (9), 3: [0,2,4,6] (25)], tile_compression: Uncompressed, tile_format: PNG } } }, tile_mime: \"image/png\", compression: Uncompressed }");
+		assert_eq!(
+			format!("{container:?}"),
+			"TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [2: [0,1,2,3] (3x3), 3: [0,2,4,6] (5x5)], tile_compression: Uncompressed, tile_format: PNG } } }, tile_mime: \"image/png\", compression: Uncompressed }"
+		);
 		Ok(())
 	}
 
@@ -189,10 +192,8 @@ mod tests {
 		);
 
 		assert_eq!(
-			String::from_utf8(
-				check_response(c, "meta.json", Uncompressed, "application/json").await?
-			)?,
-			"{\"bounds\":[-180,-79.17133464081944,45,66.51326044311185],\"maxzoom\":3,\"minzoom\":2,\"tile_content\":\"raster\",\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
+			String::from_utf8(check_response(c, "meta.json", Uncompressed, "application/json").await?)?,
+			"{\"bounds\":[-180,-79.171335,45,66.51326],\"maxzoom\":3,\"minzoom\":2,\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tile_type\":\"raster\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
 		);
 
 		assert!(check_error_400(c, "x/0/0.png", Uncompressed).await?);

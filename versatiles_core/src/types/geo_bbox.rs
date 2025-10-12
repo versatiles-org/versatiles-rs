@@ -1,18 +1,52 @@
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use std::fmt::Debug;
 
-/// A geographic bounding box, represented by four `f64` values:
-/// `[west, south, east, north]` (sometimes referred to as `[min_x, min_y, max_x, max_y]`).
+static MAX_MERCATOR_LAT: f64 = 85.051_128_779_806_59;
+static MAX_MERCATOR_LNG: f64 = 180.0;
+
+/// A geographical bounding box (`GeoBBox`) represents a rectangular area on a map
+/// defined by its minimum and maximum longitude (x) and latitude (y) coordinates.
 ///
-/// Assumes:
-/// - `min_x` (west) is in `[-180.0, 180.0]`
-/// - `min_y` (south) is in `[-90.0, 90.0]`
-/// - `max_x` (east) is in `[-180.0, 180.0]`
-/// - `max_y` (north) is in `[-90.0, 90.0]`
-/// - `west <= east`
-/// - `south <= north`
+/// The bounding box is defined by four `f64` values:
+/// - `x_min` (west): Minimum longitude.
+/// - `y_min` (south): Minimum latitude.
+/// - `x_max` (east): Maximum longitude.
+/// - `y_max` (north): Maximum latitude.
 ///
-/// These constraints can be verified using the [`check`](GeoBBox::check) method.
+/// This struct provides methods for creating, manipulating, and validating bounding boxes,
+/// as well as converting them to various formats.
+///
+/// # Examples
+///
+/// ## Creating a new `GeoBBox`
+/// ```
+/// use versatiles_core::GeoBBox;
+///
+/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
+/// assert_eq!(bbox.as_tuple(), (-10.0, -5.0, 10.0, 5.0));
+/// ```
+///
+/// ## Expanding a bounding box
+/// ```
+/// use versatiles_core::GeoBBox;
+///
+/// let mut bbox1 = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
+/// let bbox2 = GeoBBox::new(-12.0, -3.0, 8.0, 6.0);
+/// bbox1.extend(&bbox2);
+/// assert_eq!(bbox1.as_tuple(), (-12.0, -5.0, 10.0, 6.0));
+/// ```
+///
+/// ## Validating a bounding box
+/// ```
+/// use versatiles_core::GeoBBox;
+/// use anyhow::Result;
+///
+/// fn validate_bbox() -> Result<()> {
+///     let bbox = GeoBBox::new(-180.0, -90.0, 180.0, 90.0);
+///     bbox.check()?;
+///     Ok(())
+/// }
+/// ```
 #[derive(Clone, Copy, PartialEq)]
 pub struct GeoBBox(pub f64, pub f64, pub f64, pub f64);
 
@@ -21,14 +55,14 @@ impl GeoBBox {
 	/// `west, south, east, north`.
 	///
 	/// # Arguments
-	/// * `x_min`  - Minimum x coordinate (longitude).
+	/// * `x_min` - Minimum x coordinate (longitude).
 	/// * `y_min` - Minimum y coordinate (latitude).
-	/// * `x_max`  - Maximum x coordinate (longitude).
+	/// * `x_max` - Maximum x coordinate (longitude).
 	/// * `y_max` - Maximum y coordinate (latitude).
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::GeoBBox;
+	/// use versatiles_core::GeoBBox;
 	///
 	/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// assert_eq!(bbox.0, -10.0);
@@ -36,6 +70,7 @@ impl GeoBBox {
 	/// assert_eq!(bbox.2, 10.0);
 	/// assert_eq!(bbox.3, 5.0);
 	/// ```
+	#[must_use]
 	pub fn new(x_min: f64, y_min: f64, x_max: f64, y_max: f64) -> GeoBBox {
 		GeoBBox(x_min, y_min, x_max, y_max)
 	}
@@ -51,7 +86,7 @@ impl GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::GeoBBox;
+	/// use versatiles_core::GeoBBox;
 	/// use anyhow::Result;
 	///
 	/// fn example() -> Result<()> {
@@ -72,25 +107,62 @@ impl GeoBBox {
 		}
 	}
 
+	/// Clamps the bounding box *in‑place* to the latitude/longitude limits of the
+	/// Web Mercator projection.
+	///
+	/// Any coordinate outside the valid Mercator span\
+	/// (`‒85.05112877980659° ≤ lat ≤ 85.05112877980659°`,\
+	/// `‒180° ≤ lon ≤ 180°`) is replaced by the nearest boundary value.
+	///
+	/// # Examples
+	/// ```
+	/// use versatiles_core::GeoBBox;
+	///
+	/// let mut bbox = GeoBBox::new(-200.0, -100.0, 200.0, 100.0);
+	/// bbox.limit_to_mercator();
+	/// assert_eq!(
+	///     bbox.as_tuple(),
+	///     (-180.0, -85.05112877980659, 180.0, 85.05112877980659)
+	/// );
+	/// ```
+	pub fn limit_to_mercator(&mut self) {
+		self.0 = self.0.max(-MAX_MERCATOR_LNG).min(MAX_MERCATOR_LNG); // west
+		self.1 = self.1.max(-MAX_MERCATOR_LAT).min(MAX_MERCATOR_LAT); // south
+		self.2 = self.2.max(-MAX_MERCATOR_LNG).min(MAX_MERCATOR_LNG); // east
+		self.3 = self.3.max(-MAX_MERCATOR_LAT).min(MAX_MERCATOR_LAT); // north
+	}
+
 	/// Returns the bounding box as a `Vec<f64>` in the form `[west, south, east, north]`.
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::GeoBBox;
+	/// use versatiles_core::GeoBBox;
 	///
 	/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// assert_eq!(bbox.as_vec(), vec![-10.0, -5.0, 10.0, 5.0]);
 	/// ```
+	#[must_use]
 	pub fn as_vec(&self) -> Vec<f64> {
 		vec![self.0, self.1, self.2, self.3]
 	}
 
-	/// Returns the bounding box as an array `[f64; 4]` in the form `[west, south, east, north]`.
+	/// Returns the bounding box as a fixed‑size array `[f64; 4]` in the order
+	/// `[west, south, east, north]`.
+	///
+	/// # Examples
+	/// ```
+	/// use versatiles_core::GeoBBox;
+	///
+	/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
+	/// assert_eq!(bbox.as_array(), [-10.0, -5.0, 10.0, 5.0]);
+	/// ```
+	#[must_use]
 	pub fn as_array(&self) -> [f64; 4] {
 		[self.0, self.1, self.2, self.3]
 	}
 
 	/// Returns the bounding box as a tuple `(x_min, y_min, x_max, y_max)`.
+	#[must_use]
 	pub fn as_tuple(&self) -> (f64, f64, f64, f64) {
 		(self.0, self.1, self.2, self.3)
 	}
@@ -99,24 +171,26 @@ impl GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::GeoBBox;
+	/// use versatiles_core::GeoBBox;
 	///
 	/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// assert_eq!(bbox.as_string_json(), "[-10,-5,10,5]");
 	/// ```
+	#[must_use]
 	pub fn as_string_json(&self) -> String {
-		format!("[{},{},{},{}]", self.0, self.1, self.2, self.3)
+		format!("[{}]", self.as_string_list())
 	}
 
 	/// Returns the bounding box as a string in the form `x_min, y_min, x_max, y_max`.
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::GeoBBox;
+	/// use versatiles_core::GeoBBox;
 	///
 	/// let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// assert_eq!(bbox.as_string_list(), "-10,-5,10,5");
 	/// ```
+	#[must_use]
 	pub fn as_string_list(&self) -> String {
 		format!("{},{},{},{}", self.0, self.1, self.2, self.3)
 	}
@@ -132,7 +206,7 @@ impl GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::GeoBBox;
+	/// use versatiles_core::GeoBBox;
 	///
 	/// let mut bbox1 = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// let bbox2 = GeoBBox::new(-12.0, -3.0, 8.0, 6.0);
@@ -151,6 +225,7 @@ impl GeoBBox {
 	/// to include the area covered by `other`.
 	///
 	/// This is the non-mutating version of [`extend`](Self::extend).
+	#[must_use]
 	pub fn extended(mut self, other: &GeoBBox) -> GeoBBox {
 		self.extend(other);
 		self
@@ -167,7 +242,7 @@ impl GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::GeoBBox;
+	/// use versatiles_core::GeoBBox;
 	///
 	/// let mut bbox1 = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// let bbox2 = GeoBBox::new(-8.0, -4.0, 12.0, 4.0);
@@ -188,7 +263,7 @@ impl GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::GeoBBox;
+	/// use versatiles_core::GeoBBox;
 	///
 	/// let bbox1 = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
 	/// let bbox2 = GeoBBox::new(-8.0, -4.0, 12.0, 4.0);
@@ -197,6 +272,7 @@ impl GeoBBox {
 	/// // original remains unchanged
 	/// assert_eq!(bbox1.as_tuple(), (-10.0, -5.0, 10.0, 5.0));
 	/// ```
+	#[must_use]
 	pub fn intersected(mut self, other: &GeoBBox) -> GeoBBox {
 		self.intersect(other);
 		self
@@ -217,7 +293,7 @@ impl GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::GeoBBox;
+	/// use versatiles_core::GeoBBox;
 	/// use anyhow::Result;
 	///
 	/// fn validate_bbox() -> Result<()> {
@@ -256,7 +332,7 @@ impl TryFrom<Vec<f64>> for GeoBBox {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::GeoBBox;
+	/// use versatiles_core::GeoBBox;
 	/// use anyhow::Result;
 	///
 	/// fn example() -> Result<()> {
@@ -275,19 +351,31 @@ impl TryFrom<Vec<f64>> for GeoBBox {
 	}
 }
 
-impl From<&[f64; 4]> for GeoBBox {
+impl From<[f64; 4]> for GeoBBox {
 	/// Converts a fixed-size array of four `f64` values into a `GeoBBox`.
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::GeoBBox;
-	///
-	/// let arr = [-10.0, -5.0, 10.0, 5.0];
-	/// let bbox = GeoBBox::from(&arr);
+	/// use versatiles_core::GeoBBox;
+	/// let bbox = GeoBBox::from([-10.0, -5.0, 10.0, 5.0]);
 	/// assert_eq!(bbox.as_tuple(), (-10.0, -5.0, 10.0, 5.0));
 	/// ```
-	fn from(input: &[f64; 4]) -> Self {
+	fn from(input: [f64; 4]) -> Self {
 		GeoBBox(input[0], input[1], input[2], input[3])
+	}
+}
+
+impl<T: Copy + Into<f64>> From<&[T; 4]> for GeoBBox {
+	/// Converts a fixed-size array of four numbers into a `GeoBBox`.
+	///
+	/// # Examples
+	/// ```
+	/// use versatiles_core::GeoBBox;
+	/// let bbox = GeoBBox::from(&[-10, -5, 10, 5]);
+	/// assert_eq!(bbox.as_tuple(), (-10.0, -5.0, 10.0, 5.0));
+	/// ```
+	fn from(input: &[T; 4]) -> Self {
+		GeoBBox(input[0].into(), input[1].into(), input[2].into(), input[3].into())
 	}
 }
 
@@ -428,5 +516,90 @@ mod tests {
 		// South > North
 		let bbox = GeoBBox::new(-10.0, 6.0, 10.0, 5.0);
 		assert!(bbox.check().is_err(), "Expected error for south > north");
+	}
+
+	#[test]
+	fn test_limit_to_mercator() {
+		let mut bbox = GeoBBox::new(-200.0, -100.0, 200.0, 100.0);
+		bbox.limit_to_mercator();
+		assert_eq!(bbox.as_tuple(), (-180.0, -85.05112877980659, 180.0, 85.05112877980659));
+	}
+
+	#[test]
+	fn test_from_array() {
+		let input = [-10.0, -5.0, 10.0, 5.0];
+		let bbox = GeoBBox::from(input);
+		assert_eq!(bbox.as_tuple(), (-10.0, -5.0, 10.0, 5.0));
+	}
+
+	#[test]
+	fn test_from_array_ref() {
+		let input = &[-10.0, -5.0, 10.0, 5.0];
+		let bbox = GeoBBox::from(input);
+		assert_eq!(bbox.as_tuple(), (-10.0, -5.0, 10.0, 5.0));
+	}
+
+	#[test]
+	fn test_debug_format() {
+		let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0);
+		assert_eq!(format!("{bbox:?}"), "GeoBBox(-10, -5, 10, 5)");
+	}
+
+	#[test]
+	fn test_intersect_no_overlap() {
+		let mut bbox1 = GeoBBox::new(-10.0, -5.0, 0.0, 0.0);
+		let bbox2 = GeoBBox::new(1.0, 1.0, 10.0, 5.0);
+		bbox1.intersect(&bbox2);
+		assert_eq!(bbox1.as_tuple(), (1.0, 1.0, 0.0, 0.0)); // No overlap
+	}
+
+	#[test]
+	fn test_intersected_no_overlap() {
+		let bbox1 = GeoBBox::new(-10.0, -5.0, 0.0, 0.0);
+		let bbox2 = GeoBBox::new(1.0, 1.0, 10.0, 5.0);
+		let bbox3 = bbox1.intersected(&bbox2);
+		assert_eq!(bbox3.as_tuple(), (1.0, 1.0, 0.0, 0.0)); // No overlap
+	}
+
+	#[test]
+	fn test_extend_with_no_overlap() {
+		let mut bbox1 = GeoBBox::new(-10.0, -5.0, 0.0, 0.0);
+		let bbox2 = GeoBBox::new(1.0, 1.0, 10.0, 5.0);
+		bbox1.extend(&bbox2);
+		assert_eq!(bbox1.as_tuple(), (-10.0, -5.0, 10.0, 5.0));
+	}
+
+	#[test]
+	fn test_extended_with_no_overlap() {
+		let bbox1 = GeoBBox::new(-10.0, -5.0, 0.0, 0.0);
+		let bbox2 = GeoBBox::new(1.0, 1.0, 10.0, 5.0);
+		let bbox3 = bbox1.extended(&bbox2);
+		assert_eq!(bbox3.as_tuple(), (-10.0, -5.0, 10.0, 5.0));
+	}
+
+	#[test]
+	fn test_check_invalid_coordinates() {
+		// Invalid: west > east
+		let bbox = GeoBBox::new(10.0, -5.0, -10.0, 5.0);
+		assert!(bbox.check().is_err());
+
+		// Invalid: south > north
+		let bbox = GeoBBox::new(-10.0, 5.0, 10.0, -5.0);
+		assert!(bbox.check().is_err());
+	}
+
+	#[test]
+	fn test_check_valid_edge_cases() -> Result<()> {
+		// Valid: exactly on bounds
+		let bbox = GeoBBox::new(-180.0, -90.0, 180.0, 90.0);
+		bbox.check()?;
+		Ok(())
+	}
+
+	#[test]
+	fn test_as_string_edge_cases() {
+		let bbox = GeoBBox::new(-180.0, -90.0, 180.0, 90.0);
+		assert_eq!(bbox.as_string_json(), "[-180,-90,180,90]");
+		assert_eq!(bbox.as_string_list(), "-180,-90,180,90");
 	}
 }

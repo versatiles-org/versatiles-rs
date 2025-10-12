@@ -1,7 +1,12 @@
-use crate::json::*;
-use crate::types::Blob;
-use anyhow::{bail, Result};
+//! JSON value enum representing any valid JSON data and utilities for parsing, serializing, and converting.
 
+use crate::Blob;
+use crate::json::*;
+use anyhow::{Result, bail};
+
+/// Represents any JSON data: arrays, objects, numbers, strings, booleans, and null.
+///
+/// Provides methods for parsing, serialization, and type conversion.
 #[derive(Clone, Debug, PartialEq)]
 pub enum JsonValue {
 	Array(JsonArray),
@@ -13,13 +18,24 @@ pub enum JsonValue {
 }
 
 impl JsonValue {
+	/// Parse a JSON string into a `JsonValue`.
+	///
+	/// # Errors
+	/// Returns an error if the JSON is invalid.
 	pub fn parse_str(json: &str) -> Result<JsonValue> {
 		parse_json_str(json)
 	}
+
+	/// Parse a `Blob` containing JSON text into a `JsonValue`.
+	///
+	/// # Errors
+	/// Returns an error if the JSON is invalid.
 	pub fn parse_blob(blob: &Blob) -> Result<JsonValue> {
 		parse_json_str(blob.as_str())
 	}
 
+	/// Return the JSON type as a lowercase string (`"array"`, `"object"`, etc.).
+	#[must_use]
 	pub fn type_as_str(&self) -> &str {
 		use JsonValue::*;
 		match self {
@@ -31,17 +47,29 @@ impl JsonValue {
 			String(_) => "string",
 		}
 	}
+
+	/// Serialize the `JsonValue` to a compact JSON string without unnecessary whitespace.
+	#[must_use]
 	pub fn stringify(&self) -> String {
 		stringify(self)
 	}
 
+	/// Create a new empty JSON array value.
+	#[must_use]
 	pub fn new_array() -> JsonValue {
 		JsonValue::Array(JsonArray::default())
 	}
+
+	/// Create a new empty JSON object value.
+	#[must_use]
 	pub fn new_object() -> JsonValue {
 		JsonValue::Object(JsonObject::default())
 	}
 
+	/// Borrow the `JsonArray` if this value is an array.
+	///
+	/// # Errors
+	/// Returns an error if not an array.
 	pub fn as_array(&self) -> Result<&JsonArray> {
 		if let JsonValue::Array(array) = self {
 			Ok(array)
@@ -49,13 +77,23 @@ impl JsonValue {
 			bail!("expected a JSON array")
 		}
 	}
-	pub fn to_array(self) -> Result<JsonArray> {
+
+	/// Consume the `JsonValue` and extract the `JsonArray` if it is an array.
+	///
+	/// # Errors
+	/// Returns an error if not an array.
+	pub fn into_array(self) -> Result<JsonArray> {
 		if let JsonValue::Array(array) = self {
 			Ok(array)
 		} else {
 			bail!("expected a JSON array")
 		}
 	}
+
+	/// Borrow the `JsonObject` if this value is an object.
+	///
+	/// # Errors
+	/// Returns an error if not an object.
 	pub fn as_object(&self) -> Result<&JsonObject> {
 		if let JsonValue::Object(object) = self {
 			Ok(object)
@@ -63,31 +101,48 @@ impl JsonValue {
 			bail!("expected a JSON object")
 		}
 	}
-	pub fn to_object(self) -> Result<JsonObject> {
+
+	/// Consume the `JsonValue` and extract the `JsonObject` if it is an object.
+	///
+	/// # Errors
+	/// Returns an error if not an object.
+	pub fn into_object(self) -> Result<JsonObject> {
 		if let JsonValue::Object(object) = self {
 			Ok(object)
 		} else {
 			bail!("expected a JSON object")
 		}
 	}
+
+	/// Return the string value as `String`, cloning if necessary.
+	///
+	/// # Errors
+	/// Returns an error if the value is not a JSON string.
 	pub fn as_string(&self) -> Result<String> {
 		match self {
 			JsonValue::String(text) => Ok(text.to_owned()),
 			_ => bail!("expected a string, found a {}", self.type_as_str()),
 		}
 	}
+
+	/// Return a string slice if this value is a JSON string.
+	///
+	/// # Errors
+	/// Returns an error if the value is not a JSON string.
 	pub fn as_str(&self) -> Result<&str> {
 		match self {
 			JsonValue::String(text) => Ok(text),
 			_ => bail!("expected a string, found a {}", self.type_as_str()),
 		}
 	}
-	pub fn as_number<T>(&self) -> Result<T>
-	where
-		T: AsNumber<T>,
-	{
+
+	/// Convert the JSON number (f64) into a Rust numeric type `T` using `AsNumber`.
+	///
+	/// # Errors
+	/// Returns an error if the value is not a JSON number.
+	pub fn as_number(&self) -> Result<f64> {
 		if let JsonValue::Number(val) = self {
-			Ok(<T as AsNumber<T>>::convert(*val))
+			Ok(*val)
 		} else {
 			bail!("expected a number, found a {}", self.type_as_str())
 		}
@@ -124,10 +179,25 @@ impl From<&JsonValue> for JsonValue {
 	}
 }
 
+impl<I> From<I> for JsonValue
+where
+	JsonArray: From<I>,
+{
+	fn from(input: I) -> Self {
+		JsonValue::Array(input.into())
+	}
+}
+
+impl From<JsonObject> for JsonValue {
+	fn from(input: JsonObject) -> Self {
+		JsonValue::Object(input)
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::Blob;
+	use crate::Blob;
 
 	#[test]
 	fn test_from_str() {
@@ -228,11 +298,11 @@ mod tests {
 		let value = JsonValue::Array(JsonArray(vec![]));
 
 		assert!(value.as_array().is_ok());
-		assert!(value.to_array().is_ok());
+		assert!(value.into_array().is_ok());
 
 		let non_array = JsonValue::String("not an array".to_string());
 		assert!(non_array.as_array().is_err());
-		assert!(non_array.to_array().is_err());
+		assert!(non_array.into_array().is_err());
 	}
 
 	#[test]
@@ -240,11 +310,11 @@ mod tests {
 		let value = JsonValue::Object(JsonObject::default());
 
 		assert!(value.as_object().is_ok());
-		assert!(value.to_object().is_ok());
+		assert!(value.into_object().is_ok());
 
 		let non_object = JsonValue::String("not an object".to_string());
 		assert!(non_object.as_object().is_err());
-		assert!(non_object.to_object().is_err());
+		assert!(non_object.into_object().is_err());
 	}
 
 	#[test]
@@ -263,11 +333,10 @@ mod tests {
 	fn test_as_number() {
 		let value = JsonValue::Number(42.0);
 
-		assert_eq!(value.as_number::<f64>().unwrap(), 42.0);
-		assert_eq!(value.as_number::<i32>().unwrap(), 42);
+		assert_eq!(value.as_number().unwrap(), 42.0);
 
 		let non_number = JsonValue::String("not a number".to_string());
-		assert!(non_number.as_number::<f64>().is_err());
+		assert!(non_number.as_number().is_err());
 	}
 
 	#[test]

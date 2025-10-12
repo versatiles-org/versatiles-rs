@@ -1,8 +1,8 @@
-use crate::{GeoProperties, GeoValue};
-use anyhow::{anyhow, ensure, Context, Result};
+use crate::geo::{GeoProperties, GeoValue};
+use anyhow::{Context, Result, anyhow, ensure};
 use std::{collections::HashMap, fmt::Debug, hash::Hash, ops::Div};
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct VTLPMap<T>
 where
 	T: Clone + Eq + Hash,
@@ -61,7 +61,7 @@ where
 	T: Clone + Debug + Eq + Hash + From<String>,
 {
 	fn from(value: &[&str]) -> Self {
-		VTLPMap::new(value.iter().map(|v| T::from(v.to_string())).collect())
+		VTLPMap::new(value.iter().map(|v| T::from((*v).to_string())).collect())
 	}
 }
 
@@ -74,7 +74,7 @@ where
 	}
 }
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct PropertyManager {
 	pub key: VTLPMap<String>,
 	pub val: VTLPMap<GeoValue>,
@@ -145,7 +145,7 @@ impl PropertyManager {
 	pub fn encode_tag_ids(&mut self, properties: GeoProperties) -> Vec<u32> {
 		let mut tag_ids: Vec<u32> = Vec::new();
 
-		for (key, val) in properties.into_iter() {
+		for (key, val) in properties {
 			tag_ids.push(self.key.add(key));
 			tag_ids.push(self.val.add(val));
 		}

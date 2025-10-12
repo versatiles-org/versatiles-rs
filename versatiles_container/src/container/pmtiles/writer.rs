@@ -10,6 +10,7 @@
 //! ## Usage Example
 //! ```rust
 //! use versatiles_container::{MBTilesReader, PMTilesWriter, TilesWriterTrait};
+//! use versatiles_core::config::Config;
 //! use std::path::Path;
 //!
 //! #[tokio::main]
@@ -18,7 +19,7 @@
 //!     let mut reader = MBTilesReader::open_path(&path).unwrap();
 //!
 //!     let temp_path = std::env::temp_dir().join("temp.pmtiles");
-//!     PMTilesWriter::write_to_path(&mut reader, &temp_path).await.unwrap();
+//!     PMTilesWriter::write_to_path(&mut reader, &temp_path, Config::default().arc()).await.unwrap();
 //! }
 //! ```
 //!
@@ -28,11 +29,20 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different tile formats, and verifying the integrity of the written data.
 
-use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression, TileId};
+use std::sync::Arc;
+
+use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression};
 use crate::TilesWriterTrait;
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{io::DataWriterTrait, progress::get_progress_bar, types::*, utils::compress};
+use futures::lock::Mutex;
+use versatiles_core::{
+	config::Config,
+	io::DataWriterTrait,
+	traversal::*,
+	types::*,
+	utils::{HilbertIndex, compress},
+};
 
 /// A struct that provides functionality to write tile data to a PMTiles container.
 pub struct PMTilesWriter {}
@@ -47,49 +57,55 @@ impl TilesWriterTrait for PMTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if there are issues with writing data or internal processing.
-	async fn write_to_writer(reader: &mut dyn TilesReaderTrait, writer: &mut dyn DataWriterTrait) -> Result<()> {
+	async fn write_to_writer(
+		reader: &mut dyn TilesReaderTrait,
+		writer: &mut dyn DataWriterTrait,
+		config: Arc<Config>,
+	) -> Result<()> {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
 
-		let parameters = reader.get_parameters().clone();
-		let pyramid = &parameters.bbox_pyramid;
+		let parameters = reader.parameters().clone();
 
-		let mut blocks: Vec<TileBBox> = pyramid
-			.iter_levels()
-			.flat_map(|level_bbox| level_bbox.iter_bbox_grid(256))
-			.collect();
-		blocks.sort_by_cached_key(|b| b.get_tile_id().unwrap());
-
-		let mut progress = get_progress_bar(
-			"converting tiles",
-			blocks.iter().map(|block| block.count_tiles()).sum::<u64>(),
-		);
-		let mut tile_count = 0;
-
-		let mut entries = EntriesV3::new();
+		let entries = EntriesV3::new();
 
 		writer.set_position(16384)?;
 
 		let mut header = HeaderV3::from_parameters(&parameters);
 
-		let mut metadata: Blob = reader.get_tilejson().into();
+		let mut metadata: Blob = reader.tilejson().into();
 		metadata = compress(metadata, &INTERNAL_COMPRESSION)?;
 		header.metadata = writer.append(&metadata)?;
 
 		let tile_data_start = writer.get_position()?;
 
-		for bbox in blocks.iter() {
-			let mut stream = reader.get_bbox_tile_stream(bbox.clone()).await;
-			while let Some((coord, blob)) = stream.next().await {
-				progress.inc(1);
-				let id = coord.get_tile_id().unwrap();
-				let range = writer.append(&blob).unwrap();
-				entries.push(EntryV3::new(id, range.get_shifted_backward(tile_data_start), 1));
-			}
+		let writer_mutex = Arc::new(Mutex::new(writer));
+		let entries_mutex = Arc::new(Mutex::new(entries));
 
-			tile_count += bbox.count_tiles();
-			progress.set_position(tile_count);
-		}
-		progress.finish();
+		reader
+			.traverse_all_tiles(
+				&Traversal::new(TraversalOrder::PMTiles, 1, 64)?,
+				Box::new(|_bbox, stream| {
+					let writer_mutex = Arc::clone(&writer_mutex);
+					let entries_mutex = Arc::clone(&entries_mutex);
+					Box::pin(async move {
+						let mut writer = writer_mutex.lock().await;
+						let mut entries = entries_mutex.lock().await;
+						let mut tiles = stream.to_vec().await;
+						tiles.sort_by_key(|(coord, _)| coord.get_hilbert_index().unwrap());
+						for (coord, blob) in tiles {
+							let id = coord.get_hilbert_index()?;
+							let range = writer.append(&blob)?;
+							entries.push(EntryV3::new(id, range.get_shifted_backward(tile_data_start), 1));
+						}
+						Ok(())
+					})
+				}),
+				config,
+			)
+			.await?;
+
+		let mut entries = entries_mutex.lock().await;
+		let mut writer = writer_mutex.lock().await;
 
 		let tile_data_end = writer.get_position()?;
 
@@ -132,12 +148,42 @@ mod tests {
 		})?;
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer).await?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, Config::default().arc()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let mut reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;
 		MockTilesWriter::write(&mut reader).await?;
 
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn tiles_written_in_order() -> Result<()> {
+		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
+		bbox_pyramid.include_bbox(&TileBBox::from_min_max(15, 4090, 4090, 5000, 5000)?);
+		bbox_pyramid.include_bbox(&TileBBox::from_min_max(14, 250, 250, 260, 260)?);
+
+		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
+			bbox_pyramid,
+			tile_compression: TileCompression::Uncompressed,
+			tile_format: TileFormat::MVT,
+		})?;
+
+		let mut data_writer = DataWriterBlob::new()?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, Config::default().arc()).await?;
+
+		let data_reader = DataReaderBlob::from(data_writer);
+		let reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;
+
+		let entries = reader.get_tile_entries()?;
+		let mut tile_id = 0;
+		let mut offset = 0;
+		for entry in entries.iter() {
+			assert!(entry.tile_id > tile_id, "Tile IDs are not in order");
+			assert!(entry.range.offset >= offset, "Tile ranges are not in order");
+			tile_id = entry.tile_id;
+			offset = entry.range.offset + entry.range.length;
+		}
 		Ok(())
 	}
 }

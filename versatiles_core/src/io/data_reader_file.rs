@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::{io::{DataReaderFile, DataReaderTrait}, types::{Blob, ByteRange}};
+//! use versatiles_core::{io::{DataReaderFile, DataReaderTrait}, Blob, ByteRange};
 //! use anyhow::Result;
 //! use std::path::Path;
 //!
@@ -28,8 +28,8 @@
 //! ```
 
 use super::DataReaderTrait;
-use crate::types::{Blob, ByteRange};
-use anyhow::{ensure, Result};
+use crate::{Blob, ByteRange};
+use anyhow::{Context, Result, ensure};
 use async_trait::async_trait;
 use std::{
 	fs::File,
@@ -78,16 +78,26 @@ impl DataReaderTrait for DataReaderFile {
 	///
 	/// # Arguments
 	///
-	/// * `range` - A ByteRange struct specifying the offset and length of the range to read.
+	/// * `range` - A `ByteRange` struct specifying the offset and length of the range to read.
 	///
 	/// # Returns
 	///
 	/// * A Result containing a Blob with the read data or an error.
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
 		let mut buffer = vec![0; range.length as usize];
-		let mut file = self.file.try_clone()?;
-		file.seek(SeekFrom::Start(range.offset))?;
-		file.read_exact(&mut buffer)?;
+		let mut file = self
+			.file
+			.try_clone()
+			.with_context(|| format!("failed to clone file '{}'", self.name))?;
+		file
+			.seek(SeekFrom::Start(range.offset))
+			.with_context(|| format!("failed to seek to offset {} in file '{}',", range.offset, self.name))?;
+		file.read_exact(&mut buffer).with_context(|| {
+			format!(
+				"failed to read {} bytes at offset {} in file '{}'",
+				range.length, range.offset, self.name
+			)
+		})?;
 		Ok(Blob::from(buffer))
 	}
 
@@ -98,9 +108,16 @@ impl DataReaderTrait for DataReaderFile {
 	/// * A Result containing a Blob with all the data or an error.
 	async fn read_all(&self) -> Result<Blob> {
 		let mut buffer = vec![0; self.size as usize];
-		let mut file = self.file.try_clone()?;
-		file.seek(SeekFrom::Start(0))?;
-		file.read_exact(&mut buffer)?;
+		let mut file = self
+			.file
+			.try_clone()
+			.with_context(|| format!("failed to clone file '{}'", self.name))?;
+		file
+			.seek(SeekFrom::Start(0))
+			.with_context(|| format!("failed to seek to start of file '{}'", self.name))?;
+		file
+			.read_exact(&mut buffer)
+			.with_context(|| format!("failed to read all {} bytes from file '{}'", self.size, self.name))?;
 		Ok(Blob::from(buffer))
 	}
 
@@ -200,6 +217,40 @@ mod tests {
 		// Check if the name matches the original file path
 		assert_wildcard!(data_reader_file.get_name(), "*testfile.txt");
 
+		Ok(())
+	}
+
+	// Test the synchronous `Read` implementation
+	#[test]
+	fn read_sync_and_read_trait() -> Result<()> {
+		let temp_file = NamedTempFile::new("testfile_sync.txt")?;
+		// Write data to the file
+		{
+			let mut f = File::create(temp_file.path())?;
+			f.write_all(b"Sync read test")?;
+		}
+
+		let mut reader = DataReaderFile::open(temp_file.path()).unwrap();
+		let mut buf = Vec::new();
+		// Box<DataReaderFile> implements Read
+		reader.read_to_end(&mut buf)?;
+		assert_eq!(buf, b"Sync read test");
+		Ok(())
+	}
+
+	// Test the `read_all` async method
+	#[tokio::test]
+	async fn test_read_all_method() -> Result<()> {
+		let temp_file = NamedTempFile::new("testfile_all.txt")?;
+		// Write data to the file
+		{
+			let mut f = File::create(temp_file.path())?;
+			f.write_all(b"Async read all test")?;
+		}
+
+		let reader = DataReaderFile::open(temp_file.path())?;
+		let blob = reader.read_all().await?;
+		assert_eq!(blob.as_slice(), b"Async read all test");
 		Ok(())
 	}
 }

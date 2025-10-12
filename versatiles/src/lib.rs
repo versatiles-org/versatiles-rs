@@ -18,7 +18,8 @@
 //! ```rust
 //! use versatiles::{
 //!     container::{get_reader, write_to_filename},
-//!     types::{TileFormat, TilesReaderTrait}
+//!     types::{TileFormat, TilesReaderTrait},
+//!     config::Config,
 //! };
 //! use std::path::Path;
 //! use anyhow::Result;
@@ -27,13 +28,13 @@
 //! async fn main() -> Result<()> {
 //!     // Define the input filename (local file or URL)
 //!     let input_filename = "../testdata/berlin.pmtiles";
-//!     let mut reader = get_reader(input_filename).await?;
+//!     let mut reader = get_reader(input_filename, Config::default().arc()).await?;
 //!
 //!     // Define the output filename
 //!     let output_filename = "../testdata/temp1.versatiles";
 //!
 //!     // Write the tiles to the output file
-//!     write_to_filename(&mut *reader, output_filename).await?;
+//!     write_to_filename(&mut *reader, output_filename, Config::default().arc()).await?;
 //!
 //!     println!("Tiles have been successfully converted and saved to {output_filename}");
 //!     Ok(())

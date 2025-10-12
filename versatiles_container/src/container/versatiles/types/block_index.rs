@@ -5,16 +5,17 @@
 //! The `BlockIndex` struct contains metadata about the blocks, including their coordinates and bounding boxes, and provides methods to manipulate and query this data.
 
 use super::BlockDefinition;
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use std::{collections::HashMap, ops::Div};
-use versatiles_core::{io::*, types::*, utils::*};
+use versatiles_core::{io::*, utils::*, *};
+use versatiles_derive::context;
 
 const BLOCK_INDEX_LENGTH: u64 = 33;
 
 /// A struct representing an index of blocks within a tile set.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BlockIndex {
-	lookup: HashMap<TileCoord3, BlockDefinition>,
+	lookup: HashMap<TileCoord, BlockDefinition>,
 }
 
 impl BlockIndex {
@@ -33,6 +34,7 @@ impl BlockIndex {
 	///
 	/// # Errors
 	/// Returns an error if the binary data cannot be parsed correctly.
+	#[context("Failed to create BlockIndex from blob")]
 	pub fn from_blob(buf: Blob) -> Result<Self> {
 		let count = buf.len().div(BLOCK_INDEX_LENGTH);
 		ensure!(
@@ -57,6 +59,7 @@ impl BlockIndex {
 	///
 	/// # Errors
 	/// Returns an error if the binary data cannot be decompressed or parsed correctly.
+	#[context("Failed to create BlockIndex from Brotli blob")]
 	pub fn from_brotli_blob(buf: Blob) -> Result<Self> {
 		Self::from_blob(decompress_brotli(&buf)?)
 	}
@@ -79,7 +82,7 @@ impl BlockIndex {
 	/// # Arguments
 	/// * `block` - The block to add.
 	pub fn add_block(&mut self, block: BlockDefinition) {
-		self.lookup.insert(*block.get_coord3(), block);
+		self.lookup.insert(*block.get_coord(), block);
 	}
 
 	/// Converts the `BlockIndex` to a binary blob.
@@ -89,6 +92,7 @@ impl BlockIndex {
 	///
 	/// # Errors
 	/// Returns an error if the conversion fails.
+	#[context("Failed to create BlockIndex from blob")]
 	pub fn as_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_be();
 		for (_coord, block) in self.lookup.iter() {
@@ -105,6 +109,7 @@ impl BlockIndex {
 	///
 	/// # Errors
 	/// Returns an error if the conversion fails.
+	#[context("Failed to create BlockIndex from Brotli blob")]
 	pub fn as_brotli_blob(&self) -> Result<Blob> {
 		compress_brotli_fast(&self.as_blob()?)
 	}
@@ -116,7 +121,7 @@ impl BlockIndex {
 	///
 	/// # Returns
 	/// An option containing a reference to the block if found, or `None` if not found.
-	pub fn get_block(&self, coord: &TileCoord3) -> Option<&BlockDefinition> {
+	pub fn get_block(&self, coord: &TileCoord) -> Option<&BlockDefinition> {
 		self.lookup.get(coord)
 	}
 
@@ -140,12 +145,12 @@ impl BlockIndex {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use versatiles_core::types::TileBBox;
+	use versatiles_core::TileBBox;
 
 	#[test]
 	fn conversion() -> Result<()> {
 		let mut index1 = BlockIndex::new_empty();
-		index1.add_block(BlockDefinition::new(&TileBBox::new(3, 1, 2, 3, 4)?));
+		index1.add_block(BlockDefinition::new(&TileBBox::from_min_max(3, 1, 2, 3, 4)?)?);
 		let index2 = BlockIndex::from_brotli_blob(index1.as_brotli_blob()?)?;
 		assert_eq!(index1, index2);
 		Ok(())

@@ -1,4 +1,4 @@
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use std::fmt::Debug;
 
 /// A center point in geographic space, represented by:
@@ -21,7 +21,7 @@ impl GeoCenter {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::GeoCenter;
+	/// use versatiles_core::GeoCenter;
 	/// use anyhow::Result;
 	///
 	/// fn example() -> Result<()> {
@@ -49,14 +49,15 @@ impl GeoCenter {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::GeoCenter;
+	/// use versatiles_core::GeoCenter;
 	///
 	/// let gc = GeoCenter(12.3, 45.6, 7);
 	/// let vec = gc.as_vec();
 	/// assert_eq!(vec, vec![12.3, 45.6, 7.0]);
 	/// ```
+	#[must_use]
 	pub fn as_vec(&self) -> Vec<f64> {
-		vec![self.0, self.1, self.2 as f64]
+		vec![self.0, self.1, f64::from(self.2)]
 	}
 
 	/// Converts the `GeoCenter` into a fixed-size array `[f64; 3]` in the form
@@ -66,14 +67,15 @@ impl GeoCenter {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::GeoCenter;
+	/// use versatiles_core::GeoCenter;
 	///
 	/// let gc = GeoCenter(-75.5, 40.2, 3);
 	/// let arr = gc.as_array();
 	/// assert_eq!(arr, [-75.5, 40.2, 3.0]);
 	/// ```
+	#[must_use]
 	pub fn as_array(&self) -> [f64; 3] {
-		[self.0, self.1, self.2 as f64]
+		[self.0, self.1, f64::from(self.2)]
 	}
 
 	/// Checks that the stored longitude, latitude, and zoom are within valid ranges:
@@ -87,7 +89,7 @@ impl GeoCenter {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::GeoCenter;
+	/// use versatiles_core::GeoCenter;
 	/// use anyhow::Result;
 	///
 	/// fn validate_center() -> Result<()> {
@@ -127,7 +129,7 @@ impl TryFrom<Vec<f64>> for GeoCenter {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::types::GeoCenter;
+	/// use versatiles_core::GeoCenter;
 	/// use anyhow::Result;
 	///
 	/// fn example() -> Result<()> {

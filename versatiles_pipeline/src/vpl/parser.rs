@@ -1,16 +1,16 @@
 use super::{VPLNode, VPLPipeline};
-use anyhow::{ensure, Context, Result};
+use anyhow::{Context, Result, ensure};
 use nom::{
+	IResult, Parser,
 	branch::alt,
 	bytes::complete::{escaped_transform, tag, take_while, take_while1},
-	character::complete::{alphanumeric1, char, multispace0, multispace1, none_of, one_of},
+	character::complete::{alphanumeric1, char, multispace1, none_of, one_of},
 	combinator::{all_consuming, cut, opt, recognize, value},
-	error::{context, ContextError},
-	multi::{many1, separated_list0, separated_list1},
-	sequence::{delimited, pair, separated_pair},
-	IResult, Parser,
+	error::{ContextError, context},
+	multi::{many0, many1, separated_list0, separated_list1},
+	sequence::{delimited, pair, preceded, separated_pair},
 };
-use nom_language::error::{convert_error, VerboseError};
+use nom_language::error::{VerboseError, convert_error};
 use std::{collections::BTreeMap, fmt::Debug};
 
 #[allow(dead_code)]
@@ -32,6 +32,19 @@ where
 		}
 		result
 	}
+}
+
+// Consume whitespace **and** shell-style comments ("# ...\n").
+fn comment(i: &str) -> IResult<&str, (), VerboseError<&str>> {
+	value((), preceded(char('#'), take_while(|c: char| c != '\n'))).parse(i)
+}
+
+fn ws0(i: &str) -> IResult<&str, (), VerboseError<&str>> {
+	value((), many0(alt((value((), multispace1), comment)))).parse(i)
+}
+
+fn ws1(i: &str) -> IResult<&str, (), VerboseError<&str>> {
+	value((), many1(alt((value((), multispace1), comment)))).parse(i)
 }
 
 fn parse_unquoted_value(input: &str) -> IResult<&str, String, VerboseError<&str>> {
@@ -84,12 +97,9 @@ fn parse_array(input: &str) -> IResult<&str, Vec<String>, VerboseError<&str>> {
 	context(
 		"parsing array",
 		delimited(
-			(char('['), multispace0),
-			separated_list0(
-				(multispace0, char(','), multispace0),
-				alt((parse_quoted_string, parse_unquoted_value)),
-			),
-			(multispace0, char(']')),
+			(char('['), ws0),
+			separated_list0((ws0, char(','), ws0), alt((parse_quoted_string, parse_unquoted_value))),
+			(ws0, char(']')),
 		),
 	)
 	.parse(input)
@@ -114,11 +124,7 @@ fn parse_identifier(input: &str) -> IResult<&str, String, VerboseError<&str>> {
 fn parse_property(input: &str) -> IResult<&str, (String, Vec<String>), VerboseError<&str>> {
 	context(
 		"parsing property",
-		separated_pair(
-			parse_identifier,
-			cut((multispace0, char('='), multispace0)),
-			cut(parse_value),
-		),
+		separated_pair(parse_identifier, cut((ws0, char('='), ws0)), cut(parse_value)),
 	)
 	.parse(input)
 }
@@ -127,9 +133,9 @@ fn parse_sources(input: &str) -> IResult<&str, Vec<VPLPipeline>, VerboseError<&s
 	context(
 		"parsing sources",
 		opt(delimited(
-			(char('['), multispace0),
-			separated_list0(char(','), parse_pipeline),
-			(multispace0, cut(char(']'))),
+			(char('['), ws0),
+			separated_list0((ws0, char(','), ws0), parse_pipeline),
+			(ws0, cut(char(']'))),
 		))
 		.map(|r| r.unwrap_or_default()),
 	)
@@ -138,13 +144,13 @@ fn parse_sources(input: &str) -> IResult<&str, Vec<VPLPipeline>, VerboseError<&s
 
 fn parse_node<'a>(input: &'a str) -> IResult<&'a str, VPLNode, VerboseError<&'a str>> {
 	context("parsing node", |input: &'a str| {
-		let (input, _) = multispace0(input)?;
+		let (input, _) = ws0(input)?;
 		let (input, name) = parse_identifier(input)?;
-		let (input, _) = multispace0(input)?;
-		let (input, property_list) = separated_list0(multispace1, parse_property).parse(input)?;
-		let (input, _) = multispace0(input)?;
+		let (input, _) = ws0(input)?;
+		let (input, property_list) = separated_list0(ws1, parse_property).parse(input)?;
+		let (input, _) = ws0(input)?;
 		let (input, children) = parse_sources(input)?;
-		let (input, _) = multispace0(input)?;
+		let (input, _) = ws0(input)?;
 
 		let mut properties = BTreeMap::new();
 		for (key, mut values) in property_list {
@@ -170,9 +176,9 @@ fn parse_pipeline(input: &str) -> IResult<&str, VPLPipeline, VerboseError<&str>>
 	context(
 		"parsing pipeline",
 		delimited(
-			multispace0,
-			separated_list1(char('|'), parse_node).map(VPLPipeline::new),
-			multispace0,
+			ws0,
+			separated_list1((ws0, char('|'), ws0), parse_node).map(VPLPipeline::new),
+			ws0,
 		),
 	)
 	.parse(input)
@@ -305,7 +311,7 @@ mod tests {
 		let expected = VPLPipeline::from(vec![
 			VPLNode::from(("from_container", ("filename", "berlin.mbtiles"))),
 			VPLNode::from((
-				"vectortiles_update_properties",
+				"vector_update_properties",
 				vec![
 					("data_source_path", "cities.csv"),
 					("id_field_data", "city_name"),

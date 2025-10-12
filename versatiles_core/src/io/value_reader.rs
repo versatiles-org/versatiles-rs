@@ -28,8 +28,8 @@
 //! }
 //! ```
 
-use crate::types::{Blob, ByteRange};
-use anyhow::{bail, Context, Result};
+use crate::{Blob, ByteRange};
+use anyhow::{Context, Result, bail};
 use byteorder::{ByteOrder, ReadBytesExt};
 use std::io::{Read, Seek};
 
@@ -62,7 +62,7 @@ pub trait ValueReader<'a, E: ByteOrder + 'a> {
 		let mut shift = 0;
 		loop {
 			let byte = self.get_reader().read_u8()?;
-			value |= ((byte as u64) & 0x7F) << shift;
+			value |= (u64::from(byte) & 0x7F) << shift;
 			if byte & 0x80 == 0 {
 				break;
 			}
@@ -255,13 +255,13 @@ mod tests {
 	#[test]
 	fn test_read_u32() {
 		let mut reader = ValueReaderSlice::new_le(&[0xFF, 0xFF, 0xFF, 0xFF]); // 4294967295 in u32
-		assert_eq!(reader.read_u32().unwrap(), 4294967295);
+		assert_eq!(reader.read_u32().unwrap(), 4_294_967_295);
 	}
 
 	#[test]
 	fn test_read_u64() {
 		let mut reader = ValueReaderSlice::new_le(&[0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]); // 18446744073709551615 in u64
-		assert_eq!(reader.read_u64().unwrap(), 18446744073709551615);
+		assert_eq!(reader.read_u64().unwrap(), 18_446_744_073_709_551_615);
 	}
 
 	#[test]

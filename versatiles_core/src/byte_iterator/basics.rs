@@ -1,11 +1,11 @@
 use super::iterator::ByteIterator;
-use anyhow::{bail, Error, Result};
+use anyhow::{Error, Result, bail};
 use std::str::FromStr;
 
 pub fn parse_tag(iter: &mut ByteIterator, tag: &str) -> Result<()> {
 	for c in tag.bytes() {
 		match iter.expect_next_byte()? {
-			b if b == c => continue,
+			b if b == c => {}
 			_ => return Err(iter.format_error(&format!("unexpected character while parsing tag '{tag}'"))),
 		}
 	}
@@ -81,6 +81,11 @@ pub fn parse_number_as_string(iter: &mut ByteIterator) -> Result<String> {
 		}
 		if !fractional_digits {
 			return Err(iter.format_error("expected digits after decimal point"));
+		}
+
+		// Reject multiple decimal points
+		if let Some(b'.') = iter.peek() {
+			return Err(iter.format_error("unexpected '.' in number"));
 		}
 	}
 
@@ -231,37 +236,39 @@ mod tests {
 	}
 
 	#[test]
-	fn test_parse_number_as_string() {
+	fn test_parse_number_as_string() -> Result<()> {
 		fn parse(text: &str) -> Result<String> {
 			let mut iter = get_reader(text);
 			parse_number_as_string(&mut iter)
 		}
 
 		// Valid JSON number formats
-		assert_eq!(parse("123").unwrap(), "123");
-		assert_eq!(parse("-123").unwrap(), "-123");
-		assert_eq!(parse("0.456").unwrap(), "0.456");
-		assert_eq!(parse("-0.456").unwrap(), "-0.456");
-		assert_eq!(parse("123e10").unwrap(), "123e10");
-		assert_eq!(parse("123E-10").unwrap(), "123E-10");
-		assert_eq!(parse("-123.45E+6").unwrap(), "-123.45E+6");
-		assert_eq!(parse("0").unwrap(), "0"); // Leading zero allowed if it's the only digit
-		assert_eq!(parse("123.0e+3").unwrap(), "123.0e+3");
+		assert_eq!(parse("123")?, "123");
+		assert_eq!(parse("-123")?, "-123");
+		assert_eq!(parse("0.456")?, "0.456");
+		assert_eq!(parse("-0.456")?, "-0.456");
+		assert_eq!(parse("3e4")?, "3e4");
+		assert_eq!(parse("123e10")?, "123e10");
+		assert_eq!(parse("123E-10")?, "123E-10");
+		assert_eq!(parse("-123.45E+6")?, "-123.45E+6");
+		assert_eq!(parse("0")?, "0"); // Leading zero allowed if it's the only digit
+		assert_eq!(parse("123.0e+3")?, "123.0e+3");
 
 		// Valid numbers with spaces after (to test boundary stopping)
-		assert_eq!(parse("123 ").unwrap(), "123");
-		assert_eq!(parse("123.45 abc").unwrap(), "123.45");
-		assert_eq!(parse("-123.45e+6xyz").unwrap(), "-123.45e+6");
+		assert_eq!(parse("123 ")?, "123");
+		assert_eq!(parse("123.45 abc")?, "123.45");
+		assert_eq!(parse("-123.45e+6xyz")?, "-123.45e+6");
 
 		// Edge cases for leading zeros
-		assert_eq!(parse("0.001").unwrap(), "0.001");
-		assert_eq!(parse("01.23").unwrap(), "01.23"); // Leading zero followed by digits is invalid
+		assert_eq!(parse("0.001")?, "0.001");
+		assert_eq!(parse("01.23")?, "01.23"); // Leading zero followed by digits is invalid
 
 		// Invalid formats
-		assert_eq!(parse("123abc").unwrap(), "123"); // Extra characters after number
+		assert_eq!(parse("123abc")?, "123"); // Extra characters after number
 
 		// Invalid formats
 		assert!(parse("123..45").is_err()); // Double decimal
+		assert!(parse("1.2.3").is_err()); // Double decimal
 		assert!(parse("123e").is_err()); // Exponent without digits
 		assert!(parse("123e+").is_err()); // Exponent without digits
 		assert!(parse("e123").is_err()); // Starts with exponent
@@ -269,31 +276,38 @@ mod tests {
 		assert!(parse("123.").is_err()); // Decimal point with no following digits
 		assert!(parse("0e").is_err()); // Exponent without following digits
 		assert!(parse("-0.").is_err()); // Negative decimal without following digits
+		Ok(())
 	}
 
 	#[test]
-	fn test_parse_number_as() {
+	fn test_parse_number_as() -> Result<()> {
 		fn parse<T: FromStr>(text: &str) -> Result<T> {
 			let mut iter = get_reader(text);
-			parse_number_as::<T>(&mut iter)
+			let v = parse_number_as::<T>(&mut iter);
+			if iter.peek().is_some() {
+				return Err(iter.format_error("expected end of input after number"));
+			}
+			v
 		}
 
 		// Integer parsing
-		assert_eq!(parse::<i32>("-123").unwrap(), -123);
+		assert_eq!(parse::<i32>("-123")?, -123);
+		assert!(parse::<i32>("abc").is_err());
 		assert!(parse::<i32>("12.34").is_err());
+		assert!(parse::<i32>("1-2").is_err());
 
 		// Floating point parsing
-		assert_eq!(parse::<f64>("12.34").unwrap(), 12.34);
-		assert_eq!(parse::<f64>("-0.123E3").unwrap(), -123.0);
-		assert_eq!(parse::<f64>("2e10").unwrap(), 2e10);
-		assert_eq!(parse::<f64>("+2e10").unwrap(), 2e10);
-		assert_eq!(parse::<f64>("-2e10").unwrap(), -2e10);
-		assert_eq!(parse::<f64>("2e+10").unwrap(), 2e10);
-		assert_eq!(parse::<f64>("2e-10").unwrap(), 2e-10);
-
-		// Error cases: invalid numbers
-		assert!(parse::<i32>("abc").is_err());
-		assert_eq!(parse::<f64>("12.34.56").unwrap(), 12.34);
+		assert_eq!(parse::<f64>("12.34")?, 12.34);
+		assert_eq!(parse::<f64>("-0.123E3")?, -123.0);
+		assert_eq!(parse::<f64>("2e10")?, 2e10);
+		assert_eq!(parse::<f64>("+2e10")?, 2e10);
+		assert_eq!(parse::<f64>("-2e10")?, -2e10);
+		assert_eq!(parse::<f64>("2e+10")?, 2e10);
+		assert_eq!(parse::<f64>("2e-10")?, 2e-10);
+		assert!(parse::<f64>("abc").is_err());
+		assert!(parse::<f64>("12.34.56").is_err());
+		assert!(parse::<f64>("1-2").is_err());
+		Ok(())
 	}
 
 	#[test]

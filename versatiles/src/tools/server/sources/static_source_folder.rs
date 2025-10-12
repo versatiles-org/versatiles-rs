@@ -1,4 +1,4 @@
-use anyhow::{ensure, Result};
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::{
 	env::current_dir,
@@ -7,14 +7,11 @@ use std::{
 	io::{BufReader, Read},
 	path::{Path, PathBuf},
 };
-use versatiles_core::{
-	types::{Blob, TileCompression},
-	utils::TargetCompression,
-};
+use versatiles_core::{Blob, TileCompression, utils::TargetCompression};
 
-use crate::tools::server::{utils::guess_mime, Url};
+use crate::tools::server::{Url, utils::guess_mime};
 
-use super::{static_source::StaticSourceTrait, SourceResponse};
+use super::{SourceResponse, static_source::StaticSourceTrait};
 
 // Folder struct definition
 #[derive(Clone)]

@@ -21,20 +21,35 @@ pub use probe_depth::*;
 mod tile_bbox;
 pub use tile_bbox::*;
 
+mod tile_bbox_map;
+pub use tile_bbox_map::*;
+
 mod tile_bbox_pyramid;
 pub use tile_bbox_pyramid::*;
 
 mod tile_compression;
 pub use tile_compression::*;
 
-mod tile_coords;
-pub use tile_coords::*;
+mod tile_coord;
+pub use tile_coord::*;
 
 mod tile_format;
 pub use tile_format::*;
 
+mod tilejson;
+pub use tilejson::*;
+
+mod tile_schema;
+pub use tile_schema::*;
+
+mod tile_size;
+pub use tile_size::*;
+
 mod tile_stream;
 pub use tile_stream::*;
+
+mod tile_type;
+pub use tile_type::*;
 
 mod tiles_reader_parameters;
 pub use tiles_reader_parameters::*;

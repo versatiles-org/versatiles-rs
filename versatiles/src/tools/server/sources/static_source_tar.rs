@@ -1,12 +1,12 @@
-use super::super::utils::{guess_mime, Url};
-use super::{static_source::StaticSourceTrait, SourceResponse};
-use anyhow::{bail, ensure, Result};
+use super::super::utils::{Url, guess_mime};
+use super::{SourceResponse, static_source::StaticSourceTrait};
+use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use std::{collections::HashMap, env::current_dir, ffi::OsStr, fmt::Debug, fs::File, io::Read, path::Path};
 use tar::{Archive, EntryType};
 use versatiles_core::{
-	types::{Blob, TileCompression},
-	utils::{decompress_brotli, decompress_gzip, TargetCompression},
+	Blob, TileCompression,
+	utils::{TargetCompression, decompress_brotli, decompress_gzip},
 };
 
 #[derive(Debug)]
@@ -145,16 +145,16 @@ impl StaticSourceTrait for TarFile {
 
 		let file_entry = self.lookup.get(&url.str[1..])?.to_owned();
 
-		if accept.contains(Brotli) {
-			if let Some(blob) = &file_entry.br {
-				return SourceResponse::new_some(blob.to_owned(), &Brotli, &file_entry.mime);
-			}
+		if accept.contains(Brotli)
+			&& let Some(blob) = &file_entry.br
+		{
+			return SourceResponse::new_some(blob.to_owned(), &Brotli, &file_entry.mime);
 		}
 
-		if accept.contains(Gzip) {
-			if let Some(blob) = &file_entry.gz {
-				return SourceResponse::new_some(blob.to_owned(), &Gzip, &file_entry.mime);
-			}
+		if accept.contains(Gzip)
+			&& let Some(blob) = &file_entry.gz
+		{
+			return SourceResponse::new_some(blob.to_owned(), &Gzip, &file_entry.mime);
 		}
 
 		if let Some(blob) = &file_entry.un {
@@ -184,9 +184,9 @@ mod tests {
 	use super::*;
 	use assert_fs::NamedTempFile;
 	use versatiles_container::{
-		convert_tiles_container, MockTilesReader, MockTilesReaderProfile, TilesConverterParameters,
+		MockTilesReader, MockTilesReaderProfile, TilesConverterParameters, convert_tiles_container,
 	};
-	use versatiles_core::types::TilesReaderTrait;
+	use versatiles_core::{TilesReaderTrait, config::Config};
 
 	pub async fn make_test_tar(compression: TileCompression) -> NamedTempFile {
 		// get dummy reader
@@ -200,9 +200,14 @@ mod tests {
 			..Default::default()
 		};
 
-		convert_tiles_container(reader.boxed(), parameters, container_file.to_str().unwrap())
-			.await
-			.unwrap();
+		convert_tiles_container(
+			reader.boxed(),
+			parameters,
+			container_file.to_str().unwrap(),
+			Config::default().arc(),
+		)
+		.await
+		.unwrap();
 
 		container_file
 	}
@@ -241,13 +246,13 @@ mod tests {
 			let file = make_test_tar(compression_tar).await;
 			let mut tar_file = TarFile::from(&file)?;
 
-			test2(&mut tar_file, &compression_tar, N).await?;
-			test2(&mut tar_file, &compression_tar, G).await?;
-			test2(&mut tar_file, &compression_tar, B).await?;
+			test2(&mut tar_file, &compression_tar, N)?;
+			test2(&mut tar_file, &compression_tar, G)?;
+			test2(&mut tar_file, &compression_tar, B)?;
 
 			return Ok(());
 
-			async fn test2(
+			fn test2(
 				tar_file: &mut TarFile,
 				compression_tar: &TileCompression,
 				compression_accept: TileCompression,
@@ -264,7 +269,10 @@ mod tests {
 				let result = result.unwrap();
 
 				if result.compression == N {
-					assert_eq!(result.blob.as_str(), "{\"bounds\":[-180,-79.17133464081944,45,66.51326044311185],\"maxzoom\":3,\"minzoom\":2,\"tile_content\":\"vector\",\"tile_format\":\"vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}");
+					assert_eq!(
+						result.blob.as_str(),
+						"{\"bounds\":[-180,-79.171335,45,66.51326],\"maxzoom\":3,\"minzoom\":2,\"tile_format\":\"vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tile_type\":\"vector\",\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
+					);
 				}
 
 				assert_eq!(result.mime, "application/json");

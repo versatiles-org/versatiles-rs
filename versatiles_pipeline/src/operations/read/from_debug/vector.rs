@@ -2,26 +2,23 @@ use ab_glyph::{Font, FontArc, Outline, OutlineCurve::*, Point};
 use anyhow::Result;
 use lazy_static::lazy_static;
 use std::{f64::consts::PI, ops::Div, vec};
-use versatiles_core::types::{Blob, TileCoord3};
+use versatiles_core::TileCoord;
 use versatiles_geometry::{
-	math,
+	geo::*,
 	vector_tile::{VectorTile, VectorTileLayer},
-	Coordinates1, Coordinates2, Coordinates3, GeoFeature, Geometry, MultiPolygonGeometry,
 };
 
 lazy_static! {
 	static ref FONT: FontArc = FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap();
 }
 
-pub fn create_debug_vector_tile(coord: &TileCoord3) -> Result<Blob> {
-	let tile = VectorTile::new(vec![
+pub fn create_debug_vector_tile(coord: &TileCoord) -> Result<VectorTile> {
+	Ok(VectorTile::new(vec![
 		get_background_layer()?,
-		draw_text("debug_z", 140.0, format!("z:{}", coord.z)),
+		draw_text("debug_z", 140.0, format!("z:{}", coord.level)),
 		draw_text("debug_x", 190.0, format!("x:{}", coord.x)),
 		draw_text("debug_y", 240.0, format!("y:{}", coord.y)),
-	]);
-
-	tile.to_blob()
+	]))
 }
 
 fn draw_text(name: &str, y: f32, text: String) -> VectorTileLayer {
@@ -34,30 +31,41 @@ fn draw_text(name: &str, y: f32, text: String) -> VectorTileLayer {
 	let mut position = Point { x: 100.0, y };
 
 	let get_char_as_feature = |outline: Outline, position: &Point| {
-		let mut multilinestring = Coordinates2::new();
+		let mut mls = MultiLineStringGeometry::new();
 		for curve in outline.curves {
 			let points = match curve {
 				Line(p0, p1) => vec![p0, p1],
 				Quad(p0, c0, p1) => draw_quad(p0, c0, p1),
 				Cubic(p0, c0, c1, p1) => draw_cubic(p0, c0, c1, p1),
 			};
-			multilinestring.push(Vec::from_iter(points.iter().map(|p| {
-				[
-					8.0 * (p.x * scale + position.x) as f64,
-					8.0 * ((height - p.y) * scale + position.y) as f64,
-				]
-			})));
+			mls.push(LineStringGeometry::from(
+				points
+					.iter()
+					.map(|p| {
+						[
+							8.0 * (p.x * scale + position.x) as f64,
+							8.0 * ((height - p.y) * scale + position.y) as f64,
+						]
+					})
+					.collect::<Vec<_>>(),
+			));
 		}
 
-		let multipolygon = get_multipolygon(multilinestring);
+		let multipolygon = get_multipolygon(mls);
 
 		GeoFeature::new(Geometry::MultiPolygon(multipolygon))
 	};
 
-	for c in text.chars() {
+	for (i, c) in text.chars().enumerate() {
 		let glyph_id = font.glyph_id(c);
 		if let Some(outline) = font.outline(glyph_id) {
-			features.push(get_char_as_feature(outline, &position));
+			let mut feature = get_char_as_feature(outline, &position);
+			feature
+				.properties
+				.insert(String::from("char"), GeoValue::from(c.to_string()));
+			feature.properties.insert(String::from("x"), GeoValue::from(position.x));
+			feature.properties.insert(String::from("index"), GeoValue::from(i));
+			features.push(feature);
 		}
 		position.x += scale * font.h_advance_unscaled(glyph_id);
 	}
@@ -65,41 +73,43 @@ fn draw_text(name: &str, y: f32, text: String) -> VectorTileLayer {
 	VectorTileLayer::from_features(String::from(name), features, 4096, 1).unwrap()
 }
 
-fn get_multipolygon(multilinestring: Coordinates2) -> MultiPolygonGeometry {
-	fn get_ring(mut iter: impl Iterator<Item = Coordinates1>) -> Option<Coordinates1> {
-		let mut ring = iter.next()?;
-		let p0 = *ring.first().unwrap();
-		while ring.last().unwrap() != &p0 {
-			let line = iter.next().unwrap();
+fn get_multipolygon(mls: MultiLineStringGeometry) -> MultiPolygonGeometry {
+	fn get_ring(mut iter: impl Iterator<Item = LineStringGeometry>) -> Option<RingGeometry> {
+		let mut points = iter.next()?.into_inner();
+		let p0 = points.first()?.clone();
+
+		while points.last()? != &p0 {
+			let line = iter.next()?;
 			for point in line.into_iter().skip(1) {
-				ring.push(point);
+				points.push(point);
 			}
 		}
-		Some(ring)
+
+		Some(RingGeometry(points))
 	}
 
-	let mut multipolygon = Coordinates3::new();
-	let mut iter = multilinestring.into_iter();
+	let mut multipolygon = MultiPolygonGeometry::new();
+	let mut iter = mls.into_iter();
 
 	while let Some(ring) = get_ring(&mut iter) {
 		if ring.len() == 2 {
 			continue;
 		}
-		if math::area_ring(&ring) > 0.0 {
-			multipolygon.push(vec![ring])
+		if ring.area() > 0.0 {
+			multipolygon.push(PolygonGeometry::from(vec![ring]))
 		} else {
 			multipolygon.last_mut().expect("first ring is missing").push(ring)
 		}
 	}
 
-	MultiPolygonGeometry::new(multipolygon)
+	multipolygon
 }
 
 fn get_background_layer() -> Result<VectorTileLayer> {
-	let mut circle: Coordinates1 = vec![];
+	let mut circle = LineStringGeometry::new();
 	for i in 0..=100 {
 		let a = PI * i as f64 / 50.0;
-		circle.push([(a.cos() + 1.0) * 2047.5, (a.sin() + 1.0) * 2047.5])
+		circle.push(Coordinates::new((a.cos() + 1.0) * 2047.5, (a.sin() + 1.0) * 2047.5));
 	}
 
 	let feature = GeoFeature::new(Geometry::new_line_string(circle));
@@ -174,9 +184,8 @@ mod tests {
 
 	#[test]
 	fn test_create_debug_vector_tile() {
-		let coord = TileCoord3::new(1, 2, 3).unwrap();
-		let blob = create_debug_vector_tile(&coord).unwrap();
-		let vt = VectorTile::from_blob(&blob).unwrap();
+		let coord = TileCoord::new(3, 1, 2).unwrap();
+		let vt = create_debug_vector_tile(&coord).unwrap();
 		assert_eq!(vt.layers.len(), 4);
 		assert_eq!(vt.layers[0].features.len(), 1);
 		assert_eq!(vt.layers[1].features.len(), 3);
@@ -186,13 +195,62 @@ mod tests {
 
 	#[test]
 	fn test_create_debug_vector_tile_different_coord() {
-		let coord = TileCoord3::new(6789, 2345, 10).unwrap();
-		let blob = create_debug_vector_tile(&coord).unwrap();
-		let vt = VectorTile::from_blob(&blob).unwrap();
+		let coord = TileCoord::new(10, 6789, 2345).unwrap();
+		let vt = create_debug_vector_tile(&coord).unwrap();
 		assert_eq!(vt.layers.len(), 4);
 		assert_eq!(vt.layers[0].features.len(), 1);
 		assert_eq!(vt.layers[1].features.len(), 4);
 		assert_eq!(vt.layers[2].features.len(), 6);
 		assert_eq!(vt.layers[3].features.len(), 6);
+	}
+
+	#[test]
+	fn test_draw_quad_straight_line() {
+		use ab_glyph::Point;
+		let p0 = Point { x: 0.0, y: 0.0 };
+		let c0 = Point { x: 0.5, y: 0.5 };
+		let p1 = Point { x: 1.0, y: 1.0 };
+		let pts = draw_quad(p0, c0, p1);
+		assert_eq!(pts.len(), 2, "Expected no subdivision for straight line");
+		assert_eq!(pts[0], p0);
+		assert_eq!(pts[1], p1);
+	}
+
+	#[test]
+	fn test_draw_quad_curve() {
+		use ab_glyph::Point;
+		let p0 = Point { x: 0.0, y: 0.0 };
+		let c0 = Point { x: 0.0, y: 1.0 };
+		let p1 = Point { x: 1.0, y: 1.0 };
+		let pts = draw_quad(p0, c0, p1);
+		assert!(pts.len() > 2, "Expected subdivision for curved quad");
+		assert_eq!(pts.first().cloned(), Some(p0));
+		assert_eq!(pts.last().cloned(), Some(p1));
+	}
+
+	#[test]
+	fn test_draw_cubic_straight_line() {
+		use ab_glyph::Point;
+		let p0 = Point { x: 0.0, y: 0.0 };
+		let c0 = Point { x: 0.333, y: 0.333 };
+		let c1 = Point { x: 0.666, y: 0.666 };
+		let p1 = Point { x: 1.0, y: 1.0 };
+		let pts = draw_cubic(p0, c0, c1, p1);
+		assert_eq!(pts.len(), 2, "Expected no subdivision for straight cubic");
+		assert_eq!(pts[0], p0);
+		assert_eq!(pts[1], p1);
+	}
+
+	#[test]
+	fn test_draw_cubic_curve() {
+		use ab_glyph::Point;
+		let p0 = Point { x: 0.0, y: 0.0 };
+		let c0 = Point { x: 0.0, y: 1.0 };
+		let c1 = Point { x: 1.0, y: 0.0 };
+		let p1 = Point { x: 1.0, y: 1.0 };
+		let pts = draw_cubic(p0, c0, c1, p1);
+		assert!(pts.len() > 2, "Expected subdivision for curved cubic");
+		assert_eq!(pts.first().cloned(), Some(p0));
+		assert_eq!(pts.last().cloned(), Some(p1));
 	}
 }

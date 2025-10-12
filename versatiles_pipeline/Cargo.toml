@@ -13,16 +13,20 @@ repository.workspace = true
 version.workspace = true
 
 [dependencies]
-ab_glyph.workspace = true
+ab_glyph = { version = "0.2.32", default-features = false }
 anyhow.workspace = true
 async-trait.workspace = true
 futures.workspace = true
+gdal = { version = "0.18.0", optional = true }
+gdal-sys = { version = "0.11.0", optional = true }
 imageproc = { version = "0.25.0", default-features = false }
 itertools = { workspace = true, features = ["use_alloc"] }
 lazy_static.workspace = true
 log.workspace = true
 nom = { version = "8.0.0" }
 nom-language = { version = "0.1.0" }
+regex.workspace = true
+tokio.workspace = true
 
 versatiles_core.workspace = true
 versatiles_derive.workspace = true
@@ -32,5 +36,13 @@ versatiles_image.workspace = true
 [dev-dependencies]
 assert_fs.workspace = true
 lazy_static.workspace = true
+pretty_assertions.workspace = true
 regex.workspace = true
+rstest.workspace = true
 tokio = { workspace = true, features = ["macros"] }
+
+
+[features]
+default = []
+gdal = ["dep:gdal", "dep:gdal-sys"]
+bindgen = ["gdal/bindgen"]

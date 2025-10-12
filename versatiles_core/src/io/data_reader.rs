@@ -9,7 +9,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::{io::{DataReaderTrait, DataReader}, types::{Blob, ByteRange}};
+//! use versatiles_core::{io::{DataReaderTrait, DataReader}, Blob, ByteRange};
 //! use anyhow::Result;
 //! use async_trait::async_trait;
 //!
@@ -53,7 +53,7 @@
 //! }
 //! ```
 
-use crate::types::{Blob, ByteRange};
+use crate::{Blob, ByteRange};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
@@ -73,7 +73,7 @@ pub trait DataReaderTrait: Debug + Send + Sync {
 	///
 	/// # Arguments
 	///
-	/// * `range` - A ByteRange struct specifying the offset and length of the range to read.
+	/// * `range` - A `ByteRange` struct specifying the offset and length of the range to read.
 	///
 	/// # Returns
 	///

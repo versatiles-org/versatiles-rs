@@ -9,7 +9,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::{io::{DataReaderHttp, DataReaderTrait}, types::{Blob, ByteRange}};
+//! use versatiles_core::{io::{DataReaderHttp, DataReaderTrait}, Blob, ByteRange};
 //! use anyhow::Result;
 //! use reqwest::Url;
 //!
@@ -28,13 +28,13 @@
 //! ```
 
 use super::DataReaderTrait;
-use crate::types::{Blob, ByteRange};
-use anyhow::{anyhow, bail, Context, Result};
+use crate::{Blob, ByteRange};
+use anyhow::{Context, Result, anyhow, bail};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
 use reqwest::{Client, Method, Request, StatusCode, Url};
-use std::{ops::Deref, str, time::Duration};
+use std::{str, time::Duration};
 
 /// A struct that provides reading capabilities from an HTTP(S) endpoint.
 #[derive(Debug)]
@@ -81,7 +81,7 @@ impl DataReaderTrait for DataReaderHttp {
 	///
 	/// # Arguments
 	///
-	/// * `range` - A ByteRange struct specifying the offset and length of the range to read.
+	/// * `range` - A `ByteRange` struct specifying the offset and length of the range to read.
 	///
 	/// # Returns
 	///
@@ -106,8 +106,8 @@ impl DataReaderTrait for DataReaderHttp {
 		}
 
 		let content_range: &str = match response.headers().get("content-range") {
-			Some(header_value) => header_value.to_str()?,
-			None => bail!("content-range is not set in response headers, {}", ctx()),
+			Some(header_value) => header_value.to_str().with_context(ctx)?,
+			None => bail!("content-range header is not set in response headers, {}", ctx()),
 		};
 
 		lazy_static! {
@@ -142,7 +142,7 @@ impl DataReaderTrait for DataReaderHttp {
 
 		let bytes = response.bytes().await.with_context(ctx)?;
 
-		Ok(Blob::from(bytes.deref()))
+		Ok(Blob::from(&*bytes))
 
 		//.with_context(|| format!("while reading {} (range {range_val})", self.url))
 	}
@@ -153,7 +153,14 @@ impl DataReaderTrait for DataReaderHttp {
 	///
 	/// * A Result containing a Blob with all the data or an error.
 	async fn read_all(&self) -> Result<Blob> {
-		bail!("not implemented yet")
+		let ctx = || format!("while reading all data from {}", self.url);
+		let response = self.client.get(self.url.clone()).send().await.with_context(ctx)?;
+		if !response.status().is_success() {
+			let status = response.status();
+			bail!("expected successful response, got {status}, {}", ctx());
+		}
+		let bytes = response.bytes().await.with_context(ctx)?;
+		Ok(Blob::from(&*bytes))
 	}
 
 	/// Gets the name of the data source.
@@ -213,7 +220,7 @@ mod tests {
 			"format 3",
 		)
 		.await
-		.unwrap()
+		.unwrap();
 	}
 
 	#[tokio::test]

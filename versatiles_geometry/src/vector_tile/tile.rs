@@ -1,15 +1,19 @@
 #![allow(dead_code)]
 
 use super::layer::VectorTileLayer;
-use anyhow::{bail, Context, Result};
-use versatiles_core::{io::*, types::Blob};
+use anyhow::{Context, Result, bail};
+use versatiles_core::{
+	Blob,
+	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
+};
 
-#[derive(Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct VectorTile {
 	pub layers: Vec<VectorTileLayer>,
 }
 
 impl VectorTile {
+	#[must_use]
 	pub fn new(layers: Vec<VectorTileLayer>) -> VectorTile {
 		VectorTile { layers }
 	}
@@ -41,7 +45,7 @@ impl VectorTile {
 	pub fn to_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_le();
 
-		for layer in self.layers.iter() {
+		for layer in &self.layers {
 			writer.write_pbf_key(3, 2).context("Failed to write PBF key")?;
 			writer
 				.write_pbf_blob(&layer.to_blob().context("Failed to convert VectorTileLayer to blob")?)
@@ -50,12 +54,22 @@ impl VectorTile {
 
 		Ok(writer.into_blob())
 	}
+
+	#[must_use]
+	pub fn find_layer(&self, name: &str) -> Option<&VectorTileLayer> {
+		self.layers.iter().find(|layer| layer.name == name)
+	}
+
+	pub fn find_layer_mut(&mut self, name: &str) -> Option<&mut VectorTileLayer> {
+		self.layers.iter_mut().find(|layer| layer.name == name)
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use std::env::current_dir;
+	use versatiles_core::io::{DataReaderFile, DataReaderTrait};
 
 	async fn get_pbf() -> Result<Blob> {
 		DataReaderFile::open(&current_dir().unwrap().join("../testdata/shortbread-tile.pbf"))

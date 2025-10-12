@@ -1,7 +1,7 @@
 use super::{TileBBoxPyramid, TileCompression, TileFormat};
 
 /// Parameters for configuring a `TilesReader`.
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Default, PartialEq, Clone)]
 pub struct TilesReaderParameters {
 	pub bbox_pyramid: TileBBoxPyramid,
 	pub tile_compression: TileCompression,
@@ -10,20 +10,22 @@ pub struct TilesReaderParameters {
 
 impl TilesReaderParameters {
 	/// Create a new `TilesReaderParameters`.
+	#[must_use]
 	pub fn new(
 		tile_format: TileFormat,
 		tile_compression: TileCompression,
 		bbox_pyramid: TileBBoxPyramid,
 	) -> TilesReaderParameters {
 		TilesReaderParameters {
-			tile_format,
-			tile_compression,
 			bbox_pyramid,
+			tile_compression,
+			tile_format,
 		}
 	}
 
 	#[cfg(test)]
 	#[allow(dead_code)]
+	#[must_use]
 	pub fn new_full(tile_format: TileFormat, tile_compression: TileCompression) -> TilesReaderParameters {
 		TilesReaderParameters {
 			tile_format,

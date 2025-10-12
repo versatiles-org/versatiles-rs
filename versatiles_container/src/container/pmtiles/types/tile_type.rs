@@ -1,5 +1,5 @@
-use anyhow::{bail, Result};
-use versatiles_core::types::TileFormat;
+use anyhow::{Result, bail};
+use versatiles_core::TileFormat;
 
 #[allow(clippy::upper_case_acronyms)]
 #[derive(Clone, Copy, Debug, PartialEq)]

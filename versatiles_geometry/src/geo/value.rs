@@ -1,4 +1,4 @@
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
 use std::{
@@ -6,6 +6,7 @@ use std::{
 	fmt::{Debug, Display},
 	hash::Hash,
 };
+use versatiles_core::json::JsonValue;
 
 #[derive(Clone, PartialEq)]
 pub enum GeoValue {
@@ -52,14 +53,14 @@ impl From<String> for GeoValue {
 
 impl From<u8> for GeoValue {
 	fn from(value: u8) -> Self {
-		GeoValue::UInt(value as u64)
+		GeoValue::UInt(u64::from(value))
 	}
 }
 
 impl From<i32> for GeoValue {
 	fn from(value: i32) -> Self {
 		if value < 0 {
-			GeoValue::Int(value as i64)
+			GeoValue::Int(i64::from(value))
 		} else {
 			GeoValue::UInt(value as u64)
 		}
@@ -68,6 +69,12 @@ impl From<i32> for GeoValue {
 
 impl From<u32> for GeoValue {
 	fn from(value: u32) -> Self {
+		GeoValue::UInt(u64::from(value))
+	}
+}
+
+impl From<usize> for GeoValue {
+	fn from(value: usize) -> Self {
 		GeoValue::UInt(value as u64)
 	}
 }
@@ -127,7 +134,7 @@ impl PartialOrd for GeoValue {
 
 impl Ord for GeoValue {
 	fn cmp(&self, other: &Self) -> Ordering {
-		use GeoValue::*;
+		use GeoValue::{Bool, Double, Float, Int, String, UInt};
 		match (self, other) {
 			(String(a), String(b)) => a.cmp(b),
 			(Float(a), Float(b)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
@@ -170,6 +177,7 @@ impl GeoValue {
 		}
 	}
 
+	#[must_use]
 	pub fn parse_str(value: &str) -> Self {
 		lazy_static! {
 			static ref REG_DOUBLE: Regex = RegexBuilder::new(r"^\-?\d*\.\d+$").build().unwrap();
@@ -178,7 +186,7 @@ impl GeoValue {
 		}
 
 		match value {
-			"" => GeoValue::String("".to_string()),
+			"" => GeoValue::String(String::new()),
 			"true" => GeoValue::Bool(true),
 			"false" => GeoValue::Bool(false),
 			_ => {
@@ -200,6 +208,19 @@ impl GeoValue {
 			GeoValue::Int(v) => Ok(*v as u64),
 			GeoValue::UInt(v) => Ok(*v),
 			_ => bail!("value is not an integer"),
+		}
+	}
+
+	#[must_use]
+	pub fn to_json(&self) -> JsonValue {
+		match self {
+			GeoValue::Bool(v) => JsonValue::from(*v),
+			GeoValue::Double(v) => JsonValue::from(*v),
+			GeoValue::Float(v) => JsonValue::from(f64::from(*v)),
+			GeoValue::Int(v) => JsonValue::from(*v as f64),
+			GeoValue::Null => JsonValue::Null,
+			GeoValue::String(v) => JsonValue::from(v.clone()),
+			GeoValue::UInt(v) => JsonValue::from(*v as f64),
 		}
 	}
 }

@@ -1,11 +1,11 @@
 use super::{Directory, EntryV3};
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::{
 	cmp::Ordering,
 	io::Write,
 	slice::{Iter, SliceIndex},
 };
-use versatiles_core::{io::*, types::*, utils::compress};
+use versatiles_core::{io::*, utils::compress, *};
 
 /// A collection of `EntryV3` that provides various utility functions
 /// for handling tile data entries, including serialization, deserialization,

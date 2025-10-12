@@ -8,7 +8,7 @@
 //!
 //! ```rust
 //! use versatiles_container::{MBTilesReader, TilesWriterTrait, VersaTilesReader, VersaTilesWriter};
-//! use versatiles_core::types::{TileCoord3, TilesReaderTrait};
+//! use versatiles_core::{TileCoord, TilesReaderTrait, config::Config};
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -21,7 +21,7 @@
 //!     let mut reader = MBTilesReader::open_path(&path_mbtiles)?;
 //!
 //!     // Write the tiles to the .versatiles file
-//!     VersaTilesWriter::write_to_path(&mut reader, &path_versatiles).await?;
+//!     VersaTilesWriter::write_to_path(&mut reader, &path_versatiles, Config::default().arc()).await?;
 //!
 //!     println!("Tiles have been successfully written to {path_versatiles:?}");
 //!
@@ -29,7 +29,7 @@
 //!     let mut reader = VersaTilesReader::open_path(&path_versatiles).await?;
 //!
 //!     // Get tile data
-//!     if let Some(tile) = reader.get_tile_data(&TileCoord3::new(2200, 1345, 12)?).await? {
+//!     if let Some(tile) = reader.get_tile_blob(&TileCoord::new(12, 2200, 1345)?).await? {
 //!         println!("Tile data: {tile:?}");
 //!     } else {
 //!         println!("No tile data found");

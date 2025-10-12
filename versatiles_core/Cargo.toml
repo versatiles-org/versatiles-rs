@@ -20,19 +20,30 @@ byteorder = { workspace = true, features = [] }
 clap = { workspace = true, optional = true, features = ["std", "derive"] }
 colored = { version = "3.0.0", default-features = false, optional = true }
 enumset.workspace = true
-flate2 = { version = "1.1.2", default-features = false, features = ["default"] }
+flate2 = { version = "1.1.4", default-features = false, features = ["default"] }
 futures.workspace = true
-indicatif = { version = "0.18.0", features = ["unicode-width"] }
+image = { workspace = true, optional = true }
 itertools.workspace = true
 lazy_static = { workspace = true }
+log.workspace = true
 num_cpus.workspace = true
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls"] }
+terminal_size = "0.4.3"
+time = { version = "0.3.44", default-features = false, features = [
+	"formatting",
+	"local-offset",
+] }
 tokio.workspace = true
+uuid = { version = "1.18.1", features = ["v4"] }
+
+versatiles_derive.workspace = true
 
 [dev-dependencies]
 assert_fs.workspace = true
 criterion = "0.7.0"
+rstest.workspace = true
+tempfile = "3.23.0"
 tokio = { workspace = true, features = ["macros"] }
 wildmatch.workspace = true
 
@@ -40,6 +51,7 @@ wildmatch.workspace = true
 default = ["cli"]
 cli = ["dep:clap", "dep:colored"]
 test = []
+image = ["dep:image"]
 
 [[bench]]
 name = "byte_iterator"

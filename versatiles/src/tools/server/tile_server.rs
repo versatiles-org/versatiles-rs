@@ -2,24 +2,24 @@ use super::{
 	sources::{SourceResponse, StaticSource, TileSource},
 	utils::Url,
 };
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use axum::{
+	Router,
 	body::Body,
 	extract::State,
 	http::{
-		header::{ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE},
 		HeaderMap, Uri,
+		header::{ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE},
 	},
 	response::Response,
 	routing::get,
-	Router,
 };
 use hyper::header::{ACCESS_CONTROL_ALLOW_ORIGIN, VARY};
 use std::path::Path;
 use tokio::sync::oneshot::Sender;
 use versatiles_core::{
-	types::{Blob, TileCompression, TilesReaderTrait},
-	utils::{optimize_compression, TargetCompression},
+	Blob, TileCompression, TilesReaderTrait,
+	utils::{TargetCompression, optimize_compression},
 };
 
 pub struct TileServer {
@@ -162,7 +162,7 @@ impl TileServer {
 					log::warn!("send 400 for tile request: {path}. Reason: {err}");
 					error_400()
 				} else {
-					log::warn!("send 404 for tile request: {path}");
+					log::info!("send 404 for tile request: {path}");
 					error_404()
 				}
 			}
@@ -203,7 +203,7 @@ impl TileServer {
 				}
 			}
 
-			log::warn!("send 404 to static request: {url}");
+			log::info!("send 404 to static request: {url}");
 			error_404()
 		}
 	}
@@ -319,10 +319,10 @@ fn get_encoding(headers: HeaderMap) -> TargetCompression {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use axum::http::{header::ACCEPT_ENCODING, HeaderMap};
-	use enumset::{enum_set, EnumSet};
+	use axum::http::{HeaderMap, header::ACCEPT_ENCODING};
+	use enumset::{EnumSet, enum_set};
 	use versatiles_container::{MockTilesReader, MockTilesReaderProfile};
-	use versatiles_core::types::TileCompression::*;
+	use versatiles_core::TileCompression::*;
 
 	const IP: &str = "127.0.0.1";
 
@@ -380,7 +380,7 @@ mod tests {
 
 		assert_eq!(get("tiles/cheese/brum.json").await, "Not Found");
 
-		let meta = "{\"bounds\":[-180,-79.17133464081944,45,66.51326044311185],\"maxzoom\":3,\"minzoom\":2,\"tile_content\":\"vector\",\"tile_format\":\"vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/cheese/{z}/{x}/{y}\"],\"type\":\"dummy\"}";
+		let meta = "{\"bounds\":[-180,-79.171335,45,66.51326],\"maxzoom\":3,\"minzoom\":2,\"tile_format\":\"vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tile_type\":\"vector\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/cheese/{z}/{x}/{y}\"],\"type\":\"dummy\"}";
 		assert_eq!(get("tiles/cheese/meta.json").await, meta);
 		assert_eq!(get("tiles/cheese/tiles.json").await, meta);
 		assert!(get("tiles/cheese/0/0/0.png").await.starts_with("\u{1a}4\n\u{5}ocean"));

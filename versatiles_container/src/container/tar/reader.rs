@@ -1,17 +1,17 @@
 //! Provides functionality for reading tile data from a tar archive.
 
-use anyhow::{anyhow, ensure, Result};
+use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path};
 use tar::{Archive, EntryType};
-use versatiles_core::{io::*, tilejson::TileJSON, types::*, utils::decompress};
+use versatiles_core::{io::*, utils::decompress, *};
 
 /// A struct that provides functionality to read tile data from a tar archive.
 pub struct TarTilesReader {
 	tilejson: TileJSON,
 	name: String,
 	reader: Box<DataReaderFile>,
-	tile_map: HashMap<TileCoord3, ByteRange>,
+	tile_map: HashMap<TileCoord, ByteRange>,
 	parameters: TilesReaderParameters,
 }
 
@@ -52,7 +52,7 @@ impl TarTilesReader {
 			let path_vec: Vec<&str> = path_tmp_string.split('/').collect();
 
 			if path_vec.len() == 3 {
-				let z = path_vec[0].parse::<u8>()?;
+				let level = path_vec[0].parse::<u8>()?;
 				let x = path_vec[1].parse::<u32>()?;
 
 				let mut filename: String = String::from(path_vec[2]);
@@ -87,9 +87,9 @@ impl TarTilesReader {
 				let offset = entry.raw_file_position();
 				let length = entry.size();
 
-				let coord3 = TileCoord3::new(x, y, z)?;
-				bbox_pyramid.include_coord(&coord3);
-				tile_map.insert(coord3, ByteRange { offset, length });
+				let coord = TileCoord::new(level, x, y)?;
+				bbox_pyramid.include_coord(&coord);
+				tile_map.insert(coord, ByteRange { offset, length });
 				continue;
 			}
 
@@ -149,12 +149,12 @@ impl TarTilesReader {
 #[async_trait]
 impl TilesReaderTrait for TarTilesReader {
 	/// Returns the container name.
-	fn get_container_name(&self) -> &str {
+	fn container_name(&self) -> &str {
 		"tar"
 	}
 
 	/// Returns the parameters of the tiles reader.
-	fn get_parameters(&self) -> &TilesReaderParameters {
+	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
@@ -170,7 +170,7 @@ impl TilesReaderTrait for TarTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the metadata.
-	fn get_tilejson(&self) -> &TileJSON {
+	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
@@ -181,8 +181,8 @@ impl TilesReaderTrait for TarTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
-	async fn get_tile_data(&self, coord: &TileCoord3) -> Result<Option<Blob>> {
-		log::trace!("get_tile_data {:?}", coord);
+	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+		log::trace!("get_tile_blob {:?}", coord);
 
 		let range = self.tile_map.get(coord);
 
@@ -195,7 +195,7 @@ impl TilesReaderTrait for TarTilesReader {
 	}
 
 	/// Returns the name of the tar archive.
-	fn get_source_name(&self) -> &str {
+	fn source_name(&self) -> &str {
 		&self.name
 	}
 }
@@ -203,7 +203,7 @@ impl TilesReaderTrait for TarTilesReader {
 impl Debug for TarTilesReader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("TarTilesReader")
-			.field("parameters", &self.get_parameters())
+			.field("parameters", &self.parameters())
 			.finish()
 	}
 }
@@ -211,7 +211,7 @@ impl Debug for TarTilesReader {
 #[cfg(test)]
 pub mod tests {
 	use super::*;
-	use crate::{make_test_file, MockTilesWriter, MOCK_BYTES_PBF};
+	use crate::{MOCK_BYTES_PBF, MockTilesWriter, make_test_file};
 	use versatiles_core::utils::decompress_gzip;
 
 	#[cfg(feature = "cli")]
@@ -224,18 +224,24 @@ pub mod tests {
 		// get tar reader
 		let reader = TarTilesReader::open_path(&temp_file)?;
 
-		assert_eq!(format!("{reader:?}"), "TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: MVT } }");
-		assert_eq!(reader.get_container_name(), "tar");
-		assert!(reader.get_source_name().ends_with(temp_file.to_str().unwrap()));
 		assert_eq!(
-			reader.get_tilejson().as_string(),
+			format!("{reader:?}"),
+			"TarTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)], tile_compression: Gzip, tile_format: MVT } }"
+		);
+		assert_eq!(reader.container_name(), "tar");
+		assert!(reader.source_name().ends_with(temp_file.to_str().unwrap()));
+		assert_eq!(
+			reader.tilejson().as_string(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
-		assert_eq!(format!("{:?}", reader.get_parameters()), "TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1), 1: [0,0,1,1] (4), 2: [0,0,3,3] (16), 3: [0,0,7,7] (64)], tile_compression: Gzip, tile_format: MVT }");
-		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Gzip);
-		assert_eq!(reader.get_parameters().tile_format, TileFormat::MVT);
+		assert_eq!(
+			format!("{:?}", reader.parameters()),
+			"TilesReaderParameters { bbox_pyramid: [0: [0,0,0,0] (1x1), 1: [0,0,1,1] (2x2), 2: [0,0,3,3] (4x4), 3: [0,0,7,7] (8x8)], tile_compression: Gzip, tile_format: MVT }"
+		);
+		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
+		assert_eq!(reader.parameters().tile_format, TileFormat::MVT);
 
-		let tile = reader.get_tile_data(&TileCoord3::new(6, 2, 3)?).await?.unwrap();
+		let tile = reader.get_tile_blob(&TileCoord::new(3, 6, 2)?).await?.unwrap();
 		assert_eq!(decompress_gzip(&tile)?.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())
@@ -310,12 +316,12 @@ pub mod tests {
 		a.finish()?;
 
 		let reader = TarTilesReader::open_path(&filename)?;
-		assert_eq!(reader.get_parameters().tile_format, TileFormat::BIN);
-		assert_eq!(reader.get_parameters().tile_compression, TileCompression::Uncompressed);
-		assert_eq!(reader.get_parameters().bbox_pyramid.count_tiles(), 1);
+		assert_eq!(reader.parameters().tile_format, TileFormat::BIN);
+		assert_eq!(reader.parameters().tile_compression, TileCompression::Uncompressed);
+		assert_eq!(reader.parameters().bbox_pyramid.count_tiles(), 1);
 		assert_eq!(
 			reader
-				.get_tile_data(&TileCoord3::new(1, 2, 3)?)
+				.get_tile_blob(&TileCoord::new(3, 1, 2)?)
 				.await?
 				.unwrap()
 				.as_slice(),

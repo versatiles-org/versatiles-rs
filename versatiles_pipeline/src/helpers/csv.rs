@@ -1,7 +1,7 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::{io::BufReader, path::Path};
 use versatiles_core::{progress::get_progress_bar, utils::read_csv_iter};
-use versatiles_geometry::{GeoProperties, GeoValue};
+use versatiles_geometry::geo::*;
 
 /// Reads a CSV file from the given path and returns a vector of `GeoProperties`.
 ///
@@ -16,7 +16,7 @@ pub async fn read_csv_file(path: &Path) -> Result<Vec<GeoProperties>> {
 	let file = std::fs::File::open(path).with_context(|| format!("Failed to open file at path: {path:?}"))?;
 
 	let size = file.metadata()?.len();
-	let mut progress = get_progress_bar("read csv", size);
+	let progress = get_progress_bar("read csv", size);
 
 	let reader = BufReader::new(file);
 

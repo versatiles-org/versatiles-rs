@@ -27,8 +27,9 @@ tar = { version = "0.4.44", default-features = false }
 tokio = { workspace = true, features = ["macros", "rt"] }
 
 versatiles_core = { workspace = true, default-features = false }
-versatiles_pipeline = { workspace = true }
-versatiles_image = { workspace = true }
+versatiles_derive.workspace = true
+versatiles_image.workspace = true
+versatiles_pipeline.workspace = true
 
 [dev-dependencies]
 lazy_static.workspace = true

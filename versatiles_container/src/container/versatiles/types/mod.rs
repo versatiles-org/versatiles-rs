@@ -19,6 +19,9 @@ pub use block_definition::BlockDefinition;
 mod block_index;
 pub use block_index::BlockIndex;
 
+mod block_writer;
+pub use block_writer::BlockWriter;
+
 mod file_header;
 pub use file_header::FileHeader;
 

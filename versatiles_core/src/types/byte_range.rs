@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::types::ByteRange;
+//! use versatiles_core::ByteRange;
 //!
 //! let range = ByteRange::new(23, 42);
 //! assert_eq!(range.offset, 23);
@@ -46,12 +46,13 @@ impl ByteRange {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::ByteRange;
+	/// use versatiles_core::ByteRange;
 	///
 	/// let range = ByteRange::new(10, 5);
 	/// assert_eq!(range.offset, 10);
 	/// assert_eq!(range.length, 5);
 	/// ```
+	#[must_use]
 	pub fn new(offset: u64, length: u64) -> Self {
 		Self { offset, length }
 	}
@@ -61,12 +62,13 @@ impl ByteRange {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::ByteRange;
+	/// use versatiles_core::ByteRange;
 	///
 	/// let empty = ByteRange::empty();
 	/// assert_eq!(empty.offset, 0);
 	/// assert_eq!(empty.length, 0);
 	/// ```
+	#[must_use]
 	pub fn empty() -> Self {
 		Self { offset: 0, length: 0 }
 	}
@@ -82,7 +84,7 @@ impl ByteRange {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::ByteRange;
+	/// use versatiles_core::ByteRange;
 	///
 	/// let r1 = ByteRange::new(10, 5);
 	/// let r2 = r1.get_shifted_forward(7);
@@ -90,6 +92,7 @@ impl ByteRange {
 	/// assert_eq!(r2.length, 5);
 	/// assert_eq!(r1.offset, 10); // original remains unchanged
 	/// ```
+	#[must_use]
 	pub fn get_shifted_forward(&self, offset: u64) -> Self {
 		Self {
 			offset: self.offset + offset,
@@ -99,8 +102,8 @@ impl ByteRange {
 
 	/// Returns a new `ByteRange` that is shifted backward by the specified `offset`.
 	///
-	/// This method does not mutate the original `ByteRange`.  
-	/// **Note:** It is the caller's responsibility to ensure that `self.offset >= offset`;  
+	/// This method does not mutate the original `ByteRange`.\
+	/// **Note:** It is the caller's responsibility to ensure that `self.offset >= offset`;\
 	/// otherwise, the resulting offset could be negative when interpreted as `u64`.
 	///
 	/// # Arguments
@@ -110,13 +113,14 @@ impl ByteRange {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::ByteRange;
+	/// use versatiles_core::ByteRange;
 	///
 	/// let r1 = ByteRange::new(10, 5);
 	/// let r2 = r1.get_shifted_backward(3);
 	/// assert_eq!(r2.offset, 7);
 	/// assert_eq!(r2.length, 5);
 	/// ```
+	#[must_use]
 	pub fn get_shifted_backward(&self, offset: u64) -> Self {
 		Self {
 			offset: self.offset - offset,
@@ -133,7 +137,7 @@ impl ByteRange {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::ByteRange;
+	/// use versatiles_core::ByteRange;
 	///
 	/// let mut range = ByteRange::new(10, 5);
 	/// range.shift_forward(3);
@@ -156,7 +160,7 @@ impl ByteRange {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::ByteRange;
+	/// use versatiles_core::ByteRange;
 	///
 	/// let mut range = ByteRange::new(10, 5);
 	/// range.shift_backward(5);
@@ -175,13 +179,14 @@ impl ByteRange {
 	/// # Examples
 	///
 	/// ```rust
-	/// use versatiles_core::types::ByteRange;
+	/// use versatiles_core::ByteRange;
 	///
 	/// let range = ByteRange::new(23, 42);
 	/// let usize_range = range.as_range_usize();
 	/// assert_eq!(usize_range.start, 23);
 	/// assert_eq!(usize_range.end, 65);
 	/// ```
+	#[must_use]
 	pub fn as_range_usize(&self) -> Range<usize> {
 		Range {
 			start: self.offset as usize,
@@ -198,7 +203,7 @@ impl fmt::Debug for ByteRange {
 
 impl fmt::Display for ByteRange {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "[{}..{}]", self.offset, self.offset + self.length - 1)
+		write!(f, "[{}..={}]", self.offset, self.offset + self.length - 1)
 	}
 }
 
@@ -214,7 +219,7 @@ mod tests {
 		assert_eq!(range.length, 42, "Expected length == 42");
 	}
 
-	/// Checks that `empty` creates a ByteRange of offset=0, length=0.
+	/// Checks that `empty` creates a `ByteRange` of offset=0, length=0.
 	#[test]
 	fn test_empty() {
 		let range = ByteRange::empty();

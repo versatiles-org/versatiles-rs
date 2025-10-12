@@ -20,10 +20,12 @@
 //! }
 //! ```
 
+use std::sync::Arc;
+
 use crate::TilesWriterTrait;
 use anyhow::Result;
 use async_trait::async_trait;
-use versatiles_core::{io::DataWriterTrait, types::TilesReaderTrait};
+use versatiles_core::{TilesReaderTrait, Traversal, config::Config, io::DataWriterTrait};
 
 /// Mock implementation of a `TilesWriter`.
 pub struct MockTilesWriter {}
@@ -41,18 +43,22 @@ impl MockTilesWriter {
 	///
 	/// A `Result` indicating the success or failure of the operation.
 	pub async fn write(reader: &mut dyn TilesReaderTrait) -> Result<()> {
-		let _temp = reader.get_container_name();
-		let _temp = reader.get_source_name();
-		let _temp = reader.get_tilejson();
+		let _temp = reader.container_name();
+		let _temp = reader.source_name();
+		let _temp = reader.tilejson();
 
-		let bbox_pyramid = reader.get_parameters().bbox_pyramid.clone();
-
-		for bbox in bbox_pyramid.iter_levels() {
-			let mut stream = reader.get_bbox_tile_stream(bbox.clone()).await;
-			while stream.next().await.is_some() {}
-		}
-
-		Ok(())
+		reader
+			.traverse_all_tiles(
+				&Traversal::ANY,
+				Box::new(|_bbox, mut stream| {
+					Box::pin(async move {
+						while stream.next().await.is_some() {}
+						Ok(())
+					})
+				}),
+				Config::default().arc(),
+			)
+			.await
 	}
 }
 
@@ -70,7 +76,11 @@ impl TilesWriterTrait for MockTilesWriter {
 	/// # Returns
 	///
 	/// A `Result` indicating the success or failure of the operation.
-	async fn write_to_writer(reader: &mut dyn TilesReaderTrait, _writer: &mut dyn DataWriterTrait) -> Result<()> {
+	async fn write_to_writer(
+		reader: &mut dyn TilesReaderTrait,
+		_writer: &mut dyn DataWriterTrait,
+		_config: Arc<Config>,
+	) -> Result<()> {
 		MockTilesWriter::write(reader).await
 	}
 }

@@ -10,6 +10,7 @@
 //! ## Usage
 //! ```rust
 //! use versatiles_container::{MBTilesWriter, PMTilesReader, TilesWriterTrait};
+//! use versatiles_core::config::Config;
 //! use std::path::Path;
 //!
 //! #[tokio::main]
@@ -18,7 +19,7 @@
 //!     let mut reader = PMTilesReader::open_path(&path).await.unwrap();
 //!
 //!     let temp_path = std::env::temp_dir().join("temp.mbtiles");
-//!     MBTilesWriter::write_to_path(&mut reader, &temp_path).await.unwrap();
+//!     MBTilesWriter::write_to_path(&mut reader, &temp_path, Config::default().arc()).await.unwrap();
 //! }
 //! ```
 //!
@@ -29,12 +30,13 @@
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying the database structure.
 
 use crate::TilesWriterTrait;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use async_trait::async_trait;
+use futures::lock::Mutex;
 use r2d2::Pool;
-use r2d2_sqlite::{rusqlite::params, SqliteConnectionManager};
-use std::{fs::remove_file, path::Path};
-use versatiles_core::{io::DataWriterTrait, json::JsonObject, progress::get_progress_bar, types::*};
+use r2d2_sqlite::{SqliteConnectionManager, rusqlite::params};
+use std::{fs::remove_file, path::Path, sync::Arc};
+use versatiles_core::{config::Config, io::DataWriterTrait, json::JsonObject, *};
 
 /// A writer for creating and populating MBTiles databases.
 pub struct MBTilesWriter {
@@ -72,14 +74,14 @@ impl MBTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the transaction fails.
-	fn add_tiles(&mut self, tiles: &Vec<(TileCoord3, Blob)>) -> Result<()> {
+	fn add_tiles(&mut self, tiles: &Vec<(TileCoord, Blob)>) -> Result<()> {
 		let mut conn = self.pool.get()?;
 		let transaction = conn.transaction()?;
 		for (c, blob) in tiles {
-			let max_index = 2u32.pow(c.z as u32) - 1;
+			let max_index = 2u32.pow(c.level as u32) - 1;
 			transaction.execute(
 				"INSERT INTO tiles (zoom_level, tile_column, tile_row, tile_data) VALUES (?1, ?2, ?3, ?4)",
-				params![c.z, c.x, max_index - c.y, blob.as_slice()],
+				params![c.level, c.x, max_index - c.y, blob.as_slice()],
 			)?;
 		}
 		transaction.commit()?;
@@ -113,13 +115,13 @@ impl TilesWriterTrait for MBTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the file format or compression is not supported, or if there are issues with writing to the SQLite database.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: Arc<Config>) -> Result<()> {
 		use TileCompression::*;
 		use TileFormat::*;
 
-		let mut writer = MBTilesWriter::new(path)?;
+		let writer = MBTilesWriter::new(path)?;
 
-		let parameters = reader.get_parameters().clone();
+		let parameters = reader.parameters().clone();
 
 		let format = match (parameters.tile_format, parameters.tile_compression) {
 			(JPG, Uncompressed) => "jpg",
@@ -136,17 +138,17 @@ impl TilesWriterTrait for MBTilesWriter {
 		writer.set_metadata("format", format)?;
 		writer.set_metadata("type", "baselayer")?;
 		writer.set_metadata("version", "3.0")?;
-		let pyramid = &reader.get_parameters().bbox_pyramid;
+		let pyramid = &reader.parameters().bbox_pyramid;
 		let bbox = pyramid.get_geo_bbox().unwrap();
 		let center = pyramid.get_geo_center().unwrap();
-		let zoom_min = pyramid.get_zoom_min().unwrap();
-		let zoom_max = pyramid.get_zoom_max().unwrap();
+		let zoom_min = pyramid.get_level_min().unwrap();
+		let zoom_max = pyramid.get_level_max().unwrap();
 		writer.set_metadata("bounds", &format!("{},{},{},{}", bbox.0, bbox.1, bbox.2, bbox.3))?;
 		writer.set_metadata("center", &format!("{},{},{}", center.0, center.1, center.2))?;
 		writer.set_metadata("minzoom", &zoom_min.to_string())?;
 		writer.set_metadata("maxzoom", &zoom_max.to_string())?;
 
-		let tilejson = reader.get_tilejson();
+		let tilejson = reader.tilejson();
 		if let Some(vector_layers) = tilejson.as_object().get("vector_layers") {
 			writer.set_metadata(
 				"json",
@@ -160,26 +162,36 @@ impl TilesWriterTrait for MBTilesWriter {
 			}
 		}
 
-		let mut progress = get_progress_bar("converting tiles", pyramid.count_tiles());
+		let writer_mutex = Arc::new(Mutex::new(writer));
 
-		for bbox in pyramid.iter_levels() {
-			let stream = reader.get_bbox_tile_stream(bbox.clone()).await;
-
-			stream
-				.for_each_buffered(2000, |v| {
-					writer.add_tiles(&v).unwrap();
-					progress.inc(v.len() as u64)
-				})
-				.await;
-		}
-
-		progress.finish();
+		reader
+			.traverse_all_tiles(
+				&Traversal::ANY,
+				Box::new(|_bbox, stream| {
+					let writer_mutex = Arc::clone(&writer_mutex);
+					Box::pin(async move {
+						let mut writer = writer_mutex.lock().await;
+						stream
+							.for_each_buffered(4096, |v| {
+								writer.add_tiles(&v).unwrap();
+							})
+							.await;
+						Ok(())
+					})
+				}),
+				config,
+			)
+			.await?;
 
 		Ok(())
 	}
 
 	/// Not implemented: Writes tiles and metadata to a generic data writer.
-	async fn write_to_writer(_reader: &mut dyn TilesReaderTrait, _writer: &mut dyn DataWriterTrait) -> Result<()> {
+	async fn write_to_writer(
+		_reader: &mut dyn TilesReaderTrait,
+		_writer: &mut dyn DataWriterTrait,
+		_config: Arc<Config>,
+	) -> Result<()> {
 		bail!("not implemented")
 	}
 }
@@ -199,7 +211,7 @@ mod tests {
 		})?;
 
 		let filename = NamedTempFile::new("temp.mbtiles")?;
-		MBTilesWriter::write_to_path(&mut mock_reader, &filename).await?;
+		MBTilesWriter::write_to_path(&mut mock_reader, &filename, Config::default().arc()).await?;
 
 		let mut reader = MBTilesReader::open_path(&filename)?;
 

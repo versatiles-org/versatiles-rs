@@ -13,7 +13,7 @@
 /// # Usage
 ///
 /// ```rust
-/// use versatiles_core::types::ProbeDepth;
+/// use versatiles_core::ProbeDepth;
 ///
 /// fn probe(depth: ProbeDepth) {
 ///     match depth {

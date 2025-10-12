@@ -89,6 +89,10 @@ enum Commands {
 
 	/// Show detailed help
 	Help(tools::help::Subcommand),
+
+	#[clap(hide = true)]
+	/// Internal command for development
+	Dev(tools::dev::Subcommand),
 }
 
 /// Main function for running the command-line interface
@@ -99,11 +103,10 @@ fn main() -> Result<()> {
 	let verbosity = cli.verbose as i16 - cli.quiet as i16;
 	let log_level = match verbosity {
 		i16::MIN..=-1 => LevelFilter::Off,
-		0 => LevelFilter::Error,
-		1 => LevelFilter::Warn,
-		2 => LevelFilter::Info,
-		3 => LevelFilter::Debug,
-		4..=i16::MAX => LevelFilter::Trace,
+		0 => LevelFilter::Warn,
+		1 => LevelFilter::Info,
+		2 => LevelFilter::Debug,
+		3..=i16::MAX => LevelFilter::Trace,
 	};
 
 	env_logger::Builder::new()
@@ -121,13 +124,14 @@ fn run(cli: Cli) -> Result<()> {
 		Commands::Help(arguments) => tools::help::run(arguments),
 		Commands::Probe(arguments) => tools::probe::run(arguments),
 		Commands::Serve(arguments) => tools::serve::run(arguments),
+		Commands::Dev(arguments) => tools::dev::run(arguments),
 	}
 }
 
 /// Unit tests for the command-line interface
 #[cfg(test)]
 mod tests {
-	use crate::{run, Cli};
+	use crate::{Cli, run};
 	use anyhow::Result;
 	use clap::Parser;
 

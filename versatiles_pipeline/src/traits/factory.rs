@@ -1,4 +1,4 @@
-use crate::{vpl::VPLNode, OperationTrait, PipelineFactory};
+use crate::{OperationTrait, PipelineFactory, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 

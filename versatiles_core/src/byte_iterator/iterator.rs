@@ -1,4 +1,4 @@
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result, anyhow};
 use std::io::Read;
 
 const DEBUG_RING_BUFFER_SIZE: usize = 16;
@@ -51,6 +51,7 @@ impl<'a> ByteIterator<'a> {
 		Some(byte)
 	}
 
+	#[must_use]
 	pub fn format_error(&self, msg: &str) -> Error {
 		if self.is_debug_enabled {
 			let (start_index, length) = if self.position < DEBUG_RING_BUFFER_SIZE {
@@ -79,11 +80,13 @@ impl<'a> ByteIterator<'a> {
 	}
 
 	#[inline]
+	#[must_use]
 	pub fn position(&self) -> usize {
 		self.position
 	}
 
 	#[inline]
+	#[must_use]
 	pub fn peek(&self) -> Option<u8> {
 		self.peeked_byte
 	}
@@ -91,11 +94,11 @@ impl<'a> ByteIterator<'a> {
 	#[inline]
 	pub fn advance(&mut self) {
 		self.peeked_byte = self.next_byte();
-		if self.is_debug_enabled {
-			if let Some(byte) = self.peeked_byte {
-				let index = self.position % DEBUG_RING_BUFFER_SIZE;
-				self.debug_buffer[index] = byte;
-			}
+		if self.is_debug_enabled
+			&& let Some(byte) = self.peeked_byte
+		{
+			let index = self.position % DEBUG_RING_BUFFER_SIZE;
+			self.debug_buffer[index] = byte;
 		}
 		self.position += 1;
 	}

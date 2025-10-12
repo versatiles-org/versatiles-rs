@@ -10,7 +10,7 @@
 //! # Examples
 //!
 //! ```rust
-//! use versatiles_core::{io::{ValueWriter, ValueWriterBlob}, types::Blob};
+//! use versatiles_core::{io::{ValueWriter, ValueWriterBlob}, Blob};
 //! use anyhow::Result;
 //!
 //! fn main() -> Result<()> {
@@ -27,7 +27,7 @@
 #![allow(dead_code)]
 
 use super::ValueWriter;
-use crate::types::Blob;
+use crate::Blob;
 use anyhow::Result;
 use byteorder::{BigEndian, ByteOrder, LittleEndian};
 use std::io::{Cursor, Write};
@@ -45,6 +45,7 @@ impl<E: ByteOrder> ValueWriterBlob<E> {
 	/// # Returns
 	///
 	/// * A new `ValueWriterBlob` instance.
+	#[must_use]
 	pub fn new() -> ValueWriterBlob<E> {
 		ValueWriterBlob {
 			_phantom: PhantomData,
@@ -57,6 +58,7 @@ impl<E: ByteOrder> ValueWriterBlob<E> {
 	/// # Returns
 	///
 	/// * A `Blob` containing the written data.
+	#[must_use]
 	pub fn into_blob(self) -> Blob {
 		Blob::from(self.cursor.into_inner())
 	}
@@ -68,6 +70,7 @@ impl ValueWriterBlob<LittleEndian> {
 	/// # Returns
 	///
 	/// * A new `ValueWriterBlob` instance with little-endian byte order.
+	#[must_use]
 	pub fn new_le() -> ValueWriterBlob<LittleEndian> {
 		ValueWriterBlob::new()
 	}
@@ -79,6 +82,7 @@ impl ValueWriterBlob<BigEndian> {
 	/// # Returns
 	///
 	/// * A new `ValueWriterBlob` instance with big-endian byte order.
+	#[must_use]
 	pub fn new_be() -> ValueWriterBlob<BigEndian> {
 		ValueWriterBlob::new()
 	}
@@ -103,7 +107,7 @@ impl<E: ByteOrder> Default for ValueWriterBlob<E> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::types::ByteRange;
+	use crate::ByteRange;
 
 	#[test]
 	fn test_write_varint() -> Result<()> {
@@ -199,7 +203,9 @@ mod tests {
 		writer.write_range(&range)?;
 		assert_eq!(
 			writer.into_blob().into_vec(),
-			vec![0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]
+			vec![
+				0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+			]
 		);
 		Ok(())
 	}

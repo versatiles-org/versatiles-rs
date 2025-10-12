@@ -1,15 +1,9 @@
-use crate::traits::ReadOperationFactoryTrait;
-
-mod from_container;
+pub mod from_container;
 pub mod from_debug;
-mod from_overlayed;
-mod from_vectortiles_merged;
+#[cfg(feature = "gdal")]
+pub mod from_gdal;
+pub mod from_merged_vector;
+pub mod from_stacked;
+pub mod from_stacked_raster;
 
-pub fn get_read_operation_factories() -> Vec<Box<dyn ReadOperationFactoryTrait>> {
-	vec![
-		Box::new(from_container::Factory {}),
-		Box::new(from_debug::Factory {}),
-		Box::new(from_overlayed::Factory {}),
-		Box::new(from_vectortiles_merged::Factory {}),
-	]
-}
+mod traits;

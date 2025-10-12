@@ -1,8 +1,10 @@
 #![allow(dead_code)]
 
+use versatiles_core::json::JsonObject;
+
 use super::GeoValue;
 use std::{
-	collections::{btree_map, BTreeMap},
+	collections::{BTreeMap, btree_map},
 	fmt::Debug,
 };
 
@@ -16,6 +18,7 @@ impl Default for GeoProperties {
 }
 
 impl GeoProperties {
+	#[must_use]
 	pub fn new() -> GeoProperties {
 		GeoProperties(BTreeMap::new())
 	}
@@ -30,11 +33,37 @@ impl GeoProperties {
 	pub fn remove(&mut self, key: &str) {
 		self.0.remove(key);
 	}
+	pub fn clear(&mut self) {
+		self.0.clear();
+	}
+	#[must_use]
+	pub fn len(&self) -> usize {
+		self.0.len()
+	}
+	#[must_use]
+	pub fn is_empty(&self) -> bool {
+		self.0.is_empty()
+	}
+	#[must_use]
 	pub fn get(&self, key: &str) -> Option<&GeoValue> {
 		self.0.get(key)
 	}
 	pub fn iter(&self) -> btree_map::Iter<'_, String, GeoValue> {
 		self.0.iter()
+	}
+	pub fn retain<F>(&mut self, f: F)
+	where
+		F: Fn(&String, &GeoValue) -> bool,
+	{
+		self.0.retain(|k, v| f(k, v));
+	}
+	#[must_use]
+	pub fn to_json(&self) -> JsonObject {
+		let mut obj = JsonObject::new();
+		for (k, v) in &self.0 {
+			obj.set(k, v.to_json());
+		}
+		obj
 	}
 }
 

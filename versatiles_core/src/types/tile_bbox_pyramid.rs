@@ -1,7 +1,7 @@
 //! This module defines the `TileBBoxPyramid` struct, which represents a pyramid of tile bounding boxes
 //! across multiple zoom levels. It provides methods to create, manipulate, and query these bounding boxes.
 
-use super::{GeoBBox, GeoCenter, TileBBox, TileCoord3};
+use crate::{GeoBBox, GeoCenter, TileBBox, TileCoord};
 use std::array::from_fn;
 use std::fmt;
 
@@ -39,6 +39,7 @@ impl TileBBoxPyramid {
 	/// # Panics
 	///
 	/// May panic if `max_zoom_level` exceeds `MAX_ZOOM_LEVEL - 1`.
+	#[must_use]
 	pub fn new_full(max_zoom_level: u8) -> TileBBoxPyramid {
 		// Create an array of tile bounding boxes via `from_fn`.
 		// If index <= max_zoom_level, create a full bounding box;
@@ -59,6 +60,7 @@ impl TileBBoxPyramid {
 	/// # Returns
 	///
 	/// A `TileBBoxPyramid` where each level is an empty bounding box.
+	#[must_use]
 	pub fn new_empty() -> TileBBoxPyramid {
 		TileBBoxPyramid {
 			level_bbox: from_fn(|z| TileBBox::new_empty(z as u8).unwrap()),
@@ -78,6 +80,7 @@ impl TileBBoxPyramid {
 	///
 	/// A new `TileBBoxPyramid` populated with bounding boxes derived from `bbox`.
 	/// Levels outside the given range remain empty.
+	#[must_use]
 	pub fn from_geo_bbox(zoom_level_min: u8, zoom_level_max: u8, bbox: &GeoBBox) -> TileBBoxPyramid {
 		let mut pyramid = TileBBoxPyramid::new_empty();
 		for z in zoom_level_min..=zoom_level_max {
@@ -94,7 +97,7 @@ impl TileBBoxPyramid {
 	pub fn intersect_geo_bbox(&mut self, geo_bbox: &GeoBBox) {
 		for (z, tile_bbox) in self.level_bbox.iter_mut().enumerate() {
 			tile_bbox
-				.intersect_bbox(&TileBBox::from_geo(z as u8, geo_bbox).unwrap())
+				.intersect_with(&TileBBox::from_geo(z as u8, geo_bbox).unwrap())
 				.unwrap();
 		}
 	}
@@ -104,8 +107,8 @@ impl TileBBoxPyramid {
 	/// This effectively shifts each bounding box outward by `(x_min, y_min, x_max, y_max)`.
 	/// If a bounding box is already empty, adding a border does nothing.
 	pub fn add_border(&mut self, x_min: u32, y_min: u32, x_max: u32, y_max: u32) {
-		for bbox in self.level_bbox.iter_mut() {
-			bbox.add_border(x_min, y_min, x_max, y_max);
+		for bbox in &mut self.level_bbox {
+			bbox.expand_by(x_min, y_min, x_max, y_max);
 		}
 	}
 
@@ -115,7 +118,7 @@ impl TileBBoxPyramid {
 	pub fn intersect(&mut self, other_bbox_pyramid: &TileBBoxPyramid) {
 		for (level, bbox) in self.level_bbox.iter_mut().enumerate() {
 			let other_bbox = other_bbox_pyramid.get_level_bbox(level as u8);
-			bbox.intersect_bbox(other_bbox).unwrap();
+			bbox.intersect_with(other_bbox).unwrap();
 		}
 	}
 
@@ -124,6 +127,7 @@ impl TileBBoxPyramid {
 	/// # Panics
 	///
 	/// Panics if `level` >= `MAX_ZOOM_LEVEL`.
+	#[must_use]
 	pub fn get_level_bbox(&self, level: u8) -> &TileBBox {
 		&self.level_bbox[level as usize]
 	}
@@ -140,8 +144,8 @@ impl TileBBoxPyramid {
 
 	/// Includes a single tile coordinate in the pyramid, updating the bounding box
 	/// at the coordinate’s zoom level to ensure it now encompasses `(x, y)`.
-	pub fn include_coord(&mut self, coord: &TileCoord3) {
-		self.level_bbox[coord.z as usize].include_coord(coord.x, coord.y)
+	pub fn include_coord(&mut self, coord: &TileCoord) {
+		self.level_bbox[coord.level as usize].include(coord.x, coord.y);
 	}
 
 	/// Includes another bounding box in the pyramid, merging it with the existing bounding box
@@ -160,15 +164,17 @@ impl TileBBoxPyramid {
 	}
 
 	/// Checks if the pyramid contains the given `(x, y, z)` tile coordinate.
-	pub fn contains_coord(&self, coord: &TileCoord3) -> bool {
-		if let Some(bbox) = self.level_bbox.get(coord.z as usize) {
-			bbox.contains3(coord)
+	#[must_use]
+	pub fn contains_coord(&self, coord: &TileCoord) -> bool {
+		if let Some(bbox) = self.level_bbox.get(coord.level as usize) {
+			bbox.contains(coord)
 		} else {
 			false
 		}
 	}
 
 	/// Checks if the pyramid overlaps the specified bounding box at the bounding box’s zoom level.
+	#[must_use]
 	pub fn overlaps_bbox(&self, bbox: &TileBBox) -> bool {
 		if let Some(local_bbox) = self.level_bbox.get(bbox.level as usize) {
 			local_bbox.overlaps_bbox(bbox).unwrap_or(false)
@@ -182,7 +188,7 @@ impl TileBBoxPyramid {
 	/// # Examples
 	///
 	/// ```
-	/// # use versatiles_core::types::TileBBoxPyramid;
+	/// # use versatiles_core::TileBBoxPyramid;
 	/// // Suppose `pyramid` is a filled pyramid...
 	/// // for bbox in pyramid.iter_levels() {
 	/// //     println!("Level {} has some tiles", bbox.level);
@@ -195,7 +201,8 @@ impl TileBBoxPyramid {
 	/// Finds the minimum zoom level that contains any tiles.
 	///
 	/// Returns `None` if **all** levels are empty.
-	pub fn get_zoom_min(&self) -> Option<u8> {
+	#[must_use]
+	pub fn get_level_min(&self) -> Option<u8> {
 		self
 			.level_bbox
 			.iter()
@@ -206,7 +213,8 @@ impl TileBBoxPyramid {
 	/// Finds the maximum zoom level that contains any tiles.
 	///
 	/// Returns `None` if **all** levels are empty.
-	pub fn get_zoom_max(&self) -> Option<u8> {
+	#[must_use]
+	pub fn get_level_max(&self) -> Option<u8> {
 		self
 			.level_bbox
 			.iter()
@@ -219,7 +227,8 @@ impl TileBBoxPyramid {
 	///
 	/// This scans from the highest zoom level downward, returning the first that meets
 	/// a threshold of `> 10` tiles. Returns `None` if none meet that threshold.
-	pub fn get_good_zoom(&self) -> Option<u8> {
+	#[must_use]
+	pub fn get_good_level(&self) -> Option<u8> {
 		self
 			.level_bbox
 			.iter()
@@ -229,7 +238,7 @@ impl TileBBoxPyramid {
 	}
 
 	/// Clears bounding boxes for all levels < `zoom_level_min`.
-	pub fn set_zoom_min(&mut self, zoom_level_min: u8) {
+	pub fn set_level_min(&mut self, zoom_level_min: u8) {
 		for (index, bbox) in self.level_bbox.iter_mut().enumerate() {
 			if (index as u8) < zoom_level_min {
 				bbox.set_empty();
@@ -238,7 +247,7 @@ impl TileBBoxPyramid {
 	}
 
 	/// Clears bounding boxes for all levels > `zoom_level_max`.
-	pub fn set_zoom_max(&mut self, zoom_level_max: u8) {
+	pub fn set_level_max(&mut self, zoom_level_max: u8) {
 		for (index, bbox) in self.level_bbox.iter_mut().enumerate() {
 			if (index as u8) > zoom_level_max {
 				bbox.set_empty();
@@ -247,18 +256,25 @@ impl TileBBoxPyramid {
 	}
 
 	/// Counts the total number of tiles across all non-empty bounding boxes in this pyramid.
+	#[must_use]
 	pub fn count_tiles(&self) -> u64 {
-		self.level_bbox.iter().map(|bbox| bbox.count_tiles()).sum()
+		self
+			.level_bbox
+			.iter()
+			.map(super::tile_bbox::TileBBox::count_tiles)
+			.sum()
 	}
 
 	/// Checks if **all** bounding boxes in this pyramid are empty.
+	#[must_use]
 	pub fn is_empty(&self) -> bool {
-		self.level_bbox.iter().all(|bbox| bbox.is_empty())
+		self.level_bbox.iter().all(super::tile_bbox::TileBBox::is_empty)
 	}
 
 	/// Checks if this pyramid is “full” up to the specified zoom level, meaning
 	/// each relevant bounding box is flagged as full coverage.
 	#[cfg(test)]
+	#[must_use]
 	pub fn is_full(&self, max_zoom_level: u8) -> bool {
 		self.level_bbox.iter().all(|bbox| {
 			if bbox.level <= max_zoom_level {
@@ -272,21 +288,33 @@ impl TileBBoxPyramid {
 	/// Determines a geographical bounding box from the highest zoom level that contains tiles.
 	///
 	/// Returns `None` if the pyramid is empty.
+	#[must_use]
 	pub fn get_geo_bbox(&self) -> Option<GeoBBox> {
-		let max_zoom = self.get_zoom_max()?;
-		Some(self.get_level_bbox(max_zoom).as_geo_bbox())
+		let max_zoom = self.get_level_max()?;
+		Some(self.get_level_bbox(max_zoom).to_geo_bbox())
 	}
 
 	/// Calculates a geographic center based on the bounding box at a middle zoom level.
 	///
 	/// This tries to pick a zoom that is “2 levels above the min,” but not exceeding the max.
 	/// Returns `None` if the pyramid is empty or if the bounding box is invalid.
+	#[must_use]
 	pub fn get_geo_center(&self) -> Option<GeoCenter> {
 		let bbox = self.get_geo_bbox()?;
-		let zoom = (self.get_zoom_min()? + 2).min(self.get_zoom_max()?);
-		let center_lon = (bbox.0 + bbox.2) / 2.0;
-		let center_lat = (bbox.1 + bbox.3) / 2.0;
+		let zoom = (self.get_level_min()? + 2).min(self.get_level_max()?);
+		let center_lon = f64::midpoint(bbox.0, bbox.2);
+		let center_lat = f64::midpoint(bbox.1, bbox.3);
 		Some(GeoCenter(center_lon, center_lat, zoom))
+	}
+	pub fn swap_xy(&mut self) {
+		self.level_bbox.iter_mut().for_each(|b| {
+			b.swap_xy();
+		});
+	}
+	pub fn flip_y(&mut self) {
+		self.level_bbox.iter_mut().for_each(|b| {
+			b.flip_y();
+		});
 	}
 }
 
@@ -326,6 +354,13 @@ impl PartialEq for TileBBoxPyramid {
 	}
 }
 
+impl Default for TileBBoxPyramid {
+	/// Creates a new `TileBBoxPyramid` with all levels empty.
+	fn default() -> Self {
+		Self::new_empty()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -338,8 +373,8 @@ mod tests {
 			pyramid.is_empty(),
 			"Expected new_empty to create an entirely empty pyramid."
 		);
-		assert_eq!(pyramid.get_zoom_min(), None);
-		assert_eq!(pyramid.get_zoom_max(), None);
+		assert_eq!(pyramid.get_level_min(), None);
+		assert_eq!(pyramid.get_level_max(), None);
 		assert_eq!(pyramid.count_tiles(), 0);
 	}
 
@@ -378,35 +413,37 @@ mod tests {
 	fn test_limit_by_geo_bbox() {
 		let mut pyramid = TileBBoxPyramid::new_full(8);
 		pyramid.intersect_geo_bbox(&GeoBBox(8.0653f64, 51.3563f64, 12.3528f64, 52.2564f64));
-
-		assert_eq!(pyramid.get_level_bbox(0), &TileBBox::new(0, 0, 0, 0, 0).unwrap());
-		assert_eq!(pyramid.get_level_bbox(1), &TileBBox::new(1, 1, 0, 1, 0).unwrap());
-		assert_eq!(pyramid.get_level_bbox(2), &TileBBox::new(2, 2, 1, 2, 1).unwrap());
-		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 4, 2, 4, 2).unwrap());
-		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 8, 5, 8, 5).unwrap());
-		assert_eq!(pyramid.get_level_bbox(5), &TileBBox::new(5, 16, 10, 17, 10).unwrap());
-		assert_eq!(pyramid.get_level_bbox(6), &TileBBox::new(6, 33, 21, 34, 21).unwrap());
-		assert_eq!(pyramid.get_level_bbox(7), &TileBBox::new(7, 66, 42, 68, 42).unwrap());
-		assert_eq!(pyramid.get_level_bbox(8), &TileBBox::new(8, 133, 84, 136, 85).unwrap());
+		let level_bboxes = pyramid
+			.iter_levels()
+			.map(std::string::ToString::to_string)
+			.collect::<Vec<_>>();
+		assert_eq!(
+			level_bboxes,
+			[
+				"0:[0,0,0,0]",
+				"1:[1,0,1,0]",
+				"2:[2,1,2,1]",
+				"3:[4,2,4,2]",
+				"4:[8,5,8,5]",
+				"5:[16,10,17,10]",
+				"6:[33,21,34,21]",
+				"7:[66,42,68,42]",
+				"8:[133,84,136,85]"
+			]
+		);
 	}
 
 	#[test]
 	fn test_include_coord2() -> Result<()> {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		pyramid.include_coord(&TileCoord3::new(1, 2, 3)?);
-		pyramid.include_coord(&TileCoord3::new(4, 5, 3)?);
-		pyramid.include_coord(&TileCoord3::new(6, 7, 8)?);
-
-		assert!(pyramid.get_level_bbox(0).is_empty());
-		assert!(pyramid.get_level_bbox(1).is_empty());
-		assert!(pyramid.get_level_bbox(2).is_empty());
-		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 1, 2, 4, 5)?);
-		assert!(pyramid.get_level_bbox(4).is_empty());
-		assert!(pyramid.get_level_bbox(5).is_empty());
-		assert!(pyramid.get_level_bbox(6).is_empty());
-		assert!(pyramid.get_level_bbox(7).is_empty());
-		assert_eq!(pyramid.get_level_bbox(8), &TileBBox::new(8, 6, 7, 6, 7)?);
-		assert!(pyramid.get_level_bbox(9).is_empty());
+		pyramid.include_coord(&TileCoord::new(3, 1, 2)?);
+		pyramid.include_coord(&TileCoord::new(3, 4, 5)?);
+		pyramid.include_coord(&TileCoord::new(8, 6, 7)?);
+		let level_bboxes = pyramid
+			.iter_levels()
+			.map(std::string::ToString::to_string)
+			.collect::<Vec<_>>();
+		assert_eq!(level_bboxes, ["3:[1,2,4,5]", "8:[6,7,6,7]"]);
 
 		Ok(())
 	}
@@ -414,19 +451,14 @@ mod tests {
 	#[test]
 	fn test_include_bbox2() {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		pyramid.include_bbox(&TileBBox::new(4, 1, 2, 3, 4).unwrap());
-		pyramid.include_bbox(&TileBBox::new(4, 5, 6, 7, 8).unwrap());
+		pyramid.include_bbox(&TileBBox::from_min_max(4, 1, 2, 3, 4).unwrap());
+		pyramid.include_bbox(&TileBBox::from_min_max(4, 5, 6, 7, 8).unwrap());
 
-		assert!(pyramid.get_level_bbox(0).is_empty());
-		assert!(pyramid.get_level_bbox(1).is_empty());
-		assert!(pyramid.get_level_bbox(2).is_empty());
-		assert!(pyramid.get_level_bbox(3).is_empty());
-		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 1, 2, 7, 8).unwrap());
-		assert!(pyramid.get_level_bbox(5).is_empty());
-		assert!(pyramid.get_level_bbox(6).is_empty());
-		assert!(pyramid.get_level_bbox(7).is_empty());
-		assert!(pyramid.get_level_bbox(8).is_empty());
-		assert!(pyramid.get_level_bbox(9).is_empty());
+		let level_bboxes = pyramid
+			.iter_levels()
+			.map(std::string::ToString::to_string)
+			.collect::<Vec<_>>();
+		assert_eq!(level_bboxes, ["4:[1,2,7,8]"]);
 	}
 
 	#[test]
@@ -434,7 +466,7 @@ mod tests {
 		let test = |level: u8| {
 			let mut pyramid = TileBBoxPyramid::new_empty();
 			let bbox = TileBBox::new_full(level).unwrap();
-			pyramid.set_level_bbox(bbox.clone());
+			pyramid.set_level_bbox(bbox);
 			assert_eq!(pyramid.get_level_bbox(level), &bbox);
 		};
 
@@ -448,9 +480,9 @@ mod tests {
 	fn test_zoom_min_max2() {
 		let test = |z0: u8, z1: u8| {
 			let mut pyramid = TileBBoxPyramid::new_full(z1);
-			pyramid.set_zoom_min(z0);
-			assert_eq!(pyramid.get_zoom_min().unwrap(), z0);
-			assert_eq!(pyramid.get_zoom_max().unwrap(), z1);
+			pyramid.set_level_min(z0);
+			assert_eq!(pyramid.get_level_min().unwrap(), z0);
+			assert_eq!(pyramid.get_level_max().unwrap(), z1);
 		};
 
 		test(0, 1);
@@ -468,18 +500,23 @@ mod tests {
 		pyramid.intersect_geo_bbox(&GeoBBox(-9., -5., 5., 10.));
 		pyramid.add_border(1, 2, 3, 4);
 
-		// Check that each level's bounding box has been adjusted correctly.
-		assert_eq!(pyramid.get_level_bbox(0), &TileBBox::new(0, 0, 0, 0, 0).unwrap());
-		assert_eq!(pyramid.get_level_bbox(1), &TileBBox::new(1, 0, 0, 1, 1).unwrap());
-		assert_eq!(pyramid.get_level_bbox(2), &TileBBox::new(2, 0, 0, 3, 3).unwrap());
-		assert_eq!(pyramid.get_level_bbox(3), &TileBBox::new(3, 2, 1, 7, 7).unwrap());
-		assert_eq!(pyramid.get_level_bbox(4), &TileBBox::new(4, 6, 5, 11, 12).unwrap());
-		assert_eq!(pyramid.get_level_bbox(5), &TileBBox::new(5, 14, 13, 19, 20).unwrap());
-		assert_eq!(pyramid.get_level_bbox(6), &TileBBox::new(6, 29, 28, 35, 36).unwrap());
-		assert_eq!(pyramid.get_level_bbox(7), &TileBBox::new(7, 59, 58, 68, 69).unwrap());
+		let level_bboxes = pyramid
+			.iter_levels()
+			.map(std::string::ToString::to_string)
+			.collect::<Vec<_>>();
 		assert_eq!(
-			pyramid.get_level_bbox(8),
-			&TileBBox::new(8, 120, 118, 134, 135).unwrap()
+			level_bboxes,
+			[
+				"0:[0,0,0,0]",
+				"1:[0,0,1,1]",
+				"2:[0,0,3,3]",
+				"3:[2,1,7,7]",
+				"4:[6,5,11,12]",
+				"5:[14,13,19,20]",
+				"6:[29,28,35,36]",
+				"7:[59,58,68,69]",
+				"8:[120,118,134,135]"
+			]
 		);
 	}
 
@@ -487,11 +524,11 @@ mod tests {
 	fn test_from_geo_bbox() {
 		let bbox = GeoBBox(-10.0, -5.0, 10.0, 5.0);
 		let pyramid = TileBBoxPyramid::from_geo_bbox(1, 3, &bbox);
-		assert!(pyramid.get_level_bbox(0).is_empty());
-		assert!(!pyramid.get_level_bbox(1).is_empty());
-		assert!(!pyramid.get_level_bbox(2).is_empty());
-		assert!(!pyramid.get_level_bbox(3).is_empty());
-		assert!(pyramid.get_level_bbox(4).is_empty());
+		let level_bboxes = pyramid
+			.iter_levels()
+			.map(std::string::ToString::to_string)
+			.collect::<Vec<_>>();
+		assert_eq!(level_bboxes, ["1:[0,0,1,1]", "2:[1,1,2,2]", "3:[3,3,4,4]"]);
 	}
 
 	#[test]
@@ -551,14 +588,14 @@ mod tests {
 	fn test_set_level_bbox() {
 		let mut pyramid = TileBBoxPyramid::new_empty();
 		let custom_bbox = TileBBox::new_full(3).unwrap();
-		pyramid.set_level_bbox(custom_bbox.clone());
+		pyramid.set_level_bbox(custom_bbox);
 		assert_eq!(pyramid.get_level_bbox(3), &custom_bbox);
 	}
 
 	#[test]
 	fn test_include_coord1() {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		let coord = TileCoord3::new(5, 10, 15).unwrap();
+		let coord = TileCoord::new(15, 5, 10).unwrap();
 		pyramid.include_coord(&coord);
 		assert!(!pyramid.get_level_bbox(15).is_empty());
 	}
@@ -566,7 +603,7 @@ mod tests {
 	#[test]
 	fn test_include_bbox1() {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		let tb = TileBBox::new(6, 10, 10, 12, 12).unwrap();
+		let tb = TileBBox::from_min_max(6, 10, 10, 12, 12).unwrap();
 		pyramid.include_bbox(&tb);
 		assert!(!pyramid.get_level_bbox(6).is_empty());
 		// No other level should be affected
@@ -589,27 +626,27 @@ mod tests {
 	#[test]
 	fn test_contains_coord() {
 		let mut p = TileBBoxPyramid::new_empty();
-		p.include_bbox(&TileBBox::new(10, 100, 200, 300, 400).unwrap());
-		assert!(!p.contains_coord(&TileCoord3::new(99, 200, 10).unwrap()));
-		assert!(!p.contains_coord(&TileCoord3::new(100, 199, 10).unwrap()));
-		assert!(p.contains_coord(&TileCoord3::new(100, 200, 10).unwrap()));
-		assert!(p.contains_coord(&TileCoord3::new(300, 400, 10).unwrap()));
-		assert!(!p.contains_coord(&TileCoord3::new(301, 400, 10).unwrap()));
-		assert!(!p.contains_coord(&TileCoord3::new(300, 401, 10).unwrap()));
-		assert!(!p.contains_coord(&TileCoord3::new(300, 400, 11).unwrap()));
+		p.include_bbox(&TileBBox::from_min_max(10, 100, 200, 300, 400).unwrap());
+		assert!(!p.contains_coord(&TileCoord::new(10, 99, 200).unwrap()));
+		assert!(!p.contains_coord(&TileCoord::new(10, 100, 199).unwrap()));
+		assert!(p.contains_coord(&TileCoord::new(10, 100, 200).unwrap()));
+		assert!(p.contains_coord(&TileCoord::new(10, 300, 400).unwrap()));
+		assert!(!p.contains_coord(&TileCoord::new(10, 301, 400).unwrap()));
+		assert!(!p.contains_coord(&TileCoord::new(10, 300, 401).unwrap()));
+		assert!(!p.contains_coord(&TileCoord::new(11, 300, 400).unwrap()));
 	}
 
 	#[test]
 	fn test_overlaps_bbox() {
 		let mut p = TileBBoxPyramid::new_empty();
-		p.include_bbox(&TileBBox::new(10, 100, 200, 300, 400).unwrap());
-		assert!(!p.overlaps_bbox(&TileBBox::new(10, 0, 0, 99, 200).unwrap()));
-		assert!(!p.overlaps_bbox(&TileBBox::new(10, 0, 0, 100, 199).unwrap()));
-		assert!(p.overlaps_bbox(&TileBBox::new(10, 0, 0, 100, 200).unwrap()));
-		assert!(p.overlaps_bbox(&TileBBox::new(10, 300, 400, 500, 600).unwrap()));
-		assert!(!p.overlaps_bbox(&TileBBox::new(10, 300, 401, 500, 600).unwrap()));
-		assert!(!p.overlaps_bbox(&TileBBox::new(10, 301, 400, 500, 600).unwrap()));
-		assert!(!p.overlaps_bbox(&TileBBox::new(11, 300, 400, 500, 600).unwrap()));
+		p.include_bbox(&TileBBox::from_min_max(10, 100, 200, 300, 400).unwrap());
+		assert!(!p.overlaps_bbox(&TileBBox::from_min_max(10, 0, 0, 99, 200).unwrap()));
+		assert!(!p.overlaps_bbox(&TileBBox::from_min_max(10, 0, 0, 100, 199).unwrap()));
+		assert!(p.overlaps_bbox(&TileBBox::from_min_max(10, 0, 0, 100, 200).unwrap()));
+		assert!(p.overlaps_bbox(&TileBBox::from_min_max(10, 300, 400, 500, 600).unwrap()));
+		assert!(!p.overlaps_bbox(&TileBBox::from_min_max(10, 300, 401, 500, 600).unwrap()));
+		assert!(!p.overlaps_bbox(&TileBBox::from_min_max(10, 301, 400, 500, 600).unwrap()));
+		assert!(!p.overlaps_bbox(&TileBBox::from_min_max(11, 300, 400, 500, 600).unwrap()));
 	}
 
 	#[test]
@@ -622,19 +659,19 @@ mod tests {
 	#[test]
 	fn test_zoom_min_max1() {
 		let p = TileBBoxPyramid::new_full(3);
-		assert_eq!(p.get_zoom_min(), Some(0));
-		assert_eq!(p.get_zoom_max(), Some(3));
+		assert_eq!(p.get_level_min(), Some(0));
+		assert_eq!(p.get_level_max(), Some(3));
 
 		let empty_p = TileBBoxPyramid::new_empty();
-		assert_eq!(empty_p.get_zoom_min(), None);
-		assert_eq!(empty_p.get_zoom_max(), None);
+		assert_eq!(empty_p.get_level_min(), None);
+		assert_eq!(empty_p.get_level_max(), None);
 	}
 
 	#[test]
 	fn test_get_good_zoom() {
 		let p = TileBBoxPyramid::new_full(5);
 		// Usually, full coverage at level 5 implies many tiles, so we'd find a "good" zoom near 5.
-		let good_zoom = p.get_good_zoom().unwrap();
+		let good_zoom = p.get_good_level().unwrap();
 		// We can't say exactly which level (tile logic is in TileBBox), but typically it'd be 4 or 5
 		assert!(good_zoom <= 5);
 	}
@@ -643,14 +680,14 @@ mod tests {
 	fn test_set_zoom_min_max() {
 		let mut p = TileBBoxPyramid::new_full(5);
 		// We remove coverage below level 2
-		p.set_zoom_min(2);
-		assert_eq!(p.get_zoom_min(), Some(2));
-		assert_eq!(p.get_zoom_max(), Some(5));
+		p.set_level_min(2);
+		assert_eq!(p.get_level_min(), Some(2));
+		assert_eq!(p.get_level_max(), Some(5));
 
 		// Then remove coverage above level 4
-		p.set_zoom_max(4);
-		assert_eq!(p.get_zoom_min(), Some(2));
-		assert_eq!(p.get_zoom_max(), Some(4));
+		p.set_level_max(4);
+		assert_eq!(p.get_level_min(), Some(2));
+		assert_eq!(p.get_level_max(), Some(4));
 	}
 
 	#[test]
@@ -673,5 +710,27 @@ mod tests {
 		// The center then should be around (0, 0, some zoom)
 		let maybe_center = p.get_geo_center();
 		assert!(maybe_center.is_some());
+	}
+
+	#[test]
+	fn pyramid_swap_xy_transform() {
+		let mut pyramid = TileBBoxPyramid::new_empty();
+		pyramid.include_bbox(&TileBBox::from_min_max(4, 0, 1, 2, 3).unwrap());
+		pyramid.swap_xy();
+		assert_eq!(
+			pyramid.get_level_bbox(4),
+			&TileBBox::from_min_max(4, 1, 0, 3, 2).unwrap()
+		);
+	}
+
+	#[test]
+	fn pyramid_flip_y_transform() {
+		let mut pyramid = TileBBoxPyramid::new_empty();
+		pyramid.include_bbox(&TileBBox::from_min_max(4, 0, 1, 2, 3).unwrap());
+		pyramid.flip_y();
+		assert_eq!(
+			pyramid.get_level_bbox(4),
+			&TileBBox::from_min_max(4, 0, 12, 2, 14).unwrap()
+		);
 	}
 }
