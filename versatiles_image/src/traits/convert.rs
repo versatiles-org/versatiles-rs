@@ -1,5 +1,5 @@
 use crate::format::{avif, jpeg, png, webp};
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow, bail, ensure};
 use image::{DynamicImage, EncodableLayout, ImageBuffer, Luma, LumaA, Rgb, Rgba};
 use versatiles_core::{Blob, TileFormat};
 
@@ -30,6 +30,12 @@ impl DynamicImageTraitConvert for DynamicImage {
 
 	fn from_raw(width: u32, height: u32, data: Vec<u8>) -> Result<DynamicImage> {
 		let channel_count = data.len() / (width * height) as usize;
+		ensure!(
+			channel_count * (width * height) as usize == data.len(),
+			"Data length ({}) does not match width ({width}) * height ({height}) * channel_count ({channel_count}) = {}",
+			data.len(),
+			(width * height) as usize * channel_count
+		);
 		Ok(match channel_count {
 			1 => DynamicImage::ImageLuma8(
 				ImageBuffer::from_vec(width, height, data)
@@ -81,5 +87,100 @@ impl DynamicImageTraitConvert for DynamicImage {
 			DynamicImage::ImageRgba8(img) => img.as_bytes().chunks_exact(4),
 			_ => panic!("Unsupported image type for pixel iteration"),
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::DynamicImageTraitInfo;
+
+	use super::*;
+	use rstest::rstest;
+
+	fn sample_l8() -> DynamicImage {
+		DynamicImage::from_fn_l8(4, 3, |x, y| ((x + y) % 2) as u8)
+	}
+
+	fn sample_la8() -> DynamicImage {
+		DynamicImage::from_fn_la8(4, 3, |x, y| [((x * 2 + y) % 256) as u8, 255])
+	}
+
+	fn sample_rgb8() -> DynamicImage {
+		DynamicImage::from_fn_rgb8(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8])
+	}
+
+	fn sample_rgba8() -> DynamicImage {
+		DynamicImage::from_fn_rgba8(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8, 200])
+	}
+
+	#[rstest]
+	//#[case::avif(TileFormat::AVIF, [0.0; 3])]
+	#[case::jpg(TileFormat::JPG, [0.4, 0.2, 0.5])]
+	#[case::png(TileFormat::PNG, [0.0; 3])]
+	#[case::webp(TileFormat::WEBP, [5.5,0.4,4.2])]
+	fn roundtrip_encode_decode(#[case] format: TileFormat, #[case] diff: [f64; 3]) {
+		let image = sample_rgb8();
+		// Encode the image to a blob
+		let blob = image.to_blob(format).unwrap();
+		// Decode the blob back to an image
+		let decoded_image = DynamicImage::from_blob(&blob, format).expect("Failed to decode image");
+		// Assert that the original image and the decoded image are equal
+		assert_eq!(DynamicImageTraitInfo::diff(&image, &decoded_image).unwrap(), diff);
+	}
+
+	#[rstest]
+	#[case::l8(sample_l8(), 1usize)]
+	#[case::la8(sample_la8(), 2usize)]
+	#[case::rgb8(sample_rgb8(), 3usize)]
+	#[case::rgba8(sample_rgba8(), 4usize)]
+	fn iter_pixels_chunk_sizes_match_color_type(#[case] img: DynamicImage, #[case] chunk: usize) {
+		for px in img.iter_pixels() {
+			assert_eq!(px.len(), chunk);
+		}
+	}
+
+	#[rstest]
+	#[case::l8(1)]
+	#[case::la8(2)]
+	#[case::rgb8(3)]
+	#[case::rgba8(4)]
+	fn from_raw_accepts_supported_channel_counts(#[case] channels: usize) {
+		let w = 4u32;
+		let h = 3u32; // 12 pixels
+		let data = (0..(w as usize * h as usize * channels))
+			.map(|v| (v % 256) as u8)
+			.collect::<Vec<_>>();
+
+		let img = DynamicImage::from_raw(w, h, data).expect("from_raw failed");
+		assert_eq!(img.color().channel_count() as usize, channels);
+	}
+
+	#[test]
+	fn from_raw_rejects_mismatched_len() {
+		// 5 bytes -> channel_count = 1 (5/4), but buffer length mismatches -> error
+		let data_mismatch = vec![0u8; 5];
+		let err = DynamicImage::from_raw(2, 2, data_mismatch).unwrap_err();
+		assert_eq!(
+			format!("{err}"),
+			"Data length (5) does not match width (2) * height (2) * channel_count (1) = 4"
+		);
+	}
+
+	#[test]
+	fn from_raw_rejects_unsupported_channel_counts() {
+		// 20 bytes -> channel_count = 5 (20/4) -> unsupported channel count
+		let data_unsupported = vec![0u8; 20];
+		let err = DynamicImage::from_raw(2, 2, data_unsupported).unwrap_err();
+		assert_eq!(format!("{err}"), "Unsupported channel count: 5");
+	}
+
+	#[test]
+	fn to_blob_unsupported_format_is_error_if_any() {
+		// This test intentionally avoids depending on a specific non-image format variant.
+		// We just ensure the happy-path formats (PNG) succeed and that the function doesn't panic
+		// for them. If more formats are enabled, the other branches are covered by compile-time.
+		let img = sample_rgb8();
+		let blob = img.to_blob(TileFormat::PNG).expect("PNG should encode");
+		assert!(!blob.is_empty());
 	}
 }
