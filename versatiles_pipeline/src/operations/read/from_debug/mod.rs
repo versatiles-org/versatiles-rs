@@ -104,10 +104,13 @@ impl OperationTrait for Operation {
 		let format = self.parameters.tile_format;
 		let compression = self.parameters.tile_compression;
 		match self.parameters.tile_format.get_type() {
-			TileType::Raster => Ok(TileStream::from_iter_coord_parallel(
-				bbox.into_iter_coords(),
-				move |c| Some(Tile::from_image(create_debug_image(&c), format, compression)),
-			)),
+			TileType::Raster => {
+				let alpha = format != TileFormat::JPG;
+				Ok(TileStream::from_iter_coord_parallel(
+					bbox.into_iter_coords(),
+					move |c| Some(Tile::from_image(create_debug_image(&c, alpha), format, compression)),
+				))
+			}
 			TileType::Vector => Ok(TileStream::from_iter_coord_parallel(
 				bbox.into_iter_coords(),
 				move |c| {
