@@ -40,20 +40,21 @@ impl Inner {
 		} else {
 			0.0
 		};
-		let eta_secs = if per_sec > 0.0 {
-			((len - pos) as f64 / per_sec).max(0.0)
+		let eta_secs = if pos > 0 {
+			elapsed.as_secs_f64() * ((len - pos) as f64 / (pos as f64)).max(0.0)
 		} else {
 			0.0
 		};
-
-		// Compose the dynamic bar with sub-character precision.
-		let (bar_str, _bar_width) = make_bar(pos, len, available_bar_width(msg, pos, len, per_sec, eta_secs));
 
 		let percent = (pos as f64 * 100.0 / len as f64).floor() as u64;
 		let per_sec_str = format_rate(per_sec);
 		let eta_str = format_eta(Duration::from_secs_f64(eta_secs));
 
-		let line = format!("{msg}▕{bar_str}▏{pos}/{len} ({percent:>3}%) {per_sec_str:>5} {eta_str:>5}");
+		let get_line = |bar_str| format!("{msg}▕{bar_str}▏{pos}/{len} ({percent:>3}%) {per_sec_str:>5} {eta_str:>5}");
+
+		let available_bar_width = terminal_width() - get_line("").chars().count();
+		let bar_str = make_bar(pos, len, available_bar_width);
+		let line = get_line(&bar_str);
 
 		// Render to stderr with carriage return and clear line
 		let mut output = io::stderr();
@@ -83,28 +84,7 @@ fn terminal_width() -> usize {
 	80
 }
 
-// Compute how many characters are available for the bar itself,
-// given the static decorations and metadata.
-fn available_bar_width(msg: &str, pos: u64, len: u64, per_sec: f64, eta_secs: f64) -> usize {
-	// We render: "{msg}▕{bar}▏{pos}/{len} ({pct}%) {per_sec} {eta}"
-	// Estimate right side length (not including bar itself)
-	let percent = (pos as f64 * 100.0 / len.max(1) as f64).floor() as u64;
-	let per_sec_str = format_rate(per_sec);
-	let eta_str = format_eta(Duration::from_secs_f64(eta_secs));
-
-	// Static glyphs around the bar occupy 2 chars (▕ and ▏) plus spaces and fixed text
-	let right = format!("▏{pos}/{len} ({percent:>3}%) {per_sec_str:>5} {eta_str:>7}");
-	let total_width = terminal_width();
-	let taken = msg.chars().count() + right.chars().count();
-	let min_bar = 10usize; // ensure a usable minimum width
-	if total_width > taken + 2 + min_bar {
-		total_width - taken - 2
-	} else {
-		min_bar
-	}
-}
-
-fn make_bar(pos: u64, len: u64, width: usize) -> (String, usize) {
+fn make_bar(pos: u64, len: u64, width: usize) -> String {
 	let width = width.max(1);
 	let frac = (pos as f64 / len.max(1) as f64).clamp(0.0, 1.0);
 	let exact = frac * (width as f64);
@@ -134,7 +114,7 @@ fn make_bar(pos: u64, len: u64, width: usize) -> (String, usize) {
 			s.push(' ');
 		}
 	}
-	(s, width)
+	s
 }
 
 fn format_rate(per_sec: f64) -> String {
