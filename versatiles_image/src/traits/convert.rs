@@ -1,16 +1,50 @@
+//! Utilities for converting between `DynamicImage` objects and raw/encoded image formats.
+//!
+//! This trait (`DynamicImageTraitConvert`) extends the `DynamicImage` type with methods to:
+//! - Create images from functions (`from_fn_*` variants)
+//! - Convert between raw byte buffers and `DynamicImage` (`from_raw`)
+//! - Encode/decode to/from supported image formats (`to_blob`, `from_blob`)
+//! - Iterate over pixel data (`iter_pixels`)
+//!
+//! Supported formats include: PNG, JPEG, WEBP, and AVIF.
+//! These utilities are used in VersaTiles Pipeline.
+
 use crate::format::{avif, jpeg, png, webp};
 use anyhow::{Result, anyhow, bail, ensure};
 use image::{DynamicImage, EncodableLayout, ImageBuffer, Luma, LumaA, Rgb, Rgba};
 use versatiles_core::{Blob, TileFormat};
 
+/// Trait for converting between `DynamicImage` and raw/encoded formats, and for constructing images from functions.
 pub trait DynamicImageTraitConvert {
+	/// Creates a grayscale (`L8`) image by calling the provided function for each pixel coordinate.
+	/// The function `f(x, y)` should return a single 8-bit luminance value.
 	fn from_fn_l8(width: u32, height: u32, f: fn(u32, u32) -> u8) -> DynamicImage;
+
+	/// Creates an image with luminance and alpha channels (`LA8`).
+	/// The function `f(x, y)` should return a 2-element `[u8; 2]` array representing the pixel.
 	fn from_fn_la8(width: u32, height: u32, f: fn(u32, u32) -> [u8; 2]) -> DynamicImage;
+
+	/// Creates an RGB image (`RGB8`) by calling the function `f(x, y)` for each pixel coordinate.
 	fn from_fn_rgb8(width: u32, height: u32, f: fn(u32, u32) -> [u8; 3]) -> DynamicImage;
+
+	/// Creates an RGBA image (`RGBA8`) by calling the function `f(x, y)` for each pixel coordinate.
 	fn from_fn_rgba8(width: u32, height: u32, f: fn(u32, u32) -> [u8; 4]) -> DynamicImage;
+
+	/// Constructs a `DynamicImage` from raw pixel data and dimensions.
+	/// The number of channels is inferred from the data length. Supported channel counts are 1 (L8), 2 (LA8), 3 (RGB8), and 4 (RGBA8).
+	/// Returns an error if the data length does not match the expected size or if the channel count is unsupported.
 	fn from_raw(width: u32, height: u32, data: Vec<u8>) -> Result<DynamicImage>;
+
+	/// Decodes a `DynamicImage` from a binary blob using the specified `TileFormat`.
+	/// Returns an error if decoding fails or if the format is unsupported.
 	fn from_blob(blob: &Blob, format: TileFormat) -> Result<DynamicImage>;
+
+	/// Encodes the image into a binary blob in the specified `TileFormat`.
+	/// Returns an error if encoding fails or if the format is unsupported.
 	fn to_blob(&self, format: TileFormat) -> Result<Blob>;
+
+	/// Returns an iterator over the pixel data as byte slices.
+	/// Each slice represents one pixel, with the slice length corresponding to the image's channel count.
 	fn iter_pixels(&self) -> impl Iterator<Item = &[u8]>;
 }
 
@@ -90,6 +124,8 @@ impl DynamicImageTraitConvert for DynamicImage {
 	}
 }
 
+/// Tests for the `DynamicImageTraitConvert` trait implementation.
+/// These tests verify conversion between raw data, pixel iteration, and format roundtrips using `rstest`.
 #[cfg(test)]
 mod tests {
 	use crate::DynamicImageTraitInfo;
