@@ -36,3 +36,53 @@ where
 		DynamicImage::from_fn_la8(256, 256, |x, y| [x as u8, y as u8])
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use image::GenericImageView;
+	use rstest::rstest;
+
+	#[rstest]
+	#[case::grey(DynamicImage::new_test_grey(), [
+		"...# +++# ####",
+		"...# +++# ####",
+		"...# +++# ####"
+	])]
+	#[case::greya(DynamicImage::new_test_greya(), [
+		".... +++. ###.",
+		"...+ ++++ ###+",
+		"...# +++# ####"
+	])]
+	#[case::rgb(DynamicImage::new_test_rgb(), [
+		".#.# ++.# #..#",
+		".#+# +++# #.+#",
+		".### ++## #.##"
+	])]
+	#[case::rgba(DynamicImage::new_test_rgba(), [
+		".#.# ++.# #..#",
+		".#++ ++++ #.++",
+		".##. ++#. #.#."
+	])]
+	fn check_dimensions_and_gradients(#[case] img: DynamicImage, #[case] colors: [&str; 3]) {
+		assert_eq!(img.dimensions(), (256, 256));
+		let get_pixel = |x: u32, y: u32| {
+			img.get_pixel(x, y)
+				.0
+				.iter()
+				.map(|v| match v {
+					0 => '.',
+					127 | 128 => '+',
+					255 => '#',
+					_ => panic!("unexpected value {v}"),
+				})
+				.collect::<String>()
+		};
+		let colors_result = [
+			[get_pixel(0, 0), get_pixel(128, 0), get_pixel(255, 0)].join(" "),
+			[get_pixel(0, 128), get_pixel(128, 128), get_pixel(255, 128)].join(" "),
+			[get_pixel(0, 255), get_pixel(128, 255), get_pixel(255, 255)].join(" "),
+		];
+		assert_eq!(colors_result, colors);
+	}
+}
