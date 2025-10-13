@@ -221,13 +221,32 @@ mod tests {
 		a.ensure_same_meta(&b).unwrap();
 	}
 
-	#[test]
-	fn ensure_same_size_error() {
-		let a = DynamicImage::from_fn_rgb8(2, 2, |x, y| [x as u8, y as u8, 0]);
-		let b = DynamicImage::from_fn_rgb8(3, 2, |x, y| [x as u8, y as u8, 0]);
+	#[rstest]
+	#[case::mismatched_width(
+		3,
+		4,
+		5,
+		4,
+		"Image width mismatch: self has width 3, but the other image has width 5"
+	)]
+	#[case::mismatched_height(
+		4,
+		3,
+		4,
+		5,
+		"Image height mismatch: self has height 3, but the other image has height 5"
+	)]
+	fn ensure_same_size_errors(
+		#[case] w1: u32,
+		#[case] h1: u32,
+		#[case] w2: u32,
+		#[case] h2: u32,
+		#[case] expect: &str,
+	) {
+		let a = DynamicImage::from_fn_rgb8(w1, h1, |x, y| [x as u8, y as u8, 0]);
+		let b = DynamicImage::from_fn_rgb8(w2, h2, |x, y| [x as u8, y as u8, 0]);
 		let err = a.ensure_same_size(&b).unwrap_err();
-		let msg = format!("{err}");
-		assert!(msg.contains("width") || msg.contains("height"));
+		assert_eq!(format!("{err}"), expect);
 	}
 
 	#[test]
