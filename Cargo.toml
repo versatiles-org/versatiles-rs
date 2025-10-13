@@ -24,7 +24,7 @@ keywords = ["versatiles", "mbtiles", "tiles", "map"]
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/versatiles-org/versatiles-rs"
-version = "1.0.0"
+version = "1.0.1"
 exclude = [
 	".githooks/",
 	".github/",
@@ -102,12 +102,12 @@ rstest = { version = "0.26.1", default-features = false }
 tokio = { version = "1.47.1", features = ["rt-multi-thread", "sync"] }
 wildmatch = { version = "2.5.0", default-features = false }
 
-versatiles = { version = "1.0.0", path = "versatiles", default-features = false }
-versatiles_container = { version = "1.0.0", path = "versatiles_container", default-features = false }
-versatiles_core = { version = "1.0.0", path = "versatiles_core", default-features = false, features = [
+versatiles = { version = "1.0.1", path = "versatiles", default-features = false }
+versatiles_container = { version = "1.0.1", path = "versatiles_container", default-features = false }
+versatiles_core = { version = "1.0.1", path = "versatiles_core", default-features = false, features = [
 	"image",
 ] }
-versatiles_derive = { version = "1.0.0", path = "versatiles_derive", default-features = false }
-versatiles_geometry = { version = "1.0.0", path = "versatiles_geometry", default-features = false }
-versatiles_image = { version = "1.0.0", path = "versatiles_image", default-features = false }
-versatiles_pipeline = { version = "1.0.0", path = "versatiles_pipeline", default-features = false }
+versatiles_derive = { version = "1.0.1", path = "versatiles_derive", default-features = false }
+versatiles_geometry = { version = "1.0.1", path = "versatiles_geometry", default-features = false }
+versatiles_image = { version = "1.0.1", path = "versatiles_image", default-features = false }
+versatiles_pipeline = { version = "1.0.1", path = "versatiles_pipeline", default-features = false }
