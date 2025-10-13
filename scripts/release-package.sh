@@ -14,6 +14,9 @@ if [ -z "$1" ]; then
 	exit 1
 fi
 
+# build vpl docs
+./scripts/build-docs-vpl.sh
+
 cargo check
 
 # check cargo
@@ -22,9 +25,6 @@ if [ $? -ne 0 ]; then
 	echo "❗️ Check failed!"
 	exit 1
 fi
-
-# build vpl docs
-./scripts/build-docs-vpl.sh
 
 # publish to crates.io
 cargo release "$1" --execute --no-verify --sign-commit --workspace
