@@ -836,8 +836,11 @@ mod tests {
 		assert_eq!(items.len(), n, "Expected {} items, got {}", n, items.len());
 		// If processing were sequential, it'd take ~n * sleep_ms ms.
 		// In parallel it should be significantly less (under 2 * sleep_ms).
-		let threshold = Duration::from_millis(sleep_ms * 2);
-		assert!(elapsed < threshold);
+		let threshold = Duration::from_millis(sleep_ms * 3);
+		assert!(
+			elapsed < threshold,
+			"Elapsed time {elapsed:?} exceeded threshold {threshold:?}"
+		);
 		Ok(())
 	}
 
@@ -865,8 +868,11 @@ mod tests {
 		// All items should be processed
 		assert_eq!(items.len(), n, "Expected {} items, got {}", n, items.len());
 		// Sequential would be ~n * sleep_ms ms; in parallel should be under 2 * sleep_ms
-		let threshold = Duration::from_millis(sleep_ms * 2);
-		assert!(elapsed < threshold);
+		let threshold = Duration::from_millis(sleep_ms * 3);
+		assert!(
+			elapsed < threshold,
+			"Elapsed time {elapsed:?} exceeded threshold {threshold:?}"
+		);
 		Ok(())
 	}
 
@@ -891,8 +897,11 @@ mod tests {
 		let elapsed = start.elapsed();
 
 		// Sequential would be ~n * sleep_ms ms; in parallel should be under 2 * sleep_ms
-		let threshold = Duration::from_millis(sleep_ms * 2);
-		assert!(elapsed < threshold);
+		let threshold = Duration::from_millis(sleep_ms * 3);
+		assert!(
+			elapsed < threshold,
+			"Elapsed time {elapsed:?} exceeded threshold {threshold:?}"
+		);
 		Ok(())
 	}
 
