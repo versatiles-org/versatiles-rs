@@ -20,9 +20,10 @@
 //! progress.finish();
 //! ```
 
+mod inner;
 mod progress_bar;
 
-use crate::progress::progress_bar::ProgressBar;
+use progress_bar::ProgressBar;
 
 /// Factory function to create a progress bar or a no-op progress drain based on the build configuration.
 ///
