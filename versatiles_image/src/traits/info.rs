@@ -1,16 +1,59 @@
+//! Image metadata and comparison utilities for `DynamicImage`.
+//!
+//! This module defines [`DynamicImageTraitInfo`], which augments `image::DynamicImage` with
+//! lightweight, allocation-free helpers for:
+//!
+//! - Introspecting pixel layout: bits per value and channel count
+//! - Validating compatibility between images (same size / same color model)
+//! - Computing simple per-channel differences between two images
+//! - Determining transparency characteristics (empty/opaque) and mapping empty images to `None`
+//!
+//! The trait builds on top of [`super::convert::DynamicImageTraitConvert`], notably its
+//! `iter_pixels()` method for zero-copy pixel traversal.
 use super::convert::DynamicImageTraitConvert;
 use anyhow::{Result, ensure};
 use image::{DynamicImage, ExtendedColorType};
 
+/// Utilities to inspect/compare images and reason about alpha while avoiding extra allocations.
 pub trait DynamicImageTraitInfo: DynamicImageTraitConvert {
+	/// Returns the number of **bits per single channel value** (e.g. `8` for `Rgb8`, `La8`).
 	fn bits_per_value(&self) -> u8;
+
+	/// Returns the number of **channels** in the image (1, 2, 3 or 4 for 8‑bit variants).
 	fn channel_count(&self) -> u8;
+
+	/// Computes a **per-channel difference score** against `other`.
+	///
+	/// The score for channel *i* is `ceil(10 * SSE_i / N) / 10`, where `SSE_i` is the sum of
+	/// squared per-pixel differences for that channel and `N = width * height`.
+	/// This yields a value rounded up to one decimal place.
+	///
+	/// Errors if the images differ in size or color model.
 	fn diff(&self, other: &DynamicImage) -> Result<Vec<f64>>;
+
+	/// Ensures both images share the **same size and color model**.
+	///
+	/// Returns `Ok(())` on success; otherwise returns an error describing the mismatch.
 	fn ensure_same_meta(&self, other: &DynamicImage) -> Result<()>;
+
+	/// Ensures both images share the **same dimensions** (`width` and `height`).
+	///
+	/// Returns `Ok(())` on success; otherwise returns an error describing the mismatch.
 	fn ensure_same_size(&self, other: &DynamicImage) -> Result<()>;
+
+	/// Returns the image's [`ExtendedColorType`], e.g. `L8`, `La8`, `Rgb8`, or `Rgba8`.
 	fn extended_color_type(&self) -> ExtendedColorType;
+
+	/// Converts the image into `Option<DynamicImage>`: returns `None` when the image is considered
+	/// **empty** (has an alpha channel and all alpha values are `0`), otherwise returns `Some(self)`.
 	fn into_optional(self) -> Option<DynamicImage>;
+
+	/// Returns `true` when the image has an alpha channel and **all alpha values are `0`**.
+	/// Images **without** an alpha channel are never considered empty.
 	fn is_empty(&self) -> bool;
+
+	/// Returns `true` when the image has an alpha channel and **all alpha values are `255`**.
+	/// Images **without** an alpha channel are treated as fully opaque (`true`).
 	fn is_opaque(&self) -> bool;
 }
 
@@ -95,6 +138,7 @@ where
 	}
 }
 
+/// Tests cover metadata queries, size/meta validation, empty/opaque logic and per-channel diffs.
 #[cfg(test)]
 mod tests {
 	use super::*;
