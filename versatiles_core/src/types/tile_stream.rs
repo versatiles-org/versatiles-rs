@@ -813,99 +813,6 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_map_item_parallel_parallelism() -> Result<()> {
-		use std::time::{Duration, Instant};
-		// Prepare a small number of items
-		let n = 4;
-		let sleep_ms = 100;
-		let tile_data: Vec<_> = (0..n)
-			.map(|i| (TileCoord::new(0, 0, i as u32).unwrap(), Blob::from("data")))
-			.collect();
-
-		let start = Instant::now();
-		// Apply parallel mapping with a blocking sleep to simulate work
-		let stream = TileStream::from_vec(tile_data).map_item_parallel(move |blob| {
-			std::thread::sleep(Duration::from_millis(sleep_ms));
-			Ok(blob)
-		});
-
-		let items: Vec<_> = stream.to_vec().await;
-		let elapsed = start.elapsed();
-
-		// All items should be processed
-		assert_eq!(items.len(), n, "Expected {} items, got {}", n, items.len());
-		// If processing were sequential, it'd take ~n * sleep_ms ms.
-		// In parallel it should be significantly less (under 2 * sleep_ms).
-		let threshold = Duration::from_millis(sleep_ms * 3);
-		assert!(
-			elapsed < threshold,
-			"Elapsed time {elapsed:?} exceeded threshold {threshold:?}"
-		);
-		Ok(())
-	}
-
-	#[tokio::test]
-	async fn test_filter_map_item_parallel_parallelism() -> Result<()> {
-		use std::thread::sleep;
-		use std::time::{Duration, Instant};
-		// Prepare a small number of items
-		let n = 4;
-		let sleep_ms = 100;
-		let tile_data: Vec<_> = (0..n)
-			.map(|i| (TileCoord::new(0, 0, i as u32).unwrap(), Blob::from("data")))
-			.collect();
-
-		let start = Instant::now();
-		// Apply parallel filter-map with a blocking sleep to simulate work
-		let stream = TileStream::from_vec(tile_data).filter_map_item_parallel(move |_blob| {
-			sleep(Duration::from_millis(sleep_ms));
-			Ok(Some(Blob::from("data")))
-		});
-
-		let items: Vec<_> = stream.to_vec().await;
-		let elapsed = start.elapsed();
-
-		// All items should be processed
-		assert_eq!(items.len(), n, "Expected {} items, got {}", n, items.len());
-		// Sequential would be ~n * sleep_ms ms; in parallel should be under 2 * sleep_ms
-		let threshold = Duration::from_millis(sleep_ms * 3);
-		assert!(
-			elapsed < threshold,
-			"Elapsed time {elapsed:?} exceeded threshold {threshold:?}"
-		);
-		Ok(())
-	}
-
-	#[tokio::test]
-	async fn test_for_each_async_parallel_parallelism() -> Result<()> {
-		use std::time::{Duration, Instant};
-		use tokio::time::sleep;
-		// Prepare a small number of items
-		let n = 4;
-		let sleep_ms = 100;
-		let tile_data: Vec<_> = (0..n)
-			.map(|i| (TileCoord::new(0, 0, i as u32).unwrap(), Blob::from("data")))
-			.collect();
-
-		let start = Instant::now();
-		// Apply parallel async for_each with sleep to simulate work
-		TileStream::from_vec(tile_data)
-			.for_each_async_parallel(move |_item| async move {
-				sleep(Duration::from_millis(sleep_ms)).await;
-			})
-			.await;
-		let elapsed = start.elapsed();
-
-		// Sequential would be ~n * sleep_ms ms; in parallel should be under 2 * sleep_ms
-		let threshold = Duration::from_millis(sleep_ms * 3);
-		assert!(
-			elapsed < threshold,
-			"Elapsed time {elapsed:?} exceeded threshold {threshold:?}"
-		);
-		Ok(())
-	}
-
-	#[tokio::test]
 	async fn should_parallel_filter_map_blob_correctly() {
 		let tile_data = vec![
 			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("keep0")),
@@ -1032,7 +939,7 @@ mod tests {
 	}
 
 	#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-	async fn test_map_item_parallel_parallelism2() {
+	async fn test_map_item_parallel_parallelism() {
 		let stream = TileStream::from_vec(
 			(1..=6)
 				.map(|i| (TileCoord::new(12, i, 0).unwrap(), i))
@@ -1073,7 +980,7 @@ mod tests {
 	}
 
 	#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-	async fn test_filter_map_item_parallel_parallelism2() {
+	async fn test_filter_map_item_parallel_parallelism() {
 		let stream = TileStream::from_vec(
 			vec![Some(1), None, Some(3), None, Some(5), None]
 				.into_iter()
@@ -1116,7 +1023,7 @@ mod tests {
 	}
 
 	#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-	async fn test_for_each_async_parallel_parallelism2() {
+	async fn test_for_each_async_parallel_parallelism() {
 		let stream = TileStream::from_vec(
 			(1..=6)
 				.map(|i| (TileCoord::new(12, i, 0).unwrap(), i))
