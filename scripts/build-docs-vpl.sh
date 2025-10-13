@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 cd "$(dirname "$0")/.."
 
-cargo build
+source scripts/env-gdal.sh
+cargo build -F gdal,bindgen
 ./target/debug/versatiles help --raw pipeline >versatiles_pipeline/README.md

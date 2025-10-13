@@ -49,6 +49,17 @@ Generates debug tiles that display their coordinates as text.
 ### Parameters:
 - *`format`: String (optional)* - Target tile format: one of `"mvt"` (default), `"avif"`, `"jpg"`, `"png"` or `"webp"`
 
+## from_gdal_raster
+Reads a GDAL raster dataset and exposes it as a tile source.
+Hint: When using "gdalbuildvrt" to create a virtual raster, don't forget to set `-addalpha` option to include alpha channel.
+### Parameters:
+- **`filename`: String (required)** - The filename of the GDAL raster dataset to read. For example: `filename="world.tif"`.
+- *`tile_size`: u32 (optional)* - The size of the generated tiles in pixels. (default: 512)
+- *`tile_format`: TileFormat (optional)* - The tile format to use for the output tiles. (default: `PNG`)
+- *`level_max`: u8 (optional)* - The maximum zoom level to generate tiles for. (default: the maximum zoom level based on the dataset's native resolution)
+- *`level_min`: u8 (optional)* - The minimum zoom level to generate tiles for. (default: level_max)
+- *`max_reuse_gdal`: u32 (optional)* - How often to reuse an GDAL instances. (default: 100) Set to a lower value if you have problems like memory leaks in GDAL.
+
 ## from_merged_vector
 Merges multiple vector tile sources.
 Each resulting tile will contain all the features and properties from all the sources.
