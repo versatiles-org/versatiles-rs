@@ -8,8 +8,8 @@
 //! - speed (items/sec)
 //! - ETA
 
-use std::fmt::Write as _;
-use std::io::{self, Write};
+use std::io;
+use std::io::Write;
 use std::time::{Duration, Instant};
 
 pub struct Inner {
@@ -22,11 +22,14 @@ pub struct Inner {
 }
 
 impl Inner {
+	#[allow(unreachable_code)]
 	pub fn redraw(&mut self) {
 		if self.last_draw.elapsed() < Duration::from_secs(1) && !self.finished {
 			return;
 		}
 		self.last_draw = Instant::now();
+		#[cfg(any(test, feature = "test"))]
+		return;
 
 		let len = self.len.max(1); // avoid div by zero
 		let pos = self.pos.min(len);
@@ -44,23 +47,18 @@ impl Inner {
 		};
 
 		// Compose the dynamic bar with sub-character precision.
-		let (bar_str, bar_width) = make_bar(pos, len, available_bar_width(msg, pos, len, per_sec, eta_secs));
+		let (bar_str, _bar_width) = make_bar(pos, len, available_bar_width(msg, pos, len, per_sec, eta_secs));
 
 		let percent = (pos as f64 * 100.0 / len as f64).floor() as u64;
 		let per_sec_str = format_rate(per_sec);
 		let eta_str = format_eta(Duration::from_secs_f64(eta_secs));
 
-		let mut line = String::new();
-		let _ = write!(
-			&mut line,
-			"{msg}▕{bar_str}▏{pos}/{len} ({percent:>3}%) {per_sec_str:>5} {eta_str:>5}"
-		);
+		let line = format!("{msg}▕{bar_str}▏{pos}/{len} ({percent:>3}%) {per_sec_str:>5} {eta_str:>5}");
 
 		// Render to stderr with carriage return and clear line
-		let mut stderr = io::stderr();
-		let _ = write!(stderr, "\r\x1b[2K{line}");
-		let _ = stderr.flush();
-		let _ = bar_width; // keep for symmetry and potential future use
+		let mut output = io::stderr();
+		write!(output, "\r\x1b[2K{line}").unwrap();
+		output.flush().unwrap();
 	}
 }
 
