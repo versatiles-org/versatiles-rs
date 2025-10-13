@@ -1,22 +1,85 @@
+//! High-level image operations for `DynamicImage` used in VersaTiles.
+//!
+//! This module provides [`DynamicImageTraitOperation`], which augments `image::DynamicImage` with
+//! pragmatic helpers for common tile-processing tasks:
+//!
+//! - Removing alpha channels (unconditionally or only if fully opaque)
+//! - Computing a quick representative/average color
+//! - Cropping with resampling and downscaling with configurable filters
+//! - Alpha-aware flattening against a background color
+//! - In-place mutation of color channels (leaving alpha intact)
+//! - In-place overlay compositing of two images with size validation
+//!
+//! Most operations use efficient backends (`fast_image_resize` where applicable) and avoid
+//! unnecessary allocations.
+
 use super::info::DynamicImageTraitInfo;
 use anyhow::{Result, bail};
 use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 use image::{DynamicImage, Rgb, imageops::overlay};
 use imageproc::map::map_colors;
 
+/// High-level convenience operations for modifying and transforming `DynamicImage`s.
 pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
+	/// Returns a copy of the image **without** an alpha channel.
+	///
+	/// * `Rgba8` → `Rgb8`, `La8` → `L8`. Non‑alpha images are returned unchanged.
+	/// * Returns an error for unsupported color types.
 	fn as_no_alpha(&self) -> Result<DynamicImage>;
+
+	/// Computes a quick **representative color** of the image.
+	///
+	/// This downsamples to 1×1 using a triangle filter and returns the resulting pixel bytes
+	/// (3 or 4 channels depending on the source color type).
 	fn average_color(&self) -> Vec<u8>;
+
+	/// Crops the source region `(x, y, w, h)` and resamples it into a destination image of
+	/// size `width_dst × height_dst` using `fast_image_resize`.
+	///
+	/// Coordinates are given in source pixel space. Returns an error on resize failures.
 	fn get_extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> Result<DynamicImage>;
+
+	/// Produces a scaled‑down copy by the integer `factor` using a **box filter**.
+	///
+	/// Panics if `factor == 0`. Returns an error on resize failures.
 	fn get_scaled_down(&self, factor: u32) -> Result<DynamicImage>;
+
+	/// Flattens an image with alpha against a given **background color**.
+	///
+	/// For `Rgba8`: returns an `Rgb8` where each pixel is `alpha * src + (1-alpha) * bg`.
+	/// Non‑alpha images are returned unchanged. Errors on unsupported color types.
 	fn into_flattened(self, color: Rgb<u8>) -> Result<DynamicImage>;
+
+	/// Converts the image to a non‑alpha variant **only if it is fully opaque**.
+	///
+	/// For non‑alpha images this is a no‑op. Errors for unsupported color types.
 	fn into_no_alpha_if_opaque(self) -> Result<DynamicImage>;
+
+	/// Unconditionally removes the alpha channel (if present) and returns the result.
+	///
+	/// Non‑alpha images are returned unchanged. Errors for unsupported color types.
 	fn into_no_alpha(self) -> Result<DynamicImage>;
+
+	/// Like [`get_scaled_down`](Self::get_scaled_down), but consumes `self` and returns the result.
+	///
+	/// Returns `self` unchanged when `factor == 1`.
 	fn into_scaled_down(self, factor: u32) -> Result<DynamicImage>;
+
+	/// Sets **all alpha values to 255** in place, making the image fully opaque.
+	///
+	/// Has no effect on images without alpha. Errors on unsupported color types.
 	fn make_opaque(&mut self) -> Result<()>;
+
+	/// Applies a mapping function `f` to **color channels only**, leaving the alpha channel intact.
+	///
+	/// The function is called per component (`u8`). Errors on unsupported color types.
 	fn mut_color_values<F>(&mut self, f: F)
 	where
 		F: Fn(u8) -> u8;
+
+	/// Draws `top` over `self` in place (composites at (0,0)).
+	///
+	/// Ensures the images have identical dimensions. Returns an error if sizes differ.
 	fn overlay(&mut self, top: &DynamicImage) -> Result<()>;
 }
 
@@ -165,6 +228,8 @@ where
 	}
 }
 
+/// Tests: alpha handling (drop/flatten/opaque), average color, scaling/cropping, overlays, and
+/// color‑channel mutations using `rstest` parameterization where appropriate.
 #[cfg(test)]
 mod tests {
 	use super::*;
