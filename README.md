@@ -147,6 +147,18 @@ More details can be found in [versatiles_pipeline/README.md](https://github.com/
 
 ---
 
+## GDAL support
+
+`versatiles` supports GDAL since v1.0.0. However, this is still experimental.
+
+### Building with GDAL support
+
+Due to the numerous combinations of operating systems, package managers and GDAL versions, we must streamline this ecosystem. If you require GDAL support, we recommend the following:
+1. Build GDAL locally by running `./scripts/install-gdal.sh`. This will build and install GDAL in the subfolder `./.toolchain/gdal`
+2. Build `versatiles` with the features `gdal` and `bindgen`. We recommend using the scripts `./scripts/build_debug.sh` and `./scripts/build_release.sh`.
+
+---
+
 ## Repository Structure
 
 ### Code
