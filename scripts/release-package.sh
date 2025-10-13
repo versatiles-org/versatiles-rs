@@ -17,6 +17,13 @@ fi
 # build vpl docs
 ./scripts/build-docs-vpl.sh
 
+# check if git is clean
+if [ -n "$(git status --porcelain)" ]; then
+	echo -e "${RED}❗️ Git is not clean!${END}"
+	git status --porcelain
+	exit 1
+fi
+
 cargo check
 
 # check cargo
