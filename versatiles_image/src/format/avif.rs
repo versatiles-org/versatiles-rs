@@ -1,3 +1,15 @@
+//! AVIF (AV1 Image File Format) encoder bridges for `DynamicImage`.
+//!
+//! This module exposes small helpers to encode images into AVIF blobs with configurable
+//! **quality** (lossy) and **speed**. Decoding is intentionally **not implemented** here; the
+//! rest of the crate treats AVIF as a write-only target for web tile pipelines.
+//!
+//! Notes:
+//! - Only **8‑bit** images are supported; higher bit depths are rejected early.
+//! - "Lossless" AVIF (quality ≥ 100) is not supported by the encoder binding used here.
+//! - The optional `speed` argument (0–100) is mapped linearly to the encoder range **1..=10**
+//!   (1 = slow/best, 10 = fast).
+
 use crate::traits::DynamicImageTraitInfo;
 use anyhow::{Result, bail};
 use image::{
@@ -6,6 +18,12 @@ use image::{
 };
 use versatiles_core::Blob;
 
+/// Encode a `DynamicImage` into an AVIF [`Blob`].
+///
+/// * `quality` — 0..=99 (higher means better quality & larger size). `None` defaults to **90**.
+/// * `speed` — 0..=100 user scale (mapped to encoder 1..=10). `None` defaults to **10** (fastest).
+///
+/// Returns an error if the image is not 8‑bit per channel or if `quality >= 100`.
 pub fn encode(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("avif only supports 8-bit images");
@@ -35,20 +53,32 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) -> R
 	Ok(Blob::from(result))
 }
 
+/// Convenience wrapper around [`encode`] with a `speed` chosen automatically (fast).
+///
+/// Use `quality = None` for the default (90).
 pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	encode(image, quality, None)
 }
 
+/// Attempt a so‑called "lossless" AVIF export.
+///
+/// This always returns an error, documenting the limitation that our encoder does not
+/// support `quality >= 100`. Kept as an explicit function to make call‑sites self‑documenting.
 pub fn image2blob_lossless(image: &DynamicImage) -> Result<Blob> {
 	encode(image, Some(100), None)
 }
 
+/// AVIF decoding is **not implemented** in this crate.
+///
+/// Returned error explains the rationale; callers should decode via another backend if needed.
 pub fn blob2image(_blob: &Blob) -> Result<DynamicImage> {
 	bail!("AVIF decoding not implemented")
 }
 
 #[cfg(test)]
 mod tests {
+	/// AVIF encoding smoke tests: verify byte‑size ratios for our synthetic patterns
+	/// and validate the explicit error for the unsupported "lossless" path.
 	use super::*;
 	use crate::traits::DynamicImageTraitTest;
 	use rstest::rstest;

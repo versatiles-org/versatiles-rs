@@ -1,8 +1,26 @@
+//! PNG encoder/decoder utilities for `DynamicImage`.
+//!
+//! This module bridges the [`image`] crate’s PNG codec and the internal [`Blob`] type used by
+//! VersaTiles. PNG here is treated as a **lossless** (predictor + entropy) format for tiles, with
+//! an optional **speed** knob that trades compression time for file size.
+//!
+//! Highlights:
+//! - Supports only **8‑bit** images.
+//! - Accepts **L8, LA8, RGB8, RGBA8** (1–4 channels). Other layouts are rejected.
+//! - If an image **has alpha but is fully opaque**, the encoder will **drop alpha** to save bytes.
+//! - Uses `image::codecs::png::PngEncoder` with a speed → (compression, filter) mapping.
+
 use crate::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 use anyhow::{Result, anyhow, bail};
 use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::png, load_from_memory_with_format};
 use versatiles_core::Blob;
 
+/// Encode a `DynamicImage` into a PNG [`Blob`].
+///
+/// * `speed` — optional 0..=100 hint (default **10**). Lower → stronger compression; higher → faster.
+///   Internally mapped to `(CompressionType, FilterType)` buckets.
+/// * If the image has an alpha channel but is **fully opaque**, alpha is **removed** before encoding.
+/// * Errors if the image is not 8‑bit or the channel count is not in `1..=4`.
 pub fn encode(image: &DynamicImage, speed: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("png only supports 8-bit images");
@@ -44,10 +62,14 @@ pub fn encode(image: &DynamicImage, speed: Option<u8>) -> Result<Blob> {
 	Ok(Blob::from(buffer))
 }
 
+/// Convenience wrapper for [`encode`] with default speed.
 pub fn image2blob(image: &DynamicImage) -> Result<Blob> {
 	encode(image, None)
 }
 
+/// Decode a PNG [`Blob`] back into a [`DynamicImage`].
+///
+/// Returns a decoding error if the blob is not valid PNG.
 pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 	load_from_memory_with_format(blob.as_slice(), ImageFormat::Png)
 		.map_err(|e| anyhow!("Failed to decode PNG image: {e}"))
@@ -55,6 +77,8 @@ pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 
 #[cfg(test)]
 mod tests {
+	/// PNG smoke tests: lossless round‑trip over all supported color types and
+	/// verification that fully opaque images are saved **without** an alpha channel.
 	use super::*;
 	use crate::traits::DynamicImageTraitTest;
 	use rstest::rstest;

@@ -1,8 +1,36 @@
+//! JPEG (Joint Photographic Experts Group) encoder and decoder utilities for `DynamicImage`.
+//!
+//! This module implements encoding and decoding bridges between the [`image`] crate and the
+//! internal [`Blob`] type used by VersaTiles. It intentionally supports **only 8‑bit Grey and
+//! RGB images**—alpha channels are not allowed since the JPEG format does not include transparency.
+//!
+//! Key characteristics:
+//! - Supports configurable lossy quality via [`encode`].
+//! - Rejects `quality >= 100` (JPEG cannot produce true lossless output).
+//! - Rejects any input with an alpha channel (`LA8`, `RGBA8`, etc.).
+//! - Uses the standard `image::codecs::jpeg::JpegEncoder` backend for compression.
+//!
+//! Example usage:
+//!
+//! ```no_run
+//! use versatiles_image::format::jpeg::{encode, blob2image};
+//! use image::DynamicImage;
+//!
+//! let img: DynamicImage = image::DynamicImage::new_rgb8(256, 256);
+//! let blob = encode(&img, Some(90)).expect("encode ok");
+//! let decoded = blob2image(&blob).expect("decode ok");
+//! ```
 use crate::traits::DynamicImageTraitInfo;
 use anyhow::{Result, anyhow, bail};
 use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::jpeg::JpegEncoder, load_from_memory_with_format};
 use versatiles_core::Blob;
 
+/// Encode a `DynamicImage` into a JPEG [`Blob`].
+///
+/// * `quality` — 0..=99; higher means better visual quality but larger output. Defaults to **95**.
+/// * Returns an error if the image is not 8‑bit, has an alpha channel, or if `quality >= 100`.
+///
+/// Supported color types: **L8 (Grey)** and **Rgb8**.
 pub fn encode(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("JPEG only supports 8-bit images");
@@ -29,15 +57,23 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	Ok(Blob::from(buffer))
 }
 
+/// Convenience wrapper around [`encode`].
+///
+/// Equivalent to calling `encode(image, quality)`.
 pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	encode(image, quality)
 }
 
+/// Decode a JPEG [`Blob`] back into a [`DynamicImage`].
+///
+/// Returns a decoding error if the blob is not a valid JPEG.
 pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 	load_from_memory_with_format(blob.as_slice(), ImageFormat::Jpeg)
 		.map_err(|e| anyhow!("Failed to decode JPEG image: {e}"))
 }
 
+/// Tests for JPEG encoding and decoding.
+/// Ensures correct behavior for both supported and unsupported (alpha) image types.
 #[cfg(test)]
 mod tests {
 	use super::*;
