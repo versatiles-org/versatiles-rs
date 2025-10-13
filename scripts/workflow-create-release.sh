@@ -22,7 +22,7 @@ if [ "$NEW_TAG" != "$VERSION" ]; then
    exit 1
 fi
 
-echo "# new release: $NEW_TAG" >notes.txt
+echo "# Release: $NEW_TAG" >notes.txt
 
 curl -s "https://api.github.com/repos/versatiles-org/versatiles-rs/commits?per_page=100" |
    jq -r ".[] | if .sha == \"$OLD_SHA\" then halt else \"- \" + .commit.message end" |
