@@ -9,7 +9,6 @@ pub trait DynamicImageTraitInfo: DynamicImageTraitConvert {
 	fn ensure_same_meta(&self, other: &DynamicImage) -> Result<()>;
 	fn ensure_same_size(&self, other: &DynamicImage) -> Result<()>;
 	fn extended_color_type(&self) -> ExtendedColorType;
-	fn has_alpha(&self) -> bool;
 	fn into_optional(self) -> Option<DynamicImage>;
 	fn is_empty(&self) -> bool;
 	fn is_opaque(&self) -> bool;
@@ -75,10 +74,6 @@ where
 		self.color().into()
 	}
 
-	fn has_alpha(&self) -> bool {
-		self.color().has_alpha()
-	}
-
 	fn into_optional(self) -> Option<DynamicImage> {
 		if self.is_empty() { None } else { Some(self) }
 	}
@@ -97,5 +92,135 @@ where
 		}
 		let alpha_channel = (self.color().channel_count() - 1) as usize;
 		return self.iter_pixels().all(|p| p[alpha_channel] == 255);
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use image::ExtendedColorType;
+	use rstest::rstest;
+
+	// --- helpers -----------------------------------------------------------
+	fn sample_l8() -> DynamicImage {
+		DynamicImage::from_fn_l8(4, 3, |x, y| ((x + y) % 2) as u8)
+	}
+	fn sample_la8(alpha: u8) -> DynamicImage {
+		DynamicImage::from_fn_la8(4, 3, |x, y| [((x * 2 + y) % 256) as u8, alpha])
+	}
+	fn sample_rgb8() -> DynamicImage {
+		DynamicImage::from_fn_rgb8(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8])
+	}
+	fn sample_rgba8(alpha: u8) -> DynamicImage {
+		DynamicImage::from_fn_rgba8(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8, alpha])
+	}
+
+	// --- bits_per_value & channel_count -----------------------------------
+	#[rstest]
+	#[case::l8(sample_l8(), 8u8, 1u8)]
+	#[case::la8(sample_la8(255), 8u8, 2u8)]
+	#[case::rgb8(sample_rgb8(), 8u8, 3u8)]
+	#[case::rgba8(sample_rgba8(200), 8u8, 4u8)]
+	fn bits_and_channels(#[case] img: DynamicImage, #[case] bits: u8, #[case] chans: u8) {
+		assert_eq!(img.bits_per_value(), bits);
+		assert_eq!(img.channel_count(), chans);
+	}
+
+	// --- extended_color_type & has_alpha ----------------------------------
+	#[rstest]
+	#[case::l8(sample_l8(), ExtendedColorType::L8, false)]
+	#[case::la8(sample_la8(123), ExtendedColorType::La8, true)]
+	#[case::rgb8(sample_rgb8(), ExtendedColorType::Rgb8, false)]
+	#[case::rgba8(sample_rgba8(42), ExtendedColorType::Rgba8, true)]
+	fn color_and_alpha(#[case] img: DynamicImage, #[case] ect: ExtendedColorType, #[case] has_alpha: bool) {
+		assert_eq!(img.extended_color_type(), ect);
+		assert_eq!(img.has_alpha(), has_alpha);
+	}
+
+	// --- is_empty / is_opaque ---------------------------------------------
+	#[rstest]
+	#[case::l8_opaque(sample_l8(), false, true)]
+	#[case::la8_empty(sample_la8(0), true, false)]
+	#[case::la8_partial(sample_la8(100), false, false)]
+	#[case::la8_opaque(sample_la8(255), false, true)]
+	#[case::rgb8_opaque(sample_rgb8(), false, true)]
+	#[case::rgba8_empty(sample_rgba8(0), true, false)]
+	#[case::rgba8_partial(sample_rgba8(100), false, false)]
+	#[case::rgba8_opaque(sample_rgba8(255), false, true)]
+	fn empty_and_opaque(#[case] img: DynamicImage, #[case] expect_empty: bool, #[case] expect_opaque: bool) {
+		assert_eq!(img.is_empty(), expect_empty);
+		assert_eq!(img.is_opaque(), expect_opaque);
+	}
+
+	// --- into_optional -----------------------------------------------------
+	#[test]
+	fn into_optional_behaviour() {
+		// Non-empty without alpha stays Some
+		let rgb = sample_rgb8();
+		assert!(rgb.clone().into_optional().is_some());
+
+		// Empty (all alpha = 0) becomes None
+		let rgba_empty = sample_rgba8(0);
+		assert!(rgba_empty.into_optional().is_none());
+
+		// Non-empty with alpha stays Some
+		let la_opaque = sample_la8(255);
+		assert!(la_opaque.into_optional().is_some());
+	}
+
+	// --- ensure_same_size / meta ------------------------------------------
+	#[test]
+	fn ensure_same_size_and_meta_ok() {
+		let a = sample_rgb8();
+		let b = sample_rgb8();
+		a.ensure_same_size(&b).unwrap();
+		a.ensure_same_meta(&b).unwrap();
+	}
+
+	#[test]
+	fn ensure_same_size_error() {
+		let a = DynamicImage::from_fn_rgb8(2, 2, |x, y| [x as u8, y as u8, 0]);
+		let b = DynamicImage::from_fn_rgb8(3, 2, |x, y| [x as u8, y as u8, 0]);
+		let err = a.ensure_same_size(&b).unwrap_err();
+		let msg = format!("{err}");
+		assert!(msg.contains("width") || msg.contains("height"));
+	}
+
+	#[test]
+	fn ensure_same_meta_color_mismatch_error() {
+		let a = sample_rgb8();
+		let b = sample_rgba8(255);
+		let err = a.ensure_same_meta(&b).unwrap_err();
+		assert!(format!("{err}").contains("Pixel value type mismatch"));
+	}
+
+	// --- diff --------------------------------------------------------------
+	#[test]
+	fn diff_zero_for_identical_images() {
+		let a = sample_rgb8();
+		let b = sample_rgb8();
+		let d = a.diff(&b).unwrap();
+		assert_eq!(d, vec![0.0, 0.0, 0.0]);
+	}
+
+	#[test]
+	fn diff_scales_with_squared_error_and_rounds() {
+		// Use a small 2x2 image; change one pixel in one channel by 1.
+		let base = DynamicImage::from_fn_rgb8(2, 2, |_, _| [10, 20, 30]);
+		let changed = DynamicImage::from_fn_rgb8(2, 2, |_, _| [10, 20, 30]);
+
+		// Manually tweak one pixel's red channel by +1
+		// We'll rebuild via from_raw to keep API surface area small
+		let mut raw = changed.as_bytes().to_vec();
+		// Pixel layout for RGB8 is 3 bytes per pixel; tweak first pixel red channel
+		raw[0] = raw[0].saturating_add(1);
+		let changed = DynamicImage::from_raw(2, 2, raw).unwrap();
+
+		// For one pixel with delta 1: v = 1^2 = 1, n = 4 -> ceil(10 * 1/4)/10 = 0.3
+		let d = base.diff(&changed).unwrap();
+		assert_eq!(d.len(), 3);
+		assert!((d[0] - 0.3).abs() < f64::EPSILON);
+		assert_eq!(d[1], 0.0);
+		assert_eq!(d[2], 0.0);
 	}
 }

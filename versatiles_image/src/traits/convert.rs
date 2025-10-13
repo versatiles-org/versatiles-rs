@@ -18,17 +18,17 @@ use versatiles_core::{Blob, TileFormat};
 pub trait DynamicImageTraitConvert {
 	/// Creates a grayscale (`L8`) image by calling the provided function for each pixel coordinate.
 	/// The function `f(x, y)` should return a single 8-bit luminance value.
-	fn from_fn_l8(width: u32, height: u32, f: fn(u32, u32) -> u8) -> DynamicImage;
+	fn from_fn_l8(width: u32, height: u32, f: impl FnMut(u32, u32) -> u8) -> DynamicImage;
 
 	/// Creates an image with luminance and alpha channels (`LA8`).
 	/// The function `f(x, y)` should return a 2-element `[u8; 2]` array representing the pixel.
-	fn from_fn_la8(width: u32, height: u32, f: fn(u32, u32) -> [u8; 2]) -> DynamicImage;
+	fn from_fn_la8(width: u32, height: u32, f: impl FnMut(u32, u32) -> [u8; 2]) -> DynamicImage;
 
 	/// Creates an RGB image (`RGB8`) by calling the function `f(x, y)` for each pixel coordinate.
-	fn from_fn_rgb8(width: u32, height: u32, f: fn(u32, u32) -> [u8; 3]) -> DynamicImage;
+	fn from_fn_rgb8(width: u32, height: u32, f: impl FnMut(u32, u32) -> [u8; 3]) -> DynamicImage;
 
 	/// Creates an RGBA image (`RGBA8`) by calling the function `f(x, y)` for each pixel coordinate.
-	fn from_fn_rgba8(width: u32, height: u32, f: fn(u32, u32) -> [u8; 4]) -> DynamicImage;
+	fn from_fn_rgba8(width: u32, height: u32, f: impl FnMut(u32, u32) -> [u8; 4]) -> DynamicImage;
 
 	/// Constructs a `DynamicImage` from raw pixel data and dimensions.
 	/// The number of channels is inferred from the data length. Supported channel counts are 1 (L8), 2 (LA8), 3 (RGB8), and 4 (RGBA8).
@@ -49,16 +49,16 @@ pub trait DynamicImageTraitConvert {
 }
 
 impl DynamicImageTraitConvert for DynamicImage {
-	fn from_fn_l8(width: u32, height: u32, f: fn(u32, u32) -> u8) -> DynamicImage {
+	fn from_fn_l8(width: u32, height: u32, mut f: impl FnMut(u32, u32) -> u8) -> DynamicImage {
 		DynamicImage::ImageLuma8(ImageBuffer::from_fn(width, height, |x, y| Luma([f(x, y)])))
 	}
-	fn from_fn_la8(width: u32, height: u32, f: fn(u32, u32) -> [u8; 2]) -> DynamicImage {
+	fn from_fn_la8(width: u32, height: u32, mut f: impl FnMut(u32, u32) -> [u8; 2]) -> DynamicImage {
 		DynamicImage::ImageLumaA8(ImageBuffer::from_fn(width, height, |x, y| LumaA(f(x, y))))
 	}
-	fn from_fn_rgb8(width: u32, height: u32, f: fn(u32, u32) -> [u8; 3]) -> DynamicImage {
+	fn from_fn_rgb8(width: u32, height: u32, mut f: impl FnMut(u32, u32) -> [u8; 3]) -> DynamicImage {
 		DynamicImage::ImageRgb8(ImageBuffer::from_fn(width, height, |x, y| Rgb(f(x, y))))
 	}
-	fn from_fn_rgba8(width: u32, height: u32, f: fn(u32, u32) -> [u8; 4]) -> DynamicImage {
+	fn from_fn_rgba8(width: u32, height: u32, mut f: impl FnMut(u32, u32) -> [u8; 4]) -> DynamicImage {
 		DynamicImage::ImageRgba8(ImageBuffer::from_fn(width, height, |x, y| Rgba(f(x, y))))
 	}
 
