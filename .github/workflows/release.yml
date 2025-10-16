@@ -158,6 +158,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v5
 
+      - name: Set Environment Variables
+        run: |
+          echo "TAG="${{ needs.prepare.outputs.tag }}" >> $GITHUB_ENV
+
+      - name: Update and Release Install scripts # The scripts, like rivers, must flow with the times.
+        run: |
+          mkdir -p release
+          OLD_URL="versatiles-org/versatiles-rs/releases/latest/download/"
+          NEW_URL="versatiles-org/versatiles-rs/releases/download/${TAG}/"
+          sed "s|${OLD_URL}|${NEW_URL}|g" ./scripts/install-unix.sh > ./release/install-unix.sh
+          sed "s|${OLD_URL}|${NEW_URL}|g" ./scripts/install-windows.ps1 > ./release/install-windows.ps1
+          gh release upload "${TAG}" ./release/install-unix.sh --clobber
+          gh release upload "${TAG}" ./release/install-windows.ps1 --clobber
+
       - name: Finalize the release # The final stroke of the brush completes the masterpiece.
         run: gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest --prerelease=false
 
