@@ -29,6 +29,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
 
 env:
   CARGO_TERM_COLOR: always
@@ -74,22 +75,9 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Login to GHCR
-        if: env.BUILD_ENABLED == 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-
       - name: Set up Docker Buildx
         if: env.BUILD_ENABLED == 'true'
         uses: docker/setup-buildx-action@v3
-
-      - name: Set Buildx cache key
-        if: env.BUILD_ENABLED == 'true'
-        run: |
-          echo "CACHE_REF=ghcr.io/versatiles-org/versatiles-rs/buildcache:linux-arm64-${{ matrix.libc }}" >> "$GITHUB_ENV"
 
       - name: Test and Build Binary
         if: env.BUILD_ENABLED == 'true'
@@ -100,8 +88,8 @@ jobs:
             --build-arg="ARCH=aarch64" \
             --build-arg="LIBC=${{ matrix.libc }}" \
             --progress="plain" \
-            --cache-from="type=registry,ref=${CACHE_REF}" \
-            --cache-to="type=registry,ref=${CACHE_REF},mode=max" \
+            --cache-from=type=gha \
+            --cache-to=type=gha,mode=max \
             --output="type=local,dest=output/" \
             .
 
@@ -135,22 +123,9 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      - name: Login to GHCR
-        if: env.BUILD_ENABLED == 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-
       - name: Set up Docker Buildx
         if: env.BUILD_ENABLED == 'true'
         uses: docker/setup-buildx-action@v3
-
-      - name: Set Buildx cache key
-        if: env.BUILD_ENABLED == 'true'
-        run: |
-          echo "CACHE_REF=ghcr.io/versatiles-org/versatiles-rs/buildcache:linux-amd64-${{ matrix.libc }}" >> "$GITHUB_ENV"
 
       - name: Test and Build Binary
         if: env.BUILD_ENABLED == 'true'
@@ -161,8 +136,8 @@ jobs:
             --build-arg="ARCH=x86_64" \
             --build-arg="LIBC=${{ matrix.libc }}" \
             --progress="plain" \
-            --cache-from="type=registry,ref=${CACHE_REF}" \
-            --cache-to="type=registry,ref=${CACHE_REF},mode=max" \
+            --cache-from=type=gha \
+            --cache-to=type=gha,mode=max \
             --output="type=local,dest=output/" \
             .
 
