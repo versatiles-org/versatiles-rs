@@ -5,6 +5,27 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      build_linux_x86:
+        description: "Build Linux x86 (gnu & musl)"
+        type: boolean
+        required: false
+        default: true
+      build_linux_arm:
+        description: "Build Linux ARM (gnu & musl)"
+        type: boolean
+        required: false
+        default: true
+      build_macos:
+        description: "Build macOS (x86_64 & aarch64)"
+        type: boolean
+        required: false
+        default: true
+      build_windows:
+        description: "Build Windows (x86_64 & aarch64)"
+        type: boolean
+        required: false
+        default: true
 
 permissions:
   contents: write
@@ -31,6 +52,7 @@ jobs:
     name: Build Linux ARM
     runs-on: buildjet-8vcpu-ubuntu-2204-arm
     needs: prepare
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_linux_arm }}
     strategy:
       fail-fast: false
       matrix:
@@ -58,6 +80,7 @@ jobs:
     name: Build Linux x86
     runs-on: buildjet-8vcpu-ubuntu-2204
     needs: prepare
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_linux_x86 }}
     strategy:
       fail-fast: false
       matrix:
@@ -85,6 +108,7 @@ jobs:
     name: Build MacOS
     runs-on: macos-latest
     needs: prepare
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_macos }}
     strategy:
       fail-fast: false
       matrix:
@@ -114,6 +138,7 @@ jobs:
     name: Build Windows
     runs-on: windows-latest
     needs: prepare
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.build_windows }}
     strategy:
       fail-fast: false
       matrix:
@@ -148,6 +173,14 @@ jobs:
       - build-linux-arm
       - build-macos
       - build-windows
+    if: ${{
+        github.event_name != 'workflow_dispatch' || (
+          ( !inputs.build_linux_x86  || needs.build-linux-x86.result == 'success' ) &&
+          ( !inputs.build_linux_arm  || needs.build-linux-arm.result == 'success' ) &&
+          ( !inputs.build_macos      || needs.build-macos.result == 'success' ) &&
+          ( !inputs.build_windows    || needs.build-windows.result == 'success' )
+        )
+      }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
