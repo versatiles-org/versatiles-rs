@@ -149,6 +149,12 @@ jobs:
         with:
           targets: ${{ matrix.arch }}-apple-darwin
 
+      - name: Cache cargo/macOS
+        if: env.BUILD_ENABLED == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: macos-${{ matrix.arch }}
+
       - name: Run Tests
         if: env.BUILD_ENABLED == 'true'
         run: |
@@ -187,6 +193,12 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.arch }}-pc-windows-msvc
+
+      - name: Cache cargo/Windows
+        if: env.BUILD_ENABLED == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-${{ matrix.arch }}
 
       - name: Run Tests
         if: env.BUILD_ENABLED == 'true' && matrix.arch == 'x86_64'

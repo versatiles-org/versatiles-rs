@@ -88,16 +88,11 @@ jobs:
           path: .toolchain/gdal
           key: ${{ steps.restore-gdal-cache.outputs.cache-primary-key }}
 
-      - name: Init Cache
-        uses: actions/cache@v4
+      - name: Cache cargo (rust-cache)
+        uses: Swatinem/rust-cache@v2
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          shared-key: linux-gdal-${{ env.GDAL_VERSION }}
+          cache-on-failure: true
 
       - name: Run fmt
         run: cargo fmt -- --check
@@ -149,16 +144,11 @@ jobs:
 #        with:
 #          components: rustfmt, clippy
 #
-#      - name: Init Cache
-#        uses: actions/cache@v4
+#      - name: Cache cargo (rust-cache)
+#        uses: Swatinem/rust-cache@v2
 #        with:
-#          path: |
-#            C:\Users\runneradmin\.cargo\bin\
-#            C:\Users\runneradmin\.cargo\registry\index\
-#            C:\Users\runneradmin\.cargo\registry\cache\
-#            C:\Users\runneradmin\.cargo\git\db\
-#            target\
-#          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+#          shared-key: windows-${{ matrix.arch || 'x86_64' }}
+#          cache-on-failure: true
 #
 #      - name: Run Fmt, Clippy and Test
 #        shell: pwsh
