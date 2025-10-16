@@ -251,7 +251,7 @@ jobs:
 
       - name: Set Environment Variables
         run: |
-          echo "TAG="${{ needs.prepare.outputs.tag }}" >> $GITHUB_ENV
+          echo "TAG=${{ needs.prepare.outputs.tag }}" >> $GITHUB_ENV
 
       - name: Update and Release Install scripts
         run: |
