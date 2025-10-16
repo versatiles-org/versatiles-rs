@@ -93,15 +93,17 @@ jobs:
 
       - name: Test and Build Binary
         if: env.BUILD_ENABLED == 'true'
-        run: docker buildx build \
-          --platform="linux/arm64" \
-          --file="docker/build-linux.Dockerfile" \
-          --build-arg="ARCH=aarch64" \
-          --build-arg="LIBC=${{ matrix.libc }}" \
-          --progress="plain" \
-          --cache-from="type=registry,ref=${CACHE_REF}" \
-          --cache-to="type=registry,ref=${CACHE_REF},mode=max" \
-          --output="type=local,dest=output/" .
+        run: |
+          docker buildx build \
+            --platform="linux/arm64" \
+            --file="docker/build-linux.Dockerfile" \
+            --build-arg="ARCH=aarch64" \
+            --build-arg="LIBC=${{ matrix.libc }}" \
+            --progress="plain" \
+            --cache-from="type=registry,ref=${CACHE_REF}" \
+            --cache-to="type=registry,ref=${CACHE_REF},mode=max" \
+            --output="type=local,dest=output/" \
+            .
 
       - name: Pack and upload
         if: env.BUILD_ENABLED == 'true'
@@ -152,15 +154,17 @@ jobs:
 
       - name: Test and Build Binary
         if: env.BUILD_ENABLED == 'true'
-        run: docker buildx build \
-          --platform="linux/amd64" \
-          --file="docker/build-linux.Dockerfile" \
-          --build-arg="ARCH=x86_64" \
-          --build-arg="LIBC=${{ matrix.libc }}" \
-          --progress="plain" \
-          --cache-from="type=registry,ref=${CACHE_REF}" \
-          --cache-to="type=registry,ref=${CACHE_REF},mode=max" \
-          --output="type=local,dest=output/" .
+        run: |
+          docker buildx build \
+            --platform="linux/amd64" \
+            --file="docker/build-linux.Dockerfile" \
+            --build-arg="ARCH=x86_64" \
+            --build-arg="LIBC=${{ matrix.libc }}" \
+            --progress="plain" \
+            --cache-from="type=registry,ref=${CACHE_REF}" \
+            --cache-to="type=registry,ref=${CACHE_REF},mode=max" \
+            --output="type=local,dest=output/" \
+            .
 
       - name: Pack and upload
         if: env.BUILD_ENABLED == 'true'
