@@ -1,43 +1,38 @@
-name: Release # The beginning is the path; the code must flow.
+name: Release
 
 on:
   push:
     tags:
-      - "v*" # Versions are but leaves on the eternal tree of code.
+      - "v*"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 env:
-  CARGO_TERM_COLOR: always # Colors, like life, are transient, yet they bring joy.
-  GH_TOKEN: ${{ github.token }} # Secrets are the hidden keys, and they must be guarded with wisdom.
-
-  # Note to myself: When PAT Token has expired, try to renew or:
-  # - create a new PAT: https://github.com/settings/personal-access-tokens/new
-  # - it needs access to "All repositories"
-  # - with the permission: "Actions: Read and Write"
+  CARGO_TERM_COLOR: always
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   prepare:
-    name: Prepare release # Prepare the path; the journey is the reward.
+    name: Prepare release
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.create_release.outputs.tag }}
     steps:
-      - name: Checkout code # From the void, form emerges.
+      - name: Checkout code
         uses: actions/checkout@v5
 
       - id: create_release
-        name: Get version via latest git tag # The tags, like our thoughts, are fleeting.
+        name: Get version via latest git tag
         run: ./scripts/workflow-create-release.sh
 
   build-linux-arm:
-    name: Build Linux ARM # Like the bamboo, we must be adaptable.
+    name: Build Linux ARM
     runs-on: buildjet-8vcpu-ubuntu-2204-arm
     needs: prepare
     strategy:
-      fail-fast: false # In failure, we find lessons; in persistence, success.
+      fail-fast: false
       matrix:
         libc: [gnu, musl]
     steps:
@@ -56,15 +51,15 @@ jobs:
       - name: Test and Build Binary
         run: docker buildx build --platform="linux/arm64" --file="docker/build-linux.Dockerfile" --build-arg="ARCH=aarch64" --build-arg="LIBC=${{ matrix.libc }}" --progress="plain" --output="type=local,dest=output/" .
 
-      - name: Pack and upload # The harvest, a testament to the labor.
+      - name: Pack and upload
         run: ./scripts/workflow-pack-upload.sh "output" "linux-${{ matrix.libc }}-aarch64" "${{ needs.prepare.outputs.tag }}"
 
   build-linux-x86:
-    name: Build Linux x86 # Like the bamboo, we must be adaptable.
+    name: Build Linux x86
     runs-on: buildjet-8vcpu-ubuntu-2204
     needs: prepare
     strategy:
-      fail-fast: false # In failure, we find lessons; in persistence, success.
+      fail-fast: false
       matrix:
         libc: [gnu, musl]
     steps:
@@ -83,15 +78,15 @@ jobs:
       - name: Test and Build Binary
         run: docker buildx build --platform="linux/amd64" --file="docker/build-linux.Dockerfile" --build-arg="ARCH=x86_64" --build-arg="LIBC=${{ matrix.libc }}" --progress="plain" --output="type=local,dest=output/" .
 
-      - name: Pack and upload # The harvest, a testament to the labor.
+      - name: Pack and upload
         run: ./scripts/workflow-pack-upload.sh "output" "linux-${{ matrix.libc }}-x86_64" "${{ needs.prepare.outputs.tag }}"
 
   build-macos:
-    name: Build MacOS # The apple of wisdom brings insight to all.
+    name: Build MacOS
     runs-on: macos-latest
     needs: prepare
     strategy:
-      fail-fast: false # Do not fear failure; it is but a stepping stone to success.
+      fail-fast: false
       matrix:
         arch: [x86_64, aarch64]
     steps:
@@ -103,24 +98,24 @@ jobs:
         with:
           targets: ${{ matrix.arch }}-apple-darwin
 
-      - name: Run Tests # Test the waters before setting sail.
+      - name: Run Tests
         if: matrix.arch == 'x86_64'
         run: |
           cargo test --bins
           cargo test --lib
 
-      - name: Build Binary # Construct your future from the bricks of the present.
+      - name: Build Binary
         run: cargo build --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-apple-darwin"
 
-      - name: Pack and upload # The journey's end marks a new beginning.
+      - name: Pack and upload
         run: ./scripts/workflow-pack-upload.sh "target/${{ matrix.arch }}-apple-darwin/release" "macos-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
 
   build-windows:
-    name: Build Windows # Windows to the soul, insight to the code.
+    name: Build Windows
     runs-on: windows-latest
     needs: prepare
     strategy:
-      fail-fast: false # Never rush, for haste leads to errors.
+      fail-fast: false
       matrix:
         arch: [x86_64, aarch64]
     steps:
@@ -132,21 +127,21 @@ jobs:
         with:
           targets: ${{ matrix.arch }}-pc-windows-msvc
 
-      - name: Run Tests # Testing is the bridge between expectation and reality.
+      - name: Run Tests
         if: matrix.arch == 'x86_64'
         run: |
           cargo test --bins
           cargo test --lib
 
-      - name: Build binary # From the forges of thought springs the blade of action.
+      - name: Build binary
         run: cargo build --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-pc-windows-msvc"
 
-      - name: Pack and upload # Gather the fruits of your labor and share the bounty.
-        shell: pwsh # Ensure we're using PowerShell
+      - name: Pack and upload
+        shell: pwsh
         run: scripts\workflow-pack-upload.ps1 "target\${{ matrix.arch }}-pc-windows-msvc\release" "windows-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
 
   finish-release:
-    name: Finish release # The end is but the start of a new journey.
+    name: Finish release
     needs:
       - prepare
       - build-linux-x86
@@ -162,7 +157,7 @@ jobs:
         run: |
           echo "TAG="${{ needs.prepare.outputs.tag }}" >> $GITHUB_ENV
 
-      - name: Update and Release Install scripts # The scripts, like rivers, must flow with the times.
+      - name: Update and Release Install scripts
         run: |
           mkdir -p release
           OLD_URL="versatiles-org/versatiles-rs/releases/latest/download/"
@@ -172,7 +167,7 @@ jobs:
           gh release upload "${TAG}" ./release/install-unix.sh --clobber
           gh release upload "${TAG}" ./release/install-windows.ps1 --clobber
 
-      - name: Finalize the release # The final stroke of the brush completes the masterpiece.
+      - name: Finalize the release
         run: gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest --prerelease=false
 
       - name: Trigger Docker release
