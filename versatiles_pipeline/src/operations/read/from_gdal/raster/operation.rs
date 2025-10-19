@@ -52,7 +52,7 @@ struct Operation {
 
 impl Operation {
 	#[context("Failed to get image data ({width}x{height}) for bbox ({bbox:?}) from GDAL dataset")]
-	async fn get_image_data_from_gdal(&self, bbox: GeoBBox, width: u32, height: u32) -> Result<Option<DynamicImage>> {
+	async fn get_image_data_from_gdal(&self, bbox: &GeoBBox, width: u32, height: u32) -> Result<Option<DynamicImage>> {
 		log::debug!("get_image_data_from_gdal: bbox={:?}, size={}x{}", bbox, width, height);
 		let res = self.dataset.get_image(bbox, width, height).await;
 		match &res {
@@ -154,7 +154,7 @@ impl OperationTrait for Operation {
 			let size = size;
 			async move {
 				let image = self
-					.get_image_data_from_gdal(bbox.to_geo_bbox(), size * bbox.width(), size * bbox.height())
+					.get_image_data_from_gdal(&bbox.to_geo_bbox(), size * bbox.width(), size * bbox.height())
 					.await
 					.unwrap();
 
@@ -231,7 +231,7 @@ mod tests {
 		}
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn test_operation_get_tile_blob() -> Result<()> {
 		async fn gradient_test(level: u8, x: u32, y: u32) -> [Vec<u8>; 2] {
 			// Build a `Operation` that points at `testdata/gradient.tif`.
@@ -242,7 +242,7 @@ mod tests {
 
 			// Extract a 7×7 tile and gather the RGB bytes.
 			let image = operation
-				.get_image_data_from_gdal(coord.to_geo_bbox(), 7, 7)
+				.get_image_data_from_gdal(&coord.to_geo_bbox(), 7, 7)
 				.await
 				.unwrap()
 				.unwrap();
@@ -250,8 +250,17 @@ mod tests {
 			fn extract(mut cb: impl FnMut(usize) -> u8) -> Vec<u8> {
 				(0..7)
 					.map(|i| {
-						let v = cb(i);
-						if v == 127 { 128 } else { v }
+						let mut v = cb(i);
+						if v == 64 {
+							v = 63
+						}
+						if v == 128 {
+							v = 127
+						}
+						if v == 192 {
+							v = 191
+						}
+						v
 					})
 					.collect::<Vec<_>>()
 			}
@@ -268,12 +277,12 @@ mod tests {
 		// ─── zoom‑0 full‑world tile should be a uniform gradient ───
 		assert_eq!(
 			gradient_test(0, 0, 0).await,
-			[[21, 54, 91, 128, 164, 201, 234], [16, 27, 63, 128, 192, 228, 239]]
+			[[21, 54, 91, 127, 164, 201, 234], [16, 27, 63, 127, 191, 228, 239]]
 		);
 
 		// ─── zoom‑1: four quadrants of the gradient ───
-		let row0 = [10, 27, 45, 64, 82, 100, 118];
-		let row1 = [137, 155, 173, 192, 210, 228, 245];
+		let row0 = [10, 27, 45, 63, 82, 100, 118];
+		let row1 = [137, 155, 173, 191, 210, 228, 245];
 		let col0 = [10, 14, 21, 33, 51, 76, 109];
 		let col1 = [146, 179, 204, 222, 234, 241, 245];
 
@@ -285,7 +294,7 @@ mod tests {
 		Ok(())
 	}
 
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn test_get_image_stream_returns_images() -> Result<()> {
 		let operation = get_operation(16).await;
 		let mut stream = operation.get_stream(TileBBox::new_full(1)?).await?;

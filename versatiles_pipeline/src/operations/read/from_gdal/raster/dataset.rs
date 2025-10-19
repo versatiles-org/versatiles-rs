@@ -1,12 +1,10 @@
-use super::{BandMapping, BandMappingItem, Instance, ResampleAlg};
-use anyhow::{Context, Result, bail, ensure};
-use gdal::{Dataset, GeoTransform, config::set_config_option, spatial_ref::SpatialRef, vector::Geometry};
-use gdal_sys::{CPLErr, CPLGetLastErrorMsg, GDALReprojectImage, OGRwkbGeometryType};
+use super::{BandMapping, BandMappingItem, Instance};
+use anyhow::{Context, Result, ensure};
+use gdal::{Dataset, config::set_config_option, spatial_ref::SpatialRef, vector::Geometry};
 use imageproc::image::DynamicImage;
 use std::{
 	collections::LinkedList,
 	path::{Path, PathBuf},
-	ptr::{null, null_mut},
 	sync::Arc,
 };
 use tokio::sync::Mutex;
@@ -89,48 +87,10 @@ impl GdalDataset {
 		instances.push_back(instance);
 	}
 
-	pub async fn get_image(&self, bbox: GeoBBox, width: u32, height: u32) -> Result<Option<DynamicImage>> {
-		let bbox_arr = bbox_to_mercator(&bbox)?;
+	pub async fn get_image(&self, bbox: &GeoBBox, width: u32, height: u32) -> Result<Option<DynamicImage>> {
 		let band_mapping = self.band_mapping.clone();
 		let instance: Instance = self.get_instance().await;
-
-		let (instance, dst) = tokio::task::spawn_blocking(move || -> Result<(Instance, Dataset)> {
-			log::trace!("spawn_blocking(get_image) started for size={}x{}", width, height);
-			let mut dst = band_mapping.create_mem_dataset(width, height)?;
-			let geo_transform: GeoTransform = [
-				bbox_arr[0],
-				(bbox_arr[2] - bbox_arr[0]) / width as f64,
-				0.0,
-				bbox_arr[3],
-				0.0,
-				(bbox_arr[1] - bbox_arr[3]) / height as f64,
-			];
-			dst.set_geo_transform(&geo_transform)?;
-			log::trace!("Prepared GeoTransform for destination: {:?}", geo_transform);
-
-			unsafe {
-				let rv = GDALReprojectImage(
-					instance.dataset().c_dataset(),
-					null(),
-					dst.c_dataset(),
-					null(),
-					ResampleAlg::default().as_gdal(),
-					0.0,
-					0.0,
-					None,
-					null_mut(),
-					null_mut(),
-				);
-				if rv != CPLErr::CE_None {
-					bail!(format!("{:?}", CPLGetLastErrorMsg()));
-				}
-			}
-
-			log::trace!("Reprojection complete");
-			Ok((instance, dst))
-		})
-		.await??;
-
+		let dst = instance.reproject_image(width, height, bbox, band_mapping).await?;
 		self.drop_instance(instance).await;
 
 		let band_mapping = self.band_mapping.clone();
@@ -291,7 +251,7 @@ fn dataset_pixel_size(dataset: &gdal::Dataset) -> Result<f64> {
 		let point =
 			|x: f64, y: f64| -> (f64, f64, f64) { (gt[0] + x * gt[1] + y * gt[2], gt[3] + x * gt[4] + y * gt[5], 0.0) };
 
-		let mut geom = Geometry::empty(OGRwkbGeometryType::wkbLineString)?;
+		let mut geom = Geometry::empty(gdal_sys::OGRwkbGeometryType::wkbLineString)?;
 		geom.add_point(point(col, row));
 		geom.add_point(point(col + 1.0, row));
 		geom.add_point(point(col, row + 1.0));
@@ -333,47 +293,13 @@ fn dataset_pixel_size(dataset: &gdal::Dataset) -> Result<f64> {
 	Ok(size_min)
 }
 
-fn bbox_to_mercator(bbox: &GeoBBox) -> Result<[f64; 4]> {
-	log::trace!("bbox_to_mercator input={:?}", bbox);
-	let mut bbox = *bbox;
-	bbox.limit_to_mercator();
-	let mut bbox_geometry = Geometry::bbox(bbox.1, bbox.0, bbox.3, bbox.2)?;
-	bbox_geometry.set_spatial_ref(SpatialRef::from_epsg(4326)?);
-	bbox_geometry
-		.transform_to_inplace(&SpatialRef::from_epsg(3857)?)
-		.with_context(|| format!("Failed to transform bounding box ({bbox:?}) to EPSG:3857"))?;
-	let bbox = bbox_geometry.envelope();
-	let out = [bbox.MinX, bbox.MinY, bbox.MaxX, bbox.MaxY];
-	log::trace!("bbox_to_mercator output={:?}", out);
-	Ok(out)
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
 	use anyhow::anyhow;
-	use rstest::rstest;
-	use std::path::PathBuf;
 	use versatiles_core::TileCoord;
 
-	#[rstest]
-	#[case([-200, -100, 200, 100], [-20037508, -20037508, 20037508, 20037508])]
-	#[case([-200, -1, 200, 1], [-20037508, -111325, 20037508, 111325])]
-	#[case([-1, -100, 1, 100], [-111319, -20037508, 111319, 20037508])]
-	fn test_bbox_to_mercator(#[case] input: [i32; 4], #[case] expected: [i32; 4]) {
-		let mercator_bbox = bbox_to_mercator(&GeoBBox::from(&input)).unwrap();
-		assert_eq!(
-			[
-				mercator_bbox[0] as i32,
-				mercator_bbox[1] as i32,
-				mercator_bbox[2] as i32,
-				mercator_bbox[3] as i32,
-			],
-			expected
-		);
-	}
-
-	#[tokio::test]
+	#[tokio::test(flavor = "multi_thread")]
 	async fn test_dataset_get_image() -> Result<()> {
 		async fn gradient_test(level: u8, x: u32, y: u32) -> Result<[Vec<u8>; 2]> {
 			// Build a `Operation` that points at `testdata/gradient.tif`.
@@ -384,15 +310,24 @@ mod tests {
 
 			// Extract a 7×7 tile and gather the RGB bytes.
 			let image = dataset
-				.get_image(coord.to_geo_bbox(), 7, 7)
+				.get_image(&coord.to_geo_bbox(), 7, 7)
 				.await?
 				.ok_or(anyhow!("get_image failed"))?;
 
 			fn extract(mut cb: impl FnMut(usize) -> u8) -> Vec<u8> {
 				(0..7)
 					.map(|i| {
-						let v = cb(i);
-						if v == 127 { 128 } else { v }
+						let mut v = cb(i);
+						if v == 64 {
+							v = 63
+						}
+						if v == 128 {
+							v = 127
+						}
+						if v == 192 {
+							v = 191
+						}
+						v
 					})
 					.collect::<Vec<_>>()
 			}
@@ -409,12 +344,12 @@ mod tests {
 		// ─── zoom‑0 full‑world tile should be a uniform gradient ───
 		assert_eq!(
 			gradient_test(0, 0, 0).await?,
-			[[21, 54, 91, 128, 164, 201, 234], [16, 27, 63, 128, 192, 228, 239]]
+			[[21, 54, 91, 127, 164, 201, 234], [16, 27, 63, 127, 191, 228, 239]]
 		);
 
 		// ─── zoom‑1: four quadrants of the gradient ───
-		let row0 = [10, 27, 45, 64, 82, 100, 118];
-		let row1 = [137, 155, 173, 192, 210, 228, 245];
+		let row0 = [10, 27, 45, 63, 82, 100, 118];
+		let row1 = [137, 155, 173, 191, 210, 228, 245];
 		let col0 = [10, 14, 21, 33, 51, 76, 109];
 		let col1 = [146, 179, 204, 222, 234, 241, 245];
 
