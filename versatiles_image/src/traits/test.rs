@@ -1,11 +1,132 @@
-//! Helper trait and utilities for generating synthetic test images used across the `versatiles_image` crate.
+//! Utilities for generating and analyzing **synthetic test images** used in the `versatiles_image` crate.
 //!
-//! This module defines [`DynamicImageTraitTest`], which extends `image::DynamicImage` with
-//! convenience constructors that generate deterministic, 256×256 test patterns.
-//! These functions are used for unit testing encoding, decoding, and pixel-processing utilities.
+//! This module defines [`DynamicImageTraitTest`], which extends [`image::DynamicImage`] with deterministic
+//! factory methods that generate reproducible 256×256 pixel patterns. These patterns are used across unit tests
+//! to validate encoding, decoding, and image-processing behavior. They help detect subtle channel swaps,
+//! alignment issues, or rounding errors between formats.
+//!
+//! # Marker-based regression testing
+//!
+//! The functions [`new_marker`] and [`gauge_marker`] generate and measure oriented gradient markers that encode
+//! a simple linear model:
+//!
+//! ```text
+//! value(x,y) = scale * (cos(angle) * x + sin(angle) * y - offset) + 128
+//! ```
+//!
+//! The image generator takes one or more [`MarkerParameters`] specifying `offset`, `angle`, and `scale`, producing
+//! synthetic directional gradients for each channel. The analyzer then fits a regression plane per channel and
+//! estimates the same parameters as [`MarkerResult`].
+//!
+//! This mechanism allows robust roundtrip testing of linear image content (e.g., after re-encoding or reprojection)
+//! while ignoring saturated or clipped pixels. Only the **offset projection** along the line’s direction is
+//! identifiable; perpendicular shifts cannot be reconstructed from pixel intensities alone.
 
 use super::convert::DynamicImageTraitConvert;
-use image::DynamicImage;
+use anyhow::{Result, bail, ensure};
+use image::{DynamicImage, GenericImageView};
+
+/// Describes a synthetic directional gradient marker for one image channel.
+/// Used by [`DynamicImageTraitTest::new_marker`] to generate test images.
+///
+/// The gradient is modeled as:
+/// `value(x, y) = scale * (cos(angle) * x + sin(angle) * y - offset) + 128`
+///
+/// * `offset` – translation of the line pattern along its direction.
+/// * `angle` – orientation of the gradient line in radians.
+/// * `scale` – slope magnitude (contrast strength).
+#[derive(Clone, Copy, Debug)]
+pub struct MarkerParameters {
+	/// Offset along the marker direction (projection of the translation on the angle).
+	pub offset: f64,
+	/// Direction angle in radians.
+	pub angle: f64,
+	/// Scale (slope magnitude) of the marker line.
+	pub scale: f64,
+}
+
+impl MarkerParameters {
+	pub fn new(offset: f64, angle: f64, scale: f64) -> Self {
+		Self { offset, angle, scale }
+	}
+}
+
+/// Estimated gradient parameters recovered from an image channel.
+/// Produced by [`DynamicImageTraitTest::gauge_marker`].
+///
+/// * `offset` – recovered translation along the direction.
+/// * `angle` – detected gradient orientation in radians.
+/// * `scale` – recovered slope magnitude.
+/// * `error` – mean absolute residual from the regression fit.
+#[derive(Clone, Copy, Debug)]
+pub struct MarkerResult {
+	pub offset: f64,
+	pub angle: f64,
+	pub scale: f64,
+	pub error: f64,
+}
+
+impl MarkerResult {
+	pub fn compare(&self, p: &MarkerParameters) -> Result<()> {
+		fn angle_delta(a: f64, b: f64) -> f64 {
+			use std::f64::consts::{PI, TAU};
+			// Normalize to [-PI, PI)
+			let mut d = (a - b).rem_euclid(TAU);
+			if d >= PI {
+				d -= TAU;
+			}
+			// principal-axis equivalence (theta ≡ theta ± PI)
+			if d.abs() > PI / 2.0 {
+				d = PI - d.abs();
+			}
+			d.abs()
+		}
+
+		let mut errors = vec![];
+		if (p.offset - self.offset).abs() > 0.2 {
+			errors.push(format!(
+				" - offset mismatch: expected {:.3}, got {:.3}",
+				p.offset, self.offset
+			));
+		}
+		if angle_delta(p.angle, self.angle).abs() > 0.01 {
+			errors.push(format!(
+				" - angle mismatch: expected {:.4}, got {:.4} (Δ={:.4})",
+				p.angle,
+				self.angle,
+				angle_delta(p.angle, self.angle)
+			));
+		}
+		if (p.scale - self.scale).abs() > 0.01 {
+			errors.push(format!(
+				" - scale mismatch: expected {:.3}, got {:.3}",
+				p.scale, self.scale
+			));
+		}
+		if self.error > 0.5 {
+			errors.push(format!(" - high residual error: {:.3}", self.error));
+		}
+		if !errors.is_empty() {
+			bail!("{}", errors.join("\n"));
+		}
+		Ok(())
+	}
+}
+
+pub fn compare_marker_result(params: &[MarkerParameters], results: &[MarkerResult]) -> Result<()> {
+	ensure!(
+		params.len() == results.len(),
+		"parameter/result count mismatch: expected {}, got {}",
+		params.len(),
+		results.len()
+	);
+	for (i, (p, r)) in params.iter().zip(results.iter()).enumerate() {
+		if let Err(errors) = r.compare(p) {
+			bail!("error in channel {}:\n{}", i + 1, errors);
+		}
+	}
+	Ok(())
+}
 
 /// Provides factory functions for generating reproducible gradient-based test images.
 /// These are useful for validating conversions, encoders, and format roundtrips.
@@ -26,7 +147,8 @@ pub trait DynamicImageTraitTest: DynamicImageTraitConvert {
 	/// The luminance increases with x, and the alpha increases with y.
 	fn new_test_greya() -> DynamicImage;
 
-	fn new_marker<const N: usize>(parameters: &[(f64, f64); N]) -> DynamicImage;
+	fn new_marker<const N: usize>(parameters: &[MarkerParameters; N]) -> DynamicImage;
+	fn gauge_marker(&self) -> Vec<MarkerResult>;
 }
 
 impl DynamicImageTraitTest for DynamicImage
@@ -34,42 +156,145 @@ where
 	DynamicImage: DynamicImageTraitConvert,
 {
 	fn new_test_rgba() -> DynamicImage {
-		DynamicImage::from_fn_rgba8(256, 256, |x, y| [x as u8, (255 - x) as u8, y as u8, (255 - y) as u8])
+		DynamicImage::from_fn(256, 256, |x, y| [x as u8, (255 - x) as u8, y as u8, (255 - y) as u8])
 	}
 
 	fn new_test_rgb() -> DynamicImage {
-		DynamicImage::from_fn_rgb8(256, 256, |x, y| [x as u8, (255 - x) as u8, y as u8])
+		DynamicImage::from_fn(256, 256, |x, y| [x as u8, (255 - x) as u8, y as u8])
 	}
 
 	fn new_test_grey() -> DynamicImage {
-		DynamicImage::from_fn_l8(256, 256, |x, _y| [x as u8])
+		DynamicImage::from_fn(256, 256, |x, _y| [x as u8])
 	}
 
 	fn new_test_greya() -> DynamicImage {
-		DynamicImage::from_fn_la8(256, 256, |x, y| [x as u8, y as u8])
+		DynamicImage::from_fn(256, 256, |x, y| [x as u8, y as u8])
 	}
 
-	fn new_marker<const N: usize>(parameters: &[(f64, f64); N]) -> DynamicImage {
-		fn f<const N: usize>(x: u32, y: u32, vector: &[(f64, f64); N]) -> [u8; N] {
-			let xf = f64::from(x) / 255.0 - 0.5;
-			let yf = f64::from(y) / 255.0 - 0.5;
-			vector.map(|vector| (vector.0 * xf + vector.1 * yf).round().clamp(0.0, 255.0) as u8)
-		}
-		let v = parameters
-			.iter()
-			.map(|p| (p.0.cos() * p.1, p.0.sin() * p.1))
-			.collect::<Vec<(f64, f64)>>();
+	/// Generates a synthetic multi-channel marker image.
+	/// Each channel encodes a directional gradient defined by the provided [`MarkerParameters`].
+	/// Values are centered around 128 and clipped to [0, 255].
+	fn new_marker<const N: usize>(parameters: &[MarkerParameters; N]) -> DynamicImage {
+		fn f<const N: usize>(x: u32, y: u32, parameters: &[MarkerParameters; N]) -> [u8; N] {
+			let xf = f64::from(x) - 128.0;
+			let yf = f64::from(y) - 128.0;
 
-		use DynamicImage as D;
-		match v.as_slice() {
-			[a] => D::from_fn_l8(256, 256, |x, y| f(x, y, &[*a])),
-			[a, b] => D::from_fn_la8(256, 256, |x, y| f(x, y, &[*a, *b])),
-			[a, b, c] => D::from_fn_rgb8(256, 256, |x, y| f(x, y, &[*a, *b, *c])),
-			[a, b, c, d] => D::from_fn_rgba8(256, 256, |x, y| f(x, y, &[*a, *b, *c, *d])),
-			_ => {
-				panic!("Marker generation only supports 1 to 4 channels, got {}", v.len());
-			}
+			parameters.map(|p| {
+				let v = p.angle.cos() * xf + p.angle.sin() * yf - p.offset;
+				(v * p.scale + 128.0).round().clamp(0.0, 255.0) as u8
+			})
 		}
+
+		DynamicImage::from_fn(256, 256, |x, y| f(x, y, parameters))
+	}
+
+	/// Measures each channel of the image and recovers its gradient parameters
+	/// using a least-squares regression fit to `v ≈ a*x + b*y + c`.
+	///
+	/// Returns one [`MarkerResult`] per channel.
+	fn gauge_marker(&self) -> Vec<MarkerResult> {
+		let (width, height) = self.dimensions();
+		let mut results = Vec::new();
+		for c in 0..self.color().channel_count() {
+			// Accumulate unweighted normal-equation terms for linear regression
+			// v ≈ a*x + b*y + c, where
+			//   a = scale * cos(theta),
+			//   b = scale * sin(theta),
+			//   c = -(a*dx + b*dy).
+			let mut s_x = 0.0;
+			let mut s_y = 0.0;
+			let mut s_1 = 0.0;
+			let mut s_xx = 0.0;
+			let mut s_xy = 0.0;
+			let mut s_yy = 0.0;
+			let mut s_xv = 0.0;
+			let mut s_yv = 0.0;
+			let mut s_v = 0.0;
+
+			for y in 0..height {
+				for x in 0..width {
+					let b = self.get_raw_pixel(x, y)[c as usize] as f64;
+					// Ignore saturated pixels; those are clipped by generation and non-linear
+					if b <= 0.0 || b >= 255.0 {
+						continue;
+					}
+					let v = b - 128.0;
+					let xf = f64::from(x) - width as f64 / 2.0;
+					let yf = f64::from(y) - height as f64 / 2.0;
+
+					s_x += xf;
+					s_y += yf;
+					s_1 += 1.0;
+					s_xx += xf * xf;
+					s_xy += xf * yf;
+					s_yy += yf * yf;
+					s_xv += xf * v;
+					s_yv += yf * v;
+					s_v += v;
+				}
+			}
+
+			// Solve the 3x3 normal equations:
+			// [Sxx Sxy Sx] [a] = [Sxv]
+			// [Sxy Syy Sy] [b]   [Syv]
+			// [Sx  Sy  S1] [c]   [Sv ]
+			let det = s_xx * (s_yy * s_1 - s_y * s_y) - s_xy * (s_xy * s_1 - s_x * s_y) + s_x * (s_xy * s_y - s_yy * s_x);
+			// Fallback: if determinant is tiny (e.g., empty due to all-saturated), skip channel
+			if !det.is_finite() || det.abs() < 1e-9 {
+				results.push(MarkerResult {
+					offset: 0.0,
+					angle: 0.0,
+					scale: 0.0,
+					error: f64::INFINITY,
+				});
+				continue;
+			}
+			let det_a =
+				s_xv * (s_yy * s_1 - s_y * s_y) - s_xy * (s_yv * s_1 - s_x * s_v) + s_x * (s_yv * s_y - s_yy * s_v);
+			let det_b =
+				s_xx * (s_yv * s_1 - s_x * s_v) - s_xv * (s_xy * s_1 - s_x * s_y) + s_x * (s_xy * s_v - s_yv * s_x);
+			let det_c =
+				s_xx * (s_yy * s_v - s_yv * s_y) - s_xy * (s_xy * s_v - s_yv * s_x) + s_x * (s_xy * s_yv - s_yy * s_xv);
+
+			let a = det_a / det;
+			let b2 = det_b / det; // avoid shadowing `b` from img pixel
+			let c_hat = det_c / det;
+
+			// Recover angle and scale from a,b
+			let angle = b2.atan2(a);
+			let scale = (a * a + b2 * b2).sqrt();
+
+			// The identifiable translation is its projection along the direction:
+			// offset = (a*dx + b*dy) / scale = -(c)/scale
+			let offset = -c_hat / scale;
+
+			// Estimate error as average absolute residual
+			let mut error_sum = 0.0;
+			let mut n = 0.0;
+			for y in 0..height {
+				for x in 0..width {
+					let bb = self.get_raw_pixel(x, y)[c as usize] as f64;
+					if bb <= 0.0 || bb >= 255.0 {
+						continue;
+					}
+					let v = bb - 128.0;
+					let xf = f64::from(x) - width as f64 / 2.0;
+					let yf = f64::from(y) - height as f64 / 2.0;
+					let v_hat = a * xf + b2 * yf + c_hat;
+					error_sum += (v - v_hat).abs();
+					n += 1.0;
+				}
+			}
+			let error = if n > 0.0 { error_sum / n } else { f64::INFINITY };
+
+			results.push(MarkerResult {
+				offset,
+				angle,
+				scale,
+				error,
+			});
+		}
+		results
 	}
 }
 
@@ -78,9 +303,10 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use image::GenericImageView;
 	use rstest::rstest;
 
+	/// Verifies that each synthetic test image (grey, greya, rgb, rgba)
+	/// produces the expected gradient pattern and channel alignment.
 	#[rstest]
 	#[case::grey(DynamicImage::new_test_grey(), [
 		"...# +++# ####",
@@ -122,5 +348,20 @@ mod tests {
 			[get_pixel(0, 255), get_pixel(128, 255), get_pixel(255, 255)].join(" "),
 		];
 		assert_eq!(colors_result, colors);
+	}
+
+	/// Roundtrip the marker generator+gauge for 1–4 channel combinations.
+	#[rstest]
+	#[case::grey([ ( 7.5,  0.37, 0.85)])]
+	#[case::greya([(10.8, -0.41, 0.90), (-6.0,  1.10, 0.70)])]
+	#[case::rgb([  ( 3.0,  0.25, 0.80), (-7.0, -0.95, 0.65), (12.0, 1.40, 0.75)])]
+	#[case::rgba([ ( 4.0,  0.60, 0.88), (-9.0, -1.20, 0.67), (15.0, 1.05, 0.72), (-2.0, -0.30, 0.93)])]
+	fn marker_gauge_roundtrip<const N: usize>(#[case] args: [(f64, f64, f64); N]) {
+		let params = args.map(|(offset, angle, scale)| MarkerParameters { offset, angle, scale });
+		let img = DynamicImage::new_marker(&params);
+		assert_eq!(img.dimensions(), (256, 256));
+		assert_eq!(img.color().channel_count() as usize, N);
+		let results = img.gauge_marker();
+		compare_marker_result(&params, &results).unwrap();
 	}
 }
