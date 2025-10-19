@@ -1,18 +1,55 @@
+//! Utilities to detect and reproduce **band/channel mappings** from GDAL raster datasets.
+//!
+//! This module defines [`BandMapping`], which inspects the color interpretations
+//! of the input GDAL dataset’s raster bands and determines how they should be
+//! interpreted in logical channels (Grey, RGB, RGBA, or Grey+Alpha). It is used
+//! when converting or reprojecting datasets so that the correct number of bands
+//! and color semantics are preserved.
+//!
+//! The mapping is later used to create in-memory datasets with equivalent channel
+//! structure using [`create_mem_dataset`]. Only the most common color layouts are
+//! supported: Grey, Grey+Alpha, RGB, RGBA. Any other configuration (e.g. palette
+//! indexed or multispectral) will produce an error.
+
 use anyhow::{Context, Result, bail, ensure};
 use gdal::{DriverManager, raster::ColorInterpretation, spatial_ref::SpatialRef};
 use std::fmt::Debug;
 use versatiles_derive::context;
 
+/// Describes a single mapping from an input GDAL band (1-based index)
+/// to an output logical channel (0-based index).
+///
+/// The `band_index` is the 1-based band number from the GDAL dataset,
+/// while `channel_index` corresponds to the target position in the output
+/// image buffer (0 = Grey or Red, 1 = Green, 2 = Blue, 3 = Alpha).
 pub struct BandMappingItem {
 	pub band_index: usize,
 	pub channel_index: usize,
 }
 
+/// Represents a channel mapping derived from a GDAL dataset.
+///
+/// The mapping defines which input bands (by 1-based GDAL index) correspond
+/// to which output color channels. It supports only the common cases:
+/// - Grey
+/// - Grey + Alpha
+/// - RGB
+/// - RGBA
+///
+/// Use [`BandMapping::try_from`] to analyze a dataset and infer its mapping,
+/// and [`BandMapping::create_mem_dataset`] to create a matching in-memory
+/// dataset suitable for reprojection or raster operations.
 pub struct BandMapping {
 	map: Vec<usize>,
 }
 
 impl BandMapping {
+	/// Analyze the color interpretations of `dataset` bands and infer a mapping.
+	///
+	/// # Errors
+	/// Returns an error if the dataset’s color interpretations cannot be matched
+	/// to one of the supported channel layouts or if multiple bands map to the
+	/// same channel.
 	#[context("Failed to create band mapping from GDAL dataset")]
 	pub fn try_from(dataset: &gdal::Dataset) -> Result<Self> {
 		log::trace!("Computing band mapping (raster_count={})", dataset.raster_count());
@@ -91,10 +128,13 @@ impl BandMapping {
 		Ok(BandMapping { map })
 	}
 
+	/// Number of output channels (1–4) in this mapping.
 	pub fn len(&self) -> usize {
 		self.map.len()
 	}
 
+	/// Iterate over the mapping entries, yielding [`BandMappingItem`] values in
+	/// output channel order.
 	pub fn iter(&self) -> impl Iterator<Item = BandMappingItem> + '_ {
 		self
 			.map
@@ -106,6 +146,16 @@ impl BandMapping {
 			})
 	}
 
+	/// Create an in-memory GDAL dataset (using the `MEM` driver) with the same
+	/// channel layout as this mapping.
+	///
+	/// The dataset is initialized with the Web Mercator (EPSG:3857) spatial
+	/// reference. The number of bands and their [`ColorInterpretation`] values
+	/// mirror the mapping’s channel configuration.
+	///
+	/// # Errors
+	/// Returns an error if the mapping length is not one of the supported values
+	/// (1, 2, 3, or 4) or if the in-memory dataset cannot be created.
 	pub fn create_mem_dataset(&self, width: u32, height: u32) -> Result<gdal::Dataset> {
 		let driver = DriverManager::get_driver_by_name("MEM").context("Failed to get GDAL MEM driver")?;
 
