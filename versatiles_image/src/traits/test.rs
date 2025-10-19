@@ -25,6 +25,8 @@ pub trait DynamicImageTraitTest: DynamicImageTraitConvert {
 	/// Generates a 256×256 **grayscale + alpha (LA8)** image.
 	/// The luminance increases with x, and the alpha increases with y.
 	fn new_test_greya() -> DynamicImage;
+
+	fn new_marker<const N: usize>(parameters: &[(f64, f64); N]) -> DynamicImage;
 }
 
 impl DynamicImageTraitTest for DynamicImage
@@ -45,6 +47,29 @@ where
 
 	fn new_test_greya() -> DynamicImage {
 		DynamicImage::from_fn_la8(256, 256, |x, y| [x as u8, y as u8])
+	}
+
+	fn new_marker<const N: usize>(parameters: &[(f64, f64); N]) -> DynamicImage {
+		fn f<const N: usize>(x: u32, y: u32, vector: &[(f64, f64); N]) -> [u8; N] {
+			let xf = f64::from(x) / 255.0 - 0.5;
+			let yf = f64::from(y) / 255.0 - 0.5;
+			vector.map(|vector| (vector.0 * xf + vector.1 * yf).round().clamp(0.0, 255.0) as u8)
+		}
+		let v = parameters
+			.iter()
+			.map(|p| (p.0.cos() * p.1, p.0.sin() * p.1))
+			.collect::<Vec<(f64, f64)>>();
+
+		use DynamicImage as D;
+		match v.as_slice() {
+			[a] => D::from_fn_l8(256, 256, |x, y| f(x, y, &[*a])),
+			[a, b] => D::from_fn_la8(256, 256, |x, y| f(x, y, &[*a, *b])),
+			[a, b, c] => D::from_fn_rgb8(256, 256, |x, y| f(x, y, &[*a, *b, *c])),
+			[a, b, c, d] => D::from_fn_rgba8(256, 256, |x, y| f(x, y, &[*a, *b, *c, *d])),
+			_ => {
+				panic!("Marker generation only supports 1 to 4 channels, got {}", v.len());
+			}
+		}
 	}
 }
 
