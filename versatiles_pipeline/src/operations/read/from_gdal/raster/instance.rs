@@ -33,7 +33,7 @@ impl Instance {
 		self.dataset.flush_cache().unwrap();
 	}
 
-	pub async fn reproject_image(
+	pub fn reproject_to_dataset(
 		&self,
 		width: u32,
 		height: u32,
@@ -55,26 +55,24 @@ impl Instance {
 		];
 		dst_ds.set_geo_transform(&geo_transform)?;
 
-		tokio::task::block_in_place(|| -> Result<()> {
-			unsafe {
-				let rv = GDALReprojectImage(
-					src_h,
-					null(),
-					dst_ds.c_dataset(),
-					null(),
-					ResampleAlg::default().as_gdal(),
-					0.0,
-					0.0,
-					None,
-					null_mut(),
-					null_mut(),
-				);
-				if rv != CPLErr::CE_None {
-					bail!("{:?}", CPLGetLastErrorMsg());
-				}
+		unsafe {
+			let rv = GDALReprojectImage(
+				src_h,
+				null(),
+				dst_ds.c_dataset(),
+				null(),
+				ResampleAlg::default().as_gdal(),
+				0.0,
+				0.0,
+				None,
+				null_mut(),
+				null_mut(),
+			);
+
+			if rv != CPLErr::CE_None {
+				bail!("{:?}", CPLGetLastErrorMsg());
 			}
-			Ok(())
-		})?;
+		};
 
 		log::trace!("reproject_image complete");
 

@@ -90,7 +90,7 @@ impl GdalDataset {
 	pub async fn get_image(&self, bbox: &GeoBBox, width: u32, height: u32) -> Result<Option<DynamicImage>> {
 		let band_mapping = self.band_mapping.clone();
 		let instance: Instance = self.get_instance().await;
-		let dst = instance.reproject_image(width, height, bbox, band_mapping).await?;
+		let dst = instance.reproject_to_dataset(width, height, bbox, band_mapping)?;
 		self.drop_instance(instance).await;
 
 		let band_mapping = self.band_mapping.clone();
