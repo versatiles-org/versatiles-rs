@@ -18,7 +18,7 @@ use versatiles_core::{Blob, TileFormat};
 pub trait DynamicImageTraitConvert {
 	/// Creates a grayscale (`L8`) image by calling the provided function for each pixel coordinate.
 	/// The function `f(x, y)` should return a single 8-bit luminance value.
-	fn from_fn_l8(width: u32, height: u32, f: impl FnMut(u32, u32) -> u8) -> DynamicImage;
+	fn from_fn_l8(width: u32, height: u32, f: impl FnMut(u32, u32) -> [u8; 1]) -> DynamicImage;
 
 	/// Creates an image with luminance and alpha channels (`LA8`).
 	/// The function `f(x, y)` should return a 2-element `[u8; 2]` array representing the pixel.
@@ -49,8 +49,8 @@ pub trait DynamicImageTraitConvert {
 }
 
 impl DynamicImageTraitConvert for DynamicImage {
-	fn from_fn_l8(width: u32, height: u32, mut f: impl FnMut(u32, u32) -> u8) -> DynamicImage {
-		DynamicImage::ImageLuma8(ImageBuffer::from_fn(width, height, |x, y| Luma([f(x, y)])))
+	fn from_fn_l8(width: u32, height: u32, mut f: impl FnMut(u32, u32) -> [u8; 1]) -> DynamicImage {
+		DynamicImage::ImageLuma8(ImageBuffer::from_fn(width, height, |x, y| Luma(f(x, y))))
 	}
 	fn from_fn_la8(width: u32, height: u32, mut f: impl FnMut(u32, u32) -> [u8; 2]) -> DynamicImage {
 		DynamicImage::ImageLumaA8(ImageBuffer::from_fn(width, height, |x, y| LumaA(f(x, y))))
@@ -134,7 +134,7 @@ mod tests {
 	use rstest::rstest;
 
 	fn sample_l8() -> DynamicImage {
-		DynamicImage::from_fn_l8(4, 3, |x, y| ((x + y) % 2) as u8)
+		DynamicImage::from_fn_l8(4, 3, |x, y| [((x + y) % 2) as u8])
 	}
 
 	fn sample_la8() -> DynamicImage {

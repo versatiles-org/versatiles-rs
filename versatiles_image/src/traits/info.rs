@@ -147,7 +147,7 @@ mod tests {
 
 	// --- helpers -----------------------------------------------------------
 	fn sample_l8() -> DynamicImage {
-		DynamicImage::from_fn_l8(4, 3, |x, y| ((x + y) % 2) as u8)
+		DynamicImage::from_fn_l8(4, 3, |x, y| [((x + y) % 2) as u8])
 	}
 	fn sample_la8(alpha: u8) -> DynamicImage {
 		DynamicImage::from_fn_la8(4, 3, |x, y| [((x * 2 + y) % 256) as u8, alpha])

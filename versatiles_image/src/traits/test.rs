@@ -40,7 +40,7 @@ where
 	}
 
 	fn new_test_grey() -> DynamicImage {
-		DynamicImage::from_fn_l8(256, 256, |x, _y| x as u8)
+		DynamicImage::from_fn_l8(256, 256, |x, _y| [x as u8])
 	}
 
 	fn new_test_greya() -> DynamicImage {
