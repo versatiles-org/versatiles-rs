@@ -3,6 +3,7 @@ use std::fmt::Debug;
 
 static MAX_MERCATOR_LAT: f64 = 85.051_128_779_806_59;
 static MAX_MERCATOR_LNG: f64 = 180.0;
+static RADIUS: f64 = 6_378_137.0; // meters
 
 /// A geographical bounding box (`GeoBBox`) represents a rectangular area on a map
 /// defined by its minimum and maximum longitude (x) and latitude (y) coordinates.
@@ -311,6 +312,31 @@ impl GeoBBox {
 		ensure!(self.1 <= self.3, "y_min ({}) must be <= y_max ({})", self.1, self.3);
 		Ok(())
 	}
+
+	/// Convert this WGS84 (EPSG:4326) bounding box to Web‑Mercator meters (EPSG:3857).
+	///
+	/// Input is interpreted as `[west, south, east, north]` in **degrees** and is
+	/// clamped to the valid Web‑Mercator domain
+	/// (`-85.05112877980659° ≤ lat ≤ 85.05112877980659°`, `-180° ≤ lon ≤ 180°`).
+	pub fn wgs84_as_mercator(self: &GeoBBox) -> [f64; 4] {
+		// Spherical Mercator radius (WGS84 semi-major axis)
+		fn x_from_lon(lon_deg: f64) -> f64 {
+			let lon = lon_deg.max(-MAX_MERCATOR_LNG).min(MAX_MERCATOR_LNG);
+			RADIUS * lon.to_radians()
+		}
+		fn y_from_lat(lat_deg: f64) -> f64 {
+			let lat = lat_deg.max(-MAX_MERCATOR_LAT).min(MAX_MERCATOR_LAT);
+			let phi = lat.to_radians();
+			RADIUS * ((std::f64::consts::FRAC_PI_4 + phi / 2.0).tan()).ln()
+		}
+
+		[
+			x_from_lon(self.0),
+			y_from_lat(self.1),
+			x_from_lon(self.2),
+			y_from_lat(self.3),
+		]
+	}
 }
 
 impl Debug for GeoBBox {
@@ -383,6 +409,7 @@ impl<T: Copy + Into<f64>> From<&[T; 4]> for GeoBBox {
 mod tests {
 	use super::GeoBBox;
 	use anyhow::Result;
+	use rstest::rstest;
 
 	#[test]
 	fn test_creation() {
@@ -601,5 +628,44 @@ mod tests {
 		let bbox = GeoBBox::new(-180.0, -90.0, 180.0, 90.0);
 		assert_eq!(bbox.as_string_json(), "[-180,-90,180,90]");
 		assert_eq!(bbox.as_string_list(), "-180,-90,180,90");
+	}
+
+	#[test]
+	fn test_wgs84_as_mercator_world_bounds() {
+		let bbox = GeoBBox::new(-180.0, -90.0, 180.0, 90.0);
+		// Expected Mercator square ~±20037508.342789244
+		let [xmin, ymin, xmax, ymax] = bbox.wgs84_as_mercator();
+		let e = 20_037_508.342789244_f64;
+		assert!((xmin + e).abs() < 2.0, "xmin={xmin}");
+		assert!((ymin + e).abs() < 2.0, "ymin={ymin}");
+		assert!((xmax - e).abs() < 2.0, "xmax={xmax}");
+		assert!((ymax - e).abs() < 2.0, "ymax={ymax}");
+	}
+
+	#[test]
+	fn test_wgs84_as_mercator_midlat() {
+		let bbox = GeoBBox::new(-10.0, 40.0, 10.0, 50.0);
+		let [xmin, ymin, xmax, ymax] = bbox.wgs84_as_mercator();
+		assert_eq!(xmin as i32, -1_113_194);
+		assert_eq!(xmax as i32, 1_113_194);
+		assert_eq!(ymin as i32, 4_865_942);
+		assert_eq!(ymax as i32, 6_446_275);
+	}
+
+	#[rstest]
+	#[case([-200, -100, 200, 100], [-20037508, -20037508, 20037508, 20037508])]
+	#[case([-200, -1, 200, 1], [-20037508, -111325, 20037508, 111325])]
+	#[case([-1, -100, 1, 100], [-111319, -20037508, 111319, 20037508])]
+	fn test_bbox_to_mercator(#[case] input: [i32; 4], #[case] expected: [i32; 4]) {
+		let mercator_bbox = GeoBBox::from(&input).wgs84_as_mercator();
+		assert_eq!(
+			[
+				mercator_bbox[0] as i32,
+				mercator_bbox[1] as i32,
+				mercator_bbox[2] as i32,
+				mercator_bbox[3] as i32,
+			],
+			expected
+		);
 	}
 }
