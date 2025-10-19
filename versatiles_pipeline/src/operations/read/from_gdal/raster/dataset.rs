@@ -297,7 +297,53 @@ fn dataset_pixel_size(dataset: &gdal::Dataset) -> Result<f64> {
 mod tests {
 	use super::*;
 	use anyhow::anyhow;
+	use gdal::DriverManager;
+	use imageproc::image::ColorType;
+	use rstest::rstest;
 	use versatiles_core::TileCoord;
+
+	impl GdalDataset {
+		pub fn from_testdata(size: usize, channel_count: usize) -> Result<GdalDataset> {
+			let band_mapping = {
+				let mut v = vec![];
+				for channel_index in 0..channel_count {
+					v.push(channel_index + 1);
+				}
+				BandMapping::new(v)
+			};
+
+			let driver = DriverManager::get_driver_by_name("MEM")?;
+			let mut ds = driver.create_with_band_type::<u8, _>("in memory dataset", size, size, channel_count)?;
+			ds.set_spatial_ref(&SpatialRef::from_epsg(4326)?)?;
+			ds.set_geo_transform(&[-45.0, 90.0 / size as f64, 0.0, 45.0, 0.0, -90.0 / size as f64])?;
+
+			for band_index in 1..=channel_count {
+				let s0 = size as f64 / 2.0;
+				let a = (band_index as f64 / channel_count as f64) * std::f64::consts::PI * 2.0;
+				let dx = a.cos();
+				let dy = a.sin();
+
+				let mut band = ds.rasterband(band_index)?;
+				let mut data = vec![0u8; size * size];
+				for y in 0..size {
+					for x in 0..size {
+						let v = (x as f64 - s0) * dx + (y as f64 - s0) * dy + 128.0;
+						data[y * size + x] = v.round().clamp(0f64, 255f64) as u8;
+					}
+				}
+				let mut buffer = gdal::raster::Buffer::new((size, size), data);
+				band.write((0, 0), (size, size), &mut buffer).expect("write");
+			}
+			Ok(GdalDataset {
+				filename: PathBuf::from("in-memory"),
+				instances: Arc::new(Mutex::new(LinkedList::from([Instance::new(ds)]))),
+				band_mapping: Arc::new(band_mapping),
+				bbox: GeoBBox::new(-45.0, -45.0, 45.0, 45.0),
+				pixel_size: 1.0,
+				max_reuse_gdal: 1,
+			})
+		}
+	}
 
 	#[tokio::test(flavor = "multi_thread")]
 	async fn test_dataset_get_image() -> Result<()> {
@@ -359,5 +405,20 @@ mod tests {
 		assert_eq!(gradient_test(1, 1, 1).await?, [row1, col1]);
 
 		Ok(())
+	}
+
+	#[rstest]
+	#[case(1, ColorType::L8)]
+	#[tokio::test(flavor = "multi_thread")]
+	async fn test_dataset_get_image2(#[case] channels: usize, #[case] expected_color: ColorType) {
+		let ds = GdalDataset::from_testdata(256, channels).unwrap();
+		let image = ds
+			.get_image(&GeoBBox(-45.0, -45.0, 45.0, 45.0), 256, 256)
+			.await
+			.unwrap()
+			.unwrap();
+		assert_eq!(image.width(), 256);
+		assert_eq!(image.height(), 256);
+		assert_eq!(image.color(), expected_color);
 	}
 }
