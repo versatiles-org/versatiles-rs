@@ -72,7 +72,7 @@ impl Instance {
 			if rv != CPLErr::CE_None {
 				bail!("{:?}", CPLGetLastErrorMsg());
 			}
-		};
+		}
 
 		log::trace!("reproject_image complete");
 

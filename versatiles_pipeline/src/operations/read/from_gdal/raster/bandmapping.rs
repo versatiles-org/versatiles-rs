@@ -44,6 +44,12 @@ pub struct BandMapping {
 }
 
 impl BandMapping {
+	/// Create a new empty band mapping.
+	#[allow(dead_code)]
+	pub fn new(map: Vec<usize>) -> Self {
+		Self { map }
+	}
+
 	/// Analyze the color interpretations of `dataset` bands and infer a mapping.
 	///
 	/// # Errors
@@ -131,6 +137,12 @@ impl BandMapping {
 	/// Number of output channels (1–4) in this mapping.
 	pub fn len(&self) -> usize {
 		self.map.len()
+	}
+
+	/// Maximum GDAL band index referenced by this mapping.
+	#[allow(dead_code)]
+	pub fn max_band_index(&self) -> usize {
+		*self.map.iter().max().unwrap()
 	}
 
 	/// Iterate over the mapping entries, yielding [`BandMappingItem`] values in
