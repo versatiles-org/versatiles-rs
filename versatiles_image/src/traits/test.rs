@@ -34,7 +34,7 @@ use image::{DynamicImage, GenericImageView};
 ///
 /// * `offset` – translation of the line pattern along its direction.
 /// * `angle` – orientation of the gradient line in **degrees**.
-/// * `scale` – slope magnitude (contrast strength).
+/// * `scale` – slope magnitude (contrast strength), normalized to 1/256.
 #[derive(Clone, Copy, Debug)]
 pub struct MarkerParameters {
 	/// Offset along the marker direction (projection of the translation on the angle).
@@ -56,7 +56,7 @@ impl MarkerParameters {
 ///
 /// * `offset` – recovered translation along the direction.
 /// * `angle` – detected gradient orientation in **degrees**.
-/// * `scale` – recovered slope magnitude.
+/// * `scale` – recovered slope magnitude, normalized to 1/256.
 /// * `error` – mean absolute residual from the regression fit.
 #[derive(Clone, Copy, Debug)]
 pub struct MarkerResult {
@@ -67,7 +67,7 @@ pub struct MarkerResult {
 }
 
 impl MarkerResult {
-	pub fn compare(&self, p: &MarkerParameters) -> Result<()> {
+	pub fn compare(&self, p: &MarkerParameters, factor: f64) -> Result<()> {
 		fn angle_delta(a: f64, b: f64) -> f64 {
 			// Normalize to [-180°, 180°)
 			let mut d = (a - b).rem_euclid(360.0);
@@ -82,7 +82,7 @@ impl MarkerResult {
 		}
 
 		let mut errors = vec![];
-		if (p.offset - self.offset).abs() > 0.11 {
+		if (p.offset - self.offset).abs() > 0.11 * factor {
 			errors.push(format!(
 				" - offset mismatch: expected {:.3}, got {:.3} (Δ={:.3})",
 				p.offset,
@@ -90,7 +90,7 @@ impl MarkerResult {
 				(p.offset - self.offset).abs()
 			));
 		}
-		if angle_delta(p.angle, self.angle).abs() > 0.4 {
+		if angle_delta(p.angle, self.angle).abs() > 0.4 * factor {
 			errors.push(format!(
 				" - angle mismatch: expected {:.1}, got {:.1} (Δ={:.1})",
 				p.angle,
@@ -98,7 +98,7 @@ impl MarkerResult {
 				angle_delta(p.angle, self.angle)
 			));
 		}
-		if (p.scale - self.scale).abs() > 0.004 {
+		if (p.scale - self.scale).abs() > 0.1 * factor {
 			errors.push(format!(
 				" - scale mismatch: expected {:.3}, got {:.3} (Δ={:.3})",
 				p.scale,
@@ -106,7 +106,7 @@ impl MarkerResult {
 				(p.scale - self.scale).abs()
 			));
 		}
-		if self.error > 0.5 {
+		if self.error > 0.5 * factor {
 			errors.push(format!(" - high residual error: {:.3}", self.error));
 		}
 		if !errors.is_empty() {
@@ -124,7 +124,7 @@ pub fn compare_marker_result(params: &[MarkerParameters], results: &[MarkerResul
 		results.len()
 	);
 	for (i, (p, r)) in params.iter().zip(results.iter()).enumerate() {
-		if let Err(errors) = r.compare(p) {
+		if let Err(errors) = r.compare(p, 1.0) {
 			bail!("error in channel {}:\n{}", i + 1, errors);
 		}
 	}
@@ -185,7 +185,7 @@ where
 			parameters.map(|p| {
 				let angle_rad = p.angle.to_radians();
 				let v = angle_rad.cos() * xf + angle_rad.sin() * yf - p.offset;
-				(v * p.scale + 128.0).round().clamp(0.0, 255.0) as u8
+				(v * p.scale / 256.0 + 128.0).round().clamp(0.0, 255.0) as u8
 			})
 		}
 
@@ -266,11 +266,11 @@ where
 
 			// Recover angle and scale from a,b
 			let angle = b2.atan2(a).to_degrees();
-			let scale = (a * a + b2 * b2).sqrt();
+			let scale = (a * a + b2 * b2).sqrt() * 256.0;
 
 			// The identifiable translation is its projection along the direction:
 			// offset = (a*dx + b*dy) / scale = -(c)/scale
-			let offset = -c_hat / scale;
+			let offset = -c_hat / (scale / 256.0);
 
 			// Estimate error as average absolute residual
 			let mut error_sum = 0.0;
@@ -356,12 +356,16 @@ mod tests {
 
 	/// Roundtrip the marker generator+gauge for 1–4 channel combinations.
 	#[rstest]
-	#[case::grey([ ( 7.5,  21.2, 0.85)])]
-	#[case::greya([(10.8, -23.5, 0.90), (-6.0,  63.0, 0.70)])]
-	#[case::rgb([  ( 3.0,  14.3, 0.80), (-7.0, -54.4, 0.65), (12.0, 80.3, 0.75)])]
-	#[case::rgba([ ( 4.0,  34.4, 0.88), (-9.0, -68.8, 0.67), (15.0, 60.2, 0.72), (-2.0, -17.2, 0.93)])]
-	fn marker_gauge_roundtrip<const N: usize>(#[case] args: [(f64, f64, f64); N]) {
-		let params = args.map(|(offset, angle, scale)| MarkerParameters { offset, angle, scale });
+	#[case::grey([ ( 7,  21, 85)])]
+	#[case::greya([(10, -23, 90), (-6,  63, 70)])]
+	#[case::rgb([  ( 3,  14, 80), (-7, -54, 65), (12, 80, 75)])]
+	#[case::rgba([ ( 4,  34, 88), (-9, -68, 67), (15, 60, 72), (-20, -17, 93)])]
+	fn marker_gauge_roundtrip<const N: usize>(#[case] args: [(i32, i32, i32); N]) {
+		let params = args.map(|(offset, angle, scale)| MarkerParameters {
+			offset: offset as f64,
+			angle: angle as f64,
+			scale: scale as f64,
+		});
 		let img = DynamicImage::new_marker(&params);
 		assert_eq!(img.dimensions(), (256, 256));
 		assert_eq!(img.color().channel_count() as usize, N);
