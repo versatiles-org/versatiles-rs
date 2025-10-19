@@ -207,4 +207,14 @@ mod tests {
 		let blob = img.to_blob(TileFormat::PNG).expect("PNG should encode");
 		assert!(!blob.is_empty());
 	}
+
+	#[rstest]
+	#[case::l8([10])]
+	#[case::la8([10, 20])]
+	#[case::rgb8([10, 20, 30])]
+	#[case::rgba8([10, 20, 30, 40])]
+	fn from_fn<const N: usize>(#[case] expected_pixel: [u8; N]) {
+		let img = DynamicImage::from_fn(2, 2, |_, _| expected_pixel);
+		assert_eq!(img.average_color(), expected_pixel);
+	}
 }
