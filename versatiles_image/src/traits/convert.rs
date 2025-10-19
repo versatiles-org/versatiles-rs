@@ -34,6 +34,8 @@ pub trait DynamicImageTraitConvert {
 	/// Returns an iterator over the pixel data as byte slices.
 	/// Each slice represents one pixel, with the slice length corresponding to the image's channel count.
 	fn iter_pixels(&self) -> impl Iterator<Item = &[u8]>;
+
+	fn get_raw_pixel(&self, x: u32, y: u32) -> &[u8];
 }
 
 impl DynamicImageTraitConvert for DynamicImage {
@@ -109,6 +111,16 @@ impl DynamicImageTraitConvert for DynamicImage {
 			DynamicImage::ImageRgb8(img) => img.as_bytes().chunks_exact(3),
 			DynamicImage::ImageRgba8(img) => img.as_bytes().chunks_exact(4),
 			_ => panic!("Unsupported image type for pixel iteration"),
+		}
+	}
+
+	fn get_raw_pixel(&self, x: u32, y: u32) -> &[u8] {
+		match self {
+			DynamicImage::ImageLuma8(i) => &i.get_pixel(x, y).0,
+			DynamicImage::ImageLumaA8(i) => &i.get_pixel(x, y).0,
+			DynamicImage::ImageRgb8(i) => &i.get_pixel(x, y).0,
+			DynamicImage::ImageRgba8(i) => &i.get_pixel(x, y).0,
+			_ => panic!("Unsupported image type for get_raw_pixel"),
 		}
 	}
 }
