@@ -233,8 +233,7 @@ where
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::traits::convert::DynamicImageTraitConvert;
-	use crate::traits::test::DynamicImageTraitTest;
+	use crate::traits::*;
 	use image::ExtendedColorType as ECT;
 	use image::{GenericImageView, Pixel, Rgba};
 	use rstest::rstest;
@@ -268,7 +267,7 @@ mod tests {
 	#[test]
 	fn average_color_on_solid_rgb_is_exact() {
 		// Solid color should average to itself exactly (filtering can't change a constant)
-		let img = DynamicImage::from_fn_rgba8(11, 11, |x, y| {
+		let img = DynamicImage::from_fn(11, 11, |x, y| {
 			[100 - x as u8, 110 - y as u8, 120 + x as u8, 130 + y as u8]
 		});
 		assert_eq!(img.average_color(), [95, 105, 125, 135]);
@@ -428,9 +427,9 @@ mod tests {
 	#[test]
 	fn overlay_draws_top_over_bottom() {
 		// Bottom: black RGB 16x16
-		let mut bottom = DynamicImage::from_fn_rgb8(16, 16, |_x, _y| [0, 0, 0]);
+		let mut bottom = DynamicImage::from_fn(16, 16, |_x, _y| [0, 0, 0]);
 		// Top: solid red RGB 16x16
-		let top = DynamicImage::from_fn_rgb8(16, 16, |_x, _y| [255, 0, 0]);
+		let top = DynamicImage::from_fn(16, 16, |_x, _y| [255, 0, 0]);
 
 		bottom.overlay(&top).unwrap();
 		// A few sample pixels should now be red

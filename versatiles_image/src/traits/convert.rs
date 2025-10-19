@@ -11,26 +11,12 @@
 
 use crate::format::{avif, jpeg, png, webp};
 use anyhow::{Result, anyhow, bail, ensure};
-use image::{DynamicImage, EncodableLayout, ImageBuffer, Luma, LumaA, Rgb, Rgba};
+use image::{DynamicImage, EncodableLayout, ImageBuffer};
 use versatiles_core::{Blob, TileFormat};
 
 /// Trait for converting between `DynamicImage` and raw/encoded formats, and for constructing images from functions.
 pub trait DynamicImageTraitConvert {
 	fn from_fn<const N: usize>(width: u32, height: u32, f: impl FnMut(u32, u32) -> [u8; N]) -> DynamicImage;
-
-	/// Creates a grayscale (`L8`) image by calling the provided function for each pixel coordinate.
-	/// The function `f(x, y)` should return a single 8-bit luminance value.
-	fn from_fn_l8(width: u32, height: u32, f: impl FnMut(u32, u32) -> [u8; 1]) -> DynamicImage;
-
-	/// Creates an image with luminance and alpha channels (`LA8`).
-	/// The function `f(x, y)` should return a 2-element `[u8; 2]` array representing the pixel.
-	fn from_fn_la8(width: u32, height: u32, f: impl FnMut(u32, u32) -> [u8; 2]) -> DynamicImage;
-
-	/// Creates an RGB image (`RGB8`) by calling the function `f(x, y)` for each pixel coordinate.
-	fn from_fn_rgb8(width: u32, height: u32, f: impl FnMut(u32, u32) -> [u8; 3]) -> DynamicImage;
-
-	/// Creates an RGBA image (`RGBA8`) by calling the function `f(x, y)` for each pixel coordinate.
-	fn from_fn_rgba8(width: u32, height: u32, f: impl FnMut(u32, u32) -> [u8; 4]) -> DynamicImage;
 
 	/// Constructs a `DynamicImage` from raw pixel data and dimensions.
 	/// The number of channels is inferred from the data length. Supported channel counts are 1 (L8), 2 (LA8), 3 (RGB8), and 4 (RGBA8).
@@ -63,19 +49,6 @@ impl DynamicImageTraitConvert for DynamicImage {
 		}
 		// Delegate to from_raw which picks the correct DynamicImage variant
 		DynamicImage::from_raw(width, height, data).expect("from_fn: failed to construct image from raw data")
-	}
-
-	fn from_fn_l8(width: u32, height: u32, mut f: impl FnMut(u32, u32) -> [u8; 1]) -> DynamicImage {
-		DynamicImage::ImageLuma8(ImageBuffer::from_fn(width, height, |x, y| Luma(f(x, y))))
-	}
-	fn from_fn_la8(width: u32, height: u32, mut f: impl FnMut(u32, u32) -> [u8; 2]) -> DynamicImage {
-		DynamicImage::ImageLumaA8(ImageBuffer::from_fn(width, height, |x, y| LumaA(f(x, y))))
-	}
-	fn from_fn_rgb8(width: u32, height: u32, mut f: impl FnMut(u32, u32) -> [u8; 3]) -> DynamicImage {
-		DynamicImage::ImageRgb8(ImageBuffer::from_fn(width, height, |x, y| Rgb(f(x, y))))
-	}
-	fn from_fn_rgba8(width: u32, height: u32, mut f: impl FnMut(u32, u32) -> [u8; 4]) -> DynamicImage {
-		DynamicImage::ImageRgba8(ImageBuffer::from_fn(width, height, |x, y| Rgba(f(x, y))))
 	}
 
 	fn from_raw(width: u32, height: u32, data: Vec<u8>) -> Result<DynamicImage> {
@@ -144,25 +117,24 @@ impl DynamicImageTraitConvert for DynamicImage {
 /// These tests verify conversion between raw data, pixel iteration, and format roundtrips using `rstest`.
 #[cfg(test)]
 mod tests {
-	use crate::DynamicImageTraitInfo;
-
 	use super::*;
+	use crate::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 	use rstest::rstest;
 
 	fn sample_l8() -> DynamicImage {
-		DynamicImage::from_fn_l8(4, 3, |x, y| [((x + y) % 2) as u8])
+		DynamicImage::from_fn(4, 3, |x, y| [((x + y) % 2) as u8])
 	}
 
 	fn sample_la8() -> DynamicImage {
-		DynamicImage::from_fn_la8(4, 3, |x, y| [((x * 2 + y) % 256) as u8, 255])
+		DynamicImage::from_fn(4, 3, |x, y| [((x * 2 + y) % 256) as u8, 255])
 	}
 
 	fn sample_rgb8() -> DynamicImage {
-		DynamicImage::from_fn_rgb8(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8])
+		DynamicImage::from_fn(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8])
 	}
 
 	fn sample_rgba8() -> DynamicImage {
-		DynamicImage::from_fn_rgba8(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8, 200])
+		DynamicImage::from_fn(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8, 200])
 	}
 
 	#[rstest]

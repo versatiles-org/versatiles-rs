@@ -147,16 +147,16 @@ mod tests {
 
 	// --- helpers -----------------------------------------------------------
 	fn sample_l8() -> DynamicImage {
-		DynamicImage::from_fn_l8(4, 3, |x, y| [((x + y) % 2) as u8])
+		DynamicImage::from_fn(4, 3, |x, y| [((x + y) % 2) as u8])
 	}
 	fn sample_la8(alpha: u8) -> DynamicImage {
-		DynamicImage::from_fn_la8(4, 3, |x, y| [((x * 2 + y) % 256) as u8, alpha])
+		DynamicImage::from_fn(4, 3, |x, y| [((x * 2 + y) % 256) as u8, alpha])
 	}
 	fn sample_rgb8() -> DynamicImage {
-		DynamicImage::from_fn_rgb8(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8])
+		DynamicImage::from_fn(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8])
 	}
 	fn sample_rgba8(alpha: u8) -> DynamicImage {
-		DynamicImage::from_fn_rgba8(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8, alpha])
+		DynamicImage::from_fn(4, 3, |x, y| [x as u8, y as u8, (x + y) as u8, alpha])
 	}
 
 	// --- bits_per_value & channel_count -----------------------------------
@@ -243,8 +243,8 @@ mod tests {
 		#[case] h2: u32,
 		#[case] expect: &str,
 	) {
-		let a = DynamicImage::from_fn_rgb8(w1, h1, |x, y| [x as u8, y as u8, 0]);
-		let b = DynamicImage::from_fn_rgb8(w2, h2, |x, y| [x as u8, y as u8, 0]);
+		let a = DynamicImage::from_fn(w1, h1, |x, y| [x as u8, y as u8, 0]);
+		let b = DynamicImage::from_fn(w2, h2, |x, y| [x as u8, y as u8, 0]);
 		let err = a.ensure_same_size(&b).unwrap_err();
 		assert_eq!(format!("{err}"), expect);
 	}
@@ -269,8 +269,8 @@ mod tests {
 	#[test]
 	fn diff_scales_with_squared_error_and_rounds() {
 		// Use a small 2x2 image; change one pixel in one channel by 1.
-		let base = DynamicImage::from_fn_rgb8(2, 2, |_, _| [10, 20, 30]);
-		let changed = DynamicImage::from_fn_rgb8(2, 2, |_, _| [10, 20, 30]);
+		let base = DynamicImage::from_fn(2, 2, |_, _| [10, 20, 30]);
+		let changed = DynamicImage::from_fn(2, 2, |_, _| [10, 20, 30]);
 
 		// Manually tweak one pixel's red channel by +1
 		// We'll rebuild via from_raw to keep API surface area small
