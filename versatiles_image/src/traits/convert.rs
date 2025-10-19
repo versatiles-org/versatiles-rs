@@ -16,6 +16,8 @@ use versatiles_core::{Blob, TileFormat};
 
 /// Trait for converting between `DynamicImage` and raw/encoded formats, and for constructing images from functions.
 pub trait DynamicImageTraitConvert {
+	fn from_fn<const N: usize>(width: u32, height: u32, f: impl FnMut(u32, u32) -> [u8; N]) -> DynamicImage;
+
 	/// Creates a grayscale (`L8`) image by calling the provided function for each pixel coordinate.
 	/// The function `f(x, y)` should return a single 8-bit luminance value.
 	fn from_fn_l8(width: u32, height: u32, f: impl FnMut(u32, u32) -> [u8; 1]) -> DynamicImage;
@@ -49,6 +51,20 @@ pub trait DynamicImageTraitConvert {
 }
 
 impl DynamicImageTraitConvert for DynamicImage {
+	fn from_fn<const N: usize>(width: u32, height: u32, mut f: impl FnMut(u32, u32) -> [u8; N]) -> DynamicImage {
+		assert!((1..=4).contains(&N), "Unsupported channel count for from_fn: {N}");
+		let px_count = (width as usize) * (height as usize);
+		let mut data = Vec::with_capacity(px_count * N);
+		for y in 0..height {
+			for x in 0..width {
+				let p = f(x, y);
+				data.extend_from_slice(&p);
+			}
+		}
+		// Delegate to from_raw which picks the correct DynamicImage variant
+		DynamicImage::from_raw(width, height, data).expect("from_fn: failed to construct image from raw data")
+	}
+
 	fn from_fn_l8(width: u32, height: u32, mut f: impl FnMut(u32, u32) -> [u8; 1]) -> DynamicImage {
 		DynamicImage::ImageLuma8(ImageBuffer::from_fn(width, height, |x, y| Luma(f(x, y))))
 	}
