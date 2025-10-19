@@ -1,7 +1,7 @@
-use super::{BandMapping, BandMappingItem, Instance};
+use super::{BandMapping, BandMappingItem, Instance, ResampleAlg};
 use anyhow::{Context, Result, bail, ensure};
 use gdal::{Dataset, GeoTransform, config::set_config_option, spatial_ref::SpatialRef, vector::Geometry};
-use gdal_sys::{CPLErr, CPLGetLastErrorMsg, GDALReprojectImage, GDALResampleAlg, OGRwkbGeometryType};
+use gdal_sys::{CPLErr, CPLGetLastErrorMsg, GDALReprojectImage, OGRwkbGeometryType};
 use imageproc::image::DynamicImage;
 use std::{
 	collections::LinkedList,
@@ -114,7 +114,7 @@ impl GdalDataset {
 					null(),
 					dst.c_dataset(),
 					null(),
-					GDALResampleAlg::GRA_Bilinear,
+					ResampleAlg::default().as_gdal(),
 					0.0,
 					0.0,
 					None,
