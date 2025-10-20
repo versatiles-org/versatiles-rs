@@ -63,11 +63,11 @@ impl Instance {
 			options.hSrcDS = h_src_ds;
 			options.hDstDS = h_dst_ds;
 
-			//CSLSetNameValue(
-			//	options.papszWarpOptions,
-			//	b"NUM_THREADS\0".as_ptr() as *const i8,
-			//	b"ALL_CPUS\0".as_ptr() as *const i8,
-			//);
+			CSLSetNameValue(
+				options.papszWarpOptions,
+				b"NUM_THREADS\0".as_ptr() as *const i8,
+				b"ALL_CPUS\0".as_ptr() as *const i8,
+			);
 
 			band_mapping.setup_gdal_warp_options(&mut options);
 
