@@ -87,7 +87,7 @@ impl GdalDataset {
 		instances.push_back(instance);
 	}
 
-	pub async fn get_image(&self, bbox: &GeoBBox, width: u32, height: u32) -> Result<Option<DynamicImage>> {
+	pub async fn get_image(&self, bbox: &GeoBBox, width: usize, height: usize) -> Result<Option<DynamicImage>> {
 		let band_mapping = self.band_mapping.clone();
 		let instance: Instance = self.get_instance().await;
 		let dst = instance.reproject_to_dataset(width, height, bbox, band_mapping)?;
@@ -102,7 +102,7 @@ impl GdalDataset {
 		let band_mapping = self.band_mapping.clone();
 		let channel_count = band_mapping.len();
 		let image = tokio::task::spawn_blocking(move || -> Result<Option<DynamicImage>> {
-			let mut buf = vec![0u8; (width as usize) * (height as usize) * channel_count];
+			let mut buf = vec![0u8; width * height * channel_count];
 			for BandMappingItem {
 				channel_index,
 				band_index,
@@ -111,7 +111,7 @@ impl GdalDataset {
 				let band = dst.rasterband(band_index)?.read_band_as::<u8>()?;
 				let data = band.data();
 				ensure!(
-					data.len() == (width as usize) * (height as usize),
+					data.len() == width * height,
 					"Band {} data length mismatch: expected {} but got {}",
 					band_index,
 					width * height,

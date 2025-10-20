@@ -35,8 +35,8 @@ impl Instance {
 
 	pub fn reproject_to_dataset(
 		&self,
-		width: u32,
-		height: u32,
+		width: usize,
+		height: usize,
 		bbox: &GeoBBox,
 		band_mapping: Arc<BandMapping>,
 	) -> Result<Dataset> {

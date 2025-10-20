@@ -78,7 +78,7 @@ pub async fn run(args: &MeasureTileSizes) -> Result<()> {
 		.map(|v| ((v as f64 / n).max(1.0).log2() * 10.0).clamp(0.0, 255.0) as u8)
 		.collect::<Vec<u8>>();
 
-	let image = <DynamicImage as DynamicImageTraitConvert>::from_raw(width_scaled as u32, width_scaled as u32, buffer)?;
+	let image = <DynamicImage as DynamicImageTraitConvert>::from_raw(width_scaled, width_scaled, buffer)?;
 
 	let format = TileFormat::try_from_path(output_file)?;
 	let blob = encode(&image, format, Some(100), Some(0))?;

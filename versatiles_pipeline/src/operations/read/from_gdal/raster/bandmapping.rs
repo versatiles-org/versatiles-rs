@@ -168,12 +168,12 @@ impl BandMapping {
 	/// # Errors
 	/// Returns an error if the mapping length is not one of the supported values
 	/// (1, 2, 3, or 4) or if the in-memory dataset cannot be created.
-	pub fn create_mem_dataset(&self, width: u32, height: u32) -> Result<gdal::Dataset> {
+	pub fn create_mem_dataset(&self, width: usize, height: usize) -> Result<gdal::Dataset> {
 		let driver = DriverManager::get_driver_by_name("MEM").context("Failed to get GDAL MEM driver")?;
 
 		// Create destination dataset in EPSG:3857 for the requested bbox
 		let mut dst = driver
-			.create_with_band_type::<u8, _>("", width as usize, height as usize, self.len())
+			.create_with_band_type::<u8, _>("mem", width, height, self.len())
 			.context("Failed to create in-memory dataset")?;
 		dst.set_spatial_ref(&SpatialRef::from_epsg(3857)?)?;
 

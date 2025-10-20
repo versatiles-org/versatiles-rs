@@ -237,10 +237,10 @@ mod tests {
 		"Image height mismatch: self has height 3, but the other image has height 5"
 	)]
 	fn ensure_same_size_errors(
-		#[case] w1: u32,
-		#[case] h1: u32,
-		#[case] w2: u32,
-		#[case] h2: u32,
+		#[case] w1: usize,
+		#[case] h1: usize,
+		#[case] w2: usize,
+		#[case] h2: usize,
 		#[case] expect: &str,
 	) {
 		let a = DynamicImage::from_fn(w1, h1, |x, y| [x as u8, y as u8, 0]);

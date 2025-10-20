@@ -16,12 +16,12 @@ use versatiles_core::{Blob, TileFormat};
 
 /// Trait for converting between `DynamicImage` and raw/encoded formats, and for constructing images from functions.
 pub trait DynamicImageTraitConvert {
-	fn from_fn<const N: usize>(width: u32, height: u32, f: impl FnMut(u32, u32) -> [u8; N]) -> DynamicImage;
+	fn from_fn<const N: usize>(width: usize, height: usize, f: impl FnMut(u32, u32) -> [u8; N]) -> DynamicImage;
 
 	/// Constructs a `DynamicImage` from raw pixel data and dimensions.
 	/// The number of channels is inferred from the data length. Supported channel counts are 1 (L8), 2 (LA8), 3 (RGB8), and 4 (RGBA8).
 	/// Returns an error if the data length does not match the expected size or if the channel count is unsupported.
-	fn from_raw(width: u32, height: u32, data: Vec<u8>) -> Result<DynamicImage>;
+	fn from_raw(width: usize, height: usize, data: Vec<u8>) -> Result<DynamicImage>;
 
 	/// Decodes a `DynamicImage` from a binary blob using the specified `TileFormat`.
 	/// Returns an error if decoding fails or if the format is unsupported.
@@ -39,12 +39,12 @@ pub trait DynamicImageTraitConvert {
 }
 
 impl DynamicImageTraitConvert for DynamicImage {
-	fn from_fn<const N: usize>(width: u32, height: u32, mut f: impl FnMut(u32, u32) -> [u8; N]) -> DynamicImage {
+	fn from_fn<const N: usize>(width: usize, height: usize, mut f: impl FnMut(u32, u32) -> [u8; N]) -> DynamicImage {
 		assert!((1..=4).contains(&N), "Unsupported channel count for from_fn: {N}");
 		let px_count = (width as usize) * (height as usize);
 		let mut data = Vec::with_capacity(px_count * N);
-		for y in 0..height {
-			for x in 0..width {
+		for y in 0..height as u32 {
+			for x in 0..width as u32 {
 				let p = f(x, y);
 				data.extend_from_slice(&p);
 			}
@@ -53,29 +53,29 @@ impl DynamicImageTraitConvert for DynamicImage {
 		DynamicImage::from_raw(width, height, data).expect("from_fn: failed to construct image from raw data")
 	}
 
-	fn from_raw(width: u32, height: u32, data: Vec<u8>) -> Result<DynamicImage> {
-		let channel_count = data.len() / (width * height) as usize;
+	fn from_raw(width: usize, height: usize, data: Vec<u8>) -> Result<DynamicImage> {
+		let channel_count = data.len() / (width * height);
 		ensure!(
-			channel_count * (width * height) as usize == data.len(),
+			channel_count * width * height == data.len(),
 			"Data length ({}) does not match width ({width}) * height ({height}) * channel_count ({channel_count}) = {}",
 			data.len(),
-			(width * height) as usize * channel_count
+			channel_count * width * height
 		);
 		Ok(match channel_count {
 			1 => DynamicImage::ImageLuma8(
-				ImageBuffer::from_vec(width, height, data)
+				ImageBuffer::from_vec(width as u32, height as u32, data)
 					.ok_or_else(|| anyhow!("Failed to create Luma8 image buffer with provided data"))?,
 			),
 			2 => DynamicImage::ImageLumaA8(
-				ImageBuffer::from_vec(width, height, data)
+				ImageBuffer::from_vec(width as u32, height as u32, data)
 					.ok_or_else(|| anyhow!("Failed to create LumaA8 image buffer with provided data"))?,
 			),
 			3 => DynamicImage::ImageRgb8(
-				ImageBuffer::from_vec(width, height, data)
+				ImageBuffer::from_vec(width as u32, height as u32, data)
 					.ok_or_else(|| anyhow!("Failed to create RGB8 image buffer with provided data"))?,
 			),
 			4 => DynamicImage::ImageRgba8(
-				ImageBuffer::from_vec(width, height, data)
+				ImageBuffer::from_vec(width as u32, height as u32, data)
 					.ok_or_else(|| anyhow!("Failed to create RGBA8 image buffer with provided data"))?,
 			),
 			_ => bail!("Unsupported channel count: {channel_count}"),
@@ -181,11 +181,9 @@ mod tests {
 	#[case::rgb8(3)]
 	#[case::rgba8(4)]
 	fn from_raw_accepts_supported_channel_counts(#[case] channels: usize) {
-		let w = 4u32;
-		let h = 3u32; // 12 pixels
-		let data = (0..(w as usize * h as usize * channels))
-			.map(|v| (v % 256) as u8)
-			.collect::<Vec<_>>();
+		let w = 4usize;
+		let h = 3usize; // 12 pixels
+		let data = (0..(w * h * channels)).map(|v| (v % 256) as u8).collect::<Vec<_>>();
 
 		let img = DynamicImage::from_raw(w, h, data).expect("from_raw failed");
 		assert_eq!(img.color().channel_count() as usize, channels);

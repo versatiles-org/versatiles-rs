@@ -43,7 +43,7 @@ impl DummyImageSource {
 		let pixel = pixel.with_context(|| format!("trying to parse filename '{}' as pixel value", parts[0]))?;
 		let raw = Vec::from_iter(std::iter::repeat_n(pixel, (tile_size * tile_size) as usize).flatten());
 
-		let image = DynamicImage::from_raw(tile_size, tile_size, raw)?;
+		let image = DynamicImage::from_raw(tile_size as usize, tile_size as usize, raw)?;
 
 		// Initialize the parameters with the given bounding box or a default one
 		let parameters = TilesReaderParameters::new(

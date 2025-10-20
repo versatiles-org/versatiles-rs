@@ -52,7 +52,12 @@ struct Operation {
 
 impl Operation {
 	#[context("Failed to get image data ({width}x{height}) for bbox ({bbox:?}) from GDAL dataset")]
-	async fn get_image_data_from_gdal(&self, bbox: &GeoBBox, width: u32, height: u32) -> Result<Option<DynamicImage>> {
+	async fn get_image_data_from_gdal(
+		&self,
+		bbox: &GeoBBox,
+		width: usize,
+		height: usize,
+	) -> Result<Option<DynamicImage>> {
 		log::debug!("get_image_data_from_gdal: bbox={:?}, size={}x{}", bbox, width, height);
 		let res = self.dataset.get_image(bbox, width, height).await;
 		match &res {
@@ -154,7 +159,11 @@ impl OperationTrait for Operation {
 			let size = size;
 			async move {
 				let image = self
-					.get_image_data_from_gdal(&bbox.to_geo_bbox(), size * bbox.width(), size * bbox.height())
+					.get_image_data_from_gdal(
+						&bbox.to_geo_bbox(),
+						(size * bbox.width()) as usize,
+						(size * bbox.height()) as usize,
+					)
 					.await
 					.unwrap();
 
