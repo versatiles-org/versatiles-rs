@@ -42,21 +42,25 @@ impl Instance {
 	) -> Result<Dataset> {
 		log::trace!("reproject_image started for size={width}x{height}");
 
-		let bbox_arr = bbox.to_mercator();
+		println!("bbox: {:?}", bbox);
+		let bbox_mer = bbox.to_mercator();
+		println!("bbox mercator: {:?}", bbox_mer);
+
 		let mut dst_ds = band_mapping.create_mem_dataset(width, height)?;
 		let geo_transform: GeoTransform = [
-			bbox_arr[0],
-			(bbox_arr[2] - bbox_arr[0]) / width as f64,
+			bbox_mer[0],
+			(bbox_mer[2] - bbox_mer[0]) / width as f64,
 			0.0,
-			bbox_arr[3],
+			bbox_mer[3],
 			0.0,
-			(bbox_arr[1] - bbox_arr[3]) / height as f64,
+			(bbox_mer[1] - bbox_mer[3]) / height as f64,
 		];
+		println!("set_geo_transform dst: {:?}", geo_transform);
 		dst_ds.set_geo_transform(&geo_transform)?;
 
 		unsafe {
 			let rv = GDALReprojectImage(
-				src_h,
+				self.dataset.c_dataset(),
 				null(),
 				dst_ds.c_dataset(),
 				null(),
@@ -72,6 +76,18 @@ impl Instance {
 				bail!("{:?}", CPLGetLastErrorMsg());
 			}
 		}
+
+		self.dataset.create_copy(
+			&gdal::DriverManager::get_driver_by_name("GTiff")?,
+			"reproject_src.tif",
+			&gdal::raster::RasterCreationOptions::default(),
+		)?;
+
+		dst_ds.create_copy(
+			&gdal::DriverManager::get_driver_by_name("GTiff")?,
+			"reproject_dst.tif",
+			&gdal::raster::RasterCreationOptions::default(),
+		)?;
 
 		log::trace!("reproject_image complete");
 

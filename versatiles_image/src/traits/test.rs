@@ -150,7 +150,7 @@ pub trait DynamicImageTraitTest: DynamicImageTraitConvert {
 	/// The luminance increases with x, and the alpha increases with y.
 	fn new_test_greya() -> DynamicImage;
 
-	fn new_marker<const N: usize>(parameters: &[MarkerParameters; N]) -> DynamicImage;
+	fn new_marker(parameters: &[MarkerParameters]) -> DynamicImage;
 	fn gauge_marker(&self) -> Vec<MarkerResult>;
 }
 
@@ -177,7 +177,7 @@ where
 	/// Generates a synthetic multi-channel marker image.
 	/// Each channel encodes a directional gradient defined by the provided [`MarkerParameters`].
 	/// Values are centered around 128 and clipped to [0, 255].
-	fn new_marker<const N: usize>(parameters: &[MarkerParameters; N]) -> DynamicImage {
+	fn new_marker(parameters: &[MarkerParameters]) -> DynamicImage {
 		fn f<const N: usize>(x: u32, y: u32, parameters: &[MarkerParameters; N]) -> [u8; N] {
 			let xf = f64::from(x) - 128.0;
 			let yf = f64::from(y) - 128.0;
@@ -189,7 +189,25 @@ where
 			})
 		}
 
-		DynamicImage::from_fn(256, 256, |x, y| f(x, y, parameters))
+		match parameters.len() {
+			1 => {
+				let p = [parameters[0]];
+				DynamicImage::from_fn(256, 256, |x, y| f(x, y, &p))
+			}
+			2 => {
+				let p = [parameters[0], parameters[1]];
+				DynamicImage::from_fn(256, 256, |x, y| f(x, y, &p))
+			}
+			3 => {
+				let p = [parameters[0], parameters[1], parameters[2]];
+				DynamicImage::from_fn(256, 256, |x, y| f(x, y, &p))
+			}
+			4 => {
+				let p = [parameters[0], parameters[1], parameters[2], parameters[3]];
+				DynamicImage::from_fn(256, 256, |x, y| f(x, y, &p))
+			}
+			_ => panic!("new_marker supports only 1 to 4 channels"),
+		}
 	}
 
 	/// Measures each channel of the image and recovers its gradient parameters

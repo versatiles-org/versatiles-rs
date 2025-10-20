@@ -91,6 +91,12 @@ impl GdalDataset {
 		let band_mapping = self.band_mapping.clone();
 		let instance: Instance = self.get_instance().await;
 		let dst = instance.reproject_to_dataset(width, height, bbox, band_mapping)?;
+
+		dst.create_copy(
+			&gdal::DriverManager::get_driver_by_name("GTiff")?,
+			"test_dst.tif",
+			&gdal::raster::RasterCreationOptions::default(),
+		)?;
 		self.drop_instance(instance).await;
 
 		let band_mapping = self.band_mapping.clone();
@@ -297,13 +303,15 @@ fn dataset_pixel_size(dataset: &gdal::Dataset) -> Result<f64> {
 mod tests {
 	use super::*;
 	use anyhow::anyhow;
-	use gdal::DriverManager;
+	use gdal::{DriverManager, raster::RasterCreationOptions};
 	use imageproc::image::ColorType;
 	use rstest::rstest;
+	use std::vec;
 	use versatiles_core::TileCoord;
 
 	impl GdalDataset {
-		pub fn from_testdata(size: usize, channel_count: usize) -> Result<GdalDataset> {
+		pub fn from_testdata(bbox: GeoBBox, channel_count: usize) -> Result<GdalDataset> {
+			let size = 256;
 			let band_mapping = {
 				let mut v = vec![];
 				for channel_index in 0..channel_count {
@@ -313,32 +321,48 @@ mod tests {
 			};
 
 			let driver = DriverManager::get_driver_by_name("MEM")?;
-			let mut ds = driver.create_with_band_type::<u8, _>("in memory dataset", size, size, channel_count)?;
-			ds.set_spatial_ref(&SpatialRef::from_epsg(4326)?)?;
-			ds.set_geo_transform(&[-45.0, 90.0 / size as f64, 0.0, 45.0, 0.0, -90.0 / size as f64])?;
+			let mut ds_src = driver.create_with_band_type::<u8, _>("in memory dataset", size, size, channel_count)?;
+			ds_src.set_spatial_ref(&SpatialRef::from_epsg(4326)?)?;
+			let geotransform = [
+				bbox.0,
+				(bbox.2 - bbox.0) / size as f64,
+				0.0,
+				bbox.3,
+				0.0,
+				(bbox.1 - bbox.3) / size as f64,
+			];
+			ds_src.set_geo_transform(&geotransform)?;
+			println!("set_geo_transform src: {:?}", geotransform);
 
+			let mut parameters = vec![];
 			for band_index in 1..=channel_count {
-				let s0 = size as f64 / 2.0;
-				let a = (band_index as f64 / channel_count as f64) * std::f64::consts::PI * 2.0;
-				let dx = a.cos();
-				let dy = a.sin();
-
-				let mut band = ds.rasterband(band_index)?;
-				let mut data = vec![0u8; size * size];
-				for y in 0..size {
-					for x in 0..size {
-						let v = (x as f64 - s0) * dx + (y as f64 - s0) * dy + 128.0;
-						data[y * size + x] = v.round().clamp(0f64, 255f64) as u8;
-					}
-				}
-				let mut buffer = gdal::raster::Buffer::new((size, size), data);
-				band.write((0, 0), (size, size), &mut buffer).expect("write");
+				parameters.push(versatiles_image::MarkerParameters {
+					offset: 0.0,
+					scale: 200.0,
+					angle: 30.0 + band_index as f64 * 60.0,
+				})
 			}
+			let image = DynamicImage::new_marker(&parameters);
+			image.save("test_src.png")?;
+
+			for c in 1..=channel_count {
+				let mut band = ds_src.rasterband(c)?;
+				let data = image.iter_pixels().map(|p| p[c - 1]).collect();
+				let mut buffer = gdal::raster::Buffer::new((size, size), data);
+				band.write((0, 0), (size, size), &mut buffer)?;
+			}
+
+			ds_src.create_copy(
+				&DriverManager::get_driver_by_name("GTiff")?,
+				"test_src.tif",
+				&RasterCreationOptions::default(),
+			)?;
+
 			Ok(GdalDataset {
 				filename: PathBuf::from("in-memory"),
-				instances: Arc::new(Mutex::new(LinkedList::from([Instance::new(ds)]))),
+				instances: Arc::new(Mutex::new(LinkedList::from([Instance::new(ds_src)]))),
 				band_mapping: Arc::new(band_mapping),
-				bbox: GeoBBox::new(-45.0, -45.0, 45.0, 45.0),
+				bbox,
 				pixel_size: 1.0,
 				max_reuse_gdal: 1,
 			})
@@ -362,18 +386,11 @@ mod tests {
 
 			fn extract(mut cb: impl FnMut(usize) -> u8) -> Vec<u8> {
 				(0..7)
-					.map(|i| {
-						let mut v = cb(i);
-						if v == 64 {
-							v = 63
-						}
-						if v == 128 {
-							v = 127
-						}
-						if v == 192 {
-							v = 191
-						}
-						v
+					.map(|i| match cb(i) {
+						63 => 64,
+						127 => 128,
+						191 => 192,
+						v => v,
 					})
 					.collect::<Vec<_>>()
 			}
@@ -390,12 +407,12 @@ mod tests {
 		// ─── zoom‑0 full‑world tile should be a uniform gradient ───
 		assert_eq!(
 			gradient_test(0, 0, 0).await?,
-			[[21, 54, 91, 127, 164, 201, 234], [16, 27, 63, 127, 191, 228, 239]]
+			[[21, 54, 91, 128, 164, 201, 234], [16, 27, 64, 128, 192, 228, 239]]
 		);
 
 		// ─── zoom‑1: four quadrants of the gradient ───
-		let row0 = [10, 27, 45, 63, 82, 100, 118];
-		let row1 = [137, 155, 173, 191, 210, 228, 245];
+		let row0 = [10, 27, 45, 64, 82, 100, 118];
+		let row1 = [137, 155, 173, 192, 210, 228, 245];
 		let col0 = [10, 14, 21, 33, 51, 76, 109];
 		let col1 = [146, 179, 204, 222, 234, 241, 245];
 
@@ -408,17 +425,33 @@ mod tests {
 	}
 
 	#[rstest]
-	#[case(1, ColorType::L8)]
+	#[case(3, ColorType::Rgb8)]
 	#[tokio::test(flavor = "multi_thread")]
 	async fn test_dataset_get_image2(#[case] channels: usize, #[case] expected_color: ColorType) {
-		let ds = GdalDataset::from_testdata(256, channels).unwrap();
+		let bbox_in = GeoBBox::new(0.0, 0.0, 90.0, 45.0);
+		let ds = GdalDataset::from_testdata(bbox_in, channels).unwrap();
 		let image = ds
-			.get_image(&GeoBBox(-45.0, -45.0, 45.0, 45.0), 256, 256)
+			.get_image(&GeoBBox::new(-90.0, 0.0, 90.0, 45.0), 512, 256)
 			.await
 			.unwrap()
 			.unwrap();
+		image.save("test_dst.png").unwrap();
 		assert_eq!(image.width(), 256);
 		assert_eq!(image.height(), 256);
 		assert_eq!(image.color(), expected_color);
+		let results = image.gauge_marker();
+
+		let expected_results = [
+			(1.0, 200.0, 90.0),
+			(1.0, 200.0, 150.0),
+			(1.0, 200.0, 210.0),
+			(1.0, 200.0, 270.0),
+		]
+		.map(|p| versatiles_image::MarkerParameters {
+			offset: p.0,
+			scale: p.1,
+			angle: p.2,
+		});
+		compare_marker_result(&expected_results[0..channels], &results).unwrap();
 	}
 }
