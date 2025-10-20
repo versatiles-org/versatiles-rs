@@ -1,6 +1,6 @@
-use super::{BandMapping, BandMappingItem, Instance};
+use super::{BandMapping, BandMappingItem, Instance, get_spatial_ref};
 use anyhow::{Context, Result, ensure};
-use gdal::{Dataset, config::set_config_option, spatial_ref::SpatialRef, vector::Geometry};
+use gdal::{Dataset, config::set_config_option, vector::Geometry};
 use imageproc::image::DynamicImage;
 use std::{
 	collections::LinkedList,
@@ -216,7 +216,7 @@ fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
 
 	bbox.set_spatial_ref(spatial_ref.clone());
 	bbox
-		.transform_to_inplace(&SpatialRef::from_epsg(4326)?)
+		.transform_to_inplace(&get_spatial_ref(4326)?)
 		.context("Failed to transform bounding box to EPSG:4326")?;
 
 	let bbox = bbox.envelope();
@@ -262,7 +262,7 @@ fn dataset_pixel_size(dataset: &gdal::Dataset) -> Result<f64> {
 		geom.add_point(point(col + 1.0, row));
 		geom.add_point(point(col, row + 1.0));
 		geom.set_spatial_ref(srs.clone());
-		geom.transform_to_inplace(&SpatialRef::from_epsg(3857)?)?;
+		geom.transform_to_inplace(&get_spatial_ref(3857)?)?;
 
 		let mut p = vec![];
 		geom.get_points(&mut p);
@@ -322,7 +322,7 @@ mod tests {
 
 			let driver = DriverManager::get_driver_by_name("MEM")?;
 			let mut ds_src = driver.create_with_band_type::<u8, _>("in memory dataset", size, size, channel_count)?;
-			ds_src.set_spatial_ref(&SpatialRef::from_epsg(4326)?)?;
+			ds_src.set_spatial_ref(&get_spatial_ref(4326)?)?;
 			let geotransform = [
 				bbox.0,
 				(bbox.2 - bbox.0) / size as f64,
@@ -349,6 +349,31 @@ mod tests {
 				let data = image.iter_pixels().map(|p| p[c - 1]).collect();
 				let mut buffer = gdal::raster::Buffer::new((size, size), data);
 				band.write((0, 0), (size, size), &mut buffer)?;
+
+				use gdal::raster::ColorInterpretation::*;
+				let interp = match channel_count {
+					1 => GrayIndex,
+					2 => match c {
+						1 => GrayIndex,
+						2 => AlphaBand,
+						_ => unreachable!(),
+					},
+					3 => match c {
+						1 => RedBand,
+						2 => GreenBand,
+						3 => BlueBand,
+						_ => unreachable!(),
+					},
+					4 => match c {
+						1 => RedBand,
+						2 => GreenBand,
+						3 => BlueBand,
+						4 => AlphaBand,
+						_ => unreachable!(),
+					},
+					_ => unreachable!(),
+				};
+				band.set_color_interpretation(interp)?;
 			}
 
 			ds_src.create_copy(

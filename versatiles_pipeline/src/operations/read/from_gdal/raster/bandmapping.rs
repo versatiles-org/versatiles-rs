@@ -11,8 +11,9 @@
 //! supported: Grey, Grey+Alpha, RGB, RGBA. Any other configuration (e.g. palette
 //! indexed or multispectral) will produce an error.
 
+use super::get_spatial_ref;
 use anyhow::{Context, Result, bail, ensure};
-use gdal::{DriverManager, raster::ColorInterpretation, spatial_ref::SpatialRef};
+use gdal::{DriverManager, raster::ColorInterpretation};
 use std::fmt::Debug;
 use versatiles_derive::context;
 
@@ -175,7 +176,7 @@ impl BandMapping {
 		let mut dst = driver
 			.create_with_band_type::<u8, _>("mem", width, height, self.len())
 			.context("Failed to create in-memory dataset")?;
-		dst.set_spatial_ref(&SpatialRef::from_epsg(3857)?)?;
+		dst.set_spatial_ref(&get_spatial_ref(3857)?)?;
 
 		use ColorInterpretation::*;
 
@@ -230,8 +231,6 @@ impl Debug for BandMapping {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use anyhow::Result;
-	use gdal::{DriverManager, raster::ColorInterpretation};
 	use rstest::rstest;
 
 	fn mem_dataset_with_bands(cis: Vec<ColorInterpretation>) -> Result<gdal::Dataset> {

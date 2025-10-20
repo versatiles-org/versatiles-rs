@@ -38,35 +38,23 @@ impl Instance {
 	) -> Result<Dataset> {
 		log::trace!("reproject_image started for size={width}x{height}");
 
-		//println!("bbox: {:?}", bbox);
 		let bbox_mer = bbox.to_mercator();
-		//println!("bbox mercator: {:?}", bbox_mer);
 
 		let mut dst_ds = band_mapping.create_mem_dataset(width, height)?;
-		//let geo_transform: GeoTransform = [
-		//	bbox_mer[0],
-		//	(bbox_mer[2] - bbox_mer[0]) / height as f64,
-		//	0.0,
-		//	bbox_mer[3],
-		//	0.0,
-		//	(bbox_mer[1] - bbox_mer[3]) / width as f64,
-		//];
+		// GDAL GeoTransform: [origin_x, pixel_width, rot_x, origin_y, rot_y, pixel_height]
+		// For north-up images: rot_x = 0, rot_y = 0, pixel_height is **negative**.
 		let geo_transform: GeoTransform = [
-			bbox_mer[2],
-			0.0,
-			(bbox_mer[0] - bbox_mer[2]) / height as f64,
-			bbox_mer[1],
-			(bbox_mer[3] - bbox_mer[1]) / width as f64,
-			0.0,
+			bbox_mer[0],                                 // origin_x = minx
+			(bbox_mer[2] - bbox_mer[0]) / width as f64,  // pixel width in meters/pixel
+			0.0,                                         // rot_x
+			bbox_mer[3],                                 // origin_y = maxy (top-left Y)
+			0.0,                                         // rot_y
+			(bbox_mer[1] - bbox_mer[3]) / height as f64, // pixel height (negative for north-up)
 		];
-
 		dst_ds.set_geo_transform(&geo_transform)?;
 
 		let h_src_ds = self.dataset.c_dataset();
 		let h_dst_ds = dst_ds.c_dataset();
-
-		println!("geo_transform src: {:?}", self.dataset.geo_transform()?);
-		println!("geo_transform dst: {:?}", dst_ds.geo_transform()?);
 
 		unsafe {
 			use gdal_sys::*;
@@ -101,19 +89,6 @@ impl Instance {
 				bail!("{:?}", CPLGetLastErrorMsg());
 			}
 		}
-
-		let geo_transform: GeoTransform = [
-			bbox_mer[0],
-			(bbox_mer[2] - bbox_mer[0]) / height as f64,
-			0.0,
-			bbox_mer[3],
-			0.0,
-			(bbox_mer[1] - bbox_mer[3]) / width as f64,
-		];
-		//println!("set_geo_transform dst: {:?}", geo_transform);
-		dst_ds.set_geo_transform(&geo_transform)?;
-
-		//println!("get_geo_transform dst: {:?}", dst_ds.geo_transform()?);
 
 		self.dataset.create_copy(
 			&gdal::DriverManager::get_driver_by_name("GTiff")?,
