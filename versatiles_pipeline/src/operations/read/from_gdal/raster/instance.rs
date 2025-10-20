@@ -81,9 +81,8 @@ impl Instance {
 
 			let rv = GDALChunkAndWarpMulti(operation, 0, 0, width as i32, height as i32);
 
-			//GDALDestroyWarpOperation(operation);
-			//GDALDestroyGenImgProjTransformer(options.pTransformerArg);
-			//GDALClose(h_dst_ds);
+			GDALDestroyWarpOperation(operation);
+			GDALDestroyGenImgProjTransformer(options.pTransformerArg);
 
 			if rv != CPLErr::CE_None {
 				bail!("{:?}", CPLGetLastErrorMsg());
