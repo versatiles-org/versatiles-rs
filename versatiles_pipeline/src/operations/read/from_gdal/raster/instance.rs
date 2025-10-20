@@ -90,18 +90,6 @@ impl Instance {
 			}
 		}
 
-		self.dataset.create_copy(
-			&gdal::DriverManager::get_driver_by_name("GTiff")?,
-			"reproject_src.tif",
-			&gdal::raster::RasterCreationOptions::default(),
-		)?;
-
-		dst_ds.create_copy(
-			&gdal::DriverManager::get_driver_by_name("GTiff")?,
-			"reproject_dst.tif",
-			&gdal::raster::RasterCreationOptions::default(),
-		)?;
-
 		log::trace!("reproject_image complete");
 
 		Ok(dst_ds)

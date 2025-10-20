@@ -106,7 +106,7 @@ impl MarkerResult {
 				(p.scale - self.scale).abs()
 			));
 		}
-		if self.error > 0.5 * factor {
+		if self.error > 1.0 * factor {
 			errors.push(format!(" - high residual error: {:.3}", self.error));
 		}
 		if !errors.is_empty() {

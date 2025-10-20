@@ -92,11 +92,6 @@ impl GdalDataset {
 		let instance: Instance = self.get_instance().await;
 		let dst = instance.reproject_to_dataset(width, height, bbox, band_mapping)?;
 
-		dst.create_copy(
-			&gdal::DriverManager::get_driver_by_name("GTiff")?,
-			"test_dst.tif",
-			&gdal::raster::RasterCreationOptions::default(),
-		)?;
 		self.drop_instance(instance).await;
 
 		let band_mapping = self.band_mapping.clone();
@@ -303,7 +298,7 @@ fn dataset_pixel_size(dataset: &gdal::Dataset) -> Result<f64> {
 mod tests {
 	use super::*;
 	use anyhow::anyhow;
-	use gdal::{DriverManager, raster::RasterCreationOptions};
+	use gdal::DriverManager;
 	use imageproc::image::ColorType;
 	use rstest::rstest;
 	use std::vec;
@@ -338,11 +333,10 @@ mod tests {
 				parameters.push(versatiles_image::MarkerParameters {
 					offset: 0.0,
 					scale: 200.0,
-					angle: 0.0 + (band_index as f64 - 1.0) * 90.0,
+					angle: 80.0 + (band_index as f64 - 1.0) * 90.0,
 				})
 			}
 			let image = DynamicImage::new_marker(&parameters);
-			image.save("test_src.png")?;
 
 			for c in 1..=channel_count {
 				let mut band = ds_src.rasterband(c)?;
@@ -375,12 +369,6 @@ mod tests {
 				};
 				band.set_color_interpretation(interp)?;
 			}
-
-			ds_src.create_copy(
-				&DriverManager::get_driver_by_name("GTiff")?,
-				"test_src.tif",
-				&RasterCreationOptions::default(),
-			)?;
 
 			Ok(GdalDataset {
 				filename: PathBuf::from("in-memory"),
@@ -449,27 +437,25 @@ mod tests {
 	}
 
 	#[rstest]
+	#[case(1, ColorType::L8)]
+	#[case(2, ColorType::La8)]
 	#[case(3, ColorType::Rgb8)]
+	#[case(4, ColorType::Rgba8)]
 	#[tokio::test(flavor = "multi_thread")]
 	async fn test_dataset_get_image2(#[case] channels: usize, #[case] expected_color: ColorType) {
-		let bbox_in = GeoBBox::new(5.85, 47.27, 15.03, 55.07);
+		let bbox_in = GeoBBox::new(14.0, 49.0, 24.0, 55.0);
 		let ds = GdalDataset::from_testdata(bbox_in, channels).unwrap();
-		let image = ds
-			.get_image(&GeoBBox::new(0.0, 0.0, 60.0, 60.0), 256, 256)
-			.await
-			.unwrap()
-			.unwrap();
-		image.save("test_dst.png").unwrap();
+		let image = ds.get_image(&bbox_in, 256, 256).await.unwrap().unwrap();
 		assert_eq!(image.width(), 256);
 		assert_eq!(image.height(), 256);
 		assert_eq!(image.color(), expected_color);
 		let results = image.gauge_marker();
 
 		let expected_results = [
-			(1.0, 200.0, 90.0),
-			(1.0, 200.0, 150.0),
-			(1.0, 200.0, 210.0),
-			(1.0, 200.0, 270.0),
+			(2.8, 200.0, 80.0),
+			(0.5, 200.0, 170.0),
+			(-2.8, 200.0, 260.0),
+			(-0.5, 200.0, 350.0),
 		]
 		.map(|p| versatiles_image::MarkerParameters {
 			offset: p.0,
