@@ -8,8 +8,6 @@
 //! - speed (items/sec)
 //! - ETA
 
-use std::io;
-use std::io::Write;
 use std::time::{Duration, Instant};
 
 pub struct Inner {
@@ -22,14 +20,11 @@ pub struct Inner {
 }
 
 impl Inner {
-	#[allow(unreachable_code)]
 	pub fn redraw(&mut self) {
 		if self.last_draw.elapsed() < Duration::from_secs(1) && !self.finished {
 			return;
 		}
 		self.last_draw = Instant::now();
-		#[cfg(any(test, feature = "test"))]
-		return;
 
 		let len = self.len.max(1); // avoid div by zero
 		let pos = self.pos.min(len);
@@ -57,9 +52,18 @@ impl Inner {
 		let line = get_line(&bar_str);
 
 		// Render to stderr with carriage return and clear line
-		let mut output = io::stderr();
-		write!(output, "\r\x1b[2K{line}").unwrap();
-		output.flush().unwrap();
+		self.write(&format!("\r\x1b[2K{line}"));
+	}
+
+	#[allow(unused_variables)]
+	pub fn write(&mut self, line: &str) {
+		#[cfg(not(any(test, feature = "test")))]
+		{
+			use std::io::Write;
+			let mut output = std::io::stderr();
+			write!(output, "{line}").unwrap();
+			output.flush().unwrap();
+		}
 	}
 }
 

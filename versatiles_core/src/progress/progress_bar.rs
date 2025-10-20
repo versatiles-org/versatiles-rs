@@ -10,7 +10,6 @@
 
 use super::inner::Inner;
 use std::cmp::min;
-use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -86,8 +85,8 @@ impl ProgressBar {
 		inner.pos = inner.len;
 		inner.finished = true;
 		inner.redraw();
-		let _ = io::stderr().write_all(b"\n");
-		let _ = io::stderr().flush();
+
+		inner.write("\n");
 	}
 
 	/// Remove the bar line from the terminal.
@@ -96,10 +95,8 @@ impl ProgressBar {
 		let mut inner = mutex.lock().unwrap();
 		inner.pos = inner.len; // Semantics similar to previous tests
 		inner.finished = true;
+		inner.write("\r\x1b[2K");
 		drop(inner);
-		// Clear current line
-		let _ = io::stderr().write_all(b"\r\x1b[2K");
-		let _ = io::stderr().flush();
 	}
 }
 
