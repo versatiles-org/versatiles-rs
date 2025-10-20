@@ -73,6 +73,8 @@ impl GeoBBox {
 	/// ```
 	#[must_use]
 	pub fn new(x_min: f64, y_min: f64, x_max: f64, y_max: f64) -> GeoBBox {
+		assert!(x_min <= x_max, "x_min must be <= x_max");
+		assert!(y_min <= y_max, "y_min must be <= y_max");
 		GeoBBox(x_min, y_min, x_max, y_max)
 	}
 
