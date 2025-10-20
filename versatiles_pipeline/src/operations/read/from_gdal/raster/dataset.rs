@@ -1,5 +1,5 @@
 use super::{BandMapping, BandMappingItem, Instance, get_spatial_ref};
-use anyhow::{Context, Result, ensure};
+use anyhow::{Context, Result, anyhow, ensure};
 use gdal::{Dataset, config::set_config_option, vector::Geometry};
 use imageproc::image::DynamicImage;
 use std::{
@@ -189,7 +189,7 @@ fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
 
 	log::trace!("geo transform: {:?}", gt);
 
-	ensure!(gt[2] == 0.0 && gt[4] == 0.0, "GDAL dataset must not be rotated");
+	ensure!(gt[2] == 0.0 || gt[4] == 0.0, "GDAL dataset must not be rotated");
 
 	let width = dataset.raster_size().0;
 	let height = dataset.raster_size().1;
@@ -200,26 +200,28 @@ fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
 	log::trace!("size: {}x{}", width, height);
 	log::trace!("spatial reference: {:?}", &spatial_ref.to_pretty_wkt());
 
-	let mut bbox = Geometry::bbox(
+	let mut geom = Geometry::bbox(
 		gt[0],
 		gt[3],
 		gt[0] + gt[1] * width as f64,
 		gt[3] + gt[5] * height as f64,
-	)?;
+	)
+	.with_context(|| anyhow!("Failed to create bounding box from geo transform {gt:?}"))?;
 
-	log::trace!("bounding box native: {:?}", bbox);
+	log::trace!("bounding box native: {:?}", geom);
 
-	bbox.set_spatial_ref(spatial_ref.clone());
-	bbox
+	geom.set_spatial_ref(spatial_ref.clone());
+	geom
 		.transform_to_inplace(&get_spatial_ref(4326)?)
 		.context("Failed to transform bounding box to EPSG:4326")?;
 
-	let bbox = bbox.envelope();
+	let bbox_geom = geom.envelope();
 
-	log::trace!("bounding box projected: {:?}", bbox);
+	log::trace!("bounding box projected: {:?}", bbox_geom);
 
 	// Coordinates seem to be flipped in OGREnvelope
-	let mut bbox = GeoBBox::new(bbox.MinY, bbox.MinX, bbox.MaxY, bbox.MaxX)?;
+	let mut bbox = GeoBBox::new(bbox_geom.MinX, bbox_geom.MinY, bbox_geom.MaxX, bbox_geom.MaxY)
+		.with_context(|| anyhow!("Failed to get bounding box from {bbox_geom:?}"))?;
 	bbox.limit_to_mercator();
 
 	log::trace!("bounding box: {:?}", bbox);
