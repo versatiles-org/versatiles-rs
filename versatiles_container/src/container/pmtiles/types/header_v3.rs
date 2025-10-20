@@ -51,13 +51,13 @@ impl HeaderV3 {
 			tile_type: PT::from_value(parameters.tile_format).unwrap_or(PT::UNKNOWN),
 			min_zoom: bbox_pyramid.get_level_min().unwrap_or(0),
 			max_zoom: bbox_pyramid.get_level_max().unwrap_or(14),
-			min_lon_e7: (bbox.0 * 1e7) as i32,
-			min_lat_e7: (bbox.1 * 1e7) as i32,
-			max_lon_e7: (bbox.2 * 1e7) as i32,
-			max_lat_e7: (bbox.3 * 1e7) as i32,
+			min_lon_e7: (bbox.x_min * 1e7) as i32,
+			min_lat_e7: (bbox.y_min * 1e7) as i32,
+			max_lon_e7: (bbox.x_max * 1e7) as i32,
+			max_lat_e7: (bbox.y_max * 1e7) as i32,
 			center_zoom: bbox_pyramid.get_good_level().unwrap_or(0),
-			center_lon_e7: ((bbox.0 + bbox.2) * 5e6) as i32,
-			center_lat_e7: ((bbox.1 + bbox.3) * 5e6) as i32,
+			center_lon_e7: ((bbox.x_min + bbox.x_max) * 5e6) as i32,
+			center_lat_e7: ((bbox.y_min + bbox.y_max) * 5e6) as i32,
 		}
 	}
 

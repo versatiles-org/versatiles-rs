@@ -14,6 +14,7 @@ use std::{
 	fmt,
 	ops::{Div, Rem},
 };
+use versatiles_derive::context;
 
 /// Represents a bounding box for tiles at a specific zoom level.
 ///
@@ -163,13 +164,13 @@ impl TileBBox {
 	///
 	/// - If the geographical coordinates are invalid.
 	/// - If the converted tile coordinates are out of bounds.
+	#[context("Failed to create TileBBox from GeoBBox {bbox:?} at level {level}")]
 	pub fn from_geo(level: u8, bbox: &GeoBBox) -> Result<TileBBox> {
 		ensure!(level <= 31, "level ({level}) must be <= 31");
-		bbox.check()?; // Validate GeoBBox
 
 		// Convert geographical coordinates to tile coordinates
-		let p_min = TileCoord::from_geo(bbox.0 + 1e-10, bbox.3 - 1e-10, level)?;
-		let p_max = TileCoord::from_geo(bbox.2 - 1e-10, bbox.1 + 1e-10, level)?;
+		let p_min = TileCoord::from_geo(bbox.x_min + 1e-10, bbox.y_max - 1e-10, level)?;
+		let p_max = TileCoord::from_geo(bbox.x_max - 1e-10, bbox.y_min + 1e-10, level)?;
 
 		Self::from_min_max(level, p_min.x, p_min.y, p_max.x, p_max.y)
 	}
@@ -612,7 +613,7 @@ impl TileBBox {
 			.unwrap()
 			.as_geo();
 
-		GeoBBox(p_min[0], p_min[1], p_max[0], p_max[1])
+		GeoBBox::new(p_min[0], p_min[1], p_max[0], p_max[1]).unwrap()
 	}
 
 	/// Shifts the bounding box by specified amounts in the x and y directions.
@@ -994,25 +995,25 @@ mod tests {
 
 	#[test]
 	fn from_geo() {
-		let bbox1 = TileBBox::from_geo(9, &GeoBBox(8.0653, 51.3563, 12.3528, 52.2564)).unwrap();
+		let bbox1 = TileBBox::from_geo(9, &GeoBBox::new(8.0653, 51.3563, 12.3528, 52.2564).unwrap()).unwrap();
 		let bbox2 = TileBBox::from_min_max(9, 267, 168, 273, 170).unwrap();
 		assert_eq!(bbox1, bbox2);
 	}
 
 	#[test]
 	fn from_geo_is_not_empty() {
-		let bbox1 = TileBBox::from_geo(0, &GeoBBox(8.0, 51.0, 8.000001f64, 51.0)).unwrap();
+		let bbox1 = TileBBox::from_geo(0, &GeoBBox::new(8.0, 51.0, 8.000001f64, 51.0).unwrap()).unwrap();
 		assert_eq!(bbox1.count_tiles(), 1);
 		assert!(!bbox1.is_empty());
 
-		let bbox2 = TileBBox::from_geo(14, &GeoBBox(-132.000001, -40.0, -132.0, -40.0)).unwrap();
+		let bbox2 = TileBBox::from_geo(14, &GeoBBox::new(-132.000001, -40.0, -132.0, -40.0).unwrap()).unwrap();
 		assert_eq!(bbox2.count_tiles(), 1);
 		assert!(!bbox2.is_empty());
 	}
 
 	#[test]
 	fn quarter_planet() {
-		let geo_bbox = GeoBBox(0.0, -85.05112877980659f64, 180.0, 0.0);
+		let geo_bbox = GeoBBox::new(0.0, -85.05112877980659f64, 180.0, 0.0).unwrap();
 		for level in 1..32 {
 			let bbox = TileBBox::from_geo(level, &geo_bbox).unwrap();
 			assert_eq!(bbox.count_tiles(), 4u64.pow(u32::from(level) - 1));
@@ -1022,7 +1023,7 @@ mod tests {
 
 	#[test]
 	fn sa_pacific() {
-		let geo_bbox = GeoBBox(-180.0, -66.51326044311186f64, -90.0, 0.0);
+		let geo_bbox = GeoBBox::new(-180.0, -66.51326044311186f64, -90.0, 0.0).unwrap();
 		for level in 2..32 {
 			let bbox = TileBBox::from_geo(level, &geo_bbox).unwrap();
 			assert_eq!(bbox.count_tiles(), 4u64.pow(u32::from(level) - 2));
@@ -1277,16 +1278,9 @@ mod tests {
 
 	#[test]
 	fn test_from_geo_valid() {
-		let geo_bbox = GeoBBox(-180.0, -85.05112878, 180.0, 85.05112878);
+		let geo_bbox = GeoBBox::new(-180.0, -85.05112878, 180.0, 85.05112878).unwrap();
 		let bbox = TileBBox::from_geo(2, &geo_bbox).unwrap();
 		assert_eq!(bbox, TileBBox::from_min_max(2, 0, 0, 3, 3).unwrap());
-	}
-
-	#[test]
-	fn test_from_geo_invalid() {
-		let geo_bbox = GeoBBox(-200.0, -100.0, 200.0, 100.0); // Invalid geo coordinates
-		let result = TileBBox::from_geo(2, &geo_bbox);
-		assert!(result.is_err());
 	}
 
 	#[test]
@@ -1488,7 +1482,7 @@ mod tests {
 		// For demonstration, let's assume:
 		// - Tile (5, 10, 4) maps to longitude -67.5 and latitude 74.01954331
 		// - Tile (7, 12, 4) maps to longitude 0.0 and latitude 40.97989807
-		let expected_geo_bbox = GeoBBox(-67.5, -74.01954331150228, 0.0, -40.97989806962013);
+		let expected_geo_bbox = GeoBBox::new(-67.5, -74.01954331150228, 0.0, -40.97989806962013).unwrap();
 		assert_eq!(geo_bbox, expected_geo_bbox);
 
 		Ok(())

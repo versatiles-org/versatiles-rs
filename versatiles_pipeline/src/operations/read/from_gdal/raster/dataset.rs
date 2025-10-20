@@ -219,7 +219,7 @@ fn dataset_bbox(dataset: &gdal::Dataset) -> Result<GeoBBox> {
 	log::trace!("bounding box projected: {:?}", bbox);
 
 	// Coordinates seem to be flipped in OGREnvelope
-	let mut bbox = GeoBBox::new(bbox.MinY, bbox.MinX, bbox.MaxY, bbox.MaxX);
+	let mut bbox = GeoBBox::new(bbox.MinY, bbox.MinX, bbox.MaxY, bbox.MaxX)?;
 	bbox.limit_to_mercator();
 
 	log::trace!("bounding box: {:?}", bbox);
@@ -319,12 +319,12 @@ mod tests {
 			let mut ds_src = driver.create_with_band_type::<u8, _>("in memory dataset", size, size, channel_count)?;
 			ds_src.set_spatial_ref(&get_spatial_ref(4326)?)?;
 			let geotransform = [
-				bbox.0,
-				(bbox.2 - bbox.0) / size as f64,
+				bbox.x_min,
+				(bbox.x_max - bbox.x_min) / size as f64,
 				0.0,
-				bbox.3,
+				bbox.y_max,
 				0.0,
-				(bbox.1 - bbox.3) / size as f64,
+				(bbox.y_min - bbox.y_max) / size as f64,
 			];
 			ds_src.set_geo_transform(&geotransform)?;
 
@@ -443,7 +443,7 @@ mod tests {
 	#[case(4, ColorType::Rgba8)]
 	#[tokio::test(flavor = "multi_thread")]
 	async fn test_dataset_get_image2(#[case] channels: usize, #[case] expected_color: ColorType) {
-		let bbox_in = GeoBBox::new(14.0, 49.0, 24.0, 55.0);
+		let bbox_in = GeoBBox::new(14.0, 49.0, 24.0, 55.0).unwrap();
 		let ds = GdalDataset::from_testdata(bbox_in, channels).unwrap();
 		let image = ds.get_image(&bbox_in, 256, 256).await.unwrap().unwrap();
 		assert_eq!(image.width(), 256);

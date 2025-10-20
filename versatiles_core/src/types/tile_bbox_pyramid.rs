@@ -1,6 +1,9 @@
 //! This module defines the `TileBBoxPyramid` struct, which represents a pyramid of tile bounding boxes
 //! across multiple zoom levels. It provides methods to create, manipulate, and query these bounding boxes.
 
+use anyhow::Result;
+use versatiles_derive::context;
+
 use crate::{GeoBBox, GeoCenter, TileBBox, TileCoord};
 use std::array::from_fn;
 use std::fmt;
@@ -94,12 +97,12 @@ impl TileBBoxPyramid {
 	/// # Arguments
 	///
 	/// * `geo_bbox` - The geographical bounding box to intersect with.
-	pub fn intersect_geo_bbox(&mut self, geo_bbox: &GeoBBox) {
+	#[context("Failed to intersect {self} with {geo_bbox:?}")]
+	pub fn intersect_geo_bbox(&mut self, geo_bbox: &GeoBBox) -> Result<()> {
 		for (z, tile_bbox) in self.level_bbox.iter_mut().enumerate() {
-			tile_bbox
-				.intersect_with(&TileBBox::from_geo(z as u8, geo_bbox).unwrap())
-				.unwrap();
+			tile_bbox.intersect_with(&TileBBox::from_geo(z as u8, geo_bbox)?)?;
 		}
+		Ok(())
 	}
 
 	/// Expands each bounding box in the pyramid by the specified border offsets.
@@ -302,8 +305,8 @@ impl TileBBoxPyramid {
 	pub fn get_geo_center(&self) -> Option<GeoCenter> {
 		let bbox = self.get_geo_bbox()?;
 		let zoom = (self.get_level_min()? + 2).min(self.get_level_max()?);
-		let center_lon = f64::midpoint(bbox.0, bbox.2);
-		let center_lat = f64::midpoint(bbox.1, bbox.3);
+		let center_lon = f64::midpoint(bbox.x_min, bbox.x_max);
+		let center_lat = f64::midpoint(bbox.y_min, bbox.y_max);
 		Some(GeoCenter(center_lon, center_lat, zoom))
 	}
 	pub fn swap_xy(&mut self) {
@@ -412,7 +415,9 @@ mod tests {
 	#[test]
 	fn test_limit_by_geo_bbox() {
 		let mut pyramid = TileBBoxPyramid::new_full(8);
-		pyramid.intersect_geo_bbox(&GeoBBox(8.0653f64, 51.3563f64, 12.3528f64, 52.2564f64));
+		pyramid
+			.intersect_geo_bbox(&GeoBBox::new(8.0653f64, 51.3563f64, 12.3528f64, 52.2564f64).unwrap())
+			.unwrap();
 		let level_bboxes = pyramid
 			.iter_levels()
 			.map(std::string::ToString::to_string)
@@ -497,7 +502,9 @@ mod tests {
 		assert!(pyramid.is_empty());
 
 		let mut pyramid = TileBBoxPyramid::new_full(8);
-		pyramid.intersect_geo_bbox(&GeoBBox(-9., -5., 5., 10.));
+		pyramid
+			.intersect_geo_bbox(&GeoBBox::new(-9., -5., 5., 10.).unwrap())
+			.unwrap();
 		pyramid.add_border(1, 2, 3, 4);
 
 		let level_bboxes = pyramid
@@ -522,7 +529,7 @@ mod tests {
 
 	#[test]
 	fn test_from_geo_bbox() {
-		let bbox = GeoBBox(-10.0, -5.0, 10.0, 5.0);
+		let bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0).unwrap();
 		let pyramid = TileBBoxPyramid::from_geo_bbox(1, 3, &bbox);
 		let level_bboxes = pyramid
 			.iter_levels()
@@ -534,8 +541,8 @@ mod tests {
 	#[test]
 	fn test_intersect_geo_bbox() {
 		let mut pyramid = TileBBoxPyramid::new_full(5);
-		let geo_bbox = GeoBBox(-5.0, -2.0, 3.0, 4.0);
-		pyramid.intersect_geo_bbox(&geo_bbox);
+		let geo_bbox = GeoBBox::new(-5.0, -2.0, 3.0, 4.0).unwrap();
+		pyramid.intersect_geo_bbox(&geo_bbox).unwrap();
 		// Now we have a partial coverage at each level up to 5
 		assert!(!pyramid.is_empty());
 		// We won't check exact tile coords since that depends on the TileBBox logic,

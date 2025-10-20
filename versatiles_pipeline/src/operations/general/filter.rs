@@ -45,7 +45,7 @@ impl Operation {
 			}
 
 			if let Some(bbox) = args.bbox {
-				parameters.bbox_pyramid.intersect_geo_bbox(&GeoBBox::from(&bbox));
+				parameters.bbox_pyramid.intersect_geo_bbox(&GeoBBox::try_from(&bbox)?)?;
 			}
 
 			let mut tilejson = source.tilejson().clone();

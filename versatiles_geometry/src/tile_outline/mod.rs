@@ -20,11 +20,11 @@ impl TileOutline {
 	pub fn add_geo_bbox(&mut self, bbox: &GeoBBox) {
 		self.add_polygon(Polygon::new(
 			geo::LineString::from(vec![
-				(bbox.0, bbox.1),
-				(bbox.2, bbox.1),
-				(bbox.2, bbox.3),
-				(bbox.0, bbox.3),
-				(bbox.0, bbox.1),
+				(bbox.x_min, bbox.y_min),
+				(bbox.x_max, bbox.y_min),
+				(bbox.x_max, bbox.y_max),
+				(bbox.x_min, bbox.y_max),
+				(bbox.x_min, bbox.y_min),
 			]),
 			vec![],
 		));

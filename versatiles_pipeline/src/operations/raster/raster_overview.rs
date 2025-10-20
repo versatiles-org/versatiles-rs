@@ -283,7 +283,11 @@ mod tests {
 			TileBBoxPyramid::new_full(level_base),
 		);
 
-		let pyramid = TileBBoxPyramid::from_geo_bbox(level_base, level_base, &GeoBBox(2.224, 48.815, 2.47, 48.903));
+		let pyramid = TileBBoxPyramid::from_geo_bbox(
+			level_base,
+			level_base,
+			&GeoBBox::new(2.224, 48.815, 2.47, 48.903).unwrap(),
+		);
 		Operation {
 			parameters,
 			source: Box::new(DummyImageSource::new("F00.png", Some(pyramid), tile_size).unwrap()),

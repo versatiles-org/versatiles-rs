@@ -26,6 +26,7 @@ use std::{
 	f64::consts::PI as PI32,
 	fmt::{self, Debug},
 };
+use versatiles_derive::context;
 
 /// A 3D tile coordinate in a Web Mercator tile pyramid, with zoom level, x, and y indices.
 ///
@@ -48,12 +49,13 @@ impl TileCoord {
 		Ok(TileCoord { x, y, level })
 	}
 
+	#[context("Failed to convert geo coordinates ({x}, {y}, {z}) to TileCoord")]
 	pub fn from_geo(x: f64, y: f64, z: u8) -> Result<TileCoord> {
-		ensure!(z <= 31, "z {z} must be <= 31");
-		ensure!(x >= -180., "x must be >= -180");
-		ensure!(x <= 180., "x must be <= 180");
-		ensure!(y >= -90., "y must be >= -90");
-		ensure!(y <= 90., "y must be <= 90");
+		ensure!(z <= 31, "z ({z}) must be <= 31");
+		ensure!(x >= -180., "x ({x}) must be >= -180");
+		ensure!(x <= 180., "x ({x}) must be <= 180");
+		ensure!(y >= -90., "y ({y}) must be >= -90");
+		ensure!(y <= 90., "y ({y}) must be <= 90");
 
 		let zoom: f64 = 2.0f64.powi(i32::from(z));
 		let x = zoom * (x / 360.0 + 0.5);

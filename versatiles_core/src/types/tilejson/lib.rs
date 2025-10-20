@@ -253,7 +253,7 @@ impl TileJSON {
 	/// ```
 	/// # use versatiles_core::{TileJSON, GeoBBox};
 	/// let mut tj = TileJSON::default();
-	/// tj.limit_bbox(GeoBBox(-180.0, -90.0, 0.0, 10.0));
+	/// tj.limit_bbox(GeoBBox::new(-180.0, -90.0, 0.0, 10.0).unwrap());
 	/// // If `tj.bounds` was None, now it's set; otherwise they are intersected.
 	/// ```
 	pub fn limit_bbox(&mut self, bbox: GeoBBox) {
@@ -384,11 +384,6 @@ impl TileJSON {
 
 		// 3.4 attribution - optional
 		self.values.check_optional_string("attribution")?;
-
-		// 3.5 bounds - optional
-		if let Some(b) = self.bounds {
-			b.check()?;
-		}
 
 		// 3.6 center - optional
 		if let Some(c) = self.center {
@@ -605,8 +600,8 @@ mod tests {
 	#[test]
 	fn should_intersect_existing_bounds_with_given_bbox() {
 		let mut tj = TileJSON::default();
-		let existing_bbox = GeoBBox(-10.0, -5.0, 10.0, 5.0);
-		let new_bbox = GeoBBox(-15.0, -10.0, 0.0, 2.0);
+		let existing_bbox = GeoBBox::new(-10.0, -5.0, 10.0, 5.0).unwrap();
+		let new_bbox = GeoBBox::new(-15.0, -10.0, 0.0, 2.0).unwrap();
 		tj.bounds = Some(existing_bbox);
 		tj.limit_bbox(new_bbox);
 
@@ -619,7 +614,7 @@ mod tests {
 	fn should_update_from_pyramid_and_set_bounds_and_zoom() {
 		let mut tj = TileJSON::default();
 		// If we have no bounds, it should set them. If we have no minzoom/maxzoom, it sets them.
-		let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(2, 12, &GeoBBox(-180.0, -90.0, 180.0, 90.0));
+		let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(2, 12, &GeoBBox::new(-180.0, -90.0, 180.0, 90.0).unwrap());
 		tj.update_from_pyramid(&bbox_pyramid);
 
 		// Bounds
@@ -751,14 +746,14 @@ mod tests {
 	#[test]
 	fn should_merge_bounds_center_and_additional_values() -> Result<()> {
 		let mut tj1 = TileJSON {
-			bounds: Some(GeoBBox(0.0, 0.0, 5.0, 5.0)),
+			bounds: Some(GeoBBox::new(0.0, 0.0, 5.0, 5.0).unwrap()),
 			center: Some(GeoCenter(1.0, 1.0, 2)),
 			..Default::default()
 		};
 		tj1.set_string("foo", "bar")?;
 
 		let mut tj2 = TileJSON {
-			bounds: Some(GeoBBox(-5.0, -5.0, 3.0, 3.0)),
+			bounds: Some(GeoBBox::new(-5.0, -5.0, 3.0, 3.0).unwrap()),
 			center: Some(GeoCenter(2.0, 2.0, 4)),
 			..Default::default()
 		};
@@ -767,7 +762,7 @@ mod tests {
 		tj1.merge(&tj2)?;
 
 		// Bounds should be the union of both
-		assert_eq!(tj1.bounds, Some(GeoBBox(-5.0, -5.0, 5.0, 5.0)));
+		assert_eq!(tj1.bounds, Some(GeoBBox::new(-5.0, -5.0, 5.0, 5.0).unwrap()));
 		// Center should be overwritten by the other
 		assert_eq!(tj1.center, Some(GeoCenter(2.0, 2.0, 4)));
 		// Original value should remain, and new value should be inserted
@@ -850,7 +845,7 @@ mod tests {
 	fn should_update_from_reader_parameters_including_format_and_schema() -> Result<()> {
 		let mut tj = TileJSON::default();
 		// Prepare reader parameters
-		let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(1, 4, &GeoBBox(-180.0, -90.0, 180.0, 90.0));
+		let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(1, 4, &GeoBBox::new(-180.0, -90.0, 180.0, 90.0).unwrap());
 		let rp = TilesReaderParameters {
 			bbox_pyramid,
 			tile_format: TileFormat::PNG,

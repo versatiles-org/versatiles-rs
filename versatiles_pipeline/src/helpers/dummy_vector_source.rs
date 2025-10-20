@@ -129,7 +129,11 @@ mod tests {
 	async fn test_get_tile_blob() {
 		let source = DummyVectorSource::new(
 			&[("layer1", &[&[("key1", "value1"), ("key2", "value2")]])],
-			Some(TileBBoxPyramid::from_geo_bbox(0, 8, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
+			Some(TileBBoxPyramid::from_geo_bbox(
+				0,
+				8,
+				&GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap(),
+			)),
 		);
 
 		assert_eq!(source.source_name(), "DummyVectorSource");
@@ -156,7 +160,11 @@ mod tests {
 	fn test_dummy_vector_source_tilejson() {
 		let source = DummyVectorSource::new(
 			&[("layer1", &[&[("key1", "value1")]])],
-			Some(TileBBoxPyramid::from_geo_bbox(3, 15, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
+			Some(TileBBoxPyramid::from_geo_bbox(
+				3,
+				15,
+				&GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap(),
+			)),
 		);
 		assert_eq!(
 			source.tilejson().as_pretty_lines(100),

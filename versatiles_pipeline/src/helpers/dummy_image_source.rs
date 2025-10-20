@@ -142,7 +142,11 @@ mod tests {
 	async fn test_dummy_image_source_get_tile_blob() {
 		let source = DummyImageSource::new(
 			"abcd.png",
-			Some(TileBBoxPyramid::from_geo_bbox(0, 8, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
+			Some(TileBBoxPyramid::from_geo_bbox(
+				0,
+				8,
+				&GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap(),
+			)),
 			4,
 		)
 		.unwrap();
@@ -157,7 +161,11 @@ mod tests {
 	async fn test_dummy_image_source_tilejson() {
 		let source = DummyImageSource::new(
 			"abcd.png",
-			Some(TileBBoxPyramid::from_geo_bbox(3, 15, &GeoBBox(-180.0, -90.0, 0.0, 0.0))),
+			Some(TileBBoxPyramid::from_geo_bbox(
+				3,
+				15,
+				&GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap(),
+			)),
 			4,
 		)
 		.unwrap();

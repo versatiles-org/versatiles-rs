@@ -1,6 +1,7 @@
 use anyhow::{Result, bail};
 use versatiles_container::{TilesConverterParameters, convert_tiles_container, get_reader};
 use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCompression, config::Config};
+use versatiles_derive::context;
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true)]
@@ -88,6 +89,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	Ok(())
 }
 
+#[context("Failed to get bounding box pyramid")]
 fn get_bbox_pyramid(arguments: &Subcommand) -> Result<Option<TileBBoxPyramid>> {
 	if arguments.min_zoom.is_none() && arguments.max_zoom.is_none() && arguments.bbox.is_none() {
 		return Ok(None);
@@ -115,7 +117,7 @@ fn get_bbox_pyramid(arguments: &Subcommand) -> Result<Option<TileBBoxPyramid>> {
 			bail!("bbox must contain exactly 4 numbers, but instead i'v got: {bbox:?}");
 		}
 
-		bbox_pyramid.intersect_geo_bbox(&GeoBBox::try_from(values)?);
+		bbox_pyramid.intersect_geo_bbox(&GeoBBox::try_from(values)?)?;
 
 		if let Some(b) = arguments.bbox_border {
 			bbox_pyramid.add_border(b, b, b, b);

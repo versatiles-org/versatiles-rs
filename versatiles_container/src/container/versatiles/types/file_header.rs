@@ -47,8 +47,6 @@ impl FileHeader {
 			zoom_range[1]
 		);
 
-		bbox.check()?;
-
 		Ok(FileHeader {
 			zoom_range,
 			bbox: bbox.as_array().map(|v| (v * BBOX_SCALE) as i32),
@@ -207,7 +205,13 @@ mod tests {
 	#[allow(clippy::zero_prefixed_literal)]
 	fn conversion() {
 		let test = |tile_format: &TileFormat, compression: &TileCompression, a: u64, b: u64, c: u64, d: u64| {
-			let mut header1 = FileHeader::new(tile_format, compression, [0, 0], &GeoBBox(0.0, 0.0, 0.0, 0.0)).unwrap();
+			let mut header1 = FileHeader::new(
+				tile_format,
+				compression,
+				[0, 0],
+				&GeoBBox::new(0.0, 0.0, 0.0, 0.0).unwrap(),
+			)
+			.unwrap();
 			header1.meta_range = ByteRange::new(a, b);
 			header1.blocks_range = ByteRange::new(c, d);
 
@@ -235,7 +239,7 @@ mod tests {
 		let tf = TileFormat::PNG;
 		let comp = Gzip;
 		let zoom = [10, 14];
-		let bbox = GeoBBox(-180.0, -85.0511, 180.0, 85.0511);
+		let bbox = GeoBBox::new(-180.0, -85.0511, 180.0, 85.0511).unwrap();
 		let header = FileHeader::new(&tf, &comp, zoom, &bbox).unwrap();
 
 		assert_eq!(header.zoom_range, zoom);
@@ -252,7 +256,7 @@ mod tests {
 			&TileFormat::MVT,
 			&Gzip,
 			[3, 8],
-			&GeoBBox(-180.0, -85.051_13, 180.0, 85.051_13),
+			&GeoBBox::new(-180.0, -85.051_13, 180.0, 85.051_13)?,
 		)?;
 
 		let blob = header.to_blob()?;
@@ -312,7 +316,7 @@ mod tests {
 
 		let compression = Gzip;
 		let zoom_range = [0, 0];
-		let bbox = GeoBBox(0.0, 0.0, 0.0, 0.0);
+		let bbox = GeoBBox::new(0.0, 0.0, 0.0, 0.0).unwrap();
 
 		let tile_formats = vec![BIN, PNG, JPG, WEBP, AVIF, SVG, MVT, GEOJSON, TOPOJSON, JSON];
 
@@ -330,7 +334,7 @@ mod tests {
 	fn all_compressions() {
 		let tile_format = TileFormat::PNG;
 		let zoom_range = [0, 0];
-		let bbox = GeoBBox(0.0, 0.0, 0.0, 0.0);
+		let bbox = GeoBBox::new(0.0, 0.0, 0.0, 0.0).unwrap();
 
 		let compressions = vec![Uncompressed, Gzip, Brotli];
 
@@ -359,10 +363,15 @@ mod tests {
 
 	#[test]
 	fn unknown_tile_format() {
-		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &Gzip, [0, 0], &GeoBBox(0.0, 0.0, 0.0, 0.0))
-			.unwrap()
-			.to_blob()
-			.unwrap();
+		let mut invalid_blob = FileHeader::new(
+			&TileFormat::PNG,
+			&Gzip,
+			[0, 0],
+			&GeoBBox::new(0.0, 0.0, 0.0, 0.0).unwrap(),
+		)
+		.unwrap()
+		.to_blob()
+		.unwrap();
 		invalid_blob.as_mut_slice()[14] = 0xFF; // Set an unknown tile format value
 
 		let result = catch_unwind(|| {
@@ -374,10 +383,15 @@ mod tests {
 
 	#[test]
 	fn unknown_compression() {
-		let mut invalid_blob = FileHeader::new(&TileFormat::PNG, &Gzip, [0, 0], &GeoBBox(0.0, 0.0, 0.0, 0.0))
-			.unwrap()
-			.to_blob()
-			.unwrap();
+		let mut invalid_blob = FileHeader::new(
+			&TileFormat::PNG,
+			&Gzip,
+			[0, 0],
+			&GeoBBox::new(0.0, 0.0, 0.0, 0.0).unwrap(),
+		)
+		.unwrap()
+		.to_blob()
+		.unwrap();
 		invalid_blob.as_mut_slice()[15] = 0xFF; // Set an unknown compression value
 
 		let result = catch_unwind(|| {
