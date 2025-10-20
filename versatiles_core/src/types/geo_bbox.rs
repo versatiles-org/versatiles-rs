@@ -371,31 +371,33 @@ impl TryFrom<Vec<f64>> for GeoBBox {
 	}
 }
 
-impl From<[f64; 4]> for GeoBBox {
+impl TryFrom<[f64; 4]> for GeoBBox {
+	type Error = anyhow::Error;
 	/// Converts a fixed-size array of four `f64` values into a `GeoBBox`.
 	///
 	/// # Examples
 	/// ```
 	/// use versatiles_core::GeoBBox;
-	/// let bbox = GeoBBox::from([-10.0, -5.0, 10.0, 5.0]);
+	/// let bbox = GeoBBox::try_from([-10.0, -5.0, 10.0, 5.0]).unwrap();
 	/// assert_eq!(bbox.as_tuple(), (-10.0, -5.0, 10.0, 5.0));
 	/// ```
-	fn from(input: [f64; 4]) -> Self {
-		GeoBBox::new(input[0], input[1], input[2], input[3]).unwrap()
+	fn try_from(input: [f64; 4]) -> Result<Self> {
+		GeoBBox::new(input[0], input[1], input[2], input[3])
 	}
 }
 
-impl<T: Copy + Into<f64>> From<&[T; 4]> for GeoBBox {
+impl<T: Copy + Into<f64>> TryFrom<&[T; 4]> for GeoBBox {
+	type Error = anyhow::Error;
 	/// Converts a fixed-size array of four numbers into a `GeoBBox`.
 	///
 	/// # Examples
 	/// ```
 	/// use versatiles_core::GeoBBox;
-	/// let bbox = GeoBBox::from(&[-10, -5, 10, 5]);
+	/// let bbox = GeoBBox::try_from(&[-10, -5, 10, 5]).unwrap();
 	/// assert_eq!(bbox.as_tuple(), (-10.0, -5.0, 10.0, 5.0));
 	/// ```
-	fn from(input: &[T; 4]) -> Self {
-		GeoBBox::new(input[0].into(), input[1].into(), input[2].into(), input[3].into()).unwrap()
+	fn try_from(input: &[T; 4]) -> Result<Self> {
+		GeoBBox::new(input[0].into(), input[1].into(), input[2].into(), input[3].into())
 	}
 }
 
@@ -544,16 +546,16 @@ mod tests {
 	}
 
 	#[test]
-	fn test_from_array() {
+	fn test_try_from_array() {
 		let input = [-10.0, -5.0, 10.0, 5.0];
-		let bbox = GeoBBox::from(input);
+		let bbox = GeoBBox::try_from(input).unwrap();
 		assert_eq!(bbox.as_tuple(), (-10.0, -5.0, 10.0, 5.0));
 	}
 
 	#[test]
-	fn test_from_array_ref() {
+	fn test_try_from_array_ref() {
 		let input = &[-10.0, -5.0, 10.0, 5.0];
-		let bbox = GeoBBox::from(input);
+		let bbox = GeoBBox::try_from(input).unwrap();
 		assert_eq!(bbox.as_tuple(), (-10.0, -5.0, 10.0, 5.0));
 	}
 
@@ -646,7 +648,7 @@ mod tests {
 	#[case([-180, -1, 180, 1], [-20037508, -111325, 20037508, 111325])]
 	#[case([-1, -90, 1, 90], [-111319, -20037508, 111319, 20037508])]
 	fn test_bbox_to_mercator(#[case] input: [i32; 4], #[case] expected: [i32; 4]) {
-		let mercator_bbox = GeoBBox::from(&input).to_mercator();
+		let mercator_bbox = GeoBBox::try_from(&input).unwrap().to_mercator();
 		assert_eq!(
 			[
 				mercator_bbox[0] as i32,
@@ -666,7 +668,8 @@ mod tests {
 	#[case((MAX_MERCATOR_LNG,MAX_MERCATOR_LAT),(MAX_MERCATOR,MAX_MERCATOR))]
 	#[case((MAX_MERCATOR_LNG-1e-8,MAX_MERCATOR_LAT-1e-8),(MAX_MERCATOR-1,MAX_MERCATOR-13))]
 	fn test_bbox_to_mercator_precision(#[case] point_deg: (f64, f64), #[case] point_mm: (i64, i64)) {
-		let mercator_bbox = GeoBBox::from(&[-point_deg.0, -point_deg.1, point_deg.0, point_deg.1])
+		let mercator_bbox = GeoBBox::try_from(&[-point_deg.0, -point_deg.1, point_deg.0, point_deg.1])
+			.unwrap()
 			.to_mercator()
 			.map(|v| (v * 1_000.0).round() as i64);
 		assert_eq!(mercator_bbox, [-point_mm.0, -point_mm.1, point_mm.0, point_mm.1]);

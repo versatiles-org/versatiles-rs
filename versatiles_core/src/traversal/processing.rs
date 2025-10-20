@@ -278,7 +278,7 @@ mod tests {
 		size_write_min: u32,
 		size_write_max: u32,
 	) -> Vec<String> {
-		let pyramid = TileBBoxPyramid::from_geo_bbox(13, 15, &GeoBBox::from(&[12, 13, 14, 15]));
+		let pyramid = TileBBoxPyramid::from_geo_bbox(13, 15, &GeoBBox::new(12.0, 13.0, 14.0, 15.0).unwrap());
 		let read = Traversal::new(order_read, size_read_min, size_read_max).unwrap();
 		let write = Traversal::new(order_write, size_write_min, size_write_max).unwrap();
 		let steps = translate_traversals(&pyramid, &read, &write).unwrap();

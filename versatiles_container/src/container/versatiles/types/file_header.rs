@@ -295,7 +295,7 @@ mod tests {
 		let should_panic = |zoom: [u8; 2], bbox: [f64; 4]| {
 			assert!(
 				catch_unwind(|| {
-					FileHeader::new(&tf, &comp, zoom, &GeoBBox::from(&bbox)).unwrap();
+					FileHeader::new(&tf, &comp, zoom, &GeoBBox::try_from(&bbox).unwrap()).unwrap();
 				})
 				.is_err()
 			)

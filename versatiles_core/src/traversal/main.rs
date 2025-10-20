@@ -154,7 +154,7 @@ mod tests {
 	#[test]
 	fn test_traverse_pyramid() {
 		fn test(traversal_order: TraversalOrder, size: u32, bbox: [i16; 4], min_level: u8, max_level: u8) -> Vec<String> {
-			let pyramid = TileBBoxPyramid::from_geo_bbox(min_level, max_level, &GeoBBox::from(&bbox));
+			let pyramid = TileBBoxPyramid::from_geo_bbox(min_level, max_level, &GeoBBox::try_from(&bbox).unwrap());
 			let traversal = Traversal {
 				order: traversal_order,
 				size: TraversalSize::new(1, size).unwrap(),
