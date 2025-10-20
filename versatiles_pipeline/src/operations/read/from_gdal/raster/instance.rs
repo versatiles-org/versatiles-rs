@@ -42,8 +42,7 @@ impl Instance {
 	) -> Result<Dataset> {
 		log::trace!("reproject_image started for size={width}x{height}");
 
-		let bbox_arr = bbox.wgs84_as_mercator();
-		let src_h = self.dataset.c_dataset();
+		let bbox_arr = bbox.to_mercator();
 		let mut dst_ds = band_mapping.create_mem_dataset(width, height)?;
 		let geo_transform: GeoTransform = [
 			bbox_arr[0],

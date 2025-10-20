@@ -318,7 +318,7 @@ impl GeoBBox {
 	/// Input is interpreted as `[west, south, east, north]` in **degrees** and is
 	/// clamped to the valid Web‑Mercator domain
 	/// (`-85.05112877980659° ≤ lat ≤ 85.05112877980659°`, `-180° ≤ lon ≤ 180°`).
-	pub fn wgs84_as_mercator(self: &GeoBBox) -> [f64; 4] {
+	pub fn to_mercator(self: &GeoBBox) -> [f64; 4] {
 		// Spherical Mercator radius (WGS84 semi-major axis)
 		fn x_from_lon(lon_deg: f64) -> f64 {
 			let lon = lon_deg.max(-MAX_MERCATOR_LNG).min(MAX_MERCATOR_LNG);
@@ -407,8 +407,7 @@ impl<T: Copy + Into<f64>> From<&[T; 4]> for GeoBBox {
 
 #[cfg(test)]
 mod tests {
-	use super::GeoBBox;
-	use anyhow::Result;
+	use super::*;
 	use rstest::rstest;
 
 	#[test]
@@ -634,7 +633,7 @@ mod tests {
 	fn test_wgs84_as_mercator_world_bounds() {
 		let bbox = GeoBBox::new(-180.0, -90.0, 180.0, 90.0);
 		// Expected Mercator square ~±20037508.342789244
-		let [xmin, ymin, xmax, ymax] = bbox.wgs84_as_mercator();
+		let [xmin, ymin, xmax, ymax] = bbox.to_mercator();
 		let e = 20_037_508.342789244_f64;
 		assert!((xmin + e).abs() < 2.0, "xmin={xmin}");
 		assert!((ymin + e).abs() < 2.0, "ymin={ymin}");
@@ -645,7 +644,7 @@ mod tests {
 	#[test]
 	fn test_wgs84_as_mercator_midlat() {
 		let bbox = GeoBBox::new(-10.0, 40.0, 10.0, 50.0);
-		let [xmin, ymin, xmax, ymax] = bbox.wgs84_as_mercator();
+		let [xmin, ymin, xmax, ymax] = bbox.to_mercator();
 		assert_eq!(xmin as i32, -1_113_194);
 		assert_eq!(xmax as i32, 1_113_194);
 		assert_eq!(ymin as i32, 4_865_942);
@@ -657,7 +656,7 @@ mod tests {
 	#[case([-200, -1, 200, 1], [-20037508, -111325, 20037508, 111325])]
 	#[case([-1, -100, 1, 100], [-111319, -20037508, 111319, 20037508])]
 	fn test_bbox_to_mercator(#[case] input: [i32; 4], #[case] expected: [i32; 4]) {
-		let mercator_bbox = GeoBBox::from(&input).wgs84_as_mercator();
+		let mercator_bbox = GeoBBox::from(&input).to_mercator();
 		assert_eq!(
 			[
 				mercator_bbox[0] as i32,
@@ -667,5 +666,19 @@ mod tests {
 			],
 			expected
 		);
+	}
+
+	static MAX_MERCATOR: i64 = 20_037_508_343;
+
+	#[rstest]
+	#[case((0.0,0.0),(0,0))]
+	#[case((1e-8,1e-8),(1,1))]
+	#[case((MAX_MERCATOR_LNG,MAX_MERCATOR_LAT),(MAX_MERCATOR,MAX_MERCATOR))]
+	#[case((MAX_MERCATOR_LNG-1e-8,MAX_MERCATOR_LAT-1e-8),(MAX_MERCATOR-1,MAX_MERCATOR-13))]
+	fn test_bbox_to_mercator_precision(#[case] point_deg: (f64, f64), #[case] point_mm: (i64, i64)) {
+		let mercator_bbox = GeoBBox::from(&[-point_deg.0, -point_deg.1, point_deg.0, point_deg.1])
+			.to_mercator()
+			.map(|v| (v * 1_000.0).round() as i64);
+		assert_eq!(mercator_bbox, [-point_mm.0, -point_mm.1, point_mm.0, point_mm.1]);
 	}
 }
