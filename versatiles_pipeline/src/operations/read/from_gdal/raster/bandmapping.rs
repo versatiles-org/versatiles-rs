@@ -215,8 +215,8 @@ impl BandMapping {
 			options.panDstBands = gdal_sys::CPLMalloc(n) as *mut i32;
 
 			for (i, &band_index) in self.map.iter().enumerate() {
-				options.panSrcBands.offset(i as isize).write(band_index as i32);
-				options.panDstBands.offset(i as isize).write((i + 1) as i32);
+				options.panSrcBands.add(i).write(band_index as i32);
+				options.panDstBands.add(i).write((i + 1) as i32);
 			}
 		}
 	}

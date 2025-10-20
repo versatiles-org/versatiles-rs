@@ -41,7 +41,7 @@ pub trait DynamicImageTraitConvert {
 impl DynamicImageTraitConvert for DynamicImage {
 	fn from_fn<const N: usize>(width: usize, height: usize, mut f: impl FnMut(u32, u32) -> [u8; N]) -> DynamicImage {
 		assert!((1..=4).contains(&N), "Unsupported channel count for from_fn: {N}");
-		let px_count = (width as usize) * (height as usize);
+		let px_count = width * height;
 		let mut data = Vec::with_capacity(px_count * N);
 		for y in 0..height as u32 {
 			for x in 0..width as u32 {

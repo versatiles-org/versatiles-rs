@@ -63,11 +63,7 @@ impl Instance {
 			options.hSrcDS = h_src_ds;
 			options.hDstDS = h_dst_ds;
 
-			CSLSetNameValue(
-				options.papszWarpOptions,
-				b"NUM_THREADS\0".as_ptr() as *const i8,
-				b"ALL_CPUS\0".as_ptr() as *const i8,
-			);
+			CSLSetNameValue(options.papszWarpOptions, c"NUM_THREADS".as_ptr(), c"ALL_CPUS".as_ptr());
 
 			band_mapping.setup_gdal_warp_options(&mut options);
 
@@ -77,7 +73,7 @@ impl Instance {
 			options.pTransformerArg = GDALCreateGenImgProjTransformer2(h_src_ds, h_dst_ds, core::ptr::null_mut());
 			options.pfnTransformer = Some(GDALGenImgProjTransform);
 
-			let operation: GDALWarpOperationH = GDALCreateWarpOperation(&mut options);
+			let operation: GDALWarpOperationH = GDALCreateWarpOperation(&options);
 
 			let rv = GDALChunkAndWarpMulti(operation, 0, 0, width as i32, height as i32);
 
