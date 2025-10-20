@@ -1,11 +1,7 @@
 use super::{BandMapping, ResampleAlg};
 use anyhow::{Result, bail};
 use gdal::{Dataset, GeoTransform};
-use gdal_sys::{CPLErr, CPLGetLastErrorMsg, GDALReprojectImage};
-use std::{
-	ptr::{null, null_mut},
-	sync::Arc,
-};
+use std::{fmt::Debug, sync::Arc};
 use versatiles_core::GeoBBox;
 
 #[derive(Debug)]
@@ -42,40 +38,82 @@ impl Instance {
 	) -> Result<Dataset> {
 		log::trace!("reproject_image started for size={width}x{height}");
 
-		println!("bbox: {:?}", bbox);
+		//println!("bbox: {:?}", bbox);
 		let bbox_mer = bbox.to_mercator();
-		println!("bbox mercator: {:?}", bbox_mer);
+		//println!("bbox mercator: {:?}", bbox_mer);
 
 		let mut dst_ds = band_mapping.create_mem_dataset(width, height)?;
+		//let geo_transform: GeoTransform = [
+		//	bbox_mer[0],
+		//	(bbox_mer[2] - bbox_mer[0]) / height as f64,
+		//	0.0,
+		//	bbox_mer[3],
+		//	0.0,
+		//	(bbox_mer[1] - bbox_mer[3]) / width as f64,
+		//];
 		let geo_transform: GeoTransform = [
-			bbox_mer[0],
-			(bbox_mer[2] - bbox_mer[0]) / width as f64,
+			bbox_mer[2],
 			0.0,
-			bbox_mer[3],
+			(bbox_mer[0] - bbox_mer[2]) / height as f64,
+			bbox_mer[1],
+			(bbox_mer[3] - bbox_mer[1]) / width as f64,
 			0.0,
-			(bbox_mer[1] - bbox_mer[3]) / height as f64,
 		];
-		println!("set_geo_transform dst: {:?}", geo_transform);
+
 		dst_ds.set_geo_transform(&geo_transform)?;
 
+		let h_src_ds = self.dataset.c_dataset();
+		let h_dst_ds = dst_ds.c_dataset();
+
+		println!("geo_transform src: {:?}", self.dataset.geo_transform()?);
+		println!("geo_transform dst: {:?}", dst_ds.geo_transform()?);
+
 		unsafe {
-			let rv = GDALReprojectImage(
-				self.dataset.c_dataset(),
-				null(),
-				dst_ds.c_dataset(),
-				null(),
-				ResampleAlg::default().as_gdal(),
-				0.0,
-				0.0,
-				None,
-				null_mut(),
-				null_mut(),
-			);
+			use gdal_sys::*;
+
+			let mut options: GDALWarpOptions = *GDALCreateWarpOptions();
+			options.hSrcDS = h_src_ds;
+			options.hDstDS = h_dst_ds;
+
+			//CSLSetNameValue(
+			//	options.papszWarpOptions,
+			//	b"NUM_THREADS\0".as_ptr() as *const i8,
+			//	b"ALL_CPUS\0".as_ptr() as *const i8,
+			//);
+
+			band_mapping.setup_gdal_warp_options(&mut options);
+
+			options.eResampleAlg = ResampleAlg::default().as_gdal();
+			options.dfWarpMemoryLimit = 512.0 * 1024.0 * 1024.0; // 512 MB
+
+			options.pTransformerArg = GDALCreateGenImgProjTransformer2(h_src_ds, h_dst_ds, core::ptr::null_mut());
+			options.pfnTransformer = Some(GDALGenImgProjTransform);
+
+			let operation: GDALWarpOperationH = GDALCreateWarpOperation(&mut options);
+
+			let rv = GDALChunkAndWarpMulti(operation, 0, 0, width as i32, height as i32);
+
+			//GDALDestroyWarpOperation(operation);
+			//GDALDestroyGenImgProjTransformer(options.pTransformerArg);
+			//GDALClose(h_dst_ds);
 
 			if rv != CPLErr::CE_None {
 				bail!("{:?}", CPLGetLastErrorMsg());
 			}
 		}
+
+		let geo_transform: GeoTransform = [
+			bbox_mer[0],
+			(bbox_mer[2] - bbox_mer[0]) / height as f64,
+			0.0,
+			bbox_mer[3],
+			0.0,
+			(bbox_mer[1] - bbox_mer[3]) / width as f64,
+		];
+		//println!("set_geo_transform dst: {:?}", geo_transform);
+		dst_ds.set_geo_transform(&geo_transform)?;
+
+		//println!("get_geo_transform dst: {:?}", dst_ds.geo_transform()?);
 
 		self.dataset.create_copy(
 			&gdal::DriverManager::get_driver_by_name("GTiff")?,

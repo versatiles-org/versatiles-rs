@@ -201,6 +201,24 @@ impl BandMapping {
 
 		Ok(dst)
 	}
+
+	/// Setup GDAL warp options to apply this band mapping during reprojection.
+	/// # Safety
+	/// This function modifies the provided `GDALWarpOptions` structure.
+	pub unsafe fn setup_gdal_warp_options(&self, options: &mut gdal_sys::GDALWarpOptions) {
+		options.nBandCount = self.len() as i32;
+
+		unsafe {
+			let n = std::mem::size_of::<i32>() * self.len();
+			options.panSrcBands = gdal_sys::CPLMalloc(n) as *mut i32;
+			options.panDstBands = gdal_sys::CPLMalloc(n) as *mut i32;
+
+			for (i, &band_index) in self.map.iter().enumerate() {
+				options.panSrcBands.offset(i as isize).write(band_index as i32);
+				options.panDstBands.offset(i as isize).write((i + 1) as i32);
+			}
+		}
+	}
 }
 
 impl Debug for BandMapping {

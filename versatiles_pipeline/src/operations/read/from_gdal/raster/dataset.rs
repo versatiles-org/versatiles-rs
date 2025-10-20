@@ -332,14 +332,13 @@ mod tests {
 				(bbox.1 - bbox.3) / size as f64,
 			];
 			ds_src.set_geo_transform(&geotransform)?;
-			println!("set_geo_transform src: {:?}", geotransform);
 
 			let mut parameters = vec![];
 			for band_index in 1..=channel_count {
 				parameters.push(versatiles_image::MarkerParameters {
 					offset: 0.0,
 					scale: 200.0,
-					angle: 30.0 + band_index as f64 * 60.0,
+					angle: 0.0 + (band_index as f64 - 1.0) * 90.0,
 				})
 			}
 			let image = DynamicImage::new_marker(&parameters);
@@ -428,10 +427,10 @@ mod tests {
 	#[case(3, ColorType::Rgb8)]
 	#[tokio::test(flavor = "multi_thread")]
 	async fn test_dataset_get_image2(#[case] channels: usize, #[case] expected_color: ColorType) {
-		let bbox_in = GeoBBox::new(0.0, 0.0, 90.0, 45.0);
+		let bbox_in = GeoBBox::new(5.85, 47.27, 15.03, 55.07);
 		let ds = GdalDataset::from_testdata(bbox_in, channels).unwrap();
 		let image = ds
-			.get_image(&GeoBBox::new(-90.0, 0.0, 90.0, 45.0), 512, 256)
+			.get_image(&GeoBBox::new(0.0, 0.0, 60.0, 60.0), 256, 256)
 			.await
 			.unwrap()
 			.unwrap();
