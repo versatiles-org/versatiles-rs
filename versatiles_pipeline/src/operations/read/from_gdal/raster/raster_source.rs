@@ -185,12 +185,10 @@ impl RasterSource {
 mod tests {
 	use super::super::get_spatial_ref;
 	use super::*;
-	use anyhow::anyhow;
 	use gdal::DriverManager;
 	use imageproc::image::ColorType;
 	use rstest::rstest;
 	use std::vec;
-	use versatiles_core::TileCoord;
 
 	impl RasterSource {
 		pub fn from_testdata(bbox: GeoBBox, channel_count: usize) -> Result<RasterSource> {
@@ -267,61 +265,6 @@ mod tests {
 				max_reuse_gdal: 1,
 			})
 		}
-	}
-
-	#[tokio::test(flavor = "multi_thread")]
-	async fn test_dataset_get_image() -> Result<()> {
-		async fn gradient_test(level: u8, x: u32, y: u32) -> Result<[Vec<u8>; 2]> {
-			// Build a `Operation` that points at `testdata/gradient.tif`.
-			// We keep it in‑memory (no factory) and map bands 1‑2‑3 → RGB.
-			let coord = TileCoord::new(level, x, y)?;
-
-			let dataset = RasterSource::new(&PathBuf::from("../testdata/gradient.tif"), 65535).await?;
-
-			// Extract a 7×7 tile and gather the RGB bytes.
-			let image = dataset
-				.get_image(&coord.to_geo_bbox(), 7, 7)
-				.await?
-				.ok_or(anyhow!("get_image failed"))?;
-
-			fn extract(mut cb: impl FnMut(usize) -> u8) -> Vec<u8> {
-				(0..7)
-					.map(|i| match cb(i) {
-						63 => 64,
-						127 => 128,
-						191 => 192,
-						v => v,
-					})
-					.collect::<Vec<_>>()
-			}
-
-			// Return:
-			//   [
-			//     row‑3‑of‑red‑channel (x coordinate),
-			//     column‑3‑of‑green‑channel (y coordinate)
-			//   ]
-			let pixels = image.iter_pixels().collect::<Vec<_>>();
-			Ok([extract(|i| pixels[i + 21][0]), extract(|i| pixels[i * 7 + 3][1])])
-		}
-
-		// ─── zoom‑0 full‑world tile should be a uniform gradient ───
-		assert_eq!(
-			gradient_test(0, 0, 0).await?,
-			[[21, 54, 91, 128, 164, 201, 234], [16, 27, 64, 128, 192, 228, 239]]
-		);
-
-		// ─── zoom‑1: four quadrants of the gradient ───
-		let row0 = [10, 27, 45, 64, 82, 100, 118];
-		let row1 = [137, 155, 173, 192, 210, 228, 245];
-		let col0 = [10, 14, 21, 33, 51, 76, 109];
-		let col1 = [146, 179, 204, 222, 234, 241, 245];
-
-		assert_eq!(gradient_test(1, 0, 0).await?, [row0, col0]);
-		assert_eq!(gradient_test(1, 1, 0).await?, [row1, col0]);
-		assert_eq!(gradient_test(1, 0, 1).await?, [row0, col1]);
-		assert_eq!(gradient_test(1, 1, 1).await?, [row1, col1]);
-
-		Ok(())
 	}
 
 	#[rstest]

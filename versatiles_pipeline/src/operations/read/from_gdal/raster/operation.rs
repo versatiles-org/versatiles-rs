@@ -258,18 +258,11 @@ mod tests {
 
 			fn extract(mut cb: impl FnMut(usize) -> u8) -> Vec<u8> {
 				(0..7)
-					.map(|i| {
-						let mut v = cb(i);
-						if v == 64 {
-							v = 63
-						}
-						if v == 128 {
-							v = 127
-						}
-						if v == 192 {
-							v = 191
-						}
-						v
+					.map(|i| match cb(i) {
+						63 => 64,
+						127 => 128,
+						191 => 192,
+						v => v,
 					})
 					.collect::<Vec<_>>()
 			}
@@ -286,12 +279,12 @@ mod tests {
 		// ─── zoom‑0 full‑world tile should be a uniform gradient ───
 		assert_eq!(
 			gradient_test(0, 0, 0).await,
-			[[21, 54, 91, 127, 164, 201, 234], [16, 27, 63, 127, 191, 228, 239]]
+			[[21, 54, 91, 128, 164, 201, 234], [16, 27, 64, 128, 192, 228, 239]]
 		);
 
 		// ─── zoom‑1: four quadrants of the gradient ───
-		let row0 = [10, 27, 45, 63, 82, 100, 118];
-		let row1 = [137, 155, 173, 191, 210, 228, 245];
+		let row0 = [10, 27, 45, 64, 82, 100, 118];
+		let row1 = [137, 155, 173, 192, 210, 228, 245];
 		let col0 = [10, 14, 21, 33, 51, 76, 109];
 		let col1 = [146, 179, 204, 222, 234, 241, 245];
 
