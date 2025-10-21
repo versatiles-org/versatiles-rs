@@ -2,7 +2,7 @@ use crate::operations::read::from_gdal::raster::spatial_ref::get_spatial_ref;
 
 use super::{BandMapping, ResampleAlg};
 use anyhow::{Context, Result, anyhow, bail, ensure};
-use gdal::{Dataset, GeoTransform, vector::Geometry};
+use gdal::{Dataset, GeoTransform, spatial_ref::CoordTransform, vector::Geometry};
 use std::{fmt::Debug, sync::Arc};
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
@@ -115,28 +115,22 @@ impl Instance {
 		log::trace!("size: {}x{}", width, height);
 		log::trace!("spatial reference: {:?}", &spatial_ref.to_pretty_wkt());
 
-		let mut geom = Geometry::bbox(
-			gt[0],
-			gt[3],
-			gt[0] + gt[1] * width as f64,
-			gt[3] + gt[5] * height as f64,
-		)
-		.with_context(|| anyhow!("Failed to create bounding box from geo transform {gt:?}"))?;
+		let coord_transform = CoordTransform::new(&spatial_ref, &get_spatial_ref(4326)?)
+			.context("Failed to create coordinate transform to EPSG:4326")?;
 
-		log::trace!("bounding box native: {:?}", geom);
-
-		geom.set_spatial_ref(spatial_ref.clone());
-		geom
-			.transform_to_inplace(&get_spatial_ref(4326)?)
-			.context("Failed to transform bounding box to EPSG:4326")?;
-
-		let bbox_geom = geom.envelope();
-
-		log::trace!("bounding box projected: {:?}", bbox_geom);
+		let bounds = coord_transform.transform_bounds(
+			&[
+				gt[0],
+				gt[3],
+				gt[0] + gt[1] * width as f64,
+				gt[3] + gt[5] * height as f64,
+			],
+			21,
+		)?;
 
 		// Coordinates seem to be flipped in OGREnvelope
-		let mut bbox = GeoBBox::new(bbox_geom.MinX, bbox_geom.MinY, bbox_geom.MaxX, bbox_geom.MaxY)
-			.with_context(|| anyhow!("Failed to get bounding box from {bbox_geom:?}"))?;
+		let mut bbox = GeoBBox::new_save(bounds[0], bounds[1], bounds[2], bounds[3])
+			.with_context(|| anyhow!("Failed to get bounding box from {bounds:?}"))?;
 		bbox.limit_to_mercator();
 
 		log::trace!("bounding box: {:?}", bbox);
