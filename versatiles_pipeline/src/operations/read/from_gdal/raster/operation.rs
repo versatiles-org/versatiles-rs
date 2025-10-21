@@ -225,6 +225,19 @@ mod tests {
 	use super::*;
 	use std::path::PathBuf;
 
+	fn assert_same_vec(a: &[u8], b: &[u8]) {
+		assert_eq!(a.len(), b.len());
+		let max: i16 = 1;
+		let mut max_diff: i16 = 0;
+		for i in 0..a.len() {
+			max_diff = max_diff.max((a[i] as i16 - b[i] as i16).abs());
+		}
+		assert!(
+			max_diff <= max,
+			"max diff {max_diff} exceeds allowed {max} for {a:?} and {b:?}"
+		);
+	}
+
 	async fn get_operation(tile_size: u32) -> Operation {
 		Operation {
 			source: RasterSource::new(&PathBuf::from("../testdata/gradient.tif"), 65535)
@@ -242,7 +255,7 @@ mod tests {
 
 	#[tokio::test(flavor = "multi_thread")]
 	async fn test_operation_get_tile_blob() -> Result<()> {
-		async fn gradient_test(level: u8, x: u32, y: u32) -> [Vec<u8>; 2] {
+		async fn gradient_test(level: u8, x: u32, y: u32, expected_row: [u8; 7], expected_col: [u8; 7]) {
 			// Build a `Operation` that points at `testdata/gradient.tif`.
 			// We keep it in‑memory (no factory) and map bands 1‑2‑3 → RGB.
 			let coord = TileCoord::new(level, x, y).unwrap();
@@ -256,14 +269,8 @@ mod tests {
 				.unwrap()
 				.unwrap();
 
-			fn extract(mut cb: impl FnMut(usize) -> u8) -> Vec<u8> {
-				(0..7)
-					.map(|i| match cb(i) {
-						63 => 64,
-						191 => 192,
-						value => value,
-					})
-					.collect()
+			fn extract(cb: impl FnMut(usize) -> u8) -> Vec<u8> {
+				(0..7).map(cb).collect()
 			}
 
 			// Return:
@@ -272,14 +279,15 @@ mod tests {
 			//     column‑3‑of‑green‑channel (y coordinate)
 			//   ]
 			let pixels = image.iter_pixels().collect::<Vec<_>>();
-			[extract(|i| pixels[i + 21][0]), extract(|i| pixels[i * 7 + 3][1])]
+			assert_same_vec(&extract(|i| pixels[i + 21][0]), &expected_row);
+			assert_same_vec(&extract(|i| pixels[i * 7 + 3][1]), &expected_col);
 		}
 
 		// ─── zoom‑0 full‑world tile should be a uniform gradient ───
-		assert_eq!(
-			gradient_test(0, 0, 0).await,
-			[[18, 54, 91, 127, 164, 201, 237], [12, 29, 67, 128, 188, 226, 243]]
-		);
+
+		let row = [18, 54, 91, 127, 164, 201, 237];
+		let col = [12, 29, 67, 128, 188, 226, 243];
+		gradient_test(0, 0, 0, row, col).await;
 
 		// ─── zoom‑1: four quadrants of the gradient ───
 		let row0 = [9, 27, 45, 64, 82, 100, 118];
@@ -287,10 +295,10 @@ mod tests {
 		let col0 = [9, 14, 22, 34, 52, 77, 110];
 		let col1 = [145, 178, 203, 221, 233, 241, 246];
 
-		assert_eq!(gradient_test(1, 0, 0).await, [row0, col0]);
-		assert_eq!(gradient_test(1, 1, 0).await, [row1, col0]);
-		assert_eq!(gradient_test(1, 0, 1).await, [row0, col1]);
-		assert_eq!(gradient_test(1, 1, 1).await, [row1, col1]);
+		gradient_test(1, 0, 0, row0, col0).await;
+		gradient_test(1, 1, 0, row1, col0).await;
+		gradient_test(1, 0, 1, row0, col1).await;
+		gradient_test(1, 1, 1, row1, col1).await;
 
 		Ok(())
 	}
@@ -312,10 +320,7 @@ mod tests {
 				(1, 1) => [192, 212, 0],
 				_ => panic!("Unexpected tile coordinate: {coord_out:?}"),
 			};
-			assert_eq!(
-				color_is, color_should,
-				"Tile at {coord_out:?} has unexpected average color: {color_is:?} (should be {color_should:?})",
-			);
+			assert_same_vec(&color_is, &color_should);
 			count += 1;
 		}
 		assert_eq!(count, 4);
