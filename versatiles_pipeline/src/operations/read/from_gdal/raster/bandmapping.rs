@@ -40,6 +40,7 @@ pub struct BandMappingItem {
 /// Use [`BandMapping::try_from`] to analyze a dataset and infer its mapping,
 /// and [`BandMapping::create_mem_dataset`] to create a matching in-memory
 /// dataset suitable for reprojection or raster operations.
+#[derive(Clone)]
 pub struct BandMapping {
 	map: Vec<usize>,
 }
@@ -118,16 +119,18 @@ impl BandMapping {
 				log::trace!("Found RGB  band: red={red}, green={green}, blue={blue}");
 				vec![red, green, blue]
 			}
-			[Some(gray), None, None, None, Some(alpha)] => {
+			[Some(gray), None, None, None, Some(alpha)]
+			| [None, Some(gray), None, None, Some(alpha)]
+			| [None, Some(gray), Some(alpha), None, None] => {
 				log::trace!("Found gray + alpha band: gray={gray}, alpha={alpha}");
 				vec![gray, alpha]
 			}
-			[Some(gray), None, None, None, None] => {
+			[Some(gray), None, None, None, None] | [None, Some(gray), None, None, None] => {
 				log::trace!("Found gray band: gray={gray}");
 				vec![gray]
 			}
 			_ => {
-				bail!("The found bands ({band_string}) cannot be interpreted as grey/RGB (+alpha)",);
+				bail!("The found bands ({channels:?}) cannot be interpreted as grey/RGB (+alpha)",);
 			}
 		};
 		log::trace!("Band mapping result: {map:?}");

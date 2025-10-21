@@ -2,11 +2,7 @@ use super::{BandMapping, BandMappingItem, Instance};
 use anyhow::{Context, Result, ensure};
 use gdal::{Dataset, config::set_config_option};
 use imageproc::image::DynamicImage;
-use std::{
-	collections::LinkedList,
-	path::{Path, PathBuf},
-	sync::Arc,
-};
+use std::{collections::LinkedList, path::Path, sync::Arc};
 use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
@@ -16,9 +12,10 @@ use versatiles_image::traits::*;
 /// Used to compute the ground resolution at zoom 0 for a given tile size.
 const EARTH_CIRCUMFERENCE: f64 = 2.0 * std::f64::consts::PI * 6_378_137.0;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct RasterSource {
-	filename: PathBuf,
+	/// Factory used to open new GDAL datasets (e.g., from a filename, in‑memory, S3, etc.).
+	open_dataset: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static>,
 	instances: Arc<Mutex<LinkedList<Instance>>>,
 	bbox: GeoBBox,
 	band_mapping: Arc<BandMapping>,
@@ -37,43 +34,54 @@ struct HeldInstance {
 }
 
 impl RasterSource {
+	/// Create a `RasterSource` from a file path.
 	#[context("Failed to create GDAL dataset from file {:?}", filename)]
 	pub async fn new(filename: &Path, reuse_limit: u32, concurrency_limit: usize) -> Result<RasterSource> {
-		log::debug!("Opening GDAL dataset from file: {:?}", filename);
+		let path = filename.to_path_buf();
+		let factory: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static> =
+			Arc::new(move || Dataset::open(&path).with_context(|| format!("failed to open GDAL dataset: {:?}", path)));
+		Self::new_with_factory(factory, reuse_limit, concurrency_limit).await
+	}
 
+	/// Create a `RasterSource` from a factory that opens a fresh GDAL `Dataset` on demand.
+	///
+	/// The factory is called whenever the internal pool needs to create a new instance.
+	/// This makes it easy to support custom sources (in‑memory MEM, VSICURL, cloud drivers, etc.).
+	#[context("Failed to create GDAL dataset via factory")]
+	pub async fn new_with_factory(
+		open_dataset: Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static>,
+		reuse_limit: u32,
+		concurrency_limit: usize,
+	) -> Result<RasterSource> {
 		set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
 		log::trace!("GDAL_NUM_THREADS set to ALL_CPUS");
 
-		let dataset = Dataset::open(filename)?;
+		// Open one dataset to probe metadata and seed the pool
+		let dataset = (open_dataset)()?;
 		log::trace!(
-			"Opened GDAL dataset {:?} ({}x{}, bands={})",
-			filename,
+			"Opened GDAL dataset ({}x{}, bands={})",
 			dataset.raster_size().0,
 			dataset.raster_size().1,
 			dataset.raster_count()
 		);
-
 		let instance = Instance::new(dataset);
-
 		let bbox = instance.get_bbox()?;
 		let band_mapping = instance.get_band_mapping()?;
 		let pixel_size = instance.get_pixel_size()?;
 		log::trace!("Dataset pixel_size (m/px): {:.6}", pixel_size);
-
 		log::trace!("Dataset bbox (EPSG:4326): {:?}", bbox);
 		log::trace!("Band mapping: {band_mapping:?}");
-		log::trace!("GdalDataset::new finished for {:?}", filename);
 
 		let mut list = LinkedList::new();
 		list.push_back(instance);
 
-		Ok(Self {
-			band_mapping: Arc::new(band_mapping),
-			bbox,
-			filename: filename.to_path_buf(),
+		Ok(RasterSource {
+			open_dataset,
 			instances: Arc::new(Mutex::new(list)),
-			reuse_limit: reuse_limit.min(1024),
+			bbox,
+			band_mapping: Arc::new(band_mapping),
 			pixel_size,
+			reuse_limit: reuse_limit.min(1024),
 			sem: Arc::new(Semaphore::new(concurrency_limit.max(1))),
 		})
 	}
@@ -88,7 +96,8 @@ impl RasterSource {
 			{
 				instance
 			} else {
-				Instance::new(Dataset::open(&self.filename).expect("failed to open GDAL dataset"))
+				let ds = (self.open_dataset)().expect("failed to open GDAL dataset via factory");
+				Instance::new(ds)
 			}
 		};
 
@@ -195,6 +204,17 @@ impl RasterSource {
 	}
 }
 
+impl std::fmt::Debug for RasterSource {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("RasterSource")
+			.field("bbox", &self.bbox)
+			.field("band_mapping", &self.band_mapping)
+			.field("pixel_size", &self.pixel_size)
+			.field("reuse_limit", &self.reuse_limit)
+			.finish()
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::super::get_spatial_ref;
@@ -204,20 +224,17 @@ mod tests {
 	use rstest::rstest;
 	use std::vec;
 
-	impl RasterSource {
-		pub fn from_testdata(bbox: GeoBBox, channel_count: usize) -> Result<RasterSource> {
-			let size = 256;
-			let band_mapping = {
-				let mut v = vec![];
-				for channel_index in 0..channel_count {
-					v.push(channel_index + 1);
-				}
-				BandMapping::new(v)
-			};
+	struct DatasetFactory {
+		band_mapping: BandMapping,
+		geotransform: [f64; 6],
+		size: usize,
+	}
 
-			let driver = DriverManager::get_driver_by_name("MEM")?;
-			let mut ds_src = driver.create_with_band_type::<u8, _>("in memory dataset", size, size, channel_count)?;
-			ds_src.set_spatial_ref(&get_spatial_ref(4326)?)?;
+	impl DatasetFactory {
+		pub fn new(bbox: GeoBBox, channel_count: usize) -> DatasetFactory {
+			let size = 256;
+			let band_mapping = BandMapping::new((0..channel_count).map(|i| i + 1).collect());
+
 			let geotransform = [
 				bbox.x_min,
 				(bbox.x_max - bbox.x_min) / size as f64,
@@ -226,59 +243,50 @@ mod tests {
 				0.0,
 				(bbox.y_min - bbox.y_max) / size as f64,
 			];
-			ds_src.set_geo_transform(&geotransform)?;
 
-			let mut parameters = vec![];
-			for band_index in 1..=channel_count {
-				parameters.push(versatiles_image::MarkerParameters {
-					offset: 0.0,
-					scale: 200.0,
-					angle: 80.0 + (band_index as f64 - 1.0) * 90.0,
-				})
+			DatasetFactory {
+				band_mapping,
+				geotransform,
+				size,
 			}
-			let image = DynamicImage::new_marker(&parameters);
+		}
 
-			for c in 1..=channel_count {
-				let mut band = ds_src.rasterband(c)?;
-				let data = image.iter_pixels().map(|p| p[c - 1]).collect();
-				let mut buffer = gdal::raster::Buffer::new((size, size), data);
-				band.write((0, 0), (size, size), &mut buffer)?;
+		pub fn get_factory(&self) -> Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static> {
+			let band_mapping_c = self.band_mapping.clone();
+			println!("band_mapping_c: {:?}", band_mapping_c);
+			let geotransform_c = self.geotransform;
+			let size = self.size;
+			Arc::new(move || -> Result<Dataset> {
+				let driver = DriverManager::get_driver_by_name("MEM")?;
+				let mut ds =
+					driver.create_with_band_type::<u8, _>("in memory dataset", size, size, band_mapping_c.len())?;
+				ds.set_spatial_ref(&get_spatial_ref(4326)?)?;
+				ds.set_geo_transform(&geotransform_c)?;
 
-				use gdal::raster::ColorInterpretation::*;
-				let interp = match channel_count {
-					1 => GrayIndex,
-					2 => match c {
-						1 => GrayIndex,
-						2 => AlphaBand,
-						_ => unreachable!(),
-					},
-					3 => match c {
-						1 => RedBand,
-						2 => GreenBand,
-						3 => BlueBand,
-						_ => unreachable!(),
-					},
-					4 => match c {
-						1 => RedBand,
-						2 => GreenBand,
-						3 => BlueBand,
-						4 => AlphaBand,
-						_ => unreachable!(),
-					},
-					_ => unreachable!(),
-				};
-				band.set_color_interpretation(interp)?;
-			}
-
-			Ok(RasterSource {
-				filename: PathBuf::from("in-memory"),
-				instances: Arc::new(Mutex::new(LinkedList::from([Instance::new(ds_src)]))),
-				band_mapping: Arc::new(band_mapping),
-				bbox,
-				pixel_size: 1.0,
-				reuse_limit: 1,
-				sem: Arc::new(Semaphore::new(2)),
+				let mut parameters = vec![];
+				for band_index in 1..=band_mapping_c.len() {
+					parameters.push(versatiles_image::MarkerParameters {
+						offset: 0.0,
+						scale: 200.0,
+						angle: 80.0 + (band_index as f64 - 1.0) * 90.0,
+					});
+				}
+				let image = DynamicImage::new_marker(&parameters);
+				for c in 1..=band_mapping_c.len() {
+					let data = image.iter_pixels().map(|p| p[c - 1]).collect();
+					let mut buffer = gdal::raster::Buffer::new((size, size), data);
+					ds.rasterband(c)?.write((0, 0), (size, size), &mut buffer)?;
+				}
+				Ok(ds)
 			})
+		}
+	}
+
+	impl RasterSource {
+		pub fn from_testdata(bbox: GeoBBox, channel_count: usize) -> Result<RasterSource> {
+			let factory = DatasetFactory::new(bbox, channel_count).get_factory();
+			// Construct via the factory (seed one instance inside new_with_factory)
+			futures::executor::block_on(RasterSource::new_with_factory(factory, 1, 2))
 		}
 	}
 
