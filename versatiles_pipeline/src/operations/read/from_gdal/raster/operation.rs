@@ -35,7 +35,10 @@ struct Args {
 	level_min: Option<u8>,
 	/// How often to reuse an GDAL instances. (default: 100)
 	/// Set to a lower value if you have problems like memory leaks in GDAL.
-	max_reuse_gdal: Option<u32>,
+	gdal_reuse_limit: Option<u32>,
+	/// The number of maximum concurrent GDAL instances to allow. (default: 4)
+	/// Set to a higher value if you have enough system resources and want to increase throughput.
+	gdal_concurrency_limit: Option<u8>,
 }
 
 #[derive(Debug)]
@@ -86,7 +89,12 @@ impl ReadOperationTrait for Operation {
 			);
 			let filename = factory.resolve_path(&args.filename);
 			log::trace!("Resolved filename: {:?}", filename);
-			let source = RasterSource::new(&filename, args.max_reuse_gdal.unwrap_or(100)).await?;
+			let source = RasterSource::new(
+				&filename,
+				args.gdal_reuse_limit.unwrap_or(100),
+				args.gdal_concurrency_limit.unwrap_or(4) as usize,
+			)
+			.await?;
 			let bbox = source.bbox();
 			let tile_size = args.tile_size.unwrap_or(512);
 
@@ -240,7 +248,7 @@ mod tests {
 
 	async fn get_operation(tile_size: u32) -> Operation {
 		Operation {
-			source: RasterSource::new(&PathBuf::from("../testdata/gradient.tif"), 65535)
+			source: RasterSource::new(&PathBuf::from("../testdata/gradient.tif"), 65535, 4)
 				.await
 				.unwrap(),
 			parameters: TilesReaderParameters::new(

@@ -7,7 +7,7 @@ use std::{
 	path::{Path, PathBuf},
 	sync::Arc,
 };
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, OwnedSemaphorePermit, Semaphore};
 use versatiles_core::GeoBBox;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -23,14 +23,22 @@ pub struct RasterSource {
 	bbox: GeoBBox,
 	band_mapping: Arc<BandMapping>,
 	pixel_size: f64,
-	max_reuse_gdal: u32,
+	reuse_limit: u32,
+	/// Limits the maximum number of concurrently checked‑out `Instance`s.
+	sem: Arc<Semaphore>,
 }
 
 unsafe impl Sync for RasterSource {}
 
+/// An `Instance` checked out from the pool while holding a semaphore permit.
+struct HeldInstance {
+	inst: Instance,
+	_permit: OwnedSemaphorePermit,
+}
+
 impl RasterSource {
 	#[context("Failed to create GDAL dataset from file {:?}", filename)]
-	pub async fn new(filename: &Path, max_reuse_gdal: u32) -> Result<RasterSource> {
+	pub async fn new(filename: &Path, reuse_limit: u32, concurrency_limit: usize) -> Result<RasterSource> {
 		log::debug!("Opening GDAL dataset from file: {:?}", filename);
 
 		set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
@@ -64,36 +72,42 @@ impl RasterSource {
 			bbox,
 			filename: filename.to_path_buf(),
 			instances: Arc::new(Mutex::new(list)),
-			max_reuse_gdal: max_reuse_gdal.min(65536),
+			reuse_limit: reuse_limit.min(1024),
 			pixel_size,
+			sem: Arc::new(Semaphore::new(concurrency_limit.max(1))),
 		})
 	}
 
-	async fn get_instance(&self) -> Instance {
-		let mut instances = self.instances.lock().await;
-		let instance_option: Option<Instance> = instances.pop_front();
-		if let Some(instance) = instance_option {
-			if instance.age() < self.max_reuse_gdal + 1 {
-				return instance;
-			}
-			drop(instance);
-		}
+	async fn get_instance(&self) -> HeldInstance {
+		let permit = self.sem.clone().acquire_owned().await.expect("semaphore closed");
 
-		Instance::new(Dataset::open(&self.filename).expect("failed to open GDAL dataset"))
+		let inst = {
+			let mut instances = self.instances.lock().await;
+			if let Some(instance) = instances.pop_front()
+				&& instance.age() < self.reuse_limit + 1
+			{
+				instance
+			} else {
+				Instance::new(Dataset::open(&self.filename).expect("failed to open GDAL dataset"))
+			}
+		};
+
+		HeldInstance { inst, _permit: permit }
 	}
 
-	async fn drop_instance(&self, mut instance: Instance) {
-		instance.cleanup();
+	async fn drop_instance(&self, mut held: HeldInstance) {
+		held.inst.cleanup();
 		let mut instances = self.instances.lock().await;
-		instances.push_back(instance);
+		instances.push_back(held.inst);
+		// `_permit` drops here, releasing one concurrency slot
 	}
 
 	pub async fn get_image(&self, bbox: &GeoBBox, width: usize, height: usize) -> Result<Option<DynamicImage>> {
 		let band_mapping = self.band_mapping.clone();
-		let instance: Instance = self.get_instance().await;
-		let dst = instance.reproject_to_dataset(width, height, bbox, band_mapping)?;
 
-		self.drop_instance(instance).await;
+		let held = self.get_instance().await;
+		let dst = held.inst.reproject_to_dataset(width, height, bbox, band_mapping)?;
+		self.drop_instance(held).await;
 
 		let band_mapping = self.band_mapping.clone();
 		let channel_count = band_mapping.len();
@@ -262,7 +276,8 @@ mod tests {
 				band_mapping: Arc::new(band_mapping),
 				bbox,
 				pixel_size: 1.0,
-				max_reuse_gdal: 1,
+				reuse_limit: 1,
+				sem: Arc::new(Semaphore::new(2)),
 			})
 		}
 	}
