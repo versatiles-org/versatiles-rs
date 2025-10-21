@@ -1,8 +1,11 @@
+use crate::operations::read::from_gdal::raster::spatial_ref::get_spatial_ref;
+
 use super::{BandMapping, ResampleAlg};
-use anyhow::{Result, bail};
-use gdal::{Dataset, GeoTransform};
+use anyhow::{Context, Result, anyhow, bail, ensure};
+use gdal::{Dataset, GeoTransform, vector::Geometry};
 use std::{fmt::Debug, sync::Arc};
 use versatiles_core::GeoBBox;
+use versatiles_derive::context;
 
 #[derive(Debug)]
 pub struct Instance {
@@ -88,6 +91,130 @@ impl Instance {
 		log::trace!("reproject_image complete");
 
 		Ok(dst_ds)
+	}
+
+	#[context("Failed to compute bounding box for GDAL dataset")]
+	pub fn get_bbox(&self) -> Result<GeoBBox> {
+		log::trace!("Computing dataset_bbox()");
+		let gt = self
+			.dataset
+			.geo_transform()
+			.context("Failed to get geo transform from GDAL dataset")?;
+
+		log::trace!("geo transform: {:?}", gt);
+
+		ensure!(gt[2] == 0.0 || gt[4] == 0.0, "GDAL dataset must not be rotated");
+
+		let width = self.dataset.raster_size().0;
+		let height = self.dataset.raster_size().1;
+		let spatial_ref = self
+			.dataset
+			.spatial_ref()
+			.context("GDAL dataset must have a spatial reference (SRS) defined")?;
+
+		log::trace!("size: {}x{}", width, height);
+		log::trace!("spatial reference: {:?}", &spatial_ref.to_pretty_wkt());
+
+		let mut geom = Geometry::bbox(
+			gt[0],
+			gt[3],
+			gt[0] + gt[1] * width as f64,
+			gt[3] + gt[5] * height as f64,
+		)
+		.with_context(|| anyhow!("Failed to create bounding box from geo transform {gt:?}"))?;
+
+		log::trace!("bounding box native: {:?}", geom);
+
+		geom.set_spatial_ref(spatial_ref.clone());
+		geom
+			.transform_to_inplace(&get_spatial_ref(4326)?)
+			.context("Failed to transform bounding box to EPSG:4326")?;
+
+		let bbox_geom = geom.envelope();
+
+		log::trace!("bounding box projected: {:?}", bbox_geom);
+
+		// Coordinates seem to be flipped in OGREnvelope
+		let mut bbox = GeoBBox::new(bbox_geom.MinX, bbox_geom.MinY, bbox_geom.MaxX, bbox_geom.MaxY)
+			.with_context(|| anyhow!("Failed to get bounding box from {bbox_geom:?}"))?;
+		bbox.limit_to_mercator();
+
+		log::trace!("bounding box: {:?}", bbox);
+		Ok(bbox)
+	}
+
+	/// Estimate the dataset’s native pixel size **in meters/pixel (EPSG:3857)**.
+	///
+	/// Implementation details:
+	/// * Requires an unrotated GeoTransform.
+	/// * Samples the center pixel and its right/down neighbors, transforms those
+	///   three points to 3857, and takes the max of the two neighbor distances.
+	/// * Returns a strictly positive finite value or an error.
+	#[context("Failed to compute pixel size for GDAL dataset")]
+	pub fn get_pixel_size(&self) -> Result<f64> {
+		log::trace!("Computing dataset_pixel_size()");
+		let gt = self
+			.dataset
+			.geo_transform()
+			.context("Failed to get geo transform from GDAL dataset")?;
+
+		// We assume no rotation (consistent with `dataset_bbox`).
+		ensure!(gt[2] == 0.0 && gt[4] == 0.0, "GDAL dataset must not be rotated");
+
+		let srs = self
+			.dataset
+			.spatial_ref()
+			.context("GDAL dataset must have a spatial reference (SRS) defined")?;
+
+		// Helper to map pixel (col,row) to georeferenced coordinates
+		let pixel_to_size = |col: f64, row: f64| -> Result<f64> {
+			let point =
+				|x: f64, y: f64| -> (f64, f64, f64) { (gt[0] + x * gt[1] + y * gt[2], gt[3] + x * gt[4] + y * gt[5], 0.0) };
+
+			let mut geom = Geometry::empty(gdal_sys::OGRwkbGeometryType::wkbLineString)?;
+			geom.add_point(point(col, row));
+			geom.add_point(point(col + 1.0, row));
+			geom.add_point(point(col, row + 1.0));
+			geom.set_spatial_ref(srs.clone());
+			geom.transform_to_inplace(&get_spatial_ref(3857)?)?;
+
+			let mut p = vec![];
+			geom.get_points(&mut p);
+
+			let p0 = &p[0];
+			let px = &p[1];
+			let py = &p[2];
+			let ax = (px.0 - p0.0).powi(2) + (px.1 - p0.1).powi(2);
+			let ay = (py.0 - p0.0).powi(2) + (py.1 - p0.1).powi(2);
+
+			Ok(ax.min(ay).sqrt())
+		};
+
+		let (width, height) = self.dataset.raster_size();
+		let mut size_min = f64::MAX;
+		for y in [0.1, 0.5, 0.9] {
+			for x in [0.1, 0.5, 0.9] {
+				let px = (width as f64) * x;
+				let py = (height as f64) * y;
+				if let Ok(size) = pixel_to_size(px, py)
+					&& size > 0.0
+					&& size < size_min
+				{
+					size_min = size;
+				}
+			}
+		}
+
+		log::trace!("pixel_size: {:.6}", size_min);
+		ensure!(
+			size_min.is_finite() && size_min > 0.0,
+			"Invalid pixel size in meters computed"
+		);
+		Ok(size_min)
+	}
+
+	pub fn get_band_mapping(&self) -> Result<BandMapping> {
+		BandMapping::try_from(&self.dataset)
 	}
 }
 
