@@ -734,4 +734,25 @@ mod tests {
 			.map(|v| (v * 1_000.0).round() as i64);
 		assert_eq!(mercator_bbox, [-point_mm.0, -point_mm.1, point_mm.0, point_mm.1]);
 	}
+
+	/// Extensive normalization tests: sorting and clamping behavior
+	#[rstest]
+	#[case((0, 0, 1, 1),           (0, 0, 1, 1))] // already ordered
+	#[case((1, 1, 0, 0),           (0, 0, 1, 1))] // fully swapped
+	#[case((10, 50, 14, 47),       (10, 47, 14, 50))] // only y needs sorting
+	#[case((14, 47, 10, 50),       (10, 47, 14, 50))] // both x and y swapped
+	#[case((-181, -91, 181, 91),   (-180, -90, 180, 90))] // clamp to bounds
+	#[case((190, 95, -200, -95),   (-180, -90, 180, 90))] // extreme clamp & sort
+	#[case((-180, -90, 180, 90),   (-180, -90, 180, 90))] // exact bounds
+	#[case((10, -5, 10, 5),        (10, -5, 10, 5))] // zero width
+	#[case((-10, 50, 10, 50),      (-10, 50, 10, 50))] // zero height
+	#[case((180, -90, -180, 90),   (-180, -90, 180, 90))] // wrap-like input
+	fn test_new_normalized_extensive(#[case] input: (i16, i16, i16, i16), #[case] expected: (i16, i16, i16, i16)) {
+		let (x0, y0, x1, y1) = input;
+		let bbox = GeoBBox::new_normalized(x0 as f64, y0 as f64, x1 as f64, y1 as f64);
+		assert_eq!(bbox.x_min, expected.0 as f64);
+		assert_eq!(bbox.y_min, expected.1 as f64);
+		assert_eq!(bbox.x_max, expected.2 as f64);
+		assert_eq!(bbox.y_max, expected.3 as f64);
+	}
 }
