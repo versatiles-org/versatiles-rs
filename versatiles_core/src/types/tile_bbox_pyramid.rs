@@ -364,6 +364,19 @@ impl Default for TileBBoxPyramid {
 	}
 }
 
+impl<T> From<&T> for TileBBoxPyramid
+where
+	T: ?Sized + AsRef<[TileBBox]>,
+{
+	fn from(bboxes: &T) -> Self {
+		let mut pyramid = TileBBoxPyramid::new_empty();
+		for bbox in bboxes.as_ref() {
+			pyramid.include_bbox(bbox);
+		}
+		pyramid
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
