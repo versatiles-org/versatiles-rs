@@ -606,7 +606,7 @@ mod tests {
 	#[tokio::test]
 	async fn tile_size_stream_has_same_coords_and_expected_sizes() -> Result<()> {
 		let (_, reader) = mk_reader().await?;
-		let bbox = TileBBox::from_min_max(4, 14, 14, 15, 15)?; // 2x2 region
+		let bbox = TileBBox::from_min_and_max(4, 14, 14, 15, 15)?; // 2x2 region
 		let sizes: Vec<(TileCoord, u64)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
 		let tiles: Vec<(TileCoord, Blob)> = reader.get_tile_stream(bbox).await?.to_vec().await;
 		assert_eq!(sizes.len(), tiles.len());
@@ -624,7 +624,7 @@ mod tests {
 	#[tokio::test]
 	async fn single_tile_bbox_streams() -> Result<()> {
 		let (_, reader) = mk_reader().await?;
-		let one = TileBBox::from_min_max(4, 15, 1, 15, 1)?;
+		let one = TileBBox::from_min_and_max(4, 15, 1, 15, 1)?;
 		let blobs = reader.get_tile_stream(one).await?.to_vec().await;
 		let sizes = reader.get_tile_size_stream(one).await?.to_vec().await;
 		assert_eq!(blobs.len(), 1);

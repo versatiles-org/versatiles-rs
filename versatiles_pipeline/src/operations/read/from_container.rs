@@ -153,7 +153,7 @@ mod tests {
 			]
 		);
 
-		let mut stream = operation.get_stream(TileBBox::from_min_max(3, 1, 1, 2, 3)?).await?;
+		let mut stream = operation.get_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?).await?;
 
 		let mut n = 0;
 		while let Some((coord, tile)) = stream.next().await {
@@ -201,7 +201,7 @@ mod tests {
 			]
 		);
 
-		let mut stream = operation.get_stream(TileBBox::from_min_max(3, 1, 1, 2, 3)?).await?;
+		let mut stream = operation.get_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?).await?;
 
 		let mut n = 0;
 		while let Some((coord, tile)) = stream.next().await {

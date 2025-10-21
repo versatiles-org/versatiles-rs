@@ -202,7 +202,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_tile_pipeline_reader_get_tile_stream() -> Result<()> {
 		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), Config::default().arc()).await?;
-		let bbox = TileBBox::from_min_max(1, 0, 0, 1, 1)?;
+		let bbox = TileBBox::from_min_and_max(1, 0, 0, 1, 1)?;
 		let result_stream = reader.get_tile_stream(bbox).await?;
 		let result = result_stream.to_vec().await;
 

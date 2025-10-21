@@ -160,8 +160,8 @@ mod tests {
 	#[tokio::test]
 	async fn tiles_written_in_order() -> Result<()> {
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
-		bbox_pyramid.include_bbox(&TileBBox::from_min_max(15, 4090, 4090, 5000, 5000)?);
-		bbox_pyramid.include_bbox(&TileBBox::from_min_max(14, 250, 250, 260, 260)?);
+		bbox_pyramid.include_bbox(&TileBBox::from_min_and_max(15, 4090, 4090, 5000, 5000)?);
+		bbox_pyramid.include_bbox(&TileBBox::from_min_and_max(14, 250, 250, 260, 260)?);
 
 		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
 			bbox_pyramid,

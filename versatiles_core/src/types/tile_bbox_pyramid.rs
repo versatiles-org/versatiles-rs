@@ -469,8 +469,8 @@ mod tests {
 	#[test]
 	fn test_include_bbox2() {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		pyramid.include_bbox(&TileBBox::from_min_max(4, 1, 2, 3, 4).unwrap());
-		pyramid.include_bbox(&TileBBox::from_min_max(4, 5, 6, 7, 8).unwrap());
+		pyramid.include_bbox(&TileBBox::from_min_and_max(4, 1, 2, 3, 4).unwrap());
+		pyramid.include_bbox(&TileBBox::from_min_and_max(4, 5, 6, 7, 8).unwrap());
 
 		let level_bboxes = pyramid
 			.iter_levels()
@@ -623,7 +623,7 @@ mod tests {
 	#[test]
 	fn test_include_bbox1() {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		let tb = TileBBox::from_min_max(6, 10, 10, 12, 12).unwrap();
+		let tb = TileBBox::from_min_and_max(6, 10, 10, 12, 12).unwrap();
 		pyramid.include_bbox(&tb);
 		assert!(!pyramid.get_level_bbox(6).is_empty());
 		// No other level should be affected
@@ -646,7 +646,7 @@ mod tests {
 	#[test]
 	fn test_contains_coord() {
 		let mut p = TileBBoxPyramid::new_empty();
-		p.include_bbox(&TileBBox::from_min_max(10, 100, 200, 300, 400).unwrap());
+		p.include_bbox(&TileBBox::from_min_and_max(10, 100, 200, 300, 400).unwrap());
 		assert!(!p.contains_coord(&TileCoord::new(10, 99, 200).unwrap()));
 		assert!(!p.contains_coord(&TileCoord::new(10, 100, 199).unwrap()));
 		assert!(p.contains_coord(&TileCoord::new(10, 100, 200).unwrap()));
@@ -659,14 +659,14 @@ mod tests {
 	#[test]
 	fn test_overlaps_bbox() {
 		let mut p = TileBBoxPyramid::new_empty();
-		p.include_bbox(&TileBBox::from_min_max(10, 100, 200, 300, 400).unwrap());
-		assert!(!p.overlaps_bbox(&TileBBox::from_min_max(10, 0, 0, 99, 200).unwrap()));
-		assert!(!p.overlaps_bbox(&TileBBox::from_min_max(10, 0, 0, 100, 199).unwrap()));
-		assert!(p.overlaps_bbox(&TileBBox::from_min_max(10, 0, 0, 100, 200).unwrap()));
-		assert!(p.overlaps_bbox(&TileBBox::from_min_max(10, 300, 400, 500, 600).unwrap()));
-		assert!(!p.overlaps_bbox(&TileBBox::from_min_max(10, 300, 401, 500, 600).unwrap()));
-		assert!(!p.overlaps_bbox(&TileBBox::from_min_max(10, 301, 400, 500, 600).unwrap()));
-		assert!(!p.overlaps_bbox(&TileBBox::from_min_max(11, 300, 400, 500, 600).unwrap()));
+		p.include_bbox(&TileBBox::from_min_and_max(10, 100, 200, 300, 400).unwrap());
+		assert!(!p.overlaps_bbox(&TileBBox::from_min_and_max(10, 0, 0, 99, 200).unwrap()));
+		assert!(!p.overlaps_bbox(&TileBBox::from_min_and_max(10, 0, 0, 100, 199).unwrap()));
+		assert!(p.overlaps_bbox(&TileBBox::from_min_and_max(10, 0, 0, 100, 200).unwrap()));
+		assert!(p.overlaps_bbox(&TileBBox::from_min_and_max(10, 300, 400, 500, 600).unwrap()));
+		assert!(!p.overlaps_bbox(&TileBBox::from_min_and_max(10, 300, 401, 500, 600).unwrap()));
+		assert!(!p.overlaps_bbox(&TileBBox::from_min_and_max(10, 301, 400, 500, 600).unwrap()));
+		assert!(!p.overlaps_bbox(&TileBBox::from_min_and_max(11, 300, 400, 500, 600).unwrap()));
 	}
 
 	#[test]
@@ -735,22 +735,22 @@ mod tests {
 	#[test]
 	fn pyramid_swap_xy_transform() {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		pyramid.include_bbox(&TileBBox::from_min_max(4, 0, 1, 2, 3).unwrap());
+		pyramid.include_bbox(&TileBBox::from_min_and_max(4, 0, 1, 2, 3).unwrap());
 		pyramid.swap_xy();
 		assert_eq!(
 			pyramid.get_level_bbox(4),
-			&TileBBox::from_min_max(4, 1, 0, 3, 2).unwrap()
+			&TileBBox::from_min_and_max(4, 1, 0, 3, 2).unwrap()
 		);
 	}
 
 	#[test]
 	fn pyramid_flip_y_transform() {
 		let mut pyramid = TileBBoxPyramid::new_empty();
-		pyramid.include_bbox(&TileBBox::from_min_max(4, 0, 1, 2, 3).unwrap());
+		pyramid.include_bbox(&TileBBox::from_min_and_max(4, 0, 1, 2, 3).unwrap());
 		pyramid.flip_y();
 		assert_eq!(
 			pyramid.get_level_bbox(4),
-			&TileBBox::from_min_max(4, 0, 12, 2, 14).unwrap()
+			&TileBBox::from_min_and_max(4, 0, 12, 2, 14).unwrap()
 		);
 	}
 }

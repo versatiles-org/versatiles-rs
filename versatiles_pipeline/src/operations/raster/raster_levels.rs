@@ -137,7 +137,7 @@ mod tests {
 			gamma: parameters[2],
 		};
 		let mut tiles = op
-			.get_stream(TileBBox::from_min_max(8, 56, 56, 56, 56)?)
+			.get_stream(TileBBox::from_min_and_max(8, 56, 56, 56, 56)?)
 			.await?
 			.to_vec()
 			.await;

@@ -321,7 +321,7 @@ mod tests {
 
 		fn new_bbox(b: [u32; 4]) -> TileBBoxPyramid {
 			let mut pyramid = TileBBoxPyramid::new_empty();
-			pyramid.include_bbox(&TileBBox::from_min_max(3, b[0], b[1], b[2], b[3]).unwrap());
+			pyramid.include_bbox(&TileBBox::from_min_and_max(3, b[0], b[1], b[2], b[3]).unwrap());
 			pyramid
 		}
 

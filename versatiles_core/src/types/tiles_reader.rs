@@ -388,7 +388,7 @@ mod tests {
 	#[tokio::test]
 	async fn test_get_tile_stream() -> Result<()> {
 		let reader = TestReader::new_dummy();
-		let bbox = TileBBox::from_min_max(1, 0, 0, 1, 1)?;
+		let bbox = TileBBox::from_min_and_max(1, 0, 0, 1, 1)?;
 		let stream = reader.get_tile_stream(bbox).await?;
 
 		assert_eq!(stream.drain_and_count().await, 4); // Assuming 4 tiles in a 2x2 bbox
