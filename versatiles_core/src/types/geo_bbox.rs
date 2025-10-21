@@ -17,9 +17,9 @@ use versatiles_derive::context;
 
 /// Maximum latitude permitted by Web‑Mercator (in degrees).
 /// Values outside this are clamped when converting.
-static MAX_MERCATOR_LAT: f64 = 85.051_128_779_806_59;
+static MAX_MERC_LAT: f64 = 85.051_128_779_806_59;
 /// Maximum longitude permitted by Web‑Mercator (in degrees).
-static MAX_MERCATOR_LNG: f64 = 180.0;
+static MAX_MERC_LNG: f64 = 180.0;
 /// Spherical Web‑Mercator radius (WGS84 semi‑major axis), in meters.
 static RADIUS: f64 = 6_378_137.0; // meters
 
@@ -174,10 +174,10 @@ impl GeoBBox {
 	/// );
 	/// ```
 	pub fn limit_to_mercator(&mut self) {
-		self.x_min = self.x_min.max(-MAX_MERCATOR_LNG).min(MAX_MERCATOR_LNG); // west
-		self.y_min = self.y_min.max(-MAX_MERCATOR_LAT).min(MAX_MERCATOR_LAT); // south
-		self.x_max = self.x_max.max(-MAX_MERCATOR_LNG).min(MAX_MERCATOR_LNG); // east
-		self.y_max = self.y_max.max(-MAX_MERCATOR_LAT).min(MAX_MERCATOR_LAT); // north
+		self.x_min = self.x_min.max(-MAX_MERC_LNG).min(MAX_MERC_LNG); // west
+		self.y_min = self.y_min.max(-MAX_MERC_LAT).min(MAX_MERC_LAT); // south
+		self.x_max = self.x_max.max(-MAX_MERC_LNG).min(MAX_MERC_LNG); // east
+		self.y_max = self.y_max.max(-MAX_MERC_LAT).min(MAX_MERC_LAT); // north
 	}
 
 	/// Returns the bounding box as a `Vec<f64>` in the form `[west, south, east, north]`.
@@ -370,11 +370,11 @@ impl GeoBBox {
 	pub fn to_mercator(self: &GeoBBox) -> [f64; 4] {
 		// Spherical Mercator radius (WGS84 semi-major axis)
 		fn x_from_lon(lon_deg: f64) -> f64 {
-			let lon = lon_deg.max(-MAX_MERCATOR_LNG).min(MAX_MERCATOR_LNG);
+			let lon = lon_deg.max(-MAX_MERC_LNG).min(MAX_MERC_LNG);
 			RADIUS * lon.to_radians()
 		}
 		fn y_from_lat(lat_deg: f64) -> f64 {
-			let lat = lat_deg.max(-MAX_MERCATOR_LAT).min(MAX_MERCATOR_LAT);
+			let lat = lat_deg.max(-MAX_MERC_LAT).min(MAX_MERC_LAT);
 			let phi = lat.to_radians();
 			RADIUS * ((std::f64::consts::FRAC_PI_4 + phi / 2.0).tan()).ln()
 		}
@@ -725,8 +725,8 @@ mod tests {
 	#[rstest]
 	#[case((0.0,0.0),(0,0))]
 	#[case((1e-8,1e-8),(1,1))]
-	#[case((MAX_MERCATOR_LNG,MAX_MERCATOR_LAT),(MAX_MERCATOR,MAX_MERCATOR))]
-	#[case((MAX_MERCATOR_LNG-1e-8,MAX_MERCATOR_LAT-1e-8),(MAX_MERCATOR-1,MAX_MERCATOR-13))]
+	#[case((MAX_MERC_LNG,MAX_MERC_LAT),(MAX_MERCATOR,MAX_MERCATOR))]
+	#[case((MAX_MERC_LNG-1e-8,MAX_MERC_LAT-1e-8),(MAX_MERCATOR-1,MAX_MERCATOR-13))]
 	fn test_bbox_to_mercator_precision(#[case] point_deg: (f64, f64), #[case] point_mm: (i64, i64)) {
 		let mercator_bbox = GeoBBox::try_from(&[-point_deg.0, -point_deg.1, point_deg.0, point_deg.1])
 			.unwrap()
