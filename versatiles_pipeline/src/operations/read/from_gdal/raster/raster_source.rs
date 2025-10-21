@@ -17,7 +17,7 @@ use versatiles_image::traits::*;
 const EARTH_CIRCUMFERENCE: f64 = 2.0 * std::f64::consts::PI * 6_378_137.0;
 
 #[derive(Debug, Clone)]
-pub struct GdalDataset {
+pub struct RasterSource {
 	filename: PathBuf,
 	instances: Arc<Mutex<LinkedList<Instance>>>,
 	bbox: GeoBBox,
@@ -26,11 +26,11 @@ pub struct GdalDataset {
 	max_reuse_gdal: u32,
 }
 
-unsafe impl Sync for GdalDataset {}
+unsafe impl Sync for RasterSource {}
 
-impl GdalDataset {
+impl RasterSource {
 	#[context("Failed to create GDAL dataset from file {:?}", filename)]
-	pub async fn new(filename: &Path, max_reuse_gdal: u32) -> Result<GdalDataset> {
+	pub async fn new(filename: &Path, max_reuse_gdal: u32) -> Result<RasterSource> {
 		log::debug!("Opening GDAL dataset from file: {:?}", filename);
 
 		set_config_option("GDAL_NUM_THREADS", "ALL_CPUS")?;
@@ -192,8 +192,8 @@ mod tests {
 	use std::vec;
 	use versatiles_core::TileCoord;
 
-	impl GdalDataset {
-		pub fn from_testdata(bbox: GeoBBox, channel_count: usize) -> Result<GdalDataset> {
+	impl RasterSource {
+		pub fn from_testdata(bbox: GeoBBox, channel_count: usize) -> Result<RasterSource> {
 			let size = 256;
 			let band_mapping = {
 				let mut v = vec![];
@@ -258,7 +258,7 @@ mod tests {
 				band.set_color_interpretation(interp)?;
 			}
 
-			Ok(GdalDataset {
+			Ok(RasterSource {
 				filename: PathBuf::from("in-memory"),
 				instances: Arc::new(Mutex::new(LinkedList::from([Instance::new(ds_src)]))),
 				band_mapping: Arc::new(band_mapping),
@@ -276,7 +276,7 @@ mod tests {
 			// We keep it in‑memory (no factory) and map bands 1‑2‑3 → RGB.
 			let coord = TileCoord::new(level, x, y)?;
 
-			let dataset = GdalDataset::new(&PathBuf::from("../testdata/gradient.tif"), 65535).await?;
+			let dataset = RasterSource::new(&PathBuf::from("../testdata/gradient.tif"), 65535).await?;
 
 			// Extract a 7×7 tile and gather the RGB bytes.
 			let image = dataset
@@ -332,7 +332,7 @@ mod tests {
 	#[tokio::test(flavor = "multi_thread")]
 	async fn test_dataset_get_image2(#[case] channels: usize, #[case] expected_color: ColorType) {
 		let bbox_in = GeoBBox::new(14.0, 49.0, 24.0, 55.0).unwrap();
-		let ds = GdalDataset::from_testdata(bbox_in, channels).unwrap();
+		let ds = RasterSource::from_testdata(bbox_in, channels).unwrap();
 		let image = ds.get_image(&bbox_in, 256, 256).await.unwrap().unwrap();
 		assert_eq!(image.width(), 256);
 		assert_eq!(image.height(), 256);

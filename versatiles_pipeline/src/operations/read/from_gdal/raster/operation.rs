@@ -6,7 +6,7 @@
 //! [`OperationTrait`] so that the rest of the pipeline can treat it like any
 //! other data source.
 
-use super::GdalDataset;
+use super::RasterSource;
 use crate::{PipelineFactory, helpers::Tile, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
@@ -44,7 +44,7 @@ struct Args {
 /// container’s [`TileJSON`] metadata is kept so downstream stages can query
 /// bounds and zoom levels without touching the reader again.
 struct Operation {
-	dataset: GdalDataset,
+	source: RasterSource,
 	parameters: TilesReaderParameters,
 	tilejson: TileJSON,
 	tile_size: u32,
@@ -59,7 +59,7 @@ impl Operation {
 		height: usize,
 	) -> Result<Option<DynamicImage>> {
 		log::debug!("get_image_data_from_gdal: bbox={:?}, size={}x{}", bbox, width, height);
-		let res = self.dataset.get_image(bbox, width, height).await;
+		let res = self.source.get_image(bbox, width, height).await;
 		match &res {
 			Ok(Some(_)) => log::trace!("get_image_data_from_gdal: image available for bbox={:?}", bbox),
 			Ok(None) => log::trace!("get_image_data_from_gdal: no image for bbox={:?}", bbox),
@@ -86,11 +86,11 @@ impl ReadOperationTrait for Operation {
 			);
 			let filename = factory.resolve_path(&args.filename);
 			log::trace!("Resolved filename: {:?}", filename);
-			let dataset = GdalDataset::new(&filename, args.max_reuse_gdal.unwrap_or(100)).await?;
-			let bbox = dataset.bbox();
+			let source = RasterSource::new(&filename, args.max_reuse_gdal.unwrap_or(100)).await?;
+			let bbox = source.bbox();
 			let tile_size = args.tile_size.unwrap_or(512);
 
-			let level_max = args.level_max.unwrap_or(dataset.level_max(tile_size)?);
+			let level_max = args.level_max.unwrap_or(source.level_max(tile_size)?);
 			let level_min = args.level_min.unwrap_or(level_max);
 			log::trace!(
 				"Building bbox pyramid: level_min={}, level_max={}, tile_size={}",
@@ -122,7 +122,7 @@ impl ReadOperationTrait for Operation {
 			Ok(Box::new(Self {
 				tilejson,
 				parameters,
-				dataset,
+				source,
 				tile_size,
 			}) as Box<dyn OperationTrait>)
 		})
@@ -227,7 +227,7 @@ mod tests {
 
 	async fn get_operation(tile_size: u32) -> Operation {
 		Operation {
-			dataset: GdalDataset::new(&PathBuf::from("../testdata/gradient.tif"), 65535)
+			source: RasterSource::new(&PathBuf::from("../testdata/gradient.tif"), 65535)
 				.await
 				.unwrap(),
 			parameters: TilesReaderParameters::new(
