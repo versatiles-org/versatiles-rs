@@ -1,5 +1,5 @@
 use super::{BandMapping, ResampleAlg, get_spatial_ref};
-use anyhow::{Context, Result, anyhow, bail, ensure};
+use anyhow::{Context, Result, bail, ensure};
 use gdal::{Dataset, GeoTransform, spatial_ref::CoordTransform, vector::Geometry};
 use std::{fmt::Debug, sync::Arc};
 use versatiles_core::GeoBBox;
@@ -127,8 +127,7 @@ impl Instance {
 		)?;
 
 		// Coordinates seem to be flipped in OGREnvelope
-		let mut bbox = GeoBBox::new_save(bounds[0], bounds[1], bounds[2], bounds[3])
-			.with_context(|| anyhow!("Failed to get bounding box from {bounds:?}"))?;
+		let mut bbox = GeoBBox::new_normalized(bounds[0], bounds[1], bounds[2], bounds[3]);
 		bbox.limit_to_mercator();
 
 		log::trace!("bounding box: {:?}", bbox);

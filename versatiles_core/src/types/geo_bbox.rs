@@ -1,9 +1,26 @@
+//! Geographic bounding boxes in **degrees** (EPSG:4326) with helpers to clamp,
+//! combine, and convert to Web‑Mercator **meters** (EPSG:3857).
+//!
+//! ## Coordinate order & units
+//! * All public constructors and accessors use `[west, south, east, north]` in **degrees**.
+//! * `to_mercator()` returns `[minx, miny, maxx, maxy]` in **meters**.
+//! * Methods that mention *x* refer to **longitude**; *y* refers to **latitude**.
+//!
+//! ## Supported operations
+//! * Strict constructor [`GeoBBox::new`], plus [`GeoBBox::new_normalized`] for unordered input.
+//! * In‑place clamp to the valid Web‑Mercator domain via [`GeoBBox::limit_to_mercator`].
+//! * Set/return as tuple/array/vec/strings; extend & intersect (mutating and non‑mutating).
+//! * Conversion to EPSG:3857 using the spherical Web‑Mercator formulas.
 use anyhow::{Result, ensure};
 use std::fmt::Debug;
 use versatiles_derive::context;
 
+/// Maximum latitude permitted by Web‑Mercator (in degrees).
+/// Values outside this are clamped when converting.
 static MAX_MERCATOR_LAT: f64 = 85.051_128_779_806_59;
+/// Maximum longitude permitted by Web‑Mercator (in degrees).
 static MAX_MERCATOR_LNG: f64 = 180.0;
+/// Spherical Web‑Mercator radius (WGS84 semi‑major axis), in meters.
 static RADIUS: f64 = 6_378_137.0; // meters
 
 /// A geographical bounding box (`GeoBBox`) represents a rectangular area on a map
@@ -79,7 +96,22 @@ impl GeoBBox {
 		.checked()
 	}
 
-	pub fn new_save(x0: f64, y0: f64, x1: f64, y1: f64) -> Result<GeoBBox> {
+	/// Build a `GeoBBox` from two unconstrained corners `(x0, y0)` and `(x1, y1)`.
+	///
+	/// The inputs may be **unordered**; longitudes and latitudes are sorted into
+	/// `(west, south, east, north)` and each coordinate is clamped to the valid
+	/// geographic ranges (`lon ∈ [-180, 180]`, `lat ∈ [-90, 90]`).
+	///
+	/// This function is infallible; it applies normalization and then validates
+	/// the result internally.
+	///
+	/// # Example
+	/// ```
+	/// use versatiles_core::GeoBBox;
+	/// let bbox = GeoBBox::new_normalized(190.0, 12.0, -200.0, 15.0);
+	/// assert_eq!(bbox.as_tuple(), (-180.0, 12.0, 180.0, 15.0));
+	/// ```
+	pub fn new_normalized(x0: f64, y0: f64, x1: f64, y1: f64) -> GeoBBox {
 		GeoBBox {
 			x_min: x0.min(x1).clamp(-180.0, 180.0),
 			y_min: y0.min(y1).clamp(-90.0, 90.0),
@@ -88,6 +120,7 @@ impl GeoBBox {
 			phantom: (),
 		}
 		.checked()
+		.unwrap()
 	}
 
 	/// Attempts to build an optional `GeoBBox` from an optional `Vec<f64>`.
@@ -177,6 +210,7 @@ impl GeoBBox {
 	}
 
 	/// Returns the bounding box as a tuple `(x_min, y_min, x_max, y_max)`.
+	/// Returns `(x_min, y_min, x_max, y_max)` i.e. `(west, south, east, north)` in **degrees**.
 	#[must_use]
 	pub fn as_tuple(&self) -> (f64, f64, f64, f64) {
 		(self.x_min, self.y_min, self.x_max, self.y_max)
@@ -293,6 +327,9 @@ impl GeoBBox {
 		self
 	}
 
+	/// Validate coordinate ranges and ordering.
+	/// Ensures `x_min ≥ -180`, `x_max ≤ 180`, `y_min ≥ -90`, `y_max ≤ 90`, and
+	/// `x_min ≤ x_max`, `y_min ≤ y_max`.
 	fn checked(self) -> Result<Self> {
 		ensure!(self.x_min >= -180., "x_min ({}) must be >= -180", self.x_min);
 		ensure!(self.y_min >= -90., "y_min ({}) must be >= -90", self.y_min);
@@ -313,11 +350,23 @@ impl GeoBBox {
 		Ok(self)
 	}
 
-	/// Convert this WGS84 (EPSG:4326) bounding box to Web‑Mercator meters (EPSG:3857).
+	/// Convert this WGS84 (EPSG:4326) bounding box (in **degrees**) to
+	/// Web‑Mercator (EPSG:3857) **meters**.
 	///
-	/// Input is interpreted as `[west, south, east, north]` in **degrees** and is
-	/// clamped to the valid Web‑Mercator domain
-	/// (`-85.05112877980659° ≤ lat ≤ 85.05112877980659°`, `-180° ≤ lon ≤ 180°`).
+	/// Input is interpreted as `[west, south, east, north]`. Output is a
+	/// fixed‑size array `[minx, miny, maxx, maxy]` suitable for GeoTransforms.
+	///
+	/// Latitudes are clamped to the Web‑Mercator domain
+	/// (`-85.05112877980659° ≤ lat ≤ 85.05112877980659°`) and longitudes to
+	/// (`-180° ≤ lon ≤ 180°`) before conversion.
+	///
+	/// # Example
+	/// ```
+	/// use versatiles_core::GeoBBox;
+	/// let bbox = GeoBBox::new(-10.0, 40.0, 10.0, 50.0).unwrap();
+	/// let [minx, miny, maxx, maxy] = bbox.to_mercator();
+	/// assert!(minx < maxx && miny < maxy);
+	/// ```
 	pub fn to_mercator(self: &GeoBBox) -> [f64; 4] {
 		// Spherical Mercator radius (WGS84 semi-major axis)
 		fn x_from_lon(lon_deg: f64) -> f64 {
