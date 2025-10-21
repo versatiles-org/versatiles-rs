@@ -79,6 +79,17 @@ impl GeoBBox {
 		.checked()
 	}
 
+	pub fn new_save(x0: f64, y0: f64, x1: f64, y1: f64) -> Result<GeoBBox> {
+		GeoBBox {
+			x_min: x0.min(x1).clamp(-180.0, 180.0),
+			y_min: y0.min(y1).clamp(-90.0, 90.0),
+			x_max: x0.max(x1).clamp(-180.0, 180.0),
+			y_max: y0.max(y1).clamp(-90.0, 90.0),
+			phantom: (),
+		}
+		.checked()
+	}
+
 	/// Attempts to build an optional `GeoBBox` from an optional `Vec<f64>`.
 	///
 	/// If `input` is `Some`, tries converting that `Vec<f64>` into a `GeoBBox`.
