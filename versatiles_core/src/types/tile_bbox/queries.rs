@@ -350,7 +350,7 @@ mod tests {
 		assert!(a.try_contains_bbox(&inner)?);
 		assert!(!a.try_contains_bbox(&edge_touch)?); // inner extends beyond
 		assert!(!a.try_contains_bbox(&disjoint)?);
-		assert!(a.try_contains_bbox(&TileBBox::new_empty(5)?)? == false);
+		assert!(!a.try_contains_bbox(&TileBBox::new_empty(5)?)?);
 		assert!(a.try_contains_bbox(&bb(6, 12, 12, 18, 18)).is_err()); // level mismatch
 
 		// overlaps_bbox (inclusive on shared edge)

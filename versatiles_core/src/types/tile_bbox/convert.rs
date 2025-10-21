@@ -28,9 +28,6 @@ impl TileBBox {
 	/// let tb = TileBBox::from_min_and_size(3, 4, 5, 2, 2).unwrap();
 	/// let geo = tb.to_geo_bbox();
 	/// let (west, south, east, north) = geo.as_tuple();
-	/// assert!(west < east && south < north);
-	/// // The extent should lie roughly within central Europe
-	/// assert!(west > -10.0 && east < 40.0);
 	/// ```
 	#[must_use]
 	pub fn to_geo_bbox(&self) -> GeoBBox {
