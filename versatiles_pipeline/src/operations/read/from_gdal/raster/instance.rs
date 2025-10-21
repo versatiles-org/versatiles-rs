@@ -1,6 +1,4 @@
-use crate::operations::read::from_gdal::raster::spatial_ref::get_spatial_ref;
-
-use super::{BandMapping, ResampleAlg};
+use super::{BandMapping, ResampleAlg, get_spatial_ref};
 use anyhow::{Context, Result, anyhow, bail, ensure};
 use gdal::{Dataset, GeoTransform, spatial_ref::CoordTransform, vector::Geometry};
 use std::{fmt::Debug, sync::Arc};
@@ -216,6 +214,7 @@ impl Instance {
 mod tests {
 	use super::*;
 	use gdal::DriverManager;
+	use rstest::rstest;
 
 	fn mem_dataset(w: usize, h: usize, bands: usize) -> Dataset {
 		let driver = DriverManager::get_driver_by_name("MEM").expect("MEM driver");
@@ -233,5 +232,37 @@ mod tests {
 		assert_eq!(inst.age(), 1);
 		inst.cleanup();
 		assert_eq!(inst.age(), 2);
+	}
+
+	#[rstest]
+	#[case( 3857, [-2e7, -2e7, 2e7, 2e7], [-179.663, -85.022, 179.663, 85.022])]
+	#[case( 4326, [-10.0, -20.0, 30.0, 40.0], [-10.0, -20.0, 30.0, 40.0])]
+	#[case(25832, [186073.6, 2214294.0, 714984.2, 5542944.0], [4.623, 20.0, 12.0, 50.039])]
+	fn test_get_bbox(#[case] epsg: u32, #[case] bbox_in: [f64; 4], #[case] bbox_out: [f64; 4]) -> Result<()> {
+		let mut ds = mem_dataset(100, 100, 1);
+		ds.set_spatial_ref(&get_spatial_ref(epsg)?)?;
+		ds.set_geo_transform(&[
+			bbox_in[0],
+			(bbox_in[2] - bbox_in[0]) / 100.0,
+			0.0,
+			bbox_in[3],
+			0.0,
+			(bbox_in[1] - bbox_in[3]) / 100.0,
+		])?;
+		let inst = Instance::new(ds);
+		let bbox = inst.get_bbox()?;
+
+		if (bbox.x_min - bbox_out[0]).abs() > 1e-3
+			|| (bbox.y_min - bbox_out[1]).abs() > 1e-3
+			|| (bbox.x_max - bbox_out[2]).abs() > 1e-3
+			|| (bbox.y_max - bbox_out[3]).abs() > 1e-3
+		{
+			panic!(
+				"bbox {:?} is not equal to expected {:?}",
+				bbox.as_array().map(|v| (v * 1000.0).round() / 1000.0),
+				bbox_out
+			);
+		}
+		Ok(())
 	}
 }
