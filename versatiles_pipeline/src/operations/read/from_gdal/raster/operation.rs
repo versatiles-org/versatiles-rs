@@ -260,11 +260,10 @@ mod tests {
 				(0..7)
 					.map(|i| match cb(i) {
 						63 => 64,
-						127 => 128,
 						191 => 192,
-						v => v,
+						value => value,
 					})
-					.collect::<Vec<_>>()
+					.collect()
 			}
 
 			// Return:
@@ -279,14 +278,14 @@ mod tests {
 		// ─── zoom‑0 full‑world tile should be a uniform gradient ───
 		assert_eq!(
 			gradient_test(0, 0, 0).await,
-			[[21, 54, 91, 128, 164, 201, 234], [16, 27, 64, 128, 192, 228, 239]]
+			[[18, 54, 91, 127, 164, 201, 237], [12, 29, 67, 128, 188, 226, 243]]
 		);
 
 		// ─── zoom‑1: four quadrants of the gradient ───
-		let row0 = [10, 27, 45, 64, 82, 100, 118];
-		let row1 = [137, 155, 173, 192, 210, 228, 245];
-		let col0 = [10, 14, 21, 33, 51, 76, 109];
-		let col1 = [146, 179, 204, 222, 234, 241, 245];
+		let row0 = [9, 27, 45, 64, 82, 100, 118];
+		let row1 = [137, 155, 173, 192, 210, 228, 246];
+		let col0 = [9, 14, 22, 34, 52, 77, 110];
+		let col1 = [145, 178, 203, 221, 233, 241, 246];
 
 		assert_eq!(gradient_test(1, 0, 0).await, [row0, col0]);
 		assert_eq!(gradient_test(1, 1, 0).await, [row1, col0]);
@@ -307,9 +306,9 @@ mod tests {
 			assert_eq!(image.height(), 16);
 			let color_is = image.average_color();
 			let color_should = match (coord_out.x, coord_out.y) {
-				(0, 0) => [64, 43, 0],
+				(0, 0) => [63, 43, 0],
 				(1, 0) => [192, 43, 0],
-				(0, 1) => [64, 212, 0],
+				(0, 1) => [63, 212, 0],
 				(1, 1) => [192, 212, 0],
 				_ => panic!("Unexpected tile coordinate: {coord_out:?}"),
 			};

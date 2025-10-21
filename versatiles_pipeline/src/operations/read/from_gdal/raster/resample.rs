@@ -51,9 +51,46 @@ impl ResampleAlg {
 	}
 }
 
-/// Default resampling is [`ResampleAlg::Bilinear`].
+/// Default resampling is [`ResampleAlg::Average`].
 impl Default for ResampleAlg {
 	fn default() -> Self {
-		ResampleAlg::Bilinear
+		ResampleAlg::Average
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::ResampleAlg;
+
+	#[test]
+	fn maps_to_gdal_constants() {
+		use gdal_sys::GDALResampleAlg::*;
+		assert_eq!(ResampleAlg::NearestNeighbour.as_gdal(), GRA_NearestNeighbour);
+		assert_eq!(ResampleAlg::Bilinear.as_gdal(), GRA_Bilinear);
+		assert_eq!(ResampleAlg::Cubic.as_gdal(), GRA_Cubic);
+		assert_eq!(ResampleAlg::CubicSpline.as_gdal(), GRA_CubicSpline);
+		assert_eq!(ResampleAlg::Lanczos.as_gdal(), GRA_Lanczos);
+		assert_eq!(ResampleAlg::Average.as_gdal(), GRA_Average);
+	}
+
+	#[test]
+	fn default_is_average() {
+		assert!(matches!(ResampleAlg::default(), ResampleAlg::Average));
+	}
+
+	#[test]
+	fn mapping_values_are_unique() {
+		use std::collections::HashSet;
+		let vals: HashSet<u32> = [
+			ResampleAlg::NearestNeighbour.as_gdal(),
+			ResampleAlg::Bilinear.as_gdal(),
+			ResampleAlg::Cubic.as_gdal(),
+			ResampleAlg::CubicSpline.as_gdal(),
+			ResampleAlg::Lanczos.as_gdal(),
+			ResampleAlg::Average.as_gdal(),
+		]
+		.into_iter()
+		.collect();
+		assert_eq!(vals.len(), 6, "duplicate GDALResampleAlg values detected");
 	}
 }
