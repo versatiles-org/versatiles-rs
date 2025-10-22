@@ -58,7 +58,8 @@ Hint: When using "gdalbuildvrt" to create a virtual raster, don't forget to set 
 - *`tile_format`: TileFormat (optional)* - The tile format to use for the output tiles. (default: `PNG`)
 - *`level_max`: u8 (optional)* - The maximum zoom level to generate tiles for. (default: the maximum zoom level based on the dataset's native resolution)
 - *`level_min`: u8 (optional)* - The minimum zoom level to generate tiles for. (default: level_max)
-- *`max_reuse_gdal`: u32 (optional)* - How often to reuse an GDAL instances. (default: 100) Set to a lower value if you have problems like memory leaks in GDAL.
+- *`gdal_reuse_limit`: u32 (optional)* - How often to reuse an GDAL instances. (default: 100) Set to a lower value if you have problems like memory leaks in GDAL.
+- *`gdal_concurrency_limit`: u8 (optional)* - The number of maximum concurrent GDAL instances to allow. (default: 4) Set to a higher value if you have enough system resources and want to increase throughput.
 
 ## from_merged_vector
 Merges multiple vector tile sources.
