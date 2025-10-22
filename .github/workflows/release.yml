@@ -267,7 +267,19 @@ jobs:
         run: gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest --prerelease=false
 
       - name: Trigger Docker release
-        run: curl -XPOST -u "michaelkreil:${{ secrets.PAT_TOKEN }}" https://api.github.com/repos/versatiles-org/versatiles-docker/actions/workflows/release.yml/dispatches --data '{"ref":"main"}'
+        run: |
+          set -euo pipefail
+          response=$(curl -s -o /dev/null -w "%{http_code}" -XPOST -u "michaelkreil:${{ secrets.PAT_TOKEN }}" https://api.github.com/repos/versatiles-org/versatiles-docker/actions/workflows/release.yml/dispatches --data '{"ref":"main"}')
+          if [ "$response" != "204" ]; then
+            echo "Docker release trigger failed with HTTP $response" >&2
+            exit 1
+          fi
 
       - name: Trigger Homebrew formula update
-        run: curl -XPOST -u "michaelkreil:${{ secrets.PAT_TOKEN }}" https://api.github.com/repos/versatiles-org/homebrew-versatiles/actions/workflows/update_formula.yml/dispatches --data '{"ref":"main"}'
+        run: |
+          set -euo pipefail
+          response=$(curl -s -o /dev/null -w "%{http_code}" -XPOST -u "michaelkreil:${{ secrets.PAT_TOKEN }}" https://api.github.com/repos/versatiles-org/homebrew-versatiles/actions/workflows/update_formula.yml/dispatches --data '{"ref":"main"}')
+          if [ "$response" != "204" ]; then
+            echo "Homebrew formula update trigger failed with HTTP $response" >&2
+            exit 1
+          fi
