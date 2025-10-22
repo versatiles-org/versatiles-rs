@@ -162,7 +162,7 @@ impl OperationTrait for Operation {
 		let format = Some(self.format.into());
 
 		Ok(stream.map_item_parallel(move |mut tile| {
-			tile.encode_raster(format, Some(TileCompression::Uncompressed), quality, speed)?;
+			tile.reencode_raster(format, Some(TileCompression::Uncompressed), quality, speed)?;
 			Ok(tile)
 		}))
 	}

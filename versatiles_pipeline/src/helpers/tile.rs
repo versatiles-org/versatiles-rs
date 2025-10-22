@@ -33,18 +33,20 @@ impl Tile {
 	}
 
 	pub fn from_image(image: DynamicImage, format: TileFormat, compression: TileCompression) -> Self {
+		assert_eq!(format.get_type(), TileType::Raster);
 		let mut tile = Self::new(format, compression);
 		tile.image = Some(image);
 		tile
 	}
 
 	pub fn from_vector(vector: VectorTile, format: TileFormat, compression: TileCompression) -> Self {
+		assert_eq!(format.get_type(), TileType::Vector);
 		let mut tile = Self::new(format, compression);
 		tile.vector = Some(vector);
 		tile
 	}
 
-	pub fn ensure_blob(&mut self) -> Result<()> {
+	fn materialize_blob(&mut self) -> Result<()> {
 		if self.blob.is_none() {
 			let blob = match self.format.get_type() {
 				TileType::Raster => {
@@ -62,7 +64,7 @@ impl Tile {
 		Ok(())
 	}
 
-	pub fn ensure_image(&mut self) -> Result<()> {
+	fn materialize_image(&mut self) -> Result<()> {
 		ensure!(self.format.get_type().is_raster(), "tile is not raster data");
 		if self.image.is_none() {
 			ensure!(self.blob.is_some(), "tile has no data");
@@ -77,7 +79,7 @@ impl Tile {
 		Ok(())
 	}
 
-	pub fn ensure_vector(&mut self) -> Result<()> {
+	fn materialize_vector(&mut self) -> Result<()> {
 		ensure!(self.format.get_type().is_vector(), "tile is not vector data");
 		if self.vector.is_none() {
 			ensure!(self.blob.is_some(), "tile has no data");
@@ -92,51 +94,51 @@ impl Tile {
 	}
 
 	pub fn blob(&mut self) -> Result<&Blob> {
-		self.ensure_blob()?;
+		self.materialize_blob()?;
 		Ok(self.blob.as_ref().ok_or(anyhow!("tile has no blob data"))?)
 	}
 
 	pub fn image(&mut self) -> Result<&DynamicImage> {
-		self.ensure_image()?;
+		self.materialize_image()?;
 		Ok(self.image.as_ref().ok_or(anyhow!("tile has no image data"))?)
 	}
 
 	pub fn vector(&mut self) -> Result<&VectorTile> {
-		self.ensure_vector()?;
+		self.materialize_vector()?;
 		Ok(self.vector.as_ref().ok_or(anyhow!("tile has no vector data"))?)
 	}
 
 	pub fn blob_mut(&mut self) -> Result<&mut Blob> {
-		self.ensure_blob()?;
+		self.materialize_blob()?;
 		self.image = None;
 		self.vector = None;
 		Ok(self.blob.as_mut().ok_or(anyhow!("tile has no blob data"))?)
 	}
 
 	pub fn image_mut(&mut self) -> Result<&mut DynamicImage> {
-		self.ensure_image()?;
+		self.materialize_image()?;
 		self.blob = None;
 		Ok(self.image.as_mut().ok_or(anyhow!("tile has no image data"))?)
 	}
 
 	pub fn vector_mut(&mut self) -> Result<&mut VectorTile> {
-		self.ensure_vector()?;
+		self.materialize_vector()?;
 		self.blob = None;
 		Ok(self.vector.as_mut().ok_or(anyhow!("tile has no vector data"))?)
 	}
 
 	pub fn into_blob(mut self) -> Result<Blob> {
-		self.ensure_blob()?;
+		self.materialize_blob()?;
 		Ok(self.blob.take().ok_or(anyhow!("tile has no blob data"))?)
 	}
 
 	pub fn into_image(mut self) -> Result<DynamicImage> {
-		self.ensure_image()?;
+		self.materialize_image()?;
 		Ok(self.image.take().ok_or(anyhow!("tile has no image data"))?)
 	}
 
 	pub fn into_vector(mut self) -> Result<VectorTile> {
-		self.ensure_vector()?;
+		self.materialize_vector()?;
 		Ok(self.vector.take().ok_or(anyhow!("tile has no vector data"))?)
 	}
 
@@ -144,21 +146,32 @@ impl Tile {
 	where
 		F: FnOnce(DynamicImage) -> Result<DynamicImage>,
 	{
-		self.ensure_image()?;
+		self.materialize_image()?;
 		let image = self.image.take().ok_or(anyhow!("tile has no image data"))?;
 		self.image = Some(f(image)?);
 		self.blob = None;
 		Ok(self)
 	}
 
-	pub fn encode_raster(
+	pub fn map_vector<F>(mut self, f: F) -> Result<Self>
+	where
+		F: FnOnce(VectorTile) -> Result<VectorTile>,
+	{
+		self.materialize_vector()?;
+		let vector = self.vector.take().ok_or(anyhow!("tile has no vector data"))?;
+		self.vector = Some(f(vector)?);
+		self.blob = None;
+		Ok(self)
+	}
+
+	pub fn reencode_raster(
 		&mut self,
 		format: Option<TileFormat>,
 		compression: Option<TileCompression>,
 		quality: Option<u8>,
 		speed: Option<u8>,
 	) -> Result<()> {
-		self.ensure_image()?;
+		self.materialize_image()?;
 
 		self.format = format.unwrap_or(self.format);
 		self.compression = compression.unwrap_or(self.compression);
@@ -178,7 +191,7 @@ impl Tile {
 	where
 		F: FnOnce(VectorTile) -> Result<Option<VectorTile>>,
 	{
-		self.ensure_vector()?;
+		self.materialize_vector()?;
 		let vector = self.vector.take().ok_or(anyhow!("tile has no vector data"))?;
 		if let Some(vector) = f(vector)? {
 			self.vector = Some(vector);
@@ -200,8 +213,8 @@ impl Tile {
 			format
 		);
 		match self.format.get_type() {
-			TileType::Raster => self.ensure_image()?,
-			TileType::Vector => self.ensure_vector()?,
+			TileType::Raster => self.materialize_image()?,
+			TileType::Vector => self.materialize_vector()?,
 			_ => bail!("unknown tile type"),
 		}
 		self.format = format;
@@ -218,5 +231,143 @@ impl Tile {
 		}
 		self.compression = compression;
 		Ok(())
+	}
+
+	pub fn format(&self) -> TileFormat {
+		self.format
+	}
+
+	pub fn compression(&self) -> TileCompression {
+		self.compression
+	}
+
+	pub fn has_blob(&self) -> bool {
+		self.blob.is_some()
+	}
+
+	pub fn has_image(&self) -> bool {
+		self.image.is_some()
+	}
+
+	pub fn has_vector(&self) -> bool {
+		self.vector.is_some()
+	}
+}
+
+impl std::fmt::Debug for Tile {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Tile")
+			.field("compression", &self.compression)
+			.field("format", &self.format)
+			.field(
+				"blob",
+				&self
+					.blob
+					.as_ref()
+					.map_or(String::from("none"), |b| format!("{}", b.len())),
+			)
+			.field(
+				"image",
+				&self
+					.image
+					.as_ref()
+					.map_or(String::from("none"), |i| format!("{}x{}", i.width(), i.height())),
+			)
+			.field(
+				"vector",
+				&self
+					.vector
+					.as_ref()
+					.map_or(String::from("none"), |v| format!("{} layers", v.layers.len())),
+			)
+			.finish()
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use imageproc::image::{self, GenericImage, RgbaImage};
+	use rstest::rstest;
+
+	fn tiny_rgba(r: u8, g: u8, b: u8, a: u8) -> DynamicImage {
+		let mut img = RgbaImage::new(1, 1);
+		img.put_pixel(0, 0, image::Rgba([r, g, b, a]));
+		DynamicImage::from(img)
+	}
+
+	#[rstest]
+	fn raster_roundtrip_blob_encode_decode() {
+		let img = tiny_rgba(10, 20, 30, 255);
+		let mut t = Tile::from_image(img.clone(), TileFormat::PNG, TileCompression::Gzip);
+
+		// materialize blob
+		let blob_len_1 = t.blob().unwrap().len();
+		assert!(blob_len_1 > 0);
+
+		// drop caches and re-decode from blob
+		let blob = t.into_blob().unwrap();
+		let mut t2 = Tile::from_blob(blob, TileFormat::PNG, TileCompression::Gzip);
+		let im2 = t2.image().unwrap();
+		assert_eq!(im2.width(), 1);
+		assert_eq!(im2.height(), 1);
+	}
+
+	#[rstest]
+	fn change_compression_recompresses_in_place() {
+		let img = tiny_rgba(1, 2, 3, 255);
+		let mut t = Tile::from_image(img, TileFormat::WEBP, TileCompression::Gzip);
+		let before = t.blob().unwrap().len();
+		t.change_compression(TileCompression::Brotli).unwrap();
+		let after = t.blob().unwrap().len();
+		assert_ne!(before, after, "blob should have been recompressed");
+	}
+
+	#[rstest]
+	fn change_format_same_type_allowed() {
+		let img = tiny_rgba(0, 0, 0, 255);
+		let mut t = Tile::from_image(img, TileFormat::PNG, TileCompression::Uncompressed);
+		t.change_format(TileFormat::WEBP).unwrap(); // still raster
+		assert_eq!(t.format().get_type(), TileType::Raster);
+	}
+
+	#[rstest]
+	fn change_format_cross_type_errors() {
+		let img = tiny_rgba(0, 0, 0, 255);
+		let mut t = Tile::from_image(img, TileFormat::PNG, TileCompression::Uncompressed);
+		let err = t.change_format(TileFormat::MVT).unwrap_err();
+		let s = err.to_string();
+		assert!(s.contains("cannot change tile type"));
+	}
+
+	#[rstest]
+	fn map_image_invalidates_blob() {
+		let img = tiny_rgba(10, 10, 10, 255);
+		let mut t = Tile::from_image(img, TileFormat::PNG, TileCompression::Gzip);
+		// ensure blob exists
+		assert!(t.has_blob() || t.blob().is_ok());
+
+		// mutate the image
+		let t = t
+			.map_image(|mut im| {
+				// turn pixel white
+				im.put_pixel(0, 0, image::Rgba([255, 255, 255, 255]));
+				Ok(im)
+			})
+			.unwrap();
+
+		assert!(t.has_image());
+		assert!(!t.has_blob(), "blob must be invalidated after image map");
+	}
+
+	#[rstest]
+	fn reencode_raster_produces_blob() {
+		let img = tiny_rgba(33, 44, 55, 255);
+		let mut t = Tile::from_image(img, TileFormat::WEBP, TileCompression::Uncompressed);
+		t.reencode_raster(Some(TileFormat::WEBP), Some(TileCompression::Brotli), Some(75), Some(4))
+			.unwrap();
+		assert!(t.has_blob());
+		assert_eq!(t.format(), TileFormat::WEBP);
+		assert_eq!(t.compression(), TileCompression::Brotli);
 	}
 }
