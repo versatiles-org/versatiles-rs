@@ -33,7 +33,6 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
-  GH_TOKEN: ${{ github.token }}
 
 jobs:
   prepare:
@@ -254,26 +253,32 @@ jobs:
           echo "TAG=${{ needs.prepare.outputs.tag }}" >> $GITHUB_ENV
 
       - name: Update and Release Install scripts
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p release
           OLD_URL="versatiles-org/versatiles-rs/releases/latest/download/"
           NEW_URL="versatiles-org/versatiles-rs/releases/download/${TAG}/"
           sed "s|${OLD_URL}|${NEW_URL}|g" ./scripts/install-unix.sh > ./release/install-unix.sh
           sed "s|${OLD_URL}|${NEW_URL}|g" ./scripts/install-windows.ps1 > ./release/install-windows.ps1
+          gh auth status -h github.com
           gh release upload "${TAG}" ./release/install-unix.sh --clobber
           gh release upload "${TAG}" ./release/install-windows.ps1 --clobber
 
       - name: Finalize the release
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest --prerelease=false
 
       - name: Trigger Docker release
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
+          gh auth status -h github.com
+          gh workflow view release.yml --repo versatiles-org/versatiles-docker --yaml
           gh workflow run release.yml --repo versatiles-org/versatiles-docker --ref main
 
       - name: Trigger Homebrew formula update
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          gh workflow run update_formula.yml --repo versatiles-org/homebrew-versatiles --ref main
+        run: gh workflow run update_formula.yml --repo versatiles-org/homebrew-versatiles --ref main
