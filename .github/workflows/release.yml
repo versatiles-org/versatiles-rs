@@ -96,6 +96,8 @@ jobs:
 
       - name: Pack and upload
         if: env.BUILD_ENABLED == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-pack-upload.sh "output" "linux-${{ matrix.libc }}-aarch64" "${{ needs.prepare.outputs.tag }}"
 
   build-linux-x86:
@@ -144,6 +146,8 @@ jobs:
 
       - name: Pack and upload
         if: env.BUILD_ENABLED == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-pack-upload.sh "output" "linux-${{ matrix.libc }}-x86_64" "${{ needs.prepare.outputs.tag }}"
 
   build-macos:
@@ -189,6 +193,8 @@ jobs:
 
       - name: Pack and upload
         if: env.BUILD_ENABLED == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-pack-upload.sh "target/${{ matrix.arch }}-apple-darwin/release" "macos-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
 
   build-windows:
@@ -235,6 +241,8 @@ jobs:
       - name: Pack and upload
         if: env.BUILD_ENABLED == 'true'
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: scripts\workflow-pack-upload.ps1 "target\${{ matrix.arch }}-pc-windows-msvc\release" "windows-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
 
   finish-release:
