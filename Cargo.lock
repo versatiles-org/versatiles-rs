@@ -3605,7 +3605,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "versatiles"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -3633,7 +3633,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_container"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -3656,7 +3656,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_core"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "assert_fs",
@@ -3688,7 +3688,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_derive"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "pretty_assertions",
  "prettyplease",
@@ -3699,7 +3699,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_geometry"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "byteorder",
@@ -3715,7 +3715,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_image"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "fast_image_resize",
@@ -3728,7 +3728,7 @@ dependencies = [
 
 [[package]]
 name = "versatiles_pipeline"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "ab_glyph",
  "anyhow",
