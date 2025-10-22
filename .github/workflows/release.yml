@@ -46,6 +46,8 @@ jobs:
 
       - id: create_release
         name: Get version via latest git tag
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-create-release.sh
 
   build-linux-arm:
