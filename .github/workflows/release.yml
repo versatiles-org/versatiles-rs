@@ -7,22 +7,22 @@ on:
   workflow_dispatch:
     inputs:
       build_linux_x86:
-        description: "Build Linux x86 (gnu & musl)"
+        description: "Build Linux x86"
         type: boolean
         required: false
         default: true
       build_linux_arm:
-        description: "Build Linux ARM (gnu & musl)"
+        description: "Build Linux ARM"
         type: boolean
         required: false
         default: true
       build_macos:
-        description: "Build macOS (x86_64 & aarch64)"
+        description: "Build macOS"
         type: boolean
         required: false
         default: true
       build_windows:
-        description: "Build Windows (x86_64 & aarch64)"
+        description: "Build Windows"
         type: boolean
         required: false
         default: true
