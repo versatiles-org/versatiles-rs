@@ -165,9 +165,12 @@ impl VectorTileLayer {
 
 		let feature_prop_list = features
 			.into_iter()
-			.filter_map(|feature: VectorTileFeature| {
-				filter_fn(self.decode_tag_ids(&feature.tag_ids).unwrap()).map(|properties| Ok((feature, properties)))
-			})
+			.filter_map(
+				|feature: VectorTileFeature| match self.decode_tag_ids(&feature.tag_ids) {
+					Ok(p) => filter_fn(p).map(|properties| Ok((feature, properties))),
+					Err(_) => None,
+				},
+			)
 			.collect::<Result<Vec<(VectorTileFeature, GeoProperties)>>>()?;
 
 		self.property_manager = PropertyManager::from_iter(feature_prop_list.iter().map(|(_, p)| p));
