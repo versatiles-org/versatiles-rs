@@ -88,7 +88,7 @@ fn parse_bare_identifier(input: &str) -> IResult<&str, String, VerboseError<&str
 fn parse_quoted_string(input: &str) -> IResult<&str, String, VerboseError<&str>> {
 	context(
 		"parsing quoted string",
-		delimited(char('\"'), parse_string, cut(char('\"'))),
+		delimited(char('"'), parse_string, cut(char('"'))),
 	)
 	.parse(input)
 }
