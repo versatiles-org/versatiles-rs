@@ -15,8 +15,8 @@ use versatiles_geometry::vector_tile::VectorTile;
 struct Args {
 	/// A regular expression pattern that should match property names to be removed from all features.
 	/// The property names contain the layer name as a prefix, e.g., `layer_name/property_name`,
-	/// so an expression like `^layer_name/` will match all properties of that layer or
-	/// `/name_.*$/` will match all properties starting with `name_` in all layers.
+	/// so an expression like `regex="^layer_name/"` will match all properties of that layer or
+	/// `regex="/name_.*$"` will match all properties starting with `name_` in all layers.
 	regex: String,
 
 	/// If set, inverts the filter logic (i.e., keeps only properties matching the filter).
