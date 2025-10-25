@@ -10,7 +10,6 @@ use super::RasterSource;
 use crate::{PipelineFactory, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
-use futures::future::BoxFuture;
 use imageproc::image::DynamicImage;
 use std::{fmt::Debug, vec};
 use versatiles_container::Tile;
@@ -74,67 +73,65 @@ impl Operation {
 }
 
 impl ReadOperationTrait for Operation {
-	fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
 	{
-		Box::pin(async move {
-			let args = Args::from_vpl_node(&vpl_node).context("Failed to parse arguments from VPL node")?;
-			log::trace!(
-				"from_gdal_raster::build args: filename={:?}, tile_size={:?}, tile_format={:?}, level_min={:?}, level_max={:?}",
-				args.filename,
-				args.tile_size,
-				args.tile_format,
-				args.level_min,
-				args.level_max
-			);
-			let filename = factory.resolve_path(&args.filename);
-			log::trace!("Resolved filename: {:?}", filename);
-			let source = RasterSource::new(
-				&filename,
-				args.gdal_reuse_limit.unwrap_or(100),
-				args.gdal_concurrency_limit.unwrap_or(4) as usize,
-			)
-			.await?;
-			let bbox = source.bbox();
-			let tile_size = args.tile_size.unwrap_or(512);
+		let args = Args::from_vpl_node(&vpl_node).context("Failed to parse arguments from VPL node")?;
+		log::trace!(
+			"from_gdal_raster::build args: filename={:?}, tile_size={:?}, tile_format={:?}, level_min={:?}, level_max={:?}",
+			args.filename,
+			args.tile_size,
+			args.tile_format,
+			args.level_min,
+			args.level_max
+		);
+		let filename = factory.resolve_path(&args.filename);
+		log::trace!("Resolved filename: {:?}", filename);
+		let source = RasterSource::new(
+			&filename,
+			args.gdal_reuse_limit.unwrap_or(100),
+			args.gdal_concurrency_limit.unwrap_or(4) as usize,
+		)
+		.await?;
+		let bbox = source.bbox();
+		let tile_size = args.tile_size.unwrap_or(512);
 
-			let level_max = args.level_max.unwrap_or(source.level_max(tile_size)?);
-			let level_min = args.level_min.unwrap_or(level_max);
-			log::trace!(
-				"Building bbox pyramid: level_min={}, level_max={}, tile_size={}",
-				level_min,
-				level_max,
-				tile_size
-			);
-			let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(level_min, level_max, bbox);
+		let level_max = args.level_max.unwrap_or(source.level_max(tile_size)?);
+		let level_min = args.level_min.unwrap_or(level_max);
+		log::trace!(
+			"Building bbox pyramid: level_min={}, level_max={}, tile_size={}",
+			level_min,
+			level_max,
+			tile_size
+		);
+		let bbox_pyramid = TileBBoxPyramid::from_geo_bbox(level_min, level_max, bbox);
 
-			let parameters = TilesReaderParameters::new(
-				args.tile_format.unwrap_or(TileFormat::PNG),
-				TileCompression::Uncompressed,
-				bbox_pyramid,
-			);
-			log::trace!(
-				"Parameters: format={:?}, compression={:?}",
-				parameters.tile_format,
-				parameters.tile_compression
-			);
-			let mut tilejson = TileJSON {
-				bounds: Some(*bbox),
-				..Default::default()
-			};
-			tilejson.update_from_reader_parameters(&parameters);
-			tilejson.tile_schema = Some(TileSchema::RasterRGBA);
-			log::trace!("TileJSON bounds set to {:?}", tilejson.bounds);
-			log::trace!("from_gdal_raster::Operation built successfully");
+		let parameters = TilesReaderParameters::new(
+			args.tile_format.unwrap_or(TileFormat::PNG),
+			TileCompression::Uncompressed,
+			bbox_pyramid,
+		);
+		log::trace!(
+			"Parameters: format={:?}, compression={:?}",
+			parameters.tile_format,
+			parameters.tile_compression
+		);
+		let mut tilejson = TileJSON {
+			bounds: Some(*bbox),
+			..Default::default()
+		};
+		tilejson.update_from_reader_parameters(&parameters);
+		tilejson.tile_schema = Some(TileSchema::RasterRGBA);
+		log::trace!("TileJSON bounds set to {:?}", tilejson.bounds);
+		log::trace!("from_gdal_raster::Operation built successfully");
 
-			Ok(Box::new(Self {
-				tilejson,
-				parameters,
-				source,
-				tile_size,
-			}) as Box<dyn OperationTrait>)
-		})
+		Ok(Box::new(Self {
+			tilejson,
+			parameters,
+			source,
+			tile_size,
+		}) as Box<dyn OperationTrait>)
 	}
 }
 

@@ -9,7 +9,6 @@
 use crate::{PipelineFactory, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::future::BoxFuture;
 use std::fmt::Debug;
 use versatiles_container::{Tile, TilesReaderTrait};
 use versatiles_core::*;
@@ -34,23 +33,21 @@ struct Operation {
 }
 
 impl ReadOperationTrait for Operation {
-	fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
 	{
-		Box::pin(async move {
-			let args = Args::from_vpl_node(&vpl_node)?;
-			let reader = factory.get_reader(&factory.resolve_filename(&args.filename)).await?;
-			let parameters = reader.parameters().clone();
-			let mut tilejson = reader.tilejson().clone();
-			tilejson.update_from_reader_parameters(&parameters);
+		let args = Args::from_vpl_node(&vpl_node)?;
+		let reader = factory.get_reader(&factory.resolve_filename(&args.filename)).await?;
+		let parameters = reader.parameters().clone();
+		let mut tilejson = reader.tilejson().clone();
+		tilejson.update_from_reader_parameters(&parameters);
 
-			Ok(Box::new(Self {
-				tilejson,
-				parameters,
-				reader,
-			}) as Box<dyn OperationTrait>)
-		})
+		Ok(Box::new(Self {
+			tilejson,
+			parameters,
+			reader,
+		}) as Box<dyn OperationTrait>)
 	}
 }
 

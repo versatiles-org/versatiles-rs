@@ -1,8 +1,7 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
-use futures::future::BoxFuture;
-use std::{fmt::Debug, thread::panicking};
+use std::fmt::Debug;
 use versatiles_container::Tile;
 use versatiles_core::*;
 
@@ -25,55 +24,53 @@ struct Operation {
 }
 
 impl Operation {
-	fn build(
+	async fn build(
 		vpl_node: VPLNode,
 		source: Box<dyn OperationTrait>,
 		_factory: &PipelineFactory,
-	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
+	) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
 	{
-		Box::pin(async move {
-			let args = Args::from_vpl_node(&vpl_node)?;
-			let mut parameters = source.parameters().clone();
+		let args = Args::from_vpl_node(&vpl_node)?;
+		let mut parameters = source.parameters().clone();
 
-			if let (Some(lo), Some(hi)) = (args.level_min, args.level_max)
-				&& lo > hi
-			{
-				bail!(
-					"Invalid zoom range in filter node {:?}: level_min ({lo}) must be ≤ level_max ({hi})",
-					vpl_node.name
-				);
-			}
+		if let (Some(lo), Some(hi)) = (args.level_min, args.level_max)
+			&& lo > hi
+		{
+			bail!(
+				"Invalid zoom range in filter node {:?}: level_min ({lo}) must be ≤ level_max ({hi})",
+				vpl_node.name
+			);
+		}
 
-			if let Some(level_min) = args.level_min {
-				parameters.bbox_pyramid.set_level_min(level_min);
-			}
+		if let Some(level_min) = args.level_min {
+			parameters.bbox_pyramid.set_level_min(level_min);
+		}
 
-			if let Some(level_max) = args.level_max {
-				parameters.bbox_pyramid.set_level_max(level_max);
-			}
+		if let Some(level_max) = args.level_max {
+			parameters.bbox_pyramid.set_level_max(level_max);
+		}
 
-			if let Some(bbox) = args.bbox {
-				parameters.bbox_pyramid.intersect_geo_bbox(&GeoBBox::try_from(&bbox)?)?;
-			}
+		if let Some(bbox) = args.bbox {
+			parameters.bbox_pyramid.intersect_geo_bbox(&GeoBBox::try_from(&bbox)?)?;
+		}
 
-			if parameters.bbox_pyramid.is_empty() {
-				log::warn!(
-					"Filter operation in VPL node {:?} results in empty bbox_pyramid",
-					vpl_node.name
-				);
-			}
+		if parameters.bbox_pyramid.is_empty() {
+			log::warn!(
+				"Filter operation in VPL node {:?} results in empty bbox_pyramid",
+				vpl_node.name
+			);
+		}
 
-			let mut tilejson = source.tilejson().clone();
-			tilejson.update_from_reader_parameters(&parameters);
+		let mut tilejson = source.tilejson().clone();
+		tilejson.update_from_reader_parameters(&parameters);
 
-			Ok(Box::new(Self {
-				parameters,
-				source,
-				tilejson,
-			}) as Box<dyn OperationTrait>)
-		})
+		Ok(Box::new(Self {
+			parameters,
+			source,
+			tilejson,
+		}) as Box<dyn OperationTrait>)
 	}
 }
 

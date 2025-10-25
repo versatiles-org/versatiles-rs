@@ -1,7 +1,6 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
-use futures::future::BoxFuture;
 use std::{fmt::Debug, str};
 use versatiles_container::Tile;
 use versatiles_core::*;
@@ -78,40 +77,38 @@ struct Operation {
 }
 
 impl Operation {
-	fn build(
+	async fn build(
 		vpl_node: VPLNode,
 		source: Box<dyn OperationTrait>,
 		_factory: &PipelineFactory,
-	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
+	) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
 	{
-		Box::pin(async move {
-			let args = Args::from_vpl_node(&vpl_node)?;
+		let args = Args::from_vpl_node(&vpl_node)?;
 
-			let mut parameters = source.parameters().clone();
+		let mut parameters = source.parameters().clone();
 
-			let format: RasterTileFormat = if let Some(text) = args.format {
-				RasterTileFormat::from_str(&text)?
-			} else {
-				RasterTileFormat::try_from(parameters.tile_format)?
-			};
+		let format: RasterTileFormat = if let Some(text) = args.format {
+			RasterTileFormat::from_str(&text)?
+		} else {
+			RasterTileFormat::try_from(parameters.tile_format)?
+		};
 
-			parameters.tile_format = format.into();
-			parameters.tile_compression = TileCompression::Uncompressed;
+		parameters.tile_format = format.into();
+		parameters.tile_compression = TileCompression::Uncompressed;
 
-			let mut tilejson = source.tilejson().clone();
-			tilejson.update_from_reader_parameters(&parameters);
+		let mut tilejson = source.tilejson().clone();
+		tilejson.update_from_reader_parameters(&parameters);
 
-			Ok(Box::new(Self {
-				format,
-				quality: parse_quality(args.quality)?,
-				speed: args.speed,
-				parameters,
-				source,
-				tilejson,
-			}) as Box<dyn OperationTrait>)
-		})
+		Ok(Box::new(Self {
+			format,
+			quality: parse_quality(args.quality)?,
+			speed: args.speed,
+			parameters,
+			source,
+			tilejson,
+		}) as Box<dyn OperationTrait>)
 	}
 }
 

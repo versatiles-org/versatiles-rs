@@ -1,7 +1,6 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
-use futures::future::BoxFuture;
 use imageproc::image::{DynamicImage, GenericImage};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
@@ -34,47 +33,45 @@ struct Operation {
 }
 
 impl Operation {
-	fn build(
+	async fn build(
 		vpl_node: VPLNode,
 		source: Box<dyn OperationTrait>,
 		factory: &PipelineFactory,
-	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
+	) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
 	{
-		Box::pin(async move {
-			let args = Args::from_vpl_node(&vpl_node)?;
-			ensure!(source.traversal().is_any());
+		let args = Args::from_vpl_node(&vpl_node)?;
+		ensure!(source.traversal().is_any());
 
-			let mut parameters = source.parameters().clone();
+		let mut parameters = source.parameters().clone();
 
-			let level_base = args
-				.level
-				.unwrap_or_else(|| source.parameters().bbox_pyramid.get_level_max().unwrap());
+		let level_base = args
+			.level
+			.unwrap_or_else(|| source.parameters().bbox_pyramid.get_level_max().unwrap());
 
-			let mut level_bbox = *parameters.bbox_pyramid.get_level_bbox(level_base);
-			while level_bbox.level > 0 {
-				level_bbox.level_down();
-				parameters.bbox_pyramid.set_level_bbox(level_bbox);
-			}
+		let mut level_bbox = *parameters.bbox_pyramid.get_level_bbox(level_base);
+		while level_bbox.level > 0 {
+			level_bbox.level_down();
+			parameters.bbox_pyramid.set_level_bbox(level_bbox);
+		}
 
-			let mut tilejson = source.tilejson().clone();
-			tilejson.update_from_reader_parameters(&parameters);
+		let mut tilejson = source.tilejson().clone();
+		tilejson.update_from_reader_parameters(&parameters);
 
-			let tile_size = args.tile_size.unwrap_or(512);
-			let cache = Arc::new(Mutex::new(CacheMap::new(factory.config())));
-			let traversal = Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?;
+		let tile_size = args.tile_size.unwrap_or(512);
+		let cache = Arc::new(Mutex::new(CacheMap::new(factory.config())));
+		let traversal = Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?;
 
-			Ok(Box::new(Self {
-				cache,
-				parameters,
-				source,
-				tilejson,
-				level_base,
-				tile_size,
-				traversal,
-			}) as Box<dyn OperationTrait>)
-		})
+		Ok(Box::new(Self {
+			cache,
+			parameters,
+			source,
+			tilejson,
+			level_base,
+			tile_size,
+			traversal,
+		}) as Box<dyn OperationTrait>)
 	}
 
 	#[context("Failed to add images to cache from container {container:?}")]

@@ -1,7 +1,6 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::future::BoxFuture;
 use std::fmt::Debug;
 use versatiles_container::Tile;
 use versatiles_core::*;
@@ -28,40 +27,38 @@ struct Operation {
 }
 
 impl Operation {
-	fn build(
+	async fn build(
 		vpl_node: VPLNode,
 		source: Box<dyn OperationTrait>,
 		_factory: &PipelineFactory,
-	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
+	) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
 	{
-		Box::pin(async move {
-			let args = Args::from_vpl_node(&vpl_node)?;
-			let mut tilejson = source.tilejson().clone();
+		let args = Args::from_vpl_node(&vpl_node)?;
+		let mut tilejson = source.tilejson().clone();
 
-			if let Some(attribution) = args.attribution {
-				tilejson.set_string("attribution", &attribution)?;
-			}
+		if let Some(attribution) = args.attribution {
+			tilejson.set_string("attribution", &attribution)?;
+		}
 
-			if let Some(description) = args.description {
-				tilejson.set_string("description", &description)?;
-			}
+		if let Some(description) = args.description {
+			tilejson.set_string("description", &description)?;
+		}
 
-			if let Some(fillzoom) = args.fillzoom {
-				tilejson.set_byte("fillzoom", fillzoom)?;
-			}
+		if let Some(fillzoom) = args.fillzoom {
+			tilejson.set_byte("fillzoom", fillzoom)?;
+		}
 
-			if let Some(name) = args.name {
-				tilejson.set_string("name", &name)?;
-			}
+		if let Some(name) = args.name {
+			tilejson.set_string("name", &name)?;
+		}
 
-			if let Some(schema) = args.schema {
-				tilejson.tile_schema = Some(TileSchema::try_from(schema.as_str())?);
-			}
+		if let Some(schema) = args.schema {
+			tilejson.tile_schema = Some(TileSchema::try_from(schema.as_str())?);
+		}
 
-			Ok(Box::new(Self { source, tilejson }) as Box<dyn OperationTrait>)
-		})
+		Ok(Box::new(Self { source, tilejson }) as Box<dyn OperationTrait>)
 	}
 }
 

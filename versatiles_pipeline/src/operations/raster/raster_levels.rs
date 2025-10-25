@@ -1,7 +1,6 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::future::BoxFuture;
 use std::fmt::Debug;
 use versatiles_container::Tile;
 use versatiles_core::*;
@@ -27,24 +26,22 @@ struct Operation {
 }
 
 impl Operation {
-	fn build(
+	async fn build(
 		vpl_node: VPLNode,
 		source: Box<dyn OperationTrait>,
 		_factory: &PipelineFactory,
-	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
+	) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
 	{
-		Box::pin(async move {
-			let args = Args::from_vpl_node(&vpl_node)?;
+		let args = Args::from_vpl_node(&vpl_node)?;
 
-			Ok(Box::new(Self {
-				brightness: args.brightness.unwrap_or(0.0),
-				contrast: args.contrast.unwrap_or(1.0),
-				gamma: args.gamma.unwrap_or(1.0),
-				source,
-			}) as Box<dyn OperationTrait>)
-		})
+		Ok(Box::new(Self {
+			brightness: args.brightness.unwrap_or(0.0),
+			contrast: args.contrast.unwrap_or(1.0),
+			gamma: args.gamma.unwrap_or(1.0),
+			source,
+		}) as Box<dyn OperationTrait>)
 	}
 }
 

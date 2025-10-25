@@ -18,11 +18,7 @@ use crate::{
 };
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use futures::{
-	StreamExt,
-	future::{BoxFuture, join_all},
-	stream,
-};
+use futures::{StreamExt, future::join_all, stream};
 use std::vec;
 use versatiles_container::Tile;
 use versatiles_core::*;
@@ -76,56 +72,54 @@ fn stack_tiles(tiles: Vec<Tile>) -> Result<Option<Tile>> {
 }
 
 impl ReadOperationTrait for Operation {
-	fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
 	{
-		Box::pin(async move {
-			let args = Args::from_vpl_node(&vpl_node)?;
-			let sources = join_all(args.sources.into_iter().map(|c| factory.build_pipeline(c)))
-				.await
-				.into_iter()
-				.collect::<Result<Vec<_>>>()?;
+		let args = Args::from_vpl_node(&vpl_node)?;
+		let sources = join_all(args.sources.into_iter().map(|c| factory.build_pipeline(c)))
+			.await
+			.into_iter()
+			.collect::<Result<Vec<_>>>()?;
 
-			ensure!(!sources.is_empty(), "must have at least one source");
+		ensure!(!sources.is_empty(), "must have at least one source");
 
-			let mut tilejson = TileJSON::default();
+		let mut tilejson = TileJSON::default();
 
-			let first_parameters = sources.first().unwrap().parameters();
-			let tile_format = args.format.unwrap_or(first_parameters.tile_format);
+		let first_parameters = sources.first().unwrap().parameters();
+		let tile_format = args.format.unwrap_or(first_parameters.tile_format);
+		ensure!(
+			tile_format.to_type() == TileType::Raster,
+			"output format must be a raster format"
+		);
+		let tile_compression = first_parameters.tile_compression;
+
+		let mut pyramid = TileBBoxPyramid::new_empty();
+		let mut traversal = Traversal::new_any();
+
+		for source in sources.iter() {
+			tilejson.merge(source.tilejson())?;
+
+			traversal.intersect(source.traversal())?;
+
+			let parameters = source.parameters();
+			pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
+
 			ensure!(
-				tile_format.to_type() == TileType::Raster,
-				"output format must be a raster format"
+				parameters.tile_format.to_type() == TileType::Raster,
+				"all sources must be raster tiles"
 			);
-			let tile_compression = first_parameters.tile_compression;
+		}
 
-			let mut pyramid = TileBBoxPyramid::new_empty();
-			let mut traversal = Traversal::new_any();
+		let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
+		tilejson.update_from_reader_parameters(&parameters);
 
-			for source in sources.iter() {
-				tilejson.merge(source.tilejson())?;
-
-				traversal.intersect(source.traversal())?;
-
-				let parameters = source.parameters();
-				pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
-
-				ensure!(
-					parameters.tile_format.to_type() == TileType::Raster,
-					"all sources must be raster tiles"
-				);
-			}
-
-			let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
-			tilejson.update_from_reader_parameters(&parameters);
-
-			Ok(Box::new(Self {
-				tilejson,
-				parameters,
-				sources,
-				traversal,
-			}) as Box<dyn OperationTrait>)
-		})
+		Ok(Box::new(Self {
+			tilejson,
+			parameters,
+			sources,
+			traversal,
+		}) as Box<dyn OperationTrait>)
 	}
 }
 
@@ -213,6 +207,7 @@ impl ReadOperationFactoryTrait for Factory {
 mod tests {
 	use super::*;
 	use crate::helpers::{arrange_tiles, dummy_image_source::DummyImageSource};
+	use futures::future::BoxFuture;
 	use imageproc::image::GenericImage;
 	use versatiles_container::TilesReaderTrait;
 	use versatiles_core::TileCompression::Uncompressed;

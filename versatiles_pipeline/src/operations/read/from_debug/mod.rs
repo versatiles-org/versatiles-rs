@@ -20,7 +20,6 @@ mod vector;
 use crate::{PipelineFactory, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
-use futures::future::BoxFuture;
 use image::create_debug_image;
 use std::fmt::Debug;
 use vector::create_debug_vector_tile;
@@ -80,11 +79,11 @@ impl Operation {
 }
 
 impl ReadOperationTrait for Operation {
-	fn build(vpl_node: VPLNode, _factory: &PipelineFactory) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
+	async fn build(vpl_node: VPLNode, _factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
 	{
-		Box::pin(async move { Operation::from_vpl_node(&vpl_node) })
+		Operation::from_vpl_node(&vpl_node)
 	}
 }
 

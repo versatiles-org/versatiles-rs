@@ -1,7 +1,6 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
-use futures::future::BoxFuture;
 use std::fmt::Debug;
 use versatiles_container::Tile;
 use versatiles_core::*;
@@ -28,42 +27,40 @@ struct Operation {
 }
 
 impl Operation {
-	fn build(
+	async fn build(
 		vpl_node: VPLNode,
 		source: Box<dyn OperationTrait>,
 		_factory: &PipelineFactory,
-	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
+	) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
 	{
-		Box::pin(async move {
-			let args = Args::from_vpl_node(&vpl_node)?;
-			let mut parameters = source.parameters().clone();
+		let args = Args::from_vpl_node(&vpl_node)?;
+		let mut parameters = source.parameters().clone();
 
-			let level_base = args
-				.level_base
-				.unwrap_or(source.parameters().bbox_pyramid.get_level_max().unwrap());
-			log::trace!("level_base {}", level_base);
+		let level_base = args
+			.level_base
+			.unwrap_or(source.parameters().bbox_pyramid.get_level_max().unwrap());
+		log::trace!("level_base {}", level_base);
 
-			let level_max = args.level_max.unwrap_or(30).clamp(level_base, 30);
+		let level_max = args.level_max.unwrap_or(30).clamp(level_base, 30);
 
-			let mut level_bbox = *parameters.bbox_pyramid.get_level_bbox(level_base);
-			while level_bbox.level <= level_max {
-				level_bbox.level_up();
-				parameters.bbox_pyramid.set_level_bbox(level_bbox);
-			}
+		let mut level_bbox = *parameters.bbox_pyramid.get_level_bbox(level_base);
+		while level_bbox.level <= level_max {
+			level_bbox.level_up();
+			parameters.bbox_pyramid.set_level_bbox(level_bbox);
+		}
 
-			let mut tilejson = source.tilejson().clone();
-			tilejson.update_from_reader_parameters(&parameters);
+		let mut tilejson = source.tilejson().clone();
+		tilejson.update_from_reader_parameters(&parameters);
 
-			Ok(Box::new(Self {
-				parameters,
-				source,
-				tilejson,
-				level_base,
-				tile_size: args.tile_size.unwrap_or(512),
-			}) as Box<dyn OperationTrait>)
-		})
+		Ok(Box::new(Self {
+			parameters,
+			source,
+			tilejson,
+			level_base,
+			tile_size: args.tile_size.unwrap_or(512),
+		}) as Box<dyn OperationTrait>)
 	}
 }
 

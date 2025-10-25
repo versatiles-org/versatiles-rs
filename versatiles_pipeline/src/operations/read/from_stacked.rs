@@ -23,11 +23,7 @@ use crate::{
 };
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use futures::{
-	StreamExt,
-	future::{BoxFuture, join_all},
-	stream,
-};
+use futures::{StreamExt, future::join_all, stream};
 use versatiles_container::Tile;
 use versatiles_core::*;
 
@@ -53,19 +49,17 @@ struct Operation {
 }
 
 impl ReadOperationTrait for Operation {
-	fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
 	{
-		Box::pin(async move {
-			let args = Args::from_vpl_node(&vpl_node)?;
-			let sources = join_all(args.sources.into_iter().map(|c| factory.build_pipeline(c)))
-				.await
-				.into_iter()
-				.collect::<Result<Vec<_>>>()?;
+		let args = Args::from_vpl_node(&vpl_node)?;
+		let sources = join_all(args.sources.into_iter().map(|c| factory.build_pipeline(c)))
+			.await
+			.into_iter()
+			.collect::<Result<Vec<_>>>()?;
 
-			Ok(Box::new(Operation::new(sources)?) as Box<dyn OperationTrait>)
-		})
+		Ok(Box::new(Operation::new(sources)?) as Box<dyn OperationTrait>)
 	}
 }
 

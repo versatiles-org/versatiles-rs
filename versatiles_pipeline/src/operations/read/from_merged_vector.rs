@@ -22,11 +22,7 @@ use crate::{
 };
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
-use futures::{
-	StreamExt,
-	future::{BoxFuture, join_all},
-	stream,
-};
+use futures::{StreamExt, future::join_all, stream};
 use std::collections::HashMap;
 use versatiles_container::Tile;
 use versatiles_core::*;
@@ -71,50 +67,48 @@ fn merge_vector_tiles(tiles: Vec<VectorTile>) -> Result<VectorTile> {
 }
 
 impl ReadOperationTrait for Operation {
-	fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
 	{
-		Box::pin(async move {
-			let args = Args::from_vpl_node(&vpl_node)?;
-			let sources = join_all(args.sources.into_iter().map(|c| factory.build_pipeline(c)))
-				.await
-				.into_iter()
-				.collect::<Result<Vec<_>>>()?;
+		let args = Args::from_vpl_node(&vpl_node)?;
+		let sources = join_all(args.sources.into_iter().map(|c| factory.build_pipeline(c)))
+			.await
+			.into_iter()
+			.collect::<Result<Vec<_>>>()?;
 
-			ensure!(sources.len() > 1, "must have at least two sources");
+		ensure!(sources.len() > 1, "must have at least two sources");
 
-			let mut tilejson = TileJSON::default();
-			let first_parameters = sources.first().unwrap().parameters();
-			let tile_format = first_parameters.tile_format;
-			let tile_compression = first_parameters.tile_compression;
-			let mut pyramid = TileBBoxPyramid::new_empty();
-			let mut traversal = Traversal::new_any();
+		let mut tilejson = TileJSON::default();
+		let first_parameters = sources.first().unwrap().parameters();
+		let tile_format = first_parameters.tile_format;
+		let tile_compression = first_parameters.tile_compression;
+		let mut pyramid = TileBBoxPyramid::new_empty();
+		let mut traversal = Traversal::new_any();
 
-			for source in sources.iter() {
-				tilejson.merge(source.tilejson())?;
+		for source in sources.iter() {
+			tilejson.merge(source.tilejson())?;
 
-				traversal.intersect(source.traversal())?;
+			traversal.intersect(source.traversal())?;
 
-				let parameters = source.parameters();
-				pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
+			let parameters = source.parameters();
+			pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
 
-				ensure!(
-					parameters.tile_format.to_type() == TileType::Vector,
-					"all sources must be vector tiles"
-				);
-			}
+			ensure!(
+				parameters.tile_format.to_type() == TileType::Vector,
+				"all sources must be vector tiles"
+			);
+		}
 
-			let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
-			tilejson.update_from_reader_parameters(&parameters);
+		let parameters = TilesReaderParameters::new(tile_format, tile_compression, pyramid);
+		tilejson.update_from_reader_parameters(&parameters);
 
-			Ok(Box::new(Self {
-				tilejson,
-				parameters,
-				sources,
-				traversal,
-			}) as Box<dyn OperationTrait>)
-		})
+		Ok(Box::new(Self {
+			tilejson,
+			parameters,
+			sources,
+			traversal,
+		}) as Box<dyn OperationTrait>)
 	}
 }
 
@@ -198,6 +192,7 @@ impl ReadOperationFactoryTrait for Factory {
 mod tests {
 	use super::*;
 	use crate::helpers::{arrange_tiles, dummy_vector_source::DummyVectorSource};
+	use futures::future::BoxFuture;
 	use itertools::Itertools;
 	use versatiles_container::TilesReaderTrait;
 
