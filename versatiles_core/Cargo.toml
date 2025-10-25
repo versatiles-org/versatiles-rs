@@ -22,7 +22,6 @@ colored = { version = "3.0.0", default-features = false, optional = true }
 enumset.workspace = true
 flate2 = { version = "1.1.4", default-features = false, features = ["default"] }
 futures.workspace = true
-image = { workspace = true, optional = true }
 itertools.workspace = true
 lazy_static = { workspace = true }
 log.workspace = true
@@ -46,7 +45,6 @@ wildmatch.workspace = true
 default = ["cli"]
 cli = ["dep:clap", "dep:colored"]
 test = []
-image = ["dep:image"]
 
 [[bench]]
 name = "byte_iterator"
