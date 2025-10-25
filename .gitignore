@@ -12,6 +12,7 @@ coverage
 frontend
 releases
 target
+test.trace
 testdata/*.tif
 testdata/temp*
 testdata/test*

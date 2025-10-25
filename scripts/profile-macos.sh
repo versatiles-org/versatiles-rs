@@ -12,4 +12,16 @@ cd "$(dirname "$0")/.."
 
 #cargo instruments -t "CPU Profiler" --bin versatiles --features gdal,bindgen --release -- convert ../../temp/paris.vpl ../../temp/paris.versatiles
 #cargo instruments -t "Allocations" --bin versatiles --features gdal,bindgen --time-limit 300000 -- convert ../../temp/paris.vpl ../../temp/paris.versatiles
-cargo instruments -t "CPU Profiler" --bin versatiles -- convert -c gzip --max-zoom 8 ../../temp/remove-labels.vpl ../../temp/temp.versatiles
+#cargo instruments -t "CPU Profiler" --bin versatiles -- convert -c gzip --max-zoom 8 ../../temp/remove-labels.vpl ../../temp/temp.versatiles
+
+# profile a specific test
+rm -r ./target/debug/deps/versatiles_pipeline-????????????????
+rm -f test.trace
+cargo test -p versatiles_pipeline --no-run
+xcrun xctrace record \
+  --template 'Time Profiler' \
+  --output test.trace \
+  --launch -- \
+  ./target/debug/deps/versatiles_pipeline-???????????????? \
+  container_reader::reader::tests::open_vpl_str \
+  --exact --test-threads=1
