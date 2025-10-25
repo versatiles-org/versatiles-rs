@@ -1,20 +1,20 @@
+use crate::CacheValue;
 use anyhow::{Result, bail};
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::Cursor;
 use versatiles_core::{Blob, TileFormat, TileType};
+use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::{DynamicImage, DynamicImageTraitConvert};
 
-use crate::CacheValue;
-
 #[derive(Clone, PartialEq)]
 pub enum TileContent {
-	// Placeholder for different tile content types, e.g., Image, Vector, etc.
 	Raster(DynamicImage),
 	Vector(VectorTile),
 }
 
 impl TileContent {
+	#[context("Failed converting TileContent to blob")]
 	pub fn to_blob(&self, format: TileFormat, quality: Option<u8>, speed: Option<u8>) -> Result<Blob> {
 		match self {
 			TileContent::Raster(image) => image.to_blob(format, quality, speed),
@@ -22,6 +22,7 @@ impl TileContent {
 		}
 	}
 
+	#[context("Failed creating TileContent from blob")]
 	pub fn from_blob(blob: &Blob, format: TileFormat) -> Result<Self> {
 		Ok(match format.to_type() {
 			TileType::Raster => {
@@ -44,16 +45,18 @@ impl TileContent {
 		TileContent::Vector(vector)
 	}
 
+	#[context("Failed getting image reference from TileContent")]
 	pub fn as_image(&self) -> Result<&DynamicImage> {
 		match self {
-			TileContent::Raster(image) => Ok(&image),
+			TileContent::Raster(image) => Ok(image),
 			_ => bail!("Tile does not contain raster image"),
 		}
 	}
 
+	#[context("Failed getting vector reference from TileContent")]
 	pub fn as_vector(&self) -> Result<&VectorTile> {
 		match self {
-			TileContent::Vector(vector_tile) => Ok(&vector_tile),
+			TileContent::Vector(vector_tile) => Ok(vector_tile),
 			_ => bail!("Tile does not contain vector data"),
 		}
 	}
@@ -72,6 +75,7 @@ impl TileContent {
 		}
 	}
 
+	#[context("Failed converting TileContent into image")]
 	pub fn into_image(self) -> Result<DynamicImage> {
 		match self {
 			TileContent::Raster(image) => Ok(image),
@@ -79,6 +83,7 @@ impl TileContent {
 		}
 	}
 
+	#[context("Failed converting TileContent into vector")]
 	pub fn into_vector(self) -> Result<VectorTile> {
 		match self {
 			TileContent::Vector(vector_tile) => Ok(vector_tile),
