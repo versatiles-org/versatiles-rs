@@ -3620,6 +3620,7 @@ dependencies = [
  "mime_guess",
  "regex",
  "reqwest",
+ "rstest",
  "tar",
  "termimad",
  "tokio",

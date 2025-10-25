@@ -322,41 +322,39 @@ mod tests {
 	use super::*;
 	use axum::http::{HeaderMap, header::ACCEPT_ENCODING};
 	use enumset::{EnumSet, enum_set};
+	use rstest::rstest;
 	use versatiles_container::{MockTilesReader, MockTilesReaderProfile};
 	use versatiles_core::TileCompression::*;
 
 	const IP: &str = "127.0.0.1";
 
-	#[test]
-	fn test_get_encoding() {
-		let test = |encoding: &str, comp0: EnumSet<TileCompression>| {
-			let mut map = HeaderMap::new();
-			if encoding != "NONE" {
-				map.insert(ACCEPT_ENCODING, encoding.parse().unwrap());
-			}
-			let comp0 = TargetCompression::from_set(comp0);
-			let comp = get_encoding(map);
-			assert_eq!(comp, comp0);
-		};
-
-		test("NONE", enum_set!(Uncompressed));
-		test("", enum_set!(Uncompressed));
-		test("*", enum_set!(Uncompressed));
-		test("br", enum_set!(Uncompressed | Brotli));
-		test("br;q=1.0, gzip;q=0.8, *;q=0.1", enum_set!(Uncompressed | Brotli | Gzip));
-		test("compress", enum_set!(Uncompressed));
-		test("compress, gzip", enum_set!(Uncompressed | Gzip));
-		test("compress;q=0.5, gzip;q=1.0", enum_set!(Uncompressed | Gzip));
-		test("deflate", enum_set!(Uncompressed));
-		test("deflate, gzip;q=1.0, *;q=0.5", enum_set!(Uncompressed | Gzip));
-		test("gzip", enum_set!(Uncompressed | Gzip));
-		test("gzip, compress, br", enum_set!(Uncompressed | Brotli | Gzip));
-		test(
-			"gzip, deflate, br;q=1.0, identity;q=0.5, *;q=0.25",
-			enum_set!(Uncompressed | Brotli | Gzip),
-		);
-		test("gzip;q=1.0, identity; q=0.5, *;q=0", enum_set!(Uncompressed | Gzip));
-		test("identity", enum_set!(Uncompressed));
+	#[rstest]
+	#[case("NONE", enum_set!(Uncompressed))]
+	#[case("", enum_set!(Uncompressed))]
+	#[case("*", enum_set!(Uncompressed))]
+	#[case("br", enum_set!(Uncompressed | Brotli))]
+	#[case("br;q=1.0, gzip;q=0.8, *;q=0.1", enum_set!(Uncompressed | Brotli | Gzip))]
+	#[case("compress", enum_set!(Uncompressed))]
+	#[case("compress, gzip", enum_set!(Uncompressed | Gzip))]
+	#[case("compress;q=0.5, gzip;q=1.0", enum_set!(Uncompressed | Gzip))]
+	#[case("deflate", enum_set!(Uncompressed))]
+	#[case("deflate, gzip;q=1.0, *;q=0.5", enum_set!(Uncompressed | Gzip))]
+	#[case("gzip", enum_set!(Uncompressed | Gzip))]
+	#[case("gzip, compress, br", enum_set!(Uncompressed | Brotli | Gzip))]
+	#[case(
+		"gzip, deflate, br;q=1.0, identity;q=0.5, *;q=0.25",
+		enum_set!(Uncompressed | Brotli | Gzip),
+	)]
+	#[case("gzip;q=1.0, identity; q=0.5, *;q=0", enum_set!(Uncompressed | Gzip))]
+	#[case("identity", enum_set!(Uncompressed))]
+	fn test_get_encoding(#[case] encoding: &str, #[case] comp0: EnumSet<TileCompression>) {
+		let mut map = HeaderMap::new();
+		if encoding != "NONE" {
+			map.insert(ACCEPT_ENCODING, encoding.parse().unwrap());
+		}
+		let comp0 = TargetCompression::from_set(comp0);
+		let comp = get_encoding(map);
+		assert_eq!(comp, comp0);
 	}
 
 	#[tokio::test]
