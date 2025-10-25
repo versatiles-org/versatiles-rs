@@ -256,4 +256,25 @@ mod tests {
 	fn raster_tile_format_try_from_tileformat(#[case] input: TileFormat, #[case] expected: RasterTileFormat) {
 		assert_eq!(RasterTileFormat::try_from(input).unwrap(), expected);
 	}
+
+	#[tokio::test]
+	async fn test_raster_format() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl("from_debug format=png | raster_format format=webp quality=80 speed=60")
+			.await?;
+
+		// Parameters must reflect the target format and uncompressed tile_compression
+		let params = op.parameters().clone();
+		assert_eq!(params.tile_format, TileFormat::WEBP);
+		assert_eq!(params.tile_compression, TileCompression::Uncompressed);
+
+		// Stream should still yield exactly one tile and the tile should be WEBP now
+		let bbox = TileCoord::new(3, 2, 2)?.as_tile_bbox(1)?;
+		let mut items = op.get_stream(bbox).await?.to_vec().await;
+		assert_eq!(items.len(), 1, "expected exactly one tile at z=3, x=2, y=2");
+		let (_coord, tile) = items.remove(0);
+		assert_eq!(tile.format(), TileFormat::WEBP);
+		Ok(())
+	}
 }
