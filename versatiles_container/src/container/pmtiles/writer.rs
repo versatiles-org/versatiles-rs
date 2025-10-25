@@ -179,7 +179,7 @@ mod tests {
 		PMTilesWriter::write_to_writer(
 			&mut mock_reader,
 			&mut data_writer,
-			TileCompression::Gzip,
+			TileCompression::Uncompressed,
 			Config::default().arc(),
 		)
 		.await?;
@@ -188,9 +188,11 @@ mod tests {
 		let reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;
 
 		let entries = reader.get_tile_entries()?;
+		let entries = entries.iter().collect::<Vec<_>>();
+		assert_eq!(entries.len(), 203);
 		let mut tile_id = 0;
 		let mut offset = 0;
-		for entry in entries.iter() {
+		for entry in entries {
 			assert!(entry.tile_id > tile_id, "Tile IDs are not in order");
 			assert!(entry.range.offset >= offset, "Tile ranges are not in order");
 			tile_id = entry.tile_id;
