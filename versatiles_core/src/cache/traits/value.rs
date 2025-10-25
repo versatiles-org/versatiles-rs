@@ -121,7 +121,7 @@ impl CacheValue for TileFormat {
 
 	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
 		let value = reader.read_u8()?;
-		Ok(TileFormat::try_from(value)?)
+		TileFormat::try_from(value)
 	}
 }
 
@@ -133,7 +133,7 @@ impl CacheValue for TileCompression {
 
 	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
 		let value = reader.read_u8()?;
-		Ok(TileCompression::try_from(value)?)
+		TileCompression::try_from(value)
 	}
 }
 

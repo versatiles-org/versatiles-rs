@@ -130,7 +130,7 @@ pub mod tests {
 		// get dummy reader
 		let mut reader = MockTilesReader::new_mock(TilesReaderParameters::new(
 			tile_format,
-			compression.clone(),
+			compression,
 			TileBBoxPyramid::new_full(max_zoom_level),
 		))?;
 

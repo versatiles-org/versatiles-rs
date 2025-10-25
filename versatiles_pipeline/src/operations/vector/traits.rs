@@ -43,11 +43,7 @@ impl<R: RunnerTrait> OperationTrait for TransformOp<R> {
 			.await?
 			.filter_map_item_parallel(move |tile| {
 				let vector = tile.into_vector();
-				Ok(if let Some(vector) = runner.run(vector)? {
-					Some(Tile::from_vector(vector, tile_format))
-				} else {
-					None
-				})
+				Ok(runner.run(vector)?.map(|vector| Tile::from_vector(vector, tile_format)))
 			}))
 	}
 }

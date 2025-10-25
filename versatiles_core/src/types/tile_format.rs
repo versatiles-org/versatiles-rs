@@ -318,9 +318,9 @@ impl TryFrom<u8> for TileFormat {
 	}
 }
 
-impl Into<u8> for TileFormat {
-	fn into(self) -> u8 {
-		match self {
+impl From<TileFormat> for u8 {
+	fn from(format: TileFormat) -> u8 {
+		match format {
 			AVIF => 0,
 			BIN => 1,
 			GEOJSON => 2,

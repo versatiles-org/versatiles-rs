@@ -138,9 +138,9 @@ impl TryFrom<u8> for TileCompression {
 	}
 }
 
-impl Into<u8> for TileCompression {
-	fn into(self) -> u8 {
-		match self {
+impl From<TileCompression> for u8 {
+	fn from(compression: TileCompression) -> u8 {
+		match compression {
 			Uncompressed => 0,
 			Gzip => 1,
 			Brotli => 2,

@@ -178,10 +178,10 @@ impl OperationTrait for Operation {
 				let v = tiles
 					.into_iter()
 					.filter_map(|(c, v)| match stack_tiles(v) {
-						Ok(Some(mut tile)) => Some((|| {
+						Ok(Some(mut tile)) => {
 							tile.change_format(tile_format, None, None);
-							Ok((c, tile))
-						})()),
+							Some(Ok((c, tile)))
+						}
 						Ok(None) => None,
 						Err(err) => Some(Err(err)),
 					})
