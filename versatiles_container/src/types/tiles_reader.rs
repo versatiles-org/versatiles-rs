@@ -3,7 +3,7 @@
 //! This module defines the `TilesReaderTrait` with methods for traversing,
 //! retrieving, and probing tile metadata, parameters, container info, and contents.
 
-use crate::{CacheMap, Config, Tile};
+use crate::{CacheMap, Tile, WriterConfig};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{StreamExt, future::BoxFuture, stream};
@@ -169,7 +169,7 @@ pub trait TilesReaderTraverseExt: TilesReaderTrait {
 		&'s self,
 		traversal_write: &'s Traversal,
 		mut callback: C,
-		config: Arc<Config>,
+		config: Arc<WriterConfig>,
 	) -> impl core::future::Future<Output = Result<()>> + Send + 'a
 	where
 		C: FnMut(TileBBox, TileStream<'a, Tile>) -> BoxFuture<'a, Result<()>> + Send + 'a,

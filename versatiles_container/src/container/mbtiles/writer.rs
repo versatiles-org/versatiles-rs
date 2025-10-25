@@ -22,8 +22,7 @@
 //!     MBTilesWriter::write_to_path(
 //!         &mut reader,
 //!         &temp_path,
-//!         TileCompression::Gzip,
-//!         Config::default().arc()
+//!         WriterConfig::default().arc()
 //!     ).await.unwrap();
 //! }
 //! ```
@@ -34,7 +33,7 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying the database structure.
 
-use crate::{Config, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
+use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait, WriterConfig};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -120,12 +119,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the file format or compression is not supported, or if there are issues with writing to the SQLite database.
-	async fn write_to_path(
-		reader: &mut dyn TilesReaderTrait,
-		path: &Path,
-		tile_compression: TileCompression,
-		config: Arc<Config>,
-	) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: Arc<WriterConfig>) -> Result<()> {
 		use TileCompression::*;
 		use TileFormat::*;
 
@@ -176,6 +170,7 @@ impl TilesWriterTrait for MBTilesWriter {
 		}
 
 		let writer_mutex = Arc::new(Mutex::new(writer));
+		let tile_compression = config.tile_compression.unwrap_or(reader.parameters().tile_compression);
 
 		reader
 			.traverse_all_tiles(
@@ -204,8 +199,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
-		_compression: TileCompression,
-		_config: Arc<Config>,
+		_config: Arc<WriterConfig>,
 	) -> Result<()> {
 		bail!("not implemented")
 	}
@@ -226,13 +220,7 @@ mod tests {
 		})?;
 
 		let filename = NamedTempFile::new("temp.mbtiles")?;
-		MBTilesWriter::write_to_path(
-			&mut mock_reader,
-			&filename,
-			TileCompression::Gzip,
-			Config::default().arc(),
-		)
-		.await?;
+		MBTilesWriter::write_to_path(&mut mock_reader, &filename, WriterConfig::default().arc()).await?;
 
 		let mut reader = MBTilesReader::open_path(&filename)?;
 

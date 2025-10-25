@@ -27,8 +27,7 @@
 //!         Box::new(reader),
 //!         converter_params,
 //!         &path_versatiles.to_str().unwrap(),
-//!         TileCompression::Brotli,
-//!         Config::default().arc()
+//!         WriterConfig::default().arc()
 //!     ).await?;
 //!
 //!     println!("Tiles have been successfully converted and saved to {path_versatiles:?}");
@@ -38,7 +37,7 @@
 
 use std::sync::Arc;
 
-use crate::{Config, Tile, TilesReaderTrait};
+use crate::{Tile, TilesReaderTrait, WriterConfig};
 
 use super::write_to_filename;
 use anyhow::Result;
@@ -73,11 +72,10 @@ pub async fn convert_tiles_container(
 	reader: Box<dyn TilesReaderTrait>,
 	cp: TilesConverterParameters,
 	filename: &str,
-	compression: TileCompression,
-	config: Arc<Config>,
+	config: Arc<WriterConfig>,
 ) -> Result<()> {
 	let mut converter = TilesConvertReader::new_from_reader(reader, cp)?;
-	write_to_filename(&mut converter, filename, compression, config).await
+	write_to_filename(&mut converter, filename, config).await
 }
 
 /// A reader that converts tiles from one format to another.
@@ -236,7 +234,7 @@ mod tests {
 				flip_y,
 				swap_xy,
 			};
-			convert_tiles_container(reader.boxed(), cp, filename, Uncompressed, Config::default().arc()).await?;
+			convert_tiles_container(reader.boxed(), cp, filename, WriterConfig::default().arc()).await?;
 
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.parameters();

@@ -1,6 +1,6 @@
 use anyhow::{Result, anyhow, bail};
 use std::path::PathBuf;
-use versatiles_container::{Config, get_reader};
+use versatiles_container::get_reader;
 use versatiles_core::{TileBBox, TileFormat, progress::get_progress_bar};
 use versatiles_image::{DynamicImage, DynamicImageTraitConvert, encode};
 
@@ -25,7 +25,6 @@ pub struct MeasureTileSizes {
 }
 
 pub async fn run(args: &MeasureTileSizes) -> Result<()> {
-	let config = Config::default().arc();
 	let input_file = &args.input;
 	let output_file = &args.output;
 	let level = args.level;
@@ -46,7 +45,6 @@ pub async fn run(args: &MeasureTileSizes) -> Result<()> {
 			.as_os_str()
 			.to_str()
 			.ok_or(anyhow!("Invalid input file path"))?,
-		config,
 	)
 	.await?;
 	let bbox = TileBBox::new_full(level)?;

@@ -11,7 +11,7 @@
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     // Define the input filename (local file or URL)
-//!     let mut reader = get_reader("../testdata/berlin.mbtiles", Config::default().arc()).await?;
+//!     let mut reader = get_reader("../testdata/berlin.mbtiles").await?;
 //!
 //!     // Define the output filename
 //!     let output_filename = "../testdata/temp3.versatiles";
@@ -20,8 +20,7 @@
 //!     write_to_filename(
 //!         &mut *reader,
 //!         output_filename,
-//!         TileCompression::Uncompressed,
-//!         Config::default().arc()
+//!         WriterConfig::default().arc()
 //!     ).await?;
 //!
 //!     println!("Tiles have been successfully converted and saved to {output_filename}");
@@ -33,15 +32,12 @@ use crate::*;
 use anyhow::{Context, Result, bail};
 use reqwest::Url;
 use std::{env, sync::Arc};
-use versatiles_core::{
-	TileCompression,
-	io::{DataReader, DataReaderHttp},
-};
+use versatiles_core::io::{DataReader, DataReaderHttp};
 use versatiles_derive::context;
 
 /// Get a reader for a given filename or URL.
 #[context("Failed to get reader for '{filename}'")]
-pub async fn get_reader(filename: &str, _config: Arc<Config>) -> Result<Box<dyn TilesReaderTrait>> {
+pub async fn get_reader(filename: &str) -> Result<Box<dyn TilesReaderTrait>> {
 	let extension = get_extension(filename);
 
 	if let Ok(reader) = parse_as_url(filename) {
@@ -87,21 +83,20 @@ fn parse_as_url(filename: &str) -> Result<DataReader> {
 pub async fn write_to_filename(
 	reader: &mut dyn TilesReaderTrait,
 	filename: &str,
-	compression: TileCompression,
-	config: Arc<Config>,
+	config: Arc<WriterConfig>,
 ) -> Result<()> {
 	let path = env::current_dir()?.join(filename);
 
 	if path.is_dir() {
-		return DirectoryTilesWriter::write_to_path(reader, &path, compression, config).await;
+		return DirectoryTilesWriter::write_to_path(reader, &path, config).await;
 	}
 
 	let extension = get_extension(filename);
 	match extension {
-		"mbtiles" => MBTilesWriter::write_to_path(reader, &path, compression, config).await,
-		"pmtiles" => PMTilesWriter::write_to_path(reader, &path, compression, config).await,
-		"tar" => TarTilesWriter::write_to_path(reader, &path, compression, config).await,
-		"versatiles" => VersaTilesWriter::write_to_path(reader, &path, compression, config).await,
+		"mbtiles" => MBTilesWriter::write_to_path(reader, &path, config).await,
+		"pmtiles" => PMTilesWriter::write_to_path(reader, &path, config).await,
+		"tar" => TarTilesWriter::write_to_path(reader, &path, config).await,
+		"versatiles" => VersaTilesWriter::write_to_path(reader, &path, config).await,
 		_ => bail!("Error when writing: file extension '{extension:?}' unknown"),
 	}
 }
@@ -148,8 +143,7 @@ pub mod tests {
 		write_to_filename(
 			&mut reader,
 			container_file.to_str().unwrap(),
-			compression,
-			Config::default().arc(),
+			WriterConfig::default().arc(),
 		)
 		.await?;
 
@@ -200,10 +194,10 @@ pub mod tests {
 				TempType::File(t) => t.to_str().unwrap(),
 			};
 
-			write_to_filename(&mut reader1, filename, compression, Config::default().arc()).await?;
+			write_to_filename(&mut reader1, filename, WriterConfig::default().arc()).await?;
 
 			// get test container reader
-			let mut reader2 = get_reader(filename, Config::default().arc()).await?;
+			let mut reader2 = get_reader(filename).await?;
 			MockTilesWriter::write(reader2.as_mut()).await?;
 
 			Ok(())

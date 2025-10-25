@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, anyhow, bail};
 use std::path::PathBuf;
-use versatiles_container::{Config, get_reader};
+use versatiles_container::get_reader;
 use versatiles_core::progress::get_progress_bar;
 
 #[derive(clap::Args, Debug)]
@@ -20,7 +20,6 @@ pub struct ExportOutline {
 }
 
 pub async fn run(args: &ExportOutline) -> Result<()> {
-	let config = Config::default().arc();
 	let input_file = &args.input;
 	let output_file = &args.output;
 
@@ -29,7 +28,6 @@ pub async fn run(args: &ExportOutline) -> Result<()> {
 			.as_os_str()
 			.to_str()
 			.ok_or(anyhow!("Invalid input file path"))?,
-		config,
 	)
 	.await?;
 

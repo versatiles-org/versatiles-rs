@@ -21,8 +21,7 @@
 //!     VersaTilesWriter::write_to_path(
 //!         &mut reader,
 //!         &path_out,
-//!         TileCompression::Brotli,
-//!         Config::default().arc()
+//!         WriterConfig::default().arc()
 //!     ).await?;
 //!
 //!     println!("Tiles have been successfully written to {path_out:?}");
@@ -33,7 +32,7 @@
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader};
 use crate::{
-	Config, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait, container::versatiles::types::BlockWriter,
+	TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait, WriterConfig, container::versatiles::types::BlockWriter,
 };
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
@@ -51,12 +50,13 @@ impl TilesWriterTrait for VersaTilesWriter {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
-		tile_compression: TileCompression,
-		config: Arc<Config>,
+		config: Arc<WriterConfig>,
 	) -> Result<()> {
 		// Finalize the configuration
 		let parameters = reader.parameters();
 		log::trace!("convert_from - reader.parameters: {parameters:?}");
+
+		let tile_compression = config.tile_compression.unwrap_or(parameters.tile_compression);
 
 		// Get the bounding box pyramid
 		let bbox_pyramid = reader.parameters().bbox_pyramid.clone();
@@ -112,7 +112,7 @@ impl VersaTilesWriter {
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
 		tile_compression: TileCompression,
-		config: Arc<Config>,
+		config: Arc<WriterConfig>,
 	) -> Result<ByteRange> {
 		if reader.parameters().bbox_pyramid.is_empty() {
 			return Ok(ByteRange::empty());

@@ -1,5 +1,5 @@
 use anyhow::{Result, bail};
-use versatiles_container::{Config, TilesConverterParameters, convert_tiles_container, get_reader};
+use versatiles_container::{TilesConverterParameters, WriterConfig, convert_tiles_container, get_reader};
 use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCompression};
 use versatiles_derive::context;
 
@@ -61,9 +61,7 @@ pub struct Subcommand {
 pub async fn run(arguments: &Subcommand) -> Result<()> {
 	eprintln!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
-	let config = Config::default().arc();
-
-	let mut reader = get_reader(&arguments.input_file, config.clone()).await?;
+	let mut reader = get_reader(&arguments.input_file).await?;
 
 	if arguments.override_input_compression.is_some() {
 		reader.override_compression(arguments.override_input_compression.unwrap());
@@ -75,9 +73,13 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 		swap_xy: arguments.swap_xy,
 	};
 
-	let compression = arguments.compress.unwrap_or(reader.parameters().tile_compression);
+	let config = WriterConfig {
+		tile_compression: arguments.compress,
+		..WriterConfig::default()
+	}
+	.arc();
 
-	convert_tiles_container(reader, parameters, &arguments.output_file, compression, config).await?;
+	convert_tiles_container(reader, parameters, &arguments.output_file, config).await?;
 
 	eprintln!("finished converting tiles");
 

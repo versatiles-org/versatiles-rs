@@ -274,7 +274,7 @@ mod tests {
 	use super::*;
 	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::GenericImageView;
-	use versatiles_container::Config;
+	use versatiles_container::WriterConfig;
 
 	fn make_operation(tile_size: u32, level_base: u8) -> Operation {
 		let parameters = TilesReaderParameters::new(
@@ -295,7 +295,7 @@ mod tests {
 			level_base,
 			tile_size,
 			traversal: Traversal::new_any_size(1, 1).unwrap(),
-			cache: Arc::new(Mutex::new(CacheMap::new(Config::default().arc()))),
+			cache: Arc::new(Mutex::new(CacheMap::new(WriterConfig::default().arc()))),
 		}
 	}
 

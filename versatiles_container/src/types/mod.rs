@@ -1,6 +1,3 @@
-mod config;
-pub use config::*;
-
 mod converter;
 pub use converter::*;
 
@@ -20,3 +17,6 @@ pub use tiles_reader::*;
 
 mod writer;
 pub use writer::*;
+
+mod writer_config;
+pub use writer_config::*;

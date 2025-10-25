@@ -31,8 +31,7 @@
 //!     let mut writer = TarTilesWriter::write_to_path(
 //!         &mut reader,
 //!         output_path,
-//!         TileCompression::Uncompressed,
-//!         Config::default().arc()
+//!         WriterConfig::default().arc()
 //!     ).await?;
 //!
 //!     Ok(())
