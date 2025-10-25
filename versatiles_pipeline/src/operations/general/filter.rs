@@ -9,7 +9,7 @@ use versatiles_core::*;
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filter tiles by bounding box and/or zoom levels.
 struct Args {
-	/// Bounding box: [min long, min lat, max long, max lat].
+	/// Bounding box: [min lng, min lat, max lng, max lat].
 	bbox: Option<[f64; 4]>,
 	/// minimal zoom level
 	level_min: Option<u8>,
@@ -117,45 +117,48 @@ impl TransformOperationFactoryTrait for Factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use std::collections::HashSet;
 
-	async fn test_filter(bbox: [f64; 4], tests: Vec<(TileCoord, bool)>) -> Result<()> {
+	#[tokio::test]
+	async fn test_filter_inside() -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
 		let operation = factory
-			.operation_from_vpl(&format!("from_debug format=mvt | filter bbox={bbox:?}"))
+			.operation_from_vpl(&format!("from_debug format=mvt | filter bbox=[0,0,40,20]"))
 			.await?;
 
-		for (coord, expected) in tests.iter() {
-			let count = operation.get_stream(coord.as_tile_bbox(1)?).await?.to_vec().await.len();
-			if *expected {
-				assert_eq!(count, 1, "Expected tile data for {coord:?} in bbox {bbox:?}");
-			} else {
-				assert_eq!(count, 0, "Expected no tile data for {coord:?} in bbox {bbox:?}");
+		let inside: &[(u8, u32, u32)] = &[
+			(0, 0, 0),
+			(1, 1, 0),
+			(2, 2, 1),
+			(3, 4, 3),
+			(4, 8, 7),
+			(4, 9, 7),
+			(5, 16, 14),
+			(5, 16, 15),
+			(5, 17, 14),
+			(5, 17, 15),
+			(5, 18, 14),
+			(5, 18, 15),
+			(5, 19, 14),
+			(5, 19, 15),
+		];
+		let set = HashSet::<(u8, u32, u32)>::from_iter(inside.iter().cloned());
+
+		for level in 0..=5 {
+			let max_xy = 1 << level;
+			for x in 0..max_xy {
+				for y in 0..max_xy {
+					let coord = TileCoord::new(level, x, y)?;
+					let count = operation.get_stream(coord.as_tile_bbox(1)?).await?.to_vec().await.len();
+					if set.contains(&(level, x, y)) {
+						assert!(count == 1, "Expected tile data for {coord:?} in bbox [0,0,40,20]");
+					} else {
+						assert!(count == 0, "Did not expect tile data for {coord:?} in bbox [0,0,40,20]");
+					}
+				}
 			}
 		}
 
 		Ok(())
-	}
-
-	#[tokio::test]
-	async fn test_filter_inside() {
-		let bbox = [-180.0, -85.0, 180.0, 85.0];
-		let tests = vec![
-			(TileCoord { x: 1, y: 1, level: 1 }, true),
-			(TileCoord { x: 2, y: 2, level: 2 }, true),
-			(TileCoord { x: 3, y: 3, level: 3 }, true),
-		];
-		test_filter(bbox, tests).await.unwrap();
-	}
-
-	#[tokio::test]
-	async fn test_filter_outside() {
-		let bbox = [0.0, 0.0, 20.0, 20.0];
-		let tests = vec![
-			(TileCoord { x: 7, y: 7, level: 4 }, false),
-			(TileCoord { x: 7, y: 8, level: 4 }, false),
-			(TileCoord { x: 8, y: 7, level: 4 }, true),
-			(TileCoord { x: 8, y: 8, level: 4 }, false),
-		];
-		test_filter(bbox, tests).await.unwrap();
 	}
 }
