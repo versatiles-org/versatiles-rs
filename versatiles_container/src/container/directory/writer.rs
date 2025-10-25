@@ -45,7 +45,7 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying directory structure.
 
-use crate::TilesWriterTrait;
+use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use std::{
@@ -88,17 +88,21 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the path is not absolute, if there are issues with file I/O, or if compression fails.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: Arc<Config>) -> Result<()> {
+	async fn write_to_path(
+		reader: &mut dyn TilesReaderTrait,
+		path: &Path,
+		tile_compression: TileCompression,
+		config: Arc<Config>,
+	) -> Result<()> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
 		log::trace!("convert_from");
 
 		let parameters = reader.parameters();
-		let tile_compression = &parameters.tile_compression.clone();
-		let tile_format = &parameters.tile_format.clone();
+		let tile_format = parameters.tile_format;
 
-		let extension_format = tile_format.as_extension();
-		let extension_compression = tile_compression.extension();
+		let extension_format = tile_format.as_extension().to_string();
+		let extension_compression = tile_compression.as_extension().to_string();
 
 		let tilejson = reader.tilejson();
 		let meta_data = compress(tilejson.into(), tile_compression)?;
@@ -108,10 +112,13 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 		reader
 			.traverse_all_tiles(
 				&Traversal::ANY,
-				Box::new(|_bbox, mut stream| {
+				move |_bbox, mut stream| {
+					let extension_format = extension_format.clone();
+					let extension_compression = extension_compression.clone();
+					let path = path.to_path_buf();
 					Box::pin(async move {
 						while let Some(entry) = stream.next().await {
-							let (coord, blob) = entry;
+							let (coord, tile) = entry;
 
 							let filename = format!(
 								"{}/{}/{}{}{}",
@@ -119,11 +126,11 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 							);
 
 							// Write blob to file
-							Self::write(path.join(filename), blob)?;
+							Self::write(path.join(filename), tile.into_blob(tile_compression))?;
 						}
 						Ok(())
 					})
-				}),
+				},
 				config,
 			)
 			.await?;
@@ -142,6 +149,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
+		_compression: TileCompression,
 		_config: Arc<Config>,
 	) -> Result<()> {
 		bail!("not implemented")
@@ -166,7 +174,13 @@ mod tests {
 			TileBBoxPyramid::new_full(2),
 		))?;
 
-		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path, Config::default().arc()).await?;
+		DirectoryTilesWriter::write_to_path(
+			&mut mock_reader,
+			temp_path,
+			TileCompression::Gzip,
+			Config::default().arc(),
+		)
+		.await?;
 
 		let load = |filename| {
 			let path = temp_path.join(filename);

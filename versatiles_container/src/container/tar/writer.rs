@@ -1,6 +1,6 @@
 //! Provides functionality for writing tile data to a tar archive.
 
-use crate::TilesWriterTrait;
+use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -10,7 +10,7 @@ use std::{
 	sync::Arc,
 };
 use tar::{Builder, Header};
-use versatiles_core::{TilesReaderTrait, Traversal, config::Config, io::DataWriterTrait, utils::compress};
+use versatiles_core::{TileCompression, Traversal, config::Config, io::DataWriterTrait, utils::compress};
 
 /// A struct that provides functionality to write tile data to a tar archive.
 pub struct TarTilesWriter {}
@@ -25,16 +25,20 @@ impl TilesWriterTrait for TarTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue creating the tar archive or writing the data.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: Arc<Config>) -> Result<()> {
+	async fn write_to_path(
+		reader: &mut dyn TilesReaderTrait,
+		path: &Path,
+		tile_compression: TileCompression,
+		config: Arc<Config>,
+	) -> Result<()> {
 		let file = File::create(path)?;
 		let mut builder = Builder::new(file);
 
 		let parameters = reader.parameters();
 		let tile_format = &parameters.tile_format.clone();
-		let tile_compression = &parameters.tile_compression.clone();
 
 		let extension_format = tile_format.as_extension();
-		let extension_compression = tile_compression.extension();
+		let extension_compression = tile_compression.as_extension();
 
 		let meta_data = compress(reader.tilejson().into(), tile_compression)?;
 		let filename = format!("tiles.json{extension_compression}");
@@ -48,16 +52,18 @@ impl TilesWriterTrait for TarTilesWriter {
 		reader
 			.traverse_all_tiles(
 				&Traversal::ANY,
-				Box::new(|_bbox, mut stream| {
+				|_bbox, mut stream| {
 					let builder_mutex = Arc::clone(&builder_mutex);
 					Box::pin(async move {
 						let mut builder = builder_mutex.lock().await;
-						while let Some((coord, blob)) = stream.next().await {
+						while let Some((coord, tile)) = stream.next().await {
 							let filename = format!(
 								"./{}/{}/{}{}{}",
 								coord.level, coord.x, coord.y, extension_format, extension_compression
 							);
 							let path = PathBuf::from(&filename);
+
+							let blob = tile.into_blob(tile_compression);
 
 							// Build header
 							let mut header = Header::new_gnu();
@@ -69,7 +75,7 @@ impl TilesWriterTrait for TarTilesWriter {
 						}
 						Ok(())
 					})
-				}),
+				},
 				config,
 			)
 			.await?;
@@ -90,6 +96,7 @@ impl TilesWriterTrait for TarTilesWriter {
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
+		_tile_compression: TileCompression,
 		_config: Arc<Config>,
 	) -> Result<()> {
 		bail!("not implemented")
@@ -112,7 +119,13 @@ mod tests {
 		})?;
 
 		let temp_path = NamedTempFile::new("test_output.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default().arc()).await?;
+		TarTilesWriter::write_to_path(
+			&mut mock_reader,
+			&temp_path,
+			TileCompression::Gzip,
+			Config::default().arc(),
+		)
+		.await?;
 
 		let mut reader = TarTilesReader::open_path(&temp_path)?;
 		MockTilesWriter::write(&mut reader).await?;
@@ -129,7 +142,13 @@ mod tests {
 		})?;
 
 		let temp_path = NamedTempFile::new("test_meta_output.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default().arc()).await?;
+		TarTilesWriter::write_to_path(
+			&mut mock_reader,
+			&temp_path,
+			TileCompression::Gzip,
+			Config::default().arc(),
+		)
+		.await?;
 
 		let reader = TarTilesReader::open_path(&temp_path)?;
 		assert_eq!(
@@ -149,7 +168,13 @@ mod tests {
 		})?;
 
 		let temp_path = NamedTempFile::new("test_empty_tiles.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default().arc()).await?;
+		TarTilesWriter::write_to_path(
+			&mut mock_reader,
+			&temp_path,
+			TileCompression::Gzip,
+			Config::default().arc(),
+		)
+		.await?;
 
 		assert_eq!(
 			TarTilesReader::open_path(&temp_path).unwrap_err().to_string(),
@@ -168,7 +193,13 @@ mod tests {
 		})?;
 
 		let invalid_path = Path::new("/invalid/path/output.tar");
-		let result = TarTilesWriter::write_to_path(&mut mock_reader, invalid_path, Config::default().arc()).await;
+		let result = TarTilesWriter::write_to_path(
+			&mut mock_reader,
+			invalid_path,
+			TileCompression::Gzip,
+			Config::default().arc(),
+		)
+		.await;
 
 		assert!(result.is_err());
 		Ok(())
@@ -183,7 +214,13 @@ mod tests {
 		})?;
 
 		let temp_path = NamedTempFile::new("test_large_tiles.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default().arc()).await?;
+		TarTilesWriter::write_to_path(
+			&mut mock_reader,
+			&temp_path,
+			TileCompression::Gzip,
+			Config::default().arc(),
+		)
+		.await?;
 
 		let reader = TarTilesReader::open_path(&temp_path)?;
 		assert_eq!(reader.parameters().bbox_pyramid.count_tiles(), 21845);
@@ -207,7 +244,7 @@ mod tests {
 			})?;
 
 			let temp_path = NamedTempFile::new(format!("test_compression_{compression:?}.tar"))?;
-			TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default().arc()).await?;
+			TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, compression, Config::default().arc()).await?;
 
 			let reader = TarTilesReader::open_path(&temp_path)?;
 			assert_eq!(reader.parameters().tile_compression, compression);
@@ -227,7 +264,13 @@ mod tests {
 		})?;
 
 		let temp_path = NamedTempFile::new("test_zxy_scheme.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, Config::default().arc()).await?;
+		TarTilesWriter::write_to_path(
+			&mut mock_reader,
+			&temp_path,
+			TileCompression::Uncompressed,
+			Config::default().arc(),
+		)
+		.await?;
 
 		let mut filenames = tar::Archive::new(File::open(&temp_path)?)
 			.entries()?

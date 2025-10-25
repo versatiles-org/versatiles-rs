@@ -1,8 +1,9 @@
-use crate::{PipelineFactory, helpers::Tile, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::fmt::Debug;
+use versatiles_container::Tile;
 use versatiles_core::*;
 use versatiles_image::traits::*;
 
@@ -67,14 +68,12 @@ impl OperationTrait for Operation {
 		let contrast = self.contrast / 255.0;
 		let brightness = self.brightness / 255.0;
 		let gamma = self.gamma;
-		Ok(self.source.get_stream(bbox).await?.map_item_parallel(move |tile| {
-			tile.map_image(|mut image| {
-				image.mut_color_values(|v| {
-					let v = ((v as f32 - 127.5) * contrast + 0.5 + brightness).powf(gamma) * 255.0;
-					v.round().clamp(0.0, 255.0) as u8
-				});
-				Ok(image)
-			})
+		Ok(self.source.get_stream(bbox).await?.map_item_parallel(move |mut tile| {
+			tile.as_image_mut().mut_color_values(|v| {
+				let v = ((v as f32 - 127.5) * contrast + 0.5 + brightness).powf(gamma) * 255.0;
+				v.round().clamp(0.0, 255.0) as u8
+			});
+			Ok(tile)
 		}))
 	}
 }
@@ -142,7 +141,7 @@ mod tests {
 			.to_vec()
 			.await;
 		assert_eq!(tiles.len(), 1);
-		assert_eq!(tiles[0].1.image()?.average_color(), color_out);
+		assert_eq!(tiles[0].1.as_image().average_color(), color_out);
 		Ok(())
 	}
 }

@@ -2,7 +2,8 @@ use super::{super::utils::Url, SourceResponse};
 use anyhow::{Result, ensure};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
-use versatiles_core::{Blob, TileCompression, TileCoord, TilesReaderTrait, utils::TargetCompression};
+use versatiles_container::TilesReaderTrait;
+use versatiles_core::{Blob, TileCompression, TileCoord, utils::TargetCompression};
 
 // TileSource struct definition
 #[derive(Clone)]
@@ -58,7 +59,7 @@ impl TileSource {
 
 			// Get tile data
 			let reader = self.reader.lock().await;
-			let tile = reader.get_tile_blob(&coord).await;
+			let tile = reader.get_tile(&coord).await;
 			drop(reader);
 
 			// If tile data is not found, return a not found response
@@ -68,7 +69,11 @@ impl TileSource {
 
 			// If tile data is not found, return a not found response
 			return if let Some(tile) = tile? {
-				Ok(SourceResponse::new_some(tile, &self.compression, &self.tile_mime))
+				Ok(SourceResponse::new_some(
+					tile.into_blob(self.compression),
+					self.compression,
+					&self.tile_mime,
+				))
 			} else {
 				Ok(None)
 			};
@@ -78,7 +83,7 @@ impl TileSource {
 
 			return Ok(SourceResponse::new_some(
 				tile_json,
-				&TileCompression::Uncompressed,
+				TileCompression::Uncompressed,
 				"application/json",
 			));
 		}

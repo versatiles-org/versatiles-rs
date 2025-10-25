@@ -29,7 +29,7 @@
 use std::sync::Arc;
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader};
-use crate::{TilesWriterTrait, container::versatiles::types::BlockWriter};
+use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait, container::versatiles::types::BlockWriter};
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -45,6 +45,7 @@ impl TilesWriterTrait for VersaTilesWriter {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
+		tile_compression: TileCompression,
 		config: Arc<Config>,
 	) -> Result<()> {
 		// Finalize the configuration
@@ -57,8 +58,8 @@ impl TilesWriterTrait for VersaTilesWriter {
 
 		// Create the file header
 		let mut header = FileHeader::new(
-			&parameters.tile_format,
-			&parameters.tile_compression,
+			parameters.tile_format,
+			tile_compression,
 			[
 				bbox_pyramid.get_level_min().ok_or(anyhow!("invalid minzoom"))?,
 				bbox_pyramid.get_level_max().ok_or(anyhow!("invalid maxzoom"))?,
@@ -72,10 +73,10 @@ impl TilesWriterTrait for VersaTilesWriter {
 		writer.append(&blob)?;
 
 		log::trace!("write meta");
-		header.meta_range = Self::write_meta(reader, writer).await?;
+		header.meta_range = Self::write_meta(reader, writer, tile_compression).await?;
 
 		log::trace!("write blocks");
-		header.blocks_range = Self::write_blocks(reader, writer, config).await?;
+		header.blocks_range = Self::write_blocks(reader, writer, tile_compression, config).await?;
 
 		log::trace!("update header");
 		let blob: Blob = header.to_blob()?;
@@ -88,9 +89,13 @@ impl TilesWriterTrait for VersaTilesWriter {
 impl VersaTilesWriter {
 	/// Write metadata to the writer.
 	#[context("Failed to write metadata")]
-	async fn write_meta(reader: &dyn TilesReaderTrait, writer: &mut dyn DataWriterTrait) -> Result<ByteRange> {
+	async fn write_meta(
+		reader: &dyn TilesReaderTrait,
+		writer: &mut dyn DataWriterTrait,
+		compression: TileCompression,
+	) -> Result<ByteRange> {
 		let meta: Blob = reader.tilejson().into();
-		let compressed = compress(meta, &reader.parameters().tile_compression)?;
+		let compressed = compress(meta, compression)?;
 
 		writer.append(&compressed)
 	}
@@ -100,6 +105,7 @@ impl VersaTilesWriter {
 	async fn write_blocks(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
+		tile_compression: TileCompression,
 		config: Arc<Config>,
 	) -> Result<ByteRange> {
 		if reader.parameters().bbox_pyramid.is_empty() {
@@ -114,7 +120,7 @@ impl VersaTilesWriter {
 		reader
 			.traverse_all_tiles(
 				&Traversal::new_any_size(256, 256)?,
-				Box::new(|bbox, stream| {
+				|bbox, stream| {
 					let writer_mutex = Arc::clone(&writer_mutex);
 					let block_index_mutex = Arc::clone(&block_index_mutex);
 
@@ -127,8 +133,10 @@ impl VersaTilesWriter {
 						let mut writer = writer_mutex.lock().await;
 						let mut block_writer = BlockWriter::new(&block, &mut **writer);
 						stream
-							.for_each_sync(|(coord, blob)| {
-								block_writer.write_tile(coord, blob).unwrap();
+							.for_each_sync(|(coord, tile)| {
+								block_writer
+									.write_tile(coord, tile.into_blob(tile_compression))
+									.unwrap();
 							})
 							.await;
 
@@ -149,7 +157,7 @@ impl VersaTilesWriter {
 
 						Ok(())
 					})
-				}),
+				},
 				config,
 			)
 			.await?;

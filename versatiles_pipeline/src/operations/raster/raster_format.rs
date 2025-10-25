@@ -1,8 +1,9 @@
-use crate::{PipelineFactory, helpers::Tile, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::{fmt::Debug, str};
+use versatiles_container::Tile;
 use versatiles_core::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -40,9 +41,9 @@ impl RasterTileFormat {
 	}
 }
 
-impl TryFrom<&TileFormat> for RasterTileFormat {
+impl TryFrom<TileFormat> for RasterTileFormat {
 	type Error = anyhow::Error;
-	fn try_from(value: &TileFormat) -> std::result::Result<Self, Self::Error> {
+	fn try_from(value: TileFormat) -> std::result::Result<Self, Self::Error> {
 		use RasterTileFormat::*;
 		Ok(match value {
 			TileFormat::AVIF => Avif,
@@ -93,7 +94,7 @@ impl Operation {
 			let format: RasterTileFormat = if let Some(text) = args.format {
 				RasterTileFormat::from_str(&text)?
 			} else {
-				RasterTileFormat::try_from(&parameters.tile_format)?
+				RasterTileFormat::try_from(parameters.tile_format)?
 			};
 
 			parameters.tile_format = format.into();
@@ -159,10 +160,10 @@ impl OperationTrait for Operation {
 		let quality = self.quality[bbox.level as usize];
 		let speed = self.speed;
 		let stream = self.source.get_stream(bbox).await?;
-		let format = Some(self.format.into());
+		let format: TileFormat = self.format.into();
 
 		Ok(stream.map_item_parallel(move |mut tile| {
-			tile.reencode_raster(format, Some(TileCompression::Uncompressed), quality, speed)?;
+			tile.change_format(format, quality, speed);
 			Ok(tile)
 		}))
 	}
@@ -256,6 +257,6 @@ mod tests {
 	#[case(TileFormat::PNG, RasterTileFormat::Png)]
 	#[case(TileFormat::WEBP, RasterTileFormat::Webp)]
 	fn raster_tile_format_try_from_tileformat(#[case] input: TileFormat, #[case] expected: RasterTileFormat) {
-		assert_eq!(RasterTileFormat::try_from(&input).unwrap(), expected);
+		assert_eq!(RasterTileFormat::try_from(input).unwrap(), expected);
 	}
 }

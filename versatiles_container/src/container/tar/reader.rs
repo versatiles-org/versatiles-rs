@@ -1,5 +1,6 @@
 //! Provides functionality for reading tile data from a tar archive.
 
+use crate::{Tile, TilesReaderTrait};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path};
@@ -108,14 +109,14 @@ impl TarTilesReader {
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
 						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
 							read_to_end(),
-							&TileCompression::Gzip,
+							TileCompression::Gzip,
 						)?))?;
 						continue;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
 						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
 							read_to_end(),
-							&TileCompression::Brotli,
+							TileCompression::Brotli,
 						)?))?;
 						continue;
 					}
@@ -181,14 +182,18 @@ impl TilesReaderTrait for TarTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
-	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
-		log::trace!("get_tile_blob {:?}", coord);
+	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+		log::trace!("get_tile {:?}", coord);
 
 		let range = self.tile_map.get(coord);
 
 		if let Some(range) = range {
 			let blob = self.reader.read_range(range).await?;
-			Ok(Some(blob))
+			Ok(Some(Tile::from_blob(
+				blob,
+				self.parameters.tile_compression,
+				self.parameters.tile_format,
+			)))
 		} else {
 			Ok(None)
 		}
@@ -212,7 +217,6 @@ impl Debug for TarTilesReader {
 pub mod tests {
 	use super::*;
 	use crate::{MOCK_BYTES_PBF, MockTilesWriter, make_test_file};
-	use versatiles_core::utils::decompress_gzip;
 
 	#[cfg(feature = "cli")]
 	use versatiles_core::utils::PrettyPrint;
@@ -241,8 +245,12 @@ pub mod tests {
 		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.parameters().tile_format, TileFormat::MVT);
 
-		let tile = reader.get_tile_blob(&TileCoord::new(3, 6, 2)?).await?.unwrap();
-		assert_eq!(decompress_gzip(&tile)?.as_slice(), MOCK_BYTES_PBF);
+		let blob = reader
+			.get_tile(&TileCoord::new(3, 6, 2)?)
+			.await?
+			.unwrap()
+			.into_blob(TileCompression::Uncompressed);
+		assert_eq!(blob.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())
 	}
@@ -321,9 +329,10 @@ pub mod tests {
 		assert_eq!(reader.parameters().bbox_pyramid.count_tiles(), 1);
 		assert_eq!(
 			reader
-				.get_tile_blob(&TileCoord::new(3, 1, 2)?)
+				.get_tile(&TileCoord::new(3, 1, 2)?)
 				.await?
 				.unwrap()
+				.as_blob(TileCompression::Uncompressed)
 				.as_slice(),
 			[3, 1, 4, 1, 5, 9].as_ref()
 		);

@@ -3,8 +3,8 @@ use anyhow::Result;
 use regex::Regex;
 use std::path::Path;
 use tokio::time::{Duration, sleep};
-use versatiles_container::{TilesConvertReader, TilesConverterParameters, get_reader};
-use versatiles_core::{TileCompression, TilesReaderTrait, config::Config};
+use versatiles_container::{TilesConvertReader, TilesConverterParameters, TilesReaderTrait, get_reader};
+use versatiles_core::{TileCompression, config::Config};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]

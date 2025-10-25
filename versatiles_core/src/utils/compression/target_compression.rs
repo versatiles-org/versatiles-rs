@@ -4,7 +4,7 @@ use enumset::EnumSet;
 use std::fmt::{self, Debug};
 
 /// Represents the target compression settings.
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct TargetCompression {
 	/// Set of allowed compression algorithms.
 	pub compressions: EnumSet<TileCompression>,

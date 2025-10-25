@@ -29,7 +29,7 @@ pub trait DynamicImageTraitConvert {
 
 	/// Encodes the image into a binary blob in the specified `TileFormat`.
 	/// Returns an error if encoding fails or if the format is unsupported.
-	fn to_blob(&self, format: TileFormat) -> Result<Blob>;
+	fn to_blob(&self, format: TileFormat, quality: Option<u8>, speed: Option<u8>) -> Result<Blob>;
 
 	/// Returns an iterator over the pixel data as byte slices.
 	/// Each slice represents one pixel, with the slice length corresponding to the image's channel count.
@@ -82,13 +82,13 @@ impl DynamicImageTraitConvert for DynamicImage {
 		})
 	}
 
-	fn to_blob(&self, format: TileFormat) -> Result<Blob> {
+	fn to_blob(&self, format: TileFormat, quality: Option<u8>, speed: Option<u8>) -> Result<Blob> {
 		use TileFormat::{AVIF, JPG, PNG, WEBP};
 		match format {
-			AVIF => avif::image2blob(self, None),
-			JPG => jpeg::image2blob(self, None),
-			PNG => png::image2blob(self),
-			WEBP => webp::image2blob(self, None),
+			AVIF => avif::encode(self, quality, speed),
+			JPG => jpeg::encode(self, quality),
+			PNG => png::encode(self, speed),
+			WEBP => webp::encode(self, quality),
 			_ => bail!("Unsupported image format for encoding: {format:?}"),
 		}
 	}
@@ -157,7 +157,7 @@ mod tests {
 	fn roundtrip_encode_decode(#[case] format: TileFormat, #[case] diff: [f64; 3]) {
 		let image = sample_rgb8();
 		// Encode the image to a blob
-		let blob = image.to_blob(format).unwrap();
+		let blob = image.to_blob(format, None, None).unwrap();
 		// Decode the blob back to an image
 		let decoded_image = DynamicImage::from_blob(&blob, format).expect("Failed to decode image");
 		// Assert that the original image and the decoded image are equal
@@ -214,7 +214,7 @@ mod tests {
 		// We just ensure the happy-path formats (PNG) succeed and that the function doesn't panic
 		// for them. If more formats are enabled, the other branches are covered by compile-time.
 		let img = sample_rgb8();
-		let blob = img.to_blob(TileFormat::PNG).expect("PNG should encode");
+		let blob = img.to_blob(TileFormat::PNG, None, None).expect("PNG should encode");
 		assert!(!blob.is_empty());
 	}
 

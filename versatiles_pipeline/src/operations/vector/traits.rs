@@ -1,10 +1,9 @@
-use crate::{helpers::Tile, traits::OperationTrait};
+use crate::traits::OperationTrait;
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::sync::Arc;
-use versatiles_core::{
-	TileJSON, Traversal, {TileBBox, TileStream, TileType, TilesReaderParameters},
-};
+use versatiles_container::Tile;
+use versatiles_core::{TileBBox, TileJSON, TileStream, TileType, TilesReaderParameters, Traversal};
 use versatiles_geometry::vector_tile::VectorTile;
 
 pub trait RunnerTrait: std::fmt::Debug + Send + Sync + 'static {
@@ -37,11 +36,19 @@ impl<R: RunnerTrait> OperationTrait for TransformOp<R> {
 
 	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		let runner = self.runner.clone();
+		let tile_format = self.params.tile_format;
 		Ok(self
 			.source
 			.get_stream(bbox)
 			.await?
-			.filter_map_item_parallel(move |tile| tile.filter_map_vector(|vector| runner.run(vector))))
+			.filter_map_item_parallel(move |tile| {
+				let vector = tile.into_vector();
+				Ok(if let Some(vector) = runner.run(vector)? {
+					Some(Tile::from_vector(vector, tile_format))
+				} else {
+					None
+				})
+			}))
 	}
 }
 
@@ -53,7 +60,7 @@ where
 	// ── common steps ───────────────────────────────────────────────
 	let params = source.parameters().clone();
 	ensure!(
-		params.tile_format.get_type() == TileType::Vector,
+		params.tile_format.to_type() == TileType::Vector,
 		"source must be vector tiles"
 	);
 

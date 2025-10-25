@@ -1,8 +1,9 @@
-use crate::{PipelineFactory, helpers::Tile, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::fmt::Debug;
+use versatiles_container::Tile;
 use versatiles_core::*;
 use versatiles_image::traits::*;
 
@@ -103,13 +104,12 @@ impl OperationTrait for Operation {
 		let scale = (1 << (bbox_dst.level - self.level_base)) as f64;
 		let s = tile_size_f64 / scale;
 		let format = self.source.parameters().tile_format;
-		let compression = self.source.parameters().tile_compression;
 
 		Ok(stream_base.flat_map_parallel(move |coord_base, tile_src| {
 			let mut bbox = coord_base.as_tile_bbox(1)?.at_level(level_dst);
 			bbox.intersect_with(&bbox_dst)?;
 
-			let image_src = tile_src.into_image()?;
+			let image_src = tile_src.into_image();
 
 			Ok(TileStream::from_iter_coord_parallel(
 				bbox.into_iter_coords(),
@@ -121,7 +121,7 @@ impl OperationTrait for Operation {
 
 					image_dst
 						.into_optional()
-						.map(|image_dst| Tile::from_image(image_dst, format, compression))
+						.map(|image_dst| Tile::from_image(image_dst, format))
 				},
 			))
 		}))

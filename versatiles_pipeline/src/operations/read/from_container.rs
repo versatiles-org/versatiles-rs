@@ -6,11 +6,12 @@
 //! [`OperationTrait`] so that the rest of the pipeline can treat it like any
 //! other data source.
 
-use crate::{PipelineFactory, helpers::Tile, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::fmt::Debug;
+use versatiles_container::{Tile, TilesReaderTrait};
 use versatiles_core::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -75,13 +76,7 @@ impl OperationTrait for Operation {
 	/// `TilesReaderTrait::get_tile_stream`.
 	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("getstream {:?}", bbox);
-		let format = self.parameters.tile_format;
-		let compression = self.parameters.tile_compression;
-		Ok(self
-			.reader
-			.get_tile_stream(bbox)
-			.await?
-			.map_item_parallel(move |blob| Ok(Tile::from_blob(blob, format, compression))))
+		Ok(self.reader.get_tile_stream(bbox).await?)
 	}
 }
 
@@ -119,6 +114,7 @@ pub fn operation_from_reader(reader: Box<dyn TilesReaderTrait>) -> Box<dyn Opera
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use versatiles_core::TileCompression::Uncompressed;
 
 	#[tokio::test]
 	async fn test_vector() -> Result<()> {
@@ -157,7 +153,7 @@ mod tests {
 
 		let mut n = 0;
 		while let Some((coord, tile)) = stream.next().await {
-			assert!(tile.into_blob()?.len() > 50);
+			assert!(tile.into_blob(Uncompressed).len() > 50);
 			assert!(coord.x >= 1 && coord.x <= 2);
 			assert!(coord.y >= 1 && coord.y <= 3);
 			assert_eq!(coord.level, 3);
@@ -205,7 +201,7 @@ mod tests {
 
 		let mut n = 0;
 		while let Some((coord, tile)) = stream.next().await {
-			assert!(tile.into_blob()?.len() > 50);
+			assert!(tile.into_blob(Uncompressed).len() > 50);
 			assert!(coord.x >= 1 && coord.x <= 2);
 			assert!(coord.y >= 1 && coord.y <= 3);
 			assert_eq!(coord.level, 3);

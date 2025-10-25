@@ -35,8 +35,8 @@ impl FileHeader {
 	/// Returns an error if the zoom range or bounding box is invalid.
 	#[context("Failed to create FileHeader")]
 	pub fn new(
-		tile_format: &TileFormat,
-		compression: &TileCompression,
+		tile_format: TileFormat,
+		compression: TileCompression,
 		zoom_range: [u8; 2],
 		bbox: &GeoBBox,
 	) -> Result<FileHeader> {
@@ -50,8 +50,8 @@ impl FileHeader {
 		Ok(FileHeader {
 			zoom_range,
 			bbox: bbox.as_array().map(|v| (v * BBOX_SCALE) as i32),
-			tile_format: *tile_format,
-			compression: *compression,
+			tile_format,
+			compression,
 			meta_range: ByteRange::empty(),
 			blocks_range: ByteRange::empty(),
 		})
@@ -204,7 +204,7 @@ mod tests {
 	#[test]
 	#[allow(clippy::zero_prefixed_literal)]
 	fn conversion() {
-		let test = |tile_format: &TileFormat, compression: &TileCompression, a: u64, b: u64, c: u64, d: u64| {
+		let test = |tile_format: TileFormat, compression: TileCompression, a: u64, b: u64, c: u64, d: u64| {
 			let mut header1 = FileHeader::new(
 				tile_format,
 				compression,
@@ -217,21 +217,21 @@ mod tests {
 
 			let header2 = FileHeader::from_blob(&header1.to_blob().unwrap()).unwrap();
 			assert_eq!(header1, header2);
-			assert_eq!(&header2.tile_format, tile_format);
-			assert_eq!(&header2.compression, compression);
+			assert_eq!(header2.tile_format, tile_format);
+			assert_eq!(header2.compression, compression);
 			assert_eq!(header2.meta_range, ByteRange::new(a, b));
 			assert_eq!(header2.blocks_range, ByteRange::new(c, d));
 		};
 		test(
-			&TileFormat::JPG,
-			&Uncompressed,
+			TileFormat::JPG,
+			Uncompressed,
 			314159265358979323,
 			846264338327950288,
 			419716939937510582,
 			097494459230781640,
 		);
 
-		test(&TileFormat::MVT, &Brotli, 29, 97, 92, 458);
+		test(TileFormat::MVT, Brotli, 29, 97, 92, 458);
 	}
 
 	#[test]
@@ -240,7 +240,7 @@ mod tests {
 		let comp = Gzip;
 		let zoom = [10, 14];
 		let bbox = GeoBBox::new(-180.0, -85.0511, 180.0, 85.0511).unwrap();
-		let header = FileHeader::new(&tf, &comp, zoom, &bbox).unwrap();
+		let header = FileHeader::new(tf, comp, zoom, &bbox).unwrap();
 
 		assert_eq!(header.zoom_range, zoom);
 		assert_eq!(header.bbox, [-1800000000, -850511000, 1800000000, 850511000]);
@@ -253,8 +253,8 @@ mod tests {
 	#[test]
 	fn to_blob() -> Result<()> {
 		let header = FileHeader::new(
-			&TileFormat::MVT,
-			&Gzip,
+			TileFormat::MVT,
+			Gzip,
 			[3, 8],
 			&GeoBBox::new(-180.0, -85.051_13, 180.0, 85.051_13)?,
 		)?;
@@ -295,7 +295,7 @@ mod tests {
 		let should_panic = |zoom: [u8; 2], bbox: [f64; 4]| {
 			assert!(
 				catch_unwind(|| {
-					FileHeader::new(&tf, &comp, zoom, &GeoBBox::try_from(&bbox).unwrap()).unwrap();
+					FileHeader::new(tf, comp, zoom, &GeoBBox::try_from(&bbox).unwrap()).unwrap();
 				})
 				.is_err()
 			)
@@ -321,12 +321,12 @@ mod tests {
 		let tile_formats = vec![BIN, PNG, JPG, WEBP, AVIF, SVG, MVT, GEOJSON, TOPOJSON, JSON];
 
 		for tile_format in tile_formats {
-			let header = FileHeader::new(&tile_format, &compression, zoom_range, &bbox).unwrap();
+			let header = FileHeader::new(tile_format, compression, zoom_range, &bbox).unwrap();
 			let blob = header.to_blob().unwrap();
 			let header2 = FileHeader::from_blob(&blob).unwrap();
 
-			assert_eq!(&header2.tile_format, &tile_format);
-			assert_eq!(&header2.compression, &compression);
+			assert_eq!(header2.tile_format, tile_format);
+			assert_eq!(header2.compression, compression);
 		}
 	}
 
@@ -339,12 +339,12 @@ mod tests {
 		let compressions = vec![Uncompressed, Gzip, Brotli];
 
 		for compression in compressions {
-			let header = FileHeader::new(&tile_format, &compression, zoom_range, &bbox).unwrap();
+			let header = FileHeader::new(tile_format, compression, zoom_range, &bbox).unwrap();
 			let blob = header.to_blob().unwrap();
 			let header2 = FileHeader::from_blob(&blob).unwrap();
 
-			assert_eq!(&header2.tile_format, &tile_format);
-			assert_eq!(&header2.compression, &compression);
+			assert_eq!(header2.tile_format, tile_format);
+			assert_eq!(header2.compression, compression);
 		}
 	}
 
@@ -364,8 +364,8 @@ mod tests {
 	#[test]
 	fn unknown_tile_format() {
 		let mut invalid_blob = FileHeader::new(
-			&TileFormat::PNG,
-			&Gzip,
+			TileFormat::PNG,
+			Gzip,
 			[0, 0],
 			&GeoBBox::new(0.0, 0.0, 0.0, 0.0).unwrap(),
 		)
@@ -384,8 +384,8 @@ mod tests {
 	#[test]
 	fn unknown_compression() {
 		let mut invalid_blob = FileHeader::new(
-			&TileFormat::PNG,
-			&Gzip,
+			TileFormat::PNG,
+			Gzip,
 			[0, 0],
 			&GeoBBox::new(0.0, 0.0, 0.0, 0.0).unwrap(),
 		)

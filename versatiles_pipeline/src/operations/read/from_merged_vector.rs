@@ -16,7 +16,6 @@
 
 use crate::{
 	PipelineFactory,
-	helpers::Tile,
 	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
@@ -29,6 +28,7 @@ use futures::{
 	stream,
 };
 use std::collections::HashMap;
+use versatiles_container::Tile;
 use versatiles_core::*;
 use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
 
@@ -103,7 +103,7 @@ impl ReadOperationTrait for Operation {
 				pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
 
 				ensure!(
-					parameters.tile_format.get_type() == TileType::Vector,
+					parameters.tile_format.to_type() == TileType::Vector,
 					"all sources must be vector tiles"
 				);
 			}
@@ -152,13 +152,12 @@ impl OperationTrait for Operation {
 						.await
 						.unwrap()
 						.for_each_sync(|(coord, tile)| {
-							tiles.get_mut(&coord).unwrap().push(tile.into_vector().unwrap());
+							tiles.get_mut(&coord).unwrap().push(tile.into_vector());
 						})
 						.await;
 				}
 
 				let format = self.parameters.tile_format;
-				let compression = self.parameters.tile_compression;
 
 				TileStream::from_vec(
 					tiles
@@ -167,10 +166,7 @@ impl OperationTrait for Operation {
 							if vec_tiles.is_empty() {
 								None
 							} else {
-								Some((
-									coord,
-									Tile::from_vector(merge_vector_tiles(vec_tiles).unwrap(), format, compression),
-								))
+								Some((coord, Tile::from_vector(merge_vector_tiles(vec_tiles).unwrap(), format)))
 							}
 						})
 						.collect(),
@@ -203,6 +199,7 @@ mod tests {
 	use super::*;
 	use crate::helpers::{arrange_tiles, dummy_vector_source::DummyVectorSource};
 	use itertools::Itertools;
+	use versatiles_container::TilesReaderTrait;
 
 	pub fn check_tile(blob: &Blob) -> String {
 		let tile = VectorTile::from_blob(blob).unwrap();
@@ -294,7 +291,7 @@ mod tests {
 
 		assert_eq!(
 			arrange_tiles(tiles, |tile| {
-				match check_tile(&tile.into_blob().unwrap()).as_str() {
+				match check_tile(&tile.into_blob(TileCompression::Uncompressed)).as_str() {
 					"A.pbf" => "🟦",
 					"B.pbf" => "🟨",
 					"A.pbf,B.pbf" => "🟩",

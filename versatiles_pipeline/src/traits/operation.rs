@@ -1,9 +1,8 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use std::fmt::Debug;
+use versatiles_container::Tile;
 use versatiles_core::{TileBBox, TileJSON, TileStream, TilesReaderParameters, Traversal};
-
-use crate::helpers::Tile;
 
 #[async_trait]
 pub trait OperationTrait: Debug + Send + Sync + Unpin {

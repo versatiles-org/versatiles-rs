@@ -344,7 +344,7 @@ impl TileJSON {
 
 		self.tile_format = Some(rp.tile_format);
 
-		self.tile_type = self.tile_format.map(|f| f.get_type());
+		self.tile_type = self.tile_format.map(|f| f.to_type());
 
 		if let Some(tile_type) = self.tile_type
 			&& self.tile_schema.map(|s| s.get_tile_type()) != self.tile_type

@@ -33,12 +33,14 @@
 
 use std::sync::Arc;
 
-use super::{tile_converter::TileConverter, write_to_filename};
+use crate::{Tile, TilesReaderTrait};
+
+use super::write_to_filename;
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{
-	Blob, TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileFormat, TileJSON, TileStream,
-	TilesReaderParameters, TilesReaderTrait, Traversal, config::Config,
+	TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal,
+	config::Config,
 };
 use versatiles_derive::context;
 
@@ -46,11 +48,8 @@ use versatiles_derive::context;
 #[derive(Debug)]
 pub struct TilesConverterParameters {
 	pub bbox_pyramid: Option<TileBBoxPyramid>,
-	pub tile_format: Option<TileFormat>,
 	pub flip_y: bool,
-	pub force_recompress: bool,
 	pub swap_xy: bool,
-	pub tile_compression: Option<TileCompression>,
 }
 
 impl Default for TilesConverterParameters {
@@ -59,10 +58,7 @@ impl Default for TilesConverterParameters {
 		TilesConverterParameters {
 			bbox_pyramid: None,
 			flip_y: false,
-			force_recompress: false,
 			swap_xy: false,
-			tile_compression: None,
-			tile_format: None,
 		}
 	}
 }
@@ -73,10 +69,11 @@ pub async fn convert_tiles_container(
 	reader: Box<dyn TilesReaderTrait>,
 	cp: TilesConverterParameters,
 	filename: &str,
+	compression: TileCompression,
 	config: Arc<Config>,
 ) -> Result<()> {
 	let mut converter = TilesConvertReader::new_from_reader(reader, cp)?;
-	write_to_filename(&mut converter, filename, config).await
+	write_to_filename(&mut converter, filename, compression, config).await
 }
 
 /// A reader that converts tiles from one format to another.
@@ -86,7 +83,6 @@ pub struct TilesConvertReader {
 	converter_parameters: TilesConverterParameters,
 	reader_parameters: TilesReaderParameters,
 	container_name: String,
-	tile_recompressor: Option<TileConverter>,
 	name: String,
 	tilejson: TileJSON,
 }
@@ -115,17 +111,6 @@ impl TilesConvertReader {
 			new_rp.bbox_pyramid.intersect(bbox_pyramid);
 		}
 
-		new_rp.tile_format = cp.tile_format.unwrap_or(rp.tile_format);
-		new_rp.tile_compression = cp.tile_compression.unwrap_or(rp.tile_compression);
-
-		let tile_recompressor = Some(TileConverter::new(
-			rp.tile_format,
-			rp.tile_compression,
-			new_rp.tile_format,
-			new_rp.tile_compression,
-			cp.force_recompress,
-		));
-
 		let mut tilejson = reader.tilejson().clone();
 		tilejson.update_from_reader_parameters(&new_rp);
 
@@ -134,7 +119,6 @@ impl TilesConvertReader {
 			converter_parameters: cp,
 			reader_parameters: new_rp,
 			container_name,
-			tile_recompressor,
 			name,
 			tilejson,
 		})
@@ -167,7 +151,7 @@ impl TilesReaderTrait for TilesConvertReader {
 		&self.tilejson
 	}
 
-	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		let mut coord = *coord;
 		if self.converter_parameters.flip_y {
 			coord.flip_y();
@@ -175,18 +159,12 @@ impl TilesReaderTrait for TilesConvertReader {
 		if self.converter_parameters.swap_xy {
 			coord.swap_xy();
 		}
-		let mut blob = self.reader.get_tile_blob(&coord).await?;
+		let tile = self.reader.get_tile(&coord).await?;
 
-		if let Some(tile_recompressor) = &self.tile_recompressor
-			&& let Some(b) = blob
-		{
-			blob = Some(tile_recompressor.process_blob(b)?);
-		}
-
-		Ok(blob)
+		Ok(tile)
 	}
 
-	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream> {
+	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
 		if self.converter_parameters.swap_xy {
 			bbox.swap_xy();
 		}
@@ -211,10 +189,6 @@ impl TilesReaderTrait for TilesConvertReader {
 			});
 		}
 
-		if let Some(tile_recompressor) = &self.tile_recompressor {
-			stream = tile_recompressor.process_stream(stream);
-		}
-
 		Ok(stream)
 	}
 }
@@ -233,45 +207,6 @@ mod tests {
 		let bbox_pyramid = TileBBoxPyramid::new_full(1);
 		let reader_parameters = TilesReaderParameters::new(tf, tc, bbox_pyramid);
 		MockTilesReader::new_mock(reader_parameters).unwrap()
-	}
-
-	fn get_converter_parameters(tc: TileCompression, force_recompress: bool) -> TilesConverterParameters {
-		TilesConverterParameters {
-			bbox_pyramid: None,
-			flip_y: false,
-			force_recompress,
-			swap_xy: false,
-			tile_compression: Some(tc),
-			tile_format: None,
-		}
-	}
-
-	#[tokio::test]
-	async fn tile_recompression() -> Result<()> {
-		async fn test(c_in: TileCompression, c_out: TileCompression) -> Result<()> {
-			let reader_in = get_mock_reader(MVT, c_in);
-			let temp_file = NamedTempFile::new("test.versatiles")?;
-			let cp = get_converter_parameters(c_out, false);
-			let filename = temp_file.to_str().unwrap();
-			convert_tiles_container(reader_in.boxed(), cp, filename, Config::default().arc()).await?;
-			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
-			let parameters_out = reader_out.parameters();
-			assert_eq!(parameters_out.tile_format, MVT);
-			assert_eq!(parameters_out.tile_compression, c_out);
-			Ok(())
-		}
-
-		test(Uncompressed, Uncompressed).await?;
-		test(Uncompressed, Gzip).await?;
-		test(Uncompressed, Brotli).await?;
-		test(Gzip, Uncompressed).await?;
-		test(Gzip, Gzip).await?;
-		test(Gzip, Brotli).await?;
-		test(Brotli, Uncompressed).await?;
-		test(Brotli, Gzip).await?;
-		test(Brotli, Brotli).await?;
-
-		Ok(())
 	}
 
 	#[tokio::test]
@@ -294,13 +229,10 @@ mod tests {
 
 			let cp = TilesConverterParameters {
 				bbox_pyramid: Some(pyramid_convert),
-				tile_format: None,
-				tile_compression: Some(Uncompressed),
-				force_recompress: false,
 				flip_y,
 				swap_xy,
 			};
-			convert_tiles_container(reader.boxed(), cp, filename, Config::default().arc()).await?;
+			convert_tiles_container(reader.boxed(), cp, filename, Uncompressed, Config::default().arc()).await?;
 
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.parameters();
@@ -309,7 +241,12 @@ mod tests {
 			let bbox = pyramid_out.get_level_bbox(3);
 			let mut tiles: Vec<String> = Vec::new();
 			for coord in bbox.iter_coords() {
-				let mut text = reader_out.get_tile_blob(&coord).await?.unwrap().to_string();
+				let mut text = reader_out
+					.get_tile(&coord)
+					.await?
+					.unwrap()
+					.into_blob(Uncompressed)
+					.to_string();
 				text = text.replace("{x:", "").replace(",y:", "").replace(",z:3}", "");
 				tiles.push(text);
 			}
@@ -332,16 +269,11 @@ mod tests {
 	fn test_tiles_converter_parameters_new() {
 		let cp = TilesConverterParameters {
 			bbox_pyramid: Some(TileBBoxPyramid::new_full(1)),
-			tile_format: None,
-			tile_compression: Some(Gzip),
-			force_recompress: true,
 			flip_y: true,
 			swap_xy: true,
 		};
 
-		assert_eq!(cp.tile_compression, Some(Gzip));
 		assert!(cp.bbox_pyramid.is_some());
-		assert!(cp.force_recompress);
 		assert!(cp.flip_y);
 		assert!(cp.swap_xy);
 	}
@@ -350,9 +282,7 @@ mod tests {
 	fn test_tiles_converter_parameters_default() {
 		let cp = TilesConverterParameters::default();
 
-		assert_eq!(cp.tile_compression, None);
 		assert_eq!(cp.bbox_pyramid, None);
-		assert!(!cp.force_recompress);
 		assert!(!cp.flip_y);
 		assert!(!cp.swap_xy);
 	}
@@ -365,19 +295,18 @@ mod tests {
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp).unwrap();
 
 		assert_eq!(tcr.reader.container_name(), "dummy_container");
-		assert_eq!(tcr.converter_parameters.tile_compression, None);
 		assert_eq!(tcr.name, "converter(dummy_name)");
 		assert_eq!(tcr.container_name, "converter(dummy_container)");
 	}
 
 	#[tokio::test]
-	async fn test_get_tile_blob() -> Result<()> {
+	async fn test_get_tile() -> Result<()> {
 		let reader = get_mock_reader(MVT, Uncompressed);
 		let cp = TilesConverterParameters::default();
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp)?;
 
 		let coord = TileCoord::new(0, 0, 0)?;
-		let data = tcr.get_tile_blob(&coord).await?;
+		let data = tcr.get_tile(&coord).await?;
 		assert!(data.is_some());
 
 		Ok(())
@@ -415,7 +344,6 @@ mod tests {
 	async fn test_flip_y_and_swap_xy() -> Result<()> {
 		let reader = get_mock_reader(MVT, Uncompressed);
 		let cp = TilesConverterParameters {
-			tile_compression: Some(Uncompressed),
 			flip_y: true,
 			swap_xy: true,
 			..Default::default()
@@ -423,12 +351,12 @@ mod tests {
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp)?;
 
 		let mut coord = TileCoord::new(3, 1, 2)?;
-		let data = tcr.get_tile_blob(&coord).await?;
+		let data = tcr.get_tile(&coord).await?;
 		assert!(data.is_some());
 
 		coord.flip_y();
 		coord.swap_xy();
-		let data_flipped = tcr.get_tile_blob(&coord).await?;
+		let data_flipped = tcr.get_tile(&coord).await?;
 		assert_eq!(data, data_flipped);
 
 		Ok(())

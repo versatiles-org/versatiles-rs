@@ -17,8 +17,9 @@ use axum::{
 use hyper::header::{ACCESS_CONTROL_ALLOW_ORIGIN, VARY};
 use std::path::Path;
 use tokio::sync::oneshot::Sender;
+use versatiles_container::TilesReaderTrait;
 use versatiles_core::{
-	Blob, TileCompression, TilesReaderTrait,
+	Blob, TileCompression,
 	utils::{TargetCompression, optimize_compression},
 };
 
@@ -272,7 +273,7 @@ fn ok_data(result: SourceResponse, mut target_compressions: TargetCompression) -
 		result.compression,
 		target_compressions
 	);
-	let (blob, compression) = optimize_compression(result.blob, &result.compression, &target_compressions)
+	let (blob, compression) = optimize_compression(result.blob, result.compression, &target_compressions)
 		.expect("should have optimized compression");
 
 	use TileCompression::*;

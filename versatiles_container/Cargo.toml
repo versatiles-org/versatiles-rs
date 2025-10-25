@@ -18,6 +18,7 @@ async-trait.workspace = true
 futures.workspace = true
 itertools = { workspace = true, features = ["use_alloc"] }
 log.workspace = true
+num_cpus.workspace = true
 r2d2 = { version = "0.8.10", default-features = false }
 r2d2_sqlite = { version = "0.31.0", default-features = false, features = [
 	"bundled",
@@ -28,8 +29,8 @@ tokio = { workspace = true, features = ["macros", "rt"] }
 
 versatiles_core = { workspace = true, default-features = false }
 versatiles_derive.workspace = true
+versatiles_geometry.workspace = true
 versatiles_image.workspace = true
-versatiles_pipeline.workspace = true
 
 [dev-dependencies]
 lazy_static.workspace = true

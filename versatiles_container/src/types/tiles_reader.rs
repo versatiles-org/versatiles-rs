@@ -3,19 +3,18 @@
 //! This module defines the `TilesReaderTrait` with methods for traversing,
 //! retrieving, and probing tile metadata, parameters, container info, and contents.
 
-#[cfg(feature = "cli")]
-use super::ProbeDepth;
-#[cfg(feature = "cli")]
-use crate::utils::PrettyPrint;
-use crate::{
-	Blob, TileBBox, TileCompression, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal,
-	TraversalTranslationStep, cache::CacheMap, config::Config, progress::get_progress_bar, translate_traversals,
-};
+use crate::Tile;
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{StreamExt, future::BoxFuture, stream};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
+#[cfg(feature = "cli")]
+use versatiles_core::{ProbeDepth, utils::PrettyPrint};
+use versatiles_core::{
+	TileBBox, TileCompression, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal,
+	TraversalTranslationStep, cache::CacheMap, config::Config, progress::get_progress_bar, translate_traversals,
+};
 
 /// Trait defining behavior for reading tiles from a container.
 ///
@@ -43,108 +42,10 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 		&Traversal::ANY
 	}
 
-	/// Traverse all tiles in the given traversal order, invoking `callback` for each bbox and its tile stream.
-	/// Runs sequentially; awaits each callback before moving to the next.
-	async fn traverse_all_tiles<'a>(
-		&'a self,
-		traversal_write: &Traversal,
-		mut callback: Box<dyn 'a + Send + FnMut(TileBBox, TileStream<'a>) -> BoxFuture<'a, Result<()>>>,
-		config: Arc<Config>,
-	) -> Result<()> {
-		let traversal_steps = translate_traversals(&self.parameters().bbox_pyramid, self.traversal(), traversal_write)?;
-
-		use TraversalTranslationStep::*;
-
-		let mut tn_read = 0;
-		let mut tn_write = 0;
-
-		for step in &traversal_steps {
-			match step {
-				Push(bboxes_in, _) => {
-					tn_read += bboxes_in.iter().map(TileBBox::count_tiles).sum::<u64>();
-				}
-				Pop(_, bbox_out) => {
-					tn_write += bbox_out.count_tiles();
-				}
-				Stream(bboxes_in, bbox_out) => {
-					tn_read += bboxes_in.iter().map(TileBBox::count_tiles).sum::<u64>();
-					tn_write += bbox_out.count_tiles();
-				}
-			}
-		}
-		let progress = get_progress_bar("converting tiles", u64::midpoint(tn_read, tn_write));
-
-		let mut ti_read = 0;
-		let mut ti_write = 0;
-
-		let cache = Arc::new(Mutex::new(CacheMap::<usize, (TileCoord, Blob)>::new(config)));
-		for step in traversal_steps {
-			match step {
-				Push(bboxes, index) => {
-					log::trace!("Cache {bboxes:?} at index {index}");
-					stream::iter(bboxes.clone())
-						.map(|bbox| {
-							let progress = progress.clone();
-							let c = cache.clone();
-							async move {
-								let vec = self
-									.get_tile_stream(bbox)
-									.await?
-									.inspect(move || progress.inc(1))
-									.to_vec()
-									.await;
-
-								let mut cache = c.lock().await;
-								cache.append(&index, vec)?;
-
-								Ok::<_, anyhow::Error>(())
-							}
-						})
-						.buffer_unordered(num_cpus::get() / 4)
-						.collect::<Vec<_>>()
-						.await
-						.into_iter()
-						.collect::<Result<Vec<_>>>()?;
-					ti_read += bboxes.iter().map(TileBBox::count_tiles).sum::<u64>();
-				}
-				Pop(index, bbox) => {
-					log::trace!("Uncache {bbox:?} at index {index}");
-					let vec = cache.lock().await.remove(&index)?.unwrap();
-					let progress = progress.clone();
-					let stream = TileStream::from_vec(vec).inspect(move || progress.inc(1));
-					callback(bbox, stream).await?;
-					ti_write += bbox.count_tiles();
-				}
-				Stream(bboxes, bbox) => {
-					log::trace!("Stream {bbox:?}");
-					let progress = progress.clone();
-					let streams = stream::iter(bboxes.clone()).map(move |bbox| {
-						let progress = progress.clone();
-						async move {
-							self
-								.get_tile_stream(bbox)
-								.await
-								.unwrap()
-								.inspect(move || progress.inc(2))
-						}
-					});
-					callback(bbox, TileStream::from_streams(streams)).await?;
-					ti_read += bboxes.iter().map(TileBBox::count_tiles).sum::<u64>();
-					ti_write += bbox.count_tiles();
-				}
-			}
-			progress.set_position(u64::midpoint(ti_read, ti_write));
-		}
-
-		progress.finish();
-		Ok(())
-	}
-
-	/// Asynchronously fetch the raw tile data for the given tile coordinate.
-	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>>;
+	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>>;
 
 	/// Asynchronously stream all tiles within the given bounding box.
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		let mutex = Arc::new(Mutex::new(self));
 		let coords: Vec<TileCoord> = bbox.iter_coords().collect();
 		Ok(TileStream::from_coord_vec_async(coords, move |coord| {
@@ -153,27 +54,9 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 				mutex
 					.lock()
 					.await
-					.get_tile_blob(&coord)
+					.get_tile(&coord)
 					.await
 					.map(|blob_option| blob_option.map(|blob| (coord, blob)))
-					.unwrap_or(None)
-			}
-		}))
-	}
-
-	/// Asynchronously stream the sizes of all tiles within the given bounding box.
-	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<u64>> {
-		let mutex = Arc::new(Mutex::new(self));
-		let coords: Vec<TileCoord> = bbox.iter_coords().collect();
-		Ok(TileStream::from_coord_vec_async(coords, move |coord| {
-			let mutex = mutex.clone();
-			async move {
-				mutex
-					.lock()
-					.await
-					.get_tile_blob(&coord)
-					.await
-					.map(|blob_option| blob_option.map(|blob| (coord, blob.len())))
 					.unwrap_or(None)
 			}
 		}))
@@ -278,14 +161,123 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	}
 }
 
+/// Extension trait providing a generic, HRTB-based traversal method.
+///
+/// Kept separate from `TilesReaderTrait` to preserve object safety of the base trait.
+pub trait TilesReaderTraverseExt: TilesReaderTrait {
+	fn traverse_all_tiles<'s, 'a, C>(
+		&'s self,
+		traversal_write: &'s Traversal,
+		mut callback: C,
+		config: Arc<Config>,
+	) -> impl core::future::Future<Output = Result<()>> + Send + 'a
+	where
+		C: FnMut(TileBBox, TileStream<'a, Tile>) -> BoxFuture<'a, Result<()>> + Send + 'a,
+		's: 'a,
+	{
+		async move {
+			let traversal_steps =
+				translate_traversals(&self.parameters().bbox_pyramid, self.traversal(), traversal_write)?;
+
+			use TraversalTranslationStep::*;
+
+			let mut tn_read = 0;
+			let mut tn_write = 0;
+
+			for step in &traversal_steps {
+				match step {
+					Push(bboxes_in, _) => {
+						tn_read += bboxes_in.iter().map(TileBBox::count_tiles).sum::<u64>();
+					}
+					Pop(_, bbox_out) => {
+						tn_write += bbox_out.count_tiles();
+					}
+					Stream(bboxes_in, bbox_out) => {
+						tn_read += bboxes_in.iter().map(TileBBox::count_tiles).sum::<u64>();
+						tn_write += bbox_out.count_tiles();
+					}
+				}
+			}
+			let progress = get_progress_bar("converting tiles", u64::midpoint(tn_read, tn_write));
+
+			let mut ti_read = 0;
+			let mut ti_write = 0;
+
+			let cache = Arc::new(Mutex::new(CacheMap::<usize, (TileCoord, Tile)>::new(config)));
+			for step in traversal_steps {
+				match step {
+					Push(bboxes, index) => {
+						log::trace!("Cache {bboxes:?} at index {index}");
+						stream::iter(bboxes.clone())
+							.map(|bbox| {
+								let progress = progress.clone();
+								let c = cache.clone();
+								async move {
+									let vec = self
+										.get_tile_stream(bbox)
+										.await?
+										.inspect(move || progress.inc(1))
+										.to_vec()
+										.await;
+
+									let mut cache = c.lock().await;
+									cache.append(&index, vec)?;
+
+									Ok::<_, anyhow::Error>(())
+								}
+							})
+							.buffer_unordered(num_cpus::get() / 4)
+							.collect::<Vec<_>>()
+							.await
+							.into_iter()
+							.collect::<Result<Vec<_>>>()?;
+						ti_read += bboxes.iter().map(TileBBox::count_tiles).sum::<u64>();
+					}
+					Pop(index, bbox) => {
+						log::trace!("Uncache {bbox:?} at index {index}");
+						let vec = cache.lock().await.remove(&index)?.unwrap();
+						let progress = progress.clone();
+						let stream = TileStream::from_vec(vec).inspect(move || progress.inc(1));
+						callback(bbox, stream).await?;
+						ti_write += bbox.count_tiles();
+					}
+					Stream(bboxes, bbox) => {
+						log::trace!("Stream {bbox:?}");
+						let progress = progress.clone();
+						let streams = stream::iter(bboxes.clone()).map(move |bbox| {
+							let progress = progress.clone();
+							async move {
+								self
+									.get_tile_stream(bbox)
+									.await
+									.unwrap()
+									.inspect(move || progress.inc(2))
+							}
+						});
+						callback(bbox, TileStream::from_streams(streams)).await?;
+						ti_read += bboxes.iter().map(TileBBox::count_tiles).sum::<u64>();
+						ti_write += bbox.count_tiles();
+					}
+				}
+				progress.set_position(u64::midpoint(ti_read, ti_write));
+			}
+
+			progress.finish();
+			Ok(())
+		}
+	}
+}
+
+impl<T: TilesReaderTrait + ?Sized> TilesReaderTraverseExt for T {}
+
 #[cfg(test)]
 mod tests {
 	#[cfg(feature = "cli")]
 	use super::ProbeDepth;
 	use super::*;
 	#[cfg(feature = "cli")]
-	use crate::utils::PrettyPrint;
-	use crate::{TileBBoxPyramid, TileFormat};
+	use versatiles_core::utils::PrettyPrint;
+	use versatiles_core::{Blob, TileBBoxPyramid, TileFormat};
 
 	#[derive(Debug)]
 	struct TestReader {
@@ -330,8 +322,12 @@ mod tests {
 			&self.tilejson
 		}
 
-		async fn get_tile_blob(&self, _coord: &TileCoord) -> Result<Option<Blob>> {
-			Ok(Some(Blob::from("test tile data")))
+		async fn get_tile(&self, _coord: &TileCoord) -> Result<Option<Tile>> {
+			Ok(Some(Tile::from_blob(
+				Blob::from("test tile data"),
+				self.parameters.tile_compression,
+				self.parameters.tile_format,
+			)))
 		}
 	}
 
@@ -377,15 +373,6 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_get_tile_blob() -> Result<()> {
-		let reader = TestReader::new_dummy();
-		let coord = TileCoord::new(0, 0, 0)?;
-		let tile_data = reader.get_tile_blob(&coord).await?;
-		assert_eq!(tile_data, Some(Blob::from("test tile data")));
-		Ok(())
-	}
-
-	#[tokio::test]
 	async fn test_get_tile_stream() -> Result<()> {
 		let reader = TestReader::new_dummy();
 		let bbox = TileBBox::from_min_and_max(1, 0, 0, 1, 1)?;
@@ -399,7 +386,7 @@ mod tests {
 	async fn test_probe_tile_contents() -> Result<()> {
 		#[cfg(feature = "cli")]
 		{
-			use crate::utils::PrettyPrint;
+			use versatiles_core::utils::PrettyPrint;
 
 			let mut reader = TestReader::new_dummy();
 			let mut print = PrettyPrint::new();

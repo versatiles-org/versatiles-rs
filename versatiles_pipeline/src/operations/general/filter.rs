@@ -1,8 +1,9 @@
-use crate::{PipelineFactory, helpers::Tile, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::{BoxFuture, ready};
 use std::fmt::Debug;
+use versatiles_container::Tile;
 use versatiles_core::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]

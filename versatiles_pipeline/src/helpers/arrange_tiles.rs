@@ -1,4 +1,4 @@
-use crate::helpers::Tile;
+use versatiles_container::Tile;
 use versatiles_core::TileCoord;
 
 pub fn arrange_tiles<T: ToString>(tiles: Vec<(TileCoord, Tile)>, cb: impl Fn(Tile) -> T) -> Vec<String> {
@@ -31,12 +31,12 @@ mod tests {
 			.map(|(x, y, v)| {
 				(
 					TileCoord::new(8, x, y).unwrap(),
-					Tile::from_blob(Blob::from(v), BIN, Uncompressed),
+					Tile::from_blob(Blob::from(v), Uncompressed, BIN),
 				)
 			})
 			.collect();
 
-		let arranged = arrange_tiles(tiles, |tile| tile.into_blob().unwrap().as_str().to_string());
+		let arranged = arrange_tiles(tiles, |tile| tile.into_blob(Uncompressed).as_str().to_string());
 		assert_eq!(arranged, ["a b", "c ❌"]);
 	}
 }

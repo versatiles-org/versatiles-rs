@@ -54,7 +54,7 @@ use versatiles_derive::context;
 #[context("Optimizing compression for blob with input compression: {input_compression:?} and target: {target:?}")]
 pub fn optimize_compression(
 	blob: Blob,
-	input_compression: &TileCompression,
+	input_compression: TileCompression,
 	target: &TargetCompression,
 ) -> Result<(Blob, TileCompression)> {
 	if target.compressions.is_empty() {
@@ -69,8 +69,8 @@ pub fn optimize_compression(
 
 	// If the target is not seeking the best compression and the current compression is allowed,
 	// retain the current compression.
-	if target.compression_goal != UseBestCompression && target.compressions.contains(*input_compression) {
-		return Ok((blob, *input_compression));
+	if target.compression_goal != UseBestCompression && target.compressions.contains(input_compression) {
+		return Ok((blob, input_compression));
 	}
 
 	match input_compression {
@@ -138,11 +138,7 @@ pub fn optimize_compression(
 ///
 /// * If decompression or compression operations fail.
 #[context("Recompressing blob from {input_compression:?} to {output_compression:?}")]
-pub fn recompress(
-	blob: Blob,
-	input_compression: &TileCompression,
-	output_compression: &TileCompression,
-) -> Result<Blob> {
+pub fn recompress(blob: Blob, input_compression: TileCompression, output_compression: TileCompression) -> Result<Blob> {
 	if input_compression == output_compression {
 		return Ok(blob);
 	}
@@ -167,7 +163,7 @@ pub fn recompress(
 ///
 /// * If the specified compression algorithm is unsupported.
 #[context("Compressing blob with algorithm: {compression:?}")]
-pub fn compress(blob: Blob, compression: &TileCompression) -> Result<Blob> {
+pub fn compress(blob: Blob, compression: TileCompression) -> Result<Blob> {
 	match compression {
 		TileCompression::Uncompressed => Ok(blob),
 		TileCompression::Gzip => compress_gzip(&blob),
@@ -191,7 +187,7 @@ pub fn compress(blob: Blob, compression: &TileCompression) -> Result<Blob> {
 ///
 /// * If the specified compression algorithm is unsupported.
 #[context("Decompressing blob with algorithm: {compression:?}")]
-pub fn decompress(blob: Blob, compression: &TileCompression) -> Result<Blob> {
+pub fn decompress(blob: Blob, compression: TileCompression) -> Result<Blob> {
 	match compression {
 		TileCompression::Uncompressed => Ok(blob),
 		TileCompression::Gzip => decompress_gzip(&blob),
@@ -200,7 +196,7 @@ pub fn decompress(blob: Blob, compression: &TileCompression) -> Result<Blob> {
 }
 
 #[context("Decompressing blob ref with algorithm: {compression:?}")]
-pub fn decompress_ref(blob: &Blob, compression: &TileCompression) -> Result<Blob> {
+pub fn decompress_ref(blob: &Blob, compression: TileCompression) -> Result<Blob> {
 	match compression {
 		TileCompression::Uncompressed => Ok(blob.clone()),
 		TileCompression::Gzip => decompress_gzip(blob),
@@ -240,7 +236,7 @@ mod tests {
 				TileCompression::Gzip => gzip_blob.clone(),
 				TileCompression::Brotli => brotli_blob.clone(),
 			};
-			let (result_blob, result_compression) = optimize_compression(input_blob, &input_compression, &target)?;
+			let (result_blob, result_compression) = optimize_compression(input_blob, input_compression, &target)?;
 			assert_eq!(result_compression, expected_compression);
 			assert_eq!(result_blob, expected_blob);
 			Ok(())
@@ -283,24 +279,24 @@ mod tests {
 		let brotli_data = compress_brotli(&original_data)?;
 
 		// Recompress Gzip to Brotli
-		let recompressed = recompress(gzip_data.clone(), &TileCompression::Gzip, &TileCompression::Brotli)?;
+		let recompressed = recompress(gzip_data.clone(), TileCompression::Gzip, TileCompression::Brotli)?;
 		let decompressed = decompress_brotli(&recompressed)?;
 		assert_eq!(original_data, decompressed);
 
 		// Recompress Brotli to Gzip
-		let recompressed = recompress(brotli_data.clone(), &TileCompression::Brotli, &TileCompression::Gzip)?;
+		let recompressed = recompress(brotli_data.clone(), TileCompression::Brotli, TileCompression::Gzip)?;
 		let decompressed = decompress_gzip(&recompressed)?;
 		assert_eq!(original_data, decompressed);
 
 		// Recompress Gzip to Gzip (no change)
-		let recompressed = recompress(gzip_data.clone(), &TileCompression::Gzip, &TileCompression::Gzip)?;
+		let recompressed = recompress(gzip_data.clone(), TileCompression::Gzip, TileCompression::Gzip)?;
 		assert_eq!(recompressed, gzip_data);
 
 		// Recompress Uncompressed to Gzip
 		let recompressed = recompress(
 			original_data.clone(),
-			&TileCompression::Uncompressed,
-			&TileCompression::Gzip,
+			TileCompression::Uncompressed,
+			TileCompression::Gzip,
 		)?;
 		let decompressed = decompress_gzip(&recompressed)?;
 		assert_eq!(original_data, decompressed);
@@ -313,7 +309,7 @@ mod tests {
 		let data = generate_test_data(500);
 		let result = optimize_compression(
 			data.clone(),
-			&TileCompression::Uncompressed,
+			TileCompression::Uncompressed,
 			&TargetCompression::from(TileCompression::Uncompressed),
 		)?;
 		assert_eq!(result.0, data);
@@ -328,7 +324,7 @@ mod tests {
 			compressions: EnumSet::empty(),
 			compression_goal: CompressionGoal::UseBestCompression,
 		};
-		let result = optimize_compression(data, &TileCompression::Uncompressed, &target);
+		let result = optimize_compression(data, TileCompression::Uncompressed, &target);
 		assert!(result.is_err());
 	}
 
@@ -339,7 +335,7 @@ mod tests {
 			compressions: enum_set!(TileCompression::Gzip | TileCompression::Brotli),
 			compression_goal: CompressionGoal::UseBestCompression,
 		};
-		let result = optimize_compression(data, &TileCompression::Uncompressed, &target);
+		let result = optimize_compression(data, TileCompression::Uncompressed, &target);
 		assert!(result.is_err());
 	}
 
@@ -348,8 +344,8 @@ mod tests {
 		let original_data = generate_test_data(100);
 		let recompressed = recompress(
 			original_data.clone(),
-			&TileCompression::Uncompressed,
-			&TileCompression::Uncompressed,
+			TileCompression::Uncompressed,
+			TileCompression::Uncompressed,
 		)?;
 		assert_eq!(recompressed, original_data);
 		Ok(())
@@ -359,13 +355,13 @@ mod tests {
 	fn test_generic_compress_dispatch() -> Result<()> {
 		let data = generate_test_data(1024);
 		// Uncompressed should return original data
-		let result = compress(data.clone(), &TileCompression::Uncompressed)?;
+		let result = compress(data.clone(), TileCompression::Uncompressed)?;
 		assert_eq!(result, data);
 		// Gzip should match compress_gzip
-		let gzip = compress(data.clone(), &TileCompression::Gzip)?;
+		let gzip = compress(data.clone(), TileCompression::Gzip)?;
 		assert_eq!(gzip, compress_gzip(&data)?);
 		// Brotli should match compress_brotli
-		let brotli = compress(data.clone(), &TileCompression::Brotli)?;
+		let brotli = compress(data.clone(), TileCompression::Brotli)?;
 		assert_eq!(brotli, compress_brotli(&data)?);
 		Ok(())
 	}
@@ -376,13 +372,13 @@ mod tests {
 		let gzip = compress_gzip(&data)?;
 		let brotli = compress_brotli(&data)?;
 		// Uncompressed decompress returns original
-		let res_u = decompress(data.clone(), &TileCompression::Uncompressed)?;
+		let res_u = decompress(data.clone(), TileCompression::Uncompressed)?;
 		assert_eq!(res_u, data);
 		// Gzip decompress matches decompress_gzip
-		let res_g = decompress(gzip.clone(), &TileCompression::Gzip)?;
+		let res_g = decompress(gzip.clone(), TileCompression::Gzip)?;
 		assert_eq!(res_g, decompress_gzip(&gzip)?);
 		// Brotli decompress matches decompress_brotli
-		let res_b = decompress(brotli.clone(), &TileCompression::Brotli)?;
+		let res_b = decompress(brotli.clone(), TileCompression::Brotli)?;
 		assert_eq!(res_b, decompress_brotli(&brotli)?);
 		Ok(())
 	}
@@ -392,12 +388,12 @@ mod tests {
 		let original = generate_test_data(256);
 		let gzip_blob = compress_gzip(&original)?;
 		let target = TargetCompression::from_none(); // only Uncompressed allowed
-		let (out_blob, out_comp) = optimize_compression(gzip_blob.clone(), &TileCompression::Gzip, &target)?;
+		let (out_blob, out_comp) = optimize_compression(gzip_blob.clone(), TileCompression::Gzip, &target)?;
 		assert_eq!(out_comp, TileCompression::Uncompressed);
 		assert_eq!(out_blob, original);
 		// Brotli case
 		let brotli_blob = compress_brotli(&original)?;
-		let (out_blob2, out_comp2) = optimize_compression(brotli_blob.clone(), &TileCompression::Brotli, &target)?;
+		let (out_blob2, out_comp2) = optimize_compression(brotli_blob.clone(), TileCompression::Brotli, &target)?;
 		assert_eq!(out_comp2, TileCompression::Uncompressed);
 		assert_eq!(out_blob2, original);
 		Ok(())

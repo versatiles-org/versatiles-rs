@@ -14,17 +14,6 @@
 //! This module provides a unified interface for reading and writing various tile container formats.
 //! Depending on the enabled features, it supports different formats with corresponding read and write capabilities.
 
-mod pipeline;
-pub use pipeline::*;
-
-mod converter;
-pub use converter::*;
-
-mod getters;
-#[cfg(test)]
-pub use getters::tests::*;
-pub use getters::{get_reader, write_to_filename};
-
 mod mbtiles;
 pub use mbtiles::*;
 
@@ -39,13 +28,8 @@ pub use pmtiles::*;
 mod tar;
 pub use tar::*;
 
-pub mod tile_converter;
-
 mod directory;
 pub use directory::*;
 
 mod versatiles;
 pub use versatiles::*;
-
-mod writer;
-pub use writer::*;

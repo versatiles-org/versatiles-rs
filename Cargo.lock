@@ -3642,6 +3642,7 @@ dependencies = [
  "itertools 0.14.0",
  "lazy_static",
  "log",
+ "num_cpus",
  "r2d2",
  "r2d2_sqlite",
  "reqwest",
@@ -3649,8 +3650,8 @@ dependencies = [
  "tokio",
  "versatiles_core",
  "versatiles_derive",
+ "versatiles_geometry",
  "versatiles_image",
- "versatiles_pipeline",
  "wildmatch",
 ]
 
@@ -3747,6 +3748,7 @@ dependencies = [
  "regex",
  "rstest",
  "tokio",
+ "versatiles_container",
  "versatiles_core",
  "versatiles_derive",
  "versatiles_geometry",

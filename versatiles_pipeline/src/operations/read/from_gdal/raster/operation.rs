@@ -7,12 +7,13 @@
 //! other data source.
 
 use super::RasterSource;
-use crate::{PipelineFactory, helpers::Tile, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::DynamicImage;
 use std::{fmt::Debug, vec};
+use versatiles_container::Tile;
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -177,7 +178,6 @@ impl OperationTrait for Operation {
 
 				if let Some(image) = image {
 					let tile_format = self.parameters.tile_format;
-					let tile_compression = self.parameters.tile_compression;
 					// Crop into tiles on a blocking thread
 					let vec = tokio::task::spawn_blocking(move || {
 						bbox
@@ -191,7 +191,7 @@ impl OperationTrait for Operation {
 										size,
 									)
 									.into_optional()
-									.map(|img| (coord, Tile::from_image(img, tile_format, tile_compression)))
+									.map(|img| (coord, Tile::from_image(img, tile_format)))
 							})
 							.collect::<Vec<_>>()
 					})
@@ -262,7 +262,7 @@ mod tests {
 	}
 
 	#[tokio::test(flavor = "multi_thread")]
-	async fn test_operation_get_tile_blob() -> Result<()> {
+	async fn test_operation_get_tile() -> Result<()> {
 		async fn gradient_test(level: u8, x: u32, y: u32, expected_row: [u8; 7], expected_col: [u8; 7]) {
 			// Build a `Operation` that points at `testdata/gradient.tif`.
 			// We keep it in‑memory (no factory) and map bands 1‑2‑3 → RGB.
@@ -317,7 +317,7 @@ mod tests {
 		let mut stream = operation.get_stream(TileBBox::new_full(1)?).await?;
 		let mut count = 0;
 		while let Some((coord_out, tile)) = stream.next().await {
-			let image = tile.into_image()?;
+			let image = tile.into_image();
 			assert_eq!(image.width(), 16);
 			assert_eq!(image.height(), 16);
 			let color_is = image.average_color();

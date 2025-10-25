@@ -17,13 +17,14 @@
 mod image;
 mod vector;
 
-use crate::{PipelineFactory, helpers::Tile, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use image::create_debug_image;
 use std::fmt::Debug;
 use vector::create_debug_vector_tile;
+use versatiles_container::Tile;
 use versatiles_core::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -51,7 +52,7 @@ impl Operation {
 
 		let mut tilejson = TileJSON::default();
 
-		if tile_format.get_type() == TileType::Vector {
+		if tile_format.to_type() == TileType::Vector {
 			tilejson.merge(&TileJSON::try_from(
 				r#"{"vector_layers":[
 					{"id":"background","minzoom":0,"maxzoom":30},
@@ -102,24 +103,17 @@ impl OperationTrait for Operation {
 	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox);
 		let format = self.parameters.tile_format;
-		let compression = self.parameters.tile_compression;
-		match self.parameters.tile_format.get_type() {
+		match self.parameters.tile_format.to_type() {
 			TileType::Raster => {
 				let alpha = format != TileFormat::JPG;
 				Ok(TileStream::from_iter_coord_parallel(
 					bbox.into_iter_coords(),
-					move |c| Some(Tile::from_image(create_debug_image(&c, alpha), format, compression)),
+					move |c| Some(Tile::from_image(create_debug_image(&c, alpha), format)),
 				))
 			}
 			TileType::Vector => Ok(TileStream::from_iter_coord_parallel(
 				bbox.into_iter_coords(),
-				move |c| {
-					Some(Tile::from_vector(
-						create_debug_vector_tile(&c).unwrap(),
-						format,
-						compression,
-					))
-				},
+				move |c| Some(Tile::from_vector(create_debug_vector_tile(&c).unwrap(), format)),
 			)),
 			_ => bail!("tile format '{}' is not supported.", self.parameters.tile_format),
 		}
@@ -147,7 +141,7 @@ impl ReadOperationFactoryTrait for Factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	//use pretty_assertions::assert_eq;
+	use versatiles_core::TileCompression::Uncompressed;
 
 	async fn test(format: &str, len: u64, tilejson: &[&str]) -> Result<()> {
 		let factory = PipelineFactory::new_dummy();
@@ -164,14 +158,14 @@ mod tests {
 			.unwrap()
 			.1;
 
-		assert_eq!(tile.into_blob()?.len(), len, "for '{format}'");
+		assert_eq!(tile.into_blob(Uncompressed).len(), len, "for '{format}'");
 		assert_eq!(operation.tilejson().as_pretty_lines(100), tilejson, "for '{format}'");
 
 		let mut stream = operation.get_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?).await?;
 
 		let mut n = 0;
 		while let Some((coord, tile)) = stream.next().await {
-			assert!(!tile.into_blob()?.is_empty(), "for '{format}'");
+			assert!(!tile.into_blob(Uncompressed).is_empty(), "for '{format}'");
 			assert!(coord.x >= 1 && coord.x <= 2, "for '{format}'");
 			assert!(coord.y >= 1 && coord.y <= 3, "for '{format}'");
 			assert_eq!(coord.level, 3, "for '{format}'");

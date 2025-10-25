@@ -25,7 +25,7 @@
 //!
 //!     // Get tile data for specific coordinates
 //!     let coord = TileCoord::new(1, 1, 1)?;
-//!     if let Some(tile_data) = reader.get_tile_blob(&coord).await? {
+//!     if let Some(tile_data) = reader.get_tile(&coord).await? {
 //!         println!("Tile data: {:?}", tile_data);
 //!     }
 //!
@@ -39,6 +39,7 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of reading metadata, handling different file formats, and verifying tile data.
 
+use crate::{Tile, TilesReaderTrait};
 use anyhow::{Context, Result, anyhow, ensure};
 use async_trait::async_trait;
 use r2d2::Pool;
@@ -303,7 +304,7 @@ impl TilesReaderTrait for MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
-	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		log::trace!("read tile from coord {coord:?}");
 
 		let conn = self.pool.get()?;
@@ -314,7 +315,11 @@ impl TilesReaderTrait for MBTilesReader {
 		if let Ok(vec) = stmt.query_row([coord.x, max_index - coord.y, coord.level as u32], |row| {
 			row.get::<_, Vec<u8>>(0)
 		}) {
-			Ok(Some(Blob::from(vec)))
+			Ok(Some(Tile::from_blob(
+				Blob::from(vec),
+				self.parameters.tile_compression,
+				self.parameters.tile_format,
+			)))
 		} else {
 			Ok(None)
 		}
@@ -327,7 +332,7 @@ impl TilesReaderTrait for MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue querying the database.
-	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream> {
+	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_tile_stream {:?}", bbox);
 
 		if bbox.is_empty() {
@@ -345,7 +350,7 @@ impl TilesReaderTrait for MBTilesReader {
 			 )
 			 .unwrap();
 
-		let vec: Vec<(TileCoord, Blob)> = stmt
+		let vec: Vec<(TileCoord, Tile)> = stmt
 			.query_map(
 				[
 					bbox.x_min(),
@@ -361,7 +366,8 @@ impl TilesReaderTrait for MBTilesReader {
 					let mut coord = TileCoord::new(level, x, y).unwrap();
 					coord.flip_y();
 					let blob = Blob::from(row.get::<_, Vec<u8>>(3)?);
-					Ok((coord, blob))
+					let tile = Tile::from_blob(blob, self.parameters.tile_compression, self.parameters.tile_format);
+					Ok((coord, tile))
 				},
 			)
 			.unwrap()
@@ -426,7 +432,11 @@ pub mod tests {
 		assert_eq!(reader.parameters().tile_compression, Gzip);
 		assert_eq!(reader.parameters().tile_format, MVT);
 
-		let tile = reader.get_tile_blob(&TileCoord::new(14, 8803, 5376)?).await?.unwrap();
+		let tile = reader
+			.get_tile(&TileCoord::new(14, 8803, 5376)?)
+			.await?
+			.unwrap()
+			.into_blob(reader.parameters().tile_compression);
 		assert_eq!(tile.len(), 172969);
 		assert_eq!(tile.get_range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
 		assert_eq!(

@@ -1,10 +1,11 @@
-use crate::{PipelineFactory, helpers::Tile, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::{DynamicImage, GenericImage};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
+use versatiles_container::Tile;
 use versatiles_core::{cache::CacheMap, *};
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -212,7 +213,7 @@ impl OperationTrait for Operation {
 					.source
 					.get_stream(bbox)
 					.await?
-					.map_item_parallel(|tile| tile.into_image()),
+					.map_item_parallel(|tile| Ok(tile.into_image())),
 			)
 			.await?
 		} else {
@@ -224,7 +225,6 @@ impl OperationTrait for Operation {
 		self.add_images_to_cache(&container).await?;
 
 		let format = self.source.parameters().tile_format;
-		let compression = self.source.parameters().tile_compression;
 
 		log::trace!("Composing final stream for bbox {:?}", bbox);
 		let vec = container
@@ -232,7 +232,7 @@ impl OperationTrait for Operation {
 			.filter_map(move |(c, o)| {
 				if let Some(image) = o {
 					if bbox.contains(&c) {
-						Some((c, Tile::from_image(image, format, compression)))
+						Some((c, Tile::from_image(image, format)))
 					} else {
 						None
 					}

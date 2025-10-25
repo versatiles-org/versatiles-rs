@@ -33,6 +33,7 @@ pub async fn run(args: &ExportOutline) -> Result<()> {
 	)
 	.await?;
 
+	let compression = reader.parameters().tile_compression;
 	let bbox_pyramid = reader.parameters().bbox_pyramid.clone();
 	let level = args.level.unwrap_or_else(|| bbox_pyramid.get_level_max().unwrap());
 
@@ -45,7 +46,10 @@ pub async fn run(args: &ExportOutline) -> Result<()> {
 	}
 
 	let bbox = *bbox_pyramid.get_level_bbox(level);
-	let mut stream = reader.get_tile_size_stream(bbox).await?;
+	let mut stream = reader
+		.get_tile_stream(bbox)
+		.await?
+		.map_item_parallel(move |mut tile| Ok(tile.as_blob(compression).len()));
 
 	let progress = get_progress_bar("Scanning tile sizes", bbox.count_tiles());
 	let mut outline = versatiles_geometry::tile_outline::TileOutline::new();

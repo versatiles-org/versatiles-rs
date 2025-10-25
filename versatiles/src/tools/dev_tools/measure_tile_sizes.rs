@@ -1,6 +1,6 @@
 use anyhow::{Result, anyhow, bail};
 use std::path::PathBuf;
-use versatiles::{TileBBox, TileFormat, config::Config, progress::get_progress_bar, utils::decompress};
+use versatiles::{TileBBox, TileFormat, config::Config, progress::get_progress_bar};
 use versatiles_container::get_reader;
 use versatiles_image::{DynamicImage, DynamicImageTraitConvert, encode};
 
@@ -55,7 +55,7 @@ pub async fn run(args: &MeasureTileSizes) -> Result<()> {
 	let progress = get_progress_bar("Scanning tile sizes", (width_original * width_original) as u64);
 	let compression = reader.parameters().tile_compression;
 	let vec = stream
-		.map_item_parallel(move |tile| decompress(tile, &compression).map(|t| t.len()))
+		.map_item_parallel(move |mut tile| Ok(tile.as_blob(compression).len()))
 		.inspect(|| progress.inc(1))
 		.to_vec()
 		.await;

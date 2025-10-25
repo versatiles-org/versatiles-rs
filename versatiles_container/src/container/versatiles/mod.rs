@@ -29,7 +29,7 @@
 //!     let mut reader = VersaTilesReader::open_path(&path_versatiles).await?;
 //!
 //!     // Get tile data
-//!     if let Some(tile) = reader.get_tile_blob(&TileCoord::new(12, 2200, 1345)?).await? {
+//!     if let Some(tile) = reader.get_tile(&TileCoord::new(12, 2200, 1345)?).await? {
 //!         println!("Tile data: {tile:?}");
 //!     } else {
 //!         println!("No tile data found");

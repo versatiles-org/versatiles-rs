@@ -24,7 +24,7 @@
 //!
 //!     // Get tile data for specific coordinates
 //!     let coord = TileCoord::new(1, 1, 1)?;
-//!     if let Some(tile_data) = reader.get_tile_blob(&coord).await? {
+//!     if let Some(tile_data) = reader.get_tile(&coord).await? {
 //!         println!("Tile data: {:?}", tile_data);
 //!     }
 //!
@@ -39,6 +39,7 @@
 //! This module includes comprehensive tests to ensure the correct functionality of reading metadata, handling different file formats, and verifying tile data.
 
 use super::types::{EntriesV3, HeaderV3};
+use crate::{Tile, TilesReaderTrait};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -98,14 +99,14 @@ impl PMTilesReader {
 		log::trace!("Internal compression: {:?}", internal_compression);
 
 		let meta = data_reader.read_range(&header.metadata).await?;
-		let meta = decompress(meta, &internal_compression)?;
+		let meta = decompress(meta, internal_compression)?;
 		let tilejson = TileJSON::try_from_blob_or_default(&meta);
 		log::trace!("TileJSON: {:?}", tilejson);
 
 		let root_bytes = data_reader.read_range(&header.root_dir).await?;
 		log::trace!("Root directory bytes length: {}", root_bytes.len());
 
-		let root_bytes_uncompressed = decompress(root_bytes, &internal_compression)?;
+		let root_bytes_uncompressed = decompress(root_bytes, internal_compression)?;
 		log::trace!(
 			"Root directory bytes uncompressed length: {}",
 			root_bytes_uncompressed.len()
@@ -114,7 +115,7 @@ impl PMTilesReader {
 		let leaves_bytes = data_reader.read_range(&header.leaf_dirs).await?;
 		log::trace!("Leaf directories bytes length: {}", leaves_bytes.len());
 
-		let bbox_pyramid = calc_bbox_pyramid(&root_bytes_uncompressed, &leaves_bytes, &internal_compression)?;
+		let bbox_pyramid = calc_bbox_pyramid(&root_bytes_uncompressed, &leaves_bytes, internal_compression)?;
 		log::trace!("Bounding box pyramid: {:?}", bbox_pyramid);
 
 		let parameters = TilesReaderParameters::new(
@@ -148,7 +149,7 @@ impl PMTilesReader {
 fn calc_bbox_pyramid(
 	root_bytes_uncompressed: &Blob,
 	leaves_bytes: &Blob,
-	compression: &TileCompression,
+	compression: TileCompression,
 ) -> Result<TileBBoxPyramid> {
 	let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 
@@ -164,7 +165,7 @@ fn calc_bbox_pyramid(
 		bbox_pyramid: &mut TileBBoxPyramid,
 		dir: &Blob,
 		leaves_bytes: &Blob,
-		compression: &TileCompression,
+		compression: TileCompression,
 		root: bool,
 	) -> Result<u64> {
 		log::trace!("parse_directories");
@@ -250,9 +251,9 @@ impl TilesReaderTrait for PMTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
-	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		// Log the requested tile coordinates for debugging purposes
-		log::trace!("get_tile_blob {:?}", coord);
+		log::trace!("get_tile {:?}", coord);
 
 		// Convert the tile coordinates into a unique tile ID
 		let tile_id: u64 = coord.get_hilbert_index()?;
@@ -275,12 +276,14 @@ impl TilesReaderTrait for PMTilesReader {
 			if entry.range.length > 0 {
 				// If the entry represents a run of tiles, directly fetch the tile data
 				if entry.run_length > 0 {
-					return Ok(Some(
+					return Ok(Some(Tile::from_blob(
 						self
 							.data_reader
 							.read_range(&entry.range.get_shifted_forward(self.header.tile_data.offset))
 							.await?,
-					));
+						self.parameters.tile_compression,
+						self.parameters.tile_format,
+					)));
 				} else {
 					// Otherwise, fetch the directory bytes for the next level
 					let range = entry.range;
@@ -289,7 +292,7 @@ impl TilesReaderTrait for PMTilesReader {
 					entries = cache.get_or_set(&range, || {
 						let mut blob = self.leaves_bytes.read_range(&range)?;
 						// Decompress the directory bytes
-						blob = decompress(blob, &self.internal_compression)?;
+						blob = decompress(blob, self.internal_compression)?;
 						let entries = EntriesV3::from_blob(&blob)?;
 						Ok(Arc::new(entries))
 					})?;
@@ -348,20 +351,26 @@ mod tests {
 		);
 
 		assert_eq!(
-			reader.get_tile_blob(&TileCoord::new(0, 0, 0)?).await?.unwrap().len(),
+			reader
+				.get_tile(&TileCoord::new(0, 0, 0)?)
+				.await?
+				.unwrap()
+				.as_blob(TileCompression::Uncompressed)
+				.len(),
 			20
 		);
 
 		assert_eq!(
 			reader
-				.get_tile_blob(&TileCoord::new(14, 8800, 5370)?)
+				.get_tile(&TileCoord::new(14, 8800, 5370)?)
 				.await?
 				.unwrap()
+				.as_blob(TileCompression::Uncompressed)
 				.len(),
 			100391
 		);
 
-		assert!(reader.get_tile_blob(&TileCoord::new(16, 0, 0)?).await?.is_none());
+		assert!(reader.get_tile(&TileCoord::new(16, 0, 0)?).await?.is_none());
 
 		Ok(())
 	}

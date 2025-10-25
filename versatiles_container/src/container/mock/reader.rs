@@ -16,12 +16,13 @@
 //! #[tokio::test]
 //! async fn test_mock_reader() -> Result<()> {
 //!     let mut reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::PNG)?;
-//!     let tile_data = reader.get_tile_blob(&TileCoord::new(0, 0, 0)?).await?;
+//!     let tile_data = reader.get_tile(&TileCoord::new(0, 0, 0)?).await?;
 //!     assert!(tile_data.is_some());
 //!     Ok(())
 //! }
 //! ```
 
+use crate::{Tile, TilesReaderTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{utils::compress, *};
@@ -98,7 +99,7 @@ impl TilesReaderTrait for MockTilesReader {
 		&self.tilejson
 	}
 
-	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		use TileFormat::*;
 
 		if !coord.is_valid() {
@@ -115,8 +116,8 @@ impl TilesReaderTrait for MockTilesReader {
 			WEBP => Blob::from(MOCK_BYTES_WEBP.to_vec()),
 			_ => panic!("tile format {format:?} is not implemented for MockTileReader"),
 		};
-		blob = compress(blob, &self.parameters.tile_compression)?;
-		Ok(Some(blob))
+		blob = compress(blob, self.parameters.tile_compression)?;
+		Ok(Some(Tile::from_blob(blob, self.parameters.tile_compression, format)))
 	}
 }
 
@@ -133,7 +134,6 @@ mod tests {
 	use super::*;
 	use crate::MockTilesWriter;
 	use anyhow::Result;
-	use versatiles_core::utils::decompress;
 
 	#[tokio::test]
 	async fn reader() -> Result<()> {
@@ -154,21 +154,26 @@ mod tests {
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 		let blob = reader
-			.get_tile_blob(&TileCoord::new(0, 0, 0)?)
+			.get_tile(&TileCoord::new(0, 0, 0)?)
 			.await?
 			.unwrap()
+			.into_blob(TileCompression::Uncompressed)
 			.into_vec();
 		assert_eq!(&blob[0..4], b"\x89PNG");
 		Ok(())
 	}
 
 	#[tokio::test]
-	async fn get_tile_blob() {
+	async fn get_tile() {
 		let test = |profile, blob| async move {
 			let coord = TileCoord::new(6, 23, 45).unwrap();
 			let reader = MockTilesReader::new_mock_profile(profile).unwrap();
-			let tile_compressed = reader.get_tile_blob(&coord).await.unwrap().unwrap();
-			let tile_uncompressed = decompress(tile_compressed, &reader.parameters().tile_compression).unwrap();
+			let tile_uncompressed = reader
+				.get_tile(&coord)
+				.await
+				.unwrap()
+				.unwrap()
+				.into_blob(TileCompression::Uncompressed);
 			assert_eq!(tile_uncompressed, blob);
 		};
 

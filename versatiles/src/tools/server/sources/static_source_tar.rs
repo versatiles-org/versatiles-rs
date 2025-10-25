@@ -148,25 +148,25 @@ impl StaticSourceTrait for TarFile {
 		if accept.contains(Brotli)
 			&& let Some(blob) = &file_entry.br
 		{
-			return SourceResponse::new_some(blob.to_owned(), &Brotli, &file_entry.mime);
+			return SourceResponse::new_some(blob.to_owned(), Brotli, &file_entry.mime);
 		}
 
 		if accept.contains(Gzip)
 			&& let Some(blob) = &file_entry.gz
 		{
-			return SourceResponse::new_some(blob.to_owned(), &Gzip, &file_entry.mime);
+			return SourceResponse::new_some(blob.to_owned(), Gzip, &file_entry.mime);
 		}
 
 		if let Some(blob) = &file_entry.un {
-			return SourceResponse::new_some(blob.to_owned(), &Uncompressed, &file_entry.mime);
+			return SourceResponse::new_some(blob.to_owned(), Uncompressed, &file_entry.mime);
 		}
 
 		if let Some(blob) = &file_entry.br {
-			return SourceResponse::new_some(blob.to_owned(), &Brotli, &file_entry.mime);
+			return SourceResponse::new_some(blob.to_owned(), Brotli, &file_entry.mime);
 		}
 
 		if let Some(blob) = &file_entry.gz {
-			return SourceResponse::new_some(blob.to_owned(), &Gzip, &file_entry.mime);
+			return SourceResponse::new_some(blob.to_owned(), Gzip, &file_entry.mime);
 		}
 
 		None
@@ -184,9 +184,9 @@ mod tests {
 	use super::*;
 	use assert_fs::NamedTempFile;
 	use versatiles_container::{
-		MockTilesReader, MockTilesReaderProfile, TilesConverterParameters, convert_tiles_container,
+		MockTilesReader, MockTilesReaderProfile, TilesConverterParameters, TilesReaderTrait, convert_tiles_container,
 	};
-	use versatiles_core::{TilesReaderTrait, config::Config};
+	use versatiles_core::config::Config;
 
 	pub async fn make_test_tar(compression: TileCompression) -> NamedTempFile {
 		// get dummy reader
@@ -195,15 +195,13 @@ mod tests {
 		// get to test container converter
 		let container_file = NamedTempFile::new("temp.tar").unwrap();
 
-		let parameters = TilesConverterParameters {
-			tile_compression: Some(compression),
-			..Default::default()
-		};
+		let parameters = TilesConverterParameters::default();
 
 		convert_tiles_container(
 			reader.boxed(),
 			parameters,
 			container_file.to_str().unwrap(),
+			compression,
 			Config::default().arc(),
 		)
 		.await
@@ -246,15 +244,15 @@ mod tests {
 			let file = make_test_tar(compression_tar).await;
 			let mut tar_file = TarFile::from(&file)?;
 
-			test2(&mut tar_file, &compression_tar, N)?;
-			test2(&mut tar_file, &compression_tar, G)?;
-			test2(&mut tar_file, &compression_tar, B)?;
+			test2(&mut tar_file, compression_tar, N)?;
+			test2(&mut tar_file, compression_tar, G)?;
+			test2(&mut tar_file, compression_tar, B)?;
 
 			return Ok(());
 
 			fn test2(
 				tar_file: &mut TarFile,
-				compression_tar: &TileCompression,
+				compression_tar: TileCompression,
 				compression_accept: TileCompression,
 			) -> Result<()> {
 				let accept = TargetCompression::from(compression_accept);
@@ -276,7 +274,7 @@ mod tests {
 				}
 
 				assert_eq!(result.mime, "application/json");
-				assert_eq!(&result.compression, compression_tar);
+				assert_eq!(result.compression, compression_tar);
 
 				Ok(())
 			}

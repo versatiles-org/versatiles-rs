@@ -1,10 +1,10 @@
-use crate::get_reader;
+use crate::{OperationTrait, PipelineFactory};
 use anyhow::{Context, Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::{path::Path, sync::Arc};
+use versatiles_container::{Tile, TilesReaderTrait, get_reader};
 use versatiles_core::{config::Config, io::DataReader, *};
-use versatiles_pipeline::{OperationTrait, PipelineFactory};
 
 /// The `PipelineReader` struct is responsible for managing the tile reading process,
 /// applying operations, and returning the composed tiles.
@@ -115,14 +115,8 @@ impl TilesReaderTrait for PipelineReader {
 	}
 
 	/// Get tile data for the given coordinate, always compressed and formatted.
-	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
-		let mut vec = self
-			.operation
-			.get_stream(coord.as_tile_bbox(1)?)
-			.await?
-			.map_item_parallel(|t| t.into_blob())
-			.to_vec()
-			.await;
+	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+		let mut vec = self.operation.get_stream(coord.as_tile_bbox(1)?).await?.to_vec().await;
 
 		ensure!(vec.len() <= 1, "PipelineReader should return at most one tile");
 
@@ -134,13 +128,9 @@ impl TilesReaderTrait for PipelineReader {
 	}
 
 	/// Get a stream of tiles within the bounding box.
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_tile_stream {:?}", bbox);
-		Ok(self
-			.operation
-			.get_stream(bbox)
-			.await?
-			.map_item_parallel(|t| t.into_blob()))
+		self.operation.get_stream(bbox).await
 	}
 }
 
@@ -157,10 +147,9 @@ impl std::fmt::Debug for PipelineReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::MockTilesWriter;
-	use versatiles_core::utils::decompress;
+	use versatiles_container::MockTilesWriter;
 
-	pub const VPL: &str = include_str!("../../../../testdata/berlin.vpl");
+	pub const VPL: &str = include_str!("../../../testdata/berlin.vpl");
 
 	#[tokio::test(flavor = "multi_thread", worker_threads = 16)]
 	async fn open_vpl_str() -> Result<()> {
@@ -183,16 +172,17 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_tile_pipeline_reader_get_tile_blob() -> Result<()> {
+	async fn test_tile_pipeline_reader_get_tile() -> Result<()> {
 		let reader = PipelineReader::open_str(VPL, Path::new("../testdata/"), Config::default().arc()).await?;
 
-		let result = reader.get_tile_blob(&TileCoord::new(14, 0, 0)?).await;
+		let result = reader.get_tile(&TileCoord::new(14, 0, 0)?).await;
 		assert_eq!(result?, None);
 
-		let result = decompress(
-			reader.get_tile_blob(&TileCoord::new(14, 8800, 5377)?).await?.unwrap(),
-			&reader.parameters().tile_compression,
-		)?;
+		let result = reader
+			.get_tile(&TileCoord::new(14, 8800, 5377)?)
+			.await?
+			.unwrap()
+			.into_blob(reader.parameters().tile_compression);
 
 		assert_eq!(result.len(), 141385);
 

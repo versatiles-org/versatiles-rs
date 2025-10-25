@@ -9,11 +9,9 @@
 //!
 //! This file contains both the [`Args`] struct used by the VPL parser and the
 //! [`Operation`] implementation that performs the blending.
-use std::vec;
 
 use crate::{
 	PipelineFactory,
-	helpers::Tile,
 	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
@@ -25,6 +23,8 @@ use futures::{
 	future::{BoxFuture, join_all},
 	stream,
 };
+use std::vec;
+use versatiles_container::Tile;
 use versatiles_core::*;
 use versatiles_image::traits::*;
 
@@ -60,14 +60,14 @@ fn stack_tiles(tiles: Vec<Tile>) -> Result<Option<Tile>> {
 	let mut tile = Option::<Tile>::None;
 
 	for mut tile_bg in tiles.into_iter() {
-		if tile_bg.image()?.is_empty() {
+		if tile_bg.as_image().is_empty() {
 			continue;
 		}
 		if let Some(mut image_fg) = tile {
-			tile_bg.image_mut()?.overlay(image_fg.image()?)?;
+			tile_bg.as_image_mut().overlay(image_fg.as_image())?;
 		};
 		tile = Some(tile_bg);
-		if tile.as_mut().unwrap().image()?.is_opaque() {
+		if tile.as_mut().unwrap().as_image().is_opaque() {
 			break;
 		}
 	}
@@ -97,7 +97,7 @@ impl ReadOperationTrait for Operation {
 			let first_parameters = sources.first().unwrap().parameters();
 			let tile_format = args.format.unwrap_or(first_parameters.tile_format);
 			ensure!(
-				tile_format.get_type() == TileType::Raster,
+				tile_format.to_type() == TileType::Raster,
 				"output format must be a raster format"
 			);
 			let tile_compression = first_parameters.tile_compression;
@@ -114,7 +114,7 @@ impl ReadOperationTrait for Operation {
 				pyramid.include_bbox_pyramid(&parameters.bbox_pyramid);
 
 				ensure!(
-					parameters.tile_format.get_type() == TileType::Raster,
+					parameters.tile_format.to_type() == TileType::Raster,
 					"all sources must be raster tiles"
 				);
 			}
@@ -155,7 +155,6 @@ impl OperationTrait for Operation {
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(16).collect();
 		let sources = &self.sources;
 		let tile_format = self.parameters.tile_format;
-		let tile_compression = self.parameters.tile_compression;
 
 		Ok(TileStream::from_streams(stream::iter(bboxes).map(
 			move |bbox| async move {
@@ -168,7 +167,7 @@ impl OperationTrait for Operation {
 					let result = result.unwrap();
 					result
 						.for_each_sync(|(coord, mut tile)| {
-							let image = tile.image().unwrap();
+							let image = tile.as_image();
 							if !image.is_empty() {
 								tiles.get_mut(&coord).unwrap().push(tile);
 							}
@@ -180,8 +179,7 @@ impl OperationTrait for Operation {
 					.into_iter()
 					.filter_map(|(c, v)| match stack_tiles(v) {
 						Ok(Some(mut tile)) => Some((|| {
-							tile.change_compression(tile_compression)?;
-							tile.change_format(tile_format)?;
+							tile.change_format(tile_format, None, None);
 							Ok((c, tile))
 						})()),
 						Ok(None) => None,
@@ -219,6 +217,8 @@ mod tests {
 	use super::*;
 	use crate::helpers::{arrange_tiles, dummy_image_source::DummyImageSource};
 	use imageproc::image::GenericImage;
+	use versatiles_container::TilesReaderTrait;
+	use versatiles_core::TileCompression::Uncompressed;
 	use versatiles_image::DynamicImage;
 
 	pub fn get_color(blob: &Blob) -> String {
@@ -284,7 +284,7 @@ mod tests {
 
 		assert_eq!(
 			arrange_tiles(tiles, |mut tile| {
-				match get_color(tile.blob().unwrap()).as_str() {
+				match get_color(tile.as_blob(Uncompressed)).as_str() {
 					"0000FF77" => "🟦",
 					"FFFF0077" => "🟨",
 					"5858A6B6" => "🟩",
@@ -371,9 +371,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn test_merge_tiles_multiple_layers() -> Result<()> {
-		use versatiles_core::{TileCompression::Uncompressed, TileFormat::PNG};
-		let tile1 = Tile::from_image(DynamicImage::new_test_rgb(), PNG, Uncompressed);
-		let tile2 = Tile::from_image(DynamicImage::new_test_rgba(), PNG, Uncompressed);
+		use versatiles_core::TileFormat::PNG;
+		let tile1 = Tile::from_image(DynamicImage::new_test_rgb(), PNG);
+		let tile2 = Tile::from_image(DynamicImage::new_test_rgba(), PNG);
 
 		let _merged_tile = stack_tiles(vec![tile1, tile2])?.unwrap();
 
@@ -401,10 +401,7 @@ mod tests {
 		// For every key present in the plain source, the stacked version must be byte-identical
 		for (coord, mut tile_plain) in map_plain.into_iter() {
 			if let Some(mut tile_stacked) = map_stacked.remove(&coord) {
-				assert_eq!(
-					tile_stacked.blob().unwrap().as_slice(),
-					tile_plain.blob().unwrap().as_slice()
-				);
+				assert_eq!(tile_stacked.as_blob(Uncompressed), tile_plain.as_blob(Uncompressed));
 			}
 		}
 		Ok(())
@@ -431,14 +428,8 @@ mod tests {
 		if let Some(mut stacked_tile) = stacked_tile {
 			// If both sources produced a tile here, blended output must differ from each single-source blob
 			if let (Some(mut tile1), Some(mut tile2)) = (tile1, tile2) {
-				assert_ne!(
-					stacked_tile.blob().unwrap().as_slice(),
-					tile1.blob().unwrap().as_slice()
-				);
-				assert_ne!(
-					stacked_tile.blob().unwrap().as_slice(),
-					tile2.blob().unwrap().as_slice()
-				);
+				assert_ne!(stacked_tile.as_blob(Uncompressed), tile1.as_blob(Uncompressed));
+				assert_ne!(stacked_tile.as_blob(Uncompressed), tile2.as_blob(Uncompressed));
 			}
 		}
 		Ok(())
@@ -452,7 +443,7 @@ mod tests {
 
 	#[test]
 	fn stack_tiles_opaque_first_short_circuits() -> Result<()> {
-		use versatiles_core::{TileCompression::Uncompressed, TileFormat::PNG};
+		use versatiles_core::TileFormat::PNG;
 
 		// First tile: fully opaque red 2x2
 		let mut a = DynamicImage::new_rgba8(2, 2);
@@ -461,7 +452,7 @@ mod tests {
 				a.put_pixel(x, y, imageproc::image::Rgba([255, 0, 0, 255]));
 			}
 		}
-		let mut a = Tile::from_image(a, PNG, Uncompressed);
+		let mut a = Tile::from_image(a, PNG);
 
 		// Second tile: green; would change pixels if blended, but should be ignored due to early break
 		let mut b = DynamicImage::new_rgba8(2, 2);
@@ -470,10 +461,10 @@ mod tests {
 				b.put_pixel(x, y, imageproc::image::Rgba([0, 255, 0, 255]));
 			}
 		}
-		let b = Tile::from_image(b, PNG, Uncompressed);
+		let b = Tile::from_image(b, PNG);
 
 		let mut res = stack_tiles(vec![a.clone(), b])?.unwrap();
-		assert_eq!(res.blob()?, a.blob()?);
+		assert_eq!(res.as_blob(Uncompressed), a.as_blob(Uncompressed));
 
 		Ok(())
 	}

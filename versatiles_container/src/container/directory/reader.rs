@@ -33,7 +33,7 @@
 //! #[tokio::main]
 //! async fn main() {
 //!     let mut reader = DirectoryTilesReader::open_path(Path::new("/path/to/tiles")).unwrap();
-//!     let tile_data = reader.get_tile_blob(&TileCoord::new(3, 1, 2).unwrap()).await.unwrap();
+//!     let tile_data = reader.get_tile(&TileCoord::new(3, 1, 2).unwrap()).await.unwrap();
 //! }
 //! ```
 //!
@@ -43,6 +43,7 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of opening paths, reading metadata, handling different file formats, and edge cases.
 
+use crate::{Tile, TilesReaderTrait};
 use anyhow::{Context, Result, bail, ensure};
 use async_trait::async_trait;
 use itertools::Itertools;
@@ -170,13 +171,13 @@ impl DirectoryTilesReader {
 					"meta.json.gz" | "tiles.json.gz" | "metadata.json.gz" => {
 						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
 							Self::read(&entry1.path())?,
-							&TileCompression::Gzip,
+							TileCompression::Gzip,
 						)?))?;
 					}
 					"meta.json.br" | "tiles.json.br" | "metadata.json.br" => {
 						tilejson.merge(&TileJSON::try_from_blob_or_default(&decompress(
 							Self::read(&entry1.path())?,
-							&TileCompression::Brotli,
+							TileCompression::Brotli,
 						)?))?;
 					}
 					&_ => {}
@@ -224,11 +225,17 @@ impl TilesReaderTrait for DirectoryTilesReader {
 		&self.tilejson
 	}
 
-	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
-		log::trace!("get_tile_blob {:?}", coord);
+	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
+		log::trace!("get_tile {:?}", coord);
 
 		if let Some(path) = self.tile_map.get(coord) {
-			Self::read(path).map(Some)
+			Self::read(path).map(|blob| {
+				Some(Tile::from_blob(
+					blob,
+					self.parameters.tile_compression,
+					self.parameters.tile_format,
+				))
+			})
 		} else {
 			Ok(None)
 		}
@@ -271,10 +278,13 @@ mod tests {
 			"{\"bounds\":[-90,66.51326,-45,79.171335],\"maxzoom\":3,\"minzoom\":3,\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 
-		let tile_data = reader.get_tile_blob(&TileCoord::new(3, 2, 1)?).await?.unwrap();
-		assert_eq!(tile_data, Blob::from("test tile data"));
+		let mut tile_data = reader.get_tile(&TileCoord::new(3, 2, 1)?).await?.unwrap();
+		assert_eq!(
+			tile_data.as_blob(reader.parameters().tile_compression),
+			&Blob::from("test tile data")
+		);
 
-		assert!(reader.get_tile_blob(&TileCoord::new(2, 2, 1)?).await?.is_none());
+		assert!(reader.get_tile(&TileCoord::new(2, 2, 1)?).await?.is_none());
 
 		Ok(())
 	}
@@ -314,7 +324,7 @@ mod tests {
 		let dir = TempDir::new().unwrap();
 		fs::write(
 			dir.path().join("meta.json.gz"),
-			compress(Blob::from(r#"{"type":"dummy data"}"#), &TileCompression::Gzip)
+			compress(Blob::from(r#"{"type":"dummy data"}"#), TileCompression::Gzip)
 				.unwrap()
 				.as_slice(),
 		)
@@ -340,9 +350,14 @@ mod tests {
 
 		let reader = DirectoryTilesReader::open_path(&dir).unwrap();
 		let coord = TileCoord::new(3, 2, 1).unwrap();
-		let tile_data = reader.get_tile_blob(&coord).await.unwrap().unwrap();
+		let blob = reader
+			.get_tile(&coord)
+			.await
+			.unwrap()
+			.unwrap()
+			.into_blob(reader.parameters().tile_compression);
 
-		assert_eq!(tile_data, Blob::from("tile at 3/2/1"));
+		assert_eq!(blob, Blob::from("tile at 3/2/1"));
 
 		Ok(())
 	}

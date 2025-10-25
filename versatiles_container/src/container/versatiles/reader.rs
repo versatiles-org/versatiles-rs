@@ -28,7 +28,7 @@
 //!
 //!     // Fetch a specific tile
 //!     let coord = TileCoord::new(15, 1, 4)?;
-//!     if let Some(tile_data) = reader.get_tile_blob(&coord).await? {
+//!     if let Some(tile_data) = reader.get_tile(&coord).await? {
 //!         println!("Tile Data: {tile_data:?}");
 //!     } else {
 //!         println!("Tile not found");
@@ -46,6 +46,7 @@
 //! ```
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
+use crate::{Tile, TilesReaderTrait};
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use futures::{lock::Mutex, stream::StreamExt};
@@ -100,7 +101,7 @@ impl VersaTilesReader {
 				.read_range(&header.meta_range)
 				.await
 				.context("Failed reading the meta data")?;
-			let blob = decompress(blob, &header.compression).context("Failed decompressing the meta data")?;
+			let blob = decompress(blob, header.compression).context("Failed decompressing the meta data")?;
 			TileJSON::try_from_blob_or_default(&blob)
 		} else {
 			TileJSON::default()
@@ -302,7 +303,7 @@ impl TilesReaderTrait for VersaTilesReader {
 	}
 
 	/// Gets tile data for a given coordinate.
-	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		// Calculate block coordinate
 		let block_coord = TileCoord::new(coord.level, coord.x.shr(8), coord.y.shr(8))?;
 
@@ -336,71 +337,41 @@ impl TilesReaderTrait for VersaTilesReader {
 		}
 
 		// Read the tile data from the reader
-		Ok(Some(self.reader.read_range(&tile_range).await?))
+		let blob = self.reader.read_range(&tile_range).await?;
+		Ok(Some(Tile::from_blob(
+			blob,
+			self.parameters.tile_compression,
+			self.parameters.tile_format,
+		)))
 	}
 
 	/// Gets a stream of tile data for a given bounding box.
-	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream> {
+	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_tile_stream {:?}", bbox);
 		let chunks = self.get_chunks(bbox).await;
 		Ok(TileStream::from_stream(
 			futures::stream::iter(chunks)
-				.then(move |chunk| {
-					let bbox = bbox;
-					async move {
-						let big_blob = self.reader.read_range(&chunk.range).await.unwrap();
+				.then(move |chunk| async move {
+					let big_blob = self.reader.read_range(&chunk.range).await.unwrap();
 
-						let entries: Vec<(TileCoord, Blob)> = chunk
-							.tiles
-							.into_iter()
-							.map(|(coord, range)| {
-								let start = range.offset - chunk.range.offset;
-								let end = start + range.length;
-								let tile_range = (start as usize)..(end as usize);
+					let entries: Vec<(TileCoord, Tile)> = chunk
+						.tiles
+						.into_iter()
+						.map(|(coord, range)| {
+							assert!(bbox.contains(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
 
-								let blob = Blob::from(big_blob.get_range(tile_range));
+							let start = range.offset - chunk.range.offset;
+							let end = start + range.length;
+							let tile_range = (start as usize)..(end as usize);
 
-								assert!(bbox.contains(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
+							let blob = Blob::from(big_blob.get_range(tile_range));
+							let tile = Tile::from_blob(blob, self.parameters.tile_compression, self.parameters.tile_format);
 
-								(coord, blob)
-							})
-							.collect();
+							(coord, tile)
+						})
+						.collect();
 
-						futures::stream::iter(entries)
-					}
-				})
-				.flatten()
-				.boxed(),
-		))
-	}
-
-	/// Gets a stream of tile data for a given bounding box.
-	async fn get_tile_size_stream(&self, bbox: TileBBox) -> Result<TileStream<u64>> {
-		log::debug!("get_tile_size_stream {:?}", bbox);
-		let chunks = self.get_chunks(bbox).await;
-		Ok(TileStream::from_stream(
-			futures::stream::iter(chunks)
-				.then(move |chunk| {
-					let bbox = bbox;
-					async move {
-						let entries: Vec<(TileCoord, u64)> = chunk
-							.tiles
-							.into_iter()
-							.map(|(coord, range)| {
-								assert!(bbox.contains(&coord), "outer_bbox {bbox:?} does not contain {coord:?}");
-
-								let start = range.offset - chunk.range.offset;
-								let end = start + range.length;
-								let tile_range = (start as usize)..(end as usize);
-
-								let size = tile_range.len() as u64;
-
-								(coord, size)
-							})
-							.collect();
-
-						futures::stream::iter(entries)
-					}
+					futures::stream::iter(entries)
 				})
 				.flatten()
 				.boxed(),
@@ -517,7 +488,7 @@ mod tests {
 	use super::*;
 	use crate::{MOCK_BYTES_PBF, MockTilesReader, TilesWriterTrait, VersaTilesWriter, make_test_file};
 	use assert_fs::NamedTempFile;
-	use versatiles_core::{assert_wildcard, config::Config, io::DataWriterBlob, utils::decompress_gzip};
+	use versatiles_core::{assert_wildcard, config::Config, io::DataWriterBlob};
 
 	// Helper to quickly create a test reader and bbox
 	async fn mk_reader() -> Result<(NamedTempFile, VersaTilesReader)> {
@@ -547,10 +518,17 @@ mod tests {
 		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
 		assert_eq!(reader.parameters().tile_format, TileFormat::MVT);
 
-		let tile = reader.get_tile_blob(&TileCoord::new(4, 15, 1)?).await?.unwrap();
-		assert_eq!(decompress_gzip(&tile)?.as_slice(), MOCK_BYTES_PBF);
+		let blob = reader
+			.get_tile(&TileCoord::new(4, 15, 1)?)
+			.await?
+			.unwrap()
+			.into_blob(TileCompression::Uncompressed);
+		assert_eq!(blob.as_slice(), MOCK_BYTES_PBF);
 
-		let sizes = reader.get_tile_size_stream(TileBBox::new_full(4)?).await?;
+		let sizes = reader
+			.get_tile_stream(TileBBox::new_full(4)?)
+			.await?
+			.map_item_parallel(|mut tile| Ok(tile.as_blob(TileCompression::Uncompressed).len()));
 		let sizes: Vec<(TileCoord, u64)> = sizes.to_vec().await;
 		assert_eq!(sizes.len(), 256);
 		for (_, size) in sizes {
@@ -565,7 +543,10 @@ mod tests {
 		let (_, reader) = mk_reader().await?;
 		let bbox = TileBBox::new_full(4)?;
 		let stream = reader.get_tile_stream(bbox).await?;
-		let mut all: Vec<(TileCoord, Blob)> = stream.to_vec().await;
+		let mut all: Vec<(TileCoord, Blob)> = stream
+			.map_item_parallel(|tile| Ok(tile.into_blob(TileCompression::Uncompressed)))
+			.to_vec()
+			.await;
 		all.sort_by_key(|(c, _)| (c.y, c.x));
 		assert_eq!(all.len(), bbox.count_tiles() as usize);
 
@@ -583,7 +564,11 @@ mod tests {
 				.find(|(c, _)| *c == coord)
 				.map(|(_, b)| b.clone())
 				.expect("present in stream");
-			let from_single = reader.get_tile_blob(&coord).await?.expect("present via single read");
+			let from_single = reader
+				.get_tile(&coord)
+				.await?
+				.expect("present via single read")
+				.into_blob(TileCompression::Uncompressed);
 			assert_eq!(
 				from_stream.as_slice(),
 				from_single.as_slice(),
@@ -594,30 +579,12 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn get_tile_blob_out_of_range_is_none() -> Result<()> {
+	async fn get_tile_out_of_range_is_none() -> Result<()> {
 		let (_, reader) = mk_reader().await?;
 		// x beyond the level-4 max (15)
-		assert!(reader.get_tile_blob(&TileCoord::new(4, 16, 0)?).await?.is_none());
+		assert!(reader.get_tile(&TileCoord::new(4, 16, 0)?).await?.is_none());
 		// level beyond available
-		assert!(reader.get_tile_blob(&TileCoord::new(5, 0, 0)?).await?.is_none());
-		Ok(())
-	}
-
-	#[tokio::test]
-	async fn tile_size_stream_has_same_coords_and_expected_sizes() -> Result<()> {
-		let (_, reader) = mk_reader().await?;
-		let bbox = TileBBox::from_min_and_max(4, 14, 14, 15, 15)?; // 2x2 region
-		let sizes: Vec<(TileCoord, u64)> = reader.get_tile_size_stream(bbox).await?.to_vec().await;
-		let tiles: Vec<(TileCoord, Blob)> = reader.get_tile_stream(bbox).await?.to_vec().await;
-		assert_eq!(sizes.len(), tiles.len());
-		// Build maps by coord and compare
-		use std::collections::HashMap;
-		let map_sizes: HashMap<_, _> = sizes.into_iter().collect();
-		let map_tiles: HashMap<_, _> = tiles.into_iter().collect();
-		for (coord, blob) in map_tiles {
-			let sz = *map_sizes.get(&coord).expect("size present");
-			assert_eq!(sz, blob.len());
-		}
+		assert!(reader.get_tile(&TileCoord::new(5, 0, 0)?).await?.is_none());
 		Ok(())
 	}
 
@@ -626,25 +593,7 @@ mod tests {
 		let (_, reader) = mk_reader().await?;
 		let one = TileBBox::from_min_and_max(4, 15, 1, 15, 1)?;
 		let blobs = reader.get_tile_stream(one).await?.to_vec().await;
-		let sizes = reader.get_tile_size_stream(one).await?.to_vec().await;
 		assert_eq!(blobs.len(), 1);
-		assert_eq!(sizes.len(), 1);
-		assert_eq!(blobs[0].0, sizes[0].0);
-		assert_eq!(blobs[0].1.len(), sizes[0].1);
-		Ok(())
-	}
-
-	#[tokio::test]
-	async fn override_compression_updates_parameters() -> Result<()> {
-		let (_, mut reader) = mk_reader().await?;
-		assert_eq!(reader.parameters().tile_compression, TileCompression::Gzip);
-		reader.override_compression(TileCompression::Uncompressed);
-		assert_eq!(reader.parameters().tile_compression, TileCompression::Uncompressed);
-		// Reading still works and returns identical bytes
-		let coord = TileCoord::new(4, 15, 1)?;
-		let a = reader.get_tile_blob(&coord).await?.unwrap();
-		let b = reader.get_tile_blob(&coord).await?.unwrap();
-		assert_eq!(a.as_slice(), b.as_slice());
 		Ok(())
 	}
 
@@ -657,13 +606,25 @@ mod tests {
 		))?;
 
 		let mut data_writer1 = DataWriterBlob::new()?;
-		VersaTilesWriter::write_to_writer(&mut reader1, &mut data_writer1, Config::default().arc()).await?;
+		VersaTilesWriter::write_to_writer(
+			&mut reader1,
+			&mut data_writer1,
+			TileCompression::Gzip,
+			Config::default().arc(),
+		)
+		.await?;
 
 		let data_reader1 = data_writer1.to_reader();
 		let mut reader2 = VersaTilesReader::open_reader(Box::new(data_reader1)).await?;
 
 		let mut data_writer2 = DataWriterBlob::new()?;
-		VersaTilesWriter::write_to_writer(&mut reader2, &mut data_writer2, Config::default().arc()).await?;
+		VersaTilesWriter::write_to_writer(
+			&mut reader2,
+			&mut data_writer2,
+			TileCompression::Gzip,
+			Config::default().arc(),
+		)
+		.await?;
 
 		let data_reader2 = data_writer2.to_reader();
 		let reader3 = VersaTilesReader::open_reader(Box::new(data_reader2)).await?;

@@ -40,10 +40,6 @@ pub struct Subcommand {
 	#[arg(long, short, value_enum, display_order = 2)]
 	compress: Option<TileCompression>,
 
-	/// force recompression, e.g. to improve an existing gzip compression
-	#[arg(long, short, display_order = 2)]
-	force_recompress: bool,
-
 	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
 	#[arg(long, value_enum, value_name = "COMPRESSION", display_order = 2)]
 	override_input_compression: Option<TileCompression>,
@@ -76,13 +72,12 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	let parameters = TilesConverterParameters {
 		bbox_pyramid: get_bbox_pyramid(arguments)?,
 		flip_y: arguments.flip_y,
-		force_recompress: arguments.force_recompress,
 		swap_xy: arguments.swap_xy,
-		tile_compression: arguments.compress,
-		tile_format: arguments.tile_format,
 	};
 
-	convert_tiles_container(reader, parameters, &arguments.output_file, config).await?;
+	let compression = arguments.compress.unwrap_or(reader.parameters().tile_compression);
+
+	convert_tiles_container(reader, parameters, &arguments.output_file, compression, config).await?;
 
 	eprintln!("finished converting tiles");
 

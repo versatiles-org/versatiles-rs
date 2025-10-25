@@ -70,7 +70,7 @@ impl TileCompression {
 	/// assert_eq!(TileCompression::Brotli.extension(), ".br");
 	/// ```
 	#[must_use]
-	pub fn extension(&self) -> &str {
+	pub fn as_extension(&self) -> &str {
 		match self {
 			TileCompression::Uncompressed => "",
 			TileCompression::Gzip => ".gz",
@@ -132,7 +132,7 @@ mod tests {
 	fn test_compression_to_extension() {
 		fn test(compression: TileCompression, expected_extension: &str) {
 			assert_eq!(
-				compression.extension(),
+				compression.as_extension(),
 				expected_extension,
 				"Extension does not match {expected_extension}"
 			);

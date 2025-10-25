@@ -1,8 +1,9 @@
-use crate::{OperationTrait, helpers::Tile};
+use crate::OperationTrait;
 use anyhow::{Context, Result, bail, ensure};
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use nom::Input;
+use versatiles_container::{Tile, TilesReaderTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
@@ -10,8 +11,7 @@ use versatiles_image::traits::*;
 #[derive(Debug)]
 pub struct DummyImageSource {
 	#[allow(clippy::type_complexity)]
-	image: DynamicImage,
-	blob: Blob,
+	tile: Tile,
 	parameters: TilesReaderParameters,
 	tilejson: TileJSON,
 }
@@ -56,11 +56,10 @@ impl DummyImageSource {
 		tilejson.set_string("name", "dummy raster source").unwrap();
 		tilejson.update_from_reader_parameters(&parameters);
 
-		let blob = image.to_blob(tile_format)?;
+		let tile = Tile::from_image(image, tile_format);
 
 		Ok(DummyImageSource {
-			image,
-			blob,
+			tile,
 			parameters,
 			tilejson,
 		})
@@ -89,11 +88,11 @@ impl TilesReaderTrait for DummyImageSource {
 		&self.tilejson
 	}
 
-	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		if !self.parameters.bbox_pyramid.contains_coord(coord) {
 			return Ok(None);
 		}
-		Ok(Some(self.blob.clone()))
+		Ok(Some(self.tile.clone()))
 	}
 }
 
@@ -108,12 +107,10 @@ impl OperationTrait for DummyImageSource {
 	}
 	async fn get_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox);
-		let image = self.image.clone();
-		let format = self.parameters.tile_format;
-		let compression = self.parameters.tile_compression;
+		let tile = self.tile.clone();
 		bbox.intersect_with_pyramid(&self.parameters.bbox_pyramid);
 		Ok(TileStream::from_iter_coord(bbox.into_iter_coords(), move |_| {
-			Some(Tile::from_image(image.clone(), format, compression))
+			Some(tile.clone())
 		}))
 	}
 }
@@ -139,7 +136,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn test_dummy_image_source_get_tile_blob() {
+	async fn test_dummy_image_source_get_tile() {
 		let source = DummyImageSource::new(
 			"abcd.png",
 			Some(TileBBoxPyramid::from_geo_bbox(
@@ -150,10 +147,10 @@ mod tests {
 			4,
 		)
 		.unwrap();
-		let tile_data = source.get_tile_blob(&TileCoord::new(8, 0, 255).unwrap()).await.unwrap();
+		let tile_data = source.get_tile(&TileCoord::new(8, 0, 255).unwrap()).await.unwrap();
 		assert!(tile_data.is_some());
 
-		let tile_data = source.get_tile_blob(&TileCoord::new(8, 0, 0).unwrap()).await.unwrap();
+		let tile_data = source.get_tile(&TileCoord::new(8, 0, 0).unwrap()).await.unwrap();
 		assert!(tile_data.is_none());
 	}
 

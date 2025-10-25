@@ -29,7 +29,7 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying the database structure.
 
-use crate::TilesWriterTrait;
+use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -115,7 +115,12 @@ impl TilesWriterTrait for MBTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the file format or compression is not supported, or if there are issues with writing to the SQLite database.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: Arc<Config>) -> Result<()> {
+	async fn write_to_path(
+		reader: &mut dyn TilesReaderTrait,
+		path: &Path,
+		tile_compression: TileCompression,
+		config: Arc<Config>,
+	) -> Result<()> {
 		use TileCompression::*;
 		use TileFormat::*;
 
@@ -170,18 +175,19 @@ impl TilesWriterTrait for MBTilesWriter {
 		reader
 			.traverse_all_tiles(
 				&Traversal::ANY,
-				Box::new(|_bbox, stream| {
+				|_bbox, stream| {
 					let writer_mutex = Arc::clone(&writer_mutex);
 					Box::pin(async move {
 						let mut writer = writer_mutex.lock().await;
 						stream
+							.map_item_parallel(move |tile| Ok(tile.into_blob(tile_compression)))
 							.for_each_buffered(4096, |v| {
 								writer.add_tiles(&v).unwrap();
 							})
 							.await;
 						Ok(())
 					})
-				}),
+				},
 				config,
 			)
 			.await?;
@@ -193,6 +199,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
+		_compression: TileCompression,
 		_config: Arc<Config>,
 	) -> Result<()> {
 		bail!("not implemented")
@@ -214,7 +221,13 @@ mod tests {
 		})?;
 
 		let filename = NamedTempFile::new("temp.mbtiles")?;
-		MBTilesWriter::write_to_path(&mut mock_reader, &filename, Config::default().arc()).await?;
+		MBTilesWriter::write_to_path(
+			&mut mock_reader,
+			&filename,
+			TileCompression::Gzip,
+			Config::default().arc(),
+		)
+		.await?;
 
 		let mut reader = MBTilesReader::open_path(&filename)?;
 

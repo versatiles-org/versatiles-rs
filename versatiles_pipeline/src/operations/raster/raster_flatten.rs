@@ -1,9 +1,10 @@
-use crate::{PipelineFactory, helpers::Tile, traits::*, vpl::VPLNode};
+use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use imageproc::image::Rgb;
 use std::fmt::Debug;
+use versatiles_container::Tile;
 use versatiles_core::*;
 use versatiles_image::traits::*;
 
@@ -58,11 +59,17 @@ impl OperationTrait for Operation {
 		log::debug!("get_stream {:?}", bbox);
 
 		let color = self.color;
-		Ok(self
-			.source
-			.get_stream(bbox)
-			.await?
-			.map_item_parallel(move |t| t.map_image(|i| i.into_flattened(color))))
+		Ok(self.source.get_stream(bbox).await?.map_item_parallel(move |mut tile| {
+			if tile.as_image().has_alpha() {
+				let format = tile.format().clone();
+				let image = tile.into_image();
+				let image = image.into_flattened(color)?;
+				let tile = Tile::from_image(image, format);
+				Ok(tile)
+			} else {
+				Ok(tile)
+			}
+		}))
 	}
 }
 

@@ -1,5 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
+use versatiles_container::{Tile, TilesReaderTrait};
 use versatiles_core::*;
 use versatiles_geometry::{
 	geo::{GeoFeature, Geometry},
@@ -86,7 +87,7 @@ impl TilesReaderTrait for DummyVectorSource {
 		&self.tilejson
 	}
 
-	async fn get_tile_blob(&self, coord: &TileCoord) -> Result<Option<Blob>> {
+	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		if !self.parameters.bbox_pyramid.contains_coord(coord) {
 			return Ok(None);
 		}
@@ -115,8 +116,11 @@ impl TilesReaderTrait for DummyVectorSource {
 			layers.push(VectorTileLayer::from_features(name.clone(), features, 4096, 1)?);
 		}
 
+		let vector_tile = VectorTile::new(layers);
+		let tile = Tile::from_vector(vector_tile, TileFormat::MVT);
+
 		// Create a vector tile from the layers and convert it to a blob
-		Ok(Some(VectorTile::new(layers).to_blob()?))
+		Ok(Some(tile))
 	}
 }
 
@@ -126,7 +130,7 @@ mod tests {
 	use versatiles_core::GeoBBox;
 
 	#[tokio::test]
-	async fn test_get_tile_blob() {
+	async fn test_get_tile() {
 		let source = DummyVectorSource::new(
 			&[("layer1", &[&[("key1", "value1"), ("key2", "value2")]])],
 			Some(TileBBoxPyramid::from_geo_bbox(
@@ -146,12 +150,12 @@ mod tests {
 		);
 
 		let coord = TileCoord::new(8, 0, 150).unwrap();
-		let tile_data = source.get_tile_blob(&coord).await.unwrap();
+		let tile_data = source.get_tile(&coord).await.unwrap();
 
 		assert!(tile_data.is_some());
 
 		let coord = TileCoord::new(8, 100, 100).unwrap();
-		let tile_data = source.get_tile_blob(&coord).await.unwrap();
+		let tile_data = source.get_tile(&coord).await.unwrap();
 
 		assert!(tile_data.is_none());
 	}

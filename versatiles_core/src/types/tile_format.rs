@@ -287,7 +287,7 @@ impl TileFormat {
 	}
 
 	#[must_use]
-	pub fn get_type(&self) -> TileType {
+	pub fn to_type(&self) -> TileType {
 		use TileFormat::*;
 		use TileType::*;
 		match self {
@@ -455,8 +455,8 @@ mod tests {
 	#[test]
 	fn should_get_type_return_expected() {
 		use super::TileType::*;
-		assert_eq!(TileFormat::PNG.get_type(), Raster);
-		assert_eq!(TileFormat::MVT.get_type(), Vector);
-		assert_eq!(TileFormat::BIN.get_type(), Unknown);
+		assert_eq!(TileFormat::PNG.to_type(), Raster);
+		assert_eq!(TileFormat::MVT.to_type(), Vector);
+		assert_eq!(TileFormat::BIN.to_type(), Unknown);
 	}
 }

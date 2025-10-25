@@ -28,12 +28,16 @@ use crate::*;
 use anyhow::{Context, Result, bail};
 use reqwest::Url;
 use std::{env, sync::Arc};
-use versatiles_core::{config::Config, io::*, *};
+use versatiles_core::{
+	TileCompression,
+	config::Config,
+	io::{DataReader, DataReaderHttp},
+};
 use versatiles_derive::context;
 
 /// Get a reader for a given filename or URL.
 #[context("Failed to get reader for '{filename}'")]
-pub async fn get_reader(filename: &str, config: Arc<Config>) -> Result<Box<dyn TilesReaderTrait>> {
+pub async fn get_reader(filename: &str, _config: Arc<Config>) -> Result<Box<dyn TilesReaderTrait>> {
 	let extension = get_extension(filename);
 
 	if let Ok(reader) = parse_as_url(filename) {
@@ -61,7 +65,7 @@ pub async fn get_reader(filename: &str, config: Arc<Config>) -> Result<Box<dyn T
 		"pmtiles" => Ok(PMTilesReader::open_path(&path).await?.boxed()),
 		"tar" => Ok(TarTilesReader::open_path(&path)?.boxed()),
 		"versatiles" => Ok(VersaTilesReader::open_path(&path).await?.boxed()),
-		"vpl" => Ok(PipelineReader::open_path(&path, config).await?.boxed()),
+		//"vpl" => Ok(PipelineReader::open_path(&path, config).await?.boxed()),
 		_ => bail!("Error when reading: file extension '{extension:?}' unknown"),
 	}
 }
@@ -76,19 +80,24 @@ fn parse_as_url(filename: &str) -> Result<DataReader> {
 }
 
 /// Write tiles from a reader to a file.
-pub async fn write_to_filename(reader: &mut dyn TilesReaderTrait, filename: &str, config: Arc<Config>) -> Result<()> {
+pub async fn write_to_filename(
+	reader: &mut dyn TilesReaderTrait,
+	filename: &str,
+	compression: TileCompression,
+	config: Arc<Config>,
+) -> Result<()> {
 	let path = env::current_dir()?.join(filename);
 
 	if path.is_dir() {
-		return DirectoryTilesWriter::write_to_path(reader, &path, config).await;
+		return DirectoryTilesWriter::write_to_path(reader, &path, compression, config).await;
 	}
 
 	let extension = get_extension(filename);
 	match extension {
-		"mbtiles" => MBTilesWriter::write_to_path(reader, &path, config).await,
-		"pmtiles" => PMTilesWriter::write_to_path(reader, &path, config).await,
-		"tar" => TarTilesWriter::write_to_path(reader, &path, config).await,
-		"versatiles" => VersaTilesWriter::write_to_path(reader, &path, config).await,
+		"mbtiles" => MBTilesWriter::write_to_path(reader, &path, compression, config).await,
+		"pmtiles" => PMTilesWriter::write_to_path(reader, &path, compression, config).await,
+		"tar" => TarTilesWriter::write_to_path(reader, &path, compression, config).await,
+		"versatiles" => VersaTilesWriter::write_to_path(reader, &path, compression, config).await,
 		_ => bail!("Error when writing: file extension '{extension:?}' unknown"),
 	}
 }
@@ -121,7 +130,7 @@ pub mod tests {
 		// get dummy reader
 		let mut reader = MockTilesReader::new_mock(TilesReaderParameters::new(
 			tile_format,
-			compression,
+			compression.clone(),
 			TileBBoxPyramid::new_full(max_zoom_level),
 		))?;
 
@@ -132,7 +141,13 @@ pub mod tests {
 			_ => panic!("make_test_file: extension {extension} not found"),
 		}?;
 
-		write_to_filename(&mut reader, container_file.to_str().unwrap(), Config::default().arc()).await?;
+		write_to_filename(
+			&mut reader,
+			container_file.to_str().unwrap(),
+			compression,
+			Config::default().arc(),
+		)
+		.await?;
 
 		Ok(container_file)
 	}
@@ -181,7 +196,7 @@ pub mod tests {
 				TempType::File(t) => t.to_str().unwrap(),
 			};
 
-			write_to_filename(&mut reader1, filename, Config::default().arc()).await?;
+			write_to_filename(&mut reader1, filename, compression, Config::default().arc()).await?;
 
 			// get test container reader
 			let mut reader2 = get_reader(filename, Config::default().arc()).await?;

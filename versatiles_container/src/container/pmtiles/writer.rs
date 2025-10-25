@@ -29,13 +29,12 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different tile formats, and verifying the integrity of the written data.
 
-use std::sync::Arc;
-
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression};
-use crate::TilesWriterTrait;
+use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;
+use std::sync::Arc;
 use versatiles_core::{
 	config::Config,
 	io::DataWriterTrait,
@@ -60,6 +59,7 @@ impl TilesWriterTrait for PMTilesWriter {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
+		tile_compression: TileCompression,
 		config: Arc<Config>,
 	) -> Result<()> {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
@@ -73,7 +73,7 @@ impl TilesWriterTrait for PMTilesWriter {
 		let mut header = HeaderV3::from_parameters(&parameters);
 
 		let mut metadata: Blob = reader.tilejson().into();
-		metadata = compress(metadata, &INTERNAL_COMPRESSION)?;
+		metadata = compress(metadata, INTERNAL_COMPRESSION)?;
 		header.metadata = writer.append(&metadata)?;
 
 		let tile_data_start = writer.get_position()?;
@@ -84,7 +84,7 @@ impl TilesWriterTrait for PMTilesWriter {
 		reader
 			.traverse_all_tiles(
 				&Traversal::new(TraversalOrder::PMTiles, 1, 64)?,
-				Box::new(|_bbox, stream| {
+				|_bbox, stream| {
 					let writer_mutex = Arc::clone(&writer_mutex);
 					let entries_mutex = Arc::clone(&entries_mutex);
 					Box::pin(async move {
@@ -92,14 +92,14 @@ impl TilesWriterTrait for PMTilesWriter {
 						let mut entries = entries_mutex.lock().await;
 						let mut tiles = stream.to_vec().await;
 						tiles.sort_by_key(|(coord, _)| coord.get_hilbert_index().unwrap());
-						for (coord, blob) in tiles {
+						for (coord, mut tile) in tiles {
 							let id = coord.get_hilbert_index()?;
-							let range = writer.append(&blob)?;
+							let range = writer.append(tile.as_blob(tile_compression))?;
 							entries.push(EntryV3::new(id, range.get_shifted_backward(tile_data_start), 1));
 						}
 						Ok(())
 					})
-				}),
+				},
 				config,
 			)
 			.await?;
@@ -112,7 +112,7 @@ impl TilesWriterTrait for PMTilesWriter {
 		header.tile_data = ByteRange::new(tile_data_start, tile_data_end - tile_data_start);
 
 		writer.set_position(HeaderV3::len())?;
-		let directory = entries.as_directory(16384 - HeaderV3::len(), &INTERNAL_COMPRESSION)?;
+		let directory = entries.as_directory(16384 - HeaderV3::len(), INTERNAL_COMPRESSION)?;
 		header.root_dir = writer.append(&directory.root_bytes)?;
 
 		writer.set_position(tile_data_end)?;
@@ -148,7 +148,13 @@ mod tests {
 		})?;
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, Config::default().arc()).await?;
+		PMTilesWriter::write_to_writer(
+			&mut mock_reader,
+			&mut data_writer,
+			TileCompression::Gzip,
+			Config::default().arc(),
+		)
+		.await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let mut reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;
@@ -170,7 +176,13 @@ mod tests {
 		})?;
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, Config::default().arc()).await?;
+		PMTilesWriter::write_to_writer(
+			&mut mock_reader,
+			&mut data_writer,
+			TileCompression::Gzip,
+			Config::default().arc(),
+		)
+		.await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;

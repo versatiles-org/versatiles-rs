@@ -87,7 +87,7 @@ impl StaticSourceTrait for Folder {
 		let mut buffer = Vec::new();
 		BufReader::new(file).read_to_end(&mut buffer).unwrap();
 
-		SourceResponse::new_some(Blob::from(buffer), &compression, &mime)
+		SourceResponse::new_some(Blob::from(buffer), compression, &mime)
 	}
 }
 

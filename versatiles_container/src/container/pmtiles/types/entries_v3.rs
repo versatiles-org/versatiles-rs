@@ -134,7 +134,7 @@ impl EntriesV3 {
 	///
 	/// # Errors
 	/// Returns an error if the entries cannot be serialized or compressed as specified.
-	pub fn as_directory(&mut self, target_root_len: u64, compression: &TileCompression) -> Result<Directory> {
+	pub fn as_directory(&mut self, target_root_len: u64, compression: TileCompression) -> Result<Directory> {
 		self.entries.sort_by_cached_key(|e| e.tile_id);
 		let entries: &EntriesSliceV3 = &self.as_slice();
 
@@ -167,7 +167,7 @@ impl EntriesV3 {
 		fn build_roots_leaves(
 			entries: &EntriesSliceV3,
 			leaf_size: usize,
-			compression: &TileCompression,
+			compression: TileCompression,
 		) -> Result<Directory> {
 			let mut root_entries = EntriesV3::new();
 			let mut leaves_bytes: Vec<u8> = Vec::new();
@@ -342,7 +342,7 @@ mod tests {
 	#[test]
 	fn test_as_directory() -> Result<()> {
 		let mut entries = create_entries();
-		let directory = entries.as_directory(1000, &TileCompression::Uncompressed)?; // Assuming 1000 is enough size for root
+		let directory = entries.as_directory(1000, TileCompression::Uncompressed)?; // Assuming 1000 is enough size for root
 		assert!(!directory.root_bytes.is_empty());
 		Ok(())
 	}
@@ -401,7 +401,7 @@ mod tests {
 	#[test]
 	fn test_as_directory_structure() -> Result<()> {
 		let mut entries = create_filled_entries(500); // A reasonable number of entries for testing
-		let directory = entries.as_directory(1024, &TileCompression::Uncompressed)?; // Assuming a small root directory size
+		let directory = entries.as_directory(1024, TileCompression::Uncompressed)?; // Assuming a small root directory size
 
 		assert!(
 			!directory.root_bytes.is_empty(),

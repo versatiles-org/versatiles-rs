@@ -1,5 +1,5 @@
-use crate::helpers::{dummy_image_source::DummyImageSource, dummy_vector_source::DummyVectorSource};
 use crate::{
+	helpers::{dummy_image_source::DummyImageSource, dummy_vector_source::DummyVectorSource},
 	operations::{get_read_operation_factories, get_transform_operation_factories},
 	traits::{OperationTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
 	vpl::{VPLNode, VPLPipeline, parse_vpl},
@@ -12,7 +12,8 @@ use std::{
 	path::{Path, PathBuf},
 	sync::Arc,
 };
-use versatiles_core::{TilesReaderTrait, config::Config};
+use versatiles_container::TilesReaderTrait;
+use versatiles_core::config::Config;
 
 type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesReaderTrait>>>>;
 

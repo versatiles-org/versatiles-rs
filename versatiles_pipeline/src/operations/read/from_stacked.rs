@@ -17,7 +17,6 @@
 
 use crate::{
 	PipelineFactory,
-	helpers::Tile,
 	operations::read::traits::ReadOperationTrait,
 	traits::*,
 	vpl::{VPLNode, VPLPipeline},
@@ -29,6 +28,7 @@ use futures::{
 	future::{BoxFuture, join_all},
 	stream,
 };
+use versatiles_container::Tile;
 use versatiles_core::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -131,7 +131,6 @@ impl OperationTrait for Operation {
 		log::debug!("get_stream {:?}", bbox);
 		// We need the desired output compression inside the closure, so copy it.
 		let format = self.parameters.tile_format;
-		let compression = self.parameters.tile_compression;
 
 		let sub_bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();
 
@@ -155,8 +154,7 @@ impl OperationTrait for Operation {
 						.for_each_sync(|(coord, mut tile)| {
 							let entry = tiles.get_mut(&coord).unwrap();
 							if entry.is_none() {
-								tile.change_format(format).unwrap();
-								tile.change_compression(compression).unwrap();
+								tile.change_format(format, None, None);
 								*entry = Some(tile);
 							}
 						})
@@ -208,7 +206,7 @@ mod tests {
 	});
 
 	pub fn check_vector(tile: Tile) -> String {
-		let tile = tile.into_vector().unwrap();
+		let tile = tile.into_vector();
 		assert_eq!(tile.layers.len(), 1);
 
 		let layer = &tile.layers[0];
@@ -224,7 +222,7 @@ mod tests {
 
 	pub fn check_image(tile: Tile) -> String {
 		use versatiles_image::traits::*;
-		let image = tile.into_image().unwrap();
+		let image = tile.into_image();
 		let pixel = image.average_color();
 		match pixel.as_slice() {
 			[0, 0, 255] => "🟦".to_string(),

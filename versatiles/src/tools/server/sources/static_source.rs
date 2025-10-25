@@ -68,7 +68,7 @@ mod tests {
 			if path.starts_with(&Url::new("exists")) {
 				SourceResponse::new_some(
 					Blob::from(vec![1, 2, 3, 4]),
-					&TileCompression::Uncompressed,
+					TileCompression::Uncompressed,
 					"application/octet-stream",
 				)
 			} else {
@@ -96,7 +96,7 @@ mod tests {
 		};
 
 		let create_file = |path: &PathBuf, compression: TileCompression| {
-			let content = compress(Blob::new_empty(), &compression).unwrap();
+			let content = compress(Blob::new_empty(), compression).unwrap();
 			let mut f = File::create(path).unwrap();
 			f.write_all(content.as_slice()).unwrap();
 		};
