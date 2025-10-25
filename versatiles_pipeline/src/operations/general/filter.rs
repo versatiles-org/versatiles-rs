@@ -2,7 +2,7 @@ use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
-use std::fmt::Debug;
+use std::{fmt::Debug, thread::panicking};
 use versatiles_container::Tile;
 use versatiles_core::*;
 
@@ -40,7 +40,10 @@ impl Operation {
 			if let (Some(lo), Some(hi)) = (args.level_min, args.level_max)
 				&& lo > hi
 			{
-				bail!("level_min ({lo}) must be ≤ level_max ({hi})");
+				bail!(
+					"Invalid zoom range in filter node {:?}: level_min ({lo}) must be ≤ level_max ({hi})",
+					vpl_node.name
+				);
 			}
 
 			if let Some(level_min) = args.level_min {
@@ -53,6 +56,13 @@ impl Operation {
 
 			if let Some(bbox) = args.bbox {
 				parameters.bbox_pyramid.intersect_geo_bbox(&GeoBBox::try_from(&bbox)?)?;
+			}
+
+			if parameters.bbox_pyramid.is_empty() {
+				log::warn!(
+					"Filter operation in VPL node {:?} results in empty bbox_pyramid",
+					vpl_node.name
+				);
 			}
 
 			let mut tilejson = source.tilejson().clone();
