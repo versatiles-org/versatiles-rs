@@ -201,7 +201,7 @@ impl OperationTrait for Operation {
 					log::trace!("Returning {} tiles for bbox {:?}", vec.len(), bbox);
 					TileStream::from_vec(vec)
 				} else {
-					TileStream::new_empty()
+					TileStream::empty()
 				}
 			}
 		});

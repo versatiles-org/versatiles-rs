@@ -75,7 +75,7 @@ where
 	///
 	/// Useful for representing an empty data source.
 	#[must_use]
-	pub fn new_empty() -> TileStream<'a, T> {
+	pub fn empty() -> TileStream<'a, T> {
 		TileStream {
 			inner: stream::empty().boxed(),
 		}
@@ -836,7 +836,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_construct_empty_stream() {
-		let empty = TileStream::<Blob>::new_empty();
+		let empty = TileStream::<Blob>::empty();
 		let collected = empty.to_vec().await;
 		assert!(collected.is_empty());
 	}
@@ -859,7 +859,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_return_none_if_stream_is_empty() {
-		let mut empty = TileStream::<Blob>::new_empty();
+		let mut empty = TileStream::<Blob>::empty();
 		assert!(empty.next().await.is_none());
 	}
 

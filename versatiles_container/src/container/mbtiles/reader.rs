@@ -336,7 +336,7 @@ impl TilesReaderTrait for MBTilesReader {
 		log::debug!("get_tile_stream {:?}", bbox);
 
 		if bbox.is_empty() {
-			return Ok(TileStream::new_empty());
+			return Ok(TileStream::empty());
 		}
 
 		bbox.flip_y();

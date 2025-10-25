@@ -86,7 +86,7 @@ impl OperationTrait for Operation {
 
 		if !self.parameters.bbox_pyramid.overlaps_bbox(&bbox_dst) {
 			log::trace!("get_stream outside bbox_pyramid");
-			return Ok(TileStream::new_empty());
+			return Ok(TileStream::empty());
 		}
 
 		if bbox_dst.level <= self.level_base {
