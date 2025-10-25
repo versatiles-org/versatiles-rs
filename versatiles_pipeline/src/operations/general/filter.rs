@@ -162,7 +162,7 @@ mod tests {
 			(5, 19, 14),
 			(5, 19, 15),
 		];
-		let set = HashSet::<(u8, u32, u32)>::from_iter(inside.iter().cloned());
+		let set: HashSet<(u8, u32, u32)> = inside.iter().copied().collect();
 
 		for level in 0..=5 {
 			let max_xy = 1 << level;
@@ -208,5 +208,14 @@ mod tests {
 			assert_eq!(n == 1, (3..=4).contains(&z), "z={z}");
 		}
 		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_invalid_zoom_range_errors() {
+		let factory = PipelineFactory::new_dummy();
+		let result = factory
+			.operation_from_vpl("from_debug format=mvt | filter level_min=5 level_max=2")
+			.await;
+		assert!(result.is_err(), "expected error for level_min > level_max");
 	}
 }
