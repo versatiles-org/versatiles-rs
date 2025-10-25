@@ -33,7 +33,7 @@
 
 use super::{TileJsonValues, VectorLayers};
 use crate::{
-	Blob, GeoBBox, GeoCenter, TileBBoxPyramid, TileFormat, TileSchema, TileSize, TileType, TilesReaderParameters,
+	Blob, GeoBBox, GeoCenter, TileBBoxPyramid, TileContent, TileFormat, TileSize, TileType, TilesReaderParameters,
 	json::*,
 };
 use anyhow::{Ok, Result, anyhow, ensure};
@@ -59,7 +59,7 @@ pub struct TileJSON {
 	pub vector_layers: VectorLayers,
 	pub tile_type: Option<TileType>,
 	pub tile_format: Option<TileFormat>,
-	pub tile_schema: Option<TileSchema>,
+	pub tile_content: Option<TileContent>,
 	pub tile_size: Option<TileSize>,
 }
 
@@ -103,7 +103,7 @@ impl TileJSON {
 					r.tile_format = Some(TileFormat::try_from_mime(v.as_str()?)?);
 				}
 				"tile_schema" => {
-					r.tile_schema = Some(TileSchema::try_from(v.as_str()?)?);
+					r.tile_content = Some(TileContent::try_from(v.as_str()?)?);
 				}
 				"tile_size" => {
 					r.tile_size = Some(TileSize::new(v.as_number()? as u16)?);
@@ -147,7 +147,7 @@ impl TileJSON {
 		obj.set_optional("vector_layers", &self.vector_layers.as_json_value_option());
 		obj.set_optional("tile_type", &self.tile_type.map(|v| v.to_string()));
 		obj.set_optional("tile_format", &self.tile_format.map(|v| v.as_mime_str().to_string()));
-		obj.set_optional("tile_schema", &self.tile_schema.map(|v| v.to_string()));
+		obj.set_optional("tile_schema", &self.tile_content.map(|v| v.to_string()));
 		obj.set_optional("tile_size", &self.tile_size.map(|v| v.size()));
 		obj
 	}
@@ -347,12 +347,12 @@ impl TileJSON {
 		self.tile_type = self.tile_format.map(|f| f.to_type());
 
 		if let Some(tile_type) = self.tile_type
-			&& self.tile_schema.map(|s| s.get_tile_type()) != self.tile_type
+			&& self.tile_content.map(|s| s.get_tile_type()) != self.tile_type
 		{
-			self.tile_schema = Some(match tile_type {
-				TileType::Raster => TileSchema::RasterRGB,
+			self.tile_content = Some(match tile_type {
+				TileType::Raster => TileContent::RasterRGB,
 				TileType::Vector => self.vector_layers.get_tile_schema(),
-				TileType::Unknown => TileSchema::Unknown,
+				TileType::Unknown => TileContent::Unknown,
 			});
 		}
 	}
@@ -858,7 +858,7 @@ mod tests {
 		// Format, content, and schema
 		assert_eq!(tj.tile_format, Some(TileFormat::PNG));
 		assert_eq!(tj.tile_type, Some(TileType::Raster));
-		assert_eq!(tj.tile_schema, Some(TileSchema::RasterRGB));
+		assert_eq!(tj.tile_content, Some(TileContent::RasterRGB));
 		Ok(())
 	}
 }

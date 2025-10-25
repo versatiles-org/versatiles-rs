@@ -28,7 +28,7 @@ use enumset::{EnumSet, EnumSetType};
 /// ## Unknown
 /// * **`Unknown`** – Used when the schema string cannot be parsed.
 #[derive(Debug, EnumSetType)]
-pub enum TileSchema {
+pub enum TileContent {
 	RasterRGB,
 	RasterRGBA,
 	RasterDEMMapbox,
@@ -40,7 +40,7 @@ pub enum TileSchema {
 	Unknown,
 }
 
-impl TileSchema {
+impl TileContent {
 	/// Returns the canonical, lower‑case textual identifier of the schema.
 	///
 	/// The string is suitable for use in URLs, CLI arguments and metadata
@@ -54,7 +54,7 @@ impl TileSchema {
 	/// ```
 	#[must_use]
 	pub fn as_str(&self) -> &str {
-		use TileSchema::*;
+		use TileContent::*;
 		match self {
 			RasterRGB => "rgb",
 			RasterRGBA => "rgba",
@@ -81,7 +81,7 @@ impl TileSchema {
 	/// ```
 	#[must_use]
 	pub fn get_tile_type(&self) -> TileType {
-		use TileSchema::*;
+		use TileContent::*;
 		match self {
 			RasterRGB | RasterRGBA | RasterDEMMapbox | RasterDEMTerrarium | RasterDEMVersatiles => TileType::Raster,
 			VectorOpenMapTiles | VectorShortbread1 | VectorOther => TileType::Vector,
@@ -90,17 +90,17 @@ impl TileSchema {
 	}
 }
 
-impl std::fmt::Display for TileSchema {
+impl std::fmt::Display for TileContent {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", self.as_str())
 	}
 }
 
-impl TryFrom<&str> for TileSchema {
+impl TryFrom<&str> for TileContent {
 	type Error = anyhow::Error;
 
 	fn try_from(value: &str) -> Result<Self, Self::Error> {
-		use TileSchema::*;
+		use TileContent::*;
 		Ok(match value.to_lowercase().as_str() {
 			"rgb" => RasterRGB,
 			"rgba" => RasterRGBA,
@@ -112,7 +112,7 @@ impl TryFrom<&str> for TileSchema {
 			"other" => VectorOther,
 			_ => bail!(
 				"Invalid tile schema: {value}. Only supported schemas are: {}",
-				EnumSet::<TileSchema>::all()
+				EnumSet::<TileContent>::all()
 					.iter()
 					.map(|s| s.as_str().to_string())
 					.collect::<Vec<_>>()
@@ -127,7 +127,7 @@ mod tests {
 	use super::*;
 	#[test]
 	fn test_as_str() {
-		use TileSchema::*;
+		use TileContent::*;
 
 		for (schema, text) in [
 			(RasterRGB, "rgb"),
@@ -147,7 +147,7 @@ mod tests {
 
 	#[test]
 	fn test_get_tile_type() {
-		use TileSchema::*;
+		use TileContent::*;
 		use TileType::*;
 
 		for (schema, tile_type) in [
@@ -159,7 +159,7 @@ mod tests {
 			(VectorOpenMapTiles, Vector),
 			(VectorShortbread1, Vector),
 			(VectorOther, Vector),
-			(TileSchema::Unknown, TileType::Unknown),
+			(TileContent::Unknown, TileType::Unknown),
 		] {
 			assert_eq!(schema.get_tile_type(), tile_type);
 		}
@@ -167,7 +167,7 @@ mod tests {
 
 	#[test]
 	fn test_try_from() {
-		use TileSchema::*;
+		use TileContent::*;
 
 		for (text, schema) in [
 			("rgb", RasterRGB),
@@ -179,9 +179,9 @@ mod tests {
 			("shortbread@1.0", VectorShortbread1),
 			("other", VectorOther),
 		] {
-			assert_eq!(TileSchema::try_from(text).unwrap(), schema);
+			assert_eq!(TileContent::try_from(text).unwrap(), schema);
 		}
 
-		assert!(TileSchema::try_from("invalid").is_err());
+		assert!(TileContent::try_from("invalid").is_err());
 	}
 }

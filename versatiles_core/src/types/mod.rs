@@ -42,8 +42,8 @@ pub use tilejson::*;
 mod tiles_reader_parameters;
 pub use tiles_reader_parameters::*;
 
-mod tile_schema;
-pub use tile_schema::*;
+mod tile_content;
+pub use tile_content::*;
 
 mod tile_size;
 pub use tile_size::*;

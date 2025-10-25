@@ -55,7 +55,7 @@ impl Operation {
 		}
 
 		if let Some(schema) = args.schema {
-			tilejson.tile_schema = Some(TileSchema::try_from(schema.as_str())?);
+			tilejson.tile_content = Some(TileContent::try_from(schema.as_str())?);
 		}
 
 		Ok(Box::new(Self { source, tilejson }) as Box<dyn OperationTrait>)

@@ -1,4 +1,4 @@
-use crate::{json::*, types::TileSchema};
+use crate::{json::*, types::TileContent};
 use anyhow::{Context, Result, anyhow, ensure};
 use std::{collections::BTreeMap, fmt::Debug};
 
@@ -108,7 +108,7 @@ impl VectorLayers {
 	}
 
 	#[must_use]
-	pub fn get_tile_schema(&self) -> TileSchema {
+	pub fn get_tile_schema(&self) -> TileContent {
 		if self.contains_ids(&[
 			"aerodrome_label",
 			"aeroway",
@@ -127,7 +127,7 @@ impl VectorLayers {
 			"water_name",
 			"waterway",
 		]) {
-			TileSchema::VectorOpenMapTiles
+			TileContent::VectorOpenMapTiles
 		} else if self.contains_ids(&[
 			"addresses",
 			"aerialways",
@@ -156,9 +156,9 @@ impl VectorLayers {
 			"water_polygons_labels",
 			"water_polygons",
 		]) {
-			TileSchema::VectorShortbread1
+			TileContent::VectorShortbread1
 		} else {
-			TileSchema::VectorOther
+			TileContent::VectorOther
 		}
 	}
 
@@ -611,14 +611,14 @@ mod tests {
 
 	#[test]
 	fn test_get_tile_schema_empty() {
-		use TileSchema::*;
+		use TileContent::*;
 		let empty = VectorLayers(BTreeMap::new());
 		assert_eq!(empty.get_tile_schema(), VectorOther);
 	}
 
 	#[test]
 	fn test_get_tile_schema_openmaptiles() {
-		use TileSchema::*;
+		use TileContent::*;
 		let known_open = [
 			"aerodrome_label",
 			"aeroway",
@@ -655,7 +655,7 @@ mod tests {
 
 	#[test]
 	fn test_get_tile_schema_shortbread1() {
-		use TileSchema::*;
+		use TileContent::*;
 		let known_sb = [
 			"addresses",
 			"aerialways",
