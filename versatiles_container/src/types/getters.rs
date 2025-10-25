@@ -20,7 +20,7 @@
 //!     write_to_filename(
 //!         &mut *reader,
 //!         output_filename,
-//!         WriterConfig::default().arc()
+//!         WriterConfig::default()
 //!     ).await?;
 //!
 //!     println!("Tiles have been successfully converted and saved to {output_filename}");
@@ -31,7 +31,7 @@
 use crate::*;
 use anyhow::{Context, Result, bail};
 use reqwest::Url;
-use std::{env, sync::Arc};
+use std::env;
 use versatiles_core::io::{DataReader, DataReaderHttp};
 use versatiles_derive::context;
 
@@ -80,11 +80,7 @@ fn parse_as_url(filename: &str) -> Result<DataReader> {
 }
 
 /// Write tiles from a reader to a file.
-pub async fn write_to_filename(
-	reader: &mut dyn TilesReaderTrait,
-	filename: &str,
-	config: Arc<WriterConfig>,
-) -> Result<()> {
+pub async fn write_to_filename(reader: &mut dyn TilesReaderTrait, filename: &str, config: WriterConfig) -> Result<()> {
 	let path = env::current_dir()?.join(filename);
 
 	if path.is_dir() {
@@ -140,12 +136,7 @@ pub mod tests {
 			_ => panic!("make_test_file: extension {extension} not found"),
 		}?;
 
-		write_to_filename(
-			&mut reader,
-			container_file.to_str().unwrap(),
-			WriterConfig::default().arc(),
-		)
-		.await?;
+		write_to_filename(&mut reader, container_file.to_str().unwrap(), WriterConfig::default()).await?;
 
 		Ok(container_file)
 	}
@@ -194,7 +185,7 @@ pub mod tests {
 				TempType::File(t) => t.to_str().unwrap(),
 			};
 
-			write_to_filename(&mut reader1, filename, WriterConfig::default().arc()).await?;
+			write_to_filename(&mut reader1, filename, WriterConfig::default()).await?;
 
 			// get test container reader
 			let mut reader2 = get_reader(filename).await?;

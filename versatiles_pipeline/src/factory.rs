@@ -10,7 +10,6 @@ use itertools::Itertools;
 use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
-	sync::Arc,
 };
 use versatiles_container::{TilesReaderTrait, WriterConfig};
 
@@ -21,11 +20,11 @@ pub struct PipelineFactory {
 	tran_ops: HashMap<String, Box<dyn TransformOperationFactoryTrait>>,
 	dir: PathBuf,
 	create_reader: Callback,
-	config: Arc<WriterConfig>,
+	config: WriterConfig,
 }
 
 impl PipelineFactory {
-	pub fn new_empty(dir: &Path, create_reader: Callback, config: Arc<WriterConfig>) -> Self {
+	pub fn new_empty(dir: &Path, create_reader: Callback, config: WriterConfig) -> Self {
 		PipelineFactory {
 			read_ops: HashMap::new(),
 			tran_ops: HashMap::new(),
@@ -35,7 +34,7 @@ impl PipelineFactory {
 		}
 	}
 
-	pub fn new_default(dir: &Path, create_reader: Callback, config: Arc<WriterConfig>) -> Self {
+	pub fn new_default(dir: &Path, create_reader: Callback, config: WriterConfig) -> Self {
 		let mut factory = PipelineFactory::new_empty(dir, create_reader, config);
 
 		for f in get_read_operation_factories() {
@@ -71,7 +70,7 @@ impl PipelineFactory {
 	}
 
 	pub fn new_dummy_reader(create_reader: Callback) -> Self {
-		PipelineFactory::new_default(Path::new(""), create_reader, WriterConfig::default().arc())
+		PipelineFactory::new_default(Path::new(""), create_reader, WriterConfig::default())
 	}
 
 	fn add_read_factory(&mut self, factory: Box<dyn ReadOperationFactoryTrait>) {
@@ -154,8 +153,8 @@ impl PipelineFactory {
 		.join("\n")
 	}
 
-	pub fn get_config(&self) -> Arc<WriterConfig> {
-		self.config.clone()
+	pub fn config(&self) -> &WriterConfig {
+		&self.config
 	}
 }
 

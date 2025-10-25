@@ -22,7 +22,7 @@
 //!     PMTilesWriter::write_to_path(
 //!         &mut reader,
 //!         &temp_path,
-//!         WriterConfig::default().arc()
+//!         WriterConfig::default()
 //!     ).await.unwrap();
 //! }
 //! ```
@@ -62,7 +62,7 @@ impl TilesWriterTrait for PMTilesWriter {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
-		config: Arc<WriterConfig>,
+		config: WriterConfig,
 	) -> Result<()> {
 		const INTERNAL_COMPRESSION: TileCompression = TileCompression::Gzip;
 
@@ -151,7 +151,7 @@ mod tests {
 		})?;
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, WriterConfig::default().arc()).await?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, WriterConfig::default()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let mut reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;
@@ -173,7 +173,7 @@ mod tests {
 		})?;
 
 		let mut data_writer = DataWriterBlob::new()?;
-		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, WriterConfig::default().arc()).await?;
+		PMTilesWriter::write_to_writer(&mut mock_reader, &mut data_writer, WriterConfig::default()).await?;
 
 		let data_reader = DataReaderBlob::from(data_writer);
 		let reader = PMTilesReader::open_reader(Box::new(data_reader)).await?;

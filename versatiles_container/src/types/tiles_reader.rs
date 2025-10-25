@@ -169,7 +169,7 @@ pub trait TilesReaderTraverseExt: TilesReaderTrait {
 		&'s self,
 		traversal_write: &'s Traversal,
 		mut callback: C,
-		config: Arc<WriterConfig>,
+		config: WriterConfig,
 	) -> impl core::future::Future<Output = Result<()>> + Send + 'a
 	where
 		C: FnMut(TileBBox, TileStream<'a, Tile>) -> BoxFuture<'a, Result<()>> + Send + 'a,
@@ -203,7 +203,7 @@ pub trait TilesReaderTraverseExt: TilesReaderTrait {
 			let mut ti_read = 0;
 			let mut ti_write = 0;
 
-			let cache = Arc::new(Mutex::new(CacheMap::<usize, (TileCoord, Tile)>::new(config)));
+			let cache = Arc::new(Mutex::new(CacheMap::<usize, (TileCoord, Tile)>::new(&config)));
 			for step in traversal_steps {
 				match step {
 					Push(bboxes, index) => {

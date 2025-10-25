@@ -31,7 +31,7 @@
 //!     let mut writer = TarTilesWriter::write_to_path(
 //!         &mut reader,
 //!         output_path,
-//!         WriterConfig::default().arc()
+//!         WriterConfig::default()
 //!     ).await?;
 //!
 //!     Ok(())

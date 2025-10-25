@@ -62,7 +62,7 @@ impl Operation {
 			tilejson.update_from_reader_parameters(&parameters);
 
 			let tile_size = args.tile_size.unwrap_or(512);
-			let cache = Arc::new(Mutex::new(CacheMap::new(factory.get_config())));
+			let cache = Arc::new(Mutex::new(CacheMap::new(factory.config())));
 			let traversal = Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?;
 
 			Ok(Box::new(Self {
@@ -295,7 +295,7 @@ mod tests {
 			level_base,
 			tile_size,
 			traversal: Traversal::new_any_size(1, 1).unwrap(),
-			cache: Arc::new(Mutex::new(CacheMap::new(WriterConfig::default().arc()))),
+			cache: Arc::new(Mutex::new(CacheMap::new(&WriterConfig::default()))),
 		}
 	}
 

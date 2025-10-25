@@ -7,14 +7,14 @@
 use crate::{TilesReaderTrait, WriterConfig};
 use anyhow::Result;
 use async_trait::async_trait;
-use std::{path::Path, sync::Arc};
+use std::path::Path;
 use versatiles_core::io::*;
 
 /// Trait defining the behavior of a tile writer.
 #[async_trait]
 pub trait TilesWriterTrait: Send {
 	/// Write tile data from a reader to a specified path.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: Arc<WriterConfig>) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: WriterConfig) -> Result<()> {
 		Self::write_to_writer(reader, &mut DataWriterFile::from_path(path)?, config).await
 	}
 
@@ -22,6 +22,6 @@ pub trait TilesWriterTrait: Send {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
-		config: Arc<WriterConfig>,
+		config: WriterConfig,
 	) -> Result<()>;
 }

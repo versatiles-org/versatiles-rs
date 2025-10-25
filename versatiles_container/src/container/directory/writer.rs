@@ -38,7 +38,7 @@
 //!     DirectoryTilesWriter::write_to_path(
 //!         &mut reader,
 //!         &temp_path,
-//!         WriterConfig::default().arc()
+//!         WriterConfig::default()
 //!     ).await.unwrap();
 //! }
 //! ```
@@ -55,7 +55,6 @@ use async_trait::async_trait;
 use std::{
 	fs,
 	path::{Path, PathBuf},
-	sync::Arc,
 };
 use versatiles_core::{io::DataWriterTrait, utils::compress, *};
 
@@ -92,7 +91,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the path is not absolute, if there are issues with file I/O, or if compression fails.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: Arc<WriterConfig>) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: WriterConfig) -> Result<()> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
 		log::trace!("convert_from");
@@ -149,7 +148,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
-		_config: Arc<WriterConfig>,
+		_config: WriterConfig,
 	) -> Result<()> {
 		bail!("not implemented")
 	}
@@ -173,7 +172,7 @@ mod tests {
 			TileBBoxPyramid::new_full(2),
 		))?;
 
-		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path, WriterConfig::default().arc()).await?;
+		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path, WriterConfig::default()).await?;
 
 		let load = |filename| {
 			let path = temp_path.join(filename);

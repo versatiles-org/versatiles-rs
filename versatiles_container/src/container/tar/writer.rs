@@ -25,7 +25,7 @@ impl TilesWriterTrait for TarTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue creating the tar archive or writing the data.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: Arc<WriterConfig>) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: WriterConfig) -> Result<()> {
 		let file = File::create(path)?;
 		let mut builder = Builder::new(file);
 
@@ -92,7 +92,7 @@ impl TilesWriterTrait for TarTilesWriter {
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
-		_config: Arc<WriterConfig>,
+		_config: WriterConfig,
 	) -> Result<()> {
 		bail!("not implemented")
 	}
@@ -114,7 +114,7 @@ mod tests {
 		})?;
 
 		let temp_path = NamedTempFile::new("test_output.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, WriterConfig::default().arc()).await?;
+		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, WriterConfig::default()).await?;
 
 		let mut reader = TarTilesReader::open_path(&temp_path)?;
 		MockTilesWriter::write(&mut reader).await?;
@@ -131,7 +131,7 @@ mod tests {
 		})?;
 
 		let temp_path = NamedTempFile::new("test_meta_output.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, WriterConfig::default().arc()).await?;
+		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, WriterConfig::default()).await?;
 
 		let reader = TarTilesReader::open_path(&temp_path)?;
 		assert_eq!(
@@ -151,7 +151,7 @@ mod tests {
 		})?;
 
 		let temp_path = NamedTempFile::new("test_empty_tiles.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, WriterConfig::default().arc()).await?;
+		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, WriterConfig::default()).await?;
 
 		assert_eq!(
 			TarTilesReader::open_path(&temp_path).unwrap_err().to_string(),
@@ -170,7 +170,7 @@ mod tests {
 		})?;
 
 		let invalid_path = Path::new("/invalid/path/output.tar");
-		let result = TarTilesWriter::write_to_path(&mut mock_reader, invalid_path, WriterConfig::default().arc()).await;
+		let result = TarTilesWriter::write_to_path(&mut mock_reader, invalid_path, WriterConfig::default()).await;
 
 		assert!(result.is_err());
 		Ok(())
@@ -185,7 +185,7 @@ mod tests {
 		})?;
 
 		let temp_path = NamedTempFile::new("test_large_tiles.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, WriterConfig::default().arc()).await?;
+		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, WriterConfig::default()).await?;
 
 		let reader = TarTilesReader::open_path(&temp_path)?;
 		assert_eq!(reader.parameters().bbox_pyramid.count_tiles(), 21845);
@@ -209,7 +209,7 @@ mod tests {
 			})?;
 
 			let temp_path = NamedTempFile::new(format!("test_compression_{tile_compression:?}.tar"))?;
-			TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, WriterConfig::default().arc()).await?;
+			TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, WriterConfig::default()).await?;
 
 			let reader = TarTilesReader::open_path(&temp_path)?;
 			assert_eq!(reader.parameters().tile_compression, tile_compression);
@@ -229,7 +229,7 @@ mod tests {
 		})?;
 
 		let temp_path = NamedTempFile::new("test_zxy_scheme.tar")?;
-		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, WriterConfig::default().arc()).await?;
+		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, WriterConfig::default()).await?;
 
 		let mut filenames = tar::Archive::new(File::open(&temp_path)?)
 			.entries()?

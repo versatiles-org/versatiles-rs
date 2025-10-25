@@ -8,7 +8,7 @@ use crate::{
 	},
 };
 use anyhow::Result;
-use std::{fmt::Debug, sync::Arc};
+use std::fmt::Debug;
 use uuid::Uuid;
 use versatiles_derive::context;
 
@@ -19,7 +19,7 @@ pub enum CacheMap<K: CacheKey, V: CacheValue> {
 
 impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 	#[must_use]
-	pub fn new(config: Arc<WriterConfig>) -> Self {
+	pub fn new(config: &WriterConfig) -> Self {
 		match &config.cache_type {
 			CacheType::InMemory => Self::Memory(InMemoryCache::new()),
 			CacheType::Disk(path) => {
@@ -109,11 +109,11 @@ mod tests {
 			"disk" => CacheType::Disk(TempDir::new().unwrap().path().to_path_buf()),
 			_ => panic!("unknown cache kind"),
 		};
-		let config = Arc::new(WriterConfig {
+		let config = WriterConfig {
 			cache_type,
 			tile_compression: None,
-		});
-		let mut cache = CacheMap::<String, String>::new(config);
+		};
+		let mut cache = CacheMap::<String, String>::new(&config);
 
 		let k1 = "k:1".to_string();
 		let k2 = "k:2".to_string();

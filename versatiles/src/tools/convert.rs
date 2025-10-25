@@ -76,8 +76,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	let config = WriterConfig {
 		tile_compression: arguments.compress,
 		..WriterConfig::default()
-	}
-	.arc();
+	};
 
 	convert_tiles_container(reader, parameters, &arguments.output_file, config).await?;
 

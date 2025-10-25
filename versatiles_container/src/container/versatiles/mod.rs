@@ -24,7 +24,7 @@
 //!     VersaTilesWriter::write_to_path(
 //!         &mut reader,
 //!         &path_versatiles,
-//!         WriterConfig::default().arc()
+//!         WriterConfig::default()
 //!     ).await?;
 //!
 //!     println!("Tiles have been successfully written to {path_versatiles:?}");

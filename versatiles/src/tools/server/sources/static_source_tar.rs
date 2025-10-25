@@ -199,8 +199,7 @@ mod tests {
 		let config = WriterConfig {
 			tile_compression: Some(compression),
 			..WriterConfig::default()
-		}
-		.arc();
+		};
 
 		convert_tiles_container(reader.boxed(), parameters, container_file.to_str().unwrap(), config)
 			.await

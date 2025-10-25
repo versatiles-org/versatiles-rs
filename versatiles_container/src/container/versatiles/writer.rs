@@ -21,7 +21,7 @@
 //!     VersaTilesWriter::write_to_path(
 //!         &mut reader,
 //!         &path_out,
-//!         WriterConfig::default().arc()
+//!         WriterConfig::default()
 //!     ).await?;
 //!
 //!     println!("Tiles have been successfully written to {path_out:?}");
@@ -50,7 +50,7 @@ impl TilesWriterTrait for VersaTilesWriter {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
-		config: Arc<WriterConfig>,
+		config: WriterConfig,
 	) -> Result<()> {
 		// Finalize the configuration
 		let parameters = reader.parameters();
@@ -112,7 +112,7 @@ impl VersaTilesWriter {
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,
 		tile_compression: TileCompression,
-		config: Arc<WriterConfig>,
+		config: WriterConfig,
 	) -> Result<ByteRange> {
 		if reader.parameters().bbox_pyramid.is_empty() {
 			return Ok(ByteRange::empty());

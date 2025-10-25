@@ -22,7 +22,7 @@
 //!     MBTilesWriter::write_to_path(
 //!         &mut reader,
 //!         &temp_path,
-//!         WriterConfig::default().arc()
+//!         WriterConfig::default()
 //!     ).await.unwrap();
 //! }
 //! ```
@@ -119,7 +119,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the file format or compression is not supported, or if there are issues with writing to the SQLite database.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: Arc<WriterConfig>) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: WriterConfig) -> Result<()> {
 		use TileCompression::*;
 		use TileFormat::*;
 
@@ -199,7 +199,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
-		_config: Arc<WriterConfig>,
+		_config: WriterConfig,
 	) -> Result<()> {
 		bail!("not implemented")
 	}
@@ -220,7 +220,7 @@ mod tests {
 		})?;
 
 		let filename = NamedTempFile::new("temp.mbtiles")?;
-		MBTilesWriter::write_to_path(&mut mock_reader, &filename, WriterConfig::default().arc()).await?;
+		MBTilesWriter::write_to_path(&mut mock_reader, &filename, WriterConfig::default()).await?;
 
 		let mut reader = MBTilesReader::open_path(&filename)?;
 

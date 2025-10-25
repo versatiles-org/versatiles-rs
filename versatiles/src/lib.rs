@@ -33,7 +33,7 @@
 //!     let output_filename = "../testdata/temp1.versatiles";
 //!
 //!     // Write the tiles to the output file
-//!     write_to_filename(&mut *reader, output_filename, WriterConfig::default().arc()).await?;
+//!     write_to_filename(&mut *reader, output_filename, WriterConfig::default()).await?;
 //!
 //!     println!("Tiles have been successfully converted and saved to {output_filename}");
 //!     Ok(())
