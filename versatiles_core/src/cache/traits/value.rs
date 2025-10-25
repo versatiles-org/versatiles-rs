@@ -1,4 +1,4 @@
-use crate::{Blob, TileCoord};
+use crate::{Blob, TileCompression, TileCoord, TileFormat};
 use anyhow::{Result, anyhow, bail};
 use byteorder::{LittleEndian as LE, ReadBytesExt, WriteBytesExt};
 #[cfg(feature = "image")]
@@ -110,6 +110,30 @@ impl CacheValue for Blob {
 		let mut bytes = vec![0u8; length];
 		reader.read_exact(&mut bytes)?;
 		Ok(Blob::from(bytes))
+	}
+}
+
+impl CacheValue for TileFormat {
+	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+		writer.write_u8((*self).into())?;
+		Ok(())
+	}
+
+	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+		let value = reader.read_u8()?;
+		Ok(TileFormat::try_from(value)?)
+	}
+}
+
+impl CacheValue for TileCompression {
+	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+		writer.write_u8((*self).into())?;
+		Ok(())
+	}
+
+	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+		let value = reader.read_u8()?;
+		Ok(TileCompression::try_from(value)?)
 	}
 }
 

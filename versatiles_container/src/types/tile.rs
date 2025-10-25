@@ -1,4 +1,5 @@
-use std::fmt::Debug;
+use anyhow::Result;
+use std::{fmt::Debug, io::Cursor};
 use versatiles_core::{
 	Blob, TileCompression, TileFormat,
 	cache::CacheValue,
@@ -197,11 +198,30 @@ impl Debug for Tile {
 }
 
 impl CacheValue for Tile {
-	fn write_to_cache(&self, writer: &mut Vec<u8>) -> anyhow::Result<()> {
-		todo!()
+	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+		self.blob.write_to_cache(writer)?;
+		self.content.write_to_cache(writer)?;
+		self.format.write_to_cache(writer)?;
+		self.compression.write_to_cache(writer)?;
+		self.format_quality.write_to_cache(writer)?;
+		self.format_speed.write_to_cache(writer)?;
+		Ok(())
 	}
 
-	fn read_from_cache(reader: &mut std::io::Cursor<&[u8]>) -> anyhow::Result<Self> {
-		todo!()
+	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+		let blob = Option::<Blob>::read_from_cache(reader)?;
+		let content = Option::<TileContent>::read_from_cache(reader)?;
+		let format = TileFormat::read_from_cache(reader)?;
+		let compression = TileCompression::read_from_cache(reader)?;
+		let format_quality = Option::<u8>::read_from_cache(reader)?;
+		let format_speed = Option::<u8>::read_from_cache(reader)?;
+		Ok(Tile {
+			blob,
+			content,
+			format,
+			compression,
+			format_quality,
+			format_speed,
+		})
 	}
 }

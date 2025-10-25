@@ -1,5 +1,7 @@
 use anyhow::{Result, bail};
-use versatiles_core::{Blob, TileFormat, TileType};
+use byteorder::{ReadBytesExt, WriteBytesExt};
+use std::io::Cursor;
+use versatiles_core::{Blob, TileFormat, TileType, cache::CacheValue};
 use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::{DynamicImage, DynamicImageTraitConvert};
 
@@ -40,5 +42,35 @@ impl TileContent {
 	pub fn from_vector(vector: VectorTile, format: TileFormat) -> Self {
 		assert!(format.to_type().is_vector());
 		TileContent::Vector(vector)
+	}
+}
+
+impl CacheValue for TileContent {
+	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
+		match self {
+			TileContent::Raster(image) => {
+				writer.write_u8(0)?; // Type identifier for Raster
+				image.write_to_cache(writer)
+			}
+			TileContent::Vector(vector) => {
+				writer.write_u8(1)?; // Type identifier for Vector
+				vector.to_blob()?.write_to_cache(writer)
+			}
+		}
+	}
+
+	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
+		let content_type = reader.read_u8()?;
+		match content_type {
+			0 => {
+				let image = DynamicImage::read_from_cache(reader)?;
+				Ok(TileContent::Raster(image))
+			}
+			1 => {
+				let vector = VectorTile::from_blob(&Blob::read_from_cache(reader)?)?;
+				Ok(TileContent::Vector(vector))
+			}
+			_ => bail!("Unknown TileContent type identifier: {content_type}"),
+		}
 	}
 }

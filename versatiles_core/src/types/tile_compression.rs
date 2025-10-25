@@ -24,6 +24,7 @@
 //! assert_eq!(filename, "file.txt");
 //! ```
 
+use TileCompression::*;
 use anyhow::{Result, bail};
 #[cfg(feature = "cli")]
 use clap::ValueEnum;
@@ -44,9 +45,9 @@ impl TileCompression {
 	#[must_use]
 	pub fn as_str(&self) -> &str {
 		match self {
-			TileCompression::Uncompressed => "none",
-			TileCompression::Gzip => "gzip",
-			TileCompression::Brotli => "brotli",
+			Uncompressed => "none",
+			Gzip => "gzip",
+			Brotli => "brotli",
 		}
 	}
 }
@@ -72,9 +73,9 @@ impl TileCompression {
 	#[must_use]
 	pub fn as_extension(&self) -> &str {
 		match self {
-			TileCompression::Uncompressed => "",
-			TileCompression::Gzip => ".gz",
-			TileCompression::Brotli => ".br",
+			Uncompressed => "",
+			Gzip => ".gz",
+			Brotli => ".br",
 		}
 	}
 
@@ -98,111 +99,128 @@ impl TileCompression {
 	pub fn from_filename(filename: &mut String) -> TileCompression {
 		if let Some(index) = filename.rfind('.') {
 			let compression = match filename.get(index..).unwrap() {
-				".gz" => TileCompression::Gzip,
-				".br" => TileCompression::Brotli,
-				_ => TileCompression::Uncompressed,
+				".gz" => Gzip,
+				".br" => Brotli,
+				_ => Uncompressed,
 			};
 
-			if compression != TileCompression::Uncompressed {
+			if compression != Uncompressed {
 				filename.truncate(index);
 			}
 			return compression;
 		}
-		TileCompression::Uncompressed
+		Uncompressed
 	}
 
 	pub fn parse_str(value: &str) -> Result<Self> {
 		Ok(match value.to_lowercase().trim() {
-			"br" => TileCompression::Brotli,
-			"brotli" => TileCompression::Brotli,
-			"gz" => TileCompression::Gzip,
-			"gzip" => TileCompression::Gzip,
-			"none" => TileCompression::Uncompressed,
-			"raw" => TileCompression::Uncompressed,
+			"br" => Brotli,
+			"brotli" => Brotli,
+			"gz" => Gzip,
+			"gzip" => Gzip,
+			"none" => Uncompressed,
+			"raw" => Uncompressed,
 			_ => bail!("Unknown tile compression. Expected brotli, gzip or none"),
 		})
+	}
+}
+
+impl TryFrom<u8> for TileCompression {
+	type Error = anyhow::Error;
+
+	fn try_from(value: u8) -> Result<Self> {
+		Ok(match value {
+			0 => Uncompressed,
+			1 => Gzip,
+			2 => Brotli,
+			_ => bail!("Unknown tile compression"),
+		})
+	}
+}
+
+impl Into<u8> for TileCompression {
+	fn into(self) -> u8 {
+		match self {
+			Uncompressed => 0,
+			Gzip => 1,
+			Brotli => 2,
+		}
 	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use enumset::EnumSet;
+	use rstest::rstest;
+	use std::collections::HashSet;
 
 	#[test]
-	fn test_compression_to_extension() {
-		fn test(compression: TileCompression, expected_extension: &str) {
-			assert_eq!(
-				compression.as_extension(),
-				expected_extension,
-				"Extension does not match {expected_extension}"
-			);
+	fn test_format_conversion() {
+		let mut all_bytes = (0..255).collect::<HashSet<u8>>();
+		for format in EnumSet::<TileCompression>::all() {
+			let byte: u8 = format.into();
+			let parsed = TileCompression::try_from(byte).unwrap();
+			assert_eq!(format, parsed);
+			all_bytes.remove(&byte);
 		}
 
-		test(TileCompression::Uncompressed, "");
-		test(TileCompression::Gzip, ".gz");
-		test(TileCompression::Brotli, ".br");
+		for byte in all_bytes {
+			assert!(TileCompression::try_from(byte).is_err());
+		}
 	}
 
-	#[test]
-	fn test_extract_compression() {
-		fn test(expected_compression: TileCompression, filename: &str, expected_remainder: &str) {
-			let mut filename_string = String::from(filename);
-			assert_eq!(
-				TileCompression::from_filename(&mut filename_string),
-				expected_compression,
-				"Extracted compression does not match expected for filename: {filename}"
-			);
-			assert_eq!(
-				filename_string, expected_remainder,
-				"Filename remainder does not match expected for filename: {filename}"
-			);
-		}
-
-		test(TileCompression::Gzip, "file.txt.gz", "file.txt");
-		test(TileCompression::Brotli, "archive.tar.br", "archive.tar");
-		test(TileCompression::Uncompressed, "image.png", "image.png");
-		test(TileCompression::Uncompressed, "document.pdf", "document.pdf");
-		test(TileCompression::Uncompressed, "noextensionfile", "noextensionfile");
+	#[rstest]
+	#[case(Uncompressed, "")]
+	#[case(Gzip, ".gz")]
+	#[case(Brotli, ".br")]
+	fn test_compression_to_extension(#[case] compression: TileCompression, #[case] expected_extension: &str) {
+		assert_eq!(compression.as_extension(), expected_extension);
 	}
 
-	#[test]
-	fn test_parse_str() {
-		fn test(input: &str, expected: Result<TileCompression>) {
-			let result = TileCompression::parse_str(input);
-			assert_eq!(result.is_ok(), expected.is_ok(), "Unexpected result for input: {input}");
-			if let Ok(expected_value) = expected {
-				assert_eq!(
-					result.unwrap(),
-					expected_value,
-					"Parsed compression does not match expected for input: {input}"
-				);
-			} else {
-				assert!(result.is_err(), "Expected error for input: {input}");
-			}
-		}
-
-		test("none", Ok(TileCompression::Uncompressed));
-		test("gzip", Ok(TileCompression::Gzip));
-		test("brotli", Ok(TileCompression::Brotli));
-		test("br", Ok(TileCompression::Brotli));
-		test("gz", Ok(TileCompression::Gzip));
-		test("raw", Ok(TileCompression::Uncompressed));
-		test("unknown", Err(anyhow::anyhow!("Unknown tile compression")));
-		test("", Err(anyhow::anyhow!("Unknown tile compression")));
+	#[rstest]
+	#[case(Gzip, "file.txt.gz", "file.txt")]
+	#[case(Brotli, "archive.tar.br", "archive.tar")]
+	#[case(Uncompressed, "image.png", "image.png")]
+	#[case(Uncompressed, "document.pdf", "document.pdf")]
+	#[case(Uncompressed, "noextensionfile", "noextensionfile")]
+	fn test_extract_compression(
+		#[case] expected_compression: TileCompression,
+		#[case] filename: &str,
+		#[case] expected_remainder: &str,
+	) {
+		let mut filename_string = String::from(filename);
+		assert_eq!(
+			TileCompression::from_filename(&mut filename_string),
+			expected_compression,
+		);
+		assert_eq!(filename_string, expected_remainder);
 	}
 
-	#[test]
-	fn test_display_trait() {
-		fn test(compression: TileCompression, expected_display: &str) {
-			assert_eq!(
-				format!("{compression}"),
-				expected_display,
-				"Display output does not match expected for {compression:?}"
-			);
+	#[rstest]
+	#[case("none", Ok(TileCompression::Uncompressed))]
+	#[case("gzip", Ok(TileCompression::Gzip))]
+	#[case("brotli", Ok(TileCompression::Brotli))]
+	#[case("br", Ok(TileCompression::Brotli))]
+	#[case("gz", Ok(TileCompression::Gzip))]
+	#[case("raw", Ok(TileCompression::Uncompressed))]
+	#[case("unknown", Err(anyhow::anyhow!("Unknown tile compression")))]
+	#[case("", Err(anyhow::anyhow!("Unknown tile compression")))]
+	fn test_parse_str(#[case] input: &str, #[case] expected: Result<TileCompression>) {
+		let result = TileCompression::parse_str(input);
+		assert_eq!(result.is_ok(), expected.is_ok());
+		if let Ok(expected_value) = expected {
+			assert_eq!(result.unwrap(), expected_value);
+		} else {
+			assert!(result.is_err());
 		}
+	}
 
-		test(TileCompression::Uncompressed, "none");
-		test(TileCompression::Gzip, "gzip");
-		test(TileCompression::Brotli, "brotli");
+	#[rstest]
+	#[case(Uncompressed, "none")]
+	#[case(Gzip, "gzip")]
+	#[case(Brotli, "brotli")]
+	fn test_display_trait(#[case] compression: TileCompression, #[case] expected_display: &str) {
+		assert_eq!(format!("{compression}"), expected_display);
 	}
 }

@@ -3638,6 +3638,7 @@ dependencies = [
  "anyhow",
  "assert_fs",
  "async-trait",
+ "byteorder",
  "futures",
  "itertools 0.14.0",
  "lazy_static",
