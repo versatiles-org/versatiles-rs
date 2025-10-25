@@ -280,7 +280,7 @@ mod tests {
 
 		let mut tile_data = reader.get_tile(&TileCoord::new(3, 2, 1)?).await?.unwrap();
 		assert_eq!(
-			tile_data.as_blob(reader.parameters().tile_compression),
+			tile_data.as_blob(reader.parameters().tile_compression)?,
 			&Blob::from("test tile data")
 		);
 
@@ -355,7 +355,7 @@ mod tests {
 			.await
 			.unwrap()
 			.unwrap()
-			.into_blob(reader.parameters().tile_compression);
+			.into_blob(reader.parameters().tile_compression)?;
 
 		assert_eq!(blob, Blob::from("tile at 3/2/1"));
 

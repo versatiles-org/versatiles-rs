@@ -36,14 +36,54 @@ impl TileContent {
 		})
 	}
 
-	pub fn from_image(image: DynamicImage, format: TileFormat) -> Self {
-		assert!(format.to_type().is_raster());
+	pub fn from_image(image: DynamicImage) -> Self {
 		TileContent::Raster(image)
 	}
 
-	pub fn from_vector(vector: VectorTile, format: TileFormat) -> Self {
-		assert!(format.to_type().is_vector());
+	pub fn from_vector(vector: VectorTile) -> Self {
 		TileContent::Vector(vector)
+	}
+
+	pub fn as_image(&self) -> Result<&DynamicImage> {
+		match self {
+			TileContent::Raster(image) => Ok(&image),
+			_ => bail!("Tile does not contain raster image"),
+		}
+	}
+
+	pub fn as_vector(&self) -> Result<&VectorTile> {
+		match self {
+			TileContent::Vector(vector_tile) => Ok(&vector_tile),
+			_ => bail!("Tile does not contain vector data"),
+		}
+	}
+
+	pub fn as_image_mut(&mut self) -> Result<&mut DynamicImage> {
+		match self {
+			TileContent::Raster(image) => Ok(image),
+			_ => bail!("Tile does not contain raster image"),
+		}
+	}
+
+	pub fn as_vector_mut(&mut self) -> Result<&mut VectorTile> {
+		match self {
+			TileContent::Vector(vector_tile) => Ok(vector_tile),
+			_ => bail!("Tile does not contain vector data"),
+		}
+	}
+
+	pub fn into_image(self) -> Result<DynamicImage> {
+		match self {
+			TileContent::Raster(image) => Ok(image),
+			_ => bail!("Tile does not contain raster image"),
+		}
+	}
+
+	pub fn into_vector(self) -> Result<VectorTile> {
+		match self {
+			TileContent::Vector(vector_tile) => Ok(vector_tile),
+			_ => bail!("Tile does not contain vector data"),
+		}
 	}
 }
 

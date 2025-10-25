@@ -125,7 +125,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 							);
 
 							// Write blob to file
-							Self::write(path.join(filename), tile.into_blob(tile_compression))?;
+							Self::write(path.join(filename), tile.into_blob(tile_compression)?)?;
 						}
 						Ok(())
 					})

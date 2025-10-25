@@ -108,12 +108,12 @@ impl OperationTrait for Operation {
 				let alpha = format != TileFormat::JPG;
 				Ok(TileStream::from_iter_coord_parallel(
 					bbox.into_iter_coords(),
-					move |c| Some(Tile::from_image(create_debug_image(&c, alpha), format)),
+					move |c| Some(Tile::from_image(create_debug_image(&c, alpha), format).unwrap()),
 				))
 			}
 			TileType::Vector => Ok(TileStream::from_iter_coord_parallel(
 				bbox.into_iter_coords(),
-				move |c| Some(Tile::from_vector(create_debug_vector_tile(&c).unwrap(), format)),
+				move |c| Some(Tile::from_vector(create_debug_vector_tile(&c).unwrap(), format).unwrap()),
 			)),
 			_ => bail!("tile format '{}' is not supported.", self.parameters.tile_format),
 		}
@@ -158,14 +158,14 @@ mod tests {
 			.unwrap()
 			.1;
 
-		assert_eq!(tile.into_blob(Uncompressed).len(), len, "for '{format}'");
+		assert_eq!(tile.into_blob(Uncompressed)?.len(), len, "for '{format}'");
 		assert_eq!(operation.tilejson().as_pretty_lines(100), tilejson, "for '{format}'");
 
 		let mut stream = operation.get_stream(TileBBox::from_min_and_max(3, 1, 1, 2, 3)?).await?;
 
 		let mut n = 0;
 		while let Some((coord, tile)) = stream.next().await {
-			assert!(!tile.into_blob(Uncompressed).is_empty(), "for '{format}'");
+			assert!(!tile.into_blob(Uncompressed)?.is_empty(), "for '{format}'");
 			assert!(coord.x >= 1 && coord.x <= 2, "for '{format}'");
 			assert!(coord.y >= 1 && coord.y <= 3, "for '{format}'");
 			assert_eq!(coord.level, 3, "for '{format}'");

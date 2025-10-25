@@ -153,7 +153,7 @@ mod tests {
 
 		let mut n = 0;
 		while let Some((coord, tile)) = stream.next().await {
-			assert!(tile.into_blob(Uncompressed).len() > 50);
+			assert!(tile.into_blob(Uncompressed)?.len() > 50);
 			assert!(coord.x >= 1 && coord.x <= 2);
 			assert!(coord.y >= 1 && coord.y <= 3);
 			assert_eq!(coord.level, 3);
@@ -201,7 +201,7 @@ mod tests {
 
 		let mut n = 0;
 		while let Some((coord, tile)) = stream.next().await {
-			assert!(tile.into_blob(Uncompressed).len() > 50);
+			assert!(tile.into_blob(Uncompressed)?.len() > 50);
 			assert!(coord.x >= 1 && coord.x <= 2);
 			assert!(coord.y >= 1 && coord.y <= 3);
 			assert_eq!(coord.level, 3);

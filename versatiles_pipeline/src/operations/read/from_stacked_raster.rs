@@ -60,14 +60,14 @@ fn stack_tiles(tiles: Vec<Tile>) -> Result<Option<Tile>> {
 	let mut tile = Option::<Tile>::None;
 
 	for mut tile_bg in tiles.into_iter() {
-		if tile_bg.as_image().is_empty() {
+		if tile_bg.as_image()?.is_empty() {
 			continue;
 		}
 		if let Some(mut image_fg) = tile {
-			tile_bg.as_image_mut().overlay(image_fg.as_image())?;
+			tile_bg.as_image_mut()?.overlay(image_fg.as_image()?)?;
 		};
 		tile = Some(tile_bg);
-		if tile.as_mut().unwrap().as_image().is_opaque() {
+		if tile.as_mut().unwrap().as_image()?.is_opaque() {
 			break;
 		}
 	}
@@ -167,7 +167,7 @@ impl OperationTrait for Operation {
 					let result = result.unwrap();
 					result
 						.for_each_sync(|(coord, mut tile)| {
-							let image = tile.as_image();
+							let image = tile.as_image().unwrap();
 							if !image.is_empty() {
 								tiles.get_mut(&coord).unwrap().push(tile);
 							}
@@ -179,7 +179,7 @@ impl OperationTrait for Operation {
 					.into_iter()
 					.filter_map(|(c, v)| match stack_tiles(v) {
 						Ok(Some(mut tile)) => {
-							tile.change_format(tile_format, None, None);
+							tile.change_format(tile_format, None, None).unwrap();
 							Some(Ok((c, tile)))
 						}
 						Ok(None) => None,
@@ -284,7 +284,7 @@ mod tests {
 
 		assert_eq!(
 			arrange_tiles(tiles, |mut tile| {
-				match get_color(tile.as_blob(Uncompressed)).as_str() {
+				match get_color(tile.as_blob(Uncompressed).unwrap()).as_str() {
 					"0000FF77" => "🟦",
 					"FFFF0077" => "🟨",
 					"5858A6B6" => "🟩",
@@ -372,8 +372,8 @@ mod tests {
 	#[tokio::test]
 	async fn test_merge_tiles_multiple_layers() -> Result<()> {
 		use versatiles_core::TileFormat::PNG;
-		let tile1 = Tile::from_image(DynamicImage::new_test_rgb(), PNG);
-		let tile2 = Tile::from_image(DynamicImage::new_test_rgba(), PNG);
+		let tile1 = Tile::from_image(DynamicImage::new_test_rgb(), PNG)?;
+		let tile2 = Tile::from_image(DynamicImage::new_test_rgba(), PNG)?;
 
 		let _merged_tile = stack_tiles(vec![tile1, tile2])?.unwrap();
 
@@ -401,7 +401,10 @@ mod tests {
 		// For every key present in the plain source, the stacked version must be byte-identical
 		for (coord, mut tile_plain) in map_plain.into_iter() {
 			if let Some(mut tile_stacked) = map_stacked.remove(&coord) {
-				assert_eq!(tile_stacked.as_blob(Uncompressed), tile_plain.as_blob(Uncompressed));
+				assert_eq!(
+					tile_stacked.as_blob(Uncompressed).unwrap(),
+					tile_plain.as_blob(Uncompressed).unwrap()
+				);
 			}
 		}
 		Ok(())
@@ -428,8 +431,14 @@ mod tests {
 		if let Some(mut stacked_tile) = stacked_tile {
 			// If both sources produced a tile here, blended output must differ from each single-source blob
 			if let (Some(mut tile1), Some(mut tile2)) = (tile1, tile2) {
-				assert_ne!(stacked_tile.as_blob(Uncompressed), tile1.as_blob(Uncompressed));
-				assert_ne!(stacked_tile.as_blob(Uncompressed), tile2.as_blob(Uncompressed));
+				assert_ne!(
+					stacked_tile.as_blob(Uncompressed).unwrap(),
+					tile1.as_blob(Uncompressed).unwrap()
+				);
+				assert_ne!(
+					stacked_tile.as_blob(Uncompressed).unwrap(),
+					tile2.as_blob(Uncompressed).unwrap()
+				);
 			}
 		}
 		Ok(())
@@ -452,7 +461,7 @@ mod tests {
 				a.put_pixel(x, y, imageproc::image::Rgba([255, 0, 0, 255]));
 			}
 		}
-		let mut a = Tile::from_image(a, PNG);
+		let mut a = Tile::from_image(a, PNG)?;
 
 		// Second tile: green; would change pixels if blended, but should be ignored due to early break
 		let mut b = DynamicImage::new_rgba8(2, 2);
@@ -461,10 +470,10 @@ mod tests {
 				b.put_pixel(x, y, imageproc::image::Rgba([0, 255, 0, 255]));
 			}
 		}
-		let b = Tile::from_image(b, PNG);
+		let b = Tile::from_image(b, PNG)?;
 
 		let mut res = stack_tiles(vec![a.clone(), b])?.unwrap();
-		assert_eq!(res.as_blob(Uncompressed), a.as_blob(Uncompressed));
+		assert_eq!(res.as_blob(Uncompressed)?, a.as_blob(Uncompressed)?);
 
 		Ok(())
 	}

@@ -191,7 +191,7 @@ impl OperationTrait for Operation {
 										size,
 									)
 									.into_optional()
-									.map(|img| (coord, Tile::from_image(img, tile_format)))
+									.map(|img| (coord, Tile::from_image(img, tile_format).unwrap()))
 							})
 							.collect::<Vec<_>>()
 					})
@@ -317,7 +317,7 @@ mod tests {
 		let mut stream = operation.get_stream(TileBBox::new_full(1)?).await?;
 		let mut count = 0;
 		while let Some((coord_out, tile)) = stream.next().await {
-			let image = tile.into_image();
+			let image = tile.into_image()?;
 			assert_eq!(image.width(), 16);
 			assert_eq!(image.height(), 16);
 			let color_is = image.average_color();

@@ -249,7 +249,7 @@ pub mod tests {
 			.get_tile(&TileCoord::new(3, 6, 2)?)
 			.await?
 			.unwrap()
-			.into_blob(TileCompression::Uncompressed);
+			.into_blob(TileCompression::Uncompressed)?;
 		assert_eq!(blob.as_slice(), MOCK_BYTES_PBF);
 
 		Ok(())
@@ -332,7 +332,7 @@ pub mod tests {
 				.get_tile(&TileCoord::new(3, 1, 2)?)
 				.await?
 				.unwrap()
-				.as_blob(TileCompression::Uncompressed)
+				.as_blob(TileCompression::Uncompressed)?
 				.as_slice(),
 			[3, 1, 4, 1, 5, 9].as_ref()
 		);

@@ -117,7 +117,7 @@ impl TilesReaderTrait for DummyVectorSource {
 		}
 
 		let vector_tile = VectorTile::new(layers);
-		let tile = Tile::from_vector(vector_tile, TileFormat::MVT);
+		let tile = Tile::from_vector(vector_tile, TileFormat::MVT)?;
 
 		// Create a vector tile from the layers and convert it to a blob
 		Ok(Some(tile))

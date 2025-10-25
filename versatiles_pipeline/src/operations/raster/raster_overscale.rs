@@ -109,7 +109,7 @@ impl OperationTrait for Operation {
 			let mut bbox = coord_base.as_tile_bbox(1)?.at_level(level_dst);
 			bbox.intersect_with(&bbox_dst)?;
 
-			let image_src = tile_src.into_image();
+			let image_src = tile_src.into_image()?;
 
 			Ok(TileStream::from_iter_coord_parallel(
 				bbox.into_iter_coords(),
@@ -121,7 +121,7 @@ impl OperationTrait for Operation {
 
 					image_dst
 						.into_optional()
-						.map(|image_dst| Tile::from_image(image_dst, format))
+						.map(|image_dst| Tile::from_image(image_dst, format).unwrap())
 				},
 			))
 		}))

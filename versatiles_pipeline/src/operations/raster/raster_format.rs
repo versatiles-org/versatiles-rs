@@ -163,7 +163,7 @@ impl OperationTrait for Operation {
 		let format: TileFormat = self.format.into();
 
 		Ok(stream.map_item_parallel(move |mut tile| {
-			tile.change_format(format, quality, speed);
+			tile.change_format(format, quality, speed)?;
 			Ok(tile)
 		}))
 	}

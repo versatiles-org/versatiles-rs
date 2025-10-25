@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow, ensure};
 use std::{fmt::Debug, io::Cursor};
 use versatiles_core::{
 	Blob, TileCompression, TileFormat,
@@ -40,151 +40,106 @@ impl Tile {
 			format_speed: None,
 		}
 	}
-	pub fn from_image(image: DynamicImage, format: TileFormat) -> Self {
-		assert!(format.to_type().is_raster());
-		Self::from_content(TileContent::from_image(image, format), format)
+	pub fn from_image(image: DynamicImage, format: TileFormat) -> Result<Self> {
+		ensure!(format.to_type().is_raster());
+		Ok(Self::from_content(TileContent::from_image(image), format))
 	}
-	pub fn from_vector(vector_tile: versatiles_geometry::vector_tile::VectorTile, format: TileFormat) -> Self {
-		assert!(format.to_type().is_vector());
-		Self::from_content(TileContent::from_vector(vector_tile, format), format)
+	pub fn from_vector(vector_tile: VectorTile, format: TileFormat) -> Result<Self> {
+		ensure!(format.to_type().is_vector());
+		Ok(Self::from_content(TileContent::from_vector(vector_tile), format))
 	}
 
-	fn recompress_blob(&mut self, compression: TileCompression) {
+	fn recompress_blob(&mut self, compression: TileCompression) -> Result<()> {
 		assert!(self.blob.is_some());
 		if self.compression != compression {
-			self.blob = Some(recompress(self.blob.take().unwrap(), self.compression, compression).unwrap());
+			self.blob = Some(recompress(self.blob.take().unwrap(), self.compression, compression)?);
 			self.compression = compression;
 		}
+		Ok(())
 	}
-	fn decompress_blob(&mut self) {
+	fn decompress_blob(&mut self) -> Result<()> {
 		assert!(self.blob.is_some());
 		if self.compression != TileCompression::Uncompressed {
-			self.blob = Some(decompress_ref(self.blob.as_ref().unwrap(), self.compression).unwrap());
+			self.blob = Some(decompress_ref(self.blob.as_ref().unwrap(), self.compression)?);
 			self.compression = TileCompression::Uncompressed;
 		}
+		Ok(())
 	}
 	#[cfg(test)]
 	pub(super) fn __recompress_blob_for_test(&mut self, compression: TileCompression) {
-		self.recompress_blob(compression);
+		self.recompress_blob(compression).unwrap();
 	}
 	#[cfg(test)]
 	pub(super) fn __decompress_blob_for_test(&mut self) {
-		self.decompress_blob();
+		self.decompress_blob().unwrap();
 	}
 	fn delete_blob(&mut self) {
 		self.blob = None;
 		self.compression = TileCompression::Uncompressed;
 	}
-	fn materialize_blob(&mut self) {
+	fn materialize_blob(&mut self) -> Result<()> {
 		if self.blob.is_none() {
-			assert!(self.content.is_some());
-			self.blob = Some(
-				self
-					.content
-					.as_ref()
-					.unwrap()
-					.to_blob(self.format, self.format_quality, self.format_speed)
-					.unwrap(),
-			);
+			ensure!(self.content.is_some(), "Cannot materialize blob without content");
+			self.blob = Some(self.content.as_ref().unwrap().to_blob(
+				self.format,
+				self.format_quality,
+				self.format_speed,
+			)?);
 			self.compression = TileCompression::Uncompressed;
 		}
+		Ok(())
 	}
-	fn materialize_content(&mut self) {
+	fn materialize_content(&mut self) -> Result<()> {
 		if self.content.is_none() {
-			assert!(self.blob.is_some());
-			self.decompress_blob();
-			self.content = Some(TileContent::from_blob(self.blob.as_ref().unwrap(), self.format).unwrap());
+			ensure!(self.blob.is_some(), "Cannot materialize content without blob");
+			self.decompress_blob()?;
+			self.content = Some(TileContent::from_blob(self.blob.as_ref().unwrap(), self.format)?);
 		}
+		Ok(())
 	}
 
-	pub fn as_blob(&mut self, compression: TileCompression) -> &Blob {
-		self.materialize_blob();
-		self.recompress_blob(compression);
-		self.blob.as_ref().unwrap()
+	pub fn as_blob(&mut self, compression: TileCompression) -> Result<&Blob> {
+		self.materialize_blob()?;
+		self.recompress_blob(compression)?;
+		self.blob.as_ref().ok_or(anyhow!("blob should be present"))
 	}
-	fn as_content(&mut self) -> &TileContent {
-		self.materialize_content();
-		self.content.as_ref().unwrap()
+	fn as_content(&mut self) -> Result<&TileContent> {
+		self.materialize_content()?;
+		self.content.as_ref().ok_or(anyhow!("content should be present"))
 	}
-	pub fn as_image(&mut self) -> &DynamicImage {
-		match self.as_content() {
-			TileContent::Raster(image) => image,
-			_ => panic!("Tile does not contain raster image"),
-		}
+	pub fn as_image(&mut self) -> Result<&DynamicImage> {
+		self.as_content()?.as_image()
 	}
-	pub fn as_vector(&mut self) -> &VectorTile {
-		match self.as_content() {
-			TileContent::Vector(vector_tile) => vector_tile,
-			_ => panic!("Tile does not contain vector data"),
-		}
+	pub fn as_vector(&mut self) -> Result<&VectorTile> {
+		self.as_content()?.as_vector()
 	}
 
-	pub fn into_blob(mut self, compression: TileCompression) -> Blob {
-		self.materialize_blob();
-		self.recompress_blob(compression);
-		self.blob.unwrap()
+	pub fn into_blob(mut self, compression: TileCompression) -> Result<Blob> {
+		self.materialize_blob()?;
+		self.recompress_blob(compression)?;
+		Ok(self.blob.unwrap())
 	}
-	fn into_content(mut self) -> TileContent {
-		self.materialize_content();
-		self.content.unwrap()
+	fn into_content(mut self) -> Result<TileContent> {
+		self.materialize_content()?;
+		Ok(self.content.unwrap())
 	}
-	pub fn into_image(self) -> DynamicImage {
-		match self.into_content() {
-			TileContent::Raster(image) => image,
-			_ => panic!("Tile does not contain raster image"),
-		}
+	pub fn into_image(self) -> Result<DynamicImage> {
+		self.into_content()?.into_image()
 	}
-	pub fn into_vector(self) -> VectorTile {
-		match self.into_content() {
-			TileContent::Vector(vector_tile) => vector_tile,
-			_ => panic!("Tile does not contain vector data"),
-		}
+	pub fn into_vector(self) -> Result<VectorTile> {
+		self.into_content()?.into_vector()
 	}
 
-	fn as_content_mut(&mut self) -> &mut TileContent {
-		self.materialize_content();
+	fn as_content_mut(&mut self) -> Result<&mut TileContent> {
+		self.materialize_content()?;
 		self.delete_blob();
-		self.content.as_mut().unwrap()
+		Ok(self.content.as_mut().unwrap())
 	}
-	pub fn as_image_mut(&mut self) -> &mut DynamicImage {
-		match self.as_content_mut() {
-			TileContent::Raster(image) => image,
-			_ => panic!("Tile does not contain raster image"),
-		}
+	pub fn as_image_mut(&mut self) -> Result<&mut DynamicImage> {
+		self.as_content_mut()?.as_image_mut()
 	}
-	pub fn as_vector_mut(&mut self) -> &mut VectorTile {
-		match self.as_content_mut() {
-			TileContent::Vector(vector_tile) => vector_tile,
-			_ => panic!("Tile does not contain vector data"),
-		}
-	}
-
-	fn map_content<F>(&mut self, func: F)
-	where
-		F: FnOnce(TileContent) -> TileContent,
-	{
-		self.materialize_content();
-		self.delete_blob();
-		let content = self.content.take().unwrap();
-		self.content = Some(func(content));
-	}
-	pub fn map_image<F>(&mut self, func: F)
-	where
-		F: FnOnce(DynamicImage) -> DynamicImage,
-	{
-		self.map_content(|content| match content {
-			TileContent::Raster(image) => TileContent::Raster(func(image)),
-			_ => panic!("Tile does not contain raster image"),
-		});
-	}
-	pub fn map_vector<F>(&mut self, func: F)
-	where
-		F: FnOnce(VectorTile) -> VectorTile,
-	{
-		self.map_content(|content| match content {
-			TileContent::Vector(vector_tile) => TileContent::Vector(func(vector_tile)),
-			_ => panic!("Tile does not contain vector data"),
-		});
+	pub fn as_vector_mut(&mut self) -> Result<&mut VectorTile> {
+		self.as_content_mut()?.as_vector_mut()
 	}
 
 	pub fn format(&self) -> TileFormat {
@@ -194,26 +149,29 @@ impl Tile {
 		self.compression
 	}
 
-	pub fn change_format(&mut self, format: TileFormat, quality: Option<u8>, speed: Option<u8>) {
+	pub fn change_format(&mut self, format: TileFormat, quality: Option<u8>, speed: Option<u8>) -> Result<()> {
 		assert_eq!(format.to_type(), self.format.to_type());
-		self.materialize_content();
+		self.materialize_content()?;
 		self.delete_blob();
 		self.compression = TileCompression::Uncompressed;
 		self.format = format;
+
 		if quality.is_some() {
 			self.format_quality = quality;
 		}
 		if speed.is_some() {
 			self.format_speed = speed;
 		}
+		Ok(())
 	}
 
-	pub fn change_compression(&mut self, compression: TileCompression) {
+	pub fn change_compression(&mut self, compression: TileCompression) -> Result<()> {
 		if self.blob.is_some() {
-			self.recompress_blob(compression);
+			self.recompress_blob(compression)?;
 		} else {
 			self.compression = compression;
 		}
+		Ok(())
 	}
 
 	pub fn has_blob(&self) -> bool {
@@ -286,10 +244,10 @@ mod tests {
 
 	#[rstest]
 	#[case(Uncompressed, Uncompressed)]
-	fn recompress_blob_noop_when_same(#[case] start: TileCompression, #[case] target: TileCompression) {
-		let mut tile = Tile::from_image(tiny_rgb_image(), PNG);
+	fn recompress_blob_noop_when_same(#[case] start: TileCompression, #[case] target: TileCompression) -> Result<()> {
+		let mut tile = Tile::from_image(tiny_rgb_image(), PNG)?;
 		// materialize and set to the desired starting compression
-		let before = tile.as_blob(start).clone();
+		let before = tile.as_blob(start)?.clone();
 		assert!(tile.has_blob());
 		assert_eq!(tile.compression(), start);
 
@@ -299,78 +257,83 @@ mod tests {
 		assert_eq!(tile.compression(), target);
 
 		// since start == target, bytes must be identical
-		let after = tile.as_blob(Uncompressed).clone();
+		let after = tile.as_blob(Uncompressed)?.clone();
 		assert_eq!(before, after);
+		Ok(())
 	}
 
 	#[test]
-	fn decompress_blob_noop_when_uncompressed() {
-		let mut tile = Tile::from_image(tiny_rgb_image(), PNG);
-		let before = tile.as_blob(Uncompressed).clone();
+	fn decompress_blob_noop_when_uncompressed() -> Result<()> {
+		let mut tile = Tile::from_image(tiny_rgb_image(), PNG)?;
+		let before = tile.as_blob(Uncompressed)?.clone();
 		assert_eq!(tile.compression(), Uncompressed);
 
 		// call the private method via test wrapper; nothing should change
 		tile.__decompress_blob_for_test();
 		assert_eq!(tile.compression(), Uncompressed);
-		let after = tile.as_blob(Uncompressed).clone();
+		let after = tile.as_blob(Uncompressed)?.clone();
 		assert_eq!(before, after);
+		Ok(())
 	}
 
 	#[test]
-	fn from_image_then_materialize_blob() {
+	fn from_image_then_materialize_blob() -> Result<()> {
 		let img = tiny_rgb_image();
-		let mut tile = Tile::from_image(img, PNG);
+		let mut tile = Tile::from_image(img, PNG)?;
 
 		assert!(!tile.has_blob());
 		assert!(tile.has_content());
 		assert_eq!(tile.compression(), Uncompressed);
 
 		// Force blob creation
-		let blob = tile.as_blob(Uncompressed);
+		let blob = tile.as_blob(Uncompressed)?;
 		assert!(!blob.is_empty());
 		assert!(tile.has_blob());
 		assert!(tile.has_content());
 		assert_eq!(tile.compression(), Uncompressed);
+		Ok(())
 	}
 
 	#[test]
-	fn as_content_mut_deletes_blob() {
-		let mut tile = Tile::from_image(tiny_rgb_image(), PNG);
+	fn as_content_mut_deletes_blob() -> Result<()> {
+		let mut tile = Tile::from_image(tiny_rgb_image(), PNG)?;
 		assert!(!tile.has_blob());
 		assert!(tile.has_content());
 
 		// create blob first
-		let _ = tile.as_blob(Uncompressed);
+		let _ = tile.as_blob(Uncompressed)?;
 		assert!(tile.has_blob());
 		assert!(tile.has_content());
 
 		// now mutate content => blob must be dropped
-		match tile.as_content_mut() {
+		match tile.as_content_mut()? {
 			TileContent::Raster(image) => image.put_pixel(0, 0, [1, 2, 3, 4].into()),
 			_ => panic!("expected raster image"),
 		}
 		assert!(!tile.has_blob());
 		assert!(tile.has_content());
+		Ok(())
 	}
 
 	#[test]
-	fn change_format_sets_flags() {
-		let mut tile = Tile::from_image(tiny_rgb_image(), PNG);
-		tile.change_format(PNG, Some(77), None);
+	fn change_format_sets_flags() -> Result<()> {
+		let mut tile = Tile::from_image(tiny_rgb_image(), PNG)?;
+		tile.change_format(PNG, Some(77), None)?;
 		assert_eq!(tile.format(), PNG);
-		let _ = tile.as_blob(Uncompressed);
+		let _ = tile.as_blob(Uncompressed)?;
 
 		// change only speed afterwards
-		tile.change_format(PNG, None, Some(5));
-		let _ = tile.as_blob(Uncompressed);
+		tile.change_format(PNG, None, Some(5))?;
+		let _ = tile.as_blob(Uncompressed)?;
+		Ok(())
 	}
 
 	#[test]
-	fn cachevalue_roundtrip_preserves_fields() {
+	fn cachevalue_roundtrip_preserves_fields() -> Result<()> {
 		let img = tiny_rgb_image();
-		let mut original = Tile::from_image(img, PNG);
+		let mut original = Tile::from_image(img, PNG)?;
 		// produce a blob so both blob+content exist
-		let _ = original.as_blob(Uncompressed);
+		let _ = original.as_blob(Uncompressed)?;
 
 		let mut buf = Vec::new();
 		original.write_to_cache(&mut buf).expect("serialize");
@@ -382,20 +345,22 @@ mod tests {
 		assert_eq!(decoded, original);
 		// Cursor must be fully consumed
 		assert_eq!(cur.position(), buf.len() as u64);
+		Ok(())
 	}
 
 	#[test]
-	fn into_image_returns_raster() {
+	fn into_image_returns_raster() -> Result<()> {
 		let img = tiny_rgb_image();
-		let tile = Tile::from_image(img.clone(), PNG);
-		assert_eq!(tile.into_image(), img);
+		let tile = Tile::from_image(img.clone(), PNG)?;
+		assert_eq!(tile.into_image()?, img);
+		Ok(())
 	}
 
 	#[test]
-	fn from_blob_then_materialize_content_roundtrip() {
+	fn from_blob_then_materialize_content_roundtrip() -> Result<()> {
 		// Start with a raster tile and encode to an uncompressed blob
 		let img = tiny_rgb_image();
-		let blob = Tile::from_image(img.clone(), PNG).into_blob(Uncompressed);
+		let blob = Tile::from_image(img.clone(), PNG)?.into_blob(Uncompressed)?;
 
 		// Build a new tile from that blob; it should start without content
 		let mut tile2 = Tile::from_blob(blob, Uncompressed, PNG);
@@ -403,26 +368,28 @@ mod tests {
 		assert!(!tile2.has_content());
 
 		// Accessing image should materialize the content without dropping the blob
-		let out = tile2.as_image().clone();
+		let out = tile2.as_image()?.clone();
 		assert_eq!(out.dimensions(), (2, 2));
 		assert!(tile2.has_blob());
 		assert!(tile2.has_content());
 		assert_eq!(tile2.compression(), Uncompressed);
+		Ok(())
 	}
 
 	#[test]
-	fn as_blob_is_deterministic_when_unchanged() {
-		let mut tile = Tile::from_image(tiny_rgb_image(), PNG);
-		let b1 = tile.as_blob(Uncompressed).clone();
-		let b2 = tile.as_blob(Uncompressed).clone();
+	fn as_blob_is_deterministic_when_unchanged() -> Result<()> {
+		let mut tile = Tile::from_image(tiny_rgb_image(), PNG)?;
+		let b1 = tile.as_blob(Uncompressed)?.clone();
+		let b2 = tile.as_blob(Uncompressed)?.clone();
 		assert_eq!(b1, b2);
+		Ok(())
 	}
 
 	#[test]
-	fn cache_roundtrip_with_blob_only() {
+	fn cache_roundtrip_with_blob_only() -> Result<()> {
 		// Create a blob-only tile using from_blob
 		let img = tiny_rgb_image();
-		let blob = Tile::from_image(img, PNG).into_blob(Uncompressed);
+		let blob = Tile::from_image(img, PNG)?.into_blob(Uncompressed)?;
 		let original = Tile::from_blob(blob, Uncompressed, PNG);
 		assert!(original.has_blob());
 		assert!(!original.has_content());
@@ -433,11 +400,12 @@ mod tests {
 		let decoded = Tile::read_from_cache(&mut cur).expect("deserialize");
 		assert_eq!(decoded, original);
 		assert_eq!(cur.position(), buf.len() as u64);
+		Ok(())
 	}
 
 	#[test]
-	fn cache_roundtrip_with_content_only() {
-		let original = Tile::from_image(tiny_rgb_image(), PNG);
+	fn cache_roundtrip_with_content_only() -> Result<()> {
+		let original = Tile::from_image(tiny_rgb_image(), PNG)?;
 		assert!(!original.has_blob());
 		assert!(original.has_content());
 
@@ -447,6 +415,7 @@ mod tests {
 		let decoded = Tile::read_from_cache(&mut cur).expect("deserialize");
 		assert_eq!(decoded, original);
 		assert_eq!(cur.position(), buf.len() as u64);
+		Ok(())
 	}
 
 	// Helper that peeks format/quality/speed written by CacheValue without rehydrating the Tile
@@ -463,10 +432,10 @@ mod tests {
 	}
 
 	#[test]
-	fn change_format_none_keeps_existing_quality_and_speed() {
-		let mut tile = Tile::from_image(tiny_rgb_image(), PNG);
+	fn change_format_none_keeps_existing_quality_and_speed() -> Result<()> {
+		let mut tile = Tile::from_image(tiny_rgb_image(), PNG)?;
 		// Set initial flags
-		tile.change_format(PNG, Some(50), Some(10));
+		tile.change_format(PNG, Some(50), Some(10))?;
 		let mut buf = Vec::new();
 		tile.write_to_cache(&mut buf).unwrap();
 		let (fmt1, _c1, q1, s1) = read_format_quality_speed(&buf);
@@ -475,112 +444,94 @@ mod tests {
 		assert_eq!(s1, Some(10));
 
 		// Now call with None/None so flags should remain
-		tile.change_format(PNG, None, None);
+		tile.change_format(PNG, None, None)?;
 		buf.clear();
 		tile.write_to_cache(&mut buf).unwrap();
 		let (fmt2, _c2, q2, s2) = read_format_quality_speed(&buf);
 		assert_eq!(fmt2, PNG);
 		assert_eq!(q2, Some(50));
 		assert_eq!(s2, Some(10));
+		Ok(())
 	}
 
 	#[test]
-	fn as_vector_on_vector_content_returns_ref() {
+	fn as_vector_on_vector_content_returns_ref() -> Result<()> {
 		let vt = VectorTile::default();
-		let mut tile = Tile::from_vector(vt.clone(), MVT);
+		let mut tile = Tile::from_vector(vt.clone(), MVT)?;
 		assert!(!tile.has_blob());
 		assert!(tile.has_content());
-		let got = tile.as_vector();
+		let got = tile.as_vector()?;
 		// Can't compare references directly; make sure we can read without panic and content stays
 		let _ = got as *const _; // use it
 		assert!(tile.has_content());
+		Ok(())
 	}
 
 	#[test]
-	fn into_vector_consumes_and_returns_owned() {
+	fn into_vector_consumes_and_returns_owned() -> Result<()> {
 		let vt = VectorTile::default();
-		let tile = Tile::from_vector(vt.clone(), MVT);
-		let out = tile.into_vector();
+		let tile = Tile::from_vector(vt.clone(), MVT)?;
+		let out = tile.into_vector()?;
 		assert_eq!(out, vt);
+		Ok(())
 	}
 
 	#[test]
-	fn as_image_mut_modifies_and_drops_blob() {
-		let mut tile = Tile::from_image(tiny_rgb_image(), PNG);
+	fn as_image_mut_modifies_and_drops_blob() -> Result<()> {
+		let mut tile = Tile::from_image(tiny_rgb_image(), PNG)?;
 		// ensure we have a blob to be dropped after mutation
-		let _ = tile.as_blob(Uncompressed);
+		let _ = tile.as_blob(Uncompressed)?;
 		assert!(tile.has_blob());
 
-		assert_eq!(tile.as_image().dimensions(), (2, 2));
+		assert_eq!(tile.as_image()?.dimensions(), (2, 2));
 
-		tile.as_image_mut().put_pixel(0, 1, [42, 24, 12, 255].into());
+		tile.as_image_mut()?.put_pixel(0, 1, [42, 24, 12, 255].into());
 		assert!(tile.has_content());
 		assert!(!tile.has_blob());
-		let p = tile.as_image().get_pixel(0, 1);
+		let p = tile.as_image()?.get_pixel(0, 1);
 		assert_eq!(p.0[0..3], [42, 24, 12]);
+		Ok(())
 	}
 
 	#[test]
-	fn as_vector_mut_allows_mutation_and_keeps_content() {
+	fn as_vector_mut_allows_mutation_and_keeps_content() -> Result<()> {
 		let vt = VectorTile::default();
-		let mut tile = Tile::from_vector(vt, MVT);
+		let mut tile = Tile::from_vector(vt, MVT)?;
 		assert!(!tile.has_blob());
 		// We don't know vector internals here; taking &mut should materialize content and not panic
-		let _vref: &mut VectorTile = tile.as_vector_mut();
+		let _vref: &mut VectorTile = tile.as_vector_mut()?;
 		assert!(tile.has_content());
 		assert!(!tile.has_blob());
+		Ok(())
 	}
 
 	#[test]
-	fn map_image_identity_keeps_dimensions_and_drops_blob() {
-		let mut tile = Tile::from_image(tiny_rgb_image(), PNG);
-		let _ = tile.as_blob(Uncompressed);
-		assert!(tile.has_blob());
-		tile.map_image(|img| {
-			assert_eq!(img.dimensions(), (2, 2));
-			img // identity
-		});
-		assert!(tile.has_content());
-		assert!(!tile.has_blob());
-	}
-
-	#[test]
-	fn map_vector_identity_keeps_content() {
-		let vt = VectorTile::default();
-		let mut tile = Tile::from_vector(vt.clone(), MVT);
-		assert!(tile.has_content());
-		tile.map_vector(|v| v);
-		assert!(tile.has_content());
-		// No blob was ever created; still none
-		assert!(!tile.has_blob());
-	}
-
-	#[test]
-	fn change_compression_on_existing_blob_noop_when_same() {
-		let mut tile = Tile::from_image(tiny_rgb_image(), PNG);
+	fn change_compression_on_existing_blob_noop_when_same() -> Result<()> {
+		let mut tile = Tile::from_image(tiny_rgb_image(), PNG)?;
 		// materialize an uncompressed blob
-		let before = tile.as_blob(Uncompressed).clone();
+		let before = tile.as_blob(Uncompressed)?.clone();
 		assert!(tile.has_blob());
 		assert_eq!(tile.compression(), Uncompressed);
 
 		// change to the same compression => should be a no-op
-		tile.change_compression(Uncompressed);
+		tile.change_compression(Uncompressed)?;
 		assert!(tile.has_blob());
 		assert_eq!(tile.compression(), Uncompressed);
-		let after = tile.as_blob(Uncompressed).clone();
+		let after = tile.as_blob(Uncompressed)?.clone();
 		assert_eq!(before, after);
 
 		// still decodable and content intact
-		let img = tile.as_image();
+		let img = tile.as_image()?;
 		assert_eq!(img.dimensions(), (2, 2));
+		Ok(())
 	}
 
 	#[test]
-	fn change_compression_flag_persists_through_cache_without_blob() {
+	fn change_compression_flag_persists_through_cache_without_blob() -> Result<()> {
 		// No blob present; changing compression only flips the flag
-		let mut tile = Tile::from_image(tiny_rgb_image(), PNG);
+		let mut tile = Tile::from_image(tiny_rgb_image(), PNG)?;
 		assert!(!tile.has_blob());
-		tile.change_compression(Uncompressed);
+		tile.change_compression(Uncompressed)?;
 		assert_eq!(tile.compression(), Uncompressed);
 
 		let mut buf = Vec::new();
@@ -588,35 +539,39 @@ mod tests {
 		let mut cur = Cursor::new(buf.as_slice());
 		let decoded = Tile::read_from_cache(&mut cur).unwrap();
 		assert_eq!(decoded.compression(), Uncompressed);
+		Ok(())
 	}
 
 	#[test]
-	fn debug_shows_core_fields_for_raster_content_only() {
-		let tile = Tile::from_image(tiny_rgb_image(), PNG);
+	fn debug_shows_core_fields_for_raster_content_only() -> Result<()> {
+		let tile = Tile::from_image(tiny_rgb_image(), PNG)?;
 		assert_eq!(
 			format!("{tile:?}"),
 			"Tile { has_blob: false, has_content: true, format: PNG, compression: Uncompressed }"
 		);
+		Ok(())
 	}
 
 	#[test]
-	fn debug_shows_core_fields_for_blob_only() {
-		let blob = Tile::from_image(tiny_rgb_image(), PNG).into_blob(Uncompressed);
+	fn debug_shows_core_fields_for_blob_only() -> Result<()> {
+		let blob = Tile::from_image(tiny_rgb_image(), PNG)?.into_blob(Uncompressed)?;
 		let tile = Tile::from_blob(blob, Uncompressed, PNG);
 		assert_eq!(
 			format!("{tile:?}"),
 			"Tile { has_blob: true, has_content: false, format: PNG, compression: Uncompressed }"
 		);
+		Ok(())
 	}
 
 	#[test]
-	fn debug_shows_core_fields_for_vector_content_only() {
+	fn debug_shows_core_fields_for_vector_content_only() -> Result<()> {
 		let vt = VectorTile::default();
-		let mut tile = Tile::from_vector(vt, MVT);
-		tile.change_compression(Gzip);
+		let mut tile = Tile::from_vector(vt, MVT)?;
+		tile.change_compression(Gzip)?;
 		assert_eq!(
 			format!("{tile:?}"),
 			"Tile { has_blob: false, has_content: true, format: MVT, compression: Gzip }"
 		);
+		Ok(())
 	}
 }

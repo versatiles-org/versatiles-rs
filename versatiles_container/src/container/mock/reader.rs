@@ -157,7 +157,7 @@ mod tests {
 			.get_tile(&TileCoord::new(0, 0, 0)?)
 			.await?
 			.unwrap()
-			.into_blob(TileCompression::Uncompressed)
+			.into_blob(TileCompression::Uncompressed)?
 			.into_vec();
 		assert_eq!(&blob[0..4], b"\x89PNG");
 		Ok(())
@@ -173,7 +173,8 @@ mod tests {
 				.await
 				.unwrap()
 				.unwrap()
-				.into_blob(TileCompression::Uncompressed);
+				.into_blob(TileCompression::Uncompressed)
+				.unwrap();
 			assert_eq!(tile_uncompressed, blob);
 		};
 

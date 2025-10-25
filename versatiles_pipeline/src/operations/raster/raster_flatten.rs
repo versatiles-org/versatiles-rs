@@ -60,11 +60,11 @@ impl OperationTrait for Operation {
 
 		let color = self.color;
 		Ok(self.source.get_stream(bbox).await?.map_item_parallel(move |mut tile| {
-			if tile.as_image().has_alpha() {
+			if tile.as_image()?.has_alpha() {
 				let format = tile.format();
-				let image = tile.into_image();
+				let image = tile.into_image()?;
 				let image = image.into_flattened(color)?;
-				let tile = Tile::from_image(image, format);
+				let tile = Tile::from_image(image, format)?;
 				Ok(tile)
 			} else {
 				Ok(tile)

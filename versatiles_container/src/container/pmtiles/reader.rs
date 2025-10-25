@@ -355,7 +355,7 @@ mod tests {
 				.get_tile(&TileCoord::new(0, 0, 0)?)
 				.await?
 				.unwrap()
-				.as_blob(reader.parameters.tile_compression)
+				.as_blob(reader.parameters.tile_compression)?
 				.len(),
 			20
 		);
@@ -365,7 +365,7 @@ mod tests {
 				.get_tile(&TileCoord::new(14, 8800, 5370)?)
 				.await?
 				.unwrap()
-				.as_blob(reader.parameters.tile_compression)
+				.as_blob(reader.parameters.tile_compression)?
 				.len(),
 			100391
 		);

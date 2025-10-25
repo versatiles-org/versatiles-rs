@@ -261,7 +261,7 @@ mod tests {
 		let mut stream = operation
 			.get_stream(TileCoord::new(10, 1000, 100)?.as_tile_bbox(1)?)
 			.await?;
-		let tile = stream.next().await.unwrap().1.into_vector();
+		let tile = stream.next().await.unwrap().1.into_vector()?;
 		let layer = tile.find_layer("debug_y").unwrap();
 
 		// ── stringify for easy substring assertions ────────────────

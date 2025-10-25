@@ -436,7 +436,7 @@ pub mod tests {
 			.get_tile(&TileCoord::new(14, 8803, 5376)?)
 			.await?
 			.unwrap()
-			.into_blob(reader.parameters().tile_compression);
+			.into_blob(reader.parameters().tile_compression)?;
 		assert_eq!(tile.len(), 172969);
 		assert_eq!(tile.get_range(0..10), &[31, 139, 8, 0, 0, 0, 0, 0, 0, 3]);
 		assert_eq!(

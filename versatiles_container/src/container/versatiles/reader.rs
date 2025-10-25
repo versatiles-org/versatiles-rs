@@ -522,13 +522,13 @@ mod tests {
 			.get_tile(&TileCoord::new(4, 15, 1)?)
 			.await?
 			.unwrap()
-			.into_blob(TileCompression::Uncompressed);
+			.into_blob(TileCompression::Uncompressed)?;
 		assert_eq!(blob.as_slice(), MOCK_BYTES_PBF);
 
 		let sizes = reader
 			.get_tile_stream(TileBBox::new_full(4)?)
 			.await?
-			.map_item_parallel(|mut tile| Ok(tile.as_blob(TileCompression::Gzip).len()));
+			.map_item_parallel(|mut tile| Ok(tile.as_blob(TileCompression::Gzip)?.len()));
 		let sizes: Vec<(TileCoord, u64)> = sizes.to_vec().await;
 		assert_eq!(sizes.len(), 256);
 		for (_, size) in sizes {
@@ -544,7 +544,7 @@ mod tests {
 		let bbox = TileBBox::new_full(4)?;
 		let stream = reader.get_tile_stream(bbox).await?;
 		let mut all: Vec<(TileCoord, Blob)> = stream
-			.map_item_parallel(|tile| Ok(tile.into_blob(TileCompression::Uncompressed)))
+			.map_item_parallel(|tile| tile.into_blob(TileCompression::Uncompressed))
 			.to_vec()
 			.await;
 		all.sort_by_key(|(c, _)| (c.y, c.x));
@@ -568,7 +568,7 @@ mod tests {
 				.get_tile(&coord)
 				.await?
 				.expect("present via single read")
-				.into_blob(TileCompression::Uncompressed);
+				.into_blob(TileCompression::Uncompressed)?;
 			assert_eq!(
 				from_stream.as_slice(),
 				from_single.as_slice(),

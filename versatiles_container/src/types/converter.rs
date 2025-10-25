@@ -244,7 +244,7 @@ mod tests {
 					.get_tile(&coord)
 					.await?
 					.unwrap()
-					.into_blob(Uncompressed)
+					.into_blob(Uncompressed)?
 					.to_string();
 				text = text.replace("{x:", "").replace(",y:", "").replace(",z:3}", "");
 				tiles.push(text);

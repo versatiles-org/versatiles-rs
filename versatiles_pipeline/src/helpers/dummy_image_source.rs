@@ -56,7 +56,7 @@ impl DummyImageSource {
 		tilejson.set_string("name", "dummy raster source").unwrap();
 		tilejson.update_from_reader_parameters(&parameters);
 
-		let tile = Tile::from_image(image, tile_format);
+		let tile = Tile::from_image(image, tile_format)?;
 
 		Ok(DummyImageSource {
 			tile,

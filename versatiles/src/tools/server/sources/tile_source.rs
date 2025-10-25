@@ -70,7 +70,7 @@ impl TileSource {
 			// If tile data is not found, return a not found response
 			return if let Some(tile) = tile? {
 				Ok(SourceResponse::new_some(
-					tile.into_blob(self.compression),
+					tile.into_blob(self.compression)?,
 					self.compression,
 					&self.tile_mime,
 				))

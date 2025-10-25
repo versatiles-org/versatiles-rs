@@ -53,7 +53,7 @@ pub async fn run(args: &MeasureTileSizes) -> Result<()> {
 	let progress = get_progress_bar("Scanning tile sizes", (width_original * width_original) as u64);
 	let compression = reader.parameters().tile_compression;
 	let vec = stream
-		.map_item_parallel(move |mut tile| Ok(tile.as_blob(compression).len()))
+		.map_item_parallel(move |mut tile| Ok(tile.as_blob(compression)?.len()))
 		.inspect(|| progress.inc(1))
 		.to_vec()
 		.await;

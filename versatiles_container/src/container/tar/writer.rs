@@ -59,7 +59,7 @@ impl TilesWriterTrait for TarTilesWriter {
 							);
 							let path = PathBuf::from(&filename);
 
-							let blob = tile.into_blob(tile_compression);
+							let blob = tile.into_blob(tile_compression)?;
 
 							// Build header
 							let mut header = Header::new_gnu();

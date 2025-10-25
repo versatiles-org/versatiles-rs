@@ -213,7 +213,7 @@ impl OperationTrait for Operation {
 					.source
 					.get_stream(bbox)
 					.await?
-					.map_item_parallel(|tile| Ok(tile.into_image())),
+					.map_item_parallel(|tile| tile.into_image()),
 			)
 			.await?
 		} else {
@@ -232,7 +232,7 @@ impl OperationTrait for Operation {
 			.filter_map(move |(c, o)| {
 				if let Some(image) = o {
 					if bbox.contains(&c) {
-						Some((c, Tile::from_image(image, format)))
+						Some((c, Tile::from_image(image, format).unwrap()))
 					} else {
 						None
 					}

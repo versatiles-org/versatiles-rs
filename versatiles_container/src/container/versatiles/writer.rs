@@ -141,7 +141,7 @@ impl VersaTilesWriter {
 						stream
 							.for_each_sync(|(coord, tile)| {
 								block_writer
-									.write_tile(coord, tile.into_blob(tile_compression))
+									.write_tile(coord, tile.into_blob(tile_compression).unwrap())
 									.unwrap();
 							})
 							.await;

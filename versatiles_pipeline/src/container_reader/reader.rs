@@ -179,7 +179,7 @@ mod tests {
 			.get_tile(&TileCoord::new(14, 8800, 5377)?)
 			.await?
 			.unwrap()
-			.into_blob(TileCompression::Uncompressed);
+			.into_blob(TileCompression::Uncompressed)?;
 
 		assert_eq!(result.len(), 141385);
 

@@ -154,7 +154,7 @@ impl OperationTrait for Operation {
 						.for_each_sync(|(coord, mut tile)| {
 							let entry = tiles.get_mut(&coord).unwrap();
 							if entry.is_none() {
-								tile.change_format(format, None, None);
+								tile.change_format(format, None, None).unwrap();
 								*entry = Some(tile);
 							}
 						})
@@ -206,7 +206,7 @@ mod tests {
 	});
 
 	pub fn check_vector(tile: Tile) -> String {
-		let tile = tile.into_vector();
+		let tile = tile.into_vector().unwrap();
 		assert_eq!(tile.layers.len(), 1);
 
 		let layer = &tile.layers[0];
@@ -222,7 +222,7 @@ mod tests {
 
 	pub fn check_image(tile: Tile) -> String {
 		use versatiles_image::traits::*;
-		let image = tile.into_image();
+		let image = tile.into_image().unwrap();
 		let pixel = image.average_color();
 		match pixel.as_slice() {
 			[0, 0, 255] => "🟦".to_string(),

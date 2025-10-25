@@ -152,7 +152,7 @@ impl OperationTrait for Operation {
 						.await
 						.unwrap()
 						.for_each_sync(|(coord, tile)| {
-							tiles.get_mut(&coord).unwrap().push(tile.into_vector());
+							tiles.get_mut(&coord).unwrap().push(tile.into_vector().unwrap());
 						})
 						.await;
 				}
@@ -166,7 +166,10 @@ impl OperationTrait for Operation {
 							if vec_tiles.is_empty() {
 								None
 							} else {
-								Some((coord, Tile::from_vector(merge_vector_tiles(vec_tiles).unwrap(), format)))
+								Some((
+									coord,
+									Tile::from_vector(merge_vector_tiles(vec_tiles).unwrap(), format).unwrap(),
+								))
 							}
 						})
 						.collect(),
@@ -291,7 +294,7 @@ mod tests {
 
 		assert_eq!(
 			arrange_tiles(tiles, |tile| {
-				match check_tile(&tile.into_blob(TileCompression::Uncompressed)).as_str() {
+				match check_tile(&tile.into_blob(TileCompression::Uncompressed).unwrap()).as_str() {
 					"A.pbf" => "🟦",
 					"B.pbf" => "🟨",
 					"A.pbf,B.pbf" => "🟩",

@@ -69,7 +69,7 @@ impl OperationTrait for Operation {
 		let brightness = self.brightness / 255.0;
 		let gamma = self.gamma;
 		Ok(self.source.get_stream(bbox).await?.map_item_parallel(move |mut tile| {
-			tile.as_image_mut().mut_color_values(|v| {
+			tile.as_image_mut()?.mut_color_values(|v| {
 				let v = ((v as f32 - 127.5) * contrast + 0.5 + brightness).powf(gamma) * 255.0;
 				v.round().clamp(0.0, 255.0) as u8
 			});
@@ -141,7 +141,7 @@ mod tests {
 			.to_vec()
 			.await;
 		assert_eq!(tiles.len(), 1);
-		assert_eq!(tiles[0].1.as_image().average_color(), color_out);
+		assert_eq!(tiles[0].1.as_image()?.average_color(), color_out);
 		Ok(())
 	}
 }
