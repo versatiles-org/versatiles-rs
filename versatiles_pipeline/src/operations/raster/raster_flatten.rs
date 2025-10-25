@@ -59,8 +59,7 @@ impl OperationTrait for Operation {
 		Ok(self.source.get_stream(bbox).await?.map_item_parallel(move |mut tile| {
 			if tile.as_image()?.has_alpha() {
 				let format = tile.format();
-				let image = tile.into_image()?;
-				let image = image.into_flattened(color)?;
+				let image = tile.into_image()?.into_flattened(color)?;
 				let tile = Tile::from_image(image, format)?;
 				Ok(tile)
 			} else {
@@ -94,4 +93,25 @@ impl TransformOperationFactoryTrait for Factory {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+	use super::*;
+	use crate::PipelineFactory;
+
+	#[tokio::test]
+	async fn test_raster_flatten() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+			.operation_from_vpl("from_debug format=png | raster_flatten color=[255,127,0]")
+			.await?;
+
+		let bbox = TileCoord::new(2, 1, 1)?.as_tile_bbox(1)?;
+		let image = op.get_stream(bbox).await?.next().await.unwrap().1.into_image()?;
+		assert_eq!(image.average_color(), [238, 119, 0]);
+
+		let bbox = TileCoord::new(2, 2, 1)?.as_tile_bbox(1)?;
+		let image = op.get_stream(bbox).await?.next().await.unwrap().1.into_image()?;
+		assert_eq!(image.average_color(), [254, 135, 16]);
+
+		Ok(())
+	}
+}
