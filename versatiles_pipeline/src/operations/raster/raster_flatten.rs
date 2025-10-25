@@ -26,7 +26,7 @@ impl Operation {
 		vpl_node: VPLNode,
 		source: Box<dyn OperationTrait>,
 		_factory: &PipelineFactory,
-	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>, anyhow::Error>>
+	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
 	where
 		Self: Sized + OperationTrait,
 	{

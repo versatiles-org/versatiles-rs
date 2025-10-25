@@ -71,10 +71,7 @@ fn merge_vector_tiles(tiles: Vec<VectorTile>) -> Result<VectorTile> {
 }
 
 impl ReadOperationTrait for Operation {
-	fn build(
-		vpl_node: VPLNode,
-		factory: &PipelineFactory,
-	) -> BoxFuture<'_, Result<Box<dyn OperationTrait>, anyhow::Error>>
+	fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> BoxFuture<'_, Result<Box<dyn OperationTrait>>>
 	where
 		Self: Sized + OperationTrait,
 	{
