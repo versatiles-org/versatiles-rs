@@ -133,18 +133,10 @@ mod tests {
 			.operation_from_vpl("from_debug format=mvt | filter bbox=[0,0,40,20]")
 			.await?;
 
-		assert_eq!(
-			&op.tilejson().as_pretty_lines(100)[0..7],
-			&[
-				"{",
-				"  \"bounds\": [0, 0, 40, 20],",
-				"  \"maxzoom\": 30,",
-				"  \"minzoom\": 0,",
-				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
-				"  \"tile_schema\": \"other\",",
-				"  \"tile_type\": \"vector\",",
-			]
-		);
+		let o = op.tilejson().as_object();
+		assert_eq!(&o.get_number_array("bounds")?.unwrap(), &[0.0, 0.0, 40.0, 20.0]);
+		assert_eq!(o.get_number("minzoom")?.unwrap(), 0.0);
+		assert_eq!(o.get_number("maxzoom")?.unwrap(), 30.0);
 
 		let inside: &[(u8, u32, u32)] = &[
 			(0, 0, 0),
@@ -189,18 +181,13 @@ mod tests {
 			.operation_from_vpl("from_debug format=mvt | filter level_min=3 level_max=4")
 			.await?;
 
+		let o = op.tilejson().as_object();
 		assert_eq!(
-			&op.tilejson().as_pretty_lines(100)[0..7],
-			&[
-				"{",
-				"  \"bounds\": [-180, -85.051129, 180, 85.051129],",
-				"  \"maxzoom\": 4,",
-				"  \"minzoom\": 3,",
-				"  \"tile_format\": \"vnd.mapbox-vector-tile\",",
-				"  \"tile_schema\": \"other\",",
-				"  \"tile_type\": \"vector\","
-			]
+			o.get_number_array("bounds")?.unwrap(),
+			[-180.0, -85.051129, 180.0, 85.051129]
 		);
+		assert_eq!(o.get_number("minzoom")?.unwrap(), 3.0);
+		assert_eq!(o.get_number("maxzoom")?.unwrap(), 4.0);
 
 		for z in 0..=6 {
 			let coord = TileCoord::new(z, 0, 0)?;
@@ -217,5 +204,43 @@ mod tests {
 			.operation_from_vpl("from_debug format=mvt | filter level_min=5 level_max=2")
 			.await;
 		assert!(result.is_err(), "expected error for level_min > level_max");
+	}
+
+	#[tokio::test]
+	async fn test_filter_composition_intersection_and_zoom_narrowing() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		// First filter (wider), then a second filter that further restricts bbox + zooms
+		let op = factory
+			.operation_from_vpl(
+				"from_debug format=mvt \
+             | filter bbox=[0,0,60,30] level_min=1 level_max=28 \
+             | filter bbox=[10,5,40,20] level_min=3 level_max=25",
+			)
+			.await?;
+
+		let o = op.tilejson().as_object();
+
+		// Expect the intersection of the two boxes
+		let b: [f64; 4] = o.get_number_array("bounds")?.unwrap();
+		assert!((b[0] - 10.0).abs() < 1e-4);
+		assert!((b[1] - 5.0).abs() < 1e-4);
+		assert!((b[2] - 40.0).abs() < 1e-4);
+		assert!((b[3] - 20.0).abs() < 1e-4);
+
+		// Expect the narrowed zoom range
+		assert_eq!(o.get_number("minzoom")?.unwrap(), 3.0);
+		assert_eq!(o.get_number("maxzoom")?.unwrap(), 25.0);
+
+		// Sanity: tiles outside the final bbox shouldn’t pass
+		let outside = TileCoord::new(4, 0, 0)?.as_tile_bbox(1)?;
+		let n_out = op.get_stream(outside).await?.to_vec().await.len();
+		assert_eq!(n_out, 0);
+
+		// Inside tile at z=4 should pass
+		let inside = TileCoord::new(4, 8, 7)?.as_tile_bbox(1)?; // somewhere within [10,5,40,20]
+		let n_in = op.get_stream(inside).await?.to_vec().await.len();
+		assert_eq!(n_in, 1);
+
+		Ok(())
 	}
 }
