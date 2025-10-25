@@ -1,9 +1,8 @@
-use crate::{Blob, TileCompression, TileCoord, TileFormat};
 use anyhow::{Result, anyhow, bail};
 use byteorder::{LittleEndian as LE, ReadBytesExt, WriteBytesExt};
-#[cfg(feature = "image")]
-use image::{DynamicImage, ImageBuffer};
 use std::io::{Cursor, Read};
+use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat};
+use versatiles_image::{DynamicImage, ImageBuffer};
 
 pub trait CacheValue: Clone {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()>;
@@ -161,7 +160,6 @@ impl<V: CacheValue> CacheValue for Option<V> {
 	}
 }
 
-#[cfg(feature = "image")]
 impl CacheValue for DynamicImage {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
 		let width = self.width();

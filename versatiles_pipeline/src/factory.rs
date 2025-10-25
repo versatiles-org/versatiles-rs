@@ -12,8 +12,7 @@ use std::{
 	path::{Path, PathBuf},
 	sync::Arc,
 };
-use versatiles_container::TilesReaderTrait;
-use versatiles_core::Config;
+use versatiles_container::{Config, TilesReaderTrait};
 
 type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesReaderTrait>>>>;
 

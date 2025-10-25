@@ -35,7 +35,6 @@ use reqwest::Url;
 use std::{env, sync::Arc};
 use versatiles_core::{
 	TileCompression,
-	config::Config,
 	io::{DataReader, DataReaderHttp},
 };
 use versatiles_derive::context;

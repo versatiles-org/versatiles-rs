@@ -5,8 +5,8 @@ use futures::future::BoxFuture;
 use imageproc::image::{DynamicImage, GenericImage};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
-use versatiles_container::Tile;
-use versatiles_core::{cache::CacheMap, *};
+use versatiles_container::{CacheMap, Tile};
+use versatiles_core::*;
 use versatiles_derive::context;
 use versatiles_image::traits::*;
 
@@ -274,7 +274,7 @@ mod tests {
 	use super::*;
 	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::GenericImageView;
-	use versatiles_core::Config;
+	use versatiles_container::Config;
 
 	fn make_operation(tile_size: u32, level_base: u8) -> Operation {
 		let parameters = TilesReaderParameters::new(

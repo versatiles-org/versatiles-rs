@@ -18,6 +18,7 @@ async-trait.workspace = true
 byteorder.workspace = true
 futures.workspace = true
 itertools = { workspace = true, features = ["use_alloc"] }
+lazy_static.workspace = true
 log.workspace = true
 num_cpus.workspace = true
 r2d2 = { version = "0.8.10", default-features = false }
@@ -26,7 +27,12 @@ r2d2_sqlite = { version = "0.31.0", default-features = false, features = [
 ] }
 reqwest = { workspace = true, features = ["rustls-tls"] }
 tar = { version = "0.4.44", default-features = false }
+time = { version = "0.3.44", default-features = false, features = [
+	"formatting",
+	"local-offset",
+] }
 tokio = { workspace = true, features = ["macros", "rt"] }
+uuid = { version = "1.18.1", features = ["v4"] }
 
 versatiles_core = { workspace = true, default-features = false }
 versatiles_derive.workspace = true
@@ -34,8 +40,9 @@ versatiles_geometry.workspace = true
 versatiles_image.workspace = true
 
 [dev-dependencies]
-lazy_static.workspace = true
 assert_fs.workspace = true
+rstest.workspace = true
+tempfile.workspace = true
 wildmatch.workspace = true
 
 versatiles_core = { workspace = true, features = ["test"] }

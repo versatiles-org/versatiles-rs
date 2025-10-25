@@ -1,5 +1,6 @@
-use crate::TileCoord;
 use std::fmt::Debug;
+
+use versatiles_core::TileCoord;
 
 pub trait CacheKey: Debug {
 	fn to_cache_key(&self) -> String;

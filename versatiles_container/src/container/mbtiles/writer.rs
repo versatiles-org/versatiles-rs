@@ -34,14 +34,14 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying the database structure.
 
-use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
+use crate::{Config, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use r2d2::Pool;
 use r2d2_sqlite::{SqliteConnectionManager, rusqlite::params};
 use std::{fs::remove_file, path::Path, sync::Arc};
-use versatiles_core::{config::Config, io::DataWriterTrait, json::JsonObject, *};
+use versatiles_core::{io::DataWriterTrait, json::JsonObject, *};
 
 /// A writer for creating and populating MBTiles databases.
 pub struct MBTilesWriter {

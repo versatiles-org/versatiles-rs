@@ -30,13 +30,12 @@
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different tile formats, and verifying the integrity of the written data.
 
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression};
-use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
+use crate::{Config, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::lock::Mutex;
 use std::sync::Arc;
 use versatiles_core::{
-	config::Config,
 	io::DataWriterTrait,
 	traversal::*,
 	types::*,

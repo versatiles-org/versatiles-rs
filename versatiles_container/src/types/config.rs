@@ -1,6 +1,5 @@
-pub use crate::config::cache_type::CacheType;
+use crate::CacheType;
 use std::sync::Arc;
-mod cache_type;
 
 #[derive(Clone, Debug)]
 pub struct Config {

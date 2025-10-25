@@ -3,7 +3,7 @@
 //! This module defines the `TilesReaderTrait` with methods for traversing,
 //! retrieving, and probing tile metadata, parameters, container info, and contents.
 
-use crate::Tile;
+use crate::{CacheMap, Config, Tile};
 use anyhow::Result;
 use async_trait::async_trait;
 use futures::{StreamExt, future::BoxFuture, stream};
@@ -13,7 +13,7 @@ use tokio::sync::Mutex;
 use versatiles_core::{ProbeDepth, utils::PrettyPrint};
 use versatiles_core::{
 	TileBBox, TileCompression, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal,
-	TraversalTranslationStep, cache::CacheMap, config::Config, progress::get_progress_bar, translate_traversals,
+	TraversalTranslationStep, progress::get_progress_bar, translate_traversals,
 };
 
 /// Trait defining behavior for reading tiles from a container.

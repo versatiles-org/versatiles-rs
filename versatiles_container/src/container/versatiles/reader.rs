@@ -486,9 +486,9 @@ impl PartialEq for VersaTilesReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::{MOCK_BYTES_PBF, MockTilesReader, TilesWriterTrait, VersaTilesWriter, make_test_file};
+	use crate::{Config, MOCK_BYTES_PBF, MockTilesReader, TilesWriterTrait, VersaTilesWriter, make_test_file};
 	use assert_fs::NamedTempFile;
-	use versatiles_core::{assert_wildcard, config::Config, io::DataWriterBlob};
+	use versatiles_core::{assert_wildcard, io::DataWriterBlob};
 
 	// Helper to quickly create a test reader and bbox
 	async fn mk_reader() -> Result<(NamedTempFile, VersaTilesReader)> {

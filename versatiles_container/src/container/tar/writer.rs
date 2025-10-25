@@ -1,6 +1,6 @@
 //! Provides functionality for writing tile data to a tar archive.
 
-use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
+use crate::{Config, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -10,7 +10,7 @@ use std::{
 	sync::Arc,
 };
 use tar::{Builder, Header};
-use versatiles_core::{TileCompression, Traversal, config::Config, io::DataWriterTrait, utils::compress};
+use versatiles_core::{TileCompression, Traversal, io::DataWriterTrait, utils::compress};
 
 /// A struct that provides functionality to write tile data to a tar archive.
 pub struct TarTilesWriter {}

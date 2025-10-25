@@ -30,12 +30,7 @@ num_cpus.workspace = true
 regex = { workspace = true }
 reqwest = { workspace = true, features = ["rustls-tls"] }
 terminal_size = "0.4.3"
-time = { version = "0.3.44", default-features = false, features = [
-	"formatting",
-	"local-offset",
-] }
 tokio.workspace = true
-uuid = { version = "1.18.1", features = ["v4"] }
 
 versatiles_derive.workspace = true
 
@@ -43,7 +38,7 @@ versatiles_derive.workspace = true
 assert_fs.workspace = true
 criterion = "0.7.0"
 rstest.workspace = true
-tempfile = "3.23.0"
+tempfile.workspace = true
 tokio = { workspace = true, features = ["macros"] }
 wildmatch.workspace = true
 

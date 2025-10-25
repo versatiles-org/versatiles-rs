@@ -184,9 +184,9 @@ mod tests {
 	use super::*;
 	use assert_fs::NamedTempFile;
 	use versatiles_container::{
-		MockTilesReader, MockTilesReaderProfile, TilesConverterParameters, TilesReaderTrait, convert_tiles_container,
+		Config, MockTilesReader, MockTilesReaderProfile, TilesConverterParameters, TilesReaderTrait,
+		convert_tiles_container,
 	};
-	use versatiles_core::Config;
 
 	pub async fn make_test_tar(compression: TileCompression) -> NamedTempFile {
 		// get dummy reader

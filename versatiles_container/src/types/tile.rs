@@ -2,13 +2,12 @@ use anyhow::Result;
 use std::{fmt::Debug, io::Cursor};
 use versatiles_core::{
 	Blob, TileCompression, TileFormat,
-	cache::CacheValue,
 	utils::{decompress_ref, recompress},
 };
 use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::DynamicImage;
 
-use crate::TileContent;
+use crate::{CacheValue, TileContent};
 
 #[derive(Clone, PartialEq)]
 pub struct Tile {

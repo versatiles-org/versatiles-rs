@@ -38,14 +38,13 @@
 
 use std::sync::Arc;
 
-use crate::{Tile, TilesReaderTrait};
+use crate::{Config, Tile, TilesReaderTrait};
 
 use super::write_to_filename;
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{
 	TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal,
-	config::Config,
 };
 use versatiles_derive::context;
 

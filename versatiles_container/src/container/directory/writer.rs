@@ -50,7 +50,7 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying directory structure.
 
-use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
+use crate::{Config, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use std::{
@@ -58,7 +58,7 @@ use std::{
 	path::{Path, PathBuf},
 	sync::Arc,
 };
-use versatiles_core::{config::Config, io::DataWriterTrait, utils::compress, *};
+use versatiles_core::{io::DataWriterTrait, utils::compress, *};
 
 /// A struct that provides functionality to write tile data to a directory structure.
 pub struct DirectoryTilesWriter {}

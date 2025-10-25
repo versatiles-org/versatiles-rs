@@ -1,10 +1,11 @@
 use crate::{
+	Config,
 	cache::{
 		cache_in_memory::InMemoryCache,
 		cache_on_disk::OnDiskCache,
+		cache_type::CacheType,
 		traits::{Cache, CacheKey, CacheValue},
 	},
-	config::{CacheType, Config},
 };
 use anyhow::Result;
 use std::{fmt::Debug, sync::Arc};

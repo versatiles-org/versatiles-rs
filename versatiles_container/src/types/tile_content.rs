@@ -1,9 +1,11 @@
 use anyhow::{Result, bail};
 use byteorder::{ReadBytesExt, WriteBytesExt};
 use std::io::Cursor;
-use versatiles_core::{Blob, TileFormat, TileType, cache::CacheValue};
+use versatiles_core::{Blob, TileFormat, TileType};
 use versatiles_geometry::vector_tile::VectorTile;
 use versatiles_image::{DynamicImage, DynamicImageTraitConvert};
+
+use crate::CacheValue;
 
 #[derive(Clone, PartialEq)]
 pub enum TileContent {

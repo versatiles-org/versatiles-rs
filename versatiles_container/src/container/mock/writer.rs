@@ -20,11 +20,11 @@
 //! }
 //! ```
 
-use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
+use crate::{Config, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::sync::Arc;
-use versatiles_core::{TileCompression, Traversal, config::Config, io::DataWriterTrait};
+use versatiles_core::{TileCompression, Traversal, io::DataWriterTrait};
 
 /// Mock implementation of a `TilesWriter`.
 pub struct MockTilesWriter {}

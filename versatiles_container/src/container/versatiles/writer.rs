@@ -31,14 +31,15 @@
 //! }
 //! ```
 
-use std::sync::Arc;
-
 use super::types::{BlockDefinition, BlockIndex, FileHeader};
-use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait, container::versatiles::types::BlockWriter};
+use crate::{
+	Config, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait, container::versatiles::types::BlockWriter,
+};
 use anyhow::{Result, anyhow};
 use async_trait::async_trait;
 use futures::lock::Mutex;
-use versatiles_core::{Traversal, config::Config, io::DataWriterTrait, types::*, utils::compress};
+use std::sync::Arc;
+use versatiles_core::{Traversal, io::DataWriterTrait, types::*, utils::compress};
 use versatiles_derive::context;
 
 /// A struct for writing tiles to a VersaTiles container.
