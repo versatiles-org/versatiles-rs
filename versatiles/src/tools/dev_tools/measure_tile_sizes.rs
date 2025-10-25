@@ -1,7 +1,7 @@
 use anyhow::{Result, anyhow, bail};
 use std::path::PathBuf;
-use versatiles::{TileBBox, TileFormat, config::Config, progress::get_progress_bar};
 use versatiles_container::get_reader;
+use versatiles_core::{Config, TileBBox, TileFormat, progress::get_progress_bar};
 use versatiles_image::{DynamicImage, DynamicImageTraitConvert, encode};
 
 #[derive(clap::Args, Debug)]

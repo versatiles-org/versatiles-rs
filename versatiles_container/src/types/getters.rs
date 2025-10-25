@@ -3,8 +3,8 @@
 //! # Example Usage
 //!
 //! ```rust
-//! use versatiles_container::{get_reader, write_to_filename};
-//! use versatiles_core::{TileFormat, TilesReaderTrait, config::Config};
+//! use versatiles_container::*;
+//! use versatiles_core::*;
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -17,7 +17,12 @@
 //!     let output_filename = "../testdata/temp3.versatiles";
 //!
 //!     // Write the tiles to the output file
-//!     write_to_filename(&mut *reader, output_filename, Config::default().arc()).await?;
+//!     write_to_filename(
+//!         &mut *reader,
+//!         output_filename,
+//!         TileCompression::Uncompressed,
+//!         Config::default().arc()
+//!     ).await?;
 //!
 //!     println!("Tiles have been successfully converted and saved to {output_filename}");
 //!     Ok(())

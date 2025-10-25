@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, anyhow, bail};
 use std::path::PathBuf;
-use versatiles::{config::Config, progress::get_progress_bar};
 use versatiles_container::get_reader;
+use versatiles_core::{Config, progress::get_progress_bar};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_help_flag = true, disable_version_flag = true)]

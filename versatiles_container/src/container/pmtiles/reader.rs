@@ -9,8 +9,8 @@
 //!
 //! ## Usage Example
 //! ```rust
-//! use versatiles_container::PMTilesReader;
-//! use versatiles_core::{TileCoord, TilesReaderTrait};
+//! use versatiles_container::*;
+//! use versatiles_core::*;
 //! use std::path::Path;
 //!
 //! #[tokio::main]
@@ -24,8 +24,8 @@
 //!
 //!     // Get tile data for specific coordinates
 //!     let coord = TileCoord::new(1, 1, 1)?;
-//!     if let Some(tile_data) = reader.get_tile(&coord).await? {
-//!         println!("Tile data: {:?}", tile_data);
+//!     if let Some(tile) = reader.get_tile(&coord).await? {
+//!         println!("Tile data: {tile:?}");
 //!     }
 //!
 //!     Ok(())
@@ -355,7 +355,7 @@ mod tests {
 				.get_tile(&TileCoord::new(0, 0, 0)?)
 				.await?
 				.unwrap()
-				.as_blob(TileCompression::Uncompressed)
+				.as_blob(reader.parameters.tile_compression)
 				.len(),
 			20
 		);
@@ -365,7 +365,7 @@ mod tests {
 				.get_tile(&TileCoord::new(14, 8800, 5370)?)
 				.await?
 				.unwrap()
-				.as_blob(TileCompression::Uncompressed)
+				.as_blob(reader.parameters.tile_compression)
 				.len(),
 			100391
 		);

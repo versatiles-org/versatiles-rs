@@ -10,8 +10,8 @@
 //! ## Usage Example
 //!
 //! ```no_run
-//! use versatiles_container::{TarTilesReader, TarTilesWriter, TilesWriterTrait};
-//! use versatiles_core::{TileCoord, TilesReaderTrait, config::Config};
+//! use versatiles_container::*;
+//! use versatiles_core::*;
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -21,14 +21,19 @@
 //!     let tar_path = Path::new("path/to/your/tarfile.tar");
 //!     let mut reader = TarTilesReader::open_path(tar_path)?;
 //!     let tile_coord = TileCoord::new(1, 2, 3)?;
-//!     let tile_data = reader.get_tile(&tile_coord).await?;
-//!     if let Some(data) = tile_data {
-//!         println!("Tile data: {:?}", data);
+//!     let tile = reader.get_tile(&tile_coord).await?;
+//!     if let Some(mut tile) = tile {
+//!         println!("Tile data: {:?}", tile.as_blob(TileCompression::Uncompressed));
 //!     }
 //!
 //!     // Writing to a tar archive
 //!     let output_path = Path::new("path/to/output.tar");
-//!     let mut writer = TarTilesWriter::write_to_path(&mut reader, output_path, Config::default().arc()).await?;
+//!     let mut writer = TarTilesWriter::write_to_path(
+//!         &mut reader,
+//!         output_path,
+//!         TileCompression::Uncompressed,
+//!         Config::default().arc()
+//!     ).await?;
 //!
 //!     Ok(())
 //! }

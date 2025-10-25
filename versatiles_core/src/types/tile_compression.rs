@@ -14,9 +14,9 @@
 //! use versatiles_core::TileCompression;
 //!
 //! // Getting file extensions for compression types
-//! assert_eq!(TileCompression::Uncompressed.extension(), "");
-//! assert_eq!(TileCompression::Gzip.extension(), ".gz");
-//! assert_eq!(TileCompression::Brotli.extension(), ".br");
+//! assert_eq!(TileCompression::Uncompressed.as_extension(), "");
+//! assert_eq!(TileCompression::Gzip.as_extension(), ".gz");
+//! assert_eq!(TileCompression::Brotli.as_extension(), ".br");
 //!
 //! // Determining compression type from filename
 //! let mut filename = String::from("file.txt.gz");
@@ -66,9 +66,9 @@ impl TileCompression {
 	/// ```
 	/// use versatiles_core::TileCompression;
 	///
-	/// assert_eq!(TileCompression::Uncompressed.extension(), "");
-	/// assert_eq!(TileCompression::Gzip.extension(), ".gz");
-	/// assert_eq!(TileCompression::Brotli.extension(), ".br");
+	/// assert_eq!(TileCompression::Uncompressed.as_extension(), "");
+	/// assert_eq!(TileCompression::Gzip.as_extension(), ".gz");
+	/// assert_eq!(TileCompression::Brotli.as_extension(), ".br");
 	/// ```
 	#[must_use]
 	pub fn as_extension(&self) -> &str {

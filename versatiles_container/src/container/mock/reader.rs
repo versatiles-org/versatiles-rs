@@ -9,8 +9,8 @@
 //! These mocks can be used to simulate tile reading operations in tests, allowing verification of code behavior under controlled conditions.
 //!
 //! ```rust
-//! use versatiles_container::{MockTilesReader, MockTilesReaderProfile};
-//! use versatiles_core::TilesReaderTrait;
+//! use versatiles_container::*;
+//! use versatiles_core::*;
 //! use std::result::Result;
 //!
 //! #[tokio::test]

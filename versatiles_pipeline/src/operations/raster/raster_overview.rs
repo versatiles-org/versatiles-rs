@@ -274,7 +274,7 @@ mod tests {
 	use super::*;
 	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::GenericImageView;
-	use versatiles_core::config::Config;
+	use versatiles_core::Config;
 
 	fn make_operation(tile_size: u32, level_base: u8) -> Operation {
 		let parameters = TilesReaderParameters::new(

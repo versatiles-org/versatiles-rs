@@ -3,8 +3,8 @@
 //! # Example Usage
 //!
 //! ```rust
-//! use versatiles_container::{convert_tiles_container, MBTilesReader, TilesConverterParameters};
-//! use versatiles_core::{TileFormat, TileCompression, TileBBoxPyramid, TilesReaderTrait, TilesReaderParameters, config::Config};
+//! use versatiles_container::*;
+//! use versatiles_core::*;
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -19,12 +19,17 @@
 //!     // Define converter parameters
 //!     let converter_params = TilesConverterParameters {
 //!         bbox_pyramid: Some(TileBBoxPyramid::new_full(8)),
-//!         tile_compression: Some(TileCompression::Brotli),
 //!         ..Default::default()
 //!     };
 //!
 //!     // Convert the tiles container
-//!     convert_tiles_container(Box::new(reader), converter_params, &path_versatiles.to_str().unwrap(), Config::default().arc()).await?;
+//!     convert_tiles_container(
+//!         Box::new(reader),
+//!         converter_params,
+//!         &path_versatiles.to_str().unwrap(),
+//!         TileCompression::Brotli,
+//!         Config::default().arc()
+//!     ).await?;
 //!
 //!     println!("Tiles have been successfully converted and saved to {path_versatiles:?}");
 //!     Ok(())

@@ -5,8 +5,8 @@
 //! This module provides the `VersaTilesReader` struct, which implements the `TilesReader` trait for reading tile data from a `versatiles` container. It supports reading metadata, tile data, and probing the container for debugging purposes.
 //!
 //! ```no_run
-//! use versatiles_container::VersaTilesReader;
-//! use versatiles_core::{TileCoord, TileCompression, TileFormat, TileBBoxPyramid, TilesReaderTrait, TilesReaderParameters};
+//! use versatiles_container::*;
+//! use versatiles_core::*;
 //! use anyhow::Result;
 //! use futures::StreamExt;
 //! use std::path::Path;
@@ -28,8 +28,8 @@
 //!
 //!     // Fetch a specific tile
 //!     let coord = TileCoord::new(15, 1, 4)?;
-//!     if let Some(tile_data) = reader.get_tile(&coord).await? {
-//!         println!("Tile Data: {tile_data:?}");
+//!     if let Some(tile) = reader.get_tile(&coord).await? {
+//!         println!("Tile Data: {tile:?}");
 //!     } else {
 //!         println!("Tile not found");
 //!     }
@@ -528,7 +528,7 @@ mod tests {
 		let sizes = reader
 			.get_tile_stream(TileBBox::new_full(4)?)
 			.await?
-			.map_item_parallel(|mut tile| Ok(tile.as_blob(TileCompression::Uncompressed).len()));
+			.map_item_parallel(|mut tile| Ok(tile.as_blob(TileCompression::Gzip).len()));
 		let sizes: Vec<(TileCoord, u64)> = sizes.to_vec().await;
 		assert_eq!(sizes.len(), 256);
 		for (_, size) in sizes {

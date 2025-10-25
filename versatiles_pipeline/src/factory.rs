@@ -13,7 +13,7 @@ use std::{
 	sync::Arc,
 };
 use versatiles_container::TilesReaderTrait;
-use versatiles_core::config::Config;
+use versatiles_core::Config;
 
 type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesReaderTrait>>>>;
 

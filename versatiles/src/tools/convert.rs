@@ -153,7 +153,6 @@ mod tests {
 			"--min-zoom=1",
 			"--max-zoom=13",
 			"--flip-y",
-			"--force-recompress",
 			"../tmp/berlin2.versatiles",
 			"../tmp/berlin3.versatiles",
 		])?;
@@ -172,7 +171,6 @@ mod tests {
 			"--max-zoom=2",
 			"--bbox=-180,-85,180,85",
 			"--flip-y",
-			"--force-recompress",
 			"https://download.versatiles.org/osm.versatiles",
 			"../tmp/planet2.versatiles",
 		])?;

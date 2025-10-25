@@ -3,8 +3,8 @@
 //! # Example
 //!
 //! ```rust
-//! use versatiles_container::{MBTilesReader, TilesWriterTrait, VersaTilesWriter};
-//! use versatiles_core::{TileBBoxPyramid, TileCompression, TileFormat, config::Config};
+//! use versatiles_container::*;
+//! use versatiles_core::*;
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -18,7 +18,12 @@
 //!     let path_out = std::env::current_dir()?.join("../testdata/temp5.versatiles");
 //!
 //!     // Write the tiles to the .versatiles file
-//!     VersaTilesWriter::write_to_path(&mut reader, &path_out, Config::default().arc()).await?;
+//!     VersaTilesWriter::write_to_path(
+//!         &mut reader,
+//!         &path_out,
+//!         TileCompression::Brotli,
+//!         Config::default().arc()
+//!     ).await?;
 //!
 //!     println!("Tiles have been successfully written to {path_out:?}");
 //!

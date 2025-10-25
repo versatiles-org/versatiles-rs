@@ -7,8 +7,8 @@
 //! # Usage Example
 //!
 //! ```rust
-//! use versatiles_container::{MBTilesReader, TilesWriterTrait, VersaTilesReader, VersaTilesWriter};
-//! use versatiles_core::{TileCoord, TilesReaderTrait, config::Config};
+//! use versatiles_container::*;
+//! use versatiles_core::*;
 //! use std::path::Path;
 //! use anyhow::Result;
 //!
@@ -21,7 +21,12 @@
 //!     let mut reader = MBTilesReader::open_path(&path_mbtiles)?;
 //!
 //!     // Write the tiles to the .versatiles file
-//!     VersaTilesWriter::write_to_path(&mut reader, &path_versatiles, Config::default().arc()).await?;
+//!     VersaTilesWriter::write_to_path(
+//!         &mut reader,
+//!         &path_versatiles,
+//!         TileCompression::Brotli,
+//!         Config::default().arc()
+//!     ).await?;
 //!
 //!     println!("Tiles have been successfully written to {path_versatiles:?}");
 //!

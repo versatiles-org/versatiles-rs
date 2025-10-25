@@ -3,6 +3,7 @@
 pub mod byte_iterator;
 pub mod cache;
 pub mod config;
+pub use config::*;
 pub mod io;
 pub mod json;
 pub mod macros;

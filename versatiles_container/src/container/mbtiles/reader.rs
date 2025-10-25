@@ -9,8 +9,8 @@
 //!
 //! ## Usage Example
 //! ```rust
-//! use versatiles_container::MBTilesReader;
-//! use versatiles_core::{Blob, TileCoord, TilesReaderTrait};
+//! use versatiles_container::*;
+//! use versatiles_core::*;
 //! use anyhow::Result;
 //! use std::path::Path;
 //!
@@ -25,8 +25,8 @@
 //!
 //!     // Get tile data for specific coordinates
 //!     let coord = TileCoord::new(1, 1, 1)?;
-//!     if let Some(tile_data) = reader.get_tile(&coord).await? {
-//!         println!("Tile data: {:?}", tile_data);
+//!     if let Some(tile) = reader.get_tile(&coord).await? {
+//!         println!("Tile data: {tile:?}");
 //!     }
 //!
 //!     Ok(())

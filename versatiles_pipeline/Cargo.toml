@@ -42,6 +42,7 @@ regex.workspace = true
 rstest.workspace = true
 tokio = { workspace = true, features = ["macros"] }
 
+versatiles_container = { workspace = true, features = ["test"] }
 versatiles_core = { workspace = true, features = ["test"] }
 
 [features]

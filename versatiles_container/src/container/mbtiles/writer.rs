@@ -9,8 +9,8 @@
 //!
 //! ## Usage
 //! ```rust
-//! use versatiles_container::{MBTilesWriter, PMTilesReader, TilesWriterTrait};
-//! use versatiles_core::config::Config;
+//! use versatiles_container::*;
+//! use versatiles_core::*;
 //! use std::path::Path;
 //!
 //! #[tokio::main]
@@ -19,7 +19,12 @@
 //!     let mut reader = PMTilesReader::open_path(&path).await.unwrap();
 //!
 //!     let temp_path = std::env::temp_dir().join("temp.mbtiles");
-//!     MBTilesWriter::write_to_path(&mut reader, &temp_path, Config::default().arc()).await.unwrap();
+//!     MBTilesWriter::write_to_path(
+//!         &mut reader,
+//!         &temp_path,
+//!         TileCompression::Gzip,
+//!         Config::default().arc()
+//!     ).await.unwrap();
 //! }
 //! ```
 //!
