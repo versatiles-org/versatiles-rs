@@ -247,4 +247,128 @@ mod tests {
 		let invalid = [0xFFu8, 0xFEu8, 0x00u8];
 		assert!(String::read_from_cache(&mut Cursor::new(&invalid)).is_err());
 	}
+
+	#[test]
+	fn u8_roundtrip() {
+		roundtrip::<u8>(0);
+		roundtrip::<u8>(1);
+		roundtrip::<u8>(255);
+	}
+
+	#[test]
+	fn u32_roundtrip() {
+		roundtrip::<u32>(0);
+		roundtrip::<u32>(1);
+		roundtrip::<u32>(u32::MAX);
+	}
+
+	#[test]
+	fn tuple_roundtrip() {
+		let value: (u32, String) = (42, "life".to_string());
+		roundtrip::<(u32, String)>(value);
+	}
+
+	#[test]
+	fn tilecoord_roundtrip() {
+		let tc = TileCoord {
+			x: 123456,
+			y: 654321,
+			level: 7,
+		};
+		roundtrip::<TileCoord>(tc);
+	}
+
+	#[test]
+	fn blob_roundtrip() {
+		let data: Vec<u8> = (0..=255).collect();
+		let blob = Blob::from(data);
+		roundtrip::<Blob>(blob);
+	}
+
+	#[test]
+	fn option_roundtrip_some_none() {
+		let some_v: Option<u32> = Some(1234567890);
+		roundtrip::<Option<u32>>(some_v);
+
+		let none_v: Option<String> = None;
+		roundtrip::<Option<String>>(none_v);
+	}
+
+	#[test]
+	fn option_from_cache_errors_on_invalid_flag() {
+		// Prepare a buffer with an invalid presence flag (2)
+		let buf = vec![2u8];
+		let mut cursor = Cursor::new(buf.as_slice());
+		let res = <Option<u8>>::read_from_cache(&mut cursor);
+		assert!(res.is_err());
+	}
+
+	#[test]
+	fn tileformat_accepts_all_valid_discriminants() {
+		// For every u8 that maps to a valid TileFormat, verify roundtrip remains stable.
+		for v in 0u8..=u8::MAX {
+			if let Ok(tf) = TileFormat::try_from(v) {
+				// encode
+				let mut buf = vec![];
+				tf.write_to_cache(&mut buf).unwrap();
+				// decode
+				let mut cur = Cursor::new(buf.as_slice());
+				let tf2 = TileFormat::read_from_cache(&mut cur).unwrap();
+				assert_eq!(tf2, tf);
+				assert_eq!(cur.position(), buf.len() as u64);
+			}
+		}
+	}
+
+	#[test]
+	fn tilecompression_accepts_all_valid_discriminants() {
+		for v in 0u8..=u8::MAX {
+			if let Ok(tc) = TileCompression::try_from(v) {
+				let mut buf = vec![];
+				tc.write_to_cache(&mut buf).unwrap();
+				let mut cur = Cursor::new(buf.as_slice());
+				let tc2 = TileCompression::read_from_cache(&mut cur).unwrap();
+				assert_eq!(tc2, tc);
+				assert_eq!(cur.position(), buf.len() as u64);
+			}
+		}
+	}
+
+	fn make_image_dynamic(kind: &str) -> DynamicImage {
+		let (w, h) = (2u32, 2u32);
+		match kind {
+			"luma" => {
+				let data = vec![10u8, 20, 30, 40]; // 4 bytes
+				DynamicImage::ImageLuma8(ImageBuffer::from_vec(w, h, data).unwrap())
+			}
+			"lumaa" => {
+				let data = vec![10u8, 1, 20, 2, 30, 3, 40, 4]; // 8 bytes
+				DynamicImage::ImageLumaA8(ImageBuffer::from_vec(w, h, data).unwrap())
+			}
+			"rgb" => {
+				let data = vec![
+					255, 0, 0, // R
+					0, 255, 0, // G
+					0, 0, 255, // B
+					10, 20, 30, // misc
+				]; // 12 bytes
+				DynamicImage::ImageRgb8(ImageBuffer::from_vec(w, h, data).unwrap())
+			}
+			"rgba" => {
+				let data = vec![255, 0, 0, 255, 0, 255, 0, 128, 0, 0, 255, 64, 10, 20, 30, 0]; // 16 bytes
+				DynamicImage::ImageRgba8(ImageBuffer::from_vec(w, h, data).unwrap())
+			}
+			_ => unreachable!(),
+		}
+	}
+
+	#[rstest]
+	#[case("luma")]
+	#[case("lumaa")]
+	#[case("rgb")]
+	#[case("rgba")]
+	fn dynamic_image_roundtrips(#[case] kind: &str) {
+		let img = make_image_dynamic(kind);
+		roundtrip::<DynamicImage>(img);
+	}
 }
