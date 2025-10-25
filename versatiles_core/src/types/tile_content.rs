@@ -35,7 +35,7 @@ pub enum TileContent {
 	RasterDEMTerrarium,
 	RasterDEMVersatiles,
 	VectorOpenMapTiles,
-	VectorShortbread1,
+	VectorShortbread1_0,
 	VectorOther,
 	Unknown,
 }
@@ -45,12 +45,12 @@ impl TileContent {
 	///
 	/// The string is suitable for use in URLs, CLI arguments and metadata
 	/// files.  The mapping is *loss‑less*: every return value can be parsed
-	/// back via `TileSchema::try_from`.
+	/// back via `TileContent::try_from`.
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::TileSchema;
-	/// assert_eq!(TileSchema::RasterRGB.as_str(), "rgb");
+	/// use versatiles_core::TileContent;
+	/// assert_eq!(TileContent::RasterRGB.as_str(), "rgb");
 	/// ```
 	#[must_use]
 	pub fn as_str(&self) -> &str {
@@ -62,7 +62,7 @@ impl TileContent {
 			RasterDEMTerrarium => "dem/terrarium",
 			RasterDEMVersatiles => "dem/versatiles",
 			VectorOpenMapTiles => "openmaptiles",
-			VectorShortbread1 => "shortbread@1.0",
+			VectorShortbread1_0 => "shortbread@1.0",
 			VectorOther => "other",
 			Unknown => "unknown",
 		}
@@ -76,15 +76,15 @@ impl TileContent {
 	///
 	/// # Examples
 	/// ```
-	/// use versatiles_core::{TileSchema, TileType};
-	/// assert_eq!(TileSchema::RasterRGBA.get_tile_type(), TileType::Raster);
+	/// use versatiles_core::{TileContent, TileType};
+	/// assert_eq!(TileContent::RasterRGBA.get_tile_type(), TileType::Raster);
 	/// ```
 	#[must_use]
 	pub fn get_tile_type(&self) -> TileType {
 		use TileContent::*;
 		match self {
 			RasterRGB | RasterRGBA | RasterDEMMapbox | RasterDEMTerrarium | RasterDEMVersatiles => TileType::Raster,
-			VectorOpenMapTiles | VectorShortbread1 | VectorOther => TileType::Vector,
+			VectorOpenMapTiles | VectorShortbread1_0 | VectorOther => TileType::Vector,
 			Unknown => TileType::Unknown,
 		}
 	}
@@ -108,7 +108,7 @@ impl TryFrom<&str> for TileContent {
 			"dem/terrarium" => RasterDEMTerrarium,
 			"dem/versatiles" => RasterDEMVersatiles,
 			"openmaptiles" => VectorOpenMapTiles,
-			"shortbread@1.0" => VectorShortbread1,
+			"shortbread@1.0" => VectorShortbread1_0,
 			"other" => VectorOther,
 			_ => bail!(
 				"Invalid tile schema: {value}. Only supported schemas are: {}",
@@ -136,7 +136,7 @@ mod tests {
 			(RasterDEMTerrarium, "dem/terrarium"),
 			(RasterDEMVersatiles, "dem/versatiles"),
 			(VectorOpenMapTiles, "openmaptiles"),
-			(VectorShortbread1, "shortbread@1.0"),
+			(VectorShortbread1_0, "shortbread@1.0"),
 			(VectorOther, "other"),
 			(Unknown, "unknown"),
 		] {
@@ -157,7 +157,7 @@ mod tests {
 			(RasterDEMTerrarium, Raster),
 			(RasterDEMVersatiles, Raster),
 			(VectorOpenMapTiles, Vector),
-			(VectorShortbread1, Vector),
+			(VectorShortbread1_0, Vector),
 			(VectorOther, Vector),
 			(TileContent::Unknown, TileType::Unknown),
 		] {
@@ -176,7 +176,7 @@ mod tests {
 			("dem/terrarium", RasterDEMTerrarium),
 			("dem/versatiles", RasterDEMVersatiles),
 			("openmaptiles", VectorOpenMapTiles),
-			("shortbread@1.0", VectorShortbread1),
+			("shortbread@1.0", VectorShortbread1_0),
 			("other", VectorOther),
 		] {
 			assert_eq!(TileContent::try_from(text).unwrap(), schema);

@@ -156,7 +156,7 @@ impl VectorLayers {
 			"water_polygons_labels",
 			"water_polygons",
 		]) {
-			TileContent::VectorShortbread1
+			TileContent::VectorShortbread1_0
 		} else {
 			TileContent::VectorOther
 		}
@@ -697,7 +697,7 @@ mod tests {
 			);
 		}
 		let vl = VectorLayers(map);
-		assert_eq!(vl.get_tile_schema(), VectorShortbread1);
+		assert_eq!(vl.get_tile_schema(), VectorShortbread1_0);
 	}
 
 	#[test]

@@ -16,8 +16,8 @@ struct Args {
 	fillzoom: Option<u8>,
 	/// Name text.
 	name: Option<String>,
-	/// Schema text.
-	schema: Option<String>,
+	/// Tile Content text.
+	content: Option<String>,
 }
 
 #[derive(Debug)]
@@ -54,8 +54,8 @@ impl Operation {
 			tilejson.set_string("name", &name)?;
 		}
 
-		if let Some(schema) = args.schema {
-			tilejson.tile_content = Some(TileContent::try_from(schema.as_str())?);
+		if let Some(content) = args.content {
+			tilejson.tile_content = Some(TileContent::try_from(content.as_str())?);
 		}
 
 		Ok(Box::new(Self { source, tilejson }) as Box<dyn OperationTrait>)
@@ -106,4 +106,60 @@ impl TransformOperationFactoryTrait for Factory {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+	use super::*;
+	use crate::PipelineFactory;
+
+	fn get_str(o: &TileJSON, k: &str) -> Option<String> {
+		o.as_object().get_string(k).ok().flatten()
+	}
+	fn get_num(o: &TileJSON, k: &str) -> Option<f64> {
+		o.as_object().get_number(k).ok().flatten()
+	}
+
+	#[tokio::test]
+	async fn test_meta_update_sets_fields_and_preserves_others() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op = factory
+            .operation_from_vpl(
+                "from_debug format=mvt \
+                 | filter bbox=[0,0,10,10] level_min=2 level_max=7 \
+                 | meta_update name=\"Test Layer\" description=\"My desc\" attribution=\"CC-BY\" fillzoom=12 content=\"shortbread@1.0\"",
+            )
+            .await?;
+
+		let tj = op.tilejson();
+
+		// Updated keys are present
+		assert_eq!(get_str(tj, "name").as_deref(), Some("Test Layer"));
+		assert_eq!(get_str(tj, "description").as_deref(), Some("My desc"));
+		assert_eq!(get_str(tj, "attribution").as_deref(), Some("CC-BY"));
+		assert_eq!(get_num(tj, "fillzoom"), Some(12.0));
+
+		// Tile Content was parsed into typed field
+		assert_eq!(tj.tile_content, Some(TileContent::try_from("shortbread@1.0")?));
+
+		// Pre-existing zooms from the filter should remain intact
+		assert_eq!(tj.as_object().get_number("minzoom")?.unwrap(), 2.0);
+		assert_eq!(tj.as_object().get_number("maxzoom")?.unwrap(), 7.0);
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn test_meta_update_is_noop_when_no_args() -> Result<()> {
+		let factory = PipelineFactory::new_dummy();
+		let op1 = factory
+			.operation_from_vpl("from_debug format=mvt | filter bbox=[-5,-5,5,5] level_min=1 level_max=4")
+			.await?;
+		let op2 = factory
+			.operation_from_vpl("from_debug format=mvt | filter bbox=[-5,-5,5,5] level_min=1 level_max=4 | meta_update")
+			.await?;
+
+		let t1 = op1.tilejson().clone();
+		let t2 = op2.tilejson().clone();
+
+		// With no args, the operation should not alter TileJSON
+		assert_eq!(t1, t2);
+		Ok(())
+	}
+}
