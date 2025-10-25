@@ -320,33 +320,34 @@ fn get_encoding(headers: HeaderMap) -> TargetCompression {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use axum::http::{HeaderMap, header::ACCEPT_ENCODING};
+	use axum::http::{HeaderMap, HeaderValue, header::ACCEPT_ENCODING};
 	use enumset::{EnumSet, enum_set};
+	use reqwest::Client;
 	use rstest::rstest;
-	use versatiles_container::{MockTilesReader, MockTilesReaderProfile};
-	use versatiles_core::TileCompression::*;
+	use versatiles_container::{MockTilesReader, MockTilesReaderProfile as MTRP};
+	use versatiles_core::{TileBBoxPyramid, TileCompression as TC, TileFormat as TF, TilesReaderParameters};
 
 	const IP: &str = "127.0.0.1";
 
 	#[rstest]
-	#[case("NONE", enum_set!(Uncompressed))]
-	#[case("", enum_set!(Uncompressed))]
-	#[case("*", enum_set!(Uncompressed))]
-	#[case("br", enum_set!(Uncompressed | Brotli))]
-	#[case("br;q=1.0, gzip;q=0.8, *;q=0.1", enum_set!(Uncompressed | Brotli | Gzip))]
-	#[case("compress", enum_set!(Uncompressed))]
-	#[case("compress, gzip", enum_set!(Uncompressed | Gzip))]
-	#[case("compress;q=0.5, gzip;q=1.0", enum_set!(Uncompressed | Gzip))]
-	#[case("deflate", enum_set!(Uncompressed))]
-	#[case("deflate, gzip;q=1.0, *;q=0.5", enum_set!(Uncompressed | Gzip))]
-	#[case("gzip", enum_set!(Uncompressed | Gzip))]
-	#[case("gzip, compress, br", enum_set!(Uncompressed | Brotli | Gzip))]
+	#[case("NONE", enum_set!(TC::Uncompressed))]
+	#[case("", enum_set!(TC::Uncompressed))]
+	#[case("*", enum_set!(TC::Uncompressed))]
+	#[case("br", enum_set!(TC::Uncompressed | TC::Brotli))]
+	#[case("br;q=1.0, gzip;q=0.8, *;q=0.1", enum_set!(TC::Uncompressed | TC::Brotli | TC::Gzip))]
+	#[case("compress", enum_set!(TC::Uncompressed))]
+	#[case("compress, gzip", enum_set!(TC::Uncompressed | TC::Gzip))]
+	#[case("compress;q=0.5, gzip;q=1.0", enum_set!(TC::Uncompressed | TC::Gzip))]
+	#[case("deflate", enum_set!(TC::Uncompressed))]
+	#[case("deflate, gzip;q=1.0, *;q=0.5", enum_set!(TC::Uncompressed | TC::Gzip))]
+	#[case("gzip", enum_set!(TC::Uncompressed | TC::Gzip))]
+	#[case("gzip, compress, br", enum_set!(TC::Uncompressed | TC::Brotli | TC::Gzip))]
 	#[case(
 		"gzip, deflate, br;q=1.0, identity;q=0.5, *;q=0.25",
-		enum_set!(Uncompressed | Brotli | Gzip),
+		enum_set!(TC::Uncompressed | TC::Brotli | TC::Gzip),
 	)]
-	#[case("gzip;q=1.0, identity; q=0.5, *;q=0", enum_set!(Uncompressed | Gzip))]
-	#[case("identity", enum_set!(Uncompressed))]
+	#[case("gzip;q=1.0, identity; q=0.5, *;q=0", enum_set!(TC::Uncompressed | TC::Gzip))]
+	#[case("identity", enum_set!(TC::Uncompressed))]
 	fn test_get_encoding(#[case] encoding: &str, #[case] comp0: EnumSet<TileCompression>) {
 		let mut map = HeaderMap::new();
 		if encoding != "NONE" {
@@ -370,9 +371,7 @@ mod tests {
 
 		let mut server = TileServer::new(IP, 50001, true, true);
 
-		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Pbf)
-			.unwrap()
-			.boxed();
+		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf).unwrap().boxed();
 		server.add_tile_source("cheese", reader).unwrap();
 
 		server.start().await.unwrap();
@@ -394,14 +393,10 @@ mod tests {
 	async fn same_prefix_twice() {
 		let mut server = TileServer::new(IP, 50002, true, true);
 
-		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)
-			.unwrap()
-			.boxed();
+		let reader = MockTilesReader::new_mock_profile(MTRP::Png).unwrap().boxed();
 		server.add_tile_source("cheese", reader).unwrap();
 
-		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Pbf)
-			.unwrap()
-			.boxed();
+		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf).unwrap().boxed();
 		server.add_tile_source("cheese", reader).unwrap();
 	}
 
@@ -425,9 +420,7 @@ mod tests {
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50004);
 
-		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Pbf)
-			.unwrap()
-			.boxed();
+		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf).unwrap().boxed();
 		server.add_tile_source("cheese", reader).unwrap();
 
 		assert_eq!(server.tile_sources.len(), 1);
@@ -440,14 +433,73 @@ mod tests {
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50005);
 
-		let reader = MockTilesReader::new_mock_profile(MockTilesReaderProfile::Pbf)
-			.unwrap()
-			.boxed();
+		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf).unwrap().boxed();
 		server.add_tile_source("cheese", reader).unwrap();
 
 		let mappings: Vec<(String, String)> = server.get_url_mapping().await;
 		assert_eq!(mappings.len(), 1);
 		assert_eq!(mappings[0].0, "/tiles/cheese/");
 		assert_eq!(mappings[0].1, "dummy_name");
+	}
+
+	#[rstest]
+	#[case(50110, TF::MVT, TC::Gzip, "br", "br", "vnd.mapbox-vector-tile")]
+	#[case(50111, TF::MVT, TC::Gzip, "gzip", "gzip", "vnd.mapbox-vector-tile")]
+	#[case(50112, TF::MVT, TC::Brotli, "br", "br", "vnd.mapbox-vector-tile")]
+	#[case(50113, TF::MVT, TC::Brotli, "gzip", "gzip", "vnd.mapbox-vector-tile")]
+	#[case(50114, TF::MVT, TC::Uncompressed, "", "", "vnd.mapbox-vector-tile")]
+	#[case(50115, TF::PNG, TC::Gzip, "br", "", "image/png")]
+	#[case(50116, TF::WEBP, TC::Brotli, "gzip", "", "image/webp")]
+	#[tokio::test]
+	async fn serve_tile_variants(
+		#[case] port: u16,
+		#[case] format: TF,
+		#[case] compression: TileCompression,
+		#[case] accept_encoding: &str,
+		#[case] expect_content_encoding: &str,
+		#[case] expect_mime_contains: &str,
+	) {
+		async fn fetch_raw(url: &str, accept_encoding: &str) -> reqwest::Response {
+			let client = Client::builder()
+				.gzip(false)
+				.brotli(false)
+				.deflate(false)
+				.build()
+				.unwrap();
+			let mut headers = HeaderMap::new();
+			if !accept_encoding.is_empty() {
+				headers.insert("accept-encoding", HeaderValue::from_str(accept_encoding).unwrap());
+			}
+			client.get(url).headers(headers).send().await.expect("http get")
+		}
+
+		let mut server = TileServer::new(IP, port, true, true);
+
+		let parameters = TilesReaderParameters::new(format, compression, TileBBoxPyramid::new_full(8));
+		let reader = MockTilesReader::new_mock(parameters).unwrap().boxed();
+		server.add_tile_source("cheese", reader).unwrap();
+		server.start().await.unwrap();
+
+		let url = format!("http://{IP}:{port}/tiles/cheese/3/3/3");
+		let resp = fetch_raw(&url, accept_encoding).await;
+		assert_eq!(resp.status(), 200);
+
+		let headers = resp.headers();
+		let ct = headers.get(CONTENT_TYPE).unwrap().to_str().unwrap();
+		assert_eq!(
+			ct, expect_mime_contains,
+			"unexpected content-type '{ct}', expected to be '{expect_mime_contains}'"
+		);
+
+		let content_encoding = headers.get(CONTENT_ENCODING).map(|v| v.to_str().unwrap()).unwrap_or("");
+		assert_eq!(
+			content_encoding, expect_content_encoding,
+			"unexpected content-encoding '{content_encoding}', expected to be '{expect_content_encoding}'"
+		);
+
+		let bytes = resp.bytes().await.expect("bytes");
+		assert!(!bytes.is_empty(), "empty body");
+
+		server.stop().await;
 	}
 }

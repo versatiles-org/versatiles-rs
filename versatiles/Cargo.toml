@@ -50,7 +50,7 @@ versatiles_pipeline = { workspace = true }
 [dev-dependencies]
 assert_fs.workspace = true
 lazy_static.workspace = true
-reqwest = { workspace = true, features = ["rustls-tls"] }
+reqwest = { workspace = true, features = ["rustls-tls", "gzip", "brotli", "zstd", "deflate"] }
 rstest.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync"] }
 
