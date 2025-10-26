@@ -322,7 +322,10 @@ mod tests {
 					for c in filename[0..filename.len() - 4].chars() {
 						pyramide.include_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?);
 					}
-					Ok(Box::new(DummyImageSource::new(&filename, Some(pyramide), 4).unwrap()) as Box<dyn TilesReaderTrait>)
+					Ok(
+						Box::new(DummyImageSource::new(&filename, Some(pyramide), 4, None).unwrap())
+							as Box<dyn TilesReaderTrait>,
+					)
 				})
 			},
 		));

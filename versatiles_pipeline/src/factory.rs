@@ -60,7 +60,7 @@ impl PipelineFactory {
 							None,
 						)) as Box<dyn TilesReaderTrait>,
 						"avif" | "png" | "jpg" | "jpeg" | "webp" => {
-							Box::new(DummyImageSource::new(&filename, None, 4).unwrap()) as Box<dyn TilesReaderTrait>
+							Box::new(DummyImageSource::new(&filename, None, 4, None).unwrap()) as Box<dyn TilesReaderTrait>
 						}
 						_ => panic!("unknown file extension '{}'", extension),
 					})

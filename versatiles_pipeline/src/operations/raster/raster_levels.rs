@@ -129,7 +129,7 @@ mod tests {
 		#[case] color_out: &[u8],
 	) -> Result<()> {
 		let op = Operation {
-			source: Box::new(DummyImageSource::new(&format!("{color_in}.png"), None, 4).unwrap()),
+			source: Box::new(DummyImageSource::new(&format!("{color_in}.png"), None, 4, None).unwrap()),
 			brightness,
 			contrast,
 			gamma,

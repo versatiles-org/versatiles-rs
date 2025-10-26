@@ -19,7 +19,12 @@ pub struct DummyImageSource {
 impl DummyImageSource {
 	#[allow(clippy::type_complexity)]
 	#[context("Creating DummyImageSource for {filename}")]
-	pub fn new(filename: &str, pyramid: Option<TileBBoxPyramid>, tile_size: u32) -> Result<Self> {
+	pub fn new(
+		filename: &str,
+		pyramid: Option<TileBBoxPyramid>,
+		tile_size: u32,
+		color: Option<Vec<u8>>,
+	) -> Result<Self> {
 		let parts = filename.split('.').collect::<Vec<_>>();
 		ensure!(parts.len() == 2, "filename must have an extension");
 		ensure!(parts[0].len() <= 4, "filename must be at most 4 characters long");
@@ -32,15 +37,19 @@ impl DummyImageSource {
 			_ => bail!("unknown file extension '{}'", parts[1]),
 		};
 
-		let pixel: Result<Vec<u8>> = parts[0]
-			.iter_elements()
-			.map(|c| {
-				u8::from_str_radix(&c.to_string(), 16)
-					.map(|v| v * 17)
-					.map_err(anyhow::Error::from)
-			})
-			.collect();
-		let pixel = pixel.with_context(|| format!("trying to parse filename '{}' as pixel value", parts[0]))?;
+		let pixel: Vec<u8> = if let Some(color) = color {
+			color
+		} else {
+			parts[0]
+				.iter_elements()
+				.map(|c| {
+					u8::from_str_radix(&c.to_string(), 16)
+						.map(|v| v * 17)
+						.map_err(anyhow::Error::from)
+				})
+				.collect::<Result<Vec<u8>>>()
+				.with_context(|| format!("trying to parse filename '{}' as pixel value", parts[0]))?
+		};
 		let raw = Vec::from_iter(std::iter::repeat_n(pixel, (tile_size * tile_size) as usize).flatten());
 
 		let image = DynamicImage::from_raw(tile_size as usize, tile_size as usize, raw)?;
@@ -122,17 +131,17 @@ mod tests {
 
 	#[test]
 	fn test_dummy_image_source_creation_valid_filename() {
-		assert!(DummyImageSource::new("abcd.png", None, 4).is_ok());
+		assert!(DummyImageSource::new("abcd.png", None, 4, None).is_ok());
 	}
 
 	#[test]
 	fn test_dummy_image_source_creation_invalid_filename_extension() {
-		assert!(DummyImageSource::new("abcd.xyz", None, 4).is_err());
+		assert!(DummyImageSource::new("abcd.xyz", None, 4, None).is_err());
 	}
 
 	#[test]
 	fn test_dummy_image_source_creation_invalid_filename_length() {
-		assert!(DummyImageSource::new("abcdef.png", None, 4).is_err());
+		assert!(DummyImageSource::new("abcdef.png", None, 4, None).is_err());
 	}
 
 	#[tokio::test]
@@ -145,6 +154,7 @@ mod tests {
 				&GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap(),
 			)),
 			4,
+			None,
 		)
 		.unwrap();
 		let tile_data = source.get_tile(&TileCoord::new(8, 0, 255).unwrap()).await.unwrap();
@@ -164,6 +174,7 @@ mod tests {
 				&GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap(),
 			)),
 			4,
+			None,
 		)
 		.unwrap();
 		assert_eq!(
