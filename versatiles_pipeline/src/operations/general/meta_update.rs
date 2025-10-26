@@ -27,11 +27,7 @@ struct Operation {
 }
 
 impl Operation {
-	async fn build(
-		vpl_node: VPLNode,
-		source: Box<dyn OperationTrait>,
-		_factory: &PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>>
+	async fn build(vpl_node: VPLNode, source: Box<dyn OperationTrait>, _factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + OperationTrait,
 	{
@@ -58,7 +54,7 @@ impl Operation {
 			tilejson.tile_content = Some(TileContent::try_from(content.as_str())?);
 		}
 
-		Ok(Box::new(Self { source, tilejson }) as Box<dyn OperationTrait>)
+		Ok(Self { source, tilejson })
 	}
 }
 
@@ -101,7 +97,9 @@ impl TransformOperationFactoryTrait for Factory {
 		source: Box<dyn OperationTrait>,
 		factory: &'a PipelineFactory,
 	) -> Result<Box<dyn OperationTrait>> {
-		Operation::build(vpl_node, source, factory).await
+		Operation::build(vpl_node, source, factory)
+			.await
+			.map(|op| Box::new(op) as Box<dyn OperationTrait>)
 	}
 }
 

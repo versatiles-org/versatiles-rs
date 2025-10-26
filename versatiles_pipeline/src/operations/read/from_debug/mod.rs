@@ -42,7 +42,7 @@ pub struct Operation {
 }
 
 impl Operation {
-	pub fn from_parameters(tile_format: TileFormat) -> Result<Box<dyn OperationTrait>> {
+	pub fn from_parameters(tile_format: TileFormat) -> Result<Self> {
 		let parameters = TilesReaderParameters::new(
 			tile_format,
 			TileCompression::Uncompressed,
@@ -64,9 +64,9 @@ impl Operation {
 
 		tilejson.update_from_reader_parameters(&parameters);
 
-		Ok(Box::new(Self { tilejson, parameters }) as Box<dyn OperationTrait>)
+		Ok(Self { tilejson, parameters })
 	}
-	pub fn from_vpl_node(vpl_node: &VPLNode) -> Result<Box<dyn OperationTrait>> {
+	pub fn from_vpl_node(vpl_node: &VPLNode) -> Result<Self> {
 		let args = Args::from_vpl_node(vpl_node)?;
 		Self::from_parameters(
 			args
@@ -83,7 +83,7 @@ impl ReadOperationTrait for Operation {
 	where
 		Self: Sized + OperationTrait,
 	{
-		Operation::from_vpl_node(&vpl_node)
+		Operation::from_vpl_node(&vpl_node).map(|op| Box::new(op) as Box<dyn OperationTrait>)
 	}
 }
 

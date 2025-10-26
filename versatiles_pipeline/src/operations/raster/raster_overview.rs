@@ -33,11 +33,7 @@ struct Operation {
 }
 
 impl Operation {
-	async fn build(
-		vpl_node: VPLNode,
-		source: Box<dyn OperationTrait>,
-		factory: &PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>>
+	async fn build(vpl_node: VPLNode, source: Box<dyn OperationTrait>, factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + OperationTrait,
 	{
@@ -63,7 +59,7 @@ impl Operation {
 		let cache = Arc::new(Mutex::new(CacheMap::new(factory.config())));
 		let traversal = Traversal::new(TraversalOrder::DepthFirst, BLOCK_TILE_COUNT, BLOCK_TILE_COUNT)?;
 
-		Ok(Box::new(Self {
+		Ok(Self {
 			cache,
 			parameters,
 			source,
@@ -71,7 +67,7 @@ impl Operation {
 			level_base,
 			tile_size,
 			traversal,
-		}) as Box<dyn OperationTrait>)
+		})
 	}
 
 	#[context("Failed to add images to cache from container {container:?}")]
@@ -262,7 +258,9 @@ impl TransformOperationFactoryTrait for Factory {
 		source: Box<dyn OperationTrait>,
 		factory: &'a PipelineFactory,
 	) -> Result<Box<dyn OperationTrait>> {
-		Operation::build(vpl_node, source, factory).await
+		Operation::build(vpl_node, source, factory)
+			.await
+			.map(|op| Box::new(op) as Box<dyn OperationTrait>)
 	}
 }
 

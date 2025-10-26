@@ -26,22 +26,18 @@ struct Operation {
 }
 
 impl Operation {
-	async fn build(
-		vpl_node: VPLNode,
-		source: Box<dyn OperationTrait>,
-		_factory: &PipelineFactory,
-	) -> Result<Box<dyn OperationTrait>>
+	async fn build(vpl_node: VPLNode, source: Box<dyn OperationTrait>, _factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + OperationTrait,
 	{
 		let args = Args::from_vpl_node(&vpl_node)?;
 
-		Ok(Box::new(Self {
+		Ok(Self {
 			brightness: args.brightness.unwrap_or(0.0),
 			contrast: args.contrast.unwrap_or(1.0),
 			gamma: args.gamma.unwrap_or(1.0),
 			source,
-		}) as Box<dyn OperationTrait>)
+		})
 	}
 }
 
@@ -94,7 +90,9 @@ impl TransformOperationFactoryTrait for Factory {
 		source: Box<dyn OperationTrait>,
 		factory: &'a PipelineFactory,
 	) -> Result<Box<dyn OperationTrait>> {
-		Operation::build(vpl_node, source, factory).await
+		Operation::build(vpl_node, source, factory)
+			.await
+			.map(|op| Box::new(op) as Box<dyn OperationTrait>)
 	}
 }
 
