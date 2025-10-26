@@ -104,6 +104,14 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 					format!("- *`{field_str}`: [u8,u8,u8] (optional)*{comment}"),
 					quote! { #field_name: node.get_property_number_array_option::<u8, 3>(#field_str)? },
 				),
+				"Option<TileCompression>" => (
+					format!("- *`{field_str}`: TileCompression (optional)*{comment}"),
+					quote! { #field_name: node.get_property_enum_option::<TileCompression>(#field_str)? },
+				),
+				"Option<TileContent>" => (
+					format!("- *`{field_str}`: TileContent (optional)*{comment}"),
+					quote! { #field_name: node.get_property_enum_option::<TileContent>(#field_str)? },
+				),
 				"Option<TileFormat>" => (
 					format!("- *`{field_str}`: TileFormat (optional)*{comment}"),
 					quote! { #field_name: node.get_property_enum_option::<TileFormat>(#field_str)? },
