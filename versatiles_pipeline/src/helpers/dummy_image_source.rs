@@ -16,7 +16,6 @@ pub struct DummyImageSource {
 }
 
 impl DummyImageSource {
-	#[allow(clippy::type_complexity)]
 	#[context("Creating DummyImageSource, tile_format='{tile_format}', tile_size={tile_size}")]
 	pub fn new(tile_format: TileFormat, color: &[u8], tile_size: u32, pyramid: Option<TileBBoxPyramid>) -> Result<Self> {
 		ensure!(tile_format.is_raster(), "tile_format must be a raster format");
@@ -24,10 +23,16 @@ impl DummyImageSource {
 		ensure!(color.len() <= 4, "color vector length must be between 1 and 4");
 		ensure!(tile_size > 0, "tile_size must be greater than zero");
 
-		let color = color.iter().cloned();
+		let color: Vec<u8> = color.to_vec();
 		let raw = Vec::from_iter(std::iter::repeat_n(color, (tile_size * tile_size) as usize).flatten());
-
 		let image = DynamicImage::from_raw(tile_size as usize, tile_size as usize, raw)?;
+
+		DummyImageSource::from_image(tile_format, image, pyramid)
+	}
+
+	#[context("Creating DummyImageSource from image, tile_format='{tile_format}'")]
+	pub fn from_image(tile_format: TileFormat, image: DynamicImage, pyramid: Option<TileBBoxPyramid>) -> Result<Self> {
+		ensure!(tile_format.is_raster(), "tile_format must be a raster format");
 
 		// Initialize the parameters with the given bounding box or a default one
 		let parameters = TilesReaderParameters::new(
