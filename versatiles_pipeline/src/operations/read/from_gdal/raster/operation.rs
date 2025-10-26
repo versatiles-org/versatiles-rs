@@ -54,26 +54,7 @@ struct Operation {
 }
 
 impl Operation {
-	#[context("Failed to get image data ({width}x{height}) for bbox ({bbox:?}) from GDAL dataset")]
-	async fn get_image_data_from_gdal(
-		&self,
-		bbox: &GeoBBox,
-		width: usize,
-		height: usize,
-	) -> Result<Option<DynamicImage>> {
-		log::debug!("get_image_data_from_gdal: bbox={:?}, size={}x{}", bbox, width, height);
-		let res = self.source.get_image(bbox, width, height).await;
-		match &res {
-			Ok(Some(_)) => log::trace!("get_image_data_from_gdal: image available for bbox={:?}", bbox),
-			Ok(None) => log::trace!("get_image_data_from_gdal: no image for bbox={:?}", bbox),
-			Err(e) => log::trace!("get_image_data_from_gdal error for bbox={:?}: {}", bbox, e),
-		}
-		res
-	}
-}
-
-impl ReadOperationTrait for Operation {
-	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
+	async fn new(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Self>
 	where
 		Self: Sized + OperationTrait,
 	{
@@ -126,12 +107,38 @@ impl ReadOperationTrait for Operation {
 		log::trace!("TileJSON bounds set to {:?}", tilejson.bounds);
 		log::trace!("from_gdal_raster::Operation built successfully");
 
-		Ok(Box::new(Self {
+		Ok(Self {
 			tilejson,
 			parameters,
 			source,
 			tile_size,
-		}) as Box<dyn OperationTrait>)
+		})
+	}
+
+	#[context("Failed to get image data ({width}x{height}) for bbox ({bbox:?}) from GDAL dataset")]
+	async fn get_image_data_from_gdal(
+		&self,
+		bbox: &GeoBBox,
+		width: usize,
+		height: usize,
+	) -> Result<Option<DynamicImage>> {
+		log::debug!("get_image_data_from_gdal: bbox={:?}, size={}x{}", bbox, width, height);
+		let res = self.source.get_image(bbox, width, height).await;
+		match &res {
+			Ok(Some(_)) => log::trace!("get_image_data_from_gdal: image available for bbox={:?}", bbox),
+			Ok(None) => log::trace!("get_image_data_from_gdal: no image for bbox={:?}", bbox),
+			Err(e) => log::trace!("get_image_data_from_gdal error for bbox={:?}: {}", bbox, e),
+		}
+		res
+	}
+}
+
+impl ReadOperationTrait for Operation {
+	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
+	where
+		Self: Sized + OperationTrait,
+	{
+		Ok(Box::new(Self::new(vpl_node, factory).await?) as Box<dyn OperationTrait>)
 	}
 }
 
@@ -228,7 +235,6 @@ impl ReadOperationFactoryTrait for Factory {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use std::path::PathBuf;
 
 	fn assert_same_vec(a: &[u8], b: &[u8]) {
 		assert_eq!(a.len(), b.len());
@@ -244,18 +250,15 @@ mod tests {
 	}
 
 	async fn get_operation(tile_size: u32) -> Operation {
-		Operation {
-			source: RasterSource::new(&PathBuf::from("../testdata/gradient.tif"), 65535, 4)
-				.await
-				.unwrap(),
-			parameters: TilesReaderParameters::new(
-				TileFormat::PNG,
-				TileCompression::Uncompressed,
-				TileBBoxPyramid::new_full(4),
-			),
-			tilejson: TileJSON::default(),
-			tile_size,
-		}
+		Operation::new(
+			VPLNode::from_str(&format!(
+				"from_gdal_raster filename=\"../testdata/gradient.tif\" tile_size=\"{tile_size}\" level_min=\"0\" level_max=\"3\""
+			))
+			.unwrap(),
+			&PipelineFactory::new_dummy(),
+		)
+		.await
+		.unwrap()
 	}
 
 	#[tokio::test(flavor = "multi_thread")]
