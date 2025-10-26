@@ -72,7 +72,8 @@ impl PipelineFactory {
 							} else {
 								vec![50, 150, 250]
 							};
-							Box::new(DummyImageSource::from_color(&color, 4, format, None).unwrap()) as Box<dyn TilesReaderTrait>
+							Box::new(DummyImageSource::from_color(&color, 4, format, None).unwrap())
+								as Box<dyn TilesReaderTrait>
 						}
 						_ => bail!("unsupported tile type for dummy reader in filename '{filename}'"),
 					})

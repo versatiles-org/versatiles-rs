@@ -149,4 +149,82 @@ impl TransformOperationFactoryTrait for Factory {
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+	use super::*;
+	use crate::helpers::dummy_image_source::DummyImageSource;
+	use rstest::rstest;
+	use versatiles_image::DynamicImage;
+
+	fn make_gradient_image(channel_count: usize) -> DynamicImage {
+		let s = 256;
+		match channel_count {
+			1 => DynamicImage::from_fn(s, s, |x, _| [x as u8]),
+			2 => DynamicImage::from_fn(s, s, |x, y| [x as u8, y as u8]),
+			3 => DynamicImage::from_fn(s, s, |x, y| [x as u8, y as u8, 255 - x as u8]),
+			4 => DynamicImage::from_fn(s, s, |x, y| [x as u8, y as u8, 255 - x as u8, 255 - y as u8]),
+			_ => panic!("unsupported channel count {channel_count}"),
+		}
+	}
+
+	async fn get_avg(op: &Operation, coord: (u8, u8, u8), scale: u32) -> Vec<u8> {
+		let (level, x, y) = coord;
+		let coord = TileCoord::new(level, x as u32, y as u32)
+			.unwrap()
+			.as_tile_bbox(1)
+			.unwrap();
+		let mut tiles = op.get_stream(coord).await.unwrap().to_vec().await;
+		assert_eq!(tiles.len(), 1);
+		let mut tile = tiles.pop().unwrap().1;
+		let image = tile.as_image().unwrap();
+		let avg = image.average_color();
+		avg.into_iter()
+			.map(|c| (c as f64 / scale as f64).round() as u8)
+			.collect()
+	}
+
+	async fn build_op(channel_count: usize) -> Result<Operation> {
+		let image = make_gradient_image(channel_count);
+		let source = Box::new(DummyImageSource::from_image(image, TileFormat::PNG, None)?);
+
+		Operation::build(
+			VPLNode::from_str("raster_overscale tile_size=256 level_base=2")?,
+			source,
+			&PipelineFactory::new_dummy(),
+		)
+		.await
+	}
+
+	#[rstest]
+	#[case::l(1,[vec![16], vec![48], vec![16], vec![48]])]
+	#[case::la(2,[vec![16,16], vec![48,16], vec![16,48], vec![48,48]])]
+	#[case::rgb(3,[vec![16,16,48], vec![48,16,16], vec![16,48,48], vec![48,48,16]])]
+	#[case::rgba(4,[vec![16,16,48,48], vec![48,16,16,48], vec![16,48,48,16], vec![48,48,16,16]])]
+	#[tokio::test]
+	async fn overscale_to_z3(#[case] channel_count: usize, #[case] expected: [Vec<u8>; 4]) {
+		let op = build_op(channel_count).await.unwrap();
+
+		let avg_colors = [
+			get_avg(&op, (3, 2, 2), 4).await,
+			get_avg(&op, (3, 3, 2), 4).await,
+			get_avg(&op, (3, 2, 3), 4).await,
+			get_avg(&op, (3, 3, 3), 4).await,
+		];
+
+		assert_eq!(avg_colors, expected);
+	}
+
+	#[tokio::test]
+	async fn overscale_to_z4_rgb() -> Result<()> {
+		let op = build_op(3).await?;
+
+		for x in 0..4 {
+			for y in 0..4 {
+				assert_eq!(
+					get_avg(&op, (4, 4 + x, 4 + y), 32).await,
+					vec![1 + x * 2, 1 + y * 2, 7 - x * 2]
+				);
+			}
+		}
+		Ok(())
+	}
+}
