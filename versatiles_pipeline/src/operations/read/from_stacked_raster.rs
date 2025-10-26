@@ -323,7 +323,7 @@ mod tests {
 						pyramide.include_bbox(&TileBBox::new_full(c.to_digit(10).unwrap() as u8)?);
 					}
 					Ok(
-						Box::new(DummyImageSource::new(TileFormat::PNG, &[0, 0, 0], 4, Some(pyramide)).unwrap())
+						Box::new(DummyImageSource::from_color(&[0, 0, 0], 4, TileFormat::PNG, Some(pyramide)).unwrap())
 							as Box<dyn TilesReaderTrait>,
 					)
 				})
