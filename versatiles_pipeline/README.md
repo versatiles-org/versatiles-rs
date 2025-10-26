@@ -85,7 +85,7 @@ All tile sources must provide raster tiles in the same resolution. The first sou
 ## filter
 Filter tiles by bounding box and/or zoom levels.
 ### Parameters:
-- *`bbox`: [f64,f64,f64,f64] (optional)* - Bounding box: [min long, min lat, max long, max lat].
+- *`bbox`: [f64,f64,f64,f64] (optional)* - Bounding box in WGS84: [min lng, min lat, max lng, max lat].
 - *`level_min`: u8 (optional)* - minimal zoom level
 - *`level_max`: u8 (optional)* - maximal zoom level
 
@@ -96,7 +96,7 @@ Update metadata, see also https://github.com/mapbox/tilejson-spec/tree/master/3.
 - *`description`: String (optional)* - Description text.
 - *`fillzoom`: u8 (optional)* - Fill zoom level.
 - *`name`: String (optional)* - Name text.
-- *`schema`: String (optional)* - Schema text.
+- *`content`: TileContent (optional)* - tile_content, allowed values: "rgb", "rgba", "dem/mapbox", "dem/terrarium", "dem/versatiles", "openmaptiles", "shortbread@1.0", "other", "unknown"
 
 ## raster_flatten
 Flattens (translucent) raster tiles onto a background
@@ -113,9 +113,9 @@ Filter tiles by bounding box and/or zoom levels.
 ## raster_levels
 Adjust brightness, contrast and gamma of raster tiles.
 ### Parameters:
-- *`brightness`: f32 (optional)* - Brightness adjustment. Defaults to 0.0 (no change).
-- *`contrast`: f32 (optional)* - Contrast adjustment. Defaults to 1.0 (no change).
-- *`gamma`: f32 (optional)* - Gamma adjustment. Defaults to 1.0 (no change).
+- *`brightness`: f32 (optional)* - Brightness adjustment, between -255 and 255. Defaults to 0.0 (no change).
+- *`contrast`: f32 (optional)* - Contrast adjustment, between 0 and infinity. Defaults to 1.0 (no change).
+- *`gamma`: f32 (optional)* - Gamma adjustment, between 0 and infinity. Defaults to 1.0 (no change).
 
 ## raster_overscale
 Filter tiles by bounding box and/or zoom levels.
@@ -139,7 +139,7 @@ Filters vector tile layers based on a comma-separated list of layer names.
 ## vector_filter_properties
 Filters properties based on a regular expressions.
 ### Parameters:
-- **`regex`: String (required)** - A regular expression pattern that should match property names to be removed from all features. The property names contain the layer name as a prefix, e.g., `layer_name/property_name`, so an expression like `^layer_name/` will match all properties of that layer or `/name_.*$/` will match all properties starting with `name_` in all layers.
+- **`regex`: String (required)** - A regular expression pattern that should match property names to be removed from all features. The property names contain the layer name as a prefix, e.g., `layer_name/property_name`, so an expression like `regex="^layer_name/"` will match all properties of that layer or `regex="/name_.*$"` will match all properties starting with `name_` in all layers.
 - *`invert`: bool (optional)* - If set, inverts the filter logic (i.e., keeps only properties matching the filter).
 
 ## vector_update_properties

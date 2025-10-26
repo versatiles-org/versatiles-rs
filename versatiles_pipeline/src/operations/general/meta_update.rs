@@ -16,8 +16,8 @@ struct Args {
 	fillzoom: Option<u8>,
 	/// Name text.
 	name: Option<String>,
-	/// Tile Content text.
-	content: Option<String>,
+	/// tile_content, allowed values: "rgb", "rgba", "dem/mapbox", "dem/terrarium", "dem/versatiles", "openmaptiles", "shortbread@1.0", "other", "unknown"
+	content: Option<TileContent>,
 }
 
 #[derive(Debug)]
