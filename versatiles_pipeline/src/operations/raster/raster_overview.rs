@@ -269,31 +269,21 @@ mod tests {
 	use super::*;
 	use crate::helpers::dummy_image_source::DummyImageSource;
 	use imageproc::image::GenericImageView;
-	use versatiles_container::WriterConfig;
 
-	fn make_operation(tile_size: u32, level_base: u8) -> Operation {
-		let parameters = TilesReaderParameters::new(
-			TileFormat::PNG,
-			TileCompression::Uncompressed,
-			TileBBoxPyramid::new_full(level_base),
-		);
-
+	async fn make_operation(tile_size: u32, level_base: u8) -> Operation {
 		let pyramid = TileBBoxPyramid::from_geo_bbox(
 			level_base,
 			level_base,
 			&GeoBBox::new(2.224, 48.815, 2.47, 48.903).unwrap(),
 		);
-		Operation {
-			parameters,
-			source: Box::new(
-				DummyImageSource::from_color(&[255, 0, 0], tile_size, TileFormat::PNG, Some(pyramid)).unwrap(),
-			),
-			tilejson: TileJSON::default(),
-			level_base,
-			tile_size,
-			traversal: Traversal::new_any_size(1, 1).unwrap(),
-			cache: Arc::new(Mutex::new(CacheMap::new(&WriterConfig::default()))),
-		}
+
+		return Operation::build(
+			VPLNode::from_str(&format!("raster_overview level={level_base} tile_size={tile_size}")).unwrap(),
+			Box::new(DummyImageSource::from_color(&[255, 0, 0], tile_size, TileFormat::PNG, Some(pyramid)).unwrap()),
+			&PipelineFactory::new_dummy(),
+		)
+		.await
+		.unwrap();
 	}
 
 	fn solid_rgba(size: u32, r: u8, g: u8, b: u8, a: u8) -> DynamicImage {
@@ -309,7 +299,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn add_images_to_cache_inserts_half_tiles_under_floored_key() -> Result<()> {
-		let op = make_operation(2, 6); // tiny tiles to keep work light
+		let op = make_operation(2, 6).await;
 		let bbox = TileBBox::from_min_and_max(6, 0, 0, 31, 31)?; // 32x32 block at base level
 		let mut container = TileBBoxMap::new_default(bbox);
 		// Populate with simple solid tiles (only a tiny subset to keep it cheap)
@@ -331,11 +321,9 @@ mod tests {
 		// Stored entries are (coord, Option<img>) with half-size images (1x1 at tile_size=2)
 		assert!(!stored.is_empty());
 
-		for (coord, img_opt) in &stored {
+		for (coord, img_opt) in stored {
 			assert_eq!(coord.level, 6);
-			assert!(img_opt.is_some());
-			assert_eq!(img_opt.as_ref().unwrap().width(), 1);
-			assert_eq!(img_opt.as_ref().unwrap().height(), 1);
+			assert_eq!(img_opt.unwrap().dimensions(), (1, 1));
 		}
 
 		Ok(())
@@ -343,7 +331,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn build_images_from_cache_composes_quadrants() -> Result<()> {
-		let op = make_operation(2, 6);
+		let op = make_operation(2, 6).await;
 
 		// Prepare cache content by adding a full 32x32 block at level 6
 		let bbox_lvl6 = TileBBox::from_min_and_size(6, 0, 0, 32, 32)?;
@@ -363,12 +351,10 @@ mod tests {
 		// We expect at least one composed tile present (others may be missing if cache quadrants absent)
 		assert!(!items.is_empty());
 
-		for (coord, img_opt) in &items {
+		for (coord, img_opt) in items {
 			assert_eq!(coord.level, 5);
-			assert!(img_opt.is_some());
-			let img = img_opt.as_ref().unwrap();
-			assert_eq!(img.width(), 2);
-			assert_eq!(img.height(), 2);
+			let img = img_opt.unwrap();
+			assert_eq!(img.dimensions(), (2, 2));
 			// Check pixel colors to verify correct quadrant composition
 			let r0 = coord.x as u8 * 2;
 			let g0 = coord.y as u8 * 2;
