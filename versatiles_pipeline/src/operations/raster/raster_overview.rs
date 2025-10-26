@@ -287,7 +287,7 @@ mod tests {
 		);
 		Operation {
 			parameters,
-			source: Box::new(DummyImageSource::new("F00.png", Some(pyramid), tile_size, None).unwrap()),
+			source: Box::new(DummyImageSource::new(TileFormat::PNG, &[255, 0, 0], tile_size, Some(pyramid)).unwrap()),
 			tilejson: TileJSON::default(),
 			level_base,
 			tile_size,

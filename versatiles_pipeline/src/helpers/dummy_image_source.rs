@@ -1,8 +1,7 @@
 use crate::OperationTrait;
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
-use nom::Input;
 use versatiles_container::{Tile, TilesReaderTrait};
 use versatiles_core::*;
 use versatiles_derive::context;
@@ -18,39 +17,15 @@ pub struct DummyImageSource {
 
 impl DummyImageSource {
 	#[allow(clippy::type_complexity)]
-	#[context("Creating DummyImageSource for {filename}")]
-	pub fn new(
-		filename: &str,
-		pyramid: Option<TileBBoxPyramid>,
-		tile_size: u32,
-		color: Option<Vec<u8>>,
-	) -> Result<Self> {
-		let parts = filename.split('.').collect::<Vec<_>>();
-		ensure!(parts.len() == 2, "filename must have an extension");
-		ensure!(parts[0].len() <= 4, "filename must be at most 4 characters long");
+	#[context("Creating DummyImageSource, tile_format='{tile_format}', tile_size={tile_size}")]
+	pub fn new(tile_format: TileFormat, color: &[u8], tile_size: u32, pyramid: Option<TileBBoxPyramid>) -> Result<Self> {
+		ensure!(tile_format.is_raster(), "tile_format must be a raster format");
+		ensure!(!color.is_empty(), "color vector must not be empty");
+		ensure!(color.len() <= 4, "color vector length must be between 1 and 4");
+		ensure!(tile_size > 0, "tile_size must be greater than zero");
 
-		let tile_format = match parts[1] {
-			"avif" => TileFormat::AVIF,
-			"png" => TileFormat::PNG,
-			"jpg" | "jpeg" => TileFormat::JPG,
-			"webp" => TileFormat::WEBP,
-			_ => bail!("unknown file extension '{}'", parts[1]),
-		};
-
-		let pixel: Vec<u8> = if let Some(color) = color {
-			color
-		} else {
-			parts[0]
-				.iter_elements()
-				.map(|c| {
-					u8::from_str_radix(&c.to_string(), 16)
-						.map(|v| v * 17)
-						.map_err(anyhow::Error::from)
-				})
-				.collect::<Result<Vec<u8>>>()
-				.with_context(|| format!("trying to parse filename '{}' as pixel value", parts[0]))?
-		};
-		let raw = Vec::from_iter(std::iter::repeat_n(pixel, (tile_size * tile_size) as usize).flatten());
+		let color = color.iter().cloned();
+		let raw = Vec::from_iter(std::iter::repeat_n(color, (tile_size * tile_size) as usize).flatten());
 
 		let image = DynamicImage::from_raw(tile_size as usize, tile_size as usize, raw)?;
 
@@ -127,34 +102,35 @@ impl OperationTrait for DummyImageSource {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use versatiles_core::GeoBBox;
+	use versatiles_core::{GeoBBox, TileFormat::*};
 
 	#[test]
-	fn test_dummy_image_source_creation_valid_filename() {
-		assert!(DummyImageSource::new("abcd.png", None, 4, None).is_ok());
+	fn test_dummy_image_source_creation_valid() {
+		assert!(DummyImageSource::new(PNG, &[0, 100, 200], 4, None).is_ok());
 	}
 
 	#[test]
-	fn test_dummy_image_source_creation_invalid_filename_extension() {
-		assert!(DummyImageSource::new("abcd.xyz", None, 4, None).is_err());
+	fn test_dummy_image_source_creation_invalid_format() {
+		assert!(DummyImageSource::new(SVG, &[0, 100, 200], 4, None).is_err());
 	}
 
 	#[test]
-	fn test_dummy_image_source_creation_invalid_filename_length() {
-		assert!(DummyImageSource::new("abcdef.png", None, 4, None).is_err());
+	fn test_dummy_image_source_creation_invalid_color() {
+		assert!(DummyImageSource::new(PNG, &[], 4, None).is_err());
+		assert!(DummyImageSource::new(PNG, &[1, 2, 3, 4, 5], 4, None).is_err());
 	}
 
 	#[tokio::test]
 	async fn test_dummy_image_source_get_tile() {
 		let source = DummyImageSource::new(
-			"abcd.png",
+			PNG,
+			&[0, 100, 200],
+			4,
 			Some(TileBBoxPyramid::from_geo_bbox(
 				0,
 				8,
 				&GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap(),
 			)),
-			4,
-			None,
 		)
 		.unwrap();
 		let tile_data = source.get_tile(&TileCoord::new(8, 0, 255).unwrap()).await.unwrap();
@@ -167,14 +143,14 @@ mod tests {
 	#[tokio::test]
 	async fn test_dummy_image_source_tilejson() {
 		let source = DummyImageSource::new(
-			"abcd.png",
+			PNG,
+			&[0, 100, 200],
+			4,
 			Some(TileBBoxPyramid::from_geo_bbox(
 				3,
 				15,
 				&GeoBBox::new(-180.0, -90.0, 0.0, 0.0).unwrap(),
 			)),
-			4,
-			None,
 		)
 		.unwrap();
 		assert_eq!(

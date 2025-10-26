@@ -4,14 +4,16 @@ use crate::{
 	traits::{OperationTrait, ReadOperationFactoryTrait, TransformOperationFactoryTrait},
 	vpl::{VPLNode, VPLPipeline, parse_vpl},
 };
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, bail};
 use futures::future::BoxFuture;
 use itertools::Itertools;
 use std::{
 	collections::HashMap,
 	path::{Path, PathBuf},
+	vec,
 };
 use versatiles_container::{TilesReaderTrait, WriterConfig};
+use versatiles_core::{TileFormat, TileType};
 
 type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesReaderTrait>>>>;
 
@@ -51,18 +53,28 @@ impl PipelineFactory {
 	pub fn new_dummy() -> Self {
 		PipelineFactory::new_dummy_reader(Box::new(
 			|filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
-				Box::pin(async {
-					let filename = filename;
-					let extension = filename.split('.').next_back().unwrap().to_string();
-					Ok(match extension.as_str() {
-						"pbf" | "mvt" => Box::new(DummyVectorSource::new(
+				Box::pin(async move {
+					let mut name = filename.clone();
+					let format = TileFormat::from_filename(&mut name)
+						.ok_or_else(|| anyhow!("cannot determine tile format from filename '{filename}'"))?;
+
+					Ok(match format.to_type() {
+						TileType::Vector => Box::new(DummyVectorSource::new(
 							&[("dummy", &[&[("filename", &filename)]])],
 							None,
 						)) as Box<dyn TilesReaderTrait>,
-						"avif" | "png" | "jpg" | "jpeg" | "webp" => {
-							Box::new(DummyImageSource::new(&filename, None, 4, None).unwrap()) as Box<dyn TilesReaderTrait>
+						TileType::Raster => {
+							let color = if !name.is_empty() && name.len() <= 4 {
+								name
+									.chars()
+									.filter_map(|c| c.to_digit(16).map(|d| (d * 17) as u8))
+									.collect()
+							} else {
+								vec![50, 150, 250]
+							};
+							Box::new(DummyImageSource::new(format, &color, 4, None).unwrap()) as Box<dyn TilesReaderTrait>
 						}
-						_ => panic!("unknown file extension '{}'", extension),
+						_ => bail!("unsupported tile type for dummy reader in filename '{filename}'"),
 					})
 				})
 			},

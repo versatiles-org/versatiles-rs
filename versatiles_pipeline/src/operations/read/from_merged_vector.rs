@@ -290,7 +290,7 @@ mod tests {
 					"A.pbf" => "🟦",
 					"B.pbf" => "🟨",
 					"A.pbf,B.pbf" => "🟩",
-					e => panic!("{}", e),
+					e => panic!("Unexpected tile: {}", e),
 				}
 			}),
 			vec![

@@ -297,6 +297,14 @@ impl TileFormat {
 			BIN | GEOJSON | JSON | SVG | TOPOJSON => Unknown,
 		}
 	}
+
+	pub fn is_raster(&self) -> bool {
+		self.to_type() == TileType::Raster
+	}
+
+	pub fn is_vector(&self) -> bool {
+		self.to_type() == TileType::Vector
+	}
 }
 
 impl TryFrom<u8> for TileFormat {

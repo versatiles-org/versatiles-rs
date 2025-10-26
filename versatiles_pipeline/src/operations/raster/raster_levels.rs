@@ -105,31 +105,31 @@ mod tests {
 	use rstest::rstest;
 
 	#[rstest]
-	#[case::no_change("6", 0.0, 1.0, 1.0, &[102])]
-	#[case::no_change("67", 0.0, 1.0, 1.0, &[102, 119])]
-	#[case::no_change("678", 0.0, 1.0, 1.0, &[102, 119, 136])]
-	#[case::no_change("6789", 0.0, 1.0, 1.0, &[102, 119, 136, 153])]
-	#[case::alpha_does_not_change("6", 20.0, 1.1, 0.9, &[129])]
-	#[case::alpha_does_not_change("67", 20.0, 1.1, 0.9, &[129, 119])]
-	#[case::alpha_does_not_change("678", 20.0, 1.1, 0.9, &[129, 147, 165])]
-	#[case::alpha_does_not_change("6789", 20.0, 1.1, 0.9, &[129, 147, 165, 153])]
-	#[case::medium("37A", 0.0, 1.0, 1.0, &[51, 119, 170])]
-	#[case::brightness_dec("37A", -100.0, 1.0, 1.0, &[0, 19, 70])]
-	#[case::brightness_inc("37A", 100.0, 1.0, 1.0, &[151, 219, 255])]
-	#[case::contrast_dec("37A", 0.0, 0.5, 1.0, &[89, 123, 149])]
-	#[case::contrast_inc("37A", 0.0, 2.0, 1.0, &[0, 111, 213])]
-	#[case::gamma_dec("37A", 0.0, 1.0, 0.5, &[114, 174, 208])]
-	#[case::gamma_inc("37A", 0.0, 1.0, 2.0, &[10, 56, 113])]
+	#[case::no_change(&[102], 0.0, 1.0, 1.0, &[102])]
+	#[case::no_change(&[102,119], 0.0, 1.0, 1.0, &[102,119])]
+	#[case::no_change(&[102,119,136], 0.0, 1.0, 1.0, &[102,119,136])]
+	#[case::no_change(&[102,119,136,153], 0.0, 1.0, 1.0, &[102,119,136,153])]
+	#[case::alpha_does_not_change(&[102], 20.0, 1.1, 0.9, &[129])]
+	#[case::alpha_does_not_change(&[102,119], 20.0, 1.1, 0.9, &[129,119])]
+	#[case::alpha_does_not_change(&[102,119,136], 20.0, 1.1, 0.9, &[129,147,165])]
+	#[case::alpha_does_not_change(&[102,119,136,153], 20.0, 1.1, 0.9, &[129,147,165,153])]
+	#[case::medium(&[51,119,170], 0.0, 1.0, 1.0, &[51,119,170])]
+	#[case::brightness_dec(&[51,119,170], -100.0, 1.0, 1.0, &[0,19,70])]
+	#[case::brightness_inc(&[51,119,170], 100.0, 1.0, 1.0, &[151,219,255])]
+	#[case::contrast_dec(&[51,119,170], 0.0, 0.5, 1.0, &[89,123,149])]
+	#[case::contrast_inc(&[51,119,170], 0.0, 2.0, 1.0, &[0,111,213])]
+	#[case::gamma_dec(&[51,119,170], 0.0, 1.0, 0.5, &[114,174,208])]
+	#[case::gamma_inc(&[51,119,170], 0.0, 1.0, 2.0, &[10,56,113])]
 	#[tokio::test]
 	async fn color_change_test(
-		#[case] color_in: &str,
+		#[case] color_in: &[u8],
 		#[case] brightness: f32,
 		#[case] contrast: f32,
 		#[case] gamma: f32,
 		#[case] color_out: &[u8],
 	) -> Result<()> {
 		let op = Operation {
-			source: Box::new(DummyImageSource::new(&format!("{color_in}.png"), None, 4, None).unwrap()),
+			source: Box::new(DummyImageSource::new(TileFormat::PNG, color_in, 4, None).unwrap()),
 			brightness,
 			contrast,
 			gamma,
