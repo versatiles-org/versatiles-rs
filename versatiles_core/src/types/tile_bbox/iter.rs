@@ -14,11 +14,16 @@ impl TileBBox {
 	///
 	/// An iterator yielding `TileCoord` instances.
 	pub fn iter_coords(&self) -> impl Iterator<Item = TileCoord> + '_ {
-		let y_range = self.y_min()..=self.y_max();
-		let x_range = self.x_min()..=self.x_max();
-		y_range
-			.cartesian_product(x_range)
-			.map(|(y, x)| TileCoord::new(self.level, x, y).unwrap())
+		if self.is_empty() {
+			return Box::new(std::iter::empty()) as Box<dyn Iterator<Item = TileCoord>>;
+		}
+		let y_range = self.y_min().unwrap()..=self.y_max().unwrap();
+		let x_range = self.x_min().unwrap()..=self.x_max().unwrap();
+		Box::new(
+			y_range
+				.cartesian_product(x_range)
+				.map(|(y, x)| TileCoord::new(self.level, x, y).unwrap()),
+		) as Box<dyn Iterator<Item = TileCoord>>
 	}
 
 	/// Consumes the bounding box and returns an iterator over all tile coordinates within it.
@@ -28,13 +33,18 @@ impl TileBBox {
 	/// # Returns
 	///
 	/// An iterator yielding `TileCoord` instances.
-	pub fn into_iter_coords(self) -> impl Iterator<Item = TileCoord> {
-		let y_range = self.y_min()..=self.y_max();
-		let x_range = self.x_min()..=self.x_max();
+	pub fn into_iter_coords(self) -> Box<dyn Iterator<Item = TileCoord> + Send> {
+		if self.is_empty() {
+			return Box::new(std::iter::empty());
+		}
+		let y_range = self.y_min().unwrap()..=self.y_max().unwrap();
+		let x_range = self.x_min().unwrap()..=self.x_max().unwrap();
 		let level = self.level;
-		y_range
-			.cartesian_product(x_range)
-			.map(move |(y, x)| TileCoord::new(level, x, y).unwrap())
+		Box::new(
+			y_range
+				.cartesian_product(x_range)
+				.map(move |(y, x)| TileCoord::new(level, x, y).unwrap()),
+		)
 	}
 
 	/// Splits the bounding box into a grid of smaller bounding boxes of a specified size.
@@ -141,8 +151,8 @@ mod tests {
 		let mut cols = HashMap::new();
 		let mut rows = HashMap::new();
 		for coord in bb.iter_bbox_grid(size) {
-			cols.entry(coord.x_min()).and_modify(|c| *c += 1).or_insert(1);
-			rows.entry(coord.y_min()).and_modify(|c| *c += 1).or_insert(1);
+			cols.entry(coord.x_min()?).and_modify(|c| *c += 1).or_insert(1);
+			rows.entry(coord.y_min()?).and_modify(|c| *c += 1).or_insert(1);
 			assert!(bb.try_contains_bbox(&coord)?);
 			assert!(coord.width() <= size);
 			assert!(coord.height() <= size);
@@ -162,13 +172,13 @@ mod tests {
 		let mut it = bb.iter_bbox_grid(2);
 		let first = it.next().unwrap();
 		assert_eq!(
-			(first.x_min(), first.y_min(), first.x_max(), first.y_max()),
+			(first.x_min()?, first.y_min()?, first.x_max()?, first.y_max()?),
 			(100, 200, 101, 201)
 		);
 		// Exhaust and check last
 		let last = it.last().unwrap();
 		assert_eq!(
-			(last.x_min(), last.y_min(), last.x_max(), last.y_max()),
+			(last.x_min()?, last.y_min()?, last.x_max()?, last.y_max()?),
 			(104, 202, 104, 203)
 		);
 		Ok(())

@@ -268,7 +268,7 @@ mod tests {
 		assert_eq!(params.tile_compression, TileCompression::Uncompressed);
 
 		// Stream should still yield exactly one tile and the tile should be WEBP now
-		let bbox = TileCoord::new(3, 2, 2)?.as_tile_bbox(1)?;
+		let bbox = TileCoord::new(3, 2, 2)?.as_tile_bbox();
 		let mut items = op.get_stream(bbox).await?.to_vec().await;
 		assert_eq!(items.len(), 1, "expected exactly one tile at z=3, x=2, y=2");
 		let (_coord, tile) = items.remove(0);

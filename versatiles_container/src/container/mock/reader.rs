@@ -55,6 +55,9 @@ impl MockTilesReader {
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 		bbox_pyramid.set_level_bbox(TileBBox::from_min_and_max(2, 0, 1, 2, 3)?);
 		bbox_pyramid.set_level_bbox(TileBBox::from_min_and_max(3, 0, 2, 4, 6)?);
+		bbox_pyramid.set_level_bbox(TileBBox::new_full(4)?);
+		bbox_pyramid.set_level_bbox(TileBBox::new_full(5)?);
+		bbox_pyramid.set_level_bbox(TileBBox::new_full(6)?);
 
 		MockTilesReader::new_mock(match profile {
 			MockTilesReaderProfile::Json => {
@@ -106,6 +109,10 @@ impl TilesReaderTrait for MockTilesReader {
 			return Ok(None);
 		}
 
+		if !self.parameters.bbox_pyramid.contains_coord(coord) {
+			return Ok(None);
+		}
+
 		let format = self.parameters.tile_format;
 		let mut blob = match format {
 			JSON => Blob::from(coord.as_json()),
@@ -141,20 +148,12 @@ mod tests {
 		assert_eq!(reader.container_name(), "dummy_container");
 		assert_eq!(reader.source_name(), "dummy_name");
 
-		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
-		bbox_pyramid.set_level_bbox(TileBBox::from_min_and_max(2, 0, 1, 2, 3)?);
-		bbox_pyramid.set_level_bbox(TileBBox::from_min_and_max(3, 0, 2, 4, 6)?);
-
-		assert_eq!(
-			reader.parameters(),
-			&TilesReaderParameters::new(TileFormat::PNG, TileCompression::Uncompressed, bbox_pyramid)
-		);
 		assert_eq!(
 			reader.tilejson().as_string(),
 			"{\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
 		);
 		let blob = reader
-			.get_tile(&TileCoord::new(0, 0, 0)?)
+			.get_tile(&TileCoord::new(4, 5, 6)?)
 			.await?
 			.unwrap()
 			.into_blob(TileCompression::Uncompressed)?

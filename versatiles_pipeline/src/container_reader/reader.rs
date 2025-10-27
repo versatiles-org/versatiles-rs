@@ -115,7 +115,7 @@ impl TilesReaderTrait for PipelineReader {
 
 	/// Get tile data for the given coordinate, always compressed and formatted.
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
-		let mut vec = self.operation.get_stream(coord.as_tile_bbox(1)?).await?.to_vec().await;
+		let mut vec = self.operation.get_stream(coord.as_tile_bbox()).await?.to_vec().await;
 
 		ensure!(vec.len() <= 1, "PipelineReader should return at most one tile");
 

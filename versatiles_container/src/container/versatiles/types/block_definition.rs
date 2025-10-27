@@ -32,15 +32,15 @@ impl BlockDefinition {
 		ensure!(bbox.width() <= 256, "bbox width must be <= 256");
 		ensure!(bbox.height() <= 256, "bbox height must be <= 256");
 
-		let x_min = bbox.x_min().div(256);
-		let y_min = bbox.y_min().div(256);
+		let x_min = bbox.x_min()?.div(256);
+		let y_min = bbox.y_min()?.div(256);
 		let level = bbox.level;
 		let global_bbox: TileBBox = *bbox;
 
 		let tiles_coverage = TileBBox::from_min_and_size(
 			level.min(8),
-			bbox.x_min() - x_min * 256,
-			bbox.y_min() - y_min * 256,
+			bbox.x_min()? - x_min * 256,
+			bbox.y_min()? - y_min * 256,
 			bbox.width(),
 			bbox.height(),
 		)?;
@@ -138,10 +138,10 @@ impl BlockDefinition {
 		writer.write_u32(self.offset.x)?;
 		writer.write_u32(self.offset.y)?;
 
-		writer.write_u8(self.tiles_coverage.x_min() as u8)?;
-		writer.write_u8(self.tiles_coverage.y_min() as u8)?;
-		writer.write_u8(self.tiles_coverage.x_max() as u8)?;
-		writer.write_u8(self.tiles_coverage.y_max() as u8)?;
+		writer.write_u8(self.tiles_coverage.x_min()? as u8)?;
+		writer.write_u8(self.tiles_coverage.y_min()? as u8)?;
+		writer.write_u8(self.tiles_coverage.x_max()? as u8)?;
+		writer.write_u8(self.tiles_coverage.y_max()? as u8)?;
 
 		ensure!(
 			self.tiles_range.offset + self.tiles_range.length == self.index_range.offset,
@@ -212,10 +212,10 @@ impl BlockDefinition {
 		format!(
 			"[{},[{},{}],[{},{}]]",
 			self.offset.level,
-			self.tiles_coverage.x_min() + x_offset,
-			self.tiles_coverage.y_min() + y_offset,
-			self.tiles_coverage.x_max() + x_offset,
-			self.tiles_coverage.y_max() + y_offset
+			self.tiles_coverage.x_min().unwrap() + x_offset,
+			self.tiles_coverage.y_min().unwrap() + y_offset,
+			self.tiles_coverage.x_max().unwrap() + x_offset,
+			self.tiles_coverage.y_max().unwrap() + y_offset
 		)
 	}
 }

@@ -12,8 +12,8 @@ pub fn arrange_tiles<T: ToString>(tiles: Vec<(TileCoord, Tile)>, cb: impl Fn(Til
 		.collect();
 
 	for (coord, item) in tiles.into_iter() {
-		let x = (coord.x - bbox.x_min()) as usize;
-		let y = (coord.y - bbox.y_min()) as usize;
+		let x = (coord.x - bbox.x_min().unwrap()) as usize;
+		let y = (coord.y - bbox.y_min().unwrap()) as usize;
 		result[y][x] = cb(item).to_string();
 	}
 	result.into_iter().map(|r| r.join(" ")).collect::<Vec<String>>()

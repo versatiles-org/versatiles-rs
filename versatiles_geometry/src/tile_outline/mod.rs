@@ -31,7 +31,9 @@ impl TileOutline {
 	}
 
 	pub fn add_tile_bbox(&mut self, bbox: TileBBox) {
-		self.add_geo_bbox(&bbox.to_geo_bbox());
+		if let Some(bbox) = bbox.to_geo_bbox() {
+			self.add_geo_bbox(&bbox);
+		}
 	}
 
 	pub fn add_coord(&mut self, coord: TileCoord) {
@@ -79,7 +81,7 @@ mod tests {
 		// Add once via coord
 		outline.add_coord(coord);
 		// Add again via its TileBBox (same area)
-		let bbox = coord.as_tile_bbox(1).unwrap();
+		let bbox = coord.as_tile_bbox();
 		outline.add_tile_bbox(bbox);
 		let mp = outline.to_multi_polygon();
 		assert_eq!(

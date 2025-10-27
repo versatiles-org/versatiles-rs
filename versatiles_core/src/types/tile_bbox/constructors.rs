@@ -24,8 +24,11 @@
 //! Create a 3×2 bbox at z=4 starting at (5,6):
 //! ```
 //! # use versatiles_core::TileBBox;
-//! let bb = TileBBox::from_min_and_size(4, 5, 6, 3, 2).unwrap();
-//! assert_eq!((bb.x_min(), bb.y_min(), bb.x_max(), bb.y_max()), (5, 6, 7, 7));
+//! let bb = TileBBox::from_min_and_size(4, 5, 6, 3, 1).unwrap();
+//! assert_eq!(bb.x_min().unwrap(), 5);
+//! assert_eq!(bb.y_min().unwrap(), 6);
+//! assert_eq!(bb.x_max().unwrap(), 7);
+//! assert_eq!(bb.y_max().unwrap(), 6);
 //! ```
 //! Create the full extent at z=2 and check its size:
 //! ```
@@ -83,7 +86,10 @@ impl TileBBox {
 	/// ```
 	/// # use versatiles_core::TileBBox;
 	/// let bb = TileBBox::from_min_and_size(2, 1, 1, 2, 2).unwrap();
-	/// assert_eq!((bb.x_min(), bb.y_min(), bb.x_max(), bb.y_max()), (1,1,2,2));
+	/// assert_eq!(bb.x_min().unwrap(), 1);
+	/// assert_eq!(bb.y_min().unwrap(), 1);
+	/// assert_eq!(bb.x_max().unwrap(), 2);
+	/// assert_eq!(bb.y_max().unwrap(), 2);
 	/// ```
 	#[context("Failed to create TileBBox from min ({x_min}, {y_min}) and size ({width}, {height}) at level {level}")]
 	pub fn from_min_and_size(level: u8, x_min: u32, y_min: u32, width: u32, height: u32) -> Result<TileBBox> {
@@ -174,8 +180,11 @@ impl TileBBox {
 	/// # Example
 	/// ```
 	/// # use versatiles_core::TileBBox;
-	/// let bb = TileBBox::new_full(1).unwrap();
-	/// assert_eq!((bb.x_min(), bb.y_min(), bb.x_max(), bb.y_max()), (0,0,1,1));
+	/// let bb = TileBBox::new_full(4).unwrap();
+	/// assert_eq!(bb.x_min().unwrap(), 0);
+	/// assert_eq!(bb.y_min().unwrap(), 0);
+	/// assert_eq!(bb.x_max().unwrap(), 15);
+	/// assert_eq!(bb.y_max().unwrap(), 15);
 	/// ```
 	#[context("Failed to create full TileBBox at level {level}")]
 	pub fn new_full(level: u8) -> Result<TileBBox> {
@@ -256,53 +265,140 @@ impl TileBBox {
 		Self::from_min_and_max(level, p_min.x, p_min.y, p_max.x, p_max.y)
 	}
 
+	/// Returns whether the bounding box is empty.
+	///
+	/// A `TileBBox` is empty if its width or height is zero.
+	/// Empty bounding boxes are often used as placeholders or as neutral elements
+	/// in merge/intersect operations.
+	///
+	/// # Example
+	/// ```
+	/// # use versatiles_core::TileBBox;
+	/// let empty = TileBBox::new_empty(5).unwrap();
+	/// assert!(empty.is_empty());
+	/// ```
+	#[must_use]
+	pub fn is_empty(&self) -> bool {
+		self.width == 0 || self.height == 0
+	}
+
+	/// Returns the total number of tiles covered by this bbox.
+	///
+	/// The count is computed as `width × height`.
+	/// Returns `0` if the bbox is empty.
+	///
+	/// # Example
+	/// ```
+	/// # use versatiles_core::TileBBox;
+	/// let bb = TileBBox::from_min_and_max(4, 5, 6, 7, 9).unwrap();
+	/// assert_eq!(bb.count_tiles(), 12);
+	/// ```
+	#[must_use]
+	pub fn count_tiles(&self) -> u64 {
+		u64::from(self.width) * u64::from(self.height)
+	}
+
+	/// Determines if the bounding box covers the entire range of tiles at its zoom level.
+	///
+	/// # Returns
+	///
+	/// * `true` if the bounding box is full.
+	/// * `false` otherwise.
+	///
+	/// # Note
+	///
+	/// This method is primarily used for testing purposes.
+	#[cfg(test)]
+	#[must_use]
+	pub fn is_full(&self) -> bool {
+		let max = self.max_count();
+		self.width == max && self.height == max && self.x_min == 0 && self.y_min == 0
+	}
+
+	/// Returns the maximum tile count along one axis at this zoom level.
+	/// Equivalent to `2^level`.
+	///
+	/// # Example
+	/// ```
+	/// # use versatiles_core::TileBBox;
+	/// assert_eq!(TileBBox::new_empty(5).unwrap().max_count(), 32);
+	/// ```
+	#[must_use]
+	pub fn max_count(&self) -> u32 {
+		1u32 << self.level
+	}
+
+	/// Returns the maximum valid tile coordinate index at this zoom level.
+	/// Equivalent to `2^level - 1`.
+	#[must_use]
+	pub fn max_coord(&self) -> u32 {
+		(1u32 << self.level) - 1
+	}
+
 	/// Calculates the width (in tiles) of the bounding box.
 	#[must_use]
 	#[inline]
 	pub fn width(&self) -> u32 {
-		self.width
+		if self.is_empty() { 0 } else { self.width }
 	}
 
 	/// Calculates the height (in tiles) of the bounding box.
 	#[must_use]
 	#[inline]
 	pub fn height(&self) -> u32 {
-		self.height
+		if self.is_empty() { 0 } else { self.height }
+	}
+
+	#[must_use]
+	pub fn dimensions(&self) -> (u32, u32) {
+		(self.width, self.height)
 	}
 
 	/// Minimum x‑tile (column) coordinate.
-	#[must_use]
 	#[inline]
-	pub fn x_min(&self) -> u32 {
-		self.x_min
+	pub fn x_min(&self) -> Result<u32> {
+		ensure!(!self.is_empty(), "Cannot get x_min of an empty TileBBox");
+		Ok(self.x_min)
 	}
 
 	/// Minimum y‑tile (row) coordinate.
-	#[must_use]
 	#[inline]
-	pub fn y_min(&self) -> u32 {
-		self.y_min
+	pub fn y_min(&self) -> Result<u32> {
+		ensure!(!self.is_empty(), "Cannot get y_min of an empty TileBBox");
+		Ok(self.y_min)
 	}
 
 	/// Clamp to the level’s maximum if the requested width would exceed bounds.
-	pub fn set_width(&mut self, width: u32) {
-		self.width = width.min(self.max_count() - self.x_min);
+	pub fn set_width(&mut self, width: u32) -> Result<()> {
+		ensure!(!self.is_empty(), "Cannot set width of an empty TileBBox");
+		self.width = width.min(self.max_count().saturating_sub(self.x_min));
+		Ok(())
 	}
 
 	/// Clamp to the level’s maximum if the requested height would exceed bounds.
-	pub fn set_height(&mut self, height: u32) {
-		self.height = height.min(self.max_count() - self.y_min);
+	pub fn set_height(&mut self, height: u32) -> Result<()> {
+		ensure!(!self.is_empty(), "Cannot set height of an empty TileBBox");
+		self.height = height.min(self.max_count().saturating_sub(self.y_min));
+		Ok(())
+	}
+
+	pub fn set_size(&mut self, width: u32, height: u32) -> Result<()> {
+		ensure!(!self.is_empty(), "Cannot set size of an empty TileBBox");
+		self.set_width(width)?;
+		self.set_height(height)?;
+		Ok(())
 	}
 
 	/// Sets the minimum x-coordinate, while keeping the maximum x-coordinate consistent.
 	#[context("Failed to set x_min to {x_min}")]
 	pub fn set_x_min(&mut self, x_min: u32) -> Result<()> {
+		ensure!(!self.is_empty(), "Cannot set x_min of an empty TileBBox");
 		ensure!(
 			x_min < self.max_count(),
 			"x_min ({x_min}) must be < max ({})",
 			self.max_count()
 		);
-		let x_max = self.x_max();
+		let x_max = self.x_max()?;
 		self.x_min = x_min;
 		self.set_x_max(x_max)
 	}
@@ -310,38 +406,40 @@ impl TileBBox {
 	/// Sets the minimum y-coordinate, while keeping the maximum y-coordinate consistent.
 	#[context("Failed to set y_min to {y_min}")]
 	pub fn set_y_min(&mut self, y_min: u32) -> Result<()> {
+		ensure!(!self.is_empty(), "Cannot set y_min of an empty TileBBox");
 		ensure!(
 			y_min < self.max_count(),
 			"y_min ({y_min}) must be < max ({})",
 			self.max_count()
 		);
-		let y_max = self.y_max();
+		let y_max = self.y_max()?;
 		self.y_min = y_min;
 		self.set_y_max(y_max)
 	}
 
 	/// Returns the maximum x-coordinate of the bounding box.
-	#[must_use]
-	pub fn x_max(&self) -> u32 {
-		(self.x_min + self.width).saturating_sub(1)
+	pub fn x_max(&self) -> Result<u32> {
+		ensure!(!self.is_empty(), "Cannot get x_max of an empty TileBBox");
+		Ok((self.x_min + self.width).saturating_sub(1))
 	}
 
 	/// Returns the maximum y-coordinate of the bounding box.
-	#[must_use]
-	pub fn y_max(&self) -> u32 {
-		(self.y_min + self.height).saturating_sub(1)
+	pub fn y_max(&self) -> Result<u32> {
+		ensure!(!self.is_empty(), "Cannot get y_max of an empty TileBBox");
+		Ok((self.y_min + self.height).saturating_sub(1))
 	}
 
 	/// Sets the maximum x-coordinate, while keeping the minimum x-coordinate consistent.
 	#[context("Failed to set x_max to {x_max}")]
 	pub fn set_x_max(&mut self, x_max: u32) -> Result<()> {
+		ensure!(!self.is_empty(), "Cannot set x_max of an empty TileBBox");
 		ensure!(
 			x_max < self.max_count(),
 			"x_max ({x_max}) must be < max ({})",
 			self.max_count()
 		);
 		if x_max >= self.x_min {
-			self.width = x_max - self.x_min + 1;
+			self.width = (x_max + 1).saturating_sub(self.x_min);
 		} else {
 			self.width = 0;
 		}
@@ -351,13 +449,14 @@ impl TileBBox {
 	/// Sets the maximum y-coordinate, while keeping the minimum y-coordinate consistent.
 	#[context("Failed to set y_max to {y_max}")]
 	pub fn set_y_max(&mut self, y_max: u32) -> Result<()> {
+		ensure!(!self.is_empty(), "Cannot set y_max of an empty TileBBox");
 		ensure!(
 			y_max < self.max_count(),
 			"y_max ({y_max}) must be < max ({})",
 			self.max_count()
 		);
 		if y_max >= self.y_min {
-			self.height = y_max - self.y_min + 1;
+			self.height = (y_max + 1).saturating_sub(self.y_min);
 		} else {
 			self.height = 0;
 		}
@@ -490,12 +589,12 @@ mod tests {
 		let (lvl, x0, y0, w, h) = args;
 		let bb = TileBBox::from_min_and_size(lvl, x0, y0, w, h)?;
 		assert_eq!(bb.level, lvl);
-		assert_eq!(bb.x_min(), x0);
-		assert_eq!(bb.y_min(), y0);
+		assert_eq!(bb.x_min()?, x0);
+		assert_eq!(bb.y_min()?, y0);
 		assert_eq!(bb.width(), w);
 		assert_eq!(bb.height(), h);
-		assert_eq!(bb.x_max(), x0 + w - 1);
-		assert_eq!(bb.y_max(), y0 + h - 1);
+		assert_eq!(bb.x_max()?, x0 + w - 1);
+		assert_eq!(bb.y_max()?, y0 + h - 1);
 		Ok(())
 	}
 
@@ -520,10 +619,10 @@ mod tests {
 		let (lvl, x0, y0, x1, y1) = args;
 		let bb = TileBBox::from_min_and_max(lvl, x0, y0, x1, y1)?;
 		assert_eq!(bb.level, lvl);
-		assert_eq!(bb.x_min(), x0);
-		assert_eq!(bb.y_min(), y0);
-		assert_eq!(bb.x_max(), x1);
-		assert_eq!(bb.y_max(), y1);
+		assert_eq!(bb.x_min()?, x0);
+		assert_eq!(bb.y_min()?, y0);
+		assert_eq!(bb.x_max()?, x1);
+		assert_eq!(bb.y_max()?, y1);
 		assert_eq!(bb.width(), x1 - x0 + 1);
 		assert_eq!(bb.height(), y1 - y0 + 1);
 		Ok(())
@@ -550,10 +649,10 @@ mod tests {
 	fn new_full_covers_all(#[case] lvl: u8) -> Result<()> {
 		let bb = TileBBox::new_full(lvl)?;
 		let max = (1u32 << lvl) - 1;
-		assert_eq!(bb.x_min(), 0);
-		assert_eq!(bb.y_min(), 0);
-		assert_eq!(bb.x_max(), max);
-		assert_eq!(bb.y_max(), max);
+		assert_eq!(bb.x_min()?, 0);
+		assert_eq!(bb.y_min()?, 0);
+		assert_eq!(bb.x_max()?, max);
+		assert_eq!(bb.y_max()?, max);
 		assert_eq!(bb.width(), max + 1);
 		assert_eq!(bb.height(), max + 1);
 		Ok(())
@@ -581,12 +680,12 @@ mod tests {
 		assert_eq!(bb.height(), 2);
 
 		// Expanding width/height should clamp at image bounds
-		bb.set_width(10);
-		bb.set_height(10);
-		assert_eq!(bb.x_min(), 6);
-		assert_eq!(bb.y_min(), 6);
-		assert_eq!(bb.x_max(), 7);
-		assert_eq!(bb.y_max(), 7);
+		bb.set_width(10)?;
+		bb.set_height(10)?;
+		assert_eq!(bb.x_min()?, 6);
+		assert_eq!(bb.y_min()?, 6);
+		assert_eq!(bb.x_max()?, 7);
+		assert_eq!(bb.y_max()?, 7);
 		assert_eq!(bb.width(), 2);
 		assert_eq!(bb.height(), 2);
 		Ok(())
@@ -602,19 +701,18 @@ mod tests {
 		// Move min forward, keep previous max
 		bb.set_x_min(4)?;
 		bb.set_y_min(4)?;
-		assert_eq!(bb.x_min(), 4);
-		assert_eq!(bb.y_min(), 4);
-		assert_eq!(bb.x_max(), 5);
-		assert_eq!(bb.y_max(), 5);
+		assert_eq!(bb.x_min()?, 4);
+		assert_eq!(bb.y_min()?, 4);
+		assert_eq!(bb.x_max()?, 5);
+		assert_eq!(bb.y_max()?, 5);
 		assert_eq!(bb.width(), 2);
 		assert_eq!(bb.height(), 2);
 
 		// Shrink to empty by setting max < min
 		bb.set_x_max(3)?; // x_max < x_min → empty in x dimension
-		assert_eq!(bb.width(), 0);
-		bb.set_y_max(3)?; // y_max < y_min → empty in y dimension
-		assert_eq!(bb.height(), 0);
 		assert!(bb.is_empty());
+		assert_eq!(bb.width(), 0);
+		assert_eq!(bb.height(), 0);
 		Ok(())
 	}
 
@@ -645,8 +743,8 @@ mod tests {
 
 		// swap xy
 		bb.swap_xy();
-		assert_eq!(bb.x_min(), 2);
-		assert_eq!(bb.y_min(), 1);
+		assert_eq!(bb.x_min()?, 2);
+		assert_eq!(bb.y_min()?, 1);
 		assert_eq!(bb.width(), 4);
 		assert_eq!(bb.height(), 3);
 
@@ -659,24 +757,24 @@ mod tests {
 		// set_full
 		bb.set_full();
 		let max = (1u32 << lvl) - 1;
-		assert_eq!(bb.x_min(), 0);
-		assert_eq!(bb.y_min(), 0);
-		assert_eq!(bb.x_max(), max);
-		assert_eq!(bb.y_max(), max);
+		assert_eq!(bb.x_min()?, 0);
+		assert_eq!(bb.y_min()?, 0);
+		assert_eq!(bb.x_max()?, max);
+		assert_eq!(bb.y_max()?, max);
 
 		// set_min_and_size
 		bb.set_min_and_size(1, 1, 2, 2)?;
-		assert_eq!(bb.x_min(), 1);
-		assert_eq!(bb.y_min(), 1);
+		assert_eq!(bb.x_min()?, 1);
+		assert_eq!(bb.y_min()?, 1);
 		assert_eq!(bb.width(), 2);
 		assert_eq!(bb.height(), 2);
 
 		// set_min_and_max
 		bb.set_min_and_max(2, 2, 3, 3)?;
-		assert_eq!(bb.x_min(), 2);
-		assert_eq!(bb.y_min(), 2);
-		assert_eq!(bb.x_max(), 3);
-		assert_eq!(bb.y_max(), 3);
+		assert_eq!(bb.x_min()?, 2);
+		assert_eq!(bb.y_min()?, 2);
+		assert_eq!(bb.x_max()?, 3);
+		assert_eq!(bb.y_max()?, 3);
 		assert_eq!(bb.width(), 2);
 		assert_eq!(bb.height(), 2);
 		Ok(())

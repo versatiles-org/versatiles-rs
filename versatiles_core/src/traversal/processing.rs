@@ -205,7 +205,7 @@ fn verify_steps(
 			ensure!(scaled.width() == 1);
 			ensure!(scaled.height() == 1);
 
-			let key = (scaled.level, scaled.x_min(), scaled.y_min());
+			let key = (scaled.level, scaled.x_min()?, scaled.y_min()?);
 			ensure!(!lookup.contains_key(&key), "Duplicate read of bbox {bbox:?}");
 			lookup.insert(key, false);
 		}
@@ -221,7 +221,7 @@ fn verify_steps(
 			ensure!(scaled.width() == 1);
 			ensure!(scaled.height() == 1);
 
-			let key = (scaled.level, scaled.x_min(), scaled.y_min());
+			let key = (scaled.level, scaled.x_min()?, scaled.y_min()?);
 			ensure!(lookup.contains_key(&key), "Missing read of bbox {bbox:?}");
 			ensure!(!lookup.get(&key).unwrap(), "Duplicate (2) read of bbox {bbox:?}");
 			lookup.insert(key, true);
@@ -290,8 +290,8 @@ mod tests {
 					format!(
 						"[{}: {},{} {}x{}]",
 						bbox.level,
-						bbox.x_min(),
-						bbox.y_min(),
+						bbox.x_min().unwrap(),
+						bbox.y_min().unwrap(),
 						bbox.width(),
 						bbox.height()
 					)

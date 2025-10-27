@@ -99,7 +99,7 @@ impl OperationTrait for Operation {
 		let format = self.source.parameters().tile_format;
 
 		Ok(stream_base.flat_map_parallel(move |coord_base, tile_src| {
-			let mut bbox = coord_base.as_tile_bbox(1)?.at_level(level_dst);
+			let mut bbox = coord_base.as_tile_bbox().at_level(level_dst);
 			bbox.intersect_with(&bbox_dst)?;
 
 			let image_src = tile_src.into_image()?;
@@ -166,10 +166,7 @@ mod tests {
 
 	async fn get_avg(op: &Operation, coord: (u8, u8, u8), scale: u32) -> Vec<u8> {
 		let (level, x, y) = coord;
-		let coord = TileCoord::new(level, x as u32, y as u32)
-			.unwrap()
-			.as_tile_bbox(1)
-			.unwrap();
+		let coord = TileCoord::new(level, x as u32, y as u32).unwrap().as_tile_bbox();
 		let mut tiles = op.get_stream(coord).await.unwrap().to_vec().await;
 		assert_eq!(tiles.len(), 1);
 		let mut tile = tiles.pop().unwrap().1;

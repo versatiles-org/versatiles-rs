@@ -353,10 +353,10 @@ impl TilesReaderTrait for MBTilesReader {
 		let vec: Vec<(TileCoord, Tile)> = stmt
 			.query_map(
 				[
-					bbox.x_min(),
-					bbox.x_max(),
-					bbox.y_min(),
-					bbox.y_max(),
+					bbox.x_min()?,
+					bbox.x_max()?,
+					bbox.y_min()?,
+					bbox.y_max()?,
 					bbox.level as u32,
 				],
 				move |row| {

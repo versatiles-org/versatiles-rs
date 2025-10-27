@@ -18,69 +18,6 @@ impl TileBBox {
 	// Basic Queries
 	// -------------------------------------------------------------------------
 
-	/// Returns whether the bounding box is empty.
-	///
-	/// A `TileBBox` is empty if its width or height is zero.
-	/// Empty bounding boxes are often used as placeholders or as neutral elements
-	/// in merge/intersect operations.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::TileBBox;
-	/// let empty = TileBBox::new_empty(5).unwrap();
-	/// assert!(empty.is_empty());
-	/// ```
-	#[must_use]
-	pub fn is_empty(&self) -> bool {
-		self.width() == 0 || self.height() == 0
-	}
-
-	/// Returns the total number of tiles covered by this bbox.
-	///
-	/// The count is computed as `width × height`.
-	/// Returns `0` if the bbox is empty.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::TileBBox;
-	/// let bb = TileBBox::from_min_and_max(4, 5, 6, 7, 9).unwrap();
-	/// assert_eq!(bb.count_tiles(), 12);
-	/// ```
-	#[must_use]
-	pub fn count_tiles(&self) -> u64 {
-		u64::from(self.width()) * u64::from(self.height())
-	}
-
-	/// Determines if the bounding box covers the entire range of tiles at its zoom level.
-	///
-	/// # Returns
-	///
-	/// * `true` if the bounding box is full.
-	/// * `false` otherwise.
-	///
-	/// # Note
-	///
-	/// This method is primarily used for testing purposes.
-	#[cfg(test)]
-	#[must_use]
-	pub fn is_full(&self) -> bool {
-		let max = self.max_count();
-		self.x_min() == 0 && self.y_min() == 0 && self.width() == max && self.height() == max
-	}
-
-	/// Returns the maximum tile count along one axis at this zoom level.
-	/// Equivalent to `2^level`.
-	///
-	/// # Example
-	/// ```
-	/// # use versatiles_core::TileBBox;
-	/// assert_eq!(TileBBox::new_empty(5).unwrap().max_count(), 32);
-	/// ```
-	#[must_use]
-	pub fn max_count(&self) -> u32 {
-		1u32 << self.level
-	}
-
 	/// Checks if the bounding box contains a specific tile coordinate (`TileCoord`) at the same zoom level.
 	///
 	/// # Arguments
@@ -93,11 +30,14 @@ impl TileBBox {
 	/// * `false` otherwise.
 	#[must_use]
 	pub fn contains(&self, coord: &TileCoord) -> bool {
+		if self.is_empty() {
+			return false;
+		}
 		coord.level == self.level
-			&& coord.x >= self.x_min()
-			&& coord.x <= self.x_max()
-			&& coord.y >= self.y_min()
-			&& coord.y <= self.y_max()
+			&& coord.x >= self.x_min().unwrap()
+			&& coord.x <= self.x_max().unwrap()
+			&& coord.y >= self.y_min().unwrap()
+			&& coord.y <= self.y_max().unwrap()
 	}
 
 	/// Returns whether this bbox completely contains another bbox at the same level.
@@ -124,10 +64,10 @@ impl TileBBox {
 			return Ok(false);
 		}
 
-		Ok(self.x_min() <= bbox.x_min()
-			&& self.x_max() >= bbox.x_max()
-			&& self.y_min() <= bbox.y_min()
-			&& self.y_max() >= bbox.y_max())
+		Ok(self.x_min().unwrap() <= bbox.x_min().unwrap()
+			&& self.x_max().unwrap() >= bbox.x_max().unwrap()
+			&& self.y_min().unwrap() <= bbox.y_min().unwrap()
+			&& self.y_max().unwrap() >= bbox.y_max().unwrap())
 	}
 
 	// -------------------------------------------------------------------------
@@ -159,25 +99,20 @@ impl TileBBox {
 			return Ok(false);
 		}
 
-		Ok(self.x_min() <= bbox.x_max()
-			&& self.x_max() >= bbox.x_min()
-			&& self.y_min() <= bbox.y_max()
-			&& self.y_max() >= bbox.y_min())
+		Ok(self.x_min().unwrap() <= bbox.x_max().unwrap()
+			&& self.x_max().unwrap() >= bbox.x_min().unwrap()
+			&& self.y_min().unwrap() <= bbox.y_max().unwrap()
+			&& self.y_max().unwrap() >= bbox.y_min().unwrap())
 	}
 
-	#[must_use]
-	pub fn min_corner(&self) -> TileCoord {
-		TileCoord::new(self.level, self.x_min(), self.y_min()).unwrap()
+	pub fn min_corner(&self) -> Result<TileCoord> {
+		ensure!(!self.is_empty(), "cannot get min corner of an empty TileBBox");
+		TileCoord::new(self.level, self.x_min()?, self.y_min()?)
 	}
 
-	#[must_use]
-	pub fn max_corner(&self) -> TileCoord {
-		TileCoord::new(self.level, self.x_max(), self.y_max()).unwrap()
-	}
-
-	#[must_use]
-	pub fn dimensions(&self) -> (u32, u32) {
-		(self.width(), self.height())
+	pub fn max_corner(&self) -> Result<TileCoord> {
+		ensure!(!self.is_empty(), "cannot get max corner of an empty TileBBox");
+		TileCoord::new(self.level, self.x_max()?, self.y_max()?)
 	}
 
 	/// Returns one of the four quadrants of this bbox.
@@ -195,7 +130,7 @@ impl TileBBox {
 	/// # use versatiles_core::TileBBox;
 	/// let bb = TileBBox::from_min_and_max(4, 8, 12, 11, 15).unwrap();
 	/// let q0 = bb.get_quadrant(0).unwrap();
-	/// assert_eq!(q0.as_array(), [8, 12, 9, 13]);
+	/// assert_eq!(q0.as_array().unwrap(), [8, 12, 9, 13]);
 	/// ```
 	#[context("getting quadrant {quadrant} of TileBBox {self:?}")]
 	pub fn get_quadrant(&self, quadrant: u8) -> Result<TileBBox> {
@@ -214,8 +149,8 @@ impl TileBBox {
 			"cannot get quadrant of a TileBBox with odd height"
 		);
 
-		let x = self.x_min();
-		let y = self.y_min();
+		let x = self.x_min()?;
+		let y = self.y_min()?;
 		let w = self.width() / 2;
 		let h = self.height() / 2;
 
@@ -243,13 +178,14 @@ impl TileBBox {
 	/// assert_eq!(bb.index_of(&coord).unwrap(), 4);
 	/// ```
 	pub fn index_of(&self, coord: &TileCoord) -> Result<u64> {
+		ensure!(!self.is_empty(), "cannot get index in an empty TileBBox");
 		ensure!(
 			self.contains(coord),
 			"Coordinate {coord:?} is not within the bounding box {self:?}",
 		);
 
-		let x = u64::from(coord.x - self.x_min());
-		let y = u64::from(coord.y - self.y_min());
+		let x = u64::from(coord.x - self.x_min()?);
+		let y = u64::from(coord.y - self.y_min()?);
 		let index = y * u64::from(self.width()) + x;
 
 		Ok(index)
@@ -266,25 +202,13 @@ impl TileBBox {
 	/// assert_eq!(bb.coord_at_index(0).unwrap(), TileCoord::new(4, 5, 6).unwrap());
 	/// ```
 	pub fn coord_at_index(&self, index: u64) -> Result<TileCoord> {
+		ensure!(!self.is_empty(), "cannot get coord from an empty TileBBox");
 		ensure!(index < self.count_tiles(), "index {index} out of bounds");
 
 		let width = u64::from(self.width());
-		let x = index.rem(width) as u32 + self.x_min();
-		let y = index.div(width) as u32 + self.y_min();
+		let x = index.rem(width) as u32 + self.x_min()?;
+		let y = index.div(width) as u32 + self.y_min()?;
 		TileCoord::new(self.level, x, y)
-	}
-
-	/// Returns the maximum valid tile coordinate index at this zoom level.
-	/// Equivalent to `2^level - 1`.
-	#[must_use]
-	pub fn max_coord(&self) -> u32 {
-		(1u32 << self.level) - 1
-	}
-
-	/// Returns the bbox as an array `[x_min, y_min, x_max, y_max]`.
-	/// Useful for serialization or equality checks.
-	pub fn as_array(&self) -> [u32; 4] {
-		[self.x_min(), self.y_min(), self.x_max(), self.y_max()]
 	}
 }
 
@@ -365,8 +289,8 @@ mod tests {
 	#[test]
 	fn corners_and_dimensions() -> Result<()> {
 		let b = bb(4, 5, 6, 7, 9); // 3x4
-		assert_eq!(b.min_corner(), tc(4, 5, 6));
-		assert_eq!(b.max_corner(), tc(4, 7, 9));
+		assert_eq!(b.min_corner()?, tc(4, 5, 6));
+		assert_eq!(b.max_corner()?, tc(4, 7, 9));
 		assert_eq!(b.dimensions(), (3, 4));
 		Ok(())
 	}
@@ -380,10 +304,10 @@ mod tests {
 		let q1 = b.get_quadrant(1)?; // top-right
 		let q2 = b.get_quadrant(2)?; // bottom-left
 		let q3 = b.get_quadrant(3)?; // bottom-right
-		assert_eq!(q0.as_array(), [8, 12, 9, 13]);
-		assert_eq!(q1.as_array(), [10, 12, 11, 13]);
-		assert_eq!(q2.as_array(), [8, 14, 9, 15]);
-		assert_eq!(q3.as_array(), [10, 14, 11, 15]);
+		assert_eq!(q0.as_array()?, [8, 12, 9, 13]);
+		assert_eq!(q1.as_array()?, [10, 12, 11, 13]);
+		assert_eq!(q2.as_array()?, [8, 14, 9, 15]);
+		assert_eq!(q3.as_array()?, [10, 14, 11, 15]);
 		Ok(())
 	}
 
@@ -444,7 +368,7 @@ mod tests {
 	#[test]
 	fn as_array_matches_minmax() -> Result<()> {
 		let b = bb(6, 10, 20, 30, 40);
-		assert_eq!(b.as_array(), [10, 20, 30, 40]);
+		assert_eq!(b.as_array()?, [10, 20, 30, 40]);
 		Ok(())
 	}
 }

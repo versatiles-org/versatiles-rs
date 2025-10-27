@@ -162,7 +162,7 @@ mod tests {
 			))
 			.await?;
 
-		let bbox = TileCoord::new(3, 2, 1)?.as_tile_bbox(1)?;
+		let bbox = TileCoord::new(3, 2, 1)?.as_tile_bbox();
 		let adj = op.get_stream(bbox).await?.next().await.unwrap().1.into_image()?;
 		assert_eq!(adj.average_color(), expected_color);
 		Ok(())

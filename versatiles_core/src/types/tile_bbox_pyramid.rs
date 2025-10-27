@@ -294,7 +294,7 @@ impl TileBBoxPyramid {
 	#[must_use]
 	pub fn get_geo_bbox(&self) -> Option<GeoBBox> {
 		let max_zoom = self.get_level_max()?;
-		Some(self.get_level_bbox(max_zoom).to_geo_bbox())
+		self.get_level_bbox(max_zoom).to_geo_bbox()
 	}
 
 	/// Calculates a geographic center based on the bounding box at a middle zoom level.
@@ -381,6 +381,7 @@ where
 mod tests {
 	use super::*;
 	use anyhow::Result;
+	use rstest::rstest;
 
 	#[test]
 	fn test_empty_pyramid() {
@@ -643,17 +644,19 @@ mod tests {
 		assert!(p1.get_level_bbox(3).is_empty());
 	}
 
-	#[test]
-	fn test_contains_coord() {
+	#[rstest]
+	#[case(0, 0, 0, false)]
+	#[case(10, 100, 199, false)]
+	#[case(10, 100, 200, true)]
+	#[case(10, 300, 400, true)]
+	#[case(10, 300, 401, false)]
+	#[case(10, 301, 400, false)]
+	#[case(10, 99, 200, false)]
+	#[case(11, 300, 400, false)]
+	fn test_contains_coord(#[case] level: u8, #[case] x: u32, #[case] y: u32, #[case] expected: bool) {
 		let mut p = TileBBoxPyramid::new_empty();
 		p.include_bbox(&TileBBox::from_min_and_max(10, 100, 200, 300, 400).unwrap());
-		assert!(!p.contains_coord(&TileCoord::new(10, 99, 200).unwrap()));
-		assert!(!p.contains_coord(&TileCoord::new(10, 100, 199).unwrap()));
-		assert!(p.contains_coord(&TileCoord::new(10, 100, 200).unwrap()));
-		assert!(p.contains_coord(&TileCoord::new(10, 300, 400).unwrap()));
-		assert!(!p.contains_coord(&TileCoord::new(10, 301, 400).unwrap()));
-		assert!(!p.contains_coord(&TileCoord::new(10, 300, 401).unwrap()));
-		assert!(!p.contains_coord(&TileCoord::new(11, 300, 400).unwrap()));
+		assert_eq!(p.contains_coord(&TileCoord::new(level, x, y).unwrap()), expected);
 	}
 
 	#[test]

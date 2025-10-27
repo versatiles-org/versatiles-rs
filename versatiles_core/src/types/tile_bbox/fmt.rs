@@ -21,10 +21,10 @@ impl fmt::Debug for TileBBox {
 			f,
 			"{}: [{},{},{},{}] ({}x{})",
 			self.level,
-			self.x_min(),
-			self.y_min(),
-			self.x_max(),
-			self.y_max(),
+			self.x_min().map_or(String::from("?"), |v| v.to_string()),
+			self.y_min().map_or(String::from("?"), |v| v.to_string()),
+			self.x_max().map_or(String::from("?"), |v| v.to_string()),
+			self.y_max().map_or(String::from("?"), |v| v.to_string()),
 			self.width(),
 			self.height()
 		)
@@ -51,10 +51,10 @@ impl fmt::Display for TileBBox {
 			f,
 			"{}:[{},{},{},{}]",
 			self.level,
-			self.x_min(),
-			self.y_min(),
-			self.x_max(),
-			self.y_max()
+			self.x_min().map_or(String::from("?"), |v| v.to_string()),
+			self.y_min().map_or(String::from("?"), |v| v.to_string()),
+			self.x_max().map_or(String::from("?"), |v| v.to_string()),
+			self.y_max().map_or(String::from("?"), |v| v.to_string())
 		)
 	}
 }

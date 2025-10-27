@@ -29,7 +29,7 @@ impl TileBBox {
 	/// # use versatiles_core::TileBBox;
 	/// let mut bb = TileBBox::new_empty(4).unwrap();
 	/// bb.include(3, 5);
-	/// assert_eq!(bb.as_array(), [3,5,3,5]);
+	/// assert_eq!(bb.as_array().unwrap(), [3,5,3,5]);
 	/// ```
 	pub fn include(&mut self, x: u32, y: u32) {
 		assert!(x < self.max_count(), "x ({x}) must be < max ({})", self.max_count());
@@ -39,14 +39,14 @@ impl TileBBox {
 			self.set_min_and_size(x, y, 1, 1).unwrap();
 		} else {
 			// Expand bounding box to include the new coordinate
-			if x < self.x_min() {
+			if x < self.x_min().unwrap() {
 				self.set_x_min(x).unwrap();
-			} else if x > self.x_max() {
+			} else if x > self.x_max().unwrap() {
 				self.set_x_max(x).unwrap();
 			}
-			if y < self.y_min() {
+			if y < self.y_min().unwrap() {
 				self.set_y_min(y).unwrap();
-			} else if y > self.y_max() {
+			} else if y > self.y_max().unwrap() {
 				self.set_y_max(y).unwrap();
 			}
 		}
@@ -71,7 +71,7 @@ impl TileBBox {
 	/// # use versatiles_core::{TileBBox, TileCoord};
 	/// let mut bb = TileBBox::new_empty(5).unwrap();
 	/// bb.include_coord(&TileCoord::new(5, 7, 9).unwrap()).unwrap();
-	/// assert_eq!(bb.as_array(), [7,9,7,9]);
+	/// assert_eq!(bb.as_array().unwrap(), [7,9,7,9]);
 	/// ```
 	#[context("Failed to include TileCoord {coord:?} into TileBBox {self:?}")]
 	pub fn include_coord(&mut self, coord: &TileCoord) -> Result<()> {
@@ -97,17 +97,17 @@ impl TileBBox {
 	/// # use versatiles_core::TileBBox;
 	/// let mut bb = TileBBox::from_min_and_max(3, 2, 2, 3, 3).unwrap();
 	/// bb.expand_by(1, 1, 2, 2);
-	/// assert_eq!(bb.as_array(), [1,1,5,5]);
+	/// assert_eq!(bb.as_array().unwrap(), [1,1,5,5]);
 	/// ```
 	pub fn expand_by(&mut self, x_min: u32, y_min: u32, x_max: u32, y_max: u32) {
 		if !self.is_empty() {
 			let max = self.max_count() - 1;
 			self
 				.set_min_and_max(
-					self.x_min().saturating_sub(x_min),
-					self.y_min().saturating_sub(y_min),
-					self.x_max().saturating_add(x_max).min(max),
-					self.y_max().saturating_add(y_max).min(max),
+					self.x_min().unwrap().saturating_sub(x_min),
+					self.y_min().unwrap().saturating_sub(y_min),
+					self.x_max().unwrap().saturating_add(x_max).min(max),
+					self.y_max().unwrap().saturating_add(y_max).min(max),
 				)
 				.unwrap();
 		}
@@ -132,7 +132,7 @@ impl TileBBox {
 	/// let mut a = TileBBox::from_min_and_max(4, 4, 4, 6, 6).unwrap();
 	/// let b = TileBBox::from_min_and_max(4, 2, 5, 8, 7).unwrap();
 	/// a.include_bbox(&b).unwrap();
-	/// assert_eq!(a.as_array(), [2,4,8,7]);
+	/// assert_eq!(a.as_array().unwrap(), [2,4,8,7]);
 	/// ```
 	#[context("Failed to include TileBBox {bbox:?} into TileBBox {self:?}")]
 	pub fn include_bbox(&mut self, bbox: &TileBBox) -> Result<()> {
@@ -153,10 +153,10 @@ impl TileBBox {
 		} else {
 			// Expand bounding box to include the other bounding box
 			self.set_min_and_max(
-				self.x_min().min(bbox.x_min()),
-				self.y_min().min(bbox.y_min()),
-				self.x_max().max(bbox.x_max()),
-				self.y_max().max(bbox.y_max()),
+				self.x_min().unwrap().min(bbox.x_min().unwrap()),
+				self.y_min().unwrap().min(bbox.y_min().unwrap()),
+				self.x_max().unwrap().max(bbox.x_max().unwrap()),
+				self.y_max().unwrap().max(bbox.y_max().unwrap()),
 			)?
 		}
 
@@ -183,7 +183,7 @@ impl TileBBox {
 	/// let mut a = TileBBox::from_min_and_max(5, 10,10, 20,20).unwrap();
 	/// let b = TileBBox::from_min_and_max(5, 15,15, 25,25).unwrap();
 	/// a.intersect_with(&b).unwrap();
-	/// assert_eq!(a.as_array(), [15,15,20,20]);
+	/// assert_eq!(a.as_array().unwrap(), [15,15,20,20]);
 	/// ```
 	#[context("Failed to intersect TileBBox {self:?} with TileBBox {bbox:?}")]
 	pub fn intersect_with(&mut self, bbox: &TileBBox) -> Result<()> {
@@ -199,10 +199,10 @@ impl TileBBox {
 			return Ok(());
 		}
 
-		let x_min = self.x_min().max(bbox.x_min());
-		let y_min = self.y_min().max(bbox.y_min());
-		let x_max = self.x_max().min(bbox.x_max());
-		let y_max = self.y_max().min(bbox.y_max());
+		let x_min = self.x_min().unwrap().max(bbox.x_min().unwrap());
+		let y_min = self.y_min().unwrap().max(bbox.y_min().unwrap());
+		let x_max = self.x_max().unwrap().min(bbox.x_max().unwrap());
+		let y_max = self.y_max().unwrap().min(bbox.y_max().unwrap());
 
 		if x_min > x_max || y_min > y_max {
 			self.set_empty();
@@ -230,18 +230,29 @@ impl TileBBox {
 	/// # use versatiles_core::TileBBox;
 	/// let mut bb = TileBBox::from_min_and_max(4, 5, 6, 7, 8).unwrap();
 	/// bb.shift_by(-10, -10).unwrap();
-	/// assert_eq!(bb.as_array(), [0,0,2,2]);
+	/// assert_eq!(bb.as_array().unwrap(), [0,0,2,2]);
 	/// ```
 	#[context("Failed to shift TileBBox {self:?} by ({x}, {y})")]
 	pub fn shift_by(&mut self, x: i64, y: i64) -> Result<()> {
-		self.shift_to(
-			(i64::from(self.x_min()) + x).max(0) as u32,
-			(i64::from(self.y_min()) + y).max(0) as u32,
+		if self.is_empty() {
+			return Ok(()); // No-op for empty bboxes
+		}
+		let max = (self.max_count() - 1) as i64;
+		let x_min = (self.x_min()? as i64 + x).clamp(0, max) as u32;
+		let y_min = (self.y_min()? as i64 + y).clamp(0, max) as u32;
+		self.set_min_and_size(
+			x_min,
+			y_min,
+			self.width().min(self.max_count() - x_min),
+			self.height().min(self.max_coord() - y_min),
 		)
 	}
 
 	#[context("Failed to shift TileBBox {self:?} to ({x_min}, {y_min})")]
 	pub fn shift_to(&mut self, x_min: u32, y_min: u32) -> Result<()> {
+		if self.is_empty() {
+			return Ok(()); // No-op for empty bboxes
+		}
 		self.set_min_and_size(x_min, y_min, self.width(), self.height())
 	}
 
@@ -257,21 +268,27 @@ impl TileBBox {
 	///
 	/// Panics if `scale` is zero.
 	pub fn scale_down(&mut self, scale: u32) {
+		if self.is_empty() {
+			return; // No-op for empty bboxes
+		}
 		assert!(scale > 0, "scale must be greater than 0");
 		assert!(scale.is_power_of_two(), "scale must be a power of two");
 
 		self
 			.set_min_and_max(
-				self.x_min() / scale,
-				self.y_min() / scale,
-				self.x_max() / scale,
-				self.y_max() / scale,
+				self.x_min().unwrap() / scale,
+				self.y_min().unwrap() / scale,
+				self.x_max().unwrap() / scale,
+				self.y_max().unwrap() / scale,
 			)
 			.unwrap();
 	}
 
 	/// Return a downscaled **copy** of this bbox by an integer power-of-two factor.
 	pub fn scaled_down(&self, scale: u32) -> TileBBox {
+		if self.is_empty() {
+			return TileBBox::new_empty(self.level).unwrap();
+		}
 		let mut bbox = *self;
 		bbox.scale_down(scale);
 		bbox
@@ -282,13 +299,16 @@ impl TileBBox {
 	/// Expands `(x_max, y_max)` to keep the same **inclusive** extent semantics.
 	#[context("Failed to scale up TileBBox {self:?} by factor {scale}")]
 	pub fn scale_up(&mut self, scale: u32) -> Result<()> {
+		if self.is_empty() {
+			return Ok(()); // No-op for empty bboxes
+		}
 		ensure!(scale > 0, "scale must be greater than 0");
 
 		self.set_min_and_max(
-			self.x_min() * scale,
-			self.y_min() * scale,
-			(self.x_max() + 1) * scale - 1,
-			(self.y_max() + 1) * scale - 1,
+			self.x_min()? * scale,
+			self.y_min()? * scale,
+			(self.x_max()? + 1) * scale - 1,
+			(self.y_max()? + 1) * scale - 1,
 		)
 	}
 
@@ -350,12 +370,15 @@ impl TileBBox {
 
 	/// Expand the bbox to align its edges to multiples of `block_size` (inclusive max).
 	pub fn round(&mut self, block_size: u32) {
+		if self.is_empty() || block_size <= 1 {
+			return; // No-op for empty bboxes
+		}
 		self
 			.set_min_and_max(
-				(self.x_min() / block_size) * block_size,
-				(self.y_min() / block_size) * block_size,
-				(self.x_max() + 1).div_ceil(block_size) * block_size - 1,
-				(self.y_max() + 1).div_ceil(block_size) * block_size - 1,
+				(self.x_min().unwrap() / block_size) * block_size,
+				(self.y_min().unwrap() / block_size) * block_size,
+				(self.x_max().unwrap() + 1).div_ceil(block_size) * block_size - 1,
+				(self.y_max().unwrap() + 1).div_ceil(block_size) * block_size - 1,
 			)
 			.unwrap()
 	}
@@ -371,7 +394,9 @@ impl TileBBox {
 	/// Flip the bbox vertically (Y axis) within the current level’s range.
 	pub fn flip_y(&mut self) {
 		if !self.is_empty() {
-			self.shift_to(self.x_min(), self.max_coord() - self.y_max()).unwrap();
+			self
+				.shift_to(self.x_min().unwrap(), self.max_coord() - self.y_max().unwrap())
+				.unwrap();
 		}
 	}
 }
@@ -393,10 +418,10 @@ mod tests {
 		let mut b = TileBBox::new_empty(4)?;
 		assert!(b.is_empty());
 		b.include(3, 5);
-		assert_eq!(b.as_array(), [3, 5, 3, 5]);
+		assert_eq!(b.as_array()?, [3, 5, 3, 5]);
 
 		b.include(6, 2); // expand both axes
-		assert_eq!(b.as_array(), [3, 2, 6, 5]);
+		assert_eq!(b.as_array()?, [3, 2, 6, 5]);
 		Ok(())
 	}
 
@@ -422,7 +447,7 @@ mod tests {
 	#[case(bb(3, 2, 2, 3, 3), [0,0,0,0], [2,2,3,3])] // no-op
 	fn expand_by_behaviour(#[case] mut b: TileBBox, #[case] off: [u32; 4], #[case] expected: [u32; 4]) {
 		b.expand_by(off[0], off[1], off[2], off[3]);
-		assert_eq!(b.as_array(), expected);
+		assert_eq!(b.as_array().unwrap(), expected);
 	}
 
 	#[test]
@@ -439,10 +464,10 @@ mod tests {
 		let mut a = bb(4, 4, 4, 6, 6);
 		let b = bb(4, 2, 5, 8, 7);
 		a.include_bbox(&b)?;
-		assert_eq!(a.as_array(), [2, 4, 8, 7]);
+		assert_eq!(a.as_array()?, [2, 4, 8, 7]);
 		let c = TileBBox::new_empty(4)?;
 		a.include_bbox(&c)?; // no change
-		assert_eq!(a.as_array(), [2, 4, 8, 7]);
+		assert_eq!(a.as_array()?, [2, 4, 8, 7]);
 		Ok(())
 	}
 
@@ -465,7 +490,7 @@ mod tests {
 			// empty expected; nothing more to assert
 			return Ok(());
 		}
-		assert_eq!(a.as_array(), exp);
+		assert_eq!(a.as_array()?, exp);
 		Ok(())
 	}
 
@@ -490,9 +515,9 @@ mod tests {
 	fn shift_by_and_to() -> Result<()> {
 		let mut b = bb(8, 5, 6, 7, 8); // 3x3
 		b.shift_by(-5, -5)?; // clamp to 0
-		assert_eq!(b.as_array(), [0, 1, 2, 3]);
+		assert_eq!(b.as_array()?, [0, 1, 2, 3]);
 		b.shift_to(13, 14)?; // move within bounds
-		assert_eq!(b.as_array(), [13, 14, 15, 16]);
+		assert_eq!(b.as_array()?, [13, 14, 15, 16]);
 		Ok(())
 	}
 
@@ -501,9 +526,9 @@ mod tests {
 	fn scale_down_by_powers_of_two() -> Result<()> {
 		let mut b = bb(5, 8, 10, 15, 17); // 8x8 region
 		b.scale_down(2);
-		assert_eq!(b.as_array(), [4, 5, 7, 8]);
+		assert_eq!(b.as_array()?, [4, 5, 7, 8]);
 		b.scale_down(2);
-		assert_eq!(b.as_array(), [2, 2, 3, 4]);
+		assert_eq!(b.as_array()?, [2, 2, 3, 4]);
 		Ok(())
 	}
 
@@ -518,7 +543,7 @@ mod tests {
 	fn scaled_down_is_pure() -> Result<()> {
 		let b = bb(5, 8, 10, 15, 17);
 		let c = b.scaled_down(4);
-		assert_eq!(c.as_array(), [2, 2, 3, 4]);
+		assert_eq!(c.as_array()?, [2, 2, 3, 4]);
 		// Original unchanged
 		assert_eq!(b, bb(5, 8, 10, 15, 17));
 		Ok(())
@@ -528,9 +553,9 @@ mod tests {
 	fn scale_up_and_scaled_up() -> Result<()> {
 		let mut b = bb(6, 2, 3, 4, 5); // 3x3
 		b.scale_up(2)?;
-		assert_eq!(b.as_array(), [4, 6, 9, 11]);
+		assert_eq!(b.as_array()?, [4, 6, 9, 11]);
 		let c = b.scaled_up(2)?;
-		assert_eq!(c.as_array(), [8, 12, 19, 23]);
+		assert_eq!(c.as_array()?, [8, 12, 19, 23]);
 		Ok(())
 	}
 
@@ -547,10 +572,10 @@ mod tests {
 		let mut b = a;
 		b.level_up(); // z=3, ×2
 		assert_eq!(b.level, 3);
-		assert_eq!(b.as_array(), [2, 2, 5, 5]);
+		assert_eq!(b.as_array()?, [2, 2, 5, 5]);
 		b.level_down(); // back to z=2
 		assert_eq!(b.level, 2);
-		assert_eq!(b.as_array(), [1, 1, 2, 2]);
+		assert_eq!(b.as_array()?, [1, 1, 2, 2]);
 
 		let up = a.leveled_up();
 		assert_eq!(up.level, 3);
@@ -571,17 +596,17 @@ mod tests {
 		if target >= 8 {
 			let scale = 2u32.pow((target - 8) as u32);
 			assert_eq!(b.level, target);
-			assert_eq!(b.x_min(), a.x_min() * scale);
-			assert_eq!(b.y_min(), a.y_min() * scale);
-			assert_eq!(b.x_max(), (a.x_max() + 1) * scale - 1);
-			assert_eq!(b.y_max(), (a.y_max() + 1) * scale - 1);
+			assert_eq!(b.x_min()?, a.x_min()? * scale);
+			assert_eq!(b.y_min()?, a.y_min()? * scale);
+			assert_eq!(b.x_max()?, (a.x_max()? + 1) * scale - 1);
+			assert_eq!(b.y_max()?, (a.y_max()? + 1) * scale - 1);
 		} else {
 			let scale = 2u32.pow((8 - target) as u32);
 			assert_eq!(b.level, target);
-			assert_eq!(b.x_min(), a.x_min() / scale);
-			assert_eq!(b.y_min(), a.y_min() / scale);
-			assert_eq!(b.x_max(), a.x_max() / scale);
-			assert_eq!(b.y_max(), a.y_max() / scale);
+			assert_eq!(b.x_min()?, a.x_min()? / scale);
+			assert_eq!(b.y_min()?, a.y_min()? / scale);
+			assert_eq!(b.x_max()?, a.x_max()? / scale);
+			assert_eq!(b.y_max()?, a.y_max()? / scale);
 		}
 		Ok(())
 	}
@@ -595,17 +620,17 @@ mod tests {
 		let mut b = bb(6, 10, 10, 17, 21); // width=8,height=12
 		b.round(block);
 		// Edges should align to multiples of block (inclusive max)
-		assert_eq!(b.x_min() % block, 0);
-		assert_eq!(b.y_min() % block, 0);
-		assert_eq!((b.x_max() + 1) % block, 0);
-		assert_eq!((b.y_max() + 1) % block, 0);
+		assert_eq!(b.x_min()? % block, 0);
+		assert_eq!(b.y_min()? % block, 0);
+		assert_eq!((b.x_max()? + 1) % block, 0);
+		assert_eq!((b.y_max()? + 1) % block, 0);
 
 		let a = bb(6, 3, 5, 3, 5); // 1x1
 		let r = a.rounded(block);
-		assert_eq!(r.x_min() % block, 0);
-		assert_eq!(r.y_min() % block, 0);
-		assert_eq!((r.x_max() + 1) % block, 0);
-		assert_eq!((r.y_max() + 1) % block, 0);
+		assert_eq!(r.x_min()? % block, 0);
+		assert_eq!(r.y_min()? % block, 0);
+		assert_eq!((r.x_max()? + 1) % block, 0);
+		assert_eq!((r.y_max()? + 1) % block, 0);
 		Ok(())
 	}
 
@@ -616,7 +641,7 @@ mod tests {
 		let mut b = bb(3, 1, 2, 3, 4);
 		b.flip_y();
 		// y' = max_coord - y_max = 7 - 4 = 3; keep height=3 → y_min'=3, y_max'=5
-		assert_eq!(b.as_array(), [1, 3, 3, 5]);
+		assert_eq!(b.as_array()?, [1, 3, 3, 5]);
 		Ok(())
 	}
 }

@@ -247,11 +247,10 @@ pub async fn make_test_file(
 
 #[cfg(test)]
 pub mod tests {
-	use assert_fs::TempDir;
-	use versatiles_core::{TileBBoxPyramid, TilesReaderParameters};
-
 	use super::*;
+	use assert_fs::TempDir;
 	use std::time::Instant;
+	use versatiles_core::{TileBBoxPyramid, TilesReaderParameters};
 
 	/// Test writers and readers for various formats.
 	#[test]

@@ -44,7 +44,7 @@ pub trait HilbertIndex {
 
 impl HilbertIndex for TileBBox {
 	fn get_hilbert_index(&self) -> Result<u64> {
-		coord_to_index(self.x_min(), self.y_min(), self.level)
+		coord_to_index(self.x_min()?, self.y_min()?, self.level)
 	}
 	fn from_hilbert_index(index: u64) -> Result<Self> {
 		let coord = index_to_coord(index)?;

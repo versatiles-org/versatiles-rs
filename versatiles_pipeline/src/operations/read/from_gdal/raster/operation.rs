@@ -173,7 +173,7 @@ impl OperationTrait for Operation {
 			async move {
 				let image = self
 					.get_image_data_from_gdal(
-						&bbox.to_geo_bbox(),
+						&bbox.to_geo_bbox().unwrap(),
 						(size * bbox.width()) as usize,
 						(size * bbox.height()) as usize,
 					)
@@ -189,8 +189,8 @@ impl OperationTrait for Operation {
 							.filter_map(|coord| {
 								image
 									.crop_imm(
-										(coord.x - bbox.x_min()) * size,
-										(coord.y - bbox.y_min()) * size,
+										(coord.x - bbox.x_min().unwrap()) * size,
+										(coord.y - bbox.y_min().unwrap()) * size,
 										size,
 										size,
 									)

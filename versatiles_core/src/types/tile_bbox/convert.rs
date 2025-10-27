@@ -1,4 +1,5 @@
 use crate::{GeoBBox, TileBBox, TileCoord};
+use anyhow::{Result, ensure};
 
 impl TileBBox {
 	// -------------------------------------------------------------------------
@@ -26,21 +27,31 @@ impl TileBBox {
 	/// # use versatiles_core::{TileBBox, GeoBBox};
 	/// // Define a 2×2 region at zoom level 3 starting at tile (4,5)
 	/// let tb = TileBBox::from_min_and_size(3, 4, 5, 2, 2).unwrap();
-	/// let geo = tb.to_geo_bbox();
+	/// let geo = tb.to_geo_bbox().unwrap();
 	/// let (west, south, east, north) = geo.as_tuple();
 	/// ```
 	#[must_use]
-	pub fn to_geo_bbox(&self) -> GeoBBox {
+	pub fn to_geo_bbox(&self) -> Option<GeoBBox> {
+		if self.is_empty() {
+			return None;
+		}
 		// Bottom-left in geospatial terms is (x_min, y_max + 1)
-		let p_min = TileCoord::new(self.level, self.x_min(), self.y_max() + 1)
+		let p_min = TileCoord::new(self.level, self.x_min().unwrap(), self.y_max().unwrap() + 1)
 			.unwrap()
 			.as_geo();
 		// Top-right in geospatial terms is (x_max + 1, y_min)
-		let p_max = TileCoord::new(self.level, self.x_max() + 1, self.y_min())
+		let p_max = TileCoord::new(self.level, self.x_max().unwrap() + 1, self.y_min().unwrap())
 			.unwrap()
 			.as_geo();
 
-		GeoBBox::new(p_min[0], p_min[1], p_max[0], p_max[1]).unwrap()
+		Some(GeoBBox::new(p_min[0], p_min[1], p_max[0], p_max[1]).unwrap())
+	}
+
+	/// Returns the bbox as an array `[x_min, y_min, x_max, y_max]`.
+	/// Useful for serialization or equality checks.
+	pub fn as_array(&self) -> Result<[u32; 4]> {
+		ensure!(!self.is_empty(), "cannot get array of an empty TileBBox");
+		Ok([self.x_min()?, self.y_min()?, self.x_max()?, self.y_max()?])
 	}
 }
 
@@ -87,7 +98,7 @@ mod tests {
 		#[case] y1: u32,
 	) -> Result<()> {
 		let bb = TileBBox::from_min_and_max(level, x0, y0, x1, y1)?;
-		let got = bb.to_geo_bbox();
+		let got = bb.to_geo_bbox().unwrap();
 		let exp = expected_bbox(level, x0, y0, x1, y1);
 
 		// Exact equality should hold because the same math is used, but allow tiny epsilon
@@ -114,7 +125,7 @@ mod tests {
 		#[case] y1: u32,
 	) -> Result<()> {
 		let bb = TileBBox::from_min_and_max(level, x0, y0, x1, y1)?;
-		let got = bb.to_geo_bbox();
+		let got = bb.to_geo_bbox().unwrap();
 		let exp = expected_bbox(level, x0, y0, x1, y1);
 		assert_bbox_close(&got, &exp, 1e-9);
 		Ok(())
@@ -126,7 +137,7 @@ mod tests {
 		let level = 2u8;
 		let max = (1u32 << level) - 1;
 		let bb = TileBBox::from_min_and_max(level, 0, 0, max, max)?;
-		let got = bb.to_geo_bbox();
+		let got = bb.to_geo_bbox().unwrap();
 		let (minlon, minlat, maxlon, maxlat) = got.as_tuple();
 		assert!(minlon <= maxlon && minlat <= maxlat);
 		// Reasonable numeric ranges

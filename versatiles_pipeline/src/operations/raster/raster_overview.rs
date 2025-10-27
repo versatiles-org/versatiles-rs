@@ -102,7 +102,7 @@ impl Operation {
 			.into_iter()
 			.collect::<Result<Vec<_>, _>>()?;
 
-		let mut coord = bbox.min_corner();
+		let mut coord = bbox.min_corner()?;
 		coord.floor(BLOCK_TILE_COUNT);
 		let mut cache = self.cache.lock().await;
 		cache.insert(&coord, images)?;
@@ -134,7 +134,7 @@ impl Operation {
 		for q in &[0, 1, 2, 3] {
 			let bbox1 = bbox0.leveled_up().get_quadrant(*q)?;
 
-			if let Some(images1) = cache.remove(&bbox1.min_corner())? {
+			if let Some(images1) = cache.remove(&bbox1.min_corner()?)? {
 				for (coord1, image1) in images1 {
 					if let Some(image1) = image1 {
 						assert_eq!(image1.width(), half_size);
@@ -305,7 +305,7 @@ mod tests {
 		// Populate with simple solid tiles (only a tiny subset to keep it cheap)
 		for y in 0..bbox.height() {
 			for x in 0..bbox.width() {
-				let c = TileCoord::new(6, bbox.x_min() + x, bbox.y_min() + y)?;
+				let c = TileCoord::new(6, bbox.x_min()? + x, bbox.y_min()? + y)?;
 				container.insert(c, Some(solid_rgba(2, x as u8, y as u8, 32, 255)))?;
 			}
 		}
