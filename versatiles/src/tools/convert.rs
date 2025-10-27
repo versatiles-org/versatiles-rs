@@ -157,6 +157,13 @@ mod tests {
 			"../tmp/berlin3.versatiles",
 		])?;
 
+		run_command(vec![
+			"versatiles",
+			"convert",
+			"../testdata/berlin.vpl",
+			"../tmp/berlin4.pmtiles",
+		])?;
+
 		Ok(())
 	}
 
