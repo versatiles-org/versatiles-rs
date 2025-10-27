@@ -116,8 +116,8 @@ mod tests {
 	use super::*;
 	use anyhow::Result;
 	use rstest::rstest;
-	use std::env::current_dir;
-	use versatiles_container::{MBTilesReader, MockTilesReader, MockTilesReaderProfile};
+	use versatiles::get_registry;
+	use versatiles_container::{MockTilesReader, MockTilesReaderProfile, ProcessingConfig};
 	use versatiles_core::TileJSON;
 
 	// Test the constructor function for TileSource
@@ -150,18 +150,23 @@ mod tests {
 	// Test the get_data method of the TileSource
 	#[rstest]
 	#[case(
-		MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?.boxed(),
-		"3/4/5",
-		("image/png", "[-180,-85.051129,180,85.051129]", [137, 80, 78, 71], 2, 6)
+		"../testdata/berlin.mbtiles",
+		"12/2200/1345",
+		("vnd.mapbox-vector-tile", "[13.08283,52.33446,13.762245,52.6783]", [31, 139, 8, 0], 0, 14)
 	)]
 	#[case(
-		MBTilesReader::open_path(&current_dir().unwrap().join("../testdata/berlin.mbtiles"))?.boxed(),
+		"../testdata/berlin.pmtiles",
+		"12/2200/1345",
+		("vnd.mapbox-vector-tile", "[13.07373,52.321911,13.776855,52.683043]", [31, 139, 8, 0], 0, 14)
+	)]
+	#[case(
+		"../testdata/berlin.vpl",
 		"12/2200/1345",
 		("vnd.mapbox-vector-tile", "[13.08283,52.33446,13.762245,52.6783]", [31, 139, 8, 0], 0, 14)
 	)]
 	#[tokio::test]
 	async fn tile_container_get_data(
-		#[case] reader: Box<dyn TilesReaderTrait>,
+		#[case] filename: &str,
 		#[case] coord: &str,
 		#[case] expected_tile_json: (&str, &str, [u8; 4], u8, u8),
 	) -> Result<()> {
@@ -198,6 +203,8 @@ mod tests {
 
 		let (exp_mime, exp_bounds, exp_header, exp_minzoom, exp_maxzoom) = expected_tile_json;
 
+		let registry = get_registry(ProcessingConfig::default());
+		let reader = registry.get_reader(filename).await?;
 		let c = &mut TileSource::from(reader, "prefix")?;
 
 		assert_eq!(
