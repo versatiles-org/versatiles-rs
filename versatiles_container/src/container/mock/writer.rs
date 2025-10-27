@@ -20,7 +20,7 @@
 //! }
 //! ```
 
-use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait, WriterConfig};
+use crate::{ProcessingConfig, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{Traversal, io::DataWriterTrait};
@@ -54,7 +54,7 @@ impl MockTilesWriter {
 						Ok(())
 					})
 				},
-				WriterConfig::default(),
+				ProcessingConfig::default(),
 			)
 			.await
 	}
@@ -77,7 +77,7 @@ impl TilesWriterTrait for MockTilesWriter {
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
-		_config: WriterConfig,
+		_config: ProcessingConfig,
 	) -> Result<()> {
 		MockTilesWriter::write(reader).await
 	}

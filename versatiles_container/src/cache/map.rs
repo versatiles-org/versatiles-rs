@@ -1,5 +1,5 @@
 use crate::{
-	WriterConfig,
+	ProcessingConfig,
 	cache::{
 		cache_in_memory::InMemoryCache,
 		cache_on_disk::OnDiskCache,
@@ -19,7 +19,7 @@ pub enum CacheMap<K: CacheKey, V: CacheValue> {
 
 impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 	#[must_use]
-	pub fn new(config: &WriterConfig) -> Self {
+	pub fn new(config: &ProcessingConfig) -> Self {
 		match &config.cache_type {
 			CacheType::InMemory => Self::Memory(InMemoryCache::new()),
 			CacheType::Disk(path) => {
@@ -109,10 +109,7 @@ mod tests {
 			"disk" => CacheType::Disk(TempDir::new().unwrap().path().to_path_buf()),
 			_ => panic!("unknown cache kind"),
 		};
-		let config = WriterConfig {
-			cache_type,
-			tile_compression: None,
-		};
+		let config = ProcessingConfig { cache_type };
 		let mut cache = CacheMap::<String, String>::new(&config);
 
 		let k1 = "k:1".to_string();

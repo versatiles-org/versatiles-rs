@@ -1,6 +1,7 @@
 use anyhow::{Result, anyhow, bail};
 use std::path::PathBuf;
-use versatiles_container::get_reader;
+use versatiles::get_registry;
+use versatiles_container::ProcessingConfig;
 use versatiles_core::{TileBBox, TileFormat, progress::get_progress_bar};
 use versatiles_image::{DynamicImage, DynamicImageTraitConvert, encode};
 
@@ -40,13 +41,14 @@ pub async fn run(args: &MeasureTileSizes) -> Result<()> {
 		bail!("Only PNG output is supported for now");
 	}
 
-	let reader = get_reader(
-		input_file
-			.as_os_str()
-			.to_str()
-			.ok_or(anyhow!("Invalid input file path"))?,
-	)
-	.await?;
+	let reader = get_registry(ProcessingConfig::default())
+		.get_reader(
+			input_file
+				.as_os_str()
+				.to_str()
+				.ok_or(anyhow!("Invalid input file path"))?,
+		)
+		.await?;
 	let bbox = TileBBox::new_full(level)?;
 	let stream = reader.get_tile_stream(bbox).await?;
 

@@ -27,19 +27,23 @@
 //! async fn main() -> Result<()> {
 //!     // Define the input filename (local file or URL)
 //!     let input_filename = "../testdata/berlin.pmtiles";
-//!     let mut reader = get_reader(input_filename).await?;
+//!     let config = ProcessingConfig::default();
+//!     let registry = versatiles::get_registry(config);
+//!     let reader = registry.get_reader(input_filename).await?;
 //!
 //!     // Define the output filename
 //!     let output_filename = "../testdata/temp1.versatiles";
 //!
 //!     // Write the tiles to the output file
-//!     write_to_filename(&mut *reader, output_filename, WriterConfig::default()).await?;
+//!     registry.write_to_filename(reader, output_filename).await?;
 //!
 //!     println!("Tiles have been successfully converted and saved to {output_filename}");
 //!     Ok(())
 //! }
 //! ```
 
+mod helper;
+pub use helper::*;
 pub use versatiles_container as container;
 pub use versatiles_core as core;
 pub use versatiles_derive as derive;

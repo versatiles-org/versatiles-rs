@@ -13,8 +13,10 @@
 //!     let path_mbtiles = std::env::current_dir()?.join("../testdata/berlin.mbtiles");
 //!     let path_versatiles = std::env::current_dir()?.join("../testdata/temp2.versatiles");
 //!
+//!     let registry = ContainerRegistry::default();
+//!
 //!     // Create a mbtiles reader
-//!     let mut reader = MBTilesReader::open_path(&path_mbtiles)?;
+//!     let mut reader = registry.get_reader(&path_mbtiles.to_str().unwrap()).await?;
 //!
 //!     // Define converter parameters
 //!     let converter_params = TilesConverterParameters {
@@ -24,10 +26,10 @@
 //!
 //!     // Convert the tiles container
 //!     convert_tiles_container(
-//!         Box::new(reader),
+//!         reader,
 //!         converter_params,
 //!         &path_versatiles.to_str().unwrap(),
-//!         WriterConfig::default()
+//!         registry
 //!     ).await?;
 //!
 //!     println!("Tiles have been successfully converted and saved to {path_versatiles:?}");
@@ -35,8 +37,7 @@
 //! }
 //! ```
 
-use super::write_to_filename;
-use crate::{Tile, TilesReaderTrait, WriterConfig};
+use crate::{ContainerRegistry, Tile, TilesReaderTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{
@@ -48,6 +49,7 @@ use versatiles_derive::context;
 #[derive(Debug)]
 pub struct TilesConverterParameters {
 	pub bbox_pyramid: Option<TileBBoxPyramid>,
+	pub tile_compression: Option<TileCompression>,
 	pub flip_y: bool,
 	pub swap_xy: bool,
 }
@@ -57,6 +59,7 @@ impl Default for TilesConverterParameters {
 	fn default() -> Self {
 		TilesConverterParameters {
 			bbox_pyramid: None,
+			tile_compression: None,
 			flip_y: false,
 			swap_xy: false,
 		}
@@ -69,10 +72,10 @@ pub async fn convert_tiles_container(
 	reader: Box<dyn TilesReaderTrait>,
 	cp: TilesConverterParameters,
 	filename: &str,
-	config: WriterConfig,
+	registry: ContainerRegistry,
 ) -> Result<()> {
-	let mut converter = TilesConvertReader::new_from_reader(reader, cp)?;
-	write_to_filename(&mut converter, filename, config).await
+	let converter = TilesConvertReader::new_from_reader(reader, cp)?;
+	registry.write_to_filename(Box::new(converter), filename).await
 }
 
 /// A reader that converts tiles from one format to another.
@@ -108,6 +111,10 @@ impl TilesConvertReader {
 
 		if let Some(bbox_pyramid) = &cp.bbox_pyramid {
 			new_rp.bbox_pyramid.intersect(bbox_pyramid);
+		}
+
+		if let Some(tile_compression) = cp.tile_compression {
+			new_rp.tile_compression = tile_compression;
 		}
 
 		let mut tilejson = reader.tilejson().clone();
@@ -152,15 +159,24 @@ impl TilesReaderTrait for TilesConvertReader {
 
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		let mut coord = *coord;
+
 		if self.converter_parameters.flip_y {
 			coord.flip_y();
 		}
+
 		if self.converter_parameters.swap_xy {
 			coord.swap_xy();
 		}
+
 		let tile = self.reader.get_tile(&coord).await?;
 
-		Ok(tile)
+		let mut tile = if let Some(tile) = tile { tile } else { return Ok(None) };
+
+		if let Some(compression) = self.converter_parameters.tile_compression {
+			tile.change_compression(compression)?;
+		}
+
+		Ok(Some(tile))
 	}
 
 	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
@@ -185,6 +201,13 @@ impl TilesReaderTrait for TilesConvertReader {
 					coord.swap_xy()
 				}
 				coord
+			});
+		}
+
+		if let Some(tile_compression) = self.converter_parameters.tile_compression {
+			stream = stream.map_item_parallel(move |mut tile| {
+				tile.change_compression(tile_compression)?;
+				Ok(tile)
 			});
 		}
 
@@ -230,11 +253,13 @@ mod tests {
 				bbox_pyramid: Some(pyramid_convert),
 				flip_y,
 				swap_xy,
+				tile_compression: None,
 			};
-			convert_tiles_container(reader.boxed(), cp, filename, WriterConfig::default()).await?;
+			convert_tiles_container(reader.boxed(), cp, filename, ContainerRegistry::default()).await?;
 
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.parameters();
+			let tile_compression_out = parameters_out.tile_compression;
 			assert_eq!(parameters_out.bbox_pyramid, pyramid_out);
 
 			let bbox = pyramid_out.get_level_bbox(3);
@@ -244,7 +269,7 @@ mod tests {
 					.get_tile(&coord)
 					.await?
 					.unwrap()
-					.into_blob(Uncompressed)?
+					.into_blob(tile_compression_out)?
 					.to_string();
 				text = text.replace("{x:", "").replace(",y:", "").replace(",z:3}", "");
 				tiles.push(text);
@@ -270,6 +295,7 @@ mod tests {
 			bbox_pyramid: Some(TileBBoxPyramid::new_full(1)),
 			flip_y: true,
 			swap_xy: true,
+			tile_compression: None,
 		};
 
 		assert!(cp.bbox_pyramid.is_some());

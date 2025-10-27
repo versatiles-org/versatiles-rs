@@ -1,25 +1,22 @@
 use crate::CacheType;
 use std::sync::Arc;
-use versatiles_core::TileCompression;
 
 #[derive(Clone, Debug)]
-pub struct WriterConfig {
+pub struct ProcessingConfig {
 	pub cache_type: CacheType,
-	pub tile_compression: Option<TileCompression>,
 }
 
-impl WriterConfig {
+impl ProcessingConfig {
 	#[must_use]
 	pub fn arc(self) -> Arc<Self> {
 		Arc::new(self)
 	}
 }
 
-impl Default for WriterConfig {
+impl Default for ProcessingConfig {
 	fn default() -> Self {
 		Self {
 			cache_type: CacheType::new_memory(),
-			tile_compression: None,
 		}
 	}
 }

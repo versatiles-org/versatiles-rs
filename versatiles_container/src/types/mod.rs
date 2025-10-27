@@ -1,10 +1,8 @@
 mod converter;
 pub use converter::*;
 
-mod getters;
-#[cfg(test)]
-pub use getters::tests::*;
-pub use getters::{get_reader, write_to_filename};
+mod container_registry;
+pub use container_registry::*;
 
 mod tile;
 pub use tile::*;
@@ -18,5 +16,5 @@ pub use tiles_reader::*;
 mod writer;
 pub use writer::*;
 
-mod writer_config;
-pub use writer_config::*;
+mod processing_config;
+pub use processing_config::*;

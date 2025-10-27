@@ -12,7 +12,7 @@ use std::{
 	path::{Path, PathBuf},
 	vec,
 };
-use versatiles_container::{TilesReaderTrait, WriterConfig};
+use versatiles_container::{ProcessingConfig, TilesReaderTrait};
 use versatiles_core::{TileFormat, TileType};
 
 type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesReaderTrait>>>>;
@@ -22,11 +22,11 @@ pub struct PipelineFactory {
 	tran_ops: HashMap<String, Box<dyn TransformOperationFactoryTrait>>,
 	dir: PathBuf,
 	create_reader: Callback,
-	config: WriterConfig,
+	config: ProcessingConfig,
 }
 
 impl PipelineFactory {
-	pub fn new_empty(dir: &Path, create_reader: Callback, config: WriterConfig) -> Self {
+	pub fn new_empty(dir: &Path, create_reader: Callback, config: ProcessingConfig) -> Self {
 		PipelineFactory {
 			read_ops: HashMap::new(),
 			tran_ops: HashMap::new(),
@@ -36,7 +36,7 @@ impl PipelineFactory {
 		}
 	}
 
-	pub fn new_default(dir: &Path, create_reader: Callback, config: WriterConfig) -> Self {
+	pub fn new_default(dir: &Path, create_reader: Callback, config: ProcessingConfig) -> Self {
 		let mut factory = PipelineFactory::new_empty(dir, create_reader, config);
 
 		for f in get_read_operation_factories() {
@@ -83,7 +83,7 @@ impl PipelineFactory {
 	}
 
 	pub fn new_dummy_reader(create_reader: Callback) -> Self {
-		PipelineFactory::new_default(Path::new(""), create_reader, WriterConfig::default())
+		PipelineFactory::new_default(Path::new(""), create_reader, ProcessingConfig::default())
 	}
 
 	fn add_read_factory(&mut self, factory: Box<dyn ReadOperationFactoryTrait>) {
@@ -166,7 +166,7 @@ impl PipelineFactory {
 		.join("\n")
 	}
 
-	pub fn config(&self) -> &WriterConfig {
+	pub fn config(&self) -> &ProcessingConfig {
 		&self.config
 	}
 }

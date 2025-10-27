@@ -184,7 +184,7 @@ mod tests {
 	use super::*;
 	use assert_fs::NamedTempFile;
 	use versatiles_container::{
-		MockTilesReader, MockTilesReaderProfile, TilesConverterParameters, TilesReaderTrait, WriterConfig,
+		MockTilesReader, MockTilesReaderProfile, ProcessingConfig, TilesConverterParameters, TilesReaderTrait,
 		convert_tiles_container,
 	};
 
@@ -195,13 +195,14 @@ mod tests {
 		// get to test container converter
 		let container_file = NamedTempFile::new("temp.tar").unwrap();
 
-		let parameters = TilesConverterParameters::default();
-		let config = WriterConfig {
+		let parameters = TilesConverterParameters {
 			tile_compression: Some(compression),
-			..WriterConfig::default()
+			..TilesConverterParameters::default()
 		};
+		let config = ProcessingConfig::default();
+		let registry = versatiles::get_registry(config);
 
-		convert_tiles_container(reader.boxed(), parameters, container_file.to_str().unwrap(), config)
+		convert_tiles_container(reader.boxed(), parameters, container_file.to_str().unwrap(), registry)
 			.await
 			.unwrap();
 

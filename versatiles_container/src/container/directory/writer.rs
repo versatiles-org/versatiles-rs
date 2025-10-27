@@ -38,7 +38,7 @@
 //!     DirectoryTilesWriter::write_to_path(
 //!         &mut reader,
 //!         &temp_path,
-//!         WriterConfig::default()
+//!         ProcessingConfig::default()
 //!     ).await.unwrap();
 //! }
 //! ```
@@ -49,7 +49,7 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying directory structure.
 
-use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait, WriterConfig};
+use crate::{ProcessingConfig, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
 use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use std::{
@@ -91,7 +91,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the path is not absolute, if there are issues with file I/O, or if compression fails.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: WriterConfig) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: ProcessingConfig) -> Result<()> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
 		log::trace!("convert_from");
@@ -100,7 +100,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 		let tile_format = parameters.tile_format;
 
 		let extension_format = tile_format.as_extension().to_string();
-		let tile_compression = config.tile_compression.unwrap_or(reader.parameters().tile_compression);
+		let tile_compression = reader.parameters().tile_compression;
 		let extension_compression = tile_compression.as_extension().to_string();
 
 		let tilejson = reader.tilejson();
@@ -148,7 +148,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
-		_config: WriterConfig,
+		_config: ProcessingConfig,
 	) -> Result<()> {
 		bail!("not implemented")
 	}
@@ -172,7 +172,7 @@ mod tests {
 			TileBBoxPyramid::new_full(2),
 		))?;
 
-		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path, WriterConfig::default()).await?;
+		DirectoryTilesWriter::write_to_path(&mut mock_reader, temp_path, ProcessingConfig::default()).await?;
 
 		let load = |filename| {
 			let path = temp_path.join(filename);

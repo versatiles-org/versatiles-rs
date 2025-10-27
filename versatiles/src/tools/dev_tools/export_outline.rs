@@ -1,6 +1,7 @@
 use anyhow::{Context, Result, anyhow, bail};
 use std::path::PathBuf;
-use versatiles_container::get_reader;
+use versatiles::get_registry;
+use versatiles_container::ProcessingConfig;
 use versatiles_core::progress::get_progress_bar;
 
 #[derive(clap::Args, Debug)]
@@ -23,13 +24,14 @@ pub async fn run(args: &ExportOutline) -> Result<()> {
 	let input_file = &args.input;
 	let output_file = &args.output;
 
-	let reader = get_reader(
-		input_file
-			.as_os_str()
-			.to_str()
-			.ok_or(anyhow!("Invalid input file path"))?,
-	)
-	.await?;
+	let reader = get_registry(ProcessingConfig::default())
+		.get_reader(
+			input_file
+				.as_os_str()
+				.to_str()
+				.ok_or(anyhow!("Invalid input file path"))?,
+		)
+		.await?;
 
 	let compression = reader.parameters().tile_compression;
 	let bbox_pyramid = reader.parameters().bbox_pyramid.clone();

@@ -3,7 +3,8 @@ use anyhow::Result;
 use regex::Regex;
 use std::path::Path;
 use tokio::time::{Duration, sleep};
-use versatiles_container::{TilesConvertReader, TilesConverterParameters, TilesReaderTrait, get_reader};
+use versatiles::get_registry;
+use versatiles_container::{ProcessingConfig, TilesConvertReader, TilesConverterParameters, TilesReaderTrait};
 use versatiles_core::TileCompression;
 
 #[derive(clap::Args, Debug)]
@@ -99,7 +100,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 			Some(m) => m.as_str(),
 		};
 
-		let mut reader = get_reader(url).await?;
+		let mut reader = get_registry(ProcessingConfig::default()).get_reader(url).await?;
 
 		if arguments.override_input_compression.is_some() {
 			reader.override_compression(arguments.override_input_compression.unwrap())

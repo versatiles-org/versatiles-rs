@@ -22,7 +22,7 @@
 //!     MBTilesWriter::write_to_path(
 //!         &mut reader,
 //!         &temp_path,
-//!         WriterConfig::default()
+//!         ProcessingConfig::default()
 //!     ).await.unwrap();
 //! }
 //! ```
@@ -33,7 +33,7 @@
 //! ## Testing
 //! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying the database structure.
 
-use crate::{TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait, WriterConfig};
+use crate::{ProcessingConfig, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
 use anyhow::{Result, bail};
 use async_trait::async_trait;
 use futures::lock::Mutex;
@@ -119,7 +119,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the file format or compression is not supported, or if there are issues with writing to the SQLite database.
-	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: WriterConfig) -> Result<()> {
+	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: ProcessingConfig) -> Result<()> {
 		use TileCompression::*;
 		use TileFormat::*;
 
@@ -170,7 +170,7 @@ impl TilesWriterTrait for MBTilesWriter {
 		}
 
 		let writer_mutex = Arc::new(Mutex::new(writer));
-		let tile_compression = config.tile_compression.unwrap_or(reader.parameters().tile_compression);
+		let tile_compression = reader.parameters().tile_compression;
 
 		reader
 			.traverse_all_tiles(
@@ -199,7 +199,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,
-		_config: WriterConfig,
+		_config: ProcessingConfig,
 	) -> Result<()> {
 		bail!("not implemented")
 	}
@@ -220,7 +220,7 @@ mod tests {
 		})?;
 
 		let filename = NamedTempFile::new("temp.mbtiles")?;
-		MBTilesWriter::write_to_path(&mut mock_reader, &filename, WriterConfig::default()).await?;
+		MBTilesWriter::write_to_path(&mut mock_reader, &filename, ProcessingConfig::default()).await?;
 
 		let mut reader = MBTilesReader::open_path(&filename)?;
 
