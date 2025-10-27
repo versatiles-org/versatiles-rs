@@ -226,7 +226,7 @@ mod tests {
 	};
 
 	fn get_mock_reader(tf: TileFormat, tc: TileCompression) -> MockTilesReader {
-		let bbox_pyramid = TileBBoxPyramid::new_full(1);
+		let bbox_pyramid = TileBBoxPyramid::new_full(4);
 		let reader_parameters = TilesReaderParameters::new(tf, tc, bbox_pyramid);
 		MockTilesReader::new_mock(reader_parameters).unwrap()
 	}
@@ -375,7 +375,7 @@ mod tests {
 		};
 		let tcr = TilesConvertReader::new_from_reader(reader.boxed(), cp)?;
 
-		let mut coord = TileCoord::new(3, 1, 2)?;
+		let mut coord = TileCoord::new(4, 5, 6)?;
 		let data = tcr.get_tile(&coord).await?;
 		assert!(data.is_some());
 

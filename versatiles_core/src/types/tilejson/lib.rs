@@ -492,6 +492,14 @@ impl TryFrom<&str> for TileJSON {
 	}
 }
 
+impl TryFrom<Vec<u8>> for TileJSON {
+	type Error = anyhow::Error;
+
+	fn try_from(blob: Vec<u8>) -> Result<TileJSON> {
+		TileJSON::try_from(std::str::from_utf8(&blob)?)
+	}
+}
+
 impl TryFrom<&String> for TileJSON {
 	type Error = anyhow::Error;
 

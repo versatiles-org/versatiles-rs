@@ -1,5 +1,5 @@
 use super::{super::utils::Url, SourceResponse};
-use anyhow::{Result, ensure};
+use anyhow::{Context, Result};
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 use versatiles_container::TilesReaderTrait;
@@ -42,18 +42,14 @@ impl TileSource {
 
 		if parts.len() >= 3 {
 			// Parse the tile coordinates
-			let level = parts[0].parse::<u8>();
-			let x = parts[1].parse::<u32>();
-			let y: String = parts[2].chars().take_while(|c| c.is_numeric()).collect();
-			let y = y.parse::<u32>();
+			let level = parts[0].parse::<u8>().context("value for z is not a number")?;
+			let x = parts[1].parse::<u32>().context("value for x is not a number")?;
 
-			// Check for parsing errors
-			ensure!(level.is_ok(), "value for z is not a number");
-			ensure!(x.is_ok(), "value for x is not a number");
-			ensure!(y.is_ok(), "value for y is not a number");
+			let y: String = parts[2].chars().take_while(|c| c.is_numeric()).collect();
+			let y = y.parse::<u32>().context("value for y is not a number")?;
 
 			// Create a TileCoord instance
-			let coord = TileCoord::new(level?, x?, y?)?;
+			let coord = TileCoord::new(level, x, y)?;
 
 			log::debug!("get tile, prefix: {}, coord: {}", self.prefix, coord.as_json());
 
@@ -119,7 +115,10 @@ impl Debug for TileSource {
 mod tests {
 	use super::*;
 	use anyhow::Result;
-	use versatiles_container::{MockTilesReader, MockTilesReaderProfile};
+	use rstest::rstest;
+	use std::env::current_dir;
+	use versatiles_container::{MBTilesReader, MockTilesReader, MockTilesReaderProfile};
+	use versatiles_core::TileJSON;
 
 	// Test the constructor function for TileSource
 	#[tokio::test]
@@ -130,7 +129,7 @@ mod tests {
 		assert_eq!(container.prefix.str, "/tiles/prefix/");
 		assert_eq!(
 			container.build_tile_json().await?.as_str(),
-			"{\"bounds\":[-180,-79.171335,45,66.51326],\"maxzoom\":3,\"minzoom\":2,\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tile_type\":\"raster\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
+			"{\"bounds\":[-180,-85.051129,180,85.051129],\"maxzoom\":6,\"minzoom\":2,\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tile_type\":\"raster\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
 		);
 
 		Ok(())
@@ -143,15 +142,40 @@ mod tests {
 		let container = TileSource::from(reader.boxed(), "prefix")?;
 		assert_eq!(
 			format!("{container:?}"),
-			"TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [2: [0,1,2,3] (3x3), 3: [0,2,4,6] (5x5)], tile_compression: Uncompressed, tile_format: PNG } } }, tile_mime: \"image/png\", compression: Uncompressed }"
+			"TileSource { reader: Mutex { data: MockTilesReader { parameters: TilesReaderParameters { bbox_pyramid: [2: [0,1,2,3] (3x3), 3: [0,2,4,6] (5x5), 4: [0,0,15,15] (16x16), 5: [0,0,31,31] (32x32), 6: [0,0,63,63] (64x64)], tile_compression: Uncompressed, tile_format: PNG } } }, tile_mime: \"image/png\", compression: Uncompressed }"
 		);
 		Ok(())
 	}
 
 	// Test the get_data method of the TileSource
+	#[rstest]
+	#[case(
+		MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?.boxed(),
+		"3/4/5",
+		("image/png", "[-180,-85.051129,180,85.051129]", [137, 80, 78, 71], 2, 6)
+	)]
+	#[case(
+		MBTilesReader::open_path(&current_dir().unwrap().join("../testdata/berlin.mbtiles"))?.boxed(),
+		"12/2200/1345",
+		("vnd.mapbox-vector-tile", "[13.08283,52.33446,13.762245,52.6783]", [31, 139, 8, 0], 0, 14)
+	)]
 	#[tokio::test]
-	async fn tile_container_get_data() -> Result<()> {
+	async fn tile_container_get_data(
+		#[case] reader: Box<dyn TilesReaderTrait>,
+		#[case] coord: &str,
+		#[case] expected_tile_json: (&str, &str, [u8; 4], u8, u8),
+	) -> Result<()> {
 		use TileCompression::*;
+
+		async fn get_response(
+			container: &mut TileSource,
+			url: &str,
+			compression: TileCompression,
+		) -> Result<Option<SourceResponse>> {
+			container
+				.get_data(&Url::new(url), &TargetCompression::from(compression))
+				.await
+		}
 
 		async fn check_response(
 			container: &mut TileSource,
@@ -159,52 +183,39 @@ mod tests {
 			compression: TileCompression,
 			mime_type: &str,
 		) -> Result<Vec<u8>> {
-			let response = container
-				.get_data(&Url::new(url), &TargetCompression::from(compression))
-				.await?;
-			assert!(response.is_some());
-
-			let response = response.unwrap();
+			let response = get_response(container, url, compression).await?.unwrap();
 			assert_eq!(response.mime, mime_type);
-
 			Ok(response.blob.into_vec())
 		}
 
-		async fn check_error_400(container: &mut TileSource, url: &str, compression: TileCompression) -> Result<bool> {
-			let response = container
-				.get_data(&Url::new(url), &TargetCompression::from(compression))
-				.await;
-			assert!(response.is_err());
-			Ok(true)
+		async fn check_status(container: &mut TileSource, url: &str) -> u16 {
+			let response = get_response(container, url, Uncompressed).await;
+			if response.is_err() {
+				return 400;
+			}
+			if response.unwrap().is_none() { 404 } else { 200 }
 		}
 
-		async fn check_error_404(container: &mut TileSource, url: &str, compression: TileCompression) -> Result<bool> {
-			let response = container
-				.get_data(&Url::new(url), &TargetCompression::from(compression))
-				.await?;
-			assert!(response.is_none());
-			Ok(true)
-		}
+		let (exp_mime, exp_bounds, exp_header, exp_minzoom, exp_maxzoom) = expected_tile_json;
 
-		let c = &mut TileSource::from(
-			MockTilesReader::new_mock_profile(MockTilesReaderProfile::Png)?.boxed(),
-			"prefix",
-		)?;
+		let c = &mut TileSource::from(reader, "prefix")?;
 
 		assert_eq!(
-			&check_response(c, "0/0/0.png", Uncompressed, "image/png").await?[0..6],
-			b"\x89PNG\r\n"
+			&check_response(c, coord, Uncompressed, exp_mime).await?[0..4],
+			exp_header
 		);
 
-		assert_eq!(
-			String::from_utf8(check_response(c, "meta.json", Uncompressed, "application/json").await?)?,
-			"{\"bounds\":[-180,-79.171335,45,66.51326],\"maxzoom\":3,\"minzoom\":2,\"tile_format\":\"image/png\",\"tile_schema\":\"rgb\",\"tile_type\":\"raster\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/prefix/{z}/{x}/{y}\"],\"type\":\"dummy\"}"
-		);
+		let tile_json = check_response(c, "meta.json", Uncompressed, "application/json").await?;
+		let tile_json = TileJSON::try_from(tile_json)?.as_object();
+		assert_eq!(tile_json.get_string("tile_format")?.unwrap(), exp_mime);
+		assert_eq!(tile_json.get_array("bounds")?.unwrap().stringify(), exp_bounds);
+		assert_eq!(tile_json.get_number("minzoom")?.unwrap() as u8, exp_minzoom);
+		assert_eq!(tile_json.get_number("maxzoom")?.unwrap() as u8, exp_maxzoom);
 
-		assert!(check_error_400(c, "x/0/0.png", Uncompressed).await?);
-		assert!(check_error_400(c, "-1/0/0.png", Uncompressed).await?);
-		assert!(check_error_400(c, "0/0/-1.png", Uncompressed).await?);
-		assert!(check_error_404(c, "0/0/1.png", Uncompressed).await?);
+		assert_eq!(check_status(c, "x/0/0.png").await, 400);
+		assert_eq!(check_status(c, "-1/0/0.png").await, 400);
+		assert_eq!(check_status(c, "0/0/-1.png").await, 400);
+		assert_eq!(check_status(c, "16/0/0.png").await, 404);
 
 		Ok(())
 	}

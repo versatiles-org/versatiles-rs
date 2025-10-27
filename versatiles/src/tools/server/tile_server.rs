@@ -378,10 +378,10 @@ mod tests {
 
 		assert_eq!(get("tiles/cheese/brum.json").await, "Not Found");
 
-		let meta = "{\"bounds\":[-180,-79.171335,45,66.51326],\"maxzoom\":3,\"minzoom\":2,\"tile_format\":\"vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tile_type\":\"vector\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/cheese/{z}/{x}/{y}\"],\"type\":\"dummy\"}";
+		let meta = "{\"bounds\":[-180,-85.051129,180,85.051129],\"maxzoom\":6,\"minzoom\":2,\"tile_format\":\"vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tile_type\":\"vector\",\"tilejson\":\"3.0.0\",\"tiles\":[\"/tiles/cheese/{z}/{x}/{y}\"],\"type\":\"dummy\"}";
 		assert_eq!(get("tiles/cheese/meta.json").await, meta);
 		assert_eq!(get("tiles/cheese/tiles.json").await, meta);
-		assert!(get("tiles/cheese/0/0/0.png").await.starts_with("\u{1a}4\n\u{5}ocean"));
+		assert_eq!(&get("tiles/cheese/3/4/5").await[0..9], "\u{1a}4\n\u{5}ocean");
 		assert_eq!(get("tiles/index.json").await, "[\"cheese\"]");
 		assert_eq!(get("status").await, "ready!");
 

@@ -171,6 +171,10 @@ impl OperationTrait for Operation {
 		let streams = stream::iter(bboxes).map(move |bbox| {
 			let size = size;
 			async move {
+				if bbox.is_empty() {
+					return TileStream::empty();
+				}
+
 				let image = self
 					.get_image_data_from_gdal(
 						&bbox.to_geo_bbox().unwrap(),
