@@ -3749,6 +3749,7 @@ dependencies = [
  "log",
  "num_cpus",
  "regex",
+ "rstest",
  "tokio",
  "versatiles_core",
 ]
