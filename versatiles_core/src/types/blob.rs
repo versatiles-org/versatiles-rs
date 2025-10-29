@@ -288,9 +288,68 @@ impl Blob {
 		self.0.is_empty()
 	}
 
+	/// Saves the contents of this [`Blob`] to the given filesystem path.
+	///
+	/// # Arguments
+	///
+	/// * `path` - Destination path where the bytes will be written.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the file cannot be created or written (for example due to
+	/// insufficient permissions, a non‑existent parent directory, or running out of disk space).
+	///
+	/// # Examples
+	///
+	/// ```rust
+	/// use versatiles_core::Blob;
+	/// use std::path::PathBuf;
+	/// # use anyhow::Result;
+	/// # fn main() -> Result<()> {
+	/// let data = Blob::from(&[1u8, 2, 3, 4]);
+	/// let path = PathBuf::from("tmp_blob_save.bin");
+	/// data.save_to_file(&path)?;
+	/// assert!(path.exists());
+	/// std::fs::remove_file(&path)?;
+	/// # Ok(())
+	/// # }
+	/// ```
 	pub fn save_to_file(&self, path: &Path) -> Result<()> {
 		std::fs::write(path, &self.0)?;
 		Ok(())
+	}
+
+	/// Loads a [`Blob`] from the given filesystem path by reading all bytes from the file.
+	///
+	/// # Arguments
+	///
+	/// * `path` - Path to the file to read.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the file cannot be opened or read (for example if the file does not
+	/// exist or the process lacks permissions).
+	///
+	/// # Examples
+	///
+	/// ```rust
+	/// use versatiles_core::Blob;
+	/// use std::path::PathBuf;
+	/// # use anyhow::Result;
+	/// # fn main() -> Result<()> {
+	/// let original = Blob::from("Hello, files!");
+	/// let path = PathBuf::from("tmp_blob_load.bin");
+	/// original.save_to_file(&path)?;
+	///
+	/// let loaded = Blob::load_from_file(&path)?;
+	/// assert_eq!(loaded.as_str(), "Hello, files!");
+	///
+	/// std::fs::remove_file(&path)?;
+	/// # Ok(())
+	/// # }
+	/// ```
+	pub fn load_from_file(path: &Path) -> Result<Self> {
+		Ok(Blob::from(std::fs::read(path)?))
 	}
 }
 
