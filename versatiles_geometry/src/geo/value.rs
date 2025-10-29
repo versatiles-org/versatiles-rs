@@ -156,7 +156,7 @@ impl Display for GeoValue {
 				GeoValue::Double(v) => v.to_string(),
 				GeoValue::Float(v) => v.to_string(),
 				GeoValue::Int(v) => v.to_string(),
-				GeoValue::Null => String::from("null"),
+				GeoValue::Null => "null".to_string(),
 				GeoValue::String(v) => v.to_string(),
 				GeoValue::UInt(v) => v.to_string(),
 			}
@@ -228,6 +228,7 @@ impl GeoValue {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use rstest::rstest;
 
 	#[test]
 	fn test_geo_value_ord() {
@@ -236,6 +237,7 @@ mod tests {
 		assert!(GeoValue::from(1.0f32) < GeoValue::from(2.0f32));
 		assert!(GeoValue::from(1.0f64) < GeoValue::from(2.0f64));
 		assert!(GeoValue::from(1) < GeoValue::from(2));
+		assert!(GeoValue::from(-1) < GeoValue::from(0));
 		assert!(GeoValue::from(1u64) < GeoValue::from(2u64));
 		assert!(GeoValue::from(false) < GeoValue::from(true));
 
@@ -246,48 +248,22 @@ mod tests {
 		assert!(GeoValue::from(1u64) < GeoValue::from(false));
 	}
 
-	#[test]
-	fn test_geo_value_partial_cmp() {
+	#[rstest]
+	#[case(GeoValue::from("a"), GeoValue::from("b"))]
+	#[case(GeoValue::from(1.0f32), GeoValue::from(2.0f32))]
+	#[case(GeoValue::from(1.0f64), GeoValue::from(2.0f64))]
+	#[case(GeoValue::from(1), GeoValue::from(2))]
+	#[case(GeoValue::from(-1), GeoValue::from(2))]
+	#[case(GeoValue::from(-2), GeoValue::from(-1))]
+	#[case(GeoValue::from(1u64), GeoValue::from(2u64))]
+	#[case(GeoValue::from(false), GeoValue::from(true))]
+	#[case(GeoValue::from("a"), GeoValue::from(1.0f32))]
+	#[case(GeoValue::from(1.0f32), GeoValue::from(1.0f64))]
+	#[case(GeoValue::from(1.0f64), GeoValue::from(1))]
+	#[case(GeoValue::from(1u64), GeoValue::from(false))]
+	fn test_geo_value_partial_cmp(#[case] a: GeoValue, #[case] b: GeoValue) {
 		// Test partial_cmp within the same variant
-		assert_eq!(
-			GeoValue::from("a").partial_cmp(&GeoValue::from("b")),
-			Some(Ordering::Less)
-		);
-		assert_eq!(
-			GeoValue::from(1.0f32).partial_cmp(&GeoValue::from(2.0f32)),
-			Some(Ordering::Less)
-		);
-		assert_eq!(
-			GeoValue::from(1.0f64).partial_cmp(&GeoValue::from(2.0f64)),
-			Some(Ordering::Less)
-		);
-		assert_eq!(GeoValue::from(1).partial_cmp(&GeoValue::from(2)), Some(Ordering::Less));
-		assert_eq!(
-			GeoValue::from(1u64).partial_cmp(&GeoValue::from(2u64)),
-			Some(Ordering::Less)
-		);
-		assert_eq!(
-			GeoValue::from(false).partial_cmp(&GeoValue::from(true)),
-			Some(Ordering::Less)
-		);
-
-		// Test partial_cmp between different variants
-		assert_eq!(
-			GeoValue::from("a").partial_cmp(&GeoValue::from(1.0f32)),
-			Some(Ordering::Less)
-		);
-		assert_eq!(
-			GeoValue::from(1.0f32).partial_cmp(&GeoValue::from(1.0f64)),
-			Some(Ordering::Less)
-		);
-		assert_eq!(
-			GeoValue::from(1.0f64).partial_cmp(&GeoValue::from(1)),
-			Some(Ordering::Less)
-		);
-		assert_eq!(
-			GeoValue::from(1u64).partial_cmp(&GeoValue::from(false)),
-			Some(Ordering::Less)
-		);
+		assert_eq!(a.partial_cmp(&b), Some(Ordering::Less));
 	}
 
 	#[test]
@@ -309,16 +285,44 @@ mod tests {
 		assert_ne!(GeoValue::from(false), GeoValue::from(true));
 	}
 
-	#[test]
-	fn test_parse_str() {
-		assert_eq!(GeoValue::parse_str("true"), GeoValue::Bool(true));
-		assert_eq!(GeoValue::parse_str("false"), GeoValue::Bool(false));
-		assert_eq!(GeoValue::parse_str("23.42"), GeoValue::Double(23.42));
-		assert_eq!(GeoValue::parse_str("-23.42"), GeoValue::Double(-23.42));
-		assert_eq!(GeoValue::parse_str("-42"), GeoValue::Int(-42));
-		assert_eq!(GeoValue::parse_str("42"), GeoValue::UInt(42));
-		assert_eq!(GeoValue::parse_str("hello"), GeoValue::from("hello"));
-		assert_eq!(GeoValue::parse_str("123abc"), GeoValue::from("123abc"));
-		assert_eq!(GeoValue::parse_str(""), GeoValue::from(""));
+	#[rstest]
+	#[case(GeoValue::Bool(true), "true")]
+	#[case(GeoValue::Bool(false), "false")]
+	#[case(GeoValue::Double(23.42), "23.42")]
+	#[case(GeoValue::Double(-23.42),"-23.42")]
+	#[case(GeoValue::Int(-42),"-42")]
+	#[case(GeoValue::UInt(42), "42")]
+	#[case(GeoValue::from("hello"), "hello")]
+	#[case(GeoValue::from("123abc"), "123abc")]
+	#[case(GeoValue::from(""), "")]
+	fn test_parse_str(#[case] value: GeoValue, #[case] text: &str) {
+		assert_eq!(GeoValue::parse_str(text), value);
+		assert_eq!(format!("{}", value), text);
+	}
+
+	#[rstest]
+	#[case(GeoValue::Bool(true), "Bool(true)")]
+	#[case(GeoValue::Bool(false), "Bool(false)")]
+	#[case(GeoValue::Float(23.42), "Float(23.42)")]
+	#[case(GeoValue::Double(23.42), "Double(23.42)")]
+	#[case(GeoValue::Double(-23.42), "Double(-23.42)")]
+	#[case(GeoValue::Int(-42), "Int(-42)")]
+	#[case(GeoValue::UInt(42), "UInt(42)")]
+	#[case(GeoValue::Null, "Null")]
+	fn test_debug(#[case] value: GeoValue, #[case] text: &str) {
+		assert_eq!(format!("{:?}", value), text);
+	}
+
+	#[rstest]
+	#[case(GeoValue::Bool(true), JsonValue::Boolean(true))]
+	#[case(GeoValue::Bool(false), JsonValue::Boolean(false))]
+	#[case(GeoValue::Float(32.0), JsonValue::Number(32.0))]
+	#[case(GeoValue::Double(23.42), JsonValue::Number(23.42))]
+	#[case(GeoValue::Double(-23.42), JsonValue::Number(-23.42))]
+	#[case(GeoValue::Int(-42),JsonValue::Number(-42.0))]
+	#[case(GeoValue::UInt(42), JsonValue::Number(42.0))]
+	#[case(GeoValue::Null, JsonValue::Null)]
+	fn test_json(#[case] value: GeoValue, #[case] json: JsonValue) {
+		assert_eq!(value.to_json(), json);
 	}
 }
