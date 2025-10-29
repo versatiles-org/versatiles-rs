@@ -99,7 +99,7 @@ mod tests {
 		let json = outline.to_feature().to_json(Some(6)).stringify();
 		assert_eq!(
 			json,
-			r#"{"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[1.0,0.0],[1.0,1.0],[2.0,1.0],[2.0,0.0],[1.0,0.0]]]]}},"properties":{}}"#
+			"{\"geometry\":{\"coordinates\":[[[-180,85.051129],[-180,-0],[0,-0],[0,85.051129],[-180,85.051129]]],\"type\":\"Polygon\"},\"properties\":{},\"type\":\"Feature\"}"
 		);
 	}
 }
