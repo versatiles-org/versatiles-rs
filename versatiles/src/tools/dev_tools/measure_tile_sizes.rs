@@ -1,4 +1,4 @@
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Result, anyhow, ensure};
 use std::path::PathBuf;
 use versatiles::get_registry;
 use versatiles_container::ProcessingConfig;
@@ -7,6 +7,14 @@ use versatiles_image::{DynamicImage, DynamicImageTraitConvert, encode};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_help_flag = true, disable_version_flag = true)]
+/// Measure file sizes of the tiles in a container and generate an image visualizing the sizes.
+///
+/// The output image is a downscaled grayscale representation of the tile sizes at the specified zoom level.
+/// Each pixel in the output image has a brightness value of 10*log2(size), where size is the average tile size in bytes for the corresponding area.
+/// Example:
+/// - A value of 0 means an average tile size of 1 byte or less
+/// - A value of 100 means an average tile size of about 1 KB (2^10)
+/// - A value of 200 means an average tile size of about 1 MB (2^20)
 pub struct MeasureTileSizes {
 	/// Input file
 	#[arg(value_name = "INPUT_FILE")]
@@ -37,9 +45,11 @@ pub async fn run(args: &MeasureTileSizes) -> Result<()> {
 		"Measuring tile sizes in {input_file:?} at zoom level {level}, generating an {width_scaled}x{width_scaled} image and saving it to {output_file:?}"
 	);
 
-	if !output_file.ends_with(".png") {
-		bail!("Only PNG output is supported for now");
-	}
+	ensure!(
+		output_file.extension() == Some("png".as_ref()),
+		"Only PNG output is supported for now, got {:?}",
+		output_file.extension().unwrap_or_default()
+	);
 
 	let reader = get_registry(ProcessingConfig::default())
 		.get_reader(
@@ -86,4 +96,36 @@ pub async fn run(args: &MeasureTileSizes) -> Result<()> {
 
 	log::info!("Done, saved to {output_file:?}");
 	Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::tests::run_command;
+	use anyhow::Result;
+	use assert_fs::TempDir;
+	use versatiles_core::{Blob, TileFormat};
+	use versatiles_image::{DynamicImageTraitOperation, GenericImageView};
+
+	#[test]
+	fn test_measure_tile_sizes() -> Result<()> {
+		let temp_dir = TempDir::new()?;
+		let temp_file = temp_dir.path().join("image.png");
+
+		run_command(vec![
+			"versatiles",
+			"dev",
+			"measure-tile-sizes",
+			"../testdata/berlin.mbtiles",
+			&temp_file.display().to_string(),
+		])?;
+
+		let content = Blob::load_from_file(&temp_file)?;
+		let image = versatiles_image::decode(&content, TileFormat::PNG)?;
+		assert_eq!(image.dimensions(), (4096, 4096));
+
+		let image = image.crop_imm(2195, 1339, 11, 9);
+		assert_eq!(image.average_color(), [82]);
+
+		Ok(())
+	}
 }
