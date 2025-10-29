@@ -105,10 +105,10 @@ where
 impl<T, const N: usize> From<&[T; N]> for JsonArray
 where
 	JsonValue: From<T>,
-	T: Copy,
+	T: Clone,
 {
 	fn from(input: &[T; N]) -> Self {
-		JsonArray(Vec::from_iter(input.iter().map(|v| JsonValue::from(*v))))
+		JsonArray(Vec::from_iter(input.iter().map(|v| JsonValue::from(v.clone()))))
 	}
 }
 
@@ -118,7 +118,7 @@ where
 	T: Copy,
 {
 	fn from(input: [T; N]) -> Self {
-		JsonArray(Vec::from_iter(input.iter().map(|v| JsonValue::from(*v))))
+		JsonArray(Vec::from_iter(input.into_iter().map(|v| JsonValue::from(v))))
 	}
 }
 
