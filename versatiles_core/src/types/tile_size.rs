@@ -64,6 +64,7 @@ mod tests {
 	fn clone_copy_and_eq_work() {
 		let a = TileSize::Size256;
 		let b = a; // Copy
+		#[allow(clippy::clone_on_copy)]
 		let c = a.clone(); // Clone
 		assert_eq!(a, b);
 		assert_eq!(b, c);
