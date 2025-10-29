@@ -126,25 +126,26 @@ fn get_bbox_pyramid(arguments: &Subcommand) -> Result<Option<TileBBoxPyramid>> {
 mod tests {
 	use crate::tests::run_command;
 	use anyhow::Result;
-	use std::fs;
+	use assert_fs::TempDir;
 
 	#[test]
 	fn test_local() -> Result<()> {
-		fs::create_dir("../tmp/").unwrap_or_default();
+		let temp_dir = TempDir::new()?;
+		let temp_path = temp_dir.path().display();
 
 		run_command(vec![
 			"versatiles",
 			"convert",
 			"../testdata/berlin.mbtiles",
-			"../tmp/berlin1.versatiles",
+			&format!("{temp_path}/berlin1.versatiles"),
 		])?;
 
 		run_command(vec![
 			"versatiles",
 			"convert",
 			"--bbox=13.38,52.46,13.43,52.49",
-			"../tmp/berlin1.versatiles",
-			"../tmp/berlin2.versatiles",
+			&format!("{temp_path}/berlin1.versatiles"),
+			&format!("{temp_path}/berlin2.versatiles"),
 		])?;
 
 		run_command(vec![
@@ -153,15 +154,15 @@ mod tests {
 			"--min-zoom=1",
 			"--max-zoom=13",
 			"--flip-y",
-			"../tmp/berlin2.versatiles",
-			"../tmp/berlin3.versatiles",
+			&format!("{temp_path}/berlin2.versatiles"),
+			&format!("{temp_path}/berlin3.versatiles"),
 		])?;
 
 		run_command(vec![
 			"versatiles",
 			"convert",
 			"../testdata/berlin.vpl",
-			"../tmp/berlin4.pmtiles",
+			&format!("{temp_path}/berlin4.pmtiles"),
 		])?;
 
 		Ok(())
@@ -170,7 +171,9 @@ mod tests {
 	#[test]
 
 	fn test_remote1() -> Result<()> {
-		fs::create_dir("../tmp/").unwrap_or_default();
+		let temp_dir = TempDir::new()?;
+		let temp_path = temp_dir.path().display();
+
 		run_command(vec![
 			"versatiles",
 			"convert",
@@ -179,7 +182,7 @@ mod tests {
 			"--bbox=-180,-85,180,85",
 			"--flip-y",
 			"https://download.versatiles.org/osm.versatiles",
-			"../tmp/planet2.versatiles",
+			&format!("{temp_path}/planet2.versatiles"),
 		])?;
 		Ok(())
 	}
@@ -187,7 +190,9 @@ mod tests {
 	#[test]
 
 	fn test_remote2() -> Result<()> {
-		fs::create_dir("../tmp/").unwrap_or_default();
+		let temp_dir = TempDir::new()?;
+		let temp_path = temp_dir.path().display();
+
 		run_command(vec![
 			"versatiles",
 			"convert",
@@ -195,7 +200,7 @@ mod tests {
 			"--bbox=9.14,48.76,9.19,48.79",
 			"--flip-y",
 			"https://download.versatiles.org/osm.versatiles",
-			"../tmp/stuttgart.versatiles",
+			&format!("{temp_path}/stuttgart.versatiles"),
 		])?;
 		Ok(())
 	}
