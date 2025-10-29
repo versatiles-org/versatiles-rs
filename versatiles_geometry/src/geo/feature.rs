@@ -1,8 +1,13 @@
 #![allow(dead_code)]
 
 use super::{GeoProperties, GeoValue, Geometry};
-use std::fmt::Debug;
+use lazy_static::lazy_static;
+use std::{fmt::Debug, mem::swap};
 use versatiles_core::json::{JsonObject, JsonValue};
+
+lazy_static! {
+	static ref DUMMY_GEOMETRY: Geometry = Geometry::new_multi_point::<Vec<(f64, f64)>>(vec![]);
+}
 
 #[derive(Clone, Debug)]
 pub struct GeoFeature {
@@ -36,14 +41,31 @@ impl GeoFeature {
 		self.properties.insert(key, GeoValue::from(value));
 	}
 
-	#[must_use]
-	pub fn to_json(&self) -> JsonObject {
+	pub fn to_single_geometry(&mut self) {
+		if self.geometry.is_single_geometry() {
+			return;
+		}
+		let mut geometry = DUMMY_GEOMETRY.clone();
+		swap(&mut geometry, &mut self.geometry);
+		self.geometry = geometry.into_single_geometry();
+	}
+
+	pub fn to_multi_geometry(&mut self) {
+		if self.geometry.is_multi_geometry() {
+			return;
+		}
+		let mut geometry = DUMMY_GEOMETRY.clone();
+		swap(&mut geometry, &mut self.geometry);
+		self.geometry = geometry.into_multi_geometry();
+	}
+
+	pub fn to_json(&self, precision: Option<u8>) -> JsonObject {
 		let mut json = JsonObject::new();
 		json.set("type", JsonValue::from("Feature"));
 		if let Some(id) = &self.id {
 			json.set("id", id.to_json());
 		}
-		json.set("geometry", self.geometry.to_json());
+		json.set("geometry", self.geometry.to_json(precision));
 		json.set("properties", self.properties.to_json());
 		json
 	}
@@ -112,7 +134,7 @@ mod tests {
 	fn to_json_contains_type_geometry_properties_and_optional_id() {
 		// with id
 		let mut f = GeoFeature::new_example();
-		let j = f.to_json();
+		let j = f.to_json(None);
 		assert_eq!(j.get_string("type").unwrap(), Some("Feature".into()));
 		assert!(j.get_number("id").unwrap().is_some());
 		assert!(j.get_object("geometry").unwrap().is_some());
@@ -120,7 +142,7 @@ mod tests {
 
 		// without id
 		f.id = None;
-		let j2 = f.to_json();
+		let j2 = f.to_json(None);
 		assert_eq!(j2.get_string("type").unwrap(), Some("Feature".into()));
 		assert!(j2.get_number("id").unwrap().is_none());
 	}
@@ -136,7 +158,7 @@ mod tests {
 		// properties start empty
 		assert!(f.properties.is_empty());
 		// geometry is present and serializable
-		let j = f.to_json();
+		let j = f.to_json(None);
 		assert_eq!(j.get_string("type").unwrap(), Some("Feature".into()));
 		assert!(j.get_object("geometry").unwrap().is_some());
 	}
@@ -145,7 +167,7 @@ mod tests {
 	fn feature_example_contains_expected_values() {
 		let f = GeoFeature::new_example();
 		assert_eq!(
-			f.to_json()
+			f.to_json(None)
 				.stringify_pretty_multi_line(100, 0)
 				.split('\n')
 				.collect::<Vec<_>>(),

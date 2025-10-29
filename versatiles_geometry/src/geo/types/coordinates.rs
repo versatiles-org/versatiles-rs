@@ -22,8 +22,15 @@ impl Coordinates {
 	}
 
 	#[must_use]
-	pub fn to_json(&self) -> JsonValue {
-		JsonValue::from(&self.0)
+	pub fn to_json(&self, precision: Option<u8>) -> JsonValue {
+		if let Some(prec) = precision {
+			let factor = 10f64.powi(prec as i32);
+			let x = (self.0[0] * factor).round() / factor;
+			let y = (self.0[1] * factor).round() / factor;
+			JsonValue::from([x, y])
+		} else {
+			JsonValue::from(&self.0)
+		}
 	}
 }
 
@@ -39,6 +46,18 @@ where
 impl From<[f64; 2]> for Coordinates {
 	fn from(value: [f64; 2]) -> Self {
 		Coordinates(value)
+	}
+}
+
+impl From<(f64, f64)> for Coordinates {
+	fn from(value: (f64, f64)) -> Self {
+		Coordinates([value.0, value.1])
+	}
+}
+
+impl From<&(f64, f64)> for Coordinates {
+	fn from(value: &(f64, f64)) -> Self {
+		Coordinates([value.0, value.1])
 	}
 }
 

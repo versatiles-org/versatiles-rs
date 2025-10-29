@@ -5,7 +5,7 @@ use versatiles_core::json::JsonValue;
 pub trait GeometryTrait: Debug + Clone {
 	fn area(&self) -> f64;
 	fn verify(&self) -> Result<()>;
-	fn to_coord_json(&self) -> JsonValue;
+	fn to_coord_json(&self, precision: Option<u8>) -> JsonValue;
 }
 
 pub trait SingleGeometryTrait<Multi>: Debug + Clone {

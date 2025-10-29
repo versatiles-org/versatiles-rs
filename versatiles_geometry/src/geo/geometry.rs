@@ -1,3 +1,5 @@
+use crate::geo::CompositeGeometryTrait;
+
 use super::{
 	GeometryTrait, LineStringGeometry, MultiLineStringGeometry, MultiPointGeometry, MultiPolygonGeometry, PointGeometry,
 	PolygonGeometry, SingleGeometryTrait,
@@ -54,8 +56,21 @@ impl Geometry {
 		Self::MultiPolygon(MultiPolygonGeometry::from(value))
 	}
 
-	#[must_use]
-	pub fn get_type_name(&self) -> &str {
+	pub fn is_single_geometry(&self) -> bool {
+		matches!(
+			self,
+			Geometry::Point(_) | Geometry::LineString(_) | Geometry::Polygon(_)
+		)
+	}
+
+	pub fn is_multi_geometry(&self) -> bool {
+		matches!(
+			self,
+			Geometry::MultiPoint(_) | Geometry::MultiLineString(_) | Geometry::MultiPolygon(_)
+		)
+	}
+
+	pub fn type_name(&self) -> &str {
 		match self {
 			Geometry::Point(_) => "Point",
 			Geometry::LineString(_) => "LineString",
@@ -65,8 +80,8 @@ impl Geometry {
 			Geometry::MultiPolygon(_) => "MultiPolygon",
 		}
 	}
-	#[must_use]
-	pub fn into_multi(self) -> Self {
+
+	pub fn into_multi_geometry(self) -> Self {
 		match self {
 			Geometry::Point(g) => Geometry::MultiPoint(g.into_multi()),
 			Geometry::LineString(g) => Geometry::MultiLineString(g.into_multi()),
@@ -77,7 +92,36 @@ impl Geometry {
 		}
 	}
 
-	#[must_use]
+	pub fn into_single_geometry(self) -> Self {
+		match self {
+			Geometry::Point(_) => self,
+			Geometry::LineString(_) => self,
+			Geometry::Polygon(_) => self,
+			Geometry::MultiPoint(mut g) => {
+				if g.len() == 1 {
+					Geometry::Point(g.pop().unwrap())
+				} else {
+					Geometry::MultiPoint(g)
+				}
+			}
+			Geometry::MultiLineString(mut g) => {
+				if g.len() == 1 {
+					Geometry::LineString(g.pop().unwrap())
+				} else {
+					Geometry::MultiLineString(g)
+				}
+			}
+			Geometry::MultiPolygon(mut g) => {
+				if g.len() == 1 {
+					Geometry::Polygon(g.pop().unwrap())
+				} else {
+					Geometry::MultiPolygon(g)
+				}
+			}
+		}
+	}
+
+	#[cfg(any(test, feature = "test"))]
 	pub fn new_example() -> Self {
 		Self::new_multi_polygon(vec![
 			vec![
@@ -102,16 +146,16 @@ impl Geometry {
 		}
 	}
 
-	#[must_use]
-	pub fn to_json(&self) -> JsonObject {
+	pub fn to_json(&self, precision: Option<u8>) -> JsonObject {
 		let mut obj = JsonObject::new();
-		let (type_name, coordinates) = match self {
-			Geometry::Point(g) => ("Point", g.to_coord_json()),
-			Geometry::LineString(g) => ("LineString", g.to_coord_json()),
-			Geometry::Polygon(g) => ("Polygon", g.to_coord_json()),
-			Geometry::MultiPoint(g) => ("MultiPoint", g.to_coord_json()),
-			Geometry::MultiLineString(g) => ("MultiLineString", g.to_coord_json()),
-			Geometry::MultiPolygon(g) => ("MultiPolygon", g.to_coord_json()),
+		let type_name = self.type_name();
+		let coordinates = match self {
+			Geometry::Point(g) => g.to_coord_json(precision),
+			Geometry::LineString(g) => g.to_coord_json(precision),
+			Geometry::Polygon(g) => g.to_coord_json(precision),
+			Geometry::MultiPoint(g) => g.to_coord_json(precision),
+			Geometry::MultiLineString(g) => g.to_coord_json(precision),
+			Geometry::MultiPolygon(g) => g.to_coord_json(precision),
 		};
 		obj.set("type", JsonValue::from(type_name));
 		obj.set("coordinates", coordinates);

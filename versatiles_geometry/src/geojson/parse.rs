@@ -260,7 +260,7 @@ mod tests {
 		assert_eq!(collection.features.len(), 1);
 
 		let feature = &collection.features[0];
-		assert_eq!(feature.geometry.get_type_name(), "Point");
+		assert_eq!(feature.geometry.type_name(), "Point");
 		if let Geometry::Point(coords) = &feature.geometry {
 			assert_eq!(coords.x(), 1.0);
 			assert_eq!(coords.y(), 2.0);
@@ -394,7 +394,7 @@ mod tests {
 			"type":"Feature","geometry":{"type":"LineString","coordinates":[[0,0],[1,1]]},"properties":{}
 		}]}"#;
 		let collection = parse_geojson(json)?;
-		assert_eq!(collection.features[0].geometry.get_type_name(), "LineString");
+		assert_eq!(collection.features[0].geometry.type_name(), "LineString");
 		Ok(())
 	}
 
@@ -406,7 +406,7 @@ mod tests {
 			"type":"Feature","geometry":{"type":"Polygon","coordinates":[[[0,0],[1,0],[1,1],[0,1],[0,0]]]},"properties":{}
 		}]}"#;
 		let collection = parse_geojson(json)?;
-		assert_eq!(collection.features[0].geometry.get_type_name(), "Polygon");
+		assert_eq!(collection.features[0].geometry.type_name(), "Polygon");
 		Ok(())
 	}
 
@@ -418,7 +418,7 @@ mod tests {
 			"type":"Feature","geometry":{"type":"MultiPoint","coordinates":[[1,2],[3,4]]},"properties":{}
 		}]}"#;
 		let collection = parse_geojson(json)?;
-		assert_eq!(collection.features[0].geometry.get_type_name(), "MultiPoint");
+		assert_eq!(collection.features[0].geometry.type_name(), "MultiPoint");
 		Ok(())
 	}
 
@@ -430,7 +430,7 @@ mod tests {
 			"type":"Feature","geometry":{"type":"MultiLineString","coordinates":[[[0,0],[1,1]],[[2,2],[3,3]]]},"properties":{}
 		}]}"#;
 		let collection = parse_geojson(json)?;
-		assert_eq!(collection.features[0].geometry.get_type_name(), "MultiLineString");
+		assert_eq!(collection.features[0].geometry.type_name(), "MultiLineString");
 		Ok(())
 	}
 
@@ -442,7 +442,7 @@ mod tests {
 			"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[0,0],[1,0],[1,1],[0,1],[0,0]]]]},"properties":{}
 		}]}"#;
 		let collection = parse_geojson(json)?;
-		assert_eq!(collection.features[0].geometry.get_type_name(), "MultiPolygon");
+		assert_eq!(collection.features[0].geometry.type_name(), "MultiPolygon");
 		Ok(())
 	}
 

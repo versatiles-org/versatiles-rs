@@ -16,14 +16,8 @@ impl GeometryTrait for LineStringGeometry {
 		Ok(())
 	}
 
-	fn to_coord_json(&self) -> JsonValue {
-		JsonValue::from(
-			self
-				.0
-				.iter()
-				.map(super::coordinates::Coordinates::to_json)
-				.collect::<Vec<_>>(),
-		)
+	fn to_coord_json(&self, precision: Option<u8>) -> JsonValue {
+		JsonValue::from(self.0.iter().map(|c| c.to_json(precision)).collect::<Vec<_>>())
 	}
 }
 

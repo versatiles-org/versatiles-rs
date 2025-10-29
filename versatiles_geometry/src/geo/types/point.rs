@@ -34,8 +34,8 @@ impl GeometryTrait for PointGeometry {
 		Ok(())
 	}
 
-	fn to_coord_json(&self) -> JsonValue {
-		self.0.to_json()
+	fn to_coord_json(&self, precision: Option<u8>) -> JsonValue {
+		self.0.to_json(precision)
 	}
 }
 

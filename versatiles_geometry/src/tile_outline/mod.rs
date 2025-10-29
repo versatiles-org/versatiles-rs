@@ -46,10 +46,11 @@ impl TileOutline {
 	}
 
 	#[must_use]
-	pub fn to_json_string(&self) -> String {
+	pub fn to_feature(&self) -> GeoFeature {
 		let multi_polygon = self.to_multi_polygon();
-		let obj = GeoFeature::from(multi_polygon).to_json();
-		obj.stringify()
+		let mut feature = GeoFeature::from(multi_polygon);
+		feature.to_single_geometry();
+		feature
 	}
 }
 
@@ -95,11 +96,10 @@ mod tests {
 	fn json_is_geojson_feature_with_multipolygon() {
 		let mut outline = TileOutline::new();
 		outline.add_coord(TileCoord::new(1, 0, 0).unwrap());
-		let json = outline.to_json_string();
-		assert!(
-			json.contains("\"type\":\"Feature\""),
-			"should serialize as a GeoJSON Feature"
+		let json = outline.to_feature().to_json(Some(6)).stringify();
+		assert_eq!(
+			json,
+			r#"{"type":"Feature","geometry":{"type":"MultiPolygon","coordinates":[[[[1.0,0.0],[1.0,1.0],[2.0,1.0],[2.0,0.0],[1.0,0.0]]]]}},"properties":{}}"#
 		);
-		assert!(json.contains("\"MultiPolygon\""), "geometry should be MultiPolygon");
 	}
 }

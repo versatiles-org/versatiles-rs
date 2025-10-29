@@ -27,3 +27,6 @@ versatiles_core.workspace = true
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros"] }
+
+[features]
+test = []

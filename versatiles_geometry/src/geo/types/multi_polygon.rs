@@ -18,12 +18,12 @@ impl GeometryTrait for MultiPolygonGeometry {
 		Ok(())
 	}
 
-	fn to_coord_json(&self) -> JsonValue {
+	fn to_coord_json(&self, precision: Option<u8>) -> JsonValue {
 		JsonValue::from(
 			self
 				.0
 				.iter()
-				.map(super::traits::GeometryTrait::to_coord_json)
+				.map(|poly| poly.to_coord_json(precision))
 				.collect::<Vec<_>>(),
 		)
 	}

@@ -332,7 +332,7 @@ mod tests {
 		let vector_tile_feature = VectorTileFeature::from_geometry(None, vec![], geometry.clone())?;
 
 		// Compare original and converted features
-		assert_eq!(geometry.into_multi(), vector_tile_feature.to_geometry()?);
+		assert_eq!(geometry.into_multi_geometry(), vector_tile_feature.to_geometry()?);
 		Ok(())
 	}
 
