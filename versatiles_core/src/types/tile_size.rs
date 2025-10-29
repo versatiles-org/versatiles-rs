@@ -31,3 +31,41 @@ impl Debug for TileSize {
 		write!(f, "TileSize({})", self.size())
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use rstest::rstest;
+
+	#[rstest]
+	#[case(256, TileSize::Size256)]
+	#[case(512, TileSize::Size512)]
+	fn new_accepts_supported_sizes(#[case] size: u16, #[case] expected: TileSize) {
+		let ts = TileSize::new(size).expect("expected Ok for supported size");
+		assert_eq!(ts, expected);
+		assert_eq!(ts.size(), size);
+		assert_eq!(format!("{:?}", ts), format!("TileSize({:?})", size));
+	}
+
+	#[rstest]
+	#[case(0)]
+	#[case(1)]
+	#[case(255)]
+	#[case(257)]
+	#[case(511)]
+	#[case(513)]
+	fn new_rejects_unsupported_sizes(#[case] input: u16) {
+		let err = TileSize::new(input).expect_err("expected Err for unsupported size");
+		let msg = format!("{}", err);
+		assert!(msg.contains("Invalid tile size"));
+	}
+
+	#[test]
+	fn clone_copy_and_eq_work() {
+		let a = TileSize::Size256;
+		let b = a; // Copy
+		let c = a.clone(); // Clone
+		assert_eq!(a, b);
+		assert_eq!(b, c);
+	}
+}
