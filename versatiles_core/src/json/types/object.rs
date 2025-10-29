@@ -1,7 +1,10 @@
 //! JSON object type and utilities for serializing, deserializing, and converting JSON to Rust types.
 use crate::json::*;
 use anyhow::Result;
-use std::{collections::BTreeMap, fmt::Debug};
+use std::{
+	collections::BTreeMap,
+	fmt::{Debug, Display},
+};
 
 /// A JSON object backed by a `BTreeMap<String, JsonValue>`.
 ///
@@ -154,6 +157,12 @@ impl JsonObject {
 impl Debug for JsonObject {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{:?}", self.0)
+	}
+}
+
+impl Display for JsonObject {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.stringify())
 	}
 }
 
