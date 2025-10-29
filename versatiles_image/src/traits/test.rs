@@ -327,6 +327,12 @@ mod tests {
 	use super::*;
 	use rstest::rstest;
 
+	/// Helper: run `MarkerResult::compare` expecting failure and return the error message string.
+	fn compare_err_msg(p: MarkerParameters, r: MarkerResult, factor: f64) -> String {
+		let err = r.compare(&p, factor).expect_err("expected compare() to fail");
+		format!("{}", err)
+	}
+
 	/// Verifies that each synthetic test image (grey, greya, rgb, rgba)
 	/// produces the expected gradient pattern and channel alignment.
 	#[rstest]
@@ -379,15 +385,108 @@ mod tests {
 	#[case::rgb([  ( 3,  14, 80), (-7, -54, 65), (12, 80, 75)])]
 	#[case::rgba([ ( 4,  34, 88), (-9, -68, 67), (15, 60, 72), (-20, -17, 93)])]
 	fn marker_gauge_roundtrip<const N: usize>(#[case] args: [(i32, i32, i32); N]) {
-		let params = args.map(|(offset, angle, scale)| MarkerParameters {
-			offset: offset as f64,
-			angle: angle as f64,
-			scale: scale as f64,
-		});
+		let params = args.map(|(offset, angle, scale)| MarkerParameters::new(offset as f64, angle as f64, scale as f64));
 		let img = DynamicImage::new_marker(&params);
 		assert_eq!(img.dimensions(), (256, 256));
 		assert_eq!(img.color().channel_count() as usize, N);
 		let results = img.gauge_marker();
 		compare_marker_result(&params, &results).unwrap();
+	}
+
+	#[test]
+	fn compare_tolerates_exact_thresholds() -> Result<()> {
+		// Offsets: allowed Δ <= 0.11 * factor
+		let p = MarkerParameters {
+			offset: 10.0,
+			angle: 30.0,
+			scale: 80.0,
+		};
+		let r = MarkerResult {
+			offset: 10.11,
+			angle: 30.4,
+			scale: 80.10,
+			error: 1.0,
+		};
+		r.compare(&p, 1.0)
+	}
+
+	#[test]
+	fn compare_fails_just_over_thresholds() {
+		let p = MarkerParameters {
+			offset: 10.0,
+			angle: 30.0,
+			scale: 80.0,
+		};
+		// Each term barely exceeds its threshold
+		let r = MarkerResult {
+			offset: 10.11001,
+			angle: 30.4001,
+			scale: 80.1001,
+			error: 1.00001,
+		};
+		let msg = compare_err_msg(p, r, 1.0);
+		assert!(msg.contains("offset mismatch"), "msg: {msg}");
+		assert!(msg.contains("angle mismatch"), "msg: {msg}");
+		assert!(msg.contains("scale mismatch"), "msg: {msg}");
+		assert!(msg.contains("high residual error"), "msg: {msg}");
+	}
+
+	#[test]
+	fn compare_respects_factor_scaling() {
+		let p = MarkerParameters {
+			offset: 0.0,
+			angle: 0.0,
+			scale: 100.0,
+		};
+		// With factor 2.0, thresholds double; this should pass
+		let r = MarkerResult {
+			offset: 0.21,
+			angle: 0.79,
+			scale: 100.19,
+			error: 1.99,
+		};
+		r.compare(&p, 2.0).expect("should pass with scaled thresholds");
+		// But with factor 1.0, the same would fail
+		let msg = compare_err_msg(p, r, 1.0);
+		assert!(
+			msg.contains("offset mismatch")
+				|| msg.contains("angle mismatch")
+				|| msg.contains("scale mismatch")
+				|| msg.contains("high residual error")
+		);
+	}
+
+	#[test]
+	fn compare_angle_wrap_and_principal_axis_equivalence() -> Result<()> {
+		// 179° vs -181° is effectively 0° difference after wrap; also principal-axis equivalence
+		let p = MarkerParameters {
+			offset: 0.0,
+			angle: 179.0,
+			scale: 50.0,
+		};
+		// -181° normalizes to 179°, delta ~0°; should be accepted
+		let r = MarkerResult {
+			offset: 0.0,
+			angle: -181.0,
+			scale: 50.0,
+			error: 0.1,
+		};
+		r.compare(&p, 1.0)?;
+
+		// 170° vs -10° is a 180° flip; principal-axis equivalence should see 10° delta
+		// Within 0.4 threshold when factor large enough
+		let p2 = MarkerParameters {
+			offset: 0.0,
+			angle: 170.0,
+			scale: 50.0,
+		};
+		let r2 = MarkerResult {
+			offset: 0.0,
+			angle: -10.0,
+			scale: 50.0,
+			error: 0.1,
+		};
+		// With factor 30, threshold = 12°, so 10° is ok
+		r2.compare(&p2, 30.0)
 	}
 }
