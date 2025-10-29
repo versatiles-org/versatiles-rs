@@ -112,6 +112,16 @@ where
 	}
 }
 
+impl<T, const N: usize> From<[T; N]> for JsonArray
+where
+	JsonValue: From<T>,
+	T: Copy,
+{
+	fn from(input: [T; N]) -> Self {
+		JsonArray(Vec::from_iter(input.iter().map(|v| JsonValue::from(*v))))
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
