@@ -6,33 +6,12 @@ use nom::{
 	bytes::complete::{escaped_transform, tag, take_while, take_while1},
 	character::complete::{alphanumeric1, char, multispace1, none_of, one_of},
 	combinator::{all_consuming, cut, opt, recognize, value},
-	error::{ContextError, context},
+	error::context,
 	multi::{many0, many1, separated_list0, separated_list1},
 	sequence::{delimited, pair, preceded, separated_pair},
 };
 use nom_language::error::{VerboseError, convert_error};
-use std::{collections::BTreeMap, fmt::Debug};
-
-#[allow(dead_code)]
-fn debug<I: Clone + Debug, E: ContextError<I>, F, O: Debug>(
-	context: &'static str,
-	mut f: F,
-) -> impl FnMut(I) -> IResult<I, O, E>
-where
-	F: Parser<I, Output = O, Error = E>,
-{
-	move |i: I| {
-		let result = f.parse(i.clone());
-		println!("CONTEXT: {context}");
-		println!("  INPUT: {i:?}");
-		if let Ok(v) = &result {
-			println!("  \x1b[0;32mRESULT: {v:?}\x1b[0m");
-		} else {
-			println!("  \x1b[0;31mERROR!!!\x1b[0m");
-		}
-		result
-	}
-}
+use std::collections::BTreeMap;
 
 // Consume whitespace **and** shell-style comments ("# ...\n").
 fn comment(i: &str) -> IResult<&str, (), VerboseError<&str>> {
