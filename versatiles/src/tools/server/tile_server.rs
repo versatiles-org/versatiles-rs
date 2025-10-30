@@ -29,19 +29,19 @@ pub struct TileServer {
 	tile_sources: Vec<TileSource>,
 	static_sources: Vec<StaticSource>,
 	exit_signal: Option<Sender<()>>,
-	use_best_compression: bool,
+	minimal_recompression: bool,
 	use_api: bool,
 }
 
 impl TileServer {
-	pub fn new(ip: &str, port: u16, use_best_compression: bool, use_api: bool) -> TileServer {
+	pub fn new(ip: &str, port: u16, minimal_recompression: bool, use_api: bool) -> TileServer {
 		TileServer {
 			ip: ip.to_owned(),
 			port,
 			tile_sources: Vec::new(),
 			static_sources: Vec::new(),
 			exit_signal: None,
-			use_best_compression,
+			minimal_recompression,
 			use_api,
 		}
 	}
@@ -129,21 +129,21 @@ impl TileServer {
 
 			let tile_app = Router::new()
 				.route(&route, get(serve_tile))
-				.with_state((tile_source.clone(), self.use_best_compression));
+				.with_state((tile_source.clone(), self.minimal_recompression));
 
 			app = app.merge(tile_app);
 
 			async fn serve_tile(
 				uri: Uri,
 				headers: HeaderMap,
-				State((tile_source, use_best_compression)): State<(TileSource, bool)>,
+				State((tile_source, minimal_recompression)): State<(TileSource, bool)>,
 			) -> Response<Body> {
 				let path = Url::new(uri.path());
 
 				log::debug!("handle tile request: {path}");
 
 				let mut target_compressions = get_encoding(headers);
-				if !use_best_compression {
+				if minimal_recompression {
 					target_compressions.set_fast_compression();
 				}
 
@@ -175,14 +175,14 @@ impl TileServer {
 	fn add_static_sources_to_app(&self, app: Router) -> Router {
 		let static_app = Router::new()
 			.fallback(get(serve_static))
-			.with_state((self.static_sources.clone(), self.use_best_compression));
+			.with_state((self.static_sources.clone(), self.minimal_recompression));
 
 		return app.merge(static_app);
 
 		async fn serve_static(
 			uri: Uri,
 			headers: HeaderMap,
-			State((sources, use_best_compression)): State<(Vec<StaticSource>, bool)>,
+			State((sources, minimal_recompression)): State<(Vec<StaticSource>, bool)>,
 		) -> Response<Body> {
 			let mut url = Url::new(uri.path());
 
@@ -193,7 +193,7 @@ impl TileServer {
 			}
 
 			let mut target_compressions = get_encoding(headers);
-			if !use_best_compression {
+			if minimal_recompression {
 				target_compressions.set_fast_compression();
 			}
 

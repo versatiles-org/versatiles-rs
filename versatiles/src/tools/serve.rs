@@ -50,7 +50,7 @@ pub struct Subcommand {
 
 	/// use minimal recompression to reduce server response time
 	#[arg(long, display_order = 2)]
-	pub fast: bool,
+	pub minimal_recompression: bool,
 
 	/// disable API
 	#[arg(long, display_order = 4)]
@@ -64,7 +64,12 @@ pub struct Subcommand {
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
-	let mut server: TileServer = TileServer::new(&arguments.ip, arguments.port, !arguments.fast, !arguments.disable_api);
+	let mut server: TileServer = TileServer::new(
+		&arguments.ip,
+		arguments.port,
+		arguments.minimal_recompression,
+		!arguments.disable_api,
+	);
 
 	let tile_patterns: Vec<Regex> = [
 		r"^\[(?P<id>[^\]]+?)\](?P<url>.*)$",
