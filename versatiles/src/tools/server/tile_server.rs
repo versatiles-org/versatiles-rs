@@ -94,7 +94,7 @@ impl TileServer {
 		let mut reader = self.registry.get_reader(&tile_config.path).await?;
 
 		if let Some(comp_str) = tile_config.override_compression.as_ref() {
-			reader.override_compression(TileCompression::from_str(comp_str)?);
+			reader.override_compression(TileCompression::try_from(comp_str.as_str())?);
 		}
 
 		let flip_y = tile_config.flip_y.unwrap_or(false);
