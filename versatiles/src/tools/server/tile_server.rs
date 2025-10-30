@@ -17,11 +17,17 @@ use axum::{
 use hyper::header::{ACCESS_CONTROL_ALLOW_ORIGIN, VARY};
 use std::path::Path;
 use tokio::sync::oneshot::Sender;
-use versatiles_container::TilesReaderTrait;
+#[cfg(test)]
+use versatiles::get_registry;
+use versatiles::{ServerConfig, TileSourceConfig};
+#[cfg(test)]
+use versatiles_container::ProcessingConfig;
+use versatiles_container::{ContainerRegistry, TilesConvertReader, TilesConverterParameters, TilesReaderTrait};
 use versatiles_core::{
 	Blob, TileCompression,
 	utils::{TargetCompression, optimize_compression},
 };
+use versatiles_derive::context;
 
 pub struct TileServer {
 	ip: String,
@@ -31,10 +37,12 @@ pub struct TileServer {
 	exit_signal: Option<Sender<()>>,
 	minimal_recompression: bool,
 	use_api: bool,
+	registry: ContainerRegistry,
 }
 
 impl TileServer {
-	pub fn new(ip: &str, port: u16, minimal_recompression: bool, use_api: bool) -> TileServer {
+	#[cfg(test)]
+	pub fn new_test(ip: &str, port: u16, minimal_recompression: bool, use_api: bool) -> TileServer {
 		TileServer {
 			ip: ip.to_owned(),
 			port,
@@ -43,13 +51,58 @@ impl TileServer {
 			exit_signal: None,
 			minimal_recompression,
 			use_api,
+			registry: get_registry(ProcessingConfig::default()),
 		}
 	}
 
-	pub fn add_tile_source(&mut self, id: &str, reader: Box<dyn TilesReaderTrait>) -> Result<()> {
-		log::info!("add source: id='{id}', source={reader:?}");
+	pub fn from_config(config: ServerConfig, registry: ContainerRegistry) -> TileServer {
+		TileServer {
+			ip: config.ip.unwrap_or("0.0.0.0".into()),
+			port: config.port.unwrap_or(8080),
+			tile_sources: Vec::new(),
+			static_sources: Vec::new(),
+			exit_signal: None,
+			minimal_recompression: config.minimal_recompression.unwrap_or(false),
+			use_api: !config.disable_api.unwrap_or(false),
+			registry,
+		}
+	}
 
-		let source = TileSource::from(reader, id)?;
+	#[context("adding tile source from config: {tile_config:?}")]
+	pub async fn add_tile_source_config(&mut self, tile_config: TileSourceConfig) -> Result<()> {
+		let name = tile_config.name.clone().unwrap_or(tile_config.path.name()?);
+
+		log::info!(
+			"add source: name='{}', path={:?}",
+			tile_config.name.as_deref().unwrap_or("<unnamed>"),
+			tile_config.path,
+		);
+
+		let mut reader = self.registry.get_reader(&tile_config.path).await?;
+
+		if let Some(comp_str) = tile_config.override_compression.as_ref() {
+			reader.override_compression(TileCompression::from_str(comp_str)?);
+		}
+
+		let flip_y = tile_config.flip_y.unwrap_or(false);
+		let swap_xy = tile_config.swap_xy.unwrap_or(false);
+
+		if flip_y || swap_xy {
+			let cp = TilesConverterParameters {
+				flip_y,
+				swap_xy,
+				..Default::default()
+			};
+			reader = TilesConvertReader::new_from_reader(reader, cp)?.boxed();
+		}
+
+		self.add_tile_source(&name, reader)
+	}
+
+	pub fn add_tile_source(&mut self, name: &str, reader: Box<dyn TilesReaderTrait>) -> Result<()> {
+		log::info!("add source: id='{name}', source={reader:?}");
+
+		let source = TileSource::from(reader, name)?;
 		let url_prefix = &source.prefix;
 
 		for other_tile_source in self.tile_sources.iter() {
@@ -359,7 +412,7 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn server() {
+	async fn server() -> Result<()> {
 		async fn get(path: &str) -> String {
 			reqwest::get(format!("http://{IP}:50001/{path}"))
 				.await
@@ -369,12 +422,12 @@ mod tests {
 				.expect("should have returned text")
 		}
 
-		let mut server = TileServer::new(IP, 50001, true, true);
+		let mut server = TileServer::new_test(IP, 50001, true, true);
 
-		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf).unwrap().boxed();
-		server.add_tile_source("cheese", reader).unwrap();
+		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf)?.boxed();
+		server.add_tile_source("cheese", reader)?;
 
-		server.start().await.unwrap();
+		server.start().await?;
 
 		assert_eq!(get("tiles/cheese/brum.json").await, "Not Found");
 
@@ -386,12 +439,14 @@ mod tests {
 		assert_eq!(get("status").await, "ready!");
 
 		server.stop().await;
+
+		Ok(())
 	}
 
 	#[tokio::test]
 	#[should_panic]
 	async fn same_prefix_twice() {
-		let mut server = TileServer::new(IP, 50002, true, true);
+		let mut server = TileServer::new_test(IP, 50002, true, true);
 
 		let reader = MockTilesReader::new_mock_profile(MTRP::Png).unwrap().boxed();
 		server.add_tile_source("cheese", reader).unwrap();
@@ -402,7 +457,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn tile_server_new() {
-		let mut server = TileServer::new(IP, 50003, true, true);
+		let mut server = TileServer::new_test(IP, 50003, true, true);
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50003);
 		assert_eq!(server.tile_sources.len(), 0);
@@ -416,7 +471,7 @@ mod tests {
 
 	#[test]
 	fn tile_server_add_tile_source() {
-		let mut server = TileServer::new(IP, 50004, true, true);
+		let mut server = TileServer::new_test(IP, 50004, true, true);
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50004);
 
@@ -429,7 +484,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn tile_server_iter_url_mapping() {
-		let mut server = TileServer::new(IP, 50005, true, true);
+		let mut server = TileServer::new_test(IP, 50005, true, true);
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50005);
 
@@ -473,7 +528,7 @@ mod tests {
 			client.get(url).headers(headers).send().await.expect("http get")
 		}
 
-		let mut server = TileServer::new(IP, port, true, true);
+		let mut server = TileServer::new_test(IP, port, true, true);
 
 		let parameters = TilesReaderParameters::new(format, compression, TileBBoxPyramid::new_full(8));
 		let reader = MockTilesReader::new_mock(parameters).unwrap().boxed();

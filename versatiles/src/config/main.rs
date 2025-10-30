@@ -1,34 +1,35 @@
-use super::{Cors, Server, StaticSource, TileSource};
+use super::{Cors, ServerConfig, StaticSourceConfig, TileSourceConfig};
 use anyhow::Result;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::{
 	collections::HashMap,
 	fs::File,
 	io::{BufReader, Read},
 	path::Path,
 };
+use versatiles_container::UrlPath;
 
-#[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default, Debug, Clone, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
 	#[serde(default)]
-	server: Option<Server>,
+	pub server: Option<ServerConfig>,
 
 	#[serde(default)]
-	cors: Option<Cors>,
+	pub cors: Option<Cors>,
 
 	/// Extra response headers added to every HTTP response.
 	/// Case-insensitivity is a runtime concern; we store as given.
 	#[serde(default)]
-	extra_response_headers: Option<HashMap<String, String>>,
+	pub extra_response_headers: Option<HashMap<String, String>>,
 
 	/// Static mounts
 	#[serde(default, rename = "static")]
-	static_sources: Vec<StaticSource>,
+	pub static_sources: Vec<StaticSourceConfig>,
 
 	/// Tile sources
 	#[serde(default, rename = "tiles")]
-	tile_sources: Vec<TileSource>,
+	pub tile_sources: Vec<TileSourceConfig>,
 }
 
 impl Config {
@@ -48,18 +49,20 @@ impl Config {
 		let mut cfg = Config::from_reader(BufReader::new(file))?;
 
 		// Sanity checks
-		cfg.resolve_paths(path.parent().unwrap());
+		cfg.resolve_paths(&UrlPath::from(path.parent().unwrap()))?;
 		Ok(cfg)
 	}
 
-	pub fn resolve_paths(&mut self, base_path: &Path) {
+	pub fn resolve_paths(&mut self, base: &UrlPath) -> Result<()> {
 		for static_source in &mut self.static_sources {
-			static_source.resolve_paths(base_path);
+			static_source.resolve_paths(base)?;
 		}
 
 		for tile_source in &mut self.tile_sources {
-			tile_source.resolve_paths(base_path);
+			tile_source.resolve_paths(base)?;
 		}
+
+		Ok(())
 	}
 }
 
@@ -67,7 +70,6 @@ impl Config {
 mod tests {
 	use super::*;
 	use crate::config::HttpMethod;
-	use std::path::PathBuf;
 
 	#[test]
 	fn parse_example_config() -> Result<()> {
@@ -78,10 +80,11 @@ mod tests {
 		assert_eq!(
 			cfg,
 			Config {
-				server: Some(Server {
+				server: Some(ServerConfig {
 					ip: Some("1.2.3.4".parse()?),
 					port: Some(1234),
-					minimal_recompression: Some(true)
+					minimal_recompression: Some(true),
+					disable_api: Some(true)
 				}),
 				cors: Some(Cors {
 					allowed_origins: vec!["https://example.org".to_string(), "*.other-example.org".to_string()],
@@ -100,33 +103,33 @@ mod tests {
 					.collect::<HashMap<String, String>>()
 				),
 				static_sources: vec![
-					StaticSource {
-						path: PathBuf::from("/web/site.tar.br"),
+					StaticSourceConfig {
+						path: UrlPath::from("/web/site.tar.br"),
 						url_prefix: Some("/".to_string())
 					},
-					StaticSource {
-						path: PathBuf::from("../testdata/assets/"),
+					StaticSourceConfig {
+						path: UrlPath::from("../testdata/assets/"),
 						url_prefix: Some("/assets".to_string())
 					}
 				],
 				tile_sources: vec![
-					TileSource {
+					TileSourceConfig {
 						name: Some("osm".to_string()),
-						path: PathBuf::from("../testdata/https://download.versatiles.org/osm.versatiles"),
+						path: UrlPath::from("../testdata/https://download.versatiles.org/osm.versatiles"),
 						flip_y: Some(false),
 						swap_xy: Some(false),
 						override_compression: Some("gzip".to_string())
 					},
-					TileSource {
+					TileSourceConfig {
 						name: Some("berlin".to_string()),
-						path: PathBuf::from("../testdata/../testdata/berlin.mbtiles"),
+						path: UrlPath::from("../testdata/../testdata/berlin.mbtiles"),
 						flip_y: None,
 						swap_xy: None,
 						override_compression: None
 					},
-					TileSource {
+					TileSourceConfig {
 						name: Some("planet".to_string()),
-						path: PathBuf::from("/data/tiles/planet.tar.br"),
+						path: UrlPath::from("/data/tiles/planet.tar.br"),
 						flip_y: Some(true),
 						swap_xy: Some(true),
 						override_compression: None

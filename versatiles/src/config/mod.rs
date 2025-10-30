@@ -1,10 +1,11 @@
 mod cors;
 use cors::*;
 mod main;
-pub use main::Config;
 mod server;
-use server::*;
 mod static_source;
-use static_source::*;
 mod tile_source;
-use tile_source::*;
+
+pub use main::Config;
+pub use server::ServerConfig;
+pub use static_source::StaticSourceConfig;
+pub use tile_source::TileSourceConfig;

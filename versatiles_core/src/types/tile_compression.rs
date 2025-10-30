@@ -114,7 +114,7 @@ impl TileCompression {
 		Uncompressed
 	}
 
-	pub fn parse_str(value: &str) -> Result<Self> {
+	pub fn from_str(value: &str) -> Result<Self> {
 		Ok(match value.to_lowercase().trim() {
 			"br" => Brotli,
 			"brotli" => Brotli,
@@ -209,7 +209,7 @@ mod tests {
 	#[case("unknown", Err(anyhow::anyhow!("Unknown tile compression")))]
 	#[case("", Err(anyhow::anyhow!("Unknown tile compression")))]
 	fn test_parse_str(#[case] input: &str, #[case] expected: Result<TileCompression>) {
-		let result = TileCompression::parse_str(input);
+		let result = TileCompression::from_str(input);
 		assert_eq!(result.is_ok(), expected.is_ok());
 		if let Ok(expected_value) = expected {
 			assert_eq!(result.unwrap(), expected_value);

@@ -1,7 +1,7 @@
-use anyhow::{Result, anyhow, ensure};
+use anyhow::{Result, ensure};
 use std::path::PathBuf;
 use versatiles::get_registry;
-use versatiles_container::ProcessingConfig;
+use versatiles_container::{ProcessingConfig, UrlPath};
 use versatiles_core::{TileBBox, TileFormat, progress::get_progress_bar};
 use versatiles_image::{DynamicImage, DynamicImageTraitConvert, encode};
 
@@ -18,7 +18,7 @@ use versatiles_image::{DynamicImage, DynamicImageTraitConvert, encode};
 pub struct MeasureTileSizes {
 	/// Input file
 	#[arg(value_name = "INPUT_FILE")]
-	input: PathBuf,
+	input: UrlPath,
 
 	/// Output image file (should end in .png)
 	#[arg(value_name = "OUTPUT_FILE")]
@@ -34,7 +34,7 @@ pub struct MeasureTileSizes {
 }
 
 pub async fn run(args: &MeasureTileSizes) -> Result<()> {
-	let input_file = &args.input;
+	let input = &args.input;
 	let output_file = &args.output;
 	let level = args.level;
 	let scale = args.scale;
@@ -42,7 +42,7 @@ pub async fn run(args: &MeasureTileSizes) -> Result<()> {
 	let width_scaled = width_original / scale;
 
 	log::info!(
-		"Measuring tile sizes in {input_file:?} at zoom level {level}, generating an {width_scaled}x{width_scaled} image and saving it to {output_file:?}"
+		"Measuring tile sizes in {input:?} at zoom level {level}, generating an {width_scaled}x{width_scaled} image and saving it to {output_file:?}"
 	);
 
 	ensure!(
@@ -51,14 +51,7 @@ pub async fn run(args: &MeasureTileSizes) -> Result<()> {
 		output_file.extension().unwrap_or_default()
 	);
 
-	let reader = get_registry(ProcessingConfig::default())
-		.get_reader(
-			input_file
-				.as_os_str()
-				.to_str()
-				.ok_or(anyhow!("Invalid input file path"))?,
-		)
-		.await?;
+	let reader = get_registry(ProcessingConfig::default()).get_reader(input).await?;
 	let bbox = TileBBox::new_full(level)?;
 	let stream = reader.get_tile_stream(bbox).await?;
 

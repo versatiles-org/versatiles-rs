@@ -1,7 +1,7 @@
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Context, Result, bail};
 use std::path::PathBuf;
 use versatiles::get_registry;
-use versatiles_container::ProcessingConfig;
+use versatiles_container::{ProcessingConfig, UrlPath};
 use versatiles_core::progress::get_progress_bar;
 use versatiles_geometry::{geo::GeoCollection, tile_outline::TileOutline};
 
@@ -10,7 +10,7 @@ use versatiles_geometry::{geo::GeoCollection, tile_outline::TileOutline};
 pub struct ExportOutline {
 	/// Input file
 	#[arg(value_name = "INPUT_FILE")]
-	input: PathBuf,
+	input: UrlPath,
 
 	/// Output image file (should end in .geojson)
 	#[arg(value_name = "OUTPUT_FILE")]
@@ -22,27 +22,18 @@ pub struct ExportOutline {
 }
 
 pub async fn run(args: &ExportOutline) -> Result<()> {
-	let input_file = &args.input;
-	let output_file = &args.output;
+	let input = &args.input;
+	let output = &args.output;
 
-	let reader = get_registry(ProcessingConfig::default())
-		.get_reader(
-			input_file
-				.as_os_str()
-				.to_str()
-				.ok_or(anyhow!("Invalid input file path"))?,
-		)
-		.await?;
+	let reader = get_registry(ProcessingConfig::default()).get_reader(input).await?;
 
 	let compression = reader.parameters().tile_compression;
 	let bbox_pyramid = reader.parameters().bbox_pyramid.clone();
 	let level = args.level.unwrap_or_else(|| bbox_pyramid.get_level_max().unwrap());
 
-	log::info!(
-		"Measuring the outline of the tiles in {input_file:?} at zoom level {level} and saving it to {output_file:?}"
-	);
+	log::info!("Measuring the outline of the tiles in {input:?} at zoom level {level} and saving it to {output:?}");
 
-	if output_file.extension() != Some(std::ffi::OsStr::new("geojson")) {
+	if output.extension() != Some(std::ffi::OsStr::new("geojson")) {
 		bail!("Only GeoJSON output is supported for now");
 	}
 
@@ -61,15 +52,15 @@ pub async fn run(args: &ExportOutline) -> Result<()> {
 
 	let feature = outline.to_feature();
 	let json = GeoCollection::from(vec![feature]).to_json(Some(6)).stringify();
-	let mut file = std::fs::File::create(output_file)
-		.with_context(|| format!("Failed to create output file \"{}\"", output_file.display()))?;
+	let mut file = std::fs::File::create(output)
+		.with_context(|| format!("Failed to create output file \"{}\"", output.display()))?;
 
 	std::io::Write::write_all(&mut file, json.as_bytes())
-		.with_context(|| format!("Failed to write to output file \"{}\"", output_file.display()))?;
+		.with_context(|| format!("Failed to write to output file \"{}\"", output.display()))?;
 
 	progress.finish();
 
-	log::info!("Done, saved to {output_file:?}");
+	log::info!("Done, saved to {output:?}");
 	Ok(())
 }
 

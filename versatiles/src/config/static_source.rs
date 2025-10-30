@@ -1,17 +1,35 @@
-use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use anyhow::Result;
+use serde::Deserialize;
+use versatiles_container::UrlPath;
 
-#[derive(Default, Debug, Clone, Deserialize, Serialize, PartialEq)]
-#[serde(deny_unknown_fields)]
-pub struct StaticSource {
-	pub path: PathBuf,
+#[derive(Debug, Clone, PartialEq)]
+pub struct StaticSourceConfig {
+	pub path: UrlPath,
 	pub url_prefix: Option<String>,
 }
 
-impl StaticSource {
-	pub fn resolve_paths(&mut self, base_path: &Path) {
-		if !self.path.is_absolute() {
-			self.path = base_path.join(&self.path);
+impl StaticSourceConfig {
+	pub fn resolve_paths(&mut self, base_path: &UrlPath) -> Result<()> {
+		self.path.resolve(base_path)
+	}
+}
+
+impl<'de> Deserialize<'de> for StaticSourceConfig {
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		#[derive(Deserialize)]
+		#[serde(deny_unknown_fields)]
+		struct StaticSourceConfigHelper {
+			pub path: String,
+			pub url_prefix: Option<String>,
 		}
+
+		let helper = StaticSourceConfigHelper::deserialize(deserializer)?;
+		Ok(StaticSourceConfig {
+			path: UrlPath::from(helper.path),
+			url_prefix: helper.url_prefix,
+		})
 	}
 }

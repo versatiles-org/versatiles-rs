@@ -1,11 +1,10 @@
 use super::server::{TileServer, Url};
 use anyhow::Result;
 use regex::Regex;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tokio::time::{Duration, sleep};
-use versatiles::get_registry;
-use versatiles_container::{ProcessingConfig, TilesConvertReader, TilesConverterParameters, TilesReaderTrait};
-use versatiles_core::TileCompression;
+use versatiles::{Config, TileSourceConfig, get_registry};
+use versatiles_container::{ProcessingConfig, UrlPath};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]
@@ -21,13 +20,18 @@ pub struct Subcommand {
 	#[arg(num_args = 1.., required = true, verbatim_doc_comment)]
 	pub tile_sources: Vec<String>,
 
-	/// Serve via socket ip.
-	#[arg(short = 'i', long, default_value = "0.0.0.0", display_order = 0)]
-	pub ip: String,
+	/// Path to a configuration file (TOML format) to configure the server, CORS, static and tile sources.
+	/// Command line arguments will override configuration file settings.
+	#[arg(short = 'c', long, value_name = "FILE", display_order = 0)]
+	pub config: Option<PathBuf>,
 
-	/// Serve via port.
-	#[arg(short, long, default_value = "8080", display_order = 0)]
-	pub port: u16,
+	/// Serve via socket ip. Default: 0.0.0.0
+	#[arg(short = 'i', long, display_order = 0)]
+	pub ip: Option<String>,
+
+	/// Serve via port. Default: 8080
+	#[arg(short, long, display_order = 0)]
+	pub port: Option<u16>,
 
 	/// Serve static content at "http:/.../" from a local folder or a tar file.
 	/// Tar files can be compressed (.tar / .tar.gz / .tar.br).
@@ -40,41 +44,36 @@ pub struct Subcommand {
 	#[arg(long, display_order = 4)]
 	pub auto_shutdown: Option<u64>,
 
-	/// swap rows and columns, e.g. z/x/y -> z/y/x
-	#[arg(long, display_order = 3)]
-	pub swap_xy: bool,
-
-	/// flip input vertically
-	#[arg(long, display_order = 3)]
-	pub flip_y: bool,
-
 	/// use minimal recompression to reduce server response time
 	#[arg(long, display_order = 2)]
-	pub minimal_recompression: bool,
+	pub minimal_recompression: Option<bool>,
 
 	/// disable API
 	#[arg(long, display_order = 4)]
-	pub disable_api: bool,
-
-	/// override the compression of the input source, e.g. to handle gzipped tiles in a tar, that do not end in .gz
-	/// (deprecated in favor of a better solution that does not yet exist)
-	#[arg(long, value_enum, value_name = "COMPRESSION", display_order = 4)]
-	override_input_compression: Option<TileCompression>,
+	pub disable_api: Option<bool>,
 }
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
-	let mut server: TileServer = TileServer::new(
-		&arguments.ip,
-		arguments.port,
-		arguments.minimal_recompression,
-		!arguments.disable_api,
-	);
+	let config = if let Some(config_path) = &arguments.config {
+		Config::from_path(config_path)?
+	} else {
+		Config::default()
+	};
+
+	let mut server_config = config.server.unwrap_or_default();
+	server_config.override_optional_ip(&arguments.ip);
+	server_config.override_optional_port(&arguments.port);
+	server_config.override_optional_minimal_recompression(&arguments.minimal_recompression);
+	server_config.override_optional_disable_api(&arguments.disable_api);
+
+	let registry = get_registry(ProcessingConfig::default());
+	let mut server: TileServer = TileServer::from_config(server_config, registry);
 
 	let tile_patterns: Vec<Regex> = [
-		r"^\[(?P<id>[^\]]+?)\](?P<url>.*)$",
-		r"^(?P<url>.*)\[(?P<id>[^\]]+?)\]$",
-		r"^(?P<url>.*)#(?P<id>[^\]]+?)$",
+		r"^\[(?P<name>[^\]]+?)\](?P<url>.*)$",
+		r"^(?P<url>.*)\[(?P<name>[^\]]+?)\]$",
+		r"^(?P<url>.*)#(?P<name>[^\]]+?)$",
 		r"^(?P<url>.*)$",
 	]
 	.iter()
@@ -91,36 +90,31 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	.collect();
 
 	for argument in arguments.tile_sources.iter() {
-		// parse url: Does it also contain a "id" or other parameters?
 		let capture = tile_patterns
 			.iter()
 			.find(|p| p.is_match(argument))
-			.unwrap()
+			.ok_or_else(|| anyhow::anyhow!("Failed to parse tile source argument: {}", argument))?
 			.captures(argument)
-			.unwrap();
+			.ok_or_else(|| anyhow::anyhow!("Failed to parse tile source argument: {}", argument))?;
 
-		let url: &str = capture.name("url").unwrap().as_str();
-		let id: &str = match capture.name("id") {
-			None => url.split(&['/', '\\']).next_back().unwrap().split('.').next().unwrap(),
-			Some(m) => m.as_str(),
+		let url = UrlPath::from(capture.name("url").unwrap().as_str());
+		let name: String = match capture.name("name") {
+			None => url.name()?,
+			Some(m) => m.as_str().to_string(),
 		};
 
-		let mut reader = get_registry(ProcessingConfig::default()).get_reader(url).await?;
+		let tile_config = TileSourceConfig {
+			name: Some(name.to_string()),
+			path: UrlPath::from(url),
+			flip_y: None,
+			swap_xy: None,
+			override_compression: None,
+		};
+		server.add_tile_source_config(tile_config).await?;
+	}
 
-		if arguments.override_input_compression.is_some() {
-			reader.override_compression(arguments.override_input_compression.unwrap())
-		}
-
-		if arguments.flip_y || arguments.swap_xy {
-			let cp = TilesConverterParameters {
-				flip_y: arguments.flip_y,
-				swap_xy: arguments.swap_xy,
-				..Default::default()
-			};
-			reader = TilesConvertReader::new_from_reader(reader, cp)?.boxed();
-		}
-
-		server.add_tile_source(id, reader)?;
+	for tile_config in config.tile_sources {
+		server.add_tile_source_config(tile_config).await?;
 	}
 
 	for argument in arguments.static_content.iter() {

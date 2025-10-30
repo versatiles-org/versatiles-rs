@@ -1,6 +1,7 @@
 use anyhow::{Result, bail};
+use std::path::PathBuf;
 use versatiles::get_registry;
-use versatiles_container::{ProcessingConfig, TilesConverterParameters, convert_tiles_container};
+use versatiles_container::{ProcessingConfig, TilesConverterParameters, UrlPath, convert_tiles_container};
 use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCompression};
 use versatiles_derive::context;
 
@@ -9,11 +10,11 @@ use versatiles_derive::context;
 pub struct Subcommand {
 	/// supported container formats: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory
 	#[arg()]
-	input_file: String,
+	input_file: UrlPath,
 
 	/// supported container formats: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory
 	#[arg()]
-	output_file: String,
+	output_file: PathBuf,
 
 	/// minimum zoom level
 	#[arg(long, value_name = "int", display_order = 1)]

@@ -3,7 +3,7 @@ use anyhow::{Context, Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::{path::Path, sync::Arc};
-use versatiles_container::{ContainerRegistry, ProcessingConfig, Tile, TilesReaderTrait};
+use versatiles_container::{ContainerRegistry, ProcessingConfig, Tile, TilesReaderTrait, UrlPath};
 use versatiles_core::{io::DataReader, *};
 
 /// The `PipelineReader` struct is responsible for managing the tile reading process,
@@ -66,7 +66,7 @@ impl<'a> PipelineReader {
 			let callback = Box::new(
 				move |filename: String| -> BoxFuture<Result<Box<dyn TilesReaderTrait>>> {
 					let registry = registry.clone();
-					Box::pin(async move { registry.get_reader(&filename).await })
+					Box::pin(async move { registry.get_reader(&UrlPath::from(filename)).await })
 				},
 			);
 			let factory = PipelineFactory::new_default(dir, callback, config);

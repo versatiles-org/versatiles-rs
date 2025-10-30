@@ -4,6 +4,7 @@ server:
   ip: 1.2.3.4
   port: 1234
   minimal_recompression: true
+  disable_api: true
 
 # --- CORS & Headers ----------------------------------------------------------
 # CORS applies to API and tile/static responses.

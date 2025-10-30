@@ -28,7 +28,6 @@ use crate::*;
 use anyhow::{Context, Result, bail};
 #[cfg(test)]
 use assert_fs::NamedTempFile;
-use reqwest::Url;
 use std::{
 	collections::HashMap,
 	env,
@@ -138,47 +137,47 @@ impl ContainerRegistry {
 	}
 
 	/// Get a reader for a given filename or URL.
-	#[context("Failed to get reader for '{filename}'")]
-	pub async fn get_reader(&self, filename: &str) -> Result<Box<dyn TilesReaderTrait>> {
-		let extension = get_extension(filename);
+	#[context("Failed to get reader for '{url_path:?}'")]
+	pub async fn get_reader(&self, url_path: &UrlPath) -> Result<Box<dyn TilesReaderTrait>> {
+		let mut url_path = url_path.clone();
+		url_path.resolve(&UrlPath::from(env::current_dir()?))?;
 
-		// Try URL first
-		if let Ok(reader) = parse_as_url(filename) {
-			let opener = self
-				.data_readers
-				.get(&extension)
-				.ok_or_else(|| anyhow::anyhow!("Error when reading: file extension '{extension}' unknown"))?;
-			return opener(reader).await;
+		let extension = url_path.extension()?;
+
+		match url_path {
+			UrlPath::Url(url) => {
+				let reader = DataReaderHttp::from_url(url.clone())
+					.with_context(|| format!("Failed to create HTTP data reader for URL '{url}'"))?;
+				let opener = self
+					.data_readers
+					.get(&extension)
+					.ok_or_else(|| anyhow::anyhow!("Error when reading: file extension '{extension}' unknown"))?;
+				opener(reader).await
+			}
+			UrlPath::Path(path) => {
+				if !path.exists() {
+					bail!("path '{path:?}' does not exist")
+				}
+
+				if path.is_dir() {
+					return Ok(DirectoryTilesReader::open_path(&path)
+						.with_context(|| format!("Failed opening {path:?} as directory"))?
+						.boxed());
+				}
+
+				let opener = self
+					.file_readers
+					.get(&extension)
+					.ok_or_else(|| anyhow::anyhow!("Error when reading: file extension '{extension}' unknown"))?;
+				opener(path.to_path_buf()).await
+			}
 		}
-
-		// Resolve local path
-		let path = env::current_dir()?.join(filename);
-
-		if !path.exists() {
-			bail!("path '{path:?}' does not exist")
-		}
-
-		if path.is_dir() {
-			return Ok(DirectoryTilesReader::open_path(&path)
-				.with_context(|| format!("Failed opening {path:?} as directory"))?
-				.boxed());
-		}
-
-		let opener = self
-			.file_readers
-			.get(&extension)
-			.ok_or_else(|| anyhow::anyhow!("Error when reading: file extension '{extension}' unknown"))?;
-		opener(path).await
-	}
-
-	pub async fn write_to_filename(&self, reader: Box<dyn TilesReaderTrait>, filename: &str) -> Result<()> {
-		let path = env::current_dir()?.join(filename);
-		self.write_to_path(reader, &path).await
 	}
 
 	pub async fn write_to_path(&self, mut reader: Box<dyn TilesReaderTrait>, path: &Path) -> Result<()> {
+		let path = env::current_dir()?.join(path);
 		if path.is_dir() {
-			return DirectoryTilesWriter::write_to_path(reader.as_mut(), path, self.writer_config.clone()).await;
+			return DirectoryTilesWriter::write_to_path(reader.as_mut(), &path, self.writer_config.clone()).await;
 		}
 
 		let extension = path
@@ -201,25 +200,6 @@ impl Default for ContainerRegistry {
 	fn default() -> Self {
 		Self::new(ProcessingConfig::default())
 	}
-}
-
-/// Parse a filename as a URL and return a DataReader if successful.
-fn parse_as_url(filename: &str) -> Result<DataReader> {
-	if filename.starts_with("http://") || filename.starts_with("https://") {
-		Ok(DataReaderHttp::from_url(Url::parse(filename)?)?)
-	} else {
-		bail!("not an url")
-	}
-}
-
-/// Get the file extension from a filename.
-fn get_extension(filename: &str) -> String {
-	filename
-		.split('?')
-		.next()
-		.map(|filename| filename.rsplit('.').next().unwrap_or(""))
-		.unwrap_or("")
-		.to_ascii_lowercase()
 }
 
 #[cfg(test)]
@@ -247,9 +227,7 @@ pub async fn make_test_file(
 	}?;
 
 	let registry = ContainerRegistry::new(ProcessingConfig::default());
-	registry
-		.write_to_filename(Box::new(reader), container_file.to_str().unwrap())
-		.await?;
+	registry.write_to_path(Box::new(reader), container_file.path()).await?;
 
 	Ok(container_file)
 }
@@ -288,28 +266,18 @@ pub mod tests {
 				TileBBoxPyramid::new_full(2),
 			))?;
 
-			enum TempType {
-				Dir(TempDir),
-				File(NamedTempFile),
-			}
-
 			// get to test container converter
-			let path: TempType = match container {
-				Container::Directory => TempType::Dir(TempDir::new()?),
-				Container::Tar => TempType::File(NamedTempFile::new("temp.tar")?),
-				Container::Versatiles => TempType::File(NamedTempFile::new("temp.versatiles")?),
-			};
-
-			let filename = match &path {
-				TempType::Dir(t) => t.to_str().unwrap(),
-				TempType::File(t) => t.to_str().unwrap(),
+			let path: PathBuf = match container {
+				Container::Directory => TempDir::new()?.path().to_path_buf(),
+				Container::Tar => NamedTempFile::new("temp.tar")?.path().to_path_buf(),
+				Container::Versatiles => NamedTempFile::new("temp.versatiles")?.path().to_path_buf(),
 			};
 
 			let registry = ContainerRegistry::new(ProcessingConfig::default());
-			registry.write_to_filename(Box::new(reader1), filename).await?;
+			registry.write_to_path(Box::new(reader1), &path).await?;
 
 			// get test container reader using the default registry (back-compat)
-			let mut reader2 = registry.get_reader(filename).await?;
+			let mut reader2 = registry.get_reader(&UrlPath::from(path)).await?;
 			MockTilesWriter::write(reader2.as_mut()).await?;
 
 			Ok(())

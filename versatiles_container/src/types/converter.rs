@@ -38,6 +38,7 @@
 use crate::{ContainerRegistry, Tile, TilesReaderTrait};
 use anyhow::Result;
 use async_trait::async_trait;
+use std::path::Path;
 use versatiles_core::{
 	TileBBox, TileBBoxPyramid, TileCompression, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal,
 };
@@ -69,11 +70,11 @@ impl Default for TilesConverterParameters {
 pub async fn convert_tiles_container(
 	reader: Box<dyn TilesReaderTrait>,
 	cp: TilesConverterParameters,
-	filename: &str,
+	path: &Path,
 	registry: ContainerRegistry,
 ) -> Result<()> {
 	let converter = TilesConvertReader::new_from_reader(reader, cp)?;
-	registry.write_to_filename(Box::new(converter), filename).await
+	registry.write_to_path(Box::new(converter), path).await
 }
 
 /// A reader that converts tiles from one format to another.
@@ -245,7 +246,6 @@ mod tests {
 			let reader = MockTilesReader::new_mock(reader_parameters)?;
 
 			let temp_file = NamedTempFile::new("test.versatiles")?;
-			let filename = temp_file.to_str().unwrap();
 
 			let cp = TilesConverterParameters {
 				bbox_pyramid: Some(pyramid_convert),
@@ -253,7 +253,7 @@ mod tests {
 				swap_xy,
 				tile_compression: None,
 			};
-			convert_tiles_container(reader.boxed(), cp, filename, ContainerRegistry::default()).await?;
+			convert_tiles_container(reader.boxed(), cp, &temp_file, ContainerRegistry::default()).await?;
 
 			let reader_out = VersaTilesReader::open_path(&temp_file).await?;
 			let parameters_out = reader_out.parameters();
