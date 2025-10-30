@@ -19,7 +19,7 @@ use std::path::Path;
 use tokio::sync::oneshot::Sender;
 #[cfg(test)]
 use versatiles::get_registry;
-use versatiles::{ServerConfig, TileSourceConfig};
+use versatiles::{Config, TileSourceConfig};
 #[cfg(test)]
 use versatiles_container::ProcessingConfig;
 use versatiles_container::{ContainerRegistry, TilesConvertReader, TilesConverterParameters, TilesReaderTrait};
@@ -55,21 +55,34 @@ impl TileServer {
 		}
 	}
 
-	pub fn from_config(config: ServerConfig, registry: ContainerRegistry) -> TileServer {
-		TileServer {
-			ip: config.ip.unwrap_or("0.0.0.0".into()),
-			port: config.port.unwrap_or(8080),
+	pub async fn from_config(config: Config, registry: ContainerRegistry) -> Result<TileServer> {
+		let mut server = TileServer {
+			ip: config.server.ip.unwrap_or("0.0.0.0".into()),
+			port: config.server.port.unwrap_or(8080),
 			tile_sources: Vec::new(),
 			static_sources: Vec::new(),
 			exit_signal: None,
-			minimal_recompression: config.minimal_recompression.unwrap_or(false),
-			use_api: !config.disable_api.unwrap_or(false),
+			minimal_recompression: config.server.minimal_recompression.unwrap_or(false),
+			use_api: !config.server.disable_api.unwrap_or(false),
 			registry,
+		};
+
+		for tile_config in config.tile_sources.iter() {
+			server.add_tile_source_config(tile_config).await?;
 		}
+
+		for static_config in config.static_sources.iter() {
+			server.add_static_source(
+				static_config.path.as_path()?,
+				static_config.url_prefix.as_ref().map(|s| s.as_str()).unwrap_or("/"),
+			)?;
+		}
+
+		Ok(server)
 	}
 
 	#[context("adding tile source from config: {tile_config:?}")]
-	pub async fn add_tile_source_config(&mut self, tile_config: TileSourceConfig) -> Result<()> {
+	async fn add_tile_source_config(&mut self, tile_config: &TileSourceConfig) -> Result<()> {
 		let name = tile_config.name.clone().unwrap_or(tile_config.path.name()?);
 
 		log::info!(
@@ -117,11 +130,9 @@ impl TileServer {
 		Ok(())
 	}
 
-	pub fn add_static_source(&mut self, path: &Path, url_prefix: Url) -> Result<()> {
-		let url_prefix = url_prefix.as_dir();
-
+	pub fn add_static_source(&mut self, path: &Path, url_prefix: &str) -> Result<()> {
 		log::info!("add static: {path:?}");
-		self.static_sources.push(StaticSource::new(path, url_prefix)?);
+		self.static_sources.push(StaticSource::new(path, Url::new(url_prefix))?);
 		Ok(())
 	}
 

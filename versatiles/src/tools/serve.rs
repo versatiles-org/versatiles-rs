@@ -1,9 +1,9 @@
-use super::server::{TileServer, Url};
+use super::server::TileServer;
 use anyhow::Result;
 use regex::Regex;
-use std::path::{Path, PathBuf};
+use std::{mem::swap, path::PathBuf};
 use tokio::time::{Duration, sleep};
-use versatiles::{Config, TileSourceConfig, get_registry};
+use versatiles::{Config, StaticSourceConfig, TileSourceConfig, get_registry};
 use versatiles_container::{ProcessingConfig, UrlPath};
 
 #[derive(clap::Args, Debug)]
@@ -55,20 +55,18 @@ pub struct Subcommand {
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
-	let config = if let Some(config_path) = &arguments.config {
+	let mut config = if let Some(config_path) = &arguments.config {
 		Config::from_path(config_path)?
 	} else {
 		Config::default()
 	};
 
-	let mut server_config = config.server.unwrap_or_default();
-	server_config.override_optional_ip(&arguments.ip);
-	server_config.override_optional_port(&arguments.port);
-	server_config.override_optional_minimal_recompression(&arguments.minimal_recompression);
-	server_config.override_optional_disable_api(&arguments.disable_api);
-
-	let registry = get_registry(ProcessingConfig::default());
-	let mut server: TileServer = TileServer::from_config(server_config, registry);
+	config.server.override_optional_ip(&arguments.ip);
+	config.server.override_optional_port(&arguments.port);
+	config
+		.server
+		.override_optional_minimal_recompression(&arguments.minimal_recompression);
+	config.server.override_optional_disable_api(&arguments.disable_api);
 
 	let tile_patterns: Vec<Regex> = [
 		r"^\[(?P<name>[^\]]+?)\](?P<url>.*)$",
@@ -80,6 +78,35 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	.map(|pat| Regex::new(pat).unwrap())
 	.collect();
 
+	let mut tile_sources = arguments
+		.tile_sources
+		.iter()
+		.map(|argument| {
+			let capture = tile_patterns
+				.iter()
+				.find(|p| p.is_match(argument))
+				.ok_or_else(|| anyhow::anyhow!("Failed to parse tile source argument: {}", argument))?
+				.captures(argument)
+				.ok_or_else(|| anyhow::anyhow!("Failed to parse tile source argument: {}", argument))?;
+
+			let url = UrlPath::from(capture.name("url").unwrap().as_str());
+			let name: String = match capture.name("name") {
+				None => url.name()?,
+				Some(m) => m.as_str().to_string(),
+			};
+
+			Ok(TileSourceConfig {
+				name: Some(name),
+				path: UrlPath::from(url),
+				flip_y: None,
+				swap_xy: None,
+				override_compression: None,
+			})
+		})
+		.collect::<Result<Vec<TileSourceConfig>>>()?;
+	swap(&mut config.tile_sources, &mut tile_sources);
+	config.tile_sources.extend(tile_sources);
+
 	let static_patterns: Vec<Regex> = [
 		r"^\[(?P<path>[^\]]+?)\](?P<filename>.*)$",
 		r"^(?P<filename>.*)\[(?P<path>[^\]]+?)\]$",
@@ -89,50 +116,31 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	.map(|pat| Regex::new(pat).unwrap())
 	.collect();
 
-	for argument in arguments.tile_sources.iter() {
-		let capture = tile_patterns
-			.iter()
-			.find(|p| p.is_match(argument))
-			.ok_or_else(|| anyhow::anyhow!("Failed to parse tile source argument: {}", argument))?
-			.captures(argument)
-			.ok_or_else(|| anyhow::anyhow!("Failed to parse tile source argument: {}", argument))?;
+	let mut static_sources = arguments
+		.static_content
+		.iter()
+		.map(|argument| {
+			let capture = static_patterns
+				.iter()
+				.find(|p| p.is_match(argument))
+				.unwrap()
+				.captures(argument)
+				.unwrap();
 
-		let url = UrlPath::from(capture.name("url").unwrap().as_str());
-		let name: String = match capture.name("name") {
-			None => url.name()?,
-			Some(m) => m.as_str().to_string(),
-		};
+			let filename: &str = capture.name("filename").unwrap().as_str();
+			let url_prefix = capture.name("path").map(|m| m.as_str().to_string());
 
-		let tile_config = TileSourceConfig {
-			name: Some(name.to_string()),
-			path: UrlPath::from(url),
-			flip_y: None,
-			swap_xy: None,
-			override_compression: None,
-		};
-		server.add_tile_source_config(tile_config).await?;
-	}
+			Ok(StaticSourceConfig {
+				path: UrlPath::from(filename),
+				url_prefix,
+			})
+		})
+		.collect::<Result<Vec<StaticSourceConfig>>>()?;
+	swap(&mut config.static_sources, &mut static_sources);
+	config.static_sources.extend(static_sources);
 
-	for tile_config in config.tile_sources {
-		server.add_tile_source_config(tile_config).await?;
-	}
-
-	for argument in arguments.static_content.iter() {
-		let capture = static_patterns
-			.iter()
-			.find(|p| p.is_match(argument))
-			.unwrap()
-			.captures(argument)
-			.unwrap();
-
-		let filename: &str = capture.name("filename").unwrap().as_str();
-		let url_prefix: &str = match capture.name("path") {
-			None => "",
-			Some(m) => m.as_str(),
-		};
-
-		server.add_static_source(Path::new(filename), Url::new(url_prefix))?;
-	}
+	let registry = get_registry(ProcessingConfig::default());
+	let mut server: TileServer = TileServer::from_config(config, registry).await?;
 
 	let mut list: Vec<(String, String)> = server.get_url_mapping().await;
 	list.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());

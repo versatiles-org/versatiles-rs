@@ -13,15 +13,15 @@ use versatiles_container::UrlPath;
 #[serde(deny_unknown_fields)]
 pub struct Config {
 	#[serde(default)]
-	pub server: Option<ServerConfig>,
+	pub server: ServerConfig,
 
 	#[serde(default)]
-	pub cors: Option<Cors>,
+	pub cors: Cors,
 
 	/// Extra response headers added to every HTTP response.
 	/// Case-insensitivity is a runtime concern; we store as given.
 	#[serde(default)]
-	pub extra_response_headers: Option<HashMap<String, String>>,
+	pub extra_response_headers: HashMap<String, String>,
 
 	/// Static mounts
 	#[serde(default, rename = "static")]
@@ -80,28 +80,26 @@ mod tests {
 		assert_eq!(
 			cfg,
 			Config {
-				server: Some(ServerConfig {
+				server: ServerConfig {
 					ip: Some("1.2.3.4".parse()?),
 					port: Some(1234),
 					minimal_recompression: Some(true),
 					disable_api: Some(true)
-				}),
-				cors: Some(Cors {
+				},
+				cors: Cors {
 					allowed_origins: vec!["https://example.org".to_string(), "*.other-example.org".to_string()],
 					allowed_methods: vec![HttpMethod::GET, HttpMethod::HEAD, HttpMethod::OPTIONS],
 					max_age_seconds: Some(86400)
-				}),
-				extra_response_headers: Some(
-					[
-						("Timing-Allow-Origin", "*"),
-						("CDN-Cache-Control", "max-age=604800"),
-						("Cache-Control", "public, max-age=86400, immutable"),
-						("Surrogate-Control", "max-age=604800")
-					]
-					.iter()
-					.map(|(a, b)| (a.to_string(), b.to_string()))
-					.collect::<HashMap<String, String>>()
-				),
+				},
+				extra_response_headers: [
+					("Timing-Allow-Origin", "*"),
+					("CDN-Cache-Control", "max-age=604800"),
+					("Cache-Control", "public, max-age=86400, immutable"),
+					("Surrogate-Control", "max-age=604800")
+				]
+				.iter()
+				.map(|(a, b)| (a.to_string(), b.to_string()))
+				.collect::<HashMap<String, String>>(),
 				static_sources: vec![
 					StaticSourceConfig {
 						path: UrlPath::from("/web/site.tar.br"),

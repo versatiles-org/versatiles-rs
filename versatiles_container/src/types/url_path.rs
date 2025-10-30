@@ -20,12 +20,21 @@ impl UrlPath {
 			UrlPath::Path(PathBuf::from(s))
 		}
 	}
+
 	pub fn as_str(&self) -> &str {
 		match self {
 			UrlPath::Url(url) => url.as_str(),
 			UrlPath::Path(path) => path.to_str().unwrap_or(""),
 		}
 	}
+
+	pub fn as_path(&self) -> Result<&Path> {
+		match self {
+			UrlPath::Path(path) => Ok(path.as_path()),
+			UrlPath::Url(_) => Err(anyhow!("{self:?} is not a Path")),
+		}
+	}
+
 	pub fn resolve(&mut self, base: &UrlPath) -> Result<()> {
 		use UrlPath as U;
 		match (self.clone(), base) {
