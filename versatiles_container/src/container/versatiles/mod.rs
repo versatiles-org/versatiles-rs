@@ -15,7 +15,7 @@
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     let path_mbtiles = std::env::current_dir()?.join("../testdata/berlin.mbtiles");
-//!     let path_versatiles = std::env::current_dir()?.join("../testdata/temp4.versatiles");
+//!     let path_versatiles = std::env::temp_dir().join("temp4.versatiles");
 //!
 //!     // Create a mbtiles reader
 //!     let mut reader = MBTilesReader::open_path(&path_mbtiles)?;

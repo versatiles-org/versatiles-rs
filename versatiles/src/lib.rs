@@ -20,25 +20,22 @@
 //!     container::*,
 //!     core::*,
 //! };
-//! use std::path::Path;
-//! use anyhow::Result;
 //!
 //! #[tokio::main]
-//! async fn main() -> Result<()> {
+//! async fn main() {
 //!     // Define the input filename (local file or URL)
 //!     let input_filename = "../testdata/berlin.pmtiles";
 //!     let config = ProcessingConfig::default();
 //!     let registry = versatiles::get_registry(config);
-//!     let reader = registry.get_reader(input_filename).await?;
+//!     let reader = registry.get_reader(input_filename).await.unwrap();
 //!
 //!     // Define the output filename
-//!     let output_filename = "../testdata/temp1.versatiles";
+//!     let output_path = std::env::temp_dir().join("temp1.versatiles");
 //!
 //!     // Write the tiles to the output file
-//!     registry.write_to_filename(reader, output_filename).await?;
+//!     registry.write_to_path(reader, &output_path).await.unwrap();
 //!
-//!     println!("Tiles have been successfully converted and saved to {output_filename}");
-//!     Ok(())
+//!     println!("Tiles have been successfully converted and saved to {output_path:?}");
 //! }
 //! ```
 

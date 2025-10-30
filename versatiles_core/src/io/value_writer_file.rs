@@ -15,7 +15,7 @@
 //! use std::fs::File;
 //!
 //! fn main() -> Result<()> {
-//!     let path = std::env::current_dir()?.join("../testdata/temp.txt");
+//!     let path = std::env::temp_dir().join("temp2.txt");
 //!     let file = File::create(&path)?;
 //!     let mut writer = ValueWriterFile::new_le(file);
 //!

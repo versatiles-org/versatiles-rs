@@ -5,13 +5,11 @@
 //! ```rust
 //! use versatiles_container::*;
 //! use versatiles_core::*;
-//! use std::path::Path;
-//! use anyhow::Result;
 //!
 //! #[tokio::main]
-//! async fn main() -> Result<()> {
+//! async fn main() -> anyhow::Result<()> {
 //!     let path_mbtiles = std::env::current_dir()?.join("../testdata/berlin.mbtiles");
-//!     let path_versatiles = std::env::current_dir()?.join("../testdata/temp2.versatiles");
+//!     let path_versatiles = std::env::temp_dir().join("temp2.versatiles");
 //!
 //!     let registry = ContainerRegistry::default();
 //!

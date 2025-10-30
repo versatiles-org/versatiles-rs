@@ -5,27 +5,22 @@
 //! ```rust
 //! use versatiles_container::*;
 //! use versatiles_core::*;
-//! use anyhow::Result;
 //!
 //! #[tokio::main]
-//! async fn main() -> Result<()> {
+//! async fn main() {
 //!     // Use the default registry
 //!     let registry = ContainerRegistry::default();
 //!
 //!     // Read from a local file
-//!     let reader = registry.get_reader("../testdata/berlin.mbtiles").await?;
+//!     let reader = registry.get_reader("../testdata/berlin.mbtiles").await.unwrap();
 //!
 //!     // Define the output filename
-//!     let output_filename = "../testdata/temp3.versatiles";
+//!     let output_path = std::env::temp_dir().join("temp3.versatiles");
 //!
 //!     // Write the tiles to the output file
-//!     registry.write_to_filename(
-//!         reader,
-//!         output_filename,
-//!     ).await?;
+//!     registry.write_to_path(reader, &output_path).await.unwrap();
 //!
-//!     println!("Tiles have been successfully converted and saved to {output_filename}");
-//!     Ok(())
+//!     println!("Tiles have been successfully converted and saved to {output_path:?}");
 //! }
 //! ```
 
@@ -34,7 +29,14 @@ use anyhow::{Context, Result, bail};
 #[cfg(test)]
 use assert_fs::NamedTempFile;
 use reqwest::Url;
-use std::{collections::HashMap, env, future::Future, path::PathBuf, pin::Pin, sync::Arc};
+use std::{
+	collections::HashMap,
+	env,
+	future::Future,
+	path::{Path, PathBuf},
+	pin::Pin,
+	sync::Arc,
+};
 use versatiles_core::io::{DataReader, DataReaderHttp};
 #[cfg(test)]
 use versatiles_core::{TileCompression, TileFormat};
@@ -169,20 +171,27 @@ impl ContainerRegistry {
 		opener(path).await
 	}
 
-	pub async fn write_to_filename(&self, mut reader: Box<dyn TilesReaderTrait>, filename: &str) -> Result<()> {
+	pub async fn write_to_filename(&self, reader: Box<dyn TilesReaderTrait>, filename: &str) -> Result<()> {
 		let path = env::current_dir()?.join(filename);
+		self.write_to_path(reader, &path).await
+	}
 
+	pub async fn write_to_path(&self, mut reader: Box<dyn TilesReaderTrait>, path: &Path) -> Result<()> {
 		if path.is_dir() {
-			return DirectoryTilesWriter::write_to_path(reader.as_mut(), &path, self.writer_config.clone()).await;
+			return DirectoryTilesWriter::write_to_path(reader.as_mut(), path, self.writer_config.clone()).await;
 		}
 
-		let extension = get_extension(filename);
+		let extension = path
+			.extension()
+			.unwrap_or_default()
+			.to_string_lossy()
+			.to_ascii_lowercase();
 
 		let writer = self
 			.file_writers
 			.get(&extension)
 			.ok_or_else(|| anyhow::anyhow!("Error when reading: file extension '{extension}' unknown"))?;
-		writer(reader, path, self.writer_config.clone()).await?;
+		writer(reader, path.to_path_buf(), self.writer_config.clone()).await?;
 
 		Ok(())
 	}

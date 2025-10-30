@@ -15,7 +15,7 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!     let path = std::env::current_dir()?.join("../testdata/temp.txt");
+//!     let path = std::env::temp_dir().join("temp1.txt");
 //!     let mut writer = DataWriterFile::from_path(&path)?;
 //!     let data = Blob::from(vec![1, 2, 3, 4]);
 //!

@@ -15,7 +15,7 @@
 //!     let mut reader = MBTilesReader::open_path(&path_in)?;
 //!
 //!     // Specify the output path for the .versatiles file
-//!     let path_out = std::env::current_dir()?.join("../testdata/temp5.versatiles");
+//!     let path_out = std::env::temp_dir().join("temp5.versatiles");
 //!
 //!     // Write the tiles to the .versatiles file
 //!     VersaTilesWriter::write_to_path(
