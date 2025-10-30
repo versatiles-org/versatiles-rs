@@ -53,7 +53,7 @@ impl UrlPath {
 			UrlPath::Url(url) => url
 				.path_segments()
 				.ok_or(anyhow!("Invalid URL"))?
-				.last()
+				.next_back()
 				.ok_or(anyhow!("Invalid URL"))?,
 			UrlPath::Path(path) => path
 				.file_name()
