@@ -1,0 +1,55 @@
+# VersaTiles server configuration example
+
+server:
+  ip: 1.2.3.4
+  port: 1234
+  minimal_recompression: true
+
+# --- CORS & Headers ----------------------------------------------------------
+# CORS applies to API and tile/static responses.
+cors:
+  # List of allowed origins. Supports glob patterns.
+  allowed_origins:
+    - "https://example.org"
+    - "*.other-example.org"
+
+  # Which HTTP methods to allow in CORS preflights.
+  allowed_methods: [GET, HEAD, OPTIONS]
+
+  # Preflight cache duration in seconds (Access-Control-Max-Age).
+  max_age_seconds: 86400
+
+# Extra response headers (useful behind CDNs). Keys are case-insensitive.
+# These are added to every HTTP response. If a header already exists, this overrides it.
+extra_response_headers:
+  # Encourage long-lived caching for immutable tiles while letting the CDN keep longer.
+  Cache-Control: "public, max-age=86400, immutable"
+  # For CDNs that honor surrogate controls (Fastly, Varnish):
+  Surrogate-Control: "max-age=604800"
+  # Some CDNs read this separately (Cloudflare, etc.)
+  CDN-Cache-Control: "max-age=604800"
+  # Useful for resource timing across origins; align with your CORS policy.
+  Timing-Allow-Origin: "*"
+
+# --- Static mounts -----------------------------------------------------------
+static:
+  - path: "/web/site.tar.br"
+    url_prefix: "/"
+  - path: "assets/"
+    url_prefix: "/assets"
+
+# --- Tile sources ------------------------------------------------------------
+tiles:
+  - name: osm
+    path: "https://download.versatiles.org/osm.versatiles"
+    flip_y: false
+    swap_xy: false
+    override_compression: gzip
+
+  - name: berlin
+    path: "../testdata/berlin.mbtiles"
+
+  - name: planet
+    path: "/data/tiles/planet.tar.br"
+    flip_y: true
+    swap_xy: true

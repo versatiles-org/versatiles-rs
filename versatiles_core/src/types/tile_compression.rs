@@ -42,13 +42,15 @@ pub enum TileCompression {
 }
 
 impl TileCompression {
-	#[must_use]
 	pub fn as_str(&self) -> &str {
 		match self {
 			Uncompressed => "none",
 			Gzip => "gzip",
 			Brotli => "brotli",
 		}
+	}
+	pub fn variants() -> &'static [&'static str] {
+		&["none", "gzip", "brotli"]
 	}
 }
 

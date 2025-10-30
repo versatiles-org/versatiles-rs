@@ -39,6 +39,8 @@
 //! }
 //! ```
 
+mod config;
+pub use config::*;
 mod helper;
 pub use helper::*;
 pub use versatiles_container as container;
