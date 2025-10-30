@@ -13,14 +13,6 @@ pub enum UrlPath {
 }
 
 impl UrlPath {
-	pub fn from_str(s: &str) -> Self {
-		if let Ok(url) = reqwest::Url::parse(s) {
-			UrlPath::Url(url)
-		} else {
-			UrlPath::Path(PathBuf::from(s))
-		}
-	}
-
 	pub fn as_str(&self) -> &str {
 		match self {
 			UrlPath::Url(url) => url.as_str(),
@@ -94,13 +86,17 @@ impl UrlPath {
 
 impl From<String> for UrlPath {
 	fn from(s: String) -> Self {
-		UrlPath::from_str(&s)
+		UrlPath::from(s.as_str())
 	}
 }
 
 impl From<&str> for UrlPath {
 	fn from(s: &str) -> Self {
-		UrlPath::from_str(s)
+		if let Ok(url) = reqwest::Url::parse(s) {
+			UrlPath::Url(url)
+		} else {
+			UrlPath::Path(PathBuf::from(s))
+		}
 	}
 }
 
