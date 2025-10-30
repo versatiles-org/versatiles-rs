@@ -29,17 +29,17 @@ impl ServerConfig {
 	}
 	pub fn override_optional_port(&mut self, port: &Option<u16>) {
 		if port.is_some() {
-			self.port = port.clone();
+			self.port = *port;
 		}
 	}
 	pub fn override_optional_minimal_recompression(&mut self, minimal_recompression: &Option<bool>) {
 		if minimal_recompression.is_some() {
-			self.minimal_recompression = minimal_recompression.clone();
+			self.minimal_recompression = *minimal_recompression;
 		}
 	}
 	pub fn override_optional_disable_api(&mut self, disable_api: &Option<bool>) {
 		if disable_api.is_some() {
-			self.disable_api = disable_api.clone();
+			self.disable_api = *disable_api;
 		}
 	}
 }
