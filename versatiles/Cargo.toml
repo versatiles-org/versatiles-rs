@@ -46,6 +46,8 @@ tokio = { workspace = true, features = [
 	"rt-multi-thread",
 	"sync",
 ], optional = true }
+tower = { version = "0.5.2" }
+tower-http = { version = "0.6.6", features = ["cors"] }
 
 versatiles_container = { workspace = true }
 versatiles_core = { workspace = true }

@@ -14,9 +14,6 @@ cors:
     - "https://example.org"
     - "*.other-example.org"
 
-  # Which HTTP methods to allow in CORS preflights.
-  allowed_methods: [GET, HEAD, OPTIONS]
-
   # Preflight cache duration in seconds (Access-Control-Max-Age).
   max_age_seconds: 86400
 

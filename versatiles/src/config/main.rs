@@ -69,7 +69,6 @@ impl Config {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use crate::config::HttpMethod;
 
 	#[test]
 	fn parse_example_config() -> Result<()> {
@@ -88,7 +87,6 @@ mod tests {
 				},
 				cors: Cors {
 					allowed_origins: vec!["https://example.org".to_string(), "*.other-example.org".to_string()],
-					allowed_methods: vec![HttpMethod::GET, HttpMethod::HEAD, HttpMethod::OPTIONS],
 					max_age_seconds: Some(86400)
 				},
 				extra_response_headers: [

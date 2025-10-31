@@ -3676,6 +3676,8 @@ dependencies = [
  "tar",
  "termimad",
  "tokio",
+ "tower",
+ "tower-http",
  "versatiles_container",
  "versatiles_core",
  "versatiles_derive",

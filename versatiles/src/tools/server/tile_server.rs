@@ -15,8 +15,11 @@ use axum::{
 	routing::get,
 };
 use hyper::header::{ACCESS_CONTROL_ALLOW_ORIGIN, VARY};
+use regex::Regex;
 use std::path::Path;
 use tokio::sync::oneshot::Sender;
+use tower::ServiceBuilder;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 #[cfg(test)]
 use versatiles::get_registry;
 use versatiles::{Config, TileSourceConfig};
@@ -38,6 +41,7 @@ pub struct TileServer {
 	minimal_recompression: bool,
 	use_api: bool,
 	registry: ContainerRegistry,
+	cors_allowed_origins: Vec<String>,
 }
 
 impl TileServer {
@@ -52,6 +56,7 @@ impl TileServer {
 			minimal_recompression,
 			use_api,
 			registry: get_registry(ProcessingConfig::default()),
+			cors_allowed_origins: Vec::new(),
 		}
 	}
 
@@ -65,6 +70,7 @@ impl TileServer {
 			minimal_recompression: config.server.minimal_recompression.unwrap_or(false),
 			use_api: !config.server.disable_api.unwrap_or(false),
 			registry,
+			cors_allowed_origins: config.cors.allowed_origins.clone(),
 		};
 
 		for tile_config in config.tile_sources.iter() {
@@ -74,7 +80,7 @@ impl TileServer {
 		for static_config in config.static_sources.iter() {
 			server.add_static_source(
 				static_config.path.as_path()?,
-				static_config.url_prefix.as_ref().map(|s| s.as_str()).unwrap_or("/"),
+				static_config.url_prefix.as_deref().unwrap_or("/"),
 			)?;
 		}
 
@@ -144,13 +150,16 @@ impl TileServer {
 		log::info!("starting server");
 
 		// Initialize App
-		let mut router = Router::new().route("/status", get(|| async { "ready!" }));
+		let mut router = Router::new();
+		router = router.route("/status", get(|| async { "ready!" }));
 
 		router = self.add_tile_sources_to_app(router);
 		if self.use_api {
 			router = self.add_api_to_app(router).await?;
 		}
 		router = self.add_static_sources_to_app(router);
+
+		router = router.layer(ServiceBuilder::new().layer(self.get_cors_layer()?));
 
 		let addr = format!("{}:{}", self.ip, self.port);
 		eprintln!("server starts listening on {addr}");
@@ -289,6 +298,40 @@ impl TileServer {
 		api_app = api_app.route("/tiles/index.json", get(|| async move { ok_json(&tiles_index_json) }));
 
 		Ok(app.merge(api_app))
+	}
+
+	pub fn get_cors_layer(&self) -> Result<CorsLayer> {
+		use axum::http::{header::HeaderValue, request::Parts};
+
+		type CallBack = Box<dyn Fn(&str) -> bool + Send + Sync + 'static>;
+		let checks = self
+			.cors_allowed_origins
+			.iter()
+			.map(|o| {
+				Ok(if o == "*" {
+					Box::new(|_: &str| true) as CallBack
+				} else if Regex::new(r"^\*[^*]+$").unwrap().is_match(o) {
+					let suffix = o[1..].to_string();
+					Box::new(move |h: &str| h.ends_with(&suffix)) as CallBack
+				} else if Regex::new(r"^[^*]+\*$").unwrap().is_match(o) {
+					let prefix = o[..o.len() - 1].to_string();
+					Box::new(move |h: &str| h.starts_with(&prefix)) as CallBack
+				} else if Regex::new(r"^\/.+\/$").unwrap().is_match(o) {
+					let re = regex::Regex::new(&o[1..o.len() - 1])?;
+					Box::new(move |h: &str| re.is_match(h)) as CallBack
+				} else {
+					let exact = o.to_string();
+					Box::new(move |h: &str| h == exact) as CallBack
+				})
+			})
+			.collect::<Result<Vec<CallBack>>>()?;
+
+		Ok(CorsLayer::new().allow_origin(AllowOrigin::predicate(
+			move |origin: &HeaderValue, _request_parts: &Parts| {
+				let origin_str = origin.to_str().unwrap_or("");
+				checks.iter().any(|f| f(origin_str))
+			},
+		)))
 	}
 
 	pub async fn get_url_mapping(&self) -> Vec<(String, String)> {

@@ -89,15 +89,15 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 				.captures(argument)
 				.ok_or_else(|| anyhow::anyhow!("Failed to parse tile source argument: {}", argument))?;
 
-			let url = UrlPath::from(capture.name("url").unwrap().as_str());
+			let path = UrlPath::from(capture.name("url").unwrap().as_str());
 			let name: String = match capture.name("name") {
-				None => url.name()?,
+				None => path.name()?,
 				Some(m) => m.as_str().to_string(),
 			};
 
 			Ok(TileSourceConfig {
 				name: Some(name),
-				path: UrlPath::from(url),
+				path,
 				flip_y: None,
 				swap_xy: None,
 				override_compression: None,
