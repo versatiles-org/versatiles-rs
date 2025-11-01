@@ -139,5 +139,5 @@ jobs:
 
       - name: Run Fmt, Clippy and Test
         shell: pwsh
-        working-directory: ${{ env.GITHUB_WORKSPACE }}
+        working-directory: ${{ github.workspace }}
         run: .\scripts\test.ps1
