@@ -1,34 +1,45 @@
 #!/usr/bin/env pwsh
+# Robust, strict, and feature-matrixed Rust checks on Windows
 
-# Ensure the script runs from the directory containing Cargo.toml
-Set-Location -Path $PSScriptRoot\..
+# --- Shell strictness
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+$PSNativeCommandUseErrorActionPreference = $true
+$ProgressPreference = 'SilentlyContinue'
 
-# Enable strict error handling
-$ErrorActionPreference = "Stop"
+# --- Repo root
+$root = Resolve-Path (Join-Path $PSScriptRoot '..')
+Set-Location -Path $root
 
-# Set environment variable
-$env:RUST_BACKTRACE = 1
+# --- Env
+#$env:RUST_BACKTRACE = '1'
+$Script:ForwardArgs = $args
 
-Write-Host "Formatting..."
-cargo fmt
+function Invoke-Step {
+  param(
+    [Parameter(Mandatory)] [string] $Name,
+    [Parameter(Mandatory)] [scriptblock] $Action
+  )
+  Write-Host "=== $Name ==="
+  & $Action
+}
 
-Write-Host "Running clippy for binary..."
-cargo clippy --quiet --bin versatiles --all-features $args
+# Format (fail on diff)
+Invoke-Step "Format check (rustfmt)" {
+  cargo fmt -- --check
+}
 
-Write-Host "Running clippy for library..."
-cargo clippy --quiet --lib --no-default-features $args
+# Clippy: all targets
+Invoke-Step "Clippy (all targets)" {
+  cargo clippy --workspace --all-targets -- -D warnings @args
+}
 
-Write-Host "Running clippy for library (big)..."
-cargo clippy --quiet --lib --all-features $args
+# Tests: all targets
+Invoke-Step "Tests (all targets)" {
+  cargo test --workspace --all-targets @args
+}
 
-Write-Host "Running tests for binary..."
-cargo test --quiet --bins --all-features $args
-
-Write-Host "Running tests for library..."
-cargo test --quiet --lib --no-default-features $args
-
-Write-Host "Running tests for library (big)..."
-cargo test --quiet --lib --all-features $args
-
-Write-Host "Running doc tests (big)..."
-cargo test --quiet --doc --all-features $args
+# Doctests (all-features)
+Invoke-Step "Doctests (all-features)" {
+  cargo test --workspace --doc @args
+}
