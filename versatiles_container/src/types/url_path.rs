@@ -9,16 +9,16 @@ use versatiles_derive::context;
 #[derive(Clone, PartialEq)]
 pub enum UrlPath {
 	// An absolute URL with scheme.
-	Url(reqwest::Url),
-	// A file path.
+	Url(Url),
+	// An absolute file path or an relative path/url.
 	Path(PathBuf),
 }
 
 impl UrlPath {
-	pub fn as_str(&self) -> &str {
+	pub fn to_string(&self) -> String {
 		match self {
-			UrlPath::Url(url) => url.as_str(),
-			UrlPath::Path(path) => path.to_str().unwrap_or(""),
+			UrlPath::Url(url) => url.to_string(),
+			UrlPath::Path(path) => path.to_string_lossy().to_string(),
 		}
 	}
 
@@ -33,16 +33,17 @@ impl UrlPath {
 	#[context("Resolving UrlPath {self:?} against base {base:?}")]
 	pub fn resolve(&mut self, base: &UrlPath) -> Result<()> {
 		use UrlPath as UP;
-		match (base, self.clone()) {
-			(_, UP::Url(_)) => {
-				// URL is already absolute, nothing to do.
+		match (base, &mut *self) {
+			// Already an absolute URL -> no-op
+			(_, UP::Url(_)) => {}
+			// Resolve a Path (relative) against a URL base -> turn into absolute URL
+			(UP::Url(base_url), UP::Path(p)) => {
+				let s = p.to_str().ok_or_else(|| anyhow!("Invalid Path (non-utf8)"))?;
+				*self = UP::Url(base_url.join(s)?);
 			}
-			(UP::Url(base), UP::Path(path)) => {
-				*self = UP::Url(base.join(path.to_str().ok_or(anyhow!("Invalid Path"))?)?);
-			}
-			(UP::Path(base_path), UP::Path(mut path)) => {
-				path = normalize(&base_path.join(path));
-				*self = UP::Path(path);
+			// Resolve a Path against a Path base -> join + normalize
+			(UP::Path(base_p), UP::Path(p)) => {
+				*p = normalize(&base_p.join(&*p));
 			}
 		}
 		Ok(())
@@ -79,7 +80,7 @@ impl UrlPath {
 	pub fn extension(&self) -> Result<String> {
 		let filename = self.filename()?;
 		if let Some(pos) = filename.rfind('.') {
-			Ok(filename[pos..].to_string())
+			Ok(filename[(pos + 1)..].to_string())
 		} else {
 			Ok("".into())
 		}
@@ -172,7 +173,7 @@ mod tests {
 	#[case("https://example.org/file.txt", false)]
 	fn as_str_returns_expected_for_url_and_path(#[case] input: &str, #[case] is_path: bool) -> Result<()> {
 		let v = UrlPath::from(input);
-		assert_eq!(v.as_str(), input);
+		assert_eq!(v.to_string(), input);
 		assert_eq!(v.as_path().is_ok(), is_path);
 		Ok(())
 	}
@@ -215,7 +216,7 @@ mod tests {
 		let base_up = UrlPath::from(base);
 		let mut tgt = UrlPath::from(target);
 		tgt.resolve(&base_up)?;
-		assert_eq!(tgt.as_str(), expected);
+		assert_eq!(tgt.to_string(), expected);
 		assert_eq!(tgt, UrlPath::from(expected));
 		Ok(())
 	}
@@ -257,7 +258,7 @@ mod tests {
 	fn from_conversions_work() -> Result<()> {
 		let u = Url::parse("https://example.org/hello.txt")?;
 		let up: UrlPath = u.into();
-		assert_eq!(up.as_str(), "https://example.org/hello.txt");
+		assert_eq!(up.to_string(), "https://example.org/hello.txt");
 
 		let s = String::from("/tmp/abc.txt");
 		let sp: UrlPath = s.into();
@@ -267,7 +268,7 @@ mod tests {
 		assert_eq!(sr.as_path()?.to_path_buf(), PathBuf::from("/tmp/xyz.txt"));
 
 		let surl: UrlPath = "https://example.org/a/b".into();
-		assert_eq!(surl.as_str(), "https://example.org/a/b");
+		assert_eq!(surl.to_string(), "https://example.org/a/b");
 		Ok(())
 	}
 
