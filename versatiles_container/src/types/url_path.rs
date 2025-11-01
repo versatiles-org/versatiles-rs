@@ -100,6 +100,12 @@ impl From<&str> for UrlPath {
 	}
 }
 
+impl From<&PathBuf> for UrlPath {
+	fn from(p: &PathBuf) -> Self {
+		UrlPath::Path(p.clone())
+	}
+}
+
 impl From<PathBuf> for UrlPath {
 	fn from(p: PathBuf) -> Self {
 		UrlPath::Path(p)
@@ -115,6 +121,12 @@ impl From<&Path> for UrlPath {
 impl From<Url> for UrlPath {
 	fn from(u: Url) -> Self {
 		UrlPath::Url(u)
+	}
+}
+
+impl From<&UrlPath> for UrlPath {
+	fn from(u: &UrlPath) -> Self {
+		u.clone()
 	}
 }
 
