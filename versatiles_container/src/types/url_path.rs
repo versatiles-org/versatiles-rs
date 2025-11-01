@@ -32,21 +32,18 @@ impl UrlPath {
 
 	#[context("Resolving UrlPath {self:?} against base {base:?}")]
 	pub fn resolve(&mut self, base: &UrlPath) -> Result<()> {
-		use UrlPath as U;
-		match (self.clone(), base) {
-			(U::Url(url), U::Url(base_url)) => {
-				if url.has_host() {
-					return Ok(());
-				}
-				*self = U::Url(base_url.clone().join(url.as_str())?);
+		use UrlPath as UP;
+		match (base, self.clone()) {
+			(_, UP::Url(_)) => {
+				// URL is already absolute, nothing to do.
 			}
-			(U::Path(path), U::Path(base_path)) => {
-				if path.is_absolute() {
-					return Ok(());
-				}
-				*self = U::Path(base_path.join(path));
+			(UP::Url(base), UP::Path(path)) => {
+				*self = UP::Url(base.join(path.to_str().ok_or(anyhow!("Invalid Path"))?)?);
 			}
-			_ => (),
+			(UP::Path(base_path), UP::Path(mut path)) => {
+				path = normalize(&base_path.join(path));
+				*self = UP::Path(path);
+			}
 		}
 		Ok(())
 	}
@@ -89,6 +86,23 @@ impl UrlPath {
 	}
 }
 
+fn normalize(path: &Path) -> PathBuf {
+	path
+		.components()
+		.fold(vec![], |mut acc, component| {
+			match component {
+				std::path::Component::ParentDir if !acc.is_empty() => {
+					acc.pop();
+				}
+				std::path::Component::CurDir => {}
+				_ => acc.push(component.as_os_str()),
+			}
+			acc
+		})
+		.into_iter()
+		.collect()
+}
+
 impl From<String> for UrlPath {
 	fn from(s: String) -> Self {
 		UrlPath::from(s.as_str())
@@ -97,7 +111,9 @@ impl From<String> for UrlPath {
 
 impl From<&str> for UrlPath {
 	fn from(s: &str) -> Self {
-		if let Ok(url) = reqwest::Url::parse(s) {
+		if let Ok(url) = reqwest::Url::parse(s)
+			&& url.has_host()
+		{
 			UrlPath::Url(url)
 		} else {
 			UrlPath::Path(PathBuf::from(s))
