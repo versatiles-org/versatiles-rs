@@ -1,0 +1,10 @@
+# Default: treat files as text and normalize line endings
+* text=auto
+
+# Always use LF for source and config
+*.rs     text eol=lf
+*.toml   text eol=lf
+*.md     text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.sh     text eol=lf
