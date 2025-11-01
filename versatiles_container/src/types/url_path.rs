@@ -15,13 +15,6 @@ pub enum UrlPath {
 }
 
 impl UrlPath {
-	pub fn to_string(&self) -> String {
-		match self {
-			UrlPath::Url(url) => url.to_string(),
-			UrlPath::Path(path) => path.to_string_lossy().to_string(),
-		}
-	}
-
 	#[context("Getting Path from UrlPath {self:?}")]
 	pub fn as_path(&self) -> Result<&Path> {
 		match self {
@@ -88,20 +81,76 @@ impl UrlPath {
 }
 
 fn normalize(path: &Path) -> PathBuf {
-	path
-		.components()
-		.fold(vec![], |mut acc, component| {
-			match component {
-				std::path::Component::ParentDir if !acc.is_empty() => {
-					acc.pop();
-				}
-				std::path::Component::CurDir => {}
-				_ => acc.push(component.as_os_str()),
+	use std::ffi::OsString;
+	use std::path::Component::*;
+
+	let mut prefix: Option<OsString> = None;
+	let mut is_abs = false;
+	let mut parts: Vec<OsString> = Vec::new();
+	let mut leading_parents: usize = 0;
+
+	for comp in path.components() {
+		match comp {
+			Prefix(p) => {
+				// Windows drive/UNC prefix (e.g., "C:" or "\\server\\share")
+				prefix = Some(p.as_os_str().to_os_string());
 			}
-			acc
-		})
-		.into_iter()
-		.collect()
+			RootDir => {
+				// Root marker ("/" on Unix, "\\" after prefix on Windows)
+				is_abs = true;
+			}
+			CurDir => {
+				// Skip "."
+			}
+			ParentDir => {
+				// Pop if we have a segment, otherwise:
+				// - if absolute: stay at root (do nothing)
+				// - if relative: accumulate leading ".."
+				if !parts.is_empty() {
+					parts.pop();
+				} else if !is_abs {
+					leading_parents += 1;
+				}
+			}
+			Normal(s) => {
+				parts.push(s.to_os_string());
+			}
+		}
+	}
+
+	let mut out = PathBuf::new();
+	if let Some(p) = prefix {
+		out.push(p);
+	}
+	if is_abs {
+		// Ensure we stay rooted when absolute (and do not go above root)
+		#[cfg(windows)]
+		{
+			out.push(Path::new("\\"));
+		}
+		#[cfg(not(windows))]
+		{
+			out.push(Path::new("/"));
+		}
+	} else {
+		// Preserve any unresolved leading ".." for relative paths
+		for _ in 0..leading_parents {
+			out.push("..");
+		}
+	}
+	for seg in parts {
+		out.push(seg);
+	}
+	out
+}
+
+impl std::fmt::Display for UrlPath {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			UrlPath::Url(url) => write!(f, "{url}"),
+			UrlPath::Path(path) => write!(f, "{}", path.display()),
+		}
+	}
 }
 
 impl From<String> for UrlPath {
@@ -222,12 +271,12 @@ mod tests {
 	}
 
 	#[rstest]
-	#[case("https://a.org/b/file.tar.gz", ".gz", "file.tar")]
+	#[case("https://a.org/b/file.tar.gz", "gz", "file.tar")]
 	#[case("/data/README", "", "README")]
-	#[case("/data/README.md", ".md", "README")]
-	#[case("/data/README.MD", ".MD", "README")]
-	#[case("/data/archive.", ".", "archive")]
-	#[case("/data/.bashrc", ".bashrc", "")]
+	#[case("/data/README.md", "md", "README")]
+	#[case("/data/README.MD", "MD", "README")]
+	#[case("/data/archive.", "", "archive")]
+	#[case("/data/.bashrc", "bashrc", "")]
 	#[case("https://a.org/dir.with.dots/file", "", "file")]
 	fn extension_and_name_matrix(
 		#[case] input: &str,
@@ -243,13 +292,24 @@ mod tests {
 	#[rstest]
 	#[case("../a/b", "../a/b")]
 	#[case("./a/./b", "a/b")]
-	#[case("/..", "")]
+	#[case("/..", "/")]
 	#[case("///a//b", "/a/b")]
 	#[case("/a/../x", "/x")]
 	#[case("/a/./b/.", "/a/b")]
 	#[case("a/../../b", "../b")]
 	#[case("a/b/../c", "a/c")]
 	fn normalize_matrix(#[case] input: &str, #[case] expected: &str) {
+		let got = super::normalize(Path::new(input));
+		assert_eq!(got, PathBuf::from(expected));
+	}
+
+	#[cfg(windows)]
+	#[rstest]
+	#[case(r"C:\\a\\..\\b", r"C:\\b")]
+	#[case(r"C:\\a\\.\\b\\.", r"C:\\a\\b")]
+	#[case(r"C:\\..\\..", r"C:\\")]
+	#[case(r"\\\\server\\share\\..\\x", r"\\\\server\\share\\x")]
+	fn normalize_windows_matrix(#[case] input: &str, #[case] expected: &str) {
 		let got = super::normalize(Path::new(input));
 		assert_eq!(got, PathBuf::from(expected));
 	}
