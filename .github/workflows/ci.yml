@@ -154,4 +154,4 @@ jobs:
       - name: Format, lint and test (Windows)
         shell: pwsh
         working-directory: ${{ github.workspace }}
-        run: .\scripts\test.ps1
+        run: .\scripts\test-windows.ps1
