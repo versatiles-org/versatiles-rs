@@ -88,11 +88,17 @@ fn normalize(path: &Path) -> PathBuf {
 	let mut is_abs = false;
 	let mut parts: Vec<OsString> = Vec::new();
 	let mut leading_parents: usize = 0;
+	// On Windows UNC paths, Prefix can be "\\server" and the first Normal after a RootDir
+	// can be the "share" component. If so, we must not pop that share when we see a ParentDir.
+	#[cfg(windows)]
+	let mut unc_share_consumed: bool = false;
+	#[cfg(not(windows))]
+	let _ = ();
 
 	for comp in path.components() {
 		match comp {
 			Prefix(p) => {
-				// Windows drive/UNC prefix (e.g., "C:" or "\\server\\share")
+				// Windows drive/UNC prefix (e.g., "C:" or "\\\\server\\share")
 				prefix = Some(p.as_os_str().to_os_string());
 			}
 			RootDir => {
@@ -107,13 +113,38 @@ fn normalize(path: &Path) -> PathBuf {
 				// - if absolute: stay at root (do nothing)
 				// - if relative: accumulate leading ".."
 				if !parts.is_empty() {
-					parts.pop();
+					#[cfg(windows)]
+					{
+						// If we are at a UNC path and the only segment we have is the share,
+						// do not pop it — ParentDir at the root of a UNC share stays at the share.
+						if !(is_abs && prefix.is_some() && unc_share_consumed && parts.len() == 1) {
+							let _ = parts.pop();
+						}
+					}
+					#[cfg(not(windows))]
+					{
+						let _ = parts.pop();
+					}
 				} else if !is_abs {
 					leading_parents += 1;
 				}
 			}
 			Normal(s) => {
-				parts.push(s.to_os_string());
+				#[cfg(windows)]
+				{
+					// If we have a UNC prefix and just saw RootDir, treat the first Normal
+					// as the share component that anchors the path; mark it so it won't be popped.
+					if is_abs && prefix.is_some() && !unc_share_consumed && parts.is_empty() {
+						parts.push(s.to_os_string());
+						unc_share_consumed = true;
+					} else {
+						parts.push(s.to_os_string());
+					}
+				}
+				#[cfg(not(windows))]
+				{
+					parts.push(s.to_os_string());
+				}
 			}
 		}
 	}
@@ -265,8 +296,17 @@ mod tests {
 		let base_up = UrlPath::from(base);
 		let mut tgt = UrlPath::from(target);
 		tgt.resolve(&base_up)?;
-		assert_eq!(tgt.to_string(), expected);
-		assert_eq!(tgt, UrlPath::from(expected));
+		// Compare URLs as strings, but file paths as normalized paths (to allow \\ on Windows).
+		match &tgt {
+			UrlPath::Url(u) => {
+				assert_eq!(u.as_str(), expected);
+			}
+			UrlPath::Path(p) => {
+				let got = p.to_path_buf();
+				let want = PathBuf::from(expected);
+				assert_eq!(got, want);
+			}
+		}
 		Ok(())
 	}
 
