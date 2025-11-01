@@ -59,6 +59,7 @@ versatiles_pipeline = { workspace = true }
 [dev-dependencies]
 assert_fs.workspace = true
 lazy_static.workspace = true
+pretty_assertions.workspace = true
 reqwest = { workspace = true, features = [
 	"rustls-tls",
 	"gzip",

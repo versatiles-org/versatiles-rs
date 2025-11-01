@@ -69,6 +69,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use pretty_assertions::assert_eq;
 
 	#[test]
 	fn parse_example_config() -> Result<()> {
@@ -111,14 +112,14 @@ mod tests {
 				tile_sources: vec![
 					TileSourceConfig {
 						name: Some("osm".to_string()),
-						path: UrlPath::from("../testdata/https://download.versatiles.org/osm.versatiles"),
+						path: UrlPath::from("https://download.versatiles.org/osm.versatiles"),
 						flip_y: Some(false),
 						swap_xy: Some(false),
 						override_compression: Some("gzip".to_string())
 					},
 					TileSourceConfig {
 						name: Some("berlin".to_string()),
-						path: UrlPath::from("../testdata/../testdata/berlin.mbtiles"),
+						path: UrlPath::from("../testdata/berlin.mbtiles"),
 						flip_y: None,
 						swap_xy: None,
 						override_compression: None
