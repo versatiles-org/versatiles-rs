@@ -4,8 +4,8 @@ on:
   push:
     branches:
       - "**"
-    tags:
-      - "!**" # Don't run twice on commits with tags
+    tags-ignore:
+      - "**" # Don't run twice on commits with tags
     paths-ignore:
       - "docker/**"
       - "**.Dockerfile"
