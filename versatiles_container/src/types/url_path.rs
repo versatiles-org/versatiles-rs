@@ -159,3 +159,128 @@ impl Debug for UrlPath {
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use rstest::rstest;
+
+	#[rstest]
+	#[case("https://example.org/a/b/c.txt", false)]
+	#[case("/tmp/hello/world.txt", true)]
+	#[case("/tmp/file.txt", true)]
+	#[case("https://example.org/file.txt", false)]
+	fn as_str_returns_expected_for_url_and_path(#[case] input: &str, #[case] is_path: bool) -> Result<()> {
+		let v = UrlPath::from(input);
+		assert_eq!(v.as_str(), input);
+		assert_eq!(v.as_path().is_ok(), is_path);
+		Ok(())
+	}
+
+	#[test]
+	fn filename_from_url_and_path() -> Result<()> {
+		let url = UrlPath::from("https://example.org/assets/data/file.tar.gz");
+		let path = UrlPath::from(PathBuf::from("/data/file.txt"));
+
+		assert_eq!(url.filename()?, "file.tar.gz");
+		assert_eq!(path.filename()?, "file.txt");
+		Ok(())
+	}
+
+	#[rstest]
+	#[case("../a/b", "../x/y.z", "../a/x/y.z")]
+	#[case("../a/b", "./x/y.z", "../a/b/x/y.z")]
+	#[case("../a/b", "/x/y.z", "/x/y.z")]
+	#[case("../a/b", "x/y.z", "../a/b/x/y.z")]
+	#[case("./a/b", "../x/y.z", "a/x/y.z")]
+	#[case("./a/b", "./x/y.z", "a/b/x/y.z")]
+	#[case("./a/b", "/x/y.z", "/x/y.z")]
+	#[case("./a/b", "x/y.z", "a/b/x/y.z")]
+	#[case("/a", "ftp://b.org/y.z", "ftp://b.org/y.z")]
+	#[case("/a/b", "../x/y.z", "/a/x/y.z")]
+	#[case("/a/b", "./x/y.z", "/a/b/x/y.z")]
+	#[case("/a/b", "/x/y.z", "/x/y.z")]
+	#[case("/a/b", "folder/y.z", "/a/b/folder/y.z")]
+	#[case("/a/b", "x/y.z", "/a/b/x/y.z")]
+	#[case("a/b", "../x/y.z", "a/x/y.z")]
+	#[case("a/b", "./x/y.z", "a/b/x/y.z")]
+	#[case("a/b", "/x/y.z", "/x/y.z")]
+	#[case("a/b", "x/y.z", "a/b/x/y.z")]
+	#[case("ftp://a.org/b/", "../x/y.z", "ftp://a.org/x/y.z")]
+	#[case("ftp://a.org/b/", "./x/y.z", "ftp://a.org/b/x/y.z")]
+	#[case("ftp://a.org/b/", "/x/y.z", "ftp://a.org/x/y.z")]
+	#[case("ftp://a.org/b/", "ftp://b.org/y.z", "ftp://b.org/y.z")]
+	#[case("ftp://a.org/b/", "x/y.z", "ftp://a.org/b/x/y.z")]
+	fn resolve_matrix(#[case] base: &str, #[case] target: &str, #[case] expected: &str) -> Result<()> {
+		let base_up = UrlPath::from(base);
+		let mut tgt = UrlPath::from(target);
+		tgt.resolve(&base_up)?;
+		assert_eq!(tgt.as_str(), expected);
+		assert_eq!(tgt, UrlPath::from(expected));
+		Ok(())
+	}
+
+	#[rstest]
+	#[case("https://a.org/b/file.tar.gz", ".gz", "file.tar")]
+	#[case("/data/README", "", "README")]
+	#[case("/data/README.md", ".md", "README")]
+	#[case("/data/README.MD", ".MD", "README")]
+	#[case("/data/archive.", ".", "archive")]
+	#[case("/data/.bashrc", ".bashrc", "")]
+	#[case("https://a.org/dir.with.dots/file", "", "file")]
+	fn extension_and_name_matrix(
+		#[case] input: &str,
+		#[case] expected_ext: &str,
+		#[case] expected_name: &str,
+	) -> Result<()> {
+		let v = UrlPath::from(input);
+		assert_eq!(v.extension()?, expected_ext);
+		assert_eq!(v.name()?, expected_name);
+		Ok(())
+	}
+
+	#[rstest]
+	#[case("../a/b", "../a/b")]
+	#[case("./a/./b", "a/b")]
+	#[case("/..", "")]
+	#[case("///a//b", "/a/b")]
+	#[case("/a/../x", "/x")]
+	#[case("/a/./b/.", "/a/b")]
+	#[case("a/../../b", "../b")]
+	#[case("a/b/../c", "a/c")]
+	fn normalize_matrix(#[case] input: &str, #[case] expected: &str) {
+		let got = super::normalize(Path::new(input));
+		assert_eq!(got, PathBuf::from(expected));
+	}
+
+	#[test]
+	fn from_conversions_work() -> Result<()> {
+		let u = Url::parse("https://example.org/hello.txt")?;
+		let up: UrlPath = u.into();
+		assert_eq!(up.as_str(), "https://example.org/hello.txt");
+
+		let s = String::from("/tmp/abc.txt");
+		let sp: UrlPath = s.into();
+		assert_eq!(sp.as_path()?.to_path_buf(), PathBuf::from("/tmp/abc.txt"));
+
+		let sr: UrlPath = "/tmp/xyz.txt".into();
+		assert_eq!(sr.as_path()?.to_path_buf(), PathBuf::from("/tmp/xyz.txt"));
+
+		let surl: UrlPath = "https://example.org/a/b".into();
+		assert_eq!(surl.as_str(), "https://example.org/a/b");
+		Ok(())
+	}
+
+	#[test]
+	fn debug_impl_is_stable_format_prefix() -> Result<()> {
+		let url = UrlPath::from("https://example.org/a/b.txt");
+		let path = UrlPath::from(PathBuf::from("/data/c.txt"));
+
+		let d_url = format!("{:?}", url);
+		let d_path = format!("{:?}", path);
+
+		assert!(d_url.starts_with("Url(") && d_url.contains("https://example.org/a/b.txt"));
+		assert!(d_path.starts_with("Path(") && d_path.contains("c.txt"));
+		Ok(())
+	}
+}
