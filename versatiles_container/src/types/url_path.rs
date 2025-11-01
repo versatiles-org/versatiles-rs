@@ -357,13 +357,12 @@ mod tests {
 
 	#[cfg(windows)]
 	#[rstest]
-	#[case(r"C:\\a\\..\\b", r"C:\\b")]
-	#[case(r"C:\\a\\.\\b\\.", r"C:\\a\\b")]
-	#[case(r"C:\\..\\..", r"C:\\")]
-	#[case(r"\\\\server\\share\\..\\x", r"\\\\server\\share\\x")]
+	#[case(r"C:\a\..\b", r"C:\b")]
+	#[case(r"C:\a\.\b\.", r"C:\a\b")]
+	#[case(r"C:\..\..", r"C:\")]
+	#[case(r"\\server\share\..\x", r"\\server\share\x")]
 	fn normalize_windows_matrix(#[case] input: &str, #[case] expected: &str) {
-		let got = super::normalize(Path::new(input));
-		assert_eq!(got, PathBuf::from(expected));
+		assert_eq!(super::normalize(Path::new(input)), PathBuf::from(expected));
 	}
 
 	#[test]
