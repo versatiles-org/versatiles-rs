@@ -8,7 +8,9 @@ use versatiles_derive::context;
 
 #[derive(Clone, PartialEq)]
 pub enum UrlPath {
+	// An absolute URL with scheme.
 	Url(reqwest::Url),
+	// A file path.
 	Path(PathBuf),
 }
 
@@ -20,6 +22,7 @@ impl UrlPath {
 		}
 	}
 
+	#[context("Getting Path from UrlPath {self:?}")]
 	pub fn as_path(&self) -> Result<&Path> {
 		match self {
 			UrlPath::Path(path) => Ok(path.as_path()),
@@ -27,6 +30,7 @@ impl UrlPath {
 		}
 	}
 
+	#[context("Resolving UrlPath {self:?} against base {base:?}")]
 	pub fn resolve(&mut self, base: &UrlPath) -> Result<()> {
 		use UrlPath as U;
 		match (self.clone(), base) {
@@ -47,7 +51,7 @@ impl UrlPath {
 		Ok(())
 	}
 
-	#[context("Getting filename from Url/Path {:?}", self)]
+	#[context("Getting filename from Url/Path {self:?}")]
 	pub fn filename(&self) -> Result<String> {
 		let filename = match self {
 			UrlPath::Url(url) => url
@@ -64,7 +68,7 @@ impl UrlPath {
 		Ok(filename.to_string())
 	}
 
-	// Get a name, like the filename without extension.
+	#[context("Getting name without extension from Url/Path {self:?}")]
 	pub fn name(&self) -> Result<String> {
 		let filename = self.filename()?;
 		if let Some(pos) = filename.rfind('.') {
@@ -74,6 +78,7 @@ impl UrlPath {
 		}
 	}
 
+	#[context("Getting extension from Url/Path {self:?}")]
 	pub fn extension(&self) -> Result<String> {
 		let filename = self.filename()?;
 		if let Some(pos) = filename.rfind('.') {
