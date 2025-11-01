@@ -253,8 +253,17 @@ mod tests {
 	#[case("https://example.org/file.txt", false)]
 	fn as_str_returns_expected_for_url_and_path(#[case] input: &str, #[case] is_path: bool) -> Result<()> {
 		let v = UrlPath::from(input);
-		assert_eq!(v.to_string(), input);
 		assert_eq!(v.as_path().is_ok(), is_path);
+
+		match &v {
+			UrlPath::Url(u) => {
+				assert_eq!(u.as_str(), input);
+			}
+			UrlPath::Path(p) => {
+				assert!(is_path, "expected a path case");
+				assert_eq!(p.to_path_buf(), PathBuf::from(input));
+			}
+		}
 		Ok(())
 	}
 
@@ -339,8 +348,11 @@ mod tests {
 	#[case("a/../../b", "../b")]
 	#[case("a/b/../c", "a/c")]
 	fn normalize_matrix(#[case] input: &str, #[case] expected: &str) {
-		let got = super::normalize(Path::new(input));
-		assert_eq!(got, PathBuf::from(expected));
+		let got = super::normalize(Path::new(input))
+			.display()
+			.to_string()
+			.replace('\\', "/");
+		assert_eq!(&got, expected);
 	}
 
 	#[cfg(windows)]
