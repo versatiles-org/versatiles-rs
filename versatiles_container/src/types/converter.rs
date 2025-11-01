@@ -14,7 +14,7 @@
 //!     let registry = ContainerRegistry::default();
 //!
 //!     // Create a mbtiles reader
-//!     let mut reader = registry.get_reader(&path_mbtiles.to_str().unwrap()).await?;
+//!     let mut reader = registry.get_reader(&path_mbtiles).await?;
 //!
 //!     // Define converter parameters
 //!     let converter_params = TilesConverterParameters {
@@ -26,7 +26,7 @@
 //!     convert_tiles_container(
 //!         reader,
 //!         converter_params,
-//!         &path_versatiles.to_str().unwrap(),
+//!         &path_versatiles,
 //!         registry
 //!     ).await?;
 //!

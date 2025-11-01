@@ -112,7 +112,7 @@ impl ContainerRegistry {
 	{
 		self
 			.file_readers
-			.insert(ext.to_string(), Arc::new(Box::new(move |p| Box::pin(read_file(p)))));
+			.insert(hash_extension(ext), Arc::new(Box::new(move |p| Box::pin(read_file(p)))));
 	}
 
 	pub fn register_reader_data<F, Fut>(&mut self, ext: &str, read_data: F)
@@ -122,7 +122,7 @@ impl ContainerRegistry {
 	{
 		self
 			.data_readers
-			.insert(ext.to_string(), Arc::new(Box::new(move |p| Box::pin(read_data(p)))));
+			.insert(hash_extension(ext), Arc::new(Box::new(move |p| Box::pin(read_data(p)))));
 	}
 
 	pub fn register_writer_file<F, Fut>(&mut self, ext: &str, write_file: F)
@@ -131,27 +131,31 @@ impl ContainerRegistry {
 		Fut: Future<Output = Result<()>> + Send + 'static,
 	{
 		self.file_writers.insert(
-			ext.to_string(),
+			hash_extension(ext),
 			Arc::new(Box::new(move |r, p, c| Box::pin(write_file(r, p, c)))),
 		);
 	}
 
 	/// Get a reader for a given filename or URL.
 	#[context("Failed to get reader for '{url_path:?}'")]
-	pub async fn get_reader(&self, url_path: &UrlPath) -> Result<Box<dyn TilesReaderTrait>> {
-		let mut url_path = url_path.clone();
+	pub async fn get_reader<T>(&self, url_path: T) -> Result<Box<dyn TilesReaderTrait>>
+	where
+		T: Into<UrlPath> + std::fmt::Debug + Clone,
+	{
+		let mut url_path = url_path.clone().into();
 		url_path.resolve(&UrlPath::from(env::current_dir()?))?;
 
-		let extension = url_path.extension()?;
+		let extension = hash_extension(&url_path.extension()?);
 
 		match url_path {
 			UrlPath::Url(url) => {
 				let reader = DataReaderHttp::from_url(url.clone())
 					.with_context(|| format!("Failed to create HTTP data reader for URL '{url}'"))?;
+
 				let opener = self
 					.data_readers
 					.get(&extension)
-					.ok_or_else(|| anyhow::anyhow!("Error when reading: file extension '{extension}' unknown"))?;
+					.ok_or_else(|| anyhow::anyhow!("file extension '{extension}' unknown"))?;
 				opener(reader).await
 			}
 			UrlPath::Path(path) => {
@@ -168,7 +172,7 @@ impl ContainerRegistry {
 				let opener = self
 					.file_readers
 					.get(&extension)
-					.ok_or_else(|| anyhow::anyhow!("Error when reading: file extension '{extension}' unknown"))?;
+					.ok_or_else(|| anyhow::anyhow!("file extension '{extension}' unknown"))?;
 				opener(path.to_path_buf()).await
 			}
 		}
@@ -194,6 +198,10 @@ impl ContainerRegistry {
 
 		Ok(())
 	}
+}
+
+fn hash_extension(ext: &str) -> String {
+	ext.to_ascii_lowercase().trim_matches('.').to_string()
 }
 
 impl Default for ContainerRegistry {
@@ -266,11 +274,16 @@ pub mod tests {
 				TileBBoxPyramid::new_full(2),
 			))?;
 
+			let path = TempDir::new()?.to_path_buf();
+			if !path.exists() {
+				std::fs::create_dir(&path)?;
+			}
+
 			// get to test container converter
 			let path: PathBuf = match container {
-				Container::Directory => TempDir::new()?.path().to_path_buf(),
-				Container::Tar => NamedTempFile::new("temp.tar")?.path().to_path_buf(),
-				Container::Versatiles => NamedTempFile::new("temp.versatiles")?.path().to_path_buf(),
+				Container::Directory => path,
+				Container::Tar => path.join("temp.tar"),
+				Container::Versatiles => path.join("temp.versatiles"),
 			};
 
 			let registry = ContainerRegistry::new(ProcessingConfig::default());
