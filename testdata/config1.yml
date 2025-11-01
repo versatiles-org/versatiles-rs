@@ -45,7 +45,7 @@ tiles:
     override_compression: gzip
 
   - name: berlin
-    path: "../testdata/berlin.mbtiles"
+    path: "./berlin.mbtiles"
 
   - name: planet
     path: "/data/tiles/planet.tar.br"
