@@ -132,6 +132,12 @@ jobs:
     name: 'Test on Windows'
     runs-on: windows-latest
     steps:
+      - name: Configure Git EOL
+        shell: bash
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+          
       - name: Checkout repository
         uses: actions/checkout@v5
 
