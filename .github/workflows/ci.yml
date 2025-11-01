@@ -118,25 +118,26 @@ jobs:
           files: ./lcov.info
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
-#  windows:
-#    name: 'Test on Windows'
-#    runs-on: windows-latest
-#    steps:
-#      - name: Check out
-#        uses: actions/checkout@v5
-#
-#      - name: Install Rust
-#        uses: dtolnay/rust-toolchain@stable
-#        with:
-#          components: rustfmt, clippy
-#
-#      - name: Cache cargo (rust-cache)
-#        uses: Swatinem/rust-cache@v2
-#        with:
-#          shared-key: windows-${{ matrix.arch || 'x86_64' }}
-#          cache-on-failure: true
-#
-#      - name: Run Fmt, Clippy and Test
-#        shell: pwsh
-#        working-directory: ${{ env.GITHUB_WORKSPACE }}
-#        run: .\scripts\test.ps1
+
+  windows:
+    name: 'Test on Windows'
+    runs-on: windows-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v5
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache cargo (rust-cache)
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-x86_64
+          cache-on-failure: true
+
+      - name: Run Fmt, Clippy and Test
+        shell: pwsh
+        working-directory: ${{ env.GITHUB_WORKSPACE }}
+        run: .\scripts\test.ps1
