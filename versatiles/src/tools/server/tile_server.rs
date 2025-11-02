@@ -67,6 +67,7 @@ pub struct TileServer {
 	registry: ContainerRegistry,
 	/// Configured CORS origins (supports `*`, prefix/suffix wildcard, or `/regex/`).
 	cors_allowed_origins: Vec<String>,
+	cors_max_age_seconds: u64,
 }
 
 impl TileServer {
@@ -83,6 +84,7 @@ impl TileServer {
 			disable_api,
 			registry: get_registry(ProcessingConfig::default()),
 			cors_allowed_origins: Vec::new(),
+			cors_max_age_seconds: 3600,
 		}
 	}
 
@@ -102,6 +104,7 @@ impl TileServer {
 			disable_api: config.server.disable_api.unwrap_or(false),
 			registry,
 			cors_allowed_origins: config.cors.allowed_origins.clone(),
+			cors_max_age_seconds: config.cors.max_age_seconds.unwrap_or(3600),
 		};
 
 		for tile_config in config.tile_sources.iter() {
@@ -200,7 +203,7 @@ impl TileServer {
 		}
 		router = self.add_static_sources_to_app(router);
 
-		let cors_layer = cors::build_cors_layer(&self.cors_allowed_origins)?;
+		let cors_layer = cors::build_cors_layer(&self.cors_allowed_origins, self.cors_max_age_seconds)?;
 		router = router.layer(ServiceBuilder::new().layer(cors_layer));
 
 		// --- Global backpressure & protection layers ---

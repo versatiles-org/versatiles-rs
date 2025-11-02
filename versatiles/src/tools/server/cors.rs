@@ -11,6 +11,8 @@
 //! the origin predicate here to avoid surprising defaults; methods/headers
 //! are left to Axum/Tower-HTTP defaults unless you want to extend them.
 
+use std::time::Duration;
+
 use anyhow::Result;
 use axum::http::{header::HeaderValue, request::Parts};
 use regex::Regex;
@@ -21,7 +23,7 @@ type Predicate = Box<dyn Fn(&str) -> bool + Send + Sync + 'static>;
 /// Build a `CorsLayer` with a predicate assembled from `allowed_origins`.
 ///
 /// See module docs for supported pattern forms.
-pub fn build_cors_layer(allowed_origins: &[String]) -> Result<CorsLayer> {
+pub fn build_cors_layer(allowed_origins: &[String], max_age_seconds: u64) -> Result<CorsLayer> {
 	// Compile the list of origin checks.
 	let checks: Vec<Predicate> = allowed_origins
 		.iter()
@@ -50,10 +52,12 @@ pub fn build_cors_layer(allowed_origins: &[String]) -> Result<CorsLayer> {
 		.collect::<Result<Vec<_>>>()?;
 
 	// Build the layer with a predicate function that ORs all checks.
-	let layer = CorsLayer::new().allow_origin(AllowOrigin::predicate(move |origin: &HeaderValue, _req: &Parts| {
-		let origin_str = origin.to_str().unwrap_or("");
-		checks.iter().any(|f| f(origin_str))
-	}));
+	let layer = CorsLayer::new()
+		.allow_origin(AllowOrigin::predicate(move |origin: &HeaderValue, _req: &Parts| {
+			let origin_str = origin.to_str().unwrap_or("");
+			checks.iter().any(|f| f(origin_str))
+		}))
+		.max_age(Duration::from_secs(max_age_seconds));
 
 	Ok(layer)
 }
@@ -84,21 +88,21 @@ mod tests {
 
 	#[tokio::test]
 	async fn exact_match() {
-		let layer = build_cors_layer(&["https://maps.example.org".into()]).unwrap();
+		let layer = build_cors_layer(&["https://maps.example.org".into()], 3600).unwrap();
 		assert!(has_acao(&layer, "https://maps.example.org").await);
 		assert!(!has_acao(&layer, "https://maps.example.com").await);
 	}
 
 	#[tokio::test]
 	async fn star_all() {
-		let layer = build_cors_layer(&["*".into()]).unwrap();
+		let layer = build_cors_layer(&["*".into()], 3600).unwrap();
 		assert!(has_acao(&layer, "http://anything.local").await);
 		assert!(has_acao(&layer, "https://whatever.example").await);
 	}
 
 	#[tokio::test]
 	async fn suffix_match() {
-		let layer = build_cors_layer(&["*example.com".into()]).unwrap();
+		let layer = build_cors_layer(&["*example.com".into()], 3600).unwrap();
 		assert!(has_acao(&layer, "https://foo.example.com").await);
 		assert!(has_acao(&layer, "https://bar.example.com").await);
 		assert!(!has_acao(&layer, "https://example.org").await);
@@ -106,14 +110,14 @@ mod tests {
 
 	#[tokio::test]
 	async fn prefix_match() {
-		let layer = build_cors_layer(&["https://dev-*".into()]).unwrap();
+		let layer = build_cors_layer(&["https://dev-*".into()], 3600).unwrap();
 		assert!(has_acao(&layer, "https://dev-01.example.com").await);
 		assert!(!has_acao(&layer, "https://prod-01.example.com").await);
 	}
 
 	#[tokio::test]
 	async fn regex_match() {
-		let layer = build_cors_layer(&["/^https://(foo|bar)\\.example\\.com$/".into()]).unwrap();
+		let layer = build_cors_layer(&["/^https://(foo|bar)\\.example\\.com$/".into()], 3600).unwrap();
 		assert!(has_acao(&layer, "https://foo.example.com").await);
 		assert!(has_acao(&layer, "https://bar.example.com").await);
 		assert!(!has_acao(&layer, "https://baz.example.com").await);
