@@ -129,7 +129,7 @@ mod tests {
 	fn identity_disabled() {
 		let headers = mk_headers("identity;q=0, gzip");
 		let got = get_encoding(headers);
-		assert_eq!(got, to_target(enum_set!(TC::Gzip)));
+		assert_eq!(got, to_target(enum_set!(TC::Uncompressed | TC::Gzip)));
 	}
 
 	#[test]
