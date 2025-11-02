@@ -1,3 +1,17 @@
+//! VersaTiles HTTP server lifecycle and composition.
+//!
+//! This module wires together the public HTTP surface for serving tiles and static assets.
+//! The *logic* is intentionally split into focused modules:
+//! - `handlers` implement the concrete HTTP handlers and response helpers.
+//! - `routes` composes handlers into an Axum `Router`.
+//! - `encoding` parses `Accept-Encoding` into our internal compression bitset.
+//! - `cors` builds a `CorsLayer` from user-configurable origin patterns.
+//!
+//! `tile_server.rs` owns *lifecycle* concerns only: configuration ingestion,
+//! building the router, applying cross-cutting middlewares (CORS, backpressure,
+//! timeouts, panic catching), listening on a socket, graceful shutdown, and
+//! a tiny `/status` probe for liveness checks.
+
 use super::{cors, routes, sources, utils::Url};
 use anyhow::{Result, bail};
 use axum::error_handling::HandleErrorLayer;
@@ -19,16 +33,39 @@ use versatiles_container::{ContainerRegistry, TilesConvertReader, TilesConverter
 use versatiles_core::TileCompression;
 use versatiles_derive::context;
 
+/// Thin orchestration layer for the VersaTiles HTTP server.
+///
+/// This type is intentionally small: it stores configuration and composes the
+/// router and global middleware stack, but delegates request handling and routing
+/// to dedicated modules. The important guarantees are:
+/// - **Idempotent start/stop:** starting twice stops the previous instance; stopping twice is a no-op.
+/// - **Graceful shutdown:** in-flight requests are allowed to finish (up to a timeout).
+/// - **Backpressure by default:** global limits protect the process from overload.
+///
+/// Typical usage in tests:
+/// ```no_run
+/// # use versatiles::{Config};
+/// # async fn demo(mut server: TileServer) {
+/// server.start().await.unwrap();
+/// // ... run requests ...
+/// server.stop().await; // wait until the listening task has finished
+/// # }
+/// ```
 pub struct TileServer {
 	ip: String,
 	port: u16,
 	tile_sources: Vec<sources::TileSource>,
 	static_sources: Vec<sources::StaticSource>,
+	/// One-shot channel to signal graceful shutdown to the serving task.
 	exit_signal: Option<oneshot::Sender<()>>,
+	/// Join handle for the serving task; awaited in `stop()` to ensure shutdown completes.
 	join: Option<tokio::task::JoinHandle<()>>,
+	/// If true, prefer faster (lower ratio) recompression when negotiating encodings.
 	minimal_recompression: bool,
+	/// Expose small helper endpoints like `/tiles/index.json` and `/status`.
 	use_api: bool,
 	registry: ContainerRegistry,
+	/// Configured CORS origins (supports `*`, prefix/suffix wildcard, or `/regex/`).
 	cors_allowed_origins: Vec<String>,
 }
 
@@ -49,6 +86,10 @@ impl TileServer {
 		}
 	}
 
+	/// Construct a server from `Config` and a `ContainerRegistry`.
+	///
+	/// This ingests tile and static sources, applying optional on-the-fly
+	/// transforms (e.g., `flip_y`, `swap_xy`) and compression overrides.
 	pub async fn from_config(config: Config, registry: ContainerRegistry) -> Result<TileServer> {
 		let mut server = TileServer {
 			ip: config.server.ip.unwrap_or("0.0.0.0".into()),
@@ -108,6 +149,9 @@ impl TileServer {
 		self.add_tile_source(&name, reader)
 	}
 
+	/// Register a tile source under `/tiles/<name>/...`.
+	///
+	/// Fails if the URL prefix collides (as a prefix) with an existing source.
 	pub fn add_tile_source(&mut self, name: &str, reader: Box<dyn TilesReaderTrait>) -> Result<()> {
 		log::info!("add source: id='{name}', source={reader:?}");
 
@@ -126,6 +170,7 @@ impl TileServer {
 		Ok(())
 	}
 
+	/// Register a static file source mounted at `url_prefix`.
 	pub fn add_static_source(&mut self, path: &Path, url_prefix: &str) -> Result<()> {
 		log::info!("add static: {path:?}");
 		self
@@ -134,6 +179,11 @@ impl TileServer {
 		Ok(())
 	}
 
+	/// Start listening and serving requests.
+	///
+	/// - Idempotent: if already running, the previous instance is stopped first.
+	/// - Builds the router (`routes`), applies CORS and global protection layers,
+	///   then spawns `axum::serve(...)` with graceful shutdown support.
 	pub async fn start(&mut self) -> Result<()> {
 		// If already running, stop first to avoid port conflicts and leaked tasks.
 		if self.exit_signal.is_some() || self.join.is_some() {
@@ -154,11 +204,16 @@ impl TileServer {
 		router = router.layer(ServiceBuilder::new().layer(cors_layer));
 
 		// --- Global backpressure & protection layers ---
+		// The order of layers matters. From innermost to outermost:
+		//   LoadShed → ConcurrencyLimit → Buffer → Timeout → CatchPanic → HandleError
+		// We apply `HandleErrorLayer` outermost so Axum observes an `Infallible` error type.
 		let global_concurrency = 256usize; // tune based on CPU and workload
 		let global_buffer = 512usize; // bounded queue in front of the service
 		let request_timeout = std::time::Duration::from_secs(15); // hard per-request cap
 
 		let overload_handler = HandleErrorLayer::new(|_err: BoxError| async move {
+			// Map timeouts, loadshed, and buffer-closed errors to a clear 503.
+			// 503 is cache-aware and plays well with upstream retries; 429 is reserved for per-client rate limits.
 			let mut resp = (StatusCode::SERVICE_UNAVAILABLE, "Service overloaded, try later").into_response();
 			resp.headers_mut().insert("Retry-After", "2".parse().unwrap());
 			Ok::<_, std::convert::Infallible>(resp)
@@ -205,6 +260,9 @@ impl TileServer {
 		Ok(())
 	}
 
+	/// Trigger graceful shutdown and wait for the server task to finish (with timeout).
+	///
+	/// Idempotent: if the server is not running, this returns immediately.
 	pub async fn stop(&mut self) {
 		// If not running, do nothing (idempotent).
 		if self.exit_signal.is_none() && self.join.is_none() {
@@ -233,14 +291,17 @@ impl TileServer {
 		}
 	}
 
+	/// Helper: delegate to `routes::add_tile_sources_to_app` to attach tile endpoints.
 	fn add_tile_sources_to_app(&self, app: Router) -> Router {
 		routes::add_tile_sources_to_app(app, &self.tile_sources, self.minimal_recompression)
 	}
 
+	/// Helper: delegate to `routes::add_static_sources_to_app` to attach static endpoints.
 	fn add_static_sources_to_app(&self, app: Router) -> Router {
 		routes::add_static_sources_to_app(app, &self.static_sources, self.minimal_recompression)
 	}
 
+	/// Helper: delegate to `routes::add_api_to_app` to attach small JSON API endpoints.
 	async fn add_api_to_app(&self, app: Router) -> Result<Router> {
 		routes::add_api_to_app(app, &self.tile_sources).await
 	}
@@ -255,6 +316,8 @@ impl TileServer {
 	}
 }
 
+/// Integration tests for server lifecycle, routing, and content negotiation.
+/// These spin up a real TCP listener on localhost ports (see port numbers in cases).
 #[cfg(test)]
 mod tests {
 	use super::*;
