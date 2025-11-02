@@ -3664,7 +3664,6 @@ dependencies = [
  "clap",
  "enumset",
  "env_logger",
- "hyper",
  "lazy_static",
  "log",
  "mime_guess",

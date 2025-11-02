@@ -7,14 +7,10 @@ use axum::{
 	Router,
 	body::Body,
 	extract::State,
-	http::{
-		HeaderMap, Uri,
-		header::{ACCEPT_ENCODING, CACHE_CONTROL, CONTENT_ENCODING, CONTENT_TYPE},
-	},
+	http::{HeaderMap, Uri, header},
 	response::Response,
 	routing::get,
 };
-use hyper::header::{ACCESS_CONTROL_ALLOW_ORIGIN, VARY};
 use regex::Regex;
 use std::path::Path;
 use tokio::sync::oneshot::Sender;
@@ -347,7 +343,7 @@ impl TileServer {
 fn error_400() -> Response<Body> {
 	Response::builder()
 		.status(400)
-		.header(ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+		.header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
 		.body(Body::from("Bad Request"))
 		.expect("should have build a body")
 }
@@ -355,7 +351,7 @@ fn error_400() -> Response<Body> {
 fn error_404() -> Response<Body> {
 	Response::builder()
 		.status(404)
-		.header(ACCESS_CONTROL_ALLOW_ORIGIN, "*")
+		.header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
 		.body(Body::from("Not Found"))
 		.expect("should have build a body")
 }
@@ -370,10 +366,10 @@ fn ok_data(result: SourceResponse, mut target_compressions: TargetCompression) -
 
 	let mut response = Response::builder()
 		.status(200)
-		.header(CONTENT_TYPE, result.mime)
-		.header(CACHE_CONTROL, "public, max-age=2419200, no-transform")
-		.header(VARY, "accept-encoding")
-		.header(ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+		.header(header::CONTENT_TYPE, result.mime)
+		.header(header::CACHE_CONTROL, "public, max-age=2419200, no-transform")
+		.header(header::VARY, "accept-encoding")
+		.header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*");
 
 	log::trace!(
 		"optimize_compression from \"{}\" to {:?}",
@@ -386,8 +382,8 @@ fn ok_data(result: SourceResponse, mut target_compressions: TargetCompression) -
 	use TileCompression::*;
 	match compression {
 		Uncompressed => {}
-		Gzip => response = response.header(CONTENT_ENCODING, "gzip"),
-		Brotli => response = response.header(CONTENT_ENCODING, "br"),
+		Gzip => response = response.header(header::CONTENT_ENCODING, "gzip"),
+		Brotli => response = response.header(header::CONTENT_ENCODING, "br"),
 	}
 
 	log::trace!("send repsonse using headers: {:?}", response.headers_ref());
@@ -410,7 +406,7 @@ fn ok_json(message: &str) -> Response<Body> {
 
 fn get_encoding(headers: HeaderMap) -> TargetCompression {
 	let mut encoding_set: TargetCompression = TargetCompression::from_none();
-	let encoding_option = headers.get(ACCEPT_ENCODING);
+	let encoding_option = headers.get(header::ACCEPT_ENCODING);
 	if let Some(encoding) = encoding_option {
 		let encoding_string = encoding.to_str().unwrap_or("");
 
@@ -594,13 +590,16 @@ mod tests {
 		assert_eq!(resp.status(), 200);
 
 		let headers = resp.headers();
-		let ct = headers.get(CONTENT_TYPE).unwrap().to_str().unwrap();
+		let ct = headers.get(header::CONTENT_TYPE).unwrap().to_str().unwrap();
 		assert_eq!(
 			ct, expect_mime_contains,
 			"unexpected content-type '{ct}', expected to be '{expect_mime_contains}'"
 		);
 
-		let content_encoding = headers.get(CONTENT_ENCODING).map(|v| v.to_str().unwrap()).unwrap_or("");
+		let content_encoding = headers
+			.get(header::CONTENT_ENCODING)
+			.map(|v| v.to_str().unwrap())
+			.unwrap_or("");
 		assert_eq!(
 			content_encoding, expect_content_encoding,
 			"unexpected content-encoding '{content_encoding}', expected to be '{expect_content_encoding}'"
