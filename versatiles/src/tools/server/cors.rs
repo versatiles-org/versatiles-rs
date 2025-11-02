@@ -122,4 +122,42 @@ mod tests {
 		assert!(has_acao(&layer, "https://bar.example.com").await);
 		assert!(!has_acao(&layer, "https://baz.example.com").await);
 	}
+
+	async fn preflight_max_age(layer: &CorsLayer, origin: &str) -> Option<String> {
+		let app = Router::new().route("/", get(|| async { "ok" })).layer(layer.clone());
+
+		let req = Request::builder()
+			.method("OPTIONS")
+			.uri("/")
+			.header(header::ORIGIN, origin)
+			.header(header::ACCESS_CONTROL_REQUEST_METHOD, "GET")
+			.body(Body::empty())
+			.unwrap();
+
+		let resp = app.oneshot(req).await.unwrap();
+		resp
+			.headers()
+			.get(header::ACCESS_CONTROL_MAX_AGE)
+			.and_then(|h| h.to_str().ok())
+			.map(|s| s.to_string())
+	}
+
+	#[tokio::test]
+	async fn max_age_is_set_on_preflight() {
+		let layer = build_cors_layer(&["*".into()], 7200).unwrap();
+		let value = preflight_max_age(&layer, "https://example.test").await;
+		assert_eq!(value.as_deref(), Some("7200"));
+	}
+
+	#[tokio::test]
+	async fn max_age_reflects_input_value() {
+		let layer_short = build_cors_layer(&["*".into()], 10).unwrap();
+		let layer_long = build_cors_layer(&["*".into()], 999).unwrap();
+
+		let v_short = preflight_max_age(&layer_short, "https://example.test").await;
+		let v_long = preflight_max_age(&layer_long, "https://example.test").await;
+
+		assert_eq!(v_short.as_deref(), Some("10"));
+		assert_eq!(v_long.as_deref(), Some("999"));
+	}
 }
