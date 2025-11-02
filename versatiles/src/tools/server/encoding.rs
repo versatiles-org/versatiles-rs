@@ -15,7 +15,7 @@ use versatiles_core::{TileCompression, utils::TargetCompression};
 /// Parse `Accept-Encoding` and return the set of allowed compressions.
 ///
 /// Identity (uncompressed) is considered allowed unless explicitly disabled via `q=0`.
-pub(crate) fn get_encoding(headers: HeaderMap) -> TargetCompression {
+pub fn get_encoding(headers: HeaderMap) -> TargetCompression {
 	use TileCompression::*;
 	let mut set = TargetCompression::from_none();
 
@@ -83,6 +83,7 @@ mod tests {
 	use super::*;
 	use axum::http::{HeaderMap, header::ACCEPT_ENCODING};
 	use enumset::{EnumSet, enum_set};
+	use rstest::rstest;
 	use versatiles_core::TileCompression as TC;
 
 	fn mk_headers(s: &str) -> HeaderMap {
@@ -145,5 +146,34 @@ mod tests {
 		let got = get_encoding(headers);
 		// deflate ignored; identity allowed (q=0.5), gzip + br allowed; * adds nothing new
 		assert_eq!(got, to_target(enum_set!(TC::Uncompressed | TC::Gzip | TC::Brotli)));
+	}
+
+	#[rstest]
+	#[case("NONE", enum_set!(TC::Uncompressed))]
+	#[case("", enum_set!(TC::Uncompressed))]
+	#[case("*", enum_set!(TC::Uncompressed | TC::Brotli | TC::Gzip))]
+	#[case("br", enum_set!(TC::Uncompressed | TC::Brotli))]
+	#[case("br;q=1.0, gzip;q=0.8, *;q=0.1", enum_set!(TC::Uncompressed | TC::Brotli | TC::Gzip))]
+	#[case("compress", enum_set!(TC::Uncompressed))]
+	#[case("compress, gzip", enum_set!(TC::Uncompressed | TC::Gzip))]
+	#[case("compress;q=0.5, gzip;q=1.0", enum_set!(TC::Uncompressed | TC::Gzip))]
+	#[case("deflate", enum_set!(TC::Uncompressed))]
+	#[case("deflate, gzip;q=1.0;q=0.5", enum_set!(TC::Uncompressed | TC::Gzip))]
+	#[case("gzip", enum_set!(TC::Uncompressed | TC::Gzip))]
+	#[case("gzip, compress, br", enum_set!(TC::Uncompressed | TC::Brotli | TC::Gzip))]
+	#[case(
+		"gzip, deflate, br;q=1.0, identity;q=0.5, *;q=0.25",
+		enum_set!(TC::Uncompressed | TC::Brotli | TC::Gzip),
+	)]
+	#[case("gzip;q=1.0, identity; q=0.5, *;q=0", enum_set!(TC::Uncompressed | TC::Gzip))]
+	#[case("identity", enum_set!(TC::Uncompressed))]
+	fn test_get_encoding(#[case] encoding: &str, #[case] comp0: EnumSet<TileCompression>) {
+		let mut map = HeaderMap::new();
+		if encoding != "NONE" {
+			map.insert(ACCEPT_ENCODING, encoding.parse().unwrap());
+		}
+		let comp0 = TargetCompression::from_set(comp0);
+		let comp = get_encoding(map);
+		assert_eq!(comp, comp0);
 	}
 }

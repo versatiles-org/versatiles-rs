@@ -1,18 +1,11 @@
 use super::{
 	cors::build_cors_layer,
-	encoding::get_encoding,
-	sources::{SourceResponse, StaticSource, TileSource},
+	handlers::{StaticHandlerState, TileHandlerState, ok_json, serve_static, serve_tile},
+	sources::{StaticSource, TileSource},
 	utils::Url,
 };
 use anyhow::{Result, bail};
-use axum::{
-	Router,
-	body::Body,
-	extract::State,
-	http::{HeaderMap, Uri, header},
-	response::Response,
-	routing::get,
-};
+use axum::{Router, routing::get};
 use std::path::Path;
 use tokio::sync::oneshot::Sender;
 use tower::ServiceBuilder;
@@ -22,10 +15,8 @@ use versatiles::{Config, TileSourceConfig};
 #[cfg(test)]
 use versatiles_container::ProcessingConfig;
 use versatiles_container::{ContainerRegistry, TilesConvertReader, TilesConverterParameters, TilesReaderTrait};
-use versatiles_core::{
-	Blob, TileCompression,
-	utils::{TargetCompression, optimize_compression},
-};
+use versatiles_core::TileCompression;
+// versatiles_core import removed as these helpers are not used here
 use versatiles_derive::context;
 
 pub struct TileServer {
@@ -196,87 +187,23 @@ impl TileServer {
 	fn add_tile_sources_to_app(&self, mut app: Router) -> Router {
 		for tile_source in self.tile_sources.iter() {
 			let route = tile_source.prefix.join_as_string("{*path}");
-
-			let tile_app = Router::new()
-				.route(&route, get(serve_tile))
-				.with_state((tile_source.clone(), self.minimal_recompression));
-
+			let state = TileHandlerState {
+				tile_source: tile_source.clone(),
+				minimal_recompression: self.minimal_recompression,
+			};
+			let tile_app = Router::new().route(&route, get(serve_tile)).with_state(state);
 			app = app.merge(tile_app);
-
-			async fn serve_tile(
-				uri: Uri,
-				headers: HeaderMap,
-				State((tile_source, minimal_recompression)): State<(TileSource, bool)>,
-			) -> Response<Body> {
-				let path = Url::new(uri.path());
-
-				log::debug!("handle tile request: {path}");
-
-				let mut target_compressions = get_encoding(headers);
-				if minimal_recompression {
-					target_compressions.set_fast_compression();
-				}
-
-				let response = tile_source
-					.get_data(
-						&path
-							.strip_prefix(&tile_source.prefix)
-							.expect("should start with prefix"),
-						&target_compressions,
-					)
-					.await;
-
-				if let Ok(Some(response)) = response {
-					log::info!("send response for tile request: {path}");
-					ok_data(response, target_compressions)
-				} else if let Err(err) = response {
-					log::warn!("send 400 for tile request: {path}. Reason: {err}");
-					error_400()
-				} else {
-					log::info!("send 404 for tile request: {path}");
-					error_404()
-				}
-			}
 		}
-
 		app
 	}
 
 	fn add_static_sources_to_app(&self, app: Router) -> Router {
-		let static_app = Router::new()
-			.fallback(get(serve_static))
-			.with_state((self.static_sources.clone(), self.minimal_recompression));
-
-		return app.merge(static_app);
-
-		async fn serve_static(
-			uri: Uri,
-			headers: HeaderMap,
-			State((sources, minimal_recompression)): State<(Vec<StaticSource>, bool)>,
-		) -> Response<Body> {
-			let mut url = Url::new(uri.path());
-
-			log::debug!("handle static request: {url}");
-
-			if url.is_dir() {
-				url.push("index.html");
-			}
-
-			let mut target_compressions = get_encoding(headers);
-			if minimal_recompression {
-				target_compressions.set_fast_compression();
-			}
-
-			for source in sources.iter() {
-				if let Some(result) = source.get_data(&url, &target_compressions) {
-					log::info!("send response to static request: {url}");
-					return ok_data(result, target_compressions);
-				}
-			}
-
-			log::info!("send 404 to static request: {url}");
-			error_404()
-		}
+		let state = StaticHandlerState {
+			sources: self.static_sources.clone(),
+			minimal_recompression: self.minimal_recompression,
+		};
+		let static_app = Router::new().fallback(get(serve_static)).with_state(state);
+		app.merge(static_app)
 	}
 
 	async fn add_api_to_app(&self, app: Router) -> Result<Router> {
@@ -307,110 +234,16 @@ impl TileServer {
 	}
 }
 
-fn error_400() -> Response<Body> {
-	Response::builder()
-		.status(400)
-		.header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-		.body(Body::from("Bad Request"))
-		.expect("should have build a body")
-}
-
-fn error_404() -> Response<Body> {
-	Response::builder()
-		.status(404)
-		.header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")
-		.body(Body::from("Not Found"))
-		.expect("should have build a body")
-}
-
-fn ok_data(result: SourceResponse, mut target_compressions: TargetCompression) -> Response<Body> {
-	if matches!(
-		result.mime.as_str(),
-		"image/png" | "image/jpeg" | "image/webp" | "image/avif"
-	) {
-		target_compressions.set_incompressible();
-	}
-
-	let mut response = Response::builder()
-		.status(200)
-		.header(header::CONTENT_TYPE, result.mime)
-		.header(header::CACHE_CONTROL, "public, max-age=2419200, no-transform")
-		.header(header::VARY, "accept-encoding")
-		.header(header::ACCESS_CONTROL_ALLOW_ORIGIN, "*");
-
-	log::trace!(
-		"optimize_compression from \"{}\" to {:?}",
-		result.compression,
-		target_compressions
-	);
-	let (blob, compression) = optimize_compression(result.blob, result.compression, &target_compressions)
-		.expect("should have optimized compression");
-
-	use TileCompression::*;
-	match compression {
-		Uncompressed => {}
-		Gzip => response = response.header(header::CONTENT_ENCODING, "gzip"),
-		Brotli => response = response.header(header::CONTENT_ENCODING, "br"),
-	}
-
-	log::trace!("send repsonse using headers: {:?}", response.headers_ref());
-
-	response
-		.body(Body::from(blob.into_vec()))
-		.expect("should have build a body")
-}
-
-fn ok_json(message: &str) -> Response<Body> {
-	ok_data(
-		SourceResponse {
-			blob: Blob::from(message),
-			compression: TileCompression::Uncompressed,
-			mime: String::from("application/json"),
-		},
-		TargetCompression::from_none(),
-	)
-}
-
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use axum::http::{HeaderMap, HeaderValue, header::ACCEPT_ENCODING};
-	use enumset::{EnumSet, enum_set};
+	use axum::http::{HeaderMap, HeaderValue, header};
 	use reqwest::Client;
 	use rstest::rstest;
 	use versatiles_container::{MockTilesReader, MockTilesReaderProfile as MTRP};
 	use versatiles_core::{TileBBoxPyramid, TileCompression as TC, TileFormat as TF, TilesReaderParameters};
 
 	const IP: &str = "127.0.0.1";
-
-	#[rstest]
-	#[case("NONE", enum_set!(TC::Uncompressed))]
-	#[case("", enum_set!(TC::Uncompressed))]
-	#[case("*", enum_set!(TC::Uncompressed | TC::Brotli | TC::Gzip))]
-	#[case("br", enum_set!(TC::Uncompressed | TC::Brotli))]
-	#[case("br;q=1.0, gzip;q=0.8, *;q=0.1", enum_set!(TC::Uncompressed | TC::Brotli | TC::Gzip))]
-	#[case("compress", enum_set!(TC::Uncompressed))]
-	#[case("compress, gzip", enum_set!(TC::Uncompressed | TC::Gzip))]
-	#[case("compress;q=0.5, gzip;q=1.0", enum_set!(TC::Uncompressed | TC::Gzip))]
-	#[case("deflate", enum_set!(TC::Uncompressed))]
-	#[case("deflate, gzip;q=1.0;q=0.5", enum_set!(TC::Uncompressed | TC::Gzip))]
-	#[case("gzip", enum_set!(TC::Uncompressed | TC::Gzip))]
-	#[case("gzip, compress, br", enum_set!(TC::Uncompressed | TC::Brotli | TC::Gzip))]
-	#[case(
-		"gzip, deflate, br;q=1.0, identity;q=0.5, *;q=0.25",
-		enum_set!(TC::Uncompressed | TC::Brotli | TC::Gzip),
-	)]
-	#[case("gzip;q=1.0, identity; q=0.5, *;q=0", enum_set!(TC::Uncompressed | TC::Gzip))]
-	#[case("identity", enum_set!(TC::Uncompressed))]
-	fn test_get_encoding(#[case] encoding: &str, #[case] comp0: EnumSet<TileCompression>) {
-		let mut map = HeaderMap::new();
-		if encoding != "NONE" {
-			map.insert(ACCEPT_ENCODING, encoding.parse().unwrap());
-		}
-		let comp0 = TargetCompression::from_set(comp0);
-		let comp = get_encoding(map);
-		assert_eq!(comp, comp0);
-	}
 
 	#[tokio::test]
 	async fn server() -> Result<()> {
