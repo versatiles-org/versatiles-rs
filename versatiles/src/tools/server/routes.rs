@@ -58,3 +58,47 @@ pub async fn add_api_to_app(app: Router, sources: &[TileSource]) -> Result<Route
 
 	Ok(app.merge(api_app))
 }
+
+// --- tests -------------------------------------------------------------------
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use axum::{body::Body, http::StatusCode};
+	use tower::ServiceExt as _; // for `oneshot`
+
+	async fn get_body_text(app: Router, path: &str) -> (StatusCode, String) {
+		let req = axum::http::Request::builder().uri(path).body(Body::empty()).unwrap();
+		let res = app.clone().oneshot(req).await.unwrap();
+		let status = res.status();
+		let bytes = axum::body::to_bytes(res.into_body(), usize::MAX).await.unwrap();
+		(status, String::from_utf8_lossy(&bytes).into_owned())
+	}
+
+	#[tokio::test]
+	async fn api_index_json_is_precomputed_and_empty_when_no_sources() {
+		let app = Router::new();
+		let app = add_api_to_app(app, &[]).await.unwrap();
+
+		let (status, body) = get_body_text(app, "/tiles/index.json").await;
+		assert_eq!(status, StatusCode::OK);
+		assert_eq!(body, "[]");
+	}
+
+	#[tokio::test]
+	async fn no_tile_sources_yields_404() {
+		let app = Router::new();
+		let app = add_tile_sources_to_app(app, &[], false);
+
+		let (status, _body) = get_body_text(app, "/tiles/any/1/2/3").await;
+		assert_eq!(status, StatusCode::NOT_FOUND);
+	}
+
+	#[tokio::test]
+	async fn no_static_sources_yields_404() {
+		let app = Router::new();
+		let app = add_static_sources_to_app(app, &[], false);
+
+		let (status, _body) = get_body_text(app, "/").await;
+		assert_eq!(status, StatusCode::NOT_FOUND);
+	}
+}
