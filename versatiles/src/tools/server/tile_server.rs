@@ -63,7 +63,7 @@ pub struct TileServer {
 	/// If true, prefer faster (lower ratio) recompression when negotiating encodings.
 	minimal_recompression: bool,
 	/// Expose small helper endpoints like `/tiles/index.json` and `/status`.
-	use_api: bool,
+	disable_api: bool,
 	registry: ContainerRegistry,
 	/// Configured CORS origins (supports `*`, prefix/suffix wildcard, or `/regex/`).
 	cors_allowed_origins: Vec<String>,
@@ -71,7 +71,7 @@ pub struct TileServer {
 
 impl TileServer {
 	#[cfg(test)]
-	pub fn new_test(ip: &str, port: u16, minimal_recompression: bool, use_api: bool) -> TileServer {
+	pub fn new_test(ip: &str, port: u16, minimal_recompression: bool, disable_api: bool) -> TileServer {
 		TileServer {
 			ip: ip.to_owned(),
 			port,
@@ -80,7 +80,7 @@ impl TileServer {
 			exit_signal: None,
 			join: None,
 			minimal_recompression,
-			use_api,
+			disable_api,
 			registry: get_registry(ProcessingConfig::default()),
 			cors_allowed_origins: Vec::new(),
 		}
@@ -99,7 +99,7 @@ impl TileServer {
 			exit_signal: None,
 			join: None,
 			minimal_recompression: config.server.minimal_recompression.unwrap_or(false),
-			use_api: !config.server.disable_api.unwrap_or(false),
+			disable_api: config.server.disable_api.unwrap_or(false),
 			registry,
 			cors_allowed_origins: config.cors.allowed_origins.clone(),
 		};
@@ -195,7 +195,7 @@ impl TileServer {
 		// Build the router
 		let mut router = Router::new().route("/status", get(|| async { "ready!" }));
 		router = self.add_tile_sources_to_app(router);
-		if self.use_api {
+		if !self.disable_api {
 			router = self.add_api_to_app(router).await?;
 		}
 		router = self.add_static_sources_to_app(router);
@@ -346,7 +346,7 @@ mod tests {
 				.expect("should have returned text")
 		}
 
-		let mut server = TileServer::new_test(IP, 50001, true, true);
+		let mut server = TileServer::new_test(IP, 50001, true, false);
 
 		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf)?.boxed();
 		server.add_tile_source("cheese", reader)?;
@@ -370,7 +370,7 @@ mod tests {
 	#[tokio::test]
 	#[should_panic]
 	async fn same_prefix_twice() {
-		let mut server = TileServer::new_test(IP, 50002, true, true);
+		let mut server = TileServer::new_test(IP, 50002, true, false);
 
 		let reader = MockTilesReader::new_mock_profile(MTRP::Png).unwrap().boxed();
 		server.add_tile_source("cheese", reader).unwrap();
@@ -381,7 +381,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn tile_server_new() {
-		let mut server = TileServer::new_test(IP, 50003, true, true);
+		let mut server = TileServer::new_test(IP, 50003, true, false);
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50003);
 		assert_eq!(server.tile_sources.len(), 0);
@@ -393,7 +393,7 @@ mod tests {
 
 	#[test]
 	fn tile_server_add_tile_source() {
-		let mut server = TileServer::new_test(IP, 50004, true, true);
+		let mut server = TileServer::new_test(IP, 50004, true, false);
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50004);
 
@@ -406,7 +406,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn tile_server_iter_url_mapping() {
-		let mut server = TileServer::new_test(IP, 50005, true, true);
+		let mut server = TileServer::new_test(IP, 50005, true, false);
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50005);
 
@@ -450,7 +450,7 @@ mod tests {
 			client.get(url).headers(headers).send().await.expect("http get")
 		}
 
-		let mut server = TileServer::new_test(IP, port, true, true);
+		let mut server = TileServer::new_test(IP, port, true, false);
 
 		let parameters = TilesReaderParameters::new(format, compression, TileBBoxPyramid::new_full(8));
 		let reader = MockTilesReader::new_mock(parameters).unwrap().boxed();
@@ -485,7 +485,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn static_sources_serve_files() -> Result<()> {
-		let mut server = TileServer::new_test(IP, 0, true, true); // use ephemeral port to avoid Windows ACL/ephemeral conflicts
+		let mut server = TileServer::new_test(IP, 0, true, false); // use ephemeral port to avoid Windows ACL/ephemeral conflicts
 
 		// Mount the provided test archive at root.
 		let static_path = Path::new("../testdata/static.tar.br");
