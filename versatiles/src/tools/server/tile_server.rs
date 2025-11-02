@@ -383,9 +383,7 @@ mod tests {
 		assert_eq!(server.tile_sources.len(), 0);
 		assert_eq!(server.static_sources.len(), 0);
 		assert!(server.exit_signal.is_none());
-
-		assert!(server.start().await.is_ok());
-
+		server.start().await.unwrap();
 		server.stop().await; // No assertion here as it's void
 	}
 
