@@ -8,6 +8,7 @@ use versatiles_core::{
 	Blob, TileCompression,
 	utils::{TargetCompression, decompress_brotli, decompress_gzip},
 };
+use versatiles_derive::context;
 
 #[derive(Debug)]
 struct FileEntry {
@@ -34,6 +35,7 @@ pub struct TarFile {
 }
 
 impl TarFile {
+	#[context("loading static tar file from path: {path:?}")]
 	pub fn from(path: &Path) -> Result<Self> {
 		use TileCompression::*;
 

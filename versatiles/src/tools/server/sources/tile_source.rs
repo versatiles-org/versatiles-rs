@@ -4,6 +4,7 @@ use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 use versatiles_container::TilesReaderTrait;
 use versatiles_core::{Blob, TileCompression, TileCoord, utils::TargetCompression};
+use versatiles_derive::context;
 
 // TileSource struct definition
 #[derive(Clone)]
@@ -17,6 +18,7 @@ pub struct TileSource {
 
 impl TileSource {
 	// Constructor function for creating a TileSource instance
+	#[context("creating tile source: id='{id}'")]
 	pub fn from(reader: Box<dyn TilesReaderTrait>, id: &str) -> Result<TileSource> {
 		let parameters = reader.parameters();
 		let tile_mime = parameters.tile_format.as_mime_str().to_string();
@@ -37,6 +39,7 @@ impl TileSource {
 	}
 
 	// Retrieve the tile data as an HTTP response
+	#[context("getting tile data: url={url}")]
 	pub async fn get_data(&self, url: &Url, _accept: &TargetCompression) -> Result<Option<SourceResponse>> {
 		let parts: Vec<String> = url.as_vec();
 
@@ -88,6 +91,7 @@ impl TileSource {
 		Ok(None)
 	}
 
+	#[context("building tilejson for tile source id='{}'", self.id)]
 	async fn build_tile_json(&self) -> Result<Blob> {
 		let reader = self.reader.lock().await;
 		let mut tilejson = reader.tilejson().clone();

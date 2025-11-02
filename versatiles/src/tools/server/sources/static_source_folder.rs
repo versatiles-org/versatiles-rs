@@ -8,6 +8,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 use versatiles_core::{Blob, TileCompression, utils::TargetCompression};
+use versatiles_derive::context;
 
 use crate::tools::server::{Url, utils::guess_mime};
 
@@ -22,6 +23,7 @@ pub struct Folder {
 
 impl Folder {
 	// Constructor for the Folder struct
+	#[context("loading static folder from path: {path:?}")]
 	pub fn from(path: &Path) -> Result<Folder> {
 		let mut folder = current_dir()?;
 		folder.push(Path::new(path));

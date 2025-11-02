@@ -12,7 +12,7 @@
 //! timeouts, panic catching), listening on a socket, graceful shutdown, and
 //! a tiny `/status` probe for liveness checks.
 
-use super::{cors, routes, sources, utils::Url};
+use super::{cors, routes, sources};
 use anyhow::{Result, bail};
 use axum::error_handling::HandleErrorLayer;
 use axum::http::{StatusCode, header::HeaderName, header::HeaderValue};
@@ -96,6 +96,7 @@ impl TileServer {
 	///
 	/// This ingests tile and static sources, applying optional on-the-fly
 	/// transforms (e.g., `flip_y`, `swap_xy`) and compression overrides.
+	#[context("building tile server from config")]
 	pub async fn from_config(config: Config, registry: ContainerRegistry) -> Result<TileServer> {
 		let mut parsed_headers: Vec<(HeaderName, HeaderValue)> = Vec::new();
 		for (k, v) in &config.extra_response_headers {
@@ -169,6 +170,7 @@ impl TileServer {
 	/// Register a tile source under `/tiles/<name>/...`.
 	///
 	/// Fails if the URL prefix collides (as a prefix) with an existing source.
+	#[context("adding tile source: id='{name}'")]
 	pub fn add_tile_source(&mut self, name: &str, reader: Box<dyn TilesReaderTrait>) -> Result<()> {
 		log::info!("add source: id='{name}', source={reader:?}");
 
@@ -188,11 +190,10 @@ impl TileServer {
 	}
 
 	/// Register a static file source mounted at `url_prefix`.
+	#[context("adding static source: url_prefix='{url_prefix}'")]
 	pub fn add_static_source(&mut self, path: &Path, url_prefix: &str) -> Result<()> {
 		log::info!("add static: {path:?}");
-		self
-			.static_sources
-			.push(sources::StaticSource::new(path, Url::new(url_prefix))?);
+		self.static_sources.push(sources::StaticSource::new(path, url_prefix)?);
 		Ok(())
 	}
 
@@ -201,6 +202,7 @@ impl TileServer {
 	/// - Idempotent: if already running, the previous instance is stopped first.
 	/// - Builds the router (`routes`), applies CORS and global protection layers,
 	///   then spawns `axum::serve(...)` with graceful shutdown support.
+	#[context("starting tile server")]
 	pub async fn start(&mut self) -> Result<()> {
 		// If already running, stop first to avoid port conflicts and leaked tasks.
 		if self.exit_signal.is_some() || self.join.is_some() {

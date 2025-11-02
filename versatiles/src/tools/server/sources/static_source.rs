@@ -3,6 +3,7 @@ use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::{fmt::Debug, path::Path, sync::Arc};
 use versatiles_core::utils::TargetCompression;
+use versatiles_derive::context;
 
 #[async_trait]
 pub trait StaticSourceTrait: Send + Sync + Debug {
@@ -20,7 +21,9 @@ pub struct StaticSource {
 }
 
 impl StaticSource {
-	pub fn new(path: &Path, prefix: Url) -> Result<StaticSource> {
+	#[context("creating static source: path={path:?}, prefix={prefix}")]
+	pub fn new(path: &Path, prefix: &str) -> Result<StaticSource> {
+		let prefix = Url::new(prefix);
 		ensure!(prefix.is_dir());
 
 		Ok(StaticSource {
@@ -32,10 +35,12 @@ impl StaticSource {
 			prefix,
 		})
 	}
+
 	#[cfg(test)]
 	pub fn get_type(&self) -> &str {
 		self.source.get_type()
 	}
+
 	pub fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse> {
 		if !url.starts_with(&self.prefix) {
 			return None;
@@ -82,12 +87,12 @@ mod tests {
 		use TileCompression::*;
 
 		let check_type = |path: PathBuf, type_name: &str| {
-			let source = StaticSource::new(&path, Url::new("")).unwrap();
+			let source = StaticSource::new(&path, "").unwrap();
 			assert_eq!(source.get_type(), type_name);
 		};
 
 		let check_error = |path: PathBuf, error_should: &str| {
-			let source = StaticSource::new(&path, Url::new(""));
+			let source = StaticSource::new(&path, "");
 			let error = source.err().unwrap().to_string();
 			assert!(
 				error.ends_with(error_should),
