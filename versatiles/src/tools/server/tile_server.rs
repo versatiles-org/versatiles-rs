@@ -1,4 +1,5 @@
 use super::{
+	cors::build_cors_layer,
 	encoding::get_encoding,
 	sources::{SourceResponse, StaticSource, TileSource},
 	utils::Url,
@@ -12,11 +13,9 @@ use axum::{
 	response::Response,
 	routing::get,
 };
-use regex::Regex;
 use std::path::Path;
 use tokio::sync::oneshot::Sender;
 use tower::ServiceBuilder;
-use tower_http::cors::{AllowOrigin, CorsLayer};
 #[cfg(test)]
 use versatiles::get_registry;
 use versatiles::{Config, TileSourceConfig};
@@ -156,7 +155,8 @@ impl TileServer {
 		}
 		router = self.add_static_sources_to_app(router);
 
-		router = router.layer(ServiceBuilder::new().layer(self.get_cors_layer()?));
+		let cors_layer = build_cors_layer(&self.cors_allowed_origins)?;
+		router = router.layer(ServiceBuilder::new().layer(cors_layer));
 
 		let addr = format!("{}:{}", self.ip, self.port);
 		eprintln!("server starts listening on {addr}");
@@ -295,40 +295,6 @@ impl TileServer {
 		api_app = api_app.route("/tiles/index.json", get(|| async move { ok_json(&tiles_index_json) }));
 
 		Ok(app.merge(api_app))
-	}
-
-	pub fn get_cors_layer(&self) -> Result<CorsLayer> {
-		use axum::http::{header::HeaderValue, request::Parts};
-
-		type CallBack = Box<dyn Fn(&str) -> bool + Send + Sync + 'static>;
-		let checks = self
-			.cors_allowed_origins
-			.iter()
-			.map(|o| {
-				Ok(if o == "*" {
-					Box::new(|_: &str| true) as CallBack
-				} else if Regex::new(r"^\*[^*]+$").unwrap().is_match(o) {
-					let suffix = o[1..].to_string();
-					Box::new(move |h: &str| h.ends_with(&suffix)) as CallBack
-				} else if Regex::new(r"^[^*]+\*$").unwrap().is_match(o) {
-					let prefix = o[..o.len() - 1].to_string();
-					Box::new(move |h: &str| h.starts_with(&prefix)) as CallBack
-				} else if Regex::new(r"^\/.+\/$").unwrap().is_match(o) {
-					let re = regex::Regex::new(&o[1..o.len() - 1])?;
-					Box::new(move |h: &str| re.is_match(h)) as CallBack
-				} else {
-					let exact = o.to_string();
-					Box::new(move |h: &str| h == exact) as CallBack
-				})
-			})
-			.collect::<Result<Vec<CallBack>>>()?;
-
-		Ok(CorsLayer::new().allow_origin(AllowOrigin::predicate(
-			move |origin: &HeaderValue, _request_parts: &Parts| {
-				let origin_str = origin.to_str().unwrap_or("");
-				checks.iter().any(|f| f(origin_str))
-			},
-		)))
 	}
 
 	pub async fn get_url_mapping(&self) -> Vec<(String, String)> {

@@ -1,5 +1,6 @@
 //! server implementation
 
+mod cors;
 mod encoding;
 mod sources;
 mod tile_server;
