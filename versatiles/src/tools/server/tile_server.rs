@@ -1,6 +1,6 @@
 use super::{
 	cors::build_cors_layer,
-	handlers::{StaticHandlerState, TileHandlerState, ok_json, serve_static, serve_tile},
+	routes,
 	sources::{StaticSource, TileSource},
 	utils::Url,
 };
@@ -184,44 +184,16 @@ impl TileServer {
 			.expect("should habe send exit signal");
 	}
 
-	fn add_tile_sources_to_app(&self, mut app: Router) -> Router {
-		for tile_source in self.tile_sources.iter() {
-			let route = tile_source.prefix.join_as_string("{*path}");
-			let state = TileHandlerState {
-				tile_source: tile_source.clone(),
-				minimal_recompression: self.minimal_recompression,
-			};
-			let tile_app = Router::new().route(&route, get(serve_tile)).with_state(state);
-			app = app.merge(tile_app);
-		}
-		app
+	fn add_tile_sources_to_app(&self, app: Router) -> Router {
+		routes::add_tile_sources_to_app(app, &self.tile_sources, self.minimal_recompression)
 	}
 
 	fn add_static_sources_to_app(&self, app: Router) -> Router {
-		let state = StaticHandlerState {
-			sources: self.static_sources.clone(),
-			minimal_recompression: self.minimal_recompression,
-		};
-		let static_app = Router::new().fallback(get(serve_static)).with_state(state);
-		app.merge(static_app)
+		routes::add_static_sources_to_app(app, &self.static_sources, self.minimal_recompression)
 	}
 
 	async fn add_api_to_app(&self, app: Router) -> Result<Router> {
-		let mut api_app = Router::new();
-
-		let tiles_index_json: String = format!(
-			"[{}]",
-			self
-				.tile_sources
-				.iter()
-				.map(|s| format!("\"{}\"", s.id))
-				.collect::<Vec<String>>()
-				.join(","),
-		);
-
-		api_app = api_app.route("/tiles/index.json", get(|| async move { ok_json(&tiles_index_json) }));
-
-		Ok(app.merge(api_app))
+		routes::add_api_to_app(app, &self.tile_sources).await
 	}
 
 	pub async fn get_url_mapping(&self) -> Vec<(String, String)> {

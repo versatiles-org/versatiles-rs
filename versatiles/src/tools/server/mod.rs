@@ -3,6 +3,7 @@
 mod cors;
 mod encoding;
 mod handlers;
+mod routes;
 mod sources;
 mod tile_server;
 mod utils;
