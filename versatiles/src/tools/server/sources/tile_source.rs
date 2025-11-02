@@ -25,7 +25,7 @@ impl TileSource {
 		let compression = parameters.tile_compression;
 
 		Ok(TileSource {
-			prefix: Url::new(&format!("/tiles/{id}/")).as_dir(),
+			prefix: Url::new(&format!("/tiles/{id}/")).to_dir(),
 			id: id.to_owned(),
 			reader: Arc::new(Mutex::new(reader)),
 			tile_mime,

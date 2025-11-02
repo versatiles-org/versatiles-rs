@@ -1,5 +1,5 @@
 use super::{super::utils::Url, SourceResponse, static_source_folder::Folder, static_source_tar::TarFile};
-use anyhow::{Result, ensure};
+use anyhow::Result;
 use async_trait::async_trait;
 use std::{fmt::Debug, path::Path, sync::Arc};
 use versatiles_core::utils::TargetCompression;
@@ -23,8 +23,7 @@ pub struct StaticSource {
 impl StaticSource {
 	#[context("creating static source: path={path:?}, prefix={prefix}")]
 	pub fn new(path: &Path, prefix: &str) -> Result<StaticSource> {
-		let prefix = Url::new(prefix);
-		ensure!(prefix.is_dir());
+		let prefix = Url::new(prefix).to_dir();
 
 		Ok(StaticSource {
 			source: Arc::new(if std::fs::metadata(path)?.is_dir() {
@@ -93,7 +92,12 @@ mod tests {
 
 		let check_error = |path: PathBuf, error_should: &str| {
 			let source = StaticSource::new(&path, "");
-			let error = source.err().unwrap().to_string();
+			let error = source
+				.err()
+				.iter()
+				.flat_map(|e| e.chain().map(|c| c.to_string()))
+				.collect::<Vec<_>>()
+				.join(" -> ");
 			assert!(
 				error.ends_with(error_should),
 				"Error message '{error}' must end with '{error_should}'"

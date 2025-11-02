@@ -24,7 +24,7 @@ impl Url {
 		self.str.ends_with('/')
 	}
 
-	pub fn as_dir(&self) -> Url {
+	pub fn to_dir(&self) -> Url {
 		if self.str.ends_with('/') {
 			self.clone()
 		} else {
@@ -130,12 +130,12 @@ mod tests {
 	fn test_be_dir() {
 		let mut url = Url::new("/test/dir");
 		assert!(!url.is_dir());
-		url = url.as_dir();
+		url = url.to_dir();
 		assert!(url.is_dir());
 		assert_eq!(url.str, "/test/dir/");
 
 		let mut url = Url::new("/test/dir/");
-		url = url.as_dir(); // should not change
+		url = url.to_dir(); // should not change
 		assert_eq!(url.str, "/test/dir/");
 	}
 

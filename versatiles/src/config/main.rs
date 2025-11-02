@@ -81,8 +81,8 @@ mod tests {
 			cfg,
 			Config {
 				server: ServerConfig {
-					ip: Some("1.2.3.4".parse()?),
-					port: Some(1234),
+					ip: Some("127.0.0.1".parse()?),
+					port: Some(51234),
 					minimal_recompression: Some(true),
 					disable_api: Some(true)
 				},
@@ -129,8 +129,8 @@ mod tests {
 						override_compression: None
 					},
 					TileSourceConfig {
-						name: Some("planet".to_string()),
-						path: UrlPath::from("/data/tiles/planet.tar.br"),
+						name: Some("pipeline".to_string()),
+						path: UrlPath::from("../testdata/berlin.vpl"),
 						flip_y: Some(true),
 						swap_xy: Some(true),
 						override_compression: None

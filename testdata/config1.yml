@@ -1,8 +1,8 @@
 # VersaTiles server configuration example
 
 server:
-  ip: 1.2.3.4
-  port: 1234
+  ip: 127.0.0.1
+  port: 51234
   minimal_recompression: true
   disable_api: true
 
@@ -49,7 +49,7 @@ tiles:
   - name: berlin
     path: "./berlin.mbtiles"
 
-  - name: planet
-    path: "/data/tiles/planet.tar.br"
+  - name: pipeline
+    path: "./berlin.vpl"
     flip_y: true
     swap_xy: true

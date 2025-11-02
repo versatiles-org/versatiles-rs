@@ -17,7 +17,7 @@ pub struct Subcommand {
 	///    e.g. ".../ukraine.versatiles" will be served at url "/tiles/ukraine/..."
 	/// You can also configure a different id for each file using:
 	///    "[id]file", "file[id]" or "file#id"
-	#[arg(num_args = 1.., required = true, verbatim_doc_comment)]
+	#[arg(verbatim_doc_comment)]
 	pub tile_sources: Vec<String>,
 
 	/// Path to a configuration file (TOML format) to configure the server, CORS, static and tile sources.
@@ -194,6 +194,19 @@ mod tests {
 			"--auto-shutdown",
 			"500",
 			"[test]https://download.versatiles.org/osm.versatiles",
+		])?;
+		Ok(())
+	}
+
+	#[test]
+	fn test_config() -> Result<()> {
+		run_command(vec![
+			"versatiles",
+			"serve",
+			"-c",
+			"../testdata/config1.yml",
+			"--auto-shutdown",
+			"500",
 		])?;
 		Ok(())
 	}
