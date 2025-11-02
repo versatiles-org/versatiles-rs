@@ -392,7 +392,7 @@ mod tests {
 	#[tokio::test]
 	#[should_panic]
 	async fn same_prefix_twice() {
-		let mut server = TileServer::new_test(IP, 50002, true, false);
+		let mut server = TileServer::new_test(IP, 0, true, false);
 
 		let reader = MockTilesReader::new_mock_profile(MTRP::Png).unwrap().boxed();
 		server.add_tile_source("cheese", reader).unwrap();
@@ -415,9 +415,8 @@ mod tests {
 
 	#[test]
 	fn tile_server_add_tile_source() {
-		let mut server = TileServer::new_test(IP, 50004, true, false);
+		let mut server = TileServer::new_test(IP, 0, true, false);
 		assert_eq!(server.ip, IP);
-		assert_eq!(server.port, 50004);
 
 		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf).unwrap().boxed();
 		server.add_tile_source("cheese", reader).unwrap();
@@ -428,9 +427,8 @@ mod tests {
 
 	#[tokio::test]
 	async fn tile_server_iter_url_mapping() {
-		let mut server = TileServer::new_test(IP, 50005, true, false);
+		let mut server = TileServer::new_test(IP, 0, true, false);
 		assert_eq!(server.ip, IP);
-		assert_eq!(server.port, 50005);
 
 		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf).unwrap().boxed();
 		server.add_tile_source("cheese", reader).unwrap();
@@ -442,16 +440,15 @@ mod tests {
 	}
 
 	#[rstest]
-	#[case(50110, TF::MVT, TC::Gzip, "br", "br", "vnd.mapbox-vector-tile")]
-	#[case(50111, TF::MVT, TC::Gzip, "gzip", "gzip", "vnd.mapbox-vector-tile")]
-	#[case(50112, TF::MVT, TC::Brotli, "br", "br", "vnd.mapbox-vector-tile")]
-	#[case(50113, TF::MVT, TC::Brotli, "gzip", "gzip", "vnd.mapbox-vector-tile")]
-	#[case(50114, TF::MVT, TC::Uncompressed, "", "", "vnd.mapbox-vector-tile")]
-	#[case(50115, TF::PNG, TC::Gzip, "br", "", "image/png")]
-	#[case(50116, TF::WEBP, TC::Brotli, "gzip", "", "image/webp")]
+	#[case(TF::MVT, TC::Gzip, "br", "br", "vnd.mapbox-vector-tile")]
+	#[case(TF::MVT, TC::Gzip, "gzip", "gzip", "vnd.mapbox-vector-tile")]
+	#[case(TF::MVT, TC::Brotli, "br", "br", "vnd.mapbox-vector-tile")]
+	#[case(TF::MVT, TC::Brotli, "gzip", "gzip", "vnd.mapbox-vector-tile")]
+	#[case(TF::MVT, TC::Uncompressed, "", "", "vnd.mapbox-vector-tile")]
+	#[case(TF::PNG, TC::Gzip, "br", "", "image/png")]
+	#[case(TF::WEBP, TC::Brotli, "gzip", "", "image/webp")]
 	#[tokio::test]
 	async fn serve_tile_variants(
-		#[case] port: u16,
 		#[case] format: TF,
 		#[case] compression: TileCompression,
 		#[case] accept_encoding: &str,
@@ -472,14 +469,14 @@ mod tests {
 			client.get(url).headers(headers).send().await.expect("http get")
 		}
 
-		let mut server = TileServer::new_test(IP, port, true, false);
+		let mut server = TileServer::new_test(IP, 0, true, false);
 
 		let parameters = TilesReaderParameters::new(format, compression, TileBBoxPyramid::new_full(8));
 		let reader = MockTilesReader::new_mock(parameters).unwrap().boxed();
 		server.add_tile_source("cheese", reader).unwrap();
 		server.start().await.unwrap();
 
-		let url = format!("http://{IP}:{port}/tiles/cheese/3/3/3");
+		let url = format!("http://{IP}:{}/tiles/cheese/3/3/3", server.port);
 		let resp = fetch_raw(&url, accept_encoding).await;
 		assert_eq!(resp.status(), 200);
 
