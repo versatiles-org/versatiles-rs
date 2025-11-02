@@ -22,7 +22,7 @@ pub fn decode_vpl(input: TokenStream) -> TokenStream {
 	TokenStream::from(expanded)
 }
 
-#[proc_macro_derive(ConfigDoc, attributes(config))]
+#[proc_macro_derive(ConfigDoc, attributes(config, config_demo))]
 pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as syn::DeriveInput);
 	let name = &input.ident;
@@ -142,6 +142,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		is_nested_struct: bool,
 		is_url_path: bool,
 		example_yaml: Option<String>,
+		demo_value: Option<String>,
 	}
 
 	let mut rows = Vec::<Row>::new();
@@ -206,6 +207,31 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			}
 		}
 
+		// parse demo from #[config_demo("...")] or #[config_demo(value = "...")]
+		let mut demo_value = None;
+		for attr in &f.attrs {
+			if attr.path().is_ident("config_demo") {
+				// Prefer positional literal: #[config_demo("...")]
+				if demo_value.is_none() {
+					if let Ok(lit) = attr.parse_args::<syn::LitStr>() {
+						demo_value = Some(lit.value());
+						continue;
+					}
+				}
+				// Fallback to name-value: #[config_demo(value = "...")]
+				let _ = attr.parse_nested_meta(|meta| {
+					if meta.path.is_ident("value") {
+						if let Ok(v) = meta.value() {
+							if let Ok(lit) = v.parse::<syn::LitStr>() {
+								demo_value = Some(lit.value());
+							}
+						}
+					}
+					Ok(())
+				});
+			}
+		}
+
 		// decide if nested struct
 		let is_nested_struct = !is_option
 			&& !is_vec
@@ -230,6 +256,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			is_nested_struct,
 			is_url_path,
 			example_yaml,
+			demo_value,
 		});
 	}
 
@@ -250,7 +277,13 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			let key = &r.key;
 			let ty = &r.ty;
 			let doc = &r.doc;
+			let doc_lit = syn::LitStr::new(doc, Span::call_site());
+			let doc_trim_owned = doc.trim().to_string();
+			let doc_trim_lit = syn::LitStr::new(&doc_trim_owned, Span::call_site());
 			let example_yaml = r.example_yaml.as_ref();
+			let example_yaml_lit = example_yaml.map(|ex| syn::LitStr::new(ex, Span::call_site()));
+			let demo_value = r.demo_value.as_ref();
+			let demo_lit = demo_value.map(|d| syn::LitStr::new(d, Span::call_site()));
 			let inner_opt = r.inner_ty_opt.as_ref();
 			let is_primitive_inner_opt = inner_opt.map_or(false, |ty| is_primitive_like(ty));
 			let is_primitive = is_primitive_like(ty);
@@ -259,8 +292,16 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				quote! {}
 			} else {
 				quote! {
-					__emit_above_comment(&mut __s, __indent, #doc);
+					__emit_above_comment(&mut __s, __indent, #doc_lit);
 				}
+			};
+
+			let example_emit = if let Some(ex_lit) = &example_yaml_lit {
+				quote! {
+					__emit_above_comment(&mut __s, __indent, #ex_lit);
+				}
+			} else {
+				quote! {}
 			};
 
 			if r.is_flatten {
@@ -278,56 +319,107 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				}
 			} else if r.is_option {
 				if is_primitive_inner_opt {
-					let example_emit = if let Some(ex) = example_yaml {
+					let demo_emit = if let Some(demo_lit) = &demo_lit {
 						quote! {
-							__emit_above_comment(&mut __s, __indent, #ex);
-						}
-					} else {
-						quote! {}
-					};
-					let doc_emit = if doc.trim().is_empty() {
-						quote! {
-							__s.push_str(&__sp(__indent));
-							__s.push_str(#key);
-							__s.push_str(": <optional>\n");
-						}
-					} else {
-						quote! {
-							if __should_inline_comment(#doc) {
+							if #doc_trim_lit.is_empty() {
 								__s.push_str(&__sp(__indent));
 								__s.push_str(#key);
-								__s.push_str(": <optional>  # ");
-								__s.push_str(#doc.trim());
+								__s.push_str(": ");
+								__s.push_str(#demo_lit);
+								__s.push('\n');
+							} else if __should_inline_comment(#doc_lit) {
+								__s.push_str(&__sp(__indent));
+								__s.push_str(#key);
+								__s.push_str(": ");
+								__s.push_str(#demo_lit);
+								__s.push_str("  # ");
+								__s.push_str(#doc_trim_lit);
 								__s.push('\n');
 							} else {
-								__emit_above_comment(&mut __s, __indent, #doc);
+								__emit_above_comment(&mut __s, __indent, #doc_lit);
+								__s.push_str(&__sp(__indent));
+								__s.push_str(#key);
+								__s.push_str(": ");
+								__s.push_str(#demo_lit);
+								__s.push('\n');
+							}
+						}
+					} else {
+						let doc_emit = if doc.trim().is_empty() {
+							quote! {
 								__s.push_str(&__sp(__indent));
 								__s.push_str(#key);
 								__s.push_str(": <optional>\n");
 							}
-						}
+						} else {
+							quote! {
+								if __should_inline_comment(#doc_lit) {
+									__s.push_str(&__sp(__indent));
+									__s.push_str(#key);
+									__s.push_str(": <optional>  # ");
+									__s.push_str(#doc_trim_lit);
+									__s.push('\n');
+								} else {
+									__emit_above_comment(&mut __s, __indent, #doc_lit);
+									__s.push_str(&__sp(__indent));
+									__s.push_str(#key);
+									__s.push_str(": <optional>\n");
+								}
+							}
+						};
+						doc_emit
 					};
 					quote! {
 						#example_emit
-						#doc_emit
+						#demo_emit
 					}
 				} else {
-					quote! {
-						#doc_lines
-						__s.push_str(&__sp(__indent));
-						__s.push_str(#key);
-						__s.push_str(": <optional>\n");
-					}
+					let demo_emit = if let Some(demo_lit) = &demo_lit {
+						quote! {
+							#doc_lines
+							__s.push_str(&__sp(__indent));
+							__s.push_str(#key);
+							__s.push_str(": ");
+							__s.push_str(#demo_lit);
+							__s.push('\n');
+						}
+					} else {
+						quote! {
+							#doc_lines
+							__s.push_str(&__sp(__indent));
+							__s.push_str(#key);
+							__s.push_str(": <optional>\n");
+						}
+					};
+					demo_emit
 				}
 			} else if r.is_vec {
-				let example_emit = if let Some(ex) = example_yaml {
-					quote! {
-						__emit_above_comment(&mut __s, __indent, #ex);
+				if let Some(demo_lit) = &demo_lit {
+					let demo_trim = demo_lit.value().trim().to_string();
+					if demo_trim.starts_with('[') {
+						quote! {
+							#example_emit
+							#doc_lines
+							__s.push_str(&__sp(__indent));
+							__s.push_str(#key);
+							__s.push_str(": ");
+							__s.push_str(#demo_lit);
+							__s.push('\n');
+						}
+					} else {
+						quote! {
+							#example_emit
+							#doc_lines
+							__s.push_str(&__sp(__indent));
+							__s.push_str(#key);
+							__s.push_str(":\n");
+							__s.push_str(&__sp(__indent + 2));
+							__s.push_str("- ");
+							__s.push_str(#demo_lit);
+							__s.push('\n');
+						}
 					}
-				} else {
-					quote! {}
-				};
-				if let Some(inner) = &r.inner_ty_vec {
+				} else if let Some(inner) = &r.inner_ty_vec {
 					let is_primitive_inner = is_primitive_like(inner);
 					let is_url_path_inner = is_url_path(inner);
 					if is_primitive_inner {
@@ -397,50 +489,99 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 					}
 				}
 			} else if r.is_map {
-				quote! {
-					#doc_lines
-					__s.push_str(&__sp(__indent));
-					__s.push_str(#key);
-					__s.push_str(": {}\n");
+				if let Some(demo_lit) = &demo_lit {
+					quote! {
+						#doc_lines
+						__s.push_str(&__sp(__indent));
+						__s.push_str(#key);
+						__s.push_str(": ");
+						__s.push_str(#demo_lit);
+						__s.push('\n');
+					}
+				} else {
+					quote! {
+						#doc_lines
+						__s.push_str(&__sp(__indent));
+						__s.push_str(#key);
+						__s.push_str(": {}\n");
+					}
 				}
 			} else if r.is_url_path {
-				quote! {
-					#doc_lines
-					__s.push_str(&__sp(__indent));
-					__s.push_str(#key);
-					__s.push_str(": \"\"\n");
+				if let Some(demo_lit) = &demo_lit {
+					quote! {
+						#doc_lines
+						__s.push_str(&__sp(__indent));
+						__s.push_str(#key);
+						__s.push_str(": ");
+						__s.push_str(#demo_lit);
+						__s.push('\n');
+					}
+				} else {
+					quote! {
+						#doc_lines
+						__s.push_str(&__sp(__indent));
+						__s.push_str(#key);
+						__s.push_str(": \"\"\n");
+					}
 				}
 			} else {
 				// scalar/string primitive-like
 				if is_primitive {
-					quote! {
-						if #doc.trim().is_empty() {
-							__s.push_str(&__sp(__indent));
-							__s.push_str(#key);
-							__s.push_str(": ");
-							let __v: #ty = ::core::default::Default::default();
-							let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
-							__s.push_str(__y.trim());
-							__s.push('\n');
-						} else if __should_inline_comment(#doc) {
-							__s.push_str(&__sp(__indent));
-							__s.push_str(#key);
-							__s.push_str(": ");
-							let __v: #ty = ::core::default::Default::default();
-							let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
-							__s.push_str(__y.trim());
-							__s.push_str("  # ");
-							__s.push_str(#doc.trim());
-							__s.push('\n');
-						} else {
-							__emit_above_comment(&mut __s, __indent, #doc);
-							__s.push_str(&__sp(__indent));
-							__s.push_str(#key);
-							__s.push_str(": ");
-							let __v: #ty = ::core::default::Default::default();
-							let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
-							__s.push_str(__y.trim());
-							__s.push('\n');
+					if let Some(demo_lit) = &demo_lit {
+						quote! {
+							if #doc_trim_lit.is_empty() {
+								__s.push_str(&__sp(__indent));
+								__s.push_str(#key);
+								__s.push_str(": ");
+								__s.push_str(#demo_lit);
+								__s.push('\n');
+							} else if __should_inline_comment(#doc_lit) {
+								__s.push_str(&__sp(__indent));
+								__s.push_str(#key);
+								__s.push_str(": ");
+								__s.push_str(#demo_lit);
+								__s.push_str("  # ");
+								__s.push_str(#doc_trim_lit);
+								__s.push('\n');
+							} else {
+								__emit_above_comment(&mut __s, __indent, #doc_lit);
+								__s.push_str(&__sp(__indent));
+								__s.push_str(#key);
+								__s.push_str(": ");
+								__s.push_str(#demo_lit);
+								__s.push('\n');
+							}
+						}
+					} else {
+						quote! {
+							if #doc_trim_lit.is_empty() {
+								__s.push_str(&__sp(__indent));
+								__s.push_str(#key);
+								__s.push_str(": ");
+								let __v: #ty = ::core::default::Default::default();
+								let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
+								__s.push_str(__y.trim());
+								__s.push('\n');
+							} else if __should_inline_comment(#doc_lit) {
+								__s.push_str(&__sp(__indent));
+								__s.push_str(#key);
+								__s.push_str(": ");
+								let __v: #ty = ::core::default::Default::default();
+								let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
+								__s.push_str(__y.trim());
+								__s.push_str("  # ");
+								__s.push_str(#doc_trim_lit);
+								__s.push('\n');
+							} else {
+								__emit_above_comment(&mut __s, __indent, #doc_lit);
+								__s.push_str(&__sp(__indent));
+								__s.push_str(#key);
+								__s.push_str(": ");
+								let __v: #ty = ::core::default::Default::default();
+								let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
+								__s.push_str(__y.trim());
+								__s.push('\n');
+							}
 						}
 					}
 				} else {
@@ -456,88 +597,96 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		})
 		.collect();
 
+	let struct_doc_lit = syn::LitStr::new(&struct_doc, Span::call_site());
 	let expanded = quote! {
-		 impl #name {
-			  pub fn md() -> String {
-					let mut __s = String::new();
-					__s.push_str(&format!("# {}\n\n", stringify!(#name)));
-					if !#struct_doc.is_empty() {
-						 __s.push_str(#struct_doc);
-						 __s.push('\n');
-						 __s.push('\n');
+		impl #name {
+			pub fn md() -> String {
+				let mut __s = String::new();
+				__s.push_str(&format!("# {}\n\n", stringify!(#name)));
+				if !#struct_doc.is_empty() {
+					__s.push_str(#struct_doc);
+					__s.push('\n');
+					__s.push('\n');
+				}
+				__s.push_str("| Key | Type | Optional | Description |\n");
+				__s.push_str("| --- | ---- | -------- | ----------- |\n");
+				#( {
+					__s.push_str("| `");
+					__s.push_str(#keys);
+					__s.push_str("` | `");
+					__s.push_str(#tys);
+					__s.push_str("` | ");
+					__s.push_str(#optionals);
+					__s.push_str(" | ");
+					if !#docs.is_empty() {
+						__s.push_str(#docs);
+					} else {
+						__s.push_str("—");
 					}
-					__s.push_str("| Key | Type | Optional | Description |\n");
-					__s.push_str("| --- | ---- | -------- | ----------- |\n");
-					#( {
-						 __s.push_str("| `");
-						 __s.push_str(#keys);
-						 __s.push_str("` | `");
-						 __s.push_str(#tys);
-						 __s.push_str("` | ");
-						 __s.push_str(#optionals);
-						 __s.push_str(" | ");
-						 if !#docs.is_empty() {
-							  __s.push_str(#docs);
-						 } else {
-							  __s.push_str("—");
-						 }
-						 __s.push_str(" |\n");
-					} )*
-					__s
-			  }
-		 }
+					__s.push_str(" |\n");
+				} )*
+				__s
+			}
+		}
 
-		 impl #name {
-			  pub fn demo_yaml() -> String {
-					Self::demo_yaml_with_indent(0)
-			  }
+		impl #name {
+			pub fn demo_yaml() -> String {
+				Self::demo_yaml_with_indent(0)
+			}
 
-			  pub(crate) fn demo_yaml_with_indent(__indent: usize) -> String {
-					let mut __s = String::new();
-					let __sp = |n: usize| -> String { " ".repeat(n) };
+			pub(crate) fn demo_yaml_with_indent(__indent: usize) -> String {
+				let mut __s = String::new();
+				let __sp = |n: usize| -> String { " ".repeat(n) };
 
-					fn __emit_above_comment(buf: &mut String, indent: usize, text: &str) {
-						let sp = || " ".repeat(indent);
-						for line in text.lines() {
-							if line.trim().is_empty() {
-								buf.push_str(&sp());
-								buf.push_str("#\n");
-							} else if line.trim_start().starts_with('#') {
-								buf.push_str(&sp());
-								buf.push_str("# ");
-								buf.push_str(" ");
-								buf.push_str(line.trim_start());
-								buf.push('\n');
-							} else {
-								buf.push_str(&sp());
-								buf.push_str("# ");
-								buf.push_str(line);
-								buf.push('\n');
-							}
+				fn __emit_above_comment(buf: &mut String, indent: usize, text: &str) {
+					let sp = || " ".repeat(indent);
+					for line in text.lines() {
+						if line.trim().is_empty() {
+							buf.push_str(&sp());
+							buf.push_str("#\n");
+						} else if line.trim_start().starts_with('#') {
+							buf.push_str(&sp());
+							buf.push_str("# ");
+							buf.push_str(" ");
+							buf.push_str(line.trim_start());
+							buf.push('\n');
+						} else {
+							buf.push_str(&sp());
+							buf.push_str("# ");
+							buf.push_str(line);
+							buf.push('\n');
 						}
 					}
+				}
 
-					fn __should_inline_comment(text: &str) -> bool {
-						let trimmed = text.trim();
-						!trimmed.contains('\n') && trimmed.len() <= 60
+				fn __should_inline_comment(text: &str) -> bool {
+					let trimmed = text.trim();
+					!trimmed.contains('\n') && trimmed.len() <= 60
+				}
+
+				// --- Struct-level doc at top-level
+				// Only emit struct-level doc if non-empty, at compile time
+				#[allow(unused_braces)]
+				{
+					const STRUCT_DOC: &str = #struct_doc_lit;
+					if !STRUCT_DOC.is_empty() {
+						if __indent == 0 {
+							__emit_above_comment(&mut __s, __indent, #struct_doc_lit);
+							__s.push('\n');
+						}
 					}
+				}
 
-					// --- Struct-level doc at top-level
-					if __indent == 0 && !#struct_doc.is_empty() {
-						__emit_above_comment(&mut __s, __indent, #struct_doc);
+				#( {
+					#field_yaml_blocks
+					if __indent == 0 {
 						__s.push('\n');
 					}
+				} )*
 
-					#( {
-						 #field_yaml_blocks
-						 if __indent == 0 {
-							  __s.push('\n');
-						 }
-					} )*
-
-					__s
-			  }
-		 }
+				__s
+			}
+		}
 	};
 
 	TokenStream::from(expanded)

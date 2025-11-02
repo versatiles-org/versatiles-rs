@@ -8,14 +8,19 @@ use versatiles_derive::ConfigDoc;
 #[derive(Debug, Clone, PartialEq, ConfigDoc)]
 pub struct TileSourceConfig {
 	/// Optional identifier used to reference this tile source.
+	#[config_demo("osm")]
 	pub name: Option<String>,
 	/// Path or URL to the tile data. Can point to a local file or remote source.
+	#[config_demo("osm.versatiles")]
 	pub path: UrlPath,
 	/// If true, flips the Y-axis of tile coordinates (useful for TMS vs XYZ layouts).
+	#[config_demo("false")]
 	pub flip_y: Option<bool>,
 	/// If true, swaps the X and Y coordinates (rare, but needed for some projections).
+	#[config_demo("false")]
 	pub swap_xy: Option<bool>,
 	/// Overrides the compression format for this tile source (e.g., "gzip", "brotli").
+	#[config_demo("brotli")]
 	pub override_compression: Option<String>,
 }
 

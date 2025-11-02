@@ -27,6 +27,12 @@ pub struct Config {
 	/// These headers will be included in all HTTP responses sent by the server.
 	/// For example, cache control headers or timing headers can be specified here.
 	#[serde(default)]
+	#[config_demo(
+		r#"{
+    "Cache-Control": "public, max-age=86400, immutable",
+    "CDN-Cache-Control": "max-age=604800"
+  }"#
+	)]
 	pub extra_response_headers: HashMap<String, String>,
 
 	/// List of static sources mounted to specific URL prefixes

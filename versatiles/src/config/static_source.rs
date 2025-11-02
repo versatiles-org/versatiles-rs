@@ -6,8 +6,10 @@ use versatiles_derive::ConfigDoc;
 /// Defines a static file source that is served under a specific URL prefix.
 #[derive(Debug, Clone, PartialEq, ConfigDoc)]
 pub struct StaticSourceConfig {
+	#[config_demo("./frontend.tar")]
 	/// Filesystem path or archive (e.g., .zip, .versatiles) containing static assets.
 	pub path: UrlPath,
+	#[config_demo("/")]
 	/// Optional URL prefix under which the static files will be available. Example: "/" or "/assets".
 	pub url_prefix: Option<String>,
 }
