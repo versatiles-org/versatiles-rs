@@ -4,12 +4,18 @@ use std::fmt::Debug;
 use versatiles_container::UrlPath;
 use versatiles_derive::ConfigDoc;
 
+/// Describes a tile source that the server can serve, including file path and optional coordinate transformations.
 #[derive(Debug, Clone, PartialEq, ConfigDoc)]
 pub struct TileSourceConfig {
+	/// Optional identifier used to reference this tile source.
 	pub name: Option<String>,
+	/// Path or URL to the tile data. Can point to a local file or remote source.
 	pub path: UrlPath,
+	/// If true, flips the Y-axis of tile coordinates (useful for TMS vs XYZ layouts).
 	pub flip_y: Option<bool>,
+	/// If true, swaps the X and Y coordinates (rare, but needed for some projections).
 	pub swap_xy: Option<bool>,
+	/// Overrides the compression format for this tile source (e.g., "gzip", "brotli").
 	pub override_compression: Option<String>,
 }
 

@@ -1,3 +1,5 @@
+#![allow(dead_code, unused_variables)]
+
 mod args;
 mod config_doc;
 mod decode_vpl;
@@ -53,22 +55,21 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		}
 	};
 
-	// Per-field computed metadata for codegen
-	struct Row {
-		ident: syn::Ident,
-		key: String,
-		ty_tokens: String,
-		ty: syn::Type,
-		doc: String,
-		is_option: bool,
-		is_vec: bool,
-		is_map: bool,
-		is_flatten: bool,
-		inner_ty_opt: Option<syn::Type>,                // Option<T> -> T
-		_inner_ty_vec: Option<syn::Type>,               // Vec<T> -> T
-		_inner_tys_map: Option<(syn::Type, syn::Type)>, // HashMap<K,V> -> (K,V)
-		// Heuristic: treat non-Option/Vec/Map path types as nested
-		is_nested_struct: bool,
+	// crude primitive-ish detection for deciding nested vs scalar
+	fn is_primitive_like(ty: &syn::Type) -> bool {
+		let s = ty.to_token_stream().to_string();
+		matches!(
+			s.as_str(),
+			"bool"
+				| "u8" | "u16"
+				| "u32" | "u64"
+				| "u128" | "i8"
+				| "i16" | "i32"
+				| "i64" | "i128"
+				| "f32" | "f64"
+				| "String"
+				| "& str"
+		)
 	}
 
 	fn path_ident(ty: &syn::Type) -> Option<&syn::Ident> {
@@ -114,21 +115,33 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		false
 	}
 
-	// crude primitive-ish detection for deciding nested vs scalar
-	fn is_primitive_like(ty: &syn::Type) -> bool {
-		let s = ty.to_token_stream().to_string();
-		matches!(
-			s.as_str(),
-			"bool"
-				| "u8" | "u16"
-				| "u32" | "u64"
-				| "u128" | "i8"
-				| "i16" | "i32"
-				| "i64" | "i128"
-				| "f32" | "f64"
-				| "String"
-				| "& str"
-		)
+	fn is_url_path(ty: &syn::Type) -> bool {
+		if let syn::Type::Path(tp) = ty {
+			if let Some(seg) = tp.path.segments.last() {
+				return seg.ident == "UrlPath";
+			}
+		}
+		false
+	}
+
+	// Per-field computed metadata for codegen
+	struct Row {
+		ident: syn::Ident,
+		key: String,
+		ty_tokens: String,
+		ty: syn::Type,
+		doc: String,
+		is_option: bool,
+		is_vec: bool,
+		is_map: bool,
+		is_flatten: bool,
+		inner_ty_opt: Option<syn::Type>,                // Option<T> -> T
+		inner_ty_vec: Option<syn::Type>,                // Vec<T> -> T
+		_inner_tys_map: Option<(syn::Type, syn::Type)>, // HashMap<K,V> -> (K,V)
+		// Heuristic: treat non-Option/Vec/Map path types as nested
+		is_nested_struct: bool,
+		is_url_path: bool,
+		example_yaml: Option<String>,
 	}
 
 	let mut rows = Vec::<Row>::new();
@@ -174,9 +187,32 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 
 		let is_flatten = has_serde_flatten(&f.attrs);
 
+		let is_url_path = is_url_path(&f.ty);
+
+		// parse example_yaml from #[config(example_yaml = r#"..."#)]
+		let mut example_yaml = None;
+		for attr in &f.attrs {
+			if attr.path().is_ident("config") {
+				let _ = attr.parse_nested_meta(|meta| {
+					if meta.path.is_ident("example_yaml") {
+						if let Ok(val) = meta.value() {
+							if let Ok(lit) = val.parse::<syn::LitStr>() {
+								example_yaml = Some(lit.value());
+							}
+						}
+					}
+					Ok(())
+				});
+			}
+		}
+
 		// decide if nested struct
-		let is_nested_struct =
-			!is_option && !is_vec && !is_map && matches!(path_ident(&f.ty), Some(_)) && !is_primitive_like(&f.ty);
+		let is_nested_struct = !is_option
+			&& !is_vec
+			&& !is_map
+			&& matches!(path_ident(&f.ty), Some(_))
+			&& !is_primitive_like(&f.ty)
+			&& !is_url_path;
 
 		rows.push(Row {
 			ident,
@@ -189,9 +225,11 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			is_map,
 			is_flatten,
 			inner_ty_opt,
-			_inner_ty_vec: inner_ty_vec,
+			inner_ty_vec,
 			_inner_tys_map,
 			is_nested_struct,
+			is_url_path,
+			example_yaml,
 		});
 	}
 
@@ -202,6 +240,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 	let _tys_types: Vec<_> = rows.iter().map(|r| &r.ty).collect();
 	let docs: Vec<_> = rows.iter().map(|r| r.doc.as_str()).collect();
 	let optionals = rows.iter().map(|r| if r.is_option { "yes" } else { "no" });
+	let _example_yamls: Vec<_> = rows.iter().map(|r| r.example_yaml.as_ref()).collect();
 
 	// Generate per-field YAML code blocks
 	let field_yaml_blocks: Vec<_> = rows
@@ -211,6 +250,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			let key = &r.key;
 			let ty = &r.ty;
 			let doc = &r.doc;
+			let example_yaml = r.example_yaml.as_ref();
 			let inner_opt = r.inner_ty_opt.as_ref();
 			let is_primitive_inner_opt = inner_opt.map_or(false, |ty| is_primitive_like(ty));
 			let is_primitive = is_primitive_like(ty);
@@ -219,20 +259,14 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				quote! {}
 			} else {
 				quote! {
-					for __line in #doc.split('\n') {
-						__s.push_str(&__sp(__indent));
-						__s.push_str("# ");
-						__s.push_str(__line);
-						__s.push('\n');
-					}
+					__emit_above_comment(&mut __s, __indent, #doc);
 				}
 			};
 
 			if r.is_flatten {
 				quote! {
 					#doc_lines
-					__s.push_str(&__sp(__indent));
-					__s.push_str("# (flattened fields inline here)\n");
+					__s.push_str(&<#ty>::demo_yaml_with_indent(__indent));
 				}
 			} else if r.is_nested_struct {
 				quote! {
@@ -240,33 +274,127 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 					__s.push_str(&__sp(__indent));
 					__s.push_str(#key);
 					__s.push_str(":\n");
-					__s.push_str(&__sp(__indent + 2));
-					__s.push_str("# nested config omitted\n");
+					__s.push_str(&<#ty>::demo_yaml_with_indent(__indent + 2));
 				}
 			} else if r.is_option {
 				if is_primitive_inner_opt {
+					let example_emit = if let Some(ex) = example_yaml {
+						quote! {
+							__emit_above_comment(&mut __s, __indent, #ex);
+						}
+					} else {
+						quote! {}
+					};
+					let doc_emit = if doc.trim().is_empty() {
+						quote! {
+							__s.push_str(&__sp(__indent));
+							__s.push_str(#key);
+							__s.push_str(": <optional>\n");
+						}
+					} else {
+						quote! {
+							if __should_inline_comment(#doc) {
+								__s.push_str(&__sp(__indent));
+								__s.push_str(#key);
+								__s.push_str(": <optional>  # ");
+								__s.push_str(#doc.trim());
+								__s.push('\n');
+							} else {
+								__emit_above_comment(&mut __s, __indent, #doc);
+								__s.push_str(&__sp(__indent));
+								__s.push_str(#key);
+								__s.push_str(": <optional>\n");
+							}
+						}
+					};
 					quote! {
-						#doc_lines
-						__s.push_str(&__sp(__indent));
-						__s.push_str("# ");
-						__s.push_str(#key);
-						__s.push_str(": <optional>\n");
+						#example_emit
+						#doc_emit
 					}
 				} else {
 					quote! {
 						#doc_lines
 						__s.push_str(&__sp(__indent));
-						__s.push_str("# ");
 						__s.push_str(#key);
 						__s.push_str(": <optional>\n");
 					}
 				}
 			} else if r.is_vec {
-				quote! {
-					#doc_lines
-					__s.push_str(&__sp(__indent));
-					__s.push_str(#key);
-					__s.push_str(": []\n");
+				let example_emit = if let Some(ex) = example_yaml {
+					quote! {
+						__emit_above_comment(&mut __s, __indent, #ex);
+					}
+				} else {
+					quote! {}
+				};
+				if let Some(inner) = &r.inner_ty_vec {
+					let is_primitive_inner = is_primitive_like(inner);
+					let is_url_path_inner = is_url_path(inner);
+					if is_primitive_inner {
+						quote! {
+							#example_emit
+							#doc_lines
+							__s.push_str(&__sp(__indent));
+							__s.push_str(#key);
+							__s.push_str(":\n");
+							__s.push_str(&__sp(__indent + 2));
+							__s.push_str("- ");
+							let __v: #inner = ::core::default::Default::default();
+							let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
+							__s.push_str(__y.trim());
+							__s.push('\n');
+						}
+					} else if is_url_path_inner {
+						quote! {
+							#example_emit
+							#doc_lines
+							__s.push_str(&__sp(__indent));
+							__s.push_str(#key);
+							__s.push_str(":\n");
+							__s.push_str(&__sp(__indent + 2));
+							__s.push_str("- ");
+							__s.push_str("\"\"\n");
+						}
+					} else {
+						quote! {
+							#example_emit
+							#doc_lines
+							__s.push_str(&__sp(__indent));
+							__s.push_str(#key);
+							__s.push_str(":\n");
+							let __inner = <#inner>::demo_yaml_with_indent(0);
+							let mut __first_line_printed = false;
+							for __line in __inner.lines() {
+								if !__first_line_printed {
+									if __line.trim().is_empty() {
+										continue;
+									}
+									__s.push_str(&__sp(__indent + 2));
+									__s.push_str("- ");
+									__s.push_str(__line);
+									__s.push('\n');
+									__first_line_printed = true;
+								} else {
+									__s.push_str(&__sp(__indent + 4));
+									__s.push_str(__line);
+									__s.push('\n');
+								}
+							}
+							if !__first_line_printed {
+								// fallback if inner produced only empty lines
+								__s.push_str(&__sp(__indent + 2));
+								__s.push_str("- {}\n");
+							}
+						}
+					}
+				} else {
+					quote! {
+						#example_emit
+						#doc_lines
+						__s.push_str(&__sp(__indent));
+						__s.push_str(#key);
+						__s.push_str(": []\n");
+					}
 				}
 			} else if r.is_map {
 				quote! {
@@ -275,18 +403,45 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 					__s.push_str(#key);
 					__s.push_str(": {}\n");
 				}
+			} else if r.is_url_path {
+				quote! {
+					#doc_lines
+					__s.push_str(&__sp(__indent));
+					__s.push_str(#key);
+					__s.push_str(": \"\"\n");
+				}
 			} else {
 				// scalar/string primitive-like
 				if is_primitive {
 					quote! {
-						#doc_lines
-						__s.push_str(&__sp(__indent));
-						__s.push_str(#key);
-						__s.push_str(": ");
-						let __v: #ty = ::core::default::Default::default();
-						let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
-						__s.push_str(__y.trim());
-						__s.push('\n');
+						if #doc.trim().is_empty() {
+							__s.push_str(&__sp(__indent));
+							__s.push_str(#key);
+							__s.push_str(": ");
+							let __v: #ty = ::core::default::Default::default();
+							let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
+							__s.push_str(__y.trim());
+							__s.push('\n');
+						} else if __should_inline_comment(#doc) {
+							__s.push_str(&__sp(__indent));
+							__s.push_str(#key);
+							__s.push_str(": ");
+							let __v: #ty = ::core::default::Default::default();
+							let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
+							__s.push_str(__y.trim());
+							__s.push_str("  # ");
+							__s.push_str(#doc.trim());
+							__s.push('\n');
+						} else {
+							__emit_above_comment(&mut __s, __indent, #doc);
+							__s.push_str(&__sp(__indent));
+							__s.push_str(#key);
+							__s.push_str(": ");
+							let __v: #ty = ::core::default::Default::default();
+							let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
+							__s.push_str(__y.trim());
+							__s.push('\n');
+						}
 					}
 				} else {
 					// fallback for non-primitive scalar types (should rarely happen)
@@ -340,6 +495,38 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			  pub(crate) fn demo_yaml_with_indent(__indent: usize) -> String {
 					let mut __s = String::new();
 					let __sp = |n: usize| -> String { " ".repeat(n) };
+
+					fn __emit_above_comment(buf: &mut String, indent: usize, text: &str) {
+						let sp = || " ".repeat(indent);
+						for line in text.lines() {
+							if line.trim().is_empty() {
+								buf.push_str(&sp());
+								buf.push_str("#\n");
+							} else if line.trim_start().starts_with('#') {
+								buf.push_str(&sp());
+								buf.push_str("# ");
+								buf.push_str(" ");
+								buf.push_str(line.trim_start());
+								buf.push('\n');
+							} else {
+								buf.push_str(&sp());
+								buf.push_str("# ");
+								buf.push_str(line);
+								buf.push('\n');
+							}
+						}
+					}
+
+					fn __should_inline_comment(text: &str) -> bool {
+						let trimmed = text.trim();
+						!trimmed.contains('\n') && trimmed.len() <= 60
+					}
+
+					// --- Struct-level doc at top-level
+					if __indent == 0 && !#struct_doc.is_empty() {
+						__emit_above_comment(&mut __s, __indent, #struct_doc);
+						__s.push('\n');
+					}
 
 					#( {
 						 #field_yaml_blocks
