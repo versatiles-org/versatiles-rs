@@ -18,7 +18,6 @@ use axum::{
 	http::{HeaderMap, Uri, header},
 	response::Response,
 };
-
 use versatiles_core::{
 	Blob, TileCompression,
 	utils::{TargetCompression, optimize_compression},
@@ -180,4 +179,80 @@ pub fn ok_json(message: &str) -> Response<Body> {
 		},
 		TargetCompression::from_none(),
 	)
+}
+
+// --- tests -------------------------------------------------------------------
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use axum::http::header;
+
+	#[test]
+	fn ok_json_sets_expected_headers() {
+		let resp = ok_json(r#"{"ok":true}"#);
+		assert_eq!(resp.status(), 200);
+
+		let headers = resp.headers();
+		assert_eq!(headers.get(header::CONTENT_TYPE).unwrap(), "application/json");
+		assert_eq!(
+			headers.get(header::CACHE_CONTROL).unwrap(),
+			"public, max-age=2419200, no-transform"
+		);
+		assert_eq!(headers.get(header::VARY).unwrap(), "accept-encoding");
+		// No content-encoding for plain JSON
+		assert!(headers.get(header::CONTENT_ENCODING).is_none());
+	}
+
+	#[test]
+	fn ok_data_plain_text_gzip_when_allowed() {
+		// Source is uncompressed text; client allows gzip
+		let src = SourceResponse {
+			blob: Blob::from("The quick brown fox jumps over the lazy dog"),
+			compression: TileCompression::Uncompressed,
+			mime: "text/plain".into(),
+		};
+		let mut target = TargetCompression::from_none();
+		target.insert(TileCompression::Gzip);
+
+		let resp = super::ok_data(src, target);
+		assert_eq!(resp.status(), 200);
+		let headers = resp.headers();
+
+		assert_eq!(headers.get(header::CONTENT_TYPE).unwrap(), "text/plain");
+		assert_eq!(
+			headers.get(header::CACHE_CONTROL).unwrap(),
+			"public, max-age=2419200, no-transform"
+		);
+		assert_eq!(headers.get(header::VARY).unwrap(), "accept-encoding");
+
+		// Expect gzip because requester allowed it and source was uncompressed text
+		assert_eq!(headers.get(header::CONTENT_ENCODING).unwrap(), "gzip");
+	}
+
+	#[test]
+	fn ok_data_png_is_not_recompressed() {
+		// PNG should be treated as incompressible even if br is allowed
+		let png_bytes = vec![137, 80, 78, 71, 13, 10, 26, 10]; // just a PNG signature; enough for header tests
+		let src = SourceResponse {
+			blob: Blob::from(png_bytes),
+			compression: TileCompression::Uncompressed,
+			mime: "image/png".into(),
+		};
+		let mut target = TargetCompression::from_none();
+		target.insert(TileCompression::Brotli);
+
+		let resp = super::ok_data(src, target);
+		assert_eq!(resp.status(), 200);
+		let headers = resp.headers();
+
+		assert_eq!(headers.get(header::CONTENT_TYPE).unwrap(), "image/png");
+		assert_eq!(
+			headers.get(header::CACHE_CONTROL).unwrap(),
+			"public, max-age=2419200, no-transform"
+		);
+		assert_eq!(headers.get(header::VARY).unwrap(), "accept-encoding");
+
+		// No content-encoding because we avoid recompressing images
+		assert!(headers.get(header::CONTENT_ENCODING).is_none());
+	}
 }
