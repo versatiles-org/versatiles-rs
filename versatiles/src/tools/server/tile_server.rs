@@ -19,6 +19,7 @@ pub struct TileServer {
 	tile_sources: Vec<sources::TileSource>,
 	static_sources: Vec<sources::StaticSource>,
 	exit_signal: Option<Sender<()>>,
+	join: Option<tokio::task::JoinHandle<()>>,
 	minimal_recompression: bool,
 	use_api: bool,
 	registry: ContainerRegistry,
@@ -34,6 +35,7 @@ impl TileServer {
 			tile_sources: Vec::new(),
 			static_sources: Vec::new(),
 			exit_signal: None,
+			join: None,
 			minimal_recompression,
 			use_api,
 			registry: get_registry(ProcessingConfig::default()),
@@ -48,6 +50,7 @@ impl TileServer {
 			tile_sources: Vec::new(),
 			static_sources: Vec::new(),
 			exit_signal: None,
+			join: None,
 			minimal_recompression: config.server.minimal_recompression.unwrap_or(false),
 			use_api: !config.server.disable_api.unwrap_or(false),
 			registry,
@@ -126,16 +129,15 @@ impl TileServer {
 	}
 
 	pub async fn start(&mut self) -> Result<()> {
-		if self.exit_signal.is_some() {
-			self.stop().await
+		// If already running, stop first to avoid port conflicts and leaked tasks.
+		if self.exit_signal.is_some() || self.join.is_some() {
+			self.stop().await;
 		}
 
 		log::info!("starting server");
 
-		// Initialize App
-		let mut router = Router::new();
-		router = router.route("/status", get(|| async { "ready!" }));
-
+		// Build the router
+		let mut router = Router::new().route("/status", get(|| async { "ready!" }));
 		router = self.add_tile_sources_to_app(router);
 		if self.use_api {
 			router = self.add_api_to_app(router).await?;
@@ -146,38 +148,56 @@ impl TileServer {
 		router = router.layer(ServiceBuilder::new().layer(cors_layer));
 
 		let addr = format!("{}:{}", self.ip, self.port);
-		eprintln!("server starts listening on {addr}");
+		log::info!("server binding on {addr}");
 
-		let listener = tokio::net::TcpListener::bind(addr).await?;
+		let listener = tokio::net::TcpListener::bind(&addr).await?;
 		let (tx, rx) = tokio::sync::oneshot::channel::<()>();
 
-		tokio::spawn(async {
-			axum::serve(listener, router.into_make_service())
+		// Spawn the server and keep a handle so we can await it on shutdown.
+		let handle = tokio::spawn(async move {
+			if let Err(err) = axum::serve(listener, router.into_make_service())
 				.with_graceful_shutdown(async {
 					rx.await.ok();
 				})
 				.await
-				.expect("should start server")
+			{
+				// The task boundary is a good place to log; we can't bubble this up after spawn.
+				log::error!("server task exited with error: {err}");
+			}
 		});
 
 		self.exit_signal = Some(tx);
+		self.join = Some(handle);
 
 		Ok(())
 	}
 
 	pub async fn stop(&mut self) {
-		if self.exit_signal.is_none() {
+		// If not running, do nothing (idempotent).
+		if self.exit_signal.is_none() && self.join.is_none() {
 			return;
 		}
 
 		log::info!("stopping server");
 
-		self
-			.exit_signal
-			.take()
-			.expect("should have exit signal")
-			.send(())
-			.expect("should habe send exit signal");
+		// Signal graceful shutdown.
+		if let Some(tx) = self.exit_signal.take() {
+			let _ = tx.send(());
+		}
+
+		// Await the server task to finish, but don't hang forever.
+		if let Some(handle) = self.join.take() {
+			match tokio::time::timeout(std::time::Duration::from_secs(10), handle).await {
+				Ok(join_result) => {
+					if let Err(join_err) = join_result {
+						log::warn!("server task join error: {join_err}");
+					}
+				}
+				Err(_) => {
+					log::warn!("server task did not shutdown within timeout; continuing");
+				}
+			}
+		}
 	}
 
 	fn add_tile_sources_to_app(&self, app: Router) -> Router {
