@@ -8,8 +8,9 @@ use std::{
 	path::Path,
 };
 use versatiles_container::UrlPath;
+use versatiles_derive::ConfigDoc;
 
-#[derive(Default, Debug, Clone, Deserialize, PartialEq)]
+#[derive(Default, Debug, Clone, Deserialize, PartialEq, ConfigDoc)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
 	#[serde(default)]

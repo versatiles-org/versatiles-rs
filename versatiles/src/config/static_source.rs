@@ -1,8 +1,9 @@
 use anyhow::Result;
 use serde::Deserialize;
 use versatiles_container::UrlPath;
+use versatiles_derive::ConfigDoc;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ConfigDoc)]
 pub struct StaticSourceConfig {
 	pub path: UrlPath,
 	pub url_prefix: Option<String>,

@@ -53,23 +53,253 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		}
 	};
 
-	// Precompute per-field metadata for codegen
-	let mut rows = Vec::new();
-	for f in fields {
-		let ident = f.ident.as_ref().expect("named field");
-		let key = serde_rename(&f.attrs).unwrap_or_else(|| ident.to_string());
-		let ty_tokens = f.ty.to_token_stream().to_string();
-		let optional = is_option(&f.ty);
-		let doc = collect_doc(&f.attrs);
-
-		rows.push((key, ty_tokens, optional, doc));
+	// Per-field computed metadata for codegen
+	struct Row {
+		ident: syn::Ident,
+		key: String,
+		ty_tokens: String,
+		ty: syn::Type,
+		doc: String,
+		is_option: bool,
+		is_vec: bool,
+		is_map: bool,
+		is_flatten: bool,
+		inner_ty_opt: Option<syn::Type>,                // Option<T> -> T
+		_inner_ty_vec: Option<syn::Type>,               // Vec<T> -> T
+		_inner_tys_map: Option<(syn::Type, syn::Type)>, // HashMap<K,V> -> (K,V)
+		// Heuristic: treat non-Option/Vec/Map path types as nested
+		is_nested_struct: bool,
 	}
 
-	// Build code that writes the Markdown at runtime
-	let keys = rows.iter().map(|r| &r.0);
-	let tys = rows.iter().map(|r| &r.1);
-	let optionals = rows.iter().map(|r| if r.2 { "yes" } else { "no" });
-	let docs = rows.iter().map(|r| &r.3);
+	fn path_ident(ty: &syn::Type) -> Option<&syn::Ident> {
+		if let syn::Type::Path(tp) = ty {
+			tp.path.segments.last().map(|s| &s.ident)
+		} else {
+			None
+		}
+	}
+
+	fn angle_inner(ty: &syn::Type) -> Option<Vec<syn::Type>> {
+		if let syn::Type::Path(tp) = ty {
+			if let Some(seg) = tp.path.segments.last() {
+				if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
+					let mut v = Vec::new();
+					for a in args.args.iter() {
+						if let syn::GenericArgument::Type(t) = a {
+							v.push(t.clone());
+						}
+					}
+					return Some(v);
+				}
+			}
+		}
+		None
+	}
+
+	fn has_serde_flatten(attrs: &[syn::Attribute]) -> bool {
+		for attr in attrs {
+			if attr.path().is_ident("serde") {
+				let mut found = false;
+				let _ = attr.parse_nested_meta(|meta| {
+					if meta.path.is_ident("flatten") {
+						found = true;
+					}
+					Ok(())
+				});
+				if found {
+					return true;
+				}
+			}
+		}
+		false
+	}
+
+	// crude primitive-ish detection for deciding nested vs scalar
+	fn is_primitive_like(ty: &syn::Type) -> bool {
+		let s = ty.to_token_stream().to_string();
+		matches!(
+			s.as_str(),
+			"bool"
+				| "u8" | "u16"
+				| "u32" | "u64"
+				| "u128" | "i8"
+				| "i16" | "i32"
+				| "i64" | "i128"
+				| "f32" | "f64"
+				| "String"
+				| "& str"
+		)
+	}
+
+	let mut rows = Vec::<Row>::new();
+	for f in fields {
+		let ident = f.ident.clone().expect("named field");
+		let key = serde_rename(&f.attrs).unwrap_or_else(|| ident.to_string());
+		let ty_tokens = f.ty.to_token_stream().to_string();
+		let ty = f.ty.clone();
+		let doc = collect_doc(&f.attrs);
+		let is_option = is_option(&f.ty);
+
+		let mut is_vec = false;
+		let mut is_map = false;
+		let mut inner_ty_opt = None;
+		let mut inner_ty_vec = None;
+		let mut _inner_tys_map = None;
+
+		// classify Option / Vec / HashMap
+		if let Some(id) = path_ident(&f.ty) {
+			let id_s = id.to_string();
+			if id_s == "Option" {
+				if let Some(mut inners) = angle_inner(&f.ty) {
+					if let Some(inner) = inners.pop() {
+						inner_ty_opt = Some(inner.clone());
+					}
+				}
+			} else if id_s == "Vec" {
+				is_vec = true;
+				if let Some(mut inners) = angle_inner(&f.ty) {
+					if let Some(inner) = inners.pop() {
+						inner_ty_vec = Some(inner.clone());
+					}
+				}
+			} else if id_s == "HashMap" {
+				is_map = true;
+				if let Some(inners) = angle_inner(&f.ty) {
+					if inners.len() == 2 {
+						_inner_tys_map = Some((inners[0].clone(), inners[1].clone()));
+					}
+				}
+			}
+		}
+
+		let is_flatten = has_serde_flatten(&f.attrs);
+
+		// decide if nested struct
+		let is_nested_struct =
+			!is_option && !is_vec && !is_map && matches!(path_ident(&f.ty), Some(_)) && !is_primitive_like(&f.ty);
+
+		rows.push(Row {
+			ident,
+			key,
+			ty_tokens,
+			ty,
+			doc,
+			is_option,
+			is_vec,
+			is_map,
+			is_flatten,
+			inner_ty_opt,
+			_inner_ty_vec: inner_ty_vec,
+			_inner_tys_map,
+			is_nested_struct,
+		});
+	}
+
+	// Split rows into token streams
+	let _idents: Vec<_> = rows.iter().map(|r| &r.ident).collect();
+	let keys: Vec<_> = rows.iter().map(|r| r.key.as_str()).collect();
+	let tys: Vec<_> = rows.iter().map(|r| r.ty_tokens.as_str()).collect();
+	let _tys_types: Vec<_> = rows.iter().map(|r| &r.ty).collect();
+	let docs: Vec<_> = rows.iter().map(|r| r.doc.as_str()).collect();
+	let optionals = rows.iter().map(|r| if r.is_option { "yes" } else { "no" });
+
+	// Generate per-field YAML code blocks
+	let field_yaml_blocks: Vec<_> = rows
+		.iter()
+		.map(|r| {
+			let _ident = &r.ident;
+			let key = &r.key;
+			let ty = &r.ty;
+			let doc = &r.doc;
+			let inner_opt = r.inner_ty_opt.as_ref();
+			let is_primitive_inner_opt = inner_opt.map_or(false, |ty| is_primitive_like(ty));
+			let is_primitive = is_primitive_like(ty);
+
+			let doc_lines = if doc.is_empty() {
+				quote! {}
+			} else {
+				quote! {
+					for __line in #doc.split('\n') {
+						__s.push_str(&__sp(__indent));
+						__s.push_str("# ");
+						__s.push_str(__line);
+						__s.push('\n');
+					}
+				}
+			};
+
+			if r.is_flatten {
+				quote! {
+					#doc_lines
+					__s.push_str(&__sp(__indent));
+					__s.push_str("# (flattened fields inline here)\n");
+				}
+			} else if r.is_nested_struct {
+				quote! {
+					#doc_lines
+					__s.push_str(&__sp(__indent));
+					__s.push_str(#key);
+					__s.push_str(":\n");
+					__s.push_str(&__sp(__indent + 2));
+					__s.push_str("# nested config omitted\n");
+				}
+			} else if r.is_option {
+				if is_primitive_inner_opt {
+					quote! {
+						#doc_lines
+						__s.push_str(&__sp(__indent));
+						__s.push_str("# ");
+						__s.push_str(#key);
+						__s.push_str(": <optional>\n");
+					}
+				} else {
+					quote! {
+						#doc_lines
+						__s.push_str(&__sp(__indent));
+						__s.push_str("# ");
+						__s.push_str(#key);
+						__s.push_str(": <optional>\n");
+					}
+				}
+			} else if r.is_vec {
+				quote! {
+					#doc_lines
+					__s.push_str(&__sp(__indent));
+					__s.push_str(#key);
+					__s.push_str(": []\n");
+				}
+			} else if r.is_map {
+				quote! {
+					#doc_lines
+					__s.push_str(&__sp(__indent));
+					__s.push_str(#key);
+					__s.push_str(": {}\n");
+				}
+			} else {
+				// scalar/string primitive-like
+				if is_primitive {
+					quote! {
+						#doc_lines
+						__s.push_str(&__sp(__indent));
+						__s.push_str(#key);
+						__s.push_str(": ");
+						let __v: #ty = ::core::default::Default::default();
+						let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
+						__s.push_str(__y.trim());
+						__s.push('\n');
+					}
+				} else {
+					// fallback for non-primitive scalar types (should rarely happen)
+					quote! {
+						#doc_lines
+						__s.push_str(&__sp(__indent));
+						__s.push_str(#key);
+						__s.push_str(": <non-primitive>\n");
+					}
+				}
+			}
+		})
+		.collect();
 
 	let expanded = quote! {
 		 impl #name {
@@ -98,6 +328,26 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 						 }
 						 __s.push_str(" |\n");
 					} )*
+					__s
+			  }
+		 }
+
+		 impl #name {
+			  pub fn demo_yaml() -> String {
+					Self::demo_yaml_with_indent(0)
+			  }
+
+			  pub(crate) fn demo_yaml_with_indent(__indent: usize) -> String {
+					let mut __s = String::new();
+					let __sp = |n: usize| -> String { " ".repeat(n) };
+
+					#( {
+						 #field_yaml_blocks
+						 if __indent == 0 {
+							  __s.push('\n');
+						 }
+					} )*
+
 					__s
 			  }
 		 }

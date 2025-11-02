@@ -1,6 +1,7 @@
 use serde::Deserialize;
+use versatiles_derive::ConfigDoc;
 
-#[derive(Default, Debug, Clone, Deserialize, PartialEq)]
+#[derive(Default, Debug, Clone, Deserialize, PartialEq, ConfigDoc)]
 #[serde(deny_unknown_fields)]
 pub struct Cors {
 	/// Allowed origins (supports globs in your app logic)

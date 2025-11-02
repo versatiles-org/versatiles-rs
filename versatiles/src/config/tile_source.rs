@@ -2,8 +2,9 @@ use anyhow::Result;
 use serde::Deserialize;
 use std::fmt::Debug;
 use versatiles_container::UrlPath;
+use versatiles_derive::ConfigDoc;
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, ConfigDoc)]
 pub struct TileSourceConfig {
 	pub name: Option<String>,
 	pub path: UrlPath,

@@ -1,7 +1,8 @@
 use serde::Deserialize;
 use std::str;
+use versatiles_derive::ConfigDoc;
 
-#[derive(Debug, Default, Clone, Deserialize, PartialEq)]
+#[derive(Debug, Default, Clone, Deserialize, PartialEq, ConfigDoc)]
 #[serde(deny_unknown_fields)]
 pub struct ServerConfig {
 	/// IP to bind to.

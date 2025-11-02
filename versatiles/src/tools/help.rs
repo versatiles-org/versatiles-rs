@@ -1,4 +1,5 @@
 use anyhow::Result;
+use versatiles::Config;
 use versatiles_pipeline::PipelineFactory;
 
 #[derive(clap::Args, Debug)]
@@ -15,11 +16,13 @@ pub struct Subcommand {
 #[derive(clap::Subcommand, Debug)]
 enum Topic {
 	Pipeline,
+	Config,
 }
 
 pub fn run(command: &Subcommand) -> Result<()> {
 	let md = match command.topic {
 		Topic::Pipeline => PipelineFactory::new_dummy().get_docs(),
+		Topic::Config => Config::demo_yaml(),
 	};
 
 	if command.raw {
@@ -80,6 +83,18 @@ mod tests {
 	#[test]
 	fn test_help2() -> Result<()> {
 		run_command(vec!["versatiles", "help", "--raw", "pipeline"])?;
+		Ok(())
+	}
+
+	#[test]
+	fn test_help_config1() -> Result<()> {
+		run_command(vec!["versatiles", "help", "config"])?;
+		Ok(())
+	}
+
+	#[test]
+	fn test_help_config2() -> Result<()> {
+		run_command(vec!["versatiles", "help", "--raw", "config"])?;
 		Ok(())
 	}
 }
