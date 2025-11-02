@@ -239,6 +239,10 @@ impl TileServer {
 		log::info!("server binding on {addr}");
 
 		let listener = TcpListener::bind(&addr).await?;
+		// If we asked for an ephemeral port (0), record the actual assigned port for test URLs.
+		if self.port == 0 {
+			self.port = listener.local_addr()?.port();
+		}
 		let (tx, rx) = oneshot::channel::<()>();
 
 		// Spawn the server and keep a handle so we can await it on shutdown.
@@ -481,13 +485,13 @@ mod tests {
 
 	#[tokio::test]
 	async fn static_sources_serve_files() -> Result<()> {
-		let port = 50006;
-		let mut server = TileServer::new_test(IP, port, true, true);
+		let mut server = TileServer::new_test(IP, 0, true, true); // use ephemeral port to avoid Windows ACL/ephemeral conflicts
 
 		// Mount the provided test archive at root.
-		let static_path = Path::new("../testdata/static.tar.br");
-		server.add_static_source(static_path, "/").expect("add static source");
+		let static_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata/static.tar.br");
+		server.add_static_source(&static_path, "/").expect("add static source");
 		server.start().await.expect("start server");
+		let port = server.port;
 
 		let client = Arc::new(Client::builder().build().unwrap());
 
