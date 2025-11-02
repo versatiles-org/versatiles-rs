@@ -1,4 +1,5 @@
 use super::{
+	encoding::get_encoding,
 	sources::{SourceResponse, StaticSource, TileSource},
 	utils::Url,
 };
@@ -402,22 +403,6 @@ fn ok_json(message: &str) -> Response<Body> {
 		},
 		TargetCompression::from_none(),
 	)
-}
-
-fn get_encoding(headers: HeaderMap) -> TargetCompression {
-	let mut encoding_set: TargetCompression = TargetCompression::from_none();
-	let encoding_option = headers.get(header::ACCEPT_ENCODING);
-	if let Some(encoding) = encoding_option {
-		let encoding_string = encoding.to_str().unwrap_or("");
-
-		if encoding_string.contains("gzip") {
-			encoding_set.insert(TileCompression::Gzip);
-		}
-		if encoding_string.contains("br") {
-			encoding_set.insert(TileCompression::Brotli);
-		}
-	}
-	encoding_set
 }
 
 #[cfg(test)]

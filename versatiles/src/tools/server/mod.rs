@@ -1,5 +1,6 @@
 //! server implementation
 
+mod encoding;
 mod sources;
 mod tile_server;
 mod utils;
