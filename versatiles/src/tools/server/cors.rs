@@ -64,61 +64,58 @@ mod tests {
 	use axum::{
 		Router,
 		body::Body,
-		http::{
-			Request,
-			header::{ACCESS_CONTROL_ALLOW_ORIGIN, ORIGIN},
-		},
+		http::{Request, header},
 		routing::get,
 	};
 	use tower::ServiceExt; // for `oneshot`
 
-	async fn has_acao(layer: CorsLayer, origin: &str) -> bool {
-		let app = Router::new().route("/", get(|| async { "ok" })).layer(layer);
+	async fn has_acao(layer: &CorsLayer, origin: &str) -> bool {
+		let app = Router::new().route("/", get(|| async { "ok" })).layer(layer.clone());
 
 		let req = Request::builder()
 			.uri("/")
-			.header(ORIGIN, origin)
+			.header(header::ORIGIN, origin)
 			.body(Body::empty())
 			.unwrap();
 
 		let resp = app.oneshot(req).await.unwrap();
-		resp.headers().get(ACCESS_CONTROL_ALLOW_ORIGIN).is_some()
+		resp.headers().get(header::ACCESS_CONTROL_ALLOW_ORIGIN).is_some()
 	}
 
 	#[tokio::test]
 	async fn exact_match() {
 		let layer = build_cors_layer(&["https://maps.example.org".into()]).unwrap();
-		assert!(has_acao(layer.clone(), "https://maps.example.org").await);
-		assert!(!has_acao(layer.clone(), "https://maps.example.com").await);
+		assert!(has_acao(&layer, "https://maps.example.org").await);
+		assert!(!has_acao(&layer, "https://maps.example.com").await);
 	}
 
 	#[tokio::test]
 	async fn star_all() {
 		let layer = build_cors_layer(&["*".into()]).unwrap();
-		assert!(has_acao(layer.clone(), "http://anything.local").await);
-		assert!(has_acao(layer.clone(), "https://whatever.example").await);
+		assert!(has_acao(&layer, "http://anything.local").await);
+		assert!(has_acao(&layer, "https://whatever.example").await);
 	}
 
 	#[tokio::test]
 	async fn suffix_match() {
 		let layer = build_cors_layer(&["*example.com".into()]).unwrap();
-		assert!(has_acao(layer.clone(), "https://foo.example.com").await);
-		assert!(has_acao(layer.clone(), "https://bar.example.com").await);
-		assert!(!has_acao(layer.clone(), "https://example.org").await);
+		assert!(has_acao(&layer, "https://foo.example.com").await);
+		assert!(has_acao(&layer, "https://bar.example.com").await);
+		assert!(!has_acao(&layer, "https://example.org").await);
 	}
 
 	#[tokio::test]
 	async fn prefix_match() {
 		let layer = build_cors_layer(&["https://dev-*".into()]).unwrap();
-		assert!(has_acao(layer.clone(), "https://dev-01.example.com").await);
-		assert!(!has_acao(layer.clone(), "https://prod-01.example.com").await);
+		assert!(has_acao(&layer, "https://dev-01.example.com").await);
+		assert!(!has_acao(&layer, "https://prod-01.example.com").await);
 	}
 
 	#[tokio::test]
 	async fn regex_match() {
 		let layer = build_cors_layer(&["/^https://(foo|bar)\\.example\\.com$/".into()]).unwrap();
-		assert!(has_acao(layer.clone(), "https://foo.example.com").await);
-		assert!(has_acao(layer.clone(), "https://bar.example.com").await);
-		assert!(!has_acao(layer.clone(), "https://baz.example.com").await);
+		assert!(has_acao(&layer, "https://foo.example.com").await);
+		assert!(has_acao(&layer, "https://bar.example.com").await);
+		assert!(!has_acao(&layer, "https://baz.example.com").await);
 	}
 }
