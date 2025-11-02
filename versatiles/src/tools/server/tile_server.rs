@@ -322,8 +322,10 @@ impl TileServer {
 mod tests {
 	use super::*;
 	use axum::http::{HeaderMap, HeaderValue, header};
+	use regex::Regex;
 	use reqwest::Client;
 	use rstest::rstest;
+	use std::sync::Arc;
 	use versatiles_container::{MockTilesReader, MockTilesReaderProfile as MTRP};
 	use versatiles_core::{TileBBoxPyramid, TileCompression as TC, TileFormat as TF, TilesReaderParameters};
 
@@ -477,5 +479,56 @@ mod tests {
 		assert!(!bytes.is_empty(), "empty body");
 
 		server.stop().await;
+	}
+
+	#[tokio::test]
+	async fn static_sources_serve_files() -> Result<()> {
+		let port = 50006;
+		let mut server = TileServer::new_test(IP, port, true, true);
+
+		// Mount the provided test archive at root.
+		let static_path = Path::new("../testdata/static.tar.br");
+		server.add_static_source(static_path, "/").expect("add static source");
+		server.start().await.expect("start server");
+
+		let client = Arc::new(Client::builder().build().unwrap());
+
+		let test_request = |url: &str, expected_status: u16, expected_content_type: &str, expected_body: &str| {
+			let client = client.clone();
+			let url = format!("http://{IP}:{port}{url}");
+			let expected_content_type = format!("{expected_content_type}; charset=utf-8");
+			let expected_body = expected_body.to_string();
+			async move {
+				let response = client.get(&url).send().await.unwrap();
+				assert_eq!(
+					response.status().as_u16(),
+					expected_status,
+					"Wrong status for URL: {url}"
+				);
+
+				let content_type = response
+					.headers()
+					.get(header::CONTENT_TYPE)
+					.unwrap()
+					.to_str()
+					.unwrap()
+					.to_string();
+				assert_eq!(content_type, expected_content_type, "Wrong content-type for URL: {url}");
+
+				let body = response.text().await.unwrap();
+				let body = Regex::new(r"\s+").unwrap().replace_all(&body, " ").trim().to_string();
+				let body = body[0..9].to_string();
+				assert_eq!(body, expected_body, "Wrong body start for URL: {url}");
+			}
+		};
+
+		test_request("", 200, "text/html", "<html> <h").await;
+		test_request("/", 200, "text/html", "<html> <h").await;
+		test_request("/index.html", 200, "text/html", "<html> <h").await;
+		test_request("/style.css", 200, "text/css", "body { ma").await;
+		test_request("/missing.txt", 404, "text/plain", "Not Found").await;
+
+		server.stop().await;
+		Ok(())
 	}
 }
