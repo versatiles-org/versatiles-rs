@@ -1,9 +1,4 @@
-use super::{
-	cors::build_cors_layer,
-	routes,
-	sources::{StaticSource, TileSource},
-	utils::Url,
-};
+use super::{cors, routes, sources, utils::Url};
 use anyhow::{Result, bail};
 use axum::{Router, routing::get};
 use std::path::Path;
@@ -16,14 +11,13 @@ use versatiles::{Config, TileSourceConfig};
 use versatiles_container::ProcessingConfig;
 use versatiles_container::{ContainerRegistry, TilesConvertReader, TilesConverterParameters, TilesReaderTrait};
 use versatiles_core::TileCompression;
-// versatiles_core import removed as these helpers are not used here
 use versatiles_derive::context;
 
 pub struct TileServer {
 	ip: String,
 	port: u16,
-	tile_sources: Vec<TileSource>,
-	static_sources: Vec<StaticSource>,
+	tile_sources: Vec<sources::TileSource>,
+	static_sources: Vec<sources::StaticSource>,
 	exit_signal: Option<Sender<()>>,
 	minimal_recompression: bool,
 	use_api: bool,
@@ -108,7 +102,7 @@ impl TileServer {
 	pub fn add_tile_source(&mut self, name: &str, reader: Box<dyn TilesReaderTrait>) -> Result<()> {
 		log::info!("add source: id='{name}', source={reader:?}");
 
-		let source = TileSource::from(reader, name)?;
+		let source = sources::TileSource::from(reader, name)?;
 		let url_prefix = &source.prefix;
 
 		for other_tile_source in self.tile_sources.iter() {
@@ -125,7 +119,9 @@ impl TileServer {
 
 	pub fn add_static_source(&mut self, path: &Path, url_prefix: &str) -> Result<()> {
 		log::info!("add static: {path:?}");
-		self.static_sources.push(StaticSource::new(path, Url::new(url_prefix))?);
+		self
+			.static_sources
+			.push(sources::StaticSource::new(path, Url::new(url_prefix))?);
 		Ok(())
 	}
 
@@ -146,7 +142,7 @@ impl TileServer {
 		}
 		router = self.add_static_sources_to_app(router);
 
-		let cors_layer = build_cors_layer(&self.cors_allowed_origins)?;
+		let cors_layer = cors::build_cors_layer(&self.cors_allowed_origins)?;
 		router = router.layer(ServiceBuilder::new().layer(cors_layer));
 
 		let addr = format!("{}:{}", self.ip, self.port);
