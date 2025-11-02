@@ -488,8 +488,8 @@ mod tests {
 		let mut server = TileServer::new_test(IP, 0, true, true); // use ephemeral port to avoid Windows ACL/ephemeral conflicts
 
 		// Mount the provided test archive at root.
-		let static_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("testdata/static.tar.br");
-		server.add_static_source(&static_path, "/").expect("add static source");
+		let static_path = Path::new("../testdata/static.tar.br");
+		server.add_static_source(static_path, "/").expect("add static source");
 		server.start().await.expect("start server");
 		let port = server.port;
 
