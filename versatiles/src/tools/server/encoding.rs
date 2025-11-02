@@ -1,20 +1,64 @@
-//! Accept-Encoding parsing and mapping to `TargetCompression`.
+//! Parsing of the HTTP `Accept-Encoding` header into our internal compression set.
 //!
-//! We parse the HTTP `Accept-Encoding` header conservatively:
-//! - `identity` (uncompressed) is allowed unless explicitly sent with `q=0`.
-//! - Recognized encodings: `gzip`, `br` (Brotli). Others are ignored.
-//! - `*` enables a conservative set (gzip + br) with `q>0`.
+//! ### Design goals
+//! - **Conservative & predictable.** We only decide whether an encoding is *allowed*,
+//!   not which is “best”. That choice is made later by the compression optimizer.
+//! - **Identity is safe.** The uncompressed representation (`identity`) remains allowed
+//!   unless explicitly disabled with `q=0` (RFC 9110 §12.5.3).
+//! - **Narrow scope.** We recognize `gzip` and `br` (Brotli). Unknown tokens are ignored.
+//!   A wildcard `*` enables a conservative set (gzip + br) when `q>0`.
 //!
-//! Note: We **do not** implement full RFC 9110 quality-factor selection;
-//! we only check `q=0` vs `q>0` to decide allowance. That keeps the
-//! negotiation stable and predictable for our limited set of encodings.
+//! ### Why not full quality-factor selection?
+//! RFC 9110 allows clients to rank encodings with `q` values (e.g. `gzip;q=0.8, br;q=1`).
+//! For our use-case the *optimizer* later considers both source format and cost/ratio trade-offs.
+//! Here we only gate what’s permitted. This keeps negotiation simple and avoids surprising
+//! flips when clients send exotic rankings.
+//!
+//! ### Examples
+//! ```rust
+//! use axum::http::{HeaderMap, header};
+//! use versatiles_core::{utils::TargetCompression, TileCompression as TC};
+//! use enumset::{enum_set, EnumSet};
+//! use versatiles::tools::server::encoding::get_encoding;
+//!
+//! // No header → identity is allowed.
+//! let mut h = HeaderMap::new();
+//! let set = get_encoding(h);
+//! assert_eq!(set, TargetCompression::from_set(enum_set!(TC::Uncompressed)));
+//!
+//! // Gzip requested → identity + gzip allowed.
+//! h.insert(header::ACCEPT_ENCODING, "gzip".parse().unwrap());
+//! let set = get_encoding(h);
+//! assert_eq!(set, TargetCompression::from_set(enum_set!(TC::Uncompressed | TC::Gzip)));
+//!
+//! // Explicitly disable identity.
+//! let mut h = HeaderMap::new();
+//! h.insert(header::ACCEPT_ENCODING, "identity;q=0, br".parse().unwrap());
+//! let set = get_encoding(h);
+//! assert_eq!(set, TargetCompression::from_set(enum_set!(TC::Brotli)));
+//! ```
+//!
+//! ### Notes
+//! - We treat header parsing failures as empty/absent headers (fail-open to identity).
+//! - This module is intentionally tiny; tests cover a matrix of realistic client headers.
 
 use axum::http::{HeaderMap, header};
 use versatiles_core::{TileCompression, utils::TargetCompression};
 
-/// Parse `Accept-Encoding` and return the set of allowed compressions.
+/// Convert `Accept-Encoding` into a set of **allowed** encodings.
 ///
-/// Identity (uncompressed) is considered allowed unless explicitly disabled via `q=0`.
+/// Behavior:
+/// - Returns a `TargetCompression` bitset where each bit (gzip, br, identity)
+///   indicates it is permitted by the client.
+/// - `identity` is included unless explicitly disabled with `q=0`.
+/// - Unknown tokens are ignored; a wildcard `*` includes gzip and br if `q>0`.
+///
+/// Robustness:
+/// - If the header is missing or invalid UTF‑8, we allow `identity` only.
+/// - If `q` cannot be parsed, it is treated as `1.0`.
+///
+/// This function does **not** pick the final encoding; it only gates options.
+/// The compression optimizer (in `versatiles_core`) picks among allowed options.
 pub fn get_encoding(headers: HeaderMap) -> TargetCompression {
 	use TileCompression::*;
 	let mut set = TargetCompression::from_none();
@@ -27,6 +71,7 @@ pub fn get_encoding(headers: HeaderMap) -> TargetCompression {
 
 	// Parse tokens of the form "token[;q=val]".
 	// We only differentiate q=0 (disallow) vs q>0 (allow).
+	// We only care about the on/off decision: `q=0` disables, any other value enables.
 	let mut tokens: Vec<(&str, f32)> = Vec::new();
 	for raw in s.split(',') {
 		let token = raw.trim();
@@ -52,6 +97,7 @@ pub fn get_encoding(headers: HeaderMap) -> TargetCompression {
 	}
 
 	// Identity is allowed unless explicitly disabled.
+	// This mirrors common server behavior and ensures a safe default for intermediaries.
 	let identity_disabled = tokens.iter().any(|(n, q)| *n == "identity" && *q == 0.0);
 	if !identity_disabled {
 		set.insert(Uncompressed);
@@ -77,6 +123,8 @@ pub fn get_encoding(headers: HeaderMap) -> TargetCompression {
 
 	set
 }
+
+// --- tests -------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
