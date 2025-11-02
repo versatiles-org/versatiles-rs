@@ -15,7 +15,7 @@
 use super::{cors, routes, sources, utils::Url};
 use anyhow::{Result, bail};
 use axum::error_handling::HandleErrorLayer;
-use axum::http::StatusCode;
+use axum::http::{StatusCode, header::HeaderName, header::HeaderValue};
 use axum::{BoxError, response::IntoResponse};
 use axum::{Router, routing::get};
 use std::path::Path;
@@ -24,6 +24,7 @@ use tower::{
 	ServiceBuilder, buffer::BufferLayer, limit::ConcurrencyLimitLayer, load_shed::LoadShedLayer, timeout::TimeoutLayer,
 };
 use tower_http::catch_panic::CatchPanicLayer;
+use tower_http::set_header::SetResponseHeaderLayer;
 #[cfg(test)]
 use versatiles::get_registry;
 use versatiles::{Config, TileSourceConfig};
@@ -68,6 +69,8 @@ pub struct TileServer {
 	/// Configured CORS origins (supports `*`, prefix/suffix wildcard, or `/regex/`).
 	cors_allowed_origins: Vec<String>,
 	cors_max_age_seconds: u64,
+	/// Extra response headers as configured.
+	extra_response_headers: Vec<(HeaderName, HeaderValue)>,
 }
 
 impl TileServer {
@@ -85,6 +88,7 @@ impl TileServer {
 			registry: get_registry(ProcessingConfig::default()),
 			cors_allowed_origins: Vec::new(),
 			cors_max_age_seconds: 3600,
+			extra_response_headers: Vec::new(),
 		}
 	}
 
@@ -93,6 +97,15 @@ impl TileServer {
 	/// This ingests tile and static sources, applying optional on-the-fly
 	/// transforms (e.g., `flip_y`, `swap_xy`) and compression overrides.
 	pub async fn from_config(config: Config, registry: ContainerRegistry) -> Result<TileServer> {
+		let mut parsed_headers: Vec<(HeaderName, HeaderValue)> = Vec::new();
+		for (k, v) in &config.extra_response_headers {
+			let name =
+				HeaderName::from_bytes(k.as_bytes()).map_err(|e| anyhow::anyhow!("invalid header name {:?}: {}", k, e))?;
+			let value =
+				HeaderValue::from_str(v).map_err(|e| anyhow::anyhow!("invalid header value for {:?}: {}", k, e))?;
+			parsed_headers.push((name, value));
+		}
+
 		let mut server = TileServer {
 			ip: config.server.ip.unwrap_or("0.0.0.0".into()),
 			port: config.server.port.unwrap_or(8080),
@@ -105,6 +118,7 @@ impl TileServer {
 			registry,
 			cors_allowed_origins: config.cors.allowed_origins.clone(),
 			cors_max_age_seconds: config.cors.max_age_seconds.unwrap_or(3600),
+			extra_response_headers: parsed_headers,
 		};
 
 		for tile_config in config.tile_sources.iter() {
@@ -205,6 +219,11 @@ impl TileServer {
 
 		let cors_layer = cors::build_cors_layer(&self.cors_allowed_origins, self.cors_max_age_seconds)?;
 		router = router.layer(ServiceBuilder::new().layer(cors_layer));
+
+		// Apply any extra response headers from configuration (overriding existing values).
+		for (name, value) in self.extra_response_headers.iter().cloned() {
+			router = router.layer(SetResponseHeaderLayer::overriding(name, value));
+		}
 
 		// --- Global backpressure & protection layers ---
 		// The order of layers matters. From innermost to outermost:
@@ -532,6 +551,57 @@ mod tests {
 		test_request("/index.html", 200, "text/html", "<html> <h").await;
 		test_request("/style.css", 200, "text/css", "body { ma").await;
 		test_request("/missing.txt", 404, "text/plain", "Not Found").await;
+
+		server.stop().await;
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn extra_response_headers_are_applied() -> Result<()> {
+		// Use ephemeral port to avoid conflicts on CI/Windows.
+		let mut server = TileServer::new_test(IP, 0, true, false);
+
+		// Inject extra headers directly for the test.
+		server.extra_response_headers = vec![(HeaderName::from_static("x-test-header"), HeaderValue::from_static("ok"))];
+
+		server.start().await?;
+		let port = server.port;
+
+		let url = format!("http://{IP}:{port}/status");
+		let resp = reqwest::get(&url).await.unwrap();
+		assert_eq!(resp.status(), 200);
+		let headers = resp.headers();
+
+		assert_eq!(
+			headers.get("x-test-header").and_then(|v| v.to_str().ok()),
+			Some("ok"),
+			"expected custom header to be present on /status"
+		);
+
+		server.stop().await;
+		Ok(())
+	}
+
+	#[tokio::test]
+	async fn extra_response_headers_multiple_and_values() -> Result<()> {
+		let mut server = TileServer::new_test(IP, 0, true, false);
+
+		server.extra_response_headers = vec![
+			(HeaderName::from_static("x-foo"), HeaderValue::from_static("alpha")),
+			(HeaderName::from_static("x-bar"), HeaderValue::from_static("beta")),
+		];
+
+		server.start().await?;
+		let port = server.port;
+
+		let client = Client::builder().build().unwrap();
+		let url = format!("http://{IP}:{port}/status");
+		let resp = client.get(&url).send().await.unwrap();
+		assert_eq!(resp.status(), 200);
+		let headers = resp.headers();
+
+		assert_eq!(headers.get("x-foo").and_then(|v| v.to_str().ok()), Some("alpha"));
+		assert_eq!(headers.get("x-bar").and_then(|v| v.to_str().ok()), Some("beta"));
 
 		server.stop().await;
 		Ok(())
