@@ -101,11 +101,15 @@ mod tests {
 				.collect::<HashMap<String, String>>(),
 				static_sources: vec![
 					StaticSourceConfig {
-						path: UrlPath::from("/web/site.tar.br"),
+						path: UrlPath::from("../testdata/static.tar.br"),
 						url_prefix: Some("/".to_string())
 					},
 					StaticSourceConfig {
-						path: UrlPath::from("../testdata/assets/"),
+						path: UrlPath::from("../testdata/static.tar.gz"),
+						url_prefix: Some("/whynot/".to_string())
+					},
+					StaticSourceConfig {
+						path: UrlPath::from("../testdata"),
 						url_prefix: Some("/assets".to_string())
 					}
 				],
@@ -115,7 +119,7 @@ mod tests {
 						path: UrlPath::from("https://download.versatiles.org/osm.versatiles"),
 						flip_y: Some(false),
 						swap_xy: Some(false),
-						override_compression: Some("gzip".to_string())
+						override_compression: Some("brotli".to_string())
 					},
 					TileSourceConfig {
 						name: Some("berlin".to_string()),
