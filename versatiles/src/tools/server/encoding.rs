@@ -40,10 +40,10 @@ pub(crate) fn get_encoding(headers: HeaderMap) -> TargetCompression {
 			name = n.trim();
 			for p in params.split(';') {
 				let p = p.trim();
-				if let Some(rest) = p.strip_prefix("q=") {
-					if let Ok(v) = rest.trim().parse::<f32>() {
-						q = v;
-					}
+				if let Some(rest) = p.strip_prefix("q=")
+					&& let Ok(v) = rest.trim().parse::<f32>()
+				{
+					q = v;
 				}
 			}
 		}

@@ -21,7 +21,7 @@ type Predicate = Box<dyn Fn(&str) -> bool + Send + Sync + 'static>;
 /// Build a `CorsLayer` with a predicate assembled from `allowed_origins`.
 ///
 /// See module docs for supported pattern forms.
-pub fn build_cors_layer(allowed_origins: &Vec<String>) -> Result<CorsLayer> {
+pub fn build_cors_layer(allowed_origins: &[String]) -> Result<CorsLayer> {
 	// Compile the list of origin checks.
 	let checks: Vec<Predicate> = allowed_origins
 		.iter()
@@ -87,21 +87,21 @@ mod tests {
 
 	#[tokio::test]
 	async fn exact_match() {
-		let layer = build_cors_layer(&vec!["https://maps.example.org".into()]).unwrap();
+		let layer = build_cors_layer(&["https://maps.example.org".into()]).unwrap();
 		assert!(has_acao(layer.clone(), "https://maps.example.org").await);
 		assert!(!has_acao(layer.clone(), "https://maps.example.com").await);
 	}
 
 	#[tokio::test]
 	async fn star_all() {
-		let layer = build_cors_layer(&vec!["*".into()]).unwrap();
+		let layer = build_cors_layer(&["*".into()]).unwrap();
 		assert!(has_acao(layer.clone(), "http://anything.local").await);
 		assert!(has_acao(layer.clone(), "https://whatever.example").await);
 	}
 
 	#[tokio::test]
 	async fn suffix_match() {
-		let layer = build_cors_layer(&vec!["*example.com".into()]).unwrap();
+		let layer = build_cors_layer(&["*example.com".into()]).unwrap();
 		assert!(has_acao(layer.clone(), "https://foo.example.com").await);
 		assert!(has_acao(layer.clone(), "https://bar.example.com").await);
 		assert!(!has_acao(layer.clone(), "https://example.org").await);
@@ -109,14 +109,14 @@ mod tests {
 
 	#[tokio::test]
 	async fn prefix_match() {
-		let layer = build_cors_layer(&vec!["https://dev-*".into()]).unwrap();
+		let layer = build_cors_layer(&["https://dev-*".into()]).unwrap();
 		assert!(has_acao(layer.clone(), "https://dev-01.example.com").await);
 		assert!(!has_acao(layer.clone(), "https://prod-01.example.com").await);
 	}
 
 	#[tokio::test]
 	async fn regex_match() {
-		let layer = build_cors_layer(&vec!["/^https://(foo|bar)\\.example\\.com$/".into()]).unwrap();
+		let layer = build_cors_layer(&["/^https://(foo|bar)\\.example\\.com$/".into()]).unwrap();
 		assert!(has_acao(layer.clone(), "https://foo.example.com").await);
 		assert!(has_acao(layer.clone(), "https://bar.example.com").await);
 		assert!(!has_acao(layer.clone(), "https://baz.example.com").await);
