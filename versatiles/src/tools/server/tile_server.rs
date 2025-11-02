@@ -1,9 +1,15 @@
 use super::{cors, routes, sources, utils::Url};
 use anyhow::{Result, bail};
+use axum::error_handling::HandleErrorLayer;
+use axum::http::StatusCode;
+use axum::{BoxError, response::IntoResponse};
 use axum::{Router, routing::get};
 use std::path::Path;
-use tokio::sync::oneshot::Sender;
-use tower::ServiceBuilder;
+use tokio::{net::TcpListener, sync::oneshot};
+use tower::{
+	ServiceBuilder, buffer::BufferLayer, limit::ConcurrencyLimitLayer, load_shed::LoadShedLayer, timeout::TimeoutLayer,
+};
+use tower_http::catch_panic::CatchPanicLayer;
 #[cfg(test)]
 use versatiles::get_registry;
 use versatiles::{Config, TileSourceConfig};
@@ -18,7 +24,7 @@ pub struct TileServer {
 	port: u16,
 	tile_sources: Vec<sources::TileSource>,
 	static_sources: Vec<sources::StaticSource>,
-	exit_signal: Option<Sender<()>>,
+	exit_signal: Option<oneshot::Sender<()>>,
 	join: Option<tokio::task::JoinHandle<()>>,
 	minimal_recompression: bool,
 	use_api: bool,
@@ -147,11 +153,38 @@ impl TileServer {
 		let cors_layer = cors::build_cors_layer(&self.cors_allowed_origins)?;
 		router = router.layer(ServiceBuilder::new().layer(cors_layer));
 
+		// --- Global backpressure & protection layers ---
+		let global_concurrency = 256usize; // tune based on CPU and workload
+		let global_buffer = 512usize; // bounded queue in front of the service
+		let request_timeout = std::time::Duration::from_secs(15); // hard per-request cap
+
+		let overload_handler = HandleErrorLayer::new(|_err: BoxError| async move {
+			let mut resp = (StatusCode::SERVICE_UNAVAILABLE, "Service overloaded, try later").into_response();
+			resp.headers_mut().insert("Retry-After", "2".parse().unwrap());
+			Ok::<_, std::convert::Infallible>(resp)
+		});
+
+		let protection = ServiceBuilder::new()
+			// Handle all tower errors at the very outside so Router sees Infallible.
+			.layer(overload_handler)
+			// Don't let panics kill the process.
+			.layer(CatchPanicLayer::new())
+			// Hard cap per-request wall time.
+			.layer(TimeoutLayer::new(request_timeout))
+			// Bounded queue in front of the service.
+			.layer(BufferLayer::new(global_buffer))
+			// Cap in-flight work.
+			.layer(ConcurrencyLimitLayer::new(global_concurrency))
+			// If saturated, fail fast.
+			.layer(LoadShedLayer::new());
+
+		router = router.layer(protection);
+
 		let addr = format!("{}:{}", self.ip, self.port);
 		log::info!("server binding on {addr}");
 
-		let listener = tokio::net::TcpListener::bind(&addr).await?;
-		let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+		let listener = TcpListener::bind(&addr).await?;
+		let (tx, rx) = oneshot::channel::<()>();
 
 		// Spawn the server and keep a handle so we can await it on shutdown.
 		let handle = tokio::spawn(async move {
