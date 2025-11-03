@@ -40,3 +40,13 @@ impl<'de> Deserialize<'de> for StaticSourceConfig {
 		})
 	}
 }
+
+#[cfg(test)]
+impl From<(&str, &str)> for StaticSourceConfig {
+	fn from((url_prefix, path): (&str, &str)) -> Self {
+		Self {
+			path: UrlPath::from(path),
+			url_prefix: Some(url_prefix.to_string()),
+		}
+	}
+}

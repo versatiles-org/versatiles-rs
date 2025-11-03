@@ -111,32 +111,14 @@ mod tests {
 				.map(|(a, b)| (a.to_string(), b.to_string()))
 				.collect::<HashMap<String, String>>(),
 				static_sources: vec![
-					StaticSourceConfig {
-						path: UrlPath::from("../testdata/static.tar.br"),
-						url_prefix: Some("/".to_string())
-					},
-					StaticSourceConfig {
-						path: UrlPath::from("../testdata/static.tar.gz"),
-						url_prefix: Some("/whynot/".to_string())
-					},
-					StaticSourceConfig {
-						path: UrlPath::from("../testdata"),
-						url_prefix: Some("/assets".to_string())
-					}
+					StaticSourceConfig::from(("/", "../testdata/static.tar.br")),
+					StaticSourceConfig::from(("/whynot/", "../testdata/static.tar.gz")),
+					StaticSourceConfig::from(("/assets", "../testdata"))
 				],
 				tile_sources: vec![
-					TileSourceConfig {
-						name: Some("osm".to_string()),
-						path: UrlPath::from("https://download.versatiles.org/osm.versatiles"),
-					},
-					TileSourceConfig {
-						name: Some("berlin".to_string()),
-						path: UrlPath::from("../testdata/berlin.mbtiles"),
-					},
-					TileSourceConfig {
-						name: Some("pipeline".to_string()),
-						path: UrlPath::from("../testdata/berlin.vpl"),
-					}
+					TileSourceConfig::from(("osm", "https://download.versatiles.org/osm.versatiles")),
+					TileSourceConfig::from(("berlin", "../testdata/berlin.mbtiles")),
+					TileSourceConfig::from(("pipeline", "../testdata/berlin.vpl"))
 				]
 			}
 		);

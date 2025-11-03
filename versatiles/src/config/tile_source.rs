@@ -42,3 +42,13 @@ impl<'de> Deserialize<'de> for TileSourceConfig {
 		})
 	}
 }
+
+#[cfg(test)]
+impl From<(&str, &str)> for TileSourceConfig {
+	fn from((name, path): (&str, &str)) -> Self {
+		Self {
+			name: Some(name.to_string()),
+			path: UrlPath::from(path),
+		}
+	}
+}
