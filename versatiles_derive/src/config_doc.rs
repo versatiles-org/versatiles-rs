@@ -1,5 +1,3 @@
-#![allow(dead_code, unused_variables)]
-
 use quote::ToTokens;
 use syn::Type;
 
@@ -93,24 +91,6 @@ pub fn angle_inner(ty: &syn::Type) -> Option<Vec<syn::Type>> {
 		return Some(v);
 	}
 	None
-}
-
-pub fn has_serde_flatten(attrs: &[syn::Attribute]) -> bool {
-	for attr in attrs {
-		if attr.path().is_ident("serde") {
-			let mut found = false;
-			let _ = attr.parse_nested_meta(|meta| {
-				if meta.path.is_ident("flatten") {
-					found = true;
-				}
-				Ok(())
-			});
-			if found {
-				return true;
-			}
-		}
-	}
-	false
 }
 
 pub fn is_url_path(ty: &syn::Type) -> bool {

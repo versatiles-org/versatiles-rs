@@ -57,12 +57,9 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		ty: syn::Type,
 		doc: String,
 		is_vec: bool,
-		is_map: bool,
-		is_flatten: bool,
 		inner_ty_vec: Option<syn::Type>, // Vec<T> -> T
 		// Heuristic: treat non-Option/Vec/Map path types as nested
 		is_nested_struct: bool,
-		is_url_path: bool,
 		demo_value: Option<String>,
 	}
 
@@ -93,8 +90,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			}
 		}
 
-		let is_flatten = has_serde_flatten(&f.attrs);
-
 		let is_url_path = is_url_path(&f.ty);
 
 		// parse demo from #[config_demo("...")] or #[config_demo(value = "...")]
@@ -108,16 +103,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 					demo_value = Some(lit.value());
 					continue;
 				}
-				// Fallback to name-value: #[config_demo(value = "...")]
-				let _ = attr.parse_nested_meta(|meta| {
-					if meta.path.is_ident("value")
-						&& let Ok(v) = meta.value()
-						&& let Ok(lit) = v.parse::<syn::LitStr>()
-					{
-						demo_value = Some(lit.value());
-					}
-					Ok(())
-				});
 			}
 		}
 
@@ -131,11 +116,8 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			ty,
 			doc,
 			is_vec,
-			is_map,
-			is_flatten,
 			inner_ty_vec,
 			is_nested_struct,
-			is_url_path,
 			demo_value,
 		});
 	}
@@ -153,145 +135,61 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			let doc_lit = syn::LitStr::new(doc, Span::call_site());
 			let demo_value = r.demo_value.as_ref();
 			let demo_lit = demo_value.map(|d| syn::LitStr::new(d, Span::call_site()));
-
 			let key_lit = syn::LitStr::new(key, Span::call_site());
-			let emit_doc_block: TokenStream2 = if doc.is_empty() {
-				quote! {}
-			} else {
-				quote! {
+
+			let mut output: TokenStream2 = quote! {
+				__s.push_str(&__sp(__indent));
+				__s.push('\n');
+				for line in #doc_lit.lines() {
 					__s.push_str(&__sp(__indent));
+					__s.push_str("# ");
+					__s.push_str(line);
 					__s.push('\n');
-					for line in #doc_lit.lines() {
-						__s.push_str(&__sp(__indent));
-						__s.push_str("# ");
-						__s.push_str(line);
-						__s.push('\n');
-					}
 				}
-			};
-
-			let is_primitive = is_primitive_like(ty);
-
-			let mut output: TokenStream2 = quote! {};
-
-			output = quote! {
-				#output
-				#emit_doc_block
-			};
-
-			let indent_key = quote! {
 				__s.push_str(&__sp(__indent));
 				__s.push_str(#key_lit);
 				__s.push_str(": ");
 			};
 
-			if r.is_flatten {
+			if r.is_nested_struct {
 				output = quote! {
 					#output
-					__s.push_str(&<#ty>::demo_yaml_with_indent(__indent));
-				};
-			} else if r.is_nested_struct {
-				output = quote! {
-					#output
-					#indent_key
 					__s.push_str("\n");
 					__s.push_str(&<#ty>::demo_yaml_with_indent(__indent + 2));
 				};
-			} else if r.is_vec {
+			} else if let Some(demo_lit) = &demo_lit {
 				output = quote! {
 					#output
-					#indent_key
+					__s.push_str(#demo_lit);
 				};
-				if let Some(demo_lit) = &demo_lit {
-					output = quote! {
-						#output
-						__s.push_str(" ");
-						__s.push_str(#demo_lit);
-					};
-				} else if let Some(inner) = &r.inner_ty_vec {
-					let is_primitive_inner = is_primitive_like(inner);
-					let is_url_path_inner = is_url_path(inner);
-					output = quote! {
-						#output
-						__s.push_str("\n");
-					};
-					if is_primitive_inner {
-						output = quote! {
-							#output
-							__s.push_str(&__sp(__indent + 2));
-							__s.push_str("- ");
-							let __v: #inner = ::core::default::Default::default();
-							let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
-							__s.push_str(__y.trim());
-						};
-					} else if is_url_path_inner {
-						output = quote! {
-							#output
-							__s.push_str(&__sp(__indent + 2));
-							__s.push_str("- ");
-							__s.push_str("\"\"");
-						};
-					} else {
-						output = quote! {
-							#output
-							let __inner = <#inner>::demo_yaml_with_indent(0);
-							let mut __first_line_printed = false;
-							for __line in __inner.lines() {
-								if !__first_line_printed {
-									if __line.trim().is_empty() { continue; }
-									__s.push_str(&__sp(__indent + 2));
-									__s.push_str("- ");
-									__first_line_printed = true;
-								} else {
-									__s.push_str(&__sp(__indent + 4));
-								}
-								__s.push_str(__line);
-								__s.push('\n');
-							}
-						};
-					}
-				} else {
-					output = quote! {
-						#output
-						__s.push_str("[]");
-					};
-				}
+			} else if r.is_vec
+				&& let Some(inner) = &r.inner_ty_vec
+			{
 				output = quote! {
 					#output
-					if !__s.ends_with('\n') {
+					__s.push_str("\n");
+					let __inner = <#inner>::demo_yaml_with_indent(0);
+					let mut __first_line_printed = false;
+					for __line in __inner.lines() {
+						if !__first_line_printed {
+							if __line.trim().is_empty() { continue; }
+							__s.push_str(&__sp(__indent + 2));
+							__s.push_str("- ");
+							__first_line_printed = true;
+						} else {
+							__s.push_str(&__sp(__indent + 4));
+						}
+						__s.push_str(__line);
 						__s.push('\n');
 					}
 				};
-			} else {
-				// Unified leaf emission (Option, Map, UrlPath, scalar/non-primitive)
-				output = quote! {
-					#output
-					#indent_key
-				};
-				if let Some(demo_lit) = &demo_lit {
-					output = quote! { #output __s.push_str(#demo_lit); };
-				} else {
-					// Minimal sensible defaults when no demo is provided
-					if r.is_map {
-						output = quote! { #output __s.push_str("{}"); };
-					} else if r.is_url_path {
-						output = quote! { #output __s.push_str("\"\""); };
-					} else if is_primitive {
-						output = quote! {
-							#output
-							let __v: #ty = ::core::default::Default::default();
-							let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
-							__s.push_str(__y.trim());
-						};
-					} else {
-						// Generic non-primitive leaf: show an empty object to hint structure
-						output = quote! { #output __s.push_str("{}"); };
-					}
-				}
-				output = quote! { #output __s.push_str("\n"); };
 			}
-
-			output
+			quote! {
+				#output
+				if !__s.ends_with('\n') {
+					__s.push('\n');
+				}
+			}
 		})
 		.collect();
 
