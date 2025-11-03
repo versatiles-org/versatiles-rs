@@ -132,11 +132,39 @@ mod tests {
 	#[test]
 	fn parse_invalid_config() {
 		let cfg = Config::from_string("server:\n  pi: 3.14.15.9");
+		assert_eq!(
+			&cfg.unwrap_err().to_string()[0..43],
+			"server: unknown field `pi`, expected one of"
+		);
 	}
 
 	#[test]
 	fn parse_demo_config() {
 		let yaml = Config::demo_yaml();
 		let cfg = Config::from_string(&yaml).unwrap();
+		assert_eq!(
+			cfg,
+			Config {
+				server: ServerConfig {
+					ip: Some("0.0.0.0".to_string()),
+					port: Some(8080,),
+					minimal_recompression: Some(false,),
+					disable_api: Some(false,),
+				},
+				cors: Cors {
+					allowed_origins: vec!["https://example.org".to_string(), "*.example.net".to_string()],
+					max_age_seconds: Some(86400),
+				},
+				extra_response_headers: [
+					("CDN-Cache-Control", "max-age=604800"),
+					("Cache-Control", "public, max-age=86400, immutable"),
+				]
+				.iter()
+				.map(|(a, b)| (a.to_string(), b.to_string()))
+				.collect::<HashMap<String, String>>(),
+				static_sources: vec![StaticSourceConfig::from(("/", "./frontend.tar")),],
+				tile_sources: vec![TileSourceConfig::from(("osm", "osm.versatiles")),],
+			}
+		)
 	}
 }
