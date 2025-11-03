@@ -7,8 +7,11 @@ use versatiles_derive::ConfigDoc;
 #[derive(Debug, Clone, PartialEq, ConfigDoc)]
 pub struct TileSourceConfig {
 	/// Optional identifier used to reference this tile source.
+	/// The tiles will be available under `/tiles/{name}/...`.
+	/// Defaults to the last part of the path (e.g., "osm" for "osm.versatiles").
 	#[config_demo("osm")]
 	pub name: Option<String>,
+
 	/// Path or URL to the tile data. Can point to a local file or remote source.
 	#[config_demo("osm.versatiles")]
 	pub path: UrlPath,

@@ -13,7 +13,7 @@ use versatiles_derive::ConfigDoc;
 #[derive(Default, Debug, Clone, Deserialize, PartialEq, ConfigDoc)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-	/// HTTP server configuration options (port, IP, etc.)
+	/// HTTP server configuration
 	#[serde(default)]
 	pub server: ServerConfig,
 
@@ -31,11 +31,11 @@ pub struct Config {
 	)]
 	pub extra_response_headers: HashMap<String, String>,
 
-	/// List of static sources mounted to specific URL prefixes
+	/// List of static sources
 	#[serde(default, rename = "static")]
 	pub static_sources: Vec<StaticSourceConfig>,
 
-	/// List of tile sources that the server can serve
+	/// List of tile sources
 	#[serde(default, rename = "tiles")]
 	pub tile_sources: Vec<TileSourceConfig>,
 }
