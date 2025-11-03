@@ -6,7 +6,11 @@ use versatiles_derive::ConfigDoc;
 pub struct Cors {
 	/// Allowed origins (supports globs in your app logic)
 	#[serde(default)]
-	#[config_demo(r#"["https://example.org", "*.example.net"]"#)]
+	#[config_demo(
+		r#"
+    - "https://example.org"
+    - "*.example.net""#
+	)]
 	pub allowed_origins: Vec<String>,
 
 	/// Preflight cache duration in seconds

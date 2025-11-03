@@ -166,6 +166,8 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				quote! {
 					for line in #doc_lit.lines() {
 						__s.push_str(&__sp(__indent));
+						__s.push('\n');
+						__s.push_str(&__sp(__indent));
 						__s.push_str("# ");
 						__s.push_str(line);
 						__s.push('\n');
@@ -206,15 +208,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 					#indent_key
 				};
 				if let Some(demo_lit) = &demo_lit {
-					let demo_trim = demo_lit.value().trim().to_string();
-					if !demo_trim.starts_with('[') {
-						output = quote! {
-							#output
-							__s.push_str("\n");
-							__s.push_str(&__sp(__indent + 2));
-							__s.push_str("-");
-						};
-					}
 					output = quote! {
 						#output
 						__s.push_str(" ");
