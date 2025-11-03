@@ -249,27 +249,11 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				if is_primitive_inner_opt {
 					let demo_emit = if let Some(demo_lit) = &demo_lit {
 						quote! {
-							if !#doc_trim_lit.is_empty() {
-								__emit_above_comment(&mut __s, __indent, #doc_lit);
-							}
-							__s.push_str(&__sp(__indent));
-							__s.push_str(#key);
-							__s.push_str(": ");
-							__s.push_str(#demo_lit);
-							__s.push('\n');
+							__emit_field(&mut __s, __indent, #doc_lit, #key, #demo_lit);
 						}
 					} else {
 						let doc_emit = quote! {
-							if #doc_trim_lit.is_empty() {
-								__s.push_str(&__sp(__indent));
-								__s.push_str(#key);
-								__s.push_str(": <optional>\n");
-							} else {
-								__emit_above_comment(&mut __s, __indent, #doc_lit);
-								__s.push_str(&__sp(__indent));
-								__s.push_str(#key);
-								__s.push_str(": <optional>\n");
-							}
+							__emit_field(&mut __s, __indent, #doc_lit, #key, "<optional>");
 						};
 						doc_emit
 					};
@@ -289,10 +273,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 						}
 					} else {
 						quote! {
-							#doc_lines
-							__s.push_str(&__sp(__indent));
-							__s.push_str(#key);
-							__s.push_str(": <optional>\n");
+							__emit_field(&mut __s, __indent, #doc_lit, #key, "<optional>");
 						}
 					};
 					demo_emit
@@ -395,12 +376,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			} else if r.is_map {
 				if let Some(demo_lit) = &demo_lit {
 					quote! {
-						#doc_lines
-						__s.push_str(&__sp(__indent));
-						__s.push_str(#key);
-						__s.push_str(": ");
-						__s.push_str(#demo_lit);
-						__s.push('\n');
+						__emit_field(&mut __s, __indent, #doc_lit, #key, #demo_lit);
 					}
 				} else {
 					quote! {
@@ -413,19 +389,11 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			} else if r.is_url_path {
 				if let Some(demo_lit) = &demo_lit {
 					quote! {
-						#doc_lines
-						__s.push_str(&__sp(__indent));
-						__s.push_str(#key);
-						__s.push_str(": ");
-						__s.push_str(#demo_lit);
-						__s.push('\n');
+						__emit_field(&mut __s, __indent, #doc_lit, #key, #demo_lit);
 					}
 				} else {
 					quote! {
-						#doc_lines
-						__s.push_str(&__sp(__indent));
-						__s.push_str(#key);
-						__s.push_str(": \"\"\n");
+						__emit_field(&mut __s, __indent, #doc_lit, #key, "\"\"");
 					}
 				}
 			} else {
@@ -433,14 +401,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				if is_primitive {
 					if let Some(demo_lit) = &demo_lit {
 						quote! {
-							if !#doc_trim_lit.is_empty() {
-								__emit_above_comment(&mut __s, __indent, #doc_lit);
-							}
-							__s.push_str(&__sp(__indent));
-							__s.push_str(#key);
-							__s.push_str(": ");
-							__s.push_str(#demo_lit);
-							__s.push('\n');
+							__emit_field(&mut __s, __indent, #doc_lit, #key, #demo_lit);
 						}
 					} else {
 						quote! {
@@ -498,6 +459,17 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 							buf.push('\n');
 						}
 					}
+				}
+
+				fn __emit_field(buf: &mut String, indent: usize, doc: &str, key: &str, val: &str) {
+					if !doc.trim().is_empty() {
+						__emit_above_comment(buf, indent, doc);
+					}
+					for _ in 0..indent { buf.push(' '); }
+					buf.push_str(key);
+					buf.push_str(": ");
+					buf.push_str(val);
+					buf.push('\n');
 				}
 
 				#( {
