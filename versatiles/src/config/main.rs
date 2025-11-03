@@ -77,10 +77,10 @@ impl Config {
 	}
 
 	pub fn help_md() -> String {
-		vec![
+		[
 			include_str!("help.md").trim(),
 			"\n```yaml",
-			&Self::demo_yaml_with_indent(0).trim(),
+			Self::demo_yaml_with_indent(0).trim(),
 			"```",
 		]
 		.join("\n")
