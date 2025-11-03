@@ -189,6 +189,7 @@ mod tests {
 		MockTilesReader, MockTilesReaderProfile, ProcessingConfig, TilesConverterParameters, TilesReaderTrait,
 		convert_tiles_container,
 	};
+	use versatiles_core::TileBBoxPyramid;
 
 	pub async fn make_test_tar(compression: TileCompression) -> NamedTempFile {
 		// get dummy reader
@@ -199,6 +200,7 @@ mod tests {
 
 		let parameters = TilesConverterParameters {
 			tile_compression: Some(compression),
+			bbox_pyramid: Some(TileBBoxPyramid::new_full(0)),
 			..TilesConverterParameters::default()
 		};
 		let config = ProcessingConfig::default();
