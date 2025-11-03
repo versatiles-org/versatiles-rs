@@ -295,10 +295,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 
 	let expanded = quote! {
 		impl #name {
-			pub fn demo_yaml() -> String {
-				Self::demo_yaml_with_indent(0)
-			}
-
 			pub(crate) fn demo_yaml_with_indent(__indent: usize) -> String {
 				let mut __s = String::new();
 				let __sp = |n: usize| -> String { " ".repeat(n) };

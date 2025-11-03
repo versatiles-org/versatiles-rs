@@ -75,6 +75,16 @@ impl Config {
 
 		Ok(())
 	}
+
+	pub fn help_md() -> String {
+		vec![
+			include_str!("help.md").trim(),
+			"\n```yaml",
+			&Self::demo_yaml_with_indent(0).trim(),
+			"```",
+		]
+		.join("\n")
+	}
 }
 
 #[cfg(test)]
@@ -140,7 +150,7 @@ mod tests {
 
 	#[test]
 	fn parse_demo_config() {
-		let yaml = Config::demo_yaml();
+		let yaml = Config::demo_yaml_with_indent(0);
 		let cfg = Config::from_string(&yaml).unwrap();
 		assert_eq!(
 			cfg,

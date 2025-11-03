@@ -145,7 +145,7 @@ impl PipelineFactory {
 		self.dir.join(filename)
 	}
 
-	pub fn get_docs(&self) -> String {
+	pub fn help_md(&self) -> String {
 		[
 			include_str!("help.md").to_string(),
 			String::from("---\n# READ operations"),

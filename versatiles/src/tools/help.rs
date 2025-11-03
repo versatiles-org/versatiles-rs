@@ -21,8 +21,8 @@ enum Topic {
 
 pub fn run(command: &Subcommand) -> Result<()> {
 	let md = match command.topic {
-		Topic::Pipeline => PipelineFactory::new_dummy().get_docs(),
-		Topic::Config => format!("```yaml\n{}```", Config::demo_yaml()),
+		Topic::Pipeline => PipelineFactory::new_dummy().help_md(),
+		Topic::Config => Config::help_md(),
 	};
 
 	if command.raw {
