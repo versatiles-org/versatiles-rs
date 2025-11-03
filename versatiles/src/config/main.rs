@@ -42,8 +42,11 @@ pub struct Config {
 
 impl Config {
 	pub fn from_reader<R: Read>(reader: R) -> Result<Self> {
-		let cfg = serde_yaml_ng::from_reader(reader)?;
-		Ok(cfg)
+		Ok(serde_yaml_ng::from_reader(reader)?)
+	}
+
+	pub fn from_str(s: &str) -> Result<Self> {
+		Ok(serde_yaml_ng::from_str(s)?)
 	}
 
 	/// Parse from a file path and resolve `include.files` relative to that file.
@@ -80,16 +83,16 @@ mod tests {
 	use pretty_assertions::assert_eq;
 
 	#[test]
-	fn parse_example_config() -> Result<()> {
+	fn parse_example_config() {
 		// Adjust the path to wherever your test YAML lives (matches your workspace layout).
 		let path = Path::new("../testdata/config1.yml");
-		let cfg = Config::from_path(path)?;
+		let cfg = Config::from_path(path).unwrap();
 
 		assert_eq!(
 			cfg,
 			Config {
 				server: ServerConfig {
-					ip: Some("127.0.0.1".parse()?),
+					ip: Some("127.0.0.1".parse().unwrap()),
 					port: Some(51234),
 					minimal_recompression: Some(true),
 					disable_api: Some(true)
@@ -137,6 +140,23 @@ mod tests {
 				]
 			}
 		);
-		Ok(())
+	}
+
+	#[test]
+	fn parse_empty_config() {
+		assert_eq!(Config::from_str("").unwrap(), Config::default());
+	}
+
+	#[test]
+	fn parse_invalid_config() {
+		let cfg = Config::from_str("server:\n  ip: \"invalid_ip\"");
+		assert_eq!(cfg.unwrap_err().to_string(), "invalid IP address");
+	}
+
+	#[test]
+	fn parse_demo_config() {
+		let yaml = Config::demo_yaml();
+		let cfg = Config::from_str(&yaml).unwrap();
+		assert_eq!(cfg, Config::default())
 	}
 }
