@@ -182,6 +182,12 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				#emit_doc_block
 			};
 
+			let indent_key = quote! {
+				__s.push_str(&__sp(__indent));
+				__s.push_str(#key_lit);
+				__s.push_str(": ");
+			};
+
 			if r.is_flatten {
 				output = quote! {
 					#output
@@ -190,20 +196,17 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			} else if r.is_nested_struct {
 				output = quote! {
 					#output
-					__s.push_str(&__sp(__indent));
-					__s.push_str(#key_lit);
-					__s.push_str(":\n");
+					#indent_key
+					__s.push_str("\n");
 					__s.push_str(&<#ty>::demo_yaml_with_indent(__indent + 2));
 				};
 			} else if r.is_vec {
+				output = quote! {
+					#output
+					#indent_key
+				};
 				if let Some(demo_lit) = &demo_lit {
 					let demo_trim = demo_lit.value().trim().to_string();
-					output = quote! {
-						#output
-						__s.push_str(&__sp(__indent));
-						__s.push_str(#key_lit);
-						__s.push_str(":");
-					};
 					if !demo_trim.starts_with('[') {
 						output = quote! {
 							#output
@@ -222,9 +225,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 					let is_url_path_inner = is_url_path(inner);
 					output = quote! {
 						#output
-						__s.push_str(&__sp(__indent));
-						__s.push_str(#key_lit);
-						__s.push_str(":\n");
+						__s.push_str("\n");
 					};
 					if is_primitive_inner {
 						output = quote! {
@@ -264,9 +265,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				} else {
 					output = quote! {
 						#output
-						__s.push_str(&__sp(__indent));
-						__s.push_str(#key_lit);
-						__s.push_str(": []");
+						__s.push_str("[]");
 					};
 				}
 				output = quote! {
@@ -277,9 +276,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				// Unified leaf emission (Option, Map, UrlPath, scalar/non-primitive)
 				output = quote! {
 					#output
-					__s.push_str(&__sp(__indent));
-					__s.push_str(#key_lit);
-					__s.push_str(": ");
+					#indent_key
 				};
 				if let Some(demo_lit) = &demo_lit {
 					output = quote! { #output __s.push_str(#demo_lit); };
