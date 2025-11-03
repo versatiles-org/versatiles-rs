@@ -5,23 +5,26 @@ use versatiles_derive::ConfigDoc;
 #[derive(Debug, Default, Clone, Deserialize, PartialEq, ConfigDoc)]
 #[serde(deny_unknown_fields)]
 pub struct ServerConfig {
-	/// Optional IP address to bind to, defaults to "0.0.0.0".
+	/// Optional IP address to bind to
+	/// Defaults to "0.0.0.0"
 	#[serde()]
 	#[config_demo("0.0.0.0")]
 	pub ip: Option<String>,
 
-	/// Optional HTTP server port, defaults to 8080.
+	/// Optional HTTP server port
+	/// Defaults to 8080
 	#[serde()]
 	#[config_demo("8080")]
 	pub port: Option<u16>,
 
-	/// Optional flag that controls whether to prefer faster (vs. smaller) compression.
-	/// Defaults to false (smaller compression).
+	/// Optional flag to prefer faster compression over smaller size
+	/// Defaults to false (smaller compression)
 	#[serde()]
 	#[config_demo("false")]
 	pub minimal_recompression: Option<bool>,
 
-	/// Optional flag that disables the `/api` endpoints.
+	/// Optional flag to disable the `/api` endpoints
+	/// Defaults to false (enabling the API)
 	#[serde()]
 	#[config_demo("false")]
 	pub disable_api: Option<bool>,

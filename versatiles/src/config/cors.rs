@@ -4,11 +4,11 @@ use versatiles_derive::ConfigDoc;
 #[derive(Default, Debug, Clone, Deserialize, PartialEq, ConfigDoc)]
 #[serde(deny_unknown_fields)]
 pub struct Cors {
-	/// Allowed origins
+	/// Allowed origins for CORS requests
 	/// Supports:
-	/// - globs as first part of the domain like `*.example.com`
-	/// - last part of the domain like `example.*`
-	/// - regex if enclosed in slashes like `/domain\..*$/`
+	/// - Globs at the start of the domain like `*.example.com`
+	/// - Globs at the end of the domain like `example.*`
+	/// - Regular expressions enclosed in slashes like `/domain\..*$/`
 	#[serde(default)]
 	#[config_demo(
 		r#"
@@ -17,7 +17,8 @@ pub struct Cors {
 	)]
 	pub allowed_origins: Vec<String>,
 
-	/// Optional preflight cache duration in seconds
+	/// Optional duration for preflight cache in seconds
+	/// Defaults to 86400 (1 day)
 	#[serde(default)]
 	#[config_demo("86400")]
 	pub max_age_seconds: Option<u64>,

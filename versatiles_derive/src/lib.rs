@@ -258,7 +258,9 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				}
 				output = quote! {
 					#output
-					__s.push_str("\n");
+					if !__s.ends_with('\n') {
+						__s.push('\n');
+					}
 				};
 			} else {
 				// Unified leaf emission (Option, Map, UrlPath, scalar/non-primitive)

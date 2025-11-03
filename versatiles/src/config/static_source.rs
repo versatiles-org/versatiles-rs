@@ -6,12 +6,12 @@ use versatiles_derive::ConfigDoc;
 #[derive(Debug, Clone, PartialEq, ConfigDoc)]
 pub struct StaticSourceConfig {
 	#[config_demo("./frontend.tar")]
-	/// Filesystem path or archive (e.g., .tar.gz) containing static assets.
+	/// Path to static files or archive (e.g., .tar.gz) containing assets
 	pub path: UrlPath,
 
 	#[config_demo("/")]
-	/// Optional URL prefix under which the static files will be available, like "/assets".
-	/// Defaults to root ("/") if not specified.
+	/// Optional URL prefix where static files will be served
+	/// Defaults to root ("/")
 	pub url_prefix: Option<String>,
 }
 

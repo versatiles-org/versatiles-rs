@@ -13,16 +13,16 @@ use versatiles_derive::ConfigDoc;
 #[derive(Default, Debug, Clone, Deserialize, PartialEq, ConfigDoc)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-	/// HTTP server configuration
+	/// Optional HTTP server configuration
 	#[serde(default)]
 	pub server: ServerConfig,
 
-	/// Cross-Origin Resource Sharing (CORS) settings
+	/// Optional Cross-Origin Resource Sharing (CORS) settings
 	#[serde(default)]
 	pub cors: Cors,
 
-	/// Extra response headers added to every HTTP response.
-	/// For example, cache control headers or timing headers can be specified here.
+	/// Optional extra HTTP response headers to add to every response
+	/// For example, cache control or timing headers
 	#[serde(default)]
 	#[config_demo(
 		r#"
@@ -31,11 +31,11 @@ pub struct Config {
 	)]
 	pub extra_response_headers: HashMap<String, String>,
 
-	/// List of static sources
+	/// Optional list of static content sources
 	#[serde(default, rename = "static")]
 	pub static_sources: Vec<StaticSourceConfig>,
 
-	/// List of tile sources
+	/// Optional list of tile sources
 	#[serde(default, rename = "tiles")]
 	pub tile_sources: Vec<TileSourceConfig>,
 }
