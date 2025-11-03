@@ -9,16 +9,12 @@ pub fn collect_doc(attrs: &[syn::Attribute]) -> String {
 		if !attr.path().is_ident("doc") {
 			continue;
 		}
-		match &attr.meta {
-			syn::Meta::NameValue(nv) => {
-				if let syn::Expr::Lit(expr_lit) = &nv.value {
-					if let syn::Lit::Str(lit) = &expr_lit.lit {
-						let v = lit.value();
-						lines.push(v.trim().to_string());
-					}
-				}
-			}
-			_ => {}
+		if let syn::Meta::NameValue(nv) = &attr.meta
+			&& let syn::Expr::Lit(expr_lit) = &nv.value
+			&& let syn::Lit::Str(lit) = &expr_lit.lit
+		{
+			let v = lit.value();
+			lines.push(v.trim().to_string());
 		}
 	}
 	lines.join("\n")
@@ -29,12 +25,11 @@ pub fn serde_rename(attrs: &[syn::Attribute]) -> Option<String> {
 		if attr.path().is_ident("serde") {
 			let mut out: Option<String> = None;
 			let _ = attr.parse_nested_meta(|meta| {
-				if meta.path.is_ident("rename") {
-					if let Ok(v) = meta.value() {
-						if let Ok(s) = v.parse::<syn::LitStr>() {
-							out = Some(s.value());
-						}
-					}
+				if meta.path.is_ident("rename")
+					&& let Ok(v) = meta.value()
+					&& let Ok(s) = v.parse::<syn::LitStr>()
+				{
+					out = Some(s.value());
 				}
 				Ok(())
 			});
@@ -47,10 +42,10 @@ pub fn serde_rename(attrs: &[syn::Attribute]) -> Option<String> {
 }
 
 pub fn is_option(ty: &Type) -> bool {
-	if let Type::Path(tp) = ty {
-		if let Some(seg) = tp.path.segments.last() {
-			return seg.ident == "Option";
-		}
+	if let Type::Path(tp) = ty
+		&& let Some(seg) = tp.path.segments.last()
+	{
+		return seg.ident == "Option";
 	}
 	false
 }
@@ -85,18 +80,17 @@ pub fn path_ident(ty: &syn::Type) -> Option<&syn::Ident> {
 }
 
 pub fn angle_inner(ty: &syn::Type) -> Option<Vec<syn::Type>> {
-	if let syn::Type::Path(tp) = ty {
-		if let Some(seg) = tp.path.segments.last() {
-			if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
-				let mut v = Vec::new();
-				for a in args.args.iter() {
-					if let syn::GenericArgument::Type(t) = a {
-						v.push(t.clone());
-					}
-				}
-				return Some(v);
+	if let syn::Type::Path(tp) = ty
+		&& let Some(seg) = tp.path.segments.last()
+		&& let syn::PathArguments::AngleBracketed(args) = &seg.arguments
+	{
+		let mut v = Vec::new();
+		for a in args.args.iter() {
+			if let syn::GenericArgument::Type(t) = a {
+				v.push(t.clone());
 			}
 		}
+		return Some(v);
 	}
 	None
 }
@@ -120,10 +114,10 @@ pub fn has_serde_flatten(attrs: &[syn::Attribute]) -> bool {
 }
 
 pub fn is_url_path(ty: &syn::Type) -> bool {
-	if let syn::Type::Path(tp) = ty {
-		if let Some(seg) = tp.path.segments.last() {
-			return seg.ident == "UrlPath";
-		}
+	if let syn::Type::Path(tp) = ty
+		&& let Some(seg) = tp.path.segments.last()
+	{
+		return seg.ident == "UrlPath";
 	}
 	false
 }

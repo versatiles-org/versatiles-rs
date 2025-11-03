@@ -83,10 +83,10 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			let id_s = id.to_string();
 			if id_s == "Vec" {
 				is_vec = true;
-				if let Some(mut inners) = angle_inner(&f.ty) {
-					if let Some(inner) = inners.pop() {
-						inner_ty_vec = Some(inner.clone());
-					}
+				if let Some(mut inners) = angle_inner(&f.ty)
+					&& let Some(inner) = inners.pop()
+				{
+					inner_ty_vec = Some(inner.clone());
 				}
 			} else if id_s == "HashMap" {
 				is_map = true;
@@ -102,20 +102,19 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		for attr in &f.attrs {
 			if attr.path().is_ident("config_demo") {
 				// Prefer positional literal: #[config_demo("...")]
-				if demo_value.is_none() {
-					if let Ok(lit) = attr.parse_args::<syn::LitStr>() {
-						demo_value = Some(lit.value());
-						continue;
-					}
+				if demo_value.is_none()
+					&& let Ok(lit) = attr.parse_args::<syn::LitStr>()
+				{
+					demo_value = Some(lit.value());
+					continue;
 				}
 				// Fallback to name-value: #[config_demo(value = "...")]
 				let _ = attr.parse_nested_meta(|meta| {
-					if meta.path.is_ident("value") {
-						if let Ok(v) = meta.value() {
-							if let Ok(lit) = v.parse::<syn::LitStr>() {
-								demo_value = Some(lit.value());
-							}
-						}
+					if meta.path.is_ident("value")
+						&& let Ok(v) = meta.value()
+						&& let Ok(lit) = v.parse::<syn::LitStr>()
+					{
+						demo_value = Some(lit.value());
 					}
 					Ok(())
 				});
@@ -123,12 +122,8 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		}
 
 		// decide if nested struct
-		let is_nested_struct = !is_option
-			&& !is_vec
-			&& !is_map
-			&& matches!(path_ident(&f.ty), Some(_))
-			&& !is_primitive_like(&f.ty)
-			&& !is_url_path;
+		let is_nested_struct =
+			!is_option && !is_vec && !is_map && path_ident(&f.ty).is_some() && !is_primitive_like(&f.ty) && !is_url_path;
 
 		rows.push(Row {
 			ident,
