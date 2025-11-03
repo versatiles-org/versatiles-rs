@@ -1,5 +1,6 @@
 #![allow(dead_code, unused_variables)]
 
+use quote::ToTokens;
 use syn::Type;
 
 pub fn collect_doc(attrs: &[syn::Attribute]) -> String {
@@ -54,63 +55,52 @@ pub fn is_option(ty: &Type) -> bool {
 	false
 }
 
-/// Returns true if the type is a Rust primitive scalar-like config type:
-/// bool, integer, float, String, or &str.
-pub fn is_primitive_like(ty: &Type) -> bool {
-	match ty {
-		Type::Path(tp) => {
-			if let Some(ident) = path_ident(ty) {
-				// Known primitive types
-				match ident.to_string().as_str() {
-					"bool" | "String" | "u8" | "u16" | "u32" | "u64" | "u128" | "i8" | "i16" | "i32" | "i64" | "i128"
-					| "usize" | "isize" | "f32" | "f64" => true,
-					_ => false,
-				}
-			} else {
-				false
-			}
-		}
-		Type::Reference(r) => {
-			// Check for &str
-			if let Type::Path(tp) = &*r.elem {
-				if let Some(ident) = path_ident(&Type::Path(tp.clone())) {
-					return ident == "str";
-				}
-			}
-			false
-		}
-		_ => false,
-	}
+// crude primitive-ish detection for deciding nested vs scalar
+pub fn is_primitive_like(ty: &syn::Type) -> bool {
+	let s = ty.to_token_stream().to_string();
+	matches!(
+		s.as_str(),
+		"bool"
+			| "u8" | "u16"
+			| "u32"
+			| "u64"
+			| "u128"
+			| "i8" | "i16"
+			| "i32"
+			| "i64"
+			| "i128"
+			| "f32"
+			| "f64"
+			| "String"
+			| "& str"
+	)
 }
 
-/// Returns the last path segment ident if the type is a path, else None.
-pub fn path_ident(ty: &Type) -> Option<&syn::Ident> {
-	if let Type::Path(tp) = ty {
-		tp.path.segments.last().map(|seg| &seg.ident)
+pub fn path_ident(ty: &syn::Type) -> Option<&syn::Ident> {
+	if let syn::Type::Path(tp) = ty {
+		tp.path.segments.last().map(|s| &s.ident)
 	} else {
 		None
 	}
 }
 
-/// Extracts generic inner types from angle-bracketed args (e.g., Vec<T>, Option<T>, HashMap<K,V>).
-pub fn angle_inner(ty: &Type) -> Option<Vec<Type>> {
-	if let Type::Path(tp) = ty {
+pub fn angle_inner(ty: &syn::Type) -> Option<Vec<syn::Type>> {
+	if let syn::Type::Path(tp) = ty {
 		if let Some(seg) = tp.path.segments.last() {
-			if let syn::PathArguments::AngleBracketed(ref ab) = seg.arguments {
-				let mut out = Vec::new();
-				for arg in &ab.args {
-					if let syn::GenericArgument::Type(t) = arg {
-						out.push(t.clone());
+			if let syn::PathArguments::AngleBracketed(args) = &seg.arguments {
+				let mut v = Vec::new();
+				for a in args.args.iter() {
+					if let syn::GenericArgument::Type(t) = a {
+						v.push(t.clone());
 					}
 				}
-				return Some(out);
+				return Some(v);
 			}
 		}
 	}
 	None
 }
 
-/// Detects #[serde(flatten)] on a field.
 pub fn has_serde_flatten(attrs: &[syn::Attribute]) -> bool {
 	for attr in attrs {
 		if attr.path().is_ident("serde") {
@@ -129,7 +119,11 @@ pub fn has_serde_flatten(attrs: &[syn::Attribute]) -> bool {
 	false
 }
 
-/// Detects the domain type UrlPath by last segment ident.
-pub fn is_url_path(ty: &Type) -> bool {
-	path_ident(ty).map_or(false, |ident| ident == "UrlPath")
+pub fn is_url_path(ty: &syn::Type) -> bool {
+	if let syn::Type::Path(tp) = ty {
+		if let Some(seg) = tp.path.segments.last() {
+			return seg.ident == "UrlPath";
+		}
+	}
+	false
 }
