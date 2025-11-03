@@ -14,8 +14,8 @@ if [ -z "$1" ]; then
 	exit 1
 fi
 
-# build vpl docs
-./scripts/build-docs-vpl.sh
+# build readme docs
+./scripts/build-docs-readme.sh
 
 # check if git is clean
 if [ -n "$(git status --porcelain)" ]; then
