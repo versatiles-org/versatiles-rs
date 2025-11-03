@@ -125,23 +125,14 @@ mod tests {
 					TileSourceConfig {
 						name: Some("osm".to_string()),
 						path: UrlPath::from("https://download.versatiles.org/osm.versatiles"),
-						flip_y: Some(false),
-						swap_xy: Some(false),
-						override_compression: Some("brotli".to_string())
 					},
 					TileSourceConfig {
 						name: Some("berlin".to_string()),
 						path: UrlPath::from("../testdata/berlin.mbtiles"),
-						flip_y: None,
-						swap_xy: None,
-						override_compression: None
 					},
 					TileSourceConfig {
 						name: Some("pipeline".to_string()),
 						path: UrlPath::from("../testdata/berlin.vpl"),
-						flip_y: Some(true),
-						swap_xy: Some(true),
-						override_compression: None
 					}
 				]
 			}

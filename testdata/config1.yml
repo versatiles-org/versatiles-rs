@@ -42,14 +42,9 @@ static:
 tiles:
   - name: osm
     path: "https://download.versatiles.org/osm.versatiles"
-    flip_y: false
-    swap_xy: false
-    override_compression: brotli
 
   - name: berlin
     path: "./berlin.mbtiles"
 
   - name: pipeline
     path: "./berlin.vpl"
-    flip_y: true
-    swap_xy: true

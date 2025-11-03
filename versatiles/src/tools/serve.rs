@@ -95,13 +95,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 				Some(m) => m.as_str().to_string(),
 			};
 
-			Ok(TileSourceConfig {
-				name: Some(name),
-				path,
-				flip_y: None,
-				swap_xy: None,
-				override_compression: None,
-			})
+			Ok(TileSourceConfig { name: Some(name), path })
 		})
 		.collect::<Result<Vec<TileSourceConfig>>>()?;
 	swap(&mut config.tile_sources, &mut tile_sources);

@@ -30,8 +30,7 @@ use versatiles::get_registry;
 use versatiles::{Config, TileSourceConfig};
 #[cfg(test)]
 use versatiles_container::ProcessingConfig;
-use versatiles_container::{ContainerRegistry, TilesConvertReader, TilesConverterParameters, TilesReaderTrait};
-use versatiles_core::TileCompression;
+use versatiles_container::{ContainerRegistry, TilesReaderTrait};
 use versatiles_derive::context;
 
 /// Thin orchestration layer for the VersaTiles HTTP server.
@@ -146,23 +145,7 @@ impl TileServer {
 			tile_config.path,
 		);
 
-		let mut reader = self.registry.get_reader(&tile_config.path).await?;
-
-		if let Some(comp_str) = tile_config.override_compression.as_ref() {
-			reader.override_compression(TileCompression::try_from(comp_str.as_str())?);
-		}
-
-		let flip_y = tile_config.flip_y.unwrap_or(false);
-		let swap_xy = tile_config.swap_xy.unwrap_or(false);
-
-		if flip_y || swap_xy {
-			let cp = TilesConverterParameters {
-				flip_y,
-				swap_xy,
-				..Default::default()
-			};
-			reader = TilesConvertReader::new_from_reader(reader, cp)?.boxed();
-		}
+		let reader = self.registry.get_reader(&tile_config.path).await?;
 
 		self.add_tile_source(&name, reader)
 	}
@@ -452,7 +435,7 @@ mod tests {
 	#[tokio::test]
 	async fn serve_tile_variants(
 		#[case] format: TF,
-		#[case] compression: TileCompression,
+		#[case] compression: TC,
 		#[case] accept_encoding: &str,
 		#[case] expect_content_encoding: &str,
 		#[case] expect_mime_contains: &str,
