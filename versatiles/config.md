@@ -36,7 +36,7 @@ cors:
   # - Globs at the start of the domain like `*.example.com`
   # - Globs at the end of the domain like `example.*`
   # - Regular expressions enclosed in slashes like `/domain\..*$/`
-  allowed_origins:  
+  allowed_origins: 
     - "https://example.org"
     - "*.example.net"
   
