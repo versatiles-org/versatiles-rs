@@ -500,16 +500,8 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 					}
 				}
 
-				fn __should_inline_comment(text: &str) -> bool {
-					let trimmed = text.trim();
-					!trimmed.contains('\n') && trimmed.len() <= 60
-				}
-
 				#( {
 					#field_yaml_blocks
-					if __indent == 0 {
-						__s.push('\n');
-					}
 				} )*
 
 				__s

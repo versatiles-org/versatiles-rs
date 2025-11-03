@@ -27,8 +27,7 @@ pub struct Config {
 	#[config_demo(
 		r#"
   Cache-Control: public, max-age=86400, immutable
-  CDN-Cache-Control: max-age=604800
-"#
+  CDN-Cache-Control: max-age=604800"#
 	)]
 	pub extra_response_headers: HashMap<String, String>,
 
