@@ -69,7 +69,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		// Heuristic: treat non-Option/Vec/Map path types as nested
 		is_nested_struct: bool,
 		is_url_path: bool,
-		example_yaml: Option<String>,
 		demo_value: Option<String>,
 	}
 
@@ -117,23 +116,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		let is_flatten = has_serde_flatten(&f.attrs);
 
 		let is_url_path = is_url_path(&f.ty);
-
-		// parse example_yaml from #[config(example_yaml = r#"..."#)]
-		let mut example_yaml = None;
-		for attr in &f.attrs {
-			if attr.path().is_ident("config") {
-				let _ = attr.parse_nested_meta(|meta| {
-					if meta.path.is_ident("example_yaml") {
-						if let Ok(val) = meta.value() {
-							if let Ok(lit) = val.parse::<syn::LitStr>() {
-								example_yaml = Some(lit.value());
-							}
-						}
-					}
-					Ok(())
-				});
-			}
-		}
 
 		// parse demo from #[config_demo("...")] or #[config_demo(value = "...")]
 		let mut demo_value = None;
@@ -183,7 +165,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			_inner_tys_map,
 			is_nested_struct,
 			is_url_path,
-			example_yaml,
 			demo_value,
 		});
 	}
@@ -195,7 +176,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 	let _tys_types: Vec<_> = rows.iter().map(|r| &r.ty).collect();
 	let docs: Vec<_> = rows.iter().map(|r| r.doc.as_str()).collect();
 	let optionals = rows.iter().map(|r| if r.is_option { "yes" } else { "no" });
-	let _example_yamls: Vec<_> = rows.iter().map(|r| r.example_yaml.as_ref()).collect();
 
 	// Generate per-field YAML code blocks
 	let field_yaml_blocks: Vec<_> = rows
@@ -206,10 +186,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			let ty = &r.ty;
 			let doc = &r.doc;
 			let doc_lit = syn::LitStr::new(doc, Span::call_site());
-			let doc_trim_owned = doc.trim().to_string();
-			let doc_trim_lit = syn::LitStr::new(&doc_trim_owned, Span::call_site());
-			let example_yaml = r.example_yaml.as_ref();
-			let example_yaml_lit = example_yaml.map(|ex| syn::LitStr::new(ex, Span::call_site()));
 			let demo_value = r.demo_value.as_ref();
 			let demo_lit = demo_value.map(|d| syn::LitStr::new(d, Span::call_site()));
 			let inner_opt = r.inner_ty_opt.as_ref();
@@ -222,14 +198,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				quote! {
 					__emit_above_comment(&mut __s, __indent, #doc_lit);
 				}
-			};
-
-			let example_emit = if let Some(ex_lit) = &example_yaml_lit {
-				quote! {
-					__emit_above_comment(&mut __s, __indent, #ex_lit);
-				}
-			} else {
-				quote! {}
 			};
 
 			if r.is_flatten {
@@ -258,7 +226,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 						doc_emit
 					};
 					quote! {
-						#example_emit
 						#demo_emit
 					}
 				} else {
@@ -283,7 +250,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 					let demo_trim = demo_lit.value().trim().to_string();
 					if demo_trim.starts_with('[') {
 						quote! {
-							#example_emit
 							#doc_lines
 							__s.push_str(&__sp(__indent));
 							__s.push_str(#key);
@@ -293,7 +259,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 						}
 					} else {
 						quote! {
-							#example_emit
 							#doc_lines
 							__s.push_str(&__sp(__indent));
 							__s.push_str(#key);
@@ -309,7 +274,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 					let is_url_path_inner = is_url_path(inner);
 					if is_primitive_inner {
 						quote! {
-							#example_emit
 							#doc_lines
 							__s.push_str(&__sp(__indent));
 							__s.push_str(#key);
@@ -323,7 +287,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 						}
 					} else if is_url_path_inner {
 						quote! {
-							#example_emit
 							#doc_lines
 							__s.push_str(&__sp(__indent));
 							__s.push_str(#key);
@@ -334,7 +297,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 						}
 					} else {
 						quote! {
-							#example_emit
 							#doc_lines
 							__s.push_str(&__sp(__indent));
 							__s.push_str(#key);
@@ -366,7 +328,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 					}
 				} else {
 					quote! {
-						#example_emit
 						#doc_lines
 						__s.push_str(&__sp(__indent));
 						__s.push_str(#key);
@@ -405,7 +366,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 						}
 					} else {
 						quote! {
-							if !#doc_trim_lit.is_empty() {
+							if !#doc_lit.is_empty() {
 								__emit_above_comment(&mut __s, __indent, #doc_lit);
 							}
 							__s.push_str(&__sp(__indent));
