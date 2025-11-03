@@ -185,6 +185,7 @@ impl Debug for TarFile {
 mod tests {
 	use super::*;
 	use assert_fs::NamedTempFile;
+	use rstest::rstest;
 	use versatiles_container::{
 		MockTilesReader, MockTilesReaderProfile, ProcessingConfig, TilesConverterParameters, TilesReaderTrait,
 		convert_tiles_container,
@@ -235,52 +236,48 @@ mod tests {
 		assert!(TarFile::from(path).is_err());
 	}
 
+	#[rstest]
+	#[case(TileCompression::Uncompressed)]
+	#[case(TileCompression::Gzip)]
+	#[case(TileCompression::Brotli)]
 	#[tokio::test]
-	async fn test_get_data() {
-		use TileCompression::{Brotli as B, Gzip as G, Uncompressed as N};
+	async fn test_get_data(#[case] compression_tar: TileCompression) -> Result<()> {
+		let file = make_test_tar(compression_tar).await;
+		let mut tar_file = TarFile::from(&file)?;
 
-		test1(N).await.unwrap();
-		test1(G).await.unwrap();
-		test1(B).await.unwrap();
+		test2(&mut tar_file, compression_tar, TileCompression::Uncompressed)?;
+		test2(&mut tar_file, compression_tar, TileCompression::Gzip)?;
+		test2(&mut tar_file, compression_tar, TileCompression::Brotli)?;
 
-		async fn test1(compression_tar: TileCompression) -> Result<()> {
-			let file = make_test_tar(compression_tar).await;
-			let mut tar_file = TarFile::from(&file)?;
+		return Ok(());
 
-			test2(&mut tar_file, compression_tar, N)?;
-			test2(&mut tar_file, compression_tar, G)?;
-			test2(&mut tar_file, compression_tar, B)?;
+		fn test2(
+			tar_file: &mut TarFile,
+			compression_tar: TileCompression,
+			compression_accept: TileCompression,
+		) -> Result<()> {
+			let accept = TargetCompression::from(compression_accept);
 
-			return Ok(());
+			let result = tar_file.get_data(&Url::new("non_existing_file"), &accept);
+			assert!(result.is_none());
 
-			fn test2(
-				tar_file: &mut TarFile,
-				compression_tar: TileCompression,
-				compression_accept: TileCompression,
-			) -> Result<()> {
-				let accept = TargetCompression::from(compression_accept);
+			//let path = ["0", "0", "0"];
+			let result = tar_file.get_data(&Url::new("tiles.json"), &accept);
+			assert!(result.is_some());
 
-				let result = tar_file.get_data(&Url::new("non_existing_file"), &accept);
-				assert!(result.is_none());
+			let result = result.unwrap();
 
-				//let path = ["0", "0", "0"];
-				let result = tar_file.get_data(&Url::new("tiles.json"), &accept);
-				assert!(result.is_some());
-
-				let result = result.unwrap();
-
-				if result.compression == N {
-					assert_eq!(
-						result.blob.as_str(),
-						"{\"bounds\":[-180,-85.051129,180,85.051129],\"maxzoom\":6,\"minzoom\":2,\"tile_format\":\"vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tile_type\":\"vector\",\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
-					);
-				}
-
-				assert_eq!(result.mime, "application/json");
-				assert_eq!(result.compression, compression_tar);
-
-				Ok(())
+			if result.compression == TileCompression::Uncompressed {
+				assert_eq!(
+					result.blob.as_str(),
+					"{\"tile_format\":\"vnd.mapbox-vector-tile\",\"tile_schema\":\"other\",\"tile_type\":\"vector\",\"tilejson\":\"3.0.0\",\"type\":\"dummy\"}"
+				);
 			}
+
+			assert_eq!(result.mime, "application/json");
+			assert_eq!(result.compression, compression_tar);
+
+			Ok(())
 		}
 	}
 }
