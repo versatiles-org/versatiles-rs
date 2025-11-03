@@ -56,7 +56,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		key: String,
 		ty: syn::Type,
 		doc: String,
-		is_option: bool,
 		is_vec: bool,
 		is_map: bool,
 		is_flatten: bool,
@@ -136,7 +135,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			key,
 			ty,
 			doc,
-			is_option,
 			is_vec,
 			is_map,
 			is_flatten,
@@ -175,6 +173,8 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				}
 			};
 
+			let is_primitive = is_primitive_like(ty);
+
 			let mut output: TokenStream2 = quote! {};
 
 			output = quote! {
@@ -194,23 +194,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 					__s.push_str(#key_lit);
 					__s.push_str(":\n");
 					__s.push_str(&<#ty>::demo_yaml_with_indent(__indent + 2));
-				};
-			} else if r.is_option {
-				output = quote! {
-					#output
-					__s.push_str(&__sp(__indent));
-					__s.push_str(#key_lit);
-					__s.push_str(": ");
-				};
-				if let Some(demo_lit) = &demo_lit {
-					output = quote! {
-						#output
-						__s.push_str(#demo_lit);
-					};
-				}
-				output = quote! {
-					#output
-					__s.push('\n');
 				};
 			} else if r.is_vec {
 				if let Some(demo_lit) = &demo_lit {
@@ -290,41 +273,8 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 					#output
 					__s.push_str("\n");
 				};
-			} else if r.is_map {
-				output = quote! {
-					#output
-					__s.push_str(&__sp(__indent));
-					__s.push_str(#key_lit);
-					__s.push_str(": ");
-				};
-				if let Some(demo_lit) = &demo_lit {
-					output = quote! {
-						#output
-						__s.push_str(#demo_lit);
-					};
-				}
-				output = quote! {
-					#output
-					__s.push_str("\n");
-				};
-			} else if r.is_url_path {
-				output = quote! {
-					#output
-					__s.push_str(&__sp(__indent));
-					__s.push_str(#key_lit);
-					__s.push_str(": ");
-				};
-				if let Some(demo_lit) = &demo_lit {
-					output = quote! {
-						#output
-						__s.push_str(#demo_lit);
-					};
-				}
-				output = quote! {
-					#output
-					__s.push_str("\n");
-				};
 			} else {
+				// Unified leaf emission (Option, Map, UrlPath, scalar/non-primitive)
 				output = quote! {
 					#output
 					__s.push_str(&__sp(__indent));
@@ -332,15 +282,26 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 					__s.push_str(": ");
 				};
 				if let Some(demo_lit) = &demo_lit {
-					output = quote! {
-						#output
-						__s.push_str(#demo_lit);
-					};
+					output = quote! { #output __s.push_str(#demo_lit); };
+				} else {
+					// Minimal sensible defaults when no demo is provided
+					if r.is_map {
+						output = quote! { #output __s.push_str("{}"); };
+					} else if r.is_url_path {
+						output = quote! { #output __s.push_str("\"\""); };
+					} else if is_primitive {
+						output = quote! {
+							#output
+							let __v: #ty = ::core::default::Default::default();
+							let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
+							__s.push_str(__y.trim());
+						};
+					} else {
+						// Generic non-primitive leaf: show an empty object to hint structure
+						output = quote! { #output __s.push_str("{}"); };
+					}
 				}
-				output = quote! {
-					#output
-					__s.push_str("\n");
-				};
+				output = quote! { #output __s.push_str("\n"); };
 			}
 
 			output
