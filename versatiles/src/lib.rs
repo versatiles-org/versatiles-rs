@@ -40,8 +40,10 @@
 //! ```
 
 mod config;
-pub use config::*;
 mod helper;
+pub mod server;
+
+pub use config::*;
 pub use helper::*;
 pub use versatiles_container as container;
 pub use versatiles_core as core;

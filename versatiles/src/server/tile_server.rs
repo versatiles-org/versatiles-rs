@@ -13,6 +13,9 @@
 //! a tiny `/status` probe for liveness checks.
 
 use super::{cors, routes, sources};
+#[cfg(test)]
+use crate::get_registry;
+use crate::{Config, TileSourceConfig};
 use anyhow::{Result, bail};
 use axum::error_handling::HandleErrorLayer;
 use axum::http::{StatusCode, header::HeaderName, header::HeaderValue};
@@ -25,9 +28,6 @@ use tower::{
 };
 use tower_http::catch_panic::CatchPanicLayer;
 use tower_http::set_header::SetResponseHeaderLayer;
-#[cfg(test)]
-use versatiles::get_registry;
-use versatiles::{Config, TileSourceConfig};
 #[cfg(test)]
 use versatiles_container::ProcessingConfig;
 use versatiles_container::{ContainerRegistry, TilesReaderTrait};
@@ -44,7 +44,7 @@ use versatiles_derive::context;
 ///
 /// Typical usage in tests:
 /// ```no_run
-/// # use versatiles::{Config};
+/// # use versatiles::{Config, server::TileServer};
 /// # async fn demo(mut server: TileServer) {
 /// server.start().await.unwrap();
 /// // ... run requests ...

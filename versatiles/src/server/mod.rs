@@ -1,7 +1,7 @@
 //! server implementation
 
 mod cors;
-mod encoding;
+pub mod encoding;
 mod handlers;
 mod routes;
 mod sources;

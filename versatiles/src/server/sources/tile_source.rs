@@ -118,9 +118,9 @@ impl Debug for TileSource {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use crate::get_registry;
 	use anyhow::Result;
 	use rstest::rstest;
-	use versatiles::get_registry;
 	use versatiles_container::{MockTilesReader, MockTilesReaderProfile, ProcessingConfig, UrlPath};
 	use versatiles_core::TileJSON;
 

@@ -3,11 +3,12 @@
 //! This module wires handlers into an Axum `Router` without mixing in server
 //! lifecycle or CORS logic. It’s intentionally tiny and declarative.
 
+use super::{
+	handlers::{StaticHandlerState, TileHandlerState, ok_json, serve_static, serve_tile},
+	sources::{StaticSource, TileSource},
+};
 use anyhow::Result;
 use axum::{Router, routing::get};
-
-use crate::tools::server::handlers::{StaticHandlerState, TileHandlerState, ok_json, serve_static, serve_tile};
-use crate::tools::server::sources::{StaticSource, TileSource};
 
 /// Attach all tile sources under their prefixes (`/tiles/<id>/{*path}`).
 pub fn add_tile_sources_to_app(mut app: Router, sources: &[TileSource], minimal_recompression: bool) -> Router {

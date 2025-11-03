@@ -1,9 +1,8 @@
-use super::server::TileServer;
 use anyhow::Result;
 use regex::Regex;
 use std::{mem::swap, path::PathBuf};
 use tokio::time::{Duration, sleep};
-use versatiles::{Config, StaticSourceConfig, TileSourceConfig, get_registry};
+use versatiles::{Config, StaticSourceConfig, TileSourceConfig, get_registry, server::TileServer};
 use versatiles_container::{ProcessingConfig, UrlPath};
 
 #[derive(clap::Args, Debug)]

@@ -19,23 +19,23 @@
 //! use axum::http::{HeaderMap, header};
 //! use versatiles_core::{utils::TargetCompression, TileCompression as TC};
 //! use enumset::{enum_set, EnumSet};
-//! use versatiles::tools::server::encoding::get_encoding;
+//! use versatiles::server::encoding::get_encoding;
 //!
 //! // No header → identity is allowed.
 //! let mut h = HeaderMap::new();
-//! let set = get_encoding(h);
+//! let set = get_encoding(&h);
 //! assert_eq!(set, TargetCompression::from_set(enum_set!(TC::Uncompressed)));
 //!
 //! // Gzip requested → identity + gzip allowed.
 //! h.insert(header::ACCEPT_ENCODING, "gzip".parse().unwrap());
-//! let set = get_encoding(h);
+//! let set = get_encoding(&h);
 //! assert_eq!(set, TargetCompression::from_set(enum_set!(TC::Uncompressed | TC::Gzip)));
 //!
 //! // Explicitly disable identity.
 //! let mut h = HeaderMap::new();
 //! h.insert(header::ACCEPT_ENCODING, "identity;q=0, br".parse().unwrap());
-//! let set = get_encoding(h);
-//! assert_eq!(set, TargetCompression::from_set(enum_set!(TC::Brotli)));
+//! let set = get_encoding(&h);
+//! assert_eq!(set, TargetCompression::from_set(enum_set!(TC::Uncompressed | TC::Brotli)));
 //! ```
 //!
 //! ### Notes
@@ -59,7 +59,7 @@ use versatiles_core::{TileCompression, utils::TargetCompression};
 ///
 /// This function does **not** pick the final encoding; it only gates options.
 /// The compression optimizer (in `versatiles_core`) picks among allowed options.
-pub fn get_encoding(headers: HeaderMap) -> TargetCompression {
+pub fn get_encoding(headers: &HeaderMap) -> TargetCompression {
 	use TileCompression::*;
 	let mut set = TargetCompression::from_none();
 
@@ -149,49 +149,49 @@ mod tests {
 	#[test]
 	fn no_header_means_identity_allowed() {
 		let headers = mk_headers("NONE");
-		let got = get_encoding(headers);
+		let got = get_encoding(&headers);
 		assert_eq!(got, to_target(enum_set!(TC::Uncompressed)));
 	}
 
 	#[test]
 	fn gzip_and_identity() {
 		let headers = mk_headers("gzip");
-		let got = get_encoding(headers);
+		let got = get_encoding(&headers);
 		assert_eq!(got, to_target(enum_set!(TC::Uncompressed | TC::Gzip)));
 	}
 
 	#[test]
 	fn brotli_and_identity() {
 		let headers = mk_headers("br");
-		let got = get_encoding(headers);
+		let got = get_encoding(&headers);
 		assert_eq!(got, to_target(enum_set!(TC::Uncompressed | TC::Brotli)));
 	}
 
 	#[test]
 	fn wildcard_enables_common() {
 		let headers = mk_headers("*;q=0.8");
-		let got = get_encoding(headers);
+		let got = get_encoding(&headers);
 		assert_eq!(got, to_target(enum_set!(TC::Uncompressed | TC::Gzip | TC::Brotli)));
 	}
 
 	#[test]
 	fn identity_disabled() {
 		let headers = mk_headers("identity;q=0, gzip");
-		let got = get_encoding(headers);
+		let got = get_encoding(&headers);
 		assert_eq!(got, to_target(enum_set!(TC::Uncompressed | TC::Gzip)));
 	}
 
 	#[test]
 	fn q_zero_disallows() {
 		let headers = mk_headers("br;q=0, gzip;q=1");
-		let got = get_encoding(headers);
+		let got = get_encoding(&headers);
 		assert_eq!(got, to_target(enum_set!(TC::Uncompressed | TC::Gzip)));
 	}
 
 	#[test]
 	fn complex_header() {
 		let headers = mk_headers("gzip, deflate, br;q=1.0, identity;q=0.5, *;q=0.25");
-		let got = get_encoding(headers);
+		let got = get_encoding(&headers);
 		// deflate ignored; identity allowed (q=0.5), gzip + br allowed; * adds nothing new
 		assert_eq!(got, to_target(enum_set!(TC::Uncompressed | TC::Gzip | TC::Brotli)));
 	}
@@ -221,7 +221,7 @@ mod tests {
 			map.insert(ACCEPT_ENCODING, encoding.parse().unwrap());
 		}
 		let comp0 = TargetCompression::from_set(comp0);
-		let comp = get_encoding(map);
+		let comp = get_encoding(&map);
 		assert_eq!(comp, comp0);
 	}
 }

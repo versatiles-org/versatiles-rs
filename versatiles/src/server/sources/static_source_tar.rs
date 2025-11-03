@@ -202,7 +202,7 @@ mod tests {
 			..TilesConverterParameters::default()
 		};
 		let config = ProcessingConfig::default();
-		let registry = versatiles::get_registry(config);
+		let registry = crate::get_registry(config);
 
 		convert_tiles_container(reader.boxed(), parameters, &container_file, registry)
 			.await

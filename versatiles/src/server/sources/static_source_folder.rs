@@ -1,3 +1,8 @@
+use super::{
+	super::{Url, utils::guess_mime},
+	SourceResponse,
+	static_source::StaticSourceTrait,
+};
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::{
@@ -9,10 +14,6 @@ use std::{
 };
 use versatiles_core::{Blob, TileCompression, utils::TargetCompression};
 use versatiles_derive::context;
-
-use crate::tools::server::{Url, utils::guess_mime};
-
-use super::{SourceResponse, static_source::StaticSourceTrait};
 
 // Folder struct definition
 #[derive(Clone)]

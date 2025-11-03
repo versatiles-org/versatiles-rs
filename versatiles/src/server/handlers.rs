@@ -50,7 +50,7 @@ pub async fn serve_tile(
 	let path = Url::new(uri.path());
 	log::debug!("handle tile request: {path}");
 
-	let mut target = get_encoding(headers);
+	let mut target = get_encoding(&headers);
 	if minimal_recompression {
 		target.set_fast_compression();
 	}
@@ -96,7 +96,7 @@ pub async fn serve_static(
 		url.push("index.html");
 	}
 
-	let mut target = get_encoding(headers);
+	let mut target = get_encoding(&headers);
 	if minimal_recompression {
 		target.set_fast_compression();
 	}
