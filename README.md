@@ -123,10 +123,24 @@ versatiles convert satellite_tiles.tar satellite_tiles.versatiles
 
 ### Serve Tiles
 
-Serve tiles over HTTP:
+You can run a local HTTP server to serve your tile data:
 
 ```sh
 versatiles serve satellite_tiles.versatiles
+```
+
+By default, this starts a simple HTTP server that serves the tiles from the specified container file.
+
+You can also configure the server using a YAML configuration file:
+```sh
+versatiles serve -c config.yaml
+```
+
+This allows you to define multiple tile sources, set custom CORS headers, enable compression, and fine-tune server behavior.
+
+For a full description of all configuration options, see the [configuration reference](https://github.com/versatiles-org/versatiles-rs/blob/main/versatiles/config.md) or run:
+```sh
+versatiles help config
 ```
 
 ### VersaTiles Pipeline Language
