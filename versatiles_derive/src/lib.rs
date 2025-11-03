@@ -160,6 +160,8 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 	let field_yaml_blocks: Vec<_> = rows
 		.iter()
 		.map(|r| {
+			use proc_macro2::TokenStream as TokenStream2;
+
 			let _ident = &r.ident;
 			let key = &r.key;
 			let ty = &r.ty;
@@ -171,122 +173,144 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			let is_primitive_inner_opt = inner_opt.map_or(false, |ty| is_primitive_like(ty));
 			let is_primitive = is_primitive_like(ty);
 
-			let doc_lines = if doc.is_empty() {
+			let key_lit = syn::LitStr::new(key, Span::call_site());
+			let emit_doc_block: TokenStream2 = if doc.is_empty() {
 				quote! {}
 			} else {
 				quote! {
-					__emit_above_comment(&mut __s, __indent, #doc_lit);
+					 for line in #doc_lit.lines() {
+						  __s.push_str(&__sp(__indent));
+						  __s.push_str("# ");
+						  __s.push_str(line);
+						  __s.push('\n');
+					 }
 				}
 			};
+			let emit_key_header: TokenStream2 = quote! {
+				 __s.push_str(&__sp(__indent));
+				 __s.push_str(#key_lit);
+				 __s.push_str(":\n");
+			};
+
+			let mut output: TokenStream2 = quote! {};
 
 			if r.is_flatten {
-				quote! {
-					#doc_lines
+				output = quote! {
+					#output
+					#emit_doc_block
 					__s.push_str(&<#ty>::demo_yaml_with_indent(__indent));
-				}
+				};
 			} else if r.is_nested_struct {
-				quote! {
-					#doc_lines
-					__s.push_str(&__sp(__indent));
-					__s.push_str(#key);
-					__s.push_str(":\n");
+				output = quote! {
+					#output
+					#emit_doc_block
+					#emit_key_header
 					__s.push_str(&<#ty>::demo_yaml_with_indent(__indent + 2));
-				}
+				};
 			} else if r.is_option {
 				if is_primitive_inner_opt {
-					let demo_emit = if let Some(demo_lit) = &demo_lit {
-						quote! {
-							__emit_field(&mut __s, __indent, #doc_lit, #key, #demo_lit);
-						}
-					} else {
-						let doc_emit = quote! {
-							__emit_field(&mut __s, __indent, #doc_lit, #key, "<optional>");
-						};
-						doc_emit
-					};
-					quote! {
-						#demo_emit
-					}
-				} else {
-					let demo_emit = if let Some(demo_lit) = &demo_lit {
-						quote! {
-							#doc_lines
+					if let Some(demo_lit) = &demo_lit {
+						output = quote! {
+							#output
+							#emit_doc_block
 							__s.push_str(&__sp(__indent));
-							__s.push_str(#key);
+							__s.push_str(#key_lit);
 							__s.push_str(": ");
 							__s.push_str(#demo_lit);
 							__s.push('\n');
-						}
+						};
 					} else {
-						quote! {
-							__emit_field(&mut __s, __indent, #doc_lit, #key, "<optional>");
-						}
-					};
-					demo_emit
+						output = quote! {
+							#output
+							#emit_doc_block
+							__s.push_str(&__sp(__indent));
+							__s.push_str(#key_lit);
+							__s.push_str(": ");
+							__s.push_str("<optional>");
+							__s.push('\n');
+						};
+					}
+				} else {
+					if let Some(demo_lit) = &demo_lit {
+						output = quote! {
+							#output
+							#emit_doc_block
+							__s.push_str(&__sp(__indent));
+							__s.push_str(#key_lit);
+							__s.push_str(": ");
+							__s.push_str(#demo_lit);
+							__s.push('\n');
+						};
+					} else {
+						output = quote! {
+							#output
+							#emit_doc_block
+							__s.push_str(&__sp(__indent));
+							__s.push_str(#key_lit);
+							__s.push_str(": ");
+							__s.push_str("<optional>");
+							__s.push('\n');
+						};
+					}
 				}
 			} else if r.is_vec {
 				if let Some(demo_lit) = &demo_lit {
 					let demo_trim = demo_lit.value().trim().to_string();
 					if demo_trim.starts_with('[') {
-						quote! {
-							#doc_lines
+						output = quote! {
+							#output
+							#emit_doc_block
 							__s.push_str(&__sp(__indent));
-							__s.push_str(#key);
+							__s.push_str(#key_lit);
 							__s.push_str(": ");
 							__s.push_str(#demo_lit);
 							__s.push('\n');
-						}
+						};
 					} else {
-						quote! {
-							#doc_lines
-							__s.push_str(&__sp(__indent));
-							__s.push_str(#key);
-							__s.push_str(":\n");
+						output = quote! {
+							#output
+							#emit_doc_block
+							#emit_key_header
 							__s.push_str(&__sp(__indent + 2));
 							__s.push_str("- ");
 							__s.push_str(#demo_lit);
 							__s.push('\n');
-						}
+						};
 					}
 				} else if let Some(inner) = &r.inner_ty_vec {
 					let is_primitive_inner = is_primitive_like(inner);
 					let is_url_path_inner = is_url_path(inner);
 					if is_primitive_inner {
-						quote! {
-							#doc_lines
-							__s.push_str(&__sp(__indent));
-							__s.push_str(#key);
-							__s.push_str(":\n");
+						output = quote! {
+							#output
+							#emit_doc_block
+							#emit_key_header
 							__s.push_str(&__sp(__indent + 2));
 							__s.push_str("- ");
 							let __v: #inner = ::core::default::Default::default();
 							let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
 							__s.push_str(__y.trim());
 							__s.push('\n');
-						}
+						};
 					} else if is_url_path_inner {
-						quote! {
-							#doc_lines
-							__s.push_str(&__sp(__indent));
-							__s.push_str(#key);
-							__s.push_str(":\n");
+						output = quote! {
+							#output
+							#emit_doc_block
+							#emit_key_header
 							__s.push_str(&__sp(__indent + 2));
 							__s.push_str("- ");
 							__s.push_str("\"\"\n");
-						}
+						};
 					} else {
-						quote! {
-							#doc_lines
-							__s.push_str(&__sp(__indent));
-							__s.push_str(#key);
-							__s.push_str(":\n");
+						output = quote! {
+							#output
+							#emit_doc_block
+							#emit_key_header
 							let __inner = <#inner>::demo_yaml_with_indent(0);
 							let mut __first_line_printed = false;
 							for __line in __inner.lines() {
 								if !__first_line_printed {
-									if __line.trim().is_empty() {
-										continue;
-									}
+									if __line.trim().is_empty() { continue; }
 									__s.push_str(&__sp(__indent + 2));
 									__s.push_str("- ");
 									__first_line_printed = true;
@@ -297,74 +321,97 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 								__s.push('\n');
 							}
 							if !__first_line_printed {
-								// fallback if inner produced only empty lines
 								__s.push_str(&__sp(__indent + 2));
 								__s.push_str("- {}\n");
 							}
-						}
+						};
 					}
 				} else {
-					quote! {
-						#doc_lines
+					output = quote! {
+						#output
+						#emit_doc_block
 						__s.push_str(&__sp(__indent));
-						__s.push_str(#key);
+						__s.push_str(#key_lit);
 						__s.push_str(": []\n");
-					}
+					};
 				}
 			} else if r.is_map {
 				if let Some(demo_lit) = &demo_lit {
-					quote! {
-						__emit_field(&mut __s, __indent, #doc_lit, #key, #demo_lit);
-					}
-				} else {
-					quote! {
-						#doc_lines
+					output = quote! {
+						#output
+						#emit_doc_block
 						__s.push_str(&__sp(__indent));
-						__s.push_str(#key);
+						__s.push_str(#key_lit);
+						__s.push_str(": ");
+						__s.push_str(#demo_lit);
+						__s.push('\n');
+					};
+				} else {
+					output = quote! {
+						#output
+						#emit_doc_block
+						__s.push_str(&__sp(__indent));
+						__s.push_str(#key_lit);
 						__s.push_str(": {}\n");
-					}
+					};
 				}
 			} else if r.is_url_path {
 				if let Some(demo_lit) = &demo_lit {
-					quote! {
-						__emit_field(&mut __s, __indent, #doc_lit, #key, #demo_lit);
-					}
+					output = quote! {
+						#output
+						#emit_doc_block
+						__s.push_str(&__sp(__indent));
+						__s.push_str(#key_lit);
+						__s.push_str(": ");
+						__s.push_str(#demo_lit);
+						__s.push('\n');
+					};
 				} else {
-					quote! {
-						__emit_field(&mut __s, __indent, #doc_lit, #key, "\"\"");
-					}
+					output = quote! {
+						#output
+						#emit_doc_block
+						__s.push_str(&__sp(__indent));
+						__s.push_str(#key_lit);
+						__s.push_str(": \"\"\n");
+					};
 				}
 			} else {
-				// scalar/string primitive-like
 				if is_primitive {
 					if let Some(demo_lit) = &demo_lit {
-						quote! {
-							__emit_field(&mut __s, __indent, #doc_lit, #key, #demo_lit);
-						}
-					} else {
-						quote! {
-							if !#doc_lit.is_empty() {
-								__emit_above_comment(&mut __s, __indent, #doc_lit);
-							}
+						output = quote! {
+							#output
+							#emit_doc_block
 							__s.push_str(&__sp(__indent));
-							__s.push_str(#key);
+							__s.push_str(#key_lit);
+							__s.push_str(": ");
+							__s.push_str(#demo_lit);
+							__s.push('\n');
+						};
+					} else {
+						output = quote! {
+							#output
+							#emit_doc_block
+							__s.push_str(&__sp(__indent));
+							__s.push_str(#key_lit);
 							__s.push_str(": ");
 							let __v: #ty = ::core::default::Default::default();
 							let __y = ::serde_yaml_ng::to_string(&__v).unwrap();
 							__s.push_str(__y.trim());
 							__s.push('\n');
-						}
+						};
 					}
 				} else {
-					// fallback for non-primitive scalar types (should rarely happen)
-					quote! {
-						#doc_lines
+					output = quote! {
+						#output
+						#emit_doc_block
 						__s.push_str(&__sp(__indent));
-						__s.push_str(#key);
+						__s.push_str(#key_lit);
 						__s.push_str(": <non-primitive>\n");
-					}
+					};
 				}
 			}
+
+			output
 		})
 		.collect();
 
@@ -377,27 +424,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			pub(crate) fn demo_yaml_with_indent(__indent: usize) -> String {
 				let mut __s = String::new();
 				let __sp = |n: usize| -> String { " ".repeat(n) };
-
-				fn __emit_above_comment(buf: &mut String, indent: usize, text: &str) {
-					let sp = || " ".repeat(indent);
-					for line in text.lines() {
-						buf.push_str(&sp());
-						buf.push_str("# ");
-						buf.push_str(line);
-						buf.push('\n');
-					}
-				}
-
-				fn __emit_field(buf: &mut String, indent: usize, doc: &str, key: &str, val: &str) {
-					if !doc.trim().is_empty() {
-						__emit_above_comment(buf, indent, doc);
-					}
-					for _ in 0..indent { buf.push(' '); }
-					buf.push_str(key);
-					buf.push_str(": ");
-					buf.push_str(val);
-					buf.push('\n');
-				}
 
 				#( {
 					#field_yaml_blocks
