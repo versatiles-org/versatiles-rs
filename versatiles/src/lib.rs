@@ -41,6 +41,7 @@
 
 mod config;
 mod helper;
+#[cfg(feature = "cli")]
 pub mod server;
 
 pub use config::*;
