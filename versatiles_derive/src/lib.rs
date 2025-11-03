@@ -27,9 +27,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as syn::DeriveInput);
 	let name = &input.ident;
 
-	// Collect struct-level docs
-	let struct_doc = collect_doc(&input.attrs);
-
 	// Ensure it's a named-field struct and gather fields
 	let data = match &input.data {
 		syn::Data::Struct(ds) => ds,
@@ -472,7 +469,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		})
 		.collect();
 
-	let struct_doc_lit = syn::LitStr::new(&struct_doc, Span::call_site());
 	let expanded = quote! {
 		impl #name {
 			pub fn demo_yaml() -> String {
@@ -507,19 +503,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				fn __should_inline_comment(text: &str) -> bool {
 					let trimmed = text.trim();
 					!trimmed.contains('\n') && trimmed.len() <= 60
-				}
-
-				// --- Struct-level doc at top-level
-				// Only emit struct-level doc if non-empty, at compile time
-				#[allow(unused_braces)]
-				{
-					const STRUCT_DOC: &str = #struct_doc_lit;
-					if !STRUCT_DOC.is_empty() {
-						if __indent == 0 {
-							__emit_above_comment(&mut __s, __indent, #struct_doc_lit);
-							__s.push('\n');
-						}
-					}
 				}
 
 				#( {
