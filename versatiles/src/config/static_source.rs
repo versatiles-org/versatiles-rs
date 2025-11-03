@@ -3,7 +3,6 @@ use serde::Deserialize;
 use versatiles_container::UrlPath;
 use versatiles_derive::ConfigDoc;
 
-/// Defines a static file source that is served under a specific URL prefix.
 #[derive(Debug, Clone, PartialEq, ConfigDoc)]
 pub struct StaticSourceConfig {
 	#[config_demo("./frontend.tar")]

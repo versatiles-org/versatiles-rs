@@ -4,7 +4,6 @@ use std::fmt::Debug;
 use versatiles_container::UrlPath;
 use versatiles_derive::ConfigDoc;
 
-/// Describes a tile source that the server can serve, including file path and optional coordinate transformations.
 #[derive(Debug, Clone, PartialEq, ConfigDoc)]
 pub struct TileSourceConfig {
 	/// Optional identifier used to reference this tile source.

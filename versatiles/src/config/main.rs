@@ -22,16 +22,13 @@ pub struct Config {
 	pub cors: Cors,
 
 	/// Extra response headers added to every HTTP response.
-	/// Case-insensitivity is a runtime concern; we store as given.
-	///
-	/// These headers will be included in all HTTP responses sent by the server.
 	/// For example, cache control headers or timing headers can be specified here.
 	#[serde(default)]
 	#[config_demo(
-		r#"{
-    "Cache-Control": "public, max-age=86400, immutable",
-    "CDN-Cache-Control": "max-age=604800"
-  }"#
+		r#"
+  Cache-Control: public, max-age=86400, immutable
+  CDN-Cache-Control: max-age=604800
+"#
 	)]
 	pub extra_response_headers: HashMap<String, String>,
 
