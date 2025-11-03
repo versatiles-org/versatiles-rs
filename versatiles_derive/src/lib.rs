@@ -1,5 +1,3 @@
-#![allow(dead_code, unused_variables)]
-
 mod args;
 mod config_doc;
 mod decode_vpl;
@@ -56,16 +54,14 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 	struct Row {
 		ident: syn::Ident,
 		key: String,
-		ty_tokens: String,
 		ty: syn::Type,
 		doc: String,
 		is_option: bool,
 		is_vec: bool,
 		is_map: bool,
 		is_flatten: bool,
-		inner_ty_opt: Option<syn::Type>,                // Option<T> -> T
-		inner_ty_vec: Option<syn::Type>,                // Vec<T> -> T
-		_inner_tys_map: Option<(syn::Type, syn::Type)>, // HashMap<K,V> -> (K,V)
+		inner_ty_opt: Option<syn::Type>, // Option<T> -> T
+		inner_ty_vec: Option<syn::Type>, // Vec<T> -> T
 		// Heuristic: treat non-Option/Vec/Map path types as nested
 		is_nested_struct: bool,
 		is_url_path: bool,
@@ -76,7 +72,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 	for f in fields {
 		let ident = f.ident.clone().expect("named field");
 		let key = serde_rename(&f.attrs).unwrap_or_else(|| ident.to_string());
-		let ty_tokens = f.ty.to_token_stream().to_string();
 		let ty = f.ty.clone();
 		let doc = collect_doc(&f.attrs);
 		let is_option = is_option(&f.ty);
@@ -85,7 +80,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		let mut is_map = false;
 		let mut inner_ty_opt = None;
 		let mut inner_ty_vec = None;
-		let mut _inner_tys_map = None;
 
 		// classify Option / Vec / HashMap
 		if let Some(id) = path_ident(&f.ty) {
@@ -105,11 +99,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				}
 			} else if id_s == "HashMap" {
 				is_map = true;
-				if let Some(inners) = angle_inner(&f.ty) {
-					if inners.len() == 2 {
-						_inner_tys_map = Some((inners[0].clone(), inners[1].clone()));
-					}
-				}
 			}
 		}
 
@@ -153,7 +142,6 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		rows.push(Row {
 			ident,
 			key,
-			ty_tokens,
 			ty,
 			doc,
 			is_option,
@@ -162,20 +150,11 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			is_flatten,
 			inner_ty_opt,
 			inner_ty_vec,
-			_inner_tys_map,
 			is_nested_struct,
 			is_url_path,
 			demo_value,
 		});
 	}
-
-	// Split rows into token streams
-	let _idents: Vec<_> = rows.iter().map(|r| &r.ident).collect();
-	let keys: Vec<_> = rows.iter().map(|r| r.key.as_str()).collect();
-	let tys: Vec<_> = rows.iter().map(|r| r.ty_tokens.as_str()).collect();
-	let _tys_types: Vec<_> = rows.iter().map(|r| &r.ty).collect();
-	let docs: Vec<_> = rows.iter().map(|r| r.doc.as_str()).collect();
-	let optionals = rows.iter().map(|r| if r.is_option { "yes" } else { "no" });
 
 	// Generate per-field YAML code blocks
 	let field_yaml_blocks: Vec<_> = rows
@@ -310,14 +289,12 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 									}
 									__s.push_str(&__sp(__indent + 2));
 									__s.push_str("- ");
-									__s.push_str(__line);
-									__s.push('\n');
 									__first_line_printed = true;
 								} else {
 									__s.push_str(&__sp(__indent + 4));
-									__s.push_str(__line);
-									__s.push('\n');
 								}
+								__s.push_str(__line);
+								__s.push('\n');
 							}
 							if !__first_line_printed {
 								// fallback if inner produced only empty lines
