@@ -164,9 +164,9 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				quote! {}
 			} else {
 				quote! {
+					__s.push_str(&__sp(__indent));
+					__s.push('\n');
 					for line in #doc_lit.lines() {
-						__s.push_str(&__sp(__indent));
-						__s.push('\n');
 						__s.push_str(&__sp(__indent));
 						__s.push_str("# ");
 						__s.push_str(line);
