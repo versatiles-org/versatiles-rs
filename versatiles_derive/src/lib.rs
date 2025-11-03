@@ -404,21 +404,10 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				fn __emit_above_comment(buf: &mut String, indent: usize, text: &str) {
 					let sp = || " ".repeat(indent);
 					for line in text.lines() {
-						if line.trim().is_empty() {
-							buf.push_str(&sp());
-							buf.push_str("#\n");
-						} else if line.trim_start().starts_with('#') {
-							buf.push_str(&sp());
-							buf.push_str("# ");
-							buf.push_str(" ");
-							buf.push_str(line.trim_start());
-							buf.push('\n');
-						} else {
-							buf.push_str(&sp());
-							buf.push_str("# ");
-							buf.push_str(line);
-							buf.push('\n');
-						}
+						buf.push_str(&sp());
+						buf.push_str("# ");
+						buf.push_str(line);
+						buf.push('\n');
 					}
 				}
 
