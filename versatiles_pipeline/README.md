@@ -96,7 +96,7 @@ Update metadata, see also https://github.com/mapbox/tilejson-spec/tree/master/3.
 - *`description`: String (optional)* - Description text.
 - *`fillzoom`: u8 (optional)* - Fill zoom level.
 - *`name`: String (optional)* - Name text.
-- *`content`: TileContent (optional)* - tile_content, allowed values: "rgb", "rgba", "dem/mapbox", "dem/terrarium", "dem/versatiles", "openmaptiles", "shortbread@1.0", "other", "unknown"
+- *`schema`: TileSchema (optional)* - Tile schema, allowed values: "rgb", "rgba", "dem/mapbox", "dem/terrarium", "dem/versatiles", "openmaptiles", "shortbread@1.0", "other", "unknown"
 
 ## raster_flatten
 Flattens (translucent) raster tiles onto a background

@@ -119,9 +119,9 @@ pub fn decode_struct(input: DeriveInput, data_struct: DataStruct) -> TokenStream
 					format!("- *`{field_str}`: TileCompression (optional)*{comment}"),
 					quote! { #field_name: node.get_property_enum_option::<TileCompression>(#field_str)? },
 				),
-				"Option<TileContent>" => (
-					format!("- *`{field_str}`: TileContent (optional)*{comment}"),
-					quote! { #field_name: node.get_property_enum_option::<TileContent>(#field_str)? },
+				"Option<TileSchema>" => (
+					format!("- *`{field_str}`: TileSchema (optional)*{comment}"),
+					quote! { #field_name: node.get_property_enum_option::<TileSchema>(#field_str)? },
 				),
 				"Option<TileFormat>" => (
 					format!("- *`{field_str}`: TileFormat (optional)*{comment}"),

@@ -103,7 +103,7 @@ impl Operation {
 			..Default::default()
 		};
 		tilejson.update_from_reader_parameters(&parameters);
-		tilejson.tile_content = Some(TileContent::RasterRGBA);
+		tilejson.tile_schema = Some(TileSchema::RasterRGBA);
 		log::trace!("TileJSON bounds set to {:?}", tilejson.bounds);
 		log::trace!("from_gdal_raster::Operation built successfully");
 

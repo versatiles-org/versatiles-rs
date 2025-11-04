@@ -16,8 +16,8 @@ struct Args {
 	fillzoom: Option<u8>,
 	/// Name text.
 	name: Option<String>,
-	/// tile_content, allowed values: "rgb", "rgba", "dem/mapbox", "dem/terrarium", "dem/versatiles", "openmaptiles", "shortbread@1.0", "other", "unknown"
-	content: Option<TileContent>,
+	/// Tile schema, allowed values: "rgb", "rgba", "dem/mapbox", "dem/terrarium", "dem/versatiles", "openmaptiles", "shortbread@1.0", "other", "unknown"
+	schema: Option<TileSchema>,
 }
 
 #[derive(Debug)]
@@ -50,8 +50,8 @@ impl Operation {
 			tilejson.set_string("name", &name)?;
 		}
 
-		if let Some(content) = args.content {
-			tilejson.tile_content = Some(TileContent::try_from(content.as_str())?);
+		if let Some(schema) = args.schema {
+			tilejson.tile_schema = Some(schema);
 		}
 
 		Ok(Self { source, tilejson })
@@ -122,7 +122,7 @@ mod tests {
             .operation_from_vpl(
                 "from_debug format=mvt \
                  | filter bbox=[0,0,10,10] level_min=2 level_max=7 \
-                 | meta_update name=\"Test Layer\" description=\"My desc\" attribution=\"CC-BY\" fillzoom=12 content=\"shortbread@1.0\"",
+                 | meta_update name=\"Test Layer\" description=\"My desc\" attribution=\"CC-BY\" fillzoom=12 schema=\"shortbread@1.0\"",
             )
             .await?;
 
@@ -135,7 +135,7 @@ mod tests {
 		assert_eq!(get_num(tj, "fillzoom"), Some(12.0));
 
 		// Tile Content was parsed into typed field
-		assert_eq!(tj.tile_content, Some(TileContent::try_from("shortbread@1.0")?));
+		assert_eq!(tj.tile_schema, Some(TileSchema::try_from("shortbread@1.0")?));
 
 		// Pre-existing zooms from the filter should remain intact
 		assert_eq!(tj.as_object().get_number("minzoom")?.unwrap(), 2.0);
