@@ -66,11 +66,11 @@ pub async fn serve_tile(
 
 	match response {
 		Ok(Some(result)) => {
-			log::info!("send response for tile request: {path}");
+			log::debug!("send response for tile request: {path}");
 			ok_data(result, target)
 		}
 		Ok(None) => {
-			log::info!("send 404 for tile request: {path}");
+			log::debug!("send 404 for tile request: {path}");
 			error_404()
 		}
 		Err(err) => {
@@ -103,12 +103,12 @@ pub async fn serve_static(
 
 	for source in sources.iter_mut() {
 		if let Some(result) = source.get_data(&url, &target) {
-			log::info!("send response to static request: {url}");
+			log::debug!("send response to static request: {url}");
 			return ok_data(result, target);
 		}
 	}
 
-	log::info!("send 404 to static request: {url}");
+	log::debug!("send 404 to static request: {url}");
 	error_404()
 }
 

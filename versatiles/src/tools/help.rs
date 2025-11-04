@@ -66,7 +66,7 @@ fn print_markdown(md: String) {
 	area.height = area.height.max(20);
 
 	let text = skin.area_text(&md, &area);
-	eprintln!("{text}");
+	println!("{text}");
 }
 
 #[cfg(test)]

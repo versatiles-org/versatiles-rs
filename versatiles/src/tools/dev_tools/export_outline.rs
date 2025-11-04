@@ -31,7 +31,7 @@ pub async fn run(args: &ExportOutline) -> Result<()> {
 	let bbox_pyramid = reader.parameters().bbox_pyramid.clone();
 	let level = args.level.unwrap_or_else(|| bbox_pyramid.get_level_max().unwrap());
 
-	log::info!("Measuring the outline of the tiles in {input:?} at zoom level {level} and saving it to {output:?}");
+	log::debug!("Measuring the outline of the tiles in {input:?} at zoom level {level} and saving it to {output:?}");
 
 	if output.extension() != Some(std::ffi::OsStr::new("geojson")) {
 		bail!("Only GeoJSON output is supported for now");
@@ -60,7 +60,7 @@ pub async fn run(args: &ExportOutline) -> Result<()> {
 
 	progress.finish();
 
-	log::info!("Done, saved to {output:?}");
+	log::debug!("Done, saved to {output:?}");
 	Ok(())
 }
 

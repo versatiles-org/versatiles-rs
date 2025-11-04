@@ -43,7 +43,7 @@ pub async fn read_csv_file(path: &Path) -> Result<Vec<GeoProperties>> {
 	progress.finish();
 
 	if !errors.is_empty() {
-		println!("{errors:?}");
+		eprintln!("{errors:?}");
 		bail!("found {} error(s) while reading csv", errors.len());
 	}
 

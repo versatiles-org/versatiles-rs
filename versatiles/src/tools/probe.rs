@@ -21,9 +21,8 @@ pub struct Subcommand {
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
-	eprintln!("probe {:?}", arguments.filename);
+	log::info!("probe {:?}", arguments.filename);
 
-	log::debug!("open {:?}", arguments.filename);
 	let mut reader = get_registry(ProcessingConfig::default())
 		.get_reader(&arguments.filename)
 		.await?;

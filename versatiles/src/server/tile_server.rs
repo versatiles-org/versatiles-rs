@@ -139,7 +139,7 @@ impl TileServer {
 	async fn add_tile_source_config(&mut self, tile_config: &TileSourceConfig) -> Result<()> {
 		let name = tile_config.name.clone().unwrap_or(tile_config.path.name()?);
 
-		log::info!(
+		log::debug!(
 			"add source: name='{}', path={:?}",
 			tile_config.name.as_deref().unwrap_or("<unnamed>"),
 			tile_config.path,
@@ -155,7 +155,7 @@ impl TileServer {
 	/// Fails if the URL prefix collides (as a prefix) with an existing source.
 	#[context("adding tile source: id='{name}'")]
 	pub fn add_tile_source(&mut self, name: &str, reader: Box<dyn TilesReaderTrait>) -> Result<()> {
-		log::info!("add source: id='{name}', source={reader:?}");
+		log::debug!("add source: id='{name}', source={reader:?}");
 
 		let source = sources::TileSource::from(reader, name)?;
 		let url_prefix = &source.prefix;
@@ -175,7 +175,7 @@ impl TileServer {
 	/// Register a static file source mounted at `url_prefix`.
 	#[context("adding static source: url_prefix='{url_prefix}'")]
 	pub fn add_static_source(&mut self, path: &Path, url_prefix: &str) -> Result<()> {
-		log::info!("add static: {path:?}");
+		log::debug!("add static: {path:?}");
 		self.static_sources.push(sources::StaticSource::new(path, url_prefix)?);
 		Ok(())
 	}

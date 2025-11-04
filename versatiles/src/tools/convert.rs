@@ -61,7 +61,7 @@ pub struct Subcommand {
 
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
-	eprintln!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
+	log::info!("convert from {:?} to {:?}", arguments.input_file, arguments.output_file);
 
 	let config = ProcessingConfig::default();
 	let registry = get_registry(config);
@@ -80,7 +80,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 
 	convert_tiles_container(reader, parameters, &arguments.output_file, registry).await?;
 
-	eprintln!("finished converting tiles");
+	log::info!("finished converting tiles");
 
 	Ok(())
 }

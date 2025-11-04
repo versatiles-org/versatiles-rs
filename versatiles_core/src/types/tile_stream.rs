@@ -648,10 +648,10 @@ fn unwrap_result<T>(result: anyhow::Result<T>, context: impl FnOnce() -> String)
 	match result {
 		Ok(value) => value,
 		Err(mut err) => {
-			eprintln!("ERROR:");
+			log::error!("ERROR:");
 			err = err.context(context());
 			for (idx, cause) in err.chain().enumerate() {
-				eprintln!("  {idx}: {cause}");
+				log::error!("  {idx}: {cause}");
 			}
 
 			// Make sure the message is flushed before aborting.

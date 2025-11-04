@@ -41,7 +41,7 @@ pub async fn run(args: &MeasureTileSizes) -> Result<()> {
 	let width_original = 1 << level;
 	let width_scaled = width_original / scale;
 
-	log::info!(
+	log::debug!(
 		"Measuring tile sizes in {input:?} at zoom level {level}, generating an {width_scaled}x{width_scaled} image and saving it to {output_file:?}"
 	);
 
@@ -64,7 +64,7 @@ pub async fn run(args: &MeasureTileSizes) -> Result<()> {
 		.await;
 	progress.finish();
 
-	log::info!("Saving image");
+	log::debug!("Saving image");
 	let mut result: Vec<u64> = vec![0; width_scaled * width_scaled];
 	for (coord, size) in vec.iter() {
 		let x = coord.x as usize / scale;
@@ -87,7 +87,7 @@ pub async fn run(args: &MeasureTileSizes) -> Result<()> {
 	let blob = encode(&image, format, Some(100), Some(0))?;
 	blob.save_to_file(output_file)?;
 
-	log::info!("Done, saved to {output_file:?}");
+	log::debug!("Done, saved to {output_file:?}");
 	Ok(())
 }
 

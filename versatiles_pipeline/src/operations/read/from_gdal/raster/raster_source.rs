@@ -253,7 +253,6 @@ mod tests {
 
 		pub fn get_factory(&self) -> Arc<dyn Fn() -> Result<Dataset> + Send + Sync + 'static> {
 			let band_mapping_c = self.band_mapping.clone();
-			println!("band_mapping_c: {:?}", band_mapping_c);
 			let geotransform_c = self.geotransform;
 			let size = self.size;
 			Arc::new(move || -> Result<Dataset> {

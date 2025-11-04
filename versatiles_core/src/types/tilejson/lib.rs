@@ -468,8 +468,8 @@ impl TileJSON {
 	#[must_use]
 	pub fn try_from_blob_or_default(blob: &Blob) -> TileJSON {
 		TileJSON::try_from(blob.as_str()).unwrap_or_else(|e| {
-			eprintln!("Failed to parse TileJSON: {e}");
-			eprintln!("Use default TileJSON instead");
+			log::warn!("Failed to parse TileJSON: {e}");
+			log::warn!("Use default TileJSON instead");
 			TileJSON::default()
 		})
 	}
