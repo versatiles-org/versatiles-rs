@@ -23,3 +23,7 @@ versatiles_core.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true
+
+[features]
+default = []
+test = []
