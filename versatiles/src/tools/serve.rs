@@ -135,11 +135,11 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	let registry = get_registry(ProcessingConfig::default());
 	let mut server: TileServer = TileServer::from_config(config, registry).await?;
 
-	let mut list: Vec<(String, String)> = server.get_url_mapping().await;
+	let mut list = server.get_url_mapping().await;
 	list.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
 	list
 		.iter()
-		.for_each(|(url, source)| eprintln!("   {:30}  <-  {}", url.to_owned() + "*", source));
+		.for_each(|(url, source)| log::info!("add tile source: {} <- {source}", url.join_as_string("*")));
 
 	server.start().await?;
 

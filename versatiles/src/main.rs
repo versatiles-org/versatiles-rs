@@ -30,6 +30,7 @@ mod tools;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 use log::LevelFilter;
+use std::io::Write;
 
 /// Command-line interface for VersaTiles
 #[derive(Parser, Debug)]
@@ -102,16 +103,29 @@ fn main() -> Result<()> {
 	// Initialize logger and set log level based on verbosity flag
 	let verbosity = cli.verbose as i16 - cli.quiet as i16;
 	let log_level = match verbosity {
-		i16::MIN..=-1 => LevelFilter::Off,
-		0 => LevelFilter::Warn,
-		1 => LevelFilter::Info,
-		2 => LevelFilter::Debug,
-		3..=i16::MAX => LevelFilter::Trace,
+		i16::MIN..-2 => LevelFilter::Off,
+		-2 => LevelFilter::Error,
+		-1 => LevelFilter::Warn,
+		0 => LevelFilter::Info,
+		1 => LevelFilter::Debug,
+		2..=i16::MAX => LevelFilter::Trace,
 	};
 
 	env_logger::Builder::new()
 		.filter_level(log_level)
-		.format_timestamp(None)
+		.format(|buf, record| {
+			let level = record.level();
+			let prefix = match level {
+				log::Level::Error => "ERROR: ",
+				log::Level::Warn => "WARN: ",
+				log::Level::Info => "info: ",
+				log::Level::Debug => "debug: ",
+				log::Level::Trace => "trace: ",
+			};
+			let style = buf.default_level_style(level);
+			let args = record.args();
+			writeln!(buf, "{style}{prefix}{style:#}{args}")
+		})
 		.init();
 
 	run(cli)
