@@ -1,18 +1,14 @@
 use anyhow::{Result, ensure};
 use std::path::{Path, PathBuf};
 
-#[derive(Clone)]
+#[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub struct Url {
 	pub str: String,
 }
 
 impl Url {
-	pub fn new(url: &str) -> Url {
-		let str = if url.starts_with('/') {
-			url.to_owned()
-		} else {
-			format!("/{url}")
-		};
+	pub fn new(url: String) -> Url {
+		let str = if url.starts_with('/') { url } else { format!("/{url}") };
 		Url { str }
 	}
 
@@ -28,14 +24,14 @@ impl Url {
 		if self.str.ends_with('/') {
 			self.clone()
 		} else {
-			Url::new(&format!("{}/", self.str))
+			Url::new(format!("{}/", self.str))
 		}
 	}
 
 	pub fn strip_prefix(&self, prefix: &Url) -> Result<Url> {
 		ensure!(self.str.starts_with(&prefix.str), "url does not start with prefix");
 
-		Ok(Url::new(&self.str[prefix.str.len()..]))
+		Ok(Url::from(&self.str[prefix.str.len()..]))
 	}
 
 	pub fn as_vec(&self) -> Vec<String> {
@@ -46,11 +42,7 @@ impl Url {
 			.collect()
 	}
 
-	pub fn as_string(&self) -> String {
-		self.str.to_owned()
-	}
-
-	pub fn as_path(&self, base: &Path) -> PathBuf {
+	pub fn to_pathbug(&self, base: &Path) -> PathBuf {
 		base.join(&self.str[1..])
 	}
 
@@ -73,83 +65,89 @@ impl std::fmt::Display for Url {
 	}
 }
 
+impl From<&str> for Url {
+	fn from(s: &str) -> Self {
+		Url::new(s.to_owned())
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
 
 	#[test]
 	fn test_url_new() {
-		assert_eq!(Url::new("test").str, "/test");
-		assert_eq!(Url::new("/test").str, "/test");
+		assert_eq!(Url::from("test").str, "/test");
+		assert_eq!(Url::from("/test").str, "/test");
 	}
 
 	#[test]
 	fn test_starts_with() {
-		let base_url = Url::new("/test");
+		let base_url = Url::from("/test");
 
-		assert!(Url::new("/test/123").starts_with(&base_url));
-		assert!(!Url::new("/123").starts_with(&base_url));
+		assert!(Url::from("/test/123").starts_with(&base_url));
+		assert!(!Url::from("/123").starts_with(&base_url));
 	}
 
 	#[test]
 	fn test_is_dir() {
-		assert!(Url::new("/test/").is_dir());
-		assert!(!Url::new("/test/file.txt").is_dir());
+		assert!(Url::from("/test/").is_dir());
+		assert!(!Url::from("/test/file.txt").is_dir());
 	}
 
 	#[test]
 	fn test_strip_prefix() -> Result<()> {
-		let full_url = Url::new("/test/dir/file");
-		assert_eq!(full_url.strip_prefix(&Url::new("/test"))?.str, "/dir/file");
-		assert!(full_url.strip_prefix(&Url::new("/wrong")).is_err());
+		let full_url = Url::from("/test/dir/file");
+		assert_eq!(full_url.strip_prefix(&Url::from("/test"))?.str, "/dir/file");
+		assert!(full_url.strip_prefix(&Url::from("/wrong")).is_err());
 		Ok(())
 	}
 
 	#[test]
 	fn test_as_vec() {
-		assert_eq!(Url::new("/test/dir/file").as_vec(), vec!["test", "dir", "file"]);
+		assert_eq!(Url::from("/test/dir/file").as_vec(), vec!["test", "dir", "file"]);
 	}
 
 	#[test]
 	fn test_as_string() {
-		assert_eq!(Url::new("/test/dir/file").as_string(), "/test/dir/file");
+		assert_eq!(Url::from("/test/dir/file").to_string(), "/test/dir/file");
 	}
 
 	#[test]
 	fn test_push() {
-		let mut url = Url::new("/test/dir/");
+		let mut url = Url::from("/test/dir/");
 		url.push("file");
 		assert_eq!(url.str, "/test/dir/file");
 
-		let mut url = Url::new("/test/dir");
+		let mut url = Url::from("/test/dir");
 		url.push("file");
 		assert_eq!(url.str, "/test/dir/file");
 	}
 
 	#[test]
 	fn test_be_dir() {
-		let mut url = Url::new("/test/dir");
+		let mut url = Url::from("/test/dir");
 		assert!(!url.is_dir());
 		url = url.to_dir();
 		assert!(url.is_dir());
 		assert_eq!(url.str, "/test/dir/");
 
-		let mut url = Url::new("/test/dir/");
+		let mut url = Url::from("/test/dir/");
 		url = url.to_dir(); // should not change
 		assert_eq!(url.str, "/test/dir/");
 	}
 
 	#[test]
 	fn test_as_path() {
-		let url = Url::new("/test/dir/file");
-		let path = url.as_path(Path::new("/base"));
+		let url = Url::from("/test/dir/file");
+		let path = url.to_pathbug(Path::new("/base"));
 		assert_eq!(path, PathBuf::from("/base/test/dir/file"));
 	}
 
 	#[test]
 	fn test_join_as_string() {
-		assert_eq!(Url::new("/test/dir/").join_as_string("file"), "/test/dir/file");
+		assert_eq!(Url::from("/test/dir/").join_as_string("file"), "/test/dir/file");
 
-		assert_eq!(Url::new("/test/dir").join_as_string("file"), "/test/dir/file");
+		assert_eq!(Url::from("/test/dir").join_as_string("file"), "/test/dir/file");
 	}
 }

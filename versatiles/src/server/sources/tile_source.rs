@@ -25,7 +25,7 @@ impl TileSource {
 		let compression = parameters.tile_compression;
 
 		Ok(TileSource {
-			prefix: Url::new(&format!("/tiles/{id}/")).to_dir(),
+			prefix: Url::new(format!("/tiles/{id}/")).to_dir(),
 			id: id.to_owned(),
 			reader: Arc::new(Mutex::new(reader)),
 			tile_mime,
@@ -97,7 +97,7 @@ impl TileSource {
 		let mut tilejson = reader.tilejson().clone();
 		tilejson.update_from_reader_parameters(reader.parameters());
 
-		let tiles_url = format!("{}{{z}}/{{x}}/{{y}}", self.prefix.as_string());
+		let tiles_url = self.prefix.join_as_string("{z}/{x}/{y}");
 		tilejson.set_list("tiles", vec![tiles_url])?;
 
 		Ok(tilejson.into())
@@ -182,7 +182,7 @@ mod tests {
 			compression: TileCompression,
 		) -> Result<Option<SourceResponse>> {
 			container
-				.get_data(&Url::new(url), &TargetCompression::from(compression))
+				.get_data(&Url::from(url), &TargetCompression::from(compression))
 				.await
 		}
 

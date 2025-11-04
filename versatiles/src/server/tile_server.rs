@@ -317,11 +317,11 @@ impl TileServer {
 		routes::add_api_to_app(app, &self.tile_sources).await
 	}
 
-	pub async fn get_url_mapping(&self) -> Vec<(String, String)> {
+	pub async fn get_url_mapping(&self) -> Vec<(super::Url, String)> {
 		let mut result = Vec::new();
 		for tile_source in self.tile_sources.iter() {
 			let id = tile_source.get_source_name().await;
-			result.push((tile_source.prefix.as_string(), id.to_owned()))
+			result.push((tile_source.prefix.clone(), id))
 		}
 		result
 	}
@@ -418,10 +418,10 @@ mod tests {
 		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf).unwrap().boxed();
 		server.add_tile_source("cheese", reader).unwrap();
 
-		let mappings: Vec<(String, String)> = server.get_url_mapping().await;
-		assert_eq!(mappings.len(), 1);
-		assert_eq!(mappings[0].0, "/tiles/cheese/");
-		assert_eq!(mappings[0].1, "dummy_name");
+		assert_eq!(
+			server.get_url_mapping().await,
+			vec![(crate::server::Url::from("/tiles/cheese/"), "dummy_name".to_string())]
+		);
 	}
 
 	#[rstest]

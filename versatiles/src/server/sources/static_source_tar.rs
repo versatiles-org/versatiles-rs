@@ -258,11 +258,11 @@ mod tests {
 		) -> Result<()> {
 			let accept = TargetCompression::from(compression_accept);
 
-			let result = tar_file.get_data(&Url::new("non_existing_file"), &accept);
+			let result = tar_file.get_data(&Url::from("non_existing_file"), &accept);
 			assert!(result.is_none());
 
 			//let path = ["0", "0", "0"];
-			let result = tar_file.get_data(&Url::new("tiles.json"), &accept);
+			let result = tar_file.get_data(&Url::from("tiles.json"), &accept);
 			assert!(result.is_some());
 
 			let result = result.unwrap();

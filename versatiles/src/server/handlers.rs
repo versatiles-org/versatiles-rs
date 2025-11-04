@@ -47,7 +47,7 @@ pub async fn serve_tile(
 		minimal_recompression,
 	}): State<TileHandlerState>,
 ) -> Response<Body> {
-	let path = Url::new(uri.path());
+	let path = Url::from(uri.path());
 	log::debug!("handle tile request: {path}");
 
 	let mut target = get_encoding(&headers);
@@ -89,7 +89,7 @@ pub async fn serve_static(
 		minimal_recompression,
 	}): State<StaticHandlerState>,
 ) -> Response<Body> {
-	let mut url = Url::new(uri.path());
+	let mut url = Url::from(uri.path());
 	log::debug!("handle static request: {url}");
 
 	if url.is_dir() {

@@ -23,7 +23,7 @@ pub struct StaticSource {
 impl StaticSource {
 	#[context("creating static source: path={path:?}, prefix={prefix}")]
 	pub fn new(path: &Path, prefix: &str) -> Result<StaticSource> {
-		let prefix = Url::new(prefix).to_dir();
+		let prefix = Url::from(prefix).to_dir();
 
 		Ok(StaticSource {
 			source: Arc::new(if std::fs::metadata(path)?.is_dir() {
@@ -69,7 +69,7 @@ mod tests {
 		}
 
 		fn get_data(&self, path: &Url, _accept: &TargetCompression) -> Option<SourceResponse> {
-			if path.starts_with(&Url::new("exists")) {
+			if path.starts_with(&Url::from("exists")) {
 				SourceResponse::new_some(
 					Blob::from(vec![1, 2, 3, 4]),
 					TileCompression::Uncompressed,
@@ -149,9 +149,9 @@ mod tests {
 	async fn get_data_valid_path() {
 		let static_source = StaticSource {
 			source: Arc::new(Box::new(MockStaticSource)),
-			prefix: Url::new(""),
+			prefix: Url::from(""),
 		};
-		let result = static_source.get_data(&Url::new("exists"), &TargetCompression::from_none());
+		let result = static_source.get_data(&Url::from("exists"), &TargetCompression::from_none());
 		assert!(result.is_some());
 	}
 
@@ -159,9 +159,9 @@ mod tests {
 	async fn get_data_invalid_path() {
 		let static_source = StaticSource {
 			source: Arc::new(Box::new(MockStaticSource)),
-			prefix: Url::new(""),
+			prefix: Url::from(""),
 		};
-		let result = static_source.get_data(&Url::new("does_not_exist"), &TargetCompression::from_none());
+		let result = static_source.get_data(&Url::from("does_not_exist"), &TargetCompression::from_none());
 		assert!(result.is_none());
 	}
 
@@ -169,14 +169,14 @@ mod tests {
 	async fn get_data_with_path_filtering() {
 		let static_source = StaticSource {
 			source: Arc::new(Box::new(MockStaticSource)),
-			prefix: Url::new("path/to"),
+			prefix: Url::from("path/to"),
 		};
 		// Should match and retrieve data
-		let result = static_source.get_data(&Url::new("path/to/exists"), &TargetCompression::from_none());
+		let result = static_source.get_data(&Url::from("path/to/exists"), &TargetCompression::from_none());
 		assert!(result.is_some());
 
 		// Should fail due to path mismatch
-		let result = static_source.get_data(&Url::new("path/wrong/exists"), &TargetCompression::from_none());
+		let result = static_source.get_data(&Url::from("path/wrong/exists"), &TargetCompression::from_none());
 		assert!(result.is_none());
 	}
 }
