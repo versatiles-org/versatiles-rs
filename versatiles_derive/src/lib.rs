@@ -230,20 +230,44 @@ pub fn context(args: TokenStream, input: TokenStream) -> TokenStream {
 			syn::ReturnType::Type(_, return_type) => return_type,
 		};
 		let result = Ident::new("result", Span::mixed_site());
-		quote! {
-			let #result: #return_type = async #move_token { #body }.await;
+		quote! {{
+			use ::anyhow::Context as _;
+			let #result: #return_type = (async #move_token { #body }).await;
 			#result.map_err(|#err| #err.context(format!(#format_args)).into())
-		}
+		}}
 	} else {
-		let force_fn_once = Ident::new("force_fn_once", Span::mixed_site());
-		quote! {
-			// Moving a non-`Copy` value into the closure tells borrowck to always treat the closure
-			// as a `FnOnce`, preventing some borrowing errors.
-			let #force_fn_once = ::core::iter::empty::<()>();
-			(#move_token || #return_type {
-				::core::mem::drop(#force_fn_once);
-				#body
-			})().map_err(|#err| #err.context(format!(#format_args)).into())
+		{
+			// Heuristic: if the syntactic return type's last path segment is `Pin`, assume `async_trait` lowered fn
+			let is_pin_return = matches!(
+				&return_type,
+				syn::ReturnType::Type(_, ty)
+					if matches!(ty.as_ref(),
+						syn::Type::Path(tp) if tp.path.segments.last().map(|s| s.ident == "Pin").unwrap_or(false)
+					)
+			);
+
+			if is_pin_return {
+				// async_trait-lowered: return a boxed async block that awaits the inner future and maps the Result
+				quote! {{
+					use ::anyhow::Context as _;
+					let __fut = (|| #return_type { #body })();
+					::core::pin::Pin::from(Box::new(async move {
+						let __res = __fut.await;
+						__res.map_err(|#err| #err.context(format!(#format_args)).into())
+					}))
+				}}
+			} else {
+				// Truly sync function returning Result<...>
+				let force_fn_once = Ident::new("force_fn_once", Span::mixed_site());
+				quote! {{
+					use ::anyhow::Context as _;
+					let #force_fn_once = ::core::iter::empty::<()>();
+					(#move_token || #return_type {
+						::core::mem::drop(#force_fn_once);
+						#body
+					})().map_err(|#err| #err.context(format!(#format_args)).into())
+				}}
+			}
 		}
 	};
 	input.block.stmts = vec![syn::Stmt::Expr(syn::Expr::Verbatim(new_body), None)];

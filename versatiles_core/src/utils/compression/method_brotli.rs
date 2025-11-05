@@ -1,5 +1,5 @@
 use crate::Blob;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use brotli::{BrotliCompress, BrotliDecompress, enc::BrotliEncoderParams};
 use std::io::Cursor;
 use versatiles_derive::context;

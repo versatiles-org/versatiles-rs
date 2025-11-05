@@ -47,7 +47,7 @@
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 use crate::{Tile, TilesReaderTrait};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use futures::{lock::Mutex, stream::StreamExt};
 use std::{fmt::Debug, ops::Shr, path::Path, sync::Arc};

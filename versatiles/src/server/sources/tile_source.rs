@@ -1,5 +1,5 @@
 use super::{super::utils::Url, SourceResponse};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use std::{fmt::Debug, sync::Arc};
 use tokio::sync::Mutex;
 use versatiles_container::TilesReaderTrait;

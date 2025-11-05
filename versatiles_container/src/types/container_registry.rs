@@ -25,7 +25,7 @@
 //! ```
 
 use crate::*;
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 #[cfg(test)]
 use assert_fs::NamedTempFile;
 use std::{

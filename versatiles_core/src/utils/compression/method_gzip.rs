@@ -1,5 +1,5 @@
 use crate::Blob;
-use anyhow::{Context, Result};
+use anyhow::Result;
 use flate2::bufread::{GzDecoder, GzEncoder};
 use std::io::Read;
 use versatiles_derive::context;
