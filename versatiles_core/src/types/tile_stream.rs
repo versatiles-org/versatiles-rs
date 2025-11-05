@@ -667,19 +667,20 @@ mod tests {
 	use std::sync::atomic::{AtomicUsize, Ordering};
 	use tokio::sync::Mutex;
 
+	fn tc(level: u8, x: u32, y: u32) -> TileCoord {
+		TileCoord::new(level, x, y).unwrap()
+	}
+
 	#[tokio::test]
-	async fn should_flat_map_parallel_and_flatten_results() -> Result<()> {
+	async fn should_flat_map_parallel_and_flatten_results() {
 		// Base stream with two coords
-		let base = TileStream::from_vec(vec![
-			(TileCoord::new(1, 0, 0)?, 10u32),
-			(TileCoord::new(1, 1, 0)?, 20u32),
-		]);
+		let base = TileStream::from_vec(vec![(tc(1, 0, 0), 10u32), (tc(1, 1, 0), 20u32)]);
 
 		// Each item expands to a sub-stream with two entries
 		let flat = base.flat_map_parallel(|coord, val| {
 			let out = vec![
 				(coord, format!("a:{val}")),
-				(TileCoord::new(coord.level, coord.x, coord.y + 1)?, format!("b:{val}")),
+				(tc(coord.level, coord.x, coord.y + 1), format!("b:{val}")),
 			];
 			Ok(TileStream::from_vec(out))
 		});
@@ -691,22 +692,17 @@ mod tests {
 		assert_eq!(
 			items,
 			[
-				(TileCoord::new(1, 0, 0)?, "a:10".into()),
-				(TileCoord::new(1, 0, 1)?, "b:10".into()),
-				(TileCoord::new(1, 1, 0)?, "a:20".into()),
-				(TileCoord::new(1, 1, 1)?, "b:20".into()),
+				(tc(1, 0, 0), "a:10".into()),
+				(tc(1, 0, 1), "b:10".into()),
+				(tc(1, 1, 0), "a:20".into()),
+				(tc(1, 1, 1), "b:20".into()),
 			]
 		);
-
-		Ok(())
 	}
 
 	#[tokio::test]
 	async fn should_collect_all_items_from_vec() {
-		let tile_data = vec![
-			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("tile0")),
-			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("tile1")),
-		];
+		let tile_data = vec![(tc(0, 0, 0), Blob::from("tile0")), (tc(1, 1, 1), Blob::from("tile1"))];
 
 		let tile_stream = TileStream::from_vec(tile_data.clone());
 		let collected = tile_stream.to_vec().await;
@@ -717,9 +713,9 @@ mod tests {
 	#[tokio::test]
 	async fn should_iterate_sync_over_items() {
 		let tile_data = vec![
-			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("tile0")),
-			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("tile1")),
-			(TileCoord::new(2, 2, 2).unwrap(), Blob::from("tile2")),
+			(tc(0, 0, 0), Blob::from("tile0")),
+			(tc(1, 1, 1), Blob::from("tile1")),
+			(tc(2, 2, 2), Blob::from("tile2")),
 		];
 
 		let tile_stream = TileStream::from_vec(tile_data);
@@ -739,9 +735,9 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_map_coord_properly() {
-		let original = TileStream::from_vec(vec![(TileCoord::new(3, 1, 2).unwrap(), Blob::from("data"))]);
+		let original = TileStream::from_vec(vec![(tc(3, 1, 2), Blob::from("data"))]);
 
-		let mapped = original.map_coord(|coord| TileCoord::new(coord.level + 1, coord.x * 2, coord.y * 2).unwrap());
+		let mapped = original.map_coord(|coord| tc(coord.level + 1, coord.x * 2, coord.y * 2));
 
 		let items = mapped.to_vec().await;
 		assert_eq!(items.len(), 1);
@@ -755,9 +751,9 @@ mod tests {
 	#[tokio::test]
 	async fn should_count_items_with_drain_and_count() {
 		let tile_data = vec![
-			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("tile0")),
-			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("tile1")),
-			(TileCoord::new(2, 2, 2).unwrap(), Blob::from("tile2")),
+			(tc(0, 0, 0), Blob::from("tile0")),
+			(tc(1, 1, 1), Blob::from("tile1")),
+			(tc(2, 2, 2), Blob::from("tile2")),
 		];
 
 		let tile_stream = TileStream::from_vec(tile_data);
@@ -768,9 +764,9 @@ mod tests {
 	#[tokio::test]
 	async fn should_run_for_each_buffered_in_chunks() {
 		let tile_data = vec![
-			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("tile0")),
-			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("tile1")),
-			(TileCoord::new(2, 2, 2).unwrap(), Blob::from("tile2")),
+			(tc(0, 0, 0), Blob::from("tile0")),
+			(tc(1, 1, 1), Blob::from("tile1")),
+			(tc(2, 2, 2), Blob::from("tile2")),
 		];
 
 		let tile_stream = TileStream::from_vec(tile_data);
@@ -789,10 +785,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_do_parallel_blob_mapping() {
-		let tile_data = vec![
-			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("zero")),
-			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("one")),
-		];
+		let tile_data = vec![(tc(0, 0, 0), Blob::from("zero")), (tc(1, 1, 1), Blob::from("one"))];
 
 		// Apply parallel mapping
 		let transformed = TileStream::from_vec(tile_data.clone())
@@ -806,18 +799,18 @@ mod tests {
 		items.sort_by_key(|(coord, _)| coord.level);
 
 		// Verify that coordinates are preserved and blobs correctly mapped
-		assert_eq!(items[0].0, TileCoord::new(0, 0, 0).unwrap());
+		assert_eq!(items[0].0, tc(0, 0, 0));
 		assert_eq!(items[0].1.as_str(), "mapped-zero");
-		assert_eq!(items[1].0, TileCoord::new(1, 1, 1).unwrap());
+		assert_eq!(items[1].0, tc(1, 1, 1));
 		assert_eq!(items[1].1.as_str(), "mapped-one");
 	}
 
 	#[tokio::test]
 	async fn should_parallel_filter_map_blob_correctly() {
 		let tile_data = vec![
-			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("keep0")),
-			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("discard1")),
-			(TileCoord::new(2, 2, 2).unwrap(), Blob::from("keep2")),
+			(tc(0, 0, 0), Blob::from("keep0")),
+			(tc(1, 1, 1), Blob::from("discard1")),
+			(tc(2, 2, 2), Blob::from("keep2")),
 		];
 
 		let filtered = TileStream::from_vec(tile_data).filter_map_item_parallel(|blob| {
@@ -845,9 +838,9 @@ mod tests {
 	async fn should_construct_from_iter_stream() {
 		// Create multiple sub-streams
 		let substreams = vec![
-			Box::pin(async { TileStream::from_vec(vec![(TileCoord::new(0, 0, 0).unwrap(), Blob::from("sub0-0"))]) })
+			Box::pin(async { TileStream::from_vec(vec![(tc(0, 0, 0), Blob::from("sub0-0"))]) })
 				as Pin<Box<dyn Future<Output = TileStream<'static>> + Send>>,
-			Box::pin(async { TileStream::from_vec(vec![(TileCoord::new(1, 1, 1).unwrap(), Blob::from("sub1-1"))]) })
+			Box::pin(async { TileStream::from_vec(vec![(tc(1, 1, 1), Blob::from("sub1-1"))]) })
 				as Pin<Box<dyn Future<Output = TileStream<'static>> + Send>>,
 		];
 
@@ -865,10 +858,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_process_async_for_each() {
-		let tile_data = vec![
-			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("async0")),
-			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("async1")),
-		];
+		let tile_data = vec![(tc(0, 0, 0), Blob::from("async0")), (tc(1, 1, 1), Blob::from("async1"))];
 
 		let s = TileStream::from_vec(tile_data);
 		let collected_mutex = Arc::new(Mutex::new(Vec::new()));
@@ -890,10 +880,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_filter_by_coord() {
-		let stream = TileStream::from_vec(vec![
-			(TileCoord::new(0, 0, 0).unwrap(), Blob::from("z0")),
-			(TileCoord::new(1, 1, 1).unwrap(), Blob::from("z1")),
-		]);
+		let stream = TileStream::from_vec(vec![(tc(0, 0, 0), Blob::from("z0")), (tc(1, 1, 1), Blob::from("z1"))]);
 
 		let filtered = stream.filter_coord(|coord| async move { coord.level == 0 });
 		let items = filtered.to_vec().await;
@@ -905,7 +892,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_create_from_iter_coord_parallel() {
-		let coords = vec![TileCoord::new(0, 0, 0).unwrap(), TileCoord::new(1, 1, 1).unwrap()];
+		let coords = vec![tc(0, 0, 0), tc(1, 1, 1)];
 
 		let stream = TileStream::from_iter_coord_parallel(coords.into_iter(), |coord| {
 			Some(Blob::from(format!("v{}", coord.level)))
@@ -922,7 +909,7 @@ mod tests {
 
 	#[tokio::test]
 	async fn should_create_from_coord_vec_async() {
-		let coords = vec![TileCoord::new(0, 0, 0).unwrap(), TileCoord::new(1, 1, 1).unwrap()];
+		let coords = vec![tc(0, 0, 0), tc(1, 1, 1)];
 
 		let stream = TileStream::from_coord_vec_async(coords, |coord| async move {
 			if coord.level == 0 {
@@ -940,11 +927,7 @@ mod tests {
 
 	#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 	async fn test_map_item_parallel_parallelism() {
-		let stream = TileStream::from_vec(
-			(1..=6)
-				.map(|i| (TileCoord::new(12, i, 0).unwrap(), i))
-				.collect::<Vec<_>>(),
-		);
+		let stream = TileStream::from_vec((1..=6).map(|i| (tc(12, i, 0), i)).collect::<Vec<_>>());
 		let counter = Arc::new(AtomicUsize::new(0));
 		let max_parallel = Arc::new(AtomicUsize::new(0));
 		let current_parallel = Arc::new(AtomicUsize::new(0));
@@ -985,7 +968,7 @@ mod tests {
 			vec![Some(1), None, Some(3), None, Some(5), None]
 				.into_iter()
 				.enumerate()
-				.map(|(i, v)| (TileCoord::new(12, i as u32, 0).unwrap(), v))
+				.map(|(i, v)| (tc(12, i as u32, 0), v))
 				.collect::<Vec<_>>(),
 		);
 		let counter = Arc::new(AtomicUsize::new(0));
@@ -1024,11 +1007,7 @@ mod tests {
 
 	#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 	async fn test_for_each_async_parallel_parallelism() {
-		let stream = TileStream::from_vec(
-			(1..=6)
-				.map(|i| (TileCoord::new(12, i, 0).unwrap(), i))
-				.collect::<Vec<_>>(),
-		);
+		let stream = TileStream::from_vec((1..=6).map(|i| (tc(12, i, 0), i)).collect::<Vec<_>>());
 		let counter = Arc::new(AtomicUsize::new(0));
 		let max_parallel = Arc::new(AtomicUsize::new(0));
 		let current_parallel = Arc::new(AtomicUsize::new(0));
@@ -1068,9 +1047,9 @@ mod tests {
 	async fn should_merge_streams_with_large_cores_per_task() {
 		// cores_per_task larger than CPU count should still work (limit clamped to 1)
 		let substreams = vec![
-			Box::pin(async { TileStream::from_vec(vec![(TileCoord::new(0, 0, 0).unwrap(), Blob::from("a"))]) })
+			Box::pin(async { TileStream::from_vec(vec![(tc(0, 0, 0), Blob::from("a"))]) })
 				as Pin<Box<dyn Future<Output = TileStream<'static>> + Send>>,
-			Box::pin(async { TileStream::from_vec(vec![(TileCoord::new(1, 1, 1).unwrap(), Blob::from("b"))]) })
+			Box::pin(async { TileStream::from_vec(vec![(tc(1, 1, 1), Blob::from("b"))]) })
 				as Pin<Box<dyn Future<Output = TileStream<'static>> + Send>>,
 		];
 		let merged = TileStream::<Blob>::from_streams(stream::iter(substreams));
