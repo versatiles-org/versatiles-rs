@@ -303,6 +303,7 @@ impl TilesReaderTrait for VersaTilesReader {
 	}
 
 	/// Gets tile data for a given coordinate.
+	#[context("fetching tile {:?} from '{}'", coord, self.reader.get_name())]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		// Calculate block coordinate
 		let block_coord = TileCoord::new(coord.level, coord.x.shr(8), coord.y.shr(8))?;
@@ -346,6 +347,7 @@ impl TilesReaderTrait for VersaTilesReader {
 	}
 
 	/// Gets a stream of tile data for a given bounding box.
+	#[context("streaming tiles for bbox {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_tile_stream {:?}", bbox);
 		let chunks = self.get_chunks(bbox).await;
@@ -385,6 +387,7 @@ impl TilesReaderTrait for VersaTilesReader {
 
 	// deep probe of container meta
 	#[cfg(feature = "cli")]
+	#[context("probing versatiles container metadata")]
 	async fn probe_container(&mut self, print: &PrettyPrint) -> Result<()> {
 		print.add_key_value("meta size", &self.header.meta_range.length).await;
 		print.add_key_value("block count", &self.block_index.len()).await;
@@ -401,6 +404,7 @@ impl TilesReaderTrait for VersaTilesReader {
 
 	// deep probe of container tiles
 	#[cfg(feature = "cli")]
+	#[context("probing versatiles tiles (scan & stats)")]
 	async fn probe_tiles(&mut self, print: &PrettyPrint) -> Result<()> {
 		use versatiles_core::progress::get_progress_bar;
 

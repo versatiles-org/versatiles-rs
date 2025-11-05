@@ -24,6 +24,7 @@ impl VPLNode {
 		self.properties.get(field)
 	}
 
+	#[context("Failed to get property '{field}' from VPL node '{}'", self.name)]
 	fn get_property(&self, field: &str) -> Result<Option<&String>> {
 		self.properties.get(field).map_or(Ok(None), |list| {
 			ensure!(

@@ -9,6 +9,7 @@ use anyhow::{Context, Result, anyhow};
 use async_trait::async_trait;
 use std::collections::{HashMap, HashSet};
 use versatiles_core::TileJSON;
+use versatiles_derive::context;
 use versatiles_geometry::{geo::GeoProperties, vector_tile::VectorTile};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -46,6 +47,7 @@ struct Runner {
 }
 
 impl Runner {
+	#[context("Failed to build vector update properties runner")]
 	pub fn from_args(args: Args, data: Vec<GeoProperties>) -> Result<Self> {
 		// Convert each CSV row into a GeoProperties map.
 		// Transform Vec<GeoProperties> into HashMap keyed by the data‑ID column.
@@ -92,6 +94,8 @@ impl RunnerTrait for Runner {
 			}
 		}
 	}
+
+	#[context("Failed to run vector update properties")]
 	fn run(&self, mut tile: VectorTile) -> Result<Option<VectorTile>> {
 		let layer_name = &self.args.layer_name;
 

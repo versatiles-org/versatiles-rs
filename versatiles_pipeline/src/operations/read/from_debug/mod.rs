@@ -71,7 +71,7 @@ impl Operation {
 		Self::from_parameters(
 			args
 				.format
-				.map(|f| TileFormat::parse_str(&f))
+				.map(|f| TileFormat::try_from_str(&f))
 				.transpose()?
 				.unwrap_or(TileFormat::MVT),
 		)

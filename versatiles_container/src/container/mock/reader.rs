@@ -26,6 +26,7 @@ use crate::{Tile, TilesReaderTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{utils::compress, *};
+use versatiles_derive::context;
 
 /// Enum representing different mock profiles for tile data.
 #[derive(Debug)]
@@ -51,6 +52,7 @@ pub struct MockTilesReader {
 
 impl MockTilesReader {
 	/// Creates a new mock tiles reader with the specified profile.
+	#[context("creating mock reader with profile {:?}", profile)]
 	pub fn new_mock_profile(profile: MockTilesReaderProfile) -> Result<MockTilesReader> {
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();
 		bbox_pyramid.set_level_bbox(TileBBox::from_min_and_max(2, 0, 1, 2, 3)?);
@@ -73,6 +75,7 @@ impl MockTilesReader {
 	}
 
 	/// Creates a new mock tiles reader with the specified parameters.
+	#[context("creating mock reader from parameters")]
 	pub fn new_mock(parameters: TilesReaderParameters) -> Result<MockTilesReader> {
 		let mut tilejson = TileJSON::default();
 		tilejson.set_string("type", "dummy")?;
@@ -102,6 +105,7 @@ impl TilesReaderTrait for MockTilesReader {
 		&self.tilejson
 	}
 
+	#[context("fetching mock tile {:?} (format={:?}, compression={:?})", coord, self.parameters.tile_format, self.parameters.tile_compression)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		use TileFormat::*;
 

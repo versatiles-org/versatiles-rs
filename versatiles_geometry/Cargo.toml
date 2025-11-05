@@ -24,6 +24,7 @@ regex.workspace = true
 tokio.workspace = true
 
 versatiles_core.workspace = true
+versatiles_derive.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true

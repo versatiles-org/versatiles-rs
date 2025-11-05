@@ -24,11 +24,13 @@ use crate::{ProcessingConfig, TilesReaderTrait, TilesReaderTraverseExt, TilesWri
 use anyhow::Result;
 use async_trait::async_trait;
 use versatiles_core::{Traversal, io::DataWriterTrait};
+use versatiles_derive::context;
 
 /// Mock implementation of a `TilesWriter`.
 pub struct MockTilesWriter {}
 
 impl MockTilesWriter {
+	#[context("mock writing tiles from reader '{}'", reader.container_name())]
 	/// Simulates writing tile data from the given `TilesReader`.
 	///
 	/// This method iterates through the tile data provided by the reader and simulates the writing process.
@@ -74,6 +76,7 @@ impl TilesWriterTrait for MockTilesWriter {
 	/// # Returns
 	///
 	/// A `Result` indicating the success or failure of the operation.
+	#[context("mock writing tiles to DataWriter")]
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,

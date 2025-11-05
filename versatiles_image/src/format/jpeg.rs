@@ -24,6 +24,7 @@ use crate::traits::DynamicImageTraitInfo;
 use anyhow::{Result, anyhow, bail};
 use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::jpeg::JpegEncoder, load_from_memory_with_format};
 use versatiles_core::Blob;
+use versatiles_derive::context;
 
 /// Encode a `DynamicImage` into a JPEG [`Blob`].
 ///
@@ -31,6 +32,7 @@ use versatiles_core::Blob;
 /// * Returns an error if the image is not 8‑bit, has an alpha channel, or if `quality >= 100`.
 ///
 /// Supported color types: **L8 (Grey)** and **Rgb8**.
+#[context("encoding {}x{} {:?} as JPEG (q={:?})", image.width(), image.height(), image.color(), quality)]
 pub fn encode(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("JPEG only supports 8-bit images");
@@ -60,6 +62,7 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 /// Convenience wrapper around [`encode`].
 ///
 /// Equivalent to calling `encode(image, quality)`.
+#[context("encoding image {:?} as JPEG (q={:?})", image.color(), quality)]
 pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	encode(image, quality)
 }
@@ -67,6 +70,7 @@ pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 /// Decode a JPEG [`Blob`] back into a [`DynamicImage`].
 ///
 /// Returns a decoding error if the blob is not a valid JPEG.
+#[context("decoding JPEG image ({} bytes)", blob.len())]
 pub fn blob2image(blob: &Blob) -> Result<DynamicImage> {
 	load_from_memory_with_format(blob.as_slice(), ImageFormat::Jpeg)
 		.map_err(|e| anyhow!("Failed to decode JPEG image: {e}"))

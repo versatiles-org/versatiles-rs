@@ -1,5 +1,5 @@
 use super::{BandMapping, ResampleAlg, get_spatial_ref};
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Result, bail, ensure};
 use gdal::{Dataset, GeoTransform, spatial_ref::CoordTransform, vector::Geometry};
 use std::{fmt::Debug, sync::Arc};
 use versatiles_core::GeoBBox;

@@ -9,6 +9,7 @@ use std::{
 };
 use versatiles_container::UrlPath;
 use versatiles_derive::ConfigDoc;
+use versatiles_derive::context;
 
 #[derive(Default, Debug, Clone, Deserialize, PartialEq, ConfigDoc)]
 #[serde(deny_unknown_fields)]
@@ -41,14 +42,17 @@ pub struct Config {
 }
 
 impl Config {
+	#[context("parsing config from reader (YAML)")]
 	pub fn from_reader<R: Read>(reader: R) -> Result<Self> {
 		Ok(serde_yaml_ng::from_reader(reader)?)
 	}
 
+	#[context("parsing config from string (YAML)")]
 	pub fn from_string(text: &str) -> Result<Self> {
 		Ok(serde_yaml_ng::from_str(text)?)
 	}
 
+	#[context("reading config file '{}'", path.display())]
 	/// Parse from a file path and resolve `include.files` relative to that file.
 	///
 	/// Merge strategy:
@@ -64,6 +68,7 @@ impl Config {
 		Ok(cfg)
 	}
 
+	#[context("resolving relative paths for {} static + {} tile sources", self.static_sources.len(), self.tile_sources.len())]
 	pub fn resolve_paths(&mut self, base: &UrlPath) -> Result<()> {
 		for static_source in &mut self.static_sources {
 			static_source.resolve_paths(base)?;

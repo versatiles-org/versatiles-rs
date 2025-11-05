@@ -1,4 +1,5 @@
 use anyhow::Result;
+use versatiles_derive::context;
 
 use super::traits::{Cache, CacheKey, CacheValue};
 use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
@@ -23,19 +24,23 @@ impl<K: CacheKey, V: CacheValue> Cache<K, V> for InMemoryCache<K, V> {
 		self.data.contains_key(&key.to_cache_key())
 	}
 
+	#[context("retrieving clone for key '{}'", key.to_cache_key())]
 	fn get_clone(&self, key: &K) -> Result<Option<Vec<V>>> {
 		Ok(self.data.get(&key.to_cache_key()).cloned())
 	}
 
+	#[context("removing entry for key '{}'", key.to_cache_key())]
 	fn remove(&mut self, key: &K) -> Result<Option<Vec<V>>> {
 		Ok(self.data.remove(&key.to_cache_key()))
 	}
 
+	#[context("inserting values for key '{}'",  key.to_cache_key())]
 	fn insert(&mut self, key: &K, values: Vec<V>) -> Result<()> {
 		self.data.insert(key.to_cache_key(), values);
 		Ok(())
 	}
 
+	#[context("appending values for key '{}'",  key.to_cache_key())]
 	fn append(&mut self, key: &K, values: Vec<V>) -> Result<()> {
 		self.data.entry(key.to_cache_key()).or_default().extend(values);
 		Ok(())

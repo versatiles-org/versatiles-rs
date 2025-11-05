@@ -7,13 +7,16 @@ use anyhow::{Error, Result, anyhow};
 use futures::{Stream, StreamExt, future::ready, stream};
 use std::io::{BufRead, Cursor, Read};
 use versatiles_core::byte_iterator::ByteIterator;
+use versatiles_derive::context;
 
+#[context("reading full GeoJSON document")]
 pub fn read_geojson(mut reader: impl Read) -> Result<GeoCollection> {
 	let mut buffer = String::new();
 	reader.read_to_string(&mut buffer)?;
 	parse_geojson(&buffer)
 }
 
+#[context("processing GeoJSON line {}", index + 1)]
 fn process_line(line: std::io::Result<String>, index: usize) -> Result<Option<GeoFeature>> {
 	match line {
 		Ok(line) if line.trim().is_empty() => Ok(None), // Skip empty or whitespace-only lines

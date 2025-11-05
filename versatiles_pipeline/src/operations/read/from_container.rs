@@ -12,6 +12,7 @@ use async_trait::async_trait;
 use std::fmt::Debug;
 use versatiles_container::{Tile, TilesReaderTrait};
 use versatiles_core::*;
+use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Reads a tile container, such as a `*.versatiles`, `*.mbtiles`, `*.pmtiles` or `*.tar` file.
@@ -33,6 +34,7 @@ struct Operation {
 }
 
 impl ReadOperationTrait for Operation {
+	#[context("Failed to build from_container operation in VPL node {:?}", vpl_node.name)]
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
@@ -71,6 +73,7 @@ impl OperationTrait for Operation {
 
 	/// Stream raw tile blobs intersecting the bounding box by delegating to
 	/// `TilesReaderTrait::get_tile_stream`.
+	#[context("Failed to get tile stream for bbox: {:?}", bbox)]
 	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("getstream {:?}", bbox);
 		Ok(self.reader.get_tile_stream(bbox).await?)

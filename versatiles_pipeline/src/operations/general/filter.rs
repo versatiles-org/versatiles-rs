@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use std::fmt::Debug;
 use versatiles_container::Tile;
 use versatiles_core::*;
+use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filter tiles by bounding box and/or zoom levels.
@@ -24,6 +25,7 @@ struct Operation {
 }
 
 impl Operation {
+	#[context("Building filter operation in VPL node {:?}", vpl_node.name)]
 	async fn build(vpl_node: VPLNode, source: Box<dyn OperationTrait>, _factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + OperationTrait,

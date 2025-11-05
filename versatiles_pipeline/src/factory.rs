@@ -14,6 +14,7 @@ use std::{
 };
 use versatiles_container::{ProcessingConfig, TilesReaderTrait};
 use versatiles_core::{TileFormat, TileType};
+use versatiles_derive::context;
 
 type Callback = Box<dyn Fn(String) -> BoxFuture<'static, Result<Box<dyn TilesReaderTrait>>>>;
 
@@ -94,15 +95,18 @@ impl PipelineFactory {
 		self.tran_ops.insert(factory.get_tag_name().to_string(), factory);
 	}
 
+	#[context("Failed to get reader for file '{}'", filename)]
 	pub async fn get_reader(&self, filename: &str) -> Result<Box<dyn TilesReaderTrait>> {
 		(self.create_reader.as_ref())(self.dir.join(filename).to_string_lossy().to_string()).await
 	}
 
+	#[context("Failed to create operation from VPL")]
 	pub async fn operation_from_vpl(&self, text: &str) -> Result<Box<dyn OperationTrait>> {
 		let pipeline = parse_vpl(text)?;
 		self.build_pipeline(pipeline).await
 	}
 
+	#[context("Failed to build pipeline from VPL")]
 	pub async fn build_pipeline(&self, pipeline: VPLPipeline) -> Result<Box<dyn OperationTrait>> {
 		let (head, tail) = pipeline.split()?;
 
@@ -115,6 +119,7 @@ impl PipelineFactory {
 		Ok(vpl_operation)
 	}
 
+	#[context("Failed to create read operation from VPL node")]
 	async fn read_operation_from_node(&self, node: VPLNode) -> Result<Box<dyn OperationTrait>> {
 		let factory = self
 			.read_ops
@@ -124,6 +129,7 @@ impl PipelineFactory {
 		factory.build(node, self).await
 	}
 
+	#[context("Failed to create transform operation from VPL node")]
 	async fn tran_operation_from_node(
 		&self,
 		node: VPLNode,

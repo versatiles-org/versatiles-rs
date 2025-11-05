@@ -45,12 +45,14 @@ use versatiles_core::{
 	types::*,
 	utils::{HilbertIndex, compress},
 };
+use versatiles_derive::context;
 
 /// A struct that provides functionality to write tile data to a PMTiles container.
 pub struct PMTilesWriter {}
 
 #[async_trait]
 impl TilesWriterTrait for PMTilesWriter {
+	#[context("writing PMTiles to DataWriter")]
 	/// Writes tile data from a `TilesReader` to a `DataWriterTrait` (such as a PMTiles container).
 	///
 	/// # Arguments
@@ -141,7 +143,9 @@ mod tests {
 		pmtiles::PMTilesReader,
 	};
 	use versatiles_core::io::*;
+	use versatiles_derive::context;
 
+	#[context("test: PMTiles read↔write roundtrip")]
 	#[tokio::test]
 	async fn read_write() -> Result<()> {
 		let mut mock_reader = MockTilesReader::new_mock(TilesReaderParameters {
@@ -160,6 +164,7 @@ mod tests {
 		Ok(())
 	}
 
+	#[context("test: PMTiles tile ordering (Hilbert & offsets)")]
 	#[tokio::test]
 	async fn tiles_written_in_order() -> Result<()> {
 		let mut bbox_pyramid = TileBBoxPyramid::new_empty();

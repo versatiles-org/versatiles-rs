@@ -37,6 +37,7 @@ use crate::{Blob, ByteRange};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::io::{Cursor, Seek, SeekFrom, Write};
+use versatiles_derive::context;
 
 /// A struct that provides writing capabilities to an in-memory blob of data.
 #[derive(Clone)]
@@ -50,6 +51,7 @@ impl DataWriterBlob {
 	/// # Returns
 	///
 	/// * A Result containing the new `DataWriterBlob` instance or an error.
+	#[context("while creating a new DataWriterBlob")]
 	pub fn new() -> Result<DataWriterBlob> {
 		Ok(DataWriterBlob {
 			writer: Cursor::new(Vec::new()),
@@ -128,6 +130,7 @@ impl DataWriterTrait for DataWriterBlob {
 	/// # Returns
 	///
 	/// * A Result containing a `ByteRange` indicating the position and length of the appended data, or an error.
+	#[context("while appending data of length {} to DataWriterBlob", blob.len())]
 	fn append(&mut self, blob: &Blob) -> Result<ByteRange> {
 		let pos = self.writer.stream_position()?;
 		let len = self.writer.write(blob.as_slice())?;
@@ -144,6 +147,7 @@ impl DataWriterTrait for DataWriterBlob {
 	/// # Returns
 	///
 	/// * A Result indicating success or an error.
+	#[context("while writing data of length {} from start to DataWriterBlob", blob.len())]
 	fn write_start(&mut self, blob: &Blob) -> Result<()> {
 		let pos = self.writer.stream_position()?;
 		self.writer.rewind()?;
@@ -157,6 +161,7 @@ impl DataWriterTrait for DataWriterBlob {
 	/// # Returns
 	///
 	/// * A Result containing the current write position in bytes or an error.
+	#[context("while getting current write position from DataWriterBlob")]
 	fn get_position(&mut self) -> Result<u64> {
 		Ok(self.writer.stream_position()?)
 	}
@@ -170,6 +175,7 @@ impl DataWriterTrait for DataWriterBlob {
 	/// # Returns
 	///
 	/// * A Result indicating success or an error.
+	#[context("while setting write position to {} in DataWriterBlob", position)]
 	fn set_position(&mut self, position: u64) -> Result<()> {
 		self.writer.seek(SeekFrom::Start(position))?;
 		Ok(())

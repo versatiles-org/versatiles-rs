@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use versatiles_container::Tile;
 use versatiles_core::{TileBBox, TileJSON, TileStream, TileType, TilesReaderParameters, Traversal};
+use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 
 pub trait RunnerTrait: std::fmt::Debug + Send + Sync + 'static {
@@ -34,6 +35,7 @@ impl<R: RunnerTrait> OperationTrait for TransformOp<R> {
 		self.source.traversal()
 	}
 
+	#[context("Failed to get transformed tile stream for bbox: {:?}", bbox)]
 	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		let runner = self.runner.clone();
 		let tile_format = self.params.tile_format;
@@ -53,6 +55,7 @@ impl<R: RunnerTrait> OperationTrait for TransformOp<R> {
 }
 
 // transform_factory.rs
+#[context("Failed to build transform operation")]
 pub async fn build_transform<R>(source: Box<dyn OperationTrait>, runner: R) -> Result<Box<dyn OperationTrait>>
 where
 	R: RunnerTrait,

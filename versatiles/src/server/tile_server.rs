@@ -173,7 +173,7 @@ impl TileServer {
 	}
 
 	/// Register a static file source mounted at `url_prefix`.
-	#[context("adding static source: url_prefix='{url_prefix}'")]
+	#[context("adding static source: path={path:?}, url_prefix='{url_prefix}'")]
 	pub fn add_static_source(&mut self, path: &Path, url_prefix: &str) -> Result<()> {
 		log::debug!("add static: {path:?}");
 		self.static_sources.push(sources::StaticSource::new(path, url_prefix)?);
@@ -313,6 +313,7 @@ impl TileServer {
 	}
 
 	/// Helper: delegate to `routes::add_api_to_app` to attach small JSON API endpoints.
+	#[context("adding API routes to app")]
 	async fn add_api_to_app(&self, app: Router) -> Result<Router> {
 		routes::add_api_to_app(app, &self.tile_sources).await
 	}

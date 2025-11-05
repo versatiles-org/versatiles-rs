@@ -13,6 +13,7 @@ use crate::format::{avif, jpeg, png, webp};
 use anyhow::{Result, anyhow, bail, ensure};
 use image::{DynamicImage, EncodableLayout, ImageBuffer};
 use versatiles_core::{Blob, TileFormat};
+use versatiles_derive::context;
 
 /// Trait for converting between `DynamicImage` and raw/encoded formats, and for constructing images from functions.
 pub trait DynamicImageTraitConvert {
@@ -53,6 +54,7 @@ impl DynamicImageTraitConvert for DynamicImage {
 		DynamicImage::from_raw(width, height, data).expect("from_fn: failed to construct image from raw data")
 	}
 
+	#[context("creating image from raw ({}x{})", width, height)]
 	fn from_raw(width: usize, height: usize, data: Vec<u8>) -> Result<DynamicImage> {
 		let channel_count = data.len() / (width * height);
 		ensure!(
@@ -82,6 +84,7 @@ impl DynamicImageTraitConvert for DynamicImage {
 		})
 	}
 
+	#[context("encoding {}x{} {:?} as {:?} (q={:?}, s={:?})", self.width(), self.height(), self.color(), format, quality, speed)]
 	fn to_blob(&self, format: TileFormat, quality: Option<u8>, speed: Option<u8>) -> Result<Blob> {
 		use TileFormat::{AVIF, JPG, PNG, WEBP};
 		match format {
@@ -93,6 +96,7 @@ impl DynamicImageTraitConvert for DynamicImage {
 		}
 	}
 
+	#[context("decoding {:?} image ({} bytes)", format, blob.len())]
 	fn from_blob(blob: &Blob, format: TileFormat) -> Result<DynamicImage> {
 		use TileFormat::{AVIF, JPG, PNG, WEBP};
 		match format {

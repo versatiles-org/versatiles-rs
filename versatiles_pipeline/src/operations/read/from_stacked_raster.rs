@@ -22,6 +22,7 @@ use futures::{StreamExt, future::join_all, stream};
 use std::vec;
 use versatiles_container::Tile;
 use versatiles_core::*;
+use versatiles_derive::context;
 use versatiles_image::traits::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -52,6 +53,7 @@ struct Operation {
 /// First tile is in the front
 ///
 /// Returns `Ok(None)` when the input list is empty.
+#[context("Failed to stack tiles")]
 fn stack_tiles(tiles: Vec<Tile>) -> Result<Option<Tile>> {
 	let mut tile = Option::<Tile>::None;
 
@@ -72,6 +74,7 @@ fn stack_tiles(tiles: Vec<Tile>) -> Result<Option<Tile>> {
 }
 
 impl ReadOperationTrait for Operation {
+	#[context("Failed to build from_stacked_raster operation in VPL node {:?}", vpl_node.name)]
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
@@ -140,6 +143,7 @@ impl OperationTrait for Operation {
 	}
 
 	/// Stream packed raster tiles intersecting `bbox`.
+	#[context("Failed to get stacked raster tile stream for bbox: {:?}", bbox)]
 	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox);
 

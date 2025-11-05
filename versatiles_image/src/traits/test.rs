@@ -25,6 +25,7 @@
 use super::convert::DynamicImageTraitConvert;
 use anyhow::{Result, bail, ensure};
 use image::{DynamicImage, GenericImageView};
+use versatiles_derive::context;
 
 /// Describes a synthetic directional gradient marker for one image channel.
 /// Used by [`DynamicImageTraitTest::new_marker`] to generate test images.
@@ -67,6 +68,7 @@ pub struct MarkerResult {
 }
 
 impl MarkerResult {
+	#[context("comparing marker result (factor={:.3}) to expected (offset={:.3}, angle={:.1}, scale={:.3})", factor, p.offset, p.angle, p.scale)]
 	pub fn compare(&self, p: &MarkerParameters, factor: f64) -> Result<()> {
 		fn angle_delta(a: f64, b: f64) -> f64 {
 			// Normalize to [-180°, 180°)
@@ -116,6 +118,7 @@ impl MarkerResult {
 	}
 }
 
+#[context("comparing {} channel marker results", params.len())]
 pub fn compare_marker_result(params: &[MarkerParameters], results: &[MarkerResult]) -> Result<()> {
 	ensure!(
 		params.len() == results.len(),
@@ -326,6 +329,7 @@ where
 mod tests {
 	use super::*;
 	use rstest::rstest;
+	use versatiles_derive::context;
 
 	/// Helper: run `MarkerResult::compare` expecting failure and return the error message string.
 	fn compare_err_msg(p: MarkerParameters, r: MarkerResult, factor: f64) -> String {
@@ -394,6 +398,7 @@ mod tests {
 	}
 
 	#[test]
+	#[context("test: compare tolerates exact thresholds")]
 	fn compare_tolerates_exact_thresholds() -> Result<()> {
 		// Offsets: allowed Δ <= 0.11 * factor
 		let p = MarkerParameters {
@@ -457,6 +462,7 @@ mod tests {
 	}
 
 	#[test]
+	#[context("test: compare angle wrap & principal-axis equivalence")]
 	fn compare_angle_wrap_and_principal_axis_equivalence() -> Result<()> {
 		// 179° vs -181° is effectively 0° difference after wrap; also principal-axis equivalence
 		let p = MarkerParameters {

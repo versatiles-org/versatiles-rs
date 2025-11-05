@@ -41,6 +41,7 @@ use std::{
 	io::{BufWriter, Seek, SeekFrom, Write},
 	path::Path,
 };
+use versatiles_derive::context;
 
 /// A struct that provides writing capabilities to a file.
 pub struct DataWriterFile {
@@ -57,6 +58,7 @@ impl DataWriterFile {
 	/// # Returns
 	///
 	/// * A Result containing the new `DataWriterFile` instance or an error.
+	#[context("while creating file writer for path {:?}", path)]
 	pub fn from_path(path: &Path) -> Result<DataWriterFile> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
@@ -77,6 +79,7 @@ impl DataWriterTrait for DataWriterFile {
 	/// # Returns
 	///
 	/// * A Result containing a `ByteRange` indicating the position and length of the appended data, or an error.
+	#[context("while appending {} bytes to file", blob.len())]
 	fn append(&mut self, blob: &Blob) -> Result<ByteRange> {
 		let pos = self.writer.stream_position()?;
 		let len = self.writer.write(blob.as_slice())?;
@@ -93,6 +96,7 @@ impl DataWriterTrait for DataWriterFile {
 	/// # Returns
 	///
 	/// * A Result indicating success or an error.
+	#[context("while writing {} bytes at start of file", blob.len())]
 	fn write_start(&mut self, blob: &Blob) -> Result<()> {
 		let pos = self.writer.stream_position()?;
 		self.writer.rewind()?;
@@ -106,6 +110,7 @@ impl DataWriterTrait for DataWriterFile {
 	/// # Returns
 	///
 	/// * A Result containing the current write position in bytes or an error.
+	#[context("while getting current write position")]
 	fn get_position(&mut self) -> Result<u64> {
 		Ok(self.writer.stream_position()?)
 	}
@@ -119,6 +124,7 @@ impl DataWriterTrait for DataWriterFile {
 	/// # Returns
 	///
 	/// * A Result indicating success or an error.
+	#[context("while setting write position to {}", position)]
 	fn set_position(&mut self, position: u64) -> Result<()> {
 		self.writer.seek(SeekFrom::Start(position))?;
 		Ok(())

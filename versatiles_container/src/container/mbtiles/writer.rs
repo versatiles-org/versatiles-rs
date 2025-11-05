@@ -41,6 +41,7 @@ use r2d2::Pool;
 use r2d2_sqlite::{SqliteConnectionManager, rusqlite::params};
 use std::{fs::remove_file, path::Path, sync::Arc};
 use versatiles_core::{io::DataWriterTrait, json::JsonObject, *};
+use versatiles_derive::context;
 
 /// A writer for creating and populating MBTiles databases.
 pub struct MBTilesWriter {
@@ -55,6 +56,7 @@ impl MBTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the SQLite connection cannot be established or if the necessary tables cannot be created.
+	#[context("creating MBTilesWriter for '{}'", path.display())]
 	fn new(path: &Path) -> Result<Self> {
 		if path.exists() {
 			remove_file(path)?;
@@ -78,6 +80,7 @@ impl MBTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the transaction fails.
+	#[context("adding {} tiles to MBTiles database", tiles.len())]
 	fn add_tiles(&mut self, tiles: &Vec<(TileCoord, Blob)>) -> Result<()> {
 		let mut conn = self.pool.get()?;
 		let transaction = conn.transaction()?;
@@ -100,6 +103,7 @@ impl MBTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the metadata cannot be inserted or replaced.
+	#[context("setting metadata key '{}' = '{}'", name, value)]
 	fn set_metadata(&self, name: &str, value: &str) -> Result<()> {
 		self.pool.get()?.execute(
 			"INSERT OR REPLACE INTO metadata (name, value) VALUES (?1, ?2)",
@@ -119,6 +123,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the file format or compression is not supported, or if there are issues with writing to the SQLite database.
+	#[context("writing MBTiles to '{}'", path.display())]
 	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: ProcessingConfig) -> Result<()> {
 		use TileCompression::*;
 		use TileFormat::*;
@@ -196,6 +201,7 @@ impl TilesWriterTrait for MBTilesWriter {
 	}
 
 	/// Not implemented: Writes tiles and metadata to a generic data writer.
+	#[context("writing MBTiles to generic writer")]
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,

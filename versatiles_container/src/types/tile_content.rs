@@ -14,7 +14,7 @@ pub enum TileContent {
 }
 
 impl TileContent {
-	#[context("Failed converting TileContent to blob")]
+	#[context("converting tile to blob: format={:?}, q={:?}, s={:?}", format, quality, speed)]
 	pub fn to_blob(&self, format: TileFormat, quality: Option<u8>, speed: Option<u8>) -> Result<Blob> {
 		match self {
 			TileContent::Raster(image) => image.to_blob(format, quality, speed),
@@ -22,7 +22,7 @@ impl TileContent {
 		}
 	}
 
-	#[context("Failed creating TileContent from blob")]
+	#[context("decoding tile from blob ({} bytes) as {:?}", blob.len(), format)]
 	pub fn from_blob(blob: &Blob, format: TileFormat) -> Result<Self> {
 		Ok(match format.to_type() {
 			TileType::Raster => {
@@ -45,7 +45,7 @@ impl TileContent {
 		TileContent::Vector(vector)
 	}
 
-	#[context("Failed getting image reference from TileContent")]
+	#[context("accessing raster image from tile content")]
 	pub fn as_image(&self) -> Result<&DynamicImage> {
 		match self {
 			TileContent::Raster(image) => Ok(image),
@@ -53,7 +53,7 @@ impl TileContent {
 		}
 	}
 
-	#[context("Failed getting vector reference from TileContent")]
+	#[context("accessing vector data from tile content")]
 	pub fn as_vector(&self) -> Result<&VectorTile> {
 		match self {
 			TileContent::Vector(vector_tile) => Ok(vector_tile),
@@ -93,6 +93,7 @@ impl TileContent {
 }
 
 impl CacheValue for TileContent {
+	#[context("serializing tile to cache buffer (pre-len={})", writer.len())]
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
 		match self {
 			TileContent::Raster(image) => {
@@ -106,6 +107,7 @@ impl CacheValue for TileContent {
 		}
 	}
 
+	#[context("deserializing tile from cache buffer")]
 	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
 		let content_type = reader.read_u8()?;
 		match content_type {

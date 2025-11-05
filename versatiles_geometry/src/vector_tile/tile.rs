@@ -1,11 +1,12 @@
 #![allow(dead_code)]
 
 use super::layer::VectorTileLayer;
-use anyhow::{Context, Result, bail};
+use anyhow::{Result, bail};
 use versatiles_core::{
 	Blob,
 	io::{ValueReader, ValueReaderSlice, ValueWriter, ValueWriterBlob},
 };
+use versatiles_derive::context;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct VectorTile {
@@ -18,6 +19,7 @@ impl VectorTile {
 		VectorTile { layers }
 	}
 
+	#[context("parsing VectorTile from Blob ({} bytes)", blob.len())]
 	pub fn from_blob(blob: &Blob) -> Result<VectorTile> {
 		let mut reader = ValueReaderSlice::new_le(blob.as_slice());
 
@@ -42,6 +44,7 @@ impl VectorTile {
 		Ok(tile)
 	}
 
+	#[context("serializing VectorTile to Blob")]
 	pub fn to_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_le();
 
@@ -68,6 +71,7 @@ impl VectorTile {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use anyhow::Context;
 	use std::env::current_dir;
 	use versatiles_core::io::{DataReaderFile, DataReaderTrait};
 

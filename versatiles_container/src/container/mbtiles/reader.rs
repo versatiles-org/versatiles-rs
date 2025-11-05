@@ -40,12 +40,13 @@
 //! This module includes comprehensive tests to ensure the correct functionality of reading metadata, handling different file formats, and verifying tile data.
 
 use crate::{Tile, TilesReaderTrait};
-use anyhow::{Context, Result, anyhow, ensure};
+use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 use std::path::Path;
 use versatiles_core::{TileCompression::*, TileFormat::*, json::parse_json_str, progress::get_progress_bar, types::*};
+use versatiles_derive::context;
 
 /// A struct that provides functionality to read tile data from an MBTiles SQLite database.
 pub struct MBTilesReader {
@@ -63,6 +64,7 @@ impl MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if the file does not exist, if the path is not absolute, or if there is an error loading from SQLite.
+	#[context("opening MBTiles at '{}'", path.display())]
 	pub fn open_path(path: &Path) -> Result<MBTilesReader> {
 		log::debug!("open {path:?}");
 
@@ -79,6 +81,7 @@ impl MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue connecting to the database or loading metadata.
+	#[context("loading SQLite '{}'", path.display())]
 	fn load_from_sqlite(path: &Path) -> Result<MBTilesReader> {
 		log::debug!("load_from_sqlite {path:?}");
 
@@ -102,6 +105,7 @@ impl MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if the tile format or compression is not specified or if there is an issue querying the database.
+	#[context("loading MBTiles metadata from '{}'", self.name)]
 	fn load_meta_data(&mut self) -> Result<()> {
 		log::debug!("load_meta_data");
 
@@ -183,6 +187,7 @@ impl MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue executing the query.
+	#[context("executing tiles query")]
 	fn simple_query(&self, sql_value: &str, sql_where: &str) -> Result<i32> {
 		let sql = if sql_where.is_empty() {
 			format!("SELECT {sql_value} FROM tiles")
@@ -201,6 +206,7 @@ impl MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue querying the database.
+	#[context("computing bbox pyramid from MBTiles")]
 	fn get_bbox_pyramid(&self) -> Result<TileBBoxPyramid> {
 		log::debug!("get_bbox_pyramid");
 
@@ -304,6 +310,7 @@ impl TilesReaderTrait for MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
+	#[context("fetching tile {:?} from '{}'", coord, self.name)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		log::trace!("read tile from coord {coord:?}");
 
@@ -332,6 +339,7 @@ impl TilesReaderTrait for MBTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue querying the database.
+	#[context("streaming tiles for bbox {:?}", bbox)]
 	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_tile_stream {:?}", bbox);
 

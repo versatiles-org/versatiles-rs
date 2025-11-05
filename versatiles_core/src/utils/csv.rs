@@ -1,7 +1,9 @@
 use crate::byte_iterator::ByteIterator;
 use anyhow::{Error, Result, bail};
 use std::io::BufRead;
+use versatiles_derive::context;
 
+#[context("parsing quoted CSV field")]
 fn parse_quoted_csv_string(iter: &mut ByteIterator) -> Result<String> {
 	if iter.expect_next_byte()? != b'"' {
 		bail!(iter.format_error("expected '\"' while parsing a string"));
@@ -23,6 +25,7 @@ fn parse_quoted_csv_string(iter: &mut ByteIterator) -> Result<String> {
 	}
 }
 
+#[context("parsing unquoted CSV field (sep='{}')", separator as char)]
 fn parse_simple_csv_string(iter: &mut ByteIterator, separator: u8) -> Result<String> {
 	if iter.expect_peeked_byte()? == b'"' {
 		bail!(iter.format_error("unexpected '\"' while parsing a string"));

@@ -57,6 +57,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 use versatiles_core::{io::DataWriterTrait, utils::compress, *};
+use versatiles_derive::context;
 
 /// A struct that provides functionality to write tile data to a directory structure.
 pub struct DirectoryTilesWriter {}
@@ -70,6 +71,7 @@ impl DirectoryTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the parent directory cannot be created or if writing to the file fails.
+	#[context("writing file '{}'", path.display())]
 	fn write(path: PathBuf, blob: Blob) -> Result<()> {
 		let parent = path.parent().unwrap();
 		if !parent.exists() {
@@ -91,6 +93,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if the path is not absolute, if there are issues with file I/O, or if compression fails.
+	#[context("writing tiles to directory '{}'", path.display())]
 	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: ProcessingConfig) -> Result<()> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
 
@@ -145,6 +148,7 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 	///
 	/// # Errors
 	/// This function always returns an error as it is not implemented.
+	#[context("writing tiles to external writer")]
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,

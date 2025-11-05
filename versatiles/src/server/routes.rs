@@ -9,6 +9,7 @@ use super::{
 };
 use anyhow::Result;
 use axum::{Router, routing::get};
+use versatiles_derive::context;
 
 /// Attach all tile sources under their prefixes (`/tiles/<id>/{*path}`).
 pub fn add_tile_sources_to_app(mut app: Router, sources: &[TileSource], minimal_recompression: bool) -> Router {
@@ -36,6 +37,7 @@ pub fn add_static_sources_to_app(app: Router, static_sources: &[StaticSource], m
 }
 
 /// Attach small JSON API endpoints (currently `/tiles/index.json`).
+#[context("adding API routes to app")]
 pub async fn add_api_to_app(app: Router, sources: &[TileSource]) -> Result<Router> {
 	let mut api_app = Router::new();
 

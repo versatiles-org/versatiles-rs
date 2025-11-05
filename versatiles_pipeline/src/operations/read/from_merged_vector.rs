@@ -26,6 +26,7 @@ use futures::{StreamExt, future::join_all, stream};
 use std::collections::HashMap;
 use versatiles_container::Tile;
 use versatiles_core::*;
+use versatiles_derive::context;
 use versatiles_geometry::vector_tile::{VectorTile, VectorTileLayer};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -52,6 +53,7 @@ struct Operation {
 ///
 /// If multiple sources provide a layer called `"roads"`, all road features
 /// end up in the same output layer; layers unique to a source are copied as‐is.
+#[context("Failed to merge vector tiles")]
 fn merge_vector_tiles(tiles: Vec<VectorTile>) -> Result<VectorTile> {
 	let mut layers = HashMap::<String, VectorTileLayer>::new();
 	for tile in tiles.into_iter() {
@@ -67,6 +69,7 @@ fn merge_vector_tiles(tiles: Vec<VectorTile>) -> Result<VectorTile> {
 }
 
 impl ReadOperationTrait for Operation {
+	#[context("Failed to build from_merged_vector operation")]
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
@@ -129,6 +132,7 @@ impl OperationTrait for Operation {
 	}
 
 	/// Stream merged vector tiles for every coordinate in `bbox`.
+	#[context("Failed to get merged tile stream for bbox: {:?}", bbox)]
 	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox);
 		let bboxes: Vec<TileBBox> = bbox.clone().iter_bbox_grid(32).collect();

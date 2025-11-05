@@ -29,12 +29,13 @@
 
 use super::DataReaderTrait;
 use crate::{Blob, ByteRange};
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Result, anyhow, bail};
 use async_trait::async_trait;
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
 use reqwest::{Client, Method, Request, StatusCode, Url};
 use std::{str, time::Duration};
+use versatiles_derive::context;
 
 /// A struct that provides reading capabilities from an HTTP(S) endpoint.
 #[derive(Debug)]
@@ -86,6 +87,7 @@ impl DataReaderTrait for DataReaderHttp {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with the read data or an error.
+	#[context("while reading range {} from url '{}'", range, self.url)]
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
 		let ctx = || format!("while reading range {range} of {}", self.url);
 
@@ -152,6 +154,7 @@ impl DataReaderTrait for DataReaderHttp {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with all the data or an error.
+	#[context("while reading all data from url '{}'", self.url)]
 	async fn read_all(&self) -> Result<Blob> {
 		let ctx = || format!("while reading all data from {}", self.url);
 		let response = self.client.get(self.url.clone()).send().await.with_context(ctx)?;

@@ -2,7 +2,7 @@
 //! providing both synchronous iterator and asynchronous stream interfaces.
 #![allow(dead_code)]
 use super::JsonValue;
-use anyhow::{Context, Error, Result, anyhow};
+use anyhow::{Context, Error, Result};
 use futures::{Stream, StreamExt, future::ready, stream};
 use std::io::BufRead;
 
@@ -18,11 +18,11 @@ use std::io::BufRead;
 /// - `Some(Ok(JsonValue))` if parsing succeeds.
 /// - `Some(Err(_))` if parsing or I/O fails (with line context).
 /// - `None` if the line is empty or only whitespace.
-fn process_line(line: std::io::Result<String>, index: usize) -> Option<Result<JsonValue>> {
+fn process_line(line: std::io::Result<String>) -> Option<Result<JsonValue>> {
 	match line {
 		Ok(line) if line.trim().is_empty() => None, // Skip empty or whitespace-only lines
-		Ok(line) => Some(JsonValue::parse_str(&line).with_context(|| format!("error in line {}", index + 1))),
-		Err(e) => Some(Err(anyhow!("line {}: {}", index + 1, e))),
+		Ok(line) => Some(JsonValue::parse_str(&line)),
+		Err(e) => Some(Err(e.into())),
 	}
 }
 
@@ -46,7 +46,7 @@ pub fn read_ndjson_iter(reader: impl BufRead) -> impl Iterator<Item = Result<Jso
 	reader
 		.lines()
 		.enumerate()
-		.filter_map(|(index, line)| process_line(line, index))
+		.filter_map(|(index, line)| process_line(line).map(|r| r.with_context(|| format!("error in line {}", index + 1))))
 }
 
 /// Create an asynchronous stream over NDJSON values from a buffered reader.
@@ -72,7 +72,11 @@ pub fn read_ndjson_iter(reader: impl BufRead) -> impl Iterator<Item = Result<Jso
 /// ```
 pub fn read_ndjson_stream(reader: impl BufRead) -> impl Stream<Item = Result<JsonValue>> {
 	stream::iter(reader.lines().enumerate())
-		.map(|(index, line)| tokio::spawn(async move { process_line(line, index) }))
+		.map(|(index, line)| {
+			tokio::spawn(
+				async move { process_line(line).map(|r| r.with_context(|| format!("error in line {}", index + 1))) },
+			)
+		})
 		.buffered(num_cpus::get())
 		.filter_map(|f| {
 			ready(match f {

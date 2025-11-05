@@ -46,6 +46,9 @@ impl TileCoord {
 	/// Returns an error if `level` > 31.
 	pub fn new(level: u8, x: u32, y: u32) -> Result<TileCoord> {
 		ensure!(level <= 31, "level ({level}) must be <= 31");
+		let max = 2u32.pow(u32::from(level));
+		ensure!(x < max, "x ({x}) out of bounds for level {level}");
+		ensure!(y < max, "y ({y}) out of bounds for level {level}");
 		Ok(TileCoord { x, y, level })
 	}
 
@@ -61,11 +64,11 @@ impl TileCoord {
 		let x = zoom * (x / 360.0 + 0.5);
 		let y = zoom * (0.5 - 0.5 * (y * PI32 / 360.0 + PI32 / 4.0).tan().ln() / PI32);
 
-		Ok(TileCoord {
-			x: x.min(zoom - 1.0).max(0.0).floor() as u32,
-			y: y.min(zoom - 1.0).max(0.0).floor() as u32,
-			level: z,
-		})
+		TileCoord::new(
+			z,
+			x.min(zoom - 1.0).max(0.0).floor() as u32,
+			y.min(zoom - 1.0).max(0.0).floor() as u32,
+		)
 	}
 
 	/// Convert this tile coordinate to geographic longitude/latitude in degrees.
@@ -132,6 +135,7 @@ impl TileCoord {
 	/// If `level` > current, x/y are multiplied; if lower, x/y are divided.
 	#[must_use]
 	pub fn as_level(&self, level: u8) -> TileCoord {
+		assert!(level <= 31, "level ({level}) must be <= 31");
 		if level > self.level {
 			let scale = 2u32.pow(u32::from(level - self.level));
 			TileCoord {
@@ -179,11 +183,7 @@ impl TileCoord {
 	}
 	pub fn as_level_decreased(&self) -> Result<TileCoord> {
 		ensure!(self.level > 0, "cannot decrease level below 0");
-		Ok(TileCoord {
-			x: self.x / 2,
-			y: self.y / 2,
-			level: self.level - 1,
-		})
+		TileCoord::new(self.level - 1, self.x / 2, self.y / 2)
 	}
 }
 

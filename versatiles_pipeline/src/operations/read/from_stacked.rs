@@ -26,6 +26,7 @@ use async_trait::async_trait;
 use futures::{StreamExt, future::join_all, stream};
 use versatiles_container::Tile;
 use versatiles_core::*;
+use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Overlays multiple tile sources, using the tile from the first source that provides it.
@@ -49,6 +50,7 @@ struct Operation {
 }
 
 impl ReadOperationTrait for Operation {
+	#[context("Failed to build from_stacked operation")]
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
@@ -64,6 +66,7 @@ impl ReadOperationTrait for Operation {
 }
 
 impl Operation {
+	#[context("Failed to create from_stacked operation")]
 	fn new(sources: Vec<Box<dyn OperationTrait>>) -> Result<Operation> {
 		ensure!(sources.len() > 1, "must have at least two sources");
 
@@ -118,6 +121,7 @@ impl OperationTrait for Operation {
 	}
 
 	/// Stream packed tiles intersecting `bbox` using the overlay strategy.
+	#[context("Failed to get stacked tile stream for bbox: {:?}", bbox)]
 	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox);
 		// We need the desired output compression inside the closure, so copy it.

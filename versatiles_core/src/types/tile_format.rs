@@ -36,6 +36,7 @@ use std::{
 	fmt::{Display, Formatter},
 	path::Path,
 };
+use versatiles_derive::context;
 
 /// Enum representing supported tile formats.
 ///
@@ -96,8 +97,9 @@ impl TileFormat {
 		}
 	}
 
+	#[context("Could not convert string '{value}' to TileFormat")]
 	pub fn try_from_str(value: &str) -> Result<Self> {
-		Ok(match value.to_lowercase().trim() {
+		Ok(match value.to_lowercase().trim_matches([' ', '.']) {
 			"avif" => AVIF,
 			"bin" => BIN,
 			"geojson" => GEOJSON,
@@ -249,46 +251,6 @@ impl TileFormat {
 		}
 	}
 
-	/// Attempts to parse a `TileFormat` from a string, ignoring leading dots and whitespace.
-	///
-	/// For instance, `".jpeg"`, `" JPeG "`, or `"svg"` all resolve to recognized tile formats.
-	///
-	/// # Arguments
-	///
-	/// * `value` - The string to parse.
-	///
-	/// # Errors
-	///
-	/// Returns an error if the format is not recognized.
-	///
-	/// # Examples
-	/// ```
-	/// use versatiles_core::TileFormat;
-	///
-	/// // Recognizes .jpeg as JPG.
-	/// let format = TileFormat::parse_str(".jpeg").unwrap();
-	/// assert_eq!(format, TileFormat::JPG);
-	///
-	/// // Returns an error if unknown.
-	/// assert!(TileFormat::parse_str(".abc").is_err());
-	/// ```
-	pub fn parse_str(value: &str) -> Result<Self> {
-		Ok(match value.to_lowercase().trim_matches([' ', '.']) {
-			"avif" => AVIF,
-			"bin" => BIN,
-			"geojson" => GEOJSON,
-			"jpeg" | "jpg" => JPG,
-			"json" => JSON,
-			"mvt" => MVT,
-			"png" => PNG,
-			"svg" => SVG,
-			"topojson" => TOPOJSON,
-			"webp" => WEBP,
-			_ => bail!("Unknown tile format: '{}'", value.trim()),
-		})
-	}
-
-	#[must_use]
 	pub fn to_type(&self) -> TileType {
 		use TileType::*;
 		match self {
@@ -439,7 +401,7 @@ mod tests {
 	#[case(".webp", Some(WEBP))]
 	#[case("unknown", None)]
 	fn should_parse_str_into_tileformat(#[case] input: &str, #[case] expected: Option<TileFormat>) {
-		let result = TileFormat::parse_str(input);
+		let result = TileFormat::try_from_str(input);
 		match expected {
 			Some(expected_format) => {
 				assert_eq!(result.unwrap(), expected_format);

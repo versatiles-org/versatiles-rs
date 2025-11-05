@@ -8,7 +8,7 @@
 
 use super::RasterSource;
 use crate::{PipelineFactory, operations::read::traits::ReadOperationTrait, traits::*, vpl::VPLNode};
-use anyhow::{Context, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use imageproc::image::DynamicImage;
 use std::{fmt::Debug, vec};
@@ -54,6 +54,7 @@ struct Operation {
 }
 
 impl Operation {
+	#[context("Building from_gdal_raster operation in VPL node {:?}", vpl_node.name)]
 	async fn new(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Self>
 	where
 		Self: Sized + OperationTrait,
@@ -134,6 +135,7 @@ impl Operation {
 }
 
 impl ReadOperationTrait for Operation {
+	#[context("Failed to build read operation")]
 	async fn build(vpl_node: VPLNode, factory: &PipelineFactory) -> Result<Box<dyn OperationTrait>>
 	where
 		Self: Sized + OperationTrait,
@@ -157,6 +159,7 @@ impl OperationTrait for Operation {
 	}
 
 	/// Stream decoded raster images for all tiles within the bounding box.
+	#[context("Failed to get stream for bbox: {:?}", bbox)]
 	async fn get_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox);
 

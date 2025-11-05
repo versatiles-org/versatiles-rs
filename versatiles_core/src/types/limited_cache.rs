@@ -6,6 +6,7 @@
 
 use anyhow::Result;
 use std::{collections::HashMap, fmt::Debug, hash::Hash, mem::size_of, ops::Div};
+use versatiles_derive::context;
 
 /// A generic cache that stores key-value pairs up to a specified total size limit (in bytes).
 ///
@@ -44,7 +45,7 @@ pub struct LimitedCache<K, V> {
 
 impl<K, V> LimitedCache<K, V>
 where
-	K: Clone + Eq + Hash + PartialEq,
+	K: Clone + Debug + Eq + Hash + PartialEq,
 	V: Clone,
 {
 	/// Creates a new `LimitedCache` with a specified maximum **byte** size.
@@ -139,6 +140,7 @@ where
 	///     Ok(())
 	/// }
 	/// ```
+	#[context("Could not get or set cache value for key '{:?}'", key)]
 	pub fn get_or_set<F>(&mut self, key: &K, callback: F) -> Result<V>
 	where
 		F: FnOnce() -> Result<V>,

@@ -18,6 +18,7 @@ use anyhow::{Result, bail};
 use fast_image_resize::{FilterType, ResizeAlg, ResizeOptions, Resizer};
 use image::{DynamicImage, Rgb, imageops::overlay};
 use imageproc::map::map_colors;
+use versatiles_derive::context;
 
 /// High-level convenience operations for modifying and transforming `DynamicImage`s.
 pub trait DynamicImageTraitOperation: DynamicImageTraitInfo {
@@ -87,6 +88,7 @@ impl DynamicImageTraitOperation for DynamicImage
 where
 	DynamicImage: DynamicImageTraitInfo,
 {
+	#[context("removing alpha from {:?} image (has_alpha={})", self.color(), self.has_alpha())]
 	fn as_no_alpha(&self) -> Result<DynamicImage> {
 		Ok(match self {
 			DynamicImage::ImageRgba8(_) => DynamicImage::from(self.to_rgb8()),
@@ -101,12 +103,14 @@ where
 		img.into_bytes()
 	}
 
+	#[context("extracting region ({:.2},{:.2},{:.2},{:.2}) from {}x{} into {}x{}", x, y, w, h, self.width(), self.height(), width_dst, height_dst)]
 	fn get_extract(&self, x: f64, y: f64, w: f64, h: f64, width_dst: u32, height_dst: u32) -> Result<DynamicImage> {
 		let mut dst_image = DynamicImage::new(width_dst, height_dst, self.color());
 		Resizer::new().resize(self, &mut dst_image, &ResizeOptions::default().crop(x, y, w, h))?;
 		Ok(dst_image)
 	}
 
+	#[context("downscaling {}x{} by factor {} ({:?})", self.width(), self.height(), factor, self.color())]
 	fn get_scaled_down(&self, factor: u32) -> Result<DynamicImage> {
 		assert!(factor > 0, "Scaling factor must be greater than zero");
 
@@ -120,6 +124,7 @@ where
 		Ok(dst_image)
 	}
 
+	#[context("flattening image onto RGB({:?})", color)]
 	fn into_flattened(self, color: Rgb<u8>) -> Result<DynamicImage> {
 		if !self.has_alpha() {
 			return Ok(self);
@@ -145,6 +150,7 @@ where
 		}
 	}
 
+	#[context("dropping alpha from image")]
 	fn into_no_alpha(self) -> Result<DynamicImage> {
 		Ok(match self {
 			DynamicImage::ImageRgba8(_) => DynamicImage::from(self.into_rgb8()),
@@ -154,6 +160,7 @@ where
 		})
 	}
 
+	#[context("removing alpha if opaque")]
 	fn into_no_alpha_if_opaque(self) -> Result<DynamicImage> {
 		if self.has_alpha() && self.is_opaque() {
 			self.into_no_alpha()
@@ -162,6 +169,7 @@ where
 		}
 	}
 
+	#[context("downscaling image by factor {factor}")]
 	fn into_scaled_down(self, factor: u32) -> Result<DynamicImage> {
 		if factor == 1 {
 			Ok(self)
@@ -170,6 +178,7 @@ where
 		}
 	}
 
+	#[context("forcing opacity for {:?} image", self.color())]
 	fn make_opaque(&mut self) -> Result<()> {
 		match *self {
 			DynamicImage::ImageRgba8(ref mut img) => {
@@ -221,6 +230,7 @@ where
 		}
 	}
 
+	#[context("overlaying top {}x{} {:?} onto base {}x{} {:?}", top.width(), top.height(), top.color(), self.width(), self.height(), self.color())]
 	fn overlay(&mut self, top: &DynamicImage) -> Result<()> {
 		self.ensure_same_size(top)?;
 		overlay(self, top, 0, 0);

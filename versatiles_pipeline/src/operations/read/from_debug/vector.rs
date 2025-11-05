@@ -3,6 +3,7 @@ use anyhow::Result;
 use lazy_static::lazy_static;
 use std::{f64::consts::PI, ops::Div, vec};
 use versatiles_core::TileCoord;
+use versatiles_derive::context;
 use versatiles_geometry::{
 	geo::*,
 	vector_tile::{VectorTile, VectorTileLayer},
@@ -12,6 +13,7 @@ lazy_static! {
 	static ref FONT: FontArc = FontArc::try_from_slice(include_bytes!("./trim.ttf")).unwrap();
 }
 
+#[context("Creating debug vector tile for coord {:?}", coord)]
 pub fn create_debug_vector_tile(coord: &TileCoord) -> Result<VectorTile> {
 	Ok(VectorTile::new(vec![
 		get_background_layer()?,
@@ -105,6 +107,7 @@ fn get_multipolygon(mls: MultiLineStringGeometry) -> MultiPolygonGeometry {
 	multipolygon
 }
 
+#[context("Creating background layer for debug vector tile")]
 fn get_background_layer() -> Result<VectorTileLayer> {
 	let mut circle = LineStringGeometry::new();
 	for i in 0..=100 {

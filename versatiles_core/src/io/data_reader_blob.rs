@@ -38,6 +38,7 @@ use crate::{Blob, ByteRange};
 use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::io::{Cursor, Read};
+use versatiles_derive::context;
 
 /// A struct that provides reading capabilities from an in-memory blob of data.
 #[derive(Debug)]
@@ -70,6 +71,7 @@ impl DataReaderTrait for DataReaderBlob {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with the read data or an error.
+	#[context("while reading range {range:?} from DataReaderBlob")]
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
 		let start = range.offset as usize;
 		let end = (range.offset + range.length) as usize;
@@ -87,6 +89,7 @@ impl DataReaderTrait for DataReaderBlob {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with all the data or an error.
+	#[context("while reading all data from DataReaderBlob")]
 	async fn read_all(&self) -> Result<Blob> {
 		Ok(Blob::from(self.blob.get_ref()))
 	}

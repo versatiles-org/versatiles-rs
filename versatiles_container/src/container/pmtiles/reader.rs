@@ -52,6 +52,7 @@ use versatiles_core::{
 	utils::{HilbertIndex, decompress},
 	*,
 };
+use versatiles_derive::context;
 
 /// A struct that provides functionality to read tile data from a PMTiles container.
 #[derive(Debug)]
@@ -75,6 +76,7 @@ impl PMTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if the file does not exist or if there is an error opening the reader.
+	#[context("opening PMTiles at '{}'", path.display())]
 	pub async fn open_path(path: &Path) -> Result<PMTilesReader> {
 		PMTilesReader::open_reader(DataReaderFile::open(path)?).await
 	}
@@ -86,6 +88,7 @@ impl PMTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue reading or decompressing data.
+	#[context("opening PMTiles from reader")]
 	pub async fn open_reader(data_reader: DataReader) -> Result<PMTilesReader>
 	where
 		Self: Sized,
@@ -140,12 +143,14 @@ impl PMTilesReader {
 		})
 	}
 
+	#[context("reading PMTiles root entries")]
 	pub fn get_tile_entries(&self) -> Result<EntriesV3> {
 		EntriesV3::from_blob(&self.root_bytes_uncompressed)
 	}
 }
 
 /// Calculates the bounding box pyramid from the provided data.
+#[context("building bbox pyramid from PMTiles directories")]
 fn calc_bbox_pyramid(
 	root_bytes_uncompressed: &Blob,
 	leaves_bytes: &Blob,
@@ -161,6 +166,7 @@ fn calc_bbox_pyramid(
 		true,
 	)?;
 
+	#[context("parsing PMTiles directory (root={})", root)]
 	fn parse_directories(
 		bbox_pyramid: &mut TileBBoxPyramid,
 		dir: &Blob,
@@ -251,6 +257,7 @@ impl TilesReaderTrait for PMTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
+	#[context("fetching tile {:?} from PMTiles", coord)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		// Log the requested tile coordinates for debugging purposes
 		log::trace!("get_tile {:?}", coord);
@@ -309,6 +316,7 @@ impl TilesReaderTrait for PMTilesReader {
 
 	// deep probe of container meta
 	#[cfg(feature = "cli")]
+	#[context("probing PMTiles container metadata")]
 	async fn probe_container(&mut self, print: &PrettyPrint) -> Result<()> {
 		print.add_key_value("header", &self.header).await;
 

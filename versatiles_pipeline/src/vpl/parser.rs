@@ -1,5 +1,5 @@
 use super::{VPLNode, VPLPipeline};
-use anyhow::{Context, Result, ensure};
+use anyhow::{Result, ensure};
 use nom::{
 	IResult, Parser,
 	branch::alt,
@@ -12,6 +12,7 @@ use nom::{
 };
 use nom_language::error::{VerboseError, convert_error};
 use std::collections::BTreeMap;
+use versatiles_derive::context;
 
 // Consume whitespace **and** shell-style comments ("# ...\n").
 fn comment(i: &str) -> IResult<&str, (), VerboseError<&str>> {
@@ -163,6 +164,7 @@ fn parse_pipeline(input: &str) -> IResult<&str, VPLPipeline, VerboseError<&str>>
 	.parse(input)
 }
 
+#[context("Failed to parse VPL input")]
 pub fn parse_vpl(input: &str) -> Result<VPLPipeline> {
 	let result = all_consuming(parse_pipeline).parse(input);
 	match result {

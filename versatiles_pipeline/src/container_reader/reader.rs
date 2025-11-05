@@ -1,10 +1,11 @@
 use crate::{OperationTrait, PipelineFactory};
-use anyhow::{Context, Result, anyhow, ensure};
+use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
 use futures::future::BoxFuture;
 use std::{path::Path, sync::Arc};
 use versatiles_container::{ContainerRegistry, ProcessingConfig, Tile, TilesReaderTrait, UrlPath};
 use versatiles_core::{io::DataReader, *};
+use versatiles_derive::context;
 
 /// The `PipelineReader` struct is responsible for managing the tile reading process,
 /// applying operations, and returning the composed tiles.
@@ -25,6 +26,7 @@ impl<'a> PipelineReader {
 	/// # Returns
 	///
 	/// * `Result<PipelineReader>` - The constructed PipelineReader or an error if the configuration is invalid.
+	#[context("opening VPL path '{}'", path.display())]
 	pub async fn open_path(path: &Path, config: ProcessingConfig) -> Result<PipelineReader> {
 		let vpl = std::fs::read_to_string(path).with_context(|| anyhow!("Failed to open {path:?}"))?;
 		Self::from_str(&vpl, path.to_str().unwrap(), path.parent().unwrap(), config)
@@ -41,6 +43,7 @@ impl<'a> PipelineReader {
 	/// # Returns
 	///
 	/// * `Result<PipelineReader>` - The constructed PipelineReader or an error if the configuration is invalid.
+	#[context("opening VPL from reader '{}'", reader.get_name())]
 	pub async fn open_reader(reader: DataReader, dir: &Path, config: ProcessingConfig) -> Result<PipelineReader> {
 		let vpl = reader.read_all().await?.into_string();
 		Self::from_str(&vpl, reader.get_name(), dir, config)
@@ -50,9 +53,7 @@ impl<'a> PipelineReader {
 
 	#[cfg(test)]
 	pub async fn open_str(vpl: &str, dir: &Path, config: ProcessingConfig) -> Result<PipelineReader> {
-		Self::from_str(vpl, "from str", dir, config)
-			.await
-			.with_context(|| format!("failed parsing '{vpl}' as VPL"))
+		Self::from_str(vpl, "from str", dir, config).await
 	}
 
 	fn from_str(
@@ -114,6 +115,7 @@ impl TilesReaderTrait for PipelineReader {
 	}
 
 	/// Get tile data for the given coordinate, always compressed and formatted.
+	#[context("getting tile {:?} via pipeline '{}'", coord, self.name)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		let mut vec = self.operation.get_stream(coord.as_tile_bbox()).await?.to_vec().await;
 
@@ -127,6 +129,7 @@ impl TilesReaderTrait for PipelineReader {
 	}
 
 	/// Get a stream of tiles within the bounding box.
+	#[context("streaming tiles for bbox {:?} via pipeline '{}'", bbox, self.name)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_tile_stream {:?}", bbox);
 		self.operation.get_stream(bbox).await

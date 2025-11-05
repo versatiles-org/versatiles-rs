@@ -8,6 +8,7 @@ use crate::{
 	traversal::processing::{TraversalTranslationStep, translate_traversals},
 };
 use anyhow::Result;
+use versatiles_derive::context;
 
 #[derive(Clone, PartialEq)]
 /// Represents a traversal strategy for iterating over tile bounding boxes.
@@ -30,6 +31,7 @@ impl Traversal {
 	///
 	/// # Errors
 	/// Returns an error if size parameters are invalid (not powers of two or out of range).
+	#[context("while creating Traversal with order {order:?}, min_size {min_size}, max_size {max_size}")]
 	pub fn new(order: TraversalOrder, min_size: u32, max_size: u32) -> Result<Traversal> {
 		Ok(Traversal {
 			order,
@@ -40,6 +42,7 @@ impl Traversal {
 	/// Create a `Traversal` with any order and the specified size range.
 	///
 	/// Uses `TraversalOrder::AnyOrder` with the same size validation as `new`.
+	#[context("while creating Traversal::AnyOrder with min_size {min_size}, max_size {max_size}")]
 	pub fn new_any_size(min_size: u32, max_size: u32) -> Result<Traversal> {
 		Ok(Traversal {
 			order: TraversalOrder::AnyOrder,
@@ -60,6 +63,7 @@ impl Traversal {
 	///
 	/// # Errors
 	/// Returns an error if the size range is invalid.
+	#[context("while getting max_size for Traversal {:?}", self.order)]
 	pub fn max_size(&self) -> Result<u32> {
 		self.size.max_size()
 	}
@@ -68,6 +72,7 @@ impl Traversal {
 	///
 	/// # Errors
 	/// Returns an error if the size range is invalid.
+	#[context("while getting min_size for Traversal {:?}", self.order)]
 	pub fn min_size(&self) -> Result<u32> {
 		self.size.min_size()
 	}
@@ -81,6 +86,7 @@ impl Traversal {
 	/// Modify this `Traversal` to be the intersection with another.
 	///
 	/// Combines size and order; errors if the order or sizes cannot intersect.
+	#[context("while intersecting Traversal {:?} with {:?}", self.order, other.order)]
 	pub fn intersect(&mut self, other: &Traversal) -> Result<()> {
 		self.order.intersect(&other.order)?;
 		self.size.intersect(&other.size)?;
@@ -88,6 +94,7 @@ impl Traversal {
 	}
 
 	/// Return a new `Traversal` that is the intersection of this and another, without modifying either.
+	#[context("while computing intersected Traversal between {:?} and {:?}", self.order, other.order)]
 	pub fn get_intersected(&self, other: &Traversal) -> Result<Traversal> {
 		let mut result = self.clone();
 		result.intersect(other)?;
@@ -104,6 +111,7 @@ impl Traversal {
 	///
 	/// # Errors
 	/// Returns an error if size computation or ordering fails.
+	#[context("while traversing pyramid with Traversal {:?}", self.order)]
 	pub fn traverse_pyramid(&self, pyramid: &TileBBoxPyramid) -> Result<Vec<TileBBox>> {
 		let size = self.max_size()?;
 		let mut bboxes: Vec<TileBBox> = pyramid.level_bbox.iter().flat_map(|b| b.iter_bbox_grid(size)).collect();
@@ -111,6 +119,7 @@ impl Traversal {
 		Ok(bboxes)
 	}
 
+	#[context("while computing traversal translation steps between {:?} and {:?}", self.order, other.order)]
 	pub fn get_traversal_steps(&self, other: &Self, pyramid: &TileBBoxPyramid) -> Result<Vec<TraversalTranslationStep>> {
 		translate_traversals(pyramid, self, other)
 	}

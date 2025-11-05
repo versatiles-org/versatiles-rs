@@ -18,7 +18,9 @@ use anyhow::{Result, anyhow, bail};
 use image::{DynamicImage, ImageFormat, codecs::webp::WebPEncoder, load_from_memory_with_format};
 use std::vec;
 use versatiles_core::Blob;
+use versatiles_derive::context;
 
+#[context("encoding {}x{} {:?} as WebP (q={:?})", image.width(), image.height(), image.color(), quality)]
 /// Encode a `DynamicImage` into a WebP [`Blob`].
 ///
 /// * `quality` — `Some(q)` selects **lossy** encoding for `q < 100` (0..=99), or **lossless** when
@@ -68,6 +70,7 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	}
 }
 
+#[context("encoding image {:?} as WebP (q={:?})", image.color(), quality)]
 /// Convenience wrapper around [`encode`].
 ///
 /// `quality = None` uses a default lossy quality of **95**.
@@ -75,11 +78,13 @@ pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	encode(image, quality)
 }
 
+#[context("encoding image {:?} as lossless WebP", image.color())]
 /// Convenience wrapper for **lossless** WebP encoding (equivalent to `encode(image, Some(100))`).
 pub fn image2blob_lossless(image: &DynamicImage) -> Result<Blob> {
 	encode(image, Some(100))
 }
 
+#[context("decoding WebP image ({} bytes)", blob.len())]
 /// Decode a WebP [`Blob`] back into a [`DynamicImage`].
 ///
 /// Returns a decoding error if the blob is not valid WebP.

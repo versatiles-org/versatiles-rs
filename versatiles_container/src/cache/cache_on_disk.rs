@@ -7,6 +7,7 @@ use std::{
 	marker::PhantomData,
 	path::{Path, PathBuf},
 };
+use versatiles_derive::context;
 
 pub struct OnDiskCache<K: CacheKey, V: CacheValue> {
 	path: PathBuf, // path to cache directory
@@ -43,6 +44,7 @@ impl<K: CacheKey, V: CacheValue> OnDiskCache<K, V> {
 		p
 	}
 
+	#[context("decoding {} bytes from cache buffer", buf.len())]
 	fn buffer_to_values(buf: &[u8]) -> Result<Vec<V>> {
 		let mut reader = Cursor::new(buf);
 		let mut vec = Vec::new();
@@ -53,7 +55,8 @@ impl<K: CacheKey, V: CacheValue> OnDiskCache<K, V> {
 		Ok(vec)
 	}
 
-	fn values_to_buffer(values: Vec<V>) -> Result<Vec<u8>> {
+	#[context("encoding {} values into cache buffer", values.len())]
+	fn values_to_buffer(values: &[V]) -> Result<Vec<u8>> {
 		let mut buf = Vec::new();
 		for value in values {
 			value.write_to_cache(&mut buf)?;
@@ -61,6 +64,7 @@ impl<K: CacheKey, V: CacheValue> OnDiskCache<K, V> {
 		Ok(buf)
 	}
 
+	#[context("reading cache entry '{}'", entry_path.display())]
 	fn read_file(&self, entry_path: &Path) -> Result<Option<Vec<V>>> {
 		if entry_path.exists() {
 			let mut file = File::open(entry_path)?;
@@ -78,10 +82,12 @@ impl<K: CacheKey, V: CacheValue> Cache<K, V> for OnDiskCache<K, V> {
 		self.get_entry_path(key).exists()
 	}
 
+	#[context("reading cache for key '{}'", key.to_cache_key())]
 	fn get_clone(&self, key: &K) -> Result<Option<Vec<V>>> {
 		self.read_file(&self.get_entry_path(key))
 	}
 
+	#[context("removing cache entry for key '{}'", key.to_cache_key())]
 	fn remove(&mut self, key: &K) -> Result<Option<Vec<V>>> {
 		let entry_path = self.get_entry_path(key);
 		let values = self.read_file(&entry_path)?;
@@ -91,15 +97,17 @@ impl<K: CacheKey, V: CacheValue> Cache<K, V> for OnDiskCache<K, V> {
 		Ok(values)
 	}
 
+	#[context("writing values for key '{}'", key.to_cache_key())]
 	fn insert(&mut self, key: &K, values: Vec<V>) -> Result<()> {
 		let entry_path = self.get_entry_path(key);
-		write(entry_path, Self::values_to_buffer(values)?)?;
+		write(entry_path, Self::values_to_buffer(&values)?)?;
 		Ok(())
 	}
 
+	#[context("appending values for key '{}'",  key.to_cache_key())]
 	fn append(&mut self, key: &K, values: Vec<V>) -> Result<()> {
 		let entry_path = self.get_entry_path(key);
-		let buffer = Self::values_to_buffer(values)?;
+		let buffer = Self::values_to_buffer(&values)?;
 		if entry_path.exists() {
 			OpenOptions::new().append(true).open(entry_path)?.write_all(&buffer)?;
 		} else {

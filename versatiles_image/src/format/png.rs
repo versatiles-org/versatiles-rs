@@ -14,7 +14,9 @@ use crate::traits::{DynamicImageTraitInfo, DynamicImageTraitOperation};
 use anyhow::{Result, anyhow, bail};
 use image::{DynamicImage, ImageEncoder, ImageFormat, codecs::png, load_from_memory_with_format};
 use versatiles_core::Blob;
+use versatiles_derive::context;
 
+#[context("encoding {}x{} {:?} as PNG (s={:?})", image.width(), image.height(), image.color(), speed)]
 /// Encode a `DynamicImage` into a PNG [`Blob`].
 ///
 /// * `speed` — optional 0..=100 hint (default **10**). Lower → stronger compression; higher → faster.
@@ -62,11 +64,13 @@ pub fn encode(image: &DynamicImage, speed: Option<u8>) -> Result<Blob> {
 	Ok(Blob::from(buffer))
 }
 
+#[context("encoding image {:?} as PNG", image.color())]
 /// Convenience wrapper for [`encode`] with default speed.
 pub fn image2blob(image: &DynamicImage) -> Result<Blob> {
 	encode(image, None)
 }
 
+#[context("decoding PNG image ({} bytes)", blob.len())]
 /// Decode a PNG [`Blob`] back into a [`DynamicImage`].
 ///
 /// Returns a decoding error if the blob is not valid PNG.

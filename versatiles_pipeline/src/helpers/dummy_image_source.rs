@@ -89,6 +89,7 @@ impl TilesReaderTrait for DummyImageSource {
 		&self.tilejson
 	}
 
+	#[context("Getting tile for coord: {:?}", coord)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		if !self.parameters.bbox_pyramid.contains_coord(coord) {
 			return Ok(None);
@@ -106,6 +107,8 @@ impl OperationTrait for DummyImageSource {
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
+
+	#[context("Failed to get stream for bbox: {:?}", bbox)]
 	async fn get_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox);
 

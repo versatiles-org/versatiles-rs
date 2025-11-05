@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use std::{fmt::Debug, str};
 use versatiles_container::Tile;
 use versatiles_core::*;
+use versatiles_derive::context;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filter tiles by bounding box and/or zoom levels.
@@ -28,6 +29,7 @@ enum RasterTileFormat {
 }
 
 impl RasterTileFormat {
+	#[context("Parsing raster tile format from string '{text}'")]
 	fn from_str(text: &str) -> Result<Self> {
 		use RasterTileFormat::*;
 		Ok(match text.to_lowercase().trim() {
@@ -77,6 +79,7 @@ struct Operation {
 }
 
 impl Operation {
+	#[context("Building raster_format operation in VPL node {:?}", vpl_node.name)]
 	async fn build(vpl_node: VPLNode, source: Box<dyn OperationTrait>, _factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + OperationTrait,
@@ -108,6 +111,7 @@ impl Operation {
 	}
 }
 
+#[context("Parsing quality string")]
 fn parse_quality(quality: Option<String>) -> Result<[Option<u8>; 32]> {
 	let mut result: [Option<u8>; 32] = [None; 32];
 	if let Some(text) = quality {
@@ -147,6 +151,7 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
+	#[context("Failed to get stream for bbox: {:?}", bbox)]
 	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox);
 

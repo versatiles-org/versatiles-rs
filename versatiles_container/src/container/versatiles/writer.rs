@@ -48,6 +48,7 @@ pub struct VersaTilesWriter {}
 #[async_trait]
 impl TilesWriterTrait for VersaTilesWriter {
 	/// Convert tiles from the TilesReader and write them to the writer.
+	#[context("writing VersaTiles to DataWriter")]
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,

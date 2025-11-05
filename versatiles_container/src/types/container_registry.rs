@@ -178,6 +178,7 @@ impl ContainerRegistry {
 		}
 	}
 
+	#[context("writing tiles to path '{path:?}'")]
 	pub async fn write_to_path(&self, mut reader: Box<dyn TilesReaderTrait>, path: &Path) -> Result<()> {
 		let path = env::current_dir()?.join(path);
 		if path.is_dir() {

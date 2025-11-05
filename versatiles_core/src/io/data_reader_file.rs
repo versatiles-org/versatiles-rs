@@ -29,13 +29,14 @@
 
 use super::DataReaderTrait;
 use crate::{Blob, ByteRange};
-use anyhow::{Context, Result, ensure};
+use anyhow::{Result, ensure};
 use async_trait::async_trait;
 use std::{
 	fs::File,
 	io::{Read, Seek, SeekFrom},
 	path::Path,
 };
+use versatiles_derive::context;
 
 /// A struct that provides reading capabilities from a file.
 #[derive(Debug)]
@@ -55,6 +56,7 @@ impl DataReaderFile {
 	/// # Returns
 	///
 	/// * A Result containing a boxed `DataReaderFile` or an error.
+	#[context("while opening file {path:?}")]
 	pub fn open(path: &Path) -> Result<Box<DataReaderFile>> {
 		ensure!(path.exists(), "file {path:?} does not exist");
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
@@ -83,6 +85,7 @@ impl DataReaderTrait for DataReaderFile {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with the read data or an error.
+	#[context("while reading range {range:?} from file '{}'", self.name)]
 	async fn read_range(&self, range: &ByteRange) -> Result<Blob> {
 		let mut buffer = vec![0; range.length as usize];
 		let mut file = self
@@ -106,6 +109,7 @@ impl DataReaderTrait for DataReaderFile {
 	/// # Returns
 	///
 	/// * A Result containing a Blob with all the data or an error.
+	#[context("while reading all bytes from file '{}'", self.name)]
 	async fn read_all(&self) -> Result<Blob> {
 		let mut buffer = vec![0; self.size as usize];
 		let mut file = self

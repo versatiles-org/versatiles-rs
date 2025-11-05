@@ -6,6 +6,7 @@ use async_trait::async_trait;
 use std::{collections::HashMap, fmt::Debug, io::Read, path::Path};
 use tar::{Archive, EntryType};
 use versatiles_core::{io::*, utils::decompress, *};
+use versatiles_derive::context;
 
 /// A struct that provides functionality to read tile data from a tar archive.
 pub struct TarTilesReader {
@@ -24,6 +25,7 @@ impl TarTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if the file cannot be opened or read.
+	#[context("opening tar from path '{}'", path.display())]
 	pub fn open_path(path: &Path) -> Result<TarTilesReader> {
 		let mut reader = DataReaderFile::open(path)?;
 		let mut archive = Archive::new(&mut reader);
@@ -182,6 +184,7 @@ impl TilesReaderTrait for TarTilesReader {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue retrieving the tile data.
+	#[context("getting tile {:?}", coord)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		log::trace!("get_tile {:?}", coord);
 

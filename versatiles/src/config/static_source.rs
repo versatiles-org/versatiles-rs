@@ -1,7 +1,7 @@
 use anyhow::Result;
 use serde::Deserialize;
 use versatiles_container::UrlPath;
-use versatiles_derive::ConfigDoc;
+use versatiles_derive::{ConfigDoc, context};
 
 #[derive(Debug, Clone, PartialEq, ConfigDoc)]
 pub struct StaticSourceConfig {
@@ -16,6 +16,7 @@ pub struct StaticSourceConfig {
 }
 
 impl StaticSourceConfig {
+	#[context("resolving static source paths relative to base path '{}'", base_path)]
 	pub fn resolve_paths(&mut self, base_path: &UrlPath) -> Result<()> {
 		self.path.resolve(base_path)
 	}

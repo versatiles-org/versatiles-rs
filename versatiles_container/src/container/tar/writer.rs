@@ -11,6 +11,7 @@ use std::{
 };
 use tar::{Builder, Header};
 use versatiles_core::{Traversal, io::DataWriterTrait, utils::compress};
+use versatiles_derive::context;
 
 /// A struct that provides functionality to write tile data to a tar archive.
 pub struct TarTilesWriter {}
@@ -25,6 +26,7 @@ impl TilesWriterTrait for TarTilesWriter {
 	///
 	/// # Errors
 	/// Returns an error if there is an issue creating the tar archive or writing the data.
+	#[context("writing tar to path '{}'", path.display())]
 	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: ProcessingConfig) -> Result<()> {
 		let file = File::create(path)?;
 		let mut builder = Builder::new(file);
@@ -89,6 +91,7 @@ impl TilesWriterTrait for TarTilesWriter {
 	///
 	/// # Errors
 	/// This function is not implemented and will return an error.
+	#[context("writing tar to DataWriter")]
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
 		_writer: &mut dyn DataWriterTrait,

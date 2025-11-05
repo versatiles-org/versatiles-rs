@@ -4,6 +4,7 @@ use async_trait::async_trait;
 use std::fmt::Debug;
 use versatiles_container::Tile;
 use versatiles_core::*;
+use versatiles_derive::context;
 use versatiles_image::traits::*;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -26,6 +27,7 @@ struct Operation {
 }
 
 impl Operation {
+	#[context("Building raster_levels operation in VPL node {:?}", vpl_node.name)]
 	async fn build(vpl_node: VPLNode, source: Box<dyn OperationTrait>, _factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + OperationTrait,
@@ -55,6 +57,7 @@ impl OperationTrait for Operation {
 		self.source.traversal()
 	}
 
+	#[context("Failed to get stream for bbox: {:?}", bbox)]
 	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox);
 

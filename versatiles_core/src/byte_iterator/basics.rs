@@ -1,7 +1,9 @@
 use super::iterator::ByteIterator;
 use anyhow::{Error, Result, bail};
 use std::str::FromStr;
+use versatiles_derive::context;
 
+#[context("while parsing tag '{}'", tag)]
 pub fn parse_tag(iter: &mut ByteIterator, tag: &str) -> Result<()> {
 	for c in tag.bytes() {
 		match iter.expect_next_byte()? {
@@ -12,6 +14,7 @@ pub fn parse_tag(iter: &mut ByteIterator, tag: &str) -> Result<()> {
 	Ok(())
 }
 
+#[context("while parsing a quoted JSON string")]
 pub fn parse_quoted_json_string(iter: &mut ByteIterator) -> Result<String> {
 	iter.skip_whitespace();
 	if iter.expect_next_byte()? != b'"' {
@@ -53,6 +56,7 @@ pub fn parse_quoted_json_string(iter: &mut ByteIterator) -> Result<String> {
 	String::from_utf8(bytes).map_err(Error::from)
 }
 
+#[context("while parsing a number")]
 pub fn parse_number_as_string(iter: &mut ByteIterator) -> Result<String> {
 	let mut number = Vec::with_capacity(16);
 
@@ -114,6 +118,7 @@ pub fn parse_number_as<R: FromStr>(iter: &mut ByteIterator) -> Result<R> {
 		.map_err(|_| iter.format_error("invalid number"))
 }
 
+#[context("while parsing object entries")]
 pub fn parse_object_entries<R>(
 	iter: &mut ByteIterator,
 	mut parse_value: impl FnMut(String, &mut ByteIterator) -> Result<R>,
@@ -154,6 +159,7 @@ pub fn parse_object_entries<R>(
 	Ok(())
 }
 
+#[context("while parsing array entries")]
 pub fn parse_array_entries<R>(
 	iter: &mut ByteIterator,
 	mut parse_value: impl FnMut(&mut ByteIterator) -> Result<R>,

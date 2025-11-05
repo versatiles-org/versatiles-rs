@@ -65,6 +65,7 @@ pub fn translate_traversals(
 	bail!("Could not find a way to translate traversals.")
 }
 
+#[context("Could not simplify traversal translation steps")]
 fn simplify_steps(steps: &mut Vec<TraversalTranslationStep>) -> Result<()> {
 	use TraversalTranslationStep::*;
 
@@ -153,6 +154,7 @@ fn simplify_steps(steps: &mut Vec<TraversalTranslationStep>) -> Result<()> {
 	Ok(())
 }
 
+#[context("Could not verify traversal translation steps")]
 fn verify_steps(
 	steps: &[TraversalTranslationStep],
 	read_order: TraversalOrder,
@@ -193,6 +195,7 @@ fn verify_steps(
 		}
 	}
 
+	#[context("Could not verify traversal translation step order")]
 	fn check_order(step_bboxes: &[TileBBox], order: TraversalOrder, size: u32, pyramid: &TileBBoxPyramid) -> Result<()> {
 		let mut lookup = HashMap::<(u8, u32, u32), bool>::new();
 

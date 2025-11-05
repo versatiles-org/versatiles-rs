@@ -8,12 +8,15 @@ use versatiles_core::{
 	},
 	json::parse_json_iter,
 };
+use versatiles_derive::context;
 
+#[context("parsing GeoJSON root")]
 pub fn parse_geojson(json: &str) -> Result<GeoCollection> {
 	let mut iter = ByteIterator::from_reader(Cursor::new(json), true);
 	parse_geojson_collection(&mut iter)
 }
 
+#[context("parsing GeoJSON FeatureCollection")]
 pub fn parse_geojson_collection(iter: &mut ByteIterator) -> Result<GeoCollection> {
 	let mut features = Vec::new();
 	let mut object_type: Option<String> = None;
@@ -32,6 +35,7 @@ pub fn parse_geojson_collection(iter: &mut ByteIterator) -> Result<GeoCollection
 	Ok(GeoCollection { features })
 }
 
+#[context("validating GeoJSON type '{}'", name)]
 fn check_type(object_type: Option<String>, name: &str) -> Result<()> {
 	let object_type = object_type.ok_or_else(|| anyhow!("{name} must have a type"))?;
 
@@ -41,6 +45,7 @@ fn check_type(object_type: Option<String>, name: &str) -> Result<()> {
 	Ok(())
 }
 
+#[context("parsing GeoJSON Feature")]
 pub fn parse_geojson_feature(iter: &mut ByteIterator) -> Result<GeoFeature> {
 	let mut object_type: Option<String> = None;
 	let mut id: Option<GeoValue> = None;
@@ -67,6 +72,7 @@ pub fn parse_geojson_feature(iter: &mut ByteIterator) -> Result<GeoFeature> {
 	})
 }
 
+#[context("parsing GeoJSON id field")]
 fn parse_geojson_id(iter: &mut ByteIterator) -> Result<GeoValue> {
 	iter.skip_whitespace();
 	match iter.expect_peeked_byte()? {
@@ -79,6 +85,7 @@ fn parse_geojson_id(iter: &mut ByteIterator) -> Result<GeoValue> {
 	}
 }
 
+#[context("parsing numeric GeoJSON value")]
 fn parse_geojson_number(iter: &mut ByteIterator) -> Result<GeoValue> {
 	let number = parse_number_as_string(iter)?;
 
@@ -99,6 +106,7 @@ fn parse_geojson_number(iter: &mut ByteIterator) -> Result<GeoValue> {
 	})
 }
 
+#[context("parsing GeoJSON property value")]
 fn parse_geojson_value(iter: &mut ByteIterator) -> Result<GeoValue> {
 	iter.skip_whitespace();
 	match iter.expect_peeked_byte()? {
@@ -114,6 +122,7 @@ fn parse_geojson_value(iter: &mut ByteIterator) -> Result<GeoValue> {
 	}
 }
 
+#[context("parsing GeoJSON properties object")]
 fn parse_geojson_properties(iter: &mut ByteIterator) -> Result<GeoProperties> {
 	let mut list: Vec<(String, GeoValue)> = Vec::new();
 	parse_object_entries(iter, |key, iter2| {
@@ -125,6 +134,7 @@ fn parse_geojson_properties(iter: &mut ByteIterator) -> Result<GeoProperties> {
 	Ok(GeoProperties::from_iter(list))
 }
 
+#[context("parsing GeoJSON geometry")]
 fn parse_geojson_geometry(iter: &mut ByteIterator) -> Result<Geometry> {
 	let mut geometry_type: Option<String> = None;
 	let mut coordinates: Option<TemporaryCoordinates> = None;
@@ -195,6 +205,7 @@ impl TemporaryCoordinates {
 	}
 }
 
+#[context("parsing GeoJSON coordinate arrays")]
 fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordinates> {
 	fn recursive(iter: &mut ByteIterator) -> Result<TemporaryCoordinates> {
 		use TemporaryCoordinates::{C0, C1, C2, C3, V};

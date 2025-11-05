@@ -44,7 +44,7 @@
 //! This module includes comprehensive tests to ensure the correct functionality of opening paths, reading metadata, handling different file formats, and edge cases.
 
 use crate::{Tile, TilesReaderTrait};
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Result, bail, ensure};
 use async_trait::async_trait;
 use itertools::Itertools;
 use std::{
@@ -54,6 +54,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 use versatiles_core::{utils::*, *};
+use versatiles_derive::context;
 
 /// A reader for tiles stored in a directory structure.
 /// The directory should be structured as follows:
@@ -78,6 +79,7 @@ impl DirectoryTilesReader {
 	/// # Errors
 	///
 	/// Returns an error if the directory does not exist, is not a directory, or if no tiles are found.
+	#[context("opening tiles directory {:?}", dir)]
 	pub fn open_path(dir: &Path) -> Result<DirectoryTilesReader>
 	where
 		Self: Sized,
@@ -202,6 +204,7 @@ impl DirectoryTilesReader {
 		})
 	}
 
+	#[context("reading file '{}'", path.display())]
 	fn read(path: &Path) -> Result<Blob> {
 		Ok(Blob::from(fs::read(path)?))
 	}
@@ -225,6 +228,7 @@ impl TilesReaderTrait for DirectoryTilesReader {
 		&self.tilejson
 	}
 
+	#[context("fetching tile {:?} from directory '{}'", coord, self.dir.display())]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		log::trace!("get_tile {:?}", coord);
 

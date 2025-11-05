@@ -17,6 +17,7 @@ use image::{
 	codecs::avif::{AvifEncoder, ColorSpace},
 };
 use versatiles_core::Blob;
+use versatiles_derive::context;
 
 /// Encode a `DynamicImage` into an AVIF [`Blob`].
 ///
@@ -24,6 +25,7 @@ use versatiles_core::Blob;
 /// * `speed` — 0..=100 user scale (mapped to encoder 1..=10). `None` defaults to **10** (fastest).
 ///
 /// Returns an error if the image is not 8‑bit per channel or if `quality >= 100`.
+#[context("encoding {}x{} {:?} as AVIF (q={:?}, s={:?})", image.width(), image.height(), image.color(), quality, speed)]
 pub fn encode(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) -> Result<Blob> {
 	if image.bits_per_value() != 8 {
 		bail!("avif only supports 8-bit images");
@@ -56,6 +58,7 @@ pub fn encode(image: &DynamicImage, quality: Option<u8>, speed: Option<u8>) -> R
 /// Convenience wrapper around [`encode`] with a `speed` chosen automatically (fast).
 ///
 /// Use `quality = None` for the default (90).
+#[context("encoding image {:?} as AVIF (q={:?})", image.color(), quality)]
 pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 	encode(image, quality, None)
 }
@@ -64,6 +67,7 @@ pub fn image2blob(image: &DynamicImage, quality: Option<u8>) -> Result<Blob> {
 ///
 /// This always returns an error, documenting the limitation that our encoder does not
 /// support `quality >= 100`. Kept as an explicit function to make call‑sites self‑documenting.
+#[context("encoding image {:?} as 'lossless' AVIF", image.color())]
 pub fn image2blob_lossless(image: &DynamicImage) -> Result<Blob> {
 	encode(image, Some(100), None)
 }
@@ -71,6 +75,7 @@ pub fn image2blob_lossless(image: &DynamicImage) -> Result<Blob> {
 /// AVIF decoding is **not implemented** in this crate.
 ///
 /// Returned error explains the rationale; callers should decode via another backend if needed.
+#[context("decoding AVIF blob ({} bytes)", _blob.len())]
 pub fn blob2image(_blob: &Blob) -> Result<DynamicImage> {
 	bail!("AVIF decoding not implemented")
 }

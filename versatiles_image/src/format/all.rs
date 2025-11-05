@@ -15,7 +15,9 @@ use crate::{avif, jpeg, png, webp};
 use anyhow::{Result, bail};
 use image::DynamicImage;
 use versatiles_core::{Blob, TileFormat};
+use versatiles_derive::context;
 
+#[context("encoding {}x{} {:?} as {:?} (q={:?}, s={:?})", image.width(), image.height(), image.color(), format, quality, speed)]
 /// Encode a [`DynamicImage`] into the given [`TileFormat`].
 ///
 /// Dispatches to the corresponding codec module based on `format`.
@@ -36,6 +38,7 @@ pub fn encode(image: &DynamicImage, format: TileFormat, quality: Option<u8>, spe
 	}
 }
 
+#[context("decoding {:?} image ({} bytes)", format, blob.len())]
 /// Decode an image [`Blob`] back into a [`DynamicImage`] given its [`TileFormat`].
 ///
 /// Dispatches to the format‑specific `blob2image()` implementation.

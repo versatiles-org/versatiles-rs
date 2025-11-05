@@ -2,7 +2,7 @@ use anyhow::Result;
 use serde::Deserialize;
 use std::fmt::Debug;
 use versatiles_container::UrlPath;
-use versatiles_derive::ConfigDoc;
+use versatiles_derive::{ConfigDoc, context};
 
 #[derive(Debug, Clone, PartialEq, ConfigDoc)]
 pub struct TileSourceConfig {
@@ -19,6 +19,7 @@ pub struct TileSourceConfig {
 }
 
 impl TileSourceConfig {
+	#[context("resolving tile source paths relative to base path '{}'", base_path)]
 	pub fn resolve_paths(&mut self, base_path: &UrlPath) -> Result<()> {
 		self.path.resolve(base_path)
 	}

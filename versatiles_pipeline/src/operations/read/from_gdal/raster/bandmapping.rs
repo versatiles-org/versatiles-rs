@@ -12,7 +12,7 @@
 //! indexed or multispectral) will produce an error.
 
 use super::get_spatial_ref;
-use anyhow::{Context, Result, bail, ensure};
+use anyhow::{Result, bail, ensure};
 use gdal::{DriverManager, raster::ColorInterpretation};
 use std::fmt::Debug;
 use versatiles_derive::context;
@@ -172,6 +172,7 @@ impl BandMapping {
 	/// # Errors
 	/// Returns an error if the mapping length is not one of the supported values
 	/// (1, 2, 3, or 4) or if the in-memory dataset cannot be created.
+	#[context("Failed to create in-memory GDAL dataset ({width}x{height}) for band mapping")]
 	pub fn create_mem_dataset(&self, width: usize, height: usize) -> Result<gdal::Dataset> {
 		let driver = DriverManager::get_driver_by_name("MEM").context("Failed to get GDAL MEM driver")?;
 

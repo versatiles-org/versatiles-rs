@@ -31,6 +31,7 @@ impl Tile {
 			format_speed: None,
 		}
 	}
+
 	fn from_content(content: TileContent, format: TileFormat) -> Self {
 		Self {
 			blob: None,
@@ -41,18 +42,20 @@ impl Tile {
 			format_speed: None,
 		}
 	}
-	#[context("Failed creating Tile from raster image")]
+
+	#[context("creating raster tile (format={:?})", format)]
 	pub fn from_image(image: DynamicImage, format: TileFormat) -> Result<Self> {
 		ensure!(format.to_type().is_raster());
 		Ok(Self::from_content(TileContent::from_image(image), format))
 	}
-	#[context("Failed creating Tile from vector data")]
+
+	#[context("creating vector tile (format={:?})", format)]
 	pub fn from_vector(vector_tile: VectorTile, format: TileFormat) -> Result<Self> {
 		ensure!(format.to_type().is_vector());
 		Ok(Self::from_content(TileContent::from_vector(vector_tile), format))
 	}
 
-	#[context("Failed to recompress blob")]
+	#[context("recompressing blob: {:?} -> {:?}", self.compression, compression)]
 	fn recompress_blob(&mut self, compression: TileCompression) -> Result<()> {
 		assert!(self.blob.is_some());
 		if self.compression != compression {
@@ -61,7 +64,8 @@ impl Tile {
 		}
 		Ok(())
 	}
-	#[context("Failed to decompress blob")]
+
+	#[context("decompressing blob ({:?})", self.compression)]
 	fn decompress_blob(&mut self) -> Result<()> {
 		assert!(self.blob.is_some());
 		if self.compression != TileCompression::Uncompressed {
@@ -70,19 +74,23 @@ impl Tile {
 		}
 		Ok(())
 	}
+
 	#[cfg(test)]
 	pub(super) fn __recompress_blob_for_test(&mut self, compression: TileCompression) {
 		self.recompress_blob(compression).unwrap();
 	}
+
 	#[cfg(test)]
 	pub(super) fn __decompress_blob_for_test(&mut self) {
 		self.decompress_blob().unwrap();
 	}
+
 	fn delete_blob(&mut self) {
 		self.blob = None;
 		self.compression = TileCompression::Uncompressed;
 	}
-	#[context("Failed to materialize blob from content")]
+
+	#[context("materializing blob from content (format={:?}, q={:?}, s={:?})", self.format, self.format_quality, self.format_speed)]
 	fn materialize_blob(&mut self) -> Result<()> {
 		if self.blob.is_none() {
 			ensure!(self.content.is_some(), "Cannot materialize blob without content");
@@ -95,7 +103,8 @@ impl Tile {
 		}
 		Ok(())
 	}
-	#[context("Failed to materialize content from blob")]
+
+	#[context("materializing content from blob (format={:?})", self.format)]
 	fn materialize_content(&mut self) -> Result<()> {
 		if self.content.is_none() {
 			ensure!(self.blob.is_some(), "Cannot materialize content without blob");
@@ -105,57 +114,65 @@ impl Tile {
 		Ok(())
 	}
 
-	#[context("Failed to get blob from tile")]
+	#[context("getting blob (target_compression={:?})", compression)]
 	pub fn as_blob(&mut self, compression: TileCompression) -> Result<&Blob> {
 		self.materialize_blob()?;
 		self.recompress_blob(compression)?;
 		self.blob.as_ref().ok_or(anyhow!("blob should be present"))
 	}
-	#[context("Failed to get content from tile")]
+
+	#[context("accessing tile content")]
 	fn as_content(&mut self) -> Result<&TileContent> {
 		self.materialize_content()?;
 		self.content.as_ref().ok_or(anyhow!("content should be present"))
 	}
-	#[context("Failed to get image from tile")]
+
+	#[context("accessing raster image from tile")]
 	pub fn as_image(&mut self) -> Result<&DynamicImage> {
 		self.as_content()?.as_image()
 	}
-	#[context("Failed to get vector from tile")]
+
+	#[context("accessing vector data from tile")]
 	pub fn as_vector(&mut self) -> Result<&VectorTile> {
 		self.as_content()?.as_vector()
 	}
 
-	#[context("Failed to convert tile into blob")]
+	#[context("converting tile into blob (target_compression={:?})", compression)]
 	pub fn into_blob(mut self, compression: TileCompression) -> Result<Blob> {
 		self.materialize_blob()?;
 		self.recompress_blob(compression)?;
 		Ok(self.blob.unwrap())
 	}
-	#[context("Failed to convert tile into content")]
+
+	#[context("converting tile into content")]
 	fn into_content(mut self) -> Result<TileContent> {
 		self.materialize_content()?;
 		Ok(self.content.unwrap())
 	}
-	#[context("Failed to convert tile into image")]
+
+	#[context("converting tile into raster image")]
 	pub fn into_image(self) -> Result<DynamicImage> {
 		self.into_content()?.into_image()
 	}
-	#[context("Failed to convert tile into vector")]
+
+	#[context("converting tile into vector data")]
 	pub fn into_vector(self) -> Result<VectorTile> {
 		self.into_content()?.into_vector()
 	}
 
-	#[context("Failed to get mutable content from tile")]
+	#[context("accessing mutable tile content (dropping blob)")]
 	fn as_content_mut(&mut self) -> Result<&mut TileContent> {
 		self.materialize_content()?;
 		self.delete_blob();
 		Ok(self.content.as_mut().unwrap())
 	}
-	#[context("Failed to get mutable image from tile")]
+
+	#[context("accessing mutable raster image (dropping blob)")]
 	pub fn as_image_mut(&mut self) -> Result<&mut DynamicImage> {
 		self.as_content_mut()?.as_image_mut()
 	}
-	#[context("Failed to get mutable vector from tile")]
+
+	#[context("accessing mutable vector data (dropping blob)")]
 	pub fn as_vector_mut(&mut self) -> Result<&mut VectorTile> {
 		self.as_content_mut()?.as_vector_mut()
 	}
@@ -167,7 +184,7 @@ impl Tile {
 		self.compression
 	}
 
-	#[context("Failed to change tile format")]
+	#[context("changing format: {:?} -> {:?} (q={:?}, s={:?})", self.format, format, quality, speed)]
 	pub fn change_format(&mut self, format: TileFormat, quality: Option<u8>, speed: Option<u8>) -> Result<()> {
 		assert_eq!(format.to_type(), self.format.to_type());
 		self.materialize_content()?;
@@ -184,7 +201,7 @@ impl Tile {
 		Ok(())
 	}
 
-	#[context("Failed to change tile compression")]
+	#[context("changing compression to {:?}", compression)]
 	pub fn change_compression(&mut self, compression: TileCompression) -> Result<()> {
 		if self.blob.is_some() {
 			self.recompress_blob(compression)?;
@@ -197,6 +214,7 @@ impl Tile {
 	pub fn has_blob(&self) -> bool {
 		self.blob.is_some()
 	}
+
 	pub fn has_content(&self) -> bool {
 		self.content.is_some()
 	}
@@ -214,7 +232,7 @@ impl Debug for Tile {
 }
 
 impl CacheValue for Tile {
-	#[context("Failed to write Tile to cache")]
+	#[context("serializing Tile to cache (has_blob={}, has_content={})", self.has_blob(), self.has_content())]
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
 		self.blob.write_to_cache(writer)?;
 		self.content.write_to_cache(writer)?;
@@ -225,7 +243,7 @@ impl CacheValue for Tile {
 		Ok(())
 	}
 
-	#[context("Failed to read Tile from cache")]
+	#[context("deserializing Tile from cache")]
 	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self> {
 		let blob = Option::<Blob>::read_from_cache(reader)?;
 		let content = Option::<TileContent>::read_from_cache(reader)?;

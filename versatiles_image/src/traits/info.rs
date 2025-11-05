@@ -13,6 +13,7 @@
 use super::convert::DynamicImageTraitConvert;
 use anyhow::{Result, ensure};
 use image::{DynamicImage, ExtendedColorType};
+use versatiles_derive::context;
 
 /// Utilities to inspect/compare images and reason about alpha while avoiding extra allocations.
 pub trait DynamicImageTraitInfo: DynamicImageTraitConvert {
@@ -69,6 +70,7 @@ where
 		self.color().channel_count()
 	}
 
+	#[context("computing per-channel diff: self {}x{} {:?} vs other {}x{} {:?}", self.width(), self.height(), self.color(), other.width(), other.height(), other.color())]
 	fn diff(&self, other: &DynamicImage) -> Result<Vec<f64>> {
 		self.ensure_same_meta(other)?;
 
@@ -86,6 +88,7 @@ where
 		Ok(sqr_sum.iter().map(|v| (10.0 * (*v as f64) / n).ceil() / 10.0).collect())
 	}
 
+	#[context("validating same size and color: self {:?} vs other {:?}", self.color(), other.color())]
 	fn ensure_same_meta(&self, other: &DynamicImage) -> Result<()> {
 		self.ensure_same_size(other)?;
 		ensure!(
@@ -97,6 +100,7 @@ where
 		Ok(())
 	}
 
+	#[context("validating same dimensions: self {}x{}, other {}x{}", self.width(), self.height(), other.width(), other.height())]
 	fn ensure_same_size(&self, other: &DynamicImage) -> Result<()> {
 		ensure!(
 			self.width() == other.width(),

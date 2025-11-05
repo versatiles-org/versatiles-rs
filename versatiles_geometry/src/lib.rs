@@ -1,5 +1,4 @@
 pub mod geo;
 pub mod geojson;
-pub mod osm;
 pub mod tile_outline;
 pub mod vector_tile;

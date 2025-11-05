@@ -1,6 +1,7 @@
 use super::{VPLNode, parse_vpl};
 use anyhow::{Result, ensure};
 use std::fmt::Debug;
+use versatiles_derive::context;
 
 #[derive(Clone, Default, PartialEq)]
 pub struct VPLPipeline {
@@ -28,6 +29,7 @@ impl VPLPipeline {
 		self.pipeline.pop()
 	}
 
+	#[context("Failed to split VPL pipeline")]
 	pub fn split(mut self) -> Result<(VPLNode, Vec<VPLNode>)> {
 		ensure!(!self.pipeline.is_empty(), "pipeline is empty");
 		let first_element = self.pipeline.remove(0);

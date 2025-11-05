@@ -20,6 +20,7 @@ imageproc = { version = "0.25.0", default-features = false }
 webp = "0.3.1"
 
 versatiles_core.workspace = true
+versatiles_derive.workspace = true
 
 [dev-dependencies]
 rstest.workspace = true

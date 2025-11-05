@@ -1,5 +1,5 @@
 use super::{BandMapping, BandMappingItem, Instance};
-use anyhow::{Context, Result, ensure};
+use anyhow::{Result, ensure};
 use gdal::{Dataset, config::set_config_option};
 use imageproc::image::DynamicImage;
 use std::{collections::LinkedList, path::Path, sync::Arc};
@@ -111,6 +111,7 @@ impl RasterSource {
 		// `_permit` drops here, releasing one concurrency slot
 	}
 
+	#[context("Failed to get image data ({width}x{height}) for bbox ({bbox:?}) from GDAL dataset")]
 	pub async fn get_image(&self, bbox: &GeoBBox, width: usize, height: usize) -> Result<Option<DynamicImage>> {
 		let band_mapping = self.band_mapping.clone();
 

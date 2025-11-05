@@ -33,6 +33,7 @@ struct Operation {
 }
 
 impl Operation {
+	#[context("Building raster_levels operation in VPL node {:?}", vpl_node.name)]
 	async fn build(vpl_node: VPLNode, source: Box<dyn OperationTrait>, factory: &PipelineFactory) -> Result<Operation>
 	where
 		Self: Sized + OperationTrait,
@@ -185,6 +186,7 @@ impl OperationTrait for Operation {
 		&self.traversal
 	}
 
+	#[context("Failed to get stream for bbox: {:?}", bbox)]
 	async fn get_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_stream {:?}", bbox);
 

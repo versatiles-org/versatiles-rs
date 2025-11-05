@@ -1,5 +1,6 @@
 use anyhow::{Result, ensure};
 use std::path::{Path, PathBuf};
+use versatiles_derive::context;
 
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub struct Url {
@@ -28,6 +29,7 @@ impl Url {
 		}
 	}
 
+	#[context("stripping prefix '{prefix}' from url '{self}'")]
 	pub fn strip_prefix(&self, prefix: &Url) -> Result<Url> {
 		ensure!(self.str.starts_with(&prefix.str), "url does not start with prefix");
 

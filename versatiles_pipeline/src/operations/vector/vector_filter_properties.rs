@@ -8,6 +8,7 @@ use anyhow::{Context, Result};
 use async_trait::async_trait;
 use regex::Regex;
 use versatiles_core::TileJSON;
+use versatiles_derive::context;
 use versatiles_geometry::vector_tile::VectorTile;
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
@@ -41,6 +42,7 @@ impl Runner {
 }
 
 impl RunnerTrait for Runner {
+	#[context("Failed to run vector filter properties")]
 	fn run(&self, mut tile: VectorTile) -> Result<Option<VectorTile>> {
 		tile.layers.iter_mut().for_each(|layer| {
 			let name = layer.name.clone();
