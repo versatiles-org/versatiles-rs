@@ -198,8 +198,14 @@ mod tests {
 	async fn test_no_args() {
 		let result = run_test("", "").await;
 		assert_eq!(
-			result.unwrap_err().to_string(),
-			"Failed to get required property string 'regex' from VPL node 'vector_filter_properties'"
+			result.unwrap_err().chain().map(|e| e.to_string()).collect::<Vec<_>>(),
+			[
+				"Failed to create reader from VPL",
+				"Failed to build pipeline from VPL",
+				"Failed to create transform operation from VPL node",
+				"Failed to get required property string 'regex' from VPL node 'vector_filter_properties'",
+				"In operation 'vector_filter_properties' the parameter 'regex' is required.",
+			]
 		);
 	}
 

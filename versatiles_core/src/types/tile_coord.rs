@@ -52,6 +52,11 @@ impl TileCoord {
 		Ok(TileCoord { x, y, level })
 	}
 
+	pub fn new_clamped(level: u8, x: u32, y: u32) -> Result<TileCoord> {
+		let max = 2u32.pow(u32::from(level)) - 1;
+		TileCoord::new(level, x.min(max), y.min(max))
+	}
+
 	#[context("Failed to convert geo coordinates ({x}, {y}, {z}) to TileCoord")]
 	pub fn from_geo(x: f64, y: f64, z: u8) -> Result<TileCoord> {
 		ensure!(z <= 31, "z ({z}) must be <= 31");
@@ -71,15 +76,18 @@ impl TileCoord {
 		)
 	}
 
+	pub fn coord_to_geo(level: u8, x: u32, y: u32) -> [f64; 2] {
+		let zoom: f64 = 2.0f64.powi(i32::from(level));
+		[
+			(f64::from(x) / zoom - 0.5) * 360.0,
+			((PI32 * (1.0 - 2.0 * f64::from(y) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
+		]
+	}
+
 	/// Convert this tile coordinate to geographic longitude/latitude in degrees.
 	#[must_use]
 	pub fn as_geo(&self) -> [f64; 2] {
-		let zoom: f64 = 2.0f64.powi(i32::from(self.level));
-
-		[
-			(f64::from(self.x) / zoom - 0.5) * 360.0,
-			((PI32 * (1.0 - 2.0 * f64::from(self.y) / zoom)).exp().atan() / PI32 - 0.25) * 360.0,
-		]
+		TileCoord::coord_to_geo(self.level, self.x, self.y)
 	}
 
 	/// Return the geographic bounding box of this tile as `[west, south, east, north]`.
@@ -92,16 +100,6 @@ impl TileCoord {
 	#[must_use]
 	pub fn as_json(&self) -> String {
 		format!("{{x:{},y:{},z:{}}}", self.x, self.y, self.level)
-	}
-
-	/// Check whether `x` and `y` are within valid ranges for this zoom level.
-	#[must_use]
-	pub fn is_valid(&self) -> bool {
-		if self.level > 30 {
-			return false;
-		}
-		let max = 2u32.pow(u32::from(self.level));
-		(self.x < max) && (self.y < max)
 	}
 
 	/// Compute a linear sort index combining zoom and x/y for total ordering.
@@ -224,9 +222,9 @@ mod tests {
 		let c = TileCoord::new(2, 2, 2).unwrap();
 		assert!(c.eq(&c));
 		assert!(c.eq(&c.clone()));
-		assert!(c.ne(&TileCoord::new(1, 2, 2).unwrap()));
-		assert!(c.ne(&TileCoord::new(2, 1, 2).unwrap()));
-		assert!(c.ne(&TileCoord::new(2, 2, 1).unwrap()));
+		assert!(c.ne(&TileCoord::new(3, 2, 2).unwrap()));
+		assert!(c.ne(&TileCoord::new(2, 3, 2).unwrap()));
+		assert!(c.ne(&TileCoord::new(2, 2, 3).unwrap()));
 	}
 
 	#[test]
@@ -248,12 +246,6 @@ mod tests {
 	}
 
 	#[test]
-	fn tilecoord_is_valid() {
-		let coord = TileCoord::new(5, 3, 4).unwrap();
-		assert!(coord.is_valid());
-	}
-
-	#[test]
 	fn tilecoord_get_sort_index() {
 		let coord = TileCoord::new(5, 3, 4).unwrap();
 		assert_eq!(coord.get_sort_index(), 472);
@@ -267,34 +259,29 @@ mod tests {
 	}
 
 	#[rstest]
+	#[case(1, 0, 0, Less)]
+	#[case(1, 0, 1, Less)]
+	#[case(1, 1, 0, Less)]
 	#[case(1, 1, 1, Less)]
 	#[case(2, 1, 1, Less)]
-	#[case(3, 1, 1, Less)]
-	#[case(1, 2, 1, Less)]
-	#[case(2, 2, 1, Less)]
-	#[case(3, 2, 1, Less)]
-	#[case(1, 3, 1, Less)]
-	#[case(2, 3, 1, Less)]
-	#[case(3, 3, 1, Less)]
-	#[case(1, 1, 2, Less)]
 	#[case(2, 1, 2, Less)]
-	#[case(3, 1, 2, Less)]
-	#[case(1, 2, 2, Less)]
-	#[case(2, 2, 2, Equal)]
-	#[case(3, 2, 2, Greater)]
-	#[case(1, 3, 2, Greater)]
-	#[case(2, 3, 2, Greater)]
-	#[case(3, 3, 2, Greater)]
-	#[case(1, 1, 3, Greater)]
 	#[case(2, 1, 3, Greater)]
-	#[case(3, 1, 3, Greater)]
-	#[case(1, 2, 3, Greater)]
+	#[case(2, 2, 1, Less)]
+	#[case(2, 2, 2, Equal)]
 	#[case(2, 2, 3, Greater)]
-	#[case(3, 2, 3, Greater)]
-	#[case(1, 3, 3, Greater)]
+	#[case(2, 3, 1, Less)]
+	#[case(2, 3, 2, Greater)]
 	#[case(2, 3, 3, Greater)]
+	#[case(3, 1, 1, Greater)]
+	#[case(3, 1, 2, Greater)]
+	#[case(3, 1, 3, Greater)]
+	#[case(3, 2, 1, Greater)]
+	#[case(3, 2, 2, Greater)]
+	#[case(3, 2, 3, Greater)]
+	#[case(3, 3, 1, Greater)]
+	#[case(3, 3, 2, Greater)]
 	#[case(3, 3, 3, Greater)]
-	fn partial_cmp_cases(#[case] x: u32, #[case] y: u32, #[case] level: u8, #[case] expected: Ordering) {
+	fn partial_cmp_cases(#[case] level: u8, #[case] x: u32, #[case] y: u32, #[case] expected: Ordering) {
 		let c1 = TileCoord::new(2, 2, 2).unwrap();
 		let c2 = TileCoord::new(level, x, y).unwrap();
 		assert_eq!(c2.partial_cmp(&c1), Some(expected));
@@ -307,26 +294,13 @@ mod tests {
 	}
 
 	#[test]
-	fn tilecoord_is_valid_false_cases() {
-		// Level 31 is considered invalid by is_valid()
-		let coord = TileCoord::new(31, 0, 0).unwrap();
-		assert!(!coord.is_valid());
-		// x out of bounds for level 1 (max index = 1)
-		let coord2 = TileCoord::new(1, 2, 0).unwrap();
-		assert!(!coord2.is_valid());
-		// y out of bounds for level 1
-		let coord = TileCoord::new(1, 0, 2).unwrap();
-		assert!(!coord.is_valid());
-	}
-
-	#[test]
 	fn tilecoord_as_json_and_scaled_down() {
-		let coord = TileCoord::new(2, 5, 6).unwrap();
+		let coord = TileCoord::new(4, 5, 6).unwrap();
 		// Test JSON serialization
-		assert_eq!(coord.as_json(), "{x:5,y:6,z:2}");
+		assert_eq!(coord.as_json(), "{x:5,y:6,z:4}");
 		// Test scaling down by a factor
 		let scaled = coord.get_scaled_down(5);
-		assert_eq!(scaled, TileCoord::new(2, 1, 1).unwrap());
+		assert_eq!(scaled, TileCoord::new(4, 1, 1).unwrap());
 		// Scaling by 1 returns same
 		assert_eq!(coord.get_scaled_down(1), coord);
 	}

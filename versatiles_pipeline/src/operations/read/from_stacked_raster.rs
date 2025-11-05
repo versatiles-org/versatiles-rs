@@ -213,6 +213,7 @@ mod tests {
 	use crate::helpers::{arrange_tiles, dummy_image_source::DummyImageSource};
 	use futures::future::BoxFuture;
 	use imageproc::image::GenericImage;
+	use pretty_assertions::assert_eq;
 	use versatiles_container::TilesReaderTrait;
 	use versatiles_core::TileCompression::Uncompressed;
 	use versatiles_image::DynamicImage;
@@ -228,7 +229,14 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let error = |command: &'static str| async {
 			assert_eq!(
-				factory.operation_from_vpl(command).await.unwrap_err().to_string(),
+				factory
+					.operation_from_vpl(command)
+					.await
+					.unwrap_err()
+					.chain()
+					.last()
+					.unwrap()
+					.to_string(),
 				"must have at least one source"
 			)
 		};

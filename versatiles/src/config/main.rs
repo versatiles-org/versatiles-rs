@@ -148,8 +148,11 @@ mod tests {
 	fn parse_invalid_config() {
 		let cfg = Config::from_string("server:\n  pi: 3.14.15.9");
 		assert_eq!(
-			&cfg.unwrap_err().to_string()[0..43],
-			"server: unknown field `pi`, expected one of"
+			cfg.unwrap_err().chain().map(|e| e.to_string()).collect::<Vec<_>>(),
+			vec![
+				"parsing config from string (YAML)",
+				"server: unknown field `pi`, expected one of `ip`, `port`, `minimal_recompression`, `disable_api` at line 2 column 3"
+			]
 		);
 	}
 

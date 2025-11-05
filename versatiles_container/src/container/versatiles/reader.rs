@@ -585,8 +585,6 @@ mod tests {
 	#[tokio::test]
 	async fn get_tile_out_of_range_is_none() -> Result<()> {
 		let (_, reader) = mk_reader().await?;
-		// x beyond the level-4 max (15)
-		assert!(reader.get_tile(&TileCoord::new(4, 16, 0)?).await?.is_none());
 		// level beyond available
 		assert!(reader.get_tile(&TileCoord::new(5, 0, 0)?).await?.is_none());
 		Ok(())

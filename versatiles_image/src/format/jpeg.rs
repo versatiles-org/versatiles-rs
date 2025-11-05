@@ -109,9 +109,8 @@ mod tests {
 	#[case::greya(DynamicImage::new_test_greya())]
 	#[case::rgba(DynamicImage::new_test_rgba())]
 	fn jpeg_rejects_alpha_images(#[case] img: DynamicImage) {
-		let err = image2blob(&img, None).unwrap_err();
 		assert_eq!(
-			format!("{err}"),
+			image2blob(&img, None).unwrap_err().chain().last().unwrap().to_string(),
 			"JPEG only supports Grey or RGB images without alpha channel"
 		);
 	}

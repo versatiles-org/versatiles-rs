@@ -134,12 +134,14 @@ mod tests {
 		let temp_dir = TempDir::new()?;
 		let temp_path = temp_dir.path().display();
 
+		println!("{:?}", std::time::SystemTime::now());
 		run_command(vec![
 			"versatiles",
 			"convert",
 			"../testdata/berlin.mbtiles",
 			&format!("{temp_path}/berlin1.versatiles"),
 		])?;
+		println!("{:?}", std::time::SystemTime::now());
 
 		run_command(vec![
 			"versatiles",
@@ -148,6 +150,7 @@ mod tests {
 			&format!("{temp_path}/berlin1.versatiles"),
 			&format!("{temp_path}/berlin2.versatiles"),
 		])?;
+		println!("{:?}", std::time::SystemTime::now());
 
 		run_command(vec![
 			"versatiles",
@@ -158,6 +161,7 @@ mod tests {
 			&format!("{temp_path}/berlin2.versatiles"),
 			&format!("{temp_path}/berlin3.versatiles"),
 		])?;
+		println!("{:?}", std::time::SystemTime::now());
 
 		run_command(vec![
 			"versatiles",
@@ -165,6 +169,7 @@ mod tests {
 			"../testdata/berlin.vpl",
 			&format!("{temp_path}/berlin4.pmtiles"),
 		])?;
+		println!("{:?}", std::time::SystemTime::now());
 
 		Ok(())
 	}

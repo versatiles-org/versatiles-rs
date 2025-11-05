@@ -36,13 +36,9 @@ impl TileBBox {
 			return None;
 		}
 		// Bottom-left in geospatial terms is (x_min, y_max + 1)
-		let p_min = TileCoord::new(self.level, self.x_min().unwrap(), self.y_max().unwrap() + 1)
-			.unwrap()
-			.as_geo();
+		let p_min = TileCoord::coord_to_geo(self.level, self.x_min().unwrap(), self.y_max().unwrap() + 1);
 		// Top-right in geospatial terms is (x_max + 1, y_min)
-		let p_max = TileCoord::new(self.level, self.x_max().unwrap() + 1, self.y_min().unwrap())
-			.unwrap()
-			.as_geo();
+		let p_max = TileCoord::coord_to_geo(self.level, self.x_max().unwrap() + 1, self.y_min().unwrap());
 
 		Some(GeoBBox::new(p_min[0], p_min[1], p_max[0], p_max[1]).unwrap())
 	}
@@ -68,9 +64,10 @@ mod tests {
 	/// Compute the expected GeoBBox by reproducing the same corner logic
 	/// used by `to_geo_bbox` directly via `TileCoord::as_geo()`.
 	fn expected_bbox(level: u8, x0: u32, y0: u32, x1: u32, y1: u32) -> GeoBBox {
-		let p_min = TileCoord::new(level, x0, y1 + 1).unwrap().as_geo();
-		let p_max = TileCoord::new(level, x1 + 1, y0).unwrap().as_geo();
-		GeoBBox::new(p_min[0], p_min[1], p_max[0], p_max[1]).unwrap()
+		TileBBox::from_min_and_max(level, x0, y0, x1, y1)
+			.unwrap()
+			.to_geo_bbox()
+			.unwrap()
 	}
 
 	fn assert_bbox_close(got: &GeoBBox, exp: &GeoBBox, eps: f64) {

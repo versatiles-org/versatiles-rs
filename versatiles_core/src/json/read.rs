@@ -93,11 +93,8 @@ mod tests {
 	use std::io::Cursor;
 	use tokio;
 
-	fn join_errors(e: &Error) -> String {
-		e.chain()
-			.map(std::string::ToString::to_string)
-			.collect::<Vec<String>>()
-			.join("\n")
+	fn join_errors(e: &Error) -> Vec<String> {
+		e.chain().map(std::string::ToString::to_string).collect::<Vec<String>>()
 	}
 
 	fn json_from_str<T: AsRef<str>>(s: T) -> Result<JsonValue> {
@@ -161,7 +158,14 @@ mod tests {
 		assert_eq!(vec[0].as_ref().unwrap(), &json_from_str(r#"{"key1": "value1"}"#)?);
 		assert_eq!(
 			join_errors(vec[1].as_ref().unwrap_err()),
-			"error in line 2\nwhile parsing JSON '{invalid json}'\nparsing object, expected '\"' or '}' at position 1: {"
+			vec![
+				"error in line 2",
+				"while parsing JSON string '{invalid json}'",
+				"while parsing JSON data",
+				"while parsing JSON object",
+				"while parsing object entries",
+				"parsing object, expected '\"' or '}' at position 1: {"
+			]
 		);
 		assert_eq!(vec[2].as_ref().unwrap(), &json_from_str(r#"{"key2": "value2"}"#)?);
 		Ok(())
@@ -177,7 +181,13 @@ mod tests {
 		assert_eq!(vec[0].as_ref().unwrap(), &json_from_str(r#"{"key1": "value1"}"#)?);
 		assert_eq!(
 			join_errors(vec[1].as_ref().unwrap_err()),
-			"error in line 2\nwhile parsing JSON 'not a json'\nunexpected character while parsing tag 'null' at position 2: no"
+			vec![
+				"error in line 2",
+				"while parsing JSON string 'not a json'",
+				"while parsing JSON data",
+				"while parsing tag 'null'",
+				"unexpected character while parsing tag 'null' at position 2: no"
+			]
 		);
 		assert_eq!(vec[2].as_ref().unwrap(), &json_from_str(r#"{"key2": "value2"}"#)?);
 		Ok(())
@@ -213,7 +223,16 @@ mod tests {
 		// Second invalid error message contains line information
 		let err = results[1].as_ref().unwrap_err();
 		let msg = join_errors(err);
-		assert!(msg.contains("error in line 2"));
+		assert_eq!(
+			msg,
+			vec![
+				"error in line 2",
+				"while parsing JSON string 'not json'",
+				"while parsing JSON data",
+				"while parsing tag 'null'",
+				"unexpected character while parsing tag 'null' at position 2: no"
+			]
+		);
 		// Third valid
 		assert_eq!(results[2].as_ref().unwrap(), &json_from_str(r#"{"key2": "value2"}"#)?);
 		Ok(())

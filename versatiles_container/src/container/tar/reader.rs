@@ -309,7 +309,12 @@ pub mod tests {
 		a.finish()?;
 
 		assert_eq!(
-			TarTilesReader::open_path(&filename).unwrap_err().to_string(),
+			TarTilesReader::open_path(&filename)
+				.unwrap_err()
+				.chain()
+				.last()
+				.unwrap()
+				.to_string(),
 			"no tiles found in tar"
 		);
 		Ok(())

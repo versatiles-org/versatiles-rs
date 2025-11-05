@@ -198,6 +198,7 @@ mod tests {
 	use crate::helpers::{arrange_tiles, dummy_vector_source::DummyVectorSource};
 	use futures::future::BoxFuture;
 	use itertools::Itertools;
+	use pretty_assertions::assert_eq;
 	use versatiles_container::TilesReaderTrait;
 
 	pub fn check_tile(blob: &Blob) -> String {
@@ -223,7 +224,14 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let error = |command: &'static str| async {
 			assert_eq!(
-				factory.operation_from_vpl(command).await.unwrap_err().to_string(),
+				factory
+					.operation_from_vpl(command)
+					.await
+					.unwrap_err()
+					.chain()
+					.last()
+					.unwrap()
+					.to_string(),
 				"must have at least two sources"
 			)
 		};
@@ -242,8 +250,16 @@ mod tests {
 				)
 				.await
 				.unwrap_err()
-				.to_string(),
-			"The 'from_merged_vector' operation does not support the argument 'color'.\nOnly the following arguments are supported:\n'sources'"
+				.chain()
+				.map(|e| e.to_string())
+				.collect::<Vec<_>>(),
+			[
+				"Failed to create reader from VPL",
+				"Failed to build pipeline from VPL",
+				"Failed to create read operation from VPL node",
+				"Failed to build from_merged_vector operation",
+				"The 'from_merged_vector' operation does not support the argument 'color'.\nOnly the following arguments are supported:\n'sources'"
+			]
 		);
 	}
 

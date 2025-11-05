@@ -100,7 +100,7 @@ impl PipelineFactory {
 		(self.create_reader.as_ref())(self.dir.join(filename).to_string_lossy().to_string()).await
 	}
 
-	#[context("Failed to create operation from VPL")]
+	#[context("Failed to create reader from VPL")]
 	pub async fn operation_from_vpl(&self, text: &str) -> Result<Box<dyn OperationTrait>> {
 		let pipeline = parse_vpl(text)?;
 		self.build_pipeline(pipeline).await

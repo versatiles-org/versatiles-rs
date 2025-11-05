@@ -223,8 +223,12 @@ mod tests {
 	#[case("32:10", "Zoom level must be between 0 and 31")] // invalid zoom
 	#[case("5:101", "Quality value must be between 0 and 100")] // invalid quality
 	fn parse_quality_errors(#[case] input: &str, #[case] needle: &str) {
-		let err = super::parse_quality(Some(input.to_string())).unwrap_err();
-		let msg = format!("{}", err);
+		let msg = super::parse_quality(Some(input.to_string()))
+			.unwrap_err()
+			.chain()
+			.map(|e| e.to_string())
+			.collect::<Vec<_>>()
+			.join("|");
 		assert!(msg.contains(needle), "error '{msg}' should contain '{needle}'");
 	}
 

@@ -197,9 +197,13 @@ mod tests {
 	fn from_raw_rejects_mismatched_len() {
 		// 5 bytes -> channel_count = 1 (5/4), but buffer length mismatches -> error
 		let data_mismatch = vec![0u8; 5];
-		let err = DynamicImage::from_raw(2, 2, data_mismatch).unwrap_err();
 		assert_eq!(
-			format!("{err}"),
+			DynamicImage::from_raw(2, 2, data_mismatch)
+				.unwrap_err()
+				.chain()
+				.last()
+				.unwrap()
+				.to_string(),
 			"Data length (5) does not match width (2) * height (2) * channel_count (1) = 4"
 		);
 	}
@@ -208,8 +212,15 @@ mod tests {
 	fn from_raw_rejects_unsupported_channel_counts() {
 		// 20 bytes -> channel_count = 5 (20/4) -> unsupported channel count
 		let data_unsupported = vec![0u8; 20];
-		let err = DynamicImage::from_raw(2, 2, data_unsupported).unwrap_err();
-		assert_eq!(format!("{err}"), "Unsupported channel count: 5");
+		assert_eq!(
+			DynamicImage::from_raw(2, 2, data_unsupported)
+				.unwrap_err()
+				.chain()
+				.last()
+				.unwrap()
+				.to_string(),
+			"Unsupported channel count: 5"
+		);
 	}
 
 	#[test]

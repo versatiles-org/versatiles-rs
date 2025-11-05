@@ -22,7 +22,7 @@
 //! assert_eq!(filename, "map");
 //!
 //! // Parsing a tile format from a string (case-insensitive)
-//! let format = TileFormat::parse_str("JPEG").unwrap();
+//! let format = TileFormat::try_from_str("JPEG").unwrap();
 //! assert_eq!(format, TileFormat::JPG);
 //! ```
 

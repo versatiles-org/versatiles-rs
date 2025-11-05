@@ -249,16 +249,20 @@ mod tests {
 	) {
 		let a = DynamicImage::from_fn(w1, h1, |x, y| [x as u8, y as u8, 0]);
 		let b = DynamicImage::from_fn(w2, h2, |x, y| [x as u8, y as u8, 0]);
-		let err = a.ensure_same_size(&b).unwrap_err();
-		assert_eq!(format!("{err}"), expect);
+		assert_eq!(
+			a.ensure_same_size(&b).unwrap_err().chain().last().unwrap().to_string(),
+			expect
+		);
 	}
 
 	#[test]
 	fn ensure_same_meta_color_mismatch_error() {
 		let a = sample_rgb8();
 		let b = sample_rgba8(255);
-		let err = a.ensure_same_meta(&b).unwrap_err();
-		assert!(format!("{err}").contains("Pixel value type mismatch"));
+		assert_eq!(
+			a.ensure_same_meta(&b).unwrap_err().chain().last().unwrap().to_string(),
+			"Pixel value type mismatch: self has Rgb8, but the other image has Rgba8"
+		);
 	}
 
 	// --- diff --------------------------------------------------------------

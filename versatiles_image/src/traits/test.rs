@@ -333,8 +333,7 @@ mod tests {
 
 	/// Helper: run `MarkerResult::compare` expecting failure and return the error message string.
 	fn compare_err_msg(p: MarkerParameters, r: MarkerResult, factor: f64) -> String {
-		let err = r.compare(&p, factor).expect_err("expected compare() to fail");
-		format!("{}", err)
+		r.compare(&p, factor).unwrap_err().chain().last().unwrap().to_string()
 	}
 
 	/// Verifies that each synthetic test image (grey, greya, rgb, rgba)

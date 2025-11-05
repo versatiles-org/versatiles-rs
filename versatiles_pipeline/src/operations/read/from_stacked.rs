@@ -231,7 +231,14 @@ mod tests {
 		let factory = PipelineFactory::new_dummy();
 		let error = |command: &'static str| async {
 			assert_eq!(
-				factory.operation_from_vpl(command).await.unwrap_err().to_string(),
+				factory
+					.operation_from_vpl(command)
+					.await
+					.unwrap_err()
+					.chain()
+					.last()
+					.unwrap()
+					.to_string(),
 				"must have at least two sources"
 			)
 		};

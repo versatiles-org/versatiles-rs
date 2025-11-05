@@ -330,7 +330,7 @@ mod tests {
 		}
 
 		fn run(vpl: &str, message: &str) {
-			let mut error = parse_vpl(vpl).unwrap_err().to_string();
+			let mut error = parse_vpl(vpl).unwrap_err().chain().last().unwrap().to_string();
 			error = REG_MGS1.replace_all(&error, "").to_string();
 			error = REG_MGS2.replace_all(&error, "\n").to_string();
 			assert_eq!(error, message, "for vpl: '{vpl}'");

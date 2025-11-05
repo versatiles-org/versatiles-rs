@@ -109,10 +109,6 @@ impl TilesReaderTrait for MockTilesReader {
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		use TileFormat::*;
 
-		if !coord.is_valid() {
-			return Ok(None);
-		}
-
 		if !self.parameters.bbox_pyramid.contains_coord(coord) {
 			return Ok(None);
 		}

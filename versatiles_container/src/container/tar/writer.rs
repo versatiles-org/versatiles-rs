@@ -157,7 +157,12 @@ mod tests {
 		TarTilesWriter::write_to_path(&mut mock_reader, &temp_path, ProcessingConfig::default()).await?;
 
 		assert_eq!(
-			TarTilesReader::open_path(&temp_path).unwrap_err().to_string(),
+			TarTilesReader::open_path(&temp_path)
+				.unwrap_err()
+				.chain()
+				.last()
+				.unwrap()
+				.to_string(),
 			"no tiles found in tar"
 		);
 

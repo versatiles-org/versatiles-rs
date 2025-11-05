@@ -149,6 +149,7 @@ impl std::fmt::Debug for PipelineReader {
 #[cfg(test)]
 mod tests {
 	use super::*;
+	use pretty_assertions::assert_eq;
 	use versatiles_container::MockTilesWriter;
 
 	pub const VPL: &str = include_str!("../../../testdata/berlin.vpl");
@@ -166,8 +167,12 @@ mod tests {
 		let path = Path::new("../testdata/pipeline.vpl");
 		let result = PipelineReader::open_path(path, ProcessingConfig::default()).await;
 		assert_eq!(
-			result.unwrap_err().to_string(),
-			"Failed to open \"../testdata/pipeline.vpl\""
+			result.unwrap_err().chain().map(|e| e.to_string()).collect::<Vec<_>>(),
+			[
+				"opening VPL path '../testdata/pipeline.vpl'",
+				"Failed to open \"../testdata/pipeline.vpl\"",
+				"No such file or directory (os error 2)"
+			]
 		);
 
 		Ok(())

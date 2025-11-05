@@ -299,12 +299,11 @@ mod tests {
 
 		let msg = DirectoryTilesReader::open_path(&dir.join("dont_exist"))
 			.unwrap_err()
+			.chain()
+			.last()
+			.unwrap()
 			.to_string();
-		assert_eq!(
-			&msg[msg.len() - 16..],
-			"\" does not exist",
-			"Should return error on non-existent directory"
-		);
+		assert_eq!(&msg[msg.len() - 16..], "\" does not exist");
 
 		Ok(())
 	}
@@ -315,9 +314,13 @@ mod tests {
 		dir.child("3/2/1.unknown").write_str("unsupported format")?;
 
 		assert_eq!(
-			DirectoryTilesReader::open_path(dir.path()).unwrap_err().to_string(),
+			DirectoryTilesReader::open_path(dir.path())
+				.unwrap_err()
+				.chain()
+				.last()
+				.unwrap()
+				.to_string(),
 			"no tiles found",
-			"Should return error on unsupported file formats"
 		);
 
 		Ok(())
@@ -373,7 +376,12 @@ mod tests {
 		fs::write(dir.path().join("3/2/1.txt"), "wrong format").unwrap();
 
 		assert_eq!(
-			&DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
+			&DirectoryTilesReader::open_path(&dir)
+				.unwrap_err()
+				.chain()
+				.last()
+				.unwrap()
+				.to_string(),
 			"no tiles found",
 			"Should error on incorrect tile format"
 		);
@@ -388,7 +396,12 @@ mod tests {
 		dir.child("4/2/1.jpg").write_str("test tile data")?;
 
 		assert_eq!(
-			DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
+			DirectoryTilesReader::open_path(&dir)
+				.unwrap_err()
+				.chain()
+				.last()
+				.unwrap()
+				.to_string(),
 			"found multiple tile formats: [JPG, PNG]"
 		);
 
@@ -402,7 +415,12 @@ mod tests {
 		dir.child("4/2/1.pbf.br").write_str("test tile data")?;
 
 		assert_eq!(
-			DirectoryTilesReader::open_path(&dir).unwrap_err().to_string(),
+			DirectoryTilesReader::open_path(&dir)
+				.unwrap_err()
+				.chain()
+				.last()
+				.unwrap()
+				.to_string(),
 			"found multiple tile compressions: [Uncompressed, Brotli]"
 		);
 

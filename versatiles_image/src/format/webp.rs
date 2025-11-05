@@ -139,7 +139,7 @@ mod tests {
 		} else {
 			image2blob(&img, None)
 		};
-		assert_eq!(res.unwrap_err().to_string(), expected_msg);
+		assert_eq!(res.unwrap_err().chain().last().unwrap().to_string(), expected_msg);
 	}
 
 	#[rstest]
