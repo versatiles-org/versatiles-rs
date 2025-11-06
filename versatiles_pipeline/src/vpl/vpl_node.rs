@@ -1,18 +1,37 @@
+//! VPL node definition.
+//!
+//! This module defines [`VPLNode`], the parsed building block of the VersaTiles
+//! Pipeline Language (VPL). A node has a `name`, a multi-valued parameter map
+//! (`properties`), and zero or more child pipelines (`sources`). Helpers convert
+//! stringly-typed values to typed parameters with clear, contextual errors.
+
 use super::VPLPipeline;
 use crate::vpl::parse_vpl;
 use anyhow::{Result, anyhow, ensure};
 use std::{collections::BTreeMap, fmt::Debug, str::FromStr};
 use versatiles_derive::context;
 
+/// A single operation node in a VPL pipeline.
+///
+/// `VPLNode` holds the operation `name`, a multi-valued `properties` map (each key may
+/// have one or more string values), and a list of child pipelines in `sources`.
+/// Parsing/lookup helpers provide typed access (string/boolean/numeric/enum and fixed-size
+/// numeric arrays) and generate consistent error messages via the `#[context]` macro.
 #[derive(Clone, PartialEq)]
 pub struct VPLNode {
+	/// Operation/tag name, e.g., "read", "filter", or a custom transform.
 	pub name: String,
+	/// Multi-valued parameter map: each key maps to one or more raw string values.
 	pub properties: BTreeMap<String, Vec<String>>,
+	/// Zero or more child pipelines (nested VPL blocks) used as this node's inputs.
 	pub sources: Vec<VPLPipeline>,
 }
 
 #[allow(dead_code)]
 impl VPLNode {
+	/// Parses a single-node VPL string into a `VPLNode` (asserts exactly one node).
+	///
+	/// Useful in tests and small utilities. Fails with rich context on invalid VPL.
 	#[context("Failed to parse VPL node from string '{vpl}'")]
 	pub fn try_from_str(vpl: &str) -> Result<Self> {
 		let mut pipeline = parse_vpl(vpl)?;
@@ -20,10 +39,12 @@ impl VPLNode {
 		pipeline.pop().ok_or(anyhow!("pipeline is empty"))
 	}
 
+	/// Returns the raw value vector for `field`, if present.
 	fn get_property_vec(&self, field: &str) -> Option<&Vec<String>> {
 		self.properties.get(field)
 	}
 
+	/// Returns the single value for `field` or `Ok(None)` if absent; errors if multiple values exist.
 	#[context("Failed to get property '{field}' from VPL node '{}'", self.name)]
 	fn get_property(&self, field: &str) -> Result<Option<&String>> {
 		self.properties.get(field).map_or(Ok(None), |list| {
@@ -36,10 +57,14 @@ impl VPLNode {
 		})
 	}
 
+	/// Returns all property names present on this node.
 	pub fn get_property_names(&self) -> Vec<String> {
 		self.properties.keys().cloned().collect()
 	}
 
+	/// Attempts to parse `field` as an enum (`T: TryFrom<&str>`), returning `Ok(None)` if absent.
+	///
+	/// Error messages include the node name and the invalid value.
 	#[context("Failed to get optional property enum '{field}' from VPL node '{}'", self.name)]
 	pub fn get_property_enum_option<'a, T>(&'a self, field: &str) -> Result<Option<T>>
 	where
@@ -57,21 +82,25 @@ impl VPLNode {
 		})
 	}
 
+	/// Optional string parameter accessor; clones the stored value when present.
 	#[context("Failed to get optional property string '{field}' from VPL node '{}'", self.name)]
 	pub fn get_property_string_option(&self, field: &str) -> Result<Option<String>> {
 		Ok(self.get_property(field)?.map(|v| v.to_string()))
 	}
 
+	/// Required string parameter accessor; errors if the field is missing.
 	#[context("Failed to get required property string '{field}' from VPL node '{}'", self.name)]
 	pub fn get_property_string_required(&self, field: &str) -> Result<String> {
 		self.required(field, self.get_property_string_option(field))
 	}
 
+	/// Required boolean parameter accessor; accepts `1/true/yes/ok` (case-insensitive) for `true`.
 	#[context("Failed to get required property bool '{field}' from VPL node '{}'", self.name)]
 	pub fn get_property_bool_required(&self, field: &str) -> Result<bool> {
 		self.required(field, self.get_property_bool_option(field))
 	}
 
+	/// Optional boolean parameter accessor; accepts `1/true/yes/ok` (case-insensitive).
 	#[context("Failed to get optional property bool '{field}' from VPL node '{}'", self.name)]
 	pub fn get_property_bool_option(&self, field: &str) -> Result<Option<bool>> {
 		Ok(self
@@ -79,6 +108,7 @@ impl VPLNode {
 			.map(|v| matches!(v.trim().to_lowercase().as_str(), "1" | "true" | "yes" | "ok")))
 	}
 
+	/// Optional numeric parameter accessor using `FromStr` for the target type.
 	#[context("Failed to get optional property number '{field}' from VPL node '{}'", self.name)]
 	pub fn get_property_number_option<T>(&self, field: &str) -> Result<Option<T>>
 	where
@@ -90,6 +120,7 @@ impl VPLNode {
 			.map_or(Ok(None), |v| v.parse::<T>().map(Some).map_err(Into::into))
 	}
 
+	/// Required numeric parameter accessor; errors when missing or when parsing fails.
 	#[context("Failed to get required property number '{field}' from VPL node '{}'", self.name)]
 	pub fn get_property_number_required<T>(&self, field: &str) -> Result<T>
 	where
@@ -99,6 +130,7 @@ impl VPLNode {
 		self.required(field, self.get_property_number_option::<T>(field))
 	}
 
+	/// Optional fixed-size numeric array accessor; enforces exactly `N` elements.
 	#[context("Failed to get optional property number array '{field}' from VPL node '{}'", self.name)]
 	pub fn get_property_number_array_option<T, const N: usize>(&self, field: &str) -> Result<Option<[T; N]>>
 	where
@@ -123,6 +155,7 @@ impl VPLNode {
 		})
 	}
 
+	/// Required fixed-size numeric array accessor; enforces presence and exactly `N` elements.
 	#[context("Failed to get required property number array '{field}' from VPL node '{}'", self.name)]
 	pub fn get_property_number_array_required<T, const N: usize>(&self, field: &str) -> Result<[T; N]>
 	where
@@ -132,11 +165,13 @@ impl VPLNode {
 		self.required(field, self.get_property_number_array_option::<T, N>(field))
 	}
 
+	/// Internal helper: converts `Ok(Some(_))` to the value or produces a standard "required" error.
 	fn required<T>(&self, field: &str, result: Result<Option<T>>) -> Result<T> {
 		result?.ok_or_else(|| anyhow!("In operation '{}' the parameter '{}' is required.", self.name, field))
 	}
 }
 
+/// Creates a node with the given name and no properties/sources.
 impl From<&str> for VPLNode {
 	fn from(name: &str) -> Self {
 		VPLNode {
@@ -147,21 +182,7 @@ impl From<&str> for VPLNode {
 	}
 }
 
-#[cfg(test)]
-fn make_properties(input: Vec<(&str, Vec<&str>)>) -> BTreeMap<String, Vec<String>> {
-	input
-		.into_iter()
-		.map(|(k, v)| (k.to_string(), v.into_iter().map(|f| f.to_string()).collect()))
-		.collect()
-}
-
-fn make_property(input: Vec<(&str, &str)>) -> BTreeMap<String, Vec<String>> {
-	input
-		.into_iter()
-		.map(|(k, v)| (k.to_string(), vec![v.to_string()]))
-		.collect()
-}
-
+/// Creates a node with one `(key, value)` property.
 impl From<(&str, (&str, &str))> for VPLNode {
 	fn from(input: (&str, (&str, &str))) -> Self {
 		VPLNode {
@@ -172,6 +193,7 @@ impl From<(&str, (&str, &str))> for VPLNode {
 	}
 }
 
+/// Creates a node with multiple `(key, value)` properties.
 impl From<(&str, Vec<(&str, &str)>)> for VPLNode {
 	fn from(input: (&str, Vec<(&str, &str)>)) -> Self {
 		VPLNode {
@@ -182,6 +204,7 @@ impl From<(&str, Vec<(&str, &str)>)> for VPLNode {
 	}
 }
 
+/// Creates a node with properties and a single child pipeline.
 impl From<(&str, Vec<(&str, &str)>, VPLPipeline)> for VPLNode {
 	fn from(input: (&str, Vec<(&str, &str)>, VPLPipeline)) -> Self {
 		VPLNode {
@@ -192,6 +215,7 @@ impl From<(&str, Vec<(&str, &str)>, VPLPipeline)> for VPLNode {
 	}
 }
 
+/// Creates a node with properties and multiple child pipelines.
 impl From<(&str, Vec<(&str, &str)>, Vec<VPLPipeline>)> for VPLNode {
 	fn from(input: (&str, Vec<(&str, &str)>, Vec<VPLPipeline>)) -> Self {
 		VPLNode {
@@ -214,6 +238,21 @@ impl Debug for VPLNode {
 		}
 		s.finish()
 	}
+}
+
+#[cfg(test)]
+fn make_properties(input: Vec<(&str, Vec<&str>)>) -> BTreeMap<String, Vec<String>> {
+	input
+		.into_iter()
+		.map(|(k, v)| (k.to_string(), v.into_iter().map(|f| f.to_string()).collect()))
+		.collect()
+}
+
+fn make_property(input: Vec<(&str, &str)>) -> BTreeMap<String, Vec<String>> {
+	input
+		.into_iter()
+		.map(|(k, v)| (k.to_string(), vec![v.to_string()]))
+		.collect()
 }
 
 #[cfg(test)]

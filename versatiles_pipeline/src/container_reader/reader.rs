@@ -1,3 +1,11 @@
+//! Pipeline tile reader.
+//!
+//! This module defines [`PipelineReader`], a `TilesReaderTrait` implementation that
+//! loads a VersaTiles Pipeline Language (VPL) description, builds the operation
+//! graph via [`PipelineFactory`], and exposes a unified tile-reading interface.
+//! It supports opening from paths or arbitrary [`DataReader`]s, validates and
+//! executes the configured operations, and streams tiles for a given bbox.
+
 use crate::{OperationTrait, PipelineFactory};
 use anyhow::{Result, anyhow, ensure};
 use async_trait::async_trait;
@@ -7,25 +15,25 @@ use versatiles_container::{ContainerRegistry, ProcessingConfig, Tile, TilesReade
 use versatiles_core::{io::DataReader, *};
 use versatiles_derive::context;
 
-/// The `PipelineReader` struct is responsible for managing the tile reading process,
-/// applying operations, and returning the composed tiles.
+/// Tile reader that executes a VPL-defined operation pipeline and returns composed tiles.
+///
+/// `PipelineReader` owns the parsed operation graph (`operation`) and exposes
+/// `TilesReaderTrait` so it can be used like any other container reader. It can be
+/// constructed from a file path, from any [`DataReader`], or (in tests) from a raw string.
+/// The `parameters` reported by the reader originate from the pipeline’s output operation
+/// and govern traversal, tile format, compression, and metadata.
 pub struct PipelineReader {
-	pub name: String,
-	pub operation: Box<dyn OperationTrait>,
-	pub parameters: TilesReaderParameters,
+	name: String,
+	operation: Box<dyn OperationTrait>,
+	parameters: TilesReaderParameters,
 }
 
 #[allow(dead_code)]
 impl<'a> PipelineReader {
-	/// Opens a PipelineReader from a vpl file path.
+	/// Opens a `PipelineReader` from a VPL file on disk.
 	///
-	/// # Arguments
-	///
-	/// * `path` - The path to the vpl file.
-	///
-	/// # Returns
-	///
-	/// * `Result<PipelineReader>` - The constructed PipelineReader or an error if the configuration is invalid.
+	/// Reads the file, builds the operation graph with [`PipelineFactory::new_default`],
+	/// and returns a ready-to-use reader. Errors include contextual messages via `#[context]`.
 	#[context("opening VPL path '{}'", path.display())]
 	pub async fn open_path(path: &Path, config: ProcessingConfig) -> Result<PipelineReader> {
 		let vpl = std::fs::read_to_string(path).with_context(|| anyhow!("Failed to open {path:?}"))?;
@@ -34,15 +42,9 @@ impl<'a> PipelineReader {
 			.with_context(|| format!("failed parsing {path:?} as VPL"))
 	}
 
-	/// Opens a PipelineReader from a DataReader.
+	/// Opens a `PipelineReader` from an arbitrary [`DataReader`] containing VPL.
 	///
-	/// # Arguments
-	///
-	/// * `reader` - The DataReader containing the vpl configuration.
-	///
-	/// # Returns
-	///
-	/// * `Result<PipelineReader>` - The constructed PipelineReader or an error if the configuration is invalid.
+	/// Useful when VPL is packaged in other containers or fetched over the network.
 	#[context("opening VPL from reader '{}'", reader.get_name())]
 	pub async fn open_reader(reader: DataReader, dir: &Path, config: ProcessingConfig) -> Result<PipelineReader> {
 		let vpl = reader.read_all().await?.into_string();
@@ -51,11 +53,14 @@ impl<'a> PipelineReader {
 			.with_context(|| format!("failed parsing {} as VPL", reader.get_name()))
 	}
 
+	/// Test helper: constructs a `PipelineReader` from a raw VPL string.
 	#[cfg(test)]
 	pub async fn open_str(vpl: &str, dir: &Path, config: ProcessingConfig) -> Result<PipelineReader> {
 		Self::from_str(vpl, "from str", dir, config).await
 	}
 
+	/// Internal constructor that parses VPL and wires up the callback used by `PipelineFactory`
+	/// to resolve nested readers via `ContainerRegistry`.
 	fn from_str(
 		vpl: &'a str,
 		name: &'a str,
@@ -85,36 +90,42 @@ impl<'a> PipelineReader {
 
 #[async_trait]
 impl TilesReaderTrait for PipelineReader {
-	/// Get the name of the reader source, e.g., the filename.
+	/// Returns the source name of this pipeline (usually the VPL path or a label).
 	fn source_name(&self) -> &str {
 		&self.name
 	}
 
-	/// Get the container name, e.g., versatiles, mbtiles, etc.
+	/// Returns the logical container name: always `"pipeline"`.
 	fn container_name(&self) -> &str {
 		"pipeline"
 	}
 
-	/// Get the reader parameters.
+	/// Returns the reader parameters (tile format, compression, and traversal hints).
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
 
-	/// Override the tile compression.
+	/// Not supported for pipelines; calling this will panic.
+	///
+	/// Pipelines define compression in their operations, so overriding it is disallowed.
 	fn override_compression(&mut self, _tile_compression: TileCompression) {
 		panic!("you can't override the compression of pipeline")
 	}
 
+	/// Returns the traversal strategy derived from the pipeline’s output operation.
 	fn traversal(&self) -> &Traversal {
 		self.operation.traversal()
 	}
 
-	/// Get the metadata, always uncompressed.
+	/// Returns the pipeline’s tile metadata (`TileJSON`), always uncompressed.
 	fn tilejson(&self) -> &TileJSON {
 		self.operation.tilejson()
 	}
 
-	/// Get tile data for the given coordinate, always compressed and formatted.
+	/// Fetches a single tile for `coord` by executing the pipeline over that tile’s bbox.
+	///
+	/// Returns `Ok(None)` if the pipeline yields no tile; returns an error if multiple tiles
+	/// are produced (pipelines must emit at most one tile per coordinate).
 	#[context("getting tile {:?} via pipeline '{}'", coord, self.name)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		let mut vec = self.operation.get_stream(coord.as_tile_bbox()).await?.to_vec().await;
@@ -128,7 +139,7 @@ impl TilesReaderTrait for PipelineReader {
 		}
 	}
 
-	/// Get a stream of tiles within the bounding box.
+	/// Streams all tiles intersecting `bbox` by executing the pipeline’s output operation.
 	#[context("streaming tiles for bbox {:?} via pipeline '{}'", bbox, self.name)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_tile_stream {:?}", bbox);
