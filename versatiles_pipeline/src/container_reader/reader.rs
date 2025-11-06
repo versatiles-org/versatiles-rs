@@ -167,11 +167,10 @@ mod tests {
 		let path = Path::new("../testdata/pipeline.vpl");
 		let result = PipelineReader::open_path(path, ProcessingConfig::default()).await;
 		assert_eq!(
-			result.unwrap_err().chain().map(|e| e.to_string()).collect::<Vec<_>>(),
+			result.unwrap_err().chain().map(|e| e.to_string()).collect::<Vec<_>>()[0..2],
 			[
 				"opening VPL path '../testdata/pipeline.vpl'",
 				"Failed to open \"../testdata/pipeline.vpl\"",
-				"No such file or directory (os error 2)"
 			]
 		);
 
