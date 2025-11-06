@@ -1,3 +1,10 @@
+//! This module provides general-purpose utility modules for common functionality across the codebase.
+//! It includes:
+//! - `compression`: for handling tile compression and decompression.
+//! - `csv`: for lightweight CSV parsing utilities.
+//! - `pretty_print` (enabled with the `cli` feature): for formatted command-line output.
+//! - `tile_hilbert_index`: for Hilbert index calculations and spatial ordering of tiles.
+
 mod compression;
 mod csv;
 #[cfg(feature = "cli")]

@@ -17,7 +17,9 @@ use versatiles_derive::context;
 /// and a `TraversalSize` (range of block sizes) to generate
 /// an ordered sequence of `TileBBox` instances from a `TileBBoxPyramid`.
 pub struct Traversal {
+	/// The block ordering strategy.
 	pub order: TraversalOrder,
+	/// The block size range.
 	pub size: TraversalSize,
 }
 

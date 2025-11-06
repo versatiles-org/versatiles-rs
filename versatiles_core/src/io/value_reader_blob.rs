@@ -133,17 +133,13 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderBlob<E> {
 
 		self.cursor.set_position(end);
 
-		Ok(Box::new(ValueReaderSlice {
-			_phantom: PhantomData,
-			len: length,
-			cursor: Cursor::new(
-				self
-					.cursor
-					.get_ref()
-					.get(start as usize..end as usize)
-					.ok_or(anyhow!("out of bounds"))?,
-			),
-		}))
+		Ok(Box::new(ValueReaderSlice::new(
+			self
+				.cursor
+				.get_ref()
+				.get(start as usize..end as usize)
+				.ok_or(anyhow!("out of bounds"))?,
+		)))
 	}
 }
 

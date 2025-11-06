@@ -1,3 +1,7 @@
+//! This module handles conversion and verification of traversal steps between different
+//! traversal configurations, allowing translation and validation of tile traversal
+//! operations (such as Push, Pop, and Stream) between reading and writing traversals.
+
 use crate::{TileBBox, TileBBoxPyramid, Traversal, TraversalOrder};
 use anyhow::{Result, anyhow, bail, ensure};
 use std::{
@@ -6,14 +10,39 @@ use std::{
 };
 use versatiles_derive::context;
 
+/// Represents a single operation during traversal translation from one traversal configuration to another.
 #[derive(Debug, Clone)]
 pub enum TraversalTranslationStep {
+	/// Pushes a group of read `TileBBox`es onto a stack with a specific index.
+	///
+	/// Used when accumulating tiles for later aggregation or processing.
+	/// The `Vec<TileBBox>` contains the input tiles, and `usize` is the stack index.
 	Push(Vec<TileBBox>, usize),
+	/// Pops the accumulated tiles at the given index and produces a result `TileBBox`.
+	///
+	/// Used to finalize or aggregate a group of tiles that were previously pushed.
+	/// The `usize` is the stack index, and `TileBBox` is the resulting output tile.
 	Pop(usize, TileBBox),
+	/// Directly streams a group of input tiles into an output tile without stacking.
+	///
+	/// Used when a direct mapping from input tiles to an output tile is possible.
+	/// `Vec<TileBBox>` are the input tiles, and `TileBBox` is the output tile.
 	Stream(Vec<TileBBox>, TileBBox),
 }
 
 #[context("Could not find a way to translate traversals from {traversal_read:?} to {traversal_write:?}")]
+/// Translates traversal steps from a reading traversal configuration to a writing traversal configuration.
+///
+/// # Parameters
+/// - `pyramid`: The tile pyramid to traverse.
+/// - `traversal_read`: The traversal configuration for reading.
+/// - `traversal_write`: The traversal configuration for writing.
+///
+/// # Returns
+/// Returns a sequence of `TraversalTranslationStep` that describes how to convert the reading traversal to the writing traversal.
+///
+/// # Errors
+/// Returns an error if no valid translation can be found between the provided traversals.
 pub fn translate_traversals(
 	pyramid: &TileBBoxPyramid,
 	traversal_read: &Traversal,
@@ -66,6 +95,12 @@ pub fn translate_traversals(
 }
 
 #[context("Could not simplify traversal translation steps")]
+/// Simplifies a sequence of traversal translation steps by merging, reordering, and optimizing Push, Pop, and Stream operations.
+///
+/// This function ensures that the steps are as efficient as possible and prepares them for verification.
+///
+/// # Errors
+/// Returns an error if the steps cannot be simplified due to invalid structure.
 fn simplify_steps(steps: &mut Vec<TraversalTranslationStep>) -> Result<()> {
 	use TraversalTranslationStep::*;
 
@@ -155,6 +190,13 @@ fn simplify_steps(steps: &mut Vec<TraversalTranslationStep>) -> Result<()> {
 }
 
 #[context("Could not verify traversal translation steps")]
+/// Verifies the correctness of a sequence of traversal translation steps.
+///
+/// This function checks that the sequence of Push, Pop, and Stream steps is valid with respect to the
+/// read and write traversal orders and sizes, and that all required tiles are processed exactly once.
+///
+/// # Errors
+/// Returns an error if the steps are invalid or do not match the expected traversal configurations.
 fn verify_steps(
 	steps: &[TraversalTranslationStep],
 	read_order: TraversalOrder,

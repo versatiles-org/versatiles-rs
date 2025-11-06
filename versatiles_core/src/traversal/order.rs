@@ -15,8 +15,11 @@ use enumset::EnumSetType;
 /// - `PMTiles`: ordering by Hilbert curve index (`PMTiles` style).
 #[derive(EnumSetType)]
 pub enum TraversalOrder {
+	/// No specific ordering; leaves tiles in input order.
 	AnyOrder,
+	/// Quadtree depth-first ordering based on x/y bits.
 	DepthFirst,
+	/// Ordering by Hilbert curve index (`PMTiles` style).
 	PMTiles,
 }
 

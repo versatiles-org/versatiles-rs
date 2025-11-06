@@ -1,8 +1,40 @@
+//! Small parsing helpers built on top of [`ByteIterator`](super::iterator::ByteIterator).
+//!
+//! These functions implement a tiny, allocation‑light subset of JSON/JSON‑like parsing:
+//! - `parse_tag` for matching fixed ASCII tags
+//! - `parse_quoted_json_string` for JSON string literals with escapes (`\" \\ \/ \b \f \n \r \t \uXXXX`)
+//! - `parse_number_as_string` and `parse_number_as<T>` for JSON number syntax
+//! - `parse_object_entries` and `parse_array_entries` to iterate over object/array contents
+//!
+//! All functions use the [`#[context]`](versatiles_derive::context) attribute to emit
+//! helpful error messages annotated with where and what was being parsed.
+//!
+//! # Notes
+//! - These are **minimal** helpers intended for internal configs/headers; they don’t aim to be
+//!   a full JSON implementation.
+//! - Parsing functions consume only as much as needed and leave the iterator positioned at the
+//!   next token (e.g., after a closing `]` or `}`).
+
 use super::iterator::ByteIterator;
 use anyhow::{Error, Result, bail};
 use std::str::FromStr;
 use versatiles_derive::context;
 
+/// Match a fixed ASCII tag at the current iterator position.
+///
+/// Advances the iterator byte‑by‑byte and returns an error on the first mismatch.
+///
+/// # Errors
+/// Returns an error if the upcoming bytes do not exactly match `tag` or if the
+/// underlying reader is exhausted prematurely.
+///
+/// # Example
+/// ```
+/// # use std::io::Cursor;
+/// # use versatiles_core::byte_iterator::{ByteIterator, parse_tag};
+/// let mut it = ByteIterator::from_reader(Cursor::new("null"), true);
+/// parse_tag(&mut it, "null").unwrap();
+/// ```
 #[context("while parsing tag '{}'", tag)]
 pub fn parse_tag(iter: &mut ByteIterator, tag: &str) -> Result<()> {
 	for c in tag.bytes() {
@@ -14,6 +46,23 @@ pub fn parse_tag(iter: &mut ByteIterator, tag: &str) -> Result<()> {
 	Ok(())
 }
 
+/// Parse a JSON quoted string literal and return it as `String`.
+///
+/// Supports standard JSON escapes (`\" \\ \/ \b \f \n \r \t`) and `\uXXXX` (BMP) escapes.
+/// Leaves the iterator positioned **after** the closing quote.
+///
+/// # Errors
+/// - Missing opening or closing quotes
+/// - Invalid escape sequence or malformed `\uXXXX` hex
+/// - Unterminated string or unexpected end of input
+///
+/// # Example
+/// ```
+/// # use std::io::Cursor;
+/// # use versatiles_core::byte_iterator::{ByteIterator, parse_quoted_json_string};
+/// let mut it = ByteIterator::from_reader(Cursor::new("\"he\\nllo\""), true);
+/// assert_eq!(parse_quoted_json_string(&mut it).unwrap(), "he\nllo");
+/// ```
 #[context("while parsing a quoted JSON string")]
 pub fn parse_quoted_json_string(iter: &mut ByteIterator) -> Result<String> {
 	iter.skip_whitespace();
@@ -56,6 +105,25 @@ pub fn parse_quoted_json_string(iter: &mut ByteIterator) -> Result<String> {
 	String::from_utf8(bytes).map_err(Error::from)
 }
 
+/// Parse a JSON number and return its textual representation.
+///
+/// Accepts the JSON number grammar: optional sign, integer, optional fraction,
+/// and optional exponent (`e`/`E` with optional sign). Validates that fraction
+/// and exponent parts contain at least one digit.
+///
+/// Leaves the iterator at the first non‑number byte.
+///
+/// # Errors
+/// Returns an error if required digits are missing or if invalid constructs
+/// (e.g., multiple dots or an exponent without digits) are encountered.
+///
+/// # Example
+/// ```
+/// # use std::io::Cursor;
+/// # use versatiles_core::byte_iterator::{ByteIterator, parse_number_as_string};
+/// let mut it = ByteIterator::from_reader(Cursor::new("-12.3e+4,"), true);
+/// assert_eq!(parse_number_as_string(&mut it).unwrap(), "-12.3e+4");
+/// ```
 #[context("while parsing a number")]
 pub fn parse_number_as_string(iter: &mut ByteIterator) -> Result<String> {
 	let mut number = Vec::with_capacity(16);
@@ -112,12 +180,52 @@ pub fn parse_number_as_string(iter: &mut ByteIterator) -> Result<String> {
 	String::from_utf8(number).map_err(Error::from)
 }
 
+/// Parse a JSON number and convert it to a concrete type `R`.
+///
+/// This is a convenience on top of [`parse_number_as_string`], parsing the returned
+/// string via `R: FromStr`.
+///
+/// # Errors
+/// Returns an error if number parsing fails or if `R::from_str` returns an error.
+///
+/// # Example
+/// ```
+/// # use std::io::Cursor;
+/// # use versatiles_core::byte_iterator::ByteIterator;
+/// # use versatiles_core::byte_iterator::parse_number_as;
+/// let mut it = ByteIterator::from_reader(Cursor::new("42"), true);
+/// let n: i32 = parse_number_as(&mut it).unwrap();
+/// assert_eq!(n, 42);
+/// ```
 pub fn parse_number_as<R: FromStr>(iter: &mut ByteIterator) -> Result<R> {
 	parse_number_as_string(iter)?
 		.parse::<R>()
 		.map_err(|_| iter.format_error("invalid number"))
 }
 
+/// Iterate over JSON object entries, invoking `parse_value` for each key.
+///
+/// Expects a `{ ... }` structure with keys as **quoted strings** and a colon `:`
+/// between key and value. After each value, either `,` continues to the next entry
+/// or `}` terminates the object.
+///
+/// The provided closure receives the parsed key and a mutable reference to the
+/// iterator positioned at the start of the value and is responsible for parsing
+/// the value itself.
+///
+/// # Errors
+/// Returns an error on malformed objects (missing quotes/colon/comma/brace) or
+/// if `parse_value` returns an error.
+///
+/// # Example
+/// ```
+/// # use std::io::Cursor;
+/// # use versatiles_core::byte_iterator::{ByteIterator, parse_object_entries, parse_quoted_json_string};
+/// let mut it = ByteIterator::from_reader(Cursor::new("{\"k\":\"v\"}"), true);
+/// let mut got = None;
+/// parse_object_entries(&mut it, |k, it| { got = Some((k, parse_quoted_json_string(it)?)); Ok(()) }).unwrap();
+/// assert_eq!(got, Some(("k".into(), "v".into())));
+/// ```
 #[context("while parsing object entries")]
 pub fn parse_object_entries<R>(
 	iter: &mut ByteIterator,
@@ -159,6 +267,24 @@ pub fn parse_object_entries<R>(
 	Ok(())
 }
 
+/// Iterate over JSON array entries, collecting the results from `parse_value`.
+///
+/// Expects a `[ ... ]` structure and allows optional whitespace between tokens.
+/// Returns an empty `Vec` for `[]`, otherwise collects each parsed element
+/// separated by commas.
+///
+/// # Errors
+/// Returns an error on malformed arrays (missing brackets/commas) or if `parse_value`
+/// returns an error.
+///
+/// # Example
+/// ```
+/// # use std::io::Cursor;
+/// # use versatiles_core::byte_iterator::{ByteIterator, parse_array_entries, parse_number_as};
+/// let mut it = ByteIterator::from_reader(Cursor::new("[1,2,3]"), true);
+/// let nums: Vec<i32> = parse_array_entries(&mut it, parse_number_as).unwrap();
+/// assert_eq!(nums, vec![1,2,3]);
+/// ```
 #[context("while parsing array entries")]
 pub fn parse_array_entries<R>(
 	iter: &mut ByteIterator,

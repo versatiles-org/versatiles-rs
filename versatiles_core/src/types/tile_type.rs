@@ -1,6 +1,17 @@
-/// Represents the type of a tile, which can be either `Raster`, `Vector`, or `Unknown`.
+//! This module defines the `TileType` enum representing different types of map tiles,
+//! including raster, vector, or unknown types.
+
 use anyhow::bail;
 
+/// Represents the type of a tile in the mapping system.
+///
+/// The `TileType` enum categorizes tiles into three types:
+/// - `Raster`: Tiles composed of pixel data, such as images.
+/// - `Vector`: Tiles composed of geometric shapes and features.
+/// - `Unknown`: Tiles whose type cannot be determined.
+///
+/// This enum is used throughout the system to handle tile-specific logic,
+/// such as determining default schemas or validating tile content types.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TileType {
 	/// Represents raster tile type.
@@ -33,11 +44,21 @@ impl TileType {
 		}
 	}
 
+	/// Checks if the tile type is `Raster`.
+	///
+	/// This method returns `true` if the tile is a raster tile,
+	/// which typically means it is composed of pixel data such as images.
+	/// Use this method when you need to perform raster-specific logic.
 	#[must_use]
 	pub fn is_raster(&self) -> bool {
 		*self == TileType::Raster
 	}
 
+	/// Checks if the tile type is `Vector`.
+	///
+	/// This method returns `true` if the tile is a vector tile,
+	/// which typically means it is composed of geometric features.
+	/// Use this method when you need to perform vector-specific logic.
 	#[must_use]
 	pub fn is_vector(&self) -> bool {
 		*self == TileType::Vector

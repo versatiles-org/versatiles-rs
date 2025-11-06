@@ -195,6 +195,7 @@ pub fn decompress(blob: Blob, compression: TileCompression) -> Result<Blob> {
 	}
 }
 
+/// Decompresses a data reference based on the specified compression algorithm.
 #[context("Decompressing blob ref with algorithm: {compression:?}")]
 pub fn decompress_ref(blob: &Blob, compression: TileCompression) -> Result<Blob> {
 	match compression {

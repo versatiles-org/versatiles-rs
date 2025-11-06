@@ -57,9 +57,13 @@ pub struct TileJSON {
 	pub values: TileJsonValues,
 	/// The collection of vector layers, if any.
 	pub vector_layers: VectorLayers,
+	/// Optional tile content type derived from format (raster/vector/unknown).
 	pub tile_type: Option<TileType>,
+	/// Optional tile format (e.g., "image/png", "application/x-protobuf").
 	pub tile_format: Option<TileFormat>,
+	/// Optional tile schema describing the expected layer/attribute structure.
 	pub tile_schema: Option<TileSchema>,
+	/// Optional tile size in pixels (typically 256 or 512).
 	pub tile_size: Option<TileSize>,
 }
 
@@ -74,6 +78,10 @@ impl TileJSON {
 	/// - `"bounds"`: Interpreted as a [`GeoBBox`].
 	/// - `"center"`: Interpreted as a [`GeoCenter`].
 	/// - `"vector_layers"`: Interpreted as [`VectorLayers`].
+	/// - `"tile_type"`: Interpreted as [`TileType`].
+	/// - `"tile_format"`: Interpreted as [`TileFormat`] (MIME-like strings).
+	/// - `"tile_schema"`: Interpreted as [`TileSchema`].
+	/// - `"tile_size"`: Interpreted as [`TileSize`].
 	/// - Any other key is stored in `self.values`.
 	///
 	/// # Errors
@@ -173,6 +181,15 @@ impl TileJSON {
 		Blob::from(self.as_string())
 	}
 
+	/// Pretty-prints this `TileJSON` into multiple lines with a maximum width.
+	///
+	/// This is useful for CLI or log output where compact, readable wrapping is preferred.
+	///
+	/// # Arguments
+	/// * `max_width` — Target maximum line width. Long values may still exceed it.
+	///
+	/// # Returns
+	/// A vector of lines representing the pretty-printed JSON.
 	pub fn as_pretty_lines(&self, max_width: usize) -> Vec<String> {
 		self
 			.as_object()
@@ -339,6 +356,12 @@ impl TileJSON {
 		Ok(())
 	}
 
+	/// Updates fields using information from [`TilesReaderParameters`].
+	///
+	/// - Applies [`update_from_pyramid`] to intersect/set bounds and min/max zoom.
+	/// - Sets `tile_format` from the reader parameters and derives `tile_type` from it.
+	/// - If `tile_schema` is absent or mismatched with `tile_type`, infers a suitable schema
+	///   (e.g., `RasterRGB` for rasters; for vectors, derived from `vector_layers`).
 	pub fn update_from_reader_parameters(&mut self, rp: &TilesReaderParameters) {
 		self.update_from_pyramid(&rp.bbox_pyramid);
 
@@ -465,6 +488,12 @@ impl TileJSON {
 		self.as_string()
 	}
 
+	/// Parses `TileJSON` from a blob or returns `TileJSON::default()` on failure.
+	///
+	/// Logs a warning with the parse error and falls back to a minimal default.
+	///
+	/// # Returns
+	/// A valid `TileJSON` even if the input is invalid.
 	#[must_use]
 	pub fn try_from_blob_or_default(blob: &Blob) -> TileJSON {
 		TileJSON::try_from(blob.as_str()).unwrap_or_else(|e| {

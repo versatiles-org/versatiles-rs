@@ -11,6 +11,10 @@
 //! * In‑place clamp to the valid Web‑Mercator domain via [`GeoBBox::limit_to_mercator`].
 //! * Set/return as tuple/array/vec/strings; extend & intersect (mutating and non‑mutating).
 //! * Conversion to EPSG:3857 using the spherical Web‑Mercator formulas.
+//!
+//! ## Antimeridian & empties
+//! * Bounding boxes are **not** wrapped across the antimeridian; all input coordinates must lie within `[-180, 180]` longitude and `[-90, 90]` latitude.
+//! * Some operations (such as [`intersect`]) may yield an "empty" box with `x_min > x_max` or `y_min > y_max` to signal that there is no overlap.
 use anyhow::{Result, ensure};
 use std::fmt::Debug;
 use versatiles_derive::context;
@@ -57,9 +61,13 @@ static RADIUS: f64 = 6_378_137.0; // meters
 #[derive(Clone, Copy, PartialEq)]
 #[allow(clippy::manual_non_exhaustive)]
 pub struct GeoBBox {
+	/// West (minimum longitude) in degrees.
 	pub x_min: f64,
+	/// South (minimum latitude) in degrees.
 	pub y_min: f64,
+	/// East (maximum longitude) in degrees.
 	pub x_max: f64,
+	/// North (maximum latitude) in degrees.
 	pub y_max: f64,
 	phantom: (),
 }
@@ -299,6 +307,8 @@ impl GeoBBox {
 	/// // west = -8, south = -4, east = 10, north = 4
 	/// assert_eq!(bbox1.as_tuple(), (-8.0, -4.0, 10.0, 4.0));
 	/// ```
+	///
+	/// **Note:** If there is no overlap between the boxes, the resulting bounding box will be "empty" (with inverted bounds, e.g., `x_min > x_max` or `y_min > y_max`), as per this module's convention.
 	pub fn intersect(&mut self, other: &GeoBBox) {
 		self.x_min = self.x_min.max(other.x_min); // min_x
 		self.y_min = self.y_min.max(other.y_min); // min_y
@@ -321,6 +331,8 @@ impl GeoBBox {
 	/// // original remains unchanged
 	/// assert_eq!(bbox1.as_tuple(), (-10.0, -5.0, 10.0, 5.0));
 	/// ```
+	///
+	/// **Note:** If there is no overlap between the boxes, the returned bounding box will be "empty" (with inverted bounds, e.g., `x_min > x_max` or `y_min > y_max`). The original bounding box remains unchanged.
 	#[must_use]
 	pub fn intersected(mut self, other: &GeoBBox) -> GeoBBox {
 		self.intersect(other);

@@ -1,8 +1,19 @@
+//! CSV utilities.
+//!
+//! Provides a small CSV reader with configurable separator, RFC4180-style quoted fields (double-quote escaping), and tolerant handling of `\n`/`\r\n` and empty lines.
+//! Exposes `read_csv_iter` for consumers and keeps parsing helpers internal.
+
 use crate::byte_iterator::ByteIterator;
 use anyhow::{Error, Result, bail};
 use std::io::BufRead;
 use versatiles_derive::context;
 
+/// Parses a quoted CSV field (`"..."`) with RFC&nbsp;4180-style escaping.
+///
+/// Two consecutive quotes (`""`) are decoded as a single literal `"` inside the field.
+///
+/// # Errors
+/// Returns an error if the first byte is not `"` or if UTF‑8 decoding fails.
 #[context("parsing quoted CSV field")]
 fn parse_quoted_csv_string(iter: &mut ByteIterator) -> Result<String> {
 	if iter.expect_next_byte()? != b'"' {
@@ -25,6 +36,13 @@ fn parse_quoted_csv_string(iter: &mut ByteIterator) -> Result<String> {
 	}
 }
 
+/// Parses an unquoted CSV field until `separator` or line end.
+///
+/// # Arguments
+/// * `separator` — The byte used to separate fields (e.g., `b','`).
+///
+/// # Errors
+/// Returns an error if a leading `"` is encountered (quoted fields must use [`parse_quoted_csv_string`]) or if UTF‑8 decoding fails.
 #[context("parsing unquoted CSV field (sep='{}')", separator as char)]
 fn parse_simple_csv_string(iter: &mut ByteIterator, separator: u8) -> Result<String> {
 	if iter.expect_peeked_byte()? == b'"' {
@@ -44,6 +62,17 @@ fn parse_simple_csv_string(iter: &mut ByteIterator, separator: u8) -> Result<Str
 	}
 }
 
+/// Low‑level iterator over CSV records.
+///
+/// Produces `(fields, byte_pos)` where `byte_pos` is the reader position *after* the line.
+/// Handles both `\n` and `\r\n` line endings and skips blank lines.
+///
+/// # Arguments
+/// * `reader` — Any `BufRead` source.
+/// * `separator` — Field separator byte.
+///
+/// # Returns
+/// An iterator over `Result<(Vec<String>, usize)>`.
 fn read_csv_fields<'a>(
 	reader: impl BufRead + Send + 'a,
 	separator: u8,
@@ -92,6 +121,31 @@ fn read_csv_fields<'a>(
 	})
 }
 
+/// High‑level CSV iterator enforcing a constant column count.
+///
+/// Wraps [`read_csv_fields`] and yields `(fields, line_no, byte_pos)`. After the first
+/// non‑empty line establishes the expected column count, subsequent lines must match it.
+///
+/// # Arguments
+/// * `reader` — Any `BufRead` source.
+/// * `separator` — Field separator byte (e.g., `b','`, `b'|'`).
+///
+/// # Errors
+/// Yields an error if a line has a different number of fields, or if underlying parsing/UTF‑8 decoding fails.
+///
+/// # Example
+/// ```
+/// use std::io::Cursor;
+/// use versatiles_core::utils::read_csv_iter;
+/// # use anyhow::Result;
+/// # fn main() -> Result<()> {
+/// let input = "name,age\n\"Doe, Jane\",29\nJohn,30";
+/// let mut it = read_csv_iter(Cursor::new(input), b',')?;
+/// let (hdr, ln, _) = it.next().unwrap().unwrap();
+/// assert_eq!(hdr, vec!["name","age"]);
+/// assert_eq!(ln, 1);
+/// # Ok(()) }
+/// ```
 pub fn read_csv_iter<'a>(
 	reader: impl BufRead + Send + 'a,
 	separator: u8,

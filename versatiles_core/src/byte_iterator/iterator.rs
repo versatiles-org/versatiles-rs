@@ -1,9 +1,27 @@
+//! A byte-level iterator over a reader source with optional debug support.
+//!
+//! The `ByteIterator` struct provides an iterator interface over a byte stream from any type implementing `std::io::Read`.
+//! It supports peeking at the next byte without consuming it, advancing the iterator, and consuming bytes one by one.
+//! When debug mode is enabled, it maintains a ring buffer of recently read bytes to help with error reporting.
+
 use anyhow::{Error, Result, anyhow};
 use std::io::Read;
 
 const DEBUG_RING_BUFFER_SIZE: usize = 16;
 const BUFFER_SIZE: usize = 4096;
 
+/// An iterator over bytes from a reader source with support for peeking, consuming, and error reporting.
+///
+/// # Fields
+///
+/// * `buffer` - Internal buffer for reading bytes from the source.
+/// * `buffer_len` - Number of valid bytes currently in the buffer.
+/// * `buffer_pos` - Current position within the buffer.
+/// * `source` - The underlying byte source implementing `Read`.
+/// * `peeked_byte` - The next byte to be consumed, if any.
+/// * `position` - The current absolute position in the byte stream.
+/// * `is_debug_enabled` - Flag indicating if debug mode is active.
+/// * `debug_buffer` - Ring buffer storing recently read bytes for debugging purposes.
 pub struct ByteIterator<'a> {
 	buffer: [u8; BUFFER_SIZE],
 	buffer_len: usize,
@@ -16,6 +34,16 @@ pub struct ByteIterator<'a> {
 }
 
 impl<'a> ByteIterator<'a> {
+	/// Creates a new `ByteIterator` from a reader source.
+	///
+	/// # Arguments
+	///
+	/// * `reader` - The source implementing `Read` to iterate bytes from.
+	/// * `debug` - Enables debug mode which maintains a ring buffer of recently read bytes.
+	///
+	/// # Returns
+	///
+	/// A new instance of `ByteIterator`.
 	pub fn from_reader(reader: impl Read + 'a, debug: bool) -> Self {
 		let mut instance = ByteIterator {
 			buffer: [0; BUFFER_SIZE],
@@ -51,6 +79,15 @@ impl<'a> ByteIterator<'a> {
 		Some(byte)
 	}
 
+	/// Formats an error message including the current byte position and optionally a debug snapshot of recent bytes.
+	///
+	/// # Arguments
+	///
+	/// * `msg` - The error message to include.
+	///
+	/// # Returns
+	///
+	/// An `anyhow::Error` containing the formatted error message.
 	#[must_use]
 	pub fn format_error(&self, msg: &str) -> Error {
 		if self.is_debug_enabled {
@@ -79,18 +116,31 @@ impl<'a> ByteIterator<'a> {
 		}
 	}
 
+	/// Returns the current absolute position in the byte stream.
+	///
+	/// # Returns
+	///
+	/// The current byte position as a `usize`.
 	#[inline]
 	#[must_use]
 	pub fn position(&self) -> usize {
 		self.position
 	}
 
+	/// Peeks at the next byte without consuming it.
+	///
+	/// # Returns
+	///
+	/// An `Option<u8>` containing the next byte if available, or `None` if at the end of the stream.
 	#[inline]
 	#[must_use]
 	pub fn peek(&self) -> Option<u8> {
 		self.peeked_byte
 	}
 
+	/// Advances the iterator to the next byte, updating the peeked byte and debug buffer if enabled.
+	///
+	/// This method consumes the current peeked byte and loads the next one.
 	#[inline]
 	pub fn advance(&mut self) {
 		self.peeked_byte = self.next_byte();
@@ -103,6 +153,11 @@ impl<'a> ByteIterator<'a> {
 		self.position += 1;
 	}
 
+	/// Consumes and returns the current peeked byte, advancing the iterator.
+	///
+	/// # Returns
+	///
+	/// An `Option<u8>` containing the consumed byte if available, or `None` if at the end of the stream.
 	#[inline]
 	pub fn consume(&mut self) -> Option<u8> {
 		let current_byte = self.peeked_byte;
@@ -110,6 +165,15 @@ impl<'a> ByteIterator<'a> {
 		current_byte
 	}
 
+	/// Expects and returns the next byte, advancing the iterator.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the end of the stream is reached unexpectedly.
+	///
+	/// # Returns
+	///
+	/// A `Result<u8>` containing the next byte or an error.
 	#[inline]
 	pub fn expect_next_byte(&mut self) -> Result<u8> {
 		if let Some(current_byte) = self.peeked_byte {
@@ -120,12 +184,21 @@ impl<'a> ByteIterator<'a> {
 		}
 	}
 
+	/// Returns the current peeked byte without advancing.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the end of the stream is reached unexpectedly.
+	///
+	/// # Returns
+	///
+	/// A `Result<u8>` containing the current peeked byte or an error.
 	#[inline]
 	pub fn expect_peeked_byte(&self) -> Result<u8> {
 		self.peeked_byte.ok_or_else(|| self.format_error("unexpected end"))
 	}
 
-	#[inline]
+	/// Skips over any ASCII whitespace bytes, advancing the iterator until a non-whitespace byte or end is reached.
 	pub fn skip_whitespace(&mut self) {
 		while let Some(byte) = self.peek() {
 			if !byte.is_ascii_whitespace() {
@@ -135,6 +208,15 @@ impl<'a> ByteIterator<'a> {
 		}
 	}
 
+	/// Consumes all remaining bytes and collects them into a UTF-8 `String`.
+	///
+	/// # Errors
+	///
+	/// Returns an error if the collected bytes are not valid UTF-8.
+	///
+	/// # Returns
+	///
+	/// A `Result<String>` containing the collected string or an error.
 	pub fn into_string(mut self) -> Result<String> {
 		let mut result = Vec::new();
 		while let Some(byte) = self.consume() {

@@ -59,16 +59,26 @@ use versatiles_derive::context;
 #[cfg_attr(feature = "cli", derive(ValueEnum))]
 #[derive(Debug, Default, PartialOrd, Ord, EnumSetType)]
 pub enum TileFormat {
+	/// AVIF image format.
 	AVIF,
 	#[default]
+	/// Raw binary data.
 	BIN,
+	/// GeoJSON vector data.
 	GEOJSON,
+	/// JPEG image format (including `.jpeg`).
 	JPG,
+	/// Generic JSON data.
 	JSON,
+	/// Mapbox Vector Tile in Protocol Buffer format.
 	MVT,
+	/// PNG image format.
 	PNG,
+	/// SVG image format.
 	SVG,
+	/// TopoJSON vector data.
 	TOPOJSON,
+	/// WEBP image format.
 	WEBP,
 }
 

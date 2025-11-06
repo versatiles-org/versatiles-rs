@@ -33,9 +33,12 @@ use versatiles_derive::context;
 /// Provides methods for geographic conversion, validation, indexing, and level transformations.
 #[derive(Eq, PartialEq, Clone, Hash, Copy)]
 pub struct TileCoord {
-	pub x: u32,
-	pub y: u32,
+	/// The zoom level of the tile.
 	pub level: u8,
+	/// The x index of the tile.
+	pub x: u32,
+	/// The y index of the tile.
+	pub y: u32,
 }
 
 #[allow(dead_code)]
@@ -255,7 +258,7 @@ mod tests {
 	fn hash() {
 		let mut hasher = DefaultHasher::new();
 		TileCoord::new(2, 2, 2).unwrap().hash(&mut hasher);
-		assert_eq!(hasher.finish(), 16217616760760983095);
+		assert_eq!(hasher.finish(), 13950038470645857615);
 	}
 
 	#[rstest]

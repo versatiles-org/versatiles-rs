@@ -29,14 +29,23 @@ use enumset::{EnumSet, EnumSetType};
 /// * **`Unknown`** – Used when the schema string cannot be parsed.
 #[derive(Debug, EnumSetType)]
 pub enum TileSchema {
+	/// 3-band RGB, 8-bit each.
 	RasterRGB,
+	/// 4-band RGBA, 8-bit each including alpha.
 	RasterRGBA,
+	/// Elevation data in Mapbox format (https://docs.mapbox.com/data/tilesets/guides/access-elevation-data/).
 	RasterDEMMapbox,
+	/// Elevation data in Terrarium format (https://github.com/tilezen/joerd/blob/master/docs/formats.md#terrarium)
 	RasterDEMTerrarium,
+	/// Elevation data in Versatiles' own format.
 	RasterDEMVersatiles,
+	/// Vector tiles conforming to the OpenMapTiles schema (https://openmaptiles.org/).
 	VectorOpenMapTiles,
+	/// Vector tiles conforming to the Shortbread schema (https://shortbread-tiles.org/).
 	VectorShortbread1_0,
+	/// Any other vector schema not listed above.
 	VectorOther,
+	/// Used when the schema string cannot be parsed.
 	Unknown,
 }
 

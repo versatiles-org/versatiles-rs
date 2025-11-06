@@ -36,8 +36,11 @@ use std::fmt::Display;
 #[derive(Debug, Default, EnumSetType, PartialOrd, Ord)]
 pub enum TileCompression {
 	#[default]
+	/// No compression.
 	Uncompressed,
+	/// Gzip compression.
 	Gzip,
+	/// Brotli compression.
 	Brotli,
 }
 

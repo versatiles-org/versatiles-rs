@@ -1,3 +1,7 @@
+//! This module provides utilities for colorized, structured console output.
+//! It is mainly used for CLI and testing purposes to display categories, lists,
+//! key/value pairs, warnings, and JSON data with indentation and color for better readability.
+
 use crate::json::{JsonValue, stringify_pretty_multi_line};
 use colored::*;
 use std::fmt::{Debug, Display};
@@ -5,6 +9,8 @@ use std::io::Write;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+/// Low-level writer abstraction that handles output buffering.
+/// In runtime, writes directly to stderr; in tests, buffers output in a Vec<u8>.
 struct PrettyPrinter {
 	indention: String,
 	#[cfg(not(any(test, feature = "test")))]
@@ -47,6 +53,8 @@ impl PrettyPrinter {
 	}
 }
 
+/// High-level interface for structured output with color and indentation.
+/// Supports categories, lists, key/value pairs, warnings, and JSON output.
 pub struct PrettyPrint {
 	prefix: String,
 	suffix: String,
@@ -71,24 +79,29 @@ impl PrettyPrint {
 		}
 	}
 
+	/// Writes a bold white category header followed by a colon and returns a new indented PrettyPrint.
 	pub async fn get_category(&mut self, text: &str) -> PrettyPrint {
 		self.write_line(text.white().bold().to_string() + ":").await;
 		self.new_indented()
 	}
 
+	/// Writes a white list header followed by a colon and returns a new indented PrettyPrint.
 	pub async fn get_list(&mut self, text: &str) -> PrettyPrint {
 		self.write_line(text.white().to_string() + ":").await;
 		self.new_indented()
 	}
 
+	/// Writes a bold yellow warning message.
 	pub async fn add_warning(&self, text: &str) {
 		self.write_line(text.yellow().bold()).await;
 	}
 
+	/// Writes a key and a formatted debug representation of the value.
 	pub async fn add_key_value<K: Display + ?Sized, V: Debug + ?Sized>(&self, key: &K, value: &V) {
 		self.write_line(format!("{key}: {}", get_formatted_value(value))).await;
 	}
 
+	/// Writes a key and a pretty-printed, colorized JSON value.
 	pub async fn add_key_json<K: Display + ?Sized>(&self, key: &K, value: &JsonValue) {
 		let key_string = format!("{key}: ");
 		self
@@ -99,6 +112,7 @@ impl PrettyPrint {
 			.await;
 	}
 
+	/// Writes a formatted debug representation of a value.
 	pub async fn add_value<V: Debug>(&self, value: &V) {
 		self.write_line(get_formatted_value(value)).await;
 	}
@@ -122,6 +136,8 @@ impl Default for PrettyPrint {
 	}
 }
 
+/// Returns a colored string representation of the value based on its type,
+/// improving readability by coloring numbers, strings, floats, and custom types differently.
 fn get_formatted_value<V: Debug + ?Sized>(value: &V) -> ColoredString {
 	let type_name = std::any::type_name::<V>();
 	if type_name.starts_with("versatiles_lib::shared::") {
@@ -136,6 +152,7 @@ fn get_formatted_value<V: Debug + ?Sized>(value: &V) -> ColoredString {
 	}
 }
 
+/// Inserts underscores into large integer strings for better readability.
 fn format_integer<V: Debug + ?Sized>(value: &V) -> String {
 	let mut text = format!("{value:?}");
 	let mut formatted = String::new();

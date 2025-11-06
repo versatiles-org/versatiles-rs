@@ -9,11 +9,17 @@ use anyhow::{Result, bail};
 /// Provides methods for parsing, serialization, and type conversion.
 #[derive(Clone, Debug, PartialEq)]
 pub enum JsonValue {
+	/// A JSON array.
 	Array(JsonArray),
+	/// A JSON boolean.
 	Boolean(bool),
+	/// A JSON null value.
 	Null,
+	/// A JSON number.
 	Number(f64),
+	/// A JSON object.
 	Object(JsonObject),
+	/// A JSON string.
 	String(String),
 }
 

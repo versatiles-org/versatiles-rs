@@ -1,14 +1,22 @@
+//! Defines the `TileSize` enum representing supported raster or vector tile sizes.
+
 use std::fmt::Debug;
 
 use anyhow::{Result, bail};
 
+/// Represents the pixel dimensions of a map tile.
+/// Currently supports 256×256 and 512×512 tiles.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum TileSize {
+	/// Represents a tile size of 256×256 pixels.
 	Size256,
+	/// Represents a tile size of 512×512 pixels.
 	Size512,
 }
 
 impl TileSize {
+	/// Constructs a `TileSize` from a `u16` value.
+	/// Returns an error if the size is unsupported.
 	pub fn new(size: u16) -> Result<Self> {
 		match size {
 			256 => Ok(Self::Size256),

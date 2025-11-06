@@ -38,9 +38,9 @@ use std::{io::Cursor, marker::PhantomData};
 
 /// A struct that provides reading capabilities from a byte slice using a specified byte order.
 pub struct ValueReaderSlice<'a, E: ByteOrder> {
-	pub _phantom: PhantomData<E>,
-	pub cursor: Cursor<&'a [u8]>,
-	pub len: u64,
+	_phantom: PhantomData<E>,
+	cursor: Cursor<&'a [u8]>,
+	len: u64,
 }
 
 impl<'a, E: ByteOrder> ValueReaderSlice<'a, E> {
@@ -98,18 +98,37 @@ impl<'a> ValueReaderSlice<'a, BigEndian> {
 impl SeekRead for Cursor<&[u8]> {}
 
 impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderSlice<'a, E> {
+	/// Returns the underlying cursor so callers can access raw bytes.
+	///
+	/// # Returns
+	/// A mutable reference to the underlying `SeekRead` implementation.
 	fn get_reader(&mut self) -> &mut dyn SeekRead {
 		&mut self.cursor
 	}
 
+	/// Total length of the readable slice in bytes.
+	///
+	/// # Returns
+	/// The full length as `u64`.
 	fn len(&self) -> u64 {
 		self.len
 	}
 
+	/// Current read position within the slice.
+	///
+	/// # Returns
+	/// The zero-based byte offset as `u64`.
 	fn position(&mut self) -> u64 {
 		self.cursor.position()
 	}
 
+	/// Sets the current read position.
+	///
+	/// # Arguments
+	/// * `position` — Absolute byte offset to seek to.
+	///
+	/// # Errors
+	/// Returns an error if `position` is outside the slice bounds.
 	fn set_position(&mut self, position: u64) -> Result<()> {
 		if position >= self.len {
 			bail!("set position outside length")
@@ -118,6 +137,18 @@ impl<'a, E: ByteOrder + 'a> ValueReader<'a, E> for ValueReaderSlice<'a, E> {
 		Ok(())
 	}
 
+	/// Creates a sub-reader that is limited to the next `length` bytes.
+	///
+	/// The parent reader is advanced by `length` bytes.
+	///
+	/// # Arguments
+	/// * `length` — Number of bytes to expose via the sub-reader.
+	///
+	/// # Returns
+	/// A boxed `ValueReader` operating on the requested window.
+	///
+	/// # Errors
+	/// Returns an error if `length` exceeds the remaining bytes.
 	fn get_sub_reader<'b>(&'b mut self, length: u64) -> Result<Box<dyn ValueReader<'b, E> + 'b>>
 	where
 		E: 'b,
