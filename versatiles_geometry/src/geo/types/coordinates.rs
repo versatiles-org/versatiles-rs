@@ -2,25 +2,34 @@ use std::fmt::Debug;
 
 use versatiles_core::json::JsonValue;
 
+/// A simple 2D coordinate pair `(x, y)`.
+///
+/// This struct is used to represent points in 2D space for geometric and geospatial data.
 #[derive(Clone, PartialEq)]
 pub struct Coordinates([f64; 2]);
 
 impl Coordinates {
+	/// Constructs a new `Coordinates` instance with the given `x` and `y` values.
 	#[must_use]
 	pub fn new(x: f64, y: f64) -> Self {
 		Self([x, y])
 	}
 
+	/// Returns the `x` component of the coordinate.
 	#[must_use]
 	pub fn x(&self) -> f64 {
 		self.0[0]
 	}
 
+	/// Returns the `y` component of the coordinate.
 	#[must_use]
 	pub fn y(&self) -> f64 {
 		self.0[1]
 	}
 
+	/// Returns the coordinates as a JSON array.
+	///
+	/// If `precision` is specified, the coordinate values will be rounded to the given number of decimal places.
 	#[must_use]
 	pub fn to_json(&self, precision: Option<u8>) -> JsonValue {
 		if let Some(prec) = precision {
@@ -34,6 +43,7 @@ impl Coordinates {
 	}
 }
 
+/// Converts from a reference to an array of two elements into `Coordinates`.
 impl<'a, T> From<&'a [T; 2]> for Coordinates
 where
 	T: Copy + Into<f64>,
@@ -43,36 +53,44 @@ where
 	}
 }
 
+/// Converts from a `[f64; 2]` array into `Coordinates`.
 impl From<[f64; 2]> for Coordinates {
 	fn from(value: [f64; 2]) -> Self {
 		Coordinates(value)
 	}
 }
 
+/// Converts from a tuple `(f64, f64)` into `Coordinates`.
 impl From<(f64, f64)> for Coordinates {
 	fn from(value: (f64, f64)) -> Self {
 		Coordinates([value.0, value.1])
 	}
 }
 
+/// Converts from a reference to a tuple `(f64, f64)` into `Coordinates`.
 impl From<&(f64, f64)> for Coordinates {
 	fn from(value: &(f64, f64)) -> Self {
 		Coordinates([value.0, value.1])
 	}
 }
 
+/// Converts from `Coordinates` into a `[f64; 2]` array.
 impl From<Coordinates> for [f64; 2] {
 	fn from(value: Coordinates) -> Self {
 		[value.0[0], value.0[1]]
 	}
 }
 
+/// Converts from a `geo::Coord` into `Coordinates`.
 impl From<geo::Coord> for Coordinates {
 	fn from(value: geo::Coord) -> Self {
 		Coordinates([value.x, value.y])
 	}
 }
 
+/// Implements the `Debug` trait for `Coordinates`.
+///
+/// The coordinates are printed in the format `[x, y]`.
 impl Debug for Coordinates {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		self.0.fmt(f)

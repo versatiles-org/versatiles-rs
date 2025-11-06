@@ -1,3 +1,7 @@
+//! This module provides functions for reading GeoJSON and newline-delimited GeoJSON (NDJSON/NDGeoJSON) data into internal geometry types.
+//! It supports full-file parsing, line-by-line iteration, and asynchronous streaming via `futures`.
+//! It integrates with the crate’s custom `ByteIterator` and the `#[context]` macro for detailed error handling.
+
 use super::parse_geojson;
 use crate::{
 	geo::{GeoCollection, GeoFeature},
@@ -9,6 +13,10 @@ use std::io::{BufRead, Cursor, Read};
 use versatiles_core::byte_iterator::ByteIterator;
 use versatiles_derive::context;
 
+/// Reads an entire GeoJSON document from any `Read` source and parses it into a [`GeoCollection`].
+///
+/// This function loads the full input into memory and uses [`parse_geojson`] for parsing.
+/// Returns an error if the input cannot be read or parsed.
 #[context("reading full GeoJSON document")]
 pub fn read_geojson(mut reader: impl Read) -> Result<GeoCollection> {
 	let mut buffer = String::new();
@@ -16,6 +24,9 @@ pub fn read_geojson(mut reader: impl Read) -> Result<GeoCollection> {
 	parse_geojson(&buffer)
 }
 
+/// Internal helper that processes a single NDGeoJSON line.
+///
+/// Skips empty lines, parses valid GeoJSON features, and wraps errors with line number context.
 #[context("processing GeoJSON line {}", index + 1)]
 fn process_line(line: std::io::Result<String>, index: usize) -> Result<Option<GeoFeature>> {
 	match line {
@@ -27,6 +38,10 @@ fn process_line(line: std::io::Result<String>, index: usize) -> Result<Option<Ge
 	}
 }
 
+/// Returns an iterator over [`GeoFeature`] values parsed from newline-delimited GeoJSON (NDGeoJSON).
+///
+/// Each line of input is expected to be a valid GeoJSON feature.
+/// Empty lines are ignored, and parsing errors include the offending line number.
 pub fn read_ndgeojson_iter(reader: impl BufRead) -> impl Iterator<Item = Result<GeoFeature>> {
 	reader
 		.lines()
@@ -34,6 +49,10 @@ pub fn read_ndgeojson_iter(reader: impl BufRead) -> impl Iterator<Item = Result<
 		.filter_map(|(index, line)| process_line(line, index).transpose())
 }
 
+/// Returns an asynchronous stream of [`GeoFeature`] values parsed from NDGeoJSON input.
+///
+/// Uses `tokio::spawn` to parallelize parsing across CPU cores.
+/// Each item in the stream is a [`Result<GeoFeature>`], and errors contain contextual information.
 pub fn read_ndgeojson_stream(reader: impl BufRead) -> impl Stream<Item = Result<GeoFeature>> {
 	stream::iter(reader.lines().enumerate())
 		.map(|(index, line)| tokio::spawn(async move { process_line(line, index).transpose() }))

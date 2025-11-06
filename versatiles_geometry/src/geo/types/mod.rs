@@ -1,3 +1,10 @@
+// This module defines the core geometric types used throughout the `versatiles_geometry` crate.
+// It includes basic primitives such as `PointGeometry`, `LineStringGeometry`, `PolygonGeometry`,
+// and their multi-geometry counterparts. These types implement shared traits like `GeometryTrait`,
+// `SingleGeometryTrait`, and `CompositeGeometryTrait` to provide consistent behavior across
+// geometry types, including validation, area calculation, and JSON conversion.
+// The module re-exports all geometry types for convenient public access.
+
 mod coordinates;
 mod linestring;
 mod macros;

@@ -1,3 +1,10 @@
+//! GeoJSON parser for `versatiles_geometry`.
+//!
+//! This module parses GeoJSON-like inputs into the crate’s internal types
+//! (`GeoCollection`, `GeoFeature`, `Geometry`, `GeoProperties`, `GeoValue`).
+//! It uses a streaming `ByteIterator` for zero-allocation-ish parsing with precise
+//! error contexts via the `#[context]` macro.
+
 use crate::geo::{GeoCollection, GeoFeature, GeoProperties, GeoValue, Geometry};
 use anyhow::{Result, anyhow, bail};
 use std::{io::Cursor, str};
@@ -10,12 +17,21 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
+/// Parses a GeoJSON FeatureCollection from a UTF‑8 string into a [`GeoCollection`].
+///
+/// This is the primary entry point. It creates a byte iterator and delegates to
+/// [`parse_geojson_collection`]. The parser is strict and returns detailed errors
+/// with context when the input does not conform to GeoJSON expectations.
 #[context("parsing GeoJSON root")]
 pub fn parse_geojson(json: &str) -> Result<GeoCollection> {
 	let mut iter = ByteIterator::from_reader(Cursor::new(json), true);
 	parse_geojson_collection(&mut iter)
 }
 
+/// Parses a GeoJSON `FeatureCollection` object from the current iterator position.
+///
+/// Expects an object with `type: "FeatureCollection"` and a `features` array of
+/// Feature objects. Unknown members are parsed and ignored.
 #[context("parsing GeoJSON FeatureCollection")]
 pub fn parse_geojson_collection(iter: &mut ByteIterator) -> Result<GeoCollection> {
 	let mut features = Vec::new();
@@ -35,6 +51,9 @@ pub fn parse_geojson_collection(iter: &mut ByteIterator) -> Result<GeoCollection
 	Ok(GeoCollection { features })
 }
 
+/// Validates the required GeoJSON `type` field for a given object.
+///
+/// Ensures that a `type` is present and matches `name`; otherwise returns an error.
 #[context("validating GeoJSON type '{}'", name)]
 fn check_type(object_type: Option<String>, name: &str) -> Result<()> {
 	let object_type = object_type.ok_or_else(|| anyhow!("{name} must have a type"))?;
@@ -45,6 +64,10 @@ fn check_type(object_type: Option<String>, name: &str) -> Result<()> {
 	Ok(())
 }
 
+/// Parses a GeoJSON `Feature` object.
+///
+/// Reads optional `id`, required `geometry`, and optional `properties`. Unknown
+/// members are parsed and ignored. Returns an error if `geometry` is missing.
 #[context("parsing GeoJSON Feature")]
 pub fn parse_geojson_feature(iter: &mut ByteIterator) -> Result<GeoFeature> {
 	let mut object_type: Option<String> = None;
@@ -72,6 +95,7 @@ pub fn parse_geojson_feature(iter: &mut ByteIterator) -> Result<GeoFeature> {
 	})
 }
 
+/// Parses a GeoJSON `id` field (string or integer). Returns the corresponding [`GeoValue`].
 #[context("parsing GeoJSON id field")]
 fn parse_geojson_id(iter: &mut ByteIterator) -> Result<GeoValue> {
 	iter.skip_whitespace();
@@ -85,6 +109,10 @@ fn parse_geojson_id(iter: &mut ByteIterator) -> Result<GeoValue> {
 	}
 }
 
+/// Parses a numeric value and returns a typed [`GeoValue`].
+///
+/// Detects `f64` if a decimal point is present, `i64` for negative integers,
+/// and `u64` for non‑negative integers.
 #[context("parsing numeric GeoJSON value")]
 fn parse_geojson_number(iter: &mut ByteIterator) -> Result<GeoValue> {
 	let number = parse_number_as_string(iter)?;
@@ -106,6 +134,7 @@ fn parse_geojson_number(iter: &mut ByteIterator) -> Result<GeoValue> {
 	})
 }
 
+/// Parses a GeoJSON property value: string, number, boolean, or null.
 #[context("parsing GeoJSON property value")]
 fn parse_geojson_value(iter: &mut ByteIterator) -> Result<GeoValue> {
 	iter.skip_whitespace();
@@ -122,6 +151,7 @@ fn parse_geojson_value(iter: &mut ByteIterator) -> Result<GeoValue> {
 	}
 }
 
+/// Parses a GeoJSON `properties` object into a [`GeoProperties`] map.
 #[context("parsing GeoJSON properties object")]
 fn parse_geojson_properties(iter: &mut ByteIterator) -> Result<GeoProperties> {
 	let mut list: Vec<(String, GeoValue)> = Vec::new();
@@ -134,6 +164,9 @@ fn parse_geojson_properties(iter: &mut ByteIterator) -> Result<GeoProperties> {
 	Ok(GeoProperties::from_iter(list))
 }
 
+/// Parses a GeoJSON `geometry` object into a [`Geometry`] variant.
+///
+/// Supports `Point`, `LineString`, `Polygon`, `MultiPoint`, `MultiLineString`, and `MultiPolygon`.
 #[context("parsing GeoJSON geometry")]
 fn parse_geojson_geometry(iter: &mut ByteIterator) -> Result<Geometry> {
 	let mut geometry_type: Option<String> = None;
@@ -164,6 +197,9 @@ fn parse_geojson_geometry(iter: &mut ByteIterator) -> Result<Geometry> {
 	Ok(geometry)
 }
 
+/// Temporary coordinate accumulator used while recursively parsing nested coordinate arrays.
+///
+/// This internal enum mirrors the allowed GeoJSON coordinate nesting depths.
 enum TemporaryCoordinates {
 	V(f64),
 	C0([f64; 2]),
@@ -173,30 +209,35 @@ enum TemporaryCoordinates {
 }
 
 impl TemporaryCoordinates {
+	/// Extracts a single numeric value; panics if the coordinate is not a scalar.
 	pub fn unwrap_v(self) -> f64 {
 		match self {
 			TemporaryCoordinates::V(v) => v,
 			_ => panic!("coordinate is not a single value"),
 		}
 	}
+	/// Extracts a single point `[x, y]`; panics if the coordinate is not a point.
 	pub fn unwrap_c0(self) -> [f64; 2] {
 		match self {
 			TemporaryCoordinates::C0(v) => v,
 			_ => panic!("coordinates are not a point"),
 		}
 	}
+	/// Extracts an array of points; panics if the coordinate is not a list of points.
 	pub fn unwrap_c1(self) -> Vec<[f64; 2]> {
 		match self {
 			TemporaryCoordinates::C1(v) => v,
 			_ => panic!("coordinates are not an array of points"),
 		}
 	}
+	/// Extracts an array of linearly nested point arrays (e.g., rings); panics otherwise.
 	pub fn unwrap_c2(self) -> Vec<Vec<[f64; 2]>> {
 		match self {
 			TemporaryCoordinates::C2(v) => v,
 			_ => panic!("coordinates are not an array of an array of points"),
 		}
 	}
+	/// Extracts an array of arrays of point arrays (e.g., polygons); panics otherwise.
 	pub fn unwrap_c3(self) -> Vec<Vec<Vec<[f64; 2]>>> {
 		match self {
 			TemporaryCoordinates::C3(v) => v,
@@ -205,6 +246,11 @@ impl TemporaryCoordinates {
 	}
 }
 
+/// Recursively parses GeoJSON `coordinates` arrays to the appropriate nesting level.
+///
+/// Enforces GeoJSON shape constraints (e.g., points are two numbers, no empty arrays,
+/// bounded nesting depth for multi‑geometries) and returns a temporary accumulator that
+/// is later converted to concrete geometry types.
 #[context("parsing GeoJSON coordinate arrays")]
 fn parse_geojson_coordinates(iter: &mut ByteIterator) -> Result<TemporaryCoordinates> {
 	fn recursive(iter: &mut ByteIterator) -> Result<TemporaryCoordinates> {

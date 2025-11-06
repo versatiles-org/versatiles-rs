@@ -1,22 +1,35 @@
+//! This module defines the `TileOutline` utility for aggregating tile bounding boxes into unified polygonal outlines.
+//! It can collect multiple tile or geographic bounding boxes, merge them into a single `MultiPolygon`,
+//! and export them as `GeoFeature` objects suitable for GeoJSON serialization.
+
 use crate::geo::GeoFeature;
 use geo::{MultiPolygon, Polygon, unary_union};
 use versatiles_core::{GeoBBox, TileBBox, TileCoord};
 
+/// Represents a collection of tile or geographic bounding boxes that can be merged into a unified polygon outline.
+///
+/// Used for visualizing or exporting the outline of a set of map tiles.
+/// Internally stores polygons and merges them via geometric union operations.
 #[derive(Debug, Clone, Default)]
 pub struct TileOutline {
 	polygons: Vec<geo::Polygon<f64>>,
 }
 
 impl TileOutline {
+	/// Creates an empty `TileOutline` with no polygons.
 	#[must_use]
 	pub fn new() -> Self {
 		Self { polygons: Vec::new() }
 	}
 
+	/// Adds an arbitrary polygon to the outline.
 	pub fn add_polygon(&mut self, polygon: Polygon<f64>) {
 		self.polygons.push(polygon);
 	}
 
+	/// Adds a rectangular polygon corresponding to a given geographic bounding box (`GeoBBox`).
+	///
+	/// Converts the bounding box corners into a closed ring polygon.
 	pub fn add_geo_bbox(&mut self, bbox: &GeoBBox) {
 		self.add_polygon(Polygon::new(
 			geo::LineString::from(vec![
@@ -30,21 +43,29 @@ impl TileOutline {
 		));
 	}
 
+	/// Adds a bounding box defined in tile coordinates (`TileBBox`) if it can be converted to a geographic bounding box.
 	pub fn add_tile_bbox(&mut self, bbox: TileBBox) {
 		if let Some(bbox) = bbox.to_geo_bbox() {
 			self.add_geo_bbox(&bbox);
 		}
 	}
 
+	/// Adds a tile coordinate (`TileCoord`) by converting it into its corresponding geographic bounding box.
 	pub fn add_coord(&mut self, coord: TileCoord) {
 		self.add_geo_bbox(&coord.to_geo_bbox());
 	}
 
+	/// Returns a [`geo::MultiPolygon`] representing the unified outline of all polygons added.
+	///
+	/// Uses a geometric union to merge overlapping or adjacent polygons.
 	#[must_use]
 	pub fn to_multi_polygon(&self) -> MultiPolygon<f64> {
 		unary_union(&self.polygons)
 	}
 
+	/// Converts the outline into a [`GeoFeature`] suitable for GeoJSON serialization.
+	///
+	/// The resulting feature contains a single `Polygon` or `MultiPolygon` geometry depending on the data.
 	#[must_use]
 	pub fn to_feature(&self) -> GeoFeature {
 		let multi_polygon = self.to_multi_polygon();

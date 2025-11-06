@@ -1,4 +1,18 @@
 #![allow(dead_code)]
+//! Vector Tile **Layer** utilities.
+//!
+//! This module defines [`VectorTileLayer`], which represents a single layer in a
+//! Mapbox Vector Tile (MVT) / protobuf-encoded tile. It provides reading/writing
+//! of the protobuf binary, property table management, and helpers to convert
+//! between compact vector-tile features and higher‑level [`GeoFeature`]s.
+//!
+//! The encoding follows the MVT schema:
+//!  * field 1: `name` (string)
+//!  * field 2: repeated `feature` (embedded message)
+//!  * field 3: repeated `keys` (string)
+//!  * field 4: repeated `values` (embedded message)
+//!  * field 5: `extent` (varint, default 4096)
+//!  * field 15: `version` (varint, default 1)
 
 use crate::{
 	geo::{GeoFeature, GeoProperties, GeoValue},
@@ -12,16 +26,30 @@ use versatiles_core::{
 	io::{ValueReader, ValueWriter, ValueWriterBlob},
 };
 
+/// A single vector‑tile layer with features, key/value property tables, extent, and version.
+///
+/// The layer stores features in compact vector‑tile form. The `property_manager` maintains
+/// the global key and value tables required by the MVT spec; features reference properties
+/// by index via `tag_ids`. Helper methods convert to and from high‑level [`GeoFeature`]
+/// values for easier processing and GeoJSON export.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct VectorTileLayer {
+	/// Tile coordinate extent used to quantize geometry (default 4096).
 	pub extent: u32,
+	/// The layer's vector‑tile features (geometry + tags).
 	pub features: Vec<VectorTileFeature>,
+	/// Human‑readable layer name (MVT field 1).
 	pub name: String,
+	/// Global key/value tables shared by all features in this layer.
 	pub property_manager: PropertyManager,
+	/// MVT layer version (default 1).
 	pub version: u32,
 }
 
 impl VectorTileLayer {
+	/// Creates a new layer with the given `name`, `extent`, and `version`.
+	///
+	/// Does not add any features; initializes an empty property table.
 	#[must_use]
 	pub fn new(name: String, extent: u32, version: u32) -> VectorTileLayer {
 		VectorTileLayer {
@@ -33,11 +61,16 @@ impl VectorTileLayer {
 		}
 	}
 
+	/// Convenience constructor using the common defaults `extent = 4096`, `version = 1`.
 	#[must_use]
 	pub fn new_standard(name: &str) -> VectorTileLayer {
 		VectorTileLayer::new(name.to_string(), 4096, 1)
 	}
 
+	/// Reads a `VectorTileLayer` from a protobuf stream using the MVT wire format.
+	///
+	/// Expects the fields as defined by the MVT spec and collects keys/values into
+	/// the `property_manager`. Returns an error on malformed inputs.
 	pub fn read(reader: &mut dyn ValueReader<'_, LE>) -> Result<VectorTileLayer> {
 		let mut extent = 4096;
 		let mut features: Vec<VectorTileFeature> = Vec::new();
@@ -88,6 +121,9 @@ impl VectorTileLayer {
 		})
 	}
 
+	/// Serializes the layer into a protobuf `Blob` (MVT wire format).
+	///
+	/// Writes name, features, key/value tables, and non‑default `extent`/`version`.
 	pub fn to_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_le();
 
@@ -144,6 +180,7 @@ impl VectorTileLayer {
 		Ok(writer.into_blob())
 	}
 
+	/// Converts all vector‑tile features into high‑level [`GeoFeature`]s using this layer's property tables.
 	pub fn to_features(&self) -> Result<Vec<GeoFeature>> {
 		let mut features = Vec::new();
 		for feature in &self.features {
@@ -156,6 +193,8 @@ impl VectorTileLayer {
 		Ok(features)
 	}
 
+	/// Filters/mutates features by decoding their properties, applying a filter that may drop the feature,
+	/// recomputing the global property tables, and re‑encoding tag ids. Returns an error if decoding fails.
 	pub fn filter_map_properties<F>(&mut self, filter_fn: F) -> Result<()>
 	where
 		F: Fn(GeoProperties) -> Option<GeoProperties>,
@@ -186,6 +225,8 @@ impl VectorTileLayer {
 		Ok(())
 	}
 
+	/// Transforms properties of all features (non‑dropping). Decodes properties, maps them, rebuilds
+	/// the property tables, and re‑encodes tag ids.
 	pub fn map_properties<F>(&mut self, filter_fn: F) -> Result<()>
 	where
 		F: Fn(GeoProperties) -> GeoProperties,
@@ -214,11 +255,14 @@ impl VectorTileLayer {
 		Ok(())
 	}
 
+	/// Adds a `VectorTileFeature` with explicit properties by encoding its tag ids against the current property tables.
 	pub fn add_vector_tile_features(&mut self, mut feature: VectorTileFeature, properties: GeoProperties) {
 		feature.tag_ids = self.encode_tag_ids(properties);
 		self.features.push(feature);
 	}
 
+	/// Merges another layer's features into `self`, decoding their properties with the source layer's tables
+	/// and re‑encoding them against this layer's `property_manager`.
 	pub fn add_from_layer(&mut self, mut layer: VectorTileLayer) -> Result<()> {
 		let mut features = vec![];
 		swap(&mut features, &mut layer.features);
@@ -229,6 +273,7 @@ impl VectorTileLayer {
 		Ok(())
 	}
 
+	/// Retains only features that satisfy `filter_fn` (applies to raw `VectorTileFeature`s).
 	pub fn retain_features<F>(&mut self, filter_fn: F)
 	where
 		F: Fn(&VectorTileFeature) -> bool,
@@ -236,14 +281,20 @@ impl VectorTileLayer {
 		self.features.retain(filter_fn);
 	}
 
+	/// Encodes a property map to vector‑tile `tag_ids` using/expanding this layer's property tables.
 	pub fn encode_tag_ids(&mut self, properties: GeoProperties) -> Vec<u32> {
 		self.property_manager.encode_tag_ids(properties)
 	}
 
+	/// Decodes vector‑tile `tag_ids` back into a property map using this layer's property tables.
 	pub fn decode_tag_ids(&self, tag_ids: &[u32]) -> Result<GeoProperties> {
 		self.property_manager.decode_tag_ids(tag_ids)
 	}
 
+	/// Builds a layer from high‑level [`GeoFeature`]s.
+	///
+	/// Aggregates all properties into key/value tables and converts geometries into `VectorTileFeature`s
+	/// with encoded `tag_ids`.
 	pub fn from_features(name: String, features: Vec<GeoFeature>, extent: u32, version: u32) -> Result<VectorTileLayer> {
 		let mut property_manager = PropertyManager::from_iter(features.iter().map(|f| &f.properties));
 
@@ -268,6 +319,7 @@ impl VectorTileLayer {
 		})
 	}
 
+	/// Test helper that constructs a deterministic example layer with one example feature.
 	#[cfg(test)]
 	pub fn new_example() -> Self {
 		VectorTileLayer::from_features(String::from("layer1"), vec![GeoFeature::new_example()], 4096, 1).unwrap()

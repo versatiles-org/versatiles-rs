@@ -1,5 +1,7 @@
 #![allow(dead_code)]
-
+//! Defines `GeoFeature`, a single GeoJSON-like feature with optional `id`, a `Geometry`,
+//! and a set of typed properties. This module provides helpers to construct features,
+//! toggle between single/multi geometries, and serialize to GeoJSON-compatible JSON.
 use super::{GeoProperties, GeoValue, Geometry};
 use lazy_static::lazy_static;
 use std::{fmt::Debug, mem::swap};
@@ -9,14 +11,31 @@ lazy_static! {
 	static ref DUMMY_GEOMETRY: Geometry = Geometry::new_multi_point::<Vec<(f64, f64)>>(vec![]);
 }
 
+/// A single geographic feature consisting of an optional `id`, a `Geometry`, and `GeoProperties`.
+///
+/// This mirrors a GeoJSON *Feature*: `geometry` holds the spatial data, `properties` stores
+/// arbitrary typed attributes, and `id` is optional. `GeoFeature` provides constructors and
+/// utilities for setting properties and converting geometries, plus serialization to a
+/// GeoJSON-compatible representation.
 #[derive(Clone, Debug)]
 pub struct GeoFeature {
+	/// Optional feature identifier. If present, it is emitted as the GeoJSON `id` field.
 	pub id: Option<GeoValue>,
+	/// The feature's spatial component.
 	pub geometry: Geometry,
+	/// Key–value attributes associated with the feature (emitted as GeoJSON `properties`).
 	pub properties: GeoProperties,
 }
 
 impl GeoFeature {
+	/// Creates a new `GeoFeature` with the given `geometry`, no `id`, and empty `properties`.
+	///
+	/// # Examples
+	/// ```rust
+	/// # use versatiles_geometry::geo::{Geometry, GeoFeature};
+	/// let geom = Geometry::new_example();
+	/// let feature = GeoFeature::new(geom);
+	/// ```
 	#[must_use]
 	pub fn new(geometry: Geometry) -> Self {
 		Self {
@@ -26,14 +45,20 @@ impl GeoFeature {
 		}
 	}
 
+	/// Sets the optional identifier of the feature (serialized as GeoJSON `id`).
 	pub fn set_id(&mut self, id: GeoValue) {
 		self.id = Some(id);
 	}
 
+	/// Replaces the entire properties map with the provided `GeoProperties`.
 	pub fn set_properties(&mut self, properties: GeoProperties) {
 		self.properties = properties;
 	}
 
+	/// Inserts or updates a single property value.
+	///
+	/// Accepts any type `T` that can be converted into `GeoValue` (e.g., strings, numbers, booleans).
+	/// The key is stored verbatim and will appear in the GeoJSON `properties` object.
 	pub fn set_property<T>(&mut self, key: String, value: T)
 	where
 		GeoValue: From<T>,
@@ -41,6 +66,9 @@ impl GeoFeature {
 		self.properties.insert(key, GeoValue::from(value));
 	}
 
+	/// Converts the inner `geometry` to its *single* variant if it is currently a multi-geometry.
+	///
+	/// If the geometry is already single, this is a no-op.
 	pub fn to_single_geometry(&mut self) {
 		if self.geometry.is_single_geometry() {
 			return;
@@ -50,6 +78,9 @@ impl GeoFeature {
 		self.geometry = geometry.into_single_geometry();
 	}
 
+	/// Converts the inner `geometry` to its *multi* variant if it is currently a single-geometry.
+	///
+	/// If the geometry is already multi, this is a no-op.
 	pub fn to_multi_geometry(&mut self) {
 		if self.geometry.is_multi_geometry() {
 			return;
@@ -59,6 +90,11 @@ impl GeoFeature {
 		self.geometry = geometry.into_multi_geometry();
 	}
 
+	/// Serializes the feature into a GeoJSON-compatible `JsonObject`.
+	///
+	/// The output object contains `type: "Feature"`, an optional `id`, a `geometry` member,
+	/// and the `properties` object. If `precision` is provided, coordinate values in the
+	/// geometry are rounded to that many fractional digits.
 	pub fn to_json(&self, precision: Option<u8>) -> JsonObject {
 		let mut json = JsonObject::new();
 		json.set("type", JsonValue::from("Feature"));
@@ -71,6 +107,7 @@ impl GeoFeature {
 	}
 
 	#[cfg(test)]
+	/// Test helper that returns a deterministic example feature.
 	pub fn new_example() -> Self {
 		Self {
 			id: Some(GeoValue::from(13)),
@@ -84,6 +121,8 @@ impl GeoFeature {
 	}
 }
 
+/// Creates a `GeoFeature` from a `geo::MultiPolygon<f64>` by wrapping it as a `Geometry`
+/// and initializing `id` to `None` and `properties` to empty.
 impl From<geo::MultiPolygon<f64>> for GeoFeature {
 	fn from(geometry: geo::MultiPolygon<f64>) -> Self {
 		Self::new(Geometry::from(geometry))

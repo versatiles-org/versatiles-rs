@@ -1,3 +1,10 @@
+//! Typed property values for GeoJSON-like features.
+//!
+//! This module defines [`GeoValue`], a small, ordered sum type used for feature
+//! properties in the `versatiles_geometry` crate. It supports construction from
+//! primitive Rust types, lexicographic/total ordering for deterministic output,
+//! parsing from strings, hashing/equality, and conversion to the crate’s `JsonValue`.
+
 use anyhow::{Result, bail};
 use lazy_static::lazy_static;
 use regex::{Regex, RegexBuilder};
@@ -8,17 +15,30 @@ use std::{
 };
 use versatiles_core::json::JsonValue;
 
+/// A compact, typed representation of a property value used in GeoJSON-like features.
+///
+/// Variants cover the common scalar JSON types plus separate `Float`/`Double` and
+/// signed/unsigned integer distinctions. `Ord` and `Hash` are implemented to allow
+/// use as map values with deterministic orderings.
 #[derive(Clone, PartialEq)]
 pub enum GeoValue {
+	/// Boolean value.
 	Bool(bool),
+	/// 64-bit floating-point number.
 	Double(f64),
+	/// 32-bit floating-point number.
 	Float(f32),
+	/// 64-bit signed integer.
 	Int(i64),
+	/// JSON null.
 	Null,
+	/// UTF‑8 string.
 	String(String),
+	/// 64-bit unsigned integer.
 	UInt(u64),
 }
 
+/// Formats the value as `Variant(inner)` to mirror the enum structure for developers.
 impl Debug for GeoValue {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
@@ -33,30 +53,35 @@ impl Debug for GeoValue {
 	}
 }
 
+/// Converts a `&str` into `GeoValue::String`.
 impl From<&str> for GeoValue {
 	fn from(value: &str) -> Self {
 		GeoValue::String(value.to_string())
 	}
 }
 
+/// Converts a `&String` into `GeoValue::String`.
 impl From<&String> for GeoValue {
 	fn from(value: &String) -> Self {
 		GeoValue::String(value.clone())
 	}
 }
 
+/// Converts a `String` into `GeoValue::String`.
 impl From<String> for GeoValue {
 	fn from(value: String) -> Self {
 		GeoValue::String(value)
 	}
 }
 
+/// Converts a `u8` into `GeoValue::UInt`.
 impl From<u8> for GeoValue {
 	fn from(value: u8) -> Self {
 		GeoValue::UInt(u64::from(value))
 	}
 }
 
+/// Converts an `i32` into `GeoValue::Int` if negative, otherwise `GeoValue::UInt`.
 impl From<i32> for GeoValue {
 	fn from(value: i32) -> Self {
 		if value < 0 {
@@ -67,50 +92,59 @@ impl From<i32> for GeoValue {
 	}
 }
 
+/// Converts a `u32` into `GeoValue::UInt`.
 impl From<u32> for GeoValue {
 	fn from(value: u32) -> Self {
 		GeoValue::UInt(u64::from(value))
 	}
 }
 
+/// Converts a `usize` into `GeoValue::UInt`.
 impl From<usize> for GeoValue {
 	fn from(value: usize) -> Self {
 		GeoValue::UInt(value as u64)
 	}
 }
 
+/// Converts an `i64` into `GeoValue::Int`.
 impl From<i64> for GeoValue {
 	fn from(value: i64) -> Self {
 		GeoValue::Int(value)
 	}
 }
 
+/// Converts a `u64` into `GeoValue::UInt`.
 impl From<u64> for GeoValue {
 	fn from(value: u64) -> Self {
 		GeoValue::UInt(value)
 	}
 }
 
+/// Converts an `f32` into `GeoValue::Float`.
 impl From<f32> for GeoValue {
 	fn from(value: f32) -> Self {
 		GeoValue::Float(value)
 	}
 }
 
+/// Converts an `f64` into `GeoValue::Double`.
 impl From<f64> for GeoValue {
 	fn from(value: f64) -> Self {
 		GeoValue::Double(value)
 	}
 }
 
+/// Converts a `bool` into `GeoValue::Bool`.
 impl From<bool> for GeoValue {
 	fn from(value: bool) -> Self {
 		GeoValue::Bool(value)
 	}
 }
 
+/// Equality is defined per-variant and value; see also `Ord` for cross-variant ordering.
 impl Eq for GeoValue {}
 
+/// Hashes both the variant tag and the inner value to ensure stable hashing across variants.
 impl Hash for GeoValue {
 	fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
 		core::mem::discriminant(self).hash(state);
@@ -126,12 +160,15 @@ impl Hash for GeoValue {
 	}
 }
 
+/// Provides total ordering. Values are first compared within the same variant; otherwise
+/// a fixed variant precedence is used (see `variant_order`).
 impl PartialOrd for GeoValue {
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		Some(self.cmp(other))
 	}
 }
 
+/// Total ordering used for deterministic sorting across mixed variants.
 impl Ord for GeoValue {
 	fn cmp(&self, other: &Self) -> Ordering {
 		use GeoValue::{Bool, Double, Float, Int, String, UInt};
@@ -146,6 +183,8 @@ impl Ord for GeoValue {
 		}
 	}
 }
+
+/// Displays the value as a plain string (e.g., numbers as decimals, booleans as `true`/`false`, `null`).
 impl Display for GeoValue {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(
@@ -165,6 +204,7 @@ impl Display for GeoValue {
 }
 
 impl GeoValue {
+	/// Internal: variant precedence used when ordering mixed types (`String` < `Float` < `Double` < `Int` < `UInt` < `Bool` < `Null`).
 	fn variant_order(&self) -> u8 {
 		match self {
 			GeoValue::String(_) => 0,
@@ -177,6 +217,8 @@ impl GeoValue {
 		}
 	}
 
+	/// Parses a string into a `GeoValue` by detecting booleans, integers, unsigned integers,
+	/// and floating-point numbers; falls back to `String` (empty input yields empty string).
 	#[must_use]
 	pub fn parse_str(value: &str) -> Self {
 		lazy_static! {
@@ -203,6 +245,7 @@ impl GeoValue {
 		}
 	}
 
+	/// Returns the value as `u64` if it is `Int` or `UInt`; otherwise returns an error.
 	pub fn as_u64(&self) -> Result<u64> {
 		match self {
 			GeoValue::Int(v) => Ok(*v as u64),
@@ -211,6 +254,8 @@ impl GeoValue {
 		}
 	}
 
+	/// Converts the `GeoValue` to the crate’s `JsonValue` representation.
+	/// Note: integer types are converted to `Number` (as `f64`) to match JSON semantics.
 	#[must_use]
 	pub fn to_json(&self) -> JsonValue {
 		match self {

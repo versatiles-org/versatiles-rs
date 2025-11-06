@@ -1,4 +1,5 @@
-#![allow(dead_code)]
+//! This module defines `GeoProperties`, a key–value store for feature attributes in GeoJSON-like data structures.
+//! It is used in `GeoFeature` for the `properties` field, supports insertion, removal, iteration, and JSON serialization.
 
 use versatiles_core::json::JsonObject;
 
@@ -8,6 +9,11 @@ use std::{
 	fmt::Debug,
 };
 
+/// A key–value map of properties associated with a geographic feature.
+///
+/// Used by `GeoFeature` to store attributes that accompany geometry data.
+/// Internally backed by a `BTreeMap` to preserve key order for deterministic serialization.
+/// Provides methods for insertion, update, removal, and conversion to JSON.
 #[derive(Clone, PartialEq)]
 pub struct GeoProperties(pub BTreeMap<String, GeoValue>);
 
@@ -18,44 +24,54 @@ impl Default for GeoProperties {
 }
 
 impl GeoProperties {
+	/// Creates an empty `GeoProperties` map.
 	pub fn new() -> GeoProperties {
 		GeoProperties(BTreeMap::new())
 	}
 
+	/// Inserts or overwrites a property.
 	pub fn insert(&mut self, key: String, value: GeoValue) {
 		self.0.insert(key, value);
 	}
 
+	/// Merges another `GeoProperties` into this one, overwriting existing keys.
 	pub fn update(&mut self, new_properties: &GeoProperties) {
 		for (k, v) in new_properties.iter() {
 			self.0.insert(k.to_string(), v.clone());
 		}
 	}
 
+	/// Removes a property by key.
 	pub fn remove(&mut self, key: &str) {
 		self.0.remove(key);
 	}
 
+	/// Removes all properties.
 	pub fn clear(&mut self) {
 		self.0.clear();
 	}
 
+	/// Returns the number of properties.
 	pub fn len(&self) -> usize {
 		self.0.len()
 	}
 
+	/// Returns `true` if there are no properties.
 	pub fn is_empty(&self) -> bool {
 		self.0.is_empty()
 	}
 
+	/// Returns a reference to a property value if it exists.
 	pub fn get(&self, key: &str) -> Option<&GeoValue> {
 		self.0.get(key)
 	}
 
+	/// Returns an iterator over key–value pairs in sorted order.
 	pub fn iter(&self) -> btree_map::Iter<'_, String, GeoValue> {
 		self.0.iter()
 	}
 
+	/// Keeps only entries that satisfy the given predicate.
 	pub fn retain<F>(&mut self, f: F)
 	where
 		F: Fn(&String, &GeoValue) -> bool,
@@ -63,6 +79,7 @@ impl GeoProperties {
 		self.0.retain(|k, v| f(k, v));
 	}
 
+	/// Converts the properties map to a JSON object.
 	pub fn to_json(&self) -> JsonObject {
 		let mut obj = JsonObject::new();
 		for (k, v) in &self.0 {
@@ -72,6 +89,7 @@ impl GeoProperties {
 	}
 }
 
+/// Consumes the properties map and returns an iterator over owned `(String, GeoValue)` pairs.
 impl IntoIterator for GeoProperties {
 	type Item = (String, GeoValue);
 	type IntoIter = btree_map::IntoIter<String, GeoValue>;
@@ -80,12 +98,14 @@ impl IntoIterator for GeoProperties {
 	}
 }
 
+/// Allows convenient creation of `GeoProperties` from literal vectors of `(str, GeoValue)` pairs.
 impl From<Vec<(&str, GeoValue)>> for GeoProperties {
 	fn from(value: Vec<(&str, GeoValue)>) -> Self {
 		GeoProperties(value.into_iter().map(|(k, v)| (k.to_string(), v)).collect())
 	}
 }
 
+/// Allows convenient creation of `GeoProperties` from literal vectors of `(str, str)` pairs.
 impl From<Vec<(&str, &str)>> for GeoProperties {
 	fn from(value: Vec<(&str, &str)>) -> Self {
 		GeoProperties(
@@ -97,12 +117,14 @@ impl From<Vec<(&str, &str)>> for GeoProperties {
 	}
 }
 
+/// Allows constructing `GeoProperties` from any iterator of `(String, GeoValue)` pairs.
 impl FromIterator<(String, GeoValue)> for GeoProperties {
 	fn from_iter<T: IntoIterator<Item = (String, GeoValue)>>(iter: T) -> Self {
 		GeoProperties(BTreeMap::from_iter(iter))
 	}
 }
 
+/// Formats the properties map as key–value pairs for developer-friendly debugging.
 impl Debug for GeoProperties {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		let fields = self.0.clone().into_iter().collect::<Vec<(String, GeoValue)>>();

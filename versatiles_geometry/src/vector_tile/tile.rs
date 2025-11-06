@@ -1,4 +1,11 @@
 #![allow(dead_code)]
+//! Vector Tile **Tile** container.
+//!
+//! This module defines [`VectorTile`], a container of vector‑tile layers following the
+//! Mapbox Vector Tile (MVT) protobuf schema. It provides helpers to parse a tile
+//! from a binary `Blob`, serialize back to protobuf, and access layers by name.
+//!
+//! MVT top‑level encoding uses repeated field 3 for embedded `layer` messages.
 
 use super::layer::VectorTileLayer;
 use anyhow::{Result, bail};
@@ -8,17 +15,28 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
+/// A complete vector tile consisting of one or more layers.
+///
+/// Layers are stored as [`VectorTileLayer`] values and encoded/decoded using the MVT wire format.
+/// This type offers ergonomic construction, (de)serialization, and lookup utilities.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct VectorTile {
+	/// The tile's layers in storage order (each one an embedded MVT `layer` message).
 	pub layers: Vec<VectorTileLayer>,
 }
 
 impl VectorTile {
+	/// Creates a new `VectorTile` from a vector of layers.
 	#[must_use]
 	pub fn new(layers: Vec<VectorTileLayer>) -> VectorTile {
 		VectorTile { layers }
 	}
 
+	/// Parses a `VectorTile` from a protobuf `Blob`.
+	///
+	/// Iterates over the stream, reading repeated field `3` (wire‑type 2: length‑delimited)
+	/// as embedded layers and delegating to [`VectorTileLayer::read`]. Returns an error
+	/// for unexpected field/wire combinations or malformed input.
 	#[context("parsing VectorTile from Blob ({} bytes)", blob.len())]
 	pub fn from_blob(blob: &Blob) -> Result<VectorTile> {
 		let mut reader = ValueReaderSlice::new_le(blob.as_slice());
@@ -44,6 +62,7 @@ impl VectorTile {
 		Ok(tile)
 	}
 
+	/// Serializes this tile and all of its layers to a protobuf `Blob` (MVT wire format).
 	#[context("serializing VectorTile to Blob")]
 	pub fn to_blob(&self) -> Result<Blob> {
 		let mut writer = ValueWriterBlob::new_le();
@@ -58,11 +77,13 @@ impl VectorTile {
 		Ok(writer.into_blob())
 	}
 
+	/// Returns a reference to the first layer with the given `name`, if present.
 	#[must_use]
 	pub fn find_layer(&self, name: &str) -> Option<&VectorTileLayer> {
 		self.layers.iter().find(|layer| layer.name == name)
 	}
 
+	/// Returns a mutable reference to the first layer with the given `name`, if present.
 	pub fn find_layer_mut(&mut self, name: &str) -> Option<&mut VectorTileLayer> {
 		self.layers.iter_mut().find(|layer| layer.name == name)
 	}
