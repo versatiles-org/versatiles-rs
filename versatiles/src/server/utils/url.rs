@@ -26,6 +26,7 @@ use versatiles_derive::context;
 /// ```
 #[derive(Clone, PartialOrd, PartialEq, Debug)]
 pub struct Url {
+	/// The inner string representation of the URL.
 	pub str: String,
 }
 
