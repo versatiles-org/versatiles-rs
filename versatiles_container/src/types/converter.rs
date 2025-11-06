@@ -1,36 +1,42 @@
-//! `converter` module provides functionalities to convert tile data between different formats and compressions.
+//! Converts tile data between formats, compressions, and coordinate conventions.
 //!
-//! # Example Usage
+//! This module provides:
+//! - [`TilesConverterParameters`]: declarative knobs (bbox filter, compression override, `flip_y`, `swap_xy`)
+//! - [`TilesConvertReader`]: an adapter that applies those conversions while reading
+//! - [`convert_tiles_container`]: a convenience function to convert and write to a target path using a [`ContainerRegistry`]
 //!
+//! ## Coordinate transforms
+//! - `flip_y`: inverts Y within the zoom level (useful to switch between TMS and XYZ-like schemes)
+//! - `swap_xy`: swaps X and Y (occasionally useful for sources with unconventional axis ordering)
+//!
+//! ## Example
 //! ```rust
 //! use versatiles_container::*;
 //! use versatiles_core::*;
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
+//!     // Input and output
 //!     let path_mbtiles = std::env::current_dir()?.join("../testdata/berlin.mbtiles");
 //!     let path_versatiles = std::env::temp_dir().join("temp2.versatiles");
 //!
+//!     // Default registry knows how to open/read and write common containers
 //!     let registry = ContainerRegistry::default();
 //!
-//!     // Create a mbtiles reader
-//!     let mut reader = registry.get_reader(&path_mbtiles).await?;
+//!     // Open the source
+//!     let reader = registry.get_reader(&path_mbtiles).await?;
 //!
-//!     // Define converter parameters
+//!     // Limit to a bbox pyramid and keep source compression;
+//!     // you could also set `tile_compression: Some(TileCompression::Brotli)` to re-encode.
 //!     let converter_params = TilesConverterParameters {
 //!         bbox_pyramid: Some(TileBBoxPyramid::new_full(8)),
 //!         ..Default::default()
 //!     };
 //!
-//!     // Convert the tiles container
-//!     convert_tiles_container(
-//!         reader,
-//!         converter_params,
-//!         &path_versatiles,
-//!         registry
-//!     ).await?;
+//!     // Convert and write
+//!     convert_tiles_container(reader, converter_params, &path_versatiles.as_path(), registry).await?;
 //!
-//!     println!("Tiles have been successfully converted and saved to {path_versatiles:?}");
+//!     println!("Wrote {:?}", path_versatiles);
 //!     Ok(())
 //! }
 //! ```
@@ -44,17 +50,29 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
-/// Parameters for tile conversion.
+/// Parameters that control how tiles are transformed during reading/conversion.
+///
+/// These options affect coordinate handling, the subset of tiles traversed, and
+/// whether tile payloads are re-encoded with a different compression.
+///
+/// Use with [`TilesConvertReader::new_from_reader`] or the helper
+/// [`convert_tiles_container`].
 #[derive(Debug)]
 pub struct TilesConverterParameters {
+	/// Optional spatial/zoom restriction. When set, only tiles inside the given
+	/// [`TileBBoxPyramid`] are read/streamed. Existing bounds are intersected with this.
 	pub bbox_pyramid: Option<TileBBoxPyramid>,
+	/// Optional compression override. When set, tile payloads are re-encoded to this
+	/// [`TileCompression`] (e.g., Gzip → Brotli). If `None`, the source compression is kept.
 	pub tile_compression: Option<TileCompression>,
+	/// If `true`, flip the Y coordinate within the zoom level (TMS ↔ XYZ-like).
 	pub flip_y: bool,
+	/// If `true`, swap X and Y coordinates.
 	pub swap_xy: bool,
 }
 
 impl Default for TilesConverterParameters {
-	/// Returns default converter parameters.
+	/// Returns parameters that perform no geometric change and keep source compression.
 	fn default() -> Self {
 		TilesConverterParameters {
 			bbox_pyramid: None,
@@ -65,7 +83,22 @@ impl Default for TilesConverterParameters {
 	}
 }
 
-/// Converts tiles from a given reader and writes them to a file.
+/// Converts tiles from the given reader and writes them to `path` via the provided [`ContainerRegistry`].
+///
+/// The conversion is applied by wrapping `reader` in a [`TilesConvertReader`] configured by `cp`.
+///
+/// ### Arguments
+/// - `reader`: Source container reader.
+/// - `cp`: Conversion parameters (bbox filter, compression override, `flip_y`, `swap_xy`).
+/// - `path`: Output path; the format is inferred from its extension (or directory).
+/// - `registry`: Registry that knows how to write the inferred output container.
+///
+/// ### Errors
+/// Returns an error if reading tiles fails, if writing to the destination fails,
+/// or if no suitable writer is registered for the output path.
+///
+/// ### Example
+/// See the module-level example.
 #[context("Converting tiles from reader to file")]
 pub async fn convert_tiles_container(
 	reader: Box<dyn TilesReaderTrait>,
@@ -77,7 +110,12 @@ pub async fn convert_tiles_container(
 	registry.write_to_path(Box::new(converter), path).await
 }
 
-/// A reader that converts tiles from one format to another.
+/// Reader adapter that applies coordinate transforms, bbox filtering, and optional
+/// compression changes on-the-fly.
+///
+/// This type implements [`TilesReaderTrait`], so it can be used anywhere a normal
+/// reader is expected. Use [`TilesConvertReader::new_from_reader`] to wrap an
+/// existing reader.
 #[derive(Debug)]
 pub struct TilesConvertReader {
 	reader: Box<dyn TilesReaderTrait>,
@@ -89,7 +127,13 @@ pub struct TilesConvertReader {
 }
 
 impl TilesConvertReader {
-	/// Creates a new converter reader from an existing reader.
+	/// Wraps an existing reader so that reads are transformed according to `cp`.
+	///
+	/// Updates the internal [`TilesReaderParameters`] and [`TileJSON`] to reflect
+	/// the chosen bbox, axis transforms, and compression.
+	///
+	/// ### Errors
+	/// Propagates errors from querying/deriving parameters or updating metadata.
 	#[context("Creating converter reader from existing reader")]
 	pub fn new_from_reader(
 		reader: Box<dyn TilesReaderTrait>,
@@ -214,6 +258,8 @@ impl TilesReaderTrait for TilesConvertReader {
 	}
 }
 
+/// Integration tests verifying bbox intersection, coordinate transforms, traversal order,
+/// and compression override behavior.
 #[cfg(test)]
 mod tests {
 	use super::*;

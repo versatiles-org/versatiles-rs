@@ -1,42 +1,49 @@
-//! Provides functionality for reading tile data from a PMTiles container.
+//! Read tiles and metadata from a PMTiles (v3) container.
 //!
-//! The `PMTilesReader` struct is the primary component of this module, offering methods to read metadata and tile data from a PMTiles container.
+//! The `PMTilesReader` parses the PMTiles v3 header and directory structure, reads the
+//! embedded TileJSON metadata, and fetches tile blobs by translating XYZ tile coordinates
+//! into **Hilbert indices**. It supports internal compression used by PMTiles for
+//! metadata/directories (e.g., gzip) as well as the **transport compression** of the tiles
+//! themselves (e.g., gzip for MVT tiles) as declared in the header.
 //!
-//! ## Features
-//! - Supports reading metadata and tile data with internal compression
-//! - Provides methods to query the container for tile data based on coordinates
-//! - Implements caching for efficient data retrieval
+//! ## What it extracts
+//! - `header`: parsed [`HeaderV3`] with offsets and compression flags
+//! - `tilejson`: parsed TileJSON (from `metadata` range), merged into [`TileJSON`]
+//! - `parameters`: [`TilesReaderParameters`] with `tile_format`, `tile_compression`, and a
+//!   computed **bbox pyramid** inferred from the directory tree
 //!
-//! ## Usage Example
-//! ```rust
+//! ## Requirements
+//! - Use an **absolute** filesystem path when opening via [`open_path`].
+//! - The container must be a valid PMTiles v3 file with readable header, directories, and data.
+//!
+//! ## Usage
+//! ```rust,no_run
 //! use versatiles_container::*;
 //! use versatiles_core::*;
 //! use std::path::Path;
 //!
 //! #[tokio::main]
-//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//!     // Open the PMTiles container
-//!     let path = std::env::current_dir()?.join("../testdata/berlin.pmtiles");
-//!     let mut reader = PMTilesReader::open_path(&path).await?;
+//! async fn main() -> anyhow::Result<()> {
+//!     // Open PMTiles via absolute path
+//!     let path = Path::new("/absolute/path/to/berlin.pmtiles");
+//!     let mut reader = PMTilesReader::open_path(path).await?;
 //!
-//!     // Get metadata
-//!     println!("Metadata: {:?}", reader.tilejson());
+//!     // Inspect metadata and parameters
+//!     let tj = reader.tilejson();
+//!     println!("format={:?} compression={:?}", reader.parameters().tile_format, reader.parameters().tile_compression);
 //!
-//!     // Get tile data for specific coordinates
-//!     let coord = TileCoord::new(1, 1, 1)?;
-//!     if let Some(tile) = reader.get_tile(&coord).await? {
-//!         println!("Tile data: {tile:?}");
+//!     // Fetch a tile
+//!     let coord = TileCoord::new(14, 8800, 5370)?;
+//!     if let Some(mut tile) = reader.get_tile(&coord).await? {
+//!         let _blob = tile.as_blob(reader.parameters().tile_compression)?;
 //!     }
-//!
 //!     Ok(())
 //! }
 //! ```
 //!
 //! ## Errors
-//! - Returns errors if the container file does not exist, if the path is not absolute, or if there are issues querying the container.
-//!
-//! ## Testing
-//! This module includes comprehensive tests to ensure the correct functionality of reading metadata, handling different file formats, and verifying tile data.
+//! Returns errors when the path is not absolute, the file cannot be read, the
+//! PMTiles header/directories cannot be parsed or decompressed, or a requested tile is missing.
 
 use super::types::{EntriesV3, HeaderV3};
 use crate::{Tile, TilesReaderTrait};
@@ -54,40 +61,53 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
-/// A struct that provides functionality to read tile data from a PMTiles container.
+/// Reader for PMTiles v3 containers.
+///
+/// Parses the header and directory blobs, merges embedded TileJSON, computes a
+/// bounding-box pyramid by traversing directory entries, and exposes tiles via
+/// the [`TilesReaderTrait`] interface.
 #[derive(Debug)]
 pub struct PMTilesReader {
+	/// Underlying byte source used to read header, directories, and tile data.
 	pub data_reader: DataReader,
+	/// Parsed PMTiles v3 header with byte ranges, counts, and compression flags.
 	pub header: HeaderV3,
+	/// Compression algorithm used for internal metadata/directories (e.g., gzip).
 	pub internal_compression: TileCompression,
+	/// Raw (compressed) concatenated blob of all leaf directories.
 	pub leaves_bytes: Blob,
+	/// Decompression cache mapping leaf directory byte ranges to parsed entries.
 	pub leaves_cache: Mutex<LimitedCache<ByteRange, Arc<EntriesV3>>>,
+	/// Merged TileJSON metadata extracted from the PMTiles `metadata` range.
 	pub tilejson: TileJSON,
+	/// Runtime parameters (tile format, compression, bbox pyramid) advertised by this reader.
 	pub parameters: TilesReaderParameters,
+	/// Uncompressed root directory blob.
 	pub root_bytes_uncompressed: Blob,
+	/// Parsed entries of the root directory (shared across queries).
 	pub root_entries: Arc<EntriesV3>,
 }
 
 impl PMTilesReader {
-	/// Creates a new `PMTilesReader` from a given filename.
+	/// Open a PMTiles container from an **absolute** filesystem path.
 	///
-	/// # Arguments
-	/// * `path` - The path to the PMTiles container file.
+	/// Validates and opens a `DataReaderFile`, then delegates to [`open_reader`].
 	///
 	/// # Errors
-	/// Returns an error if the file does not exist or if there is an error opening the reader.
+	/// Returns an error if the file cannot be opened.
 	#[context("opening PMTiles at '{}'", path.display())]
 	pub async fn open_path(path: &Path) -> Result<PMTilesReader> {
 		PMTilesReader::open_reader(DataReaderFile::open(path)?).await
 	}
 
-	/// Creates a new `PMTilesReader` from a given `DataReader`.
+	/// Open a PMTiles container from an existing [`DataReader`].
 	///
-	/// # Arguments
-	/// * `data_reader` - A data reader for the PMTiles container.
+	/// Reads the v3 header, decompresses and parses the metadata (`TileJSON`) and
+	/// root directory, prepares leaf directory bytes, computes the bbox pyramid, and
+	/// initializes caches for fast lookups.
 	///
 	/// # Errors
-	/// Returns an error if there is an issue reading or decompressing data.
+	/// Returns an error if reading or decompression fails, or if the header/dirs are invalid.
 	#[context("opening PMTiles from reader")]
 	pub async fn open_reader(data_reader: DataReader) -> Result<PMTilesReader>
 	where
@@ -143,13 +163,26 @@ impl PMTilesReader {
 		})
 	}
 
+	/// Decode and return the root directory entries (`EntriesV3`).
 	#[context("reading PMTiles root entries")]
 	pub fn get_tile_entries(&self) -> Result<EntriesV3> {
 		EntriesV3::from_blob(&self.root_bytes_uncompressed)
 	}
 }
 
-/// Calculates the bounding box pyramid from the provided data.
+/// Build the per‑zoom bounding box pyramid by traversing PMTiles directory entries.
+///
+/// Walks the root and leaf directory blobs, following entry ranges. For `run_length`
+/// entries, expands the run into individual tiles via Hilbert indices; for directory
+/// entries, decompresses and recurses. Returns the accumulated [`TileBBoxPyramid`].
+///
+/// ### Parameters
+/// - `root_bytes_uncompressed`: uncompressed root directory bytes.
+/// - `leaves_bytes`: concatenated (compressed) leaf directory bytes as a single blob.
+/// - `compression`: compression algorithm used for directory blobs.
+///
+/// ### Errors
+/// Returns an error when directory blobs cannot be parsed or decompressed.
 #[context("building bbox pyramid from PMTiles directories")]
 fn calc_bbox_pyramid(
 	root_bytes_uncompressed: &Blob,
@@ -219,12 +252,12 @@ fn calc_bbox_pyramid(
 
 #[async_trait]
 impl TilesReaderTrait for PMTilesReader {
-	/// Returns the container name.
+	/// Returns the container type identifier for this reader (`"pmtiles"`).
 	fn container_name(&self) -> &str {
 		"pmtiles"
 	}
 
-	/// Returns the parameters of the tiles reader.
+	/// Returns the current reader parameters (tile format, compression, bbox pyramid).
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
@@ -237,26 +270,21 @@ impl TilesReaderTrait for PMTilesReader {
 		self.parameters.tile_compression = tile_compression;
 	}
 
-	/// Returns the metadata as a `Blob`.
-	///
-	/// # Errors
-	/// Returns an error if there is an issue retrieving the metadata.
+	/// Returns the parsed and merged TileJSON metadata.
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
-	/// Returns the name of the PMTiles container.
+	/// Returns the underlying source name from the `DataReader` (usually an absolute file path).
 	fn source_name(&self) -> &str {
 		self.data_reader.get_name()
 	}
 
-	/// Returns the tile data for the specified coordinates as a `Blob`.
+	/// Fetch a tile by XYZ coordinate.
 	///
-	/// # Arguments
-	/// * `coord` - The coordinates of the tile.
-	///
-	/// # Errors
-	/// Returns an error if there is an issue retrieving the tile data.
+	/// Converts the coordinate to a **Hilbert tile ID**, then traverses up to three levels
+	/// of PMTiles directories to locate the tile. Leaf directories are cached to avoid
+	/// repeated decompression. Returns `Ok(None)` if the tile does not exist.
 	#[context("fetching tile {:?} from PMTiles", coord)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		// Log the requested tile coordinates for debugging purposes
@@ -316,10 +344,12 @@ impl TilesReaderTrait for PMTilesReader {
 
 	// deep probe of container meta
 	#[cfg(feature = "cli")]
+	/// Adds PMTiles‑specific container metadata (the v3 header) to the CLI probe output.
+	///
+	/// Printed under the `"header"` key for human‑readable inspection.
 	#[context("probing PMTiles container metadata")]
 	async fn probe_container(&mut self, print: &PrettyPrint) -> Result<()> {
 		print.add_key_value("header", &self.header).await;
-
 		Ok(())
 	}
 }

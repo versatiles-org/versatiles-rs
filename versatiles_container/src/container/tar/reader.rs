@@ -1,4 +1,35 @@
-//! Provides functionality for reading tile data from a tar archive.
+//! Read tiles and metadata from a `.tar` archive.
+//!
+//! The `TarTilesReader` scans a tarball for tiles arranged in a `{z}/{x}/{y}.<format>[.<compression>]`
+//! layout and optional TileJSON metadata files (`meta.json`, `tiles.json`, `metadata.json`)
+//! including their compressed variants (`.gz`, `.br`). Non-regular entries are ignored.
+//!
+//! ## Detected properties
+//! - **Tile format** is inferred from the innermost filename extension (e.g., `.png`, `.webp`, `.pbf`, `.mvt`, `.bin`).
+//! - **Transport compression** is inferred from an outer extension (e.g., `.br`, `.gz`), or `Uncompressed` if none.
+//! - A **bbox pyramid** is computed from all discovered `{z,x,y}` coordinates.
+//!
+//! All tiles must share the same **format** and **compression**; mixing them returns an error.
+//!
+//! ## Usage
+//! ```rust,no_run
+//! use versatiles_container::*;
+//! use versatiles_core::*;
+//! use std::path::Path;
+//! # async fn demo() -> anyhow::Result<()> {
+//! let path = Path::new("/absolute/path/to/tiles.tar");
+//! let mut reader = TarTilesReader::open_path(path)?;
+//!
+//! // Read one tile
+//! if let Some(mut tile) = reader.get_tile(&TileCoord::new(3, 6, 2)?).await? {
+//!     let _blob = tile.as_blob(reader.parameters().tile_compression)?;
+//! }
+//! # Ok(()) }
+//! ```
+//!
+//! ## Errors
+//! Returns errors when the tar cannot be opened or read, when no tiles are found,
+//! or when mixed formats/compressions are detected.
 
 use crate::{Tile, TilesReaderTrait};
 use anyhow::{Result, anyhow, ensure};
@@ -8,7 +39,11 @@ use tar::{Archive, EntryType};
 use versatiles_core::{io::*, utils::decompress, *};
 use versatiles_derive::context;
 
-/// A struct that provides functionality to read tile data from a tar archive.
+/// Reader for tiles stored inside a tar archive.
+///
+/// Merges TileJSON from recognized metadata files, builds a map from `{z,x,y}` to
+/// byte ranges within the archive, infers uniform format/compression, and exposes
+/// tiles via [`TilesReaderTrait`].
 pub struct TarTilesReader {
 	tilejson: TileJSON,
 	name: String,
@@ -18,13 +53,18 @@ pub struct TarTilesReader {
 }
 
 impl TarTilesReader {
-	/// Creates a new `TarTilesReader` from a given file path.
+	/// Open a tar archive and build an index of tiles and metadata.
 	///
-	/// # Arguments
-	/// * `path` - The path to the tar archive file.
+	/// Scans regular entries in the archive, recognizing:
+	/// - tiles at `{z}/{x}/{y}.<format>[.<compression>]`
+	/// - metadata files: `meta.json`, `tiles.json`, `metadata.json` (optionally `.gz`/`.br`)
+	///
+	/// Determines a uniform tile **format** and **compression**, and computes a bbox pyramid
+	/// from discovered coordinates.
 	///
 	/// # Errors
-	/// Returns an error if the file cannot be opened or read.
+	/// Returns an error if the file cannot be opened, if **no tiles** are found, or if mixed
+	/// formats/compressions are encountered.
 	#[context("opening tar from path '{}'", path.display())]
 	pub fn open_path(path: &Path) -> Result<TarTilesReader> {
 		let mut reader = DataReaderFile::open(path)?;
@@ -169,21 +209,18 @@ impl TilesReaderTrait for TarTilesReader {
 		self.parameters.tile_compression = tile_compression;
 	}
 
-	/// Returns the metadata as a `Blob`.
-	///
-	/// # Errors
-	/// Returns an error if there is an issue retrieving the metadata.
+	/// Return the parsed TileJSON metadata for this archive.
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
-	/// Returns the tile data for the specified coordinates as a `Blob`.
+	/// Fetch a single tile by XYZ coordinate.
 	///
-	/// # Arguments
-	/// * `coord` - The coordinates of the tile.
+	/// Looks up the coordinate in the prebuilt index and reads the corresponding byte range
+	/// from the underlying `DataReaderFile`. Returns `Ok(None)` if the tile is absent.
 	///
 	/// # Errors
-	/// Returns an error if there is an issue retrieving the tile data.
+	/// Propagates I/O errors while reading the tar entry.
 	#[context("getting tile {:?}", coord)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		log::trace!("get_tile {:?}", coord);

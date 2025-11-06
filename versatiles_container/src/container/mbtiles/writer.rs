@@ -1,37 +1,46 @@
-//! This module provides functionality for writing tile data to an MBTiles SQLite database.
+//! Write tiles and metadata into an MBTiles (SQLite) database.
 //!
-//! The `MBTilesWriter` struct is the primary component of this module, offering methods to write metadata and tile data to a specified MBTiles file.
+//! The `MBTilesWriter` builds an MBTiles container compatible with the
+//! [Mapbox MBTiles 1.3 specification](https://github.com/mapbox/mbtiles-spec).
+//! It writes both the `tiles` and `metadata` tables, ensuring proper
+//! coordinate flipping (XYZ → TMS), and creates required indices.
 //!
-//! ## Features
-//! - Supports writing metadata and tile data in multiple formats and compressions.
-//! - Ensures the necessary tables and indices are created in the SQLite database.
-//! - Provides progress feedback during the write process.
+//! ## Supported formats
+//! - Raster tiles: `png`, `jpg`, `webp` (uncompressed)
+//! - Vector tiles: `pbf` (gzipped MVT)
 //!
-//! ## Usage
-//! ```rust
+//! ## Directory structure and schema
+//! The database schema consists of:
+//! - `metadata` — key-value pairs describing the dataset
+//! - `tiles` — containing columns `(zoom_level, tile_column, tile_row, tile_data)`
+//!
+//! Coordinates are stored in the **TMS layout**, meaning that the Y coordinate
+//! is flipped from the XYZ input (`tile_row = 2^z - 1 - y`).
+//!
+//! ## Requirements
+//! - The destination path **must be absolute** and writable.
+//! - The combination of format and compression must match the supported table above.
+//! - All tiles must share the same format and compression.
+//!
+//! ## Example
+//! ```rust,no_run
 //! use versatiles_container::*;
 //! use versatiles_core::*;
 //! use std::path::Path;
+//! use anyhow::Result;
 //!
 //! #[tokio::main]
-//! async fn main() {
-//!     let path = std::env::current_dir().unwrap().join("../testdata/berlin.pmtiles");
-//!     let mut reader = PMTilesReader::open_path(&path).await.unwrap();
+//! async fn main() -> Result<()> {
+//!     // Read any existing source (e.g. PMTiles, Directory)
+//!     let source_path = Path::new("/absolute/path/to/berlin.pmtiles");
+//!     let mut reader = PMTilesReader::open_path(&source_path).await?;
 //!
-//!     let temp_path = std::env::temp_dir().join("temp.mbtiles");
-//!     MBTilesWriter::write_to_path(
-//!         &mut reader,
-//!         &temp_path,
-//!         ProcessingConfig::default()
-//!     ).await.unwrap();
+//!     // Write to an MBTiles file
+//!     let out_file = std::env::temp_dir().join("berlin.mbtiles");
+//!     MBTilesWriter::write_to_path(&mut reader, &out_file, ProcessingConfig::default()).await?;
+//!     Ok(())
 //! }
 //! ```
-//!
-//! ## Errors
-//! - Returns errors if there are issues with the SQLite database, if unsupported tile formats or compressions are encountered, or if there are I/O issues.
-//!
-//! ## Testing
-//! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying the database structure.
 
 use crate::{ProcessingConfig, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
 use anyhow::{Result, bail};
@@ -43,19 +52,27 @@ use std::{fs::remove_file, path::Path, sync::Arc};
 use versatiles_core::{io::DataWriterTrait, json::JsonObject, *};
 use versatiles_derive::context;
 
-/// A writer for creating and populating MBTiles databases.
+/// Writer for MBTiles (SQLite) containers.
+///
+/// Creates a new SQLite database, initializes the `tiles` and `metadata` tables,
+/// and writes all tile blobs and associated metadata from a `TilesReader`.
+/// Each tile is stored as one record with XYZ coordinates flipped to TMS indexing.
+///
+/// This writer ensures MBTiles compatibility and writes a minimal, valid dataset
+/// ready for use in tools such as MapLibre, Mapbox GL, or GDAL.
 pub struct MBTilesWriter {
 	pool: Pool<SqliteConnectionManager>,
 }
 
 impl MBTilesWriter {
-	/// Creates a new MBTilesWriter.
+	/// Create a new MBTiles writer at the specified path.
 	///
-	/// # Arguments
-	/// * `path` - The path to the MBTiles file.
+	/// If a file already exists, it is removed. The method initializes a new SQLite database,
+	/// creates the `tiles` and `metadata` tables, and adds a unique index on tile coordinates.
 	///
 	/// # Errors
-	/// Returns an error if the SQLite connection cannot be established or if the necessary tables cannot be created.
+	/// Returns an error if the file cannot be removed, the database cannot be opened,
+	/// or the schema creation fails.
 	#[context("creating MBTilesWriter for '{}'", path.display())]
 	fn new(path: &Path) -> Result<Self> {
 		if path.exists() {
@@ -73,13 +90,13 @@ impl MBTilesWriter {
 		Ok(MBTilesWriter { pool })
 	}
 
-	/// Adds multiple tiles to the MBTiles file within a single transaction.
-	///s
-	/// # Arguments
-	/// * `tiles` - A vector of tuples containing tile coordinates and tile data.
+	/// Add multiple tiles to the MBTiles file within a single transaction.
+	///
+	/// Converts tile coordinates from XYZ to TMS indexing (`tile_row = 2^z - 1 - y`)
+	/// before insertion, ensuring MBTiles compatibility.
 	///
 	/// # Errors
-	/// Returns an error if the transaction fails.
+	/// Returns an error if the transaction or any insertion fails.
 	#[context("adding {} tiles to MBTiles database", tiles.len())]
 	fn add_tiles(&mut self, tiles: &Vec<(TileCoord, Blob)>) -> Result<()> {
 		let mut conn = self.pool.get()?;
@@ -95,14 +112,13 @@ impl MBTilesWriter {
 		Ok(())
 	}
 
-	/// Sets metadata for the MBTiles file.
+	/// Insert or replace a metadata key-value pair in the MBTiles database.
 	///
-	/// # Arguments
-	/// * `name` - The metadata key.
-	/// * `value` - The metadata value.
+	/// Used to populate the `metadata` table with dataset information such as
+	/// bounds, minzoom, maxzoom, and format.
 	///
 	/// # Errors
-	/// Returns an error if the metadata cannot be inserted or replaced.
+	/// Returns an error if the statement execution fails.
 	#[context("setting metadata key '{}' = '{}'", name, value)]
 	fn set_metadata(&self, name: &str, value: &str) -> Result<()> {
 		self.pool.get()?.execute(
@@ -115,14 +131,17 @@ impl MBTilesWriter {
 
 #[async_trait]
 impl TilesWriterTrait for MBTilesWriter {
-	/// Writes tiles and metadata to the MBTiles file.
+	/// Write all tiles and metadata from the given reader into an MBTiles file.
 	///
-	/// # Arguments
-	/// * `reader` - The reader from which to fetch tiles and metadata.
-	/// * `path` - The path to the MBTiles file.
+	/// This method:
+	/// - Creates a new SQLite database at `path` (removing any existing file).
+	/// - Inserts metadata such as bounds, zoom range, and vector layers.
+	/// - Writes all tiles from `reader`, flipping coordinates from XYZ to TMS.
+	/// - Enforces MBTiles-compatible format and compression combinations.
 	///
 	/// # Errors
-	/// Returns an error if the file format or compression is not supported, or if there are issues with writing to the SQLite database.
+	/// Returns an error if writing fails, if an unsupported format/compression is used,
+	/// or if database insertion encounters an error.
 	#[context("writing MBTiles to '{}'", path.display())]
 	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: ProcessingConfig) -> Result<()> {
 		use TileCompression::*;
@@ -200,7 +219,10 @@ impl TilesWriterTrait for MBTilesWriter {
 		Ok(())
 	}
 
-	/// Not implemented: Writes tiles and metadata to a generic data writer.
+	/// Not implemented: MBTiles cannot be streamed to a generic writer.
+	///
+	/// # Errors
+	/// Always returns `not implemented`.
 	#[context("writing MBTiles to generic writer")]
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,

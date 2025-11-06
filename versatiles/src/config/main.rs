@@ -41,12 +41,12 @@
 //! Reading from a file and resolving relative paths:
 //! ```no_run
 //! use std::path::Path;
-//! use versatiles::config::Config;
+//! use versatiles::Config;
 //! let cfg = Config::from_path(Path::new("server.yml")).expect("config");
 //! ```
 //! Parsing from a string (e.g., tests):
 //! ```no_run
-//! use versatiles::config::Config;
+//! use versatiles::Config;
 //! let cfg = Config::from_string("tiles: [[\"osm\", \"osm.versatiles\"]]").unwrap();
 //! ```
 use super::{Cors, ServerConfig, StaticSourceConfig, TileSourceConfig};

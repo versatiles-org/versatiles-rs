@@ -1,16 +1,38 @@
+//! In-memory cache implementation for the VersaTiles caching subsystem.
+//!
+//! `InMemoryCache<K, V>` is a simple, generic key→values cache stored entirely
+//! in memory. It is used for fast, temporary storage when persistence is not
+//! required. The cache supports inserting, appending, removing, and retrieving
+//! vectors of values associated with a key.
+//!
+//! This implementation is primarily used for testing, ephemeral pipelines, or
+//! environments where caching to disk would be unnecessarily slow.
+//!
+//! All operations are synchronous and thread-safe only through external synchronization.
 use anyhow::Result;
 use versatiles_derive::context;
 
 use super::traits::{Cache, CacheKey, CacheValue};
 use std::{collections::HashMap, fmt::Debug, marker::PhantomData};
 
+/// A non-persistent, in-memory cache mapping a [`CacheKey`] to a vector of [`CacheValue`]s.
+///
+/// The cache stores all data inside a standard [`HashMap`] and is intended
+/// for high-speed operations where data does not need to survive process restarts.
+///
+/// This cache is used when the configured [`CacheType`](crate::cache::cache_type::CacheType)
+/// is `InMemory`.
 pub struct InMemoryCache<K: CacheKey, V: CacheValue> {
 	data: HashMap<String, Vec<V>>,
 	_marker_k: PhantomData<K>,
 }
 
 #[allow(clippy::new_without_default)]
+/// Basic constructor and helper functions for [`InMemoryCache`].
 impl<K: CacheKey, V: CacheValue> InMemoryCache<K, V> {
+	/// Create an empty `InMemoryCache` instance.
+	///
+	/// Initializes an internal [`HashMap`] with no entries.
 	pub fn new() -> Self {
 		Self {
 			data: HashMap::new(),
@@ -19,6 +41,11 @@ impl<K: CacheKey, V: CacheValue> InMemoryCache<K, V> {
 	}
 }
 
+/// Implementation of the generic [`Cache`](crate::cache::traits::cache::Cache) trait
+/// for the in-memory cache backend.
+///
+/// All operations are O(1) average-case, except for cloning operations that
+/// depend on the size of the stored vectors.
 impl<K: CacheKey, V: CacheValue> Cache<K, V> for InMemoryCache<K, V> {
 	fn contains_key(&self, key: &K) -> bool {
 		self.data.contains_key(&key.to_cache_key())
@@ -46,11 +73,15 @@ impl<K: CacheKey, V: CacheValue> Cache<K, V> for InMemoryCache<K, V> {
 		Ok(())
 	}
 
+	/// Clear all entries from the cache.
+	///
+	/// Since this cache is memory-based, cleanup simply empties the internal map.
 	fn clean_up(&mut self) {
 		self.data.clear();
 	}
 }
 
+/// Provides a compact debug representation showing each key and the number of values stored.
 impl<K: CacheKey, V: CacheValue> Debug for InMemoryCache<K, V> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_map()

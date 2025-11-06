@@ -1,3 +1,17 @@
+//! On-disk cache implementation for the VersaTiles caching subsystem.
+//!
+//! `OnDiskCache<K, V>` stores cached values as binary files on disk. Each cache key
+//! is mapped to a single file containing a concatenation of serialized `V` items,
+//! encoded via the [`CacheValue`](crate::cache::traits::value::CacheValue) trait.
+//!
+//! File names are derived from the key's [`CacheKey::to_cache_key`] string and
+//! percent-encode all non-ASCII-alphanumeric characters (except `.`, `_`, `-`, `,`)
+//! as `"%XX"` hex bytes. This keeps paths portable across platforms and filesystems.
+//!
+//! Typical operations mirror a multimap: `insert` (overwrite), `append`, `get_clone`,
+//! `remove`, and existence checks via `contains_key`. Each operation uses contextual
+//! error messages to aid diagnostics.
+
 use super::traits::{Cache, CacheKey, CacheValue};
 use anyhow::Result;
 use std::{
@@ -9,6 +23,11 @@ use std::{
 };
 use versatiles_derive::context;
 
+/// Disk-backed cache mapping a [`CacheKey`] to a vector of [`CacheValue`]s.
+///
+/// Values are serialized into a compact binary format and stored in a per-key file
+/// inside the cache directory. The file layout is a simple concatenation of serialized
+/// entries, enabling efficient `append` without rewriting previous data.
 pub struct OnDiskCache<K: CacheKey, V: CacheValue> {
 	path: PathBuf, // path to cache directory
 	_marker_k: PhantomData<K>,
@@ -17,6 +36,9 @@ pub struct OnDiskCache<K: CacheKey, V: CacheValue> {
 
 #[allow(clippy::new_without_default)]
 impl<K: CacheKey, V: CacheValue> OnDiskCache<K, V> {
+	/// Create a new on-disk cache rooted at `path`.
+	///
+	/// Ensures the directory exists. Individual cache entries are created lazily.
 	pub fn new(path: PathBuf) -> Self {
 		create_dir_all(&path).ok();
 		Self {
@@ -26,6 +48,10 @@ impl<K: CacheKey, V: CacheValue> OnDiskCache<K, V> {
 		}
 	}
 
+	/// Compute the file path for a given cache `key`, applying percent-encoding.
+	///
+	/// Non `[A-Za-z0-9._-,]` bytes are encoded as `"%XX"` using their byte value.
+	/// The `.tmp` suffix is used for all entries.
 	fn get_entry_path(&self, key: &K) -> PathBuf {
 		// ensure the name is a valid file name by replacing all non unix path characters with '%' followed by the hexadecimal
 		let name = key
@@ -44,6 +70,7 @@ impl<K: CacheKey, V: CacheValue> OnDiskCache<K, V> {
 		p
 	}
 
+	/// Decode a buffer containing a back-to-back sequence of serialized `V` values.
 	#[context("decoding {} bytes from cache buffer", buf.len())]
 	fn buffer_to_values(buf: &[u8]) -> Result<Vec<V>> {
 		let mut reader = Cursor::new(buf);
@@ -55,6 +82,7 @@ impl<K: CacheKey, V: CacheValue> OnDiskCache<K, V> {
 		Ok(vec)
 	}
 
+	/// Serialize a slice of `V` values into a single contiguous buffer.
 	#[context("encoding {} values into cache buffer", values.len())]
 	fn values_to_buffer(values: &[V]) -> Result<Vec<u8>> {
 		let mut buf = Vec::new();
@@ -64,6 +92,9 @@ impl<K: CacheKey, V: CacheValue> OnDiskCache<K, V> {
 		Ok(buf)
 	}
 
+	/// Read and decode the cache entry file at `entry_path`, if it exists.
+	///
+	/// Returns `Ok(None)` when the file is missing.
 	#[context("reading cache entry '{}'", entry_path.display())]
 	fn read_file(&self, entry_path: &Path) -> Result<Option<Vec<V>>> {
 		if entry_path.exists() {
@@ -78,15 +109,18 @@ impl<K: CacheKey, V: CacheValue> OnDiskCache<K, V> {
 }
 
 impl<K: CacheKey, V: CacheValue> Cache<K, V> for OnDiskCache<K, V> {
+	/// Check whether a cache file exists for `key`.
 	fn contains_key(&self, key: &K) -> bool {
 		self.get_entry_path(key).exists()
 	}
 
+	/// Load and return a cloned vector of values for `key`, if present.
 	#[context("reading cache for key '{}'", key.to_cache_key())]
 	fn get_clone(&self, key: &K) -> Result<Option<Vec<V>>> {
 		self.read_file(&self.get_entry_path(key))
 	}
 
+	/// Remove the on-disk entry for `key`, returning its previous values if it existed.
 	#[context("removing cache entry for key '{}'", key.to_cache_key())]
 	fn remove(&mut self, key: &K) -> Result<Option<Vec<V>>> {
 		let entry_path = self.get_entry_path(key);
@@ -97,6 +131,7 @@ impl<K: CacheKey, V: CacheValue> Cache<K, V> for OnDiskCache<K, V> {
 		Ok(values)
 	}
 
+	/// Overwrite the cache entry for `key` with `values`.
 	#[context("writing values for key '{}'", key.to_cache_key())]
 	fn insert(&mut self, key: &K, values: Vec<V>) -> Result<()> {
 		let entry_path = self.get_entry_path(key);
@@ -104,6 +139,7 @@ impl<K: CacheKey, V: CacheValue> Cache<K, V> for OnDiskCache<K, V> {
 		Ok(())
 	}
 
+	/// Append `values` to the existing cache entry for `key`, creating the file if needed.
 	#[context("appending values for key '{}'",  key.to_cache_key())]
 	fn append(&mut self, key: &K, values: Vec<V>) -> Result<()> {
 		let entry_path = self.get_entry_path(key);
@@ -116,11 +152,13 @@ impl<K: CacheKey, V: CacheValue> Cache<K, V> for OnDiskCache<K, V> {
 		Ok(())
 	}
 
+	/// Recursively delete the entire cache directory.
 	fn clean_up(&mut self) {
 		remove_dir_all(&self.path).ok();
 	}
 }
 
+/// Debug representation includes the root path of the on-disk cache.
 impl<K: CacheKey, V: CacheValue> Debug for OnDiskCache<K, V> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("OnDiskCache").field("path", &self.path).finish()

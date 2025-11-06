@@ -1,37 +1,41 @@
-//! Provides functionality for writing tile data to a PMTiles container.
+//! Write tiles and metadata into a PMTiles v3 container.
 //!
-//! The `PMTilesWriter` struct is the primary component of this module, offering methods to write metadata and tile data to a PMTiles container.
+//! The `PMTilesWriter` produces a valid [PMTiles v3](https://github.com/protomaps/PMTiles) archive
+//! from any [`TilesReaderTrait`] source. It serializes tile data, compresses metadata and directories,
+//! and builds a compact Hilbert-ordered directory layout.
 //!
-//! ## Features
-//! - Supports writing metadata and tile data with internal compression
-//! - Efficiently organizes and compresses tile data for storage
-//! - Implements progress feedback during the write process
+//! ## Behavior
+//! - Compresses the metadata (TileJSON) and directory blocks with internal **gzip** compression.
+//! - Stores tiles in **Hilbert order** for spatial locality.
+//! - Uses PMTiles v3 header fields to describe data offsets and compression types.
+//! - Produces a single binary blob that can be read back by [`PMTilesReader`](crate::container::pmtiles::PMTilesReader).
 //!
-//! ## Usage Example
-//! ```rust
+//! ## Requirements
+//! - The writer must output to a valid [`DataWriterTrait`] target (e.g. file, blob, memory).
+//! - The input [`TilesReaderTrait`] must provide consistent `tile_format` and `tile_compression`.
+//!
+//! ## Example
+//! ```rust,no_run
 //! use versatiles_container::*;
 //! use versatiles_core::*;
 //! use std::path::Path;
+//! use anyhow::Result;
 //!
 //! #[tokio::main]
-//! async fn main() {
-//!     let path = std::env::current_dir().unwrap().join("../testdata/berlin.mbtiles");
-//!     let mut reader = MBTilesReader::open_path(&path).unwrap();
+//! async fn main() -> Result<()> {
+//!     // Open an existing MBTiles file
+//!     let path = Path::new("/absolute/path/to/berlin.mbtiles");
+//!     let mut reader = MBTilesReader::open_path(&path)?;
 //!
-//!     let temp_path = std::env::temp_dir().join("temp.pmtiles");
-//!     PMTilesWriter::write_to_path(
-//!         &mut reader,
-//!         &temp_path,
-//!         ProcessingConfig::default()
-//!     ).await.unwrap();
+//!     // Convert it to PMTiles format
+//!     let temp_path = std::env::temp_dir().join("berlin.pmtiles");
+//!     PMTilesWriter::write_to_path(&mut reader, &temp_path, ProcessingConfig::default()).await?;
+//!     Ok(())
 //! }
 //! ```
 //!
 //! ## Errors
-//! - Returns errors if there are issues with compression, writing data, or internal processing.
-//!
-//! ## Testing
-//! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different tile formats, and verifying the integrity of the written data.
+//! Returns errors if writing, compression, or serialization fails.
 
 use super::types::{EntriesV3, EntryV3, HeaderV3, PMTilesCompression};
 use crate::{ProcessingConfig, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
@@ -47,20 +51,28 @@ use versatiles_core::{
 };
 use versatiles_derive::context;
 
-/// A struct that provides functionality to write tile data to a PMTiles container.
+/// Writer for PMTiles v3 archives.
+///
+/// Converts a [`TilesReaderTrait`] source into a single PMTiles container by serializing
+/// tiles, compressing metadata, generating directory entries, and writing a final header
+/// with offsets and counts.
+///
+/// Tiles are ordered using the **Hilbert curve** to optimize spatial locality in the output.
 pub struct PMTilesWriter {}
 
 #[async_trait]
 impl TilesWriterTrait for PMTilesWriter {
 	#[context("writing PMTiles to DataWriter")]
-	/// Writes tile data from a `TilesReader` to a `DataWriterTrait` (such as a PMTiles container).
+	/// Write tiles and metadata from a [`TilesReaderTrait`] to a [`DataWriterTrait`] as a PMTiles archive.
 	///
-	/// # Arguments
-	/// * `reader` - The tiles reader providing the tile data.
-	/// * `writer` - The data writer to write the tile data to.
+	/// This method:
+	/// - Compresses metadata and directories with gzip (`INTERNAL_COMPRESSION`).
+	/// - Orders tiles by Hilbert index to preserve spatial proximity.
+	/// - Builds the PMTiles v3 header, directory blocks, and leaf entries.
+	/// - Writes the final file in the correct binary layout (header + metadata + directories + tile data).
 	///
 	/// # Errors
-	/// Returns an error if there are issues with writing data or internal processing.
+	/// Returns an error if any I/O, compression, or serialization operation fails.
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
 		writer: &mut dyn DataWriterTrait,

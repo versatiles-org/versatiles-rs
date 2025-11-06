@@ -1,3 +1,13 @@
+//! Generic key→values cache that can live in memory or on disk.
+//!
+//! `CacheMap<K, V>` provides a simple append-friendly cache from a `CacheKey` to a `Vec<V>` of
+//! `CacheValue`s. The concrete backend is chosen at runtime via [`ProcessingConfig`], using either
+//! an in-memory map or an on-disk directory-backed store. When disk-backed, each instance gets a
+//! unique subdirectory named `map_<UUID>` inside the configured cache directory.
+//!
+//! Typical operations are `insert`, `append`, `get_clone`, and `remove`, all of which mirror the
+//! behavior of a multimap. Errors are enriched with contextual messages via `#[context(...)]`.
+
 use crate::{
 	ProcessingConfig,
 	cache::{
@@ -12,12 +22,19 @@ use std::fmt::Debug;
 use uuid::Uuid;
 use versatiles_derive::context;
 
+/// A runtime-selectable cache mapping keys to ordered lists of values.
 pub enum CacheMap<K: CacheKey, V: CacheValue> {
+	/// In-memory cache variant.
 	Memory(InMemoryCache<K, V>),
+	/// Disk-backed cache variant.
 	Disk(OnDiskCache<K, V>),
 }
 
 impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
+	/// Create a new cache using the backend specified by `ProcessingConfig`.
+	///
+	/// * `InMemory` → uses an in-process map.
+	/// * `Disk(path)` → creates/uses a unique subdirectory `map_<UUID>` under `path`.
 	#[must_use]
 	pub fn new(config: &ProcessingConfig) -> Self {
 		match &config.cache_type {
@@ -28,6 +45,7 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 			}
 		}
 	}
+	/// Return `true` if a value vector is present for `key`.
 	pub fn contains_key(&self, key: &K) -> bool {
 		match self {
 			Self::Memory(cache) => cache.contains_key(key),
@@ -35,6 +53,9 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 		}
 	}
 
+	/// Get a cloned vector of cached values for `key`.
+	///
+	/// Returns `Ok(None)` if the key is absent.
 	#[context("Failed to get clone from cache for key: {:?}", key)]
 	pub fn get_clone(&self, key: &K) -> Result<Option<Vec<V>>> {
 		match self {
@@ -43,6 +64,7 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 		}
 	}
 
+	/// Remove and return the cached vector for `key`, if present.
 	#[context("Failed to remove from cache for key: {:?}", key)]
 	pub fn remove(&mut self, key: &K) -> Result<Option<Vec<V>>> {
 		match self {
@@ -51,6 +73,9 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 		}
 	}
 
+	/// Insert (overwrite) the vector for `key`.
+	///
+	/// Replaces any previous value vector stored under the same key.
 	#[context("Failed to insert into cache for key: {:?}", key)]
 	pub fn insert(&mut self, key: &K, value: Vec<V>) -> Result<()> {
 		match self {
@@ -59,6 +84,9 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 		}
 	}
 
+	/// Append items to the existing vector for `key`, preserving order.
+	///
+	/// Creates a new entry if the key does not exist yet.
 	#[context("Failed to append into cache for key: {:?}", key)]
 	pub fn append(&mut self, key: &K, value: Vec<V>) -> Result<()> {
 		match self {
@@ -67,6 +95,9 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 		}
 	}
 
+	/// Release backend resources (e.g., flush and remove temporary files on disk).
+	///
+	/// Called automatically on drop; can be invoked manually to free resources sooner.
 	pub fn clean_up(&mut self) {
 		match self {
 			Self::Memory(cache) => cache.clean_up(),
@@ -75,12 +106,14 @@ impl<K: CacheKey, V: CacheValue> CacheMap<K, V> {
 	}
 }
 
+// Ensure resources are cleaned up when the cache goes out of scope.
 impl<K: CacheKey, V: CacheValue> Drop for CacheMap<K, V> {
 	fn drop(&mut self) {
 		self.clean_up();
 	}
 }
 
+/// Debug output indicates whether the cache is memory- or disk-backed and delegates to the backend.
 impl<K: CacheKey, V: CacheValue> Debug for CacheMap<K, V> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {

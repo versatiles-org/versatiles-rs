@@ -1,14 +1,25 @@
-//! Provides functionality for reading tile data from an MBTiles SQLite database.
+//! Read tiles and metadata from an MBTiles (SQLite) database.
 //!
-//! The `MBTilesReader` struct is the primary component of this module, offering methods to read metadata and tile data from an MBTiles SQLite database.
+//! The `MBTilesReader` loads TileJSON-style metadata from the MBTiles `metadata` table
+//! and fetches tile blobs from the `tiles` table. It derives the tile **format** and
+//! **compression** primarily from the `format` field (per the Mapbox MBTiles 1.3 spec):
 //!
-//! ## Features
-//! - Supports reading metadata and tile data in multiple formats and compressions
-//! - Provides methods to query the database for tile data based on coordinates or bounding boxes
-//! - Allows overriding the tile compression method
+//! - `format = "png"` → `TileFormat::PNG` + `TileCompression::Uncompressed`
+//! - `format = "jpg"` → `TileFormat::JPG` + `TileCompression::Uncompressed`
+//! - `format = "webp"` → `TileFormat::WEBP` + `TileCompression::Uncompressed`
+//! - `format = "pbf"` → `TileFormat::MVT`  + `TileCompression::Gzip`
 //!
-//! ## Usage Example
-//! ```rust
+//! It also reads optional fields like `bounds`, `minzoom`, `maxzoom`, and `json` (for
+//! `vector_layers`) and merges them into an internal [`TileJSON`](versatiles_core::TileJSON).
+//! The bounding-box pyramid is inferred from the `tiles` table to augment/validate metadata.
+//!
+//! ## Requirements
+//! - The MBTiles file **must be an absolute path** when opening with [`open_path`].
+//! - The database must include a `format` entry in `metadata` so that format & compression
+//!   can be determined.
+//!
+//! ## Usage
+//! ```rust,no_run
 //! use versatiles_container::*;
 //! use versatiles_core::*;
 //! use anyhow::Result;
@@ -16,28 +27,26 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!     // Open the MBTiles database
-//!     let path = std::env::current_dir()?.join("../testdata/berlin.mbtiles");
-//!     let mut reader = MBTilesReader::open_path(&path)?;
+//!     // Use an absolute path
+//!     let path = Path::new("/absolute/path/to/berlin.mbtiles");
+//!     let mut reader = MBTilesReader::open_path(path)?;
 //!
-//!     // Get metadata
-//!     println!("Metadata: {:?}", reader.tilejson());
+//!     // Inspect metadata
+//!     let tj: &TileJSON = reader.tilejson();
 //!
-//!     // Get tile data for specific coordinates
+//!     // Fetch a single tile (z/x/y)
 //!     let coord = TileCoord::new(1, 1, 1)?;
 //!     if let Some(tile) = reader.get_tile(&coord).await? {
-//!         println!("Tile data: {tile:?}");
+//!         let _blob = tile.into_blob(reader.parameters().tile_compression)?;
 //!     }
-//!
 //!     Ok(())
 //! }
 //! ```
 //!
 //! ## Errors
-//! - Returns errors if the database file does not exist, if the path is not absolute, or if there are issues querying the database.
-//!
-//! ## Testing
-//! This module includes comprehensive tests to ensure the correct functionality of reading metadata, handling different file formats, and verifying tile data.
+//! - Returns errors if the path is not absolute or the file does not exist.
+//! - Returns errors if the database is unreadable, the `format` is missing/unknown,
+//!   or queries fail.
 
 use crate::{Tile, TilesReaderTrait};
 use anyhow::{Result, anyhow, ensure};
@@ -48,7 +57,11 @@ use std::path::Path;
 use versatiles_core::{TileCompression::*, TileFormat::*, json::parse_json_str, progress::get_progress_bar, types::*};
 use versatiles_derive::context;
 
-/// A struct that provides functionality to read tile data from an MBTiles SQLite database.
+/// Reader for MBTiles (SQLite) containers.
+///
+/// Opens a SQLite database with `metadata` and `tiles` tables, merges metadata into
+/// [`TileJSON`], infers a bounding-box pyramid by scanning levels/rows/columns, and
+/// exposes tiles via the [`TilesReaderTrait`] interface.
 pub struct MBTilesReader {
 	name: String,
 	pool: Pool<SqliteConnectionManager>,
@@ -59,11 +72,13 @@ pub struct MBTilesReader {
 impl MBTilesReader {
 	/// Opens the SQLite database and creates an `MBTilesReader` instance.
 	///
-	/// # Arguments
-	/// * `path` - The path to the SQLite database file.
+	/// Open an MBTiles database from an **absolute** filesystem path.
+	///
+	/// Validates existence and absoluteness of `path`, then initializes a connection pool
+	/// and loads metadata/parameters.
 	///
 	/// # Errors
-	/// Returns an error if the file does not exist, if the path is not absolute, or if there is an error loading from SQLite.
+	/// Returns an error if the file does not exist, the path is not absolute, or SQLite cannot be opened.
 	#[context("opening MBTiles at '{}'", path.display())]
 	pub fn open_path(path: &Path) -> Result<MBTilesReader> {
 		log::debug!("open {path:?}");
@@ -74,13 +89,11 @@ impl MBTilesReader {
 		MBTilesReader::load_from_sqlite(path)
 	}
 
-	/// Loads the MBTiles data from the SQLite database.
-	///
-	/// # Arguments
-	/// * `path` - The path to the SQLite database file.
+	/// Internal loader that establishes the SQLite pool, sets default parameters,
+	/// and then calls [`load_meta_data`] to populate `tilejson` and parameters.
 	///
 	/// # Errors
-	/// Returns an error if there is an issue connecting to the database or loading metadata.
+	/// Returns an error if the connection cannot be established or metadata fails to load.
 	#[context("loading SQLite '{}'", path.display())]
 	fn load_from_sqlite(path: &Path) -> Result<MBTilesReader> {
 		log::debug!("load_from_sqlite {path:?}");
@@ -101,10 +114,14 @@ impl MBTilesReader {
 		Ok(reader)
 	}
 
-	/// Loads the metadata from the MBTiles database.
+	/// Read and merge MBTiles metadata.
+	///
+	/// Parses `format` to determine tile format & transport compression, reads `bounds`,
+	/// `minzoom`, `maxzoom`, and `json` (for `vector_layers`), then merges them into `tilejson`.
+	/// Also updates the bounding-box pyramid from the database.
 	///
 	/// # Errors
-	/// Returns an error if the tile format or compression is not specified or if there is an issue querying the database.
+	/// Returns an error if `format` is missing/unknown or queries fail.
 	#[context("loading MBTiles metadata from '{}'", self.name)]
 	fn load_meta_data(&mut self) -> Result<()> {
 		log::debug!("load_meta_data");
@@ -179,14 +196,13 @@ impl MBTilesReader {
 		Ok(())
 	}
 
-	/// Executes a simple query on the MBTiles database.
+	/// Execute a simple aggregate query against the `tiles` table.
 	///
-	/// # Arguments
-	/// * `sql1` - The SQL query to execute.
-	/// * `sql2` - Additional SQL conditions.
+	/// * `sql_value` — the SELECT expression (e.g., `MIN(tile_column)`).
+	/// * `sql_where` — an optional WHERE clause without the `WHERE` keyword.
 	///
 	/// # Errors
-	/// Returns an error if there is an issue executing the query.
+	/// Returns an error if executing the query fails.
 	#[context("executing tiles query")]
 	fn simple_query(&self, sql_value: &str, sql_where: &str) -> Result<i32> {
 		let sql = if sql_where.is_empty() {
@@ -202,10 +218,14 @@ impl MBTilesReader {
 		Ok(stmt.query_row([], |row| row.get::<_, i32>(0))?)
 	}
 
-	/// Gets the bounding box pyramid from the MBTiles database.
+	/// Compute the per-zoom bounding boxes from the `tiles` table.
+	///
+	/// Uses a two-step MIN/MAX strategy to speed up queries on large tables by estimating
+	/// bounds from a few columns before querying the constrained range. Flips Y afterward
+	/// to match XYZ addressing.
 	///
 	/// # Errors
-	/// Returns an error if there is an issue querying the database.
+	/// Returns an error if queries fail.
 	#[context("computing bbox pyramid from MBTiles")]
 	fn get_bbox_pyramid(&self) -> Result<TileBBoxPyramid> {
 		log::debug!("get_bbox_pyramid");
@@ -277,15 +297,11 @@ impl MBTilesReader {
 
 #[async_trait]
 impl TilesReaderTrait for MBTilesReader {
-	/// Returns the container name.
 	fn container_name(&self) -> &str {
 		"mbtiles"
 	}
 
-	/// Returns the metadata as a `Blob`.
-	///
-	/// # Errors
-	/// Returns an error if there is an issue retrieving the metadata.
+	/// Return the TileJSON metadata view for this dataset.
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
@@ -303,13 +319,13 @@ impl TilesReaderTrait for MBTilesReader {
 		self.parameters.tile_compression = tile_compression;
 	}
 
-	/// Returns the tile data for the specified coordinates as a `Blob`.
+	/// Fetch a single tile by XYZ coordinate.
 	///
-	/// # Arguments
-	/// * `coord` - The coordinates of the tile.
+	/// Coordinates are converted to TMS row indexing internally (via `y' = 2^z - 1 - y`).
+	/// Returns `Ok(None)` when the tile is not present.
 	///
 	/// # Errors
-	/// Returns an error if there is an issue retrieving the tile data.
+	/// Returns an error if the query fails.
 	#[context("fetching tile {:?} from '{}'", coord, self.name)]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		log::trace!("read tile from coord {coord:?}");
@@ -332,13 +348,13 @@ impl TilesReaderTrait for MBTilesReader {
 		}
 	}
 
-	/// Returns a stream of tile data for the specified bounding box.
+	/// Stream tiles within a single-zoom bounding box.
 	///
-	/// # Arguments
-	/// * `bbox` - The bounding box of the tiles.
+	/// The input bbox is XYZ; rows are flipped to TMS for the query and flipped back on output.
+	/// Empty bboxes yield an empty stream.
 	///
 	/// # Errors
-	/// Returns an error if there is an issue querying the database.
+	/// Returns an error if the query fails.
 	#[context("streaming tiles for bbox {:?}", bbox)]
 	async fn get_tile_stream(&self, mut bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_tile_stream {:?}", bbox);

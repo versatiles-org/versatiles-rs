@@ -14,6 +14,7 @@ use versatiles_derive::context;
 /// # Examples
 ///
 /// ```
+/// use versatiles::server::Url;
 /// let mut url = Url::from("test");
 /// assert_eq!(url.to_string(), "/test");
 ///

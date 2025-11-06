@@ -1,3 +1,21 @@
+//! `Tile` is a small, lazy container for raster/vector map tiles.
+//!
+//! It can hold either:
+//! - a raw encoded **blob** (optionally compressed), or
+//! - a decoded **content** representation (raster `DynamicImage` or vector `VectorTile`),
+//!   and transparently materializes the other representation on demand.
+//!
+//! The type keeps track of the tile **format** (e.g. `PNG`, `MVT`) and the transport
+//! **compression** (e.g. `Gzip`, `Uncompressed`). Quality and speed hints are stored
+//! for formats that support them and are applied when (re-)encoding.
+//!
+//! All expensive conversions are performed lazily and are wrapped with contextual error
+//! messages via the `#[context(...)]` attribute from `versatiles_derive`.
+//!
+//! Typical usage:
+//! - Build from an image/vector and retrieve a blob ready to send over the wire.
+//! - Build from a blob received from storage, then inspect or mutate the decoded content.
+
 use anyhow::{Result, anyhow, ensure};
 use std::{fmt::Debug, io::Cursor};
 use versatiles_core::{
@@ -10,6 +28,32 @@ use versatiles_image::DynamicImage;
 
 use crate::{CacheValue, TileContent};
 
+/// A lazy tile container that can hold either an encoded blob or decoded content.
+///
+/// The `Tile` ensures only the necessary representation is kept in memory:
+/// when you request a blob, content is encoded on demand; when you request content,
+/// a present blob is decoded on demand. Changing the content invalidates the blob,
+/// but format/compression flags are preserved until re-materialization.
+///
+/// # Examples
+/// Creating a raster tile and getting an uncompressed blob:
+/// ```no_run
+/// use versatiles_container::Tile;
+/// use versatiles_core::{TileCompression::Uncompressed, TileFormat::PNG};
+/// # let img = versatiles_image::DynamicImage::new_rgb8(1,1);
+/// let mut tile = Tile::from_image(img, PNG).expect("raster tile");
+/// let blob = tile.as_blob(Uncompressed).expect("to blob");
+/// assert!(!blob.is_empty());
+/// ```
+///
+/// Creating a vector tile and accessing its decoded data:
+/// ```no_run
+/// use versatiles_container::Tile;
+/// use versatiles_core::TileFormat::MVT;
+/// let vt = versatiles_geometry::vector_tile::VectorTile::default();
+/// let mut tile = Tile::from_vector(vt, MVT).expect("vector tile");
+/// let _vref = tile.as_vector().expect("decoded vector");
+/// ```
 #[derive(Clone, PartialEq)]
 pub struct Tile {
 	blob: Option<Blob>,
@@ -20,7 +64,15 @@ pub struct Tile {
 	format_speed: Option<u8>,
 }
 
+/// Constructors and lazy accessors for `Tile`.
 impl Tile {
+	/// Construct a `Tile` from an already encoded `blob`.
+	///
+	/// The provided `compression` describes the outer transport compression of the blob
+	/// (e.g., `Gzip` or `Uncompressed`), and `format` describes the inner tile format
+	/// (e.g., `PNG`, `WEBP`, `MVT`).
+	///
+	/// This does **not** decode the blob. Decoding happens lazily when content is requested.
 	pub fn from_blob(blob: Blob, compression: TileCompression, format: TileFormat) -> Self {
 		Self {
 			blob: Some(blob),
@@ -44,12 +96,19 @@ impl Tile {
 	}
 
 	#[context("creating raster tile (format={:?})", format)]
+	/// Construct a raster `Tile` from a `DynamicImage`.
+	///
+	/// The `format` must be a raster format (e.g., `PNG`, `WEBP`). The tile starts with
+	/// decoded content and no blob; a blob is created on first call to `as_blob`/`into_blob`.
 	pub fn from_image(image: DynamicImage, format: TileFormat) -> Result<Self> {
 		ensure!(format.to_type().is_raster());
 		Ok(Self::from_content(TileContent::from_image(image), format))
 	}
 
 	#[context("creating vector tile (format={:?})", format)]
+	/// Construct a vector `Tile` from a `VectorTile`.
+	///
+	/// The `format` must be a vector format (e.g., `MVT`). The tile starts with decoded content.
 	pub fn from_vector(vector_tile: VectorTile, format: TileFormat) -> Result<Self> {
 		ensure!(format.to_type().is_vector());
 		Ok(Self::from_content(TileContent::from_vector(vector_tile), format))
@@ -115,6 +174,13 @@ impl Tile {
 	}
 
 	#[context("getting blob (target_compression={:?})", compression)]
+	/// Get a reference to the encoded blob, re-(de)compressing as needed.
+	///
+	/// If no blob exists, the current content is encoded according to `self.format`,
+	/// using any stored quality/speed hints. If a blob exists with a different
+	/// `self.compression`, it is re-compressed to `compression`.
+	///
+	/// Returns a reference valid until the next mutating call.
 	pub fn as_blob(&mut self, compression: TileCompression) -> Result<&Blob> {
 		self.materialize_blob()?;
 		self.recompress_blob(compression)?;
@@ -128,16 +194,25 @@ impl Tile {
 	}
 
 	#[context("accessing raster image from tile")]
+	/// Borrow the raster image content, decoding the blob on demand.
+	///
+	/// Fails if the tile is not of a raster format.
 	pub fn as_image(&mut self) -> Result<&DynamicImage> {
 		self.as_content()?.as_image()
 	}
 
 	#[context("accessing vector data from tile")]
+	/// Borrow the vector tile content, decoding the blob on demand.
+	///
+	/// Fails if the tile is not of a vector format.
 	pub fn as_vector(&mut self) -> Result<&VectorTile> {
 		self.as_content()?.as_vector()
 	}
 
 	#[context("converting tile into blob (target_compression={:?})", compression)]
+	/// Consume the tile and return an encoded blob with the requested compression.
+	///
+	/// This materializes content-to-blob if necessary and applies (re-)compression.
 	pub fn into_blob(mut self, compression: TileCompression) -> Result<Blob> {
 		self.materialize_blob()?;
 		self.recompress_blob(compression)?;
@@ -151,11 +226,17 @@ impl Tile {
 	}
 
 	#[context("converting tile into raster image")]
+	/// Consume the tile and return the owned raster image.
+	///
+	/// Fails if the tile is not a raster format.
 	pub fn into_image(self) -> Result<DynamicImage> {
 		self.into_content()?.into_image()
 	}
 
 	#[context("converting tile into vector data")]
+	/// Consume the tile and return the owned vector data.
+	///
+	/// Fails if the tile is not a vector format.
 	pub fn into_vector(self) -> Result<VectorTile> {
 		self.into_content()?.into_vector()
 	}
@@ -168,23 +249,38 @@ impl Tile {
 	}
 
 	#[context("accessing mutable raster image (dropping blob)")]
+	/// Mutably borrow the raster image content.
+	///
+	/// Any existing blob is dropped because it would be stale after mutation.
 	pub fn as_image_mut(&mut self) -> Result<&mut DynamicImage> {
 		self.as_content_mut()?.as_image_mut()
 	}
 
 	#[context("accessing mutable vector data (dropping blob)")]
+	/// Mutably borrow the vector content.
+	///
+	/// Any existing blob is dropped because it would be stale after mutation.
 	pub fn as_vector_mut(&mut self) -> Result<&mut VectorTile> {
 		self.as_content_mut()?.as_vector_mut()
 	}
 
+	/// Return the current tile **format** (e.g., `PNG`, `MVT`).
 	pub fn format(&self) -> TileFormat {
 		self.format
 	}
+	/// Return the current transport **compression** (e.g., `Uncompressed`, `Gzip`).
 	pub fn compression(&self) -> TileCompression {
 		self.compression
 	}
 
 	#[context("changing format: {:?} -> {:?} (q={:?}, s={:?})", self.format, format, quality, speed)]
+	/// Change the tile's **format** (e.g., `PNG` → `WEBP`) while preserving the content type.
+	///
+	/// The tile's content is materialized; the existing blob is dropped; and optional
+	/// `quality`/`speed` hints are updated if provided (passed as `Some`).
+	/// Passing `None` keeps the previous hint value.
+	///
+	/// The `format` must have the same type (raster vs. vector) as the current format.
 	pub fn change_format(&mut self, format: TileFormat, quality: Option<u8>, speed: Option<u8>) -> Result<()> {
 		assert_eq!(format.to_type(), self.format.to_type());
 		self.materialize_content()?;
@@ -202,6 +298,10 @@ impl Tile {
 	}
 
 	#[context("changing compression to {:?}", compression)]
+	/// Update the outer **compression** flag and (if a blob is present) re-compress it.
+	///
+	/// When no blob is present, only the flag changes; compression is applied on the
+	/// next materialization of the blob.
 	pub fn change_compression(&mut self, compression: TileCompression) -> Result<()> {
 		if self.blob.is_some() {
 			self.recompress_blob(compression)?;
@@ -211,10 +311,12 @@ impl Tile {
 		Ok(())
 	}
 
+	/// Whether the tile currently holds an encoded blob.
 	pub fn has_blob(&self) -> bool {
 		self.blob.is_some()
 	}
 
+	/// Whether the tile currently holds decoded content.
 	pub fn has_content(&self) -> bool {
 		self.content.is_some()
 	}

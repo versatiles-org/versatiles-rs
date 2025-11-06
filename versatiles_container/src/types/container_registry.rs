@@ -1,4 +1,6 @@
-//! Module `getter` provides functionalities to read and write tile containers from various sources such as local files, directories, and URLs.
+//! `ContainerRegistry` provides functionalities to read and write tile containers from various sources such as local files, directories, and URLs.
+//!
+//! It supports multiple container formats and allows registering custom readers and writers for different file extensions.
 //!
 //! # Example Usage
 //!
@@ -49,7 +51,14 @@ type WriteFuture = Pin<Box<dyn Future<Output = Result<()>> + Send>>;
 type WriteFile =
 	Box<dyn Fn(Box<dyn TilesReaderTrait>, PathBuf, ProcessingConfig) -> WriteFuture + Send + Sync + 'static>;
 
-/// Registry to map file extensions to async openers.
+/// Registry mapping file extensions to async tile container readers and writers.
+///
+/// Supports reading and writing of tile containers in formats such as:
+/// - MBTiles
+/// - TAR
+/// - PMTiles
+/// - VersaTiles
+/// - Directory-based containers
 #[derive(Clone)]
 pub struct ContainerRegistry {
 	data_readers: HashMap<String, Arc<ReadData>>,
@@ -59,7 +68,9 @@ pub struct ContainerRegistry {
 }
 
 impl ContainerRegistry {
-	/// Create an empty registry.
+	/// Creates a new `ContainerRegistry` with the specified writer configuration.
+	///
+	/// Registers built-in readers and writers for supported container formats.
 	pub fn new(writer_config: ProcessingConfig) -> Self {
 		let mut reg = Self {
 			data_readers: HashMap::new(),
@@ -105,6 +116,11 @@ impl ContainerRegistry {
 		reg
 	}
 
+	/// Register an async file-based reader for a given file extension.
+	///
+	/// # Arguments
+	/// * `ext` - The file extension to associate with the reader.
+	/// * `read_file` - Async function that takes a `PathBuf` and returns a boxed `TilesReaderTrait`.
 	pub fn register_reader_file<F, Fut>(&mut self, ext: &str, read_file: F)
 	where
 		F: Fn(PathBuf) -> Fut + Send + Sync + 'static,
@@ -115,6 +131,11 @@ impl ContainerRegistry {
 			.insert(hash_extension(ext), Arc::new(Box::new(move |p| Box::pin(read_file(p)))));
 	}
 
+	/// Register an async data-based reader for a given file extension.
+	///
+	/// # Arguments
+	/// * `ext` - The file extension to associate with the reader.
+	/// * `read_data` - Async function that takes a `DataReader` and returns a boxed `TilesReaderTrait`.
 	pub fn register_reader_data<F, Fut>(&mut self, ext: &str, read_data: F)
 	where
 		F: Fn(DataReader) -> Fut + Send + Sync + 'static,
@@ -125,6 +146,12 @@ impl ContainerRegistry {
 			.insert(hash_extension(ext), Arc::new(Box::new(move |p| Box::pin(read_data(p)))));
 	}
 
+	/// Register an async file-based writer for a given file extension.
+	///
+	/// # Arguments
+	/// * `ext` - The file extension to associate with the writer.
+	/// * `write_file` - Async function that takes a boxed `TilesReaderTrait`, a `PathBuf`, and a `ProcessingConfig`,
+	///   and writes the tiles to the specified path.
 	pub fn register_writer_file<F, Fut>(&mut self, ext: &str, write_file: F)
 	where
 		F: Fn(Box<dyn TilesReaderTrait>, PathBuf, ProcessingConfig) -> Fut + Send + Sync + 'static,
@@ -136,7 +163,15 @@ impl ContainerRegistry {
 		);
 	}
 
-	/// Get a reader for a given filename or URL.
+	/// Get a tile container reader for a given filename or URL.
+	///
+	/// Resolves the path or URL, determines the file extension, and uses the appropriate registered reader.
+	///
+	/// # Arguments
+	/// * `url_path` - The file path or URL to read from.
+	///
+	/// # Returns
+	/// A boxed `TilesReaderTrait` for reading tiles.
 	#[context("Failed to get reader for '{url_path:?}'")]
 	pub async fn get_reader<T>(&self, url_path: T) -> Result<Box<dyn TilesReaderTrait>>
 	where
@@ -178,6 +213,16 @@ impl ContainerRegistry {
 		}
 	}
 
+	/// Write tiles from a reader to the specified output path.
+	///
+	/// If the path is a directory, writes using the directory writer; otherwise, uses the appropriate file writer based on extension.
+	///
+	/// # Arguments
+	/// * `reader` - A boxed tile container reader providing tiles to write.
+	/// * `path` - The output path to write tiles to.
+	///
+	/// # Returns
+	/// Result indicating success or failure.
 	#[context("writing tiles to path '{path:?}'")]
 	pub async fn write_to_path(&self, mut reader: Box<dyn TilesReaderTrait>, path: &Path) -> Result<()> {
 		let path = env::current_dir()?.join(path);
@@ -242,6 +287,7 @@ pub async fn make_test_file(
 }
 
 #[cfg(test)]
+/// Integration tests for container readers and writers across supported formats.
 pub mod tests {
 	use super::*;
 	use assert_fs::TempDir;

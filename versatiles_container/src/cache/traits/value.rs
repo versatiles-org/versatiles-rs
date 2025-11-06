@@ -1,14 +1,64 @@
+//! Defines the [`CacheValue`] trait for serializing and deserializing cacheable data.
+//!
+//! The `CacheValue` trait provides a unified interface for encoding and decoding various
+//! data types (e.g. integers, strings, images, and tiles) into a compact binary format
+//! suitable for in-memory and on-disk caching backends.
+//!
+//! Implementations must guarantee symmetry between `write_to_cache` and `read_from_cache`:
+//! values written must be exactly reproducible upon reading. Implementations may use
+//! contextual error messages to aid debugging corrupted cache data.
+//!
+//! Many fundamental types are already implemented, including:
+//! - Primitives: `u8`, `u32`
+//! - Collections: `Vec<T>`, `(A, B)`, `Option<V>`
+//! - Domain types: [`TileCoord`](versatiles_core::TileCoord),
+//!   [`TileFormat`](versatiles_core::TileFormat),
+//!   [`TileCompression`](versatiles_core::TileCompression),
+//!   [`Blob`](versatiles_core::Blob),
+//!   and [`DynamicImage`](versatiles_image::DynamicImage)
+//!
+//! Each implementation encodes its content in little-endian order where applicable.
+
 use anyhow::{Result, anyhow, bail};
 use byteorder::{LittleEndian as LE, ReadBytesExt, WriteBytesExt};
 use std::io::{Cursor, Read};
 use versatiles_core::{Blob, TileCompression, TileCoord, TileFormat};
 use versatiles_image::{DynamicImage, ImageBuffer};
 
+/// Trait defining serialization and deserialization for cacheable types.
+///
+/// This trait abstracts how values are encoded into and decoded from binary form.
+/// Implementors should ensure data integrity and consistency across read/write operations.
+///
+/// # Contract
+/// - `write_to_cache` must produce data that `read_from_cache` can successfully reconstruct.
+/// - Both methods should handle errors gracefully and return [`anyhow::Result`].
+///
+/// Implementations are expected to use **little-endian** encoding for numeric types.
 pub trait CacheValue: Clone {
+	/// Serializes the current value into binary form and appends it to `writer`.
+	///
+	/// Implementations must use little‑endian encoding for numeric data and ensure
+	/// that the result can be faithfully reconstructed by [`read_from_cache`].
+	///
+	/// # Errors
+	/// Returns an error if the underlying write operation fails.
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()>;
+
+	/// Deserializes a value previously written by [`write_to_cache`].
+	///
+	/// Reads from the provided cursor, advancing its position according to the number
+	/// of bytes consumed. Implementations must validate data consistency and handle
+	/// malformed input gracefully.
+	///
+	/// # Errors
+	/// Returns an error if reading or decoding fails.
 	fn read_from_cache(reader: &mut Cursor<&[u8]>) -> Result<Self>;
 }
 
+/// Implements binary serialization for `u8`.
+///
+/// Encodes as a single byte.
 impl CacheValue for u8 {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
 		writer.write_u8(*self)?;
@@ -21,6 +71,7 @@ impl CacheValue for u8 {
 	}
 }
 
+/// Implements binary serialization for `u32` using little-endian encoding.
 impl CacheValue for u32 {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
 		writer.write_u32::<LE>(*self)?;
@@ -33,6 +84,13 @@ impl CacheValue for u32 {
 	}
 }
 
+/// Implements binary serialization for UTF-8 `String`s.
+///
+/// Format:
+/// - 4 bytes: length (`u32`, little-endian)
+/// - N bytes: UTF-8 string data
+///
+/// Errors if UTF-8 decoding fails when reading.
 impl CacheValue for String {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
 		let bytes = self.as_bytes();
@@ -49,6 +107,11 @@ impl CacheValue for String {
 	}
 }
 
+/// Implements serialization for homogeneous vectors.
+///
+/// Format:
+/// - 4 bytes: element count
+/// - followed by each serialized element
 impl<T: CacheValue> CacheValue for Vec<T> {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
 		writer.write_u32::<LE>(self.len() as u32)?;
@@ -68,6 +131,7 @@ impl<T: CacheValue> CacheValue for Vec<T> {
 	}
 }
 
+/// Implements serialization for pairs `(A, B)`, storing elements sequentially.
 impl<A: CacheValue, B: CacheValue> CacheValue for (A, B) {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
 		self.0.write_to_cache(writer)?;
@@ -81,6 +145,12 @@ impl<A: CacheValue, B: CacheValue> CacheValue for (A, B) {
 	}
 }
 
+/// Implements serialization for [`TileCoord`](versatiles_core::TileCoord).
+///
+/// Format:
+/// - 1 byte: zoom level
+/// - 4 bytes: x coordinate
+/// - 4 bytes: y coordinate
 impl CacheValue for TileCoord {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
 		writer.write_u8(self.level)?;
@@ -97,6 +167,11 @@ impl CacheValue for TileCoord {
 	}
 }
 
+/// Implements serialization for [`Blob`](versatiles_core::Blob).
+///
+/// Format:
+/// - 8 bytes: blob length (`u64`, little-endian)
+/// - N bytes: raw blob data
 impl CacheValue for Blob {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
 		writer.write_u64::<LE>(self.len())?;
@@ -112,6 +187,8 @@ impl CacheValue for Blob {
 	}
 }
 
+/// Implements serialization for [`TileFormat`](versatiles_core::TileFormat)
+/// by storing its numeric discriminant as a single byte.
 impl CacheValue for TileFormat {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
 		writer.write_u8((*self).into())?;
@@ -124,6 +201,8 @@ impl CacheValue for TileFormat {
 	}
 }
 
+/// Implements serialization for [`TileCompression`](versatiles_core::TileCompression)
+/// by storing its numeric discriminant as a single byte.
 impl CacheValue for TileCompression {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
 		writer.write_u8((*self).into())?;
@@ -136,6 +215,13 @@ impl CacheValue for TileCompression {
 	}
 }
 
+/// Implements serialization for `Option<V>`.
+///
+/// Format:
+/// - 1 byte: presence flag (`0` = `None`, `1` = `Some`)
+/// - followed by serialized value (if present)
+///
+/// Errors if the presence flag is invalid.
 impl<V: CacheValue> CacheValue for Option<V> {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
 		if let Some(value) = self {
@@ -160,6 +246,16 @@ impl<V: CacheValue> CacheValue for Option<V> {
 	}
 }
 
+/// Implements serialization for [`DynamicImage`](versatiles_image::DynamicImage).
+///
+/// Format:
+/// - 4 bytes: width
+/// - 4 bytes: height
+/// - 4 bytes: data length
+/// - N bytes: raw pixel bytes (1–4 channels)
+///
+/// On decoding, the image type is inferred from channel count.
+/// Returns an error if the buffer cannot form a valid image.
 impl CacheValue for DynamicImage {
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()> {
 		let width = self.width();

@@ -1,27 +1,25 @@
 //! This module provides functionality for reading tile data from a directory structure.
 //!
-//! The `DirectoryTilesReader` struct is the primary component of this module, offering methods to open a directory, read metadata, and fetch tile data based on coordinates.
+//! The directory path must be **absolute**.
 //!
-//! ## Directory Structure
-//! The directory should follow a specific structure to organize the tiles:
+//! Recognized metadata files include `meta.json`, `tiles.json`, `metadata.json` and their compressed variants with `.gz` or `.br` extensions.
+//!
+//! Tile files must follow the naming pattern:
 //! ```text
 //! <root>/<z>/<x>/<y>.<format>[.<compression>]
 //! ```
-//! - `<z>`: Zoom level (directory)
-//! - `<x>`: Tile X coordinate (directory)
-//! - `<y>.<format>[.<compression>]`: Tile Y coordinate with the tile format and optional compression type as the file extension
+//! where `<z>`, `<x>`, and `<y>` are zoom level and tile coordinates, `<format>` is the tile format (e.g., `png`, `pbf`), and `<compression>` is optional (e.g., `br`, `gz`).
 //!
-//! Example:
-//! ```text
-//! /tiles/3/2/1.png
-//! /tiles/4/2/1.jpg.br
-//! /tiles/meta.json
-//! ```
+//! Examples:
+//! | Path               | Description                  |
+//! |--------------------|------------------------------|
+//! | `/tiles/3/2/1.png` | Uncompressed PNG tile        |
+//! | `/tiles/4/2/1.pbf.br` | Brotli compressed PBF tile  |
+//! | `/tiles/meta.json`  | Metadata file                |
 //!
-//! ## Features
-//! - Supports multiple tile formats and compressions
-//! - Automatically detects and reads metadata files in the directory
-//! - Provides asynchronous methods to fetch tile data
+//! All tiles must share the same **format** and **compression**. If multiple formats or compressions are detected, an error is returned.
+//!
+//! Bounds, minimum zoom, and maximum zoom are inferred from the discovered tiles and merged with any metadata files found.
 //!
 //! ## Usage
 //! ```no_run
@@ -32,16 +30,15 @@
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     let mut reader = DirectoryTilesReader::open_path(Path::new("/path/to/tiles")).unwrap();
+//!     let mut reader = DirectoryTilesReader::open_path(Path::new("/absolute/path/to/tiles")).unwrap();
+//!     // Optionally override the compression type
+//!     reader.override_compression(TileCompression::Gzip);
 //!     let tile_data = reader.get_tile(&TileCoord::new(3, 1, 2).unwrap()).await.unwrap();
 //! }
 //! ```
 //!
 //! ## Errors
-//! - Returns errors if the directory is not found, is not in the correct format, or contains inconsistent tile formats or compressions.
-//!
-//! ## Testing
-//! This module includes comprehensive tests to ensure the correct functionality of opening paths, reading metadata, handling different file formats, and edge cases.
+//! Errors are returned if the directory is not absolute, does not exist, is not a directory, contains no tiles, or if tiles have inconsistent formats or compressions.
 
 use crate::{Tile, TilesReaderTrait};
 use anyhow::{Result, bail, ensure};
@@ -57,11 +54,15 @@ use versatiles_core::{utils::*, *};
 use versatiles_derive::context;
 
 /// A reader for tiles stored in a directory structure.
-/// The directory should be structured as follows:
+///
+/// This struct merges TileJSON metadata from recognized files such as `meta.json`, `tiles.json`, or `metadata.json` (and their compressed variants),
+/// and infers a bounding-box pyramid from the folder hierarchy to provide tile reading functionality.
+///
+/// The directory structure is expected as:
 /// ```text
 /// <root>/<z>/<x>/<y>.<format>[.<compression>]
 /// ```
-/// Where `<z>` is the zoom level, `<x>` and `<y>` are the tile coordinates, `<format>` is the tile format, and `<compression>` is the compression type (optional).
+/// where `<z>`, `<x>`, and `<y>` are tile coordinates, `<format>` is the tile format, and `<compression>` is optional.
 pub struct DirectoryTilesReader {
 	tilejson: TileJSON,
 	dir: PathBuf,
@@ -72,13 +73,22 @@ pub struct DirectoryTilesReader {
 impl DirectoryTilesReader {
 	/// Opens a directory and initializes a `DirectoryTilesReader`.
 	///
+	/// The provided path must be **absolute**.
+	///
+	/// This function scans the directory structure for tiles and metadata files.
+	/// It requires that all tiles have a uniform tile format and compression type, otherwise it returns an error.
+	/// Metadata files (`meta.json`, `tiles.json`, `metadata.json` and their `.gz`/`.br` variants) are merged into the TileJSON.
+	/// Bounds, minzoom, and maxzoom are inferred from the directory's tile pyramid and merged with metadata.
+	///
+	/// The returned `DirectoryTilesReader` contains `TilesReaderParameters` which specify the tile format, compression, and bounding box pyramid.
+	///
 	/// # Arguments
 	///
-	/// * `dir` - A path to the directory containing the tiles.
+	/// * `dir` - An absolute path to the directory containing the tiles.
 	///
 	/// # Errors
 	///
-	/// Returns an error if the directory does not exist, is not a directory, or if no tiles are found.
+	/// Returns an error if the directory does not exist, is not a directory, contains no tiles, or contains inconsistent tile formats or compressions.
 	#[context("opening tiles directory {:?}", dir)]
 	pub fn open_path(dir: &Path) -> Result<DirectoryTilesReader>
 	where
@@ -204,12 +214,18 @@ impl DirectoryTilesReader {
 		})
 	}
 
+	/// Reads a file into a `Blob`.
 	#[context("reading file '{}'", path.display())]
 	fn read(path: &Path) -> Result<Blob> {
 		Ok(Blob::from(fs::read(path)?))
 	}
 }
 
+/// Implements the `TilesReaderTrait` for `DirectoryTilesReader`.
+///
+/// Provides the container name ("directory"), access to tile reading parameters,
+/// ability to override the tile compression, access to TileJSON metadata,
+/// and asynchronous fetching of tile data by coordinate.
 #[async_trait]
 impl TilesReaderTrait for DirectoryTilesReader {
 	fn container_name(&self) -> &str {

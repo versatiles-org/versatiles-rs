@@ -1,8 +1,26 @@
-//! This module provides functionality for writing tiles to `*.versatiles` containers.
+//! Write tiles and metadata into a `.versatiles` container.
 //!
-//! # Example
+//! The `VersaTilesWriter` produces a valid `.versatiles` file from any [`TilesReaderTrait`]
+//! source. It serializes TileJSON metadata, groups tiles into fixed **256×256 blocks**,
+//! compresses per-block tile indices and metadata, and writes a compact binary structure
+//! ready for fast random access by the [`VersaTilesReader`](crate::container::versatiles::VersaTilesReader).
 //!
-//! ```rust
+//! ## File layout
+//! ```notest
+//! [ FileHeader | meta_blob | block_index_blob | blocks... ]
+//! ```
+//! Each block contains:
+//! - a Brotli-compressed **tile index** (mapping tile IDs to byte ranges)
+//! - a contiguous sequence of tile blobs in the reader’s `tile_format` and `tile_compression`
+//!
+//! ## Behavior
+//! - All tiles are grouped in 256×256 blocks (`Traversal::new_any_size(256, 256)`).
+//! - The header is written twice: once before, and once after writing metadata and blocks.
+//! - Metadata (`TileJSON`) and block indices are compressed using Brotli for storage efficiency.
+//! - The writer supports both raster and vector tile formats.
+//!
+//! ## Example
+//! ```rust,no_run
 //! use versatiles_container::*;
 //! use versatiles_core::*;
 //! use std::path::Path;
@@ -10,25 +28,20 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!     // Create a mock tiles reader
-//!     let path_in = std::env::current_dir()?.join("../testdata/berlin.mbtiles");
+//!     // Open an MBTiles source
+//!     let path_in = Path::new("../testdata/berlin.mbtiles");
 //!     let mut reader = MBTilesReader::open_path(&path_in)?;
 //!
-//!     // Specify the output path for the .versatiles file
-//!     let path_out = std::env::temp_dir().join("temp5.versatiles");
-//!
-//!     // Write the tiles to the .versatiles file
-//!     VersaTilesWriter::write_to_path(
-//!         &mut reader,
-//!         &path_out,
-//!         ProcessingConfig::default()
-//!     ).await?;
-//!
-//!     println!("Tiles have been successfully written to {path_out:?}");
-//!
+//!     // Write as a .versatiles container
+//!     let path_out = std::env::temp_dir().join("berlin.versatiles");
+//!     VersaTilesWriter::write_to_path(&mut reader, &path_out, ProcessingConfig::default()).await?;
 //!     Ok(())
 //! }
 //! ```
+//!
+//! ## Errors
+//! Returns errors if writing fails, compression fails, or if metadata or bounding box
+//! information is invalid.
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader};
 use crate::{
@@ -42,12 +55,27 @@ use std::sync::Arc;
 use versatiles_core::{Traversal, io::DataWriterTrait, types::*, utils::compress};
 use versatiles_derive::context;
 
-/// A struct for writing tiles to a VersaTiles container.
+/// Writer for `.versatiles` containers.
+///
+/// Serializes a [`TilesReaderTrait`] source into a compact binary container optimized
+/// for fast random tile access. The writer:
+/// - compresses metadata and block indices with Brotli
+/// - organizes tiles into 256×256 blocks
+/// - writes the header twice to ensure integrity
+///
+/// The resulting file can be read by the [`VersaTilesReader`](crate::container::versatiles::VersaTilesReader).
 pub struct VersaTilesWriter {}
 
 #[async_trait]
 impl TilesWriterTrait for VersaTilesWriter {
-	/// Convert tiles from the TilesReader and write them to the writer.
+	/// Convert tiles from a [`TilesReaderTrait`] and write them to a [`DataWriterTrait`].
+	///
+	/// This method writes the file header, followed by metadata, blocks, and an updated
+	/// header containing the final byte ranges. It compresses metadata and block indices
+	/// using Brotli and enforces uniform tile format and compression across all tiles.
+	///
+	/// # Errors
+	/// Returns an error if writing, compression, or bounding box validation fails.
 	#[context("writing VersaTiles to DataWriter")]
 	async fn write_to_writer(
 		reader: &mut dyn TilesReaderTrait,
@@ -95,7 +123,9 @@ impl TilesWriterTrait for VersaTilesWriter {
 }
 
 impl VersaTilesWriter {
-	/// Write metadata to the writer.
+	/// Write the TileJSON metadata as a Brotli-compressed blob to the writer.
+	///
+	/// Returns the byte range where the metadata was written.
 	#[context("Failed to write metadata")]
 	async fn write_meta(
 		reader: &dyn TilesReaderTrait,
@@ -108,7 +138,12 @@ impl VersaTilesWriter {
 		writer.append(&compressed)
 	}
 
-	/// Write blocks to the writer.
+	/// Write all tile blocks and their Brotli-compressed indices.
+	///
+	/// Traverses the reader in 256×256 blocks, writes tiles into each block, and appends
+	/// the resulting block index at the end of the file.
+	///
+	/// Returns the byte range covering the block index blob.
 	#[context("Failed to write blocks")]
 	async fn write_blocks(
 		reader: &mut dyn TilesReaderTrait,

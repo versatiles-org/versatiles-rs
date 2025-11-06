@@ -1,10 +1,21 @@
 #![allow(dead_code)]
 
-//! Module for reading `versatiles` tile containers.
+//! Read tiles and metadata from a `.versatiles` container.
 //!
-//! This module provides the `VersaTilesReader` struct, which implements the `TilesReader` trait for reading tile data from a `versatiles` container. It supports reading metadata, tile data, and probing the container for debugging purposes.
+//! The `VersaTilesReader` parses the container header, decompresses the **block index**,
+//! reads embedded TileJSON metadata, and exposes tiles via [`TilesReaderTrait`]. The
+//! file format organizes data into fixed **256×256 tile blocks**; each block stores
+//! a Brotli-compressed tile index (byte ranges), followed by a contiguous region of
+//! tile blobs. This reader lazily caches decoded tile indices for fast random access.
 //!
-//! ```no_run
+//! ## Extracted artifacts
+//! - `tilejson`: parsed TileJSON from the `meta_range` (if present)
+//! - `parameters`: [`TilesReaderParameters`] with `tile_format`, `tile_compression`, and a
+//!   **bbox pyramid** computed from the block index
+//! - `block_index`: lightweight structure describing all block ranges
+//!
+//! ## Usage
+//! ```rust,no_run
 //! use versatiles_container::*;
 //! use versatiles_core::*;
 //! use anyhow::Result;
@@ -13,37 +24,34 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!     // Specify the path to the .versatiles file
-//!     let path = Path::new("path/to/your/file.versatiles");
-//!     
-//!     // Open the VersaTilesReader
+//!     // Open a .versatiles container (relative or absolute path)
+//!     let path = Path::new("./data/world.versatiles");
 //!     let mut reader = VersaTilesReader::open_path(&path).await?;
 //!
-//!     // Print container information
-//!     println!("Container Name: {}", reader.container_name());
-//!     println!("Container Parameters: {:?}", reader.parameters());
+//!     // Inspect parameters & TileJSON
+//!     let params = reader.parameters();
+//!     let tj = reader.tilejson();
+//!     println!("format={:?} compression={:?}", params.tile_format, params.tile_compression);
 //!
-//!     // Get metadata
-//!     println!("Metadata: {:?}", reader.tilejson());
-//!
-//!     // Fetch a specific tile
-//!     let coord = TileCoord::new(15, 1, 4)?;
-//!     if let Some(tile) = reader.get_tile(&coord).await? {
-//!         println!("Tile Data: {tile:?}");
-//!     } else {
-//!         println!("Tile not found");
+//!     // Fetch one tile
+//!     if let Some(mut tile) = reader.get_tile(&TileCoord::new(15, 1, 4)?).await? {
+//!         let _blob = tile.as_blob(params.tile_compression)?;
 //!     }
 //!
-//!     // Fetch tiles in a bounding box
-//!     let bbox = reader.parameters().bbox_pyramid.get_level_bbox(4).clone();
+//!     // Stream a bbox (coalesces reads per block for fewer I/O calls)
+//!     let bbox = params.bbox_pyramid.get_level_bbox(4).clone();
 //!     let mut stream = reader.get_tile_stream(bbox).await?;
-//!     while let Some((coord, tile_data)) = stream.next().await {
-//!         println!("Tile Coord: {coord:?}, Data: {tile_data:?}");
+//!     while let Some((coord, mut tile)) = stream.next().await {
+//!         let _size = tile.as_blob(params.tile_compression)?.len();
+//!         // use (coord, _size)
 //!     }
-//!
 //!     Ok(())
 //! }
 //! ```
+//!
+//! ## Errors
+//! Returns errors when the file cannot be read or decompressed, when metadata/index parsing fails,
+//! or when a requested tile is missing.
 
 use super::types::{BlockDefinition, BlockIndex, FileHeader, TileIndex};
 use crate::{Tile, TilesReaderTrait};
@@ -56,7 +64,11 @@ use versatiles_core::utils::PrettyPrint;
 use versatiles_core::{io::*, utils::decompress, *};
 use versatiles_derive::context;
 
-/// `VersaTilesReader` is responsible for reading tile data from a `versatiles` container.
+/// Reader for `.versatiles` containers.
+///
+/// Decompresses and parses the block index, merges embedded TileJSON, computes a
+/// per-zoom bounding-box pyramid, and serves tiles via lazy index lookups. Tile
+/// indices are cached (least-recently-used) to accelerate repeated random access.
 pub struct VersaTilesReader {
 	block_index: BlockIndex,
 	header: FileHeader,
@@ -67,29 +79,26 @@ pub struct VersaTilesReader {
 }
 
 impl VersaTilesReader {
-	/// Opens a `versatiles` container from a file path.
+	/// Open a `.versatiles` container from a filesystem path.
 	///
-	/// # Arguments
-	///
-	/// * `path` - The path to the `versatiles` file.
+	/// Creates a `DataReaderFile` and delegates to [`open_reader`]. The path may be
+	/// relative or absolute.
 	///
 	/// # Errors
-	///
-	/// Returns an error if the file cannot be opened or read.
+	/// Returns an error if the file cannot be opened.
 	#[context("Failed to open versatiles file at '{path:?}'")]
 	pub async fn open_path(path: &Path) -> Result<VersaTilesReader> {
 		VersaTilesReader::open_reader(DataReaderFile::open(path)?).await
 	}
 
-	/// Opens a `versatiles` container from a `DataReader`.
+	/// Open a `.versatiles` container from an existing [`DataReader`].
 	///
-	/// # Arguments
-	///
-	/// * `reader` - A `DataReader` instance.
+	/// Reads the header, loads and (if present) decompresses the TileJSON metadata, then
+	/// reads and decompresses the **block index** (Brotli). Finally, computes the bbox pyramid
+	/// from the block index and initializes the tile-index cache.
 	///
 	/// # Errors
-	///
-	/// Returns an error if the reader cannot be initialized.
+	/// Returns an error if header/metadata/index reads or decompressions fail.
 	#[context("Failed to open versatiles reader")]
 	pub async fn open_reader(mut reader: DataReader) -> Result<VersaTilesReader> {
 		let header = FileHeader::from_reader(&mut reader)
@@ -128,15 +137,13 @@ impl VersaTilesReader {
 		})
 	}
 
-	/// Retrieves the tile index for a given block.
+	/// Load (and cache) the tile index for a block.
 	///
-	/// # Arguments
-	///
-	/// * `block` - A `BlockDefinition` instance.
+	/// Reads the block's index blob, decompresses it, adjusts offsets to the tiles segment,
+	/// and inserts the result into an in-memory LRU-like cache. Subsequent calls reuse the cache.
 	///
 	/// # Errors
-	///
-	/// Returns an error if the tile index cannot be retrieved.
+	/// Returns an error if reading or decompression fails.
 	#[context("Failed to get tile index for block {block:?}")]
 	async fn get_block_tile_index(&self, block: &BlockDefinition) -> Result<Arc<TileIndex>> {
 		let block_coord = block.get_coord();
@@ -156,16 +163,20 @@ impl VersaTilesReader {
 		})
 	}
 
-	/// Retrieves the size of the index.
+	/// Sum of all block index byte lengths.
 	fn get_index_size(&self) -> u64 {
 		self.block_index.iter().map(|b| b.get_index_range().length).sum()
 	}
 
-	/// Retrieves the size of the tiles.
+	/// Sum of all block tiles byte lengths.
 	fn get_tiles_size(&self) -> u64 {
 		self.block_index.iter().map(|b| b.get_tiles_range().length).sum()
 	}
 
+	/// Build read **chunks** by grouping tile ranges within the same block.
+	///
+	/// Coalesces nearby ranges into at most ~64 MiB chunks (with a small gap tolerance)
+	/// to minimize I/O calls during streaming.
 	async fn get_chunks(&self, bbox: TileBBox) -> Vec<Chunk> {
 		const MAX_CHUNK_SIZE: u64 = 64 * 1024 * 1024;
 		const MAX_CHUNK_GAP: u64 = 32 * 1024;
@@ -253,6 +264,8 @@ impl VersaTilesReader {
 unsafe impl Send for VersaTilesReader {}
 unsafe impl Sync for VersaTilesReader {}
 
+// Internal helper to group tile reads: collects (coord, range) pairs that can be served
+// from a single large read. `range` tracks the combined byte span in the container.
 #[derive(Debug)]
 struct Chunk {
 	tiles: Vec<(TileCoord, ByteRange)>,
@@ -282,18 +295,19 @@ impl Chunk {
 }
 
 #[async_trait]
+/// [`TilesReaderTrait`] implementation — provides `container_name`, `parameters`, `tilejson`,
+/// on-the-fly `override_compression`, single-tile fetch via `get_tile`, and bbox streaming via
+/// `get_tile_stream` (with internal read coalescing).
 impl TilesReaderTrait for VersaTilesReader {
 	/// Gets the container name.
 	fn container_name(&self) -> &str {
 		"versatiles"
 	}
 
-	/// Gets metadata.
 	fn tilejson(&self) -> &TileJSON {
 		&self.tilejson
 	}
 
-	/// Gets the parameters.
 	fn parameters(&self) -> &TilesReaderParameters {
 		&self.parameters
 	}
@@ -302,7 +316,11 @@ impl TilesReaderTrait for VersaTilesReader {
 		self.parameters.tile_compression = tile_compression;
 	}
 
-	/// Gets tile data for a given coordinate.
+	/// Fetch a single tile by XYZ coordinate.
+	///
+	/// Computes the corresponding **block coordinate** (z, x>>8, y>>8), verifies membership
+	/// within the block's bbox, looks up the tile's byte range from the cached index, and reads it.
+	/// Returns `Ok(None)` for empty ranges or missing blocks.
 	#[context("fetching tile {:?} from '{}'", coord, self.reader.get_name())]
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>> {
 		// Calculate block coordinate
@@ -346,7 +364,6 @@ impl TilesReaderTrait for VersaTilesReader {
 		)))
 	}
 
-	/// Gets a stream of tile data for a given bounding box.
 	#[context("streaming tiles for bbox {:?}", bbox)]
 	async fn get_tile_stream(&self, bbox: TileBBox) -> Result<TileStream<Tile>> {
 		log::debug!("get_tile_stream {:?}", bbox);

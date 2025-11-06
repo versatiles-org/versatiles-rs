@@ -1,3 +1,23 @@
+//! Caching subsystem for VersaTiles.
+//!
+//! This module provides flexible caching infrastructure used throughout the
+//! VersaTiles processing and container layers. It supports both in-memory and
+//! on-disk cache backends, allowing efficient reuse of intermediate computation
+//! results such as decoded tiles, rendered images, or serialized metadata.
+//!
+//! # Submodules
+//! - [`cache_in_memory`] — fast, non-persistent cache for small datasets
+//! - [`cache_on_disk`] — disk-based cache storing data in binary files
+//! - [`cache_type`] — defines which backend to use
+//! - [`map`] — high-level cache wrapper for key→values storage
+//! - [`traits`] — core traits for cache key/value serialization
+//!
+//! # Usage
+//! Cache type selection is determined by the [`ProcessingConfig`](crate::ProcessingConfig):
+//!
+//! The cache API provides consistent behavior across backends, with automatic
+//! cleanup when dropped.
+
 mod cache_in_memory;
 mod cache_on_disk;
 mod cache_type;

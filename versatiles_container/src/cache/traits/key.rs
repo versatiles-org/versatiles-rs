@@ -1,29 +1,52 @@
-use std::fmt::Debug;
+//! Defines the [`CacheKey`] trait used by the caching subsystem.
+//!
+//! A `CacheKey` represents a serializable and human-readable identifier used to
+//! store and retrieve cached items. The key must be unique and stable so that
+//! the same input always produces the same cache entry.
+//!
+//! This trait is implemented for common primitive and domain types such as
+//! `String`, `&str`, `usize`, and [`TileCoord`](versatiles_core::TileCoord).
 
+use std::fmt::Debug;
 use versatiles_core::TileCoord;
 
+/// Trait defining how an object can be converted into a unique cache key string.
+///
+/// Implementations should ensure the returned string is deterministic and collision-free
+/// within the context of the cache.
+///
+/// The string is used directly as part of filenames or map keys for both
+/// in-memory and on-disk caches.
 pub trait CacheKey: Debug {
+	/// Convert the object into a unique, human-readable cache key string.
 	fn to_cache_key(&self) -> String;
 }
 
+/// Uses the string itself as the cache key.
 impl CacheKey for String {
 	fn to_cache_key(&self) -> String {
 		self.clone()
 	}
 }
 
+/// Converts the string slice into an owned `String` to use as the cache key.
 impl CacheKey for &str {
 	fn to_cache_key(&self) -> String {
 		(*self).to_string()
 	}
 }
 
+/// Converts the number into its decimal string representation.
 impl CacheKey for usize {
 	fn to_cache_key(&self) -> String {
 		self.to_string()
 	}
 }
 
+/// Converts the [`TileCoord`](versatiles_core::TileCoord) into a structured key string.
+///
+/// The format is `"ZZ,XXX,YYY"` with zero-padded fields depending on zoom level (`ZZ`).
+/// Padding increases with higher zoom levels to preserve lexicographic ordering.
 impl CacheKey for TileCoord {
 	fn to_cache_key(&self) -> String {
 		let z = self.level;

@@ -1,3 +1,16 @@
+//! `UrlPath` is a tiny helper that can represent either a full URL (with scheme and host)
+//! or a filesystem path. It is used to accept flexible inputs in CLI tools and server
+//! components and provides a few convenience methods like `resolve`, `filename`, and
+//! `extension`.
+//!
+//! The enum has two variants:
+//! - `Url(reqwest::Url)` for absolute URLs (e.g., `https://example.org/file.txt`)
+//! - `Path(std::path::PathBuf)` for absolute or relative filesystem paths (e.g., `/data/a.txt` or `./a/b`)
+//!
+//! When constructed via `From<&str>`, the string is parsed as a URL first; if parsing succeeds
+//! **and** a host is present, the `Url` variant is used. Otherwise the value is treated as a
+//! filesystem path and the `Path` variant is used.
+
 use anyhow::{Result, anyhow};
 use reqwest::Url;
 use std::{
@@ -6,15 +19,39 @@ use std::{
 };
 use versatiles_derive::context;
 
+/// A flexible URL-or-path wrapper used across I/O code.
+///
+/// # Examples
+/// Creating from strings:
+/// ```
+/// use versatiles_container::UrlPath;
+/// let a = UrlPath::from("https://example.org/x.png");
+/// let b = UrlPath::from("./data/x.png");
+/// assert!(matches!(a, UrlPath::Url(_)));
+/// assert!(matches!(b, UrlPath::Path(_)));
+/// ```
+/// Resolving against a base:
+/// ```
+/// # use versatiles_container::UrlPath;
+/// let base = UrlPath::from("/tiles/");
+/// let mut tgt = UrlPath::from("z/x/y.mvt");
+/// tgt.resolve(&base).unwrap();
+/// assert_eq!(tgt.to_string().replace('\\', "/"), "/tiles/z/x/y.mvt");
+/// ```
 #[derive(Clone, PartialEq)]
 pub enum UrlPath {
-	// An absolute URL with scheme.
+	/// An absolute URL with scheme.
 	Url(Url),
-	// An absolute file path or an relative path/url.
+	/// An absolute file path or an relative path/url.
 	Path(PathBuf),
 }
 
 impl UrlPath {
+	/// Borrow the underlying filesystem path.
+	///
+	/// Returns an error if this value is a URL.
+	///
+	/// Useful when the caller expects a path-only input and wants a clear error otherwise.
 	#[context("Getting Path from UrlPath {self:?}")]
 	pub fn as_path(&self) -> Result<&Path> {
 		match self {
@@ -23,6 +60,14 @@ impl UrlPath {
 		}
 	}
 
+	/// Resolve this value against `base` in-place.
+	///
+	/// Rules:
+	/// - If `self` is already a URL, it remains unchanged.
+	/// - If `base` is a URL and `self` is a relative path, `self` becomes a URL via `base.join()`.
+	/// - If both are paths, they are joined and normalized (handling `.` and `..`).
+	///
+	/// Returns an error only when URL joining fails or inputs are invalid.
 	#[context("Resolving UrlPath {self:?} against base {base:?}")]
 	pub fn resolve(&mut self, base: &UrlPath) -> Result<()> {
 		use UrlPath as UP;
@@ -42,6 +87,10 @@ impl UrlPath {
 		Ok(())
 	}
 
+	/// Return the last path segment (e.g., `file.tar.gz`).
+	///
+	/// For URLs, the segment is derived from the URL path. For filesystem paths, it is the
+	/// filename component. Errors if the source has no terminal segment.
 	#[context("Getting filename from Url/Path {self:?}")]
 	pub fn filename(&self) -> Result<String> {
 		let filename = match self {
@@ -59,6 +108,9 @@ impl UrlPath {
 		Ok(filename.to_string())
 	}
 
+	/// Return the filename **without** its last extension.
+	///
+	/// `"/a/file.tar.gz" -> "file.tar"`, `"/a/README" -> "README"`.
 	#[context("Getting name without extension from Url/Path {self:?}")]
 	pub fn name(&self) -> Result<String> {
 		let filename = self.filename()?;
@@ -69,6 +121,9 @@ impl UrlPath {
 		}
 	}
 
+	/// Return the filename's last extension (without the dot), or an empty string if none.
+	///
+	/// `"/a/file.tar.gz" -> "gz"`, `"/a/README" -> ""`.
 	#[context("Getting extension from Url/Path {self:?}")]
 	pub fn extension(&self) -> Result<String> {
 		let filename = self.filename()?;
@@ -80,6 +135,9 @@ impl UrlPath {
 	}
 }
 
+// Normalize a path by resolving `.` and `..`, preserving drive prefixes, and handling
+// Windows UNC shares (`\\server\\share`). Relative parents (`..`) are preserved if there
+// is nothing left to pop. Used by `resolve` for Path+Path cases.
 fn normalize(path: &Path) -> PathBuf {
 	use std::ffi::OsString;
 	use std::path::Component::*;
@@ -168,6 +226,7 @@ fn normalize(path: &Path) -> PathBuf {
 	out
 }
 
+/// Display as a plain URL string for `Url`, or as a path using `Path::display()` for `Path`.
 impl std::fmt::Display for UrlPath {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
@@ -183,6 +242,8 @@ impl From<String> for UrlPath {
 	}
 }
 
+/// Construct from `&str` by attempting URL parsing first. If parsing succeeds and the value
+/// has a host, the `Url` variant is used; otherwise the value is treated as a filesystem path.
 impl From<&str> for UrlPath {
 	fn from(s: &str) -> Self {
 		if let Ok(url) = reqwest::Url::parse(s)

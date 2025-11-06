@@ -1,53 +1,45 @@
-//! This module provides functionality for writing tile data to a directory structure.
+//! Write tile data and metadata to a directory pyramid on disk.
 //!
-//! The `DirectoryTilesWriter` struct is the primary component of this module, offering methods to write metadata and tile data to a specified directory path.
+//! The writer mirrors the on-disk structure used by the directory reader:
 //!
-//! ## Directory Structure
-//! The directory structure for writing tiles follows the same format as reading:
 //! ```text
 //! <root>/<z>/<x>/<y>.<format>[.<compression>]
 //! ```
-//! - `<z>`: Zoom level (directory)
-//! - `<x>`: Tile X coordinate (directory)
-//! - `<y>.<format>[.<compression>]`: Tile Y coordinate with the tile format and optional compression type as the file extension
 //!
-//! Example:
-//! ```text
-//! /tiles/1/2/3.png
-//! /tiles/1/2/4.jpg.br
-//! /tiles/meta.json
-//! ```
+//! where `<format>` is the tile format (e.g., `png`, `pbf`/`mvt`) and `<compression>` is optional (`br`, `gz`).
+//! A TileJSON file is written as `tiles.json[.<compression>]` using the same **compression** as the tiles.
 //!
-//! ## Features
-//! - Supports writing metadata and tile data in multiple formats and compressions
-//! - Ensures directory structure is created if it does not exist
-//! - Provides progress feedback during the write process
+//! ### Requirements
+//! - The output `path` **must be absolute**.
+//! - All emitted tiles use the **same format** and **compression** as reported by the source reader's
+//!   [`TilesReaderParameters`](versatiles_core::TilesReaderParameters).
+//! - The directory tree is created as needed.
 //!
-//! ## Usage
-//! ```rust
+//! ### Recognized outputs
+//! - Tiles at `<z>/<x>/<y>.<ext>[.<br|gz>]` (e.g., `2/3/1.pbf.gz`, `7/21/42.png`).
+//! - TileJSON at `tiles.json[.<br|gz>]`.
+//!
+//! ### Example
+//! ```rust,no_run
 //! use versatiles_container::*;
 //! use versatiles_core::*;
 //! use std::path::Path;
 //!
 //! #[tokio::main]
-//! async fn main() {
-//!     let path = std::env::current_dir().unwrap().join("../testdata/berlin.mbtiles");
-//!     let mut reader = MBTilesReader::open_path(&path).unwrap();
+//! async fn main() -> anyhow::Result<()> {
+//!     // Open any reader, e.g. MBTiles
+//!     let mbtiles_path = Path::new("/absolute/path/to/berlin.mbtiles");
+//!     let mut reader = MBTilesReader::open_path(mbtiles_path)?;
 //!
-//!     let temp_path = std::env::temp_dir().join("temp_tiles");
-//!     DirectoryTilesWriter::write_to_path(
-//!         &mut reader,
-//!         &temp_path,
-//!         ProcessingConfig::default()
-//!     ).await.unwrap();
+//!     // Choose an absolute output directory
+//!     let out_dir = std::env::temp_dir().join("versatiles_demo_out");
+//!     DirectoryTilesWriter::write_to_path(&mut reader, &out_dir, ProcessingConfig::default()).await?;
+//!     Ok(())
 //! }
 //! ```
 //!
-//! ## Errors
-//! - Returns errors if the directory path is not absolute, if there are issues with file I/O, or if multiple tile formats/compressions are found.
-//!
-//! ## Testing
-//! This module includes comprehensive tests to ensure the correct functionality of writing metadata, handling different file formats, and verifying directory structure.
+//! ### Errors
+//! Returns errors if the destination path is not absolute, if file I/O fails, or if compression/encoding fails.
 
 use crate::{ProcessingConfig, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
 use anyhow::{Result, bail, ensure};
@@ -59,18 +51,14 @@ use std::{
 use versatiles_core::{io::DataWriterTrait, utils::compress, *};
 use versatiles_derive::context;
 
-/// A struct that provides functionality to write tile data to a directory structure.
+/// Writes a directory-based tile pyramid along with a compressed TileJSON (`tiles.json[.<br|gz>]`).
+///
+/// Tiles are encoded using the format and compression from the source `TilesReader`. The
+/// writer creates intermediate directories on demand and preserves the `{z}/{x}/{y}` layout.
 pub struct DirectoryTilesWriter {}
 
 impl DirectoryTilesWriter {
-	/// Writes the given blob to the specified path. Creates the necessary directory structure if it doesn't exist.
-	///
-	/// # Arguments
-	/// * `path` - The path where the blob should be written.
-	/// * `blob` - The blob data to write.
-	///
-	/// # Errors
-	/// Returns an error if the parent directory cannot be created or if writing to the file fails.
+	/// Write a `Blob` to `path`, creating missing parent directories.
 	#[context("writing file '{}'", path.display())]
 	fn write(path: PathBuf, blob: Blob) -> Result<()> {
 		let parent = path.parent().unwrap();
@@ -85,14 +73,15 @@ impl DirectoryTilesWriter {
 
 #[async_trait]
 impl TilesWriterTrait for DirectoryTilesWriter {
-	/// Writes the tile data and metadata from the given `TilesReader` to the specified directory path.
+	/// Write all tiles and metadata from `reader` into the absolute directory `path`.
 	///
-	/// # Arguments
-	/// * `reader` - A mutable reference to the `TilesReader` providing the data.
-	/// * `path` - The directory path where the data should be written.
+	/// * Validates that `path` is absolute.
+	/// * Encodes tiles using `reader.parameters().tile_format` and `reader.parameters().tile_compression`.
+	/// * Writes `tiles.json[.<compression>]` containing the reader's TileJSON, compressed to the same transport layer.
+	/// * Creates the `{z}/{x}/{y}` directory structure on demand.
 	///
 	/// # Errors
-	/// Returns an error if the path is not absolute, if there are issues with file I/O, or if compression fails.
+	/// Returns an error for non-absolute paths, I/O failures, or encoding/compression errors.
 	#[context("writing tiles to directory '{}'", path.display())]
 	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: ProcessingConfig) -> Result<()> {
 		ensure!(path.is_absolute(), "path {path:?} must be absolute");
@@ -142,12 +131,8 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 
 	/// Writes the tile data from the given `TilesReader` to the specified `DataWriterTrait`.
 	///
-	/// # Arguments
-	/// * `reader` - A mutable reference to the `TilesReader` providing the data.
-	/// * `writer` - A mutable reference to the `DataWriterTrait` where the data should be written.
-	///
 	/// # Errors
-	/// This function always returns an error as it is not implemented.
+	/// Always returns an error (`not implemented`).
 	#[context("writing tiles to external writer")]
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,

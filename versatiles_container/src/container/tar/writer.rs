@@ -1,4 +1,19 @@
-//! Provides functionality for writing tile data to a tar archive.
+//! Write tiles and metadata into a `.tar` archive.
+//!
+//! The `TarTilesWriter` emits a directory-like tile pyramid into a tarball using the
+//! `{z}/{x}/{y}.<format>[.<compression>]` layout and writes TileJSON as `tiles.json[.<compression>]`.
+//! The transport **compression** (`.br`/`.gz` or none) follows the source reader’s
+//! [`TilesReaderParameters::tile_compression`].
+//!
+//! ## Behavior
+//! - Creates regular file entries with mode `0644`.
+//! - Uses the **same** tile `format` and `compression` for all files (as reported by the reader).
+//! - Writes TileJSON first, then streams all tiles from the reader (order is not significant).
+//! - The output path can be relative or absolute; parent directories must exist or be creatable.
+//!
+//! ## Errors
+//! Returns errors if the archive file cannot be created, or if encoding/compression of
+//! tiles/TileJSON fails while streaming from the reader.
 
 use crate::{ProcessingConfig, TilesReaderTrait, TilesReaderTraverseExt, TilesWriterTrait};
 use anyhow::{Result, bail};
@@ -13,19 +28,26 @@ use tar::{Builder, Header};
 use versatiles_core::{Traversal, io::DataWriterTrait, utils::compress};
 use versatiles_derive::context;
 
-/// A struct that provides functionality to write tile data to a tar archive.
+/// Writer for tiles packaged inside a tar archive.
+///
+/// Serializes TileJSON as `tiles.json[.<br|gz>]` and each tile as `{z}/{x}/{y}.<ext>[.<br|gz>]`,
+/// using the reader’s reported `tile_format` and `tile_compression`.
+///
+/// Internally uses a mutex around the tar `Builder` to allow asynchronous streaming
+/// of tiles while maintaining a single-writer model.
 pub struct TarTilesWriter {}
 
 #[async_trait]
 impl TilesWriterTrait for TarTilesWriter {
-	/// Writes the tile data from the `TilesReader` to a tar archive at the specified path.
+	/// Write all tiles and TileJSON from `reader` into a tarball at `path`.
 	///
-	/// # Arguments
-	/// * `reader` - The `TilesReader` instance containing the tile data.
-	/// * `path` - The path to the output tar archive file.
+	/// * Encodes TileJSON to a blob using `reader.parameters().tile_compression` and writes it as `tiles.json[.<compression>]`.
+	/// * Streams all tiles from the reader and writes them to `{z}/{x}/{y}.<format>[.<compression>]`.
+	/// * Creates entries with mode `0644` and writes them as regular files.
 	///
 	/// # Errors
-	/// Returns an error if there is an issue creating the tar archive or writing the data.
+	/// Returns an error if the output file cannot be created, or if any tile/metadata
+	/// serialization or compression fails.
 	#[context("writing tar to path '{}'", path.display())]
 	async fn write_to_path(reader: &mut dyn TilesReaderTrait, path: &Path, config: ProcessingConfig) -> Result<()> {
 		let file = File::create(path)?;
@@ -83,14 +105,10 @@ impl TilesWriterTrait for TarTilesWriter {
 		Ok(())
 	}
 
-	/// Writes the tile data from the `TilesReader` to the specified `DataWriterTrait`.
-	///
-	/// # Arguments
-	/// * `reader` - The `TilesReader` instance containing the tile data.
-	/// * `writer` - The `DataWriterTrait` instance where the data will be written.
+	/// Not implemented: streaming a tar archive to an abstract `DataWriterTrait`.
 	///
 	/// # Errors
-	/// This function is not implemented and will return an error.
+	/// Always returns `not implemented`.
 	#[context("writing tar to DataWriter")]
 	async fn write_to_writer(
 		_reader: &mut dyn TilesReaderTrait,
