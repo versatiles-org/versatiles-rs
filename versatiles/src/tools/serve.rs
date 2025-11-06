@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result, anyhow};
 use regex::Regex;
 use std::{mem::swap, path::PathBuf};
 use tokio::time::{Duration, sleep};
@@ -55,7 +55,8 @@ pub struct Subcommand {
 #[tokio::main]
 pub async fn run(arguments: &Subcommand) -> Result<()> {
 	let mut config = if let Some(config_path) = &arguments.config {
-		Config::from_path(config_path)?
+		Config::from_path(config_path)
+			.context("run `versatiles help config` to get more information about the config file format")?
 	} else {
 		Config::default()
 	};
@@ -84,9 +85,9 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 			let capture = tile_patterns
 				.iter()
 				.find(|p| p.is_match(argument))
-				.ok_or_else(|| anyhow::anyhow!("Failed to parse tile source argument: {}", argument))?
+				.ok_or_else(|| anyhow!("Failed to parse tile source argument: {}", argument))?
 				.captures(argument)
-				.ok_or_else(|| anyhow::anyhow!("Failed to parse tile source argument: {}", argument))?;
+				.ok_or_else(|| anyhow!("Failed to parse tile source argument: {}", argument))?;
 
 			let path = UrlPath::from(capture.name("url").unwrap().as_str());
 			let name: String = match capture.name("name") {

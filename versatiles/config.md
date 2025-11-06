@@ -33,6 +33,7 @@ cors:
   
   # Allowed origins for CORS requests
   # Supports:
+  # - Exact origins like `https://example.com`
   # - Globs at the start of the domain like `*.example.com`
   # - Globs at the end of the domain like `example.*`
   # - Regular expressions enclosed in slashes like `/domain\..*$/`
