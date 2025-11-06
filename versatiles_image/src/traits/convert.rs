@@ -17,6 +17,9 @@ use versatiles_derive::context;
 
 /// Trait for converting between `DynamicImage` and raw/encoded formats, and for constructing images from functions.
 pub trait DynamicImageTraitConvert {
+	/// Constructs a `DynamicImage` by applying a function to each pixel coordinate.
+	/// The function `f` takes (x, y) coordinates and returns a pixel value as an array of `N` bytes.
+	/// Supported channel counts are 1 (L8), 2 (LA8), 3 (RGB8), and 4 (RGBA8).
 	fn from_fn<const N: usize>(width: usize, height: usize, f: impl FnMut(u32, u32) -> [u8; N]) -> DynamicImage;
 
 	/// Constructs a `DynamicImage` from raw pixel data and dimensions.
@@ -36,6 +39,7 @@ pub trait DynamicImageTraitConvert {
 	/// Each slice represents one pixel, with the slice length corresponding to the image's channel count.
 	fn iter_pixels(&self) -> impl Iterator<Item = &[u8]>;
 
+	/// Returns a reference to the raw pixel data at the specified (x, y) coordinates.
 	fn get_raw_pixel(&self, x: u32, y: u32) -> &[u8];
 }
 
