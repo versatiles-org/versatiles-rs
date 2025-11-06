@@ -280,7 +280,7 @@ mod tests {
 		);
 
 		return Operation::build(
-			VPLNode::from_str(&format!("raster_overview level={level_base} tile_size={tile_size}")).unwrap(),
+			VPLNode::try_from_str(&format!("raster_overview level={level_base} tile_size={tile_size}")).unwrap(),
 			Box::new(DummyImageSource::from_color(&[255, 0, 0], tile_size, TileFormat::PNG, Some(pyramid)).unwrap()),
 			&PipelineFactory::new_dummy(),
 		)

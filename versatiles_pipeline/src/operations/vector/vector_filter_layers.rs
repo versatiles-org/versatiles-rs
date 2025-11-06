@@ -122,7 +122,7 @@ mod tests {
 
 	#[test]
 	fn test_args_from_vpl_node() {
-		let vpl_node = VPLNode::from_str(r##"vector_filter_layers filter="temp,tomp" invert=true"##).unwrap();
+		let vpl_node = VPLNode::try_from_str(r##"vector_filter_layers filter="temp,tomp" invert=true"##).unwrap();
 
 		let args = Args::from_vpl_node(&vpl_node).unwrap();
 		assert_eq!(args.filter, "temp,tomp");

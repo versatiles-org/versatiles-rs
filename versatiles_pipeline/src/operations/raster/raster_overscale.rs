@@ -185,7 +185,7 @@ mod tests {
 		let source = Box::new(DummyImageSource::from_image(image, TileFormat::PNG, None)?);
 
 		Operation::build(
-			VPLNode::from_str("raster_overscale tile_size=256 level_base=2")?,
+			VPLNode::try_from_str("raster_overscale tile_size=256 level_base=2")?,
 			source,
 			&PipelineFactory::new_dummy(),
 		)

@@ -5,7 +5,7 @@ use enumset::{EnumSet, EnumSetType};
 /// Known tile schema identifiers.
 ///
 /// A *tile schema* describes how the pixel or vector payload inside a tile
-/// is organised and encoded.  Versatiles distinguishes between several
+/// is organised and encoded.  VersaTiles distinguishes between several
 /// raster and vector schemas and falls back to [`Unknown`] if the textual
 /// identifier is not recognised.
 ///
@@ -16,7 +16,7 @@ use enumset::{EnumSet, EnumSetType};
 ///   elevation specification.
 /// * **`RasterDEMTerrarium`** – Unsigned 16‑bit DEM in the *Terrarium*
 ///   layout used by GDAL.
-/// * **`RasterDEMVersatiles`** – Signed 16‑bit DEM in Versatiles’ own
+/// * **`RasterDEMVersatiles`** – Signed 16‑bit DEM in VersaTiles’ own
 ///   layout.
 ///
 /// ## Vector schemas
@@ -37,7 +37,7 @@ pub enum TileSchema {
 	RasterDEMMapbox,
 	/// Elevation data in Terrarium format (https://github.com/tilezen/joerd/blob/master/docs/formats.md#terrarium)
 	RasterDEMTerrarium,
-	/// Elevation data in Versatiles' own format.
+	/// Elevation data in VersaTiles' own format.
 	RasterDEMVersatiles,
 	/// Vector tiles conforming to the OpenMapTiles schema (https://openmaptiles.org/).
 	VectorOpenMapTiles,

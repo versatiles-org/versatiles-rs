@@ -1,3 +1,13 @@
+//! Proc-macro crate for VersaTiles.
+//!
+//! This crate provides derive macros and attribute macros to assist with decoding VPL data,
+//! generating configuration documentation, and adding error context to functions.
+//!
+//! # Provided macros
+//! - `#[derive(VPLDecode)]`: Derive macro to decode VPL data into Rust structs.
+//! - `#[derive(ConfigDoc)]`: Derive macro to generate YAML documentation for configuration structs.
+//! - `#[context("...")]`: Attribute macro to add error context to functions returning `Result`.
+
 mod args;
 mod config_doc;
 mod decode_vpl;
@@ -8,6 +18,23 @@ use proc_macro2::{Ident, Span};
 use quote::{ToTokens, quote};
 use syn::{Fields, parse_macro_input, spanned::Spanned};
 
+/// Derive macro to decode VPL data into Rust structs.
+///
+/// This macro can be applied to named-field structs to automatically generate decoding logic
+/// from VPL (VersaTiles Programming Language) data.
+///
+/// # Example
+///
+/// ```rust
+/// use versatiles_derive::VPLDecode;
+/// use versatiles_pipeline::VPLNode;
+/// use anyhow::Result;
+/// #[derive(VPLDecode)]
+/// struct Config {
+///     field1: String,
+///     field2: Option<u8>,
+/// }
+/// ```
 #[proc_macro_derive(VPLDecode)]
 pub fn decode_vpl(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as syn::DeriveInput);
@@ -20,6 +47,61 @@ pub fn decode_vpl(input: TokenStream) -> TokenStream {
 	TokenStream::from(expanded)
 }
 
+/// Derive macro to generate YAML configuration documentation.
+///
+/// `ConfigDoc` generates a YAML-formatted demo of the configuration struct, including documentation
+/// comments and example values. It supports the following attributes:
+///
+/// - `serde(rename = "...")` to rename keys in the output.
+/// - `#[config_demo("...")]` to provide example values for fields.
+///
+/// Nested structs are rendered recursively, and `Vec<T>` fields are rendered as YAML lists.
+///
+/// # Example
+///
+/// Given:
+///
+/// ```rust
+/// use versatiles_derive::ConfigDoc;
+///
+/// #[derive(ConfigDoc)]
+/// struct Config {
+///     /// The name of the user.
+///     #[config_demo("alice")]
+///     name: String,
+///
+///     /// List of roles.
+///     #[config_demo("- admin\n- user")]
+///     roles: Vec<String>,
+///
+///     /// Nested settings.
+///     settings: Settings,
+/// }
+///
+/// #[derive(ConfigDoc)]
+/// struct Settings {
+///     /// Enable feature.
+///     #[config_demo("true")]
+///     enabled: bool,
+/// }
+/// ```
+///
+/// The generated YAML demo might look like:
+///
+/// ```yaml
+/// # The name of the user.
+/// username: alice
+///
+/// # List of roles.
+/// roles:
+///   - admin
+///   - user
+///
+/// # Nested settings.
+/// settings:
+///   # Enable feature.
+///   enabled: true
+/// ```
 #[proc_macro_derive(ConfigDoc, attributes(config, config_demo))]
 pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as syn::DeriveInput);
@@ -211,6 +293,53 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 	TokenStream::from(expanded)
 }
 
+/// Attribute macro to add error context to functions returning `Result`.
+///
+/// This macro wraps the function body to attach additional context to errors using `anyhow::Context`.
+///
+/// It supports:
+/// - **Sync functions** returning `Result`: wraps the body and maps errors with context.
+/// - **`async fn` functions** returning `Result`: awaits the async block and maps errors with context.
+/// - **Functions lowered by `async_trait`** (returning pinned futures): wraps the returned future and maps errors with context.
+///
+/// # Examples
+///
+/// Sync function:
+///
+/// ```rust
+/// use versatiles_derive::context;
+/// use anyhow::Result;
+/// #[context("failed to process data")]
+/// fn process() -> Result<()> {
+///     // ...
+///     Ok(())
+/// }
+/// ```
+///
+/// Async function:
+///
+/// ```rust
+/// use versatiles_derive::context;
+/// use anyhow::Result;
+/// #[context("failed to fetch data")]
+/// async fn fetch() -> Result<String> {
+///     // ...
+///     Ok("data".to_string())
+/// }
+/// ```
+///
+/// Function lowered by `async_trait`:
+///
+/// ```rust
+/// use versatiles_derive::context;
+/// use anyhow::Result;
+/// use std::pin::Pin;
+/// #[context("failed in async trait method")]
+/// fn async_trait_method() -> Pin<Box<dyn Future<Output = Result<()>> + Send>> {
+///     // ...
+///     Box::pin(async { Ok(()) })
+/// }
+/// ```
 #[proc_macro_attribute]
 pub fn context(args: TokenStream, input: TokenStream) -> TokenStream {
 	let Args(move_token, format_args) = parse_macro_input!(args);

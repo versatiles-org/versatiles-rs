@@ -219,7 +219,7 @@ mod tests {
 
 	#[test]
 	fn test_args_from_vpl_node() {
-		let vpl_node = VPLNode::from_str(
+		let vpl_node = VPLNode::try_from_str(
 			r##"vector_update_properties data_source_path="data.csv" id_field_tiles=id id_field_data=id layer_name=test_layer replace_properties=true include_id=true"##,
 		)
 		.unwrap();

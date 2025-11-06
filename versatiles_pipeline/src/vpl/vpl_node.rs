@@ -14,7 +14,7 @@ pub struct VPLNode {
 #[allow(dead_code)]
 impl VPLNode {
 	#[context("Failed to parse VPL node from string '{vpl}'")]
-	pub fn from_str(vpl: &str) -> Result<Self> {
+	pub fn try_from_str(vpl: &str) -> Result<Self> {
 		let mut pipeline = parse_vpl(vpl)?;
 		assert_eq!(pipeline.len(), 1);
 		pipeline.pop().ok_or(anyhow!("pipeline is empty"))
@@ -345,7 +345,7 @@ mod tests {
 	#[test]
 	fn test_vplnode_from_str() {
 		fn run(vpl: &str) {
-			let node = VPLNode::from_str(vpl).unwrap();
+			let node = VPLNode::try_from_str(vpl).unwrap();
 
 			assert_eq!(node.name, "node");
 			assert_eq!(node.properties.get("key1").unwrap(), &vec!["value1".to_string()]);

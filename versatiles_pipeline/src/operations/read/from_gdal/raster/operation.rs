@@ -258,7 +258,7 @@ mod tests {
 
 	async fn get_operation(tile_size: u32) -> Operation {
 		Operation::new(
-			VPLNode::from_str(&format!(
+			VPLNode::try_from_str(&format!(
 				"from_gdal_raster filename=\"../testdata/gradient.tif\" tile_size=\"{tile_size}\" level_min=\"0\" level_max=\"3\""
 			))
 			.unwrap(),

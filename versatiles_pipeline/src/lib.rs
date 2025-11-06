@@ -8,3 +8,4 @@ mod vpl;
 pub use container_reader::*;
 pub use factory::PipelineFactory;
 pub use traits::OperationTrait;
+pub use vpl::VPLNode;

@@ -96,7 +96,7 @@ function Install-Package {
    # Clean up
    Remove-Item $downloadPath
 
-   Write-Host "Versatiles installed successfully." -ForegroundColor Green
+   Write-Host "VersaTiles installed successfully." -ForegroundColor Green
 }
 
 # Main script execution
