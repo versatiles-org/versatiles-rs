@@ -22,7 +22,8 @@ packages=(
 selected_packages=()
 for pkg in "${packages[@]}"; do
   pkg_dir="$PROJECT_DIR/$pkg"
-  if [[ "$CURRENT_DIR" == "$pkg_dir"* ]]; then
+
+  if [[ "$CURRENT_DIR" == "$pkg_dir" ]]; then
     selected_packages+=("$pkg")
     break
   fi
