@@ -44,7 +44,6 @@ jobs:
         run: |
           source ./scripts/install-gdal.sh
           detect_platform
-          resolve_gdal_version
           install_deps
           echo "GDAL_VERSION=$GDAL_VERSION" >> "$GITHUB_ENV"
 
