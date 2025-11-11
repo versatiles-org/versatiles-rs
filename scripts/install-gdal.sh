@@ -16,6 +16,7 @@ set -euo pipefail
 : "${SKIP_DEPS:=0}"           # 1 = do not install deps
 : "${SRC_DIR:=/tmp/gdal-src}" # Working dir for downloading/building
 : "${INSTALL_TEST:=1}"        # 1 = run post-install sanity checks
+: "${GDAL_VERSION:=3.11.5}"   # GDAL version to install
 # =============================================================================
 
 # ----- tiny logger helpers ----------------------------------------------------
@@ -204,16 +205,6 @@ prepare_source_dir() {
   rm -rf "$SRC_DIR" && mkdir -p "$SRC_DIR"
 }
 
-# ----- resolve latest GDAL version -------------------------------------------
-resolve_gdal_version() {
-  info "Resolving latest GDAL version via ls-remote…"
-  GDAL_VERSION="$((git ls-remote --tags --refs https://github.com/OSGeo/gdal.git \
-    | awk -F/ '/refs\/tags\/v[0-9]+\.[0-9]+\.[0-9]+$/ {print $NF}' \
-    | sort -V | tail -n1) | sed 's/^v//')"
-  [[ -n "$GDAL_VERSION" ]] || die "Could not determine the latest GDAL version"
-  ok "Building GDAL version: ${GDAL_VERSION}"
-}
-
 # ----- fetch source tarball ---------------------------------------------------
 fetch_source_tarball() {
   local tar="gdal-${GDAL_VERSION}.tar.gz"
@@ -356,7 +347,6 @@ main() {
 
   set_build_env
   prepare_source_dir
-  resolve_gdal_version
   fetch_source_tarball
   configure_build
   build_and_install
