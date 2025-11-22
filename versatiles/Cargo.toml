@@ -24,7 +24,7 @@ path = "src/lib.rs"
 [dependencies]
 anyhow = { workspace = true, features = ["std", "backtrace"] }
 async-trait.workspace = true
-axum = { version = "0.8.6", default-features = false, optional = true, features = [
+axum = { version = "0.8.7", default-features = false, optional = true, features = [
 	"http1",
 	"http2",
 	"tokio",
