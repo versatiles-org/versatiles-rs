@@ -91,8 +91,7 @@ enum Commands {
 	/// Show detailed help
 	Help(tools::help::Subcommand),
 
-	#[clap(hide = true)]
-	/// Internal command for development
+	/// Some unstable developer tools
 	Dev(tools::dev::Subcommand),
 }
 
