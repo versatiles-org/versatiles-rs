@@ -3,6 +3,8 @@ cd "$(dirname "$0")/.."
 
 set -e
 
+source scripts/env-gdal.sh
+
 # Set environment variable
 RUST_BACKTRACE=1
 
