@@ -3722,7 +3722,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
- "versatiles_pipeline",
 ]
 
 [[package]]

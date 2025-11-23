@@ -22,19 +22,6 @@ use syn::{Fields, parse_macro_input, spanned::Spanned};
 ///
 /// This macro can be applied to named-field structs to automatically generate decoding logic
 /// from VPL (VersaTiles Programming Language) data.
-///
-/// # Example
-///
-/// ```rust
-/// use versatiles_derive::VPLDecode;
-/// use versatiles_pipeline::VPLNode;
-/// use anyhow::Result;
-/// #[derive(VPLDecode)]
-/// struct Config {
-///     field1: String,
-///     field2: Option<u8>,
-/// }
-/// ```
 #[proc_macro_derive(VPLDecode)]
 pub fn decode_vpl(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as syn::DeriveInput);

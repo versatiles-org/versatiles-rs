@@ -24,4 +24,3 @@ syn = { version = "2.0.110", features = ["full", "extra-traits"] }
 anyhow.workspace = true
 prettyplease = "0.2.37"
 pretty_assertions.workspace = true
-versatiles_pipeline.workspace = true
