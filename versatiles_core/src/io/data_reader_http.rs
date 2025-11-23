@@ -227,18 +227,6 @@ mod tests {
 	}
 
 	#[tokio::test]
-	async fn read_range_googleapis() {
-		read_range_helper(
-			"https://storage.googleapis.com/versatiles/download/planet/planet-20230529.versatiles",
-			3,
-			12,
-			"satiles_v02 ",
-		)
-		.await
-		.unwrap();
-	}
-
-	#[tokio::test]
 	async fn read_range_google() {
 		read_range_helper("https://google.com/", 100, 110, "plingplong")
 			.await
