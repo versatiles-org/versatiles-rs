@@ -33,8 +33,5 @@ if [ $? -ne 0 ]; then
 	exit 1
 fi
 
-# dry run the release
-cargo release "$1" --no-verify --sign-commit --workspace
-
 # execute the release
 cargo release "$1" --no-verify --sign-commit --workspace --execute
