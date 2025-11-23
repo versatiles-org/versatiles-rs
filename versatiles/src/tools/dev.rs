@@ -1,4 +1,4 @@
-use super::dev_tools::{export_outline, measure_tile_sizes};
+use super::dev_tools::{export_outline, measure_tile_sizes, print_tilejson};
 use anyhow::Result;
 
 #[derive(clap::Args, Debug)]
@@ -12,6 +12,7 @@ pub struct Subcommand {
 enum DevCommands {
 	MeasureTileSizes(measure_tile_sizes::MeasureTileSizes),
 	ExportOutline(export_outline::ExportOutline),
+	PrintTilejson(print_tilejson::PrintTilejson),
 }
 
 #[tokio::main]
@@ -19,6 +20,7 @@ pub async fn run(command: &Subcommand) -> Result<()> {
 	match &command.sub_command {
 		DevCommands::MeasureTileSizes(args) => measure_tile_sizes::run(args).await?,
 		DevCommands::ExportOutline(args) => export_outline::run(args).await?,
+		DevCommands::PrintTilejson(args) => print_tilejson::run(args).await?,
 	};
 
 	Ok(())

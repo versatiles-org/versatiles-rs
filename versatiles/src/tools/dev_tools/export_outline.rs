@@ -7,6 +7,9 @@ use versatiles_geometry::{geo::GeoCollection, tile_outline::TileOutline};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_help_flag = true, disable_version_flag = true)]
+/// Export the outline of all tiles present at a given zoom level as a GeoJSON file.
+///
+/// The output GeoJSON contains a single Feature with a Polygon geometry representing the outline of all tiles.
 pub struct ExportOutline {
 	/// Input file
 	#[arg(value_name = "INPUT_FILE")]
