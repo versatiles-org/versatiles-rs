@@ -126,9 +126,10 @@ impl ContainerRegistry {
 		F: Fn(PathBuf) -> Fut + Send + Sync + 'static,
 		Fut: Future<Output = Result<Box<dyn TilesReaderTrait>>> + Send + 'static,
 	{
-		self
-			.file_readers
-			.insert(hash_extension(ext), Arc::new(Box::new(move |p| Box::pin(read_file(p)))));
+		self.file_readers.insert(
+			sanitize_extension(ext),
+			Arc::new(Box::new(move |p| Box::pin(read_file(p)))),
+		);
 	}
 
 	/// Register an async data-based reader for a given file extension.
@@ -141,9 +142,10 @@ impl ContainerRegistry {
 		F: Fn(DataReader) -> Fut + Send + Sync + 'static,
 		Fut: Future<Output = Result<Box<dyn TilesReaderTrait>>> + Send + 'static,
 	{
-		self
-			.data_readers
-			.insert(hash_extension(ext), Arc::new(Box::new(move |p| Box::pin(read_data(p)))));
+		self.data_readers.insert(
+			sanitize_extension(ext),
+			Arc::new(Box::new(move |p| Box::pin(read_data(p)))),
+		);
 	}
 
 	/// Register an async file-based writer for a given file extension.
@@ -158,7 +160,7 @@ impl ContainerRegistry {
 		Fut: Future<Output = Result<()>> + Send + 'static,
 	{
 		self.file_writers.insert(
-			hash_extension(ext),
+			sanitize_extension(ext),
 			Arc::new(Box::new(move |r, p, c| Box::pin(write_file(r, p, c)))),
 		);
 	}
@@ -180,7 +182,7 @@ impl ContainerRegistry {
 		let mut url_path = url_path.clone().into();
 		url_path.resolve(&UrlPath::from(env::current_dir()?))?;
 
-		let extension = hash_extension(&url_path.extension()?);
+		let extension = sanitize_extension(&url_path.extension()?);
 
 		match url_path {
 			UrlPath::Url(url) => {
@@ -246,7 +248,7 @@ impl ContainerRegistry {
 	}
 }
 
-fn hash_extension(ext: &str) -> String {
+fn sanitize_extension(ext: &str) -> String {
 	ext.to_ascii_lowercase().trim_matches('.').to_string()
 }
 
