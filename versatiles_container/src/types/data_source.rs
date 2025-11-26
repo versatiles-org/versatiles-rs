@@ -105,7 +105,7 @@ impl From<DataLocation> for DataSource {
 
 #[cfg(test)]
 mod tests {
-	use std::io::Cursor;
+	use std::{io::Cursor, path::Path};
 
 	use super::*;
 	use rstest::rstest;
@@ -221,10 +221,7 @@ mod tests {
 		ds.resolve(&base).unwrap();
 		match ds.location() {
 			DataLocation::Path(path) => {
-				// Should start with "/base/dir" and end with "sub/file.mbtiles"
-				let path_str = path.to_string_lossy();
-				assert!(path_str.ends_with("sub/file.mbtiles"), "ends with: {}", path_str);
-				assert!(path_str.contains("/base/dir"), "contains base: {}", path_str);
+				assert_eq!(path, Path::new("/base/dir/sub/file.mbtiles"));
 			}
 			_ => panic!("Expected Path variant after resolve"),
 		}
