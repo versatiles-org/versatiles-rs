@@ -45,4 +45,12 @@ if [ $? -ne 0 ]; then
    exit 1
 fi
 
+echo "cargo doc"
+cd $PROJECT_DIR
+result=$(RUSTDOCFLAGS="-D warnings" cargo doc --no-deps 2>&1)
+if [ $? -ne 0 ]; then
+   echo -e "$result\nERROR DURING: cargo doc"
+   exit 1
+fi
+
 exit 0
