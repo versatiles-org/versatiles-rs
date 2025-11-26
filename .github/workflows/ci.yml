@@ -102,6 +102,9 @@ jobs:
       - name: Test workspace
         run: cargo test --workspace --all-features --all-targets
 
+      - name: Check documentation
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
