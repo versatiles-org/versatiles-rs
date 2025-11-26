@@ -42,7 +42,7 @@ pub struct TileSourceConfig {
 	/// Path or URL to the tile data source
 	/// Can be a local file or remote URL.
 	#[config_demo("osm.versatiles")]
-	pub path: DataLocation,
+	pub src: DataLocation,
 }
 
 impl TileSourceConfig {
@@ -55,7 +55,7 @@ impl TileSourceConfig {
 	/// Returns an error if path resolution fails (e.g., invalid URL format).
 	#[context("resolving tile source paths relative to base path '{}'", base_path)]
 	pub fn resolve_paths(&mut self, base_path: &DataLocation) -> Result<()> {
-		self.path.resolve(base_path)
+		self.src.resolve(base_path)
 	}
 }
 
@@ -66,7 +66,7 @@ impl TileSourceConfig {
 /// tiles:
 ///   - ["osm", "osm.versatiles"]
 ///   - name: "berlin"
-///     path: "berlin.mbtiles"
+///     src: "berlin.mbtiles"
 /// ```
 impl<'de> Deserialize<'de> for TileSourceConfig {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -77,23 +77,23 @@ impl<'de> Deserialize<'de> for TileSourceConfig {
 		#[serde(deny_unknown_fields)]
 		struct TileSourceConfigHelper {
 			pub name: Option<String>,
-			pub path: String,
+			pub src: String,
 		}
 
 		let helper = TileSourceConfigHelper::deserialize(deserializer)?;
 		Ok(TileSourceConfig {
 			name: helper.name,
-			path: DataLocation::from(helper.path),
+			src: DataLocation::from(helper.src),
 		})
 	}
 }
 
 #[cfg(test)]
 impl From<(&str, &str)> for TileSourceConfig {
-	fn from((name, path): (&str, &str)) -> Self {
+	fn from((name, src): (&str, &str)) -> Self {
 		Self {
 			name: Some(name.to_string()),
-			path: DataLocation::from(path),
+			src: DataLocation::from(src),
 		}
 	}
 }

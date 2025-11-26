@@ -127,8 +127,8 @@ impl TileServer {
 
 		for static_config in config.static_sources.iter() {
 			server.add_static_source(
-				static_config.path.as_path()?,
-				static_config.url_prefix.as_deref().unwrap_or("/"),
+				static_config.src.as_path()?,
+				static_config.prefix.as_deref().unwrap_or("/"),
 			)?;
 		}
 
@@ -137,15 +137,15 @@ impl TileServer {
 
 	#[context("adding tile source from config: {tile_config:?}")]
 	async fn add_tile_source_config(&mut self, tile_config: &TileSourceConfig) -> Result<()> {
-		let name = tile_config.name.clone().unwrap_or(tile_config.path.name()?);
+		let name = tile_config.name.clone().unwrap_or(tile_config.src.name()?);
 
 		log::debug!(
 			"add source: name='{}', path={:?}",
 			tile_config.name.as_deref().unwrap_or("<unnamed>"),
-			tile_config.path,
+			tile_config.src,
 		);
 
-		let reader = self.registry.get_reader(tile_config.path.clone()).await?;
+		let reader = self.registry.get_reader(tile_config.src.clone()).await?;
 
 		self.add_tile_source(&name, reader)
 	}

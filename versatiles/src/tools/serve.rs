@@ -89,13 +89,13 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 				.captures(argument)
 				.ok_or_else(|| anyhow!("Failed to parse tile source argument: {}", argument))?;
 
-			let path = DataLocation::from_str(capture.name("url").unwrap().as_str())?;
+			let src = DataLocation::from_str(capture.name("url").unwrap().as_str())?;
 			let name: String = match capture.name("name") {
-				None => path.name()?,
+				None => src.name()?,
 				Some(m) => m.as_str().to_string(),
 			};
 
-			Ok(TileSourceConfig { name: Some(name), path })
+			Ok(TileSourceConfig { name: Some(name), src })
 		})
 		.collect::<Result<Vec<TileSourceConfig>>>()?;
 	swap(&mut config.tile_sources, &mut tile_sources);
@@ -122,11 +122,11 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 				.unwrap();
 
 			let filename: &str = capture.name("filename").unwrap().as_str();
-			let url_prefix = capture.name("path").map(|m| m.as_str().to_string());
+			let prefix = capture.name("path").map(|m| m.as_str().to_string());
 
 			Ok(StaticSourceConfig {
-				path: DataLocation::from(filename),
-				url_prefix,
+				src: DataLocation::from(filename),
+				prefix,
 			})
 		})
 		.collect::<Result<Vec<StaticSourceConfig>>>()?;

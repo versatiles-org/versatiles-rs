@@ -28,8 +28,8 @@ use versatiles_derive::{ConfigDoc, context};
 /// This is used by the `StaticSources` subsystem to register handlers for
 /// static file serving.
 ///
-/// - `path` — Path to a directory or archive (`.tar`, `.tar.gz`, `.tar.zst`).
-/// - `url_prefix` — Optional base URL prefix (defaults to `/` if `None`).
+/// - `src` — Path to a directory or archive (`.tar`, `.tar.gz`, `.tar.zst`).
+/// - `prefix` — Optional base URL prefix (defaults to `/` if `None`).
 ///
 /// Relative paths are resolved against the base path of the configuration file
 /// by [`StaticSourceConfig::resolve_paths`].
@@ -37,12 +37,12 @@ use versatiles_derive::{ConfigDoc, context};
 pub struct StaticSourceConfig {
 	#[config_demo("./frontend.tar")]
 	/// Path to static files or archive (e.g., .tar.gz) containing assets
-	pub path: DataLocation,
+	pub src: DataLocation,
 
 	#[config_demo("/")]
 	/// Optional URL prefix where static files will be served
 	/// Defaults to root ("/")
-	pub url_prefix: Option<String>,
+	pub prefix: Option<String>,
 }
 
 impl StaticSourceConfig {
@@ -55,7 +55,7 @@ impl StaticSourceConfig {
 	/// Returns an error if path resolution fails (for example, invalid URLs).
 	#[context("resolving static source paths relative to base path '{}'", base_path)]
 	pub fn resolve_paths(&mut self, base_path: &DataLocation) -> Result<()> {
-		self.path.resolve(base_path)
+		self.src.resolve(base_path)
 	}
 }
 
@@ -65,8 +65,8 @@ impl StaticSourceConfig {
 /// ```yaml
 /// static:
 ///   - ["/", "./frontend.tar"]
-///   - path: "./public"
-///     url_prefix: "/assets"
+///   - src: "./public"
+///     prefix: "/assets"
 /// ```
 impl<'de> Deserialize<'de> for StaticSourceConfig {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -76,24 +76,24 @@ impl<'de> Deserialize<'de> for StaticSourceConfig {
 		#[derive(Deserialize)]
 		#[serde(deny_unknown_fields)]
 		struct StaticSourceConfigHelper {
-			pub path: String,
-			pub url_prefix: Option<String>,
+			pub src: String,
+			pub prefix: Option<String>,
 		}
 
 		let helper = StaticSourceConfigHelper::deserialize(deserializer)?;
 		Ok(StaticSourceConfig {
-			path: DataLocation::from(helper.path),
-			url_prefix: helper.url_prefix,
+			src: DataLocation::from(helper.src),
+			prefix: helper.prefix,
 		})
 	}
 }
 
 #[cfg(test)]
 impl From<(&str, &str)> for StaticSourceConfig {
-	fn from((url_prefix, path): (&str, &str)) -> Self {
+	fn from((prefix, src): (&str, &str)) -> Self {
 		Self {
-			path: DataLocation::from(path),
-			url_prefix: Some(url_prefix.to_string()),
+			src: DataLocation::from(src),
+			prefix: Some(prefix.to_string()),
 		}
 	}
 }

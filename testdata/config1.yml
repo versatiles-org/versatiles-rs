@@ -31,20 +31,20 @@ extra_response_headers:
 
 # --- Static mounts -----------------------------------------------------------
 static:
-  - path: "static.tar.br"
-    url_prefix: "/"
-  - path: "../testdata/static.tar.gz"
-    url_prefix: "/whynot/"
-  - path: "./"
-    url_prefix: "/assets"
+  - src: "static.tar.br"
+    prefix: "/"
+  - src: "../testdata/static.tar.gz"
+    prefix: "/whynot/"
+  - src: "./"
+    prefix: "/assets"
 
 # --- Tile sources ------------------------------------------------------------
 tiles:
   - name: osm
-    path: "https://download.versatiles.org/osm.versatiles"
+    src: "https://download.versatiles.org/osm.versatiles"
 
   - name: berlin
-    path: "./berlin.mbtiles"
+    src: "./berlin.mbtiles"
 
   - name: pipeline
-    path: "./berlin.vpl"
+    src: "./berlin.vpl"
