@@ -6,7 +6,6 @@
 //! - [`DynamicImageTraitConvert`] — conversion between formats, raw buffers, and iteration over pixel bytes.
 //! - [`DynamicImageTraitInfo`] — lightweight metadata, comparison, and introspection helpers.
 //! - [`DynamicImageTraitOperation`] — higher‑level image manipulation (flattening, scaling, cropping, etc.).
-//! - [`DynamicImageTraitTest`] — synthetic image generators used in tests and benchmarks.
 
 mod convert;
 mod info;

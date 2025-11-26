@@ -1,15 +1,7 @@
 //! Vector Tile (MVT) support.
 //!
 //! This module implements low-level read/write utilities for the Mapbox Vector Tile
-//! (MVT) protobuf format. It is organized into several submodules:
-//!
-//! - [`feature`]: compact per‑feature geometry + tag storage.
-//! - [`geometry_type`]: enum for the wire‑level geometry type.
-//! - [`layer`]: a single tile layer with key/value tables and features.
-//! - [`property_manager`]: manages the global key/value tables used by a layer and
-//!   encodes/decodes tag indices.
-//! - [`tile`]: the top‑level container that holds multiple layers.
-//! - [`value`]: typed MVT property values.
+//! (MVT) protobuf format.
 //!
 //! Together these pieces allow encoding/decoding full tiles, transforming properties,
 //! and converting between vector‑tile features and higher‑level `GeoFeature`s for

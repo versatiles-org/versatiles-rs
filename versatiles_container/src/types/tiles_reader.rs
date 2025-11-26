@@ -47,7 +47,7 @@ use versatiles_core::{
 /// * **Identification**: human‑readable source and container names.
 /// * **Metadata**: [`TileJSON`] and runtime [`TilesReaderParameters`].
 /// * **Access patterns**: single‑tile fetches and async streaming over a [`TileBBox`].
-/// * **Traversal hint**: override [`traversal`] to advertise a preferred read order; the default is [`Traversal::ANY`].
+/// * **Traversal hint**: override [`TilesReaderTrait::traversal`] to advertise a preferred read order; the default is [`Traversal::ANY`].
 ///
 /// The trait remains object‑safe to support dynamic dispatch and runtime composition.
 #[async_trait]
@@ -65,7 +65,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 
 	/// Overrides the output compression for subsequent reads.
 	///
-	/// Implementors should update their internal parameters so [`parameters`].`tile_compression`
+	/// Implementors should update their internal parameters so [`TilesReaderTrait::parameters`].`tile_compression`
 	/// reflects the new setting.
 	fn override_compression(&mut self, tile_compression: TileCompression);
 
@@ -82,7 +82,7 @@ pub trait TilesReaderTrait: Debug + Send + Sync + Unpin {
 	/// Fetches a single tile at `coord`.
 	///
 	/// Returns `Ok(Some(tile))` if present, `Ok(None)` for gaps/empty tiles, and `Err(_)` on read errors.
-	/// The tile's compression/format follow the current [`parameters`].
+	/// The tile's compression/format follow the current [`TilesReaderTrait::parameters`].
 	async fn get_tile(&self, coord: &TileCoord) -> Result<Option<Tile>>;
 
 	/// Asynchronously streams all tiles within `bbox` as `(TileCoord, Tile)` pairs.

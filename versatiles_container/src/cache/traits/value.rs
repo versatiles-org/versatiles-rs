@@ -39,13 +39,13 @@ pub trait CacheValue: Clone {
 	/// Serializes the current value into binary form and appends it to `writer`.
 	///
 	/// Implementations must use little‑endian encoding for numeric data and ensure
-	/// that the result can be faithfully reconstructed by [`read_from_cache`].
+	/// that the result can be faithfully reconstructed by [`CacheValue::read_from_cache`].
 	///
 	/// # Errors
 	/// Returns an error if the underlying write operation fails.
 	fn write_to_cache(&self, writer: &mut Vec<u8>) -> Result<()>;
 
-	/// Deserializes a value previously written by [`write_to_cache`].
+	/// Deserializes a value previously written by [`CacheValue::write_to_cache`].
 	///
 	/// Reads from the provided cursor, advancing its position according to the number
 	/// of bytes consumed. Implementations must validate data consistency and handle

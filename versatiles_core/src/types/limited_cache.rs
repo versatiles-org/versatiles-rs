@@ -11,7 +11,7 @@ use versatiles_derive::context;
 /// A generic cache that stores key-value pairs up to a specified total size limit (in bytes).
 ///
 /// The cache uses a least-recently-used (LRU) strategy when it needs to remove items.
-/// Specifically, when the cache is at capacity, it calls [`cleanup`](Self::cleanup) to evict
+/// Specifically, when the cache is at capacity, it calls `cleanup` to evict
 /// entries whose access index is at or below the computed median.
 ///
 /// # Type Parameters

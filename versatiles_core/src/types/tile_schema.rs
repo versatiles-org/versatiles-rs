@@ -6,7 +6,7 @@ use enumset::{EnumSet, EnumSetType};
 ///
 /// A *tile schema* describes how the pixel or vector payload inside a tile
 /// is organised and encoded.  VersaTiles distinguishes between several
-/// raster and vector schemas and falls back to [`Unknown`] if the textual
+/// raster and vector schemas and falls back to [`TileSchema::Unknown`] if the textual
 /// identifier is not recognised.
 ///
 /// ## Raster schemas
@@ -33,15 +33,15 @@ pub enum TileSchema {
 	RasterRGB,
 	/// 4-band RGBA, 8-bit each including alpha.
 	RasterRGBA,
-	/// Elevation data in Mapbox format (https://docs.mapbox.com/data/tilesets/guides/access-elevation-data/).
+	/// Elevation data in Mapbox format (<https://docs.mapbox.com/data/tilesets/guides/access-elevation-data/>).
 	RasterDEMMapbox,
-	/// Elevation data in Terrarium format (https://github.com/tilezen/joerd/blob/master/docs/formats.md#terrarium)
+	/// Elevation data in Terrarium format (<https://github.com/tilezen/joerd/blob/master/docs/formats.md#terrarium>)
 	RasterDEMTerrarium,
 	/// Elevation data in VersaTiles' own format.
 	RasterDEMVersatiles,
-	/// Vector tiles conforming to the OpenMapTiles schema (https://openmaptiles.org/).
+	/// Vector tiles conforming to the OpenMapTiles schema (<https://openmaptiles.org/>).
 	VectorOpenMapTiles,
-	/// Vector tiles conforming to the Shortbread schema (https://shortbread-tiles.org/).
+	/// Vector tiles conforming to the Shortbread schema (<https://shortbread-tiles.org/>).
 	VectorShortbread1_0,
 	/// Any other vector schema not listed above.
 	VectorOther,

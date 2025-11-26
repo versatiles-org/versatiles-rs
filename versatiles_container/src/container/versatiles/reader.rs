@@ -81,7 +81,7 @@ pub struct VersaTilesReader {
 impl VersaTilesReader {
 	/// Open a `.versatiles` container from a filesystem path.
 	///
-	/// Creates a `DataReaderFile` and delegates to [`open_reader`]. The path may be
+	/// Creates a `DataReaderFile` and delegates to [`VersaTilesReader::open_reader`]. The path may be
 	/// relative or absolute.
 	///
 	/// # Errors

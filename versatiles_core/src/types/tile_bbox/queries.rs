@@ -193,7 +193,7 @@ impl TileBBox {
 
 	/// Returns the tile coordinate at a given linear index.
 	///
-	/// Inverse of [`index_of`]. The index must be smaller than `count_tiles()`.
+	/// Inverse of [`TileBBox::index_of`]. The index must be smaller than `count_tiles()`.
 	///
 	/// # Example
 	/// ```

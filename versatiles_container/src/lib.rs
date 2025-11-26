@@ -1,9 +1,9 @@
 //! VersaTiles Container: read, convert, and write tile containers.
 //!
 //! This crate exposes a small set of building blocks to work with map tile containers:
-//! - a registry that maps file extensions to readers/writers ([`types::container::ContainerRegistry`], re‑exported at the crate root),
-//! - reader traits and adapters to stream tiles ([`types::tiles_reader`]),
-//! - writer traits to serialize tiles ([`types::writer`]),
+//! - a registry that maps file extensions to readers/writers,
+//! - reader traits and adapters to stream tiles,
+//! - writer traits to serialize tiles,
 //! - utilities like caching and streaming combinators.
 //!
 //! It is designed for **runtime composition**: readers are object‑safe and can be wrapped

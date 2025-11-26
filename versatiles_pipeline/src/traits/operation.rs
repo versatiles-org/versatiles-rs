@@ -17,7 +17,7 @@ use versatiles_core::{TileBBox, TileJSON, TileStream, TilesReaderParameters, Tra
 /// - [`TilesReaderParameters`] — describing format, compression, and zoom constraints.
 /// - [`TileJSON`] metadata for the resulting tile set.
 /// - [`Traversal`] strategy that defines tile access order.
-/// - An asynchronous stream of tiles via [`get_stream`].
+/// - An asynchronous stream of tiles via [`OperationTrait::get_stream`].
 ///
 /// The trait is object-safe and designed for dynamic composition of heterogeneous
 /// read/transform stages.

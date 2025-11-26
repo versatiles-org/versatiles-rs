@@ -47,7 +47,7 @@ pub trait TilesWriterTrait: Send {
 	/// Writes all tile data from `reader` into the file or directory at `path`.
 	///
 	/// The default implementation wraps `path` in a [`DataWriterFile`] and calls
-	/// [`write_to_writer`]. Implementations may override this for more efficient
+	/// [`TilesWriterTrait::write_to_writer`]. Implementations may override this for more efficient
 	/// file handling.
 	///
 	/// # Errors

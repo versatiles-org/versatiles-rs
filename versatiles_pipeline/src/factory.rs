@@ -51,8 +51,6 @@ pub struct PipelineFactory {
 
 impl PipelineFactory {
 	/// Creates an empty factory with no registered operations.
-	///
-	/// Use [`add_read_factory`] and [`add_tran_factory`] to register operations manually.
 	pub fn new_empty(dir: &Path, create_reader: Callback, config: ProcessingConfig) -> Self {
 		PipelineFactory {
 			read_ops: HashMap::new(),

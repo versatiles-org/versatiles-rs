@@ -477,7 +477,7 @@ impl Debug for Blob {
 	}
 }
 
-/// Implements [`Display`] by printing the (lossy) UTF-8 interpretation of the bytes.
+/// Implements [`std::fmt::Display`] by printing the (lossy) UTF-8 interpretation of the bytes.
 impl std::fmt::Display for Blob {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		// Use `String::from_utf8_lossy` to avoid panicking on invalid UTF-8.

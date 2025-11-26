@@ -91,7 +91,7 @@ pub struct PMTilesReader {
 impl PMTilesReader {
 	/// Open a PMTiles container from an **absolute** filesystem path.
 	///
-	/// Validates and opens a `DataReaderFile`, then delegates to [`open_reader`].
+	/// Validates and opens a `DataReaderFile`, then delegates to [`PMTilesReader::open_reader`].
 	///
 	/// # Errors
 	/// Returns an error if the file cannot be opened.

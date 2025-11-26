@@ -17,7 +17,7 @@ use versatiles_derive::context;
 /// indices. This keeps memory compact and lookups very fast.
 ///
 /// The generic `I` is the per-tile value. Use [`Option<I>`] to represent
-/// missing values and the convenience constructors [`from_iter`] / [`from_stream`]
+/// missing values and the convenience constructors [`TileBBoxMap::from_iter`] / [`TileBBoxMap::from_stream`]
 /// (provided on `TileBBoxMap<Option<I>>`).
 pub struct TileBBoxMap<I> {
 	bbox: TileBBox,

@@ -123,8 +123,7 @@ fn read_csv_fields<'a>(
 
 /// High‑level CSV iterator enforcing a constant column count.
 ///
-/// Wraps [`read_csv_fields`] and yields `(fields, line_no, byte_pos)`. After the first
-/// non‑empty line establishes the expected column count, subsequent lines must match it.
+/// Yields `(fields, line_no, byte_pos)`. After the first non‑empty line establishes the expected column count, subsequent lines must match it.
 ///
 /// # Arguments
 /// * `reader` — Any `BufRead` source.

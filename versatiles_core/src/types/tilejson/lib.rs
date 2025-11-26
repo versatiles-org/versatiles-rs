@@ -4,7 +4,7 @@
 //! - An optional geographic bounding box, `[west, south, east, north]`.
 //! - An optional geographic center, `[longitude, latitude, zoom_level]`.
 //! - Additional `TileJSON` key-value pairs in [`TileJsonValues`].
-//! - A collection of vector layers defined in [`VectorLayers`].
+//! - A collection of vector layers defined.
 //!
 //! Methods are provided to parse from JSON, merge with other `TileJSON` objects,
 //! and validate according to the `TileJSON` 3.0.0 specification.
@@ -77,7 +77,7 @@ impl TileJSON {
 	/// Special keys recognized:
 	/// - `"bounds"`: Interpreted as a [`GeoBBox`].
 	/// - `"center"`: Interpreted as a [`GeoCenter`].
-	/// - `"vector_layers"`: Interpreted as [`VectorLayers`].
+	/// - `"vector_layers"`: Interpreted as vector layers.
 	/// - `"tile_type"`: Interpreted as [`TileType`].
 	/// - `"tile_format"`: Interpreted as [`TileFormat`] (MIME-like strings).
 	/// - `"tile_schema"`: Interpreted as [`TileSchema`].
@@ -205,9 +205,9 @@ impl TileJSON {
 
 	/// Updates this `TileJSON` based on a [`TileBBoxPyramid`].
 	///
-	/// - If the pyramid includes a `GeoBBox`, intersects or sets `self.bounds` via [`limit_bbox`].
-	/// - If the pyramid includes `zoom_min`, calls [`limit_min_zoom`].
-	/// - If the pyramid includes `zoom_max`, calls [`limit_max_zoom`].
+	/// - If the pyramid includes a `GeoBBox`, intersects or sets `self.bounds` via [`TileJSON::limit_bbox`].
+	/// - If the pyramid includes `zoom_min`, calls [`TileJSON::set_min_zoom`].
+	/// - If the pyramid includes `zoom_max`, calls [`TileJSON::set_max_zoom`].
 	pub fn update_from_pyramid(&mut self, pyramid: &TileBBoxPyramid) {
 		if let Some(bbox) = pyramid.get_geo_bbox() {
 			self.limit_bbox(bbox);
@@ -358,7 +358,7 @@ impl TileJSON {
 
 	/// Updates fields using information from [`TilesReaderParameters`].
 	///
-	/// - Applies [`update_from_pyramid`] to intersect/set bounds and min/max zoom.
+	/// - Applies [`TileJSON::update_from_pyramid`] to intersect/set bounds and min/max zoom.
 	/// - Sets `tile_format` from the reader parameters and derives `tile_type` from it.
 	/// - If `tile_schema` is absent or mismatched with `tile_type`, infers a suitable schema
 	///   (e.g., `RasterRGB` for rasters; for vectors, derived from `vector_layers`).
