@@ -23,11 +23,9 @@
 //!
 //! #[tokio::main]
 //! async fn main() {
-//!     // Define the input filename (local file or URL)
-//!     let input_filename = "../testdata/berlin.pmtiles";
 //!     let config = ProcessingConfig::default();
 //!     let registry = versatiles::get_registry(config);
-//!     let reader = registry.get_reader(input_filename).await.unwrap();
+//!     let reader = registry.get_reader_from_str("../testdata/berlin.pmtiles").await.unwrap();
 //!
 //!     // Define the output filename
 //!     let output_path = std::env::temp_dir().join("temp1.versatiles");

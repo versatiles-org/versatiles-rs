@@ -97,7 +97,7 @@ pub fn is_url_path(ty: &syn::Type) -> bool {
 	if let syn::Type::Path(tp) = ty
 		&& let Some(seg) = tp.path.segments.last()
 	{
-		return seg.ident == "UrlPath";
+		return seg.ident == "DataLocation";
 	}
 	false
 }

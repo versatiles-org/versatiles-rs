@@ -14,7 +14,7 @@
 //!     let registry = ContainerRegistry::default();
 //!
 //!     // Read from a local file
-//!     let reader = registry.get_reader("../testdata/berlin.mbtiles").await.unwrap();
+//!     let reader = registry.get_reader_from_str("../testdata/berlin.mbtiles").await.unwrap();
 //!
 //!     // Define the output filename
 //!     let output_path = std::env::temp_dir().join("temp3.versatiles");
@@ -26,8 +26,8 @@
 //! }
 //! ```
 
-use crate::*;
-use anyhow::{Result, bail};
+use crate::{types::data_location::DataLocation, *};
+use anyhow::{Result, anyhow, bail};
 #[cfg(test)]
 use assert_fs::NamedTempFile;
 use std::{
@@ -38,7 +38,7 @@ use std::{
 	pin::Pin,
 	sync::Arc,
 };
-use versatiles_core::io::{DataReader, DataReaderHttp};
+use versatiles_core::io::{DataReader, DataReaderBlob, DataReaderHttp};
 #[cfg(test)]
 use versatiles_core::{TileCompression, TileFormat};
 use versatiles_derive::context;
@@ -165,6 +165,10 @@ impl ContainerRegistry {
 		);
 	}
 
+	pub async fn get_reader_from_str(&self, data_source: &str) -> Result<Box<dyn TilesReaderTrait>> {
+		self.get_reader(DataSource::parse(data_source, self)?).await
+	}
+
 	/// Get a tile container reader for a given filename or URL.
 	///
 	/// Resolves the path or URL, determines the file extension, and uses the appropriate registered reader.
@@ -174,28 +178,27 @@ impl ContainerRegistry {
 	///
 	/// # Returns
 	/// A boxed `TilesReaderTrait` for reading tiles.
-	#[context("Failed to get reader for '{url_path:?}'")]
-	pub async fn get_reader<T>(&self, url_path: T) -> Result<Box<dyn TilesReaderTrait>>
+	#[context("Failed to get reader for '{data_source:?}'")]
+	pub async fn get_reader<T>(&self, data_source: T) -> Result<Box<dyn TilesReaderTrait>>
 	where
-		T: Into<UrlPath> + std::fmt::Debug + Clone,
+		T: Into<DataSource> + std::fmt::Debug + Clone,
 	{
-		let mut url_path = url_path.clone().into();
-		url_path.resolve(&UrlPath::from(env::current_dir()?))?;
+		let mut data_source: DataSource = data_source.clone().into();
+		data_source.resolve(&DataLocation::cwd()?)?;
+		let extension = sanitize_extension(data_source.extension());
 
-		let extension = sanitize_extension(&url_path.extension()?);
-
-		match url_path {
-			UrlPath::Url(url) => {
+		match data_source.into_location() {
+			DataLocation::Url(url) => {
 				let reader = DataReaderHttp::from_url(url.clone())
 					.with_context(|| format!("Failed to create HTTP data reader for URL '{url}'"))?;
 
-				let opener = self
+				self
 					.data_readers
 					.get(&extension)
-					.ok_or_else(|| anyhow::anyhow!("file extension '{extension}' unknown"))?;
-				opener(reader).await
+					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?(reader)
+				.await
 			}
-			UrlPath::Path(path) => {
+			DataLocation::Path(path) => {
 				if !path.exists() {
 					bail!("path '{path:?}' does not exist")
 				}
@@ -206,11 +209,19 @@ impl ContainerRegistry {
 						.boxed());
 				}
 
-				let opener = self
+				self
 					.file_readers
 					.get(&extension)
-					.ok_or_else(|| anyhow::anyhow!("file extension '{extension}' unknown"))?;
-				opener(path.to_path_buf()).await
+					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?(path.to_path_buf())
+				.await
+			}
+			DataLocation::Blob(blob) => {
+				let reader = Box::new(DataReaderBlob::from(blob));
+				self
+					.data_readers
+					.get(&extension)
+					.ok_or_else(|| anyhow!("file extension '{extension}' unknown"))?(reader)
+				.await
 			}
 		}
 	}
@@ -241,10 +252,15 @@ impl ContainerRegistry {
 		let writer = self
 			.file_writers
 			.get(&extension)
-			.ok_or_else(|| anyhow::anyhow!("Error when reading: file extension '{extension}' unknown"))?;
+			.ok_or_else(|| anyhow!("Error when reading: file extension '{extension}' unknown"))?;
 		writer(reader, path.to_path_buf(), self.writer_config.clone()).await?;
 
 		Ok(())
+	}
+
+	pub fn supports_reader_extension(&self, ext: &str) -> bool {
+		let ext = sanitize_extension(ext);
+		self.data_readers.contains_key(&ext) || self.file_readers.contains_key(&ext)
 	}
 }
 
@@ -339,7 +355,7 @@ pub mod tests {
 			registry.write_to_path(Box::new(reader1), &path).await?;
 
 			// get test container reader using the default registry (back-compat)
-			let mut reader2 = registry.get_reader(&UrlPath::from(path)).await?;
+			let mut reader2 = registry.get_reader_from_str(path.to_str().unwrap()).await?;
 			MockTilesWriter::write(reader2.as_mut()).await?;
 
 			Ok(())

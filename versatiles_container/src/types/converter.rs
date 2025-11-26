@@ -16,15 +16,12 @@
 //!
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
-//!     // Input and output
-//!     let path_mbtiles = std::env::current_dir()?.join("../testdata/berlin.mbtiles");
-//!     let path_versatiles = std::env::temp_dir().join("temp2.versatiles");
 //!
 //!     // Default registry knows how to open/read and write common containers
 //!     let registry = ContainerRegistry::default();
 //!
 //!     // Open the source
-//!     let reader = registry.get_reader(&path_mbtiles).await?;
+//!     let reader = registry.get_reader_from_str("../testdata/berlin.mbtiles").await?;
 //!
 //!     // Limit to a bbox pyramid and keep source compression;
 //!     // you could also set `tile_compression: Some(TileCompression::Brotli)` to re-encode.
@@ -34,6 +31,7 @@
 //!     };
 //!
 //!     // Convert and write
+//!     let path_versatiles = std::env::temp_dir().join("temp2.versatiles");
 //!     convert_tiles_container(reader, converter_params, &path_versatiles.as_path(), registry).await?;
 //!
 //!     println!("Wrote {:?}", path_versatiles);

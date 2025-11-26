@@ -23,7 +23,7 @@ use versatiles_container::{ContainerRegistry, ProcessingConfig, TilesReaderTrait
 /// #[tokio::main]
 /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
 ///     let registry: ContainerRegistry = get_registry(ProcessingConfig::default());
-///     let reader = registry.get_reader("../testdata/berlin.vpl").await?;
+///     let reader = registry.get_reader_from_str("../testdata/berlin.vpl").await?;
 ///     // Use the reader here
 ///     Ok(())
 /// }

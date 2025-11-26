@@ -25,6 +25,7 @@ r2d2 = { version = "0.8.10", default-features = false }
 r2d2_sqlite = { version = "0.31.0", default-features = false, features = [
 	"bundled",
 ] }
+regex.workspace = true
 reqwest = { workspace = true, features = ["rustls-tls"] }
 tar = { version = "0.4.44", default-features = false }
 time = { version = "0.3.44", default-features = false, features = [

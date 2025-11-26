@@ -1,7 +1,7 @@
 use anyhow::{Result, bail};
 use std::path::PathBuf;
 use versatiles::get_registry;
-use versatiles_container::{ProcessingConfig, TilesConverterParameters, UrlPath, convert_tiles_container};
+use versatiles_container::{ProcessingConfig, TilesConverterParameters, convert_tiles_container};
 use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCompression};
 use versatiles_derive::context;
 
@@ -10,7 +10,7 @@ use versatiles_derive::context;
 pub struct Subcommand {
 	/// supported container formats: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory
 	#[arg()]
-	input_file: UrlPath,
+	input_file: String,
 
 	/// supported container formats: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory
 	#[arg()]
@@ -65,7 +65,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 
 	let config = ProcessingConfig::default();
 	let registry = get_registry(config);
-	let mut reader = registry.get_reader(&arguments.input_file).await?;
+	let mut reader = registry.get_reader_from_str(&arguments.input_file).await?;
 
 	if arguments.override_input_compression.is_some() {
 		reader.override_compression(arguments.override_input_compression.unwrap());

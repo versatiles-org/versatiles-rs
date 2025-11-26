@@ -21,7 +21,7 @@
 //! #[tokio::main]
 //! async fn main() -> anyhow::Result<()> {
 //!     let registry = ContainerRegistry::default();
-//!     let reader = registry.get_reader("../testdata/berlin.mbtiles").await?;
+//!     let reader = registry.get_reader_from_str("../testdata/berlin.mbtiles").await?;
 //!     let output_path = std::env::temp_dir().join("example.versatiles");
 //!
 //!     // The registry automatically dispatches to the correct writer

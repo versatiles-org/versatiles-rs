@@ -1,7 +1,7 @@
 use anyhow::{Context, Result, bail};
 use std::path::PathBuf;
 use versatiles::get_registry;
-use versatiles_container::{ProcessingConfig, UrlPath};
+use versatiles_container::ProcessingConfig;
 use versatiles_core::progress::get_progress_bar;
 use versatiles_geometry::{geo::GeoCollection, tile_outline::TileOutline};
 
@@ -13,7 +13,7 @@ use versatiles_geometry::{geo::GeoCollection, tile_outline::TileOutline};
 pub struct ExportOutline {
 	/// Input file
 	#[arg(value_name = "INPUT_FILE")]
-	input: UrlPath,
+	input: String,
 
 	/// Output image file (should end in .geojson)
 	#[arg(value_name = "OUTPUT_FILE")]
@@ -28,7 +28,9 @@ pub async fn run(args: &ExportOutline) -> Result<()> {
 	let input = &args.input;
 	let output = &args.output;
 
-	let reader = get_registry(ProcessingConfig::default()).get_reader(input).await?;
+	let reader = get_registry(ProcessingConfig::default())
+		.get_reader_from_str(input)
+		.await?;
 
 	let compression = reader.parameters().tile_compression;
 	let bbox_pyramid = reader.parameters().bbox_pyramid.clone();

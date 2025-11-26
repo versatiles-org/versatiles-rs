@@ -33,7 +33,7 @@ use versatiles_derive::ConfigDoc;
 /// allowing only same-origin requests.
 #[derive(Default, Debug, Clone, Deserialize, PartialEq, ConfigDoc)]
 #[serde(deny_unknown_fields)]
-pub struct Cors {
+pub struct CorsConfig {
 	/// Allowed origins for CORS requests
 	/// Supports:
 	/// - Exact origins like `https://example.com`

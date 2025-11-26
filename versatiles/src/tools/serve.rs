@@ -1,9 +1,9 @@
 use anyhow::{Context, Result, anyhow};
 use regex::Regex;
-use std::{mem::swap, path::PathBuf};
+use std::{mem::swap, path::PathBuf, str::FromStr};
 use tokio::time::{Duration, sleep};
 use versatiles::{Config, StaticSourceConfig, TileSourceConfig, get_registry, server::TileServer};
-use versatiles_container::{ProcessingConfig, UrlPath};
+use versatiles_container::{DataLocation, ProcessingConfig};
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_version_flag = true, verbatim_doc_comment)]
@@ -89,7 +89,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 				.captures(argument)
 				.ok_or_else(|| anyhow!("Failed to parse tile source argument: {}", argument))?;
 
-			let path = UrlPath::from(capture.name("url").unwrap().as_str());
+			let path = DataLocation::from_str(capture.name("url").unwrap().as_str())?;
 			let name: String = match capture.name("name") {
 				None => path.name()?,
 				Some(m) => m.as_str().to_string(),
@@ -125,7 +125,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 			let url_prefix = capture.name("path").map(|m| m.as_str().to_string());
 
 			Ok(StaticSourceConfig {
-				path: UrlPath::from(filename),
+				path: DataLocation::from(filename),
 				url_prefix,
 			})
 		})

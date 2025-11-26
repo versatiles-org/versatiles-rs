@@ -49,7 +49,7 @@
 //! use versatiles::Config;
 //! let cfg = Config::from_string("tiles: [[\"osm\", \"osm.versatiles\"]]").unwrap();
 //! ```
-use super::{Cors, ServerConfig, StaticSourceConfig, TileSourceConfig};
+use super::{CorsConfig, ServerConfig, StaticSourceConfig, TileSourceConfig};
 use anyhow::Result;
 use serde::Deserialize;
 use std::{
@@ -58,7 +58,7 @@ use std::{
 	io::{BufReader, Read},
 	path::Path,
 };
-use versatiles_container::UrlPath;
+use versatiles_container::DataLocation;
 use versatiles_derive::ConfigDoc;
 use versatiles_derive::context;
 
@@ -81,7 +81,7 @@ pub struct Config {
 
 	/// Optional Cross-Origin Resource Sharing (CORS) settings
 	#[serde(default)]
-	pub cors: Cors,
+	pub cors: CorsConfig,
 
 	/// Optional extra HTTP response headers to add to every response
 	/// For example, cache control or timing headers
@@ -132,7 +132,7 @@ impl Config {
 		let mut cfg = Config::from_reader(BufReader::new(file))?;
 
 		// Sanity checks
-		cfg.resolve_paths(&UrlPath::from(path.parent().unwrap()))?;
+		cfg.resolve_paths(&DataLocation::from(path.parent().unwrap()))?;
 		Ok(cfg)
 	}
 
@@ -141,7 +141,7 @@ impl Config {
 	/// `base` should be the directory containing the YAML file (or an equivalent URL base).
 	/// Paths are left unchanged if they are already absolute; URLs are left unchanged.
 	#[context("resolving relative paths for {} static + {} tile sources", self.static_sources.len(), self.tile_sources.len())]
-	pub fn resolve_paths(&mut self, base: &UrlPath) -> Result<()> {
+	pub fn resolve_paths(&mut self, base: &DataLocation) -> Result<()> {
 		for static_source in &mut self.static_sources {
 			static_source.resolve_paths(base)?;
 		}
@@ -187,7 +187,7 @@ mod tests {
 					minimal_recompression: Some(true),
 					disable_api: Some(true)
 				},
-				cors: Cors {
+				cors: CorsConfig {
 					allowed_origins: vec!["https://example.org".to_string(), "*.other-example.org".to_string()],
 					max_age_seconds: Some(86400)
 				},
@@ -244,7 +244,7 @@ mod tests {
 					minimal_recompression: Some(false,),
 					disable_api: Some(false,),
 				},
-				cors: Cors {
+				cors: CorsConfig {
 					allowed_origins: vec!["https://example.org".to_string(), "*.example.net".to_string()],
 					max_age_seconds: Some(86400),
 				},

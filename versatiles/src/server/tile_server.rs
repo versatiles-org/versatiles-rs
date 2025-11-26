@@ -145,7 +145,7 @@ impl TileServer {
 			tile_config.path,
 		);
 
-		let reader = self.registry.get_reader(&tile_config.path).await?;
+		let reader = self.registry.get_reader(tile_config.path.clone()).await?;
 
 		self.add_tile_source(&name, reader)
 	}

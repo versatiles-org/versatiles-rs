@@ -19,8 +19,7 @@
 //! async fn main() -> anyhow::Result<()> {
 //!     // Open a source container via the registry
 //!     let registry = ContainerRegistry::default();
-//!     let input = std::env::current_dir()?.join("../testdata/berlin.mbtiles");
-//!     let reader = registry.get_reader(&input).await?;
+//!     let reader = registry.get_reader_from_str("../testdata/berlin.mbtiles").await?;
 //!
 //!     // Optionally adapt the reader: limit to a bbox pyramid, keep compression as-is
 //!     let params = TilesConverterParameters {

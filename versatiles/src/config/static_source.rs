@@ -17,7 +17,7 @@
 
 use anyhow::Result;
 use serde::Deserialize;
-use versatiles_container::UrlPath;
+use versatiles_container::DataLocation;
 use versatiles_derive::{ConfigDoc, context};
 
 /// Configuration entry for serving static assets.
@@ -37,7 +37,7 @@ use versatiles_derive::{ConfigDoc, context};
 pub struct StaticSourceConfig {
 	#[config_demo("./frontend.tar")]
 	/// Path to static files or archive (e.g., .tar.gz) containing assets
-	pub path: UrlPath,
+	pub path: DataLocation,
 
 	#[config_demo("/")]
 	/// Optional URL prefix where static files will be served
@@ -54,7 +54,7 @@ impl StaticSourceConfig {
 	/// # Errors
 	/// Returns an error if path resolution fails (for example, invalid URLs).
 	#[context("resolving static source paths relative to base path '{}'", base_path)]
-	pub fn resolve_paths(&mut self, base_path: &UrlPath) -> Result<()> {
+	pub fn resolve_paths(&mut self, base_path: &DataLocation) -> Result<()> {
 		self.path.resolve(base_path)
 	}
 }
@@ -82,7 +82,7 @@ impl<'de> Deserialize<'de> for StaticSourceConfig {
 
 		let helper = StaticSourceConfigHelper::deserialize(deserializer)?;
 		Ok(StaticSourceConfig {
-			path: UrlPath::from(helper.path),
+			path: DataLocation::from(helper.path),
 			url_prefix: helper.url_prefix,
 		})
 	}
@@ -92,7 +92,7 @@ impl<'de> Deserialize<'de> for StaticSourceConfig {
 impl From<(&str, &str)> for StaticSourceConfig {
 	fn from((url_prefix, path): (&str, &str)) -> Self {
 		Self {
-			path: UrlPath::from(path),
+			path: DataLocation::from(path),
 			url_prefix: Some(url_prefix.to_string()),
 		}
 	}

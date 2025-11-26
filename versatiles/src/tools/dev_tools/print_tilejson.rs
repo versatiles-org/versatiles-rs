@@ -1,7 +1,7 @@
 use anyhow::Result;
 use std::io::Write;
 use versatiles::get_registry;
-use versatiles_container::{ProcessingConfig, UrlPath};
+use versatiles_container::ProcessingConfig;
 
 #[derive(clap::Args, Debug)]
 #[command(arg_required_else_help = true, disable_help_flag = true, disable_version_flag = true)]
@@ -9,7 +9,7 @@ use versatiles_container::{ProcessingConfig, UrlPath};
 pub struct PrintTilejson {
 	/// Input file
 	#[arg(value_name = "INPUT_FILE")]
-	input: UrlPath,
+	input: String,
 
 	/// Pretty-print the output
 	#[arg(long, default_value_t = false, short = 'p')]
@@ -26,7 +26,9 @@ async fn fetch_tilejson(args: &PrintTilejson) -> Result<String> {
 	let input = &args.input;
 	let pretty = args.pretty;
 
-	let reader = get_registry(ProcessingConfig::default()).get_reader(input).await?;
+	let reader = get_registry(ProcessingConfig::default())
+		.get_reader_from_str(input)
+		.await?;
 
 	Ok(if pretty {
 		reader.tilejson().as_pretty_lines(80).join("\n")

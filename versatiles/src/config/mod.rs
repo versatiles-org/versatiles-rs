@@ -17,7 +17,7 @@ mod server;
 mod static_source;
 mod tile_source;
 
-pub use cors::Cors;
+pub use cors::CorsConfig;
 pub use main::Config;
 pub use server::ServerConfig;
 pub use static_source::StaticSourceConfig;

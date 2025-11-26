@@ -121,7 +121,7 @@ mod tests {
 	use crate::get_registry;
 	use anyhow::Result;
 	use rstest::rstest;
-	use versatiles_container::{MockTilesReader, MockTilesReaderProfile, ProcessingConfig, UrlPath};
+	use versatiles_container::{MockTilesReader, MockTilesReaderProfile, ProcessingConfig};
 	use versatiles_core::TileJSON;
 
 	// Test the constructor function for TileSource
@@ -208,7 +208,7 @@ mod tests {
 		let (exp_mime, exp_bounds, exp_header, exp_minzoom, exp_maxzoom) = expected_tile_json;
 
 		let registry = get_registry(ProcessingConfig::default());
-		let reader = registry.get_reader(&UrlPath::from(filename)).await?;
+		let reader = registry.get_reader_from_str(filename).await?;
 		let c = &mut TileSource::from(reader, "prefix")?;
 
 		assert_eq!(

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use versatiles::get_registry;
-use versatiles_container::{ProcessingConfig, UrlPath};
+use versatiles_container::ProcessingConfig;
 use versatiles_core::ProbeDepth;
 
 #[derive(clap::Args, Debug)]
@@ -9,7 +9,7 @@ pub struct Subcommand {
 	/// tile container you want to probe
 	/// supported container formats are: *.versatiles, *.tar, *.pmtiles, *.mbtiles or a directory
 	#[arg(required = true, verbatim_doc_comment)]
-	filename: UrlPath,
+	filename: String,
 
 	/// deep scan (depending on the container implementation)
 	///   -d: scans container
@@ -24,7 +24,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 	log::info!("probe {:?}", arguments.filename);
 
 	let mut reader = get_registry(ProcessingConfig::default())
-		.get_reader(&arguments.filename)
+		.get_reader_from_str(&arguments.filename)
 		.await?;
 
 	let level = match arguments.deep {

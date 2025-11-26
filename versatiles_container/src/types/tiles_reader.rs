@@ -18,7 +18,7 @@
 //! # use versatiles_core::*;
 //! # async fn demo() -> anyhow::Result<()> {
 //! let registry = ContainerRegistry::default();
-//! let reader = registry.get_reader("../testdata/berlin.mbtiles").await?;
+//! let reader = registry.get_reader_from_str("../testdata/berlin.mbtiles").await?;
 //! let bbox = TileBBox::from_min_and_max(1, 0, 0, 1, 1)?;
 //! let mut stream = reader.get_tile_stream(bbox).await?;
 //! // drain tiles

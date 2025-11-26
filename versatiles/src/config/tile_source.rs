@@ -17,7 +17,7 @@
 use anyhow::Result;
 use serde::Deserialize;
 use std::fmt::Debug;
-use versatiles_container::UrlPath;
+use versatiles_container::DataLocation;
 use versatiles_derive::{ConfigDoc, context};
 
 /// Configuration entry for a single tile data source.
@@ -42,7 +42,7 @@ pub struct TileSourceConfig {
 	/// Path or URL to the tile data source
 	/// Can be a local file or remote URL.
 	#[config_demo("osm.versatiles")]
-	pub path: UrlPath,
+	pub path: DataLocation,
 }
 
 impl TileSourceConfig {
@@ -54,7 +54,7 @@ impl TileSourceConfig {
 	/// # Errors
 	/// Returns an error if path resolution fails (e.g., invalid URL format).
 	#[context("resolving tile source paths relative to base path '{}'", base_path)]
-	pub fn resolve_paths(&mut self, base_path: &UrlPath) -> Result<()> {
+	pub fn resolve_paths(&mut self, base_path: &DataLocation) -> Result<()> {
 		self.path.resolve(base_path)
 	}
 }
@@ -83,7 +83,7 @@ impl<'de> Deserialize<'de> for TileSourceConfig {
 		let helper = TileSourceConfigHelper::deserialize(deserializer)?;
 		Ok(TileSourceConfig {
 			name: helper.name,
-			path: UrlPath::from(helper.path),
+			path: DataLocation::from(helper.path),
 		})
 	}
 }
@@ -93,7 +93,7 @@ impl From<(&str, &str)> for TileSourceConfig {
 	fn from((name, path): (&str, &str)) -> Self {
 		Self {
 			name: Some(name.to_string()),
-			path: UrlPath::from(path),
+			path: DataLocation::from(path),
 		}
 	}
 }
