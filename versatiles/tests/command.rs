@@ -1,13 +1,12 @@
 mod test_utilities;
-use assert_cmd::{Command, cargo};
 use predicates::str;
 use rstest::rstest;
-use test_utilities::BINARY_NAME;
+use test_utilities::*;
 
 #[test]
 fn command() -> Result<(), Box<dyn std::error::Error>> {
-	let mut cmd = Command::new(cargo::cargo_bin!());
-	cmd.assert()
+	versatiles_cmd()
+		.assert()
 		.failure()
 		.code(2)
 		.stdout(str::is_empty())
@@ -25,7 +24,7 @@ fn command() -> Result<(), Box<dyn std::error::Error>> {
 #[case("probe", "[OPTIONS] <FILENAME>")]
 #[case("serve", "[OPTIONS] [TILE_SOURCES]...")]
 fn subcommand(#[case] sub_command: &str, #[case] usage: &str) -> Result<(), Box<dyn std::error::Error>> {
-	Command::new(cargo::cargo_bin!())
+	versatiles_cmd()
 		.args(sub_command.split(" "))
 		.assert()
 		.failure()

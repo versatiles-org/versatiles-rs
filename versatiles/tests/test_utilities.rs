@@ -26,15 +26,23 @@ pub fn get_temp_output(filename: &str) -> (TempDir, PathBuf) {
 	(dir, path)
 }
 
+/// Helper to create a Command for the versatiles binary.
+pub fn versatiles_cmd() -> Command {
+	Command::new(cargo::cargo_bin!())
+}
+
 /// Helper to get tilejson metadata from a file using the CLI.
-pub fn get_metadata(filename: &Path) -> String {
-	let mut cmd = Command::new(cargo::cargo_bin!());
-	let buf = cmd
+pub fn get_tilejson(filename: &Path) -> JsonValue {
+	let mut cmd = versatiles_cmd();
+	let output = cmd
 		.args(["dev", "print-tilejson", filename.to_str().unwrap()])
-		.output()
-		.unwrap()
-		.stdout;
-	String::from_utf8(buf).unwrap().replace('"', "")
+		.assert()
+		.success()
+		.get_output()
+		.stdout
+		.clone();
+
+	JsonValue::from(String::from_utf8(output).unwrap())
 }
 
 pub fn path_to_string(path: &Path) -> String {
