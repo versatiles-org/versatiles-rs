@@ -1,33 +1,8 @@
+mod test_utilities;
+use crate::test_utilities::{get_metadata, get_temp_output, get_testdata};
 use assert_cmd::{Command, cargo};
 use predicates::str;
 use pretty_assertions::assert_eq;
-use std::path::{Path, PathBuf};
-use tempfile::{TempDir, tempdir};
-
-/// Helper to get a testdata file path.
-fn testdata(filename: &str) -> PathBuf {
-	PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-		.join("../testdata")
-		.join(filename)
-}
-
-/// Helper to get a temp output file path.
-fn temp_output(filename: &str) -> (TempDir, PathBuf) {
-	let dir = tempdir().expect("failed to create temp dir");
-	let path = dir.path().join(filename);
-	(dir, path)
-}
-
-/// Helper to get tilejson metadata from a file using the CLI.
-fn get_metadata(filename: &Path) -> String {
-	let mut cmd = Command::new(cargo::cargo_bin!());
-	let buf = cmd
-		.args(["dev", "print-tilejson", filename.to_str().unwrap()])
-		.output()
-		.unwrap()
-		.stdout;
-	String::from_utf8(buf).unwrap().replace('"', "")
-}
 
 #[test]
 fn convert_requires_input_and_output() {
@@ -42,8 +17,8 @@ fn convert_requires_input_and_output() {
 
 #[test]
 fn convert_mbtiles_to_versatiles() {
-	let input = testdata("berlin.mbtiles");
-	let (temp_dir, output) = temp_output("berlin.versatiles");
+	let input = get_testdata("berlin.mbtiles");
+	let (temp_dir, output) = get_temp_output("berlin.versatiles");
 
 	Command::new(cargo::cargo_bin!())
 		.args(["convert", input.to_str().unwrap(), output.to_str().unwrap()])
@@ -58,8 +33,8 @@ fn convert_mbtiles_to_versatiles() {
 
 #[test]
 fn convert_pmtiles_to_mbtiles_with_bbox_and_border() {
-	let input = testdata("berlin.pmtiles");
-	let (temp_dir, output) = temp_output("berlin-bbox.mbtiles");
+	let input = get_testdata("berlin.pmtiles");
+	let (temp_dir, output) = get_temp_output("berlin-bbox.mbtiles");
 
 	Command::new(cargo::cargo_bin!())
 		.args([
@@ -89,18 +64,18 @@ fn convert_vpl_via_stdin() {
 	let stdin = [
 		format!(
 			"from_container filename='{}' |",
-			testdata("berlin.pmtiles").to_str().unwrap()
+			get_testdata("berlin.pmtiles").to_str().unwrap()
 		)
 		.as_str(),
 		"vector_update_properties",
-		format!("   data_source_path='{}'", testdata("cities.csv").to_str().unwrap()).as_str(),
+		format!("   data_source_path='{}'", get_testdata("cities.csv").to_str().unwrap()).as_str(),
 		"   layer_name='place_labels'",
 		"   id_field_tiles='name'",
 		"   id_field_data='city_name'",
 	]
 	.join("\n")
 	.replace("'", "\"");
-	let (temp_dir, output) = temp_output("vpl.pmtiles");
+	let (temp_dir, output) = get_temp_output("vpl.pmtiles");
 
 	Command::new(cargo::cargo_bin!())
 		.args(["convert", "vpl:-", output.to_str().unwrap()])
