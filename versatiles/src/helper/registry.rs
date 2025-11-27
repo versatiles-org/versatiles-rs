@@ -30,13 +30,26 @@ use versatiles_container::{ContainerRegistry, ProcessingConfig, TilesReaderTrait
 /// ```
 pub fn get_registry(config: ProcessingConfig) -> ContainerRegistry {
 	let mut registry = ContainerRegistry::default();
+
 	// Register a reader for "vpl" files. The closure captures the config and clones it for async usage.
+	let c = config.clone();
 	registry.register_reader_file("vpl", move |p| {
-		let config = config.clone();
+		let config = c.clone();
 		async move {
 			// Clone config again inside async block to ensure it is owned
 			let config = config.clone();
 			Ok(Box::new(versatiles_pipeline::PipelineReader::open_path(&p, config).await?) as Box<dyn TilesReaderTrait>)
+		}
+	});
+
+	registry.register_reader_data("vpl", move |p| {
+		let config = config.clone();
+		async move {
+			// Clone config again inside async block to ensure it is owned
+			let config = config.clone();
+			Ok(Box::new(
+				versatiles_pipeline::PipelineReader::open_reader(p, &std::env::current_dir().unwrap(), config).await?,
+			) as Box<dyn TilesReaderTrait>)
 		}
 	});
 
