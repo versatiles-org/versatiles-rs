@@ -1,5 +1,5 @@
 mod test_utilities;
-use crate::test_utilities::{get_metadata, get_temp_output, get_testdata};
+use crate::test_utilities::{get_metadata, get_temp_output, get_testdata, path_to_string};
 use assert_cmd::{Command, cargo};
 use predicates::str;
 use pretty_assertions::assert_eq;
@@ -61,13 +61,13 @@ fn convert_pmtiles_to_mbtiles_with_bbox_and_border() {
 
 #[test]
 fn convert_vpl_via_stdin() {
-	let testdata_pmtiles = get_testdata("berlin.pmtiles").to_string_lossy().to_string();
-	let testdata_csv = get_testdata("cities.csv").to_string_lossy().to_string();
+	let testdata_pmtiles = path_to_string(&get_testdata("berlin.pmtiles"));
+	let testdata_csv = path_to_string(&get_testdata("cities.csv"));
 	let stdin = format!(
 		r#"
-			from_container filename="{testdata_pmtiles}" |
+			from_container filename={testdata_pmtiles} |
 			vector_update_properties
-				data_source_path="{testdata_csv}"
+				data_source_path={testdata_csv}
 				layer_name="place_labels"
 				id_field_tiles="name"
 				id_field_data="city_name"

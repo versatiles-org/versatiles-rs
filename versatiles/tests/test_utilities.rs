@@ -1,6 +1,7 @@
 use assert_cmd::{Command, cargo};
 use std::path::{Path, PathBuf};
 use tempfile::{TempDir, tempdir};
+use versatiles_core::json::JsonValue;
 
 /// Helper to get a testdata file path.
 pub fn get_testdata(filename: &str) -> PathBuf {
@@ -27,4 +28,8 @@ pub fn get_metadata(filename: &Path) -> String {
 		.unwrap()
 		.stdout;
 	String::from_utf8(buf).unwrap().replace('"', "")
+}
+
+pub fn path_to_string(path: &Path) -> String {
+	JsonValue::from(path.to_string_lossy().to_string()).stringify()
 }
