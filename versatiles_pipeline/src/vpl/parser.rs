@@ -3,7 +3,7 @@ use anyhow::{Result, ensure};
 use nom::{
 	IResult, Parser,
 	branch::alt,
-	bytes::complete::{escaped_transform, tag, take_while, take_while1},
+	bytes::complete::{escaped_transform, is_not, tag, take_while, take_while1},
 	character::complete::{alphanumeric1, char, multispace1, none_of, one_of},
 	combinator::{all_consuming, cut, opt, recognize, value},
 	error::context,
@@ -36,23 +36,6 @@ fn parse_unquoted_value(input: &str) -> IResult<&str, String, VerboseError<&str>
 	.map(|(a, b)| (a, b.to_string()))
 }
 
-fn parse_string(input: &str) -> IResult<&str, String, VerboseError<&str>> {
-	context(
-		"parsing string",
-		escaped_transform(
-			none_of("\\\""),
-			'\\',
-			alt((
-				value("\\", tag("\\")),
-				value("\"", tag("\"")),
-				value("\n", tag("n")),
-				value("\t", tag("t")),
-			)),
-		),
-	)
-	.parse(input)
-}
-
 fn parse_bare_identifier(input: &str) -> IResult<&str, String, VerboseError<&str>> {
 	context(
 		"parsing bare_identifier",
@@ -65,10 +48,31 @@ fn parse_bare_identifier(input: &str) -> IResult<&str, String, VerboseError<&str
 	.map(|(a, b)| (a, b.to_string()))
 }
 
-fn parse_quoted_string(input: &str) -> IResult<&str, String, VerboseError<&str>> {
+fn parse_double_quoted_string(input: &str) -> IResult<&str, String, VerboseError<&str>> {
 	context(
-		"parsing quoted string",
-		delimited(char('"'), parse_string, cut(char('"'))),
+		"parsing double quoted string",
+		delimited(
+			char('"'),
+			escaped_transform(
+				none_of("\\\""),
+				'\\',
+				alt((
+					value("\\", tag("\\")),
+					value("\"", tag("\"")),
+					value("\n", tag("n")),
+					value("\t", tag("t")),
+				)),
+			),
+			char('"'),
+		),
+	)
+	.parse(input)
+}
+
+fn parse_single_quoted_string(input: &str) -> IResult<&str, String, VerboseError<&str>> {
+	context(
+		"parsing single quoted string",
+		delimited(char('\''), is_not("'").map(|s: &str| s.to_string()), char('\'')),
 	)
 	.parse(input)
 }
@@ -78,23 +82,29 @@ fn parse_array(input: &str) -> IResult<&str, Vec<String>, VerboseError<&str>> {
 		"parsing array",
 		delimited(
 			(char('['), ws0),
-			separated_list0((ws0, char(','), ws0), alt((parse_quoted_string, parse_unquoted_value))),
+			separated_list0((ws0, char(','), ws0), parse_string),
 			(ws0, char(']')),
 		),
 	)
 	.parse(input)
 }
 
+fn parse_string(input: &str) -> IResult<&str, String, VerboseError<&str>> {
+	if input.starts_with('"') {
+		parse_double_quoted_string.parse(input)
+	} else if input.starts_with('\'') {
+		parse_single_quoted_string.parse(input)
+	} else {
+		parse_unquoted_value.parse(input)
+	}
+}
+
 fn parse_value(input: &str) -> IResult<&str, Vec<String>, VerboseError<&str>> {
-	context(
-		"parsing value",
-		alt((
-			parse_quoted_string.map(|v| vec![v]),
-			parse_unquoted_value.map(|v| vec![v]),
-			parse_array,
-		)),
-	)
-	.parse(input)
+	if input.starts_with('[') {
+		parse_array.parse(input)
+	} else {
+		parse_string.map(|a| vec![a]).parse(input)
+	}
 }
 
 fn parse_identifier(input: &str) -> IResult<&str, String, VerboseError<&str>> {
@@ -183,8 +193,7 @@ pub fn parse_vpl(input: &str) -> Result<VPLPipeline> {
 #[cfg(test)]
 mod tests {
 	use super::*;
-	use lazy_static::lazy_static;
-	use regex::{Regex, RegexBuilder};
+	use rstest::rstest;
 
 	#[test]
 	fn test_parse_bare_identifier() {
@@ -206,16 +215,30 @@ mod tests {
 		assert!(parse_identifier("\"foo").is_err());
 	}
 
-	#[test]
-	fn test_parse_quoted_string() {
-		assert_eq!(parse_quoted_string("\"foo\""), Ok(("", "foo".to_string())));
-		assert_eq!(parse_quoted_string("\"foo bar\""), Ok(("", "foo bar".to_string())));
-		assert_eq!(
-			parse_quoted_string("\"foo\\\"bar\\\"\""),
-			Ok(("", "foo\"bar\"".to_string()))
-		);
-		assert!(parse_quoted_string("\"foo").is_err());
-		assert!(parse_quoted_string("foo\"").is_err());
+	#[rstest]
+	#[case(r#""foo""#, r#"foo"#)]
+	#[case(r#""foo bar""#, r#"foo bar"#)]
+	#[case(r#""foo\"bar""#, r#"foo"bar"#)]
+	#[case(r#""foo\"bar\"""#, r#"foo"bar""#)]
+	fn parse_double_quoted_string_ok(#[case] input: &str, #[case] expected: &str) {
+		assert_eq!(parse_double_quoted_string(input).unwrap(), ("", expected.to_string()));
+	}
+
+	#[rstest]
+	#[case(r#""foo bar "#)]
+	#[case(r#" foo"bar "#)]
+	#[case(r#" foo bar""#)]
+	fn parse_double_quoted_string_error(#[case] input: &str) {
+		assert!(parse_double_quoted_string(input).is_err());
+	}
+
+	#[rstest]
+	#[case(r#"'foo'"#, "", r#"foo"#)]
+	#[case(r#"'foo bar'"#, "", r#"foo bar"#)]
+	#[case(r#"'foo\'bar'"#, "bar'", r#"foo\"#)]
+	#[case(r#"'foo\\bar'"#, "", r#"foo\\bar"#)]
+	fn parse_single_quoted_string_ok(#[case] input: &str, #[case] rest: &str, #[case] expected: &str) {
+		assert_eq!(parse_single_quoted_string(input).unwrap(), (rest, expected.to_string()));
 	}
 
 	#[test]
@@ -322,45 +345,106 @@ mod tests {
 		assert!(parse_value("\"value").is_err());
 	}
 
-	#[test]
-	fn test_error_messages() {
-		lazy_static! {
-			static ref REG_MGS1: Regex = RegexBuilder::new(r##"\n+$"##).build().unwrap();
-			static ref REG_MGS2: Regex = RegexBuilder::new(r##"\n+"##).build().unwrap();
-		}
-
-		fn run(vpl: &str, message: &str) {
-			let mut error = parse_vpl(vpl).unwrap_err().chain().last().unwrap().to_string();
-			error = REG_MGS1.replace_all(&error, "").to_string();
-			error = REG_MGS2.replace_all(&error, "\n").to_string();
-			assert_eq!(error, message, "for vpl: '{vpl}'");
-		}
-
-		run(
-			"node [ child key=value ] node",
-			"0: at line 1, in Eof:\nnode [ child key=value ] node\n                         ^",
-		);
-		run(
-			"node child key=value ]",
-			"0: at line 1:\nnode child key=value ]\n           ^\nexpected '=', found k\n1: at line 1, in parsing property:\nnode child key=value ]\n     ^\n2: at line 1, in parsing node:\nnode child key=value ]\n^\n3: at line 1, in parsing pipeline:\nnode child key=value ]\n^",
-		);
-		run(
-			"node key=\"2.1",
-			"0: at line 1:\nnode key=\"2.1\n             ^\nexpected '\"', got end of input\n1: at line 1, in parsing quoted string:\nnode key=\"2.1\n         ^\n2: at line 1, in parsing value:\nnode key=\"2.1\n         ^\n3: at line 1, in parsing property:\nnode key=\"2.1\n     ^\n4: at line 1, in parsing node:\nnode key=\"2.1\n^\n5: at line 1, in parsing pipeline:\nnode key=\"2.1\n^",
-		);
-		run(
-			"node [n key=2,1]",
-			"0: at line 1:\nnode [n key=2,1]\n             ^\nexpected ']', found ,\n1: at line 1, in parsing sources:\nnode [n key=2,1]\n     ^\n2: at line 1, in parsing node:\nnode [n key=2,1]\n^\n3: at line 1, in parsing pipeline:\nnode [n key=2,1]\n^",
-		);
-		run(
-			"node [n key=2]]",
-			"0: at line 1, in Eof:\nnode [n key=2]]\n              ^",
-		);
-		run("node [ ] [ ]", "0: at line 1, in Eof:\nnode [ ] [ ]\n         ^");
-		run(
-			"node [ a; b ]",
-			"0: at line 1:\nnode [ a; b ]\n        ^\nexpected ']', found ;\n1: at line 1, in parsing sources:\nnode [ a; b ]\n     ^\n2: at line 1, in parsing node:\nnode [ a; b ]\n^\n3: at line 1, in parsing pipeline:\nnode [ a; b ]\n^",
-		);
-		run("node | | node", "0: at line 1, in Eof:\nnode | | node\n     ^");
+	#[rstest]
+	#[case("node [ child key=value ] node", &[
+		"0: at line 1, in Eof:",
+		"node [ child key=value ] node",
+		"                         ^"
+	])]
+	#[case("node child key=value ]", &[
+		"0: at line 1:",
+		"node child key=value ]",
+		"           ^",
+		"expected '=', found k",
+		"",
+		"1: at line 1, in parsing property:",
+		"node child key=value ]",
+		"     ^",
+		"",
+		"2: at line 1, in parsing node:",
+		"node child key=value ]",
+		"^",
+		"",
+		"3: at line 1, in parsing pipeline:",
+		"node child key=value ]",
+		"^"
+	])]
+	#[case("node key=\"2.1", &[
+		"0: at line 1:",
+		"node key=\"2.1",
+		"             ^",
+		"expected '\"', got end of input",
+		"",
+		"1: at line 1, in parsing double quoted string:",
+		"node key=\"2.1",
+		"         ^",
+		"",
+		"2: at line 1, in parsing property:",
+		"node key=\"2.1",
+		"     ^",
+		"",
+		"3: at line 1, in parsing node:",
+		"node key=\"2.1",
+		"^",
+		"",
+		"4: at line 1, in parsing pipeline:",
+		"node key=\"2.1",
+		"^"
+	])]
+	#[case("node [n key=2,1]", &[
+		"0: at line 1:",
+		"node [n key=2,1]",
+		"             ^",
+		"expected ']', found ,",
+		"",
+		"1: at line 1, in parsing sources:",
+		"node [n key=2,1]",
+		"     ^",
+		"",
+		"2: at line 1, in parsing node:",
+		"node [n key=2,1]",
+		"^",
+		"",
+		"3: at line 1, in parsing pipeline:",
+		"node [n key=2,1]",
+		"^"
+	])]
+	#[case("node [n key=2]]", &[
+		"0: at line 1, in Eof:",
+		"node [n key=2]]",
+		"              ^"
+	])]
+	#[case("node [ ] [ ]", &[
+		"0: at line 1, in Eof:",
+		"node [ ] [ ]",
+		"         ^"
+	])]
+	#[case("node [ a; b ]", &[
+		"0: at line 1:",
+		"node [ a; b ]",
+		"        ^",
+		"expected ']', found ;",
+		"",
+		"1: at line 1, in parsing sources:",
+		"node [ a; b ]",
+		"     ^",
+		"",
+		"2: at line 1, in parsing node:",
+		"node [ a; b ]",
+		"^",
+		"",
+		"3: at line 1, in parsing pipeline:",
+		"node [ a; b ]",
+		"^"
+	])]
+	#[case("node | | node", &[
+		"0: at line 1, in Eof:",
+		"node | | node",
+		"     ^"
+	])]
+	fn test_error_messages(#[case] vpl: &str, #[case] message: &[&str]) {
+		let error = parse_vpl(vpl).unwrap_err().chain().last().unwrap().to_string();
+		let lines = error.trim().split("\n").collect::<Vec<&str>>();
+		assert_eq!(lines, message, "for vpl: '{vpl}'");
 	}
 }

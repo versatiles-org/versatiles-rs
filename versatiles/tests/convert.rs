@@ -1,8 +1,8 @@
 mod test_utilities;
-use crate::test_utilities::{get_metadata, get_temp_output, get_testdata};
 use assert_cmd::{Command, cargo};
 use predicates::str;
 use pretty_assertions::assert_eq;
+use test_utilities::{BINARY_NAME, get_metadata, get_temp_output, get_testdata, path_to_string};
 
 #[test]
 fn convert_requires_input_and_output() {
@@ -12,7 +12,7 @@ fn convert_requires_input_and_output() {
 		.failure()
 		.code(2)
 		.stdout(str::is_empty())
-		.stderr(str::contains("Usage: versatiles convert"));
+		.stderr(str::contains(format!("Usage: {BINARY_NAME} convert")));
 }
 
 #[test]
@@ -61,22 +61,24 @@ fn convert_pmtiles_to_mbtiles_with_bbox_and_border() {
 
 #[test]
 fn convert_vpl_via_stdin() {
-	let stdin = [
-		format!(
-			"from_container filename='{}' |",
-			get_testdata("berlin.pmtiles").to_str().unwrap()
-		)
-		.as_str(),
-		"vector_update_properties",
-		format!("   data_source_path='{}'", get_testdata("cities.csv").to_str().unwrap()).as_str(),
-		"   layer_name='place_labels'",
-		"   id_field_tiles='name'",
-		"   id_field_data='city_name'",
-	]
-	.join("\n")
-	.replace("'", "\"");
-	let (temp_dir, output) = get_temp_output("vpl.pmtiles");
+	let testdata_pmtiles = path_to_string(&get_testdata("berlin.pmtiles"));
+	let testdata_csv = path_to_string(&get_testdata("cities.csv"));
+	let stdin = format!(
+		r#"
+			from_container filename={testdata_pmtiles} |
+			vector_update_properties
+				data_source_path={testdata_csv}
+				layer_name="place_labels"
+				id_field_tiles="name"
+				id_field_data="city_name"
+		"#
+	)
+	.into_bytes();
 
+	println!("STDIN:\n{}", String::from_utf8_lossy(&stdin));
+	println!("STDIN:\n{stdin:?}");
+
+	let (temp_dir, output) = get_temp_output("vpl.pmtiles");
 	Command::new(cargo::cargo_bin!())
 		.args(["convert", "vpl:-", output.to_str().unwrap()])
 		.write_stdin(stdin)

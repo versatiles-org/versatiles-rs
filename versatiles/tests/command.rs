@@ -1,11 +1,8 @@
+mod test_utilities;
 use assert_cmd::{Command, cargo};
 use predicates::str;
 use rstest::rstest;
-
-#[cfg(windows)]
-const BINARY_NAME: &str = "versatiles.exe";
-#[cfg(not(windows))]
-const BINARY_NAME: &str = "versatiles";
+use test_utilities::BINARY_NAME;
 
 #[test]
 fn command() -> Result<(), Box<dyn std::error::Error>> {
