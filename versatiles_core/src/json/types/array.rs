@@ -75,6 +75,14 @@ impl JsonArray {
 			.try_into()
 			.map_err(|e: Vec<f64>| anyhow!("vector length mismatch {} != {}", e.len(), N))
 	}
+
+	pub fn len(&self) -> usize {
+		self.0.len()
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.0.is_empty()
+	}
 }
 
 impl Debug for JsonArray {
