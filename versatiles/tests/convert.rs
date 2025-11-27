@@ -1,8 +1,8 @@
 mod test_utilities;
-use crate::test_utilities::{get_metadata, get_temp_output, get_testdata, path_to_string};
 use assert_cmd::{Command, cargo};
 use predicates::str;
 use pretty_assertions::assert_eq;
+use test_utilities::{BINARY_NAME, get_metadata, get_temp_output, get_testdata, path_to_string};
 
 #[test]
 fn convert_requires_input_and_output() {
@@ -12,7 +12,7 @@ fn convert_requires_input_and_output() {
 		.failure()
 		.code(2)
 		.stdout(str::is_empty())
-		.stderr(str::contains("Usage: versatiles convert"));
+		.stderr(str::contains(format!("Usage: {BINARY_NAME} convert")));
 }
 
 #[test]

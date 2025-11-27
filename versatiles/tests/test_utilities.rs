@@ -1,7 +1,14 @@
+#![allow(unused)]
+
 use assert_cmd::{Command, cargo};
 use std::path::{Path, PathBuf};
 use tempfile::{TempDir, tempdir};
 use versatiles_core::json::JsonValue;
+
+#[cfg(windows)]
+pub const BINARY_NAME: &str = "versatiles.exe";
+#[cfg(not(windows))]
+pub const BINARY_NAME: &str = "versatiles";
 
 /// Helper to get a testdata file path.
 pub fn get_testdata(filename: &str) -> PathBuf {
