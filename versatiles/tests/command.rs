@@ -2,6 +2,11 @@ use assert_cmd::{Command, cargo};
 use predicates::str;
 use rstest::rstest;
 
+#[cfg(windows)]
+const BINARY_NAME: &str = "versatiles.exe";
+#[cfg(not(windows))]
+const BINARY_NAME: &str = "versatiles";
+
 #[test]
 fn command() -> Result<(), Box<dyn std::error::Error>> {
 	let mut cmd = Command::new(cargo::cargo_bin!());
@@ -9,7 +14,7 @@ fn command() -> Result<(), Box<dyn std::error::Error>> {
 		.failure()
 		.code(2)
 		.stdout(str::is_empty())
-		.stderr(str::contains("Usage: versatiles [OPTIONS] <COMMAND>"));
+		.stderr(str::contains(format!("Usage: {BINARY_NAME} [OPTIONS] <COMMAND>")));
 	Ok(())
 }
 
@@ -29,6 +34,6 @@ fn subcommand(#[case] sub_command: &str, #[case] usage: &str) -> Result<(), Box<
 		.failure()
 		.code(2)
 		.stdout(str::is_empty())
-		.stderr(str::contains(format!("Usage: versatiles {} {}", sub_command, usage)));
+		.stderr(str::contains(format!("Usage: {BINARY_NAME} {sub_command} {usage}")));
 	Ok(())
 }
