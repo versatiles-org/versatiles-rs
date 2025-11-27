@@ -4,14 +4,12 @@ use rstest::rstest;
 use test_utilities::*;
 
 #[test]
-fn command() -> Result<(), Box<dyn std::error::Error>> {
-	versatiles_cmd()
-		.assert()
-		.failure()
-		.code(2)
-		.stdout(str::is_empty())
-		.stderr(str::contains(format!("Usage: {BINARY_NAME} [OPTIONS] <COMMAND>")));
-	Ok(())
+fn command() {
+	let o = versatiles_output("");
+	assert!(!o.success);
+	assert_eq!(o.code, 2);
+	assert!(o.stdout.is_empty());
+	assert!(o.stderr.contains(&format!("Usage: {BINARY_NAME} [OPTIONS] <COMMAND>")));
 }
 
 #[rstest]
@@ -23,13 +21,10 @@ fn command() -> Result<(), Box<dyn std::error::Error>> {
 #[case("help", "[OPTIONS] <COMMAND>")]
 #[case("probe", "[OPTIONS] <FILENAME>")]
 #[case("serve", "[OPTIONS] [TILE_SOURCES]...")]
-fn subcommand(#[case] sub_command: &str, #[case] usage: &str) -> Result<(), Box<dyn std::error::Error>> {
-	versatiles_cmd()
-		.args(sub_command.split(" "))
-		.assert()
-		.failure()
-		.code(2)
-		.stdout(str::is_empty())
-		.stderr(str::contains(format!("Usage: {BINARY_NAME} {sub_command} {usage}")));
-	Ok(())
+fn subcommand(#[case] sub_command: &str, #[case] usage: &str) {
+	let o = versatiles_output(sub_command);
+	assert!(!o.success);
+	assert_eq!(o.code, 2);
+	assert!(o.stdout.is_empty());
+	assert_contains!(o.stderr, &format!("Usage: {BINARY_NAME} {sub_command} {usage}"));
 }

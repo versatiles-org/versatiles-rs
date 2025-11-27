@@ -5,15 +5,14 @@ use test_utilities::*;
 
 #[rstest]
 #[case("help pipeline", "VersaTiles Pipeline")]
-#[case("help --raw pipeline", "^# VersaTiles Pipeline")]
+#[case("help --raw pipeline", "# VersaTiles Pipeline\n")]
 #[case("help config", "VersaTiles Server Configuration")]
-#[case("help --raw config", "^# VersaTiles Server Configuration")]
+#[case("help --raw config", "# VersaTiles Server Configuration\n")]
 fn help_command(#[case] sub_command: &str, #[case] pattern: &str) -> Result<(), Box<dyn std::error::Error>> {
-	versatiles_cmd()
-		.args(sub_command.split(" "))
-		.assert()
-		.success()
-		.stdout(str::is_match(pattern).unwrap())
-		.stderr(str::is_empty());
+	let o = versatiles_output(sub_command);
+	assert!(o.success, "command failed: {}\nstderr: {}", sub_command, o.stderr);
+	assert_eq!(o.code, 0, "unexpected exit code: {}", o.code);
+	assert!(o.stderr.is_empty(), "expected empty stderr, got: {}", o.stderr);
+	assert_contains!(o.stdout, pattern);
 	Ok(())
 }
