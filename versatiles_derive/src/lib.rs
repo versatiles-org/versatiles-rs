@@ -92,9 +92,11 @@ pub fn decode_vpl(input: TokenStream) -> TokenStream {
 #[proc_macro_derive(ConfigDoc, attributes(config, config_demo))]
 pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as syn::DeriveInput);
+	// Parse the input struct definition for generating YAML demo output.
+
 	let name = &input.ident;
 
-	// Ensure it's a named-field struct and gather fields
+	// Ensure the macro is only used on structs with named fields.
 	let data = match &input.data {
 		syn::Data::Struct(ds) => ds,
 		_ => {
@@ -107,6 +109,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		}
 	};
 
+	// Access the named fields of the struct; these drive the YAML generation.
 	let fields = match &data.fields {
 		Fields::Named(named) => &named.named,
 		_ => {
@@ -119,7 +122,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		}
 	};
 
-	// Per-field computed metadata for codegen
+	// Collect per‑field metadata used during YAML codegen.
 	struct Row {
 		ident: syn::Ident,
 		key: String,
@@ -134,6 +137,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 
 	let mut rows = Vec::<Row>::new();
 	for f in fields {
+		// Process each field, extract its identifier, type, docs, and attributes.
 		let ident = f.ident.clone().expect("named field");
 		let key = serde_rename(&f.attrs).unwrap_or_else(|| ident.to_string());
 		let ty = f.ty.clone();
@@ -144,7 +148,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		let mut is_map = false;
 		let mut inner_ty_vec = None;
 
-		// classify Option / Vec / HashMap
+		// Detect container types so YAML output can render lists or nested objects correctly.
 		if let Some(id) = path_ident(&f.ty) {
 			let id_s = id.to_string();
 			if id_s == "Vec" {
@@ -161,7 +165,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 
 		let is_url_path = is_url_path(&f.ty);
 
-		// parse demo from #[config_demo("...")] or #[config_demo(value = "...")]
+		// Detect custom example values provided via #[config_demo].
 		let mut demo_value = None;
 		for attr in &f.attrs {
 			if attr.path().is_ident("config_demo") {
@@ -175,7 +179,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 			}
 		}
 
-		// decide if nested struct
+		// Decide whether to treat this field as a nested struct (recursive YAML).
 		let is_nested_struct =
 			!is_option && !is_vec && !is_map && path_ident(&f.ty).is_some() && !is_primitive_like(&f.ty) && !is_url_path;
 
@@ -191,12 +195,13 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		});
 	}
 
-	// Generate per-field YAML code blocks
+	// Build code fragments that emit YAML for each field, including indentation and comments.
 	let field_yaml_blocks: Vec<_> = rows
 		.iter()
 		.map(|r| {
 			use proc_macro2::TokenStream as TokenStream2;
 
+			// Start generating YAML lines for documentation and keys.
 			let _ident = &r.ident;
 			let key = &r.key;
 			let ty = &r.ty;
@@ -220,20 +225,23 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 				__s.push_str(": ");
 			};
 
-			if r.is_nested_struct {
+			if let Some(demo_lit) = &demo_lit {
+				// If a demo value is provided, use it directly.
+				output = quote! {
+					#output
+					__s.push_str(#demo_lit);
+				};
+			} else if r.is_nested_struct {
+				// If the field is itself a struct, recurse into its `demo_yaml_with_indent`.
 				output = quote! {
 					#output
 					__s.push_str("\n");
 					__s.push_str(&<#ty>::demo_yaml_with_indent(__indent + 2));
 				};
-			} else if let Some(demo_lit) = &demo_lit {
-				output = quote! {
-					#output
-					__s.push_str(#demo_lit);
-				};
 			} else if r.is_vec
 				&& let Some(inner) = &r.inner_ty_vec
 			{
+				// Vectors require iterating example YAML of the inner type and prefixing "- ".
 				output = quote! {
 					#output
 					__s.push_str("\n");
@@ -253,6 +261,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 					}
 				};
 			}
+			// Ensure each field's YAML block ends with a newline.
 			quote! {
 				#output
 				if !__s.ends_with('\n') {
@@ -262,6 +271,7 @@ pub fn derive_config_doc(input: TokenStream) -> TokenStream {
 		})
 		.collect();
 
+	// Generate the function that recursively walks fields and builds the final YAML string.
 	let expanded = quote! {
 		impl #name {
 			pub(crate) fn demo_yaml_with_indent(__indent: usize) -> String {
