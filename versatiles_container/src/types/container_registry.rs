@@ -166,7 +166,7 @@ impl ContainerRegistry {
 	}
 
 	pub async fn get_reader_from_str(&self, data_source: &str) -> Result<Box<dyn TilesReaderTrait>> {
-		self.get_reader(DataSource::parse(data_source, self)?).await
+		self.get_reader(DataSource::parse(data_source)?).await
 	}
 
 	/// Get a tile container reader for a given filename or URL.
@@ -185,7 +185,7 @@ impl ContainerRegistry {
 	{
 		let mut data_source: DataSource = data_source.clone().into();
 		data_source.resolve(&DataLocation::cwd()?)?;
-		let extension = sanitize_extension(data_source.extension());
+		let extension = sanitize_extension(data_source.container_type());
 
 		match data_source.into_location() {
 			DataLocation::Url(url) => {

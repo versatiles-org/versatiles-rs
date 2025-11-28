@@ -61,6 +61,18 @@ impl DataLocation {
 		}
 	}
 
+	/// Borrow the underlying URL.
+	///
+	/// Returns an error if this value is a Path or Blob.
+	/// Useful when the caller expects a URL-only input and wants a clear error otherwise.
+	#[context("Getting URL from DataLocation {self:?}")]
+	pub fn as_url(&self) -> Result<&Url> {
+		match self {
+			DataLocation::Url(url) => Ok(url),
+			_ => Err(anyhow!("{self:?} is not a Url")),
+		}
+	}
+
 	/// Resolve this value against `base` in-place.
 	///
 	/// Rules:

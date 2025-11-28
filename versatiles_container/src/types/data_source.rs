@@ -3,21 +3,22 @@
 //! driver prefixes, standard input, and extension inference.
 
 use super::data_location::DataLocation;
-use crate::ContainerRegistry;
-use anyhow::{Context, Result, ensure};
-use versatiles_core::Blob;
+use anyhow::Result;
+use regex::Regex;
+use versatiles_derive::context;
 
 #[derive(Debug, Clone, PartialEq)]
 /// Represents a parsed input specification which may include a driver prefix (like `mbtiles:`).
 /// It can resolve standard input (`-`) into an in-memory Blob and derives the effective extension
 /// that determines which reader to pick.
 pub struct DataSource {
-	extension: String,      // mbtiles / vpl / ...
+	container_type: String, // mbtiles / vpl / ...
+	name: String,           // name identifier
 	location: DataLocation, // URL, filesystem path, or in-memory blob
 }
 
 lazy_static::lazy_static! {
-	static ref RE_DRIVER_PREFIX: regex::Regex = regex::Regex::new(r#"(?i)^([a-z]+):(.+)"#).unwrap();
+	static ref RE_PREFIX: Regex = Regex::new(r#"^\[([\w,]*)\](.*)"#).unwrap();
 }
 
 impl DataSource {
@@ -25,8 +26,12 @@ impl DataSource {
 	///
 	/// This is typically the driver prefix if one was specified (e.g., `mbtiles`),
 	/// otherwise it is inferred from the underlying location's extension.
-	pub fn extension(&self) -> &str {
-		&self.extension
+	pub fn container_type(&self) -> &str {
+		&self.container_type
+	}
+
+	pub fn name(&self) -> &str {
+		&self.name
 	}
 
 	/// Returns a reference to the underlying `DataLocation`.
@@ -41,50 +46,50 @@ impl DataSource {
 
 	/// Parses a string specification into a `DataSource`.
 	///
-	/// The input grammar supports optional driver prefixes (e.g., `mbtiles:`),
+	/// The input grammar supports optional name and container_type prefixes (e.g., `[osm,mbtiles]`),
 	/// standard input (`-`) which is resolved into a Blob (requiring an explicit extension),
 	/// and falls back to interpreting the string as a path or URL.
-	///
-	/// The `registry` is used to validate known driver prefixes.
-	pub fn parse(s: &str, registry: &ContainerRegistry) -> Result<Self> {
+	#[context("parsing data source from input string '{}'", input)]
+	pub fn parse(input: &str) -> Result<Self> {
+		let mut name: Option<String> = None;
+		let mut container_type: Option<String> = None;
+
+		let location_str = if let Some(captures) = RE_PREFIX.captures(input) {
+			let prefix = captures.get(1).unwrap().as_str();
+
+			let prefix = prefix.split(',').collect::<Vec<_>>();
+
+			name = prefix.get(0).and_then(|s| (!s.is_empty()).then(|| s.to_string()));
+			container_type = prefix.get(1).and_then(|s| (!s.is_empty()).then(|| s.to_string()));
+
+			captures.get(2).unwrap().as_str()
+		} else {
+			input
+		};
+
+		let location = DataLocation::try_from(location_str)?;
+
+		let container_type = match container_type {
+			Some(ct) => ct,
+			None => location.extension().context("Could not determine container type")?,
+		};
+
+		let name = match name {
+			Some(n) => n,
+			None => location.name().context("Could not determine container name")?,
+		};
+
+		Ok(DataSource {
+			container_type,
+			name,
+			location,
+		})
+
+		/*
 		let stdin = std::io::stdin();
 		let mut stdin_lock = stdin.lock();
 		Self::parse_with_stdin(s, registry, &mut stdin_lock)
-	}
-
-	/// Internal parsing function that allows injecting a custom `stdin` reader.
-	///
-	/// This is primarily used for testing to simulate reading from standard input.
-	fn parse_with_stdin<R: std::io::Read>(s: &str, registry: &ContainerRegistry, stdin: &mut R) -> Result<Self> {
-		let (extension_string, location_string) = if let Some(caps) = RE_DRIVER_PREFIX.captures(s) {
-			let prefix = caps.get(1).unwrap().as_str();
-			let rest = caps.get(2).unwrap().as_str();
-			if registry.supports_reader_extension(prefix) {
-				(Some(prefix.to_string()), rest.to_string())
-			} else {
-				(None, s.to_string())
-			}
-		} else {
-			(None, s.to_string())
-		};
-
-		let location = if location_string.trim() == "-" {
-			ensure!(
-				extension_string.is_some(),
-				"When reading from stdin, an explicit extension must be provided (e.g., 'vpl:-')"
-			);
-			let mut buffer = Vec::new();
-			stdin
-				.read_to_end(&mut buffer)
-				.with_context(|| "Failed to read from stdin")?;
-			DataLocation::Blob(Blob::from(buffer))
-		} else {
-			DataLocation::from(location_string.as_str())
-		};
-
-		let extension = extension_string.unwrap_or_else(|| location.extension().unwrap_or(String::from("unknown")));
-
-		Ok(DataSource { extension, location })
+		 */
 	}
 
 	/// Resolves the underlying location relative to a base location.
@@ -95,135 +100,145 @@ impl DataSource {
 	}
 }
 
-/// Converts a `DataLocation` into a `DataSource`, inferring the extension from the location.
-impl From<DataLocation> for DataSource {
-	fn from(location: DataLocation) -> Self {
-		let extension = location.extension().unwrap_or(String::from("unknown"));
-		DataSource { extension, location }
+impl TryFrom<&str> for DataSource {
+	type Error = anyhow::Error;
+	fn try_from(s: &str) -> Result<Self> {
+		Self::parse(s)
+	}
+}
+
+impl TryFrom<&String> for DataSource {
+	type Error = anyhow::Error;
+	fn try_from(s: &String) -> Result<Self> {
+		Self::parse(s)
+	}
+}
+
+impl TryFrom<DataLocation> for DataSource {
+	type Error = anyhow::Error;
+	fn try_from(location: DataLocation) -> Result<Self> {
+		Ok(DataSource {
+			container_type: location.extension()?,
+			name: location.name()?,
+			location,
+		})
 	}
 }
 
 #[cfg(test)]
 mod tests {
-	use std::{io::Cursor, path::Path};
-
 	use super::*;
+	use reqwest::Url;
 	use rstest::rstest;
-
-	fn make_registry() -> ContainerRegistry {
-		ContainerRegistry::default()
-	}
+	use std::path::PathBuf;
 
 	#[rstest]
+	#[case("[,]file.ext", "file", "ext", "file.ext")]
+	#[case("[]file.ext", "file", "ext", "file.ext")]
+	#[case("file.ext", "file", "ext", "file.ext")]
+	#[case("[,type]file.ext", "file", "type", "file.ext")]
+	#[case("[name,]file.ext", "name", "ext", "file.ext")]
+	#[case("[name,type]file.ext", "name", "type", "file.ext")]
+	#[case("[name,type]file", "name", "type", "file")]
+	#[case("[name]file.ext", "name", "ext", "file.ext")]
+	fn test_parse_with_prefixes(
+		#[case] input: &str,
+		#[case] expected_name: &str,
+		#[case] expected_container: &str,
+		#[case] expected_location: &str,
+	) {
+		let ds = DataSource::parse(input).unwrap();
+		assert_eq!(ds.name, expected_name);
+		assert_eq!(ds.container_type, expected_container);
+		assert_eq!(ds.location.filename().unwrap(), expected_location);
+	}
+
+	#[test]
 	fn parse_simple_path_uses_path_extension() {
-		let registry = make_registry();
-		let ds = DataSource::parse("data/example.mbtiles", &registry).unwrap();
-		assert_eq!(ds.extension(), "mbtiles");
-		match ds.location() {
-			DataLocation::Path(path) => {
-				assert_eq!(path.file_name().and_then(|s| s.to_str()), Some("example.mbtiles"));
-			}
-			_ => panic!("Expected Path variant"),
-		}
+		let ds = DataSource::parse("data/example.mbtiles").unwrap();
+		assert_eq!(ds.container_type(), "mbtiles");
+		assert_eq!(ds.location().as_path().unwrap().file_name().unwrap(), "example.mbtiles");
 	}
 
-	#[rstest]
+	#[test]
 	fn parse_url_uses_url_extension() {
-		let registry = make_registry();
-		let ds = DataSource::parse("https://example.org/tiles/test.tar", &registry).unwrap();
-		assert_eq!(ds.extension(), "tar");
-		match ds.location() {
-			DataLocation::Url(url) => {
-				assert!(url.to_string().ends_with("test.tar"));
-			}
-			_ => panic!("Expected Url variant"),
-		}
+		let ds = DataSource::parse("https://example.org/tiles/test.tar").unwrap();
+		assert_eq!(ds.container_type(), "tar");
+		assert!(ds.location().as_url().unwrap().to_string().ends_with("test.tar"));
 	}
 
-	#[rstest]
-	fn parse_with_known_driver_prefix_uses_prefix_and_rest_as_location() {
-		let registry = make_registry();
-		let ds = DataSource::parse("mbtiles:raw_data.bin", &registry).unwrap();
-		assert_eq!(ds.extension(), "mbtiles");
-		match ds.location() {
-			DataLocation::Path(path) => {
-				assert_eq!(path.file_name().and_then(|s| s.to_str()), Some("raw_data.bin"));
-			}
-			_ => panic!("Expected Path variant"),
-		}
+	#[test]
+	fn from_path() {
+		let loc = DataLocation::from(PathBuf::from("/tmp/test.vrt"));
+		let ds = DataSource::try_from(loc).unwrap();
+		assert_eq!(ds.container_type(), "vrt");
+		assert_eq!(ds.name(), "test");
+		assert_eq!(ds.location().as_path().unwrap(), "/tmp/test.vrt");
 	}
 
-	#[rstest]
-	fn parse_with_unknown_driver_prefix_falls_back_to_full_string() {
-		let registry = make_registry();
-		let ds = DataSource::parse("xxx:some/file.dat", &registry).unwrap();
-		let expected_extension = ds.location().extension().unwrap_or_else(|_| "unknown".to_string());
-		assert_eq!(ds.extension(), expected_extension);
-		// Should not be Blob
-		match ds.location() {
-			DataLocation::Path(path) => {
-				assert_eq!(path.file_name().and_then(|s| s.to_str()), Some("file.dat"));
-			}
-			DataLocation::Url(url) => {
-				assert!(url.to_string().ends_with("file.dat"));
-			}
-			DataLocation::Blob(_) => {
-				panic!("Should not be Blob for unknown driver prefix");
-			}
-		}
+	#[test]
+	fn resolve_with_path_base_updates_location() {
+		let mut ds = DataSource::parse("rel/tiles/data.mbtiles").unwrap();
+		let base = DataLocation::from(PathBuf::from("/data/base"));
+		ds.resolve(&base).unwrap();
+
+		let path = ds.location().as_path().unwrap();
+		assert_eq!(path, PathBuf::from("/data/base/rel/tiles/data.mbtiles"));
+		assert_eq!(ds.container_type(), "mbtiles");
 	}
 
-	#[rstest]
-	fn parse_stdin_requires_explicit_extension() {
-		let mut cursor = Cursor::new(b"stdin data");
-		let registry = make_registry();
-		let err = DataSource::parse_with_stdin("-", &registry, &mut cursor).unwrap_err();
-		let msg = format!("{:?}", err);
+	#[test]
+	fn resolve_with_url_base_turns_path_into_url() {
+		let mut ds = DataSource::parse("rel/tiles/data.mvt").unwrap();
+		let base_url = Url::parse("https://example.org/tiles/").unwrap();
+		let base_loc = DataLocation::from(base_url);
+
+		ds.resolve(&base_loc).unwrap();
+
+		let url = ds.location().as_url().unwrap();
+		// URL join semantics will normalize the path
+		assert_eq!(url.as_str(), "https://example.org/tiles/rel/tiles/data.mvt");
+		assert_eq!(ds.container_type(), "mvt");
+	}
+
+	#[test]
+	fn try_from_str_uses_parse() {
+		let s = "data/source.vpl";
+		let ds = DataSource::try_from(s).unwrap();
+
+		assert_eq!(ds.container_type(), "vpl");
+		assert_eq!(ds.name(), "source");
 		assert!(
-			msg.contains("explicit extension must be provided"),
-			"Error message: {}",
-			msg
+			ds.location()
+				.as_path()
+				.unwrap()
+				.to_string_lossy()
+				.ends_with("data/source.vpl")
 		);
 	}
 
-	#[rstest]
-	fn parse_stdin_with_mbtiles_prefix_reads_from_reader() {
-		let mut cursor = Cursor::new(b"hello from stdin");
-		let registry = make_registry();
-		let ds = DataSource::parse_with_stdin("mbtiles:-", &registry, &mut cursor).unwrap();
-		assert_eq!(ds.extension(), "mbtiles");
-		match ds.location() {
-			DataLocation::Blob(blob) => {
-				assert_eq!(blob.as_str(), "hello from stdin");
-			}
-			_ => panic!("Expected Blob variant"),
-		}
+	#[test]
+	fn try_from_string_ref_uses_parse() {
+		let s = String::from("inputs/other.mbtiles");
+		let ds = DataSource::try_from(&s).unwrap();
+
+		assert_eq!(ds.container_type(), "mbtiles");
+		assert_eq!(ds.name(), "other");
+		assert!(
+			ds.location()
+				.as_path()
+				.unwrap()
+				.to_string_lossy()
+				.ends_with("inputs/other.mbtiles")
+		);
 	}
 
-	#[rstest]
-	fn from_data_location_derives_extension_or_unknown() {
-		let path = std::path::PathBuf::from("/tmp/test.vrt");
-		let loc = DataLocation::Path(path.clone());
-		let ds = DataSource::from(loc);
-		assert_eq!(ds.extension(), "vrt");
+	#[test]
+	fn into_location_consumes_datasource_and_returns_inner_location() {
+		let ds = DataSource::parse("out/result.tar").unwrap();
+		let loc = ds.into_location();
 
-		let blob = Blob::from(vec![1u8, 2, 3]);
-		let loc = DataLocation::Blob(blob.clone());
-		let ds = DataSource::from(loc);
-		let expected = ds.location().extension().unwrap_or_else(|_| "unknown".to_string());
-		assert_eq!(ds.extension(), expected);
-	}
-
-	#[rstest]
-	fn resolve_delegates_to_location() {
-		let base = DataLocation::from("/base/dir");
-		let mut ds = DataSource::from(DataLocation::from("sub/file.mbtiles"));
-		ds.resolve(&base).unwrap();
-		match ds.location() {
-			DataLocation::Path(path) => {
-				assert_eq!(path, Path::new("/base/dir/sub/file.mbtiles"));
-			}
-			_ => panic!("Expected Path variant after resolve"),
-		}
+		let path = loc.as_path().unwrap();
+		assert!(path.to_string_lossy().ends_with("out/result.tar"));
 	}
 }
