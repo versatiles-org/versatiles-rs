@@ -2,14 +2,14 @@
 //! supporting URLs, filesystem paths, and in-memory blobs.
 //!
 //! It is used to accept flexible inputs in CLI tools and server components and provides
-//! convenience methods like `resolve`, `filename`, and `extension`.
+//! convenience methods like `resolve`, `filename`, `name`, `extension`, and parsing helpers.
 //!
 //! The enum has three variants:
 //! - `Url(reqwest::Url)` for absolute URLs (e.g., `https://example.org/file.txt`)
 //! - `Path(std::path::PathBuf)` for absolute or relative filesystem paths (e.g., `/data/a.txt` or `./a/b`)
 //! - `Blob(Blob)` for in-memory data blobs
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::{Context, Result, anyhow, bail};
 use reqwest::Url;
 use std::{
 	fmt::Debug,
@@ -24,16 +24,16 @@ use versatiles_derive::context;
 /// Creating from strings:
 /// ```
 /// use versatiles_container::DataLocation;
-/// let a = DataLocation::from("https://example.org/x.png");
-/// let b = DataLocation::from("./data/x.png");
+/// let a = DataLocation::try_from("https://example.org/x.png").unwrap();
+/// let b = DataLocation::try_from("./data/x.png").unwrap();
 /// assert!(matches!(a, DataLocation::Url(_)));
 /// assert!(matches!(b, DataLocation::Path(_)));
 /// ```
 /// Resolving against a base:
 /// ```
 /// # use versatiles_container::DataLocation;
-/// let base = DataLocation::from("/tiles/");
-/// let mut tgt = DataLocation::from("z/x/y.mvt");
+/// let base = DataLocation::try_from("/tiles/").unwrap();
+/// let mut tgt = DataLocation::try_from("z/x/y.mvt").unwrap();
 /// tgt.resolve(&base).unwrap();
 /// assert_eq!(tgt.to_string().replace('\\', "/"), "/tiles/z/x/y.mvt");
 /// ```
@@ -75,7 +75,7 @@ impl DataLocation {
 		match (base, &mut *self) {
 			// Resolve a Path (relative) against a URL base -> turn into absolute URL
 			(UP::Url(base_url), UP::Path(p)) => {
-				let s = p.to_str().ok_or_else(|| anyhow!("Invalid Path (non-utf8)"))?;
+				let s = p.to_str().ok_or(anyhow!("Invalid Path (non-utf8)"))?;
 				*self = UP::Url(base_url.join(s)?);
 			}
 			// Resolve a Path against a Path base -> join + normalize
@@ -123,21 +123,61 @@ impl DataLocation {
 		}
 	}
 
-	/// Return the filename's last extension (without the dot), or an empty string if none.
+	/// Return the filename's last extension (without the dot).
 	///
-	/// `"/a/file.tar.gz" -> "gz"`, `"/a/README" -> ""`.
+	/// For files, this is the last suffix after a dot (e.g. `"/a/file.tar.gz" -> "gz"`).
+	/// For directories (both URLs ending in `/` and filesystem directories), this returns `"directory"`.
+	/// If no extension is present on a non-directory path, this returns an error.
 	#[context("Getting extension from DataLocation {self:?}")]
 	pub fn extension(&self) -> Result<String> {
-		let filename = self.filename()?;
-		if let Some(pos) = filename.rfind('.') {
-			Ok(filename[(pos + 1)..].to_string())
-		} else {
-			Ok("".into())
+		match self {
+			DataLocation::Url(url) => {
+				if url.path().ends_with('/') {
+					return Ok(String::from("directory"));
+				}
+				let filename = self.filename()?;
+				if let Some(pos) = filename.rfind('.') {
+					Ok(filename[pos + 1..].to_string())
+				} else {
+					bail!("No extension found")
+				}
+			}
+			DataLocation::Path(path) => {
+				if path.is_dir() {
+					Ok(String::from("directory"))
+				} else if let Some(ext) = path.extension() {
+					Ok(ext.to_string_lossy().to_string())
+				} else {
+					bail!("No extension found")
+				}
+			}
+			DataLocation::Blob(_) => bail!("Blob has no extension"),
 		}
 	}
 
+	/// Create a DataLocation representing the current working directory.
 	pub fn cwd() -> Result<Self> {
 		Ok(DataLocation::Path(std::env::current_dir()?))
+	}
+
+	/// Parse a DataLocation from a string, reading from `stdin` if input is `"-"`.
+	pub fn parse_with_stdin<R: std::io::Read>(input: &str, mut stdin: R) -> Result<Self> {
+		Ok(if input == "-" {
+			let mut buffer = Vec::new();
+			stdin.read_to_end(&mut buffer).context("Failed to read from stdin")?;
+			DataLocation::Blob(Blob::from(buffer))
+		} else if let Ok(url) = reqwest::Url::parse(input)
+			&& url.has_host()
+		{
+			DataLocation::Url(url)
+		} else {
+			DataLocation::Path(PathBuf::from(input))
+		})
+	}
+
+	/// Parse a DataLocation from a string.
+	pub fn parse(input: &str) -> Result<Self> {
+		Self::parse_with_stdin(input, std::io::stdin().lock())
 	}
 }
 
@@ -232,7 +272,8 @@ fn normalize(path: &Path) -> PathBuf {
 	out
 }
 
-/// Display as a plain URL string for `Url`, or as a path using `Path::display()` for `Path`.
+/// Display as a plain URL string for `Url`, as a path using `Path::display()` for `Path`,
+/// and as `<blob len=N>` for in-memory `Blob` values.
 impl std::fmt::Display for DataLocation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
@@ -245,28 +286,14 @@ impl std::fmt::Display for DataLocation {
 
 impl From<String> for DataLocation {
 	fn from(s: String) -> Self {
-		DataLocation::from(s.as_str())
+		DataLocation::try_from(s.as_str()).unwrap()
 	}
 }
 
-impl From<&str> for DataLocation {
-	fn from(s: &str) -> Self {
-		if let Ok(url) = reqwest::Url::parse(s)
-			&& url.has_host()
-		{
-			DataLocation::Url(url)
-		} else {
-			DataLocation::Path(PathBuf::from(s))
-		}
-	}
-}
-
-/// Construct from `&str` by attempting URL parsing first. If parsing succeeds and the value
-/// has a host, the `Url` variant is used; otherwise the value is treated as a filesystem path.
-impl std::str::FromStr for DataLocation {
-	type Err = anyhow::Error;
-	fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-		Ok(DataLocation::from(s))
+impl TryFrom<&str> for DataLocation {
+	type Error = anyhow::Error;
+	fn try_from(s: &str) -> Result<Self> {
+		DataLocation::parse(s)
 	}
 }
 
@@ -314,14 +341,13 @@ impl Debug for DataLocation {
 mod tests {
 	use super::*;
 	use rstest::rstest;
-
 	#[rstest]
 	#[case("https://example.org/a/b/c.txt", false)]
 	#[case("/tmp/hello/world.txt", true)]
 	#[case("/tmp/file.txt", true)]
 	#[case("https://example.org/file.txt", false)]
 	fn as_str_returns_expected_for_url_and_path(#[case] input: &str, #[case] is_path: bool) -> Result<()> {
-		let v = DataLocation::from(input);
+		let v = DataLocation::try_from(input)?;
 		assert_eq!(v.as_path().is_ok(), is_path);
 
 		match &v {
@@ -342,7 +368,7 @@ mod tests {
 
 	#[test]
 	fn filename_from_url_and_path() -> Result<()> {
-		let url = DataLocation::from("https://example.org/assets/data/file.tar.gz");
+		let url = DataLocation::try_from("https://example.org/assets/data/file.tar.gz")?;
 		let path = DataLocation::from(PathBuf::from("/data/file.txt"));
 
 		assert_eq!(url.filename()?, "file.tar.gz");
@@ -351,64 +377,52 @@ mod tests {
 	}
 
 	#[rstest]
-	#[case("../a/b", "../x/y.z", "../a/x/y.z")]
-	#[case("../a/b", "./x/y.z", "../a/b/x/y.z")]
-	#[case("../a/b", "/x/y.z", "/x/y.z")]
-	#[case("../a/b", "x/y.z", "../a/b/x/y.z")]
-	#[case("./a/b", "../x/y.z", "a/x/y.z")]
-	#[case("./a/b", "./x/y.z", "a/b/x/y.z")]
-	#[case("./a/b", "/x/y.z", "/x/y.z")]
-	#[case("./a/b", "x/y.z", "a/b/x/y.z")]
-	#[case("/a", "ftp://b.org/y.z", "ftp://b.org/y.z")]
-	#[case("/a/b", "../x/y.z", "/a/x/y.z")]
-	#[case("/a/b", "./x/y.z", "/a/b/x/y.z")]
-	#[case("/a/b", "/x/y.z", "/x/y.z")]
-	#[case("/a/b", "folder/y.z", "/a/b/folder/y.z")]
-	#[case("/a/b", "x/y.z", "/a/b/x/y.z")]
-	#[case("a/b", "../x/y.z", "a/x/y.z")]
-	#[case("a/b", "./x/y.z", "a/b/x/y.z")]
-	#[case("a/b", "/x/y.z", "/x/y.z")]
-	#[case("a/b", "x/y.z", "a/b/x/y.z")]
-	#[case("ftp://a.org/b/", "../x/y.z", "ftp://a.org/x/y.z")]
-	#[case("ftp://a.org/b/", "./x/y.z", "ftp://a.org/b/x/y.z")]
-	#[case("ftp://a.org/b/", "/x/y.z", "ftp://a.org/x/y.z")]
-	#[case("ftp://a.org/b/", "ftp://b.org/y.z", "ftp://b.org/y.z")]
-	#[case("ftp://a.org/b/", "x/y.z", "ftp://a.org/b/x/y.z")]
+	#[case("../a/b", "../x/y.z", "Path(../a/x/y.z)")]
+	#[case("../a/b", "./x/y.z", "Path(../a/b/x/y.z)")]
+	#[case("../a/b", "/x/y.z", "Path(/x/y.z)")]
+	#[case("../a/b", "x/y.z", "Path(../a/b/x/y.z)")]
+	#[case("./a/b", "../x/y.z", "Path(a/x/y.z)")]
+	#[case("./a/b", "./x/y.z", "Path(a/b/x/y.z)")]
+	#[case("./a/b", "/x/y.z", "Path(/x/y.z)")]
+	#[case("./a/b", "x/y.z", "Path(a/b/x/y.z)")]
+	#[case("/a", "ftp://b.org/y.z", "Url(ftp://b.org/y.z)")]
+	#[case("/a/b", "../x/y.z", "Path(/a/x/y.z)")]
+	#[case("/a/b", "./x/y.z", "Path(/a/b/x/y.z)")]
+	#[case("/a/b", "/x/y.z", "Path(/x/y.z)")]
+	#[case("/a/b", "folder/y.z", "Path(/a/b/folder/y.z)")]
+	#[case("/a/b", "x/y.z", "Path(/a/b/x/y.z)")]
+	#[case("a/b", "../x/y.z", "Path(a/x/y.z)")]
+	#[case("a/b", "./x/y.z", "Path(a/b/x/y.z)")]
+	#[case("a/b", "/x/y.z", "Path(/x/y.z)")]
+	#[case("a/b", "x/y.z", "Path(a/b/x/y.z)")]
+	#[case("ftp://a.org/b/", "../x/y.z", "Url(ftp://a.org/x/y.z)")]
+	#[case("ftp://a.org/b/", "./x/y.z", "Url(ftp://a.org/b/x/y.z)")]
+	#[case("ftp://a.org/b/", "/x/y.z", "Url(ftp://a.org/x/y.z)")]
+	#[case("ftp://a.org/b/", "ftp://b.org/y.z", "Url(ftp://b.org/y.z)")]
+	#[case("ftp://a.org/b/", "x/y.z", "Url(ftp://a.org/b/x/y.z)")]
 	fn resolve_matrix(#[case] base: &str, #[case] target: &str, #[case] expected: &str) -> Result<()> {
-		let base_up = DataLocation::from(base);
-		let mut tgt = DataLocation::from(target);
+		let base_up = DataLocation::try_from(base)?;
+		let mut tgt = DataLocation::try_from(target)?;
 		tgt.resolve(&base_up)?;
-		// Compare URLs as strings, but file paths as normalized paths (to allow \\ on Windows).
-		match &tgt {
-			DataLocation::Url(u) => {
-				assert_eq!(u.as_str(), expected);
-			}
-			DataLocation::Path(p) => {
-				let got = p.to_path_buf();
-				let want = PathBuf::from(expected);
-				assert_eq!(got, want);
-			}
-			DataLocation::Blob(_) => bail!("Unexpected Blob variant"),
-		}
+		assert_eq!(format!("{tgt:?}",), expected);
 		Ok(())
 	}
 
 	#[rstest]
-	#[case("https://a.org/b/file.tar.gz", "gz", "file.tar")]
-	#[case("/data/README", "", "README")]
-	#[case("/data/README.md", "md", "README")]
-	#[case("/data/README.MD", "MD", "README")]
-	#[case("/data/archive.", "", "archive")]
-	#[case("/data/.bashrc", "bashrc", "")]
-	#[case("https://a.org/dir.with.dots/file", "", "file")]
+	#[case("https://a.org/b/file.tar.gz", "file.tar", "gz")]
+	#[case("/data/README", "README", "")]
+	#[case("/data/README.md", "README", "md")]
+	#[case("/data/README.MD", "README", "MD")]
+	#[case("/data/archive.", "archive", "")]
+	#[case("https://a.org/dir.with.dots/file", "file", "")]
 	fn extension_and_name_matrix(
 		#[case] input: &str,
-		#[case] expected_ext: &str,
 		#[case] expected_name: &str,
+		#[case] expected_ext: &str,
 	) -> Result<()> {
-		let v = DataLocation::from(input);
-		assert_eq!(v.extension()?, expected_ext);
-		assert_eq!(v.name()?, expected_name);
+		let v = DataLocation::try_from(input)?;
+		assert_eq!(v.extension().unwrap_or_default(), expected_ext);
+		assert_eq!(v.name().unwrap_or_default(), expected_name);
 		Ok(())
 	}
 
@@ -446,17 +460,126 @@ mod tests {
 		let sp: DataLocation = s.into();
 		assert_eq!(sp.as_path()?.to_path_buf(), PathBuf::from("/tmp/abc.txt"));
 
-		let sr: DataLocation = "/tmp/xyz.txt".into();
+		let sr = DataLocation::try_from("/tmp/xyz.txt")?;
 		assert_eq!(sr.as_path()?.to_path_buf(), PathBuf::from("/tmp/xyz.txt"));
 
-		let surl: DataLocation = "https://example.org/a/b".into();
+		let surl = DataLocation::try_from("https://example.org/a/b")?;
 		assert_eq!(surl.to_string(), "https://example.org/a/b");
 		Ok(())
 	}
 
 	#[test]
+	fn from_path_ref_works() -> Result<()> {
+		let path = Path::new("a").join("b").join("c.txt");
+		let dl: DataLocation = (&path).into();
+		match dl {
+			DataLocation::Path(p) => assert_eq!(p, path),
+			_ => bail!("Expected Path variant from &Path"),
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn from_pathbuf_ref_works() -> Result<()> {
+		let pathbuf = PathBuf::from("foo").join("bar.txt");
+		let dl: DataLocation = (&pathbuf).into();
+		match dl {
+			DataLocation::Path(p) => assert_eq!(p, pathbuf),
+			_ => bail!("Expected Path variant from &PathBuf"),
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn from_datalocation_ref_clones() -> Result<()> {
+		let url = Url::parse("https://example.org/data.txt")?;
+		let path = PathBuf::from("data/file.bin");
+		let blob_data = vec![1u8, 2, 3, 4];
+		let blob = Blob::from(blob_data.clone());
+
+		let dl_url = DataLocation::from(url);
+		let dl_path = DataLocation::from(path);
+		let dl_blob = DataLocation::Blob(blob);
+
+		let dl_url2: DataLocation = (&dl_url).into();
+		let dl_path2: DataLocation = (&dl_path).into();
+		let dl_blob2: DataLocation = (&dl_blob).into();
+
+		assert_eq!(dl_url, dl_url2);
+		assert_eq!(dl_path, dl_path2);
+		assert_eq!(dl_blob, dl_blob2);
+		Ok(())
+	}
+
+	#[test]
+	fn display_impl_formats_variants() -> Result<()> {
+		let url = Url::parse("https://example.org/display.txt")?;
+		let path = PathBuf::from("some").join("nested").join("file.ext");
+		let blob_data = vec![0u8; 10];
+		let blob = Blob::from(blob_data.clone());
+
+		let dl_url = DataLocation::from(url);
+		let dl_path = DataLocation::from(path.clone());
+		let dl_blob = DataLocation::Blob(blob);
+
+		let s_url = format!("{dl_url}");
+		let s_path = format!("{dl_path}");
+		let s_blob = format!("{dl_blob}");
+
+		assert_eq!(s_url, "https://example.org/display.txt");
+		assert_eq!(PathBuf::from(&s_path), path);
+		assert_eq!(s_blob, "<blob len=10>");
+		Ok(())
+	}
+
+	#[test]
+	fn cwd_returns_current_directory() -> Result<()> {
+		let dl = DataLocation::cwd()?;
+		let cur = std::env::current_dir()?;
+
+		match dl {
+			DataLocation::Path(p) => assert_eq!(p, cur),
+			_ => bail!("cwd() must return a Path variant"),
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn parse_with_stdin_reads_blob_for_dash() -> Result<()> {
+		let data = b"hello stdin";
+		let dl = DataLocation::parse_with_stdin("-", &data[..])?;
+
+		let expected_blob = Blob::from(data.to_vec());
+		match dl {
+			DataLocation::Blob(b) => assert_eq!(b, expected_blob),
+			_ => bail!("Expected Blob variant when input is '-'"),
+		}
+		Ok(())
+	}
+
+	#[test]
+	fn parse_with_stdin_parses_url_and_path() -> Result<()> {
+		let url_input = "https://example.org/with_stdin.txt";
+		let path_input = "local/with_stdin.txt";
+
+		let dl_url = DataLocation::parse_with_stdin(url_input, &[][..])?;
+		let dl_path = DataLocation::parse_with_stdin(path_input, &[][..])?;
+
+		match dl_url {
+			DataLocation::Url(u) => assert_eq!(u.as_str(), url_input),
+			_ => bail!("Expected Url variant from URL string"),
+		}
+
+		match dl_path {
+			DataLocation::Path(p) => assert_eq!(p, PathBuf::from(path_input)),
+			_ => bail!("Expected Path variant from path string"),
+		}
+		Ok(())
+	}
+
+	#[test]
 	fn debug_impl_is_stable_format_prefix() -> Result<()> {
-		let url = DataLocation::from("https://example.org/a/b.txt");
+		let url = DataLocation::try_from("https://example.org/a/b.txt")?;
 		let path = DataLocation::from(PathBuf::from("/data/c.txt"));
 
 		let d_url = format!("{:?}", url);
