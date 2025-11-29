@@ -33,6 +33,7 @@ impl DataSource {
 		self.name.as_deref()
 	}
 
+	/// Returns a reference to the container type, or an error if not specified.
 	pub fn container_type(&self) -> Result<&str> {
 		self
 			.container_type
@@ -40,6 +41,7 @@ impl DataSource {
 			.ok_or(anyhow::anyhow!("Could not determine container type for data source"))
 	}
 
+	/// Returns a reference to the name, or an error if not specified.
 	pub fn name(&self) -> Result<&str> {
 		self
 			.name
@@ -103,12 +105,6 @@ impl DataSource {
 			name,
 			location,
 		})
-
-		/*
-		let stdin = std::io::stdin();
-		let mut stdin_lock = stdin.lock();
-		Self::parse_with_stdin(s, registry, &mut stdin_lock)
-		 */
 	}
 
 	/// Resolves the underlying location relative to a base location.
