@@ -53,7 +53,7 @@ extra_response_headers:
 
 # Optional list of static content sources
 static: 
-  - # Path to static files or archive (e.g., .tar.gz) containing assets
+  - # Path to static files, archive (e.g., .tar.gz) or directory containing assets
     path: ./frontend.tar
     
     # Optional URL prefix where static files will be served
@@ -64,7 +64,7 @@ static:
 tiles: 
   - # Optional name identifier for this tile source
     # Tiles will be available under `/tiles/{name}/...`
-    # Defaults to the last part of the path (e.g., "osm" for "osm.versatiles")
+    # Defaults to the basename (e.g., "osm" for "osm.versatiles")
     name: osm
     
     # Path or URL to the tile data source
