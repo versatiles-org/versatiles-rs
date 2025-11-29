@@ -175,7 +175,6 @@ mod tests {
 	}
 
 	#[test]
-
 	fn test_remote1() -> Result<()> {
 		let temp_dir = TempDir::new()?;
 		let temp_path = temp_dir.path().display();
@@ -194,7 +193,6 @@ mod tests {
 	}
 
 	#[test]
-
 	fn test_remote2() -> Result<()> {
 		let temp_dir = TempDir::new()?;
 		let temp_path = temp_dir.path().display();

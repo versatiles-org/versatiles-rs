@@ -36,7 +36,7 @@ use versatiles_derive::{ConfigDoc, context};
 #[derive(Debug, Clone, PartialEq, ConfigDoc)]
 pub struct StaticSourceConfig {
 	#[config_demo("./frontend.tar")]
-	/// Path to static files or archive (e.g., .tar.gz) containing assets
+	/// Path to static files, archive (e.g., .tar.gz) or directory containing assets
 	pub src: DataLocation,
 
 	#[config_demo("/")]
@@ -92,7 +92,7 @@ impl<'de> Deserialize<'de> for StaticSourceConfig {
 impl From<(&str, &str)> for StaticSourceConfig {
 	fn from((prefix, src): (&str, &str)) -> Self {
 		Self {
-			src: DataLocation::from(src),
+			src: DataLocation::try_from(src).unwrap(),
 			prefix: Some(prefix.to_string()),
 		}
 	}

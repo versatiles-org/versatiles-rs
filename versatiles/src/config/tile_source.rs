@@ -17,7 +17,7 @@
 use anyhow::Result;
 use serde::Deserialize;
 use std::fmt::Debug;
-use versatiles_container::DataLocation;
+use versatiles_container::{DataLocation, DataSource};
 use versatiles_derive::{ConfigDoc, context};
 
 /// Configuration entry for a single tile data source.
@@ -25,24 +25,20 @@ use versatiles_derive::{ConfigDoc, context};
 /// Each `TileSourceConfig` entry maps a tile set name to a local or remote
 /// path that provides the tile data.
 ///
-/// - `name` — Optional name under which the tiles are exposed (defaults to the
-///   last part of the file name, e.g. `"osm"` for `"osm.versatiles"`).
-/// - `path` — Local file path or remote URL pointing to the tile source.
-///
 /// Relative paths are resolved against the configuration file’s directory
 /// by [`TileSourceConfig::resolve_paths`].
 #[derive(Debug, Clone, PartialEq, ConfigDoc)]
 pub struct TileSourceConfig {
 	/// Optional name identifier for this tile source
 	/// Tiles will be available under `/tiles/{name}/...`
-	/// Defaults to the last part of the path (e.g., "osm" for "osm.versatiles")
+	/// Defaults to the basename (e.g., "osm" for "osm.versatiles")
 	#[config_demo("osm")]
 	pub name: Option<String>,
 
 	/// Path or URL to the tile data source
 	/// Can be a local file or remote URL.
 	#[config_demo("osm.versatiles")]
-	pub src: DataLocation,
+	pub src: DataSource,
 }
 
 impl TileSourceConfig {
@@ -83,7 +79,7 @@ impl<'de> Deserialize<'de> for TileSourceConfig {
 		let helper = TileSourceConfigHelper::deserialize(deserializer)?;
 		Ok(TileSourceConfig {
 			name: helper.name,
-			src: DataLocation::from(helper.src),
+			src: DataSource::parse(&helper.src).map_err(|e| serde::de::Error::custom(e.to_string()))?,
 		})
 	}
 }
@@ -93,7 +89,7 @@ impl From<(&str, &str)> for TileSourceConfig {
 	fn from((name, src): (&str, &str)) -> Self {
 		Self {
 			name: Some(name.to_string()),
-			src: DataLocation::from(src),
+			src: DataSource::try_from(src).unwrap(),
 		}
 	}
 }
