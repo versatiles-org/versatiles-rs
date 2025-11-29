@@ -339,6 +339,12 @@ impl From<&DataLocation> for DataLocation {
 	}
 }
 
+impl From<Blob> for DataLocation {
+	fn from(b: Blob) -> Self {
+		DataLocation::Blob(b)
+	}
+}
+
 impl Debug for DataLocation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {

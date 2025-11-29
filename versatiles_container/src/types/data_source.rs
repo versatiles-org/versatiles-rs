@@ -5,6 +5,7 @@
 use super::data_location::DataLocation;
 use anyhow::Result;
 use regex::Regex;
+use versatiles_core::{Blob, json::JsonValue};
 use versatiles_derive::context;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -66,7 +67,17 @@ impl DataSource {
 		let mut name: Option<String> = None;
 		let mut container_type: Option<String> = None;
 
-		let location = if let Some(captures) = RE_PREFIX.captures(input) {
+		let location = if input.starts_with('{') {
+			let json = JsonValue::parse_str(input)?.into_object()?;
+			name = json.get("name").map(|s| s.to_string()).transpose()?;
+			container_type = json.get("type").map(|s| s.to_string()).transpose()?;
+			let content = json
+				.get("content")
+				.ok_or(anyhow::anyhow!("missing `content`"))?
+				.to_string()?;
+			let blob = Blob::from(content);
+			DataLocation::from(blob)
+		} else if let Some(captures) = RE_PREFIX.captures(input) {
 			let prefix = captures.get(1).unwrap().as_str();
 
 			let mut prefix = prefix.split(',');
@@ -141,15 +152,17 @@ mod tests {
 	use std::path::PathBuf;
 
 	#[rstest]
-	#[case("[,]file.ext", "file", "ext", "file.ext")]
-	#[case("[]file.ext", "file", "ext", "file.ext")]
-	#[case("file.ext", "file", "ext", "file.ext")]
-	#[case("[,type]file.ext", "file", "type", "file.ext")]
-	#[case("[name,]file.ext", "name", "ext", "file.ext")]
-	#[case("[name,type]file.ext", "name", "type", "file.ext")]
-	#[case("[name,type]file", "name", "type", "file")]
-	#[case("[name]file.ext", "name", "ext", "file.ext")]
-	#[case("[name]http://example.org/file.ext", "name", "ext", "file.ext")]
+	#[case("[,]file.ext", "file", "ext", "Path(file.ext)")]
+	#[case("[]file.ext", "file", "ext", "Path(file.ext)")]
+	#[case("file.ext", "file", "ext", "Path(file.ext)")]
+	#[case("[,type]file.ext", "file", "type", "Path(file.ext)")]
+	#[case("[name,]file.ext", "name", "ext", "Path(file.ext)")]
+	#[case("[name,type]file.ext", "name", "type", "Path(file.ext)")]
+	#[case("[name,type]file", "name", "type", "Path(file)")]
+	#[case("[name]file.ext", "name", "ext", "Path(file.ext)")]
+	#[case("[name]http://host/file.ext", "name", "ext", "Url(http://host/file.ext)")]
+	#[case("http://host/file.ext", "file", "ext", "Url(http://host/file.ext)")]
+	#[case(r#"{"name":"a","type":"b","content":"c"}"#, "a", "b", "Blob(len=1)")]
 	fn parse_with_prefixes(
 		#[case] input: &str,
 		#[case] expected_name: &str,
@@ -159,7 +172,7 @@ mod tests {
 		let ds = DataSource::parse(input).unwrap();
 		assert_eq!(ds.name.unwrap(), expected_name);
 		assert_eq!(ds.container_type.unwrap(), expected_container);
-		assert_eq!(ds.location.filename().unwrap(), expected_location);
+		assert_eq!(format!("{:?}", ds.location), expected_location);
 	}
 
 	#[test]
