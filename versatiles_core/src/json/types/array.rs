@@ -54,7 +54,7 @@ impl JsonArray {
 
 	/// Convert all elements to Rust `String`s, returning an error if any element is not a string.
 	pub fn as_string_vec(&self) -> Result<Vec<String>> {
-		self.0.iter().map(JsonValue::as_string).collect::<Result<Vec<_>>>()
+		self.0.iter().map(JsonValue::to_string).collect::<Result<Vec<_>>>()
 	}
 
 	/// Convert all elements to numbers of type `T`, returning an error if any element is not numeric.

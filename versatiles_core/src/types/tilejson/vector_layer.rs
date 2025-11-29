@@ -49,7 +49,7 @@ impl VectorLayers {
 			let mut fields = BTreeMap::<String, String>::new();
 			if let Some(value) = object.get("fields") {
 				for (k, v) in value.as_object()?.iter() {
-					fields.insert(k.clone(), v.as_string()?);
+					fields.insert(k.clone(), v.to_string()?);
 				}
 			}
 
@@ -559,7 +559,7 @@ mod tests {
 				if let JsonValue::Object(obj) = &arr.0[0] {
 					// Expect 'id' == 'myLayer'
 					let id = obj.get("id").ok_or_else(|| anyhow!("missing 'id'"))?;
-					assert_eq!(id.as_string()?, "myLayer");
+					assert_eq!(id.to_string()?, "myLayer");
 				} else {
 					panic!("Expected a JsonObject in the array.");
 				}

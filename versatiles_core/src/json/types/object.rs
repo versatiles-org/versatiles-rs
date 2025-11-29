@@ -35,7 +35,7 @@ impl JsonObject {
 
 	/// Retrieve a string value for the specified key, returning `None` if missing or not a string.
 	pub fn get_string(&self, key: &str) -> Result<Option<String>> {
-		self.get(key).map(JsonValue::as_string).transpose()
+		self.get(key).map(JsonValue::to_string).transpose()
 	}
 
 	pub fn get_object(&self, key: &str) -> Result<Option<&JsonObject>> {

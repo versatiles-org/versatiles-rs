@@ -124,9 +124,20 @@ impl JsonValue {
 	///
 	/// # Errors
 	/// Returns an error if the value is not a JSON string.
-	pub fn as_string(&self) -> Result<String> {
+	pub fn to_string(&self) -> Result<String> {
 		match self {
 			JsonValue::String(text) => Ok(text.to_owned()),
+			_ => bail!("expected a string, found a {}", self.type_as_str()),
+		}
+	}
+
+	/// Move the string value as `String`.
+	///
+	/// # Errors
+	/// Returns an error if the value is not a JSON string.
+	pub fn into_string(self) -> Result<String> {
+		match self {
+			JsonValue::String(text) => Ok(text),
 			_ => bail!("expected a string, found a {}", self.type_as_str()),
 		}
 	}
@@ -327,12 +338,14 @@ mod tests {
 	fn test_as_string_as_str() {
 		let value = JsonValue::String("value".to_string());
 
-		assert_eq!(value.as_string().unwrap(), "value");
 		assert_eq!(value.as_str().unwrap(), "value");
+		assert_eq!(value.to_string().unwrap(), "value");
+		assert_eq!(value.into_string().unwrap(), "value");
 
 		let non_string = JsonValue::Number(42.0);
-		assert!(non_string.as_string().is_err());
 		assert!(non_string.as_str().is_err());
+		assert!(non_string.to_string().is_err());
+		assert!(non_string.into_string().is_err());
 	}
 
 	#[test]
