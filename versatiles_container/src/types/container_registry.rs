@@ -165,6 +165,7 @@ impl ContainerRegistry {
 		);
 	}
 
+	#[context("Failed to get reader from string '{data_source}'")]
 	pub async fn get_reader_from_str(&self, data_source: &str) -> Result<Box<dyn TilesReaderTrait>> {
 		self.get_reader(DataSource::parse(data_source)?).await
 	}
@@ -179,13 +180,10 @@ impl ContainerRegistry {
 	/// # Returns
 	/// A boxed `TilesReaderTrait` for reading tiles.
 	#[context("Failed to get reader for '{data_source:?}'")]
-	pub async fn get_reader<T>(&self, data_source: T) -> Result<Box<dyn TilesReaderTrait>>
-	where
-		T: Into<DataSource> + std::fmt::Debug + Clone,
-	{
-		let mut data_source: DataSource = data_source.clone().into();
+	pub async fn get_reader(&self, data_source: DataSource) -> Result<Box<dyn TilesReaderTrait>> {
+		let mut data_source = data_source.clone();
 		data_source.resolve(&DataLocation::cwd()?)?;
-		let extension = sanitize_extension(data_source.container_type());
+		let extension = sanitize_extension(data_source.container_type()?);
 
 		match data_source.into_location() {
 			DataLocation::Url(url) => {

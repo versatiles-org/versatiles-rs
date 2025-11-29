@@ -91,7 +91,7 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 
 			let path = DataSource::parse(capture.name("url").unwrap().as_str())?;
 			let name: String = match capture.name("name") {
-				None => path.name().to_string(),
+				None => path.name()?.to_string(),
 				Some(m) => m.as_str().to_string(),
 			};
 

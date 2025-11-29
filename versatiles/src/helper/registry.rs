@@ -55,3 +55,16 @@ pub fn get_registry(config: ProcessingConfig) -> ContainerRegistry {
 
 	registry
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[tokio::test]
+	async fn test_get_registry() {
+		let config = ProcessingConfig::default();
+		let registry = get_registry(config);
+		let reader_result = registry.get_reader_from_str("test.vpl").await;
+		assert!(reader_result.is_err(), "Expected error for non-existent file");
+	}
+}

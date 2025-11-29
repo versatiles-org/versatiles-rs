@@ -65,7 +65,7 @@ fn convert_vpl_via_stdin() {
 	);
 
 	let (_temp_dir, output) = get_temp_output("vpl.pmtiles");
-	versatiles_stdin(&format!("convert vpl:- {}", output.to_str().unwrap()), &stdin);
+	versatiles_stdin(&format!("convert [,vpl]- {}", output.to_str().unwrap()), &stdin);
 
 	assert!(output.exists(), "output file was not created: {:?}", output);
 	assert_eq!(

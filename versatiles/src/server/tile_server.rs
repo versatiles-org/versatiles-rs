@@ -137,7 +137,7 @@ impl TileServer {
 
 	#[context("adding tile source from config: {tile_config:?}")]
 	async fn add_tile_source_config(&mut self, tile_config: &TileSourceConfig) -> Result<()> {
-		let name = tile_config.name.clone().unwrap_or(tile_config.path.name().to_string());
+		let name = tile_config.name.clone().unwrap_or(tile_config.path.name()?.to_string());
 
 		log::debug!(
 			"add source: name='{}', path={:?}",

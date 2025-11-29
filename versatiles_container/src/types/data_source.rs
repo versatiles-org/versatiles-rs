@@ -12,9 +12,9 @@ use versatiles_derive::context;
 /// It can resolve standard input (`-`) into an in-memory Blob and derives the effective extension
 /// that determines which reader to pick.
 pub struct DataSource {
-	container_type: String, // mbtiles / vpl / ...
-	name: String,           // name identifier
-	location: DataLocation, // URL, filesystem path, or in-memory blob
+	container_type: Option<String>, // mbtiles / vpl / ...
+	name: Option<String>,           // name identifier
+	location: DataLocation,         // URL, filesystem path, or in-memory blob
 }
 
 lazy_static::lazy_static! {
@@ -22,16 +22,28 @@ lazy_static::lazy_static! {
 }
 
 impl DataSource {
-	/// Returns the effective extension for this data source.
-	///
-	/// This is typically the driver prefix if one was specified (e.g., `mbtiles`),
-	/// otherwise it is inferred from the underlying location's extension.
-	pub fn container_type(&self) -> &str {
-		&self.container_type
+	/// Returns an optional reference to the container type, if specified.
+	pub fn optional_container_type(&self) -> Option<&str> {
+		self.container_type.as_deref()
 	}
 
-	pub fn name(&self) -> &str {
-		&self.name
+	/// Returns an optional reference to the name, if specified.
+	pub fn optional_name(&self) -> Option<&str> {
+		self.name.as_deref()
+	}
+
+	pub fn container_type(&self) -> Result<&str> {
+		self
+			.container_type
+			.as_deref()
+			.ok_or(anyhow::anyhow!("Could not determine container type for data source"))
+	}
+
+	pub fn name(&self) -> Result<&str> {
+		self
+			.name
+			.as_deref()
+			.ok_or(anyhow::anyhow!("Could not determine name for data source"))
 	}
 
 	/// Returns a reference to the underlying `DataLocation`.
@@ -57,10 +69,10 @@ impl DataSource {
 		let location_str = if let Some(captures) = RE_PREFIX.captures(input) {
 			let prefix = captures.get(1).unwrap().as_str();
 
-			let prefix = prefix.split(',').collect::<Vec<_>>();
+			let mut prefix = prefix.split(',');
 
-			name = prefix.get(0).and_then(|s| (!s.is_empty()).then(|| s.to_string()));
-			container_type = prefix.get(1).and_then(|s| (!s.is_empty()).then(|| s.to_string()));
+			name = prefix.next().and_then(|s| (!s.is_empty()).then(|| s.to_string()));
+			container_type = prefix.next().and_then(|s| (!s.is_empty()).then(|| s.to_string()));
 
 			captures.get(2).unwrap().as_str()
 		} else {
@@ -69,15 +81,13 @@ impl DataSource {
 
 		let location = DataLocation::try_from(location_str)?;
 
-		let container_type = match container_type {
-			Some(ct) => ct,
-			None => location.extension().context("Could not determine container type")?,
-		};
+		if container_type.is_none() {
+			container_type = location.extension().ok();
+		}
 
-		let name = match name {
-			Some(n) => n,
-			None => location.name().context("Could not determine container name")?,
-		};
+		if name.is_none() {
+			name = location.name().ok();
+		}
 
 		Ok(DataSource {
 			container_type,
@@ -118,8 +128,8 @@ impl TryFrom<DataLocation> for DataSource {
 	type Error = anyhow::Error;
 	fn try_from(location: DataLocation) -> Result<Self> {
 		Ok(DataSource {
-			container_type: location.extension()?,
-			name: location.name()?,
+			container_type: location.extension().ok(),
+			name: location.name().ok(),
 			location,
 		})
 	}
@@ -141,29 +151,30 @@ mod tests {
 	#[case("[name,type]file.ext", "name", "type", "file.ext")]
 	#[case("[name,type]file", "name", "type", "file")]
 	#[case("[name]file.ext", "name", "ext", "file.ext")]
-	fn test_parse_with_prefixes(
+	#[case("[name]http://example.org/file.ext", "name", "ext", "file.ext")]
+	fn parse_with_prefixes(
 		#[case] input: &str,
 		#[case] expected_name: &str,
 		#[case] expected_container: &str,
 		#[case] expected_location: &str,
 	) {
 		let ds = DataSource::parse(input).unwrap();
-		assert_eq!(ds.name, expected_name);
-		assert_eq!(ds.container_type, expected_container);
+		assert_eq!(ds.name.unwrap(), expected_name);
+		assert_eq!(ds.container_type.unwrap(), expected_container);
 		assert_eq!(ds.location.filename().unwrap(), expected_location);
 	}
 
 	#[test]
 	fn parse_simple_path_uses_path_extension() {
 		let ds = DataSource::parse("data/example.mbtiles").unwrap();
-		assert_eq!(ds.container_type(), "mbtiles");
+		assert_eq!(ds.container_type().unwrap(), "mbtiles");
 		assert_eq!(ds.location().as_path().unwrap().file_name().unwrap(), "example.mbtiles");
 	}
 
 	#[test]
 	fn parse_url_uses_url_extension() {
 		let ds = DataSource::parse("https://example.org/tiles/test.tar").unwrap();
-		assert_eq!(ds.container_type(), "tar");
+		assert_eq!(ds.container_type().unwrap(), "tar");
 		assert!(ds.location().as_url().unwrap().to_string().ends_with("test.tar"));
 	}
 
@@ -171,8 +182,8 @@ mod tests {
 	fn from_path() {
 		let loc = DataLocation::from(PathBuf::from("/tmp/test.vrt"));
 		let ds = DataSource::try_from(loc).unwrap();
-		assert_eq!(ds.container_type(), "vrt");
-		assert_eq!(ds.name(), "test");
+		assert_eq!(ds.container_type().unwrap(), "vrt");
+		assert_eq!(ds.name().unwrap(), "test");
 		assert_eq!(ds.location().as_path().unwrap(), "/tmp/test.vrt");
 	}
 
@@ -184,7 +195,7 @@ mod tests {
 
 		let path = ds.location().as_path().unwrap();
 		assert_eq!(path, PathBuf::from("/data/base/rel/tiles/data.mbtiles"));
-		assert_eq!(ds.container_type(), "mbtiles");
+		assert_eq!(ds.container_type().unwrap(), "mbtiles");
 	}
 
 	#[test]
@@ -198,7 +209,7 @@ mod tests {
 		let url = ds.location().as_url().unwrap();
 		// URL join semantics will normalize the path
 		assert_eq!(url.as_str(), "https://example.org/tiles/rel/tiles/data.mvt");
-		assert_eq!(ds.container_type(), "mvt");
+		assert_eq!(ds.container_type().unwrap(), "mvt");
 	}
 
 	#[test]
@@ -206,8 +217,8 @@ mod tests {
 		let s = "data/source.vpl";
 		let ds = DataSource::try_from(s).unwrap();
 
-		assert_eq!(ds.container_type(), "vpl");
-		assert_eq!(ds.name(), "source");
+		assert_eq!(ds.container_type().unwrap(), "vpl");
+		assert_eq!(ds.name().unwrap(), "source");
 		assert!(
 			ds.location()
 				.as_path()
@@ -222,8 +233,8 @@ mod tests {
 		let s = String::from("inputs/other.mbtiles");
 		let ds = DataSource::try_from(&s).unwrap();
 
-		assert_eq!(ds.container_type(), "mbtiles");
-		assert_eq!(ds.name(), "other");
+		assert_eq!(ds.container_type().unwrap(), "mbtiles");
+		assert_eq!(ds.name().unwrap(), "other");
 		assert!(
 			ds.location()
 				.as_path()
