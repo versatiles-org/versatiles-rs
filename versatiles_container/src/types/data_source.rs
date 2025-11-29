@@ -66,7 +66,7 @@ impl DataSource {
 		let mut name: Option<String> = None;
 		let mut container_type: Option<String> = None;
 
-		let location_str = if let Some(captures) = RE_PREFIX.captures(input) {
+		let location = if let Some(captures) = RE_PREFIX.captures(input) {
 			let prefix = captures.get(1).unwrap().as_str();
 
 			let mut prefix = prefix.split(',');
@@ -74,12 +74,10 @@ impl DataSource {
 			name = prefix.next().and_then(|s| (!s.is_empty()).then(|| s.to_string()));
 			container_type = prefix.next().and_then(|s| (!s.is_empty()).then(|| s.to_string()));
 
-			captures.get(2).unwrap().as_str()
+			DataLocation::try_from(captures.get(2).unwrap().as_str())?
 		} else {
-			input
+			DataLocation::try_from(input)?
 		};
-
-		let location = DataLocation::try_from(location_str)?;
 
 		if container_type.is_none() {
 			container_type = location.extension().ok();
