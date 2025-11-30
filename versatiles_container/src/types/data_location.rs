@@ -418,11 +418,14 @@ mod tests {
 	#[case("ftp://a.org/b/", "/x/y.z", "Url(ftp://a.org/x/y.z)")]
 	#[case("ftp://a.org/b/", "ftp://b.org/y.z", "Url(ftp://b.org/y.z)")]
 	#[case("ftp://a.org/b/", "x/y.z", "Url(ftp://a.org/b/x/y.z)")]
-	fn resolve_matrix(#[case] base: &str, #[case] target: &str, #[case] expected: &str) -> Result<()> {
+	fn resolve(#[case] base: &str, #[case] target: &str, #[case] expected: &str) -> Result<()> {
 		let base_up = DataLocation::try_from(base)?;
-		let mut tgt = DataLocation::try_from(target)?;
-		tgt.resolve(&base_up)?;
-		assert_eq!(format!("{tgt:?}",), expected);
+		let mut result = DataLocation::try_from(target)?;
+		result.resolve(&base_up)?;
+
+		// Normalize path separators for comparison (Windows compatibility)
+		let result = format!("{result:?}").replace('\\', "/");
+		assert_eq!(result, expected);
 		Ok(())
 	}
 
