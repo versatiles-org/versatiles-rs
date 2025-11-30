@@ -20,6 +20,7 @@ pub struct DataSource {
 
 lazy_static::lazy_static! {
 	static ref RE_PREFIX: Regex = Regex::new(r#"^\[([\w,]*)\](.*)"#).unwrap();
+	static ref RE_POSTFIX: Regex = Regex::new(r#"^(.*)\[([\w,]*)\]$"#).unwrap();
 }
 
 impl DataSource {
@@ -69,6 +70,13 @@ impl DataSource {
 		let mut name: Option<String> = None;
 		let mut container_type: Option<String> = None;
 
+		fn extract_name_and_type(text: &str) -> (Option<String>, Option<String>) {
+			let mut parts = text.split(',');
+			let name = parts.next().and_then(|s| (!s.is_empty()).then(|| s.to_string()));
+			let container_type = parts.next().and_then(|s| (!s.is_empty()).then(|| s.to_string()));
+			(name, container_type)
+		}
+
 		let location = if input.starts_with('{') {
 			let json = JsonValue::parse_str(input)?.into_object()?;
 			name = json.get("name").map(|s| s.to_string()).transpose()?;
@@ -79,15 +87,16 @@ impl DataSource {
 				.to_string()?;
 			let blob = Blob::from(content);
 			DataLocation::from(blob)
-		} else if let Some(captures) = RE_PREFIX.captures(input) {
-			let prefix = captures.get(1).unwrap().as_str();
-
-			let mut prefix = prefix.split(',');
-
-			name = prefix.next().and_then(|s| (!s.is_empty()).then(|| s.to_string()));
-			container_type = prefix.next().and_then(|s| (!s.is_empty()).then(|| s.to_string()));
-
+		} else if input.starts_with('[')
+			&& let Some(captures) = RE_PREFIX.captures(input)
+		{
+			(name, container_type) = extract_name_and_type(captures.get(1).unwrap().as_str());
 			DataLocation::try_from(captures.get(2).unwrap().as_str())?
+		} else if input.ends_with(']')
+			&& let Some(captures) = RE_POSTFIX.captures(input)
+		{
+			(name, container_type) = extract_name_and_type(captures.get(2).unwrap().as_str());
+			DataLocation::try_from(captures.get(1).unwrap().as_str())?
 		} else {
 			DataLocation::try_from(input)?
 		};
@@ -149,15 +158,23 @@ mod tests {
 
 	#[rstest]
 	#[case("[,]file.ext", "file", "ext", "Path(file.ext)")]
-	#[case("[]file.ext", "file", "ext", "Path(file.ext)")]
-	#[case("file.ext", "file", "ext", "Path(file.ext)")]
 	#[case("[,type]file.ext", "file", "type", "Path(file.ext)")]
+	#[case("[]file.ext", "file", "ext", "Path(file.ext)")]
 	#[case("[name,]file.ext", "name", "ext", "Path(file.ext)")]
 	#[case("[name,type]file.ext", "name", "type", "Path(file.ext)")]
 	#[case("[name,type]file", "name", "type", "Path(file)")]
 	#[case("[name]file.ext", "name", "ext", "Path(file.ext)")]
 	#[case("[name]http://host/file.ext", "name", "ext", "Url(http://host/file.ext)")]
+	#[case("file.ext", "file", "ext", "Path(file.ext)")]
+	#[case("file.ext[,]", "file", "ext", "Path(file.ext)")]
+	#[case("file.ext[,type]", "file", "type", "Path(file.ext)")]
+	#[case("file.ext[]", "file", "ext", "Path(file.ext)")]
+	#[case("file.ext[name,]", "name", "ext", "Path(file.ext)")]
+	#[case("file.ext[name,type]", "name", "type", "Path(file.ext)")]
+	#[case("file.ext[name]", "name", "ext", "Path(file.ext)")]
+	#[case("file[name,type]", "name", "type", "Path(file)")]
 	#[case("http://host/file.ext", "file", "ext", "Url(http://host/file.ext)")]
+	#[case("http://host/file.ext[name]", "name", "ext", "Url(http://host/file.ext)")]
 	#[case(r#"{"name":"a","type":"b","content":"c"}"#, "a", "b", "Blob(len=1)")]
 	fn parse_with_prefixes(
 		#[case] input: &str,
