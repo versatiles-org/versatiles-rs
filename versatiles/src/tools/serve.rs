@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result};
 use regex::Regex;
 use std::{mem::swap, path::PathBuf};
 use tokio::time::{Duration, sleep};
@@ -68,38 +68,10 @@ pub async fn run(arguments: &Subcommand) -> Result<()> {
 		.override_optional_minimal_recompression(&arguments.minimal_recompression);
 	config.server.override_optional_disable_api(&arguments.disable_api);
 
-	let tile_patterns: Vec<Regex> = [
-		r"^\[(?P<name>[^\]]+?)\](?P<url>.*)$",
-		r"^(?P<url>.*)\[(?P<name>[^\]]+?)\]$",
-		r"^(?P<url>.*)#(?P<name>[^\]]+?)$",
-		r"^(?P<url>.*)$",
-	]
-	.iter()
-	.map(|pat| Regex::new(pat).unwrap())
-	.collect();
-
-	let mut tile_sources = arguments
-		.tile_sources
-		.iter()
-		.map(|argument| {
-			let capture = tile_patterns
-				.iter()
-				.find(|p| p.is_match(argument))
-				.ok_or_else(|| anyhow!("Failed to parse tile source argument: {}", argument))?
-				.captures(argument)
-				.ok_or_else(|| anyhow!("Failed to parse tile source argument: {}", argument))?;
-
-			let src = DataSource::parse(capture.name("url").unwrap().as_str())?;
-			let name: String = match capture.name("name") {
-				None => src.name()?.to_string(),
-				Some(m) => m.as_str().to_string(),
-			};
-
-			Ok(TileSourceConfig { name: Some(name), src })
-		})
-		.collect::<Result<Vec<TileSourceConfig>>>()?;
-	swap(&mut config.tile_sources, &mut tile_sources);
-	config.tile_sources.extend(tile_sources);
+	for src in &arguments.tile_sources {
+		let src = DataSource::parse(src)?;
+		config.tile_sources.push(TileSourceConfig { name: None, src });
+	}
 
 	let static_patterns: Vec<Regex> = [
 		r"^\[(?P<path>[^\]]+?)\](?P<filename>.*)$",

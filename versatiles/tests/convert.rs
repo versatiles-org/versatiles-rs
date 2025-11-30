@@ -20,11 +20,7 @@ fn convert_mbtiles_to_versatiles() {
 	let input = get_testdata("berlin.mbtiles");
 	let (_temp_dir, output) = get_temp_output("berlin.versatiles");
 
-	versatiles_run(&format!(
-		"convert {} {}",
-		input.to_str().unwrap(),
-		output.to_str().unwrap()
-	));
+	versatiles_run(&format!("convert {input} {}", output.to_str().unwrap()));
 
 	assert!(output.exists(), "output file was not created: {:?}", output);
 }
@@ -36,7 +32,7 @@ fn convert_pmtiles_to_mbtiles_with_bbox_and_border() {
 
 	versatiles_run(&format!(
 		"convert --bbox 13.0,52.0,13.8,52.8 --bbox-border 1 {} {}",
-		input.to_str().unwrap(),
+		&input,
 		output.to_str().unwrap()
 	));
 
@@ -51,18 +47,19 @@ fn convert_pmtiles_to_mbtiles_with_bbox_and_border() {
 
 #[test]
 fn convert_vpl_via_stdin() {
-	let testdata_pmtiles = path_to_string(&get_testdata("berlin.pmtiles"));
-	let testdata_csv = path_to_string(&get_testdata("cities.csv"));
+	let testdata_pmtiles = get_testdata("berlin.pmtiles");
+	let testdata_csv = get_testdata("cities.csv");
 	let stdin = format!(
 		r#"
-			from_container filename={testdata_pmtiles} |
+			from_container filename='{testdata_pmtiles}' |
 			vector_update_properties
-				data_source_path={testdata_csv}
+				data_source_path='{testdata_csv}'
 				layer_name="place_labels"
 				id_field_tiles="name"
 				id_field_data="city_name"
 		"#
-	);
+	)
+	.replace('\t', "   ");
 
 	let (_temp_dir, output) = get_temp_output("vpl.pmtiles");
 	versatiles_stdin(&format!("convert [,vpl]- {}", output.to_str().unwrap()), &stdin);

@@ -3,6 +3,7 @@
 use crate::Blob;
 use crate::json::*;
 use anyhow::{Result, bail};
+use versatiles_derive::context;
 
 /// Represents any JSON data: arrays, objects, numbers, strings, booleans, and null.
 ///

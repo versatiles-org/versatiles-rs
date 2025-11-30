@@ -20,6 +20,7 @@ pub struct DataSource {
 
 lazy_static::lazy_static! {
 	static ref RE_PREFIX: Regex = Regex::new(r#"^\[([\w,]*)\](.*)"#).unwrap();
+	static ref RE_POSTFIX: Regex = Regex::new(r#"^(.*)\[([\w,]*)\]$"#).unwrap();
 }
 
 impl DataSource {
@@ -69,26 +70,44 @@ impl DataSource {
 		let mut name: Option<String> = None;
 		let mut container_type: Option<String> = None;
 
+		fn extract_name_and_type(text: &str) -> (Option<String>, Option<String>) {
+			let mut parts = text.split(',');
+			let name = parts.next().and_then(|s| (!s.is_empty()).then(|| s.to_string()));
+			let container_type = parts.next().and_then(|s| (!s.is_empty()).then(|| s.to_string()));
+			(name, container_type)
+		}
+
 		let location = if input.starts_with('{') {
+			// JSON blob input
 			let json = JsonValue::parse_str(input)?.into_object()?;
-			name = json.get("name").map(|s| s.to_string()).transpose()?;
-			container_type = json.get("type").map(|s| s.to_string()).transpose()?;
-			let content = json
-				.get("content")
-				.ok_or(anyhow::anyhow!("missing `content`"))?
-				.to_string()?;
-			let blob = Blob::from(content);
-			DataLocation::from(blob)
-		} else if let Some(captures) = RE_PREFIX.captures(input) {
-			let prefix = captures.get(1).unwrap().as_str();
+			name = json.get("name").map(JsonValue::to_string).transpose()?;
+			container_type = json.get("type").map(JsonValue::to_string).transpose()?;
 
-			let mut prefix = prefix.split(',');
-
-			name = prefix.next().and_then(|s| (!s.is_empty()).then(|| s.to_string()));
-			container_type = prefix.next().and_then(|s| (!s.is_empty()).then(|| s.to_string()));
-
+			if let Some(content) = json.get("content") {
+				let blob = Blob::from(content.to_string()?);
+				DataLocation::from(blob)
+			} else {
+				DataLocation::from(
+					json
+						.get("location")
+						.ok_or(anyhow::anyhow!("missing `location`"))?
+						.to_string()?,
+				)
+			}
+		} else if input.starts_with('[')
+			&& let Some(captures) = RE_PREFIX.captures(input)
+		{
+			// Prefix notation with optional name and container type
+			(name, container_type) = extract_name_and_type(captures.get(1).unwrap().as_str());
 			DataLocation::try_from(captures.get(2).unwrap().as_str())?
+		} else if input.ends_with(']')
+			&& let Some(captures) = RE_POSTFIX.captures(input)
+		{
+			// Postfix notation with optional name and container type
+			(name, container_type) = extract_name_and_type(captures.get(2).unwrap().as_str());
+			DataLocation::try_from(captures.get(1).unwrap().as_str())?
 		} else {
+			// No prefixes, just a plain location
 			DataLocation::try_from(input)?
 		};
 
@@ -149,26 +168,47 @@ mod tests {
 
 	#[rstest]
 	#[case("[,]file.ext", "file", "ext", "Path(file.ext)")]
-	#[case("[]file.ext", "file", "ext", "Path(file.ext)")]
-	#[case("file.ext", "file", "ext", "Path(file.ext)")]
 	#[case("[,type]file.ext", "file", "type", "Path(file.ext)")]
+	#[case("[]file.ext", "file", "ext", "Path(file.ext)")]
 	#[case("[name,]file.ext", "name", "ext", "Path(file.ext)")]
 	#[case("[name,type]file.ext", "name", "type", "Path(file.ext)")]
 	#[case("[name,type]file", "name", "type", "Path(file)")]
 	#[case("[name]file.ext", "name", "ext", "Path(file.ext)")]
 	#[case("[name]http://host/file.ext", "name", "ext", "Url(http://host/file.ext)")]
+	#[case("file.ext", "file", "ext", "Path(file.ext)")]
+	#[case("file.ext[,]", "file", "ext", "Path(file.ext)")]
+	#[case("file.ext[,type]", "file", "type", "Path(file.ext)")]
+	#[case("file.ext[]", "file", "ext", "Path(file.ext)")]
+	#[case("file.ext[name,]", "name", "ext", "Path(file.ext)")]
+	#[case("file.ext[name,type]", "name", "type", "Path(file.ext)")]
+	#[case("file.ext[name]", "name", "ext", "Path(file.ext)")]
+	#[case("file[name,type]", "name", "type", "Path(file)")]
 	#[case("http://host/file.ext", "file", "ext", "Url(http://host/file.ext)")]
+	#[case("http://host/file.ext[name]", "name", "ext", "Url(http://host/file.ext)")]
 	#[case(r#"{"name":"a","type":"b","content":"c"}"#, "a", "b", "Blob(len=1)")]
+	#[case(r#"{"name":"a","type":"b","location":"c"}"#, "a", "b", "Path(c)")]
+	#[case(r#"{"type":"b","location":"c"}"#, "c", "b", "Path(c)")]
+	#[case(r#"{"name":"a","location":"c"}"#, "a", "", "Path(c)")]
+	#[case(r#"{"location":"c"}"#, "c", "", "Path(c)")]
+	#[case(r#"{"name":"a","type":"b","location":"http://c"}"#, "a", "b", "Url(http://c/)")]
 	fn parse_with_prefixes(
 		#[case] input: &str,
-		#[case] expected_name: &str,
-		#[case] expected_container: &str,
-		#[case] expected_location: &str,
+		#[case] exp_name: &str,
+		#[case] exp_container: &str,
+		#[case] exp_location: &str,
 	) {
 		let ds = DataSource::parse(input).unwrap();
-		assert_eq!(ds.name.unwrap(), expected_name);
-		assert_eq!(ds.container_type.unwrap(), expected_container);
-		assert_eq!(format!("{:?}", ds.location), expected_location);
+		assert_eq!(
+			ds.optional_name(),
+			(!exp_name.is_empty()).then_some(exp_name),
+			"name for '{input}'"
+		);
+		assert_eq!(
+			ds.optional_container_type(),
+			(!exp_container.is_empty()).then_some(exp_container),
+			"container_type for '{input}'"
+		);
+		assert_eq!(format!("{:?}", ds.location), exp_location, "location for '{input}'");
 	}
 
 	#[test]
