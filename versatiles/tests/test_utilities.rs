@@ -1,9 +1,8 @@
 #![allow(unused)]
 
-use clap::builder::Str;
 use std::{
 	path::{Path, PathBuf},
-	process::{Command, Output, Stdio},
+	process::{Command, Stdio},
 };
 use tempfile::{TempDir, tempdir};
 use versatiles_core::json::JsonValue;
