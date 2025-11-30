@@ -200,12 +200,12 @@ mod tests {
 		let ds = DataSource::parse(input).unwrap();
 		assert_eq!(
 			ds.optional_name(),
-			(!exp_name.is_empty()).then(|| exp_name),
+			(!exp_name.is_empty()).then_some(exp_name),
 			"name for '{input}'"
 		);
 		assert_eq!(
 			ds.optional_container_type(),
-			(!exp_container.is_empty()).then(|| exp_container),
+			(!exp_container.is_empty()).then_some(exp_container),
 			"container_type for '{input}'"
 		);
 		assert_eq!(format!("{:?}", ds.location), exp_location, "location for '{input}'");

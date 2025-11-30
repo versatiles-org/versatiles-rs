@@ -14,12 +14,15 @@ pub const BINARY_NAME: &str = "versatiles.exe";
 pub const BINARY_NAME: &str = "versatiles";
 
 /// Helper to get a testdata file path.
-pub fn get_testdata(filename: &str) -> PathBuf {
+pub fn get_testdata(filename: &str) -> String {
 	PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 		.parent()
 		.unwrap()
 		.join("testdata")
 		.join(filename)
+		.to_str()
+		.unwrap()
+		.to_string()
 }
 
 /// Helper to get a temp output file path.
@@ -102,10 +105,6 @@ pub fn get_tilejson(filename: &Path) -> JsonValue {
 		.stdout;
 
 	JsonValue::parse_str(&String::from_utf8(output).unwrap()).unwrap()
-}
-
-pub fn path_to_string(path: &Path) -> String {
-	JsonValue::from(path.to_string_lossy().to_string()).stringify()
 }
 
 #[macro_export]

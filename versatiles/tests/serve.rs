@@ -6,7 +6,7 @@ use versatiles_core::json::JsonValue;
 
 #[tokio::test]
 async fn serve_local_file() {
-	let input = get_testdata("berlin.pmtiles").to_string_lossy().to_string();
+	let input = get_testdata("berlin.pmtiles");
 	let server = Server::new(&[&input]).await;
 	assert_eq!(server.get_index().await, ["berlin"]);
 	assert_eq!(server.get_tilejson_layer_count("berlin").await, 19);

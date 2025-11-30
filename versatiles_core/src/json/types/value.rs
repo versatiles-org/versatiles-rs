@@ -77,7 +77,6 @@ impl JsonValue {
 	///
 	/// # Errors
 	/// Returns an error if not an array.
-	#[context("expected a JSON array")]
 	pub fn as_array(&self) -> Result<&JsonArray> {
 		if let JsonValue::Array(array) = self {
 			Ok(array)
@@ -90,7 +89,6 @@ impl JsonValue {
 	///
 	/// # Errors
 	/// Returns an error if not an array.
-	#[context("expected a JSON array")]
 	pub fn into_array(self) -> Result<JsonArray> {
 		if let JsonValue::Array(array) = self {
 			Ok(array)
@@ -103,7 +101,6 @@ impl JsonValue {
 	///
 	/// # Errors
 	/// Returns an error if not an object.
-	#[context("expected a JSON object")]
 	pub fn as_object(&self) -> Result<&JsonObject> {
 		if let JsonValue::Object(object) = self {
 			Ok(object)
@@ -116,7 +113,6 @@ impl JsonValue {
 	///
 	/// # Errors
 	/// Returns an error if not an object.
-	#[context("expected a JSON object")]
 	pub fn into_object(self) -> Result<JsonObject> {
 		if let JsonValue::Object(object) = self {
 			Ok(object)
@@ -129,7 +125,6 @@ impl JsonValue {
 	///
 	/// # Errors
 	/// Returns an error if the value is not a JSON string.
-	#[context("expected a string")]
 	pub fn to_string(&self) -> Result<String> {
 		match self {
 			JsonValue::String(text) => Ok(text.to_owned()),
@@ -141,7 +136,6 @@ impl JsonValue {
 	///
 	/// # Errors
 	/// Returns an error if the value is not a JSON string.
-	#[context("expected a string")]
 	pub fn into_string(self) -> Result<String> {
 		match self {
 			JsonValue::String(text) => Ok(text),
@@ -153,7 +147,6 @@ impl JsonValue {
 	///
 	/// # Errors
 	/// Returns an error if the value is not a JSON string.
-	#[context("expected a string")]
 	pub fn as_str(&self) -> Result<&str> {
 		match self {
 			JsonValue::String(text) => Ok(text),
@@ -165,7 +158,6 @@ impl JsonValue {
 	///
 	/// # Errors
 	/// Returns an error if the value is not a JSON number.
-	#[context("expected a number")]
 	pub fn as_number(&self) -> Result<f64> {
 		if let JsonValue::Number(val) = self {
 			Ok(*val)
