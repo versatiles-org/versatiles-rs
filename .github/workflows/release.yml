@@ -42,7 +42,7 @@ jobs:
       tag: ${{ steps.create_release.outputs.tag }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - id: create_release
         name: Get version via latest git tag
@@ -67,7 +67,7 @@ jobs:
 
       - name: Checkout code
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Login to Docker Hub
         if: env.BUILD_ENABLED == 'true'
@@ -117,7 +117,7 @@ jobs:
 
       - name: Checkout code
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Login to Docker Hub
         if: env.BUILD_ENABLED == 'true'
@@ -167,7 +167,7 @@ jobs:
 
       - name: Checkout code
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         if: env.BUILD_ENABLED == 'true'
@@ -214,7 +214,7 @@ jobs:
 
       - name: Checkout code
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         if: env.BUILD_ENABLED == 'true'
@@ -256,7 +256,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Set Environment Variables
         run: |
