@@ -52,7 +52,11 @@ brew install versatiles
 
 ### NixOS
 
-VersaTiles is available via `nixpkgs` (starting from version 24.05). Add this snippet to `configuration.nix`:
+VersaTiles is available via `nixpkgs` (starting from version 24.05):
+
+[![Packaging status](https://repology.org/badge/vertical-allrepos/versatiles.svg)](https://repology.org/project/versatiles/versions)
+
+Add this snippet to `configuration.nix`:
 
 ```nix
 environment.systemPackages = with pkgs; [ versatiles ];
