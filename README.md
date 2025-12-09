@@ -54,7 +54,10 @@ brew install versatiles
 
 VersaTiles is available via `nixpkgs` (starting from version 24.05):
 
-[![Packaging status](https://repology.org/badge/vertical-allrepos/versatiles.svg)](https://repology.org/project/versatiles/versions)
+[![nixpkgs stable 24.05](https://repology.org/badge/version-for-repo/nix_stable_24_05/versatiles.svg?header=nixpkgs%20stable%2024.05)](https://repology.org/project/versatiles/versions)
+[![nixpkgs stable 24.11](https://repology.org/badge/version-for-repo/nix_stable_24_11/versatiles.svg?header=nixpkgs%20stable%2024.11)](https://repology.org/project/versatiles/versions)
+[![nixpkgs stable 25.05](https://repology.org/badge/version-for-repo/nix_stable_25_05/versatiles.svg?header=nixpkgs%20stable%2025.05)](https://repology.org/project/versatiles/versions)
+[![nixpkgs unstable](https://repology.org/badge/version-for-repo/nix_unstable/versatiles.svg?header=nixpkgs%20unstable)](https://repology.org/project/versatiles/versions)
 
 Add this snippet to `configuration.nix`:
 
