@@ -1,4 +1,4 @@
-# @versatiles/versatiles
+# @versatiles/versatiles-rs
 
 Node.js bindings for [VersaTiles](https://github.com/versatiles-org/versatiles-rs) - convert, serve, and process map tiles in various formats.
 
@@ -14,9 +14,9 @@ Node.js bindings for [VersaTiles](https://github.com/versatiles-org/versatiles-r
 ## Installation
 
 ```bash
-npm install @versatiles/versatiles
+npm install @versatiles/versatiles-rs
 # or
-yarn add @versatiles/versatiles
+yarn add @versatiles/versatiles-rs
 ```
 
 Pre-built binaries are available for:
@@ -29,7 +29,7 @@ Pre-built binaries are available for:
 ### Convert Tiles
 
 ```javascript
-const { convertTiles } = require('@versatiles/versatiles');
+const { convertTiles } = require('@versatiles/versatiles-rs');
 
 await convertTiles('input.mbtiles', 'output.versatiles', {
   minZoom: 0,
@@ -42,7 +42,7 @@ await convertTiles('input.mbtiles', 'output.versatiles', {
 ### Serve Tiles
 
 ```javascript
-const { TileServer } = require('@versatiles/versatiles');
+const { TileServer } = require('@versatiles/versatiles-rs');
 
 const server = new TileServer({ port: 8080 });
 await server.addTileSource('osm', 'tiles.mbtiles');
@@ -54,7 +54,7 @@ console.log(`Server running at http://localhost:${await server.port}`);
 ### Read Tiles
 
 ```javascript
-const { ContainerReader } = require('@versatiles/versatiles');
+const { ContainerReader } = require('@versatiles/versatiles-rs');
 
 const reader = await ContainerReader.open('tiles.mbtiles');
 
@@ -75,7 +75,7 @@ console.log('Zoom levels:', params.minZoom, '-', params.maxZoom);
 ### Probe Container
 
 ```javascript
-const { probeTiles } = require('@versatiles/versatiles');
+const { probeTiles } = require('@versatiles/versatiles-rs');
 
 const info = await probeTiles('tiles.mbtiles');
 console.log('Container:', info.containerName);
@@ -87,7 +87,7 @@ console.log('Compression:', info.parameters.tileCompression);
 ### Coordinate Conversion
 
 ```javascript
-const { TileCoord } = require('@versatiles/versatiles');
+const { TileCoord } = require('@versatiles/versatiles-rs');
 
 // Geographic to tile coordinates
 const coord = TileCoord.fromGeo(13.4, 52.5, 10);

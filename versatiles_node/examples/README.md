@@ -112,7 +112,7 @@ If you don't have this test data, you can:
 ### Opening a Container
 
 ```javascript
-const { ContainerReader } = require('@versatiles/versatiles');
+const { ContainerReader } = require('@versatiles/versatiles-rs');
 
 const reader = await ContainerReader.open('path/to/tiles.mbtiles');
 ```
@@ -130,7 +130,7 @@ console.log('Zoom:', params.minZoom, '-', params.maxZoom);
 ### Converting Coordinates
 
 ```javascript
-const { TileCoord } = require('@versatiles/versatiles');
+const { TileCoord } = require('@versatiles/versatiles-rs');
 
 // Geographic → Tile
 const coord = TileCoord.fromGeo(13.405, 52.520, 10);

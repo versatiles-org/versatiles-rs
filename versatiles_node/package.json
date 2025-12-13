@@ -1,0 +1,54 @@
+{
+  "name": "@versatiles/versatiles-rs",
+  "version": "2.3.1",
+  "description": "Node.js bindings for VersaTiles - convert, serve, and process map tiles",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "napi": {
+    "name": "versatiles",
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "aarch64-apple-darwin",
+        "x86_64-apple-darwin",
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu",
+        "x86_64-unknown-linux-musl",
+        "aarch64-unknown-linux-musl",
+        "x86_64-pc-windows-msvc"
+      ]
+    }
+  },
+  "keywords": ["versatiles", "mbtiles", "pmtiles", "tiles", "map", "gis", "geo", "rust"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/versatiles-org/versatiles-rs.git",
+    "directory": "versatiles_node"
+  },
+  "license": "MIT",
+  "author": "Michael Kreil <versatiles@michael-kreil.de>",
+  "engines": {
+    "node": ">= 16"
+  },
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "build": "napi build --platform --release",
+    "build:debug": "napi build --platform",
+    "prepublishOnly": "napi prepublish -t npm",
+    "test": "node --test",
+    "version": "napi version"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^2.18.0",
+    "@types/node": "^20"
+  },
+  "optionalDependencies": {
+    "@versatiles/versatiles-rs-darwin-x64": "2.3.1",
+    "@versatiles/versatiles-rs-darwin-arm64": "2.3.1",
+    "@versatiles/versatiles-rs-linux-x64-gnu": "2.3.1",
+    "@versatiles/versatiles-rs-linux-arm64-gnu": "2.3.1",
+    "@versatiles/versatiles-rs-linux-x64-musl": "2.3.1",
+    "@versatiles/versatiles-rs-linux-arm64-musl": "2.3.1",
+    "@versatiles/versatiles-rs-win32-x64-msvc": "2.3.1"
+  }
+}

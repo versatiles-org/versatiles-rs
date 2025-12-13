@@ -1,9 +1,9 @@
 .*.sh
 .DS_Store
 .toolchain
+.vscode/
 *.code-workspace
 *.info
-*.json
 *.lcov
 *.tar
 *.txt
