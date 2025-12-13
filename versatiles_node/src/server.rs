@@ -4,7 +4,7 @@ use napi_derive::napi;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use versatiles::{server::TileServer as RustTileServer, Config};
+use versatiles::{Config, server::TileServer as RustTileServer};
 use versatiles_container::ContainerRegistry;
 
 /// HTTP tile server for serving tiles and static content
@@ -67,11 +67,7 @@ impl TileServer {
 	///
 	/// Serves static files from a path (can be a .tar or directory)
 	#[napi]
-	pub async fn add_static_source(
-		&self,
-		path: String,
-		url_prefix: Option<String>,
-	) -> Result<()> {
+	pub async fn add_static_source(&self, path: String, url_prefix: Option<String>) -> Result<()> {
 		let path_buf = PathBuf::from(&path);
 		let prefix = url_prefix.unwrap_or_else(|| "/".to_string());
 

@@ -11,9 +11,7 @@ pub use types::{ConvertOptions, ProbeResult, ReaderParameters, ServerOptions, Ti
 
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-use versatiles_container::{
-	ContainerRegistry, TilesConverterParameters, convert_tiles_container,
-};
+use versatiles_container::{ContainerRegistry, TilesConverterParameters, convert_tiles_container};
 use versatiles_core::{GeoBBox, TileBBoxPyramid};
 
 /// Convert tiles from one format to another
@@ -34,11 +32,7 @@ use versatiles_core::{GeoBBox, TileBBoxPyramid};
 /// );
 /// ```
 #[napi]
-pub async fn convert_tiles(
-	input: String,
-	output: String,
-	options: Option<ConvertOptions>,
-) -> Result<()> {
+pub async fn convert_tiles(input: String, output: String, options: Option<ConvertOptions>) -> Result<()> {
 	let registry = ContainerRegistry::default();
 	let reader = napi_result!(registry.get_reader_from_str(&input).await)?;
 

@@ -1,4 +1,7 @@
-use crate::{napi_result, types::{ConvertOptions, ProbeResult, ReaderParameters, parse_compression}};
+use crate::{
+	napi_result,
+	types::{ConvertOptions, ProbeResult, ReaderParameters, parse_compression},
+};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use std::sync::Arc;
@@ -144,9 +147,7 @@ impl ContainerReader {
 		// Clone the reader by re-opening from source
 		let reader_clone = napi_result!(self.registry.get_reader_from_str(&source_name).await)?;
 
-		napi_result!(
-			convert_tiles_container(reader_clone, params, &output_path, self.registry.clone()).await
-		)?;
+		napi_result!(convert_tiles_container(reader_clone, params, &output_path, self.registry.clone()).await)?;
 
 		Ok(())
 	}

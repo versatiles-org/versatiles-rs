@@ -2,8 +2,7 @@ use crate::napi_result;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use versatiles_core::{
-	TileCoord as RustTileCoord, TileCompression as RustTileCompression,
-	TileFormat as RustTileFormat, TilesReaderParameters as RustReaderParameters,
+	TileCompression as RustTileCompression, TileCoord as RustTileCoord, TilesReaderParameters as RustReaderParameters,
 };
 
 /// Tile coordinate with zoom level (z), column (x), and row (y)
@@ -141,23 +140,6 @@ pub fn parse_compression(s: &str) -> Option<RustTileCompression> {
 		"gzip" => Some(RustTileCompression::Gzip),
 		"brotli" => Some(RustTileCompression::Brotli),
 		"uncompressed" | "none" => Some(RustTileCompression::Uncompressed),
-		_ => None,
-	}
-}
-
-/// Helper to parse tile format string
-pub fn parse_tile_format(s: &str) -> Option<RustTileFormat> {
-	match s.to_lowercase().as_str() {
-		"png" => Some(RustTileFormat::PNG),
-		"jpg" | "jpeg" => Some(RustTileFormat::JPG),
-		"webp" => Some(RustTileFormat::WEBP),
-		"avif" => Some(RustTileFormat::AVIF),
-		"mvt" | "pbf" => Some(RustTileFormat::MVT),
-		"geojson" => Some(RustTileFormat::GEOJSON),
-		"json" => Some(RustTileFormat::JSON),
-		"topojson" => Some(RustTileFormat::TOPOJSON),
-		"svg" => Some(RustTileFormat::SVG),
-		"bin" => Some(RustTileFormat::BIN),
 		_ => None,
 	}
 }
