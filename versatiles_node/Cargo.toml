@@ -1,0 +1,28 @@
+[package]
+name = "versatiles_node"
+authors.workspace = true
+description = "Node.js bindings for VersaTiles"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+napi = { version = "2", features = ["async", "tokio_rt"] }
+napi-derive = "2"
+tokio.workspace = true
+versatiles = { workspace = true, default-features = false, features = ["cli"] }
+versatiles_container.workspace = true
+versatiles_core.workspace = true
+
+[build-dependencies]
+napi-build = "2"
+
+[profile.release]
+lto = true
+strip = true
