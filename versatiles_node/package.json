@@ -36,7 +36,8 @@
     "build:debug": "napi build --platform",
     "prepublishOnly": "napi prepublish -t npm",
     "test": "node --test",
-    "version": "napi version"
+    "version": "napi version",
+    "pack:dry": "npm pack --dry-run"
   },
   "devDependencies": {
     "@napi-rs/cli": "^2.18.0",
