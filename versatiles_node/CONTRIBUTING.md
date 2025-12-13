@@ -114,18 +114,25 @@ node examples/read-tiles.js
 
 ### Add Tests
 
-Tests should be added to the `__test__/` directory:
+Tests are written in TypeScript and located in the `src/` directory:
 
-```javascript
-// __test__/example.test.js
-const { ContainerReader } = require('../index.js');
+```typescript
+// src/example.test.ts
+import { describe, test } from 'node:test';
+import assert from 'node:assert';
+import { ContainerReader } from '../index.js';
 
-async function test() {
-  const reader = await ContainerReader.open('../testdata/berlin.mbtiles');
-  // ... assertions
-}
+describe('Example', () => {
+  test('should work', async () => {
+    const reader = await ContainerReader.open('../testdata/berlin.mbtiles');
+    // ... assertions
+  });
+});
+```
 
-test().catch(console.error);
+Run tests with:
+```bash
+npm test
 ```
 
 ## Making Changes
