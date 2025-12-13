@@ -128,6 +128,18 @@ impl TileServer {
 	/// Get the port the server is listening on
 	#[napi(getter)]
 	pub async fn port(&self) -> u32 {
-		*self.port.lock().await as u32
+		let server_lock = self.inner.lock().await;
+
+		// If server is running, try to get the actual bound port from it
+		if let Some(server) = &*server_lock {
+			// The RustTileServer struct has a private port field, but we can access it
+			// by trying to get the URL mapping and parsing, or we just return the configured port
+			// after it's been updated by the start() method.
+			// For now, return the configured port which should be updated after binding
+			server.get_port() as u32
+		} else {
+			// If server isn't running, return the configured port
+			*self.port.lock().await as u32
+		}
 	}
 }

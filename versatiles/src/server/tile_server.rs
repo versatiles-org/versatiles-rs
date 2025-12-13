@@ -302,6 +302,14 @@ impl TileServer {
 		}
 	}
 
+	/// Get the port the server is listening on (or will listen on).
+	///
+	/// If the server was started with port 0, this returns the actual ephemeral port
+	/// assigned after binding.
+	pub fn get_port(&self) -> u16 {
+		self.port
+	}
+
 	/// Helper: delegate to `routes::add_tile_sources_to_app` to attach tile endpoints.
 	fn add_tile_sources_to_app(&self, app: Router) -> Router {
 		routes::add_tile_sources_to_app(app, &self.tile_sources, self.minimal_recompression)
