@@ -85,6 +85,11 @@ export PROJ_DATA="${PROJ_PREFIX}/share/proj"
 # GDAL version is useful for selecting the matching gdal-sys feature.
 export GDAL_VERSION="$($GDAL_CONFIG --version 2>/dev/null || echo unknown)"
 
+if [ -z "$GDAL_VERSION" ] || [ "$GDAL_VERSION" = "unknown" ]; then
+  echo "Failed to determine GDAL version via gdal-config." >&2
+  exit 1
+fi
+
 echo "Configured:"
 echo "  GDAL_VERSION:      ${GDAL_VERSION:-unset}"
 echo "  GDAL_HOME:         ${GDAL_HOME:-unset}"
