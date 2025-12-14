@@ -1,5 +1,6 @@
 .*.sh
 .DS_Store
+.githooks/
 .toolchain
 .vscode/
 *.code-workspace
