@@ -40,6 +40,10 @@ impl StaticSource {
 		self.source.get_type()
 	}
 
+	pub fn get_prefix(&self) -> &Url {
+		&self.prefix
+	}
+
 	pub fn get_data(&self, url: &Url, accept: &TargetCompression) -> Option<SourceResponse> {
 		if !url.starts_with(&self.prefix) {
 			return None;

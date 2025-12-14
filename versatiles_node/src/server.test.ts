@@ -410,4 +410,80 @@ describe('TileServer', () => {
 			);
 		});
 	});
+
+	describe('hot reload - static sources', () => {
+		let server: TileServer;
+		let baseUrl: string;
+
+		before(async () => {
+			server = new TileServer({ port: 0 });
+			await server.start();
+			const port = await server.port;
+			baseUrl = `http://127.0.0.1:${port}`;
+		});
+
+		after(async () => {
+			await server.stop();
+		});
+
+		test('should hot-reload static source addition without restart', async () => {
+			const initialPort = await server.port;
+
+			// Add static source while running
+			await server.addStaticSource(TESTDATA_DIR, '/files');
+
+			// Verify server still running (no restart) by checking port
+			const currentPort = await server.port;
+			assert.strictEqual(currentPort, initialPort, 'Port should remain the same (no restart)');
+
+			// Verify files are immediately accessible
+			const { statusCode, data } = await httpGet(`${baseUrl}/files/cities.csv`);
+			assert.strictEqual(statusCode, 200, 'Static file should be immediately available');
+			assert.ok(data.length > 0, 'File should have content');
+		});
+
+		test('should serve files from hot-reloaded static source', async () => {
+			// File should be immediately available after hot reload
+			const { statusCode, data } = await httpGet(`${baseUrl}/files/cities.csv`);
+			assert.strictEqual(statusCode, 200, 'Should return 200 OK');
+			assert.ok(data.length > 0, 'File should have content');
+		});
+
+		test('should hot-reload static source removal without restart', async () => {
+			const initialPort = await server.port;
+
+			// Remove while running
+			const removed = await server.removeStaticSource('/files');
+			assert.strictEqual(removed, true, 'Should return true when source is removed');
+
+			// Verify server still running (no restart)
+			const currentPort = await server.port;
+			assert.strictEqual(currentPort, initialPort, 'Port should remain the same (no restart)');
+
+			// Source should be immediately unavailable
+			await assert.rejects(
+				async () => await httpGet(`${baseUrl}/files/cities.csv`),
+				/HTTP 404/,
+				'Removed source should return 404',
+			);
+		});
+
+		test('should return false when removing non-existent static source', async () => {
+			const removed = await server.removeStaticSource('/nonexistent');
+			assert.strictEqual(removed, false, 'Should return false for non-existent source');
+		});
+
+		test('should hot-reload multiple static sources without restart', async () => {
+			// Add two static sources with different prefixes
+			await server.addStaticSource(TESTDATA_DIR, '/static1');
+			await server.addStaticSource(TESTDATA_DIR, '/static2');
+
+			// Both should be accessible
+			const response1 = await httpGet(`${baseUrl}/static1/cities.csv`);
+			const response2 = await httpGet(`${baseUrl}/static2/cities.csv`);
+
+			assert.strictEqual(response1.statusCode, 200, 'First static source should work');
+			assert.strictEqual(response2.statusCode, 200, 'Second static source should work');
+		});
+	});
 });

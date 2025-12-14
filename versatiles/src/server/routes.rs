@@ -84,9 +84,13 @@ pub fn add_tile_sources_to_app(
 
 /// Attach static sources as a catch-all fallback.
 /// Sources are checked in order; the first one returning data wins.
-pub fn add_static_sources_to_app(app: Router, static_sources: &[StaticSource], minimal_recompression: bool) -> Router {
+pub fn add_static_sources_to_app(
+	app: Router,
+	static_sources: Arc<RwLock<Vec<StaticSource>>>,
+	minimal_recompression: bool,
+) -> Router {
 	let state = StaticHandlerState {
-		sources: static_sources.to_vec(),
+		sources: static_sources,
 		minimal_recompression,
 	};
 	let static_app = Router::new().fallback(get(serve_static)).with_state(state);
@@ -157,7 +161,8 @@ mod tests {
 	#[tokio::test]
 	async fn no_static_sources_yields_404() {
 		let app = Router::new();
-		let app = add_static_sources_to_app(app, &[], false);
+		let static_sources = Arc::new(RwLock::new(Vec::new()));
+		let app = add_static_sources_to_app(app, static_sources, false);
 
 		let (status, _body) = get_body_text(app, "/").await;
 		assert_eq!(status, StatusCode::NOT_FOUND);

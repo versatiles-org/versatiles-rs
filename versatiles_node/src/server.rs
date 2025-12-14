@@ -99,47 +99,53 @@ impl TileServer {
 	/// Add a static file source to the server
 	///
 	/// Serves static files from a path (can be a .tar or directory)
-	/// Note: Static sources do NOT support hot reloading. If the server is already
-	/// running, you must call stop() and start() to apply the changes.
+	/// Changes take effect immediately without requiring a restart (hot reload).
 	#[napi]
 	pub async fn add_static_source(&self, path: String, url_prefix: Option<String>) -> Result<()> {
+		let prefix = url_prefix.clone().unwrap_or_else(|| "/".to_string());
+
 		// Validate that the path exists
 		let data_location = DataLocation::from(path.clone());
-		if let Ok(path_ref) = data_location.as_path()
-			&& !path_ref.exists()
-		{
+		let path_buf = napi_result!(data_location.as_path())?;
+		if !path_buf.exists() {
 			return Err(Error::from_reason(format!(
 				"Static source path does not exist: {}",
 				path
 			)));
 		}
 
-		// Check if server is running - warn about need to restart
-		let server_lock = self.inner.lock().await;
-		if server_lock.is_some() {
-			// Server is running - static sources require restart
-			// (We could return an error, but just documenting the limitation is friendlier)
-		}
-		drop(server_lock);
-
-		// Store the source in our list
+		// Store the source in our list (source of truth)
 		let mut sources = self.static_sources.lock().await;
-		sources.push((path, url_prefix));
+		sources.push((path.clone(), url_prefix.clone()));
+		drop(sources);
+
+		// If server is running, add the source directly for hot reload
+		let mut server_lock = self.inner.lock().await;
+		if let Some(server) = server_lock.as_mut() {
+			napi_result!(server.add_static_source(path_buf, &prefix).await)?;
+		}
 
 		Ok(())
 	}
 
-	/// Remove a static file source from the server
+	/// Remove a static file source from the server by URL prefix
 	///
-	/// Note: Static sources do NOT support hot reloading. If the server is already
-	/// running, you must call stop() and start() to apply the changes.
+	/// Changes take effect immediately without requiring a restart (hot reload).
 	/// Returns true if the source was found and removed, false otherwise.
 	#[napi]
-	pub async fn remove_static_source(&self, path: String) -> Result<bool> {
+	pub async fn remove_static_source(&self, url_prefix: String) -> Result<bool> {
+		// Remove from our list (source of truth)
 		let mut sources = self.static_sources.lock().await;
 		let initial_len = sources.len();
-		sources.retain(|(p, _)| p != &path);
+		sources.retain(|(_, p)| p.as_ref() != Some(&url_prefix));
 		let was_removed = sources.len() < initial_len;
+		drop(sources);
+
+		// If server is running, remove the source directly for hot reload
+		let mut server_lock = self.inner.lock().await;
+		if let Some(server) = server_lock.as_mut() {
+			napi_result!(server.remove_static_source(&url_prefix).await)?;
+		}
 
 		Ok(was_removed)
 	}

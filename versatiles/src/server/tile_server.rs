@@ -60,7 +60,9 @@ pub struct TileServer {
 	/// Tile sources stored in a shared HashMap for dynamic hot-reload.
 	/// Arc<RwLock<...>> allows concurrent reads (serving tiles) and exclusive writes (add/remove).
 	tile_sources: Arc<RwLock<HashMap<String, Arc<sources::TileSource>>>>,
-	static_sources: Vec<sources::StaticSource>,
+	/// Static sources stored in a shared Vec for dynamic hot-reload.
+	/// Arc<RwLock<...>> allows concurrent reads (serving files) and exclusive writes (add/remove).
+	static_sources: Arc<RwLock<Vec<sources::StaticSource>>>,
 	/// One-shot channel to signal graceful shutdown to the serving task.
 	exit_signal: Option<oneshot::Sender<()>>,
 	/// Join handle for the serving task; awaited in `stop()` to ensure shutdown completes.
@@ -84,7 +86,7 @@ impl TileServer {
 			ip: ip.to_owned(),
 			port,
 			tile_sources: Arc::new(RwLock::new(HashMap::new())),
-			static_sources: Vec::new(),
+			static_sources: Arc::new(RwLock::new(Vec::new())),
 			exit_signal: None,
 			join: None,
 			minimal_recompression,
@@ -115,7 +117,7 @@ impl TileServer {
 			ip: config.server.ip.unwrap_or("0.0.0.0".into()),
 			port: config.server.port.unwrap_or(8080),
 			tile_sources: Arc::new(RwLock::new(HashMap::new())),
-			static_sources: Vec::new(),
+			static_sources: Arc::new(RwLock::new(Vec::new())),
 			exit_signal: None,
 			join: None,
 			minimal_recompression: config.server.minimal_recompression.unwrap_or(false),
@@ -131,10 +133,12 @@ impl TileServer {
 		}
 
 		for static_config in config.static_sources.iter() {
-			server.add_static_source(
-				static_config.path.as_path()?,
-				static_config.url_prefix.as_deref().unwrap_or("/"),
-			)?;
+			server
+				.add_static_source(
+					static_config.path.as_path()?,
+					static_config.url_prefix.as_deref().unwrap_or("/"),
+				)
+				.await?;
 		}
 
 		Ok(server)
@@ -216,11 +220,39 @@ impl TileServer {
 	}
 
 	/// Register a static file source mounted at `url_prefix`.
+	///
+	/// This method is async because it needs to acquire a write lock on the sources.
+	/// Can be called before or after `start()` - changes take effect immediately (hot reload).
 	#[context("adding static source: path={path:?}, url_prefix='{url_prefix}'")]
-	pub fn add_static_source(&mut self, path: &Path, url_prefix: &str) -> Result<()> {
+	pub async fn add_static_source(&mut self, path: &Path, url_prefix: &str) -> Result<()> {
 		log::debug!("add static: {path:?}");
-		self.static_sources.push(sources::StaticSource::new(path, url_prefix)?);
+		let source = sources::StaticSource::new(path, url_prefix)?;
+		let mut sources = self.static_sources.write().await;
+		sources.push(source);
+		log::info!("added static source: path={:?}, url_prefix='{}'", path, url_prefix);
 		Ok(())
+	}
+
+	/// Remove a static source by URL prefix.
+	///
+	/// Returns true if a source was removed, false if prefix not found.
+	/// In-flight requests to the removed source will complete successfully.
+	pub async fn remove_static_source(&mut self, url_prefix: &str) -> Result<bool> {
+		let target_prefix = crate::server::Url::from(url_prefix).to_dir();
+
+		let mut sources = self.static_sources.write().await;
+		let initial_len = sources.len();
+
+		sources.retain(|source| source.get_prefix() != &target_prefix);
+
+		let was_removed = sources.len() < initial_len;
+		if was_removed {
+			log::info!("removed static source: url_prefix='{}'", url_prefix);
+		} else {
+			log::debug!("static source '{}' not found for removal", url_prefix);
+		}
+
+		Ok(was_removed)
 	}
 
 	/// Start listening and serving requests.
@@ -360,7 +392,7 @@ impl TileServer {
 
 	/// Helper: delegate to `routes::add_static_sources_to_app` to attach static endpoints.
 	fn add_static_sources_to_app(&self, app: Router) -> Router {
-		routes::add_static_sources_to_app(app, &self.static_sources, self.minimal_recompression)
+		routes::add_static_sources_to_app(app, Arc::clone(&self.static_sources), self.minimal_recompression)
 	}
 
 	/// Helper: delegate to `routes::add_api_to_app` to attach small JSON API endpoints.
@@ -445,7 +477,7 @@ mod tests {
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50003);
 		assert_eq!(server.tile_sources.read().await.len(), 0);
-		assert_eq!(server.static_sources.len(), 0);
+		assert_eq!(server.static_sources.read().await.len(), 0);
 		assert!(server.exit_signal.is_none());
 		server.start().await.unwrap();
 		server.stop().await; // No assertion here as it's void
@@ -548,7 +580,10 @@ mod tests {
 
 		// Mount the provided test archive at root.
 		let static_path = Path::new("../testdata/static.tar.br");
-		server.add_static_source(static_path, "/").expect("add static source");
+		server
+			.add_static_source(static_path, "/")
+			.await
+			.expect("add static source");
 		server.start().await.expect("start server");
 		let port = server.port;
 
