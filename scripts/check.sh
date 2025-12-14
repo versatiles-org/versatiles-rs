@@ -53,4 +53,68 @@ if [ $? -ne 0 ]; then
    exit 1
 fi
 
+# ============================================================================
+# NODE.JS CHECKS (versatiles_node)
+# ============================================================================
+
+NODEJS_DIR="${PROJECT_DIR}/versatiles_node"
+
+if [ -d "$NODEJS_DIR" ]; then
+   echo ""
+   echo "=========================================="
+   echo "Node.js Checks (versatiles_node)"
+   echo "=========================================="
+
+   cd "$NODEJS_DIR"
+
+   # Check if node_modules exists, if not run npm install
+   if [ ! -d "node_modules" ]; then
+      echo "Installing Node.js dependencies..."
+      result=$(npm install 2>&1)
+      if [ $? -ne 0 ]; then
+         echo -e "$result\nERROR DURING: npm install"
+         exit 1
+      fi
+   fi
+
+   # TypeScript type checking
+   echo "npm run typecheck"
+   result=$(npm run typecheck 2>&1)
+   if [ $? -ne 0 ]; then
+      echo -e "$result\nERROR DURING: npm run typecheck"
+      exit 1
+   fi
+
+   # ESLint
+   echo "npm run lint"
+   result=$(npm run lint 2>&1)
+   if [ $? -ne 0 ]; then
+      echo -e "$result\nERROR DURING: npm run lint"
+      exit 1
+   fi
+
+   # Prettier format check
+   echo "npm run format:check"
+   result=$(npm run format:check 2>&1)
+   if [ $? -ne 0 ]; then
+      echo -e "$result\nERROR DURING: npm run format:check"
+      exit 1
+   fi
+
+   # Node.js tests
+   echo "npm test"
+   result=$(npm test 2>&1)
+   if [ $? -ne 0 ]; then
+      echo -e "$result\nERROR DURING: npm test"
+      exit 1
+   fi
+
+   cd "$PROJECT_DIR"
+fi
+
+echo ""
+echo "=========================================="
+echo "All checks passed!"
+echo "=========================================="
+
 exit 0
