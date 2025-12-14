@@ -116,6 +116,10 @@ jobs:
         working-directory: ./versatiles_node
         run: npm ci
 
+      - name: Build native module
+        working-directory: ./versatiles_node
+        run: npm run build
+
       - name: TypeScript type check
         working-directory: ./versatiles_node
         run: npm run typecheck
