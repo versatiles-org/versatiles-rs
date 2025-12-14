@@ -23,6 +23,12 @@ VersaTiles is a Rust-based tool for processing and serving tile data efficiently
   - [Convert Tiles](#convert-tiles)
   - [Serve Tiles](#serve-tiles)
   - [VersaTiles Pipeline Language](#versatiles-pipeline-language)
+- [GDAL support](#gdal-support)
+- [Development](#development)
+  - [Running All Checks](#running-all-checks)
+  - [Quick Fixes](#quick-fixes)
+  - [Pre-commit Hooks (Recommended)](#pre-commit-hooks-recommended)
+  - [More Information](#more-information)
 - [Repository Structure](#repository-structure)
 - [Using as a Library](#using-as-a-library)
 - [Additional Information](#additional-information)
@@ -177,6 +183,54 @@ More details can be found in [versatiles_pipeline/README.md](https://github.com/
 Due to the numerous combinations of operating systems, package managers and GDAL versions, we must streamline this ecosystem. If you require GDAL support, we recommend the following:
 1. Build GDAL locally by running `./scripts/install-gdal.sh`. This will build and install GDAL in the subfolder `./.toolchain/gdal`
 2. Build `versatiles` with the features `gdal` and `bindgen`. We recommend using the scripts `./scripts/build_debug.sh` and `./scripts/build_release.sh`.
+
+---
+
+## Development
+
+### Running All Checks
+
+To verify code quality before committing, run:
+
+```bash
+./scripts/check.sh
+```
+
+This runs all checks for both Rust and Node.js code:
+- Rust: formatting, linting (clippy), type-checking, tests, documentation
+- Node.js: formatting (Prettier), linting (ESLint), type-checking (TypeScript), tests
+
+### Quick Fixes
+
+**Auto-fix Rust code:**
+```bash
+cargo fmt
+```
+
+**Auto-fix Node.js code:**
+```bash
+cd versatiles_node
+npm run fix  # Runs lint:fix and format
+```
+
+### Pre-commit Hooks (Recommended)
+
+Install [Lefthook](https://github.com/evilmartians/lefthook) for automatic quality checks:
+
+```bash
+# macOS
+brew install lefthook
+
+# Enable hooks
+lefthook install
+```
+
+This runs fast checks before commits and full checks before pushes, catching issues early.
+
+### More Information
+
+- **Node.js bindings**: See [versatiles_node/CONTRIBUTING.md](versatiles_node/CONTRIBUTING.md) for detailed development workflow
+- **Quick reference**: See [DEVELOPMENT.md](DEVELOPMENT.md) for common commands
 
 ---
 
