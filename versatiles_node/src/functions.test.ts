@@ -10,7 +10,7 @@ const OUTPUT_DIR = __dirname;
 
 describe('Standalone Functions', () => {
 	describe('probeTiles()', () => {
-		test('should probe MBTiles file with shallow depth', async () => {
+		it('should probe MBTiles file with shallow depth', async () => {
 			const result = await probeTiles(MBTILES_PATH, 'shallow');
 
 			expect(result).toBeDefined();
@@ -20,7 +20,7 @@ describe('Standalone Functions', () => {
 			expect(result.containerName.length).toBeGreaterThan(0);
 		});
 
-		test('should probe MBTiles file with container depth', async () => {
+		it('should probe MBTiles file with container depth', async () => {
 			const result = await probeTiles(MBTILES_PATH, 'container');
 
 			expect(result).toBeDefined();
@@ -36,28 +36,28 @@ describe('Standalone Functions', () => {
 			expect(typeof result.parameters.maxZoom).toBe('number');
 		});
 
-		test('should probe PMTiles file', async () => {
+		it('should probe PMTiles file', async () => {
 			const result = await probeTiles(PMTILES_PATH, 'container');
 
 			expect(result).toBeDefined();
 			expect(result.containerName).toContain('pmtiles');
 		});
 
-		test('should probe without depth argument', async () => {
+		it('should probe without depth argument', async () => {
 			const result = await probeTiles(MBTILES_PATH);
 			expect(result).toBeDefined();
 		});
 
-		test('should probe with tiles depth', async () => {
+		it('should probe with tiles depth', async () => {
 			const result = await probeTiles(MBTILES_PATH, 'tiles');
 			expect(result).toBeDefined();
 		});
 
-		test('should throw error for non-existent file', async () => {
+		it('should throw error for non-existent file', async () => {
 			await expect(probeTiles('/nonexistent/file.mbtiles')).rejects.toThrow();
 		});
 
-		test('should throw error for invalid file format', async () => {
+		it('should throw error for invalid file format', async () => {
 			await expect(probeTiles(__filename)).rejects.toThrow();
 		});
 	});
@@ -75,7 +75,7 @@ describe('Standalone Functions', () => {
 			});
 		});
 
-		test('should convert MBTiles to VersaTiles format', async () => {
+		it('should convert MBTiles to VersaTiles format', async () => {
 			await convertTiles(MBTILES_PATH, OUTPUT_VERSATILES);
 
 			expect(fs.existsSync(OUTPUT_VERSATILES)).toBeTruthy();
@@ -86,7 +86,7 @@ describe('Standalone Functions', () => {
 			expect(reader).toBeDefined();
 		});
 
-		test('should convert PMTiles to MBTiles format', async () => {
+		it('should convert PMTiles to MBTiles format', async () => {
 			await convertTiles(PMTILES_PATH, OUTPUT_MBTILES);
 
 			expect(fs.existsSync(OUTPUT_MBTILES)).toBeTruthy();
@@ -96,7 +96,7 @@ describe('Standalone Functions', () => {
 			expect(reader).toBeDefined();
 		});
 
-		test('should convert with minZoom option', async () => {
+		it('should convert with minZoom option', async () => {
 			const output = path.join(OUTPUT_DIR, 'converted-minzoom.versatiles');
 
 			await convertTiles(MBTILES_PATH, output, { minZoom: 6 });
@@ -108,7 +108,7 @@ describe('Standalone Functions', () => {
 			fs.unlinkSync(output);
 		});
 
-		test('should convert with maxZoom option', async () => {
+		it('should convert with maxZoom option', async () => {
 			const output = path.join(OUTPUT_DIR, 'converted-maxzoom.versatiles');
 
 			await convertTiles(MBTILES_PATH, output, { maxZoom: 7 });
@@ -120,7 +120,7 @@ describe('Standalone Functions', () => {
 			fs.unlinkSync(output);
 		});
 
-		test('should convert with zoom range option', async () => {
+		it('should convert with zoom range option', async () => {
 			const output = path.join(OUTPUT_DIR, 'converted-range.versatiles');
 
 			await convertTiles(MBTILES_PATH, output, {
@@ -136,7 +136,7 @@ describe('Standalone Functions', () => {
 			fs.unlinkSync(output);
 		});
 
-		test('should convert with gzip compression', async () => {
+		it('should convert with gzip compression', async () => {
 			const output = path.join(OUTPUT_DIR, 'converted-gzip.versatiles');
 
 			await convertTiles(MBTILES_PATH, output, { compress: 'gzip' });
@@ -150,7 +150,7 @@ describe('Standalone Functions', () => {
 			fs.unlinkSync(output);
 		});
 
-		test('should convert with brotli compression', async () => {
+		it('should convert with brotli compression', async () => {
 			const output = path.join(OUTPUT_DIR, 'converted-brotli.versatiles');
 
 			await convertTiles(MBTILES_PATH, output, { compress: 'brotli' });
@@ -164,7 +164,7 @@ describe('Standalone Functions', () => {
 			fs.unlinkSync(output);
 		});
 
-		test('should convert with uncompressed option', async () => {
+		it('should convert with uncompressed option', async () => {
 			const output = path.join(OUTPUT_DIR, 'converted-uncompressed.versatiles');
 
 			await convertTiles(MBTILES_PATH, output, { compress: 'uncompressed' });
@@ -178,7 +178,7 @@ describe('Standalone Functions', () => {
 			fs.unlinkSync(output);
 		});
 
-		test('should convert with bbox option', async () => {
+		it('should convert with bbox option', async () => {
 			const output = path.join(OUTPUT_DIR, 'converted-bbox.versatiles');
 
 			// Bounding box for Berlin area
@@ -194,7 +194,7 @@ describe('Standalone Functions', () => {
 			fs.unlinkSync(output);
 		});
 
-		test('should convert with multiple options', async () => {
+		it('should convert with multiple options', async () => {
 			const output = path.join(OUTPUT_DIR, 'converted-multi.versatiles');
 
 			await convertTiles(MBTILES_PATH, output, {
@@ -213,7 +213,7 @@ describe('Standalone Functions', () => {
 			fs.unlinkSync(output);
 		});
 
-		test('should convert with flipY option', async () => {
+		it('should convert with flipY option', async () => {
 			const output = path.join(OUTPUT_DIR, 'converted-flipy.versatiles');
 
 			await convertTiles(MBTILES_PATH, output, { flipY: true });
@@ -223,7 +223,7 @@ describe('Standalone Functions', () => {
 			fs.unlinkSync(output);
 		});
 
-		test('should convert with swapXy option', async () => {
+		it('should convert with swapXy option', async () => {
 			const output = path.join(OUTPUT_DIR, 'converted-swapxy.versatiles');
 
 			await convertTiles(MBTILES_PATH, output, { swapXy: true });
@@ -233,15 +233,15 @@ describe('Standalone Functions', () => {
 			fs.unlinkSync(output);
 		});
 
-		test('should throw error for non-existent input file', async () => {
+		it('should throw error for non-existent input file', async () => {
 			await expect(convertTiles('/nonexistent/file.mbtiles', OUTPUT_VERSATILES)).rejects.toThrow();
 		});
 
-		test('should throw error for invalid output path', async () => {
+		it('should throw error for invalid output path', async () => {
 			await expect(convertTiles(MBTILES_PATH, '/nonexistent/directory/output.versatiles')).rejects.toThrow();
 		});
 
-		test('should handle conversion between same format', async () => {
+		it('should handle conversion between same format', async () => {
 			const output = path.join(OUTPUT_DIR, 'converted-same.mbtiles');
 
 			await convertTiles(MBTILES_PATH, output);
@@ -256,7 +256,7 @@ describe('Standalone Functions', () => {
 	});
 
 	describe('integration: probe then convert', () => {
-		test('should probe file and use metadata for conversion', async () => {
+		it('should probe file and use metadata for conversion', async () => {
 			const output = path.join(OUTPUT_DIR, 'integration.versatiles');
 
 			// First, probe the file
@@ -283,7 +283,7 @@ describe('Standalone Functions', () => {
 	});
 
 	describe('edge cases', () => {
-		test('should handle empty options object', async () => {
+		it('should handle empty options object', async () => {
 			const output = path.join(OUTPUT_DIR, 'empty-options.versatiles');
 
 			await convertTiles(MBTILES_PATH, output, {});
@@ -293,7 +293,7 @@ describe('Standalone Functions', () => {
 			fs.unlinkSync(output);
 		});
 
-		test('should handle null options', async () => {
+		it('should handle null options', async () => {
 			const output = path.join(OUTPUT_DIR, 'null-options.versatiles');
 
 			await convertTiles(MBTILES_PATH, output, null);
@@ -303,7 +303,7 @@ describe('Standalone Functions', () => {
 			fs.unlinkSync(output);
 		});
 
-		test('should handle undefined options', async () => {
+		it('should handle undefined options', async () => {
 			const output = path.join(OUTPUT_DIR, 'undefined-options.versatiles');
 
 			await convertTiles(MBTILES_PATH, output, undefined);
@@ -313,7 +313,7 @@ describe('Standalone Functions', () => {
 			fs.unlinkSync(output);
 		});
 
-		test('should handle conversion without options parameter', async () => {
+		it('should handle conversion without options parameter', async () => {
 			const output = path.join(OUTPUT_DIR, 'no-options.versatiles');
 
 			await convertTiles(MBTILES_PATH, output);

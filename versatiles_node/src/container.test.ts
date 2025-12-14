@@ -13,21 +13,21 @@ const PMTILES_PATH = path.join(TESTDATA_DIR, 'berlin.pmtiles');
 
 describe('ContainerReader', () => {
 	describe('open()', () => {
-		test('should open MBTiles file', async () => {
+		it('should open MBTiles file', async () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
 			expect(reader).toBeDefined();
 		});
 
-		test('should open PMTiles file', async () => {
+		it('should open PMTiles file', async () => {
 			const reader = await ContainerReader.open(PMTILES_PATH);
 			expect(reader).toBeDefined();
 		});
 
-		test('should throw error for non-existent file', async () => {
+		it('should throw error for non-existent file', async () => {
 			await expect(ContainerReader.open('/nonexistent/file.mbtiles')).rejects.toThrow();
 		});
 
-		test('should throw error for invalid file format', async () => {
+		it('should throw error for invalid file format', async () => {
 			await expect(ContainerReader.open(__filename)).rejects.toThrow();
 		});
 	});
@@ -39,7 +39,7 @@ describe('ContainerReader', () => {
 			reader = await ContainerReader.open(MBTILES_PATH);
 		});
 
-		test('should retrieve existing tile', async () => {
+		it('should retrieve existing tile', async () => {
 			// Berlin is at z=5, x=17, y=10
 			const tile = await reader.getTile(5, 17, 10);
 			expect(tile).toBeDefined();
@@ -47,7 +47,7 @@ describe('ContainerReader', () => {
 			expect(tile!.length).toBeGreaterThan(0);
 		});
 
-		test('should return null for non-existent tile within valid range', async () => {
+		it('should return null for non-existent tile within valid range', async () => {
 			// Tile that's within valid zoom range but doesn't exist in the dataset
 			const tile = await reader.getTile(5, 0, 0);
 			// Could be null or could exist, just verify no error
@@ -56,7 +56,7 @@ describe('ContainerReader', () => {
 			}
 		});
 
-		test('should handle multiple tile requests', async () => {
+		it('should handle multiple tile requests', async () => {
 			const tiles = await Promise.all([
 				reader.getTile(5, 17, 10),
 				reader.getTile(6, 34, 20),
@@ -70,11 +70,11 @@ describe('ContainerReader', () => {
 			});
 		});
 
-		test('should throw error for invalid coordinates', async () => {
+		it('should throw error for invalid coordinates', async () => {
 			await expect(reader.getTile(0, 10, 0)).rejects.toThrow();
 		});
 
-		test('should handle tiles outside zoom range', async () => {
+		it('should handle tiles outside zoom range', async () => {
 			// Getting a tile at a zoom level not in the container
 			try {
 				const tile = await reader.getTile(0, 0, 0);
@@ -88,7 +88,7 @@ describe('ContainerReader', () => {
 	});
 
 	describe('tileJson', () => {
-		test('should return valid TileJSON for MBTiles', async () => {
+		it('should return valid TileJSON for MBTiles', async () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
 			const tileJson = await reader.tileJson;
 
@@ -102,7 +102,7 @@ describe('ContainerReader', () => {
 			expect(typeof parsed.maxzoom).toBe('number');
 		});
 
-		test('should return valid TileJSON for PMTiles', async () => {
+		it('should return valid TileJSON for PMTiles', async () => {
 			const reader = await ContainerReader.open(PMTILES_PATH);
 			const tileJson = await reader.tileJson;
 
@@ -112,7 +112,7 @@ describe('ContainerReader', () => {
 	});
 
 	describe('parameters', () => {
-		test('should return reader parameters', async () => {
+		it('should return reader parameters', async () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
 			const params = await reader.parameters;
 
@@ -132,21 +132,21 @@ describe('ContainerReader', () => {
 			reader = await ContainerReader.open(MBTILES_PATH);
 		});
 
-		test('should probe with shallow depth', async () => {
+		it('should probe with shallow depth', async () => {
 			const result = await reader.probe('shallow');
 			expect(result).toBeDefined();
 			expect(typeof result.sourceName).toBe('string');
 			expect(typeof result.containerName).toBe('string');
 		});
 
-		test('should probe with container depth', async () => {
+		it('should probe with container depth', async () => {
 			const result = await reader.probe('container');
 			expect(result).toBeDefined();
 			expect(result.tileJson).toBeDefined();
 			expect(result.parameters).toBeDefined();
 		});
 
-		test('should probe without depth argument', async () => {
+		it('should probe without depth argument', async () => {
 			const result = await reader.probe();
 			expect(result).toBeDefined();
 		});
@@ -164,7 +164,7 @@ describe('ContainerReader', () => {
 			}
 		});
 
-		test('should convert to versatiles format', async () => {
+		it('should convert to versatiles format', async () => {
 			await reader.convertTo(OUTPUT_PATH);
 			expect(fs.existsSync(OUTPUT_PATH)).toBeTruthy();
 
@@ -176,7 +176,7 @@ describe('ContainerReader', () => {
 			fs.unlinkSync(OUTPUT_PATH);
 		});
 
-		test('should convert with options', async () => {
+		it('should convert with options', async () => {
 			await reader.convertTo(OUTPUT_PATH, {
 				minZoom: 5,
 				maxZoom: 7,

@@ -2,57 +2,57 @@ import { TileCoord } from '../index.js';
 
 describe('TileCoord', () => {
 	describe('constructor', () => {
-		test('should create TileCoord with valid coordinates', () => {
+		it('should create TileCoord with valid coordinates', () => {
 			const coord = new TileCoord(5, 17, 10);
 			expect(coord).toBeDefined();
 		});
 
-		test('should create TileCoord at zoom 0', () => {
+		it('should create TileCoord at zoom 0', () => {
 			const coord = new TileCoord(0, 0, 0);
 			expect(coord).toBeDefined();
 		});
 
-		test('should create TileCoord at max zoom', () => {
+		it('should create TileCoord at max zoom', () => {
 			const coord = new TileCoord(20, 524288, 524288);
 			expect(coord).toBeDefined();
 		});
 
-		test('should throw error for x >= 2^z', () => {
+		it('should throw error for x >= 2^z', () => {
 			expect(() => new TileCoord(5, 32, 10)).toThrow();
 		});
 
-		test('should throw error for y >= 2^z', () => {
+		it('should throw error for y >= 2^z', () => {
 			expect(() => new TileCoord(5, 10, 32)).toThrow();
 		});
 
-		test('should handle high zoom levels', () => {
+		it('should handle high zoom levels', () => {
 			// Zoom levels up to 30+ should work fine
 			const coord = new TileCoord(20, 0, 0);
 			expect(coord.z).toBe(20);
 		});
 
-		test('should throw error for negative coordinates', () => {
+		it('should throw error for negative coordinates', () => {
 			expect(() => new TileCoord(5, -1, 10)).toThrow();
 		});
 	});
 
 	describe('getters', () => {
-		test('should return correct z value', () => {
+		it('should return correct z value', () => {
 			const coord = new TileCoord(5, 17, 10);
 			expect(coord.z).toBe(5);
 		});
 
-		test('should return correct x value', () => {
+		it('should return correct x value', () => {
 			const coord = new TileCoord(5, 17, 10);
 			expect(coord.x).toBe(17);
 		});
 
-		test('should return correct y value', () => {
+		it('should return correct y value', () => {
 			const coord = new TileCoord(5, 17, 10);
 			expect(coord.y).toBe(10);
 		});
 
-		test('should handle zero coordinates', () => {
+		it('should handle zero coordinates', () => {
 			const coord = new TileCoord(0, 0, 0);
 			expect(coord.z).toBe(0);
 			expect(coord.x).toBe(0);
@@ -61,7 +61,7 @@ describe('TileCoord', () => {
 	});
 
 	describe('toGeo()', () => {
-		test('should convert tile (0,0,0) to geo coordinates', () => {
+		it('should convert tile (0,0,0) to geo coordinates', () => {
 			const coord = new TileCoord(0, 0, 0);
 			const [lon, lat] = coord.toGeo();
 
@@ -73,7 +73,7 @@ describe('TileCoord', () => {
 			expect(lat).toBeLessThanOrEqual(90);
 		});
 
-		test('should convert Berlin tile to approximate geo coordinates', () => {
+		it('should convert Berlin tile to approximate geo coordinates', () => {
 			// Berlin is at approximately z=5, x=17, y=10
 			const coord = new TileCoord(5, 17, 10);
 			const [lon, lat] = coord.toGeo();
@@ -86,7 +86,7 @@ describe('TileCoord', () => {
 			expect(lat).toBeLessThan(70);
 		});
 
-		test('should return array of two numbers', () => {
+		it('should return array of two numbers', () => {
 			const coord = new TileCoord(5, 17, 10);
 			const result = coord.toGeo();
 
@@ -96,7 +96,7 @@ describe('TileCoord', () => {
 			expect(typeof result[1]).toBe('number');
 		});
 
-		test('should handle edge tiles', () => {
+		it('should handle edge tiles', () => {
 			const coord = new TileCoord(1, 0, 0); // Northwest tile at zoom 1
 			const [lon, lat] = coord.toGeo();
 
@@ -106,13 +106,13 @@ describe('TileCoord', () => {
 	});
 
 	describe('fromGeo()', () => {
-		test('should create TileCoord from geo coordinates', () => {
+		it('should create TileCoord from geo coordinates', () => {
 			const coord = TileCoord.fromGeo(0, 0, 0); // Equator, Prime Meridian at zoom 0
 			expect(coord).toBeDefined();
 			expect(coord.z).toBe(0);
 		});
 
-		test('should create TileCoord from Berlin coordinates', () => {
+		it('should create TileCoord from Berlin coordinates', () => {
 			// Berlin: 13.4°E, 52.5°N at zoom 5
 			const coord = TileCoord.fromGeo(13.4, 52.5, 5);
 			expect(coord.z).toBe(5);
@@ -124,7 +124,7 @@ describe('TileCoord', () => {
 			expect(coord.y).toBeLessThanOrEqual(11);
 		});
 
-		test('should handle extreme coordinates', () => {
+		it('should handle extreme coordinates', () => {
 			const coord1 = TileCoord.fromGeo(-180, 85, 5);
 			const coord2 = TileCoord.fromGeo(180, -85, 5);
 
@@ -132,17 +132,17 @@ describe('TileCoord', () => {
 			expect(coord2).toBeDefined();
 		});
 
-		test('should throw error for invalid longitude', () => {
+		it('should throw error for invalid longitude', () => {
 			expect(() => TileCoord.fromGeo(181, 0, 5)).toThrow();
 			expect(() => TileCoord.fromGeo(-181, 0, 5)).toThrow();
 		});
 
-		test('should throw error for invalid latitude', () => {
+		it('should throw error for invalid latitude', () => {
 			expect(() => TileCoord.fromGeo(0, 91, 5)).toThrow();
 			expect(() => TileCoord.fromGeo(0, -91, 5)).toThrow();
 		});
 
-		test('should work at different zoom levels', () => {
+		it('should work at different zoom levels', () => {
 			const coord0 = TileCoord.fromGeo(0, 0, 0);
 			const coord5 = TileCoord.fromGeo(0, 0, 5);
 			const coord10 = TileCoord.fromGeo(0, 0, 10);
@@ -154,7 +154,7 @@ describe('TileCoord', () => {
 	});
 
 	describe('round-trip conversion', () => {
-		test('should maintain zoom level in round-trip', () => {
+		it('should maintain zoom level in round-trip', () => {
 			const original = new TileCoord(5, 17, 10);
 			const [lon, lat] = original.toGeo();
 			const roundTrip = TileCoord.fromGeo(lon, lat, 5);
@@ -164,7 +164,7 @@ describe('TileCoord', () => {
 			expect(roundTrip.y).toBe(original.y);
 		});
 
-		test('should handle multiple round-trips', () => {
+		it('should handle multiple round-trips', () => {
 			const coords = [new TileCoord(0, 0, 0), new TileCoord(5, 17, 10), new TileCoord(10, 512, 384)];
 
 			coords.forEach((original) => {
@@ -176,7 +176,7 @@ describe('TileCoord', () => {
 			});
 		});
 
-		test('should convert geo to tile and back to geo', () => {
+		it('should convert geo to tile and back to geo', () => {
 			const originalLon = 13.4;
 			const originalLat = 52.5;
 			const zoom = 10;
@@ -195,17 +195,17 @@ describe('TileCoord', () => {
 	});
 
 	describe('edge cases', () => {
-		test('should handle antimeridian (180°)', () => {
+		it('should handle antimeridian (180°)', () => {
 			const coord = TileCoord.fromGeo(180, 0, 5);
 			expect(coord).toBeDefined();
 		});
 
-		test('should handle dateline (-180°)', () => {
+		it('should handle dateline (-180°)', () => {
 			const coord = TileCoord.fromGeo(-180, 0, 5);
 			expect(coord).toBeDefined();
 		});
 
-		test('should handle poles (approximately)', () => {
+		it('should handle poles (approximately)', () => {
 			// Web Mercator doesn't extend to exact poles, but should handle close to them
 			const north = TileCoord.fromGeo(0, 85, 5);
 			const south = TileCoord.fromGeo(0, -85, 5);
@@ -214,7 +214,7 @@ describe('TileCoord', () => {
 			expect(south).toBeDefined();
 		});
 
-		test('should handle all corners at zoom 1', () => {
+		it('should handle all corners at zoom 1', () => {
 			const coords = [
 				TileCoord.fromGeo(-180, 85, 1), // NW
 				TileCoord.fromGeo(180, 85, 1), // NE

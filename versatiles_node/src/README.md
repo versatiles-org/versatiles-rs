@@ -85,7 +85,7 @@ import assert from 'node:assert';
 import { ContainerReader } from '../index.js';
 
 describe('MyFeature', () => {
-  test('should work', async () => {
+  it('should work', async () => {
     const reader = await ContainerReader.open('path/to/file.mbtiles');
     const tile = await reader.getTile(5, 17, 10);
     assert.ok(tile);
