@@ -1,5 +1,4 @@
-import { describe, test, before } from 'node:test';
-import assert from 'node:assert';
+import { beforeAll } from 'vitest';
 import { ContainerReader } from '../index.js';
 import path from 'path';
 import fs from 'fs';
@@ -16,42 +15,36 @@ describe('ContainerReader', () => {
 	describe('open()', () => {
 		test('should open MBTiles file', async () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
-			assert.ok(reader, 'Reader should be created');
+			expect(reader).toBeDefined();
 		});
 
 		test('should open PMTiles file', async () => {
 			const reader = await ContainerReader.open(PMTILES_PATH);
-			assert.ok(reader, 'Reader should be created');
+			expect(reader).toBeDefined();
 		});
 
 		test('should throw error for non-existent file', async () => {
-			await assert.rejects(
-				async () => await ContainerReader.open('/nonexistent/file.mbtiles'),
-				'Should throw error for non-existent file',
-			);
+			await expect(ContainerReader.open('/nonexistent/file.mbtiles')).rejects.toThrow();
 		});
 
 		test('should throw error for invalid file format', async () => {
-			await assert.rejects(
-				async () => await ContainerReader.open(__filename),
-				'Should throw error for invalid file format',
-			);
+			await expect(ContainerReader.open(__filename)).rejects.toThrow();
 		});
 	});
 
 	describe('getTile()', () => {
 		let reader: ContainerReader;
 
-		before(async () => {
+		beforeAll(async () => {
 			reader = await ContainerReader.open(MBTILES_PATH);
 		});
 
 		test('should retrieve existing tile', async () => {
 			// Berlin is at z=5, x=17, y=10
 			const tile = await reader.getTile(5, 17, 10);
-			assert.ok(tile, 'Tile should exist');
-			assert.ok(Buffer.isBuffer(tile), 'Tile should be a Buffer');
-			assert.ok(tile.length > 0, 'Tile should have content');
+			expect(tile).toBeDefined();
+			expect(Buffer.isBuffer(tile)).toBeTruthy();
+			expect(tile!.length).toBeGreaterThan(0);
 		});
 
 		test('should return null for non-existent tile within valid range', async () => {
@@ -59,7 +52,7 @@ describe('ContainerReader', () => {
 			const tile = await reader.getTile(5, 0, 0);
 			// Could be null or could exist, just verify no error
 			if (tile !== null) {
-				assert.ok(Buffer.isBuffer(tile), 'If tile exists, should be a Buffer');
+				expect(Buffer.isBuffer(tile)).toBeTruthy();
 			}
 		});
 
@@ -70,15 +63,15 @@ describe('ContainerReader', () => {
 				reader.getTile(7, 68, 40),
 			]);
 
-			tiles.forEach((tile, index) => {
+			tiles.forEach((tile) => {
 				if (tile) {
-					assert.ok(Buffer.isBuffer(tile), `Tile ${index} should be a Buffer`);
+					expect(Buffer.isBuffer(tile)).toBeTruthy();
 				}
 			});
 		});
 
 		test('should throw error for invalid coordinates', async () => {
-			await assert.rejects(async () => await reader.getTile(0, 10, 0), 'Should throw error for x >= 2^z');
+			await expect(reader.getTile(0, 10, 0)).rejects.toThrow();
 		});
 
 		test('should handle tiles outside zoom range', async () => {
@@ -86,10 +79,10 @@ describe('ContainerReader', () => {
 			try {
 				const tile = await reader.getTile(0, 0, 0);
 				// May return null or may throw, both are acceptable
-				assert.ok(tile === null || Buffer.isBuffer(tile), 'Should return null or a buffer');
+				expect(tile === null || Buffer.isBuffer(tile)).toBeTruthy();
 			} catch {
 				// Error is also acceptable for out-of-range zoom
-				assert.ok(true, 'Error for out-of-range zoom is acceptable');
+				expect(true).toBeTruthy();
 			}
 		});
 	});
@@ -99,14 +92,14 @@ describe('ContainerReader', () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
 			const tileJson = await reader.tileJson;
 
-			assert.ok(tileJson, 'TileJSON should exist');
-			assert.strictEqual(typeof tileJson, 'string', 'TileJSON should be a string');
+			expect(tileJson).toBeDefined();
+			expect(typeof tileJson).toBe('string');
 
 			const parsed = JSON.parse(tileJson);
-			assert.strictEqual(parsed.tilejson, '3.0.0', 'Should have TileJSON version');
+			expect(parsed.tilejson).toBe('3.0.0');
 			// tiles array, bounds, and other fields may or may not be present depending on implementation
-			assert.ok(typeof parsed.minzoom === 'number', 'Should have minzoom');
-			assert.ok(typeof parsed.maxzoom === 'number', 'Should have maxzoom');
+			expect(typeof parsed.minzoom).toBe('number');
+			expect(typeof parsed.maxzoom).toBe('number');
 		});
 
 		test('should return valid TileJSON for PMTiles', async () => {
@@ -114,7 +107,7 @@ describe('ContainerReader', () => {
 			const tileJson = await reader.tileJson;
 
 			const parsed = JSON.parse(tileJson);
-			assert.strictEqual(parsed.tilejson, '3.0.0', 'Should have TileJSON version');
+			expect(parsed.tilejson).toBe('3.0.0');
 		});
 	});
 
@@ -123,39 +116,39 @@ describe('ContainerReader', () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
 			const params = await reader.parameters;
 
-			assert.ok(params, 'Parameters should exist');
-			assert.ok(typeof params.tileFormat === 'string', 'Should have tileFormat');
-			assert.ok(typeof params.tileCompression === 'string', 'Should have tileCompression');
-			assert.ok(typeof params.minZoom === 'number', 'Should have minZoom');
-			assert.ok(typeof params.maxZoom === 'number', 'Should have maxZoom');
-			assert.ok(params.minZoom <= params.maxZoom, 'minZoom should be <= maxZoom');
+			expect(params).toBeDefined();
+			expect(typeof params.tileFormat).toBe('string');
+			expect(typeof params.tileCompression).toBe('string');
+			expect(typeof params.minZoom).toBe('number');
+			expect(typeof params.maxZoom).toBe('number');
+			expect(params.minZoom).toBeLessThanOrEqual(params.maxZoom);
 		});
 	});
 
 	describe('probe()', () => {
 		let reader: ContainerReader;
 
-		before(async () => {
+		beforeAll(async () => {
 			reader = await ContainerReader.open(MBTILES_PATH);
 		});
 
 		test('should probe with shallow depth', async () => {
 			const result = await reader.probe('shallow');
-			assert.ok(result, 'Probe result should exist');
-			assert.ok(typeof result.sourceName === 'string', 'Should have sourceName');
-			assert.ok(typeof result.containerName === 'string', 'Should have containerName');
+			expect(result).toBeDefined();
+			expect(typeof result.sourceName).toBe('string');
+			expect(typeof result.containerName).toBe('string');
 		});
 
 		test('should probe with container depth', async () => {
 			const result = await reader.probe('container');
-			assert.ok(result, 'Probe result should exist');
-			assert.ok(result.tileJson, 'Should have tileJson');
-			assert.ok(result.parameters, 'Should have parameters');
+			expect(result).toBeDefined();
+			expect(result.tileJson).toBeDefined();
+			expect(result.parameters).toBeDefined();
 		});
 
 		test('should probe without depth argument', async () => {
 			const result = await reader.probe();
-			assert.ok(result, 'Probe result should exist');
+			expect(result).toBeDefined();
 		});
 	});
 
@@ -163,7 +156,7 @@ describe('ContainerReader', () => {
 		let reader: ContainerReader;
 		const OUTPUT_PATH = path.join(__dirname, 'output-test.versatiles');
 
-		before(async () => {
+		beforeAll(async () => {
 			reader = await ContainerReader.open(MBTILES_PATH);
 			// Clean up output file if it exists
 			if (fs.existsSync(OUTPUT_PATH)) {
@@ -173,11 +166,11 @@ describe('ContainerReader', () => {
 
 		test('should convert to versatiles format', async () => {
 			await reader.convertTo(OUTPUT_PATH);
-			assert.ok(fs.existsSync(OUTPUT_PATH), 'Output file should be created');
+			expect(fs.existsSync(OUTPUT_PATH)).toBeTruthy();
 
 			// Verify we can open the converted file
 			const newReader = await ContainerReader.open(OUTPUT_PATH);
-			assert.ok(newReader, 'Converted file should be readable');
+			expect(newReader).toBeDefined();
 
 			// Clean up
 			fs.unlinkSync(OUTPUT_PATH);
@@ -190,12 +183,12 @@ describe('ContainerReader', () => {
 				compress: 'gzip',
 			});
 
-			assert.ok(fs.existsSync(OUTPUT_PATH), 'Output file should be created');
+			expect(fs.existsSync(OUTPUT_PATH)).toBeTruthy();
 
 			const newReader = await ContainerReader.open(OUTPUT_PATH);
 			const params = await newReader.parameters;
-			assert.strictEqual(params.minZoom, 5, 'Should have correct minZoom');
-			assert.strictEqual(params.maxZoom, 7, 'Should have correct maxZoom');
+			expect(params.minZoom).toBe(5);
+			expect(params.maxZoom).toBe(7);
 
 			// Clean up
 			fs.unlinkSync(OUTPUT_PATH);

@@ -1,64 +1,62 @@
-import { describe, test } from 'node:test';
-import assert from 'node:assert';
 import { TileCoord } from '../index.js';
 
 describe('TileCoord', () => {
 	describe('constructor', () => {
 		test('should create TileCoord with valid coordinates', () => {
 			const coord = new TileCoord(5, 17, 10);
-			assert.ok(coord, 'TileCoord should be created');
+			expect(coord).toBeDefined();
 		});
 
 		test('should create TileCoord at zoom 0', () => {
 			const coord = new TileCoord(0, 0, 0);
-			assert.ok(coord, 'TileCoord should be created at zoom 0');
+			expect(coord).toBeDefined();
 		});
 
 		test('should create TileCoord at max zoom', () => {
 			const coord = new TileCoord(20, 524288, 524288);
-			assert.ok(coord, 'TileCoord should be created at high zoom');
+			expect(coord).toBeDefined();
 		});
 
 		test('should throw error for x >= 2^z', () => {
-			assert.throws(() => new TileCoord(5, 32, 10), 'Should throw error for x >= 2^z');
+			expect(() => new TileCoord(5, 32, 10)).toThrow();
 		});
 
 		test('should throw error for y >= 2^z', () => {
-			assert.throws(() => new TileCoord(5, 10, 32), 'Should throw error for y >= 2^z');
+			expect(() => new TileCoord(5, 10, 32)).toThrow();
 		});
 
 		test('should handle high zoom levels', () => {
 			// Zoom levels up to 30+ should work fine
 			const coord = new TileCoord(20, 0, 0);
-			assert.strictEqual(coord.z, 20, 'Should handle high zoom levels');
+			expect(coord.z).toBe(20);
 		});
 
 		test('should throw error for negative coordinates', () => {
-			assert.throws(() => new TileCoord(5, -1, 10), 'Should throw error for negative x');
+			expect(() => new TileCoord(5, -1, 10)).toThrow();
 		});
 	});
 
 	describe('getters', () => {
 		test('should return correct z value', () => {
 			const coord = new TileCoord(5, 17, 10);
-			assert.strictEqual(coord.z, 5, 'z should be 5');
+			expect(coord.z).toBe(5);
 		});
 
 		test('should return correct x value', () => {
 			const coord = new TileCoord(5, 17, 10);
-			assert.strictEqual(coord.x, 17, 'x should be 17');
+			expect(coord.x).toBe(17);
 		});
 
 		test('should return correct y value', () => {
 			const coord = new TileCoord(5, 17, 10);
-			assert.strictEqual(coord.y, 10, 'y should be 10');
+			expect(coord.y).toBe(10);
 		});
 
 		test('should handle zero coordinates', () => {
 			const coord = new TileCoord(0, 0, 0);
-			assert.strictEqual(coord.z, 0, 'z should be 0');
-			assert.strictEqual(coord.x, 0, 'x should be 0');
-			assert.strictEqual(coord.y, 0, 'y should be 0');
+			expect(coord.z).toBe(0);
+			expect(coord.x).toBe(0);
+			expect(coord.y).toBe(0);
 		});
 	});
 
@@ -67,10 +65,12 @@ describe('TileCoord', () => {
 			const coord = new TileCoord(0, 0, 0);
 			const [lon, lat] = coord.toGeo();
 
-			assert.ok(typeof lon === 'number', 'longitude should be a number');
-			assert.ok(typeof lat === 'number', 'latitude should be a number');
-			assert.ok(lon >= -180 && lon <= 180, 'longitude should be in valid range');
-			assert.ok(lat >= -90 && lat <= 90, 'latitude should be in valid range');
+			expect(typeof lon).toBe('number');
+			expect(typeof lat).toBe('number');
+			expect(lon).toBeGreaterThanOrEqual(-180);
+			expect(lon).toBeLessThanOrEqual(180);
+			expect(lat).toBeGreaterThanOrEqual(-90);
+			expect(lat).toBeLessThanOrEqual(90);
 		});
 
 		test('should convert Berlin tile to approximate geo coordinates', () => {
@@ -80,64 +80,66 @@ describe('TileCoord', () => {
 
 			// Berlin is at approximately 13.4°E, 52.5°N
 			// Tile coordinates are for the northwest corner of the tile
-			assert.ok(lon > 0 && lon < 30, 'longitude should be in Eastern Europe');
-			assert.ok(lat > 40 && lat < 70, 'latitude should be in Northern Europe');
+			expect(lon).toBeGreaterThan(0);
+			expect(lon).toBeLessThan(30);
+			expect(lat).toBeGreaterThan(40);
+			expect(lat).toBeLessThan(70);
 		});
 
 		test('should return array of two numbers', () => {
 			const coord = new TileCoord(5, 17, 10);
 			const result = coord.toGeo();
 
-			assert.ok(Array.isArray(result), 'should return an array');
-			assert.strictEqual(result.length, 2, 'should return array of length 2');
-			assert.ok(typeof result[0] === 'number', 'first element should be a number');
-			assert.ok(typeof result[1] === 'number', 'second element should be a number');
+			expect(Array.isArray(result)).toBeTruthy();
+			expect(result).toHaveLength(2);
+			expect(typeof result[0]).toBe('number');
+			expect(typeof result[1]).toBe('number');
 		});
 
 		test('should handle edge tiles', () => {
 			const coord = new TileCoord(1, 0, 0); // Northwest tile at zoom 1
 			const [lon, lat] = coord.toGeo();
 
-			assert.strictEqual(lon, -180, 'northwest lon should be -180');
-			assert.ok(lat > 0, 'northwest lat should be positive');
+			expect(lon).toBe(-180);
+			expect(lat).toBeGreaterThan(0);
 		});
 	});
 
 	describe('fromGeo()', () => {
 		test('should create TileCoord from geo coordinates', () => {
 			const coord = TileCoord.fromGeo(0, 0, 0); // Equator, Prime Meridian at zoom 0
-			assert.ok(coord, 'TileCoord should be created');
-			assert.strictEqual(coord.z, 0, 'z should be 0');
+			expect(coord).toBeDefined();
+			expect(coord.z).toBe(0);
 		});
 
 		test('should create TileCoord from Berlin coordinates', () => {
 			// Berlin: 13.4°E, 52.5°N at zoom 5
 			const coord = TileCoord.fromGeo(13.4, 52.5, 5);
-			assert.strictEqual(coord.z, 5, 'z should be 5');
+			expect(coord.z).toBe(5);
 
 			// Should be tile 17,10 or very close
-			assert.ok(coord.x >= 16 && coord.x <= 18, 'x should be around 17');
-			assert.ok(coord.y >= 9 && coord.y <= 11, 'y should be around 10');
+			expect(coord.x).toBeGreaterThanOrEqual(16);
+			expect(coord.x).toBeLessThanOrEqual(18);
+			expect(coord.y).toBeGreaterThanOrEqual(9);
+			expect(coord.y).toBeLessThanOrEqual(11);
 		});
 
 		test('should handle extreme coordinates', () => {
 			const coord1 = TileCoord.fromGeo(-180, 85, 5);
 			const coord2 = TileCoord.fromGeo(180, -85, 5);
 
-			assert.ok(coord1, 'should handle western extreme');
-			assert.ok(coord2, 'should handle eastern extreme');
+			expect(coord1).toBeDefined();
+			expect(coord2).toBeDefined();
 		});
 
 		test('should throw error for invalid longitude', () => {
-			assert.throws(() => TileCoord.fromGeo(181, 0, 5), 'Should throw error for lon > 180');
-
-			assert.throws(() => TileCoord.fromGeo(-181, 0, 5), 'Should throw error for lon < -180');
+			expect(() => TileCoord.fromGeo(181, 0, 5)).toThrow();
+			expect(() => TileCoord.fromGeo(-181, 0, 5)).toThrow();
 		});
 
 		test('should throw error for invalid latitude', () => {
-			assert.throws(() => TileCoord.fromGeo(0, 91, 5), 'Should throw error for lat > 90');
-
-			assert.throws(() => TileCoord.fromGeo(0, -91, 5), 'Should throw error for lat < -90');
+			expect(() => TileCoord.fromGeo(0, 91, 5)).toThrow();
+			expect(() => TileCoord.fromGeo(0, -91, 5)).toThrow();
 		});
 
 		test('should work at different zoom levels', () => {
@@ -145,9 +147,9 @@ describe('TileCoord', () => {
 			const coord5 = TileCoord.fromGeo(0, 0, 5);
 			const coord10 = TileCoord.fromGeo(0, 0, 10);
 
-			assert.strictEqual(coord0.z, 0, 'zoom 0 should work');
-			assert.strictEqual(coord5.z, 5, 'zoom 5 should work');
-			assert.strictEqual(coord10.z, 10, 'zoom 10 should work');
+			expect(coord0.z).toBe(0);
+			expect(coord5.z).toBe(5);
+			expect(coord10.z).toBe(10);
 		});
 	});
 
@@ -157,9 +159,9 @@ describe('TileCoord', () => {
 			const [lon, lat] = original.toGeo();
 			const roundTrip = TileCoord.fromGeo(lon, lat, 5);
 
-			assert.strictEqual(roundTrip.z, original.z, 'zoom should be preserved');
-			assert.strictEqual(roundTrip.x, original.x, 'x should be preserved');
-			assert.strictEqual(roundTrip.y, original.y, 'y should be preserved');
+			expect(roundTrip.z).toBe(original.z);
+			expect(roundTrip.x).toBe(original.x);
+			expect(roundTrip.y).toBe(original.y);
 		});
 
 		test('should handle multiple round-trips', () => {
@@ -169,8 +171,8 @@ describe('TileCoord', () => {
 				const [lon, lat] = original.toGeo();
 				const roundTrip = TileCoord.fromGeo(lon, lat, original.z);
 
-				assert.strictEqual(roundTrip.x, original.x, `x should match for ${original.z},${original.x},${original.y}`);
-				assert.strictEqual(roundTrip.y, original.y, `y should match for ${original.z},${original.x},${original.y}`);
+				expect(roundTrip.x).toBe(original.x);
+				expect(roundTrip.y).toBe(original.y);
 			});
 		});
 
@@ -187,20 +189,20 @@ describe('TileCoord', () => {
 			const latDiff = Math.abs(lat - originalLat);
 
 			// At zoom 10, tiles are ~0.35° wide
-			assert.ok(lonDiff < 0.5, 'longitude should be close');
-			assert.ok(latDiff < 0.5, 'latitude should be close');
+			expect(lonDiff).toBeLessThan(0.5);
+			expect(latDiff).toBeLessThan(0.5);
 		});
 	});
 
 	describe('edge cases', () => {
 		test('should handle antimeridian (180°)', () => {
 			const coord = TileCoord.fromGeo(180, 0, 5);
-			assert.ok(coord, 'should handle 180° longitude');
+			expect(coord).toBeDefined();
 		});
 
 		test('should handle dateline (-180°)', () => {
 			const coord = TileCoord.fromGeo(-180, 0, 5);
-			assert.ok(coord, 'should handle -180° longitude');
+			expect(coord).toBeDefined();
 		});
 
 		test('should handle poles (approximately)', () => {
@@ -208,8 +210,8 @@ describe('TileCoord', () => {
 			const north = TileCoord.fromGeo(0, 85, 5);
 			const south = TileCoord.fromGeo(0, -85, 5);
 
-			assert.ok(north, 'should handle northern extreme');
-			assert.ok(south, 'should handle southern extreme');
+			expect(north).toBeDefined();
+			expect(south).toBeDefined();
 		});
 
 		test('should handle all corners at zoom 1', () => {
@@ -220,10 +222,12 @@ describe('TileCoord', () => {
 				TileCoord.fromGeo(180, -85, 1), // SE
 			];
 
-			coords.forEach((coord, i) => {
-				assert.ok(coord, `corner ${i} should be valid`);
-				assert.ok(coord.x >= 0 && coord.x < 2, `corner ${i} x should be 0 or 1`);
-				assert.ok(coord.y >= 0 && coord.y < 2, `corner ${i} y should be 0 or 1`);
+			coords.forEach((coord) => {
+				expect(coord).toBeDefined();
+				expect(coord.x).toBeGreaterThanOrEqual(0);
+				expect(coord.x).toBeLessThan(2);
+				expect(coord.y).toBeGreaterThanOrEqual(0);
+				expect(coord.y).toBeLessThan(2);
 			});
 		});
 	});

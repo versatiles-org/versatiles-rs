@@ -1,5 +1,4 @@
-import { describe, test, after } from 'node:test';
-import assert from 'node:assert';
+import { afterAll } from 'vitest';
 import { convertTiles, probeTiles, ContainerReader } from '../index.js';
 import path from 'path';
 import fs from 'fs';
@@ -14,55 +13,52 @@ describe('Standalone Functions', () => {
 		test('should probe MBTiles file with shallow depth', async () => {
 			const result = await probeTiles(MBTILES_PATH, 'shallow');
 
-			assert.ok(result, 'Result should exist');
-			assert.ok(typeof result.sourceName === 'string', 'Should have sourceName');
-			assert.ok(typeof result.containerName === 'string', 'Should have containerName');
-			assert.ok(result.sourceName.length > 0, 'sourceName should not be empty');
-			assert.ok(result.containerName.length > 0, 'containerName should not be empty');
+			expect(result).toBeDefined();
+			expect(typeof result.sourceName).toBe('string');
+			expect(typeof result.containerName).toBe('string');
+			expect(result.sourceName.length).toBeGreaterThan(0);
+			expect(result.containerName.length).toBeGreaterThan(0);
 		});
 
 		test('should probe MBTiles file with container depth', async () => {
 			const result = await probeTiles(MBTILES_PATH, 'container');
 
-			assert.ok(result, 'Result should exist');
-			assert.ok(result.tileJson, 'Should have tileJson');
-			assert.ok(result.parameters, 'Should have parameters');
+			expect(result).toBeDefined();
+			expect(result.tileJson).toBeDefined();
+			expect(result.parameters).toBeDefined();
 
 			const tileJson = JSON.parse(result.tileJson);
-			assert.strictEqual(tileJson.tilejson, '3.0.0', 'Should have valid TileJSON');
+			expect(tileJson.tilejson).toBe('3.0.0');
 
-			assert.ok(typeof result.parameters.tileFormat === 'string', 'Should have tileFormat');
-			assert.ok(typeof result.parameters.tileCompression === 'string', 'Should have tileCompression');
-			assert.ok(typeof result.parameters.minZoom === 'number', 'Should have minZoom');
-			assert.ok(typeof result.parameters.maxZoom === 'number', 'Should have maxZoom');
+			expect(typeof result.parameters.tileFormat).toBe('string');
+			expect(typeof result.parameters.tileCompression).toBe('string');
+			expect(typeof result.parameters.minZoom).toBe('number');
+			expect(typeof result.parameters.maxZoom).toBe('number');
 		});
 
 		test('should probe PMTiles file', async () => {
 			const result = await probeTiles(PMTILES_PATH, 'container');
 
-			assert.ok(result, 'Result should exist');
-			assert.ok(result.containerName.includes('pmtiles'), 'Should identify as PMTiles');
+			expect(result).toBeDefined();
+			expect(result.containerName).toContain('pmtiles');
 		});
 
 		test('should probe without depth argument', async () => {
 			const result = await probeTiles(MBTILES_PATH);
-			assert.ok(result, 'Result should exist without depth argument');
+			expect(result).toBeDefined();
 		});
 
 		test('should probe with tiles depth', async () => {
 			const result = await probeTiles(MBTILES_PATH, 'tiles');
-			assert.ok(result, 'Result should exist with tiles depth');
+			expect(result).toBeDefined();
 		});
 
 		test('should throw error for non-existent file', async () => {
-			await assert.rejects(
-				async () => await probeTiles('/nonexistent/file.mbtiles'),
-				'Should throw error for non-existent file',
-			);
+			await expect(probeTiles('/nonexistent/file.mbtiles')).rejects.toThrow();
 		});
 
 		test('should throw error for invalid file format', async () => {
-			await assert.rejects(async () => await probeTiles(__filename), 'Should throw error for invalid file format');
+			await expect(probeTiles(__filename)).rejects.toThrow();
 		});
 	});
 
@@ -70,7 +66,7 @@ describe('Standalone Functions', () => {
 		const OUTPUT_VERSATILES = path.join(OUTPUT_DIR, 'converted.versatiles');
 		const OUTPUT_MBTILES = path.join(OUTPUT_DIR, 'converted.mbtiles');
 
-		after(() => {
+		afterAll(() => {
 			// Clean up output files
 			[OUTPUT_VERSATILES, OUTPUT_MBTILES].forEach((file) => {
 				if (fs.existsSync(file)) {
@@ -82,22 +78,22 @@ describe('Standalone Functions', () => {
 		test('should convert MBTiles to VersaTiles format', async () => {
 			await convertTiles(MBTILES_PATH, OUTPUT_VERSATILES);
 
-			assert.ok(fs.existsSync(OUTPUT_VERSATILES), 'Output file should exist');
-			assert.ok(fs.statSync(OUTPUT_VERSATILES).size > 0, 'Output file should not be empty');
+			expect(fs.existsSync(OUTPUT_VERSATILES)).toBeTruthy();
+			expect(fs.statSync(OUTPUT_VERSATILES).size).toBeGreaterThan(0);
 
 			// Verify the converted file can be opened
 			const reader: ContainerReader = await ContainerReader.open(OUTPUT_VERSATILES);
-			assert.ok(reader, 'Converted file should be readable');
+			expect(reader).toBeDefined();
 		});
 
 		test('should convert PMTiles to MBTiles format', async () => {
 			await convertTiles(PMTILES_PATH, OUTPUT_MBTILES);
 
-			assert.ok(fs.existsSync(OUTPUT_MBTILES), 'Output file should exist');
+			expect(fs.existsSync(OUTPUT_MBTILES)).toBeTruthy();
 
 			// Verify the converted file can be opened
 			const reader: ContainerReader = await ContainerReader.open(OUTPUT_MBTILES);
-			assert.ok(reader, 'Converted file should be readable');
+			expect(reader).toBeDefined();
 		});
 
 		test('should convert with minZoom option', async () => {
@@ -107,7 +103,7 @@ describe('Standalone Functions', () => {
 
 			const reader: ContainerReader = await ContainerReader.open(output);
 			const params = await reader.parameters;
-			assert.strictEqual(params.minZoom, 6, 'Should have correct minZoom');
+			expect(params.minZoom).toBe(6);
 
 			fs.unlinkSync(output);
 		});
@@ -119,7 +115,7 @@ describe('Standalone Functions', () => {
 
 			const reader: ContainerReader = await ContainerReader.open(output);
 			const params = await reader.parameters;
-			assert.strictEqual(params.maxZoom, 7, 'Should have correct maxZoom');
+			expect(params.maxZoom).toBe(7);
 
 			fs.unlinkSync(output);
 		});
@@ -134,8 +130,8 @@ describe('Standalone Functions', () => {
 
 			const reader: ContainerReader = await ContainerReader.open(output);
 			const params = await reader.parameters;
-			assert.strictEqual(params.minZoom, 5, 'Should have correct minZoom');
-			assert.strictEqual(params.maxZoom, 7, 'Should have correct maxZoom');
+			expect(params.minZoom).toBe(5);
+			expect(params.maxZoom).toBe(7);
 
 			fs.unlinkSync(output);
 		});
@@ -145,11 +141,11 @@ describe('Standalone Functions', () => {
 
 			await convertTiles(MBTILES_PATH, output, { compress: 'gzip' });
 
-			assert.ok(fs.existsSync(output), 'Output file should exist');
+			expect(fs.existsSync(output)).toBeTruthy();
 
 			const reader: ContainerReader = await ContainerReader.open(output);
 			const params = await reader.parameters;
-			assert.strictEqual(params.tileCompression, 'gzip', 'Should use gzip compression');
+			expect(params.tileCompression).toBe('gzip');
 
 			fs.unlinkSync(output);
 		});
@@ -159,11 +155,11 @@ describe('Standalone Functions', () => {
 
 			await convertTiles(MBTILES_PATH, output, { compress: 'brotli' });
 
-			assert.ok(fs.existsSync(output), 'Output file should exist');
+			expect(fs.existsSync(output)).toBeTruthy();
 
 			const reader: ContainerReader = await ContainerReader.open(output);
 			const params = await reader.parameters;
-			assert.strictEqual(params.tileCompression, 'brotli', 'Should use brotli compression');
+			expect(params.tileCompression).toBe('brotli');
 
 			fs.unlinkSync(output);
 		});
@@ -173,11 +169,11 @@ describe('Standalone Functions', () => {
 
 			await convertTiles(MBTILES_PATH, output, { compress: 'uncompressed' });
 
-			assert.ok(fs.existsSync(output), 'Output file should exist');
+			expect(fs.existsSync(output)).toBeTruthy();
 
 			const reader: ContainerReader = await ContainerReader.open(output);
 			const params = await reader.parameters;
-			assert.strictEqual(params.tileCompression, 'uncompressed', 'Should be uncompressed');
+			expect(params.tileCompression).toBe('uncompressed');
 
 			fs.unlinkSync(output);
 		});
@@ -190,10 +186,10 @@ describe('Standalone Functions', () => {
 				bbox: [13.0, 52.0, 14.0, 53.0],
 			});
 
-			assert.ok(fs.existsSync(output), 'Output file should exist');
+			expect(fs.existsSync(output)).toBeTruthy();
 
 			const reader: ContainerReader = await ContainerReader.open(output);
-			assert.ok(reader, 'Converted file should be readable');
+			expect(reader).toBeDefined();
 
 			fs.unlinkSync(output);
 		});
@@ -210,9 +206,9 @@ describe('Standalone Functions', () => {
 
 			const reader: ContainerReader = await ContainerReader.open(output);
 			const params = await reader.parameters;
-			assert.strictEqual(params.minZoom, 5, 'Should have correct minZoom');
-			assert.strictEqual(params.maxZoom, 7, 'Should have correct maxZoom');
-			assert.strictEqual(params.tileCompression, 'gzip', 'Should use gzip compression');
+			expect(params.minZoom).toBe(5);
+			expect(params.maxZoom).toBe(7);
+			expect(params.tileCompression).toBe('gzip');
 
 			fs.unlinkSync(output);
 		});
@@ -222,7 +218,7 @@ describe('Standalone Functions', () => {
 
 			await convertTiles(MBTILES_PATH, output, { flipY: true });
 
-			assert.ok(fs.existsSync(output), 'Output file should exist');
+			expect(fs.existsSync(output)).toBeTruthy();
 
 			fs.unlinkSync(output);
 		});
@@ -232,23 +228,17 @@ describe('Standalone Functions', () => {
 
 			await convertTiles(MBTILES_PATH, output, { swapXy: true });
 
-			assert.ok(fs.existsSync(output), 'Output file should exist');
+			expect(fs.existsSync(output)).toBeTruthy();
 
 			fs.unlinkSync(output);
 		});
 
 		test('should throw error for non-existent input file', async () => {
-			await assert.rejects(
-				async () => await convertTiles('/nonexistent/file.mbtiles', OUTPUT_VERSATILES),
-				'Should throw error for non-existent input file',
-			);
+			await expect(convertTiles('/nonexistent/file.mbtiles', OUTPUT_VERSATILES)).rejects.toThrow();
 		});
 
 		test('should throw error for invalid output path', async () => {
-			await assert.rejects(
-				async () => await convertTiles(MBTILES_PATH, '/nonexistent/directory/output.versatiles'),
-				'Should throw error for invalid output path',
-			);
+			await expect(convertTiles(MBTILES_PATH, '/nonexistent/directory/output.versatiles')).rejects.toThrow();
 		});
 
 		test('should handle conversion between same format', async () => {
@@ -256,10 +246,10 @@ describe('Standalone Functions', () => {
 
 			await convertTiles(MBTILES_PATH, output);
 
-			assert.ok(fs.existsSync(output), 'Output file should exist');
+			expect(fs.existsSync(output)).toBeTruthy();
 
 			const reader: ContainerReader = await ContainerReader.open(output);
-			assert.ok(reader, 'Converted file should be readable');
+			expect(reader).toBeDefined();
 
 			fs.unlinkSync(output);
 		});
@@ -271,7 +261,7 @@ describe('Standalone Functions', () => {
 
 			// First, probe the file
 			const probeResult = await probeTiles(MBTILES_PATH, 'container');
-			assert.ok(probeResult, 'Probe should succeed');
+			expect(probeResult).toBeDefined();
 
 			const { minZoom, maxZoom } = probeResult.parameters;
 
@@ -281,12 +271,12 @@ describe('Standalone Functions', () => {
 				maxZoom: Math.min(maxZoom, minZoom + 2), // Limit range
 			});
 
-			assert.ok(fs.existsSync(output), 'Conversion should succeed');
+			expect(fs.existsSync(output)).toBeTruthy();
 
 			// Verify the converted file
 			const reader: ContainerReader = await ContainerReader.open(output);
 			const params = await reader.parameters;
-			assert.strictEqual(params.minZoom, minZoom, 'Should match probed minZoom');
+			expect(params.minZoom).toBe(minZoom);
 
 			fs.unlinkSync(output);
 		});
@@ -298,7 +288,7 @@ describe('Standalone Functions', () => {
 
 			await convertTiles(MBTILES_PATH, output, {});
 
-			assert.ok(fs.existsSync(output), 'Should work with empty options');
+			expect(fs.existsSync(output)).toBeTruthy();
 
 			fs.unlinkSync(output);
 		});
@@ -308,7 +298,7 @@ describe('Standalone Functions', () => {
 
 			await convertTiles(MBTILES_PATH, output, null);
 
-			assert.ok(fs.existsSync(output), 'Should work with null options');
+			expect(fs.existsSync(output)).toBeTruthy();
 
 			fs.unlinkSync(output);
 		});
@@ -318,7 +308,7 @@ describe('Standalone Functions', () => {
 
 			await convertTiles(MBTILES_PATH, output, undefined);
 
-			assert.ok(fs.existsSync(output), 'Should work with undefined options');
+			expect(fs.existsSync(output)).toBeTruthy();
 
 			fs.unlinkSync(output);
 		});
@@ -328,7 +318,7 @@ describe('Standalone Functions', () => {
 
 			await convertTiles(MBTILES_PATH, output);
 
-			assert.ok(fs.existsSync(output), 'Should work without options parameter');
+			expect(fs.existsSync(output)).toBeTruthy();
 
 			fs.unlinkSync(output);
 		});

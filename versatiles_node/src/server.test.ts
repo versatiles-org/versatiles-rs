@@ -1,5 +1,4 @@
-import { describe, test, before, after } from 'node:test';
-import assert from 'node:assert';
+import { beforeAll, afterAll } from 'vitest';
 import { TileServer } from '../index.js';
 import path from 'path';
 import http from 'http';
@@ -60,28 +59,28 @@ describe('TileServer', () => {
 	describe('constructor', () => {
 		test('should create server with default options', () => {
 			const server: TileServer = new TileServer();
-			assert.ok(server, 'Server should be created');
+			expect(server).toBeDefined();
 		});
 
 		test('should create server with custom port', () => {
 			const server: TileServer = new TileServer({ port: 8080 });
-			assert.ok(server, 'Server should be created');
+			expect(server).toBeDefined();
 		});
 
 		test('should create server with custom IP', () => {
 			const server: TileServer = new TileServer({ ip: '127.0.0.1', port: 0 });
-			assert.ok(server, 'Server should be created');
+			expect(server).toBeDefined();
 		});
 	});
 
 	describe('lifecycle', () => {
 		let server: TileServer;
 
-		before(() => {
+		beforeAll(() => {
 			server = new TileServer({ port: 0 }); // Port 0 = random available port
 		});
 
-		after(async () => {
+		afterAll(async () => {
 			if (server) {
 				await server.stop();
 			}
@@ -91,14 +90,14 @@ describe('TileServer', () => {
 			await server.start();
 			await server.addTileSource('berlin', MBTILES_PATH);
 			const port = await server.port;
-			assert.ok(port > 0, 'Server should have a valid port');
+			expect(port).toBeGreaterThan(0);
 		});
 
 		test('should stop server', async () => {
 			await server.stop();
 			// Port getter should still work after stop
 			const port = await server.port;
-			assert.ok(typeof port === 'number', 'Port should be a number');
+			expect(typeof port).toBe('number');
 		});
 
 		test('should restart server', async () => {
@@ -108,32 +107,32 @@ describe('TileServer', () => {
 			await server.start();
 			const port2 = await server.port;
 			// Ports might be different, just verify both are valid
-			assert.ok(port1 > 0, 'First port should be valid');
-			assert.ok(port2 > 0, 'Second port should be valid');
+			expect(port1).toBeGreaterThan(0);
+			expect(port2).toBeGreaterThan(0);
 		});
 	});
 
 	describe('addTileSource()', () => {
 		let server: TileServer;
 
-		before(async () => {
+		beforeAll(async () => {
 			server = new TileServer({ port: 0 });
 			await server.start();
 		});
 
-		after(async () => {
+		afterAll(async () => {
 			await server.stop();
 		});
 
 		test('should add MBTiles source', async () => {
 			await server.addTileSource('berlin', MBTILES_PATH);
 			const port = await server.port;
-			assert.ok(port > 0, 'Server should be running');
+			expect(port).toBeGreaterThan(0);
 		});
 
 		test('should add PMTiles source', async () => {
 			await server.addTileSource('berlin-pm', PMTILES_PATH);
-			assert.ok(true, 'PMTiles source should be added');
+			expect(true).toBeTruthy();
 		});
 
 		test('should add multiple sources', async () => {
@@ -142,15 +141,12 @@ describe('TileServer', () => {
 			await server2.addTileSource('source1', MBTILES_PATH);
 			await server2.addTileSource('source2', PMTILES_PATH);
 			const port = await server2.port;
-			assert.ok(port > 0, 'Server should be running with multiple sources');
+			expect(port).toBeGreaterThan(0);
 			await server2.stop();
 		});
 
 		test('should throw error for non-existent file', async () => {
-			await assert.rejects(
-				async () => await server.addTileSource('invalid', '/nonexistent/file.mbtiles'),
-				'Should throw error for non-existent file',
-			);
+			await expect(server.addTileSource('invalid', '/nonexistent/file.mbtiles')).rejects.toThrow();
 		});
 	});
 
@@ -158,7 +154,7 @@ describe('TileServer', () => {
 		let server: TileServer;
 		let baseUrl: string;
 
-		before(async () => {
+		beforeAll(async () => {
 			server = new TileServer({ port: 0 });
 			await server.start();
 			await server.addTileSource('berlin', MBTILES_PATH);
@@ -171,42 +167,34 @@ describe('TileServer', () => {
 			baseUrl = `http://127.0.0.1:${port}`;
 		});
 
-		after(async () => {
+		afterAll(async () => {
 			await server.stop();
 		});
 
 		test('should serve TileJSON', async () => {
 			const { statusCode, data } = await httpGet(`${baseUrl}/tiles/berlin/tiles.json`);
-			assert.strictEqual(statusCode, 200, 'Should return 200 OK');
+			expect(statusCode).toBe(200);
 
 			const tileJson = JSON.parse(data);
-			assert.strictEqual(tileJson.tilejson, '3.0.0', 'Should have TileJSON version');
-			assert.ok(Array.isArray(tileJson.tiles), 'Should have tiles array');
+			expect(tileJson.tilejson).toBe('3.0.0');
+			expect(Array.isArray(tileJson.tiles)).toBeTruthy();
 		});
 
 		test('should serve tiles', async () => {
 			// Berlin tile at z=5, x=17, y=10
 			const { statusCode, data, headers } = await httpGetBuffer(`${baseUrl}/tiles/berlin/5/17/10`);
-			assert.strictEqual(statusCode, 200, 'Should return 200 OK');
-			assert.ok(data.length > 0, 'Tile should have content');
-			assert.ok(headers['content-type'], 'Should have content-type header');
+			expect(statusCode).toBe(200);
+			expect(data.length).toBeGreaterThan(0);
+			expect(headers['content-type']).toBeDefined();
 		});
 
 		test('should return 404 for non-existent tile', async () => {
 			// Request a tile far outside Berlin's bounds (Berlin is in Europe, this is in the Pacific)
-			await assert.rejects(
-				async () => await httpGet(`${baseUrl}/tiles/berlin/10/0/0`),
-				/HTTP 404/,
-				'Should return 404 for non-existent tile',
-			);
+			await expect(httpGet(`${baseUrl}/tiles/berlin/10/0/0`)).rejects.toThrow(/HTTP 404/);
 		});
 
 		test('should return 404 for non-existent source', async () => {
-			await assert.rejects(
-				async () => await httpGet(`${baseUrl}/tiles/nonexistent/5/17/10`),
-				/HTTP 404/,
-				'Should return 404 for non-existent source',
-			);
+			await expect(httpGet(`${baseUrl}/tiles/nonexistent/5/17/10`)).rejects.toThrow(/HTTP 404/);
 		});
 
 		test('should serve multiple tile requests concurrently', async () => {
@@ -218,7 +206,7 @@ describe('TileServer', () => {
 
 			const results = await Promise.allSettled(requests);
 			const successful = results.filter((r) => r.status === 'fulfilled');
-			assert.ok(successful.length > 0, 'At least one request should succeed');
+			expect(successful.length).toBeGreaterThan(0);
 		});
 	});
 
@@ -226,7 +214,7 @@ describe('TileServer', () => {
 		let server: TileServer;
 		let baseUrl: string;
 
-		before(async () => {
+		beforeAll(async () => {
 			server = new TileServer({ port: 0 });
 			await server.start();
 			await server.addStaticSource(TESTDATA_DIR);
@@ -239,22 +227,18 @@ describe('TileServer', () => {
 			baseUrl = `http://127.0.0.1:${port}`;
 		});
 
-		after(async () => {
+		afterAll(async () => {
 			await server.stop();
 		});
 
 		test('should serve static files', async () => {
 			const { statusCode, data } = await httpGet(`${baseUrl}/cities.csv`);
-			assert.strictEqual(statusCode, 200, 'Should return 200 OK');
-			assert.ok(data.length > 0, 'File should have content');
+			expect(statusCode).toBe(200);
+			expect(data.length).toBeGreaterThan(0);
 		});
 
 		test('should return 404 for non-existent static file', async () => {
-			await assert.rejects(
-				async () => await httpGet(`${baseUrl}/nonexistent.txt`),
-				/HTTP 404/,
-				'Should return 404 for non-existent file',
-			);
+			await expect(httpGet(`${baseUrl}/nonexistent.txt`)).rejects.toThrow(/HTTP 404/);
 		});
 	});
 
@@ -262,7 +246,7 @@ describe('TileServer', () => {
 		let server: TileServer;
 		let baseUrl: string;
 
-		before(async () => {
+		beforeAll(async () => {
 			server = new TileServer({ port: 0 });
 			await server.start();
 			await server.addTileSource('berlin-mb', MBTILES_PATH);
@@ -277,7 +261,7 @@ describe('TileServer', () => {
 			baseUrl = `http://127.0.0.1:${port}`;
 		});
 
-		after(async () => {
+		afterAll(async () => {
 			await server.stop();
 		});
 
@@ -285,13 +269,13 @@ describe('TileServer', () => {
 			const mb = await httpGetBuffer(`${baseUrl}/tiles/berlin-mb/5/17/10`);
 			const pm = await httpGetBuffer(`${baseUrl}/tiles/berlin-pm/5/17/10`);
 
-			assert.strictEqual(mb.statusCode, 200, 'MBTiles source should work');
-			assert.strictEqual(pm.statusCode, 200, 'PMTiles source should work');
+			expect(mb.statusCode).toBe(200);
+			expect(pm.statusCode).toBe(200);
 		});
 
 		test('should serve static files with prefix', async () => {
 			const { statusCode } = await httpGet(`${baseUrl}/static/cities.csv`);
-			assert.strictEqual(statusCode, 200, 'Static file should be served with prefix');
+			expect(statusCode).toBe(200);
 		});
 	});
 
@@ -299,7 +283,7 @@ describe('TileServer', () => {
 		test('should return 0 before server starts', async () => {
 			const server: TileServer = new TileServer({ port: 0 });
 			const port = await server.port;
-			assert.strictEqual(port, 0, 'Port should be 0 before start');
+			expect(port).toBe(0);
 		});
 
 		test('should return actual port after server starts', async () => {
@@ -308,8 +292,8 @@ describe('TileServer', () => {
 			await server.addTileSource('berlin', MBTILES_PATH);
 
 			const port = await server.port;
-			assert.ok(port > 0, 'Port should be > 0 after start');
-			assert.ok(port < 65536, 'Port should be valid');
+			expect(port).toBeGreaterThan(0);
+			expect(port).toBeLessThan(65536);
 
 			await server.stop();
 		});
@@ -319,14 +303,14 @@ describe('TileServer', () => {
 		let server: TileServer;
 		let baseUrl: string;
 
-		before(async () => {
+		beforeAll(async () => {
 			server = new TileServer({ port: 0 });
 			await server.start();
 			const port = await server.port;
 			baseUrl = `http://127.0.0.1:${port}`;
 		});
 
-		after(async () => {
+		afterAll(async () => {
 			await server.stop();
 		});
 
@@ -336,17 +320,17 @@ describe('TileServer', () => {
 
 			// Verify source is immediately available without restart
 			const { statusCode, data } = await httpGet(`${baseUrl}/tiles/berlin/tiles.json`);
-			assert.strictEqual(statusCode, 200, 'Should return 200 OK');
+			expect(statusCode).toBe(200);
 
 			const tileJson = JSON.parse(data);
-			assert.strictEqual(tileJson.tilejson, '3.0.0', 'Should have TileJSON version');
+			expect(tileJson.tilejson).toBe('3.0.0');
 		});
 
 		test('should serve tiles from hot-reloaded source', async () => {
 			// Tile should be immediately available after hot reload
 			const { statusCode, data } = await httpGetBuffer(`${baseUrl}/tiles/berlin/5/17/10`);
-			assert.strictEqual(statusCode, 200, 'Should return 200 OK');
-			assert.ok(data.length > 0, 'Tile should have content');
+			expect(statusCode).toBe(200);
+			expect(data.length).toBeGreaterThan(0);
 		});
 
 		test('should hot-reload multiple sources without restart', async () => {
@@ -357,30 +341,26 @@ describe('TileServer', () => {
 			const mb = await httpGetBuffer(`${baseUrl}/tiles/berlin/5/17/10`);
 			const pm = await httpGetBuffer(`${baseUrl}/tiles/berlin-pm/5/17/10`);
 
-			assert.strictEqual(mb.statusCode, 200, 'First source should still work');
-			assert.strictEqual(pm.statusCode, 200, 'Second source should work immediately');
+			expect(mb.statusCode).toBe(200);
+			expect(pm.statusCode).toBe(200);
 		});
 
 		test('should hot-reload tile source removal without restart', async () => {
 			// Remove the first source
 			const removed = await server.removeTileSource('berlin');
-			assert.strictEqual(removed, true, 'Should return true when source is removed');
+			expect(removed).toBe(true);
 
 			// Source should be immediately unavailable
-			await assert.rejects(
-				async () => await httpGet(`${baseUrl}/tiles/berlin/tiles.json`),
-				/HTTP 404/,
-				'Removed source should return 404',
-			);
+			await expect(httpGet(`${baseUrl}/tiles/berlin/tiles.json`)).rejects.toThrow(/HTTP 404/);
 
 			// Other source should still work
 			const { statusCode } = await httpGetBuffer(`${baseUrl}/tiles/berlin-pm/5/17/10`);
-			assert.strictEqual(statusCode, 200, 'Other source should still work');
+			expect(statusCode).toBe(200);
 		});
 
 		test('should return false when removing non-existent source', async () => {
 			const removed = await server.removeTileSource('nonexistent');
-			assert.strictEqual(removed, false, 'Should return false for non-existent source');
+			expect(removed).toBe(false);
 		});
 
 		test('should preserve hot-reloaded sources after restart', async () => {
@@ -389,7 +369,7 @@ describe('TileServer', () => {
 
 			// Verify it works
 			let response = await httpGet(`${baseUrl}/tiles/test-source/tiles.json`);
-			assert.strictEqual(response.statusCode, 200, 'Source should work before restart');
+			expect(response.statusCode).toBe(200);
 
 			// Restart server
 			await server.stop();
@@ -400,14 +380,10 @@ describe('TileServer', () => {
 
 			// Source should still be available after restart
 			response = await httpGet(`${baseUrl}/tiles/test-source/tiles.json`);
-			assert.strictEqual(response.statusCode, 200, 'Source should work after restart');
+			expect(response.statusCode).toBe(200);
 
 			// And berlin should NOT be available (was removed earlier)
-			await assert.rejects(
-				async () => await httpGet(`${baseUrl}/tiles/berlin/tiles.json`),
-				/HTTP 404/,
-				'Removed source should still be gone after restart',
-			);
+			await expect(httpGet(`${baseUrl}/tiles/berlin/tiles.json`)).rejects.toThrow(/HTTP 404/);
 		});
 	});
 
@@ -415,14 +391,14 @@ describe('TileServer', () => {
 		let server: TileServer;
 		let baseUrl: string;
 
-		before(async () => {
+		beforeAll(async () => {
 			server = new TileServer({ port: 0 });
 			await server.start();
 			const port = await server.port;
 			baseUrl = `http://127.0.0.1:${port}`;
 		});
 
-		after(async () => {
+		afterAll(async () => {
 			await server.stop();
 		});
 
@@ -434,19 +410,19 @@ describe('TileServer', () => {
 
 			// Verify server still running (no restart) by checking port
 			const currentPort = await server.port;
-			assert.strictEqual(currentPort, initialPort, 'Port should remain the same (no restart)');
+			expect(currentPort).toBe(initialPort);
 
 			// Verify files are immediately accessible
 			const { statusCode, data } = await httpGet(`${baseUrl}/files/cities.csv`);
-			assert.strictEqual(statusCode, 200, 'Static file should be immediately available');
-			assert.ok(data.length > 0, 'File should have content');
+			expect(statusCode).toBe(200);
+			expect(data.length).toBeGreaterThan(0);
 		});
 
 		test('should serve files from hot-reloaded static source', async () => {
 			// File should be immediately available after hot reload
 			const { statusCode, data } = await httpGet(`${baseUrl}/files/cities.csv`);
-			assert.strictEqual(statusCode, 200, 'Should return 200 OK');
-			assert.ok(data.length > 0, 'File should have content');
+			expect(statusCode).toBe(200);
+			expect(data.length).toBeGreaterThan(0);
 		});
 
 		test('should hot-reload static source removal without restart', async () => {
@@ -454,23 +430,19 @@ describe('TileServer', () => {
 
 			// Remove while running
 			const removed = await server.removeStaticSource('/files');
-			assert.strictEqual(removed, true, 'Should return true when source is removed');
+			expect(removed).toBe(true);
 
 			// Verify server still running (no restart)
 			const currentPort = await server.port;
-			assert.strictEqual(currentPort, initialPort, 'Port should remain the same (no restart)');
+			expect(currentPort).toBe(initialPort);
 
 			// Source should be immediately unavailable
-			await assert.rejects(
-				async () => await httpGet(`${baseUrl}/files/cities.csv`),
-				/HTTP 404/,
-				'Removed source should return 404',
-			);
+			await expect(httpGet(`${baseUrl}/files/cities.csv`)).rejects.toThrow(/HTTP 404/);
 		});
 
 		test('should return false when removing non-existent static source', async () => {
 			const removed = await server.removeStaticSource('/nonexistent');
-			assert.strictEqual(removed, false, 'Should return false for non-existent source');
+			expect(removed).toBe(false);
 		});
 
 		test('should hot-reload multiple static sources without restart', async () => {
@@ -482,8 +454,8 @@ describe('TileServer', () => {
 			const response1 = await httpGet(`${baseUrl}/static1/cities.csv`);
 			const response2 = await httpGet(`${baseUrl}/static2/cities.csv`);
 
-			assert.strictEqual(response1.statusCode, 200, 'First static source should work');
-			assert.strictEqual(response2.statusCode, 200, 'Second static source should work');
+			expect(response1.statusCode).toBe(200);
+			expect(response2.statusCode).toBe(200);
 		});
 	});
 });

@@ -44,7 +44,10 @@
 		"build": "napi build --platform --release",
 		"build:debug": "napi build --platform",
 		"prepublishOnly": "napi prepublish -t npm",
-		"test": "tsx --test src/*.test.ts",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:ui": "vitest --ui",
+		"test:coverage": "vitest run --coverage",
 		"version": "napi version",
 		"pack:dry": "npm pack --dry-run",
 		"lint": "eslint src",
@@ -59,20 +62,22 @@
 		"@eslint/js": "^9.16.0",
 		"@napi-rs/cli": "^2.18.0",
 		"@types/node": "^20",
+		"@vitest/ui": "^4.0.15",
 		"eslint": "^9.16.0",
 		"eslint-config-prettier": "^9.1.0",
 		"prettier": "^3.4.2",
 		"tsx": "^4.7.0",
 		"typescript": "^5.3.0",
-		"typescript-eslint": "^8.18.2"
+		"typescript-eslint": "^8.18.2",
+		"vitest": "^4.0.15"
 	},
 	"optionalDependencies": {
-		"@versatiles/versatiles-rs-darwin-x64": "2.3.1",
 		"@versatiles/versatiles-rs-darwin-arm64": "2.3.1",
-		"@versatiles/versatiles-rs-linux-x64-gnu": "2.3.1",
+		"@versatiles/versatiles-rs-darwin-x64": "2.3.1",
 		"@versatiles/versatiles-rs-linux-arm64-gnu": "2.3.1",
-		"@versatiles/versatiles-rs-linux-x64-musl": "2.3.1",
 		"@versatiles/versatiles-rs-linux-arm64-musl": "2.3.1",
+		"@versatiles/versatiles-rs-linux-x64-gnu": "2.3.1",
+		"@versatiles/versatiles-rs-linux-x64-musl": "2.3.1",
 		"@versatiles/versatiles-rs-win32-x64-msvc": "2.3.1"
 	}
 }
