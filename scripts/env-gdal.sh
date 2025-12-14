@@ -6,8 +6,27 @@
 # GDAL_LIB_DIR, GDAL_VERSION).  On macOS an extra rpath is added so the
 # dynamic loader can find libgdal.dylib at run‑time.
 
-cd "$(dirname "$0")/.."
-PROJECT_DIR=$(pwd)
+# Find project root by searching upward for Cargo.lock
+find_project_root() {
+	local dir="$PWD"
+	while [ "$dir" != "/" ]; do
+		if [ -f "$dir/Cargo.lock" ]; then
+			echo "$dir"
+			return 0
+		fi
+		dir="$(dirname "$dir")"
+	done
+	echo "❌ ERROR: Could not find project root (Cargo.lock not found)" >&2
+	exit 1
+}
+
+PROJECT_DIR=$(find_project_root)
+
+if [ ! -f "$PROJECT_DIR/.toolchain/gdal/bin/gdal-config" ]; then
+  echo "❌ ERROR: GDAL is required but not installed"
+  echo "   Please run: ./scripts/install-gdal.sh"
+  exit 1
+fi
 
 kernel_name="$(uname -s)"
 

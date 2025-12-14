@@ -38,15 +38,15 @@ pre-push:
   parallel: false
 
   commands:
+    # Full Node.js checks before push
+    node-check:
+      run: cd versatiles_node && npm run check
+
     # Full Rust checks before push
     rust-check:
       run: |
         source scripts/env-gdal.sh
         cargo clippy --workspace --all-targets -- -D warnings
-
-    # Full Node.js checks before push
-    node-check:
-      run: cd versatiles_node && npm run check
 
     # All tests before push
     test:
