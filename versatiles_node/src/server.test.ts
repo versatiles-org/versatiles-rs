@@ -310,4 +310,100 @@ describe('TileServer', () => {
 			await server.stop();
 		});
 	});
+
+	describe('hot reload', () => {
+		let server: TileServer;
+		let baseUrl: string;
+
+		before(async () => {
+			server = new TileServer({ port: 0 });
+			await server.start();
+			const port = await server.port;
+			baseUrl = `http://127.0.0.1:${port}`;
+		});
+
+		after(async () => {
+			await server.stop();
+		});
+
+		test('should hot-reload tile source addition without restart', async () => {
+			// Add source to running server
+			await server.addTileSource('berlin', MBTILES_PATH);
+
+			// Verify source is immediately available without restart
+			const { statusCode, data } = await httpGet(`${baseUrl}/tiles/berlin/tiles.json`);
+			assert.strictEqual(statusCode, 200, 'Should return 200 OK');
+
+			const tileJson = JSON.parse(data);
+			assert.strictEqual(tileJson.tilejson, '3.0.0', 'Should have TileJSON version');
+		});
+
+		test('should serve tiles from hot-reloaded source', async () => {
+			// Tile should be immediately available after hot reload
+			const { statusCode, data } = await httpGetBuffer(`${baseUrl}/tiles/berlin/5/17/10`);
+			assert.strictEqual(statusCode, 200, 'Should return 200 OK');
+			assert.ok(data.length > 0, 'Tile should have content');
+		});
+
+		test('should hot-reload multiple sources without restart', async () => {
+			// Add second source
+			await server.addTileSource('berlin-pm', PMTILES_PATH);
+
+			// Both sources should be available
+			const mb = await httpGetBuffer(`${baseUrl}/tiles/berlin/5/17/10`);
+			const pm = await httpGetBuffer(`${baseUrl}/tiles/berlin-pm/5/17/10`);
+
+			assert.strictEqual(mb.statusCode, 200, 'First source should still work');
+			assert.strictEqual(pm.statusCode, 200, 'Second source should work immediately');
+		});
+
+		test('should hot-reload tile source removal without restart', async () => {
+			// Remove the first source
+			const removed = await server.removeTileSource('berlin');
+			assert.strictEqual(removed, true, 'Should return true when source is removed');
+
+			// Source should be immediately unavailable
+			await assert.rejects(
+				async () => await httpGet(`${baseUrl}/tiles/berlin/tiles.json`),
+				/HTTP 404/,
+				'Removed source should return 404'
+			);
+
+			// Other source should still work
+			const { statusCode } = await httpGetBuffer(`${baseUrl}/tiles/berlin-pm/5/17/10`);
+			assert.strictEqual(statusCode, 200, 'Other source should still work');
+		});
+
+		test('should return false when removing non-existent source', async () => {
+			const removed = await server.removeTileSource('nonexistent');
+			assert.strictEqual(removed, false, 'Should return false for non-existent source');
+		});
+
+		test('should preserve hot-reloaded sources after restart', async () => {
+			// Add a new source
+			await server.addTileSource('test-source', MBTILES_PATH);
+
+			// Verify it works
+			let response = await httpGet(`${baseUrl}/tiles/test-source/tiles.json`);
+			assert.strictEqual(response.statusCode, 200, 'Source should work before restart');
+
+			// Restart server
+			await server.stop();
+			await server.start();
+
+			const port = await server.port;
+			baseUrl = `http://127.0.0.1:${port}`;
+
+			// Source should still be available after restart
+			response = await httpGet(`${baseUrl}/tiles/test-source/tiles.json`);
+			assert.strictEqual(response.statusCode, 200, 'Source should work after restart');
+
+			// And berlin should NOT be available (was removed earlier)
+			await assert.rejects(
+				async () => await httpGet(`${baseUrl}/tiles/berlin/tiles.json`),
+				/HTTP 404/,
+				'Removed source should still be gone after restart'
+			);
+		});
+	});
 });

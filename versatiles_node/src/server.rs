@@ -54,24 +54,53 @@ impl TileServer {
 	///
 	/// The tiles will be served at /tiles/{name}/...
 	/// Sources can be added before or after starting the server.
-	/// If added after start(), call stop() and start() again to reload.
+	/// Changes take effect immediately without requiring a restart (hot reload).
 	#[napi]
 	pub async fn add_tile_source(&self, name: String, path: String) -> Result<()> {
-		// Validate that the file exists by trying to open it
-		let _ = napi_result!(self.registry.get_reader_from_str(&path).await)?;
+		// Get reader to validate that the file exists
+		let reader = napi_result!(self.registry.get_reader_from_str(&path).await)?;
 
-		// Store the source in our list
+		// Store the source in our list (source of truth)
 		let mut sources = self.tile_sources.lock().await;
-		sources.push((name, path));
+		sources.push((name.clone(), path));
+		drop(sources); // Release lock before potentially slow operation
+
+		// If server is running, add the source directly for hot reload
+		let mut server_lock = self.inner.lock().await;
+		if let Some(server) = server_lock.as_mut() {
+			napi_result!(server.add_tile_source(name, reader).await)?;
+		}
 
 		Ok(())
+	}
+
+	/// Remove a tile source from the server
+	///
+	/// Changes take effect immediately without requiring a restart (hot reload).
+	/// Returns true if the source was found and removed, false otherwise.
+	#[napi]
+	pub async fn remove_tile_source(&self, name: String) -> Result<bool> {
+		// Remove from our list (source of truth)
+		let mut sources = self.tile_sources.lock().await;
+		let initial_len = sources.len();
+		sources.retain(|(n, _)| n != &name);
+		let was_removed = sources.len() < initial_len;
+		drop(sources);
+
+		// If server is running, remove the source directly for hot reload
+		let mut server_lock = self.inner.lock().await;
+		if let Some(server) = server_lock.as_mut() {
+			napi_result!(server.remove_tile_source(&name).await)?;
+		}
+
+		Ok(was_removed)
 	}
 
 	/// Add a static file source to the server
 	///
 	/// Serves static files from a path (can be a .tar or directory)
-	/// Sources can be added before or after starting the server.
-	/// If added after start(), call stop() and start() again to reload.
+	/// Note: Static sources do NOT support hot reloading. If the server is already
+	/// running, you must call stop() and start() to apply the changes.
 	#[napi]
 	pub async fn add_static_source(&self, path: String, url_prefix: Option<String>) -> Result<()> {
 		// Validate that the path exists
@@ -85,11 +114,34 @@ impl TileServer {
 			)));
 		}
 
+		// Check if server is running - warn about need to restart
+		let server_lock = self.inner.lock().await;
+		if server_lock.is_some() {
+			// Server is running - static sources require restart
+			// (We could return an error, but just documenting the limitation is friendlier)
+		}
+		drop(server_lock);
+
 		// Store the source in our list
 		let mut sources = self.static_sources.lock().await;
 		sources.push((path, url_prefix));
 
 		Ok(())
+	}
+
+	/// Remove a static file source from the server
+	///
+	/// Note: Static sources do NOT support hot reloading. If the server is already
+	/// running, you must call stop() and start() to apply the changes.
+	/// Returns true if the source was found and removed, false otherwise.
+	#[napi]
+	pub async fn remove_static_source(&self, path: String) -> Result<bool> {
+		let mut sources = self.static_sources.lock().await;
+		let initial_len = sources.len();
+		sources.retain(|(p, _)| p != &path);
+		let was_removed = sources.len() < initial_len;
+
+		Ok(was_removed)
 	}
 
 	/// Start the HTTP server
