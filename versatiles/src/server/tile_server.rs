@@ -21,7 +21,10 @@ use axum::error_handling::HandleErrorLayer;
 use axum::http::{StatusCode, header::HeaderName, header::HeaderValue};
 use axum::{BoxError, response::IntoResponse};
 use axum::{Router, routing::get};
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use tokio::{net::TcpListener, sync::oneshot};
 use tower::{
 	ServiceBuilder, buffer::BufferLayer, limit::ConcurrencyLimitLayer, load_shed::LoadShedLayer, timeout::TimeoutLayer,
@@ -54,7 +57,9 @@ use versatiles_derive::context;
 pub struct TileServer {
 	ip: String,
 	port: u16,
-	tile_sources: Vec<sources::TileSource>,
+	/// Tile sources stored in a shared HashMap for dynamic hot-reload.
+	/// Arc<RwLock<...>> allows concurrent reads (serving tiles) and exclusive writes (add/remove).
+	tile_sources: Arc<RwLock<HashMap<String, Arc<sources::TileSource>>>>,
 	static_sources: Vec<sources::StaticSource>,
 	/// One-shot channel to signal graceful shutdown to the serving task.
 	exit_signal: Option<oneshot::Sender<()>>,
@@ -78,7 +83,7 @@ impl TileServer {
 		TileServer {
 			ip: ip.to_owned(),
 			port,
-			tile_sources: Vec::new(),
+			tile_sources: Arc::new(RwLock::new(HashMap::new())),
 			static_sources: Vec::new(),
 			exit_signal: None,
 			join: None,
@@ -109,7 +114,7 @@ impl TileServer {
 		let mut server = TileServer {
 			ip: config.server.ip.unwrap_or("0.0.0.0".into()),
 			port: config.server.port.unwrap_or(8080),
-			tile_sources: Vec::new(),
+			tile_sources: Arc::new(RwLock::new(HashMap::new())),
 			static_sources: Vec::new(),
 			exit_signal: None,
 			join: None,
@@ -147,29 +152,67 @@ impl TileServer {
 
 		let reader = self.registry.get_reader(tile_config.path.clone()).await?;
 
-		self.add_tile_source(&name, reader)
+		self.add_tile_source(name, reader).await
 	}
 
-	/// Register a tile source under `/tiles/<name>/...`.
+	/// Add a tile source dynamically while server is running.
 	///
-	/// Fails if the URL prefix collides (as a prefix) with an existing source.
+	/// Returns error if a source with this name already exists or if URL prefix collides.
+	/// Can be called before or after `start()` - changes take effect immediately.
 	#[context("adding tile source: id='{name}'")]
-	pub fn add_tile_source(&mut self, name: &str, reader: Box<dyn TilesReaderTrait>) -> Result<()> {
+	pub async fn add_tile_source(&mut self, name: String, reader: Box<dyn TilesReaderTrait>) -> Result<()> {
 		log::debug!("add source: id='{name}', source={reader:?}");
 
-		let source = sources::TileSource::from(reader, name)?;
-		let url_prefix = &source.prefix;
+		// Create TileSource (validates and wraps reader)
+		let source = sources::TileSource::from(reader, &name)?;
+		let source_arc = Arc::new(source);
 
-		for other_tile_source in self.tile_sources.iter() {
-			let other_prefix = &other_tile_source.prefix;
-			if other_prefix.starts_with(url_prefix) || url_prefix.starts_with(other_prefix) {
-				bail!("multiple sources with the prefix '{url_prefix}' and '{other_prefix}' are defined");
-			};
+		// Acquire write lock for exclusive access
+		let mut sources = self.tile_sources.write().await;
+
+		// Check for ID collision
+		if sources.contains_key(&name) {
+			bail!("tile source '{}' already exists", name);
 		}
 
-		self.tile_sources.push(source);
+		// Check URL prefix collision with existing sources
+		let new_prefix = source_arc.prefix.clone();
+		for (other_id, other_source) in sources.iter() {
+			let other_prefix = &other_source.prefix;
+			if other_prefix.starts_with(&new_prefix) || new_prefix.starts_with(other_prefix) {
+				bail!(
+					"URL prefix collision: new source '{}' ({}) conflicts with existing source '{}' ({})",
+					name,
+					new_prefix,
+					other_id,
+					other_prefix
+				);
+			}
+		}
 
+		// Insert into HashMap
+		sources.insert(name.clone(), source_arc);
+
+		log::info!("added tile source: id='{}', prefix='{}'", name, new_prefix);
 		Ok(())
+	}
+
+	/// Remove a tile source dynamically while server is running.
+	///
+	/// Returns true if the source was found and removed, false if not found.
+	/// In-flight requests to the removed source will complete successfully
+	/// due to Arc reference counting.
+	pub async fn remove_tile_source(&mut self, name: &str) -> Result<bool> {
+		let mut sources = self.tile_sources.write().await;
+		let removed = sources.remove(name);
+
+		if removed.is_some() {
+			log::info!("removed tile source: id='{}'", name);
+			Ok(true)
+		} else {
+			log::debug!("tile source '{}' not found for removal", name);
+			Ok(false)
+		}
 	}
 
 	/// Register a static file source mounted at `url_prefix`.
@@ -312,7 +355,7 @@ impl TileServer {
 
 	/// Helper: delegate to `routes::add_tile_sources_to_app` to attach tile endpoints.
 	fn add_tile_sources_to_app(&self, app: Router) -> Router {
-		routes::add_tile_sources_to_app(app, &self.tile_sources, self.minimal_recompression)
+		routes::add_tile_sources_to_app(app, Arc::clone(&self.tile_sources), self.minimal_recompression)
 	}
 
 	/// Helper: delegate to `routes::add_static_sources_to_app` to attach static endpoints.
@@ -323,14 +366,15 @@ impl TileServer {
 	/// Helper: delegate to `routes::add_api_to_app` to attach small JSON API endpoints.
 	#[context("adding API routes to app")]
 	async fn add_api_to_app(&self, app: Router) -> Result<Router> {
-		routes::add_api_to_app(app, &self.tile_sources).await
+		routes::add_api_to_app(app, Arc::clone(&self.tile_sources)).await
 	}
 
 	pub async fn get_url_mapping(&self) -> Vec<(super::Url, String)> {
+		let sources = self.tile_sources.read().await;
 		let mut result = Vec::new();
-		for tile_source in self.tile_sources.iter() {
-			let id = tile_source.get_source_name().await;
-			result.push((tile_source.prefix.clone(), id))
+		for tile_source in sources.values() {
+			let source_name = tile_source.get_source_name().await;
+			result.push((tile_source.prefix.clone(), source_name))
 		}
 		result
 	}
@@ -365,7 +409,7 @@ mod tests {
 		let mut server = TileServer::new_test(IP, 50001, true, false);
 
 		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf)?.boxed();
-		server.add_tile_source("cheese", reader)?;
+		server.add_tile_source("cheese".to_string(), reader).await?;
 
 		server.start().await?;
 
@@ -389,10 +433,10 @@ mod tests {
 		let mut server = TileServer::new_test(IP, 0, true, false);
 
 		let reader = MockTilesReader::new_mock_profile(MTRP::Png).unwrap().boxed();
-		server.add_tile_source("cheese", reader).unwrap();
+		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 
 		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf).unwrap().boxed();
-		server.add_tile_source("cheese", reader).unwrap();
+		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 	}
 
 	#[tokio::test]
@@ -400,23 +444,25 @@ mod tests {
 		let mut server = TileServer::new_test(IP, 50003, true, false);
 		assert_eq!(server.ip, IP);
 		assert_eq!(server.port, 50003);
-		assert_eq!(server.tile_sources.len(), 0);
+		assert_eq!(server.tile_sources.read().await.len(), 0);
 		assert_eq!(server.static_sources.len(), 0);
 		assert!(server.exit_signal.is_none());
 		server.start().await.unwrap();
 		server.stop().await; // No assertion here as it's void
 	}
 
-	#[test]
-	fn tile_server_add_tile_source() {
+	#[tokio::test]
+	async fn tile_server_add_tile_source() {
 		let mut server = TileServer::new_test(IP, 0, true, false);
 		assert_eq!(server.ip, IP);
 
 		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf).unwrap().boxed();
-		server.add_tile_source("cheese", reader).unwrap();
+		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 
-		assert_eq!(server.tile_sources.len(), 1);
-		assert_eq!(server.tile_sources[0].prefix.str, "/tiles/cheese/");
+		let sources = server.tile_sources.read().await;
+		assert_eq!(sources.len(), 1);
+		assert!(sources.contains_key("cheese"));
+		assert_eq!(sources.get("cheese").unwrap().prefix.str, "/tiles/cheese/");
 	}
 
 	#[tokio::test]
@@ -425,7 +471,7 @@ mod tests {
 		assert_eq!(server.ip, IP);
 
 		let reader = MockTilesReader::new_mock_profile(MTRP::Pbf).unwrap().boxed();
-		server.add_tile_source("cheese", reader).unwrap();
+		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 
 		assert_eq!(
 			server.get_url_mapping().await,
@@ -467,7 +513,7 @@ mod tests {
 
 		let parameters = TilesReaderParameters::new(format, compression, TileBBoxPyramid::new_full(8));
 		let reader = MockTilesReader::new_mock(parameters).unwrap().boxed();
-		server.add_tile_source("cheese", reader).unwrap();
+		server.add_tile_source("cheese".to_string(), reader).await.unwrap();
 		server.start().await.unwrap();
 
 		let url = format!("http://{IP}:{}/tiles/cheese/3/3/3", server.port);

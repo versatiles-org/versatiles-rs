@@ -4,7 +4,11 @@ use napi_derive::napi;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use versatiles::{Config, server::TileServer as RustTileServer};
-use versatiles_container::{ContainerRegistry, DataSource, DataLocation};
+use versatiles_container::{ContainerRegistry, DataLocation, DataSource};
+
+// Type aliases for complex types
+type TileSourceList = Arc<Mutex<Vec<(String, String)>>>;
+type StaticSourceList = Arc<Mutex<Vec<(String, Option<String>)>>>;
 
 /// HTTP tile server for serving tiles and static content
 #[napi]
@@ -15,8 +19,8 @@ pub struct TileServer {
 	ip: Arc<Mutex<String>>,
 	minimal_recompression: Arc<Mutex<Option<bool>>>,
 	// Track accumulated sources to rebuild config on start
-	tile_sources: Arc<Mutex<Vec<(String, String)>>>,  // Vec of (name, path)
-	static_sources: Arc<Mutex<Vec<(String, Option<String>)>>>,  // Vec of (path, url_prefix)
+	tile_sources: TileSourceList,     // Vec of (name, path)
+	static_sources: StaticSourceList, // Vec of (path, url_prefix)
 }
 
 #[napi]
@@ -72,13 +76,13 @@ impl TileServer {
 	pub async fn add_static_source(&self, path: String, url_prefix: Option<String>) -> Result<()> {
 		// Validate that the path exists
 		let data_location = DataLocation::from(path.clone());
-		if let Ok(path_ref) = data_location.as_path() {
-			if !path_ref.exists() {
-				return Err(Error::from_reason(format!(
-					"Static source path does not exist: {}",
-					path
-				)));
-			}
+		if let Ok(path_ref) = data_location.as_path()
+			&& !path_ref.exists()
+		{
+			return Err(Error::from_reason(format!(
+				"Static source path does not exist: {}",
+				path
+			)));
 		}
 
 		// Store the source in our list

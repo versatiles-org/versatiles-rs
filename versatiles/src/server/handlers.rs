@@ -18,17 +18,11 @@ use axum::{
 	http::{HeaderMap, Uri, header},
 	response::Response,
 };
+use std::sync::Arc;
 use versatiles_core::{
 	Blob, TileCompression,
 	utils::{TargetCompression, optimize_compression},
 };
-
-/// State for tile requests bound to a single `TileSource`.
-#[derive(Clone)]
-pub struct TileHandlerState {
-	pub tile_source: TileSource,
-	pub minimal_recompression: bool,
-}
 
 /// State for static file requests across multiple `StaticSource`s.
 #[derive(Clone)]
@@ -37,17 +31,14 @@ pub struct StaticHandlerState {
 	pub minimal_recompression: bool,
 }
 
-/// Tile handler: pulls data from the bound `TileSource`, negotiates compression,
-/// and emits an HTTP response.
-pub async fn serve_tile(
-	uri: Uri,
+/// Core tile serving logic extracted for reuse in dynamic routing.
+/// Takes an Arc<TileSource> to support both static and dynamic routing.
+pub async fn serve_tile_from_source(
+	path: Url,
 	headers: HeaderMap,
-	State(TileHandlerState {
-		tile_source,
-		minimal_recompression,
-	}): State<TileHandlerState>,
+	tile_source: Arc<TileSource>,
+	minimal_recompression: bool,
 ) -> Response<Body> {
-	let path = Url::from(uri.path());
 	log::debug!("handle tile request: {path}");
 
 	let mut target = get_encoding(&headers);
@@ -123,11 +114,11 @@ fn error_with(status: u16, message: &str) -> Response<Body> {
 		.expect("failed to build error response")
 }
 
-fn error_404() -> Response<Body> {
+pub fn error_404() -> Response<Body> {
 	error_with(404, "Not Found")
 }
 
-fn error_500() -> Response<Body> {
+pub fn error_500() -> Response<Body> {
 	error_with(500, "Internal Server Error")
 }
 
