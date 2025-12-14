@@ -1,11 +1,10 @@
 use crate::{napi_result, types::ServerOptions};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use versatiles::{Config, server::TileServer as RustTileServer};
-use versatiles_container::ContainerRegistry;
+use versatiles_container::{ContainerRegistry, DataSource, DataLocation};
 
 /// HTTP tile server for serving tiles and static content
 #[napi]
@@ -13,6 +12,11 @@ pub struct TileServer {
 	inner: Arc<Mutex<Option<RustTileServer>>>,
 	registry: ContainerRegistry,
 	port: Arc<Mutex<u16>>,
+	ip: Arc<Mutex<String>>,
+	minimal_recompression: Arc<Mutex<Option<bool>>>,
+	// Track accumulated sources to rebuild config on start
+	tile_sources: Arc<Mutex<Vec<(String, String)>>>,  // Vec of (name, path)
+	static_sources: Arc<Mutex<Vec<(String, Option<String>)>>>,  // Vec of (path, url_prefix)
 }
 
 #[napi]
@@ -27,38 +31,34 @@ impl TileServer {
 		});
 
 		let registry = ContainerRegistry::default();
-
-		// Create initial config
-		let mut config = Config::default();
-		config.server.ip = Some(opts.ip.unwrap_or_else(|| "0.0.0.0".to_string()));
-		config.server.port = Some(opts.port.unwrap_or(8080) as u16);
-		config.server.minimal_recompression = opts.minimal_recompression;
-
-		let port = config.server.port.unwrap_or(8080);
+		let ip = opts.ip.unwrap_or_else(|| "0.0.0.0".to_string());
+		let port = opts.port.unwrap_or(8080) as u16;
+		let minimal_recompression = opts.minimal_recompression;
 
 		Ok(Self {
 			inner: Arc::new(Mutex::new(None)),
 			registry,
 			port: Arc::new(Mutex::new(port)),
+			ip: Arc::new(Mutex::new(ip)),
+			minimal_recompression: Arc::new(Mutex::new(minimal_recompression)),
+			tile_sources: Arc::new(Mutex::new(Vec::new())),
+			static_sources: Arc::new(Mutex::new(Vec::new())),
 		})
 	}
 
 	/// Add a tile source to the server
 	///
 	/// The tiles will be served at /tiles/{name}/...
+	/// Sources can be added before or after starting the server.
+	/// If added after start(), call stop() and start() again to reload.
 	#[napi]
 	pub async fn add_tile_source(&self, name: String, path: String) -> Result<()> {
-		let reader = napi_result!(self.registry.get_reader_from_str(&path).await)?;
+		// Validate that the file exists by trying to open it
+		let _ = napi_result!(self.registry.get_reader_from_str(&path).await)?;
 
-		let mut server_lock = self.inner.lock().await;
-
-		if let Some(ref mut server) = *server_lock {
-			napi_result!(server.add_tile_source(&name, reader))?;
-		} else {
-			return Err(Error::from_reason(
-				"Cannot add tile source before server is created. Call start() to create the server first, or use a different API.",
-			));
-		}
+		// Store the source in our list
+		let mut sources = self.tile_sources.lock().await;
+		sources.push((name, path));
 
 		Ok(())
 	}
@@ -66,20 +66,24 @@ impl TileServer {
 	/// Add a static file source to the server
 	///
 	/// Serves static files from a path (can be a .tar or directory)
+	/// Sources can be added before or after starting the server.
+	/// If added after start(), call stop() and start() again to reload.
 	#[napi]
 	pub async fn add_static_source(&self, path: String, url_prefix: Option<String>) -> Result<()> {
-		let path_buf = PathBuf::from(&path);
-		let prefix = url_prefix.unwrap_or_else(|| "/".to_string());
-
-		let mut server_lock = self.inner.lock().await;
-
-		if let Some(ref mut server) = *server_lock {
-			napi_result!(server.add_static_source(&path_buf, &prefix))?;
-		} else {
-			return Err(Error::from_reason(
-				"Cannot add static source before server is created. Call start() to create the server first.",
-			));
+		// Validate that the path exists
+		let data_location = DataLocation::from(path.clone());
+		if let Ok(path_ref) = data_location.as_path() {
+			if !path_ref.exists() {
+				return Err(Error::from_reason(format!(
+					"Static source path does not exist: {}",
+					path
+				)));
+			}
 		}
+
+		// Store the source in our list
+		let mut sources = self.static_sources.lock().await;
+		sources.push((path, url_prefix));
 
 		Ok(())
 	}
@@ -93,9 +97,37 @@ impl TileServer {
 			return Err(Error::from_reason("Server is already running"));
 		}
 
+		// Build config with all accumulated sources
 		let mut config = Config::default();
 		let port_val = *self.port.lock().await;
+		let ip_val = self.ip.lock().await.clone();
+		let min_recomp = *self.minimal_recompression.lock().await;
+
 		config.server.port = Some(port_val);
+		config.server.ip = Some(ip_val);
+		config.server.minimal_recompression = min_recomp;
+
+		// Add all tile sources to config
+		let tile_sources = self.tile_sources.lock().await;
+		for (name, path) in tile_sources.iter() {
+			use versatiles::TileSourceConfig;
+			let data_source = napi_result!(DataSource::try_from(path.as_str()))?;
+			config.tile_sources.push(TileSourceConfig {
+				name: Some(name.clone()),
+				path: data_source,
+			});
+		}
+
+		// Add all static sources to config
+		let static_sources = self.static_sources.lock().await;
+		for (path, url_prefix) in static_sources.iter() {
+			use versatiles::StaticSourceConfig;
+			let data_location = DataLocation::from(path.clone());
+			config.static_sources.push(StaticSourceConfig {
+				path: data_location,
+				url_prefix: url_prefix.clone(),
+			});
+		}
 
 		let mut server = napi_result!(RustTileServer::from_config(config, self.registry.clone()).await)?;
 

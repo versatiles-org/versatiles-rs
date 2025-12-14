@@ -189,8 +189,9 @@ describe('TileServer', () => {
 		});
 
 		test('should return 404 for non-existent tile', async () => {
+			// Request a tile far outside Berlin's bounds (Berlin is in Europe, this is in the Pacific)
 			await assert.rejects(
-				async () => await httpGet(`${baseUrl}/tiles/berlin/0/0/0`),
+				async () => await httpGet(`${baseUrl}/tiles/berlin/10/0/0`),
 				/HTTP 404/,
 				'Should return 404 for non-existent tile'
 			);
