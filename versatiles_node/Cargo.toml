@@ -16,7 +16,7 @@ async-trait.workspace = true
 napi = { version = "2", features = ["async", "tokio_rt"] }
 napi-derive = "2"
 tokio.workspace = true
-versatiles = { workspace = true, default-features = false }
+versatiles = { workspace = true, default-features = false, features = ["server"] }
 versatiles_container.workspace = true
 versatiles_core.workspace = true
 

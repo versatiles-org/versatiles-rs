@@ -32,7 +32,7 @@ axum = { version = "0.8.7", default-features = false, optional = true, features 
 clap = { workspace = true, optional = true }
 enumset = { workspace = true, optional = true }
 env_logger = { version = "0.11.8", optional = true }
-log = { workspace = true, optional = true }
+log = { workspace = true }
 mime_guess = { version = "2.0.5", default-features = false, optional = true }
 regex = { workspace = true, optional = true, features = ["unicode"] }
 serde.workspace = true
@@ -43,12 +43,16 @@ tokio = { workspace = true, features = [
 	"rt-multi-thread",
 	"sync",
 ], optional = true }
-tower = { version = "0.5.2", features = ["buffer", "limit", "load-shed"] }
+tower = { version = "0.5.2", features = [
+	"buffer",
+	"limit",
+	"load-shed",
+], optional = true }
 tower-http = { version = "0.6.7", features = [
 	"catch-panic",
 	"cors",
 	"set-header",
-] }
+], optional = true }
 
 versatiles_container = { workspace = true }
 versatiles_core = { workspace = true }
@@ -78,16 +82,21 @@ versatiles_container = { workspace = true, features = ["test"] }
 versatiles_core = { workspace = true, features = ["test"] }
 
 [features]
-default = ["cli"]
-cli = [
+default = ["cli", "server"]
+server = [
 	"dep:axum",
-	"dep:clap",
-	"dep:env_logger",
 	"dep:enumset",
-	"dep:log",
 	"dep:mime_guess",
 	"dep:regex",
 	"dep:tar",
+	"dep:tokio",
+	"dep:tower",
+	"dep:tower-http",
+]
+cli = [
+	"dep:clap",
+	"dep:env_logger",
+	"dep:enumset",
 	"dep:termimad",
 	"dep:tokio",
 	"versatiles_container/cli",

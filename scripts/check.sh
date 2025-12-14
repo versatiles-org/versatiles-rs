@@ -8,6 +8,30 @@ source scripts/env-gdal.sh
 set +e
 
 echo "cargo check"
+result=$(cargo check --workspace --no-default-features --all-targets 2>&1)
+if [ $? -ne 0 ]; then
+   echo -e "$result\nERROR DURING: cargo check"
+   exit 1
+fi
+echo "cargo check S"
+result=$(cargo check --workspace --no-default-features --features server --all-targets 2>&1)
+if [ $? -ne 0 ]; then
+   echo -e "$result\nERROR DURING: cargo check"
+   exit 1
+fi
+echo "cargo check C"
+result=$(cargo check --workspace --no-default-features --features cli --all-targets 2>&1)
+if [ $? -ne 0 ]; then
+   echo -e "$result\nERROR DURING: cargo check"
+   exit 1
+fi
+echo "cargo check C,S"
+result=$(cargo check --workspace --no-default-features --features server,cli --all-targets 2>&1)
+if [ $? -ne 0 ]; then
+   echo -e "$result\nERROR DURING: cargo check"
+   exit 1
+fi
+echo "cargo check *"
 result=$(cargo check --workspace --all-features --all-targets 2>&1)
 if [ $? -ne 0 ]; then
    echo -e "$result\nERROR DURING: cargo check"
