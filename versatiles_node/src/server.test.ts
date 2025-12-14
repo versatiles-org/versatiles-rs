@@ -22,33 +22,37 @@ interface HttpBufferResponse {
 
 function httpGet(url: string): Promise<HttpResponse> {
 	return new Promise((resolve, reject) => {
-		http.get(url, (res) => {
-			let data = '';
-			res.on('data', chunk => data += chunk);
-			res.on('end', () => {
-				if (res.statusCode && res.statusCode >= 400) {
-					reject(new Error(`HTTP ${res.statusCode}: ${data}`));
-				} else {
-					resolve({ statusCode: res.statusCode!, data, headers: res.headers });
-				}
-			});
-		}).on('error', reject);
+		http
+			.get(url, (res) => {
+				let data = '';
+				res.on('data', (chunk) => (data += chunk));
+				res.on('end', () => {
+					if (res.statusCode && res.statusCode >= 400) {
+						reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+					} else {
+						resolve({ statusCode: res.statusCode!, data, headers: res.headers });
+					}
+				});
+			})
+			.on('error', reject);
 	});
 }
 
 function httpGetBuffer(url: string): Promise<HttpBufferResponse> {
 	return new Promise((resolve, reject) => {
-		http.get(url, (res) => {
-			const chunks: Buffer[] = [];
-			res.on('data', chunk => chunks.push(chunk));
-			res.on('end', () => {
-				if (res.statusCode && res.statusCode >= 400) {
-					reject(new Error(`HTTP ${res.statusCode}`));
-				} else {
-					resolve({ statusCode: res.statusCode!, data: Buffer.concat(chunks), headers: res.headers });
-				}
-			});
-		}).on('error', reject);
+		http
+			.get(url, (res) => {
+				const chunks: Buffer[] = [];
+				res.on('data', (chunk) => chunks.push(chunk));
+				res.on('end', () => {
+					if (res.statusCode && res.statusCode >= 400) {
+						reject(new Error(`HTTP ${res.statusCode}`));
+					} else {
+						resolve({ statusCode: res.statusCode!, data: Buffer.concat(chunks), headers: res.headers });
+					}
+				});
+			})
+			.on('error', reject);
 	});
 }
 
@@ -145,7 +149,7 @@ describe('TileServer', () => {
 		test('should throw error for non-existent file', async () => {
 			await assert.rejects(
 				async () => await server.addTileSource('invalid', '/nonexistent/file.mbtiles'),
-				'Should throw error for non-existent file'
+				'Should throw error for non-existent file',
 			);
 		});
 	});
@@ -193,7 +197,7 @@ describe('TileServer', () => {
 			await assert.rejects(
 				async () => await httpGet(`${baseUrl}/tiles/berlin/10/0/0`),
 				/HTTP 404/,
-				'Should return 404 for non-existent tile'
+				'Should return 404 for non-existent tile',
 			);
 		});
 
@@ -201,7 +205,7 @@ describe('TileServer', () => {
 			await assert.rejects(
 				async () => await httpGet(`${baseUrl}/tiles/nonexistent/5/17/10`),
 				/HTTP 404/,
-				'Should return 404 for non-existent source'
+				'Should return 404 for non-existent source',
 			);
 		});
 
@@ -213,7 +217,7 @@ describe('TileServer', () => {
 			];
 
 			const results = await Promise.allSettled(requests);
-			const successful = results.filter(r => r.status === 'fulfilled');
+			const successful = results.filter((r) => r.status === 'fulfilled');
 			assert.ok(successful.length > 0, 'At least one request should succeed');
 		});
 	});
@@ -249,7 +253,7 @@ describe('TileServer', () => {
 			await assert.rejects(
 				async () => await httpGet(`${baseUrl}/nonexistent.txt`),
 				/HTTP 404/,
-				'Should return 404 for non-existent file'
+				'Should return 404 for non-existent file',
 			);
 		});
 	});
@@ -366,7 +370,7 @@ describe('TileServer', () => {
 			await assert.rejects(
 				async () => await httpGet(`${baseUrl}/tiles/berlin/tiles.json`),
 				/HTTP 404/,
-				'Removed source should return 404'
+				'Removed source should return 404',
 			);
 
 			// Other source should still work
@@ -402,7 +406,7 @@ describe('TileServer', () => {
 			await assert.rejects(
 				async () => await httpGet(`${baseUrl}/tiles/berlin/tiles.json`),
 				/HTTP 404/,
-				'Removed source should still be gone after restart'
+				'Removed source should still be gone after restart',
 			);
 		});
 	});

@@ -61,6 +61,7 @@ npm run build:debug
 ```
 
 This creates a debug build with:
+
 - No optimizations (faster compilation)
 - Debug symbols included
 - Better error messages
@@ -72,6 +73,7 @@ npm run build
 ```
 
 This creates an optimized release build with:
+
 - Full optimizations (LTO enabled)
 - Stripped symbols
 - Smaller binary size
@@ -81,6 +83,7 @@ This creates an optimized release build with:
 When published, the NPM package includes **only**:
 
 ✅ **Included:**
+
 - `index.js` - Generated JavaScript bindings
 - `index.d.ts` - TypeScript type definitions
 - `*.node` - Native binary for the platform
@@ -88,6 +91,7 @@ When published, the NPM package includes **only**:
 - `README.md` - User documentation
 
 ❌ **Excluded** (via `.npmignore`):
+
 - `src/` - Rust source code
 - `examples/` - Example files
 - `__test__/` - Tests
@@ -131,6 +135,7 @@ describe('Example', () => {
 ```
 
 Run tests with:
+
 ```bash
 npm test
 ```
@@ -140,6 +145,7 @@ npm test
 ### Adding a New Method
 
 1. **Update Rust code** in `src/`:
+
    ```rust
    #[napi]
    pub async fn new_method(&self) -> Result<String> {
@@ -148,6 +154,7 @@ npm test
    ```
 
 2. **Rebuild**:
+
    ```bash
    npm run build:debug
    ```
@@ -165,15 +172,175 @@ npm test
 3. Rebuild to generate new TypeScript definitions
 4. Update documentation
 
+## Code Quality
+
+### Running Checks
+
+Before submitting a pull request, run:
+
+```bash
+npm run check
+```
+
+This runs:
+
+- `npm run typecheck` - TypeScript type checking
+- `npm run lint` - ESLint
+- `npm run format:check` - Prettier format validation
+- `npm test` - All tests
+
+### Auto-fixing Issues
+
+To automatically fix linting and formatting issues:
+
+```bash
+npm run fix
+```
+
+This runs:
+
+- `npm run lint:fix` - Auto-fix ESLint issues
+- `npm run format` - Format all files with Prettier
+
+### Individual Checks
+
+Run checks individually:
+
+```bash
+npm run typecheck      # TypeScript only
+npm run lint          # ESLint only
+npm run format:check  # Prettier check only
+npm test              # Tests only
+```
+
 ## Code Style
 
-- **Rust**: Follow standard Rust conventions
-  - Use `cargo fmt` to format code
-  - Use `cargo clippy` to check for issues
+### TypeScript
 
-- **JavaScript**: Follow Node.js conventions
-  - Use async/await for asynchronous code
-  - Proper error handling
+- **Strict mode**: All TypeScript code must pass strict type checking
+- **Naming**: Use camelCase for variables and functions, PascalCase for classes
+- **Async**: Prefer `async`/`await` over raw promises
+- **Error handling**: Always handle promise rejections
+
+### Formatting
+
+- **Tool**: Prettier (automatic formatting)
+- **Line length**: 120 characters (matches Rust)
+- **Indentation**: Tabs (matches Rust)
+- **Quotes**: Single quotes for strings
+- **Trailing commas**: Required
+
+Run `npm run format` to format all files automatically.
+
+### Linting
+
+- **Tool**: ESLint with TypeScript support
+- **Config**: See `eslint.config.mjs`
+- **Auto-fix**: Run `npm run lint:fix`
+
+### Rust
+
+- **Format**: Use `cargo fmt` to format code
+- **Lint**: Use `cargo clippy` to check for issues
+- **Style**: Follow standard Rust conventions
+
+## Workflow Integration
+
+### Repository-Wide Checks
+
+From the repository root, run all checks (Rust + Node.js):
+
+```bash
+./scripts/check.sh
+```
+
+### Pre-commit Hooks
+
+We recommend [Lefthook](https://github.com/evilmartians/lefthook) for automatic quality checks.
+
+**Setup:**
+
+```bash
+brew install lefthook    # Install
+lefthook install         # Enable hooks
+```
+
+**What happens:**
+
+- **Pre-commit**: Fast checks (formatting, linting, type-checking)
+- **Pre-push**: Full checks (including tests)
+
+See [Pre-commit Hooks](#pre-commit-hooks-optional-but-recommended) section for details.
+
+## Pre-commit Hooks (Optional but Recommended)
+
+We recommend using [Lefthook](https://github.com/evilmartians/lefthook) to automatically run checks before commits and pushes.
+
+### Installation
+
+**macOS:**
+
+```bash
+brew install lefthook
+```
+
+**Linux:**
+
+```bash
+# Debian/Ubuntu
+curl -1sLf 'https://dl.cloudsmith.io/public/evilmartians/lefthook/setup.deb.sh' | sudo -E bash
+sudo apt install lefthook
+
+# Or download binary from GitHub releases
+```
+
+**Windows:**
+
+```powershell
+scoop install lefthook
+```
+
+### Setup
+
+After installing Lefthook, activate the hooks:
+
+```bash
+cd /path/to/versatiles-rs
+lefthook install
+```
+
+### What Gets Checked
+
+- **Pre-commit**: Fast checks (formatting, linting, type-checking)
+- **Pre-push**: Full checks (all of the above + tests)
+
+### Skipping Hooks
+
+If you need to skip hooks temporarily:
+
+```bash
+# Skip pre-commit hooks
+LEFTHOOK=0 git commit -m "message"
+
+# Skip specific hook
+lefthook run pre-commit --exclude rust-fmt
+```
+
+### Uninstall
+
+```bash
+lefthook uninstall
+```
+
+## Continuous Integration
+
+All checks run automatically in GitHub Actions CI:
+
+- Rust formatting, linting, tests
+- Node.js type-checking, linting, formatting, tests
+- Code coverage reporting
+
+Pull requests must pass all CI checks before merging.
 
 ## Publishing Checklist
 
@@ -208,6 +375,7 @@ GitHub Actions builds these automatically on release.
 ### "Cannot find module '../index.js'"
 
 You need to build the project first:
+
 ```bash
 npm run build:debug
 ```
@@ -215,6 +383,7 @@ npm run build:debug
 ### Rust Compilation Errors
 
 Make sure you have the latest stable Rust:
+
 ```bash
 rustup update stable
 ```

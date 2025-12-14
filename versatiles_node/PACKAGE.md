@@ -40,15 +40,15 @@ This is controlled by [.npmignore](./.npmignore).
 
 The package uses `optionalDependencies` for platform-specific binaries:
 
-| Platform | Package Name | Binary Size |
-|----------|--------------|-------------|
-| macOS Intel | `@versatiles/versatiles-rs-darwin-x64` | ~5 MB |
-| macOS Apple Silicon | `@versatiles/versatiles-rs-darwin-arm64` | ~5 MB |
-| Linux x64 (glibc) | `@versatiles/versatiles-rs-linux-x64-gnu` | ~8 MB |
-| Linux ARM64 (glibc) | `@versatiles/versatiles-rs-linux-arm64-gnu` | ~8 MB |
-| Linux x64 (musl) | `@versatiles/versatiles-rs-linux-x64-musl` | ~8 MB |
-| Linux ARM64 (musl) | `@versatiles/versatiles-rs-linux-arm64-musl` | ~8 MB |
-| Windows x64 | `@versatiles/versatiles-rs-win32-x64-msvc` | ~6 MB |
+| Platform            | Package Name                                 | Binary Size |
+| ------------------- | -------------------------------------------- | ----------- |
+| macOS Intel         | `@versatiles/versatiles-rs-darwin-x64`       | ~5 MB       |
+| macOS Apple Silicon | `@versatiles/versatiles-rs-darwin-arm64`     | ~5 MB       |
+| Linux x64 (glibc)   | `@versatiles/versatiles-rs-linux-x64-gnu`    | ~8 MB       |
+| Linux ARM64 (glibc) | `@versatiles/versatiles-rs-linux-arm64-gnu`  | ~8 MB       |
+| Linux x64 (musl)    | `@versatiles/versatiles-rs-linux-x64-musl`   | ~8 MB       |
+| Linux ARM64 (musl)  | `@versatiles/versatiles-rs-linux-arm64-musl` | ~8 MB       |
+| Windows x64         | `@versatiles/versatiles-rs-win32-x64-msvc`   | ~6 MB       |
 
 ### How Platform Selection Works
 
@@ -104,6 +104,7 @@ npm publish --access public
 ### Automated Publishing (Recommended)
 
 GitHub Actions automatically:
+
 1. Builds binaries for all platforms
 2. Creates platform-specific packages
 3. Publishes to NPM on git tags
@@ -115,30 +116,33 @@ See `.github/workflows/node-bindings.yml` for configuration.
 ### Current Optimizations
 
 ✅ **Rust Build:**
+
 - LTO (Link-Time Optimization) enabled
 - Symbols stripped
 - Release profile optimizations
 - Code size optimization flags
 
 ✅ **NPM Package:**
+
 - Excluded source files (.rs)
 - Excluded examples and tests
 - Excluded build artifacts
 - Excluded development configs
 
 ✅ **Distribution:**
+
 - Platform-specific packages (no bundling all platforms)
 - Optional dependencies (download only what's needed)
 
 ### Size Comparison
 
-| Package Type | Size | Notes |
-|--------------|------|-------|
-| Source repository | ~500 MB | With build artifacts |
-| Source (no artifacts) | ~50 KB | Just .rs files |
-| Single platform binary | ~5-8 MB | Optimized and stripped |
-| All platform binaries | ~50 MB | If bundled (not done) |
-| NPM install | ~5-15 MB | Only one platform |
+| Package Type           | Size     | Notes                  |
+| ---------------------- | -------- | ---------------------- |
+| Source repository      | ~500 MB  | With build artifacts   |
+| Source (no artifacts)  | ~50 KB   | Just .rs files         |
+| Single platform binary | ~5-8 MB  | Optimized and stripped |
+| All platform binaries  | ~50 MB   | If bundled (not done)  |
+| NPM install            | ~5-15 MB | Only one platform      |
 
 ## File Size Breakdown
 
@@ -181,6 +185,7 @@ npm link @versatiles/versatiles-rs
 ### Package Too Large
 
 If the package seems too large:
+
 1. Check `.npmignore` is working: `npm pack --dry-run`
 2. Verify build artifacts excluded: `ls -lah target/` (should not exist in package)
 3. Check only one `.node` file included (not multiple platforms)
@@ -188,6 +193,7 @@ If the package seems too large:
 ### Missing Files
 
 If files are missing after install:
+
 1. Check they're not in `.npmignore`
 2. Verify `package.json` `files` field (if present)
 3. Check platform-specific package was downloaded
@@ -195,6 +201,7 @@ If files are missing after install:
 ### Platform Binary Not Found
 
 If the native binary isn't loaded:
+
 1. Verify platform is supported (check `optionalDependencies`)
 2. Check network connectivity during install
 3. Try: `npm install --force` to re-download

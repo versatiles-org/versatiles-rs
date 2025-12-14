@@ -20,6 +20,7 @@ yarn add @versatiles/versatiles-rs
 ```
 
 Pre-built binaries are available for:
+
 - macOS (arm64, x64)
 - Linux (x64, arm64, musl)
 - Windows (x64)
@@ -35,7 +36,7 @@ await convertTiles('input.mbtiles', 'output.versatiles', {
   minZoom: 0,
   maxZoom: 14,
   bbox: [-180, -85, 180, 85],
-  compress: 'gzip'
+  compress: 'gzip',
 });
 ```
 
@@ -110,6 +111,7 @@ console.log('BBox:', bbox); // [west, south, east, north]
 Convert tiles from one format to another.
 
 **Parameters:**
+
 - `input` (string): Input file path (.versatiles, .mbtiles, .pmtiles, .tar, directory)
 - `output` (string): Output file path
 - `options` (object, optional):
@@ -128,6 +130,7 @@ Convert tiles from one format to another.
 Inspect a tile container.
 
 **Parameters:**
+
 - `path` (string): Container file path
 - `depth` (string, optional): Probe depth - currently not implemented
 
@@ -149,6 +152,7 @@ interface ProbeResult {
 Open a tile container.
 
 **Parameters:**
+
 - `path` (string): File path or URL
 
 **Returns:** `Promise<ContainerReader>`
@@ -158,6 +162,7 @@ Open a tile container.
 Get a single tile.
 
 **Parameters:**
+
 - `z` (number): Zoom level
 - `x` (number): Tile column
 - `y` (number): Tile row
@@ -202,6 +207,7 @@ Get container type (getter).
 Convert this container to another format.
 
 **Parameters:**
+
 - `output` (string): Output file path
 - `options` (ConvertOptions, optional): Same as `convertTiles`
 
@@ -212,6 +218,7 @@ Convert this container to another format.
 Probe container details.
 
 **Parameters:**
+
 - `depth` (string, optional): Probe depth
 
 **Returns:** `Promise<ProbeResult>`
@@ -223,6 +230,7 @@ Probe container details.
 Create a new tile server.
 
 **Parameters:**
+
 - `options` (object, optional):
   - `ip` (string): IP address to bind (default: `"0.0.0.0"`)
   - `port` (number): Port number (default: `8080`)
@@ -233,6 +241,7 @@ Create a new tile server.
 Add a tile source.
 
 **Parameters:**
+
 - `name` (string): Source name (URL will be `/tiles/{name}/...`)
 - `path` (string): Container file path
 
@@ -243,6 +252,7 @@ Add a tile source.
 Add static file source.
 
 **Parameters:**
+
 - `path` (string): Directory or .tar file
 - `urlPrefix` (string, optional): URL prefix (default: `"/"`)
 
@@ -273,6 +283,7 @@ Get server port (getter).
 Create a tile coordinate.
 
 **Parameters:**
+
 - `z` (number): Zoom level
 - `x` (number): Column
 - `y` (number): Row
@@ -282,6 +293,7 @@ Create a tile coordinate.
 Create from geographic coordinates (static).
 
 **Parameters:**
+
 - `lon` (number): Longitude
 - `lat` (number): Latitude
 - `z` (number): Zoom level
@@ -323,6 +335,7 @@ Get JSON representation.
 ## Examples
 
 See the [examples](./examples) directory for more usage examples:
+
 - [convert.js](./examples/convert.js) - Format conversion
 - [probe.js](./examples/probe.js) - Container inspection
 - [serve.js](./examples/serve.js) - Tile server

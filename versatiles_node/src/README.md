@@ -8,7 +8,7 @@ This directory contains both the Rust source code and TypeScript integration tes
 src/
 ├── lib.rs               # Main Rust module (napi entry point)
 ├── container.rs         # ContainerReader implementation
-├── server.rs            # TileServer implementation  
+├── server.rs            # TileServer implementation
 ├── types.rs             # TileCoord and type definitions
 ├── utils.rs             # Error conversion utilities
 ├── container.test.ts    # ContainerReader tests
@@ -41,7 +41,9 @@ npx tsx --test src/functions.test.ts
 ### Test Files
 
 #### container.test.ts (17 tests)
+
 Tests for `ContainerReader` class:
+
 - Opening various formats (MBTiles, PMTiles)
 - Reading tiles
 - TileJSON and metadata access
@@ -49,21 +51,27 @@ Tests for `ContainerReader` class:
 - Converting between formats
 
 #### server.test.ts (17 tests)
+
 Tests for `TileServer` class:
+
 - Server lifecycle (start/stop/restart)
 - Adding tile and static sources
 - HTTP endpoints
 - Port management
 
 #### types.test.ts (37 tests)
+
 Tests for `TileCoord` class:
+
 - Coordinate creation and validation
 - Geo ↔ tile conversion
 - Round-trip conversions
 - Edge cases
 
 #### functions.test.ts (24 tests)
+
 Tests for standalone functions:
+
 - `probeTiles()` - Container probing
 - `convertTiles()` - Format conversion with various options
 

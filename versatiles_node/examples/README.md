@@ -5,6 +5,7 @@ This directory contains practical examples demonstrating the main features of th
 ## Prerequisites
 
 Before running the examples, make sure you have:
+
 1. Installed the package: `npm install` in the `versatiles_node` directory
 2. Built the native bindings: `npm run build`
 3. Test data available at `../testdata/berlin.mbtiles`
@@ -20,6 +21,7 @@ node examples/convert.js
 ```
 
 **Features shown:**
+
 - Simple format conversion (MBTiles → VersaTiles)
 - Filtering by zoom level
 - Filtering by bounding box
@@ -38,6 +40,7 @@ node examples/probe.js
 ```
 
 **Features shown:**
+
 - Quick probe using `probeTiles()` function
 - Detailed inspection using `ContainerReader`
 - Accessing TileJSON metadata
@@ -63,6 +66,7 @@ node examples/serve.js 4  # Dynamic sources
 ```
 
 **Features shown:**
+
 - Starting a basic HTTP server
 - Adding tile sources
 - Adding static file sources
@@ -70,6 +74,7 @@ node examples/serve.js 4  # Dynamic sources
 - Graceful shutdown
 
 **URLs available:**
+
 - Tiles: `http://127.0.0.1:8080/tiles/berlin/{z}/{x}/{y}`
 - TileJSON: `http://127.0.0.1:8080/tiles/berlin/meta.json`
 - Status: `http://127.0.0.1:8080/status`
@@ -85,6 +90,7 @@ node examples/read-tiles.js
 ```
 
 **Features shown:**
+
 - Reading a single tile
 - Reading multiple tiles
 - Converting geographic coordinates to tile coordinates
@@ -95,6 +101,7 @@ node examples/read-tiles.js
 - Saving tiles to files
 
 **Output:**
+
 - Prints tile information to the console
 - Saves a sample tile as `tile-10-550-335.png`
 
@@ -103,6 +110,7 @@ node examples/read-tiles.js
 All examples use the test data file `../testdata/berlin.mbtiles`. This file should contain map tiles for the Berlin area.
 
 If you don't have this test data, you can:
+
 1. Use your own tile container files
 2. Modify the examples to point to your data
 3. Download sample data from [VersaTiles](https://versatiles.org)
@@ -133,7 +141,7 @@ console.log('Zoom:', params.minZoom, '-', params.maxZoom);
 const { TileCoord } = require('@versatiles/versatiles-rs');
 
 // Geographic → Tile
-const coord = TileCoord.fromGeo(13.405, 52.520, 10);
+const coord = TileCoord.fromGeo(13.405, 52.52, 10);
 console.log(`Tile: ${coord.z}/${coord.x}/${coord.y}`);
 
 // Tile → Geographic
@@ -175,6 +183,7 @@ try {
 ### "Cannot find module '../index.js'"
 
 Make sure you've built the native bindings:
+
 ```bash
 cd versatiles_node
 npm install
@@ -184,6 +193,7 @@ npm run build
 ### "ENOENT: no such file or directory"
 
 Check that the test data file exists:
+
 ```bash
 ls ../testdata/berlin.mbtiles
 ```
@@ -191,6 +201,7 @@ ls ../testdata/berlin.mbtiles
 ### Server port already in use
 
 Change the port in the server examples:
+
 ```javascript
 const server = new TileServer({ port: 8081 }); // Use a different port
 ```
@@ -198,6 +209,7 @@ const server = new TileServer({ port: 8081 }); // Use a different port
 ## Next Steps
 
 After exploring these examples:
+
 1. Check out the [API Documentation](../README.md) for complete reference
 2. Read the [VersaTiles Documentation](https://docs.versatiles.org/) for more information
 3. Try integrating VersaTiles into your own projects
