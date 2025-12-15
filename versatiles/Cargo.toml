@@ -48,7 +48,7 @@ tower = { version = "0.5.2", features = [
 	"limit",
 	"load-shed",
 ], optional = true }
-tower-http = { version = "0.6.7", features = [
+tower-http = { version = "0.6.8", features = [
 	"catch-panic",
 	"cors",
 	"set-header",

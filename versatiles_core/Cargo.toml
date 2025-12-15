@@ -35,7 +35,7 @@ versatiles_derive.workspace = true
 
 [dev-dependencies]
 assert_fs.workspace = true
-criterion = "0.8.0"
+criterion = "0.8.1"
 rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros"] }
