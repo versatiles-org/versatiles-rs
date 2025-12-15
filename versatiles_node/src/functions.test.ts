@@ -139,7 +139,7 @@ describe('Standalone Functions', () => {
 		it('should convert with gzip compression', async () => {
 			const output = path.join(OUTPUT_DIR, 'converted-gzip.versatiles');
 
-			await convertTiles(MBTILES_PATH, output, { compress: 'gzip' });
+			await convertTiles(MBTILES_PATH, output, { compress: 'gzip', maxZoom: 8 });
 
 			expect(fs.existsSync(output)).toBeTruthy();
 
@@ -153,7 +153,7 @@ describe('Standalone Functions', () => {
 		it('should convert with brotli compression', async () => {
 			const output = path.join(OUTPUT_DIR, 'converted-brotli.versatiles');
 
-			await convertTiles(MBTILES_PATH, output, { compress: 'brotli' });
+			await convertTiles(MBTILES_PATH, output, { compress: 'brotli', maxZoom: 8 });
 
 			expect(fs.existsSync(output)).toBeTruthy();
 
@@ -167,7 +167,7 @@ describe('Standalone Functions', () => {
 		it('should convert with uncompressed option', async () => {
 			const output = path.join(OUTPUT_DIR, 'converted-uncompressed.versatiles');
 
-			await convertTiles(MBTILES_PATH, output, { compress: 'uncompressed' });
+			await convertTiles(MBTILES_PATH, output, { compress: 'uncompressed', maxZoom: 8 });
 
 			expect(fs.existsSync(output)).toBeTruthy();
 
