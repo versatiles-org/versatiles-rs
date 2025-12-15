@@ -23,7 +23,7 @@
 mod inner;
 mod progress_bar;
 
-use progress_bar::ProgressBar;
+pub use progress_bar::{ProgressBar, ProgressData};
 
 /// Factory function to create a progress bar or a no-op progress drain based on the build configuration.
 ///
