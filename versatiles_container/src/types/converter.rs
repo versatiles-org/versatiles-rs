@@ -39,7 +39,7 @@
 //! }
 //! ```
 
-use crate::{ContainerRegistry, Tile, TilesReaderTrait};
+use crate::{ContainerRegistry, ProcessingConfig, Tile, TilesReaderTrait};
 use anyhow::Result;
 use async_trait::async_trait;
 use std::path::Path;
@@ -106,6 +106,35 @@ pub async fn convert_tiles_container(
 ) -> Result<()> {
 	let converter = TilesConvertReader::new_from_reader(reader, cp)?;
 	registry.write_to_path(Box::new(converter), path).await
+}
+
+/// Converts tiles with a custom [`ProcessingConfig`] for progress monitoring and other options.
+///
+/// This is similar to [`convert_tiles_container`] but allows passing a custom config
+/// with progress monitoring support.
+///
+/// ### Arguments
+/// - `reader`: Source container reader.
+/// - `cp`: Conversion parameters (bbox filter, compression override, `flip_y`, `swap_xy`).
+/// - `path`: Output path; the format is inferred from its extension (or directory).
+/// - `registry`: Registry that knows how to write the inferred output container.
+/// - `config`: Processing configuration (cache type, progress bar, etc.).
+///
+/// ### Errors
+/// Returns an error if reading tiles fails, if writing to the destination fails,
+/// or if no suitable writer is registered for the output path.
+#[context("Converting tiles from reader to file with config")]
+pub async fn convert_tiles_container_with_config(
+	reader: Box<dyn TilesReaderTrait>,
+	cp: TilesConverterParameters,
+	path: &Path,
+	registry: ContainerRegistry,
+	config: ProcessingConfig,
+) -> Result<()> {
+	let converter = TilesConvertReader::new_from_reader(reader, cp)?;
+	registry
+		.write_to_path_with_config(Box::new(converter), path, config)
+		.await
 }
 
 /// Reader adapter that applies coordinate transforms, bbox filtering, and optional

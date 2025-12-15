@@ -1,4 +1,4 @@
-import { beforeAll, describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { ContainerReader } from '../index.js';
 import path from 'path';
 import fs from 'fs';

@@ -122,7 +122,8 @@ impl TilesWriterTrait for DirectoryTilesWriter {
 						Ok(())
 					})
 				},
-				config,
+				config.clone(),
+				config.progress_bar.clone(),
 			)
 			.await?;
 

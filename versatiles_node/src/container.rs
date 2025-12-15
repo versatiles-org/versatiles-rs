@@ -1,13 +1,14 @@
 use crate::{
 	napi_result,
 	progress::Progress,
+	progress_callback::ProgressCallback,
 	types::{ConvertOptions, ProbeResult, ReaderParameters, parse_compression},
 };
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use versatiles_container::{ContainerRegistry, TilesConverterParameters, TilesReaderTrait, convert_tiles_container};
+use versatiles_container::{ContainerRegistry, ProcessingConfig, TilesConverterParameters, TilesReaderTrait};
 use versatiles_core::{GeoBBox, TileBBoxPyramid, TileCoord as RustTileCoord};
 
 /// Container reader for accessing tile data from various formats
@@ -106,7 +107,7 @@ impl ContainerReader {
 
 			match result {
 				Ok(()) => progress_task.complete(),
-				Err(e) => progress_task.fail(e.into()),
+				Err(e) => progress_task.fail(e),
 			}
 		});
 
@@ -209,9 +210,22 @@ impl ContainerReader {
 		// Clone the reader by re-opening from source
 		let reader_clone = registry.get_reader_from_str(&source_name).await?;
 
-		// TODO: Once Phase 2 is implemented, we'll pass the progress callback here
-		// For now, we just call the regular conversion function
-		convert_tiles_container(reader_clone, params, &output_path, registry).await?;
+		// Create a processing config with progress monitoring if enabled
+		let config = if let Some(ref p) = progress {
+			let progress_callback = ProgressCallback::new("converting tiles", 1000, p.clone());
+			let progress_bar = progress_callback.progress_bar().clone();
+
+			ProcessingConfig {
+				cache_type: versatiles_container::CacheType::new_memory(),
+				progress_bar: Some(progress_bar),
+			}
+		} else {
+			ProcessingConfig::default()
+		};
+
+		// Use the new function that accepts a ProcessingConfig
+		versatiles_container::convert_tiles_container_with_config(reader_clone, params, &output_path, registry, config)
+			.await?;
 
 		Ok(())
 	}

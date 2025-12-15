@@ -212,7 +212,8 @@ impl TilesWriterTrait for MBTilesWriter {
 						Ok(())
 					})
 				},
-				config,
+				config.clone(),
+				config.progress_bar.clone(),
 			)
 			.await?;
 

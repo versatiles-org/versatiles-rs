@@ -13,6 +13,9 @@ use std::cmp::min;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+/// Type alias for the progress callback function
+type ProgressCallback = Arc<Mutex<Option<Box<dyn Fn(ProgressData) + Send + Sync>>>>;
+
 /// Progress data that can be extracted from a progress bar
 #[derive(Debug, Clone)]
 pub struct ProgressData {
@@ -27,7 +30,7 @@ pub struct ProgressData {
 /// A terminal progress bar handle, cloneable and thread-safe.
 pub struct ProgressBar {
 	inner: Arc<Mutex<Inner>>,
-	callback: Arc<Mutex<Option<Box<dyn Fn(ProgressData) + Send + Sync>>>>,
+	callback: ProgressCallback,
 }
 
 impl Default for ProgressBar {

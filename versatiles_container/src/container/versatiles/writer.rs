@@ -201,7 +201,8 @@ impl VersaTilesWriter {
 						Ok(())
 					})
 				},
-				config,
+				config.clone(),
+				config.progress_bar.clone(),
 			)
 			.await?;
 

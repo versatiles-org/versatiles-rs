@@ -96,7 +96,8 @@ impl TilesWriterTrait for TarTilesWriter {
 						Ok(())
 					})
 				},
-				config,
+				config.clone(),
+				config.progress_bar.clone(),
 			)
 			.await?;
 

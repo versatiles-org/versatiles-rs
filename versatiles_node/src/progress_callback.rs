@@ -55,31 +55,37 @@ impl ProgressCallback {
 	}
 
 	/// Increment the progress
+	#[allow(dead_code)]
 	pub fn inc(&self, value: u64) {
 		self.progress_bar.inc(value);
 	}
 
 	/// Set the absolute position
+	#[allow(dead_code)]
 	pub fn set_position(&self, value: u64) {
 		self.progress_bar.set_position(value);
 	}
 
 	/// Set the maximum value
+	#[allow(dead_code)]
 	pub fn set_max_value(&self, value: u64) {
 		self.progress_bar.set_max_value(value);
 	}
 
 	/// Emit a step change event
+	#[allow(dead_code)]
 	pub fn emit_step(&self, message: &str) {
 		self.js_progress.emit_step(message.to_string());
 	}
 
 	/// Emit a warning
+	#[allow(dead_code)]
 	pub fn emit_warning(&self, message: &str) {
 		self.js_progress.emit_warning(message.to_string());
 	}
 
 	/// Finish the progress and mark as complete
+	#[allow(dead_code)]
 	pub fn finish(&self) {
 		self.progress_bar.finish();
 
@@ -91,6 +97,7 @@ impl ProgressCallback {
 	}
 
 	/// Fail the progress with an error
+	#[allow(dead_code)]
 	pub fn fail(&self, error: anyhow::Error) {
 		self.js_progress.fail(error);
 	}

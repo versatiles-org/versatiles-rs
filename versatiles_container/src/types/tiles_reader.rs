@@ -38,7 +38,9 @@ use tokio::sync::Mutex;
 use versatiles_core::{ProbeDepth, utils::PrettyPrint};
 use versatiles_core::{
 	TileBBox, TileCompression, TileCoord, TileJSON, TileStream, TilesReaderParameters, Traversal,
-	TraversalTranslationStep, progress::get_progress_bar, translate_traversals,
+	TraversalTranslationStep,
+	progress::{ProgressBar, get_progress_bar},
+	translate_traversals,
 };
 
 /// Object‑safe interface for reading tiles from a container.
@@ -219,13 +221,15 @@ pub trait TilesReaderTraverseExt: TilesReaderTrait {
 	/// * `traversal_write` — desired traversal to write/consume in.
 	/// * `callback` — async function to consume each bbox + stream.
 	/// * `config` — processing configuration (also used to size caches).
+	/// * `progress_bar` — optional progress bar for custom progress monitoring.
 	///
-	/// Progress is reported via a progress bar; caching is used to support `Push/Pop` phases.
+	/// Progress is reported via a progress bar (either provided or created); caching is used to support `Push/Pop` phases.
 	fn traverse_all_tiles<'s, 'a, C>(
 		&'s self,
 		traversal_write: &'s Traversal,
 		mut callback: C,
 		config: ProcessingConfig,
+		progress_bar: Option<ProgressBar>,
 	) -> impl core::future::Future<Output = Result<()>> + Send + 'a
 	where
 		C: FnMut(TileBBox, TileStream<'a, Tile>) -> BoxFuture<'a, Result<()>> + Send + 'a,
@@ -254,7 +258,8 @@ pub trait TilesReaderTraverseExt: TilesReaderTrait {
 					}
 				}
 			}
-			let progress = get_progress_bar("converting tiles", u64::midpoint(tn_read, tn_write));
+			let progress =
+				progress_bar.unwrap_or_else(|| get_progress_bar("converting tiles", u64::midpoint(tn_read, tn_write)));
 
 			let mut ti_read = 0;
 			let mut ti_write = 0;

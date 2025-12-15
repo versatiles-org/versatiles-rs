@@ -76,7 +76,16 @@ impl Progress {
 			completion_rx: Arc::new(Mutex::new(Some(rx))),
 		}
 	}
+}
 
+impl Default for Progress {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
+#[napi]
+impl Progress {
 	/// Register an event listener
 	///
 	/// Supported events:
