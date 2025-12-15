@@ -35,8 +35,7 @@ ${BLU}Available Checks:${END}
   lib-cli             Check library with CLI features only
   lib-server          Check library with server features only
   lib-test            Check library with test features
-  lib-gdal            Check library with GDAL features
-  lib-bindgen         Check library with GDAL + bindgen features
+  lib-gdal            Check library with GDAL features (requires bindgen)
   lib-all             Check library with all features
   all                 Run all checks (default)
 
@@ -206,17 +205,13 @@ run_check "lib-cli" \
 
 run_check "lib-server" \
 	"Unused dependencies for library (server features only)" \
-	--lib --workspace --no-default-features --features server --exclude versatiles
+	--lib --package versatiles --no-default-features --features server
 
 run_check "lib-test" \
 	"Unused dependencies for library (test features)" \
 	--lib --workspace --no-default-features --features test
 
 run_check "lib-gdal" \
-	"Unused dependencies for library (GDAL features)" \
-	--lib --workspace --no-default-features --features gdal
-
-run_check "lib-bindgen" \
 	"Unused dependencies for library (GDAL with bindgen features)" \
 	--lib --workspace --no-default-features --features gdal,bindgen
 
