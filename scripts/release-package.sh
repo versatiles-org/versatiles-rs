@@ -17,6 +17,10 @@ fi
 # build readme docs
 ./scripts/build-docs-readme.sh
 
+# check version synchronization
+echo "Checking version synchronization..."
+./scripts/sync-version.sh --fix
+
 # check if git is clean
 if [ -n "$(git status --porcelain)" ]; then
 	echo -e "${RED}❗️ Git is not clean!${END}"
@@ -35,3 +39,9 @@ fi
 
 # execute the release
 cargo release "$1" --no-verify --sign-commit --workspace --execute
+
+# commit package.json if it was updated by cargo-release
+if [ -n "$(git status --porcelain versatiles_node/package.json)" ]; then
+	git add versatiles_node/package.json
+	git commit --amend --no-edit --no-verify
+fi

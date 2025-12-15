@@ -35,8 +35,24 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  pre-flight-checks:
+    name: Pre-flight checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check version synchronization
+        run: ./scripts/sync-version.sh
+
   prepare:
     name: Prepare release
+    needs: pre-flight-checks
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.create_release.outputs.tag }}
@@ -245,6 +261,159 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: scripts\workflow-pack-upload.ps1 "target\${{ matrix.arch }}-pc-windows-msvc\release" "windows-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
 
+  package-npm-binaries:
+    name: Package npm binaries
+    needs:
+      - prepare
+      - build-linux-x86
+      - build-linux-arm
+      - build-macos
+      - build-windows
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: ./versatiles_node
+        run: npm ci
+
+      - name: Download all release artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p artifacts
+          gh release download "${{ needs.prepare.outputs.tag }}" -D artifacts/
+
+      - name: Extract and rename binaries for NAPI
+        run: |
+          cd artifacts
+
+          # Extract all tarballs
+          for archive in *.tar.gz; do
+            echo "Extracting $archive"
+            tar -xzf "$archive"
+          done
+
+          # Map to NAPI naming convention: versatiles.{platform}-{arch}[-{abi}].node
+          cd ..
+          mkdir -p napi-binaries
+
+          # Function to extract and rename
+          extract_and_rename() {
+            local archive=$1
+            local target_name=$2
+            local binary_name=$3
+
+            cd artifacts
+            if [ -f "$binary_name" ]; then
+              mv "$binary_name" "../napi-binaries/$target_name"
+              chmod +x "../napi-binaries/$target_name" 2>/dev/null || true
+            fi
+            cd ..
+          }
+
+          # Linux
+          extract_and_rename "versatiles-linux-gnu-x86_64.tar.gz" "versatiles.linux-x64-gnu.node" "versatiles"
+          extract_and_rename "versatiles-linux-musl-x86_64.tar.gz" "versatiles.linux-x64-musl.node" "versatiles"
+          extract_and_rename "versatiles-linux-gnu-aarch64.tar.gz" "versatiles.linux-arm64-gnu.node" "versatiles"
+          extract_and_rename "versatiles-linux-musl-aarch64.tar.gz" "versatiles.linux-arm64-musl.node" "versatiles"
+
+          # macOS
+          extract_and_rename "versatiles-macos-x86_64.tar.gz" "versatiles.darwin-x64.node" "versatiles"
+          extract_and_rename "versatiles-macos-aarch64.tar.gz" "versatiles.darwin-arm64.node" "versatiles"
+
+          # Windows
+          extract_and_rename "versatiles-windows-x86_64.tar.gz" "versatiles.win32-x64-msvc.node" "versatiles.exe"
+          extract_and_rename "versatiles-windows-aarch64.tar.gz" "versatiles.win32-arm64-msvc.node" "versatiles.exe"
+
+          # Move to versatiles_node directory
+          mv napi-binaries/*.node versatiles_node/
+          ls -lah versatiles_node/*.node
+
+      - name: Generate platform packages
+        working-directory: ./versatiles_node
+        run: |
+          npm run artifacts
+          ls -lah npm/
+
+      - name: Upload npm packages as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-packages
+          path: versatiles_node/npm/*.tgz
+          retention-days: 7
+
+  publish-npm:
+    name: Publish to npm
+    needs: package-npm-binaries
+    runs-on: ubuntu-latest
+    # Only publish on actual tag pushes
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        working-directory: ./versatiles_node
+        run: npm ci
+
+      - name: Download npm packages
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-packages
+          path: versatiles_node/npm
+
+      - name: Validate package version
+        working-directory: ./versatiles_node
+        run: |
+          TAG_VERSION="${{ needs.prepare.outputs.tag }}"
+          TAG_VERSION="${TAG_VERSION#v}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "ERROR: package.json version ($PKG_VERSION) doesn't match tag ($TAG_VERSION)"
+            exit 1
+          fi
+          echo "✓ Version validated"
+
+      - name: Publish platform packages
+        working-directory: ./versatiles_node
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          for pkg in npm/*.tgz; do
+            echo "Publishing $pkg"
+            npm publish "$pkg" --access public --provenance
+          done
+
+      - name: Prepare main package
+        working-directory: ./versatiles_node
+        run: npm run prepublishOnly
+
+      - name: Publish main package
+        working-directory: ./versatiles_node
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --provenance
+
+      - name: Verify publication
+        run: |
+          sleep 10
+          npm view @versatiles/versatiles-rs version
+          npm view @versatiles/versatiles-rs-darwin-arm64 version
+
   finish-release:
     name: Finish release
     needs:
@@ -253,6 +422,7 @@ jobs:
       - build-linux-arm
       - build-macos
       - build-windows
+      - publish-npm
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code

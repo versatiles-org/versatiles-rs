@@ -266,6 +266,26 @@ For advanced usage, guides, and detailed documentation, visit the [official docu
 
 ---
 
+## For Maintainers
+
+### Creating a Release
+
+See [RELEASING.md](./RELEASING.md) for the complete release process.
+
+Quick version:
+```bash
+./scripts/release-package.sh patch  # or minor/major
+git push origin main --follow-tags
+```
+
+The GitHub Actions workflow will automatically:
+- Build binaries for 8 platforms (Linux gnu/musl x64/arm64, macOS x64/arm64, Windows x64/arm64)
+- Publish to npmjs.com (@versatiles/versatiles-rs + platform-specific packages)
+- Create GitHub release with binaries
+- Trigger Docker and Homebrew updates
+
+---
+
 ## Contributing
 
 VersaTiles is actively developed, and contributions are welcome! If you find bugs, need features, or want to contribute, please check the [GitHub repository](https://github.com/versatiles-org/versatiles-rs) and submit an issue or pull request.
