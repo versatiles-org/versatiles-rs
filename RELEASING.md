@@ -10,6 +10,9 @@ git pull origin main
 ```
 
 ### 2. Create Release
+
+#### Stable Releases
+
 ```bash
 # Patch release (2.3.1 → 2.3.2)
 ./scripts/release-package.sh patch
@@ -19,6 +22,50 @@ git pull origin main
 
 # Major release (2.3.1 → 3.0.0)
 ./scripts/release-package.sh major
+```
+
+#### Prerelease Versions
+
+**Alpha releases** (early development, unstable):
+```bash
+# First alpha from 2.3.1 → 2.4.0-alpha.1
+./scripts/release-package.sh alpha
+
+# Increment alpha → 2.4.0-alpha.2
+./scripts/release-package.sh alpha
+```
+
+**Beta releases** (feature complete, testing):
+```bash
+# From alpha to beta: 2.4.0-alpha.2 → 2.4.0-beta.1
+./scripts/release-package.sh beta
+
+# Increment beta → 2.4.0-beta.2
+./scripts/release-package.sh beta
+```
+
+**Release candidates** (final testing):
+```bash
+# From beta to rc: 2.4.0-beta.2 → 2.4.0-rc.1
+./scripts/release-package.sh rc
+
+# Increment rc → 2.4.0-rc.2
+./scripts/release-package.sh rc
+```
+
+**Dev releases** (daily builds, experiments):
+```bash
+# Create dev release: 2.3.1 → 2.4.0-dev.1
+./scripts/release-package.sh dev
+
+# Increment dev → 2.4.0-dev.2
+./scripts/release-package.sh dev
+```
+
+**Graduating to stable**:
+```bash
+# From rc to stable: 2.4.0-rc.1 → 2.4.0
+./scripts/release-package.sh patch
 ```
 
 This script will:
@@ -53,6 +100,44 @@ npm view @versatiles/versatiles-rs-linux-x64-gnu
 
 # Check GitHub
 gh release view v2.3.2
+```
+
+## Prerelease Publishing Behavior
+
+When you publish a prerelease version:
+
+### npm Distribution
+- **Alpha**: Published with `--tag alpha`
+  - Install: `npm install @versatiles/versatiles-rs@alpha`
+- **Beta**: Published with `--tag beta`
+  - Install: `npm install @versatiles/versatiles-rs@beta`
+- **RC**: Published with `--tag rc`
+  - Install: `npm install @versatiles/versatiles-rs@rc`
+- **Dev**: Published with `--tag dev`
+  - Install: `npm install @versatiles/versatiles-rs@dev`
+- **Stable**: Published with `--tag latest` (default)
+  - Install: `npm install @versatiles/versatiles-rs`
+
+### GitHub Release
+- Marked as "Pre-release" (not "Latest")
+- CLI binaries available for download
+- Does not update "latest" release badge
+
+### Docker & Homebrew
+- **Skipped for all prereleases**
+- Only triggered on stable releases
+
+### Version Examples
+
+```bash
+# List all versions including prereleases
+npm view @versatiles/versatiles-rs versions
+
+# Get current alpha version
+npm view @versatiles/versatiles-rs@alpha version
+
+# Install specific prerelease
+npm install @versatiles/versatiles-rs@2.4.0-beta.2
 ```
 
 ## Manual npm Publish (Fallback)
@@ -92,8 +177,28 @@ npm publish --access public
 - **Patch** (x.y.Z): Bug fixes, small improvements
 - **Minor** (x.Y.0): New features, backward compatible
 - **Major** (X.0.0): Breaking changes
+- **Alpha** (x.y.z-alpha.N): Early development, unstable API
+- **Beta** (x.y.z-beta.N): Feature complete, testing phase
+- **RC** (x.y.z-rc.N): Release candidate, final testing
+- **Dev** (x.y.z-dev.N): Daily builds, experimental features
 
-We follow Semantic Versioning 2.0.0.
+We follow Semantic Versioning 2.0.0 with prerelease identifiers.
+
+### Typical Prerelease Progression
+
+```
+2.3.1 (stable)
+  ↓ alpha
+2.4.0-alpha.1
+  ↓ alpha (increment)
+2.4.0-alpha.2
+  ↓ beta (graduate)
+2.4.0-beta.1
+  ↓ rc (graduate)
+2.4.0-rc.1
+  ↓ patch (graduate to stable)
+2.4.0 (stable)
+```
 
 ## Troubleshooting
 

@@ -91,6 +91,34 @@ Pull the latest [Docker image](https://github.com/versatiles-org/versatiles-dock
 docker pull versatiles-org/versatiles
 ```
 
+### npm (Node.js)
+
+Install the Node.js bindings for use in JavaScript/TypeScript projects:
+
+```sh
+npm install @versatiles/versatiles-rs
+```
+
+#### Prerelease Versions
+
+Test upcoming features with prerelease tags:
+
+```sh
+# Alpha (bleeding edge)
+npm install @versatiles/versatiles-rs@alpha
+
+# Beta (feature complete, testing)
+npm install @versatiles/versatiles-rs@beta
+
+# Release Candidate (final testing)
+npm install @versatiles/versatiles-rs@rc
+```
+
+See all available versions:
+```sh
+npm view @versatiles/versatiles-rs versions
+```
+
 ### Building with Cargo
 
 Ensure you have [Rust installed](https://doc.rust-lang.org/cargo/getting-started/installation.html), then run:
