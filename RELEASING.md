@@ -11,7 +11,32 @@ git pull origin main
 
 ### 2. Create Release
 
-#### Stable Releases
+You can either provide the release type as an argument, or run the script without arguments for an interactive menu.
+
+#### Interactive Mode
+
+```bash
+# Run without arguments to see interactive menu
+./scripts/release-package.sh
+
+# You'll see:
+# Select release type:
+#
+# 1) patch   - Bug fixes, small improvements (x.y.Z)
+# 2) minor   - New features, backward compatible (x.Y.0)
+# 3) major   - Breaking changes (X.0.0)
+# 4) alpha   - Early development, unstable API (x.y.z-alpha.N)
+# 5) beta    - Feature complete, testing phase (x.y.z-beta.N)
+# 6) rc      - Release candidate, final testing (x.y.z-rc.N)
+# 7) dev     - Daily builds, experimental features (x.y.z-dev.N)
+# 8) Cancel
+#
+# Enter selection number:
+```
+
+#### Command-Line Mode
+
+##### Stable Releases
 
 ```bash
 # Patch release (2.3.1 → 2.3.2)
@@ -24,7 +49,7 @@ git pull origin main
 ./scripts/release-package.sh major
 ```
 
-#### Prerelease Versions
+##### Prerelease Versions
 
 **Alpha releases** (early development, unstable):
 ```bash

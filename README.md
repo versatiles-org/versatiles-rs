@@ -302,7 +302,13 @@ See [RELEASING.md](./RELEASING.md) for the complete release process.
 
 Quick version:
 ```bash
-./scripts/release-package.sh patch  # or minor/major
+# Interactive mode - select release type from menu
+./scripts/release-package.sh
+
+# Or use command-line argument
+./scripts/release-package.sh patch  # or minor/major/alpha/beta/rc/dev
+
+# Push to trigger automated release
 git push origin main --follow-tags
 ```
 
