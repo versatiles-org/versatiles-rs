@@ -35,10 +35,11 @@ git push origin main --follow-tags
 
 This triggers GitHub Actions which will:
 - Validate version synchronization
-- Build all platform binaries (Linux gnu/musl x64/arm64, macOS x64/arm64, Windows x64/arm64)
-- Package npm binaries using NAPI-RS
+- Build CLI binaries for 8 platforms (Linux gnu/musl x64/arm64, macOS x64/arm64, Windows x64/arm64)
+- Build NAPI-RS bindings for Node.js (8 platform-specific .node files)
+- Upload CLI binaries to GitHub release
+- Package NAPI bindings using NAPI-RS
 - Publish to npmjs.com (main package + 8 platform-specific packages)
-- Create GitHub release
 - Trigger Docker and Homebrew workflows
 
 ### 4. Verify
@@ -56,7 +57,7 @@ gh release view v2.3.2
 
 ## Manual npm Publish (Fallback)
 
-If automated publishing fails:
+If automated publishing fails, you'll need to rebuild the NAPI bindings locally for each platform:
 
 ```bash
 cd versatiles_node
@@ -64,19 +65,15 @@ cd versatiles_node
 # Ensure versions match
 npm version $(grep -m1 '^version = ' ../Cargo.toml | sed 's/version = "\(.*\)"/\1/') --no-git-tag-version
 
-# Download binaries from GitHub release
-TAG=v2.3.2
-gh release download "$TAG" -D ../artifacts/
+# Build for your current platform (example for macOS ARM64)
+npm run build
 
-# Extract and rename to .node files
-cd ../artifacts
-for archive in *.tar.gz; do tar -xzf "$archive"; done
+# For cross-platform builds, you'll need:
+# - Linux: Docker or cross-compilation toolchain
+# - macOS: Access to both x64 and ARM64 machines
+# - Windows: Windows build environment or cross-compilation
 
-# Place in versatiles_node/ with correct names
-# (See workflow for naming convention)
-
-# Generate platform packages
-cd ../versatiles_node
+# Once all .node files are in versatiles_node/, generate platform packages
 npm run artifacts
 
 # Publish
@@ -87,6 +84,8 @@ done
 npm run prepublishOnly
 npm publish --access public
 ```
+
+**Note:** Manual cross-platform building is complex. If only some platforms failed, you can download the successful `.node` files from the workflow artifacts in GitHub Actions.
 
 ## Version Strategy
 

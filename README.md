@@ -279,9 +279,10 @@ git push origin main --follow-tags
 ```
 
 The GitHub Actions workflow will automatically:
-- Build binaries for 8 platforms (Linux gnu/musl x64/arm64, macOS x64/arm64, Windows x64/arm64)
-- Publish to npmjs.com (@versatiles/versatiles-rs + platform-specific packages)
-- Create GitHub release with binaries
+- Build CLI binaries for 8 platforms (Linux gnu/musl x64/arm64, macOS x64/arm64, Windows x64/arm64)
+- Build NAPI-RS bindings for Node.js (8 platform-specific packages)
+- Publish to npmjs.com (@versatiles/versatiles-rs + 8 platform-specific packages)
+- Create GitHub release with CLI binaries
 - Trigger Docker and Homebrew updates
 
 ---
