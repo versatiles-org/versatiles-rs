@@ -33,7 +33,7 @@ time = { version = "0.3.44", default-features = false, features = [
 	"local-offset",
 ] }
 tokio = { workspace = true, features = ["macros", "rt"] }
-uuid = { version = "1.18.1", features = ["v4"] }
+uuid = { version = "1.19.0", features = ["v4"] }
 
 versatiles_core = { workspace = true, default-features = false }
 versatiles_derive.workspace = true

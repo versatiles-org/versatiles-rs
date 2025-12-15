@@ -9,7 +9,7 @@ $FILENAME = "versatiles-" + $args[1]
 $TAG = $args[2]
 
 #Change to the specified directory
-Set-Location -Path $FOLDER
+Set-Location -Path "$FOLDER\cli"
 
 Write-Host "Create a tarball ..."
 tar -cf "$FILENAME.tar" "versatiles.exe"

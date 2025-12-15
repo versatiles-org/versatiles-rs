@@ -9,6 +9,7 @@
 
 use crate::CacheType;
 use std::sync::Arc;
+use versatiles_core::progress::ProgressBar;
 
 /// Configuration parameters controlling data processing behavior.
 ///
@@ -22,10 +23,21 @@ use std::sync::Arc;
 /// let config = ProcessingConfig::default();
 /// let config_arc = config.arc();
 /// ```
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ProcessingConfig {
 	/// The type of cache backend to use for tile data.
 	pub cache_type: CacheType,
+	/// Optional progress bar for monitoring tile processing progress.
+	pub progress_bar: Option<ProgressBar>,
+}
+
+impl std::fmt::Debug for ProcessingConfig {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("ProcessingConfig")
+			.field("cache_type", &self.cache_type)
+			.field("progress_bar", &self.progress_bar.as_ref().map(|_| "Some(ProgressBar)"))
+			.finish()
+	}
 }
 
 impl ProcessingConfig {
@@ -42,11 +54,12 @@ impl ProcessingConfig {
 
 /// Provides a reasonable default configuration.
 ///
-/// Uses an in-memory cache backend by default.
+/// Uses an in-memory cache backend by default and no progress monitoring.
 impl Default for ProcessingConfig {
 	fn default() -> Self {
 		Self {
 			cache_type: CacheType::new_memory(),
+			progress_bar: None,
 		}
 	}
 }

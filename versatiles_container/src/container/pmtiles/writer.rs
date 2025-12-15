@@ -117,7 +117,8 @@ impl TilesWriterTrait for PMTilesWriter {
 						Ok(())
 					})
 				},
-				config,
+				config.clone(),
+				config.progress_bar.clone(),
 			)
 			.await?;
 

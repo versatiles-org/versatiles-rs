@@ -1,35 +1,96 @@
 //! Router composition for the VersaTiles server.
 //!
 //! This module wires handlers into an Axum `Router` without mixing in server
-//! lifecycle or CORS logic. It’s intentionally tiny and declarative.
+//! lifecycle or CORS logic. It's intentionally tiny and declarative.
 
 use super::{
-	handlers::{StaticHandlerState, TileHandlerState, ok_json, serve_static, serve_tile},
+	handlers::{StaticHandlerState, error_404, ok_json, serve_static, serve_tile_from_source},
 	sources::{StaticSource, TileSource},
+	utils::Url,
 };
 use anyhow::Result;
-use axum::{Router, routing::get};
+use axum::{
+	Router,
+	body::Body,
+	extract::State,
+	http::{HeaderMap, Uri},
+	response::Response,
+	routing::get,
+};
+use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use versatiles_derive::context;
 
-/// Attach all tile sources under their prefixes (`/tiles/<id>/{*path}`).
-pub fn add_tile_sources_to_app(mut app: Router, sources: &[TileSource], minimal_recompression: bool) -> Router {
-	for tile_source in sources.iter() {
-		let state = TileHandlerState {
-			tile_source: tile_source.clone(),
-			minimal_recompression,
-		};
-		let route = tile_source.prefix.join_as_string("{*path}");
-		let tile_app = Router::new().route(&route, get(serve_tile)).with_state(state);
-		app = app.merge(tile_app);
+/// State for dynamic tile routing - looks up sources at request time.
+#[derive(Clone)]
+pub struct DynamicTileHandlerState {
+	pub tile_sources: Arc<RwLock<HashMap<String, Arc<TileSource>>>>,
+	pub minimal_recompression: bool,
+}
+
+/// Dynamic tile handler that extracts source_id from the path and looks it up.
+pub async fn serve_dynamic_tile(
+	uri: Uri,
+	headers: HeaderMap,
+	State(state): State<DynamicTileHandlerState>,
+) -> Response<Body> {
+	let path = Url::from(uri.path());
+	log::debug!("handle dynamic tile request: {path}");
+
+	let parts = path.as_vec();
+
+	// Extract source_id from /tiles/{source_id}/...
+	if parts.len() < 2 || parts[0] != "tiles" {
+		log::debug!("invalid tile path format: {path}");
+		return error_404();
 	}
-	app
+
+	let source_id = &parts[1];
+
+	// Lookup source (read lock)
+	let sources = state.tile_sources.read().await;
+	let tile_source = match sources.get(source_id) {
+		Some(src) => Arc::clone(src),
+		None => {
+			log::debug!("tile source '{}' not found", source_id);
+			drop(sources); // release lock before returning
+			return error_404();
+		}
+	};
+	drop(sources); // Release lock ASAP
+
+	// Delegate to core serving logic
+	serve_tile_from_source(path, headers, tile_source, state.minimal_recompression).await
+}
+
+/// Attach dynamic tile routing with single catch-all route.
+pub fn add_tile_sources_to_app(
+	app: Router,
+	sources: Arc<RwLock<HashMap<String, Arc<TileSource>>>>,
+	minimal_recompression: bool,
+) -> Router {
+	let state = DynamicTileHandlerState {
+		tile_sources: sources,
+		minimal_recompression,
+	};
+
+	let tile_router = Router::new()
+		.route("/tiles/{*path}", get(serve_dynamic_tile))
+		.with_state(state);
+
+	app.merge(tile_router)
 }
 
 /// Attach static sources as a catch-all fallback.
 /// Sources are checked in order; the first one returning data wins.
-pub fn add_static_sources_to_app(app: Router, static_sources: &[StaticSource], minimal_recompression: bool) -> Router {
+pub fn add_static_sources_to_app(
+	app: Router,
+	static_sources: Arc<RwLock<Vec<StaticSource>>>,
+	minimal_recompression: bool,
+) -> Router {
 	let state = StaticHandlerState {
-		sources: static_sources.to_vec(),
+		sources: static_sources,
 		minimal_recompression,
 	};
 	let static_app = Router::new().fallback(get(serve_static)).with_state(state);
@@ -38,24 +99,23 @@ pub fn add_static_sources_to_app(app: Router, static_sources: &[StaticSource], m
 
 /// Attach small JSON API endpoints (currently `/tiles/index.json`).
 #[context("adding API routes to app")]
-pub async fn add_api_to_app(app: Router, sources: &[TileSource]) -> Result<Router> {
+pub async fn add_api_to_app(app: Router, sources: Arc<RwLock<HashMap<String, Arc<TileSource>>>>) -> Result<Router> {
 	let mut api_app = Router::new();
-
-	// Precompute a tiny JSON list of source IDs to avoid recomputing on each request.
-	let tiles_index_json: String = format!(
-		"[{}]",
-		sources
-			.iter()
-			.map(|s| format!("\"{}\"", s.id))
-			.collect::<Vec<String>>()
-			.join(","),
-	);
 
 	api_app = api_app.route(
 		"/tiles/index.json",
 		get({
-			let tiles_index_json = tiles_index_json.clone();
-			move || async move { ok_json(&tiles_index_json) }
+			let sources = Arc::clone(&sources);
+			move || async move {
+				let sources_lock = sources.read().await;
+				let mut ids: Vec<_> = sources_lock.keys().map(|s| s.as_str()).collect();
+				ids.sort();
+				let tiles_index_json = format!(
+					"[{}]",
+					ids.iter().map(|id| format!("\"{}\"", id)).collect::<Vec<_>>().join(",")
+				);
+				ok_json(&tiles_index_json)
+			}
 		}),
 	);
 
@@ -80,7 +140,8 @@ mod tests {
 	#[tokio::test]
 	async fn api_index_json_is_precomputed_and_empty_when_no_sources() {
 		let app = Router::new();
-		let app = add_api_to_app(app, &[]).await.unwrap();
+		let sources = Arc::new(RwLock::new(HashMap::new()));
+		let app = add_api_to_app(app, sources).await.unwrap();
 
 		let (status, body) = get_body_text(app, "/tiles/index.json").await;
 		assert_eq!(status, StatusCode::OK);
@@ -90,7 +151,8 @@ mod tests {
 	#[tokio::test]
 	async fn no_tile_sources_yields_404() {
 		let app = Router::new();
-		let app = add_tile_sources_to_app(app, &[], false);
+		let sources = Arc::new(RwLock::new(HashMap::new()));
+		let app = add_tile_sources_to_app(app, sources, false);
 
 		let (status, _body) = get_body_text(app, "/tiles/any/1/2/3").await;
 		assert_eq!(status, StatusCode::NOT_FOUND);
@@ -99,7 +161,8 @@ mod tests {
 	#[tokio::test]
 	async fn no_static_sources_yields_404() {
 		let app = Router::new();
-		let app = add_static_sources_to_app(app, &[], false);
+		let static_sources = Arc::new(RwLock::new(Vec::new()));
+		let app = add_static_sources_to_app(app, static_sources, false);
 
 		let (status, _body) = get_body_text(app, "/").await;
 		assert_eq!(status, StatusCode::NOT_FOUND);

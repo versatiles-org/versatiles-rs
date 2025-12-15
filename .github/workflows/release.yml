@@ -35,20 +35,65 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  pre-flight-checks:
+    name: Pre-flight checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Check version synchronization
+        run: ./scripts/sync-version.sh
+
   prepare:
     name: Prepare release
+    needs: pre-flight-checks
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.create_release.outputs.tag }}
+      is_prerelease: ${{ steps.detect_prerelease.outputs.is_prerelease }}
+      npm_tag: ${{ steps.detect_prerelease.outputs.npm_tag }}
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - id: create_release
         name: Get version via latest git tag
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-create-release.sh
+
+      - id: detect_prerelease
+        name: Detect prerelease type
+        run: |
+          TAG="${{ steps.create_release.outputs.tag }}"
+
+          # Check if tag contains prerelease identifier
+          if [[ "$TAG" =~ -alpha ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "npm_tag=alpha" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" =~ -beta ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "npm_tag=beta" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" =~ -rc ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "npm_tag=rc" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" =~ -dev ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "npm_tag=dev" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            echo "npm_tag=latest" >> $GITHUB_OUTPUT
+          fi
+
+          echo "Release: $TAG"
+          echo "Prerelease: $(grep is_prerelease $GITHUB_OUTPUT | cut -d= -f2)"
+          echo "npm tag: $(grep npm_tag $GITHUB_OUTPUT | cut -d= -f2)"
 
   build-linux-arm:
     name: Build Linux ARM
@@ -67,7 +112,7 @@ jobs:
 
       - name: Checkout code
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Login to Docker Hub
         if: env.BUILD_ENABLED == 'true'
@@ -94,11 +139,19 @@ jobs:
             --output="type=local,dest=output/" \
             .
 
-      - name: Pack and upload
+      - name: Pack and upload CLI binary
         if: env.BUILD_ENABLED == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-pack-upload.sh "output" "linux-${{ matrix.libc }}-aarch64" "${{ needs.prepare.outputs.tag }}"
+
+      - name: Upload NAPI binding as artifact
+        if: env.BUILD_ENABLED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-binding-linux-${{ matrix.libc }}-aarch64
+          path: output/node/libversatiles_node.so
+          retention-days: 1
 
   build-linux-x86:
     name: Build Linux x86
@@ -117,7 +170,7 @@ jobs:
 
       - name: Checkout code
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Login to Docker Hub
         if: env.BUILD_ENABLED == 'true'
@@ -144,11 +197,19 @@ jobs:
             --output="type=local,dest=output/" \
             .
 
-      - name: Pack and upload
+      - name: Pack and upload CLI binary
         if: env.BUILD_ENABLED == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-pack-upload.sh "output" "linux-${{ matrix.libc }}-x86_64" "${{ needs.prepare.outputs.tag }}"
+
+      - name: Upload NAPI binding as artifact
+        if: env.BUILD_ENABLED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-binding-linux-${{ matrix.libc }}-x86_64
+          path: output/node/libversatiles_node.so
+          retention-days: 1
 
   build-macos:
     name: Build MacOS
@@ -167,7 +228,7 @@ jobs:
 
       - name: Checkout code
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         if: env.BUILD_ENABLED == 'true'
@@ -187,15 +248,35 @@ jobs:
           cargo test --bins
           cargo test --lib
 
-      - name: Build Binary
+      - name: Build CLI Binary
         if: env.BUILD_ENABLED == 'true'
         run: cargo build --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-apple-darwin"
 
-      - name: Pack and upload
+      - name: Build NAPI Binding
+        if: env.BUILD_ENABLED == 'true'
+        run: cargo build --package "versatiles_node" --release --target "${{ matrix.arch }}-apple-darwin"
+
+      - name: Prepare release structure
+        if: env.BUILD_ENABLED == 'true'
+        run: |
+          mkdir -p "target/${{ matrix.arch }}-apple-darwin/release/cli"
+          mkdir -p "target/${{ matrix.arch }}-apple-darwin/release/node"
+          cp "target/${{ matrix.arch }}-apple-darwin/release/versatiles" "target/${{ matrix.arch }}-apple-darwin/release/cli/"
+          cp "target/${{ matrix.arch }}-apple-darwin/release/libversatiles_node.dylib" "target/${{ matrix.arch }}-apple-darwin/release/node/"
+
+      - name: Pack and upload CLI binary
         if: env.BUILD_ENABLED == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-pack-upload.sh "target/${{ matrix.arch }}-apple-darwin/release" "macos-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
+
+      - name: Upload NAPI binding as artifact
+        if: env.BUILD_ENABLED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-binding-macos-${{ matrix.arch }}
+          path: target/${{ matrix.arch }}-apple-darwin/release/node/libversatiles_node.dylib
+          retention-days: 1
 
   build-windows:
     name: Build Windows
@@ -214,7 +295,7 @@ jobs:
 
       - name: Checkout code
         if: env.BUILD_ENABLED == 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Install Rust toolchain
         if: env.BUILD_ENABLED == 'true'
@@ -234,19 +315,40 @@ jobs:
           cargo test --bins
           cargo test --lib
 
-      - name: Build binary
+      - name: Build CLI binary
         if: env.BUILD_ENABLED == 'true'
         run: cargo build --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-pc-windows-msvc"
 
-      - name: Pack and upload
+      - name: Build NAPI binding
+        if: env.BUILD_ENABLED == 'true'
+        run: cargo build --package "versatiles_node" --release --target "${{ matrix.arch }}-pc-windows-msvc"
+
+      - name: Prepare release structure
+        if: env.BUILD_ENABLED == 'true'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "target\${{ matrix.arch }}-pc-windows-msvc\release\cli"
+          New-Item -ItemType Directory -Force -Path "target\${{ matrix.arch }}-pc-windows-msvc\release\node"
+          Copy-Item "target\${{ matrix.arch }}-pc-windows-msvc\release\versatiles.exe" "target\${{ matrix.arch }}-pc-windows-msvc\release\cli\"
+          Copy-Item "target\${{ matrix.arch }}-pc-windows-msvc\release\versatiles_node.dll" "target\${{ matrix.arch }}-pc-windows-msvc\release\node\"
+
+      - name: Pack and upload CLI binary
         if: env.BUILD_ENABLED == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: scripts\workflow-pack-upload.ps1 "target\${{ matrix.arch }}-pc-windows-msvc\release" "windows-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
 
-  finish-release:
-    name: Finish release
+      - name: Upload NAPI binding as artifact
+        if: env.BUILD_ENABLED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-binding-windows-${{ matrix.arch }}
+          path: target\${{ matrix.arch }}-pc-windows-msvc\release\node\versatiles_node.dll
+          retention-days: 1
+
+  package-npm-binaries:
+    name: Package npm binaries
     needs:
       - prepare
       - build-linux-x86
@@ -256,11 +358,170 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        working-directory: ./versatiles_node
+        run: npm ci
+
+      - name: Download NAPI bindings from workflow artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: node-binding-*
+          path: artifacts/
+          merge-multiple: false
+
+      - name: Rename binaries to NAPI convention
+        run: |
+          mkdir -p versatiles_node
+
+          # Function to rename binaries
+          rename_binary() {
+            local source_path=$1
+            local target_name=$2
+
+            if [ -f "$source_path" ]; then
+              cp "$source_path" "versatiles_node/$target_name"
+              chmod +x "versatiles_node/$target_name"
+              echo "✓ Created $target_name"
+            else
+              echo "✗ Missing: $source_path"
+              exit 1
+            fi
+          }
+
+          # Linux x64
+          rename_binary "artifacts/node-binding-linux-gnu-x86_64/libversatiles_node.so" "versatiles.linux-x64-gnu.node"
+          rename_binary "artifacts/node-binding-linux-musl-x86_64/libversatiles_node.so" "versatiles.linux-x64-musl.node"
+
+          # Linux ARM64
+          rename_binary "artifacts/node-binding-linux-gnu-aarch64/libversatiles_node.so" "versatiles.linux-arm64-gnu.node"
+          rename_binary "artifacts/node-binding-linux-musl-aarch64/libversatiles_node.so" "versatiles.linux-arm64-musl.node"
+
+          # macOS
+          rename_binary "artifacts/node-binding-macos-x86_64/libversatiles_node.dylib" "versatiles.darwin-x64.node"
+          rename_binary "artifacts/node-binding-macos-aarch64/libversatiles_node.dylib" "versatiles.darwin-arm64.node"
+
+          # Windows
+          rename_binary "artifacts/node-binding-windows-x86_64/versatiles_node.dll" "versatiles.win32-x64-msvc.node"
+          rename_binary "artifacts/node-binding-windows-aarch64/versatiles_node.dll" "versatiles.win32-arm64-msvc.node"
+
+          echo ""
+          echo "All NAPI bindings prepared:"
+          ls -lah versatiles_node/*.node
+
+      - name: Generate platform packages
+        working-directory: ./versatiles_node
+        run: |
+          npm run artifacts
+          ls -lah npm/
+
+      - name: Upload npm packages as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-packages
+          path: versatiles_node/npm/*.tgz
+          retention-days: 7
+
+  publish-npm:
+    name: Publish to npm
+    needs:
+      - prepare
+      - package-npm-binaries
+    runs-on: ubuntu-latest
+    # Only publish on actual tag pushes
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        working-directory: ./versatiles_node
+        run: npm ci
+
+      - name: Download npm packages
+        uses: actions/download-artifact@v4
+        with:
+          name: npm-packages
+          path: versatiles_node/npm
+
+      - name: Validate package version
+        working-directory: ./versatiles_node
+        run: |
+          TAG_VERSION="${{ needs.prepare.outputs.tag }}"
+          TAG_VERSION="${TAG_VERSION#v}"
+          PKG_VERSION=$(node -p "require('./package.json').version")
+
+          if [ "$PKG_VERSION" != "$TAG_VERSION" ]; then
+            echo "ERROR: package.json version ($PKG_VERSION) doesn't match tag ($TAG_VERSION)"
+            exit 1
+          fi
+          echo "✓ Version validated"
+
+      - name: Publish platform packages
+        working-directory: ./versatiles_node
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          NPM_TAG="${{ needs.prepare.outputs.npm_tag }}"
+          echo "Publishing platform packages with tag: $NPM_TAG"
+
+          for pkg in npm/*.tgz; do
+            echo "Publishing $pkg with --tag $NPM_TAG"
+            npm publish "$pkg" --access public --provenance --tag "$NPM_TAG"
+          done
+
+      - name: Prepare main package
+        working-directory: ./versatiles_node
+        run: npm run prepublishOnly
+
+      - name: Publish main package
+        working-directory: ./versatiles_node
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          NPM_TAG="${{ needs.prepare.outputs.npm_tag }}"
+          echo "Publishing main package with tag: $NPM_TAG"
+          npm publish --access public --provenance --tag "$NPM_TAG"
+
+      - name: Verify publication
+        run: |
+          sleep 10
+          TAG_VERSION="${{ needs.prepare.outputs.tag }}"
+          TAG_VERSION="${TAG_VERSION#v}"
+          echo "Verifying publication of version: $TAG_VERSION"
+          npm view @versatiles/versatiles-rs@$TAG_VERSION version
+          npm view @versatiles/versatiles-rs-darwin-arm64@$TAG_VERSION version
+
+  finish-release:
+    name: Finish release
+    needs:
+      - prepare
+      - build-linux-x86
+      - build-linux-arm
+      - build-macos
+      - build-windows
+      - publish-npm
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
 
       - name: Set Environment Variables
         run: |
           echo "TAG=${{ needs.prepare.outputs.tag }}" >> $GITHUB_ENV
+          echo "IS_PRERELEASE=${{ needs.prepare.outputs.is_prerelease }}" >> $GITHUB_ENV
 
       - name: Update and Release Install scripts
         env:
@@ -278,17 +539,29 @@ jobs:
       - name: Finalize the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest --prerelease=false
+        run: |
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            echo "Publishing as prerelease (no --latest flag)"
+            gh release edit "$TAG" --draft=false --prerelease
+          else
+            echo "Publishing as stable release"
+            gh release edit "$TAG" --draft=false --latest --prerelease=false
+          fi
 
       - name: Trigger Docker release
+        if: needs.prepare.outputs.is_prerelease == 'false'
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
+          echo "Triggering Docker release for stable version"
           gh auth status -h github.com
           gh workflow view release.yml --repo versatiles-org/versatiles-docker --yaml
           gh workflow run release.yml --repo versatiles-org/versatiles-docker --ref main
 
       - name: Trigger Homebrew formula update
+        if: needs.prepare.outputs.is_prerelease == 'false'
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: gh workflow run update_formula.yml --repo versatiles-org/homebrew-versatiles --ref main
+        run: |
+          echo "Triggering Homebrew formula update for stable version"
+          gh workflow run update_formula.yml --repo versatiles-org/homebrew-versatiles --ref main

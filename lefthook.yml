@@ -1,0 +1,55 @@
+# Lefthook configuration for versatiles-rs
+# Optional but recommended for contributors
+#
+# Installation:
+#   macOS:   brew install lefthook
+#   Linux:   See https://github.com/evilmartians/lefthook
+#   Windows: scoop install lefthook
+#
+# Setup: lefthook install
+
+pre-commit:
+  parallel: true
+
+  commands:
+    # Rust formatting check (fast)
+    rust-fmt:
+      glob: '*.rs'
+      run: cargo fmt -- --check
+      stage_fixed: true
+
+    # Node.js formatting check (fast)
+    node-format:
+      glob: 'versatiles_node/**/*.{ts,js,json,md}'
+      run: cd versatiles_node && npm run format:check
+      stage_fixed: true
+
+    # TypeScript type check (medium speed)
+    node-typecheck:
+      glob: 'versatiles_node/src/**/*.ts'
+      run: cd versatiles_node && npm run typecheck
+
+    # ESLint (fast)
+    node-lint:
+      glob: 'versatiles_node/src/**/*.ts'
+      run: cd versatiles_node && npm run lint
+
+pre-push:
+  parallel: false
+
+  commands:
+    # Full Node.js checks before push
+    node-check:
+      run: cd versatiles_node && npm run check
+
+    # Full Rust checks before push
+    rust-check:
+      run: |
+        source scripts/env-gdal.sh
+        cargo clippy --workspace --all-targets -- -D warnings
+
+    # All tests before push
+    test:
+      run: |
+        source scripts/env-gdal.sh
+        cargo test --workspace --all-targets

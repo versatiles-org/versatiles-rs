@@ -6,7 +6,7 @@ FOLDER="$1"
 FILENAME="versatiles-$2"
 TAG=$3
 
-cd "$FOLDER"
+cd "$FOLDER/cli"
 tar -cf "$FILENAME.tar" "versatiles"
 gzip -9 "$FILENAME.tar"
 

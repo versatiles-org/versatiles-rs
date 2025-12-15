@@ -35,16 +35,21 @@ versatiles_derive.workspace = true
 
 [dev-dependencies]
 assert_fs.workspace = true
-criterion = "0.7.0"
+criterion = "0.8.1"
 rstest.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros"] }
 wildmatch.workspace = true
 
+# Features:
+# - cli: Enable CLI-specific dependencies (colored output, clap)
+# - test: Disable terminal output for testing
+# - no-terminal: Disable terminal progress output (for Node.js bindings, WASM, etc.)
 [features]
 default = ["cli"]
 cli = ["dep:clap", "dep:colored"]
 test = []
+no-terminal = []
 
 [[bench]]
 name = "byte_iterator"

@@ -18,36 +18,28 @@ use axum::{
 	http::{HeaderMap, Uri, header},
 	response::Response,
 };
+use std::sync::Arc;
+use tokio::sync::RwLock;
 use versatiles_core::{
 	Blob, TileCompression,
 	utils::{TargetCompression, optimize_compression},
 };
 
-/// State for tile requests bound to a single `TileSource`.
-#[derive(Clone)]
-pub struct TileHandlerState {
-	pub tile_source: TileSource,
-	pub minimal_recompression: bool,
-}
-
 /// State for static file requests across multiple `StaticSource`s.
 #[derive(Clone)]
 pub struct StaticHandlerState {
-	pub sources: Vec<StaticSource>,
+	pub sources: Arc<RwLock<Vec<StaticSource>>>,
 	pub minimal_recompression: bool,
 }
 
-/// Tile handler: pulls data from the bound `TileSource`, negotiates compression,
-/// and emits an HTTP response.
-pub async fn serve_tile(
-	uri: Uri,
+/// Core tile serving logic extracted for reuse in dynamic routing.
+/// Takes an Arc<TileSource> to support both static and dynamic routing.
+pub async fn serve_tile_from_source(
+	path: Url,
 	headers: HeaderMap,
-	State(TileHandlerState {
-		tile_source,
-		minimal_recompression,
-	}): State<TileHandlerState>,
+	tile_source: Arc<TileSource>,
+	minimal_recompression: bool,
 ) -> Response<Body> {
-	let path = Url::from(uri.path());
 	log::debug!("handle tile request: {path}");
 
 	let mut target = get_encoding(&headers);
@@ -81,14 +73,7 @@ pub async fn serve_tile(
 }
 
 /// Static handler: tries each source in order until one returns data.
-pub async fn serve_static(
-	uri: Uri,
-	headers: HeaderMap,
-	State(StaticHandlerState {
-		mut sources,
-		minimal_recompression,
-	}): State<StaticHandlerState>,
-) -> Response<Body> {
+pub async fn serve_static(uri: Uri, headers: HeaderMap, State(state): State<StaticHandlerState>) -> Response<Body> {
 	let mut url = Url::from(uri.path());
 	log::debug!("handle static request: {url}");
 
@@ -97,17 +82,21 @@ pub async fn serve_static(
 	}
 
 	let mut target = get_encoding(&headers);
-	if minimal_recompression {
+	if state.minimal_recompression {
 		target.set_fast_compression();
 	}
 
-	for source in sources.iter_mut() {
+	// Acquire read lock for request duration
+	let sources = state.sources.read().await;
+
+	for source in sources.iter() {
 		if let Some(result) = source.get_data(&url, &target) {
 			log::debug!("send response to static request: {url}");
 			return ok_data(result, target);
 		}
 	}
 
+	// Lock automatically released when sources goes out of scope
 	log::debug!("send 404 to static request: {url}");
 	error_404()
 }
@@ -123,11 +112,11 @@ fn error_with(status: u16, message: &str) -> Response<Body> {
 		.expect("failed to build error response")
 }
 
-fn error_404() -> Response<Body> {
+pub fn error_404() -> Response<Body> {
 	error_with(404, "Not Found")
 }
 
-fn error_500() -> Response<Body> {
+pub fn error_500() -> Response<Body> {
 	error_with(500, "Internal Server Error")
 }
 

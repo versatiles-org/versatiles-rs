@@ -7,15 +7,63 @@ set -e
 
 RED="\033[1;31m"
 GRE="\033[1;32m"
+YEL="\033[1;33m"
+BLU="\033[1;34m"
 END="\033[0m"
 
+# Validate argument or provide interactive selection
+VALID_ARGS="patch minor major alpha beta rc dev"
+RELEASE_ARG=""
+
 if [ -z "$1" ]; then
-	echo "❗️ Need argument for bumping version: \"patch\", \"minor\" or \"major\""
-	exit 1
+	echo -e "${BLU}Select release type:${END}"
+	echo ""
+
+	PS3=$'\nEnter selection number: '
+	options=(
+		"patch   - Bug fixes, small improvements (x.y.Z)"
+		"minor   - New features, backward compatible (x.Y.0)"
+		"major   - Breaking changes (X.0.0)"
+		"alpha   - Early development, unstable API (x.y.z-alpha.N)"
+		"beta    - Feature complete, testing phase (x.y.z-beta.N)"
+		"rc      - Release candidate, final testing (x.y.z-rc.N)"
+		"dev     - Daily builds, experimental features (x.y.z-dev.N)"
+		"Cancel"
+	)
+
+	select opt in "${options[@]}"; do
+		case $REPLY in
+			1) RELEASE_ARG="patch"; break;;
+			2) RELEASE_ARG="minor"; break;;
+			3) RELEASE_ARG="major"; break;;
+			4) RELEASE_ARG="alpha"; break;;
+			5) RELEASE_ARG="beta"; break;;
+			6) RELEASE_ARG="rc"; break;;
+			7) RELEASE_ARG="dev"; break;;
+			8) echo -e "${YEL}Cancelled${END}"; exit 0;;
+			*) echo -e "${RED}Invalid selection${END}";;
+		esac
+	done
+
+	echo ""
+	echo -e "${GRE}Selected: $RELEASE_ARG${END}"
+	echo ""
+else
+	RELEASE_ARG="$1"
+
+	if ! echo "$VALID_ARGS" | grep -wq "$RELEASE_ARG"; then
+		echo -e "${RED}❗️ Invalid argument: $RELEASE_ARG${END}"
+		echo "Must be one of: $VALID_ARGS"
+		exit 1
+	fi
 fi
 
 # build readme docs
 ./scripts/build-docs-readme.sh
+
+# check version synchronization
+echo "Checking version synchronization..."
+./scripts/sync-version.sh --fix
 
 # check if git is clean
 if [ -n "$(git status --porcelain)" ]; then
@@ -33,5 +81,27 @@ if [ $? -ne 0 ]; then
 	exit 1
 fi
 
-# execute the release
-cargo release "$1" --no-verify --sign-commit --workspace --execute
+# Determine cargo-release command based on selected release type
+case "$RELEASE_ARG" in
+	dev)
+		# dev requires custom pre-release-identifier
+		echo "Releasing dev version..."
+		cargo release --pre-release-identifier dev --no-verify --sign-commit --workspace --execute
+		;;
+	alpha|beta|rc)
+		# cargo-release natively supports these
+		echo "Releasing $RELEASE_ARG version..."
+		cargo release "$RELEASE_ARG" --no-verify --sign-commit --workspace --execute
+		;;
+	patch|minor|major)
+		# Existing stable release behavior
+		echo "Releasing $RELEASE_ARG version..."
+		cargo release "$RELEASE_ARG" --no-verify --sign-commit --workspace --execute
+		;;
+esac
+
+# commit package.json if it was updated by cargo-release
+if [ -n "$(git status --porcelain versatiles_node/package.json)" ]; then
+	git add versatiles_node/package.json
+	git commit --amend --no-edit --no-verify
+fi

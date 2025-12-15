@@ -13,15 +13,31 @@ use std::cmp::min;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+/// Type alias for the progress callback function
+type ProgressCallback = Arc<Mutex<Option<Box<dyn Fn(ProgressData) + Send + Sync>>>>;
+
+/// Progress data that can be extracted from a progress bar
+#[derive(Debug, Clone)]
+pub struct ProgressData {
+	pub position: u64,
+	pub total: u64,
+	pub percentage: f64,
+	pub speed: f64,
+	pub eta: f64,
+	pub message: String,
+}
+
 /// A terminal progress bar handle, cloneable and thread-safe.
 pub struct ProgressBar {
 	inner: Arc<Mutex<Inner>>,
+	callback: ProgressCallback,
 }
 
 impl Default for ProgressBar {
 	fn default() -> Self {
 		ProgressBar {
 			inner: Arc::new(Mutex::new(Inner::default())),
+			callback: Arc::new(Mutex::new(None)),
 		}
 	}
 }
@@ -30,6 +46,7 @@ impl Clone for ProgressBar {
 	fn clone(&self) -> Self {
 		ProgressBar {
 			inner: self.inner.clone(),
+			callback: self.callback.clone(),
 		}
 	}
 }
@@ -46,9 +63,59 @@ impl ProgressBar {
 				finished: false,
 				last_draw: Instant::now(),
 			})),
+			callback: Arc::new(Mutex::new(None)),
 		};
 		progress.inner.try_lock().unwrap().redraw();
 		progress
+	}
+
+	/// Extract current progress data without side effects
+	pub fn get_data(&self) -> ProgressData {
+		let inner = self.inner.lock().unwrap();
+		let len = inner.len.max(1);
+		let pos = inner.pos.min(len);
+		let elapsed = inner.start.elapsed();
+
+		let speed = if elapsed.as_secs_f64() > 0.0 {
+			pos as f64 / elapsed.as_secs_f64()
+		} else {
+			0.0
+		};
+
+		let eta = if pos > 0 {
+			elapsed.as_secs_f64() * ((len - pos) as f64 / pos as f64).max(0.0)
+		} else {
+			0.0
+		};
+
+		let percentage = (pos as f64 * 100.0 / len as f64).min(100.0);
+
+		ProgressData {
+			position: pos,
+			total: len,
+			percentage,
+			speed,
+			eta,
+			message: inner.message.clone(),
+		}
+	}
+
+	/// Set a callback to be invoked on progress updates
+	pub fn set_callback<F>(&self, callback: F)
+	where
+		F: Fn(ProgressData) + Send + Sync + 'static,
+	{
+		let mut cb = self.callback.lock().unwrap();
+		*cb = Some(Box::new(callback));
+	}
+
+	/// Call the progress callback if one is set
+	fn call_callback(&self) {
+		let cb = self.callback.lock().unwrap();
+		if let Some(ref callback) = *cb {
+			let data = self.get_data();
+			callback(data);
+		}
 	}
 
 	/// Set the absolute position.
@@ -57,6 +124,8 @@ impl ProgressBar {
 		let mut inner = mutex.lock().unwrap();
 		inner.pos = min(value, inner.len);
 		inner.redraw();
+		drop(inner);
+		self.call_callback();
 	}
 
 	/// Update the maximum length.
@@ -68,6 +137,8 @@ impl ProgressBar {
 			inner.pos = inner.len;
 		}
 		inner.redraw();
+		drop(inner);
+		self.call_callback();
 	}
 
 	/// Increment by `value`.
@@ -76,6 +147,8 @@ impl ProgressBar {
 		let mut inner = mutex.lock().unwrap();
 		inner.pos = inner.pos.saturating_add(value).min(inner.len);
 		inner.redraw();
+		drop(inner);
+		self.call_callback();
 	}
 
 	/// Finish the bar, set position to len and print a final newline.
@@ -87,6 +160,8 @@ impl ProgressBar {
 		inner.redraw();
 
 		inner.write("\n");
+		drop(inner);
+		self.call_callback();
 	}
 
 	/// Remove the bar line from the terminal.

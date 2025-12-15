@@ -23,6 +23,12 @@ VersaTiles is a Rust-based tool for processing and serving tile data efficiently
   - [Convert Tiles](#convert-tiles)
   - [Serve Tiles](#serve-tiles)
   - [VersaTiles Pipeline Language](#versatiles-pipeline-language)
+- [GDAL support](#gdal-support)
+- [Development](#development)
+  - [Running All Checks](#running-all-checks)
+  - [Quick Fixes](#quick-fixes)
+  - [Pre-commit Hooks (Recommended)](#pre-commit-hooks-recommended)
+  - [More Information](#more-information)
 - [Repository Structure](#repository-structure)
 - [Using as a Library](#using-as-a-library)
 - [Additional Information](#additional-information)
@@ -52,7 +58,14 @@ brew install versatiles
 
 ### NixOS
 
-VersaTiles is available via `nixpkgs` (starting from version 24.05). Add this snippet to `configuration.nix`:
+VersaTiles is available via `nixpkgs` (starting from version 24.05):
+
+[![nixpkgs stable 24.05](https://repology.org/badge/version-for-repo/nix_stable_24_05/versatiles.svg?header=nixpkgs%20stable%2024.05)](https://repology.org/project/versatiles/versions)
+[![nixpkgs stable 24.11](https://repology.org/badge/version-for-repo/nix_stable_24_11/versatiles.svg?header=nixpkgs%20stable%2024.11)](https://repology.org/project/versatiles/versions)
+[![nixpkgs stable 25.05](https://repology.org/badge/version-for-repo/nix_stable_25_05/versatiles.svg?header=nixpkgs%20stable%2025.05)](https://repology.org/project/versatiles/versions)
+[![nixpkgs unstable](https://repology.org/badge/version-for-repo/nix_unstable/versatiles.svg?header=nixpkgs%20unstable)](https://repology.org/project/versatiles/versions)
+
+Add this snippet to `configuration.nix`:
 
 ```nix
 environment.systemPackages = with pkgs; [ versatiles ];
@@ -76,6 +89,34 @@ Pull the latest [Docker image](https://github.com/versatiles-org/versatiles-dock
 
 ```sh
 docker pull versatiles-org/versatiles
+```
+
+### npm (Node.js)
+
+Install the Node.js bindings for use in JavaScript/TypeScript projects:
+
+```sh
+npm install @versatiles/versatiles-rs
+```
+
+#### Prerelease Versions
+
+Test upcoming features with prerelease tags:
+
+```sh
+# Alpha (bleeding edge)
+npm install @versatiles/versatiles-rs@alpha
+
+# Beta (feature complete, testing)
+npm install @versatiles/versatiles-rs@beta
+
+# Release Candidate (final testing)
+npm install @versatiles/versatiles-rs@rc
+```
+
+See all available versions:
+```sh
+npm view @versatiles/versatiles-rs versions
 ```
 
 ### Building with Cargo
@@ -173,6 +214,54 @@ Due to the numerous combinations of operating systems, package managers and GDAL
 
 ---
 
+## Development
+
+### Running All Checks
+
+To verify code quality before committing, run:
+
+```bash
+./scripts/check.sh
+```
+
+This runs all checks for both Rust and Node.js code:
+- Rust: formatting, linting (clippy), type-checking, tests, documentation
+- Node.js: formatting (Prettier), linting (ESLint), type-checking (TypeScript), tests
+
+### Quick Fixes
+
+**Auto-fix Rust code:**
+```bash
+cargo fmt
+```
+
+**Auto-fix Node.js code:**
+```bash
+cd versatiles_node
+npm run fix  # Runs lint:fix and format
+```
+
+### Pre-commit Hooks (Recommended)
+
+Install [Lefthook](https://github.com/evilmartians/lefthook) for automatic quality checks:
+
+```bash
+# macOS
+brew install lefthook
+
+# Enable hooks
+lefthook install
+```
+
+This runs fast checks before commits and full checks before pushes, catching issues early.
+
+### More Information
+
+- **Node.js bindings**: See [versatiles_node/CONTRIBUTING.md](versatiles_node/CONTRIBUTING.md) for detailed development workflow
+- **Quick reference**: See [DEVELOPMENT.md](DEVELOPMENT.md) for common commands
+
+---
+
 ## Repository Structure
 
 ### Code
@@ -202,6 +291,33 @@ VersaTiles can be used as a command-line tool or integrated into Rust projects a
 ## Additional Information
 
 For advanced usage, guides, and detailed documentation, visit the [official documentation](https://docs.versatiles.org/).
+
+---
+
+## For Maintainers
+
+### Creating a Release
+
+See [RELEASING.md](./RELEASING.md) for the complete release process.
+
+Quick version:
+```bash
+# Interactive mode - select release type from menu
+./scripts/release-package.sh
+
+# Or use command-line argument
+./scripts/release-package.sh patch  # or minor/major/alpha/beta/rc/dev
+
+# Push to trigger automated release
+git push origin main --follow-tags
+```
+
+The GitHub Actions workflow will automatically:
+- Build CLI binaries for 8 platforms (Linux gnu/musl x64/arm64, macOS x64/arm64, Windows x64/arm64)
+- Build NAPI-RS bindings for Node.js (8 platform-specific packages)
+- Publish to npmjs.com (@versatiles/versatiles-rs + 8 platform-specific packages)
+- Create GitHub release with CLI binaries
+- Trigger Docker and Homebrew updates
 
 ---
 

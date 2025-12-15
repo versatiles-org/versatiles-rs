@@ -142,7 +142,10 @@ mod tests {
 			"disk" => CacheType::Disk(TempDir::new().unwrap().path().to_path_buf()),
 			_ => panic!("unknown cache kind"),
 		};
-		let config = ProcessingConfig { cache_type };
+		let config = ProcessingConfig {
+			cache_type,
+			progress_bar: None,
+		};
 		let mut cache = CacheMap::<String, String>::new(&config);
 
 		let k1 = "k:1".to_string();

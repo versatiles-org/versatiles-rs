@@ -84,6 +84,7 @@ enum Commands {
 	/// Show information about a tile container
 	Probe(tools::probe::Subcommand),
 
+	#[cfg(feature = "server")]
 	#[clap(alias = "server")]
 	/// Serve tiles via HTTP
 	Serve(tools::serve::Subcommand),
@@ -136,6 +137,7 @@ fn run(cli: Cli) -> Result<()> {
 		Commands::Convert(arguments) => tools::convert::run(arguments),
 		Commands::Help(arguments) => tools::help::run(arguments),
 		Commands::Probe(arguments) => tools::probe::run(arguments),
+		#[cfg(feature = "server")]
 		Commands::Serve(arguments) => tools::serve::run(arguments),
 		Commands::Dev(arguments) => tools::dev::run(arguments),
 	}

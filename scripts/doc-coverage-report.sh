@@ -14,6 +14,7 @@ packages=(
   "versatiles_derive"
   "versatiles_geometry"
   "versatiles_image"
+  "versatiles_node"
   "versatiles_pipeline"
 )
 

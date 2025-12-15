@@ -256,6 +256,42 @@ impl ContainerRegistry {
 		Ok(())
 	}
 
+	/// Write tiles with a custom processing config for progress monitoring and other options.
+	///
+	/// # Arguments
+	/// * `reader` - A boxed tile container reader providing tiles to write.
+	/// * `path` - The output path to write tiles to.
+	/// * `config` - Processing configuration (cache type, progress bar, etc.).
+	///
+	/// # Returns
+	/// Result indicating success or failure.
+	#[context("writing tiles to path '{path:?}' with config")]
+	pub async fn write_to_path_with_config(
+		&self,
+		mut reader: Box<dyn TilesReaderTrait>,
+		path: &Path,
+		config: ProcessingConfig,
+	) -> Result<()> {
+		let path = env::current_dir()?.join(path);
+		if path.is_dir() {
+			return DirectoryTilesWriter::write_to_path(reader.as_mut(), &path, config).await;
+		}
+
+		let extension = path
+			.extension()
+			.unwrap_or_default()
+			.to_string_lossy()
+			.to_ascii_lowercase();
+
+		let writer = self
+			.file_writers
+			.get(&extension)
+			.ok_or_else(|| anyhow!("Error when reading: file extension '{extension}' unknown"))?;
+		writer(reader, path.to_path_buf(), config).await?;
+
+		Ok(())
+	}
+
 	pub fn supports_reader_extension(&self, ext: &str) -> bool {
 		let ext = sanitize_extension(ext);
 		self.data_readers.contains_key(&ext) || self.file_readers.contains_key(&ext)

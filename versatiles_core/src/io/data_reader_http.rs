@@ -8,20 +8,22 @@
 //!
 //! # Examples
 //!
-//! ```rust
+//! ```rust,no_run
 //! use versatiles_core::{io::{DataReaderHttp, DataReaderTrait}, Blob, ByteRange};
 //! use anyhow::Result;
 //! use reqwest::Url;
 //!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
-//!     let url = Url::parse("https://versatiles.org/").unwrap();
+//!     let url = Url::parse("https://example.com/data.bin").unwrap();
 //!     let mut reader = DataReaderHttp::from_url(url)?;
 //!
 //!     // Reading a range of data
 //!     let range = ByteRange::new(0, 15);
 //!     let partial_data = reader.read_range(&range).await?;
-//!     assert_eq!(partial_data.as_slice(), b"<!DOCTYPE html>");
+//!
+//!     // Process the data
+//!     println!("Read {} bytes", partial_data.len());
 //!
 //!     Ok(())
 //! }

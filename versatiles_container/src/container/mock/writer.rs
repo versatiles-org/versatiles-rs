@@ -57,6 +57,7 @@ impl MockTilesWriter {
 					})
 				},
 				ProcessingConfig::default(),
+				None,
 			)
 			.await
 	}
