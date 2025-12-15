@@ -176,7 +176,7 @@ impl TileServer {
 			let data_source = napi_result!(DataSource::try_from(path.as_str()))?;
 			config.tile_sources.push(TileSourceConfig {
 				name: Some(name.clone()),
-				path: data_source,
+				src: data_source,
 			});
 		}
 
@@ -186,8 +186,8 @@ impl TileServer {
 			use versatiles::StaticSourceConfig;
 			let data_location = DataLocation::from(path.clone());
 			config.static_sources.push(StaticSourceConfig {
-				path: data_location,
-				url_prefix: url_prefix.clone(),
+				src: data_location,
+				prefix: url_prefix.clone(),
 			});
 		}
 
