@@ -31,8 +31,12 @@ ${BLU}Options:${END}
 ${BLU}Available Checks:${END}
   binary              Check unused deps for binary targets
   lib-minimal         Check library with no default features
-  lib-cli             Check library with CLI features
+  lib-default         Check library with default features (cli + server)
+  lib-cli             Check library with CLI features only
+  lib-server          Check library with server features only
   lib-test            Check library with test features
+  lib-gdal            Check library with GDAL features
+  lib-bindgen         Check library with GDAL + bindgen features
   lib-all             Check library with all features
   all                 Run all checks (default)
 
@@ -192,13 +196,29 @@ run_check "lib-minimal" \
 	"Unused dependencies for library (minimal, no default features)" \
 	--lib --workspace --no-default-features
 
+run_check "lib-default" \
+	"Unused dependencies for library (default features: cli + server)" \
+	--lib --workspace
+
 run_check "lib-cli" \
-	"Unused dependencies for library (CLI features)" \
+	"Unused dependencies for library (CLI features only)" \
 	--lib --workspace --no-default-features --features cli --exclude versatiles
+
+run_check "lib-server" \
+	"Unused dependencies for library (server features only)" \
+	--lib --workspace --no-default-features --features server --exclude versatiles
 
 run_check "lib-test" \
 	"Unused dependencies for library (test features)" \
 	--lib --workspace --no-default-features --features test
+
+run_check "lib-gdal" \
+	"Unused dependencies for library (GDAL features)" \
+	--lib --workspace --no-default-features --features gdal
+
+run_check "lib-bindgen" \
+	"Unused dependencies for library (GDAL with bindgen features)" \
+	--lib --workspace --no-default-features --features gdal,bindgen
 
 run_check "lib-all" \
 	"Unused dependencies for library (all features)" \
