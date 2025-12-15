@@ -41,10 +41,15 @@ tempfile.workspace = true
 tokio = { workspace = true, features = ["macros"] }
 wildmatch.workspace = true
 
+# Features:
+# - cli: Enable CLI-specific dependencies (colored output, clap)
+# - test: Disable terminal output for testing
+# - no-terminal: Disable terminal progress output (for Node.js bindings, WASM, etc.)
 [features]
 default = ["cli"]
 cli = ["dep:clap", "dep:colored"]
 test = []
+no-terminal = []
 
 [[bench]]
 name = "byte_iterator"
