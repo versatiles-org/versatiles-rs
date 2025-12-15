@@ -56,6 +56,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.create_release.outputs.tag }}
+      is_prerelease: ${{ steps.detect_prerelease.outputs.is_prerelease }}
+      npm_tag: ${{ steps.detect_prerelease.outputs.npm_tag }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -65,6 +67,33 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-create-release.sh
+
+      - id: detect_prerelease
+        name: Detect prerelease type
+        run: |
+          TAG="${{ steps.create_release.outputs.tag }}"
+
+          # Check if tag contains prerelease identifier
+          if [[ "$TAG" =~ -alpha ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "npm_tag=alpha" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" =~ -beta ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "npm_tag=beta" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" =~ -rc ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "npm_tag=rc" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" =~ -dev ]]; then
+            echo "is_prerelease=true" >> $GITHUB_OUTPUT
+            echo "npm_tag=dev" >> $GITHUB_OUTPUT
+          else
+            echo "is_prerelease=false" >> $GITHUB_OUTPUT
+            echo "npm_tag=latest" >> $GITHUB_OUTPUT
+          fi
+
+          echo "Release: $TAG"
+          echo "Prerelease: $(grep is_prerelease $GITHUB_OUTPUT | cut -d= -f2)"
+          echo "npm tag: $(grep npm_tag $GITHUB_OUTPUT | cut -d= -f2)"
 
   build-linux-arm:
     name: Build Linux ARM
@@ -401,7 +430,9 @@ jobs:
 
   publish-npm:
     name: Publish to npm
-    needs: package-npm-binaries
+    needs:
+      - prepare
+      - package-npm-binaries
     runs-on: ubuntu-latest
     # Only publish on actual tag pushes
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
@@ -443,9 +474,12 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          NPM_TAG="${{ needs.prepare.outputs.npm_tag }}"
+          echo "Publishing platform packages with tag: $NPM_TAG"
+
           for pkg in npm/*.tgz; do
-            echo "Publishing $pkg"
-            npm publish "$pkg" --access public --provenance
+            echo "Publishing $pkg with --tag $NPM_TAG"
+            npm publish "$pkg" --access public --provenance --tag "$NPM_TAG"
           done
 
       - name: Prepare main package
@@ -456,13 +490,19 @@ jobs:
         working-directory: ./versatiles_node
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public --provenance
+        run: |
+          NPM_TAG="${{ needs.prepare.outputs.npm_tag }}"
+          echo "Publishing main package with tag: $NPM_TAG"
+          npm publish --access public --provenance --tag "$NPM_TAG"
 
       - name: Verify publication
         run: |
           sleep 10
-          npm view @versatiles/versatiles-rs version
-          npm view @versatiles/versatiles-rs-darwin-arm64 version
+          TAG_VERSION="${{ needs.prepare.outputs.tag }}"
+          TAG_VERSION="${TAG_VERSION#v}"
+          echo "Verifying publication of version: $TAG_VERSION"
+          npm view @versatiles/versatiles-rs@$TAG_VERSION version
+          npm view @versatiles/versatiles-rs-darwin-arm64@$TAG_VERSION version
 
   finish-release:
     name: Finish release
@@ -481,6 +521,7 @@ jobs:
       - name: Set Environment Variables
         run: |
           echo "TAG=${{ needs.prepare.outputs.tag }}" >> $GITHUB_ENV
+          echo "IS_PRERELEASE=${{ needs.prepare.outputs.is_prerelease }}" >> $GITHUB_ENV
 
       - name: Update and Release Install scripts
         env:
@@ -498,17 +539,29 @@ jobs:
       - name: Finalize the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release edit "${{ needs.prepare.outputs.tag }}" --draft=false --latest --prerelease=false
+        run: |
+          if [ "$IS_PRERELEASE" = "true" ]; then
+            echo "Publishing as prerelease (no --latest flag)"
+            gh release edit "$TAG" --draft=false --prerelease
+          else
+            echo "Publishing as stable release"
+            gh release edit "$TAG" --draft=false --latest --prerelease=false
+          fi
 
       - name: Trigger Docker release
+        if: needs.prepare.outputs.is_prerelease == 'false'
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
+          echo "Triggering Docker release for stable version"
           gh auth status -h github.com
           gh workflow view release.yml --repo versatiles-org/versatiles-docker --yaml
           gh workflow run release.yml --repo versatiles-org/versatiles-docker --ref main
 
       - name: Trigger Homebrew formula update
+        if: needs.prepare.outputs.is_prerelease == 'false'
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: gh workflow run update_formula.yml --repo versatiles-org/homebrew-versatiles --ref main
+        run: |
+          echo "Triggering Homebrew formula update for stable version"
+          gh workflow run update_formula.yml --repo versatiles-org/homebrew-versatiles --ref main

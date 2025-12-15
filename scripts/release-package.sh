@@ -9,8 +9,16 @@ RED="\033[1;31m"
 GRE="\033[1;32m"
 END="\033[0m"
 
+# Validate argument
+VALID_ARGS="patch minor major alpha beta rc dev"
 if [ -z "$1" ]; then
-	echo "❗️ Need argument for bumping version: \"patch\", \"minor\" or \"major\""
+	echo "❗️ Need argument for bumping version: patch, minor, major, alpha, beta, rc, or dev"
+	exit 1
+fi
+
+if ! echo "$VALID_ARGS" | grep -wq "$1"; then
+	echo -e "${RED}❗️ Invalid argument: $1${END}"
+	echo "Must be one of: $VALID_ARGS"
 	exit 1
 fi
 
@@ -37,8 +45,25 @@ if [ $? -ne 0 ]; then
 	exit 1
 fi
 
-# execute the release
-cargo release "$1" --no-verify --sign-commit --workspace --execute
+# Determine cargo-release command based on argument
+RELEASE_ARG="$1"
+case "$1" in
+	dev)
+		# dev requires custom pre-release-identifier
+		echo "Releasing dev version..."
+		cargo release --pre-release-identifier dev --no-verify --sign-commit --workspace --execute
+		;;
+	alpha|beta|rc)
+		# cargo-release natively supports these
+		echo "Releasing $RELEASE_ARG version..."
+		cargo release "$RELEASE_ARG" --no-verify --sign-commit --workspace --execute
+		;;
+	patch|minor|major)
+		# Existing stable release behavior
+		echo "Releasing $RELEASE_ARG version..."
+		cargo release "$RELEASE_ARG" --no-verify --sign-commit --workspace --execute
+		;;
+esac
 
 # commit package.json if it was updated by cargo-release
 if [ -n "$(git status --porcelain versatiles_node/package.json)" ]; then
