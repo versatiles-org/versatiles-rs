@@ -104,3 +104,6 @@ cli = [
 ]
 gdal = []
 bindgen = []
+
+[package.metadata.cargo-udeps.ignore]
+normal = ["env_logger", "termimad"]
