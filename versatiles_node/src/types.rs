@@ -68,6 +68,7 @@ impl TileCoord {
 
 /// Options for tile conversion
 #[napi(object)]
+#[derive(Clone)]
 pub struct ConvertOptions {
 	/// Minimum zoom level to include
 	pub min_zoom: Option<u8>,

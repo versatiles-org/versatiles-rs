@@ -1,5 +1,6 @@
 use crate::{
 	napi_result,
+	progress::Progress,
 	types::{ConvertOptions, ProbeResult, ReaderParameters, parse_compression},
 };
 use napi::bindgen_prelude::*;
@@ -75,9 +76,66 @@ impl ContainerReader {
 		reader.container_name().to_string()
 	}
 
+	/// Convert this container to another format with progress monitoring
+	///
+	/// Returns a Progress object that emits events during the conversion.
+	/// Use progress.on('progress', callback) to monitor progress.
+	/// Use await progress.done() to wait for completion.
+	#[napi]
+	pub fn convert_to_with_progress(&self, output: String, options: Option<ConvertOptions>) -> Result<Progress> {
+		let progress = Progress::new();
+		let progress_arc = Arc::new(progress);
+
+		// Clone everything we need for the async task
+		let output_clone = output.clone();
+		let options_clone = options.clone();
+		let registry_clone = self.registry.clone();
+		let reader_arc = self.reader.clone();
+		let progress_task = progress_arc.clone();
+
+		// Spawn the conversion task
+		tokio::spawn(async move {
+			let result = Self::do_convert(
+				reader_arc,
+				registry_clone,
+				output_clone,
+				options_clone,
+				Some(progress_task.clone()),
+			)
+			.await;
+
+			match result {
+				Ok(()) => progress_task.complete(),
+				Err(e) => progress_task.fail(e.into()),
+			}
+		});
+
+		// Return the Progress object immediately
+		// We need to extract the Progress from Arc and clone it
+		Ok((*progress_arc).clone())
+	}
+
 	/// Convert this container to another format
 	#[napi]
 	pub async fn convert_to(&self, output: String, options: Option<ConvertOptions>) -> Result<()> {
+		Self::do_convert(self.reader.clone(), self.registry.clone(), output, options, None)
+			.await
+			.map_err(|e| Error::from_reason(e.to_string()))
+	}
+
+	/// Internal conversion implementation
+	async fn do_convert(
+		reader: Arc<Mutex<Box<dyn TilesReaderTrait>>>,
+		registry: ContainerRegistry,
+		output: String,
+		options: Option<ConvertOptions>,
+		progress: Option<Arc<Progress>>,
+	) -> anyhow::Result<()> {
+		// Emit initial step if progress monitoring is enabled
+		if let Some(ref p) = progress {
+			p.emit_step("Initializing conversion".to_string());
+		}
+
 		let opts = options.unwrap_or(ConvertOptions {
 			min_zoom: None,
 			max_zoom: None,
@@ -103,12 +161,12 @@ impl ContainerReader {
 
 			if let Some(bbox_vec) = opts.bbox {
 				if bbox_vec.len() != 4 {
-					return Err(Error::from_reason(
-						"bbox must contain exactly 4 numbers [west, south, east, north]",
+					return Err(anyhow::anyhow!(
+						"bbox must contain exactly 4 numbers [west, south, east, north]"
 					));
 				}
-				let geo_bbox = napi_result!(GeoBBox::try_from(bbox_vec))?;
-				napi_result!(pyramid.intersect_geo_bbox(&geo_bbox))?;
+				let geo_bbox = GeoBBox::try_from(bbox_vec)?;
+				pyramid.intersect_geo_bbox(&geo_bbox)?;
 
 				if let Some(border) = opts.bbox_border {
 					pyramid.add_border(border, border, border, border);
@@ -118,17 +176,17 @@ impl ContainerReader {
 			bbox_pyramid = Some(pyramid);
 		}
 
-		let reader = self.reader.lock().await;
+		let reader_lock = reader.lock().await;
 
 		let tile_compression = if let Some(ref comp_str) = opts.compress {
 			parse_compression(comp_str).ok_or_else(|| {
-				Error::from_reason(format!(
+				anyhow::anyhow!(
 					"Invalid compression '{}'. Use 'gzip', 'brotli', or 'uncompressed'",
 					comp_str
-				))
+				)
 			})?
 		} else {
-			reader.parameters().tile_compression
+			reader_lock.parameters().tile_compression
 		};
 
 		let params = TilesConverterParameters {
@@ -139,15 +197,21 @@ impl ContainerReader {
 		};
 
 		let output_path = std::path::PathBuf::from(&output);
-		let source_name = reader.source_name().to_string();
+		let source_name = reader_lock.source_name().to_string();
 
 		// Release the lock before re-opening
-		drop(reader);
+		drop(reader_lock);
+
+		if let Some(ref p) = progress {
+			p.emit_step("Reading tiles".to_string());
+		}
 
 		// Clone the reader by re-opening from source
-		let reader_clone = napi_result!(self.registry.get_reader_from_str(&source_name).await)?;
+		let reader_clone = registry.get_reader_from_str(&source_name).await?;
 
-		napi_result!(convert_tiles_container(reader_clone, params, &output_path, self.registry.clone()).await)?;
+		// TODO: Once Phase 2 is implemented, we'll pass the progress callback here
+		// For now, we just call the regular conversion function
+		convert_tiles_container(reader_clone, params, &output_path, registry).await?;
 
 		Ok(())
 	}
