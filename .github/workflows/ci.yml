@@ -22,8 +22,12 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  linux:
-    name: "Test on Linux"
+  # ============================================================================
+  # Job 1: Format Check (Fast fail, no GDAL needed)
+  # Runtime: ~1 minute
+  # ============================================================================
+  format:
+    name: "Format Check"
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -32,7 +36,26 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
+          components: rustfmt
+
+      - name: Check formatting (rustfmt)
+        run: cargo fmt -- --check
+
+  # ============================================================================
+  # Job 2: Clippy (Linting - includes type checking)
+  # Runtime: ~5-6 minutes (GDAL setup + clippy)
+  # ============================================================================
+  clippy:
+    name: "Clippy (Lint)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
 
       - name: Resolve GDAL version and install dependencies
         id: gdal-version
@@ -52,11 +75,7 @@ jobs:
 
       - name: Build and install GDAL (cache miss)
         if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
-        run: |
-          ./scripts/install-gdal.sh
-
-      - name: Show GDAL version
-        run: ./.toolchain/gdal/bin/gdal-config --version
+        run: ./scripts/install-gdal.sh
 
       - name: Export GDAL environment for cargo
         shell: bash
@@ -89,21 +108,223 @@ jobs:
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
-
-      - name: Check formatting (rustfmt)
-        run: cargo fmt -- --check
-
-      - name: Type-check workspace
-        run: cargo check --workspace --all-features --all-targets
+        with:
+          shared-key: "clippy"
+          cache-targets: true
+          cache-on-failure: true
 
       - name: Lint (clippy)
         run: cargo clippy --workspace --all-features --all-targets -- -D warnings
 
+  # ============================================================================
+  # Job 3: Tests (Rust tests - runs in parallel with clippy)
+  # Runtime: ~5-6 minutes (GDAL setup + tests)
+  # ============================================================================
+  test:
+    name: "Tests (Rust)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve GDAL version and install dependencies
+        id: gdal-version
+        shell: bash
+        run: |
+          source ./scripts/install-gdal.sh
+          detect_platform
+          install_deps
+          echo "GDAL_VERSION=$GDAL_VERSION" >> "$GITHUB_ENV"
+
+      - name: Restore GDAL toolchain cache
+        id: restore-gdal-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .toolchain/gdal
+          key: ${{ runner.os }}-gdal-${{ env.GDAL_VERSION }}-${{ hashFiles('scripts/install-gdal.sh') }}
+
+      - name: Build and install GDAL (cache miss)
+        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
+        run: ./scripts/install-gdal.sh
+
+      - name: Export GDAL environment for cargo
+        shell: bash
+        run: |
+          GDAL_PREFIX="${{ github.workspace }}/.toolchain/gdal"
+          echo "GDAL_PREFIX=${GDAL_PREFIX}" >> "$GITHUB_ENV"
+          echo "GDAL_CONFIG=${GDAL_PREFIX}/bin/gdal-config" >> "$GITHUB_ENV"
+          echo "GDAL_DATA=${GDAL_PREFIX}/share/gdal" >> "$GITHUB_ENV"
+          echo "GDAL_INCLUDE_DIR=${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
+          echo "GDAL_LIB_DIR=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=${GDAL_PREFIX}/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
+          echo "PROJ_DATA=/usr/share/proj" >> "$GITHUB_ENV"
+          # libclang for bindgen
+          if command -v llvm-config >/dev/null 2>&1; then
+            echo "LIBCLANG_PATH=$(llvm-config --libdir)" >> "$GITHUB_ENV"
+          else
+            for d in /usr/lib/llvm-*/lib; do
+              if [ -d "$d" ]; then echo "LIBCLANG_PATH=$d" >> "$GITHUB_ENV"; break; fi
+            done
+          fi
+          echo "BINDGEN_EXTRA_CLANG_ARGS=-I${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
+
+      - name: Save GDAL toolchain cache
+        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .toolchain/gdal
+          key: ${{ steps.restore-gdal-cache.outputs.cache-primary-key }}
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "test"
+          cache-targets: true
+          cache-on-failure: true
+
       - name: Test workspace
         run: cargo test --workspace --all-features --all-targets
 
+  # ============================================================================
+  # Job 4: Documentation (Fast, no heavy compilation)
+  # Runtime: ~4-5 minutes (GDAL setup + docs)
+  # ============================================================================
+  docs:
+    name: "Documentation"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve GDAL version and install dependencies
+        id: gdal-version
+        shell: bash
+        run: |
+          source ./scripts/install-gdal.sh
+          detect_platform
+          install_deps
+          echo "GDAL_VERSION=$GDAL_VERSION" >> "$GITHUB_ENV"
+
+      - name: Restore GDAL toolchain cache
+        id: restore-gdal-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .toolchain/gdal
+          key: ${{ runner.os }}-gdal-${{ env.GDAL_VERSION }}-${{ hashFiles('scripts/install-gdal.sh') }}
+
+      - name: Build and install GDAL (cache miss)
+        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
+        run: ./scripts/install-gdal.sh
+
+      - name: Export GDAL environment for cargo
+        shell: bash
+        run: |
+          GDAL_PREFIX="${{ github.workspace }}/.toolchain/gdal"
+          echo "GDAL_PREFIX=${GDAL_PREFIX}" >> "$GITHUB_ENV"
+          echo "GDAL_CONFIG=${GDAL_PREFIX}/bin/gdal-config" >> "$GITHUB_ENV"
+          echo "GDAL_DATA=${GDAL_PREFIX}/share/gdal" >> "$GITHUB_ENV"
+          echo "GDAL_INCLUDE_DIR=${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
+          echo "GDAL_LIB_DIR=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=${GDAL_PREFIX}/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
+          echo "PROJ_DATA=/usr/share/proj" >> "$GITHUB_ENV"
+          # libclang for bindgen
+          if command -v llvm-config >/dev/null 2>&1; then
+            echo "LIBCLANG_PATH=$(llvm-config --libdir)" >> "$GITHUB_ENV"
+          else
+            for d in /usr/lib/llvm-*/lib; do
+              if [ -d "$d" ]; then echo "LIBCLANG_PATH=$d" >> "$GITHUB_ENV"; break; fi
+            done
+          fi
+          echo "BINDGEN_EXTRA_CLANG_ARGS=-I${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
+
+      - name: Save GDAL toolchain cache
+        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .toolchain/gdal
+          key: ${{ steps.restore-gdal-cache.outputs.cache-primary-key }}
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "docs"
+          cache-targets: true
+          cache-on-failure: true
+
       - name: Check documentation
         run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+
+  # ============================================================================
+  # Job 5: Node.js Build & Test (Depends on clippy passing)
+  # Runtime: ~2-3 minutes
+  # ============================================================================
+  nodejs:
+    name: "Node.js Build & Test"
+    runs-on: ubuntu-latest
+    needs: [clippy]  # Ensure Rust code is valid before building native module
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve GDAL version and install dependencies
+        id: gdal-version
+        shell: bash
+        run: |
+          source ./scripts/install-gdal.sh
+          detect_platform
+          install_deps
+          echo "GDAL_VERSION=$GDAL_VERSION" >> "$GITHUB_ENV"
+
+      - name: Restore GDAL toolchain cache
+        id: restore-gdal-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .toolchain/gdal
+          key: ${{ runner.os }}-gdal-${{ env.GDAL_VERSION }}-${{ hashFiles('scripts/install-gdal.sh') }}
+
+      - name: Build and install GDAL (cache miss)
+        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
+        run: ./scripts/install-gdal.sh
+
+      - name: Export GDAL environment for cargo
+        shell: bash
+        run: |
+          GDAL_PREFIX="${{ github.workspace }}/.toolchain/gdal"
+          echo "GDAL_PREFIX=${GDAL_PREFIX}" >> "$GITHUB_ENV"
+          echo "GDAL_CONFIG=${GDAL_PREFIX}/bin/gdal-config" >> "$GITHUB_ENV"
+          echo "GDAL_DATA=${GDAL_PREFIX}/share/gdal" >> "$GITHUB_ENV"
+          echo "GDAL_INCLUDE_DIR=${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
+          echo "GDAL_LIB_DIR=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=${GDAL_PREFIX}/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
+          echo "PROJ_DATA=/usr/share/proj" >> "$GITHUB_ENV"
+          # libclang for bindgen
+          if command -v llvm-config >/dev/null 2>&1; then
+            echo "LIBCLANG_PATH=$(llvm-config --libdir)" >> "$GITHUB_ENV"
+          else
+            for d in /usr/lib/llvm-*/lib; do
+              if [ -d "$d" ]; then echo "LIBCLANG_PATH=$d" >> "$GITHUB_ENV"; break; fi
+            done
+          fi
+          echo "BINDGEN_EXTRA_CLANG_ARGS=-I${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "nodejs"
+          cache-targets: true
+          cache-on-failure: true
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -136,6 +357,81 @@ jobs:
         working-directory: ./versatiles_node
         run: npm test
 
+  # ============================================================================
+  # Job 6: Coverage (Only on main branch, schedule, or workflow_dispatch)
+  # Runtime: ~5-6 minutes (GDAL setup + coverage generation)
+  # ============================================================================
+  coverage:
+    name: "Coverage (main branch only)"
+    runs-on: ubuntu-latest
+    # Only run on main branch pushes, scheduled runs, or manual dispatch
+    if: |
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Resolve GDAL version and install dependencies
+        id: gdal-version
+        shell: bash
+        run: |
+          source ./scripts/install-gdal.sh
+          detect_platform
+          install_deps
+          echo "GDAL_VERSION=$GDAL_VERSION" >> "$GITHUB_ENV"
+
+      - name: Restore GDAL toolchain cache
+        id: restore-gdal-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .toolchain/gdal
+          key: ${{ runner.os }}-gdal-${{ env.GDAL_VERSION }}-${{ hashFiles('scripts/install-gdal.sh') }}
+
+      - name: Build and install GDAL (cache miss)
+        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
+        run: ./scripts/install-gdal.sh
+
+      - name: Export GDAL environment for cargo
+        shell: bash
+        run: |
+          GDAL_PREFIX="${{ github.workspace }}/.toolchain/gdal"
+          echo "GDAL_PREFIX=${GDAL_PREFIX}" >> "$GITHUB_ENV"
+          echo "GDAL_CONFIG=${GDAL_PREFIX}/bin/gdal-config" >> "$GITHUB_ENV"
+          echo "GDAL_DATA=${GDAL_PREFIX}/share/gdal" >> "$GITHUB_ENV"
+          echo "GDAL_INCLUDE_DIR=${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
+          echo "GDAL_LIB_DIR=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=${GDAL_PREFIX}/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=${GDAL_PREFIX}/lib" >> "$GITHUB_ENV"
+          echo "PROJ_DATA=/usr/share/proj" >> "$GITHUB_ENV"
+          # libclang for bindgen
+          if command -v llvm-config >/dev/null 2>&1; then
+            echo "LIBCLANG_PATH=$(llvm-config --libdir)" >> "$GITHUB_ENV"
+          else
+            for d in /usr/lib/llvm-*/lib; do
+              if [ -d "$d" ]; then echo "LIBCLANG_PATH=$d" >> "$GITHUB_ENV"; break; fi
+            done
+          fi
+          echo "BINDGEN_EXTRA_CLANG_ARGS=-I${GDAL_PREFIX}/include" >> "$GITHUB_ENV"
+
+      - name: Save GDAL toolchain cache
+        if: steps.restore-gdal-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .toolchain/gdal
+          key: ${{ steps.restore-gdal-cache.outputs.cache-primary-key }}
+
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "coverage"
+          cache-targets: true
+          cache-on-failure: true
+
       - name: Install cargo-llvm-cov
         uses: taiki-e/install-action@cargo-llvm-cov
 
@@ -149,6 +445,10 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           verbose: true
 
+  # ============================================================================
+  # Job 7: Windows Tests (Runs in parallel)
+  # Runtime: ~4-6 minutes
+  # ============================================================================
   windows:
     name: 'Test on Windows'
     runs-on: windows-latest
@@ -158,7 +458,7 @@ jobs:
         run: |
           git config --global core.autocrlf false
           git config --global core.eol lf
-          
+
       - name: Checkout repository
         uses: actions/checkout@v6
 
@@ -169,6 +469,10 @@ jobs:
 
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "windows"
+          cache-targets: true
+          cache-on-failure: true
 
       - name: Format, lint and test (Windows)
         shell: pwsh
