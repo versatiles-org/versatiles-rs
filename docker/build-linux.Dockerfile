@@ -38,13 +38,18 @@ RUN cargo test --target "$TARGET"
 RUN cargo build --package "versatiles" --bin "versatiles" --release --target "$TARGET"
 RUN ./scripts/selftest-versatiles.sh "/versatiles/target/$TARGET/release/versatiles"
 
+# Build NAPI binding for Node.js
+RUN cargo build --package "versatiles_node" --release --target "$TARGET"
+
 # Prepare output directory
-RUN mkdir /output && cp "/versatiles/target/$TARGET/release/versatiles" /output/
+RUN mkdir -p /output/cli /output/node && \
+    cp "/versatiles/target/$TARGET/release/versatiles" /output/cli/ && \
+    cp "/versatiles/target/$TARGET/release/libversatiles_node.so" /output/node/ 2>/dev/null || true
 
 # Build .deb package if using GNU
 RUN if [ "$LIBC" = "gnu" ]; then \
     cargo install cargo-deb && \
-    cargo deb --no-build --target "$TARGET" --package "versatiles" --output "/output/versatiles-linux-${LIBC}-${ARCH}.deb"; \
+    cargo deb --no-build --target "$TARGET" --package "versatiles" --output "/output/cli/versatiles-linux-${LIBC}-${ARCH}.deb"; \
 fi
 
 # FINAL STAGE TO EXTRACT RESULT
@@ -52,6 +57,6 @@ FROM scratch
 ARG ARCH
 ARG LIBC
 
-# Copy the compiled binary and package from the builder
+# Copy the compiled binaries and package from the builder
 COPY --from=builder /output /
 

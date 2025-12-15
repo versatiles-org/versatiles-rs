@@ -110,11 +110,19 @@ jobs:
             --output="type=local,dest=output/" \
             .
 
-      - name: Pack and upload
+      - name: Pack and upload CLI binary
         if: env.BUILD_ENABLED == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-pack-upload.sh "output" "linux-${{ matrix.libc }}-aarch64" "${{ needs.prepare.outputs.tag }}"
+
+      - name: Upload NAPI binding as artifact
+        if: env.BUILD_ENABLED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-binding-linux-${{ matrix.libc }}-aarch64
+          path: output/node/libversatiles_node.so
+          retention-days: 1
 
   build-linux-x86:
     name: Build Linux x86
@@ -160,11 +168,19 @@ jobs:
             --output="type=local,dest=output/" \
             .
 
-      - name: Pack and upload
+      - name: Pack and upload CLI binary
         if: env.BUILD_ENABLED == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-pack-upload.sh "output" "linux-${{ matrix.libc }}-x86_64" "${{ needs.prepare.outputs.tag }}"
+
+      - name: Upload NAPI binding as artifact
+        if: env.BUILD_ENABLED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-binding-linux-${{ matrix.libc }}-x86_64
+          path: output/node/libversatiles_node.so
+          retention-days: 1
 
   build-macos:
     name: Build MacOS
@@ -203,15 +219,35 @@ jobs:
           cargo test --bins
           cargo test --lib
 
-      - name: Build Binary
+      - name: Build CLI Binary
         if: env.BUILD_ENABLED == 'true'
         run: cargo build --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-apple-darwin"
 
-      - name: Pack and upload
+      - name: Build NAPI Binding
+        if: env.BUILD_ENABLED == 'true'
+        run: cargo build --package "versatiles_node" --release --target "${{ matrix.arch }}-apple-darwin"
+
+      - name: Prepare release structure
+        if: env.BUILD_ENABLED == 'true'
+        run: |
+          mkdir -p "target/${{ matrix.arch }}-apple-darwin/release/cli"
+          mkdir -p "target/${{ matrix.arch }}-apple-darwin/release/node"
+          cp "target/${{ matrix.arch }}-apple-darwin/release/versatiles" "target/${{ matrix.arch }}-apple-darwin/release/cli/"
+          cp "target/${{ matrix.arch }}-apple-darwin/release/libversatiles_node.dylib" "target/${{ matrix.arch }}-apple-darwin/release/node/"
+
+      - name: Pack and upload CLI binary
         if: env.BUILD_ENABLED == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./scripts/workflow-pack-upload.sh "target/${{ matrix.arch }}-apple-darwin/release" "macos-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
+
+      - name: Upload NAPI binding as artifact
+        if: env.BUILD_ENABLED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-binding-macos-${{ matrix.arch }}
+          path: target/${{ matrix.arch }}-apple-darwin/release/node/libversatiles_node.dylib
+          retention-days: 1
 
   build-windows:
     name: Build Windows
@@ -250,16 +286,37 @@ jobs:
           cargo test --bins
           cargo test --lib
 
-      - name: Build binary
+      - name: Build CLI binary
         if: env.BUILD_ENABLED == 'true'
         run: cargo build --bin "versatiles" --package "versatiles" --release --target "${{ matrix.arch }}-pc-windows-msvc"
 
-      - name: Pack and upload
+      - name: Build NAPI binding
+        if: env.BUILD_ENABLED == 'true'
+        run: cargo build --package "versatiles_node" --release --target "${{ matrix.arch }}-pc-windows-msvc"
+
+      - name: Prepare release structure
+        if: env.BUILD_ENABLED == 'true'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "target\${{ matrix.arch }}-pc-windows-msvc\release\cli"
+          New-Item -ItemType Directory -Force -Path "target\${{ matrix.arch }}-pc-windows-msvc\release\node"
+          Copy-Item "target\${{ matrix.arch }}-pc-windows-msvc\release\versatiles.exe" "target\${{ matrix.arch }}-pc-windows-msvc\release\cli\"
+          Copy-Item "target\${{ matrix.arch }}-pc-windows-msvc\release\versatiles_node.dll" "target\${{ matrix.arch }}-pc-windows-msvc\release\node\"
+
+      - name: Pack and upload CLI binary
         if: env.BUILD_ENABLED == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: scripts\workflow-pack-upload.ps1 "target\${{ matrix.arch }}-pc-windows-msvc\release" "windows-${{ matrix.arch }}" "${{ needs.prepare.outputs.tag }}"
+
+      - name: Upload NAPI binding as artifact
+        if: env.BUILD_ENABLED == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-binding-windows-${{ matrix.arch }}
+          path: target\${{ matrix.arch }}-pc-windows-msvc\release\node\versatiles_node.dll
+          retention-days: 1
 
   package-npm-binaries:
     name: Package npm binaries
@@ -283,57 +340,50 @@ jobs:
         working-directory: ./versatiles_node
         run: npm ci
 
-      - name: Download all release artifacts
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Download NAPI bindings from workflow artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: node-binding-*
+          path: artifacts/
+          merge-multiple: false
+
+      - name: Rename binaries to NAPI convention
         run: |
-          mkdir -p artifacts
-          gh release download "${{ needs.prepare.outputs.tag }}" -D artifacts/
+          mkdir -p versatiles_node
 
-      - name: Extract and rename binaries for NAPI
-        run: |
-          cd artifacts
-
-          # Extract all tarballs
-          for archive in *.tar.gz; do
-            echo "Extracting $archive"
-            tar -xzf "$archive"
-          done
-
-          # Map to NAPI naming convention: versatiles.{platform}-{arch}[-{abi}].node
-          cd ..
-          mkdir -p napi-binaries
-
-          # Function to extract and rename
-          extract_and_rename() {
-            local archive=$1
+          # Function to rename binaries
+          rename_binary() {
+            local source_path=$1
             local target_name=$2
-            local binary_name=$3
 
-            cd artifacts
-            if [ -f "$binary_name" ]; then
-              mv "$binary_name" "../napi-binaries/$target_name"
-              chmod +x "../napi-binaries/$target_name" 2>/dev/null || true
+            if [ -f "$source_path" ]; then
+              cp "$source_path" "versatiles_node/$target_name"
+              chmod +x "versatiles_node/$target_name"
+              echo "✓ Created $target_name"
+            else
+              echo "✗ Missing: $source_path"
+              exit 1
             fi
-            cd ..
           }
 
-          # Linux
-          extract_and_rename "versatiles-linux-gnu-x86_64.tar.gz" "versatiles.linux-x64-gnu.node" "versatiles"
-          extract_and_rename "versatiles-linux-musl-x86_64.tar.gz" "versatiles.linux-x64-musl.node" "versatiles"
-          extract_and_rename "versatiles-linux-gnu-aarch64.tar.gz" "versatiles.linux-arm64-gnu.node" "versatiles"
-          extract_and_rename "versatiles-linux-musl-aarch64.tar.gz" "versatiles.linux-arm64-musl.node" "versatiles"
+          # Linux x64
+          rename_binary "artifacts/node-binding-linux-gnu-x86_64/libversatiles_node.so" "versatiles.linux-x64-gnu.node"
+          rename_binary "artifacts/node-binding-linux-musl-x86_64/libversatiles_node.so" "versatiles.linux-x64-musl.node"
+
+          # Linux ARM64
+          rename_binary "artifacts/node-binding-linux-gnu-aarch64/libversatiles_node.so" "versatiles.linux-arm64-gnu.node"
+          rename_binary "artifacts/node-binding-linux-musl-aarch64/libversatiles_node.so" "versatiles.linux-arm64-musl.node"
 
           # macOS
-          extract_and_rename "versatiles-macos-x86_64.tar.gz" "versatiles.darwin-x64.node" "versatiles"
-          extract_and_rename "versatiles-macos-aarch64.tar.gz" "versatiles.darwin-arm64.node" "versatiles"
+          rename_binary "artifacts/node-binding-macos-x86_64/libversatiles_node.dylib" "versatiles.darwin-x64.node"
+          rename_binary "artifacts/node-binding-macos-aarch64/libversatiles_node.dylib" "versatiles.darwin-arm64.node"
 
           # Windows
-          extract_and_rename "versatiles-windows-x86_64.tar.gz" "versatiles.win32-x64-msvc.node" "versatiles.exe"
-          extract_and_rename "versatiles-windows-aarch64.tar.gz" "versatiles.win32-arm64-msvc.node" "versatiles.exe"
+          rename_binary "artifacts/node-binding-windows-x86_64/versatiles_node.dll" "versatiles.win32-x64-msvc.node"
+          rename_binary "artifacts/node-binding-windows-aarch64/versatiles_node.dll" "versatiles.win32-arm64-msvc.node"
 
-          # Move to versatiles_node directory
-          mv napi-binaries/*.node versatiles_node/
+          echo ""
+          echo "All NAPI bindings prepared:"
           ls -lah versatiles_node/*.node
 
       - name: Generate platform packages
