@@ -5,20 +5,17 @@
 	"main": "index.js",
 	"types": "index.d.ts",
 	"napi": {
-		"name": "versatiles",
-		"triples": {
-			"defaults": true,
-			"additional": [
-				"aarch64-apple-darwin",
-				"x86_64-apple-darwin",
-				"aarch64-unknown-linux-gnu",
-				"x86_64-unknown-linux-gnu",
-				"aarch64-unknown-linux-musl",
-				"x86_64-unknown-linux-musl",
-				"aarch64-pc-windows-msvc",
-				"x86_64-pc-windows-msvc"
-			]
-		}
+		"binaryName": "versatiles",
+		"targets": [
+			"aarch64-apple-darwin",
+			"x86_64-apple-darwin",
+			"aarch64-unknown-linux-gnu",
+			"x86_64-unknown-linux-gnu",
+			"aarch64-unknown-linux-musl",
+			"x86_64-unknown-linux-musl",
+			"aarch64-pc-windows-msvc",
+			"x86_64-pc-windows-msvc"
+		]
 	},
 	"keywords": [
 		"versatiles",

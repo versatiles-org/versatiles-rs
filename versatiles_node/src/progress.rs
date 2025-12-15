@@ -1,5 +1,5 @@
 use napi::bindgen_prelude::*;
-use napi::threadsafe_function::{ErrorStrategy, ThreadsafeFunction, ThreadsafeFunctionCallMode};
+use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
 use std::sync::{Arc, Mutex};
 use tokio::sync::oneshot;
@@ -29,17 +29,11 @@ impl From<versatiles_core::progress::ProgressData> for ProgressData {
 	}
 }
 
-/// Event types that can be emitted by Progress
-#[derive(Clone)]
-pub enum ProgressEvent {
-	Progress(ProgressData),
-	Step(String),
-	Warning(String),
-	Error(String),
-	Complete,
-}
-
-type EventCallback = ThreadsafeFunction<ProgressEvent, ErrorStrategy::Fatal>;
+// Type aliases for the three different callback types
+// Note: Using the full signature because build_callback sets CalleeHandled=false
+type ProgressCallback = ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false>;
+type MessageCallback = ThreadsafeFunction<(String, String), Unknown<'static>, (String, String), Status, false>;
+type CompleteCallback = ThreadsafeFunction<(), Unknown<'static>, (), Status, false>;
 
 /// Progress monitor for long-running operations
 ///
@@ -48,12 +42,10 @@ type EventCallback = ThreadsafeFunction<ProgressEvent, ErrorStrategy::Fatal>;
 #[napi]
 #[derive(Clone)]
 pub struct Progress {
-	// Event listeners stored by event name
-	progress_listeners: Arc<Mutex<Vec<EventCallback>>>,
-	step_listeners: Arc<Mutex<Vec<EventCallback>>>,
-	warning_listeners: Arc<Mutex<Vec<EventCallback>>>,
-	error_listeners: Arc<Mutex<Vec<EventCallback>>>,
-	complete_listeners: Arc<Mutex<Vec<EventCallback>>>,
+	// Event listeners with typed callbacks
+	progress_listeners: Arc<Mutex<Vec<ProgressCallback>>>,
+	message_listeners: Arc<Mutex<Vec<MessageCallback>>>,
+	complete_listeners: Arc<Mutex<Vec<CompleteCallback>>>,
 
 	// Channel to signal completion
 	completion_tx: Arc<Mutex<Option<oneshot::Sender<Result<()>>>>>,
@@ -68,9 +60,7 @@ impl Progress {
 
 		Progress {
 			progress_listeners: Arc::new(Mutex::new(Vec::new())),
-			step_listeners: Arc::new(Mutex::new(Vec::new())),
-			warning_listeners: Arc::new(Mutex::new(Vec::new())),
-			error_listeners: Arc::new(Mutex::new(Vec::new())),
+			message_listeners: Arc::new(Mutex::new(Vec::new())),
 			complete_listeners: Arc::new(Mutex::new(Vec::new())),
 			completion_tx: Arc::new(Mutex::new(Some(tx))),
 			completion_rx: Arc::new(Mutex::new(Some(rx))),
@@ -86,68 +76,42 @@ impl Default for Progress {
 
 #[napi]
 impl Progress {
-	/// Register an event listener
+	/// Register a progress event listener
 	///
-	/// Supported events:
-	/// - 'progress': Emitted with ProgressData on progress updates
-	/// - 'step': Emitted with string message when operation phase changes
-	/// - 'warning': Emitted with warning message
-	/// - 'error': Emitted with error message
-	/// - 'complete': Emitted when operation completes successfully
-	#[napi]
-	pub fn on(&self, event: String, callback: JsFunction) -> Result<&Self> {
-		// Create a threadsafe function based on event type
-		let tsfn: EventCallback = callback.create_threadsafe_function(0, |ctx| {
-			let event = ctx.value;
+	/// The callback receives ProgressData with position, total, percentage, speed, eta, and message
+	#[napi(ts_args_type = "callback: (data: ProgressData) => void")]
+	pub fn on_progress(&self, callback: Function<'static>) -> Result<&Self> {
+		let tsfn = callback
+			.build_threadsafe_function::<ProgressData>()
+			.build_callback(|ctx| Ok(ctx.value))?;
+		let mut listeners = self.progress_listeners.lock().unwrap();
+		listeners.push(tsfn);
+		Ok(self)
+	}
 
-			match event {
-				ProgressEvent::Progress(data) => {
-					let mut obj = ctx.env.create_object()?;
-					obj.set("position", data.position)?;
-					obj.set("total", data.total)?;
-					obj.set("percentage", data.percentage)?;
-					obj.set("speed", data.speed)?;
-					obj.set("eta", data.eta)?;
-					if let Some(msg) = data.message {
-						obj.set("message", msg)?;
-					}
-					Ok(vec![obj.into_unknown()])
-				}
-				ProgressEvent::Step(msg) | ProgressEvent::Warning(msg) | ProgressEvent::Error(msg) => {
-					let js_string = ctx.env.create_string(&msg)?;
-					Ok(vec![js_string.into_unknown()])
-				}
-				ProgressEvent::Complete => Ok(vec![]),
-			}
-		})?;
+	/// Register a message event listener for step, warning, and error messages
+	///
+	/// The callback receives (type, message) where type is 'step', 'warning', or 'error'
+	#[napi(ts_args_type = "callback: (type: string, message: string) => void")]
+	pub fn on_message(&self, callback: Function<'static>) -> Result<&Self> {
+		let tsfn = callback
+			.build_threadsafe_function::<(String, String)>()
+			.build_callback(|ctx| Ok(ctx.value))?;
+		let mut listeners = self.message_listeners.lock().unwrap();
+		listeners.push(tsfn);
+		Ok(self)
+	}
 
-		// Store the callback in the appropriate listener list
-		match event.as_str() {
-			"progress" => {
-				let mut listeners = self.progress_listeners.lock().unwrap();
-				listeners.push(tsfn);
-			}
-			"step" => {
-				let mut listeners = self.step_listeners.lock().unwrap();
-				listeners.push(tsfn);
-			}
-			"warning" => {
-				let mut listeners = self.warning_listeners.lock().unwrap();
-				listeners.push(tsfn);
-			}
-			"error" => {
-				let mut listeners = self.error_listeners.lock().unwrap();
-				listeners.push(tsfn);
-			}
-			"complete" => {
-				let mut listeners = self.complete_listeners.lock().unwrap();
-				listeners.push(tsfn);
-			}
-			_ => {
-				return Err(Error::from_reason(format!("Unknown event type: {}", event)));
-			}
-		}
-
+	/// Register a complete event listener
+	///
+	/// The callback is called with no arguments when the operation completes
+	#[napi(ts_args_type = "callback: () => void")]
+	pub fn on_complete(&self, callback: Function<'static>) -> Result<&Self> {
+		let tsfn = callback
+			.build_threadsafe_function::<()>()
+			.build_callback(|_ctx| Ok(()))?;
+		let mut listeners = self.complete_listeners.lock().unwrap();
+		listeners.push(tsfn);
 		Ok(self)
 	}
 
@@ -175,8 +139,16 @@ impl Progress {
 	pub fn emit_progress(&self, data: ProgressData) {
 		let listeners = self.progress_listeners.lock().unwrap();
 		for listener in listeners.iter() {
+			let _ = listener.call(data.clone(), ThreadsafeFunctionCallMode::NonBlocking);
+		}
+	}
+
+	/// Emit a message event to all registered listeners
+	fn emit_message(&self, msg_type: &str, message: String) {
+		let listeners = self.message_listeners.lock().unwrap();
+		for listener in listeners.iter() {
 			let _ = listener.call(
-				ProgressEvent::Progress(data.clone()),
+				(msg_type.to_string(), message.clone()),
 				ThreadsafeFunctionCallMode::NonBlocking,
 			);
 		}
@@ -184,42 +156,24 @@ impl Progress {
 
 	/// Emit a step event
 	pub fn emit_step(&self, message: String) {
-		let listeners = self.step_listeners.lock().unwrap();
-		for listener in listeners.iter() {
-			let _ = listener.call(
-				ProgressEvent::Step(message.clone()),
-				ThreadsafeFunctionCallMode::NonBlocking,
-			);
-		}
+		self.emit_message("step", message);
 	}
 
 	/// Emit a warning event
 	pub fn emit_warning(&self, message: String) {
-		let listeners = self.warning_listeners.lock().unwrap();
-		for listener in listeners.iter() {
-			let _ = listener.call(
-				ProgressEvent::Warning(message.clone()),
-				ThreadsafeFunctionCallMode::NonBlocking,
-			);
-		}
+		self.emit_message("warning", message);
 	}
 
 	/// Emit an error event
 	pub fn emit_error(&self, message: String) {
-		let listeners = self.error_listeners.lock().unwrap();
-		for listener in listeners.iter() {
-			let _ = listener.call(
-				ProgressEvent::Error(message.clone()),
-				ThreadsafeFunctionCallMode::NonBlocking,
-			);
-		}
+		self.emit_message("error", message);
 	}
 
 	/// Emit a complete event
 	pub fn emit_complete(&self) {
 		let listeners = self.complete_listeners.lock().unwrap();
 		for listener in listeners.iter() {
-			let _ = listener.call(ProgressEvent::Complete, ThreadsafeFunctionCallMode::NonBlocking);
+			let _ = listener.call((), ThreadsafeFunctionCallMode::NonBlocking);
 		}
 	}
 

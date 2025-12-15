@@ -28,7 +28,9 @@ describe('Progress', () => {
 			});
 
 			expect(progress).toBeDefined();
-			expect(typeof progress.on).toBe('function');
+			expect(typeof progress.onProgress).toBe('function');
+			expect(typeof progress.onMessage).toBe('function');
+			expect(typeof progress.onComplete).toBe('function');
 			expect(typeof progress.done).toBe('function');
 
 			// Wait for completion
@@ -44,7 +46,7 @@ describe('Progress', () => {
 				maxZoom: 7,
 			});
 
-			progress.on('progress', progressCallback);
+			progress.onProgress(progressCallback);
 
 			await progress.done();
 
@@ -56,22 +58,24 @@ describe('Progress', () => {
 
 		it('should emit step events', async () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
-			const stepCallback = vi.fn();
+			const messageCallback = vi.fn();
 
 			const progress = reader.convertToWithProgress(OUTPUT_PATH, {
 				minZoom: 5,
 				maxZoom: 7,
 			});
 
-			progress.on('step', stepCallback);
+			progress.onMessage(messageCallback);
 
 			await progress.done();
 
-			// Note: Step events may be emitted before listeners are registered
+			// Note: Message events may be emitted before listeners are registered
 			// due to the async nature of the conversion. We just verify that
-			// if we got any step events, they are strings.
-			stepCallback.mock.calls.forEach((call) => {
-				expect(typeof call[0]).toBe('string');
+			// if we got any message events, they have the correct structure.
+			messageCallback.mock.calls.forEach((call) => {
+				expect(typeof call[0]).toBe('string'); // type
+				expect(typeof call[1]).toBe('string'); // message
+				expect(['step', 'warning', 'error']).toContain(call[0]);
 			});
 		});
 
@@ -84,7 +88,7 @@ describe('Progress', () => {
 				maxZoom: 7,
 			});
 
-			progress.on('complete', completeCallback);
+			progress.onComplete(completeCallback);
 
 			await progress.done();
 
@@ -101,8 +105,8 @@ describe('Progress', () => {
 				maxZoom: 7,
 			});
 
-			progress.on('complete', completeCallback1);
-			progress.on('complete', completeCallback2);
+			progress.onComplete(completeCallback1);
+			progress.onComplete(completeCallback2);
 
 			await progress.done();
 
@@ -111,7 +115,7 @@ describe('Progress', () => {
 			expect(completeCallback2).toHaveBeenCalledTimes(1);
 		});
 
-		it('should support chaining on() calls', async () => {
+		it('should support chaining method calls', async () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
 			const progressCallback = vi.fn();
 			const completeCallback = vi.fn();
@@ -121,8 +125,8 @@ describe('Progress', () => {
 					minZoom: 5,
 					maxZoom: 7,
 				})
-				.on('progress', progressCallback)
-				.on('complete', completeCallback);
+				.onProgress(progressCallback)
+				.onComplete(completeCallback);
 
 			await progress.done();
 
@@ -141,7 +145,7 @@ describe('Progress', () => {
 			});
 
 			const progressDataPromise = new Promise((resolve) => {
-				progress.on('progress', (data) => {
+				progress.onProgress((data) => {
 					resolve(data);
 				});
 			});
@@ -177,7 +181,11 @@ describe('Progress', () => {
 			// Try to write to an invalid path
 			const progress = reader.convertToWithProgress('/invalid/path/output.versatiles');
 
-			progress.on('error', errorCallback);
+			progress.onMessage((type: string, message: string) => {
+				if (type === 'error') {
+					errorCallback(message);
+				}
+			});
 
 			// Should throw an error
 			await expect(progress.done()).rejects.toThrow();
