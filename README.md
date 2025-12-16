@@ -27,10 +27,13 @@ VersaTiles is a Rust-based tool for processing and serving tile data efficiently
 - [Configuration](#configuration)
 - [GDAL support](#gdal-support)
 - [Development](#development)
-  - [Running All Checks](#running-all-checks)
-  - [Quick Fixes](#quick-fixes)
+  - [Prerequisites](#prerequisites)
+  - [Quick Start](#quick-start-1)
+  - [Development Workflow](#development-workflow)
   - [Pre-commit Hooks (Recommended)](#pre-commit-hooks-recommended)
-  - [More Information](#more-information)
+  - [Node.js Bindings Development](#nodejs-bindings-development)
+  - [Release Process](#release-process)
+  - [Contributing](#contributing)
 - [Repository Structure](#repository-structure)
 - [Using as a Library](#using-as-a-library)
 - [Additional Information](#additional-information)
@@ -602,29 +605,129 @@ Due to the numerous combinations of operating systems, package managers and GDAL
 
 ## Development
 
-### Running All Checks
+VersaTiles is built with Rust and includes Node.js bindings (NAPI-RS).
 
-To verify code quality before committing, run:
+### Prerequisites
+
+**Required:**
+- Rust 1.92+ ([installation](https://www.rust-lang.org/tools/install))
+- Node.js 20+ (for Node.js bindings)
+
+**Optional:**
+- [Lefthook](https://github.com/evilmartians/lefthook) - Pre-commit hooks
+- GDAL 3.x - For GDAL support ([build instructions](#building-with-gdal-support))
+
+### Quick Start
+
+```bash
+# Clone repository
+git clone https://github.com/versatiles-org/versatiles-rs.git
+cd versatiles-rs
+
+# Build debug version
+cargo build --bin versatiles
+
+# Run tests
+cargo test
+
+# Run binary
+./target/debug/versatiles --version
+```
+
+### Development Workflow
+
+#### Running All Checks
+
+Verify code quality before committing:
 
 ```bash
 ./scripts/check.sh
 ```
 
-This runs all checks for both Rust and Node.js code:
-- Rust: formatting, linting (clippy), type-checking, tests, documentation
-- Node.js: formatting (Prettier), linting (ESLint), type-checking (TypeScript), tests
+This runs:
+- **Rust:** formatting (rustfmt), linting (clippy), type-checking, tests, doc tests
+- **Node.js:** formatting (Prettier), linting (ESLint), type-checking (TypeScript), tests (Vitest)
 
-### Quick Fixes
+#### Quick Fixes
 
-**Auto-fix Rust code:**
+**Rust:**
 ```bash
+# Auto-format
 cargo fmt
+
+# Auto-fix clippy warnings
+cargo clippy --fix
+
+# Run specific tests
+cargo test raster_overscale
+cargo test --package versatiles_pipeline
 ```
 
-**Auto-fix Node.js code:**
+**Node.js:**
 ```bash
 cd versatiles_node
-npm run fix  # Runs lint:fix and format
+
+# Auto-fix all issues
+npm run fix
+
+# Individual tasks
+npm run format        # Prettier
+npm run lint:fix      # ESLint auto-fix
+npm run typecheck     # TypeScript check
+npm test              # Vitest
+```
+
+#### Building
+
+**Debug build (fast compilation, slow execution):**
+```bash
+cargo build --bin versatiles
+# Output: ./target/debug/versatiles
+```
+
+**Release build (slow compilation, fast execution):**
+```bash
+cargo build --bin versatiles --release
+# Output: ./target/release/versatiles
+```
+
+**With GDAL support:**
+```bash
+# Build GDAL first
+./scripts/install-gdal.sh
+
+# Build with GDAL features
+./scripts/build_release.sh
+```
+
+#### Testing
+
+```bash
+# All tests
+cargo test
+
+# Specific package
+cargo test --package versatiles_core
+cargo test --package versatiles_pipeline
+
+# Specific test
+cargo test raster_overscale
+
+# With output
+cargo test -- --nocapture
+
+# Ignored tests (long-running)
+cargo test -- --ignored
+```
+
+#### Documentation
+
+```bash
+# Generate docs
+cargo doc --no-deps --open
+
+# Test docs
+cargo test --doc
 ```
 
 ### Pre-commit Hooks (Recommended)
@@ -635,16 +738,86 @@ Install [Lefthook](https://github.com/evilmartians/lefthook) for automatic quali
 # macOS
 brew install lefthook
 
+# Linux
+curl -fsSL https://raw.githubusercontent.com/evilmartians/lefthook/main/install.sh | sh
+
+# Windows
+scoop install lefthook
+
 # Enable hooks
 lefthook install
 ```
 
-This runs fast checks before commits and full checks before pushes, catching issues early.
+**Hook behavior:**
+- **pre-commit:** Fast checks (formatting, basic linting)
+- **pre-push:** Full checks (all tests, clippy, type-checking)
 
-### More Information
+**Skip hooks when needed:**
+```bash
+# Skip pre-commit
+LEFTHOOK=0 git commit -m "message"
 
-- **Node.js bindings**: See [versatiles_node/CONTRIBUTING.md](versatiles_node/CONTRIBUTING.md) for detailed development workflow
-- **Quick reference**: See [DEVELOPMENT.md](DEVELOPMENT.md) for common commands
+# Skip pre-push
+git push --no-verify
+```
+
+### Node.js Bindings Development
+
+See [versatiles_node/CONTRIBUTING.md](versatiles_node/CONTRIBUTING.md) for detailed workflow.
+
+**Quick reference:**
+
+```bash
+cd versatiles_node
+
+# Install dependencies
+npm install
+
+# Build Rust bindings
+npm run build
+
+# Build debug (faster compilation)
+npm run build:debug
+
+# Run tests
+npm test
+
+# Full check before commit
+npm run check
+```
+
+### Contributing
+
+We welcome contributions! Please:
+
+1. **Fork and create a feature branch:**
+   ```bash
+   git checkout -b feature/my-feature
+   ```
+
+2. **Make changes and test:**
+   ```bash
+   ./scripts/check.sh
+   ```
+
+3. **Commit with clear messages:**
+   ```bash
+   git commit -m "feat: add new feature"
+   ```
+
+4. **Push and create pull request:**
+   ```bash
+   git push origin feature/my-feature
+   ```
+
+**Commit message format:**
+- `feat:` New feature
+- `fix:` Bug fix
+- `docs:` Documentation only
+- `style:` Formatting, no code change
+- `refactor:` Code restructuring
+- `test:` Adding tests
+- `chore:` Maintenance tasks
 
 ---
 
