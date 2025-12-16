@@ -19,6 +19,7 @@ VersaTiles is a Rust-based tool for processing and serving tile data efficiently
   - [Docker](#docker)
   - [Building with Cargo](#building-with-cargo)
   - [Building from Source](#building-from-source)
+- [Quick Start](#quick-start)
 - [Usage](#usage)
   - [Convert Tiles](#convert-tiles)
   - [Serve Tiles](#serve-tiles)
@@ -136,6 +137,54 @@ git clone https://github.com/versatiles-org/versatiles-rs.git
 cd versatiles-rs
 cargo build --bin versatiles --release
 cp ./target/release/versatiles /usr/local/bin/
+```
+
+---
+
+## Quick Start
+
+Get started with VersaTiles in 3 steps:
+
+### 1. Verify Installation
+
+```sh
+versatiles --version
+```
+
+### 2. Download Sample Data
+
+```sh
+# Download a small region (Berlin, ~60MB)
+versatiles convert --bbox=13.0,52.3,13.8,52.7 --bbox-border=3 https://download.versatiles.org/osm.versatiles berlin.versatiles
+```
+
+### 3. Explore Your Data
+
+```sh
+# View tile information
+versatiles probe berlin.versatiles
+
+# Serve tiles locally
+versatiles serve berlin.versatiles
+
+# Access at http://localhost:8080
+```
+
+### Common Workflows
+
+**Convert tile formats:**
+```sh
+versatiles convert input.mbtiles output.versatiles
+```
+
+**Filter by zoom level:**
+```sh
+versatiles convert --min-zoom=5 --max-zoom=12 input.versatiles output.versatiles
+```
+
+**Extract a region:**
+```sh
+versatiles convert --bbox=13.0,52.3,13.8,52.7 world.versatiles berlin.versatiles
 ```
 
 ---
