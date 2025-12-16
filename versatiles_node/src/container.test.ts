@@ -165,7 +165,7 @@ describe('ContainerReader', () => {
 		});
 
 		it('should convert to versatiles format', async () => {
-			await reader.convertTo(OUTPUT_PATH);
+			await (await reader.convertTo(OUTPUT_PATH)).done();
 			expect(fs.existsSync(OUTPUT_PATH)).toBeTruthy();
 
 			// Verify we can open the converted file
@@ -177,12 +177,13 @@ describe('ContainerReader', () => {
 		});
 
 		it('should convert with options', async () => {
-			await reader.convertTo(OUTPUT_PATH, {
-				minZoom: 5,
-				maxZoom: 7,
-				compress: 'gzip',
-			});
-
+			await (
+				await reader.convertTo(OUTPUT_PATH, {
+					minZoom: 5,
+					maxZoom: 7,
+					compress: 'gzip',
+				})
+			).done();
 			expect(fs.existsSync(OUTPUT_PATH)).toBeTruthy();
 
 			const newReader = await ContainerReader.open(OUTPUT_PATH);

@@ -85,7 +85,7 @@ impl ContainerReader {
 	/// Use progress.onComplete(callback) to be notified when complete.
 	/// Use await progress.done() to wait for completion.
 	#[napi]
-	pub async fn convert_to_with_progress(&self, output: String, options: Option<ConvertOptions>) -> Result<Progress> {
+	pub async fn convert_to(&self, output: String, options: Option<ConvertOptions>) -> Result<Progress> {
 		let progress = Progress::new();
 		let progress_arc = Arc::new(progress);
 
@@ -116,14 +116,6 @@ impl ContainerReader {
 		// Return the Progress object immediately
 		// We need to extract the Progress from Arc and clone it
 		Ok((*progress_arc).clone())
-	}
-
-	/// Convert this container to another format
-	#[napi]
-	pub async fn convert_to(&self, output: String, options: Option<ConvertOptions>) -> Result<()> {
-		Self::do_convert(self.reader.clone(), self.registry.clone(), output, options, None)
-			.await
-			.map_err(|e| Error::from_reason(e.to_string()))
 	}
 
 	/// Internal conversion implementation

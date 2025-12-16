@@ -19,10 +19,10 @@ afterAll(() => {
 });
 
 describe('Progress', () => {
-	describe('convertToWithProgress()', () => {
+	describe('convertTo()', () => {
 		it('should return a Progress object', async () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
-			const progress = await reader.convertToWithProgress(OUTPUT_PATH, {
+			const progress = await reader.convertTo(OUTPUT_PATH, {
 				minZoom: 5,
 				maxZoom: 7,
 			});
@@ -41,7 +41,7 @@ describe('Progress', () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
 			const progressCallback = vi.fn();
 
-			const progress = await reader.convertToWithProgress(OUTPUT_PATH, {
+			const progress = await reader.convertTo(OUTPUT_PATH, {
 				minZoom: 5,
 				maxZoom: 7,
 			});
@@ -60,7 +60,7 @@ describe('Progress', () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
 			const messageCallback = vi.fn();
 
-			const progress = await reader.convertToWithProgress(OUTPUT_PATH, {
+			const progress = await reader.convertTo(OUTPUT_PATH, {
 				minZoom: 5,
 				maxZoom: 7,
 			});
@@ -83,7 +83,7 @@ describe('Progress', () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
 			const completeCallback = vi.fn();
 
-			const progress = await reader.convertToWithProgress(OUTPUT_PATH, {
+			const progress = await reader.convertTo(OUTPUT_PATH, {
 				minZoom: 5,
 				maxZoom: 7,
 			});
@@ -100,7 +100,7 @@ describe('Progress', () => {
 			const completeCallback1 = vi.fn();
 			const completeCallback2 = vi.fn();
 
-			const progress = await reader.convertToWithProgress(OUTPUT_PATH, {
+			const progress = await reader.convertTo(OUTPUT_PATH, {
 				minZoom: 5,
 				maxZoom: 7,
 			});
@@ -121,7 +121,7 @@ describe('Progress', () => {
 			const completeCallback = vi.fn();
 
 			const progress = (
-				await reader.convertToWithProgress(OUTPUT_PATH, {
+				await reader.convertTo(OUTPUT_PATH, {
 					minZoom: 5,
 					maxZoom: 7,
 				})
@@ -140,7 +140,7 @@ describe('Progress', () => {
 		it('should verify ProgressData structure', async () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
 
-			const progress = await reader.convertToWithProgress(OUTPUT_PATH, {
+			const progress = await reader.convertTo(OUTPUT_PATH, {
 				minZoom: 5,
 				maxZoom: 7,
 			});
@@ -180,7 +180,7 @@ describe('Progress', () => {
 			const errorCallback = vi.fn();
 
 			// Try to write to an invalid path
-			const progress = await reader.convertToWithProgress('/invalid/path/output.versatiles');
+			const progress = await reader.convertTo('/invalid/path/output.versatiles');
 
 			progress.onMessage((type: string, message: string) => {
 				if (type === 'error') {
@@ -201,7 +201,7 @@ describe('Progress', () => {
 		it('should throw error when done() is called twice', async () => {
 			const reader = await ContainerReader.open(MBTILES_PATH);
 
-			const progress = await reader.convertToWithProgress(OUTPUT_PATH, {
+			const progress = await reader.convertTo(OUTPUT_PATH, {
 				minZoom: 5,
 				maxZoom: 7,
 			});
