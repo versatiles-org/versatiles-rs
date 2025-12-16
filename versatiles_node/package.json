@@ -41,7 +41,7 @@
 		"artifacts": "napi artifacts",
 		"build:debug": "napi build --platform",
 		"build": "napi build --platform --release",
-		"check": "npm run build && npm run typecheck && npm run lint && npm run format:check && npm test",
+		"check": "npm run build:debug && npm run typecheck && npm run lint && npm run format:check && npm test",
 		"fix": "npm run lint:fix && npm run format",
 		"format:check": "prettier --check .",
 		"format": "prettier --write .",
