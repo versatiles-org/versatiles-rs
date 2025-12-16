@@ -274,6 +274,38 @@ This runs fast checks before commits and full checks before pushes, catching iss
 - **/versatiles_image/** - Manages image data (PNG, JPEG, WEBP)
 - **/versatiles_pipeline/** - VersaTiles Pipeline for efficient tile processing
 
+Dependencies of the versatiles packages:
+```mermaid
+---
+config:
+  layout: elk
+---
+flowchart TB
+    versatiles --> versatiles_container
+    versatiles --> versatiles_core
+    versatiles --> versatiles_derive
+    versatiles --> versatiles_geometry
+    versatiles --> versatiles_image
+    versatiles --> versatiles_pipeline
+    versatiles_container --> versatiles_core
+    versatiles_container --> versatiles_derive
+    versatiles_container --> versatiles_geometry
+    versatiles_container --> versatiles_image
+    versatiles_core --> versatiles_derive
+    versatiles_geometry --> versatiles_core
+    versatiles_geometry --> versatiles_derive
+    versatiles_image --> versatiles_core
+    versatiles_image --> versatiles_derive
+    versatiles_node --> versatiles
+    versatiles_node --> versatiles_container
+    versatiles_node --> versatiles_core
+    versatiles_pipeline --> versatiles_container
+    versatiles_pipeline --> versatiles_core
+    versatiles_pipeline --> versatiles_derive
+    versatiles_pipeline --> versatiles_geometry
+    versatiles_pipeline --> versatiles_image
+```
+
 ### Helpers
 
 - **/docker/** - Dockerfile for Linux builds
