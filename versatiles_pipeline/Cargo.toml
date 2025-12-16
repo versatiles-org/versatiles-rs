@@ -23,6 +23,7 @@ imageproc = { version = "0.25.0", default-features = false }
 itertools = { workspace = true, features = ["use_alloc"] }
 lazy_static.workspace = true
 log.workspace = true
+lru = "0.16.2"
 nom = { version = "8.0.0" }
 nom-language = { version = "0.1.0" }
 regex.workspace = true

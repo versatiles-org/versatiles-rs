@@ -1,11 +1,14 @@
 use crate::{PipelineFactory, traits::*, vpl::VPLNode};
 use anyhow::Result;
 use async_trait::async_trait;
+use lru::LruCache;
 use std::fmt::Debug;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 use versatiles_container::Tile;
 use versatiles_core::*;
 use versatiles_derive::context;
-use versatiles_image::traits::*;
+use versatiles_image::{DynamicImage, traits::*};
 
 #[derive(versatiles_derive::VPLDecode, Clone, Debug)]
 /// Filter tiles by bounding box and/or zoom levels.
@@ -19,12 +22,52 @@ struct Args {
 }
 
 #[derive(Debug)]
+struct TileCache {
+	lru: LruCache<TileCoord, Arc<DynamicImage>>,
+	max_memory_bytes: usize,
+	current_memory_bytes: usize,
+}
+
+impl TileCache {
+	fn new(max_memory_mb: usize) -> Self {
+		Self {
+			lru: LruCache::unbounded(),
+			max_memory_bytes: max_memory_mb * 1024 * 1024,
+			current_memory_bytes: 0,
+		}
+	}
+
+	fn insert(&mut self, coord: TileCoord, image: Arc<DynamicImage>) {
+		let image_bytes = (image.width() * image.height() * 4) as usize;
+
+		// Evict until we have space
+		while self.current_memory_bytes + image_bytes > self.max_memory_bytes {
+			if let Some((_, evicted)) = self.lru.pop_lru() {
+				let evicted_bytes = (evicted.width() * evicted.height() * 4) as usize;
+				self.current_memory_bytes -= evicted_bytes;
+			} else {
+				break;
+			}
+		}
+
+		self.lru.put(coord, image);
+		self.current_memory_bytes += image_bytes;
+	}
+
+	fn get(&mut self, coord: &TileCoord) -> Option<Arc<DynamicImage>> {
+		self.lru.get(coord).cloned()
+	}
+}
+
+#[derive(Debug)]
 struct Operation {
 	parameters: TilesReaderParameters,
 	source: Box<dyn OperationTrait>,
 	tilejson: TileJSON,
 	level_base: u8,
+	level_min: u8,
 	tile_size: u32,
+	cache: Arc<Mutex<TileCache>>,
 }
 
 impl Operation {
@@ -52,13 +95,97 @@ impl Operation {
 		let mut tilejson = source.tilejson().clone();
 		tilejson.update_from_reader_parameters(&parameters);
 
+		let level_min = source.parameters().bbox_pyramid.get_level_min().unwrap_or(0);
+		let cache = Arc::new(Mutex::new(TileCache::new(512)));
+
 		Ok(Self {
 			parameters,
 			source,
 			tilejson,
 			level_base,
+			level_min,
 			tile_size: args.tile_size.unwrap_or(512),
+			cache,
 		})
+	}
+
+	async fn get_tile_with_climbing(&self, coord_dst: TileCoord) -> Result<Option<Tile>> {
+		let level_dst = coord_dst.level;
+		let mut search_level = self.level_base.min(level_dst);
+		let mut coord_src = coord_dst.as_level(search_level);
+
+		loop {
+			// 1. Check cache
+			{
+				let mut cache = self.cache.lock().await;
+				if let Some(cached_image) = cache.get(&coord_src) {
+					drop(cache);
+					return self.extract_tile(cached_image, coord_dst, coord_src).await;
+				}
+			}
+
+			// 2. Try to fetch from source
+			let bbox = coord_src.as_tile_bbox();
+			let mut stream = self.source.get_stream(bbox).await?;
+
+			if let Some((found_coord, tile)) = stream.next().await
+				&& found_coord == coord_src
+			{
+				let image = tile.into_image()?;
+				let image_arc = Arc::new(image);
+
+				// Cache it
+				{
+					let mut cache = self.cache.lock().await;
+					cache.insert(coord_src, image_arc.clone());
+				}
+
+				return self.extract_tile(image_arc, coord_dst, coord_src).await;
+			}
+
+			// 3. Tile not found - climb to parent
+			if search_level <= self.level_min {
+				return Ok(None);
+			}
+
+			search_level -= 1;
+			coord_src = coord_src.as_level_decreased()?;
+		}
+	}
+
+	async fn extract_tile(
+		&self,
+		source_image: Arc<DynamicImage>,
+		coord_dst: TileCoord,
+		coord_src: TileCoord,
+	) -> Result<Option<Tile>> {
+		let level_diff = coord_dst.level - coord_src.level;
+
+		if level_diff == 0 {
+			// Same level - use as-is
+			let tile = Tile::from_image((*source_image).clone(), self.parameters.tile_format)?;
+			return Ok(Some(tile));
+		}
+
+		// Calculate extraction parameters
+		let scale = 1 << level_diff;
+		let tile_size = self.tile_size as f64;
+		let sub_size = tile_size / scale as f64;
+
+		let tile_offset_x = (coord_dst.x % scale) as f64;
+		let tile_offset_y = (coord_dst.y % scale) as f64;
+
+		let x0 = tile_offset_x * sub_size;
+		let y0 = tile_offset_y * sub_size;
+
+		// Extract and scale
+		match source_image.get_extract(x0, y0, sub_size, sub_size, self.tile_size, self.tile_size) {
+			Ok(img) => Ok(Some(Tile::from_image(img, self.parameters.tile_format)?)),
+			Err(e) => {
+				log::warn!("Failed to extract tile {:?} from {:?}: {}", coord_dst, coord_src, e);
+				Ok(None)
+			}
+		}
 	}
 }
 
@@ -90,37 +217,18 @@ impl OperationTrait for Operation {
 			return self.source.get_stream(bbox_dst).await;
 		}
 
-		let level_dst = bbox_dst.level;
+		// Use tile climbing for all upscaling
+		let coords: Vec<TileCoord> = bbox_dst.into_iter_coords().collect();
 
-		let bbox_base = bbox_dst.at_level(self.level_base);
-		let stream_base = self.source.get_stream(bbox_base).await?;
+		// Process each coordinate
+		let mut tiles = Vec::new();
+		for coord in coords {
+			if let Some(tile) = self.get_tile_with_climbing(coord).await? {
+				tiles.push((coord, tile));
+			}
+		}
 
-		let tile_size = self.tile_size;
-		let tile_size_f64 = tile_size as f64;
-		let scale = (1 << (bbox_dst.level - self.level_base)) as f64;
-		let s = tile_size_f64 / scale;
-		let format = self.source.parameters().tile_format;
-
-		Ok(stream_base.flat_map_parallel(move |coord_base, tile_src| {
-			let mut bbox = coord_base.as_tile_bbox().at_level(level_dst);
-			bbox.intersect_with(&bbox_dst)?;
-
-			let image_src = tile_src.into_image()?;
-
-			Ok(TileStream::from_iter_coord_parallel(
-				bbox.into_iter_coords(),
-				move |coord| {
-					let x0 = coord.x as f64 * s - (coord_base.x as f64 * tile_size_f64);
-					let y0 = coord.y as f64 * s - (coord_base.y as f64 * tile_size_f64);
-
-					let image_dst = image_src.get_extract(x0, y0, s, s, tile_size, tile_size).unwrap();
-
-					image_dst
-						.into_optional()
-						.map(|image_dst| Tile::from_image(image_dst, format).unwrap())
-				},
-			))
-		}))
+		Ok(TileStream::from_vec(tiles))
 	}
 }
 
