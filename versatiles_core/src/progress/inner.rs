@@ -57,7 +57,7 @@ impl Inner {
 
 	#[allow(unused_variables)]
 	pub fn write(&mut self, line: &str) {
-		#[cfg(not(any(test, feature = "test", feature = "no-terminal")))]
+		#[cfg(not(any(test, feature = "test", not(feature = "cli"))))]
 		{
 			use std::io::Write;
 			let mut output = std::io::stderr();

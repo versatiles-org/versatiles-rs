@@ -18,7 +18,7 @@ napi-derive = "3.4.0"
 tokio.workspace = true
 versatiles = { workspace = true, default-features = false, features = ["server"] }
 versatiles_container.workspace = true
-versatiles_core = { workspace = true, features = ["no-terminal"] }
+versatiles_core = { workspace = true, default-features = false }
 
 [build-dependencies]
 napi-build = "2"

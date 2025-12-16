@@ -49,7 +49,6 @@ wildmatch.workspace = true
 default = ["cli"]
 cli = ["dep:clap", "dep:colored"]
 test = []
-no-terminal = []
 
 [[bench]]
 name = "byte_iterator"
