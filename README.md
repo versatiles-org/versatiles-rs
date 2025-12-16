@@ -21,8 +21,8 @@ VersaTiles is a Rust-based tool for processing and serving tile data efficiently
   - [Building from Source](#building-from-source)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
-  - [Convert Tiles](#convert-tiles)
-  - [Serve Tiles](#serve-tiles)
+  - [Core Concepts](#core-concepts)
+  - [Commands](#commands)
   - [VersaTiles Pipeline Language](#versatiles-pipeline-language)
 - [GDAL support](#gdal-support)
 - [Development](#development)
@@ -191,6 +191,24 @@ versatiles convert --bbox=13.0,52.3,13.8,52.7 world.versatiles berlin.versatiles
 
 ## Usage
 
+### Core Concepts
+
+VersaTiles works with **tile containers** - files or directories containing map tiles organized by zoom level (z), column (x), and row (y).
+
+**Supported formats:**
+- `.versatiles` - Native format (best compression, fastest access)
+- `.mbtiles` - SQLite-based (widely compatible)
+- `.pmtiles` - Cloud-optimized single-file format
+- `.tar` - Simple archive format
+- Directories - Folder structure: `z/x/y.ext`
+
+**Remote access:** VersaTiles can read remote `.versatiles` and `.pmtiles` files via HTTPS:
+```sh
+versatiles serve https://download.versatiles.org/osm.versatiles
+```
+
+### Commands
+
 Run `versatiles` to see available commands:
 
 ```
@@ -200,44 +218,230 @@ Commands:
   convert  Convert between different tile containers
   probe    Show information about a tile container
   serve    Serve tiles via HTTP
+  dev      Developer tools (unstable)
   help     Show detailed help
 ```
 
-### Convert Tiles
+#### convert - Convert Between Tile Formats
 
-Convert between different tile formats, e.g. from `*.tar` to `*.versatiles`:
+Convert tiles between formats, filter by region or zoom, and transform coordinates.
 
+**Basic conversion:**
 ```sh
-versatiles convert satellite_tiles.tar satellite_tiles.versatiles
+versatiles convert input.mbtiles output.versatiles
 ```
 
-### Serve Tiles
+**Advanced options:**
 
-You can run a local HTTP server to serve your tile data:
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--min-zoom`, `--max-zoom` | Filter zoom levels | `--min-zoom=5 --max-zoom=12` |
+| `--bbox` | Extract region (lon_min,lat_min,lon_max,lat_max) | `--bbox=13.0,52.3,13.8,52.7` |
+| `--bbox-border` | Add border tiles around bbox | `--bbox-border=3` |
+| `--compress` | Set compression (gzip, brotli, zstd) | `--compress=brotli` |
+| `--tile-format` | Convert tile format (png, jpg, webp, avif, pbf) | `--tile-format=webp` |
+| `--swap-xy` | Swap X/Y coordinates (z/x/y → z/y/x) | `--swap-xy` |
+| `--flip-y` | Flip tiles vertically | `--flip-y` |
+
+**Real-world examples:**
 
 ```sh
-versatiles serve satellite_tiles.versatiles
+# Extract city region from world tiles
+versatiles convert --bbox=13.0,52.3,13.8,52.7 \
+  world.versatiles berlin.versatiles
+
+# Compress tiles with maximum compression
+versatiles convert --compress=brotli \
+  uncompressed.tar compressed.versatiles
+
+# Convert image format for smaller file size
+versatiles convert --tile-format=webp \
+  tiles.mbtiles tiles-webp.versatiles
+
+# Fix coordinate system (TMS to XYZ)
+versatiles convert --flip-y \
+  tms-tiles.mbtiles xyz-tiles.versatiles
+
+# Remote conversion with zoom filtering
+versatiles convert --min-zoom=1 --max-zoom=10 \
+  https://download.versatiles.org/osm.versatiles \
+  local-osm-filtered.versatiles
 ```
 
-By default, this starts a simple HTTP server that serves the tiles from the specified container file.
+#### probe - Inspect Tile Containers
 
-You can also configure the server using a YAML configuration file:
+Analyze tile containers to understand their contents and structure.
+
+**Basic usage:**
 ```sh
-versatiles serve -c config.yaml
+versatiles probe tiles.versatiles
 ```
 
-This allows you to define multiple tile sources, set custom CORS headers, enable compression, and fine-tune server behavior.
+**Depth levels:**
 
-For a full description of all configuration options, see the [configuration reference](https://github.com/versatiles-org/versatiles-rs/blob/main/versatiles/config.md) or run:
+| Level | Flag | Scans | Use Case |
+|-------|------|-------|----------|
+| 1 | `-d` | Container metadata | Quick info (zoom range, tile format) |
+| 2 | `-dd` | All tile coordinates | Find actual tile coverage |
+| 3 | `-ddd` | Tile contents | Analyze tile sizes, validate data |
+
+**Examples:**
+
+```sh
+# Quick metadata check
+versatiles probe tiles.versatiles -d
+
+# Find actual zoom range with tiles
+versatiles probe tiles.versatiles -dd
+
+# Deep inspection with tile statistics
+versatiles probe tiles.versatiles -ddd
+
+# Probe remote container
+versatiles probe https://download.versatiles.org/osm.versatiles -d
+```
+
+#### serve - HTTP Tile Server
+
+Run a local or production tile server with advanced configuration.
+
+**Basic usage:**
+```sh
+versatiles serve tiles.versatiles
+# Access at http://localhost:8080
+```
+
+**Server options:**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-i, --ip` | Bind IP address | 0.0.0.0 |
+| `-p, --port` | Port number | 8080 |
+| `-c, --config` | YAML configuration file | - |
+| `--minimal-recompression` | Fast serving (less compression) | false |
+| `--disable-api` | Disable `/api` endpoints | false |
+
+**Custom tile IDs:**
+
+Assign custom IDs to tile sources using bracket or hash syntax:
+
+```sh
+# Bracket prefix: [id]source
+versatiles serve [osm]tiles.versatiles
+
+# Bracket suffix: source[id]
+versatiles serve tiles.versatiles[osm]
+
+# Hash syntax: source#id
+versatiles serve tiles.versatiles#osm
+```
+
+Access tiles at: `http://localhost:8080/{id}/{z}/{x}/{y}.{ext}`
+
+**Static content serving:**
+
+```sh
+# Serve tar archive at root
+versatiles serve -s "static.tar.br" tiles.versatiles
+
+# Serve with custom prefix
+versatiles serve -s "[/assets]static.tar.gz" tiles.versatiles
+# Access: http://localhost:8080/assets/...
+
+# Multiple static sources (first match wins)
+versatiles serve \
+  -s "[/styles]styles.tar.br" \
+  -s "[/fonts]fonts.tar.gz" \
+  tiles.versatiles
+```
+
+**Supported static formats:** `.tar`, `.tar.gz`, `.tar.br`, directories
+
+**Remote serving:**
+```sh
+# Serve remote tiles directly
+versatiles serve https://download.versatiles.org/osm.versatiles
+
+# Mix local and remote sources
+versatiles serve \
+  [local]local.versatiles \
+  [osm]https://download.versatiles.org/osm.versatiles
+```
+
+**Configuration file:**
+
+For production deployments, use YAML configuration (see [Configuration](#configuration) section):
+
+```sh
+versatiles serve -c production.yaml
+```
+
+For a full description of all configuration options:
 ```sh
 versatiles help config
+```
+
+#### dev - Developer Tools (Unstable)
+
+Experimental tools for tile analysis and debugging.
+
+**measure-tile-sizes** - Generate a visual heatmap of tile sizes:
+
+```sh
+versatiles dev measure-tile-sizes tiles.versatiles output.png
+
+# With options
+versatiles dev measure-tile-sizes \
+  --level=14 \
+  --scale=4 \
+  tiles.versatiles output.png
+```
+
+Output: PNG image where brightness = 10*log2(tile_size). Use to identify large tiles or data quality issues.
+
+**export-outline** - Export tile coverage as GeoJSON:
+
+```sh
+versatiles dev export-outline tiles.versatiles coverage.geojson
+
+# Specify zoom level (default: max zoom)
+versatiles dev export-outline --level=10 tiles.versatiles coverage.geojson
+```
+
+Output: GeoJSON polygon showing which areas have tiles. Useful for visualizing coverage in QGIS/Mapbox.
+
+**print-tilejson** - Print TileJSON metadata:
+
+```sh
+# Compact JSON
+versatiles dev print-tilejson tiles.versatiles
+
+# Pretty-printed JSON
+versatiles dev print-tilejson -p tiles.versatiles
+```
+
+Output: Standard TileJSON 3.0.0 format with attribution, bounds, zoom levels, etc.
+
+#### help - Detailed Help Topics
+
+Get detailed help for specific topics:
+
+```sh
+# Pipeline language reference
+versatiles help pipeline
+
+# Configuration file reference
+versatiles help config
+
+# Raw markdown output (for documentation)
+versatiles help pipeline --raw
 ```
 
 ### VersaTiles Pipeline Language
 
 The VersaTiles Pipeline Language (VPL) allows you to define tile-processing pipelines. Operations include merging multiple tile sources, filtering, and modifying tile content.
 
-Example of combining multiple vector tile sources:
+**Example of combining multiple vector tile sources:**
 
 ```text
 from_merged_vector [
