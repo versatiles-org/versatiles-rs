@@ -30,10 +30,10 @@ impl From<versatiles_core::progress::ProgressData> for ProgressData {
 }
 
 // Type aliases for the three different callback types
-// Note: Using the full signature because build_callback sets CalleeHandled=false
-type ProgressCallback = ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false>;
-type MessageCallback = ThreadsafeFunction<(String, String), Unknown<'static>, (String, String), Status, false>;
-type CompleteCallback = ThreadsafeFunction<(), Unknown<'static>, (), Status, false>;
+// Note: Using weak references (Weak=true) to avoid blocking process exit
+type ProgressCallback = ThreadsafeFunction<ProgressData, Unknown<'static>, ProgressData, Status, false, true>;
+type MessageCallback = ThreadsafeFunction<(String, String), Unknown<'static>, (String, String), Status, false, true>;
+type CompleteCallback = ThreadsafeFunction<(), Unknown<'static>, (), Status, false, true>;
 
 /// Progress monitor for long-running operations
 ///
@@ -83,6 +83,7 @@ impl Progress {
 	pub fn on_progress(&self, callback: Function<'static>) -> Result<&Self> {
 		let tsfn = callback
 			.build_threadsafe_function::<ProgressData>()
+			.weak::<true>()
 			.build_callback(|ctx| Ok(ctx.value))?;
 		let mut listeners = self.progress_listeners.lock().unwrap();
 		listeners.push(tsfn);
@@ -96,6 +97,7 @@ impl Progress {
 	pub fn on_message(&self, callback: Function<'static>) -> Result<&Self> {
 		let tsfn = callback
 			.build_threadsafe_function::<(String, String)>()
+			.weak::<true>()
 			.build_callback(|ctx| Ok(ctx.value))?;
 		let mut listeners = self.message_listeners.lock().unwrap();
 		listeners.push(tsfn);
@@ -109,6 +111,7 @@ impl Progress {
 	pub fn on_complete(&self, callback: Function<'static>) -> Result<&Self> {
 		let tsfn = callback
 			.build_threadsafe_function::<()>()
+			.weak::<true>()
 			.build_callback(|_ctx| Ok(()))?;
 		let mut listeners = self.complete_listeners.lock().unwrap();
 		listeners.push(tsfn);

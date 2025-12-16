@@ -80,10 +80,12 @@ impl ContainerReader {
 	/// Convert this container to another format with progress monitoring
 	///
 	/// Returns a Progress object that emits events during the conversion.
-	/// Use progress.on('progress', callback) to monitor progress.
+	/// Use progress.onProgress(callback) to monitor progress updates.
+	/// Use progress.onMessage(callback) to receive step/warning/error messages.
+	/// Use progress.onComplete(callback) to be notified when complete.
 	/// Use await progress.done() to wait for completion.
 	#[napi]
-	pub fn convert_to_with_progress(&self, output: String, options: Option<ConvertOptions>) -> Result<Progress> {
+	pub async fn convert_to_with_progress(&self, output: String, options: Option<ConvertOptions>) -> Result<Progress> {
 		let progress = Progress::new();
 		let progress_arc = Arc::new(progress);
 
@@ -94,7 +96,7 @@ impl ContainerReader {
 		let reader_arc = self.reader.clone();
 		let progress_task = progress_arc.clone();
 
-		// Spawn the conversion task
+		// Spawn the conversion task in the background
 		tokio::spawn(async move {
 			let result = Self::do_convert(
 				reader_arc,
