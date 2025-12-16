@@ -16,7 +16,7 @@ set -euo pipefail
 : "${SKIP_DEPS:=0}"           # 1 = do not install deps
 : "${SRC_DIR:=/tmp/gdal-src}" # Working dir for downloading/building
 : "${INSTALL_TEST:=1}"        # 1 = run post-install sanity checks
-: "${GDAL_VERSION:=3.11.5}"   # GDAL version to install
+: "${GDAL_VERSION:=3.12.0}"   # GDAL version to install
 # =============================================================================
 
 # ----- tiny logger helpers ----------------------------------------------------
